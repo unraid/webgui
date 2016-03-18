@@ -180,6 +180,7 @@ function postToXML($post, $setOwnership = false) {
   $xml->WebUI              = xml_encode($post['contWebUI']);
   $xml->Icon               = xml_encode($post['contIcon']);
   $xml->ExtraParams        = xml_encode($post['contExtraParams']);
+  $xml->DateInstalled      = xml_encode(strtotime("now"));
 
   # V1 compatibility
   $xml->Description      = xml_encode($post['contOverview']);
