@@ -442,16 +442,6 @@ if (isset($_POST['contName'])) {
   // Get the command line
   list($cmd, $Name, $Repository) = xmlToCommand($postXML, $create_paths);
 
-  // Run dry
-  if ($dry_run) {
-    echo "<h2>XML</h2>";
-    echo "<pre>".htmlentities($postXML)."</pre>";
-    echo "<h2>COMMAND:</h2>";
-    echo "<pre>".htmlentities($cmd)."</pre>";
-    echo '<center><input type="button" value="Done" onclick="done()"></center><br>';
-    goto END;
-  }
-
   readfile("/usr/local/emhttp/plugins/dynamix.docker.manager/log.htm");
   @flush();
 
@@ -469,6 +459,17 @@ if (isset($_POST['contName'])) {
   if (!empty($Name)) {
     $filename = sprintf('%s/my-%s.xml', $userTmplDir, $Name);
     file_put_contents($filename, $postXML);
+  }
+
+  // Run dry
+  if ($dry_run) {
+    echo "<h2>XML</h2>";
+    echo "<pre>".htmlentities($postXML)."</pre>";
+    echo "<h2>COMMAND:</h2>";
+    echo "<pre>".htmlentities($cmd)."</pre>";
+    echo "<center><input type='button' value='Back' onclick='window.location=window.location.pathname+window.location.hash+\"?xmlTemplate=edit:${filename}\"'>";
+    echo "<input type='button' value='Done' onclick='done()'></center><br>";
+    goto END;
   }
 
   $startContainer = true;
@@ -628,8 +629,10 @@ if ($_GET['xmlTemplate']) {
     echo "<script>var Settings=".json_encode($xml).";</script>";
   }
 }
-
+$authoringMode = ($dockercfg["DOCKER_AUTHORING_MODE"] == "yes") ? true : false;
+$authoring     = $authoringMode ? 'advanced' : 'noshow';
 $showAdditionalInfo = '';
+
 ?>
 <link type="text/css" rel="stylesheet" href="/webGui/styles/jquery.ui.css">
 <link type="text/css" rel="stylesheet" href="/webGui/styles/jquery.switchbutton.css">
@@ -672,6 +675,7 @@ $showAdditionalInfo = '';
   .toggleMode:hover,.toggleMode:focus,.toggleMode:active,.toggleMode .active{color:#625D5D;}
   .basic{display:table-row;}
   .advanced{display:none;}
+  .noshow{display: none;}
   .required:after {content: " * ";color: #E80000}
 
   .switch-wrapper {
@@ -1156,7 +1160,7 @@ $showAdditionalInfo = '';
           </blockquote>
         </td>
       </tr>
-      <tr class="advanced">
+      <tr class="<?=$authoring;?>">
         <td>Categories:</td>
         <td>
           <input type="hidden" name="contCategory">
@@ -1201,11 +1205,11 @@ $showAdditionalInfo = '';
           </select>
         </td>
       </tr>
-      <tr class="advanced">
+      <tr class="<?=$authoring;?>">
         <td>Support Thread:</td>
         <td><input type="text" name="contSupport" class="textPath"></td>
       </tr>
-      <tr class="advanced">
+      <tr class="<?=$authoring;?>">
         <td colspan="2" class="inline_help">
           <blockquote class="inline_help">
             <p>Link to a support thread on Lime-Technology's forum.</p>
@@ -1223,11 +1227,11 @@ $showAdditionalInfo = '';
           </blockquote>
         </td>
       </tr>
-      <tr class="advanced">
+      <tr class="<?=$authoring;?>">
         <td>Template URL:</td>
         <td><input type="text" name="contTemplateURL" class="textPath"></td>
       </tr>
-      <tr class="advanced">
+      <tr class="<?=$authoring;?>">
         <td colspan="2" class="inline_help">
           <blockquote class="inline_help">
             <p>This URL is used to keep the template updated.</p>
@@ -1317,8 +1321,10 @@ $showAdditionalInfo = '';
       <tr>
         <td>&nbsp;</td>
         <td>
-          <input type="submit" value="<?= ($xmlType != 'edit') ? 'Create' : 'Save' ?>">
-          <!--button class="advanced" type="submit" name="dryRun" value="true" onclick="$('*[required]').prop('required', null);">Dry Run</button-->
+          <input type="submit" value="<?= ($xmlType != 'edit') ? 'Create' : 'Save and Apply' ?>">
+          <?if ($authoringMode):?>
+          <button type="submit" name="dryRun" value="true" onclick="$('*[required]').prop('required', null);">Save Template</button>
+          <?endif;?>
           <input type="button" value="Cancel" onclick="done()">
         </td>
       </tr>
@@ -1512,6 +1518,11 @@ $showAdditionalInfo = '';
 
     // Add dropdownchecklist to Select Categories
     $("#catSelect").dropdownchecklist({emptyText:'Select categories...', maxDropHeight:200, width:300, explicitClose:'...close'});
+    
+    <?if ($authoringMode){
+      echo "$('.advanced-switch').prop('checked','true'); $('.advanced-switch').change();";
+      echo "$('.advanced-switch').siblings('.switch-button-background').click();";
+    }?>
   });
 </script>
 <?END:?>
