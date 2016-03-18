@@ -445,12 +445,6 @@ if (isset($_POST['contName'])) {
   readfile("/usr/local/emhttp/plugins/dynamix.docker.manager/log.htm");
   @flush();
 
-  // Will only pull image if it's absent
-  if (!$DockerClient->doesImageExist($Repository)) {
-    // Pull image
-    pullImage($Name, $Repository);
-  }
-
   // Saving the generated configuration file.
   $userTmplDir = $dockerManPaths['templates-user'];
   if (!is_dir($userTmplDir)) {
@@ -470,6 +464,12 @@ if (isset($_POST['contName'])) {
     echo "<center><input type='button' value='Back' onclick='window.location=window.location.pathname+window.location.hash+\"?xmlTemplate=edit:${filename}\"'>";
     echo "<input type='button' value='Done' onclick='done()'></center><br>";
     goto END;
+  }
+
+  // Will only pull image if it's absent
+  if (!$DockerClient->doesImageExist($Repository)) {
+    // Pull image
+    pullImage($Name, $Repository);
   }
 
   $startContainer = true;
