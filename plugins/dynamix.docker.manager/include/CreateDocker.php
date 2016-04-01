@@ -593,8 +593,12 @@ if ($_GET['xmlTemplate']) {
         foreach ($xml['Config'] as &$arrConfig) {
           if ($arrConfig['Type'] == 'Path' && strtolower($arrConfig['Target']) == '/config') {
             $arrConfig['Default'] = $arrConfig['Value'] = realpath($dockercfg["DOCKER_APP_CONFIG_PATH"]).'/'.$xml["Name"];
-            $arrConfig['Display'] = 'hidden';
-            $arrConfig['Name'] = 'AppData Config Path';
+            if (empty($arrConfig['Display'])) {
+              $arrConfig['Display'] = 'advanced';
+            }
+            if (empty($arrConfig['Name'])) {
+              $arrConfig['Name'] = 'AppData Config Path';
+            }
           }
         }
       }
