@@ -569,6 +569,9 @@ if ($method == "update") {
     exit(1);
   }
   // install was successful, save the updated plugin so it installs again next boot
+  $oldVer = plugin("version","/var/log/plugins/$plugin",$error);
+  exec("mkdir -p /boot/config/plugins-old-versions/$plugin/$oldVer");
+  copy("/var/log/plugins/$plugin","/boot/config/plugins-old-versions/$plugin/$oldVer/$plugin");
   unlink("/var/log/plugins/$plugin");
   copy($plugin_file, "/boot/config/plugins/$plugin");
   symlink("/boot/config/plugins/$plugin", "/var/log/plugins/$plugin");
