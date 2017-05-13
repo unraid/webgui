@@ -439,7 +439,7 @@ if ($method == "install") {
       exit(1);
     }
     // do not re-install if same plugin already installed or has higher version
-    if (strcmp($version, $installed_version) < 0) {
+    if (version_compare($version, $installed_version,"<") ) {
       echo "plugin: not installing older version\n";
       exit(1);
     }
