@@ -284,14 +284,41 @@ $(function() {
 });
 var mobiles=['ipad','iphone','ipod','android'];
 var device=navigator.platform.toLowerCase();
+var csrf_token = "<?=$var['csrf_token']?>";
 for (var i=0,mobile; mobile=mobiles[i]; i++) {
   if (device.indexOf(mobile)>=0) {$('#footer').css('position','static'); break;}
 }
-$(document).ajaxSend(function(elm, xhr, s){
-  if (s.type == "POST") {
-    s.data += s.data?"&":"";
-    s.data += "csrf_token=<?=$var['csrf_token']?>";
+$.ajaxPrefilter(function( options, originalOptions, jqXHR ) {
+  // Allow just one retry
+  originalOptions._error = originalOptions.error;
+  if (typeof(originalOptions._retry) === "undefined" ) {
+    originalOptions._retry = true;
   }
+
+  // Inject csrf_token into POST data
+  var data = originalOptions.data;
+  if (originalOptions.type == "post" && originalOptions.data !== undefined) {
+    if (Object.prototype.toString.call(originalOptions.data) === '[object String]') {
+      data = $.deparam(originalOptions.data);
+    }
+  } else {
+    data = {};
+  }
+  options.data = $.param($.extend(data, { csrf_token: csrf_token }));
+
+  options.error = function( _jqXHR, _textStatus, _errorThrown ) {
+    if (_jqXHR.status == "403" && originalOptions._retry) {
+      $.get("/webGui/include/CSRFToken.php", function(token)
+      {
+        csrf_token = token;
+        originalOptions._retry = false;
+        $.ajax( originalOptions );
+      });
+    } else {
+      if( originalOptions._error ) originalOptions._error( _jqXHR, _textStatus, _errorThrown );
+      return;
+    }
+  };
 });
 </script>
 </head>
