@@ -4,7 +4,7 @@
 [[ -n $1 ]] && options="$1" || options=
 [[ -n $2 ]] && options="$1 $2"
 [[ -n $options ]] && options="$options \&" || options="\&"
-sed -ri "s|^(.*/usr/local/sbin/emhttp).*|\1 $options|" /boot/config/go
+sed -ri "s|^(.*/usr/local/sbin/emhttp).*|\1 $options|1" /boot/config/go
 
 # We need to restart the GUI in a separate process to prevent it from hanging
 at -M -f /usr/local/emhttp/webGui/scripts/restart_gui now 2>/dev/null

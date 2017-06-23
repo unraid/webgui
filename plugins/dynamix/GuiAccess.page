@@ -14,8 +14,12 @@ Title="GUI Access"
  */
 ?>
 <?
-$emhttp = preg_split('/\s+/',exec("grep '/usr/local/sbin/emhttp' /boot/config/go"));
-while ($emhttp[0] != '/usr/local/sbin/emhttp') $emhttp = array_shift($emhttp);
+$emhttp = preg_split('/\s+/',exec("grep -Pm1 '/usr/local/sbin/emhttp' /boot/config/go"));
+while (true) {
+  // strip any leading commands
+  if (strpos($emhttp[0],'emhttp')!==false) break;
+  array_shift($emhttp);
+}
 list($cmd,$options,$ports,$spare) = $emhttp;
 if ($ports[0] == '-') {
   $options .= substr($ports,1);
@@ -28,7 +32,7 @@ switch ($options) {
   case '-p' : $protocol = $http ? 'http' : 'https'; break;
   case '-rp':
   case '-pr': $protocol = 'redirect'; break;
-  default:    $protocol = 'http';
+  default   : $protocol = 'http';
 }
 ?>
 <script>
@@ -65,15 +69,25 @@ function setGUI(form) {
     $('input[name="#arg[2]"]').val((form.http.value||'80')+','+(form.https.value||'443'));
     break;
   }
+  var port = $('input[name="#arg[2]"]').val();
+  $.post('/webGui/include/PortFree.php',{port:port},function(data){
+    if (data) {
+      var port = data.split(',')[0];
+      var process = data.split(',')[1];
+      swal('Port already in use',"Port "+port+" is used by process '"+process+"'",'error');
+    } else {
+      form.submit();
+    }
+  });
 }
 $(function() {
   showPorts(document.access_mode);
 });
 </script>
-<form markdown="1" name="access_mode" method="POST" action="/update.php" target="progressFrame" onsubmit="setGUI(this)">
+<form markdown="1" name="access_mode" method="POST" action="/update.php" target="progressFrame">
 <input type="hidden" name="#command" value="/webGui/scripts/accessmode">
-<input type="hidden" name="#arg[1]" value="<?=$options?>">
-<input type="hidden" name="#arg[2]" value="<?=$ports?>">
+<input type="hidden" name="#arg[1]" value="">
+<input type="hidden" name="#arg[2]" value="">
 GUI protocol:
 : <select name="protocol" size="1" onchange="showPorts(this.form)">
   <?=mk_option($protocol, "http", "HTTP")?>
@@ -92,5 +106,5 @@ HTTPS port:
 </div>
 
 &nbsp;
-: <input type="submit" value="Apply"><input type="button" value="Done" onclick="done()">
+: <input type="button" value="Apply" onclick="setGUI(this.form)"><input type="button" value="Done" onclick="done()">
 </form>

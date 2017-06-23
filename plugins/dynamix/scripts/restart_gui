@@ -2,7 +2,4 @@
 # read go file settings and restart GUI
 # called from accessmode script
 
-/usr/local/sbin/emhttp stop >/dev/null
-/usr/local/sbin/emhttp $(grep -Po '^.*/usr/local/sbin/emhttp \K[^&]*' /boot/config/go) >/dev/null
-/etc/rc.d/rc.php-fpm start >/dev/null
-/etc/rc.d/rc.nginx start >/dev/null
+/usr/local/sbin/emhttp $(grep -Po '^.*/usr/local/sbin/emhttp \K[^&]*' /boot/config/go) restart >/dev/null
