@@ -1726,5 +1726,10 @@ $showAdditionalInfo = '';
     }?>
   });
 </script>
-<?END:?>
+<?END:
+if ($_GET['caRefer']):
+?>
+<div id='caRefer' style='display:none'></div>
+<?endif;?>
+
 
