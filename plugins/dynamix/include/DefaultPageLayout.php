@@ -126,6 +126,13 @@ function done(key) {
   var path = '/'+url[1];
   if (key) for (var i=2; i<url.length; i++) if (url[i]==key) break; else path += '/'+url[i];
   $.removeCookie('one',{path:'/'});
+  if ( $("#caRefer").length) {
+    $("input").each(function() {
+      if ( $(this).val() == "Done" ) {
+        path = "/Apps";
+      }
+    });
+  }
   location.replace(path);
 }
 function chkDelete(form, button) {
