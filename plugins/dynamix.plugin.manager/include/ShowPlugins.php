@@ -27,7 +27,7 @@ foreach (glob("/var/log/plugins/*.plg",GLOB_NOSORT) as $plugin_link) {
 //only consider symlinks
   $plugin_file = @readlink($plugin_link);
   if ($plugin_file === false) continue;
-  make_row($plugin_file);
+  make_row($plugin_file, true);
 }
 if ($empty) echo "<tr><td colspan='6' style='text-align:center;padding-top:12px'><i class='fa fa-check-square-o icon'></i> No plugins installed</td><tr>";
 ?>

@@ -57,7 +57,7 @@ function mk_options($select,$value) {
   return "<option value='$value'".($select==$value?" selected":"").">".ucfirst($value)."</option>";
 }
 
-function make_row($plugin_file) {
+function make_row($plugin_file, $show_tr) {
   global $system, $branch, $audit, $empty, $builtin, $https;
   
 //plugin name
@@ -133,7 +133,7 @@ function make_row($plugin_file) {
   }
 //write plugin information
   $empty = false;
-  echo "<tr id='".basename($plugin_file)."'>";
+  if ($show_tr) echo "<tr id='".basename($plugin_file)."'>";
   echo "<td style='vertical-align:top;width:64px'><p style='text-align:center'>{$link}</p></td>";
   echo "<td><span class='desc_readmore' style='display:block'>{$desc}</span></td>";
   echo "<td>{$author}</td>";
@@ -151,7 +151,7 @@ function make_row($plugin_file) {
     echo make_link('remove',basename($plugin_file));
   }
   echo "</td>";
-  echo "</tr>";
+  if ($show_tr) echo "</tr>\n\n";
 //remove temporary symlink
   @unlink("/var/log/plugins/$tmp_plg");
 
