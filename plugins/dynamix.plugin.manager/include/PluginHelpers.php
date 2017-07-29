@@ -114,8 +114,7 @@ function make_row($plugin_file) {
         $status = make_link('install',$plugin_file,'forced');
       } else {
         $latest = plugin('version',$filename);
-        #if (strcmp($latest,$version) > 0) {
-        if (strcmp($latest,$version) > $fake) {
+        if (strcmp($latest,$version) > 0) {
           $version .= "<br><span class='red-text'>{$latest}</span>";
           $status = make_link("update",basename($plugin_file));
           $changes_file = $filename;
