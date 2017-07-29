@@ -36,6 +36,7 @@ function openBox2(cmd,title,height,width,load) {
   // customized version of openBox specifically for dynamix.plugin.manager
   // open shadowbox window (run in foreground)
   var run = cmd.split('?')[0].substr(-4)=='.php' ? cmd : '/logging.htm?cmd='+cmd+'&csrf_token=<?=$var['csrf_token']?>';
+  var plugin=getParameterByNameFromUrl("arg2",cmd);
   var options = load ? {modal:true,onClose:function(){    
       $.get('/plugins/dynamix.plugin.manager/include/ShowPluginRow.php', {plugin:plugin}, function(data){
         if (data && document.getElementById(plugin)) {
