@@ -40,8 +40,9 @@ function openBox2(cmd,title,height,width,load) {
   var options = load ? {modal:true,onClose:function(){    
       $.get('/plugins/dynamix.plugin.manager/include/ShowPluginRow.php', {plugin:plugin}, function(data){
         if (data && document.getElementById(plugin)) {
-          document.getElementById(plugin).innerHTML=data;
-          $('.desc_readmore').readmore({maxHeight:58});          
+          document.getElementById(plugin).outerHTML=data;
+          $('.desc_readmore').readmore({maxHeight:58});
+          $('#plugin_table').trigger("update");          
         } else {
           // an error occurred or plugin was removed. reload the page
           location=location;

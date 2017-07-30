@@ -28,7 +28,7 @@ $plugin   = $_GET['plugin'] ?? false;
 if ($plugin) {
   //only consider symlinks
   $plugin_file = @readlink("/var/log/plugins/".$plugin);
-  if ($plugin_file !== false) make_row($plugin_file, false);
+  if ($plugin_file !== false) make_row($plugin_file);
 }
 if ($empty) echo ""; // i.e. do nothing
 ?>
