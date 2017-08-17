@@ -28,6 +28,29 @@ $audit = $notify['version'] ? 1 : 0;
 </style>
 <script src="/webGui/javascript/jquery.filetree.js"></script>
 <script>
+function getParameterByNameFromUrl(name, url) {
+  var match = RegExp('[?&]' + name + '=([^&]*)').exec(url);
+  return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+function openBox2(cmd,title,height,width,load) {
+  // customized version of openBox specifically for dynamix.plugin.manager
+  // open shadowbox window (run in foreground)
+  var run = cmd.split('?')[0].substr(-4)=='.php' ? cmd : '/logging.htm?cmd='+cmd+'&csrf_token=<?=$var['csrf_token']?>';
+  var plugin=getParameterByNameFromUrl("arg2",cmd);
+  var options = load ? {modal:true,onClose:function(){    
+      $.get('/plugins/dynamix.plugin.manager/include/ShowPluginRow.php', {plugin:plugin}, function(data){
+        if (data && document.getElementById(plugin)) {
+          document.getElementById(plugin).outerHTML=data;
+          $('.desc_readmore').readmore({maxHeight:58});
+          $('#plugin_table').trigger("update");          
+        } else {
+          // an error occurred or plugin was removed. reload the page
+          location=location;
+        }
+      } )
+    }} : {modal:true};
+  Shadowbox.open({content:run, player:'iframe', title:title, height:height, width:width, options:options});
+}
 <?if ($display['resize']):?>
 function resize(bind) {
   var width = [];

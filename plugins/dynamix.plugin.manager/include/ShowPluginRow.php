@@ -21,12 +21,14 @@ $audit   = $_GET['audit'] ?? false;
 $empty   = true;
 $builtin = ['unRAIDServer'];
 $https   = ['stable' => 'https://raw.github.com/limetech/\&name;/master/\&name;.plg',
-            'next'   => 'https://s3.amazonaws.com/dnld.lime-technology.com/\&category;/\&name;.plg'];
+    'next'   => 'https://s3.amazonaws.com/dnld.lime-technology.com/\&category;/\&name;.plg'];
 
-foreach (glob("/var/log/plugins/*.plg",GLOB_NOSORT) as $plugin_link) {
-//only consider symlinks
-  $plugin_file = @readlink($plugin_link);
+$plugin   = $_GET['plugin'] ?? false;
+
+if ($plugin) {
+  //only consider symlinks
+  $plugin_file = @readlink("/var/log/plugins/".$plugin);
   if ($plugin_file !== false) make_row($plugin_file);
 }
-if ($empty) echo "<tr><td colspan='6' style='text-align:center;padding-top:12px'><i class='fa fa-check-square-o icon'></i> No plugins installed</td><tr>";
+if ($empty) echo ""; // i.e. do nothing
 ?>
