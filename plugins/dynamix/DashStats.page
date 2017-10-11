@@ -115,17 +115,17 @@ $slots = count($disks) + count($devs);
 ?>
 <?if ($slots<30):?>
 <style>
-table.share_status.fixed td:nth-child(<?=$slots+1?>)~td{visibility:hidden}
+table.share_status.fixed td:nth-child(<?=$slots+1?>)~td{display:none}
 </style>
 <?endif;?>
 <table class='share_status fixed'>
 <thead><tr>
 <?
 $row0 = array_fill(0,30,"<td>-</td>"); $i = 0;
-foreach ($disks as $disk) if ($disk['type']=='Parity') $row0[$i++] = "<td>Parity<br>&nbsp;".filter_var($disk['name'],FILTER_SANITIZE_NUMBER_INT)."&nbsp;</td>";
-foreach ($disks as $disk) if ($disk['type']=='Data') $row0[$i++] = "<td>Disk<br>&nbsp;".filter_var($disk['name'],FILTER_SANITIZE_NUMBER_INT)."&nbsp;</td>";
+foreach ($disks as $disk) if ($disk['type']=='Parity') $row0[$i++] = "<td>Parity".filter_var($disk['name'],FILTER_SANITIZE_NUMBER_INT)."</td>";
+foreach ($disks as $disk) if ($disk['type']=='Data') $row0[$i++] = "<td>Disk ".filter_var($disk['name'],FILTER_SANITIZE_NUMBER_INT)."</td>";
 if ($slots <= 30) {
-  foreach ($disks as $disk) if ($disk['type']=='Cache') $row0[$i++] = "<td>Cache<br>&nbsp;".filter_var($disk['name'],FILTER_SANITIZE_NUMBER_INT)."&nbsp;</td>";
+  foreach ($disks as $disk) if ($disk['type']=='Cache') $row0[$i++] = "<td>Cache ".filter_var($disk['name'],FILTER_SANITIZE_NUMBER_INT)."</td>";
   foreach ($devs as $dev) $row0[$i++] = "<td>{$dev['device']}</td>";
 }
 echo "<td>Array Status</td>".implode('',$row0);
