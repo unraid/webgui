@@ -253,6 +253,11 @@
 			'icon' => 'ubuntu.png',
 			'os' => 'ubuntu'
 		],
+		'unRAID' => [
+			'form' => 'Custom.form.php',
+			'icon' => 'unraid.png',
+			'os' => 'unraid'
+		],
 		'VyOS' => [
 			'form' => 'Custom.form.php',
 			'icon' => 'vyos.png',
