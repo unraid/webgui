@@ -86,6 +86,8 @@ exec("lsof -Pni 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsof.txt"));
 exec("lsmod|sort 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsmod.txt"));
 exec("df -h 2>/dev/null|todos >".escapeshellarg("/$diag/system/df.txt"));
 exec("ifconfig -a -s 2>/dev/null|grep -Po '^(eth|bond)[0-9]+'", $ports);
+exec("dmidecode -qt2|awk -F: '/^\tManufacturer:/{m=\$2};/^\tProduct Name:/{p=\$2} END{print m\" -\"p}' 2>/dev/null|todos >".escapeshellarg("/$diag/system/motherboard.txt"));
+exec("dmidecode -qt0 2>/dev/null|todos >>".escapeshellarg("/$diag/system/motherboard.txt"));
 // create ethernet information information (suppress errors)
 foreach ($ports as $port) {
   exec("ethtool ".escapeshellarg($port)." 2>/dev/null|todos >>".escapeshellarg("/$diag/system/ethtool.txt"));
