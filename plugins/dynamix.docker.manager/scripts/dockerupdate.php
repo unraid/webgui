@@ -29,6 +29,10 @@ foreach ($argv as $arg) {
 }
 
 if (!isset($check)) {
+  system("ping -c 1 github.com > /dev/null 2>&1",$retValue);
+  if ( $retValue ) {
+    exit(0);
+  }
   echo " Updating templates... ";
   $DockerTemplates->downloadTemplates();
   echo " Updating info... ";
