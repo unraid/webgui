@@ -563,6 +563,7 @@ $(function() {
   }
   $('form').append($('<input>').attr({type:'hidden', name:'csrf_token', value:'<?=$var['csrf_token']?>'}));
   watchdog.start();
+  $('[title][title!=""]').tooltipster();
 });
 </script>
 </body>
