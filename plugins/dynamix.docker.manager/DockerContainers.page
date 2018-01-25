@@ -84,7 +84,8 @@ img.stopped{opacity:0.3;}
 			$updateStatus   = ($updateStatus == "true" || $updateStatus == "undef") ? 'true' : 'false';
 			$running        = ($ct['Running']) ? 'true' : 'false';
 			$webGuiUrl      = $info[$name]['url'];
-			$contextMenus[] = sprintf("addDockerContainerContext('%s', '%s', '%s', %s, %s, %s, '%s', '%s');", addslashes($ct['Name']), addslashes($ct['ImageId']), addslashes($info[$name]['template']), $running, $updateStatus, $is_autostart, addslashes($webGuiUrl), $ct["Id"]);
+			$Support        = $ct['Support'];
+			$contextMenus[] = sprintf("addDockerContainerContext('%s', '%s', '%s', %s, %s, %s, '%s', '%s', '%s');", addslashes($ct['Name']), addslashes($ct['ImageId']), addslashes($info[$name]['template']), $running, $updateStatus, $is_autostart, addslashes($webGuiUrl), $ct["Id"], addslashes($info[$name]['Support']));
 			$shape          = ($ct["Running"]) ? "play" : "square";
 			$status         = ($ct["Running"]) ? "started" : "stopped";
 
@@ -207,8 +208,8 @@ img.stopped{opacity:0.3;}
 <input type="button" onclick="addContainer()" value="Add Container"/>
 <input type="button" onclick="reloadUpdate()" value="Check for Updates"/>
 
-<script src="/webGui/javascript/jquery.switchbutton.js"></script>
-<script src="/plugins/dynamix.docker.manager/javascript/docker.js"></script>
+<script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
+<script src="<?autov('/plugins/dynamix.docker.manager/javascript/docker.js')?>"></script>
 <script>
 <?if ($display['resize']):?>
 function resize(bind) {

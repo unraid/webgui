@@ -77,10 +77,9 @@ foreach ($allContainers as $ct) {
 	$updateStatus   = ($updateStatus == "true" or $updateStatus == "undef" ) ? 'true' : 'false';
 	$running        = ($ct['Running']) ? 'true' : 'false';
 	$webGuiUrl      = $info['url'];
-	$contextMenus[] = sprintf("addDockerContainerContext('%s', '%s', '%s', %s, %s, %s, '%s', '%s');", addslashes($ct['Name']), addslashes($ct['ImageId']), addslashes($info['template']), $running, $updateStatus, $is_autostart, addslashes($webGuiUrl), $ct["Id"] );
+	$contextMenus[] = sprintf("addDockerContainerContext('%s', '%s', '%s', %s, %s, %s, '%s', '%s', '%s');", addslashes($ct['Name']), addslashes($ct['ImageId']), addslashes($info['template']), $running, $updateStatus, $is_autostart, addslashes($webGuiUrl), $ct["Id"], $info["Support"] );
 	$shape          = ($ct["Running"]) ? "play" : "square";
 	$status         = ($ct["Running"]) ? "started" : "stopped";
-
 	$Icon           = $info['icon'];
 	if (!$Icon) {
 		$Icon = "/plugins/dynamix.docker.manager/images/question.png";
@@ -171,8 +170,8 @@ foreach ($allVMs as $name) {
 ?>
 <div id="noapps">No apps available to show</div>
 </div>
-<script src="/webGui/javascript/jquery.switchbutton.js"></script>
-<script src="/plugins/dynamix.docker.manager/javascript/docker.js"></script>
+<script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
+<script src="<?autov('/plugins/dynamix.docker.manager/javascript/docker.js')?>"></script>
 <script>
 function ajaxVMDispatch(currentstate, params){
   $.post("/plugins/dynamix.vm.manager/VMajax.php", params, function( data ) {

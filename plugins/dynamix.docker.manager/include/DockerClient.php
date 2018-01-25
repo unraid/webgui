@@ -334,6 +334,9 @@ class DockerTemplates {
 			$Registry = $this->getTemplateValue($image, "Registry");
 			$tmp['registry'] = ($Registry) ? $Registry : null;
 
+			$Support = $this->getTemplateValue($image,"Support");
+			$tmp['Support'] = ($Support) ? $Support : null;
+			
 			if (!$tmp['updated'] || $reload) {
 				if ($reload) $DockerUpdate->reloadUpdateStatus($image);
 				$vs = $DockerUpdate->getUpdateStatus($image);
