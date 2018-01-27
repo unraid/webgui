@@ -77,7 +77,7 @@ foreach ($allContainers as $ct) {
 	$updateStatus   = ($updateStatus == "true" or $updateStatus == "undef" ) ? 'true' : 'false';
 	$running        = ($ct['Running']) ? 'true' : 'false';
 	$webGuiUrl      = $info['url'];
-	$contextMenus[] = sprintf("addDockerContainerContext('%s', '%s', '%s', %s, %s, %s, '%s', '%s');", addslashes($ct['Name']), addslashes($ct['ImageId']), addslashes($info['template']), $running, $updateStatus, $is_autostart, addslashes($webGuiUrl), $ct["Id"] );
+	$contextMenus[] = sprintf("addDockerContainerContext('%s', '%s', '%s', %s, %s, %s, '%s', '%s', '%s');", addslashes($ct['Name']), addslashes($ct['ImageId']), addslashes($info['template']), $running, $updateStatus, $is_autostart, addslashes($webGuiUrl), $ct["Id"], $info["Support"] );
 	$shape          = ($ct["Running"]) ? "play" : "square";
 	$status         = ($ct["Running"]) ? "started" : "stopped";
 
@@ -133,9 +133,9 @@ foreach ($allVMs as $name) {
 ?>
 <div id="noapps">No apps available to show</div>
 </div>
-<script src="/webGui/javascript/jquery.switchbutton.js"></script>
-<script src="/plugins/dynamix.docker.manager/javascript/docker.js"></script>
-<script src="/plugins/dynamix.vm.manager/javascript/vmmanager.js"></script>
+<script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
+<script src="<?autov('/plugins/dynamix.docker.manager/javascript/docker.js')?>"></script>
+<script src="<?autov('/plugins/dynamix.vm.manager/javascript/vmmanager.js')?>"></script>
 <script>
 $(function() {
 	if ($.cookie('dashapps_view_mode') == 'startedonly') {
