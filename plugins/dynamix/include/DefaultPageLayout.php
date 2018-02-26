@@ -264,7 +264,7 @@ $(function() {
   if ($.cookie('help')=='help') {$('.inline_help').show(); $('#nav-item.HelpButton').addClass('active');}
   $('#'+tab).attr('checked', true);
   updateTime();
-  $.jGrowl.defaults.closeTemplate = '<i class="fa fa-share"></i>';
+  $.jGrowl.defaults.closeTemplate = '<i class="fa fa-close"></i>';
   $.jGrowl.defaults.closerTemplate = '<?=$notify['position'][0]=='b' ? '<div>':'<div class="top">'?>[ close all notifications ]</div>';
   $.jGrowl.defaults.sticky = true;
   $.jGrowl.defaults.check = 100;
@@ -504,8 +504,11 @@ $(function() {
 <?if (strpos(file_get_contents('/proc/cmdline'),'unraidsafemode')!==false):?>
   showNotice('System running in <b>safe</b> mode');
 <?else:?>
-<?if (preg_match("/^\*\*REBOOT REQUIRED\!\*\*/",@file_get_contents("$docroot/plugins/unRAIDServer/README.md"))):?>
+<?$readme = @file_get_contents("$docroot/plugins/unRAIDServer/README.md",false,null,0,20);?>
+<?if (strpos($readme,'REBOOT REQUIRED')!==false):?>
   showUpgrade('<b>Reboot required</b> to apply unRAID OS update');
+<?elseif (strpos($readme,'DOWNGRADE')!==false):?>
+  showUpgrade('<b>Reboot required</b> to downgrade unRAID OS');
 <?elseif ($version = plugin_update_available('unRAIDServer',true)):?>
   showUpgrade('unRAID OS v<?=$version?> is available. <a>Download Now</a>','unRAIDServer');
 <?endif;?>

@@ -165,7 +165,7 @@ img.stopped{opacity:0.3;}
 			</td>
 			<td style="white-space:nowrap;"><span class="docker_readmore"><?= implode("<br>", $ports); ?></span></td>
 			<td style="word-break:break-all;"><span class="docker_readmore"><?= implode("<br>", $paths); ?></span></td>
-			<td data-sort-value="<?=$is_autostart?>"><input type="checkbox" class="autostart" container="<?=htmlspecialchars($ct['Name']);?>" <?=$info[$ct['Name']]['autostart'] ? "checked" : ""?>></td>
+			<td><input type="checkbox" class="autostart" container="<?=htmlspecialchars($ct['Name']);?>" <?=$info[$ct['Name']]['autostart'] ? "checked" : ""?>></td>
 			<td><a class="log" onclick="containerLogs('<?=addslashes(htmlspecialchars($ct['Name']));?>','<?=$ct['Id'];?>', false, false)"><img class="basic" src="/plugins/dynamix/icons/log.png"/><div class="advanced" style="width: 124px;"><?=htmlspecialchars($ct['Status'])?></div><div class="advanced" style="color:#888;">Created <?=htmlspecialchars($ct['Created'])?></div></a></td>
 		</tr>
 		<?}?>
@@ -258,7 +258,13 @@ $(function() {
   $(window).bind('resize',function(){resize(true);});
 <?endif;?>
 
-	$('#docker_containers').tablesorter( {sortList: [[1,0]], headers: {0: {sorter: false }, 7: {sorter: false }}});
+	$('#docker_containers').tablesorter({
+		sortList: [[1,0]],
+		headers: {0: {sorter: false }, 6: {sorter: false }},
+		textExtraction: {
+			5: function(node, table, cellIndex){ return $(node).find("input").prop('checked')?1:0; }
+		}
+	});
 	$('#docker_containers tr:even').addClass('odd');
 
 	context.init({ preventDoubleContext: false });

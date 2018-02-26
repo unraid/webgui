@@ -14,18 +14,22 @@ Tag="thumbs-up"
  * all copies or substantial portions of the Software.
  */
 ?>
-
 <?
 $empty = "<tr><td colspan='6' style='text-align:center;padding-top:12px'><i class='fa fa-spinner fa-spin icon'></i><em>Please wait, retrieving and updating system information ...</em></td><tr>";
 $audit = $notify['unraidos'] ? 1 : 0;
+
+if (file_exists('/boot/previous/changes.txt')) {
+  exec("head -n4 /boot/previous/changes.txt",$rows);
+  foreach ($rows as $row) {
+    list($check,$version,$date) = explode(' ',$row);
+    if (stripos($check,'version')!==false) break;
+    $version = $date = 'unknown';
+  }
+}
 ?>
 <script>
 var original = null;
 
-function noAudit() {
-  hideUpgrade();
-  $.cookie('noAudit','true',{path:'/'});
-}
 function update_table(branch) {
   $('#os_list').html("<?=$empty?>");
   if (original) {
@@ -38,11 +42,23 @@ function update_table(branch) {
     $('#os_table').trigger('update',true);
   });
 }
+function downgrade() {
+ $.get('/plugins/dynamix.plugin.manager/include/Downgrade.php',{version:'<?=$version?>'},function(){refresh();});
+}
+function noAudit() {
+  hideUpgrade();
+  $.cookie('noAudit','true',{path:'/'});
+}
 $(function() {
-  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{system:'true',audit:<?=$audit?>},function(data) {
-    if (data) $('#os_list').html(data);
+  var audit = <?=$audit?>;
+  if ($.cookie('noAudit') != null) {
+    $.removeCookie('noAudit',{path:'/'});
+    audit = 0;
+  }
+  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{system:'true',audit:audit},function(data) {
+    $('#os_list').html(data);
     $('#os_table').tablesorter({sortList:[[4,0],[1,0]],sortAppend:[[1,0]],headers:{0:{sorter:false},5:{sorter:false}},textAttribute:'data'});
-<?if (preg_match("/^\*\*REBOOT REQUIRED\!\*\*/",@file_get_contents("$docroot/plugins/unRAIDServer/README.md"))):?>
+<?if (preg_match("/^\*\*(REBOOT REQUIRED|DOWNGRADE)/",@file_get_contents("$docroot/plugins/unRAIDServer/README.md",false,null,0,20))):?>
     $('#change_branch').prop('disabled',true);
 <?endif;?>
   });
@@ -55,4 +71,7 @@ $(function() {
 <table class='tablesorter plugins shift' id='os_table'>
 <thead><tr><th></th><th>Component</th><th>Author</th><th>Version</th><th>Status</th><th>Branch</th></tr></thead>
 <tbody id="os_list"><?=$empty?></tbody>
+<?if (file_exists('/boot/previous/bzroot')):?>
+<tbody><tr><td><img src="/plugins/unRAIDServer/images/unRAIDServer.png"></td><td><b>unRAID Server OS (previous)</b></td><td>LimeTech</td><td><?=$version?></td><td><?=$date?></td><td><input type="button" value="Downgrade" onclick="downgrade()"></td></tbody>
+<?endif;?>
 </table>

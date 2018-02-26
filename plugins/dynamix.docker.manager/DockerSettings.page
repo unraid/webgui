@@ -314,7 +314,7 @@ $dhcpDisabled = $range ? '':'disabled';
 <?if ($protocol[$network] != 'ipv6'):?>
 
 IPv4 custom network on interface <?=$network?> (optional):
-: <input type="checkbox" id="DOCKER_CUSTOM_<?=$port?>_edit" onchange="changeCustom(this.id,4)"<?=$subnet?'checked':''?>>
+: <input type="checkbox" id="DOCKER_CUSTOM_<?=$port?>_edit" onchange="changeCustom(this.id,4)"<?=$subnet?'checked':''?>><span id="DOCKER_CUSTOM_<?=$port?>_line" class="<?=$subnet?'':'disabled'?>">
   <span class="<?=$ip4class?>">**Subnet:** <input type="text" id="DOCKER_CUSTOM_<?=$port?>_net" name="DOCKER_SUBNET_<?=$port?>" class="ip4" value="<?=$subnet?>" title="IPv4 address A.B.C.D"<?=$disabled?>>/
   <select id="DOCKER_CUSTOM_<?=$port?>_mask" name="DOCKER_MASK_<?=$port?>" class="mask"<?=$disabled?>>
   <?for ($m=16; $m<=30; $m++) echo mk_option($mask?:24,$m,$m)?></select>
@@ -324,7 +324,7 @@ IPv4 custom network on interface <?=$network?> (optional):
   **DHCP pool:** <input type="text" id="DOCKER_CUSTOM_<?=$port?>_pool" name="DOCKER_RANGE_<?=$port?>" class="ip4" value="<?=$range?>" title="IPv4 address A.B.C.D"<?=$disabled?>>/
   <select id="DOCKER_CUSTOM_<?=$port?>_size" name="DOCKER_SIZE_<?=$port?>" class="mask" onchange="changeHosts(this.id,this.value)"<?=$disabled?>>
   <?for ($m=16; $m<=30; $m++) echo mk_option($size?:25,$m,$m)?></select>
-  <span id="DOCKER_CUSTOM_<?=$port?>_hosts" style="<?=$subnet?'':'display:none'?>">(<?=pow(2,32-($size?:25))?> hosts)</span>
+  <span id="DOCKER_CUSTOM_<?=$port?>_hosts" style="<?=$subnet?'':'display:none'?>">(<?=pow(2,32-($size?:25))?> hosts)</span></span>
 
 <?endif;?>
 <?endforeach;?>
@@ -333,6 +333,9 @@ IPv4 custom network on interface <?=$network?> (optional):
 >
 > Enter the pool range within each allocated subnet which is used for DHCPv4 assignments by Docker. E.g. 192.168.1.128/25
 
+<?endif;?>
+<?if ($include6):?>
+<hr>
 <?endif;?>
 <?foreach ($include6 as $network => $route):?>
 <?
@@ -383,7 +386,7 @@ $dhcpDisabled = $range6 ? '':'disabled';
 <?if ($protocol[$network] != 'ipv4'):?>
 
 IPv6 custom network on interface <?=$network?> (optional):
-: <input type="checkbox" id="DOCKER_CUSTOM6_<?=$port?>_edit" onchange="changeCustom(this.id,6)"<?=$subnet6?'checked':''?>>
+: <input type="checkbox" id="DOCKER_CUSTOM6_<?=$port?>_edit" onchange="changeCustom(this.id,6)"<?=$subnet6?'checked':''?>><span id="DOCKER_CUSTOM6_<?=$port?>_line" class="<?=$subnet6?'':'disabled'?>">
   <span class="ip6">**Subnet:**<input type="text" id="DOCKER_CUSTOM6_<?=$port?>_net" name="DOCKER_SUBNET6_<?=$port?>" class="ip6" value="<?=$subnet6?>" title="IPv6 address nnnn:xxxx::yyyy"<?=$disabled?>>/
   <select id="DOCKER_CUSTOM6_<?=$port?>_mask" name="DOCKER_MASK6_<?=$port?>" class="mask"<?=$disabled?>>
   <?for ($m=64; $m<=120; $m+=8) echo mk_option($mask6?:64,$m,$m)?></select></span>
@@ -391,7 +394,7 @@ IPv6 custom network on interface <?=$network?> (optional):
   <input type="checkbox" id="DOCKER_CUSTOM6_<?=$port?>_dhcp" onchange="customDHCP(this.id,6)"<?=$subnet6?'checked':''?><?=$dhcpDisabled?>>
   **DHCP pool:**<input type="text" id="DOCKER_CUSTOM6_<?=$port?>_pool" name="DOCKER_RANGE6_<?=$port?>" class="ip6" value="<?=$range6?>" title="IPv6 address nnnn:xxxx::yyyy"<?=$disabled?>>/
   <select id="DOCKER_CUSTOM6_<?=$port?>_size" name="DOCKER_SIZE6_<?=$port?>" class="mask"<?=$disabled?>>
-  <?for ($m=64; $m<=120; $m+=8) echo mk_option($size6?:72,$m,$m)?></select>
+  <?for ($m=64; $m<=120; $m+=8) echo mk_option($size6?:72,$m,$m)?></select></span>
 
 <?endif;?>
 <?endforeach;?>
@@ -714,7 +717,13 @@ function changeCustom(id,ip) {
   $(id+'dhcp').prop('disabled',!checked);
   $(id+'pool').prop('disabled',!checked);
   $(id+'size').prop('disabled',!checked);
-  checked ? $(id+'hosts').show() : $(id+'hosts').hide();
+  if (checked) {
+    $(id+'hosts').show();
+    $(id+'line').removeClass('disabled');
+  } else {
+    $(id+'hosts').hide();
+    $(id+'line').addClass('disabled','disabled');
+  }
 }
 function changeMask(id,val) {
   var mask = Math.pow(2,32-val);

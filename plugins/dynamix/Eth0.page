@@ -372,8 +372,10 @@ watchDHCP.on('message', function(data) {
     var id = row.split('_');
     var form = $('form[name="'+id[0]+'_settings"]');
     var key = id[2].split('=');
-    if (id[1]=='I') form.find('input[name="'+key[0]+'"]').val(key[1]);
-    else if (id[1]=='S') form.find('select[name="'+key[0]+'"]').val(key[1]);
+    switch (id[1]) {
+      case 'I': form.find('input[name="'+key[0]+'"]').val(key[1]); break;
+      case 'S': form.find('select[name="'+key[0]+'"]').val(key[1]); break;
+    }
   }
 });
 $(function() {

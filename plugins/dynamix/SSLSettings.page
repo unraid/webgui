@@ -1,6 +1,5 @@
 Menu="Identification"
-Title="SSL Certificate Settings"
-Icon="ident.png"
+Title="Management Access"
 Tag="expeditedssl"
 ---
 <?PHP
@@ -16,163 +15,243 @@ Tag="expeditedssl"
  */
 ?>
 <?
+function find_tasks() {
+  global $site;
+  $tasks = [];
+  foreach ($site as $page) {
+    if (empty($page['Menu'])) continue;
+    $menu = strtok($page['Menu'], ' ');
+    switch ($menu[0]) {
+      case '$': $menu = get_ini_key($menu,strtok(' ')); break;
+      case '/': $menu = get_file_key($menu,strtok(' ')); break;
+    }
+    while ($menu !== false) {
+      if (substr($menu,0,5) == 'Tasks') {
+        if (empty($page['Cond'])) $tasks[] = $page['name'];
+        break;
+      }
+      $menu = strtok(' ');
+    }
+  }
+  sort($tasks);
+  return $tasks;
+}
 $keyfile = @file_get_contents($var['regFILE']);
-if ($keyfile !== false)
-  $keyfile = @base64_encode($keyfile);
 $isLEcert = file_exists("/boot/config/ssl/certs/certificate_bundle.pem");
-if ($isLEcert)
-  exec("/usr/bin/openssl x509 -checkend 2592000 -noout -in /etc/ssl/certs/unraid_bundle.pem",$arrout,$retval_expired);
+if ($keyfile !== false) $keyfile = base64_encode($keyfile);
+if ($isLEcert) exec("/usr/bin/openssl x509 -checkend 2592000 -noout -in /etc/ssl/certs/unraid_bundle.pem",$arrout,$retval_expired);
 $provisionlabel = $isLEcert ? 'Renew' : 'Provision';
 $disabled_provision = $keyfile===false || ($isLEcert && $retval_expired===0) || $var['USE_SSL']!="auto" ? 'disabled' : '';
 $disabled_updatedns = $keyfile!==false && $isLEcert ? '' : 'disabled';
 $internalip = $eth0['IPADDR:0'];
+$tasks = find_tasks();
 ?>
+<?if (strstr('azure,gray',$display['theme'])):?>
+<style>input.trim{width:65px}</style>
+<?endif;?>
 <script>
 function provisionSSL(button) {
-    var oldlabel = $.trim($(button).text());
-    $(button).prop("disabled", true).html("<i class=\"fa fa-spinner fa-spin\" aria-hidden=\"true\"></i> "+oldlabel+"ing");
-
-    var msg = "Your Let's Encrypt SSL Certificate has been provisioned and a DNS record " +
-              "for local IP address <?=$internalip?> has been created on unraid.net.";
-
-    var failure = function(data) {
-        var status = data.status;
-        var obj = data.responseJSON;
-        msg = "Sorry, an error ("+status+") occurred "+oldlabel.toLowerCase()+"ing your SSL certificate. " +
-              "The error is: "+obj.error+".";
-        $(button).prop("disabled", false).html(oldlabel);
-        swal("Oops",msg,"error");
-    };
-
-    var success_provision = function(data) {
-        if (data.bundle) {
-            if (oldlabel == 'Renew') {
-                msg = "Your Let's Encrypt SSL Certificate has been renewed.";
-                success_rebind_check(data);
-            } else {
-                $.get("//"+data.internal_dns+":<?=$var['PORT']?>/dnscheck",function() {
-                    success_rebind_check(data);
-                }).fail(function(){
-                    failure({"status": 403, "responseJSON": {"error": "Your router or DNS server has DNS rebinding protection enabled, preventing "+data.internal_dns+" <?=$internalip?> resolution.  See Help for more details and workarounds"}});
-                });
-            }
-        } else {
-            failure({"status": 403, "responseJSON": {"error": "Server was unable to provision SSL certificate"}});
-        }
-    };
-
-    var success_rebind_check = function(data) {
-        $.post("/webGui/include/CertUpload.php",{text:data.bundle,csrf_token:"<?=$var['csrf_token']?>"},function(data2) {
-            swal({title:"",text:msg,type:"success",allowEscapeKey:false},function(){button.form.submit();});
-        }).fail(failure);
-    };
-
-    $.post("/webGui/include/ProvisionCert.php",success_provision).fail(failure);
+  var oldlabel = $.trim($(button).text());
+  $(button).prop("disabled", true).html("<i class=\"fa fa-spinner fa-spin\" aria-hidden=\"true\"></i> "+oldlabel+"ing");
+  var msg = "Your Let's Encrypt SSL Certificate has been provisioned and a DNS record for local IP address <?=$internalip?> has been created on unraid.net.";
+  var failure = function(data) {
+    var status = data.status;
+    var obj = data.responseJSON;
+    msg = "Sorry, an error ("+status+") occurred "+oldlabel.toLowerCase()+"ing your SSL certificate. " +
+          "The error is: "+obj.error+".";
+    $(button).prop("disabled", false).html(oldlabel);
+    swal("Oops",msg,"error");
+  };
+  var success_provision = function(data) {
+    if (data.bundle) {
+      if (oldlabel == 'Renew') {
+        msg = "Your Let's Encrypt SSL Certificate has been renewed.";
+        success_rebind_check(data);
+      } else {
+        $.get("//"+data.internal_dns+":<?=$var['PORT']?>/dnscheck",function() {
+          success_rebind_check(data);
+        }).fail(function(){
+          failure({"status":403, "responseJSON":{"error": "Your router or DNS server has DNS rebinding protection enabled, preventing "+data.internal_dns+" <?=$internalip?> resolution. See Help for more details and workarounds"}});
+        });
+      }
+    } else {
+      failure({"status":403, "responseJSON":{"error": "Server was unable to provision SSL certificate"}});
+    }
+  };
+  var success_rebind_check = function(data) {
+    $.post("/webGui/include/CertUpload.php",{text:data.bundle,csrf_token:"<?=$var['csrf_token']?>"},function(data2) {
+      swal({title:"",text:msg,type:"success",allowEscapeKey:false},function(){button.form.submit();});
+    }).fail(failure);
+  };
+  $.post("/webGui/include/ProvisionCert.php",success_provision).fail(failure);
 }
-
 function updateDNS(button) {
-    $(button).prop("disabled", true).html("<i class=\"fa fa-spinner fa-spin\" aria-hidden=\"true\"></i> Updating DNS");
-
-    var failure = function(data) {
-        var status = data.status;
-        var obj = data.responseJSON;
-        var msg = "Sorry, an error ("+status+") occurred updating unraid.net DNS records. " +
-                  "The error is: "+obj.error+".";
-        $(button).prop("disabled", false).html("Update DNS");
-        swal('Oops',msg,'error');
-    };
-
-    var success = function(data) {
-        $(button).prop("disabled", false).html("Update DNS");
-        swal("","Your local IP address <?=$internalip?> has been updated for unraid.net.","success");
-    };
-
-    $.post("/webGui/include/UpdateDNS.php",success).fail(failure);
+  $(button).prop("disabled", true).html("<i class=\"fa fa-spinner fa-spin\" aria-hidden=\"true\"></i> Updating DNS");
+  var failure = function(data) {
+    var status = data.status;
+    var obj = data.responseJSON;
+    var msg = "Sorry, an error ("+status+") occurred updating unraid.net DNS records. The error is: "+obj.error+".";
+    $(button).prop("disabled", false).html("Update DNS");
+    swal('Oops',msg,'error');
+  };
+  var success = function(data) {
+    $(button).prop("disabled", false).html("Update DNS");
+    swal("","Your local IP address <?=$internalip?> has been updated for unraid.net.","success");
+  };
+  $.post("/webGui/include/UpdateDNS.php",success).fail(failure);
 }
 function checkPorts(form) {
-  if (!form.PORT.value) form.PORT.value = 80;
-  if (!form.PORTSSL.value) form.PORTSSL.value = 443;
-  var http = form.PORT.value < 1024 && form.PORT.value != 80;
-  var https = form.PORTSSL.value < 1024 && form.PORTSSL.value != 443;
-  if (http || https) {
-    var text = http ? 'HTTP' : '';
-    text = https ? (text ? 'HTTP & HTTPS' : 'HTTPS') : text;
-    swal({title:'Non-recommended port',text:text+' port may conflict with well known services',type:'warning',showCancelButton:true},function(){form.submit();});
+  var check = [{'key':'PORTTELNET','port':'23','text':'TELNET'},{'key':'PORTSSH','port':'22','text':'SSH'},{'key':'PORT','port':'80','text':'HTTP'},{'key':'PORTSSL','port':'443','text':'HTTPS'}];
+  var list = [];
+  for (var i=0; i < check.length; i++) {
+    var key = check[i]['key'];
+    var port = check[i]['port'];
+    var text = check[i]['text'];
+    var item = $(form).find('input[name="'+key+'"]');
+    if (!item.val()) item.val(port);
+    if (item.val() < 1024 && item.val() != port && item.prop('disabled')==false) list.push(text+' ('+item.val()+')');
+    item.prop('disabled',false);
+  }
+  if (list.length > 0) {
+    swal({title:'Non-recommended port'+(list.length>1?'s':''),text:list.join(', ')+'<br>may conflict with well-known services',html:true,type:'warning',showCancelButton:true},function(){form.submit();});
   } else {
     form.submit();
   }
 }
+function updateTELNET(form) {
+  form.PORTTELNET.disabled = form.USE_TELNET.value=='no';
+}
+function updateSSH(form) {
+  form.PORTSSH.disabled = form.USE_SSH.value=='no';
+}
+function updateSSL(form) {
+  form.PORTSSL.disabled = form.USE_SSL.value=='no';
+}
+$(function(){
+  var form = document.SSLSettings;
+  updateTELNET(form);
+  updateSSH(form);
+  updateSSL(form);
+});
 </script>
 <form markdown="1" name="SSLSettings" method="POST" action="/update.htm" target="progressFrame">
 <input type="hidden" name="changePorts" value="apply">
+Start page:
+: <select name="START_PAGE" size="1" class="narrow">
+<?foreach ($tasks as $task) echo mk_option($var['START_PAGE']??'Main', $task, $task);?>
+  </select>
+
+> Select the page which is opened first when entering the GUI. By default the *Main* page is selected.
+
+<!--
+Restrict access:
+: <select name="BIND_MGT" size="1" class="narrow">
+  <?=mk_option($var['BIND_MGT'], "no", "No")?>
+  <?=mk_option($var['BIND_MGT'], "yes", "Yes")?>
+  </select>
+
+> By default GUI, SSH and TELNET access are available on all active interfaces of the system.
+>
+> *Restrict access* limits GUI, SSH and TELNET access to the management interface only (eth0).
+-->
+
+Use TELNET:
+: <select name="USE_TELNET" size="1" class="narrow" onchange="updateTELNET(this.form)">
+  <?=mk_option($var['USE_TELNET'], "no", "No")?>
+  <?=mk_option($var['USE_TELNET'], "yes", "Yes")?>
+  </select>
+
+> By default TELNET access is enabled. TELNET is an insecure type of CLI access however,
+> and it is highly recommended to use SSH access instead and disable TELNET access.
+
+TELNET port:
+: <input type="number" name="PORTTELNET" class="trim" min="1" max="65535" value="<?=htmlspecialchars($var['PORTTELNET']??23)?>">
+
+> Enter the TELNET port, default port is 23.
+
+Use SSH:
+: <select name="USE_SSH" size="1" class="narrow" onchange="updateSSH(this.form)">
+  <?=mk_option($var['USE_SSH'], "no", "No")?>
+  <?=mk_option($var['USE_SSH'], "yes", "Yes")?>
+  </select>
+
+> SSH is enabled by default and offers a secure way of CLI access. Upon system startup SSH keys are automatically generated
+> if not yet existing, and stored on the flash device in the folder */config/ssh*.
+
+SSH port:
+: <input type="number" name="PORTSSH" class="trim" min="1" max="65535" value="<?=htmlspecialchars($var['PORTSSH']??22)?>">
+
+> Enter the SSH port, default port is 22.
+
 Use SSL/TLS:
-: <select name="USE_SSL" size="1" class="narrow">
+: <select name="USE_SSL" size="1" class="narrow" onchange="updateSSL(this.form)">
   <?=mk_option($var['USE_SSL'], "auto", "Auto")?>
   <?=mk_option($var['USE_SSL'], "no", "No")?>
   <?=mk_option($var['USE_SSL'], "yes", "Yes")?>
   </select>
 
-> Determines how the webGui responds to HTTP and/or HTTPS protocol.
+> Determines how the webGUI responds to HTTP and/or HTTPS protocol.
 >
 > Select **No** to disable HTTPS
 >
-> Select **Yes** to enable HTTPS and redirect HTTP to HTTPS.  If a Let's Encrypt SSL certificate has not
+> Select **Yes** to enable HTTPS and redirect HTTP to HTTPS. If a Let's Encrypt SSL certificate has not
 > been provisioned, then an automatically generated self-signed SSL certificate will be used.
 >
 > Select **Auto** if you are using or plan to use a Let's Encrypt SSL certificate provisioned
-> by Lime Technology.  Before the certificate is provisioned, the webGui remains
-> in http-mode.  After provisioning, the webGui automatically switches to https-mode.  In addition
+> by Lime Technology. Before the certificate is provisioned, the webGUI remains
+> in http-mode. After provisioning, the webGUI automatically switches to https-mode. In addition
 > two background processes are enabled:
 >
 > - *updatedns* - This starts 30 seconds after server reboot has completed and contacts the Lime Technology
-> DNS service to register the servers local IP address.  Thereafter it wakes up every 10 minutes in case
+> DNS service to register the servers local IP address. Thereafter it wakes up every 10 minutes in case
 > the local IP address has changed again.
 >
 > - *renewcert* - This starts 60 seconds after server reboot has completed and contacts the Lime Technology
 > certificate renewal service to determine if your Let's Encrypt SSL certificate needs to be renewed.
-> Thereafter it wakes up every 24 hours.  If within 30 days of expiration, a new certificate is automatically
+> Thereafter it wakes up every 24 hours. If within 30 days of expiration, a new certificate is automatically
 > provisioned and downloaded to your server.
 >
 > Note: After provisioning a Let's Encrypt SSL certificate you may turn off the *updatedns* and *newcert*
 > background processes by chaning this field to **Yes**.
 >
 > **nginx certificate handling details**
-> 
+>
 > The nginx startup script looks for a SSL certificate on the USB boot flash in this order:<br>
 > `config/ssl/certs/certficate_bundle.pem`<br>
 > `config/ssl/certs/<server-name>_unraid_bundle.pem`
-> 
+>
 > If neither file exists, a self-signed SSL certificate is automatically created and stored in<br>
 > `config/ssl/certs/<server-name>_unraid_bundle.pem`<br>
 >
 > Provisioning a Let's Encrypt certificate writes the certificate to<br>
 > `config/ssl/certs/certficate_bundle.pem`<br>
-> 
+>
 > **nginx stapling support**
-> 
+>
 > Whether nginx enables OCSP Staping is determined by which certificate is in use:<br>
 > `config/ssl/certs/certficate_bundle.pem` => Yes<br>
 > `config/ssl/certs/<server-name>_unraid_bundle.pem` => No
 
 HTTP port:
-: <input type="number" name="PORT" class="trim" min="0" max="65535" value="<?=htmlspecialchars($var['PORT'])?>">
+: <input type="number" name="PORT" class="trim" min="1" max="65535" value="<?=htmlspecialchars($var['PORT']??80)?>">
 
-> Enter the HTTP port, default is 80.
+> Enter the HTTP port, default port is 80.
 
 HTTPS port:
-: <input type="number" name="PORTSSL" class="trim" min="0" max="65535" value="<?=htmlspecialchars($var['PORTSSL'])?>">
+: <input type="number" name="PORTSSL" class="trim" min="1" max="65535" value="<?=htmlspecialchars($var['PORTSSL']??443)?>">
 
-> Enter the HTTPS port, default is 443.
+> Enter the HTTPS port, default port is 443.
 
 Local TLD:
-: <input type="text" name="LOCAL_TLD" value="<?=htmlspecialchars($var['LOCAL_TLD'])?>">
+: <input type="text" name="LOCAL_TLD" value="<?=htmlspecialchars($var['LOCAL_TLD'])?>" class="narrow">
 
-> Enter your local Top Level Domain.  May be blank.
+> Enter your local Top Level Domain. May be blank.
 
 &nbsp;
 : <input type="button" value="Apply" onclick="checkPorts(this.form)"><input type="button" value="Done" onclick="done()">
 
 </form>
+<div style="height:24px"></div>
 <form markdown="1" name="Provision" method="POST" action="/update.htm" target="progressFrame">
 <input type="hidden" name="changePorts" value="apply">
 Certificate issuer:
@@ -189,24 +268,24 @@ Certificate expiration:
 : <button type="button" onclick="provisionSSL(this)" <?=$disabled_provision?>><?=$provisionlabel?></button><button type="button" onclick="updateDNS(this)" <?=$disabled_updatedns?>>Update DNS</button>
 
 > **Provision** may be used to allocate a *free* SSL Certficiate from [Let's Encrypt](https://letsencrypt.org/) and
-> then upload to your server.  Note: We **highly** recommend using a static IP address in this case.
+> then upload to your server. Note: We **highly** recommend using a static IP address in this case.
 
-> **Update DNS** may be used to manually initiate updating the DNS A-record of your server FQDN on unraid.net.  Note
+> **Update DNS** may be used to manually initiate updating the DNS A-record of your server FQDN on unraid.net. Note
 > that DNS propagation change could take anywhere from 1 minute to several hours (we set TTL to 60 seconds).
 
 > Note: **Provision** may fail if your router or upstream DNS server has
-> [DNS rebinding protection](https://en.wikipedia.org/wiki/DNS_rebinding) enabled.  DNS rebinding
-> protection prevents DNS from resolving a private IP network range.  DNS rebinding protection is meant as
+> [DNS rebinding protection](https://en.wikipedia.org/wiki/DNS_rebinding) enabled. DNS rebinding
+> protection prevents DNS from resolving a private IP network range. DNS rebinding protection is meant as
 > a security feature on a local LAN which includes legacy devices with buggy/insecure "web" interfaces.
 
-> One source of DNS rebinding protection could be your ISP DNS server.  In this case the problem may be solved by
+> One source of DNS rebinding protection could be your ISP DNS server. In this case the problem may be solved by
 > switching to a different DNS server such as Google's public DNS.
 
-> More commonly, DNS rebinding protection could be enabled in your router.  Most consumer routers do not implement DNS
+> More commonly, DNS rebinding protection could be enabled in your router. Most consumer routers do not implement DNS
 > rebinding protection; but, if they do, a configuration setting should be available to turn it off.
 
-> Higher end routers usually do enable DNS rebinding protection however.  Typically there are ways of turning it off
-> entirely or selectively based on domain.  Examples:
+> Higher end routers usually do enable DNS rebinding protection however. Typically there are ways of turning it off
+> entirely or selectively based on domain. Examples:
 
 > **DD-WRT:** If you are using "dnsmasq" with DNS rebinding protection enabled, you can add this line to your router
 > configuration file:

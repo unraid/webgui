@@ -516,24 +516,23 @@ function toggle_CPU(init) {
   if (!init) {
     if ($.cookie('cpu')===undefined) $.cookie('cpu','close',{path:'/',expires:3650}); else $.removeCookie('cpu',{path:'/'});
   }
-  if ($.cookie('cpu')===undefined) {
-    $('.cpu_open').show();
-  } else {
-    $('.cpu_open').hide();
-  }
+  $.cookie('cpu')===undefined ? $('.cpu_open').show() : $('.cpu_open').hide();
 }
 var cpuload = new NchanSubscriber('/sub/cpuload');
-cpuload.on('message',function(message) {
-// message should be something like: {"cpuload": {"cpu":[0,0],"cpu0":[0,0],"cpu1":[0,0],"cpu2":[0,0],"cpu3":[0,0]}}
-// The array values are [<load-percentage>,<guest-percentage>].  guest-percentage is that part of load-percentage that is being consumed by VM guests
-// var json = $.parseJSON(message);
-// $.each(json["cpuload"],function(k,v) {
-//   $('#'+k).animate({width:v[0]+'%'},{step:function(){$('#'+k).css('overflow','visible');}}).text(v[0]+'%');
-// });
-// message is the cpuload.ini file contents
-  var ini = parseINI(message);
+cpuload.on('message',function(data) {
+/*
+message should be something like: {"cpuload": {"cpu":[0,0],"cpu0":[0,0],"cpu1":[0,0],"cpu2":[0,0],"cpu3":[0,0]}}
+The array values are [<load-percentage>,<guest-percentage>].  guest-percentage is that part of load-percentage that is being consumed by VM guests
+var json = $.parseJSON(message);
+$.each(json["cpuload"],function(k,v) {
+  $('#'+k).animate({width:v[0]+'%'},{step:function(){$('#'+k).css('overflow','visible');}}).text(v[0]+'%');
+});
+*/
+//data is the cpuload.ini file contents
+  var ini = parseINI(data);
   $.each(ini,function(k,v) {
-    $('#'+k).animate({width:v['host']+'%'},{step:function(){$('#'+k).css('overflow','visible');}}).text(v['host']+'%');
+    var load = v['host']+'%';
+    $('#'+k).animate({width:load},{step:function(){$('#'+k).css('overflow','visible');}}).text(load);
   });
 });
 $(function() {

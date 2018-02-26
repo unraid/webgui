@@ -176,7 +176,7 @@ if (empty($doms)) {
     $graphics = '';
     if ($vncport > 0) {
       $wsport = $lv->domain_get_ws_port($res);
-      $vnc = '/plugins/dynamix.vm.manager/vnc.html?autoconnect=true&host=' . $_SERVER['HTTP_HOST'] . '&port=' . $wsport . '&path=';
+      $vnc = '/plugins/dynamix.vm.manager/vnc.html?autoconnect=true&host=' . $_SERVER['HTTP_HOST'] . '&port=&path=/wsproxy/' . $wsport . '/';
       $graphics = 'VNC:'.$vncport;
     }
     else if ($vncport == -1) {

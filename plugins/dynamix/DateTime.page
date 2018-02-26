@@ -39,6 +39,8 @@ Use NTP:
 
 > Select 'Yes' to use Network Time Protocol to keep your server time accurate.
 > We **highly** recommend the use of a network time server, especially if you plan on using Active Directory.
+>
+> Note: if using `pool.ntp.org` time servers, please also refer to [their documentation](http://www.pool.ntp.org/en/use.html).
 
 NTP server 1:
 : <input type="text" name="NTP_SERVER1" maxlength="80" value="<?=htmlspecialchars($var['NTP_SERVER1'])?>">
@@ -54,6 +56,11 @@ NTP server 3:
 : <input type="text" name="NTP_SERVER3" maxlength="80" value="<?=htmlspecialchars($var['NTP_SERVER3'])?>">
 
 > This is the alternate NTP Server to use if NTP Servers 1 and 2 are both down.
+
+NTP server 4:
+: <input type="text" name="NTP_SERVER4" maxlength="80" value="<?=htmlspecialchars($var['NTP_SERVER3'])?>">
+
+> This is the alternate NTP Server to use if NTP Servers 1, 2, and 3 are all down.
 
 New date and time:
 : <input type="text" name="newDateTime" maxlength="40" value="<?=my_time(time(), "%F %T")?>">
