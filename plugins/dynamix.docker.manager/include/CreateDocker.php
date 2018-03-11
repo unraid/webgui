@@ -1182,7 +1182,7 @@ optgroup.title{background-color:#625D5D;color:#FFFFFF;text-align:center;margin-t
       <? if ($xmlType == "edit"):
       if ($DockerClient->doesContainerExist($templateName)): echo "<input type='hidden' name='existingContainer' value='${templateName}'>\n"; endif;
       else:?>
-      <tr>
+      <tr class='TemplateDropDown'>
         <td>Template:</td>
         <td>
           <select id="TemplateSelect" size="1" onchange="loadTemplate(this);">
@@ -1784,6 +1784,9 @@ optgroup.title{background-color:#625D5D;color:#FFFFFF;text-align:center;margin-t
       echo "$('.advanced-switch').siblings('.switch-button-background').click();";
     }?>
   });
+	if (window.location.href.indexOf("/Apps/") > 0 ) {
+		$(".TemplateDropDown").hide();
+	}
 </script>
 <?END:?>
 
