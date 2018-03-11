@@ -40,7 +40,7 @@ if ($user) {
   $set = explode("\n",str_replace(",\n",",",preg_replace("/(cache|disk)/","\n$1",$set[0]))); $i = 0;
 }
 
-echo "<thead><tr><th>Type</th><th>Name</th><th>Size</th><th>Last Modified</th><th>Location</th></tr></thead>";
+echo "<thead><tr><th>Type</th><th class='sorter-text'>Name</th><th>Size</th><th>Last Modified</th><th>Location</th></tr></thead>";
 if ($link = parent_link()) echo "<tbody class='tablesorter-infoOnly'><tr><td><div><img src='/webGui/icons/folderup.png'></div></td><td>$link</td><td colspan='3'></td></tr></tbody>";
 
 foreach ($file as $row) {

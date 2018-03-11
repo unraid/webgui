@@ -319,7 +319,7 @@ class DockerTemplates {
 		foreach ($DockerClient->getDockerContainers() as $ct) {
 			$name           = $ct['Name'];
 			$image          = $ct['Image'];
-			$tmp            = (count($info[$name])) ? $info[$name] : [];
+			$tmp            = is_array($info[$name]) ? $info[$name] : [];
 
 			$tmp['running'] = $ct['Running'];
 			$tmp['autostart'] = in_array($name, $allAutoStart);

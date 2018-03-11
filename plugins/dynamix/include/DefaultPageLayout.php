@@ -134,10 +134,11 @@ function chkDelete(form, button) {
   button.value = form.confirmDelete.checked ? 'Delete' : 'Apply';
   button.disabled = false;
 }
-function openBox(cmd,title,height,width,load) {
+function openBox(cmd,title,height,width,load,func,id) {
   // open shadowbox window (run in foreground)
+  if (id === undefined) id = '';
   var run = cmd.split('?')[0].substr(-4)=='.php' ? cmd : '/logging.htm?cmd='+cmd+'&csrf_token=<?=$var['csrf_token']?>';
-  var options = load ? {modal:true,onClose:function(){location=location;}} : {modal:true};
+  var options = load ? (func ? {modal:true,onClose:function(){setTimeout(func+'('+'"'+id+'")',0);}} : {modal:true,onClose:function(){location=location;}}) : {modal:true};
   Shadowbox.open({content:run, player:'iframe', title:title, height:height, width:width, options:options});
 }
 function openWindow(cmd,title,height,width) {

@@ -13,7 +13,7 @@
 <?
 $docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 require_once "$docroot/webGui/include/Helpers.php";
-require_once "$docroot/plugins/dynamix.vm.manager/classes/libvirt_helpers.php";
+require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 
 $strSelectedTemplate = array_keys($arrAllTemplates)[1];
 if (!empty($_GET['template']) && !(empty($arrAllTemplates[$_GET['template']]))) {
@@ -24,7 +24,8 @@ $arrLoad = [
 	'name' => '',
 	'icon' => $arrAllTemplates[$strSelectedTemplate]['icon'],
 	'autostart' => false,
-	'form' => $arrAllTemplates[$strSelectedTemplate]['form']
+	'form' => $arrAllTemplates[$strSelectedTemplate]['form'],
+	'state' => 'shutoff'
 ];
 $strIconURL = '/plugins/dynamix.vm.manager/templates/images/'.$arrLoad['icon'];
 
@@ -43,7 +44,8 @@ if (!empty($_GET['uuid'])) {
 		'name' => $lv->domain_get_name($res),
 		'icon' => basename($strIconURL),
 		'autostart' => $lv->domain_get_autostart($res),
-		'form' => $arrAllTemplates[$strSelectedTemplate]['form']
+		'form' => $arrAllTemplates[$strSelectedTemplate]['form'],
+		'state' => $lv->domain_get_state($res)
 	];
 
 	if (empty($_GET['template'])) {
@@ -176,10 +178,10 @@ if (!empty($_GET['uuid'])) {
 		margin-top: 1px;
 	}
 	.basic {
-		/*Empty placeholder*/
+		display: none;
 	}
 	.advanced {
-		display: none;
+		/*Empty placeholder*/
 	}
 	.switch-button-label.off {
 		color: inherit;
@@ -334,10 +336,14 @@ if (!empty($_GET['uuid'])) {
 <script src="/webGui/javascript/jquery.filedrop.js"></script>
 <script src="/webGui/javascript/jquery.filetree.js"></script>
 <script src="/webGui/javascript/jquery.switchbutton.js"></script>
-<script src="/plugins/dynamix.vm.manager/scripts/dynamix.vm.manager.js"></script>
+<script src="/plugins/dynamix.vm.manager/javascript/dynamix.vm.manager.js"></script>
 <script>
 function isVMAdvancedMode() {
-	return ($.cookie('vmmanager_listview_mode') == 'advanced');
+	return true;
+}
+
+function isVMXMLMode() {
+	return ($.cookie('vmmanager_listview_mode') == 'xml');
 }
 
 $(function() {
@@ -352,13 +358,13 @@ $(function() {
 
 	$('.advancedview').switchButton({
 		labels_placement: "left",
-		on_label: 'Advanced View',
-		off_label: 'Basic View',
-		checked: isVMAdvancedMode()
+		on_label: 'XML View',
+		off_label: 'Form View',
+		checked: isVMXMLMode()
 	});
 	$('.advancedview').change(function () {
-		toggleRows('advanced', $(this).is(':checked'), 'basic');
-		$.cookie('vmmanager_listview_mode', $(this).is(':checked') ? 'advanced' : 'basic', { expires: 3650 });
+		toggleRows('xmlview', $(this).is(':checked'), 'formview');
+		$.cookie('vmmanager_listview_mode', $(this).is(':checked') ? 'xml' : 'form', { expires: 3650 });
 	});
 
 	$('#template_img').click(function (){
@@ -381,25 +387,25 @@ $(function() {
 		var category = $(this).data('category');
 
 		updatePrefixLabels(category);
-		bindSectionEvents(category);
+		<?if ($arrLoad['state'] == 'shutoff'):?> bindSectionEvents(category); <?endif;?>
 	});
 
 	$("#vmform input[data-pickroot]").fileTreeAttach();
 
 	var $el = $('#form_content');
-	var $advanced = $el.find('.advanced');
-	var $basic = $el.find('.basic');
+	var $xmlview = $el.find('.xmlview');
+	var $formview = $el.find('.formview');
 
-	if ($advanced.length || $basic.length) {
+	if ($xmlview.length || $formview.length) {
 		$('.advancedview_panel').fadeIn('fast');
-		if (isVMAdvancedMode()) {
-			$('.basic').hide();
-			$('.advanced').filter(function() {
+		if (isVMXMLMode()) {
+			$('.formview').hide();
+			$('.xmlview').filter(function() {
 				return (($(this).prop('style').display + '') === '');
 			}).show();
 		} else {
-			$('.advanced').hide();
-			$('.basic').filter(function() {
+			$('.xmlview').hide();
+			$('.formview').filter(function() {
 				return (($(this).prop('style').display + '') === '');
 			}).show();
 		}

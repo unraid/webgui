@@ -119,11 +119,11 @@ foreach ($xml->Agent as $agent) {
   $i = 1;
   foreach ($agent->Variables->children() as $v) {
     $vName = preg_replace('#\[([^\]]*)\]#', '<$1>', (string) $v);
-    $vDesc = ucfirst(strtolower(preg_replace('#\[([^\]]*)\]#', '<$1>', (String) $v->attributes()->Desc)));
-    $vDefault = preg_replace('#\[([^\]]*)\]#', '<$1>', (String) $v->attributes()->Default);
-    $vHelp = preg_replace('#\[([^\]]*)\]#', '<$1>', (String) $v->attributes()->Help);
-    echo '<dl><dt>'.$vDesc.':</dt><dd>';
-    if (preg_match('/title|message/', ${vDesc})) {
+    $vDesc = ucfirst(strtolower(preg_replace('#\[([^\]]*)\]#', '<$1>', $v->attributes()->Desc)));
+    $vDefault = preg_replace('#\[([^\]]*)\]#', '<$1>', $v->attributes()->Default);
+    $vHelp = preg_replace('#\[([^\]]*)\]#', '<$1>', $v->attributes()->Help);
+    echo "<dl><dt>$vDesc:</dt><dd>";
+    if (preg_match('/title|message/', $vDesc)) {
       echo '<select id="slot_'.$i.'" name="'.$vName.'" size="1" multiple style="display:none">';
       $i++;
       $value = str_replace('\n',',',isset($values[$vName]) ? $values[$vName] : $vDefault);

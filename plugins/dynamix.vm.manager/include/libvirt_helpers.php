@@ -12,7 +12,7 @@
 ?>
 <?
 	$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
-	require_once "$docroot/plugins/dynamix.vm.manager/classes/libvirt.php";
+	require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt.php";
 
 	// Load emhttp variables if needed.
 	if (!isset($var)){
@@ -541,12 +541,9 @@
 					<div style=\"position:relative; width:48px; height:48px; margin:0px auto;\">
 						<img src=\"$icon\" class=\"$status\" style=\"position:absolute; z-index:1; top:0; bottom:0; left:0; right:0; width:48px; height:48px;\"/>
 						<i class=\"fa iconstatus fa-$shape $status\" title=\"$status\"></i>
-					</div>
-					<div class=\"PanelText\">
-						<span class=\"PanelText $status\">$name</span>
-					</div>
-				</div>
-			</div>";
+					</div></div>
+					<div class=\"PanelText\"><span class=\"PanelText $status\">$name</span></div>
+				</div>";
 	}
 
 	function sanitizeVendor($strVendor) {
@@ -990,19 +987,19 @@
 		}
 
 		foreach ($arrHostDevs as $arrHostDev) {
-			$arrFoundGPUDevices = array_filter($arrValidGPUDevices, function($arrDev) use ($arrHostDev) { return ($arrDev['id'] == $arrHostDev['id']); });
+			$arrFoundGPUDevices = array_filter($arrValidGPUDevices, function($arrDev) use ($arrHostDev) {return ($arrDev['id'] == $arrHostDev['id']);});
 			if (!empty($arrFoundGPUDevices)) {
-				$arrGPUDevices[] = ['id' => $arrHostDev['id']];
+				$arrGPUDevices[] = ['id' => $arrHostDev['id'], 'rom' => $arrHostDev['rom']];
 				continue;
 			}
 
-			$arrFoundAudioDevices = array_filter($arrValidAudioDevices, function($arrDev) use ($arrHostDev) { return ($arrDev['id'] == $arrHostDev['id']); });
+			$arrFoundAudioDevices = array_filter($arrValidAudioDevices, function($arrDev) use ($arrHostDev) {return ($arrDev['id'] == $arrHostDev['id']);});
 			if (!empty($arrFoundAudioDevices)) {
 				$arrAudioDevices[] = ['id' => $arrHostDev['id']];
 				continue;
 			}
 
-			$arrFoundOtherDevices = array_filter($arrValidOtherDevices, function($arrDev) use ($arrHostDev) { return ($arrDev['id'] == $arrHostDev['id']); });
+			$arrFoundOtherDevices = array_filter($arrValidOtherDevices, function($arrDev) use ($arrHostDev) {return ($arrDev['id'] == $arrHostDev['id']);});
 			if (!empty($arrFoundOtherDevices)) {
 				$arrOtherDevices[] = ['id' => $arrHostDev['id']];
 				continue;
@@ -1059,6 +1056,13 @@
 			$medias = array_reverse($medias);
 		}
 
+		$strUSBMode = 'usb2';
+		if ($lv->_get_single_xpath_result($res, '//domain/devices/controller[@model=\'nec-xhci\']')) {
+			$strUSBMode = 'usb3';
+		} else if ($lv->_get_single_xpath_result($res, '//domain/devices/controller[@model=\'qemu-xhci\']')) {
+			$strUSBMode = 'usb3-qemu';
+		}
+
 		return [
 			'template' => $arrTemplateValues,
 			'domain' => [
@@ -1079,7 +1083,7 @@
 				'autostart' => ($lv->domain_get_autostart($res) ? 1 : 0),
 				'state' => $lv->domain_state_translate($dom['state']),
 				'ovmf' => ($lv->domain_get_ovmf($res) ? 1 : 0),
-				'usbmode' => ($lv->_get_single_xpath_result($res, '//domain/devices/controller[@model=\'nec-xhci\']') ? 'usb3' : 'usb2')
+				'usbmode' => $strUSBMode
 			],
 			'media' => [
 				'cdrom' => (!empty($medias) && !empty($medias[0]) && array_key_exists('file', $medias[0])) ? $medias[0]['file'] : '',

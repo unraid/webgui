@@ -1,7 +1,2 @@
 #!/bin/bash
 # Invoked after docker image loopback mounted but before docker is started
-
-if [[ -f /boot/config/docker.cfg ]]; then
-  . /boot/config/docker.cfg
-  [[ "$DOCKER_USER_NETWORKS" != "preserve" ]] && rm -f /var/lib/docker/network/files/local-kv.db
-fi

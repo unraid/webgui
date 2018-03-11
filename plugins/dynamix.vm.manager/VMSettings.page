@@ -17,7 +17,7 @@ Markdown="false"
  */
 ?>
 <?
-require_once "$docroot/plugins/dynamix.vm.manager/classes/libvirt_helpers.php";
+require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 
 
 // Check for Intel VT-x (vmx) or AMD-V (svm) cpu virtualzation support
@@ -230,6 +230,20 @@ foreach ($arrSyslinuxCfg as &$strSyslinuxCfg) {
 		<p>NOTE: You can also specify a network bridge on a per-VM basis.</p>
 	</blockquote>
 	<dl>
+		<dt>Upon host shutdown:</dt>
+		<dd>
+			<select id="hostshutdown" name="HOSTSHUTDOWN" class="narrow">
+			<?
+				echo mk_option($domain_cfg['HOSTSHUTDOWN'], 'shutdown', 'Shutdown VMs');
+				echo mk_option($domain_cfg['HOSTSHUTDOWN'], 'hibernate', 'Hibernate VMs');
+			?>
+			</select>
+		</dd>
+	</dl>
+	<blockquote class="inline_help">
+		<p>When shutting down the server, this defines the action to take upon running VMs. If <em>Hibernate VMs</em> is chosen, the VM will be instructed to hibernate (if supported) otherwise it will attempt a VM shutdown.</p>
+	</blockquote>
+	<dl>
 		<dt>VM shutdown time-out:</dt>
 		<dd>
 			<input type="number" name="TIMEOUT" value="<?=htmlspecialchars($domain_cfg['TIMEOUT'])?>" class="narrow">
@@ -325,7 +339,7 @@ foreach ($arrSyslinuxCfg as &$strSyslinuxCfg) {
 
 <script src="/webGui/javascript/jquery.filetree.js"></script>
 <script src="/webGui/javascript/jquery.switchbutton.js"></script>
-<script src="/plugins/dynamix.vm.manager/scripts/dynamix.vm.manager.js"></script>
+<script src="/plugins/dynamix.vm.manager/javascript/dynamix.vm.manager.js"></script>
 <script>
 $(function(){
 	$("#applyBtn").click(function(){
@@ -334,11 +348,11 @@ $(function(){
 			return;
 		}
 		if ($('#pcie_acs_override').val() == '1') {
-			$.getJSON("/plugins/dynamix.vm.manager/VMajax.php", {action: "acs-override-enable"}, function(data) {
+			$.getJSON("/plugins/dynamix.vm.manager/include/VMajax.php", {action: "acs-override-enable"}, function(data) {
 				$("#settingsForm").submit();
 			});
 		} else {
-			$.getJSON("/plugins/dynamix.vm.manager/VMajax.php", {action: "acs-override-disable"}, function(data) {
+			$.getJSON("/plugins/dynamix.vm.manager/include/VMajax.php", {action: "acs-override-disable"}, function(data) {
 				$("#settingsForm").submit();
 			});
 		}
@@ -365,7 +379,7 @@ $(function(){
 		$form.find('input,select').prop('disabled', true);
 		$button.removeClass('fa-download').addClass('fa-circle-o-notch fa-spin');
 
-		$.post("/plugins/dynamix.vm.manager/VMajax.php", postdata, function( data ) {
+		$.post("/plugins/dynamix.vm.manager/include/VMajax.php", postdata, function( data ) {
 			if (data.error) {
 				$("#download_status").html('<span style="color: red">' + data.error + '</span>');
 			} else {
@@ -419,7 +433,7 @@ $(function(){
 			file: $(this).val()
 		};
 
-		$.get("/plugins/dynamix.vm.manager/VMajax.php", params, function( data ) {
+		$.get("/plugins/dynamix.vm.manager/include/VMajax.php", params, function( data ) {
 
 			if (!data.exists) {
 				$("#download_button").show('fast');
@@ -482,6 +496,7 @@ $(function(){
 			$("#winvirtio_select").prop("disabled", checked);
 			$("#winvirtio").prop("disabled", checked);
 			$("#bridge").prop("disabled", checked);
+			$("#hostshutdown").prop("disabled", checked);
 			$("#pcie_acs_override").prop("disabled", checked);
 			$("#applyBtn").val(checked ? "Delete" : "Apply").removeAttr('disabled');
 		});

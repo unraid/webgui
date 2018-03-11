@@ -31,7 +31,7 @@ $DockerTemplates = new DockerTemplates();
 #   ██║     ╚██████╔╝██║ ╚████║╚██████╗   ██║   ██║╚██████╔╝██║ ╚████║███████║
 #   ╚═╝      ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝   ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝
 
-$echo = function($m){ echo "<pre>".print_r($m, true)."</pre>"; };
+$echo = function($m){echo "<pre>".print_r($m, true)."</pre>";};
 
 unset($custom);
 exec("docker network ls --filter driver='macvlan' --format='{{.Name}}'", $custom);
@@ -492,48 +492,31 @@ function setXmlVal(&$xml, $value, $el, $attr = null, $pos = 0) {
 }
 
 function getUsedPorts() {
-  global $dockerManPaths;
-  $docker = new DockerClient();
-  $docker = $docker->getDockerContainers();
-  if (!$docker) $docker = [];
-  $names = $ports = [];
-  foreach ($docker as $ct) $names[] = strtolower($ct['Name']);
-  foreach (glob($dockerManPaths['templates-user'].'/*.xml',GLOB_NOSORT) as $file) {
-    $name = strtolower(getXmlVal($file,'Name'));
-    if (!in_array($name,$names)) continue;
-    $list = []; $p = 0;
-    $list['Name'] = $name;
-    $list['Port'] = '';
-    while ($port = getXmlVal($file,'HostPort',null,$p++)) $list['Port'] .= $port.' ';
+  $ports = [];
+  exec("docker ps --format='{{.Names}}' 2>/dev/null",$names);
+  foreach ($names as $name) {
+    $list = [];
+    $list['Name'] = strtolower($name);
+    $mode = exec("docker inspect --format='{{lower .HostConfig.NetworkMode}}' $name 2>/dev/null");
+    if ($mode == 'bridge')
+      $port = explode('|',exec("docker inspect --format='{{range \$c := .HostConfig.PortBindings}}{{(index \$c 0).HostPort}}|{{end}}' $name 2>/dev/null"));
+    else
+      $port = explode('|',str_replace(['/tcp','/udp'],'',exec("docker inspect --format='{{range \$p,\$c := .Config.ExposedPorts}}{{\$p}}|{{end}}' $name 2>/dev/null")));
+    natsort($port);
+    $list['Port'] = implode(' ',array_unique($port));
     $ports[] = $list;
   }
   return $ports;
 }
 
 function getUsedIPs() {
-  global $dockerManPaths,$eth0;
-  $docker = new DockerClient();
-  $docker = $docker->getDockerContainers();
-  if (!$docker) $docker = [];
-  $names = $ips = [];
-  foreach ($docker as $ct) $names[] = strtolower($ct['Name']);
-  foreach (glob($dockerManPaths['templates-user'].'/*.xml',GLOB_NOSORT) as $file) {
-    $name = strtolower(getXmlVal($file,'Name'));
-    if (!in_array($name,$names)) continue;
+  $ips = [];
+  exec("docker ps --format='{{.Names}}' 2>/dev/null",$names);
+  foreach ($names as $name) {
     $list = [];
-    $list['Name'] = $name;
-    $mode = strtolower(getXmlVal($file,'Mode'));
-    if ($mode == 'none')
-      $list['ip'] = '-';
-    if ($mode == 'bridge')
-      $list['ip'] = 'dynamic';
-    elseif ($mode == 'host')
-      $list['ip'] = $eth0['IPADDR:0'];
-    else {
-      $list['ip'] = getXmlVal($file,'MyIP',null,0);
-      if (!$list['ip']) $list['ip'] = 'dynamic';
-    }
-    $list['ip'] .= " ($mode)";
+    $list['Name'] = strtolower($name);
+    $mode = exec("docker inspect --format='{{lower .HostConfig.NetworkMode}}' $name 2>/dev/null");
+    $list['ip'] = exec("docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $name 2>/dev/null")." ($mode)";
     $ips[] = $list;
   }
   return $ips;
@@ -781,7 +764,7 @@ optgroup.title{background-color:#625D5D;color:#FFFFFF;text-align:center;margin-t
 </style>
 <script src="/webGui/javascript/jquery.switchbutton.js"></script>
 <script src="/webGui/javascript/jquery.filetree.js"></script>
-<script src="/plugins/dynamix.vm.manager/scripts/dynamix.vm.manager.js"></script>
+<script src="/plugins/dynamix.vm.manager/javascript/dynamix.vm.manager.js"></script>
 <script type="text/javascript">
   var this_tab = $('input[name$="tabs"]').length;
   $(function() {
@@ -798,7 +781,7 @@ optgroup.title{background-color:#625D5D;color:#FFFFFF;text-align:center;margin-t
     $('#tab'+this_tab).bind({click:function(){$('#'+elementId).show();}});
     for (var x=1; x<=last; x++) if(x != this_tab) $('#tab'+x).bind({click:function(){$('#'+elementId).hide();}});
     <?endif;?>
-    $('.advanced-switch').switchButton({ labels_placement: "left", on_label: 'Advanced View', off_label: 'Basic View'});
+    $('.advanced-switch').switchButton({labels_placement: "left", on_label: 'Advanced View', off_label: 'Basic View'});
     $('.advanced-switch').change(function () {
       var status = $(this).is(':checked');
       toggleRows('advanced', status, 'basic');
@@ -935,7 +918,7 @@ optgroup.title{background-color:#625D5D;color:#FFFFFF;text-align:center;margin-t
             Opts.Name = makeName(Opts.Type);
           }
           if (! Opts.Description ) {
-            Opts.Description = "Container " + Opts.Type + ": " + Opts.Target;
+            Opts.Description = "Container "+Opts.Type+": "+Opts.Target;
           }
           if (Opts.Required == "true") {
             Opts.Buttons  = "<span class='advanced'><button type='button' onclick='editConfigPopup("+confNum+",false)'> Edit</button> ";
@@ -970,7 +953,7 @@ optgroup.title{background-color:#625D5D;color:#FFFFFF;text-align:center;margin-t
     popup.html($("#templatePopupConfig").html());
 
     // Load existing config info
-    var config = $("#ConfigNum" + num);
+    var config = $("#ConfigNum"+num);
     config.find("input").each(function(){
       var name = $(this).attr("name").replace("conf", "").replace("[]", "");
       popup.find("*[name='"+name+"']").val($(this).val());
@@ -1017,7 +1000,7 @@ optgroup.title{background-color:#625D5D;color:#FFFFFF;text-align:center;margin-t
             Opts.Name = makeName(Opts.Type);
           }
           if (! Opts.Description ) {
-            Opts.Description = "Container " + Opts.Type + ": " + Opts.Target;
+            Opts.Description = "Container "+Opts.Type+": "+Opts.Target;
           }
           Opts.Number = num;
           newConf = makeConfig(Opts);
@@ -1048,7 +1031,7 @@ optgroup.title{background-color:#625D5D;color:#FFFFFF;text-align:center;margin-t
   }
 
   function removeConfig(num) {
-    $('#ConfigNum' + num).fadeOut("fast", function() { $(this).remove(); });
+    $('#ConfigNum'+num).fadeOut("fast", function() {$(this).remove();});
     $('input[name="contName"]').trigger('change'); // signal change
   }
 
@@ -1063,8 +1046,8 @@ optgroup.title{background-color:#625D5D;color:#FFFFFF;text-align:center;margin-t
   }
 
   function makeName(type) {
-    i = $("#configLocation input[name^='confType'][value='"+type+"']").length + 1;
-    return "Host " + type.replace('Variable','Key') + " "+i;
+    i = $("#configLocation input[name^='confType'][value='"+type+"']").length+1;
+    return "Host "+type.replace('Variable','Key')+" "+i;
   }
 
   function toggleMode(el,disabled) {
@@ -1160,7 +1143,7 @@ optgroup.title{background-color:#625D5D;color:#FFFFFF;text-align:center;margin-t
     function(folder){if(on_folders){p.val(folder);p.trigger('change');if(close_on_select){$(ft).slideUp('fast',function (){$(ft).remove();});}}}
     );
     // Format fileTree according to parent position, height and width
-    ft.css({'left':p.position().left,'top':( p.position().top + p.outerHeight() ),'width':(p.width()) });
+    ft.css({'left':p.position().left,'top':(p.position().top+p.outerHeight()),'width':(p.width())});
     // close if click elsewhere
     $(document).mouseup(function(e){if(!ft.is(e.target) && ft.has(e.target).length === 0){ft.slideUp('fast',function (){$(ft).remove();});}});
     // close if parent changed
@@ -1225,7 +1208,7 @@ optgroup.title{background-color:#625D5D;color:#FFFFFF;text-align:center;margin-t
                 //$value['name'] = str_replace("my-", '', $value['name']);
                 $selected = (isset($xmlTemplate) && $value['path'] == $xmlTemplate) ? ' selected ' : '';
                 if ($selected && ($key == "default")) $showAdditionalInfo = 'class="advanced"';
-                if (strlen($selected) && $key == 'user' ){ $rmadd = $value['path']; }
+                if (strlen($selected) && $key == 'user' ){$rmadd = $value['path'];}
                 printf("\t\t\t\t\t\t<option class=\"list\" value=\"%s:%s\" {$selected} >%s</option>\n", htmlspecialchars($key), htmlspecialchars($value['path']), htmlspecialchars($value['name']));
               }
               printf("\t\t\t\t\t</optgroup>\n");
@@ -1488,7 +1471,7 @@ optgroup.title{background-color:#625D5D;color:#FFFFFF;text-align:center;margin-t
           <?=mk_option(0,'host','Host')?>
           <?=mk_option(0,'none','None')?>
           <?foreach ($custom as $network):?>
-          <?=mk_option(0,$network,$network)?>
+          <?=mk_option(0,$network,"Custom : $network")?>
           <?endforeach;?>
           </select>
         </td>
@@ -1531,14 +1514,14 @@ optgroup.title{background-color:#625D5D;color:#FFFFFF;text-align:center;margin-t
     <table class="settings wide">
       <tr>
         <td></td>
-        <td id="portsused_toggle" class="portsused_collapsed"><a onclick="togglePortsUsed()" style="cursor:pointer"><i class="fa fa-chevron-down"></i> Show deployed host ports ...</a></td>
+        <td id="portsused_toggle" class="portsused_collapsed"><a onclick="togglePortsUsed()" style="cursor:pointer"><i class="fa fa-chevron-down"></i> Show exposed host ports ...</a></td>
       </tr>
     </table>
     <div id="configLocationPorts" style="display:none"></div><br>
     <table class="settings wide">
       <tr>
         <td></td>
-        <td id="ipsused_toggle" class="ipsused_collapsed"><a onclick="toggleIPsUsed()" style="cursor:pointer"><i class="fa fa-chevron-down"></i> Show deployed IP addresses ...</a></td>
+        <td id="ipsused_toggle" class="ipsused_collapsed"><a onclick="toggleIPsUsed()" style="cursor:pointer"><i class="fa fa-chevron-down"></i> Show exposed IP addresses ...</a></td>
       </tr>
     </table>
     <div id="configLocationIPs" style="display:none"></div><br>
@@ -1656,13 +1639,13 @@ optgroup.title{background-color:#625D5D;color:#FFFFFF;text-align:center;margin-t
 
 <div id="templateUsedPorts" style="display:none">
 <table class='settings wide'>
-  <tr><td></td><td style="{0}"><span style="width:120px;display:inline-block;padding-left:20px">{1}</span>{2}</td></tr>
+  <tr><td></td><td style="{0}"><span style="width:160px;display:inline-block;padding-left:20px">{1}</span>{2}</td></tr>
 </table>
 </div>
 
 <div id="templateUsedIPs" style="display:none">
 <table class='settings wide'>
-  <tr><td></td><td style="{0}"><span style="width:120px;display:inline-block;padding-left:20px">{1}</span>{2}</td></tr>
+  <tr><td></td><td style="{0}"><span style="width:160px;display:inline-block;padding-left:20px">{1}</span>{2}</td></tr>
 </table>
 </div>
 
@@ -1703,11 +1686,11 @@ optgroup.title{background-color:#625D5D;color:#FFFFFF;text-align:center;margin-t
     if ( readm.hasClass('portsused_collapsed') ) {
       readm.removeClass('portsused_collapsed').addClass('portsused_expanded');
       $('#configLocationPorts').slideDown('fast');
-      readm.find('a').html('<i class="fa fa-chevron-up"></i> Hide deployed host ports ...');
+      readm.find('a').html('<i class="fa fa-chevron-up"></i> Hide exposed host ports ...');
     } else {
       $('#configLocationPorts').slideUp('fast');
       readm.removeClass('portsused_expanded').addClass('portsused_collapsed');
-      readm.find('a').html('<i class="fa fa-chevron-down"></i> Show deployed host ports ...');
+      readm.find('a').html('<i class="fa fa-chevron-down"></i> Show exposed host ports ...');
     }
   }
   function toggleIPsUsed() {
@@ -1715,11 +1698,11 @@ optgroup.title{background-color:#625D5D;color:#FFFFFF;text-align:center;margin-t
     if ( readm.hasClass('ipsused_collapsed') ) {
       readm.removeClass('ipsused_collapsed').addClass('ipsused_expanded');
       $('#configLocationIPs').slideDown('fast');
-      readm.find('a').html('<i class="fa fa-chevron-up"></i> Hide deployed IP addresses ...');
+      readm.find('a').html('<i class="fa fa-chevron-up"></i> Hide exposed IP addresses ...');
     } else {
       $('#configLocationIPs').slideUp('fast');
       readm.removeClass('ipsused_expanded').addClass('ipsused_collapsed');
-      readm.find('a').html('<i class="fa fa-chevron-down"></i> Show deployed IP addresses ...');
+      readm.find('a').html('<i class="fa fa-chevron-down"></i> Show exposed IP addresses ...');
     }
   }
   function load_contOverview() {
@@ -1784,10 +1767,10 @@ optgroup.title{background-color:#625D5D;color:#FFFFFF;text-align:center;margin-t
     // Show associated subnet with fixed IP (if existing)
     showSubnet($('select[name="contNetwork"]').val());
 
-    // Add list of deployed host ports
+    // Add list of exposed host ports
     $("#configLocationPorts").html(makeUsedPorts(UsedPorts,$('input[name="contName"]').val()));
 
-    // Add list of deployed IP addresses
+    // Add list of exposed IP addresses
     $("#configLocationIPs").html(makeUsedIPs(UsedIPs,$('input[name="contName"]').val()));
 
     // Add switchButton

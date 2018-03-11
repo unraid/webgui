@@ -13,7 +13,7 @@
 <?
 $docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 require_once "$docroot/webGui/include/Helpers.php";
-require_once "$docroot/plugins/dynamix.vm.manager/classes/libvirt_helpers.php";
+require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 
 function requireLibvirt() {
 	global $lv;
@@ -118,6 +118,10 @@ switch ($action) {
 		$arrResponse = $lv->domain_shutdown($domName) ?
 						['success' => true, 'state' => $lv->domain_get_state($domName)] :
 						['error' => $lv->get_last_error()];
+		$n = 20; // wait for VM to die
+		while ($arrResponse['success'] && $lv->domain_get_state($domName)=='running') {
+			sleep(1); if(!--$n) break;
+		}
 		break;
 
 	case 'domain-destroy':

@@ -17,7 +17,8 @@ Tag="download"
 <script>
 function installPlugin(name) {
   var file = name.trim();
-  if (file) {noAudit();openBox('/plugins/dynamix.plugin.manager/scripts/plugin&arg1=install&arg2='+file,'Install Plugin',600,900,true);}
+  var plugin = file.replace(/^.*(\\|\/|\:)/,'').replace('.plg','')+':install';
+  if (file) openBox('/plugins/dynamix.plugin.manager/scripts/plugin&arg1=install&arg2='+file,'Install Plugin',600,900,true,'loadlist',plugin);
 }
 </script>
 **Enter URL of remote plugin file or local plugin file**

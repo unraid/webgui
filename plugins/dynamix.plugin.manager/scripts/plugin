@@ -213,9 +213,9 @@ function plugin($method, $plugin_file, &$error) {
   $methods = ["install", "remove"];
 
   // parse plugin definition XML file
-  $xml = simplexml_load_file($plugin_file, NULL, LIBXML_NOCDATA);
+  $xml = file_exists($plugin_file) ? simplexml_load_file($plugin_file, NULL, LIBXML_NOCDATA) : false;
   if ($xml === false) {
-    $error = "xml parse error";
+    $error = "file doesn't exist or xml parse error";
     return false;
   }
 

@@ -16,14 +16,16 @@ Tag="thumbs-up"
 ?>
 <?
 $empty = "<tr><td colspan='6' style='text-align:center;padding-top:12px'><i class='fa fa-spinner fa-spin icon'></i><em>Please wait, retrieving and updating system information ...</em></td><tr>";
-$audit = $notify['unraidos'] ? 1 : 0;
+$version = $date = 'unknown';
 
 if (file_exists('/boot/previous/changes.txt')) {
   exec("head -n4 /boot/previous/changes.txt",$rows);
   foreach ($rows as $row) {
-    list($check,$version,$date) = explode(' ',$row);
-    if (stripos($check,'version')!==false) break;
-    $version = $date = 'unknown';
+    $i = stripos($row,'version');
+    if ($i !== false) {
+      list($version,$date) = explode(' ',trim(substr($row,$i+7)));
+      break;
+    }
   }
 }
 ?>
@@ -45,24 +47,30 @@ function update_table(branch) {
 function downgrade() {
  $.get('/plugins/dynamix.plugin.manager/include/Downgrade.php',{version:'<?=$version?>'},function(){refresh();});
 }
-function noAudit() {
-  hideUpgrade();
-  $.cookie('noAudit','true',{path:'/'});
-}
-$(function() {
-  var audit = <?=$audit?>;
-  if ($.cookie('noAudit') != null) {
-    $.removeCookie('noAudit',{path:'/'});
-    audit = 0;
-  }
-  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{system:'true',audit:audit},function(data) {
-    $('#os_list').html(data);
+function loadlist(id) {
+  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{system:'true',audit:id},function(data) {
+    if (id) {
+      var tmp = id.split(':');
+      var tr = 'tr#'+tmp[0].replace(/[\. _]/g,'');
+      switch (tmp[1]) {
+        case 'update':
+        case 'install': $('#os_list').find(tr).remove(); $('#os_list').append(data).trigger('update'); break;
+      }
+    } else {
+      $('#os_list').html(data);
+    }
     $('#os_table').tablesorter({sortList:[[4,0],[1,0]],sortAppend:[[1,0]],headers:{0:{sorter:false},5:{sorter:false}},textAttribute:'data'});
 <?if (preg_match("/^\*\*(REBOOT REQUIRED|DOWNGRADE)/",@file_get_contents("$docroot/plugins/unRAIDServer/README.md",false,null,0,20))):?>
     $('#change_branch').prop('disabled',true);
 <?endif;?>
+<?if (file_exists('/boot/previous/bzroot')):?>
+    $('#previous').show();
+<?endif;?>
   });
-<?if (!$audit):?>
+}
+$(function() {
+  loadlist();
+<?if (!$notify['unraidos']):?>
   $('.tabs').append("<span class='status vhshift'><input type='button' value='Check for Updates' onclick='openBox(\"/plugins/dynamix.plugin.manager/scripts/plugin&arg1=checkos\",\"Plugin Update Check\",490,430,true)'></span>");
 <?endif;?>
 });
@@ -72,6 +80,6 @@ $(function() {
 <thead><tr><th></th><th>Component</th><th>Author</th><th>Version</th><th>Status</th><th>Branch</th></tr></thead>
 <tbody id="os_list"><?=$empty?></tbody>
 <?if (file_exists('/boot/previous/bzroot')):?>
-<tbody><tr><td><img src="/plugins/unRAIDServer/images/unRAIDServer.png"></td><td><b>unRAID Server OS (previous)</b></td><td>LimeTech</td><td><?=$version?></td><td><?=$date?></td><td><input type="button" value="Downgrade" onclick="downgrade()"></td></tbody>
+<tbody id="previous" style="display:none"><tr><td><img src="/plugins/unRAIDServer/images/unRAIDServer.png"></td><td><b>unRAID Server OS (previous)</b></td><td>LimeTech</td><td><?=$version?></td><td><?=$date?></td><td><input type="button" value="Downgrade" onclick="downgrade()"></td></tbody>
 <?endif;?>
 </table>

@@ -13,7 +13,7 @@
 <?
 	$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 	require_once "$docroot/webGui/include/Helpers.php";
-	require_once "$docroot/plugins/dynamix.vm.manager/classes/libvirt_helpers.php";
+	require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 
 	$strXML = '';
 	$strUUID = '';
@@ -31,7 +31,7 @@
 
 
 	if (array_key_exists('createvm', $_POST)) {
-		$tmp = $lv->domain_define($_POST['xmldesc']);
+		$tmp = $lv->domain_define($_POST['xmldesc'], !empty($config['domain']['startnow']));
 		if (!$tmp){
 			$arrResponse = ['error' => $lv->get_last_error()];
 		} else {

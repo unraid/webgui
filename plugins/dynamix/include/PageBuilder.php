@@ -61,7 +61,7 @@ function find_pages($item) {
       $menu = strtok(' ');
     }
   }
-  ksort($pages);
+  ksort($pages,SORT_NATURAL);
   return $pages;
 }
 

@@ -20,19 +20,24 @@ function plugin($method, $arg = '') {
   return $retval==0 ? implode("\n", $output) : false;
 }
 
-function check_plugin($arg, $google='8.8.8.8') {
-// ping google DNS server first to ensure internet is present
-  $inet = exec("ping -qnl2 -c2 -W3 $google|awk '/received/{print $4}'");
-  return $inet ? plugin('check',$arg) : false;
+function check_plugin($arg, $dns='8.8.8.8') {
+// ping DNS server first to ensure internet is present
+  return exec("ping -qnl2 -c2 -W3 $dns 2>/dev/null|awk '/received/{print $4}'") ? plugin('check',$arg) : false;
 }
 
 function make_link($method, $arg, $extra='') {
-  $id = basename($arg, '.plg').$method;
+  $plg = basename($arg,'.plg').':'.$method;
+  $id = str_replace(['.',' ','_'],'',$plg);
   $check = $method=='remove' ? "<input type='checkbox' onClick='document.getElementById(\"$id\").disabled=!this.checked'>" : "";
   $disabled = $check ? ' disabled' : '';
-  $cmd = $method == 'delete' ? "/plugins/dynamix.plugin.manager/scripts/plugin_rm&arg1=$arg" : "/plugins/dynamix.plugin.manager/scripts/plugin&arg1=$method&arg2=$arg".($extra?"&arg3=$extra":"");
-  $clr = $method == 'delete' ? "" : "noAudit();";
-  return "{$check}<input type='button' id='$id' value='".ucfirst($method)."' onclick='{$clr}openBox(\"{$cmd}\",\"".ucwords($method)." Plugin\",600,900,true)'{$disabled}>";
+  if ($method == 'delete') {
+    $cmd = "/plugins/dynamix.plugin.manager/scripts/plugin_rm&arg1=$arg";
+    $exec = $plg = "";
+  } else {
+    $cmd = "/plugins/dynamix.plugin.manager/scripts/plugin&arg1=$method&arg2=$arg".($extra?"&arg3=$extra":"");
+    $exec = "loadlist";
+  }
+  return "$check<input type='button' id='$id' value='".ucfirst($method)."' onclick='openBox(\"$cmd\",\"".ucwords($method)." Plugin\",600,900,true,\"$exec\",\"$plg\");'$disabled>";
 }
 
 // trying our best to find an icon

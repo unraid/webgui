@@ -37,8 +37,8 @@ if (file_exists($realfile)) {
   }
 }
 unset($custom,$other);
-exec("ls /sys/class/net|grep -P '^br[0-9]'",$custom);
-exec("ls /sys/class/net|grep -P '^(bond|eth)[0-9]'",$other);
+exec("ls --indicator-style=none /sys/class/net|grep -P '^br[0-9]'",$custom);
+exec("ls --indicator-style=none /sys/class/net|grep -P '^(bond|eth)[0-9]'",$other);
 foreach ($other as $network) {
   if (substr($network,0,4)=='bond') {
     $br = str_replace('bond','br',$network);
@@ -133,9 +133,10 @@ span.disabled{color:#404040}
 
 <form markdown="1" id="settingsForm" name="settingsForm" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareDocker(this)">
 <input type="hidden" name="#file" value="<?=$docker_cfgfile?>">
+<input type="hidden" name="#include" value="/plugins/dynamix.docker.manager/include/PruneConfig.php">
 <input type="hidden" name="#command" value="/plugins/dynamix/scripts/emhttpd_update">
 <input type="hidden" name="#cleanup" value="true">
-<input type="hidden" name="DOCKER_CUSTOM_NETWORKS" value="<?=$dockercfg['DOCKER_CUSTOM_NETWORKS']?>">
+<input type="hidden" name="DOCKER_CUSTOM_NETWORKS" value="<?=implode(' ',$unset)?> ">
 Enable Docker:
 : <select id="DOCKER_ENABLED" name="DOCKER_ENABLED" class="narrow">
   <?=mk_option($dockercfg['DOCKER_ENABLED'], 'no', 'No')?>
@@ -699,17 +700,6 @@ function customDHCP(id,ip) {
 function changeCustom(id,ip) {
   var checked = $('#'+id).prop('checked');
   var device = id.substr(0,id.length-5).split('_').splice(2,2).join('.').toLowerCase();
-  var user = $('input:hidden[name="DOCKER_CUSTOM_NETWORKS"]');
-  if (ip==4) {
-    var other = $('#'+id.replace('CUSTOM','CUSTOM6')).prop('checked');
-  } else {
-    var other = $('#'+id.replace('CUSTOM6','CUSTOM')).prop('checked');
-  }
-  if (checked || other) {
-    if (user.val().indexOf(device)<0) user.val(user.val()+device+' ');
-  } else {
-    user.val(user.val().replace(device+' ',''));
-  }
   id = '#'+id.substr(0,id.length-4);
   $(id+'net').prop('disabled',!checked);
   $(id+'mask').prop('disabled',!checked);

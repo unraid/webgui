@@ -20,8 +20,18 @@ $branch  = $_GET['branch'] ?? false;
 $audit   = $_GET['audit'] ?? false;
 $empty   = true;
 $builtin = ['unRAIDServer'];
+$plugins = "/var/log/plugins/*.plg";
 
-foreach (glob("/var/log/plugins/*.plg",GLOB_NOSORT) as $plugin_link) {
+if ($audit) {
+  list($plg,$action) = explode(':',$audit);
+  switch ($action) {
+    case 'remove' : return;
+    case 'install':
+    case 'update' : $plugins = "/var/log/plugins/$plg.plg"; break;
+  }
+}
+
+foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
 //only consider symlinks
   $plugin_file = @readlink($plugin_link);
   if ($plugin_file === false) continue;
@@ -31,7 +41,7 @@ foreach (glob("/var/log/plugins/*.plg",GLOB_NOSORT) as $plugin_link) {
 //switch between system and custom plugins
   if (($system && !$custom) || (!$system && $custom)) continue;
 //forced plugin check?
-  $checked = $audit ? check_plugin(basename($plugin_file)) : true;
+  $checked = check_plugin(basename($plugin_file));
 //OS update?
   $os = $system && $name==$builtin[0];
   $toggle = false;
@@ -102,7 +112,7 @@ foreach (glob("/var/log/plugins/*.plg",GLOB_NOSORT) as $plugin_link) {
   }
 //write plugin information
   $empty = false;
-  echo "<tr>";
+  echo "<tr id=\"".str_replace(['.',' ','_'],'',basename($plugin_file,'.plg'))."\">";
   echo "<td style='vertical-align:top;width:64px'><p style='text-align:center'>$link</p></td>";
   echo "<td><span class='desc_readmore' style='display:block'>$desc</span></td>";
   echo "<td>$author</td>";
