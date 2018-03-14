@@ -4,10 +4,9 @@ Icon="dynamix.docker.manager.png"
 Tag="docker"
 ---
 <?PHP
-/* Copyright 2005-2017, Lime Technology
- * Copyright 2014-2017, Guilherme Jardim, Eric Schultz, Jon Panozzo.
- *
- * Additional updates by Bergware International (October 2017)
+/* Copyright 2005-2018, Lime Technology
+ * Copyright 2014-2018, Guilherme Jardim, Eric Schultz, Jon Panozzo.
+ * Copyright 2012-2018, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -39,9 +38,12 @@ if (file_exists($realfile)) {
 unset($custom,$other);
 exec("ls --indicator-style=none /sys/class/net|grep -P '^br[0-9]'",$custom);
 exec("ls --indicator-style=none /sys/class/net|grep -P '^(bond|eth)[0-9]'",$other);
+$slaves = [];
 foreach ($other as $network) {
   if (substr($network,0,4)=='bond') {
     $br = str_replace('bond','br',$network);
+    $bond = "/sys/class/net/$network/bonding/slaves";
+    if (file_exists($bond)) $slaves = array_merge($slaves,explode(' ',str_replace("\n","",file_get_contents($bond))));
     if (!in_array($br,$custom)) $custom[] = $network;
   } else {
     $br = str_replace('eth','br',$network);
@@ -51,6 +53,7 @@ foreach ($other as $network) {
 }
 $include = $include6 = $address = $address6 = $gateway = $gateway6 = $unset = $protocol = [];
 foreach ($custom as $network) {
+  if (in_array($network,$slaves)) continue;
   $ip4 = exec("ip -4 addr show $network|awk '/inet /{print $2}'");
   $ip6 = exec("ip -6 addr show $network noprefixroute|awk '/inet6 /{print $2}'");
   $ip6 = $ip6 ?: exec("ip -6 addr show $network scope global permanent|awk '/inet6 /{print $2}'");
