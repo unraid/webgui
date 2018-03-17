@@ -1,9 +1,10 @@
 Menu="UserList"
 Title="Edit User"
+Tag="user"
 ---
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -27,10 +28,14 @@ $icon = "<i class='fa fa-trash top' title='Restore default image' onclick='resto
 ?>
 
 <style>
-<?if ($display['theme'] == 'black'):?>
+<?if ($display['theme']=='gray'):?>
+span#dropbox{border:1px solid #606E7F;border-radius:5px;background:#121510;padding:28px 12px;line-height:72px;margin-right:16px;}
+<?elseif ($display['theme']=='azure'):?>
+span#dropbox{border:1px solid #606E7F;border-radius:5px;background:#EDEAEF;padding:28px 12px;line-height:72px;margin-right:16px;}
+<?elseif ($display['theme']=='black'):?>
 span#dropbox{border:1px solid #202020;border-radius:5px;background:-webkit-radial-gradient(#303030,#101010);background:linear-gradient(#303030,#101010);padding:28px 12px;line-height:72px;margin-right:16px;}
 <?else:?>
-span#dropbox{border:1px solid #D0D0D0;border-radius:5px;background:-webkit-radial-gradient(#B0B0B0,#F0F0F0);background:linear-gradient(#B0B0B0,#F0F0F0);padding:28px 12px;line-height:72px;margin-right:16px;}
+span#dropbox{border:1px solid #D0D0D0;border-radius:5px;background:radient(#B0B0B0,#F0F0F0);background:linear-gradient(#B0B0B0,#F0F0F0);padding:28px 12px;line-height:72px;margin-right:16px;}
 <?endif;?>
 i.top{position:absolute;padding-top:4px;cursor:pointer;}
 </style>
@@ -69,7 +74,7 @@ $(function(){
   // attach the drag-n-drop feature to the 'dropbox' element
   dropbox.filedrop({
     maxfiles:1,
-    maxfilesize:95, // KB
+    maxfilesize:512, // KB
     url:'/webGui/include/FileUpload.php',
     data:{"csrf_token":"<?=$var['csrf_token']?>"},
     beforeEach:function(file) {
@@ -87,7 +92,7 @@ $(function(){
         swal({title:"Too many files",text:"Please select one file only!",type:"error"});
         break;
       case 'FileTooLarge':
-        swal({title:"File too large",text:"Maximum file upload size is 95 kB (97,280 bytes)",type:"error"});
+        swal({title:"File too large",text:"Maximum file upload size is 512 kB (524,288 bytes)",type:"error"});
         break;
       }
     },
@@ -136,7 +141,7 @@ Custom image:
 <?endif;?>
   </span><em>Drag-n-drop a PNG file or click the image at the left.</em><input type="file" id="drop" accept=".png" style="display:none">
 
-> The image will be scaled to 48x48 pixels in size. The maximum image file upload size is 95 kB (97,280 bytes).
+> The image will be scaled to 48x48 pixels in size. The maximum image file upload size is 512 kB (524,288 bytes).
 
 <?if ($name=="root"):?>
 &nbsp;

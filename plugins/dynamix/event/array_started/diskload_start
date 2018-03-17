@@ -1,0 +1,7 @@
+#!/bin/bash
+# daemonize the 'diskload' script
+DAEMON="/usr/local/emhttp/webGui/scripts/diskload"
+if [[ "$(pgrep -f $DAEMON)" == "" ]]; then
+  logger "Starting $DAEMON"
+  $DAEMON &>/dev/null &
+fi

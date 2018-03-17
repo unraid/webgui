@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -30,10 +30,10 @@ function my_duration($time) {
 <html lang="en">
 <head>
 <link type="text/css" rel="stylesheet" href="/webGui/styles/default-fonts.css">
-<link type="text/css" rel="stylesheet" href="/webGui/styles/default-white.css">
+<link type="text/css" rel="stylesheet" href="/webGui/styles/default-popup.css">
 </head>
 <body>
-<table class='share_status' style='margin-top:0'><thead><tr><td>Date</td><td>Duration</td><td>Speed</td><td>Status</td><td>Errors</td></tr></thead><tbody>
+<table class='share_status'><thead><tr><td>Date</td><td>Duration</td><td>Speed</td><td>Status</td><td>Errors</td></tr></thead><tbody>
 <?
 $log = '/boot/config/parity-checks.log'; $list = [];
 if (file_exists($log)) {

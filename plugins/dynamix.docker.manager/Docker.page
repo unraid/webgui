@@ -1,10 +1,11 @@
 Menu="Tasks:60"
 Type="xmenu"
+Code="f100"
 Cond="exec(\"grep -o '^DOCKER_ENABLED=.yes' /boot/config/docker.cfg 2>/dev/null\")"
 ----
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2014-2016, Guilherme Jardim, Eric Schultz, Jon Panozzo.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2014-2017, Guilherme Jardim, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -17,6 +18,10 @@ Cond="exec(\"grep -o '^DOCKER_ENABLED=.yes' /boot/config/docker.cfg 2>/dev/null\
 <?
 if ($var['fsState'] != "Started") {
   echo "<p class='notice'>Array must be <span class='strong big'>started</span> to view Docker containers.</p>";
+  return;
+}
+if ( !is_file('/var/run/dockerd.pid') || (!is_dir('/proc/'.@file_get_contents('/var/run/dockerd.pid'))) ) {
+  echo "<p class='notice'>Docker Service failed to start.</p>";
   return;
 }
 ?>

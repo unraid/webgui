@@ -1,10 +1,11 @@
 Menu="NetworkSettings"
 Title="Interface Rules"
+Tag="tags"
 Cond="file_exists('/boot/config/network-rules.cfg')"
 ---
 <?PHP
-/* Copyright 2016, Lime Technology
- * Copyright 2016, Bergware International.
+/* Copyright 2017, Lime Technology
+ * Copyright 2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -42,7 +43,7 @@ info['<?='_'.str_replace(':','',$val['mac'])?>'] = "<?=$val['info']?>";
 function check_rules(form) {
   var mac = [];
   $(form).find('select[name^="eth"]').each(function(){mac.push($(this).val());});
-  if (mac.dups()) {
+  if (mac.same()) {
     swal('MAC address mismatch','Rules contain duplicate MAC address assignments','error');
     return false;
   } else {

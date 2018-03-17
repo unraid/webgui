@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -11,7 +11,7 @@
  */
 ?>
 <?
-$docroot = $docroot ?: @$_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
+$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 $file = $_POST['file'];
 switch ($_POST['cmd']) {
 case 'save':
@@ -36,5 +36,12 @@ case 'diag':
   exec("$docroot/webGui/scripts/diagnostics $anon ".escapeshellarg("$docroot/$file"));
   echo "/$file";
   break;
-}
+case 'unlink':
+  $backup = readlink("$docroot/$file");
+  exec("rm -f '$docroot/$file' '$backup'");
+  break;
+case 'backup':
+  echo exec("$docroot/webGui/scripts/flash_backup");
+  break;
+}  
 ?>

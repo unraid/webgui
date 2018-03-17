@@ -1,29 +1,20 @@
 #!/bin/bash
 ini=/var/local/emhttp/diskload.ini
-declare -a sector reads writes
+declare -a reads writes
 
 # t = poll interval in seconds
 t=6
-# get sector size of each disk
-c=0
-for dev in $(awk '/(sd[a-z]*|nvme[0-9]n1) /{print $3}' /proc/diskstats); do
-  sector[c]=$(cat /sys/block/$dev/queue/hw_sector_size 2>/dev/null)
-  [[ -z ${sector[c]} ]] && sector[c]=512
-  ((c++))
-done
-
-# start daemon
 while :; do
-  stats=($(awk '/(sd[a-z]*|nvme[0-9]n1) /{print $3,$6,$10,$4,$8}' /proc/diskstats))
+  stats=($(awk '/(sd[a-z]*|nvme[0-9]n1|vd[a-z]) /{print $3,$6,$10,$4,$8}' /proc/diskstats))
   c=0; s=${#stats[@]}
   echo -n >$ini
   for ((i=0;i<s;i+=5)); do
     reads[c]=$((stats[i+1]-reads[c]))
     writes[c]=$((stats[i+2]-writes[c]))
-    echo ${stats[i]}=$((reads[c]*sector[c]/t)) $((writes[c]*sector[c]/t)) ${stats[i+3]} ${stats[i+4]} >>$ini
+    echo ${stats[i]}=$((reads[c]*512/t)) $((writes[c]*512/t)) ${stats[i+3]} ${stats[i+4]} >>$ini
     reads[c]=${stats[i+1]}
     writes[c]=${stats[i+2]}
     ((c++))
   done
   sleep $t
-done &
+done

@@ -1,9 +1,10 @@
 Menu="UNRAID-OS"
 Title="System Devices"
+Tag="list"
 ---
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -13,6 +14,21 @@ Title="System Devices"
  * all copies or substantial portions of the Software.
  */
 ?>
+<style>
+table.pre{margin-top:0}
+table.pre td:first-child{width:144px}
+table tr td{padding:0 0 3px 0;margin:0}
+table tr td.thin{line-height:8px;height:8px}
+</style>
+<script>
+$(function(){
+  $('#t1').load('/webGui/include/SysDevs.php',{table:'t1'});
+  $('#t2').load('/webGui/include/SysDevs.php',{table:'t2'});
+  $('#t3').load('/webGui/include/SysDevs.php',{table:'t3'});
+  $('#t4').load('/webGui/include/SysDevs.php',{table:'t4'});
+});
+</script>
+
 **PCI Devices and IOMMU Groups**
 
 > This displays a list of IOMMU groups available on your system along with the output of the `lspci` command for each IOMMU group.  The numeric identifiers are used to configure PCI pass-through.
@@ -20,30 +36,20 @@ Title="System Devices"
 <?if (strpos(file_get_contents('/proc/cmdline'), 'pcie_acs_override=') !== false):?>
 <p class="notice">Warning: Your system has booted with the PCIe ACS Override setting enabled. The below list doesn't not reflect the way IOMMU would naturally group devices. To see natural IOMMU groups for your hardware, go to the <b><a href="/Settings/VMSettings">VM Settings</a></b> page and set the <b>PCIe ACS Override</b> setting to <b>No</b>.</p>
 <?endif;?>
-<pre><?
-	$iommu_groups = shell_exec('for iommu_group in $(ls /sys/kernel/iommu_groups/ -1 | sort -n);do echo "IOMMU group $iommu_group"; for device in $(ls -1 "/sys/kernel/iommu_groups/$iommu_group"/devices/); do echo -n $\'\t\';lspci -ns "$device" | awk \'BEGIN{ORS=" "}{ print "["$3"]" }\';lspci -s "$device"; done; done');
-	if (empty($iommu_groups)) {
-		$iommu_groups = explode("\n", shell_exec("lspci -n | awk '{ print \"[\"\$3\"]\" }'"));
-		$i = 0;
-		foreach (explode("\n", shell_exec("lspci")) as $strDesc) {
-			$iommu_groups[$i++] .= " $strDesc";
-		}
-		$iommu_groups = implode("\n", $iommu_groups);
-	}
-	echo $iommu_groups;
-?></pre>
+
+<pre><table id='t1' class='pre'><tr><td><i class='fa fa-circle-o-notch fa-spin fa-3x fa-fw'></i></td></tr></table></pre><br>
 
 **CPU Thread Pairings**
 
 > This displays a list of CPU thread pairings.
 
-<pre><?=preg_replace(['/(\d+)[-,](\d+)/','/(\d+)\b/'], ['$1 <===> $2','cpu $1'], shell_exec("cat /sys/devices/system/cpu/*/topology/thread_siblings_list | sort -nu"))?></pre>
+<pre><table id='t2' class='pre'><tr><td><i class='fa fa-circle-o-notch fa-spin fa-3x fa-fw'></i></td></tr></table></pre><br>
 
 **USB Devices**
 
 > This displays the output of the `lsusb` command.  The numeric identifiers are used to configure PCI pass-through.
 
-<pre><?=shell_exec("lsusb | sort")?></pre>
+<pre><table id='t3' class='pre'><tr><td><i class='fa fa-circle-o-notch fa-spin fa-3x fa-fw'></i></td></tr></table></pre><br>
 
 **SCSI Devices**
 
@@ -51,5 +57,5 @@ Title="System Devices"
 >
 > Note that linux groups ATA, SATA and SAS devices with true SCSI devices.
 
-<pre><?=shell_exec("lsscsi -s")?></pre>
+<pre><table id='t4' class='pre'><tr><td><i class='fa fa-circle-o-notch fa-spin fa-3x fa-fw'></i></td></tr></table></pre>
 <input type="button" value="Done" onclick="done()">

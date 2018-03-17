@@ -1,5 +1,5 @@
 <?PHP
-/* Copyright 2005-2016, Lime Technology
+/* Copyright 2005-2017, Lime Technology
  * Copyright 2015, Dan Landon.
  * Copyright 2015, Bergware International.
  *

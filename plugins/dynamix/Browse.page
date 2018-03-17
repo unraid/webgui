@@ -1,9 +1,10 @@
 Title="Index of $dir"
-Png="dirindex.png"
+Tag="navicon"
+Markdown="false"
 ---
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -13,130 +14,25 @@ Png="dirindex.png"
  * all copies or substantial portions of the Software.
  */
 ?>
-
-<?
-/* Create list of objects in directory given by global $dir variable.  The list
- * is sorted by $field (type, name, size, time or disk), either SORT_ASC or SORT_DESC
- * as given by $opt.
- */
-function sort_by($field, $opt, $show_disk) {
-// read directory contents into 'list' array
-  global $docroot,$dir;
-  $path = $docroot.preg_replace('/([\'" &()[\]\\\\])/','\\\\$1',$dir).'/*';
-  $file = []; $list = [];
-  $i = 0;
-  exec("shopt -s dotglob ; stat -L -c'%F|%n|%s|%Y' $path 2>/dev/null", $file);
-  foreach ($file as $entry) {
-    $attr = explode('|', $entry);
-    $info = pathinfo($attr[1]);
-    $list[] = [
-    'type' => $attr[0],
-    'name' => $info['basename'],
-    'fext' => strtolower($info['extension']),
-    'size' => $attr[2],
-    'time' => $attr[3],
-    'disk' => $show_disk?my_disk(exec("shopt -s dotglob ; getfattr --no-dereference --absolute-names --only-values -n system.LOCATIONS ".escapeshellarg($attr[1]))):''];
-  }
-// sort by input 'field'
-  if ($field=='name') {
-    $type = []; $name = [];
-    foreach ($list as $row) {
-      $type[] = $row['type'];
-      $name[] = strtolower($row['name']);
-    }
-    array_multisort($type,$opt, $name,$opt, $list);
-  } else {
-    $type = []; $indx = []; $name = [];
-    foreach ($list as $row) {
-      $type[] = $row['type'];
-      $indx[] = $row[$field];
-      $name[] = strtolower($row['name']);
-    }
-    if ($field=='size'||$field=='time')
-      array_multisort($type,$opt, $indx,$opt,SORT_NUMERIC, $name,$opt, $list);
-    else
-     array_multisort($type,$opt, $indx,$opt, $name,$opt, $list);
-  }
-// return sorted list
-  return $list;
-}
-
-function parent_link($text) {
-  global $dir, $path;
-  if (($dir == "/boot") || (dirname($dir) == "/mnt") || (dirname($dir) == "/mnt/user"))
-    return $text;
-  else {
-    $parent = urlencode_path(dirname($dir));
-    return "<a href=\"".htmlspecialchars("/$path?dir=$parent")."\">".htmlspecialchars($text)."</a>";
-  }
-}
-
-// here we go..
-$show_disk = (substr_compare("/mnt/user",$dir,0,9)==0);
-clearstatcache();
-if (empty($column)) $column = 'name';
-if (empty($order)) $order = 'A';
-$list = sort_by($column, $order=='A'?SORT_ASC:SORT_DESC, $show_disk);
-
-$order=($order=='A'?'D':'A');
-$fext_order=($column=='fext'?$order:'A');
-$name_order=($column=='name'?$order:'A');
-$size_order=($column=='size'?$order:'A');
-$time_order=($column=='time'?$order:'A');
-$disk_order=($column=='disk'?$order:'A');
-?>
-<table id="indexer">
-  <tr>
-  <td><a href="<?=htmlspecialchars("/$path?dir=".urlencode_path($dir)."&column=fext&order=$fext_order")?>">Type</a></td>
-  <td><a href="<?=htmlspecialchars("/$path?dir=".urlencode_path($dir)."&column=name&order=$name_order")?>">Name</a></td>
-  <td><a href="<?=htmlspecialchars("/$path?dir=".urlencode_path($dir)."&column=size&order=$size_order")?>">Size</a></td>
-<?if ($show_disk):?>
-  <td><a href="<?=htmlspecialchars("/$path?dir=".urlencode_path($dir)."&column=disk&order=$disk_order")?>">Location</a></td>
-<?endif;?>
-  <td><a href="<?=htmlspecialchars("/$path?dir=".urlencode_path($dir)."&column=time&order=$time_order")?>">Last Modified</a></td>
-  </tr>
-<?if ($dir):?>
-  <tr>
-  <td><div class="icon-dirup"></div></td>
-  <td><?=parent_link("Parent Directory")?></td>
-  <td></td>
-  <td></td>
-<?if ($show_disk):?>
-  <td></td>
-<?endif;?>
-  </tr>
-<?endif;?>
-<?$dirs=0; $files=0; $total=0;
-  foreach ($list as $entry):
-?>  <tr>
-<?  if ($entry['type']=='directory'):
-      $dirs++;
-      $warn = "";
-?>    <td><div class="icon-folder"></div></td>
-      <td><a href="<?=htmlspecialchars("/$path?dir=".urlencode_path($dir.'/'.$entry['name']))?>"><?=htmlspecialchars($entry['name'])?></a></td>
-      <td></td>
-<?  else:
-      $files++;
-      $total+=$entry['size'];
-      $warn = strstr($entry['disk'],",") ? ' class="warning"' : '';
-?>    <td><div class="icon-file icon-<?=strtolower($entry['fext'])?>"></div></td>
-      <td><a href="<?=htmlspecialchars(urlencode_path(autov($dir.'/'.$entry['name'])));?>" <?=$warn?$warn:'class="none"'?>><?=htmlspecialchars($entry['name'])?></a></td>
-      <td<?=$warn?>><?=my_scale($entry['size'],$unit).' '.$unit?></td>
-<?  endif;?>
-<?if ($show_disk):?>
-    <td<?=$warn?>><?=$entry['disk'];?></td>
-<?endif;?>
-    <td<?=$warn?>><?=my_time($entry['time'],"%F {$display['time']}")?></td>
-    </tr>
-<?endforeach;
-  $objs = $dirs + $files;
-  $objtext = ($objs == 1)? "1 object" : "{$objs} objects";
-  $dirtext = ($dirs == 1)? "1 directory" : "{$dirs} directories";
-  $filetext = ($files == 1)? "1 file" : "{$files} files";
-  $totaltext = ($files == 0)? "" : '('.my_scale($total,$unit).' '.$unit.' total)';
-?><tr>
-  <td></td>
-  <td colspan=<?=$show_disk?4:3?>><span><?=$objtext?>: <?=$dirtext?>, <?=$filetext?> <?=$totaltext?></span></td>
-  </tr>
+<style>.loc{text-align:left;white-space:nowrap}</style>
+<script>
+$(function(){
+  $.get('/webGui/include/Browse.php',{dir:"<?=addslashes(urlencode($dir))?>",path:"<?=$path?>",user:<?=strpos($dir,'/mnt/user')===0?1:0?>},function(data){
+    var table = $('table.indexer');
+    var col = $.cookie('col')||1;
+    var dir = $.cookie('dir')||0;
+    table.html(data);
+    table.bind('sortEnd',function(e,t){
+      var sort = e.target.config.sortList.toString().split(',');
+      $.cookie('col',sort[0],{path:'/'});
+      $.cookie('dir',sort[1],{path:'/'});
+    });
+    table.tablesorter({sortList:[[col,dir],[1,0]],sortAppend:[[1,0]],textAttribute:'data'});
+  });
+});
+</script>
+<table class="indexer tablesorter">
+ <thead><tr><th>Type</th><th class='sorter-text'>Name</th><th>Size</th><th>Last Modified</th><th>Location</th></tr></thead>
+ <tbody><tr><td colspan="5" style="text-align:center;padding:24px"><i class='fa fa-circle-o-notch fa-spin fa-3x fa-fw'></i></td></tr></tbody>
 </table>
 <input type="button" value="Done" onclick="done('Browse')">

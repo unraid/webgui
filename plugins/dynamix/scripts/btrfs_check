@@ -1,7 +1,7 @@
 #!/bin/bash
 # btrfs_check start <dev> <id> <options> 
 # btrfs_check status <dev> <id>
-# btrfs_check cancel <dev> 
+# btrfs_check cancel <dev> <id>
 
 case "$1" in
 'start')
@@ -13,9 +13,14 @@ case "$1" in
   else
     echo "Not available"
   fi;
-  pgrep -f "/sbin/btrfs_check.*$2" >/dev/null
+  # establish retval of this script: 0 running, 1 not running
+  pgrep -f "/sbin/btrfs check .*$2" >/dev/null
 ;;
 'cancel')
   pkill -f "/sbin/btrfs_check.*$2"
+  while pgrep -f "/sbin/btrfs check .*$2" >/dev/null ; do
+    sleep 1
+  done
+  echo "Cancelled" >> /var/lib/btrfs/check.status.$3
 ;;
 esac

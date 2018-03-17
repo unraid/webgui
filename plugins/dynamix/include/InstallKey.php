@@ -1,5 +1,5 @@
 <?PHP
-/* Copyright 2005-2016, Lime Technology
+/* Copyright 2005-2017, Lime Technology
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -10,7 +10,7 @@
  */
 ?>
 <?
-$docroot = $docroot ?: @$_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
+$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 
 function addLog($line) { echo "<script>addLog('$line');</script>"; }
 

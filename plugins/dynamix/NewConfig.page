@@ -1,9 +1,10 @@
 Menu="UNRAID-OS"
 Title="New Config"
+Tag="hand-paper-o"
 ---
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -15,7 +16,13 @@ Title="New Config"
 ?>
 <?
 $newarray = $var['mdState']=='NEW_ARRAY';
-$disabled = $var['fsState']=="Started" || $newarray ? 'disabled' : '';
+$disabled = $var['fsState']=="Started";
+$width = strstr('gray,azure',$display['theme']) ? [166,305]:[131,300];
+if ($newarray) {
+  @unlink('/boot/config/smart-one.cfg');
+  @unlink('/boot/config/smart-all.cfg');
+  @unlink('/boot/config/plugins/dynamix/monitor.ini');
+}
 ?>
 <style>
 span.indent{display:inline-block;width:200px;margin-top:11px;}
@@ -23,32 +30,17 @@ span.indent{display:inline-block;width:200px;margin-top:11px;}
 
 <script>
 function prepareNewConfig(form) {
-  // assemble preset value
-  var preset = '';
   for (var i=1,item; item=form.preset.options[i]; i++) {
-    if (item.selected) {
-      if (preset.length) preset += ',';
-      preset += item.value;
-      item.selected = false;
+    switch (item.value) {
+      case 'parity': if (item.selected) form.preserveParity.disabled = false; break;
+      case 'data'  : if (item.selected) form.preserveData.disabled = false; break;
+      case 'cache' : if (item.selected) form.preserveCache.disabled = false; break;
     }
   }
-  // set preset filter to populate slots
-  $.post('/webGui/include/PrepareDisks.php',{preset:preset},function(){form.submit();});
+  form.preset.disabled = true;
 }
-<?if (file_exists('/var/tmp/disks.ini')):?>
-function assign(id,disk) {
-  var pair = {changeDevice:'Apply'};
-  pair['slotId.'+id] = disk;
-  $.post('/update.htm',pair);
-}
-<?
-$disks = parse_ini_file('/var/tmp/disks.ini',true);
-foreach ($disks as $disk) echo "assign('{$disk['idx']}','{$disk['id']}');";
-unlink('/var/tmp/disks.ini');
-?>
-<?endif;?>
 $(function() {
-  $('#s1').dropdownchecklist({emptyText:'None', width:131, firstItemChecksAll:true, explicitClose:'...close'});
+  $('#s1').dropdownchecklist({emptyText:'None', width:<?=$width[0]?>, firstItemChecksAll:true, explicitClose:'...close'});
 <?if ($disabled):?>
   $('#s1').dropdownchecklist('disable');
 <?endif;?>
@@ -61,26 +53,31 @@ if it were a fresh new server.
 This is useful when you have added or removed multiple drives and wish to rebuild parity based on
 the new configuration.
 
-Use the *'Retain current configuration'* selection to populate the desired disk slots ***after*** the array has been reset. By default **no** disk slots are populated.
+Use the *'Preserve current assignments'* selection to populate the desired disk slots ***after*** the array has been reset. By default **no** disk slots are populated.
 
 **DO NOT USE THIS UTILITY THINKING IT WILL REBUILD A FAILED DRIVE** - it will have the opposite
 effect of making it ***impossible*** to rebuild an existing failed drive - you have been warned!
 
 <hr>
-<form name="newConfig" method="POST" action="/update.htm" target="progressFrame">
-<input type="hidden" name="cmdInit" value=" Apply ">
-<span class="indent">Retain current configuration:</span>
+<form name="newConfig" method="POST" action="/update.htm" target="progressFrame" onsubmit="prepareNewConfig(this)">
+<input type="hidden" name="preserveParity" value="yes" disabled>
+<input type="hidden" name="preserveData" value="yes" disabled>
+<input type="hidden" name="preserveCache" value="yes" disabled>
+
+<span class="indent">Preserve current assignments:</span>
 <select id="s1" name="preset" size="1" multiple="multiple" style="display:none">
 <option value=''>All</option>
-<?=mk_option_check(0,'Parity','Parity slots')?>
-<?=mk_option_check(0,'Data','Data slots')?>
-<?=mk_option_check(0,'Cache','Cache slots')?>
+<?=mk_option_check(0,'parity','Parity slots')?>
+<?=mk_option_check(0,'data','Data slots')?>
+<?=mk_option_check(0,'cache','Cache slots')?>
 </select>
 <br>
-<span class="indent"><input type="button" name="apply" value=" Apply " onclick="prepareNewConfig(this.form)" disabled><input type="button" value=" Done " onclick="done()"></span>
-<?if ($disabled):?>
-<?=$newarray ? "Array has been <span class='strong big'>Reset</span> (please configure)" : "Array must be <span class='strong big'>Stopped</span>"?>
+<span class="indent"><input type="submit" class="lock" name="cmdInit" value="Apply" disabled><input type="button" class="lock" value="Done" onclick="done()"></span>
+<?if ($newarray):?>
+Array has been <span class='strong big'>Reset</span> (please configure)
+<?elseif ($disabled):?>
+Array must be <span class='strong big'>Stopped</span>
 <?else:?>
-<input type="checkbox" onClick="apply.disabled=!this.checked"><small>Yes I want to do this</small>
+<input type="checkbox" onClick="cmdInit.disabled=!this.checked"><small>Yes I want to do this</small>
 <?endif;?>
 </form>

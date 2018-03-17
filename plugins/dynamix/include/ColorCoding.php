@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -26,7 +26,7 @@ $match =
   'text'  => ['\b(error|emask|tainted|killed|fsck\?|parity incorrect|invalid opcode|kernel bug|power failure)\b','\b(dma|ata\d+[.:]) disabled','nobody cared','unknown boot option','write protect is on','call trace','out[ _]of[ _]memory','hpa detected: current \d+']
  ],
  ['class' => 'system',
-  'text'  => ['\b(checksumming|controller|driver|version|highmem|lowmem|bogomips)\b','throttling rate','get value of subfeature','[mg]hz processor','cpu\d*: (intel|amd)','kernel: (processors|memory|smp|console):','\bmd: xor using','thermal zone','adding \d+k swap on','kernel command line:','_sse','found.*chip','\b(mouse|speaker|kbd port|aux port|ps\/2|keyboard)\b']
+  'text'  => ['\b(checksumming|controller|driver|version|highmem|lowmem|bogomips)\b','throttling rate','get value of subfeature','[mg]hz processor','cpu\d*: (intel|amd)','kernel: (processors|memory|smp|console|microcode):','\bmd: xor using','thermal zone','adding \d+k swap on','kernel command line:','_sse','found.*chip','\b(mouse|speaker|kbd port|aux port|ps\/2|keyboard)\b']
  ],
  ['class' => 'array',
   'text'  => [': (mdcmd|md|super\.dat|unraid system|unregistered|running, size)\b','key detected, registered']

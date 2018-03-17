@@ -1,10 +1,11 @@
 Menu="Device New"
 Title="Capabilities"
+Tag="building"
 Cond="strpos($disks[$name]['status'],'_NP')===false"
 ---
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -16,14 +17,14 @@ Cond="strpos($disks[$name]['status'],'_NP')===false"
 ?>
 <script>
 $(function() {
-  $.post("/webGui/include/SmartInfo.php",{cmd:'capabilities',port:'<?=addslashes(htmlspecialchars(isset($disks[$name]['device'])?$disks[$name]['device']:$name))?>',name:'<?=addslashes(htmlspecialchars($name))?>'}, function(data) {
+  $.post("/webGui/include/SmartInfo.php",{cmd:'capabilities',port:'<?=addslashes(htmlspecialchars($disks[$name]['device']??$name))?>',name:'<?=addslashes(htmlspecialchars($name))?>'}, function(data) {
     $('#disk_capabilities').html(data);
   });
 });
 </script>
 <table class='share_status small'>
 <thead><td style="width:33%">Feature</td><td>Value</td><td>Information</td></thead>
-<tbody id="disk_capabilities"><tr><td colspan='3' style='text-align:center;padding-top:12px'><i class='fa fa-spinner fa-spin'></i>&nbsp;<em>Please wait... retrieving S.M.A.R.T. information!</em></td></tr></tbody>
+<tbody id="disk_capabilities"><tr><td colspan='3' style='text-align:center;padding:24px'><i class='fa fa-circle-o-notch fa-spin fa-3x fa-fw'></i></td></tr></tbody>
 </table>
 <input type="button" value="Done" onclick="done()">
 

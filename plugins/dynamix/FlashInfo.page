@@ -1,9 +1,10 @@
 Menu="Flash"
 Title="Flash Device Settings"
+Tag="usb"
 ---
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -13,6 +14,32 @@ Title="Flash Device Settings"
  * all copies or substantial portions of the Software.
  */
 ?>
+<script>
+function cleanUp(zip) {
+  if (document.hasFocus()) {
+    $('input[value="Creating Flash backup..."]').val('Flash backup').prop('disabled',false);
+    $('#pleaseWait').hide('slow');
+    $.post('/webGui/include/Download.php',{cmd:'unlink',file:zip});
+  } else {
+    setTimeout(function(){cleanUp(zip);},2000);
+  }
+}
+function backup() {
+  $('input[value="Flash backup"]').val('Creating Flash backup...').prop('disabled',true);
+  $('#pleaseWait').show('slow');
+  $.post('/webGui/include/Download.php',{cmd:'backup'},function(zip) {
+    if (zip) {
+      location = '/'+zip;
+      setTimeout(function(){cleanUp(zip);},6000);
+    } else {
+      $('input[value="Creating Flash backup..."]').val('Flash backup');
+      $('#pleaseWait').hide('slow');
+      swal('Creation error','Insufficient free disk space available','error');
+    }
+  });
+}
+</script>
+
 Flash Vendor:
 : <?=$var['flashVendor'];?>
 
@@ -34,5 +61,10 @@ Flash GUID:
 
 <?endif;?>
 
+> Use *Flash backup* to create a single zip file of the current contents of the flash device and store it locally on your computer.
+
 &nbsp;
-: <input type="button" value="Done" onclick="done()">
+: <input type="button" value="Flash backup" onclick="backup()"><input type="button" value="Done" onclick="done()">
+
+<br><div id="pleaseWait" style="display:none;text-align:center"><span class="red-text strong">Please wait... creating Flash backup zip file (this may take several minutes)</span>
+<br><br><span class="small">Do not leave this page until backup operation is finished</span></div>

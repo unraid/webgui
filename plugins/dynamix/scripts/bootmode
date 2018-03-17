@@ -1,0 +1,14 @@
+#!/bin/bash
+# usage: bootmode 0|1
+# 0 = legacy mode
+# 1 = UEFI mode
+
+cd /boot
+case $1 in
+  0) OLD=EFI; NEW=EFI-; ;;
+  1) OLD=EFI-; NEW=EFI; ;;
+  *) OLD=EFI; NEW=EFI-; ;;
+esac
+if [[ -d $OLD && ! -d $NEW ]]; then
+  mv $OLD $NEW
+fi

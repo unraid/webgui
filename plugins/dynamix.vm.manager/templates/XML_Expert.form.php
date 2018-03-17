@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2015-2016, Derek Macias, Eric Schultz, Jon Panozzo.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2015-2017, Derek Macias, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -11,10 +11,9 @@
  */
 ?>
 <?
-	$docroot = $docroot ?: @$_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
+	$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 	require_once "$docroot/webGui/include/Helpers.php";
-	require_once "$docroot/plugins/dynamix.vm.manager/classes/libvirt.php";
-	require_once "$docroot/plugins/dynamix.vm.manager/classes/libvirt_helpers.php";
+	require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 
 	$strXML = '';
 	$strUUID = '';
@@ -32,11 +31,7 @@
 
 
 	if (array_key_exists('createvm', $_POST)) {
-		//DEBUG
-		file_put_contents('/tmp/debug_libvirt_postparams.txt', print_r($_POST, true));
-		file_put_contents('/tmp/debug_libvirt_newxml.xml', $_POST['xmldesc']);
-
-		$tmp = $lv->domain_define($_POST['xmldesc']);
+		$tmp = $lv->domain_define($_POST['xmldesc'], !empty($config['domain']['startnow']));
 		if (!$tmp){
 			$arrResponse = ['error' => $lv->get_last_error()];
 		} else {
@@ -50,10 +45,6 @@
 	}
 
 	if (array_key_exists('updatevm', $_POST)) {
-		//DEBUG
-		file_put_contents('/tmp/debug_libvirt_postparams.txt', print_r($_POST, true));
-		file_put_contents('/tmp/debug_libvirt_updatexml.xml', $_POST['xmldesc']);
-
 		// Backup xml for existing domain in ram
 		$strOldXML = '';
 		$boolOldAutoStart = false;
@@ -61,9 +52,6 @@
 		if ($dom) {
 			$strOldXML = $lv->domain_get_xml($dom);
 			$boolOldAutoStart = $lv->domain_get_autostart($dom);
-
-			//DEBUG
-			file_put_contents('/tmp/debug_libvirt_oldxml.xml', $strOldXML);
 		}
 
 		// Remove existing domain

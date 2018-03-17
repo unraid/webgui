@@ -11,7 +11,11 @@
  */
 ?>
 <?
-$docroot = $docroot ?: @$_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
+$disks = []; $var = [];
+$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
+require_once "$docroot/webGui/include/CustomMerge.php";
+require_once "$docroot/webGui/include/Wrappers.php";
+require_once "$docroot/webGui/include/Preselect.php";
 
 function normalize($text, $glue='_') {
   $words = explode($glue,$text);
@@ -28,64 +32,72 @@ function duration(&$hrs) {
 function spindownDelay($port) {
   $disks = parse_ini_file('state/disks.ini',true);
   foreach ($disks as $disk) {
-    if ($disk['device']==$port) { file_put_contents("/var/tmp/diskSpindownDelay.{$disk['idx']}", $disk['spindownDelay']); break; }
+    $name = substr($disk['device'],-2)!='n1' ? $disk['device'] : substr($disk['device'],0,-2);
+    if ($name==$port) {file_put_contents("/var/tmp/diskSpindownDelay.{$disk['idx']}", $disk['spindownDelay']); break;}
   }
 }
-function get(&$ref,$n,$d) {
-  global $var;
-  $val = $ref[$n] ?? -1; if ($val==-1) $val = $var[$n] ?? $d;
-  return $val;
-}
-function exist(&$ref) {
-  return isset($ref) && strlen($ref);
-}
 function append(&$ref, &$info) {
-  if (isset($info)) $ref .= ($ref ? " " : "").$info;
+  if ($info) $ref .= ($ref ? " " : "").$info;
 }
-$disks = []; $var = [];
-require_once "$docroot/webGui/include/CustomMerge.php";
 $name = $_POST['name'] ?? '';
 $port = $_POST['port'] ?? '';
 if ($name) {
   $disk = &$disks[$name];
-  $type = get($disk,'smType','');
-  if ($type) {
-    $ports = [];
-    if (exist($disk['smDevice'])) $port = $disk['smDevice'];
-    if (exist($disk['smPort1'])) $ports[] = $disk['smPort1'];
-    if (exist($disk['smPort2'])) $ports[] = $disk['smPort2'];
-    if (exist($disk['smPort3'])) $ports[] = $disk['smPort3'];
-    if ($ports) $type .= ','.implode($disk['smGlue'] ?? ',',$ports);
-  }
+  $type = get_value($disk,'smType','');
+  get_ctlr_options($type, $disk);
+} else {
+  $disk = [];
+  $type = '';
 }
+$port = port_name($disk['smDevice'] ?? $port);
 switch ($_POST['cmd']) {
 case "attributes":
-  require_once "$docroot/webGui/include/Wrappers.php";
-  require_once "$docroot/webGui/include/Preselect.php";
-  $select = get($disk,'smSelect',0);
-  $level  = get($disk,'smLevel',1);
-  $events = explode('|',$disk['smEvents'] ?? $var['smEvents'] ?? $numbers);
-  $temps = [190,194];
+  $select = get_value($disk,'smSelect',0);
+  $level  = get_value($disk,'smLevel',1);
+  $events = explode('|',get_value($disk,'smEvents',$numbers));
   $unraid = parse_plugin_cfg('dynamix',true);
-  $max = $unraid['display']['max'];
-  $hot = $unraid['display']['hot'];
-  exec("smartctl -A $type ".escapeshellarg("/dev/$port")."|awk 'NR>7'",$output);
-  $empty = true;
-  foreach ($output as $line) {
-    if (!$line) continue;
-    $info = explode(' ', trim(preg_replace('/\s+/',' ',$line)), 10);
-    $color = "";
-    $highlight = strpos($info[8],'FAILING_NOW')!==false || ($select ? $info[5]>0 && $info[3]<=$info[5]*$level : $info[9]>0);
-    if (in_array($info[0], $events) && $highlight) $color = " class='warn'";
-    elseif (in_array($info[0], $temps)) {
-      if ($info[9]>=$max) $color = " class='alert'"; elseif ($info[9]>=$hot) $color = " class='warn'";
+  $max = $disk['maxTemp'] ?? $unraid['display']['max'];
+  $hot = $disk['hotTemp'] ?? $unraid['display']['hot'];
+  $top = $_POST['top'] ?? 120;
+  exec("smartctl -A $type ".escapeshellarg("/dev/$port")."|awk 'NR>4'",$output);
+  if (strpos($output[0], 'SMART Attributes Data Structure')===0) {
+    $output = array_slice($output, 3);
+    $empty = true;
+    foreach ($output as $line) {
+      if (!$line) continue;
+      $info = explode(' ', trim(preg_replace('/\s+/',' ',$line)), 10);
+      $color = "";
+      $highlight = strpos($info[8],'FAILING_NOW')!==false || ($select ? $info[5]>0 && $info[3]<=$info[5]*$level : $info[9]>0);
+      if (in_array($info[0], $events) && $highlight) $color = " class='warn'";
+      elseif (in_array($info[0], [190,194])) {
+        if (exceed($info[9],$max,$top)) $color = " class='alert'"; elseif (exceed($info[9],$hot,$top)) $color = " class='warn'";
+      }
+      if ($info[8]=='-') $info[8] = 'Never';
+      if ($info[0]==9 && is_numeric($info[9])) duration($info[9]);
+      echo "<tr{$color}>".implode('',array_map('normalize', $info))."</tr>";
+      $empty = false;
     }
-    if ($info[8]=='-') $info[8] = 'Never';
-    if ($info[0]==9 && is_numeric($info[9])) duration($info[9]);
-    echo "<tr{$color}>".implode('',array_map('normalize', $info))."</tr>";
-    $empty = false;
+    if ($empty) echo "<tr><td colspan='10' style='text-align:center;padding-top:12px'>Can not read attributes</td></tr>";
+  } else {
+    // probably a NMVe or SAS device that smartmontools doesn't know how to parse in to a SMART Attributes Data Structure
+    foreach ($output as $line) {
+      if (strpos($line,':')===false) continue;
+      list($name,$value) = explode(':', $line);
+      $name = ucfirst(strtolower($name));
+      $value = trim($value);
+      $color = '';
+      switch ($name) {
+      case 'Temperature':
+        $temp = strtok($value,' ');
+        if (exceed($temp,$max)) $color = " class='alert'"; elseif (exceed($temp,$hot)) $color = " class='warn'";
+        break;
+      case 'Power on hours':
+        if (is_numeric($value)) duration($value);
+        break;
+      }
+      echo "<tr{$color}><td>-</td><td>$name</td><td colspan='8'>$value</td></tr>";
+    }
   }
-  if ($empty) echo "<tr><td colspan='10' style='text-align:center;padding-top:12px'>Can not read attributes</td></tr>";
   break;
 case "capabilities":
   exec("smartctl -c $type ".escapeshellarg("/dev/$port")."|awk 'NR>5'",$output);
@@ -113,7 +125,7 @@ case "identify":
   exec("smartctl -H $type ".escapeshellarg("/dev/$port")."|grep -Pom1 '^SMART.*: [A-Z]+'|sed 's:self-assessment test result::'",$output);
   $empty = true;
   foreach ($output as $line) {
-    if (!strlen($line)) continue;
+    if (!$line) continue;
     if (strpos($line,'VALID ARGUMENTS')!==false) break;
     list($title,$info) = array_map('trim', explode(':', $line, 2));
     if (in_array($info,$passed)) $info = "<span class='green-text'>Passed</span>";
@@ -121,10 +133,24 @@ case "identify":
     echo "<tr>".normalize(preg_replace('/ is:$/',':',"$title:"),' ')."<td>$info</td></tr>";
     $empty = false;
   }
-  if ($empty) echo "<tr><td colspan='2' style='text-align:center;padding-top:12px'>Can not read identification</td></tr>";
+  if ($empty) {
+    echo "<tr><td colspan='2' style='text-align:center;padding-top:12px'>Can not read identification</td></tr>";
+  } else {
+    $file = '/boot/config/disk.log';
+    $disks = parse_ini_file('state/disks.ini',true);
+    $extra = file_exists($file) ? parse_ini_file($file,true) : [];
+    $disk = $disks[$name]['id'];
+    $info = &$extra[$disk];
+    $periods = ['6','12','18','24','36','48','60'];
+    echo "<tr><td>Manufacturing date:</td><td><input type='date' class='narrow' value='{$info['date']}' onchange='disklog(\"$disk\",\"date\",this.value)'></td></tr>";
+    echo "<tr><td>Date of purchase:</td><td><input type='date' class='narrow' value='{$info['purchase']}' onchange='disklog(\"$disk\",\"purchase\",this.value)'></td></tr>";
+    echo "<tr><td>Warranty period:</td><td><select size='1' class='noframe' onchange='disklog(\"$disk\",\"warranty\",this.value)'><option value=''>unknown</option>";
+    foreach ($periods as $period) echo "<option value='$period'".($info['warranty']==$period?" selected":"").">$period months</option>";
+    echo "</select></td></tr>";
+  }
   break;
 case "save":
-  exec("smartctl -a $type ".escapeshellarg("/dev/$port")." >".escapeshellarg("$docroot/{$_POST['file']}"));
+  exec("smartctl -x $type ".escapeshellarg("/dev/$port")." >".escapeshellarg("$docroot/{$_POST['file']}"));
   break;
 case "delete":
   if (strpos(realpath("/var/tmp/{$_POST['file']}"), "/var/tmp/") === 0) {

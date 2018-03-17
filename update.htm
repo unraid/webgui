@@ -22,7 +22,7 @@ src:url('/webGui/styles/arimo-bold-italic.eot');src:url('/webGui/styles/arimo-bo
 font-family:'bitstream';font-weight:normal;font-style:normal;
 src:url('/webGui/styles/bitstream.eot');src:url('/webGui/styles/bitstream.eot?#iefix') format('embedded-opentype'),url('/webGui/styles/bitstream.woff') format('woff'),url('/webGui/styles/bitstream.ttf') format('truetype'),url('/webGui/styles/bitstream.svg#bitstream') format('svg');
 }
-.logLine{font-family:bitstream;font-size:10px;color:#505050;margin:0 8px;padding:0;}
+.logLine{font-family:bitstream;font-size:11px;color:#808080;margin:0 8px;padding:0}
 .logLine.spacing{margin:10px;}
 </style>
 <script>
@@ -32,6 +32,10 @@ var enablePage=parent.location;
 function replaceName(name) {
   var x = enablePage.href.indexOf("name=");
   if (x) enablePage.href = enablePage.href.substring(0,x+5) + name;
+}
+
+function replaceOrigin(origin) {
+  enablePage=origin+enablePage.pathname;
 }
 
 function addLog(logLine) {

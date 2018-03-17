@@ -1,10 +1,11 @@
 Menu="Main:4"
 Title="Unassigned Devices"
+Tag="unlink"
 Cond="((count($devs)>0)&&($var['fsState']=='Started'))"
 ---
 <?PHP
-/* Copyright 2012-2016, Bergware International.
- * Copyright 2005-2016, Lime Technology
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -21,16 +22,16 @@ $tabX = '#tab'.($var['fsState']=='Stopped'||is_dir('/mnt/cache') ? '4' : '3');
 function open_status() {
   $.post('/webGui/include/DeviceList.php',{path:'<?=addslashes(htmlspecialchars($path))?>',device:'open'},function(data) {
     if (data) {$('#open_devices').html(data); display_diskio();}
-<?if ($update && $var['fsState']=='Started'):?>
+<?if ($var['fsState']=='Started'):?>
 <?if ($tabbed):?>
-    if ($('<?=$tabX?>').is(':checked')) timer = setTimeout(open_status,<?=abs($display['refresh'])?>);
+    if ($('<?=$tabX?>').is(':checked')) timer = setTimeout(open_status,3000);
 <?else:?>
-    setTimeout(open_status,<?=abs($display['refresh'])?>);
+    setTimeout(open_status,3000);
 <?endif;?>
 <?endif;?>
   });
 }
-<?if ($update && $var['fsState']=='Started' && $tabbed):?>
+<?if ($var['fsState']=='Started' && $tabbed):?>
 $('<?=$tabX?>').bind({click:function() {clearTimeout(timer); open_status(); $('i.toggle').show('slow');}});
 <?else:?>
 $('<?=$tabX?>').bind({click:function() {$('i.toggle').show('slow');}});
@@ -39,7 +40,7 @@ $('<?=$tabX?>').bind({click:function() {$('i.toggle').show('slow');}});
 open_status();
 </script>
 
-<table class="disk_status <?=($var['fsState']=='Stopped'?'small':$display['view']).' '.$display['align']?>">
+<table class="disk_status wide">
 <thead><tr><td>Device</td><td>Identification</td><td>Temp.</td><td>Reads</td><td>Writes</td><td>Errors</td><td>FS</td><td>Size</td><td>Used</td><td>Free</td><td>View</td></tr></thead>
 <tbody id="open_devices">
 <?

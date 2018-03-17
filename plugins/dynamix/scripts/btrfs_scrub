@@ -6,9 +6,9 @@
 case "$1" in
 'start')
   # one might wonder: why exec the scrub command, passing -B and put in background, vs just
-  # executing scrub without -B and without explicit background.  It's because it handles case
+  # executing scrub without -B and without explicit background?  It's because it handles case
   # where user adds -B themselves as one of the options, which would hang webGui process until
-  # scrub completes which would not be good.  btrfs balance does not have this btw.
+  # scrub completes, which would not be good.  (btrfs balance does not have -B option btw)
   exec /sbin/btrfs scrub start -B $3 $2 &>/dev/null &
 ;;
 'status')

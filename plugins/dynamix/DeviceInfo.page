@@ -1,6 +1,6 @@
 Menu="Device:1"
 Title="$name Settings"
-Png="devicesettings.png"
+Tag="hdd-o"
 ---
 <?PHP
 /* Copyright 2005-2017, Lime Technology
@@ -17,13 +17,51 @@ Png="devicesettings.png"
 <?
 require_once "$docroot/webGui/include/Preselect.php";
 $disk = &$disks[$name];
+$date = date('Ymd-Hi');
 $events = explode('|',$disk['smEvents'] ?? $var['smEvents'] ?? $numbers);
 
 function displayTemp($temp) {
   global $display;
   return $display['unit']=='F' ? round($temp*9/5)+32 : $temp;
 }
+function maintenance_mode() {
+  global $var, $disk;
+  return ($var['fsState']=="Started" && $var['startMode']=="Maintenance" && $disk['luksState']<=1);
+}
+$sheets = []; $n = 0;
+$type = isset($disks[$name]) ? 'Device' : 'New';
+if ($type=='New') {
+  $dev = $name;
+  foreach ($devs as $sheet) {
+    $sheets[] = $sheet['device'];
+    if ($sheet['device']==$name) {$i = $n; $file = $sheet['id']."-$date.txt";}
+    $n++;
+  }
+} else {
+  $disk = $disks[$name];
+  $dev  = $disk['device'];
+  $file = $disk['id']."-$date.txt";
+  foreach ($disks as $sheet) {
+    if ($sheet['type']=='Flash' || $sheet['color']=='grey-off') continue;
+    $sheets[] = $sheet['name'];
+    if ($sheet['name']==$name) { $i = $n; $spindown = "diskSpindownDelay.{$sheet['idx']}"; $delay = $sheet['spindownDelay']; }
+    $n++;
+  }
+}
+$end  = count($sheets)-1;
+$prev = $i>0 ? $sheets[$i-1] : $sheets[$end];
+$next = $i<$end ? $sheets[$i+1] : $sheets[0];
 ?>
+<style>
+input.option{display:none;width:40px}
+span.devtext{display:none;font-weight:bold}
+span.helptext{display:none;font-style:italic}
+<?if (strstr('azure,gray',$display['theme'])):?>
+span.code{display:inline-block;width:186px}
+<?else:?>
+span.code{display:inline-block;width:138px}
+<?endif;?>
+</style>
 <script>
 function doDispatch(form) {
   var fields = {};
@@ -42,27 +80,67 @@ function prepareDeviceInfo(form) {
     form.elements['at'+i].disabled = true;
   }
   var custom = form.smCustom.value.trim();
-  var custom = custom.length ? custom.split(',') : [];
+  custom = custom.length ? custom.split(',') : [];
   for (var i=0; i < custom.length; i++) events.push(custom[i].trim());
   form.smEvents.value = events.join('|');
   if (form.smEvents.value == '<?=implode('|',$events)?>') form.smEvents.value = '';
   if (form.smLevel.value == 1.00) form.smLevel.value = '';
 }
-function setGlue(form) {
-  var data = [{glue:'' ,more:0},
-              {glue:'' ,more:0},
-              {glue:'' ,more:0},
-              {glue:',',more:1,min1:0,max1:127},
-              {glue:'/',more:2,min1:1,max1:128,min2:1,max2:8},
-              {glue:'/',more:3,min1:1,max1:4,min2:1,max2:128,min3:1,max3:4},
-              {glue:'' ,more:0},
-              {glue:',',more:1,min1:0,max1:127}
-             ];
-  var n = form.smType.selectedIndex > 0 ? form.smType.selectedIndex-1 : <?=isset($var['smIndex'])?$var['smIndex']:0?>;
+function setGlue(form,reset) {
+  var data =
+  [{glue:'' ,more:0,dev:0,type:''},                                                        // auto
+   {glue:'' ,more:0,dev:0,type:''},                                                        // ata
+   {glue:',',more:1,dev:0,type:'input',min1:'',max1:'0xffffffff'},                         // nvme
+   {glue:',',more:2,dev:0,type:'select',min11:'',min12:'auto',min21:'',min22:12,min23:16}, // sat
+   {glue:'' ,more:0,dev:0,type:''},                                                        // scsi
+   {glue:',',more:1,dev:1,type:'',min1:0,max1:127},                                        // 3ware
+   {glue:',',more:3,dev:1,type:'',min1:0,max1:15,min2:0,max2:7,min3:0,max3:7},             // adaptec
+   {glue:',',more:1,dev:1,type:'',min1:1,max1:24},                                         // areca
+   {glue:'/',more:3,dev:1,type:'',min1:1,max1:4,min2:1,max2:128,min3:1,max3:4},            // highpoint
+   {glue:'' ,more:0,dev:0,type:''},                                                        // marvell
+   {glue:',',more:1,dev:1,type:'',min1:0,max1:127}                                         // megaraid
+  ];
+  var n = form.smType.selectedIndex>0 ? form.smType.selectedIndex-1 : <?=$var['smIndex']??0?>;
   var x = data[n]['more'];
-  for (var i=1; i <= x; i++) $('input[name="smPort'+i+'"]').attr('placeholder',data[n]['min'+i]+'..'+data[n]['max'+i]).show();
-  for (var i=x+1; i <= 3; i++) $('input[name="smPort'+i+'"]').val('').hide();
-  if (x > 0) {
+  var t = data[n]['type'];
+  for (var i=1; i <= x; i++) {
+    switch (t) {
+    case 'input':
+      var min = data[n]['min'+i];
+      var max = data[n]['max'+i];
+      var len = max.toString().length;
+      if (reset) $('input[name="smPort'+i+'"]').val('');
+      $('select[name="smPort'+i+'"]').prop('disabled',true).hide();
+      $('input[name="smPort'+i+'"]').css('width',80).attr('maxlength',len).attr('placeholder',min).prop('disabled',false).show();
+      break;
+    case 'select':
+      var options = [];
+      var c = 1;
+      do {
+        var option = data[n]['min'+i+(c++)];
+        if (typeof(option)!='undefined') {
+          var selected = option==$('input[name="smPort'+i+'"]').val() ? ' selected':'';
+          options.push('<option value="'+option+'"'+selected+'>'+option+'</option>');
+        } else break;
+      } while (true);
+      if (reset) $('select[name="smPort'+i+'"]').val('');
+      $('input[name="smPort'+i+'"]').prop('disabled',true).hide();
+      $('select[name="smPort'+i+'"]').html(options.join('')).prop('disabled',false).show();
+      break;
+    default:
+      var min = data[n]['min'+i];
+      var max = data[n]['max'+i];
+      var len = max.toString().length;
+      if (reset) $('input[name="smPort'+i+'"]').val('');
+      $('select[name="smPort'+i+'"]').prop('disabled',true).hide();
+      $('input[name="smPort'+i+'"]').css('width',40).attr('maxlength',len).attr('placeholder',min+'...'+max).prop('disabled',false).show();
+    }
+  }
+  for (var i=x+1; i <= 3; i++) {
+    $('input[name="smPort'+i+'"]').val('').prop('disabled',false).hide();
+    $('select[name="smPort'+i+'"]').prop('disabled',true).hide();
+  }
+  if (data[n]['dev']==1) {
     $('#devtext').show();
     $('input[name="smDevice"]').show();
     $('#helptext').show();
@@ -73,11 +151,21 @@ function setGlue(form) {
   }
 }
 $(function() {
+<?if (count($sheets)>1):?>
+  var ctrl  = "<span class='status vhshift'><span class='waitmsg' style='display:none;font-size:small;font-style:italic;margin-right:8px'>please wait...</span><a href='/Main/<?=$type?>?name=<?=$prev?>' title='previous device'>";
+      ctrl += "<button type='button' style='margin-right:4px' onclick='this.disabled=true;$(\".waitmsg\").show();'><i class='fa fa-chevron-left'></i></button></a>";
+      ctrl += "<a href='/Main/<?=$type?>?name=<?=$next?>' title='next device'><button type='button' onclick='this.disabled=true;$(\".waitmsg\").show();'><i class='fa fa-chevron-right'></i></button></a></span>";
+<?if ($tabbed):?>
+  $('.tabs').append(ctrl);
+<?else:?>
+  $('div[id=title]:first').append(ctrl);
+<?endif;?>
+<?endif;?>
   var form = document.smart_settings;
 <?if (!isset($disk['smType'])):?>
   form.smType.selectedIndex = 0;
 <?endif;?>
-  setGlue(form);
+  setGlue(form,false);
 });
 </script>
 
@@ -86,52 +174,18 @@ Name:
 : <span class='big'><?=htmlspecialchars(my_disk($name))?></span>
 
 Partition size:
-: <?=my_number($disk['size'])?> KB (K=1024)
+: <?=my_number($disk['sizeSb'])?> KB (K=1024)
 
 Partition format:
 : <?=$disk['format']?>
 
-<?if ($disk['type']!="Parity"):?>
-<?if ($disk['type']=="Data" || $disk['name']=="cache"):?>
-Comments:
-: <input type="text" name="diskComment.<?=$disk['idx'];?>" maxlength="256" value="<?=htmlspecialchars($disk['comment'])?>">
-
-> This text will appear under the *Comments* column for the share in Windows Explorer.
-> Enter anything you like, up to 256 characters.
+<?if ($var['spinupGroups']=="yes" && $disk['type']=="Data"):?>
+Spinup group(s):
+: <input type="text" name="diskSpinupGroup.<?=$disk['idx'];?>" maxlength="256" value="<?=$disk['spinupGroup']?>">
 
 <?endif;?>
-File system status:
-: <?=$disk['fsStatus']?><?if ($disk['fsError']) echo " - {$disk['fsError']}";?>&nbsp;
-<?endif;?>
-<?if ($disk['type']=="Data" || ($disk['type']=="Cache" && $var['SYS_CACHE_SLOTS']==1)):?>
-<?if ($var['fsState']=="Stopped"):?>
-<?$disabled = $var['mdState']=="RECON_DISK" || $var['mdState']=="SWAP_DSBL" ? "disabled" : "";?>
-
-File system type:
-: <select name="diskFsType.<?=$disk['idx'];?>" size="1" <?=$disabled?>>
-  <?=mk_option($disk['fsType'], "auto", "auto")?>
-  <?=mk_option($disk['fsType'], "btrfs", "btrfs")?>
-  <?=mk_option($disk['fsType'], "reiserfs", "reiserfs")?>
-  <?=mk_option($disk['fsType'], "xfs", "xfs")?>
-  </select>
-<?else:?>
-
-File system type:
-: <select name="diskFsType.<?=$disk['idx'];?>" size="1" disabled>
-  <?=mk_option($disk['fsType'], "auto", "auto")?>
-  <?=mk_option($disk['fsType'], "btrfs", "btrfs")?>
-  <?=mk_option($disk['fsType'], "reiserfs", "reiserfs")?>
-  <?=mk_option($disk['fsType'], "xfs", "xfs")?>
-  </select> Array must be <span class="strong big">Stopped</span> to change
-<?endif;?>
-<?elseif ($disk['type']=="Cache" && $var['SYS_CACHE_SLOTS']>1):?>
-
-File system type:
-: <?=$disk['fsType'];?>&nbsp;
-<?endif;?>
-
 Spin down delay:
-: <select name="diskSpindownDelay.<?=$disk['idx']?>" size="1">
+: <select name="diskSpindownDelay.<?=$disk['idx']?>">
   <?=mk_option($disk['spindownDelay'], "-1", "Use default")?>
   <?=mk_option($disk['spindownDelay'], "0",  "Never")?>
   <?=mk_option($disk['spindownDelay'], "15", "15 minutes")?>
@@ -148,7 +202,61 @@ Spin down delay:
   <?=mk_option($disk['spindownDelay'], "9",  "9 hours")?>
   </select><span id="smart_selftest" class='orange-text'></span>
 
-<?if (isset($disk['fsSize'])):?>
+Warning disk temperature threshold (&deg;<?=$display['unit']?>):
+: <input type="number" min="0" max="300" name="<?=htmlspecialchars($name)?>_hotTemp" class="narrow" value="<?=strlen($disk['hotTemp'])?displayTemp($disk['hotTemp']):''?>" placeholder="<?=displayTemp($display['hot'])?>">
+
+> *Warning disk temperature* sets the warning threshold for this hard disk temperature. Exceeding this threshold will result in a warning notification.
+>
+> A value of zero will disable the warning threshold (including notifications).
+
+Critical disk temperature threshold (&deg;<?=$display['unit']?>):
+: <input type="number" min="0" max="300" name="<?=htmlspecialchars($name)?>_maxTemp" class="narrow" value="<?=strlen($disk['maxTemp'])?displayTemp($disk['maxTemp']):''?>" placeholder="<?=displayTemp($display['max'])?>">
+
+> *Critical disk temperature* sets the critical threshold for this hard disk temperature. Exceeding this threshold will result in an alert notification.
+>
+> A value of zero will disable the critical threshold (including notifications).
+
+<?if ($disk['type']=="Data" || $disk['name']=="cache"):?>
+File system status:
+: <?=$disk['fsStatus']?>&nbsp;
+
+<?if ($var['fsState']=="Stopped"):?>
+<?$disabled = $var['mdState']=="SWAP_DSBL" ? "disabled" : "";?>
+<?if ($disk['type']=="Data" || $var['SYS_CACHE_SLOTS']==1):?>
+File system type:
+: <select id="diskFsType" name="diskFsType.<?=$disk['idx'];?>" <?=$disabled?>>
+  <?=mk_option($disk['fsType'], "auto", "auto")?>
+  <?=mk_option($disk['fsType'], "xfs", "xfs")?>
+  <?=mk_option($disk['fsType'], "btrfs", "btrfs")?>
+  <?=mk_option($disk['fsType'], "reiserfs", "reiserfs")?>
+  <?=mk_option($disk['fsType'], "luks:xfs", "xfs - encrypted")?>
+  <?=mk_option($disk['fsType'], "luks:btrfs", "btrfs - encrypted")?>
+  <?=mk_option($disk['fsType'], "luks:reiserfs", "reiserfs - encrypted")?>
+  </select>
+
+> Enter the desired file system type.  Changing the file system type of a device will permit you to reformat
+> that device using the new file system.  Be aware that **all existing data on the device will be lost**.
+
+<?elseif ($var['SYS_CACHE_SLOTS']>1):?>
+File system type:
+: <select id="diskFsType" name="diskFsType.<?=$disk['idx'];?>" <?=$disabled?>>
+  <?=mk_option($disk['fsType'], "auto", "auto")?>
+  <?=mk_option($disk['fsType'], "btrfs", "btrfs")?>
+  <?=mk_option($disk['fsType'], "luks:btrfs", "btrfs - encrypted")?>
+  </select>
+
+<?endif;?>
+<?else:?>
+File system type:
+: <?=str_replace('luks:','',$disk['fsType']).(strpos($disk['fsType'],'luks:')!==false ? ' - encrypted' : '')?>&nbsp;
+
+<?endif;?>
+Comments:
+: <input type="text" name="diskComment.<?=$disk['idx'];?>" maxlength="256" value="<?=htmlspecialchars($disk['comment'])?>">
+
+> This text will appear under the *Comments* column for the share in Windows Explorer.
+> Enter anything you like, up to 256 characters.
+
 Warning disk utilization threshold (%):
 : <input type="number" min="0" max="100" name="<?=htmlspecialchars($name)?>_warning" class="narrow" value="<?=strlen($disk['warning'])?$disk['warning']:''?>" placeholder="<?=$display['warning']?>">
 
@@ -166,38 +274,12 @@ Critical disk utilization threshold (%):
 > A value of zero will disable the critical threshold (including notifications).
 
 <?endif;?>
-Warning disk temperature threshold (&deg;<?=$display['unit']?>):
-: <input type="number" min="0" max="300" name="<?=htmlspecialchars($name)?>_hotTemp" class="narrow" value="<?=strlen($disk['hotTemp'])?displayTemp($disk['hotTemp']):''?>" placeholder="<?=displayTemp($display['hot'])?>">
-
-> *Warning disk temperature* sets the warning threshold for this hard disk temperature. Exceeding this threshold will result in a warning notification.
->
-> A value of zero will disable the warning threshold (including notifications).
-
-Critical disk temperature threshold (&deg;<?=$display['unit']?>):
-: <input type="number" min="0" max="300" name="<?=htmlspecialchars($name)?>_maxTemp" class="narrow" value="<?=strlen($disk['maxTemp'])?displayTemp($disk['maxTemp']):''?>" placeholder="<?=displayTemp($display['max'])?>">
-
-> *Critical disk temperature* sets the critical threshold for this hard disk temperature. Exceeding this threshold will result in an alert notification.
->
-> A value of zero will disable the critical threshold (including notifications).
-
-<?if (($var['spinupGroups']=="yes")&&($disk['type']!="Cache")):?>
-Spinup group(s):
-: <input type="text" name="diskSpinupGroup.<?=$disk['idx'];?>" maxlength="256" value="<?=$disk['spinupGroup']?>">
-<?endif;?>
-
 &nbsp;
 : <input type="submit" name="changeDisk" value="Apply"><input type="button" value="Done" onclick="done()">
 </form>
 
-<?if ($name=="cache" && $var['SYS_CACHE_SLOTS']>1):?>
-<div id="title" class="nocontrol"><span class="left"><img src="/plugins/dynamix/icons/poolinformation.png" class="icon">Pool Information</span></div>
-
-btrfs filesystem show:
-: <?echo "<pre>".shell_exec("/sbin/btrfs filesystem show {$disk['uuid']}")."</pre>";?>
-
-<?endif;?>
-<?if ($disk['fsType']=="btrfs"):?>
-<div id="title" class="nocontrol"><span class="left"><img src="/plugins/dynamix/icons/balancestatus.png" class="icon">Balance Status</span></div>
+<?if (strpos($disk['fsType'],"btrfs")!==false):?>
+<div id="title" class="nocontrol"><span class="left"><i class="title fa fa-balance-scale"></i>Balance Status</span></div>
 <form markdown="1" method="POST" action="/update.php" target="progressFrame">
 <?if ($disk['fsStatus']=="Mounted"):?>
 <?exec("$docroot/webGui/scripts/btrfs_balance status /mnt/{$disk['name']}", $balance_status, $retval);?>
@@ -242,13 +324,13 @@ btrfs balance status:
 <?else:?>
 
 &nbsp;
-: <input type="submit" value="Balance" disabled>**Balance** is only available when array is Started.
+: <input type="submit" value="Balance" disabled><?=!preg_match('/^cache\d+$/',$disk['name']) ? "<b>Balance</b> is only available when array is Started." : "See Cache Settings."?>
 
 <?endif;?>
 </form>
 <?endif;?>
-<?if ($disk['fsType']=="btrfs"):?>
-<div id="title" class="nocontrol"><span class="left"><img src="/plugins/dynamix/icons/scrubstatus.png" class="icon">Scrub Status</span></div>
+<?if (strpos($disk['fsType'],"btrfs")!==false):?>
+<div id="title" class="nocontrol"><span class="left"><i class="title fa fa-paint-brush"></i>Scrub Status</span></div>
 <form markdown="1" method="POST" action="/update.php" target="progressFrame">
 <?if ($disk['fsStatus']=="Mounted"):?>
 <?exec("$docroot/webGui/scripts/btrfs_scrub status /mnt/{$disk['name']}", $scrub_status, $retval);?>
@@ -284,15 +366,15 @@ btrfs scrub status:
 <?else:?>
 
 &nbsp;
-: <input type="submit" value="Scrub" disabled>**Scrub** is only available when array is Started.
+: <input type="submit" value="Scrub" disabled><?=!preg_match('/^cache\d+$/',$disk['name']) ? "<b>Scrub</b> is only available when array is Started." : "See Cache Settings."?>
 
 <?endif;?>
 </form>
 <?endif?>
-<?if ($disk['fsType']=="btrfs"):?>
-<div id="title" class="nocontrol"><span class="left"><img src="/plugins/dynamix/icons/filesystemstatus.png" class="icon">Check Filesystem Status</span></div>
+<?if (strpos($disk['fsType'],"btrfs")!==false):?>
+<div id="title" class="nocontrol"><span class="left"><i class="title fa fa-shield"></i>Check Filesystem Status</span></div>
 <form markdown="1" method="POST" action="/update.php" target="progressFrame">
-<?if ($var['fsState']=="Started" && $var['startMode']=='Maintenance'):?>
+<?if (maintenance_mode()):?>
 <?exec("$docroot/webGui/scripts/btrfs_check status /dev/{$disk['deviceSb']} {$disk['id']}", $check_status, $retval);?>
 
 btrfs check status:
@@ -331,16 +413,22 @@ btrfs check status:
 <?endif;?>
 <?else:?>
 
+<?if (!preg_match('/^cache\d+$/',$disk['name'])):?>
 &nbsp;
-: <input type="submit" value="Check" disabled>**Check** is only available when array is Started in **Maintenance** mode.
+: <input type="submit" value="Check" disabled> **Check** is only available when array is Started in **Maintenance** mode.
+
+<?else:?>
+&nbsp;
+: <input type="submit" value="Check" disabled> See Cache Settings.
+<?endif;?>
 
 <?endif;?>
 </form>
 <?endif;?>
-<?if ($disk['fsType']=="reiserfs"):?>
-<div id="title" class="nocontrol"><span class="left"><img src="/plugins/dynamix/icons/filesystemstatus.png" class="icon">Check Filesystem Status</span></div>
+<?if (strpos($disk['fsType'],"reiserfs")!==false):?>
+<div id="title" class="nocontrol"><span class="left"><i class="title fa fa-shield"></i>Check Filesystem Status</span></div>
 <form markdown="1" method="POST" action="/update.php" target="progressFrame">
-<?if ($var['fsState']=="Started" && $var['startMode']=='Maintenance'):?>
+<?if (maintenance_mode()):?>
 <?exec("$docroot/webGui/scripts/reiserfs_check status /dev/{$disk['deviceSb']} {$disk['id']}", $check_status, $retval);?>
 
 reiserfsck status:
@@ -381,15 +469,15 @@ reiserfsck status:
 <?else:?>
 
 &nbsp;
-: <input type="submit" value="Check" disabled>**Check** is only available when array is Started in **Maintenance** mode.
+: <input type="submit" value="Check" disabled> **Check** is only available when array is Started in **Maintenance** mode.
 
 <?endif;?>
 </form>
 <?endif;?>
-<?if ($disk['fsType']=="xfs"):?>
-<div id="title" class="nocontrol"><span class="left"><img src="/plugins/dynamix/icons/filesystemstatus.png" class="icon">Check Filesystem Status</span></div>
+<?if (strpos($disk['fsType'],"xfs")!==false):?>
+<div id="title" class="nocontrol"><span class="left"><i class="title fa fa-shield"></i>Check Filesystem Status</span></div>
 <form markdown="1" method="POST" action="/update.php" target="progressFrame">
-<?if ($var['fsState']=="Started" && $var['startMode']=='Maintenance'):?>
+<?if (maintenance_mode()):?>
 <?exec("$docroot/webGui/scripts/xfs_check status /dev/{$disk['deviceSb']} {$disk['id']}", $check_status, $retval);?>
 
 xfs_repair status:
@@ -428,13 +516,13 @@ xfs_repair status:
 <?else:?>
 
 &nbsp;
-: <input type="submit" value="Check" disabled>**Check** is only available when array is Started in **Maintenance** mode.
+: <input type="submit" value="Check" disabled> **Check** is only available when array is Started in **Maintenance** mode.
 
 <?endif;?>
 </form>
 <?endif;?>
 
-<div id="title"><span class="left"><img src="/webGui/icons/smartchecks.png" class="icon">SMART Settings</span></div>
+<div id="title"><span class="left"><i class="title fa fa-plus-square"></i>SMART Settings</span></div>
 
 <form markdown="1" name="smart_settings" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareDeviceInfo(this)">
 <input type="hidden" name="#file" value="/boot/config/smart-one.cfg">
@@ -443,7 +531,7 @@ xfs_repair status:
 <input type="hidden" name="smEvents" value="">
 <input type="hidden" name="smGlue" value="<?=htmlspecialchars($var['smGlue'])?>">
 SMART notification value:
-: <select name="smSelect" size="1">
+: <select name="smSelect">
   <?=mk_option($disk['smSelect'], "-1", "Use default")?>
   <?=mk_option($disk['smSelect'], "0", "Raw")?>
   <?=mk_option($disk['smSelect'], "1", "Normalized")?>
@@ -454,7 +542,7 @@ SMART notification value:
 > Each disk may have its own specific setting overruling the 'default' setting (see global SMART settings under Disk Settings).
 
 SMART notification tolerance level:
-: <select name="smLevel" size="1">
+: <select name="smLevel">
   <?=mk_option($disk['smLevel'], "-1", "Use default")?>
   <?=mk_option($disk['smLevel'], "1.00", "Absolute")?>
   <?=mk_option($disk['smLevel'], "1.05", "5%")?>
@@ -470,22 +558,24 @@ SMART notification tolerance level:
 > Each disk may have its own specific setting overruling the 'default' setting (see global SMART settings under Disk Settings).
 
 SMART controller type:
-: <select name="smType" size="1" onchange="setGlue(this.form)">
+: <select name="smType" onchange="setGlue(this.form,true)">
   <?=mk_option($disk['smType'], "-1", "Use default")?>
   <?=mk_option($disk['smType'], " ", "Automatic")?>
   <?=mk_option($disk['smType'], "-d ata", "ATA")?>
-  <?=mk_option($disk['smType'], "-d sat", "SATA")?>
+  <?=mk_option($disk['smType'], "-d nvme", "NVMe")?>
+  <?=mk_option($disk['smType'], "-d sat", "SAT")?>
   <?=mk_option($disk['smType'], "-d scsi", "SCSI")?>
   <?=mk_option($disk['smType'], "-d 3ware", "3Ware")?>
+  <?=mk_option($disk['smType'], "-d aacraid", "Adaptec")?>
   <?=mk_option($disk['smType'], "-d areca", "Areca")?>
   <?=mk_option($disk['smType'], "-d hpt", "HighPoint")?>
   <?=mk_option($disk['smType'], "-d marvell", "Marvell")?>
   <?=mk_option($disk['smType'], "-d megaraid", "MegaRAID")?>
   </select>
-  <input type="text" name="smPort1" maxlength="3" value="<?=$disk['smPort1']?>" style="display:none;width:32px">
-  <input type="text" name="smPort2" maxlength="3" value="<?=$disk['smPort2']?>" style="display:none;width:32px">
-  <input type="text" name="smPort3" maxlength="3" value="<?=$disk['smPort3']?>" style="display:none;width:32px"><span id="devtext" style="display:none;font-weight:bold">/dev/</span>
-  <input type="text" name="smDevice" value="<?=isset($disk['smDevice'])?$disk['smDevice']:''?>" style="display:none;width:32px" placeholder="<?=htmlspecialchars($disk['device'])?>"><span id="helptext" style="display:none;font-style:italic">enter disk index and device name as applicable to your controller</span>
+  <input type="text" name="smPort1" value="<?=$disk['smPort1']?>" class="option"><select name="smPort1" class="narrow" style="display:none" disabled></select>
+  <input type="text" name="smPort2" value="<?=$disk['smPort2']?>" class="option"><select name="smPort2" class="narrow" style="display:none" disabled></select>
+  <input type="text" name="smPort3" value="<?=$disk['smPort3']?>" class="option"><select name="smPort3" class="narrow" style="display:none" disabled></select><span id="devtext" class="devtext">/dev/</span>
+  <input type="text" name="smDevice" value="<?=$disk['smDevice']??''?>" class="option" placeholder="<?=htmlspecialchars($disk['device'])?>"><span id="helptext" class="helptext">enter disk index and device name as applicable to your controller</span>
 
 > By default automatic controller selection is done by smartctl to read the SMART information. Certain controllers however need specific settings for smartctl to work.
 > Use this setting to select your controller type and fill-in the specific disk index and device name for your situation. Use the manufacturer's documentation to find the relevant information.
@@ -493,12 +583,12 @@ SMART controller type:
 > Each disk may have its own specific setting overruling the 'default' setting (see global SMART settings under Disk Settings).
 
 SMART attribute notifications:
-: <input type="text" name="smCustom" value="<?=isset($disk['smCustom'])?$disk['smCustom']:$var['smCustom']?>" class="narrow">Custom attributes (use comma to separate numbers)
+: <input type="text" name="smCustom" value="<?=$disk['smCustom']??$var['smCustom']?>" class="narrow">Custom attributes (use comma to separate numbers)
 
-  <?for ($x = 0; $x < count($preselect); $x++):?>
+<?for ($x=0; $x < count($preselect); $x++):?>
 &nbsp;
-: <input type="checkbox" name="at<?=$x?>" value="<?=$preselect[$x]['code']?>"<?=in_array($preselect[$x]['code'],$events)?' checked':''?>><span style="display:inline-block;width:136px"><?=$preselect[$x]['code']?></span><?=$preselect[$x]['text']?>
-  <?endfor;?>
+: <input type="checkbox" name="at<?=$x?>" value="<?=$preselect[$x]['code']?>"<?=in_array($preselect[$x]['code'],$events)?' checked':''?>><span class="code">Attribute = <?=$preselect[$x]['code']?></span><?=$preselect[$x]['text']?>
+<?endfor;?>
 
 > The user can enable or disable notifications for the given SMART attributes. It is recommended to keep the default, which is ALL selected attributes,
 > when certain attributes are not present on your hard disk or do not provide the correct information, these may be excluded.

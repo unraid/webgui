@@ -1,6 +1,7 @@
 Menu="OtherSettings"
 Title="Disk Settings"
 Icon="disk-settings.png"
+Tag="database"
 ---
 <?PHP
 /* Copyright 2005-2017, Lime Technology
@@ -23,6 +24,13 @@ function displayTemp($temp) {
   return $display['unit']=='F' ? round(9/5*$temp)+32 : $temp;
 }
 ?>
+<style>
+<?if (strstr('azure,gray',$display['theme'])):?>
+span.code{display:inline-block;width:186px}
+<?else:?>
+span.code{display:inline-block;width:138px}
+<?endif;?>
+</style>
 <script>
 function doDispatch(form) {
   var fields = {};
@@ -114,9 +122,12 @@ Default partition format:
 
 Default file system:
 : <select name="defaultFsType" size="1">
-  <?=mk_option($var['defaultFsType'], "btrfs", "Btrfs");?>
-  <?=mk_option($var['defaultFsType'], "reiserfs", "ReiserFS");?>
-  <?=mk_option($var['defaultFsType'], "xfs", "XFS");?>
+  <?=mk_option($var['defaultFsType'], "xfs", "xfs");?>
+  <?=mk_option($var['defaultFsType'], "btrfs", "btrfs");?>
+  <?=mk_option($var['defaultFsType'], "reiserfs", "reiserfs");?>
+  <?=mk_option($var['defaultFsType'], "luks:xfs", "xfs - encrypted");?>
+  <?=mk_option($var['defaultFsType'], "luks:btrfs", "btrfs - encrypted");?>
+  <?=mk_option($var['defaultFsType'], "luks:reiserfs", "reiserfs - encrypted");?>
   </select>
 
 > Defines the default file system type to create when an *unmountable* array device is formatted.
@@ -144,11 +155,11 @@ Tunable (enable NCQ):
 > If set to **Yes** then *Native Command Queuing* is enabled for all array devices that support NCQ.
 >
 > Note: After changing from **No** to **Yes** you must reboot the server for the change to take effect.  Changing
-> from **Yes* to **No** however, takes effect immediately.
+> from **Yes** to **No** however, takes effect immediately.
 >
 > Most users find that overall system performance is better with NCQ disabled.
 >
-> *Auto* selects `No`.
+> **Auto** selects `No`.
 
 Tunable (nr_requests):
 : <input type="text" name="nr_requests" maxlength="10" value="<?=$var['nr_requests']?>" class="narrow"><?=$var['nr_requests_status']?>
@@ -213,7 +224,7 @@ Default critical disk temperature threshold (&deg;<?=$display['unit']?>):
 : <input type="submit" name="changeDisk" value="Apply"><input type="button" value="Done" onclick="done()">
 </form>
 
-<div id="title"><span class="left"><img src="/webGui/icons/smartchecks.png" class="icon">Global SMART Settings</span></div>
+<div id="title"><span class="left"><i class="title fa fa-plus-square"></i>Global SMART Settings</span></div>
 
 <form markdown="1" name="smart_settings" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareDiskSettings(this)">
 <input type="hidden" name="#file" value="/boot/config/smart-all.cfg">
@@ -248,15 +259,17 @@ Default SMART notification tolerance level:
 
 Default SMART controller type:
 : <select name="smType" size="1" onchange="setIndex(this.form)">
-  <?=mk_option($var['smType'], "", "Automatic")?>
-  <?=mk_option($var['smType'], "-d ata", "ATA")?>
-  <?=mk_option($var['smType'], "-d sat", "SATA")?>
-  <?=mk_option($var['smType'], "-d scsi", "SCSI")?>
-  <?=mk_option($var['smType'], "-d 3ware", "3Ware")?>
-  <?=mk_option($var['smType'], "-d areca", "Areca")?>
-  <?=mk_option($var['smType'], "-d hpt", "HighPoint")?>
-  <?=mk_option($var['smType'], "-d marvell", "Marvell")?>
-  <?=mk_option($var['smType'], "-d megaraid", "MegaRAID")?>
+  <?=mk_option($disk['smType'], "", "Automatic")?>
+  <?=mk_option($disk['smType'], "-d ata", "ATA")?>
+  <?=mk_option($disk['smType'], "-d nvme", "NVMe")?>
+  <?=mk_option($disk['smType'], "-d sat", "SAT")?>
+  <?=mk_option($disk['smType'], "-d scsi", "SCSI")?>
+  <?=mk_option($disk['smType'], "-d 3ware", "3Ware")?>
+  <?=mk_option($disk['smType'], "-d aacraid", "Adaptec")?>
+  <?=mk_option($disk['smType'], "-d areca", "Areca")?>
+  <?=mk_option($disk['smType'], "-d hpt", "HighPoint")?>
+  <?=mk_option($disk['smType'], "-d marvell", "Marvell")?>
+  <?=mk_option($disk['smType'], "-d megaraid", "MegaRAID")?>
   </select>
 
 > By default automatic controller selection is done by smartctl to read the SMART information. Certain controllers however need specific settings for smartctl to work.
@@ -267,10 +280,10 @@ Default SMART controller type:
 Default SMART attribute notifications:
 : <input type="text" name="smCustom" value="<?=$var['smCustom']?>" class="narrow">Custom attributes (use comma to separate numbers)
 
-  <?for ($x = 0; $x < count($preselect); $x++):?>
+<?for ($x = 0; $x < count($preselect); $x++):?>
 &nbsp;
-: <input type="checkbox" name="at<?=$x?>" value="<?=$preselect[$x]['code']?>"<?=in_array($preselect[$x]['code'],$events)?' checked':''?>><span style="display:inline-block;width:136px"><?=$preselect[$x]['code']?></span><?=$preselect[$x]['text']?>
-  <?endfor;?>
+: <input type="checkbox" name="at<?=$x?>" value="<?=$preselect[$x]['code']?>"<?=in_array($preselect[$x]['code'],$events)?' checked':''?>><span class="code">Attribute = <?=$preselect[$x]['code']?></span><?=$preselect[$x]['text']?>
+<?endfor;?>
 
 > The user can enable or disable notifications for the given SMART attributes. It is recommended to keep the default, which is ALL selected attributes,
 > when certain attributes are not present on your hard disk or do not provide the correct information, these may be excluded.

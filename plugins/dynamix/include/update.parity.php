@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -11,7 +11,7 @@
  */
 ?>
 <?
-$docroot = $docroot ?: @$_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
+$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 require_once "$docroot/webGui/include/Wrappers.php";
 
 $memory = '/tmp/memory.tmp';
@@ -50,7 +50,7 @@ if (isset($_POST['#apply'])) {
     $month = isset($_POST['month']) ? $_POST['month'] : '*';
     $day = isset($_POST['day']) ? $_POST['day'] : '*';
     $write = isset($_POST['write']) ? $_POST['write'] : '';
-    $cron = "# Generated parity check schedule:\n$time $dotm $month $day $term/usr/local/sbin/mdcmd check $write &> /dev/null\n\n";
+    $cron = "# Generated parity check schedule:\n$time $dotm $month $day $term/usr/local/sbin/mdcmd check $write &> /dev/null || :\n\n";
   }
   parse_cron_cfg("dynamix", "parity-check", $cron);
   @unlink($memory);

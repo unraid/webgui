@@ -38,6 +38,7 @@ function write_log($string) {
 }
 // unRAID update control
 readfile('update.htm');
+flush();
 
 $docroot = $_SERVER['DOCUMENT_ROOT'];
 if (isset($_POST['#file'])) {

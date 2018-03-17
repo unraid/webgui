@@ -1,9 +1,10 @@
 Menu="Tasks:2"
 Type="xmenu"
+Code="f07b"
 ----
 <?PHP
-if ($var['fsState']!="Started") {
-  echo "<p class='notice'>Array must be <span class='strong big'>started</span> to view Shares.</p>";
+if ($var['fsState']=="Stopped") {
+  echo "<p class='notice'>Array must be <span class='strong big'>Started</span> to view Shares.</p>";
   return;
 }
 if (count($pages)==2) $tabbed = false;

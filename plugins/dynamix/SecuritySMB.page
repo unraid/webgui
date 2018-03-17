@@ -1,10 +1,11 @@
 Menu="Disk Share Flash"
 Title="SMB Security Settings"
+Tag="windows"
 Cond="(($var['shareSMBEnabled']!='no') && (isset($name)?array_key_exists($name,$sec):0))"
 ---
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -15,23 +16,20 @@ Cond="(($var['shareSMBEnabled']!='no') && (isset($name)?array_key_exists($name,$
  */
 ?>
 <?
-function clone_list($disk) {
-  return strpos($disk['status'],'_NP')===false && ($disk['type']=='Data' || $disk['name']=='cache');
-}
+$width = strstr('gray,azure',$display['theme']) ? [123,305]:[123,300];
 ?>
-<style>
-table.settings{width:83.3%;}
-table.settings tr td:first-child{width:40%;}
-</style>
-
-> *Clone destinations* is used to copy the SMB security settings of the current selected share to one or more other existing shares.
+> *Read settings from* is used to preset the SMB security settings of the current selected share with the settings of an existing share.
 >
-> Select the desired destinations and press **Clone** to copy the SMB security settings to those shares.
+> Select the desired share name and press **Read** to copy the SMB security settings from the selected source.
+>
+> *Write settings to* is used to copy the SMB security settings of the current selected share to one or more other existing shares.
+>
+> Select the desired destinations and press **Write** to copy the SMB security settings to the selected shares.
 
-<div style="float:right">
-<span style="display:block;font-weight:bold;margin-left:2px;margin-bottom:4px">Clone destinations</span>
-<select id="s4" name="smbClone" size="1" multiple="multiple" style="display:none">
-<option>All</option>
+<div class="clone1">
+<span class="clone">Read settings from</span><i class="fa fa-arrow-left clone"></i>
+<select name="readsmb" size="1" class="clone" onchange="toggleButton('readsmb',false)">
+<option disabled selected>select...</option>
 <?
 if (isset($disks[$name])) {
   foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name) echo mk_option("", $list['name'], my_disk($list['name']));
@@ -39,11 +37,25 @@ if (isset($disks[$name])) {
   foreach ($shares as $list) if ($list['name']!=$name) echo mk_option("", $list['name'], $list['name']);
 }
 ?>
-</select>
-<div style="margin-top:10px;text-align:right"><input type="button" id="clonesmb" value="Clone" onclick="cloneSMB()" style="margin-right:0"></div>
+</select><input type="button" id="readsmb" value="Read" class="clone" onclick="readSMB()" disabled>
+</div>
+<div class="clone2">
+<span class="clone">Write settings to</span><i class="fa fa-arrow-right clone"></i>
+<select id="smb1" name="writesmb" size="1" multiple="multiple" style="display:none" onchange="toggleButton('writesmb',this.id)">
+<?
+$rows = [];
+if (isset($disks[$name])) {
+  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name) $rows[] = mk_option("", $list['name'], my_disk($list['name']));
+} else {
+  foreach ($shares as $list) if ($list['name']!=$name) $rows[] = mk_option("", $list['name'], $list['name']);
+}
+if ($rows) echo "<option>All</option>";
+foreach ($rows as $row) echo $row;
+?>
+</select><input type="button" id="writesmb" value="Write" class="clone" onclick="writeSMB()" disabled>
 </div>
 
-<form markdown="1" method="POST" action="/update.htm" target="progressFrame" onchange="$('#clonesmb').prop('disabled',true);$('#s4').dropdownchecklist('disable')">
+<form markdown="1" name="smb_edit" method="POST" action="/update.htm" target="progressFrame" onchange="toggleButton('writesmb',true);$('#smb1').dropdownchecklist('disable')">
 <input type="hidden" name="shareName" value="<?=htmlspecialchars($name)?>">
 
 Share name:
@@ -60,7 +72,6 @@ Export:
 > will *hide* the share from *browsing* but is still accessible if you know the share name.
 
 <?if ($name !== 'flash'):?>
-
 Enhanced OS X interoperability:
 : <select name="shareFruit" size="1">
   <?=mk_option($sec[$name]['fruit'], "no", "No");?>
@@ -72,7 +83,6 @@ Enhanced OS X interoperability:
 > the [VFS_FRUIT MAN PAGE](https://www.mankier.com/8/vfs_fruit).
 
 <?endif;?>
-
 Security:
 : <select name="shareSecurity" size="1">
   <?=mk_option($sec[$name]['security'], "public", "Public");?>
@@ -95,28 +105,46 @@ Security:
 </form>
 
 <?if ($sec[$name]['security'] == 'secure'):?>
-<div id="title" class="nocontrol"><dt>User Access</dt><i>Guests have <b>read-only</b> access.</i></div>
+<div id="title" class="nocontrol"><dt>SMB User Access</dt><i>Guests have <b>read-only</b> access.</i></div>
 
-> *Clone destinations* is used to copy the User access settings of the current share to one or more other existing shares.
+> *Read settings from* is used to preset the SMB User Access settings of the current selected share with the settings of an existing share.
 >
-> Select the desired destinations and press **Clone** to copy the  User access settings to those shares.
+> Select the desired share name and press **Read** to copy the SMB security settings from the selected source.
+>
+> *Write settings to* is used to copy the SMB User Access settings of the current share to one or more other existing shares.
+>
+> Select the desired destinations and press **Write** to copy the SMB User access settings to the selected shares.
 
-<div style="float:right">
-<span style="display:block;font-weight:bold;margin-left:2px;margin-bottom:4px">Clone destinations</span>
-<select id="s5" name="smbClone" size="1" multiple="multiple" style="display:none">
-<option>All</option>
+<div class="clone1">
+<span class="clone">Read settings from</span><i class="fa fa-arrow-left clone"></i>
+<select name="readusersmb" size="1" class="clone" onchange="toggleButton('readusersmb',false)">
+<option disabled selected>select...</option>
 <?
 if (isset($disks[$name])) {
-  foreach ($disks as $list) if ($list['name']!=$name && ($list['type']=='Data' || $list['name']=='cache') && $sec[$list['name']]['security']=='secure') echo mk_option("", $list['name'], my_disk($list['name']));
+  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='secure') echo mk_option("", $list['name'], my_disk($list['name']));
 } else {
   foreach ($shares as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='secure') echo mk_option("", $list['name'], $list['name']);
 }
 ?>
-</select>
-<div style="margin-top:10px;text-align:right"><input type="button" id="cloneuser" value="Clone" onclick="cloneUser()" style="margin-right:0"></div>
+</select><input type="button" id="readusersmb" value="Read" class="clone" onclick="readUserSMB()" disabled>
+</div>
+<div class="clone2">
+<span class="clone">Write settings to</span><i class="fa fa-arrow-right clone"></i>
+<select id="smb2" name="writeusersmb" size="1" multiple="multiple" style="display:none" onchange="toggleButton('writeusersmb',this.id)">
+<?
+$rows = [];
+if (isset($disks[$name])) {
+  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='secure') $rows[] = mk_option("", $list['name'], my_disk($list['name']));
+} else {
+  foreach ($shares as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='secure') $rows[] = mk_option("", $list['name'], $list['name']);
+}
+if ($rows) echo "<option>All</option>";
+foreach ($rows as $row) echo $row;
+?>
+</select><input type="button" id="writeusersmb" value="Write" class="clone" onclick="writeUserSMB()" disabled>
 </div>
 
-<form markdown="1" method="POST" action="/update.htm" target="progressFrame" onchange="$('#cloneuser').prop('disabled',true);$('#s5').dropdownchecklist('disable')">
+<form markdown="1" name="smb_user_edit" method="POST" action="/update.htm" target="progressFrame" onchange="toggleButton('writeusersmb',true);$('#smb2').dropdownchecklist('disable')">
 <input type="hidden" name="shareName" value="<?=htmlspecialchars($name)?>">
 <?input_secure_users($sec);?>
 
@@ -125,16 +153,20 @@ if (isset($disks[$name])) {
 </form>
 
 <?elseif ($sec[$name]['security'] == 'private'):?>
-<div id="title" class="nocontrol"><dt>User Access</dt><i>Guests have <b>no</b> access.</i></div>
+<div id="title" class="nocontrol"><dt>SMB User Access</dt><i>Guests have <b>no</b> access.</i></div>
 
-> *Clone destinations* is used to copy the User access settings of the current share to one or more other existing shares.
+> *Read settings from* is used to preset the SMB User Access settings of the current selected share with the settings of an existing share.
 >
-> Select the desired destinations and press **Clone** to copy the  User access settings to those shares.
+> Select the desired share name and press **Read** to copy the SMB security settings from the selected source.
+>
+> *Write settings to* is used to copy the SMB User Access settings of the current share to one or more other existing shares.
+>
+> Select the desired destinations and press **Write** to copy the SMB User access settings to the selected shares.
 
-<div style="float:right">
-<span style="display:block;font-weight:bold;margin-left:2px;margin-bottom:4px">Clone destinations</span>
-<select id="s5" name="smbClone" size="1" multiple="multiple" style="display:none">
-<option>All</option>
+<div class="clone1">
+<span class="clone">Read settings from</span><i class="fa fa-arrow-left clone"></i>
+<select name="readusersmb" size="1" class="clone" onchange="toggleButton('readusersmb',false)">
+<option disabled selected>select...</option>
 <?
 if (isset($disks[$name])) {
   foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='private') echo mk_option("", $list['name'], my_disk($list['name']));
@@ -142,10 +174,25 @@ if (isset($disks[$name])) {
   foreach ($shares as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='private') echo mk_option("", $list['name'], $list['name']);
 }
 ?>
-</select>
-<div style="margin-top:10px;text-align:right"><input type="button" id="cloneuser" value="Clone" onclick="cloneUser()" style="margin-right:0"></div>
+</select><input type="button" id="readusersmb" value="Read" class="clone" onclick="readUserSMB()" disabled>
 </div>
-<form markdown="1" method="POST" action="/update.htm" target="progressFrame" onchange="$('#cloneuser').prop('disabled',true);$('#s5').dropdownchecklist('disable')">
+<div class="clone2">
+<span class="clone">Write settings to</span><i class="fa fa-arrow-right clone"></i>
+<select id="smb2" name="writeusersmb" size="1" multiple="multiple" style="display:none" onchange="toggleButton('writeusersmb',this.id)">
+<?
+$rows = [];
+if (isset($disks[$name])) {
+  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='private') $rows[] = mk_option("", $list['name'], my_disk($list['name']));
+} else {
+  foreach ($shares as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='private') $rows[] = mk_option("", $list['name'], $list['name']);
+}
+if ($rows) echo "<option>All</option>";
+foreach ($rows as $row) echo $row;
+?>
+</select><input type="button" id="writeusersmb" value="Write" class="clone" onclick="writeUserSMB()" disabled>
+</div>
+
+<form markdown="1" name="smb_user_edit" method="POST" action="/update.htm" target="progressFrame" onchange="toggleButton('writeusersmb',true);$('#smb2').dropdownchecklist('disable')">
 <input type="hidden" name="shareName" value="<?=htmlspecialchars($name)?>">
 <?input_private_users($sec);?>
 
@@ -156,38 +203,71 @@ if (isset($disks[$name])) {
 
 <script>
 $(function() {
-  initDropdown2(false);
+  initDropdownSMB(false);
 <?if ($tabbed):?>
-  $('#tab'+$('input[name$="tabs"]').length).bind({click:function(){initDropdown2(true);}});
+  $('#tab'+$('input[name$="tabs"]').length).bind({click:function(){initDropdownSMB(true);}});
 <?endif;?>
 <?if (count($users)==1):?>
-  $('#cloneuser').prop('disabled',true);
+  toggleButton('readusersmb',true);
+  toggleButton('writeusersmb',true);
+  $('#smb2').dropdownchecklist('disable');
 <?endif;?>
 });
-function initDropdown2(reset) {
+function initDropdownSMB(reset) {
   if (reset) {
-    $('#s4').dropdownchecklist('destroy');
-    $('#s5').dropdownchecklist('destroy');
+    $('#smb1').dropdownchecklist('destroy');
+    $('#smb2').dropdownchecklist('destroy');
   }
-  $("#s4").dropdownchecklist({firstItemChecksAll:true, emptyText:'please select...', width:150, explicitClose:'...close'});
-  $("#s5").dropdownchecklist({firstItemChecksAll:true, emptyText:'please select...', width:150, explicitClose:'...close'});
+  $("#smb1").dropdownchecklist({firstItemChecksAll:true, emptyText:'select...', width:<?=$width[0]?>, explicitClose:'...close'});
+  $("#smb2").dropdownchecklist({firstItemChecksAll:true, emptyText:'select...', width:<?=$width[0]?>, explicitClose:'...close'});
 }
-function cloneSMB() {
+function readSMB() {
+  var form = document.smb_edit;
+  var name = $('select[name="readsmb"]').val();
+  $.get('/webGui/include/ProtocolData.php',{protocol:'smb',name:name},function(json) {
+    var data = $.parseJSON(json);
+    form.shareExport.value = data.export;
+    form.shareFruit.value = data.fruit;
+    form.shareSecurity.value = data.security;
+  });
+  $(form).find('select').trigger('change');
+}
+function writeSMB() {
   var data = {}, copied = false;
   data.shareExport = '<?=addslashes(htmlspecialchars($sec[$name]['export']))?>';
   data.shareFruit = '<?=addslashes(htmlspecialchars($sec[$name]['fruit']))?>';
   data.shareSecurity = '<?=addslashes(htmlspecialchars($sec[$name]['security']))?>';
   data.changeShareSecurity = 'Apply';
-  $('select#s4 option').map(function() {
+  $('select#smb1 option').map(function() {
     if ($(this).prop('selected')==true) {
       data.shareName = $(this).val();
       $.post('/update.htm', data);
       copied = true;
     }
   });
-  if (copied) swal({title:'Clone complete',text:'SMB security settings are cloned to the selected shares',type:'success'},function(){refresh();});
+  if (copied) swal({title:'Clone complete',text:'SMB security settings are written to the selected shares',type:'success'},function(){refresh();});
 }
-function cloneUser() {
+function readUserSMB() {
+  var form = document.smb_user_edit;
+  var name = $('select[name="readusersmb"]').val();
+  var users = {};
+<?
+  foreach ($users as $user) {
+    if ($user['name'] == "root") continue;
+    echo "users['{$user['name']}'] = {$user['idx']};\n";
+  }
+?>
+  $.get('/webGui/include/ProtocolData.php',{protocol:'smb',name:name},function(json) {
+    var data = $.parseJSON(json);
+    var readList = data.readList.split(',');
+    var writeList = data.writeList.split(',');
+    $(form).find('select[name^="userAccess."]').each(function(){$(this).val('no-access');});
+    for (var i=0; i < readList.length; i++) $(form).find('select[name="userAccess.'+users[readList[i]]+'"]').val('read-only');
+    for (var i=0; i < writeList.length; i++) $(form).find('select[name="userAccess.'+users[writeList[i]]+'"]').val('read-write');
+  });
+  $(form).find('select').trigger('change');
+}
+function writeUserSMB() {
   var data = {}, copied = false;
   data['userAccess.0'] = 'no-access';
 <?
@@ -206,13 +286,13 @@ function cloneUser() {
   }
 ?>
   data.changeShareAccess = 'Apply';
-  $('select#s5 option').map(function() {
+  $('select#smb2 option').map(function() {
     if ($(this).prop('selected')==true) {
       data.shareName = $(this).val();
       $.post('/update.htm', data);
       copied = true;
     }
   });
-  if (copied) swal({title:'Clone complete',text:'User access settings are cloned to the selected shares',type:'success'},function(){refresh();});
+  if (copied) swal({title:'Clone complete',text:'SMB User Access settings are written to the selected shares',type:'success'},function(){refresh();});
 }
 </script>

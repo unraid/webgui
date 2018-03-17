@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2014-2016, Guilherme Jardim, Eric Schultz, Jon Panozzo.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2014-2017, Guilherme Jardim, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -11,7 +11,7 @@
  */
 ?>
 <?
-$docroot = $docroot ?: @$_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
+$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
 
 // Autostart file

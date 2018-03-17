@@ -1,10 +1,11 @@
 Menu="Shares:1"
 Title="User Shares"
-Cond="$var['fsState']=="Started" && $var['shareUser']=='e'"
+Tag="user-circle"
+Cond="$var['fsState']!='Stopped' && $var['shareUser']=='e'"
 ---
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -16,8 +17,12 @@ Cond="$var['fsState']=="Started" && $var['shareUser']=='e'"
 ?>
 <script>
 function displayShares(all) {
-  if (all == 'yes') $('#share_list').html("<tr><td colspan='8' style='text-align:center'><i class='fa fa-spinner fa-spin icon'></i>Please wait... computing user shares!</td></tr>");
-  $.get('/webGui/include/ShareList.php',{compute:all,path:'<?=addslashes(htmlspecialchars($path))?>',prev:'<?=addslashes(htmlspecialchars($prev))?>',scale:'<?=$display['scale']?>',number:'<?=$display['number']?>'},function(data){
+  if (all == 'yes') {
+    $.cookie('ssz','ssz',{path:'/'});
+    $('#share_list').html("<tr><td colspan='8' style='text-align:center;padding:24px'><i class='fa fa-circle-o-notch fa-spin fa-3x fa-fw'></i></td></tr>");
+  }
+  $.get('/webGui/include/ShareList.php',{compute:all,path:'<?=addslashes(htmlspecialchars($path))?>',scale:'<?=$display['scale']?>',number:'<?=$display['number']?>',fill:$.cookie('ssz')},function(data){
+    $.removeCookie('ssz',{path:'/'})
     $('#share_list').html(data);
     $('#compute-shares').prop('disabled',!data || data.indexOf('colspan=')!=-1);
   });
@@ -27,12 +32,11 @@ $(function() {
 });
 </script>
 
-<table class="share_status share <?=$display['view']?>">
+<table class="share_status share wide">
 <thead><tr><td style="width:15%">Name</td><td style="width:33%">Comment</td><td>SMB</td><td>NFS</td><td>AFP</td><td>Size</td><td>Free</td><td>View</td></tr></thead>
 <tbody id="share_list"></tbody>
 </table>
-<p><form name="share_form" method="GET" action="<?=htmlspecialchars($path)?>/Share">
-<input type="hidden" name="name" value="">
+<p><form name="share_form" method="POST" action="<?=htmlspecialchars($path)?>/Share?name=">
 <input id="compute-shares" type="button" value="Compute All" onclick="$(this).prop('disabled',true);displayShares('yes')">
 <?if ($var['startMode']=='Normal'):?>
 <input type="submit" value="Add Share"<?=$var['shareUser']=='e'?'>':' disabled>User shares must be <strong>enabled</strong> to add shares.'?>

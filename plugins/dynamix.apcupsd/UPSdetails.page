@@ -1,10 +1,11 @@
 Menu="UPSsettings"
 Title="UPS Details"
+Tag="battery-0"
 ---
 <?PHP
-/* Copyright 2005-2016, Lime Technology
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  * Copyright 2015, Dan Landon.
- * Copyright 2015, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -22,9 +23,7 @@ function getUPSstatus() {
       $('#ups_summary').html(data[0]);
       $('#ups_status').html(data[1]);
     }
-<?if ($update):?>
-    setTimeout(getUPSstatus,<?=max(abs($display['refresh']),15000)?>);
-<?endif;?>
+    setTimeout(getUPSstatus,15000);
   });
 }
 $(getUPSstatus);
@@ -32,5 +31,5 @@ $(getUPSstatus);
 
 <table class="tablesorter shift">
 <thead><tr><th style="width:15%">Key</th><th style="width:35%">Value</th><th style="width:15%">Key</th><th style="width:35%">Value</th></tr></thead>
-<tbody id="ups_status"><tr><td colspan="4" style="text-align:center"><i class="fa fa-spinner fa-spin icon"></i><em>Please wait, retrieving UPS information...</em></td></tr></tbody>
+<tbody id="ups_status"><tr><td colspan="4" style="text-align:center;padding:24px"><i class="fa fa-circle-o-notch fa-spin fa-3x fa-fw"></i></td></tr></tbody>
 </table>

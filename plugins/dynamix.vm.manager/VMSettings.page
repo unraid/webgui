@@ -1,11 +1,12 @@
 Menu="OtherSettings"
 Title="VM Manager"
 Icon="dynamix.vm.manager.png"
+Tag="columns"
 Markdown="false"
 ---
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2015-2016, Derek Macias, Eric Schultz, Jon Panozzo.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2015-2017, Derek Macias, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -16,8 +17,7 @@ Markdown="false"
  */
 ?>
 <?
-require_once "$docroot/plugins/dynamix.vm.manager/classes/libvirt.php";
-require_once "$docroot/plugins/dynamix.vm.manager/classes/libvirt_helpers.php";
+require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 
 
 // Check for Intel VT-x (vmx) or AMD-V (svm) cpu virtualzation support
@@ -81,9 +81,9 @@ foreach ($arrSyslinuxCfg as &$strSyslinuxCfg) {
 		cursor: pointer;
 		margin-left: -2px;
 		color: #08C;
-		font-size: 1.4em;
+		font-size: 1.2em;
 		display: none;
-		transform: translate(0px, 4px);
+		transform: translate(0px, 2px);
 	}
 	#download_button.fa-spin {
 		cursor: default;
@@ -97,13 +97,27 @@ foreach ($arrSyslinuxCfg as &$strSyslinuxCfg) {
 	#download_button.fa-spin span {
 		display: none;
 	}
+	#remove_button {
+		cursor: pointer;
+		margin-left: -2px;
+		color: #EF3D47;
+		font-size: 1.2em;
+		display: none;
+		transform: translate(0px, 2px);
+	}
+	#remove_button span {
+		font-size: 12px;
+		font-family: arimo;
+		vertical-align: top;
+	}
 </style>
-<span class="status" style="margin-top: -10px;"><input type="checkbox" class="advancedview"></span>
+<span class="status" style="margin-top:<?=strstr('gray,azure',$display['theme'])?0:-10?>px;"><input type="checkbox" class="advancedview"></span>
 <?if ($boolACSEnabled != $boolACSInSyslinux):?>
 	<br><p class="notice">You must reboot for changes to take effect</p>
 <?endif;?>
 <form id="settingsForm" method="POST" action="/update.php" target="progressFrame">
 <input type="hidden" name="#file" value="<?=htmlspecialchars($domain_cfgfile)?>" />
+<input type="hidden" name="#command" value="/plugins/dynamix/scripts/emhttpd_update" />
 
 <dl>
 	<dt>Enable VMs:</dt>
@@ -202,7 +216,7 @@ foreach ($arrSyslinuxCfg as &$strSyslinuxCfg) {
 
 			echo mk_option($strMatch, 'manual', 'Manual');
 		?>
-		</select><input type="text" id="winvirtio" name="VIRTIOISO" data-pickfilter="iso" data-pickcloseonfile="true" data-pickroot="<?= (is_dir('/mnt/user/') ? '/mnt/user/' : '/mnt/') ?>" value="<?=htmlspecialchars($domain_cfg['VIRTIOISO'])?>"<?if ($var['fsState'] == "Started"):?> placeholder="Click to Select"><i class="fa fa-download" id="download_button" title="Download Windows VirtIO driver ISO"> <span>Download</span></i><span id="download_status"></span<?endif;?>>
+		</select><input type="text" id="winvirtio" name="VIRTIOISO" data-pickfilter="iso" data-pickcloseonfile="true" data-pickroot="<?= (is_dir('/mnt/user/') ? '/mnt/user/' : '/mnt/') ?>" value="<?=htmlspecialchars($domain_cfg['VIRTIOISO'])?>"<?if ($var['fsState'] == "Started"):?> placeholder="Click to Select"><i class="fa fa-trash" id="remove_button" title="Remove Windows VirtIO driver ISO"> <span>Remove</span></i><i class="fa fa-download" id="download_button" title="Download Windows VirtIO driver ISO"> <span>Download</span></i><span id="download_status"></span<?endif;?>>
 	</dd>
 </dl>
 <blockquote class="inline_help">
@@ -227,6 +241,20 @@ foreach ($arrSyslinuxCfg as &$strSyslinuxCfg) {
 		<p>Select the name of the network bridge you wish to use as default for your VMs, the setting 'virbr0' will let libvirt create a virtual bridge that utilizes NAT (network address translation) and act as a DHCP server to hand out IP addresses to virtual machines directly.</p>
 		<p>More optional selections are present when virtual bridges are created under network settings.</p>
 		<p>NOTE: You can also specify a network bridge on a per-VM basis.</p>
+	</blockquote>
+	<dl>
+		<dt>Upon host shutdown:</dt>
+		<dd>
+			<select id="hostshutdown" name="HOSTSHUTDOWN" class="narrow">
+			<?
+				echo mk_option($domain_cfg['HOSTSHUTDOWN'], 'shutdown', 'Shutdown VMs');
+				echo mk_option($domain_cfg['HOSTSHUTDOWN'], 'hibernate', 'Hibernate VMs');
+			?>
+			</select>
+		</dd>
+	</dl>
+	<blockquote class="inline_help">
+		<p>When shutting down the server, this defines the action to take upon running VMs. If <em>Hibernate VMs</em> is chosen, the VM will be instructed to hibernate (if supported) otherwise it will attempt a VM shutdown.</p>
 	</blockquote>
 	<dl>
 		<dt>VM shutdown time-out:</dt>
@@ -270,7 +298,7 @@ foreach ($arrSyslinuxCfg as &$strSyslinuxCfg) {
 
 <?if ($libvirt_running == 'yes' && trim(shell_exec('stat -c %T -f /etc/libvirt')) == 'btrfs'):?>
 <div class="advanced">
-  <div id="title"><span class="left"><img src="/plugins/dynamix.docker.manager/icons/vcard.png" class="icon">Libvirt volume info</span></div>
+  <div id="title"><span class="left"><i class="title fa fa-list"></i>Libvirt volume info</span></div>
 
   <dl>
     <dt>btrfs filesystem show:</dt>
@@ -324,7 +352,7 @@ foreach ($arrSyslinuxCfg as &$strSyslinuxCfg) {
 
 <script src="/webGui/javascript/jquery.filetree.js"></script>
 <script src="/webGui/javascript/jquery.switchbutton.js"></script>
-<script src="/plugins/dynamix.vm.manager/scripts/dynamix.vm.manager.js"></script>
+<script src="/plugins/dynamix.vm.manager/javascript/dynamix.vm.manager.js"></script>
 <script>
 $(function(){
 	$("#applyBtn").click(function(){
@@ -333,11 +361,11 @@ $(function(){
 			return;
 		}
 		if ($('#pcie_acs_override').val() == '1') {
-			$.getJSON("/plugins/dynamix.vm.manager/VMajax.php", {action: "acs-override-enable"}, function(data) {
+			$.getJSON("/plugins/dynamix.vm.manager/include/VMajax.php", {action: "acs-override-enable"}, function(data) {
 				$("#settingsForm").submit();
 			});
 		} else {
-			$.getJSON("/plugins/dynamix.vm.manager/VMajax.php", {action: "acs-override-disable"}, function(data) {
+			$.getJSON("/plugins/dynamix.vm.manager/include/VMajax.php", {action: "acs-override-disable"}, function(data) {
 				$("#settingsForm").submit();
 			});
 		}
@@ -361,12 +389,14 @@ $(function(){
 			checkonly: ((typeof checkonly === 'undefined') ? false : !!checkonly) ? 1 : 0
 		};
 
-		$form.find('input,select').prop('disabled', true);
 		$button.removeClass('fa-download').addClass('fa-circle-o-notch fa-spin');
 
-		$.post("/plugins/dynamix.vm.manager/VMajax.php", postdata, function( data ) {
+		$.post("/plugins/dynamix.vm.manager/include/VMajax.php", postdata, function( data ) {
+			if (postdata.download_version != $('#winvirtio_select').val())
+				return;
 			if (data.error) {
 				$("#download_status").html('<span style="color: red">' + data.error + '</span>');
+				$button.removeClass('fa-circle-o-notch fa-spin').addClass('fa-download');
 			} else {
 				$("#download_status").html(data.status);
 
@@ -380,8 +410,6 @@ $(function(){
 				}
 			}
 
-			$button.removeClass('fa-circle-o-notch fa-spin').addClass('fa-download');
-			$form.find('input,select').prop('disabled', false);
 		}, "json");
 	};
 
@@ -398,6 +426,22 @@ $(function(){
 		if (!$(this).hasClass('fa-spin')) {
 			checkOrInitDownload(false);
 		}
+	});
+
+	$("#remove_button").click(function removeVirtIOVersion() {
+		var postdata = {
+			action: "virtio-win-iso-remove",
+			path: $('#mediadir').val(),
+			file: $('#winvirtio_select').val()
+		};
+		$.post("/plugins/dynamix.vm.manager/include/VMajax.php", postdata, function( data ) {
+			if (postdata.file != $('#winvirtio_select').val())
+				return;
+
+			if (data.success) {
+				$("#winvirtio_select").change();
+			}
+		}, "json");
 	});
 
 	// Fire events below once upon showing page
@@ -418,16 +462,18 @@ $(function(){
 			file: $(this).val()
 		};
 
-		$.get("/plugins/dynamix.vm.manager/VMajax.php", params, function( data ) {
+		$.get("/plugins/dynamix.vm.manager/include/VMajax.php", params, function( data ) {
 
-			if (!data.exists) {
-				$("#download_button").show('fast');
+			if (!data.exists || data.pid) {
+				$("#remove_button").hide('fast');
+				$("#download_button").removeClass('fa-circle-o-notch fa-spin').addClass('fa-download').show('fast');
 				$("#download_status").html('').show('fast');
 				if (data.pid) {
 					checkOrInitDownload(true);
 				}
 			} else {
 				$("#download_button,#download_status").hide('fast');
+				$("#remove_button").show('fast');
 				$("#winvirtio").val(data.path);
 			}
 
@@ -481,6 +527,7 @@ $(function(){
 			$("#winvirtio_select").prop("disabled", checked);
 			$("#winvirtio").prop("disabled", checked);
 			$("#bridge").prop("disabled", checked);
+			$("#hostshutdown").prop("disabled", checked);
 			$("#pcie_acs_override").prop("disabled", checked);
 			$("#applyBtn").val(checked ? "Delete" : "Apply").removeAttr('disabled');
 		});

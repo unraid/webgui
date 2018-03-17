@@ -1,19 +1,21 @@
 #!/usr/bin/php -q
 <?PHP
-// Copyright 2005-2016, Lime Technology
+// Copyright 2005-2017, Lime Technology
 // License: GPLv2 only
 //
 // Program updates made by Bergware International (April 2016)
 $usage = <<<EOF
 Process plugin files.
 
-Usage: plugin install PLUGIN-FILE
+Usage: plugin install PLUGIN-FILE [forced]
   install a plugin
 
   PLUGIN-FILE is a plugin definition XML file with ".plg" extension.
 
   PLUGIN-FILE can be a local file, or a URL.  If a URL, the plugin file is first downloaded to /tmp/plugins.
 
+  forced is optional and can be used to install a lower version than currently running.
+  
   This command will process all FILE elements in PLUGIN-FILE which are tagged with the "install" method (or
   that have no method tag).
 
@@ -56,7 +58,7 @@ Usage: plugin check PLUGIN
 Usage: plugin checkall
   check all installed plugins
 
-  Runs 'plugin check PLUGIN' for each plugin file linked-to in /var/lib/plugins.
+  Runs 'plugin check PLUGIN' for each plugin file linked-to in /var/log/plugins.
 
 Usage: plugin update PLUGIN
   update the plugin
@@ -211,9 +213,9 @@ function plugin($method, $plugin_file, &$error) {
   $methods = ["install", "remove"];
 
   // parse plugin definition XML file
-  $xml = simplexml_load_file($plugin_file, NULL, LIBXML_NOCDATA);
+  $xml = file_exists($plugin_file) ? simplexml_load_file($plugin_file, NULL, LIBXML_NOCDATA) : false;
   if ($xml === false) {
-    $error = "xml parse error";
+    $error = "file doesn't exist or xml parse error";
     return false;
   }
 
@@ -365,14 +367,32 @@ if ($argc < 2) {
   exit(1);
 }
 $method = $argv[1];
+$builtin = ['unRAIDServer'];
 
 // plugin checkall
-// check all installed plugins
+// check all installed plugins, except built-in
 //
 if ($method == "checkall") {
   foreach (glob("/var/log/plugins/*", GLOB_NOSORT) as $link) {
+    if (in_array(basename($link,'.plg'),$builtin)) continue;
     // only consider symlinks
     $installed_plugin_file = @readlink($link);
+    if ($installed_plugin_file === false) continue;
+    if (plugin("pluginURL", $installed_plugin_file, $error) === false) continue;
+    $plugin = basename($installed_plugin_file);
+    echo "plugin: checking $plugin ...\n";
+    exec(realpath($argv[0]) . " check $plugin", $output, $retval);
+  }
+  exit(0);
+}
+
+// plugin checkos
+// check built-in only
+//
+if ($method == "checkos") {
+  foreach ($builtin as $link) {
+    // only consider symlinks
+    $installed_plugin_file = @readlink("/var/log/plugins/$link.plg");
     if ($installed_plugin_file === false) continue;
     if (plugin("pluginURL", $installed_plugin_file, $error) === false) continue;
     $plugin = basename($installed_plugin_file);
@@ -415,6 +435,8 @@ if ($method == "install") {
     exit(1);
   }
   $max = plugin("max", $plugin_file, $error);
+  if (empty($max))
+    $max = plugin("unRAID", $plugin_file, $error);
   if ($max && version_compare($unraid['version'],$max,'>')) {
     echo "plugin: installed unRAID version is too high, require at most version $max\n";
     exit(1);
@@ -438,14 +460,18 @@ if ($method == "install") {
       echo "plugin: $error\n";
       exit(1);
     }
-    // do not re-install if same plugin already installed or has higher version
-    if (strcmp($version, $installed_version) < 0) {
-      echo "plugin: not installing older version\n";
-      exit(1);
-    }
-    if (strcmp($version, $installed_version) == 0) {
-      echo "plugin: not reinstalling same version\n";
-      exit(1);
+    // check version installation?
+    $forced = $argc==4 ? $argv[3] : false;
+    if (!$forced) {
+      // do not re-install if same plugin already installed or has higher version
+      if (strcmp($version, $installed_version) < 0) {
+        echo "plugin: not installing older version\n";
+        exit(1);
+      }
+      if (strcmp($version, $installed_version) == 0) {
+        echo "plugin: not reinstalling same version\n";
+        exit(1);
+      }
     }
     if (plugin("install", $plugin_file, $error) === false) {
       echo "plugin: $error\n";
@@ -469,9 +495,13 @@ if ($method == "install") {
   // Bergware change: add user or system plugin selection - deprecated
   $plugintype = plugin("plugintype", $plugin_file, $error);
   $target = $plugintype != "system" ? "/boot/config/plugins/$plugin" : "/boot/plugins/$plugin";
-  if ($target != $plugin_file) copy($plugin_file, $target);
-  symlink($target, "/var/log/plugins/$plugin");
+  if ( ! plugin("noInstall",$plugin_file,$error) ) {
+    if ($target != $plugin_file) copy($plugin_file, $target);
+    symlink($target, "/var/log/plugins/$plugin");
   echo "plugin: installed\n";
+  } else {
+    echo "Script: executed\n";
+  }
   exit(0);
 }
 
@@ -550,7 +580,7 @@ if ($method == "update") {
   // verify previous check has been done
   $plugin_file = "/tmp/plugins/$plugin";
   if (!file_exists($plugin_file)) {
-    echo "plugin: $plugin_file does not exist, check first\n";
+    echo "plugin: $plugin_file does not exist, check for updates first\n";
     exit (1);
   }
   // bergware - check unRAID version dependency (if present)
@@ -560,6 +590,8 @@ if ($method == "update") {
     exit(1);
   }
   $max = plugin("max", $plugin_file, $error);
+  if (empty($max))
+    $max = plugin("unRAID", $plugin_file, $error);
   if ($max && version_compare($unraid['version'],$max,'>')) {
     echo "plugin: installed unRAID version is too high, require at most version $max\n";
     exit(1);

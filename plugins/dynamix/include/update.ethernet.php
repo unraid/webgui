@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -12,14 +12,18 @@
 ?>
 <?
 if ($_POST['#arg'][1] != 'none') {
+  $ethX = $_POST['#section'];
   if ($_POST['BONDING']=='yes') {
-    $nics = explode(',',str_replace('eth0','',$_POST['BONDNICS']));
+    $nics = explode(',',str_replace($ethX,'',$_POST['BONDNICS']));
+    // prepare 'other' interfaces which are part of the bond
     foreach ($nics as $nic) if ($nic) unset($keys[$nic]);
   }
   if ($_POST['BRIDGING']=='yes') {
-    $nics = explode(',',str_replace('eth0','',$_POST['BRNICS']));
+    $nics = explode(',',str_replace($ethX,'',$_POST['BRNICS']));
+    // prepare 'other' interfaces which are part of the bridge
     foreach ($nics as $nic) if ($nic) unset($keys[$nic]);
   }
-  unset($keys[$_POST['#section']]);
+  // prepare interface to be changed
+  unset($keys[$ethX]);
 }
 ?>

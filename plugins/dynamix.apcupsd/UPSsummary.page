@@ -3,9 +3,9 @@ Title="UPS Summary"
 Cond="file_exists('/var/run/apcupsd.pid')"
 ---
 <?PHP
-/* Copyright 2005-2016, Lime Technology
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  * Copyright 2015, Dan Landon.
- * Copyright 2015, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -23,9 +23,7 @@ table.ups tbody tr td{padding-left:10px;font-weight:bold;}
 function getUPSstatus() {
   $.get('/plugins/dynamix.apcupsd/include/UPSstatus.php',{all:'false'},function(data) {
     if (data) $('#ups_summary').html(data);
-<?if ($update):?>
-    setTimeout(getUPSstatus, <?=max(abs($display['refresh']),15000)?>);
-<?endif;?>
+    setTimeout(getUPSstatus,15000);
   });
 }
 $(getUPSstatus);

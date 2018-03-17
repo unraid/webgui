@@ -2,10 +2,11 @@ Menu="OtherSettings"
 Type="xmenu"
 Title="Global Share Settings"
 Icon="share-settings.png"
+Tag="share-alt-square"
 ---
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -15,16 +16,15 @@ Icon="share-settings.png"
  * all copies or substantial portions of the Software.
  */
 ?>
-
 <?
 $disabled = $var['fsState']!='Stopped' ? 'disabled' : '';
 $disks = array_filter($disks,'my_disks');
+$width = strstr('gray,azure',$display['theme']) ? [166,305]:[131,300];
 ?>
-
 <script>
 $(function() {
-  $("#s1").dropdownchecklist({emptyText:'All', width:131, explicitClose:'...close'});
-  $("#s2").dropdownchecklist({emptyText:'None', width:131, explicitClose:'...close'});
+  $('#s1').dropdownchecklist({emptyText:'All', width:<?=$width[0]?>, explicitClose:'...close'});
+  $('#s2').dropdownchecklist({emptyText:'None', width:<?=$width[0]?>, explicitClose:'...close'});
   presetShare(document.share_settings);
 });
 // Simulate the original input field
@@ -52,19 +52,19 @@ function prepareShare(form) {
   item.value = exclude;
   item.selected = true;
 }
-function presetShare(form) {
-  var disabled = <?=$disabled ? 'true' : 'false'?>;
-  var onOff = disabled ? 'disable' : 'enable';
+function presetShare(form,shares) {
+  var disabled = shares==null ? <?=$disabled ? 'true':'false'?> : shares=='-';
+  var onOff = disabled ? 'disable':'enable';
   form.shareUserInclude.disabled = disabled;
   form.shareUserExclude.disabled = disabled;
-  $("#s1").dropdownchecklist(onOff);
-  $("#s2").dropdownchecklist(onOff);
+  $('#s1').dropdownchecklist(onOff);
+  $('#s2').dropdownchecklist(onOff);
 }
 </script>
 <form markdown="1" name="share_settings" method="POST" action="/update.htm" target="progressFrame" onsubmit="prepareShare(this)">
 
 Enable disk shares:
-: <select name="shareDisk" size="1" onchange="presetShare(this.form)" <?=$disabled?>>
+: <select name="shareDisk" size="1" <?=$disabled?>>
   <?=mk_option($var['shareDisk'], "no", "No")?>
   <?=mk_option($var['shareDisk'], "yes", "Yes")?>
   <?=mk_option($var['shareDisk'], "auto", "Auto")?>
@@ -78,7 +78,7 @@ Enable disk shares:
 > If set to Auto, only disk shares not participating in User Shares may be exported.
 
 Enable user shares:
-: <select name="shareUser" size="1" onchange="presetShare(this.form)" <?=$disabled?>>
+: <select name="shareUser" size="1" onchange="presetShare(this.form,this.value)" <?=$disabled?>>
   <?=mk_option($var['shareUser'], "e", "Yes")?>
   <?=mk_option($var['shareUser'], "-", "No")?>
   </select>
@@ -88,7 +88,7 @@ Enable user shares:
 Included disk(s):
 : <select id="s1" name="shareUserInclude" size="1" multiple="multiple" style="display:none">
   <?foreach ($disks as $disk):?>
-  <?=mk_option_check($disk['name'], $var['shareUserInclude'])?>
+  <?=mk_option_luks($disk['name'], $var['shareUserInclude'], strstr($disk['fsType'],':',true))?>
   <?endforeach;?>
   </select>
 
@@ -98,7 +98,7 @@ Included disk(s):
 Excluded disk(s):
 : <select id="s2" name="shareUserExclude" size="1" multiple="multiple" style="display:none">
   <?foreach ($disks as $disk):?>
-  <?=mk_option_check($disk['name'], $var['shareUserExclude'])?>
+  <?=mk_option_luks($disk['name'], $var['shareUserExclude'], strstr($disk['fsType'],':',true))?>
   <?endforeach;?>
   </select>
 
@@ -122,5 +122,4 @@ Tunable (enable Direct IO):
 
 &nbsp;
 : <input type="submit" name="changeShare" value="Apply" <?=$disabled?>><input type="button" value="Done" onclick="done()"><?if ($disabled):?>Array must be <span class="strong big">Stopped</span> to change<?endif;?>
-
 </form>

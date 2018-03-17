@@ -1,1 +1,40 @@
 Type="xmenu"
+---
+<?PHP
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+function clone_list($disk) {
+  return strpos($disk['status'],'_NP')===false && ($disk['type']=='Data' || $disk['name']=='cache');
+}
+?>
+<style>
+div.clone1{position:absolute;right:0;margin-top:0}
+div.clone2{position:absolute;right:0;margin-top:48px}
+select.clone{min-width:144px;margin-right:0}
+input.clone{margin-left:8px;margin-right:0}
+span.clone,i.clone{margin-right:4px}
+</style>
+<script>
+function toggleButton(button,id) {
+  var disabled = true;
+  switch (id) {
+  case false:
+  case true:
+    disabled = id;
+    break;
+  default:
+    $('select#'+id+' option').each(function(){if ($(this).prop('selected')==true) disabled = false;});
+  }
+  $('input#'+button).prop('disabled',disabled);
+}
+</script>

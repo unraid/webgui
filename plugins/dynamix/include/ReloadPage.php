@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2015-2016, Bergware International
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2015-2017, Bergware International
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -11,16 +11,20 @@
  */
 ?>
 <?
-$var = parse_ini_file("state/var.ini");
-switch ($var['fsState']) {
-case 'Copying':
-  echo "<strong>Copying, {$var['fsCopyPrcnt']}% complete...</strong>";
-  break;
-case 'Clearing':
-  echo "<strong>Clearing, {$var['fsClearPrcnt']}% complete...</strong>";
-  break;
-default:
-  echo substr($var['fsState'],-3)=='ing' ? 'wait' : 'stop';
-  break;
+if (empty($_GET['btrfs'])) {
+  $var = parse_ini_file("state/var.ini");
+  switch ($var['fsState']) {
+  case 'Copying':
+    echo "<strong>Copying, {$var['fsCopyPrcnt']}% complete...</strong>";
+    break;
+  case 'Clearing':
+    echo "<strong>Clearing, {$var['fsClearPrcnt']}% complete...</strong>";
+    break;
+  default:
+    echo substr($var['fsState'],-3)=='ing' ? 'wait' : 'stop';
+    break;
+  }
+} else {
+  echo exec('pgrep -cf /sbin/btrfs')>0 ? 'disable' : 'enable';
 }
 ?>

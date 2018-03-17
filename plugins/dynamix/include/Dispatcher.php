@@ -21,7 +21,7 @@ foreach ($_POST as $field => $value) {
 }
 foreach ($keys as $section => $block) {
   $pairs = "";
-  foreach ($block as $key => $value) if (strlen($value) && $value != -1) $pairs .= "$key=\"$value\"\n";
+  foreach ($block as $key => $value) $pairs .= "$key=\"$value\"\n";
   if ($pairs) $text .= "[$section]\n".$pairs;
 }
 if ($text) file_put_contents($_POST['#cfg'], $text); else @unlink($_POST['#cfg']);

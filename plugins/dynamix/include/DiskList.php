@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -11,7 +11,7 @@
  */
 ?>
 <?
-$docroot = $docroot ?: @$_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
+$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 require_once "$docroot/webGui/include/Helpers.php";
 
 $shares  = parse_ini_file('state/shares.ini',true);
@@ -22,10 +22,10 @@ $sec_nfs = parse_ini_file('state/sec_nfs.ini',true);
 $sec_afp = parse_ini_file('state/sec_afp.ini',true);
 $compute = $_GET['compute'];
 $path    = $_GET['path'];
-$prev    = $_GET['prev'];
+$fill    = $_GET['fill'];
 
-$display           = [];
-$display['scale']  = $_GET['scale'];
+$display = [];
+$display['scale'] = $_GET['scale'];
 $display['number'] = $_GET['number'];
 
 // Display export settings
@@ -46,37 +46,47 @@ function shareInclude($name) {
   return !$include || substr($name,0,4)!='disk' || strpos("$include,", "$name,")!==false;
 }
 
-// Compute all disk shares
-if ($compute=='yes') foreach ($disks as $name => $disk) if ($disk['exportable']=='yes') exec("webGui/scripts/disk_size ".escapeshellarg($name)." ssz2");
+function sharesOnly($disk) {
+  return strpos('Data,Cache',$disk['type'])!==false && $disk['exportable']=='yes';
+}
+// filter disk shares
+$disks = array_filter($disks,'sharesOnly');
+
+// Compute all disk shares & check encryption
+$crypto = false;
+foreach ($disks as $name => $disk) {
+  if ($compute=='yes') exec("webGui/scripts/disk_size ".escapeshellarg($name)." ssz2");
+  $crypto |= strpos($disk['fsType'],'luks:')!==false;
+}
 
 // global shares include/exclude
 $myDisks = array_filter(array_diff(array_keys($disks), explode(',',$var['shareUserExclude'])), 'globalInclude');
 
 // Share size per disk
-$preserve = ($path==$prev || $compute=='yes');
 $ssz2 = [];
-foreach (glob("state/*.ssz2", GLOB_NOSORT) as $entry) {
-  if ($preserve) {
-    $ssz2[basename($entry, ".ssz2")] = parse_ini_file($entry);
-  } else {
-    unlink($entry);
-  }
-}
+if ($fill)
+  foreach (glob("state/*.ssz2", GLOB_NOSORT) as $entry) $ssz2[basename($entry, ".ssz2")] = parse_ini_file($entry);
+else
+  exec("rm -f /var/local/emhttp/*.ssz2");
 
 // Build table
 $row = 0;
 foreach ($disks as $name => $disk) {
-  if ($disk['type']=='Flash') continue;
-  if ($disk['fsColor']=='grey-off') continue;
-  if ($disk['exportable']=='no') continue;
+  $color = $disk['fsColor'];
   $row++;
-  $ball = "/webGui/images/{$disk['fsColor']}.png";
-  switch ($disk['fsColor']) {
+  $ball = "/webGui/images/$color.png";
+  switch ($color) {
     case 'green-on':  $help = 'All files protected'; break;
     case 'yellow-on': $help = 'All files unprotected'; break;
   }
+  if ($crypto) switch ($disk['luksState']) {
+    case 0: $luks = "<i class='nolock fa fa-lock'></i>"; break;
+    case 1: $luks = "<a class='info' onclick='return false'><i class='padlock fa fa-unlock-alt green-text'></i><span>All files encrypted</span></a>"; break;
+    case 2: $luks = "<a class='info' onclick='return false'><i class='padlock fa fa-unlock-alt orange-text'></i><span>Some or all files unencrypted</span></a>"; break;
+   default: $luks = "<a class='info' onclick='return false'><i class='padlock fa fa-lock red-text'></i><span>Unknown encryption state'</span></a>"; break;
+  } else $luks = "";
   echo "<tr>";
-  echo "<td><a class='info nohand' onclick='return false'><img src='$ball' class='icon'><span style='left:18px'>$help</span></a><a href='$path/Disk?name=$name' onclick=\"$.cookie('one','tab1',{path:'/'})\">$name</a></td>";
+  echo "<td><a class='info nohand' onclick='return false'><img src='$ball' class='icon'><span style='left:18px'>$help</span></a>$luks<a href='$path/Disk?name=$name' onclick=\"$.cookie('one','tab1',{path:'/'})\">$name</a></td>";
   echo "<td>{$disk['comment']}</td>";
   echo "<td>".disk_share_settings($var['shareSMBEnabled'], $sec[$name])."</td>";
   echo "<td>".disk_share_settings($var['shareNFSEnabled'], $sec_nfs[$name])."</td>";
@@ -99,17 +109,17 @@ foreach ($disks as $name => $disk) {
       echo "<td></td>";
       echo "<td class='disk-$row-1'>".my_scale($sharesize*1024, $unit)." $unit</td>";
       echo "<td class='disk-$row-2'>".my_scale($disk['fsFree']*1024, $unit)." $unit</td>";
-      echo "<td><a href='/update.htm?cmd=$cmd&csrf_token={$var['csrf_token']}' target='progressFrame' title='Recompute...' onclick='$(\".disk-$row-1\").html(\"Please wait...\");$(\".disk-$row-2\").html(\"\");'><i class='fa fa-refresh icon'></i></a></td>";
+      echo "<td><a href='/update.htm?cmd=$cmd&csrf_token={$var['csrf_token']}' target='progressFrame' title='Recompute...' onclick='$.cookie(\"ssz\",\"ssz\",{path:\"/\"});$(\".disk-$row-1\").html(\"Please wait...\");$(\".disk-$row-2\").html(\"\");'><i class='fa fa-refresh icon'></i></a></td>";
       echo "</tr>";
     }
   } else {
-    echo "<td><a href='/update.htm?cmd=$cmd&csrf_token={$var['csrf_token']}' target='progressFrame' onclick=\"$(this).text('Please wait...')\">Compute...</a></td>";
+    echo "<td><a href='/update.htm?cmd=$cmd&csrf_token={$var['csrf_token']}' target='progressFrame' onclick=\"$.cookie('ssz','ssz',{path:'/'});$(this).text('Please wait...')\">Compute...</a></td>";
     echo "<td>".my_scale($disk['fsFree']*1024, $unit)." $unit</td>";
     echo "<td><a href='$path/Browse?dir=/mnt/$name'><img src='/webGui/images/explore.png' title='Browse /mnt/$name'></a></td>";
     echo "</tr>";
   }
 }
 if ($row==0) {
-  echo "<tr><td colspan='8' style='text-align:center'><i class='fa fa-folder-open-o icon'></i>There are no exportable disk shares</td></tr>";
+  echo "<tr><td colspan='8' style='text-align:center;padding-top:12px'><i class='fa fa-folder-open-o icon'></i>There are no exportable disk shares</td></tr>";
 }
 ?>

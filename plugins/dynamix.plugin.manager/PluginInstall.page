@@ -1,9 +1,10 @@
 Menu="Plugins"
 Title="Install Plugin"
+Tag="download"
 ---
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -16,7 +17,8 @@ Title="Install Plugin"
 <script>
 function installPlugin(name) {
   var file = name.trim();
-  if (file) openBox('/plugins/dynamix.plugin.manager/scripts/plugin&arg1=install&arg2='+file,'Install Plugin',600,900,true);
+  var plugin = file.replace(/^.*(\\|\/|\:)/,'').replace('.plg','')+':install';
+  if (file) openBox('/plugins/dynamix.plugin.manager/scripts/plugin&arg1=install&arg2='+file,'Install Plugin',600,900,true,'loadlist',plugin);
 }
 </script>
 **Enter URL of remote plugin file or local plugin file**

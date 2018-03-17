@@ -1,5 +1,5 @@
 <?PHP
-/* Copyright 2005-2016, Lime Technology
+/* Copyright 2005-2017, Lime Technology
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -10,7 +10,7 @@
  */
 ?>
 <?
-$docroot = $docroot ?: @$_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
+$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 $var = parse_ini_file('state/var.ini');
 $unraid = parse_ini_file('/etc/unraid-version');
 $keyfile = trim(base64_encode(@file_get_contents($var['regFILE'])));
@@ -25,21 +25,21 @@ if (array_key_exists('getdiagnostics', $_GET)) {
 }
 ?>
 <link type="text/css" rel="stylesheet" href="/webGui/styles/default-fonts.css">
-<link type="text/css" rel="stylesheet" href="/webGui/styles/default-white.css">
+<link type="text/css" rel="stylesheet" href="/webGui/styles/default-popup.css">
 <style>
-#spinner_image{position:fixed;left:46%;top:46%;width:16px;height:16px;display:none;}
-#control_panel{position:fixed;left:5px;right:5px;top:0;padding-top:8px;line-height:24px;white-space:nowrap;}
-.four{text-align:center;box-sizing:border-box;-moz-box-sizing:border-box;-webkit-box-sizing:border-box;}
-.four label:first-child{margin-left:0;}
-.four label{margin-left:2%;cursor:pointer;}
-.allpanels{display:none;position:absolute;left:15px;right:15px;top:40px;bottom:25px;overflow:auto;margin-top:15px;}
+#spinner_image{position:fixed;left:46%;top:46%;width:16px;height:16px;display:none}
+#control_panel{position:fixed;left:5px;right:5px;top:0;padding-top:8px;line-height:24px;white-space:nowrap}
+.four{text-align:center;box-sizing:border-box;-moz-box-sizing:border-box;-webkit-box-sizing:border-box}
+.four label:first-child{margin-left:0}
+.four label{margin-left:2%;cursor:pointer}
+.allpanels{display:none;position:absolute;left:15px;right:15px;top:40px;bottom:25px;overflow:auto;margin-top:15px}
 #footer_panel{position:fixed;left:5px;right:5px;bottom:0;height:30px;line-height:10px;text-align:center}
 textarea{width:100%;height:250px;margin:10px 0}
 input[type=button]{margin-right:0;float:right}
 input[type=email]{margin-top:8px;float:left}
 </style>
 <body>
-<div style="margin-top:0;font-size:12px;line-height:30px;color:#303030;margin-left:5px;margin-right:5px">
+<div style="margin-top:0;line-height:30px;margin-left:5px;margin-right:5px">
 <div id="control_panel" class="four">
 <label for="optOnlinePoll"><input type="radio" name="mode" id="optOnlinePoll" value="onlinepoll" checked="checked" /> Online Poll</label>
 <label for="optFeatureRequest"><input type="radio" name="mode" id="optFeatureRequest" value="featurerequest"/> Feature Request</label>

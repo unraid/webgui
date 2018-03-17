@@ -1,11 +1,13 @@
 Menu="Tasks:50"
 Type="xmenu"
 Title="Installed Plugins"
+Tag="puzzle-piece"
 Tabs="true"
+Code="f1e6"
 ---
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2018, Lime Technology
+ * Copyright 2012-2018, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -15,18 +17,15 @@ Tabs="true"
  * all copies or substantial portions of the Software.
  */
 ?>
-
 <?
 // Remove stale /tmp/plugin/*.plg entries
-$tmp_stale = ($path != $prev);
-if ($tmp_stale) foreach (glob("/tmp/plugins/*.{plg,txt}", GLOB_NOSORT+GLOB_BRACE) as $entry) if (!file_exists("/var/log/plugins/".basename($entry))) @unlink($entry);
+foreach (glob("/tmp/plugins/*.{plg,txt}", GLOB_NOSORT+GLOB_BRACE) as $entry) if (!file_exists("/var/log/plugins/".basename($entry))) @unlink($entry);
+$check = $notify['version'] ? 0 : 1;
 ?>
 <link type="text/css" rel="stylesheet" href="/webGui/styles/jquery.filetree.css">
-<style>
-#plugin_tree{width:33%;height:200px;overflow:scroll;}
-</style>
-<script src="/webGui/javascript/jquery.filetree.js"></script>
+<style>#plugin_tree{width:33%;height:200px;overflow-y:scroll;}</style>
 
+<script src="<?autov('/webGui/javascript/jquery.filetree.js')?>"></script>
 <script>
 <?if ($display['resize']):?>
 function resize(bind) {
@@ -41,26 +40,37 @@ function resize(bind) {
   }
 }
 <?endif;?>
-$(function() {
-  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{stale:'<?=$tmp_stale?>'},function(data) {
-    if (data) $('#plugin_list').html(data);
+function loadlist(id) {
+  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{audit:id,check:<?=$check?>},function(data) {
+    if (id) {
+      var tmp = id.split(':');
+      var list = $('#plugin_list');
+      var tr = 'tr#'+tmp[0].replace(/[\. _]/g,'');
+      switch (tmp[1]) {
+        case 'remove' : list.find(tr).remove(); break;
+        case 'update' : list.find(tr).remove();
+        case 'install': if (!list.find(tr).length) list.append(data).trigger('update'); break;
+      }
+    } else {
+      $('#plugin_list').html(data);
+    }
 <?if ($display['resize']):?>
     resize();
     $(window).bind('resize',function(){resize(true);});
 <?endif;?>
-    $('#plugin_table').tablesorter({sortList:[[1,0]],headers:{0:{sorter:false},5:{sorter:false}}});
-    $('.desc_readmore').readmore({maxHeight:58});
+    $('#plugin_table').tablesorter({sortList:[[4,0],[1,0]],sortAppend:[[1,0]],headers:{0:{sorter:false},5:{sorter:false}},textAttribute:'data'});
+    $('.desc_readmore').readmore({maxHeight:66,moreLink:"<a href='#'><i class='fa fa-chevron-down'></i></a>",lessLink:"<a href='#'><i class='fa fa-chevron-up'></i></a>"});
   });
+}
+$(function() {
+  loadlist();
   $('#plugin_tree').fileTree({root:'/boot/',filter:'plg'}, function(file) {$('#plugin_file').val(file);});
+<?if ($check):?>
   $('.tabs').append("<span class='status vhshift'><input type='button' value='Check for Updates' onclick='openBox(\"/plugins/dynamix.plugin.manager/scripts/plugin&arg1=checkall\",\"Plugin Update Check\",490,430,true)'></span>");
+<?endif;?>
 });
 </script>
-
-<blockquote class="inline_help ontop">
-Click <span class="strong big">check for updates</span> to check all plugins. This page might take some time to load depending on your internet connection and how many plugins need to be checked.
-</blockquote>
-
 <table class='tablesorter plugins shift' id='plugin_table'>
-<thead><tr><th></th><th>Plugin</th><th>Author</th><th>Version</th><th>Status</th><th></th></tr></thead>
-<tbody id="plugin_list"><tr><td colspan='6' style='text-align:center;padding-top:12px'><i class="fa fa-spinner fa-spin icon"></i><em>Please wait, retrieving plugin information ...</em></td><tr></tbody>
+<thead><tr><th></th><th>Plugin</th><th>Author</th><th>Version</th><th>Status</th><th>Uninstall</th></tr></thead>
+<tbody id="plugin_list"><tr><td colspan='6' style='text-align:center;padding:24px'><i class='fa fa-circle-o-notch fa-spin fa-3x fa-fw'></i></td><tr></tbody>
 </table>

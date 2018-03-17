@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2015-2016, Bergware International
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2015-2017, Bergware International
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,

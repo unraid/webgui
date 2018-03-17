@@ -1,10 +1,10 @@
 Menu="Scheduler:1"
 Title="Parity Check"
-Cond="($disks['parity']['status']!='DISK_NP_DSBL')"
+Tag="calendar"
 ---
 <?PHP
-/* Copyright 2012-2016, Bergware International.
- * Copyright 2005-2016, Lime Technology
+/* Copyright 2012-2017, Bergware International.
+ * Copyright 2005-2017, Lime Technology
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -14,8 +14,11 @@ Cond="($disks['parity']['status']!='DISK_NP_DSBL')"
  * all copies or substantial portions of the Software.
  */
 ?>
-
 <?
+if ($disks['parity']['status']=='DISK_NP_DSBL' && $disks['parity2']['status']=='DISK_NP_DSBL') {
+  echo "<p class='notice'>No Parity disk present!</p>";
+}
+$width = strstr('gray,azure',$display['theme']) ? [166,305]:[131,300];
 $mode = ['Disabled','Daily','Weekly','Monthly','Yearly','Custom'];
 $days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 $months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -32,8 +35,8 @@ if (file_exists($memory)) {
 <script>
 <?if ($parity['mode']==5):?>
 $(function() {
-  $("#s1").dropdownchecklist({emptyText:'Every day', width:131, explicitClose:'...close'});
-  $("#s2").dropdownchecklist({emptyText:'Every month', width:131, explicitClose:'...close'});
+  $("#s1").dropdownchecklist({emptyText:'Every day', width:<?=$width[0]?>, explicitClose:'...close'});
+  $("#s2").dropdownchecklist({emptyText:'Every month', width:<?=$width[0]?>, explicitClose:'...close'});
 });
 // Simulate a single input field
 function prepareParity(form) {

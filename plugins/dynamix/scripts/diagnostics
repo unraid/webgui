@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -19,7 +19,7 @@ $cli = empty($zip);
 $get = "/var/local/emhttp";
 $var = file_exists("$get/var.ini") ? parse_ini_file("$get/var.ini") : [];
 
-$docroot = $docroot ?: @$_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
+$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 $folders = ['/boot','/boot/config','/boot/config/plugins','/boot/extra','/boot/syslinux','/var/log','/var/log/plugins','/var/log/packages','/tmp'];
 
 function anonymize($text,$select) {
@@ -64,6 +64,8 @@ if ($cli) {
 }
 // create folder structure
 exec("mkdir -p ".escapeshellarg("/$diag/system")." ".escapeshellarg("/$diag/config")." ".escapeshellarg("/$diag/logs")." ".escapeshellarg("/$diag/shares")." ".escapeshellarg("/$diag/smart")." ".escapeshellarg("/$diag/qemu"));
+// get utilization of running processes
+exec("top -bn1 -o%CPU 2>/dev/null|todos >".escapeshellarg("/$diag/system/top.txt"));
 // make unRAID version reference
 $unraid = parse_ini_file('/etc/unraid-version');
 file_put_contents("/$diag/unRAID-".$unraid['version'].".txt",$unraid['version']);
@@ -78,12 +80,14 @@ exec("lscpu 2>/dev/null|todos >".escapeshellarg("/$diag/system/lscpu.txt"));
 exec("lsscsi -vgl 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsscsi.txt"));
 exec("lspci -knn 2>/dev/null|todos >".escapeshellarg("/$diag/system/lspci.txt"));
 exec("lsusb 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsusb.txt"));
-exec("free -mt 2>/dev/null|todos >".escapeshellarg("/$diag/system/memory.txt"));
-exec("ps -ef 2>/dev/null|todos >".escapeshellarg("/$diag/system/ps.txt"));
+exec("free -mth 2>/dev/null|todos >".escapeshellarg("/$diag/system/memory.txt"));
+exec("ps -auxf --sort=-pcpu 2>/dev/null|todos >".escapeshellarg("/$diag/system/ps.txt"));
 exec("lsof -Pni 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsof.txt"));
-exec("lsmod 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsmod.txt"));
+exec("lsmod|sort 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsmod.txt"));
 exec("df -h 2>/dev/null|todos >".escapeshellarg("/$diag/system/df.txt"));
 exec("ifconfig -a -s 2>/dev/null|grep -Po '^(eth|bond)[0-9]+'", $ports);
+exec("dmidecode -qt2|awk -F: '/^\tManufacturer:/{m=\$2};/^\tProduct Name:/{p=\$2} END{print m\" -\"p}' 2>/dev/null|todos >".escapeshellarg("/$diag/system/motherboard.txt"));
+exec("dmidecode -qt0 2>/dev/null|todos >>".escapeshellarg("/$diag/system/motherboard.txt"));
 // create ethernet information information (suppress errors)
 foreach ($ports as $port) {
   exec("ethtool ".escapeshellarg($port)." 2>/dev/null|todos >>".escapeshellarg("/$diag/system/ethtool.txt"));
@@ -105,10 +109,25 @@ exec("cp /boot/config/*.{cfg,conf,dat} /boot/config/go ".escapeshellarg("/$diag/
 // anonymize configuration files
 if (!$all) exec("sed -ri 's/^((disk|flash)(Read|Write)List.*=\")[^\"]+/\\1.../' ".escapeshellarg("/$diag/config/*.cfg")." 2>/dev/null");
 
+// don't anonymize system share names
+$vardomain = file_exists('/boot/config/domain.cfg') ? parse_ini_file('/boot/config/domain.cfg') : [];
+$vardocker = file_exists('/boot/config/docker.cfg') ? parse_ini_file('/boot/config/docker.cfg') : [];
+$showshares = [];
+$showshares[] = current(array_slice(explode('/',$vardomain['IMAGE_FILE']), 3, 1)).'.cfg';
+$showshares[] = current(array_slice(explode('/',$vardomain['DOMAINDIR']), 3, 1)).'.cfg';
+$showshares[] = current(array_slice(explode('/',$vardomain['MEDIADIR']), 3, 1)).'.cfg';
+$showshares[] = current(array_slice(explode('/',$vardomain['DISKDIR']), 3, 1)).'.cfg';
+$showshares[] = current(array_slice(explode('/',$vardocker['DOCKER_IMAGE_FILE']), 3, 1)).'.cfg';
+$showshares[] = current(array_slice(explode('/',$vardocker['DOCKER_APP_CONFIG_PATH']), 3, 1)).'.cfg';
+$showshares[] = current(array_slice(explode('/',$vardocker['DOCKER_HOME']), 3, 1)).'.cfg';
+
 // copy share information (anonymize if applicable)
 $files = glob("/boot/config/shares/*.cfg");
 foreach ($files as $file) {
-  $dest = anonymize("/$diag/shares/".basename($file),2);
+  $dest = "/$diag/shares/".basename($file);
+  if (!in_array(basename($file),$showshares)) {
+    $dest = anonymize($dest,2);
+  }
   @copy($file, $dest);
   if (!$all) exec("sed -ri 's/^(share(Comment|ReadList|WriteList)=\")[^\"]+/\\1.../' ".escapeshellarg($dest)." 2>/dev/null");
 }
@@ -127,6 +146,7 @@ foreach (glob("/var/log/syslog*") as $file) {
     unset($titles,$rows);
     exec("grep -Po 'logger: moving \"\K[^\"]+' ".escapeshellarg("$log.txt")." 2>/dev/null|sort|uniq", $titles);
     exec("sed -ri 's|\b\S+@\S+\.\S+\b|xxx@removed.com|;s|\b(username\|password)([=:])\S+\b|\\1\\2xxx|;s|(GUID: \S)\S+(\S) |\\1..\\2 |;s|(moving \"\S\|\"/mnt/user/\S).*(\S)\"|\\1..\\2\"|' ".escapeshellarg("$log.txt"));
+    exec("sed -ri 's|(host: \").+(\.unraid\.net:[0-9]+\")|\\1hash\\2|;s|(referrer: \"https?://).+(\.unraid\.net)|\\1hash\\2|' ".escapeshellarg("$log.txt"));
     foreach ($titles as $mover) {
       $title = "/{$mover[0]}..".substr($mover,-1)."/...";
       exec("sed -ri 's|(logger: [.>cr].*)[ /]$mover/.*$|\\1 file: $title|' ".escapeshellarg("$log.txt")." 2>/dev/null");
@@ -174,35 +194,35 @@ if ($qemu) {
 // create SMART reports (suppress errors)
 $disks = file_exists("$get/disks.ini") ? parse_ini_file("$get/disks.ini", true) : [];
 include_once "$docroot/webGui/include/CustomMerge.php";
+include_once "$docroot/webGui/include/Wrappers.php";
 exec("ls -l /dev/disk/by-id/[asun]* 2>/dev/null|sed '/-part/d;s|^.*/by-id/[^-]*-||;s|-> ../../||;s|:|-|'", $devices);
 foreach ($devices as $device) {
-  list($name,$dev) = explode(' ',$device);
-  $type = '';
+  list($name,$port) = explode(' ',$device);
+  $diskName = ''; $type = '';
   foreach ($disks as $find) {
-    if ($find['device']==$dev) {
-      $type = isset($find['smType']) ? $find['smType'] : -1;
-      if ($type==-1) $type = isset($var['smType']) ? $var['smType'] : '';
-      if ($type) {
-        $ports = [];
-        if (isset($find['smDevice']) && strlen($find['smDevice'])) $port = $find['smDevice'];
-        if (isset($find['smPort1']) && strlen($find['smPort1'])) $ports[] = $find['smPort1'];
-        if (isset($find['smPort2']) && strlen($find['smPort2'])) $ports[] = $find['smPort2'];
-        if (isset($find['smPort3']) && strlen($find['smPort3'])) $ports[] = $find['smPort3'];
-        if ($ports) {
-          $glue = isset($find['smGlue']) ? $find['smGlue'] : ',';
-          $type .= ','.implode($glue,$ports);
-        }
-      }
+    if ($find['device']==$port) {
+      $diskName = $find['name'];
+      $type = get_value($find,'smType','');
+      get_ctlr_options($type, $find);
+      $port = $find['smDevice'] ?? $port;
       break;
     }
   }
-  exec("smartctl -a $type ".escapeshellarg("/dev/$dev")." 2>/dev/null|todos >".escapeshellarg("/$diag/smart/$name-$date.txt"));
+  $port = port_name($port);
+  exec("smartctl -x $type ".escapeshellarg("/dev/$port")." 2>/dev/null|todos >".escapeshellarg("/$diag/smart/$name-$date $diskName ($port).txt"));
 }
 // create cache pool information
-if (is_dir('/mnt/cache') && $disks['cache']['fsType']=='btrfs') {
-  exec("/sbin/btrfs filesystem show /mnt/cache 2>/dev/null|todos >".escapeshellarg("/$diag/system/btrfs-show.txt"));
-  exec("/sbin/btrfs filesystem df /mnt/cache 2>/dev/null|todos >".escapeshellarg("/$diag/system/btrfs-df.txt"));
+if (is_dir('/mnt/cache') && strpos($disks['cache']['fsType'],'btrfs')!==false) {
+  exec("/sbin/btrfs filesystem usage /mnt/cache 2>/dev/null|todos >".escapeshellarg("/$diag/system/btrfs-usage.txt"));
 }
+// create installed plugin information
+$plugins = glob("/var/log/plugins/*.plg");
+foreach ($plugins as $plugin) {
+	$installedPlugins .= basename($plugin)." - ".exec("plugin version ".escapeshellarg($plugin))."\r\n";
+}
+$installedPlugins = $installedPlugins ?: "No additional Plugins Installed";
+file_put_contents("/$diag/system/plugins.txt",$installedPlugins);
+
 // create resulting zip file and remove temp folder
 exec("zip -qmr ".escapeshellarg($zip)." ".escapeshellarg("/$diag"));
 if ($cli) echo "done.\nZIP file '$zip' created.\n";

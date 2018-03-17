@@ -1,10 +1,11 @@
 Menu="Disk Share"
 Title="NFS Security Settings"
+Tag="linux"
 Cond="(($var['shareNFSEnabled']!='no') && (isset($name)?array_key_exists($name,$sec_nfs):0))"
 ---
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -14,7 +15,47 @@ Cond="(($var['shareNFSEnabled']!='no') && (isset($name)?array_key_exists($name,$
  * all copies or substantial portions of the Software.
  */
 ?>
-<form markdown="1" method="POST" action="/update.htm" target="progressFrame">
+<?
+$width = strstr('gray,azure',$display['theme']) ? [123,305]:[123,300];
+?>
+> *Read settings from* is used to preset the NFS security settings of the current selected share with the settings of an existing share.
+>
+> Select the desired share name and press **Read** to copy the NFS security settings from the selected source.
+>
+> *Write settings to* is used to copy the NFS security settings of the current selected share to one or more other existing shares.
+>
+> Select the desired destinations and press **Write** to copy the NFS security settings to the selected shares.
+
+<div class="clone1">
+<span class="clone">Read settings from</span><i class="fa fa-arrow-left clone"></i>
+<select name="readnfs" size="1" class="clone" onchange="toggleButton('readnfs',false)">
+<option disabled selected>select...</option>
+<?
+if (isset($disks[$name])) {
+  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name) echo mk_option("", $list['name'], my_disk($list['name']));
+} else {
+  foreach ($shares as $list) if ($list['name']!=$name) echo mk_option("", $list['name'], $list['name']);
+}
+?>
+</select><input type="button" id="readnfs" value="Read" class="clone" onclick="readNFS()" disabled>
+</div>
+<div class="clone2">
+<span class="clone">Write settings to</span><i class="fa fa-arrow-right clone"></i>
+<select id="nfs1" name="writenfs" size="1" multiple="multiple" style="display:none" onchange="toggleButton('writenfs',this.id)">
+<?
+$rows = [];
+if (isset($disks[$name])) {
+  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name) $rows[] = mk_option("", $list['name'], my_disk($list['name']));
+} else {
+  foreach ($shares as $list) if ($list['name']!=$name) $rows[] = mk_option("", $list['name'], $list['name']);
+}
+if ($rows) echo "<option>All</option>";
+foreach ($rows as $row) echo $row;
+?>
+</select><input type="button" id="writenfs" value="Write" class="clone" onclick="writeNFS()" disabled>
+</div>
+
+<form markdown="1" name="nfs_edit" method="POST" action="/update.htm" target="progressFrame" onchange="toggleButton('writenfs',true);$('#nfs1').dropdownchecklist('disable')">
 <input type="hidden" name="shareName" value="<?=htmlspecialchars($name)?>">
 
 Share name:
@@ -47,3 +88,46 @@ Rule:
 : <input type="submit" name="changeShareAccessNFS" value="Apply"><input type="button" value="Done" onclick="done()">
 </form>
 <?endif;?>
+
+<script>
+$(function() {
+  initDropdownNFS(false);
+<?if ($tabbed):?>
+<?
+$path=='Shares/Share' ? $t=2 : $t=1;
+if ($var['shareAFPEnabled']!='no') $t++;
+?>
+  $('#tab<?=$t?>').bind({click:function(){initDropdownNFS(true);}});
+<?endif;?>
+});
+function initDropdownNFS(reset) {
+  if (reset) {
+    $('#nfs1').dropdownchecklist('destroy');
+  }
+  $("#nfs1").dropdownchecklist({firstItemChecksAll:true, emptyText:'select...', width:<?=$width[0]?>, explicitClose:'...close'});
+}
+function readNFS() {
+  var form = document.nfs_edit;
+  var name = $('select[name="readnfs"]').val();
+  $.get('/webGui/include/ProtocolData.php',{protocol:'nfs',name:name},function(json) {
+    var data = $.parseJSON(json);
+    form.shareExportNFS.value = data.export;
+    form.shareSecurityNFS.value = data.security;
+  });
+  $(form).find('select').trigger('change');
+}
+function writeNFS() {
+  var data = {}, copied = false;
+  data.shareExportNFS = '<?=addslashes(htmlspecialchars($sec_nfs[$name]['export']))?>';
+  data.shareSecurityNFS = '<?=addslashes(htmlspecialchars($sec_nfs[$name]['security']))?>';
+  data.changeShareSecurityNFS = 'Apply';
+  $('select#nfs1 option').map(function() {
+    if ($(this).prop('selected')==true) {
+      data.shareName = $(this).val();
+      $.post('/update.htm', data);
+      copied = true;
+    }
+  });
+  if (copied) swal({title:'Clone complete',text:'NFS security settings are written to the selected shares',type:'success'},function(){refresh();});
+}
+</script>

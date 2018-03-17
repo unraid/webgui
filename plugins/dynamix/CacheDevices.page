@@ -1,10 +1,11 @@
 Menu="Main:2"
 Title="Cache Devices"
+Tag="bullseye"
 Cond="($var['fsState']=='Stopped' || $var['cacheSbNumDisks'])"
 ---
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -18,16 +19,16 @@ Cond="($var['fsState']=='Stopped' || $var['cacheSbNumDisks'])"
 function cache_status() {
   $.post('/webGui/include/DeviceList.php',{path:'<?=$path?>',device:'cache'},function(data) {
     if (data) {$('#cache_device').html(data); display_diskio();}
-<?if ($update && $var['fsState']=='Started'):?>
+<?if ($var['fsState']=='Started'):?>
 <?if ($tabbed):?>
-    if ($('#tab2').is(':checked')) timer = setTimeout(cache_status,<?=abs($display['refresh'])?>);
+    if ($('#tab2').is(':checked')) timer = setTimeout(cache_status,3000);
 <?else:?>
-    setTimeout(cache_status,<?=abs($display['refresh'])?>);
+    setTimeout(cache_status,3000);
 <?endif;?>
 <?endif;?>
   });
 }
-<?if ($update && $var['fsState']=='Started' && $tabbed):?>
+<?if ($var['fsState']=='Started' && $tabbed):?>
 $('#tab2').bind({click:function() {clearTimeout(timer); cache_status(); $('i.toggle').show('slow');}});
 <?else:?>
 $('#tab2').bind({click:function() {$('i.toggle').show('slow');}});
@@ -36,7 +37,7 @@ $('#tab2').bind({click:function() {$('i.toggle').show('slow');}});
 cache_status();
 </script>
 
-<table class="disk_status <?=($var['fsState']=='Stopped'?'small':$display['view']).' '.$display['align']?>">
+<table class="disk_status wide">
 <thead><tr><td>Device</td><td>Identification</td><td>Temp.</td><td>Reads</td><td>Writes</td><td>Errors</td><td>FS</td><td>Size</td><td>Used</td><td>Free</td><td>View</td></tr></thead>
 <tbody id="cache_device">
 <?

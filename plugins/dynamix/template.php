@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -16,15 +16,6 @@ $docroot = $_SERVER['DOCUMENT_ROOT'];
 
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/PageBuilder.php";
-
-// Extract the 'querystring'
-// variables provided by emhttp:
-//   path=<path>   page path, e.g., path=Main/Disk
-//   prev=<path>   prev path, e.g., prev=Main (used to determine if page was refreshed)
-extract($_GET);
-
-// The current "task" is the first element of the path
-$task = strtok($path, '/');
 
 // Get the webGui configuration preferences
 extract(parse_plugin_cfg('dynamix',true));
@@ -52,10 +43,20 @@ foreach (glob('plugins/*', GLOB_ONLYDIR) as $plugin) {
   if ($plugin != 'plugins/dynamix') build_pages("$plugin/*.page");
 }
 
+// Extract the 'querystring'
+extract($_GET);
+
+// Need the following to make php-fpm & nginx work
+if (empty($path))
+  $path = substr(explode('?', $_SERVER['REQUEST_URI'])[0], 1);
+
+// The current "task" is the first element of the path
+$task = strtok($path, '/');
+
 // Here's the page we're rendering
 $myPage = $site[basename($path)];
 $pageroot = $docroot.'/'.dirname($myPage['file']);
-$update = $display['refresh']>0 || ($display['refresh']<0 && $var['mdResync']==0);
+$update = true; // set for legacy
 
 // Giddyup
 require_once "$docroot/webGui/include/DefaultPageLayout.php";

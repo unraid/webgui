@@ -1,10 +1,10 @@
 Menu="Scheduler:2"
 Title="Mover Settings"
-Cond="(($var['shareUser']!='-')&&(isset($disks['cache']))&&($disks['cache']['status']!='DISK_NP')&&($var['shareCacheEnabled']=='yes'))"
+Tag="calendar-check-o"
 ---
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -14,8 +14,14 @@ Cond="(($var['shareUser']!='-')&&(isset($disks['cache']))&&($disks['cache']['sta
  * all copies or substantial portions of the Software.
  */
 ?>
-
 <?
+if (empty($disks['cache']) || $disks['cache']['status']=='DISK_NP') {
+  echo "<p class='notice'>No Cache disk present!</p>";
+} elseif ($var['shareCacheEnabled']!='yes') {
+  echo "<p class='notice'>Cache disk not enabled!</p>";
+} elseif ($var['shareUser']=='-') {
+  echo "<p class='notice'>User shares not enabled!</p>";
+}
 $cron = explode(' ',$var['shareMoverSchedule']);
 $move = $cron[2]!='*' ? 3 : ($cron[4]!='*' ? 2 : (substr($cron[1],0,1)!='*' ? 1 : 0));
 $mode = ['Hourly','Daily','Weekly','Monthly'];
@@ -114,10 +120,12 @@ Mover logging:
 &nbsp;
 : <input type="submit" name="changeMover" value="Apply"><input type="button" value="Done" onclick="done()">
 
+<?if ($var['shareCacheEnabled']=="yes" && is_dir("/mnt/cache")):?>
 &nbsp;
 <?if (file_exists("/var/run/mover.pid")):?>
 : <input type="submit" name="cmdStartMover" value="Move now" disabled> Mover is running.
 <?else:?>
 : <input type="submit" name="cmdStartMover" value="Move now"> Click to invoke the Mover.
+<?endif;?>
 <?endif;?>
 </form>

@@ -1,10 +1,11 @@
 Menu="Device New"
 Title="Attributes"
+Tag="address-card-o"
 Cond="strpos($disks[$name]['status'],'_NP')===false"
 ---
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -16,14 +17,14 @@ Cond="strpos($disks[$name]['status'],'_NP')===false"
 ?>
 <script>
 $(function() {
-  $.post("/webGui/include/SmartInfo.php",{cmd:'attributes',port:'<?=addslashes(htmlspecialchars(isset($disks[$name]['device'])?$disks[$name]['device']:$name))?>',name:'<?=addslashes(htmlspecialchars($name))?>'}, function(data) {
+  $.post("/webGui/include/SmartInfo.php",{cmd:'attributes',port:'<?=addslashes(htmlspecialchars($disks[$name]['device']??$name))?>',name:'<?=addslashes(htmlspecialchars($name))?>'}, function(data) {
     $('#disk_attributes').html(data);
   });
 });
 </script>
 <table class='share_status small'>
-<thead><td style="width:30px">#</td><td>Attribute Name</td><td>Flag</td><td>Value</td><td>Worst</td><td>Threshold</td><td>Type</td><td>Updated</td><td>Failed</td><td style="width:145px">Raw Value</td></thead>
-<tbody id="disk_attributes"><tr><td colspan='10' style='text-align:center;padding-top:12px'><i class='fa fa-spinner fa-spin'></i>&nbsp;<em>Please wait... retrieving S.M.A.R.T. information!</em></td></tr></tbody>
+<thead><td style="width:40px">#</td><td>Attribute Name</td><td>Flag</td><td>Value</td><td>Worst</td><td>Threshold</td><td>Type</td><td>Updated</td><td>Failed</td><td style="width:145px">Raw Value</td></thead>
+<tbody id="disk_attributes"><tr><td colspan='10' style='text-align:center;padding:24px'><i class='fa fa-circle-o-notch fa-spin fa-3x fa-fw'></i></td></tr></tbody>
 </table>
 <input type="button" value="Done" onclick="done()">
 

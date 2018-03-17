@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2016, Lime Technology
- * Copyright 2012-2016, Bergware International.
+/* Copyright 2005-2017, Lime Technology
+ * Copyright 2012-2017, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -12,32 +12,25 @@
  */
 ?>
 <?
-$docroot = $docroot ?: @$_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
+$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 require_once "$docroot/webGui/include/Wrappers.php";
 require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginHelpers.php";
 
 $var     = parse_ini_file('/var/local/emhttp/var.ini');
-exec("wget -qO /dev/null 127.0.0.1:$(lsof -i -P -sTCP:LISTEN|grep -Pom1 '^emhttp.*:\K\d+')/update.htm?cmdStatus=apply\&csrf_token={$var['csrf_token']}");
-$var     = parse_ini_file('/var/local/emhttp/var.ini');
-
 $current = parse_ini_file('/etc/unraid-version');
 $unraid  = parse_plugin_cfg('dynamix', true);
 $notify  = "$docroot/webGui/scripts/notify";
 $server  = strtoupper($var['NAME']);
 $output  = $unraid['notify']['plugin'];
 
-plugin("checkall");
+plugin('checkall');
 foreach (glob("/tmp/plugins/*.plg", GLOB_NOSORT) as $file) {
-  $plg = basename($file);
-  $old = plugin('version', "/var/log/plugins/$plg");
+  $name = basename($file, '.plg');
+  $old = plugin('version', "/var/log/plugins/$name.plg");
   $new = plugin('version', $file);
   // silently suppress bad download of PLG file
   if (strcmp($new, $old) > 0) {
-    $unRAID = plugin('unRAID', $file);
-    if ($unRAID === false || version_compare($current['version'], $unRAID, '>=')) {
-      $name = basename($file, '.plg');
-      exec("$notify -e ".escapeshellarg("Plugin - $name [$new]")." -s ".escapeshellarg("Notice [$server] - Version update $new")." -d ".escapeshellarg("A new version of $name is available")." -i ".escapeshellarg("normal $output")." -x");
-    }
+    exec("$notify -e ".escapeshellarg("Plugin - $name [$new]")." -s ".escapeshellarg("Notice [$server] - Version update $new")." -d ".escapeshellarg("A new version of $name is available")." -i ".escapeshellarg("normal $output")." -x");
   }
 }
 exit(0);
