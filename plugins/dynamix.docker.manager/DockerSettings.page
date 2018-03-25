@@ -815,17 +815,17 @@ function showLogOptions(log) {
     $('#DOCKER_LOG_OPTIONS').show('slow');
   }
 }
-
 function validateStopTime(entry) {
   entry = Math.abs(parseInt(entry));
-	if ( entry < 10 ) {
-	  entry = 10;
-	}
-	if ( entry > 30 ) {
-	  entry = 30;
-	}
-	$("#DOCKER_STOP_TIME").val(entry);
+  if ( entry < 10 ) {
+    entry = 10;
+  }
+  if ( entry > 30 ) {
+    entry = 30;
+  }
+  $("#DOCKER_STOP_TIME").val(entry);
 }
+
 $(function() {
   $("#applyBtn").click(function(){
     if (!checkDHCP() || !checkIP()) return;
