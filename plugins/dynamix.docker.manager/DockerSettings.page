@@ -236,6 +236,11 @@ Template Authoring Mode:
 
 > If set to **Yes**, when creating/editing containers the interface will be present with some extra fields related to template authoring.
 
+Wait time in seconds when stopping containers:
+: <input id="DOCKER_STOP_TIME" type="number" name="DOCKER_STOP_TIME" value="<?=$dockercfg['DOCKER_STOP_TIME']?>"  style="width:50px;" onchange='validateStopTime(this.value);' required="required">
+
+> When stopping a container, wait this many seconds for the container to gracefully exit before forcibly killing it (Minimum 10 seconds, Maximum 30 seconds)
+
 Preserve user defined networks:
 : <select name="DOCKER_USER_NETWORKS" class="narrow">
   <?=mk_option($dockercfg['DOCKER_USER_NETWORKS'], 'remove', 'No')?>
@@ -810,6 +815,17 @@ function showLogOptions(log) {
     $('#DOCKER_LOG_OPTIONS').show('slow');
   }
 }
+function validateStopTime(entry) {
+  entry = Math.abs(parseInt(entry));
+  if ( entry < 10 ) {
+    entry = 10;
+  }
+  if ( entry > 30 ) {
+    entry = 30;
+  }
+  $("#DOCKER_STOP_TIME").val(entry);
+}
+
 $(function() {
   $("#applyBtn").click(function(){
     if (!checkDHCP() || !checkIP()) return;

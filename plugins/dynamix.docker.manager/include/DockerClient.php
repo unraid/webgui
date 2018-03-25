@@ -38,6 +38,7 @@ function docker($cmd, &$var=null) {
 # Docker configuration file - guaranteed to exist
 $docker_cfgfile = '/boot/config/docker.cfg';
 $dockercfg = parse_ini_file($docker_cfgfile);
+$dockercfg['DOCKER_STOP_TIME'] = $dockercfg['DOCKER_STOP_TIME'] ?: 10;
 
 ######################################
 ##      DOCKERTEMPLATES CLASS       ##
@@ -678,7 +679,9 @@ class DockerClient {
 	}
 
 	public function stopContainer($id) {
-		$this->getDockerJSON("/containers/${id}/stop?t=10", 'POST', $code);
+		global $dockercfg;
+		
+		$this->getDockerJSON("/containers/${id}/stop?t={$dockercfg['DOCKER_STOP_TIME']}", 'POST', $code);
 		$this::$allContainersCache = null; // flush cache
 		$codes = [
 			'204' => true, // No error
@@ -690,7 +693,9 @@ class DockerClient {
 	}
 
 	public function restartContainer($id) {
-		$this->getDockerJSON("/containers/${id}/restart?t=10", 'POST', $code);
+		global $dockercfg;
+		
+		$this->getDockerJSON("/containers/${id}/restart?t={$dockercfg['DOCKER_STOP_TIME']}", 'POST', $code);
 		$this::$allContainersCache = null; // flush cache
 		$codes = [
 			'204' => true, // No error
