@@ -194,35 +194,36 @@ function postToXML($post, $setOwnership=false) {
   $xml->addChild("Data");
   $xml->addChild("Environment");
 
-  $post['confName'] = $post['confName'] ?? [];
-  for ($i = 0; $i < count($post['confName']); $i++) {
-    $Type                  = $post['confType'][$i];
-    $config                = $xml->addChild('Config', xml_encode($post['confValue'][$i]));
-    $config['Name']        = xml_encode($post['confName'][$i]);
-    $config['Target']      = xml_encode($post['confTarget'][$i]);
-    $config['Default']     = xml_encode($post['confDefault'][$i]);
-    $config['Mode']        = xml_encode($post['confMode'][$i]);
-    $config['Description'] = xml_encode($post['confDescription'][$i]);
-    $config['Type']        = xml_encode($post['confType'][$i]);
-    $config['Display']     = xml_encode($post['confDisplay'][$i]);
-    $config['Required']    = xml_encode($post['confRequired'][$i]);
-    $config['Mask']        = xml_encode($post['confMask'][$i]);
-    # V1 compatibility
-    if ($Type == "Port") {
-      $port                = $xml->Networking->Publish->addChild("Port");
-      $port->HostPort      = $post['confValue'][$i];
-      $port->ContainerPort = $post['confTarget'][$i];
-      $port->Protocol      = $post['confMode'][$i];
-    } elseif ($Type == "Path") {
-      $path               = $xml->Data->addChild("Volume");
-      $path->HostDir      = $post['confValue'][$i];
-      $path->ContainerDir = $post['confTarget'][$i];
-      $path->Mode         = $post['confMode'][$i];
-    } elseif ($Type == "Variable") {
-      $variable        = $xml->Environment->addChild("Variable");
-      $variable->Value = $post['confValue'][$i];
-      $variable->Name  = $post['confTarget'][$i];
-      $variable->Mode  = $post['confMode'][$i];
+  if(isset($post['confName']) && is_array($post['confName'])) {
+    for ($i = 0; $i < count($post['confName']); $i++) {
+      $Type                  = $post['confType'][$i];
+      $config                = $xml->addChild('Config', xml_encode($post['confValue'][$i]));
+      $config['Name']        = xml_encode($post['confName'][$i]);
+      $config['Target']      = xml_encode($post['confTarget'][$i]);
+      $config['Default']     = xml_encode($post['confDefault'][$i]);
+      $config['Mode']        = xml_encode($post['confMode'][$i]);
+      $config['Description'] = xml_encode($post['confDescription'][$i]);
+      $config['Type']        = xml_encode($post['confType'][$i]);
+      $config['Display']     = xml_encode($post['confDisplay'][$i]);
+      $config['Required']    = xml_encode($post['confRequired'][$i]);
+      $config['Mask']        = xml_encode($post['confMask'][$i]);
+      # V1 compatibility
+      if ($Type == "Port") {
+        $port                = $xml->Networking->Publish->addChild("Port");
+        $port->HostPort      = $post['confValue'][$i];
+        $port->ContainerPort = $post['confTarget'][$i];
+        $port->Protocol      = $post['confMode'][$i];
+      } elseif ($Type == "Path") {
+        $path               = $xml->Data->addChild("Volume");
+        $path->HostDir      = $post['confValue'][$i];
+        $path->ContainerDir = $post['confTarget'][$i];
+        $path->Mode         = $post['confMode'][$i];
+      } elseif ($Type == "Variable") {
+        $variable        = $xml->Environment->addChild("Variable");
+        $variable->Value = $post['confValue'][$i];
+        $variable->Name  = $post['confTarget'][$i];
+        $variable->Mode  = $post['confMode'][$i];
+      }
     }
   }
   $dom = new DOMDocument('1.0');
