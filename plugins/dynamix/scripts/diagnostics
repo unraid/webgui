@@ -111,7 +111,7 @@ foreach ($ports as $port) {
 }
 exec("ifconfig -a 2>/dev/null|todos >".escapeshellarg("/$diag/system/ifconfig.txt"));
 // create system information (suppress errors)
-exec("find /sys/kernel/iommu_groups/ -type l 2>/dev/null|todos >".escapeshellarg("/$diag/system/iommu_groups.txt"));
+exec("find /sys/kernel/iommu_groups/ -type l 2>/dev/null|sort -V|todos >".escapeshellarg("/$diag/system/iommu_groups.txt"));
 exec("todos </proc/cmdline >".escapeshellarg("/$diag/system/cmdline.txt"));
 // create folder structure listing
 $dest = "/$diag/system/folders.txt";
