@@ -951,7 +951,7 @@ span.cpu{display:inline-block;width:50px}
       <tr class="advanced">
         <td colspan="2">
           <blockquote class="inline_help">
-            <p>Help text for CPU pinning.</p>
+            <p>Checking off a CPU core(s) will only allow the container to execute on those cores.  Selecting no cores will allow the container to execute on all cores</p>
           </blockquote>
         </td>
       </tr>
