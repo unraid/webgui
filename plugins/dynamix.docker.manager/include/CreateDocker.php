@@ -81,7 +81,7 @@ if (isset($_POST['contName'])) {
   $userTmplDir = $dockerManPaths['templates-user'];
   if (!is_dir($userTmplDir)) mkdir($userTmplDir, 0777, true);
   if ($Name) {
-    $filename = sprintf('%s/my-%s.xml', $userTmplDir, $Name);
+    $filename = sprintf('%s/my-%s-%s.xml', $userTmplDir, $Name,explode(":",str_replace("/","-",$Repository))[0]);
     file_put_contents($filename, $postXML);
   }
   // Run dry
