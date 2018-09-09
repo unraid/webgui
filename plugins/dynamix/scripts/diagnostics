@@ -145,6 +145,11 @@ $showshares[] = current(array_slice(explode('/',$vardocker['DOCKER_HOME']), 3, 1
 // copy share information (anonymize if applicable)
 $files = glob("/boot/config/shares/*.cfg");
 foreach ($files as $file) {
+  if ( is_dir("/mnt/user") ) {
+    if ( ! is_dir("/mnt/user/".pathinfo($file,PATHINFO_FILENAME)) ) {
+      continue;
+    }
+  }
   $dest = "/$diag/shares/".basename($file);
   if (!in_array(basename($file),$showshares)) {
     $dest = anonymize($dest,2);
