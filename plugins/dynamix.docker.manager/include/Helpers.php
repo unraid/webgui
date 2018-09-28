@@ -469,7 +469,7 @@ function execCommand($command, $echo=true) {
   return $retval===0;
 }
 
-function dockerRunSecurity($command) {
+function dockerRunSecurity($command) { return false;
   $testCommand = htmlspecialchars_decode($command);
   $testCommand = str_replace("\'","",$testCommand);
   $cmdSplit = explode("'",$testCommand);
