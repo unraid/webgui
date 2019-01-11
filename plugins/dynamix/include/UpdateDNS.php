@@ -28,15 +28,41 @@ function response_complete($httpcode, $result, $cli_success_msg='') {
   exit((string)$result);
 }
 
+// remoteaccess, externalport, (if registering) username, password
+extract(parse_ini_file('/boot/config/plugins/dynamix/dynamix.cfg',true));
+if (empty($remote)) {
+  $remote = [
+    "apikey" => "",
+    "wanaccess" => "no",
+    "wanport" => "443"
+  ];
+}
+if (empty($remote['wanport'])) {
+  $remote['wanport'] = 443;
+}
+if ($cli) {
+  $remoteaccess = $remote['wanaccess'];
+  $externalport = $remote['wanport'];
+  $username = '';
+  $password = '';
+} else {
+  $remoteaccess = $_POST['remoteaccess'];
+  $externalport = $_POST['externalport'];
+  $username = $_POST['username'];
+  $password = $_POST['password'];
+}
+$isRegistered = !empty($remote['apikey']);
+
 // protocol, hostname, internalport
 list($protocol, $hostname, $internalport) = explode(":", rtrim(file_get_contents("/var/run/nginx.origin")));
 $hostname = substr($hostname, 2);
-if (!preg_match('/.*\.unraid\.net$/', $hostname)) {
+
+if (!$isRegistered && empty($username) && !preg_match('/.*\.unraid\.net$/', $hostname)) {
   response_complete(406, '{"error":"Nothing to do"}');
 }
 
 // keyfile
-$var = parse_ini_file("/var/local/emhttp/var.ini");
+$var = parse_ini_file('/var/local/emhttp/var.ini');
 $keyfile = @file_get_contents($var['regFILE']);
 if ($keyfile === false) {
   response_complete(406, '{"error":"Registration key required"}');
@@ -49,10 +75,45 @@ $internalip = $eth0['IPADDR:0'];
 
 $ch = curl_init('https://keys.lime-technology.com/account/server/register');
 curl_setopt($ch, CURLOPT_POST, 1);
-curl_setopt($ch, CURLOPT_POSTFIELDS, [
-  'internalip' => $internalip,
-  'keyfile' => $keyfile
-]);
+
+if (!$isRegistered && empty($username)) {
+  curl_setopt($ch, CURLOPT_POSTFIELDS, [
+    'internalip' => $internalip,
+    'keyfile' => $keyfile
+  ]);
+} else {
+  // servername, servercomment
+  $servername = $var['NAME'];
+  $servercomment = $var['COMMENT'];
+  if (empty($username)) {
+    curl_setopt($ch, CURLOPT_POSTFIELDS, [
+      'servername' => $servername,
+      'servercomment' => $servercomment,
+      'protocol' => $protocol,
+      'hostname' => $hostname,
+      'internalport' => $internalport,
+      'internalip' => $internalip,
+      'remoteaccess' => $remoteaccess,
+      'externalport' => $externalport,
+      'keyfile' => $keyfile
+    ]);
+  } else {
+    curl_setopt($ch, CURLOPT_POSTFIELDS, [
+      'servername' => $servername,
+      'servercomment' => $servercomment,
+      'protocol' => $protocol,
+      'hostname' => $hostname,
+      'internalport' => $internalport,
+      'internalip' => $internalip,
+      'remoteaccess' => $remoteaccess,
+      'externalport' => $externalport,
+      'username' => $username,
+      'password' => $password,
+      'keyfile' => $keyfile
+    ]);
+  }
+}
+
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 $result = curl_exec($ch);
 $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);

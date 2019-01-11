@@ -40,6 +40,16 @@ Hide "dot" files:
 
 > If set to 'No' then dot files will appear in folder lists the same as any other file.
 
+Enhanced OS X interoperability:
+: <select name="enableFruit" size="1">
+  <?=mk_option($var['enableFruit'], "no", "No");?>
+  <?=mk_option($var['enableFruit'], "yes", "Yes");?>
+  </select>
+
+> When set to 'Yes' provides enhanced compatibility with Apple SMB clients, resulting, for example, in faster
+> Finder browsing, and ability to export Time Machine shares.  This may cause some issues with Windows clients, however.
+> Please also refer to the [VFS_FRUIT MAN PAGE](https://www.mankier.com/8/vfs_fruit).
+
 &nbsp;
 : <input type="submit" name="changeShare" value="Apply" disabled><input type="button" value="Done" onclick="done()"><?if ($var['fsState']=="Started"):?>Array must be <span class="strong big">Stopped</span> to change<?endif;?>
 </form>

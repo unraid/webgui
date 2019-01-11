@@ -1,0 +1,272 @@
+Menu="Identification"
+Title="Unraid.net"
+Icon="ident.png"
+Tag="globe"
+---
+<?PHP
+/* Copyright 2005-2018, Lime Technology
+ * Copyright 2012-2018, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+// more:
+// - if someone deletes the dynamic.cfg or directly edits [remote] section therein, it may be possible
+// that server will appear 'unregistered' in webgui but not on My Servers.
+// - appears someone could register, enable remote access, then unregister, replace the ssl cert, and
+// now can remotely access using url that matches their cert. This is probably a bug here, but we might
+// want to rework this somewhat to explicitly enable this 'feature' (remote access using user-provided cert).
+
+$keyfile = @file_get_contents($var['regFILE']);
+if ($keyfile !== false)
+  $keyfile = @base64_encode($keyfile);
+
+if (empty($remote)) {
+    $remote = [
+        "apikey" => "",
+        "wanaccess" => "no",
+        "wanport" => "443"
+    ];
+}
+if (empty($remote['wanport'])) {
+    $remote['wanport'] = 443;
+}
+
+$hasCert = file_exists('/boot/config/ssl/certs/certificate_bundle.pem');
+$isRegistered = !empty($remote['apikey']);
+$boolWebUIAuth = $isRegistered || file_exists('/etc/nginx/htpasswd');
+
+$isActivated = false;
+$isUptodate = false;
+if ($isRegistered) {
+  exec("/usr/bin/php -f $docroot/webGui/include/UpdateFlashBackup.php status", $output, $retval);
+  $isActivated = ($retval == 0);
+  if ($isActivated) $isUptodate = empty($output);
+}
+?>
+<script>
+function registerServer(button) {
+    var oldlabel = $.trim($(button).text());
+
+    var failure = function(data) {
+        var status = data.status;
+        var obj = data.responseJSON;
+        var msg = "Sorry, an error ("+status+") occurred registering this server. " +
+                  "The error is: "+obj.error+".";
+        $(button).prop("disabled", false).html(oldlabel);
+        swal('Oops',msg,'error');
+    };
+
+    var success = function(data) {
+        if (data.apikey) {
+            $.post('/webGui/include/Dispatcher.php',{
+                "#cfg": "/boot/config/plugins/dynamix/dynamix.cfg",
+                "remote_apikey": data.apikey,
+                "remote_wanaccess": $('#wanaccess').val(),
+                "remote_wanport": $('#wanport').val()
+            });
+            $(button).prop("disabled", false).html(oldlabel);
+<?if(!$isRegistered):?>
+            swal({title:"",text:"Your server has been registered",type:"success",allowEscapeKey:false},function(){button.form.submit();});
+<?else:?>
+            button.form.submit();
+<?endif?>
+        } else {
+            failure({"status": 403, "responseJSON": {"error": "Unable to register this Unraid Server"}});
+        }
+    };
+
+    $(button).prop("disabled", true).html("<i class=\"fa fa-spinner fa-spin\" aria-hidden=\"true\"></i> "+oldlabel+"ing");
+    $.post("/webGui/include/UpdateDNS.php",{username:$('#ips_username').val(),password:$('#ips_password').val(),externalport:$('#wanport').val(),remoteaccess:$('#wanaccess').val()},success).fail(failure);
+}
+
+function unregisterServer(button) {
+    var oldlabel = $.trim($(button).text());
+
+    var failure = function(data) {
+        var status = data.status;
+        var obj = data.responseJSON;
+        var msg = "Sorry, an error ("+status+") occurred unregistering this server. " +
+                  "The error is: "+obj.error+".";
+        $(button).prop("disabled", false).html(oldlabel);
+        swal('Oops',msg,'error');
+    };
+
+    var success = function(data) {
+        $.post('/webGui/include/Dispatcher.php',{
+            "#cfg": "/boot/config/plugins/dynamix/dynamix.cfg",
+            "remote_apikey": "",
+            "remote_wanaccess": $('#wanaccess').val(),
+            "remote_wanport": $('#wanport').val()
+        });
+        $(button).prop("disabled", false).html(oldlabel);
+        swal({title:"",text:"Your server has been unregistered",type:"success",allowEscapeKey:false},function(){button.form.submit();});
+    };
+
+    swal({title:"Remove Registration",text:"Are you sure you want to unregister your server?",type:'warning',confirmButtonText:'Unregister',showCancelButton:true},function(){
+        $(button).prop("disabled", true).html("<i class=\"fa fa-spinner fa-spin\" aria-hidden=\"true\"></i> "+oldlabel+"ing");
+        $.post("https://keys.lime-technology.com/account/server/unregister",{keyfile:"<?=$keyfile?>"},success).fail(failure);
+    });
+}
+
+function dnsCheckServer(button) {
+    var oldlabel = $.trim($(button).text());
+
+    var failure = function(data) {
+        var status = data.status;
+        var obj = data.responseJSON;
+        var msg = "Sorry, an error ("+status+") occurred checking this server. " +
+                  "The error is: "+obj.error+".";
+        $(button).prop("disabled", false).html(oldlabel);
+        swal('Oops',msg,'error');
+    };
+
+    var success = function(data) {
+        $(button).prop("disabled", false).html(oldlabel);
+        if (data.status) {
+            swal("","Your Unraid Server is reachable from the internet","success");
+        } else {
+            swal("Oops","This Unraid Server was unreachable from the outside","error");
+        }
+    };
+
+    $(button).prop("disabled", true).html("<i class=\"fa fa-spinner fa-spin\" aria-hidden=\"true\"></i> "+oldlabel+"ing");
+    $.post("https://keys.lime-technology.com/account/server/checkdns",{externalport:$('#wanport').val(),keyfile:"<?=$keyfile?>"},success).fail(failure);
+}
+
+function changeRemoteAccess(dropdown) {
+    if ($(dropdown).val() == 'yes') {
+        $("#wanpanel").slideDown('fast');
+    } else {
+        $("#wanpanel").slideUp('fast');
+    }
+}
+
+function enableFlashBackup(button) {
+    var oldlabel = $.trim($(button).text());
+
+    var failure = function(data) {
+        var status = data.status;
+        var obj = data.responseJSON;
+        var msg = "Sorry, an error ("+status+") occurred enabling Flash backup. " +
+                  "The error is: "+obj.error+".";
+        $(button).prop("disabled", false).html(oldlabel);
+        swal({title:"",text:"Oops",type:"error",allowEscapeKey:false},function(){button.form.submit();});
+    };
+
+    var success = function(data) {
+        $(button).prop("disabled", false).html(oldlabel);
+        button.form.submit();
+    };
+
+    if (oldlabel == 'Activate') {
+        $(button).prop("disabled", true).html("<i class=\"fa fa-spinner fa-spin\" aria-hidden=\"true\"></i> Activating");
+        $.post("/webGui/include/UpdateFlashBackup.php",{command:"activate"},success).fail(failure);
+    }
+    if (oldlabel == 'Deactivate') {
+        $(button).prop("disabled", true).html("<i class=\"fa fa-spinner fa-spin\" aria-hidden=\"true\"></i> Deactivating");
+        $.post("/webGui/include/UpdateFlashBackup.php",{command:"deactivate"},success).fail(failure);
+    }
+    if (oldlabel == 'Update') {
+        $(button).prop("disabled", true).html("<i class=\"fa fa-spinner fa-spin\" aria-hidden=\"true\"></i> Updating");
+        $.post("/webGui/include/UpdateFlashBackup.php",{command:"update"},success).fail(failure);
+    }
+    if (oldlabel == 'Reinitialize') {
+        $(button).prop("disabled", true).html("<i class=\"fa fa-spinner fa-spin\" aria-hidden=\"true\"></i> Reinitializing");
+        $.post("/webGui/include/UpdateFlashBackup.php",{command:"reinit"},success).fail(failure);
+    }
+    if (oldlabel == 'Deactivate') {
+        $(button).prop("disabled", true).html("<i class=\"fa fa-spinner fa-spin\" aria-hidden=\"true\"></i> Deactivating");
+        $.post("/webGui/include/UpdateFlashBackup.php",{command:"deactivate"},success).fail(failure);
+    }
+    if (oldlabel == 'Changes') {
+	openBox("/webGui/include/gitstatus.php", "Changes", 600,600, false);
+    }
+}
+</script>
+<form markdown="1" name="UnraidNetSettings" method="POST" action="/update.htm" target="progressFrame">
+<?if(!$isRegistered):?>
+Unraid.net Status:
+: <span class='orange p0'>Unregistered</span>
+
+Unraid.net Username:
+: <input type="text" id="ips_username" value="">
+
+Unraid.net Password:
+: <input type="password" id="ips_password" value="">
+
+<?else:?>
+Unraid.net Status:
+: <span class='green p0'>Registered</span>
+
+<?endif?>
+<?if($hasCert):?>
+Allow Remote Access:
+: <select id="wanaccess" size="1" class="narrow" onchange="changeRemoteAccess(this)">
+  <?=mk_option($remote['wanaccess'], "no", "No")?>
+  <?=mk_option($remote['wanaccess'], "yes", "Yes")?>
+  </select>
+
+<div markdown="1" id="wanpanel" style="display:<?=($remote['wanaccess']=='yes'?'block':'none')?>">
+WAN Port:
+: <?if(!$boolWebUIAuth):?><input type="hidden" id="wanport" value="0"><span><i class="fa fa-warning icon warning"></i> Disabled until your root user account is password-protected</span><?else:?><input type="number" id="wanport" class="trim" min="0" max="65535" value="<?=htmlspecialchars($remote['wanport'])?>"> <button type="button" onclick="dnsCheckServer(this)" style="margin-top: 0">Check</button><?endif?>
+
+> WAN Port is the external TCP port number setup on your router to NAT/Port Forward traffic from the internet to this
+> Unraid server SSL port for secure web traffic.
+</div>
+<?else:?>
+<input type="hidden" id="wanaccess" value="no">
+<input type="hidden" id="wanport" value="0">
+<?endif?>
+&nbsp;
+: <button type="button" onclick="registerServer(this)"><?=$isRegistered?'Apply':'Register'?></button><?if($isRegistered):?><button type="button" onclick="unregisterServer(this)">Unregister</button><?endif?>
+
+</form>
+<?if($isRegistered):?>
+<form markdown="1" name="FlashBackup" method="POST" action="/update.htm" target="progressFrame">
+<?if(!$isActivated):?>
+Flash backup:
+: <span class='orange p0'>Not activated</span>
+
+&nbsp;
+: <button type="button" onclick="enableFlashBackup(this)">Activate</button>
+
+> Click Activate to set up a local git repo for your local USB Flash boot device and connect to a dedicated remote on unraid.net tied tothis server.
+
+<?else:?>
+Flash backup:
+: <span class='green p0'>Activated:</span> <?if(!$isUptodate):?><span class='orange p0'>Not up-to-date</span><?else:?><span class='green p0'>Up-to-date</span><?endif?>
+
+<?if(!$isUptodate):?>
+&nbsp;
+: <button type="button" onclick="enableFlashBackup(this)">Update</button> <button type="button" onclick="enableFlashBackup(this)">Changes</button>
+
+> The Not Up-to-date status indicates there are local files which are changed vs. the remote on unraid.net.
+
+> Click Update to push changes to the remote.
+
+> Click Changes to see what has changed.
+
+<?else:?>
+&nbsp;
+: <button type="button" disabled>Update</button>
+
+> The Up-to-date status indicates your local configuration matches that stored on the unraid.net remote.
+
+<?endif?>
+&nbsp;
+: <button type="button" onclick="enableFlashBackup(this)">Deactivate</button> <button type="button" onclick="enableFlashBackup(this)">Reinitialize</button>
+
+> Click Deactivate to pause communication with your remote on unraid.net.
+
+> Click Reinitialize to erase all change history in both local and unraid.net remote.
+
+<?endif?>
+</form>
+<?endif?>

@@ -427,6 +427,7 @@ case 'parity':
     $time = time();
     switch ($parity['mode']) {
     case 0: // check disabled
+      echo "\0";
       echo "<i class='fa fa-warning'></i> Scheduled parity check is disabled";
       return;
     case 1: // daily check

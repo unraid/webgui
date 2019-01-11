@@ -125,7 +125,7 @@ function updateTime() {
         $('#licenseexpire').html('less than a minute remaining').addClass('red-text');
       }
     } else {
-      $('#licenseexpire').html('expired').addClass('red-text');
+      $('#licenseexpire').addClass('red-text');
     }
   }
   setTimeout(updateTime,1000);
@@ -537,10 +537,9 @@ $('.back_to_top').click(function(event) {
   return false;
 });
 $(function() {
-<?$regTy = strtolower($var['regTy']);?>
-<?if ($regTy=='unregistered'):?>
+<?if ($var['regTy']=='unregistered'):?>
   $('#licensetype').addClass('orange-text');
-<?elseif (!in_array($regTy,['trial','basic','plus','pro'])):?>
+<?elseif (!in_array($var['regTy'],['Trial','Basic','Plus','Pro'])):?>
   $('#licensetype').addClass('red-text');
 <?endif;?>
 <?if ($notify['entity'] & 1 == 1):?>
