@@ -19,7 +19,7 @@ require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 $display = $_POST['display'];
 $menu = [];
 
-if ($display=='icons' || $display=='docker') {
+if ($_POST['docker'] && ($display=='icons' || $display=='docker')) {
   $user_prefs = $dockerManPaths['user-prefs'];
   $DockerClient = new DockerClient();
   $DockerTemplates = new DockerTemplates();
@@ -58,7 +58,7 @@ if ($display=='icons' || $display=='docker') {
   echo "</td><td></td></tr>";
 }
 echo "\0";
-if ($display=='icons' || $display=='vms') {
+if ($_POST['vms'] && ($display=='icons' || $display=='vms')) {
   $user_prefs = '/boot/config/plugins/dynamix.vm.manager/userprefs.cfg';
   $vms = $lv->get_domains();
   if (file_exists($user_prefs)) {

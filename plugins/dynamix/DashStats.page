@@ -89,7 +89,7 @@ $names = implode(',',$names);
 $passwd = $nopass = 0;
 foreach ($users as $user) if ($user['passwd']=='yes') $passwd++; else $nopass++;
 
-$boot   = "/boot/config";
+$boot   = "/boot/config/plugins/dynamix";
 $myfile = "case-model.cfg";
 $mycase = file_exists("$boot/$myfile") ? file_get_contents("$boot/$myfile") : false;
 
@@ -139,9 +139,11 @@ if ($low) $memory_maximum = pow(2,ceil(log($memory_installed)/log(2)));
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.ui.css')?>">
 <style>
-.switch-button-background{top:12px}
 <?if ($themes2):?>
-.switch-button-label{margin-top:-4px}
+.switch-button-background{top:16px}
+.switch-button-label{margin-top:0}
+<?else:?>
+.switch-button-background{top:12px}
 <?endif;?>
 span.outer{float:left}
 span.inner{width:124px}
@@ -197,10 +199,10 @@ foreach ($cpus as $pair) {
 <tbody>
 <tr><td></td><td colspan='3' class='next'><i class='icon-ram'></i><div class='section'>Memory<br><span><?="$memory_installed $unit $memory_type $ecc"?><span style='margin-left:20px'>Utilization: <span class='sys0'>0%</span></span><br><br></div>
 <i class='fa blue-text chevron' id='mem_view' onclick='toggleChevron("mem_view",0)'></i></td><td></td></tr>
-<tr class='mem_view' style='display:none'><td></td><td>Maximum size: <?="$memory_maximum $unit"?><?=$low?'*':''?></td><td><i>RAM: </i><span class='sys0'>0%</span><div class='usage-disk sys mm'><span id='sys0' style='width:0'></span></div></td>
-<td><i>Flash: </i><span class='sys1'>0%</span><div class='usage-disk sys mm'><span id='sys1' style='width:0'></span></div></td><td></td></tr>
-<tr class='mem_view' style='display:none'><td></td><td>Usable size: <?=my_scale($total,$unit,1,null,1024)." $unit"?></td><td><i>Log: </i><span class='sys2'>0%</span><div class='usage-disk sys mm'><span id='sys2' style='width:0'></span></div></td>
-<td><?if (exec("df /var/lib/docker|grep -om1 '^/'")):?><i>Docker: </i><span class='sys3'>0%</span><div class='usage-disk sys mm'><span id='sys3' style='width:0'></span></div><?endif;?></td><td></td></tr>
+<tr class='mem_view' style='display:none'><td></td><td>Maximum size: <?="$memory_maximum $unit"?><?=$low?'*':''?></td><td><i class='mm'>RAM</i><span class='sys0 load'>0%</span><div class='usage-disk sys'><span id='sys0' style='width:0'></span></div></td>
+<td><i class='mm'>Flash</i><span class='sys1 load'>0%</span><div class='usage-disk sys'><span id='sys1' style='width:0'></span></div></td><td></td></tr>
+<tr class='mem_view' style='display:none'><td></td><td>Usable size: <?=my_scale($total,$unit,1,null,1024)." $unit"?></td><td><i class='mm'>Log</i><span class='sys2 load'>0%</span><div class='usage-disk sys'><span id='sys2' style='width:0'></span></div></td>
+<td><?if (exec("df /var/lib/docker|grep -om1 '^/'")):?><i class='mm'>Docker</i><span class='sys3 load'>0%</span><div class='usage-disk sys'><span id='sys3' style='width:0'></span></div><?endif;?></td><td></td></tr>
 </tbody>
 <tbody>
 <tr><td></td><td colspan='3' class='next'><i class='icon-ethernet'></i><div class='section'>Interface<br>
@@ -457,7 +459,7 @@ function loadlist(init) {
     });
     context.init({preventDoubleContext:false,left:true,above:false});
   }
-  $.post('/webGui/include/DashboardApps.php',{display:'<?=$display['dashapps']?>'},function(d) {
+  $.post('/webGui/include/DashboardApps.php',{display:'<?=$display['dashapps']?>',docker:'<?=$dockerd?>',vms:'<?=$libvirtd?>'},function(d) {
     var data = d.split(/\0/);
     $('.docker_view').html(data[0]);
     $('.vm_view').html(data[1]);
@@ -539,7 +541,7 @@ function moreInfo(data,table) {
   if (data[2]>0) info.push(data[2]+" heat warning"+(data[2]==1?'':'s'));
   if (data[3]>0) info.push(data[3]+" SMART error"+(data[3]==1?'':'s'));
   if (data[4]>0) info.push(data[4]+" utilization warning"+(data[4]==1?'':'s'));
-  return info.length ? "<i class='icon-u-triangle failed'></i><span class='failed'>"+table+" has "+info.join('. ')+".</span>" : "";
+  return info.length ? "<div style='padding-bottom:12px'><i class='icon-u-triangle failed'></i><span class='failed'>"+table+" has "+info.join('. ')+".</span></div>" : "";
 }
 function update5() {
 <?if ($fans>0):?>
@@ -682,8 +684,8 @@ function toggleCPU(init) {
 function toggleView(field,init,view) {
   if (!view) view = $.cookie(field)||field;
   if (!init) {if ($.cookie(field)===undefined) $.cookie(field,view,{path:'/',expires:3650}); else $.removeCookie(field,{path:'/'});}
-  if ($.cookie(field)===undefined) $('.'+view).show(); else $('.'+view).hide();
-  var visible = $('.'+view).is(':visible');
+  var visible = $.cookie(field)===undefined;
+  if (visible) $('.'+view).show(); else $('.'+view).hide();
   var unset = true;
   switch (field) {
   case 'users_view':
