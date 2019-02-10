@@ -624,5 +624,14 @@ $(function() {
   watchdog.start();
 });
 </script>
+
+<?
+  $themescript = "/webGui/javascript/dynamix-{$display['theme']}.js";
+	$themescript_file = $docroot.$themescript;
+	if (file_exists($themescript_file)) {
+		echo '<script src="'.$themescript.'"></script>';
+	}
+?>
+
 </body>
 </html>
