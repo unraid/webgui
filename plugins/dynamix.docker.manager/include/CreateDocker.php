@@ -1192,7 +1192,7 @@ button[type=button]{margin:0 20px 0 0}
   }
   function load_contOverview() {
     var new_overview = $("textarea[name='contOverview']").val();
-		new_overview = new_overview.replaceAll("\n","[br]");
+    new_overview = new_overview.replaceAll("\n","[br]");
     new_overview = new_overview.replaceAll("[","<").replaceAll("]",">");
 
     $("#contDescription").html(new_overview);
