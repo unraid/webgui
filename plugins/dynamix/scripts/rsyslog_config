@@ -1,7 +1,9 @@
 #!/bin/bash
 
-CONF=/boot/config/rsyslog.conf
+CFG=/boot/config/rsyslog.conf
 ETC=/etc/rsyslog.conf
+USB=/boot/config/rsyslog.local
+LOG=/etc/logrotate.d/rsyslog.local
 
 # read settings
 source /boot/config/rsyslog.cfg
@@ -19,7 +21,7 @@ fi
 # local syslog server
 if [[ -n $local_server ]]; then
   if ! grep -q '^\$RuleSet remote$' $ETC; then
-    sed -ri '$a\$RuleSet remote\n\$FileOwner nobody\n\$FileGroup users\n$FileCreateMode 0644\n*.* ?remote' $ETC
+    sed -ri '$a\$RuleSet remote\n\$FileOwner nobody\n\$FileGroup users\n$FileCreateMode 0666\n\$IncludeConfig /etc/rsyslog.d/*.conf # remote\n*.* ?remote' $ETC
   fi
   # enable/disable local logging
   sed -ri "s/^#?(\*\.\* \?remote)$/$h\1/" $ETC
@@ -35,7 +37,7 @@ if [[ -n $local_server ]]; then
   fi
   sed -ri "/^\\\$template remote,.*$/d;/^#\\\$UDPServerRun [0-9]+.*$/a\\\$template remote,\"${server_folder:-/mnt/user/system}/syslog-%FROMHOST-IP%.log\"" $ETC
 else
-  sed -ri '/^\$RuleSet remote$/d;/^\$FileOwner nobody$/d;/^\$FileGroup users$/d;/^\$FileCreateMode 0644$/d;/^\*\.\* \?remote$/d;/^\$template remote,".*"$/d;/^\$Input(TCP|UDP)ServerBindRuleset remote$/d;/^\$(InputTCP|UDP)ServerRun [0-9]+$/d;s/^#?\$(ModLoad imtcp|ModLoad imudp)/#\$\1/' $ETC
+  sed -ri '/^\$RuleSet remote$/d;/^\$FileOwner nobody$/d;/^\$FileGroup users$/d;/^\$FileCreateMode 06[46][46]$/d;/^\$IncludeConfig \/etc\/rsyslog\.d\/\*\.conf # remote$/d;/^\*\.\* \?remote$/d;/^\$template remote,".*"$/d;/^\$Input(TCP|UDP)ServerBindRuleset remote$/d;/^\$(InputTCP|UDP)ServerRun [0-9]+$/d;s/^#?\$(ModLoad imtcp|ModLoad imudp)/#\$\1/' $ETC
 fi
 
 # remote syslog server
@@ -57,11 +59,36 @@ else
 fi
 
 # copy conf to flash (read settings on reboot)
-todos <$ETC >$CONF
+todos <$ETC >$CFG
 
 # keep local logging disabled at startup
 # disk mount and disk unmount events are used to start/stop logging
-sed -ri 's/^(\*\.\* \?remote)/#\1/' $CONF
+sed -ri 's/^(\*\.\* \?remote)/#\1/' $CFG
+
+# update syslog rotation
+if [[ -n $local_server ]]; then
+  if [[ -n $log_rotation ]]; then
+    cat <<- EOF > $LOG
+$server_folder/*.log {
+  su nobody users
+  missingok
+  create 0666 nobody users
+  size $log_size
+  rotate $log_files
+  sharedscripts
+  postrotate
+    /bin/kill -HUP \$(cat /var/run/rsyslogd.pid 2>/dev/null) 2>/dev/null || true
+  endscript
+}
+EOF
+    chmod 644 $LOG
+    # keep copy on flash
+    cp -f $LOG $USB
+  else
+    # clean up
+    rm -f $LOG $USB
+  fi
+fi
 
 # update syslog daemon
 /etc/rc.d/rc.rsyslogd restart &> /dev/null

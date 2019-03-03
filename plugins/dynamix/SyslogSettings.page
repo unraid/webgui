@@ -22,11 +22,16 @@ $syslog = @(array)parse_ini_file('/boot/config/rsyslog.cfg');
 span.span{display:inline-block;width:224px}
 </style>
 <script>
-function localFolder(state) {
-  if (state) $('#local_folder').show(); else $('#local_folder').hide();
+function localFolder(local,time) {
+  if (local) $('#local_folder').show(time); else $('#local_folder').hide(time);
 }
+function logOptions(log,time) {
+  if (log) $('#log_options').show(time); else $('#log_options').hide(time);
+}
+
 $(function(){
   localFolder(document.syslog.local_server.value);
+  logOptions(document.syslog.log_rotation.value);
 });
 </script>
 
@@ -35,11 +40,11 @@ $(function(){
 <input type="hidden" name="#command" value="/webGui/scripts/rsyslog_config">
 
 Local syslog server:
-: <span class="span"><select name="local_server" class="narrow" size="1" onchange="localFolder(this.value)">
+: <span class="span"><select name="local_server" class="narrow" onchange="localFolder(this.value,'slow')">
   <?=mk_option($syslog['local_server'], "", "Disabled")?>
   <?=mk_option($syslog['local_server'], "1", "Enabled")?>
   </select></span>
-  <select name="server_protocol" class="narrow" size="1">
+  <select name="server_protocol" class="narrow">
   <?=mk_option($syslog['server_protocol'], "udp", "UDP")?>
   <?=mk_option($syslog['server_protocol'], "tcp", "TCP")?>
   <?=mk_option($syslog['server_protocol'], "both", "Both")?>
@@ -53,13 +58,51 @@ Local syslog server:
 
 <div markdown="1" id="local_folder" style="display:none">
 Local syslog folder:
-: <select name="server_folder" class="narrow" size="1">
+: <select name="server_folder" class="narrow">
+  <?=mk_option(0,'','&lt;custom&gt;','disabled')?>
   <?foreach ($shares as $share){echo mk_option($syslog['server_folder'], '/mnt/user/'.$share['name'], $share['name']);}?>
   </select>
 
 > Select the share folder where the syslogs will be stored.
 > It is recommended that you use a share located on the cache drive to prevent array disk spinups.
 
+Local syslog rotation:
+: <select name="log_rotation" class="narrow" onchange="logOptions(this.value,'slow')">
+  <?=mk_option($syslog['log_rotation'], "", "Disabled")?>
+  <?=mk_option($syslog['log_rotation'], "1", "Enabled")?>
+  </select>
+
+> By default LOG rotation is disabled and will create a single LOG file of unlimited size.
+>
+> Enable LOG rotation to limit the size of the LOG file and specify the number of files to keep in the rotation scheme.
+
+<div markdown="1" id="log_options" style="display:none">
+Local syslog maximum file size:
+: <select name="log_size" class="narrow">
+  <?=mk_option($syslog['log_size'], '1M', '1 MB')?>
+  <?=mk_option($syslog['log_size'], '2M', '2 MB')?>
+  <?=mk_option($syslog['log_size'], '5M', '5 MB')?>
+  <?=mk_option($syslog['log_size'], '10M', '10 MB')?>
+  <?=mk_option($syslog['log_size'], '20M', '20 MB')?>
+  <?=mk_option($syslog['log_size'], '50M', '50 MB')?>
+  <?=mk_option($syslog['log_size'], '100M', '100 MB')?>
+  <?=mk_option($syslog['log_size'], '200M', '200 MB')?>
+  <?=mk_option($syslog['log_size'], '500M', '500 MB')?>
+  </select>
+
+> Specifies the maximum LOG size. When exceeded LOG rotation will occur.
+
+Local syslog number of files:
+: <select name="log_files" class="narrow">
+  <?=mk_option($syslog['log_files'], '1', '1')?>
+  <?=mk_option($syslog['log_files'], '2', '2')?>
+  <?=mk_option($syslog['log_files'], '3', '3')?>
+  <?=mk_option($syslog['log_files'], '4', '4')?>
+  </select>
+
+> Specifies the number of additional LOG files to keep in the rotation scheme.
+
+</div>
 </div>
 
 Remote syslog server:

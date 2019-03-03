@@ -329,7 +329,7 @@ $.ajaxPrefilter(function(s, orig, xhr){
   <div class="upgrade_notice" style="display:none"></div>
   <div id="header" class="<?=$display['banner']?>">
    <div class="logo">
-   <a href="https://unraid.net"><?readfile("$docroot/webGui/images/UN-logotype-gradient.svg")?></a>
+   <a href="https://unraid.net" target="_blank"><?readfile("$docroot/webGui/images/UN-logotype-gradient.svg")?></a>
    Version: <?=$var['version']?><?=$notes?>
    </div>
    <div class="block">
