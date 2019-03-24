@@ -34,7 +34,7 @@
   var presto = /Opera\//.test(navigator.userAgent);
   var safari = /Apple Computer/.test(navigator.vendor);
   var khtml = /KHTML\//.test(navigator.userAgent);
-  var mac_geMountainLion = /Mac OS X 1\d\D([8-9]|\d\d)\D/.test(navigator.userAgent);
+  var mac_geMountainLion = /macOS 1\d\D([8-9]|\d\d)\D/.test(navigator.userAgent);
   var phantom = /PhantomJS/.test(navigator.userAgent);
 
   var ios = /AppleWebKit/.test(navigator.userAgent) && /Mobile\/\w+/.test(navigator.userAgent);
@@ -46,7 +46,7 @@
   var presto_version = presto && navigator.userAgent.match(/Version\/(\d*\.\d*)/);
   if (presto_version) presto_version = Number(presto_version[1]);
   if (presto_version && presto_version >= 15) { presto = false; webkit = true; }
-  // Some browsers use the wrong event properties to signal cmd/ctrl on OS X
+  // Some browsers use the wrong event properties to signal cmd/ctrl on macOS
   var flipCtrlCmd = mac && (qtwebkit || presto && (presto_version == null || presto_version < 12.11));
   var captureRightClick = gecko || (ie && ie_version >= 9);
 
@@ -848,7 +848,7 @@
 
     function rm(node) {
       var next = node.nextSibling;
-      // Works around a throw-scroll bug in OS X Webkit
+      // Works around a throw-scroll bug in macOS Webkit
       if (webkit && mac && cm.display.currentWheelTarget == node)
         node.style.display = "none";
       else
@@ -3202,7 +3202,7 @@
     if (!(dx && scroll.scrollWidth > scroll.clientWidth ||
           dy && scroll.scrollHeight > scroll.clientHeight)) return;
 
-    // Webkit browsers on OS X abort momentum scrolls when the target
+    // Webkit browsers on macOS abort momentum scrolls when the target
     // of the scroll event is removed from the scrollable element.
     // This hack (see related code in patchDisplay) makes sure the
     // element is kept around.

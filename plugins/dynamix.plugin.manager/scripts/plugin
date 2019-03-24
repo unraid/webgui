@@ -149,7 +149,7 @@ EOF;
 // Returns TRUE if success else FALSE and fills in error.
 //
 function download($URL, $name, &$error) {
-  if ($file = popen("wget --no-cache --progress=dot -O $name $URL 2>&1", 'r')) {
+  if ($file = popen("wget --compressed=auto --no-cache --progress=dot -O $name $URL 2>&1", 'r')) {
     echo "plugin: downloading: $URL ...\r";
     $level = -1;
     while (!feof($file)) {

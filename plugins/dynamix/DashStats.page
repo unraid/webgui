@@ -682,7 +682,7 @@ function update60() {
       else if (load >= <?=$display['warning']?>) var color = 'orangebar';
       else var color = '';
       $('.sys'+k).text(v);
-      $('#sys'+k).animate({width:v},{step:function(){$('#sys'+k).css('overflow','visible').removeClass().addClass(color);}});
+      $('#sys'+k).finish().animate({width:v},{step:function(){$('#sys'+k).css('overflow','visible').removeClass().addClass(color);}});
     });
     setTimeout(update60,60000);
   });
@@ -859,7 +859,7 @@ $.each(json["cpuload"],function(k,v) {
     else var color = '';
     load += '%';
     $('.'+k).text(load);
-    $('#'+k).animate({width:load},{step:function(){$('#'+k).css('overflow','visible').removeClass().addClass(color);}});
+    $('#'+k).finish().animate({width:load},{step:function(){$('#'+k).css('overflow','visible').removeClass().addClass(color);}});
   });
 });
 $(function() {

@@ -259,7 +259,8 @@ function xmlToCommand($xml, $create_paths=false) {
   $cmdName       = strlen($xml['Name']) ? '--name='.escapeshellarg($xml['Name']) : '';
   $cmdPrivileged = strtolower($xml['Privileged'])=='true' ? '--privileged=true' : '';
   $cmdNetwork    = '--net='.escapeshellarg(strtolower($xml['Network']));
-  $cmdMyIP       = $xml['MyIP'] ? '--ip='.escapeshellarg($xml['MyIP']) : '';
+  $cmdMyIP       = '';
+  foreach (explode(' ',str_replace(',',' ',$xml['MyIP'])) as $myIP) if ($myIP) $cmdMyIP .= (strpos($myIP,':')?'--ip6=':'--ip=').escapeshellarg($myIP).' ';
   $cmdCPUset     = strlen($xml['CPUset']) ? '--cpuset-cpus='.escapeshellarg($xml['CPUset']) : '';
   $Volumes       = [''];
   $Ports         = [''];
