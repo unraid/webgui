@@ -1,6 +1,6 @@
 var eventURL = '/plugins/dynamix.docker.manager/include/Events.php';
 
-function addDockerContainerContext(container, image, template, started, paused, update, autostart, webui, shell, id, Support, Project) {
+function addDockerContainerContext(container, image, template, started, paused, update, autostart, webui, shell, id, Support, Project, Registry) {
   var opts = [{header:container, image:'/plugins/dynamix.docker.manager/images/dynamix.docker.manager.png'}];
   if (started && !paused) {
     if (webui !== '' && webui != '#') opts.push({text:'WebUI', icon:'fa-globe', href:webui, target:'_blank'});
@@ -37,6 +37,9 @@ function addDockerContainerContext(container, image, template, started, paused, 
   }
   if (Project) {
     opts.push({text:'Project Page', icon:'fa-life-ring', href:Project, target:'_blank'});
+  }
+  if (Registry) {
+    opts.push({text:'More Info',icon:'fa-info-circle', href:Registry, target:'_blank'});
   }
   context.attach('#'+id, opts);
 }
