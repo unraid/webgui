@@ -1193,9 +1193,13 @@ button[type=button]{margin:0 20px 0 0}
   function load_contOverview() {
     var new_overview = $("textarea[name='contOverview']").val();
 <<<<<<< HEAD
+<<<<<<< HEAD
     new_overview = new_overview.replaceAll("\n","[br]");
 =======
 >>>>>>> parent of 9fd40c22... Preserve \r on descriptions
+=======
+		new_overview = new_overview.replaceAll("\n","[br]");
+>>>>>>> parent of c6f7ea4d... Tabs
     new_overview = new_overview.replaceAll("[","<").replaceAll("]",">");
     $("#contDescription").html(new_overview);
   }
