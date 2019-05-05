@@ -392,7 +392,7 @@ if (!count($shares)) echo "<tr><td></td><td colspan='4' class='none'>No shares p
 ?></tbody>
 <?endif;?>
 <?if (!$group):?>
-<tbody><?
+<tbody class='share'><?
 foreach ($shares as $name => $share) {
   $list = "<a href=\"$path/Share?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".truncate($name,20)."</a>";
   if ($share['luksStatus']>0) $list = str_replace('blue-text','green-text',$list);
@@ -461,7 +461,7 @@ foreach ($users as $user) {
 ?></tbody>
 <?endif;?>
 <?if (!$group):?>
-<tbody><?
+<tbody class='user'><?
 foreach ($users as $user) {
   $name = $user['name'];
   $list = "<a href=\"$path/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".truncate($name,20)."</a>";
@@ -564,7 +564,7 @@ function setCase() {
 function changeMode(item) {
   var user = $.cookie('users_view');
   var share = $.cookie('shares_view');
-  if (item==0) $.removeCookie('enter_share',{path:'/'}); else $.cookie('enter_share',item,{path:'/',expires:3650});
+  if (item==0) $.removeCookie('enter_share'); else $.cookie('enter_share',item,{expires:3650});
 <?if ($var['shareSMBEnabled']=='yes'):?>
   if (item==0 && user==null) $('.smb.user1').show(); else $('.smb.user1').hide();
   if (item==0 && share==null) $('.smb.share1').show(); else $('.smb.share1').hide();
@@ -579,7 +579,7 @@ function changeMode(item) {
 <?endif;?>
 }
 function changeView(item) {
-  if (item==0) $.removeCookie('enter_view',{path:'/'}); else $.cookie('enter_view',item,{path:'/',expires:3650});
+  if (item==0) $.removeCookie('enter_view'); else $.cookie('enter_view',item,{expires:3650});
   if (item==0) $('.view1').show(); else $('.view1').hide();
   if (item==1) $('.view2').show(); else $('.view2').hide();
   if (item==2) $('.view3').show(); else $('.view3').hide();
@@ -613,7 +613,7 @@ function portMenu() {
   }
 }
 function portSelect(name) {
-  $.cookie('port_select',name,{path:'/',expires:3650});
+  $.cookie('port_select',name,{expires:3650});
   port_select = name;
   timestamp = 0, rx_bytes = 0, tx_bytes = 0;
 }
@@ -642,7 +642,7 @@ function update5() {
   });
 }
 function update15() {
-<?if ($var['fsState']=='Started'):?>
+<?if ($var['fsState']=='Started' && $group):?>
   var tag = $('.smb').is(':visible') ? 'smb' : $('.afp').is(':visible') ? 'afp' : $('.nfs').is(':visible') ? 'nfs' : '';
   $.post('<?=$url?>',{cmd:'shares',com:tag,names:'<?=addslashes(htmlspecialchars($names))?>'},function(data) {
     $.each(data.split('\0'),function(k,v) {$('#share'+(k+1)).html(v);});
@@ -758,7 +758,7 @@ function toggleChevron(field,action) {
   }
 }
 function toggleCPU(init) {
-  if (!init) {if ($.cookie('cpu')===undefined) $.cookie('cpu','close',{path:'/',expires:3650}); else $.removeCookie('cpu',{path:'/'});}
+  if (!init) {if ($.cookie('cpu')===undefined) $.cookie('cpu','close',{expires:3650}); else $.removeCookie('cpu');}
   if ($.cookie('cpu_view')===undefined) {
     if ($.cookie('cpu')===undefined) {
       $('.cpu_open').show();
@@ -775,7 +775,7 @@ function toggleCPU(init) {
 }
 function toggleView(field,init,view) {
   if (!view) view = $.cookie(field)||field;
-  if (!init) {if ($.cookie(field)===undefined) $.cookie(field,view,{path:'/',expires:3650}); else $.removeCookie(field,{path:'/'});}
+  if (!init) {if ($.cookie(field)===undefined) $.cookie(field,view,{expires:3650}); else $.removeCookie(field);}
   var visible = $.cookie(field)===undefined;
   if (visible) $('.'+view).show(); else $('.'+view).hide();
   var unset = true;
@@ -888,7 +888,9 @@ $.each(json["cpuload"],function(k,v) {
   });
 });
 $(function() {
+<?if ($group):?>
   dropdown('enter_share');
+<?endif;?>
   dropdown('enter_view');
   update5();
   update15();

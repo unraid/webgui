@@ -804,6 +804,7 @@ button[type=button]{margin:0 20px 0 0}
               <option value="Backup:">Backup</option>
               <option value="Cloud:">Cloud</option>
               <option value="Downloaders:">Downloaders</option>
+              <option value="GameServers:">Game Servers</option>
               <option value="HomeAutomation:">HomeAutomation</option>
               <option value="Productivity:">Productivity</option>
               <option value="Tools:">Tools</option>

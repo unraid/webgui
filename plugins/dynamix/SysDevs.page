@@ -35,7 +35,8 @@ $(function(){
 > This displays a list of IOMMU groups available on your system along with the output of the `lspci` command for each IOMMU group.  The numeric identifiers are used to configure PCI pass-through.
 
 <?if (strpos(file_get_contents('/proc/cmdline'), 'pcie_acs_override=') !== false):?>
-<p class="notice" style="line-height:30px;height:auto">Warning: Your system has booted with the PCIe ACS Override setting enabled. The below list doesn't not reflect the way IOMMU would naturally group devices.<br>To see natural IOMMU groups for your hardware, go to the <b><a href="/Settings/VMSettings">VM Settings</a></b> page and set the <b>PCIe ACS Override</b> setting to <b>No</b>.</p>
+<p class="notice" style="line-height:30px;height:auto">Warning: Your system has booted with the PCIe ACS Override setting enabled. The below list doesn't not reflect the way IOMMU would naturally group devices.<br>
+To see natural IOMMU groups for your hardware, go to the <b><a href="/Settings/VMSettings">VM Manager</a></b> page and set the <b>PCIe ACS override</b> setting to <b>Disabled</b>.</p>
 <?endif;?>
 
 <pre><table id='t1' class='pre'><tr><td><div class="spinner"></div></td></tr></table></pre><br>
