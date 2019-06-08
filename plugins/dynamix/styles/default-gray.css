@@ -2,7 +2,7 @@ html{font-family:clear-sans;font-size:62.5%;height:100%}
 body{font-size:1.3rem;color:#606e7f;background-color:#1b1d1b;padding:0;margin:0;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 @media (max-width:1280px){#template{min-width:1260px;max-width:1260px;margin:0}}
 @media (min-width:1281px){#template{min-width:1260px;margin:0}}
-@media (min-width:1921px){#template{min-width:1260px;margin:0 auto}}
+@media (min-width:1921px){#template{min-width:1260px;max-width:1920px;margin:0 auto}}
 img{border:none;text-decoration:none;vertical-align:middle}
 p{text-align:left}
 p.centered{text-align:left}
@@ -53,7 +53,7 @@ textarea{resize:none}
 #header .text-right{float:right;text-align:left;padding-left:5px}
 #header .text-right a{color:#606e7f}
 #header .text-right #licensetype{font-weight:bold;font-style:italic;margin-right:4px}
-#menu{position:fixed;top:0;left:0;bottom:12px;width:65px;padding:0;margin:0;background-color:#383a34;z-index:1000;box-shadow:inset -1px 0 2px #121510}
+#menu{position:fixed;top:0;left:0;bottom:12px;width:65px;padding:0;margin:0;background-color:#383a34;z-index:100;box-shadow:inset -1px 0 2px #121510}
 #nav-block{position:absolute;top:0;bottom:12px;color:#ffdfb9;white-space:nowrap;float:left;overflow-y:scroll;direction:rtl;letter-spacing:1.8px}
 #nav-block::-webkit-scrollbar{display:none}
 #nav-block{-ms-overflow-style:none;overflow:-moz-scrollbars-none}
@@ -163,22 +163,19 @@ table.share_status.dashboard tbody tr:last-child td{border-bottom:none}
 table.share_status.dashboard tbody tr>td{border-top:1px solid #0c0f0b}
 table.share_status.dashboard tbody tr>td:first-child{border-top:none}
 table.share_status.dashboard tbody tr>td:last-child{border-top:none}
+table.share_status.dashboard tbody tr>td.next{border-top:1px solid #606e7f}
+table.share_status.dashboard tbody.split{border-top:1px solid #606e7f;border-bottom:1px solid #606e7f;background-color:#1b1d1b}
+table.share_status.dashboard tbody.split td{border-left:1px solid #1b1d1b;border-right:1px solid #1b1d1b;height:normal;line-height:normal}
 table.share_status.dashboard tr>td:first-child{width:3.5%}
 table.share_status.dashboard tr>td:last-child{width:3.5%}
 table.share_status.dashboard tr>td{padding-left:4px}
-table.share_status.dashboard tr>td.next{border-top:1px solid #606e7f!important}
 table.share_status.dashboard td.top{vertical-align:middle}
-table.share_status.dashboard td.vpn{font-size:1.1rem;font-weight:bold;text-transform:uppercase;letter-spacing:1px}
-table.share_status.dashboard td.left{font-size:1.1rem;padding-left:24px}
-table.share_status.dashboard td.right{font-size:1.1rem;text-align:right;padding-right:10px}
 table.share_status.dashboard td i[class^="icon-"]{font-size:1.6rem;margin-right:8px}
 table.share_status.dashboard td i[class^="icon-u-"]{font-size:inherit}
-table.share_status.dashboard td i.vpn{font-size:inherit!important;cursor:pointer}
 table.share_status.dashboard td span[class^="fa "]{font-size:1.6rem;margin-right:8px}
 table.share_status.dashboard td i#mycase[class^="case-"]{font-size:128px}
 table.share_status.dashboard td i#mycase[class^="fa "]{font-size:96px}
-table.share_status.dashboard td img#mycase{width:auto;max-width:128px;height:128px}
-table.share_status.dashboard td i.chevron{float:right;font-size:1.2rem!important;margin-top:0;margin-right:2px;cursor:pointer;color:#606e7f}
+table.share_status.dashboard td i.chevron{float:right;font-size:1.1rem!important;margin-top:0;margin-right:2px;cursor:pointer;color:#606e7f}
 table.share_status.dashboard td i.chevron.mt0{margin-top:18px}
 table.share_status.dashboard td div.section{display:inline-block;vertical-align:top;margin-left:4px;font-size:1.2rem;font-weight:bold;text-transform:uppercase;letter-spacing:1px}
 table.share_status.dashboard td div.section span{font-weight:normal;text-transform:none;letter-spacing:0;white-space:normal}
@@ -198,7 +195,6 @@ table.share_status.dashboard.box1 tr.last>td{padding-bottom:20px}
 table.share_status.dashboard.box1 td i[class^="icon-"]{font-size:32px;vertical-align:top}
 table.share_status.dashboard.box1 td i[class^="fa "]{font-size:1rem;vertical-align:super}
 table.share_status.dashboard.box1 td span.header{font-size:1.1rem!important;text-transform:uppercase;letter-spacing:1px}
-table.share_status.dashboard.box1 td span.text{white-space:normal}
 table.share_status.dashboard.box2 thead tr:first-child td{border-bottom:1px solid #606e7f}
 table.share_status.dashboard.box2 thead tr:first-child td:first-child{border-bottom:none}
 table.share_status.dashboard.box2 thead tr:first-child td:last-child{border-bottom:none}
@@ -262,8 +258,7 @@ span.three{margin-left:-23px}
 span.tub{margin-right:8px;font-size:2.4rem;cursor:pointer}
 span.score{font-size:1.1rem;color:#ffffff;position:absolute}
 span#dropbox{background:none;line-height:6rem;margin-right:20px}
-span.outer{margin-bottom:20px;margin-right:0}
-span.outer.solid{background-color:#1b1d1b}
+span.outer{margin-bottom:20px;margin-right:0;background-color:#1b1d1b}
 span.hand{cursor:pointer}
 span.outer.started>img,span.outer.started>i.img{opacity:1.0}
 span.outer.stopped>img,span.outer.stopped>i.img{opacity:0.3}
