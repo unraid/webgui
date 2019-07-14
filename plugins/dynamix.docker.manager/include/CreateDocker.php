@@ -73,6 +73,7 @@ function cpu_pinning() {
 
 if (isset($_POST['contName'])) {
   $postXML = postToXML($_POST, true);
+	file_put_contents("/tmp/blah",$DockerTemplates->getTemplateValue($postXML, 'Icon'));
   $dry_run = $_POST['dryRun']=='true' ? true : false;
   $existing = $_POST['existingContainer'] ?? false;
   $create_paths = $dry_run ? false : true;
@@ -137,7 +138,15 @@ if (isset($_POST['contName'])) {
   }
   if ($startContainer) $cmd = str_replace('/docker create ', '/docker run -d ', $cmd);
   execCommand($cmd);
- echo '<div style="text-align:center"><button type="button" onclick="done()">Done</button></div><br>';
+  // force re-download of the icon
+  if (! strpos($Repository,":")) {
+    $Repository .= ":latest";
+  }
+  $iconPath = $DockerTemplates->getIcon($Repository);
+  @unlink("$docroot/$iconPath");
+  @unlink("{$dockerManPaths['images-usb']}/".basename($iconPath));
+	
+  echo '<div style="text-align:center"><button type="button" onclick="done()">Done</button></div><br>';
   goto END;
 }
 
@@ -156,6 +165,7 @@ if ($_GET['updateContainer']){
       continue;
     }
     $xml = file_get_contents($tmpl);
+
     list($cmd, $Name, $Repository) = xmlToCommand($tmpl);
     $Registry = getXmlVal($xml, "Registry");
     $oldImageID = $DockerClient->getImageID($Repository);
