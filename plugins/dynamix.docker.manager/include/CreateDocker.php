@@ -73,6 +73,7 @@ function cpu_pinning() {
 
 if (isset($_POST['contName'])) {
   $postXML = postToXML($_POST, true);
+	file_put_contents("/tmp/blah",$DockerTemplates->getTemplateValue($postXML, 'Icon'));
   $dry_run = $_POST['dryRun']=='true' ? true : false;
   $existing = $_POST['existingContainer'] ?? false;
   $create_paths = $dry_run ? false : true;
@@ -137,6 +138,14 @@ if (isset($_POST['contName'])) {
   }
   if ($startContainer) $cmd = str_replace('/docker create ', '/docker run -d ', $cmd);
   execCommand($cmd);
+  // force re-download of the icon
+  if (! strpos($Repository,":")) {
+    $Repository .= ":latest";
+  }
+  $iconPath = $DockerTemplates->getIcon($Repository);
+  @unlink("$docroot/$iconPath");
+  @unlink("{$dockerManPaths['images-usb']}/".basename($iconPath));
+	
   echo '<div style="text-align:center"><button type="button" onclick="done()">Done</button></div><br>';
   goto END;
 }
@@ -156,6 +165,7 @@ if ($_GET['updateContainer']){
       continue;
     }
     $xml = file_get_contents($tmpl);
+
     list($cmd, $Name, $Repository) = xmlToCommand($tmpl);
     $Registry = getXmlVal($xml, "Registry");
     $oldImageID = $DockerClient->getImageID($Repository);
@@ -254,16 +264,6 @@ $authoring     = $authoringMode ? 'advanced' : 'noshow';
 $disableEdit   = $authoringMode ? 'false' : 'true';
 $showAdditionalInfo = '';
 $bgcolor = strstr('white,azure',$display['theme']) ? '#f2f2f2' : '#1c1c1c';
-
-if ( $authoringMode && ( (stripos($_SERVER['REQUEST_URI'],"/Apps/") === false) || !is_file("/tmp/community.applications/tempFiles/categoryList.json") ) ) {
-  $categoryFile = tempnam("/tmp/","dockerMan-");
-  $DockerTemplates::download_url($dockerManPaths['categoryURL'],$categoryFile);
-  $categoriesJSON = @file_get_contents($categoryFile);
-  @unlink($categoryFile);
-} else {
-  $categoriesJSON = @file_get_contents("/tmp/community.applications/tempFiles/categoryList.json");
-}
-$categories = $categoriesJSON ? @json_decode($categoriesJSON,true) : [];
 ?>
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.ui.css")?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.switchbutton.css")?>">
@@ -381,11 +381,11 @@ button[type=button]{margin:0 20px 0 0}
     }
     return newConfig.prop('outerHTML');
   }
-  
+	
   function escapeQuote(string) {
     return string.replace(new RegExp('"','g'),"&quot;");
   }
-  
+	
   function makeAllocations(container,current) {
     var html = [];
     for (var i=0,ct; ct=container[i]; i++) {
@@ -811,30 +811,39 @@ button[type=button]{margin:0 20px 0 0}
           <input type="hidden" name="contCategory">
           <select id="catSelect" size="1" multiple="multiple" style="display:none" onchange="prepareCategory();">
             <optgroup label="Categories">
-<?
-          if ( $authoringMode ) {
-            if ( empty($categories) ) {
-              echo "<optgroup label='Categories Not Available'></optgroup>";
-            } else {
-              foreach ($categories as $category) {
-                if ( ! $category['Sub'] ) {
-                  if ( $category['Cat'] == "Plugins:" ) continue;
-                  echo "<option value='{$category['Cat']}'>{$category['Des']}</option>";
-                }
-              }
-              echo "</optgroup>";
-              foreach ($categories as $category) {
-                if ( $category['Sub'] ) {
-                  echo "<optgroup label='{$category['Des']}'>";
-                  foreach ($category['Sub'] as $sub) {
-                    echo "<option value='{$sub['Cat']}'>{$sub['Cat']}</option>";
-                  }
-                  echo "</optgroup>";
-                }
-              }
-            }
-          }
-?>
+              <option value="Backup:">Backup</option>
+              <option value="Cloud:">Cloud</option>
+              <option value="Downloaders:">Downloaders</option>
+              <option value="GameServers:">Game Servers</option>
+              <option value="HomeAutomation:">HomeAutomation</option>
+              <option value="Productivity:">Productivity</option>
+              <option value="Tools:">Tools</option>
+              <option value="Other:">Other</option>
+            </optgroup>
+            <optgroup label="MediaApp">
+              <option value="MediaApp:Video">MediaApp:Video</option>
+              <option value="MediaApp:Music">MediaApp:Music</option>
+              <option value="MediaApp:Books">MediaApp:Books</option>
+              <option value="MediaApp:Photos">MediaApp:Photos</option>
+              <option value="MediaApp:Other">MediaApp:Other</option>
+            </optgroup>
+            <optgroup label="MediaServer">
+              <option value="MediaServer:Video">MediaServer:Video</option>
+              <option value="MediaServer:Music">MediaServer:Music</option>
+              <option value="MediaServer:Books">MediaServer:Books</option>
+              <option value="MediaServer:Photos">MediaServer:Photos</option>
+              <option value="MediaServer:Other">MediaServer:Other</option>
+            </optgroup>
+            <optgroup label="Network">
+              <option value="Network:Web">Network:Web</option>
+              <option value="Network:DNS">Network:DNS</option>
+              <option value="Network:FTP">Network:FTP</option>
+              <option value="Network:Proxy">Network:Proxy</option>
+              <option value="Network:Voip">Network:Voip</option>
+              <option value="Network:Management">Network:Management</option>
+              <option value="Network:Other">Network:Other</option>
+              <option value="Network:Messenger">Network:Messenger</option>
+            </optgroup>
             <optgroup label="Development Status">
               <option value="Status:Stable">Status:Stable</option>
               <option value="Status:Beta">Status:Beta</option>
