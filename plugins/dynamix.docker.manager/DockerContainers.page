@@ -30,7 +30,6 @@ $cpus = cpu_list();
 .advanced{display:none;white-space:nowrap}
 .log{cursor:zoom-in}
 .exec{cursor:pointer}
-tbody>tr.sortable:hover{cursor:move}
 table#docker_containers{text-align:left}
 th.five{width:5%}
 th.nine{width:9%}
@@ -103,7 +102,8 @@ function loadlist() {
   $.get('/plugins/dynamix.docker.manager/include/DockerContainers.php',function(d) {
     var data = d.split(/\0/);
     $('div.spinner').hide('slow').remove();
-    $('#docker_list').html(data[0]).sortable({helper:sortableHelper,items:'tr.sortable',opacity:0.4,update:function(e,i){
+    $('#docker_list').html(data[0]).sortable({helper:sortableHelper,items:'tr.sortable',cursor:'move',axis:'y',containment:'parent',cancel:'span.docker_readmore,input',delay:100,opacity:0.5,zIndex:9999,
+    update:function(e,ui){
       var row = $('#docker_list').find('tr:first');
       var names = ''; var index = '';
       row.parent().children().find('td.ct-name').each(function(){names+=$(this).find('.appname').text()+';';index+=$(this).parent().parent().children().index($(this).parent())+';';});
@@ -133,7 +133,7 @@ function loadlist() {
     $('input[type=button]').prop('disabled',false).show('slow');
     var update = false;
     for (var i=0,ct; ct=docker[i]; i++) if (ct.update=='false') {update = true; break;};
-    if (!update) $('input#updateAll').hide();
+    if (!update) $('input#updateAll').prop('disabled',true);
     listview();
     if (data[2]==1) {$('#busy').show(); setTimeout(loadlist,5000);} else if ($('#busy').is(':visible')) {$('#busy').hide(); setTimeout(loadlist,3000);}
   });

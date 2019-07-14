@@ -1,8 +1,8 @@
 Menu="Dashboard"
 ---
 <?PHP
-/* Copyright 2005-2018, Lime Technology
- * Copyright 2012-2018, Bergware International.
+/* Copyright 2005-2019, Lime Technology
+ * Copyright 2012-2019, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -40,9 +40,23 @@ function data_devices($disk) {
 function cache_devices($disk) {
   return $disk['type']=='Cache';
 }
+function vpn_peers($file) {
+  $peers = [];
+  $entries = array_filter(array_map('trim',preg_split('/\[(Interface|Peer)\]/',file_get_contents($file))));
+  foreach($entries as $key => $entry) {
+    $noname = true;
+    foreach (explode("\n",$entry) as $row) {
+      if ($key>1 && $row[0]=='#') {$peers[$key-1] = substr($row,1); $noname = false;}
+    }
+    if ($key>1 && $noname) $peers[$key-1] = "Peer ".($key-1);
+  }
+  return $peers;
+}
+
 $dockerd = pgrep('dockerd');
 $libvirtd = pgrep('libvirtd');
 $apcupsd = file_exists('/var/run/apcupsd.pid');
+$wireguard = is_executable('/usr/bin/wg');
 $started = $var['fsState']=='Started';
 $sleep = isset($display['sleep']);
 $cache_pool = $var['cacheSbNumDisks'];
@@ -80,6 +94,11 @@ $array_percent = number_format(100*$array_used/($array_size ?: 1),1,$dot,'');
 $cache_percent = number_format(100*$cache_used/($cache_size ?: 1),1,$dot,'');
 
 exec('cat /sys/devices/system/cpu/*/topology/thread_siblings_list|sort -nu', $cpus);
+$conf  = $wireguard ? glob('/etc/wireguard/wg*.conf') : [];
+$wg_up = $wireguard ? exec("wg show interfaces") : '';
+$wg_up = $wg_up ? explode(' ',$wg_up) : [];
+$up    = count($wg_up);
+$down  = max(count($conf)-$up,0);
 $fans  = exec("sensors -uA 2>/dev/null|grep -c 'fan[0-9]_input'");
 $group = $var['shareSMBEnabled']=='yes' | $var['shareAFPEnabled']=='yes' | $var['shareNFSEnabled']=='yes';
 $url   = "/webGui/include/DashUpdate.php";
@@ -149,23 +168,27 @@ if ($low) $memory_maximum = pow(2,ceil(log($memory_installed)/log(2)));
 div.frame{float:left;margin:14px 0 36px 0}
 div#iframe-popup{display:none;-webkit-overflow-scrolling:touch}
 div.last{padding-bottom:12px}
+div.left{float:left;width:66%;margin-top:-12px}
+div.right{float:right;margin:-12px 20px 0 0;text-align:center}
+span.ctrl{float:right;margin-right:10px}
 span.outer{float:left}
 span.inner{width:134px}
 span.ups{width:124px;display:inline-block}
-span.busy{opacity:0.5}
+span.busy,i.inactive{opacity:0.5}
 span#inbound{width:70px;display:inline-block}
 span#load{width:80px;display:inline-block}
 span#util{margin-left:20px}
 span[id^=cpu],span[id^=sys]{width:0}
 i.heat{margin-left:8px}
 a.cpu_close,span.hand{cursor:pointer}
-td.top.center{text-align:center}
+tr.hidden{display:none;height:0;lineheight:0}
 td.none{text-align:center;padding-top:12px}
 input[value=Edit]{margin:12px 0 0 0;padding:5px 10px}
 .sys_view,.mb_view,.cpu_view,.cpu_open,.mem_view,.port_view,.ups_view,.fan_view,.docker_view,.vm_view,.parity_view,.array_view,.cache_view,.my_view,.extra_view{display:none}
 .share1,.share2,.share3,.view1,.view2,.view3,.user1,.user2,.user3{display:none}
 #shares_view_on,#users_view_on,#array_view_on,#cache_view_on,#extra_view_on{display:none}
 form[name=boot]{display:none}
+.flat{height:0;lineheight:0}
 <?if ($themes2):?>
 .switch-button-background{top:16px}
 .switch-button-label{margin-top:0}
@@ -177,9 +200,13 @@ form[name=boot]{display:none}
 <script src="<?autov('/plugins/dynamix.docker.manager/javascript/docker.js')?>"></script>
 <script src="<?autov('/plugins/dynamix.vm.manager/javascript/vmmanager.js')?>"></script>
 
+<?$N=0?>
 <div class='frame'>
-<table class='share_status dashboard box1'>
-<thead><tr><td></td><td colspan='2'><?=$var['NAME']?></td><td>
+<table id='db-box1' class='share_status dashboard box1'>
+<thead sort='<?=$N?>' class='sortable'><tr><td></td><td colspan='3' class='next'><?=$var['NAME']?>
+<i class='fa fa-fw chevron mt0' id='sys_view' onclick='toggleChevron("sys_view",0)'></i>
+<a href='/Dashboard/Identification' title='Go to identification settings'><i class='fa fa-fw fa-cog chevron mt0'></i></a>
+<span class='ctrl'>
 <?if ($parity||$mover||$btrfs):?>
 <span class='fa fa-fw fa-<?=$started?'stop':'play'?>-circle busy' title='<?=$started?'Stop':'Start'?> the array'></span>
 <?else:?>
@@ -187,34 +214,43 @@ form[name=boot]{display:none}
 <?endif;?>
 <?if($sleep):?><span class='fa fa-fw fa-moon-o hand' title='Put system to sleep' onclick='Sleep()'></span><?endif;?>
 <span class='fa fa-fw fa-refresh hand' title='Reboot the system' onclick='Reboot()'></span>
-<span class='fa fa-fw fa-power-off hand' title='Shutdown the system' onclick='Shutdown()'></span>
-<i class='fa fa-fw chevron mt0' id='sys_view' onclick='toggleChevron("sys_view",0)'></i>
-<a href='/Dashboard/Identification' title='Go to identification settings'><i class='fa fa-fw fa-cog chevron mt0'></i></a>
+<span class='fa fa-fw fa-power-off hand' title='Shutdown the system' onclick='Shutdown()'></span></span>
 </td><td></td></tr></thead>
-<tbody class='sys_view'>
-<tr><td></td><td colspan='2' class='top'>
-<span class='header'>Description</span><br>
+<tbody sort='<?=$N?>' class='sys_view sortable'>
+<tr><td></td><td colspan='3'>
+<div class='left'>
+<span class='header'>Description</span><span class='text'><br>
 <?=$var['COMMENT']?><br>
-<?=$var['SYS_MODEL']?><br><br>
+<?=$var['SYS_MODEL']?><br><br></span>
 <span class='header'>Registration</span><br>Unraid OS <b><em><?=$var['regTy']?></em></b><br><br>
 <span class='header'>Uptime</span><br><span class='uptime'></span>
-</td><td class='top center'>
+</div>
+<div class='right'>
+<span id='casing'>
 <?if ($mycase):?>
+<?if (substr($mycase,-4)!='.png'):?>
 <i id='mycase' class='case-<?=$mycase?>'></i><br>
 <?else:?>
-<i id='mycase' class='fa fa-wpexplorer'></i><br>
+<img id='mycase' src='<?=autov("/webGui/images/$mycase")?>'><br>
 <?endif;?>
+<?else:?>
+<i id='mycase' class='fa fa-hdd-o'></i><br>
+<?endif;?>
+</span>
 <input type='button' value='Edit' onclick='openBox("/webGui/include/SelectCase.php?file=<?=$myfile?>&csrf=<?=$var['csrf_token']?>","Select Case Model",600,980,true,"setCase");return false'>
+</div>
 </td><td></td></tr>
 </tbody>
-<tbody>
+<thead sort='<?=++$N?>'><tr class='hidden'><td></td><td colspan='3'></td><td></td></tr></thead>
+<tbody sort='<?=$N?>' class='sortable'>
 <tr><td></td><td colspan='3' class='next'><i class='icon-motherboard'></i><div class='section'>Motherboard<br><span id='mb-temp'></span><br><br></div>
 <i class='fa fa-fw chevron' id='mb_view' onclick='toggleChevron("mb_view",0)'></i>
 <a href='/Dashboard/ManagementAccess' title='Go to access settings'><i class='fa fa-fw fa-cog chevron'></i></a>
 </td><td></td></tr>
 <tr class='mb_view'><td></td><td colspan='3'><?=$board?><br><?=$bios?><br><?=$biosdate?></td><td></td></tr>
 </tbody>
-<tbody>
+<thead sort='<?=++$N?>'><tr class='hidden'><td></td><td colspan='3'></td><td></td></tr></thead>
+<tbody sort='<?=$N?>' class='sortable'>
 <tr><td></td><td colspan='3' class='next'><i class='icon-cpu'></i><div class='section'>Processor<br>
 <span id='load'>Load: <span class='cpu'>0%</span></span><span id='cpu-temp'></span><br><br></div>
 <i class='fa fa-fw chevron' id='cpu_view' onclick='toggleChevron("cpu_view",1)'></i>
@@ -236,7 +272,8 @@ foreach ($cpus as $pair) {
 }
 ?>
 </tbody>
-<tbody>
+<thead sort='<?=++$N?>'><tr class='hidden'><td></td><td colspan='3'></td><td></td></tr></thead>
+<tbody sort='<?=$N?>' class='sortable'>
 <tr><td></td><td colspan='3' class='next'><i class='icon-ram'></i><div class='section'>Memory<br><span><?="$memory_installed $unit $memory_type $ecc"?><span id='util'>Utilization: <span class='sys0'>0%</span></span><br><br></div>
 <i class='fa fa-fw chevron' id='mem_view' onclick='toggleChevron("mem_view",0)'></i>
 <a href='/Dashboard/DiskSettings' title='Go to disk settings'><i class='fa fa-fw fa-cog chevron'></i></a>
@@ -246,7 +283,8 @@ foreach ($cpus as $pair) {
 <tr class='mem_view'><td></td><td>Usable size: <?=my_scale($total,$unit,1,null,1024)." $unit"?></td><td><i class='mm'>Log</i><span class='sys2 load'>0%</span><div class='usage-disk sys'><span id='sys2'></span><span></span></div></td>
 <td><?if (exec("df /var/lib/docker|grep -om1 '^/'")):?><i class='mm'>Docker</i><span class='sys3 load'>0%</span><div class='usage-disk sys'><span id='sys3'></span><span></span></div><?endif;?></td><td></td></tr>
 </tbody>
-<tbody>
+<thead sort='<?=++$N?>'><tr class='hidden'><td></td><td colspan='3'></td><td></td></tr></thead>
+<tbody sort='<?=$N?>' class='sortable'>
 <tr><td></td><td colspan='3' class='next'><i class='icon-ethernet'></i><div class='section'>Interface<br>
 <select name="port_select" size="1" onchange="portSelect(this.value)">
 <?foreach ($ports as $port):?>
@@ -284,8 +322,25 @@ foreach ($ports as $port) {
 }
 ?>
 </tbody>
+<?if ($wireguard):?>
+<thead sort='<?=++$N?>'><tr class='hidden'><td></td><td colspan='3'></td><td></td></tr></thead>
+<tbody sort='<?=$N?>' class='sortable'>
+<tr><td></td><td colspan='3' class='next'><i class='icon-vpn'></i><div class='section'>VPN<br><span class='ups'>Active tunnels: <span id='vpn-active'><?=$up?></span></span><span class='ups'>Inactive tunnels: <span id='vpn-inactive'><?=$down?></span></span><br><br></div>
+<i class='fa fa-fw chevron' id='vpn_view' onclick='toggleChevron("vpn_view",0)'></i>
+<a href='/Settings/VPNmanager' title='Go to VPN settings'><i class='fa fa-fw fa-cog chevron'></i></a>
+</td><td></td></tr>
+<?foreach ($conf as $wg):?>
+<?$vpn = basename($wg,'.conf'); $peers = vpn_peers($wg);?>
+<tr class='vpn_view'><td></td><td class='vpn'><i class='icon-vpn vpn<?=in_array($vpn,$wg_up)?'':' inactive'?>' onclick="toggleVPN($(this),'<?=$vpn?>')" title="Toggle tunnel state"></i><?="Tunnel $vpn"?></td><td class='vpn right'>Activity</td><td class='vpn right'>Handshake</td><td></td></tr>
+<?foreach ($peers as $i => $peer):?>
+<tr class='vpn_view'><td></td><td class='left'><?=$peer?></td><td class='right' id='<?="$vpn-rx-".($i-1)?>'>---</td><td class='right' id='<?="$vpn-hs-".($i-1)?>'>inactive</td><td></td></tr>
+<?endforeach;?>
+<?endforeach;?>
+</tbody>
+<?endif;?>
 <?if ($apcupsd):?>
-<tbody>
+<thead sort='<?=++$N?>'><tr class='hidden'><td></td><td colspan='3'></td><td></td></tr></thead>
+<tbody sort='<?=$N?>' class='sortable'>
 <tr><td></td><td colspan='3' class='next'><i class='icon-ups'></i><div class='section'>Power<br>
 <span>UPS Load: <span id='ups_loadpct'></span></span><br><br></div>
 <i class='fa fa-fw chevron' id='ups_view' onclick='toggleChevron("ups_view",0)'></i>
@@ -300,7 +355,8 @@ foreach ($ports as $port) {
 </tbody>
 <?endif;?>
 <?if ($fans):?>
-<tbody>
+<thead sort='<?=++$N?>'><tr class='hidden'><td></td><td colspan='3'></td><td></td></tr></thead>
+<tbody sort='<?=$N?>' class='sortable'>
 <tr><td></td><td colspan='3' class='next'><i class='icon-fan'></i><div class='section'>Airflow<br><span>Fan count: <?=$fans?></span><br><br></div>
 <i class='fa fa-fw chevron' id='fan_view' onclick='toggleChevron("fan_view",0)'></i>
 <a href='/Dashboard/FanSettings' title='Go to fan settings'><i class='fa fa-fw fa-cog chevron'></i></a>
@@ -313,25 +369,23 @@ foreach ($ports as $port) {
 <?endif;?>
 </table>
 
-<table class='share_status dashboard box3'>
+<?$N=0?>
+<table id='db-box3' class='share_status dashboard box3'>
 <?if ($display['dashapps']!='none'):?>
 <?if ($dockerd && ($display['dashapps']=='icons' || $display['dashapps']=='docker')):?>
-<thead><tr><td></td><td colspan='4'>Docker Containers<i class='fa fa-fw chevron mt0' id='docker_view' onclick='toggleChevron("docker_view",0)'></i>
+<thead sort='<?=$N?>' class='sortable'><tr><td></td><td colspan='4' class='next'>Docker Containers<i class='fa fa-fw chevron mt0' id='docker_view' onclick='toggleChevron("docker_view",0)'></i>
 <a href='/Dashboard/DockerSettings' title='Go to Docker settings'><i class='fa fa-fw fa-cog chevron mt0'></i></a>
 <span class='info apps'><input type='checkbox' id='apps'></span></td><td></td></tr></thead>
-<tbody class='docker_view'>
-</tbody>
+<tbody sort='<?=$N?>' class='docker_view sortable'></tbody>
 <?endif;?>
 <?if ($libvirtd && ($display['dashapps']=='icons' || $display['dashapps']=='vms')):?>
-<thead><tr><td></td><td colspan='4' class='next'>Virtual Machines<i class='fa fa-fw chevron mt0' id='vm_view' onclick='toggleChevron("vm_view",0)'></i>
+<thead sort='<?=++$N?>' class='sortable'><tr><td></td><td colspan='4' class='next'>Virtual Machines<i class='fa fa-fw chevron mt0' id='vm_view' onclick='toggleChevron("vm_view",0)'></i>
 <a href='/Dashboard/VMSettings' title='Go to VM settings'><i class='fa fa-fw fa-cog chevron mt0'></i></a>
 <span class='info vms'><input type='checkbox' id='vms'></span></td><td></td></tr></thead>
-<tbody class='vm_view'>
-</tbody>
+<tbody sort='<?=$N?>' class='vm_view sortable'></tbody>
 <?endif;?>
-<tbody class='split'><tr><td colspan='6'></td></tr></tbody>
 <?endif;?>
-<thead><tr><td></td><td colspan='4' class='next'>Shares<i class='fa fa-fw chevron mt0' id='shares_view' onclick='toggleChevron("shares_view",4)'></i>
+<thead sort='<?=++$N?>' class='sortable'><tr><td></td><td colspan='4' class='next'>Shares<i class='fa fa-fw chevron mt0' id='shares_view' onclick='toggleChevron("shares_view",4)'></i>
 <a href='/Shares' title='Go to Share settings'><i class='fa fa-fw fa-cog chevron mt0'></i></a>
 <span class='info'>Share count: <?=count($shares)?> with <?=$cache_only?> cache only and <?=$encrypted?> encrypted</span>
 <?if ($group):?>
@@ -351,7 +405,7 @@ foreach ($ports as $port) {
 <tr id='shares_view_on'><td></td><td>Name</td><td>Description</td><td>Security</td><td>Streams</td><td></td></tr>
 </thead>
 <?if ($var['shareSMBEnabled']=='yes'):?>
-<tbody class='smb share share1'><?
+<tbody sort='<?=$N?>' class='smb share share1 sortable'><?
 $i = 0;
 foreach ($shares as $name => $share) {
   $i++;
@@ -366,7 +420,7 @@ if (!count($shares)) echo "<tr><td></td><td colspan='4' class='none'>No shares p
 ?></tbody>
 <?endif;?>
 <?if ($var['shareAFPEnabled']=='yes'):?>
-<tbody class='afp share share2'><?
+<tbody sort='<?=$N?>' class='afp share share2 sortable'><?
 foreach ($shares as $name => $share) {
   $list = "<a href=\"$path/Share?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".truncate($name,20)."</a>";
   if ($share['luksStatus']>0) $list = str_replace('blue-text','green-text',$list);
@@ -379,7 +433,7 @@ if (!count($shares)) echo "<tr><td></td><td colspan='4' class='none'>No shares p
 ?></tbody>
 <?endif;?>
 <?if ($var['shareNFSEnabled']=='yes'):?>
-<tbody class='nfs share share3'><?
+<tbody sort='<?=$N?>' class='nfs share share3 sortable'><?
 foreach ($shares as $name => $share) {
   $list = "<a href=\"$path/Share?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".truncate($name,20)."</a>";
   if ($share['luksStatus']>0) $list = str_replace('blue-text','green-text',$list);
@@ -392,7 +446,7 @@ if (!count($shares)) echo "<tr><td></td><td colspan='4' class='none'>No shares p
 ?></tbody>
 <?endif;?>
 <?if (!$group):?>
-<tbody class='share'><?
+<tbody sort='<?=$N?>' class='share sortable'><?
 foreach ($shares as $name => $share) {
   $list = "<a href=\"$path/Share?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".truncate($name,20)."</a>";
   if ($share['luksStatus']>0) $list = str_replace('blue-text','green-text',$list);
@@ -403,13 +457,12 @@ foreach ($shares as $name => $share) {
 if (!count($shares)) echo "<tr><td></td><td colspan='4' class='none'>No shares present</td><td></td></tr>";
 ?></tbody>
 <?endif;?>
-<tbody class='split'><tr><td colspan='6'></td></tr></tbody>
-<thead><tr><td></td><td colspan='4'>Users<i class='fa fa-fw chevron mt0' id='users_view' onclick='toggleChevron("users_view",3)'></i>
+<thead sort='<?=++$N?>' class='sortable'><tr><td></td><td colspan='4' class='next'>Users<i class='fa fa-fw chevron mt0' id='users_view' onclick='toggleChevron("users_view",3)'></i>
 <a href='/Users' title='Go to User settings'><i class='fa fa-fw fa-cog chevron mt0'></i></a>
 <span class='info'>User count: <?=count($users)?> with <?=$nopass?> unprotected</span>
 </td><td></td></tr><tr id='users_view_on'><td></td><td>Name</td><td>Description</td><td>Write</td><td>Read</td><td></td></tr></thead>
 <?if ($var['shareSMBEnabled']=='yes'):?>
-<tbody class='smb user user1'><?
+<tbody sort='<?=$N?>' class='smb user user1 sortable'><?
 foreach ($users as $user) {
   $name = $user['name'];
   $list = "<a href=\"$path/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".truncate($name,20)."</a>";
@@ -429,7 +482,7 @@ foreach ($users as $user) {
 ?></tbody>
 <?endif;?>
 <?if ($var['shareAFPEnabled']=='yes'):?>
-<tbody class='afp user user2'><?
+<tbody sort='<?=$N?>' class='afp user user2 sortable'><?
 foreach ($users as $user) {
   $name = $user['name'];
   $list = "<a href=\"$path/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".truncate($name,20)."</a>";
@@ -449,7 +502,7 @@ foreach ($users as $user) {
 ?></tbody>
 <?endif;?>
 <?if ($var['shareNFSEnabled']=='yes'):?>
-<tbody class='nfs user user3'><?
+<tbody sort='<?=$N?>' class='nfs user user3 sortable'><?
 foreach ($users as $user) {
   $name = $user['name'];
   $list = "<a href=\"$path/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".truncate($name,20)."</a>";
@@ -461,7 +514,7 @@ foreach ($users as $user) {
 ?></tbody>
 <?endif;?>
 <?if (!$group):?>
-<tbody class='user'><?
+<tbody sort='<?=$N?>' class='user sortable'><?
 foreach ($users as $user) {
   $name = $user['name'];
   $list = "<a href=\"$path/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".truncate($name,20)."</a>";
@@ -473,38 +526,39 @@ foreach ($users as $user) {
 <?endif;?>
 </table>
 
-<table class='share_status dashboard box2'>
-<thead><tr><td></td><td colspan='5'>Parity<i class='fa fa-fw chevron mt0' id='parity_view' onclick='toggleChevron("parity_view",0)'></i>
+<?$N=0?>
+<table id='db-box2' class='share_status dashboard box2'>
+<thead sort='<?=$N?>' class='sortable'><tr><td></td><td colspan='5' class='next'>Parity<i class='fa fa-fw chevron mt0' id='parity_view' onclick='toggleChevron("parity_view",0)'></i>
 <a href='/Dashboard/Scheduler' title='Go to scheduler settings'><i class='fa fa-fw fa-cog chevron mt0'></i></a>
 <span class='info title'></span></td><td></td></tr></thead>
-<tbody class='parity_view'>
+<tbody sort='<?=$N?>' class='parity_view sortable'>
 <tr><td></td><td colspan='5' id='parity'></td><td></td></tr>
 <tr><td></td><td colspan='5' id='program'></td><td></td></tr>
 </tbody>
-<thead><tr><td></td><td colspan='5' class='next'>Array<?if (!$started):?> (stopped)<?endif;?><i class='fa fa-fw chevron mt0' id='array_view' onclick='toggleChevron("array_view",0)'></i>
+<thead sort='<?=++$N?>' class='sortable'><tr><td></td><td colspan='5' class='next'>Array<?if (!$started):?> (stopped)<?endif;?><i class='fa fa-fw chevron mt0' id='array_view' onclick='toggleChevron("array_view",0)'></i>
 <a href='/Dashboard/Device?name=disk1' title='Go to disk settings'><i class='fa fa-fw fa-cog chevron mt0'></i></a>
 <?if ($started):?><span class='info'><?=my_scale($array_used*1024,$unit)." $unit"?> used of <?=my_scale($array_size*1024,$unit,-1,-1)." $unit"?> (<?=$array_percent?> %)</span><?endif;?>
 </td><td></td></tr>
 <tr class='my_view'><td></td><td id='array_info' colspan='5'></td><td></td></tr>
 <tr id='array_view_on'><td></td><td>Device</td><td>Status</td><td>Temp</td><td>SMART</td><td>Utilization</td><td></td></tr>
 </thead>
-<tbody class='array_view' id='array_list'></tbody>
+<tbody sort='<?=$N?>' class='array_view sortable' id='array_list'></tbody>
 <?if ($cache_pool):?>
-<thead><tr><td></td><td colspan='5' class='next'>Cache<?if (!$started):?> (stopped)<?endif;?><i class='fa fa-fw chevron mt0' id='cache_view' onclick='toggleChevron("cache_view",0)'></i>
+<thead sort='<?=++$N?>' class='sortable'><tr><td></td><td colspan='5' class='next'>Cache<?if (!$started):?> (stopped)<?endif;?><i class='fa fa-fw chevron mt0' id='cache_view' onclick='toggleChevron("cache_view",0)'></i>
 <a href='/Dashboard/Device?name=cache' title='Go to cache settings'><i class='fa fa-fw fa-cog chevron mt0'></i></a>
 <?if ($started):?><span class='info'><?=my_scale($cache_used*1024,$unit)." $unit"?> used of <?=my_scale($cache_size*1024,$unit,-1,-1)." $unit"?> (<?=$cache_percent?> %)</span><?endif;?>
 </td><td></td></tr>
 <tr class='my_view'><td></td><td id='cache_info' colspan='5'></td><td></td></tr>
 <tr id='cache_view_on'><td></td><td>Device</td><td>Status</td><td>Temp</td><td>SMART</td><td>Utilization</td><td></td></tr>
 </thead>
-<tbody class='cache_view' id='cache_list'></tbody>
+<tbody sort='<?=$N?>' class='cache_view sortable' id='cache_list'></tbody>
 <?endif;?>
 <?if ($devs):?>
-<thead><tr><td></td><td colspan='5' class='next'>Unassigned<i class='fa fa-fw chevron mt0' id='extra_view' onclick='toggleChevron("extra_view",0)'></i><span class='info'></span></td><td></td></tr>
+<thead sort='<?=++$N?>' class='sortable'><tr><td></td><td colspan='5' class='next'>Unassigned<i class='fa fa-fw chevron mt0' id='extra_view' onclick='toggleChevron("extra_view",0)'></i><span class='info'></span></td><td></td></tr>
 <tr class='my_view'><td></td><td id='extra_info' colspan='5'></td><td></td></tr>
 <tr id='extra_view_on'><td></td><td>Device</td><td>Status</td><td>Temp</td><td>SMART</td><td>Utilization</td><td></td></tr>
 </thead>
-<tbody class='extra_view' id='extra_list'></tbody>
+<tbody sort='<?=$N?>' class='extra_view sortable' id='extra_list'></tbody>
 <?endif;?>
 </table>
 </div>
@@ -521,6 +575,28 @@ var red = 90;
 var timestamp = 0, rx_bytes = 0, tx_bytes = 0;
 var port_select = $.cookie('port_select')||'<?=$ports[0]?>';
 
+<?if ($wireguard):?>
+Number.prototype.pad = function(size){var s=String(this);while(s.length<(size||2)){s='0'+s;}return s;}
+
+function toggleVPN(id,vtun) {
+  var up = $('#vpn-active');
+  var down = $('#vpn-inactive');
+  if (id.hasClass('inactive')) {
+    $.post('/webGui/include/update.wireguard.php',{'#cmd':'toggle','#wg':'start','#vtun':vtun},function(up){if (up){
+      id.removeClass('inactive');
+      up.text(up.text()*1+1);
+      if (down.text()>0) down.text(down.text()*1-1);
+    }});
+  } else {
+    $.post('/webGui/include/update.wireguard.php',{'#cmd':'toggle','#wg':'stop','#vtun':vtun});
+    id.addClass('inactive');
+    down.text(down.text()*1+1);
+    if (up.text()>0) up.text(up.text()*1-1);
+    $('td[id^="'+vtun+'-hs"]').text('inactive');
+    $('td[id^="'+vtun+'-rx"]').text('---');
+  }
+}
+<?endif;?>
 function noApps() {
   if ($('span.outer.apps:visible').length==0) $('#no_apps').show(); else $('#no_apps').hide();
 }
@@ -555,12 +631,17 @@ function loadlist(init) {
 }
 function setCase() {
   $.post('/webGui/include/SelectCase.php',{mode:'get',file:'<?=$myfile?>'},function(model){
-    if (model) {
-      $('#mycase').removeClass().addClass('case-'+model);
-      $('#myinfo').show(); $('#nocase').hide();
+    if (!model) {
+      $('#casing').html("<i id='mycase' class='fa fa-hdd-o'></i><br>");
+    } else if (model.indexOf('.png')<0) {
+      $('#casing').html("<i id='mycase' class='case-"+model+"'></i><br>");
+    } else {
+      var now = new Date();
+      $('#casing').html("<img id='mycase' src='/webGui/images/"+model+"?v="+now.getTime()+"'><br>");
     }
   });
 }
+
 function changeMode(item) {
   var user = $.cookie('users_view');
   var share = $.cookie('shares_view');
@@ -625,6 +706,29 @@ function moreInfo(data,table) {
   if (data[4]>0) info.push(data[4]+" utilization warning"+(data[4]==1?'':'s'));
   return info.length ? "<div class='last'><i class='icon-u-triangle failed'></i><span class='failed'>"+table+" has "+info.join('. ')+".</span></div>" : "";
 }
+<?if ($wireguard):?>
+function update1() {
+  $.post('/webGui/include/update.wireguard.php',{'#cmd':'stats','#vtun':'*'},function(data){
+    var n = {};
+    var row = data.split('\0');
+    for (var i=0; i < row.length; i++) {
+      var info = row[i].split(';');
+      vtun = info[0];
+      if (typeof n[vtun]=='undefined') n[vtun] = 0; else n[vtun]++;
+      if (info[1] > 0) {
+        var hr = parseInt(info[1]/3600).pad();
+        var mn = parseInt(info[1]/60%60).pad();
+        var sc = parseInt(info[1]%60).pad();
+        $('td#'+vtun+'-hs-'+n[vtun]).text(hr+':'+mn+':'+sc+' ago');
+      } else {
+        $('td#'+vtun+'-hs-'+n[vtun]).text('not received');
+      }
+      $('td#'+vtun+'-rx-'+n[vtun]).text(info[2]+', '+info[3]);
+    }
+    setTimeout(update1,1000);
+  });
+}
+<?endif;?>
 function update5() {
 <?if ($fans):?>
   $.post('<?=$url?>',{cmd:'fan'},function(data) {
@@ -777,7 +881,7 @@ function toggleView(field,init,view) {
   if (!view) view = $.cookie(field)||field;
   if (!init) {if ($.cookie(field)===undefined) $.cookie(field,view,{expires:3650}); else $.removeCookie(field);}
   var visible = $.cookie(field)===undefined;
-  if (visible) $('.'+view).show(); else $('.'+view).hide();
+  if (visible) $('.'+view).show().removeClass('flat'); else $('.'+view).hide().addClass('flat');
   var unset = true;
   switch (field) {
   case 'users_view':
@@ -865,6 +969,15 @@ function SleepNow() {
 }
 <?endif;?>
 
+function sortTable(table,index) {
+  if (!index) return;
+  index = index.split(';');
+  for (var i=0,n; n=index[i]; i++) {
+    table.find('thead[sort="'+n+'"]').appendTo(table);
+    table.find('tbody[sort="'+n+'"]').appendTo(table);
+  }
+}
+
 var cpuload = new NchanSubscriber('/sub/cpuload', /^((?!chrome|android).)*safari/i.test(navigator.userAgent) ? {subscriber:'longpoll'} : {});
 cpuload.on('message',function(data) {
 /*
@@ -887,11 +1000,56 @@ $.each(json["cpuload"],function(k,v) {
     $('#'+k).finish().animate({width:load},{step:function(){$('#'+k).css('overflow','visible').removeClass().addClass(color);}});
   });
 });
+var sortableHelper = function(e,ui){
+  var width = [];
+  var table = ui.parent();
+  ui.find('tr:first').children().each(function(){width.push($(this).width());});
+  if (ui.prop('nodeName').toLowerCase()=='tbody') {
+    var sort = ui.attr('sort');
+    var head = table.find('thead[sort="'+sort+'"]');
+    if (head.find('tr:first').is(':visible')) ui = head.clone();
+  }
+  ui.find('tr:first').children().each(function(i){$(this).width(width[i]);});
+  return ui;
+};
 $(function() {
+  $('table').sortable({helper:sortableHelper,items:'.sortable',cursor:'move',axis:'y',containment:'parent',delay:100,opacity:0.5,zIndex:9999,
+  update:function(e,ui){
+    var table = ui.item.parent();
+    var index = [], prev = -1;
+    if (ui.item.prop('nodeName').toLowerCase()=='tbody') {
+      table.find('tbody').each(function(){
+        var sort = $(this).attr('sort');
+        var head = table.find('thead[sort="'+sort+'"]');
+        if (sort != prev) {
+          head.remove().insertBefore($(this));
+          index.push(sort);
+          prev = sort;
+        } else {
+          $(this).remove().insertAfter(head);
+        }
+      });
+    } else {
+      table.find('thead').each(function(){
+        var sort = $(this).attr('sort');
+        var body = table.find('tbody[sort="'+sort+'"]');
+        body.remove().insertAfter($(this));
+        index.push(sort);
+      });
+    }
+    var sorted = true;
+    for (var x = 0; x < index.length-1; x++) {
+      if (index[x+1]-index[x]!=1) {sorted=false; break;}
+    }
+    sorted ? $.removeCookie(table.prop('id')) : $.cookie(table.prop('id'),index.join(';'),{expires:3650});
+  }});
 <?if ($group):?>
   dropdown('enter_share');
 <?endif;?>
   dropdown('enter_view');
+<?if ($wireguard):?>
+  update1();
+<?endif;?>
   update5();
   update15();
   update60();
@@ -901,6 +1059,9 @@ $(function() {
   toggleView('cpu_view',true);
   toggleView('mem_view',true);
   toggleView('port_view',true);
+<?if ($wireguard):?>
+  toggleView('vpn_view',true);
+<?endif;?>
 <?if ($fans):?>
   toggleView('fan_view',true);
 <?endif;?>
@@ -926,5 +1087,8 @@ $(function() {
   portMenu();
   loadlist(true);
   cpuload.start();
+  sortTable($('#db-box1'),$.cookie('db-box1'));
+  sortTable($('#db-box2'),$.cookie('db-box2'));
+  sortTable($('#db-box3'),$.cookie('db-box3'));
 });
 </script>

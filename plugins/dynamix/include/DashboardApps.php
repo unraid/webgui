@@ -52,7 +52,7 @@ if ($_POST['docker'] && ($display=='icons' || $display=='docker')) {
     $update = $updateStatus=='false' ? 'blue-text' : '';
     $icon = $info['icon'] ?: '/plugins/dynamix.docker.manager/images/question.png';
     $image = substr($icon,-4)=='.png' ? "<img src='$icon' class='img'>" : (substr($icon,0,5)=='icon-' ? "<i class='$icon img'></i>" : "<i class='fa fa-$icon img'></i>");
-    echo "<span class='outer apps $status'><span id='$id' class='hand'>$image</span><span class='inner'><span class='$update'>$name</span><br><i class='fa fa-$shape $status $color'></i><span class='state'>$status</span></span></span>";
+    echo "<span class='outer solid apps $status'><span id='$id' class='hand'>$image</span><span class='inner'><span class='$update'>$name</span><br><i class='fa fa-$shape $status $color'></i><span class='state'>$status</span></span></span>";
   }
   $none = count($containers) ? "No running docker containers" : "No docker containers defined";
   echo "<span id='no_apps' style='display:none'>$none<br><br></span>";
@@ -108,7 +108,7 @@ if ($_POST['vms'] && ($display=='icons' || $display=='vms')) {
       break;
     }
     $image = substr($icon,-4)=='.png' ? "<img src='$icon' class='img'>" : (substr($icon,0,5)=='icon-' ? "<i class='$icon img'></i>" : "<i class='fa fa-$icon img'></i>");
-    echo "<span class='outer vms $status'><span id='vm-$uuid' class='hand'>$image</span><span class='inner'>$vm<br><i class='fa fa-$shape $status $color'></i><span class='state'>$status</span></span></span>";
+    echo "<span class='outer solid vms $status'><span id='vm-$uuid' class='hand'>$image</span><span class='inner'>$vm<br><i class='fa fa-$shape $status $color'></i><span class='state'>$status</span></span></span>";
   }
   $none = count($vms) ? "No running virtual machines" : "No virtual machines defined";
   echo "<span id='no_vms' style='display:none'>$none<br><br></span>";

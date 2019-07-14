@@ -76,7 +76,7 @@ $dirs=0; $files=0; $total=0;
 foreach ($list as $row) {
   if ($row['type']=='directory') {
     echo "<tr>";
-    echo "<td data=''><div class='icon-folder'></div></td>";
+    echo "<td data=''><div class='icon-dir'></div></td>";
     echo "<td><a href=\"/$path?dir=".htmlspecialchars(urlencode_path(trim_slash($dir.'/'.$row['name'])))."\">".htmlspecialchars($row['name'])."</a></td>";
     echo "<td data='0'>&lt;DIR&gt;</td>";
     echo "<td data='{$row['time']}'>".my_time($row['time'],"%F {$display['time']}")."</td>";

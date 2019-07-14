@@ -106,7 +106,6 @@ div.four label.cpu1{width:32%}
 div.four label.cpu2{width:26%}
 th.vmname{width:350px}
 th.eight{width:8%}
-tbody>tr.sortable:hover{cursor:move}
 table.domdisk tbody tr:nth-child(even){background-color:transparent}
 table tbody td{line-height:normal}
 </style>
@@ -149,7 +148,8 @@ var sortableHelper = function(e,i){
 function loadlist() {
   $.get('/plugins/dynamix.vm.manager/include/VMMachines.php',{show:$.cookie('vmshow')},function(d) {
     var data = d.split(/\0/);
-    $('#kvm_list').html(data[0]).sortable({helper:sortableHelper,items:'tr.sortable',opacity:0.4,update:function(e,i){
+    $('#kvm_list').html(data[0]).sortable({helper:sortableHelper,items:'tr.sortable',cursor:'move',axis:'y',containment:'parent',delay:100,opacity:0.5,zIndex:9999,
+    update:function(e,ui){
       $('#kvm_list').find('tr.sortable').each(function(){
         var parent = $(this).attr('parent-id');
         var child = $('tr[child-id="'+parent+'"]');

@@ -82,7 +82,7 @@ foreach ($shares as $list) if ($list['name']!=$name || !$name) echo mk_option(""
 <?
 $rows = [];
 foreach ($shares as $list) if ($list['name']!=$name) $rows[] = mk_option("", $list['name'], $list['name']);
-if ($rows) echo "<option>All</option>";
+if ($rows) echo "<option>(All)</option>";
 foreach ($rows as $row) echo $row;
 ?>
 </select><input type="button" id="writeshare" value="Write" class="clone" onclick="writeShare()" disabled>
@@ -366,7 +366,7 @@ function writeShare() {
   data.shareUseCache = '<?=addslashes(htmlspecialchars($share['useCache']))?>';
   data.cmdEditShare = 'Apply';
   $('select#s3 option').map(function() {
-    if ($(this).prop('selected')==true) {
+    if ($(this).prop('selected')==true && $(this).val()!='(All)') {
       data.shareNameOrig = $(this).val();
       data.shareName = $(this).val();
       $.post('/update.htm', data);

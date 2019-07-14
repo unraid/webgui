@@ -624,6 +624,11 @@ if ($method == "update") {
     echo "plugin: installed Unraid version is too high, require at most version $max\n";
     exit(1);
   }
+  // check for a reinstall of same version
+  if (strcmp(plugin("version",$installed_plugin_file,$error),plugin("version",$plugin_file,$error1)) == 0) {
+    echo "Not reinstalling same version\n";
+    exit(1);
+  }
   // install the updated plugin
   if (plugin("install", $plugin_file, $error) === false) {
     echo "plugin: $error\n";
