@@ -210,7 +210,7 @@ function showFooter(data, id) {
 function showNotice(data) {
   $('#user-notice').html(data.replace(/<a>(.*)<\/a>/,"<a href='/Plugins'>$1</a>"));
 }
-var showUpgrade = funtion(data) {
+var showUpgrade = function(data) {
   if ($.cookie('os_upgrade')==null)
     $('.upgrade_notice').html(data.replace(/<a>(.*)<\/a>/,"<a href='#' onclick='hideUpgrade();openUpgrade()'>$1</a>")+"<i class='fa fa-close' title='Close' onclick='hideUpgrade(true)'></i>").show();
 }
