@@ -210,11 +210,11 @@ function showFooter(data, id) {
 function showNotice(data) {
   $('#user-notice').html(data.replace(/<a>(.*)<\/a>/,"<a href='/Plugins'>$1</a>"));
 }
-function showUpgrade(data) {
+var showUpgrade = funtion(data) {
   if ($.cookie('os_upgrade')==null)
     $('.upgrade_notice').html(data.replace(/<a>(.*)<\/a>/,"<a href='#' onclick='hideUpgrade();openUpgrade()'>$1</a>")+"<i class='fa fa-close' title='Close' onclick='hideUpgrade(true)'></i>").show();
 }
-function hideUpgrade(set) {
+var hideUpgrade = function(set) {
   $('.upgrade_notice').hide();
   if (set)
     $.cookie('os_upgrade','true',{path:'/'});
