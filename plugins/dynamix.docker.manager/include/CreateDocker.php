@@ -897,10 +897,6 @@ button[type=button]{margin:0 20px 0 0}
         </td>
       </tr>
       <tr class="<?=$authoring;?>">
-        <td>Template URL:</td>
-        <td><input type="text" name="contTemplateURL"></td>
-      </tr>
-      <tr class="<?=$authoring;?>">
         <td colspan="2">
           <blockquote class="inline_help">
             <p>This URL is used to keep the template updated.</p>
