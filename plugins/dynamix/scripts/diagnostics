@@ -112,6 +112,7 @@ exert("ifconfig -a -s 2>/dev/null|grep -Po '^(eth|bond)[0-9]+'", $ports);
 exert("dmidecode -qt2|awk -F: '/^\tManufacturer:/{m=\$2};/^\tProduct Name:/{p=\$2} END{print m\" -\"p}' 2>/dev/null|todos >".escapeshellarg("/$diag/system/motherboard.txt"));
 exert("dmidecode -qt0 2>/dev/null|todos >>".escapeshellarg("/$diag/system/motherboard.txt"));
 exert("cat /proc/meminfo 2>/dev/null|todos >".escapeshellarg("/$diag/system/meminfo.txt"));
+exert("dmidecode --type 17 2>/dev/null|todos >>".escapeshellarg("/$diag/system/meminfo.txt"));
 // create ethernet information information (suppress errors)
 foreach ($ports as $port) {
   exert("ethtool ".escapeshellarg($port)." 2>/dev/null|todos >>".escapeshellarg("/$diag/system/ethtool.txt"));

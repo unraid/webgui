@@ -194,13 +194,13 @@ Excluded disk(s):
 
 > Specify the disks which can *not* be used by the share. By default no disks are excluded.
 
-Use cache disk:
-: <select name="shareUseCache" size="1" onchange="setDiskList(this.value)">
+Use cache (for new files/directories):
+: <select name="shareUseCache" size="1" onchange="setDiskList(this.value) ; setMoverAction(this.value)">
   <?=mk_option($share['useCache'], "no", "No")?>
   <?=mk_option($share['useCache'], "yes", "Yes")?>
   <?=mk_option($share['useCache'], "only", "Only")?>
   <?=mk_option($share['useCache'], "prefer", "Prefer")?>
-  </select>
+  </select><span id="moverAction"></span>
 
 > Specify whether new files and directories written on the share can be written onto the Cache disk/pool
 > if present.
@@ -262,6 +262,7 @@ $(function() {
   $('#tab1').bind({click:function(){initDropdown(true,true);}});
 <?endif;?>
   setDiskList(document.share_edit.shareUseCache.value);
+  setMoverAction(document.share_edit.shareUseCache.value);
   presetSpace(document.share_edit.shareFloor);
 });
 function initDropdown(remove,create) {
@@ -284,6 +285,15 @@ function setDiskList(cache) {
   var onOff = cache=='only' ? 'disable':'enable';
   $('#s1').dropdownchecklist(onOff);
   $('#s2').dropdownchecklist(onOff);
+}
+function setMoverAction(cache) {
+  var textAction;
+  switch (cache) {
+  case 'yes':  textAction = 'Mover transfers files from cache to array'; break;
+  case 'prefer': textAction = 'Mover transfers files from array to cache'; break;
+  default:  textAction = 'Mover takes no action'; break;
+  }
+  document.getElementById("moverAction").innerHTML=textAction;
 }
 function presetSpace(shareFloor) {
   var unit = ['KB','MB','GB','TB','PB'];

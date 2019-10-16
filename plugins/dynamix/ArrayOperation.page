@@ -360,7 +360,7 @@ $(function(){
         <input type="button" id="cancelButton" value="Cancel" onclick="stopParity(this.form,'Clearing')"></td>
         <td id="cancelText"><strong>Cancel</strong> will stop Clearing.</td></tr>
 <?    endif;?>
-      <tr><td></td><td><input type="button" value="History" onclick="openBox('/webGui/include/ParityHistory.php','Parity/Read-Check History',600,900,false)"></td><td>Current operation started on <strong><?=my_time($var['sbUpdated'])?></strong></td></tr>
+      <tr><td></td><td><input type="button" value="History" onclick="openBox('/webGui/include/ParityHistory.php','Parity/Read-Check History',600,900,false)"></td><td>Current operation <?if ($var['mdResync']):?>started<?else:?>paused<?endif;?> on <strong><?=my_time($var['sbUpdated'])?></strong></td></tr>
       <tr><td>Total size:</td><td id="line0"></td><td></td></tr>
       <tr><td>Elapsed time:</td><td id="line1"></td><td></td></tr>
       <tr><td>Current position:</td><td id="line2"></td><td></td></tr>
