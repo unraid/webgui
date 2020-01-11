@@ -339,7 +339,7 @@ $theme_dark = in_array($display['theme'],['black','gray']);
 
                 <form action="/login" method="POST">
                     <p>
-                        <input name="username" type="text" placeholder="Username" required>
+                        <input name="username" type="text" placeholder="Username" autocapitalize="none" required>
                         <input name="password" type="password" placeholder="Password" required>
                     </p>
                     <? if ($error) echo '<p class="error">'.$error.'</p>'; ?>
