@@ -83,7 +83,7 @@ class DockerTemplates {
 		if ( $path && $out )
 			file_put_contents($path,$out);
 		else
-			@unlink(path);
+			@unlink($path);
 
 		return $out ?: false;
 	}
