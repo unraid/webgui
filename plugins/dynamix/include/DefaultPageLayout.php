@@ -28,6 +28,7 @@ $themes2 = in_array($theme,['gray','azure']);
 <meta name="viewport" content="width=1440">
 <meta name="robots" content="noindex, nofollow">
 <meta http-equiv="Content-Security-Policy" content="block-all-mixed-content">
+<meta name="referrer" content="same-origin">
 <link type="image/png" rel="shortcut icon" href="/webGui/images/<?=$var['mdColor']?>.png">
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/default-fonts.css")?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/default-cases.css")?>">
