@@ -78,6 +78,8 @@ class DockerTemplates {
 		curl_setopt($ch,CURLOPT_ENCODING,"");
 		curl_setopt($ch,CURLOPT_RETURNTRANSFER,true);
 		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+		curl_setopt($ch, CURLOPT_REFERER,"");
+		
 		$out = curl_exec($ch);
 		curl_close($ch);
 		if ( $path && $out )
