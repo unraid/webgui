@@ -98,7 +98,7 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
   $date = str_replace('.','',$version);
 //support
   $support = plugin('support',$plugin_file) ?: "";
-  $support = $support ? "<a href='$support' target='_blank'>Support Thread</a>" : "";
+  $support = $support ? "<a href='$support' target='_blank' rel='noreferrer'>Support Thread</a>" : "";
 //category
   $category = plugin('category',$plugin_file) ?: (strpos($version,'-')!==false ? 'next' : 'stable');
 //status
