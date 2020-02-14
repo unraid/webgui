@@ -59,18 +59,18 @@ function checkPassword(form) {
 }
 
 function validatePassword(entry) {
-	// regex from https://www.thepolyglotdeveloper.com/2015/05/use-regex-to-test-password-strength-in-javascript/
+  // regex from https://www.thepolyglotdeveloper.com/2015/05/use-regex-to-test-password-strength-in-javascript/
   var strongRegex = new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*])(?=.{8,})");
   var mediumRegex = new RegExp("^(((?=.*[a-z])(?=.*[A-Z]))|((?=.*[a-z])(?=.*[0-9]))|((?=.*[A-Z])(?=.*[0-9])))(?=.{6,})");
 
-	if ( ! entry ) {
-		$("#strength").html("");
-		return;
-	}
-	if ( strongRegex.test(entry) ) {
-		$("#strength").html("STRONG");$("#strength").css("background-color","green");
-	} else if ( mediumRegex.test(entry) ) $("#strength").html("MEDIUM").css("background-color","#D35400");
-	else $("#strength").html("WEAK").css("background-color","red");
+  if ( ! entry ) {
+    $("#strength").html("");
+    return;
+  }
+  if ( strongRegex.test(entry) ) {
+    $("#strength").html("STRONG");$("#strength").css("background-color","green");
+  } else if ( mediumRegex.test(entry) ) $("#strength").html("MEDIUM").css("background-color","#D35400");
+  else $("#strength").html("WEAK").css("background-color","red");
 }
 
 function restore() {
