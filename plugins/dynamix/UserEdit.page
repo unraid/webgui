@@ -58,6 +58,21 @@ function checkPassword(form) {
   return true;
 }
 
+function validatePassword(entry) {
+	// regex from https://www.thepolyglotdeveloper.com/2015/05/use-regex-to-test-password-strength-in-javascript/
+  var strongRegex = new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*])(?=.{8,})");
+  var mediumRegex = new RegExp("^(((?=.*[a-z])(?=.*[A-Z]))|((?=.*[a-z])(?=.*[0-9]))|((?=.*[A-Z])(?=.*[0-9])))(?=.{6,})");
+
+	if ( ! entry ) {
+		$("#strength").html("");
+		return;
+	}
+	if ( strongRegex.test(entry) ) {
+		$("#strength").html("STRONG");$("#strength").css("background-color","green");
+	} else if ( mediumRegex.test(entry) ) $("#strength").html("MEDIUM").css("background-color","#D35400");
+	else $("#strength").html("WEAK").css("background-color","red");
+}
+
 function restore() {
   // restore original image and activate APPLY button
   $('#dropbox').html("<?=$void?>");
@@ -160,7 +175,8 @@ Delete<input type="checkbox" name="confirmDelete" onChange="chkDelete(this.form,
 <input type="hidden" name="userName" value="<?=htmlspecialchars($name)?>">
 Password:
 <input type="hidden" name="userPassword" value="">
-: <input type="password" name="userPasswordGUI" maxlength="129" onKeyUp="this.form.cmdUserEdit.disabled=(this.form.userPasswordGUI.value != this.form.userPasswordConfGUI.value);">
+: <input type="password" name="userPasswordGUI" maxlength="129" onKeyUp="validatePassword(this.form.userPasswordGUI.value);this.form.cmdUserEdit.disabled=(this.form.userPasswordGUI.value != this.form.userPasswordConfGUI.value);">
+<span id='strength'></span>
 
 > Up to 128 characters.
 
