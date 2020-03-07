@@ -38,7 +38,7 @@ if ($_POST['docker'] && ($display=='icons' || $display=='docker')) {
     $running = $info['running'] ? 1:0;
     $paused = $info['paused'] ? 1:0;
     $is_autostart = $info['autostart'] ? 'true':'false';
-    $updateStatus = $info['updated']=='true'||$info['updated']=='undef' ? 'true':'false';
+    $updateStatus = substr($ct['NetworkMode'],-4)==':???' ? 2 : ($info['updated']=='true' ? 0 : ($info['updated']=='false' ? 1 : 3));
     $template = $info['template'];
     $shell = $info['shell'];
     $webGui = html_entity_decode($info['url']);
