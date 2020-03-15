@@ -23,7 +23,7 @@ function parse_plugin_cfg($plugin, $sections=false, $scanner=INI_SCANNER_NORMAL)
     @mkdir(dirname($cache),0777,true);
     @copy($rom,$cache);
   }
-  $cfg = file_exists($cache) ? parse_ini_file($ram, $sections, $scanner) : [];
+  $cfg = file_exists($ram) ? parse_ini_file($ram, $sections, $scanner) : [];
   return file_exists($cache) ? array_replace_recursive($cfg, parse_ini_file($cache, $sections, $scanner)) : $cfg;
 }
 function parse_cron_cfg($plugin, $job, $text = "") {
