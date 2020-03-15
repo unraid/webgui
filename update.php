@@ -72,7 +72,7 @@ if (isset($_POST['#file'])) {
       foreach ($keys as $key => $value) if (strlen($value) || !$cleanup) $text .= "$key=\"$value\"\n";
     }
     @mkdir(dirname($file));
-    $ramfile = "/usr/local/emhttp/state/cfg/".basename($file);
+    $ramfile = "$docroot/state/cfg/".basename($file);
 
     mkdir(dirname($ramfile),0777,true);
     file_put_contents($ramfile,$text);
