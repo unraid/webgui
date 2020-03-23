@@ -165,7 +165,10 @@ function settab(tab) {
 }
 function done(key) {
   var url = location.pathname.split('/');
-  var path = '/'+url[url.length - 2];
+  if (url.indexOf("/Apps/")) 
+    var path = "/Apps";
+  else 
+    var path = '/'+url[1];
   if (key) for (var i=2; i<url.length; i++) if (url[i]==key) break; else path += '/'+url[i];
   $.removeCookie('one',{path:'/'});
   location.replace(path);
