@@ -165,6 +165,7 @@ function settab(tab) {
 }
 function done(key) {
   var url = location.pathname.split('/');
+  // Ensure Done() goes back to CA if referrer is CA
   if (location.pathname.indexOf("/Apps/") != -1 ) 
     var path = "/Apps";
   else 
