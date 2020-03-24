@@ -165,7 +165,7 @@ function settab(tab) {
 }
 function done(key) {
   var url = location.pathname.split('/');
-  if (url.indexOf("/Apps/")) 
+  if (location.pathname.indexOf("/Apps/") != -1 ) 
     var path = "/Apps";
   else 
     var path = '/'+url[1];
