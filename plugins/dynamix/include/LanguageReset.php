@@ -14,5 +14,7 @@
 $docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: "/usr/local/emhttp";
 
 $lang = $_POST['lang'] ?? '';
+if ( ! is_file("/boot/config/plugins/dynamix/dynamix.cfg") )
+  copy("$docroot/plugins/dynamix/default.cfg","/boot/config/plugins/dynamix/dynamix.cfg");
 exec("sed -ri 's/^(locale=\")[^\"]*/\\1$lang/' /boot/config/plugins/dynamix/dynamix.cfg 2>/dev/null");
 ?>
