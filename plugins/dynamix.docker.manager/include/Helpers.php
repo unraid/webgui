@@ -13,6 +13,9 @@
 ?>
 <?
 // add translations
+
+$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
+
 if (substr($_SERVER['REQUEST_URI'],0,7) != '/Docker') {
   $_SERVER['REQUEST_URI'] = 'docker';
   require_once "$docroot/webGui/include/Translations.php";
