@@ -13,9 +13,7 @@
 <?
 $docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 
-if (!function_exists('_')) {
-  function _($text) {return $text;}
-}
+require_once "$docroot/plugins/dynamix/include/Translations.php";
 
 // Invoke the plugin command with indicated method
 function plugin($method, $arg = '') {
