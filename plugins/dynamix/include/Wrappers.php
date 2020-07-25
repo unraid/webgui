@@ -19,7 +19,7 @@ function parse_plugin_cfg($plugin, $sections=false, $scanner=INI_SCANNER_NORMAL)
   $ram   = "$docroot/plugins/$plugin/default.cfg";
   $cache = "$docroot/state/cfg/$plugin.cfg";
   $rom   = "/boot/config/plugins/$plugin/$plugin.cfg";
-  if ( ! is_file($cache) ) {
+  if ( ! is_file($cache) && file_exists($rom) ) {
     @mkdir(dirname($cache),0777,true);
     @copy($rom,$cache);
   }
