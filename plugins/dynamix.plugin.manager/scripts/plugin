@@ -292,7 +292,7 @@ function plugin($method, $plugin_file, &$error) {
             return false;
           }
         }
-        if (!file_put_contents($name, $contents)) {
+        if (!file_safeput_contents($name, $contents)) {
           $error = "unable to create file: $name";
           @unlink($name);
           return false;
@@ -618,7 +618,7 @@ if ($method == 'update') {
     $dom->preserveWhiteSpace = false;
     $dom->formatOutput = true;
     $dom->loadXML($pluginXML->asXML());
-    file_put_contents($plugin_file,$dom->saveXML());
+    file_safeput_contents($plugin_file,$dom->saveXML());
   }
   copy($plugin_file,"$boot/$plugin");
   symlink("$boot/$plugin", "$plugins/$plugin");

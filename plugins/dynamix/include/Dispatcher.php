@@ -26,5 +26,5 @@ foreach ($keys as $section => $block) {
   foreach ($block as $key => $value) if (strlen($value) || !$cleanup) $pairs .= "$key=\"$value\"\n";
   if ($pairs) $text .= "[$section]\n".$pairs;
 }
-if ($text) file_put_contents($_POST['#cfg'], $text); else @unlink($_POST['#cfg']);
+if ($text) file_safeput_contents($_POST['#cfg'], $text); else @unlink($_POST['#cfg']);
 ?>

@@ -26,7 +26,7 @@ $exist = file_exists("$boot/$file");
 
 switch ($_POST['mode']) {
 case 'set':
-  file_put_contents("$boot/$file",$model);
+  file_safeput_contents("$boot/$file",$model);
   exit;
 case 'get':
   if ($exist) echo file_get_contents("$boot/$file");
@@ -36,8 +36,8 @@ case 'del':
   exit;
 case 'file':
   $name = 'case-model.png';
-  file_put_contents("$boot/$file",$name);
-  file_put_contents("$boot/$name",base64_decode(str_replace('data:image/png;base64,','',$_POST['data'])));
+  file_safeput_contents("$boot/$file",$name);
+  file_safeput_contents("$boot/$name",base64_decode(str_replace('data:image/png;base64,','',$_POST['data'])));
   exit;
 }
 $casemodel = $exist ? file_get_contents("$boot/$file") : '';

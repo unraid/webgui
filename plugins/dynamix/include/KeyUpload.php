@@ -19,9 +19,9 @@ $text = $_POST['text'] ?? false;
 $file = $_POST['file'] ?? false;
 
 if ($text) {
-  file_put_contents($luks, $text);
+  file_safeput_contents($luks, $text);
 } elseif ($file) {
-  file_put_contents($luks, base64_decode(preg_replace('/^data:.*;base64,/','',$file)));
+  file_safeput_contents($luks, base64_decode(preg_replace('/^data:.*;base64,/','',$file)));
   @unlink($tmp);
 } elseif (file_exists($luks)) {
   unlink($luks);

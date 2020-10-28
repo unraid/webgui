@@ -24,7 +24,7 @@ switch ($_POST['cmd'] ?? 'load') {
 case 'load':
   if (isset($_POST['filedata'])) {
     exec("rm -f $temp/*.png");
-    $result = file_put_contents("$temp/".basename($file),base64_decode(str_replace(['data:image/png;base64,',' '],['','+'],$_POST['filedata'])));
+    $result = file_safeput_contents("$temp/".basename($file),base64_decode(str_replace(['data:image/png;base64,',' '],['','+'],$_POST['filedata'])));
   }
   break;
 case 'save':
@@ -52,7 +52,7 @@ case 'add':
   $path = "$docroot/languages/$file";
   $save = "/tmp/lang-$file.zip";
   exec("mkdir -p $path");
-  if ($result = file_put_contents($save,base64_decode(preg_replace('/^data:.*;base64,/','',$_POST['filedata'])))) {
+  if ($result = file_safeput_contents($save,base64_decode(preg_replace('/^data:.*;base64,/','',$_POST['filedata'])))) {
     @unlink("$docroot/webGui/javascript/translate.$file.js");
     foreach (glob("$path/*.dot",GLOB_NOSORT) as $dot_file) unlink($dot_file);
     exec("unzip -qqjLo -d $path $save", $dummy, $err);

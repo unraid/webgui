@@ -396,7 +396,7 @@ case 'cache':
         if (isset($log[$disk['name']])) $off |= ($log[$disk['name']]!=$disk['id']); else $log[$disk['name']] = $disk['id'];
       }
       $data = []; foreach ($log as $key => $value) $data[] = "$key=\"$value\"";
-      file_put_contents($tmp,implode("\n",$data));
+      file_safeput_contents($tmp,implode("\n",$data));
       echo "<tr class='tr_last'><td>"._('Slots').":</td><td colspan='9'>".cache_slots($off,$pool,$cache[$pool]['devicesSb'],$cache[$pool]['slots'])."</td><td></td></tr>\0";
     } else {
       if ($cache[$pool]['devices']) {
@@ -455,7 +455,7 @@ case 'parity':
     $speed = ($status==0) ? my_scale($var['mdResyncSize']*1024/$duration,$unit,1)." $unit/s" : _('Unavailable');
     $error = $var['sbSyncErrs'];
     $year = date('Y',$var['sbSynced2']);
-    if ($status==0||file_exists($log)) file_put_contents($log,"$year $timestamp|$duration|$speed|$status|$error\n",FILE_APPEND);
+    if ($status==0||file_exists($log)) file_safeput_contents($log,"$year $timestamp|$duration|$speed|$status|$error\n",FILE_APPEND);
   }
   break;
 }

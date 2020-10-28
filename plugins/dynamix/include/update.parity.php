@@ -54,7 +54,7 @@ if (isset($_POST['#apply'])) {
   parse_cron_cfg("dynamix", "parity-check", $cron);
   @unlink($memory);
 } else {
-  file_put_contents($memory, http_build_query($_POST));
+  file_safeput_contents($memory, http_build_query($_POST));
   $save = false;
 }
 ?>

@@ -23,7 +23,7 @@ if (isset($_POST['reset'])) {
   if (file_exists($autostart_file)) {
     $allAutoStart = file($autostart_file, FILE_IGNORE_NEW_LINES);
     natcasesort($allAutoStart);
-    file_put_contents($autostart_file, implode(PHP_EOL, $allAutoStart).PHP_EOL);
+    file_safeput_contents($autostart_file, implode(PHP_EOL, $allAutoStart).PHP_EOL);
   }
 } else {
   $names = explode(';',$_POST['names']);
@@ -31,7 +31,7 @@ if (isset($_POST['reset'])) {
   $save  = []; $i = 0;
 
   foreach ($names as $name) if ($name) $save[] = $index[$i++]."=\"".$name."\""; else $i++;
-  file_put_contents($user_prefs, implode("\n",$save)."\n");
+  file_safeput_contents($user_prefs, implode("\n",$save)."\n");
 
   // sort containers for start-up
   if (file_exists($autostart_file)) {
@@ -39,7 +39,7 @@ if (isset($_POST['reset'])) {
     $allAutoStart = file($autostart_file, FILE_IGNORE_NEW_LINES);
     foreach ($allAutoStart as $ct) $sort[] = array_search(explode(' ',$ct)[0],$prefs) ?? 999;
     array_multisort($sort,SORT_NUMERIC,$allAutoStart);
-    file_put_contents($autostart_file, implode(PHP_EOL, $allAutoStart).PHP_EOL);
+    file_safeput_contents($autostart_file, implode(PHP_EOL, $allAutoStart).PHP_EOL);
   }
 }
 ?>

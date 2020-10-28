@@ -375,7 +375,7 @@ case 'syslinux':
 	$syslinux = file($cfg, FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
 	$m1 = embed($syslinux, 'pcie_acs_override', $_REQUEST['pcie']);
 	$m2 = embed($syslinux, 'vfio_iommu_type1.allow_unsafe_interrupts', $_REQUEST['vfio']);
-	if ($m1||$m2) file_put_contents($cfg, implode("\n",$syslinux)."\n");
+	if ($m1||$m2) file_safeput_contents($cfg, implode("\n",$syslinux)."\n");
 	$arrResponse = ['success' => true, 'modified' => $m1|$m2];
 	break;
 
@@ -448,7 +448,7 @@ case 'virtio-win-iso-download':
 		$domain_cfg['VIRTIOISO'] = $strTargetFile;
 		$tmp = '';
 		foreach ($domain_cfg as $key => $value) $tmp .= "$key=\"$value\"\n";
-		file_put_contents($domain_cfgfile, $tmp);
+		file_safeput_contents($domain_cfgfile, $tmp);
 		$strDownloadCmd = 'wget -nv -c -O '.escapeshellarg($strTargetFile).' '.escapeshellarg($arrDownloadVirtIO['url']);
 		$strDownloadPgrep = '-f "wget.*'.$strTargetFile.'.*'.$arrDownloadVirtIO['url'].'"';
 		$strVerifyCmd = 'md5sum -c '.escapeshellarg($strMD5File);
@@ -501,7 +501,7 @@ case 'virtio-win-iso-download':
 					$arrResponse['status'] = 'Downloading ... 100%';
 					if (!pgrep($strInstallScriptPgrep, false) && !$boolCheckOnly) {
 						// Run all commands
-						file_put_contents($strInstallScript, $strAllCmd);
+						file_safeput_contents($strInstallScript, $strAllCmd);
 						chmod($strInstallScript, 0777);
 						exec($strInstallScript.' >/dev/null 2>&1 &');
 					}
@@ -510,7 +510,7 @@ case 'virtio-win-iso-download':
 		} elseif (!$boolCheckOnly) {
 			if (!pgrep($strInstallScriptPgrep, false)) {
 				// Run all commands
-				file_put_contents($strInstallScript, $strAllCmd);
+				file_safeput_contents($strInstallScript, $strAllCmd);
 				chmod($strInstallScript, 0777);
 				exec($strInstallScript.' >/dev/null 2>&1 &');
 			}

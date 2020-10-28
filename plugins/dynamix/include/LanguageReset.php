@@ -19,6 +19,6 @@ $file = '/boot/config/plugins/dynamix/dynamix.cfg';
 if (file_exists($file)) {
   exec("sed -ri 's/^(locale=\")[^\"]*/\\1$lang/' $file");
 } else {
-  file_put_contents($file, "[display]\nlocale=\"$lang\"\n");
+  file_safeput_contents($file, "[display]\nlocale=\"$lang\"\n");
 }
 ?>

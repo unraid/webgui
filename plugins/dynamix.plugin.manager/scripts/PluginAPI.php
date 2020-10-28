@@ -30,7 +30,7 @@ function download_url($url, $path = "") {
 	$out = curl_exec($ch);
 	curl_close($ch);
 	if ( $path )
-		file_put_contents($path,$out);
+		file_safeput_contents($path,$out);
 
 	return $out ?: false;
 }
@@ -58,7 +58,7 @@ switch ($_POST['action']) {
 		$installedVersion = @plugin("version","/boot/config/plugins/$plugin");
 		$min = @plugin("min","/tmp/plugins/$plugin") ?: "6.4.0";
 		if ( $changes ) {
-			file_put_contents("/tmp/plugins/".pathinfo($plugin, PATHINFO_FILENAME).".txt",$changes);
+			file_safeput_contents("/tmp/plugins/".pathinfo($plugin, PATHINFO_FILENAME).".txt",$changes);
 		} else {
 			@unlink("/tmp/plugins/".pathinfo($plugin, PATHINFO_FILENAME).".txt");
 		}
@@ -81,14 +81,14 @@ switch ($_POST['action']) {
 		$existing = @file("/tmp/reboot_notifications",FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: array();
 		$existing[] = $message;
 		
-		file_put_contents("/tmp/reboot_notifications",implode("\n",array_unique($existing)));
+		file_safeput_contents("/tmp/reboot_notifications",implode("\n",array_unique($existing)));
 		break;
 	
 	case 'removeRebootNotice':
 		$message = htmlspecialchars(trim($_POST['message']));
 		$existing = file_get_contents("/tmp/reboot_notifications");
 		$newReboots = str_replace($message,"",$existing);
-		file_put_contents("/tmp/reboot_notifications",$newReboots);
+		file_safeput_contents("/tmp/reboot_notifications",$newReboots);
 		break;
 }	
 ?>

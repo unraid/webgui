@@ -48,7 +48,7 @@ case 'autostart':
     } else {
       natcasesort($autostart);
     }
-    file_put_contents($autostart_file, implode("\n", $autostart)."\n");
+    file_safeput_contents($autostart_file, implode("\n", $autostart)."\n");
   } else @unlink($autostart_file);
   break;
 case 'wait':
@@ -59,13 +59,13 @@ case 'wait':
   $autostart = file($autostart_file, FILE_IGNORE_NEW_LINES) ?: [];
   $names = array_map('var_split', $autostart);
   $autostart[array_search($container,$names)] = $item;
-  file_put_contents($autostart_file, implode("\n", $autostart)."\n");
+  file_safeput_contents($autostart_file, implode("\n", $autostart)."\n");
   break;
 case 'templates':
   // update template
   readfile("$docroot/update.htm");
   $repos = $_POST['template_repos'];
-  file_put_contents($template_repos, $repos);
+  file_safeput_contents($template_repos, $repos);
   $DockerTemplates = new DockerTemplates();
   $DockerTemplates->downloadTemplates();
   break;

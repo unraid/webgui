@@ -158,7 +158,7 @@
 				}
 				list($strVendor,$strProduct) = explode(':', $strNewUSBID);
 				// hot-attach usb
-				file_put_contents('/tmp/hotattach.tmp', "<hostdev mode='subsystem' type='usb'><source startupPolicy='optional'><vendor id='0x".$strVendor."'/><product id='0x".$strProduct."'/></source></hostdev>");
+				file_safeput_contents('/tmp/hotattach.tmp', "<hostdev mode='subsystem' type='usb'><source startupPolicy='optional'><vendor id='0x".$strVendor."'/><product id='0x".$strProduct."'/></source></hostdev>");
 				exec("virsh attach-device ".escapeshellarg($uuid)." /tmp/hotattach.tmp --live 2>&1", $arrOutput, $intReturnCode);
 				unlink('/tmp/hotattach.tmp');
 				if ($intReturnCode != 0) {
@@ -170,7 +170,7 @@
 			foreach ($arrExistingConfig['usb'] as $arrExistingUSB) {
 				if (!in_array($arrExistingUSB['id'], $arrNewUSBIDs)) {
 					list($strVendor, $strProduct) = explode(':', $arrExistingUSB['id']);
-					file_put_contents('/tmp/hotdetach.tmp', "<hostdev mode='subsystem' type='usb'><source startupPolicy='optional'><vendor id='0x".$strVendor."'/><product id='0x".$strProduct."'/></source></hostdev>");
+					file_safeput_contents('/tmp/hotdetach.tmp', "<hostdev mode='subsystem' type='usb'><source startupPolicy='optional'><vendor id='0x".$strVendor."'/><product id='0x".$strProduct."'/></source></hostdev>");
 					exec("virsh detach-device ".escapeshellarg($uuid)." /tmp/hotdetach.tmp --live 2>&1", $arrOutput, $intReturnCode);
 					unlink('/tmp/hotdetach.tmp');
 					if ($intReturnCode != 0) $arrErrors[] = implode(' ',$arrOutput);

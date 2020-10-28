@@ -136,7 +136,7 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
   $changes = plugin('changes',$changes_file);
   if ($changes !== false) {
     $txtfile = "/tmp/plugins/".basename($plugin_file,'.plg').".txt";
-    file_put_contents($txtfile,$changes);
+    file_safeput_contents($txtfile,$changes);
     $version .= "&nbsp;<a href='#' title=\""._('View Release Notes')."\" onclick=\"openBox('/plugins/dynamix.plugin.manager/include/ShowChanges.php?file=".urlencode($txtfile)."','"._('Release Notes')."',600,900); return false\"><span class='fa fa-info-circle fa-fw big blue-text'></span></a>";
   }
 //write plugin information

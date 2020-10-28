@@ -88,12 +88,12 @@ exert("mkdir -p ".escapeshellarg("/$diag/system")." ".escapeshellarg("/$diag/con
 exert("top -bn1 -o%CPU 2>/dev/null|todos >".escapeshellarg("/$diag/system/top.txt"));
 // make Unraid version reference
 $unraid = parse_ini_file('/etc/unraid-version');
-file_put_contents("/$diag/unraid-".$unraid['version'].".txt",$unraid['version']);
+file_safeput_contents("/$diag/unraid-".$unraid['version'].".txt",$unraid['version']);
 // copy ini variables
 foreach (glob("$get/*.ini") as $file) {
   $ini = basename($file,".ini");
   // skip users file in anonymized mode
-  if ($all || $ini != "users") file_put_contents("/$diag/system/vars.txt",preg_replace(["/\n/","/^Array/"],["\r\n",$ini],anonymize(print_r(parse_ini_file($file,true),true),1)),FILE_APPEND);
+  if ($all || $ini != "users") file_safeput_contents("/$diag/system/vars.txt",preg_replace(["/\n/","/^Array/"],["\r\n",$ini],anonymize(print_r(parse_ini_file($file,true),true),1)),FILE_APPEND);
 }
 // Create loads.txt
 $cpuload = exert("uptime")."  Cores: ".exert("nproc")."\r\n".(string)@file_get_contents("$get/cpuload.ini")."\r\n";
@@ -109,7 +109,7 @@ foreach ($diskload as $loadLine) {
     }
   }
 }
-file_put_contents("/$diag/system/loads.txt",$cpuload.implode("\r\n",$loadTxt));
+file_safeput_contents("/$diag/system/loads.txt",$cpuload.implode("\r\n",$loadTxt));
 // individual commands execution (suppress errors)
 exert("lscpu 2>/dev/null|todos >".escapeshellarg("/$diag/system/lscpu.txt"));
 exert("lsscsi -vgl 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsscsi.txt"));
@@ -128,9 +128,9 @@ exert("dmidecode --type 17 2>/dev/null|todos >>".escapeshellarg("/$diag/system/m
 // create ethernet information information (suppress errors)
 foreach ($ports as $port) {
   exert("ethtool ".escapeshellarg($port)." 2>/dev/null|todos >>".escapeshellarg("/$diag/system/ethtool.txt"));
-  file_put_contents("/$diag/system/ethtool.txt", "\r\n", FILE_APPEND);
+  file_safeput_contents("/$diag/system/ethtool.txt", "\r\n", FILE_APPEND);
   exert("ethtool -i ".escapeshellarg($port)." 2>/dev/null|todos >>".escapeshellarg("/$diag/system/ethtool.txt"));
-  file_put_contents("/$diag/system/ethtool.txt", "--------------------------------\r\n", FILE_APPEND);
+  file_safeput_contents("/$diag/system/ethtool.txt", "--------------------------------\r\n", FILE_APPEND);
 }
 exert("ifconfig -a 2>/dev/null|todos >".escapeshellarg("/$diag/system/ifconfig.txt"));
 // create system information (suppress errors)
@@ -168,13 +168,13 @@ foreach ($files as $file) {
   @copy($file, $dest);
   if (!$all) exert("sed -ri 's/^(share(Comment|ReadList|WriteList)=\")[^\"]+/\\1.../' ".escapeshellarg($dest)." 2>/dev/null");
   $share = pathinfo(basename($file),PATHINFO_FILENAME);
-  file_put_contents($dest,"# Share exists on ".shareDisks($share)."\r\n",FILE_APPEND);
+  file_safeput_contents($dest,"# Share exists on ".shareDisks($share)."\r\n",FILE_APPEND);
 }
 // create default user shares information
 $shares = (array)@parse_ini_file("$get/shares.ini", true);
 foreach ($shares as $share) {
   $name = $share['name'];
-  if (!in_array("/boot/config/shares/$name.cfg",$files)) file_put_contents(anonymize("/$diag/shares/$name.cfg",2),"# This share has default settings.\r\n# Share exists on ".shareDisks($name)."\r\n");
+  if (!in_array("/boot/config/shares/$name.cfg",$files)) file_safeput_contents(anonymize("/$diag/shares/$name.cfg",2),"# This share has default settings.\r\n# Share exists on ".shareDisks($name)."\r\n");
 }
 // copy pools information (anonymize)
 $files = glob("/boot/config/pools/*.cfg");
@@ -228,7 +228,7 @@ foreach ($plugins as $plugin) {
   $installedPlugins .= basename($plugin)." - ".exert("plugin version ".escapeshellarg($plugin))."\r\n";
 }
 $installedPlugins = $installedPlugins ?: "No additional Plugins Installed";
-file_put_contents("/$diag/system/plugins.txt",$installedPlugins);
+file_safeput_contents("/$diag/system/plugins.txt",$installedPlugins);
 // copy libvirt information (if existing)
 $libvirtd = "/var/log/libvirt/libvirtd.log";
 if (file_exists($libvirtd)) {
@@ -251,7 +251,7 @@ if ($qemu) {
     }
   }
 } else {
-  file_put_contents("/$diag/qemu/no qemu log files","");
+  file_safeput_contents("/$diag/qemu/no qemu log files","");
 }
 // copy VM XML config files
 exert("cp /etc/libvirt/qemu/*.xml ".escapeshellarg("/$diag/xml")." 2>/dev/null");

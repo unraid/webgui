@@ -37,7 +37,7 @@ function spindownDelay($port) {
   $disks = parse_ini_file('state/disks.ini',true);
   foreach ($disks as $disk) {
     $name = substr($disk['device'],-2)!='n1' ? $disk['device'] : substr($disk['device'],0,-2);
-    if ($name==$port) {file_put_contents("/var/tmp/diskSpindownDelay.{$disk['idx']}", $disk['spindownDelay']); break;}
+    if ($name==$port) {file_safeput_contents("/var/tmp/diskSpindownDelay.{$disk['idx']}", $disk['spindownDelay']); break;}
   }
 }
 function append(&$ref, &$info) {
