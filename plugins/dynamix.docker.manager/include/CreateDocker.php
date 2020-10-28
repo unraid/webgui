@@ -93,7 +93,7 @@ if (isset($_POST['contName'])) {
         @unlink("{$dockerManPaths['images']}/".basename($iconPath));
       }
     }
-    file_put_contents($filename, $postXML);
+    file_safeput_contents($filename, $postXML);
   }
   // Run dry
   if ($dry_run) {

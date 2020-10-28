@@ -23,6 +23,6 @@ if (isset($_POST['reset'])) {
 
   foreach ($names as $name) if ($name) $save[] = $index[$i++]."=\"".$name."\""; else $i++;
   if (!is_dir(dirname($user_prefs))) mkdir(dirname($user_prefs));
-  file_put_contents($user_prefs, implode("\n",$save)."\n");
+  file_safeput_contents($user_prefs, implode("\n",$save)."\n");
 }
 ?>

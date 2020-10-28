@@ -168,7 +168,7 @@ case 'is':
     }
     $i++;
   }
-  if ($make) file_put_contents($cfg, implode("\n",$syslinux)."\n");
+  if ($make) file_safeput_contents($cfg, implode("\n",$syslinux)."\n");
   $reply = ['success' => $name];
   break;
 }

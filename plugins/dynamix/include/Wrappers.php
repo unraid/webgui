@@ -23,7 +23,7 @@ function parse_plugin_cfg($plugin, $sections=false, $scanner=INI_SCANNER_NORMAL)
 }
 function parse_cron_cfg($plugin, $job, $text = "") {
   $cron = "/boot/config/plugins/$plugin/$job.cron";
-  if ($text) file_put_contents($cron, $text); else @unlink($cron);
+  if ($text) file_safeput_contents($cron, $text); else @unlink($cron);
   exec("/usr/local/sbin/update_cron");
 }
 function agent_fullname($agent, $state) {

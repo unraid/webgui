@@ -53,7 +53,7 @@ function read_write_parity_log($epoch,$duration,$speed,$status,$error) {
   if (empty($line)) {
     $year = date('Y',$epoch);
     $line = "$year $timestamp|$duration|$speed|$status|$error";
-    if ($status==0||file_exists($log)) file_put_contents($log,"$line\n",FILE_APPEND);
+    if ($status==0||file_exists($log)) file_safeput_contents($log,"$line\n",FILE_APPEND);
   }
   return str_replace("\n","",$line);
 }
@@ -341,8 +341,8 @@ if ($saved) {
     foreach ($block as $key => $value) $text .= "$key=\"$value\"\n";
   }
   if ($text) {
-    if ($text != @file_get_contents($ram)) file_put_contents($ram, $text);
-    if (!file_exists($rom) || exec("diff -q $ram $rom")) file_put_contents($rom, $text);
+    if ($text != @file_get_contents($ram)) file_safeput_contents($ram, $text);
+    if (!file_exists($rom) || exec("diff -q $ram $rom")) file_safeput_contents($rom, $text);
   } else {
     @unlink($ram);
     @unlink($rom);

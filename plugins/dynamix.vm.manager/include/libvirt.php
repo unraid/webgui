@@ -861,7 +861,7 @@
 				}
 
 				// Driver bound to some other driver - attempt to unbind driver
-				if (file_put_contents('/sys/bus/pci/devices/' . $strPassthruDeviceLong . '/driver/unbind', $strPassthruDeviceLong) === false) {
+				if (file_safeput_contents('/sys/bus/pci/devices/' . $strPassthruDeviceLong . '/driver/unbind', $strPassthruDeviceLong) === false) {
 					$this->last_error = 'Failed to unbind device ' . $strPassthruDeviceShort . ' from current driver';
 					return false;
 				}
@@ -872,7 +872,7 @@
 			$strDevice = file_get_contents('/sys/bus/pci/devices/' . $strPassthruDeviceLong . '/device');
 
 			// Attempt to bind driver to vfio-pci
-			if (file_put_contents('/sys/bus/pci/drivers/vfio-pci/new_id', $strVendor . ' ' . $strDevice) === false) {
+			if (file_safeput_contents('/sys/bus/pci/drivers/vfio-pci/new_id', $strVendor . ' ' . $strDevice) === false) {
 				$this->last_error = 'Failed to bind device ' . $strPassthruDeviceShort . ' to vfio-pci driver';
 				return false;
 			}

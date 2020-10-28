@@ -18,6 +18,12 @@ function csrf_terminate($reason) {
     shell_exec("logger error: " . escapeshellarg($_SERVER['REQUEST_URI']) . ": $reason csrf_token");
     exit;
 }
+function file_safeput_contents($filename, $data, $flags = 0) {
+    if ($flags == FILE_APPEND) return file_safeput_contents($filename, $data, $flags);
+    $return = file_put_contents($filename.'.new', $data, $flags);
+    if ($return !== false) rename($filename.'.new', $filename);
+    return $return;
+}
 putenv('PATH=.:/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin');
 chdir('/usr/local/emhttp');
 setlocale(LC_ALL,'en_US.UTF-8');

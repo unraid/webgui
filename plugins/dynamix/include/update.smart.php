@@ -28,7 +28,7 @@ if (!isset($_POST['#default'])) {
       foreach ($block as $key => $value) $text .= "$key=\"$value\"\n";
     }
   }
-  if ($text) file_put_contents($file, $text); else @unlink($file);
+  if ($text) file_safeput_contents($file, $text); else @unlink($file);
   $save = false;
 }
 ?>

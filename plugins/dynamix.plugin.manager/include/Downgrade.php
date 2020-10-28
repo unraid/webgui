@@ -17,5 +17,5 @@ $_SERVER['REQUEST_URI'] = 'plugins';
 require_once "$docroot/webGui/include/Translations.php";
 
 exec("mv -f /boot/previous/* /boot");
-file_put_contents("$docroot/plugins/unRAIDServer/README.md","**"._('DOWNGRADE TO VERSION')." {$_GET['version']}**");
+file_safeput_contents("$docroot/plugins/unRAIDServer/README.md","**"._('DOWNGRADE TO VERSION')." {$_GET['version']}**");
 ?>

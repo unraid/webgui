@@ -55,7 +55,7 @@ foreach ($ports as $ethX) {
   $file = "$docroot/webGui/".ucfirst($ethX).".page";
   if (!file_exists($file)) {
     $X = filter_var($ethX,FILTER_SANITIZE_NUMBER_INT);
-    file_put_contents($file,str_replace(['parentname:nnn','tabX','bondX','brX','ethX'],['NetworkSettings:'.($X+100),'tab'.($X+1),'bond'.$X,'br'.$X,$ethX],file_get_contents($template)));
+    file_safeput_contents($file,str_replace(['parentname:nnn','tabX','bondX','brX','ethX'],['NetworkSettings:'.($X+100),'tab'.($X+1),'bond'.$X,'br'.$X,$ethX],file_get_contents($template)));
     $build = true;
   }
 }

@@ -36,6 +36,6 @@ if (file_exists($cfgfile)) {
 }
 if ($cfg_new) {
     foreach ($cfg_new as $key => $value) $tmp .= "$key=\"$value\"\n";
-    file_put_contents($cfgfile, $tmp);
+    file_safeput_contents($cfgfile, $tmp);
 }
 ?>

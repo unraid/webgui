@@ -21,7 +21,7 @@ foreach ($saved as $item => $block) {
   if ($block) $text .= "[$item]\n";
   foreach ($block as $key => $value) $text .= "$key=\"$value\"\n";
 }
-file_put_contents($ram, $text);
-file_put_contents($rom, $text);
+file_safeput_contents($ram, $text);
+file_safeput_contents($rom, $text);
 echo "200 OK";
 ?>

@@ -87,7 +87,7 @@ class DockerTemplates {
 		curl_setopt($ch, CURLOPT_REFERER, "");
 		$out = curl_exec($ch) ?: false;
 		curl_close($ch);
-		if ($path && $out) file_put_contents($path,$out); elseif ($path) @unlink($path);
+		if ($path && $out) file_safeput_contents($path,$out); elseif ($path) @unlink($path);
 		return $out;
 	}
 
@@ -140,7 +140,7 @@ class DockerTemplates {
 		$tmp_dir = '/tmp/tmp-'.mt_rand();
 		if (!file_exists($dockerManPaths['template-repos'])) {
 			@mkdir(dirname($dockerManPaths['template-repos']), 0777, true);
-			@file_put_contents($dockerManPaths['template-repos'], 'https://github.com/limetech/docker-templates');
+			@file_safeput_contents($dockerManPaths['template-repos'], 'https://github.com/limetech/docker-templates');
 		}
 		$urls = @file($Urls, FILE_IGNORE_NEW_LINES);
 		if (!is_array($urls)) return false;
@@ -372,7 +372,7 @@ class DockerUpdate{
 		curl_setopt($ch, CURLOPT_REFERER, "");
 		$out = curl_exec($ch) ?: false;
 		curl_close($ch);
-		if ($path && $out) file_put_contents($path,$out); elseif ($path) @unlink($path);
+		if ($path && $out) file_safeput_contents($path,$out); elseif ($path) @unlink($path);
 		return $out;
 	}
 
@@ -389,7 +389,7 @@ class DockerUpdate{
 		curl_setopt($ch, CURLOPT_REFERER, "");
 		$out = curl_exec($ch) ?: false;
 		curl_close($ch);
-		if ($path && $out) file_put_contents($path,$out); elseif ($path) @unlink($path);
+		if ($path && $out) file_safeput_contents($path,$out); elseif ($path) @unlink($path);
 		return $out;
 	}
 
@@ -614,7 +614,7 @@ class DockerUpdate{
 			$dom->preserveWhiteSpace = false;
 			$dom->formatOutput = true;
 			$dom->loadXML($template->asXML());
-			file_put_contents($file, $dom->saveXML());
+			file_safeput_contents($file, $dom->saveXML());
 		} else {
 			//$this->debug("Template is up to date.");
 		}
@@ -972,7 +972,7 @@ class DockerUtil {
 
 	public static function saveJSON($path, $content) {
 		if (!is_dir(dirname($path))) mkdir(dirname($path), 0755, true);
-		return file_put_contents($path, json_encode($content, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));
+		return file_safeput_contents($path, json_encode($content, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));
 	}
 
 	public static function docker($cmd, $a=false) {

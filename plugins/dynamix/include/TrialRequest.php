@@ -21,7 +21,7 @@ extract(parse_plugin_cfg('dynamix',true));
 $var = parse_ini_file('state/var.ini');
 
 if (!empty($_POST['trial'])) {
-  file_put_contents('/boot/config/Trial.key', base64_decode($_POST['trial']));
+  file_safeput_contents('/boot/config/Trial.key', base64_decode($_POST['trial']));
   exit;
 }
 ?>

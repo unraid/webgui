@@ -7,7 +7,7 @@
 
 $config_file = "/boot/config/vsftpd.user_list";
 if (trim($argv[2]))
-  file_put_contents($config_file, implode("\n", explode(' ', trim($argv[2])))."\n");
+  file_safeput_contents($config_file, implode("\n", explode(' ', trim($argv[2])))."\n");
 else
   @unlink($config_file);
 

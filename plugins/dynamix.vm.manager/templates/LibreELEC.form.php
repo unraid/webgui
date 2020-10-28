@@ -67,7 +67,7 @@
 			unset($arrLibreELECConfig[$_POST['delete_version']]);
 			$text = '';
 			foreach ($arrLibreELECConfig as $key => $value) $text .= "$key=\"$value\"\n";
-			file_put_contents($strLibreELECConfig, $text);
+			file_safeput_contents($strLibreELECConfig, $text);
 			$reply = ['status' => 'ok'];
 		}
 
@@ -108,7 +108,7 @@
 			$arrLibreELECConfig[$_POST['download_version']] = $strExtractedFile;
 			$text = '';
 			foreach ($arrLibreELECConfig as $key => $value) $text .= "$key=\"$value\"\n";
-			file_put_contents($strLibreELECConfig, $text);
+			file_safeput_contents($strLibreELECConfig, $text);
 
 			$strDownloadCmd = 'wget -nv -c -O ' . escapeshellarg($strTempFile) . ' ' . escapeshellarg($arrDownloadLibreELEC['url']);
 			$strDownloadPgrep = '-f "wget.*' . $strTempFile . '.*' . $arrDownloadLibreELEC['url'] . '"';
@@ -172,7 +172,7 @@
 					$reply['status'] = _('Downloading').' ... 100%';
 					if (!pgrep($strInstallScriptPgrep, false) && !$boolCheckOnly) {
 						// Run all commands
-						file_put_contents($strInstallScript, $strAllCmd);
+						file_safeput_contents($strInstallScript, $strAllCmd);
 						chmod($strInstallScript, 0777);
 						exec($strInstallScript . ' >/dev/null 2>&1 &');
 					}
@@ -180,7 +180,7 @@
 			} elseif (!$boolCheckOnly) {
 				if (!pgrep($strInstallScriptPgrep, false)) {
 					// Run all commands
-					file_put_contents($strInstallScript, $strAllCmd);
+					file_safeput_contents($strInstallScript, $strAllCmd);
 					chmod($strInstallScript, 0777);
 					exec($strInstallScript . ' >/dev/null 2>&1 &');
 				}
@@ -315,7 +315,7 @@ $hdrXML = "<?xml version='1.0' encoding='UTF-8'?>\n"; // XML encoding declaratio
 				}
 				list($strVendor,$strProduct) = explode(':', $strNewUSBID);
 				// hot-attach usb
-				file_put_contents('/tmp/hotattach.tmp', "<hostdev mode='subsystem' type='usb'><source startupPolicy='optional'><vendor id='0x".$strVendor."'/><product id='0x".$strProduct."'/></source></hostdev>");
+				file_safeput_contents('/tmp/hotattach.tmp', "<hostdev mode='subsystem' type='usb'><source startupPolicy='optional'><vendor id='0x".$strVendor."'/><product id='0x".$strProduct."'/></source></hostdev>");
 				exec("virsh attach-device ".escapeshellarg($uuid)." /tmp/hotattach.tmp --live 2>&1", $arrOutput, $intReturnCode);
 				unlink('/tmp/hotattach.tmp');
 				if ($intReturnCode != 0) {
@@ -327,7 +327,7 @@ $hdrXML = "<?xml version='1.0' encoding='UTF-8'?>\n"; // XML encoding declaratio
 			foreach ($arrExistingConfig['usb'] as $arrExistingUSB) {
 				if (!in_array($arrExistingUSB['id'], $arrNewUSBIDs)) {
 					list($strVendor, $strProduct) = explode(':', $arrExistingUSB['id']);
-					file_put_contents('/tmp/hotdetach.tmp', "<hostdev mode='subsystem' type='usb'><source startupPolicy='optional'><vendor id='0x".$strVendor."'/><product id='0x".$strProduct."'/></source></hostdev>");
+					file_safeput_contents('/tmp/hotdetach.tmp', "<hostdev mode='subsystem' type='usb'><source startupPolicy='optional'><vendor id='0x".$strVendor."'/><product id='0x".$strProduct."'/></source></hostdev>");
 					exec("virsh detach-device ".escapeshellarg($uuid)." /tmp/hotdetach.tmp --live 2>&1", $arrOutput, $intReturnCode);
 					unlink('/tmp/hotdetach.tmp');
 					if ($intReturnCode != 0) $arrErrors[] = implode(' ',$arrOutput);
