@@ -19,7 +19,7 @@ function csrf_terminate($reason) {
     exit;
 }
 function file_safeput_contents($filename, $data, $flags = 0) {
-    if ($flags == FILE_APPEND) return file_safeput_contents($filename, $data, $flags);
+    if ($flags == FILE_APPEND) return file_put_contents($filename, $data, $flags);
     $return = file_put_contents($filename.'.new', $data, $flags);
     if ($return !== false) rename($filename.'.new', $filename);
     return $return;
