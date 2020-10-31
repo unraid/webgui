@@ -39,12 +39,11 @@ function process {
 if [[ -n $1 ]]; then
   process "$@"
 else
-  process /mnt/cache
-  for disk in /mnt/disk[0-9]*; do
-    process $disk
-  done
+  /usr/local/emhttp/plugins/dynamix/scripts/newperms.php
 fi
 
 echo
 secs=$SECONDS
-printf "completed, elapsed time: %.2d:%.2d:%.2d\n" $(($secs/3600)) $(($secs%3600/60)) $(($secs%60))
+if [[ ! -n $1 ]]; then 
+  printf "completed, elapsed time: %.2d:%.2d:%.2d\n" $(($secs/3600)) $(($secs%3600/60)) $(($secs%60))
+fi
