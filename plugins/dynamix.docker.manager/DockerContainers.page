@@ -79,13 +79,8 @@ function resetSorting() {
 }
 function listview() {
   var more = $.cookie('docker_listview_mode')=='advanced';
-  if (more) {
-    $.post('/plugins/dynamix.docker.manager/include/UpdateConfig.php',{action:'docker_load_start'});
-    $('.docker_readmore').readmore('destroy');
-  } else {
-    $.post('/plugins/dynamix.docker.manager/include/UpdateConfig.php',{action:'docker_load_stop'});
-    $('.docker_readmore').readmore({maxHeight:32,moreLink:"<a href='#' style='text-align:center'><i class='fa fa-chevron-down'></i></a>",lessLink:"<a href='#' style='text-align:center'><i class='fa fa-chevron-up'></i></a>"});
-  }
+  $.post('/plugins/dynamix.docker.manager/include/UpdateConfig.php',{action:'docker_load_stop'});
+  $('.docker_readmore').readmore({maxHeight:32,moreLink:"<a href='#' style='text-align:center'><i class='fa fa-chevron-down'></i></a>",lessLink:"<a href='#' style='text-align:center'><i class='fa fa-chevron-up'></i></a>"});
   $('input.autostart').each(function(){
     var wait = $('#'+$(this).prop('id').replace('auto','wait'));
     var auto = $(this).prop('checked');
