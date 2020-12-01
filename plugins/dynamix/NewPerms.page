@@ -17,9 +17,8 @@ Tag="folder-o"
 ?>
 <?
 $width = [166,300];
-
 function data_disks($disk) {
-  return ($disk['type']=='Data' && $disk['status']=='DISK_OK');
+  return ( ($disk['type']=='Data' || $disk['type'] == "Cache") && $disk['status']=='DISK_OK');
 }
 ?>
 <style>
@@ -44,7 +43,7 @@ function setNewPerms(form) {
       dirs += item.value;
     }
   }
-  if (dirs) swal({title:"_(Proceed)_?",text:"_(This will update folder & file permissions)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){openBox("/webGui/scripts/newperms&arg1="+dirs,"_(New Permissions)_",490,430,true);});
+  if (dirs) swal({title:"_(Proceed)_?",text:"_(This will update folder & file permissions)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){openBox("/webGui/scripts/newperms&arg1="+dirs,"_(New Permissions)_",490,600,true);});
 }
 $(function() {
   $('#s1').dropdownchecklist({emptyText:"_(None)_", width:<?=$width[0]?>, firstItemChecksAll:true, explicitClose:"..._(close)_"});
@@ -93,9 +92,6 @@ Note that this tool may negatively affect any docker containers if you allow you
 <span class="block"><div class="div">_(Disks)_</div>
 <select id="s1" name="includeDisk" size="1" multiple="multiple" style="display:none">
 <option value=''>_(All)_</option>
-<?if (isset($disks['cache'])):?>
-<option value='/mnt/cache'>_(Cache)_</option>
-<?endif;?>
 <?foreach (array_filter($disks,'data_disks') as $disk):?>
 <?=mk_option(1,"/mnt/{$disk['name']}",_(my_disk($disk['name'])),3)?>
 <?endforeach;?>

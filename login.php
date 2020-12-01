@@ -331,8 +331,6 @@ $theme_dark = in_array($display['theme'],['black','gray']);
                 <?else:?>
                 <img src='<?=autov("/webGui/images/$mycase")?>'>
                 <?endif;?>
-            <?else:?>
-                <span class='case-define-r5'></span>
             <?endif;?>
             </div>
 

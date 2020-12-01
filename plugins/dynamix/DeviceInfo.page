@@ -461,7 +461,7 @@ _(Critical disk utilization threshold)_ (%):
 : <input type="submit" name="changeDisk" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
   <?$erasable=false?>
   <?if ($disk['type']=='Data' || $disk['type']=='Parity'):?>
-    <?if ($var['fsState']=="Stopped" && $disk['status']=='DISK_NEW'):?>
+    <?if ($var['fsState']=="Stopped" && strpos($disk['status'],'_NEW')!==FALSE):?>
       <?$erasable=true?>
     <?endif;?>
     <?if ($var['fsState']=="Started" && $var['startMode']!="Normal" && $disk['type']=='Data'):?>

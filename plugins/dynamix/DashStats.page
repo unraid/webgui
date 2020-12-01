@@ -47,7 +47,8 @@ function vpn_peers($file) {
 $dockerd = pgrep('dockerd');
 $libvirtd = pgrep('libvirtd');
 $apcupsd = file_exists('/var/run/apcupsd.pid');
-$wireguard = is_executable('/usr/bin/wg') && file_exists('/var/log/plugins/dynamix.wireguard.plg');
+$conf  = glob('/etc/wireguard/wg*.conf');
+$wireguard = is_executable('/usr/bin/wg') && file_exists('/var/log/plugins/dynamix.wireguard.plg') && count($conf);
 $started = $var['fsState']=='Started';
 $sleep = isset($display['sleep']);
 $array_size = $array_used = 0;
@@ -85,7 +86,6 @@ foreach ($devs as $disk) {
 }
 $array_percent = number_format(100*$array_used/($array_size ?: 1),1,$dot,'');
 exec('cat /sys/devices/system/cpu/*/topology/thread_siblings_list|sort -nu', $cpus);
-$conf  = $wireguard ? glob('/etc/wireguard/wg*.conf') : [];
 $wg_up = $wireguard ? exec("wg show interfaces") : '';
 $wg_up = $wg_up ? explode(' ',$wg_up) : [];
 $up    = count($wg_up);
@@ -317,7 +317,7 @@ foreach ($ports as $port) {
 }
 ?>
 </tbody>
-<?if ($wireguard && count($conf)):?>
+<?if ($wireguard):?>
 <thead sort='<?=++$N?>'><tr class='hidden'><td></td><td colspan='3'></td><td></td></tr></thead>
 <tbody sort='<?=$N?>' class='sortable'>
 <tr><td></td><td colspan='3' class='next'><i class='icon-vpn'></i><div class='section'>_(VPN)_<br><span class='ups'>_(Active tunnels)_: <span id='vpn-active'><?=$up?></span></span><span class='ups'>_(Inactive tunnels)_: <span id='vpn-inactive'><?=$down?></span></span><br><br></div>

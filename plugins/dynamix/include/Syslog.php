@@ -17,10 +17,18 @@ require_once "$docroot/webGui/include/ColorCoding.php";
 $logs = glob($_POST['log'].'*',GLOB_NOSORT);
 usort($logs, create_function('$a,$b', 'return filemtime($a)-filemtime($b);'));
 foreach ($logs as $log) {
-  foreach (file($log) as $line) {
+  $i=0;
+  $line_count = intval(exec("wc -l '$log'"));
+  $fh = fopen($log, "r");
+  while (($line = fgets($fh)) !== false) {
+    $i++;
+    if ($i < $line_count - 1000) {
+      continue;
+    }
     $span = "span class='text'";
     foreach ($match as $type) foreach ($type['text'] as $text) if (preg_match("/$text/i",$line)) {$span = "span class='{$type['class']}'"; break 2;}
     echo "<$span>".htmlspecialchars($line)."</span>";
   }
+  fclose($fh);
 }
 ?>

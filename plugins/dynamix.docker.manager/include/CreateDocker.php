@@ -716,7 +716,7 @@ _(Template)_:
 
 <div markdown="1" class="<?=$showAdditionalInfo?>">
 _(Name)_:
-: <input type="text" name="contName" required>
+: <input type="text" name="contName" pattern="[a-zA-Z0-9][a-zA-Z0-9_.-]+" required>
 
 :docker_client_name_help:
 

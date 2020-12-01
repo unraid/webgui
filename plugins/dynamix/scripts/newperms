@@ -1,5 +1,5 @@
-#!/bin/bash
-
+#!/usr/bin/php
+<?
 # Usage: newperms [dir] [owner] [group]
 # Recursively changes the ownership and permissions of the directory and all files/subdirs
 # within the directory.
@@ -16,35 +16,44 @@
 #  go+u    Copy the user permissions to group and other
 #  ugo+X   Set the 'x' bit for directories in user, group, and other
 
-function process {
-  list="$1"
-  [[ $# -ge 2 ]] && owner=$2 || owner=nobody
-  [[ $# -ge 3 ]] && group=$3 || group=users
-  ifs=$IFS; IFS='|'
-  for dir in $list; do
-    echo "$dir"
-    if [[ -d $dir ]]; then
-      echo processing "$dir"
-      echo ... chmod -R u-x,go-rwx,go+u,ugo+X "$dir"
-      chmod -R u-x,go-rwx,go+u,ugo+X "$dir"
-      echo ... chown -R $owner:$group "$dir"
-      chown -R $owner:$group "$dir"
-      echo ... sync
-      sync
-    fi
-  done
-  IFS=$ifs
+function process($path) {
+	global $argv;
+	
+	$owner = $argv[2] ?: "nobody";
+	$group = $argv[3] ?: "users";
+
+	if ( is_dir($path) ) {
+		echo "processing ".escapeshellarg($path)."\n";
+		echo "... chmod -R u-x,go-rwx,go+u,ugo+X ".escapeshellarg($path)."\n";
+		passthru("chmod -R u-x,go-rwx,go+u,ugo+X ".escapeshellarg($path));
+		echo "... chown -R $owner:$group ".escapeshellarg($path)."\n";
+		passthru("chown -R $owner:$group ".escapeshellarg($path));
+		echo "... sync\n";
+		passthru("sync");
+	}	
+	
 }
 
-if [[ -n $1 ]]; then
-  process "$@"
-else
-  process /mnt/cache
-  for disk in /mnt/disk[0-9]*; do
-    process $disk
-  done
-fi
+$startTime = time();
 
-echo
-secs=$SECONDS
-printf "completed, elapsed time: %.2d:%.2d:%.2d\n" $(($secs/3600)) $(($secs%3600/60)) $(($secs%60))
+if ($argv[1])  {
+	$paths=explode("|",$argv[1]);
+	foreach ($paths as $path)
+		process($path);
+} else {
+	$disks = parse_ini_file("/var/local/emhttp/disks.ini",true);
+	foreach ($disks as $disk => $prop) {
+		if ( is_dir("/mnt/$disk") && $prop['status'] !== "DISK_NP_DSBL" && $prop['status'] !== "DISK_NP") {
+			process("/mnt/$disk");
+		}
+	}
+}
+
+$seconds = time() - $startTime;
+$hours = floor($seconds / 3600);
+$mins = floor($seconds / 60 % 60);
+$secs = floor($seconds % 60);
+
+echo "completed, elapsed time: ".sprintf('%02d:%02d:%02d', $hours, $mins, $secs)."\n";
+
+?>

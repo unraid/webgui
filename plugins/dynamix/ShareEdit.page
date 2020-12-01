@@ -106,7 +106,7 @@ _(Use cache pool (for new files/directories))_:
 _(Select cache pool)_:
 : <select name="shareCachePool">
   <?foreach ($pools as $pool):?>
-  <?if ($disks[$pool]['devices']) echo mk_option($share['cachePool'],$pool,ucfirst($pool))?>
+<?if ($disks[$pool]['devices']) echo mk_option($share['cachePool'],$pool,ucfirst($pool),$disks[$pool]['shareEnabled']=='yes'?"":"disabled")?>
   <?endforeach;?>
   </select>
 

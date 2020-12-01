@@ -19,6 +19,7 @@ require_once "$docroot/webGui/include/Translations.php";
 
 require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
+require_once "$docroot/webGui/include/Helpers.php";
 
 $display = $_POST['display'];
 $menu = [];

@@ -114,7 +114,6 @@ for ($tab=1; $tab<=$tabs; $tab++) {
   }
   if ($tab==$tabs) {
     echo "<a style='text-decoration:none;cursor:pointer;$select' onclick='$(\"input#file\").trigger(\"click\")'><div class='case-list".($i%6==0?' left':($i%6==5?' right':''))."' id='Custom'><i class='fa fa-file-image-o'></i><div class='case-name'>"._('custom image')."</div></div></a>"; $i++;
-    echo "<a style='text-decoration:none;cursor:pointer' onclick='deleteCase()'><div class='case-list".($i%6==0?' left':($i%6==5?' right':''))."'><i class='fa fa-hdd-o'></i><div class='case-name'>"._('default image')."</div></div></a>";
   }
   echo "</div></div>";
 }
