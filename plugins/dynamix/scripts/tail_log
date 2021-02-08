@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2021, Lime Technology
+ * Copyright 2012-2021, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -23,14 +23,17 @@ require_once "$docroot/webGui/include/ColorCoding.php";
 
 echo "<p style='text-align:center'><span class='error label'>"._('Error')."</span><span class='warn label'>"._('Warning')."</span><span class='system label'>"._('System')."</span><span class='array label'>"._('Array')."</span><span class='login label'>"._('Login')."</span></p>\n";
 
-$handle = popen('/usr/bin/tail -n 40 -f '.escapeshellarg("/var/log/{$argv[1]}").' 2>&1', 'r');
-while (!feof($handle)) {
-  $line = fgets($handle);
-  if (strpos($line,'tail_log')!==false) continue;
-  $span = "span";
-  foreach ($match as $type) foreach ($type['text'] as $text) if (preg_match("/$text/i",$line)) {$span = "span class='{$type['class']}'"; break 2;}
-  echo "<$span>".htmlspecialchars($line)."</span>";
-  flush();
+$file = realpath("/var/log/{$argv[1]}");
+if ( (substr($file,0,9) == '/var/log/') && (is_file($file)) ) {
+  $handle = popen('/usr/bin/tail -n 40 -f '.escapeshellarg($file).' 2>&1', 'r');
+  while (!feof($handle)) {
+    $line = fgets($handle);
+    if (strpos($line,'tail_log')!==false) continue;
+    $span = "span";
+    foreach ($match as $type) foreach ($type['text'] as $text) if (preg_match("/$text/i",$line)) {$span = "span class='{$type['class']}'"; break 2;}
+    echo "<$span>".htmlspecialchars($line)."</span>";
+    flush();
+  }
+  pclose($handle);
 }
-pclose($handle);
 ?>

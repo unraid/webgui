@@ -28,6 +28,7 @@ $cpus = cpu_list();
 <style>
 .basic{display:block}
 .advanced{display:none;white-space:nowrap}
+.dockerhandle{cursor:grab;}
 .log{cursor:zoom-in}
 .exec{cursor:pointer}
 table#docker_containers{text-align:left}
@@ -40,7 +41,7 @@ table tbody td{line-height:normal}
 <div id="iframe-popup" style="display:none;-webkit-overflow-scrolling:touch;"></div>
 <span class="status" style="margin-top:<?=$width?>px"><span><input type="checkbox" class="advancedview"></span></span>
 <table id="docker_containers" class="tablesorter shift">
-<thead><tr><th><a href="#" style="cursor:hand;margin-left:12px;display:inline-block;width:32px" onclick="resetSorting()" title="_(Reset sorting)_"><i class="fa fa-th-list"></i></a>_(Application)_</th><th>_(Version)_</th><th>_(Network)_</th><th>_(Port Mappings)_ <small>(_(App to Host)_)</small></th><th>_(Volume Mappings)_ <small>(_(App to Host)_)</small></th><th class="load advanced">_(CPU & Memory load)_</th><th class="nine">_(Autostart)_</th><th class="five">_(Uptime)_</th></tr></thead>
+<thead><tr><th><a href="#" style="cursor:hand;margin-left:12px;display:inline-block;width:32px" onclick="resetSorting()" title="_(Reset sorting)_"><i class="fa fa-th-list"></i></a>_(Application)_</th><th>_(Version)_</th><th>_(Network)_</th><th>_(Port Mappings)_ <small>(_(App to Host)_)</small></th><th>_(Volume Mappings)_ <small>(_(App to Host)_)</small></th><th class="load advanced">_(CPU & Memory load)_</th><th class="nine">_(Autostart)_</th><th class="five">_(Uptime)_</th><th></th></tr></thead>
 <tbody id="docker_list"><tr><td colspan='9'></td></tr></tbody>
 </table>
 <input type="button" onclick="addContainer()" value="_(Add Container)_" style="display:none">
@@ -102,7 +103,7 @@ function loadlist() {
   $.get('/plugins/dynamix.docker.manager/include/DockerContainers.php',function(d) {
     clearTimeout(timers.docker);
     var data = d.split(/\0/);
-    $('#docker_list').html(data[0]).sortable({helper:sortableHelper,items:'tr.sortable',cursor:'move',axis:'y',containment:'parent',cancel:'span.docker_readmore,input',delay:100,opacity:0.5,zIndex:9999,
+    $('#docker_list').html(data[0]).sortable({helper:sortableHelper,handle:'.dockerhandle',items:'tr.sortable',cursor:'move',axis:'y',containment:'parent',cancel:'span.docker_readmore,input',delay:100,opacity:0.5,zIndex:9999,
     update:function(e,ui){
       var row = $('#docker_list').find('tr:first');
       var names = ''; var index = '';

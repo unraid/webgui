@@ -50,8 +50,8 @@ function in_parity_log($log,$timestamp) {
 function device_info(&$disk,$online) {
   global $pools, $path, $var, $crypto;
   $name = $disk['name'];
-  $fancyname = $disk['type']=='New' ? $name : compress(_(my_disk($name),3),16,5);
-  $type = $disk['type']=='Flash' || $disk['type']=='New' ? $disk['type'] : 'Device';
+  $fancyname = compress(_(my_disk($name),3),16,5);
+  $type = $disk['type']=='Flash' ? $disk['type'] : 'Device';
   $action = strpos($disk['color'],'blink')===false ? 'down' : 'up';
   switch ($disk['color']) {
     case 'green-on': $orb = 'circle'; $color = 'green'; $help = _('Normal operation, device is active'); break;
@@ -200,10 +200,9 @@ function array_offline(&$disk,$pool='') {
   case 'DISK_INVALID':
   case 'DISK_DSBL_NEW':
   case 'DISK_NEW':
-    $spin = strpos($disk['color'],'blink')===false;
     echo "<td>".device_info($disk,false)."</td>";
     echo "<td>".assignment($disk)."</td>";
-    echo "<td>".($spin ? my_temp($disk['temp']) : '*')."</td>";
+    echo "<td>".my_temp($disk['temp'])."</td>";
     echo "<td colspan='8'>$warning</td>";
     break;
   case 'DISK_WRONG':
@@ -253,10 +252,9 @@ function array_online(&$disk) {
     break;
   case 'DISK_DSBL':
   default:
-    $spin = strpos($disk['color'],'blink')===false;
     echo "<td>".device_info($disk,true)."</td>";
     echo "<td>".device_desc($disk)."</td>";
-    echo "<td>".($spin ? my_temp($disk['temp']) : '*')."</td>";
+    echo "<td>".my_temp($disk['temp'])."</td>";
     echo "<td><span class='diskio'>".my_diskio($data[0])."</span><span class='number'>".my_number($disk['numReads'])."</span></td>";
     echo "<td><span class='diskio'>".my_diskio($data[1])."</span><span class='number'>".my_number($disk['numWrites'])."</span></td>";
     echo "<td>".my_number($disk['numErrors'])."</td>";
@@ -271,17 +269,6 @@ function my_clock($time) {
   $hour = $time/60%24;
   $mins = $time%60;
   return plus($days,'day',($hour|$mins)==0).plus($hour,'hour',$mins==0).plus($mins,'minute',true);
-}
-function read_disk($name, $part) {
-  global $var;
-  $port = port_name($name);
-  switch ($part) {
-  case 'color':
-    return disk_active($port) ? 'blue-on' : 'blue-blink';
-  case 'temp':
-    $smart = "/var/local/emhttp/smart/$name";
-    return read_temp($smart);
-  }
 }
 function show_totals($text,$array,$name) {
   global $var, $display, $sum;
@@ -416,22 +403,21 @@ case 'open':
   foreach ($devs as $disk) {
     $dev = $disk['device'];
     $data = explode(' ',$diskio[$dev] ?? '0 0 0 0');
-    $disk['name'] = $dev;
     $disk['type'] = 'New';
-    $disk['color'] = read_disk($dev,'color');
-    $disk['temp'] = read_disk($dev,'temp');
+    $disk['color'] = $disk['spundown']=="0" ? 'blue-on' : 'blue-blink';
     echo "<tr>";
     echo "<td>".device_info($disk,true)."</td>";
     echo "<td>".device_desc($disk)."</td>";
     echo "<td>".my_temp($disk['temp'])."</td>";
-    echo "<td><span class='diskio'>".my_diskio($data[0])."</span><span class='number'>".my_number($data[2])."</span></td>";
-    echo "<td><span class='diskio'>".my_diskio($data[1])."</span><span class='number'>".my_number($data[3])."</span></td>";
+    echo "<td><span class='diskio'>".my_diskio($data[0])."</span><span class='number'>".my_number($disk['numReads'])."</span></td>";
+    echo "<td><span class='diskio'>".my_diskio($data[1])."</span><span class='number'>".my_number($disk['numWrites'])."</span></td>";
+    echo "<td>".my_number($disk['numErrors'])."</td>";
     if (file_exists("/tmp/preclear_stat_$dev")) {
       $text = exec("cut -d'|' -f3 /tmp/preclear_stat_$dev|sed 's:\^n:\<br\>:g'");
       if (strpos($text,'Total time')===false) $text = _('Preclear in progress').'... '.$text;
-      echo "<td colspan='6' style='text-align:right'><em>$text</em></td>";
+      echo "<td colspan='5' style='text-align:right'><em>$text</em></td>";
     } else
-      echo "<td colspan='6'></td>";
+      echo "<td colspan='5'></td>";
     echo "</tr>";
   }
   break;

@@ -114,26 +114,22 @@ function stage($i) {
   }
   return $t;
 }
-function device_name(&$disk, $array) {
+function device_name(&$disk) {
   global $path;
-  if ($array) {
-    switch ($disk['type']) {
-      case 'Parity': $type = $disk['rotational'] ? 'disk' : 'nvme'; break;
-      case 'Data'  :
-      case 'Cache' : $type = $disk['rotational'] ? ($disk['luksState'] ? 'disk-encrypted' : 'disk') : 'nvme'; break;
-    }
-    $name = my_disk($disk['name']);
-    [$p1,$p2] = explode(' ',$name);
-    $name = _($p1).($p2?" $p2":"");
-    return "<i class='icon-$type'></i> <a href=\"".htmlspecialchars("$path/Main/Device?name={$disk['name']}")."\" title=\"$name settings\">$name</a>";
-  } else {
-    $name = $disk['device'];
-    return "<i class='icon-disk'></i> <a href=\"".htmlspecialchars("$path/Main/New?name=$name")."\" title=\"$name settings\">$name</a>";
+  switch ($disk['type']) {
+    case 'Extra' :
+    case 'Parity': $type = $disk['rotational'] ? 'disk' : 'nvme'; break;
+    case 'Data'  :
+    case 'Cache' : $type = $disk['rotational'] ? ($disk['luksState'] ? 'disk-encrypted' : 'disk') : 'nvme'; break;
   }
+  $name = my_disk($disk['name']);
+  [$p1,$p2] = explode(' ',$name);
+  $name = _($p1).($p2?" $p2":"");
+  return "<i class='icon-$type'></i> <a href=\"".htmlspecialchars("$path/Main/Device?name={$disk['name']}")."\" title=\"$name settings\">$name</a>";
 }
-function device_status(&$disk, $array, &$error, &$warning) {
+function device_status(&$disk, &$error, &$warning) {
   global $var;
-  if ($array && $var['fsState']=='Stopped') {
+  if (disk['type']!='Extra' && $var['fsState']=='Stopped') {
     $color = 'green'; $text = 'off-line';
   } else switch ($disk['color']) {
     case 'green-on'    : $color = 'green';  $text = 'active';     break;
@@ -163,12 +159,11 @@ function device_temp(&$disk, &$red, &$orange) {
   }
   return ($spin && $temp>0) ? "<span class='$color-text'>".my_unit($temp,$_POST['unit'])."</span>".($heat ? "<i class='fa fa-$heat $color-text heat'></i>" : "") : "*";
 }
-function device_smart(&$disk, $name, &$fail, &$smart) {
+function device_smart(&$disk, &$fail, &$smart) {
   global $numbers,$saved;
   if (!$disk['device'] || strpos($disk['color'],'blink')) return "-";
   $failed = ['FAILED','NOK'];
-  $page   = $name ? 'New' : 'Device';
-  $name   = $name ?: $disk['name'];
+  $name   = $disk['name'];
   $select = get_value($name,'smSelect',0);
   $level  = get_value($name,'smLevel',1);
   $events = explode('|',get_value($disk,'smEvents',$numbers));
@@ -193,52 +188,51 @@ function device_smart(&$disk, $name, &$fail, &$smart) {
     }
   }
   $title .= _('Click for context menu');
-  return "<span id='smart-$name' name='$page' class='fa fa-$thumb $color-text' style='margin-right:8px' onmouseover='this.style.cursor=\"pointer\"' title='$title'></span>$text";
+  return "<span id='smart-$name' name=Device class='fa fa-$thumb $color-text' style='margin-right:8px' onmouseover='this.style.cursor=\"pointer\"' title='$title'></span>$text";
 }
-function device_usage(&$disk, $array, &$full, &$high) {
-  if ($array) {
-    $text = $_POST['text'];
-    $used = ($disk['type']!='Parity' && $disk['fsStatus']=='Mounted') ? (($disk['fsSize'] ? round((1-$disk['fsFree']/$disk['fsSize'])*100):0).'%') : false;
-    if ($used && ($text==2 || $text==21)) {
+function device_usage(&$disk, &$full, &$high) {
+  $text = $_POST['text'];
+  $used = ($disk['type']!='Parity' && $disk['type']!='Extra' && $disk['fsStatus']=='Mounted') ? (($disk['fsSize'] ? round((1-$disk['fsFree']/$disk['fsSize'])*100):0).'%') : false;
+  if ($used) {
+    if ($text==2 || $text==21) {
       $load = substr($used,0,-1);
       $critical = $disk['critical'] ?? $_POST['critical'];
       $warning = $disk['warning'] ?? $_POST['warning'];
       if ($critical > 0 && $load >= $critical) {$class = 'redbar'; $full++;}
       elseif ($warning > 0 && $load >= $warning) {$class = 'orangebar'; $high++;}
       else $class = 'greenbar';
-    } else $class = false;
-  } else $used = false;
-  if ($used) {
+    }
+    else
+      $class = false;
     return $text%10==0 ? $used : "<span class='load'>$used</span><div class='usage-disk sys'><span style='width:$used'".($class?" class='$class'":"")."></span><span></span></div>";
-  } else {
-    return $text%10==0 ? "-" : "<span class='load'>-</span><div class='usage-disk sys none'><span></span></div>";
   }
+  else
+    return $text%10==0 ? "-" : "<span class='load'>-</span><div class='usage-disk sys none'><span></span></div>";
 }
 function array_group($type,$pool=false) {
   global $disks,$error,$warning,$red,$orange,$fail,$smart,$full,$high;
   foreach ($disks as $disk) if ($disk['type']==$type && strpos($disk['status'],'DISK_NP')===false && (!$pool||$pool==prefix($disk['name']))) {
     echo "<tr><td></td>";
-    echo "<td>".device_name($disk,true)."</td>";
-    echo "<td>".device_status($disk,true,$error,$warning)."</td>";
+    echo "<td>".device_name($disk)."</td>";
+    echo "<td>".device_status($disk,$error,$warning)."</td>";
     echo "<td>".device_temp($disk,$red,$orange)."</td>";
-    echo "<td>".device_smart($disk,false,$fail,$smart)."</td>";
-    echo "<td>".device_usage($disk,true,$full,$high)."</td>";
+    echo "<td>".device_smart($disk,$fail,$smart)."</td>";
+    echo "<td>".device_usage($disk,$full,$high)."</td>";
     echo "<td></td></tr>";
   }
 }
 function extra_group() {
   global $disks,$error,$warning,$red,$orange,$fail,$smart,$full,$high;
   foreach ($disks as $disk) {
-    $name = $disk['device'];
-    $port = port_name($name);
-    $disk['color'] = exec("hdparm -C /dev/$port|grep -Po 'active|unknown'") ? 'blue-on' : 'blue-blink';
-    $disk['temp'] = exec("awk 'BEGIN{s=t=\"*\"}\$1==190{s=\$10};\$1==194{t=\$10;exit};\$1==\"Temperature:\"{t=\$2;exit};/^Current Drive Temperature:/{t=\$4;exit} END{if(t!=\"*\")print t; else print s}' state/smart/$name 2>/dev/null");
+    $name = $disk['name'];
+    $disk['type'] = "Extra";
+    $disk['color'] = $disk['spundown']=="0" ? 'blue-on' : 'blue-blink';
     echo "<tr><td></td>";
-    echo "<td>".device_name($disk,false)."</td>";
-    echo "<td>".device_status($disk,false,$error,$warning)."</td>";
+    echo "<td>".device_name($disk)."</td>";
+    echo "<td>".device_status($disk,$error,$warning)."</td>";
     echo "<td>".device_temp($disk,$red,$orange)."</td>";
-    echo "<td>".device_smart($disk,$name,$fail,$smart)."</td>";
-    echo "<td>".device_usage($disk,false,$full,$high)."</td>";
+    echo "<td>".device_smart($disk,$fail,$smart)."</td>";
+    echo "<td>".device_usage($disk,$full,$high)."</td>";
     echo "<td></td></tr>";
   }
 }
@@ -273,8 +267,7 @@ case 'extra':
   $var = (array)parse_ini_file('state/var.ini');
   $disks = (array)parse_ini_file('state/devs.ini',true);
   $saved = @(array)parse_ini_file('state/monitor.ini',true);
-  $smartALL = '/boot/config/smart-all.cfg';
-  if (file_exists($smartALL)) $var = array_merge($var, parse_ini_file($smartALL));
+  require_once "$docroot/webGui/include/CustomMerge.php";
   require_once "$docroot/webGui/include/Preselect.php";
   $error = $warning = $red = $orange = $fail = $smart = $full = $high = 0;
   extra_group();

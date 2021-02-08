@@ -24,7 +24,7 @@ function disklog(disk,key,value) {
   $.post('/webGui/include/DiskLog.php',{disk:disk,key:key,value:value});
 }
 $(function() {
-  $.post("/webGui/include/SmartInfo.php",{cmd:'identify',port:'<?=addslashes(htmlspecialchars($disks[$name]['device']??$name))?>',name:'<?=addslashes(htmlspecialchars($name))?>'}, function(data) {
+  $.post("/webGui/include/SmartInfo.php",{cmd:'identify',port:'<?=addslashes(htmlspecialchars($dev))?>',name:'<?=addslashes(htmlspecialchars($name))?>'}, function(data) {
     $('#disk_identify').html(data);
   });
 });

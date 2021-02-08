@@ -17,7 +17,7 @@ Cond="strpos($disks[$name]['status'],'_NP')===false"
 ?>
 <script>
 $(function() {
-  $.post("/webGui/include/SmartInfo.php",{cmd:'capabilities',port:'<?=addslashes(htmlspecialchars($disks[$name]['device']??$name))?>',name:'<?=addslashes(htmlspecialchars($name))?>'}, function(data) {
+  $.post("/webGui/include/SmartInfo.php",{cmd:'capabilities',port:'<?=addslashes(htmlspecialchars($dev))?>',name:'<?=addslashes(htmlspecialchars($name))?>'}, function(data) {
     $('#disk_capabilities').html(data);
   });
 });

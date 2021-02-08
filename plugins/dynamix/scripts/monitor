@@ -222,11 +222,9 @@ foreach ($disks as $disk) {
 
 // check unassigned devices
 foreach ($devs as $dev) {
-  $name = $dev['device'];
-  $smart = "/var/local/emhttp/smart/$name";
-  $type = $var['smType'] ?? '';
+  $name = $dev['name'];
   $port = port_name($name);
-  $temp = read_temp($smart);
+  $temp = $dev['temp'];
   $text = "device $name";
   $info = !empty($dev['id']) ? "{$dev['id']} ($name)": "No device identification ($name)";
 // process disk temperature notifications

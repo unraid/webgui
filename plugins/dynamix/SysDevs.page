@@ -4,8 +4,8 @@ Icon="icon-hardware"
 Tag="server"
 ---
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2021, Lime Technology
+ * Copyright 2012-2021, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -22,6 +22,10 @@ table tr td{padding:0 0 3px 0;margin:0}
 table tr td.thin{line-height:8px;height:8px}
 </style>
 <script>
+$(window).bind('beforeunload',function(e){
+  // warn user if they leave the page with unsaved changes
+  if (!$('#applycfg').prop('disabled')) return "You have unsaved changes";
+});
 $(function(){
   $('#t1').load('/webGui/include/SysDevs.php',{table:'t1'});
   $('#t2').load('/webGui/include/SysDevs.php',{table:'t2'});
@@ -49,6 +53,7 @@ function applyCfg() {
       removeRebootNotice(message);
       document.getElementById("warning").innerHTML = "<b>_(No changes)_.</b>";
     }
+    $("#applycfg").attr("disabled",true);
   });
 }
 </script>

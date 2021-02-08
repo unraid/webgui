@@ -22,16 +22,18 @@ function prefix($key) {
 }
 function emhttpd($cmd) {
   global $state, $csrf;
-  $ch = curl_init("http://127.0.0.1/update.htm?$cmd&startState=$state&csrf_token=$csrf");
-  curl_setopt_array($ch, [CURLOPT_UNIX_SOCKET_PATH => '/var/run/emhttpd.socket']);
+  $ch = curl_init("http://127.0.0.1/update");
+  $options = array(CURLOPT_UNIX_SOCKET_PATH => '/var/run/emhttpd.socket',
+                   CURLOPT_POST => 1,
+                   CURLOPT_POSTFIELDS => "$cmd&startState=$state&csrf_token=$csrf");
+  curl_setopt_array($ch, $options);
   curl_exec($ch);
   curl_close($ch);
 }
 
 switch ($device) {
 case 'New':
-  $cmd  = $action=='up' ? 'S0' : ($action=='down' ? 'y' : false);
-  if ($cmd && $name) exec("/usr/sbin/hdparm -$cmd /dev/$name >/dev/null 2>&1");
+  emhttpd("cmdSpin$action=$name");
   break;
 case 'Clear':
   emhttpd("clearStatistics=true");

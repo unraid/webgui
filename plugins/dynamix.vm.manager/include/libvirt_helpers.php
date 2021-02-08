@@ -313,6 +313,12 @@
 	];
 
 	$virtio_isos = [
+		'virtio-win-0.1.190-1' => [
+			'name' => 'virtio-win-0.1.190-1.iso',
+			'url' => 'https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.190-1/virtio-win-0.1.190.iso',
+			'size' => 501745664,
+			'md5' => '6e30288fa45ba99a1434740204b8e8e8'
+		],
 		'virtio-win-0.1.189-1' => [
 			'name' => 'virtio-win-0.1.189-1.iso',
 			'url' => 'https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.189-1/virtio-win-0.1.189.iso',
@@ -1103,7 +1109,7 @@
 		// settings not in the GUI, but maybe customized
 		unset($new['memoryBacking'], $new['clock'], $new['features']);
 		// preserve vnc port settings
-		unset($new['devices']['graphics']);
+		if (!$new['devices']['graphics']) unset($old['devices']['graphics']);
 		// update parent arrays
 		if (!$old['devices']['hostdev']) unset($old['devices']['hostdev']);
 		if (!$new['devices']['hostdev']) unset($new['devices']['hostdev']);

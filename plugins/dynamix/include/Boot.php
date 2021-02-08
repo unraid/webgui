@@ -85,12 +85,12 @@ $safemode = '/boot/unraidsafemode';
 switch ($_POST['cmd']) {
   case 'reboot':
     if (isset($_POST['safemode'])) touch($safemode); else @unlink($safemode);
-    exec('/sbin/reboot');?>
+    exec('/sbin/reboot -n');?>
     <body onload="reboot_online()"><div class='notice'></div></body>
 <?  break;
   case 'shutdown':
     if (isset($_POST['safemode'])) touch($safemode); else @unlink($safemode);
-    exec('/sbin/poweroff');?>
+    exec('/sbin/poweroff -n');?>
     <body onload="shutdown_online()"><div class='notice'></div></body>
 <?  break;
   default:?>

@@ -31,6 +31,9 @@ $users   = (array)parse_ini_file('state/users.ini',true);
 $shares  = (array)parse_ini_file('state/shares.ini',true);
 $sec_nfs = (array)parse_ini_file('state/sec_nfs.ini',true);
 
+// Merge SMART settings
+require_once "$docroot/webGui/include/CustomMerge.php";
+
 // Pool devices
 $pool_devices = false;
 $pools = pools_filter($disks);
@@ -38,9 +41,6 @@ foreach ($pools as $pool) $pool_devices |= $disks[$pool]['devices'];
 
 // Read network settings
 extract(parse_ini_file('state/network.ini',true));
-
-// Merge SMART settings
-require_once "$docroot/webGui/include/CustomMerge.php";
 
 // Language translations
 $_SESSION['locale'] = $display['locale'];

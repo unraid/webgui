@@ -33,13 +33,6 @@ function duration(&$hrs) {
   $age = date_diff($poh,$now);
   $hrs = "$hrs (".($age->y?"{$age->y}y, ":"").($age->m?"{$age->m}m, ":"").($age->d?"{$age->d}d, ":"")."{$age->h}h)";
 }
-function spindownDelay($port) {
-  $disks = parse_ini_file('state/disks.ini',true);
-  foreach ($disks as $disk) {
-    $name = substr($disk['device'],-2)!='n1' ? $disk['device'] : substr($disk['device'],0,-2);
-    if ($name==$port) {file_put_contents("/var/tmp/diskSpindownDelay.{$disk['idx']}", $disk['spindownDelay']); break;}
-  }
-}
 function append(&$ref, &$info) {
   if ($info) $ref .= ($ref ? " " : "").$info;
 }
@@ -63,10 +56,10 @@ case "attributes":
   $max = $disk['maxTemp'] ?? $unraid['display']['max'];
   $hot = $disk['hotTemp'] ?? $unraid['display']['hot'];
   $top = $_POST['top'] ?? 120;
-  exec("smartctl -A $type ".escapeshellarg("/dev/$port")."|awk 'NR>4'",$output);
+  $empty = true;
+  exec("smartctl -n standby -A $type ".escapeshellarg("/dev/$port")."|awk 'NR>4'",$output);
   if (strpos($output[0], 'SMART Attributes Data Structure')===0) {
     $output = array_slice($output, 3);
-    $empty = true;
     foreach ($output as $line) {
       if (!$line) continue;
       $info = explode(' ', trim(preg_replace('/\s+/',' ',$line)), 10);
@@ -81,7 +74,6 @@ case "attributes":
       echo "<tr{$color}>".implode('',array_map('normalize', $info))."</tr>";
       $empty = false;
     }
-    if ($empty) echo "<tr><td colspan='10' style='text-align:center;padding-top:12px'>"._('Can not read attributes')."</td></tr>";
   } else {
     // probably a NMVe or SAS device that smartmontools doesn't know how to parse in to a SMART Attributes Data Structure
     foreach ($output as $line) {
@@ -100,11 +92,13 @@ case "attributes":
         break;
       }
       echo "<tr{$color}><td>-</td><td>$name</td><td colspan='8'>$value</td></tr>";
+      $empty = false;
     }
   }
+  if ($empty) echo "<tr><td colspan='10' style='text-align:center;padding-top:12px'>"._('Can not read attributes')."</td></tr>";
   break;
 case "capabilities":
-  exec("smartctl -c $type ".escapeshellarg("/dev/$port")."|awk 'NR>5'",$output);
+  exec("smartctl -n standby -c $type ".escapeshellarg("/dev/$port")."|awk 'NR>5'",$output);
   $row = ['','',''];
   $empty = true;
   foreach ($output as $line) {
@@ -126,7 +120,7 @@ case "identify":
   $passed = ['PASSED','OK'];
   $failed = ['FAILED','NOK'];
   exec("smartctl -i $type ".escapeshellarg("/dev/$port")."|awk 'NR>4'",$output);
-  exec("smartctl -H $type ".escapeshellarg("/dev/$port")."|grep -Pom1 '^SMART.*: [A-Z]+'|sed 's:self-assessment test result::'",$output);
+  exec("smartctl -n standby -H $type ".escapeshellarg("/dev/$port")."|grep -Pom1 '^SMART.*: [A-Z]+'|sed 's:self-assessment test result::'",$output);
   $empty = true;
   foreach ($output as $line) {
     if (!$line) continue;
@@ -162,28 +156,21 @@ case "delete":
   }
   break;
 case "short":
-  spindownDelay($port);
   exec("smartctl -t short $type ".escapeshellarg("/dev/$port"));
   break;
 case "long":
-  spindownDelay($port);
   exec("smartctl -t long $type ".escapeshellarg("/dev/$port"));
   break;
 case "stop":
   exec("smartctl -X $type ".escapeshellarg("/dev/$port"));
   break;
 case "update":
-  if (!exec("hdparm -C ".escapeshellarg("/dev/$port")."|grep -Pom1 'active|unknown'")) {
-    $cmd = $_POST['type']=='New' ? "cmd=/webGui/scripts/hd_parm&arg1=up&arg2=$name" : "cmdSpinup=$name";
-    echo "<a href='/update.htm?$cmd&csrf_token={$_POST['csrf']}' class='info' target='progressFrame'><input type='button' value=\""._('Spin Up')."\"></a><span class='big orange-text'>"._('Unavailable - disk must be spun up')."</span>";
-    break;
-  }
-  $progress = exec("smartctl -c $type ".escapeshellarg("/dev/$port")."|grep -Pom1 '\d+%'");
+  $progress = exec("smartctl -n standby -c $type ".escapeshellarg("/dev/$port")."|grep -Pom1 '\d+%'");
   if ($progress) {
     echo "<span class='big'><i class='fa fa-spinner fa-pulse'></i> "._('self-test in progress').", ".(100-substr($progress,0,-1))."% "._('complete')."</span>";
     break;
   }
-  $result = trim(exec("smartctl -l selftest $type ".escapeshellarg("/dev/$port")."|grep -m1 '^# 1'|cut -c26-55"));
+  $result = trim(exec("smartctl -n standby -l selftest $type ".escapeshellarg("/dev/$port")."|grep -m1 '^# 1'|cut -c26-55"));
   if (!$result) {
     echo "<span class='big'>"._('No self-tests logged on this disk')."</span>";
     break;
@@ -199,10 +186,10 @@ case "update":
   echo "<span class='big red-text'>"._('Errors occurred - Check SMART report')."</span>";
   break;
 case "selftest":
-  echo shell_exec("smartctl -l selftest $type ".escapeshellarg("/dev/$port")."|awk 'NR>5'");
+  echo shell_exec("smartctl -n standby -l selftest $type ".escapeshellarg("/dev/$port")."|awk 'NR>5'");
   break;
 case "errorlog":
-  echo shell_exec("smartctl -l error $type ".escapeshellarg("/dev/$port")."|awk 'NR>5'");
+  echo shell_exec("smartctl -n standby -l error $type ".escapeshellarg("/dev/$port")."|awk 'NR>5'");
   break;
 }
 ?>

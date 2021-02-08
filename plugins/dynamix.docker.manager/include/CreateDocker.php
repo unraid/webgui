@@ -113,13 +113,14 @@ if (isset($_POST['contName'])) {
       goto END;
     }
   }
-  $startContainer = true;
+  $startContainer = filter_var($_POST['contStart'],FILTER_VALIDATE_BOOLEAN);
   // Remove existing container
   if ($DockerClient->doesContainerExist($Name)) {
     // attempt graceful stop of container first
     $oldContainerInfo = $DockerClient->getContainerDetails($Name);
     if (!empty($oldContainerInfo) && !empty($oldContainerInfo['State']) && !empty($oldContainerInfo['State']['Running'])) {
       // attempt graceful stop of container first
+      $startContainer = true;
       stopContainer($Name);
     }
     // force kill container if still running after 10 seconds
@@ -698,6 +699,7 @@ _(Template)_:
     $title = ucfirst($section)." templates";
     printf("<optgroup class='title bold' label='[ %s ]'>", htmlspecialchars($title));
     foreach ($template as $value){
+      if ( $value['name'] == "my-ca_profile" || $value['name'] == "ca_profile" ) continue;
       $name = str_replace('my-', '', $value['name']);
       $selected = (isset($xmlTemplate) && $value['path']==$xmlTemplate) ? ' selected ' : '';
       if ($selected && $section=='default') $showAdditionalInfo = 'advanced';
@@ -887,9 +889,15 @@ _(Privileged)_:
 &nbsp;
 : <a href="javascript:addConfigPopup()"><i class="fa fa-fw fa-plus"></i> _(Add another Path, Port, Variable, Label or Device)_</a>
 
+<?if ($xmlType != "edit"):?>
+&nbsp;
+: <input type='checkbox' name='contStart' checked> <span class='orange-text'>_(Start Container After Install)_</span>
+<?endif;?>
+
 &nbsp;
 : <input type="submit" value="<?=$xmlType=='edit' ? "_(Apply)_" : " _(Apply)_ "?>"><input type="button" value="_(Done)_" onclick="done()">
   <?if ($authoringMode):?><button type="submit" name="dryRun" value="true" onclick="$('*[required]').prop('required', null);">_(Save)_</button><?endif;?>
+
 
 </form>
 </div>
@@ -1053,7 +1061,7 @@ function load_contOverview() {
     // Handle code block being created by authors indenting (manually editing the xml and spacing)
     new_overview = new_overview.replaceAll("    ","&nbsp;&nbsp;&nbsp;&nbsp;");
     new_overview = marked(new_overview);
-  } else 
+  } else
     new_overview = new_overview.replaceAll("\n","");
   $("#contDescription").html(new_overview);
 }

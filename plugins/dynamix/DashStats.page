@@ -160,6 +160,7 @@ div#iframe-popup{display:none;-webkit-overflow-scrolling:touch}
 div.last{padding-bottom:12px}
 div.left{float:left;width:66%;margin-top:-12px}
 div.right{float:right;margin:-20px 0 0 0;text-align:center}
+.section,.next{cursor:grab}
 span.ctrl{float:right;margin-right:10px}
 span.outer{float:left}
 span.inner{width:<?=$theme1?153:140?>px}
@@ -240,7 +241,7 @@ form[name=boot]{display:none}
 <tbody sort='<?=$N?>' class='sortable'>
 <tr><td></td><td colspan='3' class='next'><i class='icon-motherboard'></i><div class='section'>_(Motherboard)_<br><span id='mb-temp'></span><br><br></div>
 <i class='fa fa-fw chevron' id='mb_view' onclick='toggleChevron("mb_view",0)'></i>
-<a href='#' onclick='InfoButton();' title="_(Show Information)_"><i class='fa fa-fw fa-cog chevron'></i></a>
+<a href='#' onclick='InfoButton();' title="_(Show Information)_"><i class='fa fa-fw fa-info-circle chevron'></i></a>
 </td><td></td></tr>
 <tr class='mb_view'><td></td><td colspan='3'><?=$board?><br><?=$bios?><br><?=$biosdate?></td><td></td></tr>
 </tbody>
@@ -271,7 +272,7 @@ foreach ($cpus as $pair) {
 <tbody sort='<?=$N?>' class='sortable'>
 <tr><td></td><td colspan='3' class='next'><i class='icon-ram'></i><div class='section'>_(Memory)_<br><span><?="$memory_installed $unit $memory_type $ecc"?><span id='util'>_(Utilization)_: <span class='sys0'>0%</span></span><br><br></div>
 <i class='fa fa-fw chevron' id='mem_view' onclick='toggleChevron("mem_view",0)'></i>
-<a href='/Dashboard/Tools/Processes' title="_(View Running Processes)_"><i class='fa fa-fw fa-cog chevron'></i></a>
+<a href='/Dashboard/Tools/Processes' title="_(View Running Processes)_"><i class='fa fa-fw fa-info-circle chevron'></i></a>
 </td><td></td></tr>
 <tr class='mem_view'><td></td><td>_(Maximum size)_: <?="$memory_maximum $unit"?><?=$low?'*':''?></td><td><i class='mm'>_(RAM)_</i><span class='sys0 load'>0%</span><div class='usage-disk sys'><span id='sys0'></span><span></span></div></td>
 <td><i class='mm'>_(Flash)_</i><span class='sys1 load'>0%</span><div class='usage-disk sys'><span id='sys1'></span><span></span></div></td><td></td></tr>
@@ -521,7 +522,7 @@ foreach ($users as $user) {
 <tr><td></td><td colspan='5' id='program' class="wrap"></td><td></td></tr>
 </tbody>
 <thead sort='<?=++$N?>' class='sortable'><tr><td></td><td colspan='5' class='next'>_(Array)_<?if (!$started):?> (_(stopped)_)<?endif;?><i class='fa fa-fw chevron mt0' id='array_view' onclick='toggleChevron("array_view",0)'></i>
-<a href='/Dashboard/Main/Device?name=disk1' title="_(Go to disk settings)_"><i class='fa fa-fw fa-cog chevron mt0'></i></a>
+<a href='/Dashboard/Settings/DiskSettings' title="_(Go to disk settings)_"><i class='fa fa-fw fa-cog chevron mt0'></i></a>
 <?if ($started):?><span class='info'><?=sprintf(_("%s used of %s (%s %%)"),my_scale($array_used*1024,$unit)." $unit",my_scale($array_size*1024,$unit,-1,-1)." $unit",$array_percent)?></span><?endif;?>
 </td><td></td></tr>
 <tr class='my_view'><td></td><td id='array_info' colspan='5'></td><td></td></tr>
@@ -531,7 +532,7 @@ foreach ($users as $user) {
 <?$i=0?>
 <?foreach ($pools as $pool):?>
 <thead sort='<?=++$N?>' class='sortable'><tr><td></td><td colspan='5' class='next'><?=ucfirst($pool)?><?if (!$started):?> (_(stopped)_)<?endif;?><i class='fa fa-fw chevron mt0' id='_<?=$pool?>_view' onclick='toggleChevron("_<?=$pool?>_view",0)'></i>
-<a href='/Dashboard/Main/Device?name=cache' title="_(Go to cache settings)_"><i class='fa fa-fw fa-cog chevron mt0'></i></a>
+<a href='/Dashboard/Settings/DiskSettings' title="_(Go to disk settings)_"><i class='fa fa-fw fa-cog chevron mt0'></i></a>
 <?if ($started):?><span class='info'><?=sprintf(_("%s used of %s (%s %%)"),my_scale($cache_used[$pool]*1024,$unit)." $unit",my_scale($cache_size[$pool]*1024,$unit,-1,-1)." $unit",$cache_rate[$pool])?></span><?endif;?>
 </td><td></td></tr>
 <tr class='my_view'><td></td><td id='cache_info<?=$i?>' colspan='5'></td><td></td></tr>
@@ -1007,7 +1008,7 @@ var sortableHelper = function(e,ui){
   return ui;
 };
 $(function() {
-  $('table').sortable({helper:sortableHelper,items:'.sortable',cursor:'move',axis:'y',containment:'parent',delay:100,opacity:0.5,zIndex:9999,
+  $('table').sortable({helper:sortableHelper,items:'.sortable',handle:'.section,.next',cursor:'move',axis:'y',containment:'parent',delay:100,opacity:0.5,zIndex:9999,
   update:function(e,ui){
     var table = ui.item.parent();
     var index = [], prev = -1;

@@ -16,8 +16,11 @@ Tag="hdd-o"
 ?>
 <?
 require_once "$docroot/webGui/include/Preselect.php";
+$unassigned = array_key_exists($name, $devs);
+$disks = array_merge_recursive($disks, $devs);
 $disk = &$disks[$name];
-$date = date('Ymd-Hi');
+$dev  = $disk['device'];
+$id   = $disk['id'];
 $events = explode('|',$disk['smEvents'] ?? $var['smEvents'] ?? $numbers);
 $bgcolor = strstr('white,azure',$display['theme']) ? '#f2f2f2' : '#1c1c1c';
 $yes = _('Yes');
@@ -34,24 +37,11 @@ function maintenance_mode() {
   return ($var['fsState']=="Started" && $var['startMode']=="Maintenance" && $disk['luksState']<=1);
 }
 $sheets = []; $n = 0;
-$type = isset($disks[$name]) ? 'Device' : 'New';
-if ($type=='New') {
-  $dev = $name;
-  foreach ($devs as $sheet) {
-    $sheets[] = $sheet['device'];
-    if ($sheet['device']==$name) {$i = $n; $file = $sheet['id']."-$date.txt";}
-    $n++;
-  }
-} else {
-  $disk = &$disks[$name];
-  $dev  = $disk['device'];
-  $file = $disk['id']."-$date.txt";
-  foreach ($disks as $sheet) {
-    if ($sheet['type']=='Flash' || $sheet['color']=='grey-off') continue;
-    $sheets[] = $sheet['name'];
-    if ($sheet['name']==$name) { $i = $n; $spindown = "diskSpindownDelay.{$sheet['idx']}"; $delay = $sheet['spindownDelay']; }
-    $n++;
-  }
+foreach ($disks as $sheet) {
+  if ($sheet['type']=='Flash' || $sheet['color']=='grey-off') continue;
+  $sheets[] = $sheet['name'];
+  if ($sheet['name']==$name) { $i = $n; }
+  $n++;
 }
 $tag  = $disk['name'];
 $end  = count($sheets)-1;
@@ -76,12 +66,12 @@ if ($.cookie('deletepool')!=null) {
 function doDispatch(form) {
   var fields = {};
 <?if ($display['unit']=='F'):?>
-  if (form.<?=addslashes(htmlspecialchars($name))?>_hotTemp.value>0) form.<?=addslashes(htmlspecialchars($name))?>_hotTemp.value = Math.round((form.<?=addslashes(htmlspecialchars($name))?>_hotTemp.value-32)*5/9);
-  if (form.<?=addslashes(htmlspecialchars($name))?>_maxTemp.value>0) form.<?=addslashes(htmlspecialchars($name))?>_maxTemp.value = Math.round((form.<?=addslashes(htmlspecialchars($name))?>_maxTemp.value-32)*5/9);
+  if (form.<?=addslashes(htmlspecialchars($id))?>_hotTemp.value>0) form.<?=addslashes(htmlspecialchars($id))?>_hotTemp.value = Math.round((form.<?=addslashes(htmlspecialchars($id))?>_hotTemp.value-32)*5/9);
+  if (form.<?=addslashes(htmlspecialchars($id))?>_maxTemp.value>0) form.<?=addslashes(htmlspecialchars($id))?>_maxTemp.value = Math.round((form.<?=addslashes(htmlspecialchars($id))?>_maxTemp.value-32)*5/9);
 <?endif;?>
   fields['#cfg'] = "/boot/config/smart-one.cfg";
   fields['#cleanup'] = true;
-  $(form).find('input[name^="<?=addslashes(htmlspecialchars($name))?>_"]').each(function(){fields[$(this).attr('name')] = $(this).val(); $(this).prop('disabled',true);});
+  $(form).find('input[name^="<?=addslashes(htmlspecialchars($id))?>_"]').each(function(){fields[$(this).attr('name')] = $(this).val(); $(this).prop('disabled',true);});
   $.post('/webGui/include/Dispatcher.php',fields);
 }
 function prepareDeviceInfo(form) {
@@ -303,9 +293,9 @@ function freeSpace(val) {
 }
 $(function() {
 <?if (count($sheets)>1):?>
-  var ctrl  = "<span class='status <?=$tabbed?'vhshift':'vshift'?>'><span class='waitmsg fa fa-circle-o-notch fa-span fa-fw' style='display:none;margin-right:8px'></span><a href='/Main/<?=$type?>?name=<?=$prev?>' title='previous device'>";
+  var ctrl  = "<span class='status <?=$tabbed?'vhshift':'vshift'?>'><span class='waitmsg fa fa-circle-o-notch fa-span fa-fw' style='display:none;margin-right:8px'></span><a href='/Main/Device?name=<?=$prev?>' title='previous device'>";
       ctrl += "<button type='button' style='margin-right:4px' onclick='this.disabled=true;$(\".waitmsg\").show();'><i class='fa fa-chevron-left fa-fw'></i></button></a>";
-      ctrl += "<a href='/Main/<?=$type?>?name=<?=$next?>' title='next device'><button type='button' onclick='this.disabled=true;$(\".waitmsg\").show();'><i class='fa fa-chevron-right fa-fw'></i></button></a></span>";
+      ctrl += "<a href='/Main/Device?name=<?=$next?>' title='next device'><button type='button' onclick='this.disabled=true;$(\".waitmsg\").show();'><i class='fa fa-chevron-right fa-fw'></i></button></a></span>";
 <?if ($tabbed):?>
   $('.tabs').append(ctrl);
 <?else:?>
@@ -358,6 +348,10 @@ _(Name)_:
 : <?=_(my_disk($name),3)?>
 
 <?endif;?>
+_(Identification)_:
+: <?=my_id($disk['id'])?>&nbsp;(<?=$disk['device']?>)
+
+<?if (!$unassigned):?>
 _(Comments)_:
 : <input type="text" name="diskComment.<?=$disk['idx']?>" maxlength="256" value="<?=htmlspecialchars($disk['comment'])?>">
 
@@ -391,14 +385,15 @@ _(Spin down delay)_:
   <?=mk_option($disk['spindownDelay'], "8",  "8 "._('hours'))?>
   <?=mk_option($disk['spindownDelay'], "9",  "9 "._('hours'))?>
   </select><span id="smart_selftest" class='orange-text'></span>
+<?endif;?>
 
 _(Warning disk temperature threshold)_ (&deg;<?=$display['unit']?>):
-: <input type="number" min="0" max="300" name="<?=htmlspecialchars($name)?>_hotTemp" class="narrow" value="<?=strlen($disk['hotTemp'])?displayTemp($disk['hotTemp']):''?>" placeholder="<?=displayTemp($display['hot'])?>">
+: <input type="number" min="0" max="300" name="<?=htmlspecialchars($id)?>_hotTemp" class="narrow" value="<?=strlen($disk['hotTemp'])?displayTemp($disk['hotTemp']):''?>" placeholder="<?=displayTemp($display['hot'])?>">
 
 :info_warning_temp_help:
 
 _(Critical disk temperature threshold)_ (&deg;<?=$display['unit']?>):
-: <input type="number" min="0" max="300" name="<?=htmlspecialchars($name)?>_maxTemp" class="narrow" value="<?=strlen($disk['maxTemp'])?displayTemp($disk['maxTemp']):''?>" placeholder="<?=displayTemp($display['max'])?>">
+: <input type="number" min="0" max="300" name="<?=htmlspecialchars($id)?>_maxTemp" class="narrow" value="<?=strlen($disk['maxTemp'])?displayTemp($disk['maxTemp']):''?>" placeholder="<?=displayTemp($display['max'])?>">
 
 :info_critical_temp_help:
 
@@ -447,12 +442,12 @@ _(Minimum free space)_:
 
 <?endif;?>
 _(Warning disk utilization threshold)_ (%):
-: <input type="number" min="0" max="100" name="<?=htmlspecialchars($name)?>_warning" class="narrow" value="<?=strlen($disk['warning'])?$disk['warning']:''?>" placeholder="<?=$display['warning']?>">
+: <input type="number" min="0" max="100" name="<?=htmlspecialchars($id)?>_warning" class="narrow" value="<?=strlen($disk['warning'])?$disk['warning']:''?>" placeholder="<?=$display['warning']?>">
 
 :info_warning_utilization_help:
 
 _(Critical disk utilization threshold)_ (%):
-: <input type="number" min="0" max="100" name="<?=htmlspecialchars($name)?>_critical" class="narrow" value="<?=strlen($disk['critical'])?$disk['critical']:''?>" placeholder="<?=$display['critical']?>")>
+: <input type="number" min="0" max="100" name="<?=htmlspecialchars($id)?>_critical" class="narrow" value="<?=strlen($disk['critical'])?$disk['critical']:''?>" placeholder="<?=$display['critical']?>")>
 
 :info_critical_utilization_help:
 
@@ -708,7 +703,7 @@ _(xfs_repair status)_:
 <form markdown="1" name="smart_settings" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareDeviceInfo(this)">
 <input type="hidden" name="#file" value="/boot/config/smart-one.cfg">
 <input type="hidden" name="#include" value="webGui/include/update.smart.php">
-<input type="hidden" name="#section" value="<?=htmlspecialchars($name)?>">
+<input type="hidden" name="#section" value="<?=htmlspecialchars($disk['id'])?>">
 <input type="hidden" name="#cleanup" value="true">
 <input type="hidden" name="smEvents" value="">
 <input type="hidden" name="smGlue" value="<?=htmlspecialchars($var['smGlue'])?>">
