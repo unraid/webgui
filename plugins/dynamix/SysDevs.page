@@ -24,7 +24,7 @@ table tr td.thin{line-height:8px;height:8px}
 <script>
 $(window).bind('beforeunload',function(e){
   // warn user if they leave the page with unsaved changes
-  if (!$('#applycfg').prop('disabled')) return "You have unsaved changes";
+  if ($('#applycfg') && $('#applycfg').is(":visible") && !$('#applycfg').prop('disabled')) return "You have unsaved changes";
 });
 $(function(){
   $('#t1').load('/webGui/include/SysDevs.php',{table:'t1'});

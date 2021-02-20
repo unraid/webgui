@@ -4,8 +4,8 @@ Icon="icon-diagnostics"
 Tag="tv"
 ---
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2021, Lime Technology
+ * Copyright 2012-2021, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -25,29 +25,50 @@ pre>p{margin:0;padding:0}
 </style>
 
 <script>
+var diagnosticsFile = "";
+var file = "";
+var diagnostic = new NchanSubscriber('/sub/diagnostic');
+diagnostic.on('message',function(data) {
+  if (data) {
+    if (data == diagnosticsFile.replace("/","")+"FINISHED") {
+      diagnostic.stop();
+      swal.close();
+      location = diagnosticsFile;
+      setTimeout(function(){cleanUp(file);},4000);
+    } else {
+      $("#command").html(data);
+    }
+  }
+});
+
+function cleanUp(file) {	
+  if (document.hasFocus()) {	
+    $.post('/webGui/include/Download.php',{cmd:'delete',file:file});	
+  } else {	
+    setTimeout(function(){cleanUp(file);},2000);	
+  }	
+}
+
 function zipfile(){
   var tzoffset = (new Date()).getTimezoneOffset() * 60000; //offset in milliseconds
   var localISOTime = (new Date(Date.now() - tzoffset)).toISOString().slice(0, -1);
   return '<?=$zip?>-diagnostics-'+localISOTime.substr(0,16).replace(/[-:]/g,'').replace('T','-')+'.zip';
 }
-function cleanUp(file) {
-  if (document.hasFocus()) {
-    $('input[value="Downloading..."]').val('Download').prop('disabled',false);
-    $('div.spinner').hide('slow');
-    $('#pleaseWait').hide('slow');
-    $.post('/webGui/include/Download.php',{cmd:'delete',file:file});
-  } else {
-    setTimeout(function(){cleanUp(file);},2000);
-  }
-}
+
 function diagnostics(file) {
-  $('input[value="Download"]').val('Downloading...').prop('disabled',true);
-  $('div.spinner').show('slow');
-  $('#pleaseWait').show('slow');
   var anonymize = $('#anonymize').is(':checked') ? '' : '-a';
   $.post('/webGui/include/Download.php',{cmd:'diag',file:file,anonymize:anonymize},function(zip) {
-    location = zip;
-    setTimeout(function(){cleanUp(file);},4000);
+    diagnosticsFile = zip;
+    diagnostic.start();
+    swal({
+      title: "_(Downloading...)_",
+      text: "/boot/logs"+zip+"<br><tt><span id='command'></span></tt>",
+      allowOutsideClick: false,
+      showConfirmButton: false,
+      showCancelButton: false,
+      type: "info",
+      html: true
+    });
   });
 }
 </script>
@@ -94,3 +115,5 @@ to the system log.*
 :end
 
 <input type="button" value="_(Download)_" onclick="diagnostics(zipfile())"><input type="button" value="_(Done)_" onclick="done()"><input type="checkbox" id="anonymize" checked>_(Anonymize diagnostics)_
+
+

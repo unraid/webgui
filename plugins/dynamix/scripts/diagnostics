@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2019, Lime Technology
- * Copyright 2012-2019, Bergware International.
+/* Copyright 2005-2021, Lime Technology
+ * Copyright 2012-2021, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -22,11 +22,29 @@ $var = (array)@parse_ini_file("$get/var.ini");
 $docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 $folders = ['/boot','/boot/config','/boot/config/plugins','/boot/extra','/boot/syslinux','/var/log','/var/log/plugins','/var/log/packages','/tmp'];
 
+function curl_socket($socket, $url, $postdata = NULL) {
+  $ch = curl_init($url);
+  curl_setopt($ch, CURLOPT_UNIX_SOCKET_PATH, $socket);
+  if ($postdata !== NULL) {
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $postdata);
+  }
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+  curl_exec($ch);
+  curl_close($ch);
+}
+function publish($endpoint, $message){
+  curl_socket("/var/run/nginx.socket", "http://localhost/pub/$endpoint?buffer_length=1", $message);
+}
+
 function exert($cmd, &$save=null) {
+  global $cli,$diag;
 // execute command with timeout of 30s
+  publish("diagnostic",$cmd);
   exec("timeout -s9 30 $cmd", $save);
   return implode("\n",$save);
 }
+
 function shareDisks($share) {
   return exec("shopt -s dotglob; getfattr --no-dereference --absolute-names --only-values -n system.LOCATIONS ".escapeshellarg("/usr/local/emhttp/mnt/user/$share")." 2>/dev/null") ?: "no drives";
 }
@@ -281,6 +299,8 @@ foreach (glob("/var/log/syslog*") as $file) {
   }
   // replace consecutive repeated lines in syslog
   exert("awk -i inplace '{if(s!=substr(\$0,17)){if(x>0)print\"### [PREVIOUS LINE REPEATED \"x\" TIMES] ###\\r\";print;x=0}else{x++}s=substr(\$0,17)}END{if(x>0)print\"### [PREVIOUS LINE REPEATED \"x\" TIMES] ###\\r\"}' ".escapeshellarg("$log.txt"));
+  // remove SHA256 hashes
+  exert("sed -ri 's/(SHA256:).+[^\s\b]/SHA256:***REMOVED***/gm' $log.txt");
   // truncate syslog if too big
   if (basename($file)=='syslog' && filesize($file)>=$max) exert("tail -n 200 ".escapeshellarg("$log.txt")." >".escapeshellarg("$log.last200.txt"));
   exert("truncate -s '<$max' ".escapeshellarg("$log.txt"));
@@ -299,5 +319,10 @@ if (file_exists($vfiopci)) {
 }
 // create resulting zip file and remove temp folder
 exert("zip -qmr ".escapeshellarg($zip)." ".escapeshellarg("/$diag"));
-if ($cli) echo "done.\nZIP file '$zip' created.\n";
+if ($cli) {
+  echo "done.\nZIP file '$zip' created.\n";
+} else {
+  copy($zip,"/boot/logs/".basename($zip));
+}
+publish("diagnostic",basename($zip)."FINISHED");
 ?>

@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2021, Lime Technology
+ * Copyright 2012-2021, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -34,7 +34,7 @@ case 'delete':
 case 'diag':
   if (is_file("$docroot/$file") && strpos(realpath("$docroot/$file"), $docroot.'/') !== 0) exit;
   $anon = empty($_POST['anonymize']) ? '' : escapeshellarg($_POST['anonymize']);
-  exec("$docroot/webGui/scripts/diagnostics $anon ".escapeshellarg("$docroot/$file"));
+  exec("echo $docroot/webGui/scripts/diagnostics $anon ".escapeshellarg("$docroot/$file")." | at NOW > /dev/null 2>&1");
   echo "/$file";
   break;
 case 'unlink':
