@@ -189,6 +189,28 @@ function parityStatus() {
     }
   });
 }
+function moverStatus() {
+  
+ $.post('/webGui/include/DeviceList.php',{path:'<?=$path?>',device:'mover'},function(data) {
+    if (data) {$.each(data.split(';'),function(k,v) {if ($('#moverline'+k).length>0) $('#moverline'+k).html(v);});}
+ timers.moverStatus = setTimeout(moverStatus,3000);
+ if (!data &&  $('#moverButton').is(":disabled")) {
+      $('#moverButton').removeAttr('disabled');
+      text ='<strong>_(Move)_</strong> _(will immediately invoke the Mover)_.&nbsp;&nbsp;<a href="/Main/Settings/Scheduler ">(Schedule)</a>'
+      $('#movertext').html(text);
+      $('#moverrow0' ).hide();
+      $('#moverrow1' ).hide();
+ }
+ if (data &&  $('#moverButton').is(":enabled")) {
+      $('#moverButton').attr('disabled', 'disbaled');
+      text ='_(Disabled)_ - _(Mover is running)_'
+      $('#movertext').html(text);
+      $('#moverrow0' ).show();
+      $('#moverrow1' ).show();
+ }
+  });
+}
+
 function stopArray(form) {
   $(form).append('<input type="hidden" name="cmdStop" value="Stop">');
 <?if ($confirm['stop']):?>
@@ -231,6 +253,7 @@ function toggleApply(checked) {
   $('input[name="#apply"]').prop('disabled',!checked);
 }
 parityStatus();
+moverStatus();
 <?if ($tabbed):?>
 $('.tabs').append(ctrl);
 if ($.cookie('tab')=='tab0') $('i.toggle').hide();
@@ -525,9 +548,13 @@ function formatWarning(val) {
 <table markdown="1" class="array_status noshift">
  <tr><td></td>
 <?if ($mover):?>
- <td><input type="submit" name="cmdStartMover" value="_(Move)_" disabled></td><td>_(Disabled)_ - _(Mover is running)_.</td>
-<?else:?>
- <td><input type="submit" name="cmdStartMover" value="_(Move)_"></td><td>**_(Move)_** _(will immediately invoke the Mover)_.&nbsp;&nbsp;<a href="/Main/Settings/Scheduler"<?if ($tabbed):?> onclick="$.cookie('one','tab2',{path:'/'})"<?endif;?>>(_(Schedule)_)</a></td>
+ <td><input type="submit" name="cmdStartMover" id="moverButton" value="_(Move)_" disabled></td><td id="movertext">_(Disabled)_ - _(Mover is running)_.<br>
+ <tr id="moverrow0" ><td>_(Transfering To Array)_:</td><td id="moverline0"></td><td></td></tr>
+ <tr id="moverrow1" ><td>_(Transfering From Array)_:</td><td id="moverline1"></td><td></td></tr>
+ <?else:?>
+ <td><input type="submit" name="cmdStartMover" id="moverButton" value="_(Move)_"></td><td id="movertext">**_(Move)_** _(will immediately invoke the Mover)_.&nbsp;&nbsp;<a href="/Main/Settings/Scheduler"<?if ($tabbed):?> onclick="$.cookie('one','tab2',{path:'/'})"<?endif;?>>(_(Schedule)_)</a></td>
+ <tr id="moverrow0" hidden><td>_(Transfering To Array)_:</td><td id="moverline0"></td><td></td></tr>
+ <tr id="moverrow1" hidden><td>_(Transfering From Array)_:</td><td id="moverline1"></td><td></td></tr>
 <?endif;?>
  </tr>
 </table>

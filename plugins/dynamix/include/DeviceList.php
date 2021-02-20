@@ -444,5 +444,27 @@ case 'parity':
     if ($status==0||file_exists($log)) file_put_contents($log,"$year $timestamp|$duration|$speed|$status|$error\n",FILE_APPEND);
   }
   break;
+case "mover":
+  $mover = file_exists('/var/run/mover.pid') ;
+  if ($mover) {
+    if ( file_exists('/usr/local/emhttp/state/mover.ini')) {
+      $moverstat = parse_ini_file('/usr/local/emhttp/state/mover.ini') ;
+      if ($moverstat["TotalToArray"]>0) { 
+        $toperc = ($moverstat["TotalToArray"]-$moverstat["RemainToArray"])/$moverstat["TotalToArray"] * 100; 
+        if ($moverstat["RemainToArray"]>0) { $data[] = _("Percentage Complete ").round($toperc,2)."%" ; } else {$data[] = _("Transfer complete") ;}
+        } else { 
+          $data[] = _("Nothing to transfer") ;}
+      if ($moverstat["TotalFromArray"]>0) { 
+        $fromperc = ($moverstat["TotalFromArray"] - $moverstat["RemainFromArray"])/$moverstat["TotalFromArray"] * 100; 
+        if ($moverstat["RemainFromArray"]>0) { $data[] = _("Percentage Complete ").round($fromperc,2)."%" ; } else {$data[] = _("Transfer complete") ;}
+        } else { 
+        $data[] = _("Nothing to transfer") ;}
+    } else {
+      $data[] = 'Error';
+      $data[] = 'Error';
+    }
+  echo implode(';',$data);
+  }
+  break;
 }
 ?>
