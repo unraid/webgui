@@ -204,7 +204,7 @@ foreach ($files as $file) {
 // copy docker information (if existing)
 $max = 1*1024*1024; //=1MB
 $docker = "/var/log/docker.log";
-if (file_exists($docker)) {
+if (file_exists($docker) && filesize($docker)) {
   $log = "/$diag/logs/docker";
   exert("todos <$docker >".escapeshellarg("$log.txt"));
   if (filesize($docker)>=$max) {
@@ -249,7 +249,7 @@ $installedPlugins = $installedPlugins ?: "No additional Plugins Installed";
 file_put_contents("/$diag/system/plugins.txt",$installedPlugins);
 // copy libvirt information (if existing)
 $libvirtd = "/var/log/libvirt/libvirtd.log";
-if (file_exists($libvirtd)) {
+if (file_exists($libvirtd) && filesize($libvirtd)) {
   $log = "/$diag/logs/libvirt";
   exert("todos <$libvirtd >".escapeshellarg("$log.txt"));
   if (filesize($libvirtd)>=$max) {
@@ -307,13 +307,13 @@ foreach (glob("/var/log/syslog*") as $file) {
 }
 // copy graphql-api.log
 $graphql = "/var/log/graphql-api.log";
-if (file_exists($graphql)) {
+if (file_exists($graphql) && filesize($graphql)) {
   $log = "/$diag/logs/graphql-api.txt";
   exert("todos <$graphql >".escapeshellarg($log));
 }
 // copy vfio-pci log
 $vfiopci = "/var/log/vfio-pci";
-if (file_exists($vfiopci)) {
+if (file_exists($vfiopci) && filesize($vfiopci)) {
   $log = "/$diag/logs/vfio-pci.txt";
   exert("todos <$vfiopci >".escapeshellarg($log));
 }
