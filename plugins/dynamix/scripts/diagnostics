@@ -22,6 +22,17 @@ $var = (array)@parse_ini_file("$get/var.ini");
 $docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 $folders = ['/boot','/boot/config','/boot/config/plugins','/boot/extra','/boot/syslinux','/var/log','/var/log/plugins','/var/log/packages','/tmp'];
 
+function emhttpd($cmd) {
+  global $state, $csrf;
+  $ch = curl_init("http://127.0.0.1/update");
+  $options = array(CURLOPT_UNIX_SOCKET_PATH => '/var/run/emhttpd.socket',
+                   CURLOPT_POST => 1,
+                   CURLOPT_POSTFIELDS => "$cmd&startState=$state&csrf_token=$csrf");
+  curl_setopt_array($ch, $options);
+  curl_exec($ch);
+  curl_close($ch);
+}
+
 function curl_socket($socket, $url, $postdata = NULL) {
   $ch = curl_init($url);
   curl_setopt($ch, CURLOPT_UNIX_SOCKET_PATH, $socket);
@@ -99,6 +110,19 @@ if ($cli) {
   $diag = basename($zip, '.zip');
   $split = explode('-', $diag);
   $date = "{$split[2]}-{$split[3]}";
+}
+
+// spin up all drives
+$disks = (array)parse_ini_file('state/disks.ini',true);
+$vars = parse_ini_file('state/var.ini',true);
+$state = $vars['mdState'];
+$csrf = $vars['csrf_token'];
+
+foreach ($disks as $disk) {
+  if ($disk['status'] != 'DISK_OK') continue;
+  if ( ! $disk['spundown'] ) continue;
+  publish("diagnostic","Spinning up {$disk['name']}");
+  emhttpd("cmdSpinup={$disk['name']}");
 }
 // create folder structure
 exert("mkdir -p ".escapeshellarg("/$diag/system")." ".escapeshellarg("/$diag/config")." ".escapeshellarg("/$diag/logs")." ".escapeshellarg("/$diag/shares")." ".escapeshellarg("/$diag/smart")." ".escapeshellarg("/$diag/qemu")." ".escapeshellarg("/$diag/xml"));
