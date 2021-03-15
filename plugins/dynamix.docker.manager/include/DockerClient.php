@@ -299,7 +299,7 @@ class DockerTemplates {
 			if ($ct['Running']) {
 				$port = &$ct['Ports'][0];
 				$ip = ($ct['NetworkMode']=='host'||$port['NAT'] ? $host : $port['IP']);
-				$tmp['url'] = $ip ? (strpos($tmp['url'],$ip)!==false ? $tmp['url'] : $this->getControlURL($ct, $ip)) : $tmp['url'];
+				$tmp['url'] = $tmp['url'] ?? $this->getControlURL($ct, $ip);
 				$tmp['shell'] = $tmp['shell'] ?? $this->getTemplateValue($image, 'Shell');
 			}
 			$tmp['registry'] = $tmp['registry'] ?? $this->getTemplateValue($image, 'Registry');
