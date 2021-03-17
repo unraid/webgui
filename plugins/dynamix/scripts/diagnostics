@@ -113,17 +113,14 @@ if ($cli) {
 }
 
 // spin up all drives
-$disks = (array)parse_ini_file('state/disks.ini',true);
+
 $vars = parse_ini_file('state/var.ini',true);
 $state = $vars['mdState'];
 $csrf = $vars['csrf_token'];
 
-foreach ($disks as $disk) {
-  if ($disk['status'] != 'DISK_OK') continue;
-  if ( ! $disk['spundown'] ) continue;
-  publish("diagnostic","Spinning up {$disk['name']}");
-  emhttpd("cmdSpinup={$disk['name']}");
-}
+publish("diagnostic","Spinning up disks");
+emhttpd("cmdSpinupAll=apply");
+
 // create folder structure
 exert("mkdir -p ".escapeshellarg("/$diag/system")." ".escapeshellarg("/$diag/config")." ".escapeshellarg("/$diag/logs")." ".escapeshellarg("/$diag/shares")." ".escapeshellarg("/$diag/smart")." ".escapeshellarg("/$diag/qemu")." ".escapeshellarg("/$diag/xml"));
 // get utilization of running processes
