@@ -1017,10 +1017,8 @@
 				<td>
 					<select name="nic[<?=$i?>][model]">
 					<?
-					echo mk_option($arrNic['model'], 'e1000', 'e1000');
 					echo mk_option($arrNic['model'], 'virtio-net', 'virtio-net');
 					echo mk_option($arrNic['model'], 'virtio', 'virtio');
-					echo mk_option($arrNic['model'], 'vmxnet', 'vmxnet');
 					?>
 					</select>
 				</td>
