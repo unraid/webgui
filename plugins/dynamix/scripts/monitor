@@ -137,8 +137,8 @@ function check_usage($name,$used,$text,$info) {
   global $notify,$disks,$saved,$display,$server;
   if ($used == -1) return;
   $disk = &$disks[$name];
-  $warning = $disk['warning'] ?? $display['warning'];
-  $critical = $disk['critical'] ?? $display['critical'];
+  $warning = $disk['warning'] ?: $display['warning'];
+  $critical = $disk['critical'] ?: $display['critical'];
   $warn = exceed($used,$critical) ? 'alert' : (exceed($used,$warning) ? 'warning' : '');
   $item = 'used';
   $last = $saved[$item][$name] ?? 0;

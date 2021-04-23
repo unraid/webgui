@@ -65,13 +65,16 @@ if ($.cookie('deletepool')!=null) {
 }
 function doDispatch(form) {
   var fields = {};
+  var id = "<?=addslashes(htmlspecialchars($id))?>_";
 <?if ($display['unit']=='F'):?>
-  if (form.<?=addslashes(htmlspecialchars($id))?>_hotTemp.value>0) form.<?=addslashes(htmlspecialchars($id))?>_hotTemp.value = Math.round((form.<?=addslashes(htmlspecialchars($id))?>_hotTemp.value-32)*5/9);
-  if (form.<?=addslashes(htmlspecialchars($id))?>_maxTemp.value>0) form.<?=addslashes(htmlspecialchars($id))?>_maxTemp.value = Math.round((form.<?=addslashes(htmlspecialchars($id))?>_maxTemp.value-32)*5/9);
+  var hottemp = $(form).find('input[name="'+id+'hotTemp"]');
+  var maxtemp = $(form).find('input[name="'+id+'maxTemp"]');
+  if (hottemp.val()>0) hottemp.val(Math.round((hottemp.val()-32)*5/9));
+  if (maxtemp.val()>0) maxtemp.val(Math.round((maxtemp.val()-32)*5/9));
 <?endif;?>
   fields['#cfg'] = "/boot/config/smart-one.cfg";
   fields['#cleanup'] = true;
-  $(form).find('input[name^="<?=addslashes(htmlspecialchars($id))?>_"]').each(function(){fields[$(this).attr('name')] = $(this).val(); $(this).prop('disabled',true);});
+  $(form).find('input[name^="'+id+'"]').each(function(){fields[$(this).attr('name')] = $(this).val(); $(this).prop('disabled',true);});
   $.post('/webGui/include/Dispatcher.php',fields);
 }
 function prepareDeviceInfo(form) {
@@ -338,7 +341,7 @@ $(function() {
 });
 </script>
 
-<form markdown="1" method="POST" action="/update.htm" target="progressFrame" onsubmit="doDispatch(this)">
+<form markdown="1" method="POST" action="/update.htm" target="progressFrame">
 <?if ($var['fsState']=="Stopped" && in_array($name,$pools)):?>
 _(Name)_:
 : <a onclick="renamePoolPopup()" style="cursor:pointer" title="_(Rename Pool)_"><?=$name?></a>
@@ -348,9 +351,15 @@ _(Name)_:
 : <?=_(my_disk($name),3)?>
 
 <?endif;?>
+<?if (strpos($disk['status'],'_NP')!==false):?>
+_(Identification)_:
+: _(No device)_
+
+<?else:?>
 _(Identification)_:
 : <?=my_id($disk['id'])?>&nbsp;(<?=$disk['device']?>)
 
+<?endif;?>
 <?if (!$unassigned):?>
 _(Comments)_:
 : <input type="text" name="diskComment.<?=$disk['idx']?>" maxlength="256" value="<?=htmlspecialchars($disk['comment'])?>">
@@ -386,16 +395,6 @@ _(Spin down delay)_:
   <?=mk_option($disk['spindownDelay'], "9",  "9 "._('hours'))?>
   </select><span id="smart_selftest" class='orange-text'></span>
 <?endif;?>
-
-_(Warning disk temperature threshold)_ (&deg;<?=$display['unit']?>):
-: <input type="number" min="0" max="300" name="<?=htmlspecialchars($id)?>_hotTemp" class="narrow" value="<?=strlen($disk['hotTemp'])?displayTemp($disk['hotTemp']):''?>" placeholder="<?=displayTemp($display['hot'])?>">
-
-:info_warning_temp_help:
-
-_(Critical disk temperature threshold)_ (&deg;<?=$display['unit']?>):
-: <input type="number" min="0" max="300" name="<?=htmlspecialchars($id)?>_maxTemp" class="narrow" value="<?=strlen($disk['maxTemp'])?displayTemp($disk['maxTemp']):''?>" placeholder="<?=displayTemp($display['max'])?>">
-
-:info_critical_temp_help:
 
 <?if ($disk['type']=="Data" || in_array($tag,$pools)):?>
 _(File system status)_:
@@ -442,12 +441,12 @@ _(Minimum free space)_:
 
 <?endif;?>
 _(Warning disk utilization threshold)_ (%):
-: <input type="number" min="0" max="100" name="<?=htmlspecialchars($id)?>_warning" class="narrow" value="<?=strlen($disk['warning'])?$disk['warning']:''?>" placeholder="<?=$display['warning']?>">
+: <input type="number" min="0" max="100" name="diskWarning.<?=$disk['idx']?>" class="narrow" value="<?=strlen($disk['warning'])?$disk['warning']:''?>" placeholder="<?=$display['warning']?>">
 
 :info_warning_utilization_help:
 
 _(Critical disk utilization threshold)_ (%):
-: <input type="number" min="0" max="100" name="<?=htmlspecialchars($id)?>_critical" class="narrow" value="<?=strlen($disk['critical'])?$disk['critical']:''?>" placeholder="<?=$display['critical']?>")>
+: <input type="number" min="0" max="100" name="diskCritical.<?=$disk['idx']?>" class="narrow" value="<?=strlen($disk['critical'])?$disk['critical']:''?>" placeholder="<?=$display['critical']?>")>
 
 :info_critical_utilization_help:
 
@@ -698,15 +697,26 @@ _(xfs_repair status)_:
 </form>
 <?endif;?>
 
+<?if (strpos($disks[$name]['status'],'_NP')===false):?>
 <div id="title"><span class="left"><i class="title fa fa-plus-square"></i>_(SMART Settings)_</span></div>
 
-<form markdown="1" name="smart_settings" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareDeviceInfo(this)">
+<form markdown="1" name="smart_settings" method="POST" action="/update.php" target="progressFrame" onsubmit="doDispatch(this);prepareDeviceInfo(this)">
 <input type="hidden" name="#file" value="/boot/config/smart-one.cfg">
 <input type="hidden" name="#include" value="webGui/include/update.smart.php">
 <input type="hidden" name="#section" value="<?=htmlspecialchars($disk['id'])?>">
 <input type="hidden" name="#cleanup" value="true">
 <input type="hidden" name="smEvents" value="">
 <input type="hidden" name="smGlue" value="<?=htmlspecialchars($var['smGlue'])?>">
+_(Warning disk temperature threshold)_ (&deg;<?=$display['unit']?>):
+: <input type="number" min="0" max="300" name="<?=htmlspecialchars($id)?>_hotTemp" class="narrow" value="<?=strlen($disk['hotTemp'])?displayTemp($disk['hotTemp']):''?>" placeholder="<?=displayTemp($display['hot'])?>">
+
+:info_warning_temp_help:
+
+_(Critical disk temperature threshold)_ (&deg;<?=$display['unit']?>):
+: <input type="number" min="0" max="300" name="<?=htmlspecialchars($id)?>_maxTemp" class="narrow" value="<?=strlen($disk['maxTemp'])?displayTemp($disk['maxTemp']):''?>" placeholder="<?=displayTemp($display['max'])?>">
+
+:info_critical_temp_help:
+
 _(SMART notification value)_:
 : <select name="smSelect">
   <?=mk_option($disk['smSelect'], "-1", _('Use default'))?>
@@ -766,6 +776,7 @@ _(SMART attribute notifications)_:
 <input type="submit" name="#default" value="_(Default)_">
 : <input type="submit" name="#apply" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
 </form>
+<?endif?>
 
 <div id="dialogRenamePool" style="display:none"></div>
 
@@ -783,4 +794,5 @@ _(Name)_:
 <input type="hidden" name="changeSlots" value="apply">
 <input type="hidden" name="poolName" value="<?=$name?>">
 <input type="hidden" name="poolSlots" value="0">
+<input type='hidden' name='csrf_token' value='<?=$var['csrf_token']?>'>
 </form>

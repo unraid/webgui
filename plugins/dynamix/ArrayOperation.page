@@ -152,7 +152,7 @@ function prepareInput(form) {
       form.file.disabled = false;
       form.text.disabled = false;
       form.copy.disabled = false;
-      swal({title:"_(Printable Characters Only)_",text:"_(Use <b>ASCII</b> characters from space ' ' to tilde '~')_<br>_(Otherwise use the <b>keyfile</b> method for UTF8 input)_",html:true,type:'error',confirmButtonText:"_(Ok)_"});
+      swal({title:"_(Printable Characters Only)_",text:"_(Use **ASCII** characters from space ' ' to tilde '~')_<br>_(Otherwise use the **keyfile** method for UTF8 input)_",html:true,type:'error',confirmButtonText:"_(Ok)_"});
     }
     return;
   }
@@ -165,12 +165,12 @@ function prepareInput(form) {
 function parityWarning(form) {
   if (form.md_invalidslot.checked) {
 <?if (strpos($disks['parity2']['status'],'_NP')===false):?>
-    var text = "_(<i>Dual parity valid</i> requires <b>ALL</b> disks in their original slots)_";
+    var text = "_(*Dual parity* valid requires **ALL** disks in their original slots)_";
 <?else:?>
-    var text = "_(<i>Parity valid</i> requires <b>ALL</b> disks to have their original content)_";
+    var text = "_(*Parity valid* requires **ALL** disks to have their original content)_";
 <?endif;?>
   } else {
-    var text = "_(<i>Parity</i> disk(s) content will be overwritten)_";
+    var text = "_(*Parity* disk(s) content will be overwritten)_";
   }
   swal({title:"_(Proceed to start)_",text:text,html:true,type:'warning',showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){prepareInput(form);});
 }
@@ -295,10 +295,10 @@ function formatWarning(val) {
   if (val==true)
     swal({
       title:"_(Format Unmountable disks)_",
-      text: "_(Create an empty file system on the disks shown as <b>Unmountable</b> discarding all data currently on the disks and update parity to reflect this)_. "+
+      text: "_(Create an empty file system on the disks shown as **Unmountable** discarding all data currently on the disks and update parity to reflect this)_. "+
             "_(This is typically done when a new disk is added to the array to get it ready for files to be written to it)_.<br>"+
-            "<p><br><b>_(WARNING)_</b>"+
-            "<p>_(A format is <b>NEVER</b> part of a data recovery or disk rebuild process and if done in such circumstances will normally lead to loss of all data on the disks being formatted)_.",
+            "<p><br>**_(WARNING)_**"+
+            "<p>_(A format is **NEVER** part of a data recovery or disk rebuild process and if done in such circumstances will normally lead to loss of all data on the disks being formatted)_.",
       type: "warning",
       confirmButtonText:"_(Ok)_",
       html: true

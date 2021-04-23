@@ -196,8 +196,8 @@ function device_usage(&$disk, &$full, &$high) {
   if ($used) {
     if ($text==2 || $text==21) {
       $load = substr($used,0,-1);
-      $critical = $disk['critical'] ?? $_POST['critical'];
-      $warning = $disk['warning'] ?? $_POST['warning'];
+      $critical = $disk['critical'] ?: $_POST['critical'];
+      $warning = $disk['warning'] ?: $_POST['warning'];
       if ($critical > 0 && $load >= $critical) {$class = 'redbar'; $full++;}
       elseif ($warning > 0 && $load >= $warning) {$class = 'orangebar'; $high++;}
       else $class = 'greenbar';

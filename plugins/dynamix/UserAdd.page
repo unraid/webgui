@@ -175,14 +175,14 @@ _(Custom image)_:
 
 _(Password)_:
 <input type="hidden" name="userPassword" value="">
-: <input type="password" name="userPasswordGUI" maxlength="129" onKeyUp="validatePassword(this.value);this.form.cmdUserEdit.disabled=(this.form.userName.value=='' || this.form.userPasswordGUI.value!=this.form.userPasswordConfGUI.value)">
+: <input type="password" name="userPasswordGUI" maxlength="129" autocomplete="new-password" onKeyUp="validatePassword(this.value);this.form.cmdUserEdit.disabled=(this.form.userName.value=='' || this.form.userPasswordGUI.value!=this.form.userPasswordConfGUI.value)">
   <i id="showPass" class="fa fa-eye" style="cursor:pointer" title="_(Show / Hide password)_" onclick="showPassword()"></i><span><span class="usage-disk sys none"><span id="strength-bar" style="width:0"></span><span></span></span><span id="strength-text"></span></span>
 
 :user_password_help:
 
 _(Retype password)_:
 <input type="hidden" name="userPasswordConf" value="">
-: <input type="password" name="userPasswordConfGUI" maxlength="129" onKeyUp="this.form.cmdUserEdit.disabled=(this.form.userName.value=='' || this.form.userPasswordGUI.value!=this.form.userPasswordConfGUI.value)">
+: <input type="password" name="userPasswordConfGUI" maxlength="129" autocomplete="new-password" onKeyUp="this.form.cmdUserEdit.disabled=(this.form.userName.value=='' || this.form.userPasswordGUI.value!=this.form.userPasswordConfGUI.value)">
 
 &nbsp;
 : <input type="submit" name="cmdUserEdit" value="_(Add)_" onclick="this.value='Add'" disabled><input type="button" value="_(Done)_" onclick="done('UserAdd')">

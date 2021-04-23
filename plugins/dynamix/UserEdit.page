@@ -3,8 +3,8 @@ Title="Edit User"
 Tag="user"
 ---
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2021, Lime Technology
+ * Copyright 2012-2021, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -133,7 +133,7 @@ $(function(){
         swal({title:"_(Too many files)_",text:"_(Please select one file only)_!",html:true,type:"error"});
         break;
       case 'FileTooLarge':
-        swal({title:"_(File too large)_",text:"_(Maximum file upload size is 512K (524,288 bytes))_",type:"error",html:true,confirmButtonText:"_(Ok)_"});
+        swal({title:"_(File too large)_",text:"_(Maximum file upload size is 512K)_ (524,288 _(bytes)_)",type:"error",html:true,confirmButtonText:"_(Ok)_"});
         break;
       }
     },
@@ -196,14 +196,14 @@ _(Delete)_<input type="checkbox" name="confirmDelete" onChange="chkDelete(this.f
 <input type="hidden" name="userName" value="<?=htmlspecialchars($name)?>">
 _(Password)_:
 <input type="hidden" name="userPassword" value="">
-: <input type="password" name="userPasswordGUI" maxlength="129" onKeyUp="validatePassword(this.value);this.form.cmdUserEdit.disabled=(this.form.userPasswordGUI.value != this.form.userPasswordConfGUI.value);">
+: <input type="password" name="userPasswordGUI" maxlength="129" autocomplete="new-password" onKeyUp="validatePassword(this.value);this.form.cmdUserEdit.disabled=(this.form.userPasswordGUI.value != this.form.userPasswordConfGUI.value);">
   <i id="showPass" class="fa fa-eye" style="cursor:pointer" title="_(Show / Hide password)_" onclick="showPassword()"></i><span><span class="usage-disk sys none"><span id="strength-bar" style="width:0"></span><span></span></span><span id="strength-text"></span></span>
 
 :user_password_help:
 
 _(Retype password)_:
 <input type="hidden" name="userPasswordConf" value="">
-: <input type="password" name="userPasswordConfGUI" maxlength="129" onKeyUp="this.form.cmdUserEdit.disabled=(this.form.userPasswordGUI.value != this.form.userPasswordConfGUI.value);">
+: <input type="password" name="userPasswordConfGUI" maxlength="129" autocomplete="new-password" onKeyUp="this.form.cmdUserEdit.disabled=(this.form.userPasswordGUI.value != this.form.userPasswordConfGUI.value);">
 
 &nbsp;
 : <input type="submit" name="cmdUserEdit" value="_(Change)_" onclick="this.value='Change'" disabled><input type="button" value="_(Done)_" onclick="done('UserEdit')">

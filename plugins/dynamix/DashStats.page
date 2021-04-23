@@ -1,8 +1,8 @@
 Menu="Dashboard"
 ---
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2021, Lime Technology
+ * Copyright 2012-2021, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -165,6 +165,7 @@ span.ctrl{float:right;margin-right:10px}
 span.outer{float:left}
 span.inner{width:<?=$theme1?153:140?>px}
 span.ups{width:200px;display:inline-block}
+span.tx{width:75px;display:inline-block}
 span.busy,i.inactive{opacity:0.5}
 span#inbound{width:75px;display:inline-block}
 span#load{width:120px;display:inline-block}
@@ -705,15 +706,15 @@ function update1() {
         $('td#'+vtun+'-hs-'+n[vtun]).text("_(not received)_");
       } else if (info[1] > 86400) {
         var d = parseInt(info[1]/86400);
-        var s = d==1 ? "_(day)_" : "_(days)_";
-        $('td#'+vtun+'-hs-'+n[vtun]).text(d+s+" _(ago)_");
+        var s = d==1 ? " _(day)_" : " _(days)_";
+        $('td#'+vtun+'-hs-'+n[vtun]).text(simplef("_(%s ago)_",d+s));
       } else {
         var h = parseInt(info[1]/3600).pad();
         var m = parseInt(info[1]/60%60).pad();
         var s = parseInt(info[1]%60).pad();
-        $('td#'+vtun+'-hs-'+n[vtun]).text(h+':'+m+':'+s+" _(ago)_");
+        $('td#'+vtun+'-hs-'+n[vtun]).text(simplef("_(%s ago)_",h+':'+m+':'+s));
       }
-      $('td#'+vtun+'-rx-'+n[vtun]).html(info[2]+'&nbsp;<i class="fa fa-fw fa-arrow-up"></i>&nbsp;&nbsp;&nbsp;'+info[3]+'&nbsp;<i class="fa fa-fw fa-arrow-down"></i>');
+      $('td#'+vtun+'-rx-'+n[vtun]).html(info[2]+'&nbsp;<i class="fa fa-fw fa-arrow-down"></i><span class="tx">'+info[3]+'&nbsp;<i class="fa fa-fw fa-arrow-up"></i></span>');
     }
     setTimeout(update1,1000);
   });
@@ -973,6 +974,12 @@ function sortTable(table,index) {
   }
 }
 
+function simplef() {
+  var text = arguments[0];
+  for (var i=1,arg; arg=arguments[i]; i++) text = text.replace('%s',arg);
+  return text;
+}
+
 var cpuload = new NchanSubscriber('/sub/cpuload');
 cpuload.on('message',function(data) {
 /*
@@ -1007,6 +1014,7 @@ var sortableHelper = function(e,ui){
   ui.find('tr:first').children().each(function(i){$(this).width(width[i]);});
   return ui;
 };
+
 $(function() {
   $('table').sortable({helper:sortableHelper,items:'.sortable',handle:'.section,.next',cursor:'move',axis:'y',containment:'parent',delay:100,opacity:0.5,zIndex:9999,
   update:function(e,ui){

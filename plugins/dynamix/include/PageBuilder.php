@@ -31,7 +31,8 @@ function build_pages($pattern) {
   global $site;
   foreach (glob($pattern,GLOB_NOSORT) as $entry) {
     [$header, $content] = explode("---\n", file_get_contents($entry),2);
-    $page = parse_ini_string($header);
+    $page = @parse_ini_string($header);
+    if ( ! $page ) exec("logger -t 'webGUI' Invalid .page format: $entry");
     $page['file'] = $entry;
     $page['root'] = dirname($entry);
     $page['name'] = basename($entry, '.page');

@@ -146,9 +146,8 @@ if ($locale) {
   }
 }
 // split URI into translation levels
-$uri = array_filter(explode('/',strtok($_SERVER['REQUEST_URI'],'?')));
+$uri = array_filter(explode('/',strtolower(strtok($_SERVER['REQUEST_URI'],'?'))));
 foreach($uri as $more) {
-  $more = strtolower($more);
   $text = "$docroot/languages/$locale/$more.txt";
   if (file_exists($text)) {
     // additional translations

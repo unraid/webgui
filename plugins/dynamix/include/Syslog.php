@@ -22,7 +22,7 @@ foreach ($logs as $log) {
   $fh = fopen($log, "r");
   while (($line = fgets($fh)) !== false) {
     $i++;
-    if ($i < $line_count - 1000) {
+    if ($i < $line_count - 3000) {
       continue;
     }
     $span = "span class='text'";

@@ -1,6 +1,6 @@
 #!/usr/bin/php -q
 <?PHP
-// Copyright 2005-2020, Lime Technology
+// Copyright 2005-2021, Lime Technology
 // License: GPLv2 only
 //
 // Program updates made by Bergware International (April 2020)
@@ -304,7 +304,14 @@ function plugin($method, $plugin_file, &$error) {
           @unlink($name);
           return false;
         }
-        if ($file->MD5) {
+        if ($file->SHA256) {
+          logger("plugin: checking: $name - SHA256");
+          if (hash_file('sha256', $name) != $file->SHA256) {
+            $error = "bad file SHA256: $name";
+            unlink($name);
+            return false;
+          }
+        } elseif ($file->MD5) {
           logger("plugin: checking: $name - MD5");
           if (md5_file($name) != $file->MD5) {
             $error = "bad file MD5: $name";
@@ -458,12 +465,18 @@ if ($method == 'install') {
   $min = plugin('min', $plugin_file, $error);
   if ($min && version_compare($unraid['version'], $min, '<')) {
     echo "plugin: installed Unraid version is too low, require at least version $min\n";
+    if (dirname($plugin_file) == "$boot") {
+      move($plugin_file, "$boot-error");
+    }
     exit(1);
   }
   $max = plugin('max', $plugin_file, $error);
   if (empty($max)) $max = plugin('Unraid', $plugin_file, $error);
   if ($max && version_compare($unraid['version'], $max, '>')) {
     echo "plugin: installed Unraid version is too high, require at most version $max\n";
+    if (dirname($plugin_file) == "$boot") {
+      move($plugin_file, "$boot-error");
+    }		
     exit(1);
   }
   $plugin = basename($plugin_file);

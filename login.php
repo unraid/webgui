@@ -2,8 +2,45 @@
 $docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 require_once "$docroot/webGui/include/Helpers.php";
 
+function fileRead($file) {
+    $text = "";
+    if (file_exists($file)) {
+        $fp = fopen($file,"r");
+        if (flock($fp, LOCK_EX)) {
+            $text = fread($fp, filesize($file));
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        }
+    }
+    return $text;
+}
+function fileAppend($file, $text) {
+    $fp = fopen($file,"a");
+    if (flock($fp, LOCK_EX)) {
+        fwrite($fp, $text);
+        fflush($fp);
+        flock($fp, LOCK_UN);
+        fclose($fp);
+    }
+}
+function fileWrite($file, $text) {
+    $fp = fopen($file,"w");
+    if (flock($fp, LOCK_EX)) {
+        fwrite($fp, $text);
+        fflush($fp);
+        flock($fp, LOCK_UN);
+        fclose($fp);
+    }
+}
+
 $var = parse_ini_file('state/var.ini');
 $error = '';
+
+$maxfails = 3;
+$cooldown = 15*60;
+$remote_addr = $_SERVER['REMOTE_ADDR'] ?? "unknown";
+@mkdir("/var/log/pwfail/", 0755);
+$failfile = "/var/log/pwfail/{$remote_addr}";
 
 if ($_SERVER['REQUEST_URI'] == '/logout') {
     // User Logout
@@ -19,27 +56,56 @@ if ($_SERVER['REQUEST_URI'] == '/logout') {
     }
     $error = 'Successfully logged out';
 } else if (!empty($_POST['username']) && !empty($_POST['password'])) {
-    // User Login attempt
-    foreach (file('/etc/nginx/htpasswd') as $strCredentials) {
-        list($user,$pwhash) = explode(':', trim($strCredentials));
 
-        // Validate credentials
-        if ($_POST['username'] == $user && password_verify($_POST['password'], $pwhash)) {
-            // Successful login, start session
-            session_start();
-            $_SESSION['unraid_login'] = time();
-            $_SESSION['unraid_user'] = $_POST['username'];
-            session_regenerate_id(true);
-            session_write_close();
-            exec("logger -t webGUI ".escapeshellarg("Successful login user {$_POST['username']} from {$_SERVER['REMOTE_ADDR']}"));
-            header("Location: /".$var['START_PAGE']);
-            exit;
+    $failtext = fileRead($failfile);
+    $fails = explode("\n", trim($failtext));
+    $time = time();
+
+    // remove entries older than $cooldown minutes
+    $updatefails = false;
+    foreach ((array) $fails as $key => $value) {
+        if ($value && $time - $value > $cooldown) {
+            unset ($fails[$key]);
+            $updatefails = true;
         }
     }
+    if ($updatefails) {
+        $failtext = implode("\n", $fails);
+        fileWrite($failfile, $failtext);
+    }
 
-    // Invalid login
-    $error = 'Invalid Username or Password';
-    exec("logger -t webGUI ".escapeshellarg("Unsuccessful login user {$_POST['username']} from {$_SERVER['REMOTE_ADDR']}"));
+    if (count($fails) >= $maxfails) {
+        $error = 'Too many invalid login attempts';
+        if (count($fails) == $maxfails)
+           exec("logger -t webGUI ".escapeshellarg("Ignoring login attempts for {$_POST['username']} from {$remote_addr}"));
+
+    } else {
+
+        // User Login attempt
+        foreach (file('/etc/nginx/htpasswd') as $strCredentials) {
+            list($user,$pwhash) = explode(':', trim($strCredentials));
+
+            // Validate credentials
+            if ($_POST['username'] == $user && password_verify($_POST['password'], $pwhash)) {
+                // Successful login, start session
+                @unlink($failfile);
+                session_start();
+                $_SESSION['unraid_login'] = time();
+                $_SESSION['unraid_user'] = $_POST['username'];
+                session_regenerate_id(true);
+                session_write_close();
+                exec("logger -t webGUI ".escapeshellarg("Successful login user {$_POST['username']} from {$remote_addr}"));
+                header("Location: /".$var['START_PAGE']);
+                exit;
+            }
+        }
+
+        // Invalid login
+        $error = 'Invalid Username or Password';
+        exec("logger -t webGUI ".escapeshellarg("Unsuccessful login user {$_POST['username']} from {$remote_addr}"));
+
+    }
+    fileAppend($failfile, $time."\n");
 }
 
 
@@ -361,4 +427,3 @@ $theme_dark = in_array($display['theme'],['black','gray']);
     </section>
 </body>
 </html>
-

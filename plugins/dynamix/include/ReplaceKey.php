@@ -47,7 +47,7 @@ function replaceKey(email, guid, keyfile) {
         $('#spinner_image').fadeOut('fast');
         var msg = "<p><?=_('A registration replacement key has been created for USB Flash GUID')?> <strong>"+guid+"</strong></p>" +
                   "<p><?=_('An email has been sent to')?> <strong>"+email+"</strong> <?=_('containing your key file URL')?>." +
-                  " <?=_('When received, please paste the URL into the <i>Key file URL</i> box and')?>" +
+                  " <?=_('When received, please paste the URL into the *Key file URL* box and')?>" +
                   " <?=_('click <i>Install Key</i>')?>.</p>" +
                   "<p><?=_('If you do not receive an email, please check your spam or junk-email folder')?>.</p>";
 

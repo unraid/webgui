@@ -668,11 +668,9 @@ Summary of security modes:
 
 **Public** All users including guests have full read/write access.
 
-**Secure** All users including guests have read access, you select which of your users
-have write access.
+**Secure** All users including guests have read access, you select which of your users have write access.
 
-**Private** No guest access at all, you select which of your users have read/write or
-read-only access.
+**Private** No guest access at all, you select which of your users have read/write, read-only access or no access.
 :end
 
 :smb_secure_access_help:
@@ -960,6 +958,10 @@ For a list of popular community-supported repositories, visit here: <a href="htt
 Before you can start the Docker service for the first time, please specify an image file for Docker to install to.
 
 Once started, Docker will always automatically start after the array has been started.
+:end
+
+:docker_timeout_help:
+The time in seconds to allow a container to gracefully stop before forcing it to stop
 :end
 
 :docker_vdisk_type_help:
@@ -1988,7 +1990,7 @@ To delete a User-defined template, select it from the list above and click the r
 :end
 
 :docker_client_name_help:
-Give the container a name or leave it as default.
+Give the container a name or leave it as default.  Two characters minimum.  First character must be a-z A-Z 0-9  Remaining characters a-z A-Z 0-9 . - _
 :end
 
 :docker_client_overview_help:
@@ -2006,14 +2008,6 @@ Link to a support thread on Lime-Technology's forum.
 
 :docker_client_project_page_help:
 Link to the project page (eg: www.plex.tv)
-:end
-
-:docker_client_donation_text_help:
-Text to appear on Donation Links Within The Apps Tab
-:end
-
-:docker_client_donation_link_help:
-Link to the donation page.  If using donation's, both the image and link must be set
 :end
 
 :docker_client_hub_url_help:
@@ -2035,7 +2029,7 @@ Use [IP] to identify the IP of your host and [PORT:####] replacing the #'s for y
 
 :docker_extra_parameters_help:
 If you wish to append additional commands to your Docker container at run-time, you can specify them here.<br>
-For all possible Docker run-time commands, see here: <a href="https://docs.docker.com/engine/reference/run/" target="_blank">https://docs.docker.com/engine/reference/run/</a>
+For all possible Docker run-time commands, see here: <a href="https://docs.docker.com/reference/run/" target="_blank">https://docs.docker.com/reference/run/</a>
 :end
 
 :docker_post_arguments_help:
@@ -2087,31 +2081,4 @@ This displays the output of the `lsusb` command.  The numeric identifiers are us
 This displays the output of the `lsscsi` command.  The numeric identifiers are used to configure PCI pass-through.
 
 Note that linux groups ATA, SATA and SAS devices with true SCSI devices.
-:end
-
-:unraidnet_wanpanel_help:
-WAN Port is the external TCP port number setup on your router to NAT/Port Forward traffic from the internet to this
-Unraid server SSL port for secure web traffic.
-:end
-
-:unraidnet_inactivespanel_help:
-Click Activate to set up a local git repo for your local USB Flash boot device and connect to a dedicated remote on unraid.net tied to this server.
-:end
-
-:unraidnet_changespanel_help:
-The Not Up-to-date status indicates there are local files which are changed vs. the remote on unraid.net.
-
-Click Update to push changes to the remote.
-
-Click Changes to see what has changed.
-:end
-
-:unraidnet_uptodatepanel_help:
-The Up-to-date status indicates your local configuration matches that stored on the unraid.net remote.
-:end
-
-:unraidnet_activepanel_help:
-Click Deactivate to pause communication with your remote on unraid.net.
-
-Click Reinitialize to erase all change history in both local and unraid.net remote.
 :end

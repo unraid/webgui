@@ -16,7 +16,7 @@ $docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 $_SERVER['REQUEST_URI'] = 'main';
 require_once "$docroot/webGui/include/Translations.php";
 
-$disks = []; $var = [];
+$disks = array_merge_recursive((array)parse_ini_file('state/disks.ini',true), (array)parse_ini_file('state/devs.ini',true));
 require_once "$docroot/webGui/include/CustomMerge.php";
 require_once "$docroot/webGui/include/Wrappers.php";
 require_once "$docroot/webGui/include/Preselect.php";
@@ -135,7 +135,6 @@ case "identify":
     echo "<tr><td colspan='2' style='text-align:center;padding-top:12px'>"._('Can not read identification')."</td></tr>";
   } else {
     $file = '/boot/config/disk.log';
-    $disks = parse_ini_file('state/disks.ini',true);
     $extra = file_exists($file) ? parse_ini_file($file,true) : [];
     $disk = $disks[$name]['id'];
     $info = &$extra[$disk];

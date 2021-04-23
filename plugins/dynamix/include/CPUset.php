@@ -73,7 +73,9 @@ case 'ct':
   // create the current container assignments
   require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
   $DockerClient = new DockerClient();
+  $DockerTemplates = new DockerTemplates();
   $containers = $DockerClient->getDockerContainers();
+  $allInfo = $DockerTemplates->getAllInfo();
   $user_prefs = $dockerManPaths['user-prefs'];
   $cts = []; foreach ($containers as $ct) $cts[] = $ct['Name'];
   // list containers per user preference
@@ -84,6 +86,7 @@ case 'ct':
     unset($sort);
   }
   foreach ($containers as $ct) {
+    if ( ! is_file($allInfo[$ct['Name']]['template']) ) continue;
     echo "<tr><td>{$ct['Name']}</td>";
     create('ct', $ct['Name'], explode(',',$ct['CPUset']));
     echo "</tr>";

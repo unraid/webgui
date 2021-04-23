@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2021, Lime Technology
+ * Copyright 2012-2021, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -125,7 +125,7 @@ case 't1':
           echo (in_array($pciaddress."|".$vd, $vfio_cfg_devices) || in_array($pciaddress, $vfio_cfg_devices)) ? " checked>" : ">";
         } else { echo "</td><td>"; }
         echo '</td><td title="';
-        foreach ($outputvfio as $line2) echo "$line2&#10;";
+        foreach ($outputvfio as $line2) echo htmlentities($line2,ENT_QUOTES)."&#10;";
         echo '">'.$line.'</td></tr>';
         unset($outputvfio);
         switch (true) {

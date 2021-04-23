@@ -359,7 +359,7 @@ case 'flash':
   $data = explode(' ',$diskio[$disk['device']] ?? '0 0');
   $flash = &$sec['flash']; $share = "";
   if ($var['shareSMBEnabled']=='yes' && $flash['export']=='e' && $flash['security']=='public')
-    $share = "<a class='info'><i class='fa fa-warning fa-fw orange-text'></i><span>"._('Flash device is set as public share')."<br>"._('Please change share SMB security')."<br>"._('Click on <b>FLASH</b> above this message')."</span></a>";
+    $share = "<a class='info'><i class='fa fa-warning fa-fw orange-text'></i><span>"._('Flash device is set as public share')."<br>"._('Please change share SMB security')."<br>"._('Click on **FLASH** above this message')."</span></a>";
   echo "<tr>";
   echo "<td>".$share.device_info($disk,true)."</td>";
   echo "<td>".device_desc($disk)."</td>";

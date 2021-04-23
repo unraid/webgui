@@ -345,6 +345,7 @@ function makeConfig(opts) {
     value.addClass("numbersOnly");
   }
   if (opts.Mask == "true") {
+    value.prop("autocomplete","new-password");
     value.prop("type", "password");
   }
   return newConfig.prop('outerHTML');
@@ -751,6 +752,7 @@ _(Categories)_:
   <option value="Backup:">_(Backup)_</option>
   <option value="Cloud:">_(Cloud)_</option>
   <option value="Downloaders:">_(Downloaders)_</option>
+  <option value="Drivers:">_(Drivers)_</option>
   <option value="GameServers:">_(Game Servers)_</option>
   <option value="HomeAutomation:">_(Home Automation)_</option>
   <option value="Productivity:">_(Productivity)_</option>
@@ -798,16 +800,6 @@ _(Project Page)_:
 : <input type="text" name="contProject">
 
 :docker_client_project_page_help:
-
-_(Donation Text)_:
-: <input type="text" name="contDonateText">
-
-:docker_client_donation_text_help:
-
-_(Donation Link)_:
-: <input type="text" name="contDonateLink">
-
-:docker_client_donation_link_help:
 
 </div>
 <div markdown="1" class="advanced">

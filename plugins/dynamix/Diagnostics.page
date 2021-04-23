@@ -41,12 +41,13 @@ diagnostic.on('message',function(data) {
   }
 });
 
-function cleanUp(file) {	
-  if (document.hasFocus()) {	
-    $.post('/webGui/include/Download.php',{cmd:'delete',file:file});	
-  } else {	
-    setTimeout(function(){cleanUp(file);},2000);	
-  }	
+function cleanUp(file) {
+  if (document.hasFocus()) {
+    $.post('/webGui/include/Download.php',{cmd:'delete',file:file});
+    $("#download").attr("disabled",false);
+  } else {
+    setTimeout(function(){cleanUp(file);},2000);
+  }
 }
 
 function zipfile(){
@@ -61,8 +62,8 @@ function diagnostics(file) {
     diagnosticsFile = zip;
     diagnostic.start();
     swal({
-      title: "_(Downloading...)_",
-      text: "/boot/logs"+zip+"<br><tt><span id='command'></span></tt>",
+      title: "_(Downloading)_...",
+      text: "/boot/logs"+zip+"<br><br><tt style='display:inline-block;text-align:left'><span id='command'></span></tt>",
       allowOutsideClick: false,
       showConfirmButton: false,
       showCancelButton: false,
@@ -114,6 +115,4 @@ to the system log.*
 *Use* **Anonymize diagnostics** *when publishing the diagnostics file in the public forum. In private communication with Limetech it is recommended to uncheck this setting and capture all information unaltered.*
 :end
 
-<input type="button" value="_(Download)_" onclick="diagnostics(zipfile())"><input type="button" value="_(Done)_" onclick="done()"><input type="checkbox" id="anonymize" checked>_(Anonymize diagnostics)_
-
-
+<input id='download' type="button" value="_(Download)_" onclick="$(this).attr('disabled',true);diagnostics(zipfile())"><input type="button" value="_(Done)_" onclick="done()"><input type="checkbox" id="anonymize" checked>_(Anonymize diagnostics)_
