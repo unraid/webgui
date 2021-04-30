@@ -21,7 +21,8 @@ Code="e944"
 <?
 // Remove stale /tmp/plugin/*.plg entries
 foreach (glob("/tmp/plugins/*.{plg,txt}", GLOB_NOSORT+GLOB_BRACE) as $entry) if (!file_exists("/var/log/plugins/".basename($entry))) @unlink($entry);
-$check = $notify['version'] ? 0 : 1;
+//$check = $notify['version'] ? 0 : 1;
+$check = 1;
 ?>
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.filetree.css')?>">
 <style>
