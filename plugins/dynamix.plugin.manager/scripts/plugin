@@ -583,6 +583,8 @@ if ($method == 'check') {
 //
 if ($method == 'update') {
   $plugin = $argv[2];
+  echo "plugin: checking for update\n";
+  exec(realpath($argv[0])." check $plugin");
   echo "plugin: updating: $plugin\n";
   $installed_plugin_file = @readlink("$plugins/$plugin");
   if ($installed_plugin_file === false) {
