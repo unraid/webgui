@@ -223,8 +223,8 @@ if ($_GET['xmlTemplate']) {
               $arrConfig['Name'] = 'AppData Config Path';
             }
           }
-          $arrConfig['Name'] = strip_tags($arrConfig['Name']);
-          $arrConfig['Description'] = strip_tags($arrConfig['Description']);
+					$arrConfig['Name'] = strip_tags($arrConfig['Name']);
+					$arrConfig['Description'] = strip_tags($arrConfig['Description']);
         }
       }
       if (!empty($dockercfg['DOCKER_APP_UNRAID_PATH']) && file_exists($dockercfg['DOCKER_APP_UNRAID_PATH'])) {
@@ -254,7 +254,7 @@ if ($_GET['xmlTemplate']) {
         }
       }
     }
-    $xml['Overview'] = str_replace(['[', ']'], ['<', '>'], $xml['Overview']);
+		$xml['Overview'] = str_replace(['[', ']'], ['<', '>'], $xml['Overview']);
     $xml['Description'] = $xml['Overview'] = strip_tags(str_replace("<br>","\n", $xml['Overview']));
     echo "<script>var Settings=".json_encode($xml).";</script>";
   }
@@ -1046,14 +1046,10 @@ function toggleAllocations() {
 
 function load_contOverview() {
   var new_overview = $("textarea[name='contOverview']").val();
-  new_overview = new_overview.replaceAll("[","<").replaceAll("]",">");
-  // if no html tags are present, treat the overview as Markdown
-  if ( stripTags(new_overview) == new_overview ) {
-    // Handle code block being created by authors indenting (manually editing the xml and spacing)
-    new_overview = new_overview.replaceAll("    ","&nbsp;&nbsp;&nbsp;&nbsp;");
-    new_overview = marked(new_overview);
-  } else 
-    new_overview = new_overview.replaceAll("\n","");
+  new_overview = new_overview.replaceAll("[","<").replaceAll("]",">").replaceAll("\n","<br>");
+  // Handle code block being created by authors indenting (manually editing the xml and spacing)
+  new_overview = new_overview.replaceAll("    ","&nbsp;&nbsp;&nbsp;&nbsp;");
+  new_overview = marked(new_overview);
   $("#contDescription").html(new_overview);
 }
 
