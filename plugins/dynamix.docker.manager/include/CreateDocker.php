@@ -223,8 +223,8 @@ if ($_GET['xmlTemplate']) {
               $arrConfig['Name'] = 'AppData Config Path';
             }
           }
-					$arrConfig['Name'] = strip_tags($arrConfig['Name']);
-					$arrConfig['Description'] = strip_tags($arrConfig['Description']);
+          $arrConfig['Name'] = strip_tags($arrConfig['Name']);
+          $arrConfig['Description'] = strip_tags($arrConfig['Description']);
         }
       }
       if (!empty($dockercfg['DOCKER_APP_UNRAID_PATH']) && file_exists($dockercfg['DOCKER_APP_UNRAID_PATH'])) {
@@ -254,7 +254,7 @@ if ($_GET['xmlTemplate']) {
         }
       }
     }
-		$xml['Overview'] = str_replace(['[', ']'], ['<', '>'], $xml['Overview']);
+    $xml['Overview'] = str_replace(['[', ']'], ['<', '>'], $xml['Overview']);
     $xml['Description'] = $xml['Overview'] = strip_tags(str_replace("<br>","\n", $xml['Overview']));
     echo "<script>var Settings=".json_encode($xml).";</script>";
   }
@@ -1050,7 +1050,7 @@ function load_contOverview() {
   // Handle code block being created by authors indenting (manually editing the xml and spacing)
   new_overview = new_overview.replaceAll("    ","&nbsp;&nbsp;&nbsp;&nbsp;");
   new_overview = marked(new_overview);
-	new_overview = new_overview.replaceAll("\n","<br>"); // has to be after marked
+  new_overview = new_overview.replaceAll("\n","<br>"); // has to be after marked
 
   $("#contDescription").html(new_overview);
 }
