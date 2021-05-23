@@ -223,6 +223,8 @@ if ($_GET['xmlTemplate']) {
               $arrConfig['Name'] = 'AppData Config Path';
             }
           }
+          $arrConfig['Name'] = strip_tags($arrConfig['Name']);
+          $arrConfig['Description'] = strip_tags($arrConfig['Description']);
         }
       }
       if (!empty($dockercfg['DOCKER_APP_UNRAID_PATH']) && file_exists($dockercfg['DOCKER_APP_UNRAID_PATH'])) {
@@ -252,7 +254,8 @@ if ($_GET['xmlTemplate']) {
         }
       }
     }
-    $xml['Description'] = str_replace(['[', ']'], ['<', '>'], $xml['Overview']);
+    $xml['Overview'] = str_replace(['[', ']'], ['<', '>'], $xml['Overview']);
+    $xml['Description'] = $xml['Overview'] = strip_tags(str_replace("<br>","\n", $xml['Overview']));
     echo "<script>var Settings=".json_encode($xml).";</script>";
   }
 }
