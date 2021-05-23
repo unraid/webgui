@@ -1046,10 +1046,12 @@ function toggleAllocations() {
 
 function load_contOverview() {
   var new_overview = $("textarea[name='contOverview']").val();
-  new_overview = new_overview.replaceAll("[","<").replaceAll("]",">").replaceAll("\n","<br>");
+  new_overview = new_overview.replaceAll("[","<").replaceAll("]",">");
   // Handle code block being created by authors indenting (manually editing the xml and spacing)
   new_overview = new_overview.replaceAll("    ","&nbsp;&nbsp;&nbsp;&nbsp;");
   new_overview = marked(new_overview);
+	new_overview = new_overview.replaceAll("\n","<br>"); // has to be after marked
+
   $("#contDescription").html(new_overview);
 }
 
