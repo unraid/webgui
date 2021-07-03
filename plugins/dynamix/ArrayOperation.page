@@ -282,7 +282,7 @@ parityStatus.on('message', function(data) {
   }
 });
 
- var moverStatus = new NchanSubscriber('/sub/mover');
+var moverStatus = new NchanSubscriber('/sub/mover');
 moverStatus.on('message', function(data) {
 $.each(data.split(';'),function(k,v) {if ($('#moverline'+k).length>0) $('#moverline'+k).html(v);});
 
@@ -292,20 +292,18 @@ $.each(data.split(';'),function(k,v) {if ($('#moverline'+k).length>0) $('#moverl
       $('#movertext').html(text);
       $('#moverrow1' ).hide();
       $('#moverrow2' ).hide();
- }
+  }
  
- if ($('#moverline0').html() == "true" &&  $('#moverButton').is(":enabled")) {
+  if ($('#moverline0').html() == "true" &&  $('#moverButton').is(":enabled")) {
       $('#moverButton').attr('disabled', 'disbaled');
       text ='_(Disabled)_ - _(Mover is running)_' ;
       $('#movertext').html(text);
       $('#moverrow1' ).show();
       $('#moverrow2' ).show();
- }
+  }
 });
 
-
 moverStatus.start();
-
 
 devices.start();
 <?if ($var['mdResyncPos']):?>
