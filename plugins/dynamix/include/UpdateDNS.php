@@ -43,9 +43,10 @@ $anonMode = !empty($remote) && !empty($remote['anonMode']) && $remote['anonMode'
 
 $certpath = '/boot/config/ssl/certs/certificate_bundle.pem';
 $certhostname = file_exists($certpath) ? trim(exec("/usr/bin/openssl x509 -subject -noout -in $certpath | awk -F' = ' '{print $2}'")) : '';
+$isCertUnraidNet = preg_match('/.*\.unraid\.net$/', $certhostname);
 
-// only proceed when a hash.unraid.net SSL certificate is active or when signed in
-if (!$isRegistered && !preg_match('/.*\.unraid\.net$/', $certhostname)) {
+// only proceed when a hash.unraid.net SSL certificate is active and signed in w/o anonMode
+if ((!$isRegistered || $anonMode) && !$isCertUnraidNet) {
   response_complete(406, '{"error":"'._('Nothing to do').'"}');
 }
 
@@ -67,7 +68,7 @@ $post = [
   'plgversion' => 'base-'.$var['version'],
   'keyfile' => $keyfile
 ];
-if (preg_match('/.*\.unraid\.net$/', $certhostname)) {
+if ($isCertUnraidNet) {
   $post['internalip'] = is_array($internalip) ? $internalip[0] : $internalip;
 }
 if ($isRegistered && !$anonMode) {
