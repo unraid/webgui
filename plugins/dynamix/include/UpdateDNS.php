@@ -39,6 +39,7 @@ if (file_exists('/boot/config/plugins/dynamix.my.servers/myservers.cfg')) {
   @extract(parse_ini_file('/boot/config/plugins/dynamix.my.servers/myservers.cfg',true));
 }
 $isRegistered = !empty($remote) && !empty($remote['username']);
+$anonMode = !empty($remote) && !empty($remote['anonMode']) && $remote['anonMode'] === 'true';
 
 $certpath = '/boot/config/ssl/certs/certificate_bundle.pem';
 $certhostname = file_exists($certpath) ? trim(exec("/usr/bin/openssl x509 -subject -noout -in $certpath | awk -F' = ' '{print $2}'")) : '';
@@ -69,7 +70,7 @@ $post = [
 if (preg_match('/.*\.unraid\.net$/', $certhostname)) {
   $post['internalip'] = is_array($internalip) ? $internalip[0] : $internalip;
 }
-if ($isRegistered) {
+if ($isRegistered && !$anonMode) {
   $post['servername'] = $var['NAME'];
   $post['servercomment'] = $var['COMMENT'];
 }
