@@ -16,12 +16,38 @@ Tag="globe"
  */
 ?>
 <?
-$ftp_userlist_file = "/boot/config/vsftpd.user_list";
+// Don't need this file any more - IMTheNachoMan on 2021-09-16
+// $ftp_userlist_file = "/boot/config/vsftpd.user_list";
+
+// Where we'll save what each user's chroot jail is - IMTheNachoMan on 2021-09-16
+$user_config_dir = "/boot/config/vsftpd.user_config_dir";
+
 $ftp_userlist = "";
-if (file_exists($ftp_userlist_file)) {
-  $ftp_userlist = str_replace("\n", " ", trim(file_get_contents($ftp_userlist_file)));
-  if ($ftp_userlist === false) $ftp_userlist = "";
+// We can't just get the conents of a file. We have to iterate through the files in a directory - IMTheNachoMan on 2021-09-16
+// if (file_exists($ftp_userlist_file)) {
+//   $ftp_userlist = str_replace("\n", " ", trim(file_get_contents($ftp_userlist_file)));
+//   if ($ftp_userlist === false) $ftp_userlist = "";
+// }
+
+// new code start - IMTheNachoMan on 2021-09-16
+
+$ftp_userlist_items = array();
+
+// make sure we have a folder
+if(file_exists($user_config_dir) && is_dir($user_config_dir))
+{
+    // go through all of the files, read their content, and piece together the necessary syntax
+    foreach(array_diff(scandir($user_config_dir), array(".", "..")) as $filename)
+    {
+        $user_config = trim(file_get_contents($user_config_dir . "/" . $filename));
+        $user_config_parts = explode("=", $user_config);
+        array_push($ftp_userlist_items, $filename . "=" . $user_config_parts[1]);
+    }
 }
+
+$ftp_userlist = implode("; ", $ftp_userlist_items);
+
+// end new code - IMTheNachoMan on 2021-09-16
 $ftp_server = exec("lsof -i:21 -Pln|awk '/\(LISTEN\)/{print $2;exit}'") ? 1 : 0;
 ?>
 <script>
