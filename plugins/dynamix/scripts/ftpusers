@@ -1,13 +1,46 @@
 #!/usr/bin/php -q
 <?php
-// usage: ftpusers 0|1 ['user1 user2 .. ']
+// usage: ftpusers 0|1 ['user1=/path/to/share; user2=/path/to/another share; .. ']
 // 0 = disable, 1 = enable FTP server daemon
-// the list of users must be within quotes, ie, as one argument
+// a semicolon separated list of users configuration using the format username=/path/to/share
+// must be within quotes, ie, as one argument
 // if no user(s) specified, deletes the config file
 
 $config_file = "/boot/config/vsftpd.user_list";
+
+// Where we'll save what each user's chroot jail is - IMTheNachoMan on 2021-09-16
+$user_config_dir = "/boot/config/vsftpd.user_config_dir";
+
 if (trim($argv[2]))
-  file_put_contents($config_file, implode("\n", explode(' ', trim($argv[2])))."\n");
+{
+  // the user field in the UI has a specific syntax that has to be processed so we can't just write it to a file - IMTheNachoMan on 2021-09-16
+  // file_put_contents($config_file, implode("\n", explode(' ', trim($argv[2])))."\n");
+
+  // new code start - IMTheNachoMan on 2021-09-16
+  // first we need to empty out or create $config_file
+  file_put_contents($config_file, "");
+
+  // we need to make sure the directory for the user config exists
+  exec("mkdir -p '$user_config_dir'");
+
+  // go through each user configuration
+  foreach(explode(";", trim($argv[2])) as $user_config)
+  {
+    if(trim($user_config))
+    {
+      // get the user configuration parts
+      $user_config_parts = explode("=", trim($user_config));
+      
+      // write the configuration information to a file in $user_config_dir
+      file_put_contents($user_config_dir."/".$user_config_parts[0], "local_root=".$user_config_parts[1]."\n");
+
+      // also append the user to $config_file
+      file_put_contents($config_file, $user_config_parts[0]."\n", FILE_APPEND);
+    }
+  }
+
+  // end new code - IMTheNachoMan on 2021-09-16
+}
 else
   @unlink($config_file);
 
