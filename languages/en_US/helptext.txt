@@ -1235,7 +1235,12 @@ This setting is not saved, i.e. upon system reboot it will revert to its default
 :end
 
 :ftp_users_help:
-Enter the user names (separated by spaces) permitted to access the server using FTP.
+Enter a semicolon (;) separated list of users and their chroot jailed share using the format `username=/path/to/share`.
+
+For example:
+
+    dataUser=/mnt/user/data;videoUser=/mnt/user/video;picUser=/mnt/user/pictures
+
 To disallow any user access, clear this setting.
 
 **Note:** do not enter user name `root` since this may cause problems in the future.
