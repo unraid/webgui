@@ -1,50 +1,28 @@
 #!/usr/bin/php -q
 <?php
-// usage: ftpusers 0|1 ['user1=/path/to/share; user2=/path/to/another share; .. ']
-// 0 = disable, 1 = enable FTP server daemon
-// a semicolon separated list of users configuration using the format username=/path/to/share
-// must be within quotes, ie, as one argument
-// if no user(s) specified, deletes the config file
+// usage: ftpusers user_config_data
+// user_config_data = pipe (|) delimited root folders for user in the format of user=/path/to/root/folder
 
-$config_file = "/boot/config/vsftpd.user_list";
-
-// Where we'll save what each user's chroot jail is - IMTheNachoMan on 2021-09-16
 $user_config_dir = "/boot/config/vsftpd.user_config_dir";
 
-if (trim($argv[2]))
+$user_options = explode("|", $argv[1]);
+
+foreach(explode("|", $argv[1]) as $user_config)
 {
-  // the user field in the UI has a specific syntax that has to be processed so we can't just write it to a file - IMTheNachoMan on 2021-09-16
-  // file_put_contents($config_file, implode("\n", explode(' ', trim($argv[2])))."\n");
+  $user_config_parts = explode("=", trim($user_config));
+  $user_config_file = $user_config_dir . "/" . $user_config_parts[0];
+  $user_config_root_folder = $user_config_parts[1];
 
-  // new code start - IMTheNachoMan on 2021-09-16
-  // first we need to empty out or create $config_file
-  file_put_contents($config_file, "");
-
-  // we need to make sure the directory for the user config exists
-  exec("mkdir -p '$user_config_dir'");
-
-  // go through each user configuration
-  foreach(explode(";", trim($argv[2])) as $user_config)
+  // if no root folder and this user has an existing config file
+  if($user_config_root_folder === "" && file_exists($user_config_file) && is_file($user_config_file))
   {
-    if(trim($user_config))
-    {
-      // get the user configuration parts
-      $user_config_parts = explode("=", trim($user_config));
-      
-      // write the configuration information to a file in $user_config_dir
-      file_put_contents($user_config_dir."/".$user_config_parts[0], "local_root=".$user_config_parts[1]."\n");
-
-      // also append the user to $config_file
-      file_put_contents($config_file, $user_config_parts[0]."\n", FILE_APPEND);
-    }
+    // delete the config file
+    unlink($user_config_file);
   }
-
-  // end new code - IMTheNachoMan on 2021-09-16
+  else if($user_config_root_folder !== "" && file_exists($user_config_root_folder) && is_dir($user_config_root_folder))
+  {
+    file_put_contents($user_config_file, "local_root=" . $user_config_root_folder . "\n");
+  }
 }
-else
-  @unlink($config_file);
 
-$state = $argv[1] ? "'s/^#\(ftp.*vsftpd\)\$/\\1/'" : "'s/^\(ftp.*vsftpd\)\$/#\\1/'";
-exec("sed -i $state /etc/inetd.conf");
-exec("killall -HUP inetd");
 ?>

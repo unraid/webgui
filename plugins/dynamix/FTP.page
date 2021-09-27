@@ -16,65 +16,137 @@ Tag="globe"
  */
 ?>
 <?
-// Don't need this file any more - IMTheNachoMan on 2021-09-16
-// $ftp_userlist_file = "/boot/config/vsftpd.user_list";
 
 // Where we'll save what each user's chroot jail is - IMTheNachoMan on 2021-09-16
 $user_config_dir = "/boot/config/vsftpd.user_config_dir";
-
-$ftp_userlist = "";
-// We can't just get the conents of a file. We have to iterate through the files in a directory - IMTheNachoMan on 2021-09-16
-// if (file_exists($ftp_userlist_file)) {
-//   $ftp_userlist = str_replace("\n", " ", trim(file_get_contents($ftp_userlist_file)));
-//   if ($ftp_userlist === false) $ftp_userlist = "";
-// }
-
-// new code start - IMTheNachoMan on 2021-09-16
-
-$ftp_userlist_items = array();
-
-// make sure we have a folder
-if(file_exists($user_config_dir) && is_dir($user_config_dir))
-{
-    // go through all of the files, read their content, and piece together the necessary syntax
-    foreach(array_diff(scandir($user_config_dir), array(".", "..")) as $filename)
-    {
-        $user_config = trim(file_get_contents($user_config_dir . "/" . $filename));
-        $user_config_parts = explode("=", $user_config);
-        array_push($ftp_userlist_items, $filename . "=" . $user_config_parts[1]);
-    }
-}
-
-$ftp_userlist = implode("; ", $ftp_userlist_items);
-
-// end new code - IMTheNachoMan on 2021-09-16
-$ftp_server = exec("lsof -i:21 -Pln|awk '/\(LISTEN\)/{print $2;exit}'") ? 1 : 0;
+$is_ftp_server_running = exec("lsof -i:21 -Pln|awk '/\(LISTEN\)/{print $2;exit}'") ? 1 : 0;
+$is_ftp_syslog_enabled = preg_match('/syslog_enable\s*=\s*yes/i', exec("grep syslog_enable /etc/vsftpd.conf"));
 ?>
+
 <script>
 $(function() {
   showStatus('21');
 });
+
+function updateFTPPermissions(form)
+{
+  var permissions = [];
+  
+  $(form).find(".ftp_permissions input[type='text']").each(function(){
+    var value = this.value;
+    var name = this.name;
+    permissions.push(`${name}=${value}`);
+  });
+
+  $(form).find('input[name="#arg[1]"]').val(permissions.join("|"));
+
+  return true;
+}
+
 </script>
 
+:ftp_overview_help:
+
 <form markdown="1" method="POST" action="/update.php" target="progressFrame">
-<input type="hidden" name="#command" value="/webGui/scripts/ftpusers">
+<input type="hidden" name="#command" value="/webGui/scripts/ftpconfiguration">
 
 _(FTP server)_:
 : <select name="#arg[1]">
-  <?=mk_option($ftp_server, "0", _("Disabled"))?>
-  <?=mk_option($ftp_server, "1", _("Enabled"))?>
+  <?=mk_option($is_ftp_server_running, "0", _("Disabled"))?>
+  <?=mk_option($is_ftp_server_running, "1", _("Enabled"))?>
   </select>
 
 :ftp_server_help:
 
-_(FTP user(s))_:
-: <input type="text" name="#arg[2]" size="40" maxlength="80" value="<?=htmlspecialchars($ftp_userlist)?>">
+_(Log to Syslog)_:
+: <select name="#arg[2]">
+  <?=mk_option($is_ftp_syslog_enabled, "0", _("Disabled"))?>
+  <?=mk_option($is_ftp_syslog_enabled, "1", _("Enabled"))?>
+  </select>
 
-:ftp_users_help:
+:ftp_syslog_enable_help:
 
 &nbsp;
 : <input type="submit" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
 
 </form>
 
-:ftp_overview_help:
+<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="return updateFTPPermissions(this)">
+<input type="hidden" name="#command" value="/webGui/scripts/ftpusers">
+<input type="hidden" name="#arg[1]" value="root=test">
+
+<?php
+
+echo "<table class='ftp_permissions' style='margin-top:20px'><thead><tr><td>" . _('User') . "</td><td>" . _('Current Root Folder') . "</td><td>" . _('New Root Folder') . "</td></tr></thead><tbody>";
+
+foreach($users as $user)
+{
+  $user_config_file = $user_config_dir . "/" . $user["name"];
+  $user_root_folder = "";
+  if(file_exists($user_config_file) && is_file($user_config_file))
+  {
+    $user_config = trim(file_get_contents($user_config_file));
+    $user_config_parts = explode("=", $user_config);
+    $user_root_folder = $user_config_parts[1];
+  }
+
+  echo "<tr><td>" . $user["name"] . "</td><td>" . $user_root_folder . "</td><td><input type='text' name='" . $user["name"] . "' value='" . $user_root_folder . "'></td></tr>";
+}
+
+echo "</tbody></table>";
+
+?>
+
+&nbsp;
+: <input type="submit" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+</form>
+
+<?PHP
+
+# copied from plugins\dynamix.docker.manager\include\CreateDocker.php
+
+$bgcolor = strstr('white,azure',$display['theme']) ? '#f2f2f2' : '#1c1c1c';
+
+?>
+
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.filetree.css")?>">
+<style>
+.fileTree{width:240px;max-height:200px;overflow-y:scroll;overflow-x:hidden;position:absolute;z-index:100;display:none;background:<?=$bgcolor?>}
+</style>
+<script src="<?autov('/webGui/javascript/jquery.filetree.js')?>" charset="utf-8"></script>
+
+<script>
+
+function openFileBrowser(el, root, filter, on_folders, on_files, close_on_select) {
+  if (on_folders === undefined) on_folders = true;
+  if (on_files   === undefined) on_files = true;
+  if (!filter && !on_files) filter = 'HIDE_FILES_FILTER';
+  if (!root.trim()) root = "/mnt/user/";
+  p = $(el);
+  // Skip is fileTree is already open
+  if (p.next().hasClass('fileTree')) return null;
+  // create a random id
+  var r = Math.floor((Math.random()*1000)+1);
+  // Add a new span and load fileTree
+  p.after("<span id='fileTree"+r+"' class='textarea fileTree'></span>");
+  var ft = $('#fileTree'+r);
+  ft.fileTree({
+    root: root,
+    filter: filter,
+    allowBrowsing: true
+  },
+  function(file){if(on_files){p.val(file);p.trigger('change');if(close_on_select){ft.slideUp('fast',function(){ft.remove();});}}},
+  function(folder){if(on_folders){p.val(folder.replace(/\/\/+/g,'/'));p.trigger('change');if(close_on_select){$(ft).slideUp('fast',function(){$(ft).remove();});}}});
+  // Format fileTree according to parent position, height and width
+  ft.css({'left':p.position().left,'top':(p.position().top+p.outerHeight()),'width':(p.width())});
+  // close if click elsewhere
+  $(document).mouseup(function(e){if(!ft.is(e.target) && ft.has(e.target).length === 0){ft.slideUp('fast',function(){$(ft).remove();});}});
+  // close if parent changed
+  p.bind("keydown", function(){ft.slideUp('fast', function(){$(ft).remove();});});
+  // Open fileTree
+  ft.slideDown('fast');
+}
+
+$(".ftp_permissions input[type='text']").attr("onclick", "openFileBrowser(this,$(this).val()||'/mnt/user','',true,false);");
+
+</script>
