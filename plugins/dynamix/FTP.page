@@ -79,17 +79,22 @@ _(Log to Syslog)_:
 
 echo "<table class='ftp_permissions' style='margin-top:20px'><thead><tr><td>" . _('User') . "</td><td>" . _('Current Root Folder') . "</td><td>" . _('New Root Folder') . "</td></tr></thead><tbody>";
 
+// go through every user
 foreach($users as $user)
 {
   $user_config_file = $user_config_dir . "/" . $user["name"];
   $user_root_folder = "";
+  
+  // if the user has a config file
   if(file_exists($user_config_file) && is_file($user_config_file))
   {
+    // get the root folder from the config file
     $user_config = trim(file_get_contents($user_config_file));
     $user_config_parts = explode("=", $user_config);
     $user_root_folder = $user_config_parts[1];
   }
 
+  // show on the screen
   echo "<tr><td>" . $user["name"] . "</td><td>" . $user_root_folder . "</td><td><input type='text' name='" . $user["name"] . "' value='" . $user_root_folder . "'></td></tr>";
 }
 

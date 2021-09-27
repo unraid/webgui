@@ -3,12 +3,14 @@
 // usage: ftpusers user_config_data
 // user_config_data = pipe (|) delimited root folders for user in the format of user=/path/to/root/folder
 
+// where user config files are stored
 $user_config_dir = "/boot/config/vsftpd.user_config_dir";
 
+// go through each user's configuration option
 $user_options = explode("|", $argv[1]);
-
 foreach(explode("|", $argv[1]) as $user_config)
 {
+  // figure out what their root folder should be
   $user_config_parts = explode("=", trim($user_config));
   $user_config_file = $user_config_dir . "/" . $user_config_parts[0];
   $user_config_root_folder = $user_config_parts[1];
@@ -19,8 +21,10 @@ foreach(explode("|", $argv[1]) as $user_config)
     // delete the config file
     unlink($user_config_file);
   }
+  // else if the root folder exists
   else if($user_config_root_folder !== "" && file_exists($user_config_root_folder) && is_dir($user_config_root_folder))
   {
+    // save it to the config
     file_put_contents($user_config_file, "local_root=" . $user_config_root_folder . "\n");
   }
 }

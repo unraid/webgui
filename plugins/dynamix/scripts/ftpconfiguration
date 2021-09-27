@@ -4,9 +4,11 @@
 // enable: 0 = disable, 1 = enable FTP server daemon
 // syslog_enable: 0 = disable, 1 = enable logging to syslog
 
+// enable or disable listening on port 21 for FTP
 $ftp_state = $argv[1] ? "'s/^#\(ftp.*vsftpd\)\$/\\1/'" : "'s/^\(ftp.*vsftpd\)\$/#\\1/'";
 exec("sed -i $ftp_state /etc/inetd.conf");
 
+// enable or disable syslog logging for vsftpd
 $syslog_enable_state = $argv[2] ? "'s/syslog_enable\s*=\s*no/syslog_enable=YES/i'" : "'s/syslog_enable\s*=\s*yes/syslog_enable=NO/i'";
 exec("sed -i -e $syslog_enable_state /etc/vsftpd.conf");
 
