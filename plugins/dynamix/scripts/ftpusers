@@ -4,10 +4,16 @@
 // user_config_data = pipe (|) delimited root folders for user in the format of user=/path/to/root/folder
 
 // where user config files are stored
+$config_file = "/boot/config/vsftpd.user_list";
 $user_config_dir = "/boot/config/vsftpd.user_config_dir";
 
+// make the folder if it does not exist
+exec("mkdir -p $user_config_dir");
+
+// empty the config file
+file_put_contents($config_file, "");
+
 // go through each user's configuration option
-$user_options = explode("|", $argv[1]);
 foreach(explode("|", $argv[1]) as $user_config)
 {
   // figure out what their root folder should be
@@ -26,6 +32,9 @@ foreach(explode("|", $argv[1]) as $user_config)
   {
     // save it to the config
     file_put_contents($user_config_file, "local_root=" . $user_config_root_folder . "\n");
+
+    // add the user to the list
+    file_put_contents($config_file, $user_config_parts[0] . "\n", FILE_APPEND);
   }
 }
 
