@@ -282,52 +282,6 @@ parityStatus.on('message', function(data) {
   }
 });
 
-var devices = new NchanSubscriber('/sub/devices<?=$spot?",parity":""?>',{subscriber:'websocket'});
-devices.on('message', function(msg,meta) {
-  switch (<?if($spot):?>meta.id.channel()<?else:?>0<?endif;?>) {
-  case 0:
-    // array + pool + ua devices
-    var tables = msg.split('\0');
-    // get array state
-    var stopped = tables.pop();
-    for (var n=0; n < tables.length; n++) {
-      // get table name and content
-      var table = tables[n].split('\n');
-      $('#'+table[0]).html(table[1]);
-    }
-    display_diskio();
-    // stop updating when array is stopped
-    if (stopped==1) {
-<?if ($var['fsState']=='Started'):?>
-      setTimeout(refresh,0);
-<?else:?>
-      if (!timers.stopped) timers.stopped = setTimeout(function(){devices.stop(); arraymonitor.start();},1000);
-<?endif;?>
-    }
-    break;
-  case 1:
-    // running parity status
-    $.each(msg.split(';'),function(k,v) {if ($('#line'+k).length>0) $('#line'+k).html(v);});
-    // button control
-    if ($('#pauseButton').length>0 && $('#pauseButton').prop('disabled')==false) {
-      if (!msg && $('#cancelButton').length>0 && $('#cancelButton').val()=="_(Cancel)_") {
-        $('#cancelButton').val("_(Done)_").prop('onclick',null).off('click').click(function(){refresh();});
-        $('#pauseButton').prop('disabled',true);
-        $('#cancelText').html('');
-        $('#line4').html("_(completed)_");
-      } else {
-        var form = document.arrayOps;
-        if ($('#pauseButton').val()=="_(Pause)_" && msg.search("_(paused)_")!=-1) {
-          $('#pauseButton').val("_(Resume)_").prop('onclick',null).off('click').click(function(){resumeParity(form);});
-        } else if ($('#pauseButton').val()=="_(Resume)_" && msg.search("_(paused)_")==-1) {
-          $('#pauseButton').val("_(Pause)_").prop('onclick',null).off('click').click(function(){pauseParity(form);});
-        }
-      }
-    }
-    break;
-  }
-});
-
 var moverStatus = new NchanSubscriber('/sub/mover');
 moverStatus.on('message', function(data) {
 $.each(data.split(';'),function(k,v) {if ($('#moverline'+k).length>0) $('#moverline'+k).html(v);});
