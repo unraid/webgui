@@ -282,32 +282,6 @@ parityStatus.on('message', function(data) {
   }
 });
 
-
-
-
-var moverStatus = new NchanSubscriber('/sub/mover');
-moverStatus.on('message', function(data) {
-$.each(data.split(';'),function(k,v) {if ($('#moverline'+k).length>0) $('#moverline'+k).html(v);});
-
-  if ($('#moverline0').html() == "false" &&  $('#moverButton').is(":disabled")) {
-      $('#moverButton').removeAttr('disabled');
-      text ='<strong>_(Move)_</strong> _(will immediately invoke the Mover)_.&nbsp;&nbsp;<a href="/Main/Settings/Scheduler ">(Schedule)</a>' ;
-      $('#movertext').html(text);
-      $('#moverrow1' ).hide();
-      $('#moverrow2' ).hide();
-  }
- 
-  if ($('#moverline0').html() == "true" &&  $('#moverButton').is(":enabled")) {
-      $('#moverButton').attr('disabled', 'disbaled');
-      text ='_(Disabled)_ - _(Mover is running)_' ;
-      $('#movertext').html(text);
-      $('#moverrow1' ).show();
-      $('#moverrow2' ).show();
-  }
-});
-
-moverStatus.start();
-
 var devices = new NchanSubscriber('/sub/devices<?=$spot?",parity":""?>',{subscriber:'websocket'});
 devices.on('message', function(msg,meta) {
   switch (<?if($spot):?>meta.id.channel()<?else:?>0<?endif;?>) {
@@ -353,6 +327,29 @@ devices.on('message', function(msg,meta) {
     break;
   }
 });
+
+var moverStatus = new NchanSubscriber('/sub/mover');
+moverStatus.on('message', function(data) {
+$.each(data.split(';'),function(k,v) {if ($('#moverline'+k).length>0) $('#moverline'+k).html(v);});
+
+  if ($('#moverline0').html() == "false" &&  $('#moverButton').is(":disabled")) {
+      $('#moverButton').removeAttr('disabled');
+      text ='<strong>_(Move)_</strong> _(will immediately invoke the Mover)_.&nbsp;&nbsp;<a href="/Main/Settings/Scheduler ">(Schedule)</a>' ;
+      $('#movertext').html(text);
+      $('#moverrow1' ).hide();
+      $('#moverrow2' ).hide();
+  }
+ 
+  if ($('#moverline0').html() == "true" &&  $('#moverButton').is(":enabled")) {
+      $('#moverButton').attr('disabled', 'disbaled');
+      text ='_(Disabled)_ - _(Mover is running)_' ;
+      $('#movertext').html(text);
+      $('#moverrow1' ).show();
+      $('#moverrow2' ).show();
+  }
+});
+
+moverStatus.start();
 
 devices.start();
 <?if ($var['mdResyncPos']):?>
