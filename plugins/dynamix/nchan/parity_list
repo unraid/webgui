@@ -116,10 +116,38 @@ while (true) {
   elseif (exec('pgrep -cf /sbin/btrfs')>0) $process = 3;
   else $process = 0;
 
+ 
+  if ($process == 2) {
+    $moverdata = [];
+    $moverdata[] = "true"  ;
+    if ( file_exists("$varroot/mover.ini")) {
+      $moverstat = parse_ini_file("$varroot/mover.ini") ;
+      if ($moverstat["TotalToArray"]>0) { 
+        $toperc = ($moverstat["TotalToArray"]-$moverstat["RemainToArray"])/$moverstat["TotalToArray"] * 100; 
+        if ($moverstat["RemainToArray"]>0) { $moverdata[] = _("Percentage Complete ").round($toperc,2)."%" ; } else {$moverdata[] = _("Transfer complete") ;}
+        } else { 
+          $moverdata[] = _("Nothing to transfer") ;}
+      if ($moverstat["TotalFromArray"]>0) { 
+        $fromperc = ($moverstat["TotalFromArray"] - $moverstat["RemainFromArray"])/$moverstat["TotalFromArray"] * 100; 
+        if ($moverstat["RemainFromArray"]>0) { $moverdata[] = _("Percentage Complete ").round($fromperc,2)."%" ; } else {$moverdata[] = _("Transfer complete") ;}
+        } else { 
+        $moverdata[] = _("Nothing to transfer") ;}  
+    } else {
+      $moverdata[] = _('Error');
+      $moverdata[] = _('Error');
+      }
+  } else {
+    $moverdata = [];
+    $moverdata[] = "false"  ;
+    $moverdata[] = _('Not Running');
+    $moverdata[] = _('Not Running');
+  }
+
   publish('parity', implode(';',$data));
   publish('paritymonitor', $spot>0 ? 1 : 0);
   publish('fsState', $fsState);
   publish('mymonitor', $process);
+  publish('mover', implode(';',$moverdata));
   sleep(1);
 }
 ?>

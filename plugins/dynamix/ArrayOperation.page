@@ -261,6 +261,8 @@ mymonitor.on('message', function(state) {
 <?if ($var['shareUser']=='e' && $pool_devices):?>
     $('#mover-button').prop('disabled',false);
     $('#mover-text').html("<b>_(Move)_</b> _(will immediately invoke the Mover)_.&nbsp;<a href=\"/Main/Settings/Scheduler\"<?if($tabbed):?> onclick=\"$.cookie('one','tab2',{path:'/'})\"<?endif;?>>(_(Schedule)_)</a>");
+    $('#moverrow1' ).hide();
+    $('#moverrow2' ).hide();    
 <?endif;?>
     break;
   case '1': // parity running
@@ -273,6 +275,8 @@ mymonitor.on('message', function(state) {
 <?if ($var['shareUser']=='e' && $pool_devices):?>
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ -- _(Parity operation is running)_");
+    $('#moverrow1' ).hide();
+    $('#moverrow2' ).hide();
 <?endif;?>
     break;
   case '2': // mover running
@@ -281,6 +285,10 @@ mymonitor.on('message', function(state) {
 <?if ($var['shareUser']=='e' && $pool_devices):?>
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ - _(Mover is running)_.");
+ //   $('#moverline1').html("Test Line 1")
+ //   $('#moverline2').html("Test Line 2")
+    $('#moverrow1' ).show();
+    $('#moverrow2' ).show();
 <?endif;?>
     break;
   case '3': // btrfs running
@@ -289,6 +297,8 @@ mymonitor.on('message', function(state) {
 <?if ($var['shareUser']=='e' && $pool_devices):?>
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ -- _(BTRFS operation is running)_");
+    $('#moverrow1' ).hide();
+    $('#moverrow2' ).hide();
 <?endif;?>
     break;
   }
@@ -300,6 +310,13 @@ var arraymonitor = new NchanSubscriber('/sub/arraymonitor',{subscriber:'websocke
 arraymonitor.on('message', function(state) {
   if (state==1 && !timers.arraymonitor) timers.arraymonitor = setTimeout(refresh,1250);
 });
+
+var moverStatus = new NchanSubscriber('/sub/mover',{subscriber:'websocket'});
+moverStatus.on('message', function(moverdata) {
+$.each(moverdata.split(';'),function(k,v) {if ($('#moverline'+k).length>0) $('#moverline'+k).html(v);});
+});
+
+moverStatus.start();
 
 var devices = new NchanSubscriber('/sub/devices<?=$spot?",parity":""?>',{subscriber:'websocket'});
 devices.on('message', function(msg,meta) {
@@ -648,6 +665,9 @@ function formatWarning(val) {
 <form name="mover_schedule" method="POST" action="/update.htm" target="progressFrame">
 <table markdown="1" class="array_status noshift">
 <tr><td></td><td><input type="submit" id="mover-button" name="cmdStartMover" value="_(Move)_"></td><td id="mover-text"></td></tr>
+ <tr id="moverrow1" hidden><td></td><td>_(Transfering To Array)_:</td><td id="moverline1"></td><td></td></tr>
+ <tr id="moverrow2" hidden><td></td><td>_(Transfering From Array)_:</td><td id="moverline2"></td><td></td></tr>
+ <tr id="moverrow0" hidden><td></td><td></td><td id="moverline0"></td><td></td></tr>
 </table>
 </form>
 <?endif;?>
