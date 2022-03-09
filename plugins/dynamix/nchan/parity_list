@@ -119,26 +119,41 @@ while (true) {
  
   if ($process == 2) {
     $moverdata = [];
-    $moverdata[] = "true"  ;
+    
     if ( file_exists("$varroot/mover.ini")) {
       $moverstat = parse_ini_file("$varroot/mover.ini") ;
+      $moverdata[] = $moverstat["File"]  ;
+      $moverdata[] = $moverstat["Action"] ;
+      $perc = $moverstat["Filepercent"]      ;
+      $moverdata[] =  "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>$perc%</span></div>" ;
       if ($moverstat["TotalToArray"]>0) { 
         $toperc = ($moverstat["TotalToArray"]-$moverstat["RemainToArray"])/$moverstat["TotalToArray"] * 100; 
-        if ($moverstat["RemainToArray"]>0) { $moverdata[] = _("Percentage Complete ").round($toperc,2)."%" ; } else {$moverdata[] = _("Transfer complete") ;}
+        if ($moverstat["RemainToArray"]>0) { 
+          $perc= round($toperc,2) ;
+          $moverdata[] = "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>"._("Percentage Complete ").$perc."%</span></div>" ; 
+        } else {$moverdata[] = _("Transfer complete") ;}
         } else { 
           $moverdata[] = _("Nothing to transfer") ;}
       if ($moverstat["TotalFromArray"]>0) { 
         $fromperc = ($moverstat["TotalFromArray"] - $moverstat["RemainFromArray"])/$moverstat["TotalFromArray"] * 100; 
-        if ($moverstat["RemainFromArray"]>0) { $moverdata[] = _("Percentage Complete ").round($fromperc,2)."%" ; } else {$moverdata[] = _("Transfer complete") ;}
+        if ($moverstat["RemainFromArray"]>0) { 
+          $perc= round($fromperc,2) ;
+          $moverdata[] = "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>"._("Percentage Complete ").$perc."%</span></div>"; 
+        } else {$moverdata[] = _("Transfer complete") ;}
         } else { 
         $moverdata[] = _("Nothing to transfer") ;}  
     } else {
       $moverdata[] = _('Error');
       $moverdata[] = _('Error');
+      $moverdata[] = _('Error');
+      $moverdata[] = _('Error');
+      $moverdata[] = _('Error');
       }
   } else {
     $moverdata = [];
-    $moverdata[] = "false"  ;
+    $moverdata[] = _('Not Running');
+    $moverdata[] = _('Not Running');
+    $moverdata[] = _('Not Running');
     $moverdata[] = _('Not Running');
     $moverdata[] = _('Not Running');
   }
