@@ -3,8 +3,8 @@ Tag="navicon"
 Markdown="false"
 ---
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -45,8 +45,8 @@ $(function(){
     table.html(data);
     table.bind('sortEnd',function(e,t){
       var sort = e.target.config.sortList.toString().split(',');
-      $.cookie('col',sort[0],{path:'/'});
-      $.cookie('dir',sort[1],{path:'/'});
+      $.cookie('col',sort[0]);
+      $.cookie('dir',sort[1]);
     });
     $('div.spinner.fixed').hide('slow');
     table.tablesorter({sortList:[[col,dir],[1,0]],sortAppend:[[1,0]],textAttribute:'data'});

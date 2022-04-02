@@ -44,7 +44,7 @@ function plain($ip) {
 $tasks       = find_tasks();
 $ethX        = 'eth0';
 $addr        = ipaddr($ethX);
-$rebindip    = "192.168.42.42";
+$rebindip4   = "192.168.42.42";
 $keyfile     = @file_get_contents($var['regFILE']);
 if ($keyfile !== false) $keyfile = base64_encode($keyfile);
 $isRegistered = !empty($remote['username']); // signed in to unraid.net or not
@@ -62,11 +62,12 @@ if ($certPresent) {
   if ($isLEcert) {
     if ($isWildcardCert) $subjectURL = str_replace("*", str_replace(".", "-", $addr), $subjectURL);
     exec("openssl x509 -checkend 2592000 -noout -in $certFile 2>/dev/null", $arrout, $retval_expired);
-    $protocol = $$ethX['PROTOCOL:0']=='ipv6' ? '-6' : '-4';
-    $rebindtest_ip = exec("host $protocol rebindtest.unraid.net 2>/dev/null|awk '{print \$4}'");
-    $dnsRebindingProtection = ($rebindtest_ip != $rebindip);
+    $options = $$ethX['PROTOCOL:0']=='ipv6' ? '-6 -t AAAA' : '-4 -t A';
+    $rebindtesturl = $isLegacyCert ? "rebindtest.unraid.net" : "rebindtest.myunraid.net";
+    $rebindtest_ip = exec("host $options $rebindtesturl 2>/dev/null|awk '{print \$4}'");
+    $dnsRebindingProtection = ($rebindtest_ip != $rebindip4);
     if (!$dnsRebindingProtection) {
-      $certtest_ip = exec("host $protocol $subjectURL 2>/dev/null|awk '{print \$4}'");
+      $certtest_ip = exec("host $options $subjectURL 2>/dev/null|awk '{print \$4}'");
       $dnsValid = $certtest_ip==$addr;
     }
     // more: similar test for "www.$certSubject" dns valid goes here
@@ -185,8 +186,7 @@ $(function(){
 </script>
 <form markdown="1" name="SSLSettings" method="POST" action="/update.htm" target="progressFrame">
 <input type="hidden" name="changePorts" value="Apply">
-<input type="hidden" name="server_https" value="<?=$_SERVER['HTTPS']?>">
-<input type="hidden" name="server_name" value="<?=$_SERVER['HTTP_HOST']?>">
+<input type="hidden" name="server_name" value="<?=strtok($_SERVER['HTTP_HOST'],":")?>">
 <input type="hidden" name="server_addr" value="<?=$_SERVER['SERVER_ADDR']?>">
 _(User 'root')_:
 : [_(Manage)_](/Settings/Users/ManagementAccess/UserEdit?name=root)
@@ -274,8 +274,7 @@ _(Local TLD)_:
 </form>
 <div style="height:24px"></div>
 <form markdown="1" name="Provision" method="POST" target="progressFrame" action="/update.htm" onsubmit="provisionHandler(event, this)">
-<input type="hidden" name="server_https" value="<?=$_SERVER['HTTPS']?>">
-<input type="hidden" name="server_name" value="<?=$_SERVER['HTTP_HOST']?>">
+<input type="hidden" name="server_name" value="<?=strtok($_SERVER['HTTP_HOST'],":")?>">
 <input type="hidden" name="server_addr" value="<?=$_SERVER['SERVER_ADDR']?>">
 <?if ($certPresent):?>
 _(CA-signed certificate file)_:
@@ -310,7 +309,7 @@ _(CA-signed certificate file)_:
 
 <?endif;?>
 &nbsp;
-: <button type="submit" name="changePorts" value="Provision" <?=$disabled_provision?>><?=$provisionlabel?></button><button type="submit" name="changePorts" value="Delete" <?=$disabled_delete?> >_(Delete)_</button><button type="button" onclick="updateDNS(this)" <?=$disabled_updatedns?>>_(Update DNS)_</button>
+: <button type="submit" name="changePorts" value="Provision" <?=$disabled_provision?>><?=$provisionlabel?></button><button type="submit" name="changePorts" value="Delete" <?=$disabled_delete?> >_(Delete)_</button><!-- <button type="button" onclick="updateDNS(this)" <?=$disabled_updatedns?>>_(Update DNS)_</button> -->
 
 <?if ($certPresent && $isLegacyCert):?>
 &nbsp;

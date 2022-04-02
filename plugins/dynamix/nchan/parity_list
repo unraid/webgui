@@ -97,9 +97,9 @@ while (true) {
     if (new_parity_log($timestamp)) {
       $idle = []; while (count($synced)>1) $idle[] = array_pop($synced)-array_pop($synced);
       [$action,$size] = file_exists($resync) ? my_explode(',',file_get_contents($resync)) : [$var['mdResyncAction'],$var['mdResyncSize']];
-      $duration = $var['sbSynced2']-$sbSynced;
+      $duration = $var['sbSynced2']-$sbSynced-array_sum($idle);
       $status   = $var['sbSyncExit'];
-      $speed    = $status==0 ? round($size*1024/($duration-array_sum($idle))) : 0;
+      $speed    = $status==0 ? round($size*1024/$duration) : 0;
       $error    = $var['sbSyncErrs'];
       file_put_contents($log,"$timestamp|$duration|$speed|$status|$error|$action|$size\n",FILE_APPEND);
     }

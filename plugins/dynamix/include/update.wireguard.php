@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -296,9 +296,9 @@ case 'public':
   $v6 = $_POST['#prot']!='';
   $context = stream_context_create(['https'=>['timeout'=>12]]);
   $int_ipv4 = $v4 ? (preg_match("/^$validIP4$/", $ip) ? $ip : (@dns_get_record($ip, DNS_A)[0]['ip'] ?: '')) : '';
-  $ext_ipv4 = $v4 ? (@file_get_contents('https://api.ipify.org',false,$context) ?: '') : '';
+  $ext_ipv4 = $v4 ? (@file_get_contents('https://wanip4.unraid.net',false,$context) ?: '') : '';
   $int_ipv6 = $v6 ? (preg_match("/^$validIP6$/", $ip) ? $ip : (@dns_get_record($ip, DNS_AAAA)[0]['ipv6'] ?: '')) : '';
-  $ext_ipv6 = $v6 ? (@file_get_contents('https://api6.ipify.org',false,$context) ?: '') : '';
+  $ext_ipv6 = $v6 ? (@file_get_contents('https://wanip6.unraid.net',false,$context) ?: '') : '';
   echo "$int_ipv4;$ext_ipv4;$int_ipv6;$ext_ipv6";
   break;
 case 'addtunnel':

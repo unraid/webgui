@@ -3,8 +3,8 @@ Title="Array Devices"
 Tag="database"
 ---
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -45,7 +45,7 @@ function display_diskio() {
 }
 function toggle_diskio(init) {
   if (!init) {
-    if ($.cookie('diskio')===undefined) $.cookie('diskio','diskio',{path:'/',expires:3650}); else $.removeCookie('diskio',{path:'/'});
+    if ($.cookie('diskio')===undefined) $.cookie('diskio','diskio',{expires:3650}); else $.removeCookie('diskio');
   }
   if ($.cookie('diskio')===undefined) {
     $('i.toggle').removeClass('fa-tachometer').addClass('fa-list');

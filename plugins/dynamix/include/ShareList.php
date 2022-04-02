@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -91,7 +91,7 @@ foreach ($shares as $name => $share) {
    default: $luks = "<a class='info' onclick='return false'><i class='padlock fa fa-lock red-text'></i><span>"._('Unknown encryption state')."</span></a>"; break;
   } else $luks = "";
   echo "<tr>";
-  echo "<td><a class='info nohand' onclick='return false'><i class='fa fa-$orb orb $color-orb'></i><span style='left:18px'>$help</span></a>$luks<a href=\"/$path/Share?name=".urlencode($name)."\" onclick=\"$.cookie('one','tab1',{path:'/'})\">".compress($name)."</a></td>";
+  echo "<td><a class='info nohand' onclick='return false'><i class='fa fa-$orb orb $color-orb'></i><span style='left:18px'>$help</span></a>$luks<a href=\"/$path/Share?name=".urlencode($name)."\" onclick=\"$.cookie('one','tab1')\">".compress($name)."</a></td>";
   echo "<td>{$share['comment']}</td>";
   echo "<td>".user_share_settings($var['shareSMBEnabled'], $sec[$name])."</td>";
   echo "<td>".user_share_settings($var['shareNFSEnabled'], $sec_nfs[$name])."</td>";
@@ -120,7 +120,7 @@ foreach ($shares as $name => $share) {
     }
   } else {
     echo "<td>$cache</td>";
-    echo "<td><a href=\"/update.htm?cmd=$cmd&csrf_token={$var['csrf_token']}\" target=\"progressFrame\" onclick=\"$.cookie('ssz','ssz',{path:'/'});$(this).text('"._('Please wait')."...')\">"._('Compute')."...</a></td>";
+    echo "<td><a href=\"/update.htm?cmd=$cmd&csrf_token={$var['csrf_token']}\" target=\"progressFrame\" onclick=\"$.cookie('ssz','ssz');$(this).text('"._('Please wait')."...')\">"._('Compute')."...</a></td>";
     echo "<td>".my_scale($share['free']*1024, $unit)." $unit</td>";
     echo "<td><a href=\"/$path/Browse?dir=/mnt/user/".urlencode($name)."\"><i class=\"icon-u-tab\" title=\""._('Browse')." /mnt/user/".urlencode($name)."\"></i></a></td>";
     echo "</tr>";

@@ -796,6 +796,7 @@ _(Categories)_:
   <option value="Network:Management">_(Network)_:_(Management)_</option>
   <option value="Network:Messenger">_(Network)_:_(Messenger)_</option>
   <option value="Network:VPN">_(Network)_:_(VPN)_</option>
+  <option value="Network:Privacy">_(Network)_:_(Privacy)_</option>
   <option value="Network:Other">_(Network)_:_(Other)_</option>
   </optgroup>
   <optgroup label="_(Development Status)_">

@@ -1,7 +1,21 @@
 <?php
-// incuded in login.php
+// Included in login.php
 
-function fileRead($file) {
+// Only start a session to check if they have a cookie that looks like our session
+$server_name = strtok($_SERVER['HTTP_HOST'],":");
+if (!empty($_COOKIE['unraid_'.md5($server_name)])) {
+    // Start the session so we can check if $_SESSION has data
+    session_start();
+
+    // Check if the user is already logged in
+    if ($_SESSION && !empty($_SESSION['unraid_user'])) {
+        // If so redirect them to the start page
+        header("Location: /".$var['START_PAGE']);
+        exit;
+    }
+}
+
+function readFromFile($file): string {
     $text = "";
     if (file_exists($file)) {
         $fp = fopen($file,"r");
@@ -13,7 +27,8 @@ function fileRead($file) {
     }
     return $text;
 }
-function fileAppend($file, $text) {
+
+function appendToFile($file, $text): void {
     $fp = fopen($file,"a");
     if (flock($fp, LOCK_EX)) {
         fwrite($fp, $text);
@@ -22,7 +37,8 @@ function fileAppend($file, $text) {
         fclose($fp);
     }
 }
-function fileWrite($file, $text) {
+
+function writeToFile($file, $text): void {
     $fp = fopen($file,"w");
     if (flock($fp, LOCK_EX)) {
         fwrite($fp, $text);
@@ -32,74 +48,198 @@ function fileWrite($file, $text) {
     }
 }
 
-$maxfails = 3;
-$cooldown = 15*60;
-$remote_addr = $_SERVER['REMOTE_ADDR'] ?? "unknown";
-$failfile = "/var/log/pwfail/{$remote_addr}";
-
-if (!empty($_POST['username']) && !empty($_POST['password'])) {
-
-    @mkdir("/var/log/pwfail/", 0755);
-    $failtext = fileRead($failfile);
-    $fails = explode("\n", trim($failtext));
-    $time = time();
-
-    // remove entries older than $cooldown minutes
-    $updatefails = false;
-    foreach ((array) $fails as $key => $value) {
-        if ($value && $time - $value > $cooldown) {
-            unset ($fails[$key]);
-            $updatefails = true;
-        }
-    }
-    if ($updatefails) {
-        $failtext = implode("\n", $fails);
-        fileWrite($failfile, $failtext);
-    }
-
-    if (count($fails) >= $maxfails) {
-        $error = _('Too many invalid login attempts');
-        if (count($fails) == $maxfails)
-           exec("logger -t webGUI ".escapeshellarg("Ignoring login attempts for {$_POST['username']} from {$remote_addr}"));
-
-    } else {
-        // User Login attempt, validate credentials
-        if (($_POST['username'] == "root")) {
-            // more: integrate with PAM to avoid direct access to /etc/shadow and validate other user names (future)
-            $output = exec("/usr/bin/grep root /etc/shadow");
-            if ($output !== false) {
-                $strCredentials = explode(":", $output);
-                if (password_verify($_POST['password'], $strCredentials[1])) {
-                    // Successful login, start session
-                    @unlink($failfile);
-                    session_start();
-                    $_SESSION['unraid_login'] = time();
-                    $_SESSION['unraid_user'] = $_POST['username'];
-                    session_regenerate_id(true);
-                    session_write_close();
-                    exec("logger -t webGUI ".escapeshellarg("Successful login user {$_POST['username']} from {$remote_addr}"));
-                    header("Location: /".$var['START_PAGE']);
-                    exit;
-                }
-            }
-        }
-
-        // Invalid login
-        $error = _('Invalid Username or Password');
-        exec("logger -t webGUI ".escapeshellarg("Unsuccessful login user {$_POST['username']} from {$remote_addr}"));
-
-    }
-    fileAppend($failfile, $time."\n");
+// Source: https://stackoverflow.com/a/2524761
+function isValidTimeStamp($timestamp)
+{
+    return ((string) (int) $timestamp === $timestamp) 
+        && ($timestamp <= PHP_INT_MAX)
+        && ($timestamp >= ~PHP_INT_MAX);
 }
 
+function cleanupFails(string $failFile, int $time): int {
+    global $cooldown;
+
+    // Read existing fails
+    @mkdir(dirname($failFile), 0755);
+    $failText = readFromFile($failFile);
+    $fails = explode("\n", trim($failText));
+
+    // Remove entries older than $cooldown minutes, and entries that are not timestamps
+    $updateFails = false;
+    foreach ((array) $fails as $key => $value) {
+        if ( !isValidTimeStamp($value) || ($time - $value > $cooldown) || ($value > $time) ) {
+            unset ($fails[$key]);
+            $updateFails = true;
+        }
+    }
+
+    // Save fails to disk
+    if ($updateFails) {
+        $failText = implode("\n", $fails)."\n";
+        writeToFile($failFile, $failText);
+    }
+    return count($fails);
+}
+
+function verifyUsernamePassword(string $username, string $password): bool {
+    if ($username != "root") return false;
+
+    // @TODO: integrate with PAM to avoid direct access to /etc/shadow and validate other user names
+    $output = exec("/usr/bin/grep root /etc/shadow");
+    if ($output === false) return false;
+    $credentials = explode(":", $output);
+    return password_verify($password, $credentials[1]);
+}
+
+function verifyTwoFactorToken(string $username, string $token): bool {
+    try {
+        // Create curl client
+        $curlClient = curl_init();
+        curl_setopt($curlClient, CURLOPT_HEADER, true);
+        curl_setopt($curlClient, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($curlClient, CURLOPT_UNIX_SOCKET_PATH, '/var/run/unraid-api.sock');
+        curl_setopt($curlClient, CURLOPT_URL, 'http://unixsocket/verify');
+        curl_setopt($curlClient, CURLOPT_BUFFERSIZE, 256);
+        curl_setopt($curlClient, CURLOPT_TIMEOUT, 5);
+        curl_setopt($curlClient, CURLOPT_HTTPHEADER, array('Content-Type:application/json', 'Origin: /var/run/unraid-notifications.sock'));
+        curl_setopt($curlClient, CURLOPT_POSTFIELDS, json_encode([
+            'username' => $username,
+            'token' => $token
+        ]));
+
+        // Send the request
+        curl_exec($curlClient);
+
+        // Get the http status code
+        $httpCode = curl_getinfo($curlClient, CURLINFO_HTTP_CODE);
+
+        // Close the connection
+        curl_close($curlClient);
+
+        // Error
+        // This should accept 200 or 204 status codes
+        if ($httpCode !== 200 && $httpCode !== 204) {
+            // Log error to syslog
+            exec("logger -t webGUI ".escapeshellarg("2FA code for {$username} is invalid, blocking access!"));
+            return false;
+        }
+
+        // Log success to syslog
+        exec("logger -t webGUI ".escapeshellarg("2FA code for {$username} is valid, allowing login!"));
+
+        // Success
+        return true;
+    } catch (Exception $exception) {
+        // Error
+        return false;
+    }
+}
+
+// Check if a haystack ends in a needle
+function endsWith($haystack, $needle): bool {
+    return substr_compare($haystack, $needle, -strlen($needle)) === 0;
+}
+
+// Check if we're accessing this via a wildcard cert
+function isWildcardCert(): bool {
+    global $server_name;
+    return endsWith($server_name, '.myunraid.net');
+}
+
+// Check if we're accessing this locally via the expected myunraid.net url
+function isLocalAccess(): bool {
+    global $nginx, $server_name;
+    return isWildcardCert() && $nginx['NGINX_LANFQDN'] === $server_name;
+}
+
+// Check if we're accessing this remotely via the expected myunraid.net url
+function isRemoteAccess(): bool {
+    global $nginx, $server_name;
+    return isWildcardCert() && $nginx['NGINX_WANFQDN'] === $server_name;
+}
+
+// Check if 2fa is enabled for local (requires USE_SSL to be "auto" so no alternate urls can access the server)
+function isLocalTwoFactorEnabled(): bool {
+    global $nginx, $my_servers;
+    return $nginx['NGINX_USESSL'] === "auto" && $my_servers['local']['2Fa'] === 'yes';
+}
+
+// Check if 2fa is enabled for remote
+function isRemoteTwoFactorEnabled(): bool {
+    global $my_servers;
+    return $my_servers['remote']['2Fa'] === 'yes';
+}
+
+// Load configs into memory
+$my_servers = @parse_ini_file('/boot/config/plugins/dynamix.my.servers/myservers.cfg', true);
+$nginx = @parse_ini_file('/var/local/emhttp/nginx.ini');
+
+// Vars
+$maxFails = 3;
+$cooldown = 15 * 60; // 15 mins
+$remote_addr = $_SERVER['REMOTE_ADDR'] ?? "unknown";
+$failFile = "/var/log/pwfail/{$remote_addr}";
+
+// Get the credentials
+$username = $_POST['username'];
+$password = $_POST['password'];
+$token = $_REQUEST['token'];
+
+// Check if we need 2fa
+$twoFactorRequired = (isLocalAccess() && isLocalTwoFactorEnabled()) || (isRemoteAccess() && isRemoteTwoFactorEnabled());
+
+// If we have a username + password combo attempt to login
+if (!empty($username) && !empty($password)) {
+    try {
+        // Bail if we're missing the 2FA token and we expect one
+        if (isWildcardCert() && $twoFactorRequired && empty($token)) throw new Exception(_('No 2FA token detected'));
+
+        // Read existing fails, cleanup expired ones
+        $time = time();
+        $failCount = cleanupFails($failFile, $time);
+
+        // Check if we're limited
+        if ($failCount >= $maxFails) {
+            if ($failCount == $maxFails) exec("logger -t webGUI ".escapeshellarg("Ignoring login attempts for {$username} from {$remote_addr}"));
+            throw new Exception(_('Too many invalid login attempts'));
+        }
+
+        // Bail if username + password combo doesn't work
+        if (!verifyUsernamePassword($username, $password)) throw new Exception(_('Invalid username or password'));
+
+        // Bail if we need a token but it's invalid
+        if (isWildcardCert() && $twoFactorRequired && !verifyTwoFactorToken($username, $token)) throw new Exception(_('Invalid 2FA token'));
+
+        // Successful login, start session
+        @unlink($failFile);
+        session_start();
+        $_SESSION['unraid_login'] = time();
+        $_SESSION['unraid_user'] = $username;
+        session_regenerate_id(true);
+        session_write_close();
+        exec("logger -t webGUI ".escapeshellarg("Successful login user {$username} from {$remote_addr}"));
+
+        // Redirect the user to the start page
+        header("Location: /".$var['START_PAGE']);
+        exit;
+    } catch (Exception $exception) {
+        // Set error message
+        $error = $exception->getMessage();
+
+        // Log error to syslog
+        exec("logger -t webGUI ".escapeshellarg("Unsuccessful login user {$username} from {$remote_addr}"));
+        appendToFile($failFile, $time."\n");
+    }
+}
 
 $boot   = "/boot/config/plugins/dynamix";
-$myfile = "case-model.cfg";
-$mycase = file_exists("$boot/$myfile") ? file_get_contents("$boot/$myfile") : false;
+$myFile = "case-model.cfg";
+$myCase = file_exists("$boot/$myFile") ? file_get_contents("$boot/$myFile") : false;
 
-extract(parse_plugin_cfg('dynamix',true));
-$theme_dark = in_array($display['theme'],['black','gray']);
+extract(parse_plugin_cfg('dynamix', true));
+$theme_dark = in_array($display['theme'], ['black', 'gray']);
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -137,8 +277,8 @@ $theme_dark = in_array($display['theme'],['black','gray']);
     /
     /************************/
     body {
-        background: #<?=$theme_dark?'1C1B1B':'F2F2F2'?>;
-        color: #<?=$theme_dark?'fff':'1c1b1b'?>;
+        background: <?=$theme_dark?'#1C1B1B':'#F2F2F2'?>;
+        color: <?=$theme_dark?'#fff':'#1c1b1b'?>;
         font-family: clear-sans, sans-serif;
         font-size: .875rem;
         padding: 0;
@@ -215,14 +355,19 @@ $theme_dark = in_array($display['theme'],['black','gray']);
 
     /************************
     /
-    /  Login spesific styling
+    /  Login specific styling
     /
     /************************/
     #login {
         width: 500px;
         margin: 6rem auto;
         border-radius: 10px;
-        background: #<?=$theme_dark?'2B2A29':'fff'?>;
+        background: <?=$theme_dark?'#2B2A29':'#fff'?>;
+    }
+    #login::after {
+        content: "";
+        clear: both;
+        display: table;
     }
     #login .logo {
         position: relative;
@@ -281,7 +426,7 @@ $theme_dark = in_array($display['theme'],['black','gray']);
         -webkit-box-shadow: 0 2px 8px 0 rgba(0,0,0,.12);
         box-shadow: 0 2px 8px 0 rgba(0,0,0,.12);
     }
-
+    .hidden { display: none; }
     /************************
     /
     /  Cases
@@ -309,7 +454,7 @@ $theme_dark = in_array($display['theme'],['black','gray']);
     /************************/
     @media (max-width: 500px) {
         body {
-            background: #<?=$theme_dark?'2B2A29':'fff'?>;
+            background: <?=$theme_dark?'#2B2A29':'#fff'?>;
         }
         [type=email], [type=number], [type=password], [type=search], [type=tel], [type=text], [type=url], textarea {
             font-size: 16px; /* This prevents the mobile browser from zooming in on the input-field. */
@@ -345,23 +490,41 @@ $theme_dark = in_array($display['theme'],['black','gray']);
             </h2>
 
             <div class="case">
-            <?if ($mycase):?>
-                <?if (substr($mycase,-4)!='.png'):?>
-                <span class='case-<?=$mycase?>'></span>
+            <?if ($myCase):?>
+                <?if (substr($myCase,-4)!='.png'):?>
+                <span class='case-<?=$myCase?>'></span>
                 <?else:?>
-                <img src='<?=autov("/webGui/images/$mycase")?>'>
+                <img src='<?=autov("/webGui/images/$myCase")?>'>
                 <?endif;?>
             <?endif;?>
             </div>
 
             <div class="form">
-
-                <form action="/login" method="POST">
-                    <p>
-                        <input name="username" type="text" placeholder="<?=_('Username')?>" autocapitalize="none" autocomplete="off" spellcheck="false" autofocus required>
-                        <input name="password" type="password" placeholder="<?=_('Password')?>" required>
-                    </p>
-                    <?if ($error) echo "<p class='error'>$error</p>";?>
+                <form class="js-removeTimeout" action="/login" method="POST">
+                    <? if (($twoFactorRequired && $token) || !$twoFactorRequired) { ?>
+                        <p>
+                            <input name="username" type="text" placeholder="<?=_('Username')?>" autocapitalize="none" autocomplete="off" spellcheck="false" autofocus required>
+                            <input name="password" type="password" placeholder="<?=_('Password')?>" required>
+                            <input name="token" type="hidden" value="<?= $token ?>">
+                        </p>
+                        <? if ($error) echo "<p class='error'>$error</p>"; ?>
+                        <p>
+                            <button type="submit" class="button button--small"><?=_('Login')?></button>
+                        </p>
+                    <? } else { ?>
+                        <? if ($error) { ?>
+                            <div>
+                                <p class="error" style="padding-top:10px;"><?= $error ?></p>
+                            </div>
+                        <? } else { ?>
+                            <div>
+                                <p class="error" style="padding-top:10px;" title="<?= _('Please access this server via the My Servers Dashboard') ?>"><?= _('No 2FA token detected') ?></p>
+                            </div>
+                        <? } ?>
+                        <div>
+                            <a href="https://forums.unraid.net/my-servers/" class="button button--small" title="<?=_('Go to My Servers Dashboard')?>"><?=_('Go to My Servers Dashboard')?></a>
+                        </div>
+                    <? } ?>
                     <script type="text/javascript">
                         document.cookie = "cookietest=1";
                         cookieEnabled = document.cookie.indexOf("cookietest=")!=-1;
@@ -370,14 +533,42 @@ $theme_dark = in_array($display['theme'],['black','gray']);
                             document.write("<p class='error'><?=_('Browser cookie support required for Unraid OS webgui')?></p>");
                         }
                     </script>
-                    <p>
-                        <button type="submit" class="button button--small"><?=_('Login')?></button>
-                    </p>
                 </form>
+
+                <? if (($twoFactorRequired && $token) || !$twoFactorRequired) { ?>
+                    <div class="js-addTimeout hidden">
+                        <p class="error" style="padding-top:10px;"><?=_('Transparent 2FA Token timed out')?></p>
+                        <a href="https://forums.unraid.net/my-servers/" class="button button--small" title="<?=_('Go to My Servers Dashboard')?>"><?=_('Go to My Servers Dashboard')?></a>
+                    </div>
+                <? } ?>
             </div>
 
-            <p><a href="https://wiki.unraid.net/Manual/Troubleshooting#Lost_root_Password" target="_blank"><?=_('Password recovery')?></a></p>
+            <? if (($twoFactorRequired && $token) || !$twoFactorRequired) { ?>
+                <p class="js-removeTimeout"><a href="https://wiki.unraid.net/Manual/Troubleshooting#Lost_root_Password" target="_blank"><?=_('Password recovery')?></a></p>
+            <? } ?>
+
         </div>
     </section>
+    <? if ($token) { ?>
+        <script type="text/javascript">
+            const $elsToRemove = document.querySelectorAll('.js-removeTimeout');
+            const $elsToShow = document.querySelectorAll('.js-addTimeout');
+            /**
+             * A user can manually refresh the page or submit with the wrong username/password
+             * the t2fa token will be re-used on these page refreshes. We need to keep track of the timeout across potential page
+             * loads rather than setting the timer with a fresh timeout each page load
+             */
+            const tokenName = '<?=$token?>'.slice(-20);
+            const ts = Date.now();
+            const timeoutStarted = sessionStorage.getItem(tokenName) ? Number(sessionStorage.getItem(tokenName)) : ts;
+            const timeoutDiff = ts - timeoutStarted; // current timestamp minus timestamp when token first set
+            const timeoutMS = 297000 - timeoutDiff; // 5 minutes minus 3seconds or (5*60)*1000ms - 3000ms = 297000
+            sessionStorage.setItem(tokenName, timeoutStarted);
+            const tokenTimeout = setTimeout(() => {
+                $elsToRemove.forEach(z => z.remove()); // remove elements
+                $elsToShow.forEach(z => z.classList.remove('hidden')); // add elements
+            }, timeoutMS); // if timeoutMS is negative value the timeout will trigger immediately
+        </script>
+    <? } ?>
 </body>
 </html>

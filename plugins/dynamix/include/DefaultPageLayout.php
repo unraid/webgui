@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -157,34 +157,34 @@ function refresh(top) {
     for (var i=0,link; link=document.getElementsByTagName('a')[i]; i++) { link.style.color = "gray"; } //fake disable
     location.reload();
   } else {
-    $.cookie('top',top,{path:'/'});
+    $.cookie('top',top);
     location.reload();
   }
 }
 function initab() {
-  $.removeCookie('one',{path:'/'});
-  $.removeCookie('tab',{path:'/'});
+  $.removeCookie('one');
+  $.removeCookie('tab');
 }
 function settab(tab) {
 <?switch ($myPage['name']):?>
 <?case'Main':?>
-  $.cookie('tab',tab,{path:'/'});
+  $.cookie('tab',tab);
 <?if ($var['fsState']=='Started'):?>
-  $.cookie('one','tab1',{path:'/'});
+  $.cookie('one','tab1');
 <?endif;?>
 <?break;?>
 <?case'Cache':case'Data':case'Flash':case'Parity':?>
-  $.cookie('one',tab,{path:'/'});
+  $.cookie('one',tab);
 <?break;?>
 <?default:?>
-  $.cookie(($.cookie('one')==null?'tab':'one'),tab,{path:'/'});
+  $.cookie(($.cookie('one')==null?'tab':'one'),tab);
 <?endswitch;?>
 }
 function done(key) {
   var url = location.pathname.split('/');
   var path = '/'+url[1];
   if (key) for (var i=2; i<url.length; i++) if (url[i]==key) break; else path += '/'+url[i];
-  $.removeCookie('one',{path:'/'});
+  $.removeCookie('one');
   location.replace(path);
 }
 function chkDelete(form, button) {
@@ -228,7 +228,7 @@ function openTerminal(tag,name,more) {
   }
   // open terminal window (run in background)
   name = name.replace(/ /g,"_");
-  tty_window = makeWindow(name,Math.max(screen.availHeight*3/5,600),Math.min(Math.max(screen.availWidth/2,900),1600));
+  tty_window = makeWindow(name+(more=='.log'?more:''),Math.max(screen.availHeight*3/5,600),Math.min(Math.max(screen.availWidth/2,900),1600));
   var socket = ['ttyd','syslog'].includes(tag) ? '/webterminal/'+tag+'/' : '/logterminal/'+name+(more=='.log'?more:'')+'/';
   $.get('/webGui/include/OpenTerminal.php',{tag:tag,name:name,more:more},function(){tty_window.location=socket; tty_window.focus();});
 }
@@ -266,7 +266,7 @@ function addBannerWarning(text,warning=true,noDismiss=false) {
 }
 
 function dismissBannerWarning(entry,cookieText) {
-  $.cookie(cookieText,"true",{expires:365,path:'/'});
+  $.cookie(cookieText,"true",{expires:365});
   removeBannerWarning(entry);
 }
 
@@ -318,9 +318,9 @@ function showUpgrade(text,noDismiss=false) {
 function hideUpgrade(set) {
   removeBannerWarning(osUpgradeWarning);
   if (set)
-    $.cookie('os_upgrade','true',{path:'/'});
+    $.cookie('os_upgrade','true');
   else
-    $.removeCookie('os_upgrade',{path:'/'});
+    $.removeCookie('os_upgrade');
 }
 function openUpgrade() {
   hideUpgrade();
@@ -421,7 +421,7 @@ foreach ($tasks as $button) {
   $page = $button['name'];
   echo "<div id='nav-item'";
   echo $task==$page ? " class='active'>" : ">";
-  echo "<a href='/$page' onclick='initab()'>"._($button['Name'] ?? $page)."</a></div>";
+  echo "<a href=\"/$page\" onclick='initab();window.location=\"/$page\"'>"._($button['Name'] ?? $page)."</a></div>";
   // create list of nchan scripts to be started
   if (isset($button['Nchan'])) nchan_merge($button['root'], $button['Nchan']);
 }
@@ -506,7 +506,7 @@ foreach ($pages as $page) {
         if (substr($icon,0,3)!='fa-') $icon = "fa-$icon";
         $icon = "<i class='fa $icon PanelIcon'></i>";
       }
-      echo "<div class=\"Panel\"><a href=\"/$path/{$pg['name']}\" onclick=\"$.cookie('one','tab1',{path:'/'})\"><span>$icon</span><div class=\"PanelText\">"._($title)."</div></a></div>";
+      echo "<div class=\"Panel\"><a href=\"/$path/{$pg['name']}\" onclick=\"$.cookie('one','tab1')\"><span>$icon</span><div class=\"PanelText\">"._($title)."</div></a></div>";
     }
   }
   // create list of nchan scripts to be started
@@ -557,7 +557,7 @@ default:
   echo "<span class='green strong'><i class='fa fa-play-circle'></i> "._('Array Started')."</span>$progress"; break;
 }
 echo "</span></span><span id='countdown'></span><span id='user-notice' class='red-text'></span>";
-echo "<span id='copyright'>Unraid&reg; webGui &copy;2021, Lime Technology, Inc.";
+echo "<span id='copyright'>Unraid&reg; webGui &copy;2022, Lime Technology, Inc.";
 echo " <a href='https://wiki.unraid.net/Manual' target='_blank' title=\""._('Online manual')."\"><i class='fa fa-book'></i> "._('manual')."</a>";
 echo "</span></div>";
 ?>
@@ -663,9 +663,6 @@ defaultPage.on('message', function(msg,meta) {
     break;
   }
 });
-defaultPage.on('error', function(code,error) {
-  swal({title:"<?=_('Nchan communication error')?>", text:"<?=_('Page will be reloaded')?>", type:"warning", html:true, confirmButtonText:"<?=_('Ok')?>"},function(){setTimeout(refresh,50);});
-});
 
 var backtotopoffset = 250;
 var backtotopduration = 500;
@@ -718,7 +715,7 @@ $(function() {
   });
   var top = ($.cookie('top')||0) - $('.tabs').offset().top - 75;
   if (top>0) {$('html,body').scrollTop(top);}
-  $.removeCookie('top',{path:'/'});
+  $.removeCookie('top');
 <?if ($safemode):?>
   showNotice("<?=_('System running in')?> <b><?=('safe mode')?></b>");
 <?else:?>

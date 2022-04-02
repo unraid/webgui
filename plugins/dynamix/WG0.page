@@ -4,8 +4,8 @@ Tag="icon-vpn"
 Nchan="wg_poller"
 ---
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -26,6 +26,8 @@ exec("ip -6 route show type unicast|grep -Pv 'expires|shim-'|awk '/^[^dfm:]/{pri
 exec("ip -6 addr show scope global|grep -PA2 ': (eth|br|bond)\d+'|awk '/inet6 .+ (global|noprefixroute) \$/{split(\$2,ip,\"/\");print ip[1]}'",$hosts6);
 exec("ls  --indicator-style=none $etc/wg*.conf*|grep -Po wg[0-9]+",$vtuns);
 exec("docker network ls --filter driver='macvlan' --filter driver='ipvlan' --format='{{.Name}}' 2>/dev/null",$filter);
+
+$nginx = (array)parse_ini_file('state/nginx.ini');
 
 // add subnets defined in Docker custom networks
 if (count($filter)) {
@@ -122,7 +124,7 @@ function readConf(&$peer_wg,&$wg,$vtun) {
   foreach ($peer_wg as $i) if ((int)$wg["TYPE:$i"]==7) {$vpn = true; break;}
   return [$conf,$cfg,$file,$vpn];
 }
-$public    = strpos($_SERVER['HTTP_HOST'],'unraid.net')!==false && $remote['wanaccess']=='yes' ? (substr($_SERVER['HTTP_HOST'],0,4)!='www.'?'www.':'').explode(':',$_SERVER['HTTP_HOST'])[0] : '';
+$public    = $nginx['NGINX_WANFQDN'];
 $active    = (array)explode(' ',exec('wg show interfaces'));
 $autostart = (array)explode(' ',@file_get_contents("$etc/autostart"));
 $build     = false;
@@ -1289,7 +1291,7 @@ _(Local tunnel address IPv6)_:
 </div>
 </div>
 _(Local endpoint)_:
-: <span class="input"><input type="text" id="endpoint-wg0" name="Endpoint:0" class="subnet" value="<?=$vpn_wg0?'':$wg0['Endpoint:0']?>" onchange="toLC(this);quickValidate(this);" pattern="<?=$validText?>" title="_(IP address or FQDN)_" placeholder="<?=$vpn_wg0?'(not used)':preg_replace('/^(www\.).+(\.unraid.net)$/','$1<hash>$2',$public)?>">:
+: <span class="input"><input type="text" id="endpoint-wg0" name="Endpoint:0" class="subnet" value="<?=$vpn_wg0?'':$wg0['Endpoint:0']?>" onchange="toLC(this);quickValidate(this);" pattern="<?=$validText?>" title="_(IP address or FQDN)_" placeholder="<?=$vpn_wg0?'(not used)':preg_replace('/^(.+?\.)[0-9a-zA-Z]+(\.(my)?unraid.net)$/','$1<hash>$2',$public)?>">:
   <input type="number" name="gui:ListenPort:0" class="port" min="1" max="65535" value="<?=$vpn_wg0?'':$wg0['ListenPort:0']?>" onchange="if(quickValidate(this)) {portRemark($(document.wg0),'wg0',this.value)}" placeholder="<?=$vpn_wg0?'':$netport['wg0']?>"></span>
   <span class="remark block" style="display:none">_(Remark)_: _(configure your router with port forwarding of port)_ **<span id="my-port-wg0"><?=$wg0['ListenPort:0']?:$netport['wg0']?></span>/_(UDP)_** _(to)_ **<?=$server?>:<?=$wg0['ListenPort:0']?:$netport['wg0']?>**</span><span class="upnp wg0 block"></span>
   <input type="hidden" name="ListenPort:0" value=""><dl id="endpoint4-wg0" style="display:none"></dl><dl id="endpoint6-wg0" style="display:none"></dl>

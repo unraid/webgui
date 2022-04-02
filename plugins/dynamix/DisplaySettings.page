@@ -53,7 +53,7 @@ function presetTime(form) {
   form.time.disabled = system;
 }
 function presetBanner(form) {
-  if (form.banner.selectedIndex == 0) $('#custom').hide(); else $('#custom').show();
+  if (form.banner.selectedIndex == 0) $('.js-bannerSettings').hide(); else $('.js-bannerSettings').show();
 }
 function presetRefresh(form) {
   for (var i=0,item; item=form.refresh.options[i]; i++) item.value *= -1;
@@ -253,44 +253,13 @@ _(Show array utilization indicator)_:
   <?=mk_option($display['usage'], "1",_('Yes'))?>
   </select>
 
-_(Header custom text color)_:
-: <input type="text" class="narrow" name="header" value="<?=$display['header']?>" maxlength="6" pattern="([0-9a-fA-F]{3}){1,2}" title="_(HTML color code of 3 or 6 hexadecimal digits)_">
-
-:display_custom_text_color_help:
-
-_(Header custom background color)_:
-: <input type="text" class="narrow" name="background" value="<?=$display['background']?>" maxlength="6" pattern="([0-9a-fA-F]{3}){1,2}" title="_(HTML color code of 3 or 6 hexadecimal digits)_">
-
-:display_custom_background_color_help:
-
-_(Header show description)_:
-: <select name="headerdescription">
-  <?=mk_option($display['headerdescription'], "yes",_('Yes'))?>
-  <?=mk_option($display['headerdescription'], "no",_('No'))?>
+_(Temperature unit)_:
+: <select name="unit">
+  <?=mk_option($display['unit'], "C",_('Celsius'))?>
+  <?=mk_option($display['unit'], "F",_('Fahrenheit'))?>
   </select>
 
-_(Header custom meta text color)_:
-: <input type="text" class="narrow" name="headermetacolor" value="<?=$display['headermetacolor']?>" maxlength="6" pattern="([0-9a-fA-F]{3}){1,2}" title="HTML color code of 3 or 6 hexadecimal digits">
-
-_(Show banner)_:
-: <select name="banner" onchange="presetBanner(this.form)">
-  <?=mk_option($display['banner'], "",_('No'))?>
-  <?=mk_option($display['banner'], "image",_('Yes'))?>
-  </select>
-
-<div id="custom" markdown="1" style="display:none">
-_(Custom banner)_:
-<input type="hidden" name="#custom" value="">
-: <span id="dropbox">
-<?if (file_exists($banner)):?>
-  <img src="<?=autov($banner)?>" width="330" height="30" onclick="$('#drop').click()" style="cursor:pointer" title="_(Click to select PNG file)_"><?=$icon?>
-<?else:?>
-  <?=$void?>
-<?endif;?>
-  </span><em>_(Drag-n-drop a PNG file or click the image at the left)_.</em><input type="file" id="drop" accept="image/*" style="display:none">
-</div>
-
-:display_custom_banner_help:
+:display_temperature_unit_help:
 
 _(Show Dashboard apps)_:
 : <select name="dashapps">
@@ -319,13 +288,52 @@ _(Used / Free columns)_:
   <?=mk_option($display['text'], "21",_('Bar (color) - Text'))?>
   </select>
 
-_(Temperature unit)_:
-: <select name="unit">
-  <?=mk_option($display['unit'], "C",_('Celsius'))?>
-  <?=mk_option($display['unit'], "F",_('Fahrenheit'))?>
+_(Header custom text color)_:
+: <input type="text" class="narrow" name="header" value="<?=$display['header']?>" maxlength="6" pattern="([0-9a-fA-F]{3}){1,2}" title="_(HTML color code of 3 or 6 hexadecimal digits)_">
+
+:display_custom_text_color_help:
+
+_(Header custom secondary text color)_:
+: <input type="text" class="narrow" name="headermetacolor" value="<?=$display['headermetacolor']?>" maxlength="6" pattern="([0-9a-fA-F]{3}){1,2}" title="HTML color code of 3 or 6 hexadecimal digits">
+
+_(Header custom background color)_:
+: <input type="text" class="narrow" name="background" value="<?=$display['background']?>" maxlength="6" pattern="([0-9a-fA-F]{3}){1,2}" title="_(HTML color code of 3 or 6 hexadecimal digits)_">
+
+:display_custom_background_color_help:
+
+_(Header show description)_:
+: <select name="headerdescription">
+  <?=mk_option($display['headerdescription'], "yes",_('Yes'))?>
+  <?=mk_option($display['headerdescription'], "no",_('No'))?>
   </select>
 
-:display_temperature_unit_help:
+_(Show banner)_:
+: <select name="banner" onchange="presetBanner(this.form)">
+  <?=mk_option($display['banner'], "",_('No'))?>
+  <?=mk_option($display['banner'], "image",_('Yes'))?>
+  </select>
+
+<div class="js-bannerSettings" markdown="1" style="display:none">
+_(Custom banner)_:
+<input type="hidden" name="#custom" value="">
+: <span id="dropbox">
+<?if (file_exists($banner)):?>
+  <img src="<?=autov($banner)?>" width="330" height="30" onclick="$('#drop').click()" style="cursor:pointer" title="_(Click to select PNG file)_"><?=$icon?>
+<?else:?>
+  <?=$void?>
+<?endif;?>
+  </span><em>_(Drag-n-drop a PNG file or click the image at the left)_.</em><input type="file" id="drop" accept="image/*" style="display:none">
+
+:display_custom_banner_help:
+</div>
+
+<div class="js-bannerSettings" markdown="1" style="display:none">
+_(Show banner background color fade)_:
+: <select name="showBannerGradient">
+  <?=mk_option($display['showBannerGradient'], "no",_('No'))?>
+  <?=mk_option($display['showBannerGradient'], "yes",_('Yes'))?>
+  </select>
+</div>
 
 <input type="submit" name="#default" value="_(Default)_" onclick="filename='reset'">
 : <input type="submit" name="#apply" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">

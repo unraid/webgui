@@ -973,8 +973,6 @@ This can be an image file with a specific size or a dedicated folder.
 If the system needs to create a new docker image file, this is the default size to use specified in GB.
 
 To resize an existing image file, specify the new size here. Next time the Docker service is started the file (and file system) will be increased to the new size (but never decreased).
-
-WARNING: resizing the docker image file will empty its content. Docker containers need to be re-installed afterwards.
 :end
 
 :docker_vdisk_location_help:
@@ -1135,14 +1133,25 @@ Enable (default) or disable the UPnP function on the server. This function allow
 :mgmt_use_ssl_tls_help:
 Determines how the webGUI responds to HTTP and/or HTTPS protocol on your LAN.
 
-Select **No** to disable HTTPS.
+Select **No** to use HTTP. To access your server use this URL:
 
-Select **Yes** to enable HTTPS and redirect HTTP to HTTPS. A
-self-signed SSL certificate will be generated automatically if a Let's Encrypt SSL certificate has not been provisioned.
+`http://<server-name>.<localTLD>`
 
-Select **Auto** if you have *Provisioned* a Let's Encrypt SSL
-certificate.  In this case webGUI access will use HTTPS with the Let's Encrypt
-certificate exclusively.  Note that a DNS sever must also be reachable.
+or this URL:
+
+`http://<server-ip-address>`
+
+Select **Yes** to enable use of an automatically-generated self-signed
+SSL certificate.  Use this URL to access your server:
+
+`https://<server-name>.<localTLD>`
+
+Note that use of a self-signed SSL certificate will generate a browser
+warning.
+
+Select **Auto** to enable *exclusive* use of an Unraid.net SSL
+certificate for https access (see **Provision** below).  Note that a DNS
+server must be reachable.
 
 Important: **Auto** may not be selectable if your router or upstream DNS server has
 [DNS rebinding protection](https://en.wikipedia.org/wiki/DNS_rebinding) enabled. DNS rebinding
@@ -1192,10 +1201,29 @@ Enter your local Top Level Domain. May be blank.
 :end
 
 :mgmt_certificate_expiration_help:
-**Provision** may be used to install a *free* SSL Certficiate from
-[Let's Encrypt](https://letsencrypt.org/), if the server is signed in to unraid.net.
+**Provision** may be used to install a *free* Unraid.net SSL Certificate from
+[Let's Encrypt](https://letsencrypt.org/).
 
-After a Let's Encrypt SSL Certificate has been installed, two
+The Unraid.net SSL certificate can be used in two ways.  First,
+having the certificate present enables your server to respond to an
+alternate URL of the form:
+
+`https://<lan-ip>.<hash>.myunraid.net`
+
+The `<hash>` value is a 40-character hex string (160 bits) unique to
+your server.  A Lime Technology DDNS server will return your `<lan-ip>`
+in response to a DNS request on this URL. The certificate Subject is
+set to `*.<hash>.myunraid.net` thus validating the https connection.
+
+You may enable this URL exclusively on your LAN by setting **Use
+SSL/TLS** to **Auto**.
+
+The second use for an Unraid.net certificate is to enable secure
+remote access available through the My Servers plugin feature.  Note
+that it is possible to use secure remote access in conjunction with
+insecure local access.
+
+After an Unraid.net SSL Certificate has been installed, two
 background services are activated while the server is signed in to unraid.net:
 
 - *updatedns* - This starts 30 seconds after server reboot has completed and contacts the Lime Technology
@@ -1203,15 +1231,11 @@ DNS service to register the servers local IP address. Thereafter it wakes up eve
 the local IP address has changed.
 
 - *renewcert* - This starts 60 seconds after server reboot has completed and contacts the Lime Technology
-certificate renewal service to determine if your Let's Encrypt SSL certificate needs to be renewed.
+certificate renewal service to determine if your Unraid.net SSL certificate needs to be renewed.
 Thereafter it wakes up every 24 hours. If within 30 days of expiration, a new certificate is automatically
 provisioned and downloaded to your server.
 
-**Delete** may be used to delete the Let's Encrypt certificate file.
-
-**Update DNS** may be used to manually initiate updating the DNS A-record of your server FQDN on unraid.net, assuming the server is signed in. Note
-that world-wide DNS propagation could take anywhere from 1 minute to several hours (we set TTL to 60 seconds). For
-this reason, we also recommend assigning a static IP address to the server on your LAN.
+**Delete** may be used to delete the Unraid.net certificate file.
 
 **nginx certificate handling details**
 
@@ -1219,7 +1243,7 @@ nginx makes use of two certificate files stored on the USB flash boot device:<br
 
 - a self-signed certificate: `config/ssl/certs/<server-name>_unraid_bundle.pem`
 
-- a Let's Encrypt certificate: `config/ssl/certs/certificate_bundle.pem`
+- an Unraid.net certificate: `config/ssl/certs/certificate_bundle.pem`
 
 The self-signed SSL certificate file is automatically created when nginx
 starts; and re-created if the server hostname or local TLD is changed.
@@ -1841,15 +1865,15 @@ Choose here whether any parity errors found during the check, need to be correct
 :end
 
 :parity_cumulative_check_help:
-Change this setting to **Yes** to divide long duration parity checks over multiple periods. This is useful the system needs to be available and a parity check runs only during off hours.
+Change this setting to **Yes** to divide long duration parity checks over multiple periods. This is useful when the system needs to be available and a parity check runs only during off hours.
 :end
 
 :parity_accumulation_frequency_help:
 Specifies how accumulation periods are executed.
 
-**Daily** means every subsequent day the parity check continuous until finished
+**Daily** means every subsequent day the parity check continues until finished
 
-**Weekly** means every subsequent week the parity check continuous until finished
+**Weekly** means every subsequent week the parity check continues until finished
 :end
 
 :parity_accumulation_duration_help:

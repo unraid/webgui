@@ -130,10 +130,10 @@ function toggle_id(itemID){
    var cookie = $.cookie('vmshow')||'';
    if ((document.getElementById(itemID).style.display == 'none')) {
       slideDownRows($('#'+itemID));
-      if (cookie.indexOf(itemID)<0) $.cookie('vmshow',cookie+itemID+',',{path:'/'}); 
+      if (cookie.indexOf(itemID)<0) $.cookie('vmshow',cookie+itemID+','); 
    } else {
       slideUpRows($('#'+itemID));
-      if (cookie.indexOf(itemID)>=0) $.cookie('vmshow',cookie.replace(itemID+',',''),{path:'/'});
+      if (cookie.indexOf(itemID)>=0) $.cookie('vmshow',cookie.replace(itemID+',',''));
    }
    return false;
 }

@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -27,7 +27,7 @@ function language($method, $arg = '') {
 
 function check_plugin($arg, &$ncsi) {
 // Get network connection status indicator (NCSI)
-  if ($ncsi===null) $ncsi = exec("wget --spider -nv -T10 -t1 http://www.msftncsi.com/ncsi.txt 2>&1|grep -o 'OK'");
+  if ($ncsi===null) $ncsi = exec("wget --spider --no-check-certificate -nv -T10 -t1 https://www.msftncsi.com/ncsi.txt 2>&1|grep -o 'OK'");
   return $ncsi ? plugin('check',$arg) : false;
 }
 

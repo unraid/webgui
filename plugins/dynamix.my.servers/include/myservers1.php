@@ -31,6 +31,7 @@ if (file_exists('/boot/config/plugins/dynamix.my.servers/myservers.cfg')) { // c
 $ALLOWED_UPC_ENV_VALS = [
   'production',
   'staging',
+  'stagingLogs',
   'development',
   'local',
 ];
@@ -50,6 +51,9 @@ switch ($UPC_ENV) {
     break;
   case 'staging':
     $upcSrc = 'https://registration-dev.unraid.net/webComps/unraid.min.js';
+    break;
+  case 'stagingLogs':
+    $upcSrc = 'https://registration-dev-logs.unraid.net/webComps/unraid.min.js';
     break;
   case 'development':
     $upcSrc = 'https://launchpad.unraid.test:6969/webComps/unraid.js';

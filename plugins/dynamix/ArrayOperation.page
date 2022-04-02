@@ -186,8 +186,8 @@ function parityWarning(form) {
   swal({title:"_(Proceed to start)_",text:text,html:true,type:'warning',showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){prepareInput(form);});
 }
 function tab0() {
-  $.removeCookie('one',{path:'/'});
-  $.cookie('tab','tab0',{path:'/'});
+  $.removeCookie('one');
+  $.cookie('tab','tab0');
 }
 function stopArray(form) {
   $(form).append('<input type="hidden" name="cmdStop" value="Stop">');
@@ -261,7 +261,7 @@ mymonitor.on('message', function(state) {
 <?endif;?>
 <?if ($var['shareUser']=='e' && $pool_devices):?>
     $('#mover-button').prop('disabled',false);
-    $('#mover-text').html("<b>_(Move)_</b> _(will immediately invoke the Mover)_.&nbsp;<a href=\"/Main/Settings/Scheduler\"<?if($tabbed):?> onclick=\"$.cookie('one','tab2',{path:'/'})\"<?endif;?>>(_(Schedule)_)</a>");
+    $('#mover-text').html("<b>_(Move)_</b> _(will immediately invoke the Mover)_.&nbsp;<a href=\"/Main/Settings/Scheduler\"<?if($tabbed):?> onclick=\"$.cookie('one','tab2')\"<?endif;?>>(_(Schedule)_)</a>");
     for (let i = 0; i < maxmoverlines; i++) {
       $('#moverrow'+i ).hide();
      }   
@@ -441,7 +441,7 @@ function formatWarning(val) {
         <tr><td></td><td><input type="submit" name="cmdCheck" value="_(Clear)_"></td><td>**_(Clear)_** _(will start **Disk-Clear** of new data disk(s))_.</td></tr>
 <?    else:
         if ($action[0]=="check" && count($action)>1):?>
-          <tr><td>_(Parity is valid)_.</td><td><input type="submit" name="cmdCheck" value="_(Check)_"></td><td>**_(Check)_** _(will start **Parity-Check**)_.&nbsp;<a href="/Main/Settings/Scheduler"<?if ($tabbed):?> onclick="$.cookie('one','tab1',{path:'/'})"<?endif;?>>(_(Schedule)_)</a>
+          <tr><td>_(Parity is valid)_.</td><td><input type="submit" name="cmdCheck" value="_(Check)_"></td><td>**_(Check)_** _(will start **Parity-Check**)_.&nbsp;<a href="/Main/Settings/Scheduler"<?if ($tabbed):?> onclick="$.cookie('one','tab1')"<?endif;?>>(_(Schedule)_)</a>
           <br><input type="checkbox" name="optionCorrect" value="correct" checked><small>_(Write corrections to parity)_</small></td></tr>
 <?      elseif ($action[0]=="check"):?>
           <tr><td></td><td><input type="submit" name="cmdCheck" value="_(Check)_"></td><td>**_(Check)_** _(will start **Read-Check** of all array disks)_.</td></tr>

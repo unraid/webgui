@@ -4,8 +4,8 @@ Tag="user-circle"
 Cond="$var['fsState']!='Stopped' && $var['shareUser']=='e'"
 ---
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -18,12 +18,12 @@ Cond="$var['fsState']!='Stopped' && $var['shareUser']=='e'"
 <script>
 function displayShares(all) {
   if (all == 'yes') {
-    $.cookie('ssz','ssz',{path:'/'});
+    $.cookie('ssz','ssz');
     $('#shareslist').html("<tr><td colspan='8'><div class='spinner'></div></td></tr>");
     $('div.spinner').html(unraid_logo);
   }
   $.get('/webGui/include/ShareList.php',{compute:all,path:'<?=addslashes(htmlspecialchars($path))?>',scale:'<?=$display['scale']?>',number:'<?=$display['number']?>',raw:'<?=$display['raw']?>',fill:$.cookie('ssz')},function(data){
-    $.removeCookie('ssz',{path:'/'})
+    $.removeCookie('ssz')
     $('#shareslist').html(data);
     $('#compute-shares').prop('disabled',!data || data.indexOf('colspan=')!=-1);
   });

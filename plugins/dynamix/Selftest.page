@@ -85,7 +85,7 @@ function testUpdate(init) {
       $('#short_test').val("_(Start)_");
       $('#long_test').val("_(Start)_");
       if (!init) {
-        $.removeCookie('test.<?=addslashes(htmlspecialchars($dev))?>',{path:'/'});
+        $.removeCookie('test.<?=addslashes(htmlspecialchars($dev))?>');
       }
     }
   });
@@ -104,11 +104,11 @@ function startShortTest() {
   if ($('#short_test').val()=="_(Start)_") {
     $('#short_test').val("_(Stop)_");
     $('#long_test').attr('disabled','disabled');
-    $.cookie('test.<?=addslashes(htmlspecialchars($dev))?>','short',{path:'/',expires:365});
+    $.cookie('test.<?=addslashes(htmlspecialchars($dev))?>','short',{expires:365});
     $.post('/webGui/include/SmartInfo.php',{cmd:'short',port:'<?=addslashes(htmlspecialchars($dev))?>',name:'<?=addslashes(htmlspecialchars($name))?>'},function(){timers.testUpdate = setTimeout(testUpdate,0);});
   } else {
     clearTimeout(timers.testUpdate);
-    $.removeCookie('test.<?=addslashes(htmlspecialchars($dev))?>',{path:'/'});
+    $.removeCookie('test.<?=addslashes(htmlspecialchars($dev))?>');
     $.post('/webGui/include/SmartInfo.php',{cmd:'stop',port:'<?=addslashes(htmlspecialchars($dev))?>',name:'<?=addslashes(htmlspecialchars($name))?>'},function(){setTimeout(testUpdate,0);});
   }
 }
@@ -116,11 +116,11 @@ function startLongTest() {
   if ($('#long_test').val()=="_(Start)_") {
     $('#long_test').val("_(Stop)_");
     $('#short_test').attr('disabled','disabled');
-    $.cookie('test.<?=addslashes(htmlspecialchars($dev))?>','long',{path:'/',expires:365});
+    $.cookie('test.<?=addslashes(htmlspecialchars($dev))?>','long',{expires:365});
     $.post('/webGui/include/SmartInfo.php',{cmd:'long',port:'<?=addslashes(htmlspecialchars($dev))?>',name:'<?=addslashes(htmlspecialchars($name))?>'},function(){timers.testUpdate = setTimeout(testUpdate,0);});
   } else {
     clearTimeout(timers.testUpdate);
-    $.removeCookie('test.<?=addslashes(htmlspecialchars($dev))?>',{path:'/'});
+    $.removeCookie('test.<?=addslashes(htmlspecialchars($dev))?>');
     $.post('/webGui/include/SmartInfo.php',{cmd:'stop',port:'<?=addslashes(htmlspecialchars($dev))?>',name:'<?=addslashes(htmlspecialchars($name))?>'},function(){setTimeout(testUpdate,0);});
   }
 }

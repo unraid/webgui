@@ -128,7 +128,7 @@ function geturls_certdetails($file, $hostname, $ip="") {
     $type = 'myunraid.net';
     $iphost = str_replace('.','-',$ip);
     // anonymize ip portion of hostname if not a private ip
-    $priv_iphost = (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE)) ? "ipaddress" : $iphost;
+    $priv_iphost = (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) ? "ipaddress" : $iphost;
     // anonymize myunraid.net hash
     $cn_priv = preg_replace('/\*\.([a-f0-9]*)\.myunraid\.net/', "{$priv_iphost}.hash.myunraid.net", $cn);
     // replace wildcard with ip
@@ -163,10 +163,10 @@ function geturls_checkhost($host, $hostpriv, $expectedip, $dnsserver) {
     return "  ERROR: When using DNS server {$dnsserver}, the host {$hostpriv} does not resolve.\n";
   }
   if ($ip != $expectedip) {
-    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE)) {
+    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
       $ip = "[redacted]";
     }
-    if (filter_var($expectedip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE)) {
+    if (filter_var($expectedip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
       $expectedip = "[redacted]";
     }
     return "  ERROR: When using DNS server {$dnsserver}, {$hostpriv} resolves to {$ip}. It should resolve to {$expectedip}\n";
@@ -176,16 +176,20 @@ function geturls_checkhost($host, $hostpriv, $expectedip, $dnsserver) {
 function geturls() {
   $var = parse_ini_file('/var/local/emhttp/var.ini');
   extract(parse_ini_file('/var/local/emhttp/network.ini',true));
+  $nginx = parse_ini_file('/var/local/emhttp/nginx.ini');
   $internalip = $internalip_priv = $internalip_msg = $eth0['IPADDR:0'];
   $dnsserver = $eth0['DNS_SERVER1'];
-  if (filter_var($internalip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE)) {
+  if (filter_var($internalip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
     $internalip_priv = "ipaddress";
     $internalip_msg = "redacted (FYI - this system has a routable IP address, ensure it is behind a firewall)";
   }
   $host_tld_msg = $var['LOCAL_TLD'] ? '': '[blank] (FYI - a blank TLD can cause issues for Mac and Linux clients)';
+  $isLegacyCert = preg_match('/.*\.unraid\.net$/', $nginx['NGINX_CERTNAME']);
+  $rebindtesturl = $isLegacyCert ? "rebindtest.unraid.net" : "rebindtest.myunraid.net";
+  $rebindtestdomain = $isLegacyCert ? "unraid.net" : "myunraid.net";
   $rebindip = "192.168.42.42";
-  $rebindtest_ip = exec("host -4 rebindtest.unraid.net 2>/dev/null|sed -n 's/.*has address //p'");
-  $rebind_msg = ($rebindtest_ip != $rebindip) ? "is enabled, myunraid.net urls will not work" : "is disabled, myunraid.net urls will work";
+  $rebindtest_ip = exec("host -4 $rebindtesturl 2>/dev/null|sed -n 's/.*has address //p'");
+  $rebind_msg = ($rebindtest_ip != $rebindip) ? "is enabled, $rebindtestdomain urls will not work" : "is disabled, $rebindtestdomain urls will work";
 
   // show raw data from config files
   $urls = '';

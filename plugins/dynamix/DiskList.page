@@ -4,8 +4,8 @@ Tag="user-circle-o"
 Cond="$var['fsState']!='Stopped' && $var['shareDisk']!='no'"
 ---
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -18,12 +18,12 @@ Cond="$var['fsState']!='Stopped' && $var['shareDisk']!='no'"
 <script>
 function displayDisks(all) {
   if (all == 'yes') {
-    $.cookie('ssz','ssz',{path:'/'});
+    $.cookie('ssz','ssz');
     $('#disk_list').html("<tr><td colspan='8'><div class='spinner'></div></td></tr>");
     $('div.spinner').html(unraid_logo);
   }
   $.get('/webGui/include/DiskList.php',{compute:all,path:'<?=$path?>',scale:'<?=$display['scale']?>',number:'<?=$display['number']?>',fill:$.cookie('ssz')},function(data){
-    $.removeCookie('ssz',{path:'/'})
+    $.removeCookie('ssz')
     $('#disk_list').html(data);
     $('#compute-disks').prop('disabled',!data || data.indexOf('colspan=')!=-1);
   });

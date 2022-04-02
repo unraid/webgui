@@ -502,7 +502,7 @@ _(Critical disk utilization threshold)_ (%):
 <form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareFS(this,'btrfs-balance-<?=$tag?>','/mnt/<?=$tag?>')">
 <?if ($disk['fsStatus']=="Mounted"):?>
 <?exec("$docroot/webGui/scripts/btrfs_balance status /mnt/$tag", $balance_status, $retval)?>
-<?$usage = exec("/sbin/btrfs fi usage /mnt/$tag|grep -Pom1 '^Data,RAID.+ \\(\\K[^)]+'");?>
+<?$usage = exec("/sbin/btrfs fi usage /mnt/$tag|grep -Pom1 '^Data,.+ \\(\\K[^%]+'");?>
 
 _(btrfs filesystem df)_:
 : <?echo "<pre>".shell_exec("/sbin/btrfs filesystem df /mnt/$tag")."</pre>"?>
@@ -517,7 +517,7 @@ _(btrfs balance status)_:
 <input type="hidden" name="#arg[3]" value="">
 
 &nbsp;
-: &nbsp;_(Current usage ratio)_: <?=round($usage*1,1)?> % --- <?=($usage*1 <= 75) ? "_(Full Balance recommended)_" : "_(No Balance required)_"?>
+: &nbsp;_(Current usage ratio)_: <?=round($usage,1)?> % --- <?=($usage <= 50) ? "_(Full Balance recommended)_" : "_(No Balance required)_"?>
 
 &nbsp;
 : <input type="submit" value="_(Balance)_">

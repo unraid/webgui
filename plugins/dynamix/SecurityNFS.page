@@ -4,8 +4,8 @@ Tag="linux"
 Cond="(($var['shareNFSEnabled']!='no') && (isset($name)?array_key_exists($name,$sec_nfs):0))"
 ---
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -90,7 +90,7 @@ $(function() {
     var host = $('input[name="shareHostListNFS"]');
     host.val($.cookie('hostList'));
     setTimeout(function(){host.trigger('change');},100);
-    $.removeCookie('hostList',{path:'/'});
+    $.removeCookie('hostList');
   }
 <?if ($tabbed):?>
 <?$path=='Shares/Share' ? $t=2 : $t=1;?>
@@ -110,7 +110,7 @@ function readNFS() {
     var data = $.parseJSON(json);
     form.shareExportNFS.value = data.export;
     form.shareSecurityNFS.value = data.security;
-    if (data.hostList != '') $.cookie('hostList',data.hostList,{path:'/'});
+    if (data.hostList != '') $.cookie('hostList',data.hostList);
     $(form).find('select').trigger('change');
   });
 }
