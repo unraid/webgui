@@ -66,16 +66,11 @@ if ($keyfile === false) {
   response_complete(406, '{"error":"'._('License key required').'"}');
 }
 $keyfile      = @base64_encode($keyfile);
-$ethX         = 'eth0';
-$internalip   = ipaddr($ethX);
-$internalport = $var['PORTSSL'];
 
 $ch = curl_init("https://keys.lime-technology.com/account/ssl/$endpoint");
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POST, 1);
 curl_setopt($ch, CURLOPT_POSTFIELDS, [
-  'internalip' => $internalip,
-  'internalport' => $internalport,
   'keyfile' => $keyfile
 ]);
 $result = curl_exec($ch);
