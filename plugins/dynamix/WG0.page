@@ -488,7 +488,7 @@ function prepareSettings(form,vtun) {
     postdown.val(postdown1.bind(vtun));
     break;
   }
-  $('div[id^="index-wg0-"]').each(function(){
+  $('div[id^="index-'+vtun+'-"]').each(function(){
     var temp = $(this).find('select[name^="TYPE:"]').val();
     if (temp >= 7) form.find('input[name="#type"]').val(temp);
   });

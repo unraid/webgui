@@ -38,16 +38,12 @@ function find_tasks() {
   sort($tasks);
   return $tasks;
 }
-function plain($ip) {
-  return str_replace(['[',']'],'',$ip);
-}
 $tasks       = find_tasks();
 $ethX        = 'eth0';
-$addr        = ipaddr($ethX);
-$rebindip4   = "192.168.42.42";
+#$addr        = ipaddr($ethX);
+$addr        = $_SERVER['SERVER_ADDR'];
 $keyfile     = @file_get_contents($var['regFILE']);
 if ($keyfile !== false) $keyfile = base64_encode($keyfile);
-$isRegistered = !empty($remote['username']); // signed in to unraid.net or not
 
 $certFile    = "/boot/config/ssl/certs/certificate_bundle.pem";
 $certPresent = file_exists("$certFile");
@@ -59,56 +55,63 @@ if ($certPresent) {
   $isWildcardCert = preg_match('/.*\.myunraid\.net$/', $certSubject);
   $isLEcert = $isLegacyCert || $isWildcardCert;
   $subjectURL = $certSubject;
-  if ($isLEcert) {
-    if ($isWildcardCert) $subjectURL = str_replace("*", str_replace(".", "-", $addr), $subjectURL);
-    exec("openssl x509 -checkend 2592000 -noout -in $certFile 2>/dev/null", $arrout, $retval_expired);
-    $options = $$ethX['PROTOCOL:0']=='ipv6' ? '-6 -t AAAA' : '-4 -t A';
-    $rebindtesturl = $isLegacyCert ? "rebindtest.unraid.net" : "rebindtest.myunraid.net";
-    $rebindtest_ip = exec("host $options $rebindtesturl 2>/dev/null|awk '{print \$4}'");
-    $dnsRebindingProtection = ($rebindtest_ip != $rebindip4);
-    if (!$dnsRebindingProtection) {
-      $certtest_ip = exec("host $options $subjectURL 2>/dev/null|awk '{print \$4}'");
-      $dnsValid = $certtest_ip==$addr;
-    }
-    // more: similar test for "www.$certSubject" dns valid goes here
+  if ($isWildcardCert) {
+    if (strpos($addr, ":") === false)
+      $subjectURL = str_replace("*", str_replace(".", "-", $addr), $subjectURL);
+    else
+      $subjectURL = str_replace("*", str_replace(":", "-", $addr), $subjectURL);
   }
-  $cert_time_format = $display['date'].($display['date']!='%c' ? ', '.str_replace(['%M','%R'],['%M:%S','%R:%S'],$display['time']):'');
+  if ($isLEcert) {
+    exec("openssl x509 -checkend 2592000 -noout -in $certFile 2>/dev/null", $arrout, $retval_expired);
+    if (strpos($addr, ":") === false) {
+      $rebindtest_ip = exec("host -4 -t A rebindtest4.myunraid.net 2>/dev/null|awk '{print \$4}'");
+      $dnsRebindingProtection = ($rebindtest_ip != "192.168.42.42");
+      if (!$dnsRebindingProtection) {
+        $cert_ip = exec("host -4 -t A $subjectURL 2>/dev/null|awk '{print \$4}'");
+        $dnsValid = $cert_ip==$addr;
+      }
+    } else {
+      $rebindtest_ip = exec("host -6 -t AAAA rebindtest6.myunraid.net 2>/dev/null|awk '{print \$4}'");
+      // more: restore this after TTL expires
+      // $dnsRebindingProtection = ($rebindtest_ip != "fd42::42");
+      $dnsRebindingProtection = ($rebindtest_ip != "fd42::42") && ($rebindtest_ip != "fd42::");
+      if (!$dnsRebindingProtection) {
+        $cert_ip = exec("host -6 -t AAAA $subjectURL 2>/dev/null|awk '{print \$4}'");
+        $dnsValid = $cert_ip==$addr;
+      }
+    }
+  }
 }
 
+$cert_time_format   = $display['date'].($display['date']!='%c' ? ', '.str_replace(['%M','%R'],['%M:%S','%R:%S'],$display['time']):'');
 $provisionlabel     = $isLEcert ? _('Renew') : _('Provision');
-$disabled_provision = !$isRegistered || $keyfile===false || ($isLEcert && $retval_expired===0) ? 'disabled' : '';
-$disabled_updatedns = $isRegistered && $keyfile!==false && $isLEcert ? '' : 'disabled';
+$disabled_provision = $keyfile===false || ($isLEcert && $retval_expired===0) ? 'disabled' : '';
+$disabled_updatedns = $keyfile!==false && $isLEcert ? '' : 'disabled';
 $disabled_delete    = $certPresent && $var['USE_SSL']!='auto' ? '' : 'disabled';
-$disabled_auto      = $isRegistered && $isLEcert && !$dnsRebindingProtection && $dnsValid ? '' : 'disabled';
+$disabled_auto      = $isLEcert && !$dnsRebindingProtection && $dnsValid ? '' : 'disabled';
 $upgradelabel       = _('Upgrade Cert');
 
 // Get ports in use
 $portsInUse = [];
 exec("lsof -Pni|awk '/LISTEN/ && \$9!~/127.0.0.1/ && \$9!~/\\[::1\\]/{print \$9}'|sort -u", $output);
 
-$bind = $var['BIND_MGT']=='yes';
+$bind = false; //= $var['BIND_MGT']=='yes'; - not used in 6.10
 $list = ['*',$addr];
 
 foreach ($output as $line) {
-  [$ip, $port] = my_explode(':', $line);
-  if (!in_array($port,$portsInUse) && (!$bind || in_array(plain($ip),$list))) $portsInUse[] = $port;
+  [$ip, $port] = my_explode($line[0]=='[' ? ']:' : ':',$line);
+  if ($ip[0]=='[') $ip = substr($ip,1); // ipv6 address
+  if (!in_array($port,$portsInUse) && (!$bind || in_array($ip,$list))) $portsInUse[] = $port;
 }
+sort($portsInUse,SORT_NUMERIC);
 ?>
 <script>
-var isRegistered = <?= $isRegistered ? 1 : 0 ?>;
-var notRegisteredMsg = '<?= _('Sign In to Unraid.net required') ?>';
-
 function provisionHandler(event, form) { // provisions and renewals require being Signed In to Unraid.net
-  if (event.submitter.value === 'Delete') return true; // always allow deletes regardless of isRegistered value
-  if (event.submitter.value === 'Renew') return true; // always allow renewals regardless of isRegistered value
-  if (!isRegistered) {
-    event.preventDefault();
-    return alert(notRegisteredMsg);
-  }
+  if (event.submitter.value === 'Delete') return true; // always allow deletes
+  if (event.submitter.value === 'Renew') return true; // always allow renewals
 };
 
 function updateDNS(button) {
-  if (!isRegistered) return alert(notRegisteredMsg);
   $(button).prop("disabled", true).html("<i class='fa fa-circle-o-notch fa-spin fa-fw'></i>_(Update DNS)_");
   var failure = function(data) {
     var status = data.status;
@@ -126,7 +129,7 @@ function updateDNS(button) {
 }
 
 function checkPorts(form) {
-  var portsInUse = JSON.parse('<?=json_encode($portsInUse)?>');
+  var portsInUse = [<?=implode(',',$portsInUse)?>];
   var range = [], list = [], duplicates = [];
   var checks = [
     {'key':"PORTTELNET", 'used':"<?=$var['USE_TELNET']=='yes'?>", 'port':"<?=$var['PORTTELNET']?>", 'default':"23" , 'name':"_(TELNET port)_"},
@@ -143,7 +146,7 @@ function checkPorts(form) {
     if (userPort < 1 || userPort > 65535) range.push(userPort+' ('+check['name']+')');
     duplicates.push(userPort);
     if (check['used'] == '1' && userPort != current) {
-      if (portsInUse.includes(userPort)) list.push(userPort+' ('+check['name']+')');
+      if (portsInUse.includes(parseInt(userPort))) list.push(userPort+' ('+check['name']+')');
     }
   }
   duplicates = duplicates.reduce(function(acc, el, i, arr) {
@@ -301,11 +304,6 @@ _(Certificate expiration)_:
 <?else:?>
 _(CA-signed certificate file)_:
 : _(Not present)_
-
-<?if (!$isRegistered):?>
-&nbsp;
-: <i class="fa fa-warning icon warning"></i> <em>_(You must be signed in to Unraid.net in order to generate an Unraid.net SSL certificate)_</em>
-<?endif;?>
 
 <?endif;?>
 &nbsp;

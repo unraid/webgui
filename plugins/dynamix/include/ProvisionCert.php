@@ -41,7 +41,6 @@ extract(parse_ini_file('/var/local/emhttp/network.ini',true));
 if (file_exists('/boot/config/plugins/dynamix.my.servers/myservers.cfg')) {
   @extract(parse_ini_file('/boot/config/plugins/dynamix.my.servers/myservers.cfg',true));
 }
-$isRegistered = !empty($remote) && !empty($remote['username']);
 
 $certPresent = file_exists($certPath);
 if ($certPresent) {
@@ -59,11 +58,6 @@ if ($certPresent) {
     // assume custom cert
     response_complete(406, '{"error":"'._('Cannot renew a custom cert at').' '.$certPath.'"}');
   }
-} else {
-  // provision new cert
-  if (!$isRegistered) {
-    response_complete(406, '{"error":"'._('Must be signed in to Unraid.net to provision cert').'"}');
-  }
 }
 $endpoint = ($certPresent && $isLegacyCert) ? "provisioncert" : "provisionwildcard";
 
@@ -71,17 +65,12 @@ $keyfile = @file_get_contents($var['regFILE']);
 if ($keyfile === false) {
   response_complete(406, '{"error":"'._('License key required').'"}');
 }
-$keyfile      = @base64_encode($keyfile);
-$ethX         = 'eth0';
-$internalip   = ipaddr($ethX);
-$internalport = $var['PORTSSL'];
+$keyfile = @base64_encode($keyfile);
 
 $ch = curl_init("https://keys.lime-technology.com/account/ssl/$endpoint");
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POST, 1);
 curl_setopt($ch, CURLOPT_POSTFIELDS, [
-  'internalip' => $internalip,
-  'internalport' => $internalport,
   'keyfile' => $keyfile
 ]);
 $result = curl_exec($ch);

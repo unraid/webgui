@@ -270,7 +270,7 @@ mymonitor.on('message', function(state) {
   case '1': // parity running
     $('#stop-button').prop('disabled',true);
     $('#stop-text').html("<br><small>_(Disabled)_ -- _(Parity operation is running)_</small>");
-<?if ($var['fsState']!="Stopped"):?>
+<?if ($var['fsState']!="Stopped" && $var['mdResync']>0):?>
     $('#spinup-button').prop('disabled',true);
     $('#spindown-button').prop('disabled',true);
 <?endif;?>

@@ -99,7 +99,7 @@ foreach ($shares as $name => $share) {
   $cache = _(ucfirst($share['useCache'])).($share['useCache']!='no'?' : '.compress(my_disk($share['cachePool'],$display['raw'])):'');
   if (array_key_exists($name, $ssz1)) {
     echo "<td>$cache</td>";
-    echo "<td>".my_scale($ssz1[$name]['disk.total']*1024, $unit)." $unit</td>";
+    echo "<td>".my_scale($ssz1[$name]['disk.total'], $unit)." $unit</td>";
     echo "<td>".my_scale($share['free']*1024, $unit)." $unit</td>";
     echo "<td><a href=\"/$path/Browse?dir=/mnt/user/".urlencode($name)."\"><i class=\"icon-u-tab\" title=\""._('Browse')." /mnt/user/".urlencode($name)."\"></i></a></td>";
     echo "</tr>";

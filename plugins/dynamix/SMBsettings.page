@@ -33,6 +33,14 @@ _(Hide "dot" files)_:
 
 :smb_hide_files_help:
 
+_(Enable SMB Multi Channel)_:
+: <select name="serverMultiChannel" <?if ($var['fsState']=="Started"):?>disabled<?endif;?>>
+  <?=mk_option($var['serverMultiChannel'], "no", _('No'))?>
+  <?=mk_option($var['serverMultiChannel'], "yes", _('Yes'))?>
+  </select>
+
+:smb_multi_channel_help:
+
 _(Enhanced macOS interoperability)_:
 : <select name="enableFruit" <?if ($var['fsState']=="Started"):?>disabled<?endif;?>>
   <?=mk_option($var['enableFruit'], "no", _('No'))?>

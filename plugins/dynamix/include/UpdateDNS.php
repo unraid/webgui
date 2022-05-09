@@ -46,7 +46,9 @@ function rebindDisabled() {
   global $isLegacyCert;
   $rebindtesturl = $isLegacyCert ? "rebindtest.unraid.net" : "rebindtest.myunraid.net";
   // DNS Rebind Protection - this checks the server but clients could still have issues
-  return host_lookup_ip($rebindtesturl) == "192.168.42.42";
+  $validResponse = array("192.168.42.42", "fd42");
+  $response = host_lookup_ip($rebindtesturl);
+  return in_array(explode('::',$response)[0], $validResponse);
 }
 function format_port($port) {
   return ($port != 80 && $port != 443) ? ':'.$port : '';
@@ -85,7 +87,7 @@ function verbose_output($httpcode, $result) {
   global $remoteaccess;
   global $icon_warn, $icon_ok;
   if (!$cli || !$verbose) return;
-  
+
   if ($anon) echo "(Output is anonymized, use '-vv' to see full details)".PHP_EOL;
   echo "Unraid OS {$var['version']}".((strpos($plgversion, "base-") === false) ? " with My Servers plugin version {$plgversion}" : '').PHP_EOL;
   echo ($isRegistered) ? "{$icon_ok}Signed in to Unraid.net as {$remote['username']}".PHP_EOL : "{$icon_warn}Not signed in to Unraid.net".PHP_EOL ;
@@ -376,10 +378,10 @@ $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 $error = curl_error($ch);
 curl_close($ch);
 
-if ($result === false) {
+if ( ($result === false) || ($httpcode != "200") ) {
   // delete cache file to retry submission on next run
   @unlink($datafile);
-  response_complete(500, array('error' => $error));
+  response_complete($httpcode ?? "500", array('error' => $error));
 }
 
 response_complete($httpcode, $result, _('success'));
