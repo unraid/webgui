@@ -1,7 +1,7 @@
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2014-2021, Guilherme Jardim, Eric Schultz, Jon Panozzo.
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2014-2022, Guilherme Jardim, Eric Schultz, Jon Panozzo.
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -87,6 +87,7 @@ class DockerTemplates {
 		curl_setopt($ch, CURLOPT_ENCODING, "");
 		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
 		curl_setopt($ch, CURLOPT_REFERER, "");
+		curl_setopt($ch, CURLOPT_FAILONERROR, true);
 		$out = curl_exec($ch) ?: false;
 		curl_close($ch);
 		if ($path && $out) file_put_contents($path,$out); elseif ($path) @unlink($path);
@@ -353,6 +354,10 @@ class DockerTemplates {
 		if (!is_file($icon) && is_file($iconRAM)) {
 			@copy($iconRAM,$icon);
 		}
+		if ( !is_file($iconRAM) ) {
+			exec("/usr/bin/logger ".escapeshellarg("$imageName: Could not download icon $imgUrl"));
+		}
+
 		return (is_file($iconRAM)) ? str_replace($docroot, '', $iconRAM) : '';
 	}
 }
@@ -760,6 +765,7 @@ class DockerClient {
 	public function startContainer($id) {
 		$this->getDockerJSON("/containers/$id/start", 'POST', $code);
 		$this->flushCache($this::$containersCache);
+		addRoute($id); // add route for remote WireGuard access
 		return $code;
 	}
 
@@ -788,6 +794,7 @@ class DockerClient {
 	public function restartContainer($id) {
 		$this->getDockerJSON("/containers/$id/restart", 'POST', $code);
 		$this->flushCache($this::$containersCache);
+		addRoute($id); // add route for remote WireGuard access
 		return $code;
 	}
 

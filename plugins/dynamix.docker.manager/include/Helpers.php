@@ -1,7 +1,7 @@
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2014-2020, Guilherme Jardim, Eric Schultz, Jon Panozzo.
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2014-2022, Guilherme Jardim, Eric Schultz, Jon Panozzo.
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -12,6 +12,18 @@
  */
 ?>
 <?
+function addRoute($ct) {
+  // add static route(s) for remote WireGuard access
+  [$pid,$net] = explode(' ',exec("docker inspect --format='{{.State.Pid}} {{.NetworkSettings.Networks}}' $ct"));
+  $net = substr($net,4,strpos($net,':')-4);
+  if (!$pid || $net != 'br0') return;
+  $thisip  = ipaddr();
+  foreach (glob('/etc/wireguard/wg*.cfg') as $cfg) {
+    $network = exec("grep -Pom1 '^Network:0=\"\\K[^\"]+' $cfg");
+    if ($network) exec("nsenter -n -t $pid ip -4 route add $network via $thisip 2>/dev/null");
+  }
+}
+
 function xml_encode($string) {
   return htmlspecialchars($string, ENT_XML1, 'UTF-8');
 }

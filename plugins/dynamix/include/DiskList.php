@@ -68,7 +68,7 @@ $myDisks = array_filter(array_diff(array_keys($disks), explode(',',$var['shareUs
 // Share size per disk
 $ssz2 = [];
 if ($fill)
-  foreach (glob("state/*.ssz2", GLOB_NOSORT) as $entry) $ssz2[basename($entry, ".ssz2")] = parse_ini_file($entry);
+  foreach (glob("state/*.ssz2", GLOB_NOSORT) as $entry) $ssz2[basename($entry, ".ssz2")] = file($entry,FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES);
 else
   exec("rm -f /var/local/emhttp/*.ssz2");
 
@@ -92,7 +92,7 @@ foreach ($disks as $name => $disk) {
   echo "<td>{$disk['comment']}</td>";
   echo "<td>".disk_share_settings($var['shareSMBEnabled'], $sec[$name])."</td>";
   echo "<td>".disk_share_settings($var['shareNFSEnabled'], $sec_nfs[$name])."</td>";
-  $cmd="/webGui/scripts/disk_size"."&arg1=".urlencode($name)."&arg2=ssz2";
+  $cmd="/webGui/scripts/disk_size"."&arg1=$name&arg2=ssz2";
   $type = $disk['rotational'] ? _('HDD') : _('SSD');
   if (array_key_exists($name, $ssz2)) {
     echo "<td>$type</td>";
@@ -100,7 +100,8 @@ foreach ($disks as $name => $disk) {
     echo "<td>".my_scale($disk['fsFree']*1024, $unit)." $unit</td>";
     echo "<td><a href=\"/$path/Browse?dir=/mnt/$name\"><i class=\"icon-u-tab\" title=\""._('Browse')." /mnt/$name\"></i></a></td>";
     echo "</tr>";
-    foreach ($ssz2[$name] as $sharename => $sharesize) {
+    foreach ($ssz2[$name] as $entry) {
+      [$sharename,$sharesize] = my_explode('=',$entry);
       if ($sharename=='share.total') continue;
       $include = $shares[$sharename]['include'];
       $inside = in_array($disk['name'], array_filter(array_diff($myDisks, explode(',',$shares[$sharename]['exclude'])), 'shareInclude'));
@@ -110,7 +111,7 @@ foreach ($disks as $name => $disk) {
       echo "<td></td>";
       echo "<td></td>";
       echo "<td></td>";
-      echo "<td class='disk-$row-1'>".my_scale($sharesize*1024, $unit)." $unit</td>";
+      echo "<td class='disk-$row-1'>".my_scale($sharesize, $unit)." $unit</td>";
       echo "<td class='disk-$row-2'>".my_scale($disk['fsFree']*1024, $unit)." $unit</td>";
       echo "<td><a href=\"/update.htm?cmd=$cmd&csrf_token={$var['csrf_token']}\" target=\"progressFrame\" title=\""._('Recompute')."...\" onclick='$.cookie(\"ssz\",\"ssz\",{path:\"/\"});$(\".disk-$row-1\").html(\""._('Please wait')."...\");$(\".disk-$row-2\").html(\"\");'><i class='fa fa-refresh icon'></i></a></td>";
       echo "</tr>";

@@ -18,6 +18,7 @@ $varroot = '/var/local/emhttp';
 $log     = '/boot/config/parity-checks.log';
 $stamps  = '/var/tmp/stamps.ini';
 $resync  = '/var/tmp/resync.ini';
+$timer   = time();
 
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/publish.php";
@@ -159,10 +160,14 @@ while (true) {
   }
 
   publish('parity', implode(';',$data));
-  publish('paritymonitor', $spot>0 ? 1 : 0);
-  publish('fsState', $fsState);
-  publish('mymonitor', $process);
-  publish('mover', implode(';',$moverdata));
+  if (time()-$timer >= 2) {
+    // update every 2 seconds
+    publish('paritymonitor', $spot>0 ? 1 : 0);
+    publish('fsState', $fsState);
+    publish('mymonitor', $process);
+    publish('mover', implode(';',$moverdata));
+    $timer = time();
+  }
   sleep(1);
 }
 ?>

@@ -161,9 +161,10 @@ function refresh(top) {
     location.reload();
   }
 }
-function initab() {
+function initab(page) {
   $.removeCookie('one');
   $.removeCookie('tab');
+  if (page != null) location.replace(page);
 }
 function settab(tab) {
 <?switch ($myPage['name']):?>
@@ -421,7 +422,7 @@ foreach ($tasks as $button) {
   $page = $button['name'];
   echo "<div id='nav-item'";
   echo $task==$page ? " class='active'>" : ">";
-  echo "<a href=\"/$page\" onclick='initab();window.location=\"/$page\"'>"._($button['Name'] ?? $page)."</a></div>";
+  echo "<a href=\"/$page\" onclick=\"initab('/$page')\">"._($button['Name'] ?? $page)."</a></div>";
   // create list of nchan scripts to be started
   if (isset($button['Nchan'])) nchan_merge($button['root'], $button['Nchan']);
 }

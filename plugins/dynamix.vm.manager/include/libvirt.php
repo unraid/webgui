@@ -1607,6 +1607,12 @@
 			return ($tmp) ? $tmp : $this->_set_last_error();
 		}
 
+		function domain_qemu_agent_command($domain,$cmd,$timeout,$flags) {
+			$domain = $this->get_domain_object($domain);
+			$tmp = libvirt_domain_qemu_agent_command($domain,$cmd,$timeout,$flags);
+			return ($tmp) ? $tmp : $this->_set_last_error();
+		}
+
 		function generate_uuid($seed=false) {
 			if (!$seed)
 				$seed = time();

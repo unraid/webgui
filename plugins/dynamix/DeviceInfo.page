@@ -517,7 +517,7 @@ _(btrfs balance status)_:
 <input type="hidden" name="#arg[3]" value="">
 
 &nbsp;
-: &nbsp;_(Current usage ratio)_: <?=round($usage,1)?> % --- <?=($usage <= 50) ? "_(Full Balance recommended)_" : "_(No Balance required)_"?>
+: &nbsp;_(Current usage ratio)_: <?=round($usage,1)?> % --- <?=($usage > 0 && $usage <= 50) ? "_(Full Balance recommended)_" : "_(No Balance required)_"?>
 
 &nbsp;
 : <input type="submit" value="_(Balance)_">

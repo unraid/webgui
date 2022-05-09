@@ -44,8 +44,6 @@ th.load{width:140px}
 input.wait{width:24px;margin:0 4px;padding:0 5px;border:none;box-shadow:none;background-color:transparent}
 table tbody td{line-height:normal}
 </style>
-<div id="iframe-popup" style="display:none;-webkit-overflow-scrolling:touch;"></div>
-<span class="status" style="margin-top:<?=$width?>px"><span><input type="checkbox" class="advancedview"></span></span>
 <table id="docker_containers" class="tablesorter shift">
 <thead><tr><th><a href="#" style="cursor:hand;margin-left:12px;display:inline-block;width:32px" onclick="resetSorting()" title="_(Reset sorting)_"><i class="fa fa-th-list"></i></a>_(Application)_</th><th>_(Version)_</th><th>_(Network)_</th><th>_(Port Mappings)_ <small>(_(App to Host)_)</small></th><th>_(Volume Mappings)_ <small>(_(App to Host)_)</small></th><th class="load advanced">_(CPU & Memory load)_</th><th class="nine">_(Autostart)_</th><th class="five">_(Uptime)_</th><th></th></tr></thead>
 <tbody id="docker_list"><tr><td colspan='9'></td></tr></tbody>
@@ -58,6 +56,7 @@ table tbody td{line-height:normal}
 <input type="button" onclick="checkAll()" value="_(Check for Updates)_" id="checkAll" style="display:none">
 <input type="button" onclick="updateAll()" value="_(Update All)_" id="updateAll" style="display:none">
 <input type="button" onclick="sizes()" value="_(Container Size)_" style="display:none">
+<div id="iframe-popup" style="display:none;-webkit-overflow-scrolling:touch;"></div>
 
 <script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
 <script src="<?autov('/plugins/dynamix.docker.manager/javascript/docker.js')?>"></script>
@@ -68,16 +67,14 @@ $('#title').append("<span id='busy' class='red-text strong' style='display:none;
 $('.tabs').append("<span id='busy' class='red-text strong' style='display:none;position:relative;top:<?=$top?>px;left:40px;font-size:1.4rem;letter-spacing:2px'><?=$busy?></span>");
 <?endif;?>
 <?if ($display['resize']):?>
-function resize(bind) {
+function resize() {
   var width = [];
-  var h = $('#docker_list').height();
-  var s = Math.max(window.innerHeight-340,330);
-  if (h>s || bind) {
-    $('#docker_list').height(s);
-    $('#docker_containers tbody tr:first-child td').each(function(){width.push($(this).width());});
-    $('#docker_containers thead tr th').each(function(i){$(this).width(width[i]);});
-    if (!bind) $('#docker_containers thead,#docker_containers tbody').addClass('fixed');
-  }
+  $('#docker_list').height(Math.max(window.innerHeight-340,330));
+  $('#docker_containers thead,#docker_containers tbody').removeClass('fixed');
+  $('#docker_containers tbody tr:first-child td').each(function(){width.push($(this).width());});
+  $('#docker_containers thead tr th').each(function(i){$(this).width(width[i]);});
+  $('#docker_containers tbody tr td').each(function(i){$(this).width(width[i]);});
+  $('#docker_containers thead,#docker_containers tbody').addClass('fixed');
 }
 <?endif;?>
 function resetSorting() {
@@ -99,7 +96,7 @@ var sortableHelper = function(e,i){
   });
   return i;
 };
-function loadlist() {
+function loadlist(init) {
   timers.docker = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
   $.get('/plugins/dynamix.docker.manager/include/DockerContainers.php',function(d) {
     clearTimeout(timers.docker);
@@ -114,7 +111,7 @@ function loadlist() {
     $('head').append('<script>'+data[1]+'<\/script>');
 <?if ($display['resize']):?>
     resize();
-    $(window).bind('resize',function(){resize(true);});
+    if (init) $(window).bind('resize',function(){resize();});
 <?endif;?>
     $('.iconstatus').each(function(){
       if ($(this).hasClass('stopped')) $('div.'+$(this).prop('id')).hide();
@@ -160,6 +157,7 @@ dockerload.on('message', function(msg){
   }
 });
 $(function() {
+  $(".tabs").append('<span class="status"><span><input type="checkbox" class="advancedview"></span></span>');
   $('.advancedview').switchButton({labels_placement:'left', on_label:"_(Advanced View)_", off_label:"_(Basic View)_", checked:$.cookie('docker_listview_mode')=='advanced'});
   $('.advancedview').change(function(){
     $('.advanced').toggle('slow');
@@ -167,7 +165,7 @@ $(function() {
     $.cookie('docker_listview_mode',$('.advancedview').is(':checked')?'advanced':'basic',{expires:3650});
     listview();
   });
-  loadlist();
+  loadlist(true);
   dockerload.start();
 });
 </script>

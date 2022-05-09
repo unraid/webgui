@@ -113,7 +113,7 @@ foreach ($shares as $name => $share) {
       echo "<td></td>";
       echo "<td></td>";
       echo "<td></td>";
-      echo "<td class='share-$row-1'>".my_scale($disksize*1024, $unit)." $unit</td>";
+      echo "<td class='share-$row-1'>".my_scale($disksize, $unit)." $unit</td>";
       echo "<td class='share-$row-2'>".my_scale($disks[$diskname]['fsFree']*1024, $unit)." $unit</td>";
       echo "<td><a href=\"/update.htm?cmd=$cmd&csrf_token={$var['csrf_token']}\" target=\"progressFrame\" title=\""._('Recompute')."...\" onclick='$.cookie(\"ssz\",\"ssz\",{path:\"/\"});$(\".share-$row-1\").html(\""._('Please wait')."...\");$(\".share-$row-2\").html(\"\");'><i class='fa fa-refresh icon'></i></a></td>";
       echo "</tr>";

@@ -3,8 +3,8 @@ Title="Tunnel wgX"
 Tag="icon-vpn"
 ---
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -27,13 +27,12 @@ $netport['wgX']  = $netport['wg0']+XXX;
 [$conf_wgX,$cfg_wgX,$this_wgX,$vpn_wgX] = readConf($peer_wgX,$wgX,'wgX');
 ?>
 <script>
-netbase['wgX'] = <?=$netbase['wgX']?>;
-netpool['wgX'] = '<?=$netpool['wgX']?>';
-netport['wgX'] = '<?=$netport['wgX']?>';
+netbase['wgX']  = <?=$netbase['wgX']?>;
+netpool['wgX']  = '<?=$netpool['wgX']?>';
+netport['wgX']  = '<?=$netport['wgX']?>';
 netbase6['wgX'] = '<?=$netbase6['wgX']?>';
 netpool6['wgX'] = '<?=$netpool6['wgX']?>';
-
-tstate['wgX'] = "<?=$check_wgX ? 'active' : ''?>";
+tstate['wgX']   = "<?=$check_wgX ? 'active' : ''?>";
 
 $(function(){
   var ctrl = "<span class='status vhshift hshift'><i id='block-wgX' class='fa fa-fw fa-chevron-up' style='cursor:pointer' onclick='blockToggle(&quot;wgX&quot;)'></i></span>";
@@ -54,11 +53,16 @@ $(function(){
     e.preventDefault();
     e.stopPropagation();
     var wg = $('#toggle-wgX').is(':checked') ? 'start' : 'stop';
-    $.post('/webGui/include/update.wireguard.php',{'#cmd':'toggle','#wg':wg,'#vtun':'wgX'},function(ok){
+    var type = 0;
+    $('div[id^="index-wgX-"]').each(function(){
+      var temp = $(this).find('select[name^="TYPE:"]').val();
+      if (temp >= 7 && type==0) type = temp;
+    });
+    $.post('/webGui/include/update.wireguard.php',{'#cmd':'toggle','#wg':wg,'#vtun':'wgX','#type':type},function(ok){
       if (wg=='start') {
-        if (ok) tstate['wgX']='active'; else $('#toggle-wgX').switchButton({checked:false});
+        if (ok==0) tstate['wgX']='active'; else $('#toggle-wgX').switchButton({checked:false});
       } else {
-        if (ok) tstate['wgX']=''; else $('#toggle-wgX').switchButton({checked:true});
+        if (ok==0) tstate['wgX']=''; else $('#toggle-wgX').switchButton({checked:true});
       }
 <?if ($wgX['UPNP:0']===''):?>
       $.post('/webGui/include/update.wireguard.php',{'#cmd':'upnpc','#xml':xml,'#vtun':'wgX','#link':'<?=$link?>','#ip':'<?=$server?>','#wg':tstate['wgX']},function(data){$('span.upnp.wgX').text(data);});
@@ -105,11 +109,11 @@ $(function(){
   setProtocol(form,'wgX');
   form.find('input[name^="Address:"]').each(function(){
     var i = $(this).attr('name').split(':')[1];
-    if (i>0) $(this).on('input change',function(){form.find('#ping-button1-'+i).prop('disabled',$(this).val()=='');});
+    if (i > 0) $(this).on('input change',function(){form.find('#ping-button1-'+i).prop('disabled',$(this).val()=='');});
   });
   form.find('input[name^="Address6:"]').each(function(){
     var i = $(this).attr('name').split(':')[1];
-    if (i>0) $(this).on('input change',function(){form.find('.ping-button6-'+i).prop('disabled',$(this).val()=='');});
+    if (i > 0) $(this).on('input change',function(){form.find('.ping-button6-'+i).prop('disabled',$(this).val()=='');});
   });
   form.find('input[name^="gui:Endpoint:"]').each(function(){
     var i = $(this).attr('name').split(':')[2];
@@ -126,15 +130,18 @@ $(function(){
   } else {
     form.find('select[name="UPNP:0"]').val('no');
   }
-  var vpn = false, lan = false
+  var vpn = 0, lan = false
   form.find('select[name^="TYPE:"]').each(function(){
     var i = $(this).attr('name').split(':')[1];
-    vpn |= $(this).val()=='7';
+    if ($(this).val()>=7 && vpn==0) vpn = $(this).val();
     lan |= $(this).val()=='6' || $(this).val() % 2;
-    form.find('input[name="DNS:'+i+'"]').attr('placeholder',$(this).val()=='7' ? "(_(not used)_)" : "(_(optional)_)");
+    form.find('input[name="DNS:'+i+'"]').attr('placeholder',$(this).val()>=7 ? "(_(not used)_)" : "(_(optional)_)");
     showAccess(form,i,$(this).val());
   });
-  if (vpn) form.find('select[name="NAT:0"]').val('no').prop('disabled',true);
+  if (vpn > 0) {
+    form.find('select[name="NAT:0"]').val('no').prop('disabled',true);
+    form.find('#addpeer-wgX').prop('disabled',true);
+  }
   else if (form.find('select[name="NAT:0"]').val()=='no' && lan) $('span#my-static1-wgX').show();
   else if (lan) $('span#my-static2-wgX').show();
 });
@@ -147,6 +154,7 @@ $(function(){
 <input type="hidden" name="#cmd" value="update">
 <input type="hidden" name="#name" value="<?=$tower?>">
 <input type="hidden" name="#vtun" value="wgX">
+<input type="hidden" name="#type" value="0">
 <input type="hidden" name="#wg" value="">
 <input type="hidden" name="#internet" value="<?=$public?>">
 <input type="hidden" name="#subnets1" value="">
@@ -216,7 +224,7 @@ _(Local tunnel address IPv6)_:
 </div>
 </div>
 _(Local endpoint)_:
-: <span class="input"><input type="text" id="endpoint-wgX" name="Endpoint:0" class="subnet" value="<?=$vpn_wgX?'':$wgX['Endpoint:0']?>" onchange="toLC(this);quickValidate(this);" pattern="<?=$validText?>" title="_(IP address or FQDN)_" placeholder="<?=$vpn_wgX?'(not used)':preg_replace('/^(www\.).+(\.unraid.net)$/','$1<hash>$2',$public)?>">:
+: <span class="input"><input type="text" id="endpoint-wgX" name="Endpoint:0" class="subnet" value="<?=$vpn_wgX?'':$wgX['Endpoint:0']?>" onchange="toLC(this);quickValidate(this);" pattern="<?=$validText?>" title="_(IP address or FQDN)_" placeholder="<?=$vpn_wgX?'(_(not used)_)':preg_replace('/^(www\.).+(\.unraid.net)$/','$1<hash>$2',$public)?>">:
   <input type="number" name="gui:ListenPort:0" class="port" min="1" max="65535" value="<?=$vpn_wgX?'':$wgX['ListenPort:0']?>" onchange="if(quickValidate(this)) {portRemark($(document.wgX),'wgX',this.value)}"  placeholder="<?=$vpn_wgX?'':$netport['wgX']?>"></span>
   <span class="remark block" style="display:none">_(Remark)_: _(configure your router with port forwarding of port)_ **<span id="my-port-wgX"><?=$wgX['ListenPort:0']?:$netport['wgX']?></span>/_(UDP)_** _(to)_ **<?=$server?>:<?=$wgX['ListenPort:0']?:$netport['wgX']?>**</span><span class="upnp wgX block"></span>
   <input type="hidden" name="ListenPort:0" value=""><dl id="endpoint4-wgX" style="display:none"></dl><dl id="endpoint6-wgX" style="display:none"></dl>
@@ -279,7 +287,7 @@ _(DNS servers)_:
 _(Peer name)_:
 : <span class="input"><input type="text" name="Name:<?=$i?>" class="wide" maxlength="99" value="<?=$wgX["Name:$i"]??''?>" onchange="quickValidate(this);" pattern="<?=$validname?>" title="_(Use only letters A-Z, digits or space,dash,underscore)_" placeholder="(_(optional)_)"></span>
   <input type="button" class="form" value="_(Delete Peer)_" onclick="delPeer($(document.wgX),'#index-wgX-<?=$i?>')">
-  <span class="pin"><i class="fa fa-fw fa-eye eye<?=$i?><?=(file_exists("$etc/peers/peer-$tower-wgX-$i.conf")&&(int)$wgX["TYPE:$i"]!=7)?'':' key-off'?>" style="cursor:pointer" onclick="WGconfig(this,'peer-<?=$tower?>-wgX-<?=$i?>','/peers')" title="_(View Peer Config)_"></i>
+  <span class="pin"><i class="fa fa-fw fa-eye eye<?=$i?><?=(file_exists("$etc/peers/peer-$tower-wgX-$i.conf")&&$wgX["TYPE:$i"]<=6)?'':' key-off'?>" style="cursor:pointer" onclick="WGconfig(this,'peer-<?=$tower?>-wgX-<?=$i?>','/peers')" title="_(View Peer Config)_"></i>
   <i class="fa fa-fw fa-key zone<?=$i?><?=$wgX["PublicKey:$i"]?'':' key-off'?>" style="cursor:pointer" onclick="openClose($(document.wgX),null,'div.key<?=$i?>')" title="_(Toggle keys)_"></i>
   <i id="chevron-wgX-<?=$i?>" class="fa fa-fw fa-chevron-down" style="cursor:pointer" onclick="openClose($(document.wgX),this,'div.zone<?=$i?>')" title="_(Toggle view)_"></i></span>
 
@@ -294,7 +302,8 @@ _(Peer type of access)_:
   <?=mk_option($wgX["TYPE:$i"], "4", _("Server hub & spoke access"))?>
   <?=mk_option($wgX["TYPE:$i"], "5", _("LAN hub & spoke access"))?>
   <?=mk_option($wgX["TYPE:$i"], "6", _("Remote tunneled access"))?>
-  <?=mk_option($wgX["TYPE:$i"], "7", _("VPN tunneled access"),count($peer_wgX)==1?'':'disabled')?>
+  <?=mk_option($wgX["TYPE:$i"], "7", _("VPN tunneled access for system"),count($peer_wgX)==1?'':'disabled')?>
+  <?=mk_option($wgX["TYPE:$i"], "8", _("VPN tunneled access for docker"))?>
   </select></span>
   <span id="access-type-<?=$i?>" class="access-type"></span>
 
@@ -365,7 +374,7 @@ _(Persistent keepalive)_:
 <?endforeach;?>
 
 &nbsp;
-: <input type="submit" value="_(Apply)_" onclick="return(validateForm($(document.wgX),'wgX'))" disabled><input type="button" value="_(Done)_" onclick="done()"><input type="button" value="_(Add Peer)_" onclick="addPeer($(document.wgX),'wgX')"><input type="button" class="advanced wgX" value="_(Delete Tunnel)_" style="float:right;display:none" onclick="delTunnel('wgX')">
+: <input type="submit" value="_(Apply)_" onclick="return(validateForm($(document.wgX),'wgX'))" disabled><input type="button" value="_(Done)_" onclick="done()"><input type="button" id="addpeer-wgX" value="_(Add Peer)_" onclick="addPeer($(document.wgX),'wgX')"><input type="button" class="advanced wgX" value="_(Delete Tunnel)_" style="float:right;display:none" onclick="delTunnel('wgX')">
 </form>
 
 <script markdown="1" type="text/html" id="peer-template-wgX">
@@ -387,7 +396,8 @@ _(Peer type of access)_:
   <?=mk_option(0, "4", _("Server hub & spoke access"))?>
   <?=mk_option(0, "5", _("LAN hub & spoke access"))?>
   <?=mk_option(0, "6", _("Remote tunneled access"))?>
-  <?=mk_option(0, "7", _("VPN tunneled access"),'disabled')?>
+  <?=mk_option(0, "7", _("VPN tunneled access for system"),'disabled')?>
+  <?=mk_option(0, "8", _("VPN tunneled access for docker"))?>
   </select></span>
   <span id="access-type-INDEX" class="access-type"></span>
 

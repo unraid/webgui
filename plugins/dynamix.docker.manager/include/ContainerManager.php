@@ -1,7 +1,7 @@
 <?PHP
-/* Copyright 2005-2018, Lime Technology
- * Copyright 2014-2018, Guilherme Jardim, Eric Schultz, Jon Panozzo.
- * Copyright 2012-2018, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2014-2022, Guilherme Jardim, Eric Schultz, Jon Panozzo.
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -26,5 +26,8 @@ if (file_exists($user_prefs)) {
   array_multisort($sort, ($action=='start'?SORT_ASC:SORT_DESC), SORT_NUMERIC, $containers);
 }
 
-foreach ($containers as $ct) DockerUtil::docker("$action $ct >/dev/null");
+foreach ($containers as $ct) {
+  DockerUtil::docker("$action $ct >/dev/null");
+  addRoute($ct);
+}
 ?>

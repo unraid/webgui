@@ -37,10 +37,10 @@ if (count($filter)) {
     elseif (strpos($network,':')!==false && !in_array($network,$subnets6)) $subnets6[] = $network;
   }
 }
-$subnets = implode(', ',$subnets);
-$hosts = implode(', ',$hosts);
-$subnets6 = implode(', ',$subnets6);
-$hosts6 = implode(', ',$hosts6);
+$subnets = implode(',',$subnets);
+$hosts = implode(',',$hosts);
+$subnets6 = implode(',',$subnets6);
+$hosts6 = implode(',',$hosts6);
 
 function ifname($eth,$new) {
   return str_replace('eth',$new,$eth);
@@ -58,8 +58,9 @@ function readConf(&$peer_wg,&$wg,$vtun) {
   global $etc,$netbase,$netpool,$netbase6,$netpool6,$validIP4,$validIP6;
   $conf = "$etc/$vtun.conf";
   $cfg  = "$etc/$vtun.cfg";
-  $file = $vpn = false;
-  if (file_exists($conf) && filesize($conf)>0) {
+  $file = false;
+  $vpn  = 0;
+  if (file_exists($conf) && filesize($conf) > 0) {
     $entries = array_filter(array_map('trim',preg_split('/\[(Interface|Peer)\]/',file_get_contents($conf))));
     foreach ($entries as $key => $entry) {
       $i = $key-1;
@@ -121,7 +122,7 @@ function readConf(&$peer_wg,&$wg,$vtun) {
     $netbase[$vtun] = ip2long($netpool[$vtun]);
     $netbase6[$vtun] = $netpool6[$vtun];
   }
-  foreach ($peer_wg as $i) if ((int)$wg["TYPE:$i"]==7) {$vpn = true; break;}
+  foreach ($peer_wg as $i) if ($wg["TYPE:$i"]>=7) {$vpn = $wg["TYPE:$i"]; break;}
   return [$conf,$cfg,$file,$vpn];
 }
 $public    = $nginx['NGINX_WANFQDN'];
@@ -176,7 +177,7 @@ $netpool6['wg0'] = 'fc00:253:0:0::';
 $netport['wg0']  = 51820;
 
 // read current configuration
-[$conf_wg0, $cfg_wg0, $this_wg0, $vpn_wg0] = readConf($peer_wg0, $wg0, 'wg0');
+[$conf_wg0,$cfg_wg0,$this_wg0,$vpn_wg0] = readConf($peer_wg0,$wg0,'wg0');
 
 // gather IPv4 and IPv6 addresses for available interfaces
 $endpoints = [];
@@ -189,8 +190,8 @@ while (isset($$eth)) {
 
 // remove obsolete tunnels
 foreach (glob("$docroot/webGui/WG[1-9]*.page",GLOB_NOSORT) as $wgX) {
-  if (!in_array(strtolower(basename($wgX,'.page')), $vtuns)) {
-    unlink($wgX);
+  if (!in_array(strtolower(basename($wgX,'.page')),$vtuns)) {
+    delete_file($wgX);
     $build = true;
   }
 }
@@ -201,7 +202,7 @@ foreach ($vtuns as $wgX) {
   if (!file_exists($file)) {
     $X = filter_var($wgX,FILTER_SANITIZE_NUMBER_INT);
     $nnn = 100 + $X;
-    copy($template, $file);
+    copy($template,$file);
     exec("sed -i 's/parentname:nnn/VPNmanager:$nnn/;s/XXX/$X/g;s/wgX/$wgX/g' $file");
     chmod($file,0644);
     $build = true;
@@ -278,12 +279,11 @@ if (!HTMLInputElement.prototype.reportValidity || (navigator.userAgent.indexOf("
     }
   };
 }
-
 function ipv4(ip) {
-  return ip.indexOf('.')>0;
+  return ip.indexOf('.') > 0;
 }
 function ipv6(ip) {
-  return ip.indexOf(':')>0;
+  return ip.indexOf(':') > 0;
 }
 function ipset(ip) {
   return ipv4(ip) ? ip : '['+ip+']';
@@ -323,7 +323,7 @@ function prepareSettings(form,vtun) {
   var mypool = netpool[vtun];
   var network6 = form.find('input[name="gui:Network6:0"]').val();
   var mypool6 = netpool6[vtun];
-  var vpn = false;
+  var vpn = 0;
   form.find('input[name="Network:0"]').val((network||mypool)+'/'+(form.find('input[name="gui:Mask:0"]').val()||24));
   form.find('input[name="Network6:0"]').val((network6||mypool6)+'/'+(form.find('input[name="gui:Mask6:0"]').val()||64));
   form.find('input[name^="Address:"]').each(function(){
@@ -356,8 +356,8 @@ function prepareSettings(form,vtun) {
     form.find('input[name="#shared2"]').val(form.find('input[name="Network:0"]').val()+', '+hosts);
     break;
   }
-  form.find('select[name^="TYPE:"]').each(function(){if($(this).val()==7){vpn=true;return false};});
-  if (!vpn) form.find('input[name="ListenPort:0"]').val(listen);
+  form.find('select[name^="TYPE:"]').each(function(){if($(this).val()>=7){vpn=$(this).val();return false};});
+  if (vpn==0) form.find('input[name="ListenPort:0"]').val(listen);
   form.find('input[name^="gui:Endpoint:"]').each(function(){
     var i = $(this).attr('name').split(':')[2];
     var endpoint = form.find('input[name="Endpoint:'+i+'"]');
@@ -377,7 +377,7 @@ function prepareSettings(form,vtun) {
 <?if (!is_executable('/usr/bin/upnpc')):?>
   upnp.val('no');
 <?endif;?>
-  if (!xml||vpn||upnp.val()=='no') {
+  if (!xml||vpn > 0||upnp.val()=='no') {
     postup.prop('disabled',true);
     postdown.prop('disabled',true);
   } else {
@@ -385,10 +385,9 @@ function prepareSettings(form,vtun) {
     postdown.val(postdown.val().replace(/<port>/,listen));
   }
   postup = form.find('input[name="PostUp:0:1"]');
-  postdown = form.find('input[name="PostDown:0:1"]');
   postup.val(postup.val().replace(/<wg>/,vtun));
+  postdown = form.find('input[name="PostDown:0:1"]');
   postdown.val(postdown.val().replace(/<wg>/,vtun));
-
   postup = form.find('input[name="PostUp:0:2"]');
   postdown = form.find('input[name="PostDown:0:2"]');
   var drop = form.find('input[name="DROP:0"]').val();
@@ -451,13 +450,13 @@ function prepareSettings(form,vtun) {
   }
   switch (protocol) {
   case '46':
-    if (ip4.length>0) {
+    if (ip4.length > 0) {
       postup1.push(postup3);
       postup1.push(ip4);
       postup1.push(postupZ.patch(source));
       postdown1.push(postdown3);
     }
-    if (ip6.length>0) {
+    if (ip6.length > 0) {
       postup16.push(postup36);
       postup16.push(ip6);
       postup16.push(postupZ6.patch(source6));
@@ -469,7 +468,7 @@ function prepareSettings(form,vtun) {
     postdown.val(postdown1.bind(vtun));
     break;
   case '6':
-    if (ip6.length>0) {
+    if (ip6.length > 0) {
       postup16.push(postup36);
       postup16.push(ip6);
       postup16.push(postupZ6.patch(source6));
@@ -479,7 +478,7 @@ function prepareSettings(form,vtun) {
     postdown.val(postdown16.bind(vtun));
     break;
   default:
-    if (ip4.length>0) {
+    if (ip4.length > 0) {
       postup1.push(postup3);
       postup1.push(ip4);
       postup1.push(postupZ.patch(source));
@@ -489,6 +488,10 @@ function prepareSettings(form,vtun) {
     postdown.val(postdown1.bind(vtun));
     break;
   }
+  $('div[id^="index-wg0-"]').each(function(){
+    var temp = $(this).find('select[name^="TYPE:"]').val();
+    if (temp >= 7) form.find('input[name="#type"]').val(temp);
+  });
   if (!postup.val()) postup.prop('disabled',true);
   if (!postdown.val()) postdown.prop('disabled',true);
 }
@@ -515,7 +518,13 @@ function addTunnel() {
 }
 function delTunnel(vtun) {
   swal({title:"_(Delete Tunnel)_ "+vtun,text:"_(This removes any connections running over this tunnel)_",type:'warning',confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_",showCancelButton:true},function(){
-    $.post('/webGui/include/update.wireguard.php',{'#cmd':'deltunnel','#vtun':vtun,'#name':'<?=$tower?>'},function(){clearTunnel(vtun);});
+    $.post('/webGui/include/update.wireguard.php',{'#cmd':'deltunnel','#vtun':vtun,'#name':'<?=$tower?>'},function(ok){
+      if (ok==0) {
+        clearTunnel(vtun);
+      } else {
+        setTimeout(function(){swal({title:"_(Delete tunnel failed)_",text:"_(Tunnel has running containers attached)_<br>_(Stop corresponding docker containers)_",html:true,type:'error',confirmButtonText:"_(Ok)_"});},250);
+      }
+    });
   });
 }
 function addPeer(form,vtun) {
@@ -528,7 +537,7 @@ function addPeer(form,vtun) {
   var template = $($('<div/>').loadTemplate($('#peer-template-'+vtun)).html().replace(/INDEX/g,i));
   var peer = i==1 ? $('div#peers-list-'+vtun) : $('[id^="index-'+vtun+'-"]').last();
   $(peer).after(template);
-  if (i==1) form.find('select[name="TYPE:1"] option:last').prop('disabled',false);
+  if (i==1) form.find('select[name="TYPE:1"] option').each(function(){$(this).prop('disabled',false);});
   var address = [], address6 = [];
   var protocol = form.find('select[name="PROT:0"]').val();
   if (protocol!='6') {
@@ -578,12 +587,12 @@ function addPeer(form,vtun) {
     $(this).attr('id','helpinfo'+i);
     var pin = $(this).prev();
     if (!pin.prop('nodeName')) pin = $(this).parent().prev();
-    while (pin.prop('nodeName') && pin.prop('nodeName').search(/(table|dl)/i)==-1) pin = pin.prev();
+    while (pin.prop('nodeName') && pin.prop('nodeName').search(/(table|dl)/i) == -1) pin = pin.prev();
     pin.find('tr:first,dt:last').each(function() {
       var node = $(this);
       var name = node.prop('nodeName').toLowerCase();
       if (name=='dt') {
-        while (!node.html() || node.html().search(/(<input|<select|nbsp;)/i)>=0 || name!='dt') {
+        while (!node.html() || node.html().search(/(<input|<select|nbsp;)/i) >= 0 || name!='dt') {
           if (name=='dt' && node.is(':first-of-type')) break;
           node = node.prev();
           name = node.prop('nodeName').toLowerCase();
@@ -650,6 +659,7 @@ function updatePeer(form,i,n,vtun) {
     form.find('input[name="DNS:'+i+'"]').attr('placeholder',"(_(optional)_)").removeAttr('required');
     break;
   }
+  form.find('#addpeer-'+vtun).prop('disabled',n>=7);
   var subnet = form.find('input[name="Address:'+i+'"]').val();
   var subnet6 = form.find('input[name="Address6:'+i+'"]').val();
   switch (protocol) {
@@ -839,7 +849,7 @@ function verifyInSubnet6(field) {
   if (!quickValidate(field)) return false;
   // ensure this IPv6 address is in the Local tunnel network pool IPv6
   var form = $(field).parents('form');
-  var network6 = form.find('input[name="gui:Network6:0"]').val()||form.find('input[name="gui:Network6:0"]').prop('placeholder');;
+  var network6 = form.find('input[name="gui:Network6:0"]').val()||form.find('input[name="gui:Network6:0"]').prop('placeholder');
   var mask6 = form.find('input[name="gui:Mask6:0"]').val()||64;
   if (mask6 !== 64) {
     // this logic only handles IPv6 mask of 64. for other masks, assume the user knows what they are doing.
@@ -859,14 +869,14 @@ function setAllow(form,subnet,i) {
   var input = form.find('input[name="AllowedIPs:'+i+'"]');
   var type = form.find('select[name="TYPE:'+i+'"]').val();
   var prot = form.find('select[name="PROT:0"]').val();
-  if (type!='7') {
+  if (type < 7) {
     var list = input.val().replace(/ +/g,'').split(',');
-    var n = prot=='46' ? 0 : (list.length>1 ? 2 : 1);
+    var n = prot=='46' ? 0 : (list.length > 1 ? 2 : 1);
     list.splice(0,n);
     list.unshift(subnet);
     list = [...new Set(list)];
     list = list.filter(nodefault);
-    if (n>0) list = list.filter(ipv4);
+    if (n > 0) list = list.filter(ipv4);
   } else {
     var list = prot!='46' ? ['0.0.0.0/0'] : ['0.0.0.0/0','::/0'];
   }
@@ -877,14 +887,14 @@ function setAllow6(form,subnet6,i) {
   var input = form.find('input[name="AllowedIPs:'+i+'"]');
   var type = form.find('select[name="TYPE:'+i+'"]').val();
   var prot = form.find('select[name="PROT:0"]').val();
-  if (type!='7') {
+  if (type < 7) {
     var list = input.val().replace(/ +/g,'').split(',');
-    var n = prot=='46' ? 0 : (list.length>1 ? 2 : 1);
+    var n = prot=='46' ? 0 : (list.length > 1 ? 2 : 1);
     list.splice(0,n);
     list.unshift(subnet6);
     list = [...new Set(list)];
     list = list.filter(nodefault6);
-    if (n>0) list = list.filter(ipv6);
+    if (n > 0) list = list.filter(ipv6);
   } else {
     var list = prot!='46' ? ['::/0'] : ['0.0.0.0/0','::/0'];
   }
@@ -911,19 +921,19 @@ function highlight(form,input,i) {
 }
 function showRemark(form) {
   var upnp = form.find('select[name="UPNP:0"]').val();
-  var vpn = false;
-  form.find('select[name^="TYPE:"]').each(function(){vpn |= $(this).val()=='7';});
-  if (upnp=='' || vpn) form.find('span.remark').hide(); else form.find('span.remark').show();
-  if (upnp=='' && !vpn) form.find('span.upnp').show(); else form.find('span.upnp').hide();
+  var vpn = 0;
+  form.find('select[name^="TYPE:"]').each(function(){if ($(this).val()>=7 && vpn==0) vpn = $(this).val();});
+  if (upnp=='' || vpn > 0) form.find('span.remark').hide(); else form.find('span.remark').show();
+  if (upnp=='' && vpn < 7) form.find('span.upnp').show(); else form.find('span.upnp').hide();
 }
 function showRoute(form,vtun,i) {
   var nat = form.find('select[name="NAT:0"]').val();
-  var vpn = false, lan = false;
+  var vpn = 0, lan = false;
   form.find('select[name^="TYPE:"]').each(function(){
-    vpn |= $(this).val()=='7';
-    lan |= $(this).val()=='6' || $(this).val() % 2;
+    if ($(this).val()>=7 && vpn==0) vpn = $(this).val();
+    else lan |= $(this).val()=='6' || $(this).val() % 2;
   });
-  if (nat=='no' && !vpn && lan) {
+  if (nat=='no' && vpn==0 && lan) {
     $('span#my-static1-'+vtun).show();
     $('span#my-static2-'+vtun).hide();
   } else {
@@ -934,7 +944,7 @@ function showRoute(form,vtun,i) {
 }
 function showAccess(form,i,n) {
   switch (n) {
-    case '0': 
+    case '0':
       switch (form.find('select[name="PROT:0"]').val()) {
         case '6' : var peer_addr = form.find('input[name="Address6:0"]').val()+"</b>"; break;
         case '46': var peer_addr = form.find('input[name="Address:0"]').val()+"</b> _(or)_ <b>"+form.find('input[name="Address6:0"]').val()+"</b>"; break;
@@ -956,6 +966,7 @@ function showAccess(form,i,n) {
       break;
     case '5': form.find('span#access-type-'+i).html("_(Remark)_: _(ensure the peer networks are different from)_ <b><?=exec("ip -4 route show dev $link scope link|awk '{print \$1;exit}'")?></b>"); break;
     case '7': form.find('span#access-type-'+i).html("_(Remark)_: _(this must be the only peer in the tunnel and sole active tunnel when in use)_"); break;
+    case '8': form.find('span#access-type-'+i).html("_(Remark)_: _(VPN tunnel for docker containers only)_"); break;
   }
 }
 function portRemark(form,vtun,val) {
@@ -1124,11 +1135,16 @@ $(function(){
     e.preventDefault();
     e.stopPropagation();
     var wg = $('#toggle-wg0').is(':checked') ? 'start' : 'stop';
-    $.post('/webGui/include/update.wireguard.php',{'#cmd':'toggle','#wg':wg,'#vtun':'wg0'},function(ok){
+    var type = 0;
+    $('div[id^="index-wg0-"]').each(function(){
+      var temp = $(this).find('select[name^="TYPE:"]').val();
+      if (temp >= 7 && type==0) type = temp;
+    });
+    $.post('/webGui/include/update.wireguard.php',{'#cmd':'toggle','#wg':wg,'#vtun':'wg0','#type':type},function(ok){
       if (wg=='start') {
-        if (ok) tstate['wg0']='active'; else $('#toggle-wg0').switchButton({checked:false});
+        if (ok==0) tstate['wg0']='active'; else $('#toggle-wg0').switchButton({checked:false});
       } else {
-        if (ok) tstate['wg0']=''; else $('#toggle-wg0').switchButton({checked:true});
+        if (ok==0) tstate['wg0']=''; else $('#toggle-wg0').switchButton({checked:true});
       }
 <?if ($wg0['UPNP:0']===''):?>
       $.post('/webGui/include/update.wireguard.php',{'#cmd':'upnpc','#xml':xml,'#vtun':'wg0','#link':'<?=$link?>','#ip':'<?=$server?>','#wg':tstate['wg0']},function(data){$('span.upnp.wg0').text(data);});
@@ -1175,11 +1191,11 @@ $(function(){
   setProtocol(form,'wg0');
   form.find('input[name^="Address:"]').each(function(){
     var i = $(this).attr('name').split(':')[1];
-    if (i>0) $(this).on('input change',function(){form.find('.ping-button1-'+i).prop('disabled',$(this).val()=='');});
+    if (i > 0) $(this).on('input change',function(){form.find('.ping-button1-'+i).prop('disabled',$(this).val()=='');});
   });
   form.find('input[name^="Address6:"]').each(function(){
     var i = $(this).attr('name').split(':')[1];
-    if (i>0) $(this).on('input change',function(){form.find('.ping-button6-'+i).prop('disabled',$(this).val()=='');});
+    if (i > 0) $(this).on('input change',function(){form.find('.ping-button6-'+i).prop('disabled',$(this).val()=='');});
   });
   form.find('input[name^="gui:Endpoint:"]').each(function(){
     var i = $(this).attr('name').split(':')[2];
@@ -1196,20 +1212,23 @@ $(function(){
   } else {
     form.find('select[name="UPNP:0"]').val('no');
   }
-  var vpn = false, lan = false
+  var vpn = 0, lan = false
   form.find('select[name^="TYPE:"]').each(function(){
     var i = $(this).attr('name').split(':')[1];
-    vpn |= $(this).val()=='7';
+    if ($(this).val()>=7 && vpn==0) vpn = $(this).val();
     lan |= $(this).val()=='6' || $(this).val() % 2;
-    form.find('input[name="DNS:'+i+'"]').attr('placeholder',$(this).val()=='7' ? "(_(not used)_)" : "(_(optional)_)");
+    form.find('input[name="DNS:'+i+'"]').attr('placeholder',$(this).val()>=7 ? "(_(not used)_)" : "(_(optional)_)");
     showAccess(form,i,$(this).val());
   });
-  if (vpn) form.find('select[name="NAT:0"]').val('no').prop('disabled',true);
+  if (vpn > 0) {
+    form.find('select[name="NAT:0"]').val('no').prop('disabled',true);
+    form.find('#addpeer-wg0').prop('disabled',true);
+  }
   else if (form.find('select[name="NAT:0"]').val()=='no' && lan) $('span#my-static1-wg0').show();
   else if (lan) $('span#my-static2-wg0').show();
 <?if (file_exists($tmp)):?>
   setTimeout(function(){swal({title:"_(Peer update required)_",text:"<b><u>_(List of peers)_</u></b><br><span style='display:inline-block;text-align:left'><?=file_get_contents($tmp)?></span>",type:'warning',html:true});},200);
-<?unlink($tmp);?>
+<?delete_file($tmp);?>
 <?endif;?>
 });
 </script>
@@ -1222,6 +1241,7 @@ $(function(){
 <input type="hidden" name="#cmd" value="update">
 <input type="hidden" name="#name" value="<?=$tower?>">
 <input type="hidden" name="#vtun" value="wg0">
+<input type="hidden" name="#type" value="0">
 <input type="hidden" name="#wg" value="">
 <input type="hidden" name="#internet" value="<?=$public?>">
 <input type="hidden" name="#subnets1" value="">
@@ -1291,7 +1311,7 @@ _(Local tunnel address IPv6)_:
 </div>
 </div>
 _(Local endpoint)_:
-: <span class="input"><input type="text" id="endpoint-wg0" name="Endpoint:0" class="subnet" value="<?=$vpn_wg0?'':$wg0['Endpoint:0']?>" onchange="toLC(this);quickValidate(this);" pattern="<?=$validText?>" title="_(IP address or FQDN)_" placeholder="<?=$vpn_wg0?'(not used)':preg_replace('/^(.+?\.)[0-9a-zA-Z]+(\.(my)?unraid.net)$/','$1<hash>$2',$public)?>">:
+: <span class="input"><input type="text" id="endpoint-wg0" name="Endpoint:0" class="subnet" value="<?=$vpn_wg0?'':$wg0['Endpoint:0']?>" onchange="toLC(this);quickValidate(this);" pattern="<?=$validText?>" title="_(IP address or FQDN)_" placeholder="<?=$vpn_wg0?'(_(not used)_)':preg_replace('/^(.+?\.)[0-9a-zA-Z]+(\.(my)?unraid.net)$/','$1<hash>$2',$public)?>">:
   <input type="number" name="gui:ListenPort:0" class="port" min="1" max="65535" value="<?=$vpn_wg0?'':$wg0['ListenPort:0']?>" onchange="if(quickValidate(this)) {portRemark($(document.wg0),'wg0',this.value)}" placeholder="<?=$vpn_wg0?'':$netport['wg0']?>"></span>
   <span class="remark block" style="display:none">_(Remark)_: _(configure your router with port forwarding of port)_ **<span id="my-port-wg0"><?=$wg0['ListenPort:0']?:$netport['wg0']?></span>/_(UDP)_** _(to)_ **<?=$server?>:<?=$wg0['ListenPort:0']?:$netport['wg0']?>**</span><span class="upnp wg0 block"></span>
   <input type="hidden" name="ListenPort:0" value=""><dl id="endpoint4-wg0" style="display:none"></dl><dl id="endpoint6-wg0" style="display:none"></dl>
@@ -1354,7 +1374,7 @@ _(DNS servers)_:
 _(Peer name)_:
 : <span class="input"><input type="text" name="Name:<?=$i?>" class="wide" maxlength="99" value="<?=$wg0["Name:$i"]??''?>" onchange="quickValidate(this);" pattern="<?=$validname?>" title="_(Use only letters A-Z, digits or space,dash,underscore)_" placeholder="(_(optional)_)"></span>
   <input type="button" class="form" value="_(Delete Peer)_" onclick="delPeer($(document.wg0),'#index-wg0-<?=$i?>')">
-  <span class="pin"><i class="fa fa-fw fa-eye eye<?=$i?><?=(file_exists("$etc/peers/peer-$tower-wg0-$i.conf")&&(int)$wg0["TYPE:$i"]!=7)?'':' key-off'?>" style="cursor:pointer" onclick="WGconfig(this,'peer-<?=$tower?>-wg0-<?=$i?>','/peers')" title="_(View Peer Config)_"></i>
+  <span class="pin"><i class="fa fa-fw fa-eye eye<?=$i?><?=(file_exists("$etc/peers/peer-$tower-wg0-$i.conf")&&$wg0["TYPE:$i"]<=6)?'':' key-off'?>" style="cursor:pointer" onclick="WGconfig(this,'peer-<?=$tower?>-wg0-<?=$i?>','/peers')" title="_(View Peer Config)_"></i>
   <i class="fa fa-fw fa-key zone<?=$i?><?=$wg0["PublicKey:$i"]?'':' key-off'?>" style="cursor:pointer" onclick="openClose($(document.wg0),null,'div.key<?=$i?>')" title="_(Toggle keys)_"></i>
   <i id="chevron-wg0-<?=$i?>" class="fa fa-fw fa-chevron-down" style="cursor:pointer" onclick="openClose($(document.wg0),this,'div.zone<?=$i?>')" title="_(Toggle view)_"></i></span>
 
@@ -1369,7 +1389,8 @@ _(Peer type of access)_:
   <?=mk_option($wg0["TYPE:$i"], "4", _("Server hub & spoke access"))?>
   <?=mk_option($wg0["TYPE:$i"], "5", _("LAN hub & spoke access"))?>
   <?=mk_option($wg0["TYPE:$i"], "6", _("Remote tunneled access"))?>
-  <?=mk_option($wg0["TYPE:$i"], "7", _("VPN tunneled access"),count($peer_wg0)==1?'':'disabled')?>
+  <?=mk_option($wg0["TYPE:$i"], "7", _("VPN tunneled access for system"),count($peer_wg0)==1?'':'disabled')?>
+  <?=mk_option($wg0["TYPE:$i"], "8", _("VPN tunneled access for docker"),count($peer_wg0)==1?'':'disabled')?>
   </select></span>
   <span id="access-type-<?=$i?>" class="access-type"></span>
 
@@ -1440,7 +1461,7 @@ _(Persistent keepalive)_:
 <?endforeach;?>
 
 &nbsp;
-: <input type="submit" value="_(Apply)_" onclick="return(validateForm($(document.wg0),'wg0'))" disabled><input type="button" value="_(Done)_" onclick="done()"><input type="button" value="_(Add Peer)_" onclick="addPeer($(document.wg0),'wg0')">
+: <input type="submit" value="_(Apply)_" onclick="return(validateForm($(document.wg0),'wg0'))" disabled><input type="button" value="_(Done)_" onclick="done()"><input type="button" id="addpeer-wg0" value="_(Add Peer)_" onclick="addPeer($(document.wg0),'wg0')">
   <input type="button" class="advanced wg0" value="_(Delete Tunnel)_" style="float:right;display:none" onclick="delTunnel('wg0')"<?=file_exists($conf_wg0)?'':' disabled'?>>
 </form>
 <small style="position:absolute;left:10px;top:30px">"WireGuard" and the "WireGuard" logo are registered trademarks of Jason A. Donenfield</small>
@@ -1464,7 +1485,8 @@ _(Peer type of access)_:
   <?=mk_option(0, "4", _("Server hub & spoke access"))?>
   <?=mk_option(0, "5", _("LAN hub & spoke access"))?>
   <?=mk_option(0, "6", _("Remote tunneled access"))?>
-  <?=mk_option(0, "7", _("VPN tunneled access"),'disabled')?>
+  <?=mk_option(0, "7", _("VPN tunneled access for system"),'disabled')?>
+  <?=mk_option(0, "8", _("VPN tunneled access for docker"),'disabled')?>
   </select></span>
   <span id="access-type-INDEX" class="access-type"></span>
 

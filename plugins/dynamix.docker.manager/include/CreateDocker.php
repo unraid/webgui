@@ -1,7 +1,7 @@
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2015-2021, Guilherme Jardim, Eric Schultz, Jon Panozzo.
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2015-2022, Guilherme Jardim, Eric Schultz, Jon Panozzo.
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -14,7 +14,7 @@
 <?
 $docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
-libxml_use_internal_errors(false); # Enable xml errors
+libxml_use_internal_errors(true);
 
 require_once "$docroot/webGui/include/Helpers.php";
 extract(parse_plugin_cfg('dynamix',true));
@@ -145,6 +145,7 @@ if (isset($_POST['contName'])) {
   }
   if ($startContainer) $cmd = str_replace('/docker create ', '/docker run -d ', $cmd);
   execCommand($cmd);
+  if ($startContainer) addRoute($Name); // add route for remote WireGuard access
 
   echo '<div style="text-align:center"><button type="button" onclick="done()">'._('Done').'</button></div><br>';
   goto END;
@@ -175,15 +176,18 @@ if (isset($_GET['updateContainer'])){
     if ($echo && !pullImage($Name, $Repository)) continue;
     $oldContainerInfo = $DockerClient->getContainerDetails($Name);
     // determine if the container is still running
+    $startContainer = false;
     if (!empty($oldContainerInfo) && !empty($oldContainerInfo['State']) && !empty($oldContainerInfo['State']['Running'])) {
       // since container was already running, put it back it to a running state after update
       $cmd = str_replace('/docker create ', '/docker run -d ', $cmd);
+      $startContainer = true;
       // attempt graceful stop of container first
       stopContainer($Name, $echo);
     }
     // force kill container if still running after 10 seconds
     if (empty($_GET['communityApplications'])) removeContainer($Name, $echo);
     execCommand($cmd, $echo);
+    if ($startContainer) addRoute($Name); // add route for remote WireGuard access
     $DockerClient->flushCaches();
     $newImageID = $DockerClient->getImageID($Repository);
     // remove old orphan image since it's no longer used by this container
@@ -837,7 +841,7 @@ Donation Link:
 
 Template URL:
 : <input type="text" name="contTemplateURL">
-  
+
 </div>
 <div markdown="1" class="advanced">
 _(Icon URL)_:
@@ -872,7 +876,18 @@ _(Network Type)_:
   <?=mk_option(1,'host',_('Host'))?>
   <?=mk_option(1,'none',_('None'))?>
   <?foreach ($custom as $network):?>
-  <?=mk_option(1,$network,_('Custom')." : $network")?>
+  <?$name = $network;
+  if (preg_match('/^(br|bond|eth)[0-9]+(\.[0-9]+)?$/',$network)) {
+    [$eth,$x] = my_explode('.',$network);
+    $eth = str_replace(['br','bond'],'eth',$eth);
+    $n = $x ? 1 : 0; while (isset($$eth["VLANID:$n"]) && $$eth["VLANID:$n"] != $x) $n++;
+    if ($$eth["DESCRIPTION:$n"]) $name .= ' -- '.compress(trim($$eth["DESCRIPTION:$n"]));
+  } elseif (preg_match('/^wg[0-9]+$/',$network)) {
+    $conf = file("/etc/wireguard/$network.conf");
+    if ($conf[1][0]=='#') $name .= ' -- '.compress(trim(substr($conf[1],1)));
+  }
+  ?>
+  <?=mk_option(1,$network,_('Custom')." : $name")?>
   <?endforeach;?></select>
 
 <div markdown="1" class="myIP noshow">
@@ -950,21 +965,21 @@ _(Config Type)_:
   </select>
 
 _(Name)_:
-: <input type="text" name="Name">
+: <input type="text" name="Name" autocomplete="off" spellcheck="false">
 
 <div markdown="1" id="Target">
 <span id="dt1">_(Target)_</span>:
-: <input type="text" name="Target">
+: <input type="text" name="Target" autocomplete="off" spellcheck="false">
 </div>
 
 <div markdown="1" id="Value">
 <span id="dt2">_(Value)_</span>:
-: <input type="text" name="Value">
+: <input type="text" name="Value" autocomplete="off" spellcheck="false">
 </div>
 
 <div markdown="1" id="Default">
 _(Default Value)_:
-: <input type="text" name="Default">
+: <input type="text" name="Default" autocomplete="off" spellcheck="false">
 </div>
 
 <div id="Mode"></div>
@@ -1072,7 +1087,7 @@ function load_contOverview() {
   new_overview = marked(new_overview);
   new_overview = new_overview.replaceAll("\n","<br>"); // has to be after marked
   $("#contDescription").html(new_overview);
-  
+
   var new_requires = $("textarea[name='contRequires']").val();
   new_requires = new_requires.replaceAll("[","<").replaceAll("]",">");
   // Handle code block being created by authors indenting (manually editing the xml and spacing)
