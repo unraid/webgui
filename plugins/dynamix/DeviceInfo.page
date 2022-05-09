@@ -448,6 +448,7 @@ _(File system type)_:
   </select>
 
 <?endif;?>
+<?if (in_array($name,$pools)):?>
 <?$disabled = $var['fsState']!="Stopped" ? "disabled" : ""?>
 _(Enable user share assignment)_:
 : <select id="shareEnabled" name="diskShareEnabled.<?=$disk['idx']?>" onchange="freeSpace(this.value)" <?=$disabled?>>
@@ -462,6 +463,7 @@ _(Minimum free space)_:
 
 :info_free_space_help:
 
+<?endif;?>
 _(Warning disk utilization threshold)_ (%):
 : <input type="number" min="0" max="100" name="diskWarning.<?=$disk['idx']?>" class="narrow" value="<?=strlen($disk['warning'])?$disk['warning']:''?>" placeholder="<?=$display['warning']?>">
 

@@ -1,5 +1,24 @@
     <!-- myservers2 -->
     <?
+    // add 'ipaddr' function for 6.9 backwards compatibility
+    if (!function_exists('ipaddr')) {
+      function ipaddr($ethX='eth0', $prot=4) {
+        global $$ethX;
+        switch ($$ethX['PROTOCOL:0']) {
+        case 'ipv4':
+          return $$ethX['IPADDR:0'];
+        case 'ipv6':
+          return $$ethX['IPADDR6:0'];
+        case 'ipv4+ipv6':
+          switch ($prot) {
+          case 4: return $$ethX['IPADDR:0'];
+          case 6: return $$ethX['IPADDR6:0'];
+          default:return [$$ethX['IPADDR:0'],$$ethX['IPADDR6:0']];}
+        default:
+          return $$ethX['IPADDR:0'];
+        }
+      }
+    }
     if (file_exists('/boot/config/plugins/dynamix.my.servers/myservers.cfg')) {
       @extract(parse_ini_file('/boot/config/plugins/dynamix.my.servers/myservers.cfg',true));
     }
@@ -9,11 +28,17 @@
         'getStarted' => _('Get Started'),
         'signIn' => _('Sign In'),
         'signUp' => _('Sign Up'),
+        'signInUp' => _('Sign In / Up'),
         'signOut' => _('Sign Out'),
         'error' => _('Error'),
         'fixError' => _('Fix Error'),
         'closeLaunchpad' => _('Close Launchpad and continue to webGUI'),
+        'installPlugin' => _('Install Plugin'),
+        'noThanks' => _('No thanks'),
+        'closePromo' => _('Close My Servers details and continue to webGUI'),
+        'promoHeading' => _('Enhance your Unraid experience with these<br> My Servers (BETA) features'),
         'learnMore' => _('Learn more'),
+        'checkoutTheMyServersDocs' => _('Checkout the My Servers docs'),
         'popUp' => _('Pop-up'),
         'close' => _('Close'),
         'backToPopUp' => sprintf(_('Back to %s'), _('Pop-up')),
@@ -37,19 +62,22 @@
         'seconds' => _('seconds'),
         'ago' => _('ago'),
         'basicPlusPro' => [
-          'heading' => _('Thank you for choosing Unraid OS').'!',
+          'heading' => _('Thank you for choosing Unraid OS and My Servers').'!',
           'message' => [
-            'registered' => _('Get started by signing in to Unraid.net'),
-            'upgradeEligible' => _('To support more storage devices as your server grows click Upgrade Key')
-          ]
+            'registered' => _('Connect to My Servers by signing in to Unraid.net'),
+            'upgradeEligible' => _('To support more storage devices as your server grows click Upgrade Key'),
+          ],
         ],
         'actions' => [
           'purchase' => _('Purchase Key'),
           'upgrade' => _('Upgrade Key'),
           'recover' => _('Recover Key'),
           'replace' => _('Replace Key'),
+          'replaceIneligible' => _('Replace Key Ineligible'),
           'extend' => _('Extend Trial'),
+          'startTrial' => _('Start Trial'),
           'signOutUnraidNet' => _('Sign Out of Unraid.net'),
+          'redeemActivationCode' => _('Redeem Activation Code'),
         ],
         'upc' => [
           'avatarAlt' => '{0} '._('Avatar'),
@@ -59,6 +87,15 @@
           'pleaseConfirmClosureYouHaveOpenPopUp' => _('Please confirm closure').'. '._('You have an open pop-up').'.',
           'trialHasExpiredSeeOptions' => _('Trial has expired see options below'),
           'errorCertRequiresSignIn' => _('Sign In before your Unraid.net SSL certificate expires'),
+          'removeMyServersPlugin' => _('Remove My Servers plugin'),
+          'continueUsingMyServers' => _('Continue using My Servers'),
+          'confirmMyServersPluginRemoval' => _('Confirm My Servers plugin removal'),
+          'removingMyServersPlugin' => _('Removing My Servers plugin…'),
+          'enhanceYourExperienceWithMyServers' => _('Enhance your experience with My Servers'),
+          'lanIpCopied' => _('LAN IP Copied'),
+          'installingMyServers' => _('Installing My Servers (beta)'),
+          'thankYouForInstallingMyServers' => _('Thank you installing My Servers') . '!',
+          'connectYourUnraidnetAccountToGetStarted' => _('Connect your Unraid.net account to get started'),
           'noRemoteApikeyRegisteredWithPlg' => [
             'heading' => _('My Servers Error'),
             'msg' => _('Unraid.net re-authentication required'),
@@ -99,6 +136,7 @@
           'myServers' => [
             'heading' => _('My Servers'),
             'beta' => _('beta'),
+            'restarting' => _('Restarting…'),
             'errors' => [
               'unraidApi' => [
                 'heading' => _('Unraid API Error'),
@@ -123,6 +161,11 @@
               'remote' => _('Remote access'),
               'unavailable' => _('Access unavailable'),
             ],
+            'api' => [
+              'start' => _('Restart unraid-api'),
+              'startTitle' => _('Executes `unraid-api start`; no terminal needed'),
+              'stop' => _('Stop unraid-api'),
+            ],
           ],
           'opensNewHttpsWindow' => [
             'base' => sprintf(_('Opens new HTTPS window to %s'), '{0}'),
@@ -140,14 +183,8 @@
         'stateData' => [
           'ENOKEYFILE' => [
             'humanReadable' => _('No Keyfile'),
-            'heading' => [
-              'registered' => _('Thanks for supporting Unraid').'!',
-              'notRegistered' => _("Let's unleash your hardware"),
-            ],
-            'message' => [
-              'registered' => _('You are all set 👍'),
-              'notRegistered' => _('Sign in or sign up to get started'),
-            ],
+            'heading' => _("Let's unleash your hardware").'!',
+            'message' => '<p>'._('Your server will not be usable until you purchase a Registration key or install a free 30-day Trial key').'. '._('A Trial key provides all the functionality of a Pro Registration key').'.</p><p>'._('Registration keys are bound to your USB Flash boot device serial number (GUID)').'. '._('Please use a high quality name brand device at least 1GB in size').'.</p><p>'._('Note: USB memory card readers are generally not supported because most do not present unique serial numbers').'.</p>',
           ],
           'TRIAL' => [
             'humanReadable' => _('Trial'),
@@ -181,6 +218,7 @@
                 'default' => _('The license key file does not correspond to the USB Flash boot device').'. '._('Please copy the correct key file to the */config* directory on your USB Flash boot device or choose Purchase Key').'.',
                 'replacementIneligible' => _('Your Unraid registration key is ineligible for replacement as it has been replaced within the last 12 months').'.',
                 'replacementEligible' => _('The license key file does not correspond to the USB Flash boot device').'. '._('Please copy the correct key file to the */config* directory on your USB Flash boot device or choose Purchase Key or Replace Key').'.',
+                'blacklisted' => _('Your Unraid registration key is ineligible for replacement as it is blacklisted') . '.',
               ],
             ],
           ],
@@ -188,7 +226,7 @@
             'humanReadable' => _('Missing key file'),
             'error' => [
               'heading' => '@:stateData.ENOKEYFILE2.humanReadable',
-              'message' => _('It appears that your license key file is corrupted or missing').". "._('The key file should be located in the */config* directory on your USB Flash boot device').'. '._('If you do not have a backup copy of your license key file you may attempt to recover your key').'. '._('If this was a Trial installation, you may purchase a license key').'.',
+              'message' => _('It appears that your license key file is corrupted or missing').'. '._('The key file should be located in the */config* directory on your USB Flash boot device').'. '._('If you do not have a backup copy of your license key file you may attempt to recover your key').'. '._('If this was a Trial installation, you may purchase a license key').'.',
             ],
           ],
           'ETRIAL' => [
@@ -269,6 +307,7 @@
           'shutDown' => _('Shut Down'),
           'haveAccountSignIn' => _('Already have an account').'? '._('Sign In'),
           'noAccountSignUp' => _('Do not have an account').'? '._('Sign Up'),
+          'willConnectYourServerToMyServers' => _('This will connect your server to My Servers <sup>BETA</sup>'),
           'serverInfo' => [
             'flash' => _('Flash'),
             'product' => _('Product'),
@@ -294,6 +333,7 @@
             'togglePasswordVisibility' => _('Toggle Password Visibility'),
             'message' => _('Message'),
             'confirmPassword' => _('Confirm Password'),
+            'passwordMustMatch' => _('Password confirmation must match'),
             'passwordMinimum' => _('8 or more characters'),
             'comments' => _('comments'),
             'newsletterCopy' => _('Sign me up for the monthly Unraid newsletter').': '._('a digest of recent blog posts, community videos, popular forum threads, product announcements, and more'),
@@ -308,6 +348,7 @@
                 'loading' => _('Extending Trial'),
                 'error' => _('Trial Extension Failed'),
               ],
+              'message' => _('Not ready to purchase?').'<br>'._('Receive an additional 15 days for your trial').'.',
             ],
             'forgotPassword' => [
               'heading' => _('Forgot Password'),
@@ -321,7 +362,6 @@
                 'recover' => _('Unraid.net Sign In to Recover Key'),
                 'replace' => _('Unraid.net Sign In to Replace Key'),
               ],
-              'subheading' => _('Please sign in with your Unraid.net forum account'),
               'form' => [
                 'replacementConditions' => [
                   'name' => _('Acknowledge Replacement Conditions'),
@@ -336,7 +376,6 @@
             ],
             'signUp' => [
               'heading' => _('Create Unraid.net Account'),
-              'subheading' => _('This will start your free 30-day Trial'),
             ],
             'signOut' => [
               'heading' => _('Unraid.net Sign Out'),
@@ -384,7 +423,7 @@
                 'loading' => sprintf(_('Installing %s Key'), '{0}'),
                 'error' => sprintf(_('%s Key Install Error'), '{0}'),
                 'success' => sprintf(_('Installed %s Key'), '{0}'),
-                'manualInstructions' => _("To manually install the key paste the key file url into the Key file URL field on the webGUI Tools > Registration page and then click Install Key") . '.',
+                'manualInstructions' => _('To manually install the key paste the key file url into the Key file URL field on the webGUI Tools > Registration page and then click Install Key') . '.',
                 'copyFail' => _('Unable to copy'),
                 'copySuccess' => _('Copied key url') . '!',
                 'copyButton' => _('Copy Key URL'),
@@ -430,7 +469,7 @@
               'goBack' => _("Have the code now? Go Back"),
               'resend' => _("Resend Code"),
             ],
-            'whatIsUnraidNet' => [
+            'whatIsMyServers' => [
               'heading' => _('What is Unraid.net?'),
               'subheading' => _('Expand your servers capabilities'),
               'copy' => _('With an Unraid.net account you can start using My Servers (beta) which gives you access to the following features:'),
@@ -451,6 +490,16 @@
                   'heading' => _('Registration key management'),
                   'copy' => _('Download any registration key linked to your account').'. '._('Upgrade keys to higher editions').'.',
                 ],
+                'plusMore' => [
+                  'heading' => _('Plus more on the way'),
+                  'copy' => _('All you need is an active internet connection, an Unraid.net account, and the <span>My Servers</span> plugin').'. '._('Get started by installing the plugin') . '.',
+                ],
+              ],
+            ],
+            'replaceKey' => [
+              'subheading' => [
+                'registered' => 'A record of your replacement will be sent to your Unraid.net account email address',
+                'notRegistered' => 'A record of your replacement will be sent to this email',
               ],
             ],
             'notFound' => [
@@ -465,7 +514,12 @@
           'checking' => _('Checking Wan IPs'),
           'match' => sprintf(_('Remark: your WAN IPv4 is **%s**'), '{0}'),
           'mismatch' => sprintf(_("Remark: Unraid's WAN IPv4 **%1s** does not match your client's WAN IPv4 **%2s**"), '{0}', '{1}').'. '._('This may indicate a complex network that will not work with this Remote Access solution').'. '._('Ignore this message if you are currently connected via Remote Access or VPN').'.',
-          'resolveError' => _('DNS issue, unable to resolve wanip.unraid.net'),
+          'resolveError' => _('DNS issue, unable to resolve wanip4.unraid.net'),
+        ],
+        'upcTrigger' => [
+          'upgrade' => _('To support more storage devices as your server grows click the *Open Dropdown* button').'.',
+          'default' => _('Key management is done via the dropdown in the top right of the webGUI on every page').'.',
+          'open' => _('Open Dropdown'),
         ],
       ],
     ];
@@ -476,37 +530,67 @@
       "withdrawn" => 'WITHDRAWN',
     ];
     $nginx = parse_ini_file('/var/local/emhttp/nginx.ini');
+    $plgInstalled = (file_exists('/var/log/plugins/dynamix.unraid.net.plg')
+    ? 'dynamix.unraid.net.plg'
+    : (file_exists('/var/log/plugins/dynamix.unraid.net.staging.plg')
+      ? 'dynamix.unraid.net.staging.plg'
+      : ''));
     $serverstate = [ // feeds server vars to Vuex store in a slightly different array than state.php
-      "avatar" => $remote['avatar'],
+      "avatar" => (!empty($remote['avatar']) && $plgInstalled) ? $remote['avatar'] : '',
       "config" => [
         'valid' => $var['configValid'] === 'yes',
-        'error' => $var['configValid'] !== 'yes' ? (array_key_exists($var['configValid'], $configErrorEnum) ? $configErrorEnum[$var['configValid']] : 'UNKNOWN_ERROR') : null,
+        'error' => $var['configValid'] !== 'yes'
+          ? (array_key_exists($var['configValid'], $configErrorEnum) ? $configErrorEnum[$var['configValid']] : 'UNKNOWN_ERROR')
+          : null,
       ],
       "deviceCount" => $var['deviceCount'],
       "email" => $remote['email'] ?? '',
+      "extraOrigins" => $api['extraOrigins'] ? explode(',', $api['extraOrigins']) : [],
       "flashproduct" => $var['flashProduct'],
       "flashvendor" => $var['flashVendor'],
       "guid" => $var['flashGUID'],
-      'hasUnraidNetSSL' => file_exists('/boot/config/ssl/certs/certificate_bundle.pem') ? preg_match('/.*\.unraid\.net$/', $_SERVER['SERVER_NAME']) : 0, // required for boolean to check if user has unraid.net Let's Encrypt cert. Using for a less expensive check w/ $_SERVER['SERVER_NAME'] compared to reading cert file contents on every page load
+      "hasRemoteApikey" => !empty($remote['apikey']),
       "internalip" => ipaddr(),
       "internalport" => $_SERVER['SERVER_PORT'],
       "keyfile" => str_replace(['+','/','='], ['-','_',''], trim(base64_encode(@file_get_contents($var['regFILE'])))),
       "osVersion" => $var['version'],
-      "plgVersion" => 'base-'.$var['version'],
+      "plgVersion" => $plgversion = file_exists('/var/log/plugins/dynamix.unraid.net.plg')
+        ? trim(@exec('/usr/local/sbin/plugin version /var/log/plugins/dynamix.unraid.net.plg 2>/dev/null'))
+        : ( file_exists('/var/log/plugins/dynamix.unraid.net.staging.plg')
+            ? trim(@exec('/usr/local/sbin/plugin version /var/log/plugins/dynamix.unraid.net.staging.plg 2>/dev/null'))
+            : 'base-'.$var['version'] ),
+      "plgInstalled" => $plgInstalled,
       "protocol" => $_SERVER['REQUEST_SCHEME'],
       "reggen" => (int)$var['regGen'],
       "regGuid" => $var['regGUID'],
-      "registered" => !empty($remote['username']),
+      "registered" => (!empty($remote['username']) && $plgInstalled),
       "servername" => $var['NAME'],
       "site" => $_SERVER['REQUEST_SCHEME']."://".$_SERVER['HTTP_HOST'],
       "state" => strtoupper(empty($var['regCheck']) ? $var['regTy'] : $var['regCheck']),
       "ts" => time(),
-      "username" => $remote['username'],
+      "username" => (!empty($remote['username']) && $plgInstalled) ? $remote['username'] : '',
       "wanFQDN" => $nginx['NGINX_WANFQDN'] ?? '',
     ];
+    /** @TODO - prop refactor needed. The issue is because the prop names share the same name as the vuex store variables
+     * if we remove the props and deployed a UPC that doesn't rely on props anymore uses that don't have an updated version
+     * of this file will have a non-working UPC.
+     * apikey
+     * apiVersion
+     * csrf
+     * expiretime
+     * hideMyServers
+     * plgPath
+     * regWizTime
+     * sendCrashInfo
+     * serverdesc
+     * servermodel
+     * serverupdate
+     * uptime
+    */
     ?>
     <unraid-user-profile
-      apikey="<?=@$upc['apikey']?>"
+      apikey="<?=$upc['apikey'] ?? ''?>"
+      api-version="<?=$api['version'] ?? ''?>"
       banner="<?=$display['banner'] ?? ''?>"
       bgcolor="<?=($backgnd) ? '#'.$backgnd : ''?>"
       csrf="<?=$var['csrf_token']?>"

@@ -83,6 +83,13 @@ $(document).ajaxSend(function(elm, xhr, s){
     s.data += "csrf_token=<?=$var['csrf_token']?>";
   }
 });
+/**
+ * If we have a sessionStorage item for hiding the UPC's 'lets unleash your hardware' overlay for ENOKEYFILE state users
+ * this will remove the item so that if the user reboots their server the overlay will display again once the server comes back up.
+ */
+const serverName = '<?= $var['NAME'] ?>';
+const guid = '<?= $var['flashGUID'] ?>';
+sessionStorage.removeItem(`${serverName}_${guid ? guid.slice(-12) : 'NO_GUID'}`);
 </script>
 </head>
 <?

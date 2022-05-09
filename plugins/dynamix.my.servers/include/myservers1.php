@@ -19,7 +19,8 @@ unraid-user-profile {
   height: 100%;
 }
 
-unraid-launchpad {
+unraid-launchpad,
+unraid-promo {
   position: relative;
   z-index: 10001;
 }
@@ -44,7 +45,7 @@ if (!file_exists('/usr/local/sbin/unraid-api')) { // When NOT using the plugin w
 } else { // When PLG exists load from local when not signed in but when signed in load UPC from production.
   $UPC_ENV = $UPC_ENV_CK ?? ((empty($remote['username']) || empty($var['regFILE'])) ? 'local' : 'production');
 }
-$upcLocalSrc = '/plugins/dynamix.my.servers/webComps/unraid.min.js'; // @NOTE - that using autov(); would render the file name below the body tag. So dont use it :(
+$upcLocalSrc = autov('/plugins/dynamix.my.servers/webComps/unraid.min.js', true);
 switch ($UPC_ENV) {
   case 'production':
     $upcSrc = 'https://registration.unraid.net/webComps/unraid.min.js';
@@ -74,7 +75,7 @@ setTimeout(() => {
     console.log('[UPC] Fallback to filesystem src 😖');
     const el = document.createElement('script');
     el.type = 'text/javascript';
-    el.src = '<?autov($upcLocalSrc) ?>';
+    el.src = '<?=$upcLocalSrc?>';
     document.head.appendChild(el);
     return upcEnv('local', false, true); // set session cookie to prevent delayed loads of UPC
   }

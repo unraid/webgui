@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -11,9 +11,15 @@
  */
 ?>
 <?
+// start new session as required
 if (session_status()==PHP_SESSION_NONE && !isset($login_locale)) {
   session_start();
   session_write_close();
+}
+// remove empty and temporary session files
+$session = '/var/lib/php/sess_'.session_id();
+if (file_exists($session)) {
+  if (filesize($session)===0 || (count($_SESSION??[])==1 && isset($_SESSION['locale']))) unlink($session);
 }
 require_once "$docroot/webGui/include/Markdown.php";
 
