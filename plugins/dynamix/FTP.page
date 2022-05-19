@@ -21,6 +21,8 @@ Tag="globe"
 $user_config_dir = "/boot/config/vsftpd.user_config_dir";
 $is_ftp_server_running = exec("lsof -i:21 -Pln|awk '/\(LISTEN\)/{print $2;exit}'") ? 1 : 0;
 $is_ftp_syslog_enabled = preg_match('/syslog_enable\s*=\s*yes/i', exec("grep syslog_enable /etc/vsftpd.conf"));
+$pasv_min_port = exec("grep pasv_min_port /etc/vsftpd.conf | awk -F '=' '{print $2}'");
+$pasv_max_port = exec("grep pasv_max_port /etc/vsftpd.conf | awk -F '=' '{print $2}'");
 ?>
 
 <script>
@@ -65,6 +67,16 @@ _(Log to Syslog)_:
   </select>
 
 :ftp_syslog_enable_help:
+
+_(PASV Min Port)_:
+: <input class='narrow' type="number" name="#arg[3]" min='1' max='65535' value='<?= $pasv_min_port ?>'>
+
+:ftp_pasv_min_port_help:
+
+_(PASV Max Port)_:
+: <input class='narrow' type="number" name="#arg[4]" min='1' max='65535' value='<?= $pasv_max_port ?>'>
+
+:ftp_pasv_max_port_help:
 
 &nbsp;
 : <input type="submit" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">

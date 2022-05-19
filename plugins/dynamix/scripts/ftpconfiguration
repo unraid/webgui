@@ -1,8 +1,13 @@
 #!/usr/bin/php -q
 <?php
-// usage: ftpconfiguration [enable = 0|1] [syslog_enable = 0|1]
+// usage: ftpconfiguration [enable = 0|1] [syslog_enable = 0|1] [pasv_min_port] [pasv_max_port]
 // enable: 0 = disable, 1 = enable FTP server daemon
 // syslog_enable: 0 = disable, 1 = enable logging to syslog
+// pasv_min_port: http://vsftpd.beasts.org/vsftpd_conf.html
+// pasv_max_port: http://vsftpd.beasts.org/vsftpd_conf.html
+
+$pasv_min_port = $argv[3];
+$pasv_max_port = $argv[4];
 
 // enable or disable listening on port 21 for FTP
 $ftp_state = $argv[1] ? "'s/^#\(ftp.*vsftpd\)\$/\\1/'" : "'s/^\(ftp.*vsftpd\)\$/#\\1/'";
@@ -11,6 +16,15 @@ exec("sed -i $ftp_state /etc/inetd.conf");
 // enable or disable syslog logging for vsftpd
 $syslog_enable_state = $argv[2] ? "'s/syslog_enable\s*=\s*no/syslog_enable=YES/i'" : "'s/syslog_enable\s*=\s*yes/syslog_enable=NO/i'";
 exec("sed -i -e $syslog_enable_state /etc/vsftpd.conf");
+
+exec("sed -i '/^pasv_min_port/d' /etc/vsftpd.conf");
+exec("sed -i '/^pasv_max_port/d' /etc/vsftpd.conf");
+
+if($pasv_min_port !== "" && $pasv_max_port !== "")
+{
+    exec("echo 'pasv_min_port=$pasv_min_port' >> /etc/vsftpd.conf");
+    exec("echo 'pasv_max_port=$pasv_max_port' >> /etc/vsftpd.conf");
+}
 
 // restart inetd to implement the changes
 exec("killall -HUP inetd");
