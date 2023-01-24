@@ -257,7 +257,7 @@ class DockerTemplates {
 		}
 		return null;
 	}
-	
+
 	public function getUserTemplate($Container) {
 		foreach ($this->getTemplates('user') as $file) {
 			$doc = new DOMDocument('1.0', 'utf-8');
@@ -347,7 +347,7 @@ class DockerTemplates {
 		$imageName = $contName ?: $name;
 		$iconRAM = sprintf('%s/%s-%s.png', $dockerManPaths['images-ram'], $contName, 'icon');
 		$icon    = sprintf('%s/%s-%s.png', $dockerManPaths['images'], $contName, 'icon');
-		
+
 		if (!is_dir(dirname($iconRAM))) mkdir(dirname($iconRAM), 0755, true);
 		if (!is_dir(dirname($icon))) mkdir(dirname($icon), 0755, true);
 
@@ -445,7 +445,15 @@ class DockerUpdate{
 		/*
 		 * Step 2: Get www-authenticate header from manifest url to generate token or basic auth
 		 */
-		$header = ['Accept: application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json'];
+		$header = ['Accept: '.implode(',', [
+			// https://github.com/opencontainers/image-spec/blob/main/image-index.md
+			'application/vnd.oci.image.index.v1+json',
+			'application/vnd.oci.image.manifest.v1+json',
+			// https://docs.docker.com/registry/spec/manifest-v2-2/
+			'application/vnd.docker.distribution.manifest.v1+json',
+			'application/vnd.docker.distribution.manifest.v2+json',
+			'application/vnd.docker.distribution.manifest.list.v2+json',
+		])];
 		$digest_ch = getCurlHandle($manifestURL, 'HEAD', $header);
 		preg_match('@www-authenticate:\s*Bearer\s*(.*)@i', $reply, $matches);
 		if (!empty($matches[1])) {
@@ -562,7 +570,7 @@ class DockerUpdate{
 	public function updateUserTemplate($Container) {
 		// Don't update templates, but leave code in place for future reference
 		return;
-				
+
 		$changed = false;
 		$DockerTemplates = new DockerTemplates();
 		$validElements = ['Support', 'Overview', 'Category', 'Project', 'Icon', 'ReadMe'];
@@ -867,7 +875,7 @@ class DockerClient {
 		}
 		[$ret['username'], $ret['password']] = array_pad(explode(':', base64_decode($dockerConfig['auths'][ $configKey ]['auth'])),2,'');
 
-		return $ret; 
+		return $ret;
 	}
 
 	public function removeImage($id) {
