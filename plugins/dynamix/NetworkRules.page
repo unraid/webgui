@@ -4,8 +4,8 @@ Tag="icon-network"
 Cond="file_exists('/boot/config/network-rules.cfg')"
 ---
 <?PHP
-/* Copyright 2021, Lime Technology
- * Copyright 2021, Bergware International.
+/* Copyright 2023, Lime Technology
+ * Copyright 2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -73,7 +73,7 @@ function toggleRules() {
   $(view).toggle('slow');
 }
 $(function(){
-  $('div#title').eq(-2).find('span.left').append("<span class='status vhshift'><i id='tag_rules' class='fa fa-fw fa-chevron-up' style='cursor:pointer' onclick='toggleRules()'></i></span>");
+  $('div.title').eq(-2).find('span.left').append("<span class='status vhshift'><i id='tag_rules' class='fa fa-fw fa-chevron-up' style='cursor:pointer' onclick='toggleRules()'></i></span>");
   if (!$.cookie('#rules_table')) $('#rules_table').show(); else {$('#rules_table').hide(); $('#tag_rules').removeClass('fa-chevron-up').addClass('fa-chevron-down');}
 });
 <?else:?>

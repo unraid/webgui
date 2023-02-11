@@ -24,7 +24,7 @@ if (!empty($_POST['password']) && !empty($_POST['confirmPassword'])) {
     $result = exec("/usr/local/sbin/emcmd 'cmdUserEdit=Change&userName=$userName&userPassword=$userPassword'");
     if ($result == 0) {
         // PAM service will log to syslog: "password changed for root"
-        session_start();
+        if (session_status()==PHP_SESSION_NONE) session_start();
         $_SESSION['unraid_login'] = time();
         $_SESSION['unraid_user'] = 'root';
         session_regenerate_id(true);
@@ -59,19 +59,17 @@ $THEME_DARK = in_array($display['theme'],['black','gray']);
     <style>
     /************************
     /
-    /  Fonts: original font-family names are kept for backward compatibility
-    /   clear-sans --> source-sans-pro
-    /   bitstream  --> source-code-pro
+    /  Fonts
     /
     /************************/
-    @font-face{font-family:clear-sans;font-weight:normal;font-style:normal; src:url('/webGui/styles/clear-sans.woff2?20220507') format('woff2'),url('/webGui/styles/clear-sans.woff?20220507') format('woff');}
-    @font-face{font-family:clear-sans;font-weight:bold;font-style:normal; src:url('/webGui/styles/clear-sans-bold.woff2?20220507') format('woff2'),url('/webGui/styles/clear-sans-bold.woff?20220507') format('woff');}
-    @font-face{font-family:clear-sans;font-weight:normal;font-style:italic; src:url('/webGui/styles/clear-sans-italic.woff2?20220507') format('woff2'),url('/webGui/styles/clear-sans-italic.woff?20220507') format('woff');}
-    @font-face{font-family:clear-sans;font-weight:bold;font-style:italic; src:url('/webGui/styles/clear-sans-bold-italic.woff2?20220507') format('woff2'),url('/webGui/styles/clear-sans-bold-italic.woff?20220507') format('woff');}
-    @font-face{font-family:bitstream;font-weight:normal;font-style:normal; src:url('/webGui/styles/bitstream.woff2?20220507') format('woff2'),url('/webGui/styles/bitstream.woff?20220507') format('woff');}
-    @font-face{font-family:bitstream;font-weight:bold;font-style:normal; src:url('/webGui/styles/bitstream-bold.woff2?20220507') format('woff2'),url('/webGui/styles/bitstream-bold.woff?20220507') format('woff');}
-    @font-face{font-family:bitstream;font-weight:normal;font-style:italic; src:url('/webGui/styles/bitstream-italic.woff2?20220507') format('woff2'),url('/webGui/styles/bitstream-italic.woff?20220507') format('woff');}
-    @font-face{font-family:bitstream;font-weight:bold;font-style:italic; src:url('/webGui/styles/bitstream-bold-italic.woff2?20220507') format('woff2'),url('/webGui/styles/bitstream-bold-italic.woff?20220507') format('woff');}
+    @font-face{font-family:clear-sans;font-weight:normal;font-style:normal; src:url('/webGui/styles/clear-sans.woff?v=20220513') format('woff')}
+    @font-face{font-family:clear-sans;font-weight:bold;font-style:normal; src:url('/webGui/styles/clear-sans-bold.woff?v=20220513') format('woff')}
+    @font-face{font-family:clear-sans;font-weight:normal;font-style:italic; src:url('/webGui/styles/clear-sans-italic.woff?v=20220513') format('woff')}
+    @font-face{font-family:clear-sans;font-weight:bold;font-style:italic; src:url('/webGui/styles/clear-sans-bold-italic.woff?v=20220513') format('woff')}
+    @font-face{font-family:bitstream;font-weight:normal;font-style:normal; src:url('/webGui/styles/bitstream.woff?v=20220513') format('woff')}
+    @font-face{font-family:bitstream;font-weight:bold;font-style:normal; src:url('/webGui/styles/bitstream-bold.woff?v=20220513') format('woff')}
+    @font-face{font-family:bitstream;font-weight:normal;font-style:italic; src:url('/webGui/styles/bitstream-italic.woff?v=20220513') format('woff')}
+    @font-face{font-family:bitstream;font-weight:bold;font-style:italic; src:url('/webGui/styles/bitstream-bold-italic.woff?v=20220513') format('woff')}
 
     /************************
     /

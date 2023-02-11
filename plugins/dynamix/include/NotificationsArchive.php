@@ -21,7 +21,7 @@ require_once "$docroot/webGui/include/Wrappers.php";
 $dynamix = parse_plugin_cfg('dynamix',true);
 $filter = unscript($_GET['filter']??'');
 $files = glob("{$dynamix['notify']['path']}/archive/*.notify", GLOB_NOSORT);
-usort($files, create_function('$a,$b', 'return filemtime($b)-filemtime($a);'));
+usort($files, function($a,$b){return filemtime($b)-filemtime($a);});
 
 $row = 1; $empty = true;
 foreach ($files as $file) {

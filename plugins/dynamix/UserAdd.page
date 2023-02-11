@@ -35,7 +35,6 @@ i#showPass.checked{opacity:0.5}
 </style>
 
 <script src="<?autov('/webGui/javascript/jquery.filedrop.js')?>"></script>
-<script src="<?autov('/webGui/javascript/jquery.base64.js')?>"></script>
 <?if ($zxcvbn):?>
 <script src="<?autov('/boot/config/plugins/dynamix/zxcvbn.js')?>" async></script>
 <?endif;?>
@@ -43,6 +42,9 @@ i#showPass.checked{opacity:0.5}
 var path = '/boot/config/plugins/dynamix/users';
 var filename = '';
 
+function base64(str) {
+  return window.btoa(unescape(encodeURIComponent(str)));
+}
 function showPassword() {
   if ($('#showPass').hasClass('checked')) {
     $('#showPass').removeClass('checked fa-eye-slash').addClass('fa-eye');

@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -23,13 +23,27 @@ $system  = unscript($_GET['system']??'');
 $branch  = unscript($_GET['branch']??'');
 $audit   = unscript($_GET['audit']??'');
 $check   = unscript($_GET['check']??'');
+$cmd     = unscript($_GET['cmd']??'');
 $init    = unscript($_GET['init']??'');
 $empty   = true;
 $install = false;
 $updates = 0;
+$alerts  = '/tmp/plugins/my_alerts.txt';
 $builtin = ['unRAIDServer'];
 $plugins = "/var/log/plugins/*.plg";
 $ncsi    = null; // network connection status indicator
+
+if ($cmd=='alert') {
+  // signal alert message yer or no
+  echo is_file($alerts) ? 1 : 0;
+  die();
+}
+
+if ($cmd=='pending') {
+  // prepare pending status for multi operations
+  foreach (explode('*',$_GET['plugin']) as $plugin) file_put_contents("/tmp/plugins/pluginPending/$plugin",'multi');
+  die();
+}
 
 if ($audit) {
   [$plg,$action] = my_explode(':',$audit);
@@ -41,6 +55,7 @@ if ($audit) {
   }
 }
 
+delete_file($alerts);
 foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
   //only consider symlinks
   $plugin_file = @readlink($plugin_link);
@@ -82,13 +97,13 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
     //support
     $support = plugin('support',$plugin_file) ?: "";
     $support = $support ? "<a href='$support' target='_blank'>"._('Support Thread')."</a>" : "";
-    //category
-    $category = plugin('category',$plugin_file) ?: (strpos($version,'-')!==false ? 'next' : 'stable');
     //author
     $author = plugin('author',$plugin_file) ?: _('anonymous');
     //version
     $version = plugin('version',$plugin_file) ?: _('unknown');
     $date = str_replace('.','',$version);
+    //category
+    $category = plugin('category',$plugin_file) ?: (strpos($version,'-')!==false ? 'next' : 'stable');
     //status
     $status = $check ? _('unknown') : _('checking').'...';
     $id = str_replace('.','-',$name);
@@ -123,7 +138,8 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
       copy($plugin_file,$tmp_file);
       exec("sed -ri 's|^(<!ENTITY category).*|\\1 \"{$branch}\">|' $tmp_file");
       symlink($tmp_file,"/var/log/plugins/$tmp_plg");
-      $next = end(explode("\n",check_plugin($tmp_plg,$ncsi)));
+      $next = array_filter(explode("\n",check_plugin($tmp_plg,$ncsi)),function($row){return is_numeric($row[0]);});
+      $next = end($next);
       if (version_compare($next,$past,'>')) {
         copy("/tmp/plugins/$tmp_plg",$tmp_file);
         $plugin_file = $tmp_file;
@@ -161,11 +177,14 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
     elseif ($status=='need check') $rank = '2';
     elseif ($status=='up-to-date') $rank = '3';
     else $rank = '4';
-    $changes = plugin('changes',$changes_file);
-    if ($changes !== false) {
+    if (($changes = plugin('changes',$changes_file)) !== false) {
       $txtfile = "/tmp/plugins/".basename($plugin_file,'.plg').".txt";
       file_put_contents($txtfile,$changes);
-      $version .= "&nbsp;<a href='#' title=\""._('View Release Notes')."\" onclick=\"openBox('/plugins/dynamix.plugin.manager/include/ShowChanges.php?file=".urlencode($txtfile)."','"._('Release Notes')."',600,900); return false\"><span class='fa fa-info-circle fa-fw big blue-text'></span></a>";
+      $version .= "&nbsp;<span class='fa fa-info-circle fa-fw big blue-text' title='"._('View Release Notes')."' onclick=\"openChanges('showchanges $txtfile','"._('Release Notes')."')\"></span>";
+    }
+    if ($rank < 2 && ($alert = plugin('alert',$changes_file)) !== false) {
+      // generate alert message (if existing) when newer version is available
+      file_put_contents($alerts,($os ? "" : "## $name\n\n").$alert."\n\n",FILE_APPEND);
     }
     //write plugin information
     $empty = false;

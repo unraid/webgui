@@ -44,7 +44,6 @@ i#showPass.checked{opacity:0.5}
 </style>
 
 <script src="<?autov('/webGui/javascript/jquery.filedrop.js')?>"></script>
-<script src="<?autov('/webGui/javascript/jquery.base64.js')?>"></script>
 <?if ($zxcvbn):?>
 <script src="<?autov('/boot/config/plugins/dynamix/zxcvbn.js')?>" async></script>
 <?endif;?>
@@ -52,6 +51,9 @@ i#showPass.checked{opacity:0.5}
 var path = '/boot/config/plugins/dynamix/users';
 var filename = '';
 
+function base64(str) {
+  return window.btoa(unescape(encodeURIComponent(str)));
+}
 function showPassword() {
   if ($('#showPass').hasClass('checked')) {
     $('#showPass').removeClass('checked fa-eye-slash').addClass('fa-eye');
@@ -116,10 +118,8 @@ function checkKey(form) {
   // check syntax of ssh keys
   var rows = form.text.value.split('\n');
   for (var i=0,row; row=rows[i]; i++) {
-    var data = row.split(' ');
-    // key must have 3 fields, starts with ssh or ecdsa, and is for user
-    if (data.length!=3 || data[0].search(/^(ssh|ecdsa)/)==-1 || data[2].search('@')==-1) {
-      swal({title:"_(Invalid Key)_",text:"["+(i+1)+"] "+data[0].substr(0,10)+": _(Syntax of the key is incorrect)_!",type:"error",html:true,confirmButtonText:"_(Ok)_"});
+    if (row.search(/^(ssh-ed25519 AAAAC3NzaC1lZDI1NTE5|sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29t|ssh-rsa AAAAB3NzaC1yc2)[0-9A-Za-z+/]+[=]{0,3}(\s.*)?$/)==-1) {
+      swal({title:"_(Invalid Key)_",text:"["+(i+1)+"] "+row.split(' ')[0]+": _(Syntax of the key is incorrect)_!",type:"error",html:true,confirmButtonText:"_(Ok)_"});
       return false;
     }
   }

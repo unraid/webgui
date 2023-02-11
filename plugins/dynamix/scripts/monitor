@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2022, Lime Technology
- * Copyright 2012-2022, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -18,10 +18,12 @@ $docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 if (!function_exists('_')) {
   function _($text) {return $text;}
 }
+// Exit when settings are not yet initialized
+if (!file_exists("/var/local/emhttp/var.ini")) exit;
 
-$var   = parse_ini_file("/var/local/emhttp/var.ini");
-$devs  = parse_ini_file("/var/local/emhttp/devs.ini",true);
-$disks = parse_ini_file("/var/local/emhttp/disks.ini",true);
+$var   = (array)parse_ini_file("/var/local/emhttp/var.ini");
+$devs  = (array)parse_ini_file("/var/local/emhttp/devs.ini",true);
+$disks = (array)parse_ini_file("/var/local/emhttp/disks.ini",true);
 
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/Preselect.php";
@@ -44,8 +46,8 @@ function check_temp(&$disk,$text,$info) {
   global $notify,$saved,$server,$display,$top;
   $name = $disk['name'];
   $temp = $disk['temp'];
-  $hot  = $disk['hotTemp'] ?? $display['hot'];
-  $max  = $disk['maxTemp'] ?? $display['max'];
+  $hot  = $disk['hotTemp'] ?? $display['hot'] ?? 0;
+  $max  = $disk['maxTemp'] ?? $display['max'] ?? 0;
   $warn = exceed($temp,$max,$top) ? 'alert' : (exceed($temp,$hot,$top) ? 'warning' : false);
   $item = 'temp';
   $last = $saved[$item][$name] ?? 0;
@@ -74,7 +76,7 @@ function check_smart(&$disk,$port,$text,$info) {
   $item = 'smart';
   foreach ($codes as $code) {
     if (!$code || !is_numeric($code[0])) continue;
-    [$id,$class,$value,$thres,$when,$raw] = explode(' ',$code);
+    [$id,$class,$value,$thres,$when,$raw] = my_explode(' ',$code,7);
     $fail = strpos($when,'FAILING_NOW')!==false;
     if (!$fail && !in_array($id,$events)) continue;
     $word = str_replace(['_',' (-)'],[' ',''],strtolower("$class ($when)"));
@@ -98,7 +100,7 @@ function check_smart(&$disk,$port,$text,$info) {
       }
       break;
     case 1:
-      $attr = "$name.${id}n";
+      $attr = "$name.{$id}n";
       $last = $saved[$item][$attr] ?? 255;
       if (($thres>0 && $value<=$thres*$level) || $fail) {
         if ($value*($value>$thres?$level:1)<$last) {
@@ -128,7 +130,7 @@ function check_usage(&$disk,$used,$text,$info) {
   $last = $saved[$item][$name] ?? 0;
   if ($warn) {
     if ($used>$last) {
-      exec("$notify -l '/Main' -e ".escapeshellarg("Unraid $text disk utilization")." -s ".escapeshellarg(ucfirst($warn)." [$server] - $text is ".($warn=='alert'?'low on space':'high on usage')." (${used}%)")." -d ".escapeshellarg("$info")." -i \"$warn\" 2>/dev/null");
+      exec("$notify -l '/Main' -e ".escapeshellarg("Unraid $text disk utilization")." -s ".escapeshellarg(ucfirst($warn)." [$server] - $text is ".($warn=='alert'?'low on space':'high on usage')." ({$used}%)")." -d ".escapeshellarg("$info")." -i \"$warn\" 2>/dev/null");
       $saved[$item][$name] = max($critical,$used);
     }
   } else {
@@ -186,7 +188,7 @@ foreach ($disks as $disk) {
   if ($disk['numErrors']>0) $errors[] = "$text - $info (errors {$disk['numErrors']})";
 // check file system of cache pool
   $item = 'pool';
-  if (in_array($name,$pools) && strpos($disk['fsType'],'btrfs')!==false) {
+  if (in_array($name,$pools) && strpos($disk['fsType']??'','btrfs')!==false) {
     $attr = 'missing';
     if (exec("/sbin/btrfs filesystem show {$disk['uuid']} 2>/dev/null|grep -c 'missing'")>0) {
       if (empty($saved[$item][$attr])) {
@@ -294,12 +296,12 @@ if ($retval===0 && exec("df /var/lib/docker|grep -Po '^/dev/\Kloop'")) {
   $warn = exec("df /var/lib/docker|awk '/^\//{print $5*1}'");
   if ($warn>=$high1 && $high1>0) {
     if ($warn>$last) {
-      exec("$notify -l '/Docker' -e \"Docker critical image disk utilization\" -s ".escapeshellarg("Alert [$server] - Docker image disk utilization of ${warn}%")." -d ".escapeshellarg("$info")." -i \"alert\" 2>/dev/null");
+      exec("$notify -l '/Docker' -e \"Docker critical image disk utilization\" -s ".escapeshellarg("Alert [$server] - Docker image disk utilization of {$warn}%")." -d ".escapeshellarg("$info")." -i \"alert\" 2>/dev/null");
       $saved[$item][$name] = $warn;
     }
   } elseif ($warn>=$high2 && $high2>0) {
     if ($warn>$last) {
-      exec("$notify -l '/Docker' -e \"Docker high image disk utilization\" -s ".escapeshellarg("Warning [$server] - Docker image disk utilization of ${warn}%")." -d ".escapeshellarg("$info")." -i \"warning\" 2>/dev/null");
+      exec("$notify -l '/Docker' -e \"Docker high image disk utilization\" -s ".escapeshellarg("Warning [$server] - Docker image disk utilization of {$warn}%")." -d ".escapeshellarg("$info")." -i \"warning\" 2>/dev/null");
       $saved[$item][$name] = $warn;
     }
   } else {

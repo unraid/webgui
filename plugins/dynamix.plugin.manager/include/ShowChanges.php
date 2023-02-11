@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -18,6 +18,9 @@ require_once "$docroot/webGui/include/Translations.php";
 
 require_once "$docroot/webGui/include/Helpers.php";
 extract(parse_plugin_cfg('dynamix',true));
+
+$valid = ['/var/tmp/','/tmp/plugins/'];
+$good  = false;
 ?>
 <!DOCTYPE HTML>
 <html <?=$display['rtl']?>lang="<?=strtok($locale,'_')?:'en'?>">
@@ -26,7 +29,7 @@ extract(parse_plugin_cfg('dynamix',true));
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta http-equiv="Content-Security-Policy" content="block-all-mixed-content">
 <meta name="format-detection" content="telephone=no">
-<meta name="viewport" content="width=1600">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="same-origin">
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/default-fonts.css")?>">
@@ -34,10 +37,12 @@ extract(parse_plugin_cfg('dynamix',true));
 </head>
 <body style="margin:14px 10px">
 <?
-$file = unscript($_GET['file']??'');
-$tmp = unscript($_GET['tmp']??'') ? '/var/tmp' : '/tmp/plugins/';
-
-if (file_exists($file) && strpos(realpath($file),$tmp)===0 && substr($file,-4)=='.txt') echo Markdown(file_get_contents($file)); else echo Markdown("*"._('No release notes available')."!*");
+if ($file = realpath(unscript($_GET['file']??''))) {
+  foreach ($valid as $check) if (strncmp($file,$check,strlen($check))===0) $good = true;
+  if ($good && pathinfo($file)['extension']=='txt') echo Markdown(file_get_contents($file));
+} else {
+  echo Markdown("*"._('No release notes available')."!*");
+}
 ?>
 <br><div style="text-align:center"><input type="button" value="<?=_('Done')?>" onclick="top.Shadowbox.close()"></div>
 </body>

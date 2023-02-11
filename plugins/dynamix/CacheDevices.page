@@ -28,7 +28,7 @@ table.divider{margin-top:20px}
 </style>
 <script>
 function validate(poolname) {
-  var valid = /^[a-z_]([a-z0-9_-]*[a-z_])*$/;
+  var valid = /^[a-z]([a-z0-9_-]*[a-z_-])*$/;
   var reserved = [<?=implode(',',array_map('escapestring',explode(',',$var['reservedNames'])))?>];
   var shares = [<?=implode(',',array_map('escapestring',array_filter(array_map('sharename',scandir('boot/config/shares')))))?>];
   var pools = [<?=implode(',',array_map('escapestring',$pools))?>];
@@ -90,7 +90,7 @@ $('#tab2').bind({click:function() {$('i.toggle').show('slow');}});
 <?foreach ($pools as $pool):?>
 <?if (isset($disks[$pool]['devices']) || $var['fsState']=='Stopped'):?>
 <table class="disk_status wide<?=$i?' divider':''?>">
-<thead><tr><td>_(Device)_</td><td>_(Identification)_</td><td>_(Temp)_.</td><td>_(Reads)_</td><td>_(Writes)_</td><td>_(Errors)_</td><td>_(FS)_</td><td>_(Size)_</td><td>_(Used)_</td><td>_(Free)_</td><td>_(View)_</td></tr></thead>
+<thead><tr><td>_(Device)_</td><td>_(Identification)_</td><td>_(Temp)_.</td><td>_(Reads)_</td><td>_(Writes)_</td><td>_(Errors)_</td><td>_(FS)_</td><td>_(Size)_</td><td>_(Used)_</td><td>_(Free)_</td></tr></thead>
 <tbody id="pool_device<?=$i++?>">
 <?foreach (cache_filter($disks) as $disk) if (prefix($disk['name'])==$pool) echo "<tr><td colspan='11'>&nbsp;</td></tr>"?>
 </tbody>

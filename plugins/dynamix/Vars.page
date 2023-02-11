@@ -4,8 +4,8 @@ Icon="icon-vars"
 Tag="code"
 ---
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -28,8 +28,9 @@ $(function() {
 <?endif;?>
 <?
 $myPage['text'] = $page['text'] = $pages['Vars']['text'] = $language = $text = $notes = $site = '...';
-ksort($GLOBALS);
-if (isset($GLOBALS['_SERVER']['PHP_AUTH_PW'])) $GLOBALS['_SERVER']['PHP_AUTH_PW'] = "***";
-echo ($display['resize'] ? "<pre class='up' style='display:none'>" : "<pre class='up'>").htmlspecialchars(print_r($GLOBALS,true))."</pre>";
+$globals = $GLOBALS;
+ksort($globals);
+if (isset($globals['_SERVER']['PHP_AUTH_PW'])) $globals['_SERVER']['PHP_AUTH_PW'] = "***";
+echo ($display['resize'] ? "<pre class='up' style='display:none'>" : "<pre class='up'>").htmlspecialchars(print_r($globals,true))."</pre>";
 ?>
 <input type="button" value="_(Done)_" onclick="done()">

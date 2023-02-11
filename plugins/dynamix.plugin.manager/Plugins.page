@@ -6,8 +6,8 @@ Tabs="true"
 Code="e944"
 ---
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -18,8 +18,10 @@ Code="e944"
  */
 ?>
 <?
-// Remove stale /tmp/plugin/*.plg entries
-foreach (glob("/tmp/plugins/*.{plg,txt}", GLOB_NOSORT+GLOB_BRACE) as $entry) if (!file_exists("/var/log/plugins/".basename($entry))) @unlink($entry);
+// Remove stale /tmp/plugin/*.plg entries (check that script 'plugin' is not running to avoid clashes)
+if (!exec("pgrep -f $docroot/plugins/dynamix.plugin.manager/scripts/plugin")) {
+  foreach (glob("/tmp/plugins/*.{plg,txt}", GLOB_NOSORT+GLOB_BRACE) as $entry) if (!file_exists("/var/log/plugins/".basename($entry))) @unlink($entry);
+}
 $check = $notify['version'] ? 0 : 1;
 ?>
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.filetree.css')?>">
@@ -27,8 +29,30 @@ $check = $notify['version'] ? 0 : 1;
 #plugin_tree{width:33%;height:200px;overflow-y:scroll}
 table tbody td{line-height:normal}
 </style>
+
 <script src="<?autov('/webGui/javascript/jquery.filetree.js')?>" charset="utf-8"></script>
 <script>
+const args = {};
+
+function openInstall(cmd,title,plg,func) {
+  if (cmd == null) {
+    openPlugin(args.cmd,args.title,args.plg,args.func,1);
+    return;
+  }
+  args.cmd = cmd;
+  args.title = title;
+  args.plg = plg;
+  args.func = func;
+  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{cmd:'alert'},function(data) {
+    if (data==0) {
+      // no alert message - proceed with update
+      setTimeout(openInstall);
+    } else {
+      // show alert message and ask for confirmation
+      openAlert("showchanges <?=$alerts?>","_(Alert Message)_",'openInstall');
+    }
+  });
+}
 <?if ($display['resize']):?>
 function resize(bind) {
   var width = [];
@@ -42,6 +66,27 @@ function resize(bind) {
   }
 }
 <?endif;?>
+function multiRemove() {
+  if ($('input.remove:checked').length > 1) $('#removeall').show(); else $('#removeall').hide();
+}
+function updateList() {
+  var plugin = [];
+  $('input.update').each(function(){plugin.push($(this).attr('data'));});
+  var plugins = plugin.join('*');
+  $('#updateall').hide();
+  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{cmd:'pending',plugin:plugins},function() {
+    openPlugin("multiplugin update "+plugins,"_(Update All Plugins)_",":return","loadlist",1);
+  });
+}
+function removeList() {
+  var plugin = [];
+  $('input.remove:checked').each(function(){plugin.push($(this).attr('data'));});
+  var plugins = plugin.join('*');
+  $('#removeall').hide();
+  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{cmd:'pending',plugin:plugins},function() {
+    openPlugin("multiplugin remove "+plugins,"_(Remove Selected Plugins)_","","refresh",1);
+  });
+}
 function updateInfo(data) {
   var updates = data.split('\n');
   for (var n=0,update; update=updates[n]; n++) {
@@ -49,11 +94,10 @@ function updateInfo(data) {
     for (var i=0,field; field=fields[i]; i++) {
       var row = field.split('::');
       $('#'+row[0]).attr('data',row[1]).html(row[2]);
+      var removeButton = $('input[data="'+row[0].substr(4).replace(/-/g,'.')+'.plg'+'"]');
+      if (row[2].indexOf('hourglass') >= 0) removeButton.hide(); else removeButton.show();
     }
   }
-}
-function disableButton() {
-  $('#plugin_list').find('input[type=button]').prop('disabled',true);
 }
 function initlist() {
   timers.plugins = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
@@ -74,8 +118,8 @@ function initlist() {
 }
 function loadlist(id,check) {
   if (id) timers.plugins = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
-  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{audit:id,check:check||<?=$check?>},function(d) {
-    var data = d.split(/\0/);
+  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{audit:id,check:check||<?=$check?>},function(data) {
+    data = data.split('\0');
     var list = $('#plugin_list');
     if (id) {
       clearTimeout(timers.plugins);
@@ -90,17 +134,18 @@ function loadlist(id,check) {
       }
     } else {
       updateInfo(data[0]);
+      if (data[1] > 1) $('#updateall').show(); else $('#updateall').hide();
     }
     $('#plugin_table').trigger('update');
-    if (data[1]>1) $('#updateall').show(); else $('#updateall').hide();
     $('#checkall').find('input').prop('disabled',false);
   });
 }
 $(function() {
   initlist();
   $('#plugin_tree').fileTree({root:'/boot/',top:'/boot/',filter:'plg'}, function(file) {$('#plugin_file').val(file);});
-  $('.tabs').append("<span id='updateall' class='status vhshift' style='display:none;margin-left:12px'><input type='button' value='<?=_('Update All Plugins')?>' onclick='disableButton();openBox(\"/plugins/dynamix.plugin.manager/scripts/plugin&arg1=updateall\",\"<?=_('Update All Plugins')?>\",600,600,true,\"loadlist\",\":return\")'></span>");
-  $('.tabs').append("<span id='checkall' class='status vhshift'><input type='button' value='<?=_('Check For Updates')?>' onclick='openBox(\"/plugins/dynamix.plugin.manager/scripts/checkall\",\"<?=_('Plugin Update Check')?>\",600,600,true,\"loadlist\",\":return\")' disabled></span>");
+  $('.tabs').append("<span id='checkall' class='status vhshift'><input type='button' value=\"_(Check For Updates)_\" onclick='openPlugin(\"checkall\",\"_(Plugin Update Check)_\",\":return\")' disabled></span>");
+  $('.tabs').append("<span id='updateall' class='status vhshift' style='display:none;margin-left:12px'><input type='button' value=\"_(Update All Plugins)_\" onclick='updateList()'></span>");
+  $('.tabs').append("<span id='removeall' class='status vhshift' style='display:none;margin-left:12px'><input type='button' value=\"_(Remove Selected Plugins)_\" onclick='removeList()'></span>");
 });
 </script>
 <table class='tablesorter plugins shift' id='plugin_table'>

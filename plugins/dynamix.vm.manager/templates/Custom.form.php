@@ -31,8 +31,9 @@
 	$arrValidDiskBuses = getValidDiskBuses();
 	$arrValidCdromBuses = getValidCdromBuses();
 	$arrValidVNCModels = getValidVNCModels();
+	$arrValidProtocols = getValidVMRCProtocols();
 	$arrValidKeyMaps = getValidKeyMaps();
-	$arrValidBridges = getNetworkBridges();
+	$arrValidNetworks = getValidNetworks();
 	$strCPUModel = getHostCPUModel();
 
 	$arrConfigDefaults = [
@@ -56,13 +57,15 @@
 			'vcpu' => [0],
 			'hyperv' => 1,
 			'ovmf' => 1,
-			'usbmode' => 'usb2'
+			'usbmode' => 'usb2',
+			'memoryBacking' => '{"nosharepages":{}}'
 		],
 		'media' => [
 			'cdrom' => '',
 			'cdrombus' => 'ide',
 			'drivers' => is_file($domain_cfg['VIRTIOISO']) ? $domain_cfg['VIRTIOISO'] : '',
-			'driversbus' => 'ide'
+			'driversbus' => 'ide' ,
+			'cdromboot' => 2
 		],
 		'disk' => [
 			[
@@ -71,14 +74,21 @@
 				'driver' => 'raw',
 				'dev' => 'hda',
 				'select' => $domain_cfg['VMSTORAGEMODE'],
-				'bus' => 'virtio'
+				'bus' => 'virtio' ,
+				'boot' => 1,
+				'serial' => 'vdisk1'
 			]
 		],
 		'gpu' => [
 			[
-				'id' => 'vnc',
+				'id' => 'virtual',
+				'protocol' => 'vnc',
+				'autoport' => 'yes',
 				'model' => 'qxl',
-				'keymap' => 'en-us'
+				'keymap' => 'en-us',
+				'port' => -1 ,
+				'wsport' => -1,
+				'copypaste' => 'no'
 			]
 		],
 		'audio' => [
@@ -98,7 +108,8 @@
 		'shares' => [
 			[
 				'source' => '',
-				'target' => ''
+				'target' => '',
+				'mode' => ''
 			]
 		]
 	];
@@ -122,13 +133,15 @@
 		} else {
 			// form view
 			if ($lv->domain_new($_POST)) {
-				// Fire off the vnc popup if available
+				// Fire off the vnc/spice popup if available
 				$dom = $lv->get_domain_by_name($_POST['domain']['name']);
-				$vncport = $lv->domain_get_vnc_port($dom);
+				$vmrcport = $lv->domain_get_vnc_port($dom);
 				$wsport = $lv->domain_get_ws_port($dom);
+				$protocol = $lv->domain_get_vmrc_protocol($dom);
 				$reply = ['success' => true];
-				if ($vncport > 0) {
-					$reply['vncurl'] = autov('/plugins/dynamix.vm.manager/vnc.html',true).'&autoconnect=true&host='.$_SERVER['HTTP_HOST'].'&port=&path=/wsproxy/'.$wsport.'/';
+				if ($vmrcport > 0) {
+					$reply['vmrcurl']  = autov('/plugins/dynamix.vm.manager/'.$protocol.'.html',true).'&autoconnect=true&host=' . $_SERVER['HTTP_HOST'] ;
+					if ($protocol == "spice") $reply['vmrcurl']  .= '&port=/wsproxy/'.$vmrcport.'/'; else $reply['vmrcurl'] .= '&port=&path=/wsproxy/' . $wsport . '/';
 				}
 			} else {
 				$reply = ['error' => $lv->get_last_error()];
@@ -153,10 +166,13 @@
 
 			// hot-attach any new usb devices
 			foreach ($arrNewUSBIDs as $strNewUSBID) {
+				if (strpos($strNewUSBID,"#remove")) continue ;
+				$remove = explode('#', $strNewUSBID) ;
+				$strNewUSBID2 = $remove[0] ;
 				foreach ($arrExistingConfig['usb'] as $arrExistingUSB) {
-					if ($strNewUSBID == $arrExistingUSB['id']) continue 2;
+					if ($strNewUSBID2 == $arrExistingUSB['id']) continue 2;
 				}
-				[$strVendor,$strProduct] = my_explode(':', $strNewUSBID);
+				[$strVendor,$strProduct] = my_explode(':', $strNewUSBID2);
 				// hot-attach usb
 				file_put_contents('/tmp/hotattach.tmp', "<hostdev mode='subsystem' type='usb'><source startupPolicy='optional'><vendor id='0x".$strVendor."'/><product id='0x".$strProduct."'/></source></hostdev>");
 				exec("virsh attach-device ".escapeshellarg($uuid)." /tmp/hotattach.tmp --live 2>&1", $arrOutput, $intReturnCode);
@@ -186,7 +202,7 @@
 			$oldName = $lv->domain_get_name($dom);
 			$newName = $_POST['domain']['name'];
 			$oldDir = $domain_cfg['DOMAINDIR'].$oldName;
-			$newDir = $domain_cfg['DOMAINDIR'].$newdName;
+			$newDir = $domain_cfg['DOMAINDIR'].$newName;
 			if ($oldName && $newName && is_dir($oldDir) && !is_dir($newDir)) {
 				// mv domain/vmname folder
 				if (rename($oldDir, $newDir)) {
@@ -242,17 +258,20 @@
 		$strXML = $lv->domain_get_xml($dom);
 		$boolNew = false;
 		$arrConfig = array_replace_recursive($arrConfigDefaults, domain_to_config($uuid));
+		$arrVMUSBs = getVMUSBs($strXML) ;
 	} else {
 		// edit new VM
 		$boolRunning = false;
 		$strXML = '';
 		$boolNew = true;
 		$arrConfig = $arrConfigDefaults;
+		$arrVMUSBs = getVMUSBs($strXML) ;
 	}
 	// Add any custom metadata field defaults (e.g. os)
 	if (!$arrConfig['template']['os']) {
 		$arrConfig['template']['os'] = ($arrConfig['domain']['clock']=='localtime' ? 'windows' : 'linux');
 	}
+	$os_type = ((empty($arrConfig['template']['os']) || stripos($arrConfig['template']['os'], 'windows') === false) ? 'other' : 'windows');
 ?>
 
 <link rel="stylesheet" href="<?autov('/plugins/dynamix.vm.manager/scripts/codemirror/lib/codemirror.css')?>">
@@ -269,6 +288,7 @@
 <input type="hidden" name="domain[clock]" id="domain_clock" value="<?=htmlspecialchars($arrConfig['domain']['clock'])?>">
 <input type="hidden" name="domain[arch]" value="<?=htmlspecialchars($arrConfig['domain']['arch'])?>">
 <input type="hidden" name="domain[oldname]" id="domain_oldname" value="<?=htmlspecialchars($arrConfig['domain']['name'])?>">
+<input type="hidden" name="domain[memoryBacking]" id="domain_memorybacking" value="<?=htmlspecialchars($arrConfig['domain']['memoryBacking'])?>">
 
 	<table>
 		<tr>
@@ -297,7 +317,7 @@
 			<td>_(CPU Mode)_:</td>
 			<td>
 				<select name="domain[cpumode]" title="_(define type of cpu presented to this vm)_">
-				<?mk_dropdown_options(['host-passthrough' => _('Host Passthrough').' (' . $strCPUModel . ')', 'emulated' => _('Emulated').' ('._('QEMU64').')'], $arrConfig['domain']['cpumode']);?>
+				<?mk_dropdown_options(['host-passthrough' => _('Host Passthrough').' (' . $strCPUModel . ')', 'custom' => _('Emulated').' ('._('QEMU64').')'], $arrConfig['domain']['cpumode']);?>
 				</select>
 			</td>
 		</tr>
@@ -413,7 +433,7 @@
 		<tr class="advanced">
 			<td>_(BIOS)_:</td>
 			<td>
-				<select name="domain[ovmf]" id="domain_ovmf" class="narrow" title="_(Select the BIOS)_.  _(SeaBIOS will work for most)_.  _(OVMF requires a UEFI-compatable OS)_ (_(e.g.)_ _(Windows 8/2012, newer Linux distros)_) _(and if using graphics device passthrough it too needs UEFI)_">
+				<select name="domain[ovmf]" id="domain_ovmf" class="narrow" title="_(Select the BIOS)_.  _(SeaBIOS will work for most)_.  _(OVMF requires a UEFI-compatable OS)_ (_(e.g.)_ _(Windows 8/2012, newer Linux distros)_) _(and if using graphics device passthrough it too needs UEFI)_" onchange="BIOSChange(this)">
 				<?
 					echo mk_option($arrConfig['domain']['ovmf'], '0', _('SeaBIOS'));
 
@@ -429,7 +449,20 @@
 					}
 				?>
 				</select>
-			</td>
+			
+			<?			
+			$usbboothidden =  "hidden" ;
+				if ($arrConfig['domain']['ovmf'] != '0') $usbboothidden = "" ;
+				?>
+				<span id="USBBoottext" class="advanced" <?=$usbboothidden?>>_(Enable USB boot)_:</span>
+								
+				<select name="domain[usbboot]" id="domain_usbboot" class="narrow" title="_(define OS boot options)_" <?=$usbboothidden?> onchange="USBBootChange(this)">
+				<?
+					echo mk_option($arrConfig['domain']['usbboot'], 'No', 'No');
+					echo mk_option($arrConfig['domain']['usbboot'], 'Yes', 'Yes');
+				?>
+				</select>
+				</td>
 		</tr>
 	</table>
 	<div class="advanced">
@@ -448,6 +481,10 @@
 			</p>
 			<p>
 				Once a VM is created this setting cannot be adjusted.
+			</p>
+			<p>
+				<b>USB Boot</b><br>
+				Adds support for booting from USB devices using UEFI. No device boot orders can be specified at the same time as this option.<br>
 			</p>
 		</blockquote>
 	</div>
@@ -506,6 +543,9 @@
 				<select name="media[cdrombus]" class="cdrom_bus narrow">
 				<?mk_dropdown_options($arrValidCdromBuses, $arrConfig['media']['cdrombus']);?>
 				</select>
+				_(Boot Order)_:
+				<input type="number" size="5" maxlength="5" id="cdboot" class="narrow bootorder" style="width: 50px;" name="media[cdromboot]"   title="_(Boot order)_"  value="<?=$arrConfig['media']['cdromboot']?>" >
+				</td>
 			</td>
 		</tr>
 	</table>
@@ -653,6 +693,14 @@
 					<select name="disk[<?=$i?>][bus]" class="disk_bus narrow">
 					<?mk_dropdown_options($arrValidDiskBuses, $arrDisk['bus']);?>
 					</select>
+				_(Boot Order)_:
+				<input type="number" size="5" maxlength="5" id="disk[<?=$i?>][boot]" class="narrow bootorder" style="width: 50px;" name="disk[<?=$i?>][boot]"   title="_(Boot order)_"  value="<?=$arrDisk['boot']?>" >
+				</td>
+			</tr>
+			<tr class="advanced disk_bus_options">
+				<td>_(Serial)_:</td>
+				<td>
+				<input type="text" size="20" maxlength="20" id="disk[<?=$i?>][serial]" class="narrow disk_serial" style="width: 200px;" name="disk[<?=$i?>][serial]"   title="_(Serial)_"  value="<?=$arrDisk['serial']?>" >
 				</td>
 			</tr>
 		</table>
@@ -687,6 +735,16 @@
 			<p class="advanced">
 				<b>vDisk Bus</b><br>
 				Select virtio for best performance.
+			</p>
+			
+			<p class="advanced">
+				<b>vDisk Boot Order</b><br>
+				Specify the order the devices are used for booting.
+			</p>
+			
+			<p class="advanced">
+				<b>vDisk Serial</b><br>
+				Set the device serial number presented to the VM.
 			</p>
 
 			<p>Additional devices can be added/removed by clicking the symbols to the left.</p>
@@ -779,42 +837,89 @@
 					<select name="disk[{{INDEX}}][bus]" class="disk_bus narrow">
 					<?mk_dropdown_options($arrValidDiskBuses, '');?>
 					</select>
+				
+				_(Boot Order)_:
+				<input type="number" size="5" maxlength="5" id="disk[{{INDEX}}][boot]" class="narrow bootorder" style="width: 50px;" name="disk[{{INDEX}}][boot]"   title="_(Boot order)_"  value="" >
 				</td>
+				<tr class="advanced disk_bus_options">
+				<td>_(Serial)_:</td>
+				<td>
+				<input type="text" size="20" maxlength="20" id="disk[{{INDEX}}[serial]" class="narrow disk_serial" style="width: 200px;" name="disk[{{INDEX}}][serial]"   title="_(Serial)_"  value="" >
+				</td>
+			</tr>
 			</tr>
 		</table>
 	</script>
 
-	<?foreach ($arrConfig['shares'] as $i => $arrShare) {
+	<?
+	 $arrUnraidShares = getUnraidShares() ;
+	 foreach ($arrConfig['shares'] as $i => $arrShare) {
 		$strLabel = ($i > 0) ? appendOrdinalSuffix($i + 1) : '';
 
 		?>
-		<table class="domain_os other" data-category="Share" data-multiple="true" data-minimum="1" data-index="<?=$i?>" data-prefix="<?=$strLabel?>">
+		<table  data-category="Share" data-multiple="true" data-minimum="1" data-index="<?=$i?>" data-prefix="<?=$strLabel?>">
+
 			<tr class="advanced">
-				<td>_(Unraid Share)_:</td>
+				<td>_(Unraid Share Mode)_:</td>
 				<td>
-					<input type="text" name="shares[<?=$i?>][source]" autocomplete="off" data-pickfolders="true" data-pickfilter="NO_FILES_FILTER" data-pickroot="/mnt/" value="<?=htmlspecialchars($arrShare['source'])?>" placeholder="_(e.g.)_ /mnt/user/..." title="_(path of Unraid share)_" />
+				<select name="shares[<?=$i?>][mode]" class="disk_bus narrow">
+					<?if ($os_type != "windows") echo mk_option($arrShare['mode'], "9p", _('9p Mode'));;?>
+					<?echo mk_option($arrShare['mode'], "virtiofs", _('Virtiofs Mode'));;?>
+				</select>
+				_(Unraid Share)_:
+				<select name="shares[<?=$i?>][unraid]" class="disk_bus narrow"  onchange="ShareChange(this)" >
+				    <?	$UnraidShareDisabled = ' disabled="disabled"' ; 
+					    $arrUnraidIndex = array_search("User:".$arrShare['target'],$arrUnraidShares) ;
+					    if ($arrUnraidIndex != false && substr($arrShare['source'],0,10) != '/mnt/user/') $arrUnraidIndex = false ;
+					    if ($arrUnraidIndex == false) $arrUnraidIndex = array_search("Disk:".$arrShare['target'],$arrUnraidShares) ;
+						if ($arrUnraidIndex == false) { $arrUnraidIndex = '' ; $UnraidShareDisabled = "" ;}
+						mk_dropdown_options($arrUnraidShares, $arrUnraidIndex);?>
+				</select>
+				</td>
+				</tr>	
+
+			<tr class="advanced">
+				<td> 
+					<text id="shares[<?=$i?>]sourcetext" > _(Unraid Source Path)_: </text> 
+				</td>
+				<td>
+					<input type="text" <?=$UnraidShareDisabled?> id="shares[<?=$i?>][source]" name="shares[<?=$i?>][source]" autocomplete="off" data-pickfolders="true" data-pickfilter="NO_FILES_FILTER" data-pickroot="/mnt/" value="<?=htmlspecialchars($arrShare['source'])?>" placeholder="_(e.g.)_ /mnt/user/..." title="_(path of Unraid share)_" />
 				</td>
 			</tr>
 
-			<tr class="advanced">
-				<td>_(Unraid Mount tag)_:</td>
+			<tr  class="advanced">
+				<td><span id="shares[<?=$i?>][targettext]" >_(Unraid Mount Tag)_:</span></td>
 				<td>
-					<input type="text" name="shares[<?=$i?>][target]" value="<?=htmlspecialchars($arrShare['target'])?>" placeholder="_(e.g.)_ _(shares)_ (_(name of mount tag inside vm)_)" title="_(mount tag inside vm)_" />
+					<input type="text" <?=$UnraidShareDisabled?> name="shares[<?=$i?>][target]" id="shares[<?=$i?>][target]" value="<?=htmlspecialchars($arrShare['target'])?>" placeholder="_(e.g.)_ _(shares)_ (_(name of mount tag inside vm)_)" title="_(mount tag inside vm)_" />
 				</td>
 			</tr>
 		</table>
 		<?if ($i == 0) {?>
-		<div class="domain_os other">
+		<div>
 			<div class="advanced">
 				<blockquote class="inline_help">
 					<p>
+						<b>Unraid Share Mode</b><br>
+						Used to create a VirtFS mapping to a Linux-based guest.  Specify the mode you want to use either 9p or Virtiofs.
+					</p>
+
+					
+					<p>
 						<b>Unraid Share</b><br>
-						Used to create a VirtFS mapping to a Linux-based guest.  Specify the path on the host here.
+						Set tag and path to match the selected Unraid share.
+					</p>
+
+					<p>
+						<b>Unraid Source Path</b><br>
+						Specify the path on the host here.
 					</p>
 
 					<p>
 						<b>Unraid Mount tag</b><br>
 						Specify the mount tag that you will use for mounting the VirtFS share inside the VM.  See this page for how to do this on a Linux-based guest: <a href="http://wiki.qemu.org/Documentation/9psetup" target="_blank">http://wiki.qemu.org/Documentation/9psetup</a>
+					</p>
+					<p>	
+						For Windows additional software needs to be installed: <a href="https://virtio-fs.gitlab.io/howto-windows.html" target="_blank">https://virtio-fs.gitlab.io/howto-windows.html</a>	
 					</p>
 
 					<p>Additional devices can be added/removed by clicking the symbols to the left.</p>
@@ -825,17 +930,33 @@
 	<?}?>
 	<script type="text/html" id="tmplShare">
 		<table class="domain_os other">
-			<tr class="advanced">
-				<td>_(Unraid Share)_:</td>
+		<tr class="advanced">
+				<td>_(Unraid Share Mode)_:</td>
 				<td>
-					<input type="text" name="shares[{{INDEX}}][source]" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickfilter="NO_FILES_FILTER" data-pickroot="/mnt/" value="" placeholder="_(e.g.)_ /mnt/user/..." title="_(path of Unraid share)_" />
+				<select name="shares[{{INDEX}}][mode]" class="disk_bus narrow">
+					<?if ($os_type != "windows") echo mk_option($arrShare['mode'], "9p", _('9p Mode'));;?>
+					<?echo mk_option('', "virtiofs", _('Virtiofs Mode'));;?>
+				</select>
+
+				_(Unraid Share)_:
+				
+				<select name="shares[{{INDEX}}][unraid]" class="disk_bus narrow"  onchange="ShareChange(this)" >
+					<?mk_dropdown_options($arrUnraidShares, '');?>
+				</select>
+				</td>
+				</tr>	
+
+			<tr class="advanced">
+				<td>_(Unraid Source Path)_:</td>
+				<td>
+					<input type="text" name="shares[{{INDEX}}][source]" id="shares[{{INDEX}}][source]" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickfilter="NO_FILES_FILTER" data-pickroot="/mnt/" value="" placeholder="_(e.g.)_ /mnt/user/..." title="_(path of Unraid share)_" />
 				</td>
 			</tr>
 
 			<tr class="advanced">
-				<td>_(Unraid Mount tag)_:</td>
+				<td>_(Unraid Mount Tag)_:</td>
 				<td>
-					<input type="text" name="shares[{{INDEX}}][target]" value="" placeholder="_(e.g.)_ _(shares)_ (_(name of mount tag inside vm)_)" title="_(mount tag inside vm)_" />
+					<input type="text" name="shares[{{INDEX}}][target]" id="shares[{{INDEX}}][target]" value="" placeholder="_(e.g.)_ _(shares)_ (_(name of mount tag inside vm)_)" title="_(mount tag inside vm)_" />
 				</td>
 			</tr>
 		</table>
@@ -852,8 +973,9 @@
 					<select name="gpu[<?=$i?>][id]" class="gpu narrow">
 					<?
 						if ($i == 0) {
-							// Only the first video card can be VNC
-							echo mk_option($arrGPU['id'], 'vnc', _('VNC'));
+							// Only the first video card can be VNC or SPICE
+							echo mk_option($arrGPU['id'], 'virtual', _('Virtual'));
+							
 						} else {
 							echo mk_option($arrGPU['id'], '', _('None'));
 						}
@@ -866,21 +988,66 @@
 				</td>
 			</tr>
 
-			<?if ($i == 0) {?>
-			<tr class="<?if ($arrGPU['id'] != 'vnc') echo 'was';?>advanced vncmodel">
-				<td>_(VNC Video Driver)_:</td>
+			<?if ($i == 0) { 
+				$hiddenport = $hiddenwsport = "hidden" ;
+				if ($arrGPU['autoport'] == "no"){
+				if ($arrGPU['protocol'] == "vnc") $hiddenport = $hiddenwsport = "" ;
+				if ($arrGPU['protocol'] == "spice") $hiddenport = "" ;
+				}
+				?>
+				<tr class="<?if ($arrGPU['id'] != 'virtual') echo 'was';?>advanced protocol">
+				<td>_(VM Console Protocol)_:</td>
+				<td>
+					<select id="protocol" name="gpu[<?=$i?>][protocol]" class="narrow" title="_(protocol for virtual console)_" onchange="ProtocolChange(this)" >
+					<?mk_dropdown_options($arrValidProtocols, $arrGPU['protocol']);?>
+					</select>
+				</td>
+				</tr>
+				<tr  id="copypasteline" name="copypaste" class="<?if ($arrGPU['id'] != 'virtual') echo 'was';?>advanced ">
+					<td>_(VM Console enable Copy/paste)_:</td>
+				<td>
+					<select id="copypaste" name="gpu[<?=$i?>][copypaste]" class="narrow" >
+						<?
+						echo mk_option($arrGPU['copypaste'], 'no', _('No'));
+						echo mk_option($arrGPU['copypaste'], 'yes', _('Yes'));
+						?>
+					</select>
+			</tr>
+				<tr  id="autoportline" name="autoportline" class="<?if ($arrGPU['id'] != 'virtual') echo 'was';?>advanced autoportline">
+					<td>_(VM Console AutoPort)_:</td>
+				<td>
+					<select id="autoport" name="gpu[<?=$i?>][autoport]" class="narrow" onchange="AutoportChange(this)">
+						<?
+						echo mk_option($arrGPU['autoport'], 'yes', _('Yes'));
+						echo mk_option($arrGPU['autoport'], 'no', _('No'));
+						?>
+					</select>
+				
+					<span id="Porttext"  <?=$hiddenport?>>_(VM Console Port)_:</span>
+				
+				    <input type="number" size="5" maxlength="5"  id="port" class="narrow" style="width: 50px;" name="gpu[<?=$i?>][port]"   title="_(port for virtual console)_"  value="<?=$arrGPU['port']?>"  <?=$hiddenport?> >
+				
+					<span id="WSPorttext" <?=$hiddenwsport?>>_(VM Console WS Port)_:</span>
+				
+				    <input type="number" size="5" maxlength="5" id="wsport" class="narrow" style="width: 50px;" name="gpu[<?=$i?>][wsport]"   title="_(wsport for virtual console)_"  value="<?=$arrGPU['wsport']?>" <?=$hiddenwsport?> >
+				</td>
+			</tr>
+
+			<tr class="<?if ($arrGPU['id'] != 'virtual') echo 'was';?>advanced vncmodel">
+				<td>_(VM Console Video Driver)_:</td>
 				<td>
 					<select id="vncmodel" name="gpu[<?=$i?>][model]" class="narrow" title="_(video for VNC)_">
 					<?mk_dropdown_options($arrValidVNCModels, $arrGPU['model']);?>
 					</select>
 				</td>
 			</tr>
+
 			<tr class="vncpassword">
-				<td>_(VNC Password)_:</td>
+				<td>_(VM Console Password)_:</td>
 				<td><input type="password" name="domain[password]" autocomplete='new-password' title="_(password for VNC)_" placeholder="_(password for VNC)_ (_(optional)_)" /></td>
 			</tr>
-			<tr class="<?if ($arrGPU['id'] != 'vnc') echo 'was';?>advanced vnckeymap">
-				<td>_(VNC Keyboard)_:</td>
+			<tr class="<?if ($arrGPU['id'] != 'virtual') echo 'was';?>advanced vnckeymap">
+				<td>_(VM Console Keyboard)_:</td>
 				<td>
 					<select name="gpu[<?=$i?>][keymap]" title="_(keyboard for VNC)_">
 					<?mk_dropdown_options($arrValidKeyMaps, $arrGPU['keymap']);?>
@@ -888,36 +1055,51 @@
 				</td>
 			</tr>
 			<?}?>
-			<tr class="<?if ($arrGPU['id'] == 'vnc') echo 'was';?>advanced romfile">
+			<tr class="<?if ($arrGPU['id'] == 'virtual') echo 'was';?>advanced romfile">
 				<td>_(Graphics ROM BIOS)_:</td>
 				<td>
 					<input type="text" name="gpu[<?=$i?>][rom]" autocomplete="off" spellcheck="false" data-pickcloseonfile="true" data-pickfilter="rom,bin" data-pickmatch="^[^.].*" data-pickroot="/mnt/" value="<?=htmlspecialchars($arrGPU['rom'])?>" placeholder="_(Path to ROM BIOS file)_ (_(optional)_)" title="_(Path to ROM BIOS file)_ (_(optional)_)" />
 				</td>
 			</tr>
 		</table>
-		<?if ($i == 0) {?>
+		<?if ($i == 0 || $i == 1) {?>
 		<blockquote class="inline_help">
 			<p>
 				<b>Graphics Card</b><br>
-				If you wish to assign a graphics card to the VM, select it from this list, otherwise leave it set to VNC.
+				If you wish to assign a graphics card to the VM, select it from this list, otherwise leave it set to virtual.
 			</p>
 
-			<p class="<?if ($arrGPU['id'] != 'vnc') echo 'was';?>advanced vncmodel">
-				<b>VNC Video Driver</b><br>
-				If you wish to assign a different video driver to use for a VNC connection, specify one here.
+			<p class="<?if ($arrGPU['id'] != 'virtual') echo 'was';?>advanced protocol">
+				<b>Virtual video protocol VNC/SPICE</b><br>
+				If you wish to assign a protocol type, specify one here. 
+			</p>
+
+			<p class="<?if ($arrGPU['id'] != 'virtual') echo 'was';?>advanced protocol">
+				<b>Virtual enable copy paste for VNC/SPICE</b><br>
+				If you enable copy paste you need to install additional software on the client in addition to the QEMU agent if that has been installed. <a href="https://www.spice-space.org/download.html"  target="_blank">https://www.spice-space.org/download.html </a>is the location for spice-vdagent for both window and linux. Note copy paste function will not work with web spice viewer you need to use virt-viewer.
+			</p>
+
+			<p class="<?if ($arrGPU['id'] != 'virtual') echo 'was';?>advanced protocol">
+				<b>Virtual auto port</b><br>
+				Set it you want to specify a manual port for VNC or Spice. VNC needs two ports where Spice only requires one. Leave as auto yes for the system to set. 
+			</p>
+
+			<p class="<?if ($arrGPU['id'] != 'virtual') echo 'was';?>advanced vncmodel">
+				<b>Virtual Video Driver</b><br>
+				If you wish to assign a different video driver to use for a VM Console connection, specify one here.
 			</p>
 
 			<p class="vncpassword">
-				<b>VNC Password</b><br>
-				If you wish to require a password to connect to the VM over a VNC connection, specify one here.
+				<b>Virtual Password</b><br>
+				If you wish to require a password to connect to the VM over a VM Console connection, specify one here.
 			</p>
 
-			<p class="<?if ($arrGPU['id'] != 'vnc') echo 'was';?>advanced vnckeymap">
-				<b>VNC Keyboard</b><br>
-				If you wish to assign a different keyboard layout to use for a VNC connection, specify one here.
+			<p class="<?if ($arrGPU['id'] != 'virtual') echo 'was';?>advanced vnckeymap">
+				<b>Virtual Keyboard</b><br>
+				If you wish to assign a different keyboard layout to use for a VM Console connection, specify one here.
 			</p>
 
-			<p class="<?if ($arrGPU['id'] == 'vnc') echo 'was';?>advanced romfile">
+			<p class="<?if ($arrGPU['id'] == 'virtual') echo 'was';?>advanced romfile">
 				<b>Graphics ROM BIOS</b><br>
 				If you wish to use a custom ROM BIOS for a Graphics card, specify one here.
 			</p>
@@ -995,7 +1177,15 @@
 		</table>
 	</script>
 
-	<?foreach ($arrConfig['nic'] as $i => $arrNic) {
+	<?	if ( $arrConfig['nic'] == false) {
+	  		$arrConfig['nic']['0'] = 
+			[
+				'network' => $domain_bridge,
+				'mac' => "",
+				'model' => 'virtio-net'
+			] ;
+		}	
+	  	foreach ($arrConfig['nic'] as $i => $arrNic) {
 		$strLabel = ($i > 0) ? appendOrdinalSuffix($i + 1) : '';
 
 		?>
@@ -1007,12 +1197,17 @@
 				</td>
 			</tr>
 			<tr class="advanced">
-				<td>_(Network Bridge)_:</td>
+				<td>_(Network Source)_:</td>
 				<td>
 					<select name="nic[<?=$i?>][network]">
 					<?
-					foreach ($arrValidBridges as $strBridge) {
-						echo mk_option($arrNic['network'], $strBridge, $strBridge);
+					foreach (array_keys($arrValidNetworks) as $key) {
+
+						echo mk_option("", $key, "- "._($key)." -", "disabled");
+
+						foreach ($arrValidNetworks[$key] as $strNetwork) {
+							echo mk_option($arrNic['network'], $strNetwork, $strNetwork);
+						}
 					}
 					?>
 					</select>
@@ -1026,9 +1221,16 @@
 					echo mk_option($arrNic['model'], 'virtio-net', 'virtio-net');
 					echo mk_option($arrNic['model'], 'virtio', 'virtio');
 					echo mk_option($arrNic['model'], 'e1000', 'e1000');
+					echo mk_option($arrNic['model'], 'rtl8139', 'rtl8139');
 					echo mk_option($arrNic['model'], 'vmxnet3', 'vmxnet3');
 					?>
 					</select>
+				</td>
+			</tr>
+			<tr class="advanced">
+				<td>_(Boot Order)_:</td>
+				<td>
+				<input type="number" size="5" maxlength="5" id="nic[<?=$i?>][boot]" class="narrow bootorder" <?=$bootdisable?>  style="width: 50px;" name="nic[<?=$i?>][boot]"   title="_(Boot order)_"  value="<?=$arrNic['boot']?>" >
 				</td>
 			</tr>
 		</table>
@@ -1041,14 +1243,16 @@
 				</p>
 
 				<p>
-					<b>Network Bridge</b><br>
-					The default libvirt managed network bridge (virbr0) will be used, otherwise you may specify an alternative name for a private network bridge to the host.
+					<b>Network Source</b><br>
+					The default libvirt managed network bridge (virbr0) will be used, otherwise you may specify an alternative name for a private network to the host.
 				</p>
 
 				<p>
 					<b>Network Model</b><br>
 					Default and recommended is 'virtio-net', which gives improved stability. To improve performance 'virtio' can be selected, but this may lead to stability issues.
 				</p>
+
+				<p>Use boot order to set device as bootable and boot sequence.</p>
 
 				<p>Additional devices can be added/removed by clicking the symbols to the left.</p>
 			</blockquote>
@@ -1064,12 +1268,17 @@
 				</td>
 			</tr>
 			<tr class="advanced">
-				<td>_(Network Bridge)_:</td>
+				<td>_(Network Source)_:</td>
 				<td>
 					<select name="nic[{{INDEX}}][network]">
 					<?
-					foreach ($arrValidBridges as $strBridge) {
-						echo mk_option($domain_bridge, $strBridge, $strBridge);
+					foreach (array_keys($arrValidNetworks) as $key) {
+
+						echo mk_option("", $key, "- "._($key)." -", "disabled");
+
+						foreach ($arrValidNetworks[$key] as $strNetwork) {
+							echo mk_option($domain_bridge, $strNetwork, $strNetwork);
+						}
 					}
 					?>
 					</select>
@@ -1088,19 +1297,30 @@
 					</select>
 				</td>
 			</tr>
+			<tr class="advanced">
+				<td>_(Boot Order)_:</td>
+				<td>
+				<input type="number" size="5" maxlength="5" id="nic[{{INDEX}}][boot]" class="narrow bootorder" <?=$bootdisable?>  style="width: 50px;" name="nic[{{INDEX}}][boot]"   title="_(Boot order)_"  value="" >
+				</td>
+			</tr>
 		</table>
 	</script>
 
 	<table>
+		<tr><td></td>
+		<td>_(Select)_&nbsp&nbsp_(Optional)_&nbsp&nbsp_(Boot Order)_</td></tr></div> 
 		<tr>
 			<td>_(USB Devices)_:</td>
 			<td>
-				<div class="textarea" style="width: 540px">
+				<div class="textarea" style="width: 850px">
 				<?
-					if (!empty($arrValidUSBDevices)) {
-						foreach($arrValidUSBDevices as $i => $arrDev) {
+					if (!empty($arrVMUSBs)) {
+						foreach($arrVMUSBs as $i => $arrDev) {
 						?>
-						<label for="usb<?=$i?>"><input type="checkbox" name="usb[]" id="usb<?=$i?>" value="<?=htmlspecialchars($arrDev['id'])?>" <?if (count(array_filter($arrConfig['usb'], function($arr) use ($arrDev) { return ($arr['id'] == $arrDev['id']); }))) echo 'checked="checked"';?>/> <?=htmlspecialchars($arrDev['name'])?> (<?=htmlspecialchars($arrDev['id'])?>)</label><br/>
+						<label for="usb<?=$i?>">&nbsp&nbsp&nbsp&nbsp<input type="checkbox" name="usb[]" id="usb<?=$i?>" value="<?=htmlspecialchars($arrDev['id'])?>" <?if (count(array_filter($arrConfig['usb'], function($arr) use ($arrDev) { return ($arr['id'] == $arrDev['id']); }))) echo 'checked="checked"';?>
+						/> &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp <input type="checkbox" name="usbopt[<?=htmlspecialchars($arrDev['id'])?>]" id="usbopt<?=$i?>" value="<?=htmlspecialchars($arrDev['id'])?>" <?if ($arrDev["startupPolicy"] =="optional") echo 'checked="checked"';?>/>&nbsp&nbsp&nbsp&nbsp&nbsp 
+						<input type="number" size="5" maxlength="5" id="usbboot<?=$i?>" class="narrow bootorder" <?=$bootdisable?>  style="width: 50px;" name="usbboot[<?=htmlspecialchars($arrDev['id'])?>]"   title="_(Boot order)_"  value="<?=$arrDev['usbboot']?>" >
+						<?=htmlspecialchars($arrDev['name'])?> (<?=htmlspecialchars($arrDev['id'])?>)</label><br/>
 						<?
 						}
 					} else {
@@ -1113,28 +1333,38 @@
 	</table>
 	<blockquote class="inline_help">
 		<p>If you wish to assign any USB devices to your guest, you can select them from this list.</p>
+		<p>Use boot order to set device as bootable and boot sequence.</p>
+		<p>Select optional if you want device to be ignored when VM starts if not present.</p>
 	</blockquote>
 
 	<table>
+	<tr><td></td>
+		<td>_(Select)_&nbsp&nbsp_(Boot Order)_</td></tr></div> 
+		<tr>
 		<tr>
 			<td>_(Other PCI Devices)_:</td>
 			<td>
-				<div class="textarea" style="width: 540px">
+				<div class="textarea" style="width: 850px">
 				<?
 					$intAvailableOtherPCIDevices = 0;
 
 					if (!empty($arrValidOtherDevices)) {
 						foreach($arrValidOtherDevices as $i => $arrDev) {
-							$extra = '';
-							if (count(array_filter($arrConfig['pci'], function($arr) use ($arrDev) { return ($arr['id'] == $arrDev['id']); }))) {
+							$bootdisable = $extra = $pciboot = '';
+							if ($arrDev["typeid"] != "0108" && substr($arrDev["typeid"],0,2) != "02") $bootdisable = ' disabled="disabled"' ;
+							if (count($pcidevice=array_filter($arrConfig['pci'], function($arr) use ($arrDev) { return ($arr['id'] == $arrDev['id']); }))) {
 								$extra .= ' checked="checked"';
+								foreach ($pcidevice as $pcikey => $pcidev)  $pciboot = $pcidev["boot"];  ;
+									
 							} elseif (!in_array($arrDev['driver'], ['pci-stub', 'vfio-pci'])) {
 								//$extra .= ' disabled="disabled"';
 								continue;
 							}
 							$intAvailableOtherPCIDevices++;
 					?>
-						<label for="pci<?=$i?>"><input type="checkbox" name="pci[]" id="pci<?=$i?>" value="<?=htmlspecialchars($arrDev['id'])?>" <?=$extra?>/> <?=htmlspecialchars($arrDev['name'])?> | <?=htmlspecialchars($arrDev['type'])?> (<?=htmlspecialchars($arrDev['id'])?>)</label><br/>
+						<label for="pci<?=$i?>">&nbsp&nbsp&nbsp&nbsp<input type="checkbox" name="pci[]" id="pci<?=$i?>" value="<?=htmlspecialchars($arrDev['id'])?>" <?=$extra?>/> &nbsp 
+						<input type="number" size="5" maxlength="5" id="pciboot<?=$i?>" class="narrow pcibootorder" <?=$bootdisable?>  style="width: 50px;" name="pciboot[<?=htmlspecialchars($arrDev['id'])?>]"   title="_(Boot order)_"  value="<?=$pciboot?>" >
+						<?=htmlspecialchars($arrDev['name'])?> | <?=htmlspecialchars($arrDev['type'])?> (<?=htmlspecialchars($arrDev['id'])?>)</label><br/>
 					<?
 						}
 					}
@@ -1149,6 +1379,7 @@
 	</table>
 	<blockquote class="inline_help">
 		<p>If you wish to assign any other PCI devices to your guest, you can select them from this list.</p>
+		<p>Use boot order to set device as bootable and boot sequence. Only NVMe and Network devices (PCI types 0108 and 02xx) supported for boot order.</p>
 	</blockquote>
 
 	<table>
@@ -1209,6 +1440,131 @@
 <script src="<?autov('/plugins/dynamix.vm.manager/scripts/codemirror/addon/hint/libvirt-schema.js')?>"></script>
 <script src="<?autov('/plugins/dynamix.vm.manager/scripts/codemirror/mode/xml/xml.js')?>"></script>
 <script type="text/javascript">
+
+function ShareChange(share) {
+		var value = share.value;
+		var text = share.options[share.selectedIndex].text;
+		var strArray = text.split(":");
+		var index = share.name.indexOf("]") + 1;
+		var name = share.name.substr(0,index) ;
+		if (strArray[0] === "User") {
+			var path = "/mnt/user/" + strArray[1] ;
+		} else {
+			var path = "/mnt/" + strArray[1] ;
+		}
+		if (strArray[0] != "Manual") {
+		document.getElementById(name+"[target]").value = strArray[1] ;	
+		document.getElementById(name+"[source]").value = path ;	
+		document.getElementById(name+"[target]").setAttribute("disabled","disabled");
+		document.getElementById(name+"[source]").setAttribute("disabled","disabled");
+		} else {
+			document.getElementById(name+"[target]").removeAttribute("disabled");
+			document.getElementById(name+"[source]").removeAttribute("disabled");
+		}
+}
+
+function BIOSChange(bios) {
+		var value = bios.value;
+		if (value == "0") {
+			document.getElementById("USBBoottext").style.visibility="hidden";
+			document.getElementById("domain_usbboot").style.visibility="hidden";
+		} else {
+			document.getElementById("USBBoottext").style.display="inline";
+			document.getElementById("USBBoottext").style.visibility="visible";
+			document.getElementById("domain_usbboot").style.display="inline";
+			document.getElementById("domain_usbboot").style.visibility="visible";
+		}
+}
+
+function SetBootorderfields(usbbootvalue) {
+	var bootelements = document.getElementsByClassName("bootorder");
+	for(var i = 0; i < bootelements.length; i++) {
+		if (usbbootvalue == "Yes") {
+		bootelements[i].value = "";
+		bootelements[i].setAttribute("disabled","disabled");
+		} else bootelements[i].removeAttribute("disabled");
+	}
+	var bootelements = document.getElementsByClassName("pcibootorder");
+	const bootpcidevs = <? 	
+		$devlist = [] ;
+		foreach($arrValidOtherDevices as $i => $arrDev) {
+			if ($arrDev["typeid"] != "0108" && substr($arrDev["typeid"],0,2) != "02") $devlist[$arrDev['id']] = "N" ; else $devlist[$arrDev['id']] = "Y" ;
+		}
+		echo json_encode($devlist) ;
+		?>  
+
+	for(var i = 0; i < bootelements.length; i++) {
+		let bootpciid = bootelements[i].name.split('[') ;
+		bootpciid= bootpciid[1].replace(']', '') ;
+		
+		if (usbbootvalue == "Yes") {
+		bootelements[i].value = "";
+		bootelements[i].setAttribute("disabled","disabled");
+		} else {
+			// Put check for PCI Type 0108 & 02xx and only remove disable if 0108 or 02xx.
+			if (bootpcidevs[bootpciid] === "Y") 	bootelements[i].removeAttribute("disabled");
+		}
+	}
+}
+
+function USBBootChange(usbboot) {
+	// Remove all boot orders if changed to Yes
+	var value = usbboot.value ;
+	SetBootorderfields(value) ;
+}
+
+function AutoportChange(autoport) {
+		if (autoport.value == "yes") {
+			document.getElementById("port").style.visibility="hidden";
+			document.getElementById("Porttext").style.visibility="hidden";
+			document.getElementById("wsport").style.visibility="hidden";
+			document.getElementById("WSPorttext").style.visibility="hidden";
+		} else {
+			var protocol = document.getElementById("protocol").value ;
+			document.getElementById("port").style.display="inline";
+			document.getElementById("port").style.visibility="visible";
+			document.getElementById("Porttext").style.display="inline";
+			document.getElementById("Porttext").style.visibility="visible";
+			if (protocol == "vnc") {
+				document.getElementById("wsport").style.display="inline";
+				document.getElementById("wsport").style.visibility="visible";
+				document.getElementById("WSPorttext").style.display="inline";
+				document.getElementById("WSPorttext").style.visibility="visible";
+			} else {
+				document.getElementById("wsport").style.visibility="hidden";
+				document.getElementById("WSPorttext").style.visibility="hidden";
+			}
+		}	
+	}
+
+function ProtocolChange(protocol) {
+		var autoport = document.getElementById("autoport").value ;
+		if (autoport == "yes") {
+			document.getElementById("port").style.visibility="hidden";
+			document.getElementById("Porttext").style.visibility="hidden";
+			document.getElementById("wsport").style.visibility="hidden";
+			document.getElementById("WSPorttext").style.visibility="hidden";
+		} else {
+			document.getElementById("port").style.display="inline";
+			document.getElementById("port").style.visibility="visible";
+			document.getElementById("Porttext").style.display="inline";
+			document.getElementById("Porttext").style.visibility="visible";
+			if (protocol.value == "vnc") {
+				document.getElementById("wsport").style.display="inline";
+				document.getElementById("wsport").style.visibility="visible";
+				document.getElementById("WSPorttext").style.display="inline";
+				document.getElementById("WSPorttext").style.visibility="visible";
+			} else {
+				document.getElementById("wsport").style.visibility="hidden";
+				document.getElementById("WSPorttext").style.visibility="hidden";
+			}
+		}	
+	}
+		
+	
+
+
+
 $(function() {
 	function completeAfter(cm, pred) {
 		var cur = cm.getCursor();
@@ -1235,6 +1591,7 @@ $(function() {
 		});
 	}
 
+
 	var editor = CodeMirror.fromTextArea(document.getElementById("addcode"), {
 		mode: "xml",
 		lineNumbers: true,
@@ -1249,6 +1606,8 @@ $(function() {
 		},
 		hintOptions: {schemaInfo: getLibvirtSchema()}
 	});
+
+	SetBootorderfields("<?=$arrConfig['domain']['usbboot']?>") ;
 
 	function resetForm() {
 		$("#vmform .domain_vcpu").change(); // restore the cpu checkbox disabled states
@@ -1269,6 +1628,7 @@ $(function() {
 		}
 	});
 
+
 	var regenerateDiskPreview = function (disk_index) {
 		var domaindir = '<?=$domain_cfg['DOMAINDIR']?>' + $('#domain_oldname').val();
 		var tl_args = arguments.length;
@@ -1285,6 +1645,7 @@ $(function() {
 			var $disk_bus_sections = $table.find('.disk_bus_options');
 			var $disk_input = $table.find('.disk');
 			var $disk_preview = $table.find('.disk_preview');
+			var $disk_serial = $table.find('.disk_serial');
 
 			if (disk_select == 'manual') {
 
@@ -1348,6 +1709,31 @@ $(function() {
 		});
 	};
 
+	var setDiskserial = function (disk_index) {
+		var domaindir = '<?=$domain_cfg['DOMAINDIR']?>' + $('#domain_oldname').val();
+		var tl_args = arguments.length;
+
+		$("#vmform .disk").closest('table').each(function (index) {
+			var $table = $(this);
+
+			if (tl_args && disk_index != $table.data('index')) {
+				return;
+			}
+
+			var disk_select = $table.find(".disk_select option:selected").val();
+			var $disk_serial = $table.find('.disk_serial');
+
+			 if (disk_select !== '') {
+
+				// Auto disk serial
+				var auto_serial = 'vdisk' + (index+1) ;
+				$disk_serial.val(auto_serial);
+
+			} 
+
+		});
+	};
+
 	<?if ($boolNew):?>
 	$("#vmform #domain_name").on("input change", function changeNameEvent() {
 		$('#vmform #domain_oldname').val($(this).val());
@@ -1395,6 +1781,7 @@ $(function() {
 	$("#vmform").on("spawn_section", function spawnSectionEvent(evt, section, sectiondata) {
 		if (sectiondata.category == 'vDisk') {
 			regenerateDiskPreview(sectiondata.index);
+			setDiskserial(sectiondata.index) ;
 		}
 		if (sectiondata.category == 'Graphics_Card') {
 			$(section).find(".gpu").change();
@@ -1434,8 +1821,8 @@ $(function() {
 		var myindex = $(this).closest('table').data('index');
 
 		if (myindex == 0) {
-			$vnc_sections = $('.vncmodel,.vncpassword,.vnckeymap');
-			if (myvalue == 'vnc') {
+			$vnc_sections = $('.autoportline,.protocol,.vncmodel,.vncpassword,.vnckeymap');
+			if (myvalue == 'virtual') {
 				$vnc_sections.filter('.wasadvanced').removeClass('wasadvanced').addClass('advanced');
 				slideDownRows($vnc_sections.not(isVMAdvancedMode() ? '.basic' : '.advanced'));
 			} else {
@@ -1445,7 +1832,7 @@ $(function() {
 		}
 
 		$romfile = $(this).closest('table').find('.romfile');
-		if (myvalue == 'vnc' || myvalue == '') {
+		if (myvalue == 'virtual' || myvalue == '') {
 			slideUpRows($romfile.not(isVMAdvancedMode() ? '.basic' : '.advanced'));
 			$romfile.filter('.advanced').removeClass('advanced').addClass('wasadvanced');
 		} else {
@@ -1484,7 +1871,7 @@ $(function() {
 
 		<?if (!$boolNew):?>
 		// signal devices to be added or removed
-		form.find('input[name="usb[]"],input[name="pci[]"]').each(function(){
+		form.find('input[name="usb[]"],input[name="pci[]"],input[name="usbopt[]"]').each(function(){
 			if (!$(this).prop('checked')) $(this).prop('checked',true).val($(this).val()+'#remove');
 		});
 		// remove unused graphic cards
@@ -1495,7 +1882,7 @@ $(function() {
 		} while (gpu);
 		form.find('select[name="gpu[0][id]"] option').each(function(){
 			var gpu = $(this).val();
-			if (gpu != 'vnc' && !gpus.includes(gpu)) form.append('<input type="hidden" name="pci[]" value="'+gpu+'#remove">');
+			if (gpu != 'virtual' && !gpus.includes(gpu)) form.append('<input type="hidden" name="pci[]" value="'+gpu+'#remove">');
 		});
 		// remove unused sound cards
 		var sound = [], i = 0;
@@ -1511,7 +1898,7 @@ $(function() {
 		var postdata = form.find('input,select').serialize().replace(/'/g,"%27");
 		<?if (!$boolNew):?>
 		// keep checkbox visually unchecked
-		form.find('input[name="usb[]"],input[name="pci[]"]').each(function(){
+		form.find('input[name="usb[]"],input[name="usbopt[]"],input[name="pci[]"]').each(function(){
 			if ($(this).val().indexOf('#remove')>0) $(this).prop('checked',false);
 		});
 		<?endif?>
@@ -1521,10 +1908,10 @@ $(function() {
 
 		$.post("/plugins/dynamix.vm.manager/templates/Custom.form.php", postdata, function( data ) {
 			if (data.success) {
-				if (data.vncurl) {
-					var vnc_window=window.open(data.vncurl, '_blank', 'scrollbars=yes,resizable=yes');
+				if (data.vmrcurl) {
+					var vmrc_window=window.open(data.vmrcurl, '_blank', 'scrollbars=yes,resizable=yes');
 					try {
-						vnc_window.focus();
+						vmrc_window.focus();
 					} catch (e) {
 						swal({title:"_(Browser error)_",text:"_(Pop-up Blocker is enabled! Please add this site to your exception list)_",type:"warning",confirmButtonText:"_(Ok)_"},function(){ done() });
 						return;

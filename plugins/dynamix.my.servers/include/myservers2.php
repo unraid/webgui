@@ -19,9 +19,7 @@
         }
       }
     }
-    if (file_exists('/boot/config/plugins/dynamix.my.servers/myservers.cfg')) {
-      @extract(parse_ini_file('/boot/config/plugins/dynamix.my.servers/myservers.cfg',true));
-    }
+    // note: $myservers variable defined in myservers1.php, by parsing myservers.cfg
     // upc translations
     $upc_translations = [
       ($_SESSION['locale']) ? $_SESSION['locale'] : 'en_US' => [
@@ -184,7 +182,7 @@
           'ENOKEYFILE' => [
             'humanReadable' => _('No Keyfile'),
             'heading' => _("Let's unleash your hardware").'!',
-            'message' => '<p>'._('Your server will not be usable until you purchase a Registration key or install a free 30-day Trial key').'. '._('A Trial key provides all the functionality of a Pro Registration key').'.</p><p>'._('Registration keys are bound to your USB Flash boot device serial number (GUID)').'. '._('Please use a high quality name brand device at least 1GB in size').'.</p><p>'._('Note: USB memory card readers are generally not supported because most do not present unique serial numbers').'.</p>',
+            'message' => '<p>'._('Your server will not be usable until you purchase a Registration key or install a free 30-day Trial key').'. '._('A Trial key provides all the functionality of a Pro Registration key').'.</p><p>'._('Registration keys are bound to your USB Flash boot device serial number (GUID)').'. '._('Please use a high quality name brand device at least 1GB in size (min 4GB recommended)').'.</p><p>'._('Note: USB memory card readers are generally not supported because most do not present unique serial numbers').'.</p>',
           ],
           'TRIAL' => [
             'humanReadable' => _('Trial'),
@@ -226,7 +224,7 @@
             'humanReadable' => _('Missing key file'),
             'error' => [
               'heading' => '@:stateData.ENOKEYFILE2.humanReadable',
-              'message' => _('It appears that your license key file is corrupted or missing').'. '._('The key file should be located in the */config* directory on your USB Flash boot device').'. '._('If you do not have a backup copy of your license key file you may attempt to recover your key').'. '._('If this was a Trial installation, you may purchase a license key').'.',
+              'message' => _('It appears that your license key file is corrupted or missing').'. '._('The key file should be located in the */config* directory on your USB Flash boot device').'. '._('If you do not have a backup copy of your license key file you may install the My Servers (beta) plugin to attempt to recover your key').'. '._('If this was an expired Trial installation, you may purchase a license key').'.',
             ],
           ],
           'ETRIAL' => [
@@ -383,7 +381,7 @@
                 'remoteAccessDisabled' => _('Remote access will be disabled'),
                 'remoteAccessInaccessible' => sprintf(_('You will no longer have access to this server using <abbr title="%s" class="italic">this url</abbr>'), '{0}'),
                 'disablingFlashBackup' => _('Automated flash backups will be disabled until you sign in again'),
-                'downloadFlashBackup' => _('Download latest backup from My Servers Dashboard'),
+                'downloadFlashBackup' => _('Download latest backup from My Servers Dashboard before signing out'),
               ],
             ],
             'success' => [
@@ -521,6 +519,12 @@
           'default' => _('Key management is done via the dropdown in the top right of the webGUI on every page').'.',
           'open' => _('Open Dropdown'),
         ],
+        'yargYePirate' => _('Oh no! Are you pirating Unraid OS?<br>Are you ready to buy a real license?'),
+        'keyFileNotValid' => _('Key file not valid'),
+        'installFailed' => [
+          'heading' => _('My Servers plugin install failed'),
+          'message' => _('The My Servers plugin install is incomplete').'. '._('Please uninstall and reinstall the My Servers plugin').'. '._('Be sure to let the install complete before you close the window').'.',
+        ],
       ],
     ];
     $configErrorEnum = [ // used to map $var['configValid'] value to mimic unraid-api's `configError` ENUM
@@ -530,13 +534,24 @@
       "withdrawn" => 'WITHDRAWN',
     ];
     $nginx = parse_ini_file('/var/local/emhttp/nginx.ini');
-    $plgInstalled = (file_exists('/var/log/plugins/dynamix.unraid.net.plg')
-    ? 'dynamix.unraid.net.plg'
-    : (file_exists('/var/log/plugins/dynamix.unraid.net.staging.plg')
-      ? 'dynamix.unraid.net.staging.plg'
-      : ''));
+
+    $plgInstalled = '';
+    if (!file_exists('/var/lib/pkgtools/packages/dynamix.unraid.net') && !file_exists('/var/lib/pkgtools/packages/dynamix.unraid.net.staging')) {
+      $plgInstalled = ''; // base OS only, My Servers plugin not installed • show ad for My Servers
+    } else {
+      // plugin is installed but if the unraid-api file doesn't fully install it's a failed install
+      if (file_exists('/var/lib/pkgtools/packages/dynamix.unraid.net')) $plgInstalled = 'dynamix.unraid.net.plg';
+      if (file_exists('/var/lib/pkgtools/packages/dynamix.unraid.net.staging')) $plgInstalled = 'dynamix.unraid.net.staging.plg';
+      // plugin install failed • append failure detected so we can show warning about failed install via UPC
+      if (!file_exists('/usr/local/sbin/unraid-api')) $plgInstalled = $plgInstalled . '_installFailed';
+    }
+
+    // read flashbackup ini file
+    $flashbackup_ini = '/var/local/emhttp/flashbackup.ini';
+    $flashbackup_status = (file_exists($flashbackup_ini)) ? @parse_ini_file($flashbackup_ini) : [];
+
     $serverstate = [ // feeds server vars to Vuex store in a slightly different array than state.php
-      "avatar" => (!empty($remote['avatar']) && $plgInstalled) ? $remote['avatar'] : '',
+      "avatar" => (!empty($myservers['remote']['avatar']) && $plgInstalled) ? $myservers['remote']['avatar'] : '',
       "config" => [
         'valid' => $var['configValid'] === 'yes',
         'error' => $var['configValid'] !== 'yes'
@@ -544,15 +559,16 @@
           : null,
       ],
       "deviceCount" => $var['deviceCount'],
-      "email" => $remote['email'] ?? '',
-      "extraOrigins" => $api['extraOrigins'] ? explode(',', $api['extraOrigins']) : [],
+      "email" => $myservers['remote']['email'] ?? '',
+      "extraOrigins" => explode(',', $myservers['api']['extraOrigins']??''),
       "flashproduct" => $var['flashProduct'],
       "flashvendor" => $var['flashVendor'],
+      "flashBackupActivated" => empty($flashbackup_status['activated']) ? '' : 'true',
       "guid" => $var['flashGUID'],
-      "hasRemoteApikey" => !empty($remote['apikey']),
+      "hasRemoteApikey" => !empty($myservers['remote']['apikey']),
       "internalip" => ipaddr(),
       "internalport" => $_SERVER['SERVER_PORT'],
-      "keyfile" => str_replace(['+','/','='], ['-','_',''], trim(base64_encode(@file_get_contents($var['regFILE'])))),
+      "keyfile" => empty($var['regFILE'])? "" : str_replace(['+','/','='], ['-','_',''], trim(base64_encode(@file_get_contents($var['regFILE'])))),
       "osVersion" => $var['version'],
       "plgVersion" => $plgversion = file_exists('/var/log/plugins/dynamix.unraid.net.plg')
         ? trim(@exec('/usr/local/sbin/plugin version /var/log/plugins/dynamix.unraid.net.plg 2>/dev/null'))
@@ -563,12 +579,12 @@
       "protocol" => $_SERVER['REQUEST_SCHEME'],
       "reggen" => (int)$var['regGen'],
       "regGuid" => $var['regGUID'],
-      "registered" => (!empty($remote['username']) && $plgInstalled),
+      "registered" => (!empty($myservers['remote']['username']) && $plgInstalled),
       "servername" => $var['NAME'],
       "site" => $_SERVER['REQUEST_SCHEME']."://".$_SERVER['HTTP_HOST'],
       "state" => strtoupper(empty($var['regCheck']) ? $var['regTy'] : $var['regCheck']),
       "ts" => time(),
-      "username" => (!empty($remote['username']) && $plgInstalled) ? $remote['username'] : '',
+      "username" => (!empty($myservers['remote']['username']) && $plgInstalled) ? $myservers['remote']['username'] : '',
       "wanFQDN" => $nginx['NGINX_WANFQDN'] ?? '',
     ];
     /** @TODO - prop refactor needed. The issue is because the prop names share the same name as the vuex store variables
@@ -589,19 +605,19 @@
     */
     ?>
     <unraid-user-profile
-      apikey="<?=$upc['apikey'] ?? ''?>"
-      api-version="<?=$api['version'] ?? ''?>"
+      apikey="<?=$myservers['upc']['apikey'] ?? ''?>"
+      api-version="<?=$myservers['api']['version'] ?? ''?>"
       banner="<?=$display['banner'] ?? ''?>"
       bgcolor="<?=($backgnd) ? '#'.$backgnd : ''?>"
       csrf="<?=$var['csrf_token']?>"
-      displaydesc="<?=($display['headerdescription']!='no') ? 'true' : ''?>"
+      displaydesc="<?=($display['headerdescription']??''!='no') ? 'true' : ''?>"
       expiretime="<?=1000*($var['regTy']=='Trial'||strstr($var['regTy'],'expired')?$var['regTm2']:0)?>"
-      hide-my-servers="<?=(file_exists('/usr/local/sbin/unraid-api')) ? '' : 'yes' ?>"
+      hide-my-servers="<?=$plgInstalled ? '' : 'yes' ?>"
       locale="<?=($_SESSION['locale']) ? $_SESSION['locale'] : 'en_US'?>"
       locale-messages="<?=rawurlencode(json_encode($upc_translations, JSON_UNESCAPED_SLASHES, JSON_UNESCAPED_UNICODE))?>"
-      metacolor="<?=($display['headermetacolor']) ? '#'.$display['headermetacolor'] : ''?>"
+      metacolor="<?=($display['headermetacolor']??'') ? '#'.$display['headermetacolor'] : ''?>"
       plg-path="dynamix.my.servers"
-      reg-wiz-time="<?=$remote['regWizTime'] ?? ''?>"
+      reg-wiz-time="<?=$myservers['remote']['regWizTime'] ?? ''?>"
       serverdesc="<?=$var['COMMENT']?>"
       servermodel="<?=$var['SYS_MODEL']?>"
       serverstate="<?=rawurlencode(json_encode($serverstate, JSON_UNESCAPED_SLASHES))?>"

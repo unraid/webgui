@@ -1,11 +1,11 @@
 Menu="Device New"
 Title="Identity"
 Tag="user"
-Cond="strpos($disks[$name]['status'],'_NP')===false"
+Cond="strpos($disks[$name]['status']??'','_NP')===false"
 ---
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -24,7 +24,7 @@ function disklog(disk,key,value) {
   $.post('/webGui/include/DiskLog.php',{disk:disk,key:key,value:value});
 }
 $(function() {
-  $.post("/webGui/include/SmartInfo.php",{cmd:'identify',port:'<?=addslashes(htmlspecialchars($dev))?>',name:'<?=addslashes(htmlspecialchars($name))?>'}, function(data) {
+  $.post("/webGui/include/SmartInfo.php",{cmd:'identify',port:'<?=$dev?>',name:'<?=$name?>'}, function(data) {
     $('#disk_identify').html(data);
   });
 });

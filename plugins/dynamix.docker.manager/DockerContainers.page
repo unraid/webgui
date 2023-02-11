@@ -6,9 +6,9 @@ Markdown="false"
 Nchan="docker_load:stop"
 ---
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2014-2021, Guilherme Jardim, Eric Schultz, Jon Panozzo.
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2014-2023, Guilherme Jardim, Eric Schultz, Jon Panozzo.
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -19,14 +19,12 @@ Nchan="docker_load:stop"
  */
 ?>
 <?
+require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
+
 $width   = in_array($theme,['white','black']) ? -58: -44;
 $top     = in_array($theme,['white','black']) ? 40 : 20;
 $busy    = "<i class='fa fa-spin fa-circle-o-notch'></i> "._('Please wait')."... "._('starting up containers');
 $cpus    = cpu_list();
-
-// adjust the text color in log window
-$fgcolor = in_array($theme,['white','azure']) ? '#1c1c1c' : '#f2f2f2';
-exec("sed -ri 's/^\.logLine\{color:#......;/.logLine{color:$fgcolor;/' $docroot/plugins/dynamix.docker.manager/log.htm >/dev/null &");
 ?>
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.ui.css')?>">
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
@@ -34,7 +32,6 @@ exec("sed -ri 's/^\.logLine\{color:#......;/.logLine{color:$fgcolor;/' $docroot/
 <style>
 .basic{display:block}
 .advanced{display:none;white-space:nowrap}
-.dockerhandle{cursor:grab;}
 .log{cursor:zoom-in}
 .exec{cursor:pointer}
 table#docker_containers{text-align:left}
@@ -45,8 +42,8 @@ input.wait{width:24px;margin:0 4px;padding:0 5px;border:none;box-shadow:none;bac
 table tbody td{line-height:normal}
 </style>
 <table id="docker_containers" class="tablesorter shift">
-<thead><tr><th><a href="#" style="cursor:hand;margin-left:12px;display:inline-block;width:32px" onclick="resetSorting()" title="_(Reset sorting)_"><i class="fa fa-th-list"></i></a>_(Application)_</th><th>_(Version)_</th><th>_(Network)_</th><th>_(Port Mappings)_ <small>(_(App to Host)_)</small></th><th>_(Volume Mappings)_ <small>(_(App to Host)_)</small></th><th class="load advanced">_(CPU & Memory load)_</th><th class="nine">_(Autostart)_</th><th class="five">_(Uptime)_</th><th></th></tr></thead>
-<tbody id="docker_list"><tr><td colspan='9'></td></tr></tbody>
+<thead><tr><th><a href="#" style="cursor:hand;margin-left:12px;display:inline-block;width:32px" onclick="resetSorting()" title="_(Reset sorting)_"><i class="fa fa-th-list"></i></a>_(Application)_</th><th>_(Version)_</th><th>_(Network)_</th><th>_(Port Mappings)_ <small>(_(App to Host)_)</small></th><th>_(Volume Mappings)_ <small>(_(App to Host)_)</small></th><th class="load advanced">_(CPU & Memory load)_</th><th class="nine">_(Autostart)_</th><th class="five">_(Uptime)_</th></tr></thead>
+<tbody id="docker_list"><tr><td colspan='8'></td></tr></tbody>
 </table>
 <input type="button" onclick="addContainer()" value="_(Add Container)_" style="display:none">
 <input type="button" onclick="startAll()" value="_(Start All)_" style="display:none">
@@ -55,14 +52,15 @@ table tbody td{line-height:normal}
 <input type="button" onclick="resumeAll()" value="_(Resume All)_" style="display:none">
 <input type="button" onclick="checkAll()" value="_(Check for Updates)_" id="checkAll" style="display:none">
 <input type="button" onclick="updateAll()" value="_(Update All)_" id="updateAll" style="display:none">
-<input type="button" onclick="sizes()" value="_(Container Size)_" style="display:none">
+<input type="button" onclick="contSizes()" value="_(Container Size)_" style="display:none">
 <div id="iframe-popup" style="display:none;-webkit-overflow-scrolling:touch;"></div>
 
 <script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
 <script src="<?autov('/plugins/dynamix.docker.manager/javascript/docker.js')?>"></script>
 <script>
+var docker = [];
 <?if (!$tabbed):?>
-$('#title').append("<span id='busy' class='red-text strong' style='display:none;margin-left:40px'><?=$busy?></span>");
+$('.title').append("<span id='busy' class='red-text strong' style='display:none;margin-left:40px'><?=$busy?></span>");
 <?else:?>
 $('.tabs').append("<span id='busy' class='red-text strong' style='display:none;position:relative;top:<?=$top?>px;left:40px;font-size:1.4rem;letter-spacing:2px'><?=$busy?></span>");
 <?endif;?>
@@ -83,31 +81,50 @@ function resetSorting() {
 }
 function listview() {
   var more = $.cookie('docker_listview_mode')=='advanced';
+  <?if(($dockercfg['DOCKER_READMORE']??'yes') === 'yes'):?>
   $('.docker_readmore').readmore({maxHeight:32,moreLink:"<a href='#' style='text-align:center'><i class='fa fa-chevron-down'></i></a>",lessLink:"<a href='#' style='text-align:center'><i class='fa fa-chevron-up'></i></a>"});
+  <?endif;?>
   $('input.autostart').each(function(){
     var wait = $('#'+$(this).prop('id').replace('auto','wait'));
     var auto = $(this).prop('checked');
     if (auto && more) wait.show(); else wait.hide();
   });
 }
-var sortableHelper = function(e,i){
-  i.children().each(function(){
-    $(this).width($(this).width());
-  });
-  return i;
+var sortableHelper = function(e,ui){
+  ui.children().each(function(){$(this).width($(this).width());});
+  return ui;
 };
-function loadlist(init) {
-  timers.docker = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
-  $.get('/plugins/dynamix.docker.manager/include/DockerContainers.php',function(d) {
-    clearTimeout(timers.docker);
-    var data = d.split(/\0/);
-    $('#docker_list').html(data[0]).sortable({helper:sortableHelper,handle:'.dockerhandle',items:'tr.sortable',cursor:'move',axis:'y',containment:'parent',cancel:'span.docker_readmore,input',delay:100,opacity:0.5,zIndex:9999,
+function LockButton() {
+  if ($.cookie('lockbutton') == null) {
+    $.cookie('lockbutton','lockbutton');
+<?if ($themes1):?>
+    $('div.nav-item.LockButton').find('a').prop('title',"_(Lock sortable items)_");
+    $('div.nav-item.LockButton').find('b').removeClass('icon-u-lock red-text').addClass('icon-u-lock-open green-text');
+<?endif;?>
+    $('div.nav-item.LockButton').find('span').text("_(Lock sortable items)_");
+    $('#docker_list').sortable({helper:sortableHelper,items:'.sortable',cursor:'grab',axis:'y',containment:'parent',cancel:'span.docker_readmore,input',delay:100,opacity:0.5,zIndex:9999,forcePlaceholderSize:true,
     update:function(e,ui){
       var row = $('#docker_list').find('tr:first');
       var names = ''; var index = '';
       row.parent().children().find('td.ct-name').each(function(){names+=$(this).find('.appname').text()+';';index+=$(this).parent().parent().children().index($(this).parent())+';';});
       $.post('/plugins/dynamix.docker.manager/include/UserPrefs.php',{names:names,index:index});
     }});
+  } else {
+    $.removeCookie('lockbutton');
+<?if ($themes1):?>
+    $('div.nav-item.LockButton').find('a').prop('title',"_(Unlock sortable items)_");
+    $('div.nav-item.LockButton').find('b').removeClass('icon-u-lock-open green-text').addClass('icon-u-lock red-text');
+<?endif;?>
+    $('div.nav-item.LockButton').find('span').text("_(Unlock sortable items)_");
+    $('#docker_list').sortable('destroy');
+  }
+}
+function loadlist(init) {
+  timers.docker = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
+  $.get('/plugins/dynamix.docker.manager/include/DockerContainers.php',function(d) {
+    clearTimeout(timers.docker);
+    var data = d.split(/\0/);
+    $('#docker_list').html(data[0]);
     $('head').append('<script>'+data[1]+'<\/script>');
 <?if ($display['resize']):?>
     resize();
@@ -142,8 +159,10 @@ function loadlist(init) {
     if (rebuild) rebuildAll();
   });
 }
-function sizes() {
-  openBox("/plugins/dynamix.docker.manager/include/ContainerSize.php","_(Container Size)_",600,600);
+function contSizes() {
+  // show spinner over window
+  $('div.spinner.fixed').css({'z-index':'100000'}).show();
+  openPlugin('container_size', "_(Container Size)_");
 }
 var dockerload = new NchanSubscriber('/sub/dockerload',{subscriber:'websocket'});
 dockerload.on('message', function(msg){
@@ -165,6 +184,7 @@ $(function() {
     $.cookie('docker_listview_mode',$('.advancedview').is(':checked')?'advanced':'basic',{expires:3650});
     listview();
   });
+  $.removeCookie('lockbutton');
   loadlist(true);
   dockerload.start();
 });

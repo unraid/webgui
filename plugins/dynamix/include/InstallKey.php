@@ -11,29 +11,50 @@
 ?>
 <?
 $docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
-require_once "$docroot/webGui/include/Secure.php";
+// add translations
+$_SERVER['REQUEST_URI'] = 'settings';
+require_once "$docroot/webGui/include/Translations.php";
 
-function addLog($line) {echo "<script>addLog('$line');</script>";}
+require_once "$docroot/webGui/include/Helpers.php";
+/**
+ * @name response_complete
+ * @param {HTTP Response Status Code} $httpcode https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
+ * @param {String|Array} $result - strings are assumed to be encoded JSON. Arrays will be encoded to JSON.
+ * @param {String} $cli_success_msg
+ */
+function response_complete($httpcode, $result, $cli_success_msg='') {
+  global $cli;
+  $mutatedResult = is_array($result) ? json_encode($result) : $result;
+  if ($cli) {
+    $json = @json_decode($mutatedResult,true);
+    if (!empty($json['error'])) {
+      echo 'Error: '.$json['error'].PHP_EOL;
+      exit(1);
+    }
+    exit($cli_success_msg.PHP_EOL);
+  }
+  header('Content-Type: application/json');
+  http_response_code($httpcode);
+  exit((string)$mutatedResult);
+}
 
-readfile("$docroot/logging.htm");
-$var = parse_ini_file('state/var.ini');
+$cli = php_sapi_name()=='cli';
 $url = unscript($_GET['url']??'');
+$host = parse_url($url)['host'];
 
-$parsed_url = parse_url($url);
-if (isset($parsed_url['host']) && ($parsed_url['host']=="keys.lime-technology.com" || $parsed_url['host']=="lime-technology.com")) {
-  addLog("Downloading $url ... ");
+if (in_array($host,['keys.lime-technology.com','lime-technology.com'])) {
   $key_file = basename($url);
   exec("/usr/bin/wget -q -O ".escapeshellarg("/boot/config/$key_file")." ".escapeshellarg($url), $output, $return_var);
   if ($return_var === 0) {
-    if ($var['mdState'] == "STARTED")
-      addLog("<br>Installing ... Please Stop array to complete key installation.<br>");
-    else
-      addLog("<br>Installed ...<br>");
+    if (parse_ini_file('/var/local/emhttp/var.ini')['mdState'] == "STARTED") {
+      response_complete(200, array('status' => _('Please Stop array to complete key installation')), _('success').', '._('Please Stop array to complete key installation'));
+    } else {
+      response_complete(200, array('status' => ''), _('success'));
+    }
+  } else {
+    response_complete(406, array('error' => _('download error') . " $return_var"));
   }
-  else {
-    addLog("ERROR ($return_var)<br>");
-  }
+} else {
+  response_complete(406, array('error' => _('bad or missing key file') . ": $url"));
 }
-else
-  addLog("ERROR, bad or missing key file URL: $url<br>");
 ?>

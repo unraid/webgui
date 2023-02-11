@@ -1,0 +1,63 @@
+Menu="Dashboard:0"
+Cond="version_compare(parse_ini_file('/etc/unraid-version')['version'],'6.11.9','>')"
+---
+<?PHP
+/*
+  Create a .page file based on this example file and store the file in your plugin directory
+  Make sure this file has a unique name not used by the GUI or other plugins
+
+  This is an example configuration which is used to add custom tiles to the dashboard
+  Placement of one or more custom tiles is done under column1, column2 or column3
+  A column can have as many new custom tiles as needed, each custom tile is a <tbody> element
+  Each tile must have these two properties set:
+
+  "_(description)_"    - this is the (translated) description shown in the Content Manager window
+  "_(Tile tile)_"      - this is the (translated) title of the tile shown in bold on the screen
+
+  The content of the tile can be any text as required by your plugin, this content is placed inside the <td> element
+  A number of predefined spans are available to make fields of certain widths and maybe used to follow the GUI alignment
+  These are:
+  <span class="w18">
+  <span class="w26">
+  <span class="w36">
+  <span class="w44">
+  <span class="w72">
+*/
+$pluginname = "myplugin"; // substitute this entry with the name of your plugin
+
+$mytiles[$pluginname]['column1'] =
+<<<EOT
+<tbody title="_(description)_">
+<tr><td>_(Tile title)_</td></tr>
+<tr><td>
+## content of the tile ##<br>
+single field
+</td></tr>
+</tbody>
+EOT;
+
+$mytiles[$pluginname]['column2'] =
+<<<EOT
+<tbody title="_(description)_">
+<tr><td>_(Tile title)_</td></tr>
+<tr><td>
+## content of the tile ##<br>
+<span class="w26" style="background-color:orange">field 1</span>
+<span class="w72" style="background-color:lightgreen">field 2</span>
+</td></tr>
+</tbody>
+EOT;
+
+$mytiles[$pluginname]['column3'] =
+<<<EOT
+<tbody title="_(description)_">
+<tr><td>_(Tile title)_</td></tr>
+<tr><td>
+## content of the tile ##<br>
+<span class="w26" style="background-color:orange">field 1</span>
+<span class="w36" style="background-color:lightgreen">field 2</span>
+<span class="w36" style="background-color:lightblue">field 3<span>
+</td></tr>
+</tbody>
+EOT;
+?>

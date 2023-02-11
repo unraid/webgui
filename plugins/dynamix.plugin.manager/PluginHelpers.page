@@ -2,8 +2,8 @@ Menu='Buttons'
 Link='nav-user'
 ---
 <?
-/* Copyright 2021, Lime Technology
- * Copyright 2021, Andrew Zawadzki.
+/* Copyright 2023, Lime Technology
+ * Copyright 2023, Andrew Zawadzki.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -15,14 +15,22 @@ Link='nav-user'
 ?>
 <style>
 /* Additional CSS for when user supplies element */
-.ca_element_notice{padding-right:20px;width:100%;height:40px;line-height:40px;color:#e68a00;background:#feefb3;border-bottom:#e68a00 1px solid;text-align:center;font-size:1.4rem;z-index:900;display:none;}
-.ca_PluginUpdateDismiss{float:right;margin-right:20px;cursor:pointer;}
-.ca_pluginUpdateInfo{cursor:pointer;}
-.ca_PluginUpdateInstall{cursor:pointer;}
-a.bannerInfo {cursor:pointer;text-decoration:none;}
-.bannerInfo::before {content:"\f05a";font-family:fontAwesome;color:#e68a00;}
+.ca_element_notice{padding-right:20px;width:100%;height:40px;line-height:40px;color:#e68a00;background:#feefb3;border-bottom:#e68a00 1px solid;text-align:center;font-size:1.4rem;z-index:900;}
+a.ca_PluginUpdateInstall{cursor:pointer;}
+span.ca_PluginUpdateDismiss{float:right;margin-right:20px;cursor:pointer;}
+span.bannerInfo {cursor:pointer;text-decoration:none;margin:0 12px 0 6px;}
+span.bannerInfo::before {content:"\f05a";font-family:fontAwesome;color:#e68a00;}
 </style>
 <script>
+const ca_args = {};
+
+function ca_refresh() {
+<?if ($task == 'Plugins'):?>
+	loadlist();
+<?else:?>
+	refresh();
+<?endif;?>
+}
 
 function ca_hidePluginUpdate(plugin,version,element) {
 	$.cookie(plugin,version);
@@ -30,14 +38,21 @@ function ca_hidePluginUpdate(plugin,version,element) {
 }
 
 function ca_pluginUpdateInstall(plugin) {
-	openBox("/plugins/dynamix.plugin.manager/scripts/plugin&arg1=update&arg2="+plugin,"_(Installing Update)_",600,900,true,"window.location.reload()");
-}
-
-function ca_pluginUpdateShowInfo(cmd,title,height,width,load,func,id) {
-	// open shadowbox window (run in foreground)
-	var run = cmd.split('?')[0].substr(-4)=='.php' ? cmd : '/logging.htm?cmd='+cmd+'&csrf_token=<?=$var['csrf_token']?>';
-	var options = load ? (func ? {modal:true,onClose:function(){setTimeout(func+'('+'"'+(id||'')+'")',0);}} : {modal:false,onClose:function(){location.reload();}}) : {modal:false};
-	Shadowbox.open({content:run, player:'iframe', title:title, height:Math.min(height,screen.availHeight), width:Math.min(width,screen.availWidth), options:options});
+	if (plugin == null) {
+		openPlugin(ca_args.cmd,ca_args.title,'','ca_refresh');
+		return;
+	}
+	ca_args.cmd = 'plugin update '+plugin;
+	ca_args.title = "_(Installing Update)_";
+	$.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{cmd:'alert'},function(data) {
+		if (data==0) {
+			// no alert message - proceed with update
+			setTimeout(ca_pluginUpdateInstall);
+		} else {
+			// show alert message and ask for confirmation
+			openAlert("showchanges <?=$alerts?>","_(Alert Message)_","ca_pluginUpdateInstall");
+		}
+	});
 }
 
 function caPluginUpdateCheck(plugin,options=[],callback) {
@@ -54,21 +69,20 @@ function caPluginUpdateCheck(plugin,options=[],callback) {
 		if ( options.debug == true ) result.updateAvailable = true;
 		if ( ! options.element && ! options.dontShow ) {
 			if ( result.updateAvailable ) {
-				var HTML = result.updateMessage+" <a class='ca_PluginUpdateInstall' onclick='ca_pluginUpdateInstall(&quot;"+plugin+"&quot;);'>"+result.linkMessage+"</a> <a class='bannerInfo fa fa-info-circle' onclick='ca_pluginUpdateShowInfo(&quot;/plugins/dynamix.plugin.manager/include/ShowChanges.php?file=%2Ftmp%2Fplugins%2F"+pluginFilename+".txt&quot;,&quot;_(Release Notes)_&quot;,600,900); return false;'></a>";
+				var HTML = result.updateMessage+"<span class='bannerInfo fa fa-info-circle big' title=\"_(View Release Notes)_\" onclick='openChanges(\"showchanges /tmp/plugins/"+pluginFilename+".txt\",\"_(Release Notes)_\")'></span><a class='ca_PluginUpdateInstall' onclick='ca_pluginUpdateInstall(\""+plugin+"\")'>"+result.linkMessage+"</a>";
 				addBannerWarning(HTML,false,options.noDismiss);
 			}
 		} else {
 			if ( $.cookie(plugin) != result.version ) {
 				if ( result.updateAvailable ) {
-					var HTML = result.updateMessage+" <a class='ca_PluginUpdateInstall' onclick='ca_pluginUpdateInstall(&quot;"+plugin+"&quot;);'>"+result.linkMessage+"</a> <a class='bannerInfo fa fa-info-circle' onclick='ca_pluginUpdateShowInfo(&quot;/plugins/dynamix.plugin.manager/include/ShowChanges.php?file=%2Ftmp%2Fplugins%2F"+pluginFilename+".txt&quot;,&quot;_(Release Notes)_&quot;,600,900); return false;'></a>";
+					var HTML = result.updateMessage+"<span class='bannerInfo fa fa-info-circle big' title=\"_(View Release Notes)_\" onclick='openChanges(\"showchanges /tmp/plugins/"+pluginFilename+".txt\",\"_(Release Notes)_\")'></span><a class='ca_PluginUpdateInstall' onclick='ca_pluginUpdateInstall(\""+plugin+"\")'>"+result.linkMessage+"</a>";
 					if ( ! options.noDismiss ) {
-						HTML = HTML.concat("<span class='ca_PluginUpdateDismiss'><i class='fa fa-close' onclick='ca_hidePluginUpdate(&quot;"+plugin+"&quot;,&quot;"+result.version+"&quot;,&quot;"+options.element+"&quot;);'></i>");
+						HTML = HTML.concat("<span class='ca_PluginUpdateDismiss'><i class='fa fa-close' onclick='ca_hidePluginUpdate(\""+plugin+"\",\""+result.version+"\",\""+options.element+"\")'></i></span>");
 					}
 					result.HTML = HTML;
-
 					if ( ! options.dontShow ) {
 						$(options.element).html(HTML);
-						$(options.element).addClass("ca_element_notice").show();
+						$(options.element).addClass("ca_element_notice");
 					}
 				}
 			}
@@ -81,5 +95,4 @@ function caPluginUpdateCheck(plugin,options=[],callback) {
 		}
 	});
 }
-
 </script>

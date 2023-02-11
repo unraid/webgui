@@ -30,6 +30,7 @@ if (isset($_POST['#apply'])) {
     $month = $_POST['month'] ?? '*';
     $day   = $_POST['day'] ?? '*';
     $write = $_POST['write'] ?? '';
+    $write = ($write == "yes") ? "" : "NOCORRECT";
     $term  = $test = $end1 = $end2 = '';
     switch ($dotm) {
       case '28-31':

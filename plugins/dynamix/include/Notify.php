@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  * Copyright 2012, Andrew Hamer-Adams, http://www.pixeleyes.co.nz.
  *
  * This program is free software; you can redistribute it and/or
@@ -33,7 +33,7 @@ case 'add':
     case 'd':
     case 'i':
     case 'm':
-      $notify .= " -{$option} \"{$value}\"";
+      $notify .= " -{$option} ".escapeshellarg($value);
       break;
     case 'x':
     case 't':
@@ -46,8 +46,13 @@ case 'add':
 case 'get':
   echo shell_exec("$notify get");
   break;
+case 'hide':
+  $file = $_POST['file']??'';
+  if (file_exists($file) && $file==realpath($file) && pathinfo($file)['extension']=='notify') chmod($file,0000);
+  break;
 case 'archive':
-  shell_exec("$notify archive ".escapeshellarg($_POST['file']));
+  $file = $_POST['file']??'';
+  if (strlen($file) && strpos($file,'/')===false) shell_exec("$notify archive ".escapeshellarg($file));
   break;
 }
 ?>

@@ -3,8 +3,8 @@ Title="SMTP Settings"
 Tag="envelope"
 ---
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -75,112 +75,112 @@ function settings(form, data) {
 <input type="hidden" name="#arg[1]" value="smtp-init">
 _(Preset service)_:
 : <select name="service" size="1" onchange="settings(this.form,this.value)">
-<?=mk_option($ssmtp['service'], "smtp.gmail.com:465:YES:NO:login", "Gmail")?>
-<?=mk_option($ssmtp['service'], "smtp.gmail.com:587:YES:YES:login", "Gmail with TLS")?>
-<?=mk_option($ssmtp['service'], "smtp.office365.com:587:YES:YES:login", "Outlook")?>
-<?=mk_option($ssmtp['service'], "smtp.office365.com:587:YES:YES:login", "Hotmail")?>
-<?=mk_option($ssmtp['service'], "smtp.office365.com:587:YES:YES:login", "Office365")?>
-<?=mk_option($ssmtp['service'], "smtp.mail.yahoo.com:465:YES:NO:login", "Yahoo")?>
-<?=mk_option($ssmtp['service'], "plus.smtp.mail.yahoo.com:465:YES:NO:login", "Yahoo Plus")?>
-<?=mk_option($ssmtp['service'], "smtp.mail.yahoo.co.uk:465:YES:NO:login", "Yahoo UK")?>
-<?=mk_option($ssmtp['service'], "smtp.mail.yahoo.com.au:465:YES:NO:login", "Yahoo AU/NZ")?>
-<?=mk_option($ssmtp['service'], "smtp.o2.ie:25:NO:NO:login", "O2")?>
-<?=mk_option($ssmtp['service'], "smtp.o2.co.uk:25:NO:NO:login", "O2 UK")?>
-<?=mk_option($ssmtp['service'], "smtp.o2online.de:25:NO:NO:login", "O2 Online Deutschland")?>
-<?=mk_option($ssmtp['service'], "securesmtp.t-online.de:587:YES:YES:login", "T-Online Deutschland")?>
-<?=mk_option($ssmtp['service'], "smtp.1and1.com:587:YES:YES:login", "1&1")?>
-<?=mk_option($ssmtp['service'], "smtp.1und1.de:587:YES:YES:login", "1&1 Deutschland")?>
-<?=mk_option($ssmtp['service'], "smtp.att.yahoo.com:465:YES:NO:login", "AT&T")?>
-<?=mk_option($ssmtp['service'], "smtp.ntlworld.com:465:YES:NO:login", "NTL")?>
-<?=mk_option($ssmtp['service'], "mail.btopenworld.com:25:NO:NO:login", "BT Openworld")?>
-<?=mk_option($ssmtp['service'], "mail.btinternet.com:25:NO:NO:login", "BT Internet")?>
-<?=mk_option($ssmtp['service'], "smtp.comcast.net:465:YES:NO:login", "Comcast")?>
-<?=mk_option($ssmtp['service'], "outgoing.verizon.net:465:YES:NO:login", "Verizon")?>
-<?=mk_option($ssmtp['service'], "outgoing.yahoo.verizon.net:587:NO:NO:login", "Verizon (Yahoo hosted)")?>
-<?=mk_option($ssmtp['service'], "smtp.mail.com:465:YES:NO:login", "Mail.com")?>
-<?=mk_option($ssmtp['service'], "smtp.gmx.com:465:YES:NO:login", "GMX.com")?>
-<?=mk_option($ssmtp['service'], "smtp.zoho.com:465:YES:NO:login", "zoho Mail")?>
-<?=mk_option($ssmtp['service'], "::NO:NO:none", _("Custom"))?>
+<?=mk_option($ssmtp['service']??'', "smtp.gmail.com:465:YES:NO:login", "Gmail")?>
+<?=mk_option($ssmtp['service']??'', "smtp.gmail.com:587:YES:YES:login", "Gmail with TLS")?>
+<?=mk_option($ssmtp['service']??'', "smtp.office365.com:587:YES:YES:login", "Outlook")?>
+<?=mk_option($ssmtp['service']??'', "smtp.office365.com:587:YES:YES:login", "Hotmail")?>
+<?=mk_option($ssmtp['service']??'', "smtp.office365.com:587:YES:YES:login", "Office365")?>
+<?=mk_option($ssmtp['service']??'', "smtp.mail.yahoo.com:465:YES:NO:login", "Yahoo")?>
+<?=mk_option($ssmtp['service']??'', "plus.smtp.mail.yahoo.com:465:YES:NO:login", "Yahoo Plus")?>
+<?=mk_option($ssmtp['service']??'', "smtp.mail.yahoo.co.uk:465:YES:NO:login", "Yahoo UK")?>
+<?=mk_option($ssmtp['service']??'', "smtp.mail.yahoo.com.au:465:YES:NO:login", "Yahoo AU/NZ")?>
+<?=mk_option($ssmtp['service']??'', "smtp.o2.ie:25:NO:NO:login", "O2")?>
+<?=mk_option($ssmtp['service']??'', "smtp.o2.co.uk:25:NO:NO:login", "O2 UK")?>
+<?=mk_option($ssmtp['service']??'', "smtp.o2online.de:25:NO:NO:login", "O2 Online Deutschland")?>
+<?=mk_option($ssmtp['service']??'', "securesmtp.t-online.de:587:YES:YES:login", "T-Online Deutschland")?>
+<?=mk_option($ssmtp['service']??'', "smtp.1and1.com:587:YES:YES:login", "1&1")?>
+<?=mk_option($ssmtp['service']??'', "smtp.1und1.de:587:YES:YES:login", "1&1 Deutschland")?>
+<?=mk_option($ssmtp['service']??'', "smtp.att.yahoo.com:465:YES:NO:login", "AT&T")?>
+<?=mk_option($ssmtp['service']??'', "smtp.ntlworld.com:465:YES:NO:login", "NTL")?>
+<?=mk_option($ssmtp['service']??'', "mail.btopenworld.com:25:NO:NO:login", "BT Openworld")?>
+<?=mk_option($ssmtp['service']??'', "mail.btinternet.com:25:NO:NO:login", "BT Internet")?>
+<?=mk_option($ssmtp['service']??'', "smtp.comcast.net:465:YES:NO:login", "Comcast")?>
+<?=mk_option($ssmtp['service']??'', "outgoing.verizon.net:465:YES:NO:login", "Verizon")?>
+<?=mk_option($ssmtp['service']??'', "outgoing.yahoo.verizon.net:587:NO:NO:login", "Verizon (Yahoo hosted)")?>
+<?=mk_option($ssmtp['service']??'', "smtp.mail.com:465:YES:NO:login", "Mail.com")?>
+<?=mk_option($ssmtp['service']??'', "smtp.gmx.com:465:YES:NO:login", "GMX.com")?>
+<?=mk_option($ssmtp['service']??'', "smtp.zoho.com:465:YES:NO:login", "zoho Mail")?>
+<?=mk_option($ssmtp['service']??'', "::NO:NO:none", _("Custom"))?>
 </select>
 
 :smtp_preset_service_help:
 
 _(Sending email address)_:
-: <input type="text" name="root" value="<?=htmlspecialchars($ssmtp['root'])?>">
+: <input type="text" name="root" value="<?=htmlspecialchars($ssmtp['root']??'')?>">
 
 :smtp_email_address_help:
 
 _(Email recipients)_:
-: <input type="text" name="RcptTo" value="<?=htmlspecialchars($ssmtp['RcptTo'])?>">
+: <input type="text" name="RcptTo" value="<?=htmlspecialchars($ssmtp['RcptTo']??'')?>">
 
 :smtp_recipients_help:
 
 _(Priority in header)_:
 : <select name="SetEmailPriority">
-  <?=mk_option($ssmtp['SetEmailPriority'], "False", _("No"))?>
-  <?=mk_option($ssmtp['SetEmailPriority'], "True", _("Yes"))?>
+  <?=mk_option($ssmtp['SetEmailPriority']??'', "False", _("No"))?>
+  <?=mk_option($ssmtp['SetEmailPriority']??'', "True", _("Yes"))?>
   </select>
 
 :smtp_priority_help:
 
 _(Email subject prefix)_:
-: <input type="text" name="Subject" value="<?=htmlspecialchars($ssmtp['Subject'])?>">
+: <input type="text" name="Subject" value="<?=htmlspecialchars($ssmtp['Subject']??'')?>">
 
 :smtp_subject_prefix_help:
 
 _(Mail server)_:
-: <input type="text" name="server" value="<?=htmlspecialchars($ssmtp['server'])?>">
+: <input type="text" name="server" value="<?=htmlspecialchars($ssmtp['server']??'')?>">
 
 :smtp_mail_server_help:
 
 _(Mail server port)_:
-: <input type="text" name="port" class="narrow"  maxlength="5"  value="<?=htmlspecialchars($ssmtp['port'])?>">
+: <input type="text" name="port" class="narrow"  maxlength="5" value="<?=htmlspecialchars($ssmtp['port']??'')?>">
 
 :smtp_mail_server_port_help:
 
 _(Use SSL/TLS)_:
 : <select name="UseTLS">
-  <?=mk_option($ssmtp['UseTLS'], "NO", _("No"))?>
-  <?=mk_option($ssmtp['UseTLS'], "YES", _("Yes"))?>
+  <?=mk_option($ssmtp['UseTLS']??'', "NO", _("No"))?>
+  <?=mk_option($ssmtp['UseTLS']??'', "YES", _("Yes"))?>
   </select>
 
 :smtp_use_ssl_tls_help:
 
 _(Use STARTTLS)_:
 : <select name="UseSTARTTLS">
-  <?=mk_option($ssmtp['UseSTARTTLS'], "NO", _("No"))?>
-  <?=mk_option($ssmtp['UseSTARTTLS'], "YES", _("Yes"))?>
+  <?=mk_option($ssmtp['UseSTARTTLS']??'', "NO", _("No"))?>
+  <?=mk_option($ssmtp['UseSTARTTLS']??'', "YES", _("Yes"))?>
   </select>
 
 :smtp_use_starttls_help:
 
 _(Define a TLS certificate)_:
 : <select name="UseTLSCert" onchange="tls(this.form)">
-  <?=mk_option($ssmtp['UseTLSCert'], "NO", _("No"))?>
-  <?=mk_option($ssmtp['UseTLSCert'], "YES", _("Yes"))?>
+  <?=mk_option($ssmtp['UseTLSCert']??'', "NO", _("No"))?>
+  <?=mk_option($ssmtp['UseTLSCert']??'', "YES", _("Yes"))?>
   </select>
 
 :smtp_define_tls_cert_help:
 
 _(TLS certificate location)_:
-: <input type="text" name="TLSCert" value="<?=htmlspecialchars($ssmtp['TLSCert'])?>">
+: <input type="text" name="TLSCert" value="<?=htmlspecialchars($ssmtp['TLSCert']??'')?>">
 
 :smtp_tls_cert_location_help:
 
 _(Authentication method)_:
 : <select name="AuthMethod" onchange="pwd(this.form)">
-  <?=mk_option($ssmtp['AuthMethod'], "none", _("None"))?>
-  <?=mk_option($ssmtp['AuthMethod'], "cram-md5", _("CRAM-MD5"))?>
-  <?=mk_option($ssmtp['AuthMethod'], "login", _("Login"))?>
+  <?=mk_option($ssmtp['AuthMethod']??'', "none", _("None"))?>
+  <?=mk_option($ssmtp['AuthMethod']??'', "cram-md5", _("CRAM-MD5"))?>
+  <?=mk_option($ssmtp['AuthMethod']??'', "login", _("Login"))?>
   </select>
 
 :smtp_authentication_method_help:
 
 _(Username)_:
-: <input type="text" name="AuthUser" value="<?=htmlspecialchars($ssmtp['AuthUser'])?>">
+: <input type="text" name="AuthUser" value="<?=htmlspecialchars($ssmtp['AuthUser']??'')?>">
 
 _(Password)_:
-: <input type="password" name="AuthPass" value="<?=htmlspecialchars($ssmtp['AuthPass'])?>">
+: <input type="password" name="AuthPass" value="<?=htmlspecialchars($ssmtp['AuthPass']??'')?>">
 
 :smtp_username_password_help:
 

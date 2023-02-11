@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2022, Lime Technology
- * Copyright 2012-2022, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -15,7 +15,7 @@ $docroot  = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 // add translations
 $_SERVER['REQUEST_URI'] = 'settings';
 // special case when script is called on form-submit and processed by update.php
-if (!isset($_SESSION['locale'])) $_SESSION['locale'] = $_POST['#locale'];
+if (!isset($_SESSION['locale'])) $_SESSION['locale'] = $_POST['#locale']??'';
 require_once "$docroot/webGui/include/Translations.php";
 require_once "$docroot/webGui/include/Helpers.php";
 
@@ -37,7 +37,8 @@ function mask2cidr($mask) {
 function thisNet($ethX='eth0') {
   extract(parse_ini_file('state/network.ini',true));
   $net = long2ip(ip2long($$ethX['IPADDR:0']) & ip2long($$ethX['NETMASK:0'])).'/'.mask2cidr($$ethX['NETMASK:0']);
-  return [$net,$$ethX['GATEWAY:0']];
+  $dev = $$ethX['BRIDGING']=='yes' ? $$ethX['BRNAME'] : ($$ethX['BONDING']=='yes' ? $$ethX['BONDNAME'] : $ethX);
+  return [$dev,$net,$$ethX['GATEWAY:0']];
 }
 function ipv4($ip) {
   return strpos($ip,'.')!==false;
@@ -75,7 +76,9 @@ function newNet($vtun) {
 function wgState($vtun,$state,$type=0) {
   global $t1,$etc;
   $tmp = '/tmp/wg-quick.tmp';
+  $log = '/var/log/wg-quick.log';
   exec("timeout $t1 wg-quick $state $vtun 2>$tmp");
+  file_put_contents($log, "wg-quick $state $vtun\n".file_get_contents($tmp)."\n", FILE_APPEND);
   if ($type==8) {
     // make VPN tunneled access for Docker containers only
     $table = exec("grep -Pom1 'fwmark \K[\d]+' $tmp");
@@ -112,10 +115,10 @@ function addDocker($vtun) {
     $error = dockerNet($vtun);
   }
   if (!$error && !isNet($network)) {
-    [$thisnet,$gateway] = thisNet();
+    [$device,$thisnet,$gateway] = thisNet();
     exec("ip -4 rule add from $network table $index");
     exec("ip -4 route add unreachable default table $index");
-    exec("ip -4 route add $thisnet via $gateway table $index");
+    exec("ip -4 route add $thisnet via $gateway dev $device table $index");
   }
   return $error;
 }
@@ -140,22 +143,22 @@ function delPeer($vtun,$id='') {
 }
 function addPeer(&$x) {
   global $peers,$var;
-  $peers[$x] = ['[Interface]'];                                  // [Interface]
-  if ($var['client']) $peers[$x][] = $var['client'];             // #name
-  if ($var['privateKey']) $peers[$x][] = $var['privateKey'];     // PrivateKey
-  $peers[$x][] = $var['address'];                                // Address
-  if ($var['listenport']) $peers[$x][] = $var['listenport'];     // ListenPort
-  if ($var['dns']) $peers[$x][] = $var['dns'];                   // DNS server
-  if ($var['mtu']) $peers[$x][] = $var['mtu'];                   // MTU
+  $peers[$x] = ['[Interface]'];                                         // [Interface]
+  if (isset($var['client'])) $peers[$x][] = $var['client'];             // #name
+  if (isset($var['privateKey'])) $peers[$x][] = $var['privateKey'];     // PrivateKey
+  $peers[$x][] = $var['address']??'';                                   // Address
+  if (isset($var['listenport'])) $peers[$x][] = $var['listenport'];     // ListenPort
+  if (isset($var['dns'])) $peers[$x][] = $var['dns'];                   // DNS server
+  if (isset($var['mtu'])) $peers[$x][] = $var['mtu'];                   // MTU
   $peers[$x][] = '';
-  $peers[$x][] = "[Peer]";                                       // [Peer]
-  if ($var['server']) $peers[$x][] = $var['server'];             // #name
-  if ($var['handshake']) $peers[$x][] = $var['handshake'];       // PersistentKeepalive
-  if ($var['presharedKey']) $peers[$x][] = $var['presharedKey']; // PresharedKey
-  $peers[$x][] = $var['publicKey'];                              // PublicKey
-  if ($var['tunnel']) $peers[$x][] = $var['tunnel'];             // Tunnel address
-  $peers[$x][] = $var['endpoint'] ?: $var['internet'];           // Endpoint
-  $peers[$x][] = $var['allowedIPs'];                             // AllowedIPs
+  $peers[$x][] = "[Peer]";                                              // [Peer]
+  if (isset($var['server'])) $peers[$x][] = $var['server'];             // #name
+  if (isset($var['handshake'])) $peers[$x][] = $var['handshake'];       // PersistentKeepalive
+  if (isset($var['presharedKey'])) $peers[$x][] = $var['presharedKey']; // PresharedKey
+  $peers[$x][] = $var['publicKey']??'';                                 // PublicKey
+  if (isset($var['tunnel'])) $peers[$x][] = $var['tunnel'];             // Tunnel address
+  $peers[$x][] = $var['endpoint'] ?: $var['internet'] ?: '';            // Endpoint
+  $peers[$x][] = $var['allowedIPs']??'';                                // AllowedIPs
   $x++;
 }
 function autostart($vtun,$cmd) {
@@ -220,22 +223,22 @@ function createIPs($list) {
   return implode(', ',array_map('host',array_filter(array_map('trim',explode(',',$list)))));
 }
 function parseInput($vtun,&$input,&$x) {
-  global $conf,$user,$var,$default,$default6,$vpn;
+  global $conf,$user,$var,$default,$default6,$vpn,$tunip;
   $section = 0; $addPeer = false;
   foreach ($input as $key => $value) {
     if ($key[0]=='#') continue;
-    [$id,$i] = my_explode(':',$key);
+    [$id,$i] = array_pad(explode(':',$key),2,0);
     if ($i != $section) {
       if ($section==0) {
         // add WG routing for docker containers. Only IPv4 supported
         [$index,$network] = newNet($vtun);
-        [$thisnet,$gateway] = thisNet();
+        [$device,$thisnet,$gateway] = thisNet();
         $conf[]  = "PostUp=ip -4 route flush table $index";
-        $conf[]  = "PostUp=ip -4 route add default via $tunip table $index";
-        $conf[]  = "PostUp=ip -4 route add $thisnet via $gateway table $index";
+        $conf[]  = "PostUp=ip -4 route add default via $tunip dev $vtun table $index";
+        $conf[]  = "PostUp=ip -4 route add $thisnet via $gateway dev $device table $index";
         $conf[]  = "PostDown=ip -4 route flush table $index";
         $conf[]  = "PostDown=ip -4 route add unreachable default table $index";
-        $conf[]  = "PostDown=ip -4 route add $thisnet via $gateway table $index";
+        $conf[]  = "PostDown=ip -4 route add $thisnet via $gateway dev $device table $index";
       }
       $conf[] = "\n[Peer]";
       // add peers, this is only used for peer sections
@@ -364,6 +367,7 @@ case 'update':
   $gone = explode(',',$_POST['#deleted']);
   $conf = ['[Interface]'];
   $user = $peers = $var = [];
+  $tunip = "";
   $var['subnets1'] = "AllowedIPs=".createList($_POST['#subnets1']);
   $var['subnets2'] = "AllowedIPs=".createList($_POST['#subnets2']);
   $var['shared1']  = "AllowedIPs=".createList($_POST['#shared1']);
@@ -379,6 +383,14 @@ case 'update':
   file_put_contents($cfg,implode("\n",$user)."\n");
   createPeerFiles($vtun);
   if ($upstate) wgState($vtun,'up',$_POST['#type']);
+  // if $tunip (with dots to slashes) not found in nginx config, then reload nginx to add it
+  $nginx = parse_ini_file('/var/local/emhttp/nginx.ini');
+  if (stripos($nginx['NGINX_CERTNAME'],'.myunraid.net')!==false) {
+    $key = 'NGINX_'.strtoupper($vtun).'FQDN';
+    if (!isset($nginx[$key]) || stripos($nginx[$key],str_replace('.','-',$tunip))===false) {
+      exec("/etc/rc.d/rc.nginx reload");
+    }
+  }
   $save = false;
   break;
 case 'toggle':
@@ -394,7 +406,7 @@ case 'toggle':
       exec("ip -4 rule add from $network table $index");
       exec("ip -4 route add unreachable default table $index");
     }
-    wgState($vtun,'up',$_POST['#type']);
+    wgState($vtun,'up',$_POST['#type']??'');
     echo status($vtun) ? 0 : 1;
     break;
   }
@@ -432,6 +444,12 @@ case 'deltunnel':
     delete_file("$etc/$vtun.conf","$etc/$vtun.cfg");
     delPeer($vtun);
     autostart($vtun,'off');
+    // remove tunnel url from nginx config
+    $nginx = parse_ini_file('/var/local/emhttp/nginx.ini');
+    $key = 'NGINX_'.strtoupper($vtun).'FQDN';
+    if (isset($nginx[$key])) {
+      exec("/etc/rc.d/rc.nginx reload");
+    }
   }
   echo $error ? 1 : 0;
   break;
@@ -452,6 +470,8 @@ case 'import':
     }
   }
   if ($import['PrivateKey:0'] && !$import['PublicKey:0']) $import['PublicKey:0'] = exec("wg pubkey <<<'{$import['PrivateKey:0']}'");
+  // delete ListenPort and let WG generate a random local port
+  unset($import['ListenPort:0']);
   $import['UPNP:0'] = 'no';
   $import['NAT:0'] = 'no';
   [$subnet,$mask] = my_explode('/',$import['Address:0']);
@@ -520,7 +540,7 @@ case 'upnpc':
   $ip = $_POST['#ip'];
   if ($_POST['#wg']=='active') {
     exec("timeout $t1 stdbuf -o0 upnpc -u $xml -m $link -l 2>/dev/null|grep -Po \"^(ExternalIPAddress = \K.+|.+\KUDP.+>$ip:[0-9]+ 'WireGuard-$vtun')\"",$upnp);
-    [$addr,$upnp] = $upnp;
+    [$addr,$upnp] = array_pad($upnp,2,'');
     [$type,$rule] = my_explode(' ',$upnp);
     echo $rule ? "UPnP: $addr:$rule/$type" : _("UPnP: forwarding not set");
   } else {

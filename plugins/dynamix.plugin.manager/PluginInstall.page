@@ -15,17 +15,31 @@ Tag="download"
  */
 ?>
 <script>
-function installPlugin(name) {
-  var file = name.trim();
-  var plugin = file.replace(/^.*(\\|\/|\:)/,'').replace('.plg','')+':install';
-  var func = plugin.includes('dynamix.unraid.net') ? 'reloadToList' : 'loadlist'; // conditionally reload on closure of shadboxbox for My Servers plugin
-  if (file) openBox("/plugins/dynamix.plugin.manager/scripts/plugin&arg1=install&arg2="+file,"_(Install Plugin)_",600,900,true,func,plugin);
+const my = {};
+
+function installPlugin(file) {
+  if (file == null) {
+    $('#plugin_file').val('');
+    openPlugin(my.cmd,my.title,my.plg);
+    return;
+  }
+  file = file.trim();
+  if (!file) return;
+  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{cmd:'alert'},function(data) {
+    my.cmd = 'plugin install '+file;
+    my.title = "_(Install Plugin)_";
+    my.plg = file.replace(/^.*(\\|\/|\:)/,'').replace('.plg','')+':install';
+    if (data==0) {
+      // no alert message - proceed with install
+      setTimeout(installPlugin);
+    } else {
+      // show alert message and ask for confirmation
+      openAlert("showchanges <?=$alerts?>","<?=_('Alert Message')?>",'installPlugin');
+    }
+  });
 }
-function reloadToList() {
-  $.removeCookie('tab');
-  window.location.href = '/Plugins';
-};
 </script>
+
 **_(Enter URL of remote plugin file or local plugin file)_**
 
 <form name="plugin_install" method="POST" target="progressFrame">

@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -41,7 +41,7 @@ function get_plugin_attr($attr, $file) {
 function plugin_update_available($plugin, $os=false) {
   $local  = get_plugin_attr('version', "/var/log/plugins/$plugin.plg");
   $remote = get_plugin_attr('version', "/tmp/plugins/$plugin.plg");
-  if (strcmp($remote,$local)>0) {
+  if ($remote && strcmp($remote,$local)>0) {
     if ($os) return $remote;
     if (!$unraid = get_plugin_attr('Unraid', "/tmp/plugins/$plugin.plg")) return $remote;
     $server = get_plugin_attr('version', "/var/log/plugins/unRAIDServer.plg");
@@ -56,9 +56,9 @@ function get_value(&$object, $name, $default) {
 function get_ctlr_options(&$type, &$disk) {
   if (!$type) return;
   $ports = [];
-  if (strlen($disk['smPort1'])) $ports[] = $disk['smPort1'];
-  if (strlen($disk['smPort2'])) $ports[] = $disk['smPort2'];
-  if (strlen($disk['smPort3'])) $ports[] = $disk['smPort3'];
+  if (isset($disk['smPort1'])) $ports[] = $disk['smPort1'];
+  if (isset($disk['smPort2'])) $ports[] = $disk['smPort2'];
+  if (isset($disk['smPort3'])) $ports[] = $disk['smPort3'];
   $type .= ($ports ?  ','.implode($disk['smGlue'] ?? ',',$ports) : '');
 }
 function port_name($port) {
@@ -82,5 +82,10 @@ function ipaddr($ethX='eth0', $prot=4) {
   default:
     return $$ethX['IPADDR:0'];
   }
+}
+// convert strftime to date format
+function my_date($fmt, $time) {
+  $legacy = ['%c' => 'D j M Y h:i:s A T','%A' => 'l','%Y' => 'Y','%B' => 'F','%e' => 'j','%d' => 'd','%m' => 'm','%I' => 'h','%H' => 'H','%M' => 'i','%S' => 's','%p' => 'a','%R' => 'H:i', '%F' => 'Y-m-d', '%T' => 'H:i:s'];
+  return date(strtr($fmt,$legacy), $time);
 }
 ?>

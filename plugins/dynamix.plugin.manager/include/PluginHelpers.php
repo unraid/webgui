@@ -34,16 +34,21 @@ function check_plugin($arg, &$ncsi) {
 function make_link($method, $arg, $extra='') {
   $plg = basename($arg,'.plg').':'.$method;
   $id = str_replace(['.',' ','_'],'',$plg);
-  $check = $method=='remove' ? "<input type='checkbox' onClick='document.getElementById(\"$id\").disabled=!this.checked'>" : "";
+  $check = $method=='remove' ? "<input type='checkbox' data='$arg' class='remove' onClick='document.getElementById(\"$id\").disabled=!this.checked;multiRemove()'>" : "";
   $disabled = $check ? ' disabled' : '';
   if ($method == 'delete') {
-    $cmd = "/plugins/dynamix.plugin.manager/scripts/plugin_rm&arg1=$arg";
-    $exec = $plg = "";
+    $cmd  = "plugin_rm $arg";
+    $func = "refresh";
+    $plg  = "";
   } else {
-    $cmd = "/plugins/dynamix.plugin.manager/scripts/plugin&arg1=$method&arg2=$arg".($extra?"&arg3=$extra":"");
-    $exec = "loadlist";
+    $cmd  = "plugin $method $arg".($extra?" $extra":"");
+    $func = "loadlist";
   }
-  return "$check<input type='button' id='$id' value='"._(ucfirst($method))."' onclick='openBox(\"$cmd\",\"".ucwords($method)." Plugin\",600,900,true,\"$exec\",\"$plg\");'$disabled>";
+  if (is_file("/tmp/plugins/pluginPending/$arg") && !$check) {
+    return "<span class='orange-text'><i class='fa fa-hourglass-o fa-fw'></i>&nbsp;"._('pending')."</span>";
+  } else {
+    return "$check<input type='button' id='$id' data='$arg' class='$method' value=\""._(ucfirst($method))."\" onclick='openInstall(\"$cmd\",\""._(ucwords($method)." Plugin")."\",\"$plg\",\"$func\");'$disabled>";
+  }
 }
 
 // trying our best to find an icon

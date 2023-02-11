@@ -1,11 +1,11 @@
 Menu="Device:2 New:2"
 Title="Self-Test"
 Tag="wrench"
-Cond="strpos($disks[$name]['status'],'_NP')===false"
+Cond="strpos($disks[$name]['status']??'','_NP')===false"
 ---
 <?PHP
-/* Copyright 2005-2022, Lime Technology
- * Copyright 2012-2022, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -19,7 +19,7 @@ Cond="strpos($disks[$name]['status'],'_NP')===false"
 $date = date('Ymd-Hi');
 $file = $disk['id']."-$date.txt";
 $zip  = str_replace(' ','_',strtolower($var['NAME']))."-smart-$date.zip";
-$long = $disks[$name]['spindownDelay']==0 || ($disks[$name]['spindownDelay']==-1 && $var['spindownDelay']==0);
+$long = isset($disks[$name]['spindownDelay']) && ($disks[$name]['spindownDelay']==0 || ($disks[$name]['spindownDelay']==-1 && $var['spindownDelay']==0));
 ?>
 _(Download SMART report)_:
 : <input type='button' value="_(Download)_" onclick='saveSMART()'>
@@ -65,7 +65,7 @@ function cleanUp() {
 }
 function saveSMART() {
   $('input[value="_(Download)_"]').val('_(Downloading)_...').prop('disabled',true);
-  $.post('/webGui/include/SmartInfo.php',{cmd:'save',port:'<?=addslashes(htmlspecialchars($dev))?>',name:'<?=addslashes(htmlspecialchars($name))?>',file:'<?=addslashes(htmlspecialchars($file))?>'}, function() {
+  $.post('/webGui/include/SmartInfo.php',{cmd:'save',port:'<?=$dev?>',name:'<?=$name?>',file:'<?=addslashes(htmlspecialchars($file))?>'}, function() {
     $.post('/webGui/include/Download.php',{cmd:'save',source:'<?=addslashes(htmlspecialchars($file))?>',file:'<?=addslashes(htmlspecialchars($zip))?>'},function(zip) {
       location = zip;
       setTimeout(cleanUp,4000);
@@ -73,7 +73,7 @@ function saveSMART() {
   });
 }
 function testUpdate(init) {
-  $.post('/webGui/include/SmartInfo.php',{cmd:'update',port:'<?=addslashes(htmlspecialchars($dev))?>',name:'<?=addslashes(htmlspecialchars($name))?>',type:'<?=addslashes(htmlspecialchars($type))?>',csrf:'<?=$var['csrf_token']?>'},function(data) {
+  $.post('/webGui/include/SmartInfo.php',{cmd:'update',port:'<?=$dev?>',name:'<?=$name?>',csrf:'<?=$var['csrf_token']?>'},function(data) {
     $('#test_result').html(data);
     if (data.indexOf('%')>=0) {
       if ($('#smart_selftest').length) {
@@ -85,7 +85,7 @@ function testUpdate(init) {
       $('#short_test').val("_(Start)_");
       $('#long_test').val("_(Start)_");
       if (!init) {
-        $.removeCookie('test.<?=addslashes(htmlspecialchars($dev))?>');
+        $.removeCookie('test.<?=$dev?>');
       }
     }
   });
@@ -104,31 +104,31 @@ function startShortTest() {
   if ($('#short_test').val()=="_(Start)_") {
     $('#short_test').val("_(Stop)_");
     $('#long_test').attr('disabled','disabled');
-    $.cookie('test.<?=addslashes(htmlspecialchars($dev))?>','short',{expires:365});
-    $.post('/webGui/include/SmartInfo.php',{cmd:'short',port:'<?=addslashes(htmlspecialchars($dev))?>',name:'<?=addslashes(htmlspecialchars($name))?>'},function(){timers.testUpdate = setTimeout(testUpdate,0);});
+    $.cookie('test.<?=$dev?>','short',{expires:365});
+    $.post('/webGui/include/SmartInfo.php',{cmd:'short',port:'<?=$dev?>',name:'<?=$name?>'},function(){timers.testUpdate = setTimeout(testUpdate,0);});
   } else {
     clearTimeout(timers.testUpdate);
-    $.removeCookie('test.<?=addslashes(htmlspecialchars($dev))?>');
-    $.post('/webGui/include/SmartInfo.php',{cmd:'stop',port:'<?=addslashes(htmlspecialchars($dev))?>',name:'<?=addslashes(htmlspecialchars($name))?>'},function(){setTimeout(testUpdate,0);});
+    $.removeCookie('test.<?=$dev?>');
+    $.post('/webGui/include/SmartInfo.php',{cmd:'stop',port:'<?=$dev?>',name:'<?=$name?>'},function(){setTimeout(testUpdate,0);});
   }
 }
 function startLongTest() {
   if ($('#long_test').val()=="_(Start)_") {
     $('#long_test').val("_(Stop)_");
     $('#short_test').attr('disabled','disabled');
-    $.cookie('test.<?=addslashes(htmlspecialchars($dev))?>','long',{expires:365});
-    $.post('/webGui/include/SmartInfo.php',{cmd:'long',port:'<?=addslashes(htmlspecialchars($dev))?>',name:'<?=addslashes(htmlspecialchars($name))?>'},function(){timers.testUpdate = setTimeout(testUpdate,0);});
+    $.cookie('test.<?=$dev?>','long',{expires:365});
+    $.post('/webGui/include/SmartInfo.php',{cmd:'long',port:'<?=$dev?>',name:'<?=$name?>'},function(){timers.testUpdate = setTimeout(testUpdate,0);});
   } else {
     clearTimeout(timers.testUpdate);
-    $.removeCookie('test.<?=addslashes(htmlspecialchars($dev))?>');
-    $.post('/webGui/include/SmartInfo.php',{cmd:'stop',port:'<?=addslashes(htmlspecialchars($dev))?>',name:'<?=addslashes(htmlspecialchars($name))?>'},function(){setTimeout(testUpdate,0);});
+    $.removeCookie('test.<?=$dev?>');
+    $.post('/webGui/include/SmartInfo.php',{cmd:'stop',port:'<?=$dev?>',name:'<?=$name?>'},function(){setTimeout(testUpdate,0);});
   }
 }
 $(function() {
-  var smarttest = $.cookie('test.<?=addslashes(htmlspecialchars($dev))?>');
+  var smarttest = $.cookie('test.<?=$dev?>');
   testUpdate(smarttest===undefined);
   if (smarttest !== undefined) $('#'+smarttest+'_test').val("_(Stop)_").removeAttr('disabled');
-  $.post('/webGui/include/SmartInfo.php',{cmd:'selftest',port:'<?=addslashes(htmlspecialchars($dev))?>',name:'<?=addslashes(htmlspecialchars($name))?>'},function(data){$('#selftest').html(data);});
-  $.post('/webGui/include/SmartInfo.php',{cmd:'errorlog',port:'<?=addslashes(htmlspecialchars($dev))?>',name:'<?=addslashes(htmlspecialchars($name))?>'},function(data){$('#errorlog').html(data);});
+  $.post('/webGui/include/SmartInfo.php',{cmd:'selftest',port:'<?=$dev?>',name:'<?=$name?>'},function(data){$('#selftest').html(data);});
+  $.post('/webGui/include/SmartInfo.php',{cmd:'errorlog',port:'<?=$dev?>',name:'<?=$name?>'},function(data){$('#errorlog').html(data);});
 });
 </script>

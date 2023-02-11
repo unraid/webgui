@@ -1,11 +1,11 @@
 Menu="Device New"
 Title="Attributes"
 Tag="address-card-o"
-Cond="strpos($disks[$name]['status'],'_NP')===false"
+Cond="strpos($disks[$name]['status']??'','_NP')===false"
 ---
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -17,7 +17,7 @@ Cond="strpos($disks[$name]['status'],'_NP')===false"
 ?>
 <script>
 $(function() {
-  $.post("/webGui/include/SmartInfo.php",{cmd:'attributes',port:'<?=addslashes(htmlspecialchars($dev))?>',name:'<?=addslashes(htmlspecialchars($name))?>'}, function(data) {
+  $.post("/webGui/include/SmartInfo.php",{cmd:'attributes',port:'<?=$dev?>',name:'<?=$name?>'}, function(data) {
     $('#disk_attributes').html(data);
   });
 });

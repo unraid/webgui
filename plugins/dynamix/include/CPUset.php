@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -17,10 +17,10 @@ $_SERVER['REQUEST_URI'] = 'settings';
 require_once "$docroot/webGui/include/Translations.php";
 require_once "$docroot/webGui/include/Helpers.php";
 
-$cpus = explode(';',$_POST['cpus']);
+$cpus = explode(';',$_POST['cpus']??'');
 
 function scan($area, $text) {
-  return strpos($area,$text)!==false;
+  return isset($area) ? strpos($area,$text)!==false : false;
 }
 
 function create($id, $name, $vcpu) {
@@ -39,6 +39,7 @@ function create($id, $name, $vcpu) {
       [$cpu1, $cpu2] = my_preg_split('/[,-]/',$cpus[$c*32+$n]);
       $check1 = in_array($cpu1, $vcpu) ? 'checked':'';
       $check2 = $cpu2 ? (in_array($cpu2, $vcpu) ? 'checked':''):'';
+      if (empty($text[$n])) $text[$n] = '';
       $text[$n] .="<label class='checkbox'><input type='checkbox' name='$name:$cpu1' $check1><span class='checkmark'></span></label><br>";
       if ($cpu2) $text[$n] .= "<label class='checkbox'><input type='checkbox' name='$name:$cpu2' $check2><span class='checkmark'></span></label><br>";
     }
@@ -50,7 +51,7 @@ switch ($_POST['id']) {
 case 'vm':
   // create the current vm assignments
   require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
-  $vms = $libvirt_running=='yes' ? $lv->get_domains() : [];
+  $vms = $libvirt_running=='yes' ? ($lv->get_domains() ?: []) : [];
   $user_prefs = '/boot/config/plugins/dynamix.vm.manager/userprefs.cfg';
   // list vms per user preference
   if (file_exists($user_prefs)) {

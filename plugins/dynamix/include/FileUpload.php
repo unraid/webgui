@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -19,6 +19,7 @@ $plugins   = '/var/log/plugins';
 $boot      = "/boot/config/plugins";
 $safepaths = ["$boot/dynamix"];
 $safeexts  = ['.png'];
+$result    = false;
 
 require_once "$docroot/webGui/include/Helpers.php";
 

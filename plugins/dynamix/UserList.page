@@ -3,8 +3,8 @@ Title="Users"
 Tag="users"
 ---
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -22,15 +22,15 @@ ksort($users);
 <style>
 a.info span{top:66px;left:42px}
 <?if ($themes1):?>
-div.title{margin-top:-30px!important}
+div#title{margin-top:-30px!important}
 <?endif;?>
 </style>
 
-<div id="title" class="title">_(Management Access)_</div>
+<div id="title" class="title"><span class="left"><i class="fa fa-bell title"></i>_(Management Access)_</span></div>
 <?$img = "/boot/config/plugins/dynamix/users/root.png"?>
 <div class="user-list" style="text-align:center"><a class="<?=(!empty($users['root']['desc']) ? 'info' : '')?>" href="<?=$path?>/UserEdit?name=root"><img src="<?=(file_exists($img) ? autov($img) : '/webGui/images/user.png')?>" class="picture" border="0" width="48" height="48"><br>root<span><?=htmlspecialchars($users['root']['desc'])?></span></a></div>
 
-<div id="title">_(Shares Access)_</div>
+<div class="title"><span class="left"><i class="fa fa-cloud title"></i>_(Shares Access)_</span></div>
 <?foreach ($users as $user):?>
 <?if ($user['name'] == 'root') continue;?>
 <?$img = "/boot/config/plugins/dynamix/users/{$user['name']}.png"?>

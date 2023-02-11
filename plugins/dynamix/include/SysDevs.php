@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -24,12 +24,12 @@ function usb_physical_port($usbbusdev) {
     $physical_busid = _("None") ;
     exec($udevcmd , $udev);
     if (isset($udev)) {
-    $physical_busid = trim(substr($udev[0], 13) , '"') ;
-    if (substr($physical_busid,0,3) =='usb') {
-      $physical_busid = substr($physical_busid,3).'-0' ;
+      $physical_busid = trim(substr($udev[0], 13) , '"') ;
+      if (substr($physical_busid,0,3) =='usb') {
+        $physical_busid = substr($physical_busid,3).'-0' ;
       }
-    }     
-  } 
+    }
+  }
   return($physical_busid) ;
 }
 
@@ -85,25 +85,24 @@ case 't1':
     $networks = (array)parse_ini_file('state/network.ini',true);
     $networklist = array_merge(array_column($networks, 'BRNICS'), array_column($networks, 'BONDNICS'));
     foreach ($networklist as $niclist) {
-        if (!empty($niclist)) {
-            $nics = explode(",", $niclist);
-            if (!empty($nics)) {
-                foreach ($nics as $line) {
-                    if (!empty($line)) {
-                        exec('readlink /sys/class/net/'.$line,$linereturn);
-                        preg_match_all($DBDF_PARTIAL_REGEX, $linereturn[0], $inuse);
-                        foreach ($inuse[0] as $line) {
-                          $lines[] = $line;
-                        }
-                        unset($inuse);
-                        unset($linereturn);
-                    }
-                }
+      if (!empty($niclist)) {
+        $nics = explode(",", $niclist);
+        if (!empty($nics)) {
+          foreach ($nics as $line) {
+            if (!empty($line)) {
+              exec('readlink /sys/class/net/'.$line,$linereturn);
+              preg_match_all($DBDF_PARTIAL_REGEX, $linereturn[0], $inuse);
+              foreach ($inuse[0] as $line) {
+                $lines[] = $line;
+              }
+              unset($inuse);
+              unset($linereturn);
             }
+          }
         }
+      }
     }
     $lines = array_values(array_unique($lines, SORT_STRING));
-
 
     $iommuinuse = array ();
     foreach ($lines as $pciinuse){
@@ -115,7 +114,7 @@ case 't1':
     foreach ($groups as $line) {
       if (!$line) continue;
       if ($line[0]=='I') {
-        if ($spacer) echo "<tr><td colspan='2' class='thin'></td>"; else $spacer = true;
+        if (isset($spacer)) echo "<tr><td colspan='2' class='thin'></td>"; else $spacer = true;
         echo "</tr><tr><td>$line:</td><td>";
         $iommu = substr($line, 12);
         $append = true;
@@ -147,7 +146,7 @@ case 't1':
         unset($outputvfio);
         switch (true) {
           case (strpos($line, 'USB controller') !== false):
-            if ($isbound) {
+            if (isset($isbound)) {
               echo '<tr><td></td><td></td><td></td><td></td><td style="padding-left: 50px;">'._('This controller is bound to vfio, connected USB devices are not visible').'.</td></tr>';
             } else {
               exec('for usb_ctrl in $(find /sys/bus/usb/devices/usb* -maxdepth 0 -type l);do path="$(realpath "${usb_ctrl}")";if [[ $path == *'.$pciaddress.'* ]];then bus="$(cat "${usb_ctrl}/busnum")";lsusb -s $bus:|sort;fi;done',$getusb);
@@ -167,7 +166,7 @@ case 't1':
           case (strpos($line, 'IDE interface') !== false):
           case (strpos($line, 'Mass storage controller') !== false):
           case (strpos($line, 'Non-Volatile memory controller') !== false):
-            if ($isbound) {
+            if (isset($isbound)) {
               echo '<tr><td></td><td></td><td></td><td></td><td style="padding-left: 50px;">'._('This controller is bound to vfio, connected drives are not visible').'.</td></tr>';
             } else {
               exec('ls -al /sys/block/sd* /sys/block/hd* /sys/block/sr* /sys/block/nvme* 2>/dev/null | grep -i "'.$pciaddress.'"',$getsata);
@@ -189,9 +188,9 @@ case 't1':
     }
     echo '<tr><td></td><td></td><td></td><td></td><td><br>';
     if (file_exists("/var/log/vfio-pci") && filesize("/var/log/vfio-pci")) {
-      echo '<input id="viewlog" type="button" value="'._('View VFIO-PCI Log').'" onclick="openBox(\'/webGui/scripts/vfio_log\',\''._('VFIO-PCI Log').'\',600,600);">';
+      echo '<input id="viewlog" type="button" value="'._('View VFIO-PCI Log').'" onclick="openTerminal(\'log\',\'vfio-pci\',\'vfio-pci\')">';
     }
-    echo '<input id="applycfg" type="submit" disabled value="'._('Bind selected to VFIO at Boot').'" onclick="applyCfg();" '.($noiommu ? "style=\"display:none\"" : "").'>';
+    echo '<input id="applycfg" type="submit" disabled value="'._('Bind selected to VFIO at Boot').'" onclick="applyCfg();" '.(isset($noiommu) ? "style=\"display:none\"" : "").'>';
     echo '<span id="warning"></span>';
     echo '</td></tr>';
     echo <<<EOT

@@ -1,3 +1,7 @@
+function displayconsole(url) {
+  window.open(url, '_blank', 'scrollbars=yes,resizable=yes');
+}
+
 function ajaxVMDispatch(params, spin){
   if (spin) $('#vm-'+params['uuid']).parent().find('i').removeClass('fa-play fa-square fa-pause').addClass('fa-refresh fa-spin');
   $.post("/plugins/dynamix.vm.manager/include/VMajax.php", params, function(data) {
@@ -14,15 +18,33 @@ function ajaxVMDispatch(params, spin){
     }
   },'json');
 }
-function addVMContext(name, uuid, template, state, vncurl, log){
+function ajaxVMDispatchconsole(params, spin){
+  if (spin) $('#vm-'+params['uuid']).parent().find('i').removeClass('fa-play fa-square fa-pause').addClass('fa-refresh fa-spin');
+  $.post("/plugins/dynamix.vm.manager/include/VMajax.php", params, function(data) {
+    if (data.error) {
+      swal({
+        title:_("Execution error"), html:true,
+        text:data.error, type:"error",
+        confirmButtonText:_('Ok')
+      },function(){
+        if (spin) setTimeout(spin+'()',500); else location=window.location.href;
+      });
+    } else {
+      if (spin) setTimeout(spin+'()',500); else location=window.location.href;
+      setTimeout('displayconsole("'+data.vmrcurl+'")',500) ;
+    }
+  },'json');
+}
+function addVMContext(name, uuid, template, state, vmrcurl,vmrcprotocol , log){
   var opts = [];
   var path = location.pathname;
   var x = path.indexOf("?");
   if (x!=-1) path = path.substring(0,x);
-  if (vncurl !== "") {
-    opts.push({text:_("VNC Remote"), icon:"fa-desktop", action:function(e) {
+  if (vmrcurl !== "" && state == "running") {
+    var vmrctext=_("VM Console") + "(" + vmrcprotocol + ")" ;
+    opts.push({text:vmrctext, icon:"fa-desktop", action:function(e) {
       e.preventDefault();
-      window.open(vncurl, '_blank', 'scrollbars=yes,resizable=yes');
+      window.open(vmrcurl, '_blank', 'scrollbars=yes,resizable=yes');
     }});
     opts.push({divider:true});
   }
@@ -70,7 +92,12 @@ function addVMContext(name, uuid, template, state, vncurl, log){
       e.preventDefault();
       ajaxVMDispatch({action:"domain-start", uuid:uuid}, "loadlist");
     }});
-  }
+    if (vmrcprotocol == "VNC" || vmrcprotocol == "SPICE")  {
+    opts.push({text:_("Start with console")+ "(" + vmrcprotocol + ")" , icon:"fa-play", action:function(e) {
+      e.preventDefault();
+       ajaxVMDispatchconsole({action:"domain-start-console", uuid:uuid, vmrcurl:vmrcurl}, "loadlist") ;  
+    }});
+  }}
   opts.push({divider:true});
   if (log !== "") {
     opts.push({text:_("Logs"), icon:"fa-navicon", action:function(e){e.preventDefault(); openTerminal('log',name,log);}});

@@ -78,6 +78,12 @@ if [[ -n "${LINK}" ]] && [[ ${LINK} != http* ]]; then
 source <(grep "NGINX_DEFAULTURL" /usr/local/emhttp/state/nginx.ini 2>/dev/null)
 LINK=${NGINX_DEFAULTURL}${LINK}
 fi
+# Discord will not allow links with bare hostname, links must have both hostname and tld or no link at all
+if [[ -n "${LINK}" ]]; then
+HOST=$(echo "${LINK}" | cut -d'/' -f3)
+[[ ${HOST} != *.* ]] && LINK=
+fi
+
 # note: there is no default for CONTENT
 
 # send DESCRIPTION and/or CONTENT. Ignore the default DESCRIPTION.

@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2022, Lime Technology
- * Copyright 2012-2022, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -11,8 +11,10 @@
  */
 ?>
 <?
+require_once "$docroot/webGui/include/MarkdownExtra.inc.php";
+
 // start new session as required
-if (session_status()==PHP_SESSION_NONE && !isset($login_locale)) {
+if (!headers_sent() && session_status()==PHP_SESSION_NONE && !isset($login_locale)) {
   session_start();
   session_write_close();
 }
@@ -21,7 +23,6 @@ $session = '/var/lib/php/sess_'.session_id();
 if (file_exists($session)) {
   if (filesize($session)===0 || (count($_SESSION??[])==1 && isset($_SESSION['locale']))) unlink($session);
 }
-require_once "$docroot/webGui/include/Markdown.php";
 
 function _($text, $do=-1) {
   // PHP translation function _
@@ -55,7 +56,8 @@ function parse_lang_file($file) {
 }
 function parse_help_file($file) {
   // parser for help text files, includes some trickery to handle PHP quirks.
-  return array_help(array_tags((array)parse_ini_string(preg_replace(['/^$/m','/^([^:;].+)$/m','/^:(.+_help(_\d{8})?):$/m','/^:end$/m'],['>','>$1','_$1="','"'],escapeQuotes(file_get_contents($file))))));
+  $text = array_tags((array)parse_ini_string(preg_replace(['/^$/m','/^([^:;].+)$/m','/^:(.+_help(_\d{8})?):$/m','/^:end$/m'],['>','>$1','_$1="','"'],escapeQuotes(file_get_contents($file)))));
+  return array_help($text);
 }
 function parse_text($text) {
   // inline text parser
@@ -91,7 +93,8 @@ function array_safe($array) {
 function array_tags($array) {
   // filter outdated help tags
   return array_filter($array,function($v,$k){
-    $tag = end(explode('_',$k));
+    $tag = explode('_',$k);
+    $tag = end($tag);
     return ($tag=='help' ? true : $tag <= $_SESSION['buildDate']) && strlen($v);
   },ARRAY_FILTER_USE_BOTH);
 }
@@ -111,14 +114,14 @@ function escapeQuotes($text) {
 }
 function translate($key) {
   // replaces multi-line sections
-  global $language;
+  global $language,$netpool,$netpool6,$netport,$nginx;
   if ($plug = isset($language[$key])) eval('?>'.Markdown($language[$key]));
   return !$plug;
 }
 
 // main
 $language = [];
-$locale   = $_SESSION['locale'] ?? $login_locale;
+$locale   = $_SESSION['locale'] ?? ($login_locale??'');
 $return   = "function _(t){return t;}";
 $jscript  = "$docroot/webGui/javascript/translate.en_US.js";
 $root     = "$docroot/languages/en_US/helptext.txt";
@@ -146,14 +149,14 @@ if ($locale) {
       $script = ['function _(t){var l=[];'];
       foreach ($source as $key => $value) $script[] = "l[\"$key\"]=\"$value\";";
       $script[] = "return l[t.replace(/\&amp;|[\?\{\}\|\&\~\!\[\]\(\)\/\\:\*^\.\"']|<.+?\/?>/g,'').replace(/  +/g,' ')]||t;}";
-      file_put_contents($jscript,implode('',$script));
+      file_put_contents($jscript,implode($script));
     } else {
       file_put_contents($jscript,$return);
     }
   }
 }
 // split URI into translation levels
-$uri = array_filter(explode('/',strtolower(strtok($_SERVER['REQUEST_URI'],'?'))));
+$uri = array_filter(explode('/',strtolower(strtok($_SERVER['REQUEST_URI']??'','?'))));
 foreach($uri as $more) {
   $text = "$docroot/languages/$locale/$more.txt";
   if (file_exists($text)) {
@@ -164,7 +167,7 @@ foreach($uri as $more) {
   }
 }
 // help text
-if ($_SERVER['REQUEST_URI'][0]=='/') {
+if (($_SERVER['REQUEST_URI'][0]??'')=='/') {
   if (!file_exists($help)) file_put_contents($help,serialize(parse_help_file($root)));
   $language = array_merge($language,unserialize(file_get_contents($help)));
 }

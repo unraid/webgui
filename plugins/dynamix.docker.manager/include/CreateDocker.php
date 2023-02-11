@@ -1,7 +1,7 @@
 <?PHP
-/* Copyright 2005-2022, Lime Technology
- * Copyright 2015-2022, Guilherme Jardim, Eric Schultz, Jon Panozzo.
- * Copyright 2012-2022, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2015-2023, Guilherme Jardim, Eric Schultz, Jon Panozzo.
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -72,7 +72,7 @@ function cpu_pinning() {
 
 if (isset($_POST['contName'])) {
   $postXML = postToXML($_POST, true);
-  $dry_run = $_POST['dryRun']=='true' ? true : false;
+  $dry_run = isset($_POST['dryRun']) && $_POST['dryRun']=='true';
   $existing = $_POST['existingContainer'] ?? false;
   $create_paths = $dry_run ? false : true;
   // Get the command line
@@ -182,9 +182,9 @@ if (isset($_GET['updateContainer'])){
       $cmd = str_replace('/docker create ', '/docker run -d ', $cmd);
       $startContainer = true;
       // attempt graceful stop of container first
-      stopContainer($Name, $echo);
+      stopContainer($Name, false, $echo);
     }
-    // force kill container if still running after 10 seconds
+    // force kill container if still running after time-out
     if (empty($_GET['communityApplications'])) removeContainer($Name, $echo);
     execCommand($cmd, $echo);
     if ($startContainer) addRoute($Name); // add route for remote WireGuard access
@@ -209,6 +209,7 @@ if (isset($_POST['rmTemplate'])) {
 ##    LOAD TEMPLATE    ##
 #########################
 
+$xmlType = $xmlTemplate = '';
 if (isset($_GET['xmlTemplate'])) {
   [$xmlType, $xmlTemplate] = my_explode(':', unscript(urldecode($_GET['xmlTemplate'])));
   if (is_file($xmlTemplate)) {
@@ -338,9 +339,9 @@ function makeConfig(opts) {
   newConfig = $($.parseHTML(newConfig));
   value     = newConfig.find("input[name='confValue[]']");
   if (opts.Type == "Path") {
-    value.attr("onclick", "openFileBrowser(this,$(this).val(),'',true,false);");
+    value.attr("onclick", "openFileBrowser(this,$(this).val(),$(this).val(),'',true,false);");
   } else if (opts.Type == "Device") {
-    value.attr("onclick", "openFileBrowser(this,$(this).val()||'/dev','',false,true);")
+    value.attr("onclick", "openFileBrowser(this,'/dev','/dev','',true,true);")
   } else if (opts.Type == "Variable" && opts.Default.split("|").length > 1) {
     var valueOpts = opts.Default.split("|");
     var newValue = "<select name='confValue[]' class='selectVariable' default='"+valueOpts[0]+"'>";
@@ -403,7 +404,7 @@ function addConfigPopup() {
   popup.dialog({
     title: title,
     resizable: false,
-    width: 900,
+    width: 800,
     modal: true,
     show : {effect: 'fade' , duration: 250},
     hide : {effect: 'fade' , duration: 250},
@@ -477,7 +478,7 @@ function editConfigPopup(num,disabled) {
   popup.dialog({
     title: title,
     resizable: false,
-    width: 900,
+    width: 800,
     modal: true,
     show: {effect:'fade', duration: 250},
     hide: {effect:'fade', duration: 250},
@@ -570,7 +571,7 @@ function toggleMode(el,disabled) {
   switch ($(el)[0].selectedIndex) {
   case 0: // Path
     mode.html("<dl><dt>_(Access Mode)_:</dt><dd><select name='Mode'><option value='rw'>_(Read/Write)_</option><option value='rw,slave'>_(Read/Write - Slave)_</option><option value='rw,shared'>_(Read/Write - Shared)_</option><option value='ro'>_(Read Only)_</option><option value='ro,slave'>_(Read Only - Slave)_</option><option value='ro,shared'>_(Read Only - Shared)_</option></select></dd></dl>");
-    value.bind("click", function(){openFileBrowser(this,$(this).val(), 'sh', true, false);});
+    value.bind("click", function(){openFileBrowser(this,$(this).val(),$(this).val(),'',true,false);});
     targetDiv.find('#dt1').text("_(Container Path)_");
     valueDiv.find('#dt2').text("_(Host Path)_");
     break;
@@ -604,7 +605,7 @@ function toggleMode(el,disabled) {
     targetDiv.hide();
     defaultDiv.hide();
     valueDiv.find('#dt2').text("_(Value)_");
-    value.bind("click", function(){openFileBrowser(this,$(this).val()||'/dev', '', true, true);});
+    value.bind("click", function(){openFileBrowser(this,'/dev','/dev','',true,true);});
     break;
   }
   reloadTriggers();
@@ -623,26 +624,23 @@ function rmTemplate(tmpl) {
   swal({title:"_(Are you sure)_?",text:"_(Remove template)_: "+name,type:"warning",html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){$("#rmTemplate").val(tmpl);$("#formTemplate1").submit();});
 }
 
-function openFileBrowser(el, root, filter, on_folders, on_files, close_on_select) {
+function openFileBrowser(el, top, root, filter, on_folders, on_files, close_on_select) {
   if (on_folders === undefined) on_folders = true;
   if (on_files   === undefined) on_files = true;
   if (!filter && !on_files) filter = 'HIDE_FILES_FILTER';
-  if (!root.trim()) root = "/mnt/user/";
+  if (!root.trim()) {root = "/mnt/user/"; top = "/mnt/";}
   p = $(el);
-  // Skip is fileTree is already open
+  // Skip if fileTree is already open
   if (p.next().hasClass('fileTree')) return null;
   // create a random id
-  var r = Math.floor((Math.random()*1000)+1);
+  var r = Math.floor((Math.random()*10000)+1);
   // Add a new span and load fileTree
   p.after("<span id='fileTree"+r+"' class='textarea fileTree'></span>");
   var ft = $('#fileTree'+r);
-  ft.fileTree({
-    root: root,
-    filter: filter,
-    allowBrowsing: true
-  },
-  function(file){if(on_files){p.val(file);p.trigger('change');if(close_on_select){ft.slideUp('fast',function(){ft.remove();});}}},
-  function(folder){if(on_folders){p.val(folder.replace(/\/\/+/g,'/'));p.trigger('change');if(close_on_select){$(ft).slideUp('fast',function(){$(ft).remove();});}}});
+  ft.fileTree({top:top, root:root, filter:filter, allowBrowsing:true},
+    function(file){if(on_files){p.val(file);p.trigger('change');if(close_on_select){ft.slideUp('fast',function(){ft.remove();});}}},
+    function(folder){if(on_folders){p.val(folder.replace(/\/\/+/g,'/'));p.trigger('change');if(close_on_select){$(ft).slideUp('fast',function(){$(ft).remove();});}}}
+  );
   // Format fileTree according to parent position, height and width
   ft.css({'left':p.position().left,'top':(p.position().top+p.outerHeight()),'width':(p.width())});
   // close if click elsewhere
@@ -671,7 +669,7 @@ $(function() {
 <?if ($tabbed):?>
   $('.tabs').append(ctrl);
 <?else:?>
-  $('div[id=title]').append(ctrl);
+  $('div[class=title]').append(ctrl);
 <?endif;?>
   $('.advancedview').switchButton({labels_placement:'left', on_label: "_(Advanced View)_", off_label: "_(Basic View)_"});
   $('.advancedview').change(function() {
@@ -826,7 +824,7 @@ _(Read Me First)_:
 
 </div>
 <div markdown="1" class="advanced">
-_(Docker Hub URL)_:
+_(Registry URL)_:
 : <input type="text" name="contRegistry"></td>
 
 :docker_client_hub_url_help:
@@ -950,7 +948,7 @@ _(Privileged)_:
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="format-detection" content="telephone=no">
-<meta name="viewport" content="width=1600">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="same-origin">
 </head>

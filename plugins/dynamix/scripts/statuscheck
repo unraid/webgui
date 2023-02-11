@@ -71,7 +71,7 @@ function my_check($time,$speed) {
 }
 function my_time($time) {
   global $unraid;
-  $date = strftime($unraid['display']['date'].($unraid['display']['date']!='%c' ? ", {$unraid['display']['time']}" : ""), $time);
+  $date = my_date($unraid['display']['date'].($unraid['display']['date']!='%c' ? ", {$unraid['display']['time']}" : ""), $time);
   $now  = new DateTime("@".intval(time()/86400)*86400);
   $last = new DateTime("@".intval($time/86400)*86400);
   $days = date_diff($last,$now)->format('%a');
@@ -97,8 +97,8 @@ function my_clock($time) {
 function my_array(&$disk) {
   global $data,$unraid,$error0,$error1,$error2,$error3;
   $name = $disk['name'];
-  $hot  = strlen($disk['hotTemp']) ? $disk['hotTemp'] : $unraid['display']['hot'];
-  $max  = strlen($disk['maxTemp']) ? $disk['maxTemp'] : $unraid['display']['max'];
+  $hot  = $disk['hotTemp'] ?? $unraid['display']['hot'] ?? 0;
+  $max  = $disk['maxTemp'] ?? $unraid['display']['max'] ?? 0;
   if (strpos($disk['status'],'_NP')!==false) return false;
   $temp = $disk['temp'];
   if ($temp>=$max) {

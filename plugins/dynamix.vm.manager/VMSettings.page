@@ -4,9 +4,9 @@ Icon="icon-virtualization"
 Tag="columns"
 ---
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2015-2021, Derek Macias, Eric Schultz, Jon Panozzo.
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2015-2023, Derek Macias, Eric Schultz, Jon Panozzo.
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -51,7 +51,7 @@ function detect(&$syslinux, $key) {
   return $value;
 }
 $syslinux          = file('/boot/syslinux/syslinux.cfg',FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
-$arrValidBridges   = getNetworkBridges();
+$arrValidNetworks   = getValidNetworks();
 $pcie_acs_override = detect($syslinux, 'pcie_acs_override');
 $vfio_allow_unsafe = detect($syslinux, 'allow_unsafe_interrupts');
 $bgcolor           = strstr('white,azure',$display['theme']) ? '#f2f2f2' : '#1c1c1c';
@@ -155,12 +155,19 @@ _(Default Windows VirtIO driver ISO)_ (_(optional)_):
 :vms_virtio_driver_help:
 
 <div class="advanced" markdown="1">
-_(Default network bridge)_:
-: <select id="bridge" name="BRNAME">
-  <?foreach ($arrValidBridges as $strBridge) echo mk_option($domain_cfg['BRNAME'], $strBridge, $strBridge);?>
+_(Default network source)_:
+: <select id="network" name="BRNAME">
+  <?foreach (array_keys($arrValidNetworks) as $key) {
+
+    echo mk_option("", $key, "- "._($key)." -", "disabled");
+
+    foreach ($arrValidNetworks[$key] as $strNetwork) {
+        echo mk_option($domain_cfg['BRNAME'], $strNetwork, $strNetwork);
+    }
+  }?>
   </select>
 
-:vms_network_bridge_help:
+:vms_network_source_help:
 
 _(Upon host shutdown)_:
 : <select id="hostshutdown" name="HOSTSHUTDOWN">
@@ -213,7 +220,7 @@ _(VFIO allow unsafe interrupts)_:
 
 <?if ($libvirt_up && trim(shell_exec('stat -c %T -f /etc/libvirt'))=='btrfs'):?>
 <div class="advanced" markdown="1">
-<div id="title"><span class="left"><i class="title fa fa-list"></i>_(Libvirt volume info)_</span></div>
+<div class="title"><span class="left"><i class="title fa fa-list"></i>_(Libvirt volume info)_</span></div>
 _(btrfs filesystem show)_:
 : <?="<pre id='btrfs-scrub'>".shell_exec("btrfs filesystem show /etc/libvirt")."</pre>"?>
 
@@ -433,7 +440,7 @@ $(function(){
       $("#mediadir").prop("disabled", checked);
       $("#winvirtio_select").prop("disabled", checked);
       $("#winvirtio").prop("disabled", checked);
-      $("#bridge").prop("disabled", checked);
+      $("#network").prop("disabled", checked);
       $("#hostshutdown").prop("disabled", checked);
       $("#pcie_acs_override").prop("disabled", checked);
       $("#vm_shutdown_timeout").prop("disabled", checked);

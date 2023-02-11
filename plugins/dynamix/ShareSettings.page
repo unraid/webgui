@@ -83,7 +83,7 @@ _(Enable user shares)_:
 _(Included disk(s))_:
 : <select id="s1" name="shareUserInclude" multiple="multiple" style="display:none">
   <?foreach ($disks as $disk):?>
-  <?=mk_option_luks($disk['name'], $var['shareUserInclude'], strstr($disk['fsType'],':',true))?>
+  <?=mk_option_luks($disk['name'], $var['shareUserInclude'], strstr($disk['fsType']??'',':',true))?>
   <?endforeach;?>
   </select>
 
@@ -92,7 +92,7 @@ _(Included disk(s))_:
 _(Excluded disk(s))_:
 : <select id="s2" name="shareUserExclude" multiple="multiple" style="display:none">
   <?foreach ($disks as $disk):?>
-  <?=mk_option_luks($disk['name'], $var['shareUserExclude'], strstr($disk['fsType'],':',true))?>
+  <?=mk_option_luks($disk['name'], $var['shareUserExclude'], strstr($disk['fsType']??'',':',true))?>
   <?endforeach;?>
   </select>
 

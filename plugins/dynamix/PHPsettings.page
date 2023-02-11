@@ -1,0 +1,193 @@
+Menu="WebGui"
+Title="PHP Settings"
+Icon="icon-template"
+Tag="edit"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$log  = "/var/log/phplog";
+$ini  = "/etc/php.d/errors-php.ini";
+$conf = file_exists($ini) ? parse_ini_file($ini) : [];
+if (!file_exists($log)) touch($log);
+?>
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.ui.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/plugins/dynamix.docker.manager/styles/style-$theme.css")?>">
+
+<style>
+div#templateWindow,div#dialogWindow{display:none}
+span.dim{opacity:0.2}
+#screenlog{margin-left:0}
+</style>
+
+<div markdown="1" style="width:43%;margin-bottom:40px;padding:5px 15px;border:solid 1px">
+:php_settings_plug:
+This utility is used for development purposes only and allows Plugin Authors to verify their PHP code by enabling different levels of PHP error reporting.
+
+By default error logging is minimum and any errors are shown on screen. Changing the **Error reporting level** will capture the selected level of errors
+into a LOG file, which can be opened in a separate window to monitor in real-time the events when visiting various GUI pages or executing background
+processes on the server.
+
+The LOG file can quickly grow large when multiple errors exists, it is advised to use it only during development and use the default setting
+under normal running conditions.
+:end
+</div>
+
+<form markdown="1" name="php_settings" method="POST" action="/update.php" target="progressFrame" onsubmit="preset(this)">
+<input type="hidden" name="#cleanup" value="1">
+<input type="hidden" name="#file" value="<?=$ini?>">
+<input type="hidden" name="error_log" value="<?=$log?>">
+<input type="hidden" name="display_startup_errors" value="0">
+<input type="hidden" name="display_errors" value="<?=$conf['display_errors']??0?>">
+<input type="hidden" name="log_errors" value="1">
+_(Error reporting level)_:
+: <select name="error_reporting" onchange="toggleScreen(this.selectedIndex)">
+  <?=mk_option($conf['error_reporting']??'', "", "_(Default)_");?>
+  <?=mk_option($conf['error_reporting']??'', "32767", "_(All Categories)_");?>
+  <?=mk_option($conf['error_reporting']??'', "1", "_(Errors Only)_");?>
+  <?=mk_option($conf['error_reporting']??'', "2", "_(Warnings Only)_");?>
+  <?=mk_option($conf['error_reporting']??'', "8", "_(Notices Only)_");?>
+  <?=mk_option($conf['error_reporting']??'', "8192", "_(Deprecated Only)_");?>
+  </select>
+
+&nbsp;
+: <input type="checkbox" id="screenlog" onclick="screenLog()" <?=($conf['display_errors']??0)?'checked':''?> disabled><span id="screentext" class="dim">_(Show errors on screen)_</span>
+
+<input type="button" value="_(PHP Info)_" onclick="PHPinfo()"><input type="button" id="clearlog" value="_(Clear Log)_" onclick="clearLog()"<?=filesize($log)>0?'':' disabled'?>><input type="button" id="viewlog" value="_(View Log)_" onclick="viewLog()" disabled>_(LOG size)_:&nbsp;<span id="logsize"></span>
+: <input type="submit" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+</form>
+
+<div id="dialogWindow"></div>
+
+<div markdown="1" id="templateWindow">
+<!--!
+<html <?=$display['rtl']?>lang="<?=strtok($locale,'_')?:'en'?>">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="format-detection" content="telephone=no">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="same-origin">
+</head>
+
+<style>
+table{box-shadow:1px 2px 3px rgba(0,0,0,0.2);width:90%}
+.center{text-align:center;color:#f2f2f2!important;background-color:#1c1b1b}
+.center table{margin:1em auto;text-align:left}
+.center th{text-align:center!important}
+td,th{border:1px solid #505153;vertical-align:baseline;padding:4px 5px!important;color:#f2f2f2}
+th{position:sticky;top:0}
+img{float:right;border:0}
+hr{width:90%;background-color:#505153;border:0;height:1px}
+h1{font-size:150%}
+h2{font-size:125%}
+h2 a{color:#f2f2f2!important}
+.p{text-align:left}
+.e{background-color:#404A77;width:300px}
+.h{background-color:#4F5B93}
+.v{background-color:#333;max-width:300px;overflow-x:auto;word-wrap:break-word}
+.v i{color:#999}
+.h td,td.e,th{border-color:#606A90}
+</style>
+
+<body>
+<?
+ob_start();
+phpinfo();
+echo preg_replace('/^<!DOCTYPE html .*<body>/s','',ob_get_clean());
+?>
+
+!-->
+</div>
+
+<script>
+String.prototype.build = function(){return this.replace(/\n(<!--!|!-->)\n/g,'');}
+
+var box = null;
+
+function screenLog() {
+  $('input[name="display_errors"]').val($('#screenlog').prop('checked')?1:0);
+}
+function viewLog() {
+  openTerminal('log','PHP Error Log','phplog');
+}
+function clearLog() {
+  $.post('/webGui/include/PHPsettings.php',{cmd:'clear'},function(){
+    swal({title:"_(PHP Log File)_",text:"_(Log file cleared)_",type:'success',html:true,confirmButtonText:"_(Ok)_"},function(){
+      if (tty_window==null) viewLog();
+      tty_window.close();
+      $('#clearlog').prop('disabled',true);
+    });
+  });
+}
+function logSize() {
+  $.post('/webGui/include/PHPsettings.php',{cmd:'logsize'},function(size){
+    $('#logsize').text(size);
+    if (size.split(' ')[0]!=0) $('#clearlog').prop('disabled',false);
+    setTimeout(logSize,3000);
+  });
+}
+function PHPinfo() {
+  box = $("#dialogWindow");
+  box.html($("#templateWindow").html().build());
+  box.dialog({
+    title: "_(PHP Information)_",
+    resizable: false,
+    height: Math.min(window.innerHeight-80,800),
+    width: Math.min(window.innerWidth,1200),
+    modal: true,
+    show: {effect:'fade', duration:250},
+    hide: {effect:'fade', duration:250},
+    buttons: {
+      "_(Done)_": function(){
+        box.dialog('close');
+      }
+    }
+  });
+  $('.ui-dialog-titlebar-close').css({'display':'none'});
+  $('.ui-dialog-title').css({'text-align':'center','width':'100%','font-size':'1.8rem'});
+  $('.ui-button-text').css({'padding':'0 5px'});
+}
+function preset(form) {
+  // reset to default settings
+  if (form.error_reporting.selectedIndex==0) {
+    form.error_log.value = "";
+    form.display_startup_errors.value = "";
+    form.display_errors.value = "";
+    form.log_errors.value = "";
+  }
+  $.cookie('reload_php',1);
+}
+function toggleScreen(index) {
+  if (index > 0) {
+    $('#screenlog').prop('disabled',false);
+    $('#screentext').removeClass('dim');
+  } else {
+    $('#screenlog').prop('disabled',true);
+    $('#screentext').addClass('dim');
+  }
+}
+$(function(){
+  logSize();
+  if (document.php_settings.error_reporting.selectedIndex > 0) {
+    $('#viewlog').prop('disabled',false);
+    $('#screenlog').prop('disabled',false);
+    $('#screentext').removeClass('dim');
+  }
+  if ($.cookie('reload_php')==1) {
+    $.removeCookie('reload_php');
+    $.post('/webGui/include/PHPsettings.php',{cmd:'reload'});
+  }
+});
+</script>

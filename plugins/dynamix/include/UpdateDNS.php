@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2022, Lime Technology
- * Copyright 2012-2022, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -17,29 +17,9 @@ $_SERVER['REQUEST_URI'] = 'settings';
 require_once "$docroot/webGui/include/Translations.php";
 require_once "$docroot/webGui/include/Helpers.php";
 
-// add 'ipaddr' function for 6.9 backwards compatibility
-if (!function_exists('ipaddr')) {
-  function ipaddr($ethX='eth0', $prot=4) {
-    global $$ethX;
-    switch ($$ethX['PROTOCOL:0']) {
-    case 'ipv4':
-      return $$ethX['IPADDR:0'];
-    case 'ipv6':
-      return $$ethX['IPADDR6:0'];
-    case 'ipv4+ipv6':
-      switch ($prot) {
-      case 4: return $$ethX['IPADDR:0'];
-      case 6: return $$ethX['IPADDR6:0'];
-      default:return [$$ethX['IPADDR:0'],$$ethX['IPADDR6:0']];}
-    default:
-      return $$ethX['IPADDR:0'];
-    }
-  }
-}
-
 function host_lookup_ip($host) {
   $result = @dns_get_record($host, DNS_A);
-  $ip = ($result) ? $result[0]['ip'] : '';
+  $ip = ($result) ? $result[0]['ip']??'' : '';
   return($ip);
 }
 function rebindDisabled() {
@@ -83,14 +63,14 @@ function generate_external_host($host, $ip) {
   return $host;
 }
 function verbose_output($httpcode, $result) {
-  global $cli, $verbose, $anon, $plgversion, $post, $var, $isRegistered, $remote, $reloadNginx, $nginx, $isLegacyCert;
+  global $cli, $verbose, $anon, $plgversion, $post, $var, $isRegistered, $myservers, $reloadNginx, $nginx, $isLegacyCert;
   global $remoteaccess;
   global $icon_warn, $icon_ok;
   if (!$cli || !$verbose) return;
 
   if ($anon) echo "(Output is anonymized, use '-vv' to see full details)".PHP_EOL;
   echo "Unraid OS {$var['version']}".((strpos($plgversion, "base-") === false) ? " with My Servers plugin version {$plgversion}" : '').PHP_EOL;
-  echo ($isRegistered) ? "{$icon_ok}Signed in to Unraid.net as {$remote['username']}".PHP_EOL : "{$icon_warn}Not signed in to Unraid.net".PHP_EOL ;
+  echo ($isRegistered) ? "{$icon_ok}Signed in to Unraid.net as {$myservers['remote']['username']}".PHP_EOL : "{$icon_warn}Not signed in to Unraid.net".PHP_EOL ;
   echo "Use SSL is {$nginx['NGINX_USESSL']}".PHP_EOL;
   echo (rebindDisabled()) ? "{$icon_ok}Rebind protection is disabled" : "{$icon_warn}Rebind protection is enabled";
   echo " for ".($isLegacyCert ? "unraid.net" : "myunraid.net").PHP_EOL;
@@ -108,27 +88,27 @@ function verbose_output($httpcode, $result) {
       $internalhostip = host_lookup_ip(generate_internal_host($post['internalhostname'], $post['internalip']));
       $internalhosterr = ($internalhostip != $post['internalip']);
     }
-    if ($post['externalhostname']) {
+    if (!empty($post['externalhostname'])) {
       // $post['externalhostname'] is $nginx['NGINX_CERTNAME'] (certificate_bundle.pem)
       $externalhostip = host_lookup_ip(generate_external_host($post['externalhostname'], $wanip));
       $externalhosterr = ($externalhostip != $wanip);
     }
     // anonymize data. no caclulations can be done with this data beyond this point.
     if ($anon) {
-      if ($certhostip) $certhostip = anonymize_ip($certhostip);
-      if ($certhostname) $certhostname = anonymize_host($certhostname);
-      if ($internalhostip) $internalhostip = anonymize_ip($internalhostip);
-      if ($externalhostip) $externalhostip = anonymize_ip($externalhostip);
-      if ($wanip) $wanip = anonymize_ip($wanip);
-      if ($post['internalip']) $post['internalip'] = anonymize_ip($post['internalip']);
-      if ($post['internalhostname']) $post['internalhostname'] = anonymize_host($post['internalhostname']);
-      if ($post['externalhostname']) $post['externalhostname'] = anonymize_host($post['externalhostname']);
-      if ($post['externalport']) $post['externalport'] = "[redacted]";
+      if (!empty($certhostip)) $certhostip = anonymize_ip($certhostip);
+      if (!empty($certhostname)) $certhostname = anonymize_host($certhostname);
+      if (!empty($internalhostip)) $internalhostip = anonymize_ip($internalhostip);
+      if (!empty($externalhostip)) $externalhostip = anonymize_ip($externalhostip);
+      if (!empty($wanip)) $wanip = anonymize_ip($wanip);
+      if (!empty($post['internalip'])) $post['internalip'] = anonymize_ip($post['internalip']);
+      if (!empty($post['internalhostname'])) $post['internalhostname'] = anonymize_host($post['internalhostname']);
+      if (!empty($post['externalhostname'])) $post['externalhostname'] = anonymize_host($post['externalhostname']);
+      if (!empty($post['externalport'])) $post['externalport'] = "[redacted]";
     }
     // always anonymize the keyfile
-    if ($post['keyfile']) $post['keyfile'] = "[redacted]";
+    if (!empty($post['keyfile'])) $post['keyfile'] = "[redacted]";
     // output notes
-    if ($post['internalprotocol'] && $post['internalhostname'] && $post['internalport']) {
+    if (!empty($post['internalprotocol']) && !empty($post['internalhostname']) && !empty($post['internalport'])) {
       $localurl = $post['internalprotocol']."://".generate_internal_host($post['internalhostname'], $post['internalip']).format_port($post['internalport']);
       echo 'Local Access url: '.$localurl.PHP_EOL;
       if ($internalhostip) {
@@ -145,7 +125,7 @@ function verbose_output($httpcode, $result) {
         echo ($certhosterr) ? ", it should resolve to {$post['internalip']}" : "";
         echo PHP_EOL;
       }
-      if ($remoteaccess == 'yes' && $post['externalprotocol'] && $post['externalhostname'] && $post['externalport']) {
+      if ($remoteaccess == 'yes' && !empty($post['externalprotocol']) && !empty($post['externalhostname']) && !empty($post['externalport'])) {
         $remoteurl = $post['externalprotocol']."://".generate_external_host($post['externalhostname'], $wanip).format_port($post['externalport']);
         echo 'Remote Access url: '.$remoteurl.PHP_EOL;
         echo ($externalhosterr) ? $icon_warn : $icon_ok;
@@ -163,7 +143,8 @@ function verbose_output($httpcode, $result) {
   }
   if ($result) {
     echo "Response (HTTP $httpcode):".PHP_EOL;
-    echo @json_encode(@json_decode($result, true), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) . PHP_EOL;
+    $mutatedResult = is_array($result) ? json_encode($result) : $result;
+    echo @json_encode(@json_decode($mutatedResult, true), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) . PHP_EOL;
   }
 }
 /**
@@ -191,15 +172,14 @@ function response_complete($httpcode, $result, $cli_success_msg='') {
 
 $cli = php_sapi_name()=='cli';
 $verbose = $anon = false;
-if ($cli && $argv[1] == "-v") {
+if ($cli && ($argc > 1) && $argv[1] == "-v") {
   $verbose = true;
   $anon = true;
 }
-if ($cli && $argv[1] == "-vv") {
+if ($cli && ($argc > 1) && $argv[1] == "-vv") {
   $verbose = true;
 }
 $var = parse_ini_file('/var/local/emhttp/var.ini');
-extract(parse_ini_file('/var/local/emhttp/network.ini',true));
 $nginx = parse_ini_file('/var/local/emhttp/nginx.ini');
 $is69 = version_compare($var['version'],"6.9.9","<");
 $reloadNginx = false;
@@ -207,27 +187,25 @@ $dnserr = false;
 $icon_warn = "⚠️  ";
 $icon_ok = "✅  ";
 
-// parse myservers.cfg
-if (file_exists('/boot/config/plugins/dynamix.my.servers/myservers.cfg')) {
-  @extract(parse_ini_file('/boot/config/plugins/dynamix.my.servers/myservers.cfg',true));
+$myservers_flash_cfg_path='/boot/config/plugins/dynamix.my.servers/myservers.cfg';
+$myservers = file_exists($myservers_flash_cfg_path) ? @parse_ini_file($myservers_flash_cfg_path,true) : [];
+// ensure some vars are defined here so we don't have to test them later
+if (empty($myservers['remote']['apikey'])) {
+  $myservers['remote']['apikey'] = "";
 }
-if (empty($remote)) {
-  $remote = [
-    "apikey" => "",
-    "wanaccess" => "no",
-    "wanport" => "443"
-  ];
+if (empty($myservers['remote']['wanaccess'])) {
+  $myservers['remote']['wanaccess'] = "no";
 }
-if (empty($remote['wanport'])) {
-  $remote['wanport'] = 443;
+if (empty($myservers['remote']['wanport'])) {
+  $myservers['remote']['wanport'] = 443;
 }
 // remoteaccess, externalport
 if ($cli) {
   $remoteaccess = (empty($nginx['NGINX_WANFQDN'])) ? 'no' : 'yes';
-  $externalport = $remote['wanport'];
+  $externalport = $myservers['remote']['wanport'];
 } else {
-  $remoteaccess = $_POST['remoteaccess'];
-  $externalport = intval($_POST['externalport']);
+  $remoteaccess = $_POST['remoteaccess']??'no';
+  $externalport = intval($_POST['externalport']??443);
 
   if ($remoteaccess != 'yes') {
     $remoteaccess = 'no';
@@ -237,11 +215,11 @@ if ($cli) {
     $externalport = 443;
   }
 
-  if ($remote['wanaccess'] != $remoteaccess) {
+  if ($myservers['remote']['wanaccess'] != $remoteaccess) {
     // update the wanaccess ini value
-    $orig = @parse_ini_file('/boot/config/plugins/dynamix.my.servers/myservers.cfg',true);
-    if ($orig === false) {
-      $orig = ['remote' => $remote];
+    $orig = file_exists($myservers_flash_cfg_path) ? parse_ini_file($myservers_flash_cfg_path,true) : [];
+    if (!$orig) {
+      $orig = ['remote' => $myservers['remote']];
     }
     $orig['remote']['wanaccess'] = $remoteaccess;
     $text = '';
@@ -250,12 +228,12 @@ if ($cli) {
       foreach ($block as $key => $value) if (strlen($value)) $pairs .= "$key=\"$value\"\n";
       if ($pairs) $text .= "[$section]\n".$pairs;
     }
-    if ($text) file_put_contents('/boot/config/plugins/dynamix.my.servers/myservers.cfg', $text);
+    if ($text) file_put_contents($myservers_flash_cfg_path, $text);
     // need nginx reload
     $reloadNginx = true;
   }
 }
-$isRegistered = !empty($remote) && !empty($remote['username']);
+$isRegistered = !empty($myservers['remote']['username']);
 
 // protocols, hostnames, ports
 $internalprotocol = 'http';
@@ -266,6 +244,7 @@ $externalprotocol = 'https';
 $externalhostname = $nginx['NGINX_CERTNAME'];
 $isLegacyCert = preg_match('/.*\.unraid\.net$/', $nginx['NGINX_CERTNAME']);
 $isWildcardCert = preg_match('/.*\.myunraid\.net$/', $nginx['NGINX_CERTNAME']);
+$internalip = $nginx['NGINX_LANIP'];
 
 if ($nginx['NGINX_USESSL']=='yes') {
   // When NGINX_USESSL is 'yes' in 6.9, it could be using either Server_unraid_bundle.pem or certificate_bundle.pem
@@ -293,19 +272,15 @@ $plgversion = file_exists("/var/log/plugins/dynamix.unraid.net.plg") ? trim(@exe
 
 // only proceed when when signed in or when legacy unraid.net SSL certificate exists
 if (!$isRegistered && !$isLegacyCert) {
-    response_complete(406, array('error' => _('Nothing to do')));
+  response_complete(406, array('error' => _('Nothing to do')));
 }
 
 // keyfile
-$keyfile = @file_get_contents($var['regFILE']);
+$keyfile = empty($var['regFILE']) ? false : @file_get_contents($var['regFILE']);
 if ($keyfile === false) {
   response_complete(406, array('error' => _('Registration key required')));
 }
 $keyfile = @base64_encode($keyfile);
-
-// internalip
-$ethX       = 'eth0';
-$internalip = ipaddr($ethX);
 
 // build post array
 $post = [
@@ -343,7 +318,7 @@ if ($isRegistered) {
 }
 
 // if remoteaccess is enabled in 6.10.0-rc3+ and WANIP has changed since nginx started, reload nginx
-if ($post['_wanip'] && ($post['_wanip'] != $nginx['NGINX_WANIP']) && version_compare($var['version'],"6.10.0-rc2",">")) $reloadNginx = true;
+if (isset($post['_wanip']) && ($post['_wanip'] != $nginx['NGINX_WANIP']) && version_compare($var['version'],"6.10.0-rc2",">")) $reloadNginx = true;
 // if remoteaccess is currently disabled (perhaps because a wanip was not available when nginx was started)
 //    BUT the system is configured to have it enabled AND a wanip is now available
 //    then reload nginx

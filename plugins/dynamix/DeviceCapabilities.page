@@ -1,11 +1,11 @@
 Menu="Device New"
 Title="Capabilities"
 Tag="building"
-Cond="strpos($disks[$name]['status'],'_NP')===false"
+Cond="strpos($disks[$name]['status']??'','_NP')===false"
 ---
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -17,15 +17,14 @@ Cond="strpos($disks[$name]['status'],'_NP')===false"
 ?>
 <script>
 $(function() {
-  $.post("/webGui/include/SmartInfo.php",{cmd:'capabilities',port:'<?=addslashes(htmlspecialchars($dev))?>',name:'<?=addslashes(htmlspecialchars($name))?>'}, function(data) {
-    $('#disk_capabilities').html(data);
+  $.post("/webGui/include/SmartInfo.php",{cmd:'capabilities',port:'<?=$dev?>',name:'<?=$name?>'}, function(data) {
+    $('#disk_capabilities_div').html(data);
   });
 });
 </script>
-<table class='share_status small'>
-<thead><td style="width:33%">_(Feature)_</td><td>_(Value)_</td><td>_(Information)_</td></thead>
-<tbody id="disk_capabilities"><tr><td colspan='3'><div class="spinner"></div></td></tr></tbody>
-</table>
+<div id="disk_capabilities_div" class='share_status small'>
+
+</div>
 <input type="button" value="_(Done)_" onclick="done()">
 
 :smart_capabilities_help:

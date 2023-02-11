@@ -4,8 +4,8 @@ Icon="icon-update"
 Tag="upload"
 ---
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -19,9 +19,11 @@ Tag="upload"
 $version = $branch = $date = _('unknown');
 $bzroot  = file_exists('/boot/previous/bzroot');
 $check   = $notify['unraidos'] ? 0 : 1;
+$changes = '/boot/previous/changes.txt';
+$zip     = htmlspecialchars(str_replace(' ','_',strtolower($var['NAME'])));
 
-if (file_exists('/boot/previous/changes.txt')) {
-  exec("head -n4 /boot/previous/changes.txt",$rows);
+if (file_exists($changes)) {
+  exec("head -n4 $changes",$rows);
   foreach ($rows as $row) {
     $i = stripos($row,'version');
     if ($i !== false) {
@@ -34,14 +36,57 @@ if (file_exists('/boot/previous/changes.txt')) {
 $reboot = preg_match("/^\*\*(REBOOT REQUIRED|DOWNGRADE)/",@file_get_contents("$docroot/plugins/unRAIDServer/README.md",false,null,0,20));
 ?>
 <style>
+ul,li{margin:0;padding-top:0;padding-bottom:0}
+pre.pre{margin:30px 0}
+pre>p{margin:0;padding:0}
+pre#swaltext{height:600px!important}
+@media (max-width:960px){pre#swaltext{height:400px!important}}
+@media (max-width:960px){.sweet-alert.nchan{height:600px;width:900px;margin-left:-470px}}
+@media (max-height:768px){pre#swaltext{height:400px!important}}
+@media (max-height:768px){.sweet-alert.nchan{height:600px;width:900px;margin-left:-470px}}
 input[value="_(Install)_"],input[value="_(Update)_"],input[value="_(Restore)_"]{margin:0}
 <?if ($themes1):?>
 span.vhshift{margin-top:13px!important}
 <?endif;?>
 </style>
-<script>
-var original = null;
 
+<script>
+var diagnosticsFile = "";
+var nchan_diagnostics = new NchanSubscriber('/sub/diagnostics',{subscriber:'websocket'});
+var original = null;
+const args = {};
+
+nchan_diagnostics.on('message', function(data) {
+  if (data == '_DONE_') {
+    nchan_diagnostics.stop();
+    $('.sweet-alert').hide('fast').removeClass('nchan');
+    swal.close();
+    location = diagnosticsFile;
+    setTimeout(cleanUp,4000);
+  } else if (data) {
+    let box = $('pre#swaltext');
+    box.html(box.html()+'<br>'+data).scrollTop(box[0].scrollHeight);
+  }
+});
+
+function openInstall(cmd,title,plg) {
+  if (cmd == null) {
+    openPlugin(args.cmd,args.title,args.plg);
+    return;
+  }
+  args.cmd = cmd;
+  args.title = title;
+  args.plg = plg;
+  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{cmd:'alert'},function(data) {
+    if (data==0) {
+      // no alert message - proceed with update
+      setTimeout(openInstall);
+    } else {
+      // show alert message and ask for confirmation
+      openAlert("showchanges <?=$alerts?>","_(Alert Message)_",'openInstall');
+    }
+  });
+}
 function update_table(branch) {
   if (original) {
     if (branch != original) branch = '';
@@ -49,12 +94,21 @@ function update_table(branch) {
     if (branch) original = branch;
   }
   $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{system:true,branch:branch},function(data) {
-    updateInfo(data);
+    data = data.split('\0');
+    updateInfo(data[0]);
     $('#os_table').trigger('update');
   });
 }
 function downgrade() {
- $.get('/plugins/dynamix.plugin.manager/include/Downgrade.php',{version:'<?=$version?>'},function(){refresh();});
+  swal({title:"_(Diagnostics)_",text:"_(Please provide diagnostics when experiencing problems)_<br>_(Post these in the forums)_",html:true,type:'warning',showCancelButton:true,confirmButtonText:"<?=_('Diagnostics')?>",cancelButtonText:"<?=_('Restore')?>"},function(diag){
+    if (diag) {
+      // get diagnostics and then downgrade
+      setTimeout(function(){diagnostics(zipfile());},250);
+    } else {
+      // downgrade immediately
+      $.get('/plugins/dynamix.plugin.manager/include/Downgrade.php',{version:'<?=$version?>'},function(){refresh();});
+    }
+  });
 }
 function updateInfo(data) {
   var updates = data.split('\n');
@@ -77,7 +131,7 @@ function initlist() {
 }
 function warning (data) {
   $('#change_branch').prop('disabled',true);
-  return data.replace('green','orange').replace("<?=_('up-to-date')?>","<?=_('Reboot')?>").replace('check','warning');
+  return data.replace('green','orange').replace("<?=_('up-to-date')?>","<?=_('Reboot')?>").replace('checking','warning');
 }
 function loadlist(id,check) {
   $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{system:true,audit:id,check:check||<?=$check?>},function(data) {
@@ -104,9 +158,36 @@ function loadlist(id,check) {
 <?endif;?>
   });
 }
+function cleanUp() {
+  if (document.hasFocus()) {
+    $.post('/webGui/include/Download.php',{cmd:'delete',file:diagnosticsFile},function(){
+      $.get('/plugins/dynamix.plugin.manager/include/Downgrade.php',{version:'<?=$version?>'},function(){refresh();});
+    });
+  } else {
+    setTimeout(cleanUp,2000);
+  }
+}
+function zipfile(){
+  var tzoffset = (new Date()).getTimezoneOffset() * 60000; //offset in milliseconds
+  var localISOTime = (new Date(Date.now() - tzoffset)).toISOString().slice(0,-1);
+  return '<?=$zip?>-diagnostics-'+localISOTime.substr(0,16).replace(/[-:]/g,'').replace('T','-')+'.zip';
+}
+function diagnostics(file) {
+  nchan_diagnostics.start();
+  $.post('/webGui/include/Download.php',{cmd:'diag',file:file,anonymize:''},function(zip) {
+    if (zip) {
+      diagnosticsFile = zip;
+      swal({title:"_(Downloading)_...",text:"/boot/logs"+zip+"<hr><pre id='swaltext'></pre>",html:true,animation:'none',showConfirmButton:false});
+      $('.sweet-alert').addClass('nchan');
+      $('button.confirm').prop('disabled',true);
+    } else {
+      nchan_diagnostics.stop();
+    }
+  });
+}
 $(function() {
   initlist();
-  $('.tabs').append("<span class='status vhshift'><input type='button' id='checkos' value='<?=_('Check for Updates')?>' onclick='openBox(\"/plugins/dynamix.plugin.manager/scripts/plugin&arg1=checkos\",\"<?=_('System Update Check')?>\",600,600,true,\"loadlist\",\":return\")' disabled></span>");
+  $('.tabs').append("<span class='status vhshift'><input type='button' id='checkos' value=\"_(Check for Updates)_\" onclick='openPlugin(\"plugin checkos\",\"_(System Update Check)_\",\":return\")' disabled></span>");
 });
 </script>
 <table class='tablesorter plugins shift' id='os_table'>

@@ -33,8 +33,13 @@ $(function() {
 });
 </script>
 
-<table class="share_status share">
-<thead><tr><td style="width:15%">_(Name)_</td><td style="width:30%">_(Comment)_</td><td style="width:8%">_(SMB)_</td><td style="width:8%">_(NFS)_</td><td style="width:14%">_(Cache)_</td><td style="width:10%">_(Size)_</td><td style="width:10%">_(Free)_</td><td style="width:5%">_(View)_</td></tr></thead>
+<style>
+table.share_status thead tr td:first-child{width:15%}
+table.share_status thead tr td:nth-child(n+3){width:10%}
+</style>
+
+<table class="share_status">
+<thead><tr><td>_(Name)_</td><td>_(Comment)_</td><td>_(SMB)_</td><td>_(NFS)_</td><td>_(Cache)_</td><td>_(Size)_</td><td>_(Free)_</td></tr></thead>
 <tbody id="shareslist"></tbody>
 </table>
 <p><form name="share_form" method="POST" action="<?=htmlspecialchars($path)?>/Share?name=">

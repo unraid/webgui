@@ -15,7 +15,6 @@ $docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 // add translations
 $_SERVER['REQUEST_URI'] = 'shares';
 require_once "$docroot/webGui/include/Translations.php";
-
 require_once "$docroot/webGui/include/Helpers.php";
 
 $shares  = parse_ini_file('state/shares.ini',true);
@@ -32,10 +31,11 @@ $display['scale'] = unscript($_GET['scale']??'');
 $display['number'] = unscript($_GET['number']??'');
 $display['raw'] = unscript($_GET['raw']??'');
 
-$pools = implode(',',pools_filter(cache_filter($disks)));
+$pools_check = pools_filter(cache_filter($disks));
+$pools = implode(',', $pools_check);
 
 if (!$shares) {
-  echo "<tr><td colspan='8' style='text-align:center;padding-top:12px'><i class='fa fa-folder-open-o icon'></i>"._('There are no exportable user shares')."</td></tr>";
+  echo "<tr><td colspan='7' style='text-align:center;padding-top:12px'><i class='fa fa-folder-open-o icon'></i>",_('There are no exportable user shares'),"</td></tr>";
   exit;
 }
 // Natural sorting of share names
@@ -90,42 +90,47 @@ foreach ($shares as $name => $share) {
     case 2: $luks = "<a class='info' onclick='return false'><i class='padlock fa fa-unlock-alt orange-text'></i><span>"._('Some or all files unencrypted')."</span></a>"; break;
    default: $luks = "<a class='info' onclick='return false'><i class='padlock fa fa-lock red-text'></i><span>"._('Unknown encryption state')."</span></a>"; break;
   } else $luks = "";
-  echo "<tr>";
-  echo "<td><a class='info nohand' onclick='return false'><i class='fa fa-$orb orb $color-orb'></i><span style='left:18px'>$help</span></a>$luks<a href=\"/$path/Share?name=".urlencode($name)."\" onclick=\"$.cookie('one','tab1')\">".compress($name)."</a></td>";
+  echo "<tr><td><a class='view' href=\"/$path/Browse?dir=/mnt/user/",urlencode($name),"\"><i class=\"icon-u-tab\" title=\"",_('Browse')," /mnt/user/".urlencode($name),"\"></i></a>";
+  echo "<a class='info nohand' onclick='return false'><i class='fa fa-$orb orb $color-orb'></i><span style='left:18px'>$help</span></a>$luks<a href=\"/$path/Share?name=";
+  echo urlencode($name),"\" onclick=\"$.cookie('one','tab1')\">",compress($name),"</a></td>";
   echo "<td>{$share['comment']}</td>";
-  echo "<td>".user_share_settings($var['shareSMBEnabled'], $sec[$name])."</td>";
-  echo "<td>".user_share_settings($var['shareNFSEnabled'], $sec_nfs[$name])."</td>";
-  $cmd="/webGui/scripts/share_size"."&arg1=".urlencode($name)."&arg2=ssz1&arg3=".urlencode($pools);
+  echo "<td>",user_share_settings($var['shareSMBEnabled'], $sec[$name]),"</td>";
+  echo "<td>",user_share_settings($var['shareNFSEnabled'], $sec_nfs[$name]),"</td>";
+  $cmd="/webGui/scripts/share_size&arg1=".urlencode($name)."&arg2=ssz1&arg3=".urlencode($pools);
+  /* Check for non existent pool device. */
+  if ($share['cachePool']) {
+    if (! in_array($share['cachePool'], $pools_check)) {
+      $share['useCache'] = "no";
+    }
+  }
   $cache = _(ucfirst($share['useCache'])).($share['useCache']!='no'?' : '.compress(my_disk($share['cachePool'],$display['raw'])):'');
   if (array_key_exists($name, $ssz1)) {
     echo "<td>$cache</td>";
-    echo "<td>".my_scale($ssz1[$name]['disk.total'], $unit)." $unit</td>";
-    echo "<td>".my_scale($share['free']*1024, $unit)." $unit</td>";
-    echo "<td><a href=\"/$path/Browse?dir=/mnt/user/".urlencode($name)."\"><i class=\"icon-u-tab\" title=\""._('Browse')." /mnt/user/".urlencode($name)."\"></i></a></td>";
+    echo "<td>",my_scale($ssz1[$name]['disk.total'], $unit)," $unit</td>";
+    echo "<td>",my_scale($share['free']*1024, $unit)," $unit</td>";
     echo "</tr>";
     foreach ($ssz1[$name] as $diskname => $disksize) {
       if ($diskname=='disk.total') continue;
       $include = $share['include'];
       $inside = in_array($diskname, array_filter(array_diff($myDisks, explode(',',$share['exclude'])), 'shareInclude'));
-      echo "<tr class='share_status_size".($inside ? "'>" : " warning'>");
-      echo "<td>"._(my_disk($diskname,$display['raw']),3).":</td>";
-      echo "<td>".($inside ? "" : "<em>"._('Share is outside the list of designated disks')."</em>")."</td>";
+      echo "<tr class='",($inside ? "'>" : "warning'>");
+      echo "<td><a class='view'></a><a href=\"/update.htm?cmd=$cmd&csrf_token={$var['csrf_token']}\" target=\"progressFrame\" title=\"";
+      echo _('Recompute'),"...\" onclick='$.cookie(\"ssz\",\"ssz\",{path:\"/\"});$(\".share-$row-1\").html(\"",_('Please wait'),"...\");$(\".share-$row-2\").html(\"\");'><i class='fa fa-refresh icon'></i></a>&nbsp;",_(my_disk($diskname,$display['raw']),3),"</td>";
+      echo "<td>",($inside ? "" : "<em>"._('Share is outside the list of designated disks')."</em>"),"</td>";
       echo "<td></td>";
       echo "<td></td>";
       echo "<td></td>";
-      echo "<td class='share-$row-1'>".my_scale($disksize, $unit)." $unit</td>";
-      echo "<td class='share-$row-2'>".my_scale($disks[$diskname]['fsFree']*1024, $unit)." $unit</td>";
-      echo "<td><a href=\"/update.htm?cmd=$cmd&csrf_token={$var['csrf_token']}\" target=\"progressFrame\" title=\""._('Recompute')."...\" onclick='$.cookie(\"ssz\",\"ssz\",{path:\"/\"});$(\".share-$row-1\").html(\""._('Please wait')."...\");$(\".share-$row-2\").html(\"\");'><i class='fa fa-refresh icon'></i></a></td>";
+      echo "<td class='share-$row-1'>",my_scale($disksize, $unit)," $unit</td>";
+      echo "<td class='share-$row-2'>",my_scale($disks[$diskname]['fsFree']*1024, $unit)," $unit</td>";
       echo "</tr>";
     }
   } else {
     echo "<td>$cache</td>";
-    echo "<td><a href=\"/update.htm?cmd=$cmd&csrf_token={$var['csrf_token']}\" target=\"progressFrame\" onclick=\"$.cookie('ssz','ssz');$(this).text('"._('Please wait')."...')\">"._('Compute')."...</a></td>";
-    echo "<td>".my_scale($share['free']*1024, $unit)." $unit</td>";
-    echo "<td><a href=\"/$path/Browse?dir=/mnt/user/".urlencode($name)."\"><i class=\"icon-u-tab\" title=\""._('Browse')." /mnt/user/".urlencode($name)."\"></i></a></td>";
+    echo "<td><a href=\"/update.htm?cmd=$cmd&csrf_token={$var['csrf_token']}\" target=\"progressFrame\" onclick=\"$.cookie('ssz','ssz');$(this).text('",_('Please wait')."...')\">",_('Compute'),"...</a></td>";
+    echo "<td>",my_scale($share['free']*1024, $unit)," $unit</td>";
     echo "</tr>";
   }
 }
 if ($row==0) {
-  echo "<tr><td colspan='9' style='text-align:center;padding-top:12px'><i class='fa fa-folder-open-o icon'></i>"._('There are no exportable user shares')."</td></tr>";
+  echo "<tr><td colspan='7' style='text-align:center;padding-top:12px'><i class='fa fa-folder-open-o icon'></i>",_('There are no exportable user shares'),"</td></tr>";
 }

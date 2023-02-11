@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -108,9 +108,9 @@ case 'ct':
     // since container was already running, put it back it to a running state after update
     $cmd = str_replace('/docker create ', '/docker run -d ', $cmd);
     // attempt graceful stop of container first
-    $DockerClient->stopContainer($ct,30);
+    $DockerClient->stopContainer($ct);
   }
-  // force kill container if still running after 30 seconds
+  // force kill container if still running after time-out
   $DockerClient->removeContainer($ct);
   execCommand($cmd,false);
   $DockerClient->flushCaches();

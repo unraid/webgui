@@ -1,9 +1,11 @@
 #!/usr/bin/php -q
 <?PHP
-// Copyright 2005-2020, Lime Technology
+// Copyright 2005-2023, Lime Technology
 // License: GPLv2 only
 //
 // Program updates made by Bergware International (April 2020)
+// Program updates made by Bergware International (June 2022)
+
 $usage = <<<EOF
 Process language files.
 
@@ -30,6 +32,9 @@ Usage: language updateall
 
 EOF;
 
+// Error code to description (wget)
+// ref: https://www.gnu.org/software/wget/manual/html_node/Exit-Status.html
+//
 function error_desc($code) {
   switch($code) {
     case 0: return 'No errors';
@@ -46,38 +51,117 @@ function error_desc($code) {
   }
 }
 
+// Signal DONE to caller
+//
+function done($code) {
+  global $nchan;
+  if ($nchan) write('_DONE_','');
+  exit($code);
+}
+
+// Function to write either to console (echo) or nchan (curl)
+// Default output is console, use optional parameter "nchan" to write to nchan instead
+//
+function write(...$messages){
+  global $nchan;
+  if ($nchan) {
+    $com = curl_init();
+    curl_setopt_array($com,[
+      CURLOPT_URL => 'http://localhost/pub/plugins?buffer_length=1',
+      CURLOPT_UNIX_SOCKET_PATH => '/var/run/nginx.socket',
+      CURLOPT_POST => 1,
+      CURLOPT_RETURNTRANSFER => true
+    ]);
+    foreach ($messages as $message) {
+      curl_setopt($com, CURLOPT_POSTFIELDS, $message);
+      curl_exec($com);
+    }
+    curl_close($com);
+  } else {
+    foreach ($messages as $message) echo $message;
+  }
+}
+
+// Run command and obtain output
+//
+function run($command) {
+  $run = popen($command,'r');
+  while (!feof($run)) write(fgets($run));
+  return pclose($run);
+}
+
+// Run hooked scripts before correct execution of "method"
+// method = install, update, remove, check
+// hook programs receives three parameters: type=language and method and language-name
+//
+function pre_hooks() {
+  global $method, $name;
+  $language = (pathinfo($name)['extension']??'')=='xml' ? $name : "lang-$name.xml";
+  $hooks = "/usr/local/emhttp/plugins/dynamix.plugin.manager/pre-hooks";
+  foreach (glob("$hooks/*") as $hook) if (is_executable($hook)) {
+    write("Executing hook script: ".basename($hook)."\n");
+    run("$hook language $method $language");
+  }
+}
+
+// Run hooked scripts after successful or failed completion of "method"
+// method = install, update, remove, check
+// hook programs receives four parameters: type=language and method and language-name and error (empty if none)
+//
+function post_hooks($error='') {
+  global $method, $name;
+  $language = (pathinfo($name)['extension']??'')=='xml' ? $name : "lang-$name.xml";
+  $hooks = "/usr/local/emhttp/plugins/dynamix.plugin.manager/post-hooks";
+  foreach (glob("$hooks/*") as $hook) if (is_executable($hook)) {
+    write("Executing hook script: ".basename($hook)."\n");
+    run("$hook language $method $language $error");
+  }
+}
+
+// Download a file from a URL.
+// Returns TRUE if success else FALSE and fills in error.
+//
 function download($url, $name, &$error) {
+  $plg = basename($url);
   if ($file = popen("wget --compression=auto --no-cache --progress=dot -O $name $url 2>&1", 'r')) {
-    echo "language: downloading: $url ...\r";
+    write("language: downloading: $plg ...\r");
     $level = -1;
     while (!feof($file)) {
       if (preg_match('/\d+%/', fgets($file), $matches)) {
         $percentage = substr($matches[0],0,-1);
         if ($percentage > $level) {
-          echo "language: downloading: $url ... $percentage%\r";
+          write("language: downloading: $plg ... $percentage%\r");
           $level = $percentage;
         }
       }
     }
     if (($perror = pclose($file)) == 0) {
-      echo "language: downloading: $url ... done\n";
+      write("language: downloading: $plg ... done\n");
       return true;
     } else {
-      echo "language: downloading: $url ... failed (".error_desc($perror).")\n";
-      $error = "$url download failure (".error_desc($perror).")";
+      $error = "$plg download failure (".error_desc($perror).")";
       return false;
     }
   } else {
-    $error = "$url failed to open";
+    $error = "$plg failed to open";
     return false;
   }
 }
 
+// Deal with logging message.
+//
+function logger($message) {
+  shell_exec("logger $message");
+}
+
+// Interpret a language file
+// Returns TRUE if success, else FALSE and fills in error string.
+//
 function language($method, $xml_file, &$error) {
   global $docroot, $boot, $plugins, $tmp;
 
   // parse language XML file
-  $xml = file_exists($xml_file) ? simplexml_load_file($xml_file,NULL,LIBXML_NOCDATA) : false;
+  $xml = file_exists($xml_file) ? @simplexml_load_file($xml_file,NULL,LIBXML_NOCDATA) : false;
   if ($xml === false) {
     $error = "XML file doesn't exist or xml parse error";
     return false;
@@ -127,7 +211,7 @@ function language($method, $xml_file, &$error) {
     }
   case 'dump':
     // dump file: debugging
-    echo print_r($xml);
+    write(print_r($xml,true));
     return true;
   default:
     // return single attribute
@@ -136,34 +220,42 @@ function language($method, $xml_file, &$error) {
   }
 }
 
-// MAIN - single argument
-if ($argc < 2) {
-  echo $usage;
-  exit(1);
-}
-
 $docroot = '/usr/local/emhttp';
 $boot    = '/boot/config/plugins';
 $plugins = '/var/log/plugins';
 $tmp     = '/tmp/plugins';
 $method  = $argv[1];
+$nchan   = $argv[$argc-1] == 'nchan'; // console or nchan output
 
+// MAIN - single argument
+if ($argc < 2) {
+  write($usage);
+  done(1);
+}
+
+// language checkall
+// check all installed languages
+//
 if ($method == 'checkall') {
-  echo "language: checking all language packs\n";
+  write("language: checking all language packs\n");
   foreach (glob("$plugins/lang-*.xml", GLOB_NOSORT) as $link) {
     $lang_file = @readlink($link);
     if ($lang_file === false) continue;
     if (language('LanguageURL', $lang_file, $error) === false) continue;
     $name = str_replace('lang-', '', basename($lang_file, '.xml'));
     $lang = language('Language', $lang_file, $error) ?: $name;
-    echo "language: checking $lang language pack ...\n";
+    write("language: checking $lang language pack ...\n");
     exec(realpath($argv[0])." check $name >/dev/null");
   }
-  exit(0);
+  write("language: checking finished.\n");
+  done(0);
 }
 
+// language updateall
+// update all installed languages
+//
 if ($method == 'updateall') {
-  echo "language: updating all language packs\n";
+  write("language: updating all language packs\n");
   foreach (glob("$plugins/lang-*.xml", GLOB_NOSORT) as $link) {
     $lang_file = @readlink($link);
     if ($lang_file === false) continue;
@@ -174,91 +266,112 @@ if ($method == 'updateall') {
     $latest = language('Version', "$tmp/lang-$name.xml", $error);
     // update only when newer
     if (strcmp($latest, $version) > 0) {
-      echo "language: updating $lang language pack ...\n";
+      write("language: updating $lang language pack ...\n");
       exec(realpath($argv[0])." update $name >/dev/null");
     }
   }
-  exit(0);
+  write("language: updating finished.\n");
+  done(0);
 }
 
 // MAIN - two arguments
-if ($argc != 3) {
-  echo $usage;
-  exit(1);
+if ($argc < 3) {
+  write($usage);
+  done(1);
 }
 
+// language install [language_file]
+//
 if ($method == 'install') {
-  echo "language: installing language pack\n";
-  if (substr($argv[2],0,7)=='http://' || substr($argv[2],0,8)=='https://') {
+  $argv[2] = preg_replace('#[\x00-\x1F\x80-\xFF]#', '', $argv[2]);
+  $name = basename($argv[2]);
+  write("language: installing language pack\n");
+  // check for URL
+  if (preg_match('#^https?://#',$argv[2])) {
     $langURL = $argv[2];
-    echo "language: downloading $langURL\n";
-    $name = basename($langURL);
     $xml_file = "$tmp/$name";
+    write("language: downloading: $name\n");
     if (!download($langURL, $xml_file, $error)) {
-      echo "language: $error\n";
+      write("language: $error\n");
       @unlink($xml_file);
-      exit(1);
+      done(1);
     }
   } else {
     $xml_file = realpath($argv[2]);
-    $name = basename($xml_file);
   }
   $link_file = "$plugins/$name";
   $lang_file = "$boot/$name";
   @unlink($link_file);
+  // run hook scripts for pre processing
+  pre_hooks();
   if (language('install', $xml_file, $error) === false) {
-    echo "language: $error\n";
-    exit(1);
+    write("language: $error\n");
+    // run hook scripts for post processing
+    post_hooks($error);
+    done(1);
   }
   $lang = language('Language', $xml_file, $error) ?: substr($name,0,-4);
   copy($xml_file, $lang_file);
   symlink($lang_file, $link_file);
-  echo "language: $lang language pack installed\n";
-  exit(0);
+  write("language: $lang language pack installed\n");
+  logger("language: $lang language pack installed");
+  // run hook scripts for post processing
+  post_hooks();
+  done(0);
 }
 
+// language check [language]
+//
 if ($method == 'check') {
   $name = $argv[2];
-  echo "language: checking language pack\n";
+  write("language: checking language pack\n");
   $link_file = "$plugins/lang-$name.xml";
   $lang_file = @readlink($link_file);
   if ($lang_file === false) {
-    echo "language: $name language pack not installed\n";
-    exit(1);
+    write("language: $name language pack not installed\n");
+    done(1);
   }
   $templateURL = language('TemplateURL', $lang_file, $error);
   if ($templateURL === false) {
-    echo "language: $error\n";
-    exit(1);
+    write("language: $error\n");
+    done(1);
   }
   $xml_file = "$tmp/lang-$name.xml";
   if (!download($templateURL, $xml_file, $error)) {
-    echo "language: $error\n";
+    write("language: $error\n");
     @unlink($xml_file);
-    exit(1);
+    done(1);
   }
+  // run hook scripts for pre processing
+  pre_hooks();
   $version = language('Version', $xml_file, $error);
   if ($version === false) {
-    echo "language: $error\n";
-    exit(1);
+    write("language: $error\n");
+    // run hook scripts for post processing
+    post_hooks($error);
+    done(1);
   }
-  echo "$version\n";
-  exit(0);
+  write("$version\n");
+  // run hook scripts for post processing
+  post_hooks();
+  done(0);
 }
 
+// language update [language]
+//
 if ($method == 'update') {
   $name = $argv[2];
-  echo "language: updating language pack\n";
+  write("language: updating language pack\n");
   $link_file = "$plugins/lang-$name.xml";
   $lang_file = @readlink($link_file);
   if ($lang_file === false) {
-    echo "language: $name language pack not installed\n";
-    exit(1);
+    write("language: $name language pack not installed\n");
+    done(1);
   }
   // verify previous check has been done
   $xml_file = "$tmp/lang-$name.xml";
   if (!file_exists($xml_file)) {
-    echo "language: update does not exist, perform a check first\n";
+    write("language: update does not exist, perform a check first\n");
     exit (1);
   }
   $lang = language('Language', $xml_file, $error) ?: $name;
@@ -266,47 +379,64 @@ if ($method == 'update') {
   $old_version = language('Version', $lang_file, $error);
   $new_version = language('Version', $xml_file, $error);
   if ($new_version == $old_version) {
-    echo "language: $lang language pack not reinstalling same version\n";
-    exit(1);
+    write("language: $lang language pack not reinstalling same version\n");
+    done(1);
   }
   // install the updated plugin
   @unlink("$boot/dynamix/lang-$name.zip");
   @unlink($link_file);
+  // run hook scripts for pre processing
+  pre_hooks();
   if (language('install', $xml_file, $error) === false) {
-    echo "language: $error\n";
-    exit(1);
+    write("language: $error\n");
+    // run hook scripts for post processing
+    post_hooks($error);
+    done(1);
   }
   copy($xml_file, $lang_file);
   symlink($lang_file, $link_file);
-  echo "language: $lang language pack updated\n";
-  exit(0);
+  write("language: $lang language pack updated\n");
+  logger("language: $lang language pack updated");
+  // run hook scripts for post processing
+  post_hooks();
+  done(0);
 }
 
+// language remove [language]
+//
 if ($method == 'remove') {
   $name = $argv[2];
-  echo "language: removing language pack\n";
+  write("language: removing language pack: $name\n");
   $link_file = "$plugins/lang-$name.xml";
   $lang_file = @readlink($link_file);
   if ($lang_file === false) {
-    echo "language: $name language pack not installed\n";
-    exit(1);
+    write("language: $name language pack not installed\n");
+    done(1);
   }
   $lang = language('Language', $lang_file, $error) ?: $name;
+  // run hook scripts for pre processing
+  pre_hooks();
   if (language('remove', $lang_file, $error) === false) {
-    echo "language: $error\n";
-    exit(1);
+    write("language: $error\n");
+    // run hook scripts for post processing
+    post_hooks($error);
+    done(1);
   }
-  echo "language: $lang language pack removed\n";
-  exit(0);
+  write("language: $lang language pack removed\n");
+  logger("language: $lang language pack removed");
+  // run hook scripts for post processing
+  post_hooks();
+  done(0);
 }
 
 // return attribute
+//
 $xml_file =  $argv[2];
 $value = language($method, $xml_file, $error);
 if ($value === false) {
-  echo "language: $error\n";
-  exit(1);
+  write("language: $error\n");
+  done(1);
 }
-echo "$value\n";
-exit(0);
+write("$value\n");
+done(0);
 ?>

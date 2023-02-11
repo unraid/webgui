@@ -41,7 +41,7 @@ if (file_exists($user_prefs)) {
 
 // Read container info
 $allInfo = $DockerTemplates->getAllInfo();
-$docker = ['var docker=[];'];
+$docker = [];
 $null = '0.0.0.0';
 
 $autostart = @file($autostart_file, FILE_IGNORE_NEW_LINES) ?: [];
@@ -69,13 +69,13 @@ foreach ($containers as $ct) {
   $paused = $info['paused'] ? 1 : 0;
   $is_autostart = $info['autostart'] ? 'true':'false';
   $updateStatus = substr($ct['NetworkMode'],-4)==':???' ? 2 : ($info['updated']=='true' ? 0 : ($info['updated']=='false' ? 1 : 3));
-  $template = $info['template'];
-  $shell = $info['shell'];
-  $webGui = html_entity_decode($info['url']);
-  $support = html_entity_decode($info['Support']);
-  $project = html_entity_decode($info['Project']);
-  $registry = html_entity_decode($info['registry']);
-  $donateLink = html_entity_decode($info['DonateLink']);  
+  $template = $info['template']??'';
+  $shell = $info['shell']??'';
+  $webGui = html_entity_decode($info['url']??'');
+  $support = html_entity_decode($info['Support']??'');
+  $project = html_entity_decode($info['Project']??'');
+  $registry = html_entity_decode($info['registry']??'');
+  $donateLink = html_entity_decode($info['DonateLink']??'');  
   $readme = html_entity_decode($info['ReadMe']);
   $menu = sprintf("onclick=\"addDockerContainerContext('%s','%s','%s',%s,%s,%s,%s,'%s','%s','%s','%s','%s','%s', '%s','%s')\"", addslashes($name), addslashes($ct['ImageId']), addslashes($template), $running, $paused, $updateStatus, $is_autostart, addslashes($webGui), $shell, $id, addslashes($support), addslashes($project),addslashes($registry),addslashes($donateLink),addslashes($readme));
   $docker[] = "docker.push({name:'$name',id:'$id',state:$running,pause:$paused,update:$updateStatus});";
@@ -85,7 +85,7 @@ foreach ($containers as $ct) {
   $update = $updateStatus==1 ? 'blue-text' : '';
   $icon = $info['icon'] ?: '/plugins/dynamix.docker.manager/images/question.png';
   $image = substr($icon,-4)=='.png' ? "<img src='$icon?".filemtime("$docroot{$info['icon']}")."' class='img' onerror=this.src='/plugins/dynamix.docker.manager/images/question.png';>" : (substr($icon,0,5)=='icon-' ? "<i class='$icon img'></i>" : "<i class='fa fa-$icon img'></i>");
-  $wait = var_split($autostart[array_search($name,$names)],1);
+  $wait = var_split($autostart[array_search($name,$names)]??'',1);
   $ports = [];
   foreach ($ct['Ports'] as $port) {
     $intern = $running ? ($ct['NetworkMode']=='host' ? $host : $port['IP']) : $null;
@@ -142,8 +142,7 @@ foreach ($containers as $ct) {
   echo "<br><span class='mem-$id'>0 / 0</span></td>";
   echo "<td><input type='checkbox' id='$id-auto' class='autostart' container='".htmlspecialchars($name)."'".($info['autostart'] ? ' checked':'').">";
   echo "<span id='$id-wait' style='float:right;display:none'>"._('wait')."<input class='wait' container='".htmlspecialchars($name)."' type='number' value='$wait' placeholder='0' title=\""._('seconds')."\"></span></td>";
-  echo "<td><div style='white-space:nowrap'>".htmlspecialchars(str_replace('Up',_('Uptime').':',my_lang_log($ct['Status'])))."<div style='margin-top:4px'>"._('Created').": ".htmlspecialchars(my_lang_time($ct['Created']))."</div></div></td>";
-  echo "<td><span class='dockerhandle'><i class='fa fa-arrows-v'></i></span></td></tr>";
+  echo "<td><div style='white-space:nowrap'>".htmlspecialchars(str_replace('Up',_('Uptime').':',my_lang_log($ct['Status'])))."<div style='margin-top:4px'>"._('Created').": ".htmlspecialchars(my_lang_time($ct['Created']))."</div></div></td></tr>";
 }
 foreach ($images as $image) {
   if (count($image['usedBy'])) continue;
@@ -151,8 +150,8 @@ foreach ($images as $image) {
   $menu = sprintf("onclick=\"addDockerImageContext('%s','%s')\"", $id, implode(',',$image['Tags']));
   echo "<tr class='advanced'><td style='width:220px;padding:8px'>";
   echo "<span class='outer apps'><span id='$id' $menu class='hand'><img src='/webGui/images/disk.png' class='img'></span><span class='inner'>("._('orphan image').")<br><i class='fa fa-square stopped grey-text'></i><span class='state'>"._('stopped')."</span></span></span>";
-  echo "</td><td colspan='6'>"._('Image ID').": $id<br>";
-  echo implode(', ',array_map('htmlspecialchars',$image['Tags']));
+  echo "</td><td colspan='5'>"._('Image ID').": $id<br>";
+  echo implode(', ',$image['Tags']);
   echo "</td><td>"._('Created')." ".htmlspecialchars(_($image['Created'],0))."</td></tr>";
 }
 echo "\0".implode($docker)."\0".(pgrep('rc.docker')!==false ? 1:0);

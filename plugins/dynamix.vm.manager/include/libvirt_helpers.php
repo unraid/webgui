@@ -12,6 +12,155 @@
  */
 ?>
 <?
+/**
+ * Array2XML: A class to convert array in PHP to XML
+ * It also takes into account attributes names unlike SimpleXML in PHP
+ * It returns the XML in form of DOMDocument class for further manipulation.
+ * It throws exception if the tag name or attribute name has illegal chars.
+ *
+ * Author : Lalit Patel
+ * Website: http://www.lalit.org/lab/convert-php-array-to-xml-with-attributes
+ * License: Apache License 2.0
+ *          http://www.apache.org/licenses/LICENSE-2.0
+ * Version: 0.1 (10 July 2011)
+ * Version: 0.2 (16 August 2011)
+ *          - replaced htmlentities() with htmlspecialchars() (Thanks to Liel Dulev)
+ *          - fixed a edge case where root node has a false/null/0 value. (Thanks to Liel Dulev)
+ * Version: 0.3 (22 August 2011)
+ *          - fixed tag sanitize regex which didn't allow tagnames with single character.
+ * Version: 0.4 (18 September 2011)
+ *          - Added support for CDATA section using @cdata instead of @value.
+ * Version: 0.5 (07 December 2011)
+ *          - Changed logic to check numeric array indices not starting from 0.
+ * Version: 0.6 (04 March 2012)
+ *          - Code now doesn't @cdata to be placed in an empty array
+ * Version: 0.7 (24 March 2012)
+ *          - Reverted to version 0.5
+ * Version: 0.8 (02 May 2012)
+ *          - Removed htmlspecialchars() before adding to text node or attributes.
+ *
+ * Usage:
+ *       $xml = Array2XML::createXML('root_node_name', $php_array);
+ *       echo $xml->saveXML();
+ */
+class Array2XML {
+	private static $xml = null;
+private static $encoding = 'UTF-8';
+	/**
+	 * Initialize the root XML node [optional]
+	 * @param $version
+	 * @param $encoding
+	 * @param $format_output
+	 */
+	public static function init($version = '1.0', $encoding = 'UTF-8', $format_output = true) {
+			self::$xml = new DomDocument($version, $encoding);
+			self::$xml->formatOutput = $format_output;
+	self::$encoding = $encoding;
+	}
+	/**
+	 * Convert an Array to XML
+	 * @param string $node_name - name of the root node to be converted
+	 * @param array $arr - aray to be converterd
+	 * @return DomDocument
+	 */
+	public static function &createXML($node_name, $arr=array()) {
+			$xml = self::getXMLRoot();
+			$xml->appendChild(self::convert($node_name, $arr));
+			self::$xml = null;    // clear the xml node in the class for 2nd time use.
+			return $xml;
+	}
+	/**
+	 * Convert an Array to XML
+	 * @param string $node_name - name of the root node to be converted
+	 * @param array $arr - aray to be converterd
+	 * @return DOMNode
+	 */
+	private static function &convert($node_name, $arr=array()) {
+			//print_arr($node_name);
+			$xml = self::getXMLRoot();
+			$node = $xml->createElement($node_name);
+			if(is_array($arr)){
+					// get the attributes first.;
+					if(isset($arr['@attributes'])) {
+							foreach($arr['@attributes'] as $key => $value) {
+									if(!self::isValidTagName($key)) {
+											throw new Exception('[Array2XML] Illegal character in attribute name. attribute: '.$key.' in node: '.$node_name);
+									}
+									$node->setAttribute($key, self::bool2str($value));
+							}
+							unset($arr['@attributes']); //remove the key from the array once done.
+					}
+					// check if it has a value stored in @value, if yes store the value and return
+					// else check if its directly stored as string
+					if(isset($arr['@value'])) {
+							$node->appendChild($xml->createTextNode(self::bool2str($arr['@value'])));
+							unset($arr['@value']);    //remove the key from the array once done.
+							//return from recursion, as a note with value cannot have child nodes.
+							return $node;
+					} else if(isset($arr['@cdata'])) {
+							$node->appendChild($xml->createCDATASection(self::bool2str($arr['@cdata'])));
+							unset($arr['@cdata']);    //remove the key from the array once done.
+							//return from recursion, as a note with cdata cannot have child nodes.
+							return $node;
+					}
+			}
+			//create subnodes using recursion
+			if(is_array($arr)){
+					// recurse to get the node for that key
+					foreach($arr as $key=>$value){
+							if(!self::isValidTagName($key)) {
+									throw new Exception('[Array2XML] Illegal character in tag name. tag: '.$key.' in node: '.$node_name);
+							}
+							if(is_array($value) && is_numeric(key($value))) {
+									// MORE THAN ONE NODE OF ITS KIND;
+									// if the new array is numeric index, means it is array of nodes of the same kind
+									// it should follow the parent key name
+									foreach($value as $k=>$v){
+											$node->appendChild(self::convert($key, $v));
+									}
+							} else {
+									// ONLY ONE NODE OF ITS KIND
+									$node->appendChild(self::convert($key, $value));
+							}
+							unset($arr[$key]); //remove the key from the array once done.
+					}
+			}
+			// after we are done with all the keys in the array (if it is one)
+			// we check if it has any text value, if yes, append it.
+			if(!is_array($arr)) {
+					$node->appendChild($xml->createTextNode(self::bool2str($arr ?? "")));
+			}
+			return $node;
+	}
+	/*
+	 * Get the root XML node, if there isn't one, create it.
+	 */
+	private static function getXMLRoot(){
+			if(empty(self::$xml)) {
+					self::init();
+			}
+			return self::$xml;
+	}
+	/*
+	 * Get string representation of boolean value
+	 */
+	private static function bool2str($v){
+			//convert boolean to text value.
+			$v = $v === true ? 'true' : $v;
+			$v = $v === false ? 'false' : $v;
+			return $v;
+	}
+	/*
+	 * Check if the tag name or attribute name contains illegal characters
+	 * Ref: http://www.w3.org/TR/xml/#sec-common-syn
+	 */
+	private static function isValidTagName($tag){
+			$pattern = '/^[a-z_]+[a-z0-9\:\-\.\_]*[^:]*$/i';
+			return preg_match($pattern, $tag, $matches) && $matches[0] == $tag;
+	}
+}
+
+
 	$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 	require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt.php";
 
@@ -502,8 +651,6 @@
 
 	// Read configuration file (guaranteed to exist)
 	$domain_cfgfile = "/boot/config/domain.cfg";
-        // This will clean any ^M characters (\r) caused by windows from the config file
-        shell_exec("sed -i 's!\r!!g' '$domain_cfgfile'");
 	$domain_cfg = parse_ini_file($domain_cfgfile);
 
 	if ($domain_cfg['DEBUG'] != "yes") {
@@ -860,6 +1007,14 @@
 
 		return $arrValidVNCModels;
 	}
+	function getValidVMRCProtocols() {
+		$arrValidProtocols = [
+			'vnc' => 'VNC',
+			'spice' => 'SPICE'
+		];
+
+		return $arrValidProtocols;
+	}
 
 	function getValidKeyMaps() {
 		$arrValidKeyMaps = [
@@ -908,21 +1063,38 @@
 		return trim($strCPUModel);
 	}
 
-	function getNetworkBridges() {
-		exec("brctl show|grep -Po '^(vir)?br\d\S*'", $arrValidBridges);
+	function getValidNetworks() {
+		global $lv;
+		$arrValidNetworks = [];
+		exec("brctl show|grep -Po '^(vir)?br\d\S*'", $arrBridges);
 
-		if (!is_array($arrValidBridges)) {
-			$arrValidBridges = [];
+		if (!is_array($arrBridges)) {
+			$arrBridges = [];
 		}
 
 		// Make sure the default libvirt bridge is first in the list
-		if (($key = array_search('virbr0', $arrValidBridges)) !== false) {
-			unset($arrValidBridges[$key]);
+		if (($key = array_search('virbr0', $arrBridges)) !== false) {
+			unset($arrBridges[$key]);
 		}
 		// We always list virbr0 because libvirt might not be started yet (thus the bridge doesn't exists)
-		array_unshift($arrValidBridges, 'virbr0');
+		array_unshift($arrBridges, 'virbr0');
 
-		return array_values($arrValidBridges);
+		$arrValidNetworks['bridges'] = array_values($arrBridges);
+
+		// This breaks VMSettings.page if libvirt is not running
+        	if ($libvirt_running == "yes") {
+			$arrVirtual = $lv->libvirt_get_net_list($lv->get_connection());
+			
+			if (($key = array_search('default', $arrVirtual)) !== false) {
+				unset($arrVirtual[$key]);
+			}
+			
+			array_unshift($arrVirtual, 'default');
+			
+			$arrValidNetworks['libvirt'] = array_values($arrVirtual);
+		}
+
+		return $arrValidNetworks;
 	}
 
 	function domain_to_config($uuid) {
@@ -942,6 +1114,7 @@
 		$arrNICs = $lv->get_nic_info($res);
 		$arrHostDevs = $lv->domain_get_host_devices_pci($res);
 		$arrUSBDevs = $lv->domain_get_host_devices_usb($res);
+		$getcopypaste=getcopypaste($res) ;
 
 		// Metadata Parsing
 		// libvirt xpath parser sucks, use php's xpath parser instead
@@ -966,13 +1139,20 @@
 		$arrAudioDevices = [];
 		$arrOtherDevices = [];
 
-		// check for vnc; add to arrGPUDevices
-		$intVNCPort = $lv->domain_get_vnc_port($res);
-		if (!empty($intVNCPort)) {
+		// check for vnc/spice; add to arrGPUDevices
+		$vmrcport = $lv->domain_get_vnc_port($res);
+		$autoport = $lv->domain_get_vmrc_autoport($res);
+		if (empty($vmrcport) && $autoport == "yes") $vmrcport = -1 ;
+		if (!empty($vmrcport)) {
 			$arrGPUDevices[] = [
-				'id' => 'vnc',
+				'id' => 'virtual',
+				'protocol' => $lv->domain_get_vmrc_protocol($res),
 				'model' => $lv->domain_get_vnc_model($res),
-				'keymap' => $lv->domain_get_vnc_keymap($res)
+				'keymap' => $lv->domain_get_vnc_keymap($res),
+				'port' => $vmrcport,
+				'wsport' => $lv->domain_get_ws_port($res),
+				'autoport' => $autoport,
+				'copypaste' => $getcopypaste,
 			];
 		}
 
@@ -991,7 +1171,7 @@
 
 			$arrFoundOtherDevices = array_filter($arrValidOtherDevices, function($arrDev) use ($arrHostDev) {return ($arrDev['id'] == $arrHostDev['id']);});
 			if (!empty($arrFoundOtherDevices)) {
-				$arrOtherDevices[] = ['id' => $arrHostDev['id']];
+				$arrOtherDevices[] = ['id' => $arrHostDev['id'],'boot' => $arrHostDev['boot']];
 				continue;
 			}
 		}
@@ -1026,6 +1206,8 @@
 				'driver' => 'raw',
 				'dev' => $disk['device'],
 				'bus' => $disk['bus'],
+				'boot' => $disk['boot order'],
+				'serial' => $disk['serial'],
 				'select' => $default_option
 			];
 		}
@@ -1063,6 +1245,8 @@
 		  }
   	}
 
+		if ($lv->domain_get_boot_devices($res)[0] == "fd") $osbootdev = "Yes" ; else $osbootdev = "No" ;
+
 		return [
 			'template' => $arrTemplateValues,
 			'domain' => [
@@ -1083,10 +1267,13 @@
 				'autostart' => ($lv->domain_get_autostart($res) ? 1 : 0),
 				'state' => $lv->domain_state_translate($dom['state']),
 				'ovmf' => $strOVMF,
-				'usbmode' => $strUSBMode
+				'usbboot' => $osbootdev,
+				'usbmode' => $strUSBMode,
+				'memoryBacking' => getmemoryBacking($res) 
 			],
 			'media' => [
 				'cdrom' => (!empty($medias) && !empty($medias[0]) && array_key_exists('file', $medias[0])) ? $medias[0]['file'] : '',
+				'cdromboot' => (!empty($medias) && !empty($medias[0]) && array_key_exists('file', $medias[0])) ? $medias[0]['boot order'] : '',
 				'cdrombus' => (!empty($medias) && !empty($medias[0]) && array_key_exists('bus', $medias[0])) ? $medias[0]['bus'] : (stripos($lv->domain_get_machine($res), 'q35')!==false ? 'sata': 'ide'),
 				'drivers' => (!empty($medias) && !empty($medias[1]) && array_key_exists('file', $medias[1])) ? $medias[1]['file'] : '',
 				'driversbus' => (!empty($medias) && !empty($medias[1]) && array_key_exists('bus', $medias[1])) ? $medias[1]['bus'] : (stripos($lv->domain_get_machine($res), 'q35')!==false ? 'sata': 'ide')
@@ -1146,8 +1333,9 @@
 			foreach ($old['devices']['disk'] as $k => $d) if ($source==$d['source']['@attributes']['file']) $new['devices']['disk'][$key]['driver']['@attributes'] = $d['driver']['@attributes'];
 		}
 		// settings not in the GUI, but maybe customized
-		unset($new['memoryBacking'], $new['clock'], $new['features']);
-		// preserve vnc port settings
+		unset($new['clock']); 
+		// preserve vnc/spice port settings
+		// unset($new['devices']['graphics']['@attributes']['port'],$new['devices']['graphics']['@attributes']['autoport']);
 		if (!$new['devices']['graphics']) unset($old['devices']['graphics']);
 		// update parent arrays
 		if (!$old['devices']['hostdev']) unset($old['devices']['hostdev']);
@@ -1156,7 +1344,114 @@
 		if (!$new['devices']['tpm']) unset($old['devices']['tpm']);
 		// remove existing auto-generated settings
 		unset($old['cputune']['vcpupin'],$old['devices']['video'],$old['devices']['disk'],$old['devices']['interface'],$old['devices']['filesystem'],$old['cpu']['@attributes'],$old['os']['boot'],$old['os']['loader'],$old['os']['nvram']);
+		// Remove old CPU cache and features
+		unset($old['cpu']['cache'], $old['cpu']['feature']) ;
+		unset($old['features']['hyperv'],$old['devices']['channel']) ;
 		// set namespace
 		$new['metadata']['vmtemplate']['@attributes']['xmlns'] = 'unraid';
+	}
+
+	function getVMUSBs($strXML){
+		$arrValidUSBDevices = getValidUSBDevices() ;
+		foreach($arrValidUSBDevices as $key => $data) {
+
+			$array[$key] = [
+					'id' => $data['id'],
+					'name' => $data["name"],
+					'checked' => '',
+					'startupPolicy' => '',
+					'usbboot' => '' 
+					];
+		}
+		if ($strXML !="") { 
+			$VMxml = new SimpleXMLElement($strXML);
+			$VMUSB=$VMxml->xpath('//devices/hostdev[@type="usb"]') ;
+			foreach($VMUSB as $USB){
+				$vendor=$USB->source->vendor->attributes()->id ;
+				$product=$USB->source->product->attributes()->id ;
+				$startupPolicy=$USB->source->attributes()->startupPolicy ;
+				$usbboot= $USB->boot->attributes()->order  ;
+				$id = str_replace('0x', '', $vendor . ':' . $product) ;
+				$found = false ;
+				foreach($arrValidUSBDevices as $key => $data) {
+					if ($data['id'] == $id) {
+						$array[$key]['checked'] = "checked" ;
+						$array[$key]['startupPolicy'] = $startupPolicy ;
+						$array[$key]['usbboot'] = $usbboot ;
+						$found = true ;
+						break ;
+					}
+				}
+				if (!$found) {
+						$array[] = [
+						'id' => $id,
+						'name' => _("USB device is missing"),
+						'checked' => 'checked',
+						'startupPolicy' => $startupPolicy,
+						'usbboot' => $usbboot 
+						];
+				}
+			}
+		}	
+		return $array ;
+	} 
+
+	function sharesOnly($disk) {
+		return strpos('Data,Cache',$disk['type'])!==false && $disk['exportable']=='yes';
+	  }
+
+	function getUnraidShares(){
+		$shares  = parse_ini_file('state/shares.ini',true);
+		uksort($shares,'strnatcasecmp');
+		$arrreturn[] = "Manual" ;
+		foreach ($shares as $share) {
+			$arrreturn[] = "User:".$share["name"] ;
+		}
+		$disks   = parse_ini_file('state/disks.ini',true);
+		$disks = array_filter($disks,'sharesOnly');
+
+		foreach ($disks as $name => $disk) {
+			$arrreturn[] = "Disk:".$name ;
+		}
+		return $arrreturn ;
+	}
+
+	function getgastate($res) {
+        global $lv ;
+        $xml = new SimpleXMLElement($lv->domain_get_xml($res)) ;
+        $data = $xml->xpath('//channel/target[@name="org.qemu.guest_agent.0"]/@state') ;
+        $data = $data[0]->state ;
+        return $data ;
+	}
+
+	function getmemoryBacking($res) {
+		global $lv ;
+		$xml = $lv->domain_get_xml($res) ;
+		$memoryBacking = new SimpleXMLElement($xml);
+		$memorybacking = $memoryBacking->memoryBacking ;
+		return json_encode($memorybacking); ;
+	}
+	
+	function getchannels($res) {
+		global $lv ;
+        $xml = $lv->domain_get_xml($res) ;
+		$x = strpos($xml,"<channel", 0) ;
+		$y = strpos($xml,"</channel>", 0)  ;
+		$z=$y ;
+		while ($y!=false) {
+			$y = strpos($xml,"</channel>", $z +10)  ;
+			if ($y != false) $z =$y  ;
+		}
+		$channels = substr($xml,$x, ($z + 10) -$x) ;
+		return $channels ;
+	}
+
+	function getcopypaste($res) {
+		$channels = getchannels($res) ;
+		$spicevmc = $qemuvdaagent = $copypaste = false ;
+		if (strpos($channels,"spicevmc",0)) $spicevmc = true ;
+		if (strpos($channels,"qemu-vdagent",0)) $qemuvdaagent = true ;
+		if ($spicevmc || $qemuvdaagent) $copypaste = true ; else $copypaste = false ;
+		return $copypaste ;
 	}
 ?>

@@ -25,7 +25,7 @@ function response_complete($httpcode, $result, $cli_success_msg='') {
   if ($cli) {
     $json = @json_decode($result,true);
     if (!empty($json['error'])) {
-      echo 'Error: '.$json['error'].PHP_EOL;
+      fwrite(STDERR, 'Error: '.$json['error'].PHP_EOL);
       exit(1);
     }
     exit($cli_success_msg.PHP_EOL);
@@ -78,18 +78,15 @@ $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 
 // save the cert
-if ($cli) {
-  $json = @json_decode($result,true);
-  if (empty($json['bundle'])) {
-    $strError = _('Server was unable to provision SSL certificate');
-    if (!empty($json['error'])) {
-      $strError .= ' - '.$json['error'];
-    }
-    response_complete(406, '{"error":"'.$strError.'"}');
+$json = @json_decode($result,true);
+if (empty($json['bundle'])) {
+  $strError = _('Server was unable to provision SSL certificate');
+  if (!empty($json['error'])) {
+    $strError .= ' - '.$json['error'];
   }
-  $_POST['text'] = $json['bundle']; // nice way to leverage CertUpload.php to save the cert
-  include(__DIR__.'/CertUpload.php');
+  response_complete(406, '{"error":"'.$strError.'"}');
 }
-
+file_put_contents("{$certPath}.new", $json['bundle']);
+rename("{$certPath}.new", "$certPath");
 response_complete($httpcode, $result, _('LE Cert Provisioned successfully'));
 ?>

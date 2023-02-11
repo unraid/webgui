@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2018, Lime Technology
- * Copyright 2012-2018, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -30,7 +30,7 @@ if ($free > $used) $zip = "/$backup"; else {
     if ($free > $used) {$zip = "/mnt/user/$share/$backup"; break;}
   }
 }
-if ($zip) {
+if (isset($zip)) {
   chdir("/boot");
   foreach (glob("*",GLOB_NOSORT+GLOB_ONLYDIR) as $folder) {
     if (in_array($folder,$out)) continue;

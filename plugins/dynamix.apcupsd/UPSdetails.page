@@ -3,8 +3,8 @@ Title="UPS Details"
 Tag="battery-3"
 ---
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  * Copyright 2015, Dan Landon.
  *
  * This program is free software; you can redistribute it and/or
@@ -17,13 +17,11 @@ Tag="battery-3"
 ?>
 <script>
 function getUPSstatus() {
-  $.get('/plugins/dynamix.apcupsd/include/UPSstatus.php',{all:'true'},function(data) {
-    if (data) {
-      data = data.split(/\n/);
-      $('#ups_summary').html(data[0]);
-      $('#ups_status').html(data[1]);
-    }
-    setTimeout(getUPSstatus,15000);
+  $.post('/plugins/dynamix.apcupsd/include/UPSstatus.php',{level:<?=$cfg['BATTERYLEVEL']?>,runtime:<?=$cfg['MINUTES']?>},function(data) {
+    data = data.split('\n');
+    $('#ups_summary').html(data[0]);
+    $('#ups_status').html(data[1]);
+    setTimeout(getUPSstatus,3000);
   });
 }
 $(getUPSstatus);

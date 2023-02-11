@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2015-2021, Derek Macias, Eric Schultz, Jon Panozzo.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2015-2023, Derek Macias, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -90,9 +90,9 @@ if (isset($_GET['uuid'])) {
 
 <style>
 body{-webkit-overflow-scrolling:touch}
-.fileTree{background:<?=$bgcolor?>;width:300px;max-height:150px;overflow-y:scroll;overflow-x:hidden;position:absolute;z-index:100;display:none}
+.fileTree{background:<?=$bgcolor?>;width:300px;max-height:150px;overflow-y:scroll;overflow-x:hidden;position:relative;z-index:100;display:none}
 #vmform table{margin-top:0}
-#vmform div#title + table{margin-top:0}
+#vmform div.title + table{margin-top:0}
 #vmform table tr{vertical-align:top;line-height:40px}
 #vmform table tr td:nth-child(odd){width:300px;text-align:right;padding-right:10px}
 #vmform table tr td:nth-child(even){width:110px}

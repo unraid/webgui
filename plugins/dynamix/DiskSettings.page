@@ -4,8 +4,8 @@ Icon="icon-disks"
 Tag="icon-disk"
 ---
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -96,9 +96,11 @@ _(Enable spinup groups)_:
 _(Default file system)_:
 : <select name="defaultFsType" size="1">
   <?=mk_option($var['defaultFsType'], "xfs", _('xfs'));?>
+  <?=mk_option($var['defaultFsType'], "zfs", _('zfs'));?>
   <?=mk_option($var['defaultFsType'], "btrfs", _('btrfs'));?>
   <?=mk_option($var['defaultFsType'], "reiserfs", _('reiserfs'));?>
   <?=mk_option($var['defaultFsType'], "luks:xfs", _('xfs')." - "._('encrypted'));?>
+  <?=mk_option($var['defaultFsType'], "luks:zfs", _('zfs')." - "._('encrypted'));?>
   <?=mk_option($var['defaultFsType'], "luks:btrfs", _('btrfs')." - "._('encrypted'));?>
   <?=mk_option($var['defaultFsType'], "luks:reiserfs", _('reiserfs')." - "._('encrypted'));?>
   </select>
@@ -187,7 +189,7 @@ _(Default critical disk temperature threshold)_ (&deg;<?=$display['unit']?>):
 : <input type="submit" name="changeDisk" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
 </form>
 
-<div id="title"><span class="left"><i class="title fa fa-plus-square"></i>_(Global SMART Settings)_</span></div>
+<div class="title"><span class="left"><i class="title fa fa-plus-square"></i>_(Global SMART Settings)_</span></div>
 
 <form markdown="1" name="smart_settings" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareDiskSettings(this)">
 <input type="hidden" name="#file" value="/boot/config/smart-all.cfg">
@@ -198,39 +200,39 @@ _(Default critical disk temperature threshold)_ (&deg;<?=$display['unit']?>):
 <input type="hidden" name="smIndex" value="0">
 _(Default SMART notification value)_:
 : <select name="smSelect" size="1">
-  <?=mk_option($var['smSelect'], "0", _('Raw'))?>
-  <?=mk_option($var['smSelect'], "1", _('Normalized'))?>
+  <?=mk_option($var['smSelect']??'', "0", _('Raw'))?>
+  <?=mk_option($var['smSelect']??'', "1", _('Normalized'))?>
   </select>
 
 :disk_default_smart_notification_help:
 
 _(Default SMART notification tolerance level)_:
 : <select name="smLevel" size="1">
-  <?=mk_option($var['smLevel'], "1.00", _('Absolute'))?>
-  <?=mk_option($var['smLevel'], "1.05", "5%")?>
-  <?=mk_option($var['smLevel'], "1.10", "10%")?>
-  <?=mk_option($var['smLevel'], "1.15", "15%")?>
-  <?=mk_option($var['smLevel'], "1.20", "20%")?>
-  <?=mk_option($var['smLevel'], "1.25", "25%")?>
-  <?=mk_option($var['smLevel'], "1.50", "50%")?>
+  <?=mk_option($var['smLevel']??'', "1.00", _('Absolute'))?>
+  <?=mk_option($var['smLevel']??'', "1.05", "5%")?>
+  <?=mk_option($var['smLevel']??'', "1.10", "10%")?>
+  <?=mk_option($var['smLevel']??'', "1.15", "15%")?>
+  <?=mk_option($var['smLevel']??'', "1.20", "20%")?>
+  <?=mk_option($var['smLevel']??'', "1.25", "25%")?>
+  <?=mk_option($var['smLevel']??'', "1.50", "50%")?>
   </select>
 
 :disk_default_smart_tolerance_help:
 
 _(Default SMART controller type)_:
 : <select name="smType" size="1" onchange="setIndex(this.form)">
-  <?=mk_option($var['smType'], "", _('Automatic'))?>
-  <?=mk_option($var['smType'], "-d ata", "ATA")?>
-  <?=mk_option($var['smType'], "-d nvme", "NVMe")?>
-  <?=mk_option($var['smType'], "-d sat", "SAT")?>
-  <?=mk_option($var['smType'], "-d scsi", "SCSI")?>
-  <?=mk_option($var['smType'], "-d 3ware", "3Ware")?>
-  <?=mk_option($var['smType'], "-d aacraid", "Adaptec")?>
-  <?=mk_option($var['smType'], "-d areca", "Areca")?>
-  <?=mk_option($var['smType'], "-d hpt", "HighPoint")?>
-  <?=mk_option($var['smType'], "-d cciss", "HP cciss")?>
-  <?=mk_option($var['smType'], "-d marvell", "Marvell")?>
-  <?=mk_option($var['smType'], "-d megaraid", "MegaRAID")?>
+  <?=mk_option($var['smType']??'', "", _('Automatic'))?>
+  <?=mk_option($var['smType']??'', "-d ata", "ATA")?>
+  <?=mk_option($var['smType']??'', "-d nvme", "NVMe")?>
+  <?=mk_option($var['smType']??'', "-d sat", "SAT")?>
+  <?=mk_option($var['smType']??'', "-d scsi", "SCSI")?>
+  <?=mk_option($var['smType']??'', "-d 3ware", "3Ware")?>
+  <?=mk_option($var['smType']??'', "-d aacraid", "Adaptec")?>
+  <?=mk_option($var['smType']??'', "-d areca", "Areca")?>
+  <?=mk_option($var['smType']??'', "-d hpt", "HighPoint")?>
+  <?=mk_option($var['smType']??'', "-d cciss", "HP cciss")?>
+  <?=mk_option($var['smType']??'', "-d marvell", "Marvell")?>
+  <?=mk_option($var['smType']??'', "-d megaraid", "MegaRAID")?>
   </select>
 
 :disk_default_smart_controller_help:
@@ -240,7 +242,7 @@ _(Default SMART attribute notifications)_:
 
 <?for ($x = 0; $x < count($preselect); $x++):?>
 &nbsp;
-: <input type="checkbox" name="at<?=$x?>" value="<?=$preselect[$x]['code']?>"<?=in_array($preselect[$x]['code'],$events)?' checked':''?>><span class="code">_(Attribute)_ = <?=$preselect[$x]['code']?></span><?=$preselect[$x]['text']?>
+: <input type="checkbox" name="at<?=$x?>" value="<?=$preselect[$x]['code']??''?>"<?=in_array($preselect[$x]['code']??'',$events)?' checked':''?>><span class="code">_(Attribute)_ = <?=$preselect[$x]['code']?></span><?=$preselect[$x]['text']?>
 <?endfor;?>
 
 :disk_default_smart_attribute_help:

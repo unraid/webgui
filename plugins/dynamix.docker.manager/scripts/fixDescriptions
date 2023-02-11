@@ -15,12 +15,12 @@ foreach ($xmlFiles as $file) {
     }
     
     foreach ($xml->Config as $id => $config) {
-        if ( startsWith((string)$config->attributes()->Description,"Container ".(string)$config->attributes()->Type) ) {
+        if (startsWith((string)$config->attributes()->Description,"Container ".(string)$config->attributes()->Type)) {
             $config->attributes()->Description = "";
             $changeFlag = true;
         }
     }
-    if ( $changeFlag ) {
+    if (isset($changeFlag)) {
         copy($file,"$file.bak");
         $dom = new DOMDocument('1.0');
         $dom->preserveWhiteSpace = false;

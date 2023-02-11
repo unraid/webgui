@@ -4,8 +4,8 @@ Icon="icon-eula"
 Tag="file-text-o"
 ---
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -52,7 +52,7 @@ $(function(){
 });
 function validatePort(form) {
   var portsInUse = JSON.parse('<?=json_encode($portsInUse)?>');
-  var currentPort = "<?=($syslog['local_server'] && $syslog['server_protocol'] != "udp") ? $syslog['server_port'] : "0"?>";
+  var currentPort = "<?=(isset($syslog['local_server']) && $syslog['server_protocol']??''!='udp') ? $syslog['server_port']??'0' : '0'?>";
   var port = $(form).find('input[name="server_port"]');
   var remotePort = $(form).find('input[name="remote_port"]');
   var protocol = $(form).find('select[name="server_protocol"]').val();
@@ -90,15 +90,15 @@ function validatePort(form) {
 
 _(Local syslog server)_:
 : <span class="span"><select name="local_server" onchange="localFolder(this.value,'slow')">
-  <?=mk_option($syslog['local_server'], "", _("Disabled"))?>
-  <?=mk_option($syslog['local_server'], "1", _("Enabled"))?>
+  <?=mk_option($syslog['local_server']??'', "", _("Disabled"))?>
+  <?=mk_option($syslog['local_server']??'', "1", _("Enabled"))?>
   </select></span>
   <select name="server_protocol" class="narrow">
-  <?=mk_option($syslog['server_protocol'], "udp", _("UDP"))?>
-  <?=mk_option($syslog['server_protocol'], "tcp", _("TCP"))?>
-  <?=mk_option($syslog['server_protocol'], "both", _("Both"))?>
+  <?=mk_option($syslog['server_protocol']??'', "udp", _("UDP"))?>
+  <?=mk_option($syslog['server_protocol']??'', "tcp", _("TCP"))?>
+  <?=mk_option($syslog['server_protocol']??'', "both", _("Both"))?>
   </select>
-  <input type="text" name="server_port" class="trim" value="<?=$syslog['server_port']?>" maxlength="5" placeholder="514">
+  <input type="text" name="server_port" class="trim" value="<?=$syslog['server_port']??''?>" maxlength="5" placeholder="514">
 
 :syslog_local_server_help:
 
@@ -106,15 +106,15 @@ _(Local syslog server)_:
 _(Local syslog folder)_:
 : <select name="server_folder">
   <?=mk_option(0,'','&lt;'._('custom').'&gt;','disabled')?>
-  <?foreach ($shares as $share){echo mk_option($syslog['server_folder'], '/mnt/user/'.$share['name'], $share['name']);}?>
+  <?foreach ($shares as $share){echo mk_option($syslog['server_folder']??'', '/mnt/user/'.$share['name'], $share['name']);}?>
   </select>
 
 :syslog_local_folder_help:
 
 _(Local syslog rotation)_:
 : <select name="log_rotation" onchange="logOptions(this.value,'slow')">
-  <?=mk_option($syslog['log_rotation'], "", _("Disabled"))?>
-  <?=mk_option($syslog['log_rotation'], "1", _("Enabled"))?>
+  <?=mk_option($syslog['log_rotation']??'', "", _("Disabled"))?>
+  <?=mk_option($syslog['log_rotation']??'', "1", _("Enabled"))?>
   </select>
 
 :syslog_local_rotation_help:
@@ -122,25 +122,25 @@ _(Local syslog rotation)_:
 <div markdown="1" id="log_options" style="display:none">
 _(Local syslog maximum file size)_:
 : <select name="log_size">
-  <?=mk_option($syslog['log_size'], '1M', '1 '._('MB'))?>
-  <?=mk_option($syslog['log_size'], '2M', '2 '._('MB'))?>
-  <?=mk_option($syslog['log_size'], '5M', '5 '._('MB'))?>
-  <?=mk_option($syslog['log_size'], '10M', '10 '._('MB'))?>
-  <?=mk_option($syslog['log_size'], '20M', '20 '._('MB'))?>
-  <?=mk_option($syslog['log_size'], '50M', '50 '._('MB'))?>
-  <?=mk_option($syslog['log_size'], '100M', '100 '._('MB'))?>
-  <?=mk_option($syslog['log_size'], '200M', '200 '._('MB'))?>
-  <?=mk_option($syslog['log_size'], '500M', '500 '._('MB'))?>
+  <?=mk_option($syslog['log_size']??'', '1M', '1 '._('MB'))?>
+  <?=mk_option($syslog['log_size']??'', '2M', '2 '._('MB'))?>
+  <?=mk_option($syslog['log_size']??'', '5M', '5 '._('MB'))?>
+  <?=mk_option($syslog['log_size']??'', '10M', '10 '._('MB'))?>
+  <?=mk_option($syslog['log_size']??'', '20M', '20 '._('MB'))?>
+  <?=mk_option($syslog['log_size']??'', '50M', '50 '._('MB'))?>
+  <?=mk_option($syslog['log_size']??'', '100M', '100 '._('MB'))?>
+  <?=mk_option($syslog['log_size']??'', '200M', '200 '._('MB'))?>
+  <?=mk_option($syslog['log_size']??'', '500M', '500 '._('MB'))?>
   </select>
 
 :syslog_local_file_size_help:
 
 _(Local syslog number of files)_:
 : <select name="log_files">
-  <?=mk_option($syslog['log_files'], '1', '1')?>
-  <?=mk_option($syslog['log_files'], '2', '2')?>
-  <?=mk_option($syslog['log_files'], '3', '3')?>
-  <?=mk_option($syslog['log_files'], '4', '4')?>
+  <?=mk_option($syslog['log_files']??'', '1', '1')?>
+  <?=mk_option($syslog['log_files']??'', '2', '2')?>
+  <?=mk_option($syslog['log_files']??'', '3', '3')?>
+  <?=mk_option($syslog['log_files']??'', '4', '4')?>
   </select>
 
 :syslog_local_file_number_help:
@@ -149,19 +149,19 @@ _(Local syslog number of files)_:
 </div>
 
 _(Remote syslog server)_:
-: <span class="span"><input type="text" name="remote_server" class="narrow" value="<?=$syslog['remote_server']?>" maxlength="23" placeholder="_(name or ip address)_"></span>
+: <span class="span"><input type="text" name="remote_server" class="narrow" value="<?=$syslog['remote_server']??''?>" maxlength="23" placeholder="_(name or ip address)_"></span>
   <select name="remote_protocol" class="narrow" size="1">
-  <?=mk_option($syslog['remote_protocol'], "udp", _("UDP"))?>
-  <?=mk_option($syslog['remote_protocol'], "tcp", _("TCP"))?>
+  <?=mk_option($syslog['remote_protocol']??'', "udp", _("UDP"))?>
+  <?=mk_option($syslog['remote_protocol']??'', "tcp", _("TCP"))?>
   </select>
-  <input type="number" name="remote_port" class="trim" value="<?=$syslog['remote_port']?>" maxlength="5" placeholder="514" pattern="([0-9]{1,5})">
+  <input type="number" name="remote_port" class="trim" value="<?=$syslog['remote_port']??''?>" maxlength="5" placeholder="514" pattern="([0-9]{1,5})">
 
 :syslog_remote_server_help:
 
 _(Mirror syslog to flash)_:
 : <select name="syslog_flash" size="1">
-  <?=mk_option($syslog['syslog_flash'], "", _("No"))?>
-  <?=mk_option($syslog['syslog_flash'], "1", _("Yes"))?>
+  <?=mk_option($syslog['syslog_flash']??'', "", _("No"))?>
+  <?=mk_option($syslog['syslog_flash']??'', "1", _("Yes"))?>
   </select>
 
 :syslog_mirror_flash_help:

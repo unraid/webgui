@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -12,19 +12,17 @@
  */
 ?>
 <?
-
-session_start();
 $docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 
 require_once "$docroot/webGui/include/Wrappers.php";
 require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginHelpers.php";
 
-$var     = parse_ini_file('/var/local/emhttp/var.ini');
-$unraid  = parse_plugin_cfg('dynamix', true);
+$var    = parse_ini_file('/var/local/emhttp/var.ini');
+$unraid = parse_plugin_cfg('dynamix', true);
 
 // Multi-language support
-$_SESSION['locale'] = $unraid['display']['locale'];
 $_SERVER['REQUEST_URI'] = "scripts";
+$login_locale = $unraid['display']['locale'];
 require_once "$docroot/webGui/include/Translations.php";
 
 $server  = strtoupper($var['NAME']);

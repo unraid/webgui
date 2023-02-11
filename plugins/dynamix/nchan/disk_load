@@ -5,6 +5,17 @@ declare -a reads writes
 
 # t = poll interval in seconds
 t=2
+
+# initialize array values upon first start
+stats=($(awk '/(sd[a-z]*|nvme[0-9]*n1|vd[a-z]*) /{print $3,$6,$10,$4,$8}' /proc/diskstats))
+c=0; s=${#stats[@]}
+for ((i=0;i<s;i+=5)); do
+  reads[c]=${stats[i+1]}
+  writes[c]=${stats[i+2]}
+  ((c++))
+done
+sleep $t
+
 while :; do
   stats=($(awk '/(sd[a-z]*|nvme[0-9]*n1|vd[a-z]*) /{print $3,$6,$10,$4,$8}' /proc/diskstats))
   c=0; s=${#stats[@]}

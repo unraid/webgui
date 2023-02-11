@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2022, Lime Technology
- * Copyright 2012-2022, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -12,7 +12,6 @@
  */
 ?>
 <?
-session_start();
 $docroot = '/usr/local/emhttp';
 $varroot = '/var/local/emhttp';
 $stamps  = '/var/tmp/stamps.ini';
@@ -24,19 +23,16 @@ extract(parse_plugin_cfg('dynamix',true));
 
 // add translations
 $_SERVER['REQUEST_URI'] = 'dashboard/main';
-$_SESSION['locale'] = $display['locale'];
+$login_locale = $display['locale'];
 require_once "$docroot/webGui/include/Translations.php";
+
 // remember current language
 $locale_init = $locale;
-
-// close session, it is not needed anymore
-session_unset();
-session_destroy();
 
 function my_clock($time) {
   if (!$time) return _('less than a minute');
   $days = floor($time/1440);
-  $hour = $time/60%24;
+  $hour = floor($time/60)%24;
   $mins = $time%60;
   return plus($days,'day',($hour|$mins)==0).plus($hour,'hour',$mins==0).plus($mins,'minute',true);
 }
@@ -137,9 +133,9 @@ function device_name(&$disk) {
     case 'Cache' : $type = $disk['rotational'] ? ($disk['luksState'] ? 'disk-encrypted' : 'disk') : 'nvme'; break;
   }
   $name = my_disk($disk['name']);
-  [$p1,$p2] = explode(' ',$name);
+  [$p1,$p2] = my_explode(' ',$name);
   $name = _($p1).($p2?" $p2":"");
-  return "<i class='icon-$type'></i> <a href=\"".htmlspecialchars("/Dashboard/Main/Settings/Device?name={$disk['name']}")."\" title=\"$name settings\">$name</a>";
+  return "<i class='icon-$type f14'></i> <a href=\"".htmlspecialchars("/Dashboard/Main/Settings/Device?name={$disk['name']}")."\" title=\"$name settings\">$name</a>";
 }
 function device_status(&$disk, &$error, &$warning) {
   global $var;
@@ -163,8 +159,8 @@ function device_temp(&$disk, &$red, &$orange) {
   global $display;
   $spin = strpos($disk['color'],'blink')===false;
   $temp = $disk['temp'];
-  $hot = $disk['hotTemp'] ?? $display['hot'];
-  $max = $disk['maxTemp'] ?? $display['max'];
+  $hot = $disk['hotTemp'] ?? $display['hot'] ?? 0;
+  $max = $disk['maxTemp'] ?? $display['max'] ?? 0;
   $top = $display['top'] ?? 120;
   $heat = false; $color = 'green';
   if (exceed($temp,$max,$top)) {
@@ -194,7 +190,7 @@ function device_smart(&$disk, &$fail, &$smart) {
       exec("awk 'NR>7{print $1,$2,$4,$6,$9,$10}' ".escapeshellarg($file)." 2>/dev/null", $codes);
       foreach ($codes as $code) {
         if (!$code || !is_numeric($code[0])) continue;
-        [$id,$class,$value,$thres,$when,$raw] = explode(' ',$code);
+        [$id,$class,$value,$thres,$when,$raw] = my_explode(' ',$code,7);
         $failing = strpos($when,'FAILING_NOW')!==false;
         if (!$failing && !in_array($id,$events)) continue;
         if ($failing || ($select ? $thres>0 && $value<=$thres*$level : $raw>0)) $title .= normalize($class,$failing?$when:$raw);
@@ -208,7 +204,7 @@ function device_smart(&$disk, &$fail, &$smart) {
 function device_usage(&$disk, &$full, &$high) {
   global $display;
   $text = $display['text'];
-  $used = ($disk['type']!='Parity' && $disk['type']!='Extra' && $disk['fsStatus']=='Mounted') ? (($disk['fsSize'] ? round((1-$disk['fsFree']/$disk['fsSize'])*100):0).'%') : false;
+  $used = ($disk['type']!='Parity' && $disk['type']!='Extra' && isset($disk['fsStatus']) && $disk['fsStatus']=='Mounted') ? (((isset($disk['fsSize']) && $disk['fsSize']>0) ? round((1-$disk['fsFree']/$disk['fsSize'])*100):0).'%') : false;
   if ($used) {
     if ($text==2 || $text==21) {
       $load = substr($used,0,-1);
@@ -229,13 +225,13 @@ function array_group($type,$pool=false) {
   global $disks,$error,$warning,$red,$orange,$fail,$smart,$full,$high;
   $echo = [];
   foreach ($disks as $disk) if ($disk['type']==$type && strpos($disk['status'],'DISK_NP')===false && (!$pool||$pool==prefix($disk['name']))) {
-    $echo[] = "<tr><td></td>";
-    $echo[] = "<td>".device_name($disk)."</td>";
-    $echo[] = "<td>".device_status($disk,$error,$warning)."</td>";
-    $echo[] = "<td>".device_temp($disk,$red,$orange)."</td>";
-    $echo[] = "<td>".device_smart($disk,$fail,$smart)."</td>";
-    $echo[] = "<td>".device_usage($disk,$full,$high)."</td>";
-    $echo[] = "<td></td></tr>";
+    $echo[] = "<tr class='updated'><td>";
+    $echo[] = "<span class='w26'>".device_name($disk)."</span>";
+    $echo[] = "<span class='w18'>".device_status($disk,$error,$warning)."</span>";
+    $echo[] = "<span class='w18'>".device_temp($disk,$red,$orange)."</span>";
+    $echo[] = "<span class='w18'>".device_smart($disk,$fail,$smart)."</span>";
+    $echo[] = "<span class='w18'>".device_usage($disk,$full,$high)."</span>";
+    $echo[] = "</td></tr>";
   }
   return implode('',$echo);
 }
@@ -246,13 +242,13 @@ function extra_group() {
     $name = $disk['name'];
     $disk['type'] = "Extra";
     $disk['color'] = $disk['spundown']=="0" ? 'blue-on' : 'blue-blink';
-    $echo[] = "<tr><td></td>";
-    $echo[] = "<td>".device_name($disk)."</td>";
-    $echo[] = "<td>".device_status($disk,$error,$warning)."</td>";
-    $echo[] = "<td>".device_temp($disk,$red,$orange)."</td>";
-    $echo[] = "<td>".device_smart($disk,$fail,$smart)."</td>";
-    $echo[] = "<td>".device_usage($disk,$full,$high)."</td>";
-    $echo[] = "<td></td></tr>";
+    $echo[] = "<tr class='updated'><td>";
+    $echo[] = "<span class='w26'>".device_name($disk)."</span>";
+    $echo[] = "<span class='w18'>".device_status($disk,$error,$warning)."</span>";
+    $echo[] = "<span class='w18'>".device_temp($disk,$red,$orange)."</span>";
+    $echo[] = "<span class='w18'>".device_smart($disk,$fail,$smart)."</span>";
+    $echo[] = "<span class='w18'>".device_usage($disk,$full,$high)."</span>";
+    $echo[] = "</td></tr>";
   }
   return implode('',$echo);
 }
@@ -303,9 +299,9 @@ while (true) {
   $echo[0] .= array_group('Data');
   $echo[0] .= "\0".($error+$warning)."\0".($red+$orange)."\0".($fail+$smart)."\0".($full+$high);
   //pool devices
-  $error = $warning = $red = $orange = $fail = $smart = $full = $high = 0;
   $echo[1] = '';
   foreach (pools_filter($disks) as $pool) if ($disks[$pool]['devices']) {
+    $error = $warning = $red = $orange = $fail = $smart = $full = $high = 0;
     $echo[1] .= array_group('Cache',$pool);
     $echo[1] .= "\0".($error+$warning)."\0".($red+$orange)."\0".($fail+$smart)."\0".($full+$high)."\r";
   }
@@ -460,7 +456,7 @@ while (true) {
     $echo[4] .= "\0";
     if ($check) {
       $frmt = $display['date'].($display['date']!='%c' ? ", {$display['time']}" : "");
-      $echo[4] .= sprintf(_('Next check scheduled on **%s**'),_(strftime($frmt,$time+$t),0));
+      $echo[4] .= sprintf(_('Next check scheduled on **%s**'),_(my_date($frmt,$time+$t),0));
       $echo[4] .= "<br><i class='fa fa-fw fa-clock-o'></i> "._('Due in').": "._(my_clock(floor($t/60)),2);
     } else {
       $echo[4] .= _('Scheduled parity check is disabled');

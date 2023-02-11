@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2022, Lime Technology
- * Copyright 2012-2022, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -39,13 +39,13 @@ function my_scale($value, &$unit, $decimals=NULL, $scale=NULL, $kilo=1000) {
 }
 function my_number($value) {
   global $display;
-  $number = $display['number'];
+  $number = $display['number'] ?? '.,';
   return number_format($value, 0, $number[0], ($value>=10000 ? $number[1] : ''));
 }
 function my_time($time, $fmt=NULL) {
   global $display;
   if (!$fmt) $fmt = $display['date'].($display['date']!='%c' ? ", {$display['time']}" : "");
-  return $time ? strftime($fmt, $time) : _('unknown');
+  return $time ? my_date($fmt, $time) : _('unknown');
 }
 function my_temp($value) {
   global $display;
@@ -134,7 +134,7 @@ function my_check($time, $speed) {
   $days = floor($time/86400);
   $hmss = $time-$days*86400;
   $hour = floor($hmss/3600);
-  $mins = $hmss/60%60;
+  $mins = floor($hmss/60)%60;
   $secs = $hmss%60;
   return plus($days,'day',($hour|$mins|$secs)==0).plus($hour,'hour',($mins|$secs)==0).plus($mins,'minute',$secs==0).plus($secs,'second',true).". "._('Average speed').": ".(is_numeric($speed) ? my_scale($speed,$unit,1)." $unit/s" : $speed);
 }

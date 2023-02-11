@@ -1,9 +1,11 @@
 #!/usr/bin/php -q
 <?PHP
-// Copyright 2005-2021, Lime Technology
+// Copyright 2005-2022, Lime Technology
 // License: GPLv2 only
 //
 // Program updates made by Bergware International (April 2020)
+// Program updates made by Bergware International (June 2022)
+
 $usage = <<<EOF
 Process plugin files.
 
@@ -160,40 +162,128 @@ function error_desc($code) {
   }
 }
 
+// Signal DONE to caller
+//
+function done($code) {
+  global $nchan;
+  if ($nchan) write('_DONE_','');
+  exit($code);
+}
+
+// Function to write either to console (echo) or nchan (curl)
+// Default output is console, use optional parameter "nchan" to write to nchan instead
+//
+function write(...$messages){
+  global $nchan;
+  if ($nchan) {
+    $com = curl_init();
+    curl_setopt_array($com,[
+      CURLOPT_URL => 'http://localhost/pub/plugins?buffer_length=1',
+      CURLOPT_UNIX_SOCKET_PATH => '/var/run/nginx.socket',
+      CURLOPT_POST => 1,
+      CURLOPT_RETURNTRANSFER => true
+    ]);
+    foreach ($messages as $message) {
+      curl_setopt($com, CURLOPT_POSTFIELDS, $message);
+      curl_exec($com);
+    }
+    curl_close($com);
+  } else {
+    foreach ($messages as $message) echo $message;
+  }
+}
+
+// Run command and obtain output
+//
+function run($command) {
+  $run = popen($command,'r');
+  while (!feof($run)) write(fgets($run));
+  return pclose($run);
+}
+
+// Run hooked scripts before correct execution of "method"
+// method = install, update, remove, check
+// hook programs receives three parameters: type=plugin and method and plugin-name
+//
+function pre_hooks() {
+  global $method, $plugin;
+  $hooks = "/usr/local/emhttp/plugins/dynamix.plugin.manager/pre-hooks";
+  foreach (glob("$hooks/*") as $hook) if (is_executable($hook)) {
+    write("Executing hook script: ".basename($hook)."\n");
+    run("$hook plugin $method $plugin");
+  }
+}
+
+// Run hooked scripts after successful or failed completion of "method"
+// method = install, update, remove, check
+// hook programs receives four parameters: type=plugin and method and plugin-name and error (empty if none)
+//
+function post_hooks($error='') {
+  global $method, $plugin;
+  $hooks = "/usr/local/emhttp/plugins/dynamix.plugin.manager/post-hooks";
+  foreach (glob("$hooks/*") as $hook) if (is_executable($hook)) {
+    write("Executing hook script: ".basename($hook)."\n");
+    run("$hook plugin $method $plugin $error");
+  }
+}
+
 // Download a file from a URL.
 // Returns TRUE if success else FALSE and fills in error.
 //
-function download($url, $name, &$error) {
-  if ($file = popen("wget --compression=auto --no-cache --progress=dot -O $name $url 2>&1", 'r')) {
-    echo "plugin: downloading: $url ...\r";
-    $level = -1;
-    while (!feof($file)) {
-      if (preg_match('/\d+%/', fgets($file), $matches)) {
-        $percentage = substr($matches[0],0,-1);
-        if ($percentage > $level) {
-          echo "plugin: downloading: $url ... $percentage%\r";
-          $level = $percentage;
+function download($url, $name, &$error, $write=true) {
+  if ($url) {
+    $plg = basename($url);
+    $plg = str_replace('"', '', $plg);
+    $tries = (strpos($url, '.cdn') !== false) ? "1" : "3";
+    if ($file = popen("wget --compression=auto --no-cache --progress=dot --retry-connrefused --prefer-family=IPv4 --timeout=10 --tries=$tries --waitretry=$tries -O $name $url 2>&1", 'r')) {
+      if ($write) write("plugin: downloading: $plg ...\r");
+      $level = -1;
+      while (($line = fgets($file)) !== false) {
+        if (preg_match('/\d+%/', $line, $matches)) {
+          $percentage = substr($matches[0],0,-1);
+          if ($percentage > $level) {
+            if ($write) write("plugin: downloading: $plg ... $percentage%\r");
+            $level = $percentage;
+          }
         }
       }
-    }
-    if (($perror = pclose($file)) == 0) {
-      echo "plugin: downloading: $url ... done\n";
-      return true;
+      if (($perror = pclose($file)) != 0) {
+        $error = "$plg download failure: ".error_desc($perror);
+        return false;
+      } elseif (filesize($name) == 0) {
+        if ($write) write("plugin: download failure: zero-length file\r","\n");
+        return false;
+      } else {
+        if ($write) write("plugin: downloading: $plg ... done\r","\n");
+        return true;
+      }
     } else {
-      echo "plugin: downloading: $url ... failed (".error_desc($perror).")\n";
-      $error = "$url download failure (".error_desc($perror).")";
+      $error = "$plg failed to open";
       return false;
     }
   } else {
-    $error = "$url failed to open";
+    // The url is empty
     return false;
   }
+}
+
+// Filter URL.
+// If URL contains '.cdn' remove the '.cdn' from the URL.
+// Returns URL without '.cdn' if found.
+//
+function filter_url($url) {
+  if (strpos($url, '.cdn') !== false) {
+    $new_url = str_replace('"', '', $url);
+    $new_url = str_replace('.cdn', '', $new_url);
+  }  else {
+    $new_url = "";
+  }
+  return($new_url);
 }
 
 // Deal with logging message.
 //
 function logger($message) {
-//  echo "$message\n";
   shell_exec("logger $message");
 }
 
@@ -209,7 +299,7 @@ function plugin($method, $plugin_file, &$error) {
   $methods = ['install', 'remove'];
 
   // parse plugin definition XML file
-  $xml = file_exists($plugin_file) ? simplexml_load_file($plugin_file, NULL, LIBXML_NOCDATA) : false;
+  $xml = file_exists($plugin_file) ? @simplexml_load_file($plugin_file, NULL, LIBXML_NOCDATA) : false;
   if ($xml === false) {
     $error = "XML file doesn't exist or xml parse error";
     return false;
@@ -217,15 +307,38 @@ function plugin($method, $plugin_file, &$error) {
 
   // dump
   if ($method == 'dump') {
-    // echo $xml->asXML();
-    echo print_r($xml);
+    // dump file: debugging
+    write(print_r($xml,true));
     return true;
   }
 
   // release notes
   if ($method == 'changes') {
-    if (!$xml->CHANGES) return false;
-    return trim($xml->CHANGES);
+    return $xml->CHANGES ? trim($xml->CHANGES) : false;
+  }
+
+  // alert message
+  if ($method == 'alert') {
+    return $xml->ALERT ? trim($xml->ALERT) : false;
+  }
+
+  // validate plugin download without installation
+  if ($method  == 'validate') {
+    $name = '/tmp/validate-plugin.tmp';
+    foreach ($xml->FILE as $file) if ($file->URL) {
+      if (!$file->SHA256 and !$file->MD5) continue;
+      if ( (download($file->URL, $name, $error, false) === false) && (download(filter_url($file->URL), $name, $error, false) === false) ) {
+        @unlink($name);
+        return false;
+      }
+      if (($file->SHA256 && hash_file('sha256',$name) != $file->SHA256) or ($file->MD5 && md5_file($name) != $file->MD5)) {
+        $error = "bad hash value";
+        @unlink($name);
+        return false;
+      }
+    }
+    @unlink($name);
+    return "valid";
   }
 
   // check if $method is an attribute
@@ -248,12 +361,12 @@ function plugin($method, $plugin_file, &$error) {
     // bergware - check Unraid version dependency (if present)
     $min = $file->attributes()->Min;
     if ($min && version_compare($unraid['version'],$min,'<')) {
-      echo "plugin: skipping: ".basename($name)." - Unraid version too low, requires at least version $min\n";
+      write("plugin: skipping: ".basename($name)." - Unraid version too low, requires at least version $min\n");
       continue;
     }
     $max = $file->attributes()->Max;
     if ($max && version_compare($unraid['version'],$max,'>')) {
-      echo "plugin: skipping: ".basename($name)." - Unraid version too high, requires at most version $max\n";
+      write("plugin: skipping: ".basename($name)." - Unraid version too high, requires at most version $max\n");
       continue;
     }
     // Name can be missing but only makes sense if Run attribute is present
@@ -264,6 +377,20 @@ function plugin($method, $plugin_file, &$error) {
         if (!mkdir(dirname($name), 0770, true)) {
           $error = "unable to create parent directory for $name";
           return false;
+        }
+      }
+      // If file already exists, check the SHA256/MD5 (if supplied)
+      if (file_exists($name)) {
+        if ($file->SHA256) {
+          logger("plugin: checking: $name - SHA256");
+          if (hash_file('sha256', $name) != $file->SHA256) {
+            unlink($name);
+          }
+        } elseif ($file->MD5) {
+          logger("plugin: checking: $name - MD5");
+          if (md5_file($name) != $file->MD5) {
+            unlink($name);
+          }
         }
       }
       // If file already exists, do not overwrite
@@ -300,7 +427,7 @@ function plugin($method, $plugin_file, &$error) {
       } elseif ($file->URL) {
         // for download file, download and maybe verify the file MD5
         logger("plugin: creating: $name - downloading from URL $file->URL");
-        if (download($file->URL, $name, $error) === false) {
+        if ( (download($file->URL, $name, $error) === false) && (download(filter_url($file->URL), $name, $error) === false) ) {
           @unlink($name);
           return false;
         }
@@ -337,18 +464,20 @@ function plugin($method, $plugin_file, &$error) {
     if ($file->attributes()->Run) {
       $command = $file->attributes()->Run;
       if ($name) {
-        logger("plugin: running: $name");
-        system("$command $name", $retval);
+        logger(escapeshellarg("plugin: running: $command $name"));
+        $retval = run("$command $name");
       } elseif ($file->LOCAL) {
-        logger("plugin: running: $file->LOCAL");
-        system("$command $file->LOCAL", $retval);
+        logger(escapeshellarg("plugin: running: $command $file->LOCAL"));
+        $retval = run("$command $file->LOCAL");
       } elseif ($file->INLINE) {
         logger("plugin: running: 'anonymous'");
-        $inline = escapeshellarg($file->INLINE);
-        passthru("echo $inline | $command", $retval);
+        $name = '/tmp/inline.sh';
+        file_put_contents($name, $file->INLINE);
+        $retval = run("$command $name");
+        unlink($name);
       }
-      if ($retval) {
-        $error = "run failed: $command retval: $retval";
+      if ($retval != 0) {
+        $error = "run failed: $command";
         return false;
       }
     }
@@ -361,26 +490,32 @@ function move($src_file, $tar_dir) {
   return rename($src_file, $tar_dir."/".basename($src_file));
 }
 
-// In following code,
-//  $plugin - is a basename of a plugin, eg, "myplugin.plg"
-//  $plugin_file - is an absolute path, eg, "/boot/config/plugins/myplugin.plg"
-//
-// MAIN - single argument
-if ($argc < 2) {
-  echo $usage;
-  exit(1);
-}
 $notify  = '/usr/local/emhttp/webGui/scripts/notify';
 $boot    = '/boot/config/plugins';
 $plugins = '/var/log/plugins';
 $tmp     = '/tmp/plugins';
 $method  = $argv[1];
 $builtin = ['unRAIDServer','unRAIDServer-'];
+$nchan   = $argv[$argc-1] == 'nchan'; // console or nchan output
+
+// In following code,
+//  $plugin - is a basename of a plugin, eg, "myplugin.plg"
+//  $plugin_file - is an absolute path, eg, "/boot/config/plugins/myplugin.plg"
+//
+// MAIN - single argument
+if ($argc < 2) {
+  write($usage);
+  done(1);
+}
 
 // plugin checkall
 // check all installed plugins, except built-in
 //
 if ($method == 'checkall') {
+  if (!$cmd = realpath($argv[0])) {
+    write("Unknown command: {$argv[0]}\n");
+    done(1);
+  }
   foreach (glob("$plugins/*.plg", GLOB_NOSORT) as $link) {
     // skip OS related plugins
     if (in_array(basename($link,'.plg'),$builtin)) continue;
@@ -389,16 +524,21 @@ if ($method == 'checkall') {
     if ($installed_plugin_file === false) continue;
     if (plugin('pluginURL', $installed_plugin_file, $error) === false) continue;
     $plugin = basename($installed_plugin_file);
-    echo "plugin: checking $plugin ...\n";
-    exec(realpath($argv[0])." check $plugin >/dev/null");
+    write("plugin: checking $plugin ...\n");
+    exec("$cmd check $plugin >/dev/null");
   }
-  exit(0);
+  write("plugin: checking finished.\n");
+  done(0);
 }
 
 // plugin updateall
 // update all installed plugins, which have a update available
 //
 if ($method == 'updateall') {
+  if (!$cmd = realpath($argv[0])) {
+    write("Unknown command: {$argv[0]}\n");
+    done(1);
+  }
   foreach (glob("$plugins/*.plg", GLOB_NOSORT) as $link) {
     // skip OS related plugins
     if (in_array(basename($link,'.plg'),$builtin)) continue;
@@ -411,33 +551,39 @@ if ($method == 'updateall') {
     $latest = plugin('version', "$tmp/$plugin", $error);
     // update only when newer
     if (strcmp($latest,$version) > 0) {
-      echo "plugin: updating $plugin ...\n";
-      exec(realpath($argv[0])." update $plugin >/dev/null");
+      write("plugin: updating $plugin ...\n");
+      exec("$cmd update $plugin >/dev/null");
     }
   }
-  exit(0);
+  write("plugin: updating finished.\n");
+  done(0);
 }
 
 // plugin checkos
 // check built-in only
 //
 if ($method == 'checkos') {
+  if (!$cmd = realpath($argv[0])) {
+    write("Unknown command: {$argv[0]}\n");
+    done(1);
+  }
   foreach ($builtin as $link) {
     // only consider symlinks
     $installed_plugin_file = @readlink("$plugins/$link.plg");
     if ($installed_plugin_file === false) continue;
     if (plugin("pluginURL", $installed_plugin_file, $error) === false) continue;
     $plugin = basename($installed_plugin_file);
-    echo "plugin: checking $plugin ...\n";
-    exec(realpath($argv[0])." check $plugin >/dev/null");
+    write("plugin: checking $plugin ...\n");
+    exec("$cmd check $plugin >/dev/null");
   }
-  exit(0);
+  write("plugin: checking finished.\n");
+  done(0);
 }
 
 // MAIN - two or three arguments
 if ($argc < 3) {
-  echo $usage;
-  exit(1);
+  write($usage);
+  done(1);
 }
 
 // plugin install [plugin_file]
@@ -448,72 +594,97 @@ if ($argc < 3) {
 //
 $unraid = parse_ini_file('/etc/unraid-version');
 if ($method == 'install') {
-  $argv[2] = preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $argv[2]);
-  echo "plugin: installing: {$argv[2]}\n";
+  $argv[2] = preg_replace('#[\x00-\x1F\x80-\xFF]#', '', $argv[2]);
+  $plugin = basename($argv[2]);
+  if (pathinfo($plugin, PATHINFO_EXTENSION) != "plg") {
+    write("plugin: $plugin is not a plg file\n");
+    done(1);
+  }
+  write("plugin: installing: $plugin\n");
   // check for URL
-  if ((strpos($argv[2], "http://") === 0) || (strpos($argv[2], "https://") === 0)) {
+  if (preg_match('#^https?://#',$argv[2])) {
     $pluginURL = $argv[2];
-    echo "plugin: downloading $pluginURL\n";
-    $plugin_file = "$tmp/".basename($pluginURL);
-    if (!download($pluginURL, $plugin_file, $error)) {
-      echo "plugin: $error\n";
+    // run hook scripts for pre processing
+    pre_hooks();
+    $plugin_file = "$tmp/$plugin";
+    write("plugin: downloading: $plugin\n");
+    if ( (download($pluginURL, $plugin_file, $error) === false) && (download(filter_url($pluginURL), $plugin_file, $error) === false) ) {
+      write("plugin: $error\n");
       @unlink($plugin_file);
-      exit(1);
+      // run hook scripts for post processing
+      post_hooks($error);
+      done(1);
     }
-  } else
+  } else {
     $plugin_file = realpath($argv[2]);
+  }
   // bergware - check Unraid version dependency (if present)
   $min = plugin('min', $plugin_file, $error);
   if ($min && version_compare($unraid['version'], $min, '<')) {
-    echo "plugin: installed Unraid version is too low, require at least version $min\n";
+    write("plugin: installed Unraid version is too low, require at least version $min\n");
     if (dirname($plugin_file) == "$boot") {
       move($plugin_file, "$boot-error");
     }
-    exit(1);
+    // run hook scripts for post processing
+    post_hooks($error);
+    done(1);
   }
-  $max = plugin('max', $plugin_file, $error);
-  if (empty($max)) $max = plugin('Unraid', $plugin_file, $error);
+  $max = plugin('max', $plugin_file, $error) ?: plugin('Unraid', $plugin_file, $error);
   if ($max && version_compare($unraid['version'], $max, '>')) {
-    echo "plugin: installed Unraid version is too high, require at most version $max\n";
+    write("plugin: installed Unraid version is too high, require at most version $max\n");
     if (dirname($plugin_file) == "$boot") {
       move($plugin_file, "$boot-error");
-    }		
-    exit(1);
+    }
+    // run hook scripts for post processing
+    post_hooks($error);
+    done(1);
   }
-  $plugin = basename($plugin_file);
+  $symlink = "$plugins/$plugin";
   // check for re-install
-  $installed_plugin_file = @readlink("$plugins/$plugin");
+  $installed_plugin_file = @readlink($symlink);
   if ($installed_plugin_file !== false) {
     if ($plugin_file == $installed_plugin_file) {
-      echo "plugin: not re-installing same plugin\n";
-      exit(1);
+      write("plugin: not re-installing same plugin\n");
+      // run hook scripts for post processing
+      post_hooks($error);
+      done(1);
     }
     // must have version attributes for re-install
     $version = plugin('version', $plugin_file, $error);
     if ($version === false) {
-      echo "plugin: $error\n";
-      exit(1);
+      write("plugin: $error\n");
+      // run hook scripts for post processing
+      post_hooks($error);
+      done(1);
     }
     $installed_version = plugin('version', $installed_plugin_file, $error);
     if ($installed_version === false) {
-      echo "plugin: $error\n";
-      exit(1);
+      write("plugin: $error\n");
+      // run hook scripts for post processing
+      post_hooks($error);
+      done(1);
     }
     // check version installation?
-    $forced = $argc==4 ? $argv[3] : false;
+    $forced = $nchan ? ($argc==5 ? $argv[4] : false) : ($argc==4 ? $argv[3] : false);
     if (!$forced) {
       // do not re-install if same plugin already installed or has higher version
       if (strcmp($version, $installed_version) < 0) {
-        echo "plugin: not installing older version\n";
-        exit(1);
+        write("plugin: not installing older version\n");
+        // run hook scripts for post processing
+        post_hooks($error);
+        done(1);
       }
-      if (strcmp($version, $installed_version) == 0) {
-        echo "plugin: not reinstalling same version\n";
-        exit(1);
+      if (strcmp($version, $installed_version) === 0) {
+        write("plugin: not reinstalling same version\n");
+        // run hook scripts for post processing
+        post_hooks($error);
+        done(1);
       }
     }
+    // run hook scripts for pre processing
+    pre_hooks();
     if (plugin('install', $plugin_file, $error) === false) {
-      echo "plugin: $error\n";
+      write("plugin: $error\n");
       if (dirname($plugin_file) == "$boot") {
         move($plugin_file, "$boot-error");
       }
@@ -521,29 +692,40 @@ if ($method == 'install') {
       $subject = "plugin: ".basename($plugin_file);
       $description = "Plugin failed to install";
       exec("$notify -e $event -s $subject -d $description) -i 2");
-      exit(1);
+      // run hook scripts for post processing
+      post_hooks($error);
+      done(1);
     }
-    unlink("$plugins/$plugin");
+    // remove symlink for re-install
+    unlink($symlink);
   } else {
+    // run hook scripts for pre processing
+    pre_hooks();
     // fresh install
     if (plugin('install', $plugin_file, $error) === false) {
-      echo "plugin: $error\n";
+      write("plugin: $error\n");
       if (dirname($plugin_file) == "$boot") {
         move($plugin_file, "$boot-error");
       }
-      exit(1);
+      // run hook scripts for post processing
+      post_hooks($error);
+      done(1);
     }
   }
   // register successful install
   $target = "$boot/$plugin";
   if (!plugin('noInstall', $plugin_file, $error)) {
     if ($target != $plugin_file) copy($plugin_file, $target);
-    symlink($target, "$plugins/$plugin");
-    echo "plugin: $plugin installed\n";
+    symlink($target, $symlink);
+    write("plugin: $plugin installed\n");
+    logger("plugin: $plugin installed");
   } else {
-    echo "script: $plugin executed\n";
+    write("script: $plugin executed\n");
+    logger("script: $plugin executed");
   }
-  exit(0);
+  // run hook scripts for post processing
+  post_hooks();
+  done(0);
 }
 
 // plugin check [plugin]
@@ -552,30 +734,43 @@ if ($method == 'install') {
 //
 if ($method == 'check') {
   $plugin = $argv[2];
-  echo "plugin: checking: $plugin\n";
-  $installed_plugin_file = @readlink("$plugins/$plugin");
+  $symlink = "$plugins/$plugin";
+  write("plugin: checking: $plugin ...\n");
+  $installed_plugin_file = @readlink($symlink);
   if ($installed_plugin_file === false) {
-    echo "plugin: not installed\n";
-    exit(1);
+    write("plugin: not installed\n");
+    // run hook scripts for post processing
+    post_hooks($error);
+    done(1);
   }
   $installed_pluginURL = plugin('pluginURL', $installed_plugin_file, $error);
   if ($installed_pluginURL === false) {
-    echo "plugin: $error\n";
-    exit(1);
+    write("plugin: $error\n");
+    // run hook scripts for post processing
+    post_hooks($error);
+    done(1);
   }
   $plugin_file = "$tmp/$plugin";
-  if (!download($installed_pluginURL, $plugin_file, $error)) {
-    echo "plugin: $error\n";
+  if ( (download($installed_pluginURL, $plugin_file, $error) === false) && (download(filter_url($installed_pluginURL), $plugin_file, $error) === false) ) {
+    write("plugin: $error\n");
     @unlink($plugin_file);
-    exit(1);
+    // run hook scripts for post processing
+    post_hooks($error);
+    done(1);
   }
+  // run hook scripts for pre processing
+  pre_hooks();
   $version = plugin('version', $plugin_file, $error);
   if ($version === false) {
-    echo "plugin: $error\n";
-    exit(1);
+    write("plugin: $error\n");
+    // run hook scripts for post processing
+    post_hooks($error);
+    done(1);
   }
-  echo "$version\n";
-  exit(0);
+  write("$version\n");
+  // run hook scripts for post processing
+  post_hooks();
+  done(0);
 }
 
 // plugin update [plugin]
@@ -588,60 +783,62 @@ if ($method == 'check') {
 //
 if ($method == 'update') {
   $plugin = $argv[2];
-  echo "plugin: updating: $plugin\n";
-  $installed_plugin_file = @readlink("$plugins/$plugin");
+  $symlink = "$plugins/$plugin";
+  write("plugin: updating: $plugin\n");
+  $installed_plugin_file = @readlink($symlink);
   if ($installed_plugin_file === false) {
-    echo "plugin: $plugin not installed\n";
-    exit(1);
+    write("plugin: $plugin not installed\n");
+    // run hook scripts for post processing
+    post_hooks($error);
+    done(1);
   }
-  // get old support link
-  $previousSupportLink = plugin('support', "$plugins/$plugin", $error);
   // verify previous check has been done
   $plugin_file = "$tmp/$plugin";
   if (!file_exists($plugin_file)) {
-    echo "plugin: $plugin_file does not exist, check for updates first\n";
+    write("plugin: $plugin_file does not exist, check for updates first\n");
     exit (1);
   }
   // bergware - check Unraid version dependency (if present)
   $min = plugin('min', $plugin_file, $error);
   if ($min && version_compare($unraid['version'], $min, '<')) {
-    echo "plugin: installed Unraid version is too low, require at least version $min\n";
-    exit(1);
+    write("plugin: installed Unraid version is too low, require at least version $min\n");
+    // run hook scripts for post processing
+    post_hooks($error);
+    done(1);
   }
-  $max = plugin('max', $plugin_file, $error);
-  if (empty($max))
-    $max = plugin('Unraid', $plugin_file, $error);
+  $max = plugin('max', $plugin_file, $error) ?: plugin('Unraid', $plugin_file, $error);
   if ($max && version_compare($unraid['version'], $max, '>')) {
-    echo "plugin: installed Unraid version is too high, require at most version $max\n";
-    exit(1);
+    write("plugin: installed Unraid version is too high, require at most version $max\n");
+    // run hook scripts for post processing
+    post_hooks($error);
+    done(1);
   }
   // check for a reinstall of same version
-  if (strcmp(plugin('version', $installed_plugin_file,$error), plugin('version', $plugin_file,$error1)) == 0) {
-    echo "Not reinstalling same version\n";
-    exit(1);
+  if (strcmp(plugin('version', $installed_plugin_file, $error), plugin('version', $plugin_file, $error)) === 0) {
+    write("Not reinstalling same version\n");
+    // run hook scripts for post processing
+    post_hooks($error);
+    done(1);
   }
+  // run hook scripts for pre processing
+  pre_hooks();
   // install the updated plugin
   if (plugin('install', $plugin_file, $error) === false) {
-    echo "plugin: $error\n";
-    exit(1);
+    write("plugin: $error\n");
+    // run hook scripts for post processing
+    post_hooks($error);
+    done(1);
   }
   // install was successful, save the updated plugin so it installs again next boot
-  unlink("$plugins/$plugin");
-  // re-inject the old support link if the updated plugin doesn't have one
-  if (!plugin('support', $plugin_file,$error) && $previousSupportLink) {
-    echo "\n\nUpdating Support Link\n";
-    $pluginXML = simplexml_load_file($plugin_file);
-    $pluginXML->addAttribute('support', $previousSupportLink);
-    $dom = new DOMDocument('1.0');
-    $dom->preserveWhiteSpace = false;
-    $dom->formatOutput = true;
-    $dom->loadXML($pluginXML->asXML());
-    file_put_contents($plugin_file,$dom->saveXML());
-  }
-  copy($plugin_file,"$boot/$plugin");
-  symlink("$boot/$plugin", "$plugins/$plugin");
-  echo "plugin: $plugin updated\n";
-  exit(0);
+  unlink($symlink);
+  $target = "$boot/$plugin";
+  copy($plugin_file, $target);
+  symlink($target, $symlink);
+  write("plugin: $plugin updated\n");
+  logger("plugin: $plugin updated");
+  // run hook scripts for post processing
+  post_hooks();
+  done(0);
 }
 
 // plugin remove [plugin]
@@ -649,34 +846,42 @@ if ($method == 'update') {
 //
 if ($method == 'remove') {
   $plugin = $argv[2];
-  echo "plugin: removing: $plugin\n";
-  $installed_plugin_file = @readlink("$plugins/$plugin");
+  $symlink = "$plugins/$plugin";
+  write("plugin: removing: $plugin\n");
+  $installed_plugin_file = @readlink($symlink);
   if ($installed_plugin_file !== false) {
     // remove the symlink
-    unlink("$plugins/$plugin");
+    unlink($symlink);
     @unlink("$tmp/$plugin");
+    // run hook scripts for pre processing
+    pre_hooks();
     if (plugin('remove', $installed_plugin_file, $error) === false) {
       // but if can't remove, restore the symlink
-      symlink($installed_plugin_file, "$plugins/$plugin");
-      echo "plugin: $error\n";
-      exit(1);
+      if (is_file($installed_plugin_file)) symlink($installed_plugin_file, $symlink);
+      write("plugin: $error\n");
+      // run hook scripts for post processing
+      post_hooks($error);
+      done(1);
     }
   }
   // remove the plugin file
   move($installed_plugin_file, "$boot-removed");
-  echo "plugin: $plugin removed\n";
+  write("plugin: $plugin removed\n");
+  logger("plugin: $plugin removed");
   exec("/usr/local/sbin/update_cron");
-  exit(0);
+  // run hook scripts for post processing
+  post_hooks();
+  done(0);
 }
 
-// <attribute>
+// return attribute
 //
 $plugin_file = $argv[2];
 $value = plugin($method, $plugin_file, $error);
 if ($value === false) {
-  echo "plugin: $error\n";
-  exit(1);
+  write("plugin: $error\n");
+  done(1);
 }
-echo "$value\n";
-exit(0);
+write("$value\n");
+done(0);
 ?>

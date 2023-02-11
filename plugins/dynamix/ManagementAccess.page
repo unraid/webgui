@@ -5,8 +5,8 @@ Icon="icon-key"
 Tag="expeditedssl"
 ---
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -38,36 +38,70 @@ function find_tasks() {
   sort($tasks);
   return $tasks;
 }
+function acceptableCert($certFile, $hostname, $expectedURL) {
+  if (!file_exists($certFile)) return false;
+  $certURLs=null;
+  // get Subject URL and all SAN URLs from cert
+  exec("openssl x509 -noout -subject -nameopt multiline -in $certFile | sed -n 's/ *commonName *= //p' ; openssl x509 -noout -ext subjectAltName -in $certFile | grep -Eo \"DNS:[a-zA-Z 0-9.*-]*\" | sed \"s/DNS://g\"", $certURLs);
+  foreach($certURLs as $certURL) {
+    // adjust for wildcard certs
+    $certURL = str_replace('*', $hostname, $certURL);
+    // case-insensitive compare
+    if (strcasecmp($certURL, $expectedURL) == 0) return true;
+  }
+  return false;
+}
 $tasks       = find_tasks();
-$ethX        = 'eth0';
-#$addr        = ipaddr($ethX);
-$addr        = $_SERVER['SERVER_ADDR'];
+$nginx = parse_ini_file('/var/local/emhttp/nginx.ini');
+$addr = (array_key_exists('NGINX_LANIP', $nginx) && $nginx['NGINX_LANIP']) ? $nginx['NGINX_LANIP'] : ((array_key_exists('NGINX_LANIP6', $nginx) && $nginx['NGINX_LANIP6']) ? $nginx['NGINX_LANIP6'] : '');
 $keyfile     = @file_get_contents($var['regFILE']);
+$cert2Issuer = '';
+$isLEcert    = false;
 if ($keyfile !== false) $keyfile = base64_encode($keyfile);
 
-$certFile    = "/boot/config/ssl/certs/certificate_bundle.pem";
-$certPresent = file_exists("$certFile");
-if ($certPresent) {
-  $certSubject = exec("/usr/bin/openssl x509 -in $certFile -noout -subject -nameopt multiline 2>/dev/null|sed -n 's/ *commonName *= //p'");
-  $certIssuer  = exec("/usr/bin/openssl x509 -in $certFile -noout -text | sed -n -e 's/^.*Issuer: //p'");
-  $certExpires = exec("/usr/bin/openssl x509 -in $certFile -noout -text | sed -n -e 's/^.*Not After : //p'");
-  $isLegacyCert = preg_match('/.*\.unraid\.net$/', $certSubject);
-  $isWildcardCert = preg_match('/.*\.myunraid\.net$/', $certSubject);
+// self-signed or user-provided cert
+$cert1File    = "/boot/config/ssl/certs/{$var['NAME']}_unraid_bundle.pem";
+$cert1Present = file_exists("$cert1File");
+if ($cert1Present) {
+  $cert1URL = $var['NAME'].".".$var['LOCAL_TLD'];
+  // if user replaced cert without reloading nginx, the cert on the flash could be invalid
+  $cert1URLvalid = acceptableCert($cert1File, $var['NAME'], $cert1URL);
+  $cert1Subject = exec("/usr/bin/openssl x509 -in $cert1File -noout -text | sed -n 's/^.*Subject: //p'");
+  $cert1Issuer  = exec("/usr/bin/openssl x509 -in $cert1File -noout -text | sed -n -e 's/^.*Issuer: //p'");
+  $cert1Expires = exec("/usr/bin/openssl x509 -in $cert1File -noout -text | sed -n -e 's/^.*Not After : //p'");
+  $cert1SelfSigned = ($cert1Subject == $cert1Issuer);
+}
+
+// unraid.net, myunraid.net LE cert. could potentially be user provided as well
+$cert2File    = "/boot/config/ssl/certs/certificate_bundle.pem";
+$cert2Present = file_exists("$cert2File");
+if ($cert2Present) {
+  $cert2Subject = exec("/usr/bin/openssl x509 -in $cert2File -noout -subject -nameopt multiline 2>/dev/null|sed -n 's/ *commonName *= //p'");
+  $cert2Issuer  = exec("/usr/bin/openssl x509 -in $cert2File -noout -text | sed -n -e 's/^.*Issuer: //p'");
+  $cert2Expires = exec("/usr/bin/openssl x509 -in $cert2File -noout -text | sed -n -e 's/^.*Not After : //p'");
+  $isLegacyCert = preg_match('/.*\.unraid\.net$/', $cert2Subject);
+  $isWildcardCert = preg_match('/.*\.myunraid\.net$/', $cert2Subject);
   $isLEcert = $isLegacyCert || $isWildcardCert;
-  $subjectURL = $certSubject;
+  $subject2URL = $cert2Subject;
   if ($isWildcardCert) {
-    if (strpos($addr, ":") === false)
-      $subjectURL = str_replace("*", str_replace(".", "-", $addr), $subjectURL);
+    if (!$addr)
+      // if eth0 doesn't have an IP address, then show noip.hash.myunraid.net as a placeholder url
+      $subject2URL = str_replace("*", 'noip', $subject2URL);
+    elseif (strpos($addr, ":") === false)
+      $subject2URL = str_replace("*", str_replace(".", "-", $addr), $subject2URL);
     else
-      $subjectURL = str_replace("*", str_replace(":", "-", $addr), $subjectURL);
+      $subject2URL = str_replace("*", str_replace(":", "-", $addr), $subject2URL);
   }
   if ($isLEcert) {
-    exec("openssl x509 -checkend 2592000 -noout -in $certFile 2>/dev/null", $arrout, $retval_expired);
-    if (strpos($addr, ":") === false) {
+    exec("openssl x509 -checkend 2592000 -noout -in $cert2File 2>/dev/null", $arrout, $retval_expired);
+    if (!$addr) {
+      $dnsValid = false;
+      $dnsRebindingProtection = false;
+    } elseif (strpos($addr, ":") === false) {
       $rebindtest_ip = exec("host -4 -t A rebindtest4.myunraid.net 2>/dev/null|awk '{print \$4}'");
       $dnsRebindingProtection = ($rebindtest_ip != "192.168.42.42");
       if (!$dnsRebindingProtection) {
-        $cert_ip = exec("host -4 -t A $subjectURL 2>/dev/null|awk '{print \$4}'");
+        $cert_ip = exec("host -4 -t A $subject2URL 2>/dev/null|awk '{print \$4}'");
         $dnsValid = $cert_ip==$addr;
       }
     } else {
@@ -76,18 +110,64 @@ if ($certPresent) {
       // $dnsRebindingProtection = ($rebindtest_ip != "fd42::42");
       $dnsRebindingProtection = ($rebindtest_ip != "fd42::42") && ($rebindtest_ip != "fd42::");
       if (!$dnsRebindingProtection) {
-        $cert_ip = exec("host -6 -t AAAA $subjectURL 2>/dev/null|awk '{print \$4}'");
+        $cert_ip = exec("host -6 -t AAAA $subject2URL 2>/dev/null|awk '{print \$4}'");
         $dnsValid = $cert_ip==$addr;
       }
     }
   }
 }
 
+$http_port = $var['PORT'] != 80 ? ":{$var['PORT']}" : '';
+$https_port = $var['PORTSSL'] != 443 ? ":{$var['PORTSSL']}" : '';
+
+$http_ip_url = "http://{$nginx['NGINX_LANIP']}{$http_port}/";
+$https_ip_url = "https://{$nginx['NGINX_LANIP']}{$https_port}/";
+$http_ip6_url = "http://{$nginx['NGINX_LANIP6']}{$http_port}/";
+$https_ip6_url = "https://{$nginx['NGINX_LANIP6']}{$https_port}/";
+$http_mdns_url = "http://{$nginx['NGINX_LANMDNS']}{$http_port}/";
+$https_mdns_url = "https://{$nginx['NGINX_LANMDNS']}{$https_port}/";
+$https_fqdn_url = "https://{$nginx['NGINX_LANFQDN']}{$https_port}/";
+$https_fqdn6_url = "https://{$nginx['NGINX_LANFQDN6']}{$https_port}/";
+
+$urls = array();
+// push an array of three values into the $urls array:
+//   0 - the url
+//   1 - the url it redirects to, or null
+//   2 - the certificate file used, or null
+switch($var['USE_SSL']) {
+  case 'no':
+    if ($nginx['NGINX_LANIP'])    $urls[] = [$http_ip_url, null, null, false];
+    if ($nginx['NGINX_LANIP6'])   $urls[] = [$http_ip6_url, null, null, false];
+    if ($nginx['NGINX_LANMDNS'])  $urls[] = [$http_mdns_url, null, null, false];
+    if ($nginx['NGINX_LANFQDN'])  $urls[] = [$https_fqdn_url, null, "certificate_bundle.pem", false];
+    if ($nginx['NGINX_LANFQDN6']) $urls[] = [$https_fqdn6_url, null, "certificate_bundle.pem", false];
+    break;
+  case 'yes':
+    if ($nginx['NGINX_LANIP'])    $urls[] = [$http_ip_url, $https_ip_url, null, false];
+    if ($nginx['NGINX_LANIP'])    $urls[] = [$https_ip_url, null, "{$var['NAME']}_unraid_bundle.pem", $cert1SelfSigned];
+    if ($nginx['NGINX_LANIP6'])   $urls[] = [$http_ip6_url, $https_ip6_url, null, false];
+    if ($nginx['NGINX_LANIP6'])   $urls[] = [$https_ip6_url, null, "{$var['NAME']}_unraid_bundle.pem", $cert1SelfSigned];
+    if ($nginx['NGINX_LANMDNS'])  $urls[] = [$http_mdns_url, $https_mdns_url, null, false];
+    if ($nginx['NGINX_LANMDNS'])  $urls[] = [$https_mdns_url, null, "{$var['NAME']}_unraid_bundle.pem", $cert1SelfSigned];
+    if ($nginx['NGINX_LANFQDN'])  $urls[] = [$https_fqdn_url, null, "certificate_bundle.pem", false];
+    if ($nginx['NGINX_LANFQDN6']) $urls[] = [$https_fqdn6_url, null, "certificate_bundle.pem", false];
+    break;
+  case 'auto': // aka strict
+    if ($nginx['NGINX_LANIP'])    $urls[] = [$http_ip_url, $https_fqdn_url, null, false];
+    if ($nginx['NGINX_LANIP6'])   $urls[] = [$http_ip6_url, $https_fqdn6_url, null, false];
+    if ($nginx['NGINX_LANMDNS'])  $urls[] = [$http_mdns_url, $https_fqdn_url, null, false];
+    if ($nginx['NGINX_LANFQDN'])  $urls[] = [$https_fqdn_url, null, "certificate_bundle.pem", false];
+    if ($nginx['NGINX_LANFQDN6']) $urls[] = [$https_fqdn6_url, null, "certificate_bundle.pem", false];
+    break;
+}
+
 $cert_time_format   = $display['date'].($display['date']!='%c' ? ', '.str_replace(['%M','%R'],['%M:%S','%R:%S'],$display['time']):'');
 $provisionlabel     = $isLEcert ? _('Renew') : _('Provision');
-$disabled_provision = $keyfile===false || ($isLEcert && $retval_expired===0) ? 'disabled' : '';
+$disabled_provision = $keyfile===false || ($isLEcert && $retval_expired===0) || !$addr ? 'disabled' : '';
+$disabled_provision_msg = !$addr ? _('Ensure the primary network card eth0 has an IP address.') : '';
+$disabled_upgrade   = !$addr ? 'disabled' : '';
 $disabled_updatedns = $keyfile!==false && $isLEcert ? '' : 'disabled';
-$disabled_delete    = $certPresent && $var['USE_SSL']!='auto' ? '' : 'disabled';
+$disabled_delete    = $cert2Present && $var['USE_SSL']!='auto' ? '' : 'disabled';
 $disabled_auto      = $isLEcert && !$dnsRebindingProtection && $dnsValid ? '' : 'disabled';
 $upgradelabel       = _('Upgrade Cert');
 
@@ -96,7 +176,8 @@ $portsInUse = [];
 exec("lsof -Pni|awk '/LISTEN/ && \$9!~/127.0.0.1/ && \$9!~/\\[::1\\]/{print \$9}'|sort -u", $output);
 
 $bind = false; //= $var['BIND_MGT']=='yes'; - not used in 6.10
-$list = ['*',$addr];
+$list = ['*'];
+if ($addr) array_push($list, $addr);
 
 foreach ($output as $line) {
   [$ip, $port] = my_explode($line[0]=='[' ? ']:' : ':',$line);
@@ -105,6 +186,10 @@ foreach ($output as $line) {
 }
 sort($portsInUse,SORT_NUMERIC);
 ?>
+<style>
+span.warning{margin-left:20px}
+</style>
+
 <script>
 function provisionHandler(event, form) { // provisions and renewals require being Signed In to Unraid.net
   if (event.submitter.value === 'Delete') return true; // always allow deletes
@@ -176,15 +261,11 @@ function updateSSH(form) {
   form.PORTSSH.disabled = form.USE_SSH.value=='no';
 }
 
-function updateSSL(form) {
-  form.PORT.disabled = form.USE_SSL.value=='yes';
-}
 
 $(function(){
   var form = document.SSLSettings;
   updateTELNET(form);
   updateSSH(form);
-  updateSSL(form);
 });
 </script>
 <form markdown="1" name="SSLSettings" method="POST" action="/update.htm" target="progressFrame">
@@ -248,11 +329,11 @@ _(Use UPnP)_:
 :mgmt_use_upnp_help:
 
 _(Use SSL/TLS)_:
-: <select name="USE_SSL" onchange="updateSSL(this.form)">
+: <select name="USE_SSL" onchange="$('#ssl-warning').show();">
   <?=mk_option($var['USE_SSL'], "no", _('No'))?>
   <?=mk_option($var['USE_SSL'], "yes", _('Yes'))?>
-  <?=mk_option($var['USE_SSL'], "auto", _('Auto'), $disabled_auto)?>
-  </select>
+  <?=mk_option($var['USE_SSL'], "auto", _('Strict'), $disabled_auto)?>
+  </select><span id="ssl-warning" class="warning" style="display:none"><i class="fa fa-warning fa-fw"></i> _(if you have trouble logging in, close all other tabs pointing to this server and clear your browser's cache)_</span>
 
 :mgmt_use_ssl_tls_help:
 
@@ -275,22 +356,72 @@ _(Local TLD)_:
 : <input type="button" value="_(Apply)_" onclick="checkPorts(this.form)" disabled><input type="button" value="_(Done)_" onclick="done()">
 
 </form>
-<div style="height:24px"></div>
+
+_(Local access URLs)_:
+: <?
+// url[0] = url
+// url[1] = redirect url or null
+// url[2] = certificate used or null
+// url[3] = is certificate self-signed T/F
+$n = 0;
+foreach($urls as $url) {
+  $msg  = "";
+  $url0 = substr_count($url[0]??'',':')>3 ? preg_replace('#(://)(.+)(/$)#','$1[$2]$3',$url[0]) : $url[0]; // IPv6 - IPv4 notation
+  $url1 = substr_count($url[1]??'',':')>3 ? preg_replace('#(://)(.+)(/$)#','$1[$2]$3',$url[1]) : $url[1]; // IPv6 - IPv4 notation
+  if ($url[1]) $msg .= " "._("redirects to")." <a href='$url1'>$url1</a>";
+  if ($url[2]) $msg .= " "._("uses")." ".$url[2];
+  if ($url[3]) $msg .= "<span class='warning'> <i class='fa fa-warning fa-fw'></i> "._("is a self-signed certificate, ignore the browser's warning and proceed to the GUI")."</span>";
+  echo ($n ? "<dt>&nbsp;</dt><dd>" : ""),"<a href='$url0'>$url0</a>$msg",($n++ ? "</dd>" : "");
+}?>
+
+:mgmt_local_access_urls_help:
+
+<?if ($cert1Present):?>
+_(Self-signed or user-provided certificate)_:
+: <?=$cert1File?>
+
+<?if ($cert1URLvalid && $var['USE_SSL']=='yes'):?>
+_(Certificate URL)_:
+: <?="<a href='https://$cert1URL$https_port'>$cert1URL</a>"?>
+
+<?elseif ($cert1URLvalid):?>
+_(Certificate URL)_:
+: <?=$cert1URL?>
+
+<?else:?>
+_(Certificate URL)_:
+: _(Certificate not valid for)_ <?=$cert1URL?>
+<?endif;?>
+
+_(Certificate issuer)_:
+: <?=$cert1Issuer?>
+<?if ($cert1URLvalid && $var['USE_SSL']=='yes' && $cert1SelfSigned):?>
+  <span class="warning"><i class="fa fa-warning fa-fw"></i> _(is a self-signed certificate, ignore the browser's warning when using this certificate)_</span>
+<?endif;?>
+
+_(Certificate expiration)_:
+: <?=_(my_date($cert_time_format, strtotime($cert1Expires)),0)?>
+
+<?else:?>
+_(Self-signed certificate file)_:
+: _(Not present)_
+<?endif;?>
+
 <form markdown="1" name="Provision" method="POST" target="progressFrame" action="/update.htm" onsubmit="provisionHandler(event, this)">
 <input type="hidden" name="server_name" value="<?=strtok($_SERVER['HTTP_HOST'],":")?>">
 <input type="hidden" name="server_addr" value="<?=$_SERVER['SERVER_ADDR']?>">
-<?if ($certPresent):?>
-_(CA-signed certificate file)_:
-: <?=$certFile?>
+<?if ($cert2Present):?>
+_(Unraid Let's Encrypt certificate)_:
+: <?=$cert2File?>
 
-_(Certificate subject)_:
-: [<?=$certSubject?>](https://<?=$subjectURL?>:<?=$var['PORTSSL']?>)
+_(Certificate URL)_:
+: <?="<a href='https://$subject2URL$https_port'>$cert2Subject</a>"?>
 
 _(Certificate issuer)_:
-: <?=$certIssuer?>
+: <?=$cert2Issuer?>
 
 _(Certificate expiration)_:
-: <?=_(strftime($cert_time_format, strtotime($certExpires)),0)?>
+: <?=_(my_date($cert_time_format, strtotime($cert2Expires)),0)?>
 
 <?if ($dnsRebindingProtection):?>
 &nbsp;
@@ -307,11 +438,11 @@ _(CA-signed certificate file)_:
 
 <?endif;?>
 &nbsp;
-: <button type="submit" name="changePorts" value="Provision" <?=$disabled_provision?>><?=$provisionlabel?></button><button type="submit" name="changePorts" value="Delete" <?=$disabled_delete?> >_(Delete)_</button><!-- <button type="button" onclick="updateDNS(this)" <?=$disabled_updatedns?>>_(Update DNS)_</button> -->
+: <button type="submit" name="changePorts" value="Provision" <?=$disabled_provision?>><?=$provisionlabel?></button><button type="submit" name="changePorts" value="Delete" <?=$disabled_delete?> >_(Delete)_</button><!-- <button type="button" onclick="updateDNS(this)" <?=$disabled_updatedns?>>_(Update DNS)_</button> --><?=$disabled_provision_msg?>
 
-<?if ($certPresent && $isLegacyCert):?>
+<?if ($cert2Present && $isLegacyCert):?>
 &nbsp;
-: <button type="submit" name="changePorts" value="Upgrade"><?=$upgradelabel?></button>
+: <button type="submit" name="changePorts" value="Upgrade" <?=$disabled_upgrade?>><?=$upgradelabel?></button>
 <?endif;?>
 
 :mgmt_certificate_expiration_help:

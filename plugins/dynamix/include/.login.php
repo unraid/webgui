@@ -5,7 +5,7 @@
 $server_name = strtok($_SERVER['HTTP_HOST'],":");
 if (!empty($_COOKIE['unraid_'.md5($server_name)])) {
     // Start the session so we can check if $_SESSION has data
-    session_start();
+    if (session_status()==PHP_SESSION_NONE) session_start();
 
     // Check if the user is already logged in
     if ($_SESSION && !empty($_SESSION['unraid_user'])) {
@@ -51,7 +51,7 @@ function writeToFile($file, $text): void {
 // Source: https://stackoverflow.com/a/2524761
 function isValidTimeStamp($timestamp)
 {
-    return ((string) (int) $timestamp === $timestamp) 
+    return ((string) (int) $timestamp === $timestamp)
         && ($timestamp <= PHP_INT_MAX)
         && ($timestamp >= ~PHP_INT_MAX);
 }
@@ -84,8 +84,7 @@ function cleanupFails(string $failFile, int $time): int {
 function verifyUsernamePassword(string $username, string $password): bool {
     if ($username != "root") return false;
 
-    // @TODO: integrate with PAM to avoid direct access to /etc/shadow and validate other user names
-    $output = exec("/usr/bin/grep root /etc/shadow");
+    $output = exec("/usr/bin/getent shadow $username");
     if ($output === false) return false;
     $credentials = explode(":", $output);
     return password_verify($password, $credentials[1]);
@@ -161,13 +160,13 @@ function isRemoteAccess(): bool {
 // Check if 2fa is enabled for local (requires USE_SSL to be "auto" so no alternate urls can access the server)
 function isLocalTwoFactorEnabled(): bool {
     global $nginx, $my_servers;
-    return $nginx['NGINX_USESSL'] === "auto" && $my_servers['local']['2Fa'] === 'yes';
+    return $nginx['NGINX_USESSL'] === "auto" && ($my_servers['local']['2Fa']??'') === 'yes';
 }
 
 // Check if 2fa is enabled for remote
 function isRemoteTwoFactorEnabled(): bool {
     global $my_servers;
-    return $my_servers['remote']['2Fa'] === 'yes';
+    return ($my_servers['remote']['2Fa']??'') === 'yes';
 }
 
 // Load configs into memory
@@ -181,9 +180,9 @@ $remote_addr = $_SERVER['REMOTE_ADDR'] ?? "unknown";
 $failFile = "/var/log/pwfail/{$remote_addr}";
 
 // Get the credentials
-$username = $_POST['username'];
-$password = $_POST['password'];
-$token = $_REQUEST['token'];
+$username = $_POST['username']??'';
+$password = $_POST['password']??'';
+$token = $_REQUEST['token']??'';
 
 // Check if we need 2fa
 $twoFactorRequired = (isLocalAccess() && isLocalTwoFactorEnabled()) || (isRemoteAccess() && isRemoteTwoFactorEnabled());
@@ -212,7 +211,7 @@ if (!empty($username) && !empty($password)) {
 
         // Successful login, start session
         @unlink($failFile);
-        session_start();
+        if (session_status()==PHP_SESSION_NONE) session_start();
         $_SESSION['unraid_login'] = time();
         $_SESSION['unraid_user'] = $username;
         session_regenerate_id(true);
@@ -257,19 +256,17 @@ $theme_dark = in_array($display['theme'], ['black', 'gray']);
     <style>
     /************************
     /
-    /  Fonts: original font-family names are kept for backward compatibility
-    /   clear-sans --> source-sans-pro
-    /   bitstream  --> source-code-pro
+    /  Fonts
     /
     /************************/
-    @font-face{font-family:clear-sans;font-weight:normal;font-style:normal; src:url('/webGui/styles/clear-sans.woff2?20220507') format('woff2'),url('/webGui/styles/clear-sans.woff?20220507') format('woff');}
-    @font-face{font-family:clear-sans;font-weight:bold;font-style:normal; src:url('/webGui/styles/clear-sans-bold.woff2?20220507') format('woff2'),url('/webGui/styles/clear-sans-bold.woff?20220507') format('woff');}
-    @font-face{font-family:clear-sans;font-weight:normal;font-style:italic; src:url('/webGui/styles/clear-sans-italic.woff2?20220507') format('woff2'),url('/webGui/styles/clear-sans-italic.woff?20220507') format('woff');}
-    @font-face{font-family:clear-sans;font-weight:bold;font-style:italic; src:url('/webGui/styles/clear-sans-bold-italic.woff2?20220507') format('woff2'),url('/webGui/styles/clear-sans-bold-italic.woff?20220507') format('woff');}
-    @font-face{font-family:bitstream;font-weight:normal;font-style:normal; src:url('/webGui/styles/bitstream.woff2?20220507') format('woff2'),url('/webGui/styles/bitstream.woff?20220507') format('woff');}
-    @font-face{font-family:bitstream;font-weight:bold;font-style:normal; src:url('/webGui/styles/bitstream-bold.woff2?20220507') format('woff2'),url('/webGui/styles/bitstream-bold.woff?20220507') format('woff');}
-    @font-face{font-family:bitstream;font-weight:normal;font-style:italic; src:url('/webGui/styles/bitstream-italic.woff2?20220507') format('woff2'),url('/webGui/styles/bitstream-italic.woff?20220507') format('woff');}
-    @font-face{font-family:bitstream;font-weight:bold;font-style:italic; src:url('/webGui/styles/bitstream-bold-italic.woff2?20220507') format('woff2'),url('/webGui/styles/bitstream-bold-italic.woff?20220507') format('woff');}
+    @font-face{font-family:clear-sans;font-weight:normal;font-style:normal; src:url('/webGui/styles/clear-sans.woff?v=20220513') format('woff')}
+    @font-face{font-family:clear-sans;font-weight:bold;font-style:normal; src:url('/webGui/styles/clear-sans-bold.woff?v=20220513') format('woff')}
+    @font-face{font-family:clear-sans;font-weight:normal;font-style:italic; src:url('/webGui/styles/clear-sans-italic.woff?v=20220513') format('woff')}
+    @font-face{font-family:clear-sans;font-weight:bold;font-style:italic; src:url('/webGui/styles/clear-sans-bold-italic.woff?v=20220513') format('woff')}
+    @font-face{font-family:bitstream;font-weight:normal;font-style:normal; src:url('/webGui/styles/bitstream.woff?v=20220513') format('woff')}
+    @font-face{font-family:bitstream;font-weight:bold;font-style:normal; src:url('/webGui/styles/bitstream-bold.woff?v=20220513') format('woff')}
+    @font-face{font-family:bitstream;font-weight:normal;font-style:italic; src:url('/webGui/styles/bitstream-italic.woff?v=20220513') format('woff')}
+    @font-face{font-family:bitstream;font-weight:bold;font-style:italic; src:url('/webGui/styles/bitstream-bold-italic.woff?v=20220513') format('woff')}
 
     /************************
     /
@@ -501,11 +498,13 @@ $theme_dark = in_array($display['theme'], ['black', 'gray']);
 
             <div class="form">
                 <form class="js-removeTimeout" action="/login" method="POST">
-                    <? if (($twoFactorRequired && $token) || !$twoFactorRequired) { ?>
+                    <? if (($twoFactorRequired && !empty($token)) || !$twoFactorRequired) { ?>
                         <p>
                             <input name="username" type="text" placeholder="<?=_('Username')?>" autocapitalize="none" autocomplete="off" spellcheck="false" autofocus required>
                             <input name="password" type="password" placeholder="<?=_('Password')?>" required>
+                            <? if ($twoFactorRequired && !empty($token)) { ?>
                             <input name="token" type="hidden" value="<?= $token ?>">
+                            <? } ?>
                         </p>
                         <? if ($error) echo "<p class='error'>$error</p>"; ?>
                         <p>
@@ -535,7 +534,7 @@ $theme_dark = in_array($display['theme'], ['black', 'gray']);
                     </script>
                 </form>
 
-                <? if (($twoFactorRequired && $token) || !$twoFactorRequired) { ?>
+                <? if (($twoFactorRequired && !empty($token)) || !$twoFactorRequired) { ?>
                     <div class="js-addTimeout hidden">
                         <p class="error" style="padding-top:10px;"><?=_('Transparent 2FA Token timed out')?></p>
                         <a href="https://forums.unraid.net/my-servers/" class="button button--small" title="<?=_('Go to My Servers Dashboard')?>"><?=_('Go to My Servers Dashboard')?></a>
@@ -543,13 +542,13 @@ $theme_dark = in_array($display['theme'], ['black', 'gray']);
                 <? } ?>
             </div>
 
-            <? if (($twoFactorRequired && $token) || !$twoFactorRequired) { ?>
+            <? if (($twoFactorRequired && !empty($token)) || !$twoFactorRequired) { ?>
                 <p class="js-removeTimeout"><a href="https://wiki.unraid.net/Manual/Troubleshooting#Lost_root_Password" target="_blank"><?=_('Password recovery')?></a></p>
             <? } ?>
 
         </div>
     </section>
-    <? if ($token) { ?>
+    <? if ($twoFactorRequired && !empty($token)) { ?>
         <script type="text/javascript">
             const $elsToRemove = document.querySelectorAll('.js-removeTimeout');
             const $elsToShow = document.querySelectorAll('.js-addTimeout');

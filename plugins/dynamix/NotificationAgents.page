@@ -3,8 +3,8 @@ Title="Notification Agents"
 Tag="rss-square"
 ---
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -93,6 +93,7 @@ function initDropdown() {
 $fields = ['Event','Subject','Timestamp','Description','Importance','Content','Link'];
 $xml_file = "webGui/include/NotificationAgents.xml";
 $xml = @simplexml_load_file($xml_file) or die(_("Failed to open")." $xml_file");
+$i = 1;
 foreach ($xml->Agent as $agent) {
   $name = str_replace(' ','_',$agent->Name);
   $enabledAgent = agent_fullname("$name.sh", "enabled");
@@ -117,7 +118,7 @@ foreach ($xml->Agent as $agent) {
     }
   }
   foreach (explode(PHP_EOL,(String) $agent->Script) as $line) if (trim($line)) $script .= trim($line)."{1}";
-  echo '<div id="title" class="shift"><span class="left"><img src="/plugins/dynamix/icons/'.strtolower(str_replace('_','',$name)).'.png" class="icon" style="height:16px;width:16px;">'.str_replace('_',' ',$name).'</span><span class="status vhshift">'.(is_file($enabledAgent) ? '<span class="green">'._("Enabled").'</span>' : '<span class="red">'._("Disabled").'</span>').'</span></div>';
+  echo '<div class="title shift"><span class="left"><img src="/plugins/dynamix/icons/'.strtolower(str_replace('_','',$name)).'.png" class="icon" style="height:16px;width:16px;">'.str_replace('_',' ',$name).'</span><span class="status vhshift">'.(is_file($enabledAgent) ? '<span class="green">'._("Enabled").'</span>' : '<span class="red">'._("Disabled").'</span>').'</span></div>';
   echo '<form method="POST" name="'.$name.'" action="/update.php" target="progressFrame">';
   echo '<input type="hidden" name="#include" value="/webGui/include/update.file.php">';
   echo '<input type="hidden" name="#file" value="'.$file.'">';
@@ -130,7 +131,6 @@ foreach ($xml->Agent as $agent) {
   echo mk_option(is_file($enabledAgent), 'yes', _('Enabled'));
   echo '</select></dd></dl>';
   echo '<script>scripts["'.$name.'"]='.json_encode($script).';enabledAgents["'.$name.'"]="'.$enabledAgent.'";disabledAgents["'.$name.'"]="'.$disabledAgent.'";</script>';
-  $i = 1;
   foreach ($agent->Variables->children() as $v) {
     $vName = preg_replace('#\[([^\]]*)\]#', '<$1>', (string) $v);
     $vDesc = ucfirst(strtolower(preg_replace('#\[([^\]]*)\]#', '<$1>', $v->attributes()->Desc)));
@@ -138,8 +138,7 @@ foreach ($xml->Agent as $agent) {
     $vHelp = preg_replace('#\[([^\]]*)\]#', '<$1>', $v->attributes()->Help);
     echo "<dl><dt>$vDesc:</dt><dd>";
     if (preg_match('/title|message/', $vDesc)) {
-      echo '<select id="slot_'.$i.'" name="'.$vName.'" multiple style="display:none">';
-      $i++;
+      echo '<select id="slot_'.$i++.'" name="'.$vName.'" multiple style="display:none">';
       $value = str_replace('\n',',',isset($values[$vName]) ? $values[$vName] : $vDefault);
       foreach ($fields as $field) echo mk_option_check($value,'$'.strtoupper($field),_($field));
       echo '</select>';

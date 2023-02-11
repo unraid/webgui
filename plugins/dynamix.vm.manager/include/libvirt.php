@@ -26,6 +26,14 @@
 			}
 		}
 
+		function __construct($uri = false, $login = false, $pwd = false, $debug=false) {
+			if ($debug)
+				$this->set_logfile($debug);
+			if ($uri != false) {
+				$this->enabled = $this->connect($uri, $login, $pwd);
+			}
+		}
+
 		function _set_last_error() {
 			$this->last_error = libvirt_get_last_error();
 			return false;
@@ -36,7 +44,7 @@
 		}
 
 		function set_logfile($filename) {
-			if (!libvirt_logfile_set($filename,'10M'))
+			if (!libvirt_logfile_set($filename,10000))
 				return $this->_set_last_error();
 
 			return true;
@@ -245,6 +253,12 @@
 					if (!empty($disk['bus'])) {
 						$arrReturn['bus'] = $disk['bus'];
 					}
+					if (!empty($disk['boot'])) {
+						$arrReturn['boot'] = $disk['boot'];
+					}
+					if (!empty($disk['serial'])) {
+						$arrReturn['serial'] = $disk['serial'];
+					}
 
 				}
 			}
@@ -259,9 +273,12 @@
 			$nics = $config['nic'];
 			$disks = $config['disk'];
 			$usb = $config['usb'];
+			$usbopt = $config['usbopt'];
+			$usbboot = $config['usbboot'];
 			$shares = $config['shares'];
 			$gpus = $config['gpu'];
 			$pcis = $config['pci'];
+			$pciboot = $config['pciboot'];
 			$audios = $config['audio'];
 			$template = $config['template'];
 
@@ -280,6 +297,7 @@
 
 			$loader = '';
 			$swtpm = '';
+			$osbootdev = '';
 			if (!empty($domain['ovmf'])) {
 			  if ($domain['ovmf'] == 1) {
 			  	if (!is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd')) {
@@ -294,6 +312,7 @@
 
 				  $loader = "<loader readonly='yes' type='pflash'>/usr/share/qemu/ovmf-x64/OVMF_CODE-pure-efi.fd</loader>
 				  			<nvram>/etc/libvirt/qemu/nvram/".$uuid."_VARS-pure-efi.fd</nvram>";
+				if ($domain['usbboot'] == 'Yes') $osbootdev = "<boot dev='fd'/>" ;			
 			  }
 			  if ($domain['ovmf'] == 2) {
 				  if (!is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
@@ -312,6 +331,7 @@
 				$swtpm = "<tpm model='tpm-tis'>
   							<backend type='emulator' version='2.0' persistent_state='yes'/>
   						</tpm>";
+				if ($domain['usbboot'] == 'Yes') $osbootdev = "<boot dev='fd'/>" ;  
 	  		}
 	  	}
 
@@ -426,7 +446,7 @@
 					</clock>";
 
 			$hyperv = '';
-			if (!empty($domain['hyperv']) && $os_type == "windows") {
+			if ($domain['hyperv'] == 1 && $os_type == "windows") {
 				$hyperv = "<hyperv>
 							<relaxed state='on'/>
 							<vapic state='on'/>
@@ -444,12 +464,19 @@
 			if (!empty($usb)) {
 				foreach($usb as $i => $v){
 					$usbx = explode(':', $v);
+					$startupPolicy = '' ;
+					if (isset($usbopt[$v])) {
+						 if (strpos($usbopt[$v], "#remove") == false) $startupPolicy = 'startupPolicy="optional"' ; 	else  $startupPolicy = '' ;
+					}	 
 					$usbstr .= "<hostdev mode='subsystem' type='usb'>
-									<source>
+									<source $startupPolicy>
 										<vendor id='0x".$usbx[0]."'/>
 										<product id='0x".$usbx[1]."'/>
-									</source>
-								</hostdev>";
+									</source>" ;
+					if (!empty($usbboot[$v])) {
+						$usbstr .= "<boot order='".$usbboot[$v]."'/>" ;
+						}					
+					$usbstr .= "</hostdev>";
 				}
 			}
 
@@ -457,7 +484,6 @@
 			foreach (range('a', 'z') as $letter) {
 				$arrAvailableDevs['hd' . $letter] = 'hd' . $letter;
 			}
-			$arrUsedBootOrders = [];
 
 			$needSCSIController = false;
 
@@ -470,17 +496,20 @@
 			$mediastr = '';
 			if (!empty($media['cdrom'])) {
 				unset($arrAvailableDevs['hda']);
-				$arrUsedBootOrders[] = 2;
+				$cdromboot = $media['cdromboot'] ;
 				$media['cdrombus'] = $media['cdrombus'] ?: $bus;
 				if ($media['cdrombus'] == 'scsi') {
 					$needSCSIController = true;
+				}
+				if ($cdromboot > 0) {
+					$mediaboot = "<boot order='$cdromboot'/>" ;
 				}
 				$mediastr = "<disk type='file' device='cdrom'>
 								<driver name='qemu'/>
 								<source file='" . htmlspecialchars($media['cdrom'], ENT_QUOTES | ENT_XML1) . "'/>
 								<target dev='hda' bus='" . $media['cdrombus'] . "'/>
 								<readonly/>
-								<boot order='2'/>
+								$mediaboot
 							</disk>";
 			}
 
@@ -587,11 +616,10 @@
 							$disk['dev'] = array_shift($arrAvailableDevs);
 						}
 						unset($arrAvailableDevs[$disk['dev']]);
-
+						$boot = $disk['boot'] ;
 						$bootorder = '';
-						if (!in_array(1, $arrUsedBootOrders)) {
-							$bootorder = "<boot order='1'/>";
-							$arrUsedBootOrders[] = 1;
+						if ($boot > 0) {
+							$bootorder = "<boot order='$boot'/>" ;
 						}
 
 						$readonly = '';
@@ -600,6 +628,8 @@
 						}
 
 						$strDevType = @filetype(realpath($disk['image']));
+
+						if ($disk["serial"] != "") $serial = "<serial>".$disk["serial"]."</serial>" ; else $serial = "" ;
 
 						if ($strDevType == 'file' || $strDevType == 'block') {
 							$strSourceType = ($strDevType == 'file' ? 'file' : 'dev');
@@ -610,6 +640,7 @@
 											<target bus='" . $disk['bus'] . "' dev='" . $disk['dev'] . "'/>
 											$bootorder
 											$readonly
+											$serial
 										</disk>";
 						}
 					}
@@ -628,31 +659,67 @@
 						continue;
 					}
 					$netmodel = $nic['model'] ?: 'virtio-net';
-					$netstr .= "<interface type='bridge'>
-									<mac address='{$nic['mac']}'/>
-									<source bridge='" . htmlspecialchars($nic['network'], ENT_QUOTES | ENT_XML1) . "'/>
-									<model type='$netmodel'/>
-								</interface>";
+
+					$net_res =$this->libvirt_get_net_res($this->conn, $nic['network']);
+					exec("brctl show | cut -f1| awk NF | sed -n '1!p'", $br);
+					
+					if ($nic["boot"] != NULL) $nicboot = "<boot order='".$nic["boot"]."'/>" ; else $nicboot = "" ;
+					if($net_res) {
+						$netstr .= "<interface type='network'>
+										<mac address='{$nic['mac']}'/>
+										<source network='" . htmlspecialchars($nic['network'], ENT_QUOTES | ENT_XML1) . "'/>
+										<model type='$netmodel'/>
+										$nicboot 
+									</interface>" ;
+					} elseif(in_array($nic['network'], $br)) {
+						$netstr .= "<interface type='bridge'>
+										<mac address='{$nic['mac']}'/>
+										<source bridge='" . htmlspecialchars($nic['network'], ENT_QUOTES | ENT_XML1) . "'/>
+										<model type='$netmodel'/>
+										$nicboot 
+									</interface>";				
+					} else {
+						continue;
+					}
 				}
 			}
 
 			$sharestr = '';
-			if (!empty($shares) && $os_type != "windows") {
+			$memorybacking = json_decode($domain['memoryBacking'],true);
+
+			if (!empty($shares)) {
 				foreach ($shares as $i => $share) {
-					if (empty($share['source']) || empty($share['target'])) {
+					if (empty($share['source']) || empty($share['target']) || ($os_type == "windows" && $share["mode"] == "9p")) {
 						continue;
 					}
 
-					$sharestr .= "<filesystem type='mount' accessmode='passthrough'>
-										<source dir='" . htmlspecialchars($share['source'], ENT_QUOTES | ENT_XML1) . "'/>
-										<target dir='" . htmlspecialchars($share['target'], ENT_QUOTES | ENT_XML1) . "'/>
-									</filesystem>";
+					if ($share['mode'] == "virtiofs") {
+					if (!isset($memorybacking['source'])) 	$memorybacking['source']["@attributes"]["type"] = "memfd" ;	
+					if (!isset($memorybacking['access'])) 	$memorybacking['access']["@attributes"]["mode"] = "shared" ;									
+
+						$sharestr .=	"<filesystem type='mount' accessmode='passthrough'>
+											<driver type='virtiofs' queue='1024' />
+											<source dir='" . htmlspecialchars($share['source'], ENT_QUOTES | ENT_XML1) . "'/>
+											<target dir='" . htmlspecialchars($share['target'], ENT_QUOTES | ENT_XML1) . "'/>
+											<binary path='/usr/libexec/virtiofsd'  xattr='on'>
+												<sandbox mode='chroot'/>
+												<cache mode='always'/>
+												<lock posix='on' flock='on'/>
+											</binary>
+										</filesystem>" ;
+					} else { 
+							$sharestr .= "<filesystem type='mount' accessmode='passthrough'>
+												<source dir='" . htmlspecialchars($share['source'], ENT_QUOTES | ENT_XML1) . "'/>
+												<target dir='" . htmlspecialchars($share['target'], ENT_QUOTES | ENT_XML1) . "'/>
+											</filesystem>";
+					}
 				}
 			}
 
 			$pcidevs='';
 			$gpudevs_used=[];
-			$vnc='';
+			$vmrc='';
+			$channelscopypaste = '';
 			if (!empty($gpus)) {
 				foreach ($gpus as $i => $gpu) {
 					// Skip duplicate video devices
@@ -660,7 +727,7 @@
 						continue;
 					}
 
-					if ($gpu['id'] == 'vnc') {
+					if ($gpu['id'] == 'virtual') {
 						$strKeyMap = '';
 						if (!empty($gpu['keymap'])) {
 							$strKeyMap = "keymap='" . $gpu['keymap'] . "'";
@@ -680,18 +747,53 @@
 								$strModelType = 'qxl';
 							}
 						}
+						if (!empty($gpu['autoport'])) {
+							$strAutoport = $gpu['autoport'];
+						} else $strAutoport = "yes" ;
 
-						$vnc = "<input type='tablet' bus='usb'/>
+						
+
+						if (!empty($gpu['protocol'])) {
+							$strProtocol = $gpu['protocol'];
+						} else $strProtocol = "vnc" ;
+
+						if (!empty($gpu['wsport'])) {
+							$strWSport = $gpu['wsport'];
+						} else $strWSport = "-1" ;
+
+						if (!empty($gpu['port'])) {
+							$strPort = $gpu['port'];
+						} else $strPort = "-1" ;
+
+						if ($strAutoport == "yes") $strPort = $strWSport = "-1" ;
+						if (($gpu['copypaste'] == "yes") && ($strProtocol == "spice")) $vmrcmousemode = "<mouse mode='server'/>" ; else $vmrcmousemode = ""  ;
+
+						$vmrc = "<input type='tablet' bus='usb'/>
 								<input type='mouse' bus='ps2'/>
 								<input type='keyboard' bus='ps2'/>
-								<graphics type='vnc' port='-1' autoport='yes' websocket='-1' listen='0.0.0.0' $passwdstr $strKeyMap>
+								<graphics type='$strProtocol' port='$strPort' autoport='$strAutoport' websocket='$strWSport' listen='0.0.0.0' $passwdstr $strKeyMap>
 									<listen type='address' address='0.0.0.0'/>
+									$vmrcmousemode
 								</graphics>
 								<video>
 									<model type='$strModelType'/>
 								</video>";
 
-						$gpudevs_used[] = $gpu['id'];
+						if ($gpu['copypaste'] == "yes") {
+							if ($strProtocol == "spice") {
+								$channelscopypaste = 	"<channel type='spicevmc'>
+															<target type='virtio' name='com.redhat.spice.0'/>
+														</channel>" ;
+							} else {
+								$channelscopypaste = 	"<channel type='qemu-vdagent'>
+														<source>
+								  								<clipboard copypaste='yes'/>
+																<mouse mode='client'/>
+															</source>
+															<target type='virtio' name='com.redhat.spice.0'/>
+														</channel>" ;
+							}
+						} else $channelcopypaste = ""; 
 
 						continue;
 					}
@@ -763,20 +865,25 @@
 									<driver name='vfio'/>
 									<source>
 										<address domain='0x0000' bus='0x" . $pci_bus . "' slot='0x" . $pci_slot . "' function='0x" . $pci_function . "'/>
-									</source>
-								</hostdev>";
+									</source>" ;
+					if (!empty($pciboot[$pci_id])) {
+						$pcidevs .= "<boot order='".$pciboot[$pci_id]."'/>" ;
+					}
+					$pcidevs .= "</hostdev>";
 
 					$pcidevs_used[] = $pci_id;
 				}
 			}
 
 			$memballoon = "<memballoon model='none'/>";
-			if (empty( array_filter(array_merge($gpudevs_used, $audiodevs_used, $pcidevs_used), function($k){ return strpos($k,'#remove')===false && $k!='vnc'; }) )) {
+			if (empty( array_filter(array_merge($gpudevs_used, $audiodevs_used, $pcidevs_used), function($k){ return strpos($k,'#remove')===false && $k!='virtual' ; }) )) {
 				$memballoon = "<memballoon model='virtio'>
 							<alias name='balloon0'/>
 						</memballoon>";
 			}
-
+			#$osbootdev = "" ;
+			$memorybackingXML = Array2XML::createXML('memoryBacking', $memorybacking);
+			$memoryBackingXML = $memorybackingXML->saveXML($memorybackingXML->documentElement);
 			return "<domain type='$type' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
 						<uuid>$uuid</uuid>
 						<name>$name</name>
@@ -784,13 +891,12 @@
 						$metadata
 						<currentMemory unit='KiB'>$mem</currentMemory>
 						<memory unit='KiB'>$maxmem</memory>
-						<memoryBacking>
-							<nosharepages/>
-						</memoryBacking>
 						$cpustr
+						$memoryBackingXML
 						<os>
 							$loader
 							<type arch='$arch' machine='$machine'>hvm</type>
+							$osbootdev
 						</os>
 						<features>
 							<acpi/>
@@ -810,7 +916,7 @@
 							$ctrl
 							$sharestr
 							$netstr
-							$vnc
+							$vmrc
 							<console type='pty'/>
 							$scsicontroller
 							$pcidevs
@@ -818,6 +924,7 @@
 							<channel type='unix'>
 								<target type='virtio' name='org.qemu.guest_agent.0'/>
 							</channel>
+							$channelscopypaste
 							$swtpm
 							$memballoon
 						</devices>
@@ -1023,12 +1130,14 @@
 			$buses =  $this->get_xpath($dom, '//domain/devices/disk[@device="cdrom"]/target/@bus', false);
 			$disks =  $this->get_xpath($dom, '//domain/devices/disk[@device="cdrom"]/target/@dev', false);
 			$files =  $this->get_xpath($dom, '//domain/devices/disk[@device="cdrom"]/source/@file', false);
+			$boot  =  $this->get_xpath($dom, '//domain/devices/disk[@device="cdrom"]/boot/@*', false);
 
 			$ret = [];
 			for ($i = 0; $i < $disks['num']; $i++) {
 				$tmp = libvirt_domain_get_block_info($dom, $disks[$i]);
 				if ($tmp) {
 					$tmp['bus'] = $buses[$i];
+					$tmp["boot order"] = $boot[$i] ;
 					$ret[] = $tmp;
 				}
 				else {
@@ -1068,16 +1177,20 @@
 		function get_disk_stats($domain, $sort=true) {
 			$dom = $this->get_domain_object($domain);
 
-			$buses =  $this->get_xpath($dom, '//domain/devices/disk[@device="disk"]/target/@bus', false);
-			$disks =  $this->get_xpath($dom, '//domain/devices/disk[@device="disk"]/target/@dev', false);
-			$files =  $this->get_xpath($dom, '//domain/devices/disk[@device="disk"]/source/@*', false);
+			$domainXML = $this->domain_get_xml($dom) ;
+			$arrDomain = new SimpleXMLElement($domainXML);
+			$arrDomain = $arrDomain->devices->disk;
 
 			$ret = [];
-			for ($i = 0; $i < $disks['num']; $i++) {
-				$tmp = libvirt_domain_get_block_info($dom, $disks[$i]);
+			foreach ($arrDomain as $disk) {
+				if ($disk->attributes()->device != "disk") continue ;
+				$tmp = libvirt_domain_get_block_info($dom, $disk->target->attributes()->dev);
+		 
 				if ($tmp) {
-					$tmp['bus'] = $buses[$i];
-
+					$tmp['bus'] = $disk->target->attributes()->bus->__toString();
+					$tmp["boot order"] = $disk->boot->attributes()->order ;
+					$tmp['serial'] = $disk->serial ;
+					
 					// Libvirt reports 0 bytes for raw disk images that haven't been
 					// written to yet so we just report the raw disk size for now
 					if ( !empty($tmp['file']) &&
@@ -1088,7 +1201,7 @@
 						$intSize = filesize($tmp['file']);
 						$tmp['physical'] = $intSize;
 						$tmp['capacity'] = $intSize;
-					}
+					} 
 
 					$ret[] = $tmp;
 				}
@@ -1096,13 +1209,15 @@
 					$this->_set_last_error();
 
 					$ret[] = [
-						'device' => $disks[$i],
-						'file'   => $files[$i],
+						'device' => $disk->target->attributes()->dev,
+						'file'   => $disk->source->attributes()->file,
 						'type'   => '-',
 						'capacity' => '-',
 						'allocation' => '-',
 						'physical' => '-',
-						'bus' => $buses[$i]
+						'bus' =>  $disk->target->attributes()->bus->__toString(),
+						'boot order' => $disk->boot->attributes()->order ,
+						'serial' => $disk->serial 
 					];
 				}
 			}
@@ -1119,10 +1234,9 @@
 				}
 			}
 
-			unset($buses);
-			unset($disks);
-			unset($files);
-
+			unset($domainXML);
+			unset($arrDomain) ;
+			unset($disk) ;
 			return $ret;
 		}
 
@@ -1159,10 +1273,13 @@
 			$ret = 0;
 			for ($i = 0; $i < sizeof($tmp); $i++) {
 				if (($disk == '*') || ($tmp[$i]['device'] == $disk))
-					if ($physical)
+					if ($physical) {
+					    if($tmp[$i]['physical'] == "-") $tmp[$i]['physical'] = "0" ;
 						$ret += $tmp[$i]['physical'];
-					else
+					} else {
+					    if($tmp[$i]['capacity'] == "-") $tmp[$i]['capacity'] = "0" ;
 						$ret += $tmp[$i]['capacity'];
+					}
 			}
 			unset($tmp);
 
@@ -1493,6 +1610,11 @@
 			return ($tmp) ? $tmp : $this->_set_last_error();
 		}
 
+		function domain_interface_addresses($domain,$flag) {
+			$tmp =  libvirt_domain_interface_addresses($domain,$flag);
+			return ($tmp) ? $tmp : $this->_set_last_error();
+		}
+
 		function domain_get_memory_stats($domain) {
 			$dom = $this->get_domain_object($domain);
 			if (!$dom)
@@ -1785,6 +1907,22 @@
 			return $var;
 		}
 
+		function domain_get_vmrc_autoport($domain) {
+			$tmp = $this->get_xpath($domain, '//domain/devices/graphics/@autoport', false);
+			$var = $tmp[0];
+			unset($tmp);
+
+			return $var;
+		}
+
+		function domain_get_vmrc_protocol($domain) {
+			$tmp = $this->get_xpath($domain, '//domain/devices/graphics/@type', false);
+			$var = $tmp[0];
+			unset($tmp);
+
+			return $var;
+		}
+
 		function domain_get_vnc_model($domain) {
 			$tmp = $this->get_xpath($domain, '//domain/devices/video/model/@type', false);
 			if (!$tmp)
@@ -1915,21 +2053,20 @@
 		}
 
 		function domain_get_mount_filesystems($domain) {
-			$xpath = '//domain/devices/filesystem[@type="mount"]';
-
-			$sources = $this->get_xpath($domain, $xpath.'/source/@dir', false);
-			$targets = $this->get_xpath($domain, $xpath.'/target/@dir', false);
-
 			$ret = [];
-			if (!empty($sources)) {
-				for ($i = 0; $i < $sources['num']; $i++) {
+			$strXML = $this->domain_get_xml($domain) ;
+			$xml = new SimpleXMLElement($strXML);
+			$FS=$xml->xpath('//domain/devices/filesystem[@type="mount"]') ;
+			foreach($FS as $FSD){
+					$target=$FSD->target->attributes()->dir ;
+					$source=$FSD->source->attributes()->dir ;
+					$mode=$FSD->driver->attributes()->type ;
 					$ret[] = [
-						'source' => $sources[$i],
-						'target' => $targets[$i]
-					];
-				}
+						'source' => $source,
+						'target' => $target ,
+						'mode' => $mode 
+						];
 			}
-
 			return $ret;
 		}
 
@@ -2014,7 +2151,7 @@
 					$func = $xpath->query('source/address/@function', $objNode)->Item(0)->value;
 					$rom = $xpath->query('rom/@file', $objNode);
 					$rom = ($rom->length > 0 ? $rom->Item(0)->value : '');
-
+					$boot =$xpath->query('boot/@order', $objNode)->Item(0)->value;
 					$devid = str_replace('0x', '', 'pci_'.$dom.'_'.$bus.'_'.$slot.'_'.$func);
 					$tmp2 = $this->get_node_device_information($devid);
 
@@ -2028,6 +2165,7 @@
 						'vendor_id' => $tmp2['vendor_id'],
 						'product' => $tmp2['product_name'],
 						'product_id' => $tmp2['product_id'],
+						'boot' => $boot,
 						'rom' => $rom
 					];
 				}
@@ -2115,25 +2253,25 @@
 
 		function get_nic_info($domain) {
 			$macs = $this->get_xpath($domain, "//domain/devices/interface/mac/@address", false);
-			$net = $this->get_xpath($domain, "//domain/devices/interface/@type", false);
-			$bridge = $this->get_xpath($domain, "//domain/devices/interface/source/@bridge", false);
-			$model = $this->get_xpath($domain, "//domain/devices/interface/model/@type", false);
+
 			if (!$macs)
 				return $this->_set_last_error();
 			$ret = [];
 			for ($i = 0; $i < $macs['num']; $i++) {
-				if ($net[$i] != 'bridge')
-					$tmp = libvirt_domain_get_network_info($domain, $macs[$i]);
-				if ($tmp)
-					$ret[] = $tmp;
-				else {
+				$net = $this->get_xpath($domain, "//domain/devices/interface/mac[@address='$macs[$i]']/../source/@*", false);
+				$model = $this->get_xpath($domain, "//domain/devices/interface/mac[@address='$macs[$i]']/../model/@type", false);
+				$boot = $this->get_xpath($domain, "//domain/devices/interface/mac[@address='$macs[$i]']/../boot/@order", false);
+
+				if(empty($macs[$i]) && empty($net[0])) {
 					$this->_set_last_error();
-					$ret[] = [
-						'mac' => $macs[$i],
-						'network' => $bridge[$i],
-						'model' => $model[$i]
-					];
+					continue;
 				}
+				$ret[] = [
+					'mac' => $macs[$i],
+					'network' => $net[0],
+					'model' => $model[0],
+					'boot' => $boot[0]
+				];
 			}
 
 			return $ret;
@@ -2398,6 +2536,19 @@
 			$xml = join("\n", $tmp);
 
 			return $this->domain_define($xml);
+		}
+
+		function libvirt_get_net_res($conn, $net) {
+			return libvirt_network_get($conn, $net);
+		}
+
+		function libvirt_get_net_list($conn, $opt=VIR_NETWORKS_ALL) {
+			// VIR_NETWORKS_{ACTIVE|INACTIVE|ALL}
+			return libvirt_list_networks($conn, $opt);
+		}
+
+		function libvirt_get_net_xml($res, $xpath=NULL) {
+			return libvirt_network_get_xml_desc($res, $xpath);
 		}
 	}
 ?>

@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  * Copyright 2012, Andrew Hamer-Adams, http://www.pixeleyes.co.nz.
  *
  * This program is free software; you can redistribute it and/or
@@ -110,7 +110,7 @@ $agents_dir = "/boot/config/plugins/dynamix/notifications/agents";
 if (is_dir($agents_dir)) {
   $agents = [];
   foreach (array_diff(scandir($agents_dir), ['.','..']) as $p) {
-    if (file_exists("${agents_dir}/${p}")) $agents[] = "${agents_dir}/${p}";
+    if (file_exists("{$agents_dir}/{$p}")) $agents[] = "{$agents_dir}/{$p}";
   }
 } else {
   $agents = NULL;
@@ -166,12 +166,13 @@ case 'add':
   $subject = 'Notification';
   $description = 'No description';
   $importance = 'normal';
-  $message = '';
+  $message = $link = '';
   $timestamp = time();
   $ticket = $timestamp;
   $mailtest = false;
   $overrule = false;
-  
+  $noBrowser = false;
+
   $options = getopt("l:e:s:d:i:m:r:xtb");
   foreach ($options as $option => $value) {
     switch ($option) {
@@ -225,22 +226,22 @@ case 'get':
   $output = [];
   $json = [];
   $files = glob("$unread/*.notify", GLOB_NOSORT);
-  usort($files, create_function('$a,$b', 'return filemtime($a)-filemtime($b);'));
+  usort($files, function($a,$b){return filemtime($a)-filemtime($b);});
   $i = 0;
   foreach ($files as $file) {
-    if (!is_readable($file)) continue;
     $fields = preg_split('/\n/', file_get_contents($file));
     $time = true;
+    $output[$i]['file'] = basename($file);
+    $output[$i]['show'] = fileperms($file)==32768 ? 0 : 1;
     foreach ($fields as $field) {
       if (!$field) continue;
-      list($key,$val) = explode('=', $field);
+      [$key,$val] = array_pad(explode('=', $field),2,'');
       if ($time) {$val = date($notify['date'].' '.$notify['time'], $val); $time = false;}
-      $output[$i][trim($key)] = trim($val);  
+      $output[$i][trim($key)] = trim($val);
     }
-    $output[$i++]["file"] = basename($file);
-    chmod($file,0000);
+    $i++;
   }
-  echo json_encode($output, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+  echo json_encode($output, JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
   break;
 
 case 'archive':

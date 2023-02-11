@@ -1,6 +1,6 @@
-#!/usr/bin/php
+#!/usr/bin/php -q
 <?PHP
-/* Copyright 2015-2016, Lime Technology
+/* Copyright 2015-2023, Lime Technology
  * Copyright 2015-2016, Guilherme Jardim, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
@@ -18,7 +18,8 @@ $cfg_defaults = [
     "DOCKER_IMAGE_FILE" => "/mnt/user/system/docker/docker.img",
     "DOCKER_IMAGE_SIZE" => "20",
     "DOCKER_APP_CONFIG_PATH" => "/mnt/user/appdata/",
-    "DOCKER_APP_UNRAID_PATH" => ""
+    "DOCKER_APP_UNRAID_PATH" => "",
+    "DOCKER_READMORE" => "yes"
 ];
 
 $cfg_new = $cfg_defaults;
@@ -30,7 +31,8 @@ if (file_exists($cfgfile)) {
             unset($cfg_new);
     }
 }
-if ($cfg_new) {
+if (isset($cfg_new)) {
+    $tmp = '';
     foreach ($cfg_new as $key => $value) $tmp .= "$key=\"$value\"\n";
     file_put_contents($cfgfile, $tmp);
 }

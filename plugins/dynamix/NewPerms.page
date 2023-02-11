@@ -4,8 +4,8 @@ Icon="icon-permissions"
 Tag="folder-o"
 ---
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -30,20 +30,19 @@ pre>p{margin:0;padding:0}
 
 <script>
 function setNewPerms(form) {
-  var dirs = '';
+  var dirs = [];
   for (var i=1,item; item=form.includeDisk.options[i]; i++) {
-    if (item.selected) {
-      if (dirs.length) dirs += '|';
-      dirs += item.value;
-    }
+    if (item.selected) dirs.push(item.value);
   }
   for (var i=1,item; item=form.includeShare.options[i]; i++) {
-    if (item.selected) {
-      if (dirs.length) dirs += '|';
-      dirs += item.value;
-    }
+    if (item.selected) dirs.push(item.value);
   }
-  if (dirs) swal({title:"_(Proceed)_?",text:"_(This will update folder & file permissions)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){openBox("/webGui/scripts/newperms&arg1="+dirs,"_(New Permissions)_",490,600,true);});
+  dirs = dirs.join('*');
+  if (dirs) {
+    swal({title:"_(Proceed)_?",text:"_(This will update folder & file permissions)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},
+      function(){setTimeout(function(){openPlugin('newperms '+encodeURIComponent(dirs),"_(New Permissions)_");},250);
+    });
+  }
 }
 $(function() {
   $('#s1').dropdownchecklist({emptyText:"_(None)_", width:<?=$width[0]?>, firstItemChecksAll:true, explicitClose:"..._(close)_"});

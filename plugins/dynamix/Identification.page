@@ -22,22 +22,22 @@ $name_regex = '^[A-Za-z0-9]([A-Za-z0-9\-\.]{0,13}[A-Za-z0-9])?$';
 $name_warn = preg_match('/'.$name_regex.'/', $var['NAME']) ? 'none' : 'block';
 ?>
 <form markdown="1" name="NameSettings" method="POST" action="/update.htm" target="progressFrame">
-<input type="hidden" name="server_https" value="<?=$_SERVER['HTTPS']?>">
-<input type="hidden" name="server_name" value="<?=$_SERVER['HTTP_HOST']?>">
-<input type="hidden" name="server_addr" value="<?=$_SERVER['SERVER_ADDR']?>">
+<input type="hidden" name="server_https" value="<?=$_SERVER['HTTPS']??''?>">
+<input type="hidden" name="server_name" value="<?=$_SERVER['HTTP_HOST']??''?>">
+<input type="hidden" name="server_addr" value="<?=$_SERVER['SERVER_ADDR']??''?>">
 
 _(Server name)_:
-: <input type="text" name="NAME" id="NAME" maxlength="15" pattern="<?=$name_regex?>" value="<?=htmlspecialchars($var['NAME'])?>" title="_(Only alphanumeric characters)_ (&quot;A-Z&quot;, &quot;a-z&quot;, and &quot;0-9&quot;), dashes (&quot;-&quot;), and dots (&quot;.&quot;); _(and, the first and last characters must be alphanumeric)_" <?=$disabled?> required> <span id="name_warning" style="display:<?=$name_warn?>"><i class="fa fa-warning icon warning"></i> _(Not compatible with NetBIOS)_</span>
+: <input type="text" name="NAME" id="NAME" maxlength="15" pattern="<?=$name_regex?>" value="<?=htmlspecialchars($var['NAME']??'')?>" title="_(Only alphanumeric characters)_ (&quot;A-Z&quot;, &quot;a-z&quot;, and &quot;0-9&quot;), dashes (&quot;-&quot;), and dots (&quot;.&quot;); _(and, the first and last characters must be alphanumeric)_" <?=$disabled?> required> <span id="name_warning" style="display:<?=$name_warn?>"><i class="fa fa-warning icon warning"></i> _(Not compatible with NetBIOS)_</span>
 
 :id_server_name_help:
 
 _(Description)_:
-: <input type="text" name="COMMENT" value="<?=htmlspecialchars($var['COMMENT'])?>" <?=$disabled?>>
+: <input type="text" name="COMMENT" value="<?=htmlspecialchars($var['COMMENT']??'')?>" <?=$disabled?>>
 
 :id_description_help:
 
 _(Model)_:
-: <input type="text" name="SYS_MODEL" value="<?=htmlspecialchars($var['SYS_MODEL'])?>" <?=$disabled?>>
+: <input type="text" name="SYS_MODEL" value="<?=htmlspecialchars($var['SYS_MODEL']??'')?>" <?=$disabled?>>
 
 :id_model_help:
 

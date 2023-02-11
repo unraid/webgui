@@ -1,6 +1,18 @@
 #!/bin/bash
 
-# put some restrictions on 'rm'
-echo "Deleting $1 ..."
-[[ $1 == /boot/config/plugins-error/* ]] && rm $1
-[[ $1 == /boot/config/plugins-stale/* ]] && rm $1
+write(){
+  for message in "$@"; do
+    curl -sfd "$message" --unix-socket /var/run/nginx.socket http://localhost/pub/plugins?buffer_length=1 >/dev/null 2>&1
+  done
+}
+
+# put some restrictions on 'delete'
+if [[ $1 == /boot/config/plugins-error/* || $1 == /boot/config/plugins-stale/* ]]; then
+  text="Deleting $1 ..."
+  if [[ -z $2 ]]; then
+    echo "$text"
+  else
+    write "$text " "_DONE_" ""
+  fi
+  rm $1
+fi

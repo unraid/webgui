@@ -11,7 +11,7 @@
  */
 ?>
 <?
-require_once "$docroot/webGui/include/Markdown.php";
+require_once "$docroot/webGui/include/MarkdownExtra.inc.php";
 
 function get_ini_key($key,$default) {
   $x = strpos($key, '[');

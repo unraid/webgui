@@ -52,21 +52,23 @@ echo "<ul class='jqueryFileTree'>";
 if ($_POST['show_parent']=='true' && is_top($rootdir)) echo "<li class='directory collapsed'>$checkbox<a href='#' rel=\"".htmlspecialchars(dirname($rootdir))."\">..</a></li>";
 
 if (is_low($rootdir) && is_dir($rootdir)) {
-  $names = array_filter(scandir($rootdir),function($n){return $n!='.' && $n!='..';});
-  if (count($names)) {
-    natcasesort($names);
-    foreach ($names as $dir) if (is_dir($rootdir.$dir)) {
-      $htmlRel  = htmlspecialchars($rootdir.$dir);
-      $htmlName = htmlspecialchars(mb_strlen($dir)<=33 ? $dir : mb_substr($dir,0,30).'...');
-      if (empty($match)||preg_match("/$match/",$rootdir.$dir)) echo "<li class='directory collapsed'>$checkbox<a href='#' rel=\"$htmlRel/\">$htmlName</a></li>";
+  $dirs = $files = [];
+  $names = array_filter(scandir($rootdir,SCANDIR_SORT_NONE),function($n){return $n!='.' && $n!='..';});
+  natcasesort($names);
+  foreach ($names as $name) if (is_dir($rootdir.$name)) $dirs[] = $name; else $files[] = $name;
+  foreach ($dirs as $name) {
+    $htmlRel  = htmlspecialchars($rootdir.$name);
+    $htmlName = htmlspecialchars(mb_strlen($name)<=33 ? $name : mb_substr($name,0,30).'...');
+    if (is_dir($rootdir.$name)) {
+      if (empty($match)||preg_match("/$match/",$rootdir.$name)) echo "<li class='directory collapsed'>$checkbox<a href='#' rel=\"$htmlRel/\">$htmlName</a></li>";
     }
-    foreach ($names as $file) if (is_file($rootdir.$file)) {
-      $htmlRel  = htmlspecialchars($rootdir.$file);
-      $htmlName = htmlspecialchars($file);
-      $ext      = mb_strtolower(pathinfo($file)['extension']);
-      foreach ($filters as $filter) if (empty($filter)||$ext==$filter) {
-        if (empty($match)||preg_match("/$match/",$file)) echo "<li class='file ext_$ext'>$checkbox<a href='#' rel=\"$htmlRel\">$htmlName</a></li>";
-      }
+  }
+  foreach ($files as $name) {
+    $htmlRel  = htmlspecialchars($rootdir.$name);
+    $htmlName = htmlspecialchars($name);
+    $ext      = mb_strtolower(pathinfo($name)['extension']??'');
+    foreach ($filters as $filter) if (empty($filter)||$ext==$filter) {
+      if (empty($match)||preg_match("/$match/",$name)) echo "<li class='file ext_$ext'>$checkbox<a href='#' rel=\"$htmlRel\">$htmlName</a></li>";
     }
   }
 }

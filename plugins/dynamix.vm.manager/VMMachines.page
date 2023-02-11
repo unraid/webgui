@@ -20,6 +20,10 @@ Markdown="false"
 <?
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 $cpus = cpu_list();
+$hover   = in_array($theme,['white','azure']) ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+$bgcolor = in_array($theme,['white','azure']) ? '#f2f2f2' : '#1c1c1c';
+$fgcolor = in_array($theme,['white','azure']) ? '#1c1c1c' : '#f2f2f2';
+$incolor = $theme!='gray' ? $bgcolor : '#121510';
 
 function showCPUs($uuid) {
   global $cpus;
@@ -60,7 +64,6 @@ if (isset($_GET['refresh'])) {
     echo "<meta http-equiv='refresh' content='5; url=/VMs?name=$vm&amp;refresh=true'>";
     $msg = "Waiting for $vm to shutdown...";
   } else {
-    echo "<script>clearHistory();</script>";
     $msg = "$vm has been shutdown";
   }
 }
@@ -95,9 +98,8 @@ if ($subaction) {
     ? "Snapshot description for $vm has been saved"
     : "Error: ".$lv->get_last_error();
   }
-  echo "<script>clearHistory();</script>";
 }
-if ($libvirt_running=='yes') $vms = $lv->get_domains();
+if ($libvirt_running=='yes') $vms = $lv->get_domains() ?: [];
 if (empty($vms)) {
   $msg = $libvirt_running=='yes'
   ? 'No VMs defined. Create from template or add XML.'
@@ -105,6 +107,9 @@ if (empty($vms)) {
 }
 ?>
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.filetree.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.ui.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/plugins/dynamix.docker.manager/styles/style-$theme.css")?>">
 <style>
 th.th1{width:25%}
 th.th2{width:15%}
@@ -117,10 +122,16 @@ div.four label.cpu2{width:26%}
 table.domdisk thead th:nth-child(1){width:76%;}
 table.domdisk thead th:nth-child(2){width:8%;}
 table.domdisk thead th:nth-child(3){width:8%;}
+table.domdisk thead th:nth-child(3){width:8%;}
 table.domdisk thead tr th:nth-child(1){padding-left:72px}
 table.domdisk tbody tr td:nth-child(1){padding-left:72px}
 table.domdisk tbody tr:nth-child(even){background-color:transparent!important}
 table.domdisk tbody tr:nth-child(4n-1){background-color:transparent!important}
+.fileTree{background:<?=$bgcolor?>;width:500px;max-height:320px;overflow-y:scroll;overflow-x:hidden;position:absolute;z-index:100;display:none}
+div.template,div#dialogWindow,input#upload{display:none}
+.fileTree{background:<?=$bgcolor?>;width:500px;max-height:320px;overflow-y:scroll;overflow-x:hidden;position:absolute;z-index:100;display:none}
+.ui-dialog .ui-dialog-buttonpane .ui-dialog-buttonset button[disabled]{cursor:default;color:#808080;background:-webkit-gradient(linear,left top,right top,from(#404040),to(#808080)) 0 0 no-repeat,-webkit-gradient(linear,left top,right top,from(#404040),to(#808080)) 0 100% no-repeat,-webkit-gradient(linear,left bottom,left top,from(#404040),to(#404040)) 0 100% no-repeat,-webkit-gradient(linear,left bottom,left top,from(#808080),to(#808080)) 100% 100% no-repeat;background:linear-gradient(90deg,#404040 0,#808080) 0 0 no-repeat,linear-gradient(90deg,#404040 0,#808080) 0 100% no-repeat,linear-gradient(0deg,#404040 0,#404040) 0 100% no-repeat,linear-gradient(0deg,#808080 0,#808080) 100% 100% no-repeat;background-size:100% 2px,100% 2px,2px 100%,2px 100%}
+.dropdown-menu{z-index:10001;
 </style>
 <table id="kvm_table" class="tablesorter four shift">
 <thead><tr><th class="th1"><a href="#" style="cursor:hand;margin-left:12px;display:inline-block;width:32px" onclick="resetSorting()" title="Reset sorting"><i class="fa fa-th-list"></i></a>_(Name)_</th><th class="th2">_(Description)_</th><th>_(CPUs)_</th><th>_(Memory)_</th><th>_(vDisks)_</th><th>_(Graphics)_</th><th class="th3">_(Autostart)_</th></tr></thead>
@@ -133,6 +144,7 @@ table.domdisk tbody tr:nth-child(4n-1){background-color:transparent!important}
 <script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
 <script src="<?autov('/plugins/dynamix.vm.manager/javascript/dynamix.vm.manager.js')?>"></script>
 <script src="<?autov('/plugins/dynamix.vm.manager/javascript/vmmanager.js')?>"></script>
+<script src="<?autov("/webGui/javascript/jquery.filetree.js")?>"></script>
 <script>
 <?if ($display['resize']):?>
 function resize(bind) {
@@ -151,29 +163,90 @@ function resetSorting() {
   $('input[type=button]').prop('disabled',true);
   $.post('/plugins/dynamix.vm.manager/include/UserPrefs.php',{reset:true},function(){loadlist();});
 }
-var sortableHelper = function(e,i){
-  i.children().each(function(){
-    $(this).width($(this).width());
+function changemedia(uuid,dev,bus,file) {
+  if (file === "--select") getisoimage(uuid,dev,bus,file) ; 
+  if (file === "--eject") ajaxVMDispatch({action:"change-media", uuid:uuid , cdrom:"" , dev:dev , bus:bus , file:file}, "loadlist");
+  
+}
+function getisoimage(uuid,dev,bus,file){
+  var root = <?= '"'.$domain_cfg["MEDIADIR"].'"';?> ;
+  var match= ".iso" ;
+  var box = $("#dialogWindow");
+  box.html($("#templateISO").html());
+
+  box.find('#target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).fileTreeAttach(null,null,function(path){
+      var bits = path.substr(1).split('/');
+      var auto = bits.length>3 ? '' : share;
+      box.find('#target').val(path+auto).change();
+    });
+    var height = 100;
+  box.dialog({
+    title: "Select ISO",
+    resizable: false,
+    width: 600,
+    height: 300,
+    modal: true,
+    show: {effect:'fade', duration:250},
+    hide: {effect:'fade', duration:250},
+    buttons: {
+      "_(Insert)_": function(){
+        var target = box.find('#target');
+        if (target.length) {
+          target = target.val();
+          if (!target ) {errorTarget(); return;}
+        } else target = '';
+        box.find('#target').prop('disabled',true);
+        ajaxVMDispatch({action:"change-media", uuid:uuid , cdrom:"" , dev:dev , bus:bus , file:target}, "loadlist"); ;
+        box.dialog('close');
+      },
+      "_(Cancel)_": function(){
+        box.dialog('close');
+      }
+    }
   });
-  return i;
+  dialogStyle();
+}
+function dialogStyle() {
+  $('.ui-dialog-titlebar-close').css({'background':'transparent','border':'none','font-size':'1.8rem','margin-top':'-14px','margin-right':'-18px'}).html('<i class="fa fa-times"></i>').prop('title',"_(Close)_").prop('onclick',null).off('click').click(function(){box.dialog('close');});
+  $('.ui-dialog-title').css({'text-align':'center','width':'100%','font-size':'1.8rem'});
+  $('.ui-dialog-content').css({'padding-top':'15px','vertical-align':'bottom'});
+  $('.ui-button-text').css({'padding':'0px 5px'});
+}
+var sortableHelper = function(e,ui){
+  ui.children().each(function(){$(this).width($(this).width());});
+  return ui;
 };
-function loadlist() {
-  timers.vm = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
-  $.get('/plugins/dynamix.vm.manager/include/VMMachines.php',{show:$.cookie('vmshow')},function(d) {
-    clearTimeout(timers.vm);
-    var data = d.split(/\0/);
-    $('#kvm_list').html(data[0]).sortable({helper:sortableHelper,items:'tr.sortable',cursor:'move',axis:'y',containment:'parent',delay:100,opacity:0.5,zIndex:9999,
+function LockButton() {
+  if ($.cookie('lockbutton') == null) {
+    $.cookie('lockbutton','lockbutton');
+<?if ($themes1):?>
+    $('div.nav-item.LockButton').find('a').prop('title',"_(Lock sortable items)_");
+    $('div.nav-item.LockButton').find('b').removeClass('icon-u-lock red-text').addClass('icon-u-lock-open green-text');
+<?endif;?>
+    $('div.nav-item.LockButton').find('span').text("_(Lock sortable items)_");
+    $('#kvm_list').sortable({helper:sortableHelper,items:'tr.sortable',cursor:'move',axis:'y',containment:'parent',delay:100,opacity:0.5,zIndex:9999,forcePlaceholderSize:true,
     update:function(e,ui){
-      $('#kvm_list').find('tr.sortable').each(function(){
-        var parent = $(this).attr('parent-id');
-        var child = $('tr[child-id="'+parent+'"]');
-        child.detach().insertAfter($(this));
-      });
       var row = $('#kvm_list').find('tr:first');
       var names = ''; var index = '';
       row.parent().children().find('td.vm-name').each(function(){names+=$(this).find('a').text()+';';index+=$(this).parent().parent().children().index($(this).parent())+';';});
       $.post('/plugins/dynamix.vm.manager/include/UserPrefs.php',{names:names,index:index});
     }});
+  } else {
+    $.removeCookie('lockbutton');
+<?if ($themes1):?>
+    $('div.nav-item.LockButton').find('a').prop('title',"_(Unlock sortable items)_");
+    $('div.nav-item.LockButton').find('b').removeClass('icon-u-lock-open green-text').addClass('icon-u-lock red-text');
+<?endif;?>
+    $('div.nav-item.LockButton').find('span').text("_(Unlock sortable items)_");
+    $('#kvm_list').sortable('destroy');
+  }
+}
+function loadlist() {
+  timers.vm = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
+  $.get('/plugins/dynamix.vm.manager/include/VMMachines.php',{show:$.cookie('vmshow')},function(d) {
+    clearTimeout(timers.vm);
+    var data = d.split(/\0/);
+    $('#kvm_list').html(data[0]);
     $('head').append('<script>'+data[1]+'<\/script>');
 <?if ($display['resize']):?>
     resize();
@@ -209,9 +282,30 @@ function loadlist() {
 $(function() {
 <?if ($msg):?>
   <?$color = strpos($msg, "rror:")!==false ? 'red-text':'green-text'?>
-  $('#countdown').html("<span class='<?-$color?>'><?=_($msg)?></span>");
+  $('#countdown').html("<span class='<?=$color?>'><?=_($msg)?></span>");
 <?endif;?>
   $('#btnAddVM').click(function AddVMEvent(){$('.tab>input#tab2').click();});
+  $.removeCookie('lockbutton');
   loadlist();
 });
 </script>
+
+<div id="dialogWindow"></div>
+<div markdown="1" id="templateISO" class="template">
+<html <?=$display['rtl']?>lang="<?=strtok($locale,'_')?:'en'?>">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="format-detection" content="telephone=no">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="same-origin">
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/default-fonts.css")?>">
+</head>
+<body>
+_(ISO Image)_:
+: <input type="text" id="target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="" data-pickmatch="" data-pickroot="" data-picktop="">
+
+</body>
+</html>
+</div>

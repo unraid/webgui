@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -14,20 +14,21 @@
 $docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 require_once "$docroot/webGui/include/ColorCoding.php";
 
-$logs = glob($_POST['log'].'*',GLOB_NOSORT);
-usort($logs, create_function('$a,$b', 'return filemtime($a)-filemtime($b);'));
+array_multisort(array_map('filemtime',($logs = glob($_POST['log'].'*',GLOB_NOSORT))),SORT_ASC,$logs);
+$sum = array_sum(array_map(function($log){return count(file($log));},$logs));
+$max = $_POST['max'];
+$row = 0;
+
 foreach ($logs as $log) {
-  $i=0;
-  $line_count = intval(exec("wc -l '$log'"));
-  $fh = fopen($log, "r");
+  $fh = fopen($log,'r');
   while (($line = fgets($fh)) !== false) {
-    $i++;
-    if ($i < $line_count - 3000) {
-      continue;
+    if ($max > 0 && $max < $sum - $row++) continue;
+    $span = '<span class="text">';
+    foreach ($match as $type) foreach ($type['text'] as $text) if (preg_match("/$text/i",$line)) {
+      $span = '<span class="'.$type['class'].'">';
+      break 2;
     }
-    $span = "span class='text'";
-    foreach ($match as $type) foreach ($type['text'] as $text) if (preg_match("/$text/i",$line)) {$span = "span class='{$type['class']}'"; break 2;}
-    echo "<$span>".htmlspecialchars($line)."</span>";
+    echo $span,htmlspecialchars($line),"</span>";
   }
   fclose($fh);
 }

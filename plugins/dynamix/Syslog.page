@@ -4,8 +4,8 @@ Icon="icon-log"
 Tag="list"
 ---
 <?PHP
-/* Copyright 2005-2020, Lime Technology
- * Copyright 2012-2020, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -16,38 +16,43 @@ Tag="list"
  */
 ?>
 <?
-$zip = htmlspecialchars(str_replace(' ','_',strtolower($var['NAME'])));
-$log = '/var/log/syslog';
-$cfg = '/boot/config/rsyslog.cfg';
-$select  = '';
+$zip    = htmlspecialchars(str_replace(' ','_',strtolower($var['NAME'])));
+$log    = '/var/log/syslog';
+$cfg    = '/boot/config/rsyslog.cfg';
+$max    = 5000;
+$select = [];
 if (file_exists($cfg)) {
   $syslog = parse_ini_file($cfg);
-  if ($syslog['local_server'] && $logs = glob($syslog['server_folder'].'/syslog-*.log',GLOB_NOSORT)) {
-    $select = "<select onchange='showLog(this.value)'>";
-    $select .= mk_option(1,$log,'syslog');
+  if (isset($syslog['local_server']) && isset($syslog['server_folder']) && $logs = glob($syslog['server_folder'].'/syslog-*.log',GLOB_NOSORT)) {
     natsort($logs);
-    foreach ($logs as $file) $select .= mk_option(1,$file,basename($file));
-    $select .= "</select>";
+    $select[] = "<select onchange='showLog(this.value)'>";
+    $select[] = mk_option(1,$log,'syslog');
+    foreach ($logs as $file) $select[] = mk_option(1,$file,basename($file));
+    $select[] = "</select>";
   }
 }
+$select = implode($select);
 ?>
+<style>
+input#max{border:none;width:60px;margin:0;padding:0}
+</style>
 <script>
-var logfile = '<?=$log?>';
+var logfile = "<?=$log?>";
 
 function zipfile(){
   var d = new Date();
-  return '<?=$zip?>-'+logfile.split('/').reverse()[0].replace('.log','')+'-'+d.toISOString().substr(0,16).replace(/[-:]/g,'').replace('T','-')+'.zip';
+  return "<?=$zip?>-"+logfile.split('/').reverse()[0].replace('.log','')+'-'+d.toISOString().substr(0,16).replace(/[-:]/g,'').replace('T','-')+'.zip';
 }
 function cleanUp(file) {
   if (document.hasFocus()) {
-    $('input[value="_(Downloading)_..."]').val("_(Download)_").prop('disabled',false);
+    $('input#download').val("_(Download)_").prop('disabled',false);
     $.post('/webGui/include/Download.php',{cmd:'delete',file:file});
   } else {
     setTimeout(function(){cleanUp(file);},2000);
   }
 }
 function syslog(file) {
-  $('input[value="_(Download)_"]').val("_(Downloading)_...").prop('disabled',true);
+  $('input#download').val("_(Downloading)_...").prop('disabled',true);
   $.post('/webGui/include/Download.php',{cmd:'save',source:logfile,file:file},function(zip) {
     location = zip;
     setTimeout(function(){cleanUp(file);},4000);
@@ -85,7 +90,7 @@ function showLog(log,init) {
     $(this).removeClass().addClass(type+' label');
   });
   timers.syslog = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
-  $.post('/webGui/include/Syslog.php',{log:log},function(data){
+  $.post('/webGui/include/Syslog.php',{log:log,max:$('#max').val()||<?=$max?>},function(data){
     clearTimeout(timers.syslog);
     $('pre.up').html(data);
 <?if ($display['resize']):?>
@@ -96,9 +101,16 @@ function showLog(log,init) {
   });
 }
 $(function() {
+  $('input#max').on('keydown',function(e) {
+    if (e.keyCode === 13) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      showLog(logfile);
+    }
+  });
   showLog(logfile,true);
 });
-$('.tabs').append("<span class='status'><?=$select?><span class='lite label'><label>_(Text)_<input type='checkbox' class='ctrl' onclick='highlight(!this.checked,\"N\")' checked></label></span><span class='error label'><label>_(Error)_<input type='checkbox' onclick='highlight(this.checked,\"E\")' checked></label></span><span class='warn label'><label>_(Warning)_<input type='checkbox' onclick='highlight(this.checked,\"W\")' checked></label></span><span class='system label'><label>_(System)_<input type='checkbox' onclick='highlight(this.checked,\"S\")' checked></label></span><span class='array label'><label>_(Array)_<input type='checkbox' onclick='highlight(this.checked,\"A\")' checked></label></span><span class='login label'><label>_(Login)_<input type='checkbox' onclick='highlight(this.checked,\"L\")' checked></label></span><span class='lite label'><input type='checkbox' class='ctrl' onclick='toggle(this.checked)' checked></span></span>");
+$('.tabs').append("<span class='status'><span class='lite label'>_(Log size)_:&nbsp;&nbsp;<input type='number' id='max' value='' placeholder='<?=$max?>'></span><?=$select?><span class='lite label'><label>_(Text)_<input type='checkbox' class='ctrl' onclick='highlight(!this.checked,\"N\")' checked></label></span><span class='error label'><label>_(Error)_<input type='checkbox' onclick='highlight(this.checked,\"E\")' checked></label></span><span class='warn label'><label>_(Warning)_<input type='checkbox' onclick='highlight(this.checked,\"W\")' checked></label></span><span class='system label'><label>_(System)_<input type='checkbox' onclick='highlight(this.checked,\"S\")' checked></label></span><span class='array label'><label>_(Array)_<input type='checkbox' onclick='highlight(this.checked,\"A\")' checked></label></span><span class='login label'><label>_(Login)_<input type='checkbox' onclick='highlight(this.checked,\"L\")' checked></label></span><span class='lite label'><input type='checkbox' class='ctrl' onclick='toggle(this.checked)' checked></span></span>");
 </script>
 <pre class='up'></pre>
-<input type="button" value="_(Download)_" onclick="syslog(zipfile())"><input type="button" value="_(Refresh)_" onclick="showLog(logfile)"><input type="button" value="_(Done)_" onclick="done()">
+<input type="button" id="download" value="_(Download)_" onclick="syslog(zipfile())"><input type="button" value="_(Refresh)_" onclick="showLog(logfile)"><input type="button" value="_(Done)_" onclick="done()">

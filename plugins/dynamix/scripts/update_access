@@ -6,8 +6,7 @@ SERV=/etc/services
 
 # read settings
 if [[ -a /boot/config/ident.cfg ]]; then
-  /usr/bin/fromdos </boot/config/ident.cfg >/var/tmp/ident.cfg
-  source /var/tmp/ident.cfg
+  source <(/usr/bin/fromdos < /boot/config/ident.cfg)
 fi
 
 # preset default values

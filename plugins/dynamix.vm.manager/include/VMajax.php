@@ -90,6 +90,22 @@ case 'domain-start':
 	: ['error' => $lv->get_last_error()];
 	break;
 
+	case 'domain-start-console':
+		requireLibvirt();
+		$arrResponse = $lv->domain_start($domName)
+		? ['success' => true, 'state' => $lv->domain_get_state($domName)]
+		: ['error' => $lv->get_last_error()];
+		$dom = $lv->get_domain_by_name($domName) ;
+		$vmrcport = $lv->domain_get_vnc_port($dom);
+		$wsport = $lv->domain_get_ws_port($dom);
+		$protocol = $lv->domain_get_vmrc_protocol($dom);
+		if ($vmrcport > 0) {
+			$vmrcurl  = autov('/plugins/dynamix.vm.manager/'.$protocol.'.html',true).'&autoconnect=true&host=' . $_SERVER['HTTP_HOST'] ;
+			if ($protocol == "spice") $vmrcurl  .= '&vmname='. urlencode($domName) .'&port=/wsproxy/'.$vmrcport.'/'; else $vmrcurl .= '&port=&path=/wsproxy/' . $wsport . '/';
+		}
+		$arrResponse['vmrcurl'] = $vmrcurl ;
+		break;
+	
 case 'domain-pause':
 	requireLibvirt();
 	$arrResponse = $lv->domain_suspend($domName)
@@ -197,6 +213,16 @@ case 'cdrom-change':
 	? ['success' => true]
 	: ['error' => $lv->get_last_error()];
 	break;
+
+case 'change-media':
+	requireLibvirt();
+	$dev= $_REQUEST['dev'] ;
+	$file= $_REQUEST['file'] ;
+	$cmdstr = "virsh change-media '$domName' $dev $file" ;
+	$rtn=shell_exec($cmdstr)
+		? ['success' => true]
+		: ['error' => "Change Media Failed"];
+		break;
 
 case 'memory-change':
 	requireLibvirt();

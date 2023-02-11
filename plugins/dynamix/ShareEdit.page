@@ -3,8 +3,8 @@ Title="Share Settings"
 Tag="share-alt-square"
 ---
 <?PHP
-/* Copyright 2005-2021, Lime Technology
- * Copyright 2012-2021, Bergware International.
+/* Copyright 2005-2022, Lime Technology
+ * Copyright 2012-2022, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -37,6 +37,13 @@ if ($name == "") {
   /* handle share deleted case */
   echo "<p class='notice'>"._('Share')." '".htmlspecialchars($name)."' "._('has been deleted').".</p><input type='button' value=\""._('Done')."\" onclick='done()'>";
   return;
+}
+
+/* Check for non existent pool device. */
+if ($share['cachePool']) {
+  if (! in_array($share['cachePool'], $pools)) {
+    $share['useCache'] = "no";
+  }
 }
 
 /* check for empty share */
@@ -84,7 +91,7 @@ foreach ($rows as $row) echo $row;
 <input type="hidden" name="shareNameOrig" value="<?=htmlspecialchars($share['nameOrig'])?>">
 
 _(Share name)_:
-: <input type="text" name="shareName" maxlength="40" value="<?=htmlspecialchars($name)?>">
+: <input type="text" name="shareName" maxlength="40" value="<?=htmlspecialchars($name)?>" title="_(Hidden share names are not allowed)_" pattern="^[^\.]+">
 
 :share_edit_name_help:
 
