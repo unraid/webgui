@@ -21,7 +21,7 @@ Tag="icon-docker"
 require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
 
 $DockerClient  = new DockerClient();
-$DockerStopped = pgrep('dockerd')===false;
+$DockerStopped = file_exists("/var/run/docker.sock")===false;
 
 function strposX($s, $c, $n=1) {
   $p = 0;
