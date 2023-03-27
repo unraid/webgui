@@ -231,21 +231,24 @@ function post_hooks($error='') {
 // Returns TRUE if success else FALSE and fills in error.
 //
 function download($url, $name, &$error, $write=true) {
+    logger("plugin: download: started with url: $url , name: $name ");
   if ($url) {
-    $plg = basename($url);
-    $plg = str_replace('"', '', $plg);
-    $tries = (strpos($url, '.cdn') !== false) ? "1" : "3";
-    if ($file = popen("wget --compression=auto --no-cache --progress=dot --retry-connrefused --prefer-family=IPv4 --timeout=10 --tries=$tries --waitretry=$tries -O $name $url 2>&1", 'r')) {
-      if ($write) write("plugin: downloading: $plg ...\r");
-      $level = -1;
-      while (($line = fgets($file)) !== false) {
-        if (preg_match('/\d+%/', $line, $matches)) {
-          $percentage = substr($matches[0],0,-1);
-          if ($percentage > $level) {
-            if ($write) write("plugin: downloading: $plg ... $percentage%\r");
-            $level = $percentage;
-          }
-        }
+      $plg     = basename($url);
+      $plg     = str_replace('"', '', $plg);
+      $tries   = (strpos($url, '.cdn') !== false) ? "1" : "3";
+      $wgetCmd = "wget --compression=auto --no-cache --progress=dot --retry-connrefused --prefer-family=IPv4 --timeout=10 --tries=$tries --waitretry=$tries -O $name $url 2>&1";
+      logger("plugin: download: wget command: '$wgetCmd'");
+      if ($file = popen($wgetCmd, 'r')) {
+          if ($write) write("plugin: downloading: $plg ...\r");
+          $level = -1;
+          while (($line = fgets($file)) !== false) {
+              if (preg_match('/\d+%/', $line, $matches)) {
+                  $percentage = substr($matches[0], 0, -1);
+                  if ($percentage > $level) {
+                      if ($write) write("plugin: downloading: $plg ... $percentage%\r");
+                      $level = $percentage;
+                  }
+              }
       }
       if (($perror = pclose($file)) != 0) {
         $error = "$plg download failure: ".error_desc($perror);
@@ -736,23 +739,27 @@ if ($method == 'check') {
   $plugin = $argv[2];
   $symlink = "$plugins/$plugin";
   write("plugin: checking: $plugin ...\n");
-  $installed_plugin_file = @readlink($symlink);
+    $installed_plugin_file = @readlink($symlink);
+    logger("plugin: installed plugin file: " . $installed_plugin_file);
   if ($installed_plugin_file === false) {
     write("plugin: not installed\n");
     // run hook scripts for post processing
     post_hooks($error);
     done(1);
   }
-  $installed_pluginURL = plugin('pluginURL', $installed_plugin_file, $error);
+    $installed_pluginURL = plugin('pluginURL', $installed_plugin_file, $error);
+    logger("plugin: pluginURL: " . $installed_pluginURL);
   if ($installed_pluginURL === false) {
     write("plugin: $error\n");
     // run hook scripts for post processing
     post_hooks($error);
     done(1);
   }
-  $plugin_file = "$tmp/$plugin";
+    $plugin_file = "$tmp/$plugin";
+    logger('plugin: plugin file: ' . $plugin_file);
   if ( (download($installed_pluginURL, $plugin_file, $error) === false) && (download(filter_url($installed_pluginURL), $plugin_file, $error) === false) ) {
-    write("plugin: $error\n");
+      logger("plugin: download failed! $error");
+      write("plugin: $error\n");
     @unlink($plugin_file);
     // run hook scripts for post processing
     post_hooks($error);
