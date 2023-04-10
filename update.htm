@@ -49,9 +49,9 @@ function addLog(logLine) {
 }
 
 function disablePage() {
-  setTimeout(function(){top.document.getElementsByClassName('spinner fixed')[0].style.display = 'block';},500); // show spinner when operation takes longer than 0.5s
-  for (var i=0,element; element=top.document.querySelectorAll('input,button,select')[i]; i++) element.disabled = true;
-  for (var i=0,link; link=top.document.getElementsByTagName('a')[i]; i++) link.style.color = "gray"; //fake disable
+  setTimeout(function(){parent.document.getElementsByClassName('spinner fixed')[0].style.display = 'block';},500); // show spinner when operation takes longer than 0.5s
+  for (var i=0,element; element=parent.document.querySelectorAll('input,button,select')[i]; i++) element.disabled = true;
+  for (var i=0,link; link=parent.document.getElementsByTagName('a')[i]; i++) link.style.color = "gray"; //fake disable
 }
 
 function enablePage() {
