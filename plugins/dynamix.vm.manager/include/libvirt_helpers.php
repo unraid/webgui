@@ -410,6 +410,11 @@ private static $encoding = 'UTF-8';
 			'icon' => 'slackware.png',
 			'os' => 'slackware'
 		],
+		'Unraid' => [
+			'form' => 'Custom.form.php',
+			'icon' => 'unraid.png',
+			'os' => 'slackware'
+		],
 		'SteamOS' => [
 			'form' => 'Custom.form.php',
 			'icon' => 'steamos.png',
