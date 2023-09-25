@@ -572,29 +572,39 @@ start_docker(){
 # Stop docker
 stop_docker(){
   echo "stopping $DOCKERD ..."
-  # If there is no PID file, ignore this request...
   if [[ ! -r $DOCKER_PIDFILE ]]; then
     echo "$DOCKERD is not running..."
+    exit 1
+  else
+    kill $(docker_pid) 2>/dev/null
+    # must ensure daemon has exited
+    for n in {1..15}; do
+      sleep 1
+      if [[ $(ps -p $(docker_pid) -o comm= 2>/dev/null) != $DOCKERD ]]; then
+        rm -f $DOCKER_PIDFILE
+        # tear down the bridge
+        if ip link show docker0 >/dev/null 2>&1; then
+          ip link set docker0 down
+          ip link del docker0
+        fi
+        echo "$DOCKERD has stopped"
+        return
+      fi
+      echo "waiting for $DOCKERD to die ..."
+    done
+    echo "$DOCKERD will not die!"
     return 1
   fi
-  kill $(docker_pid) 2>/dev/null
-  # must ensure daemon has exited
-  for n in {1..15}; do
-    sleep 1
-    if [[ $(ps -p $(docker_pid) -o comm= 2>/dev/null) != $DOCKERD ]]; then
-      rm -f $DOCKER_PIDFILE
-      # tear down the bridge
-      if ip link show docker0 >/dev/null 2>&1; then
-        ip link set docker0 down
-        ip link del docker0
-      fi
-      echo "$DOCKERD has stopped"
-      return
-    fi
-    echo "waiting for $DOCKERD to die ..."
-  done
-  echo "$DOCKERD will not die!"
-  exit 1
+}
+
+# Kill docker
+kill_docker(){
+  echo "killing $DOCKERD ..."
+  if [[ -r $DOCKER_PIDFILE ]]; then
+    docker container kill $(docker ps -q) 2>/dev/null
+    kill -SIGKILL $(docker_pid)
+    rm -f /var/run/docker.sock $DOCKER_PIDFILE
+  fi
 }
 
 case "$1" in
@@ -611,11 +621,12 @@ stop)
   ;;
 force_stop)
   stop_docker
+  kill_docker
   ;;
 restart)
   stop_containers
   stop_network
-  stop_docker
+  kill_docker
   sleep 1
   start_docker
   start_network
