@@ -30,6 +30,14 @@ INI="/var/local/emhttp/nginx.ini.new"
 CERTPATH="$SSL/certs/certificate_bundle.pem"
 MYSERVERS="/boot/config/plugins/dynamix.my.servers/myservers.cfg"
 
+# determine shell type
+SHELLTYPE=
+[[ -n $SSH_TTY ]] && SHELLTYPE=ssh
+[[ -z $SHELLTYPE && -n $DISPLAY ]] && SHELLTYPE=slimterminal
+[[ -z $SHELLTYPE && -n $XDG_SESSION_TYPE ]] && SHELLTYPE=console
+[[ -z $SHELLTYPE && -z $XDG_SESSION_TYPE ]] && SHELLTYPE=webterminal
+[[ -z $SHELLTYPE ]] && SHELLTYPE=unknown
+
 # hold server names
 SERVER_NAMES=()
 
@@ -750,13 +758,27 @@ case "$1" in
   nginx_start
   ;;
 'stop')
-  nginx_stop
+  if [[ $SHELLTYPE == "webterminal" ]]; then
+    log "Unable to stop nginx from a webterminal. Use SSH or the console instead."
+    exit 1
+  else
+    nginx_stop
+  fi
   ;;
 'term')
   nginx_stop_forced
   ;;
 'restart')
-  nginx_restart
+  if [[ "$2" == "inbg" ]]; then
+    # already running in background, go ahead and restart nginx
+    nginx_restart
+  elif [[ $SHELLTYPE == "webterminal" ]]; then
+    # being run from a webterminal, restart nginx in the background
+    /etc/rc.d/rc.nginx restart inbg &
+  else
+    # not a webterminal, just restart nginx
+    nginx_restart
+  fi
   ;;
 'reload')
   nginx_reload
