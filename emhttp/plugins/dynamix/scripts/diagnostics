@@ -640,6 +640,36 @@ foreach (glob("/var/log/syslog*") as $file) {
   run("truncate -s '<$max' ".escapeshellarg("$log.txt"));
 }
 
+// copy syslog information from logs mirrored to USB (anonymize if applicable)
+$max = 2*1024*1024; //=2MB
+foreach (glob("/boot/logs/syslog*") as $file) {
+  $log = "/$diag/logs/".basename($file)."-fromUSB";
+  run("todos <".escapeshellarg($file)." >".escapeshellarg("$log.txt"));
+  if (!$all) {
+    unset($titles,$rows);
+    run("grep -Po 'file: \K[^\"\\x27]+' ".escapeshellarg("$log.txt")." 2>/dev/null|sort|uniq", $titles);
+    run("sed -ri 's|\b\S+@\S+\.\S+\b|email@removed.com|;s|\b(username\|password)([=:])\S+\b|\\1\\2xxx|;s|(GUID: \S)\S+(\S) |\\1..\\2 |;s|(moving \"\S\|\"/mnt/user/\S).*(\S)\"|\\1..\\2\"|' ".escapeshellarg("$log.txt"));
+    run("sed -ri 's|(server: ).+(\.(my)?unraid\.net(:[0-9]+)?,)|\\1hash\\2|;s|(host: \").+(\.(my)?unraid\.net(:[0-9]+)?\")|\\1hash\\2|;s|(referrer: \"https?://).+(\.(my)?unraid\.net)|\\1hash\\2|' ".escapeshellarg("$log.txt"));
+    maskIP("$log.txt");
+    foreach ($titles as $mover) {
+      if (!$mover) continue;
+      $title = "/{$mover[0]}..".substr($mover,-1)."/...";
+      run("sed -i 's/".str_replace("/","\/",$mover)."/".str_replace("/","\/",$title)."/g' ".escapeshellarg("$log.txt")." 2>/dev/null");
+      //run("sed -ri 's|(file: [.>cr].*)[ /]$mover/.*$|\\1 file: $title|' ".escapeshellarg("$log.txt")." 2>/dev/null");
+    }
+    run("grep -n ' cache_dirs: -' ".escapeshellarg("$log.txt")." 2>/dev/null|cut -d: -f1", $rows);
+    for ($i = 0; $i < count($rows); $i += 2) for ($row = $rows[$i]+1; $row < $rows[$i+1]; $row++) run("sed -ri '$row s|(cache_dirs: \S).*(\S)|\\1..\\2|' ".escapeshellarg("$log.txt")." 2>/dev/null");
+  }
+  // replace consecutive repeated lines in syslog
+  run("awk -i inplace '{if(s!=substr(\$0,17)){if(x>0)print\"### [PREVIOUS LINE REPEATED \"x\" TIMES] ###\\r\";print;x=0}else{x++}s=substr(\$0,17)}END{if(x>0)print\"### [PREVIOUS LINE REPEATED \"x\" TIMES] ###\\r\"}' ".escapeshellarg("$log.txt"));
+  // remove SHA256 hashes
+  run("sed -ri 's/(SHA256:).+[^\s\b]/SHA256:***REMOVED***/gm' $log.txt");
+  // truncate syslog if too big
+  if (basename($file)=='syslog' && filesize($file)>=$max) run("tail -n 200 ".escapeshellarg("$log.txt")." >".escapeshellarg("$log.last200.txt"));
+  run("truncate -s '<$max' ".escapeshellarg("$log.txt"));
+}
+
+
 // copy dhcplog
 $dhcplog = "/var/log/dhcplog";
 if (file_exists($dhcplog)) {
