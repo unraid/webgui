@@ -30,6 +30,19 @@ if (file_exists($cfg)) {
     foreach ($logs as $file) $select[] = mk_option(1,$file,basename($file));
     $select[] = "</select>";
   }
+  if (isset($syslog['syslog_flash']) && $logs = glob('/boot/logs/syslog*',GLOB_NOSORT)) {
+  natsort($logs);
+  if (empty($select)) {
+    $select[] = "<select onchange='showLog(this.value)'>";
+    $select[] = mk_option(1,$log,'syslog');
+    foreach ($logs as $file) $select[] = mk_option(1,$file,basename($file)."(on USB)");
+    $select[] = "</select>";
+  } else {
+    array_pop($select);
+    foreach ($logs as $file) $select[] = mk_option(1,$file,basename($file)."(on USB)");
+    $select[] = "</select>";
+  }
+  }
 }
 $select = implode($select);
 ?>
