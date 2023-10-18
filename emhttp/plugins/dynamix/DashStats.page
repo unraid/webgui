@@ -1223,7 +1223,7 @@ function openClose(button) {
     } else {
       button.removeClass('fa-chevron-up fa-chevron-down').addClass('fa-chevron-up');
       tbody.mixedView(1);
-      hidden.splice(hidden.indexOf(tbody.attr('sort')));
+      hidden = hidden.filter(a => a !== tbody.attr('sort'));
     }
     $.cookie('hidden_content',hidden.join(';'),{expires:3650});
   } else {
