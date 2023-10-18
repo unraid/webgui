@@ -1189,6 +1189,7 @@ function showContent() {
   var hidden = $.cookie('hidden_content');
   if (hidden) {
     hidden = hidden.split(';');
+    hidden = hidden.filter(n => n);
     for (var n=0,md5; md5=hidden[n]; n++) {
       var tbody = $('div.frame tbody[sort="'+md5+'"]');
       tbody.find('.openclose').removeClass('fa-chevron-up fa-chevron-down').addClass('fa-chevron-down');
@@ -1211,6 +1212,7 @@ function setColor(l, t1, t2) {
 function openClose(button) {
   var hidden = $.cookie('hidden_content');
   hidden = hidden==null ? [] : hidden.split(';');
+  hidden = hidden==null ? [] : hidden.filter(n => n);
   if (button) {
     // show/hide single tile content
     var tbody = button.closest('tbody');
@@ -1221,7 +1223,7 @@ function openClose(button) {
     } else {
       button.removeClass('fa-chevron-up fa-chevron-down').addClass('fa-chevron-up');
       tbody.mixedView(1);
-      hidden.splice(hidden.indexOf(tbody.attr('sort')),1);
+      hidden.splice(hidden.indexOf(tbody.attr('sort')));
     }
     $.cookie('hidden_content',hidden.join(';'),{expires:3650});
   } else {
