@@ -1,13 +1,10 @@
-<?php
+<?PHP
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once("$docroot/plugins/dynamix.my.servers/include/state.php");
 require_once("$docroot/plugins/dynamix.my.servers/include/translations.php");
-
-$serverState = new ServerState();
-$wCTranslations = new WebComponentTranslations();
 ?>
 <script>
-window.LOCALE_DATA = '<?= $wCTranslations->getTranslationsJson(true) ?>';
+window.LOCALE_DATA = '<?= rawurlencode(json_encode($webComponentTranslations, JSON_UNESCAPED_SLASHES, JSON_UNESCAPED_UNICODE)) ?>';
 /**
  * So we're not needing to modify DefaultLayout with an additional include, we'll add the Modals web component to the bottom of the body.
  */
@@ -24,5 +21,5 @@ if (!document.getElementsByTagName(modalsWebComponent).length) {
 <?
 echo "
 <unraid-i18n-host>
-    <unraid-user-profile server='" . $serverState->getServerStateJson() . "'></unraid-user-profile>
+    <unraid-user-profile server='" . json_encode($serverState) . "'></unraid-user-profile>
 </unraid-i18n-host>";
