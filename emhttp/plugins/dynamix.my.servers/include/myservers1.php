@@ -16,6 +16,15 @@
     margin-left: auto;
     height: 100%;
 }
+
+/**
+ * Tools page, rotate the Downgrade icon to prevent needing to add a new icon to the icon font.
+ * The pseudo element is targeted here otherwise the rotation of the span would mess up spacing with the text.
+ */
+a[href="/Tools/Downgrade"] .icon-update:before {
+    display: inline-block; /* required otherwise the rotation won't work */
+    rotate: 180deg;
+}
 </style>
 <?php
 // Set the path for the local manifest file

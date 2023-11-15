@@ -3,182 +3,39 @@ Title="Update OS"
 Icon="icon-update"
 Tag="upload"
 ---
-<?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License version 2,
- * as published by the Free Software Foundation.
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- */
-?>
-<?
-$version = $branch = $date = _('unknown');
-$bzroot  = file_exists('/boot/previous/bzroot');
-$check   = $notify['unraidos'] ? 0 : 1;
-$changes = '/boot/previous/changes.txt';
-$zip     = htmlspecialchars(str_replace(' ','_',strtolower($var['NAME'])));
-
-if (file_exists($changes)) {
-  exec("head -n4 $changes",$rows);
-  foreach ($rows as $row) {
-    $i = stripos($row,'version');
-    if ($i !== false) {
-      [$version,$date] = explode(' ',trim(substr($row,$i+7)));
-      break;
-    }
-  }
-  $branch = strpos($version,'rc')!==false ? _('Next') : (strpos($version,'beta')!==false ? _('Beta') : _('Stable'));
-}
-$reboot = preg_match("/^\*\*(REBOOT REQUIRED|DOWNGRADE)/",@file_get_contents("$docroot/plugins/unRAIDServer/README.md",false,null,0,20));
+<?php
+require_once "$docroot/plugins/dynamix.my.servers/include/reboot-details.php";
+$rebootDetails = new RebootDetails();
 ?>
 <script>
-var diagnosticsFile = "";
-var nchan_diagnostics = new NchanSubscriber('/sub/diagnostics',{subscriber:'websocket'});
-var original = null;
-const args = {};
-
-nchan_diagnostics.on('message', function(data) {
-  if (data == '_DONE_') {
-    nchan_diagnostics.stop();
-    $('.sweet-alert').hide('fast').removeClass('nchan');
-    swal.close();
-    location = diagnosticsFile;
-    setTimeout(cleanUp,4000);
-  } else if (data) {
-    let box = $('pre#swaltext');
-    box.html(box.html()+'<br>'+data).scrollTop(box[0].scrollHeight);
-  }
-});
-
-function openInstall(cmd,title,plg) {
-  if (cmd == null) {
-    openPlugin(args.cmd,args.title,args.plg);
-    return;
-  }
-  args.cmd = cmd;
-  args.title = title;
-  args.plg = plg;
-  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{cmd:'alert'},function(data) {
-    if (data==0) {
-      // no alert message - proceed with update
-      setTimeout(openInstall);
-    } else {
-      // show alert message and ask for confirmation
-      openAlert("showchanges <?=$alerts?>","_(Alert Message)_",'openInstall');
-    }
-  });
-}
-function update_table(branch) {
-  if (original) {
-    if (branch != original) branch = '';
-  } else {
-    if (branch) original = branch;
-  }
-  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{system:true,branch:branch},function(data) {
-    data = data.split('\0');
-    updateInfo(data[0]);
-    $('#os_table').trigger('update');
-  });
-}
-function downgrade() {
-  swal({title:"_(Diagnostics)_",text:"_(Please provide diagnostics when experiencing problems)_<br>_(Post these in the forums)_",html:true,type:'warning',showCancelButton:true,confirmButtonText:"<?=_('Diagnostics')?>",cancelButtonText:"<?=_('Restore')?>"},function(diag){
-    if (diag) {
-      // get diagnostics and then downgrade
-      setTimeout(function(){diagnostics(zipfile());},250);
-    } else {
-      // downgrade immediately
-      $.get('/plugins/dynamix.plugin.manager/include/Downgrade.php',{version:'<?=$version?>'},function(){refresh();});
-    }
-  });
-}
-function updateInfo(data) {
-  var updates = data.split('\n');
-  for (var n=0,update; update=updates[n]; n++) {
-    var fields = update.split('\r');
-    for (var i=0,field; field=fields[i]; i++) {
-      var row = field.split('::');
-      $('#'+row[0]).attr('data',row[1]).html(row[2]);
-    }
-  }
-}
-function initlist() {
-  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{init:true,system:true,check:<?=$check?>},function(data) {
-    $('#os_list').html(data);
-<?if ($bzroot):?>
-    $('#previous').show();
-<?endif;?>
-    loadlist();
-  });
-}
-function warning (data) {
-  $('#change_branch').prop('disabled',true);
-  return data.replace('green','orange').replace("<?=_('up-to-date')?>","<?=_('Reboot')?>").replace('checking','warning');
-}
-function loadlist(id,check) {
-  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{system:true,audit:id,check:check||<?=$check?>},function(data) {
-    var list = $('#os_list');
-    if (id) {
-      var cmd = id.split(':');
-      var tr = 'tr#'+cmd[0].replace(/[\. _]/g,'');
-      switch (cmd[1]) {
-        case 'update' : data = warning(data);
-        case 'return' : updateInfo(data); break;
-        case 'install': list.find(tr).remove(); list.append(warning(data)); break;
-      }
-    } else {
-<?if (!$reboot):?>
-      updateInfo(data);
-<?else:?>
-      updateInfo(warning(data));
-<?endif;?>
-    }
-    $('#os_table').trigger('update');
-    $('#checkos').prop('disabled',false);
-<?if ($reboot):?>
-    $('#change_branch').prop('disabled',true);
-<?endif;?>
-  });
-}
-function cleanUp() {
+function cleanUpFlashBackup(zip) {
   if (document.hasFocus()) {
-    $.post('/webGui/include/Download.php',{cmd:'delete',file:diagnosticsFile},function(){
-      $.get('/plugins/dynamix.plugin.manager/include/Downgrade.php',{version:'<?=$version?>'},function(){refresh();});
-    });
+    $('input[value="_(Creating Flash backup)_..."]').val("_(Flash backup)_").prop('disabled',false);
+    $('div.spinner').hide('slow');
+    $('#pleaseWait').hide('slow');
+    $.post('/webGui/include/Download.php',{cmd:'unlink',file:zip});
   } else {
-    setTimeout(cleanUp,2000);
+    setTimeout(function(){cleanUpFlashBackup(zip);},2000);
   }
 }
-function zipfile(){
-  var tzoffset = (new Date()).getTimezoneOffset() * 60000; //offset in milliseconds
-  var localISOTime = (new Date(Date.now() - tzoffset)).toISOString().slice(0,-1);
-  return '<?=$zip?>-diagnostics-'+localISOTime.substr(0,16).replace(/[-:]/g,'').replace('T','-')+'.zip';
-}
-function diagnostics(file) {
-  nchan_diagnostics.start();
-  $.post('/webGui/include/Download.php',{cmd:'diag',file:file,anonymize:''},function(zip) {
+function flashBackup() {
+  $('input[value="_(Flash backup)_"]').val('_(Creating Flash backup)_...').prop('disabled',true);
+  $('div.spinner').show('slow');
+  $('#pleaseWait').show('slow');
+  $.post('/webGui/include/Download.php',{cmd:'backup'},function(zip) {
     if (zip) {
-      diagnosticsFile = zip;
-      swal({title:"_(Downloading)_...",text:"/boot/logs"+zip+"<hr><pre id='swaltext'></pre>",html:true,animation:'none',showConfirmButton:false});
-      $('.sweet-alert').addClass('nchan');
-      $('button.confirm').prop('disabled',true);
+      location = '/'+zip;
+      setTimeout(function(){cleanUpFlashBackup(zip);},6000);
     } else {
-      nchan_diagnostics.stop();
+      $('input[value="_(Creating Flash backup)_..."]').val("_(Flash backup)_");
+      $('div.spinner').hide('slow');
+      $('#pleaseWait').hide('slow');
+      swal({title:"_(Creation error)_",text:"_(Insufficient free disk space available)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
     }
   });
 }
-$(function() {
-  initlist();
-  $('.tabs').append("<span class='status vhshift'><input type='button' id='checkos' value=\"_(Check for Updates)_\" onclick='openPlugin(\"plugin checkos\",\"_(System Update Check)_\",\":return\")' disabled></span>");
-});
 </script>
-<table class='tablesorter plugins shift' id='os_table'>
-<thead><tr><th></th><th>_(Component)_</th><th>_(Author)_</th><th>_(Version)_</th><th>_(Status)_</th><th>_(Branch)_</th></tr></thead>
-<tbody id="os_list"><tr><td colspan="6"></td></tr></tbody>
-<?if ($bzroot):?>
-<tbody id="previous" style="display:none"><tr><td><img src="/plugins/unRAIDServer/images/unRAIDServer.png" class="list"></td><td><b>_(Unraid OS)_ (_(previous)_)</b></td><td>LimeTech</td><td><?=$version?></td><td><input type="button" value="_(Restore)_" onclick="downgrade()"></td><td><?=$branch?></td></tbody>
-<?endif;?>
-</table>
+
+<unraid-i18n-host>
+  <unraid-update-os reboot-version="<?= $rebootDetails->getRebootVersion() ?>"></unraid-update-os>
+</unraid-i18n-host>
