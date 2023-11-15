@@ -89,6 +89,8 @@ if ($themes2) {
   echo ".nav-item.LockButton a:before{content:'\\e955'}\n";
   foreach ($buttons as $button) if (isset($button['Code'])) echo ".nav-item.{$button['name']} a:before{content:'\\{$button['Code']}'}\n";
 }
+$notes = '/var/tmp/unRAIDServer.txt';
+if (!file_exists($notes)) file_put_contents($notes,shell_exec("$docroot/plugins/dynamix.plugin.manager/scripts/plugin changes $docroot/plugins/unRAIDServer/unRAIDServer.plg"));
 ?>
 </style>
 
@@ -378,6 +380,7 @@ function abortOperation(pid) {
   });
 }
 function openChanges(cmd,title,nchan,button=0) {
+  $('div.spinner.fixed').show();
   // button = 0 : hide CLOSE button (default)
   // button = 1 : show CLOSE button
   // nchan argument is not used, exists for backward compatibility
@@ -501,7 +504,16 @@ function removeRebootNotice(message="<?=_('You must reboot for changes to take e
   $.post("/plugins/dynamix.plugin.manager/scripts/PluginAPI.php",{action:'removeRebootNotice',message:message});
 }
 
-function hideUpgrade(set) {
+function showUpgradeChanges() { /** @note can likely be removed, not used in webgui or api repos */
+  openChanges("showchanges /tmp/plugins/unRAIDServer.txt","<?=_('Release Notes')?>");
+}
+function showUpgrade(text,noDismiss=false) { /** @note can likely be removed, not used in webgui or api repos */
+  if ($.cookie('os_upgrade')==null) {
+    if (osUpgradeWarning) removeBannerWarning(osUpgradeWarning);
+    osUpgradeWarning = addBannerWarning(text.replace(/<a>(.+?)<\/a>/,"<a href='#' onclick='openUpgrade()'>$1</a>").replace(/<b>(.*)<\/b>/,"<a href='#' onclick='document.rebootNow.submit()'>$1</a>"),false,noDismiss);
+  }
+}
+function hideUpgrade(set) { /** @note can likely be removed, not used in webgui or api repos */
   removeBannerWarning(osUpgradeWarning);
   if (set)
     $.cookie('os_upgrade','true');

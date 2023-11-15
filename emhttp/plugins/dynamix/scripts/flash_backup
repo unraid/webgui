@@ -13,6 +13,7 @@
 ?>
 <?
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/Wrappers.php";
 
 $var = (array)@parse_ini_file('/var/local/emhttp/var.ini');
 $dir = ['system','appdata','isos','domains'];
@@ -20,7 +21,7 @@ $out = ['prev','previous'];
 
 $server = isset($var['NAME']) ? str_replace(' ','_',strtolower($var['NAME'])) : 'tower';
 $mydate = date('Ymd-Hi');
-$osVersion = @$var['version'] ?? '_unknown';
+$osVersion = _var($var,'version','_unknown');
 $backup = "$server-v$osVersion-flash-backup-$mydate.zip";
 
 $used = exec("df /boot|awk 'END{print $3}'") * 1.5;
