@@ -270,7 +270,11 @@ function array_online(&$disk, $fstype='') {
   default:
     $echo[] = "<td>".device_info($disk,true)."</td>";
     $echo[] = "<td>".device_desc($disk)."</td>";
-    $echo[] = "<td>".my_temp(_var($disk,'temp','*'))."</td>";
+    if ($disk['transport'] == "nvme") {
+      $powerstate=getnvmepowerstate("/dev/".$disk['device']); 
+      $powerstatevalue="<br>PS: ".$powerstate['powerstatevalue']."(".$powerstate['powerstate'].")" ;
+    } else $powerstatevalue = "" ;
+    $echo[] = "<td>".my_temp(_var($disk,'temp','*')).$powerstatevalue."</td>";
     $echo[] = "<td><span class='diskio'>".my_diskio($data[0])."</span><span class='number'>".my_number(_var($disk,'numReads',0))."</span></td>";
     $echo[] = "<td><span class='diskio'>".my_diskio($data[1])."</span><span class='number'>".my_number(_var($disk,'numWrites',0))."</span></td>";
     $echo[] = "<td>".my_number(_var($disk,'numErrors',0))."</td>";
