@@ -43,9 +43,9 @@ writestatus() {
   echo "RemainToArray=${TO}" >> $MOVERSTATUS
   echo "TotalFromArray=${TOTALFROM}"   >> $MOVERSTATUS
   echo "RemainFromArray=${FROM}"  >> $MOVERSTATUS
-  echo "File=Test"  >> $MOVERSTATUS
-  echo "Action=Moving share ${SHARE}"  >> $MOVERSTATUS
-  echo "Filepercent=50"  >> $MOVERSTATUS
+  echo "File=Processing"  >> $MOVERSTATUS
+  echo "Action=Processing"  >> $MOVERSTATUS
+  echo "Filepercent=Processing"  >> $MOVERSTATUS
 }
 
 start() {
@@ -138,7 +138,7 @@ start() {
       if grep -qs 'shareUseCache="yes"' "/boot/config/shares/${SHARE}.cfg" ; then
         TOMOVE=$(du -sc ${SHAREPATH%/} | grep total | awk '{print $1}') 
          [[ $LOGLEVEL -gt 0 ]] && echo "Moving ${SHAREPATH%/} Bytes ${TOMOVE}"
-        find "${SHAREPATH%/}" -depth | /usr/local/sbin/move -d $LOGLEVEL
+        find "${SHAREPATH%/}" -depth | /usr/local/bin/move -d $LOGLEVEL
         ((TO=TO-TOMOVE))
          [[ $LOGLEVEL -gt 0 ]] && echo "RemainFromArray=${TO}" 
         writestatus   
@@ -158,7 +158,7 @@ start() {
       if [[ -d "/mnt/$shareCachePool" ]]; then
         FROMMOVE=$(du -sc ${SHAREPATH%/} | grep total | awk '{print $1}') 
          [[ $LOGLEVEL -gt 0 ]] && echo "Moving ${SHAREPATH%/} Bytes ${FROMMOVE}"
-        find "${SHAREPATH%/}" -depth | /usr/local/sbin/move -d $LOGLEVEL
+        find "${SHAREPATH%/}" -depth | /usr/local/bin/move -d $LOGLEVEL
         ((FROM=FROM-FROMMOVE))
          [[ $LOGLEVEL -gt 0 ]] && echo "RemainFromArray=${FROM}" 
         writestatus
