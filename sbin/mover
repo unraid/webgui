@@ -1,5 +1,5 @@
 #!/bin/bash
-#Copyright 2005-2020, Lime Technology
+#Copyright 2005-2023, Lime Technology
 #License: GPLv2 only
 
 # This is the 'mover' script used for moving files between a pool and the main unRAID array.
@@ -35,7 +35,18 @@
 
 PIDFILE="/var/run/mover.pid"
 CFGFILE="/boot/config/share.cfg"
-DEBUGGING=""
+LOGLEVEL=0
+MOVERSTATUS="/usr/local/emhttp/state/mover.ini"
+
+writestatus() {
+  echo "TotalToArray=${TOTALTO}"  > $MOVERSTATUS
+  echo "RemainToArray=${TO}" >> $MOVERSTATUS
+  echo "TotalFromArray=${TOTALFROM}"   >> $MOVERSTATUS
+  echo "RemainFromArray=${FROM}"  >> $MOVERSTATUS
+  echo "File=Test"  >> $MOVERSTATUS
+  echo "Action=Moving share ${SHARE}"  >> $MOVERSTATUS
+  echo "Filepercent=50"  >> $MOVERSTATUS
+}
 
 start() {
   if [ -f $PIDFILE ]; then
@@ -51,14 +62,25 @@ start() {
       echo "mover: cache not enabled"
       exit 2
     fi
+    if grep -qs 'shareMoverLogging="yes"' $CFGFILE ; then
+      LOGLEVEL=1
+    fi
   fi
   if ! mountpoint -q /mnt/user0 ; then
     echo "mover: array devices not mounted"
     exit 3
   fi
 
+  TOTALFROM=0
+  TOTALTO=0
+  writestatus
+
   echo $$ >/var/run/mover.pid
-  echo "mover: started"
+  [[ $LOGLEVEL -gt 0 ]] && echo "mover: started"
+
+  TOSHARES=0
+  FROMSHARES=0
+  DUARGSI=""
 
   shopt -s nullglob
 
@@ -67,27 +89,86 @@ start() {
     for SHAREPATH in /mnt/$(basename "$POOL" .cfg)/*/ ; do
       SHARE=$(basename "$SHAREPATH")
       if grep -qs 'shareUseCache="yes"' "/boot/config/shares/${SHARE}.cfg" ; then
-        find "${SHAREPATH%/}" -depth | /usr/local/bin/move $DEBUGGING
+        DUARGSI="${DUARGSI} ${SHAREPATH}"  
+        ((TOSHARES=TOSHARES+1)) 
+      fi
+    done
+  done
+
+
+  if [[ "$TOSHARES" > 0 ]]
+    then
+      TO=$(du -sc ${DUARGSI} | grep total | awk '{print $1}' )
+   else
+      TO=0
+   fi
+
+  DUARGSO=""
+
+  # Check for objects to move from array to pools
+  for SHAREPATH in $(ls -dv /mnt/disk[0-9]*/*/) ; do
+    SHARE=$(basename "$SHAREPATH")
+    if grep -qs 'shareUseCache="prefer"' "/boot/config/shares/${SHARE}.cfg" ; then
+      eval "$(grep -s shareCachePool /boot/config/shares/${SHARE}.cfg | tr -d '\r')"
+      if [[ -z "$shareCachePool" ]]; then
+        shareCachePool="cache"
+      fi
+      if [[ -d "/mnt/$shareCachePool" ]]; then
+         DUARGSO="${DUARGSO} ${SHAREPATH}"  
+         ((FROMSHARES=FROMSHARES+1))
+      fi
+    fi
+  done
+
+ if [[ "$FROMSHARES" > 0 ]] 
+  then
+    FROM=$(du -sc ${DUARGSO} | grep total | awk '{print $1}') 
+  else
+    FROM=0 
+ fi
+  TOTALFROM=$FROM
+  TOTALTO=$TO
+  writestatus
+
+ # Check for objects to move from pools to array
+  for POOL in /boot/config/pools/*.cfg ; do
+    for SHAREPATH in /mnt/$(basename "$POOL" .cfg)/*/ ; do
+      SHARE=$(basename "$SHAREPATH")
+      writestatus
+      if grep -qs 'shareUseCache="yes"' "/boot/config/shares/${SHARE}.cfg" ; then
+        TOMOVE=$(du -sc ${SHAREPATH%/} | grep total | awk '{print $1}') 
+         [[ $LOGLEVEL -gt 0 ]] && echo "Moving ${SHAREPATH%/} Bytes ${TOMOVE}"
+        find "${SHAREPATH%/}" -depth | /usr/local/sbin/move -d $LOGLEVEL
+        ((TO=TO-TOMOVE))
+         [[ $LOGLEVEL -gt 0 ]] && echo "RemainFromArray=${TO}" 
+        writestatus   
       fi
     done
   done
 
   # Check for objects to move from array to pools
-  ls -dvc1 /mnt/disk[0-9]*/*/ | while read SHAREPATH ; do
+  for SHAREPATH in $(ls -dv /mnt/disk[0-9]*/*/) ; do
     SHARE=$(basename "$SHAREPATH")
+    writestatus
     if grep -qs 'shareUseCache="prefer"' "/boot/config/shares/${SHARE}.cfg" ; then
-      eval $(grep -s shareCachePool "/boot/config/shares/${SHARE}.cfg" | tr -d '\r')
+      eval "$(grep -s shareCachePool /boot/config/shares/${SHARE}.cfg | tr -d '\r')"
       if [[ -z "$shareCachePool" ]]; then
         shareCachePool="cache"
       fi
       if [[ -d "/mnt/$shareCachePool" ]]; then
-        find "${SHAREPATH%/}" -depth | /usr/local/bin/move $DEBUGGING
+        FROMMOVE=$(du -sc ${SHAREPATH%/} | grep total | awk '{print $1}') 
+         [[ $LOGLEVEL -gt 0 ]] && echo "Moving ${SHAREPATH%/} Bytes ${FROMMOVE}"
+        find "${SHAREPATH%/}" -depth | /usr/local/sbin/move -d $LOGLEVEL
+        ((FROM=FROM-FROMMOVE))
+         [[ $LOGLEVEL -gt 0 ]] && echo "RemainFromArray=${FROM}" 
+        writestatus
       fi
     fi
   done
-
+  sleep 5
   rm -f $PIDFILE
-  echo "mover: finished"
+  rm -f $MOVERSTATUS
+  [[ $LOGLEVEL -gt 0 ]] && echo "mover: finished"
 }
 
 killtree() {
