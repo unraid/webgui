@@ -269,7 +269,7 @@ function delete_file(...$file) {
 }
 function getnvmepowerstate($device) {
   $array=[] ;
-  exec("nvme  id-ctrl /dev/nvme0 |grep -E 'ps |wctemp|cctemp'",$array,$error) ;
+  exec("nvme  id-ctrl $device |grep -E 'ps |wctemp|cctemp'",$array,$error) ;
   foreach ($array as $line){
       $split = explode(":",$line) ;
       $check=str_replace(" ","",trim($split[0]));
