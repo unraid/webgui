@@ -109,7 +109,7 @@ start() {
   for SHAREPATH in $(ls -dv /mnt/disk[0-9]*/*/) ; do
     SHARE=$(basename "$SHAREPATH")
     if grep -qs 'shareUseCache="prefer"' "/boot/config/shares/${SHARE}.cfg" ; then
-      eval "$(grep -s shareCachePool /boot/config/shares/${SHARE}.cfg | tr -d '\r')"
+      eval "$(grep -s shareCachePool '/boot/config/shares/${SHARE}.cfg' | tr -d '\r')"
       if [[ -z "$shareCachePool" ]]; then
         shareCachePool="cache"
       fi
@@ -151,7 +151,7 @@ start() {
     SHARE=$(basename "$SHAREPATH")
     writestatus
     if grep -qs 'shareUseCache="prefer"' "/boot/config/shares/${SHARE}.cfg" ; then
-      eval "$(grep -s shareCachePool /boot/config/shares/${SHARE}.cfg | tr -d '\r')"
+      eval "$(grep -s shareCachePool '/boot/config/shares/${SHARE}.cfg' | tr -d '\r')"
       if [[ -z "$shareCachePool" ]]; then
         shareCachePool="cache"
       fi
