@@ -1,0 +1,19 @@
+#/bin/bash
+
+# Concatenate the set of installed plugin cron files
+# into a single system crontab.
+
+cron_files() {
+  cat /boot/config/plugins/dynamix/*.cron 2>/dev/null
+  for plugin in /var/log/plugins/*.plg; do
+    plugin=${plugin##*/}
+    cat /boot/config/plugins/${plugin%.*}/*.cron 2>/dev/null
+  done
+}
+
+ENTRIES=$(cron_files)
+if [[ "$ENTRIES" ]]; then
+  echo "$ENTRIES"|crontab -c /etc/cron.d -
+else
+  crontab -c /etc/cron.d -d
+fi

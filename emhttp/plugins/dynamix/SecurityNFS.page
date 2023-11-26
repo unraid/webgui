@@ -1,0 +1,142 @@
+Menu="Disk Share"
+Title="NFS Security Settings"
+Tag="linux"
+Cond="(($var['shareNFSEnabled']!='no') && (isset($name)?array_key_exists($name,$sec_nfs):0))"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$width = [123,300];
+?>
+:nfs_security_help:
+
+<div class="clone1">
+<span class="clone">_(Read settings from)_</span><i class="fa fa-arrow-left fa-fw"></i>
+<span class="wrap"><select name="readnfs" class="clone" onchange="toggleButton('readnfs',false)">
+<option disabled selected>_(select)_...</option>
+<?
+if (isset($disks[$name])) {
+  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name) echo mk_option("", $list['name'], _(my_disk($list['name']),3));
+} else {
+  foreach ($shares as $list) if ($list['name']!=$name) echo mk_option("", $list['name'], compress($list['name']));
+}
+?>
+</select></span><input type="button" id="readnfs" value="_(Read)_" class="clone" onclick="readNFS()" disabled>
+</div>
+<div class="clone2">
+<span class="clone">_(Write settings to)_</span><i class="fa fa-arrow-right fa-fw"></i>
+<span class="wrap"><select id="nfs1" name="writenfs" multiple="multiple" style="display:none" onchange="toggleButton('writenfs',this.id)">
+<?
+$rows = [];
+if (isset($disks[$name])) {
+  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name) $rows[] = mk_option("", $list['name'], _(my_disk($list['name']),3));
+} else {
+  foreach ($shares as $list) if ($list['name']!=$name) $rows[] = mk_option("", $list['name'], compress($list['name']));
+}
+if ($rows) echo "<option>("._('All').")</option>";
+foreach ($rows as $row) echo $row;
+?>
+</select></span><input type="button" id="writenfs" value="_(Write)_" class="clone" onclick="writeNFS()" disabled>
+</div>
+
+<form markdown="1" name="nfs_edit" method="POST" action="/update.htm" target="progressFrame" onchange="toggleButton('writenfs',true);$('#nfs1').dropdownchecklist('disable')">
+<input type="hidden" name="shareName" value="<?=htmlspecialchars($name)?>">
+
+_(Share name)_:
+: <?=htmlspecialchars($name)?>
+
+_(Export)_:
+: <select name="shareExportNFS">
+  <?=mk_option($sec_nfs[$name]['export'], "-", _('No'));?>
+  <?=mk_option($sec_nfs[$name]['export'], "e", _('Yes'));?>
+  </select>
+
+_(Security)_:
+: <select name="shareSecurityNFS">
+  <?=mk_option($sec_nfs[$name]['security'], "public", _('Public'));?>
+  <?=mk_option($sec_nfs[$name]['security'], "secure", _('Secure'));?>
+  <?=mk_option($sec_nfs[$name]['security'], "private", _('Private'));?>
+  </select>
+
+&nbsp;
+: <input type="submit" name="changeShareSecurityNFS" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+</form>
+
+<?if ($sec_nfs[$name]['security']=='private'):?>
+<form markdown="1" method="POST" name="otherForm" action="/update.htm" target="progressFrame">
+<input type="hidden" name="shareName" value="<?=htmlspecialchars($name)?>">
+_(Rule)_:
+: <input type="text" name="shareHostListNFS" maxlength="512" value="<?=htmlspecialchars($sec_nfs[$name]['hostList'])?>">
+
+&nbsp;
+: <input type="submit" name="changeShareAccessNFS" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+</form>
+<?endif;?>
+
+<script>
+$(function() {
+  initDropdownNFS(false);
+  if ($.cookie('hostList')!=null) {
+    var host = $('input[name="shareHostListNFS"]');
+    host.val($.cookie('hostList'));
+    setTimeout(function(){host.trigger('change');},100);
+    $.removeCookie('hostList');
+  }
+<?if ($tabbed):?>
+<?$path=='Shares/Share' ? $t=2 : $t=1;?>
+  $('#tab<?=$t?>').bind({click:function(){initDropdownNFS(true);}});
+<?endif;?>
+});
+function initDropdownNFS(reset) {
+  if (reset) {
+    $('#nfs1').dropdownchecklist('destroy');
+  }
+  $("#nfs1").dropdownchecklist({firstItemChecksAll:true, emptyText:"_(select)_...", width:<?=$width[0]?>, explicitClose:"..._(close)_"});
+}
+function readNFS() {
+  var form = document.nfs_edit;
+  var name = $('select[name="readnfs"]').val();
+  $.get('/webGui/include/ProtocolData.php',{protocol:'nfs',name:name},function(json) {
+    var data = $.parseJSON(json);
+    form.shareExportNFS.value = data.export;
+    form.shareSecurityNFS.value = data.security;
+    if (data.hostList != '') $.cookie('hostList',data.hostList);
+    $(form).find('select').trigger('change');
+  });
+}
+function writeNFS(data,n,i) {
+  if (data) {
+    if (n<i) {
+      $.post('/update.htm',data[n], function(){setTimeout(function(){writeNFS(data,++n,i);},3000);});
+    } else {
+      toggleButton('writenfs',false);
+      $('div.spinner.fixed').hide();
+    }
+  } else {
+    var data = [], i = 0;
+    $('select#nfs1 option').map(function(i) {
+      if ($(this).prop('selected')==true && $(this).val()!='(_(All)_)') {
+        data[i] = {};
+        data[i]['shareName'] = $(this).val();
+        data[i]['shareExportNFS'] = '<?=addslashes(htmlspecialchars($sec_nfs[$name]['export']))?>';
+        data[i]['shareSecurityNFS'] = '<?=addslashes(htmlspecialchars($sec_nfs[$name]['security']))?>';
+        data[i]['changeShareSecurityNFS'] = 'Apply';
+        i++;
+      }
+    });
+    toggleButton('writenfs',true);
+    $('div.spinner.fixed').show('slow');
+    writeNFS(data,0,i);
+  }
+}
+</script>

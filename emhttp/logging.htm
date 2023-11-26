@@ -1,0 +1,86 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta http-equiv="Content-Security-Policy" content="block-all-mixed-content">
+<meta name="format-detection" content="telephone=no">
+<meta name="viewport" content="width=1600">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="same-origin">
+<style>
+/************************
+/
+/  Fonts
+/
+/************************/
+@font-face{font-family:clear-sans;font-weight:normal;font-style:normal; src:url('/webGui/styles/clear-sans.woff?20220513') format('woff')}
+@font-face{font-family:clear-sans;font-weight:bold;font-style:normal; src:url('/webGui/styles/clear-sans-bold.woff?20220513') format('woff')}
+@font-face{font-family:clear-sans;font-weight:normal;font-style:italic; src:url('/webGui/styles/clear-sans-italic.woff?20220513') format('woff')}
+@font-face{font-family:clear-sans;font-weight:bold;font-style:italic; src:url('/webGui/styles/clear-sans-bold-italic.woff?20220513') format('woff')}
+@font-face{font-family:bitstream;font-weight:normal;font-style:normal; src:url('/webGui/styles/bitstream.woff?20220513') format('woff')}
+@font-face{font-family:bitstream;font-weight:bold;font-style:normal; src:url('/webGui/styles/bitstream-bold.woff?20220513') format('woff')}
+@font-face{font-family:bitstream;font-weight:normal;font-style:italic; src:url('/webGui/styles/bitstream-italic.woff?20220513') format('woff')}
+@font-face{font-family:bitstream;font-weight:bold;font-style:italic; src:url('/webGui/styles/bitstream-bold-italic.woff?20220513') format('woff')}
+
+html{font-family:clear-sans;font-size:62.5%;height:100%}
+body{font-size:1.2rem;color:#1c1c1c;background:#f2f2f2;padding:0;margin:0;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+.logLine{font-family:bitstream;font-size:1.2rem;line-height:1.6rem;margin:0 8px;padding:0}
+.logLine.spacing{margin:10px}
+input[type=button],input[type=reset],input[type=submit],button,button[type=button],a.button{font-family:clear-sans;font-size:1.1rem;font-weight:bold;letter-spacing:2px;text-transform:uppercase;margin:10px 12px 10px 0;padding:9px 18px;text-decoration:none;white-space:nowrap;cursor:pointer;outline:none;border-radius:4px;border:0;color:#ff8c2f;background:-webkit-gradient(linear,left top,right top,from(#e22828),to(#ff8c2f)) 0 0 no-repeat,-webkit-gradient(linear,left top,right top,from(#e22828),to(#ff8c2f)) 0 100% no-repeat,-webkit-gradient(linear,left bottom,left top,from(#e22828),to(#e22828)) 0 100% no-repeat,-webkit-gradient(linear,left bottom,left top,from(#ff8c2f),to(#ff8c2f)) 100% 100% no-repeat;background:linear-gradient(90deg,#e22828 0,#ff8c2f) 0 0 no-repeat,linear-gradient(90deg,#e22828 0,#ff8c2f) 0 100% no-repeat,linear-gradient(0deg,#e22828 0,#e22828) 0 100% no-repeat,linear-gradient(0deg,#ff8c2f 0,#ff8c2f) 100% 100% no-repeat;background-size:100% 2px,100% 2px,2px 100%,2px 100%}
+input:hover[type=button],input:hover[type=reset],input:hover[type=submit],button:hover,button:hover[type=button],a.button:hover{color:#f2f2f2;background:-webkit-gradient(linear,left top,right top,from(#e22828),to(#ff8c2f));background:linear-gradient(90deg,#e22828 0,#ff8c2f)}
+input[type=button][disabled],input[type=reset][disabled],input[type=submit][disabled],button[disabled],button[type=button][disabled],a.button[disabled]
+input:hover[type=button][disabled],input:hover[type=reset][disabled],input:hover[type=submit][disabled],button:hover[disabled],button:hover[type=button][disabled],a.button:hover[disabled]
+input:active[type=button][disabled],input:active[type=reset][disabled],input:active[type=submit][disabled],button:active[disabled],button:active[type=button][disabled],a.button:active[disabled]{cursor:default;color:#808080;background:-webkit-gradient(linear,left top,right top,from(#404040),to(#808080)) 0 0 no-repeat,-webkit-gradient(linear,left top,right top,from(#404040),to(#808080)) 0 100% no-repeat,-webkit-gradient(linear,left bottom,left top,from(#404040),to(#404040)) 0 100% no-repeat,-webkit-gradient(linear,left bottom,left top,from(#808080),to(#808080)) 100% 100% no-repeat;background:linear-gradient(90deg,#404040 0,#808080) 0 0 no-repeat,linear-gradient(90deg,#404040 0,#808080) 0 100% no-repeat,linear-gradient(0deg,#404040 0,#404040) 0 100% no-repeat,linear-gradient(0deg,#808080 0,#808080) 100% 100% no-repeat;background-size:100% 2px,100% 2px,2px 100%,2px 100%}
+p.centered{text-align:center}
+span.error{color:#F0000C;background-color:#FF9E9E;display:block;width:100%}
+span.warn{color:#E68A00;background-color:#FEEFB3;display:block;width:100%}
+span.system{color:#00529B;background-color:#BDE5F8;display:block;width:100%}
+span.array{color:#4F8A10;background-color:#DFF2BF;display:block;width:100%}
+span.login{color:#D63301;background-color:#FFDDD1;display:block;width:100%}
+span.label{padding:4px 8px;margin-right:10px;border-radius:4px;display:inline;width:auto}
+</style>
+<script>
+var progressframe = parent.document.getElementById('progressFrame');
+if (progressframe) progressframe.style.zIndex = 10;
+var lastLine = 0;
+var cursor;
+function addLog(logLine) {
+  var scrollTop = (window.pageYOffset !== undefined) ? window.pageYOffset : (document.documentElement || document.body.parentNode).scrollTop;
+  var clientHeight = (document.documentElement || document.body.parentNode).clientHeight;
+  var scrollHeight = (document.documentElement || document.body.parentNode).scrollHeight;
+  var isScrolledToBottom = scrollHeight - clientHeight <= scrollTop + 1;
+  if (lastLine == 0) {
+    lastLine = document.body.innerHTML.length;
+    cursor = lastLine;
+  }
+  if (logLine.slice(-1) == "\n") {
+    document.body.innerHTML = document.body.innerHTML.slice(0,cursor) + logLine.slice(0,-1) + "<br>";
+    lastLine = document.body.innerHTML.length;
+    cursor = lastLine;
+  }
+  else if (logLine.slice(-1) == "\r") {
+    document.body.innerHTML = document.body.innerHTML.slice(0,cursor) + logLine.slice(0,-1);
+    cursor = lastLine;
+  }
+  else if (logLine.slice(-1) == "\b") {
+    if (logLine.length > 1)
+      document.body.innerHTML = document.body.innerHTML.slice(0,cursor) + logLine.slice(0,-1);
+    cursor += logLine.length-2;
+  }
+  else {
+    document.body.innerHTML += logLine;
+    cursor += logLine.length;
+  }
+  if (isScrolledToBottom) {
+    window.scrollTo(0,document.body.scrollHeight);
+  }
+}
+function addCloseButton() {
+  var done = location.search.split('&').pop().split('=')[1];
+  addLog("<p class='centered'><button class='logLine' type='button' onclick='" + (parent.Shadowbox ? "parent.Shadowbox" : "window") + ".close()'>"+decodeURI(done)+"</button></p>");
+}
+</script>
+</head>
+<body class="logLine spacing" onload="addCloseButton()"></body>
+</html>

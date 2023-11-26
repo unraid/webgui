@@ -1,0 +1,127 @@
+Menu="UNRAID-OS"
+Title="New Permissions"
+Icon="icon-permissions"
+Tag="folder-o"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$width = [166,300];
+function data_disks($disk) {
+  global $pools;
+  return (_var($disk,'type')=="Data" || (_var($disk,'type')=="Cache" && in_array(_var($disk,'name'),$pools))) && _var($disk,'status')=='DISK_OK';
+}
+?>
+<script>
+function selection(select,remove) {
+  if (remove) {
+    $('#s1').dropdownchecklist('destroy');
+    $('#s2').dropdownchecklist('destroy');
+  }
+  if (select==0) {$('#disks').show(); $('#shares').hide();} else {$('#shares').show(); $('#disks').hide();}
+  $('#s1').dropdownchecklist({emptyText:"_(None)_", width:<?=$width[0]?>, firstItemChecksAll:true, explicitClose:"..._(close)_"});
+  $('#s2').dropdownchecklist({emptyText:"_(None)_", width:<?=$width[0]?>, firstItemChecksAll:true, explicitClose:"..._(close)_"});
+<?if ($var['fsState']!="Started"):?>
+  $('#s1').dropdownchecklist('disable');
+  $('#s2').dropdownchecklist('disable');
+<?endif;?>
+}
+function setNewPerms(form) {
+  var dirs = [];
+  if (form.select.value==0) {
+    for (var i=1,item; item=form.disks.options[i]; i++) {
+      if (item.selected) dirs.push(item.value);
+    }
+  } else {
+    for (var i=1,item; item=form.shares.options[i]; i++) {
+      if (item.selected) dirs.push(item.value);
+    }
+  }
+  dirs = dirs.join('*');
+  if (dirs) {
+    swal({title:"_(Proceed)_?",text:"_(This will update folder & file permissions)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},
+      function(){setTimeout(function(){openPlugin('newperms '+encodeURIComponent(dirs),"_(New Permissions)_");},250);
+    });
+  }
+}
+$(function() {
+  selection(0,false);
+});
+</script>
+
+:newperms_1_plug:
+This is a mandatory one-time action to be taken after upgrading from a pre-5.0 Unraid server release to Unraid v5 or a later release.
+Select **ALL DISKS** when performing this one-time action.
+
+This utility is also useful for restoring default ownership/permissions on files and
+directories when transitioning back from Active Directory to non-Active Directory integration.
+
+The utility starts a background process that goes to each of your data disks and cache disks and selected user shares
+and changes file and directory ownership to *nobody/users* (i.e., uid/gid to 99/100), and sets permissions
+as follows:
+:end
+
+<pre class="pre">
+:newperms_2_plug:
+For directories:
+  drwxrwxrwx
+
+For read/write files:
+  -rw-rw-rw-
+
+For readonly files:
+  -r--r--r--
+:end
+</pre>
+
+:newperms_3_plug:
+Clicking **Start** will open another window and start the background process.
+
+Closing the window before completion will terminate the background process - so don't do that. This process can take a long time if you have many files.
+
+Note that this tool may negatively affect any docker containers if you allow your **appdata** share to be included.
+:end
+
+<form method="POST" action="/update.htm" target="progressFrame">
+<span class="block">
+<select name="select" onchange="selection(this.value,true)">
+<?=mk_option(0,"0","_(Disks)_")?>
+<?=mk_option(0,"1","_(Shares)_")?>
+</select>
+</span>
+
+<span id="disks" class="block">
+<select id="s1" name="disks" style="display:none" multiple>
+<option value=''>_(All)_</option>
+<?foreach (array_filter($disks,'data_disks') as $disk):?>
+<?=mk_option(1,"/mnt/{$disk['name']}",_(my_disk($disk['name'])),3)?>
+<?endforeach;?>
+</select>
+</span>
+
+<span id="shares" class="block" style="display:none">
+<select id="s2" name="shares" style="display:none" multiple>
+<option value=''>_(All)_</option>
+<?uksort($shares,'strnatcasecmp');?>
+<?foreach ($shares as $share):?>
+<?=mk_option(1,"/mnt/user/{$share['name']}",$share['name'])?>
+<?endforeach;?>
+</select>
+</span>
+
+<?if (_var($var,'fsState')=="Started"):?>
+<div><input type="button" value="_(Start)_" onclick="setNewPerms(this.form)"><input type="button" value="_(Done)_" class="lock" onclick="done()"></div>
+<?else:?>
+<div><input type="button" value="_(Start)_" disabled><input type="button" value="_(Done)_" class="lock" onclick="done()">_(Array must be **Started** to change permissions)_.</div>
+<?endif;?>
+</form>

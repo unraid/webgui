@@ -1,0 +1,50 @@
+#!/bin/sh
+#
+# /etc/rc.d/rc.smartd
+#
+# Start/stop/restart the smartd daemon, which monitors the status of
+# S.M.A.R.T. compatible hard drives and reports any problems.
+#
+# By default, smartd will scan for all ATA/SATA and SCSI/SAS hard drives
+# and solid-state drives. Settings may be customized in /etc/smartd.conf.
+
+# Import script defaults:
+if [ -r /etc/default/smartd ]; then
+  . /etc/default/smartd
+fi
+ 
+smart_start() {
+  if [ -x /usr/sbin/smartd -a -r /etc/smartd.conf ]; then
+    echo "Starting smartd:  /usr/sbin/smartd -p /run/smartd.pid $SMARTD_OPTIONS &"
+    /usr/sbin/smartd -p /run/smartd.pid $SMARTD_OPTIONS &
+  fi
+}
+
+smart_stop() {
+  echo "Stopping smartd."
+  if [ -r /run/smartd.pid ]; then
+    kill $(cat /run/smartd.pid)
+  else
+    killall smartd
+  fi
+}
+
+smart_restart() {
+  smart_stop
+  sleep 1
+  smart_start
+}
+
+case "$1" in
+'start')
+  smart_start
+  ;;
+'stop')
+  smart_stop
+  ;;
+'restart')
+  smart_restart
+  ;;
+*)
+  echo "Usage: $0 {start|stop|restart}"
+esac

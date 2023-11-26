@@ -1,0 +1,58 @@
+Menu="Shares:1"
+Title="User Shares"
+Tag="user-circle"
+Cond="_var($var,'fsState')!='Stopped' && _var($var,'shareUser')=='e'"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<table class="share_status">
+<thead><tr><td>_(Name)_</td><td>_(Comment)_</td><td>_(SMB)_</td><td>_(NFS)_</td><td>_(Storage)_</td><td>_(Size)_</td><td>_(Free)_</td></tr></thead>
+<tbody id="shareslist"></tbody>
+</table>
+
+<form name="share_form" method="POST" action="<?=htmlspecialchars($path)?>/Share?name=">
+<input type="button" id="compute-shares" value="_(Compute All)_" onclick="$(this).prop('disabled',true);shareList('',-1)">
+<input type="submit" value="_(Add Share)_">
+<input type="button" value="_(Clean Up)_" onclick="cleanup()" id="cleanup-button" disabled>
+</form>
+
+:share_list_help:
+
+<script>
+function shareList(name,all) {
+  timers.shareList = setTimeout(function(){$('div.spinner.fixed').show();},500);
+  $.post('/webGui/include/ShareList.php',{compute:name,path:"<?=rawurlencode($path)?>",all:all},function(data){
+    clearTimeout(timers.shareList);
+    $('div.spinner.fixed').hide();
+    $('#shareslist').html(data);
+    if (all!=1) $('#compute-shares').prop('disabled',!data||data.indexOf('colspan=')!=-1);
+  });
+}
+function computeShare(name,status) {
+  status.html("<i class='fa fa-circle-o-notch fa-spin'></i> _(Please wait)_...");
+  shareList(name,1);
+}
+function cleanup() {
+  swal({title:"_(CLEAN UP)_",text:"_(Remove unused share configurations)_",type:'info',html:true,animation:'none',showCancelButton:true,closeOnConfirm:false,confirmButtonText:"<?=_('Proceed')?>",cancelButtonText:"<?=_('Cancel')?>"},function(cleanup){
+    if (!cleanup) return;
+    $.post('/webGui/include/ShareList.php',{cleanup:1},function(data){
+      swal({title:"_(CLEAN UP)_",text:"_(Removed share configurations)_: "+data,type:"success",html:true,confirmButtonText:"_(Ok)_"},function(esc){$('#cleanup-button').prop('disabled',true);});
+    });
+  });
+}
+$(function(){
+  // enable CLEAN_UP button only when unused files are present
+  $.post('/webGui/include/ShareList.php',{cleanup:0},function(data){if (data>0) $('#cleanup-button').prop('disabled',false);});
+  shareList('',0);
+});
+</script>

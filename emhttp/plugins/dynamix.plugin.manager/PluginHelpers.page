@@ -1,0 +1,90 @@
+Menu='Buttons'
+Link='nav-user'
+---
+<?
+/* Copyright 2023, Lime Technology
+ * Copyright 2023, Andrew Zawadzki.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<script>
+const ca_args = {};
+
+function ca_refresh() {
+<?if ($task == 'Plugins'):?>
+	loadlist();
+<?else:?>
+	refresh();
+<?endif;?>
+}
+
+function ca_hidePluginUpdate(plugin,version,element) {
+	$.cookie(plugin,version);
+	$(element).hide();
+}
+
+function ca_pluginUpdateInstall(plugin) {
+	if (plugin == null) {
+		openPlugin(ca_args.cmd,ca_args.title,'','ca_refresh');
+		return;
+	}
+	ca_args.cmd = 'plugin update '+plugin;
+	ca_args.title = "_(Installing Update)_";
+	$.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{cmd:'alert'},function(data) {
+		if (data==0) {
+			// no alert message - proceed with update
+			setTimeout(ca_pluginUpdateInstall);
+		} else {
+			// show alert message and ask for confirmation
+			openAlert("showchanges <?=$alerts?>","_(Alert Message)_","ca_pluginUpdateInstall");
+		}
+	});
+}
+
+function caPluginUpdateCheck(plugin,options=[],callback) {
+	var pluginFilename = plugin.substr(0, plugin.lastIndexOf("."));
+	console.time("checkPlugin "+plugin);
+	console.log("checkPlugin  "+plugin);
+	$.post("/plugins/dynamix.plugin.manager/scripts/PluginAPI.php",{action:'checkPlugin',options:{plugin:plugin,name:options.name}},function(caAPIresult) {
+		console.groupCollapsed("Result checkPlugin "+plugin);
+		console.log(caAPIresult);
+		console.timeEnd("checkPlugin "+plugin);
+		console.groupEnd();
+		var result = JSON.parse(caAPIresult);
+
+		if ( options.debug == true ) result.updateAvailable = true;
+		if ( ! options.element && ! options.dontShow ) {
+			if ( result.updateAvailable ) {
+				var HTML = result.updateMessage+"<span class='bannerInfo fa fa-info-circle big' title=\"_(View Release Notes)_\" onclick='openChanges(\"showchanges /tmp/plugins/"+pluginFilename+".txt\",\"_(Release Notes)_\")'></span><a class='ca_PluginUpdateInstall' onclick='ca_pluginUpdateInstall(\""+plugin+"\")'>"+result.linkMessage+"</a>";
+				addBannerWarning(HTML,false,options.noDismiss);
+			}
+		} else {
+			if ( $.cookie(plugin) != result.version ) {
+				if ( result.updateAvailable ) {
+					var HTML = result.updateMessage+"<span class='bannerInfo fa fa-info-circle big' title=\"_(View Release Notes)_\" onclick='openChanges(\"showchanges /tmp/plugins/"+pluginFilename+".txt\",\"_(Release Notes)_\")'></span><a class='ca_PluginUpdateInstall' onclick='ca_pluginUpdateInstall(\""+plugin+"\")'>"+result.linkMessage+"</a>";
+					if ( ! options.noDismiss ) {
+						HTML = HTML.concat("<span class='ca_PluginUpdateDismiss'><i class='fa fa-close' onclick='ca_hidePluginUpdate(\""+plugin+"\",\""+result.version+"\",\""+options.element+"\")'></i></span>");
+					}
+					result.HTML = HTML;
+					if ( ! options.dontShow ) {
+						$(options.element).html(HTML);
+						$(options.element).addClass("ca_element_notice");
+					}
+				}
+			}
+		}
+		if ( typeof options === "function" ) {
+			callback = options;
+		}
+		if ( typeof callback === "function" ) {
+			callback(JSON.stringify(result));
+		}
+	});
+}
+</script>

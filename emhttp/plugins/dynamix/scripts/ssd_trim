@@ -1,0 +1,88 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/Wrappers.php";
+extract(parse_plugin_cfg('dynamix',true));
+
+// cron operation
+if ($argc==2 && $argv[1]=='cron') {
+  // trim btrfs, xfs
+  echo shell_exec("fstrim -va 2>/dev/null");
+  // trim zfs
+  zfs_trim(false);
+  exit(0);
+}
+
+// add translations
+$_SERVER['REQUEST_URI'] = 'settings';
+$login_locale = _var($display,'locale');
+require_once "$docroot/webGui/include/Translations.php";
+
+function write(...$messages){
+  $com = curl_init();
+  curl_setopt_array($com,[
+    CURLOPT_URL => 'http://localhost/pub/plugins?buffer_length=1',
+    CURLOPT_UNIX_SOCKET_PATH => '/var/run/nginx.socket',
+    CURLOPT_POST => 1,
+    CURLOPT_RETURNTRANSFER => true
+  ]);
+  foreach ($messages as $message) {
+    curl_setopt($com, CURLOPT_POSTFIELDS, $message);
+    curl_exec($com);
+  }
+  curl_close($com);
+}
+
+function is_hdd($disk) {
+  $disk = explode('/',$disk);
+  $disk = preg_replace('/^(sd[a-z]+|nvme[0-9]+n1)p?1$/','$1',end($disk));
+  return file_get_contents("/sys/block/$disk/queue/rotational")==1;
+}
+
+function zfs_info($name) {
+  $trim = preg_replace('/(.$)/',' $1',exec("zfs list -Ho used $name"))."iB";
+  $bytes = exec("zfs list -Hpo used $name");
+  exec("zpool list -vHP $name|grep -Po '^\s+\K/\S+'",$devs);
+  foreach ($devs as &$dev) if (is_hdd($dev)) $dev = '';
+  return "/mnt/$name: $trim ($bytes bytes) trimmed on ".implode(', ',array_filter($devs));
+}
+
+function zfs_trim($write) {
+  if (!file_exists('/proc/spl/kstat/zfs/arcstats')) return;
+  exec("zfs list -d0 -Ho name",$pools);
+  foreach ($pools as $name) {
+    if ($write) {
+      write("/mnt/$name: ... <i class='fa fa-spin fa-circle-o-notch'></i>\r");
+      if (exec("zpool trim -w $name 2>&1")=='') write(zfs_info($name)."\r","\n"); else write("\r");
+    } else {
+      if (exec("zpool trim -w $name 2>&1")=='') echo zfs_info($name)."\n";
+    }
+  }
+}
+
+write(_("TRIM operation started")."\n","\n","\n");
+// trim btrfs, xfs
+exec("findmnt -lnt btrfs,xfs -o target,source|awk '\$2!~\"\\\\[\"{print \$1,\$2}'",$mounts);
+foreach ($mounts as $mount) {
+  [$target,$source] = explode(' ',$mount);
+  if (is_hdd($source)) continue;
+  write("$target: ... <i class='fa fa-spin fa-circle-o-notch'></i>\r");
+  $trim = exec("fstrim -v $target 2>/dev/null");
+  if ($trim) write("$trim on $source\r","\n"); else write("\r");
+}
+// trim zfs
+zfs_trim(true);
+write(_("Finished")."\n",'_DONE_','');
+?>

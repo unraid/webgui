@@ -1,0 +1,53 @@
+#!/bin/bash
+
+# Script to set the USE_SSL variable, presumably to 'yes' or 'no' when currently set to 'auto' and
+# DNS resolution fails, locking out user from webGUI.  In this case, user can use console or
+# ssh/telnet to login and restore http or self-signed https access.
+# To set USE_SSL to 'no':
+#  use_ssl no
+# To set USE_SSL to 'yes':
+#  use_ssl yes
+
+USE_SSL=$(awk -F "=" '/USE_SSL/ {print $2}' /usr/local/emhttp/state/var.ini 2>/dev/null | tr -d '"')
+NGINX_DEFAULTURL=$(awk -F "=" '/NGINX_DEFAULTURL/ {print $2}' /usr/local/emhttp/state/nginx.ini 2>/dev/null | tr -d '"')
+
+# use_ssl is "no", nothing to do here
+if [[ "$USE_SSL" == "no" ]]; then
+  echo "use_ssl is currently set to 'no'."
+  echo "The default url is $NGINX_DEFAULTURL"
+  echo "To enable SSL, visit Settings -> Management Access in the webGUI."
+  exit 1
+fi
+
+# use_ssl is "yes", allow downgrade to "no"
+if [[ "$USE_SSL" == "yes" && "$1" != "no" ]]; then
+  echo "use_ssl is currently set to 'yes'"
+  echo "The default url is $NGINX_DEFAULTURL"
+  echo "To disable SSL, execute: $0 no"
+  exit 1
+fi
+
+# use_ssl is "auto", allow downgrade to "yes" or "no"
+if [[ "$USE_SSL" == "auto" && "$1" != "yes" && "$1" != "no" ]]; then
+  echo "use_ssl is currently set to 'auto' (which means Strict)"
+  echo "The default url is $NGINX_DEFAULTURL"
+  echo "For less strict SSL, execute: $0 yes"
+  echo "To disable SSL, execute: $0 no"
+  exit 1
+fi
+
+# final test if USE_SSL is unexpected value, should never happen. at least ensure the values of $1 are correct
+if [[ "$1" != "yes" && "$1" != "no" ]]; then
+  echo "use_ssl is currently set to '$USE_SSL'"
+  echo "The default url is $NGINX_DEFAULTURL"
+  echo "Usage: $0 [no|yes]"
+  exit 1
+fi
+
+emcmd "USE_SSL=$1&server_name=localhost&server_addr=127.0.0.1&changePorts=Apply"
+[[ $? -ne 0 ]] && echo "unable to change use_ssl from '${USE_SSL}' to '$1'" && exit 1
+
+NGINX_DEFAULTURL=$(awk -F "=" '/NGINX_DEFAULTURL/ {print $2}' /usr/local/emhttp/state/nginx.ini 2>/dev/null | tr -d '"')
+echo "use_ssl changed from '${USE_SSL}' to '$1'"
+echo "The default url is now $NGINX_DEFAULTURL"
+exit 0

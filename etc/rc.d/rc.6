@@ -1,0 +1,281 @@
+#!/bin/bash
+#
+# script: rc.6
+#
+# This file is executed by init when it goes into runlevel 0 (halt) or runlevel 6 (reboot).
+# It kills all processes, unmounts file systems and then either halts or reboots.
+#
+# Version: 2.47 Sat Jan 13 13:37:26 PST 2001
+#
+# Author:  Miquel van Smoorenburg <miquels@drinkel.nl.mugnet.org>
+#          Modified by: Patrick J. Volkerding, <volkerdi@slackware.com>
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+# Set the path.
+PATH=/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# If there are SystemV init scripts for this runlevel, run them.
+if [[ -x /etc/rc.d/rc.sysvinit ]]; then
+  /etc/rc.d/rc.sysvinit
+fi
+
+# Set linefeed mode to avoid staircase effect.
+/bin/stty onlcr
+
+log "Running shutdown script $0:"
+
+# Find out how we were called.
+case "$0" in
+*0)
+  SHUTDOWN_COMMAND="halt"
+  ;;
+*6)
+  SHUTDOWN_COMMAND="reboot"
+  ;;
+*)
+  /bin/echo "$0: call me as \"rc.0\" or \"rc.6\" please!"
+  exit 1
+esac
+
+# Restart init. This prevents init from hanging on to file handles for removed
+# glibc shared libraries in the case that those were upgraded or reinstalled.
+/sbin/telinit u
+
+# Save the system time to the hardware clock using hwclock --systohc.
+# This will also create or update the timestamps in /etc/adjtime.
+if [[ -x /sbin/hwclock ]]; then
+  # Check for a broken motherboard RTC clock (where ioports for rtc are
+  # unknown) to prevent hwclock causing a hang:
+  if ! /bin/grep -q " : rtc" /proc/ioports; then
+    CLOCK_OPT="--directisa"
+  fi
+  if [[ /etc/adjtime -nt /etc/hardwareclock ]]; then
+    if /bin/grep -q "^LOCAL" /etc/adjtime; then
+      log "Saving system time to the hardware clock (localtime)."
+    else
+      log "Saving system time to the hardware clock (UTC)."
+    fi
+    run /sbin/hwclock $CLOCK_OPT --systohc
+  elif /bin/grep -q "^UTC" /etc/hardwareclock 2>/dev/null; then
+    log "Saving system time to the hardware clock (UTC)."
+    if [[ ! -r /etc/adjtime ]]; then
+      log "Creating system time correction file /etc/adjtime."
+    fi
+    run /sbin/hwclock $CLOCK_OPT --utc --systohc
+  else
+    log "Saving system time to the hardware clock (localtime)."
+    if [[ ! -r /etc/adjtime ]]; then
+      log "Creating system time correction file /etc/adjtime."
+    fi
+    run /sbin/hwclock $CLOCK_OPT --localtime --systohc
+  fi
+fi
+
+# Run any local shutdown scripts:
+if [[ -x /etc/rc.d/rc.local_shutdown ]]; then
+  /etc/rc.d/rc.local_shutdown stop
+fi
+
+# Stop mcelog
+if [[ -x /etc/rc.d/rc.mcelog ]]; then
+  /etc/rc.d/rc.mcelog stop
+fi
+
+# Stop the Samba server:
+if [[ -x /etc/rc.d/rc.samba ]]; then
+  /etc/rc.d/rc.samba stop
+fi
+
+# Stop avahi:
+if [[ -x /etc/rc.d/rc.avahidaemon ]]; then
+  /etc/rc.d/rc.avahidaemon stop
+  /etc/rc.d/rc.avahidnsconfd stop
+fi
+
+# Shut down WireGuard
+if [[ -x /etc/rc.d/rc.wireguard ]]; then
+  /etc/rc.d/rc.wireguard stop
+fi
+
+# Shut down OpenLDAP:
+if [[ -x /etc/rc.d/rc.openldap ]]; then
+  /etc/rc.d/rc.openldap stop
+fi
+
+# Shut down the SASL authentication daemon:
+if [[ -x /etc/rc.d/rc.saslauthd ]]; then
+  /etc/rc.d/rc.saslauthd stop
+fi
+
+# Stop the MySQL database:
+if [[ -x /etc/rc.d/rc.mysqld && -r /var/run/mysql/mysql.pid ]]; then
+  /etc/rc.d/rc.mysqld stop
+fi
+
+# Shut down the NFS server:
+if [[ -x /etc/rc.d/rc.nfsd ]]; then
+  /etc/rc.d/rc.nfsd stop
+fi
+
+# Shut down the SSH server:
+if [[ -x /etc/rc.d/rc.sshd ]]; then
+  /etc/rc.d/rc.sshd stop
+fi
+
+# Stop the Network Time Protocol daemon:
+if [[ -x /etc/rc.d/rc.ntpd ]]; then
+  /etc/rc.d/rc.ntpd stop
+fi
+
+# Kill any processes (typically gam) that would otherwise prevent
+# unmounting NFS volumes:
+unset FUSER_DELAY
+for DIR in $(/bin/mount | /bin/grep -e 'type nfs ' -e 'type nfs4 ' | /bin/sed -e 's|.* on ||g' | /bin/cut -d ' ' -f 1); do
+  log "Killing processes holding NFS mount $DIR open..."
+  # Background this to prevent fuser from also blocking shutdown:
+  run /usr/bin/fuser -k -M -m "$DIR" &
+  FUSER_DELAY=5
+done
+# If fuser was run, let it have some delay:
+if [[ -n $FUSER_DELAY ]]; then
+  /bin/sleep $FUSER_DELAY
+fi
+
+# Unmount any NFS, SMB, or CIFS filesystems:
+log "Unmounting remote filesystems:"
+/bin/umount -v -a -l -f -r -t nfs,nfs4,smbfs,cifs | /bin/tr -d ' ' | /bin/grep successfully | /bin/sed "s/:successfullyunmounted/ has been successfully unmounted./g" | log
+# Update PATH hashes:
+hash -r
+
+# Stop D-Bus:
+if [[ -x /etc/rc.d/rc.messagebus ]]; then
+  /etc/rc.d/rc.messagebus stop
+fi
+
+# Bring down the networking system, but first make sure that this
+# isn't a diskless client with the / partition mounted via NFS:
+if ! /bin/mount | /bin/grep -q -e 'on / type nfs' -e 'on / type nfs4'; then
+  if [[ -x /etc/rc.d/rc.inet1 ]]; then
+    /etc/rc.d/rc.inet1 stop
+  fi
+fi
+
+# In case dhcpcd might have been manually started on the command line,
+# look for the .pid file, and shut dhcpcd down if it's found:
+if /bin/ls /etc/dhcpc/*.pid &>/dev/null; then
+  /sbin/dhcpcd -k &>/dev/null
+  # A little time for /etc/resolv.conf and/or other files to
+  # restore themselves.
+  /bin/sleep 2
+fi
+
+# Turn off process accounting:
+if [[ -x /sbin/accton && -r /var/log/pacct ]]; then
+  /sbin/accton off
+fi
+
+# Terminate acpid before syslog:
+if [[ -x /etc/rc.d/rc.acpid && -r /var/run/acpid.pid ]]; then # quit
+  /etc/rc.d/rc.acpid stop
+fi
+
+# Stop udev:
+if [[ -x /etc/rc.d/rc.udev ]]; then
+  /etc/rc.d/rc.udev force-stop
+fi
+
+# Kill all remaining processes.
+OMITPIDS="$(for P in $(/usr/bin/pgrep mdmon); do /bin/echo -o $P; done)" # Don't kill mdmon
+if [[ $1 != fast ]]; then
+  log "Sending all processes the SIGTERM signal."
+  run /sbin/killall5 -15 $OMITPIDS
+  /bin/sleep 5
+  log "Sending all processes the SIGKILL signal."
+  run /sbin/killall5 -9 $OMITPIDS
+fi
+
+# limetech - let's keep this on the USB flash
+# Carry a random seed between reboots.
+/usr/sbin/seedrng
+/bin/cp /var/lib/seedrng/seed.credit /boot/config/random-seed 2>/dev/null
+
+# Before unmounting file systems write a reboot or halt record to wtmp.
+/sbin/$SHUTDOWN_COMMAND -w
+
+# Turn off swap:
+if [[ ! $(/bin/cat /proc/swaps | /bin/wc -l) == 1 ]]; then
+  log "Turning off swap."
+  run /sbin/swapoff -a
+  run /bin/sync
+fi
+
+# Unmount local file systems:
+# limetech - but not /, /lib, /usr or /boot (yet)
+log "Unmounting local file systems:"
+EXCLUDE_TYPES=("proc" "sysfs" "tmpfs" "devtmpfs" "devpts" "nfsd")
+EXCLUDE_PATHS=("/" "/lib" "/usr" "/boot")
+while IFS= read -r LINE; do
+  MOUNT_TYPE=$(/bin/echo "$LINE" | awk '{print $3}')
+  MOUNT_PATH=$(/bin/echo "$LINE" | awk '{print $2}')
+  [[ " ${EXCLUDE_TYPES[@]} " =~ " $MOUNT_TYPE " ]] && continue
+  [[ " ${EXCLUDE_PATHS[@]} " =~ " $MOUNT_PATH " ]] && continue
+  run /bin/umount -v "$MOUNT_PATH"
+done <<< "$(/bin/cat /proc/mounts)"
+
+# limetech - shut down the unraid driver if started
+if /bin/grep -qs 'mdState=STARTED' /proc/mdstat; then
+  log "Stopping md/unraid driver:"
+  /bin/echo "stop" >/proc/mdcmd
+  if /bin/grep -qs 'mdState=STOPPED' /proc/mdstat; then
+    log "Clean shutdown"
+    /bin/rm -f /boot/config/forcesync
+  else
+    log "Unclean shutdown - Cannot stop md/unraid driver"
+  fi
+fi
+
+# This never hurts:
+/bin/sync
+
+# now remount /boot read-only
+log "Remounting /boot read-only:"
+run /bin/mount -v -o remount,ro /boot
+
+log "Remounting root filesystem read-only:"
+run /bin/mount -v -n -o remount,ro /
+
+# sleep 3 fixes problems with some hard drives that don't
+# otherwise finish syncing before reboot or poweroff
+/bin/sleep 3
+
+# This is to ensure all processes have completed on SMP machines:
+wait
+
+if [[ -x /sbin/genpowerd ]]; then
+  # See if this is a powerfail situation:
+  if /bin/grep -Eq "FAIL|SCRAM" /etc/upsstatus 2>/dev/null; then
+    # Signal UPS to shut off the inverter:
+    run /sbin/genpowerd -k
+    if [[ $? != 0 ]]; then
+      log "There was an error signaling the UPS."
+      log "Perhaps you need to edit /etc/genpowerd.conf to configure"
+      log "the serial line and UPS type."
+      # Wasting 15 seconds of precious power:
+      /bin/sleep 15
+    fi
+  fi
+fi
+
+# Now halt (poweroff with APM or ACPI enabled kernels) or reboot.
+if [[ $SHUTDOWN_COMMAND == reboot ]]; then
+  log "Rebooting."
+  run /sbin/reboot
+else
+  log "Powering off."
+  run /sbin/poweroff
+fi

@@ -1,0 +1,77 @@
+#!/usr/bin/php -q
+<?
+# Copyright 2005-2023, Lime Technology
+#
+# Usage: newperms [dir] [owner] [group]
+# Recursively changes the ownership and permissions of the directory and all files/subdirs
+# within the directory.
+# If no arguments given, operates on /mnt/cache and /mnt/disk*, setting owner:group to nobody:users
+# default owner is 'nobody', default group is 'users'
+
+# This was created to fix ownership/permissions when upgrading to Unraid version 5.
+
+# With corrections suggested by forum member Stokkes
+
+# Here's a breakdown of chmod "u-x,go-rwx,go+u,ugo+X"
+#  u-x     Clear the 'x' bit in the user permissions (leaves rw as-is)
+#  go-rwx  Clear the 'rwx' bits in both the group and other permissions
+#  go+u    Copy the user permissions to group and other
+#  ugo+X   Set the 'x' bit for directories in user, group, and other
+
+$nchan = $argv[$argc-1] == 'nchan'; // console or nchan output
+if ($nchan) unset($argv[$argc-1]);  // remove nchan parameter
+
+function write(...$messages){
+  global $nchan;
+  if ($nchan) {
+    $com = curl_init();
+    curl_setopt_array($com,[
+      CURLOPT_URL => 'http://localhost/pub/plugins?buffer_length=1',
+      CURLOPT_UNIX_SOCKET_PATH => '/var/run/nginx.socket',
+      CURLOPT_POST => 1,
+      CURLOPT_RETURNTRANSFER => true
+    ]);
+    foreach ($messages as $message) {
+      curl_setopt($com, CURLOPT_POSTFIELDS, $message);
+      curl_exec($com);
+    }
+    curl_close($com);
+  } else {
+    foreach ($messages as $message) echo $message;
+  }
+}
+function process($path) {
+  global $argv;
+  $owner = $argv[2] ?? 'nobody';
+  $group = $argv[3] ?? 'users';
+  if (is_dir($path) && preg_match('/^\/mnt\/.+/',$path)) {
+    write("Processing: $path\n", "... chmod -R u-x,go-rwx,go+u,ugo+X $path\n");
+    exec("chmod -R u-x,go-rwx,go+u,ugo+X ".escapeshellarg($path));
+    write("... chown -R $owner:$group $path\n");
+    exec("chown -R $owner:$group ".escapeshellarg($path));
+    write("... sync\n");
+    exec("sync");
+    write("\n");
+  } else write("Error: expecting absolute folder path starting with /mnt\n");
+}
+
+$startTime = time();
+
+if ($argv[1]??'') {
+  $paths = array_filter(explode('*',rawurldecode($argv[1])));
+  foreach ($paths as $path) process($path);
+} else {
+  $disks = parse_ini_file("/var/local/emhttp/disks.ini",true);
+  foreach ($disks as $disk => $prop) {
+    if (is_dir("/mnt/$disk") && !in_array($prop['status'],['DISK_NP_DSBL','DISK_NP'])) process("/mnt/$disk");
+  }
+}
+
+$time  = time()-$startTime;
+$hours = floor($time/3600);
+$mins  = floor($time/60)%60;
+$secs  = floor($time%60);
+
+write("Completed, elapsed time: ".sprintf('%02d:%02d:%02d', $hours, $mins, $secs)."\n");
+if ($nchan) write('_DONE_','');
+?>

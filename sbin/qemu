@@ -1,0 +1,7 @@
+#!/bin/bash
+source /boot/config/domain.cfg
+if [ $DISABLE == "yes" ]
+    then 
+    exit ;
+fi 
+eval exec /usr/bin/qemu-system-x86_64 $(/usr/local/emhttp/plugins/dynamix.vm.manager/scripts/qemu.php "$@")

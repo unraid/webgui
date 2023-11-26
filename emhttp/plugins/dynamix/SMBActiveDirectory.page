@@ -1,0 +1,52 @@
+Menu="SMB:3"
+Title="Active Directory Settings"
+Tag="list-ul"
+Cond="($var['shareSMBEnabled']=='ads')"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<form markdown="1" name="JoinOps" method="POST" action="/update.htm" target="progressFrame">
+_(AD join status)_:
+: <?=$var['joinStatus'];?>&nbsp;
+
+_(AD domain name)_ (FQDN):
+: <input type="text" name="DOMAIN" maxlength="80" value="<?=htmlspecialchars($var['DOMAIN'])?>">
+
+_(AD short domain name)_:
+: <input type="text" name="DOMAIN_SHORT" maxlength="40" value="<?=htmlspecialchars($var['DOMAIN_SHORT'])?>">
+
+_(AD account login)_:
+: <input type="text" name="DOMAIN_LOGIN" maxlength="40" value="<?=htmlspecialchars($var['DOMAIN_LOGIN'])?>">
+
+_(AD account password)_:
+: <input type="password" name="DOMAIN_PASSWD" maxlength="40" value="<?=htmlspecialchars($var['DOMAIN_PASSWD'])?>">
+
+&nbsp;
+: <?if ($var['joinStatus']=="Joined"):?>
+  <input type="submit" name="cmdJoinDomain" value="_(Join)_" disabled><input type="submit" name="cmdLeaveDomain" value="_(Leave)_">
+  <?else:?>
+  <input type="submit" name="cmdJoinDomain" value="_(Join)_"><input type="submit" name="cmdLeaveDomain" value="_(Leave)_" disabled>
+  <?endif;?>
+</form>
+<br>
+
+<form markdown="1" name="shareOwnership" method="POST" action="/update.htm" target="progressFrame">
+_(AD initial owner)_:
+: <input type="text" name="shareInitialOwner" maxlength="40" value="<?=htmlspecialchars($var['shareInitialOwner'])?>">
+
+_(AD initial group)_:
+: <input type="text" name="shareInitialGroup" maxlength="40" value="<?=htmlspecialchars($var['shareInitialGroup'])?>">
+
+&nbsp;
+: <input type="submit" name="changeShare" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+</form>

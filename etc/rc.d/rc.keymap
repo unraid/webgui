@@ -1,0 +1,9 @@
+#!/bin/bash
+#
+# Load a keyboard map.  More maps are in /usr/share/kbd/keymaps.
+
+# Read Unraid config file and set kayboard layout if found.
+KBD_LAYOUT=$(grep "keyboard_layout" /boot/config/plugins/dynamix/dynamix.cfg 2>/dev/null | cut -d'=' -f2 | sed 's/"//g')
+if [[ ! -z $KBD_LAYOUT ]]; then
+  loadkeys $KBD_LAYOUT >/dev/null 2>&1
+fi

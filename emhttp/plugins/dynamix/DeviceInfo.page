@@ -1,0 +1,1332 @@
+Menu="Device:1"
+Title="$name _(Settings)_"
+Tag="hdd-o"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License verssion 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+require_once "$docroot/webGui/include/Preselect.php";
+
+$unassigned = array_key_exists($name, $devs);
+$disks      = array_merge_recursive($disks, $devs);
+$disk       = &$disks[$name] ?? [];
+$dev        = _var($disk,'device');
+$disk['id'] = _var($disk,'id');
+$events     = explode('|',$disk['smEvents'] ?? $var['smEvents'] ?? $numbers);
+$mode       = ['Disabled','Hourly','Daily','Weekly','Monthly'];
+$days       = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+function sanitize(&$val) {
+  $data = explode('.',str_replace([' ',','],['','.'],$val));
+  $last = array_pop($data);
+  $val = count($data) ? implode($data).".$last" : $last;
+  $val = preg_replace('/[^0-9.]/','',$val);
+}
+function presetSpace($val) {
+  global $disk,$display;
+  if (!$val or strcasecmp($val,'NaN')==0) return;
+  sanitize($val);
+  $size = _var($disk,'fsSize',0);
+  $size = $size>0 ? round(100*$val/$size,1) : 0;
+  $units = ['KB','MB','GB','TB','PB','EB','ZB','YB'];
+  $base = $val>0 ? floor(log($val,1000)) : 0;
+  $size = round($val/pow(1000,$base),1);
+  $unit = _var($units,$base);
+  [$dot,$comma] = str_split(_var($display,'number','.,'));
+  return $size>0 ? number_format($size,$size-floor($size)?1:0,$dot,$comma).' '.$unit : '';
+}
+function fsSize() {
+  global $disks,$pools;
+  $fsSize = [];
+  foreach ($pools as $pool) $fsSize[] = '"'.$pool.'":"'._var($disks[$pool],'fsSize',0).'"';
+  return implode(',',$fsSize);
+}
+function fsType($type) {
+  global $disk;
+  return strpos(_var($disk,'fsType'),$type)!==false;
+}
+function diskStatus($status) {
+  global $disk;
+  return strpos(_var($disk,'status'),$status)!==false;
+}
+function diskType(...$types) {
+  global $disk;
+  $pass = false;
+  foreach ($types as $type) $pass |= _var($disk,'type')==$type;
+  return $pass;
+}
+function makeList($list) {
+  return implode(',',array_map('escapestring',$list));
+}
+function sharename($share) {
+  return basename($share,'.cfg');
+}
+function displayTemp($temp) {
+  global $display;
+  return (_var($display,'unit')=='F' && is_numeric($temp)) ? round($temp*9/5)+32 : $temp;
+}
+function maintenance_mode() {
+  global $var;
+  return _var($var,'fsState')=="Started" && _var($var,'startMode')=="Maintenance" && _var($disk,'luksState',0)<=1;
+}
+function isPool($name) {
+  global $pools;
+  return in_array($name,$pools);
+}
+$sheets = []; $i = $n = 0;
+foreach ($disks as $sheet) {
+  if (_var($sheet,'type')=="Flash" || _var($sheet,'color')=="grey-off" || empty($sheet['name'])) continue;
+  $sheets[] = $sheet['name'];
+  if ($sheet['name']==$name) {$i = $n;}
+  $n++;
+}
+$tag  = _var($disk,'name');
+$end  = count($sheets)-1;
+$prev = $i>0 ? $sheets[$i-1] : $sheets[$end];
+$next = $i<$end ? $sheets[$i+1] : $sheets[0];
+
+$text = isPool($name) ? _('This will ERASE content of ALL devices in the pool') : _('This will ERASE ALL device content');
+?>
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.ui.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/plugins/dynamix.docker.manager/styles/style-$theme.css")?>">
+
+<script>
+if ($.cookie('deletepool')) {
+  $.removeCookie('deletepool');
+  done();
+}
+function setFloor() {
+  if ($('#shareFloor').length==0) return;
+  const fsSize = {<?=fsSize()?>};
+  const units = ['K','M','G','T','P','E','Z','Y'];
+  var val  = $('#shareFloor').val();
+  var full = fsSize["<?=$tag?>"];
+  var size = parseInt(full * 0.1); // 10% of available size
+  var number = val.replace(/[A-Z%\s]/gi,'').replace(',','.').split('.');
+  var last = number.pop();
+  number = number.length ? number.join('')+'.'+last : last;
+  if (number==0 && size>0) {
+    size = size.toString();
+    $.cookie('autosize-<?=$tag?>','1',{expires:365});
+  } else {
+    size = val;
+    $.removeCookie('autosize-<?=$tag?>');
+  }
+  var unit = size.replace(/[0-9.,\s]/g,'');
+  if (unit=='%') {
+    number = (number > 0 && number <= 100) ? parseInt(full * number / 100) : '';
+  } else {
+    var base = unit.length==2 ? 1000 : (unit.length==1 ? 1024 : 0);
+    number = base>0 ? number * Math.pow(base,(units.indexOf(unit.toUpperCase().replace('B',''))||0)) : size;
+  }
+  $('#shareFloor').val(isNaN(number) ? '' : number);
+}
+<?if (fsType('btrfs')):?>
+function presetBTRFS(form,hour) {
+  var mode = form.mode.value;
+  form.min.disabled = mode==0;
+  form.day.disabled = mode==0 || mode!=3;
+  form.dotm.disabled = mode==0 || mode!=4;
+  form.hour1.disabled = mode==0;
+  form.hour2.disabled = mode==0;
+  form.day.value = form.day.disabled ? '*' : (form.day.value=='*' ? 0 : form.day.value);
+  form.dotm.value = form.dotm.disabled ? '*' : (form.dotm.value=='*' ? 1 : form.dotm.value);
+  if (mode==1) {$(hour+'1').hide(); $(hour+'2').show();} else {$(hour+'2').hide(); $(hour+'1').show();}
+}
+function prepareBTRFS(form) {
+  var include = '';
+  var mode = form.mode.value;
+  form.hour.value = mode!=1 ? form.hour1.value : form.hour2.value;
+  form.min.value = mode!=1 ? form.min.value : 0;
+  form.hour1.disabled = true;
+  form.hour2.disabled = true;
+  if (form.usage.value != '') {
+    var job = $(form).find('input[name="#job"]');
+    job.val(job.val().replace('=50','='+form.usage.value));
+  }
+}
+<?endif;?>
+
+<?if (fsType('zfs')):?>
+function presetZFS(form,hour) {
+  var mode = form.mode.value;
+  form.min.disabled = mode==0;
+  form.day.disabled = mode==0 || mode!=3;
+  form.dotm.disabled = mode==0 || mode!=4;
+  form.hour1.disabled = mode==0;
+  form.hour2.disabled = mode==0;
+  form.day.value = form.day.disabled ? '*' : (form.day.value=='*' ? 0 : form.day.value);
+  form.dotm.value = form.dotm.disabled ? '*' : (form.dotm.value=='*' ? 1 : form.dotm.value);
+  if (mode==1) {$(hour+'1').hide(); $(hour+'2').show();} else {$(hour+'2').hide(); $(hour+'1').show();}
+}
+function prepareZFS(form) {
+  var include = '';
+  var mode = form.mode.value;
+  form.hour.value = mode!=1 ? form.hour1.value : form.hour2.value;
+  form.min.value = mode!=1 ? form.min.value : 0;
+  form.hour1.disabled = true;
+  form.hour2.disabled = true;
+  if (form.usage.value != '') {
+    var job = $(form).find('input[name="#job"]');
+    job.val(job.val().replace('=50','='+form.usage.value));
+  }
+}
+<?endif;?>
+
+function selectDiskFsWidth() {
+  var num_slots = <?=_var($disk,'slots',0)?>;
+  var selected_width = <?=_var($disk,'fsWidth',0)?>;
+  $('#diskFsWidthZFS').empty();
+  if (num_slots == 0) {
+    $('#diskFsWidthZFS').prop('disabled',true).append($('<option>', {
+      value: 0,
+      text: "<?=_('no devices')?>"
+    }));
+  } else if ($('#diskFsProfileZFS').val() == '') {
+    var label = (num_slots == 1) ? "device" : "devices";
+    $('#diskFsWidthZFS').append($('<option>', {
+      value: 1,
+      text: _(sprintf('%s '+label,num_slots))
+    }));
+  } else if ($('#diskFsProfileZFS').val() == 'mirror') {
+    var width;
+    for (width=2; width<=Math.min(num_slots,4); width++) {
+      if ((num_slots % width) == 0) {
+        var groups = num_slots / width;
+        var label = (groups == 1) ? "group" : "groups";
+        $('#diskFsWidthZFS').append($('<option>', {
+          value: width,
+          text: _(sprintf('%s '+label+' of %s devices',groups,width)),
+          selected: (width == selected_width)
+        }));
+      }
+    }
+  } else {
+    var width, min_width;
+    if ($('#diskFsProfileZFS').val() == 'raidz1') min_width = 3;
+    else if ($('#diskFsProfileZFS').val() == 'raidz2') min_width = 3;
+    else if ($('#diskFsProfileZFS').val() == 'raidz3') min_width = 4;
+    for (width=min_width; width<=num_slots; width++) {
+      if ((num_slots % width) == 0) {
+        var groups = num_slots / width;
+        var label = (groups == 1) ? "group" : "groups";
+        $('#diskFsWidthZFS').append($('<option>', {
+          value: width,
+          text: _(sprintf('%s '+label+' of %s devices',groups,width)),
+          selected: (width == selected_width)
+        }));
+      }
+    }
+  }
+}
+function selectDiskFsProfile(init) {
+  var t = init ? null : 'slow';
+  if (($('#diskFsType').val()||'').indexOf('auto') != -1) {
+    $('#diskFsProfileBTRFS').prop('disabled',true).hide();
+    $('#diskFsProfileZFS').prop('disabled',true).hide();
+    $('#diskFsWidthZFS').prop('disabled',true).hide();;
+    $('#compression').hide(t);
+    $('#autotrim').hide(t);
+  } else if (($('#diskFsType').val()||'').indexOf('btrfs') != -1) {
+    if (!init) $('#diskFsProfileBTRFS').prop('disabled',false);
+    $('#diskFsProfileBTRFS').show();
+    $('#diskFsProfileZFS').prop('disabled',true).hide();
+    $('#diskFsWidthZFS').prop('disabled',true).hide();
+    $('#compression').show(t);
+<?if (diskType('Cache')):?>
+    $('#autotrim').show(t);
+<?endif;?>
+  } else if (($('#diskFsType').val()||'').indexOf('zfs') != -1) {
+    $('#diskFsProfileBTRFS').prop('disabled',true).hide();
+    if (!init) {
+      $('#diskFsProfileZFS').prop('disabled',false);
+      $('#diskFsWidthZFS').prop('disabled',false);
+    }
+    $('#diskFsProfileZFS').show();
+    $('#diskFsWidthZFS').show();
+    selectDiskFsWidth();
+    $('#compression').show(t);
+<?if (diskType('Cache')):?>
+    $('#autotrim').show(t);
+  } else if (($('#diskFsType').val()||'').indexOf('xfs') != -1) {
+    $('#autotrim').show(t);
+<?endif;?>
+  }
+}
+function changeFsType() {
+  var fstype = ($('#diskFsType').val()||'').replace('luks:','');
+  if (['btrfs', 'zfs'].includes(fstype)) $('#compression').show('slow'); else $('#compression').hide('slow');
+<?if (diskType('Cache')):?>
+  if (['xfs', 'btrfs', 'zfs'].includes(fstype)) $('#autotrim').show('slow'); else $('#autotrim').hide('slow');
+<?endif;?>
+  if (fstype=='reiserfs') $('#reiserfs').show(); else $('#reiserfs').hide(); 
+}
+function prepareDeviceInfo(form) {
+  var events = [];
+  for (var i=0; i < <?=count($preselect)?>; i++) {
+    if (form.elements['at'+i].checked) events.push(form.elements['at'+i].value);
+    form.elements['at'+i].disabled = true;
+  }
+  var custom = form.smCustom.value.trim();
+  custom = custom.length ? custom.split(',') : [];
+  for (var i=0; i < custom.length; i++) events.push(custom[i].trim());
+  form.smEvents.value = events.join('|');
+  if (form.smEvents.value == '<?=$numbers?>') form.smEvents.value = '';
+  if (form.smLevel.value == 1.00) form.smLevel.value = '';
+<?if (_var($display,'unit')=='F'):?>
+  if (form.hotTemp.value>0) form.hotTemp.value = Math.round((form.hotTemp.value-32)*5/9);
+  if (form.maxTemp.value>0) form.maxTemp.value = Math.round((form.maxTemp.value-32)*5/9);
+<?endif;?>
+}
+function setGlue(form,reset) {
+  var data =
+  [{glue:'' ,more:0,dev:0,type:''},                                                        // auto
+   {glue:'' ,more:0,dev:0,type:''},                                                        // ata
+   {glue:',',more:1,dev:0,type:'input',min1:'',max1:'0xffffffff'},                         // nvme
+   {glue:',',more:2,dev:0,type:'select',min11:'',min12:'auto',min21:'',min22:12,min23:16}, // sat
+   {glue:'' ,more:0,dev:0,type:''},                                                        // scsi
+   {glue:',',more:1,dev:1,type:'',min1:0,max1:127},                                        // 3ware
+   {glue:',',more:3,dev:1,type:'',min1:0,max1:15,min2:0,max2:7,min3:0,max3:15},            // adaptec
+   {glue:'/',more:2,dev:1,type:'',min1:1,max1:128,min2:1,max2:8},                          // areca
+   {glue:'/',more:3,dev:1,type:'',min1:1,max1:4,min2:1,max2:128,min3:1,max3:4},            // highpoint
+   {glue:'' ,more:1,dev:1,type:'',min1:0,max1:15},                                         // hp cciss
+   {glue:'' ,more:0,dev:0,type:''},                                                        // marvell
+   {glue:',',more:1,dev:1,type:'',min1:0,max1:127}                                         // megaraid
+  ];
+  var n = form.smType.selectedIndex>0 ? form.smType.selectedIndex-1 : <?=_var($var,'smIndex',0)?>;
+  var x = data[n]['more'];
+  var t = data[n]['type'];
+  for (var i=1; i <= x; i++) {
+    switch (t) {
+    case 'input':
+      var min = data[n]['min'+i];
+      var max = data[n]['max'+i];
+      var len = max.toString().length;
+      if (reset) $('input[name="smPort'+i+'"]').val('');
+      $('select[name="smPort'+i+'"]').prop('disabled',true).hide();
+      $('input[name="smPort'+i+'"]').css('width',80).attr('maxlength',len).attr('placeholder',min).prop('disabled',false).show();
+      break;
+    case 'select':
+      var options = [];
+      var c = 1;
+      do {
+        var option = data[n]['min'+i+(c++)];
+        if (typeof(option)!='undefined') {
+          var selected = option==$('input[name="smPort'+i+'"]').val() ? ' selected':'';
+          options.push('<option value="'+option+'"'+selected+'>'+option+'</option>');
+        } else break;
+      } while (true);
+      if (reset) $('select[name="smPort'+i+'"]').val('');
+      $('input[name="smPort'+i+'"]').prop('disabled',true).hide();
+      $('select[name="smPort'+i+'"]').html(options.join('')).prop('disabled',false).show();
+      break;
+    default:
+      var min = data[n]['min'+i];
+      var max = data[n]['max'+i];
+      var len = max.toString().length;
+      if (reset) $('input[name="smPort'+i+'"]').val('');
+      $('select[name="smPort'+i+'"]').prop('disabled',true).hide();
+      $('input[name="smPort'+i+'"]').css('width',40).attr('maxlength',len).attr('placeholder',min+'...'+max).prop('disabled',false).show();
+    }
+  }
+  for (var i=x+1; i <= 3; i++) {
+    $('input[name="smPort'+i+'"]').val('').prop('disabled',false).hide();
+    $('select[name="smPort'+i+'"]').prop('disabled',true).hide();
+  }
+  if (data[n]['dev']==1) {
+    $('#devtext').show();
+    $('input[name="smDevice"]').show();
+    $('#helptext').show();
+  } else {
+    $('#devtext').hide();
+    $('input[name="smDevice"]').val('').hide();
+    $('#helptext').hide();
+  }
+  form.smGlue.value = form.smType.selectedIndex>0 ? data[n]['glue'] : "<?=_var($var,'smGlue')?>";
+}
+function prepareFS(form,cookie,value) {
+  if ($(form).find('input[type="submit"]').val()=='Cancel') $.removeCookie(cookie); else $.cookie(cookie,value);
+}
+function btrfsBalance(path) {
+  $.post('/webGui/include/FileSystemStatus.php',{cmd:'btrfs-balance',path:path},function(data) {
+    if (data.indexOf('running')>0) {
+      $('#btrfs-balance').text(data);
+      setTimeout(function(){btrfsBalance(path);},1000);
+    } else {
+      $.removeCookie('btrfs-balance-<?=$tag?>');
+      refresh();
+    }
+  });
+  return false;
+}
+function btrfsScrub(path) {
+  $.post('/webGui/include/FileSystemStatus.php',{cmd:'btrfs-scrub',path:path},function(data) {
+    if (data.indexOf('running')>0) {
+      $('#btrfs-scrub').text(data);
+      setTimeout(function(){btrfsScrub(path);},1000);
+    } else {
+      $.removeCookie('btrfs-scrub-<?=$tag?>');
+      refresh();
+    }
+  });
+  return false;
+}
+function btrfsCheck(path) {
+  $.post('/webGui/include/FileSystemStatus.php',{cmd:'btrfs-check',path:path},function(data) {
+    $('#btrfs-check').text(data);
+    if (data.slice(-1)!='\0') {
+      setTimeout(function(){btrfsCheck(path);},1000);
+    } else {
+      $.removeCookie('btrfs-check-<?=$tag?>');
+      refresh();
+    }
+  });
+  return false;
+}
+function zfsScrub(path) {
+  $.post('/webGui/include/FileSystemStatus.php',{cmd:'zfs-scrub',path:path},function(data) {
+    if (data.indexOf('scrub in progress')>0) {
+      $('#zfs-pool').text(data);
+      setTimeout(function(){zfsScrub(path);},1000);
+    } else {
+      $.removeCookie('zfs-scrub-<?=$tag?>');
+      refresh();
+    }
+  });
+  return false;
+}
+function zfsResilver(path) {
+  $.post('/webGui/include/FileSystemStatus.php',{cmd:'zfs-resilver',path:path},function(data) {
+    if (data.indexOf('resilver in progress')>0) {
+      $('#zfs-button').prop('disabled',true);
+      $('#zfs-pool').text(data);
+      setTimeout(function(){zfsResilver(path);},1000);
+    } else {
+      $.removeCookie('zfs-resilver-<?=$tag?>');
+      refresh();
+    }
+  });
+  return false;
+}
+function rfsCheck(path) {
+  $.post('/webGui/include/FileSystemStatus.php',{cmd:'rfs-check',path:path},function(data) {
+    $('#rfs-check').text(data);
+    if (data.slice(-1)!='\0') {
+      setTimeout(function(){rfsCheck(path);},1000);
+    } else {
+      $.removeCookie('rfs-check-<?=$tag?>');
+      refresh();
+    }
+  });
+  return false;
+}
+function xfsCheck(path) {
+  $.post('/webGui/include/FileSystemStatus.php',{cmd:'xfs-check',path:path},function(data) {
+    $('#xfs-check').text(data);
+    if (data.slice(-1)!='\0') {
+      setTimeout(function(){xfsCheck(path);},1000);
+    } else {
+      $.removeCookie('xfs-check-<?=$tag?>');
+      refresh();
+    }
+  });
+  return false;
+}
+function updateMode(form,mode) {
+  $(form).find('input[name="#arg[3]"]').val(mode);
+}
+function validate(poolname) {
+  var valid = /^[a-z_]([a-z0-9~._-]*[a-z_])*$/;
+  var reserved = [<?=makeList(explode(',',_var($var,'reservedNames')))?>];
+  var shares = [<?=makeList(array_map('sharename',glob('boot/config/shares/*.cfg',GLOB_NOSORT)))?>];
+  var pools = [<?=makeList($pools)?>];
+  if (!poolname.trim()) return false;
+  if (reserved.includes(poolname)) {
+    swal({title:"_(Invalid pool name)_",text:"_(Do not use reserved names)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    return false;
+  } else if (shares.includes(poolname)) {
+    swal({title:"_(Invalid pool name)_",text:"_(Do not use user share names)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    return false;
+  } else if (pools.includes(poolname)) {
+    swal({title:"_(Invalid pool name)_",text:"_(Pool name already exists)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    return false;
+  } else if (!valid.test(poolname)) {
+    swal({title:"_(Invalid pool name)_",text:"_(Use only lowercase with no special characters or leading/trailing digits)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    return false;
+  }
+  return true;
+}
+function dialogStyle() {
+  $('.ui-dialog-titlebar-close').css({'display':'none'});
+  $('.ui-dialog-title').css({'text-align':'center','width':'100%','font-size':'1.8rem'});
+  $('.ui-dialog-content').css({'padding-top':'15px','vertical-align':'bottom'});
+  $('.ui-button-text').css({'padding':'0px 5px'});
+}
+function renamePoolPopup() {
+  var popup = $('#dialogRenamePool');
+  // Load popup with the template info
+  popup.html($("#templatePopupPool").html());
+  // Start Dialog section
+  popup.dialog({
+    title: "_(Rename Pool)_",
+    height: 'auto',
+    width: 600,
+    resizable: false,
+    modal: true,
+    buttons: {
+    "_(Rename)_": function() {
+        if (validate($(this).find('input[name="poolName"]').val())) {
+          $(this).find('form').submit();
+          $(this).dialog('close');
+        }
+      },
+    "_(Cancel)_": function() {
+        $(this).dialog('close');
+      }
+    }
+  });
+  dialogStyle();
+}
+function deletePool() {
+  $.cookie('deletepool','deletepool');
+  document.deletepool.submit();
+}
+function eraseDisk(name) {
+  swal({
+    title:"_(Erase Device Content)_?",
+    text:"<?=$text?><p style='font-weight:bold;color:red;margin:8px 0'>_(Existing content is permanently lost)_</p>",
+    html:true,
+    type:'input',
+    inputPlaceholder:"<?=sprintf(_('To confirm your action type: %s'),$name)?>",
+    showCancelButton:true,
+    closeOnConfirm:false,
+    confirmButtonText:"_(Proceed)_",
+    cancelButtonText:"_(Cancel)_"
+  },
+  function(confirm){
+    if (confirm == "<?=$name?>") {
+      swal.close();
+      $('#doneButton').prop('disabled',true);
+      $('#eraseButton').prop('disabled',true);
+      $('div.spinner.fixed').show();
+      $.get("/update.htm",{cmdWipefs:name,csrf_token:"<?=_var($var,'csrf_token')?>"},function(){
+        $('div.spinner.fixed').hide();
+        refresh();
+      });
+    } else {
+      if (confirm.length) swal({title:"_(Incorrect confirmation)_",text:"_(Please try again)_!",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    }
+  });
+}
+</script>
+
+<form markdown="1" method="POST" action="/update.htm" target="progressFrame" onsubmit="setFloor()">
+<?if (_var($var,'fsState')=="Stopped" && isPool($name) && !isSubpool($name)):?>
+_(Name)_:
+: <a onclick="renamePoolPopup()" style="cursor:pointer" title="_(Rename Pool)_"><?=$name?></a>
+
+<?else:?>
+_(Name)_:
+: <?=_(my_disk(native($name)),3)?>
+
+<?endif;?>
+<?if (diskStatus('_NP')):?>
+_(Identification)_:
+: _(No device)_
+
+<?else:?>
+_(Identification)_:
+: <?=my_id(_var($disk,'id'))?>&nbsp;(<?=$dev?>)
+
+<?endif;?>
+<?if (!$unassigned):?>
+<?if (diskType('Data') || (diskType('Cache') && isPool($name) && !isSubpool($name))):?>
+_(Comments)_:
+: <input type="text" name="diskComment.<?=_var($disk,'idx',0)?>" maxlength="256" value="<?=htmlspecialchars(_var($disk,'comment'))?>">
+
+:info_comments_help:
+
+<?endif;?>
+_(Partition size)_:
+: <?=my_number(_var($disk,'sizeSb',0))?> KB (K=1024)
+
+_(Partition format)_:
+: <?=_(_var($disk,'format'))?>
+
+<?endif;?>
+<?if (_var($var,'spinupGroups')=="yes" && diskType('Data','Parity')):?>
+_(Spinup group(s))_:
+: <input type="text" name="diskSpinupGroup.<?=_var($disk,'idx',0)?>" maxlength="256" value="<?=_var($disk,'spinupGroup')?>">
+
+<?endif;?>
+<?if (diskType('Data') || isPool($tag)):?>
+_(Spin down delay)_:
+: <select name="diskSpindownDelay.<?=_var($disk,'idx',0)?>">
+  <?=mk_option(_var($disk,'spindownDelay'), "-1", _('Use default'))?>
+  <?=mk_option(_var($disk,'spindownDelay'), "0",  _('Never'))?>
+  <?=mk_option(_var($disk,'spindownDelay'), "15", "15 "._('minutes'))?>
+  <?=mk_option(_var($disk,'spindownDelay'), "30", "30 "._('minutes'))?>
+  <?=mk_option(_var($disk,'spindownDelay'), "45", "45 "._('minutes'))?>
+  <?=mk_option(_var($disk,'spindownDelay'), "1",  "1 "._('hour'))?>
+  <?=mk_option(_var($disk,'spindownDelay'), "2",  "2 "._('hours'))?>
+  <?=mk_option(_var($disk,'spindownDelay'), "3",  "3 "._('hours'))?>
+  <?=mk_option(_var($disk,'spindownDelay'), "4",  "4 "._('hours'))?>
+  <?=mk_option(_var($disk,'spindownDelay'), "5",  "5 "._('hours'))?>
+  <?=mk_option(_var($disk,'spindownDelay'), "6",  "6 "._('hours'))?>
+  <?=mk_option(_var($disk,'spindownDelay'), "7",  "7 "._('hours'))?>
+  <?=mk_option(_var($disk,'spindownDelay'), "8",  "8 "._('hours'))?>
+  <?=mk_option(_var($disk,'spindownDelay'), "9",  "9 "._('hours'))?>
+  </select><span id="smart_selftest" class='orange-text'></span>
+
+_(File system status)_:
+: <?=_(_var($disk,'fsStatus'))?>&nbsp;
+
+<?$disabled = (_var($var,'fsState')=="Stopped" && !empty(_var($disk,'uuid'))) || (_var($var,'fsState')=="Started" &&  _var($disk,'fsStatus')=='Mounted') ? "disabled" : ""?>
+<?if (diskType('Data') || (!isSubpool($name) && _var($disk,'slots',0)==1)):?>
+_(File system type)_:
+: <select id="diskFsType" name="diskFsType.<?=_var($disk,'idx',0)?>" onchange="changeFsType()" <?=$disabled?>>
+  <?=mk_option(_var($disk,'fsType'), "auto", _('auto'))?>
+  <?=mk_option(_var($disk,'fsType'), "xfs", _('xfs'))?>
+  <?=mk_option(_var($disk,'fsType'), "zfs", _('zfs'))?>
+  <?=mk_option(_var($disk,'fsType'), "btrfs", _('btrfs'))?>
+  <?=mk_option(_var($disk,'fsType'), "reiserfs", _('reiserfs'))?>
+  <?=mk_option(_var($disk,'fsType'), "luks:xfs", _('xfs')." - "._('encrypted'))?>
+  <?=mk_option(_var($disk,'fsType'), "luks:zfs", _('zfs')." - "._('encrypted'))?>
+  <?=mk_option(_var($disk,'fsType'), "luks:btrfs", _('btrfs')." - "._('encrypted'))?>
+  <?=mk_option(_var($disk,'fsType'), "luks:reiserfs", _('reiserfs')." - "._('encrypted'))?>
+  </select><span id="reiserfs" class="warning"<?if (!fsType('reiserfs')):?> style="display:none"<?endif;?>><i class="fa fa-warning"></i>&nbsp;_(ReiserFS is deprecated, please use another file system)_!</span>
+
+:info_file_system_help:
+
+<?elseif (!isSubpool($name) && _var($disk,'slots',0)>1):?>
+_(File system type)_:
+: <select id="diskFsType" name="diskFsType.<?=_var($disk,'idx',0)?>" onchange="selectDiskFsProfile(false)" <?=$disabled?>>
+  <?=mk_option(_var($disk,'fsType'), "auto", _('auto'))?>
+  <?=mk_option(_var($disk,'fsType'), "zfs", _('zfs'))?>
+  <?=mk_option(_var($disk,'fsType'), "btrfs", _('btrfs'))?>
+  <?=mk_option(_var($disk,'fsType'), "luks:zfs", _('zfs')." - "._('encrypted'))?>
+  <?=mk_option(_var($disk,'fsType'), "luks:btrfs", _('btrfs')." - "._('encrypted'))?>
+  </select>
+  <select id="diskFsProfileBTRFS" name="diskFsProfile.<?=_var($disk,'idx',0)?>" style="display:none" <?=$disabled?>>
+  <?=mk_option(_var($disk,'fsProfile'),"single", _('single'))?>
+  <?if (_var($disk,'slots',0)>=2) echo mk_option(_var($disk,'fsProfile'),"raid0", _('raid0'))?>
+  <?if (_var($disk,'slots',0)>=2) echo mk_option(_var($disk,'fsProfile'),"raid1", _('raid1'))?>
+  <?if (_var($disk,'slots',0)>=3) echo mk_option(_var($disk,'fsProfile'),"raid1c3", _('raid1c3'))?>
+  <?if (_var($disk,'slots',0)>=4) echo mk_option(_var($disk,'fsProfile'),"raid1c4", _('raid1c4'))?>
+  <?if (_var($disk,'slots',0)>=4) echo mk_option(_var($disk,'fsProfile'),"raid10", _('raid10'))?>
+  <?if (_var($disk,'slots',0)>=3) echo mk_option(_var($disk,'fsProfile'),"raid5", _('raid5'))?>
+  <?if (_var($disk,'slots',0)>=4) echo mk_option(_var($disk,'fsProfile'),"raid6", _('raid6'))?>
+  </select>
+  <select id="diskFsProfileZFS" name="diskFsProfile.<?=_var($disk,'idx',0)?>" style="display:none" onchange="selectDiskFsWidth()" <?=$disabled?>>
+  <?if (_var($disk,'slots',0)==1) echo mk_option(_var($disk,'fsProfile'),"", _('single'))?>
+  <?if (_var($disk,'slots',0)>=2) echo mk_option(_var($disk,'fsProfile'),"", _('raid0'))?>
+  <?if ((_var($disk,'slots',0)%2)==0 || (_var($disk,'slots',0)%3)==0 || (_var($disk,'slots',0)%4)==0) echo mk_option(_var($disk,'fsProfile'),"mirror", _('mirror'))?>
+  <?if (_var($disk,'slots',0)>=3) echo mk_option(_var($disk,'fsProfile'),"raidz1", _('raidz'))?>
+  <?if (_var($disk,'slots',0)>=3) echo mk_option(_var($disk,'fsProfile'),"raidz2", _('raidz2'))?>
+  <?if (_var($disk,'slots',0)>=4) echo mk_option(_var($disk,'fsProfile'),"raidz3", _('raidz3'))?>
+  </select>
+  <select id="diskFsWidthZFS" name="diskFsWidth.<?=_var($disk,'idx',0)?>" style="display:none" <?=$disabled?>>
+  </select>
+<?elseif (isSubpool($name)=="special" || isSubpool($name)=="logs" || isSubpool($name)=="dedup"):?>
+_(File system type)_:
+: <select id="diskFsType" name="diskFsType.<?=_var($disk,'idx',0)?>" onchange="selectDiskFsProfile(false)" <?=$disabled?>>
+  <?=mk_option(_var($disk,'fsType'), "zfs", _('zfs'))?>
+  </select>
+  <select id="diskFsProfileZFS" name="diskFsProfile.<?=_var($disk,'idx',0)?>" onchange="selectDiskFsWidth()" <?=$disabled?>>
+  <?if (_var($disk,'slots',0)==1) echo mk_option(_var($disk,'fsProfile'),"", _('single'))?>
+  <?if (_var($disk,'slots',0)>=2) echo mk_option(_var($disk,'fsProfile'),"", _('raid0'))?>
+  <?if ((_var($disk,'slots',0)%2)==0 || (_var($disk,'slots',0)%3)==0 || (_var($disk,'slots',0)%4)==0) echo mk_option(_var($disk,'fsProfile'),"mirror", _('mirror'))?>
+  </select>
+  <select id="diskFsWidthZFS" name="diskFsWidth.<?=_var($disk,'idx',0)?>" style="display:none" <?=$disabled?>>
+  </select>
+<?elseif (isSubpool($name)=="cache"):?>
+_(File system type)_:
+: <select id="diskFsType" name="diskFsType.<?=_var($disk,'idx',0)?>" onchange="selectDiskFsProfile(false)" <?=$disabled?>>
+  <?=mk_option(_var($disk,'fsType'), "zfs", _('zfs'))?>
+  </select>
+  <select id="diskFsProfileZFS" name="diskFsProfile.<?=_var($disk,'idx',0)?>" onchange="selectDiskFsWidth()" <?=$disabled?>>
+  <?if (_var($disk,'slots',0)==1) echo mk_option(_var($disk,'fsProfile'),"", _('single'))?>
+  <?if (_var($disk,'slots',0)>=2) echo mk_option(_var($disk,'fsProfile'),"", _('raid0'))?>
+  </select>
+  <select id="diskFsWidthZFS" name="diskFsWidth.<?=_var($disk,'idx',0)?>" style="display:none" <?=$disabled?>>
+  </select>
+<?elseif (isSubpool($name)=="spares"):?>
+_(File system type)_:
+: <select id="diskFsType" name="diskFsType.<?=_var($disk,'idx',0)?>" onchange="selectDiskFsProfile(false)" <?=$disabled?>>
+  <?=mk_option(_var($disk,'fsType'), "zfs", _('zfs'))?>
+  </select>
+<?endif;?>
+
+<?if (isSubpool($name)===false):?>
+<div markdown="1" id="compression" style="display:none">
+_(Compression)_:
+<?$disabled = _var($disk,'fsStatus')=='Mounted' ? "disabled" : ""?>
+: <select id="diskCompression" name="diskCompression.<?=_var($disk,'idx',0)?>" <?=$disabled?>>
+  <?=mk_option(_var($disk,'compression'), "off", _('Off'))?>
+  <?=mk_option(_var($disk,'compression'), "on", _('On'))?>
+  </select>
+
+:info_compression_help:
+</div>
+
+<div markdown="1" id="autotrim" style="display:none">
+_(Autotrim)_:
+<?$disabled = _var($disk,'fsStatus')=='Mounted' ? "disabled" : ""?>
+: <select id="diskAutotrim" name="diskAutotrim.<?=_var($disk,'idx',0)?>" <?=$disabled?>>
+  <?=mk_option(_var($disk,'autotrim'), "on", _('On'))?>
+  <?=mk_option(_var($disk,'autotrim'), "off", _('Off'))?>
+  </select>
+
+:info_autotrim_help:
+</div>
+<?if (isPool($name)):?>
+_(Enable user share assignment)_:
+<?$disabled = _var($var,'fsState')!="Stopped" ? "disabled" : ""?>
+: <select id="shareEnabled" name="diskShareEnabled.<?=_var($disk,'idx',0)?>" onchange="freeSpace(this.value)" <?=$disabled?>>
+  <?=mk_option(_var($disk,'shareEnabled'), "yes", _('Yes'))?>
+  <?=mk_option(_var($disk,'shareEnabled'), "no", _('No'))?>
+  </select>
+
+:info_share_assignment_help:
+
+_(Minimum free space)_:
+: <input type="text" id="shareFloor" name="diskShareFloor.<?=_var($disk,'idx',0)?>" maxlength="16" autocomplete="off" spellcheck="false" value="<?=presetSpace(_var($disk,'shareFloor',0))?>" class="narrow" placeholder="0" <?if ($var['mdState']=='STARTED'):?>disabled<?endif;?>>
+  <span id="autosize"><i class="fa fa-info i"></i>_(Calculated free space value)_</span>
+
+:info_free_space_help:
+
+<?endif;?>
+_(Warning disk utilization threshold)_ (%):
+: <input type="number" min="0" max="100" name="diskWarning.<?=_var($disk,'idx',0)?>" autocomplete="off" spellcheck="false" class="narrow" value="<?=_var($disk,'warning')?>" placeholder="<?=_var($display,'warning')?>">
+
+:info_warning_utilization_help:
+
+_(Critical disk utilization threshold)_ (%):
+: <input type="number" min="0" max="100" name="diskCritical.<?=_var($disk,'idx',0)?>" autocomplete="off" spellcheck="false" class="narrow" value="<?=_var($disk,'critical')?>" placeholder="<?=_var($display,'critical')?>")>
+
+:info_critical_utilization_help:
+
+<?endif;?>
+<?endif;?>
+&nbsp;
+: <input type="submit" name="changeDisk" value="_(Apply)_" disabled><input type="button" id="doneButton" value="_(Done)_" onclick="done()">
+  <?$erasable=false?>
+  <?if (diskType('Parity','Data')):?>
+    <?if (_var($var,'fsState')=="Stopped" && diskStatus('_NEW')): $erasable=true; endif;?>
+    <?if (_var($var,'fsState')=="Started" && _var($var,'startMode')!="Normal" && diskType('Data')): $erasable=true; endif;?>
+    <input type="button" id="eraseButton" value="_(Erase)_" onclick="eraseDisk('<?=$name?>')"<?=$erasable?'':' disabled'?>>
+  <?endif;?>
+  <?if (isPool($name) && strpos($name,$_tilde_)===false):?>
+    <?if (_var($var,'fsState')=="Stopped" || (_var($var,'fsState')=="Started" && _var($var,'startMode')!="Normal")): $erasable=true; endif;?>
+    <input type="button" id="eraseButton" value="_(Erase)_" onclick="eraseDisk('<?=$name?>')"<?=$erasable?'':' disabled'?>>
+  <?endif;?>
+  <?if (_var($var,'fsState')=="Stopped" && isPool($name)):?>
+    <?$empty = _var($disk,'devices',0)==0?>
+    <input type="button" value="_(Delete Pool)_" onclick="deletePool()"<?=$empty?'':' disabled'?>><?if (!$empty):?>_(Unassign **ALL** devices to delete this pool)_<?endif;?>
+  <?endif;?>
+</form>
+
+<?if (fsType('btrfs')):?>
+<div class="title nocontrol"><span class="left"><i class="title fa fa-balance-scale"></i>_(Balance Status)_</span></div>
+<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareFS(this,'btrfs-balance-<?=$tag?>','/mnt/<?=$tag?>')">
+<?if (_var($disk,'fsStatus')=="Mounted"):?>
+<?exec("$docroot/webGui/scripts/btrfs_balance status /mnt/$tag", $balance_status, $retval)?>
+<?$usage = exec("/sbin/btrfs fi usage /mnt/$tag|grep -Pom1 '^Data,.+ \\(\\K[^%]+'");?>
+
+_(btrfs filesystem df)_:
+: <?echo "<pre>".shell_exec("/sbin/btrfs filesystem df /mnt/$tag")."</pre>"?>
+
+_(btrfs balance status)_:
+: <?echo "<pre id='btrfs-balance'>".implode("\n", $balance_status)."</pre>"?>
+
+<?if ($retval != 0):?>
+<input type="hidden" name="#command" value="/webGui/scripts/btrfs_balance">
+<input type="hidden" name="#arg[1]" value="start">
+<input type="hidden" name="#arg[2]" value="/mnt/<?=$tag?>">
+<input type="hidden" name="#arg[3]" value="">
+
+&nbsp;
+: &nbsp;_(Current usage ratio)_: <?=round($usage,1)?> % --- <?=($usage > 0 && $usage <= 50) ? "_(Full Balance recommended)_" : "_(No Balance required)_"?>
+
+&nbsp;
+: <input type="submit" value="_(Balance)_">
+<?if (_var($disk,'devices',0)>1):?>
+  <select onchange="updateMode(this.form,this.value)">
+  <?=mk_option(1,'',_('Perform full balance'))?>
+  <?if (_var($disk,'devices',0)>=1) echo mk_option(1,'-dconvert=single,soft -mconvert=dup,soft',_('Convert to single mode'))?>
+  <?if (_var($disk,'devices',0)>=2) echo mk_option(1,'-dconvert=raid0,soft -mconvert=raid1,soft',_('Convert to raid0 mode'))?>
+  <?if (_var($disk,'devices',0)>=2) echo mk_option(1,'-dconvert=raid1,soft -mconvert=raid1,soft',_('Convert to raid1 mode'))?>
+  <?if (_var($disk,'devices',0)>=3) echo mk_option(1,'-dconvert=raid1c3,soft -mconvert=raid1c3,soft',_('Convert to raid1c3 mode'))?>
+  <?if (_var($disk,'devices',0)>=4) echo mk_option(1,'-dconvert=raid1c4,soft -mconvert=raid1c4,soft',_('Convert to raid1c4 mode'))?>
+  <?if (_var($disk,'devices',0)>=4) echo mk_option(1,'-dconvert=raid10,soft -mconvert=raid10,soft',_('Convert to raid10 mode'))?>
+  <?if (_var($disk,'devices',0)>=3) echo mk_option(1,'-dconvert=raid5,soft -mconvert=raid1,soft',_('Convert to raid5 mode *see help'))?>
+  <?if (_var($disk,'devices',0)>=4) echo mk_option(1,'-dconvert=raid6,soft -mconvert=raid1c3,soft',_('Convert to raid6 mode *see help'))?>
+  </select>
+<?else:?>
+  *_(Perform full balance)_*
+<?endif;?>
+
+:info_btrfs_balance_help:
+
+<?else:?>
+<input type="hidden" name="#command" value="/webGui/scripts/btrfs_balance">
+<input type="hidden" name="#arg[1]" value="cancel">
+<input type="hidden" name="#arg[2]" value="/mnt/<?=$tag?>">
+
+&nbsp;
+: <input type="submit" value="_(Cancel)_">
+
+:info_balance_cancel_help:
+
+<?endif;?>
+<?else:?>
+
+&nbsp;
+: <input type="submit" value="_(Balance)_" disabled><?=$tag==prefix($tag) ? "<b>"._('Balance')."</b> "._('is only available when array is Started') : sprintf(_('See %s Settings'),ucfirst(prefix($tag)))?>
+
+<?endif;?>
+</form>
+<hr>
+<?$balance = str_replace('-','_',"balance_$tag")?>
+<form markdown="1" name="balance_schedule" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareBTRFS(this)">
+<input type="hidden" name="#file" value="dynamix/dynamix.cfg">
+<input type="hidden" name="#section" value="<?=$balance?>">
+<input type="hidden" name="#include" value="/webGui/include/update.btrfs.php">
+<input type="hidden" name="#job" value="balance_<?=$tag?>;<?=$docroot?>/plugins/dynamix/scripts/btrfs_balance start /mnt/<?=$tag?> -dusage=50">
+<input type="hidden" name="hour" value="">
+_(Balance schedule)_:
+: <select name="mode" onchange="presetBTRFS(this.form,'#balance-hour')">
+  <?for ($m=0; $m<count($mode); $m++):?>
+  <?=mk_option(_var($$balance,'mode'), strval($m), _($mode[$m]).($m<4 ? '': ' ('._('recommended').')'))?>
+  <?endfor;?>
+  </select>
+
+_(Day of the week)_:
+: <select name="day">
+  <?for ($d=0; $d<count($days); $d++):?>
+  <?=mk_option(_var($$balance,'day'), strval($d), _($days[$d]),0)?>
+  <?endfor;?>
+  <?=mk_option(_var($$balance,'day'), "*", "--------", _("disabled"))?>
+  </select>
+
+_(Day of the month)_:
+: <select name="dotm">
+  <?for ($d=1; $d<=31; $d++):?>
+  <?=mk_option(_var($$balance,'dotm'), strval($d), sprintf("%02d", $d))?>
+  <?endfor;?>
+  <?=mk_option(_var($$balance,'dotm'), "*", "--------", _("disabled"))?>
+  </select>
+
+_(Time of the day)_:
+: <span id="balance-hour1" style="display:none"><select name="hour1" class="narrow">
+  <?for ($d=0; $d<=23; $d++):?>
+  <?=mk_option(_var($$balance,'hour'), strval($d), sprintf("%02d", $d))?>
+  <?endfor;?>
+  </select>
+  <select name="min" class="narrow">
+  <?for ($d=0; $d<=55; $d+=5):?>
+  <?=mk_option(_var($$balance,'min'), strval($d), sprintf("%02d", $d))?>
+  <?endfor;?>
+  </select>&nbsp;&nbsp;_(HH:MM)_</span>
+: <span id="balance-hour2" style="display:none"><select name="hour2">
+  <?=mk_option(_var($$balance,'hour'), "*/1", _("Every hour"))?>
+  <?=mk_option(_var($$balance,'hour'), "*/2", _("Every 2 hours"))?>
+  <?=mk_option(_var($$balance,'hour'), "*/3", _("Every 3 hours"))?>
+  <?=mk_option(_var($$balance,'hour'), "*/4", _("Every 4 hours"))?>
+  <?=mk_option(_var($$balance,'hour'), "*/6", _("Every 6 hours"))?>
+  <?=mk_option(_var($$balance,'hour'), "*/8", _("Every 8 hours"))?>
+  </select></span>
+
+_(Block group usage)_ (%):
+: <input type="number" name="usage" class="narrow" min="0" max="100" value="<?=_var($$balance,'usage')?>" placeholder="50">
+
+&nbsp;
+: <input type="submit" name="#apply" value="_(Apply)_"><input type="button" value="_(Done)_" onclick="done()">
+</form>
+
+<div class="title nocontrol"><span class="left"><i class="title fa fa-paint-brush"></i>_(Scrub Status)_</span></div>
+<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareFS(this,'btrfs-scrub-<?=$tag?>','/mnt/<?=$tag?>')">
+<?if (_var($disk,'fsStatus')=="Mounted"):?>
+<?exec("$docroot/webGui/scripts/btrfs_scrub status /mnt/$tag", $scrub_status, $retval)?>
+
+_(btrfs scrub status)_:
+: <?echo "<pre id='btrfs-scrub'>".implode("\n", $scrub_status)."</pre>"?>
+
+<?if ($retval != 0):?>
+<input type="hidden" name="#command" value="/webGui/scripts/btrfs_scrub">
+<input type="hidden" name="#arg[1]" value="start">
+<input type="hidden" name="#arg[2]" value="/mnt/<?=$tag?>">
+<input type="hidden" name="#arg[3]" value="-r">
+
+&nbsp;
+: <input type="submit" value="_(Scrub)_"><label><input type="checkbox" name="#arg[3]" value=""> _(Repair corrupted blocks)_</label>
+
+:info_btrfs_scrub_help:
+
+<?else:?>
+<input type="hidden" name="#command" value="/webGui/scripts/btrfs_scrub">
+<input type="hidden" name="#arg[1]" value="cancel">
+<input type="hidden" name="#arg[2]" value="/mnt/<?=$tag?>">
+
+&nbsp;
+: <input type="submit" value="_(Cancel)_">
+
+:info_scrub_cancel_help:
+
+<?endif;?>
+<?else:?>
+
+&nbsp;
+: <input type="submit" value="_(Scrub)_" disabled><?=$tag==prefix($tag) ? "<b>"._('Scrub')."</b> "._('is only available when array is Started') : sprintf(_('See %s Settings'),ucfirst(prefix($tag)))?>
+
+<?endif;?>
+</form>
+<hr>
+<?$scrub = str_replace('-','_',"scrub_$tag")?>
+<form markdown="1" name="scrub_schedule" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareBTRFS(this)">
+<input type="hidden" name="#file" value="dynamix/dynamix.cfg">
+<input type="hidden" name="#section" value="<?=$scrub?>">
+<input type="hidden" name="#include" value="/webGui/include/update.btrfs.php">
+<input type="hidden" name="#job" value="scrub_<?=$tag?>;<?=$docroot?>/plugins/dynamix/scripts/btrfs_scrub start /mnt/<?=$tag?> -r">
+<input type="hidden" name="hour" value="">
+_(Scrub schedule)_:
+: <select name="mode" onchange="presetBTRFS(this.form,'#scrub-hour')">
+  <?for ($m=0; $m<count($mode); $m++):?>
+  <?=mk_option(_var($$scrub,'mode'), strval($m), _($mode[$m]))?>
+  <?endfor;?>
+  </select>
+
+_(Day of the week)_:
+: <select name="day">
+  <?for ($d=0; $d<count($days); $d++):?>
+  <?=mk_option(_var($$scrub,'day'), strval($d), _($days[$d]),0)?>
+  <?endfor;?>
+  <?=mk_option(_var($$scrub,'day'), "*", "--------", _("disabled"))?>
+  </select>
+
+_(Day of the month)_:
+: <select name="dotm">
+  <?for ($d=1; $d<=31; $d++):?>
+  <?=mk_option(_var($$scrub,'dotm'), strval($d), sprintf("%02d", $d))?>
+  <?endfor;?>
+  <?=mk_option(_var($$scrub,'dotm'), "*", "--------", _("disabled"))?>
+  </select>
+
+_(Time of the day)_:
+: <span id="scrub-hour1" style="display:none"><select name="hour1" class="narrow">
+  <?for ($d=0; $d<=23; $d++):?>
+  <?=mk_option(_var($$scrub,'hour'), strval($d), sprintf("%02d", $d))?>
+  <?endfor;?>
+  </select>
+  <select name="min" class="narrow">
+  <?for ($d=0; $d<=55; $d+=5):?>
+  <?=mk_option(_var($$scrub,'min'), strval($d), sprintf("%02d", $d))?>
+  <?endfor;?>
+  </select>&nbsp;&nbsp;_(HH:MM)_</span>
+: <span id="scrub-hour2" style="display:none"><select name="hour2">
+  <?=mk_option(_var($$scrub,'hour'), "*/1", _("Every hour"))?>
+  <?=mk_option(_var($$scrub,'hour'), "*/2", _("Every 2 hours"))?>
+  <?=mk_option(_var($$scrub,'hour'), "*/3", _("Every 3 hours"))?>
+  <?=mk_option(_var($$scrub,'hour'), "*/4", _("Every 4 hours"))?>
+  <?=mk_option(_var($$scrub,'hour'), "*/6", _("Every 6 hours"))?>
+  <?=mk_option(_var($$scrub,'hour'), "*/8", _("Every 8 hours"))?>
+  </select></span>
+
+&nbsp;
+: <input type="submit" name="#apply" value="_(Apply)_"><input type="button" value="_(Done)_" onclick="done()">
+</form>
+
+<div class="title nocontrol"><span class="left"><i class="title fa fa-shield"></i>_(Check Filesystem Status)_</span></div>
+<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareFS(this,'btrfs-check-<?=$tag?>','/dev/<?=_var($disk,'deviceSb')?> <?=_var($disk,'id')?>')">
+<?if (maintenance_mode()):?>
+<?exec("$docroot/webGui/scripts/btrfs_check status /dev/"._var($disk,'deviceSb')." "._var($disk,'id'), $check_status, $retval)?>
+
+_(btrfs check status)_:
+: <?echo "<pre id='btrfs-check'>".implode("\n", $check_status)."</pre>"?>
+
+<?if ($retval != 0):?>
+<input type="hidden" name="#command" value="/webGui/scripts/btrfs_check">
+<input type="hidden" name="#arg[1]" value="start">
+<input type="hidden" name="#arg[2]" value="/dev/<?=_var($disk,'deviceSb')?>">
+<input type="hidden" name="#arg[3]" value="<?=_var($disk,'id')?>">
+
+&nbsp;
+: <input type="submit" value="_(Check)_"><input type="text" name="#arg[4]" class="narrow" maxlength="256" value="--readonly"> _(Options (see Help))_
+
+:info_btrfs_check_help:
+
+<?else:?>
+<input type="hidden" name="#command" value="/webGui/scripts/btrfs_check">
+<input type="hidden" name="#arg[1]" value="cancel">
+<input type="hidden" name="#arg[2]" value="/dev/<?=_var($disk,'deviceSb')?>">
+<input type="hidden" name="#arg[3]" value="<?=_var($disk,'id')?>">
+
+&nbsp;
+: <input type="submit" value="_(Cancel)_"> *_(Running)_*
+
+:info_check_cancel_help:
+
+<?endif;?>
+<?else:?>
+
+<?if ($tag==prefix($tag)):?>
+&nbsp;
+: <input type="submit" value="_(Check)_" disabled> **_(Check)_** _(is only available when array is Started in **Maintenance** mode)_.
+
+<?else:?>
+&nbsp;
+: <input type="submit" value="_(Check)_" disabled> <?=sprintf(_('See %s Settings'),ucfirst(prefix($tag)))?>.
+<?endif;?>
+
+<?endif;?>
+</form>
+<?endif;?>
+<?if (fsType('zfs') && !isSubpool($name)):?>
+<div class="title nocontrol"><span class="left"><i class="title fa fa-info"></i>_(Pool Status)_</span></div>
+<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareFS(this,'zfs-scrub-<?=$tag?>','<?=$tag?>')">
+<?if (_var($disk,'fsStatus')=="Mounted"):?>
+<?exec("$docroot/webGui/scripts/zfs_scrub status $tag", $zfs_status, $retval); $zfs_status = implode("\n",$zfs_status)?>
+<?$zfs_cmd = strpos($zfs_status,"'zpool clear'")===false ? 'start' : 'clear'?>
+
+_(zfs pool status)_:
+: <pre id='zfs-pool'><?=$zfs_status?></pre>
+
+<?if ($retval != 0):?>
+<input type="hidden" name="#command" value="/webGui/scripts/zfs_scrub">
+<input type="hidden" name="#arg[1]" value="<?=$zfs_cmd?>">
+<input type="hidden" name="#arg[2]" value="<?=$tag?>">
+
+&nbsp;
+: <input type="submit" id="zfs-button" value="<?=$zfs_cmd=='start' ? _('Scrub') : _('Clear')?>">
+
+:info_zfs_scrub_help:
+
+<?else:?>
+<input type="hidden" name="#command" value="/webGui/scripts/zfs_scrub">
+<input type="hidden" name="#arg[1]" value="cancel">
+<input type="hidden" name="#arg[2]" value="<?=$tag?>">
+
+&nbsp;
+: <input type="submit" value="_(Cancel)_">
+
+:info_scrub_cancel_help:
+
+<?endif;?>
+<?else:?>
+
+&nbsp;
+: <input type="submit" value="_(Scrub)_" disabled><?=$tag==prefix($tag) ? "<b>"._('Scrub')."</b> "._('is only available when array is Started') : sprintf(_('See %s Settings'),ucfirst(prefix($tag)))?>
+
+<?endif;?>
+</form>
+<hr>
+<?$scrub = str_replace('-','_',"scrub_$tag")?>
+<form markdown="1" name="scrub_schedule" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareZFS(this)">
+<input type="hidden" name="#file" value="dynamix/dynamix.cfg">
+<input type="hidden" name="#section" value="<?=$scrub?>">
+<input type="hidden" name="#include" value="/webGui/include/update.zfs.php">
+<input type="hidden" name="#job" value="scrub_<?=$tag?>;<?=$docroot?>/plugins/dynamix/scripts/zfs_scrub start <?=$tag?>">
+<input type="hidden" name="hour" value="">
+_(Scrub schedule)_:
+: <select name="mode" onchange="presetZFS(this.form,'#scrub-hour')">
+  <?for ($m=0; $m<count($mode); $m++):?>
+  <?=mk_option(_var($$scrub,'mode'), strval($m), _($mode[$m]))?>
+  <?endfor;?>
+  </select>
+
+_(Day of the week)_:
+: <select name="day">
+  <?for ($d=0; $d<count($days); $d++):?>
+  <?=mk_option(_var($$scrub,'day'), strval($d), _($days[$d]),0)?>
+  <?endfor;?>
+  <?=mk_option(_var($$scrub,'day'), "*", "--------", _("disabled"))?>
+  </select>
+
+_(Day of the month)_:
+: <select name="dotm">
+  <?for ($d=1; $d<=31; $d++):?>
+  <?=mk_option(_var($$scrub,'dotm'), strval($d), sprintf("%02d", $d))?>
+  <?endfor;?>
+  <?=mk_option(_var($$scrub,'dotm'), "*", "--------", _("disabled"))?>
+  </select>
+
+_(Time of the day)_:
+: <span id="scrub-hour1" style="display:none"><select name="hour1" class="narrow">
+  <?for ($d=0; $d<=23; $d++):?>
+  <?=mk_option(_var($$scrub,'hour'), strval($d), sprintf("%02d", $d))?>
+  <?endfor;?>
+  </select>
+  <select name="min" class="narrow">
+  <?for ($d=0; $d<=55; $d+=5):?>
+  <?=mk_option(_var($$scrub,'min'), strval($d), sprintf("%02d", $d))?>
+  <?endfor;?>
+  </select>&nbsp;&nbsp;_(HH:MM)_</span>
+: <span id="scrub-hour2" style="display:none"><select name="hour2">
+  <?=mk_option(_var($$scrub,'hour'), "*/1", _("Every hour"))?>
+  <?=mk_option(_var($$scrub,'hour'), "*/2", _("Every 2 hours"))?>
+  <?=mk_option(_var($$scrub,'hour'), "*/3", _("Every 3 hours"))?>
+  <?=mk_option(_var($$scrub,'hour'), "*/4", _("Every 4 hours"))?>
+  <?=mk_option(_var($$scrub,'hour'), "*/6", _("Every 6 hours"))?>
+  <?=mk_option(_var($$scrub,'hour'), "*/8", _("Every 8 hours"))?>
+  </select></span>
+
+&nbsp;
+: <input type="submit" name="#apply" value="_(Apply)_"><input type="button" value="_(Done)_" onclick="done()">
+</form>
+<?endif;?>
+<?if (fsType('reiserfs')):?>
+<div class="title nocontrol"><span class="left"><i class="title fa fa-shield"></i>_(Check Filesystem Status)_</span></div>
+<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareFS(this,'rfs-check-<?=$tag?>','/dev/<?=_var($disk,'deviceSb')?> <?=_var($disk,'id')?>')">
+<?if (maintenance_mode()):?>
+<?exec("$docroot/webGui/scripts/reiserfs_check status /dev/"._var($disk,'deviceSb')." "._var($disk,'id'), $check_status, $retval)?>
+
+_(reiserfsck status)_:
+: <?echo "<pre id='rfs-check'>".implode("\n", $check_status)."</pre>"?>
+
+<?if ($retval != 0):?>
+<input type="hidden" name="#command" value="/webGui/scripts/reiserfs_check">
+<input type="hidden" name="#arg[1]" value="start">
+<input type="hidden" name="#arg[2]" value="/dev/<?=_var($disk,'deviceSb')?>">
+<input type="hidden" name="#arg[3]" value="<?=_var($disk,'id')?>">
+
+&nbsp;
+: <input type="submit" value="_(Check)_"><input type="text" name="#arg[4]" class="narrow" maxlength="256" value=""> _(Options (see Help))_
+
+:info_reiserfs_check_help:
+
+<?else:?>
+<input type="hidden" name="#command" value="/webGui/scripts/reiserfs_check">
+<input type="hidden" name="#arg[1]" value="cancel">
+<input type="hidden" name="#arg[2]" value="/dev/<?=_var($disk,'deviceSb')?>">
+<input type="hidden" name="#arg[3]" value="<?=_var($disk,'id')?>">
+
+&nbsp;
+: <input type="submit" value="_(Cancel)_"> *_(Running)_*
+
+:info_reiserfs_cancel_help:
+
+<?endif;?>
+<?else:?>
+
+&nbsp;
+: <input type="submit" value="_(Check)_" disabled> **_(Check)_** _(is only available when array is Started in **Maintenance** mode)_.
+
+<?endif;?>
+</form>
+<?endif;?>
+<?if (fsType('xfs')):?>
+<div class="title nocontrol"><span class="left"><i class="title fa fa-shield"></i>_(Check Filesystem Status)_</span></div>
+<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareFS(this,'xfs-check-<?=$tag?>','/dev/<?=_var($disk,'deviceSb')?> <?=_var($disk,'id')?>')">
+<?if (maintenance_mode()):?>
+<?exec("$docroot/webGui/scripts/xfs_check status /dev/"._var($disk,'deviceSb')." "._var($disk,'id'), $check_status, $retval)?>
+
+_(xfs_repair status)_:
+: <?echo "<pre id='xfs-check'>".implode("\n", $check_status)."</pre>"?>
+
+<?if ($retval != 0):?>
+<input type="hidden" name="#command" value="/webGui/scripts/xfs_check">
+<input type="hidden" name="#arg[1]" value="start">
+<input type="hidden" name="#arg[2]" value="/dev/<?=_var($disk,'deviceSb')?>">
+<input type="hidden" name="#arg[3]" value="<?=_var($disk,'id')?>">
+
+&nbsp;
+: <input type="submit" value="_(Check)_"><input type="text" name="#arg[4]" class="narrow" maxlength="256" value="-n"> _(Options (see Help))_
+
+:info_xfs_check_help:
+
+<?else:?>
+<input type="hidden" name="#command" value="/webGui/scripts/xfs_check">
+<input type="hidden" name="#arg[1]" value="cancel">
+<input type="hidden" name="#arg[2]" value="/dev/<?=_var($disk,'deviceSb')?>">
+
+&nbsp;
+: <input type="submit" value="_(Cancel)_"> *_(Running)_*
+
+:info_xfs_cancel_help:
+
+<?endif;?>
+<?else:?>
+
+&nbsp;
+: <input type="submit" value="_(Check)_" disabled> **_(Check)_** _(is only available when array is Started in **Maintenance** mode)_.
+
+<?endif;?>
+</form>
+<?endif;?>
+
+<?if (!diskStatus('_NP')):?>
+<div class="title"><span class="left"><i class="title fa fa-plus-square"></i>_(SMART Settings)_</span></div>
+
+<form markdown="1" name="smart_settings" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareDeviceInfo(this)">
+<input type="hidden" name="#file"    value="/boot/config/smart-one.cfg">
+<input type="hidden" name="#include" value="webGui/include/update.smart.php">
+<input type="hidden" name="#section" value="<?=_var($disk,'id')?>">
+<input type="hidden" name="#cleanup" value="true">
+<input type="hidden" name="smEvents" value="">
+<input type="hidden" name="smGlue"   value="<?=_var($var,'smGlue')?>">
+_(Warning disk temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
+: <input type="number" min="0" max="300" name="hotTemp" class="narrow" value="<?=displayTemp(_var($disk,'hotTemp'))?>" placeholder="<?=displayTemp(_var($display,'hot'))?>">
+
+:info_warning_temp_help:
+
+_(Critical disk temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
+: <input type="number" min="0" max="300" name="maxTemp" class="narrow" value="<?=displayTemp(_var($disk,'maxTemp'))?>" placeholder="<?=displayTemp(_var($display,'max'))?>">
+
+:info_critical_temp_help:
+
+_(SMART notification value)_:
+: <select name="smSelect">
+  <?=mk_option(_var($disk,'smSelect'), "-1", _('Use default'))?>
+  <?=mk_option(_var($disk,'smSelect'), "0", _('Raw'))?>
+  <?=mk_option(_var($disk,'smSelect'), "1", _('Normalized'))?>
+  </select>
+
+:info_smart_notifications_help:
+
+_(SMART notification tolerance level)_:
+: <select name="smLevel">
+  <?=mk_option(_var($disk,'smLevel'), "-1", _('Use default'))?>
+  <?=mk_option(_var($disk,'smLevel'), "1.00", _('Absolute'))?>
+  <?=mk_option(_var($disk,'smLevel'), "1.05", "5%")?>
+  <?=mk_option(_var($disk,'smLevel'), "1.10", "10%")?>
+  <?=mk_option(_var($disk,'smLevel'), "1.15", "15%")?>
+  <?=mk_option(_var($disk,'smLevel'), "1.20", "20%")?>
+  <?=mk_option(_var($disk,'smLevel'), "1.25", "25%")?>
+  <?=mk_option(_var($disk,'smLevel'), "1.50", "50%")?>
+  </select>
+
+:info_tolerance_level_help:
+
+_(SMART controller type)_:
+: <select name="smType" onchange="setGlue(this.form,true)">
+  <?=mk_option(_var($disk,'smType'), "-1", _('Use default'))?>
+  <?=mk_option(_var($disk,'smType'), " ", _('Automatic'))?>
+  <?=mk_option(_var($disk,'smType'), "-d ata", "ATA")?>
+  <?=mk_option(_var($disk,'smType'), "-d nvme", "NVMe")?>
+  <?=mk_option(_var($disk,'smType'), "-d sat", "SAT")?>
+  <?=mk_option(_var($disk,'smType'), "-d scsi", "SCSI")?>
+  <?=mk_option(_var($disk,'smType'), "-d 3ware", "3Ware")?>
+  <?=mk_option(_var($disk,'smType'), "-d aacraid", "Adaptec")?>
+  <?=mk_option(_var($disk,'smType'), "-d areca", "Areca")?>
+  <?=mk_option(_var($disk,'smType'), "-d hpt", "HighPoint")?>
+  <?=mk_option(_var($disk,'smType'), "-d cciss", "HP cciss")?>
+  <?=mk_option(_var($disk,'smType'), "-d marvell", "Marvell")?>
+  <?=mk_option(_var($disk,'smType'), "-d megaraid", "MegaRAID")?>
+  </select>
+  <input type="text" name="smPort1" value="<?=_var($disk,'smPort1')?>" class="option"><select name="smPort1" class="narrow option" disabled></select>
+  <input type="text" name="smPort2" value="<?=_var($disk,'smPort2')?>" class="option"><select name="smPort2" class="narrow option" disabled></select>
+  <input type="text" name="smPort3" value="<?=_var($disk,'smPort3')?>" class="option"><select name="smPort3" class="narrow option" disabled></select><span id="devtext">/dev/</span>
+  <input type="text" name="smDevice" value="<?=_var($disk,'smDevice')?>" class="option" placeholder="<?=$dev?>"><span id="helptext">_(enter disk index and device name as applicable to your controller)_</span>
+
+:info_controller_type_help:
+
+_(SMART attribute notifications)_:
+: <input type="text" name="smCustom" value="<?=$disk['smCustom']??$var['smCustom']??''?>" class="narrow">_(Custom attributes (use comma to separate numbers))_
+
+<?for ($x=0; $x<count($preselect); $x++):?>
+&nbsp;
+: <input type="checkbox" name="at<?=$x?>" value="<?=_var($preselect[$x],'code')?>"<?=in_array(_var($preselect[$x],'code'),$events)?' checked':''?>><span class="code">_(Attribute)_ = <?=_var($preselect[$x],'code')?></span><?=_var($preselect[$x],'text')?>
+<?endfor;?>
+
+:info_attribute_notifications_help:
+
+<input type="submit" name="#default" value="_(Default)_">
+: <input type="submit" name="#apply" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+</form>
+<?endif?>
+
+<div id="dialogRenamePool" style="display:none"></div>
+
+<div id="templatePopupPool" style="display:none">
+<form markdown="1" method="POST" action="/update.htm" target="progressFrame" onsubmit="return validate(this.poolName.value)">
+<input type="hidden" name="poolNameOrig" value="<?=$name?>">
+<input type="hidden" name="changeSlots" value="apply">
+_(Name)_:
+: <input type="text" name="poolName" maxlength="40" value="<?=$name?>">
+
+</form>
+</div>
+
+<form name="deletepool" method="POST" action="/update.htm" target="progressFrame" style="display:none">
+<input type="hidden" name="changeSlots" value="apply">
+<input type="hidden" name="poolName" value="<?=$name?>">
+<input type="hidden" name="poolSlots" value="0">
+<input type='hidden' name='csrf_token' value='<?=_var($var,'csrf_token')?>'>
+</form>
+
+<script>
+$(function() {
+<?if (count($sheets)>1):?>
+  var ctrl  = "<span class='status <?=$tabbed?'vhshift':'vshift'?>'><span class='waitmsg fa fa-circle-o-notch fa-span fa-fw' style='display:none;margin-right:8px'></span><a href='/<?=$path?>?name=<?=$prev?>' title='_(previous device)_'>";
+      ctrl += "<button type='button' style='margin-right:4px' onclick='this.disabled=true;$(\".waitmsg\").show();'><i class='fa fa-chevron-left fa-fw'></i></button></a>";
+      ctrl += "<a href='/<?=$path?>?name=<?=$next?>' title='_(next device)_'><button type='button' onclick='this.disabled=true;$(\".waitmsg\").show();'><i class='fa fa-chevron-right fa-fw'></i></button></a></span>";
+<?if ($tabbed):?>
+  $('.tabs').append(ctrl);
+<?else:?>
+  $('div[class=title]:first').append(ctrl);
+<?endif;?>
+<?endif;?>
+<?if (!diskStatus('_NP')):?>
+  var form = document.smart_settings;
+<?if (!isset($disk['smType'])):?>
+  form.smType.selectedIndex = 0;
+<?endif;?>
+  setGlue(form,false);
+<?endif;?>
+  var status = true;
+  if ($.cookie('autosize-<?=$tag?>')) $('#autosize').show();
+  if ($.cookie('btrfs-balance-<?=$tag?>')) status = btrfsBalance($.cookie('btrfs-balance-<?=$tag?>'));
+  if ($.cookie('btrfs-scrub-<?=$tag?>')) status = btrfsScrub($.cookie('btrfs-scrub-<?=$tag?>'));
+  if ($.cookie('btrfs-check-<?=$tag?>')) status = btrfsCheck($.cookie('btrfs-check-<?=$tag?>'));
+  if ($.cookie('zfs-scrub-<?=$tag?>')) status = zfsScrub($.cookie('zfs-scrub-<?=$tag?>'));
+  if ($.cookie('zfs-resilver-<?=$tag?>')) status = zfsResilver($.cookie('zfs-resilver-<?=$tag?>'));
+  if ($.cookie('rfs-check-<?=$tag?>')) status = rfsCheck($.cookie('rfs-check-<?=$tag?>'));
+  if ($.cookie('xfs-check-<?=$tag?>')) status = xfsCheck($.cookie('xfs-check-<?=$tag?>'));
+  if (status) {
+    $.post('/webGui/include/FileSystemStatus.php',{cmd:'status',path:'<?=$tag?>'},function(a){
+      var action = a.split(',');
+      for (var i=0,busy; busy=action[i]; i++) {
+        switch (busy) {
+        case 'btrfs-balance':
+          $.cookie('btrfs-balance-<?=$tag?>','/mnt/<?=$tag?>');
+          btrfsBalance($.cookie('btrfs-balance-<?=$tag?>'));
+          break;
+        case 'btrfs-scrub':
+          $.cookie('btrfs-scrub-<?=$tag?>','/mnt/<?=$tag?>');
+          btrfsScrub($.cookie('btrfs-scrub-<?=$tag?>'));
+          break;
+        case 'btrfs-check':
+          $.cookie('btrfs-check-<?=$tag?>','/mnt/<?=$tag?>');
+          btrfsCheck($.cookie('btrfs-check-<?=$tag?>'));
+          break;
+        case 'zfs-scrub':
+          $.cookie('zfs-scrub-<?=$tag?>','<?=$tag?>');
+          zfsScrub($.cookie('zfs-scrub-<?=$tag?>'));
+          break;
+        case 'zfs-resilver':
+          $.cookie('zfs-resilver-<?=$tag?>','<?=$tag?>');
+          zfsResilver($.cookie('zfs-resilver-<?=$tag?>'));
+          break;
+        }
+      }
+    });
+  }
+  selectDiskFsProfile(true);
+<?if (fsType('btrfs')):?>
+  presetBTRFS(document.balance_schedule,'#balance-hour');
+  presetBTRFS(document.scrub_schedule,'#scrub-hour');
+<?elseif (fsType('zfs') && !isSubpool($name)):?>
+  presetZFS(document.scrub_schedule,'#scrub-hour');
+<?endif;?>
+});
+</script>

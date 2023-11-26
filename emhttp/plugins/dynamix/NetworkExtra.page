@@ -1,0 +1,109 @@
+Menu="NetworkSettings"
+Title="Interface Extra"
+Tag="icon-ethernet"
+---
+<?PHP
+/* Copyright 2023, Lime Technology
+ * Copyright 2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$cfg = '/boot/config/network-extra.cfg';
+
+if (file_exists($cfg)) {
+  extract(parse_ini_file($cfg));
+  $include_interfaces = str_replace(" ","\n",$include_interfaces);
+  $exclude_interfaces = str_replace(" ","\n",$exclude_interfaces);
+} else {
+  $include_interfaces = "";
+  $exclude_interfaces = "";
+}
+?>
+<script>
+function prepareText(form) {
+  var mgmt = ['br0','bond0','eth0'];
+  form.include_interfaces.value = form.include.value.replace(/[\n,]/g,' ').replace(/  +/g,' ').trim();
+  form.exclude_interfaces.value = form.exclude.value.replace(/[\n,]/g,' ').replace(/  +/g,' ').trim();
+  form.include.disabled = true;
+  form.exclude.disabled = true;
+  var include = form.include_interfaces.value.split(' ');
+  var exclude = form.exclude_interfaces.value.split(' ');
+  // silently remove management interfaces from include list
+  for (var i=0,name; name=include[i]; i++) {
+    if (mgmt.includes(name)) include[i] = '';
+  }
+  form.include_interfaces.value = include.join(' ').replace(/  +/g,' ').trim();
+  // give warning when management interface is excluded
+  for (var i=0,name; name=exclude[i]; i++) {
+    if (mgmt.includes(name)) {
+      swal({title:"_(Management Interface)_ '"+name+"'",text:"_(You can not exclude this interface)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+      form.include.disabled = false;
+      form.exclude.disabled = false;
+      return false;
+    }
+  }
+  return true;
+}
+
+<?if (!$tabbed):?>
+function toggleExtra() {
+  var tag = '#tag_extra';
+  var view = '#extra_table';
+  if ($(view).is(':visible')) {
+    $(tag).removeClass('fa-chevron-up').addClass('fa-chevron-down');
+    $.cookie(view,'hide',{expires:3650});
+  } else {
+    $(tag).removeClass('fa-chevron-down').addClass('fa-chevron-up');
+    $.removeCookie(view);
+  }
+  $(view).toggle('slow');
+}
+$(function(){
+  $('div.title').eq(-3).find('span.left').append("<span class='status vhshift'><i id='tag_extra' class='fa fa-fw fa-chevron-up' style='cursor:pointer' onclick='toggleExtra()'></i></span>");
+  if (!$.cookie('#extra_table')) $('#extra_table').show(); else {$('#extra_table').hide(); $('#tag_extra').removeClass('fa-chevron-up').addClass('fa-chevron-down');}
+});
+<?else:?>
+$(function(){
+  $('#extra_table').show();
+});
+<?endif;?>
+$(function(){
+  $('form textarea').on('input',function(){
+    $(this).prop('rows',($(this).val().match(/\n/g)||[]).length+1);
+  });
+});
+</script>
+
+<div markdown="1" id="extra_table" style="display:none">
+<form markdown="1" name="network_extra" method="POST" action="/update.php" target="progressFrame" onsubmit="return prepareText(this)">
+<input type="hidden" name="#file" value="<?=$cfg?>">
+<input type="hidden" name="#command" value="/webGui/scripts/reload_services">
+<input type="hidden" name="include_interfaces" value="">
+<input type="hidden" name="exclude_interfaces" value="">
+
+_(Current listening interfaces)_:
+: <?=exec("$docroot/webGui/scripts/show_interfaces")?:_('Any')?><span class="red-text" style="margin-left:30px"><?=exec("$docroot/webGui/scripts/error_interfaces")?></span>
+<hr>
+
+_(Include listening interfaces)_:
+: <textarea name="include" spellcheck="false" cols="80" rows="<?=substr_count($include_interfaces,"\n")+1?>" maxlength="2048" name="text" style="resize:none;width:200px"><?=$include_interfaces?></textarea>
+
+:eth_network_extra_include_help:
+
+_(Exclude listening interfaces)_:
+: <textarea name="exclude" spellcheck="false" cols="80" rows="<?=substr_count($exclude_interfaces,"\n")+1?>" maxlength="2048" name="text" style="resize:none;width:200px"><?=$exclude_interfaces?></textarea>
+
+:eth_network_extra_exclude_help:
+
+&nbsp;
+: <input type="submit" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+</form>
+
+</div>

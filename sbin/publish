@@ -1,0 +1,45 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2017, Lime Technology
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+function curl_socket($socket, $url, $postdata = NULL)
+{
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_UNIX_SOCKET_PATH, $socket);
+    if ($postdata !== NULL) {
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $postdata);
+    }
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_exec($ch);
+    curl_close($ch);
+}
+function publish($endpoint, $message)
+{
+    curl_socket("/var/run/nginx.socket", "http://localhost/pub/$endpoint?buffer_length=1", $message);
+}
+
+// POST the contents of a specified file to a nchan publisher endpoint named after the file.
+//
+// usage:
+//  publish [FILE]
+//  
+//  FILE is the file to publish
+//
+// example:
+//  publish /var/local/emhttp/cpuload.ini
+//
+//  POSTs the contents of /var/local/emhttp/cpuload.ini to http://localhost/pub/cpuload
+
+$path_info = pathinfo($argv[1]);
+publish($path_info['filename'], file_get_contents($argv[1]));
+?>

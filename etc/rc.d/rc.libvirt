@@ -1,0 +1,337 @@
+#!/bin/bash
+#
+# script: rc.libvirt
+#
+# Init script for libvirtd on Slackware
+# Written by Matteo Bernardini <ponce@slackbuilds.org>
+#
+# Note that a dnsmasq daemon is started by libvirtd itself to serve
+# its virtual network, and possibly can conflict with a dnsmasq
+# Already started on the system, see
+# http://wiki.libvirt.org/page/Libvirtd_and_dnsmasq
+# Note also that the tun, vhost_net and kvm related modules are
+# automatically loaded at start and removed at stop: edit the
+# script if this behaviour conflicts with anything else running
+# on your setup
+#
+# Read Unraid libvirt configuration file (named "domain.cfg" leftover from Xen days)
+#
+# Modified stop_running_machines by Bergware 2022-03-11
+# Avoid Unraid from hanging when the array is stopped, while VMs are in paused or suspended state
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+DAEMON="libvirt daemon"
+MODULES=${MODULES:-"vhost_net"}
+TIMEOUT=${TIMEOUT:-60}
+HOSTSHUTDOWN=${HOSTSHUTDOWN:-"shutdown"}
+
+LIBVIRTD_PIDFILE="/var/run/libvirt/libvirtd.pid"
+LIBVIRTD_OPTS=${LIBVIRT_OPTS:-" -f /etc/libvirt/libvirtd.conf -p $LIBVIRTD_PIDFILE "}
+VIRTLOGD_PIDFILE="/var/run/libvirt/virtlogd.pid"
+VIRTLOGD_OPTS=${VIRTLOGD_OPTS:-" -f /etc/libvirt/virtlogd.conf -p $VIRTLOGD_PIDFILE "}
+VIRTLOCKD_PIDFILE="/var/run/libvirt/virtlockd.pid"
+VIRTLOCKD_OPTS=${VIRTLOCKD_OPTS:-" -f /etc/libvirt/virtlockd.conf -p $VIRTLOCKD_PIDFILE "}
+
+BOOT_DOMAIN="/boot/config/domain.cfg"
+SYSTEM="/sys/class/net"
+VIRTLOG="virtlog daemon"
+VIRTLOCK="virtlock daemon"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# Read Unraid configuration
+[[ -f $BOOT_DOMAIN ]] && . $BOOT_DOMAIN
+
+vmstate(){
+  virsh list --all | awk -F'[[:space:]][[:space:]]+' 'NR>2 && /^.+$/{print $3}'
+}
+
+vmlist(){
+  local STATE=
+  for ARG in ${@: 1}; do
+    [[ $ARG == all ]] && STATE="$STATE --all" || STATE="$STATE --state-$ARG"
+  done
+  virsh list --uuid $STATE | grep -v '^$'
+}
+
+waitfor(){
+  local C=0
+  while [[ $C -lt $TIMEOUT && $(virsh list --state-$1 | awk "NR>2 && /${2:-^.+$}/" | wc -l) -gt 0 ]]; do
+    ((C++))
+    sleep 1
+  done
+}
+
+stop_running_machines(){
+  # create names array
+  declare -A NAMES
+  while IFS='\n' read -r ID; do
+    [[ -n $ID ]] && NAMES[${ID:0:36}]=${ID:37}
+  done <<< $(virsh list --all --uuid --name)
+
+  # resume paused VMs
+  for UUID in $(vmlist paused); do
+    log "Resuming VM: ${NAMES[$UUID]}"
+    virsh resume $UUID &>/dev/null
+  done
+  # wait until VMs are resumed
+  waitfor paused
+
+  if [[ $HOSTSHUTDOWN == hibernate ]]; then
+    for UUID in $(vmlist running); do
+      log "Suspending VM: ${NAMES[$UUID]}"
+      virsh dompmsuspend $UUID disk &>/dev/null
+    done
+    # wait until VMs are suspended
+    waitfor running
+  fi
+
+  # graceful shutdown of running VMs
+  for UUID in $(vmlist running); do
+    log "Shutting down VM: ${NAMES[$UUID]}"
+    virsh shutdown $UUID &>/dev/null
+  done
+  # wait until VMs are stopped
+  waitfor running
+
+  # graceful shutdown of suspended VMs
+  i=0; UUID=($(vmlist all))
+  while IFS='\n' read -r STATE; do
+    # check explicitely for suspended VMs
+    if [[ $STATE == pmsuspended ]]; then
+      log "Stopping suspended VM: ${NAMES[${UUID[$i]}]}"
+      virsh destroy ${UUID[$i]} --graceful &>/dev/null
+    fi
+    ((I++))
+  done <<< $(vmstate)
+  # wait until VMs are stopped
+  waitfor other pmsuspended
+
+  # forced shutdown of rogue VMs
+  for UUID in $(vmlist running paused other); do
+    log "Forced shutting down VM: ${NAMES[$UUID]}"
+    virsh destroy $UUID &>/dev/null
+  done
+}
+
+check_processor(){
+  grep 'vmx' /proc/cpuinfo >/dev/null
+  if [[ $? -eq 0 ]]; then
+    MODULE="kvm_intel"
+  fi
+  CHECK=$?
+  grep 'svm' /proc/cpuinfo >/dev/null
+  if [[ $? -eq 0 ]]; then
+    MODULE="kvm_amd"
+  fi
+  CHECK=$(expr $CHECK + $?)
+  if [[ $CHECK -eq 2 ]]; then
+    log "Your system does not support KVM!"
+  fi
+}
+
+libvirtd_test(){
+  check_processor
+  if [[ -z $MODULE ]]; then
+    exit 1
+  fi
+  if lsmod | grep -q "^$MODULE"; then
+    echo $MODULE
+    exit 0
+  fi
+  modprobe $MODULE
+  if lsmod | grep -q "^$MODULE"; then
+    modprobe -r $MODULE
+    echo $MODULE
+    exit 0
+  fi
+  exit 1
+}
+
+wait_stop(){
+  # wait for daemon to exit
+  PIDFILE=$1
+  PROCESS=$2
+  for N in {1..15}; do
+    sleep 1
+    if [[ ! -f "$PIDFILE" || $(ps -p $(cat "$PIDFILE") -o comm= 2>/dev/null) != "$PROCESS" ]]; then
+      rm -f "$PIDFILE"
+      return 0
+    fi
+    echo "waiting for $PROCESS to die ..."
+  done
+  log "$PROCESS will not die!"
+  return 1
+}
+
+version(){
+  echo $1 | awk -F. '{printf("%03d%03d",$1,$2);}'
+}
+
+libvirtd_start(){
+  log "Starting $DAEMON..."
+  if ! mountpoint /etc/libvirt &>/dev/null; then
+    log "$DAEMON...  No image mounted at /etc/libvirt."
+    exit 1
+  elif [[ -f $LIBVIRTD_PIDFILE ]]; then
+    log "$DAEMON...  Already started."
+    return 1
+  fi
+  # convert libvirt 1.3.1 w/ eric's hyperv vendor id patch to how libvirt does it in libvirt 1.3.3+
+  sed -ri "s/<vendor id='none'\/>/<vendor_id state='on' value='none'\/>/g" /etc/libvirt/qemu/*.xml &>/dev/null
+  # remove <locked/> from xml because libvirt + virlogd + virlockd has an issue with locked
+  sed -ri "/<locked\/>/d" /etc/libvirt/qemu/*.xml &>/dev/null
+  # Remove "<watchdog model='itco' action='reset'/>" if reverting from later release.
+  . /etc/unraid-version
+  [[ $(version $version) -le $(version "6.12") ]] && sed -ri "/<watchdog model='itco' action='reset'\/>/d" /etc/libvirt/qemu/*.xml &>/dev/null
+  # update interface section((s) of VM configuration files
+  for XML in /etc/libvirt/qemu/*.xml; do
+    # get all interface sections
+    ROW=($(grep -nhP '<interface type=' "$XML" | grep -Pom1 '^[0-9]+'))
+    # get all source sections
+    CAT=($(grep -nhP '<source (bridge|dev)=' "$XML" | awk '{print $1$3}'))
+    for i in ${!ROW[@]}; do
+      ROW2=$(echo ${CAT[$i]} | grep -Pom1 '^[0-9]+')
+      DEV=$(echo ${CAT[$i]} | grep -Pom1 "^.+='\K[^']+")
+      if [[ ! -e $SYSTEM/$DEV ]]; then
+        NAME=${DEV//[0-9.]/}
+        if [[ $NAME == br ]]; then
+          # change to macvtap
+          log "change $DEV to macvtap in $XML"
+          sed -ri "${ROW[$i]} s/<interface type='bridge'>/<interface type='direct' trustGuestRxFilters='yes'>/; $ROW2 s/<source bridge='$DEV'\/>/<source dev='${DEV/$NAME/vhost}' mode='bridge'\/>/" "$XML"
+        else
+          # change to bridge
+          log "change $DEV to bridge in $XML"
+          sed -ri "${ROW[$i]} s/<interface type='direct'( trustGuestRxFilters='yes')?>/<interface type='bridge'>/; $ROW2 s/<source dev='$DEV' mode='bridge'\/>/<source bridge='${DEV/$NAME/br}'\/>/" "$XML"
+        fi
+      fi
+    done
+  done
+
+  # copy any new conf files we dont currently have
+  cp -n /etc/libvirt-/*.conf /etc/libvirt &>/dev/null
+  # ensure tpm-states path exists
+  mkdir -p /etc/libvirt/qemu/swtpm/tpm-states
+  # setup snapshot persistance.
+  mkdir -p /etc/libvirt/qemu/snapshot
+  rm -rf /var/lib/libvirt/qemu/snapshot
+  ln -sf /etc/libvirt/qemu/snapshot /var/lib/libvirt/qemu/snapshot
+  # create directory for pid file
+  mkdir -p $(dirname $LIBVIRTD_PIDFILE)
+
+  check_processor
+  modprobe -a $MODULE $MODULES
+  libvirtd -d -l $LIBVIRTD_OPTS
+  log "$DAEMON...  Started."
+}
+
+libvirtd_stop(){
+  log "Stopping $DAEMON..."
+  if [[ ! -f $LIBVIRTD_PIDFILE ]]; then
+    log "$DAEMON...  Already stopped."
+    return 1
+  fi
+  stop_running_machines
+  for network in $(virsh net-list --uuid | grep -v ^$); do
+    run virsh net-destroy $network
+  done
+  kill -TERM $(cat $LIBVIRTD_PIDFILE)
+  wait_stop $LIBVIRTD_PIDFILE $DAEMON
+  check_processor
+  modprobe -ra $MODULE $MODULES 2>/dev/null
+  log "$DAEMON...  Stopped."
+}
+
+virtlogd_start(){
+  log "Starting $VIRTLOG..."
+  if [[ -f $VIRTLOGD_PIDFILE ]]; then
+    log "$VIRTLOG...  Already started."
+    return 1
+  fi
+  mkdir -p $(dirname $VIRTLOGD_PIDFILE)
+  virtlogd -d $VIRTLOGD_OPTS
+  log "$VIRTLOG...  Started."
+}
+
+virtlogd_stop(){
+  log "Stopping $VIRTLOG..."
+  if [[ ! -f $VIRTLOGD_PIDFILE ]]; then
+    log "$VIRTLOG... Already stopped."
+    return 1
+  fi
+  kill -TERM $(cat $VIRTLOGD_PIDFILE)
+  wait_stop $VIRTLOGD_PIDFILE $VIRTLOG
+  log "$VIRTLOG...  Stopped."
+}
+
+virtlockd_start(){
+  log "Starting $VIRTLOCK..."
+  if [[ -f $VIRTLOCKD_PIDFILE ]]; then
+    log "$VIRTLOCK...  Already started."
+    return 1
+  fi
+  mkdir -p $(dirname $VIRTLOCKD_PIDFILE)
+  virtlockd -d $VIRTLOCKD_OPTS
+  log "$VIRTLOCK...  Started."
+}
+
+virtlockd_stop(){
+  log "Stopping $VIRTLOCK..."
+   if [[ ! -f $VIRTLOCKD_PIDFILE ]]; then
+    log "$VIRTLOCK... Already stopped."
+    return 1
+  fi
+  kill -TERM $(cat $VIRTLOCKD_PIDFILE)
+  wait_stop $VIRTLOCKD_PIDFILE $VIRTLOCK
+  log "$VIRTLOCK...  Stopped."
+}
+
+libvirtd_status(){
+  if [[ -f $LIBVIRTD_PIDFILE ]]; then
+    echo "$DAEMON is currently running."
+  else
+    echo "$DAEMON is not running."
+    exit 1
+  fi
+}
+
+libvirtd_cleanup(){
+  find /run/libvirt -type f -exec rm "{}" \;
+  sleep 1
+}
+
+case "$1" in
+'test')
+  libvirtd_test
+  ;;
+'start')
+  virtlockd_start
+  virtlogd_start
+  libvirtd_start
+  ;;
+'stop')
+  libvirtd_stop
+  virtlogd_stop
+  virtlockd_stop
+  libvirtd_cleanup
+  ;;
+'restart')
+  libvirtd_stop
+  virtlogd_stop
+  virtlockd_stop
+  libvirtd_cleanup
+  virtlockd_start
+  virtlogd_start
+  libvirtd_start
+  ;;
+'status')
+  libvirtd_status
+  ;;
+*)
+  echo "Usage: $BASENAME test|start|stop|restart|status"
+  exit 1
+esac
+exit 0

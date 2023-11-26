@@ -1,0 +1,751 @@
+#!/bin/bash
+#
+# script: rc.inet1
+#
+# This script is used to bring up the various network interfaces.
+#
+# @(#)/etc/rc.d/rc.inet1 10.2  Sun Jul 24 12:45:56 PDT 2005 (pjv)
+
+# LimeTech - modified for Unraid OS
+
+# Adapted by Bergware for use in Unraid OS - April 2016
+# - improved interface configuration
+# - added VLAN (sub-interface) support
+# - removed wireless (unsupported)
+# - updated shell syntax
+# - used 'iproute2' utilities for network settings
+
+# Adapted by Bergware for use in Unraid OS - April 2017
+# - added IPv6 support
+# - added multi bonding ports support
+# - added multi bridging groups support
+# - added multi default gateway support
+# - added default route metrics support
+# - added static route add/del command
+
+# Adapted by Bergware for use in Unraid OS - November 2017
+# - added independent DHCP & DNS settings for IPv4 and IPv6
+# - improved delete all assigned IPv4 and IPv6 addresses
+
+# Adapted by Bergware for use in Unraid OS - February 2018
+# - fixed multi default gateway with different metrics & protocols
+# - fixed route_up & route_down functions
+
+# Adapted by Bergware for use in Unraid OS - December 2019
+# - added disable IPv6 SLAAC per interface
+
+# Adapted by Bergware for use in Unraid OS - February 2020
+# - added delay to allow bond initialization
+
+# Adapted by Bergware for use in Unraid OS - July 2021
+# - improved ipv4 address removal
+# - improved ipv6 address removal
+# - fixed jumbo frame settings
+
+# Adapted by Bergware for use in Unraid OS - February 2023
+# - revised bond interface creation for linux kernel 6.1
+# - added primary slave setting to bond interface
+
+# Adapted by Bergware for use in Unraid OS - May 2023
+# - added iptables and ip6tables and arp-tables inclusion to bridge interfaces
+# - fixed ipv4 and ipv6 DNS assignment
+# - suppress errors
+
+# Adapted by Bergware for use in Unraid OS - July 2023
+# - reverted iptables and ip6tables and arp-tables inclusion to bridge interfaces
+# - removed promiscuous mode setting for bridge interfaces
+# - added persistent option to dhcpcd
+
+# Adapted by Bergware for use in Unraid OS - August 2023
+# - added macvtap network creation
+# - removed unnecessary error output redirection for 'run' command
+# - added error logging to syslog
+# - replace logging for generic add-in module
+
+# Adapted by Bergware for use in Unraid OS - October 2023
+# - added interface carrier check before assigning IP address (DHCP or static)
+# - added "status" command
+
+# Bergware - modified for Unraid OS, October 2023
+
+###########
+# LOGGING #
+###########
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+############################
+# READ NETWORK CONFIG FILE #
+############################
+
+# get the configuration information from rc.inet1.conf
+. /etc/rc.d/rc.inet1.conf
+
+# system network references
+SYSTEM=/sys/class/net
+CONF6=/proc/sys/net/ipv6/conf
+
+############################
+# DETERMINE INTERFACE LIST #
+############################
+
+# compose a list of interfaces from /etc/rc.d/rc.inet1.conf with a default
+# maximum of 6 interfaces, but you can easily enlarge the interface limit
+# if a value for IFNAME[n] is not set, we assume it is an eth'n' interface.
+# this way, the new script is compatible with older rc.inet1.conf files.
+# the IFNAME array is used to determine which interfaces to bring up/down.
+
+MAXNICS=${MAXNICS:-6}
+i=0
+while [[ $i -lt $MAXNICS ]]; do
+  IFNAME[$i]=${IFNAME[$i]:-eth$i}
+  ((i++))
+done
+
+[[ $DEBUG_ETH_UP == yes ]] && log "List of interfaces: ${IFNAME[@]}"
+
+######################
+# LOOPBACK FUNCTIONS #
+######################
+
+# function to bring up loopback interface
+lo_up(){
+  if [[ -e $SYSTEM/lo ]]; then
+    if ! ip -4 addr show lo | grep -qw 'inet'; then
+      run ip -4 addr add 127.0.0.1/8 dev lo
+    fi
+    if ! ip -6 addr show lo | grep -qw 'inet6'; then
+      run ip -6 addr add ::1/128 dev lo
+    fi
+    run ip link set lo up
+  else
+    [[ $DEBUG_ETH_UP == yes ]] && log "interface lo not present, can't bring up"
+  fi
+}
+
+# function to take down loopback interface
+lo_down(){
+  if [[ -e $SYSTEM/lo ]]; then
+    run ip link set lo down
+  else
+    [[ $DEBUG_ETH_UP == yes ]] && log "interface lo not present, can't take down"
+  fi
+}
+
+#######################
+# INTERFACE FUNCTIONS #
+#######################
+
+# function to get link mtu size
+get_mtu(){
+  ip link show $1 | grep -Po 'mtu \K\d+'
+}
+
+# function to set/reset link mtu size
+set_mtu(){
+  if [[ -n ${MTU[$i]} ]]; then
+    # set MTU to specified value
+    run ip link set $1 mtu ${MTU[$i]}
+  else
+    # reset MTU to default value
+    [[ $(get_mtu $1) -ne 1500 ]] && run ip link set $1 mtu 1500
+  fi
+}
+
+# function to wait for carrier of interface
+carrier_up(){
+  local n
+  for n in {1..10}; do
+    [[ $(cat $SYSTEM/$1/carrier 2>/dev/null) == 1 ]] && return 0 || sleep 1
+  done
+  return 1
+}
+
+# function to create bond interface
+bond_up(){
+  [[ -d /proc/net/bonding ]] || modprobe bonding mode=${BONDING_MODE[$i]} miimon=${BONDING_MIIMON[$i]}
+  run ip link add name ${BONDNAME[$i]} type bond mode ${BONDING_MODE[$i]} miimon ${BONDING_MIIMON[$i]}
+  set_mtu ${BONDNAME[$i]}
+  PRIMARY=;
+  # loop thru assigned interfaces in bond
+  for BONDIF in ${BONDNICS[$i]}; do
+    if [[ -e $SYSTEM/$BONDIF ]]; then
+      [[ -z $PRIMARY ]] && PRIMARY=$BONDIF
+      run ip link set $BONDIF down
+      run ip link set $BONDIF master ${BONDNAME[$i]} up type bond_slave
+    else
+      [[ $DEBUG_ETH_UP == yes ]] && log "interface $BONDIF not present, can't add to ${BONDNAME[$i]}"
+    fi
+  done
+  [[ -n $PRIMARY ]] && run ip link set name ${BONDNAME[$i]} type bond primary $PRIMARY
+}
+
+# function to delete bond interface
+bond_down(){
+  if [[ -e $SYSTEM/${BONDNAME[$i]} ]]; then
+    # loop thru attached interfaces in bond
+    for BONDIF in $(cat $SYSTEM/${BONDNAME[$i]}/bonding/slaves); do
+      run ip link set $BONDIF nomaster
+    done
+    run ip link set ${BONDNAME[$i]} down
+    run ip link del ${BONDNAME[$i]}
+  else
+    [[ $DEBUG_ETH_UP == yes ]] && log "interface ${BONDNAME[$i]} not present, can't take down"
+  fi
+}
+
+# function to create bridge interface
+br_up(){
+  for ((j=0;j<${VLANS[$i]:-1};j++)); do
+    [[ $j -eq 0 ]] && BRIDGE=${BRNAME[$i]} || BRIDGE=${BRNAME[$i]}.${VLANID[$i,$j]}
+    [[ $j -eq 0 ]] && IP=${PROTOCOL[$i]:-ipv4} || IP=${PROTOCOL[$i,$j]:-ipv4}
+    # convert legacy no/yes
+    BRSTP[$i]=${BRSTP[$i]/no/0}
+    BRSTP[$i]=${BRSTP[$i]/yes/1}
+    run ip link add name $BRIDGE type bridge stp_state ${BRSTP[$i]} forward_delay ${BRFD[$i]}
+    # loop thru assigned interfaces in bridge
+    for BRNIC in ${BRNICS[$i]}; do
+      [[ $j -eq 0 ]] && BRIF=$BRNIC || BRIF=$BRNIC.${VLANID[$i,$j]}
+      [[ $j -eq 0 && -n ${HWADDR[$i]} ]] && run ip link set $BRIF addr ${HWADDR[$i]}
+      if [[ -e $SYSTEM/$BRIF ]]; then
+        [[ ${BRIF:0:3} == eth ]] && set_mtu $BRIF
+        [[ ${BRIF:0:4} == bond ]] && set_mtu ${BRIF/bond/eth}
+        run ip link set $BRIF down
+        [[ $IP != ipv6 ]] && run ip -4 addr flush dev $BRIF
+        [[ $IP != ipv4 ]] && run ip -6 addr flush dev $BRIF
+        run ip link set $BRIF master $BRIDGE up
+      else
+        [[ $DEBUG_ETH_UP == yes ]] && log "interface $BRIF not present, can't add to $BRIDGE"
+      fi
+    done
+  done
+}
+
+# function to delete bridge interface
+br_down(){
+  for ((j=0;j<${VLANS[$i]:-1};j++)); do
+    # loop thru main bridge and bridge VLAN interfaces
+    [[ $j -eq 0 ]] && BRIDGE=${BRNAME[$i]} || BRIDGE=${BRNAME[$i]}.${VLANID[$i,$j]}
+    if [[ -e $SYSTEM/$BRIDGE ]]; then
+      # loop thru attached interfaces in bridge
+      for BRIF in $(ls --indicator-style=none $SYSTEM/$BRIDGE/brif); do
+        run ip link set $BRIF nomaster
+      done
+      run ip link set $BRIDGE down
+      run ip link del $BRIDGE
+    else
+      [[ $DEBUG_ETH_UP == yes ]] && log "interface $BRIDGE not present, can't take down"
+    fi
+  done
+}
+
+# function to create VLAN interfaces
+vlan_up(){
+  for PORT in ${BRNICS[$i]:-${IFNAME[$i]}}; do
+    for ((j=1;j<${VLANS[$i]};j++)); do
+      VLAN=${VLANID[$i,$j]}
+      run ip link add link $PORT name $PORT.$VLAN type vlan id $VLAN
+      [[ ${PORT:0:3} == eth ]] && set_mtu $PORT.$VLAN
+      run ip link set $PORT.$VLAN up
+    done
+  done
+}
+
+# function to delete VLAN interfaces
+vlan_down(){
+  for PORT in ${BRNICS[$i]:-${IFNAME[$i]}}; do
+    for VLAN in $(ls --indicator-style=none $SYSTEM | grep -Po "$PORT\.\d+"); do
+      run ip link set $VLAN down
+      run ip link del $VLAN
+    done
+  done
+}
+
+# function to create macvtap interfaces
+macvtap_up(){
+  PARENT=${IFNAME[$i]}
+  [[ -n ${BONDNICS[$i]} ]] && PARENT=${BONDNAME[$i]}
+  VTAP=vhost${PARENT//[^0-9]/}
+  MAC=$(echo $(hostname)-$VTAP | md5sum | sed -r 's/^(..)(..)(..)(..)(..).*$/02:\1:\2:\3:\4:\5/')
+  run ip link add link $PARENT name $VTAP address $MAC type macvtap mode bridge
+  set_mtu $VTAP
+  run ip link set $VTAP up
+  for ((j=1;j<${VLANS[$i]:-0};j++)); do
+    VLAN=${VLANID[$i,$j]}
+    run ip link add link $PARENT.$VLAN name $VTAP.$VLAN address $MAC type macvtap mode bridge
+    set_mtu $VTAP.$VLAN
+    run ip link set $VTAP.$VLAN up
+  done
+}
+
+# function to delete macvtap interfaces
+macvtap_down(){
+  PARENT=${IFNAME[$i]}
+  [[ -n ${BONDNICS[$i]} ]] && PARENT=${BONDNAME[$i]}
+  VTAP=vhost${PARENT//[^0-9]/}
+  for ((j=1;j<${VLANS[$i]:-0};j++)); do
+    VLAN=${VLANID[$i,$j]}
+    run ip addr flush dev $VTAP.$VLAN
+    run ip link set $VTAP.$VLAN down
+    run ip link del $VTAP.$VLAN
+  done
+  run ip addr flush dev $VTAP
+  run ip link set $VTAP down
+  run ip link del $VTAP
+}
+
+# function to enable/disable ipv6 protocol per interface
+ipv6_up(){
+  [[ -d $CONF6/${IFACE/$1/$2} ]] && echo $4 >$CONF6/${IFACE/$1/$2}/disable_ipv6
+  [[ -d $CONF6/${IFACE/$1/$3} ]] && echo $4 >$CONF6/${IFACE/$1/$3}/disable_ipv6
+}
+
+# function to enable/disable ipv6 assignment per interface
+ipv6_ra(){
+  echo $2 >$CONF6/$1/accept_ra
+  echo $2 >$CONF6/$1/accept_ra_defrtr
+  echo $3 >$CONF6/$1/autoconf
+}
+
+# function to enable/disable ipv6 assignment per interface
+ipv6_conf(){
+  [[ -d $CONF6/${IFACE/$1/$2} ]] && ipv6_ra ${IFACE/$1/$2} $4 $5
+  [[ -d $CONF6/${IFACE/$1/$3} ]] && ipv6_ra ${IFACE/$1/$3} $4 $5
+}
+
+# function to enable/disable ipv6 assignment per interface
+ipv6_addr(){
+  [[ -d $CONF6/$IFACE ]] && ipv6_ra $IFACE $1 $2
+  [[ -d $CONF6/$VHOST ]] && ipv6_ra $VHOST $1 $2
+  # repeat action on related interfaces
+  if [[ ${IFACE:0:4} == bond ]]; then
+    ipv6_conf bond br eth $1 $2
+  elif [[ ${IFACE:0:2} == br ]]; then
+    ipv6_conf br bond eth $1 $2
+  else
+    ipv6_conf eth bond br $1 $2
+  fi
+  sleep 1
+}
+
+# function to assign IP address
+ipaddr_up(){
+  # disable IPv6 per interface when IPv4 only
+  [[ $IP == ipv4 ]] && DISABLE6=1 || DISABLE6=0
+  [[ -d $CONF6/$IFACE ]] && echo $DISABLE6 >$CONF6/$IFACE/disable_ipv6
+  [[ -d $CONF6/$VHOST ]] && echo $DISABLE6 >$CONF6/$VHOST/disable_ipv6
+  # repeat action on related interfaces
+  if [[ ${IFACE:0:4} == bond ]]; then
+    ipv6_up bond br eth $DISABLE6
+  elif [[ ${IFACE:0:2} == br ]]; then
+    ipv6_up br bond eth $DISABLE6
+  else
+    ipv6_up eth bond br $DISABLE6
+  fi
+  if [[ $DHCP == yes ]]; then
+    # bring up interface using DHCP/SLAAC
+    ipv6_addr 1 1
+    DHCP_OPTIONS="-q -n -p -t ${DHCP_TIMEOUT[$i]:-10}"
+    [[ -n $DHCP_HOSTNAME ]] && DHCP_OPTIONS="$DHCP_OPTIONS -h $DHCP_HOSTNAME"
+    [[ $DHCP_KEEP_RESOLV == yes ]] && DHCP_OPTIONS="$DHCP_OPTIONS -C resolv.conf"
+    [[ $DHCP_DEBUG == yes ]] && DHCP_OPTIONS="$DHCP_OPTIONS -d"
+    [[ $DHCP_NOIPV4LL == yes ]] && DHCP_OPTIONS="$DHCP_OPTIONS -L"
+    [[ -n $DHCP_METRIC && $DHCP_METRIC -eq 0 ]] && DHCP_OPTIONS="$DHCP_OPTIONS -G"
+    [[ -n $DHCP_METRIC && $DHCP_METRIC -gt 0 ]] && DHCP_OPTIONS="$DHCP_OPTIONS -m $DHCP_METRIC"
+    [[ $IP == ipv4 ]] && DHCP_OPTIONS="$DHCP_OPTIONS -4"
+    [[ $IP == ipv6 ]] && DHCP_OPTIONS="$DHCP_OPTIONS -6"
+    [[ $IP != ipv4 && -n $PRIV6 && -d $CONF6/$IFACE ]] && echo $PRIV6 >$CONF6/$IFACE/use_tempaddr
+    if carrier_up $IFACE; then
+      # interface is UP
+      log "interface $IFACE is UP, polling up to 60 sec for DHCP $IP server"
+      if ! run timeout 60 dhcpcd -w $DHCP_OPTIONS $IFACE; then
+        log "can't obtain IP address, continue polling in background on interface $IFACE"
+        run dhcpcd -b $DHCP_OPTIONS $IFACE
+      fi
+    else
+      # interface is DOWN
+      log "interface $IFACE is DOWN, polling DHCP $IP server in background"
+      run dhcpcd -b $DHCP_OPTIONS $IFACE
+    fi
+  elif [[ $DHCP == no ]]; then
+    # bring up interface using static IP address
+    if carrier_up $IFACE; then STATE="UP"; else STATE="DOWN"; fi
+    log "interface $IFACE is $STATE, setting static $IP address"
+    ipv6_addr 0 1
+    if [[ $IP != ipv6 ]]; then
+      [[ $j -eq 0 ]] && ADDR=${IPADDR[$i]} || ADDR=${IPADDR[$i,$j]}
+      if [[ -n $ADDR ]]; then
+        [[ $j -eq 0 ]] && MASK=${NETMASK[$i]} || MASK=${NETMASK[$i,$j]}
+        [[ -n $MASK ]] && run ip -4 addr add $ADDR/$MASK dev $IFACE metric 1
+      fi
+    fi
+    if [[ $IP != ipv4 ]]; then
+      [[ $j -eq 0 ]] && ADDR6=${IPADDR6[$i]} || ADDR6=${IPADDR6[$i,$j]}
+      if [[ -n $ADDR6 ]]; then
+        [[ $j -eq 0 ]] && MASK6=${NETMASK6[$i]} || MASK6=${NETMASK6[$i,$j]}
+        [[ -n $MASK6 ]] && run ip -6 addr add $ADDR6/$MASK6 dev $IFACE metric 1
+        [[ -n $PRIV6 && -d $CONF6/$IFACE ]] && echo 0 >$CONF6/$IFACE/use_tempaddr
+      fi
+    fi
+  else
+    # bring up interface without IP address
+    ipv6_addr 0 0
+    ipaddr_down
+  fi
+}
+
+# function to release IP addresses and routes
+ipaddr_conf(){
+  if [[ -e $SYSTEM/${IFACE/$1/$2} ]]; then
+    run ip -$4 addr flush dev ${IFACE/$1/$2}
+    run ip -$4 route flush dev ${IFACE/$1/$2}
+  fi
+  if [[ -e $SYSTEM/${IFACE/$1/$3} ]]; then
+    run ip -$4 addr flush dev ${IFACE/$1/$3}
+    run ip -$4 route flush dev ${IFACE/$1/$3}
+  fi
+}
+
+# function to release IP addresses and routes
+ipaddr_flush(){
+  run ip -$1 addr flush dev $IFACE
+  run ip -$1 route flush dev $IFACE
+  [[ -e $SYSTEM/$VHOST ]] && run ip -$1 addr flush dev $VHOST
+  if [[ ${IFACE:0:4} == bond ]]; then
+    ipaddr_conf bond br eth $1
+  elif [[ ${IFACE:0:2} == br ]]; then
+    ipaddr_conf br bond eth $1
+  else
+    ipaddr_conf eth bond br $1
+  fi
+}
+
+# function to release IP addresses and routes
+ipaddr_down(){
+  if [[ $DHCP == yes ]]; then
+    DHCP_OPTIONS="-q -k"
+    [[ $DHCP_KEEP_RESOLV == yes ]] && DHCP_OPTIONS="$DHCP_OPTIONS -C resolv.conf"
+    [[ $IP == ipv4 ]] && DHCP_OPTIONS="$DHCP_OPTIONS -4"
+    [[ $IP == ipv6 ]] && DHCP_OPTIONS="$DHCP_OPTIONS -6"
+    # release DHCP assigned addresses
+    run dhcpcd $DHCP_OPTIONS $IFACE
+    sleep 1
+  fi
+  # release assigned addresses and routes
+  [[ $IP != ipv6 ]] && ipaddr_flush 4
+  [[ $IP != ipv4 ]] && ipaddr_flush 6
+}
+
+# function to bring up network interface
+if_up(){
+  # set index of INTERFACE in array
+  i=0
+  while [[ $i -lt $MAXNICS ]]; do
+    [[ ${IFNAME[$i]} == $1 ]] && break || ((i++))
+  done
+  # exit when interface is not found
+  [[ $i -eq $MAXNICS ]] && break
+  [[ -n ${BONDNICS[$i]} ]] && bond_up    # create interface as bond
+  [[ -n ${VLANS[$i]} ]] && vlan_up       # create interface VLANs
+  [[ -n ${BRNICS[$i]} ]] && br_up        # create interface as bridge
+  [[ -z ${BRNICS[$i]} ]] && macvtap_up   # create macvtap interfaces
+  # if the interface isn't in the kernel yet
+  # but there's an alias for it in modules.conf
+  # then it should be loaded first
+  if [[ ! -e $SYSTEM/$1 ]]; then
+    if modprobe -c | grep -v "^#" | grep -w "alias $1" | grep -qvw "alias $1 off"; then
+      run modprobe $1
+    else
+      [[ $DEBUG_ETH_UP == yes ]] && log "interface $1 not present nor aliased, can't create"
+    fi
+  fi
+  # loop thru main and VLAN interfaces
+  for ((j=0;j<${VLANS[$i]:-1};j++)); do
+    [[ $j -eq 0 ]] && IFACE=$1 || IFACE=$1.${VLANID[$i,$j]}
+    [[ $j -eq 0 ]] && IP=${PROTOCOL[$i]:-ipv4} || IP=${PROTOCOL[$i,$j]:-ipv4}
+    [[ $j -eq 0 ]] && PRIV6=${PRIVACY6[$i]} || PRIV6=${PRIVACY6[$i,$j]}
+    if [[ ! -e $SYSTEM/$IFACE ]]; then
+      [[ $DEBUG_ETH_UP == yes ]] && log "interface $IFACE does not exist (yet)"
+      continue
+    fi
+    # macvtap interface name
+    VHOST=vhost${IFACE//[^0-9.]}
+    # set main interface
+    if [[ $j -eq 0 ]]; then
+      # set hardware address before interface goes up
+      [[ -n ${HWADDR[$i]} ]] && run ip link set $1 addr ${HWADDR[$i]}
+      set_mtu $1
+    fi
+    run ip link set $IFACE up
+    # set interface address
+    [[ $i -eq 0 && $j -eq 0 ]] && MAIN=1 || MAIN=
+    if [[ $IP == ipv4 ]]; then
+      [[ $j -eq 0 ]] && DHCP=${USE_DHCP[$i]} || DHCP=${USE_DHCP[$i,$j]}
+      [[ $j -eq 0 ]] && DHCP_METRIC=${METRIC[$i]} || DHCP_METRIC=${METRIC[$i,$j]}
+      [[ -n $MAIN ]] && DHCP_KEEP_RESOLV=$DHCP_KEEPRESOLV || DHCP_KEEP_RESOLV=yes
+      ipaddr_up
+    elif [[ $IP == ipv6 ]]; then
+      [[ $j -eq 0 ]] && DHCP=${USE_DHCP6[$i]} || DHCP=${USE_DHCP6[$i,$j]}
+      [[ $j -eq 0 ]] && DHCP_METRIC=${METRIC6[$i]} || DHCP_METRIC=${METRIC6[$i,$j]}
+      [[ -n $MAIN ]] && DHCP_KEEP_RESOLV=$DHCP6_KEEPRESOLV || DHCP_KEEP_RESOLV=yes
+      ipaddr_up
+    else
+      [[ $j -eq 0 ]] && DHCP=${USE_DHCP[$i]} || DHCP=${USE_DHCP[$i,$j]}
+      [[ $j -eq 0 ]] && DHCP6=${USE_DHCP6[$i]} || DHCP6=${USE_DHCP6[$i,$j]}
+      [[ $j -eq 0 ]] && DHCP_METRIC=${METRIC[$i]} || DHCP_METRIC=${METRIC[$i,$j]}
+      [[ $j -eq 0 ]] && DHCP6_METRIC=${METRIC6[$i]} || DHCP6_METRIC=${METRIC6[$i,$j]}
+      [[ -n $MAIN ]] && DHCP_KEEP_RESOLV=$DHCP_KEEPRESOLV || DHCP_KEEP_RESOLV=yes
+      [[ -n $MAIN ]] && DHCP6_KEEP_RESOLV=$DHCP6_KEEPRESOLV || DHCP6_KEEP_RESOLV=yes
+      [[ -n $DHCP_METRIC ]] && METRIC_VALUE=$DHCP_METRIC || METRIC_VALUE=0
+      [[ -n $DHCP6_METRIC ]] && METRIC6_VALUE=$DHCP6_METRIC || METRIC6_VALUE=0
+      IP=ipv4
+      ipaddr_up
+      IP=ipv6
+      DHCP=$DHCP6
+      DHCP_METRIC=$DHCP6_METRIC
+      DHCP_KEEP_RESOLV=$DHCP6_KEEP_RESOLV
+      ipaddr_up
+    fi
+  done
+}
+
+# function to take down network interface
+if_down(){
+  # set index of INTERFACE in array
+  i=0
+  while [[ $i -lt $MAXNICS ]]; do
+    [[ ${IFNAME[$i]} == $1 ]] && break
+    ((i++))
+  done
+  # exit when interface is not found
+  [[ $i -eq $MAXNICS ]] && break
+  # loop thru main and VLAN interfaces
+  for ((j=0;j<${VLANS[$i]:-1};j++)); do
+    [[ $j -eq 0 ]] && IFACE=$1 || IFACE=$1.${VLANID[$i,$j]}
+    [[ $j -eq 0 ]] && IP=${PROTOCOL[$i]:-ipv4} || IP=${PROTOCOL[$i,$j]:-ipv4}
+    # macvtap interface name
+    VHOST=vhost${IFACE//[^0-9.]}
+    if [[ -e $SYSTEM/$IFACE ]]; then
+      # take down interface
+      if [[ $IP == ipv4 ]]; then
+        [[ $j -eq 0 ]] && DHCP=${USE_DHCP[$i]} || DHCP=${USE_DHCP[$i,$j]}
+        [[ $j -eq 0 ]] && DHCP_KEEP_RESOLV=$DHCP_KEEPRESOLV || DHCP_KEEP_RESOLV=yes
+        ipaddr_down
+      elif [[ $IP == ipv6 ]]; then
+        [[ $j -eq 0 ]] && DHCP=${USE_DHCP6[$i]} || DHCP=${USE_DHCP6[$i,$j]}
+        [[ $j -eq 0 ]] && DHCP_KEEP_RESOLV=$DHCP6_KEEPRESOLV || DHCP_KEEP_RESOLV=yes
+        ipaddr_down
+      else
+        [[ $j -eq 0 ]] && DHCP=${USE_DHCP[$i]} || DHCP=${USE_DHCP[$i,$j]}
+        [[ $j -eq 0 ]] && DHCP6=${USE_DHCP6[$i]} || DHCP6=${USE_DHCP6[$i,$j]}
+        [[ $j -eq 0 ]] && DHCP_KEEP_RESOLV=$DHCP_KEEPRESOLV || DHCP_KEEP_RESOLV=yes
+        IP=ipv4
+        ipaddr_down
+        IP=ipv6
+        DHCP=$DHCP6
+        [[ $j -eq 0 ]] && DHCP_KEEP_RESOLV=$DHCP6_KEEPRESOLV || DHCP_KEEP_RESOLV=yes
+        ipaddr_down
+      fi
+      run ip link set $IFACE down
+    else
+      [[ $DEBUG_ETH_UP == yes ]] && log "interface $IFACE not present, can't take down"
+    fi
+  done
+  [[ -z ${BRNICS[$i]} ]] && macvtap_down   # delete macvtap interfaces
+  [[ -n ${BRNICS[$i]} ]] && br_down        # delete interface as bridge
+  [[ -n ${VLANS[$i]} ]] && vlan_down       # delete interface VLANs
+  [[ -n ${BONDNICS[$i]} ]] && bond_down    # delete interface as bond
+}
+
+#####################
+# GATEWAY FUNCTIONS #
+#####################
+
+# function to add default gateway per interface
+gateway_up(){
+  for GW in ${GATEWAY[@]}; do
+    [[ -z $GW ]] && continue
+    # get corresponding interface
+    for x in ${!GATEWAY[@]}; do if [[ ${GATEWAY[$x]} == $GW ]]; then break; fi; done
+    i=(${x/,/ })
+    [[ -z ${i[1]} ]] && DEV=${IFNAME[$i]} || DEV=${IFNAME[$i]}.${VLANID[$x]}
+    IP=${PROTOCOL[$x]:-ipv4}
+    AD=${METRIC[$x]}
+    [[ -n $AD ]] && AD="metric $AD"
+    EXIST=$(ip -4 route show default via $GW dev $DEV | grep "$AD ")
+    [[ $IP != ipv6 && -z $EXIST ]] && run ip -4 route add default via $GW dev $DEV $AD
+  done
+  for GW6 in ${GATEWAY6[@]}; do
+    [[ -z $GW6 ]] && continue
+    # get corresponding interface
+    for x in ${!GATEWAY6[@]}; do if [[ ${GATEWAY6[$x]} == $GW6 ]]; then break; fi; done
+    i=(${x/,/ })
+    [[ -z ${i[1]} ]] && DEV=${IFNAME[$i]} || DEV=${IFNAME[$i]}.${VLANID[$x]}
+    IP=${PROTOCOL[$x]:-ipv4}
+    AD6=${METRIC6[$x]}
+    [[ -n $AD6 ]] && AD6="metric $AD6"
+    EXIST=$(ip -6 route show default via $GW6 dev $DEV | grep "$AD6 ")
+    [[ $IP != ipv4 && -z $EXIST ]] && run ip -6 route add default via $GW6 dev $DEV $AD6
+  done
+}
+
+# function to delete default gateway per interface
+gateway_down(){
+  for GW in ${GATEWAY[@]}; do
+    [[ -z $GW ]] && continue
+    # get corresponding interface
+    for x in ${!GATEWAY[@]}; do if [[ ${GATEWAY[$x]} == $GW ]]; then break; fi; done
+    i=(${x/,/ })
+    [[ -z ${i[1]} ]] && DEV=${IFNAME[$i]} || DEV=${IFNAME[$i]}.${VLANID[$x]}
+    IP=${PROTOCOL[$x]:-ipv4}
+    EXIST=$(ip -4 route show default dev $DEV)
+    [[ $IP != ipv6 && -n $EXIST ]] && run ip -4 route flush default dev $DEV
+  done
+  for GW6 in ${GATEWAY6[@]}; do
+    [[ -z $GW6 ]] && continue
+    # get corresponding interface
+    for x in ${!GATEWAY6[@]}; do if [[ ${GATEWAY6[$x]} == $GW6 ]]; then break; fi; done
+    i=(${x/,/ })
+    [[ -z ${i[1]} ]] && DEV=${IFNAME[$i]} || DEV=${IFNAME[$i]}.${VLANID[$x]}
+    IP=${PROTOCOL[$x]:-ipv4}
+    EXIST=$(ip -6 route show default dev $DEV)
+    [[ $IP != ipv4 && -n $EXIST ]] && run ip -6 route flush default dev $DEV
+  done
+}
+
+# function to start network
+start(){
+  lo_up
+  for INTERFACE in ${IFNAME[@]}; do
+    if_up $INTERFACE
+  done
+  gateway_up
+}
+
+# function to stop network
+stop(){
+  gateway_down
+  for INTERFACE in ${IFNAME[@]}; do
+    if_down $INTERFACE
+  done
+  lo_down
+}
+
+# function to show network status
+status(){
+  echo "INTERFACE        STATE          INFORMATION"
+  echo "========================================================================"
+  [[ $1 == ip ]] && ip -brief addr || ip -brief link
+}
+
+##########################
+# STATIC ROUTE FUNCTIONS #
+##########################
+
+# function to add static route
+route_up(){
+  [[ -n $3 ]] && METRIC="metric $3" || METRIC=
+  if [[ $2 == default ]]; then
+    # determine IP protocol & optional device
+    [[ -n ${1##*:*} ]] && IP=-4 || IP=-6
+    [[ -z ${1##*-*} ]] && DEV="dev ${1#*-}" || DEV=
+    EXIST=$(ip $IP route show default via ${1%-*} $DEV | grep "$METRIC ")
+    [[ -z $EXIST ]] && run ip $IP route add default via ${1%-*} $DEV $METRIC
+  elif [[ -n $2 ]]; then
+    # determine IP protocol & gateway syntax
+    [[ -n ${2##*:*} ]] && IP=-4 || IP=-6
+    [[ -e $SYSTEM/$1 ]] && GW="dev $1" || GW="via $1"
+    EXIST=$(ip $IP route show $2 $GW | grep "$METRIC ")
+    [[ -z $EXIST ]] && run ip $IP route add $2 $GW $METRIC
+  fi
+}
+
+# function to delete static route
+route_down(){
+  [[ -n $3 ]] && METRIC="metric $3" || METRIC=
+  if [[ $2 == default ]]; then
+    # determine IP protocol & optional device
+    [[ -n ${1##*:*} ]] && IP=-4 || IP=-6
+    [[ -z ${1##*-*} ]] && DEV="dev ${1#*-}" || DEV=
+    EXIST=$(ip $IP route show default via ${1%-*} $DEV)
+    [[ -n $EXIST ]] && run ip $IP route del default via ${1%-*} $DEV $METRIC
+  elif [[ -n $2 ]]; then
+    # determine IP protocol & gateway syntax
+    [[ -n ${2##*:*} ]] && IP=-4 || IP=-6
+    [[ -e $SYSTEM/$1 ]] && GW="dev $1" || GW="via $1"
+    EXIST=$(ip $IP route show $2 $GW)
+    [[ -n $EXIST ]] && run ip $IP route del $2 $GW $METRIC
+  fi
+}
+
+############
+### MAIN ###
+############
+
+case "$1" in
+start|up)
+  start
+  ;;
+stop|down)
+  stop
+  ;;
+restart)
+  stop
+  sleep 1
+  start
+  ;;
+*_start|*_up)
+  INTERFACE=$(echo $1 | cut -d_ -f1)
+  if_up $INTERFACE
+  gateway_up
+  ;;
+*_stop|*_down)
+  INTERFACE=$(echo $1 | cut -d_ -f1)
+  if_down $INTERFACE
+  ;;
+*_restart)
+  INTERFACE=$(echo $1 | cut -d_ -f1)
+  if_down $INTERFACE
+  sleep 1
+  if_up $INTERFACE
+  gateway_up
+  ;;
+*_add)
+  INTERFACE=$(echo $1 | cut -d_ -f1)
+  ROUTE=$(echo $1 | cut -d_ -f2)
+  METRIC=$(echo $1 | cut -d_ -f3)
+  [[ $METRIC == add ]] && METRIC=
+  route_up $INTERFACE $ROUTE $METRIC
+  ;;
+*_del)
+  INTERFACE=$(echo $1 | cut -d_ -f1)
+  ROUTE=$(echo $1 | cut -d_ -f2)
+  METRIC=$(echo $1 | cut -d_ -f3)
+  [[ $METRIC == del ]] && METRIC=
+  route_down $INTERFACE $ROUTE $METRIC
+  ;;
+  # default is to bring up the entire network
+status)
+  status $2
+  ;;
+*)
+  start
+esac
+exit 0
+
+# Command examples
+# rc.inet1 start                      bring up the entire network
+# rc.inet1 up                         bring up the entire network
+# rc.inet1 stop                       take down the entire network
+# rc.inet1 down                       take down the entire network
+# rc.inet1 restart                    restart the entire network
+# rc.inet1 eth0_up                    bring up selected interface eth0 only
+# rc.inet1 eth0_down                  take down selected interface eth0 only
+# rc.inet1 eth0_restart               restart selected interface eth0 only
+# rc.inet1 eth0_10.0.0.0/24_10_add    add specific route with metric 10 to interface eth0
+# rc.inet1 10.0.0.1_default_add       add default route to gateway 10.0.0.1 with metric 1
+# rc.inet1 eth0_10.0.0.0/24_1_del     delete specific route & metric from interface eth0
+# rc.inet1 10.0.0.1_default_del       delete default route from gateway 10.0.0.1
+# rc.inet1 status                     show link status
+# rc.inet1 status ip                  show ip status

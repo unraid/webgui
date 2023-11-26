@@ -1,0 +1,168 @@
+#!/bin/bash
+#
+# script: rc.nfsd
+#
+# Start/stop/restart the NFS server.
+# This is an init script for the knfsd NFS daemons.
+# To use NFS, you must first set up /etc/exports.
+# See exports(5) for information on /etc/exports format.
+#
+# Written for Slackware Linux by Patrick J. Volkerding <volkerdi@slackware.com>.
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+DAEMON="NFS server daemon"
+CALLER="nfs"
+NFSD="/usr/sbin/rpc.nfsd"
+EXPORTFS="/usr/sbin/exportfs"
+RQUOTAD="/usr/sbin/rpc.rquotad"
+MOUNTD="/usr/sbin/rpc.mountd"
+OPTIONS="-u -s"
+RPC="/etc/default/rpc"
+NFS="/etc/default/nfs"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# library functions
+. /etc/rc.d/rc.library.source
+
+# get bind addresses
+if check && [[ -n $BIND ]]; then
+  RPC_NFSD_OPTS="$OPTIONS -H ${BIND// / -H }"
+fi
+
+# source default settings:
+[[ -r $RPC ]] && . $RPC
+
+nfsd_running(){
+  sleep 0.1
+  ps axc | grep -q rpc.mountd
+}
+
+nfsd_start(){
+  log "Starting $DAEMON..."
+  local REPLY
+  if nfsd_running; then
+    REPLY="Already started"
+  else
+    # There used to be "sanity checks" here to exit without starting if various
+    # config files didn't exist, or didn't contain certain expected content.
+    # This behavior led to some bugs and has been removed. It's not our business
+    # to check your config files - that's for the binaries that use them.
+
+    # If we do not detect nfsd support built into the kernel (or previously
+    # loaded as a module), we will try to load the nfsd.ko kernel module:
+    if [[ ! -r /proc/1/net/rpc/nfsd ]]; then
+      /sbin/modprobe nfsd 2>/dev/null
+    fi
+    # mount the nfsd filesystem:
+    if awk '$NF == "nfsd"' /proc/filesystems | grep -q . ; then
+      if ! awk '$3 == "nfsd" && $2 == "/proc/fs/nfs"' /proc/mounts | grep -q . ; then
+        /sbin/mount -t nfsd nfsd /proc/fs/nfs 2>/dev/null
+      fi
+    fi
+    # if basic RPC services are not running, start them:
+    if ! ps axc | grep -q rpc.statd; then
+      if [[ -r /etc/rc.d/rc.rpc ]]; then
+        /etc/rc.d/rc.rpc start
+      else
+        # sure, we tested for rpc.statd, but this is the probable cause:
+        log "FATAL: Can't start $DAEMON without rpcbind package."
+        sleep 5
+        exit 1
+      fi
+    fi
+    if [[ -x $EXPORTFS ]]; then
+      run $EXPORTFS -r
+    fi
+    if [[ -x $RQUOTAD ]]; then
+      [[ -n $RPC_RQUOTAD_PORT ]] && RPC_RQUOTAD_OPTS="$RPC_RQUOTAD_OPTS -p $RPC_RQUOTAD_PORT"
+      run $RQUOTAD $RPC_RQUOTAD_OPTS
+    fi
+    # update default settings
+    sed -ri "s/^(RPC_NFSD_OPTS)=.*/\1=\"$RPC_NFSD_OPTS\"/" $NFS 2>/dev/null
+    [[ -r $NFS ]] && . $NFS
+    # start nfsd servers - 8 if not set extrawise (an old Sun standard):
+    if [[ -x $NFSD ]]; then
+      [[ -z $RPC_NFSD_COUNT ]] && RPC_NFSD_COUNT=8
+      run $NFSD $RPC_NFSD_OPTS $RPC_NFSD_COUNT
+    fi
+    if [[ -x $MOUNTD ]]; then
+      [[ -n $RPC_MOUNTD_PORT ]] && RPC_MOUNTD_OPTS="$RPC_MOUNTD_OPTS -p $RPC_MOUNTD_PORT"
+      run $MOUNTD $RPC_MOUNTD_OPTS
+    fi
+    if nfsd_running; then REPLY="Started"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+nfsd_stop(){
+  log "Stopping $DAEMON..."
+  local REPLY
+  if ! nfsd_running; then
+    REPLY="Already stopped"
+  else
+    killall rpc.mountd 2>/dev/null
+    killall nfsd 2>/dev/null
+    sleep 1
+    killall -9 nfsd 2>/dev/null
+    killall rpc.rquotad 2>/dev/null
+    run $EXPORTFS -au
+    if ! nfsd_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+nfsd_restart(){
+  log "Restarting $DAEMON..."
+  nfsd_stop
+  sleep 1
+  nfsd_start
+}
+
+nfsd_reload(){
+  # restart without info
+  nfsd_restart &>/dev/null
+}
+
+nfsd_update(){
+  # 0 = update needed, 1 = no action
+  if ! nfsd_running; then exit 1; fi
+  if check && [[ "$(this)" == "-H ${BIND// / -H }" ]]; then exit 1; else exit 0; fi
+}
+
+nfsd_status(){
+  if nfsd_running; then
+    echo "$DAEMON is currently running."
+  else
+    echo "$DAEMON is not running."
+    exit 1
+  fi
+}
+
+case "$1" in
+'start')
+  nfsd_start
+  ;;
+'stop')
+  nfsd_stop
+  ;;
+'restart')
+  nfsd_restart
+  ;;
+'reload')
+  nfsd_reload
+  ;;
+'update')
+  nfsd_update
+  ;;
+'status')
+  nfsd_status
+  ;;
+*)
+  echo "Usage: $BASENAME start|stop|restart|reload|update|status"
+  exit 1
+esac
+exit 0

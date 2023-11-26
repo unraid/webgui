@@ -1,0 +1,112 @@
+Menu="UNRAID-OS"
+Title="Diagnostics"
+Icon="icon-diagnostics"
+Tag="tv"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$zip = htmlspecialchars(str_replace(' ','_',strtolower($var['NAME'])));
+?>
+<script>
+var diagnosticsFile = "";
+var nchan_diagnostics = new NchanSubscriber('/sub/diagnostics',{subscriber:'websocket'});
+
+nchan_diagnostics.on('message', function(data) {
+  if (data == '_DONE_') {
+    nchan_diagnostics.stop();
+    $('.sweet-alert').hide('fast').removeClass('nchan');
+    swal.close();
+    location = diagnosticsFile;
+    setTimeout(cleanUp,4000);
+  } else if (data) {
+    let box = $('pre#swaltext');
+    box.html(box.html()+'<br>'+data).scrollTop(box[0].scrollHeight);
+  }
+});
+
+function cleanUp() {
+  if (document.hasFocus()) {
+    $.post('/webGui/include/Download.php',{cmd:'delete',file:diagnosticsFile});
+    $("#download").attr("disabled",false);
+    diagnosticsFile = "";
+  } else {
+    setTimeout(cleanUp,2000);
+  }
+}
+
+function zipfile(){
+  var tzoffset = (new Date()).getTimezoneOffset() * 60000; //offset in milliseconds
+  var localISOTime = (new Date(Date.now() - tzoffset)).toISOString().slice(0,-1);
+  return '<?=$zip?>-diagnostics-'+localISOTime.substr(0,16).replace(/[-:]/g,'').replace('T','-')+'.zip';
+}
+
+function diagnostics(file) {
+  var anonymize = $('#anonymize').is(':checked') ? '' : '-a';
+  nchan_diagnostics.start();
+  $.post('/webGui/include/Download.php',{cmd:'diag',file:file,anonymize:anonymize},function(zip) {
+    if (zip) {
+      diagnosticsFile = zip;
+      swal({title:"_(Downloading)_...",text:"/boot/logs"+zip+"<hr><pre id='swaltext'></pre>",html:true,animation:'none',showConfirmButton:false});
+      $('.sweet-alert').addClass('nchan');
+      $('button.confirm').prop('disabled',true);
+    } else {
+      nchan_diagnostics.stop();
+      $("#download").attr("disabled",false);
+    }
+  });
+}
+</script>
+
+:diagnostics_1_plug:
+This utility is used for troubleshooting purposes. It will collect all of the system information and configuration files, and package these files in a single ZIP file which can be saved locally.
+Subsequently, this file can be included in your correspondence with Limetech or the Unraid forum.
+
+This will help others to quickly get the inside information of your system and provide better support to your problem. The following information
+and configuration files are collected:
+:end
+
+<pre class="pre" markdown="1">
+:diagnostics_2_plug:
++ */config*
+  <br>copy all *\*.cfg files*, *go* file and the *super.dat* file. These are configuration files.
++ */config/shares*
+  <br>copy all *\*.cfg* files. These are user share settings files.
++ *Syslog file(s)*
+  <br>copy the current *syslog* file and any previous existing *syslog* files.
++ *System*
+  <br>save output of the following commands:
+  <br>lsscsi, lspci, lsusb, free, lsof, ps, ethtool & ifconfig.
+  <br>display of iommu groups.
+  <br>display of command line parameters (e.g. pcie acs override, pci stubbing, etc).
+  <br>save system variables.
++ *SMART reports*
+  <br>save a SMART report of each individual disk present in your system.
++ *Docker*
+  <br>save files *docker.log*, *libvirtd.log*, *libvirt/qemu/\*.log* and *vfio-pci*.
+:end
+</pre>
+
+:diagnostics_3_plug:
+Clicking **Download** will start the collection process and then instruct your browser to save the zip file locally.
+
+*No personal information such as user names, passwords, or any other file contents not specified above is included
+by Unraid OS; however, your server name, IP address, and user share names* **will** *be included.*
+
+*Note that 3rd-party plugins **may** or may not store personal information in plugin-specific configuration files and/or output
+to the system log.*
+
+*Use* **Anonymize diagnostics** *when publishing the diagnostics file in the public forum. In private communication with Limetech it is recommended to uncheck this setting and capture all information unaltered.*
+:end
+
+<input id='download' type="button" value="_(Download)_" onclick="$(this).attr('disabled',true);diagnostics(zipfile())"><input type="button" value="_(Done)_" onclick="done()"><input type="checkbox" id="anonymize" checked>_(Anonymize diagnostics)_

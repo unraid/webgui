@@ -1,0 +1,32 @@
+#!/bin/bash
+docroot=/usr/local/emhttp                            # webGui root folder
+nchan_pid=/var/run/nchan.pid                         # keeps list of nchan processes registered by GUI
+disk_load=/var/local/emhttp/diskload.ini             # disk load statistics
+nginx=/var/run/nginx.socket                          # nginx local access
+status=http://localhost/pub/session?buffer_length=1  # nchan information about GUI subscribers
+nchan_id=$(basename "$0")
+
+while :; do
+  # only act when GUI registered nchan processes are running
+  if [[ -e $nchan_pid ]]; then
+    # get number of GUI nchan subscribers
+    subs=$(curl --unix-socket $nginx $status 2>/dev/null|grep -Pom1 'subscribers: \K\d+')
+    if [[ -z $subs || $subs -eq 0 ]]; then
+      sleep 3
+      # steady state?
+      subs=$(curl --unix-socket $nginx $status 2>/dev/null|grep -Pom1 'subscribers: \K\d+')
+      if [[ -z $subs || $subs -eq 0 ]]; then
+       logger -t $nchan_id -- "Stop running nchan processes"
+       # kill GUI registered nchan processes
+        while IFS=$'\n' read -r running; do
+          pkill -f $docroot/${running/:stop/}
+        done < $nchan_pid
+        # empty GUI registered list & statistics
+        rm -f $nchan_pid $disk_load
+      fi
+    fi
+  fi
+  # check every 30 seconds
+  sleep 30
+done &
+disown %%

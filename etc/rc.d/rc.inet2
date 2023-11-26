@@ -1,0 +1,160 @@
+#!/bin/bash
+#
+# script: rc.inet2
+#
+# This shell script boots up the entire network system.
+# Note, that when this script is used to also fire
+# up any important remote NFS disks (like the /usr
+# directory), care must be taken to actually
+# have all the needed binaries online _now_ ...
+#
+# Uncomment or comment out sections depending on which
+# services your site requires.
+#
+# Author: Fred N. van Kempen, <waltje@uwalt.nl.mugnet.org>
+# Modified for Slackware by Patrick Volkerding <volkerdi@slackware.com>
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# At this point, we are (almost) ready to talk to The World...
+#
+# If there is a firewall script, run it before enabling packet forwarding.
+# See the HOWTOs on http://www.netfilter.org/ for documentation on
+# setting up a firewall or NAT on Linux. In some cases this might need to
+# be moved past the section below dealing with IP packet forwarding.
+
+if [[ -x /etc/rc.d/rc.firewall ]]; then
+  /etc/rc.d/rc.firewall start
+fi
+
+# Turn on IPv4 packet forwarding support.
+if [[ -x /etc/rc.d/rc.ip_forward ]]; then
+  /etc/rc.d/rc.ip_forward start
+fi
+
+# Start krb5kdc, which is the Kerberos version 5 Authentication Service
+# and Key Distribution Center (AS/KDC). This needs to run first on both
+# master and secondary KDCs.
+if [[ -x /etc/rc.d/rc.krb5kdc ]]; then
+  /etc/rc.d/rc.krb5kdc start
+fi
+
+# Start the Kerberos administration server. This typically runs on the
+# master Kerberos server, which stores the KDC database.
+if [[ -x /etc/rc.d/rc.kadmind ]]; then
+  /etc/rc.d/rc.kadmind start
+fi
+
+# Start the Kerberos V5 slave KDC update server. This runs on a slave
+# (secondary) KDC server. It allows the master Kerberos server to use
+# kprop(8) to propagate its database to the slave servers.
+if [[ -x /etc/rc.d/rc.kpropd ]]; then
+  /etc/rc.d/rc.kpropd start
+fi
+
+# Mount remote (NFS) filesystems:
+if cat /etc/fstab | grep -v '^#' | grep -w nfs &>/dev/null; then
+  # Start rpc.portmap, /sbin/rpc.lockd, and /sbin/rpc.statd if we find NFS
+  # volumes defined in /etc/fstab since these will need to be running in order
+  # to mount them. If they are not running, attempting to mount an NFS
+  # partition will cause mount to hang, or at least result in unreliable
+  # operation. Keep this in mind if you plan to mount unlisted NFS
+  # partitions...
+  # If you have uncommented NFS partitions in your /etc/fstab, rc.rpc is run
+  # whether it is set as executable or not. If you don't want to run it,
+  # comment the NFS partitions out in /etc/fstab or erase/rename rc.rpc.
+  if [[ -r /etc/rc.d/rc.rpc ]]; then
+    /etc/rc.d/rc.rpc start
+  fi
+  log "Mounting remote (NFS) file systems."
+  run /sbin/mount -a -t nfs       # This may be our /usr runtime!
+  # Show the mounted volumes:
+  /sbin/mount -v -t nfs
+fi
+
+# If /etc/rc.d/rc.rpc is executable, run it to load rpc.portmap, rpc.lockd,
+# and rpc.statd. This might be needed to mount NFS partitions that are not
+# listed in /etc/fstab. Starting this twice won't hurt as the script will
+# check if things are already running before trying to start them.
+# LimeTech - nope
+# if [[ -x /etc/rc.d/rc.rpc ]]; then
+#   /etc/rc.d/rc.rpc start
+# fi
+
+# Mount remote CIFS filesystems. Note that where possible, using CIFS is
+# preferred over SMBFS. SMBFS is no longer actively maintained.
+if cat /etc/fstab | grep -v '^#' | grep -w cifs &>/dev/null; then
+  log "Mounting remote CIFS file systems."
+  run /sbin/mount -a -t cifs
+  # Show the mounted volumes:
+  /sbin/mount -v -t cifs
+fi
+
+# Mount remote SMB filesystems:
+if cat /etc/fstab | grep -v '^#' | grep -w smbfs &>/dev/null; then
+  log "Mounting remote SMBFS file systems."
+  run /sbin/mount -a -t smbfs
+  # Show the mounted volumes:
+  /sbin/mount -v -t smbfs
+fi
+
+# Start the system logger if it is not already running (maybe because /usr
+# is on a network partition). NOTE: Don't put /usr on a network partition,
+# or even a separate local partition. This is not supported and is likely to
+# cause some problems...
+if [[ -x /etc/rc.d/rc.rsyslogd && -d /var/log && ! -r /var/run/rsyslogd.pid ]]; then
+  /etc/rc.d/rc.rsyslogd start
+fi
+
+# Start the inetd server:
+if [[ -x /etc/rc.d/rc.inetd ]]; then
+  /etc/rc.d/rc.inetd start
+fi
+
+# Start the OpenSSH SSH daemon:
+if [[ -x /etc/rc.d/rc.sshd ]]; then
+  /etc/rc.d/rc.sshd start
+fi
+
+# Start the BIND name server daemon:
+if [[ -x /etc/rc.d/rc.bind ]]; then
+  /etc/rc.d/rc.bind start
+fi
+
+# Start NIS (the Network Information Service):
+if [[ -x /etc/rc.d/rc.yp ]]; then
+  /etc/rc.d/rc.yp start
+fi
+
+# Start OpenVPN:
+if [[ -x /etc/rc.d/rc.openvpn ]]; then
+  /etc/rc.d/rc.openvpn start
+fi
+
+# Start the NFS server. Note that for this to work correctly, you'll
+# need nfsd support in the kernel (the startup script will try to load
+# the module for you).
+# You'll also need to set up some shares in /etc/exports.
+# Starting the NFS server:
+# LimeTech - don't start NFS here; emhttpd will bring up NFS if enabled.
+# if [[ -x /etc/rc.d/rc.nfsd ]]; then
+#   /etc/rc.d/rc.nfsd start
+# fi
+
+# Stuff you won't need follows.  ;-)
+
+# # Start the network routing daemon:
+# if [[ -x /usr/sbin/routed ]]; then
+#   log "Starting network routing daemon."
+#   run /usr/sbin/routed -g -s
+# fi
+
+# # Start the system status server:
+# if [[ -x /usr/sbin/rwhod ]]; then
+#   log "Starting system status server."
+#   run /usr/sbin/rwhod
+# fi

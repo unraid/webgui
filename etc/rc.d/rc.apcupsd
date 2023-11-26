@@ -1,0 +1,91 @@
+#!/bin/bash
+#
+# script: rc.apcupsd
+#
+# This shell script takes care of starting and stopping
+# the apcupsd UPS monitoring daemon.
+#
+# chkconfig: 2345 20 99
+# description: apcupsd monitors power and takes action if necessary
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+DAEMON="APC-UPS Power Management"
+APCPID="/var/run/apcupsd.pid"
+LOCK="/var/lock/apcupsd"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+apcupsd_running(){
+  sleep 0.1
+  [[ -f $APCPID ]]
+}
+
+apcupsd_start(){
+  log "Starting $DAEMON..."
+  local REPLY
+  rm -f /etc/apcupsd/powerfail /etc/nologin
+  if apcupsd_running; then
+    REPLY="Already started"
+  else
+    mkdir -p $(dirname $LOCK)
+    if /sbin/apcupsd; then
+      touch $LOCK
+      REPLY="Started"
+    else
+      REPLY="Failed"
+    fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+apcupsd_stop(){
+  log "Stopping $DAEMON..."
+  local REPLY
+  if ! apcupsd_running; then
+    REPLY="Already stopped"
+  else
+    kill $(cat $APCPID)
+    if ! apcupsd_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+    rm -f $APCPID
+  fi
+  rm -f $LOCK
+  log "$DAEMON...  $REPLY."
+}
+
+apcupsd_restart(){
+  log "Restarting $DAEMON..."
+  apcupsd_stop
+  sleep 1
+  apcupsd_start
+}
+
+apcupsd_status(){
+  if apcupsd_running; then
+    echo "$DAEMON is currently running."
+  else
+    echo "$DAEMON is not running."
+    exit 1
+  fi
+}
+
+case "$1" in
+'start')
+  apcupsd_start
+  ;;
+'stop')
+  apcupsd_stop
+  ;;
+'restart')
+  apcupsd_restart
+  ;;
+'status')
+  apcupsd_status
+  ;;
+*)
+  echo "Usage: $BASENAME start|stop|restart|status"
+  exit 1
+esac
+exit 0

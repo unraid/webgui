@@ -1,0 +1,18 @@
+#!/usr/bin/php -q
+<?PHP
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/publish.php";
+
+function emhttp_command($cmd) {
+  $var = (array)@parse_ini_file("/var/local/emhttp/var.ini");
+  $cmd .= "&csrf_token=".($var['csrf_token']??'');
+  return curl_socket("/var/run/emhttpd.socket", "http://localhost/update", $cmd);
+}
+
+$error = !empty($argv[1]) ? emhttp_command($argv[1]) : '';
+if ($error) {
+  echo "$error\n";
+  exit(1);
+}
+exit(0);
+?>

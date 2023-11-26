@@ -1,0 +1,30 @@
+#!/usr/bin/php -q
+<?PHP
+function startsWith($haystack, $needle) {
+  if (!is_string($haystack) || !is_string($needle)) return false;
+  return $needle === "" || strripos($haystack, $needle, -strlen($haystack)) !== false;
+}
+
+$xmlFiles = glob("/boot/config/plugins/dockerMan/templates-user/*.xml");
+
+foreach ($xmlFiles as $file) {
+  unset($changeFlag);
+  $xml = @simplexml_load_file($file);
+  if (!$xml) continue;
+
+  foreach ($xml->Config as $id => $config) {
+    if (startsWith((string)$config->attributes()->Description,"Container ".(string)$config->attributes()->Type)) {
+      $config->attributes()->Description = "";
+      $changeFlag = true;
+    }
+  }
+  if (isset($changeFlag)) {
+    copy($file,"$file.bak");
+    $dom = new DOMDocument('1.0');
+    $dom->preserveWhiteSpace = false;
+    $dom->formatOutput = true;
+    $dom->loadXML($xml->asXML());
+    file_put_contents($file,$dom->saveXML()); 
+  }
+}
+?>

@@ -1,0 +1,199 @@
+Menu="Main:2"
+Title="Pool Devices"
+Tag="bullseye"
+Cond="($pool_devices || $var['fsState']=='Stopped')"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+function makeList($list) {
+  return implode(',',array_map('escapestring',$list));
+}
+function sharename($share) {
+  return basename($share,'.cfg');
+}
+?>
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.ui.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/plugins/dynamix.docker.manager/styles/style-$theme.css")?>">
+
+<script>
+function validate(poolname) {
+  var valid = /^[a-z]([a-z0-9~._-]*[a-z_-])*$/;
+  var reserved = [<?=makeList(explode(',',_var($var,'reservedNames')))?>];
+  var shares = [<?=makeList(array_map('sharename',glob('boot/config/shares/*.cfg',GLOB_NOSORT)))?>];
+  var pools = [<?=makeList($pools)?>];
+  if (!poolname.trim()) return false;
+  if (reserved.includes(poolname)) {
+    swal({title:"_(Invalid pool name)_",text:"_(Do not use reserved names)_",html:true,type:'error',confirmButtonText:"_(Ok)_"});
+    return false;
+  } else if (shares.includes(poolname)) {
+    swal({title:"_(Invalid pool name)_",text:"_(Do not use user share names)_",html:true,type:'error',confirmButtonText:"_(Ok)_"});
+    return false;
+  } else if (pools.includes(poolname)) {
+    swal({title:"_(Invalid pool name)_",text:"_(Pool name already exists)_",html:true,type:'error',confirmButtonText:"_(Ok)_"});
+    return false;
+  } else if (!valid.test(poolname)) {
+    swal({title:"_(Invalid pool name)_",text:"_(Use only lowercase with no special characters or leading/trailing digits)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    return false;
+  }
+  return true;
+}
+function dialogStyle() {
+  $('.ui-dialog-titlebar-close').css({'display':'none'});
+  $('.ui-dialog-title').css({'text-align':'center','width':'100%','font-size':'1.8rem'});
+  $('.ui-dialog-content').css({'padding-top':'15px','vertical-align':'bottom'});
+  $('.ui-button-text').css({'padding':'0px 5px'});
+}
+function addPoolPopup() {
+  var popup = $('#dialogWindow');
+  // Load popup with the template info
+  popup.html($("#templatePopupPool").html());
+  // Start Dialog section
+  popup.dialog({
+    title: "_(Add Pool)_",
+    height: 'auto',
+    width: 600,
+    resizable: false,
+    modal: true,
+    buttons: {
+    "_(Add)_": function() {
+        if (validate($(this).find('input[name="poolName"]').val())) {
+          $(this).find('form').submit();
+          $(this).dialog('close');
+        }
+      },
+    "_(Cancel)_": function() {
+        $(this).dialog('close');
+      }
+    }
+  });
+  dialogStyle();
+}
+function removeOption(inputString,value) {
+  // Define a regular expression to match <option>...</option> substrings
+  const optionPattern = /<option .*?<\/option>/g;
+  // Replace all matching substrings that contain "value" with an empty string
+  const result = inputString.replace(optionPattern, (match) => {
+    if (match.includes(value)) {
+      return ''; // Remove the entire substring
+    } else {
+      return match; // Keep the substring as is
+    }
+  });
+  return result;
+}
+function addSubpoolPopup(poolname,currentsubpools) {
+  var popup = $('#dialogWindow');
+  // Load popup with the template info
+  popup.html($("#templatePopupSubpool").html());
+  // Remove the options specifed by currentsubpools
+  if (currentsubpools.trim().length !== 0) {
+    var subpools = currentsubpools.split(',');
+    subpools.forEach(function(subpool) {
+      popup.html(function(index, oldHtml) {
+        return removeOption(oldHtml, subpool);
+      });
+    });
+  }
+  // Start Dialog section
+  popup.dialog({
+    title: "_(Add ZFS Subpool)_",
+    height: 'auto',
+    width: 600,
+    resizable: false,
+    modal: true,
+    buttons: {
+    "_(Add)_": function() {
+        subpool=$(this).find('select[name="subpool"]').val();
+        $(this).find('input[name="poolName"]').val(poolname + '<?=$_tilde_?>' + subpool);
+        $(this).find('form').submit();
+        $(this).dialog('close');
+      },
+    "_(Cancel)_": function() {
+        $(this).dialog('close');
+      }
+    }
+  });
+  dialogStyle();
+}
+
+<?if (_var($var,'fsState')=="Started"):?>
+$('#tab2').bind({click:function() {$('i.toggle').show('slow');}});
+<?endif;?>
+</script>
+
+<?$i = 0?>
+<?foreach ($pools as $pool):?>
+<?if (isset($disks[$pool]['devices']) or _var($var,'fsState')=="Stopped"):?>
+<table class="disk_status wide<?=$i?' divider':''?>">
+<?if (!isSubpool($pool)):?>
+<thead><tr><td>_(Device)_</td><td>_(Identification)_</td><td>_(Temp)_.</td><td>_(Reads)_</td><td>_(Writes)_</td><td>_(Errors)_</td><td>_(FS)_</td><td>_(Size)_</td><td>_(Used)_</td><td>_(Free)_</td></tr></thead>
+<?endif;?>
+<tbody id="pool_device<?=$i++?>">
+<?foreach (cache_filter($disks) as $disk) if (prefix($disk['name'])==$pool) echo "<tr><td colspan='11'>&nbsp;</td></tr>"?>
+</tbody>
+</table>
+<?endif;?>
+<?endforeach;?>
+
+:cache_devices_help:
+
+<?if (_var($var,'fsState')=="Stopped"):?>
+<div></div>
+:cache_slots_help:
+<?endif;?>
+
+<div id="dialogWindow" class="template"></div>
+
+<?if (_var($var,'fsState')=="Stopped"):?>
+<input type="button" value="_(Add Pool)_" style="margin:0" onclick="addPoolPopup()">
+
+<div id="templatePopupPool" class="template">
+<form markdown="1" method="POST" action="/update.htm" target="progressFrame" onsubmit="return validate(this.poolName.value)">
+<input type="hidden" name="changeSlots" value="apply">
+_(Name)_:
+: <input type="text" name="poolName" maxlength="40" value="<?=count($pools)==0?'cache':''?>">
+
+_(Slots)_:
+: <select name="poolSlots">
+  <?for ($n=1; $n<=_var($var,'MAX_CACHESZ',0); $n++):?>
+  <?=mk_option(1,$n,$n)?>
+  <?endfor;?>
+  </select>
+
+</form>
+</div>
+
+<div id="templatePopupSubpool" class="template">
+<form markdown="1" method="POST" action="/update.htm" target="progressFrame">
+<input type="hidden" name="changeSlots" value="apply">
+<input type="hidden" name="poolName" value="">
+_(Name)_:
+: <select name="subpool">
+  <?=mk_option("","special",_("special - Special Allocation Class"))?>
+  <?=mk_option("","logs",_("logs - ZFS Intent Log"))?>
+  <?=mk_option("","dedup",_("dedup - Deduplication Tables"))?>
+  <?=mk_option("","cache",_("cache - Cache Devices"))?>
+  <?=mk_option("","spares",_("spares - Hot Spares"))?>
+  </select>
+
+_(Slots)_:
+: <select name="poolSlots">
+  <?for ($n=1; $n<=_var($var,'MAX_CACHESZ',0); $n++):?>
+  <?=mk_option(1,$n,$n)?>
+  <?endfor;?>
+  </select>
+
+</form>
+</div>
+<?endif;?>

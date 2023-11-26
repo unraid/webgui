@@ -1,0 +1,170 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$docroot = '/usr/local/emhttp';
+$varroot = '/var/local/emhttp';
+$log     = '/boot/config/parity-checks.log';
+$stamps  = '/var/tmp/stamps.ini';
+$resync  = '/var/tmp/resync.ini';
+$timer   = time();
+
+require_once "$docroot/webGui/include/Helpers.php";
+require_once "$docroot/webGui/include/publish.php";
+extract(parse_plugin_cfg('dynamix',true));
+
+// add translations
+$_SERVER['REQUEST_URI'] = 'main';
+$login_locale = _var($display,'locale');
+require_once "$docroot/webGui/include/Translations.php";
+
+$dot = _var($display,'number','.,')[0];
+// remember current language
+$locale_init = $locale;
+
+function new_parity_log($timestamp) {
+  global $log;
+  return file_exists($log) ? explode('|',tail($log))[0]!=$timestamp : true;
+}
+function my_clock($time) {
+  if (!$time) return _('less than a minute');
+  $days = floor($time/1440);
+  $hour = floor($time/60)%24;
+  $mins = $time%60;
+  return plus($days,'day',($hour|$mins)==0).plus($hour,'hour',$mins==0).plus($mins,'minute',true);
+}
+function update_translation($locale) {
+  global $docroot,$language;
+  $language = [];
+  if ($locale) {
+    $text = "$docroot/languages/$locale/translations.txt";
+    if (file_exists($text)) {
+      $store = "$docroot/languages/$locale/translations.dot";
+      if (!file_exists($store)) file_put_contents($store,serialize(parse_lang_file($text)));
+      $language = unserialize(file_get_contents($store));
+    }
+    $text = "$docroot/languages/$locale/main.txt";
+    if (file_exists($text)) {
+      $store = "$docroot/languages/$locale/main.dot";
+      if (!file_exists($store)) file_put_contents($store,serialize(parse_lang_file($text)));
+      $language = array_merge($language,unserialize(file_get_contents($store)));
+    }
+  }
+}
+function create_sync($file) {
+  return file_exists($file) ? explode(',',file_get_contents($file)) : [];
+}
+function create_file($file,...$data) {
+  if (!file_exists($file)) file_put_contents($file,implode(',',$data));
+}
+
+while (true) {
+  $var = (array)@parse_ini_file("$varroot/var.ini");
+  // check for language changes
+  extract(parse_plugin_cfg('dynamix',true));
+  if (_var($display,'locale') != $locale_init) {
+    $locale_init = _var($display,'locale');
+    update_translation($locale_init);
+  }
+  $synced = create_sync($stamps);
+  $sbSynced = array_shift($synced) ?: _var($var,'sbSynced',0);
+  $data = [];
+  $spot = _var($var,'mdResyncPos',0);
+  if ($spot>0) {
+    [$size,$delta,$bytes] = [_var($var,'mdResyncSize',0),_var($var,'mdResyncDt',0),_var($var,'mdResyncDb',0)];
+    create_file($resync,_var($var,'mdResyncAction'),$size);
+    $data[] = my_scale($size*1024,$unit,-1)." $unit";
+    $data[] = _(my_clock(floor((time()-$sbSynced)/60)),2).($delta ? '' : ' ('._('paused').')');
+    $data[] = my_scale($spot*1024,$unit)." $unit (".number_format($spot/($size/100+1),1,$dot,'')." %)";
+    $data[] = $delta ? my_scale($bytes*1024/$delta,$unit, 1)." $unit/sec" : '---';
+    $data[] = $bytes ? _(my_clock(round(((($delta*(($size-$spot)/($bytes/100+1)))/100)/60),0)),2) : _('Unknown');
+    $data[] = $var['sbSyncErrs'];
+  } elseif (_var($var,'sbSynced') && _var($var,'sbSynced2')) {
+    $timestamp = str_replace(['.0','.'],['  ',' '],date('Y.M.d H:i:s',$var['sbSynced2']));
+    if (new_parity_log($timestamp)) {
+      $idle = []; while (count($synced)>1) $idle[] = array_pop($synced)-array_pop($synced);
+      [$action,$size] = file_exists($resync) ? my_explode(',',file_get_contents($resync)) : [_var($var,'mdResyncAction'),_var($var,'mdResyncSize',0)];
+      $duration = $var['sbSynced2']-$sbSynced-array_sum($idle);
+      $status   = _var($var,'sbSyncExit');
+      $speed    = $status==0 ? round($size*1024/$duration) : 0;
+      $error    = _var($var,'sbSyncErrs',0);
+      file_put_contents($log,"$timestamp|$duration|$speed|$status|$error|$action|$size\n",FILE_APPEND);
+    }
+    delete_file($stamps,$resync);
+  }
+  if (_var($var,'fsState')=='Copying') $fsState = _var($var,'fsCopyPrcnt')."% "._('completed');
+  elseif ($var['fsState']=='Clearing') $fsState = _var($var,'fsClearPrcnt')."% "._('completed');
+  elseif (substr(_var($var,'fsState'),-3)!='ing') $fsState = 'stop';
+  else $fsState = '';
+
+  if (_var($var,'fsState')!="Started") $process = -1;
+  elseif ($spot>0 && $bytes>0) $process = 1;
+  elseif (file_exists('/var/run/mover.pid')) $process = 2;
+  elseif (exec('ps -C btrfs -o cmd=|grep -cv show')>0) $process = 3;
+  elseif (exec("zpool status|grep -c 'scrub in progress'")>0) $process = 4;
+  else $process = 0;
+
+ 
+  if ($process == 2) {
+    $moverdata = [];
+    
+    if ( file_exists("$varroot/mover.ini")) {
+      $moverstat = parse_ini_file("$varroot/mover.ini") ;
+      $moverdata[] = $moverstat["File"]  ;
+      $moverdata[] = $moverstat["Action"] ;
+      $perc = $moverstat["Filepercent"]      ;
+      $moverdata[] =  "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>$perc%</span></div>" ;
+      if ($moverstat["TotalToArray"]>0) { 
+        $toperc = ($moverstat["TotalToArray"]-$moverstat["RemainToArray"])/$moverstat["TotalToArray"] * 100; 
+        if ($moverstat["RemainToArray"]>0) { 
+          $perc= round($toperc,2) ;
+          $moverdata[] = "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>"._("Percentage Complete ").$perc."%</span></div>" ; 
+        } else {$moverdata[] = _("Transfer complete") ;}
+        } else { 
+          $moverdata[] = _("Nothing to transfer") ;}
+      if ($moverstat["TotalFromArray"]>0) { 
+        $fromperc = ($moverstat["TotalFromArray"] - $moverstat["RemainFromArray"])/$moverstat["TotalFromArray"] * 100; 
+        if ($moverstat["RemainFromArray"]>0) { 
+          $perc= round($fromperc,2) ;
+          $moverdata[] = "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>"._("Percentage Complete ").$perc."%</span></div>"; 
+        } else {$moverdata[] = _("Transfer complete") ;}
+        } else { 
+        $moverdata[] = _("Nothing to transfer") ;}  
+    } else {
+      $moverdata[] = _('Error');
+      $moverdata[] = _('Error');
+      $moverdata[] = _('Error');
+      $moverdata[] = _('Error');
+      $moverdata[] = _('Error');
+      }
+  } else {
+    $moverdata = [];
+    $moverdata[] = _('Not Running');
+    $moverdata[] = _('Not Running');
+    $moverdata[] = _('Not Running');
+    $moverdata[] = _('Not Running');
+    $moverdata[] = _('Not Running');
+  }
+
+  publish('parity', implode(';',$data));
+  if (time()-$timer >= 2) {
+    // update every 2 seconds
+    publish('paritymonitor', $spot>0 ? 1 : 0);
+    publish('fsState', $fsState);
+    publish('mymonitor', $process);
+    publish('mover', implode(';',$moverdata));
+    $timer = time();
+  }
+  sleep(1);
+}
+?>

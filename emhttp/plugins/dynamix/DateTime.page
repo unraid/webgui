@@ -1,0 +1,127 @@
+Menu="OtherSettings"
+Title="Date and Time"
+Icon="icon-clock"
+Tag="clock-o"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$keys = explode("\n",file_get_contents("$docroot/webGui/include/timezones.key"));
+?>
+<form markdown="1" name="datetime_settings" method="POST" action="/update.htm" target="progressFrame">
+<input type="hidden" name="setDateTime" value="apply">
+_(Current date and time)_:
+: <?=_(my_time(time()),0)?>
+
+_(Date format)_:
+: <select name="display_date" onchange="presetTime(this.form)">
+  <?=mk_option($display['date'], "%c","_(System Setting)_")?>
+  <?=mk_option($display['date'], "%A, %Y %B %e",_('Day, YYYY Month D'))?>
+  <?=mk_option($display['date'], "%A, %e %B %Y",_('Day, D Month YYYY'))?>
+  <?=mk_option($display['date'], "%A, %B %e, %Y",_('Day, Month D, YYYY'))?>
+  <?=mk_option($display['date'], "%A, %m/%d/%Y",_('Day, MM/DD/YYYY'))?>
+  <?=mk_option($display['date'], "%A, %d-%m-%Y",_('Day, DD-MM-YYYY'))?>
+  <?=mk_option($display['date'], "%A, %d.%m.%Y",_('Day, DD.MM.YYYY'))?>
+  <?=mk_option($display['date'], "%A, %Y-%m-%d",_('Day, YYYY-MM-DD'))?>
+  </select>
+
+_(Time format)_:
+: <select name="display_time">
+  <?=mk_option($display['time'], "%I:%M %p",_('12 hours'))?>
+  <?=mk_option($display['time'], "%R",_('24 hours'))?>
+  </select>
+
+_(Time zone)_:
+: <select name="timeZone"><?
+  foreach ($keys as $key) {
+    [$timezone, $city] = my_explode('|', $key);
+    echo mk_option($var['timeZone'], $timezone, $city);
+  }
+?></select>
+
+:timezone_help:
+
+_(Use NTP)_:
+: <select name="USE_NTP" onchange="checkDateTimeSettings(this.form)">
+  <?=mk_option($var['USE_NTP'], "yes", _('Yes'))?>
+  <?=mk_option($var['USE_NTP'], "no", _('No'))?>
+  </select>
+
+:use_ntp_help:
+
+_(NTP server)_ 1:
+: <input type="text" name="NTP_SERVER1" maxlength="40" class="narrow" value="<?=htmlspecialchars($var['NTP_SERVER1'])?>">
+
+:ntp_server1_help:
+
+_(NTP server)_ 2:
+: <input type="text" name="NTP_SERVER2" maxlength="40" class="narrow" value="<?=htmlspecialchars($var['NTP_SERVER2'])?>">
+
+:ntp_server2_help:
+
+_(NTP server)_ 3:
+: <input type="text" name="NTP_SERVER3" maxlength="40" class="narrow" value="<?=htmlspecialchars($var['NTP_SERVER3'])?>">
+
+:ntp_server3_help:
+
+_(NTP server)_ 4:
+: <input type="text" name="NTP_SERVER4" maxlength="40" class="narrow" value="<?=htmlspecialchars($var['NTP_SERVER4'])?>">
+
+:ntp_server4_help:
+
+_(New date and time)_:
+: <input type="text" name="newDateTime" maxlength="20" class="narrow" value="<?=my_time(time(), "%F %T")?>">
+
+:current_time_help:
+
+&nbsp;
+: <input type="button" value="_(Apply)_" onclick="doDispatch(this.form)" disabled><input type="button" value="_(Done)_" onclick="done()">
+</form>
+
+<script>
+function doDispatch(form) {
+  var fields = {};
+  var old_tz = "<?=$var['timeZone']?>";
+  $(form).find('button').prop('disabled',true);
+  fields['#cfg'] = "/boot/config/plugins/dynamix/dynamix.cfg";
+  $(form).find('select[name^="display_"]').each(function(){fields[$(this).attr('name')] = $(this).val();});
+  $.post('/webGui/include/Dispatcher.php',fields);
+  if (form.timeZone.value != old_tz) $.post('/webGui/include/ResetTZ.php');
+  form.submit();
+}
+function presetTime(form) {
+  var system = form.display_date.selectedIndex==0;
+  if (system) form.display_time.selectedIndex = 0;
+  form.display_time.disabled = system;
+}
+function checkDateTimeSettings(form) {
+  if (form.USE_NTP.value=="yes") {
+    form.newDateTime.disabled=true;
+    form.NTP_SERVER1.disabled=false;
+    form.NTP_SERVER2.disabled=false;
+    form.NTP_SERVER3.disabled=false;
+    form.NTP_SERVER4.disabled=false;
+  } else {
+    form.newDateTime.disabled=false;
+    form.NTP_SERVER1.disabled=true;
+    form.NTP_SERVER2.disabled=true;
+    form.NTP_SERVER3.disabled=true;
+    form.NTP_SERVER4.disabled=true;
+  }
+}
+$(function() {
+  var form = document.datetime_settings;
+  presetTime(form);
+  checkDateTimeSettings(form);
+});
+</script>

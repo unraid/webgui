@@ -1,0 +1,170 @@
+#!/bin/bash
+#
+# script: rc.local
+#
+# Local system initialization script.
+# Put any local startup commands in here.  Also, if you have
+# anything that needs to be run at shutdown time you can
+# make an /etc/rc.d/rc.local_shutdown script and put those
+# commands in there.
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# irqbalance daemon distributes interrupts over processors and cores
+# if [[ -x /usr/sbin/irqbalance ]]; then
+#   /usr/sbin/irqbalance
+# fi
+
+# reclaim 1.6M of microcode files that are no longer needed
+rm -rf /kernel
+
+# For Docker: mark submounts under /mnt "shared"
+/sbin/mount --bind --make-rshared /mnt /mnt
+# and grant access to graphics device nodes
+[[ -d /dev/dri ]] && chmod -R 777 /dev/dri
+
+# Ensure required config directories exist
+# these will all have permissions 0700
+CONFIG="/boot/config"
+mkdir -p $CONFIG/modprobe.d
+mkdir -p $CONFIG/plugins/dockerMan
+mkdir -p $CONFIG/plugins/dynamix/users
+mkdir -p $CONFIG/plugins-error/
+mkdir -p $CONFIG/pools
+mkdir -p $CONFIG/shares
+mkdir -p $CONFIG/ssh/root
+mkdir -p $CONFIG/ssl/certs
+
+# upgrade network configuration (if needed) and (re)generates our welcome text
+if [[ -x /usr/local/sbin/create_network_ini ]]; then
+  /usr/local/sbin/create_network_ini init &>/dev/null &
+fi
+
+# Needed by dynamix
+# copy monitor.ini file
+if [[ -s $CONFIG/plugins/dynamix/monitor.ini ]]; then
+  cp $CONFIG/plugins/dynamix/monitor.ini /var/local/emhttp
+  chmod -x /var/local/emhttp/monitor.ini
+fi
+# initialize notifications
+/usr/local/emhttp/webGui/scripts/notify smtp-init
+/usr/local/emhttp/webGui/scripts/notify cron-init
+
+# start nchan monitoring -> stop all running nchan processes when no subscribers are connected
+if [[ -x /usr/local/sbin/monitor_nchan ]]; then
+  /usr/local/sbin/monitor_nchan
+fi
+
+# First boot following Unraid Server OS update: delete plugin file
+rm -f /boot/plugins/unRAIDServer.plg
+rm -f $CONFIG/plugins/unRAIDServer.plg
+
+# These plugins are now integrated in the OS or obsolete and may interfere
+OBSOLETE="vfio.pci dynamix.wireguard dynamix.ssd.trim dynamix.file.manager gui.search unlimited-width"
+for PLUGIN in $OBSOLETE; do
+  if [[ -e $CONFIG/plugins/$PLUGIN.plg ]]; then
+    log "moving obsolete plugin $PLUGIN.plg to $CONFIG/plugins-error"
+    # preserve ssd-trim config
+    if [[ $PLUGIN == dynamix.ssd.trim ]]; then
+      if [[ -e $CONFIG/plugins/$PLUGIN/$PLUGIN.cfg ]]; then
+        echo "[ssd]" >> $CONFIG/plugins/dynamix/dynamix.cfg
+        cat $CONFIG/plugins/$PLUGIN/$PLUGIN.cfg >> $CONFIG/plugins/dynamix/dynamix.cfg
+      fi
+      if [[ -e $CONFIG/plugins/$PLUGIN/ssd-trim.cron ]]; then
+        mv $CONFIG/plugins/$PLUGIN/ssd-trim.cron $CONFIG/plugins/dynamix/ssd-trim.cron
+      fi
+    fi
+    mv $CONFIG/plugins/$PLUGIN.plg $CONFIG/plugins-error/
+    rm -rf $CONFIG/plugins/$PLUGIN
+  fi
+done
+
+# uninstall obsolete plugins
+#
+# these plugins with these versions or older are incompatible with this version of Unraid
+# if found, they will be moved from $CONFIG/plugins to $CONFIG/plugins-error
+# in theory, newer versions will be ok
+#
+obsolete(){
+  local PLUGIN=$1
+  local BADVER=$2
+  if [[ -e "$CONFIG/plugins/$PLUGIN.plg" ]]; then
+    local VERSION=$(/usr/local/sbin/plugin version "$CONFIG/plugins/$PLUGIN.plg")
+    # assumes all version strings are of form YYYY.MM.DD[.letter]
+    if [[ $VERSION < $BADVER || $VERSION == $BADVER ]]; then
+      log "moving obsolete plugin $PLUGIN.plg version $VERSION to $CONFIG/plugins-error"
+      /usr/local/emhttp/webGui/scripts/notify -e "Plugin Removed" -s "$PLUGIN" -d "Plugin '$PLUGIN' version '$VERSION' was removed as it is incompatible with this version of Unraid OS" -m "A replacement *may* be available in Community Apps" -i "alert" -l "/Plugins"
+      mv "$CONFIG/plugins/$PLUGIN.plg" "$CONFIG/plugins-error/"
+      # notify needs a delay between notifications
+      sleep 1
+    fi
+  fi
+}
+
+# Disk Location by olehj, breaks the dashboard
+obsolete "disklocation-master" "2022.06.18"
+# Plex Streams by dorgan, breaks the dashboard
+obsolete "plexstreams" "2022.08.31"
+# Corsair PSU Statistics by Fma965, breaks the dashboard
+obsolete "corsairpsu" "2021.10.05"
+# GPU Statistics by b3rs3rk, breaks the dashboard
+obsolete "gpustat" "2022.11.30a"
+# IPMI Tools by dmacias72, breaks the dashboard
+obsolete "ipmi" "2021.01.08"
+# NUT - Network UPS Tools by dmacias72, breaks the dashboard
+obsolete "nut" "2022.03.20"
+# Nerd Tools by dmacias72
+obsolete "NerdPack" "2021.08.11"
+# UPnP Monitor by ljm42, not PHP 8 compatible
+obsolete "upnp-monitor" "2020.01.04c"
+# ZFS-Companion Monitor by campusantu, breaks the dashboard
+obsolete "ZFS-companion" "2021.08.24"
+
+# If "unraidsafemode" indicated, skip installing extra packages and plugins
+if [[ -f /boot/unraidsafemode ]] || grep -wq unraidsafemode /proc/cmdline; then
+  log "Unraid Safe Mode (unraidsafemode) has been set"
+else
+  # Install any extra packages
+  if [[ -d /boot/extra ]]; then
+    log "Installing /boot/extra packages"
+    ( export -f log; find /boot/extra -maxdepth 1 -type f -exec sh -c 'upgradepkg --terse --install-new "$1" | log' -- "{}" \; )
+  fi
+  # Install plugins
+  log "Installing plugins"
+  shopt -s nullglob
+  for PLUGIN in $CONFIG/plugins/*.plg; do
+    /usr/local/sbin/plugin install $PLUGIN | log
+  done
+  shopt -u nullglob
+fi
+
+# Install languages
+log "Installing language packs"
+shopt -s nullglob
+for LANGUAGE in $CONFIG/plugins/lang-*.xml; do
+  /usr/local/sbin/language install $LANGUAGE | log
+done
+shopt -u nullglob
+
+# Enable persistent bash history
+PERSISTENT_BASH_HISTORY=$(grep "persist_bash_history" /boot/config/plugins/dynamix/dynamix.cfg 2>/dev/null | cut -d'=' -f2 | sed 's/"//g')
+if [[ $PERSISTENT_BASH_HISTORY == 1 ]]; then
+  if [[ ! -d /boot/config/history ]]; then
+    mkdir -p /boot/config/history
+  fi
+  rm -f /root/.bash_history
+  touch /boot/config/history/bash_history
+  ln -s /boot/config/history/bash_history /root/.bash_history
+fi
+
+# Invoke the 'go' script
+if [[ -f $CONFIG/go ]]; then
+  log "Starting go script"
+  fromdos <$CONFIG/go >/var/tmp/go
+  chmod +x /var/tmp/go
+  /var/tmp/go
+fi

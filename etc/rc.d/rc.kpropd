@@ -1,0 +1,41 @@
+#!/bin/sh
+# Start the Kerberos V5 slave KDC update server. This runs on a slave
+# (secondary) KDC server. It allows the master Kerberos server to use
+# kprop(8) to propagate its database to the slave servers.
+
+# To change the default options, edit /etc/default/kpropd.
+if [ -r /etc/default/kpropd ]; then
+  . /etc/default/kpropd
+fi
+
+start_atd() {
+  if ! /usr/bin/pgrep --ns $$ --euid root -f "^/usr/sbin/kpropd" 1> /dev/null 2> /dev/null ; then
+    echo "Starting kpropd:  /usr/sbin/kpropd $KPROPD_OPTIONS"
+    /usr/sbin/kpropd $KPROPD_OPTIONS
+  fi
+}
+
+stop_atd() {
+  echo "Stopping kpropd."
+  /usr/bin/pkill --ns $$ --euid root -f "^/usr/sbin/kpropd" 2> /dev/null
+}
+
+restart_atd() {
+  stop_atd
+  sleep 1
+  start_atd
+}
+
+case "$1" in
+'start')
+  start_atd
+  ;;
+'stop')
+  stop_atd
+  ;;
+'restart')
+  restart_atd
+  ;;
+*)
+  echo "usage $0 start|stop|restart"
+esac

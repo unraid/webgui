@@ -1,0 +1,64 @@
+#!/bin/bash
+#
+# script: emhttp
+#
+# Start emhttpd. The nginx components are started during emhttpd initialization.
+#
+# Usage:
+#   emhttp [OPER]
+#
+# OPER is start or stop.  Default is start.
+#
+# The protocol schemes and ports recognized by nginx are defined by these variables
+# in the file /boot/config/ident.cfg:
+#  USE_SSL="no"|"yes"|"only"|"auto"        default: "auto"
+#  PORT=<http listening port number>       default: 80
+#  PORTSSL=<https listening port number>   default: 443
+# Refer to /etc/rc.d/rc.nginx
+#
+# Backward-compatibility Usage:
+#   emhttp [-r] [-p port[,sslport]] [OPER]
+#
+# The -r and -p options are deprecated and no longer function. They are simply accepted and dropped.
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+while getopts ":p:r" OPT; do
+  case $OPT in
+    p) ;;
+    r) ;;
+    *) echo "unknown option $OPT"
+       exit 1
+  esac
+done
+shift $((OPTIND-1))
+
+case "${1:-start}" in
+'start')
+  log "Starting emhttpd..."
+  # verify emhttpd not already started
+  if [[ -n $(pgrep emhttpd) ]]; then
+    log "emhttpd already started."
+    exit 1
+  fi
+  # start emhttpd
+  /usr/local/bin/emhttpd
+  ;;
+'stop')
+  log "Stopping web services..."
+  /etc/rc.d/rc.nginx stop
+  /etc/rc.d/rc.php-fpm stop
+  log "Stopping emhttpd..."
+  pkill emhttpd
+  rmmod md-mod
+  log "All services...  Stopped."
+  ;;
+*)
+  echo "Unknown operation: $1"
+  exit 1
+esac
+exit 0

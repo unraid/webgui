@@ -1,0 +1,83 @@
+#!/bin/bash
+#
+# script: rc.atd
+#
+# start/stop the at daemon
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+DAEMON="AT daemon"
+CROND="/usr/sbin/atd"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# To change the default options, edit /etc/default/atd.
+if [[ -r /etc/default/atd ]]; then
+  . /etc/default/atd
+fi
+
+atd_running(){
+  sleep 0.1
+  pgrep --ns $$ --euid daemon -f "^$CROND" &>/dev/null
+}
+
+atd_start(){
+  log "Starting $DAEMON..."
+  local REPLY
+  if atd_running; then
+    REPLY="Already started"
+  else
+    run /usr/sbin/atd $ATD_OPTS
+    if atd_running; then REPLY="Started"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+atd_stop(){
+  log "Stopping $DAEMON..."
+  local REPLY
+  if ! atd_running; then
+    REPLY="Already stopped"
+  else
+    run pkill --ns $$ --euid daemon -f "^$CROND"
+    if ! atd_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+atd_restart(){
+  log "Restarting $DAEMON..."
+  atd_stop
+  sleep 1
+  atd_start
+}
+
+atd_status(){
+  if atd_running; then
+    echo "$DAEMON is currently running."
+  else
+    echo "$DAEMON is not running."
+    exit 1
+  fi
+}
+
+case "$1" in
+'start')
+  atd_start
+  ;;
+'stop')
+  atd_stop
+  ;;
+'restart')
+  atd_restart
+  ;;
+'status')
+  atd_status
+  ;;
+*)
+  echo "Usage: $BASENAME start|stop|restart|status"
+  exit 1
+esac
+exit 0

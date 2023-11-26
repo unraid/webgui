@@ -1,0 +1,25 @@
+#!/bin/bash
+#
+# script: rc.runlog
+#
+# General purpose run and log functions
+#
+# Bergware - created for Unraid OS, October 2023
+
+BASENAME=$(basename "$0")
+
+run(){
+  # log command to syslog
+  /usr/bin/logger -t $BASENAME -- "$*"
+  # run command - dismiss all output
+  $* &>/dev/null
+}
+
+log(){
+  # log message to syslog
+  while IFS=$'\n' read -r LINE; do
+    /usr/bin/logger -t $BASENAME -- "$LINE"
+  done <<< ${1:-$(</dev/stdin)}
+  # echo message to console
+  [[ -t 1 && -n $1 ]] && /bin/echo "$BASENAME: $1"
+}

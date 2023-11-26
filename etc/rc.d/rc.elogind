@@ -1,0 +1,101 @@
+#!/bin/bash
+#
+# script: rc.elogind
+#
+# Initializes the elogind service on Slackware.
+# There is no need to explicitly start a daemon; this will be taken
+# care of automatically by dbus when that starts.
+#
+# Author:
+# Eric Hameleers <alien@slackware.com> 2016
+# Widya Walesa 2020
+#
+# Description:
+# We use elogind (standalone subset extracted from systemd) instead of
+# systemd itself; so we need to initialize a systemd-like state.
+#
+# Note:
+# Slackware has a tmpfs mounted on /run (see rc.S).
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+DAEMON="Elogin daemon"
+ELOGIND="/lib64/elogind/elogind"
+PIDFILE="/run/elogind.pid"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+elogind_running(){
+  sleep 0.1
+  pgrep -l -F $PIDFILE 2>/dev/null | grep -q elogind
+}
+
+elogind_start(){
+  log "Starting $DAEMON..."
+  local REPLY
+  [[ -x $ELOGIND ]] || exit 1
+  [[ -d /run/user ]] || mkdir -p /run/user
+  if [[ ! -d /run/systemd ]]; then
+    mkdir -p /run/elogind /sys/fs/cgroup/elogind
+    ( cd /run; rm -rf systemd; ln -sf elogind systemd; )
+    # LimeTech - eliminate warning about not being able to create symlink
+    # ( cd /sys/fs/cgroup; rm -rf systemd; ln -sf elogind systemd; )
+  fi
+  if elogind_running; then
+    REPLY="Already started"
+  else
+    rm -f $PIDFILE
+    run $ELOGIND --daemon
+    if elogind_running; then REPLY="Started"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+elogind_stop(){
+  log "Stopping $DAEMON..."
+  local REPLY
+  if ! elogind_running; then
+    REPLY="Already stopped"
+  else
+    pkill -F $PIDFILE 2>/dev/null
+    if ! elogind_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+elogind_restart(){
+  log "Restarting $DAEMON..."
+  elogind_stop
+  sleep 1
+  elogind_start
+}
+
+elogind_status(){
+  if elogind_running; then
+    echo "$DAEMON is currently running."
+  else
+    echo "$DAEMON is not running."
+    exit 1
+  fi
+}
+
+case "$1" in
+'start')
+  elogind_start
+  ;;
+'stop')
+  elogind_stop
+  ;;
+'restart')
+  elogind_restart
+  ;;
+'status')
+  elogind_status
+  ;;
+*)
+  echo "Usage: $BASENAME start|stop|restart|status"
+  exit 1
+esac
+exit 0

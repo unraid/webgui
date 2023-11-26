@@ -1,0 +1,149 @@
+#!/bin/bash
+#
+# script rc.rpc
+#
+# rc.rpc:  start/stop/restart RPC daemons needed to use NFS.
+# You must run these daemons in order to mount NFS partitions
+# (unless you use the mount option '-o nolock', which can
+# corrupt files and is not generally recommended unless you
+# are mounting the partition(s) as read-only).
+#
+# To run an NFS server, starting these is mandatory.
+#
+# LimeTech - get rid of chatty '-l' rpcbind option
+# Bergware - modified for Unraid OS, October 2023
+
+DAEMON="RPC server daemon"
+CALLER="rpc"
+RPCBIND="/sbin/rpcbind"
+STATD="/sbin/rpc.statd"
+RPC="/etc/default/rpc"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# library functions
+. /etc/rc.d/rc.library.source
+
+# get bind addresses
+if check && [[ -n $BIND ]]; then
+  RPCBIND_OPTS="-h ${BIND// / -h }"
+fi
+
+rpc_running(){
+  sleep 0.1
+  ps axc | grep -q rpc.statd
+}
+
+rpc_start(){
+  log "Starting $DAEMON..."
+  local REPLY
+  if rpc_running; then
+    REPLY="Already started"
+  else
+    if [[ -x $RPCBIND && -x $STATD ]]; then
+      # update default settings
+      sed -ri "s/^#?(RPCBIND_OPTS)=.*/\1=\"$RPCBIND_OPTS\"/" $RPC 2>/dev/null
+      [[ -r $RPC ]] && . $RPC
+      # Set up port for lockd:
+      if [[ -n $LOCKD_TCP_PORT ]]; then
+        /sbin/sysctl -w "fs.nfs.nlm_tcpport=$LOCKD_TCP_PORT" 2>/dev/null
+      fi
+      if [[ -n $LOCKD_UDP_PORT ]]; then
+        /sbin/sysctl -w "fs.nfs.nlm_udpport=$LOCKD_UDP_PORT" 2>/dev/null
+      fi
+      if ! ps axc | grep -q rpcbind; then
+        log "Starting RPC portmapper"
+        run $RPCBIND $* $RPCBIND_OPTS
+      fi
+      if ! ps axc | grep -q rpc.statd; then
+        [[ -n $RPC_STATD_HOSTNAME ]] && RPC_STATD_OPTS="$RPC_STATD_OPTS -n $RPC_STATD_HOSTNAME"
+        [[ -n $RPC_STATD_PORT ]] && RPC_STATD_OPTS="$RPC_STATD_OPTS -p $RPC_STATD_PORT"
+        [[ -n $RPC_STATD_OUTGOING_PORT ]] && RPC_STATD_OPTS="$RPC_STATD_OPTS -o $RPC_STATD_OUTGOING_PORT"
+        log "Starting RPC NSM (Network Status Monitor)"
+        run $STATD $RPC_STATD_OPTS
+      fi
+      if rpc_running; then REPLY="Started"; else REPLY="Failed"; fi
+    else
+      log "WARNING: Cannot start RPC daemons needed for NFS.  One or more of"
+      log "         these required daemons is not executable or is not present on your system:"
+      log "         $RPCBIND or $STATD"
+      REPLY="Failed"
+    fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+rpc_stop(){
+  log "Stopping $DAEMON..."
+  local REPLY
+  if ! rpc_running; then
+    REPLY="Already stopped"
+  else
+    killall rpc.statd 2>/dev/null
+    sleep 1
+    killall rpcbind 2>/dev/null
+    sleep 1
+    killall -9 rpc.statd 2>/dev/null # make sure :)
+    sleep 1
+    killall -9 rpcbind 2>/dev/null   # make sure :)
+    if ! rpc_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+rpc_restart(){
+  log "Restarting $DAEMON..."
+  rpc_stop
+  sleep 1
+  rpc_start
+}
+
+rpc_reload(){
+  # restart without info
+  rpc_restart &>/dev/null
+}
+
+rpc_update(){
+  # 0 = update needed, 1 = no action
+  if ! rpc_running; then exit 1; fi
+  if check && [[ "$(this)" == "-h ${BIND// / -h }" ]]; then exit 1; else exit 0; fi
+}
+
+rpc_status(){
+  if rpc_running; then
+    echo "$DAEMON is currently running."
+  else
+    echo "$DAEMON is not running."
+    exit 1
+  fi
+}
+
+case "$1" in
+'start')
+  # warm restart by default (see "man rpcbind" for details about the -w option)
+  rpc_start -w
+  ;;
+'cold_start') # start without -w option
+  rpc_start
+  ;;
+'stop')
+  rpc_stop
+  ;;
+'restart')
+  rpc_restart
+  ;;
+'reload')
+  rpc_reload
+  ;;
+'update')
+  rpc_update
+  ;;
+'status')
+  rpc_status
+  ;;
+*)
+  echo "Usage: $BASENAME start|stop|restart|reload|update|status"
+  exit 1
+esac
+exit 0

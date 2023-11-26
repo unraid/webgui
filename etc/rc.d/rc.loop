@@ -1,0 +1,14 @@
+#!/bin/bash
+#
+# script: rc.loop
+#
+# Load the loop device kernel module.
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+if modinfo loop &>/dev/null; then
+  if ! lsmod | grep -wq "^loop"; then
+    modprobe loop
+  fi
+fi

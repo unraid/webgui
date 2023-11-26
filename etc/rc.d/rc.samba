@@ -1,0 +1,213 @@
+#!/bin/bash
+#
+# script: rc.samba
+#
+# Start/stop/restart the Samba SMB file/print server.
+# To make Samba start automatically at boot, make this
+# file executable:  chmod 755 /etc/rc.d/rc.samba
+#
+# LimeTech - modified to initialize smb-names.conf file from config
+# Bergware - modified for Unraid OS, October 2023
+
+DAEMON="Samba server daemon"
+CALLER="smb"
+SMBD="/usr/sbin/smbd"
+NMBD="/usr/sbin/nmbd"
+WINBINDD="/usr/sbin/winbindd"
+WSDD2="/usr/sbin/wsdd2"
+SMBCONF="/etc/samba/smb.conf"
+CONF="/etc/samba/smb-names.conf"
+IDENT="/boot/config/ident.cfg"
+BOOT="/boot/config"
+PRIVATE="/var/lib/samba/private"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# library functions
+. /etc/rc.d/rc.library.source
+
+# read Unraid settings
+[[ -r $IDENT ]] && . <(fromdos <$IDENT)
+# disable ipv6 when netbios is used
+[[ $USE_NETBIOS == yes ]] && DENY6=1
+
+samba_running(){
+  sleep 0.1
+  [[ $(pgrep -cf $SMBD) -gt 0 ]]
+}
+
+samba_settings(){
+  [[ -z $COMMENT ]] && COMMENT=""
+  [[ -z $SECURITY ]] && SECURITY="user"
+  [[ -z $WORKGROUP ]] && WORKGROUP="WORKGROUP"
+  [[ -z $USE_NETBIOS ]] && USE_NETBIOS="no"
+  [[ -z $USE_WSD ]] && USE_WSD="yes"
+  [[ -z $localMaster ]] && localMaster="no"
+  [[ -z $serverMultiChannel ]] && serverMultiChannel="no"
+  [[ -z $hideDotFiles ]] && hideDotFiles="No"
+
+  echo "# Generated names" >$CONF
+  echo "netbios name = $(hostname -s)" >>$CONF
+  echo "server string = $COMMENT" >>$CONF
+  echo "hide dot files = $hideDotFiles" >>$CONF
+  echo "server multi channel support = $serverMultiChannel" >>$CONF
+  echo "max open files = $(ulimit -n)" >>$CONF
+  # fixme: samba can now auto-register with avahi but conflicts with emhttp, so disable for now
+  echo "multicast dns register = No" >>$CONF
+
+  if [[ $USE_NETBIOS == yes ]]; then
+    echo "disable netbios = No" >>$CONF
+    echo "server min protocol = NT1" >>$CONF
+    if [[ $localMaster == yes ]]; then
+      echo "local master = yes" >>$CONF
+      echo "os level = 100" >>$CONF
+    else
+      echo "local master = No" >>$CONF
+    fi
+  else
+    echo "disable netbios = yes" >>$CONF
+    echo "server min protocol = SMB2" >>$CONF
+  fi
+  if [[ $SECURITY == ads ]]; then
+    echo "security = ADS" >>$CONF
+    if [[ -z $DOMAIN_SHORT ]]; then
+      echo "workgroup = ${DOMAIN%%.*}" >>$CONF
+    else
+      echo "workgroup = $DOMAIN_SHORT" >>$CONF
+    fi
+    echo "realm = $DOMAIN" >>$CONF
+    echo "null passwords = Yes" >>$CONF
+    echo "idmap config * : backend = hash" >>$CONF
+    echo "idmap config * : range = 10000-4000000000" >>$CONF
+    echo "winbind use default domain = Yes" >>$CONF
+    echo "ldap ssl = No" >>$CONF
+    echo "nt acl support = Yes" >>$CONF
+    echo "acl map full control = Yes" >>$CONF
+    echo "acl group control = Yes" >>$CONF
+    echo "inherit acls = Yes" >>$CONF
+    echo "inherit permissions = Yes" >>$CONF
+    echo "map acl inherit = Yes" >>$CONF
+    echo "dos filemode = Yes" >>$CONF
+  else
+    echo "security = USER" >>$CONF
+    echo "workgroup = $WORKGROUP" >>$CONF
+    echo "map to guest = Bad User" >>$CONF
+    echo "passdb backend = smbpasswd" >>$CONF
+    echo "null passwords = Yes" >>$CONF
+    echo "idmap config * : backend = tdb" >>$CONF
+    echo "idmap config * : range = 3000-7999" >>$CONF
+    echo "create mask = 0777" >>$CONF
+    echo "directory mask = 0777" >>$CONF
+  fi
+  # bind samba service
+  if check; then
+    if [[ -n $BIND ]]; then
+      echo "bind interfaces only = yes" >>$CONF
+      echo "interfaces = $BIND" >>$CONF
+    fi
+    # wsdd2: enable ipv4/ipv6
+    [[ $IPV4 == yes && "$WSD2_OPT" != *"-4"* ]] && WSD2_OPT="$WSD2_OPT -4"
+    [[ $IPV6 == yes && "$WSD2_OPT" != *"-6"* ]] && WSD2_OPT="$WSD2_OPT -6"
+  fi
+}
+
+samba_start(){
+  log "Starting $DAEMON..."
+  local REPLY
+  if samba_running; then
+    REPLY="Already started"
+  else
+    if [[ -x $SMBD && -x $NMBD && -x $WINBINDD && -r $SMBCONF ]]; then
+      mkdir -p /var/run/samba
+      # restore previously stored samba 'secrets' file (for better AD integration)
+      if [[ -e $BOOT/secrets.tdb ]]; then
+        cp -f $BOOT/secrets.tdb $PRIVATE
+      fi
+      # create settings
+      samba_settings
+      # start services
+      run $SMBD -D
+      [[ $USE_NETBIOS == yes ]] && run $NMBD -D
+      [[ $USE_WSD == yes ]] && run $WSDD2 -d ${WSD2_OPT## }
+      run $WINBINDD -D
+      if samba_running; then REPLY="Started"; else REPLY="Failed"; fi
+    else
+      REPLY="Missing executables"
+    fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+samba_stop(){
+  log "Stopping $DAEMON..."
+  local REPLY
+  if ! samba_running; then
+    REPLY="Already stopped"
+  else
+    run killall smbd nmbd wsdd2 winbindd
+    # save samba 'secrets' file
+    [[ -e $PRIVATE/secrets.tdb ]] && cp -f $PRIVATE/secrets.tdb $BOOT
+    if ! samba_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+samba_restart(){
+  log "Restarting $DAEMON..."
+  samba_stop
+  sleep 2
+  samba_start
+}
+
+samba_reload(){
+  killall smbd nmbd wsdd2 winbindd 2>/dev/null
+  # update settings
+  samba_settings
+  # restart services
+  $SMBD -D 2>/dev/null
+  [[ $USE_NETBIOS == yes ]] && $NMBD -D 2>/dev/null
+  [[ $USE_WSD == yes ]] && $WSDD2 -d ${WSD2_OPT## } 2>/dev/null
+  $WINBINDD -D 2>/dev/null
+}
+
+samba_update(){
+  # 0 = update needed, 1 = no action
+  if ! samba_running; then exit 1; fi
+  if check && [[ "$(this interfaces)" == "$BIND" ]]; then exit 1; else exit 0; fi
+}
+
+samba_status(){
+  if samba_running; then
+    echo "$DAEMON is currently running."
+  else
+    echo "$DAEMON is not running."
+    exit 1
+  fi
+}
+
+case "$1" in
+'start')
+  samba_start
+  ;;
+'stop')
+  samba_stop
+  ;;
+'restart')
+  samba_restart
+  ;;
+'reload')
+  samba_reload
+  ;;
+'update')
+  samba_update
+  ;;
+'status')
+  samba_status
+  ;;
+*)
+  # Default is "start", for backwards compatibility with previous
+  # Slackware versions. This may change to a 'usage' error someday.
+  samba_start
+esac
+exit 0

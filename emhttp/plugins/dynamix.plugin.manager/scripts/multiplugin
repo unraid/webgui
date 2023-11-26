@@ -1,0 +1,53 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$method  = $argv[1]??'';
+$plugins = explode('*',$argv[2]??'');
+$nchan   = $argv[$argc-1] == 'nchan'; // console or nchan output
+$call    = ['plg' => 'plugin', 'xml' => 'language', '' => 'language'];
+
+function write(...$messages){
+  global $nchan;
+  if ($nchan) {
+    $com = curl_init();
+    curl_setopt_array($com,[
+      CURLOPT_URL => 'http://localhost/pub/plugins?buffer_length=1',
+      CURLOPT_UNIX_SOCKET_PATH => '/var/run/nginx.socket',
+      CURLOPT_POST => 1,
+      CURLOPT_RETURNTRANSFER => true
+    ]);
+    foreach ($messages as $message) {
+      curl_setopt($com, CURLOPT_POSTFIELDS, $message);
+      curl_exec($com);
+    }
+    curl_close($com);
+  } else {
+    foreach ($messages as $message) echo $message;
+  }
+}
+
+foreach ($plugins as $plugin) {
+  if (!$plugin || (!$cmd = $call[pathinfo($plugin,PATHINFO_EXTENSION)])) continue;
+  $line = '';
+  $pluginArg = $method == "update" ? basename($plugin) : $plugin;
+  $run = popen("$cmd $method $pluginArg",'r');
+  while (!feof($run)) {
+    $line .= fgetc($run);
+    if (!empty($line) && in_array($line[-1],["\r","\n"])) {write($line); $line = '';}
+  }
+  pclose($run);
+  write("\n");
+}
+if ($nchan) write('_DONE_','');
+?>

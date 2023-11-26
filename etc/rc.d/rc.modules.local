@@ -1,0 +1,32 @@
+#!/bin/bash
+#
+# script: rc.modules.local
+#
+# The Linux kernel source is the best place to look for documentation
+# for the many available kernel modules.  This can be found under
+# /usr/src/linux-$VERSION/Documentation/.
+
+# Almost all necessary modules are automatically loaded when needed,
+# but there are a few exceptions.  Here's a (not all-inclusive) list,
+# so uncomment any of the below entries or add others as needed:
+# Note that you could also create/edit rc.modules-$version if you
+# only wanted specific modules loaded for particular kernels.
+
+#/sbin/modprobe tun   # Universal TUN/TAP device driver
+#/sbin/modprobe sg    # Generic SCSI support for SATA DVD-RW
+
+# LimeTech - set default zfs arc size to 1/8 total memory
+# Bergware - modified for Unraid OS, October 2023
+
+# MemTotal is reported in units of 1024, SIZE needs to be bytes
+SIZE="$(awk '/MemTotal/{print $(NF-1)*128}' /proc/meminfo)"
+CONF="/etc/modprobe.d/zfs.conf"
+
+echo "# LimeTech - Default ARC size is MemTotal/8 (in bytes)" >$CONF
+echo "options zfs zfs_arc_max=$SIZE" >>$CONF
+
+# LimeTech - grab any user defined module conf files
+MODPROBE="/boot/config/modprobe.d"
+if [[ -d $MODPROBE ]]; then
+  find $MODPROBE -type f -exec install -p -m 0644 "{}" /etc/modprobe.d \;
+fi

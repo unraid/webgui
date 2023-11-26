@@ -1,0 +1,103 @@
+#!/bin/bash
+#
+# script: rc.wsdd2
+#
+# start/stop/restart the wsdd2 daemon.
+#
+# To make wsdd2 start automatically at boot make sure this
+# file is executable, and add the following entry to rc.local
+# after the samba test (uncommented)
+
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+DAEMON="WSDD daemon"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# if [[ -x /etc/rc.d/rc.wsdd2 ]]; then
+#   /etc/rc.d/rc.wsdd2 start
+# fi
+
+# you may also add the following entry to rc.local_shutdown
+# (uncommented)
+
+# if [[ -x /etc/rc.d/rc.wsdd2 ]]; then
+#   /etc/rc.d/rc.wsdd2 stop
+# fi
+
+wsdd2_running(){
+  sleep 0.1
+  ps axc | grep -q ' wsdd2'
+}
+
+wsdd2_start(){
+  log "Starting $DAEMON..."
+  local REPLY
+  if [[ -r /etc/samba/smb.conf && -x /etc/rc.d/rc.samba && -x /usr/sbin/wsdd2 ]]; then
+    if wsdd2_running; then
+      REPLY="Already started"
+    else
+      run /usr/sbin/wsdd2 -d
+      if wsdd2_running; then REPLY="Started"; else REPLY="Failed"; fi
+    fi
+  elif [[ ! -r /etc/samba/smb.conf ]]; then
+    log "ERROR: samba not configured, $DAEMON has no service to advertise"
+    exit 1
+  else
+    REPLY="Not started"
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+wsdd2_stop(){
+  log "Stopping $DAEMON..."
+  local REPLY
+  # check something is running before trying to kill it.
+  if ! wsdd2_running; then
+    REPLY="Already stopped"
+  else
+    killall wsdd2
+    if ! wsdd2_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+wsdd2_restart(){
+  log "Restarting $DAEMON..."
+  wsdd2_stop
+  sleep 1
+  wsdd2_start
+}
+
+wsdd2_status(){
+  if wsdd2_running; then
+    echo "$DAEMON is currently running."
+  else
+    echo "$DAEMON is not running."
+    exit 1
+  fi
+}
+
+case "$1" in
+'start')
+  # we don't want to run this more than once,
+  # so kill off any instance already running
+  wsdd2_stop
+  wsdd2_start
+  ;;
+'stop')
+  wsdd2_stop
+  ;;
+'restart')
+  wsdd2_restart
+  ;;
+'status')
+  wsdd2_status
+  ;;
+*)
+  # default is start
+  wsdd2_start
+esac
+exit 0

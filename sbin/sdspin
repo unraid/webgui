@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# spin device up or down or get spinning status
+# $1 device name
+# $2 up or down or status
+# ATA only
+
+# exit status:
+# 0 for up/down: success; for status: device is spun up
+# 1 error: probably device does not support standby
+# 2 for status: device is spun down (standy mode)
+# 
+
+# hattip to Community Dev @doron
+
+RDEVNAME=/dev/${1#'/dev/'}      # So that we can be called with either "sdX" or "/dev/sdX"
+
+hdparm () {
+  OUTPUT=$(/usr/sbin/hdparm $1 $RDEVNAME 2>&1)
+  RET=$?
+  [[ $RET == 0 && ${OUTPUT,,} =~ "bad/missing sense" ]] && RET=1
+}
+
+if [[ "$2" == "up" ]]; then
+  hdparm "-S0"
+elif [[ "$2" == "down" ]]; then
+  hdparm "-y"
+else
+  hdparm "-C"
+  [[ $RET == 0 && ${OUTPUT,,} =~ "standby" ]] && RET=2
+fi
+exit $RET

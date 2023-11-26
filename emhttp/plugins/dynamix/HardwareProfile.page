@@ -1,0 +1,74 @@
+Menu="UNRAID-OS"
+Title="Hardware Profile"
+Icon="icon-profile"
+Tag="wrench"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$var = parse_ini_file('state/var.ini');
+$keyfile = trim(base64_encode(@file_get_contents($var['regFILE'])));
+?>
+
+<script>
+function toggle_hw() {
+  if ($('#hw_details a').html()=="_(Show Details)_") {
+    $.getJSON('/webGui/include/HardwareCollect.php',function(hwdata) {
+      $('#hw_details a').html("_(Hide Details)_");
+      $('#hw_details pre').text(hwdata.hwxml).slideDown('fast');
+    });
+  } else {
+    $('#hw_details a').html("_(Show Details)_");
+    $('#hw_details pre').slideUp('fast', function(){$(this).html('');});
+  }
+}
+function upload() {
+  $('input[value="Upload"]').val('_(Uploading)_...').prop('disabled',true);
+  $('#pleaseWait').show('fast');
+
+  $.getJSON('/webGui/include/HardwareCollect.php',function(hwdata) {
+    $.post('https://keys.lime-technology.com/account/hwprofile/upload',{keyfile:hwdata.keyfile,osversion:hwdata.osversion,hwxml:hwdata.hwxml},function(data) {
+      $('#pleaseWait').hide().html(data.message).fadeIn('fast');
+      $('input[value="_(Uploading)_..."]').val('_(Uploaded)_!');
+    }).fail(function(data) {
+      var msg = "<p>_(Sorry, an error occurred)_. _(Please try again later)_.</p>";
+      $('#pleaseWait').hide().html(msg).fadeIn('fast');
+      $('input[value="_(Uploading)_..."]').val("_(Upload)_").prop('disabled',false);
+    });
+  });
+}
+$(function() {
+  $.getJSON('https://keys.lime-technology.com/account/hwprofile/status',{keyfile:'<?=$keyfile?>'},function(status) {
+    if (status.last_submitted) {
+      var d = new Date(status.last_submitted * 1000);
+      $('#lastUploaded').html("_(Your hardware profile was last submitted on)_ " + d.toLocaleDateString()).fadeIn('fast');
+    } else {
+      $('#lastUploaded').html("_(You haven't sent Limetech your hardware profile yet)_").fadeIn('fast');
+    }
+  });
+});
+</script>
+_(This utility is used for troubleshooting purposes)_. _(It will collect all of the system hardware information, remove any serial numbers, and securely upload it to LimeTech)_.
+
+<div id="hw_details">
+<pre style="display:none;max-height:300px;overflow-y:auto"></pre>
+<a href="#" onclick="toggle_hw();return false;">_(Show Details)_</a>
+</div>
+
+*_(No personal information such as user names, passwords, or any other file contents is included in the hardware profile)_.*
+
+<div id="lastUploaded" style="color:grey"></div>
+
+<input type="button" value="_(Upload)_" onclick="upload()"><input type="button" value="_(Done)_" onclick="done()">
+
+<br><div id="pleaseWait" style="display:none;font-weight:bold;color:blue;text-align:center">_(Please wait)_... _(uploading hardware information)_ (_(this may take several minutes)_)</div>

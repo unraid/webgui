@@ -1,0 +1,23 @@
+#!/bin/bash
+#
+# This file provides the command line for the setterm utility to set the
+# terminal attributes (primarily used for screen blanking and power
+# management).
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+# Read Unraid config file and set timout or fall back to default
+SCREEN_BLANK=$(grep "screen_blank" /boot/config/plugins/dynamix/dynamix.cfg 2>/dev/null | cut -d'=' -f2 | sed 's/"//g')
+if [[ $SCREEN_BLANK =~ ^[0-9]+$ ]]; then
+  setterm --blank $SCREEN_BLANK --powersave off
+elif [[ $SCREEN_BLANK == disabled ]]; then
+  setterm --blank=0 --powersave off
+else
+  # Screen blanks after 15 minutes idle time, and powers down in one hour
+  # if the kernel supports APM or ACPI power management (default setting):
+  setterm --blank 15 --powersave powerdown --powerdown 60
+fi
+
+# Screen does not blank or use power management features:
+#setterm -blank 0 -powersave off -powerdown 0

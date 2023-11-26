@@ -1,0 +1,176 @@
+Menu="UserList"
+Title="Add User"
+Tag="user"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$void = "<img src='/webGui/images/user.png' width='48' height='48' onclick='$(&quot;#drop&quot;).click()' style='cursor:pointer' title='"._('Click to select PNG file')."'>";
+$icon = "<i class='fa fa-trash top' title='"._('Restore default image')."' onclick='restore()'></i>";
+$zxcvbn = file_exists('/boot/config/plugins/dynamix/zxcvbn.js');
+?>
+<script src="<?autov('/webGui/javascript/jquery.filedrop.js')?>"></script>
+<?if ($zxcvbn):?>
+<script src="<?autov('/boot/config/plugins/dynamix/zxcvbn.js')?>" async></script>
+<?endif;?>
+<script>
+var path = '/boot/config/plugins/dynamix/users';
+var filename = '';
+
+function base64(str) {
+  return window.btoa(unescape(encodeURIComponent(str)));
+}
+function showPassword() {
+  if ($('#showPass').hasClass('checked')) {
+    $('#showPass').removeClass('checked fa-eye-slash').addClass('fa-eye');
+    var type = 'password';
+  } else {
+    $('#showPass').addClass('checked fa-eye-slash').removeClass('fa-eye');
+    var type = 'text';
+  }
+  $('input[name="userPasswordGUI"]').attr('type',type);
+  $('input[name="userPasswordConfGUI"]').attr('type',type);
+}
+function checkUsername(form) {
+  var username = form.userName.value.trim();
+  if (!username.match('^[a-z_][a-z0-9_-]*[$]?$')) {
+    $('input[name="cmdUserEdit"]').val("_(Add)_");
+    swal({title:"_(Invalid user name)_",text:"_(Use only lowercase letters, digits, underscores and dashes)_",type:"error",html:true,confirmButtonText:"_(Ok)_"});
+		
+    return false;
+  }
+  if (form.userPasswordGUI.value.length > 128 || form.userPasswordConfGUI.value.length > 128) {
+    swal({title:"_(Password too long)_",text:"_(Use a password up to 128 characters)_",type:"error",html:true,confirmButtonText:"_(Ok)_"});
+    return false;
+  }
+  if (filename) {
+    $.post("/webGui/include/FileUpload.php",{cmd:'save',path:path,filename:filename,output:username+'.png'});
+  }
+  form.userPassword.value = base64(form.userPasswordGUI.value);
+  form.userPasswordConf.value = base64(form.userPasswordConfGUI.value);
+  form.userPasswordGUI.disabled = true;
+  form.userPasswordConfGUI.disabled = true;
+  return true;
+}
+function validatePassword(input) {
+<?if ($zxcvbn):?>
+  var custom = ['unraid','limetech','lime-technology','bergware','squidly'];
+  var strength = ['Worst','Bad','Weak','Good','Strong'];
+  var emoji = ['&#128565;','&#128553;','&#128532;','&#128512;','&#128526;'];
+  if (!input) {
+    $('#strength-bar').css('background-color','transparent');
+    $('#strength-text').html('');
+    $('.usage-disk.sys').addClass('none');
+  } else {
+    var bar = zxcvbn(input,custom);
+    switch (bar.score) {
+      case 0: $('#strength-bar').css('background-color','red'); break;
+      case 1: $('#strength-bar').css('background-color','yellow'); break;
+      case 2: $('#strength-bar').css('background-color','orange'); break;
+      case 3: $('#strength-bar').css('background-color','blue'); break;
+      case 4: $('#strength-bar').css('background-color','green'); break;
+    }
+    $('#strength-bar').css('width',Math.min(input.length*100/64,100)+'%');
+    $('#strength-text').html(emoji[bar.score]+' '+strength[bar.score]+'. '+bar.feedback.warning);
+    $('.usage-disk.sys').removeClass('none');
+  }
+<?endif;?>
+}
+function restore() {
+  // restore original image
+  $('#dropbox').html("<?=$void?>");
+  filename = '';
+}
+$(function(){
+  var dropbox = $('#dropbox');
+  // attach the drag-n-drop feature to the 'dropbox' element
+  dropbox.filedrop({
+    maxfiles:1,
+    maxfilesize:512, // KB
+    url:'/webGui/include/FileUpload.php',
+    data:{path:path,"csrf_token":"<?=$var['csrf_token']?>"},
+    beforeEach:function(file) {
+      if (!file.type.match(/^image\/png/)) {
+        swal({title:"Warning",text:"Only PNG images are allowed!",type:"warning",html:true,confirmButtonText:"_(Ok)_"});
+        return false;
+      }
+    },
+    error: function(error, file, i) {
+      switch (error) {
+      case 'BrowserNotSupported':
+        swal({title:"_(Browser error)_",text:"_(Your browser does not support HTML5 file uploads)_!",type:"error",html:true,confirmButtonText:"_(Ok)_"});
+        break;
+      case 'TooManyFiles':
+        swal({title:"_(Too many files)_",text:"_(Please select one file only)_!",type:"error",html:true});
+        break;
+      case 'FileTooLarge':
+        swal({title:"_(File too large)_",text:"_(Maximum file upload size is 512K)_ (524,288 _(bytes)_)",type:"error",html:true,confirmButtonText:"_(Ok)_"});
+        break;
+      }
+    },
+    uploadStarted:function(i,file,count) {
+      var image = $('img', $(dropbox));
+      var reader = new FileReader();
+      image.width = 48;
+      image.height = 48;
+      reader.onload = function(e){image.attr('src',e.target.result);};
+      reader.readAsDataURL(file);
+    },
+    uploadFinished:function(i,file,response) {
+      if (response == 'OK 200') {
+        if (!filename) $(dropbox).append("<?=$icon?>");
+        $('input[name="userDesc"]').trigger('change');
+        filename = file.name;
+      } else {
+        swal({title:"_(Upload error)_",text:response,type:"error",html:true,confirmButtonText:"_(Ok)_"});
+      }
+    }
+  });
+  // simulate a drop action when manual file selection is done
+  $('#drop').bind('change', function(e) {
+    var files = e.target.files;
+    if ($('#dropbox').triggerHandler({type:'drop',dataTransfer:{files:files}})==false) e.stopImmediatePropagation();
+  });
+});
+</script>
+
+<form markdown="1" name="user_edit" method="POST" action="/update.htm" target="progressFrame" onsubmit="return checkUsername(this)">
+_(User name)_:
+: <input type="text" name="userName" maxlength="40" onKeyUp="this.form.cmdUserEdit.disabled=(this.form.userName.value=='')">
+
+:user_add_username_help:
+
+_(Description)_:
+: <input type="text" name="userDesc" maxlength="64" pattern='[^&:"]*'>
+
+:user_add_description_help:
+
+_(Custom image)_:
+: <span id="dropbox"><?=$void?></span><em>_(Drag-n-drop a PNG file or click the image at the left)_</em><input type="file" id="drop" accept="image/png" style="display:none">
+
+:user_add_custom_image_help:
+
+_(Password)_:
+<input type="hidden" name="userPassword" value="">
+: <input type="password" name="userPasswordGUI" maxlength="129" autocomplete="new-password" onKeyUp="validatePassword(this.value);this.form.cmdUserEdit.disabled=(this.form.userName.value=='' || this.form.userPasswordGUI.value!=this.form.userPasswordConfGUI.value)">
+  <i id="showPass" class="fa fa-eye" style="cursor:pointer" title="_(Show / Hide password)_" onclick="showPassword()"></i><span><span class="usage-disk sys none"><span id="strength-bar" style="width:0"></span><span></span></span><span id="strength-text"></span></span>
+
+:user_password_help:
+
+_(Retype password)_:
+<input type="hidden" name="userPasswordConf" value="">
+: <input type="password" name="userPasswordConfGUI" maxlength="129" autocomplete="new-password" onKeyUp="this.form.cmdUserEdit.disabled=(this.form.userName.value=='' || this.form.userPasswordGUI.value!=this.form.userPasswordConfGUI.value)">
+
+&nbsp;
+: <input type="submit" name="cmdUserEdit" value="_(Add)_" onclick="this.value='Add'" disabled><input type="button" value="_(Done)_" onclick="done('UserAdd')">
+</form>

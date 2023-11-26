@@ -1,0 +1,35 @@
+#!/bin/bash
+# Copyright 2021 Lime Technology, Inc.
+
+# Unraid OS upgrade script.
+# Invoked early in emhttpd execution.
+
+# Ensure we have a case model
+CFG=/boot/config/plugins/dynamix/case-model.cfg
+[[ -s "$CFG" ]] || echo -n "mid-tower" > $CFG
+
+# Multipool upgrade
+# extract 'cache' vars from disk.cfg into separate pools/cache.cfg
+SRC=/boot/config/disk.cfg
+TAR=/boot/config/pools/cache.cfg
+
+if [[ -f $SRC ]] && grep -q 'diskFsType.0' $SRC ; then
+  mv $SRC $SRC.bak
+  if [[ ! -e $TAR ]] && grep -q '^cache' $SRC.bak ; then
+    grep '^cache' $SRC.bak | grep -v 'AFP' | sed s/^cache/disk/ > $TAR
+    echo 'diskExportNFSFsid="10"' >> $TAR
+  fi
+  egrep -v '^cache|AFP|diskComment.0|diskFsType.0|diskComment.29|diskFsType.29' $SRC.bak > $SRC
+  for I in {1..28} ; do
+    grep -q "diskExportNFS.$I=" $SRC.bak && echo "diskExportNFSFsid.$I=\"$(($I+10))\"" >> $SRC
+  done
+fi
+
+# remove previous auto-populated docker template descriptions
+/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/fixDescriptions
+
+# stating with 6.10 'USE_SSL="auto"' without a LE cert is invalid
+[[ ! -f /boot/config/ssl/certs/certificate_bundle.pem ]] && sed -i s/USE_SSL=\"auto\"/USE_SSL=\"no\"/ /boot/config/ident.cfg
+
+# delete any temp dir left over from a version downgrade (see dynamix.plugin.manager/include/Downgrade.php)
+rm -rf /boot/deletemedowngrade.*

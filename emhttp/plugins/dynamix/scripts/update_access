@@ -1,0 +1,57 @@
+#!/bin/bash
+
+CONF=/etc/ssh/sshd_config
+INET=/etc/inetd.conf
+SERV=/etc/services
+
+# read settings
+if [[ -a /boot/config/ident.cfg ]]; then
+  source <(/usr/bin/fromdos < /boot/config/ident.cfg)
+fi
+
+# preset default values
+[[ -z $USE_TELNET ]] && USE_TELNET=no
+[[ -z $PORTTELNET ]] && PORTTELNET=23
+[[ -z $USE_SSH ]] && USE_SSH=no
+[[ -z $PORTSSH ]] && PORTSSH=22
+[[ -z $USE_UPNP ]] && USE_UPNP=no
+
+# update SSH listening port
+if [[ $PORTSSH == 22 ]]; then
+  sed -ri 's/^#?Port [0-9]+$/#Port 22/' $CONF
+else
+  sed -ri "s/^#?Port [0-9]+\$/Port ${PORTSSH}/" $CONF
+fi
+
+# enable/disable SSH service
+if [[ $USE_SSH == yes ]]; then
+  if [[ -r /var/run/sshd.pid ]]; then
+    /etc/rc.d/rc.sshd restart >/dev/null
+  else
+    /etc/rc.d/rc.sshd start >/dev/null
+  fi
+else
+  /etc/rc.d/rc.sshd stop >/dev/null
+fi
+
+# enable/disable UPnP function
+if [[ $USE_UPNP == yes ]]; then
+  [[ ! -x /usr/bin/upnpc ]] && chmod +x /usr/bin/upnpc
+else
+  [[ -x /usr/bin/upnpc ]] && chmod -x /usr/bin/upnpc
+fi
+
+# update TELNET listening port
+sed -ri "s/^(telnet\s+)[0-9]+\/(tcp|udp)\$/\1${PORTTELNET}\/\2/" $SERV
+
+# bind/unbind TELNET service
+if [[ -n $IPV4 ]]; then
+  BIND="$IPV4:"
+fi
+# enable/disable TELNET service
+if  [[ $USE_TELNET == yes ]]; then
+  sed -ri "s/^#?(.+:)?(telnet\s.+telnetd\$)/${BIND}\2/" $INET
+else
+  sed -ri 's/^#?(.+:)?(telnet\s.+telnetd$)/#\2/' $INET
+fi
+/etc/rc.d/rc.inetd restart >/dev/null

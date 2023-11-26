@@ -1,0 +1,57 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginHelpers.php";
+
+$type    = $argv[1]??'';   // plugin or language
+$method  = $argv[2]??'';   // install, update, remove, check
+$name    = $argv[3]??'';   // plugin name (*.plg) or language name (*.xml)
+
+$plugin  = "/boot/config/plugins/$name";
+$pending = "/tmp/plugins/pluginPending";
+$unraid  = ['unRAIDServer.plg','unRAIDServer-.plg'];
+
+// set pending status
+if (!is_dir($pending)) mkdir($pending);
+if ($method != 'check') file_put_contents("$pending/$name",$method);
+
+switch ($type) {
+case 'plugin':
+  switch ($method) {
+  case 'update':
+    // implicit validation on plugin update (not applicable to OS updates)
+    if (in_array($name, $unraid)) break;
+    if (@readlink("/var/log/plugins/$name")) plugin('check', $name);
+    break;
+  case 'check':
+    // validate plugin update (not applicable to OS updates)
+    if (in_array($name, $unraid)) break;
+    $new_plugin = "/tmp/plugins/$name";
+    if (plugin('version', $new_plugin) > plugin('version', $plugin)) {
+      echo "Validating $name update\n";
+      if (($status = plugin('validate', $new_plugin)) != 'valid') {
+        echo "$status\n";
+        // restore original plugin and undo update
+        copy($plugin, $new_plugin);
+      }
+    }
+    break;
+  }
+  break;
+case 'language':
+  // nothing defined
+  break;
+}
+?>

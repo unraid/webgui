@@ -1,0 +1,18 @@
+#!/bin/bash
+
+CALLER="show"
+
+# library functions
+. /etc/rc.d/rc.library.source
+
+# include IP addresses?
+if check && [[ $1 == ip ]]; then
+  ip=()
+  for net in $bind; do
+    ip+=("$net#[$(show -4 dev $net)#$(show -6 dev $net)]")
+  done
+  bind=${ip[@]}
+fi
+
+# return list
+echo ${bind// /, }

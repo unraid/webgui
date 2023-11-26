@@ -1,0 +1,63 @@
+#!/bin/bash
+#
+# script: rc.4
+#
+# This file is executed by init(8) when the system is being initialized for run level 4 (XDM)
+#
+# Version: 2.00  02/17/93
+#
+# Author:  Fred N. van Kempen, <waltje@uwalt.nl.mugnet.org>
+#          At least 47% rewritten by: Patrick J. Volkerding <volkerdi@slackware.com>
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+# Tell the viewers what's going to happen...
+echo "Starting up X11 session manager..."
+
+# If you'd like to start something different or in a different order than
+# the options below, create your own startup script /etc/rc.d/rc.4.local
+# and make it executable and it will be used instead:
+if [[ -x /etc/rc.d/rc.4.local ]]; then
+  exec /bin/bash /etc/rc.d/rc.4.local
+fi
+
+# Try to use GNOME's gdm session manager.  This comes first because if
+# gdm is on the machine then the user probably installed it and wants
+# to use it by default:
+if [[ -x /usr/bin/gdm ]]; then
+  exec /usr/bin/gdm
+fi
+
+# Someone thought that gdm looked prettier in /usr/sbin,
+# so look there, too:
+if [[ -x /usr/sbin/gdm ]]; then
+  exec /usr/sbin/gdm
+fi
+
+# Not there?  OK, try to use KDE's kdm session manager:
+if [[ -x /opt/kde/bin/kdm ]]; then
+  exec /opt/kde/bin/kdm -nodaemon
+elif [[ -x /usr/bin/kdm ]]; then
+  exec /usr/bin/kdm -nodaemon
+fi
+
+# Look for SDDM as well:
+if [[ -x /usr/bin/sddm ]]; then
+  exec /usr/bin/sddm
+fi
+
+# If all you have is XDM, I guess it will have to do:
+if [[ -x /usr/bin/xdm ]]; then
+  exec /usr/bin/xdm -nodaemon
+elif [[ -x /usr/X11R6/bin/xdm ]]; then
+  exec /usr/X11R6/bin/xdm -nodaemon
+fi
+
+# error
+echo
+echo "Hey, you don't have SDDM, KDM, GDM, or XDM.  Can't use runlevel 4 without"
+echo "one of those installed."
+sleep 30
+
+# All done.

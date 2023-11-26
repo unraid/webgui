@@ -1,0 +1,116 @@
+#!/bin/bash
+#Copyright 2005-2021, Lime Technology
+#License: GPLv2 only
+
+# mount_image filepath mountpoint size
+
+# If filepath ends in ".img" extension, we (first create if necessary and then) mount filepath
+# as a loopback filesystem.  For create, size is the initial size in GiB to fallocate for filepath,
+# subsequently, size indicates a possibly larger size to extend filepath.  filepath is then
+# mounted onto mountpoint.
+
+# The filesystem created when we create a loopback file specified using a filename suffix.  If
+# suffix is "-xfs" then we create xfs filesystem.  If no suffix or suffix is "-btrfs" then we
+# create a btrfs filesystem.
+
+# If filepath does not end in ".img" extension, we assume filepath refers to a directory which
+# we will bind-mount onto mountpath.  The size parameter is not required in this case.
+
+FILEPATH=$1
+FILESIZE=$3
+MOUNTPOINT=$2
+
+# if filepath does not end in .img then this is a directory to be bind-mounted.
+if [[ "${FILEPATH:(-4)}" != ".img" ]]; then
+  if ! mkdir -p "$FILEPATH" 2>/dev/null ; then
+    echo "Cannot create '$FILEPATH' or is not a directory"
+    exit 1
+  fi
+  # if filepath is located on a "user share" dereference to get real device path
+  DISK=$(getfattr -n system.LOCATION --only-values --absolute-names "$FILEPATH" 2>/dev/null)
+  if [[ $DISK != "" ]]; then
+    FILEPATH=${FILEPATH/user/$DISK}
+  fi
+  mount --bind "$FILEPATH" "$MOUNTPOINT"
+  exit
+fi
+
+# if filepath ends in .img then file name suffix indicates xfs or btrfs
+if [[ "${FILEPATH:(-8)}" = "-xfs.img" ]]; then
+  MAKEFS="mkfs.xfs -n ftype=1"
+  GROWFS="xfs_growfs"
+  MOUNTFS="mount -o noatime"
+else
+  MAKEFS="mkfs.btrfs"
+  GROWFS="btrfs filesystem resize max"
+  MOUNTFS="mount -o noatime,space_cache=v2"
+fi
+
+# if no image file we'll create one
+if [[ ! -e "$FILEPATH" ]]; then
+  echo "Creating new image file: '$FILEPATH' size: ${FILESIZE}G"
+  # ensure parent path exists
+  mkdir -p "$(dirname "$FILEPATH")"
+  # create 0-length file so we can set NOCOW attribute on the new file and then extend size of file
+  touch "$FILEPATH"
+  # if image file is located on a "user share" dereference to get real device path
+  DISK=$(getfattr -n system.LOCATION --only-values --absolute-names "$FILEPATH" 2>/dev/null)
+  if [[ $DISK != "" ]]; then
+    FILEPATH=${FILEPATH/user/$DISK}
+  fi
+  # setting NOCOW attribute will fail if not btrfs/xfs, but so what?
+  chattr +C "$FILEPATH" 2>/dev/null
+  # try to use fallocate first
+  if ! fallocate -l ${FILESIZE}G "$FILEPATH" 2>/dev/null ; then
+    # try truncate
+    if ! truncate -s +${FILESIZE}G "$FILEPATH" 2>/dev/null ; then
+      echo "failed to create image file"
+      rm -f "$FILEPATH" 2>/dev/null
+      exit 1
+    fi
+  fi
+  # set ownership
+  chown nobody:users "$FILEPATH"
+  # create file system in the image file
+  if ! $MAKEFS "$FILEPATH" ; then
+    echo "failed to create file system"
+    rm -f "$FILEPATH" 2>/dev/null
+    exit 1
+  fi
+  # mount
+  if ! $MOUNTFS "$FILEPATH" "$MOUNTPOINT" ; then
+    echo "mount error"
+    rm -f "$FILEPATH" 2>/dev/null
+    exit 1
+  fi
+else
+  # exists, check that it's a regular file
+  if [[ ! -f "$FILEPATH" ]]; then
+    echo "'$FILEPATH' is not a file"
+    exit 1
+  fi
+  # check that the file is not already in-use (or being moved by 'mover')
+  if /usr/local/sbin/in_use "$FILEPATH" ; then
+    echo "'$FILEPATH' is in-use, cannot mount"
+    exit 1
+  fi
+  # if image file is located on a "user share" dereference to get real device path
+  DISK=$(getfattr -n system.LOCATION --only-values --absolute-names "$FILEPATH" 2>/dev/null)
+  if [[ $DISK != "" ]]; then
+    FILEPATH=${FILEPATH/user/$DISK}
+  fi
+  # (maybe) extend file size
+  # try to use fallocate first, will never make the file smaller
+  if ! fallocate -l ${FILESIZE}G "$FILEPATH" 2>/dev/null ; then
+    # try truncate
+    truncate -s \>${FILESIZE}G "$FILEPATH"
+  fi
+  # mount
+  if ! $MOUNTFS "$FILEPATH" "$MOUNTPOINT" ; then
+    echo "mount error"
+    exit 1
+  fi
+  # (maybe) extend file system size
+  $GROWFS "$MOUNTPOINT"
+fi
+exit 0

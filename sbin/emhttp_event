@@ -1,0 +1,105 @@
+#!/bin/bash
+#Copyright 2005-2016, Lime Technology
+#License: GPLv2 only
+
+# emhttp_event script (a work in process).
+
+# This script is called by the emhttp process as a result of various events that take place.
+# The /var/local/emhttp/*.ini files are updated immediately preceeding each event.
+# Caution: the 'emhttp' process will hang until this script completes!
+
+# The first argument to the script is a string indicating the event:
+
+# driver_loaded
+#   Occurs early in emhttp initialization.
+#   Can also occur as a result of init-config and device slot change.
+#   Status information is valid.
+
+# starting
+#   Occurs at beginning of cmdStart execution
+
+# array_started
+#   Occurs during cmdStart execution.
+#   The 'md' devices are valid.
+
+# disks_mounted
+#   Occurs during cmdStart execution.
+#   The disks and user shares (if enabled) are mounted.
+
+# svcs_restarted
+#   Occurs during cmdStart execution.
+#   Occurs as a result of changing/adding/deleting a share.
+#   The network services are started and may be exporting different share(s).
+
+# docker_started
+#   Occurs during cmdStart execution.
+#   The docker service is enabled and started.
+
+# libvirt_started
+#   Occurs during cmdStart execution.
+#   The libvirt service is enabled and started.
+
+# started
+#   Signals end of cmdStart execution.
+
+# stopping
+#   Occurs at beginning of cmdStop execution
+
+# stopping_libvirt
+#   Occurs during cmdStop execution.
+#   About to stop libvirt.
+
+# stopping_docker
+#   Occurs during cmdStop execution.
+#   About to stop docker.
+
+# stopping_svcs
+#   Occurs during cmdStop execution.
+#   About to stop network services.
+
+# unmounting_disks
+#   Occurs during cmdStop execution.
+#   The network services have been stopped, about to unmount the disks and user shares.
+#   The disks have been spun up and a "sync" executed, but no disks un-mounted yet.
+
+# stopping_array
+#   Occurs during cmdStop execution.
+#   The disks and user shares have been unmounted, about to stop the array.
+
+# stopped
+#   Occurs at end of cmdStop execution, or if cmdStart failed.
+#   The array has been stopped.
+
+# poll_attributes
+#   Occurs after each time emhttp polls disk SMART data.
+#   Note that if array is not Started, emhttp will not spin down any disk, but emhttp will
+#   still poll SMART data (for spun-up devices) and generate this event.
+
+# heartbeat
+#   Occurs once per second.
+
+# Invoke all 'any_event' scripts that might exist
+for Dir in /usr/local/emhttp/plugins/* ; do
+  if [ -d $Dir/event/any_event ]; then
+    for File in $Dir/event/any_event/* ; do
+      if [ -x $File ]; then
+      	$File "$@"
+      fi
+    done
+  elif [ -x $Dir/event/any_event ]; then
+    $Dir/event/any_event "$@"
+  fi
+done
+
+# Invoke specific event scripts that might exist for this event
+for Dir in /usr/local/emhttp/plugins/* ; do
+  if [ -d $Dir/event/$1 ]; then
+    for File in $Dir/event/$1/* ; do
+      if [ -x $File ]; then
+      	$File "$@"
+      fi
+    done
+  elif [ -x $Dir/event/$1 ]; then
+    $Dir/event/$1 "$@"
+  fi
+done

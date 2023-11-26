@@ -1,0 +1,48 @@
+Menu="Buttons:1"
+Title="Switch Language"
+Icon="icon-u-switch"
+Code="e982"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?if (count(glob('/var/log/plugins/lang-*.xml'))==0):?>
+<style>
+.nav-item.LanguageButton{display:none}
+</style>
+<?endif;?>
+
+<script>
+function LanguageButton() {
+  var locale = '<?=$locale?>';
+  // reset dashboard tiles when switching language
+  if (locale != ($.cookie('locale')||'')) {
+    $.removeCookie('db-box1');
+    $.removeCookie('db-box2');
+    $.removeCookie('db-box3');
+    $.removeCookie('inactive_content');
+    $.removeCookie('hidden_content');
+  }
+  if (locale) {
+    $.cookie('locale',locale);
+    switchLanguage('');
+  } else {
+    locale = $.cookie('locale');
+    $.removeCookie('locale');
+    switchLanguage(locale);
+  }
+}
+
+function switchLanguage(lang) {
+  $.post('/webGui/include/LanguageReset.php',{lang:lang},function(){location.reload();});
+}
+</script>

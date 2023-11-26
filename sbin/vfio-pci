@@ -1,0 +1,48 @@
+#!/bin/bash
+# limetech - wrapper for Andre Ritchter's vfio-bind script:
+# https://github.com/andre-richter/vfio-pci-bind/blob/master/vfio-pci-bind.sh
+# additional changes by ljm42
+#
+# Invoked early in startup before any devices are bound.
+# Devices are specified in /boot/config/vfio-pci.cfg:
+# BIND=<Vendor:Device>|<Domain:Bus:Device.Function> <Vendor:Device>|<Domain:Bus:Device.Function>
+#
+# Order does not matter. If both are provided, must be separated by "|".
+# Multiple entries must be separated by space.
+#
+
+# Invoke script for each device referenced via /boot/config/vfio-pci.cfg
+# Accept string enclosed in quotes or not
+CFG=/boot/config/vfio-pci.cfg
+
+[[ ! -f "$CFG" ]] && exit
+grep -q "^BIND=" "$CFG" || exit
+echo "Loading config from $CFG"
+cat $CFG
+echo "---"
+
+if [[ ! "$(ls -A /sys/kernel/iommu_groups/)" ]]; then
+    echo "Error: IOMMU not available"
+    exit 1
+fi
+
+while IFS='=' read -r name value
+do
+    [[ ! -z "$value" ]] && declare "${name}"="${value//\"}"
+done <<< $(/usr/bin/fromdos < $CFG)
+[[ -z "$BIND" ]] && exit
+
+for PARAM in $BIND
+do
+    while IFS='|' read -r arg1 arg2
+    do
+        echo "Processing $arg1 $arg2"
+        /usr/local/sbin/vfio-pci-bind.sh $arg1 $arg2
+        echo "---"
+    done <<< $PARAM
+done
+
+echo 'Devices listed in /sys/bus/pci/drivers/vfio-pci:'
+ls -l /sys/bus/pci/drivers/vfio-pci | egrep [[:xdigit:]]{4}:
+
+echo "vfio-pci binding complete"

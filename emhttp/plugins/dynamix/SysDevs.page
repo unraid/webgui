@@ -1,0 +1,84 @@
+Menu="UNRAID-OS"
+Title="System Devices"
+Icon="icon-hardware"
+Tag="server"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<script>
+$(function(){
+  $('#t1').load('/webGui/include/SysDevs.php',{table:'t1'});
+  $('#t2').load('/webGui/include/SysDevs.php',{table:'t2'});
+  $('#t3').load('/webGui/include/SysDevs.php',{table:'t3'});
+  $('#t4').load('/webGui/include/SysDevs.php',{table:'t4'});
+});
+function applyCfg() {
+  var message = "_(System Devices)_: _(A reboot is required to apply changes)_";
+  var string = "BIND=";
+  var elements = document.getElementById("vfiopci").elements;
+  for (var i = 0, element; element = elements[i++];) {
+    if (element.type === "checkbox"  && element.checked === true)
+    string = string + element.value + " ";
+  }
+  string = string.trim();
+  if (string === "BIND=") {
+    string = "";
+  }
+  $.get( "/plugins/dynamix/include/update.vfio-pci-cfg.php", { cfg: string } )
+  .done(function(d) {
+    if (d==1) {
+      addRebootNotice(message);
+      document.getElementById("warning").innerHTML = "<b>_(ALERT)_: _(Changes saved)_. _(Reboot to take effect)_.</b>";
+    } else {
+      removeRebootNotice(message);
+      document.getElementById("warning").innerHTML = "<b>_(No changes)_.</b>";
+    }
+    $("#applycfg").attr("disabled",true);
+  });
+}
+</script>
+
+<?exec('ls /sys/kernel/iommu_groups/',$groups); ?>
+<?if (count($groups) > 0):?>
+**_(PCI Devices and IOMMU Groups)_**
+<?else:?>
+**_(PCI Devices (No IOMMU Groups Available))_**
+<?endif;?>
+
+:sysdevs_iommu_groups_help:
+
+<?if (strpos(file_get_contents('/proc/cmdline'), 'pcie_acs_override=') !== false):?>
+<p class="notice" style="line-height:30px;height:auto">_(Warning)_: _(Your system has booted with the PCIe ACS Override setting enabled)_. _(The below list doesn't not reflect the way IOMMU would naturally group devices)_.<br>
+<?=my_hyperlink(_("To see natural IOMMU groups for your hardware, go to the [VM Manager] page and set the **PCIe ACS override** setting to **Disabled**"),'/Settings/VMSettings')?>.</p>
+<?endif;?>
+
+<pre><form id="vfiopci" class="js-confirm-leave" onsubmit="return false"><table id='t1' class='pre'><tr><td><div class="spinner"></div></td></tr></table></form></pre><br>
+
+**_(CPU Thread Pairings)_**
+
+:sysdevs_thread_pairings_help:
+
+<pre><table id='t2' class='pre'><tr><td><div class="spinner"></div></td></tr></table></pre><br>
+
+**_(USB Devices)_**
+
+:sysdevs_usb_devices_help:
+
+<pre><table id='t3' class='pre'><tr><td><div class="spinner"></div></td></tr></table></pre><br>
+
+**_(SCSI Devices)_**
+
+:sysdevs_scsi_devices_help:
+
+<pre><table id='t4' class='pre'><tr><td><div class="spinner"></div></td></tr></table></pre>
+<input type="button" value="_(Done)_" onclick="done()">

@@ -1,0 +1,183 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/Wrappers.php";
+
+$var   = (array)@parse_ini_file("/var/local/emhttp/var.ini");
+$disks = (array)@parse_ini_file("/var/local/emhttp/disks.ini",true);
+
+require_once "$docroot/webGui/include/CustomMerge.php";
+
+$script = "$docroot/webGui/scripts/notify";
+extract(parse_plugin_cfg("dynamix",true));
+$output = _var($notify,'report');
+$server = strtoupper(_var($var,'NAME','tower'));
+$data   = [];
+$parity = $pools = false;
+$error0 = $error1 = $error2 = $error3 = 0;
+
+function plus($val, $word, $last) {
+  return $val>0 ? (($val || $last) ? ($val.' '.$word.($val!=1?'s':'').($last ?'':', ')) : '') : '';
+}
+function my_temp($value) {
+  global $display;
+  if ($value=='*') return ' - standby';
+  $unit = _var($display,'unit','C');
+  return ' - active '.($unit=='F' ? round(9/5*$value+32) : str_replace('.',_var($display,'number','.,')[0], $value)).' '.$unit;
+}
+function my_disk($name) {
+  return ucfirst(preg_replace('/(\d+)$/',' $1',$name));
+}
+function my_scale($value, &$unit, $precision = NULL) {
+  global $display;
+  $scale = _var($display,'scale',-1);
+  $number = _var($display,'number','.,');
+  $units = ['B','KB','MB','GB','TB','PB'];
+  if ($scale==0 && $precision===NULL) {
+    $unit = '';
+    return number_format($value, 0, $number[0], ($value>=10000 ? $number[1] : ''));
+  } else {
+    $base = $value ? floor(log($value, 1000)) : 0;
+    if ($scale>0 && $base>$scale) $base = $scale;
+    $value = round($value/pow(1000, $base), $precision===NULL ? 2 : $precision);
+    if ($value>=1000 && $scale<0) { $value = 1; $base++; }
+    $unit = $units[$base];
+    return number_format($value, $precision===NULL ? (($value-intval($value)==0 || $value>=100) ? 0 : ($value>=10 ? 1 : 2)) : $precision, $number[0], ($value>=10000 ? $number[1] : ''));
+  }
+}
+function my_check($time,$speed) {
+  if (!$time) return 'unavailable (no parity-check entries logged)';
+  $days = floor($time/86400);
+  $hmss = $time-$days*86400;
+  $hour = floor($hmss/3600);
+  $mins = floor($hmss/60)%60;
+  $secs = $hmss%60;
+  return plus($days,'day',($hour|$mins|$secs)==0).plus($hour,'hour',($mins|$secs)==0).plus($mins,'minute',$secs==0).plus($secs,'second',true).". Average speed: $speed";
+}
+function my_time($time) {
+  global $display;
+  $date = my_date(_var($display,'date').(_var($display,'date')!='%c' ? ", "._var($display,'time') : ""), $time);
+  $now  = new DateTime("@".intval(time()/86400)*86400);
+  $last = new DateTime("@".intval($time/86400)*86400);
+  $days = date_diff($last,$now)->format('%a');
+  switch (true) {
+  case ($days<0):
+    return $date;
+  case ($days==0):
+    return "$date (today)";
+  case ($days==1):
+    return "$date (yesterday)";
+  default:
+    return "$date ($days days ago)";
+  }
+}
+function my_clock($time) {
+  if (!$time) return 'less than a minute';
+  $days = floor($time/1440);
+  $hour = floor($time/60)%24;
+  $mins = $time%60;
+  return plus($days,'day',($hour|$mins)==0).plus($hour,'hour',$mins==0).plus($mins,'minute',true);
+}
+
+function my_array(&$disk) {
+  global $data,$display,$error0,$error1,$error2,$error3;
+  $name = _var($disk,'name');
+  $max  = _var($disk,'maxTemp')>=0 ? $disk['maxTemp'] : (_var($display,'max')>=0 ? $display['max'] : 0);
+  $hot  = _var($disk,'hotTemp')>=0 ? $disk['hotTemp'] : (_var($display,'hot')>=0 ? $display['hot'] : 0);
+  if (strpos(_var($disk,'status'),'_NP')!==false) return false;
+  $temp = _var($disk,'temp');
+  if ($max>0 && $temp>=$max) {
+    $fail = ' (disk is overheated';
+    $error0++;
+  } elseif ($hot>0 && $temp>=$hot) {
+    $fail = ' (disk is hot';
+    $error1++;
+  } else {
+    $fail = '';
+  }
+  if (_var($disk,'numErrors',0)>0) {
+    if ($fail) $fail .= ', '; else $fail = ' (';
+    $fail .= 'disk has read errors';
+    $error2++;
+  }
+  if ($fail) $fail .= ')';
+  $status = $fail ? ' [NOK]' : ' [OK]';
+  $color = strtok(_var($disk,'color'),'-');
+  if ($color=='red'||$color=='yellow') {$error3++; $status = ' ['.str_replace(['NP_','_'],['',' '],_var($disk,'status')).']';}
+  $info = _var($disk,'id')." ("._var($disk,'device').")";
+  if ($info==" ()") $info = 'No device identification present';
+  $data[] = my_disk($name)." - $info".my_temp($temp).$fail.$status;
+  return true;
+}
+
+// generate report of array devices
+foreach ($disks as $disk) if (_var($disk,'type')=='Parity') $parity |= my_array($disk);
+foreach ($disks as $disk) if (_var($disk,'type')=='Data') my_array($disk);
+foreach ($disks as $disk) if (_var($disk,'type')=='Cache') $pools |= my_array($disk);
+
+$size = count($data);
+
+// generate parity report
+$data[]   = '';
+$mdResync = _var($var,'mdResync',0);
+$action   = preg_split('/\s+/',_var($var,'mdResyncAction'));
+if ($mdResync>0) {
+  $mdResyncPos = _var($var,'mdResyncPos',0);
+  $mdResyncDb  = _var($var,'mdResyncDb',0);
+  $mdResyncDt  = _var($var,'mdResyncDt',0);
+  switch ($action[0]) {
+    case "recon": $mode = $action[1]=='P' ? 'Parity-Sync' : 'Data-Rebuild'; break;
+    case "check": $mode = count($action)>1 ? 'Parity-Check' : 'Read-Check'; break;
+    case "clear": $mode = 'Disk-Clear'; break;
+    default     : $mode = 'Unknown'; break;
+  }
+  $data[] = $mode." in progress.";
+  $data[] = "Total size: ".my_scale($mdResync*1024, $unit)." $unit";
+  $data[] = "Elapsed time: ".my_clock(floor((time()-_var($var,'sbUpdated',0))/60));
+  $data[] = "Current position: ".my_scale($mdResyncPos*1024, $unit)." $unit (".number_format(($mdResyncPos/($mdResync/100+1)),1,$unraid['display']['number'][0],'')." %)";
+  $data[] = "Estimated speed: ".my_scale($mdResyncDb/$mdResyncDt*1024, $unit, 1)." $unit/sec";
+  $data[] = "Estimated finish: ".my_clock(round(((($mdResyncDt*(($mdResync-$mdResyncPos)/($mdResyncDb/100+1)))/100)/60),0));
+  $data[] = "Sync errors ".(_var($var,'mdResyncCorr',0)==0 ? 'detected: ' : 'corrected: ')._var($var,'sbSyncErrs',0);
+} else {
+  $sbSynced   = _var($var,'sbSynced',0);
+  $sbSynced2  = _var($var,'sbSynced2',0);
+  $sbSyncErrs = _var($var,'sbSyncErrs',0);
+  if (_var($var,'sbSyncExit',0)!=0) {
+    $data[] = "Last check incomplete on ".my_time($sbSynced2).", finding $sbSyncErrs error".($sbSyncErrs==1?'.':'s.');
+    $data[] = "Error code: ".$var['sbSyncExit'];
+  } elseif ($sbSynced==0) {
+    $data[] = "Parity has not been checked yet";
+  } elseif ($sbSynced2>0) {
+    if ($action[0]=='recon') {
+      $data[] = $action[1]=='P' ? 'Parity is invalid' : 'Data-Rebuild is invalid';
+    } else {
+      $data[] = 'Parity is valid';
+    }
+    $duration = Max($sbSynced2-$sbSynced,1);
+    $speed = my_scale(_var($var,'mdResyncSize',0)*1024/$duration,$unit,1)." $unit/s";
+    $data[] = "Last checked on ".my_time($sbSynced2).", finding $sbSyncErrs error".($sbSyncErrs==1?'.':'s.');
+    $data[] = "Duration: ".my_check($duration,$speed);
+  }
+}
+
+$word = $size==1 ? "" : "including ";
+$warn = ($error0 || $error3) ? "alert" : (($error1 || $error2) ? "warning" : "normal");
+$stat = $warn=="normal" ? "[PASS]" : "[FAIL]";
+$info = "Array has $size disk".($size==1 ? "" : "s").($parity ? " ({$word}parity".($pools ? " & pools)" : ")") : ($pools ? " ({$word}pools)" : ""));
+$message = implode('\n', $data);
+exec("$script -s ".escapeshellarg("Notice [$server] - array health report $stat")." -d ".escapeshellarg("$info")." -m ".escapeshellarg("$message")." -i ".escapeshellarg("$warn $output")." -l '/Main'");
+
+exit(0);
+?>

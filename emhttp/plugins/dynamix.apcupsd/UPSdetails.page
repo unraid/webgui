@@ -1,0 +1,33 @@
+Menu="UPSsettings"
+Title="UPS Details"
+Tag="battery-3"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ * Copyright 2015, Dan Landon.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<script>
+function getUPSstatus() {
+  $.post('/plugins/dynamix.apcupsd/include/UPSstatus.php',{level:<?=$cfg['BATTERYLEVEL']?>,runtime:<?=$cfg['MINUTES']?>},function(data) {
+    data = data.split('\n');
+    $('#ups_summary').html(data[0]);
+    $('#ups_status').html(data[1]);
+    setTimeout(getUPSstatus,3000);
+  });
+}
+$(getUPSstatus);
+</script>
+
+<table class="tablesorter shift">
+<thead><tr><th style="width:15%">_(Key)_</th><th style="width:35%">_(Value)_</th><th style="width:15%">_(Key)_</th><th style="width:35%">_(Value)_</th></tr></thead>
+<tbody id="ups_status"><tr><td colspan="4"><div class="spinner"></div></td></tr></tbody>
+</table>

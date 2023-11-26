@@ -1,0 +1,128 @@
+Menu="OtherSettings"
+Type="xmenu"
+Title="Global Share Settings"
+Icon="icon-share"
+Tag="share-alt"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$disabled = _var($var,'fsState')!='Stopped' ? 'disabled' : '';
+$disks    = array_filter($disks,'my_disks');
+$width    = [166,300];
+?>
+<script>
+$(function() {
+  $('#s1').dropdownchecklist({emptyText:"_(All)_", width:<?=$width[0]?>, explicitClose:"..._(close)_"});
+  $('#s2').dropdownchecklist({emptyText:"_(None)_", width:<?=$width[0]?>, explicitClose:"..._(close)_"});
+  presetShare(document.share_settings);
+});
+// Simulate the original input field
+function prepareShare(form) {
+  var include = '';
+  for (var i=0,item; item=form.shareUserInclude.options[i]; i++) {
+    if (item.selected) {
+      if (include.length) include += ',';
+      include += item.value;
+      item.selected = false;
+    }
+  }
+  item = form.shareUserInclude.options[0];
+  item.value = include;
+  item.selected = true;
+  var exclude = '';
+  for (var i=0,item; item=form.shareUserExclude.options[i]; i++) {
+    if (item.selected) {
+      if (exclude.length) exclude += ',';
+      exclude += item.value;
+      item.selected = false;
+    }
+  }
+  item = form.shareUserExclude.options[0];
+  item.value = exclude;
+  item.selected = true;
+}
+function presetShare(form,shares) {
+  var disabled = shares==null ? <?=$disabled ? 'true':'false'?> : shares=='-';
+  var onOff = disabled ? 'disable':'enable';
+  form.shareUserInclude.disabled = disabled;
+  form.shareUserExclude.disabled = disabled;
+  $('#s1').dropdownchecklist(onOff);
+  $('#s2').dropdownchecklist(onOff);
+}
+</script>
+<form markdown="1" name="share_settings" method="POST" action="/update.htm" target="progressFrame" onsubmit="prepareShare(this)">
+
+_(Enable disk shares)_:
+: <select name="shareDisk" <?=$disabled?>>
+  <?=mk_option($var['shareDisk'], "no", _('No'))?>
+  <?=mk_option($var['shareDisk'], "yes", _('Yes'))?>
+  <?=mk_option($var['shareDisk'], "auto", _('Auto'))?>
+  </select>
+
+:shares_enable_disk_help:
+
+_(Enable user shares)_:
+: <select name="shareUser" onchange="presetShare(this.form,this.value)" <?=$disabled?>>
+  <?=mk_option($var['shareUser'], "e", _('Yes'))?>
+  <?=mk_option($var['shareUser'], "-", _('No'))?>
+  </select>
+
+:shares_enable_shares_help:
+
+_(Included disk(s))_:
+: <select id="s1" name="shareUserInclude" multiple="multiple" style="display:none">
+  <?foreach ($disks as $disk):?>
+  <?=mk_option_luks(_var($disk,'name'),_var($var,'shareUserInclude'),strstr(_var($disk,'fsType'),':',true))?>
+  <?endforeach;?>
+  </select>
+
+:shares_included_disks_help:
+
+_(Excluded disk(s))_:
+: <select id="s2" name="shareUserExclude" multiple="multiple" style="display:none">
+  <?foreach ($disks as $disk):?>
+  <?=mk_option_luks(_var($disk,'name'),_var($var,'shareUserExclude'),strstr(_var($disk,'fsType'),':',true))?>
+  <?endforeach;?>
+  </select>
+
+:shares_excluded_disks_help:
+
+_(Permit exclusive shares)_:
+: <select name="shareUserExclusive" <?=$disabled?>>
+  <?=mk_option($var['shareUserExclusive'], "no", _('No'))?>
+  <?=mk_option($var['shareUserExclusive'], "yes", _('Yes'))?>
+  </select>
+
+:shares_exclusive_shares_help:
+
+_(Tunable (support Hard Links))_:
+: <select name="fuse_useino" <?=$disabled?>>
+  <?=mk_option($var['fuse_useino'], "no", _('No'))?>
+  <?=mk_option($var['fuse_useino'], "yes", _('Yes'))?>
+  </select>
+
+:shares_tunable_hard_links_help:
+
+_(Tunable (enable Direct IO))_:
+: <select name="fuse_directio" <?=$disabled?>>
+  <?=mk_option($var['fuse_directio'], "auto", _('Auto'))?>
+  <?=mk_option($var['fuse_directio'], "0", _('No'))?>
+  <?=mk_option($var['fuse_directio'], "1", _('Yes'))?>
+  </select>
+
+:shares_tunable_direct_io_help:
+
+&nbsp;
+: <input type="submit" name="changeShare" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()"><?if ($disabled):?>*_(Array must be **Stopped** to change)_*<?endif;?>
+</form>

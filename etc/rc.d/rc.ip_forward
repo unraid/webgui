@@ -1,0 +1,134 @@
+#!/bin/bash
+#
+# script: rc.ip_forward
+#
+# start/stop IP packet forwarding
+#
+# If you intend to run your Linux box as a router, i.e. as a
+# computer that forwards and redistributes network packets, you
+# will need to enable IP packet forwarding in your kernel.
+#
+# To activate IP packet forwarding at boot time, make this
+# script executable:  chmod 755 /etc/rc.d/rc.ip_forward
+#
+# To disable IP packet forwarding at boot time, make this
+# script non-executable:  chmod 644 /etc/rc.d/rc.ip_forward
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+SYSTEM="/proc/sys/net"
+SYSCTL="/etc/sysctl.conf"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+ip_forward_start(){
+  if [[ -f $SYSTEM/ipv4/ip_forward ]]; then
+    log "Activating IPv4 packet forwarding."
+    echo 1 >$SYSTEM/ipv4/ip_forward
+    # Changing /proc/sys/net/ipv4/ip_forward results in resetting all
+    # non-default ipv4 parameters for the interface as mentioned in
+    # /usr/src/linux/Documentation/networking/ip-sysctl.txt.  So, we
+    # will reapply any ipv4 sysctl parameters now:
+    if [[ -r $SYSCTL ]]; then
+      grep ipv4 $SYSCTL | sysctl -p - &>/dev/null
+    fi
+  fi
+  if [[ -f $SYSTEM/ipv6/conf/all/forwarding ]]; then
+    log "Activating IPv6 packet forwarding."
+    echo 1 >$SYSTEM/ipv6/conf/all/forwarding
+    # Changing /proc/sys/net/ipv6/conf/all/forwarding results in resetting
+    # all non-default ipv6 parameters for the interface as mentioned in
+    # /usr/src/linux/Documentation/networking/ip-sysctl.txt.  So, we
+    # will reapply any ipv6 sysctl parameters now:
+    if [[ -r $SYSCTL ]]; then
+      grep ipv6 $SYSCTL | sysctl -p - &>/dev/null
+    fi
+  fi
+  # When using IPv4 packet forwarding, you will also get the
+  # rp_filter, which automatically rejects incoming packets if the
+  # routing table entry for their source address doesn't match the
+  # network interface they're arriving on.  This has security
+  # advantages because it prevents the so-called IP spoofing,
+  # however it can pose problems if you use asymmetric routing
+  # (packets from you to a host take a different path than packets
+  # from that host to you) or if you operate a non-routing host
+  # which has several IP addresses on different interfaces.  To
+  # turn rp_filter off, uncomment the lines below:
+  # if [ -r $SYSTEM/ipv4/conf/all/rp_filter ]; then
+  #   log "Disabling rp_filter."
+  #   echo 0 >$SYSTEM/ipv4/conf/all/rp_filter
+  # fi
+}
+
+ip_forward_stop(){
+  if [[ -f $SYSTEM/ipv4/ip_forward ]]; then
+    log "Disabling IPv4 packet forwarding."
+    echo 0 >$SYSTEM/ipv4/ip_forward
+    # Changing /proc/sys/net/ipv4/ip_forward results in resetting all
+    # non-default ipv4 parameters for the interface as mentioned in
+    # /usr/src/linux/Documentation/networking/ip-sysctl.txt.  So, we
+    # will reapply any ipv4 sysctl parameters now:
+    if [[ -r $SYSCTL ]]; then
+      grep ipv4 $SYSCTL | sysctl -p - &>/dev/null
+    fi
+  fi
+  if [[ -f $SYSTEM/ipv6/conf/all/forwarding ]]; then
+    log "Disabling IPv6 packet forwarding."
+    echo 0 >$SYSTEM/ipv6/conf/all/forwarding
+    # Changing /proc/sys/net/ipv6/conf/all/forwarding results in resetting
+    # all non-default ipv6 parameters for the interface as mentioned in
+    # /usr/src/linux/Documentation/networking/ip-sysctl.txt.  So, we
+    # will reapply any ipv6 sysctl parameters now:
+    if [[ -r $SYSCTL ]]; then
+      grep ipv6 $SYSCTL | sysctl -p - &>/dev/null
+    fi
+  fi
+}
+
+ip_forward_restart(){
+  ip_forward_stop
+  sleep 1
+  ip_forward_start
+}
+
+ip_forward_status(){
+  if [[ -f $SYSTEM/ipv4/ip_forward ]]; then
+    if [[ $(cat $SYSTEM/ipv4/ip_forward) == 1 ]]; then
+      echo "IPv4 packet forwarding is enabled."
+    else
+      echo "IPv4 packet forwarding is disabled."
+    fi
+  else
+    echo "IPv4 packet forwarding is not present."
+  fi
+  if [[ -f $SYSTEM/ipv6/conf/all/forwarding ]]; then
+    if [[ $(cat $SYSTEM/ipv6/conf/all/forwarding) == 1 ]]; then
+      echo "IPv6 packet forwarding is enabled."
+    else
+      echo "IPv6 packet forwarding is disabled."
+    fi
+  else
+    echo "IPv6 packet forwarding is not present."
+  fi
+}
+
+case "$1" in
+'start')
+  ip_forward_start
+  ;;
+'stop')
+  ip_forward_stop
+  ;;
+'restart')
+  ip_forward_restart
+  ;;
+'status')
+  ip_forward_status
+  ;;
+*)
+  echo "Usage: $BASENAME start|stop|restart|status"
+  exit 1
+esac
+exit 0

@@ -1,0 +1,136 @@
+#!/bin/sh
+# Start/stop/restart the BIND name server daemon (named).
+
+# Start BIND. By default this will run with user "named". If you'd like to
+# change this or other options, see: /etc/default/named
+
+# You might also consider running BIND in a "chroot jail",
+# a discussion of which may be found in
+# /usr/doc/Linux-HOWTOs/Chroot-BIND-HOWTO.
+ 
+# One last note: rndc has a lot of other nice features that it is not
+# within the scope of this start/stop/restart script to support.
+# For more details, see "man rndc" or just type "rndc" to see the options.
+
+# Load command defaults:
+if [ -f /etc/default/named ] ; then . /etc/default/named ; fi
+if [ -f /etc/default/rndc ] ; then . /etc/default/rndc ; fi
+
+# In case /etc/default/named was missing, provide fallbacks:
+if [ -z "$NAMED_USER" ]; then
+  NAMED_USER="named"
+fi
+if [ -z "$NAMED_GROUP" ]; then
+  NAMED_GROUP="named"
+fi
+if [ -z "$NAMED_OPTIONS" ]; then
+  NAMED_OPTIONS="-u $NAMED_USER"
+fi
+
+# Sanity check. If /usr/sbin/named is missing then it
+# doesn't make much sense to try to run this script:
+if [ ! -x /usr/sbin/named ]; then
+  echo "/etc/rc.d/rc.bind:  no /usr/sbin/named found (or not executable); cannot start."
+  exit 1
+fi
+
+# Start BIND. As many times as you like. ;-)
+# Seriously, don't run "rc.bind start" if BIND is already
+# running or you'll get more than one copy running.
+bind_start() {
+  # Make sure /var/run/named exists:
+  mkdir -p /var/run/named
+  # Make sure that /var/run/named has correct ownership:
+  chown -R ${NAMED_USER}:${NAMED_GROUP} /var/run/named
+  # Make sure that /var/named has correct ownership:
+  chown -R ${NAMED_USER}:${NAMED_GROUP} /var/named
+  if [ -r /etc/rndc.key ]; then
+    # Make sure that /etc/rndc.key has correct ownership:
+    chown ${NAMED_USER}:${NAMED_GROUP} /etc/rndc.key
+  fi
+  # Start named:
+  if [ -x /usr/sbin/named ]; then
+    echo "Starting BIND:  /usr/sbin/named $NAMED_OPTIONS"
+    /usr/sbin/named $NAMED_OPTIONS
+    sleep 1
+  fi
+  # Make sure that named started:
+  if ! ps axc | grep -q named ; then
+    echo "WARNING:  named did not start."
+    echo "Attempting to start named again:  /usr/sbin/named $NAMED_OPTIONS"
+    /usr/sbin/named $NAMED_OPTIONS
+    sleep 1
+    if ps axc | grep -q named ; then
+      echo "SUCCESS:  named started."
+    else
+      echo "FAILED: Sorry, a second attempt to start named has also failed."
+      echo "There may be a configuration error that needs fixing. Good luck!"
+    fi
+  fi
+}
+
+# Stop all running copies of BIND (/usr/sbin/named):
+bind_stop() {
+  # If you've set up rndc, we can use this to make shutting down BIND faster.
+  # If you have /etc/rndc.conf, or you have /etc/rndc.key, or $RNDC_OPTIONS is
+  # not empty, we'll try it.
+  if [ -r /etc/rndc.conf -o -r /etc/rndc.key -o ! -z "$RNDC_OPTIONS" ]; then
+    if [ -z "$RNDC_OPTIONS" ]; then
+      echo "Stopping BIND:  /usr/sbin/rndc stop"
+    else
+      echo "Stopping BIND:  /usr/sbin/rndc $RNDC_OPTIONS stop"
+    fi
+    /usr/sbin/rndc $RNDC_OPTIONS stop
+    # Wait for up to $TIMEOUT seconds before moving on to try killall:
+    TIMEOUT=${TIMEOUT:-10}
+    while [ "$TIMEOUT" -gt "0" ]; do
+      # Exit the timeout loop if there are no named processes:
+      if ! ps axco command | grep -q -e "^named$"; then
+        break
+      fi
+      sleep 1
+      TIMEOUT=$(expr $TIMEOUT - 1)
+    done
+  fi
+  # Kill named processes if there are any running:
+  if ps axco command | grep -q -e "^named$"; then
+    echo "Stopping all named processes in this namespace:  /bin/killall -SIGTERM --ns \$\$ named"
+    /bin/killall -SIGTERM --ns $$ named 2> /dev/null
+  fi
+}
+
+# Reload BIND:
+bind_reload() {
+  /usr/sbin/rndc $RNDC_OPTIONS reload
+}
+
+# Restart BIND:
+bind_restart() {
+  bind_stop
+  bind_start
+}
+
+# Get BIND status:
+bind_status() {
+  /usr/sbin/rndc $RNDC_OPTIONS status
+}
+
+case "$1" in
+'start')
+  bind_start
+  ;;
+'stop')
+  bind_stop
+  ;;
+'reload')
+  bind_reload
+  ;;
+'restart')
+  bind_restart
+  ;;
+'status')
+  bind_status
+  ;;
+*)
+  echo "usage $0 start|stop|reload|restart|status"
+esac

@@ -1,0 +1,140 @@
+#!/bin/bash
+#
+# script: rc.avahidaemon
+#
+# Start/stop/restart the avahi daemon
+# This file is part of avahi.
+#
+# avahi is free software; you can redistribute it and/or modify it
+# under the terms of the GNU Lesser General Public License as
+# published by the Free Software Foundation; either version 2 of the
+# License, or (at your option) any later version.
+#
+# avahi is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
+# License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with avahi; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
+
+# LimeTech - 'status' modified to exit with correct status
+# LimeTech - 'start' modified to enable/disable ipv4/ipv6
+# Bergware - added interface bind functionality
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+DAEMON="Avahi mDNS/DNS-SD daemon"
+CALLER="avahi"
+AVAHI="/usr/sbin/avahi-daemon"
+CONF="/etc/avahi/avahi-daemon.conf"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# library functions
+. /etc/rc.d/rc.library.source
+
+allow(){
+  sed -ri "s/^#?(allow-interfaces)=.*/\1=$*/" $CONF
+}
+
+enable(){
+  sed -ri "s/^#?(use-$1)=.*/\1=yes/" $CONF
+}
+
+disable(){
+  sed -ri "s/^#?(use-$1)=.*/\1=no/" $CONF
+}
+
+avahid_running(){
+  sleep 0.1
+  $AVAHI -c
+  [[ $? == 0 ]]
+}
+
+avahid_start(){
+  log "Starting $DAEMON..."
+  local REPLY
+  if avahid_running; then
+    REPLY="Already started"
+  else
+    if check && [[ -n $BIND ]]; then
+      # bind avahi service
+      allow $BIND
+      [[ $IPV4 == no ]] && disable ipv4 || enable ipv4
+      [[ $IPV6 == no ]] && disable ipv6 || enable ipv6
+      run $AVAHI -D
+      if avahid_running; then REPLY="Started"; else REPLY="Failed"; fi
+    else
+      REPLY="Bind failed"
+    fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+avahid_stop(){
+  log "Stopping $DAEMON..."
+  local REPLY
+  if ! avahid_running; then
+    REPLY="Already stopped"
+  else
+    run $AVAHI -k
+    if ! avahid_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+avahid_restart(){
+  log "Restarting $DAEMON..."
+  avahid_stop
+  sleep 1
+  avahid_start
+}
+
+avahid_reload(){
+  $AVAHI -k 2>/dev/null
+  avahid_start >/dev/null
+}
+
+avahid_update(){
+  # 0 = update needed, 1 = no action
+  if ! avahid_running; then exit 1; fi
+  if check && [[ "$(this allow-interfaces)" == "$BIND" ]]; then exit 1; else exit 0; fi
+}
+
+avahid_status(){
+  if avahid_running; then
+    echo "$DAEMON is currently running."
+  else
+    echo "$DAEMON is not running."
+    exit 1
+  fi
+}
+
+case "$1" in
+'start')
+  avahid_start
+  ;;
+'stop')
+  avahid_stop
+  ;;
+'restart')
+  avahid_restart
+  ;;
+'reload')
+  avahid_reload
+  ;;
+'update')
+  avahid_update
+  ;;
+'status')
+  avahid_status
+  ;;
+*)
+  echo "Usage: $BASENAME start|stop|restart|reload|update|status"
+  exit 1
+esac
+exit 0

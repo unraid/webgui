@@ -1,0 +1,985 @@
+Menu="OtherSettings"
+Title="Docker"
+Icon="icon-docker"
+Tag="icon-docker"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ * Copyright 2014-2021, Guilherme Jardim, Eric Schultz, Jon Panozzo.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+// Add the Docker JSON client
+require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
+
+$DockerClient  = new DockerClient();
+exec("/etc/rc.d/rc.docker status >/dev/null",$dummy,$DockerStopped);
+
+exec("ls --indicator-style=none /sys/class/net|awk '/^br[0-9]+$/'",$nics);
+$bridge = count($nics)>0;
+
+function strposX($s, $c, $n=1) {
+  $p = 0;
+  while ($n && $p=strpos($s,$c,$p)!==false) {$n--; $p+=strlen($c);}
+  return $p;
+}
+
+unset($custom,$other);
+exec("ls --indicator-style=none /sys/class/net|grep -P '^br[0-9]'",$custom);
+exec("ls --indicator-style=none /sys/class/net|grep -P '^(bond|eth)[0-9]'",$other);
+$slaves = [];
+foreach ($other as $network) {
+  if (substr($network,0,4)=='bond') {
+    $br = str_replace('bond','br',$network);
+    $bond = "/sys/class/net/$network/bonding/slaves";
+    if (file_exists($bond)) $slaves = array_merge($slaves,explode(' ',str_replace("\n","",file_get_contents($bond))));
+    if (!in_array($br,$custom)) $custom[] = $network;
+  } else {
+    $br = str_replace('eth','br',$network);
+    $bond = str_replace('eth','bond',$network);
+    if (!in_array($br,$custom) && !in_array($bond,$custom)) $custom[] = $network;
+  }
+}
+$include = $include6 = $address = $address6 = $gateway = $gateway6 = $unset = $protocol = [];
+$wide = false;
+foreach ($custom as $network) {
+  if (in_array($network,$slaves)) continue;
+  $ip4    = exec("ip -br -4 addr show $network scope global|awk '{print $3}'");
+  $ip6    = exec("ip -br -6 addr show $network scope global|awk '{print $3}'");
+  $gw4    = $ip4 ? exec("ip -4 route show dev $network default|awk '{print $3;exit}'") : '';
+  $gw6    = $ip6 ? exec("ip -6 route show dev $network default|awk '{print $3;exit}'") : '';
+  $route4 = $ip4 ? exec("ip -4 route show dev $network $ip4|awk '{print $1;exit}'") : '';
+  $route6 = $ip6 ? exec("ip -6 route show dev $network|awk '/^".substr($ip6,0,strposX($ip6,':',4))."/{print $1;exit}'") : '';
+  [$eth,$vlan] = my_explode('.',$network);
+  $eth = str_replace(['bond','br'],'eth',$eth);
+  if (!$vlan) {
+    $protocol[$network] = _var($$eth,'PROTOCOL:0','ipv4');
+  } else {
+    foreach ($$eth as $key => $value) if (strpos($key,'VLANID')!==false && $value==$vlan) {$protocol[$network] = _var($$eth,str_replace('VLANID','PROTOCOL',$key),'ipv4'); break;}
+  }
+  if ($ip4 && $route4) {
+    $include[$network] = $route4;
+    $address[$network] = $ip4;
+    $gateway[$network] = $gw4;
+  } elseif (!array_key_exists($network,$gateway6)) {
+    $unset[] = $network;
+  }
+  if ($ip6 && $route6) {
+    $include6[$network] = $route6;
+    $address6[$network] = $ip6;
+    $gateway6[$network] = $gw6;
+  } elseif (!array_key_exists($network,$gateway)) {
+    $unset[] = $network;
+  }
+  if ($protocol[$network] != 'ipv4') $wide = true;
+}
+$ip4class = $wide ? 'ip6' : 'ip4';
+$gw4class = $wide ? 'gw6' : 'gw4';
+
+$unset = array_unique($unset);
+
+function normalize($network) {
+  return strtoupper(str_replace('.','_',$network));
+}
+function base_min($route) {
+  [$net,$mask] = my_explode('/',$route);
+  $mask = 32-$mask;
+  return explode('.',long2ip((ip2long($net)>>$mask)<<$mask));
+}
+function base_max($route) {
+  [$net,$mask] = my_explode('/',$route);
+  $mask = 32-$mask;
+  return explode('.',long2ip(((ip2long($net)>>$mask)<<$mask)+pow(2,$mask)-1));
+}
+function base_net($route) {
+  return substr(explode('/',$route)[0],0,-2);
+}
+$bgcolor = strstr('white,azure',$display['theme']) ? '#f2f2f2' : '#1c1c1c';
+?>
+<link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.filetree.css')?>">
+<link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
+<span class="status vhshift"><input type="checkbox" class="advancedview"></span>
+
+<form markdown="1" id="settingsForm" name="settingsForm" method="POST" action="/update.php" target="progressFrame" onsubmit="return prepareDocker(this)">
+<input type="hidden" name="#file" value="<?=$docker_cfgfile?>">
+<input type="hidden" name="#include" value="/plugins/dynamix.docker.manager/include/PruneConfig.php">
+<input type="hidden" name="#command" value="/plugins/dynamix/scripts/emcmd">
+<input type="hidden" name="#arg[1]" value="cmdStatus=Apply">
+<input type="hidden" name="#cleanup" value="true">
+<input type="hidden" name="DOCKER_CUSTOM_NETWORKS" value="<?=implode(' ',$unset)?> ">
+<input type="hidden" name="DOCKER_IMAGE_FILE" value="<?=_var($dockercfg,'DOCKER_IMAGE_FILE')?>">
+_(Enable Docker)_:
+: <select id="DOCKER_ENABLED" name="DOCKER_ENABLED">
+  <?=mk_option(_var($dockercfg,'DOCKER_ENABLED'), 'no', _('No'))?>
+  <?=mk_option(_var($dockercfg,'DOCKER_ENABLED'), 'yes', _('Yes'))?>
+  </select>
+  <?if (_var($var,'fsState')!="Started"):?>
+  <span id="arraystopped"><i class="fa fa-warning icon warning"></i> <?=(_var($dockercfg,'DOCKER_ENABLED')=='yes') ? '_(Docker will be available after Array is Started)_' : '_(Apply to activate Docker after Array is Started)_'?></span>
+  <?elseif (!is_dir(dirname(_var($dockercfg,'DOCKER_IMAGE_FILE'))) || !is_dir(_var($dockercfg,'DOCKER_APP_CONFIG_PATH'))):?>
+  <span class="basic"><i class="fa fa-warning icon warning"></i> _(One or more paths do not exist)_ (<a href="#" onclick="$('.advancedview').switchButton('option','checked',true); return false">_(view)_</a>)</span>
+  <?endif;?>
+
+:docker_enable_help:
+
+_(Enable container table readmore-js)_:
+: <select id="DOCKER_READMORE" name="DOCKER_READMORE">
+
+  <?=mk_option(_var($dockercfg,'DOCKER_READMORE'), 'yes', _('Yes'))?>
+  <?=mk_option(_var($dockercfg,'DOCKER_READMORE'), 'no', _('No'))?>
+
+  </select>
+
+:docker_readmore_help:
+
+_(Docker Stop Timeout)_:
+: <input class='narrow' id="DOCKER_TIMEOUT" type="number" name="DOCKER_TIMEOUT" min='1' value="<?=_var($dockercfg,'DOCKER_TIMEOUT')?>">_(seconds)_
+
+:docker_timeout_help:
+
+<?if ($DockerStopped):?>
+
+_(Docker data-root)_:
+: <select id="DOCKER_IMAGE_TYPE" name="DOCKER_IMAGE_TYPE" onchange="updateLocation(this.value)">
+  <?=mk_option(_var($dockercfg,'DOCKER_IMAGE_TYPE'), '', _('btrfs vDisk'))?>
+  <?=mk_option(_var($dockercfg,'DOCKER_IMAGE_TYPE'), 'xfs', _('xfs vDisk'))?>
+  <?=mk_option(_var($dockercfg,'DOCKER_IMAGE_TYPE'), 'folder', _('directory'))?>
+  </select>
+
+:docker_vdisk_type_help:
+
+<div markdown="1" id="vdisk_file" style="display:none">
+_(Docker vDisk size)_:
+: <input id="DOCKER_IMAGE_SIZE" type="number" name="DOCKER_IMAGE_SIZE" value="<?=_var($dockercfg,'DOCKER_IMAGE_SIZE')?>" class="narrow" required>GB<span id="SIZE_ERROR" class="errortext"></span>
+
+:docker_vdisk_size_help:
+
+_(Docker vDisk location)_:
+: <input type="text" id="DOCKER_IMAGE_FILE1" name="DOCKER_IMAGE_FILE1" autocomplete="off" spellcheck="false" value="<?=_var($dockercfg,'DOCKER_IMAGE_FILE')?>" placeholder="_(e.g.)_ /mnt/user/system/docker.img" data-pickcloseonfile="true" data-pickfilter="img" data-pickroot="/mnt" data-pickfolders="true" disabled required pattern="^[^\\]*(docker-xfs\.img|docker\.img)$">
+  <span class="deleteLabel"><label><input type="checkbox" class="deleteCheckbox"> _(Delete vDisk file)_</label></span>
+  <?if ($var['fsState'] != "Started"):?><span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
+  <?elseif (!is_dir(dirname(_var($dockercfg,'DOCKER_IMAGE_FILE')))):?><span class="nonexist"><i class="fa fa-warning icon warning"></i> _(Path does not exist)_</span>
+  <?endif;?><span id="IMAGE_ERROR1" class="errortext"></span>
+
+:docker_vdisk_location_help:
+
+</div>
+<div markdown="1" id="vdisk_dir" style="display:none">
+_(Docker directory)_:
+: <input type="text" id="DOCKER_IMAGE_FILE2" name="DOCKER_IMAGE_FILE2" autocomplete="off" spellcheck="false" value="<?=_var($dockercfg,'DOCKER_IMAGE_FILE')?>" placeholder="_(e.g.)_ /mnt/user/system/docker" data-pickcloseonfile="true" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="/mnt" data-pickfolders="true" disabled required pattern="^[^\\]*/$">
+  <span class="deleteLabel"><label><input type="checkbox" class="deleteCheckbox"> _(Delete directory)_</label></span>
+  <?if ($var['fsState'] != "Started"):?><span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
+  <?elseif (!is_dir(dirname(_var($dockercfg,'DOCKER_IMAGE_FILE')))):?><span class="nonexist"><i class="fa fa-warning icon warning"></i> _(Path does not exist)_</span>
+  <?endif;?><span id="IMAGE_ERROR2" class="errortext"></span>
+
+:docker_vdisk_directory_help:
+
+</div>
+_(Default appdata storage location)_:
+: <input type="text" id="DOCKER_APP_CONFIG_PATH" name="DOCKER_APP_CONFIG_PATH" autocomplete="off" spellcheck="false" value="<?=_var($dockercfg,'DOCKER_APP_CONFIG_PATH')?>" placeholder="_(e.g.)_ /mnt/user/appdata/" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="<?=is_dir('/mnt/user')?'/mnt/user':'/mnt'?>" data-pickfolders="true" pattern="^[^\\]*/$">
+  <?if ($var['fsState'] != "Started"):?>
+  <span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
+  <?elseif (!is_dir(_var($dockercfg,'DOCKER_APP_CONFIG_PATH'))):?>
+  <span class="nonexist"><i class="fa fa-warning icon warning"></i> _(Path does not exist)_</span>
+  <?endif;?>
+
+:docker_appdata_location_help:
+
+<div markdown="1" class="advanced">
+_(Docker LOG rotation)_:
+: <select name="DOCKER_LOG_ROTATION" onchange="showLogOptions(this.value)">
+  <?=mk_option(_var($dockercfg,'DOCKER_LOG_ROTATION'), 'no', _('Disabled'))?>
+  <?=mk_option(_var($dockercfg,'DOCKER_LOG_ROTATION'), 'yes', _('Enabled'))?>
+  </select>
+
+:docker_log_rotation_help:
+
+<div markdown="1" id="DOCKER_LOG_OPTIONS" style="display:none">
+_(Docker LOG maximum file size)_:
+: <select name="DOCKER_LOG_SIZE">
+  <?=mk_option(_var($dockercfg,'DOCKER_LOG_SIZE'), '10m', '10 '._('MB'))?>
+  <?=mk_option(_var($dockercfg,'DOCKER_LOG_SIZE'), '20m', '20 '._('MB'))?>
+  <?=mk_option(_var($dockercfg,'DOCKER_LOG_SIZE'), '50m', '50 '._('MB'))?>
+  <?=mk_option(_var($dockercfg,'DOCKER_LOG_SIZE'), '100m', '100 '._('MB'))?>
+  <?=mk_option(_var($dockercfg,'DOCKER_LOG_SIZE'), '500m', '500 '._('MB'))?>
+  <?=mk_option(_var($dockercfg,'DOCKER_LOG_SIZE'), '1g', '1000 '._('MB'))?>
+  </select>
+
+:docker_log_file_size_help:
+
+_(Docker LOG number of files)_:
+: <select name="DOCKER_LOG_FILES">
+  <?=mk_option(_var($dockercfg,'DOCKER_LOG_FILES'), '1', '1')?>
+  <?=mk_option(_var($dockercfg,'DOCKER_LOG_FILES'), '2', '2')?>
+  <?=mk_option(_var($dockercfg,'DOCKER_LOG_FILES'), '3', '3')?>
+  </select>
+
+:docker_log_file_number_help:
+
+</div>
+_(Template Authoring Mode)_:
+: <select id="DOCKER_AUTHORING_MODE" name="DOCKER_AUTHORING_MODE">
+  <?=mk_option(_var($dockercfg,'DOCKER_AUTHORING_MODE'), 'no', _('No'))?>
+  <?=mk_option(_var($dockercfg,'DOCKER_AUTHORING_MODE'), 'yes', _('Yes'))?>
+  </select>
+
+:docker_authoring_mode_help:
+
+_(Docker custom network type)_:
+: <select name="DOCKER_NETWORK_TYPE">
+  <?=mk_option(_var($dockercfg,'DOCKER_NETWORK_TYPE'), '1', _('ipvlan'), $bridge?'':'disabled')?>
+  <?=mk_option(_var($dockercfg,'DOCKER_NETWORK_TYPE'), '', _('macvlan'), $bridge?'':'selected')?>
+  </select>&nbsp;_(Please read the Help carefully)_.  _(Misconfiguration can cause problems)_.
+
+:docker_custom_network_type_help:
+
+_(Host access to custom networks)_:
+: <select name="DOCKER_ALLOW_ACCESS">
+  <?=mk_option(_var($dockercfg,'DOCKER_ALLOW_ACCESS'), '', _('Disabled'))?>
+  <?=mk_option(_var($dockercfg,'DOCKER_ALLOW_ACCESS'), 'yes', _('Enabled'))?>
+  </select>&nbsp;_(Make sure you understand what you are doing before enabling)_.
+
+:docker_custom_network_access_help:
+
+_(Preserve user defined networks)_:
+: <select name="DOCKER_USER_NETWORKS">
+  <?=mk_option(_var($dockercfg,'DOCKER_USER_NETWORKS'), 'remove', _('No'))?>
+  <?=mk_option(_var($dockercfg,'DOCKER_USER_NETWORKS'), 'preserve', _('Yes'))?>
+  </select>
+
+:docker_user_defined_network_help:
+
+<?foreach ($include as $network => $route):?>
+<?
+$net = normalize($network);
+$docker_auto = "DOCKER_AUTO_$net";
+$docker_dhcp = "DOCKER_DHCP_$net";
+?>
+
+<input type="hidden" name="<?=$docker_auto?>" value="<?=_var($dockercfg,$docker_auto)?>">
+
+_(IPv4 custom network on interface)_ <?=$network?> (_(optional)_):
+<?
+  $auto = _var($dockercfg,$docker_auto)!='no';
+  $autoDisabled = $auto ? '':'disabled';
+  $dhcp = _var($dockercfg,$docker_dhcp);
+  $dhcpDisabled = ($auto && $dhcp) ? '':'disabled';
+  $net = base_min($route);
+  $max = base_max($route);
+  $mask = explode('/',$route)[1];
+  $net_user = $dhcp ? base_min($dhcp) : $net;
+  $mask_user = $dhcp ? explode('/',$dhcp)[1] : $mask+1;
+  $size = pow(2,32-$mask_user);
+  switch (true) {
+    case ($mask < 16): $prefix = $net[0]; $box = 1; break;
+    case ($mask < 24): $prefix = $net[0].'.'.$net[1]; $box = 2; break;
+    case ($mask < 32): $prefix = $net[0].'.'.$net[1].'.'.$net[2]; $box = 3 ;break;
+  }
+?>
+: <input type="checkbox" id="<?=$docker_dhcp?>_edit" onchange="changeEdit(this.id,4)"<?=$auto?'checked':''?>>
+  <span id="<?=$docker_dhcp?>_line" class="<?=$autoDisabled?>">
+  <span class="<?=$ip4class?>">**_(Subnet)_:** <?=$route?></span>
+  <span class="<?=$gw4class?>">**_(Gateway)_:** <?=$gateway[$network]?></span>
+  <input type="checkbox" id="<?=$docker_dhcp?>_dhcp" onchange="changeDHCP(this.id,4)"<?=$dhcp?'checked':''?><?=$autoDisabled?>>
+  **_(DHCP pool)_:**<span id="<?=$docker_dhcp?>_net" class="net <?=$dhcpDisabled?>"><?=$prefix?>.</span>
+  </span>
+<?
+  for ($b=$box; $b<=3; $b++) {
+    switch ($b) {
+      case 1: $step = floor($size/65536)%256; break;
+      case 2: $step = floor($size/256)%256; break;
+      case 3: $step = $size%256; break;
+    }
+    if ($step===0) $step = 256;
+    echo "<select id=\"{$docker_dhcp}_{$b}\" class=\"net\" $dhcpDisabled>";
+    for ($n=$net[$b]; $n<=$max[$b]; $n++) echo mk_option($net_user[$b],$n,$n,$n%$step==0?'':'class="hide"');
+    echo "</select>";
+  }
+  echo "/ ";
+  echo "<select id=\"{$docker_dhcp}_mask\" class=\"mask\" onchange=\"changeMask(this.id,this.value)\" $dhcpDisabled>";
+  for ($m=$mask+1; $m<=30; $m++) echo mk_option($mask_user,$m,$m);
+  echo "</select><span id=\"{$docker_dhcp}_size\" style=\"".($dhcp?'':'display:none')."\">($size "._('hosts').")</span>";
+  echo "<input type=\"hidden\" name=\"$docker_dhcp\" value=\"\">";
+?>
+
+<?endforeach;?>
+<?if ($include):?>
+:docker_include_interface_vlan_ipv4_help:
+
+<?endif;?>
+<?foreach ($unset as $network):?>
+<?
+$port = normalize($network);
+[$subnet,$mask] = my_explode('/',_var($dockercfg,"DOCKER_SUBNET_$port"));
+[$range,$size] = my_explode('/',_var($dockercfg,"DOCKER_RANGE_$port"));
+$disabled = $subnet ? '':'disabled';
+$dhcpDisabled = $range ? '':'disabled';
+?>
+<?if ($protocol[$network] != 'ipv6'):?>
+
+_(IPv4 custom network on interface)_ <?=$network?> (_(optional)_):
+: <input type="checkbox" id="DOCKER_CUSTOM_<?=$port?>_edit" onchange="changeCustom(this.id,4)"<?=$subnet?'checked':''?>><span id="DOCKER_CUSTOM_<?=$port?>_line" class="<?=$subnet?'':'disabled'?>">
+  <span class="<?=$ip4class?>">**_(Subnet)_:** <input type="text" id="DOCKER_CUSTOM_<?=$port?>_net" name="DOCKER_SUBNET_<?=$port?>" class="ip4" value="<?=$subnet?>" title="_(IPv4 address A.B.C.D)_"<?=$disabled?>>/
+  <select id="DOCKER_CUSTOM_<?=$port?>_mask" name="DOCKER_MASK_<?=$port?>" class="mask"<?=$disabled?>>
+  <?for ($m=16; $m<=30; $m++) echo mk_option($mask?:24,$m,$m)?></select>
+  </span>
+  <span class="<?=$gw4class?>">**_(Gateway)_:** <input type="text" id="DOCKER_CUSTOM_<?=$port?>_gw" name="DOCKER_GATEWAY_<?=$port?>" class="ip4" value="<?=_var($dockercfg,"DOCKER_GATEWAY_$port")?>" title="_(IPv4 address A.B.C.D)_"<?=$disabled?>></span>
+  <input type="checkbox" id="DOCKER_CUSTOM_<?=$port?>_dhcp" onchange="customDHCP(this.id,4)"<?=$subnet?'checked':''?><?=$dhcpDisabled?>>
+  **_(DHCP pool)_:** <input type="text" id="DOCKER_CUSTOM_<?=$port?>_pool" name="DOCKER_RANGE_<?=$port?>" class="ip4" value="<?=$range?>" title="_(IPv4 address A.B.C.D)_"<?=$disabled?>>/
+  <select id="DOCKER_CUSTOM_<?=$port?>_size" name="DOCKER_SIZE_<?=$port?>" class="mask" onchange="changeHosts(this.id,this.value)"<?=$disabled?>>
+  <?for ($m=16; $m<=30; $m++) echo mk_option($size?:25,$m,$m)?></select>
+  <span id="DOCKER_CUSTOM_<?=$port?>_hosts" style="<?=$subnet?'':'display:none'?>">(<?=pow(2,32-($size?:25))?> _(hosts)_)</span></span>
+
+<?endif;?>
+<?endforeach;?>
+<?if ($unset && $protocol[$network] != 'ipv6'):?>
+:docker_exclude_interface_vlan_ipv4_help:
+
+<?endif;?>
+<?if ($include6):?>
+<hr>
+<?endif;?>
+<?foreach ($include6 as $network => $route):?>
+<?
+$net = normalize($network);
+$docker_auto = "DOCKER_AUTO_$net";
+$docker_dhcp6 = "DOCKER_DHCP6_$net";
+?>
+
+_(IPv6 custom network on interface)_ <?=$network?> (_(optional)_):
+<?
+  $auto6 = _var($dockercfg,$docker_auto)!='no';
+  $auto6Disabled = $auto6 ? '':'disabled';
+  $dhcp6 = _var($dockercfg,$docker_dhcp6);
+  $dhcp6Disabled = ($auto6 && $dhcp6) ? '':'disabled';
+  $net = base_net($route);
+  $mask = explode('/',$route)[1];
+  $net_user = $dhcp6 ? str_replace("$net:","",base_net($dhcp6)) : '';
+  $mask_user = $dhcp6 ? explode('/',$dhcp6)[1] : $mask;
+?>
+: <input type="checkbox" id="<?=$docker_dhcp6?>_edit" onchange="changeEdit(this.id,6)"<?=$auto6?'checked':''?>>
+  <span id="<?=$docker_dhcp6?>_line" class="<?=$auto6Disabled?>">
+  <span class="ip6">**_(Subnet)_:** <?=$route?></span>
+  <span class="gw6">**_(Gateway)_:** <?=$gateway6[$network]?></span>
+  <input type="checkbox" id="<?=$docker_dhcp6?>_dhcp" onchange="changeDHCP(this.id,6)"<?=$dhcp6?'checked':''?><?=$auto6Disabled?>>
+  **_(DHCP pool)_:**<span id="<?=$docker_dhcp6?>_net" class="net <?=$dhcp6Disabled?>"><?=$net?>:</span>
+<?
+  echo "<input type=\"text\" id=\"{$docker_dhcp6}_text\" value=\"$net_user\" class=\"pool6\" $dhcp6Disabled>/ ";
+  echo "<select id=\"{$docker_dhcp6}_mask\" class=\"mask\" $dhcp6Disabled>";
+  for ($m=$mask+8; $m<=120; $m+=8) echo mk_option($mask_user,$m,$m);
+  echo "</select><input type=\"hidden\" name=\"$docker_dhcp6\" value=\"\"></span>";
+?>
+
+<?endforeach;?>
+<?if ($include6):?>
+:docker_include_interface_vlan_ipv6_help:
+
+<?endif;?>
+<?foreach ($unset as $network):?>
+<?
+$port = normalize($network);
+[$subnet6,$mask6] = my_explode('/',_var($dockercfg,"DOCKER_SUBNET6_$port"));
+[$range6,$size6] = my_explode('/',_var($dockercfg,"DOCKER_RANGE6_$port"));
+$disabled = $subnet6 ? '':'disabled';
+$dhcpDisabled = $range6 ? '':'disabled';
+?>
+<?if ($protocol[$network] != 'ipv4'):?>
+
+_(IPv6 custom network on interface)_ <?=$network?> (_(optional)_):
+: <input type="checkbox" id="DOCKER_CUSTOM6_<?=$port?>_edit" onchange="changeCustom(this.id,6)"<?=$subnet6?'checked':''?>><span id="DOCKER_CUSTOM6_<?=$port?>_line" class="<?=$subnet6?'':'disabled'?>">
+  <span class="ip6">**_(Subnet)_:**<input type="text" id="DOCKER_CUSTOM6_<?=$port?>_net" name="DOCKER_SUBNET6_<?=$port?>" class="ip6" value="<?=$subnet6?>" title="_(IPv6 address nnnn:xxxx::yyyy)_"<?=$disabled?>>/
+  <select id="DOCKER_CUSTOM6_<?=$port?>_mask" name="DOCKER_MASK6_<?=$port?>" class="mask"<?=$disabled?>>
+  <?for ($m=64; $m<=120; $m+=8) echo mk_option($mask6?:64,$m,$m)?></select></span>
+  <span class="gw6">**_(Gateway)_:**<input type="text" id="DOCKER_CUSTOM6_<?=$port?>_gw" name="DOCKER_GATEWAY6_<?=$port?>" class="gw6" value="<?=_var($dockercfg,"DOCKER_GATEWAY6_$port")?>" title="_(IPv6 address nnnn:xxxx::yyyy)_"<?=$disabled?>></span>
+  <input type="checkbox" id="DOCKER_CUSTOM6_<?=$port?>_dhcp" onchange="customDHCP(this.id,6)"<?=$subnet6?'checked':''?><?=$dhcpDisabled?>>
+  **_(DHCP pool)_:**<input type="text" id="DOCKER_CUSTOM6_<?=$port?>_pool" name="DOCKER_RANGE6_<?=$port?>" class="ip6" value="<?=$range6?>" title="_(IPv6 address nnnn:xxxx::yyyy)_"<?=$disabled?>>/
+  <select id="DOCKER_CUSTOM6_<?=$port?>_size" name="DOCKER_SIZE6_<?=$port?>" class="mask"<?=$disabled?>>
+  <?for ($m=64; $m<=120; $m+=8) echo mk_option($size6?:72,$m,$m)?></select></span>
+
+<?endif;?>
+<?endforeach;?>
+<?if ($unset && $protocol[$network] != 'ipv4'):?>
+:docker_exclude_interface_vlan_ipv6_help:
+
+<?endif;?>
+</div>
+<?else: /* DOCKER STARTED */?>
+
+_(Docker version)_:
+: <?$arrInfo = $DockerClient->getInfo(); echo $arrInfo['Version']?>
+
+:docker_version_help:
+
+<?if (_var($dockercfg,'DOCKER_IMAGE_TYPE')!='folder'):?>
+_(Docker vDisk location)_:
+: <?=_var($dockercfg,'DOCKER_IMAGE_FILE')?>
+<?else:?>
+_(Docker directory)_:
+: <?=_var($dockercfg,'DOCKER_IMAGE_FILE')?>
+<?endif;?>
+
+:docker_vdisk_location_active_help:
+
+_(Default appdata storage location)_:
+: <?=_var($dockercfg,'DOCKER_APP_CONFIG_PATH')?>
+
+:docker_appdata_location_active_help:
+
+<div markdown="1" class="advanced">
+_(Docker LOG rotation)_:
+: <?=_var($dockercfg,'DOCKER_LOG_ROTATION')=='yes' ? _('Enabled') : _('Disabled')?>
+
+:docker_log_rotation_active_help:
+
+_(Docker custom network type)_:
+: <?=_var($dockercfg,'DOCKER_NETWORK_TYPE')!='1' || !$bridge ? _('macvlan') : _('ipvlan')?>
+
+:docker_custom_network_type_help:
+
+_(Host access to custom networks)_:
+: <?=_var($dockercfg,'DOCKER_ALLOW_ACCESS')=='yes' ? _('Enabled') : _('Disabled')?>
+
+:docker_custom_network_access_help:
+
+_(Preserve user defined networks)_:
+: <?=_var($dockercfg,'DOCKER_USER_NETWORKS')=='preserve' ? _('Yes') : _('No')?>
+
+:docker_user_defined_network_help:
+
+<?foreach ($include as $network => $route):?>
+<?
+$net = normalize($network);
+$docker_dhcp = "DOCKER_DHCP_$net";
+?>
+<?if (isset($dockercfg[$docker_dhcp]) || empty($dockercfg["DOCKER_AUTO_$net"])):?>
+_(IPv4 custom network on interface)_ <?=$network?>:
+: <span class="<?=$gw4class?>">**_(Subnet)_:** <?=$route?></span>
+  <span class="<?=$gw4class?>">**_(Gateway)_:** <?=$gateway[$network]?></span>
+  **_(DHCP pool)_:** <?=_var($dockercfg,$docker_dhcp) ?: "_(not set)_"?><?if (isset($dockercfg[$docker_dhcp])):?>&nbsp;&nbsp;(<?=pow(2,32-my_explode('/',$dockercfg[$docker_dhcp])[1])?> _(hosts)_)<?endif;?>
+
+<?endif;?>
+<?endforeach;?>
+<?foreach ($unset as $network):?>
+<?
+$port = normalize($network);
+[$eth,$vlan] = my_explode('.',$network);
+$eth = str_replace(['bond','br'],'eth',$eth);
+if (!$vlan) {
+  $protocol = _var($$eth,'PROTOCOL:0','ipv4');
+} else {
+  foreach ($$eth as $key => $value) {
+    if (strpos($key,'VLANID')!==false && $value==$vlan) {$protocol = _var($$eth,str_replace('VLANID','PROTOCOL',$key),'ipv4'); break;}
+  }
+}
+[$subnet,$mask] = my_explode('/',_var($dockercfg,"DOCKER_SUBNET_$port"));
+[$range,$size] = my_explode('/',_var($dockercfg,"DOCKER_RANGE_$port"));
+?>
+<?if ($protocol != 'ipv6' && $subnet):?>
+_(IPv4 custom network on interface)_ <?=$network?>:
+: <span class="<?=$gw4class?>">**_(Subnet)_:** <?=$subnet?>/<?=$mask?></span>
+  <span class="<?=$gw4class?>">**_(Gateway)_:** <?=_var($dockercfg,"DOCKER_GATEWAY_$port")?></span>
+  **_(DHCP pool)_:** <?=$range ? "$range/$size" : "_(not set)_"?><?if ($range):?>&nbsp;&nbsp;(<?=pow(2,32-($size?:25))?> _(hosts)_)<?endif;?>
+
+<?endif;?>
+<?endforeach;?>
+<?foreach ($include6 as $network => $route):?>
+<?
+$net = normalize($network);
+$docker_dhcp6 = "DOCKER_DHCP6_$net";
+if (isset($dockercfg[$docker_dhcp6]) || empty($dockercfg["DOCKER_AUTO_$net"])):?>
+<?$wide = true;?>
+_(IPv6 custom network on interface)_ <?=$network?>:
+: <span class="gw6">**_(Subnet)_:** <?=$route?></span>
+  <span class="gw6">**_(Gateway)_:** <?=$gateway6[$network]?></span>
+  **_(DHCP pool)_:** <?=_var($dockercfg,$docker_dhcp6) ?: "_(not set)_"?>
+
+<?endif;?>
+<?endforeach;?>
+<?foreach ($unset as $network):?>
+<?
+$port = normalize($network);
+[$eth,$vlan] = my_explode('.',$network);
+$eth = str_replace(['bond','br'],'eth',$eth);
+if (!$vlan) {
+  $protocol = _var($$eth,'PROTOCOL:0','ipv4');
+} else {
+  foreach ($$eth as $key => $value) {
+    if (strpos($key,'VLANID')!==false && $value==$vlan) {$protocol = _var($$eth,str_replace('VLANID','PROTOCOL',$key),'ipv4'); break;}
+  }
+}
+[$subnet6,$mask6] = my_explode('/',_var($dockercfg,"DOCKER_SUBNET6_$port"));
+[$range6,$size6] = my_explode('/',_var($dockercfg,"DOCKER_RANGE6_$port"));
+?>
+<?if ($protocol != 'ipv4' && $subnet6):?>
+_(IPv6 custom network on interface)_ <?=$network?>:
+: <span class="gw6">**_(Subnet)_:** <?=$subnet6?>/<?=$mask6?></span>
+  <span class="gw6">**_(Gateway)_:** <?=_var($dockercfg,"DOCKER_GATEWAY6_$port")?></span>
+  **_(DHCP pool)_:** <?=$range6 ? "$range6/$size6" : "_(not set)_"?>
+<?endif;?>
+<?endforeach;?>
+</div>
+<?endif;?>
+
+&nbsp;
+: <input id="applyBtn" type="button" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+</form>
+
+<form id="removeForm" method="POST" action="/update.php" target="progressFrame">
+  <input type="hidden" name="#command" value="/plugins/dynamix.docker.manager/scripts/docker_rm">
+</form>
+
+<?if (!$DockerStopped && exec("findmnt --output FSTYPE --noheadings /var/lib/docker")=='btrfs'):?>
+<div markdown="1" class="advanced">
+<div class="title"><span class="left"><i class="title fa fa-address-card-o"></i>_(Docker volume info)_</span></div>
+_(btrfs filesystem show)_:
+: <?="<pre>".shell_exec("btrfs filesystem show /var/lib/docker")."</pre>"?>
+
+<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareFS(this,'btrfs-scrub-docker','/var/lib/docker')">
+<?exec("$docroot/webGui/scripts/btrfs_scrub status /var/lib/docker", $scrub_status, $retval)?>
+_(btrfs scrub status)_:
+: <?="<pre id='btrfs-scrub'>".implode("\n", $scrub_status)."</pre>"?>
+
+<?if ($retval != 0):?>
+<input type="hidden" name="#command" value="/webGui/scripts/btrfs_scrub">
+<input type="hidden" name="#arg[1]" value="start">
+<input type="hidden" name="#arg[2]" value="/var/lib/docker">
+<input type="hidden" name="#arg[3]" value="-r">
+&nbsp;
+: <input type="submit" value="_(Scrub)_"><label><input type="checkbox" name="#arg[3]" value=""> _(Correct file system errors)_</label>
+
+:docker_scrub_help:
+
+<?else:?>
+<input type="hidden" name="#command" value="/webGui/scripts/btrfs_scrub">
+<input type="hidden" name="#arg[1]" value="cancel">
+<input type="hidden" name="#arg[2]" value="/var/lib/docker">
+&nbsp;
+: <input type="submit" value="_(Cancel)_">
+
+:docker_cancel_help:
+
+</form>
+<?endif;?>
+</div>
+<?endif;?>
+
+<script src="<?autov('/webGui/javascript/jquery.filetree.js')?>" charset="utf-8"></script>
+<script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
+<script>
+function prepareDocker(form) {
+<?if ($DockerStopped):?>
+  var bye = false;
+  $(form).find('input[type="text"]').each(function(){
+    if ($(this).attr('pattern') && !$(this).prop('disabled')) {
+      var pattern = new RegExp($(this).attr('pattern'));
+      if (!pattern.test($(this).val())) {$(this).css('color','red').attr('title',"_(Use image name docker.img or docker-xfs.img or select a folder)_"); bye = true;}
+    }
+  });
+  if (bye) return false;
+  $(form).find('input[name="DOCKER_IMAGE_FILE"]').val($('#DOCKER_IMAGE_TYPE').val()=='folder' ? $("#DOCKER_IMAGE_FILE2").val() : $("#DOCKER_IMAGE_FILE1").val());
+  $("#DOCKER_IMAGE_FILE1").prop('disabled',true);
+  $("#DOCKER_IMAGE_FILE2").prop('disabled',true);
+<?endif;?>
+  $(form).find('input:hidden[name^="DOCKER_DHCP_"]').each(function(){
+    var id = '#'+$(this).attr('name')+'_';
+    if ($(id+'dhcp').prop('checked') && $(id+'edit').prop('checked')) {
+      var net = $(id+'net').text();
+      for (var b=1; b<=3; b++) if ($(id+b).length>0) net += $(id+b).val()+'.';
+      net = net.replace(/\.$/,'/')+$(id+'mask').val();
+      $(this).val(net);
+    } else {
+      $(this).val('').prop('disabled',false);
+    }
+  });
+  $(form).find('input:hidden[name^="DOCKER_DHCP6_"]').each(function(){
+    var id = '#'+$(this).attr('name')+'_';
+    if ($(id+'dhcp').prop('checked') && $(id+'edit').prop('checked')) {
+      var net = $(id+'net').text()+$(id+'text').val();
+      if (net.substr(-2)!='::') net += '::';
+      $(this).val(net+'/'+$(id+'mask').val());
+    } else {
+      $(this).val('').prop('disabled',false);
+    }
+  });
+  $(form).find('input[name^="DOCKER_SUBNET_"]').each(function(){
+    var edit = '#'+$(this).attr('name').replace('SUBNET','CUSTOM')+'_edit';
+    var mask = '#'+$(this).attr('name').replace('SUBNET','CUSTOM')+'_mask';
+    if ($(edit).prop('checked')) {
+      if ($(this).val()) $(this).val($(this).val()+'/'+$(mask).val());
+    } else {
+      $(this).val('').prop('disabled',false);
+    }
+    $(mask).prop('disabled',true);
+  });
+  $(form).find('input[name^="DOCKER_GATEWAY_"]').each(function(){
+    var edit = '#'+$(this).attr('name').replace('GATEWAY','CUSTOM')+'_edit';
+    if (!$(edit).prop('checked')) $(this).val('').prop('disabled',false);
+  });
+  $(form).find('input[name^="DOCKER_RANGE_"]').each(function(){
+    var edit = '#'+$(this).attr('name').replace('RANGE','CUSTOM')+'_edit';
+    var size = '#'+$(this).attr('name').replace('RANGE','CUSTOM')+'_size';
+    var dhcp = '#'+$(this).attr('name').replace('RANGE','CUSTOM')+'_dhcp';
+    if ($(edit).prop('checked') && $(dhcp).prop('checked')) {
+      if ($(this).val()) $(this).val($(this).val()+'/'+$(size).val());
+    } else {
+      $(this).val('').prop('disabled',false);
+    }
+    $(size).prop('disabled',true);
+  });
+  $(form).find('input[name^="DOCKER_SUBNET6_"]').each(function(){
+    var edit6 = '#'+$(this).attr('name').replace('SUBNET','CUSTOM')+'_edit';
+    var mask6 = '#'+$(this).attr('name').replace('SUBNET','CUSTOM')+'_mask';
+    if ($(edit6).prop('checked')) {
+      if ($(this).val()) $(this).val($(this).val()+'/'+$(mask6).val());
+    } else {
+      $(this).val('').prop('disabled',false);
+    }
+    $(mask6).prop('disabled',true);
+  });
+  $(form).find('input[name^="DOCKER_GATEWAY6_"]').each(function(){
+    var edit6 = '#'+$(this).attr('name').replace('GATEWAY','CUSTOM')+'_edit';
+    if (!$(edit6).prop('checked')) $(this).val('').prop('disabled',false);
+  });
+  $(form).find('input[name^="DOCKER_RANGE6_"]').each(function(){
+    var edit6 = '#'+$(this).attr('name').replace('RANGE','CUSTOM')+'_edit';
+    var size6 = '#'+$(this).attr('name').replace('RANGE','CUSTOM')+'_size';
+    var dhcp6 = '#'+$(this).attr('name').replace('RANGE','CUSTOM')+'_dhcp';
+    if ($(edit6).prop('checked') && $(dhcp6).prop('checked')) {
+      if ($(this).val()) $(this).val($(this).val()+'/'+$(size6).val());
+    } else {
+      $(this).val('').prop('disabled',false);
+    }
+    $(size6).prop('disabled',true);
+  });
+  return true;
+}
+function changeEdit(id,ip) {
+  var checked = $('#'+id).prop('checked');
+  var id1 = '#'+id.substr(0,id.length-4);
+  if (ip==4) {
+    var name = id.substr(0,id.length-5).replace('DHCP','AUTO');
+    var id2 = '#'+name.replace('AUTO','DHCP6')+'_';
+  } else {
+    var name = id.substr(0,id.length-5).replace('DHCP6','AUTO');
+    var id2 = '#'+name.replace('AUTO','DHCP')+'_';
+  }
+  if (checked) {
+    $(id1+'line').removeClass('disabled');
+    $(id1+'dhcp').prop('disabled',false);
+    $(id2+'line').removeClass('disabled');
+    $(id2+'dhcp').prop('disabled',false);
+    $(id2+'edit').prop('checked',true);
+  } else {
+    $(id1+'line').addClass('disabled','disabled');
+    $(id1+'dhcp').prop('disabled',true);
+    $(id2+'line').addClass('disabled','disabled');
+    $(id2+'dhcp').prop('disabled',true);
+    $(id2+'edit').prop('checked',false);
+  }
+  $('input:hidden[name="'+name+'"]').val(checked?'':'no');
+  if (ip==4) {
+    changeDHCP(id,4,$('#'+id.replace('edit','dhcp')).prop('checked'));
+    id = id.replace('DHCP','DHCP6');
+    $('#'+id).prop('checked',checked);
+    changeDHCP(id,6,$('#'+id.replace('edit','dhcp')).prop('checked'));
+  } else {
+    changeDHCP(id,6,$('#'+id.replace('edit','dhcp')).prop('checked'));
+    id = id.replace('DHCP6','DHCP');
+    $('#'+id).prop('checked',checked);
+    changeDHCP(id,4,$('#'+id.replace('edit','dhcp')).prop('checked'));
+  }
+}
+function changeDHCP(id,ip,sid) {
+  if (sid==null) sid = true;
+  var checked = $('#'+id).prop('checked') && sid;
+  id = '#'+id.substr(0,id.length-4);
+  if (ip==4) {
+    for (var b=1; b<=3; b++) if ($(id+b).length>0) $(id+b).prop('disabled',!checked);
+    $(id+'mask').prop('disabled',!checked);
+    if (checked) {
+      $(id+'size').show();
+      $(id+'net').removeClass('disabled');
+    } else {
+      $(id+'size').hide();
+      $(id+'net').addClass('disabled','disabled');
+    }
+  } else {
+    $(id+'text').prop('disabled',!checked);
+    $(id+'mask').prop('disabled',!checked);
+    if (checked) {
+      $(id+'net').removeClass('disabled');
+    } else {
+      $(id+'net').addClass('disabled','disabled');
+    }
+  }
+}
+function customDHCP(id,ip) {
+  var checked = $('#'+id).prop('checked');
+  id = '#'+id.substr(0,id.length-4);
+  $(id+'pool').prop('disabled',!checked);
+  $(id+'size').prop('disabled',!checked);
+  if (ip==4) checked ? $(id+'hosts').show() : $(id+'hosts').hide();
+}
+function changeCustom(id,ip) {
+  var checked = $('#'+id).prop('checked');
+  var device = id.substr(0,id.length-5).split('_').splice(2,2).join('.').toLowerCase();
+  id = '#'+id.substr(0,id.length-4);
+  $(id+'net').prop('disabled',!checked);
+  $(id+'mask').prop('disabled',!checked);
+  $(id+'gw').prop('disabled',!checked);
+  $(id+'dhcp').prop('disabled',!checked);
+  $(id+'pool').prop('disabled',!checked);
+  $(id+'size').prop('disabled',!checked);
+  if (checked) {
+    $(id+'hosts').show();
+    $(id+'line').removeClass('disabled');
+  } else {
+    $(id+'hosts').hide();
+    $(id+'line').addClass('disabled','disabled');
+  }
+}
+function changeMask(id,val) {
+  var mask = Math.pow(2,32-val);
+  id = '#'+id.substr(0,id.length-4);
+  $(id+'size').html('('+mask+' hosts)');
+  for (var b=1; b<=3; b++) {
+    var cell = id+b;
+    switch (b) {
+      case 1: var step = Math.floor(mask/65536)%256; break;
+      case 2: var step = Math.floor(mask/256)%256; break;
+      case 3: var step = mask%256; break;
+    }
+    if (step==0) step = 256;
+    if ($(cell).length==0) continue;
+    var max = $(cell+' option').length;
+    for (var i=0; i < max; i++) if (i%step==0) $(cell+' option:eq('+i+')').removeClass('hide'); else $(cell+' option:eq('+i+')').addClass('hide');
+    if ($(cell+' option:selected').val()%step!=0) $(cell+' option:selected').removeAttr('selected');
+  }
+}
+function changeHosts(id,val) {
+  var mask = Math.pow(2,32-val);
+  id = '#'+id.substr(0,id.length-4);
+  $(id+'hosts').html('('+mask+' hosts)');
+}
+function ip2int(ip) {
+  return ip.split('.').reduce(function(ipInt,octet){return (ipInt<<8)+parseInt(octet,10)},0)>>>0;
+}
+function checkDHCP() {
+  var good = true;
+  $('#settingsForm').find('input[name^="DOCKER_DHCP_"]').each(function(){
+    if ($(this).val()) {
+      var id = $(this).attr('name');
+      var pool = $(this).val().split('/');
+      var base = $('#'+id).text().split('/');
+      if (good && typeof(pool[1])=='undefined') {good = false; swal({title:"_(Missing subnet size)_",text:"_(Pool subnet size is not defined)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});}
+      if (good && pool[1]<=base[1]) {good = false; swal({title:"_(Invalid subnet size)_",text:"_(Pool subnet size is too large)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});}
+      if (typeof(pool[1])=='undefined') pool[1] = 0;
+      if (typeof(base[1])=='undefined') base[1] = 32;
+      var toppool = ip2int(pool[0]);
+      var topbase = ip2int(base[0]);
+      var endpool = toppool+Math.pow(2,32-pool[1]);
+      var endbase = topbase+Math.pow(2,32-base[1]);
+      if (good && (toppool < topbase || endpool > endbase)) {good = false; swal({title:"_(Invalid pool address)_",text:"_(Pool address is out of range)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});}
+    }
+  });
+  if (good) $('#settingsForm').find('input[name^="DOCKER_DHCP6_"]').each(function(){
+    if ($(this).val()) {
+      var id = $(this).attr('name');
+      var pool = $(this).val().split('/');
+      var base = $('#'+id).text().split('/');
+      if (good && typeof(pool[1])=='undefined') {good = false; swal({title:"_(Missing subnet size)_",text:"_(Pool subnet size is not defined)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});}
+      if (good && pool[1]<=base[1]) {good = false; swal({title:"_(Invalid subnet size)_",text:"_(Pool subnet size is too large)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});}
+    }
+  });
+  return good;
+}
+function checkIP() {
+  var validIP4 = /^((25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(25[0-5]|2[0-4]\d|[01]?\d\d?)$/;
+  var validIP6 = /^((?=.*::)(?!.*::.+::)(::)?([\dA-F]{1,4}:(:|\b)|){5}|([\dA-F]{1,4}:){6})((([\dA-F]{1,4}((?!\3)::|:\b|$))|(?!\2\3)){2}|(((2[0-4]|1\d|[1-9])?\d|25[0-5])\.?\b){4})$/i;
+  var error = false;
+  $('#settingsForm').find('input[name^="DOCKER_SUBNET_"]').each(function(){
+    if ($(this).val() && !validIP4.test($(this).val())) error = true;
+  });
+  if (error) {swal({title:"_(Invalid IPv4 subnet)_",text:"_(Please enter a valid subnet)_",type:'error',html:true,confirmButtonText:"_(Ok)_"}); return false;}
+  $('#settingsForm').find('input[name^="DOCKER_GATEWAY_"]').each(function(){
+    if ($(this).val() && !validIP4.test($(this).val())) error = true;
+  });
+  if (error) {swal({title:"_(Invalid IPv4 gateway)_",text:"_(Please enter a valid gateway)_",type:'error',html:true,confirmButtonText:"_(Ok)_"}); return false;}
+  $('#settingsForm').find('input[name^="DOCKER_RANGE_"]').each(function(){
+    if ($(this).val() && !validIP4.test($(this).val())) error = true;
+  });
+  if (error) {swal({title:"_(Invalid IPv4 range)_",text:"_(Please enter a valid range)_",type:'error',html:true,confirmButtonText:"_(Ok)_"}); return false;}
+  $('#settingsForm').find('input[name^="DOCKER_SUBNET6_"]').each(function(){
+    if ($(this).val() && !validIP6.test($(this).val())) error = true;
+  });
+  if (error) {swal({title:"_(Invalid IPv6 subnet)_",text:"_(Please enter a valid subnet)_",type:'error',html:true,confirmButtonText:"_(Ok)_"}); return false;}
+  $('#settingsForm').find('input[name^="DOCKER_GATEWAY6_"]').each(function(){
+    if ($(this).val() && !validIP6.test($(this).val())) error = true;
+  });
+  if (error) {swal({title:"_(Invalid IPv6 gateway)_",text:"_(Please enter a valid gateway)_",type:'error',html:true,confirmButtonText:"_(Ok)_"}); return false;}
+  $('#settingsForm').find('input[name^="DOCKER_RANGE6_"]').each(function(){
+    if ($(this).val() && !validIP6.test($(this).val())) error = true;
+  });
+  if (error) {swal({title:"_(Invalid IPv6 range)_",text:"_(Please enter a valid range)_",type:'error',html:true,confirmButtonText:"_(Ok)_"}); return false;}
+  return true;
+}
+function showLogOptions(log) {
+  if (log == 'no') {
+    $('#DOCKER_LOG_OPTIONS').hide('slow');
+  } else {
+    $('#DOCKER_LOG_OPTIONS').show('slow');
+  }
+}
+function prepareFS(form,cookie,value) {
+  if ($(form).find('input[type="submit"]').val()=='Cancel') $.removeCookie(cookie); else $.cookie(cookie,value);
+}
+function btrfsScrub(path) {
+  $.post('/webGui/include/FileSystemStatus.php',{cmd:'scrub',path:path},function(data) {
+    if (data.indexOf('running')>0) {
+      $('#btrfs-scrub').text(data);
+      setTimeout(function(){btrfsScrub(path);},1000);
+    } else {
+      $.removeCookie('btrfs-scrub-docker');
+      refresh();
+    }
+  });
+}
+function updateLocation(val) {
+  var content1 = $("#DOCKER_IMAGE_FILE1");
+  var content2 = $("#DOCKER_IMAGE_FILE2");
+  switch (val) {
+  case 'xfs':
+    var path = content2.val().split('/');
+    path.splice(-1,1);
+    content1.val((path.join('/') + '/docker-xfs.img'));
+    $('#vdisk_file').show('slow');
+    $('#vdisk_dir').hide('slow');
+    content1.prop('disabled',false).trigger('change');
+    content2.prop('disabled',true);
+    break;
+  case 'folder':
+    var path = content2.val().split('/');
+    if (path[path.length-1]=='') path.splice(-2,2); else path.splice(-1,1);
+    content2.val(path.join('/') + '/docker/');
+    $('#vdisk_file').hide('slow');
+    $('#vdisk_dir').show('slow');
+    content1.prop('disabled',true);
+    content2.prop('disabled',false).trigger('change');
+    break;
+  default:
+    var path = content2.val().split('/');
+    path.splice(-1,1);
+    content1.val((path.join('/') + '/docker.img'));
+    $('#vdisk_file').show('slow');
+    $('#vdisk_dir').hide('slow');
+    content1.prop('disabled',false).trigger('change');
+    content2.prop('disabled',true);
+    break;
+  }
+}
+function checkbox_state(value) {
+  $.post('/plugins/dynamix.docker.manager/include/UpdateConfig.php',{action:'exist',name:value},function(state){state==0 ? $('.deleteLabel').fadeIn() : $('.deleteLabel').fadeOut();});
+}
+$(function() {
+<?if ($DockerStopped):?>
+  if ($('#DOCKER_IMAGE_TYPE').val()=='folder') {
+    $('#vdisk_dir').show();
+    checkbox_state($("#DOCKER_IMAGE_FILE2").val());
+    $("#DOCKER_IMAGE_FILE2").prop('disabled',false);
+  } else {
+    $('#vdisk_file').show();
+    checkbox_state($("#DOCKER_IMAGE_FILE1").val());
+    $("#DOCKER_IMAGE_FILE1").prop('disabled',false);
+  }
+<?endif;?>
+  $("#applyBtn").click(function() {
+    if (!checkDHCP() || !checkIP()) return;
+    if ($(".deleteCheckbox").is(":checked")) {
+      $("#removeForm").submit();
+      return;
+    }
+<?if ($DockerStopped):?>
+    if (($("#DOCKER_IMAGE_SIZE").length || $("#DOCKER_IMAGE_TYPE").val()=='folder') && ($("#DOCKER_IMAGE_FILE1").length || $("#DOCKER_IMAGE_FILE2").length)) {
+      var size = $("#DOCKER_IMAGE_SIZE").val();
+      var target = $("#SIZE_ERROR");
+      if ($("#DOCKER_IMAGE_TYPE").val()!='folder' && !$.isNumeric(size)) {
+        target.fadeIn().html('_(Error)_: _(value must be a number)_.');
+        return;
+      } else {
+        target.fadeOut();
+      }
+      $("#settingsForm").submit();
+    }
+<?else:?>
+    $("#settingsForm").submit();
+<?endif;?>
+  });
+  $("#DOCKER_ENABLED").change(function changeService() {
+    if ($(this).val()=='yes') {
+      $('#arraystopped').fadeIn('slow');
+    } else {
+      $('#arraystopped').fadeOut('fast');
+    }
+  });
+  if ($("#DOCKER_ENABLED").val()!='yes') $('#arraystopped').hide();
+<?if ($DockerStopped):?>
+  showLogOptions(document.settingsForm.DOCKER_LOG_ROTATION.value);
+  $("#DOCKER_IMAGE_FILE1").on("input change", function(){
+    $("#IMAGE_ERROR1").fadeOut();
+    $("#applyBtn").prop("disabled", false);
+    checkbox_state($(this).val());
+  });
+  $("#DOCKER_IMAGE_FILE2").on("input change", function(){
+    $("#IMAGE_ERROR2").fadeOut();
+    $("#applyBtn").prop("disabled", false);
+    checkbox_state($(this).val());
+  });
+<?if ($var['fsState'] == "Started"):?>
+  $("#DOCKER_IMAGE_FILE1").fileTreeAttach(null, null, function(folder) {
+    var item = $("#DOCKER_IMAGE_TYPE").val()=='xfs' ? 'docker-xfs.img' : 'docker.img';
+    $("#DOCKER_IMAGE_FILE1").val(folder + item).change();
+  });
+  $("#DOCKER_IMAGE_FILE2").fileTreeAttach(null, null, function(folder) {
+    var item = 'docker/';
+    $("#DOCKER_IMAGE_FILE2").val(folder + item).change();
+  });
+  $("#DOCKER_APP_CONFIG_PATH").fileTreeAttach();
+<?endif;?>
+  $(".deleteCheckbox").change(function() {
+    var checked = $(this).is(":checked");
+    $("#DOCKER_ENABLED").prop("disabled", checked).val('no');
+    $("#DOCKER_IMAGE_SIZE").prop("disabled", checked);
+    $("#DOCKER_IMAGE_TYPE").prop("disabled", checked);
+    $("#DOCKER_IMAGE_FILE").prop("disabled", checked);
+    $("#DOCKER_APP_CONFIG_PATH").prop("disabled", checked);
+    $("#DOCKER_APP_UNRAID_PATH").prop("disabled", checked);
+    $("#applyBtn").val(checked ? "Delete" : "Apply").removeAttr('disabled');
+  });
+<?else:?>
+  if ($.cookie('btrfs-scrub-docker')) btrfsScrub($.cookie('btrfs-scrub-docker'));
+<?endif;?>
+  if ($.cookie('dockersettings_view_mode') == 'advanced') {
+    $('.advanced').show();
+    $('.basic').hide();
+  }
+  $('.advancedview').switchButton({
+    labels_placement: "left",
+    on_label: "_(Advanced View)_",
+    off_label: "_(Basic View)_",
+    checked: $.cookie('dockersettings_view_mode') == 'advanced'
+  });
+  $('.advancedview').change(function () {
+    $('.advanced').toggle('slow');
+    $('.basic').toggle('slow');
+    $.cookie('dockersettings_view_mode', $('.advancedview').is(':checked') ? 'advanced':'basic', {expires:3650});
+  });
+  showStatus('pid','dockerd');
+});
+</script>

@@ -1,0 +1,66 @@
+Menu="WebGui"
+Title="Page Map"
+Icon="icon-pagemap"
+Tag="map-o"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?if (_var($display,'resize')):?>
+<script>
+function resize() {
+  $('div.up').height(Math.max(window.innerHeight-320,330));
+}
+$(function() {
+  resize();
+  $(window).bind('resize',function(){resize();});
+});
+</script>
+<?endif;?>
+<?
+function show_map($menu, $level) {
+  $pages = find_pages( $menu);
+  if (empty($pages))
+    return;
+  echo "<ul>";
+  foreach ($pages as $page) {
+    $link  = "<a href='/{$page['name']}'>{$page['name']}</a>";
+    $title = _($page['Title'] ?? '');
+    $type  = $page['Type'] ?? '';
+    if ($type == "menu") {
+      $link = "($link)";
+    } elseif ($type == "xmenu") {
+      $link = "[$link]";
+    }
+    echo "$level $link",($title ? " - $title" : ""),"<br>";
+    show_map($page['name'], $level+1);
+  }
+  echo "</ul>";
+}
+$uri = ['dashboard','main','shares','users','settings','plugins','docker','vms'];
+
+foreach($uri as $more) {
+  $text = "$docroot/languages/$locale/$more.txt";
+  if (file_exists($text)) {
+    // additional translations
+    $store = "$docroot/languages/$locale/$more.dot";
+    if (!file_exists($store)) file_put_contents($store,serialize(parse_lang_file($text)));
+    $language = array_merge($language,unserialize(file_get_contents($store)));
+  }
+}
+
+echo "<div class='up'>";
+show_map("Tasks", 1);
+show_map("Buttons", 1);
+echo "</div>";
+?>
+<input type="button" value="_(Done)_" onclick="done()">

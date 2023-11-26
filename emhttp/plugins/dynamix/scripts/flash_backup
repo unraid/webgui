@@ -1,0 +1,49 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/Wrappers.php";
+
+$var = (array)@parse_ini_file('/var/local/emhttp/var.ini');
+$dir = ['system','appdata','isos','domains'];
+$out = ['prev','previous'];
+
+$server = isset($var['NAME']) ? str_replace(' ','_',strtolower($var['NAME'])) : 'tower';
+$mydate = date('Ymd-Hi');
+$osVersion = _var($var,'version','_unknown');
+$backup = "$server-v$osVersion-flash-backup-$mydate.zip";
+
+$used = exec("df /boot|awk 'END{print $3}'") * 1.5;
+$free = exec("df /|awk 'END{print $4}'");
+if ($free > $used) $zip = "/$backup"; else {
+  foreach ($dir as $share) {
+    if (!is_dir("/mnt/user/$share")) continue;
+    $free = exec("df /mnt/user/$share|awk 'END{print $4}'");
+    if ($free > $used) {$zip = "/mnt/user/$share/$backup"; break;}
+  }
+}
+if (isset($zip)) {
+  chdir("/boot");
+  foreach (glob("*",GLOB_NOSORT+GLOB_ONLYDIR) as $folder) {
+    if (in_array($folder,$out)) continue;
+    exec("zip -qr ".escapeshellarg($zip)." ".escapeshellarg($folder));
+  }
+  foreach (glob("*",GLOB_NOSORT) as $file) {
+    if (is_dir($file)) continue;
+    exec("zip -q ".escapeshellarg($zip)." ".escapeshellarg($file));
+  }
+  symlink($zip,"$docroot/$backup");
+  echo $backup;
+}
+?>

@@ -1,0 +1,45 @@
+#!/bin/bash
+#
+# script: rc.local_shutdown
+#
+# Local system shutdown script.
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+# Beep the motherboard speaker
+beep -r 2
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# Invoke custom 'stop' script if present
+if [[ -f /boot/config/stop ]]; then
+  log "Starting stop script"
+  fromdos </boot/config/stop >/var/tmp/stop
+  chmod +x /var/tmp/stop
+  /var/tmp/stop
+fi
+
+# Get time-out setting
+. /var/local/emhttp/var.ini
+TIMEOUT=${shutdownTimeout:-90}
+
+# Try to stop the array
+log "Waiting up to $TIMEOUT seconds for graceful shutdown..."
+if ! timeout $TIMEOUT curl -s --unix-socket /var/run/emhttpd.socket http://localhost/update.htm?cmdStop=apply\&csrf_token=$csrf_token >/dev/null; then
+  log "Forcing shutdown..."
+  # Send some additional info to the system log and generate diagnostics.zip file
+  log "Status of all loop devices"
+  run losetup -a
+  log "Active pids left on /mnt/*"
+  run fuser -mv /mnt/*
+  log "Active pids left on /dev/md*"
+  run fuser -mv /dev/md*
+  log "Generating diagnostics..."
+  /usr/local/sbin/diagnostics
+fi
+
+# Stop emhttpd
+log "Stopping emhttpd"
+run /usr/local/sbin/emhttp stop

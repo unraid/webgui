@@ -1,0 +1,23 @@
+#!/bin/bash
+# zfs_scrub start <pool>
+# zfs_scrub clear <pool>
+# zfs_scrub status <pool>
+# zfs_scrub cancel <pool> 
+
+case "$1" in
+'start')
+  exec /usr/sbin/zpool scrub $2 2>/dev/null
+;;
+'clear')
+  exec /usr/sbin/zpool clear $2 2>/dev/null
+;;
+'status')
+  # first output whatever the status is to stdout
+  /usr/sbin/zpool status -P $2
+  # establish retval of this script: 0 running, 1 not running
+  /usr/sbin/zpool status -P $2 | grep -q 'scrub in progress'
+;;
+'cancel')
+  /usr/sbin/zpool scrub -s $2 2>/dev/null
+;;
+esac

@@ -1,0 +1,105 @@
+#!/bin/bash
+#
+# script: rc.rsyslogd
+#
+# Start/stop/restart the system logging daemons.
+#
+# Written for Slackware Linux by Patrick J. Volkerding <volkerdi@slackware.com>.
+# Modded for rsyslogd by Chris Elvidge <chris@lowe.ae> Sept 2005
+# slightly modified by ponce <matteo.bernardini@sns.it> Oct 2010
+# rsyslogd_reload added by Christophe Trussardi <chris@teria.org> Sept 2011
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+DAEMON="Syslog server daemon"
+PIDFILE=/var/run/rsyslogd.pid  # native rsyslogd pid file
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+create_xconsole(){
+  if [[ ! -e /dev/xconsole ]]; then
+    mknod -m 640 /dev/xconsole p
+  else
+    chmod 0640 /dev/xconsole
+  fi
+  chown 0:0 /dev/xconsole
+}
+
+rsyslogd_running(){
+  sleep 0.1
+  ps axc | grep -q ' rsyslogd'
+}
+
+rsyslogd_start(){
+  log "Starting $DAEMON..."
+  local REPLY
+  if rsyslogd_running; then
+    REPLY="Already started"
+  else
+    run /usr/sbin/rsyslogd -i $PIDFILE
+    if rsyslogd_running; then REPLY="Started"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+rsyslogd_stop(){
+  log "Stopping $DAEMON..."
+  local REPLY
+  if ! rsyslogd_running; then
+    REPLY="Already stopped"
+  else
+    run killall rsyslogd
+    rm -f $PIDFILE
+    if ! rsyslogd_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+rsyslogd_restart(){
+  log "Restarting $DAEMON..."
+  rsyslogd_stop
+  sleep 1
+  rsyslogd_start
+}
+
+rsyslogd_reload(){
+  log "Reloading $DAEMON..."
+  local REPLY
+  REPLY="Reloaded"
+  [[ -f $PIDFILE ]] && run kill -HUP $(cat $PIDFILE) || REPLY="Failed"
+  log "$DAEMON...  $REPLY."
+}
+
+rsyslogd_status(){
+  if rsyslogd_running; then
+    echo "$DAEMON is currently running."
+  else
+    echo "$DAEMON is not running."
+    exit 1
+  fi
+}
+
+case "$1" in
+'start')
+  create_xconsole
+  rsyslogd_start
+  ;;
+'stop')
+  rsyslogd_stop
+  ;;
+'restart')
+  rsyslogd_restart
+  ;;
+'reload')
+  rsyslogd_reload
+  ;;
+'status')
+  rsyslogd_status
+  ;;
+*)
+  echo "Usage: $BASENAME start|stop|restart|reload|status"
+  exit 1
+esac
+exit 0

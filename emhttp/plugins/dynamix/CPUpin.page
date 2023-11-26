@@ -1,0 +1,30 @@
+Menu="CPUset:2"
+Title="CPU Pinning Docker"
+Tag="icon-cpu"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+*/
+?>
+<?if ($dockerd):?>
+<form name="ct">
+<input type="hidden" name="names" id="names-ct" value="">
+<table class='tablesorter shift' style='width:auto'>
+<thead><tr><th><i class="fa fa-list"></i> _(Container)_</th><?create()?></tr></thead>
+<tbody id="table-ct"><?=$spinner?></tbody>
+</table>
+<input type="button" value="_(Apply)_" onclick="apply(this.form)" disabled><input type="button" value="_(Done)_" onclick="done()"><span id="wait-ct" class="red-text" style="display:none"><i class="fa fa-spinner fa-spin"></i> _(Please wait)_...</span>
+</form>
+<?else:?>
+<div class="notice">_(No CPU pinning available. Docker service must be started)_</div>
+<?endif;?>
+
+:cpu_pinning_help:

@@ -1,0 +1,36 @@
+Menu="SMB:2"
+Title="Workgroup Settings"
+Tag="sitemap"
+Cond="($var['shareSMBEnabled']=='yes')"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<form markdown="1" name="WorkGroup" method="POST" action="/update.htm" target="progressFrame">
+_(Workgroup)_:
+: <input type="text" name="WORKGROUP" maxlength="40" value="<?=htmlspecialchars($var['WORKGROUP'])?>" class="narrow" <?if ($var['fsState']=="Started"):?>disabled<?endif;?>>
+
+:smb_workgroup_help:
+
+<?if ($var['USE_NETBIOS']=="yes"):?>
+_(Local master)_:
+: <select name="localMaster" <?if ($var['fsState']=="Started"):?>disabled<?endif;?>>
+  <?=mk_option($var['localMaster'], "no", _('No'))?>
+  <?=mk_option($var['localMaster'], "yes", _('Yes'))?>
+  </select>
+
+:smb_local_master_help:
+
+<?endif?>
+&nbsp;
+: <input type="submit" name="changeShare" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()"><?if ($var['fsState']=="Started"):?>*_(Array must be **Stopped** to change)_*<?endif;?>
+</form>

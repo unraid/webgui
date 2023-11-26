@@ -1,0 +1,59 @@
+#!/bin/bash
+# upnp_port add link descr ip port port udp
+# upnp_port del link port udp
+
+# exit if not executable
+[[ ! -x /usr/bin/upnpc ]] && exit 0
+
+LINK=$2
+UPNP=/var/tmp/upnp
+XML=$(cat $UPNP 2>/dev/null)
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+if [[ -n $XML ]]; then
+  # validate XML
+  timeout 6 stdbuf -o0 upnpc -u $XML -m $LINK -l 2>&1|grep -qm1 'refused'
+  [[ $? -ne 1 ]] && XML=
+fi
+if [[ -z $XML ]]; then
+  # obtain XML
+  GW=$(ip -4 route list default dev $LINK|awk '{print $3}')
+  DESC=$(timeout 12 stdbuf -o0 upnpc -m $LINK -l 2>/dev/null|grep -Po 'desc: \K.+')
+  for URL in $DESC; do
+    IP=${URL#*://}
+    if [[ ${IP%:*} == $GW ]]; then
+      XML=$URL
+      echo -n $XML >$UPNP
+      break
+    fi
+  done
+fi
+# exit when no XML
+[[ -z $XML ]] && exit 0
+
+WG=$(wg show interfaces)
+POLLER=/usr/local/emhttp/webGui/scripts/upnp_poller
+
+case "$1" in
+'add')
+  upnpc -u $XML -m $LINK -e $3 -a $4 $5 $6 $7 >/dev/null 2>&1
+  if [[ $? -eq 0 ]]; then
+    [[ -n $WG ]] && at -M -f ${POLLER}_start now 2>/dev/null
+    log "Added port $5/$7"
+  else
+    log "Failed to add port $5/$7"
+  fi
+  ;;
+'del')
+  upnpc -u $XML -m $LINK -d $3 $4 >/dev/null 2>&1
+  if [[ $? -eq 0 ]]; then
+    [[ -z $WG && -n $(pgrep -f $POLLER) ]] && pkill -f $POLLER
+    log "Deleted port $3/$4"
+  else
+    log "Failed to delete port $3/$4"
+  fi
+  ;;
+esac
+exit 0

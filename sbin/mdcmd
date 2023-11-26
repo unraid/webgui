@@ -1,0 +1,12 @@
+#!/bin/bash
+#
+if [ $# -eq 0 ]; then
+  echo "usage: mdcmd <command> [arg ... ]"
+  exit 1;
+fi;
+
+if [ $1 == "status" ]; then
+  cat /proc/mdstat
+else
+  echo $* >/proc/mdcmd
+fi

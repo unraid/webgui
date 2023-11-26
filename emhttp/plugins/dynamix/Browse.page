@@ -1,0 +1,1004 @@
+Title=""
+Tag="home"
+Nchan="file_manager"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+function dfm_quote($text) {
+  return "\"$text\"";
+}
+function dfm_array($array) {
+  return implode(',',array_map('dfm_quote',$array));
+}
+function validdir($dir) {
+  $path = realpath($dir);
+  return in_array(explode('/',$path)[1]??'',['mnt','boot']) ? $path : '';
+}
+$dir     = validdir(htmlspecialchars_decode($dir));
+[$none,$root,$main,$next,$rest] = my_explode('/',$dir,5);
+$dir     = htmlspecialchars(str_replace('\\','\\\\',$dir));
+$lock    = $root=='mnt' ? ($main ?: '---') : ($root=='boot' ? _('flash') : '---');
+$isshare = $root=='mnt' && (!$main || !$next || ($main=='rootshare' && !$rest));
+$editor  = '/boot/config/editor.cfg';
+
+if (!file_exists($editor)) file_put_contents($editor,implode("\n",['','txt','js','php','page','plg','xml','old','bak','log','css']));
+?>
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.filetree.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.switchbutton.css")?>">
+
+<script src="<?autov("/webGui/javascript/jquery.filetree.js")?>"></script>
+<script src="<?autov("/webGui/javascript/jquery.switchbutton.js")?>"></script>
+<script>
+// General variables
+var dir = "<?=$dir?>";
+var table = null;
+var thead = null;
+
+function autoscale(value) {
+  var unit = ['B','kB','MB','GB','TB','PB','EB'];
+  var base = value>1?Math.floor(Math.log(value)/Math.log(1000)):0;
+  var data = base<unit.length ? value/Math.pow(1000, base) : 0;
+  var scale = data<100?100:10;
+  if (data==0) base=0;
+  return ((Math.round(scale*data)/scale)+' '+unit[base]).replace('.','<?=$display['number'][0]?>')+'/s';
+}
+function folderContextMenu(id,button) {
+  var opts = [];
+  context.settings({button:button});
+  if (dfm.running) {
+    opts.push({text:"_(Job running)_", icon:"fa fa-ban"});
+  } else {
+    opts.push({header:"_(Action)_"});
+    opts.push({text:"_(Delete)_", icon:"fa-trash-o", action:function(e){e.preventDefault();doAction(1,"_(Delete)_",id.dfm_proxy());}});
+    opts.push({text:"_(Copy)_", icon:"fa-copy", action:function(e){e.preventDefault();doAction(3,"_(Copy)_",id.dfm_proxy());}});
+    opts.push({text:"_(Move)_", icon:"fa-paste", action:function(e){e.preventDefault();doAction(4,"_(Move)_",id.dfm_proxy());}});
+<?if (!$isshare):?>
+    opts.push({text:"_(Rename)_", icon:"fa-edit", action:function(e){e.preventDefault();doAction(2,"_(Rename)_",id.dfm_proxy());}});
+<?endif?>
+    opts.push({divider:true});
+    opts.push({text:"_(Owner)_", icon:"fa-user-o", action:function(e){e.preventDefault();doAction(11,"_(Change Owner)_",id.dfm_proxy());}});
+    opts.push({text:"_(Permission)_", icon:"fa-address-book-o", action:function(e){e.preventDefault();doAction(12,"_(Change Permission)_",id.dfm_proxy());}});
+    opts.push({text:"_(Calculate)_", icon:"fa-calculator", action:function(e){e.preventDefault();doAction(14,"_(Calculate Occupied Space)_",id.dfm_proxy());}});
+    opts.push({text:"_(Search)_", icon:"fa-search", action:function(e){e.preventDefault();doAction(15,"_(Search)_",id.dfm_proxy());}});
+<?if (!$isshare):?>
+    opts.push({header:"_(Common)_"});
+    opts.push({text:"_(Create)_", icon:"fa-folder-o", action:function(e){e.preventDefault();doAction(0,"_(Create)_",id.dfm_proxy());}});
+<?if ($dir):?>
+    opts.push({text:"_(Upload)_", icon:"fa-upload", action:function(e){e.preventDefault();$('#dfm_upload').click();}});
+<?endif?>
+<?endif?>
+  }
+  context.attach('#'+id, opts);
+}
+function fileContextMenu(id,button) {
+  var opts = [];
+  context.settings({button:button});
+  if (dfm.running) {
+    opts.push({text:"_(Job running)_", icon:"fa fa-ban"});
+  } else {
+    opts.push({header:"_(Action)_"});
+    opts.push({text:"_(Delete)_", icon:"fa-trash-o", action:function(e){e.preventDefault();doAction(6,"_(Delete)_",id.dfm_proxy());}});
+    opts.push({text:"_(Copy)_", icon:"fa-copy", action:function(e){e.preventDefault();doAction(8,"_(Copy)_",id.dfm_proxy());}});
+    opts.push({text:"_(Move)_", icon:"fa-paste", action:function(e){e.preventDefault();doAction(9,"_(Move)_",id.dfm_proxy());}});
+    opts.push({text:"_(Rename)_", icon:"fa-edit", action:function(e){e.preventDefault();doAction(7,"_(Rename)_",id.dfm_proxy());}});
+    opts.push({divider:true});
+    opts.push({text:"_(Owner)_", icon:"fa-user-o", action:function(e){e.preventDefault();doAction(11,"_(Change Owner)_",id.dfm_proxy());}});
+    opts.push({text:"_(Permission)_", icon:"fa-address-book-o", action:function(e){e.preventDefault();doAction(12,"_(Change Permission)_",id.dfm_proxy());}});
+    opts.push({text:"_(Download)_", icon:"fa-download", action:function(e){e.preventDefault();doAction(13,"_(Download)_",id.dfm_proxy());}});
+<?if (!$isshare):?>
+    opts.push({header:"_(Common)_"});
+    opts.push({text:"_(Create)_", icon:"fa-folder-o", action:function(e){e.preventDefault();doAction(0,"_(Create)_",id.dfm_proxy());}});
+<?if ($dir):?>
+    opts.push({text:"_(Upload)_", icon:"fa-upload", action:function(e){e.preventDefault();$('#dfm_upload').click();}});
+<?endif?>
+<?endif?>
+  }
+  context.attach('#'+id, opts);
+}
+function deviceFolderContextMenu(dev,id) {
+  var opts = [];
+  context.settings({button:'both'});
+  if (dfm.running) {
+    opts.push({text:"_(Job running)_", icon:"fa fa-ban"});
+  } else {
+    opts.push({header:dev.split('/')[2]});
+    opts.push({text:"_(Delete)_", icon:"fa-trash-o", action:function(e){e.preventDefault();doAction(1,"_(Delete)_",dev);}});
+    opts.push({text:"_(Copy)_", icon:"fa-copy", action:function(e){e.preventDefault();doAction(3,"_(Copy)_",dev);}});
+    opts.push({text:"_(Move)_", icon:"fa-paste", action:function(e){e.preventDefault();doAction(4,"_(Move)_",dev);}});
+    opts.push({divider:true});
+    opts.push({text:"_(Calculate)_", icon:"fa-calculator", action:function(e){e.preventDefault();doAction(14,"_(Calculate Occupied Space)_",dev);}});
+  }
+  context.attach('#device_'+id, opts);
+}
+function deviceFileContextMenu(dev,id) {
+  var opts = [];
+  context.settings({button:'both'});
+  if (dfm.running) {
+    opts.push({text:"_(Job running)_", icon:"fa fa-ban"});
+  } else {
+    opts.push({header:dev.split('/')[2]});
+    opts.push({text:"_(Delete)_", icon:"fa-trash-o", action:function(e){e.preventDefault();doAction(6,"_(Delete)_",dev);}});
+    opts.push({text:"_(Copy)_", icon:"fa-copy", action:function(e){e.preventDefault();doAction(8,"_(Copy)_",dev);}});
+    opts.push({text:"_(Move)_", icon:"fa-paste", action:function(e){e.preventDefault();doAction(9,"_(Move)_",dev);}});
+  }
+  context.attach('#device_'+id, opts);
+}
+function home(source,target) {
+  var equal = '?';
+  $.ajax({
+    async: false,
+    url: '/webGui/include/Control.php',
+    type: 'POST',
+    dataType: 'text',
+    data: {mode:'home',source:encodeURIComponent(dfm_htmlspecialchars(source)),target:encodeURIComponent(dfm_htmlspecialchars(target))},
+    success: function(e){equal = e;}
+  });
+  return equal;
+}
+function resize() {
+  $('div.autoheight').height(Math.max(window.innerHeight-320,330));
+}
+function selectAll() {
+  if (dfm.running) {
+    context.attach('#check_0', [{text:"_(Job running)_", icon:"fa fa-ban"}]);
+    return;
+  }
+  context.destroy('#check_0');
+  if ($('#check_0').hasClass('fa-square-o')) {
+    $('i[id^="check_"]:visible').removeClass('fa-square-o').addClass('fa-check-square-o');
+    $('input.extra').prop('disabled',false);
+<?if (!$isshare):?>
+    $('input.rename').prop('disabled',false);
+<?endif;?>
+  } else {
+    $('i[id^="check_"]:visible').removeClass('fa-check-square-o').addClass('fa-square-o');
+    $('input.extra').prop('disabled',true);
+<?if (!$isshare):?>
+    $('input.rename').prop('disabled',true);
+<?endif;?>
+  }
+}
+function selectOne(id,check=true) {
+  if (dfm.running && check) {
+    context.attach('#'+id, [{text:"_(Job running)_", icon:"fa fa-ban"}]);
+    return;
+  }
+  context.destroy('#'+id);
+  if ($('#'+id).hasClass('fa-square-o')) {
+    $('#'+id).removeClass('fa-square-o').addClass('fa-check-square-o');
+  } else {
+    $('#'+id).removeClass('fa-check-square-o').addClass('fa-square-o');
+  }
+  var checked = 0;
+  if (check) {
+    $('i[id^="check_"]').each(function(){if ($(this).prop('id')!='check_0' && $(this).hasClass('fa-check-square-o')) checked++;});
+    $('input.extra').prop('disabled',checked==0);
+<?if (!$isshare):?>
+    $('input.rename').prop('disabled',checked!=1);
+<?endif;?>
+  } else {
+    $('i[id^="queue_"]').each(function(){if ($(this).hasClass('fa-check-square-o')) checked++;});
+    $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',checked==0);
+  }
+}
+function errorSource() {
+  swal({title:"_(Invalid source)_",text:"_(Not allowed to mix disk and user shares)_",html:true,type:'error',confirmButtonText:"_(Ok)_"});
+}
+function errorTarget() {
+  swal({title:"_(Invalid target)_",text:"_(Enter a valid target)_",html:true,type:'error',confirmButtonText:"_(Ok)_"},function(x){dfm.window.find('#dfm_target').prop('disabled',false);});
+}
+function data(id) {
+  var data = id.attr('data').dfm_quote();
+<?if ($isshare):?>
+  return id.attr('type')=='d' ? data+'/' : data;
+<?else:?>
+  return data;
+<?endif;?>
+}
+function fileName(file) {
+  return file.indexOf('/')>=0 ? file.split('/').pop() : file;
+}
+function fileExtension(file) {
+  file = fileName(file);
+  return file.indexOf('.')>=0 ? file.split('.').pop() : '';
+}
+function fileEdit(id) {
+  const known = ["","cfg","conf",<?=dfm_array(file($editor,FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES))?>];
+  var source = $('#'+id.dfm_proxy()).attr('data').dfm_quote();
+  var ext = fileExtension(source);
+  if (ext == 'zip') {
+    // download zip files
+    downloadFile(source);
+    return;
+  }
+  dfm.window = $("#dfm_dialogWindow");
+  if (!known.includes(ext)) {
+    // file viewer - supported file extensions: .pdf, .jpg, .png, .jpeg, .gif
+    dfm.window.html($("#dfm_templateViewFile").html().replace('{$0}',source).dfm_build());
+    return;
+  }
+  // file editor dialog
+  dfm.window.html($("#dfm_templateEditFile").html().replace('{$0}',source).dfm_build());
+  dfm.window.dialog({
+    dialogClass: 'ui-dfm',
+    autoOpen: true,
+    title: fileName(source),
+    height: Math.min(window.innerHeight-80,800),
+    width: Math.min(window.innerWidth,1200),
+    resizable: false,
+    modal: true,
+    buttons: {
+      "_(Save)_": function(){
+        $.post('/webGui/include/Control.php',{mode:'save',file:encodeURIComponent(source), data:encodeURIComponent(editor.session.getValue())});
+        dfm.window.dialog('destroy');
+        setTimeout(loadList,100);
+      },
+      "_(Cancel)_": function(){
+        dfm.window.dialog('destroy');
+      }
+    }
+  });
+  $('.ui-dfm .ui-dialog-titlebar-close').html('<i class="fa fa-expand"></i>').prop('title',"_(Expand)_").prop('onclick',null).off('click').click(function(){fullWindow();}).show();
+}
+function fullWindow() {
+  if ($('.ui-dfm .ui-dialog-titlebar-close').html().indexOf('expand')>=0) {
+    dfm.window.dialog('option','height',window.innerHeight-40);
+    dfm.window.dialog('option','width',window.innerWidth);
+    dfm.window.dialog('option','position',{my:'top',at:'top',of:window});
+    $('.ui-dfm .ui-dialog-titlebar-close').html("<i class='fa fa-compress'></i>").prop("title","_(Compress)_");
+  } else {
+    dfm.window.dialog('option','height',Math.min(window.innerHeight-80,800));
+    dfm.window.dialog('option','width',Math.min(window.innerWidth,1200));
+    dfm.window.dialog('option','position',{my:'center',at:'center',of:window});
+    $('.ui-dfm .ui-dialog-titlebar-close').html("<i class='fa fa-expand'></i>").prop("title","_(Expand)_");
+  }
+  editor.resize();
+}
+function doJobs(title) {
+  dfm.window = $("#dfm_dialogWindow");
+  dfm.window.html($('#dfm_templateJobs').html().dfm_build());
+  dfm.window.dialog({
+    dialogClass: 'ui-dfm',
+    autoOpen: true,
+    title: title,
+    height: 630,
+    width: 900,
+    resizable: false,
+    modal: true,
+    buttons: {
+      "_(Start)_": function(){
+        $.post('/webGui/include/Control.php',{mode:'start'},function(queue){
+          if (parseInt(queue) > 0) {
+            if (dfm.window.find('i[id^="queue_"]').length < 2) $.removeCookie('dfm_control.jobs');
+            dfm.window.dialog('close');
+            dfm_openDialog();
+            dfm_fileManager('start');
+          }
+        });
+      },
+      "_(Delete)_": function(){
+        let row = [];
+        dfm.window.find('i[id^="queue_"]').each(function(){if ($(this).hasClass('fa-check-square-o')) row.push((($(this).prop('id').split('_')[1]-1)*9)+1);});
+        $.post('/webGui/include/Control.php',{mode:'undo',row:row.join(',')},function(queue){
+          $.post('/webGui/include/Control.php',{mode:'jobs'},function(jobs){
+            $('#dfm_jobs').html(jobs);
+            if (dfm.window.find('i[id^="queue_"]').length==0) $.removeCookie('dfm_control.jobs');
+          });
+          if (parseInt(queue)==1) {
+            setTimeout(function(){$('#dfm_jobs').html("<div id='dfm_joblist'><i class='fa fa-fw fa-minus-square-o grey-text job'></i>_(No jobs scheduled)_ ...</div>");},100);
+            $('.ui-dfm .ui-dialog-buttonset button:eq(0)').prop('disabled',true);
+            $('.dfm_control.jobs').prop('disabled',true);
+            $.removeCookie('dfm_control.jobs');
+          }
+          $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',true);
+        });
+      },
+      "_(Done)_": function(){
+        dfm.window.dialog('destroy');
+      }
+    }
+  });
+  $('.ui-dfm .ui-dialog-titlebar-close').css({'display':'none'});
+  if (dfm.running) $('.ui-dfm .ui-dialog-buttonset button:eq(0)').prop('disabled',true);
+  $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',true);
+}
+var filemonitor = new NchanSubscriber('/sub/filemonitor',{subscriber:'websocket'});
+filemonitor.on('message', function(state) {
+  if (state==1 && !dfm.running && !timers.filemonitor) timers.filemonitor = setTimeout(function(){if (dfm.running) clearTimeout(timers.filemonitor); else refresh();},1500);
+});
+setTimeout(function(){filemonitor.start();},3000);
+
+function doAction(action,title,id) {
+  var link   = id.substr(0,1)=='/';
+  var source = link ? id : data($('#'+id));
+  var path   = source.substr(1).split('/');
+  var zfs    = '';
+<?if ($dfm['zfs']):?>
+  if ([1,4].includes(action) && path[0]=='mnt') {
+    switch (path.length) {
+    case 3:
+      if (path[2]=='') zfs = path[1]+'/';
+      break;
+    case 4:
+      if (path[3]=='') zfs = path[1]+'/'+path[2];
+      break;
+    }
+  }
+<?endif;?>
+  var access = ['mnt','boot'];
+  if (!access.includes(path[0])) return;
+  var user   = /^(user0?|rootshare)$/.test(path[1]);
+  var root   = '/'+path[0]+(user ? '/'+path[1] : '');
+  var share  = user||!path[2]||(link&&path.length==3) ? '' : path[2]+'/';
+  var ud     = ['disks','remotes'].includes(path[1]); // unassigned devices
+  var match  = ud||user ? '' : '^(?!\\/mnt\\/user0?\\/).*$';
+  var name   = path.pop()||path.pop();
+  var hdlink = "<?=$var['fuse_directio']==1?'1':''?>";
+  dfm.window = $("#dfm_dialogWindow");
+  switch (action) {
+  case 0: // create folder
+    dfm.window.html($('#dfm_templateCreateFolder').html());
+    source = dir;
+    dfm.height = 330;
+    break;
+  case 1: // delete folder
+    dfm.window.html($('#dfm_templateDeleteFolder').html());
+    dfm_createSource(source.dfm_strip());
+    dfm.height = 330;
+    break;
+  case 2: // rename folder
+    dfm.window.html($('#dfm_templateRenameFolder').html());
+    dfm_createSource(name);
+    dfm.window.find('#dfm_target').val(name);
+    dfm.height = 330;
+    break;
+  case 3: // copy folder
+    dfm.window.html($('#dfm_templateCopyFolder').html());
+    dfm_createSource(source.dfm_strip());
+    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).fileTreeAttach(null,null,function(path){
+      var bits = path.substr(1).split('/');
+      var auto = bits.length>3 ? '' : share;
+      dfm.window.find('#dfm_target').val(path+auto).change();
+    });
+    dfm.height = 630;
+    break;
+  case 4: // move folder
+    dfm.window.html($('#dfm_templateMoveFolder').html());
+    dfm_createSource(source.dfm_strip());
+    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).fileTreeAttach(null,null,function(path){
+      var bits = path.substr(1).split('/');
+      var auto = bits.length>3 ? '' : share;
+      dfm.window.find('#dfm_target').val(path+auto).change();
+    });
+    dfm.height = 630;
+    break;
+  case 6: // delete file
+    dfm.window.html($('#dfm_templateDeleteFile').html());
+    dfm_createSource(source);
+    dfm.height = 330;
+    break;
+  case 7: // rename file
+    dfm.window.html($('#dfm_templateRenameFile').html());
+    dfm_createSource(name);
+    dfm.window.find('#dfm_target').val(name);
+    dfm.height = 330;
+    break;
+  case 8: // copy file
+    dfm.window.html($('#dfm_templateCopyFile').html());
+    dfm_createSource(source);
+    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).fileTreeAttach(null,null,function(path){
+      dfm.window.find('#dfm_target').val(path).change();
+    });
+    dfm.height = 630;
+    break;
+  case 9: // move file
+    dfm.window.html($('#dfm_templateMoveFile').html());
+    dfm_createSource(source);
+    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).fileTreeAttach(null,null,function(path){
+      dfm.window.find('#dfm_target').val(path).change();
+    });
+    dfm.height = 630;
+    break;
+  case 11: // change owner
+    dfm.window.html($('#dfm_templateChangeOwner').html());
+    var owner = $('#'+id.dfm_bring('owner')).text();
+    dfm_createSource(source.dfm_strip());
+    dfm.window.find('#dfm_target').val(owner);
+    dfm.height = 330;
+    break;
+  case 12: // change permission
+    dfm.window.html($('#dfm_templateChangePermission').html());
+    var perm = $('#'+id.dfm_bring('perm')).text();
+    dfm_createSource(source.dfm_strip());
+    dfm.window.find('#dfm_owner').val('u-'+perm.substr(1,2).dfm_patch());
+    dfm.window.find('#dfm_group').val('g-'+perm.substr(4,2).dfm_patch());
+    dfm.window.find('#dfm_other').val('o-'+perm.substr(7,2).dfm_patch());
+    dfm.height = 330;
+    break;
+  case 13: // download file
+    downloadFile(source,name);
+    return;
+  case 14: // calculate occupied space
+    timers.calc = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
+    $.post('/webGui/include/Control.php',{mode:'calc',source:encodeURIComponent(dfm_htmlspecialchars(source))},function(text){
+      clearTimeout(timers.calc);
+      $('div.spinner.fixed').hide('slow');
+      swal({title:"_(Calculate Occupied Space)_",text:text,html:true,confirmButtonText:"_(Ok)_"});
+    });
+    return;
+  case 15: // search
+    dfm.window.html($('#dfm_templateSearch').html());
+    dfm_createSource(source.dfm_strip());
+    dfm.window.find('.dfm_loc').html('&nbsp;').css({'line-height':'normal'});
+    dfm.window.find('.dfm_text').html('').css({'line-height':'normal'});
+    dfm.height = 630;
+    break;
+  }
+  dfm.window.dialog({
+    dialogClass: 'ui-dfm',
+    autoOpen: true,
+    title: title,
+    height: dfm.height,
+    width: 900,
+    resizable: false,
+    modal: true,
+    buttons: {
+      "_(Start)_": function(){
+        if (dfm.running) return;
+        var target = dfm.window.find('#dfm_target');
+        if (target.length) {
+          target = target.val();
+          switch (action) {
+          case 0: // create folder
+          case 2: // rename folder
+          case 7: // rename file
+            var valid = /^[^\/]*$/; // no slashes allowed
+            break;
+          case 4: // move folder
+          case 9: // move file
+            // disallow mixing of disk and user shares
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|rootshare)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)).+$|^\/boot\/.+/);
+            // check if 'mv' can be used
+            if (path.length > 2) {
+              if (user) {
+                if (home(source,target)==1) action++;
+              } else {
+                var mv = '/'+path[0]+'/'+path[1]+'/';
+                if (target.substr(0,mv.length) == mv) action++;
+              }
+            }
+            break;
+          case 11: // change owner
+            var valid = /.+/;
+            target += (target=='root' ? ':root' : ':users');
+            break;
+          case 12: // change permission
+            var valid = /.+/;
+            target = [];
+            target.push(dfm.window.find('#dfm_owner').val());
+            target.push(dfm.window.find('#dfm_group').val());
+            target.push(dfm.window.find('#dfm_other').val());
+            target = target.join(',')+',ugo+X';
+            break;
+          case 15: // search
+            var valid = /.+/;
+            bulk = false;
+            dfm.window.find('#dfm_target').prop('disabled',true);
+            dfm.window.find('.dfm_loc').html('&nbsp;');
+            dfm.window.find('#dfm_files').html('');
+            break;
+          default:
+            // disallow mixing of disk and user shares
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|rootshare)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)).+$|^\/boot\/.+/);
+            break;
+          }
+          if (!target || !valid.test(target)) {errorTarget(); return;}
+        } else target = '';
+        dfm.window.find('.dfm_text').removeClass('orange-text').html("_(Running)_...");
+        dfm.window.find('#dfm_target').prop('disabled',true);
+        dfm.window.find('#dfm_sparse').prop('disabled',true);
+        dfm.window.find('#dfm_exist').prop('disabled',true);
+        dfm.window.find('.dfm_sparse').css({'opacity':'0.5'});
+        dfm.window.find('.dfm_exist').css({'opacity':'0.5'});
+        if (action==11) {
+          dfm.window.find('#dfm_owner').prop('disabled',true);
+          dfm.window.find('#dfm_group').prop('disabled',true);
+          dfm.window.find('#dfm_other').prop('disabled',true);
+        }
+        dfm_footer('hide');
+        dfm_fileManager('start');
+        $.post('/webGui/include/Control.php',{mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs)},function(){
+          $.post('/webGui/include/Control.php',{mode:'read'},function(data){
+            dfm_read = JSON.parse(data);
+            dfm_read.action = parseInt(dfm_read.action);
+          });
+        });
+      },
+      "_(Queue)_": function(){
+        var target = dfm.window.find('#dfm_target');
+        if (target.length) {
+          target = target.val();
+          switch (action) {
+          case 0: // create folder
+          case 2: // rename folder
+          case 7: // rename file
+            var valid = /^[^\/]*$/; // no slashes allowed
+            break;
+          case 4: // move folder
+          case 9: // move file
+            // disallow mixing of disk and user shares
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|rootshare)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)).+$|^\/boot\/.+/);
+            // check if 'mv' can be used
+            if (path.length > 2) {
+              if (user) {
+                if (home(source,target)==1) action++;
+              } else {
+                var mv = '/'+path[0]+'/'+path[1]+'/';
+                if (target.substr(0,mv.length) == mv) action++;
+              }
+            }
+            break;
+          case 11: // change owner
+            var valid = /.+/;
+            target += (target=='root' ? ':root' : ':users');
+            break;
+          case 12: // change permission
+            var valid = /.+/;
+            target = [];
+            target.push(dfm.window.find('#dfm_owner').val());
+            target.push(dfm.window.find('#dfm_group').val());
+            target.push(dfm.window.find('#dfm_other').val());
+            target = target.join(',')+',ugo+X';
+            break;
+          default:
+            // disallow mixing of disk and user shares
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|rootshare)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)).+$|^\/boot\/.+/);
+            break;
+          }
+          if (!target || !valid.test(target)) {errorTarget(); return;}
+        } else target = '';
+        $.post('/webGui/include/Control.php',{mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs)});
+        dfm.window.dialog('destroy');
+        $('.dfm_control.jobs').prop('disabled',false);
+        $.cookie('dfm_control.jobs','1');
+      },
+      "_(Cancel)_": function(){
+        if (dfm.running) $.post('/webGui/include/Control.php',{mode:'file',action:99},function(){setTimeout(loadList,500);});
+        dfm_fileManager('stop');
+        dfm.window.dialog('destroy');
+      }
+    }
+  });
+  dfm_close_button();
+  if (action==15) $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',true);
+  setTimeout(function(){if (dfm.window.find('#dfm_target').length) dfm.window.find('#dfm_target').focus().click(); else $('.ui-dfm .ui-dialog-buttonset button:eq(0)').focus();});
+}
+function doActions(action,title) {
+  var source = [], type = [], owner = [], perm = [], zfs = [];
+  if (action > 0) {
+    $('i[id^="check_"]').each(function(){
+      if ($(this).prop('id')!='check_0' && $(this).hasClass('fa-check-square-o')) {
+        var id = $(this).prop('id');
+        source.push(data($('#'+id.dfm_fetch('row'))));
+        type.push($('#'+id.dfm_fetch('row')).attr('type'));
+        owner.push($('#'+id.dfm_fetch('owner')).text());
+        perm.push($('#'+id.dfm_fetch('perm')).text());
+      }
+    });
+  }
+  if (action > 0 && action < 15) {
+    var bulk   = source.length > 1;
+    var path   = source[0].substr(1).split('/');
+    var access = ['mnt','boot'];
+    if (!access.includes(path[0])) return;
+    var user   = /^(user0?|rootshare)$/.test(path[1]);
+    var root   = '/'+path[0]+(user ? '/'+path[1] : '');
+    var share  = user||!path[2] ? '' : path[2]+'/';
+    var ud     = ['disks','remotes'].includes(path[1]); // unassigned devices
+    var match  = ud||user ? '' : '^(?!.*(user0?|rootshare)).*$';
+    var name   = path.pop()||path.pop();
+    var hdlink = "<?=$var['fuse_directio']==1?'1':''?>";
+    var u      = false;
+    var d      = false;
+    if (bulk) {
+      for (var i=0,s; s=source[i]; i++) {
+        s = s.dfm_strip();
+        source[i] = s;
+        var p = s.substr(1).split('/');
+        if (/^user0?$/.test(p[1])) u = true; else d = true;
+<?if ($dfm['zfs']):?>
+        if ([1,4].includes(action) && p[0]=='mnt' && type[i]=='d') {
+          switch (p.length) {
+          case 2:
+            zfs.push(p[1]+'/');
+            break;
+          case 3:
+            zfs.push(p[1]+'/'+p[2]);
+            break;
+          }
+        }
+      }
+    } else {
+      var p = source[0].substr(1).dfm_strip().split('/');
+      if ([1,4].includes(action) && p[0]=='mnt' && type[0]=='d') {
+        switch (p.length) {
+        case 2:
+          zfs.push(p[1]+'/');
+          break;
+        case 3:
+          zfs.push(p[1]+'/'+p[2]);
+          break;
+        }
+<?endif;?>
+      }
+    }
+    if (u && d) {errorSource(); return;} // disallow mixing of disk and user shares
+  }
+  dfm.window = $("#dfm_dialogWindow");
+  switch (action) {
+  case 0: // create folder
+    dfm.window.html($('#dfm_templateCreateFolder').html());
+    source[0] = dir;
+    dfm.height = 330;
+    break;
+  case 1: // delete object
+    dfm.window.html($('#dfm_templateDeleteObject').html());
+    dfm_createSource(source);
+    dfm.height = 330;
+    break;
+  case 2: // rename object
+    dfm.window.html($('#dfm_templateRenameObject').html());
+    dfm_createSource(name);
+    dfm.window.find('#dfm_target').val(name);
+    dfm.height = 330;
+    break;
+  case 3: // copy object
+    dfm.window.html($('#dfm_templateCopyObject').html());
+    dfm_createSource(source);
+    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match);
+    if (bulk || type[0]=='d') dfm.window.find('#dfm_target').attr('data-pickfilter','HIDE_FILES_FILTER');
+    dfm.window.find('#dfm_target').fileTreeAttach(null,null,function(path){
+      var bits = path.substr(1).split('/');
+      var auto = bulk || bits.length>3 ? '' : (type[0]=='d' ? share : '');
+      dfm.window.find('#dfm_target').val(path+auto).change();
+    });
+    dfm.height = 630;
+    break;
+  case 4: // move object
+    dfm.window.html($('#dfm_templateMoveObject').html());
+    dfm_createSource(source);
+    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match);
+    if (bulk || type[0]=='d') dfm.window.find('#dfm_target').attr('data-pickfilter','HIDE_FILES_FILTER');
+    dfm.window.find('#dfm_target').fileTreeAttach(null,null,function(path){
+      var bits = path.substr(1).split('/');
+      var auto = bulk || bits.length>3 ? '' : (type[0]=='d' ? share : '');
+      dfm.window.find('#dfm_target').val(path+auto).change();
+    });
+    dfm.height = 630;
+    break;
+  case 11: // change owner
+    dfm.window.html($('#dfm_templateChangeOwner').html());
+    dfm_createSource(source);
+    if (!bulk) dfm.window.find('#dfm_target').val(owner[0]);
+    dfm.height = 330;
+    break;
+  case 12: // change permission
+    dfm.window.html($('#dfm_templateChangePermission').html());
+    dfm_createSource(source);
+    if (!bulk) {
+      dfm.window.find('#dfm_owner').val('u-'+perm[0].substr(1,2).dfm_patch());
+      dfm.window.find('#dfm_group').val('g-'+perm[0].substr(4,2).dfm_patch());
+      dfm.window.find('#dfm_other').val('o-'+perm[0].substr(7,2).dfm_patch());
+    }
+    dfm.height = 330;
+    break;
+  case 14: // calculate occupied space
+    timers.calc = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
+    $.post('/webGui/include/Control.php',{mode:'calc',source:encodeURIComponent(dfm_htmlspecialchars(source.join('\n')))},function(text){
+      clearTimeout(timers.calc);
+      $('div.spinner.fixed').hide('slow');
+      swal({title:"_(Calculate Occupied Space)_",text:text,html:true,confirmButtonText:"_(Ok)_"});
+    });
+    return;
+  case 15: // search
+    dfm.window.html($('#dfm_templateSearch').html());
+    // folders only
+    for (var i=0,t; t=type[i]; i++) if (t != 'd') source[i] = '';
+    source = source.filter(n=>n);
+    if (source.length==0) source[0] = dir;
+    dfm_createSource(source);
+    dfm.window.find('.dfm_loc').html('&nbsp;').css({'line-height':'normal'});
+    dfm.window.find('.dfm_text').html('').css({'line-height':'normal'});
+    dfm.height = 630;
+    break;
+  }
+  dfm.window.find('#dfm_source').attr('size',Math.min(dfm.tsize[action],source.length));
+  dfm.window.dialog({
+    dialogClass: 'ui-dfm',
+    autoOpen: true,
+    title: title,
+    height: dfm.height,
+    width: 900,
+    resizable: false,
+    modal: true,
+    buttons: {
+      "_(Start)_": function(){
+        if (dfm.running) return;
+        var target = dfm.window.find('#dfm_target');
+        if (target.length) {
+          target = target.val();
+          switch (action) {
+          case 0: // create folder
+            bulk = false;
+          case 2: // rename object
+            var valid = /^[^\/]*$/; // no slashes allowed
+            break;
+          case 4: // move object
+            // disallow mixing of disk and user shares
+            var valid = ud ? /\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|rootshare)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)).+$|^\/boot\/.+/);
+            // check if 'mv' can be used
+            if (path.length > 2) {
+              if (user) {
+                if (home(source.join('\n'),target)==1) action++;
+              } else {
+                var mv = '/'+path[0]+'/'+path[1]+'/';
+                if (target.substr(0,mv.length) == mv) action++;
+              }
+            }
+            break;
+          case 11: // change owner
+            var valid = /.+/;
+            target += (target=='root' ? ':root' : ':users');
+            bulk = false;
+            break;
+          case 12: // change permission
+            var valid = /.+/;
+            target = [];
+            target.push(dfm.window.find('#dfm_owner').val());
+            target.push(dfm.window.find('#dfm_group').val());
+            target.push(dfm.window.find('#dfm_other').val());
+            target = target.join(',')+',ugo+X';
+            bulk = false;
+            break;
+          case 15: // search
+            var valid = /.+/;
+            bulk = false;
+            dfm.window.find('#dfm_target').prop('disabled',true);
+            dfm.window.find('.dfm_loc').html('&nbsp;');
+            dfm.window.find('#dfm_files').html('');
+            break;
+          default:
+            // disallow mixing of disk and user shares
+            var valid = ud ? /\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|rootshare)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)).+$|^\/boot\/.+/);
+            break;
+          }
+          if (!target || !valid.test(target)) {errorTarget(); return;}
+        } else target = '';
+        if (bulk && target.length>0 && target.substr(-1)!='/') target += '/';
+        dfm.window.find('#dfm_target').prop('disabled',true);
+        dfm.window.find('#dfm_sparse').prop('disabled',true);
+        dfm.window.find('#dfm_exist').prop('disabled',true);
+        dfm.window.find('.dfm_sparse').css({'opacity':'0.5'});
+        dfm.window.find('.dfm_exist').css({'opacity':'0.5'});
+        if (action==12) {
+          dfm.window.find('#dfm_owner').prop('disabled',true);
+          dfm.window.find('#dfm_group').prop('disabled',true);
+          dfm.window.find('#dfm_other').prop('disabled',true);
+        }
+        dfm.window.find('.dfm_text').removeClass('orange-text').html("_(Running)_...");
+        dfm_footer('hide');
+        dfm_fileManager('start');
+        $.post('/webGui/include/Control.php',{mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs.join('\r'))},function(){
+          $.post('/webGui/include/Control.php',{mode:'read'},function(data){
+            dfm_read = JSON.parse(data);
+            dfm_read.action = parseInt(dfm_read.action);
+          });
+        });
+      },
+      "_(Queue)_": function(){
+        var target = dfm.window.find('#dfm_target');
+        if (target.length) {
+          target = target.val();
+          switch (action) {
+          case 0: // create folder
+            bulk = false;
+          case 2: // rename object
+            var valid = /^[^\/]*$/; // no slashes allowed
+            break;
+          case 4: // move object
+            // disallow mixing of disk and user shares
+            var valid = ud ? /\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|rootshare)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)).+$|^\/boot\/.+/);
+            // check if 'mv' can be used
+            if (path.length > 2) {
+              if (user) {
+                if (home(source.join('\n'),target)==1) action++;
+              } else {
+                var mv = '/'+path[0]+'/'+path[1]+'/';
+                if (target.substr(0,mv.length) == mv) action++;
+              }
+            }
+            break;
+          case 11: // change owner
+            var valid = /.+/;
+            target += (target=='root' ? ':root' : ':users');
+            bulk = false;
+            break;
+          case 12: // change permission
+            var valid = /.+/;
+            target = [];
+            target.push(dfm.window.find('#dfm_owner').val());
+            target.push(dfm.window.find('#dfm_group').val());
+            target.push(dfm.window.find('#dfm_other').val());
+            target = target.join(',')+',ugo+X';
+            bulk = false;
+            break;
+          default:
+            // disallow mixing of disk and user shares
+            var valid = ud ? /\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|rootshare)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)).+$|^\/boot\/.+/);
+            break;
+          }
+          if (!target || !valid.test(target)) {errorTarget(); return;}
+        } else target = '';
+        $.post('/webGui/include/Control.php',{mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs.join('\r'))});
+        dfm.window.dialog('destroy');
+        $('.dfm_control.jobs').prop('disabled',false);
+        $.cookie('dfm_control.jobs','1');
+      },
+      "_(Cancel)_": function(){
+        if (dfm.running) $.post('/webGui/include/Control.php',{mode:'file',action:99},function(){setTimeout(loadList,500);});
+        dfm_fileManager('stop');
+        dfm.window.dialog('destroy');
+      }
+    }
+  });
+  dfm_close_button();
+  if (action==15) $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',true);
+  setTimeout(function(){if (dfm.window.find('#dfm_target').length) dfm.window.find('#dfm_target').focus().click(); else $('.ui-dfm .ui-dialog-buttonset button:eq(0)').focus();});
+}
+function stopUpload(file,error) {
+  window.onbeforeunload = null;
+  $.post('/webGui/include/Control.php',{mode:'stop',file:encodeURIComponent(dfm_htmlspecialchars(file))});
+  $('#dfm_uploadButton').val("_(Upload)_").prop('onclick',null).off('click').click(function(){$('#dfm_upload').click();});
+  $('#dfm_uploadStatus').html('');
+  $('#dfm_upload').val('');
+  dfm.running = false;
+  loadList();
+  if (error) setTimeout(function(){swal({title:"_(Upload Error)_",text:"_(File is removed)_",html:true,confirmButtonText:"_(Ok)_"});},200);
+}
+function downloadFile(source) {
+  var a = document.createElement('a');
+  a.setAttribute('href',source);
+  a.setAttribute('download',source.split('/').pop());
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+function uploadFile(files,index,start,time) {
+  var file = files[index];
+  var slice = 2097152; // 2M
+  var next = start + slice;
+  var blob = file.slice(start, next);
+  reader.onloadend = function(e){
+    if (e.target.readyState !== FileReader.DONE) return;
+    $.post('/webGui/include/Control.php',{mode:'upload',file:encodeURIComponent(dir+'/'+dfm_htmlspecialchars(file.name)),start:start,data:window.btoa(e.target.result),cancel:cancel},function(reply){
+      if (reply=='stop') {stopUpload(file.name); return;}
+      if (reply=='error') {stopUpload(file.name,true); return;}
+      if (next < file.size) {
+        var total = 0;
+        for (var i=0,f; f=files[i]; i++) {
+          if (i < index) start += f.size;
+          total += f.size;
+        }
+        const d = new Date();
+        var speed = autoscale(((start + slice) * 8) / (d.getTime() - time));
+        var percent = Math.floor((start + slice) / total * 100);
+        $('#dfm_uploadStatus').html("_(Uploading)_: <span class='dfm_percent'>"+percent+"%</span><span class='dfm_speed'>Speed: "+speed+"</span><span class='orange-text'> ["+(index+1)+'/'+files.length+']&nbsp;&nbsp;'+file.name+"</span>");
+        uploadFile(files,index,next,time);
+      } else if (index < files.length-1) {
+        uploadFile(files,index+1,0,time);
+      } else {stopUpload(file.name); return;}
+    });
+  };
+  reader.readAsBinaryString(blob);
+}
+var reader = {};
+var cancel = 0;
+
+function startUpload(files) {
+  if (files.length==0) return;
+  reader = new FileReader();
+  window.onbeforeunload = function(e){return '';};
+  $('#dfm_uploadButton').val("_(Cancel)_").prop('onclick',null).off('click').click(function(){cancel=1;});
+  dfm.running = true;
+  const d = new Date();
+  uploadFile(files,0,0,d.getTime());
+}
+function filter(ext) {
+  $('td.ext').each(function(){
+    if ($(this).attr('data').search(ext)==-1) $(this).parent().hide(); else $(this).parent().show();
+  });
+}
+function toggleTime(init) {
+  $('.my_time').toggle();
+  $('.my_age').toggle();
+  if (init) return;
+  $.cookie('my_time')==null ? $.cookie('my_time','age') : $.removeCookie('my_time');
+}
+function loadList() {
+  var col = $.cookie('col')||2;
+  var ord = $.cookie('dir')||0;
+  $('#check_0').removeClass('fa-check-square-o').addClass('fa-square-o');
+  timers.browse = setTimeout(function(){$('div.spinner.fixed').show();},500);
+  $.get('/webGui/include/Browse.php',{dir:encodeURIComponent(dir),path:"<?=$path?>"},function(data){
+    clearTimeout(timers.browse);
+    $('div.spinner.fixed').hide();
+    table.find('tbody,tfoot').remove();
+    thead.after(data);
+    table.tablesorter({headers:{0:{sorter:false},8:{sorter:false}},sortList:[[col,ord],[2,0]],sortAppend:[[2,0]],textAttribute:'data'});
+    table.trigger('update',[true]);
+    if ($.cookie('my_time')!=null) toggleTime(true);
+    $('div#buttons').show();
+  });
+}
+function xlink(link) {
+  swal({title:'',text:decodeURIComponent(link),html:true,confirmButtonText:"_(Ok)_"});
+}
+$(function(){
+  var dirs = dir.split('/'), url = [];
+  if (dirs.length > 1) {
+    for (var n=1; n < dirs.length; n++) {
+      var subdir = dirs.slice(1,n+1);
+      url.push('<a class="none" href="/<?=$path?>?dir=/'+encodeURIComponent(subdir.join('/'))+'" oncontextmenu="xlink(\'/'+encodeURIComponent(subdir.join('/'))+'\');return false">'+(n==1 ? '<i class="fa fa-home"></i>' : dirs[n])+'</a>');
+    }
+  } else {
+    url.push('<i class="fa fa-home red-text"></i>');
+  }
+  $('span.left').html(url.join('<i class="fa fa-chevron-right"></i>')).append('<span class="right"><span class="dfm_filter"><input type="text" class="dfm_filter" oninput="filter(this.value)" autocomplete="off" spellcheck="false" placeholder="_(file type)_"><i class="fa fa-filter dfm_filter"></i></span><i class="fa fa-toggle-off" onclick="toggleTime()" style="cursor:pointer;margin-left:20px" title="_(Toggle Time/Age display)_"></i></span>');
+  table = $('table.indexer');
+  thead = table.find('thead');
+  table.bind('sortEnd',function(e,t){
+    var sort = e.target.config.sortList.toString().split(',');
+    $.cookie('col',sort[0]);
+    $.cookie('dir',sort[1]);
+  });
+<?if ($display['resize']):?>
+  resize();
+  $(window).bind('resize',function(){resize();});
+<?endif;?>
+  loadList();
+<?if (!$dir||$isshare):?>
+  $.cookie('dfm_control.common','1');
+<?else:?>
+  $.removeCookie('dfm_control.common');
+<?endif;?>
+});
+</script>
+<div class="autoheight">
+<table class="indexer tablesorter shift"><thead><tr><th><?if($dir){?><i id="check_0" class="fa fa-fw fa-square-o" onclick="selectAll()"></i><?}?></th><th>_(Type)_</th><th class='sorter-text'>_(Name)_</th><th>_(Owner)_</th><th>_(Permission)_</th><th>_(Size)_</th><th>_(Last Modified)_</th><th style="width:200px">_(Location)_</th><th>_(Action)_</th></tr></thead></table>
+</div>
+<div id="buttons">
+<input type="button" value="_(Done)_" onclick="done('Browse')">
+<input type="button" value="_(Jobs)_" class="dfm_control jobs" onclick="doJobs('_(Scheduled Jobs)_')"<?=$dfm['jobs']?'':' disabled'?>>
+<input type="button" value="_(Search)_" class="dfm_control basic" onclick="doActions(15,this.value)"<?=$dfm['running']?' disabled':''?>>
+<input type="button" value="_(Delete)_" class="dfm_control extra" onclick="doActions(1,this.value)" disabled>
+<input type="button" value="_(Copy)_" class="dfm_control extra" onclick="doActions(3,this.value)" disabled>
+<input type="button" value="_(Move)_" class="dfm_control extra" onclick="doActions(4,this.value)" disabled>
+<input type="button" value="_(Rename)_" class="dfm_control rename" onclick="doActions(2,this.value)" disabled>
+<input type="button" value="_(Owner)_" class="dfm_control extra" onclick="doActions(11,this.value)" disabled>
+<input type="button" value="_(Permission)_" class="dfm_control extra" onclick="doActions(12,this.value)" disabled>
+<input type="button" value="_(Calculate)_" class="dfm_control extra" onclick="doActions(14,this.value)" disabled>
+<input type="button" value="_(Create)_" class="dfm_control common" onclick="doActions(0,this.value)"<?if(!$dir||$isshare){?> disabled<?}?>>
+<input type="button" value="_(Upload)_" class="dfm_control common" id="dfm_uploadButton" onclick="$('#dfm_upload').click()"<?if(!$dir||$isshare){?> disabled<?}?>><span id="dfm_uploadStatus"></span>
+</div>

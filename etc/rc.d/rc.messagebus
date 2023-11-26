@@ -1,0 +1,107 @@
+#!/bin/bash
+#
+# script: rc.messagebus
+#
+# messagebus:  The D-BUS systemwide message bus
+#
+# description: This is a daemon which broadcasts notifications of system events \
+#              and other messages. See http://www.freedesktop.org/software/dbus/
+#
+# processname: dbus-daemon
+
+# This is a modified version of the rc.messagebus script distributed with the
+# dbus sources.  Thanks to Don Tanner of the GWare <http://gware.org> Project
+# for most of the work involved      --Robby Workman <rworkman@slackware.com>
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+DAEMON="System Message Bus"
+PIDFILE="/var/run/dbus/dbus.pid"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+dbus_running(){
+  sleep 0.1
+  ps -u messagebus -c | grep -wq dbus-daemon
+}
+
+dbus_start(){
+  log "Starting $DAEMON..."
+  local REPLY
+  if dbus_running; then
+    REPLY="Already started"
+  else
+    mkdir -p $(dirname $PIDFILE)
+    rm -f $(dirname $PIDFILE)/*
+    if [[ -x /usr/bin/dbus-uuidgen && -x /usr/bin/dbus-daemon ]]; then
+      run /usr/bin/dbus-uuidgen --ensure
+      run /usr/bin/dbus-daemon --system
+    fi
+    if dbus_running; then REPLY="Started"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+dbus_stop(){
+  log "Stopping $DAEMON..."
+  local REPLY
+  if ! dbus_running; then
+    REPLY="Already stopped"
+  else
+    run kill $(cat $PIDFILE)
+    # Just in case:
+    run killall dbus-daemon
+    rm -f $PIDFILE
+    if ! dbus_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+dbus_reload(){
+  log "Reloading $DAEMON..."
+  if [[ -e $PIDFILE ]]; then
+    pid=$(cat $PIDFILE)
+    run kill -HUP $pid
+  else
+    run killall -HUP dbus-daemon
+  fi
+  log "$DAEMON...  Reloaded."
+}
+
+dbus_status(){
+  if dbus_running; then
+    echo "$DAEMON is currently running."
+  else
+    echo "$DAEMON is not running."
+    exit 1
+  fi
+}
+
+# See how we were called.
+case "$1" in
+'start')
+  dbus_start
+  ;;
+'stop')
+  dbus_stop
+  ;;
+'restart')
+  dbus_stop
+  sleep 1
+  dbus_start
+  log "You may need to restart your Window Manager to reconnect to the system dbus."
+  ;;
+'reload')
+  dbus_reload
+  ;;
+'status')
+  dbus_status
+  ;;
+*)
+  echo "Usage: $BASENAME start|stop|restart|reload|status"
+  exit 1
+  ;;
+esac
+exit 0

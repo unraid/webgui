@@ -1,0 +1,54 @@
+Menu="NetworkServices:999"
+Title="FTP Server"
+Icon="icon-ftp"
+Tag="globe"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$ftp_userlist_file = "/boot/config/vsftpd.user_list";
+$ftp_userlist = "";
+if (file_exists($ftp_userlist_file)) {
+  $ftp_userlist = str_replace("\n", " ", trim(file_get_contents($ftp_userlist_file)));
+  if ($ftp_userlist === false) $ftp_userlist = "";
+}
+$ftp_server = exec("lsof -i:21 -Pln|awk '/\(LISTEN\)/{print $2;exit}'") ? 1 : 0;
+?>
+<script>
+$(function() {
+  showStatus('21');
+});
+</script>
+
+<form markdown="1" method="POST" action="/update.php" target="progressFrame">
+<input type="hidden" name="#command" value="/webGui/scripts/ftpusers">
+
+_(FTP server)_:
+: <select name="#arg[1]">
+  <?=mk_option($ftp_server, "0", _("Disabled"))?>
+  <?=mk_option($ftp_server, "1", _("Enabled"))?>
+  </select>
+
+:ftp_server_help:
+
+_(FTP user(s))_:
+: <input type="text" name="#arg[2]" size="40" maxlength="80" value="<?=htmlspecialchars($ftp_userlist)?>">
+
+:ftp_users_help:
+
+&nbsp;
+: <input type="submit" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+
+</form>
+
+:ftp_overview_help:

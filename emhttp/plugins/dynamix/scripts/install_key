@@ -1,0 +1,75 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+function write(...$messages){
+  $com = curl_init();
+  curl_setopt_array($com,[
+    CURLOPT_URL => 'http://localhost/pub/plugins?buffer_length=1',
+    CURLOPT_UNIX_SOCKET_PATH => '/var/run/nginx.socket',
+    CURLOPT_POST => 1,
+    CURLOPT_RETURNTRANSFER => true
+  ]);
+  foreach ($messages as $message) {
+    curl_setopt($com, CURLOPT_POSTFIELDS, $message);
+    curl_exec($com);
+  }
+  curl_close($com);
+}
+
+$url = rawurldecode($argv[1]??'');
+$host = parse_url($url)['host'];
+
+if (in_array($host,['keys.lime-technology.com','lime-technology.com'])) {
+  $key_file = basename($url);
+  write("Downloading $keyfile ...\n");
+  exec("/usr/bin/wget -q -O ".escapeshellarg("/boot/config/$key_file")." ".escapeshellarg($url), $output, $return_var);
+  if ($return_var === 0) {
+    if (parse_ini_file('/var/local/emhttp/var.ini')['mdState'] == 'STARTED') {
+      write("Installing ... Please Stop array to complete key installation.\n");
+    } else {
+      write("Installed ...\n");
+    }
+  } else {
+    write("ERROR: $return_var\n");
+    switch($return_var) {
+      case 1:
+        write("Generic error code - Contact Support\n");
+        break;
+      case 2:
+        write("Parse Error - Contact Support\n");
+        break;
+      case 3:
+        write("File I/O error - Contact Support\n");
+        break;
+      case 4:
+        write("Network Failure:  Try setting static DNS addresses within Settings - Network Settings or Contact Support\n");
+        break;
+      case 5:
+        write("SSL verification failure.  Is the date & time set correctly? (Settings - Date & Time Settings) or Contact Support\n");
+        break;
+      case 6:
+        write("Username/password authentication failure - Contact Support\n");
+        break;
+      case 7:
+        write("Protocol error - Contact Support\n");
+        break;
+      case 8:
+        write("Server issued an error response - Contact Support\n");
+        break;
+    }
+  }
+} else {
+  write("ERROR, bad or missing key file URL: $url\n");
+}
+write('_DONE_','');
+?>

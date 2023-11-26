@@ -1,0 +1,142 @@
+#!/bin/bash
+#
+# script: rc.sshd
+#
+# Start/stop/restart the secure shell server:
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+DAEMON="SSH server daemon"
+CALLER="ssh"
+SSHD="/usr/sbin/sshd"
+CONF="/etc/ssh/sshd_config"
+PID="/var/run/sshd.pid"
+SSH_BOOT="/boot/config/ssh"
+SSH_ETC="/etc/ssh"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# library functions
+. /etc/rc.d/rc.library.source
+
+sshd_running(){
+  sleep 0.1
+  [[ $(pgrep -cf $SSHD) -gt 0 ]]
+}
+
+sshd_build(){
+  if check && [[ -n $BIND ]]; then
+    # remove existing entries
+    sed -ri '/^#?(ListenAddress|AddressFamily) /d' $CONF
+    # create new entries (in reverse order)
+    for i in $(seq $((${#BIND[@]}-1)) -1 0); do
+      sed -ri "/^#?Port /a ListenAddress ${BIND[$i]} # $(show ${BIND[$i]})" $CONF
+    done
+    sed -ri "/^#?Port /a AddressFamily $FAMILY" $CONF
+  fi
+}
+
+sshd_start(){
+  log "Starting $DAEMON..."
+  local REPLY
+  if sshd_running; then
+    REPLY="Already started"
+  else
+    # make sure ssh dir exists on flash
+    mkdir -p $SSH_BOOT
+    # restore saved keys, config file, etc. (but not subdirs)
+    cp -n $SSH_BOOT/* $SSH_ETC 2>/dev/null
+    chmod 600 $SSH_ETC/* 2>/dev/null
+    # create host keys if needed and copy any newly generated key(s) back to flash
+    ssh-keygen -A
+    cp -n $SSH_ETC/ssh_host*_key* $SSH_BOOT/ 2>/dev/null
+    # build configuration
+    sshd_build
+    # start daemon
+    run $SSHD
+    if sshd_running; then REPLY="Started"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+sshd_stop(){
+  local REPLY
+  if ! sshd_running; then
+    REPLY="Already stopped"
+  else
+    log "Stopping $DAEMON..."
+    killall sshd
+    if ! sshd_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+sshd_restart(){
+  log "Restarting $DAEMON..."
+  if [[ -r $PID ]]; then
+    echo "WARNING: killing listener process only.  To kill every sshd process, you must"
+    echo "         use 'rc.sshd stop'.  'rc.sshd restart' kills only the parent sshd to"
+    echo "         allow an admin logged in through sshd to use 'rc.sshd restart' without"
+    echo "         being cut off.  If sshd has been upgraded, new connections will now"
+    echo "         use the new version, which should be a safe enough approach."
+    kill $(cat $PID)
+    sleep 1
+  else
+    echo "WARNING: There does not appear to be a parent instance of sshd running."
+    echo "         If you really want to kill all running instances of sshd (including"
+    echo "         any sessions currently in use), run '/etc/rc.d/rc.sshd stop' instead."
+    exit 1
+  fi
+  sshd_start
+}
+
+sshd_reload(){
+  # kill listener
+  [[ -r $PID ]] && kill $(cat $PID)
+  # update settings
+  sshd_build
+  # restart daemon
+  $SSHD 2>/dev/null
+}
+
+sshd_update(){
+  # 0 = update needed, 1 = no action
+  if ! sshd_running; then exit 1; fi
+  if check && [[ "$(this ListenAddress)" == "${BIND[@]}" ]]; then exit 1; else exit 0; fi
+}
+
+sshd_status(){
+  if sshd_running; then
+    echo "$DAEMON is currently running."
+  else
+    echo "$DAEMON is not running."
+    exit 1
+  fi
+}
+
+case "$1" in
+'start')
+  sshd_start
+  ;;
+'stop')
+  sshd_stop
+  ;;
+'restart')
+  sshd_restart
+  ;;
+'reload')
+  sshd_reload
+  ;;
+'update')
+  sshd_update
+  ;;
+'status')
+  sshd_status
+  ;;
+*)
+  echo "Usage: $BASENAME start|stop|restart|reload|update|status"
+  exit 1
+esac
+exit 0

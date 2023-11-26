@@ -1,0 +1,80 @@
+Menu="UNRAID-OS"
+Title="New Config"
+Icon="icon-config"
+Tag="cog"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$newarray = $var['mdState']=='NEW_ARRAY';
+$disabled = $var['fsState']=="Started";
+$width    = [166,300];
+if ($newarray) {
+  @unlink('/boot/config/smart-one.cfg');
+  @unlink('/boot/config/smart-all.cfg');
+  @unlink('/boot/config/plugins/dynamix/monitor.ini');
+  foreach ($pools as $pool) @unlink("/var/tmp/$pool.log.tmp");
+}
+?>
+<script>
+function prepareNewConfig(form) {
+  for (var i=1,item; item=form.preset.options[i]; i++) {
+    switch (item.value) {
+      case 'array': if (item.selected) form.preserveArray.disabled = false; break;
+      case 'cache' : if (item.selected) form.preserveCache.disabled = false; break;
+    }
+  }
+  form.preset.disabled = true;
+}
+$(function() {
+  $('#s1').dropdownchecklist({emptyText:"_(None)_", width:<?=$width[0]?>, firstItemChecksAll:true, explicitClose:"..._(close)_"});
+<?if ($disabled):?>
+  $('#s1').dropdownchecklist('disable');
+<?endif;?>
+});
+</script>
+
+:newconfig_plug:
+This is a utility to reset the array disk configuration so that all disks appear as "New" disks, as
+if it were a fresh new server.
+
+This is useful when you have added or removed multiple drives and wish to rebuild parity based on
+the new configuration.
+
+Use the *'Preserve current assignments'* selection to populate the desired disk slots ***after*** the array has been reset. By default **no** disk slots are populated.
+
+**DO NOT USE THIS UTILITY THINKING IT WILL REBUILD A FAILED DRIVE** - it will have the opposite
+effect of making it ***impossible*** to rebuild an existing failed drive - you have been warned!
+:end
+
+<hr>
+<form name="newConfig" method="POST" action="/update.htm" target="progressFrame" onsubmit="prepareNewConfig(this)">
+<input type="hidden" name="preserveArray" value="yes" disabled>
+<input type="hidden" name="preserveCache" value="yes" disabled>
+
+<span class="indent">_(Preserve current assignments)_:</span>
+<select id="s1" name="preset" multiple="multiple" style="display:none">
+<option value=''>_(All)_</option>
+<?=mk_option_check(0,'array',_('Array slots'))?>
+<?=mk_option_check(0,'cache',_('Pool slots'))?>
+</select>
+<br>
+<span class="indent"><input type="submit" class="lock" name="cmdInit" value="_(Apply)_" disabled><input type="button" class="lock" value="_(Done)_" onclick="done()"></span>
+<?if ($newarray):?>
+_(Array has been **Reset**)_ (_(please configure)_)
+<?elseif ($disabled):?>
+_(Array must be **Stopped** to change)_
+<?else:?>
+<input type="checkbox" onClick="cmdInit.disabled=!this.checked"><small>_(Yes, I want to do this)_</small>
+<?endif;?>
+</form>

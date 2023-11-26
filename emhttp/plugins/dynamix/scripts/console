@@ -1,0 +1,25 @@
+#!/bin/bash
+# Load keyboard layout for local console
+loadkeys -q $1
+
+# Set screenblank and powersave for local console
+if [[ $2 =~ ^[0-9]+$ ]]; then
+  TERM=linux setterm --blank=$2 --powersave off >/dev/console
+elif [[ $2 == disabled ]]; then
+  TERM=linux setterm --blank=0 --powersave off >/dev/console
+else
+  TERM=linux setterm --blank 15 --powersave powerdown --powerdown 60 >/dev/console
+fi
+
+# Enable or disable persistent bash history
+if [[ $3 == 1 ]]; then
+  if [[ ! -d /boot/config/history ]]; then
+    mkdir -p /boot/config/history
+  fi
+  rm -f /root/.bash_history
+  touch /boot/config/history/bash_history
+  ln -s /boot/config/history/bash_history /root/.bash_history
+else
+  rm -f /boot/config/history/bash_history /root/.bash_history
+  touch /root/.bash_history
+fi

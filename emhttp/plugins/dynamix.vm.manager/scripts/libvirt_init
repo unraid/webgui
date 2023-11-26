@@ -1,0 +1,38 @@
+#!/bin/bash
+# Intialize libvirt config storage
+# Invoked by emhttp after mounting libvirt loopback but before starting libvirt.
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# missing qemu directory would indicate new libvirt image file created
+if [ ! -d /etc/libvirt/qemu ]; then
+  log "initializing /etc/libvirt"
+  # initialize with default settings
+  cp -rp /etc/libvirt-/* /etc/libvirt
+  # check if libvirt image file exists on USB flash
+  OLD_IMAGE=/boot/config/plugins/dynamix.kvm.manager/domain.img
+  if [ ! -f $OLD_IMAGE ]; then
+    OLD_IMAGE=/boot/config/plugins/virtMan/virtMan.img
+    if [ ! -f $OLD_IMAGE ]; then
+      OLD_IMAGE=
+    fi
+  fi
+  if [ "$OLD_IMAGE" != "" ]; then
+    # found existing image, use qemu config from there
+    rm -rf /etc/libvirt/qemu/*
+    mount $OLD_IMAGE /etc/libvirt-
+    cp -rp /etc/libvirt-/qemu/* /etc/libvirt/qemu
+    if [ -f /etc/libvirt-/hooks/qemu ]; then
+      cp -p /etc/libvirt-/hooks/qemu /etc/libvirt/hooks/qemu
+    fi
+    umount /etc/libvirt-
+  fi
+fi
+
+# if vfio-pci bind error, prevent autostart
+if [ -s /var/log/vfio-pci-errors ]; then
+  mkdir -p /run/libvirt/qemu
+  echo "vfio-pci bind error" > /run/libvirt/qemu/autostarted
+  /usr/local/emhttp/webGui/scripts/notify -e "VM Autostart disabled" -s "vfio-pci-errors " -d "VM Autostart disabled due to vfio-bind error" -m "Please review /var/log/vfio-pci-errors" -i "alert" -l "/VMs"
+fi

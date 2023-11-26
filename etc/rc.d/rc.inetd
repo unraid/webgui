@@ -1,0 +1,77 @@
+#!/bin/bash
+#
+# script: rc.inetd
+
+# Start/stop/restart inetd, the BSD Internet super-daemon.
+
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+DAEMON="Internet daemon"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+inetd_running(){
+  sleep 0.1
+  ps axc | grep -q ' inetd'
+}
+
+inetd_start() {
+  log "Starting $DAEMON..."
+  local REPLY
+  if inetd_running; then
+    REPLY="Already started"
+  else
+    run /usr/sbin/inetd
+    if inetd_running; then REPLY="Started"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+inetd_stop() {
+  log "Stopping $DAEMON..."
+  local REPLY
+  if ! inetd_running; then
+    REPLY="Already stopped"
+  else
+    run killall inetd
+    if ! inetd_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+inetd_restart() {
+  log "Restarting $DAEMON..."
+  inetd_stop
+  sleep 1
+  inetd_start
+}
+
+inetd_status(){
+  if inetd_running; then
+    echo "$DAEMON is currently running."
+  else
+    echo "$DAEMON is not running."
+    exit 1
+  fi
+}
+
+case "$1" in
+'start')
+  inetd_start
+  ;;
+'stop')
+  inetd_stop
+  ;;
+'restart')
+  inetd_restart
+  ;;
+'status')
+  inetd_status
+  ;;
+*)
+  echo "Usage: $BASENAME start|stop|restart|status"
+  exit 1
+esac
+exit 0

@@ -1,0 +1,247 @@
+#!/bin/bash
+#
+# script: rc.S.cont
+#
+# System initialization script (continuation)
+# source'ed by rc.S
+# Mostly written by: Patrick J. Volkerding, <volkerdi@slackware.com>
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# LimeTech - bind selected devices to vfio-pci
+/usr/local/sbin/vfio-pci 1>/var/log/vfio-pci 2>/var/log/vfio-pci-errors
+
+# Run the kernel module script. This updates the module dependencies and
+# also supports manually loading kernel modules through rc.modules.local.
+if [[ -x /etc/rc.d/rc.modules ]]; then
+  /etc/rc.d/rc.modules
+fi
+
+# Initialize udev to manage /dev entries and hotplugging.
+# You may turn off udev by making the /etc/rc.d/rc.udev file non-executable
+# or giving the "nohotplug" option at boot, but realize that if you turn off
+# udev that you will have to load all the kernel modules that you need
+# yourself (possibly in /etc/rc.d/rc.modules.local), and make any additional
+# device nodes that you need in the /dev directory.  Even USB and IEEE1394
+# devices will need to have the modules loaded by hand if udev is not used.
+# So use it.  :-)
+if /bin/grep -wq sysfs /proc/mounts && /bin/grep -q devtmpfs /proc/filesystems; then
+  if ! /bin/grep -wq nohotplug /proc/cmdline; then
+    if [[ -x /etc/rc.d/rc.udev ]]; then
+      /etc/rc.d/rc.udev start
+    fi
+  fi
+fi
+
+# Mount Control Groups filesystem interface:
+if /bin/grep -wq cgroup /proc/filesystems; then
+  # Christoph H. - Check if unraidcgroup1 is passed over in command line
+  if /bin/grep -wq unraidcgroup1 /proc/cmdline; then
+    if [[ -d /sys/fs/cgroup ]]; then
+      # See linux-*/Documentation/cgroups/cgroups.txt (section 1.6)
+      # Check if we have some tools to autodetect the available cgroup controllers
+      if [[ -x /bin/cut && -x /bin/tail ]]; then
+        # Mount a tmpfs as the cgroup filesystem root
+        /sbin/mount -t tmpfs -o mode=0755,size=8M cgroup_root /sys/fs/cgroup
+        # Autodetect available controllers and mount them in subfolders
+        CONTROLLERS="$(cut -f 1 /proc/cgroups | tail -n +2)"
+        for i in $CONTROLLERS; do
+          /bin/mkdir /sys/fs/cgroup/$i
+          /sbin/mount -t cgroup -o $i $i /sys/fs/cgroup/$i
+        done
+        unset i CONTROLLERS
+        # Eric S. figured out this needs to go here...
+        /bin/echo 1 >/sys/fs/cgroup/memory/memory.use_hierarchy
+      else
+        # We can't use autodetection so fall back mounting them all together
+        /sbin/mount -t cgroup cgroup /sys/fs/cgroup
+      fi
+    else
+      /bin/mkdir -p /dev/cgroup
+      /sbin/mount -t cgroup cgroup /dev/cgroup
+    fi
+  else
+    if [[ -d /sys/fs/cgroup ]]; then
+      # See https://docs.kernel.org/admin-guide/cgroup-v2.html (section Mounting)
+      # Mount a tmpfs as the cgroup2 filesystem root
+      /sbin/mount -t tmpfs -o mode=0755,size=8M cgroup_root /sys/fs/cgroup
+      /sbin/mount -t cgroup2 none /sys/fs/cgroup
+    else
+      /bin/mkdir -p /dev/cgroup
+      /sbin/mount -t cgroup2 none /dev/cgroup
+    fi
+  fi
+fi
+
+# Huge page support:
+/sbin/mount /hugetlbfs
+
+# Enable swapping:
+/sbin/swapon -a 2>/dev/null
+
+# Set the tick and frequency for the system clock.
+# Default values are: TICK=10000 and FREQ=0
+TICK=10000
+FREQ=0
+# If there's a /etc/default/adjtimex config file, source it to override
+# the default TICK and FREQ:
+if [[ -r /etc/default/adjtimex ]]; then
+  . /etc/default/adjtimex
+fi
+if adjtimex --tick $TICK --frequency $FREQ; then
+  log "Setting the system clock rate: adjtimex --tick $TICK --frequency $FREQ"
+else
+  log "Failed to set system clock with adjtimex, possibly invalid parameters? (TICK=$TICK FREQ=$FREQ)"
+fi
+
+# Set the system time from the hardware clock using hwclock --hctosys.
+if [[ -x /sbin/hwclock ]]; then
+  # Check for a broken motherboard RTC clock (where ioports for rtc are
+  # unknown) to prevent hwclock causing a hang:
+  if ! /bin/grep -q " : rtc" /proc/ioports ; then
+    CLOCK_OPT="--directisa"
+  fi
+  if [[ /etc/adjtime -nt /etc/hardwareclock ]]; then
+    if /bin/grep -q "^LOCAL" /etc/adjtime; then
+      log "Setting system time from the hardware clock (localtime)..."
+    else
+      log "Setting system time from the hardware clock (UTC)..."
+    fi
+    run /sbin/hwclock $CLOCK_OPT --hctosys
+  elif /bin/grep -wq "^localtime" /etc/hardwareclock 2>/dev/null; then
+    log "Setting system time from the hardware clock (localtime)..."
+    run /sbin/hwclock $CLOCK_OPT --localtime --hctosys
+  else
+    log "Setting system time from the hardware clock (UTC)..."
+    run /sbin/hwclock $CLOCK_OPT --utc --hctosys
+  fi
+  /bin/date
+fi
+
+# Configure ISA Plug-and-Play devices:
+if [[ -r /etc/isapnp.conf ]]; then
+  if [[ -x /sbin/isapnp ]]; then
+    /sbin/isapnp /etc/isapnp.conf
+  fi
+fi
+
+# Configure kernel parameters:
+if [[ -x /sbin/sysctl && -r /etc/sysctl.conf ]]; then
+  log "Configuring kernel parameters..."
+  run /sbin/sysctl -e --system
+elif [[ -x /sbin/sysctl ]]; then
+  log "Configuring kernel parameters..."
+  # Don't say "Applying /etc/sysctl.conf" or complain if the file doesn't exist
+  /sbin/sysctl -e --system | /bin/grep -v "Applying /etc/sysctl.conf" | log
+fi
+
+# Clean up some temporary files:
+/bin/rm -f /etc/nologin /etc/dhcpc/*.pid /etc/forcefsck /etc/fastboot \
+  /var/state/saslauthd/saslauthd.pid /tmp/.Xauth* &>/dev/null
+/bin/rm -rf /tmp/{kde-[a-zA-Z]*,ksocket-[a-zA-Z]*,hsperfdata_[a-zA-Z]*,plugtmp*}
+if [[ -d /var/lib/pkgtools/setup/tmp ]]; then
+  ( cd /var/lib/pkgtools/setup/tmp && /bin/rm -rf * )
+elif [[ -d /var/log/setup/tmp ]]; then
+  ( cd /var/log/setup/tmp && /bin/rm -rf * )
+fi
+
+# Clear /var/lock/subsys:
+if [[ -d /var/lock/subsys ]]; then
+  /bin/rm -f /var/lock/subsys/*
+fi
+
+# Start libcgroup services:
+if [[ -x /etc/rc.d/rc.cgconfig && -x /etc/rc.d/rc.cgred && -d /sys/fs/cgroup ]]; then
+  /etc/rc.d/rc.cgconfig start
+  /etc/rc.d/rc.cgred start
+fi
+
+# Create /tmp/{.ICE-unix,.X11-unix} if they are not present:
+if [[ ! -e /tmp/.ICE-unix ]]; then
+  /bin/mkdir -p /tmp/.ICE-unix
+  /bin/chmod 1777 /tmp/.ICE-unix
+fi
+if [[ ! -e /tmp/.X11-unix ]]; then
+  /bin/mkdir -p /tmp/.X11-unix
+  /bin/chmod 1777 /tmp/.X11-unix
+fi
+
+# Create a fresh utmp file:
+/bin/touch /var/run/utmp
+/bin/chown root:utmp /var/run/utmp
+/bin/chmod 664 /var/run/utmp
+
+# In case pam_faillock(8) is being used, create the tally directory:
+/bin/mkdir -p /var/run/faillock
+
+# If there are SystemV init scripts for this runlevel, run them.
+if [[ -x /etc/rc.d/rc.sysvinit ]]; then
+  /etc/rc.d/rc.sysvinit
+fi
+
+# Run serial port setup script:
+# CAREFUL!  This can make some systems hang if the rc.serial script isn't
+# set up correctly.  If this happens, you may have to edit the file from a
+# boot disk, and/or set it as non-executable:
+if [[ -x /etc/rc.d/rc.serial ]]; then
+  /etc/rc.d/rc.serial start
+fi
+
+# LimeTech - let's keep this on the USB flash
+## Carry an entropy pool between reboots to improve randomness.
+/bin/mkdir -p /var/lib/seedrng
+/bin/chmod 600 /var/lib/seedrng
+/bin/cp /boot/config/random-seed /var/lib/seedrng/seed.no-credit 2>/dev/null
+/usr/sbin/seedrng
+
+# LimeTech - restore hostname from ident.cfg file on flash and ensure hostname is
+# defined as localhost alias in /etc/hosts (this lets wins name resolution work)
+NAME="Tower"
+timeZone="America/Los_Angeles"
+if [[ -r /boot/config/ident.cfg ]]; then
+  . <(/usr/bin/fromdos </boot/config/ident.cfg)
+  NAME=${NAME//[^a-zA-Z\-\.0-9]/\-}
+fi
+/bin/echo "$NAME" >/etc/HOSTNAME
+/bin/echo "# Generated" >/etc/hosts
+/bin/echo "127.0.0.1      $NAME localhost" >>/etc/hosts
+/bin/echo "54.149.176.35  keys.lime-technology.com" >>/etc/hosts
+
+# LimeTech - restore the configured timezone
+if [[ $timeZone == custom ]]; then
+  /bin/ln -sf /boot/config/timezone /etc/localtime
+else
+  /bin/ln -sf /usr/share/zoneinfo/$timeZone /etc/localtime
+fi
+
+# LimeTech - restore password files stored on flash
+if [[ -r /boot/config/passwd ]]; then
+  while IFS=: read -r USERNAME PASSWORD USERID GROUPID COMMENT HOMEDIR CMDSHELL; do
+    if [[ $USERNAME == root ]]; then
+      /bin/sed -i "s|^root:.*|root:x:0:0:$COMMENT:/root:/bin/bash|" /etc/passwd
+    fi
+    if (( USERID >= 1000 )); then
+      /bin/echo "$USERNAME:x:$USERID:$GROUPID:$COMMENT:/:/bin/false" >> /etc/passwd
+    fi
+  done </boot/config/passwd
+  if [[ -r /boot/config/shadow ]]; then
+    /bin/cp -f /boot/config/shadow /etc
+    /bin/chmod 600 /etc/shadow
+  fi
+fi
+/usr/sbin/pwconv
+if [[ -r /boot/config/smbpasswd ]]; then
+  /bin/cp -f /boot/config/smbpasswd /var/lib/samba/private
+fi
+if [[ -r /boot/config/secrets.tdb ]]; then
+  /bin/cp -f /boot/config/secrets.tdb /var/lib/samba/private
+fi
+
+# LimeTech - restore custom rsyslog.conf config file from flash if present
+if [[ -r /boot/config/rsyslog.conf ]]; then
+  /usr/bin/fromdos </boot/config/rsyslog.conf >/etc/rsyslog.conf
+fi

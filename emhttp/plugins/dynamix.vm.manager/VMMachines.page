@@ -1,0 +1,534 @@
+Menu="VMs:1"
+Title="Virtual Machines"
+Tag="columns"
+Cond="is_file('/var/run/libvirt/libvirtd.pid')"
+Markdown="false"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ * Copyright 2015-2021, Derek Macias, Eric Schultz, Jon Panozzo.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
+
+$cpus = cpu_list();
+$hover   = in_array($theme,['white','azure']) ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+$bgcolor = in_array($theme,['white','azure']) ? '#f2f2f2' : '#1c1c1c';
+$fgcolor = in_array($theme,['white','azure']) ? '#1c1c1c' : '#f2f2f2';
+$incolor = $theme!='gray' ? $bgcolor : '#121510';
+
+function showCPUs($uuid) {
+  global $cpus;
+  $vm = domain_to_config($uuid);
+  $vcpu = $vm['domain']['vcpu'];
+  echo "<div class='four'>";
+  foreach ($cpus as $pair) {
+    unset($cpu1,$cpu2);
+    [$cpu1, $cpu2] = my_preg_split('/[,-]/',$pair);
+    $check = ($vcpu && in_array($cpu1, $vcpu)) ? 'fa-circle orange-text':'fa-circle-o';
+    if (!$cpu2) {
+      echo "<label><i class='fa fa-fw $check'></i>&nbsp;&nbsp;cpu $cpu1</label>";
+    } else {
+      echo "<label class='cpu1'><i class='fa fa-fw $check'></i>&nbsp;&nbsp;cpu $cpu1 / $cpu2</label>";
+      $check = ($vcpu && in_array($cpu2, $vcpu)) ? 'fa-circle orange-text':'fa-circle-o';
+      echo "<label class='cpu2'><i class='fa fa-fw $check'></i></label>";
+    }
+  }
+  echo "</div>";
+}
+function vsize($size,$expand=true) {
+  $units = ['','K','M','G','T','P','E','Z','Y'];
+  if ($expand) {
+    $size = str_replace(['B',' ',',', '.'],'',strtoupper($size));
+    [$c1,$c2] = my_preg_split('/(?<=[0-9])(?=[A-Z])/',$size);
+    return $c1 * pow(1024,array_search($c2,$units)?:0);
+  } else {
+    $base = $size ? floor(log($size,1024)) : 0;
+    return $size/pow(1024,$base).$units[$base];
+  }
+}
+
+$uuid = unscript(_var($_GET,'uuid'));
+$subaction = _var($_GET,'subaction');
+if (isset($_GET['refresh'])) {
+  $vm = unscript(_var($_GET,'name'));
+  if ($lv->domain_is_active($vm)) {
+    echo "<meta http-equiv='refresh' content='5; url=/VMs?name=$vm&amp;refresh=true'>";
+    $msg = "Waiting for $vm to shutdown...";
+  } else {
+    $msg = "$vm has been shutdown";
+  }
+}
+if ($subaction) {
+  $vm = $lv->domain_get_name_by_uuid($uuid);
+  if ($subaction == 'disk-resize') {
+    $capacity = vsize($_GET['cap']);
+    if ($capacity > vsize($_GET['oldcap'])) {
+      shell_exec("qemu-img resize -q ".escapeshellarg(unscript($_GET['disk']??''))." ".vsize($capacity,0));
+    $msg = $vm." disk capacity has been changed to {$_GET['cap']}";
+    } else {
+      $msg = "Error: disk capacity has to be greater than {$_GET['oldcap']}";
+    }
+  } elseif ($subaction == 'disk-remove') {
+    $msg = $lv->domain_disk_remove($vm,_var($_GET,'dev'))
+    ? "$vm disk has been removed"
+    : "Error: ".$lv->get_last_error();
+  } elseif ($subaction == 'snap-create') {
+    $msg = $lv->domain_snapshot_create($vm)
+    ? "Snapshot for $vm has been created"
+    : "Error: ".$lv->get_last_error();
+  } elseif ($subaction == 'snap-delete') {
+    $msg = $lv->domain_snapshot_delete($vm,_var($_GET,'snap'))
+    ? "Snapshot for $vm has been deleted"
+    : "Error: ".$lv->get_last_error();
+  } elseif ($subaction == 'snap-revert') {
+    $msg = $lv->domain_snapshot_revert($vm,_var($_GET,'snap'))
+    ? "$vm has been reverted"
+    : "Error: ".$lv->get_last_error();
+  } elseif ($subaction == 'snap-desc') {
+    $msg = $lv->snapshot_set_metadata($vm,_var($_GET,'snap'),_var($_POST,'snapdesc'))
+    ? "Snapshot description for $vm has been saved"
+    : "Error: ".$lv->get_last_error();
+  }
+}
+if ($libvirt_running=='yes') $vms = $lv->get_domains() ?: [];
+if (empty($vms)) {
+  $msg = $libvirt_running=='yes'
+  ? 'No VMs defined. Create from template or add XML.'
+  : 'Libvirt is not running. Goto Settings tab then click Start.';
+}
+?>
+<link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.filetree.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.ui.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/plugins/dynamix.docker.manager/styles/style-$theme.css")?>">
+
+<script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
+<script src="<?autov('/plugins/dynamix.vm.manager/javascript/dynamix.vm.manager.js')?>"></script>
+<script src="<?autov('/plugins/dynamix.vm.manager/javascript/vmmanager.js')?>"></script>
+<script src="<?autov("/webGui/javascript/jquery.filetree.js")?>"></script>
+<script>
+<?if (_var($display,'resize')):?>
+function resize() {
+  $('#kvm_list').height(Math.max(window.innerHeight-340,330));
+  $('#kvm_table thead,#kvm_table tbody').removeClass('fixed');
+  $('#kvm_table thead tr th').each(function(){$(this).width($(this).width());});
+  $('#kvm_table tbody tr td').each(function(){$(this).width($(this).width());});
+  $('#kvm_table thead,#kvm_table tbody').not('.child').addClass('fixed');
+}
+<?endif;?>
+function resetSorting() {
+  if ($.cookie('lockbutton')==null) return;
+  $('input[type=button]').prop('disabled',true);
+  $.post('/plugins/dynamix.vm.manager/include/UserPrefs.php',{reset:true},function(){loadlist();});
+}
+function changemedia(uuid,dev,bus,file) {
+  if (file === "--select") getisoimage(uuid,dev,bus,file);
+  if (file === "--eject") ajaxVMDispatch({action:"change-media", uuid:uuid , cdrom:"" , dev:dev , bus:bus , file:file}, "loadlist");
+}
+function dialogStyle() {
+  $('.ui-dialog-titlebar-close').css({'display':'none'});
+  $('.ui-dialog-title').css({'text-align':'center','width':'100%','font-size':'1.8rem'});
+  $('.ui-dialog-content').css({'padding-top':'15px','vertical-align':'bottom'});
+  $('.ui-button-text').css({'padding':'0px 5px'});
+}
+function getisoimageboth(uuid,dev,bus,file,dev2,bus2,file2){
+  var box = $("#dialogWindow");
+  box.html($("#templateISOboth").html());
+  box.find('#target').attr('value',file).fileTreeAttach(null,null,function(path){
+    box.find('#target').val(path).change();
+  });
+  box.find('#target2').attr('value',file2).fileTreeAttach(null,null,function(path){
+    box.find('#target2').val(path).change();
+  });
+  box.dialog({
+    title: "_(Select ISOs for CDROMs)_",
+    height: 530,
+    width: 900,
+    resizable: false,
+    modal: true,
+    buttons: {
+      "_(Update)_": function(){
+        var target = box.find('#target');
+        if (target.length) target = target.val(); else target = '';
+        var target2 = box.find('#target2');
+        if (target2.length) target2 = target2.val(); else target2 = '';
+        box.find('#target').prop('disabled',true);
+        box.find('#target2').prop('disabled',true);
+        ajaxVMDispatch({action:"change-media-both", uuid:uuid, cdrom:"", dev:dev, bus:bus, file:target, dev2:dev2, bus2:bus2, file2:target2}, "loadlist");
+        box.dialog('close');
+      },
+      "_(Cancel)_": function(){
+        box.dialog('close');
+      }
+    }
+  });
+  dialogStyle();
+}
+function getisoimage(uuid,dev,bus,file){
+  var box = $("#dialogWindow");
+  box.html($("#templateISO").html());
+  box.find('#target').attr('value',file).fileTreeAttach(null,null,function(path){
+    box.find('#target').val(path).change();
+  });
+  box.dialog({
+    title: "_(Select ISO)_",
+    height: 530,
+    width: 900,
+    resizable: false,
+    modal: true,
+    buttons: {
+      "_(Insert)_": function(){
+        var target = box.find('#target');
+        if (target.length) target = target.val(); else target = '';
+        box.find('#target').prop('disabled',true);
+        ajaxVMDispatch({action:"change-media", uuid:uuid, cdrom:"", dev:dev, bus:bus, file:target}, "loadlist");
+        box.dialog('close');
+      },
+      "_(Cancel)_": function(){
+        box.dialog('close');
+      }
+    }
+  });
+  dialogStyle();
+}
+function VMClone(uuid, name){
+  var box = $("#dialogWindow");
+  box.html($("#templateClone").html());
+  box.find('#VMBeingCloned').html(name).change();
+  box.find('#target').val(name + "_clone");
+  document.getElementById("Free").checked = true;
+  document.getElementById("Overwrite").checked = true;
+  box.dialog({
+    title: "_(VM Clone)_",
+    height: 'auto',
+    width: 600,
+    resizable: false,
+    modal: true,
+    buttons: {
+      "_(Clone)_": function(){
+        var target = box.find('#target');
+        if (target.length) {
+          target = target.val();
+          //if (!target) {errorTarget(); return;}
+        } else target = '';
+        var clone = box.find("#target").prop('value');
+        var start = box.find('#Start').prop('checked') ? 'yes' : 'no';
+        var edit = box.find('#Edit').prop('checked') ? 'yes' : 'no';
+        var overwrite = box.find('#Overwrite').prop('checked') ? 'yes' : 'no';
+        var free = box.find('#Free').prop('checked') ? 'yes' : 'no';
+        scripturl =  "VMClone.php " + encodeURIComponent("/usr/local/emhttp/plugins/dynamix.vm.manager/include/VMClone.php&" + $.param({action:"clone", name:name, clone:clone, overwrite:overwrite, edit:edit, start:start, free:free}));
+        openVMAction((scripturl),"VM Clone", "dynamix.vm.manager", "loadlist");
+        box.dialog('close');
+      },
+      "_(Cancel)_": function(){
+        box.dialog('close');
+      }
+    }
+  });
+  dialogStyle();
+}
+function selectsnapshot(uuid, name ,snaps, opt, getlist,state){
+  var box = $("#dialogWindow");
+  box.html($("#templatesnapshot"+opt).html());
+  const capopt = opt.charAt(0).toUpperCase() + opt.slice(1);
+  var optiontext = capopt + " _(Snapshot)_";
+  box.find('#VMName').html(name);
+  box.find('#targetsnap').val(snaps);
+  box.find('#targetsnapl').html(snaps);
+  if (getlist) {
+    var only = (opt == "remove") ? 0 : 1;
+    $.post("/plugins/dynamix.vm.manager/include/VMajax.php", {action:"snap-images", uuid:uuid, snapshotname:snaps, only:only}, function(data) {
+      if (data.html) box.find('#targetsnapimages').html(data.html);
+    },'json');
+  }
+  document.getElementById("targetsnaprmv").checked = true;
+  document.getElementById("targetsnaprmvmeta").checked = true;
+  document.getElementById("targetsnapkeep").checked = true;
+  document.getElementById("targetsnapfspc").checked = true;
+  box.dialog({
+    title: optiontext,
+    height: 'auto',
+    width: 600,
+    resizable: false,
+    modal: true,
+    buttons: {
+      "_(Proceed)_": function(){
+        var target = box.find('#targetsnap');
+        if (target.length) {
+          target = target.val();
+          if (!target ) {errorTarget(); return;}
+        } else target = '';
+        var remove = 'yes'
+        var keep = 'yes'
+        var removemeta = 'yes'
+        var free = 'yes'
+        var desc = ''
+        box.find('#targetsnap').prop('disabled',true);
+        if (opt == "revert") {
+          remove = box.find('#targetsnaprmv').prop('checked') ? 'yes' : 'no';
+          removemeta = box.find('#targetsnaprmvmeta').prop('checked') ? 'yes' : 'no';
+          keep = box.find('#targetsnapkeep').prop('checked') ? 'yes' : 'no';
+        }
+        if (opt == "create") {
+          free = box.find('#targetsnapfspc').prop('checked') ? 'yes' : 'no';
+          desc = box.find("#targetsnapdesc").prop('value');
+        }
+        ajaxVMDispatch({action:"snap-" + opt +'-external', uuid:uuid, snapshotname:target, remove:remove, free:free, removemeta:removemeta, keep:keep, desc:desc}, "loadlist");
+        box.dialog('close');
+      },
+      "_(Cancel)_": function(){
+        box.dialog('close');
+      }
+    }
+  });
+  dialogStyle();
+}
+function selectblock(uuid, name, snaps, opt, getlist, state){
+  var box = $("#dialogWindow");
+  box.html($("#templateblock").html());
+  const capopt = opt.charAt(0).toUpperCase() + opt.slice(1);
+  var optiontext = capopt + " _(Block Devices)_";
+  box.find('#VMName').html(name);
+  box.find('#targetsnap').val(snaps);
+  box.find('#targetsnapl').html(snaps);
+  getlist = true;
+  if (getlist) {
+    var only = 1;
+    if (opt == "remove") only = 0;
+    $.post("/plugins/dynamix.vm.manager/include/VMajax.php", {action:"snap-list", uuid:uuid}, function(data){
+      if (data.html) {
+        var targetbase = document.getElementById("targetblockbase");
+        htmlstrbase = "<select class='targetblockbase' name='targetblockbase' id='targetblockbase'><option value='--base'>--base</option>" + data.html + "</select>"
+        htmlstrtop = "<select class='targetblocktop' name='targetblocktop' id='targetblocktop'><option value='--top'>--top</option>" + data.html + "</select>"
+        $("select.targetblockbase").replaceWith(htmlstrbase);
+        $("select.targetblocktop").replaceWith(htmlstrtop);
+      }
+    },'json');
+  }
+  document.getElementById("targetsnaprmv").checked = true;
+  document.getElementById("targetsnaprmvmeta").checked = true;
+  document.getElementById("targetsnapkeep").checked = true;
+  document.getElementById("targetsnapfspc").checked = true;
+  if (opt == "pull") {
+    $('.toprow').hide();
+    $('.targetpivotrow').hide();
+    $('.targetdeleterow').hide();
+  } else {
+    $('.toprow').show();
+    $('.targetpivotrow').show();
+    $('.targetdeleterow').show();
+  }
+  box.dialog({
+    title: optiontext,
+    height: 'auto',
+    width: 600,
+    resizable: false,
+    modal: true,
+    buttons: {
+      "_(Action)_": function(){
+        var target = box.find('#targetsnap');
+        if (target.length) {
+          target = target.val();
+          if (!target ) {errorTarget(); return;}
+        } else target = '';
+        var remove = 'yes'
+        var keep = 'yes'
+        var removemeta = 'yes'
+        var free = 'yes'
+        var delete_file = 'yes'
+        var pivot = 'yes'
+        var desc = ''
+        box.find('#targetsnap').prop('disabled',true);
+          if (opt == "create") {
+          free = box.find('#targetsnapfspc').prop('checked') ? 'yes' : 'no';
+          var desc = box.find("#targetsnapdesc").prop('value');
+        }
+        var targetbase = box.find("#targetblockbase").prop('value');
+        var targettop = box.find("#targetblocktop").prop('value');
+        pivot = box.find('#targetpivot').prop('checked') ? 'yes' : 'no';
+        delete_file = box.find('#targetdelete').prop('checked') ? 'yes' : 'no';
+        Ajaxurl =  "VMAjaxCall.php " + encodeURIComponent("/usr/local/emhttp/plugins/dynamix.vm.manager/include/VMajax.php&" + $.param({action:opt, name:name, targetbase:targetbase, targettop:targettop, snapshotname:target, remove:remove, targetpivot:pivot, removemeta:removemeta, targetdelete:delete_file}));
+        openVMAction((Ajaxurl),"Block Commit", "dynamix.vm.manager", "loadlist");
+        box.dialog('close');
+      },
+      "_(Cancel)_": function(){
+        box.dialog('close');
+      }
+    }
+  });
+  dialogStyle();
+}
+var sortableHelper = function(e,ui){
+  var child = ui.next();
+  if (child.is(':visible')) child.addClass('unhide').hide();
+  ui.children().each(function(){$(this).width($(this).width());});
+  return ui;
+};
+function LockButton() {
+  if ($.cookie('lockbutton')==null) {
+    $.cookie('lockbutton','lockbutton');
+    $('#resetsort').removeClass('nohand').addClass('hand');
+    $('i.mover').show();
+    $('#kvm_list .sortable').css({'cursor':'move'});
+<?if ($themes1):?>
+    $('div.nav-item.LockButton a').prop('title',"_(Lock sortable items)_");
+    $('div.nav-item.LockButton b').removeClass('icon-u-lock green-text').addClass('icon-u-lock-open red-text');
+<?endif;?>
+    $('div.nav-item.LockButton span').text("_(Lock sortable items)_");
+    $('#kvm_list').sortable({helper:sortableHelper,items:'.sortable',cursor:'grab',axis:'y',containment:'parent',delay:100,opacity:0.5,zIndex:9999,forcePlaceholderSize:true,
+    update:function(e,ui){
+      $('#kvm_list .sortable').each(function(){
+        var parent = $(this).attr('parent-id');
+        var child = $('tr[child-id="'+parent+'"]');
+        child.detach().insertAfter($(this));
+        if (child.hasClass('unhide')) child.removeClass('unhide').show();
+      });
+      var row = $('#kvm_list tr:first');
+      var names = '', index = '';
+      row.parent().children().find('td.vm-name').each(function(){names+=$(this).find('a').text()+';';index+=$(this).parent().parent().children().index($(this).parent())+';';});
+      $.post('/plugins/dynamix.vm.manager/include/UserPrefs.php',{names:names,index:index});
+    }});
+  } else {
+    $.removeCookie('lockbutton');
+    $('#resetsort').removeClass('hand').addClass('nohand');
+    $('i.mover').hide();
+    $('#kvm_list .sortable').css({'cursor':'default'});
+<?if ($themes1):?>
+    $('div.nav-item.LockButton a').prop('title',"_(Unlock sortable items)_");
+    $('div.nav-item.LockButton b').removeClass('icon-u-lock-open red-text').addClass('icon-u-lock green-text');
+<?endif;?>
+    $('div.nav-item.LockButton span').text("_(Unlock sortable items)_");
+    $('#kvm_list').sortable('destroy');
+  }
+}
+function loadlist() {
+  timers.vm = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
+  $.get('/plugins/dynamix.vm.manager/include/VMMachines.php',{show:$.cookie('vmshow')},function(d) {
+    clearTimeout(timers.vm);
+    var data = d.split(/\0/);
+    $('#kvm_list').html(data[0]);
+    $('head').append('<script>'+data[1]+'<\/script>');
+<?if (_var($display,'resize')):?>
+    resize();
+    $(window).bind('resize',function(){resize();});
+<?endif;?>
+<?foreach ($vms as $vm) {
+  $res = $lv->get_domain_by_name($vm);
+  $uuid = $lv->domain_get_uuid($res);
+?>  $('.vcpu-<?=$uuid?>').tooltipster({
+      trigger:'custom',
+      triggerOpen:{mouseenter:true,click:true,touchstart:true},
+      contentAsHTML:true,
+      animation:'grow',
+      triggerClose:{click:true,scroll:true,mouseleave:true,delay:1},
+      interactive:true,
+      viewportAware:true,
+      functionBefore:function(instance,helper){instance.content("<?=showCPUs($uuid)?>");}
+    });
+<?}?>
+    $('.autostart').switchButton({labels_placement:'right', on_label:"_(On)_", off_label:"_(Off)_"});
+    $('.autostart').change(function() {
+      $.post('/plugins/dynamix.vm.manager/include/VMajax.php',{action:'domain-autostart',uuid:$(this).attr('uuid'),autostart:$(this).prop('checked'),response:'json'},function(data){
+        $(this).prop('checked', data.autostart);
+      },'json');
+    });
+    $('div.spinner.fixed').hide('slow');
+    $('input[type=button]').prop('disabled',false).show('slow');
+    $('.text').click(showInput);
+    $('.input').blur(hideInput);
+  });
+}
+$(function() {
+<?if ($msg):?>
+  <?$color = strpos($msg, "rror:")!==false ? 'red-text':'green-text'?>
+  $('#countdown').html("<span class='<?=$color?>'><?=_($msg)?></span>");
+<?endif;?>
+  $('#btnAddVM').click(function AddVMEvent(){$('.tab>input#tab2').click();});
+  $.removeCookie('lockbutton');
+  loadlist();
+});
+</script>
+
+<table id="kvm_table" class="tablesorter four shift">
+<thead><tr><th class="th1"><a id="resetsort" class="nohand" onclick="resetSorting()" title="Reset sorting"><i class="fa fa-th-list"></i></a>_(Name)_</th><th class="th2">_(Description)_</th><th>_(CPUs)_</th><th>_(Memory)_</th><th>_(vDisks / vCDs)_</th><th>_(Graphics)_</th><th>_(IP Address)_</th><th class="th3">_(Autostart)_</th></tr></thead>
+<tbody id="kvm_list"><tr><td colspan='8'></td></tr></tbody>
+</table>
+
+<input type="button" onclick="addVM()" id="btnAddVM" value="_(Add VM)_" style="display:none">
+<input type="button" onclick="startAll()" value="_(Start All)_" style="display:none">
+<input type="button" onclick="stopAll()" value="_(Stop All)_" style="display:none">
+
+<div id="dialogWindow"></div>
+
+<div id="templateISO" class="template">
+<dl>
+<dt>_(ISO Image)_:</dt>
+<dd><input type="text" id="target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="iso"></dd>
+</dl>
+</div>
+
+<div id="templateISOboth" class="template">
+<dl>
+<dt>_(CD1 ISO Image)_:</dt>
+<dd><input type="text" id="target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="iso"></dd>
+<dt>_(CD2 ISO Image)_:</dt>
+<dd><input type="text" id="target2" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="iso"></dd>
+</dl>
+</div>
+
+<div id="templatesnapshotcreate" class="template">
+<table id='snapshot' class='snapshot'>
+<tr><td>_(VM Name)_:</td><td><label id="VMName"></label></td></tr>
+<tr><td>_(Snapshot Name)_:</td><td><input type="text" id="targetsnap" autocomplete="off" spellcheck="false" value="--generate" onclick="this.select()">_(Check free space)_: <input type="checkbox" id="targetsnapfspc" checked></td></tr>
+<tr><td>_(Description  )_:</td><td><input type="text" id="targetsnapdesc" autocomplete="off" spellcheck="false" value="" onclick="this.select()"></td></tr>
+</table>
+</div>
+
+<div id="templatesnapshotrevert" class="template">
+_(VM Name)_: <label id="VMName"></label><br>
+_(Snapshot Name)_: <input type="text" id="targetsnap" hidden><label id="targetsnapl"></label><br>
+_(Remove Images)_: <input type="checkbox" id="targetsnaprmv" checked><br>
+_(Remove Meta)_:<input type="checkbox" id="targetsnaprmvmeta" checked> <input type="checkbox" id="targetsnapkeep" hidden><label id="targetsnapimages"></label><br>
+</div>
+
+<div id="templatesnapshotremove" class="template">
+<h3>!! _(Warning removing Snapshots can break the chain)_ !!</h3>
+
+_(VM Name)_: <label id="VMName"></label><br>
+_(Snapshot Name)_: <input type="text" id="targetsnap" hidden><label id="targetsnapl"></label><label id="targetsnapimages"></label>
+</div>
+
+<div id="templateblock" class="template">
+_(VM Name)_: <label id="VMName"></label><br>
+_(Snapshot Name)_: <input type="text" id="targetsnap" hidden><label id="targetsnapl"></label><br><br>
+<table id='block' class='snapshot'>
+<tr><td>_(Base Image)_:</td><td><select class="targetblockbase"></select></td></tr>
+<tr name="toprow" class="toprow" ><td>_(Top Image  )_:</td><td><select class="targetblocktop" name="targetblocktop" id="targetblocktop"></select></td><td></tr>
+<tr name="targetpivotrow" class="targetpivotrow" ><td>_(Pivot)_:</td><td><input type="checkbox" id="targetpivot" checked></td></tr>
+<tr name="targetdeleterow" class="targetdeleterow" ><td>_(Delete)_:</td><td><input type="checkbox" id="targetdelete" checked></td></tr>
+</table>
+<input type="checkbox" id="targetsnapkeep" hidden><br>
+<label id="targetsnapimages"></label><br>
+</div>
+
+<div id="templateClone" class="template">
+<table class='snapshot'>
+<tr><td>_(VM Being Cloned)_:</td><td><span id="VMBeingCloned"></span></td></tr>
+<tr><td>_(New VM)_:</td><td><input type="text" id="target" autocomplete="off" spellcheck="false" value="" onclick="this.select()" ></td></tr>
+<tr><td>_(Overwrite)_:</td><td><input type="checkbox" id="Overwrite" value="" ></td></tr>
+<tr hidden><td>_(Start Cloned VM)_:</td><td><input type="checkbox" id="Start" value="" ></td></tr>
+<tr hidden><td>_(Edit VM after clone)_:</td><td><input type="checkbox" id="Edit" value="" ></td></tr>
+<tr><td>_(Check Free Space)_:</td><td><input type="checkbox" id="Free" value="" ></td></tr>
+</table>
+</div>

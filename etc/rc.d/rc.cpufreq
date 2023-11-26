@@ -1,0 +1,76 @@
+#!/bin/bash
+#
+# script: rc.cpufreq
+#
+# Settings for CPU frequency and voltage scaling in the kernel.
+# For more information, see the kernel documentation in
+# /usr/src/linux/Documentation/cpu-freq/
+#
+# Default CPU scaling governor to try.  Some possible choices are:
+# performance:  The CPUfreq governor "performance" sets the CPU statically
+#               to the highest frequency within the borders of scaling_min_freq
+#               and scaling_max_freq.
+# powersave:    The CPUfreq governor "powersave" sets the CPU statically to the
+#               lowest frequency within the borders of scaling_min_freq and
+#               scaling_max_freq.
+# userspace:    The CPUfreq governor "userspace" allows the user, or any
+#               userspace program running with UID "root", to set the CPU to a
+#               specific frequency by making a sysfs file "scaling_setspeed"
+#               available in the CPU-device directory.
+# ondemand:     The CPUfreq governor "ondemand" sets the CPU depending on the
+#               current usage.
+# conservative: The CPUfreq governor "conservative", much like the "ondemand"
+#               governor, sets the CPU depending on the current usage.  It
+#               differs in behaviour in that it gracefully increases and
+#               decreases the CPU speed rather than jumping to max speed the
+#               moment there is any load on the CPU.
+# schedutil:    The CPUfreq governor "schedutil" aims at better integration with
+#               the Linux kernel scheduler. Load estimation is achieved through
+#               the scheduler's Per-Entity Load Tracking (PELT) mechanism, which
+#               also provides information about the recent load.
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+SCALING_GOVERNOR="ondemand"
+SYSTEM="/sys/devices/system/cpu"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# For CPUs using intel_pstate, always use the performance governor. This also
+# provides power savings on Intel processors while avoiding the ramp-up lag
+# present when using the powersave governor (which is the default if ondemand
+# is requested on these machines):
+if [[ $(cat $SYSTEM/cpu0/cpufreq/scaling_driver 2>/dev/null) == intel_pstate ]]; then
+  SCALING_GOVERNOR="performance"
+fi
+
+# To force a particular option without having to edit this file, uncomment the
+# line in /etc/default/cpufreq and edit it to select the desired option:
+if [[ -r /etc/default/cpufreq ]]; then
+  . /etc/default/cpufreq
+fi
+
+# If rc.cpufreq is given an option, use it for the CPU scaling governor instead:
+if [[ -n $1 && $1 != start ]]; then
+  SCALING_GOVERNOR=$1
+fi
+
+# If you need to load a specific CPUFreq driver, load it here.  Most likely you don't.
+#/sbin/modprobe acpi-cpufreq
+
+# Attempt to apply the CPU scaling governor setting.  This may or may not
+# actually override the default value depending on if the choice is supported
+# by the architecture, processor, or underlying CPUFreq driver.  For example,
+# processors that use the Intel P-state driver will only be able to set
+# performance or powersave here.
+echo $SCALING_GOVERNOR | tee $SYSTEM/cpu*/cpufreq/scaling_governor &>/dev/null
+
+# Report what CPU scaling governor is in use after applying the setting:
+if [[ -r $SYSTEM/cpu0/cpufreq/scaling_governor ]]; then
+  log "Enabled CPU frequency scaling governor:  $(cat $SYSTEM/cpu0/cpufreq/scaling_governor)"
+fi
+
+unset SCALING_GOVERNOR
+exit 0

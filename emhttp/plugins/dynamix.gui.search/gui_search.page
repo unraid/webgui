@@ -1,0 +1,115 @@
+Menu='Buttons:1'
+Icon='icon-u-search'
+Title='Search'
+Code='e956'
+---
+<?
+###################################################
+#                                                 #
+# GUI Search copyright 2021-2023, Andrew Zawadzki #
+#           Licenced under GPLv2                  #
+#                                                 #
+###################################################
+
+$currentUnraidPage = str_replace('Browse','Main',basename(explode('?',$_SERVER['REQUEST_URI'])[0]));
+$guiSearchBoxSpan  = "<span id='guiSearchBoxSpan'><input type='text' id='guiSearchBox' autocomplete='new-password'></input></span><span class='guiSearchBoxResults'></span>";
+?>
+<script>
+var languageVisible;
+var guiSearchSuggestions;
+
+var browserName = (function(agent){
+	switch (true) {
+		case agent.indexOf('edge') >= 0: return 'Edge'; // Edge
+		case agent.indexOf('edg/') >= 0: return 'Edge'; // Edge Chromium Based
+		case agent.indexOf('opr') >= 0 && !!window.opr: return 'Opera';
+		case agent.indexOf('chrome') >= 0 && !!window.chrome: return 'Chrome';
+		case agent.indexOf('trident') >= 0: return 'MS IE';
+		case agent.indexOf('firefox') >= 0: return 'Mozilla Firefox';
+		case agent.indexOf('safari') >= 0: return 'Safari';
+		default: return 'other';
+	}
+})(window.navigator.userAgent.toLowerCase());
+
+$(function(){
+<?if ($themes2):?>
+	$('.nav-item.gui_search').hover(function(){gui_search();},function(e){closeSearchBox(e);});
+<?endif;?>
+	$.post('/plugins/dynamix.gui.search/include/exec.php',function(data) {
+		if (data) {
+			try {guiSearchSuggestions = JSON.parse(data); setupGUIsearch();}
+			catch(e) {console.log('Invalid JSON for GUI search autocomplete');}
+		}
+	});
+});
+
+function guiSearchBoxSpan() {
+	return $('#guiSearchBoxSpan').length>0;
+}
+
+function setupGUIsearch() {
+	window.addEventListener('keydown',function(e){
+		if (!e.shiftKey && !e.altKey && (navigator.appVersion.indexOf('Mac')==-1 ? e.ctrlKey : e.metaKey) && e.keyCode==75) {
+			e.preventDefault();
+		<?if ($themes1):?>
+			if (guiSearchBoxSpan()) closeSearchBox(e); else gui_search();
+		<?endif;?>
+		}
+	});
+	if (browserName != 'Chrome' && browserName != 'Edge') {
+		var hashTag = (window.location.hash||'').substr(1).replace('%20',' ').replace('%2d','-');
+		if (hashTag.length) $('body').mark(hashTag,{'accuracy': {'value': 'exactly','limiters': ['.',':','?']},'separateWordSearch': false});
+	}
+}
+
+function gui_search() {
+<?if ($themes1):?>
+	languageVisible = $('.nav-item.LanguageButton').is(':visible');
+	$('.nav-tile.right').prepend("<?=$guiSearchBoxSpan?>").css('overflow','visible');
+	$('.nav-item.util,.nav-user.show').hide();
+<?else:?>
+	if (!guiSearchBoxSpan()) $('.nav-item.gui_search a').append("<?=$guiSearchBoxSpan?>");
+	$('.nav-item.gui_search').css('overflow','visible');
+<?endif;?>
+	if (guiSearchSuggestions) {
+		var guiSearchAwesomplete = new Awesomplete(document.getElementById('guiSearchBox'));
+		guiSearchAwesomplete.list = guiSearchSuggestions;
+		guiSearchAwesomplete.maxItems = 15;
+		guiSearchAwesomplete.autoFirst = true;
+		Awesomplete.$('#guiSearchBox').removeEventListener('awesomplete-selectcomplete',guiSearch);
+		Awesomplete.$('#guiSearchBox').addEventListener('awesomplete-selectcomplete',guiSearch);
+		$('#guiSearchBox').attr('autocomplete','new-password'); // Stop awesomplete from resetting autocomplete
+	}
+	$('#guiSearchBox').focus().keydown(function(e){if (e.which==27) closeSearchBox(e);}).blur(function(e){closeSearchBox(e);});
+}
+
+function closeSearchBox(e) {
+	e.stopPropagation();
+	$('#guiSearchBoxSpan').remove();
+<?if ($themes1):?>
+	$('.nav-tile.right').css({'overflow-x':'auto','overflow-y':'hidden'});
+	$('.nav-item.util,.nav-user.show').show();
+	if (!languageVisible) $('.nav-item.LanguageButton').hide();
+<?else:?>
+	$('.nav-item.gui_search').css('overflow','hidden');
+<?endif;?>
+}
+
+function guiSearch() {
+	var searchInfo = $('#guiSearchBox').val().split('**');
+	var separator  = (browserName == 'Chrome' || browserName == 'Edge') ? '#:~:text=' : '#';
+	var scrollText = (typeof searchInfo[1] != 'undefined') ? separator+searchInfo[1].replace(' ','%20').replace('-','%2d') : '';
+	var newPage    = "<?=$currentUnraidPage?>/Settings/Tools".replace(searchInfo[0]+'/','');
+
+	closeSearchBox(event);
+	if (newPage == 'Dashboard/Settings/Tools') newPage = 'Settings';
+	location.replace('/'+newPage+'/'+searchInfo[0]+scrollText);
+}
+
+if (browserName != 'Chrome' && browserName != 'Edge') {
+  var script  = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = '<?autov('/plugins/dynamix.gui.search/javascript/jquery.mark.js')?>';
+  document.getElementsByTagName('head')[0].appendChild(script);
+}
+</script>

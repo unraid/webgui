@@ -1,0 +1,140 @@
+#!/bin/bash
+#
+# script: rc.ntpd
+#
+# Start/stop/restart ntpd.
+#
+# LimeTech - modified to initialize ntp.conf file from config
+# Bergware - modified for Unraid OS, October 2023
+
+DAEMON="NTP server daemon"
+CALLER="ntp"
+NTPD="/usr/sbin/ntpd"
+OPTIONS="-g -u ntp:ntp"
+CONF="/etc/ntp.conf"
+IDENT="/boot/config/ident.cfg"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# library functions
+. /etc/rc.d/rc.library.source
+
+ntpd_running(){
+  sleep 0.1
+  [[ $(pgrep -cf $NTPD) -gt 0 ]]
+}
+
+ntpd_build(){
+  cp $CONF- $CONF
+  echo "# Generated entries follow:" >>$CONF
+  echo "interface ignore wildcard" >>$CONF
+  if check && [[ -n $BIND ]]; then
+    # ignore unused protocol
+    [[ $IPV4 == no ]] && echo "interface ignore ipv4" >>$CONF
+    [[ $IPV6 == no ]] && echo "interface ignore ipv6" >>$CONF
+    # add listen interfaces
+    for NET in $BIND; do
+      echo "interface listen $NET # $(show $NET)" >>$CONF
+    done
+  fi
+  # add configured NTP servers
+  [[ -n $NTP_SERVER1 ]] && echo "server $NTP_SERVER1 iburst" >>$CONF
+  [[ -n $NTP_SERVER2 ]] && echo "server $NTP_SERVER2 iburst" >>$CONF
+  [[ -n $NTP_SERVER3 ]] && echo "server $NTP_SERVER3 iburst" >>$CONF
+  [[ -n $NTP_SERVER4 ]] && echo "server $NTP_SERVER4 iburst" >>$CONF
+}
+
+ntpd_start(){
+  log "Starting $DAEMON..."
+  local REPLY
+  # read Unraid settings
+  [[ -r $IDENT ]] && . <(fromdos <$IDENT)
+  # if ntp not enabled, don't start ntp
+  if [[ $USE_NTP != yes ]]; then
+    REPLY="Service not enabled"
+  elif ntpd_running; then
+    REPLY="Already started"
+  else
+    # generate our config file
+    ntpd_build
+    # restore previously saved drift file if present
+    install --owner=ntp --group=ntp --mode=644 /boot/config/drift /var/lib/ntp 2>/dev/null
+    $NTPD $OPTIONS 2>/dev/null
+    if ntpd_running; then REPLY="Started"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+ntpd_stop(){
+  log "Stopping $DAEMON..."
+  local REPLY
+  if ! ntpd_running; then
+    REPLY="Already stopped"
+  else
+    if [[ -r /var/run/ntpd.pid ]]; then
+      kill -HUP $(cat /var/run/ntpd.pid)
+      rm -f /var/run/ntpd.pid
+    else
+      killall -HUP -q ntpd
+    fi
+    if ! ntpd_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+  fi
+  # save the drift file if present
+  cp /var/lib/ntp/drift /boot/config 2>/dev/null
+  log "$DAEMON...  $REPLY."
+}
+
+ntpd_restart(){
+  log "Restarting $DAEMON..."
+  ntpd_stop
+  sleep 1
+  ntpd_start
+}
+
+ntpd_reload(){
+  killall -HUP -q ntpd
+  . <(fromdos <$IDENT)
+  ntpd_build
+  $NTPD $OPTIONS 2>/dev/null
+}
+
+ntpd_update(){
+  # 0 = update needed, 1 = no action
+  if ! ntpd_running; then exit 1; fi
+  if check && [[ "$(this 'interface listen')" == "$BIND" ]]; then exit 1; else exit 0; fi
+}
+
+ntpd_status(){
+  if ntpd_running; then
+    echo "$DAEMON is currently running."
+  else
+    echo "$DAEMON is not running."
+    exit 1
+  fi
+}
+
+case "$1" in
+'start')
+  ntpd_start
+  ;;
+'stop')
+  ntpd_stop
+  ;;
+'restart')
+  ntpd_restart
+  ;;
+'reload')
+  ntpd_reload
+  ;;
+'update')
+  ntpd_update
+  ;;
+'status')
+  ntpd_status
+  ;;
+*)
+  echo "Usage: $BASENAME start|stop|restart|reload|update|status"
+  exit 1
+esac
+exit 0

@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+while :; do
+  if [[ -x /usr/bin/upnpc ]]; then
+    UPNP=/var/tmp/upnp
+    XML=$(cat $UPNP 2>/dev/null)
+    LINK=eth0
+    [[ -e /sys/class/net/bond0 ]] && LINK=bond0
+    [[ -e /sys/class/net/br0 ]] && LINK=br0
+    if [[ -n $XML ]]; then
+      # validate XML
+      timeout 6 stdbuf -o0 upnpc -u $XML -m $LINK -l 2>&1|grep -qm1 'refused'
+      [[ $? -ne 1 ]] && XML=
+    fi
+    if [[ -z $XML ]]; then
+      # obtain XML
+      GW=$(ip -4 route list default dev $LINK|awk '{print $3}')
+      DESC=$(timeout 12 stdbuf -o0 upnpc -m $LINK -l 2>/dev/null|grep -Po 'desc: \K.+')
+      for URL in $DESC; do
+        IP=${URL#*://}
+        if [[ ${IP%:*} == $GW ]]; then
+          XML=$URL
+          echo -n $XML >$UPNP
+          break
+        fi
+      done
+    fi
+    if [[ -n $XML ]]; then
+      # upnp on router is enabled, get active tunnels
+      TUNNEL=$(wg show interfaces)
+      UPNP=$(timeout 6 stdbuf -o0 upnpc -u $XML -m $LINK -l 2>/dev/null|grep -Po "WireGuard-\Kwg[0-9]+"|tr '\n' ' ')
+      for WG in $TUNNEL; do
+        if [[ -z $(grep -Pom1 'UPNP:0="\K.[^"]+' /etc/wireguard/$WG.cfg) && ! ${UPNP[@]} =~ "$WG " ]]; then
+          # port forwarding is closed; re-open it
+          IP=$(ip -4 addr show dev $LINK|grep -Pom1 'inet \K.[^/]+')
+          PORT=$(wg show $WG listen-port)
+          upnpc -u $XML -m $LINK -e "WireGuard-$WG" -a $IP $PORT $PORT udp >/dev/null 2>&1
+          [[ $? -eq 0 ]] && log "Added port $PORT/udp" || log "Failed to add port $PORT/udp"
+        fi
+      done
+    fi
+  fi
+  # loop every 3 minutes
+  sleep 180
+done &

@@ -1,0 +1,38 @@
+#!/bin/bash
+#
+# Helper script to set a disk device queue_depth value.
+# Usage:
+# set_ncq <identifier> <value>
+# <identifer> is part after /dev/, for example, sda
+# <value> if omitted reports current setting, 1 means disable NCQ, otherwise sets queue_depth
+
+# if no arguments, output usage
+if [ $# -eq 0 ]; then
+  echo "Usage: set_ncq <identifier> [ <value> ]"
+  exit
+fi
+
+# if queue_depth file not present, then probably not SATA/SCSI device
+if [ ! -e /sys/block/$1/device/queue_depth ]; then
+#  echo "set_ncq: $1 does not support NCQ"
+  exit
+fi
+
+# if only one argument, then report current queue_depth setting
+if [ $# -eq 1 ]; then
+  cat /sys/block/$1/device/queue_depth
+  exit
+fi
+
+# if we're trying to disable NCQ and queue_depth is already 0 or 1, don't try to
+# write queue_depth.  This avoids trying to write to a read-only queue_depth when device
+# doesn't support NCQ, or when queue_depth can't be changed.
+# Also supports devices for which 0 means 'disable NCQ' instead of 1 (are there any?).
+if [ $2 -eq 1 -a `cat /sys/block/$1/device/queue_depth` -le 1 ]; then
+#  echo "set_ncq: $1 NCQ already disabled"
+  exit
+fi
+
+# set the desired queue_depth
+echo "set_ncq: setting $1 queue_depth to $2"
+echo $2 > /sys/block/$1/device/queue_depth

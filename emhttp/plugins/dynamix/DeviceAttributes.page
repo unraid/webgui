@@ -1,0 +1,32 @@
+Menu="Device New"
+Title="Attributes"
+Tag="address-card-o"
+Cond="strpos(_var($disks[$name],'status'),'_NP')===false"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<script>
+$(function() {
+  $.post("/webGui/include/SmartInfo.php",{cmd:'attributes',port:'<?=$dev?>',name:'<?=$name?>'}, function(data) {
+    $('#disk_attributes').html(data);
+  });
+});
+</script>
+<table class='share_status small'>
+<thead><td style="width:40px">#</td><td>_(Attribute Name)_</td><td>_(Flag)_</td><td>_(Value)_</td><td>_(Worst)_</td><td>_(Threshold)_</td><td>_(Type)_</td><td>_(Updated)_</td><td>_(Failed)_</td><td style="width:145px">_(Raw Value)_</td></thead>
+<tbody id="disk_attributes"><tr><td colspan='10'><div class="spinner"></div></td></tr></tbody>
+</table>
+<input type="button" value="_(Done)_" onclick="done()">
+
+:smart_attributes_help:
+

@@ -1,0 +1,36 @@
+#!/usr/bin/php -q
+<?php
+// usage: smartctl_type name options
+// name is the device identifer, eg, "disk1"
+// options is a string to pass as options to 'smartctl' command
+function get_ctlr_options(&$type, &$disk) {
+  if (!$type) return;
+  $ports = [];
+  if (strlen($disk['smPort1']??'')) $ports[] = $disk['smPort1'];
+  if (strlen($disk['smPort2']??'')) $ports[] = $disk['smPort2'];
+  if (strlen($disk['smPort3']??'')) $ports[] = $disk['smPort3'];
+  $type .= ($ports ?  ','.implode($disk['smGlue'] ?? ',',$ports) : '');
+}
+// determine $device, eg, "sdb"
+$var   = (array)parse_ini_file('state/var.ini');
+$devs  = (array)parse_ini_file("/var/local/emhttp/devs.ini",true);
+$disks = (array)parse_ini_file("/var/local/emhttp/disks.ini",true);
+require_once "/usr/local/emhttp/webGui/include/CustomMerge.php";
+$name = $argv[1];
+$options = $argv[2];
+if (array_key_exists($name, $disks))
+  $disk = $disks[$name];
+else if (array_key_exists($name, $devs))
+  $disk = $devs[$name];
+else
+  exit(1);
+
+// form $type, the complete '-d' option string to pass to smrtctl
+$device = $disk['device'];
+$type = $disk['smType']??'';
+get_ctlr_options($type, $disk);
+
+// execute the 'smartctl' command
+passthru("/usr/sbin/smartctl $options $type /dev/$device", $retval);
+exit($retval);
+?>

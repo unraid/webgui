@@ -1,0 +1,190 @@
+Menu="Notifications:2"
+Title="SMTP Settings"
+Tag="envelope"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+require_once "$docroot/webGui/include/Encryption.php";
+
+$ssmtp['AuthPass'] = base64_decrypt(_var($ssmtp,'AuthPass'));
+$incomplete = !_var($ssmtp,'root') || !_var($ssmtp,'server') || !_var($ssmtp,'port') || ((!_var($ssmtp,'AuthUser') || !_var($ssmtp,'AuthPass')) && _var($ssmtp,'AuthMethod')!='none');
+?>
+<script>
+var counter,pid;
+
+$(function() {
+  $('#testbutton').click(function(){
+    $('#testresult').html('_(Test running)_:<span class="orange">_(obtaining)_ <span id="testcounter"></span>...</span>');
+    counter = 20;
+    mailtest();
+    $.get('/webGui/include/SMTPtest.php',function(data){clearTimeout(pid); $('#testresult').html(data)});
+  });
+  tls(document.smtp_setup);
+  pwd(document.smtp_setup);
+});
+function mailcheck(form) {
+  var email = /^\S+@\S+\.\S+/;
+  if (!email.test(form.root.value)) {
+    swal({title:"_(Invalid email address)_",text:"_(Please enter a valid sending email address)_",type:"error",html:true,confirmButtonText:"_(Ok)_"});
+    return false;
+  }
+  return true;
+}
+function tls(form) {
+  form.TLSCert.disabled = form.UseTLSCert.selectedIndex==0;
+}
+function pwd(form) {
+  form.AuthUser.disabled = form.AuthMethod.selectedIndex==0;
+  form.AuthPass.disabled = form.AuthMethod.selectedIndex==0;
+}
+function mailtest() {
+  document.getElementById('testcounter').innerHTML = '('+counter+' sec)';
+  counter--;
+  if (counter>0) pid=setTimeout(mailtest,1000);
+}
+function disableTest() {
+  document.getElementById('testbutton').disabled = true;
+}
+function settings(form, data) {
+  var item = data.split(':');
+  form.server.value = item[0];
+  form.port.value = item[1];
+  form.UseTLS.value = item[2];
+  form.UseSTARTTLS.value = item[3];
+  form.AuthMethod.value = item[4];
+  disableTest();
+}
+</script>
+
+<form markdown="1" name="smtp_setup" method="POST" action="/update.php" target="progressFrame" onsubmit="return mailcheck(this)" onchange="disableTest()">
+<input type="hidden" name="#file"  value="dynamix/dynamix.cfg">
+<input type="hidden" name="#section" value="ssmtp">
+<input type="hidden" name="#include" value="/webGui/include/update.ssmtp.php">
+<input type="hidden" name="#command" value="/webGui/scripts/notify">
+<input type="hidden" name="#arg[1]" value="smtp-init">
+_(Preset service)_:
+: <select name="service" size="1" onchange="settings(this.form,this.value)">
+<?=mk_option(_var($ssmtp,'service'), "smtp.gmail.com:465:YES:NO:login", "Gmail")?>
+<?=mk_option(_var($ssmtp,'service'), "smtp.gmail.com:587:YES:YES:login", "Gmail with TLS")?>
+<?=mk_option(_var($ssmtp,'service'), "smtp.office365.com:587:YES:YES:login", "Outlook")?>
+<?=mk_option(_var($ssmtp,'service'), "smtp.office365.com:587:YES:YES:login", "Hotmail")?>
+<?=mk_option(_var($ssmtp,'service'), "smtp.office365.com:587:YES:YES:login", "Office365")?>
+<?=mk_option(_var($ssmtp,'service'), "smtp.mail.yahoo.com:465:YES:NO:login", "Yahoo")?>
+<?=mk_option(_var($ssmtp,'service'), "plus.smtp.mail.yahoo.com:465:YES:NO:login", "Yahoo Plus")?>
+<?=mk_option(_var($ssmtp,'service'), "smtp.mail.yahoo.co.uk:465:YES:NO:login", "Yahoo UK")?>
+<?=mk_option(_var($ssmtp,'service'), "smtp.mail.yahoo.com.au:465:YES:NO:login", "Yahoo AU/NZ")?>
+<?=mk_option(_var($ssmtp,'service'), "smtp.o2.ie:25:NO:NO:login", "O2")?>
+<?=mk_option(_var($ssmtp,'service'), "smtp.o2.co.uk:25:NO:NO:login", "O2 UK")?>
+<?=mk_option(_var($ssmtp,'service'), "smtp.o2online.de:25:NO:NO:login", "O2 Online Deutschland")?>
+<?=mk_option(_var($ssmtp,'service'), "securesmtp.t-online.de:587:YES:YES:login", "T-Online Deutschland")?>
+<?=mk_option(_var($ssmtp,'service'), "smtp.1and1.com:587:YES:YES:login", "1&1")?>
+<?=mk_option(_var($ssmtp,'service'), "smtp.1und1.de:587:YES:YES:login", "1&1 Deutschland")?>
+<?=mk_option(_var($ssmtp,'service'), "smtp.att.yahoo.com:465:YES:NO:login", "AT&T")?>
+<?=mk_option(_var($ssmtp,'service'), "smtp.ntlworld.com:465:YES:NO:login", "NTL")?>
+<?=mk_option(_var($ssmtp,'service'), "mail.btopenworld.com:25:NO:NO:login", "BT Openworld")?>
+<?=mk_option(_var($ssmtp,'service'), "mail.btinternet.com:25:NO:NO:login", "BT Internet")?>
+<?=mk_option(_var($ssmtp,'service'), "smtp.comcast.net:465:YES:NO:login", "Comcast")?>
+<?=mk_option(_var($ssmtp,'service'), "outgoing.verizon.net:465:YES:NO:login", "Verizon")?>
+<?=mk_option(_var($ssmtp,'service'), "outgoing.yahoo.verizon.net:587:NO:NO:login", "Verizon (Yahoo hosted)")?>
+<?=mk_option(_var($ssmtp,'service'), "smtp.mail.com:465:YES:NO:login", "Mail.com")?>
+<?=mk_option(_var($ssmtp,'service'), "smtp.gmx.com:465:YES:NO:login", "GMX.com")?>
+<?=mk_option(_var($ssmtp,'service'), "smtp.zoho.com:465:YES:NO:login", "zoho Mail")?>
+<?=mk_option(_var($ssmtp,'service'), "::NO:NO:none", _("Custom"))?>
+</select>
+
+:smtp_preset_service_help:
+
+_(Sending email address)_:
+: <input type="text" name="root" value="<?=htmlspecialchars(_var($ssmtp,'root'))?>">
+
+:smtp_email_address_help:
+
+_(Email recipients)_:
+: <input type="text" name="RcptTo" value="<?=htmlspecialchars(_var($ssmtp,'RcptTo'))?>">
+
+:smtp_recipients_help:
+
+_(Priority in header)_:
+: <select name="SetEmailPriority">
+  <?=mk_option(_var($ssmtp,'SetEmailPriority'), "False", _("No"))?>
+  <?=mk_option(_var($ssmtp,'SetEmailPriority'), "True", _("Yes"))?>
+  </select>
+
+:smtp_priority_help:
+
+_(Email subject prefix)_:
+: <input type="text" name="Subject" value="<?=htmlspecialchars(_var($ssmtp,'Subject'))?>">
+
+:smtp_subject_prefix_help:
+
+_(Mail server)_:
+: <input type="text" name="server" value="<?=htmlspecialchars(_var($ssmtp,'server'))?>">
+
+:smtp_mail_server_help:
+
+_(Mail server port)_:
+: <input type="text" name="port" class="narrow"  maxlength="5" value="<?=htmlspecialchars(_var($ssmtp,'port'))?>">
+
+:smtp_mail_server_port_help:
+
+_(Use SSL/TLS)_:
+: <select name="UseTLS">
+  <?=mk_option(_var($ssmtp,'UseTLS'), "NO", _("No"))?>
+  <?=mk_option(_var($ssmtp,'UseTLS'), "YES", _("Yes"))?>
+  </select>
+
+:smtp_use_ssl_tls_help:
+
+_(Use STARTTLS)_:
+: <select name="UseSTARTTLS">
+  <?=mk_option(_var($ssmtp,'UseSTARTTLS'), "NO", _("No"))?>
+  <?=mk_option(_var($ssmtp,'UseSTARTTLS'), "YES", _("Yes"))?>
+  </select>
+
+:smtp_use_starttls_help:
+
+_(Define a TLS certificate)_:
+: <select name="UseTLSCert" onchange="tls(this.form)">
+  <?=mk_option(_var($ssmtp,'UseTLSCert'), "NO", _("No"))?>
+  <?=mk_option(_var($ssmtp,'UseTLSCert'), "YES", _("Yes"))?>
+  </select>
+
+:smtp_define_tls_cert_help:
+
+_(TLS certificate location)_:
+: <input type="text" name="TLSCert" value="<?=htmlspecialchars(_var($ssmtp,'TLSCert'))?>">
+
+:smtp_tls_cert_location_help:
+
+_(Authentication method)_:
+: <select name="AuthMethod" onchange="pwd(this.form)">
+  <?=mk_option(_var($ssmtp,'AuthMethod'), "none", _("None"))?>
+  <?=mk_option(_var($ssmtp,'AuthMethod'), "cram-md5", _("CRAM-MD5"))?>
+  <?=mk_option(_var($ssmtp,'AuthMethod'), "login", _("Login"))?>
+  </select>
+
+:smtp_authentication_method_help:
+
+_(Username)_:
+: <input type="text" name="AuthUser" value="<?=htmlspecialchars(_var($ssmtp,'AuthUser'))?>">
+
+_(Password)_:
+: <input type="password" name="AuthPass" value="<?=htmlspecialchars(_var($ssmtp,'AuthPass'))?>">
+
+:smtp_username_password_help:
+
+&nbsp;
+: <input type="submit" name="#apply" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+  <span id="testresult"><input type="button" id="testbutton" value="_(Test)_"<?if ($incomplete):?> disabled<?endif;?>></span>
+</form>

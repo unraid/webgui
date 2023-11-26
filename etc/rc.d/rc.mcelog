@@ -1,0 +1,135 @@
+#!/bin/bash
+#
+# script: rc.mcelog
+#
+# Startup script for mcelog
+#
+# Provides:          mcelog
+# Default-Start:     3 5
+# Default-Stop:      0 1 2 6
+# Short-Description: mcelog hardware error logging
+# Description:       Start the mcelog hardware error logging.
+#                    This logs and handles CPU hardware errors on x86 systems.
+#
+# LimeTech - don't start if cpu not supported because ERROR message written to system log worries users
+# Bergware - modified for Unraid OS, October 2023
+
+DAEMON="MCElog daemon"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# mcelog mode
+# valid values: daemon, trigger, cron
+# Recommended value daemon
+MCELOG_MODE="daemon"
+
+# additional options to pass to the daemon
+# this only works in daemon mode
+# see the manpage for details. settings can be also
+# set in /etc/mcelog.conf
+MCELOG_OPTIONS=""
+
+# private settings
+MCELOG="${MCELOG:-/usr/sbin/mcelog}"
+TRIGGER="/sys/devices/system/machinecheck/machinecheck0/trigger"
+
+[[ -x $MCELOG ]] || ( echo "mcelog not found"; exit 1 )
+[[ -r /dev/mcelog ]] || ( echo "/dev/mcelog not active"; exit 0 )
+
+
+mcelog_running(){
+  sleep 0.1
+  ps axc | grep -q ' mcelog'
+}
+
+mcelog_start(){
+  log "Starting $DAEMON..."
+  local REPLY
+  if [[ $MCELOG_MODE == daemon ]]; then
+    if mcelog_running; then
+      REPLY="Already started"
+    else
+      # check cpu support (Intel)
+      if $MCELOG --is-cpu-supported &>/dev/null; then
+        $MCELOG --daemon $MCELOG_OPTIONS
+        if mcelog_running; then REPLY="Started"; else REPLY="Failed"; fi
+      else
+        REPLY="Skipped"
+      fi
+    fi
+  elif [[ -f $TRIGGER ]]; then
+    echo $MCELOG > $TRIGGER
+    REPLY="Triggered"
+  else
+    REPLY="No machine check capability"
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+mcelog_stop(){
+  log "Stopping $DAEMON..."
+  local REPLY
+  if [[ $MCELOG_MODE == daemon ]]; then
+    if ! mcelog_running; then
+      REPLY="Already stopped"
+    else
+      killall -TERM $MCELOG
+      if ! mcelog_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+    fi
+  elif [[ $MCELOG_MODE == trigger && -f $TRIGGER ]]; then 
+    echo > $TRIGGER
+    REPLY="Triggered"
+  else
+    REPLY="Already stopped"
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+mcelog_restart(){
+  log "Restarting $DAEMON..."
+  mcelog_stop
+  sleep 1
+  mcelog_start
+}
+
+mcelog_status(){
+  if mcelog_running; then
+    echo "$DAEMON is currently running."
+  else
+    echo "$DAEMON is not running."
+    exit 1
+  fi
+}
+
+case "$1" in
+'start')
+  mcelog_start
+  ;;
+'stop')
+  mcelog_stop
+  ;;
+'restart')
+  mcelog_restart
+  ;;
+'try-restart')
+  if mcelog_running; then
+    mcelog_restart
+  fi
+  ;;
+'reload')
+  if mcelog_running; then
+    mcelog_restart
+  fi
+  ;;
+'force-reload')
+  mcelog_restart
+  ;;
+'status')
+  mcelog_status
+  ;;
+*)
+  echo "Usage: $BASENAME start|stop|restart|try-restart|reload|force-reload|status"
+  exit 1
+esac
+exit 0

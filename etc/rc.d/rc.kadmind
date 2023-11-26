@@ -1,0 +1,40 @@
+#!/bin/sh
+# Start the Kerberos administration server. This typically runs on the
+# master Kerberos server, which stores the KDC database.
+
+# To change the default options, edit /etc/default/kadmind.
+if [ -r /etc/default/kadmind ]; then
+  . /etc/default/kadmind
+fi
+
+start_atd() {
+  if ! /usr/bin/pgrep --ns $$ --euid root -f "^/usr/sbin/kadmind" 1> /dev/null 2> /dev/null ; then
+    echo "Starting kadmind:  /usr/sbin/kadmind $KADMIND_OPTIONS"
+    /usr/sbin/kadmind $KADMIND_OPTIONS
+  fi
+}
+
+stop_atd() {
+  echo "Stopping kadmind."
+  /usr/bin/pkill --ns $$ --euid root -f "^/usr/sbin/kadmind" 2> /dev/null
+}
+
+restart_atd() {
+  stop_atd
+  sleep 1
+  start_atd
+}
+
+case "$1" in
+'start')
+  start_atd
+  ;;
+'stop')
+  stop_atd
+  ;;
+'restart')
+  restart_atd
+  ;;
+*)
+  echo "usage $0 start|stop|restart"
+esac

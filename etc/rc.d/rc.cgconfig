@@ -1,0 +1,202 @@
+#!/bin/bash
+# SPDX-License-Identifier: LGPL-2.1-only
+#
+# Start/Stop the workload manager
+#
+# Copyright IBM Corporation. 2008
+#
+# Authors:     Balbir Singh <balbir@linux.vnet.ibm.com>
+#
+# cgconfig Control Groups Configuration Startup
+# chkconfig: - 5 95
+# description: This script runs the cgconfigparser utility to parse and setup
+#              the control group filesystem. It uses /etc/cgconfig.conf
+#              and parses the configuration specified in there.
+
+### BEGIN INIT INFO
+# Provides:             cgconfig
+# Required-Start:
+# Required-Stop:
+# Should-Start:         ypbind
+# Should-Stop:          ypbind
+# Short-Description:    Create and setup control group filesystem(s)
+# Description:          Create and setup control group filesystem(s)
+### END INIT INFO
+
+# get correct location of binaries from configure
+sbindir=${exec_prefix}/sbin
+CGCONFIGPARSER_BIN=$sbindir/cgconfigparser
+CONFIG_FILE=/etc/cgconfig.conf
+CONFIG_DIR=/etc/cgconfig.d
+servicename=cgconfig
+
+
+lockfile=/run/lock/subsys/$servicename
+
+# read the config
+CREATE_DEFAULT=yes
+if [ -e /etc/sysconfig/cgconfig ]; then
+	# shellcheck disable=SC1091
+        source /etc/sysconfig/cgconfig
+fi
+
+lockfiledir=$(dirname "$lockfile")
+
+create_default_groups() {
+	defaultcgroup=
+
+        if [ -f /etc/cgrules.conf ]; then
+	    # shellcheck disable=SC2034
+	    read -r user ctrl defaultcgroup <<< \
+		    "$(grep -m1 '^\*[[:space:]]\+' /etc/cgrules.conf)"
+           if [[ ( -n "$defaultcgroup" ) && ( "$defaultcgroup" = "*" ) ]]; then
+                echo "/etc/cgrules.conf incorrect"
+                echo "Overriding it"
+                defaultcgroup=
+            fi
+        fi
+
+        if [[ -z "$defaultcgroup" ]]
+        then
+            defaultcgroup=sysdefault/
+        fi
+
+        #
+        # Find all mounted subsystems and create comma-separated list
+        # of controllers.
+        #
+        controllers=$(lssubsys 2>/dev/null | tr '\n' ',' | sed s/.$//)
+
+        #
+        # Create the default group, ignore errors when the default group
+        # already exists.
+        #
+        cgcreate -f 664 -d 775 -g "$controllers":"$defaultcgroup" 2>/dev/null
+
+        #
+        # special rule for cpusets
+        #
+        if echo "$controllers" | grep -q -w cpuset; then
+                cpus=$(cgget -nv -r cpuset.cpus /)
+                cgset -r cpuset.cpus="$cpus $defaultcgroup"
+                mems=$(cgget -nv -r cpuset.mems /)
+                cgset -r cpuset.mems="$mems $defaultcgroup"
+        fi
+
+        #
+        # Classify everything to default cgroup. Ignore errors, some processes
+        # may exit after ps is run and before cgclassify moves them.
+        #
+        cgclassify -g "$controllers:$defaultcgroup $(ps --no-headers -eL o tid)" \
+                 2>/dev/null || :
+}
+
+start() {
+        printf "Starting %s service: " "$servicename"
+	if [[ -f "$lockfile" ]]; then
+            echo "lock file already exists"
+            return 0
+        fi
+
+        if [[ ! -s "$CONFIG_FILE" ]]; then
+          echo $CONFIG_FILE "is not configured"
+          return 6
+        fi
+
+
+        if ! "$CGCONFIGPARSER_BIN" -l "$CONFIG_FILE" -L "$CONFIG_DIR"
+        then
+          echo "Failed to parse " "$CONFIG_FILE"  "or" "$CONFIG_DIR"'/*'
+          return 1
+        fi
+
+        if [ $CREATE_DEFAULT = "yes" ]; then
+                create_default_groups
+        fi
+
+        if ! mkdir -p "$lockfiledir" ; then
+          echo "Failed to mkdir $lockfiledir directory"
+          return 1
+        fi
+
+
+        if ! touch "$lockfile" ; then
+            echo "Failed to touch $lockfile"
+            return 1
+        fi
+        echo "Started $servicename"
+        return 0
+}
+
+stop() {
+    printf "Stopping %s service is not supported!: " "$servicename"
+    echo "Failed to stop $servicename"
+    return 1
+}
+
+trapped() {
+    #
+    # Do nothing
+    #
+    true
+}
+
+usage() {
+    echo "$0 <start|stop|restart|condrestart|status>"
+    exit 2
+}
+
+common() {
+    #
+    # main script work done here
+    #
+    trap "trapped ABRT" ABRT
+    trap "trapped QUIT" QUIT
+    trap "trapped TERM" TERM
+    trap "trapped INT"   INT
+}
+
+restart() {
+	common
+	stop
+	start
+}
+
+RETVAL=0
+
+case $1 in
+    'stop')
+        common
+        stop
+        RETVAL=$?
+        ;;
+    'start')
+        common
+        start
+        RETVAL=$?
+        ;;
+    'restart'|'reload')
+	restart
+        RETVAL=$?
+        ;;
+    'condrestart')
+        if [[ -f "$lockfile" ]]; then
+            restart
+            RETVAL=$?
+        fi
+        ;;
+    'status')
+        if [ -f "$lockfile" ]; then
+            echo "Running"
+            exit 0
+        else
+            echo "Stopped"
+            exit 3
+        fi
+	;;
+    *)
+        usage
+        ;;
+esac
+
+exit $RETVAL

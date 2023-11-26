@@ -1,0 +1,32 @@
+Menu="UNRAID-OS"
+Title="Processes"
+Icon="icon-processes"
+Tag="cogs"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?if (_var($display,'resize')):?>
+<script>
+function resize() {
+  $('pre.up').height(Math.max(window.innerHeight-320,330));
+}
+$(function() {
+  resize();
+  $(window).bind('resize',function(){resize();});
+});
+</script>
+<?endif;?>
+<?
+echo "<pre class='up'>",shell_exec('ps -aux'),"</pre>";
+?>
+<input type="button" value="_(Done)_" onclick="done()">

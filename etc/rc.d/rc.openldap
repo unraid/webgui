@@ -1,0 +1,69 @@
+#!/bin/sh
+# Start/stop/restart the OpenLDAP server (slapd).
+
+# Source default settings:
+if [ -r /etc/default/slapd ]; then
+  . /etc/default/slapd
+fi
+
+# If needed, create run directory:
+if [ ! -d /var/run/openldap ]; then
+  mkdir -p /var/run/openldap
+  chown ldap:ldap /var/run/openldap
+fi
+
+slapd_start() {
+  if [ -e /var/run/openldap/slapd.pid ]; then
+    echo "ERROR: Not starting OpenLDAP server because /var/run/openldap/slapd.pid exists."
+  elif [ -x /usr/sbin/slapd ]; then
+    echo "Starting OpenLDAP server:  /usr/sbin/slapd -u ldap -h "$SLAPD_URLS" $SLAPD_OPTIONS"
+    /usr/sbin/slapd -u ldap -h "$SLAPD_URLS" $SLAPD_OPTIONS 1> /dev/null 2> /dev/null
+  fi
+}
+
+slapd_stop() {
+  if [ -e /var/run/openldap/slapd.pid ]; then
+    echo "Stopping OpenLDAP server."
+    kill -INT $(cat /var/run/openldap/slapd.pid)
+  else
+    echo "ERROR: Not stopping OpenLDAP server because /var/run/openldap/slapd.pid does not exist."
+  fi
+  rm -f /var/run/openldap/slapd.pid
+}
+
+slapd_restart() {
+  slapd_stop
+  sleep 1
+  slapd_start
+}
+
+slapd_status() {
+  if [ -e /var/run/openldap/slapd.pid ]; then
+    if ps axc | grep slapd >/dev/null 2>&1; then
+      echo "OpenLDAP is running."
+      return 0
+    fi
+    echo "OpenLDAP PID file exists but the service is down."
+    return 1
+  else
+    echo "OpenLDAP is stopped."
+    return 0
+  fi
+}
+
+case "$1" in
+  'start')
+    slapd_start
+    ;;
+  'stop')
+    slapd_stop
+    ;;
+  'restart')
+    slapd_restart
+    ;;
+  'status')
+    slapd_status
+    ;;
+  *)
+    echo "usage $0 start|stop|restart"
+esac

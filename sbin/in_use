@@ -1,0 +1,19 @@
+#!/bin/bash
+#Copyright 2005-2016, Lime Technology
+#License: GPLv2 only
+
+# usage: in_use <file>
+# returns exit status 0 (success) if in-use, 1 if not
+# used to check if a file is "in use", ie:
+# - if any process has the file open, or
+# - if file is loopback mounted
+
+FILE=$1
+# if file is on user share, check dereferenced file
+if [[ "$FILE" == /mnt/user/* ]]; then
+  DISK=$(getfattr -n system.LOCATION --absolute-names --only-values "$FILE" 2>/dev/null)
+  FILE="${FILE/user/$DISK}"
+fi
+fuser -s "$FILE" && exit
+[[ $(losetup -j "$FILE") ]] && exit
+exit 1

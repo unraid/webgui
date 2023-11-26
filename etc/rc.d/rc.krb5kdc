@@ -1,0 +1,41 @@
+#!/bin/sh
+# Start krb5kdc, which is the Kerberos version 5 Authentication Service
+# and Key Distribution Center (AS/KDC). This needs to run first on both
+# master and secondary KDCs.
+
+# To change the default options, edit /etc/default/krb5kdc.
+if [ -r /etc/default/krb5kdc ]; then
+  . /etc/default/krb5kdc
+fi
+
+start_atd() {
+  if ! /usr/bin/pgrep --ns $$ --euid root -f "^/usr/sbin/krb5kdc" 1> /dev/null 2> /dev/null ; then
+    echo "Starting krb5kdc:  /usr/sbin/krb5kdc $KRB5KDC_OPTIONS"
+    /usr/sbin/krb5kdc $KRB5KDC_OPTIONS
+  fi
+}
+
+stop_atd() {
+  echo "Stopping krb5kdc."
+  /usr/bin/pkill --ns $$ --euid root -f "^/usr/sbin/krb5kdc" 2> /dev/null
+}
+
+restart_atd() {
+  stop_atd
+  sleep 1
+  start_atd
+}
+
+case "$1" in
+'start')
+  start_atd
+  ;;
+'stop')
+  stop_atd
+  ;;
+'restart')
+  restart_atd
+  ;;
+*)
+  echo "usage $0 start|stop|restart"
+esac

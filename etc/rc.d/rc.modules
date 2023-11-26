@@ -1,0 +1,64 @@
+#!/bin/bash
+#
+# script: rc.modules
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+# Determine the version of the running kernel:
+RELEASE=$(uname -r)
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# LimeTech - install third-party modules
+if [[ -f /boot/unraidsafemode ]] || grep -wq unraidsafemode /proc/cmdline; then
+  log "Unraid Safe Mode (unraidsafemode) has been set, skip driver installation"
+else
+  log "Installing third-party drivers..."
+  find /boot/config/plugins/*/packages/${RELEASE%%-*}/ -maxdepth 1 -type f 2>/dev/null | while read -r PKG; do
+    if [[ $PKG == *"-$RELEASE-"*.t?z ]]; then
+      if [[ -f $PKG.md5 ]]; then
+        HASH1=$(md5sum $PKG)
+        HASH2=$(cat $PKG.md5)
+        if [[ ${HASH1:0:32} != ${HASH2:0:32} ]]; then
+          log "Package $PKG has MD5 error, not installing"
+          continue
+        fi
+      fi
+      if [[ -f $PKG.sha256 ]]; then
+        HASH1=$(sha256sum $PKG)
+        HASH2=$(cat $PKG.sha256)
+        if [[ ${HASH1:0:64} != ${HASH2:0:64} ]]; then
+          log "Package $PKG has SHA256 error, not installing"
+          continue
+        fi
+      fi
+      log "Installing package: $PKG"
+      /sbin/installpkg $PKG
+      # force creating new modules.dep
+      rm -f /lib/modules/$RELEASE/modules.dep
+    fi
+  done
+fi
+
+# Update kernel module dependencies:
+if [[ -e /lib/modules/$RELEASE/modules.dep ]]; then
+  log "Updating module dependency list for $RELEASE:  /sbin/depmod --quick"
+  /sbin/depmod --quick
+else
+  log "Creating module dependency list for $RELEASE:  /sbin/depmod --all"
+  /sbin/depmod --all
+fi
+
+# Run any rc.modules-$(uname -r) file that exists (this is used
+# if you have specific modules which should only be loaded for
+# specific kernel versions):
+if [[ -x /etc/rc.d/rc.modules-$RELEASE ]]; then
+  /etc/rc.d/rc.modules-$RELEASE
+fi
+
+# Run a local (sysadmin-version) of rc.modules if it exists:
+if [[ -x /etc/rc.d/rc.modules.local ]]; then
+  /etc/rc.d/rc.modules.local
+fi

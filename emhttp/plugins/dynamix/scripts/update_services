@@ -1,0 +1,10 @@
+#!/bin/bash
+lock=/tmp/atlock.tmp
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+log "delay = ${1:-1}s"
+rm -f $lock
+echo "sleep ${1:-1};/usr/local/emhttp/webGui/scripts/reload_services $lock"|at -M now 2>/dev/null
+exit 0

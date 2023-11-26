@@ -1,0 +1,61 @@
+#!/bin/bash
+#
+# script: rc.sysvinit
+#
+# This file provides basic compatibility with SystemV style
+# startup scripts.  The SystemV style init system places
+# start/stop scripts for each runlevel into directories such as
+# /etc/rc.d/rc3.d/ (for runlevel 3) instead of starting them
+# from /etc/rc.d/rc.M.  This makes for a lot more init scripts,
+# and a more complicated execution path to follow through if
+# something goes wrong.  For this reason, Slackware has always
+# used the traditional BSD style init script layout.
+#
+# However, many binary packages exist that install SystemV
+# init scripts.  With rc.sysvinit in place, most well-written
+# startup scripts will work.  This is primarily intended to
+# support commercial software, though, and probably shouldn't
+# be considered bug free.
+#
+# Written by Patrick Volkerding <volkerdi@slackware.com>, 1999
+# from an example by Miquel van Smoorenburg <miquels@cistron.nl>.
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+# Run an init script:
+startup(){
+  case "$1" in
+  *.sh)
+    sh "$@"
+    ;;
+  *)
+    "$@"
+    ;;
+  esac
+}
+
+# Set onlcr to avoid staircase effect.
+stty onlcr 0>&1
+
+if [[ -z $runlevel ]]; then
+  runlevel=$RUNLEVEL
+  export runlevel
+  prevlevel=$PREVLEVEL
+  export prevlevel
+fi
+
+# Run kill scripts:
+for SCRIPT in /etc/rc.d/rc$runlevel.d/K*; do
+  if [[ -x $SCRIPT ]]; then
+    startup $SCRIPT stop
+  fi
+done
+
+# Now do the startup scripts:
+for SCRIPT in /etc/rc.d/rc$runlevel.d/S*; do
+  if [[ -x $SCRIPT ]]; then
+    startup $SCRIPT start
+  fi
+done
+exit 0

@@ -1,0 +1,94 @@
+#!/bin/bash
+#
+# script: rc.avahi-dnsconfd
+#
+# Start/stop/restart the avahi dnsconfd daemon
+# This file is part of avahi.
+#
+# avahi is free software; you can redistribute it and/or modify it
+# under the terms of the GNU Lesser General Public License as
+# published by the Free Software Foundation; either version 2 of the
+# License, or (at your option) any later version.
+#
+# avahi is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
+# License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with avahi; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+DAEMON="Avahi mDNS/DNS-SD DNS server daemon"
+AVAHI="/usr/sbin/avahi-dnsconfd"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+avahidns_running(){
+  sleep 0.1
+  $AVAHI -c
+  [[ $? == 0 ]]
+}
+
+avahidns_start(){
+  log "Starting $DAEMON..."
+  local REPLY
+  if avahidns_running; then
+    REPLY="Already started"
+  else
+    run $AVAHI -D
+    if avahidns_running; then REPLY="Started"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+avahidns_stop(){
+  log "Stopping $DAEMON..."
+  local REPLY
+  if ! avahidns_running; then
+    REPLY="Already stopped"
+  else
+    run $AVAHI -k
+    if ! avahidns_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+avahidns_restart(){
+  log "Restarting $DAEMON..."
+  avahidns_stop
+  sleep 1
+  avahidns_start
+}
+
+avahidns_status(){
+  if avahidns_running; then
+    echo "$DAEMON is currently running."
+  else
+    echo "$DAEMON is not running."
+    exit 1
+  fi
+}
+
+case "$1" in
+'start')
+  avahidns_start
+  ;;
+'stop')
+  avahidns_stop
+  ;;
+'restart')
+  avahidns_restart
+  ;;
+'status')
+  avahidns_status
+  ;;
+*)
+  echo "Usage: $BASENAME start|stop|restart|status"
+  exit 1
+esac
+exit 0

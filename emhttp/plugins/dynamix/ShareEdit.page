@@ -1,0 +1,578 @@
+Menu="Share:1"
+Title="Share Settings"
+Tag="share-alt-square"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$width = [123,300];
+
+if ($name == "") {
+  // default values when adding new share
+  $share = ["nameOrig"   => "",
+            "name"       => "",
+            "comment"    => "",
+            "allocator"  => "highwater",
+            "floor"      => "",
+            "splitLevel" => "",
+            "include"    => "",
+            "exclude"    => "",
+            "useCache"   => "no",
+            "cachePool"  => "",
+            "cow"        => "auto"
+           ];
+} elseif (array_key_exists($name, $shares)) {
+  // edit existing share
+  $share = $shares[$name];
+} else {
+  // handle share deleted case
+  echo "<p class='notice'>"._('Share')." '".htmlspecialchars($name)."' "._('has been deleted').".</p><input type='button' value=\""._('Done')."\" onclick='done()'>";
+  return;
+}
+// Check for non existent pool device
+if ($share['cachePool'] && !in_array($share['cachePool'],$pools)) $share['useCache'] = "no";
+
+function globalInclude($name) {
+  global $var;
+  return substr($name,0,4)=='disk' && (!$var['shareUserInclude'] || in_array($name,explode(',',$var['shareUserInclude'])));
+}
+function sanitize(&$val) {
+  $data = explode('.',str_replace([' ',','],['','.'],$val));
+  $last = array_pop($data);
+  $val = count($data) ? implode($data).".$last" : $last;
+}
+function presetSpace($val) {
+  global $disks,$shares,$name,$pools,$display;
+  if (!$val or strcasecmp($val,'NaN')==0) return;
+  sanitize($val);
+  $small = [];
+  foreach (data_filter($disks) as $disk) $small[] = _var($disk,'fsSize');
+  $fsSize[""] = min(array_filter($small));
+  foreach ($pools as $pool) $fsSize[$pool] = _var($disks[$pool],'fsSize',0);
+  $pool = _var($shares[$name],'cachePool');
+  $size = _var($fsSize,$pool,0);
+  $size = $size>0 ? round(100*$val/$size,1) : 0;
+  $units = ['KB','MB','GB','TB','PB','EB','ZB','YB'];
+  $base = $val>0 ? floor(log($val,1000)) : 0;
+  $size = round($val/pow(1000,$base),1);
+  $unit = _var($units,$base);
+  [$dot,$comma] = str_split(_var($display,'number','.,'));
+  return $size>0 ? number_format($size,$size-floor($size)?1:0,$dot,$comma).' '.$unit : '';
+}
+function fsSize() {
+  global $disks,$pools;
+  $fsSize = $small = [];
+  foreach (data_filter($disks) as $disk) $small[] = _var($disk,'fsSize');
+  $fsSize[] = '"":"'.min(array_filter($small)).'"';
+  foreach ($pools as $pool) $fsSize[] = '"'.$pool.'":"'._var($disks[$pool],'fsSize',0).'"';
+  return implode(',',$fsSize);
+}
+function fsType() {
+  global $disks,$pools;
+  $fsType = [];
+  foreach ($pools as $pool) $fsType[] = '"'.$pool.'":"'.str_replace('luks:','',_var($disks[$pool],'fsType')).'"';
+  return implode(',',$fsType);
+}
+function primary() {
+  global $share;
+  return $share['useCache']=='no' ? '' : $share['cachePool'];
+}
+function secondary() {
+  global $share;
+  return in_array($share['useCache'],['no','only']) ? '0' : '1';
+}
+function direction() {
+  global $share;
+  return $share['useCache']=='prefer' ? '1' : '0';
+}
+// global shares include/exclude
+$myDisks = array_filter(array_diff(array_keys(array_filter($disks,'my_disks')), explode(',',$var['shareUserExclude'])), 'globalInclude');
+?>
+:share_edit_global1_help:
+<?if ($name):?>
+:share_edit_global2_help:
+<?endif;?>
+
+<div class="clone1">
+<span class="clone">_(Read settings from)_</span><i class="fa fa-arrow-left fa-fw"></i>
+<span class="wrap"><select name="readshare" class="clone" onchange="toggleButton('readshare',false)">
+<option disabled selected>_(select)_...</option>
+<?
+foreach ($shares as $list) if ($list['name']!=$name || !$name) echo mk_option("", $list['name'], compress($list['name']));
+?>
+</select></span><input type="button" id="readshare" value="_(Read)_" class="clone" onclick="readShare()" disabled>
+</div>
+<?if ($name):?>
+<div class="clone2">
+<span class="clone">_(Write settings to)_</span><i class="fa fa-arrow-right fa-fw"></i>
+<span class="wrap"><select id="s5" name="writeshare" multiple onchange="toggleButton('writeshare',this.id)">
+<?
+$rows = [];
+foreach ($shares as $list) if ($list['name']!=$name) $rows[] = mk_option("", $list['name'], compress($list['name']));
+if ($rows) echo "<option>("._('All').")</option>";
+foreach ($rows as $row) echo $row;
+?>
+</select></span><input type="button" id="writeshare" value="_(Write)_" class="clone" onclick="writeShare()" disabled>
+</div>
+<?endif;?>
+
+<form markdown="1" name="share_edit" method="POST" action="/update.htm" target="progressFrame" onsubmit="return prepareEdit()"<?=$name?" onchange=\"toggleButton('writeshare',true);$('#s5').dropdownchecklist('disable')\">":">"?>
+<input type="hidden" name="shareNameOrig" value="<?=htmlspecialchars($share['nameOrig'])?>">
+<input type="hidden" name="shareUseCache" value="<?=$share['useCache']?>">
+<input type="hidden" name="shareAllocator" value="">
+<input type="hidden" name="shareSplitLevel" value="">
+<input type="hidden" name="shareInclude" value="">
+<input type="hidden" name="shareExclude" value="">
+
+<div markdown="1" class="shade-<?=$display['theme']?>">
+_(Share name)_:
+: <input type="text" id="shareName" name="shareName" maxlength="40" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars($name)?>" oninput="checkName(this.value)" title="_(Hidden share names are not allowed)_" pattern="^[^\.].*"><span id="zfs-name" class="orange-text"><i class="fa fa-warning"></i> _(Share name contains invalid characters for ZFS use)_</span>
+
+:share_edit_name_help:
+
+_(Comments)_:
+: <input type="text" name="shareComment" maxlength="256" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars($share['comment'])?>">
+
+:share_edit_comments_help:
+
+<div markdown="1">
+_(Minimum free space)_:
+: <span class="input"><input type="text" name="shareFloor" maxlength="16" autocomplete="off" spellcheck="false" class="narrow" value="<?=presetSpace($share['floor'])?>" placeholder="0"></span><span id="autosize"><i class="fa fa-info i"></i>_(Calculated free space value)_</span>
+
+:share_edit_free_space_help:
+
+</div>
+<?if ($name):?>
+<div markdown="1" class="empty">
+_(Share status)_:
+: _(Share is empty)_
+
+:share_edit_status_help:
+
+</div>
+<div markdown="1" class="full">
+_(Share status)_:
+: <span class="full1">&nbsp;</span><span class="full2">_(Share contains data)_</span>
+
+:share_edit_delete_help:
+
+</div>
+<?if (_var($share,'exclusive')=="yes"):?>
+_(Exclusive access)_:
+: _(Yes)_
+
+:share_edit_exclusive_access_help:
+
+<?else:?>
+_(Exclusive access)_:
+: _(No)_
+
+:share_edit_exclusive_access_help:
+
+<?endif;?>
+<?endif;?>
+</div>
+<div markdown="1" class="shade-<?=$display['theme']?>">
+_(Primary storage (for new files and folders))_:
+: <select id="primary" name="shareCachePool" onchange="form.shareFloor.value='';updateScreen(z(4),'slow')">
+  <?=mk_option(primary(),'',_('Array'))?>
+  <?foreach ($pools as $pool):?>
+  <?if ($disks[$pool]['devices']) echo mk_option(primary(),$pool,my_disk($pool),$disks[$pool]['shareEnabled']=='yes'?"":"disabled")?>
+  <?endforeach;?>
+  </select>
+
+:share_edit_primary_storage_help:
+
+<div markdown="1" id="cow-setting">
+_(Enable Copy-on-write)_:
+: <span class="input"><select name="shareCOW"<?if ($name):?> disabled<?endif;?>>
+  <?=mk_option($share['cow'], "no", _('No'))?>
+  <?=mk_option($share['cow'], "auto", _('Auto'))?>
+  </select></span><?if ($name):?><i class='fa fa-info i'></i>_(Set when adding new share only)_<?endif;?>
+
+:share_edit_copy_on_write_help:
+
+</div>
+<div markdown="1" id="moreSettings1">
+_(Allocation method)_:
+: <select name="shareAllocator1">
+  <?=mk_option($share['allocator'], "highwater", _('High-water'))?>
+  <?=mk_option($share['allocator'], "fillup", _('Fill-up'))?>
+  <?=mk_option($share['allocator'], "mostfree", _('Most-free'))?>
+  </select>
+
+:share_edit_allocation_method_help:
+
+_(Split level)_:
+: <select name="shareSplitLevel1">
+  <?=mk_option($share['splitLevel'], "", _('Automatically split any directory as required'))?>
+  <?=mk_option($share['splitLevel'], "1", _('Automatically split only the top level directory as required'))?>
+  <?=mk_option($share['splitLevel'], "2", _('Automatically split only the top two directory levels as required'))?>
+  <?=mk_option($share['splitLevel'], "3", _('Automatically split only the top three directory levels as required'))?>
+  <?=mk_option($share['splitLevel'], "4", _('Automatically split only the top four directory levels as required'))?>
+  <?=mk_option($share['splitLevel'], "5", _('Automatically split only the top five directory levels as required'))?>
+  <?=mk_option($share['splitLevel'], "0", _('Manual: do not automatically split directories'))?>
+  </select>
+
+:share_edit_split_level_help:
+
+_(Included disk(s))_:
+: <select id="s1" name="shareInclude1" multiple>
+  <?foreach ($myDisks as $disk):?>
+  <?=mk_option_luks($disk, $share['include'], strstr(_var($disks[$disk],'fsType'),':',true))?>
+  <?endforeach;?>
+  </select>
+
+:share_edit_included_disks_help:
+
+_(Excluded disk(s))_:
+: <select id="s2" name="shareExclude1" multiple>
+  <?foreach ($myDisks as $disk):?>
+  <?=mk_option_luks($disk, $share['exclude'], strstr(_var($disks[$disk],'fsType'),':',true))?>
+  <?endforeach;?>
+  </select>
+
+:share_edit_excluded_disks_help:
+
+</div>
+</div>
+<div markdown="1" class="shade-<?=$display['theme']?>">
+_(Secondary storage)_:
+: <select id="secondary" onchange="updateScreen(z(4),'slow')">
+  <?=mk_option(secondary(),'0',_('None'))?>
+  <?=mk_option(secondary(),'1',_('Array'))?>
+  </select>
+
+:share_edit_secondary_storage_help:
+
+<div markdown="1" id="moreSettings2">
+_(Allocation method)_:
+: <select name="shareAllocator2">
+  <?=mk_option($share['allocator'], "highwater", _('High-water'))?>
+  <?=mk_option($share['allocator'], "fillup", _('Fill-up'))?>
+  <?=mk_option($share['allocator'], "mostfree", _('Most-free'))?>
+  </select>
+
+:share_edit_allocation_method_help:
+
+_(Split level)_:
+: <select name="shareSplitLevel2">
+  <?=mk_option($share['splitLevel'], "", _('Automatically split any directory as required'))?>
+  <?=mk_option($share['splitLevel'], "1", _('Automatically split only the top level directory as required'))?>
+  <?=mk_option($share['splitLevel'], "2", _('Automatically split only the top two directory levels as required'))?>
+  <?=mk_option($share['splitLevel'], "3", _('Automatically split only the top three directory levels as required'))?>
+  <?=mk_option($share['splitLevel'], "4", _('Automatically split only the top four directory levels as required'))?>
+  <?=mk_option($share['splitLevel'], "5", _('Automatically split only the top five directory levels as required'))?>
+  <?=mk_option($share['splitLevel'], "0", _('Manual: do not automatically split directories'))?>
+  </select>
+
+:share_edit_split_level_help:
+
+_(Included disk(s))_:
+: <select id="s3" name="shareInclude2" multiple>
+  <?foreach ($myDisks as $disk):?>
+  <?=mk_option_luks($disk, $share['include'], strstr(_var($disks[$disk],'fsType'),':',true))?>
+  <?endforeach;?>
+  </select>
+
+:share_edit_included_disks_help:
+
+_(Excluded disk(s))_:
+: <select id="s4" name="shareExclude2" multiple>
+  <?foreach ($myDisks as $disk):?>
+  <?=mk_option_luks($disk, $share['exclude'], strstr(_var($disks[$disk],'fsType'),':',true))?>
+  <?endforeach;?>
+  </select>
+
+:share_edit_excluded_disks_help:
+
+</div>
+
+</div>
+<div markdown="1" class="shade-<?=$display['theme']?>">
+<div markdown="1" id="moverDirection1">
+_(Mover action)_:
+: <span class="input"><select id="direction" onchange="updateScreen(z(3),'slow')">
+  <?=mk_option(direction(),'0','')?>
+  <?=mk_option(direction(),'1','')?>
+  </select></span><span id="moverAction1"></span>
+
+:share_edit_mover_action_help:
+
+</div>
+<div markdown="1" id="moverDirection2">
+_(Mover action)_:
+: <span class="input"><select disabled>
+  <?=mk_option('','',"_(Not used)_")?>
+  </select></span><span id="moverAction2"></span>
+
+:share_edit_mover_action_help:
+
+</div>
+</div>
+<?if (!$name):?>
+&nbsp;
+: <input type="submit" name="cmdEditShare" value="_(Add Share)_" onclick="this.value='Add Share'"><input type="button" value="_(Done)_" onclick="done()">
+<?else:?>
+<div markdown="1" class="empty">
+_(Delete)_<input type="checkbox" name="confirmDelete" onchange="chkDelete(this.form, document.getElementById('cmdEditShare'));">
+: <input type="submit" id="cmdEditShare" name="cmdEditShare" value="_(Apply)_" onclick="if (this.value=='_(Delete)_') this.value='Delete'; else this.value='Apply'" disabled><input type="button" value="_(Done)_" onclick="done()">
+</div>
+<div markdown="1" class="full">
+&nbsp;
+: <input type="submit" name="cmdEditShare" value="_(Apply)_" onclick="this.value='Apply'" disabled><input type="button" value="_(Done)_" onclick="done()">
+</div>
+<?endif;?>
+</form>
+<script>
+var form = document.share_edit;
+
+$(function() {
+<?if ($name):?>
+  $.post('/webGui/include/ShareList.php',{scan:"<?=$name?>"},function(e){
+    if (e==1) {$('.empty').show(); $('.full').hide();} else {$('.full1').hide(); $('.full2').show();}
+  });
+<?endif;?>
+  initDropdown(false,true);
+<?if ($tabbed):?>
+  $('#tab1').bind({click:function(){initDropdown(true,true);}});
+<?endif;?>
+  updateScreen(form.shareUseCache.value);
+  if ($.cookie('autosize-'+$('#shareName').val())) $('#autosize').show();
+  checkName($('#shareName').val());
+});
+function initDropdown(remove,create) {
+  if (remove) {
+    $('#s1').dropdownchecklist('destroy');
+    $('#s2').dropdownchecklist('destroy');
+    $('#s3').dropdownchecklist('destroy');
+    $('#s4').dropdownchecklist('destroy');
+<?if ($name):?>
+    $('#s5').dropdownchecklist('destroy');
+<?endif;?>
+  }
+  if (create) {
+    $('#s1').dropdownchecklist({emptyText:"_(All)_", width:<?=$width[1]?>, explicitClose:"..._(close)_"});
+    $('#s2').dropdownchecklist({emptyText:"_(None)_", width:<?=$width[1]?>, explicitClose:"..._(close)_"});
+    $('#s3').dropdownchecklist({emptyText:"_(All)_", width:<?=$width[1]?>, explicitClose:"..._(close)_"});
+    $('#s4').dropdownchecklist({emptyText:"_(None)_", width:<?=$width[1]?>, explicitClose:"..._(close)_"});
+<?if ($name):?>
+    $("#s5").dropdownchecklist({firstItemChecksAll:true, emptyText:"_(select)_...", width:<?=$width[0]?>, explicitClose:"..._(close)_"});
+<?endif;?>
+  }
+}
+function z(i) {
+  switch (i) {
+    case 0: return $('#primary').prop('selectedIndex');
+    case 1: return $('#secondary').prop('selectedIndex');
+    case 2: return $('#direction').prop('selectedIndex');
+    case 3: return z(2)==0 ? 'yes' : 'prefer';
+    case 4: return z(0)==0 ? 'no' : (z(1)==0 ? 'only' : z(3));
+  }
+}
+function updateCOW(i,slow) {
+  const fsType = {<?=fsType()?>};
+  if (fsType[i]=='btrfs') $('#cow-setting').show(slow); else $('#cow-setting').hide(slow);
+}
+function updateScreen(cache,slow) {
+  switch (cache) {
+  case 'no':
+    $('#primary option:eq('+z(0)+')').prop('selected',true);
+    $('#secondary option:eq(0)').prop('selected',true);
+    $('#secondary option:eq(1)').prop('disabled',true);
+    $('#moverDirection1').hide();
+    $('#moverDirection2').show();
+    $('#moreSettings1').show(slow);
+    $('#moreSettings2').hide(slow);
+    $('#cow-setting').hide(slow);
+    form.shareAllocator.disabled = false;
+    form.shareSplitLevel.disabled = false;
+    $('#s1').dropdownchecklist('enable');
+    $('#s2').dropdownchecklist('enable');
+    $('#moverAction2').html("<i class='fa fa-info i'></i>_(Mover takes no action)_");
+    break;
+  case 'yes':
+    $('#primary option:eq('+z(0)+')').prop('selected',true);
+    $('#secondary option:eq('+z(1)+')').prop('selected',true);
+    $('#secondary option:eq(1)').prop('disabled',false);
+    $('#moverDirection1 option:eq(0)').text($('#primary option:eq('+z(0)+')').text()+' → '+$('#secondary option:eq('+z(1)+')').text());
+    $('#moverDirection1 option:eq(1)').text($('#secondary option:eq('+z(1)+')').text()+' → '+$('#primary option:eq('+z(0)+')').text());
+    $('#moverDirection1').val('0').show();
+    $('#moverDirection2').hide();
+    $('#moreSettings1').hide(slow);
+    $('#moreSettings2').show(slow);
+    updateCOW(form.shareCachePool.value,slow);
+    form.shareAllocator.disabled = false;
+    form.shareSplitLevel.disabled = false;
+    $('#s3').dropdownchecklist('enable');
+    $('#s4').dropdownchecklist('enable');
+    $('#moverAction1').html("<i class='fa fa-info i'></i>_(Mover transfers files from Primary storage to Secondary storage)_");
+    break;
+  case 'only':
+    $('#primary option:eq('+z(0)+')').prop('selected',true);
+    $('#secondary option:eq('+z(1)+')').prop('selected',true);
+    $('#secondary option:eq(1)').prop('disabled',false);
+    $('#moverDirection1').hide();
+    $('#moverDirection2').show();
+    $('#moreSettings1').hide(slow);
+    $('#moreSettings2').hide(slow);
+    updateCOW(form.shareCachePool.value,slow);
+    form.shareAllocator.disabled = true;
+    form.shareSplitLevel.disabled = true;
+    $('#s1').dropdownchecklist('disable');
+    $('#s2').dropdownchecklist('disable');
+    $('#moverAction2').html("<i class='fa fa-info i'></i>_(Mover takes no action)_");
+    break;
+  case 'prefer':
+    $('#primary option:eq('+z(0)+')').prop('selected',true);
+    $('#secondary option:eq('+z(1)+')').prop('selected',true);
+    $('#secondary option:eq(1)').prop('disabled',false);
+    $('#moverDirection1 option:eq(0)').text($('#primary option:eq('+z(0)+')').text()+' → '+$('#secondary option:eq('+z(1)+')').text());
+    $('#moverDirection1 option:eq(1)').text($('#secondary option:eq('+z(1)+')').text()+' → '+$('#primary option:eq('+z(0)+')').text());
+    $('#moverDirection1').val('1').show();
+    $('#moverDirection2').hide();
+    $('#moreSettings1').hide(slow);
+    $('#moreSettings2').show(slow);
+    updateCOW(form.shareCachePool.value,slow);
+    form.shareAllocator.disabled = false;
+    form.shareSplitLevel.disabled = false;
+    $('#s3').dropdownchecklist('enable');
+    $('#s4').dropdownchecklist('enable');
+    $('#moverAction1').html("<i class='fa fa-info i'></i>_(Mover transfers files from Secondary storage to Primary storage)_");
+    break;
+  }
+}
+function unite(field) {
+  var list = [];
+  for (var i=0,item; item=field.options[i]; i++) if (item.selected) list.push(item.value);
+  return list.join(',');
+}
+function setFloor(val) {
+  const fsSize = {<?=fsSize()?>};
+  const units = ['K','M','G','T','P','E','Z','Y'];
+  var full = fsSize[$('#primary').val()];
+  var size = parseInt(full * 0.1); // 10% of available size
+  var number = val.replace(/[A-Z%\s]/gi,'').replace(',','.').split('.');
+  var last = number.pop();
+  number = number.length ? number.join('')+'.'+last : last;
+  if (number==0 && size>0) {
+    size = size.toString()
+    $.cookie('autosize-'+$('#shareName').val(),'1',{expires:365});
+  } else {
+    size = val;
+    $.removeCookie('autosize-'+$('#shareName').val());
+  }
+  var unit = size.replace(/[0-9.,\s]/g,'');
+  if (unit=='%') {
+    number = (number > 0 && number <= 100) ? parseInt(full * number / 100) : '';
+  } else {
+    var base = unit.length==2 ? 1000 : (unit.length==1 ? 1024 : 0);
+    number = base>0 ? number * Math.pow(base,(units.indexOf(unit.toUpperCase().replace('B',''))||0)) : size;
+  }
+  return isNaN(number) ? '' : number;
+}
+// Compose input fields
+function prepareEdit() {
+// Test share name validity
+  var share = form.shareName.value.trim();
+  if (share.length==0) {
+    swal({title:"_(Missing share name)_",text:"_(Enter a name for the share)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    return false;
+  }
+  var reserved = [<?=implode(',',array_map('escapestring',explode(',',$var['reservedNames'])))?>];
+  if (reserved.includes(share)) {
+    swal({title:"_(Invalid share name)_",text:"_(Do not use reserved names)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    return false;
+  }
+  var pools = [<?=implode(',',array_map('escapestring',$pools))?>];
+  if (pools.includes(share)) {
+    swal({title:"_(Invalid share name)_",text:"_(Do not use pool names)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    return false;
+  }
+  if (share.match('[:\\\/*<>|"?]')) {
+    swal({title:"_(Invalid Characters)_",text:"_(You cannot use the following within share names)_"+'<b> \\ / : * < > | " ?</b>',type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    return false;
+  }
+// Update settings
+  form.shareName.value = share;
+  form.shareUseCache.value = z(4);
+  form.shareFloor.value = setFloor(form.shareFloor.value);
+  switch (form.shareUseCache.value) {
+  case 'no':
+    form.shareAllocator.value = form.shareAllocator1.value;
+    form.shareSplitLevel.value = form.shareSplitLevel1.value;
+    form.shareInclude.value = unite(form.shareInclude1);
+    form.shareExclude.value = unite(form.shareExclude1);
+    break;
+  case 'yes':
+  case 'prefer':
+    form.shareAllocator.value = form.shareAllocator2.value;
+    form.shareSplitLevel.value = form.shareSplitLevel2.value;
+    form.shareInclude.value = unite(form.shareInclude2);
+    form.shareExclude.value = unite(form.shareExclude2);
+    break;
+  }
+  return true;
+}
+function readShare() {
+  var name = $('select[name="readshare"]').val();
+  initDropdown(true,false);
+  $.get('/webGui/include/ShareData.php',{name:name},function(json) {
+    var data = $.parseJSON(json);
+    form.shareAllocator.value = data.allocator;
+    form.shareFloor.value = data.floor;
+    form.shareSplitLevel.value = data.splitLevel;
+    form.shareInclude.value = data.include;
+    form.shareExclude.value = data.exclude;
+    form.shareUseCache.value = data.useCache;
+    form.shareCOW.value = data.cow;
+    for (var i=0,disk; disk=data.include.split(',')[i]; i++) for (var j=0,include; include=form.shareInclude.options[j]; j++) if (include.value==disk) include.selected=true;
+    for (var i=0,disk; disk=data.exclude.split(',')[i]; i++) for (var j=0,exclude; exclude=form.shareExclude.options[j]; j++) if (exclude.value==disk) exclude.selected=true;
+    initDropdown(false,true);
+  });
+  $(form).find('select').trigger('change');
+}
+function writeShare(data,n,i) {
+  if (data) {
+    if (n<i) {
+      $.post('/update.htm',data[n], function(){setTimeout(function(){writeShare(data,++n,i);},3000);});
+    } else {
+      toggleButton('writeshare',false);
+      $('div.spinner.fixed').hide();
+    }
+  } else {
+    var data = [], i = 0;
+    $('select#s5 option').map(function() {
+      if ($(this).prop('selected')==true && $(this).val()!='(All)') {
+        data[i] = {};
+        data[i]['shareName'] = $(this).val();
+        data[i]['shareNameOrig'] = $(this).val();
+        data[i]['shareAllocator'] = '<?=addslashes(htmlspecialchars($share['allocator']))?>';
+        data[i]['shareFloor'] = '<?=addslashes(htmlspecialchars($share['floor']))?>';
+        data[i]['shareSplitLevel'] = '<?=addslashes(htmlspecialchars($share['splitLevel']))?>';
+        data[i]['shareInclude'] = '<?=addslashes(htmlspecialchars($share['include']))?>';
+        data[i]['shareExclude'] = '<?=addslashes(htmlspecialchars($share['exclude']))?>';
+        data[i]['shareUseCache'] = '<?=addslashes(htmlspecialchars($share['useCache']))?>';
+        data[i]['cmdEditShare'] = 'Apply';
+        i++;
+      }
+    });
+    toggleButton('writeshare',true);
+    $('div.spinner.fixed').show('slow');
+    writeShare(data,0,i);
+  }
+}
+function checkName(name) {
+  if (/^[A-Za-z0-9-_.: ]*$/.test(name)) $('#zfs-name').hide(); else $('#zfs-name').show();
+}
+</script>

@@ -1,0 +1,38 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
+
+$DockerClient = new DockerClient();
+$DockerUpdate = new DockerUpdate();
+$DockerTemplates = new DockerTemplates();
+
+$start  = array_map(function($row){return strtok($row,' ');},@file('/var/lib/docker/unraid-autostart',FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES) ?: []);
+$custom = DockerUtil::custom();
+$subnet = DockerUtil::network($custom);
+$cpus   = DockerUtil::cpus();
+$tmpl   = $DockerTemplates->getUserTemplate($argv[1]);
+$xml    = file_get_contents($tmpl);
+
+[$cmd,$name,$repository] = xmlToCommand($tmpl);
+$old = $DockerClient->getImageID($repository);
+
+removeContainer($name,false,false);
+execCommand(str_replace('/docker create ','/docker run -d ',$cmd),false);
+if (!in_array($name,$start)) stopContainer($name,false,false);
+$DockerClient->flushCaches();
+$new = $DockerClient->getImageID($repository);
+if ($old && $old != $new) removeImage($old,false);
+?>

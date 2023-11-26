@@ -1,0 +1,83 @@
+#!/bin/bash
+#
+# script: rc.crond
+#
+# Start/stop the cron daemon
+#
+# LimeTech - modified for Unraid OS
+# Bergware - modified for Unraid OS, October 2023
+
+DAEMON="Cron daemon"
+CONF="/etc/default/crond"
+CROND="/usr/sbin/crond"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# To change the default options, edit /etc/default/crond.
+[[ -r $CONF ]] && . $CONF
+
+crond_running(){
+  sleep 0.1
+  pgrep --ns $$ --euid root -f "^$CROND" &>/dev/null
+}
+
+crond_start(){
+  log "Starting $DAEMON..."
+  local REPLY
+  if crond_running; then
+    REPLY="Already started"
+  else
+    mkdir -p /run/cron
+    run $CROND $CROND_OPTS
+    if crond_running; then REPLY="Started"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+crond_stop(){
+  log "Stopping $DAEMON..."
+  local REPLY
+  if ! crond_running; then
+    REPLY="Already stopped"
+  else
+    run pkill --ns $$ --euid root -f "^$CROND"
+    if ! crond_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+crond_restart(){
+  log "Restarting $DAEMON..."
+  crond_stop
+  sleep 1
+  crond_start
+}
+
+crond_status(){
+  if atd_running; then
+    echo "$DAEMON is currently running."
+  else
+    echo "$DAEMON is not running."
+    exit 1
+  fi
+}
+
+case "$1" in
+'start')
+  crond_start
+  ;;
+'stop')
+  crond_stop
+  ;;
+'restart')
+  crond_restart
+  ;;
+'status')
+  crond_status
+  ;;
+*)
+  echo "Usage: $BASENAME start|stop|restart|status"
+  exit 1
+esac
+exit 0

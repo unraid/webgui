@@ -1,0 +1,25 @@
+Title="Add Container"
+Cond="(pgrep('dockerd')!==false)"
+Markdown="false"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ * Copyright 2014-2021, Guilherme Jardim, Eric Schultz, Jon Panozzo.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+// add docker translations (if needed)
+if (substr($_SERVER['REQUEST_URI'],0,7) != '/Docker') {
+  $docker = "$docroot/languages/$locale/docker.dot";
+  if (file_exists($docker)) $language = array_merge($language,unserialize(file_get_contents($docker)));
+}
+eval('?>'.parse_file("$docroot/plugins/dynamix.docker.manager/include/CreateDocker.php"));
+?>
