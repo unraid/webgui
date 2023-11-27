@@ -290,9 +290,7 @@ mymonitor.on('message', function(state) {
 <?if (_var($var,'shareUser')=='e' && $pool_devices):?>
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ - _(Mover is running)_.");
-    for (let i = 0; i < maxmoverlines; i++) {
-      $('#moverrow'+i ).show();
-     }
+
 
 <?endif;?>
     break;
@@ -319,8 +317,27 @@ arraymonitor.on('message', function(state) {
 
 var moverStatus = new NchanSubscriber('/sub/mover',{subscriber:'websocket'});
 moverStatus.on('message', function(moverdata) {
-$.each(moverdata.split(';'),function(k,v) {if ($('#moverline'+k).length>0) $('#moverline'+k).html(v);});
+  var moverlines = 0;
+  var selectlines = [] ;
+  $.each(moverdata.split(';'),function(k,v) {
+  var keydata = v.split('#');
+      if(keydata[0]=="Showlines") {moverlines=keydata[1];}
+      if(keydata[0]=="Selectlines") {selectlines=keydata[1].split(',');}
+      $('#'+keydata[0]).html(keydata[1]);    
+    });
 
+    if(moverlines > maxmoverlines) moverlines = maxmoverlines;
+    if(moverlines == 0) {
+    for (let i = 0; i < 5; i++) {
+      $('#moverrow'+i ).hide();
+    };
+  };
+  for (let i = 0; i < moverlines; i++) {
+    var selectline =  i + 1;
+    var selectlinestr = selectline.toString();
+    var checkselectline = selectlines.includes(selectlinestr);
+    if (checkselectline == true)  $('#moverrow'+i ).show(); else  $('#moverrow'+i ).hide(); 
+     };
 });
 
 moverStatus.start();
@@ -682,11 +699,11 @@ function formatWarning(val) {
 <form name="mover_schedule" method="POST" action="/update.htm" target="progressFrame">
 <table markdown="1" class="array_status noshift">
 <tr><td></td><td><input type="submit" id="mover-button" name="cmdStartMover" value="_(Move)_"></td><td id="mover-text"></td></tr>
- <tr id="moverrow0" hidden><td></td><td>_(File being processed)_</td><td id="moverline0"></td><td></td></tr>
- <tr id="moverrow1" hidden><td></td><td>_(Action)_</td><td id="moverline1"></td><td></td></tr>
- <tr id="moverrow2" hidden><td></td><td>_(Progress)_</td><td><span id="moverline2" style="width:50"></span></td><td></td></tr>
- <tr id="moverrow3" hidden><td></td><td>_(Transfering To Array)_:</td><td id="moverline3"></td><td></td></tr>
- <tr id="moverrow4" hidden><td></td><td>_(Transfering From Array)_:</td><td id="moverline4"></td><td></td></tr>
+ <tr id="moverrow0" hidden><td></td><td><span id="movertitle0">_(File being processed)_</span></td><td id="moverline0"></td><td></td></tr>
+ <tr id="moverrow1" hidden><td></td><td id="movertitle1">_(Action)_</td><td id="moverline1"></td><td></td></tr>
+ <tr id="moverrow2" hidden><td></td><td id="movertitle2">_(Progress)_</td><td><span id="moverline2" style="width:50"></span></td><td></td></tr>
+ <tr id="moverrow3" hidden><td></td><td id="movertitle3">_(Transfering To Array)_:</td><td id="moverline3"></td><td></td></tr>
+ <tr id="moverrow4" hidden><td></td><td id="movertitle4">_(Transfering From Array)_:</td><td id="moverline4"></td><td></td></tr>
 </table>
 </form>
 <?endif;?>

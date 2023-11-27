@@ -120,40 +120,43 @@ while (true) {
     
     if ( file_exists("$varroot/mover.ini")) {
       $moverstat = parse_ini_file("$varroot/mover.ini") ;
-      $moverdata[] = $moverstat["File"]  ;
-      $moverdata[] = $moverstat["Action"] ;
       $perc = $moverstat["Filepercent"]      ;
-      $moverdata[] =  "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>$perc%</span></div>" ;
+      $value1 =  "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>$perc%</span></div>" ;
       if ($moverstat["TotalToArray"]>0) { 
         $toperc = ($moverstat["TotalToArray"]-$moverstat["RemainToArray"])/$moverstat["TotalToArray"] * 100; 
         if ($moverstat["RemainToArray"]>0) { 
           $perc= round($toperc,2) ;
-          $moverdata[] = "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>"._("Percentage Complete ").$perc."%</span></div>" ; 
-        } else {$moverdata[] = _("Transfer complete") ;}
+          $value2 = "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>"._("Percentage Complete ").$perc."%</span></div>" ; 
+        } else {$value2 = _("Transfer complete") ;}
         } else { 
-          $moverdata[] = _("Nothing to transfer") ;}
+          $value2 = _("Nothing to transfer") ;}
       if ($moverstat["TotalFromArray"]>0) { 
         $fromperc = ($moverstat["TotalFromArray"] - $moverstat["RemainFromArray"])/$moverstat["TotalFromArray"] * 100; 
         if ($moverstat["RemainFromArray"]>0) { 
           $perc= round($fromperc,2) ;
-          $moverdata[] = "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>"._("Percentage Complete ").$perc."%</span></div>"; 
-        } else {$moverdata[] = _("Transfer complete") ;}
+          $value3 = "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>"._("Percentage Complete ").$perc."%</span></div>"; 
+        } else {$value3 = _("Transfer complete") ;}
         } else { 
-        $moverdata[] = _("Nothing to transfer") ;}  
+        $value3 = _("Nothing to transfer") ;}  
+        $moverdata = [];
+        $moverdata[] = "Showlines#{$moverstat['Showlines']}";
+        $moverdata[] = "Selectlines#{$moverstat['Selectlines']}";
+        $moverdata[] = "movertitle0#"._($moverstat['movertitle1']);
+        $moverdata[] = "movertitle1#"._($moverstat['movertitle2']);
+        $moverdata[] = "movertitle2#"._($moverstat['movertitle3']);
+        $moverdata[] = "movertitle3#"._($moverstat['movertitle4']);
+        $moverdata[] = "movertitle4#"._($moverstat['movertitle5']);    
+        $moverdata[] = "moverline0#{$moverstat['File']}";
+        $moverdata[] = "moverline1#{$moverstat['Action']}";
+        $moverdata[] = "moverline2#$value1";
+        $moverdata[] = "moverline3#$value2";
+        $moverdata[] = "moverline4#$value3";
     } else {
-      $moverdata[] = _('Error');
-      $moverdata[] = _('Error');
-      $moverdata[] = _('Error');
-      $moverdata[] = _('Error');
-      $moverdata[] = _('Error');
+      $moverdata[] = "Showlines#0";
       }
   } else {
     $moverdata = [];
-    $moverdata[] = _('Not Running');
-    $moverdata[] = _('Not Running');
-    $moverdata[] = _('Not Running');
-    $moverdata[] = _('Not Running');
-    $moverdata[] = _('Not Running');
+    $moverdata[] = "Showlines#0";
   }
 
   publish('parity', implode(';',$data));
