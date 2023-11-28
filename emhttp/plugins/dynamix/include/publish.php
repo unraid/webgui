@@ -10,62 +10,63 @@
  */
 ?>
 <?
-function curl_socket($socket, $Url, $message) {
-	$com = curl_init($Url);
-	curl_setopt_array($com,[
-		CURLOPT_UNIX_SOCKET_PATH => $socket,
-		CURLOPT_POST=> 1,
-		CURLOPT_POSTFIELDS => $message,
-		CURLOPT_RETURNTRANSFER => true
-	]);
-	$reply = curl_exec($com);
+function curl_socket($socket, $url, $message) {
+    /* Initialize cURL session. */
+    $ch = curl_init($url);
 
-	curl_close($com);
+    /* Set cURL options. */
+    curl_setopt_array($ch, [
+        CURLOPT_UNIX_SOCKET_PATH => $socket,
+        CURLOPT_POST => 1,
+        CURLOPT_POSTFIELDS => $message,
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
 
-	return $reply;
+    /* Execute cURL session and close it. */
+    $reply = curl_exec($ch);
+    curl_close($ch);
+
+    /* Return the result. */
+    return $reply;
 }
 
-function publish($endpoint, $message="", $len=1) {
-	$socket		= "/var/run/nginx.socket";
-	$Url		= "http://localhost/pub/".$endpoint."?buffer_length=".$len;
+function publish($endpoint, $message = "", $len = 1) {
+    /* Define socket and URL. */
+    $socket = "/var/run/nginx.socket";
+    $url = "http://localhost/pub/{$endpoint}?buffer_length={$len}";
 
-	/* If the endpoint is set and there are listeners send the message. */
-	if ((numSubscribers($socket, $Url)) != 0) {
-		/* Send the message. */
-		$result	= curl_socket($socket, $Url, $message);
-	} else {
-		/* Message was not sent. */
-		$result	= false;
-	}
+    $result = false; /* Initialize result variable. */
 
-	return($result);
+    /* If there are subscribers, send the message. */
+    if (numSubscribers($socket, $url) !== 0) {
+        $result = curl_socket($socket, $url, $message);
+    }
+
+    /* Return the result. */
+    return $result;
 }
 
-function numSubscribers($socket, $Url) {
-	/* Initialize cURL session. */
-	$ch				= curl_init();
+function numSubscribers($socket, $url) {
+    /* Initialize cURL session. */
+    $ch = curl_init();
 
-	/* Set cURL options. */
-	curl_setopt($ch, CURLOPT_UNIX_SOCKET_PATH, $socket);
-	curl_setopt($ch, CURLOPT_URL, $Url);
-	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    /* Set cURL options. */
+    curl_setopt_array($ch, [
+        CURLOPT_UNIX_SOCKET_PATH => $socket,
+        CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
 
-	/* Execute cURL session and get the result. */
-	$statusData		= curl_exec($ch);
+    /* Execute cURL session and get the result. */
+    $statusData = curl_exec($ch);
 
-	/* Use preg_match to extract the number of subscribers. */
-	preg_match('/subscribers: (\d+)/', $statusData, $matches);
+    /* Close cURL session. */
+    curl_close($ch);
 
-	/* Check if there is a match. */
-	if (! empty($matches[1])) {
-		$result		= $matches[1];
-	} else {
-		$result		= 0;
-	}
+    /* Use preg_match to extract the number of subscribers. */
+    preg_match('/subscribers: (\d+)/', $statusData, $matches);
 
-	/* Close cURL session. */
-	curl_close($ch);
-
-	return($result);
+    /* Check if there is a match. */
+    return (!empty($matches[1])) ? $matches[1] : 0;
 }
 ?>
