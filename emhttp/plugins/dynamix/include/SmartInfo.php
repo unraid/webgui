@@ -58,10 +58,11 @@ case "attributes":
   $level  = get_value($disk,'smLevel',1);
   $events = explode('|',get_value($disk,'smEvents',$numbers));
   extract(parse_plugin_cfg('dynamix',true));
-  $max = ($disk['maxTemp'] ?? $display['max'] ?? 0) ?: 0;
-  $hot = ($disk['hotTemp'] ?? $display['hot'] ?? 0) ?: 0;
-  $top = $_POST['top'] ?? 120;
-  $empty = true;
+  [$hotNVME,$maxNVME] = _var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'temp') : [-1,-1];
+  $hot    = _var($disk,'hotTemp',-1)>=0 ? $disk['hotTemp'] : ($hotNVME>=0 ? $hotNVME : (_var($display,'hot',-1)>=0 ? $display['hot'] : 0));
+  $max    = _var($disk,'maxTemp',-1)>=0 ? $disk['maxTemp'] : ($maxNVME>=0 ? $maxNVME : (_var($display,'max',-1)>=0 ? $display['max'] : 0));
+  $top    = $_POST['top'] ?? 120;
+  $empty  = true;
   exec("smartctl -n standby -A $type ".escapeshellarg("/dev/$port"),$output);
   // remove empty rows
   $output = array_filter($output);
@@ -229,10 +230,10 @@ case "stop":
   exec("smartctl -X $type ".escapeshellarg("/dev/$port"));
   break;
 case "update":
-  if ($disk["transport"] == "scsi") {
+  if ($disk["transport"] == "scsi" || $disk["transport"] == "nvme") {
     $progress = exec("smartctl -n standby -l selftest $type ".escapeshellarg("/dev/$port")."|grep -Pom1 '\d+%'");
     if ($progress) {
-      echo "<span class='big'><i class='fa fa-spinner fa-pulse'></i> "._('self-test in progress').", ".(100-substr($progress,0,-1))."% "._('complete')."</span>";
+      if ($disk["transport"] == "nvme") echo "<span class='big'><i class='fa fa-spinner fa-pulse'></i> "._('self-test in progress').", ".(substr($progress,0,-1))."% "._('complete')."</span>"; else echo "<span class='big'><i class='fa fa-spinner fa-pulse'></i> "._('self-test in progress').", ".(100-substr($progress,0,-1))."% "._('complete')."</span>";
       break;
     } 
   } else {
@@ -243,7 +244,8 @@ case "update":
     }
   }
   if ($disk["transport"] == "scsi") $result = trim(exec("smartctl -n standby -l selftest $type ".escapeshellarg("/dev/$port")."|grep -m1 '^# 1'|cut -c24-50"));
-  else  $result = trim(exec("smartctl -n standby -l selftest $type ".escapeshellarg("/dev/$port")."|grep -m1 '^# 1'|cut -c26-55"));
+  else if ($disk["transport"] == "nvme") $result = trim(exec("smartctl -n standby -l selftest $type ".escapeshellarg("/dev/$port")."|grep -m1 '^ 0'|cut -c24-50"));
+  else $result = trim(exec("smartctl -n standby -l selftest $type ".escapeshellarg("/dev/$port")."|grep -m1 '^# 1'|cut -c26-55"));
   if (!$result) {
     $spundown = $disk['spundown'] ? "Device spundown, spinup to get information" : "No self-tests logged on this disk" ;
     echo "<span class='big'>"._($spundown)."</span>";

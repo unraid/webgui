@@ -428,6 +428,16 @@ function formatWarning(val) {
     });
   }
 }
+
+window.onunload = function(){
+<?if (_var($var,'fsState')=='Started'):?>
+  mymonitor.stop();
+  devices.stop();
+<?endif;?>
+<?if ($spot==0):?>
+  paritymonitor.stop();
+<?endif;?>
+}
 </script>
 <form name="arrayOps" method="POST" action="/update.htm" target="progressFrame">
 <input type="hidden" name="startState" value="<?=htmlspecialchars(_var($var,'mdState'))?>">

@@ -16,6 +16,7 @@ $docroot = '/usr/local/emhttp';
 $varroot = '/var/local/emhttp';
 require_once "$docroot/webGui/include/publish.php";
 
+$md5_old = -1;
 while (true) {
   unset($memory,$sys,$zfs,$rpms,$lsof);
   exec("grep -Po '^Mem(Total|Available):\s+\K\d+' /proc/meminfo",$memory);
@@ -32,8 +33,12 @@ while (true) {
   foreach ($names as $name) $count[] = $counts[$name] ?? 0;
   $count = implode("\0",$count);
 
-  publish('update1', "$info\1$rpms\1$count");
+  $echo = "$info\1$rpms\1$count";
+  $md5_new = md5($echo,true);
+  if ($md5_new !== $md5_old) {
+    publish('update1', $echo);
+    $md5_old = $md5_new;
+  }
   sleep(5);
 }
 ?>
-

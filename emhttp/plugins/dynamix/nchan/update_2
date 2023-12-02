@@ -16,6 +16,7 @@ $docroot = '/usr/local/emhttp';
 $varroot = '/var/local/emhttp';
 $stamps  = '/var/tmp/stamps.ini';
 $resync  = '/var/tmp/resync.ini';
+$md5_old = -1;
 
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/publish.php";
@@ -158,9 +159,10 @@ function device_temp(&$disk, &$red, &$orange) {
   global $display;
   $spin = strpos(_var($disk,'color'),'blink')===false;
   $temp = _var($disk,'temp','*');
-  $max  = _var($disk,'maxTemp')>=0 ? $disk['maxTemp'] : (_var($display,'max')>=0 ? $display['max'] : 0);
-  $hot  = _var($disk,'hotTemp')>=0 ? $disk['hotTemp'] : (_var($display,'hot')>=0 ? $display['hot'] : 0);
-  $top = $display['top'] ?? 120;
+  [$hotNVME,$maxNVME] = _var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'temp') : [-1,-1];
+  $hot  = _var($disk,'hotTemp',-1)>=0 ? $disk['hotTemp'] : ($hotNVME>=0 ? $hotNVME : (_var($display,'hot',-1)>=0 ? $display['hot'] : 0));
+  $max  = _var($disk,'maxTemp',-1)>=0 ? $disk['maxTemp'] : ($maxNVME>=0 ? $maxNVME : (_var($display,'max',-1)>=0 ? $display['max'] : 0));
+  $top  = $display['top'] ?? 120;
   $heat = false; $color = 'green';
   if (exceed($temp,$max,$top)) {
     $heat = 'fire'; $color = 'red'; $red++;
@@ -463,7 +465,12 @@ while (true) {
       $echo[4] .= _('Scheduled parity check is disabled');
     }
   }
-  publish('update2', implode("\1",$echo));
+  $echo = implode("\1",$echo);
+  $md5_new = md5($echo,true);
+  if ($md5_new !== $md5_old) {
+    publish('update2', $echo);
+    $md5_old = $md5_new;
+  }
   sleep(5);
 }
 ?>

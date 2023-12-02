@@ -56,8 +56,8 @@ function plugin_update_available($plugin, $os=false) {
     if (version_compare($server, $unraid, '>=')) return $remote;
   }
 }
-function _var(&$name, $key, $default='') {
-  return $name[$key] ?? $default;
+function _var(&$name, $key=null, $default='') {
+  return is_null($key) ? ($name ?? $default) : ($name[$key] ?? $default);
 }
 function get_value(&$name, $key, $default) {
   global $var;
@@ -112,6 +112,20 @@ function isSubpool($name) {
   global $subpools, $_tilde_;
   $subpool = my_explode($_tilde_,$name)[1];
   return in_array($subpool,$subpools) ? $subpool : false;
+}
+function get_nvme_info($device, $info) {
+  switch ($info) {
+  case 'temp':
+    exec("nvme id-ctrl /dev/$device | grep -Pom2 '^[wc]ctemp +: \K\d+'",$temp);
+    return [$temp[0]-273, $temp[1]-273];
+  case 'cctemp':
+    return exec("nvme id-ctrl /dev/$device | grep -Pom1 '^cctemp +: \K\d+'")-273;
+  case 'wctemp':
+    return exec("nvme id-ctrl /dev/$device | grep -Pom1 '^wctemp +: \K\d+'")-273;
+  case 'power':
+    $state = hexdec(exec("nvme get-feature /dev/$device -f2 | grep -Pom1 'value:\K0x\d+'"));
+    return exec("smartctl -c /dev/$device | grep -Pom1 '^ *$state [+-] +\K[^W]+'");
+  }
 }
 // convert strftime to date format
 function my_date($fmt, $time) {

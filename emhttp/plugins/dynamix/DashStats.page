@@ -264,11 +264,11 @@ foreach ($cpus as $pair) {
 <a href='/Dashboard/Tools/Processes' title="_(View Running Processes)_"><i class='fa fa-fw fa-info-circle control'></i></a>
 </td></tr>
 <tr><td><span class='w36'><i class='ups fa fa-compress'></i>_(Usable size)_: <?=my_scale($total,$unit,1,null,1024)." $unit"?></span><i class='ups fa fa-expand'></i>_(Maximum size)_: <?="$memory_maximum $unit"?><?=$low?'*':''?></td></tr>
-<tr id='var0'><td><span class='w26'><i class='ups fa fa-fw fa-microchip'></i>_(RAM)_</span><span class='w72'><span class='sys0 load resize'>0%</span><div class='usage-disk sys'><span id='sys0'></span><span></span></div></span></td></tr>
-<tr id='var1'><td><span class='w26'><i class='ups fa fa-fw fa-shield'></i>_(ZFS)_</span><span class='w72'><span class='sys1 load resize'>0%</span><div class='usage-disk sys'><span id='sys1'></span><span></span></div></span></td></tr>
-<tr id='var2'><td><span class='w26'><i class='ups fa fa-fw fa-pencil-square'></i>_(Flash)_</span><span class='w72'><span class='sys2 load resize'>0%</span><div class='usage-disk sys'><span id='sys2'></span><span></span></div></span></td></tr>
-<tr id='var3'><td><span class='w26'><i class='ups fa fa-fw fa-file-text'></i>_(Log)_</span><span class='w72'><span class='sys3 load resize'>0%</span><div class='usage-disk sys'><span id='sys3'></span><span></span></div></span></td></tr>
-<tr id='var4'><td><span class='w26'><i class='ups fa fa-fw fa-docker'></i>_(Docker)_</span><span class='w72'><span class='sys4 load resize'>0%</span><div class='usage-disk sys'><span id='sys4'></span><span></span></div></span></td></tr>
+<tr id='var0'><td><span class='w26'><i class='ups fa fa-fw fa-microchip'></i>_(RAM)_</span><span class='w72'><span class='sys0 load resize'>0%</span><span class="sys0_ load resize"></span><div class='usage-disk sys'><span id='sys0'></span><span></span></div></span></td></tr>
+<tr id='var1'><td><span class='w26'><i class='ups fa fa-fw fa-shield'></i>_(ZFS)_</span><span class='w72'><span class='sys1 load resize'>0%</span><span class="sys1_ load resize"></span><div class='usage-disk sys'><span id='sys1'></span><span></span></div></span></td></tr>
+<tr id='var2'><td><span class='w26'><i class='ups fa fa-fw fa-pencil-square'></i>_(Flash)_</span><span class='w72'><span class='sys2 load resize'>0%</span><span class="sys2_ load resize"></span><div class='usage-disk sys'><span id='sys2'></span><span></span></div></span></td></tr>
+<tr id='var3'><td><span class='w26'><i class='ups fa fa-fw fa-file-text'></i>_(Log)_</span><span class='w72'><span class='sys3 load resize'>0%</span><span class="sys3_ load resize"></span><div class='usage-disk sys'><span id='sys3'></span><span></span></div></span></td></tr>
+<tr id='var4'><td><span class='w26'><i class='ups fa fa-fw fa-docker'></i>_(Docker)_</span><span class='w72'><span class='sys4 load resize'>0%</span><span class="sys4_ load resize"></span><div class='usage-disk sys'><span id='sys4'></span><span></span></div></span></td></tr>
 </tbody>
 
 <tbody title="_(Interface Information)_" class="mixed">
@@ -390,8 +390,7 @@ echo "</td></tr>";
 
 <div class='tile' id='tile2'>
 <table id='db-box2' class='share_status dashboard'>
-<?if ($display['dashapps']!='none'):?>
-<?if ($dockerd && ($display['dashapps']=='icons' || $display['dashapps']=='docker')):?>
+<?if ($dockerd):?>
 <tbody id='docker_view' title="_(Docker Containers)_" data="noApps()">
 <tr><td><i class='icon-docker f32'></i><div class='section'>_(Docker Containers)_<br>
 <span id="tile_apps"><span class='apps'><input type='checkbox' id='apps'></span></span>
@@ -400,7 +399,7 @@ echo "</td></tr>";
 </td></tr>
 </tbody>
 <?endif;?>
-<?if ($libvirtd && ($display['dashapps']=='icons' || $display['dashapps']=='vms')):?>
+<?if ($libvirtd):?>
 <tbody id='vm_view' title="_(Virtual Machines)_" data="noVMs()">
 <tr><td><i class='icon-virtualization f32'></i><div class='section'>_(Virtual Machines)_<br>
 <span id="tile_vms"><span class='vms'><input type='checkbox' id='vms'></span></span>
@@ -408,7 +407,6 @@ echo "</td></tr>";
 <a href='/Dashboard/Settings/VMSettings' title="_(Go to VM settings)_"><i class='fa fa-fw fa-cog control'></i></a>
 </td></tr>
 </tbody>
-<?endif;?>
 <?endif;?>
 
 <tbody title="_(Shares Information)_"<?if ($group):?> class="mixed"<?endif;?>>
@@ -909,7 +907,7 @@ function loadlist(init) {
       $('#vms').is(':checked') ? $.cookie('my_vms','startedOnly',{expires:3650}) : $.removeCookie('my_vms');
     });
   }
-  $.post('/webGui/include/DashboardApps.php',{display:'<?=$display['dashapps']?>',docker:'<?=$dockerd?>',vms:'<?=$libvirtd?>'},function(d) {
+  $.post('/webGui/include/DashboardApps.php',{docker:'<?=$dockerd?>',vms:'<?=$libvirtd?>'},function(d) {
     var data = d.split('\0');
     $('#docker_view tr.updated').remove();
     $('#docker_view').append(data[0]).hideMe();
@@ -1185,14 +1183,14 @@ function addProperties() {
     $(this).find('td:first').prepend("<i class='fa fa-fw fa-close control tile' onclick='dismiss($(this))' title=\"_(Close Tile)_\"></i>");
   });
   $('div.frame tr').attr('title','');
-  $('tr#var0').hover(function(){if(!timers.var0){timers.var0=setTimeout(function(){timers.var0=null},3000);$.post('/webGui/include/DashboardApps.php',{sys:0},function(val){$('.sys0').not('.head').text(val);});}});
+  $('tr#var0').hover(function(){if(!timers.var0){timers.var0=setTimeout(function(){timers.var0=null;$('.sys0_').hide();$('.sys0').show();},5000);$.post('/webGui/include/DashboardApps.php',{sys:0},function(val){$('.sys0').hide();$('.sys0_').text(val).show();});}});
 <?if ($zfs):?>
-  $('tr#var1').show().hover(function(){if(!timers.var1){timers.var1=setTimeout(function(){timers.var1=null},3000);$.post('/webGui/include/DashboardApps.php',{sys:1},function(val){$('.sys1').text(val);});}});
+  $('tr#var1').show().hover(function(){if(!timers.var1){timers.var1=setTimeout(function(){timers.var1=null;$('.sys1_').hide();$('.sys1').show();},5000);$.post('/webGui/include/DashboardApps.php',{sys:1},function(val){$('.sys1').hide();$('.sys1_').text(val).show();});}});
 <?endif;?>
-  $('tr#var2').hover(function(){if(!timers.var2){timers.var2=setTimeout(function(){timers.var2=null},3000);$.post('/webGui/include/DashboardApps.php',{sys:2},function(val){$('.sys2').text(val);});}});
-  $('tr#var3').hover(function(){if(!timers.var3){timers.var3=setTimeout(function(){timers.var3=null},3000);$.post('/webGui/include/DashboardApps.php',{sys:3},function(val){$('.sys3').text(val);});}});
+  $('tr#var2').hover(function(){if(!timers.var2){timers.var2=setTimeout(function(){timers.var2=null;$('.sys2_').hide();$('.sys2').show();},5000);$.post('/webGui/include/DashboardApps.php',{sys:2},function(val){$('.sys2').hide();$('.sys2_').text(val).show();});}});
+  $('tr#var3').hover(function(){if(!timers.var3){timers.var3=setTimeout(function(){timers.var3=null;$('.sys3_').hide();$('.sys3').show();},5000);$.post('/webGui/include/DashboardApps.php',{sys:3},function(val){$('.sys3').hide();$('.sys3_').text(val).show();});}});
 <?if ($dockerd):?>
-  $('tr#var4').show().hover(function(){if(!timers.var4){timers.var4=setTimeout(function(){timers.var4=null},3000);$.post('/webGui/include/DashboardApps.php',{sys:4},function(val){$('.sys4').text(val);});}});
+  $('tr#var4').show().hover(function(){if(!timers.var4){timers.var4=setTimeout(function(){timers.var4=null;$('.sys4_').hide();$('.sys4').show();},5000);$.post('/webGui/include/DashboardApps.php',{sys:4},function(val){$('.sys4').hide();$('.sys4_').text(val).show();});}});
 <?endif;?>
 }
 function showContent() {
@@ -1628,4 +1626,11 @@ $(function() {
     $.post('/webGui/include/InitCharts.php',{cmd:'set',data:JSON.stringify(data)});
   });
 });
+
+window.onunload = function(){
+  dashboard.stop();
+<?if ($apcupsd):?>
+  apcups.stop();
+<?endif;?>
+}
 </script>

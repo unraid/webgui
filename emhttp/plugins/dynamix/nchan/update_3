@@ -16,6 +16,7 @@ $docroot = '/usr/local/emhttp';
 $net     = '/sys/class/net';
 $bond    = '/proc/net/bonding';
 $data    = [];
+$md5_old = -1;
 
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/publish.php";
@@ -63,7 +64,7 @@ function esc($text) {
 }
 
 // initialize variables
-$time0 = $time = microtime(true);
+$time0 = $time1 = microtime(true);
 foreach (ports() as $port) {
   $data[$port]['rx'] = (float)port_get_contents("$net/$port/statistics/rx_bytes");
   $data[$port]['tx'] = (float)port_get_contents("$net/$port/statistics/tx_bytes");
@@ -77,7 +78,7 @@ while (true) {
     update_translation($locale_init);
   }
   $echo = $mode = $rxtx = $stat = [];
-  $ts = $time - $time0;
+  $ts = $time1 - $time0;
   foreach (ports() as $port) {
     // inbound + outbound speed
     $rx = (float)port_get_contents("$net/$port/statistics/rx_bytes");
@@ -129,8 +130,13 @@ while (true) {
   $xdate = _var($display,'date')=='%c';
   $clock = date($xtime||$xdate ? 'g:i '.esc('<span class="ampm">').'a'.esc('</span>') : 'G:i',$now);
   $date  = my_date($xdate ? 'D j M Y, T' : $display['date'].', T',$now);
-  publish('update3',implode("\n",$echo)."\1".implode("\0",$mode)."\1".implode("\0",$rxtx)."\1".implode("\0",$stat)."\1".$clock."\n"._($date,0));
-  $time0 = $time;
+  $echo  = implode("\n",$echo)."\1".implode("\0",$mode)."\1".implode("\0",$rxtx)."\1".implode("\0",$stat)."\1".$clock."\n"._($date,0);
+  $md5_new = md5($echo,true);
+  if ($md5_new !== $md5_old) {
+    publish('update3', $echo);
+    $md5_old = $md5_new;
+    $time0 = $time1;
+  }
   sleep(1);
-  $time = microtime(true);
+  $time1 = microtime(true);
 }

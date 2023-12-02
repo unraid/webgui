@@ -27,6 +27,7 @@ function my_scale($value, &$unit) {
   return number_format($value, $decimals, '.', $value>9999 ? ',':'');
 }
 
+$md5_old = -1;
 while (true) {
   $now = time(); $i = 0;
   unset($dump);  $vtun = [];
@@ -35,7 +36,12 @@ while (true) {
     $row = preg_split('/\s+/',$row);
     if (count($row)>5) $vtun[] = $row[0].';'.($row[5] ? $now - $row[5] : 0).';'.my_scale($row[6],$unit)." $unit;".my_scale($row[7],$unit)." $unit";
   }
-  publish('wireguard', implode("\0",$vtun));
+  $echo = implode("\0",$vtun);
+  $md5_new = md5($echo,true);
+  if ($md5_new !== $md5_old) {
+    publish('wireguard', $echo);
+    $md5_old = $md5_new;
+  }
   sleep(1);
 }
 ?>

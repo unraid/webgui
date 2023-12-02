@@ -357,7 +357,7 @@ function plugin($method, $plugin_file, &$error) {
     if (isset($file->attributes()->Method)) {
       if (!in_array($method, explode(" ", $file->attributes()->Method))) continue;
     } elseif ($method != 'install') continue;
-    $name = $file->attributes()->Name;
+    $name = $file->attributes()->Name ?: '';
     // bergware - check Unraid version dependency (if present)
     $min = $file->attributes()->Min;
     if ($min && version_compare($unraid['version'],$min,'<')) {

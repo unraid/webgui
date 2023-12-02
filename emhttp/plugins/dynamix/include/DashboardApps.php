@@ -34,9 +34,7 @@ if (isset($_POST['sys'])) {
   die(my_scale($size,$unit,null,-1,1024)." $unit");
 }
 
-$display = $_POST['display'];
-
-if ($_POST['docker'] && ($display=='icons' || $display=='docker')) {
+if ($_POST['docker']) {
   $user_prefs = $dockerManPaths['user-prefs'];
   $DockerClient = new DockerClient();
   $DockerTemplates = new DockerTemplates();
@@ -78,7 +76,7 @@ if ($_POST['docker'] && ($display=='icons' || $display=='docker')) {
   echo "</td></tr>";
 }
 echo "\0";
-if ($_POST['vms'] && ($display=='icons' || $display=='vms')) {
+if ($_POST['vms']) {
   $user_prefs = '/boot/config/plugins/dynamix.vm.manager/userprefs.cfg';
   $vms = $lv->get_domains() ?: [];
   if (file_exists($user_prefs)) {

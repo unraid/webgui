@@ -14,11 +14,17 @@
 <?
 $docroot = '/usr/local/emhttp';
 $notify  = "$docroot/webGui/scripts/notify";
+$md5_old = -1;
 
 require_once "$docroot/webGui/include/publish.php";
 
 while (true) {
-  publish('notify', shell_exec("$notify get"));
+  $echo = shell_exec("$notify get");
+  $md5_new = md5($echo,true);
+  if ($md5_new !== $md5_old) {
+    publish('notify', $echo);
+    $md5_old = $md5_new;
+  }
   sleep(3);
 }
 ?>

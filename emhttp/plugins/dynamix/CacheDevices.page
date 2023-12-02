@@ -137,7 +137,7 @@ $('#tab2').bind({click:function() {$('i.toggle').show('slow');}});
 <?if (isset($disks[$pool]['devices']) or _var($var,'fsState')=="Stopped"):?>
 <table class="disk_status wide<?=$i?' divider':''?>">
 <?if (!isSubpool($pool)):?>
-<thead><tr><td>_(Device)_</td><td>_(Identification)_</td><td>_(Temp)_.</td><td>_(Reads)_</td><td>_(Writes)_</td><td>_(Errors)_</td><td>_(FS)_</td><td>_(Size)_</td><td>_(Used)_</td><td>_(Free)_</td></tr></thead>
+<thead><tr><td>_(Device)_</td><td>_(Identification)_</td><td>_(Temp)_ / _(Power)_</td><td>_(Reads)_</td><td>_(Writes)_</td><td>_(Errors)_</td><td>_(FS)_</td><td>_(Size)_</td><td>_(Used)_</td><td>_(Free)_</td></tr></thead>
 <?endif;?>
 <tbody id="pool_device<?=$i++?>">
 <?foreach (cache_filter($disks) as $disk) if (prefix($disk['name'])==$pool) echo "<tr><td colspan='11'>&nbsp;</td></tr>"?>

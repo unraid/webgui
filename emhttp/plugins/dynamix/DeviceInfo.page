@@ -1175,12 +1175,12 @@ _(xfs_repair status)_:
 <input type="hidden" name="smEvents" value="">
 <input type="hidden" name="smGlue"   value="<?=_var($var,'smGlue')?>">
 _(Warning disk temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
-: <input type="number" min="0" max="300" name="hotTemp" class="narrow" value="<?=displayTemp(_var($disk,'hotTemp'))?>" placeholder="<?=displayTemp(_var($display,'hot'))?>">
+: <input type="number" min="0" max="300" name="hotTemp" class="narrow" value="<?=displayTemp(_var($disk,'hotTemp'))?>" placeholder="<?=displayTemp(_var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'wctemp') : _var($display,'hot'))?>">
 
 :info_warning_temp_help:
 
 _(Critical disk temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
-: <input type="number" min="0" max="300" name="maxTemp" class="narrow" value="<?=displayTemp(_var($disk,'maxTemp'))?>" placeholder="<?=displayTemp(_var($display,'max'))?>">
+: <input type="number" min="0" max="300" name="maxTemp" class="narrow" value="<?=displayTemp(_var($disk,'maxTemp'))?>" placeholder="<?=displayTemp(_var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'cctemp') : _var($display,'max'))?>">
 
 :info_critical_temp_help:
 

@@ -17,6 +17,8 @@ $varroot  = '/var/local/emhttp';
 $pool_log = '/var/tmp/pool_log.tmp';
 $smartALL = '/boot/config/smart-all.cfg';
 $smartONE = '/boot/config/smart-one.cfg';
+$md5_old  = -1;
+$fs_old   = -1;
 
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/publish.php";
@@ -31,10 +33,15 @@ require_once "$docroot/webGui/include/Translations.php";
 $locale_init = $locale;
 
 function initSum() {
-  return ['count'=>0, 'temp'=>0, 'fsSize'=>0, 'fsUsed'=>0, 'fsFree'=>0, 'ioReads'=>0, 'ioWrites'=>0, 'numReads'=>0, 'numWrites'=>0, 'numErrors'=>0];
+  return ['count'=>0, 'temp'=>0, 'power'=>0, 'fsSize'=>0, 'fsUsed'=>0, 'fsFree'=>0, 'ioReads'=>0, 'ioWrites'=>0, 'numReads'=>0, 'numWrites'=>0, 'numErrors'=>0];
 }
 function model($id) {
   return substr($id,0,strrpos($id,'_'));
+}
+function power($power) {
+  global $display;
+  $number = _var($display,'number','.,');
+  return $power ? ' / '.number_format($power,2,$number[0]).' W' : '';
 }
 function device_info(&$disk,$online) {
   global $pools, $var, $crypto;
@@ -113,7 +120,7 @@ function device_desc(&$disk) {
   $log = _var($var,'fsState')=='Started'
        ? "<a class='info hand' onclick=\"openTerminal('disklog','"._var($disk,'device')."','')\"><i class='icon-$type icon'></i><span>"._('Disk Log Information')."</span></a>"
        : "<a class='static'><i class='icon-$type icon'></i></a>";
-  return  $log."<span style='font-family:bitstream'>".my_id(_var($disk,'id'))."</span> - $size $unit ("._var($disk,'device').")";
+  return $log."<span style='font-family:bitstream'>".my_id(_var($disk,'id'))."</span> - $size $unit ("._var($disk,'device').")";
 }
 function assignment(&$disk) {
   global $var, $devs;
@@ -173,6 +180,7 @@ function my_diskio($data) {
 }
 function array_offline(&$disk, $pool='') {
   global $var, $disks;
+  $disk['power'] ??= (_var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'power') : 0);
   $echo = []; $warning = '';
   $status = ['DISK_DSBL','DISK_INVALID','DISK_DSBL_NEW','DISK_NEW','DISK_WRONG'];
   $text = "<span class='red-text'><em>"._('All existing data on this device will be OVERWRITTEN when array is Started')."</em></span>";
@@ -207,7 +215,7 @@ function array_offline(&$disk, $pool='') {
   case 'DISK_NEW':
     $echo[] = "<td>".device_info($disk,false)."</td>";
     $echo[] = "<td>".assignment($disk)."</td>";
-    $echo[] = "<td>".my_temp(_var($disk,'temp','*'))."</td>";
+    $echo[] = "<td>".my_temp(_var($disk,'temp','*')).power($disk['power'])."</td>";
     if ($warning) {
       $echo[] = "<td colspan='7'>$warning</td>";
     } else {
@@ -234,6 +242,7 @@ function array_offline(&$disk, $pool='') {
 }
 function array_online(&$disk, $fstype='') {
   global $pools, $sum, $diskio;
+  $disk['power'] ??= (_var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'power') : 0);
   $echo = [];
   $data = [0,0];
   if (_var($disk,'device')) {
@@ -246,6 +255,7 @@ function array_online(&$disk, $fstype='') {
     $sum['count']++;
     $sum['temp'] += $disk['temp'];
   }
+  $sum['power'] += _var($disk,'power',0);
   $sum['numReads'] += _var($disk,'numReads',0);
   $sum['numWrites'] += _var($disk,'numWrites',0);
   $sum['numErrors'] += _var($disk,'numErrors',0);
@@ -274,7 +284,7 @@ function array_online(&$disk, $fstype='') {
   default:
     $echo[] = "<td>".device_info($disk,true)."</td>";
     $echo[] = "<td>".device_desc($disk)."</td>";
-    $echo[] = "<td>".my_temp(_var($disk,'temp','*'))."</td>";
+    $echo[] = "<td>".my_temp(_var($disk,'temp','*')).power($disk['power'])."</td>";
     $echo[] = "<td><span class='diskio'>".my_diskio($data[0])."</span><span class='number'>".my_number(_var($disk,'numReads',0))."</span></td>";
     $echo[] = "<td><span class='diskio'>".my_diskio($data[1])."</span><span class='number'>".my_number(_var($disk,'numWrites',0))."</span></td>";
     $echo[] = "<td>".my_number(_var($disk,'numErrors',0))."</td>";
@@ -286,6 +296,7 @@ function array_online(&$disk, $fstype='') {
 }
 function show_totals($text,$array,$name) {
   global $var, $display, $sum, $locale;
+  $number = _var($display,'number','.,');
   $ctrl1 = "onclick=\"toggle_state('Device','$name','down')\"";
   $ctrl2 = "onclick=\"toggle_state('Device','$name','up')\"";
   $help1 = _('Spin Down').' '._(ucfirst(substr($name,0,-1)));
@@ -294,7 +305,7 @@ function show_totals($text,$array,$name) {
   $echo[] = "<tr class='tr_last'>";
   $echo[] = "<td><a class='info'><i class='fa fa-fw fa-toggle-down control' $ctrl1></i><span>$help1</span></a><a class='info'><i class='fa fa-fw fa-toggle-up control' $ctrl2></i><span>$help2</span></a></td>";
   $echo[] = "<td><a class='static'><i class='icon-disks icon'></i></a><span></span>$text</td>";
-  $echo[] = "<td>".($sum['count']>0 ? my_temp(round($sum['temp']/$sum['count'],1)) : '*')."</td>";
+  $echo[] = "<td>".($sum['count']>0 ? my_temp(round($sum['temp']/$sum['count'],1)) : '*').power($sum['power'])."</td>";
   $echo[] = "<td><span class='diskio'>".my_diskio($sum['ioReads'])."</span><span class='number'>".my_number($sum['numReads'])."</span></td>";
   $echo[] = "<td><span class='diskio'>".my_diskio($sum['ioWrites'])."</span><span class='number'>".my_number($sum['numWrites'])."</span></td>";
   $echo[] = "<td>".my_number($sum['numErrors'])."</td>";
@@ -510,8 +521,17 @@ while (true) {
   $n++;
   $echo[$n] = _var($var,'fsState')=='Stopped' ? 1 : 0;
 
-  publish('devices', implode("\0",$echo));
-  publish('arraymonitor', _var($var,'fsState')=='Started' ? 1 : 0);
+  $echo = implode("\0",$echo);
+  $md5_new = md5($echo,true);
+  if ($md5_new !== $md5_old) {
+    publish('devices', $echo);
+    $md5_old = $md5_new;
+  }
+  $fs_new = _var($var,'fsState')=='Started' ? 1 : 0;
+  if ($fs_new !== $fs_old) {
+    publish('arraymonitor', $fs_new);
+    $fs_old = $fs_new;
+  }
   sleep(1);
 }
 ?>

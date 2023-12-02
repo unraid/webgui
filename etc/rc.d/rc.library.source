@@ -52,11 +52,11 @@ scan(){
 good(){
   DATA=
   for i in ${BIND[@]}; do
-    [[ $i == $1 || ${1:0:4} == fe80 ]] && DATA=1
+    [[ $i == $1 || $1 == 0 || ${1:0:4} == fe80 ]] && DATA=1
   done
   if [[ -n $2 ]]; then
     for i in ${NETS[@]}; do
-      [[ $i == $2 || ${2:0:4} == fe80 ]] && DATA=2
+      [[ $i == $2 || $2 == 0 || ${2:0:4} == fe80 ]] && DATA=2
     done
   fi
   echo $DATA
@@ -93,7 +93,7 @@ min6(){
 wipe(){
   WET=($*)
   # remove temporary (privacy extensions) and host ipv6 addresses
-  for TMP in $(ip -br -6 addr show scope global temporary dev $WET 2>/dev/null | awk '{$1=$2="";print}'); do
+  for TMP in $(ip -br -6 addr show scope global temporary dev $WET 2>/dev/null | sed -r 's/metric [0-9]+//g' | awk '{$1=$2="";print}'); do
     for i in ${!WET[@]}; do
       [[ ${WET[$i]} == $TMP || (${WET[$i]} =~ '::' && ${WET[$i]#*/} == 128) ]] && unset 'WET[i]'
     done
@@ -110,7 +110,7 @@ show(){
   case $# in
     1) ip -br addr show scope global to $1 2>/dev/null | awk '{print $1;exit}';;
     2) ip -br addr show scope global $1 $2 2>/dev/null | awk '{print $3;exit}';;
-    3) if [[ $1 == -6 ]]; then main $(ip -br -6 addr show scope global $2 $3 2>/dev/null | awk '{$2="";print;exit}'); else ip -br -4 addr show scope global $2 $3 2>/dev/null | awk '{print $3;exit}'; fi;;
+    3) if [[ $1 == -6 ]]; then main $(ip -br -6 addr show scope global $2 $3 2>/dev/null | sed -r 's/metric [0-9]+//g' | awk '{$2="";print;exit}'); else ip -br -4 addr show scope global $2 $3 2>/dev/null | awk '{print $3;exit}'; fi;;
   esac
 }
 
@@ -199,10 +199,10 @@ check(){
     [[ ${NET:0:2} == wg && $(grep -Pom1 '^TYPE:1="\K[^"]+' $WIREGUARD/$NET.cfg) == 8 ]] && continue
     NET1=$(sub ${NET[1]})
     if [[ "avahi show" =~ "$CALLER" ]]; then
-      [[ -n $NET && -n $NET1 && $NET != '0' && $NET1 != '0' && -z $(good $NET $NET1) ]] && BIND+=($NET)
-      [[ -n $NET1 && $NET1 != '0' ]] && IPV4=yes NETS+=($NET1)
+      [[ -n $NET && -n $NET1 && -z $(good $NET $NET1) ]] && BIND+=($NET)
+      [[ -n $NET1 && $NET1 != 0 ]] && IPV4=yes NETS+=($NET1)
     else
-      [[ -n $NET1 && $NET1 != '0' && -z $(good $NET1) ]] && IPV4=yes BIND+=($NET1)
+      [[ -n $NET1 && -z $(good $NET1) ]] && IPV4=yes BIND+=($NET1)
     fi
   done <<< $(ip -br -4 addr show scope global | awk '/^(br|bond|eth|wg)[0-9]+(\.[0-9]+)?/ {print $1,$3}' | sort)
   # active IPV6 interfaces (including wireguard)
@@ -215,12 +215,12 @@ check(){
     [[ ${NET:0:2} == wg && $(grep -Pom1 '^TYPE:1="\K[^"]+' $WIREGUARD/$NET.cfg) == 8 ]] && continue
     NET1=$(sub $(main ${NET[@]}))
     if [[ "avahi show" =~ "$CALLER" ]]; then
-      [[ -n $NET && -n $NET1 && $NET != '0' && $NET1 != '0' && -z $(good $NET $NET1) ]] && BIND+=($NET)
-      [[ -n $NET1 && $NET1 != '0' ]] && IPV6=yes NETS+=($NET1)
+      [[ -n $NET && -n $NET1 && -z $(good $NET $NET1) ]] && BIND+=($NET)
+      [[ -n $NET1 && $NET1 != 0 ]] && IPV6=yes NETS+=($NET1)
     else
-      [[ -z $DENY6 && -n $NET1 && $NET1 != '0' && -z $(good $NET1) ]] && IPV6=yes BIND+=($NET1)
+      [[ -z $DENY6 && -n $NET1 && -z $(good $NET1) ]] && IPV6=yes BIND+=($NET1)
     fi
-  done <<< $(ip -br -6 addr show scope global | awk '/^(br|bond|eth|wg)[0-9]+(\.[0-9]+)?/{$2="";print}' | sort)
+  done <<< $(ip -br -6 addr show scope global | sed -r 's/metric [0-9]+//g' | awk '/^(br|bond|eth|wg)[0-9]+(\.[0-9]+)?/{$2="";print}' | sort)
   # add loopback interface
   if [[ "smb nfs" =~ "$CALLER" ]]; then
     [[ $IPV4 == yes ]] && BIND+=(127.0.0.1)

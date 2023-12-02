@@ -73,7 +73,7 @@ textarea{resize:none}
 .nav-item a b{display:none}
 .nav-user{position:fixed;top:102px;right:10px}
 .nav-user a{color:#606e7f;background-color:transparent}
-.LanguageButton{font-size:12px !important;} /* Fix Switch Language Being Cut-Off */
+.LanguageButton{font-size:12px!important} /* Fix Switch Language Being Cut-Off */
 div.title{color:#39587f;margin:20px 0 10px 0;padding:10px 0;clear:both;background-color:#e4e2e4;border-bottom:1px solid #606e7f;letter-spacing:1.8px}
 div.title span.left{font-size:1.6rem;text-transform:uppercase}
 div.title span.right{font-size:1.6rem;padding-right:10px;float:right}
@@ -108,7 +108,7 @@ div.title.shift{margin-top:-12px}
 .usage-disk.sys>span{line-height:normal;height:12px;padding:0}
 .usage-disk.mm{height:3px;line-height:normal;background-color:transparent;margin:5px 20px 0 0}
 .usage-disk.mm>span:first-child{height:3px;line-height:normal}
-.notice{background:#fff6bf url(../images/notice.png) no-repeat;background-position:60px 50%;font-size:1.4rem;text-align:left;padding:15px 0 15px 130px;display:block;height:7rem;line-height:7rem;vertical-align:middle;border-top:1px solid #ffd324;border-bottom:1px solid #ffd324}
+.notice{background:url(../images/notice.png) no-repeat 30px 50%;font-size:1.5rem;text-align:left;vertical-align:middle;padding-left:100px;height:6rem;line-height:6rem}
 .greenbar{background:-webkit-radial-gradient(#127a05,#17bf0b);background:linear-gradient(#127a05,#17bf0b)}
 .orangebar{background:-webkit-radial-gradient(#ce7c10,#f0b400);background:linear-gradient(#ce7c10,#f0b400)}
 .redbar{background:-webkit-radial-gradient(#941c00,#de1100);background:linear-gradient(#941c00,#de1100)}
@@ -134,7 +134,9 @@ table.array_status tr>td+td{padding-left:2px;width:20%}
 table.array_status tr>td+td+td{width:auto}
 table.array_status td.line{border-top:1px solid #f3f0f4}
 table.settings{padding-top:8px;line-height:4.2rem}
-table.settings td:first-child{width:35%;padding-left:12px}
+@media (max-width:1280px){table.settings td:first-child{width:35%;padding-left:12px}}
+@media (min-width:1281px){table.settings td:first-child{width:30%;padding-left:12px}}
+@media (min-width:1921px){table.settings td:first-child{width:25%;padding-left:12px}}
 table.settings td+td{padding-left:8px}
 table.settings tr>td+td{line-height:1.6rem}
 table.settings.shifted{padding:0;margin-left:0;margin-top:0}
@@ -242,9 +244,9 @@ div.vmtemplate:hover{background-color:#edeaef}
 div.vmtemplate{height:12rem;width:12rem;border:1px solid #f3f0f4}
 div.vmtemplate img{margin-top:20px}
 div.up{margin-top:-20px;border:1px solid #f3f0f4;padding:4px 6px;overflow:auto}
-div.spinner{text-align:center;cursor:wait;}
-div.spinner.fixed{display:none;position:fixed;top:0;left:0;z-index:99999;bottom:0;right:0;margin:0;}
-div.spinner .unraid_mark{height:64px; position:fixed;top:50%;left:50%;margin-top:-16px;margin-left:-64px;}
+div.spinner{text-align:center;cursor:wait}
+div.spinner.fixed{display:none;position:fixed;top:0;left:0;z-index:99999;bottom:0;right:0;margin:0}
+div.spinner .unraid_mark{height:64px; position:fixed;top:50%;left:50%;margin-top:-16px;margin-left:-64px}
 div.spinner .unraid_mark_2,div .unraid_mark_4{animation:mark_2 1.5s ease infinite}
 div.spinner .unraid_mark_3{animation:mark_3 1.5s ease infinite}
 div.spinner .unraid_mark_6,div .unraid_mark_8{animation:mark_6 1.5s ease infinite}
@@ -257,7 +259,10 @@ pre.up{margin-top:0}
 pre{border:1px solid #f3f0f4;font-family:bitstream;font-size:1.3rem;line-height:1.8rem;padding:0;overflow:auto;margin-bottom:10px;padding:10px}
 iframe#progressFrame{position:fixed;bottom:32px;left:60px;margin:0;padding:8px 8px 0 8px;width:100%;height:1.2rem;line-height:1.2rem;border-style:none;overflow:hidden;font-family:bitstream;font-size:1.1rem;color:#808080;white-space:nowrap;z-index:-2}
 dl{margin-top:0;padding-left:12px;line-height:2.6rem}
-dt{clear:left;float:left;width:35%}
+dt{clear:left;float:left;text-align:right;margin-right:4rem}
+@media (max-width:1280px){dt{width:35%}}
+@media (min-width:1281px){dt{width:30%}}
+@media (min-width:1921px){dt{width:25%}}
 dd{margin-bottom:12px;white-space:nowrap}
 dd p{margin:0 0 4px 0}
 dd blockquote{padding-left:0}
@@ -271,10 +276,10 @@ span.checkmark{position:absolute;top:0;left:6px;height:14px;width:14px;backgroun
 label.checkbox:hover input ~ .checkmark{background-color:#a4a2a4}
 label.checkbox input:checked ~ .checkmark{background-color:#ff8c2f}
 label.checkbox input:disabled ~ .checkmark{opacity:0.5}
-a.bannerDismiss {float:right;cursor:pointer;text-decoration:none;margin-right:1rem;}
-.bannerDismiss::before {content:"\e92f";font-family:Unraid;color:#e68a00;}
-a.bannerInfo {cursor:pointer;text-decoration:none;}
-.bannerInfo::before {content:"\f05a";font-family:fontAwesome;color:#e68a00;}
+a.bannerDismiss {float:right;cursor:pointer;text-decoration:none;margin-right:1rem}
+.bannerDismiss::before {content:"\e92f";font-family:Unraid;color:#e68a00}
+a.bannerInfo {cursor:pointer;text-decoration:none}
+.bannerInfo::before {content:"\f05a";font-family:fontAwesome;color:#e68a00}
 ::-webkit-scrollbar{width:10px;height:10px;background:transparent}
 ::-webkit-scrollbar-thumb{background:lightgray;border-radius:10px}
 ::-webkit-scrollbar-corner{background:lightgray;border-radius:10px}

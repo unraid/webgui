@@ -399,7 +399,7 @@ case 'disk-create':
 	if (!is_dir($dir)) mkdir($dir);
 	// determine the actual disk if user share is being used
 	$dir = transpose_user_path($dir);
-	@exec("chattr +C -R ".escapeshellarg($dir)." >/dev/null");
+	#@exec("chattr +C -R ".escapeshellarg($dir)." >/dev/null");
 	$strLastLine = exec("qemu-img create -q -f ".escapeshellarg($driver)." ".escapeshellarg($disk)." ".escapeshellarg($size)." 2>&1", $out, $status);
 	$arrResponse = empty($status)
 	? ['success' => true]

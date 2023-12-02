@@ -200,7 +200,7 @@ foreach ($vms as $vm) {
   echo "<tr child-id='$i' id='name-$i".(in_array('name-'.$i++,$show) ? "'>" : "' style='display:none'>");
   echo "<td colspan='8' style='margin:0;padding:0'>";
   echo "<table class='tablesorter domdisk'>";
-  echo "<thead class='child'><tr><th><i class='fa fa-hdd-o'></i> <b>",_('Disk devices'),"</b></th><th>",_('Serial'),"</b></th><th>",_('Bus'),"</th><th>",_('Capacity'),"</th><th>",_('Allocation'),"</th><th>Boot Order</th</tr></thead>";
+  echo "<thead class='child'><tr><th><i class='fa fa-hdd-o'></i> <b>",_('Disk devices/Volume'),"</b></th><th>",_('Serial'),"</b></th><th>",_('Bus'),"</th><th>",_('Capacity'),"</th><th>",_('Allocation'),"</th><th>Boot Order</th</tr></thead>";
   echo "<tbody class='child'>";
 
   /* Display VM disks */
@@ -213,7 +213,9 @@ foreach ($vms as $vm) {
     $boot= $arrDisk["boot order"];
     $serial = $arrDisk["serial"];
     if ($boot < 1) $boot = _('Not set');
-    echo "<tr><td>$disk</td><td>$serial</td><td>$bus</td>";
+    $reallocation = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($disk)." 2>/dev/null"));
+    if (!empty($reallocation)) $reallocationstr = "($reallocation)"; else $reallocationstr = "";
+    echo "<tr><td>$disk $reallocationstr</td><td>$serial</td><td>$bus</td>";
     if ($state == 'shutoff') {
       echo "<td title='Click to increase Disk Size'>";
       echo "<form method='get' action=''>";

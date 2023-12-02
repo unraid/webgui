@@ -305,6 +305,7 @@ if (!String.prototype.replaceAll) {
 // Create config nodes using templateDisplayConfig
 function makeConfig(opts) {
   confNum += 1;
+  var icons = {'Path':'folder-o', 'Port':'minus-square-o', 'Variable':'file-text-o', 'Label':'tags', 'Device':'play-circle-o'};
   var newConfig = $("#templateDisplayConfig").html();
   newConfig =  newConfig.format(
     stripTags(opts.Name),
@@ -319,7 +320,8 @@ function makeConfig(opts) {
     escapeQuote(opts.Value),
     opts.Buttons,
     opts.Required=='true' ? 'required' : '',
-    sprintf('Container %s',opts.Type)
+    sprintf('Container %s',opts.Type),
+    icons[opts.Type] || 'question'
   );
   newConfig = "<div id='ConfigNum"+opts.Number+"' class='config_"+opts.Display+"'' >"+newConfig+"</div>";
   newConfig = $($.parseHTML(newConfig));
@@ -991,7 +993,7 @@ _(Password Mask)_:
 <input type="hidden" name="confDisplay[]" value="{6}">
 <input type="hidden" name="confRequired[]" value="{7}">
 <input type="hidden" name="confMask[]" value="{8}">
-<span class="{11}">{0}:</span>
+<span class="{11}"><i class="fa fa-fw fa-{13}"></i>&nbsp;&nbsp;{0}:</span>
 : <span class="boxed"><input type="text" class="setting_input" name="confValue[]" default="{2}" value="{9}" autocomplete="off" spellcheck="false" {11}>{10}<br><span class='orange-text'>{12}: {1}</span><br><span class="orange-text">{4}</span><br></span>
 </div>
 

@@ -79,7 +79,7 @@
 
 			$folder = transpose_user_path($folder);
 
-			@shell_exec("chattr +C -R " . escapeshellarg($folder) . " &>/dev/null");
+			#@shell_exec("chattr +C -R " . escapeshellarg($folder) . " &>/dev/null");
 
 			return true;
 		}
@@ -208,6 +208,7 @@
 					$return_value = 0;
 				} else {
 					$strImgRawLocationPath = $strImgPath;
+					if (!empty($disk['storage']) && !empty($disk['select']) && $disk['select'] == 'auto' && $disk['storage'] != "default") $disk['select'] = $disk['storage'];
 					if (!empty($disk['select']) && (!in_array($disk['select'], ['auto', 'manual'])) && (is_dir('/mnt/'.$disk['select']))) {
 						// Force qemu disk creation to happen directly on either cache/disk1/disk2 ect based on dropdown selection
 						$strImgRawLocationPath = str_replace('/mnt/user/', '/mnt/'.$disk['select'].'/', $strImgPath);
@@ -1043,6 +1044,8 @@
 
 		function domain_new($config) {
 
+			# Set storage for disks.
+			foreach ($config['disk'] as $i => $disk) { $config['disk'][$i]['storage'] = $config['template']['storage'];}
 			// attempt to create all disk images if needed
 			$diskcount = 0;
 			if (!empty($config['disk'])) {
@@ -1957,6 +1960,20 @@
 			}
 			if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd_backup')) {
 				rename('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd_backup', '/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd');
+				return true;
+			}
+
+			return false;
+		}
+
+		function nvram_rename($uuid,$newuuid) {
+			// rename backup OVMF VARS if this domain had them
+			if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd')) {
+				rename('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd_backup', '/etc/libvirt/qemu/nvram/'.$newuuid.'_VARS-pure-efi.fd');
+				return true;
+			}
+			if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
+				rename('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd_backup', '/etc/libvirt/qemu/nvram/'.$newuuid.'_VARS-pure-efi-tpm.fd');
 				return true;
 			}
 
