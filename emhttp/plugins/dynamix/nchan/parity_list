@@ -21,6 +21,7 @@ $md5_old  = -1;
 $spot_old = -1;
 $fs_old   = -1;
 $proc_old = -1;
+$mover_old = -1;
 
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/publish.php";
@@ -121,14 +122,15 @@ while (true) {
   if ($process == 2) {
     $moverdata = [];
     if ( file_exists("$varroot/mover.ini")) {
-      $moverstat = parse_ini_file("$varroot/mover.ini") ;
-      $perc = $moverstat["Filepercent"]      ;
-      $value1 =  "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>$perc%</span></div>" ;
+      $moverstat = parse_ini_file("$varroot/mover.ini");
+      $mover = $moverstat;
+      $perc = $moverstat["Filepercent"];
+      $value1 =  "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>$perc%</span></div>";
       if ($moverstat["TotalToArray"]>0) { 
         $toperc = ($moverstat["TotalToArray"]-$moverstat["RemainToArray"])/$moverstat["TotalToArray"] * 100; 
         if ($moverstat["RemainToArray"]>0) { 
           $perc= round($toperc,2) ;
-          $value2 = "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>"._("Percentage Complete ").$perc."%</span></div>" ; 
+          $value2 = "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>"._("Percentage Complete ").$perc."%</span></div>"; 
         } else {$value2 = _("Transfer complete") ;}
         } else { 
           $value2 = _("Nothing to transfer") ;}
@@ -154,11 +156,11 @@ while (true) {
         $moverdata[] = "moverline3#$value2";
         $moverdata[] = "moverline4#$value3";
     } else {
-      $moverdata[] = "Showlines#0";
+      $moverdata[] = "Showlines#0"; $mover = -1 ;
       }
   } else {
     $moverdata = [];
-    $moverdata[] = "Showlines#0";
+    $moverdata[] = "Showlines#0"; $mover = -1 ;
   }
 
   $echo = implode(';',$data);
