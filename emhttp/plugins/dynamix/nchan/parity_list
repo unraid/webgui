@@ -120,7 +120,6 @@ while (true) {
  
   if ($process == 2) {
     $moverdata = [];
-    
     if ( file_exists("$varroot/mover.ini")) {
       $moverstat = parse_ini_file("$varroot/mover.ini") ;
       $perc = $moverstat["Filepercent"]      ;
@@ -162,9 +161,6 @@ while (true) {
     $moverdata[] = "Showlines#0";
   }
 
-  publish('parity', implode(';',$data));
-  if (time()-$timer >= 2) {
-    // update every 2 seconds
   $echo = implode(';',$data);
   $md5_new = md5($echo,true);
   if ($md5_new !== $md5_old) {
@@ -181,10 +177,14 @@ while (true) {
   }
   if ($process !== $proc_old) {
     publish('mymonitor', $process);
-    publish('mover', implode(';',$moverdata));
     $timer = time();
     $proc_old = $process;
   }
+  if ($mover !== $mover_old){
+    publish('mover', implode(';',$moverdata));
+    $mover_old = $mover;
+  }
+
   sleep(1);
 }
 ?>
