@@ -189,7 +189,7 @@ if [[ -x /etc/rc.d/rc.udev ]]; then
   /etc/rc.d/rc.udev force-stop
 fi
 
-# Kill all remaining processes.
+# Kill all remaining processes (including rsyslogd)
 OMITPIDS="$(for P in $(/usr/bin/pgrep mdmon); do /bin/echo -o $P; done)" # Don't kill mdmon
 if [[ $1 != fast ]]; then
   log "Sending all processes the SIGTERM signal."
@@ -199,10 +199,13 @@ if [[ $1 != fast ]]; then
   run /sbin/killall5 -9 $OMITPIDS
 fi
 
-# limetech - let's keep this on the USB flash
 # Carry a random seed between reboots.
 /usr/sbin/seedrng
 /bin/cp /var/lib/seedrng/seed.credit /boot/config/random-seed 2>/dev/null
+
+# If "Mirror syslog to flash" is not enabled, copy current syslog to flash drive, 
+# will become /boot/logs/syslog-previous after next boot (see rc.M)
+[[ ! -f /boot/logs/syslog ]] && log "Saving syslog to flash" && /bin/cp /var/log/syslog /boot/logs/syslog
 
 # Before unmounting file systems write a reboot or halt record to wtmp.
 /sbin/$SHUTDOWN_COMMAND -w
