@@ -1409,10 +1409,11 @@ private static $encoding = 'UTF-8';
 				if ($p2['bus'] && $p2['slot'] && $p2['function'] && $p2['bus']==$pci['bus'] && $p2['slot']==$pci['slot'] && $p2['function']==$function) unset($old['devices']['hostdev'][$k]);
 			}
 		}
-		// remove and rebuild usb controllers
+		// remove and rebuild usb + scsi controllers
 		$devices = $old['devices']['controller'];
 		foreach ($devices as $key => $controller) {
 			if ($controller['@attributes']['type']=='usb') unset($old['devices']['controller'][$key]);
+			if ($controller['@attributes']['type']=='scsi') unset($old['devices']['controller'][$key]);
 		}
 		// preserve existing disk driver settings
 		foreach ($new['devices']['disk'] as $key => $disk) {
