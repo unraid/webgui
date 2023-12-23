@@ -197,6 +197,11 @@ libvirtd_start(){
       # Remove "<watchdog model='itco' action='reset'/>" if reverting from later release.
       sed -ri "/<watchdog model='itco' action='reset'\/>/d" "$XML"
     fi
+    # Fix xmlns to include http://
+    if grep -qm1 '<vmtemplate xmlns="unraid"' "$XML"; then
+      # Remove "<watchdog model='itco' action='reset'/>" if reverting from later release.
+      sed -ri 's/<vmtemplate xmlns="unraid"/<vmtemplate xmlns="http:\/\/unraid"/g' "$XML"
+    fi
     # get all interface sections
     ROW=($(grep -nhP '<interface type=' "$XML" | grep -Pom1 '^[0-9]+'))
     # get all source sections

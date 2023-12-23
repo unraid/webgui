@@ -1437,7 +1437,7 @@ private static $encoding = 'UTF-8';
 		unset($old['cpu']['cache'], $old['cpu']['feature']) ;
 		unset($old['features']['hyperv'],$old['devices']['channel']) ;
 		// set namespace
-		$new['metadata']['vmtemplate']['@attributes']['xmlns'] = 'unraid';
+		$new['metadata']['vmtemplate']['@attributes']['xmlns'] = 'http://unraid';
 	}
 
 	function getVMUSBs($strXML){
@@ -1544,8 +1544,8 @@ private static $encoding = 'UTF-8';
 		] ;
 		foreach ($clocks['timer'] as $timer) {
 			$name = $timer["@attributes"]["name"] ;
-			$tickpolicy = $timer["@attributes"]["tickpolicy"] ;
-			$present = $timer["@attributes"]["present"] ;
+			$tickpolicy = isset($timer["@attributes"]["tickpolicy"]) ? $timer["@attributes"]["tickpolicy"] : "" ;
+			$present = isset($timer["@attributes"]["present"]) ? $timer["@attributes"]["present"] : "";
 			if (isset($present)) $arrClocks[$name]['present'] = $present ;
 			if (isset($tickpolicy)) { $arrClocks[$name]['tickpolicy'] = $tickpolicy ; $arrClocks[$name]['present'] = 'yes' ; }
 		}
@@ -1726,7 +1726,7 @@ private static $encoding = 'UTF-8';
   function getvmsnapshots($vm) {
 	  $snaps=array() ;
 	  $dbpath = "/etc/libvirt/qemu/snapshot/$vm" ;
-	  $snaps_json = file_get_contents($dbpath."/snapshots.db") ;
+	  $snaps_json = is_file($dbpath."/snapshots.db") ? file_get_contents($dbpath."/snapshots.db") : "";
 	  $snaps = json_decode($snaps_json,true) ;
 	  if (is_array($snaps)) uasort($snaps,'compare_creationtime') ;
 	  return $snaps ;
@@ -1965,7 +1965,7 @@ private static $encoding = 'UTF-8';
 					  }
 				  }
 			  $xml = custom::createXML('domain',$xmlobj)->saveXML();
-			  if (!strpos($xml,'<vmtemplate xmlns="unraid"')) $xml=str_replace('<vmtemplate','<vmtemplate xmlns="unraid"',$xml);
+			  if (!strpos($xml,'<vmtemplate xmlns="http://unraid"')) $xml=str_replace('<vmtemplate','<vmtemplate xmlns="http://unraid"',$xml);
 			  $new = $lv->domain_define($xml);
 			  file_put_contents("/tmp/xmlrevert", "$xml" ) ;## Remove before stable.
 			  if ($new)
@@ -2002,7 +2002,7 @@ private static $encoding = 'UTF-8';
 					  $xml = file_get_contents($xmlfile) ;
 					  $xmlobj = custom::createArray('domain',$xml) ;
 					  $xml = custom::createXML('domain',$xmlobj)->saveXML();
-					  if (!strpos($xml,'<vmtemplate xmlns="unraid"')) $xml=str_replace('<vmtemplate','<vmtemplate xmlns="unraid"',$xml);
+					  if (!strpos($xml,'<vmtemplate xmlns="http://unraid"')) $xml=str_replace('<vmtemplate','<vmtemplate xmlns="http://unraid"',$xml);
 					  file_put_contents("/tmp/xmlrevert2", "$xml" ) ;## Remove before stable.
 					  $rtn = $lv->domain_define($xml) ;
 

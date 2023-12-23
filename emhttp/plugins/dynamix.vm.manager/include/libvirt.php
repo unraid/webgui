@@ -345,7 +345,7 @@
 				foreach ($template as $key => $value) {
 					$template_options .= $key . "='" . htmlspecialchars($value, ENT_QUOTES | ENT_XML1) . "' ";
 				}
-				$metadata .= "<vmtemplate xmlns='unraid' " . $template_options . "/>";
+				$metadata .= "<vmtemplate xmlns='http://unraid' " . $template_options . "/>";
 				$metadata .= "</metadata>";
 			}
 
