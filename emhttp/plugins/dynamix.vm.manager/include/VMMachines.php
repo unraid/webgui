@@ -134,17 +134,17 @@ foreach ($vms as $vm) {
   $cdbus = $cdbus2 = $cdfile = $cdfile2 = "";
   $cdromcount = 0;
     foreach ($cdroms as $arrCD) {
-    $disk = $arrCD['file'] ?? $arrCD['partition'];
+    $disk = $arrCD['file'];
     $dev = $arrCD['device'];
     $bus = $arrValidDiskBuses[$arrCD['bus']] ?? 'VirtIO';
     if ($dev == "hda") {
       $cdbus = $arrValidDiskBuses[$arrCD['bus']] ?? 'VirtIO';
-      $cdfile = $arrCD['file'] ?? $arrCD['partition'];
+      $cdfile = $arrCD['file'];
       if ($cdfile != "") $cdromcount++;
     }
     if ($dev == "hdb") {
       $cdbus2 = $arrValidDiskBuses[$arrCD['bus']] ?? 'VirtIO';
-      $cdfile2 = $arrCD['file'] ?? $arrCD['partition'];
+      $cdfile2 = $arrCD['file'];
       if ($cdfile2 != "") $cdromcount++;
     }
   }
@@ -213,7 +213,8 @@ foreach ($vms as $vm) {
     $boot= $arrDisk["boot order"];
     $serial = $arrDisk["serial"];
     if ($boot < 1) $boot = _('Not set');
-    $reallocation = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($disk)." 2>/dev/null"));
+    $reallocation = shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($disk)." 2>/dev/null");
+    if ($reallocation) $reallocation = trim($reallocation);
     if (!empty($reallocation)) $reallocationstr = "($reallocation)"; else $reallocationstr = "";
     echo "<tr><td>$disk $reallocationstr</td><td>$serial</td><td>$bus</td>";
     if ($state == 'shutoff') {

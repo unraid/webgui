@@ -1245,10 +1245,13 @@
 			$disks =  $this->get_xpath($dom, '//domain/devices/disk[@device="cdrom"]/target/@dev', false);
 			$files =  $this->get_xpath($dom, '//domain/devices/disk[@device="cdrom"]/source/@file', false);
 			$boot  =  $this->get_xpath($dom, '//domain/devices/disk[@device="cdrom"]/boot/@*', false);
-
+			if (!$disks) {
+				$disks = [] ;
+				$disks['num'] = 0;
+			}
 			$ret = [];
 			for ($i = 0; $i < $disks['num']; $i++) {
-				$tmp = libvirt_domain_get_block_info($dom, $disks[$i]);
+				$tmp = @libvirt_domain_get_block_info($dom, $disks[$i]);
 				if ($tmp) {
 					$tmp['bus'] = $buses[$i];
 					$tmp["boot order"] = $boot[$i] ?? "";
@@ -1259,7 +1262,7 @@
 
 					$ret[] = [
 						'device' => $disks[$i],
-						'file'   => $files[$i],
+						'file'   => isset($files[$i]) ? $files[$i] : "",
 						'type'   => '-',
 						'capacity' => '-',
 						'allocation' => '-',
@@ -1298,7 +1301,8 @@
 			$ret = [];
 			foreach ($arrDomain as $disk) {
 				if ($disk->attributes()->device != "disk") continue ;
-				$tmp = libvirt_domain_get_block_info($dom, $disk->target->attributes()->dev);
+				#if (is_file($disk->target->attributes()->dev))
+				$tmp = @libvirt_domain_get_block_info($dom, $disk->target->attributes()->dev);
 
 				if ($tmp) {
 					$tmp['bus'] = $disk->target->attributes()->bus->__toString();
@@ -1605,7 +1609,7 @@
 			if (is_resource($res))
 				return $res;
 
-			$tmp = libvirt_nodedev_get($this->conn, $res);
+			$tmp = @libvirt_nodedev_get($this->conn, $res);
 			return ($tmp) ? $tmp : $this->_set_last_error();
 		}
 
@@ -1660,7 +1664,7 @@
 				if ($name_override)
 					$name = $name_override;
 
-				$ret[$name] = libvirt_domain_get_info($dom);
+				$ret[(int) $name] = libvirt_domain_get_info($dom);
 				return $ret;
 			}
 			else {
@@ -1687,7 +1691,7 @@
 			$domkey  = $name_override ? $name_override : $this->domain_get_name($dom);
 			if (!array_key_exists($domkey, $this->dominfos)) {
 				$tmp = $this->domain_get_info_call($name, $name_override);
-				$this->dominfos[$domkey] = $tmp[$domname];
+				$this->dominfos[$domkey] = $tmp[(int) $domname];
 			}
 
 			return $this->dominfos[$domkey];
@@ -2076,7 +2080,7 @@
 
 		function domain_get_vnc_port($domain) {
 			$tmp = $this->get_xpath($domain, '//domain/devices/graphics/@port', false);
-			$var = (int)$tmp[0];
+			$var = isset($tmp[0]) ? (int)$tmp[0] : null ;
 			unset($tmp);
 
 			return $var;
@@ -2084,7 +2088,7 @@
 
 		function domain_get_vmrc_autoport($domain) {
 			$tmp = $this->get_xpath($domain, '//domain/devices/graphics/@autoport', false);
-			$var = $tmp[0];
+			$var = isset($tmp[0]) ? $tmp[0] : null ;
 			unset($tmp);
 
 			return $var;
@@ -2092,7 +2096,7 @@
 
 		function domain_get_vmrc_protocol($domain) {
 			$tmp = $this->get_xpath($domain, '//domain/devices/graphics/@type', false);
-			$var = $tmp[0];
+			$var = isset($tmp[0]) ? $tmp[0] : null ;
 			unset($tmp);
 
 			return $var;
@@ -2103,7 +2107,7 @@
 			if (!$tmp)
 				return 'qxl';
 
-			$var = $tmp[0];
+			$var = isset($tmp[0]) ? $tmp[0] : null ;
 			unset($tmp);
 
 			return $var;
@@ -2114,7 +2118,7 @@
 			if (!$tmp)
 				return 'none';
 
-			$var = $tmp[0];
+			$var = isset($tmp[0]) ? $tmp[0] : null ;
 			unset($tmp);
 
 			return $var;
@@ -2136,7 +2140,7 @@
 
 		function domain_get_ws_port($domain) {
 			$tmp = $this->get_xpath($domain, '//domain/devices/graphics/@websocket', false);
-			$var = (int)$tmp[0];
+			$var = isset($tmp[0]) ? (int)$tmp[0] : null ;
 			unset($tmp);
 
 			return $var;
@@ -2260,7 +2264,7 @@
 			foreach($FS as $FSD){
 					$target=$FSD->target->attributes()->dir ;
 					$source=$FSD->source->attributes()->dir ;
-					$mode=$FSD->driver->attributes()->type ;
+					$mode= isset($FSD->driver->attributes()->type) ? $FSD->driver->attributes()->type : null ;
 					$ret[] = [
 						'source' => $source,
 						'target' => $target ,
@@ -2351,10 +2355,10 @@
 					$func = $xpath->query('source/address/@function', $objNode)->Item(0)->nodeValue;
 					$rom = $xpath->query('rom/@file', $objNode);
 					$rom = ($rom->length > 0 ? $rom->Item(0)->nodeValue : '');
-					$boot =$xpath->query('boot/@order', $objNode)->Item(0)->nodeValue;
+					$boot = isset($xpath->query('boot/@order', $objNode)->Item(0)->nodeValue) ? $xpath->query('boot/@order', $objNode)->Item(0)->nodeValue : null;
 					$devid = str_replace('0x', '', 'pci_'.$dom.'_'.$bus.'_'.$slot.'_'.$func);
 					$tmp2 = $this->get_node_device_information($devid);
-					$guest["multi"] = $xpath->query('address/@multifunction', $objNode)->Item(0)->nodeValue ? "on" : "off" ;
+					$guest["multi"] = (isset($xpath->query('address/@multifunction', $objNode)->Item(0)->nodeValue) && $xpath->query('address/@multifunction', $objNode)->Item(0)->nodeValue)  ? "on" : "off" ;
 					$guest["dom"]  = $xpath->query('address/@domain', $objNode)->Item(0)->nodeValue;
 					$guest["bus"]  = $xpath->query('address/@bus', $objNode)->Item(0)->nodeValue;
 					$guest["slot"] = $xpath->query('address/@slot', $objNode)->Item(0)->nodeValue;
@@ -2365,10 +2369,10 @@
 						'slot' => $slot,
 						'func' => $func,
 						'id' => str_replace('0x', '', $bus.':'.$slot.'.'.$func),
-						'vendor' => $tmp2['vendor_name'],
-						'vendor_id' => $tmp2['vendor_id'],
-						'product' => $tmp2['product_name'],
-						'product_id' => $tmp2['product_id'],
+						'vendor' => isset($tmp2['vendor_name']) ? $tmp2['vendor_name'] : "",
+						'vendor_id' => isset($tmp2['vendor_id']) ? $tmp2['vendor_id'] : "",
+						'product' => isset($tmp2['product_name']) ? $tmp2['product_name'] : "",
+						'product_id' => isset($tmp2['product_id']) ? $tmp2['product_id'] : "",
 						'boot' => $boot,
 						'rom' => $rom,
 						'guest' => $guest
@@ -2441,8 +2445,8 @@
 						'id' => str_replace('0x', '', $vid[$i] . ':' . $pid[$i]),
 						'vendor_id' => $vid[$i],
 						'product_id' => $pid[$i],
-						'product' => $dev['product_name'],
-						'vendor' => $dev['vendor_name']
+						'product' => isset($dev['product_name']) ? $dev['product_name'] : null,
+						'vendor' => isset($dev['vendor_name']) ? $dev['vendor_name'] : null
 					];
 				}
 			}

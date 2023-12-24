@@ -1329,7 +1329,7 @@ private static $encoding = 'UTF-8';
 		  }
   	}
 
-		if ($lv->domain_get_boot_devices($res)[0] == "fd") $osbootdev = "Yes" ; else $osbootdev = "No" ;
+		if (isset($lv->domain_get_boot_devices($res)[0]) && $lv->domain_get_boot_devices($res)[0] == "fd") $osbootdev = "Yes" ; else $osbootdev = "No" ;
 
 		return [
 			'template' => $arrTemplateValues,

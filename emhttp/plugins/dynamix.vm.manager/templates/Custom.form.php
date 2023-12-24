@@ -117,7 +117,7 @@
 		]
 	];
 	$hdrXML = "<?xml version='1.0' encoding='UTF-8'?>\n"; // XML encoding declaration
-
+	$bootdisable = '';
 	// Merge in any default values from the VM template
 	if ($arrAllTemplates[$strSelectedTemplate] && $arrAllTemplates[$strSelectedTemplate]['overrides']) {
 		$arrConfigDefaults = array_replace_recursive($arrConfigDefaults, $arrAllTemplates[$strSelectedTemplate]['overrides']);
@@ -1461,7 +1461,6 @@
 				<div class="textarea" style="width: 850px">
 				<?
 					$intAvailableOtherPCIDevices = 0;
-
 					if (!empty($arrValidOtherDevices)) {
 						foreach($arrValidOtherDevices as $i => $arrDev) {
 							$bootdisable = $extra = $pciboot = '';
