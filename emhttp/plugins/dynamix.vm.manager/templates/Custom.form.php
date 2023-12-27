@@ -39,13 +39,14 @@
 
 	$arrConfigDefaults = [
 		'template' => [
-			'name' => $strSelectedTemplate,
-			'icon' => $arrAllTemplates[$strSelectedTemplate]['icon'],
-			'os' => $arrAllTemplates[$strSelectedTemplate]['os'],
+			'name' => isset($strSelectedTemplate) ? $strSelectedTemplate : null,
+			'icon' => isset($arrAllTemplates[$strSelectedTemplate]['icon']) ? $arrAllTemplates[$strSelectedTemplate]['icon'] : null,
+			'os' => isset($arrAllTemplates[$strSelectedTemplate]['os'])  ? $arrAllTemplates[$strSelectedTemplate]['os'] : null,
 			'storage' => "default"
 		],
 		'domain' => [
 			'name' => $strSelectedTemplate,
+			'desc' => '' ,
 			'persistent' => 1,
 			'uuid' => $lv->domain_generate_uuid(),
 			'clock' => 'localtime',
@@ -61,6 +62,7 @@
 			'hyperv' => 1,
 			'ovmf' => 1,
 			'usbmode' => 'usb2',
+			'usbboot'=> 'No',
 			'memoryBacking' => '{"nosharepages":{}}'
 		],
 		'media' => [
@@ -91,7 +93,10 @@
 				'keymap' => 'en-us',
 				'port' => -1 ,
 				'wsport' => -1,
-				'copypaste' => 'no'
+				'copypaste' => 'no',
+				'password' => '',
+				'rom' => '',
+				'guest' => ['multi' => 'off'],
 			]
 		],
 		'audio' => [
@@ -104,7 +109,8 @@
 			[
 				'network' => $domain_bridge,
 				'mac' => $lv->generate_random_mac_addr(),
-				'model' => 'virtio-net'
+				'model' => 'virtio-net',
+				'boot' => ''
 			]
 		],
 		'usb' => [],
@@ -114,12 +120,13 @@
 				'target' => '',
 				'mode' => ''
 			]
-		]
+			],
+		'qemucmdline' => '',
 	];
 	$hdrXML = "<?xml version='1.0' encoding='UTF-8'?>\n"; // XML encoding declaration
 	$bootdisable = '';
 	// Merge in any default values from the VM template
-	if ($arrAllTemplates[$strSelectedTemplate] && $arrAllTemplates[$strSelectedTemplate]['overrides']) {
+	if ($arrAllTemplates[$strSelectedTemplate] && isset($arrAllTemplates[$strSelectedTemplate]['overrides'])) {
 		$arrConfigDefaults = array_replace_recursive($arrConfigDefaults, $arrAllTemplates[$strSelectedTemplate]['overrides']);
 	}
 	// create new VM
@@ -159,7 +166,7 @@
 		$uuid = $_POST['domain']['uuid'];
 		$dom = $lv->domain_get_domain_by_uuid($uuid);
 		$oldAutoStart = $lv->domain_get_autostart($dom)==1;
-		$newAutoStart = $_POST['domain']['autostart']==1;
+		$newAutoStart = isset($_POST['domain']['autostart']) ? $_POST['domain']['autostart']==1 : false;
 		$strXML = $lv->domain_get_xml($dom);
 
 		if ($lv->domain_get_state($dom)=='running') {

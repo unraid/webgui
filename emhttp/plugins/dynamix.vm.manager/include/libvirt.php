@@ -279,7 +279,7 @@
 			$shares = $config['shares'];
 			$gpus = $config['gpu'];
 			$pcis = $config['pci'];
-			$pciboot = $config['pciboot'];
+			$pciboot = isset($config['pciboot']) ? $config['pciboot'] : null;
 			$audios = $config['audio'];
 			$template = $config['template'];
 			$clocks = $config['clock'];
@@ -2445,8 +2445,8 @@
 						'id' => str_replace('0x', '', $vid[$i] . ':' . $pid[$i]),
 						'vendor_id' => $vid[$i],
 						'product_id' => $pid[$i],
-						'product' => isset($dev['product_name']) ? $dev['product_name'] : null,
-						'vendor' => isset($dev['vendor_name']) ? $dev['vendor_name'] : null
+						'product' => isset($dev['product_name']) ? $dev['product_name'] : "",
+						'vendor' => isset($dev['vendor_name']) ? $dev['vendor_name'] : ""
 					];
 				}
 			}
@@ -2756,7 +2756,7 @@
 		}
 
 		function libvirt_get_net_res($conn, $net) {
-			return libvirt_network_get($conn, $net);
+			return @libvirt_network_get($conn, $net);
 		}
 
 		function libvirt_get_net_list($conn, $opt=VIR_NETWORKS_ALL) {

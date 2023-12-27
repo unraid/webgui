@@ -199,7 +199,6 @@ libvirtd_start(){
     fi
     # Fix xmlns to include http://
     if grep -qm1 '<vmtemplate xmlns="unraid"' "$XML"; then
-      # Remove "<watchdog model='itco' action='reset'/>" if reverting from later release.
       sed -ri 's/<vmtemplate xmlns="unraid"/<vmtemplate xmlns="http:\/\/unraid"/g' "$XML"
     fi
     # get all interface sections

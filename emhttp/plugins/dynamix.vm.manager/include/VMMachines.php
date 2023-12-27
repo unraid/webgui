@@ -268,7 +268,7 @@ foreach ($vms as $vm) {
       if ($snap['parent'] == "" || $snap['parent'] == "Base") $j++;
       $steps[$j] .= $snap['name'].';';
     }
-    echo "<thead class='child' child-id='$i'><tr><th><i class='fa fa-clone'></i> <b>",_('Snapshots'),"</b></th><th></th><th>",_('Date/Time'),"</th><th>",_('Type'),"</th><th>",_('Parent'),"</th><th>",_('Memory'),"</th></tr></thead>";
+    echo "<thead class='child' child-id='$i'><tr><th><i class='fa fa-clone'></i> <b>",_('Snapshots'),"</b></th><th></th><th>",_('Date/Time'),"</th><th>",_('Type (Method)'),"</th><th>",_('Parent'),"</th><th>",_('Memory'),"</th></tr></thead>";
     echo "<tbody class='child'child-id='$i'>";
     foreach ($steps as $stepsline) {
       $snapshotlist = explode(";",$stepsline);
@@ -276,7 +276,7 @@ foreach ($vms as $vm) {
       foreach ($snapshotlist as  $snapshotitem) {
         if ($snapshotitem == "") continue;
         $snapshot = $snapshots[$snapshotitem] ;
-        $snapshotstate = _(ucfirst($snapshot["state"]));
+        $snapshotstate = _(ucfirst($snapshot["state"]))." ({$snapshot["method"]})";
         $snapshotdesc = $snapshot["desc"];
         $snapshotmemory = _(ucfirst($snapshot["memory"]["@attributes"]["snapshot"]));
         $snapshotparent = $snapshot["parent"] ? $snapshot["parent"]  : "None";

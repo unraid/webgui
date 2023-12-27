@@ -1380,9 +1380,9 @@ private static $encoding = 'UTF-8';
 		$index = 0;
 		foreach ($new['disk'] as $i => $disk) {
 			$index++;
-			if ($disk['new']) {
+			if (isset($disk['new'])) {
 				$disk = $lv->create_disk_image($disk, $new['domain']['name'], $index);
-				if ($disk['error']) return $disk['error'];
+				if (isset($disk['error'])) return $disk['error'];
 				$new['disk'][$i] = $disk;
 			}
 		}
@@ -1393,18 +1393,22 @@ private static $encoding = 'UTF-8';
 		$hostold = $old['devices']['hostdev']; // existing devices including custom settings
 		$hostnew = $new['devices']['hostdev']; // GUI generated devices
 		// update USB & PCI host devices
+		file_put_contents("/tmp/usbfile",json_encode($new['devices']['hostdev'],JSON_PRETTY_PRINT) );
 		foreach ($hostnew as $key => $device) {
-			$auto = $device['tag'];
-			$vendor = $device['source']['vendor']['@attributes']['id'];
+			#$auto = $device['tag'];
+			$type= $device['@attributes']['type'];
+			$vendor = isset($device['source']['vendor']['@attributes']['id']) ? $device['source']['vendor']['@attributes']['id'] : null;
 			$remove_usb = $remove_pci = false;
-			[$product,$remove_usb] = my_explode('#',$device['source']['product']['@attributes']['id']);
+			if ($type=='usb') [$product,$remove_usb] = my_explode('#',$device['source']['product']['@attributes']['id']);
+			if ($type=='pci') { 
 			$pci = $device['source']['address']['@attributes'];
 			[$function,$remove_pci] = my_explode('#',$pci['function']);
+			}
 			if ($remove_usb || $remove_pci) unset($new['devices']['hostdev'][$key]);
 			foreach ($hostold as $k => $d) {
-				$v = $d['source']['vendor']['@attributes']['id'];
-				$p = $d['source']['product']['@attributes']['id'];
-				$p2 = $d['source']['address']['@attributes'];
+				$v = isset($d['source']['vendor']['@attributes']['id']) ? $d['source']['vendor']['@attributes']['id'] : null ;
+				$p = isset($d['source']['product']['@attributes']['id']) ? $d['source']['product']['@attributes']['id'] : null; 
+				$p2 = isset($d['source']['address']['@attributes']) ? $d['source']['address']['@attributes'] : ['bus' => null, 'slot' => null, 'fuction' => null] ;
 				if ($v && $p && $v==$vendor && $p==$product) unset($old['devices']['hostdev'][$k]);
 				if ($p2['bus'] && $p2['slot'] && $p2['function'] && $p2['bus']==$pci['bus'] && $p2['slot']==$pci['slot'] && $p2['function']==$function) unset($old['devices']['hostdev'][$k]);
 			}
@@ -1430,7 +1434,7 @@ private static $encoding = 'UTF-8';
 		if (!$old['devices']['hostdev']) unset($old['devices']['hostdev']);
 		if (!$new['devices']['hostdev']) unset($new['devices']['hostdev']);
 		// preserve tpm
-		if (!$new['devices']['tpm']) unset($old['devices']['tpm']);
+		if (!isset($new['devices']['tpm'])) unset($old['devices']['tpm']);
 		// remove existing auto-generated settings
 		unset($old['cputune']['vcpupin'],$old['devices']['video'],$old['devices']['disk'],$old['devices']['interface'],$old['devices']['filesystem'],$old['cpu']['@attributes'],$old['os']['boot'],$old['os']['loader'],$old['os']['nvram']);
 		// Remove old CPU cache and features
@@ -1732,7 +1736,7 @@ private static $encoding = 'UTF-8';
 	  return $snaps ;
   }
 
-  function write_snapshots_database($vm,$name) {
+  function write_snapshots_database($vm,$name,$method="QEMU") {
 	  global $lv ;
 	  $dbpath = "/etc/libvirt/qemu/snapshot/$vm" ;
 	  if (!is_dir($dbpath)) mkdir($dbpath) ;
@@ -1750,6 +1754,7 @@ private static $encoding = 'UTF-8';
 	  $snaps[$vmsnap]["desc"]= $b["description"];
 	  $snaps[$vmsnap]["memory"]= $b["memory"];
 	  $snaps[$vmsnap]["creationtime"]= $b["creationTime"];
+	  $snaps[$vmsnap]["method"]= $method;
 
 	  $disks =$lv->get_disk_stats($vm) ;
 		  foreach($disks as $disk)   {
