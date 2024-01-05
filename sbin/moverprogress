@@ -1,0 +1,303 @@
+#!/usr/bin/php
+<?
+require_once("/usr/local/emhttp/plugins/dynamix/include/Wrappers.php");
+
+$cfg = parse_ini_file("/boot/config/share.cfg");
+
+
+$runcmd = true ;
+function logger($string) {
+	global $cfg;
+
+	#if ( $cfg['logging'] == 'yes' ) {
+		exec("logger ".escapeshellarg($string));
+	#}
+}
+
+function writestatus() {      
+    $config["TotalToArray"] = 0 ;
+    $config["RemainToArray"] =  0;
+    $config["TotalFromArray"] = 0 ;
+    $config["RemainFromArray"] = 0 ;
+    $config["File"] = "Calculating" ;
+    $config["Action"] = "Caclulating Sizes" ;
+    $config["Filepercent"] = 0 ;
+    $config["Showlines"] = "5" ;
+    $config["Selectlines"] ="2,3,4,5";
+    $config["movertitle1"] = "File being processed:" ;
+    $config["movertitle2"] = "Action:";
+    $config["movertitle3"] = "Progress:" ;
+    $config["movertitle4"] = "Transfering To Array:" ;
+    $config["movertitle5"] = "Transfering From Array:"; 
+    save_ini_file("/usr/local/emhttp/state/mover.ini", $config);
+}
+  
+function save_ini_file($file, $array) {
+
+    $res = array();
+    foreach($array as $key => $val) {
+        if(is_array($val)) {
+            $res[] = PHP_EOL."[$key]";
+            foreach($val as $skey => $sval) $res[] = "$skey = ".(is_numeric($sval) ? $sval : '"'.$sval.'"');
+        } else {
+            $res[] = "$key = ".(is_numeric($val) ? $val : '"'.$val.'"');
+        }
+    }
+
+    file_put_contents($file, implode(PHP_EOL, $res));
+}
+
+
+function save_moverstate($var, $val) {
+	$config_file = "/usr/local/emhttp/state/mover.ini";
+	$config = @parse_ini_file($config_file, true);
+	$config[$var] = $val;
+	save_ini_file($config_file, $config);
+	return (isset($config[$var][$val])) ? $config[$var][$val] : FALSE;
+}  
+
+function save_moverstatefull($state) {
+	$config_file = "/usr/local/emhttp/state/mover.ini";
+	$config = @parse_ini_file($config_file, true);
+	$config = $state;
+	save_ini_file($config_file, $config);
+	return (isset($config)) ? $config : FALSE;
+}  
+
+function startMover($options="") {
+	global $vars, $cfg, $cron, $runcmd ;
+
+
+	
+	$pid = @file_get_contents("/var/run/mover.pid");
+	if ($pid) {
+		echo "mover: mover already running\n" ;
+		exit();
+	}
+	
+
+	if (isset($cfg)) {
+    	# Only start if shfs includes pools
+    	if ($cfg["shareCacheEnabled"] != "yes") {
+      		echo "mover: cache not enabled\n" ;
+      		exit(2) ; 
+		}
+	}
+
+	$LOGLEVEL = 0 ;
+
+    if ($cfg["shareMoverLogging"] == "yes") $LOGLEVEL=1 ;
+    exec("mountpoint -q /mnt/user0",$output, $rtnvar) ;
+  	if ($rtnvar > 0) {
+    	echo "mover: array devices not mounted" ;
+   		exit(3) ;
+	}
+	
+ 	if ($LOGLEVEL >0) echo "mover: started\n" ;
+	file_put_contents("/var/run/mover.pid", getmypid()) ;
+       
+    $path= '/boot/config/pools';
+    $directory = '/boot/config/pools/';
+	$scanned_directory = array_diff(scandir($directory), array('..', '.'));
+	$pools = glob($path."/*.cfg");
+	$DUARGSI = $DUARGSO = "" ;
+	writestatus() ;
+	$config_file = "/usr/local/emhttp/state/mover.ini";
+	$config = @parse_ini_file($config_file, true);
+
+	foreach ($pools as $pool) {
+		$sfiles = glob("/mnt/".basename($pool , ".cfg")."/*", GLOB_ONLYDIR );
+
+		foreach ($sfiles as $sfile) {
+
+			if (is_file("/boot/config/shares/".basename($sfile).".cfg")) {
+			$ini = parse_ini_file("/boot/config/shares/".basename($sfile).".cfg", true)  ;
+
+				if ($ini["shareUseCache"] == "yes" ) {
+					$DUARGSI .= " ".$sfile  ;
+					}
+			}
+		}
+
+	}
+
+	$sfiles=array() ;
+	exec('ls -dv /mnt/disk[0-9]*/*/',$sfiles) ;
+
+	$total0 = 0 ;
+	foreach ($sfiles as $sfile) {
+
+		if (is_file("/boot/config/shares/".basename($sfile).".cfg")) {
+		$ini = parse_ini_file("/boot/config/shares/".basename($sfile).".cfg", true)  ;
+
+			if ($ini["shareUseCache"] == "prefer" ) {
+				if (!isset($ini["shareCachePool"])) $ini["shareCachePool"]="cache" ;
+				if (is_dir($sfile)) {
+
+				$DUARGSO .= " ".$sfile  ;
+				}
+			}
+		}
+	}
+
+	$total=0;
+	if ($DUARGSI != "") $total = shell_exec("du -sc ".$DUARGSI." |  grep total | awk '{print $1}'" ) ; else $total = 0;
+	if ($DUARGSO != "") $totalo = shell_exec("du -sc ".$DUARGSO." |  grep total | awk '{print $1}'" ) ; else $totalo = 0;
+
+	
+	printf("mover: shares to array %s To array bytes %d\n",$DUARGSI,$total) ;
+	printf("mover: shares from array %s From array bytes %d\n",$DUARGSO,$totalo) ;
+	$config_file = "/usr/local/emhttp/state/mover.ini";
+	$config = @parse_ini_file($config_file, true); 
+	$pools = glob($path."/*.cfg");
+
+	$config["TotalToArray"] = $total ;
+	$config["RemainToArray"] =  $total;
+	$config["TotalFromArray"] = $totalo;
+	$config["RemainFromArray"] = $totalo ;
+	save_moverstatefull($config) ;
+
+    sleep(10);
+	
+	foreach ($pools as $pool) {
+		$sfiles = glob("/mnt/".basename($pool , ".cfg")."/*", GLOB_ONLYDIR );
+
+		foreach ($sfiles as $sfile) {
+
+			if (is_file("/boot/config/shares/".basename($sfile).".cfg")) {
+				$ini = parse_ini_file("/boot/config/shares/".basename($sfile).".cfg", true)  ;
+				
+				if ($ini["shareUseCache"] == "yes" ) {	
+					$find=array() ;
+					exec("find ".$sfile." -depth ", $find) ;
+
+					#$LOGLEVEL = 1 ;
+					
+					foreach ($find as $movefile) {
+						if (!is_dir($movefile)) { $tomove   = shell_exec("du -sc \"".$movefile."\" |  grep total | awk '{print $1}'" ) ; } else {$tomove = 0 ;}
+						
+						$config["File"] = $movefile ;
+						$config["Action"] = "Move share:".basename($sfile)." to array" ;
+						$config["Filepercent"] = 0 ;
+						save_moverstatefull($config) ;
+						
+						$movecmd="echo \"".$movefile."\" | /usr/local/bin/move -d ".$LOGLEVEL ;
+						if ($runcmd) shell_exec($movecmd) ; else printf("Command running %s\n File size %d\n " ,$movecmd, $tomove) ;
+						
+						$config["RemainToArray"] = $config["RemainToArray"] - $tomove ;
+						
+						save_moverstatefull($config) ;
+						
+					}
+			
+				if ($LOGLEVEL > 0) printf("mover: remaining to transfer to array %d %s\n",$config["RemainToArray"],$sfile) ; 
+				}
+			}
+		}
+		
+	}
+
+	
+		$sfiles = glob("/mnt/".basename($pool , ".cfg")."/*", GLOB_ONLYDIR );
+		$sfiles=array() ;
+		exec('ls -dv /mnt/disk[0-9]*/*/',$sfiles) ;
+	
+		
+		foreach ($sfiles as $sfile) {
+
+			if (is_file("/boot/config/shares/".basename($sfile).".cfg")) {
+			$ini = parse_ini_file("/boot/config/shares/".basename($sfile).".cfg", true)  ;
+
+				if ($ini["shareUseCache"] == "prefer" ) {
+					if (!isset($ini["shareCachePool"])) $ini["shareCachePool"]="cache" ;
+					if (is_dir($sfile)) {
+
+					
+						$find=array() ;
+						exec("find ".$sfile." -depth ", $find) ;
+
+						#$LOGLEVEL = 1 ;
+
+						foreach ($find as $movefile) {
+							if (!is_dir($movefile)) { $frommove   = shell_exec("du -sc \"".$movefile."\" |  grep total | awk '{print $1}'" ) ; } else {$frommove = 0 ;}
+
+							$config["File"] = $movefile ;
+							$config["Action"] = "Move share:".basename($sfile)." from array" ;
+							$config["Filepercent"] = 0 ;
+							save_moverstatefull($config) ;
+							
+							$movecmd="echo \"".$movefile."\" | /usr/local/bin/move -d ".$LOGLEVEL ;
+							if ($runcmd) shell_exec($movecmd) ; else printf("Command running %s\n File size %d\n " ,$movecmd, $frommove) ;
+							
+							$config["RemainFromArray"] = $config["RemainFromArray"] - $frommove ;
+							
+							save_moverstatefull($config) ;
+							
+						}
+				
+					if ($LOGLEVEL > 0) printf("mover: remaining to transfer from array %d %s\n",$config["RemainFromArray"],$sfile) ;
+					}
+				}
+
+			}
+		}
+	if ($LOGLEVEL > 0) echo "mover: finished\n";
+	
+	unlink("/var/run/mover.pid");
+	
+}	
+
+
+
+/*function killtree() {
+  local pid=$1 child
+  $mypid=getmypid()  
+  for child in $(pgrep -P $pid); do
+    killtree $child
+  done
+  [ $pid -ne $$ ] && kill -TERM $pid
+}
+*/
+# Caution: stopping mover like this can lead to partial files on the destination
+# and possible incomplete hard link transfer.  Not recommended to do this.
+function stopMover() {
+	$pid = @file_get_contents("/var/run/mover.pid");
+	
+	if (!$pid) {
+		echo "mover: not running\n" ;
+		exit(1);
+	}
+
+  #killtree $(cat $PIDFILE)
+  sleep(2) ;
+  unlink("/var/run/mover.pid");
+  echo "mover: stopped" ;
+
+} 
+
+$COMMAND = "";
+if (isset($argv[1])) $COMMAND = $argv[1];
+switch ($COMMAND) {
+case 'start':
+    startMover() ;
+	break;	
+
+case 'stop':
+	stopMover() ;
+	break;	
+
+case 'status':
+	if (is_file("/var/run/mover.pid")) {
+	$pid=file_get_contents("/var/run/mover.pid") ;
+	printf("%d\n",$pid) ;
+	}
+	break;	
+
+
+
+default:
+
+	startMover();
+	break;
+}
+?>

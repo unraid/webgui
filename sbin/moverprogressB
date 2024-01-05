@@ -1,0 +1,218 @@
+#!/bin/bash
+#Copyright 2005-2023, Lime Technology
+#License: GPLv2 only
+
+# This is the 'mover' script used for moving files between a pool and the main unRAID array.
+# It is typically invoked via cron.
+
+# First we check if it's valid for this script run: pool use in shfs must be enabled and
+# an instance of the script must not already be running.
+
+# Next, check each of the top-level directories (shares) on each pool.
+# If, and only if, the 'Use Cache' setting for the share is set to "yes", we use 'find' to
+# list the objects (files and directories) of that share directory, moving them to the array.
+# Next, we check each of the top-level directories (shares) on each array disk (in sorted order).
+# If, and only if, the 'Use Cache' setting for the share is set to "prefer", we use 'find' to
+# list the objects (files and directories) of that share directory, moving them to the pool
+# associted with the share.
+
+# The script is set up so that hidden directories (i.e., directory names beginning with a '.'
+# character) at the topmost level of a pool or an array disk are not moved.  This behavior
+# can be turned off by uncommenting the following line:
+# shopt -s dotglob
+
+# Files at the top level of a pool or an array disk are never moved.
+
+# The 'find' command generates a list of all files and directories of a share.
+# For each file, if the file is not "in use" by any process (as detected by 'in_use' command),
+# then the file is moved, and upon success, deleted from the source disk.  If the file already
+# exists on the target, it is not moved and the source is not deleted.  All meta-data of moved
+# files/directories is preserved: permissions, ownership, extended attributes, and access/modified
+# timestamps.
+
+# If an error occurs in copying a file, the partial file, if present, is deleted and the
+# operation continues on to the next file.
+
+PIDFILE="/var/run/mover.pid"
+CFGFILE="/boot/config/share.cfg"
+LOGLEVEL=0
+MOVERSTATUS="/usr/local/emhttp/state/mover.ini"
+
+writestatus() {
+  echo "TotalToArray=${TOTALTO}"  > $MOVERSTATUS
+  echo "RemainToArray=${TO}" >> $MOVERSTATUS
+  echo "TotalFromArray=${TOTALFROM}"   >> $MOVERSTATUS
+  echo "RemainFromArray=${FROM}"  >> $MOVERSTATUS
+  echo "File="  >> $MOVERSTATUS
+  echo "Action=Moving share ${SHARE}"  >> $MOVERSTATUS
+  echo "Filepercent="  >> $MOVERSTATUS
+  echo "Showlines=5" >> $MOVERSTATUS
+  echo "Selectlines=2,3,4,5" >> $MOVERSTATUS
+  echo "movertitle1=File being processed:" >> $MOVERSTATUS
+  echo "movertitle2=Action:" >> $MOVERSTATUS
+  echo "movertitle3=Progress:" >> $MOVERSTATUS
+  echo "movertitle4=Transfering To Array:" >> $MOVERSTATUS
+  echo "movertitle5=Transfering From Array:" >> $MOVERSTATUS
+}
+
+start() {
+  if [ -f $PIDFILE ]; then
+    if ps h $(cat $PIDFILE) | grep mover ; then
+        echo "mover: already running"
+        exit 1
+    fi
+  fi
+
+  if [ -f $CFGFILE ]; then
+    # Only start if shfs includes pools
+    if ! grep -qs 'shareCacheEnabled="yes"' $CFGFILE ; then
+      echo "mover: cache not enabled"
+      exit 2
+    fi
+    if grep -qs 'shareMoverLogging="yes"' $CFGFILE ; then
+      LOGLEVEL=1
+    fi
+  fi
+  if ! mountpoint -q /mnt/user0 ; then
+    echo "mover: array devices not mounted"
+    exit 3
+  fi
+
+  TOTALFROM=0
+  TOTALTO=0
+  writestatus
+
+  echo $$ >/var/run/mover.pid
+  [[ $LOGLEVEL -gt 0 ]] && echo "mover: started"
+
+  TOSHARES=0
+  FROMSHARES=0
+  DUARGSI=""
+
+  shopt -s nullglob
+
+  # Check for objects to move from pools to array
+  for POOL in /boot/config/pools/*.cfg ; do
+    for SHAREPATH in /mnt/$(basename "$POOL" .cfg)/*/ ; do
+      SHARE=$(basename "$SHAREPATH")
+      if grep -qs 'shareUseCache="yes"' "/boot/config/shares/${SHARE}.cfg" ; then
+        DUARGSI="${DUARGSI} ${SHAREPATH}"  
+        ((TOSHARES=TOSHARES+1)) 
+      fi
+    done
+  done
+
+
+  if [[ "$TOSHARES" > 0 ]]
+    then
+      TO=$(du -sc ${DUARGSI} | grep total | awk '{print $1}' )
+   else
+      TO=0
+   fi
+
+  DUARGSO=""
+
+  # Check for objects to move from array to pools
+  for SHAREPATH in $(ls -dv /mnt/disk[0-9]*/*/) ; do
+    SHARE=$(basename "$SHAREPATH")
+    if grep -qs 'shareUseCache="prefer"' "/boot/config/shares/${SHARE}.cfg" ; then
+      eval "$(grep -s shareCachePool '/boot/config/shares/${SHARE}.cfg' | tr -d '\r')"
+      if [[ -z "$shareCachePool" ]]; then
+        shareCachePool="cache"
+      fi
+      if [[ -d "/mnt/$shareCachePool" ]]; then
+         DUARGSO="${DUARGSO} ${SHAREPATH}"  
+         ((FROMSHARES=FROMSHARES+1))
+      fi
+    fi
+  done
+
+ if [[ "$FROMSHARES" > 0 ]] 
+  then
+    FROM=$(du -sc ${DUARGSO} | grep total | awk '{print $1}') 
+  else
+    FROM=0 
+ fi
+  TOTALFROM=$FROM
+  TOTALTO=$TO
+  writestatus
+
+ # Check for objects to move from pools to array
+  for POOL in /boot/config/pools/*.cfg ; do
+    for SHAREPATH in /mnt/$(basename "$POOL" .cfg)/*/ ; do
+      SHARE=$(basename "$SHAREPATH")
+      writestatus
+      if grep -qs 'shareUseCache="yes"' "/boot/config/shares/${SHARE}.cfg" ; then
+        TOMOVE=$(du -sc ${SHAREPATH%/} | grep total | awk '{print $1}') 
+         [[ $LOGLEVEL -gt 0 ]] && echo "Moving ${SHAREPATH%/} Bytes ${TOMOVE}"
+        find "${SHAREPATH%/}" -depth | /usr/local/bin/move -d $LOGLEVEL
+        ((TO=TO-TOMOVE))
+         [[ $LOGLEVEL -gt 0 ]] && echo "RemainFromArray=${TO}" 
+        writestatus   
+      fi
+    done
+  done
+
+  # Check for objects to move from array to pools
+  for SHAREPATH in $(ls -dv /mnt/disk[0-9]*/*/) ; do
+    SHARE=$(basename "$SHAREPATH")
+    writestatus
+    if grep -qs 'shareUseCache="prefer"' "/boot/config/shares/${SHARE}.cfg" ; then
+      eval "$(grep -s shareCachePool '/boot/config/shares/${SHARE}.cfg' | tr -d '\r')"
+      if [[ -z "$shareCachePool" ]]; then
+        shareCachePool="cache"
+      fi
+      if [[ -d "/mnt/$shareCachePool" ]]; then
+        FROMMOVE=$(du -sc ${SHAREPATH%/} | grep total | awk '{print $1}') 
+         [[ $LOGLEVEL -gt 0 ]] && echo "Moving ${SHAREPATH%/} Bytes ${FROMMOVE}"
+        find "${SHAREPATH%/}" -depth | /usr/local/bin/move -d $LOGLEVEL
+        ((FROM=FROM-FROMMOVE))
+         [[ $LOGLEVEL -gt 0 ]] && echo "RemainFromArray=${FROM}" 
+        writestatus
+      fi
+    fi
+  done
+  sleep 5
+  rm -f $PIDFILE
+  rm -f $MOVERSTATUS
+  [[ $LOGLEVEL -gt 0 ]] && echo "mover: finished"
+}
+
+killtree() {
+  local pid=$1 child
+    
+  for child in $(pgrep -P $pid); do
+    killtree $child
+  done
+  [ $pid -ne $$ ] && kill -TERM $pid
+}
+
+# Caution: stopping mover like this can lead to partial files on the destination
+# and possible incomplete hard link transfer.  Not recommended to do this.
+stop() {
+  if [ ! -f $PIDFILE ]; then
+    echo "mover: not running"
+    exit 0
+  fi
+  killtree $(cat $PIDFILE)
+  sleep 2
+  rm -f $PIDFILE
+  echo "mover: stopped"
+}
+
+case $1 in
+start)
+  start
+  ;;
+stop)
+  stop
+  ;;
+status)
+  [ -f $PIDFILE ]
+  ;;
+*)
+  # Default is "start"
+  # echo "Usage: $0 (start|stop|status)"
+  start
+  ;;
+esac

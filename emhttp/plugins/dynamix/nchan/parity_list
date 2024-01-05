@@ -21,6 +21,7 @@ $md5_old  = -1;
 $spot_old = -1;
 $fs_old   = -1;
 $proc_old = -1;
+$mover_old = -1;
 
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/publish.php";
@@ -117,6 +118,51 @@ while (true) {
   elseif (exec("zpool status|grep -c 'scrub in progress'")>0) $process = 4;
   else $process = 0;
 
+ 
+  if ($process == 2) {
+    $moverdata = [];
+    if ( file_exists("$varroot/mover.ini")) {
+      $moverstat = parse_ini_file("$varroot/mover.ini");
+      $mover = $moverstat;
+      $perc = $moverstat["Filepercent"];
+      $value1 =  "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>$perc%</span></div>";
+      if ($moverstat["TotalToArray"]>0) { 
+        $toperc = ($moverstat["TotalToArray"]-$moverstat["RemainToArray"])/$moverstat["TotalToArray"] * 100; 
+        if ($moverstat["RemainToArray"]>0) { 
+          $perc= round($toperc,2) ;
+          $value2 = "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>"._("Percentage Complete ").$perc."%</span></div>"; 
+        } else {$value2 = _("Transfer complete") ;}
+        } else { 
+          $value2 = _("Nothing to transfer") ;}
+      if ($moverstat["TotalFromArray"]>0) { 
+        $fromperc = ($moverstat["TotalFromArray"] - $moverstat["RemainFromArray"])/$moverstat["TotalFromArray"] * 100; 
+        if ($moverstat["RemainFromArray"]>0) { 
+          $perc= round($fromperc,2) ;
+          $value3 = "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>"._("Percentage Complete ").$perc."%</span></div>"; 
+        } else {$value3 = _("Transfer complete") ;}
+        } else { 
+        $value3 = _("Nothing to transfer") ;}  
+        $moverdata = [];
+        $moverdata[] = "Showlines#{$moverstat['Showlines']}";
+        $moverdata[] = "Selectlines#{$moverstat['Selectlines']}";
+        $moverdata[] = "movertitle0#"._($moverstat['movertitle1']);
+        $moverdata[] = "movertitle1#"._($moverstat['movertitle2']);
+        $moverdata[] = "movertitle2#"._($moverstat['movertitle3']);
+        $moverdata[] = "movertitle3#"._($moverstat['movertitle4']);
+        $moverdata[] = "movertitle4#"._($moverstat['movertitle5']);    
+        $moverdata[] = "moverline0#{$moverstat['File']}";
+        $moverdata[] = "moverline1#{$moverstat['Action']}";
+        $moverdata[] = "moverline2#$value1";
+        $moverdata[] = "moverline3#$value2";
+        $moverdata[] = "moverline4#$value3";
+    } else {
+      $moverdata[] = "Showlines#0"; $mover = -1 ;
+      }
+  } else {
+    $moverdata = [];
+    $moverdata[] = "Showlines#0"; $mover = -1 ;
+  }
+
   $echo = implode(';',$data);
   $md5_new = md5($echo,true);
   if ($md5_new !== $md5_old) {
@@ -135,6 +181,11 @@ while (true) {
     publish('mymonitor', $process);
     $proc_old = $process;
   }
+  if ($mover !== $mover_old){
+    publish('mover', implode(';',$moverdata));
+    $mover_old = $mover;
+  }
+
   sleep(1);
 }
 ?>
