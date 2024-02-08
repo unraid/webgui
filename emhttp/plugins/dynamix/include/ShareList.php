@@ -106,7 +106,7 @@ foreach ($shares as $name => $share) {
   } else $luks = "";
   echo "<tr><td><a class='view' href=\"/$path/Browse?dir=/mnt/user/",rawurlencode($name),"\"><i class=\"icon-u-tab\" title=\"",_('Browse')," /mnt/user/".rawurlencode($name),"\"></i></a>";
   echo "<a class='info nohand' onclick='return false'><i class='fa fa-$orb orb $color-orb'></i><span style='left:18px'>$help</span></a>$luks<a href=\"/$path/Share?name=";
-  echo rawurlencode($name),"\" onclick=\"$.cookie('one','tab1')\">",compress($name),"</a></td>";
+  echo rawurlencode($name),"\" onclick=\"$.cookie('one','tab1')\">$name</a></td>";
   echo "<td>{$share['comment']}</td>";
   echo "<td>",user_share_settings($var['shareSMBEnabled'], $sec[$name]),"</td>";
   echo "<td>",user_share_settings($var['shareNFSEnabled'], $sec_nfs[$name]),"</td>";
@@ -126,7 +126,7 @@ foreach ($shares as $name => $share) {
     break;
   case 'only':
     $exclusive = isset($share['exclusive']) && $share['exclusive']=='yes' ? "<i class='fa fa-caret-right '></i> " : "";
-    $cache = "<a class='hand info none' onclick='return false'><i class='fa fa-bullseye fa-fw'></i>$exclusive".compress(my_disk($share['cachePool'],$display['raw']))."<span>".sprintf(_('Primary storage %s'),$share['cachePool']).($exclusive ? ", "._('Exclusive access') : "")."</span></a>";
+    $cache = "<a class='hand info none' onclick='return false'><i class='fa fa-bullseye fa-fw'></i>$exclusive".my_disk($share['cachePool'],$display['raw'])."<span>".sprintf(_('Primary storage %s'),$share['cachePool']).($exclusive ? ", "._('Exclusive access') : "")."</span></a>";
     break;
   }
   if (array_key_exists($name,$ssz1)) {

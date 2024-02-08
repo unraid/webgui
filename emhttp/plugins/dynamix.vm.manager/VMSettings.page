@@ -151,12 +151,8 @@ _(Default Windows VirtIO driver ISO)_ (_(optional)_):
 _(Default network source)_:
 : <select id="network" name="BRNAME">
   <?foreach (array_keys($arrValidNetworks) as $key) {
-
     echo mk_option("", $key, "- "._($key)." -", "disabled");
-
-    foreach ($arrValidNetworks[$key] as $strNetwork) {
-        echo mk_option($domain_cfg['BRNAME'], $strNetwork, $strNetwork);
-    }
+    foreach ($arrValidNetworks[$key] as $strNetwork) echo mk_option($domain_cfg['BRNAME'], $strNetwork, $strNetwork);
   }?>
   </select>
 
@@ -211,6 +207,8 @@ _(VFIO allow unsafe interrupts)_:
 <?else:?>
 &nbsp;
 <?endif;?>
+<?else:?>
+&nbsp;
 <?endif;?>
 : <input type="button" id="applyBtn" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
 </form>

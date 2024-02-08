@@ -132,19 +132,28 @@ $('#tab2').bind({click:function() {$('i.toggle').show('slow');}});
 <?endif;?>
 </script>
 
+<table class="unraid disk_status">
 <?$i = 0?>
 <?foreach ($pools as $pool):?>
 <?if (isset($disks[$pool]['devices']) or _var($var,'fsState')=="Stopped"):?>
-<table class="disk_status wide<?=$i?' divider':''?>">
-<?if (!isSubpool($pool)):?>
-<thead><tr><td>_(Device)_</td><td>_(Identification)_</td><td>_(Temp)_.</td><td>_(Reads)_</td><td>_(Writes)_</td><td>_(Errors)_</td><td>_(FS)_</td><td>_(Size)_</td><td>_(Used)_</td><td>_(Free)_</td></tr></thead>
+<?if (!isSubpool($pool)):
+$cache = array_filter(cache_filter($disks),function($disk) use ($pool){return prefix($disk['name'])==$pool;});
+$power = _var($display,'power') && in_array('nvme',array_column($cache,'transport')) ? _('Power').' / ' : '';
+$root  = explode($_tilde_,$pool)[0];
+?>
+<?if ($i==0):?>
+<thead><tr><td>_(Device)_</td><td>_(Identification)_</td><td><?=$power?>_(Temp)_</td><td>_(Reads)_</td><td>_(Writes)_</td><td>_(Errors)_</td><td>_(FS)_</td><td>_(Size)_</td><td>_(Used)_</td><td>_(Free)_</td></tr></thead>
+<?else:?>
+<thead><tr><td class="divider" colspan="10"></td></td></tr></thead>
+<?endif;?>
 <?endif;?>
 <tbody id="pool_device<?=$i++?>">
-<?foreach (cache_filter($disks) as $disk) if (prefix($disk['name'])==$pool) echo "<tr><td colspan='11'>&nbsp;</td></tr>"?>
+<?foreach ($cache as $disk) if (substr($disk['status'],0,7)!='DISK_NP') echo "<tr><td colspan='10'></td></tr>"?>
+<?if (_var($display,'total') && _var($cache[$root],'devices',0)>1) echo "<tr class='tr_last'><td colspan='10'></td></tr>"?>
 </tbody>
-</table>
 <?endif;?>
 <?endforeach;?>
+</table>
 
 :cache_devices_help:
 

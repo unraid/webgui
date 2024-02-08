@@ -25,7 +25,7 @@ require_once "$docroot/webGui/include/Translations.php";
 
 // remember current language
 $locale_init = $locale;
-
+$md5_old = -1;
 $state = [
   'ONLINE'   => _('Online'),
   'SLAVE'    => '('._('slave').')',
@@ -121,7 +121,12 @@ while (true) {
     elseif (isset($load)) $status[5] = ($load<90 ? "<span>" : "<span $red>").$status[5]."</span>";
     $status[6] = isset($output) ? ((!$volt || ($minv<$output && $output<$maxv) ? "<span $green>" : "<span $red>").$status[6].(isset($freq) ? " ~ $freq Hz" : "")."</span>") : $status[6];
   }
-  publish('apcups',implode(';', $status));
+  $echo = implode(';', $status);
+  $md5_new = md5($echo,true);
+  if ($md5_new !== $md5_old) {
+    publish('apcups', $echo);
+    $md5_old = $md5_new;
+  }
   sleep(3);
 }
 ?>

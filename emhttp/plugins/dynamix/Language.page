@@ -89,15 +89,9 @@ $(function() {
 _(Installed languages)_:
 : <span class="installed"><?=implode(', ',$installed)?></span>
 
-_(Enter URL of language pack XML file)_
-: &nbsp;
+_(Enter URL of language pack XML file)_:
+: <input type="text" id="xml_file" maxlength="1024" value=""><input type="button" id="install" value="_(Install)_" onclick="installXML($('#xml_file').val())">
 
-<dl>
-<form name="xml_install" method="POST" target="progressFrame">
-<dt><input type="text" name="file" id="xml_file" maxlength="1024" value="" style="width:90%"></dt>
-<dd><input type="button" value="_(Install)_" onclick="installXML(this.form.file.value)" style="margin:0"></dd>
-</form>
-</dl>
 </div>
 
 <div markdown="1" class="developer" style="display:none">

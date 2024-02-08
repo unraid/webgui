@@ -1,0 +1,10 @@
+mkdir -p unraidwol
+cd unraidwol/
+DATA_DIR=$(pwd)
+cd ${DATA_DIR}
+git clone https://github.com/SimonFair/unraidwol
+cd ${DATA_DIR}/unraidwol
+git checkout main
+PATH="$PATH:/usr/local/go/bin"
+go mod tidy
+go build

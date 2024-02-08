@@ -18,9 +18,13 @@ $varroot = '/var/local/emhttp';
 require_once "$docroot/webGui/include/publish.php";
 require_once "$docroot/webGui/include/Wrappers.php";
 
+$csrf_old = '';
 while (true) {
-  $var = (array)@parse_ini_file("$varroot/var.ini");
-  publish('session',_var($var,'csrf_token'),0);
+  $csrf_new = @parse_ini_file("$varroot/var.ini")['csrf_token'];
+  if ($csrf_new !== $csrf_old) {
+    publish('session', $csrf_new);
+    $csrf_old = $csrf_new;
+  }
   sleep(10);
 }
 ?>

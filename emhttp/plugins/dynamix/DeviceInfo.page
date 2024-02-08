@@ -17,14 +17,33 @@ Tag="hdd-o"
 <?
 require_once "$docroot/webGui/include/Preselect.php";
 
-$unassigned = array_key_exists($name, $devs);
-$disks      = array_merge_recursive($disks, $devs);
-$disk       = &$disks[$name] ?? [];
+$unassigned = array_key_exists($name,$devs);
+$disk       = $disks[$name] ?? $devs[$name] ?? [];
 $dev        = _var($disk,'device');
 $disk['id'] = _var($disk,'id');
 $events     = explode('|',$disk['smEvents'] ?? $var['smEvents'] ?? $numbers);
 $mode       = ['Disabled','Hourly','Daily','Weekly','Monthly'];
 $days       = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+$sheets     = [];
+$i = $n     = 0;
+
+foreach ($disks as $sheet) {
+  if (_var($sheet,'type')=="Flash" || _var($sheet,'color')=="grey-off" || empty($sheet['name'])) continue;
+  $sheets[] = $sheet['name'];
+  if ($sheet['name']==$name) {$i = $n;}
+  $n++;
+}
+foreach ($devs as $sheet) {
+  if (empty($sheet['name'])) continue;
+  $sheets[] = $sheet['name'];
+  if ($sheet['name']==$name) {$i = $n;}
+  $n++;
+}
+$tag  = _var($disk,'name');
+$end  = count($sheets)-1;
+$prev = $i>0 ? $sheets[$i-1] : $sheets[$end];
+$next = $i<$end ? $sheets[$i+1] : $sheets[0];
+$text = isPool($name) ? _('This will ERASE content of ALL devices in the pool') : _('This will ERASE ALL device content');
 
 function sanitize(&$val) {
   $data = explode('.',str_replace([' ',','],['','.'],$val));
@@ -71,9 +90,13 @@ function makeList($list) {
 function sharename($share) {
   return basename($share,'.cfg');
 }
-function displayTemp($temp) {
+function makeTemp(&$disk, $zone) {
   global $display;
-  return (_var($display,'unit')=='F' && is_numeric($temp)) ? round($temp*9/5)+32 : $temp;
+  switch ($zone) {
+    case 'hot': $nvme = 'wctemp'; break;
+    case 'max': $nvme = 'cctemp'; break;
+  }
+  return _var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),$nvme) : (_var($disk,'rotational',1)==0 && $display["{$zone}ssd"]>=0 ? $display["{$zone}ssd"] : $display[$zone]);
 }
 function maintenance_mode() {
   global $var;
@@ -83,24 +106,13 @@ function isPool($name) {
   global $pools;
   return in_array($name,$pools);
 }
-$sheets = []; $i = $n = 0;
-foreach ($disks as $sheet) {
-  if (_var($sheet,'type')=="Flash" || _var($sheet,'color')=="grey-off" || empty($sheet['name'])) continue;
-  $sheets[] = $sheet['name'];
-  if ($sheet['name']==$name) {$i = $n;}
-  $n++;
-}
-$tag  = _var($disk,'name');
-$end  = count($sheets)-1;
-$prev = $i>0 ? $sheets[$i-1] : $sheets[$end];
-$next = $i<$end ? $sheets[$i+1] : $sheets[0];
-
-$text = isPool($name) ? _('This will ERASE content of ALL devices in the pool') : _('This will ERASE ALL device content');
 ?>
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.ui.css")?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/plugins/dynamix.docker.manager/styles/style-$theme.css")?>">
 
 <script>
+String.prototype.celsius = function(){return Math.round((parseInt(this)-32)*5/9).toString();}
+
 if ($.cookie('deletepool')) {
   $.removeCookie('deletepool');
   done();
@@ -284,8 +296,8 @@ function prepareDeviceInfo(form) {
   if (form.smEvents.value == '<?=$numbers?>') form.smEvents.value = '';
   if (form.smLevel.value == 1.00) form.smLevel.value = '';
 <?if (_var($display,'unit')=='F'):?>
-  if (form.hotTemp.value>0) form.hotTemp.value = Math.round((form.hotTemp.value-32)*5/9);
-  if (form.maxTemp.value>0) form.maxTemp.value = Math.round((form.maxTemp.value-32)*5/9);
+  if (form.hotTemp.value>0) form.hotTemp.value = form.hotTemp.value.celsius();
+  if (form.maxTemp.value>0) form.maxTemp.value = form.maxTemp.value.celsius();
 <?endif;?>
 }
 function setGlue(form,reset) {
@@ -1174,13 +1186,25 @@ _(xfs_repair status)_:
 <input type="hidden" name="#cleanup" value="true">
 <input type="hidden" name="smEvents" value="">
 <input type="hidden" name="smGlue"   value="<?=_var($var,'smGlue')?>">
+<?if (_var($disk,'rotational',1)==1):?>
 _(Warning disk temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
-: <input type="number" min="0" max="300" name="hotTemp" class="narrow" value="<?=displayTemp(_var($disk,'hotTemp'))?>" placeholder="<?=displayTemp(_var($display,'hot'))?>">
+<?elseif (_var($disk,'transport')=='nvme'):?>
+_(Warning NVME temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
+<?else:?>
+_(Warning SSD temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
+<?endif;?>
+: <input type="number" min="0" max="300" name="hotTemp" class="narrow" value="<?=displayTemp(_var($disk,'hotTemp'))?>" placeholder="<?=displayTemp(makeTemp($disk,'hot'))?>">
 
 :info_warning_temp_help:
 
+<?if (_var($disk,'rotational',1)==1):?>
 _(Critical disk temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
-: <input type="number" min="0" max="300" name="maxTemp" class="narrow" value="<?=displayTemp(_var($disk,'maxTemp'))?>" placeholder="<?=displayTemp(_var($display,'max'))?>">
+<?elseif (_var($disk,'transport')=='nvme'):?>
+_(Critical NVME temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
+<?else:?>
+_(Critical SSD temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
+<?endif;?>
+: <input type="number" min="0" max="300" name="maxTemp" class="narrow" value="<?=displayTemp(_var($disk,'maxTemp'))?>" placeholder="<?=displayTemp(makeTemp($disk,'max'))?>">
 
 :info_critical_temp_help:
 

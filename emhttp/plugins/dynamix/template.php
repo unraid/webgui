@@ -30,13 +30,13 @@ require_once "$docroot/webGui/include/Helpers.php";
 extract(parse_plugin_cfg('dynamix',true));
 
 // Read emhttp status
-$var     = (array)@parse_ini_file('state/var.ini');
-$sec     = (array)@parse_ini_file('state/sec.ini',true);
 $devs    = (array)@parse_ini_file('state/devs.ini',true);
 $disks   = (array)@parse_ini_file('state/disks.ini',true);
-$users   = (array)@parse_ini_file('state/users.ini',true);
-$shares  = (array)@parse_ini_file('state/shares.ini',true);
+$sec     = (array)@parse_ini_file('state/sec.ini',true);
 $sec_nfs = (array)@parse_ini_file('state/sec_nfs.ini',true);
+$shares  = (array)@parse_ini_file('state/shares.ini',true);
+$users   = (array)@parse_ini_file('state/users.ini',true);
+$var     = (array)@parse_ini_file('state/var.ini');
 
 // Merge SMART settings
 require_once "$docroot/webGui/include/CustomMerge.php";

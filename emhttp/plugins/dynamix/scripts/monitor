@@ -47,8 +47,9 @@ function check_temp(&$disk,$text,$info) {
   $name  = _var($disk,'name');
   $named = no_tilde($name);
   $temp  = _var($disk,'temp','*');
-  $max   = _var($disk,'maxTemp')>=0 ? $disk['maxTemp'] : (_var($display,'max')>=0 ? $display['max'] : 0);
-  $hot   = _var($disk,'hotTemp')>=0 ? $disk['hotTemp'] : (_var($display,'hot')>=0 ? $display['hot'] : 0);
+  [$hotNVME,$maxNVME] = _var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'temp') : [-1,-1];
+  $hot   = _var($disk,'hotTemp',-1)>=0 ? $disk['hotTemp'] : ($hotNVME>=0 ? $hotNVME : (_var($disk,'rotational',1)==0 && $display['hotssd']>=0 ? $display['hotssd'] : $display['hot']));
+  $max   = _var($disk,'maxTemp',-1)>=0 ? $disk['maxTemp'] : ($maxNVME>=0 ? $maxNVME : (_var($disk,'rotational',1)==0 && $display['maxssd']>=0 ? $display['maxssd'] : $display['max']));
   $warn  = exceed($temp,$max,$top) ? 'alert' : (exceed($temp,$hot,$top) ? 'warning' : false);
   $item  = 'temp';
   $last  = $saved[$item][$named] ?? 0;
@@ -126,8 +127,8 @@ function check_usage(&$disk,$used,$text,$info) {
   if ($used == -1) return;
   $name     = _var($disk,'name');
   $named    = no_tilde($name);
-  $critical = _var($disk,'critical')>=0 ? $disk['critical'] : (_var($display,'critical')>=0 ? $display['critical'] : 0);
-  $warning  = _var($disk,'warning')>=0 ? $disk['warning'] : (_var($display,'warning')>=0 ? $display['warning'] : 0);
+  $critical = _var($disk,'critical',-1)>=0 ? $disk['critical'] : $display['critical'];
+  $warning  = _var($disk,'warning',-1)>=0 ? $disk['warning'] : $display['warning'];
   $warn     = exceed($used,$critical) ? 'alert' : (exceed($used,$warning) ? 'warning' : false);
   $item     = 'used';
   $last     = $saved[$item][$named] ?? 0;

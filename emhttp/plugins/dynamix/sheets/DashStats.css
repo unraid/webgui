@@ -7,7 +7,7 @@ div.rightside{float:right;margin:0;text-align:center}
 div[id$=chart]{margin:-12px 8px -24px -18px}
 div.template,div#dialogWindow,input#upload{display:none}
 span.head_info{width:250px;display:inline-block}
-span#head_cpu,span#head_ram,#head_ups,#head_apps,#head_vms,#_ups_status_,#_current_time_{display:none;margin-left:0}
+span.switch{display:none}
 span.head_bar{display:inline-block;width:180px}
 span.head_gap{padding-left:14px}
 span.head_time{padding-left:40px;font-size:inherit!important;font-weight:bold!important}
@@ -30,11 +30,13 @@ span[id^=cpu],span[id^=sys]{width:0}
 span[class^="fa "]{font-size:1.6rem;margin-right:18px}
 span.load.resize{font-size:1.1rem}
 span.fan{width:36%;display:inline-block}
-span.w18{width:18%;display:inline-block;float:left}
-span.w26{width:26%;display:inline-block;float:left}
-span.w36{width:36%;display:inline-block;float:left}
-span.w44{width:44%;display:inline-block;float:left}
-span.w72{width:72%;display:inline-block;float:left}
+span.w18{min-width:18%;max-width:18%;display:inline-block;float:left;overflow:hidden;text-overflow:ellipsis}
+span.w26{min-width:26%;max-width:26%;display:inline-block;float:left;overflow:hidden;text-overflow:ellipsis}
+span.w36{min-width:36%;max-width:36%;display:inline-block;float:left;overflow:hidden;text-overflow:ellipsis}
+span.w44{min-width:44%;max-width:44%;display:inline-block;float:left;overflow:hidden;text-overflow:ellipsis}
+span.w72{min-width:72%;max-width:72%;display:inline-block;float:left;overflow:hidden;text-overflow:ellipsis}
+span.w18:hover{overflow:visible}
+span.center{display:block;width:96px;text-align:center;margin:4px 0 8px 0}
 select#cpuline,select#netline{border:none;padding:0 12px 0 0}
 select[name=enter_share],select[name=enter_user]{margin-top:0;float:none}
 img#mycase{width:auto;max-width:128px;height:auto;max-height:128px}
@@ -51,12 +53,14 @@ i[class^="icon-u-"]{font-size:inherit}
 i#mycase[class^="case-"]{font-size:128px}
 i#mycase[class^="fa "]{font-size:96px}
 a.cpu_close,span.hand{cursor:pointer;z-index:1001}
+a.info{white-space:normal;word-spacing:40px}
+a.info span{word-spacing:normal}
 tr#var0,tr#var1,tr#var2,tr#var3,tr#var4{cursor:alias}
 tr#var1,tr#var4,tr#cpu_chart,.cpu_open{display:none}
 td.none{text-align:center;padding-top:12px}
 input[value=Edit]{margin:12px 0 0 0;padding:5px 10px}
 .share1,.share3,.user1,.user3,.view1,.view2,.view3,.view4,.unused{display:none}
-.port_view,.control,#apps,#vms{z-index:10000}
+.port_view,.control{z-index:10000}
 .flat{height:0;lineheight:0}
 .wrap{white-space:normal}
 .switch-button-background{margin-left:0;margin-top:4px}
@@ -65,3 +69,10 @@ input[value=Edit]{margin:12px 0 0 0;padding:5px 10px}
 #current_time{font-size:4rem;margin-left:8px}
 #current_date{font-size:1.3rem;margin-left:18px}
 table.snapshot{margin-top:0}
+.switch-button-background{margin-top:4px!important}
+div.pie{height:96px;width:96px;border-radius:50%;display:flex;justify-content:center;align-items:center}
+div.pie::after{content:'';position:absolute;height:72px;width:72px;border-radius:50%}
+div.pie span{z-index:2;font-size:1.6rem;font-weight:bold}
+div.more{margin-top:8px}
+.var0,.var1,.var2,.var3{display:none;font-size:1.3rem!important}
+legend{font-variant:small-caps;margin:8px 0 4px 0}

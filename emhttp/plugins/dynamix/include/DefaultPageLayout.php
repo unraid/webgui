@@ -44,8 +44,8 @@ function annotate($text) {echo "\n<!--\n",str_repeat("#",strlen($text)),"\n$text
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/font-awesome.css")?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/context.standalone.css")?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.sweetalert.css")?>">
-<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/default-{$display['theme']}.css")?>">
-<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/dynamix-{$display['theme']}.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/default-$theme.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/dynamix-$theme.css")?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/defaultpagelayout.css")?>">
 
 <style>
@@ -784,16 +784,16 @@ unset($pages,$page,$pgs,$pg,$icon,$nchan,$running,$start,$stop,$row,$script,$opt
 // Build footer
 annotate('Footer');
 echo '<div id="footer"><span id="statusraid"><span id="statusbar">';
-$progress = (_var($var,'fsProgress')!='')? "&bullet;<span class='blue strong tour'>{$var['fsProgress']}</span>" : '';
+$progress = (_var($var,'fsProgress')!='') ? "&bullet;<span class='blue strong tour'>{$var['fsProgress']}</span>" : "";
 switch (_var($var,'fsState')) {
 case 'Stopped':
-  echo "<span class='red strong'><i class='fa fa-stop-circle'></i> "._('Array Stopped')."</span>$progress"; break;
+  echo "<span class='red strong'><i class='fa fa-stop-circle'></i> ",_('Array Stopped'),"</span>$progress"; break;
 case 'Starting':
-  echo "<span class='orange strong'><i class='fa fa-pause-circle'></i> "._('Array Starting')."</span>$progress"; break;
+  echo "<span class='orange strong'><i class='fa fa-pause-circle'></i> ",_('Array Starting'),"</span>$progress"; break;
 case 'Stopping':
-  echo "<span class='orange strong'><i class='fa fa-pause-circle'></i> "._('Array Stopping')."</span>$progress"; break;
+  echo "<span class='orange strong'><i class='fa fa-pause-circle'></i> ",_('Array Stopping'),"</span>$progress"; break;
 default:
-  echo "<span class='green strong'><i class='fa fa-play-circle'></i> "._('Array Started')."</span>$progress"; break;
+  echo "<span class='green strong'><i class='fa fa-play-circle'></i> ",_('Array Started'),"</span>$progress"; break;
 }
 echo "</span></span><span id='countdown'></span><span id='user-notice' class='red-text'></span>";
 echo "<span id='copyright'>Unraid&reg; webGui &copy;2023, Lime Technology, Inc.";
@@ -804,14 +804,14 @@ echo "</span></div>";
 // Firefox specific workaround, not needed anymore in firefox version 100 and higher
 //if (typeof InstallTrigger!=='undefined') $('#nav-block').addClass('mozilla');
 
-function parseINI(data){
+function parseINI(msg) {
   var regex = {
     section: /^\s*\[\s*\"*([^\]]*)\s*\"*\]\s*$/,
     param: /^\s*([^=]+?)\s*=\s*\"*(.*?)\s*\"*$/,
     comment: /^\s*;.*$/
   };
   var value = {};
-  var lines = data.split(/[\r\n]+/);
+  var lines = msg.split(/[\r\n]+/);
   var section = null;
   lines.forEach(function(line) {
     if (regex.comment.test(line)) {
@@ -960,6 +960,7 @@ nchan_docker.on('message', function(data) {
   }
   box.scrollTop(box[0].scrollHeight);
 });
+
 var nchan_vmaction = new NchanSubscriber('/sub/vmaction',{subscriber:'websocket'});
 nchan_vmaction.on('message', function(data) {
   if (!data || openDone(data) || openError(data)) return;
@@ -1008,6 +1009,7 @@ nchan_vmaction.on('message', function(data) {
   }
   box.scrollTop(box[0].scrollHeight);
 });
+
 var backtotopoffset = 250;
 var backtotopduration = 500;
 $(window).scroll(function() {

@@ -1,0 +1,94 @@
+Menu="OtherSettings"
+Type="xmenu"
+Title="Wake on Lan Settings"
+Icon="fa-bell"
+Tag="share-alt"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+exec("ls --indicator-style=none /sys/class/net|grep -P '^eth[1-9][0-9]*$'",$ports);
+$disabled = _var($var,'fsState')!='Stopped' ? 'disabled' : '';
+$width    = [166,300];
+$file    = '/boot/config/wol.cfg';
+$current = parse_ini_file($file);
+if (!isset($current['LOGFILE'])) $current['LOGFILE'] = "syslog"
+?>
+<script>
+showStatus('pid','unraidwold');
+</script>
+<form markdown="1" name="WOLsettings" method="POST" action="/update.php" target="progressFrame"  >
+<input type="hidden" name="#file" value="<?=$file;?>">
+<input type="hidden" name="#command" value="/webGui/scripts/WOL_action">
+<input type="hidden" name="#arg[1]" value="load">
+
+_(Enable Wake on Lan)_:
+: <select name="WOLENABLED" >
+  <?=mk_option($current['WOLENABLED'], "no", _('No'))?>
+  <?=mk_option($current['WOLENABLED'], "yes", _('Yes'))?>
+  </select>
+
+:WOL_enable_help:
+
+_(Enable Docker actions)_:
+
+: <select name="RUNDOCKER" >
+  <?=mk_option($current['RUNDOCKER'], "y", _('Yes'))?>
+  <?=mk_option($current['RUNDOCKER'], "n", _('No'))?>
+  </select>
+
+:WOL_run_docker_help:
+
+_(Enable LXC actions)_:
+: <select name="RUNLXC" >
+  <?=mk_option($current['RUNLXC'], "y", _('Yes'))?>
+  <?=mk_option($current['RUNLXC'], "n", _('No'))?>
+  </select>
+
+:WOL_run_LXC_help:
+
+_(Enable VM actions)_:
+: <select name="RUNVM" >
+  <?=mk_option($current['RUNVM'], "y", _('Yes'))?>
+  <?=mk_option($current['RUNVM'], "n", _('No'))?>
+  </select>
+
+:WOL_run_VM_help:
+
+_(Interface to listern on)_:
+: <select id="INTERFACE" name="INTERFACE" >
+  <?=mk_option(_var($eth0,'INTERFACE'),'eth0','eth0','selected')?>
+  <?foreach ($ports as $port):?>
+  <?if (!locked('eth0',$port)) echo mk_option_check($current['INTERFACE'],$port,$port)?>
+  <?endforeach;?>
+  </select>
+
+:WOL_interface_help:
+
+  _(Interface promiscuous mode)_:
+: <select id="IFMODE" name="IFMODE" >
+  <?=mk_option($current['IFMODE'], "n", _('No'))?>
+  <?=mk_option($current['IFMODE'], "y", _('Yes'))?>
+  </select>
+
+:WOL_promiscuous_mode_help:
+
+_(Log file)_:
+: <input name="LOGFILE" class="narrow"type="text" value=<?=$current['LOGFILE']?>>
+
+
+:WOL_log_file_help:
+
+&nbsp;
+: <input type="submit"  value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+</form>

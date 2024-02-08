@@ -48,9 +48,12 @@ $port = file_exists('/sys/class/net/br0') ? 'BR0' : (file_exists('/sys/class/net
 
 // Docker configuration file - guaranteed to exist
 $docker_cfgfile = '/boot/config/docker.cfg';
-if (file_exists($docker_cfgfile) && exec("grep -Pom1 '_{$port}(_[0-9]+)?=' $docker_cfgfile")=='') {
-  # interface has changed, update configuration
-  exec("sed -ri 's/_(BR0|BOND0|ETH0)(_[0-9]+)?=/_{$port}\\2=/' $docker_cfgfile");
+if (file_exists($docker_cfgfile)) {
+  exec("grep -Pom2 '_SUBNET_|_{$port}(_[0-9]+)?=' $docker_cfgfile",$cfg);
+  if (isset($cfg[0]) && $cfg[0]=='_SUBNET_' && empty($cfg[1])) { 
+    # interface has changed, update configuration
+    exec("sed -ri 's/_(BR0|BOND0|ETH0)(_[0-9]+)?=/_{$port}\\2=/' $docker_cfgfile");
+  }
 }
 
 $defaults = (array)@parse_ini_file("$docroot/plugins/dynamix.docker.manager/default.cfg");

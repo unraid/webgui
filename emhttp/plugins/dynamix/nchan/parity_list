@@ -12,12 +12,15 @@
  */
 ?>
 <?
-$docroot = '/usr/local/emhttp';
-$varroot = '/var/local/emhttp';
-$log     = '/boot/config/parity-checks.log';
-$stamps  = '/var/tmp/stamps.ini';
-$resync  = '/var/tmp/resync.ini';
-$timer   = time();
+$docroot  = '/usr/local/emhttp';
+$varroot  = '/var/local/emhttp';
+$log      = '/boot/config/parity-checks.log';
+$stamps   = '/var/tmp/stamps.ini';
+$resync   = '/var/tmp/resync.ini';
+$md5_old  = -1;
+$spot_old = -1;
+$fs_old   = -1;
+$proc_old = -1;
 
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/publish.php";
@@ -114,13 +117,23 @@ while (true) {
   elseif (exec("zpool status|grep -c 'scrub in progress'")>0) $process = 4;
   else $process = 0;
 
-  publish('parity', implode(';',$data));
-  if (time()-$timer >= 2) {
-    // update every 2 seconds
+  $echo = implode(';',$data);
+  $md5_new = md5($echo,true);
+  if ($md5_new !== $md5_old) {
+    publish('parity', $echo);
+    $md5_old = $md5_new;
+  }
+  if ($spot !== $spot_old) {
     publish('paritymonitor', $spot>0 ? 1 : 0);
+    $spot_old = $spot;
+  }
+  if ($fsState !== $fs_old) {
     publish('fsState', $fsState);
+    $fs_old = $fsState;
+  }
+  if ($process !== $proc_old) {
     publish('mymonitor', $process);
-    $timer = time();
+    $proc_old = $process;
   }
   sleep(1);
 }

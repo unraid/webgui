@@ -14,26 +14,94 @@
 <?
 $docroot = '/usr/local/emhttp';
 $varroot = '/var/local/emhttp';
+$md5_old = -1;
+
+require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/publish.php";
+extract(parse_plugin_cfg('dynamix',true));
+
+// add translations
+$_SERVER['REQUEST_URI'] = 'dashboard';
+$login_locale = _var($display,'locale');
+require_once "$docroot/webGui/include/Translations.php";
+
+// remember current language
+$locale_init = $locale;
+
+function update_translation($locale) {
+  global $docroot,$language;
+  $language = [];
+  if ($locale) {
+    $text = "$docroot/languages/$locale/translations.txt";
+    if (file_exists($text)) {
+      $store = "$docroot/languages/$locale/translations.dot";
+      if (!file_exists($store)) file_put_contents($store,serialize(parse_lang_file($text)));
+      $language = unserialize(file_get_contents($store));
+    }
+    $text = "$docroot/languages/$locale/main.txt";
+    if (file_exists($text)) {
+      $store = "$docroot/languages/$locale/main.dot";
+      if (!file_exists($store)) file_put_contents($store,serialize(parse_lang_file($text)));
+      $language = array_merge($language,unserialize(file_get_contents($store)));
+    }
+  }
+}
 
 while (true) {
-  unset($memory,$sys,$zfs,$rpms,$lsof);
-  exec("grep -Po '^Mem(Total|Available):\s+\K\d+' /proc/meminfo",$memory);
-  exec("df /boot /var/log /var/lib/docker|grep -Po '\d+%'",$sys);
-  exec("sensors -uA 2>/dev/null|grep -Po 'fan\d_input: \K\d+'",$rpms);
-  exec("awk '/^c_max|^size/{print \$3}' /proc/spl/kstat/zfs/arcstats 2>/dev/null",$zfs);
+  extract(parse_plugin_cfg('dynamix',true));
+  if (_var($display,'locale') != $locale_init) {
+    $locale_init = _var($display,'locale');
+    update_translation($locale_init);
+  }
+  unset($memory,$df,$fans,$lsof);
+  exec("awk '/^Mem(Total|Available)/{print $2*1024}' /proc/meminfo",$memory);
+  exec("df --output=pcent,used /boot /var/log /var/lib/docker 2>/dev/null|awk '(NR>1){print $1,$2*1024}'",$df);
+  exec("sensors -uA 2>/dev/null|grep -Po 'fan\d_input: \K\d+'",$fans);
   [$total,$free] = $memory;
-  $used = $total-$free;
-  $info = max(round(100*(1-$free/$total)),0)."%\0".min(100,round(100*($zfs[1]??0)/($zfs[0]??1)))."%\0".implode("\0",$sys);
-  $rpms = count($rpms) ? implode(" RPM\0",$rpms).' RPM' : '';
-  $names = array_keys((array)parse_ini_file("$varroot/shares.ini"));
-  exec("LANG='en_US.UTF8' lsof -Owl /mnt/disk[0-9]* 2>/dev/null|awk '/^shfs/ && \$0!~/\.AppleD(B|ouble)/ && \$5==\"REG\"'|awk -F/ '{print \$4}'",$lsof);
-  $counts = array_count_values($lsof); $count = [];
-  foreach ($names as $name) $count[] = $counts[$name] ?? 0;
-  $count = implode("\0",$count);
-
-  publish('update1', "$info\1$rpms\1$count");
+  $used  = $total-$free;
+  $names = [_('Services'),_('Free')];
+  $bytes = $echo = [];
+  $hooks = array_filter(glob("/usr/local/emhttp/plugins/*/system/*",GLOB_NOSORT),function($file){return is_executable($file);});
+  foreach ($hooks as $hook) {
+    $data = @intval(exec(escapeshellarg($hook)));
+    if (!$data || $data>$used) continue;
+    $names[] = _(str_replace('_',' ',basename($hook))); // name of element
+    $bytes[] = $data;                                   // value in bytes
+  }
+  // parse RAM graph
+  $a = 'ram';
+  $services  = $used-array_sum($bytes);
+  $echo[$a][] = round(100*$used/$total)."%";
+  $echo[$a][] = my_scale($used,$unit,null,-1,1024)." $unit";
+  $echo[$a][] = round(100*$free/$total);
+  $echo[$a][] = my_scale($free,$unit,null,-1,1024)." $unit";
+  $echo[$a][] = round(100*$services/$total);
+  $echo[$a][] = my_scale($services,$unit,null,-1,1024)." $unit";
+  foreach ($bytes as $byte) {
+    // parse hook script information for RAM usage graph
+    $echo[$a][] = round(100*$byte/$total);
+    $echo[$a][] = my_scale($byte,$unit,null,-1,1024)." $unit";
+  }
+  // add element names
+  $echo['name'] = $names;
+  // parse the graphs for flash, log & docker
+  foreach ($df as $data) {
+    [$pcent,$used] = explode(' ',$data);
+    $echo['sys'][] = [$pcent,my_scale($used,$unit,null,-1,1024)." $unit"];
+  }
+  // add fans information
+  if (count($fans)) $echo['fan'] = array_map(function($fan){return "$fan RPM";},$fans);
+  // add streams information
+  exec("LANG='en_US.UTF8' lsof -Fn /mnt/disk[0-9]* 2>/dev/null|awk -F/ '(NR>1){print \$4}'",$lsof);
+  $share = array_keys(parse_ini_file("$varroot/shares.ini",true));
+  $count = array_count_values($lsof);
+  foreach ($share as $name) $echo['stream'][] = $count[$name]??0;
+  $echo = json_encode($echo);
+  $md5_new = md5($echo,true);
+  if ($md5_new !== $md5_old) {
+    publish('update1', $echo);
+    $md5_old = $md5_new;
+  }
   sleep(5);
 }
 ?>
-

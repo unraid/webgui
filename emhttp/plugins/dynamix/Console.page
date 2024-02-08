@@ -19,36 +19,50 @@ Tag="terminal"
 <?
 // selected keyboard layouts
 $keymaps = [
-  'by'                    => 'Belarusian',
-  'be-latin1'             => 'Belgium (French)',
-  'br-abnt'               => 'Brazilian',
+  'be-latin1'             => 'Belgian',
+  'br-abnt'               => 'Brazilian (ABNT2 layout)',
+  'bg-cp1251'             => 'Bulgarian',
+  'by'                    => 'Byelorussian',
+  'croat'                 => 'Croat',
   'cz'                    => 'Czech',
   'dk'                    => 'Danish',
   'nl'                    => 'Dutch',
   'uk'                    => 'English (United Kingdom)',
   'us'                    => 'English (United States)',
-  'es'                    => 'Español',
   'et'                    => 'Estonian',
   'fi'                    => 'Finnish',
   'fr'                    => 'French',
   'de-latin1-nodeadkeys'  => 'German',
   'gr'                    => 'Greek',
-  'hu'                    => 'Hungarian',
+  'hu101'                 => 'Hungarian',
   'is-latin1'             => 'Icelandic',
-  'it'                    => 'Italian',
-  'il'                    => 'Israelian',
+  'it2'                   => 'Italian',
+  'jp106'                 => 'Japanese',
+  'il'                    => 'Hebrew',
+  'unicode'               => 'Kirghiz',
+  'la-latin1'             => 'Latin American',
+  'lt'                    => 'Latvian',
   'lt'                    => 'Lithuanian',
   'mk'                    => 'Macedonian',
   'no'                    => 'Norwegian',
-  'pl'                    => 'Polish',
-  'pt'                    => 'Portuguese',
+  'pl1'                   => 'Polish',
+  'pt-latin1'             => 'Portuguese',
   'ro'                    => 'Romanian',
-  'ru'                    => 'Russian',
-  'sk-qwertz'             => 'Slovakian',
+  'ru1'                   => 'Russian (Right Alt)',
+  'ru'                    => 'Russian (Right Ctrl)',
+  'ru3'                   => 'Russian (102 Keys)',
+  'ru4'                   => 'Russian (105 Keys)',
+  'ru-ms'                 => 'Russian (MS Cyrillic Layout)',
+  'ru-yawerty'            => 'Russian (Yawerty Layout)',
+  'sr'                    => 'Serbian',
+  'sk-qwertz'             => 'Slovak',
+  'slovene'               => 'Slovene',
+  'es'                    => 'Spanish',
   'se-latin1'             => 'Swedish',
   'de_CH-latin1'          => 'Swiss (German)',
   'fr_CH-latin1'          => 'Swiss (French)',
-  'tr_q-latin5'           => 'Turkish'
+  'trq'                   => 'Turkish',
+  'ua'                    => 'Ukrainian'
 ];
 
 // time-out values in minutes
@@ -73,25 +87,29 @@ function prepareConsole(form) {
 
 _(Local keyboard layout)_:
 : <select name="keyboard_layout">
-  <?foreach ($keymaps as $keymap => $text) echo mk_option($console['keyboard_layout'], $keymap, $text, (!isset($console['keyboard_layout']) && $keymap == 'us' ? 'selected' : ''))?>
-</select>
+  <?foreach ($keymaps as $keymap => $text):?>
+  <?=mk_option(_var($console,'keyboard_layout','us'), $keymap, $text)?>
+  <?endforeach;?>
+  </select>
 
 :console_keyboard_help:
 
 _(Local screen blank time)_:
-: <select name="screen_blank" class="narrow">
-  <option value="default" <?php echo (!isset($console['screen_blank']) || $console['screen_blank'] == 'default') ? 'selected' : ''; ?>>Default - 15</option>
-  <option value="disabled" <?php echo ($console['screen_blank'] == 'disabled') ? 'selected' : ''; ?>>Disabled - 0</option>
-  <?php foreach ($minutes as $minute) echo mk_option($console['screen_blank'], $minute, $minute, ($console['screen_blank'] == $minute) ? 'selected' : ''); ?>
-</select> _(minutes)_
+: <select name="screen_blank">
+  <?=mk_option(_var($console,'screen_blank','default'), 'default', _('Default'))?>
+  <?=mk_option(_var($console,'screen_blank','default'), 'disabled', _('Disabled'))?>
+  <?foreach ($minutes as $minute):?>
+  <?=mk_option(_var($console,'screen_blank','default'), $minute, "$minute "._('minute'.($minute==1?'':'s')))?>
+  <?endforeach;?>
+  </select>
 
 :console_screen_help:
 
 _(Persistent Bash History)_:
-: <select name="persist_bash_history" class="narrow">
-   <?=mk_option($console['persist_bash_history'], "0", _('Disabled'))?>
-   <?=mk_option($console['persist_bash_history'], "1", _('Enabled'))?>
-</select>
+: <select name="persist_bash_history">
+  <?=mk_option(_var($console,'persist_bash_history','0'), '0', _('Disabled'))?>
+  <?=mk_option(_var($console,'persist_bash_history','0'), '1', _('Enabled'))?>
+  </select>
 
 :console_bash_help:
 

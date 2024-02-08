@@ -47,7 +47,8 @@ if [[ -f $DOCKER_CFG ]]; then
     elif [[ -e $SYSTEM/${NIC/eth/bond} ]]; then
       NIC=${NIC/eth/bond}
     fi
-    if ! grep -qPm1 "_${NIC^^}(_[0-9]+)?=" $DOCKER_CFG; then
+    CFG=($(grep -Pom2 "_SUBNET_|_${NIC^^}(_[0-9]+)?=" $DOCKER_CFG))
+    if [[ ${CFG[0]} == _SUBNET_ && -z ${CFG[1]} ]]; then
       # interface has changed, update configuration
       X=${NIC//[^0-9]/}
       sed -ri "s/_(BR|BOND|ETH)$X(_[0-9]+)?=/_${NIC^^}\2=/; s/(br|bond|eth)$X(\.[0-9]+)? /$NIC\2 /g" $DOCKER_CFG

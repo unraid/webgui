@@ -51,7 +51,7 @@ function my_temp($value) {
   global $display;
   $unit = _var($display,'unit','C');
   $number = _var($display,'number','.,');
-  return is_numeric($value) ? (($unit=='F' ? round(9/5*$value+32) : str_replace('.', $number[0], $value))." $unit") : $value;
+  return is_numeric($value) ? (($unit=='F' ? fahrenheit($value) : str_replace('.', $number[0], $value)).'&#8201;&#176;'.$unit) : $value;
 }
 function my_disk($name, $raw=false) {
   global $display;
@@ -63,6 +63,9 @@ function my_disks($disk) {
 function my_hyperlink($text, $link) {
   return str_replace(['[',']'],["<a href=\"$link\">","</a>"],$text);
 }
+function main_only($disk) {
+  return _var($disk,'type')=='Parity' || _var($disk,'type')=='Data';
+}
 function parity_only($disk) {
   return _var($disk,'type')=='Parity';
 }
@@ -71,6 +74,9 @@ function data_only($disk) {
 }
 function cache_only($disk) {
   return _var($disk,'type')=='Cache';
+}
+function main_filter($disks) {
+  return array_filter($disks,'main_only');
 }
 function parity_filter($disks) {
   return array_filter($disks,'parity_only');

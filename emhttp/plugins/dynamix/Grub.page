@@ -1,0 +1,67 @@
+Menu="Flash"
+Title="GRUB configuration"
+Tag="edit"
+Cond="file_exists('/boot/grub/grub.cfg')"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$top = $themes1 ? -58 : -44;
+
+$file    = '/boot/grub/grub.cfg';
+$current = @file_get_contents($file);
+$default = @file_get_contents("$file-") ?: $current;
+$current = preg_replace(["/\r\n/","/\r/","/\n$/"],["\n","\n",""],$current);
+$default = preg_replace(["/\r\n/","/\r/","/\n$/"],["\n","\n",""],$default);
+
+$title   = _('Global Configuration');
+?>
+<link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
+
+<script>
+function prepareMenu(form) {
+    form.text.value = form.raw.value+'\n';
+}
+
+function setDefault(form) {
+  $(form).find('textarea.raw').val(<?=json_encode($default)?>).prop('rows',$(this).val().match(/\n/g).length+1).trigger('change');
+}
+</script>
+
+<script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
+
+:grub_cfg_help:
+
+<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareMenu(this)">
+<input type="hidden" name="#include" value="/webGui/include/update.file.php">
+<input type="hidden" name="#file" value="<?=$file;?>">
+<input type="hidden" name="#arg[1]" value="">
+<input type="hidden" name="text" value="">
+
+<div markdown="1">
+_(GRUB configuration)_:
+: <textarea class="raw" name="raw" spellcheck="false" cols="80" rows="20" maxlength="2048" style="min-width: 600px;"><?=$current?></textarea>
+
+</div>
+_(Server boot mode)_:
+: <?=is_dir('/sys/firmware/efi') ? 'UEFI' : 'Legacy'?>
+
+_(Permit UEFI boot mode)_ <input type="checkbox" name="boot" checked disabled>
+: *_(By default UEFI and Legacy boot mode are both enabled when GRUB is used to boot the machine)_.*
+
+<input type="button" value="_(Default)_" onclick="setDefault(this.form)">
+: <input type="submit" value="_(Apply)_"><input type="button" value="_(Done)_" onclick="done()">
+
+:grub_button_help:
+
+</form>

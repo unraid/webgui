@@ -21,22 +21,7 @@ require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 $_SERVER['REQUEST_URI'] = 'dashboard';
 require_once "$docroot/webGui/include/Translations.php";
 
-if (isset($_POST['sys'])) {
-  switch ($_POST['sys']) {
-    case 0: $size = exec("awk '/^MemTotal/{t=$2}/^MemAvailable/{a=$2}END{print (t-a)*1024}' /proc/meminfo 2>/dev/null"); break;
-    case 1: $size = exec("awk '/^size/{print \$3;exit}' /proc/spl/kstat/zfs/arcstats 2>/dev/null"); break;
-    case 2: $size = exec("df --output=used /boot 2>/dev/null|awk '$1!=\"Used\" {print $1*1024}'"); break;
-    case 3: $size = exec("df --output=used /var/log 2>/dev/null|awk '$1!=\"Used\" {print $1*1024}'"); break;
-    case 4: $size = exec("df --output=used /var/lib/docker 2>/dev/null|awk '$1!=\"Used\" {print $1*1024}'"); break;
-   default: $size = 0;
-  }
-  extract(parse_plugin_cfg('dynamix',true));
-  die(my_scale($size,$unit,null,-1,1024)." $unit");
-}
-
-$display = $_POST['display'];
-
-if ($_POST['docker'] && ($display=='icons' || $display=='docker')) {
+if ($_POST['docker']) {
   $user_prefs = $dockerManPaths['user-prefs'];
   $DockerClient = new DockerClient();
   $DockerTemplates = new DockerTemplates();
@@ -78,7 +63,7 @@ if ($_POST['docker'] && ($display=='icons' || $display=='docker')) {
   echo "</td></tr>";
 }
 echo "\0";
-if ($_POST['vms'] && ($display=='icons' || $display=='vms')) {
+if ($_POST['vms']) {
   $user_prefs = '/boot/config/plugins/dynamix.vm.manager/userprefs.cfg';
   $vms = $lv->get_domains() ?: [];
   if (file_exists($user_prefs)) {

@@ -56,8 +56,18 @@ function plugin_update_available($plugin, $os=false) {
     if (version_compare($server, $unraid, '>=')) return $remote;
   }
 }
-function _var(&$name, $key, $default='') {
-  return $name[$key] ?? $default;
+function _var(&$name, $key=null, $default='') {
+  return is_null($key) ? ($name ?? $default) : ($name[$key] ?? $default);
+}
+function celsius($temp) {
+  return round(($temp-32)*5/9);
+}
+function fahrenheit($temp) {
+  return round(9/5*$temp)+32;
+}
+function displayTemp($temp) {
+  global $display;
+  return (is_numeric($temp) && _var($display,'unit')=='F') ? fahrenheit($temp) : $temp;
 }
 function get_value(&$name, $key, $default) {
   global $var;
@@ -76,7 +86,7 @@ function port_name($port) {
   return substr($port,-2)!='n1' ? $port : substr($port,0,-2);
 }
 function exceed($value, $limit, $top=100) {
-  return ($value>$limit && $limit>0 && $value<=$top);
+  return is_numeric($value) && $limit>0 ? ($value>$limit && $value<=$top) : false;
 }
 function ipaddr($ethX='eth0', $prot=4) {
   global $$ethX;
@@ -112,6 +122,23 @@ function isSubpool($name) {
   global $subpools, $_tilde_;
   $subpool = my_explode($_tilde_,$name)[1];
   return in_array($subpool,$subpools) ? $subpool : false;
+}
+function get_nvme_info($device, $info) {
+  switch ($info) {
+  case 'temp':
+    exec("nvme id-ctrl /dev/$device 2>/dev/null | grep -Pom2 '^[wc]ctemp +: \K\d+'",$temp);
+    return [$temp[0]-273, $temp[1]-273];
+  case 'cctemp':
+    return exec("nvme id-ctrl /dev/$device 2>/dev/null | grep -Pom1 '^cctemp +: \K\d+'")-273;
+  case 'wctemp':
+    return exec("nvme id-ctrl /dev/$device 2>/dev/null | grep -Pom1 '^wctemp +: \K\d+'")-273;
+  case 'state':
+    $state = exec("nvme get-feature /dev/$device -f2 2>/dev/null | grep -Pom1 'value:.+\K.$'");
+    return exec("nvme id-ctrl /dev/$device 2>/dev/null | grep -Pom1 '^ps +$state : mp:\K\S+ \S+'");
+  case 'power':
+    $state = exec("nvme get-feature /dev/$device -f2 2>/dev/null | grep -Pom1 'value:.+\K.$'");
+    return exec("smartctl -c /dev/$device 2>/dev/null | grep -Pom1 '^ *$state [+-] +\K[^W]+'");
+  }
 }
 // convert strftime to date format
 function my_date($fmt, $time) {

@@ -307,23 +307,24 @@ var devices = new NchanSubscriber('/sub/devices<?=$spot?",parity":""?>',{subscri
 devices.on('message', function(msg,meta) {
   switch (<?if($spot):?>meta.id.channel()<?else:?>0<?endif;?>) {
   case 0:
-    // array + pool + ua devices
-    var tables = msg.split('\0');
-    // get array state
-    var stopped = tables.pop();
-    for (var n=0; n < tables.length; n++) {
-      // get table name and content
-      var table = tables[n].split('\n');
-      $('#'+table[0]).html(table[1]);
-    }
+    // array + pool + ua + flash devices
+    var get = JSON.parse(msg);
+    for (var name in get) $('#'+name).html(get[name]);
     display_diskio();
     // stop updating when array is stopped
-    if (stopped==1) {
+    if (get.stop==1) {
+      $('thead tr').removeClass().addClass('offline');
 <?if (_var($var,'fsState')=='Started'):?>
       setTimeout(refresh);
 <?else:?>
       if (!timers.stopped) timers.stopped = setTimeout(function(){devices.stop(); arraymonitor.start();},1500);
 <?endif;?>
+    } else {
+      // make truncated descriptions fully visible when hovering over them
+      $('td.desc').hover(
+        function(){if ($(this)[0].offsetWidth < $(this)[0].scrollWidth) {devices.stop();$(this).next().html('');}},
+        function(){if ($(this)[0].offsetWidth < $(this)[0].scrollWidth) {devices.start();}}
+      );
     }
     break;
   case 1:
@@ -388,6 +389,16 @@ function formatWarning(val) {
       confirmButtonText:"_(Ok)_"
     });
   }
+}
+
+window.onunload = function(){
+<?if (_var($var,'fsState')=='Started'):?>
+  mymonitor.stop();
+  devices.stop();
+<?endif;?>
+<?if ($spot==0):?>
+  paritymonitor.stop();
+<?endif;?>
 }
 </script>
 <form name="arrayOps" method="POST" action="/update.htm" target="progressFrame">

@@ -87,7 +87,7 @@ foreach ($disks as $name => $disk) {
    default: $luks = "<a class='info' onclick='return false'><i class='padlock fa fa-lock red-text'></i><span>"._('Unknown encryption state')."</span></a>"; break;
   } else $luks = "";
   echo "<tr><td><a class='view' href=\"/$path/Browse?dir=/mnt/$name\"><i class=\"icon-u-tab\" title=\"",_('Browse')," /mnt/$name\"></i></a>";
-  echo "<a class='info nohand' onclick='return false'><i class='fa fa-$orb orb $color-orb'></i><span style='left:18px'>$help</span></a>$luks<a href=\"/$path/Disk?name=$name\" onclick=\"$.cookie('one','tab1')\">",compress($name),"</a></td>";
+  echo "<a class='info nohand' onclick='return false'><i class='fa fa-$orb orb $color-orb'></i><span style='left:18px'>$help</span></a>$luks<a href=\"/$path/Disk?name=$name\" onclick=\"$.cookie('one','tab1')\">$name</a></td>";
   echo "<td>"._var($disk,'comment')."</td>";
   echo "<td>",disk_share_settings(_var($var,'shareSMBEnabled'), $sec[$name]),"</td>";
   echo "<td>",disk_share_settings(_var($var,'shareNFSEnabled'), $sec_nfs[$name]),"</td>";

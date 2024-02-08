@@ -1025,6 +1025,16 @@ private static $encoding = 'UTF-8';
 		return $arrValidMachineTypes;
 	}
 
+	function ValidateMachineType($machinetype) {
+		$machinetypes=getValidMachineTypes();
+		$type = substr($machinetype,0,strpos($machinetype,'-',3));
+		foreach($machinetypes as $machinetypekey => $machinedetails){
+			$check_type = substr($machinetypekey,0,strlen($type));
+			if ($check_type == $type) break;
+		}
+		return($machinetypekey) ;	
+	}
+	
 	function getLatestMachineType($strType = 'i440fx') {
 		$arrMachineTypes = getValidMachineTypes();
 
@@ -1610,7 +1620,9 @@ private static $encoding = 'UTF-8';
 		$dom = $lv->domain_get_info($res);
 		$state = $lv->domain_state_translate($dom['state']);
 		$vmxml = $lv->domain_get_xml($res) ;
-		file_put_contents("/tmp/cloningxml" ,$vmxml) ;
+		file_put_contents("/tmp/cloningxml" ,$vmxml) ; ## Remove before stable.
+		$storage =  $lv->_get_single_xpath_result($vm, '//domain/metadata/*[local-name()=\'vmtemplate\']/@storage');
+		if (empty($storage)) $storage = "default" ;
 		# if VM running shutdown. Record was running.
 		if ($state != 'shutoff') {write("addLog\0".htmlspecialchars(_("Shuting down $vm current $state"))); $arrResponse = $lv->domain_destroy($vm) ; }
 		# Wait for shutdown?
@@ -1666,7 +1678,7 @@ private static $encoding = 'UTF-8';
 			$file_clone[$diskid]["target"] = $config["disk"][$diskid]["new"] ;
 			}
 
-		$clonedir = $domain_cfg['DOMAINDIR'].$clone ;
+		if ($storage == "default") $clonedir = $domain_cfg['DOMAINDIR'].$clone ; else $clonedir = str_replace('/mnt/user/', "/mnt/$storage/", $domain_cfg['DOMAINDIR']).$clone;
 		if (!is_dir($clonedir)) {
 			mkdir($clonedir,0777,true) ;
 			chown($clonedir, 'nobody');
@@ -1680,13 +1692,13 @@ private static $encoding = 'UTF-8';
 			$target = $disk['target'] ;
 			$source = $disk['source'] ;
 			if ($target == $source) { write("addLog\0".htmlspecialchars(_("New image file is same as old")));  return( false) ; }
-			$sourcerealdisk = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($source)." 2>/dev/null"));
-            $reptgt = str_replace('/mnt/user/', "/mnt/$sourcerealdisk/", $target);
-            $repsrc = str_replace('/mnt/user/', "/mnt/$sourcerealdisk/", $source);
+			if ($storage == "default") $sourcerealdisk = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($source)." 2>/dev/null")); else $sourcerealdisk = $storage;
+			$reptgt = str_replace('/mnt/user/', "/mnt/$sourcerealdisk/", $target);
+			$repsrc = str_replace('/mnt/user/', "/mnt/$sourcerealdisk/", $source);
 
 			$cmdstr = "cp --reflink=always '$repsrc' '$reptgt'" ;
         	if ($reflink == true) { $refcmd = $cmdstr ; } else {$refcmd = false; }
-			$cmdstr = "rsync -ahPIXS  --out-format=%f --info=flist0,misc0,stats0,name1,progress2 '$source' '$target'" ;
+			$cmdstr = "rsync -ahPIXS  --out-format=%f --info=flist0,misc0,stats0,name1,progress2 '$repsrc' '$reptgt'" ;
 			$error = execCommand_nchan_clone($cmdstr,$target,$refcmd) ;
 			if (!$error) { write("addLog\0".htmlspecialchars("Image copied failed."));  return( false) ; }
 		}
@@ -1695,7 +1707,7 @@ private static $encoding = 'UTF-8';
 		write("addLog\0".htmlspecialchars("Creating new XML $clone"));
 
 		$xml = $lv->config_to_xml($config, true) ;
-		file_put_contents("/tmp/clonexml" ,$xml) ;
+		file_put_contents("/tmp/clonexml" ,$xml) ; ## Remove before stable.
 		$rtn = $lv->domain_define($xml) ;
 		return($rtn) ;
 
@@ -1841,6 +1853,8 @@ private static $encoding = 'UTF-8';
 	  $res = $lv->get_domain_by_name($vm);
 	  $dom = $lv->domain_get_info($res);
 	  $state = $lv->domain_state_translate($dom['state']);
+	  $storage =  $lv->_get_single_xpath_result($vm, '//domain/metadata/*[local-name()=\'vmtemplate\']/@storage');
+	  if (empty($storage)) $storage = "default" ;
 
 	  #Get disks for --diskspec
 	  $disks =$lv->get_disk_stats($vm) ;
@@ -1852,16 +1866,23 @@ private static $encoding = 'UTF-8';
 	  foreach($disks as $disk)   {
 		  $file = $disk["file"] ;
 		  $pathinfo =  pathinfo($file) ;
-		  $filenew = $pathinfo["dirname"].'/'.$pathinfo["filename"].'.'.$name.'qcow2' ;
+		  $dirpath = $pathinfo["dirname"];
+		  if ($storage == "default") {
+				$dirpath = $pathinfo["dirname"];
+		  } else {
+				$storagelocation = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($file)." 2>/dev/null"));
+				$dirpath= str_replace('/mnt/user/', "/mnt/$storagelocation/", $dirpath);
+		  } 
+		  $filenew = $dirpath.'/'.$pathinfo["filename"].'.'.$name.'qcow2' ;
 		  $diskspec .= " --diskspec '".$disk["device"]."',snapshot=external,file='".$filenew."'" ;
 		  $capacity = $capacity + $disk["capacity"] ;
 	  }
-	  $dirpath = $pathinfo["dirname"] ;
+
 	  #get memory
 	  $mem = $lv->domain_get_memory_stats($vm) ;
 	  $memory = $mem[6] ;
 
-	  if ($memorysnap = "yes") $memspec = ' --memspec "'.$pathinfo["dirname"].'/memory'.$name.'.mem",snapshot=external' ; else $memspec = "" ;
+	  if ($memorysnap = "yes") $memspec = ' --memspec "'.$dirpath.'/memory'.$name.'.mem",snapshot=external' ; else $memspec = "" ;
 	  $cmdstr = "virsh snapshot-create-as '$vm' --name '$name' $snapshotdesc  --atomic" ;
 
 
@@ -1874,7 +1895,7 @@ private static $encoding = 'UTF-8';
 	  }
 
 	  #Check free space.
-	  $dirfree = disk_free_space($pathinfo["dirname"]) ;
+	  $dirfree = disk_free_space($dirpath) ;
 
 	  $capacity *=  1 ;
 
@@ -1883,8 +1904,8 @@ private static $encoding = 'UTF-8';
 	  #Copy nvram
 	  if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_create_snapshot($lv->domain_get_uuid($vm),$name) ;
 
-	  $xmlfile = $pathinfo["dirname"]."/".$name.".running" ;
-	  file_put_contents("/tmp/xmltst", "$xmlfile" ) ;
+	  $xmlfile = $dirpath."/".$name.".running" ;
+	  file_put_contents("/tmp/xmltst", "$xmlfile" ) ;## Remove before stable.
 	  if ($state == "running") exec("virsh dumpxml '$vm' > ".escapeshellarg($xmlfile),$outxml,$rtnxml) ;
 
 	  $output= [] ;
@@ -1943,7 +1964,9 @@ private static $encoding = 'UTF-8';
 					  }
 				  }
 			  $xml = custom::createXML('domain',$xmlobj)->saveXML();
+			  if (!strpos($xml,'<vmtemplate xmlns="unraid"')) $xml=str_replace('<vmtemplate','<vmtemplate xmlns="unraid"',$xml);
 			  $new = $lv->domain_define($xml);
+			  file_put_contents("/tmp/xmlrevert", "$xml" ) ;## Remove before stable.
 			  if ($new)
 				  $arrResponse  = ['success' => true] ; else
 				  $arrResponse = ['error' => $lv->get_last_error()] ;
@@ -1978,13 +2001,14 @@ private static $encoding = 'UTF-8';
 					  $xml = file_get_contents($xmlfile) ;
 					  $xmlobj = custom::createArray('domain',$xml) ;
 					  $xml = custom::createXML('domain',$xmlobj)->saveXML();
+					  if (!strpos($xml,'<vmtemplate xmlns="unraid"')) $xml=str_replace('<vmtemplate','<vmtemplate xmlns="unraid"',$xml);
+					  file_put_contents("/tmp/xmlrevert2", "$xml" ) ;## Remove before stable.
 					  $rtn = $lv->domain_define($xml) ;
 
 					  # Restore Memory.
 
 					  $makerun = true ;
 					  if ($makerun == true) exec("virsh restore ".escapeshellarg($memoryfile)) ;
-					  #exec("virsh restore $memoryfile") ;
 					  }
 					  #Delete Metadata only.
 					  if ($actionmeta == "yes") {
@@ -2027,8 +2051,6 @@ private static $encoding = 'UTF-8';
 		  $reversed = array_reverse($output) ;
 		  $snaps[$vm][$rev] = $reversed ;
 		  $pathinfo =  pathinfo($file) ;
-		  #$filenew = $pathinfo["dirname"].'/'.$pathinfo["filename"].'.'.$name.'qcow2' ;
-		  #$diskspec .= " --diskspec ".$disk["device"].",snapshot=external,file=".$filenew ;
 		  $capacity = $capacity + $disk["capacity"] ;
 	  }
 

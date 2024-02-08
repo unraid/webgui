@@ -1,0 +1,121 @@
+Menu="UNRAID-OS"
+Title="Wake On LAN"
+Icon="fa-bell"
+Tag="server"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+
+if (count($_POST)) {
+  $cfg = NULL ;
+  if ($_POST['#apply'] == "_(Save)_") {
+    foreach($_POST as $postkey=>$data) {
+      if ($postkey=="#apply") continue;
+      $keys = explode(";",$postkey);
+      if (count($keys) >1) $update_file[$keys[1]][$keys[2]][$keys[0]]=$data;        
+    }
+
+    foreach($update_file as $type => $types) {
+      foreach($types as $name => $details) {
+        if ($details['user_mac'] == "") $details['user_mac'] = "None Defined";
+        if ($details['user_mac'] == "None Defined" && $details['enable'] == "enable") unset($update_file[$type][$name]) ;
+      }
+    }
+  }
+  unset($_POST) ;
+  file_put_contents("/boot/config/wol.json",json_encode($update_file));
+  #echo '<meta http-equiv="refresh" content="0;url=/Tools">';
+  echo '<meta http-equiv="refresh" content="0">';
+  #unset($_SESSION['csrf_token']);
+ 
+  
+
+}
+?>
+<script src="/webGui/javascript/jquery.tablesorter.widgets.js"></script>
+
+<script>
+function showWOL(options, init = false) {
+  option = options;
+  if (init) {
+  $('#wolsearch').prop('disabled', true);
+  $.post('/webGui/include/WOL.php',{table:'t1load',option:"all"},function(data){
+    clearTimeout(timers.refresh);
+    filter = [];
+    $("#t1").trigger("destroy");
+    $('#t1').html(data.html);
+    $('#t1').tablesorter({
+      sortList: [[0,0]],
+      sortAppend: [[0,0]],
+      widgets: ['stickyHeaders','filter','zebra'],
+      widgetOptions: {
+        // on black and white, offset is height of #menu
+        // on azure and gray, offset is height of #header
+        stickyHeaders_offset: ($('#menu').height() < 50) ? $('#menu').height() : $('#header').height(),
+        filter_columnFilters: false,
+        zebra: ["normal-row","alt-row"]
+      }
+    });
+    $('div.spinner.fixed').hide('slow');
+    $('#wolsearch').prop('disabled', false);
+    $('#select').prop('disabled', false);
+    $('#rebuild').prop('disabled', data.init);
+  },"json");
+  } else {
+    filter = [];
+    filterWOL();
+  }
+}
+
+function filterWOL() {
+  var totalColumns = $('#t1')[0].config.columns;
+  var filter = [];
+  filter[totalColumns] = $('#wolsearch').val(); // this searches all columns
+  $('#t1').trigger('search', [filter]);
+}
+
+function showWOLupdate() {
+  $('#rebuild').prop('disabled', true);
+  $('#t1').html("");
+  $('#wolsearch').prop('disabled', true);
+  $('#select').prop('disabled', true);
+  $('div.spinner.fixed').show('slow');
+  $.post('/webGui/include/WOL.php',{table:'t1create',option:"all"},function(data){
+    $('#rebuild').prop('disabled', false);
+    showWOL("all",true);
+    $('div.spinner.fixed').hide('slow');
+  });
+}
+
+
+function maccreate(name) {
+ 
+  $.getJSON("/plugins/dynamix.vm.manager/include/VMajax.php?action=generate-mac", function( data ) {
+			if (data.mac) {
+				$('#'+name).val(data.mac);
+			}
+		});
+}
+
+showWOL("all",true);
+</script>
+
+:WOL_intro_help:
+
+<form autocomplete="off" onsubmit="return false;"><span><input class="t1 search" id="wolsearch" type="search" placeholder="Search..." onchange="filterWOL();"></span></form>
+<pre><form name="WOL" id="WOL" method="POST" class="js-confirm-leave"  >
+<table name="t1"id='t1' class="t1 unraid  tablesorter" >
+<tr><td><div class="spinner"></div></td></tr></table></pre><br>
+<input type="button" value="_(Done)_" onclick="done()">
+<input type="submit" name="#apply" id='#apply' value="_(Save)_" >
+</form>
+
