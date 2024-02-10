@@ -49,7 +49,6 @@ if (isset($_POST['#file'])) {
   $cleanup = isset($_POST['#cleanup']);
   $default = ($file && isset($_POST['#default'])) ? @parse_ini_file("$docroot/plugins/".basename(dirname($file))."/default.cfg", $section) : [];
 
-  $keys = is_file($file) ? (parse_ini_file($file, $section) ?: []) : [];
   // the 'save' switch can be reset by the include file to disallow settings saving
   $save = true;
   if (isset($_POST['#include'])) {
@@ -62,6 +61,7 @@ if (isset($_POST['#file'])) {
   if ($save) {
     $text = "";
     if ($section) {
+      $keys = is_file($file) ? (parse_ini_file($file, $section) ?: []) : [];
       foreach ($_POST as $key => $value) if ($key[0]!='#') $keys[$section][$key] = $default[$section][$key] ?? $value;
       foreach ($keys as $section => $block) {
         $text .= "[$section]\n";
