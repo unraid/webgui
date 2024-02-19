@@ -46,11 +46,20 @@ if [[ -d /sys/firmware/efi/efivars ]]; then
   fi
 fi
 
-# If /run exists, mount a tmpfs on it (unless the
-# initrd has already done so):
+# Get CPU thread count
+THREAD_COUNT=$(grep -c ^processor /proc/cpuinfo)
+
+# If /run exists, mount a tmpfs on it (unless the initrd has already done
+# so), create the tmpfs based on the CPU thread count:
 if [[ -d /run ]]; then
   if ! /bin/grep -wq "tmpfs /run tmpfs" /proc/mounts; then
-    /sbin/mount -v -n -t tmpfs tmpfs /run -o mode=0755,size=32M,nodev,nosuid,noexec
+    if [[ $THREAD_COUNT -ge 64 ]]; then
+      /sbin/mount -v -n -t tmpfs tmpfs /run -o mode=0755,size=128M,nodev,nosuid,noexec
+    elif [[ $THREAD_COUNT -ge 32 ]]; then
+      /sbin/mount -v -n -t tmpfs tmpfs /run -o mode=0755,size=64M,nodev,nosuid,noexec
+    else
+      /sbin/mount -v -n -t tmpfs tmpfs /run -o mode=0755,size=32M,nodev,nosuid,noexec
+    fi
   fi
 fi
 
