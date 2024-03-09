@@ -139,7 +139,7 @@ function download_url($url, $path="", $bg=false, $timeout=15) {
   ]);
   $out = curl_exec($ch);
   curl_close($ch);
-  if ($path) file_put_contents_atomic_atomic($path,$out);
+  if ($path) file_put_contents_atomic($path,$out);
   return $out ?: false;
 }
 function geturls_certdetails($file, $hostname, $ip="") {
