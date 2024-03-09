@@ -20,7 +20,7 @@ case 'get':
   echo @file_get_contents($charts) ?: '{"cpu":"","rxd":"","txd":""}';
   break;
 case 'set':
-  file_put_contents($charts,$_POST['data']);
+  file_put_contents_atomic($charts,$_POST['data']);
   break;
 }
 ?>

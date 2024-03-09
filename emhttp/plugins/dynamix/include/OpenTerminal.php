@@ -32,7 +32,7 @@ if (!empty($display['tty'])) exec("sed -ri 's/fontSize=[0-9]+/fontSize={$display
 function wait($name,$cmd) {
   global $run,$wait;
   $exec = "/var/tmp/$name.run.sh";
-  file_put_contents($exec,"#!/bin/bash\n$run $cmd\n$wait\n");
+  file_put_contents_atomic($exec,"#!/bin/bash\n$run $cmd\n$wait\n");
   chmod($exec,0755);
   return $exec;
 }

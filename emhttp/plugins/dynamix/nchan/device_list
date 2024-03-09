@@ -369,13 +369,13 @@ function update_translation($locale) {
     $text = "$docroot/languages/$locale/translations.txt";
     if (file_exists($text)) {
       $store = "$docroot/languages/$locale/translations.dot";
-      if (!file_exists($store)) file_put_contents($store,serialize(parse_lang_file($text)));
+      if (!file_exists($store)) file_put_contents_atomic($store,serialize(parse_lang_file($text)));
       $language = unserialize(file_get_contents($store));
     }
     $text = "$docroot/languages/$locale/main.txt";
     if (file_exists($text)) {
       $store = "$docroot/languages/$locale/main.dot";
-      if (!file_exists($store)) file_put_contents($store,serialize(parse_lang_file($text)));
+      if (!file_exists($store)) file_put_contents_atomic($store,serialize(parse_lang_file($text)));
       $language = array_merge($language,unserialize(file_get_contents($store)));
     }
   }
@@ -476,7 +476,7 @@ while (true) {
       }
       $data = []; foreach ($log as $key => $value) $data[] = "$key=\"$value\"";
       $off &= !empty(_var($Cache[$pool],'uuid'));
-      file_put_contents($pool_log,implode("\n",$data));
+      file_put_contents_atomic($pool_log,implode("\n",$data));
       $echo[$a][] = "<tr class='tr_last'><td>"._('Slots').":</td><td colspan='8'><span class='slots'><span class='slots-left'>".cache_slots($off,$pool,_var($Cache[$pool],'devicesSb'),_var($Cache[$pool],'slots',0))."</span>";
       $zfsPool = strstr(_var($Cache[$pool],'fsType'),'zfs') && !isSubpool($pool);
       if ($zfsPool) {

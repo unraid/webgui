@@ -47,7 +47,7 @@ case 'upload':
   if ($_POST['start']==0) {
     $my = pathinfo($file); $n = 0;
     while (file_exists($file)) $file = $my['dirname'].'/'.preg_replace('/ \(\d+\)$/','',$my['filename']).' ('.++$n.')'.($my['extension'] ? '.'.$my['extension'] : '');
-    file_put_contents($local,$file);
+    file_put_contents_atomic($local,$file);
     // create file with proper permissions and owner
     touch($file);
     chgrp($file,'users');
@@ -59,7 +59,7 @@ case 'upload':
     delete_file($file);
     die('stop');
   }
-  if (file_put_contents($file,base64_decode($_POST['data']),FILE_APPEND)===false) {
+  if (file_put_contents_atomic($file,base64_decode($_POST['data']),FILE_APPEND)===false) {
     delete_file($file);
     die('error');
   }
@@ -120,7 +120,7 @@ case 'edit':
   $file = validname(rawurldecode($_POST['file']));
   die($file ? file_get_contents($file) : '');
 case 'save':
-  if ($file = validname(rawurldecode($_POST['file']))) file_put_contents($file,rawurldecode($_POST['data']));
+  if ($file = validname(rawurldecode($_POST['file']))) file_put_contents_atomic($file,rawurldecode($_POST['data']));
   die();
 case 'stop':
   $file = htmlspecialchars_decode(rawurldecode($_POST['file']));
@@ -169,10 +169,10 @@ case 'file':
     // add task to queue
     $task = rawurldecode($_POST['task']);
     $data = "task=\"$task\"\n".implode("\n",$data)."\n";
-    file_put_contents($jobs,$data,FILE_APPEND);
+    file_put_contents_atomic($jobs,$data,FILE_APPEND);
   } else {
     // start operation
-    file_put_contents($active,implode("\n",$data));
+    file_put_contents_atomic($active,implode("\n",$data));
   }
   die();
 }

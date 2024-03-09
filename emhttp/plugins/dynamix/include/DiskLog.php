@@ -23,5 +23,5 @@ foreach ($disks as $disk => $block) {
   $text .= "[$disk]\n";
   foreach ($block as $key => $value) $text .= "$key=\"$value\"\n";
 }
-file_put_contents($file,$text);
+file_put_contents_atomic($file,$text);
 ?>

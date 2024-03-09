@@ -85,7 +85,7 @@ if (empty($json['bundle'])) {
   }
   response_complete(406, '{"error":"'.$strError.'"}');
 }
-file_put_contents("{$certPath}.new", $json['bundle']);
+file_put_contents_atomic("{$certPath}.new", $json['bundle']);
 rename("{$certPath}.new", "$certPath");
 response_complete($httpcode, $result, _('LE Cert Provisioned successfully'));
 ?>

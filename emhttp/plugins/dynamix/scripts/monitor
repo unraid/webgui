@@ -326,8 +326,8 @@ if ($saved) {
     foreach ($block as $key => $value) $text .= no_tilde($key)."=\"$value\"\n";
   }
   if ($text) {
-    if ($text != @file_get_contents($ram)) file_put_contents($ram, $text);
-    if (!file_exists($rom) || exec("diff -q $ram $rom")) file_put_contents($rom, $text);
+    if ($text != @file_get_contents($ram)) file_put_contents_atomic($ram, $text);
+    if (!file_exists($rom) || exec("diff -q $ram $rom")) file_put_contents_atomic($rom, $text);
   } else {
     delete_file($ram,$rom);
   }

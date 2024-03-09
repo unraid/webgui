@@ -57,7 +57,7 @@ function diskname($name) {
 function reply($text,$type) {
   global $oldkey,$newkey,$delkey;
   $reply = _var($_POST,'#reply');
-  if (realpath(dirname($reply))=='/var/tmp') file_put_contents($reply,$text."\0".$type);
+  if (realpath(dirname($reply))=='/var/tmp') file_put_contents_atomic($reply,$text."\0".$type);
   delete_file($oldkey);
   if (_var($_POST,'newinput','text')=='text' || $delkey) delete_file($newkey);
   die();
@@ -66,10 +66,10 @@ function reply($text,$type) {
 if (isset($_POST['oldinput'])) {
   switch ($_POST['oldinput']) {
   case 'text':
-    file_put_contents($oldkey,base64_decode(_var($_POST,'oldluks')));
+    file_put_contents_atomic($oldkey,base64_decode(_var($_POST,'oldluks')));
     break;
   case 'file':
-    file_put_contents($oldkey,base64_decode(explode(';base64,',_var($_POST,'olddata','x;base64,'))[1]));
+    file_put_contents_atomic($oldkey,base64_decode(explode(';base64,',_var($_POST,'olddata','x;base64,'))[1]));
     break;
   }
 } else {
@@ -86,12 +86,12 @@ if ($error > 0) reply(_('Incorrect existing key'),'warning');
 if (isset($_POST['newinput'])) {
   switch ($_POST['newinput']) {
   case 'text':
-    file_put_contents($newkey,base64_decode(_var($_POST,'newluks')));
+    file_put_contents_atomic($newkey,base64_decode(_var($_POST,'newluks')));
     $luks = 'luksKey';
     $data = _var($_POST,'newluks');
     break;
   case 'file':
-    file_put_contents($newkey,base64_decode(explode(';base64,',_var($_POST,'newdata','x;base64,'))[1]));
+    file_put_contents_atomic($newkey,base64_decode(explode(';base64,',_var($_POST,'newdata','x;base64,'))[1]));
     $luks = 'luksKey=&luksKeyfile';
     $data = $newkey;
     break;
