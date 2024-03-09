@@ -68,7 +68,7 @@ function update_translation($locale) {
     $text = "$docroot/languages/$locale/translations.txt";
     if (file_exists($text)) {
       $store = "$docroot/languages/$locale/translations.dot";
-      if (!file_exists($store)) file_put_contents($store,serialize(parse_lang_file($text)));
+      if (!file_exists($store)) file_put_contents_atomic($store,serialize(parse_lang_file($text)));
       $language = unserialize(file_get_contents($store));
     }
   }

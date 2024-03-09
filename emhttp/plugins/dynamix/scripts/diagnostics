@@ -139,7 +139,7 @@ function download_url($url, $path="", $bg=false, $timeout=15) {
   ]);
   $out = curl_exec($ch);
   curl_close($ch);
-  if ($path) file_put_contents($path,$out);
+  if ($path) file_put_contents_atomic_atomic($path,$out);
   return $out ?: false;
 }
 function geturls_certdetails($file, $hostname, $ip="") {
@@ -380,7 +380,7 @@ run("top -bn1 -o%CPU 2>/dev/null|todos >".escapeshellarg("/$diag/system/top.txt"
 
 // make Unraid version reference
 $unraid = parse_ini_file('/etc/unraid-version');
-file_put_contents("/$diag/unraid-".$unraid['version'].".txt",$unraid['version']."\r\n");
+file_put_contents_atomic("/$diag/unraid-".$unraid['version'].".txt",$unraid['version']."\r\n");
 
 // add bz*.sha256 values
 run("tail /boot/bz*.sha256 >> ".escapeshellarg("/$diag/unraid-".$unraid['version'].".txt"));
@@ -398,16 +398,16 @@ if (file_exists($changes)) {
     }
   }
   $previous_version = "Previous Version: ".$version;
-  file_put_contents("/$diag/unraid-".$unraid['version'].".txt", "\r\n".$previous_version."\r\n", FILE_APPEND);
+  file_put_contents_atomic("/$diag/unraid-".$unraid['version'].".txt", "\r\n".$previous_version."\r\n", FILE_APPEND);
 } else {
-  file_put_contents("/$diag/unraid-".$unraid['version'].".txt", "\r\nNo Previous Version Found\r\n", FILE_APPEND);
+  file_put_contents_atomic("/$diag/unraid-".$unraid['version'].".txt", "\r\nNo Previous Version Found\r\n", FILE_APPEND);
 }
 
 // copy ini variables
 foreach (glob("$path/*.ini") as $file) {
   $ini = basename($file,".ini");
   // skip users file in anonymized mode
-  if ($all || $ini != "users") file_put_contents("/$diag/system/vars.txt",preg_replace(["/\n/","/^Array/"],["\r\n",$ini],anonymize(print_r(parse_ini_file($file,true),true),1)),FILE_APPEND);
+  if ($all || $ini != "users") file_put_contents_atomic("/$diag/system/vars.txt",preg_replace(["/\n/","/^Array/"],["\r\n",$ini],anonymize(print_r(parse_ini_file($file,true),true),1)),FILE_APPEND);
 }
 
 // Create loads.txt
@@ -425,7 +425,7 @@ if (file_exists("$path/diskload.ini")){
     }
   }
 }
-file_put_contents("/$diag/system/loads.txt",$cpuload.implode("\r\n",$loadTxt));
+file_put_contents_atomic("/$diag/system/loads.txt",$cpuload.implode("\r\n",$loadTxt));
 
 // individual commands execution (suppress errors)
 run("lscpu 2>/dev/null|todos >".escapeshellarg("/$diag/system/lscpu.txt"));
@@ -446,9 +446,9 @@ run("dmidecode --type 17 2>/dev/null|todos >>".escapeshellarg("/$diag/system/mem
 // create ethernet information information (suppress errors)
 foreach ($ports as $port) {
   run("ethtool ".escapeshellarg($port)." 2>/dev/null|todos >>".escapeshellarg("/$diag/system/ethtool.txt"));
-  file_put_contents("/$diag/system/ethtool.txt", "\r\n", FILE_APPEND);
+  file_put_contents_atomic("/$diag/system/ethtool.txt", "\r\n", FILE_APPEND);
   run("ethtool -i ".escapeshellarg($port)." 2>/dev/null|todos >>".escapeshellarg("/$diag/system/ethtool.txt"));
-  file_put_contents("/$diag/system/ethtool.txt", "--------------------------------\r\n", FILE_APPEND);
+  file_put_contents_atomic("/$diag/system/ethtool.txt", "--------------------------------\r\n", FILE_APPEND);
 }
 run("ip -br a|todos >".escapeshellarg("/$diag/system/ifconfig.txt"));
 if (!$all) maskIP("/$diag/system/ifconfig.txt");
@@ -494,9 +494,9 @@ foreach ($files as $file) {
   $home = shareDisks($share);
   $home = $home ? "# Share exists on $home\r\n" : "# Share does not exist\r\n";
   $shareDisk[] = str_pad(basename($dest,'.cfg'),34).str_pad(exec("grep -m1 'shareUseCache' ".escapeshellarg($file)),24).$home;
-  file_put_contents($dest,$home.file_get_contents($dest));
+  file_put_contents_atomic($dest,$home.file_get_contents($dest));
 }
-file_put_contents("/$diag/shares/shareDisks.txt",implode($shareDisk));
+file_put_contents_atomic("/$diag/shares/shareDisks.txt",implode($shareDisk));
 
 // create default user shares information
 $shares = (array)@parse_ini_file("$path/shares.ini", true);
@@ -506,8 +506,8 @@ foreach ($shares as $share) {
     $home = shareDisks($name);
     $home = $home ? "# Share exists on $home\r\n" : "# Share does not exist\r\n";
     $file = anonymize("/$diag/shares/$name.cfg",2);
-    file_put_contents($file,"# This share has default settings.\r\n".$home);
-    file_put_contents("/$diag/shares/shareDisks.txt",str_pad(basename($file,'.cfg'),34).str_pad('shareUseCache="no"',24).$home,FILE_APPEND);
+    file_put_contents_atomic($file,"# This share has default settings.\r\n".$home);
+    file_put_contents_atomic("/$diag/shares/shareDisks.txt",str_pad(basename($file,'.cfg'),34).str_pad('shareUseCache="no"',24).$home,FILE_APPEND);
   }
 }
 
@@ -604,10 +604,10 @@ foreach ($plugins as $plugin) {
   $installedPlugins .= "\r\n";
 }
 $installedPlugins = $installedPlugins ?: "No additional Plugins Installed";
-file_put_contents("/$diag/system/plugins.txt",$installedPlugins);
+file_put_contents_atomic("/$diag/system/plugins.txt",$installedPlugins);
 
 // determine urls
-file_put_contents("/$diag/system/urls.txt",geturls());
+file_put_contents_atomic("/$diag/system/urls.txt",geturls());
 
 // copy libvirt information (if existing)
 $libvirtd = "/var/log/libvirt/libvirtd.log";
@@ -632,7 +632,7 @@ if ($qemu) {
     }
   }
 } else {
-  file_put_contents("/$diag/qemu/no qemu log files","");
+  file_put_contents_atomic("/$diag/qemu/no qemu log files","");
 }
 
 // copy VM XML config files
@@ -699,7 +699,7 @@ if (file_exists("/usr/local/sbin/unraid-api")) {
 $testparm = run("testparm -s 2>/dev/null");
 if (!$all)
   $testparm = preg_replace("/(?<=\[.)(.*)(?=.\])|(?<=(write list = .)|(comment = .)|(valid users = .)|(path = \/mnt\/addons\/.)|(path = \/mnt\/remotes\/.)|(path = \/mnt\/disks\/.)|(path = \/mnt\/user\/.)).*(?=.)/","...",$testparm);
-file_put_contents("/$diag/system/testparm.txt",str_replace("\n","\r\n",$testparm));
+  file_put_contents_atomic("/$diag/system/testparm.txt",str_replace("\n","\r\n",$testparm));
 maskIP("/$diag/system/testparm.txt");
 
 // copy ntp.conf

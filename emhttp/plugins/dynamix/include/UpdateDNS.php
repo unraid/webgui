@@ -229,7 +229,7 @@ if ($cli) {
       foreach ($block as $key => $value) if (strlen($value)) $pairs .= "$key=\"$value\"\n";
       if ($pairs) $text .= "[$section]\n".$pairs;
     }
-    if ($text) file_put_contents($myservers_flash_cfg_path, $text);
+    if ($text) file_put_contents_atomic($myservers_flash_cfg_path, $text);
     // need nginx reload
     $reloadNginx = true;
   }
@@ -338,7 +338,7 @@ $datanew = implode("\n",$post)."\n";
 if ($datanew == $dataprev && (time()-filemtime($datafile) < $maxage)) {
   response_complete(204, null, _('No change to report'));
 }
-file_put_contents($datafiletmp,$datanew);
+file_put_contents_atomic($datafiletmp,$datanew);
 rename($datafiletmp, $datafile);
 
 // do not submit the wanip, it will be captured from the submission if needed for remote access

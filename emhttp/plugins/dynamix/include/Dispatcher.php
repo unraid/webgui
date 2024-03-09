@@ -27,5 +27,5 @@ foreach ($keys as $section => $block) {
   if ($pairs) $text .= "[$section]\n".$pairs;
 }
 
-if ($text) file_put_contents($_POST['#cfg'], $text); else @unlink($_POST['#cfg']);
+if ($text) file_put_contents_atomic($_POST['#cfg'], $text); else @unlink($_POST['#cfg']);
 ?>

@@ -31,7 +31,7 @@ case 'load':
     $verifiedPNG   = "$temp/".basename($file);
     if (file_exists($initialUpload)) unlink($initialUpload);
     if (file_exists($verifiedPNG)) unlink($verifiedPNG);
-    $result = file_put_contents($initialUpload,base64_decode(str_replace(['data:image/png;base64,',' '],['','+'],$_POST['filedata'])));
+    $result = file_put_contents_atomic($initialUpload,base64_decode(str_replace(['data:image/png;base64,',' '],['','+'],$_POST['filedata'])));
     if ($result) {
       $img = @imagecreatefrompng($initialUpload);
       if ($img) {
@@ -71,7 +71,7 @@ case 'add':
   $path = "$docroot/languages/$file";
   $save = "/tmp/lang-$file.zip";
   exec("mkdir -p $path");
-  if ($result = file_put_contents($save,base64_decode(preg_replace('/^data:.*;base64,/','',$_POST['filedata'])))) {
+  if ($result = file_put_contents_atomic($save,base64_decode(preg_replace('/^data:.*;base64,/','',$_POST['filedata'])))) {
     @unlink("$docroot/webGui/javascript/translate.$file.js");
     foreach (glob("$path/*.dot",GLOB_NOSORT) as $dot_file) unlink($dot_file);
     exec("unzip -qqjLo -d $path $save", $dummy, $err);

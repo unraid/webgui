@@ -80,7 +80,7 @@ function wgState($vtun,$state,$type=0) {
   $tmp = '/tmp/wg-quick.tmp';
   $log = '/var/log/wg-quick.log';
   exec("timeout $t1 wg-quick $state $vtun 2>$tmp");
-  file_put_contents($log, "wg-quick $state $vtun\n".file_get_contents($tmp)."\n", FILE_APPEND);
+  file_put_contents_atomic($log, "wg-quick $state $vtun\n".file_get_contents($tmp)."\n", FILE_APPEND);
   if ($type==8) {
     // make VPN tunneled access for Docker containers only
     $table = exec("grep -Pom1 'fwmark \K[\d]+' $tmp");
@@ -172,7 +172,7 @@ function autostart($vtun,$cmd) {
     case 'off': if ($key!==false) unset($list[$key]); break;
     case 'on' : if ($key===false) $list[] = $vtun; break;
   }
-  if (count($list)) file_put_contents($autostart,implode(' ',$list)); else delete_file($autostart);
+  if (count($list)) file_put_contents_atomic($autostart,implode(' ',$list)); else delete_file($autostart);
 }
 function createPeerFiles($vtun) {
   global $etc,$peers,$name,$gone,$vpn;
@@ -210,13 +210,13 @@ function createPeerFiles($vtun) {
     $cfgnew = implode("\n",$peer)."\n";
     if ($cfgnew !== $cfgold && $vpn==0) {
       $list[] = "$vtun: peer $id (".($peer[1][0]=='#' ? substr($peer[1],1) : _('no name')).')';
-      file_put_contents($cfg,$cfgnew);
+      file_put_contents_atomic($cfg,$cfgnew);
       $png = str_replace('.conf','.png',$cfg);
       exec("qrencode -t PNG -r $cfg -o $png");
     }
   }
   // store the peer names which are updated
-  if (count($list)) file_put_contents($tmp,implode("<br>",$list)); else delete_file($tmp);
+  if (count($list)) file_put_contents_atomic($tmp,implode("<br>",$list)); else delete_file($tmp);
 }
 function createList($list) {
   return implode(', ',array_unique(array_filter(array_map('trim',explode(',',$list)))));
@@ -385,8 +385,8 @@ case 'update':
   addDocker($vtun);
   $upstate = status($vtun);
   wgState($vtun,'down');
-  file_put_contents($file,implode("\n",$conf)."\n");
-  file_put_contents($cfg,implode("\n",$user)."\n");
+  file_put_contents_atomic($file,implode("\n",$conf)."\n");
+  file_put_contents_atomic($cfg,implode("\n",$user)."\n");
   createPeerFiles($vtun);
   if ($upstate) wgState($vtun,'up',_var($_POST,'#type'));
   // if $tunip (with dots to slashes) not found in nginx config, then reload nginx to add it
@@ -510,8 +510,8 @@ case 'import':
   $vtun = vtun();
   parseInput($vtun,$import,$x);
   addPeer($x);
-  file_put_contents("$etc/$vtun.conf",implode("\n",$conf)."\n");
-  file_put_contents("$etc/$vtun.cfg",implode("\n",$user)."\n");
+  file_put_contents_atomic("$etc/$vtun.conf",implode("\n",$conf)."\n");
+  file_put_contents_atomic("$etc/$vtun.cfg",implode("\n",$user)."\n");
   delPeer($vtun);
   addDocker($vtun);
   autostart($vtun,'off');
@@ -535,7 +535,7 @@ case 'upnp':
       foreach ($desc as $url) if ($url && strpos($url,$gw)!==false) {$xml = $url; break;}
     }
   } else $xml = "";
-  file_put_contents($upnp,$xml);
+  file_put_contents_atomic($upnp,$xml);
   echo $xml;
   break;
 case 'upnpc':

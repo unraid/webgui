@@ -128,7 +128,7 @@ foreach ($ini as $name => $port) {
 }
 $new[] = "SYSNICS=\"$i\"";
 
-file_put_contents($cfg,implode("\r\n",$new)."\r\n");
+file_put_contents_atomic($cfg,implode("\r\n",$new)."\r\n");
 // start interface with updated (new) configuration
 // don't execute when only interface description has changed
 if ($run) {

@@ -20,10 +20,12 @@ require_once "$docroot/webGui/include/publish.php";
 
 while (true) {
   $echo = shell_exec("$notify get");
-  $md5_new = md5($echo,true);
-  if ($md5_new !== $md5_old) {
-    publish('notify', $echo);
-    $md5_old = $md5_new;
+  if ( $echo ) {
+    $md5_new = md5($echo,true);
+    if ($md5_new !== $md5_old) {
+      publish('notify', $echo);
+      $md5_old = $md5_new;
+    }
   }
   sleep(3);
 }

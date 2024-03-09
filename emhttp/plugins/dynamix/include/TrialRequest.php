@@ -21,7 +21,7 @@ require_once "$docroot/webGui/include/Translations.php";
 $var = parse_ini_file('state/var.ini');
 
 if (!empty($_POST['trial'])) {
-  file_put_contents('/boot/config/Trial.key', base64_decode($_POST['trial']));
+  file_put_contents_atomic('/boot/config/Trial.key', base64_decode($_POST['trial']));
   exit;
 }
 ?>

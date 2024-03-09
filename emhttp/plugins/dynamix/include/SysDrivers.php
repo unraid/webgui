@@ -107,7 +107,7 @@ case 't1load':
 case "update":
   $conf = $_POST['conf'];
   $module = $_POST['module'];
-  if ($conf == "") $error = unlink("/boot/config/modprobe.d/$module.conf"); else $error = file_put_contents("/boot/config/modprobe.d/$module.conf",$conf);
+  if ($conf == "") $error = unlink("/boot/config/modprobe.d/$module.conf"); else $error = file_put_contents_atomic("/boot/config/modprobe.d/$module.conf",$conf);
   getmodules($module);
   $return = $arrModules[$module];
   $return['supportpage'] = $supportpage;

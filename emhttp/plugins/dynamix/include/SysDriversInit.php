@@ -21,7 +21,7 @@ $supportpage  = true;
 $modtoplgfile = "/tmp/modulestoplg.json";
 $sysdrvfile   = "/tmp/sysdrivers.json";
 $arrModtoPlg  = file_exists($modtoplgfile) ? json_decode(file_get_contents($modtoplgfile), true) : '';
-file_put_contents("/tmp/sysdrivers.init","1");
+file_put_contents_atomic("/tmp/sysdrivers.init","1");
 
 SysDriverslog("SysDrivers Build Starting");
 modtoplg();

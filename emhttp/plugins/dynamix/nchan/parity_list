@@ -50,13 +50,13 @@ function update_translation($locale) {
     $text = "$docroot/languages/$locale/translations.txt";
     if (file_exists($text)) {
       $store = "$docroot/languages/$locale/translations.dot";
-      if (!file_exists($store)) file_put_contents($store,serialize(parse_lang_file($text)));
+      if (!file_exists($store)) file_put_contents_atomic($store,serialize(parse_lang_file($text)));
       $language = unserialize(file_get_contents($store));
     }
     $text = "$docroot/languages/$locale/main.txt";
     if (file_exists($text)) {
       $store = "$docroot/languages/$locale/main.dot";
-      if (!file_exists($store)) file_put_contents($store,serialize(parse_lang_file($text)));
+      if (!file_exists($store)) file_put_contents_atomic($store,serialize(parse_lang_file($text)));
       $language = array_merge($language,unserialize(file_get_contents($store)));
     }
   }
@@ -65,7 +65,7 @@ function create_sync($file) {
   return file_exists($file) ? explode(',',file_get_contents($file)) : [];
 }
 function create_file($file,...$data) {
-  if (!file_exists($file)) file_put_contents($file,implode(',',$data));
+  if (!file_exists($file)) file_put_contents_atomic($file,implode(',',$data));
 }
 
 while (true) {
@@ -98,7 +98,7 @@ while (true) {
       $status   = _var($var,'sbSyncExit');
       $speed    = $status==0 ? round($size*1024/$duration) : 0;
       $error    = _var($var,'sbSyncErrs',0);
-      file_put_contents($log,"$timestamp|$duration|$speed|$status|$error|$action|$size\n",FILE_APPEND);
+      file_put_contents_atomic($log,"$timestamp|$duration|$speed|$status|$error|$action|$size\n",FILE_APPEND);
     }
     delete_file($stamps,$resync);
   }

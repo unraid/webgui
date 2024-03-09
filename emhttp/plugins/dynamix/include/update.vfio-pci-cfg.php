@@ -22,7 +22,7 @@ $new  = _var($_GET,'cfg');
 $reply = 0;
 if ($new != $old) {
   if ($old) copy($vfio,"$vfio.bak");
-  if ($new) file_put_contents($vfio,$new); else @unlink($vfio);
+  if ($new) file_put_contents_atomic($vfio,$new); else @unlink($vfio);
   $reply = 1;
 }
 echo $reply;
