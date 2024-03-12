@@ -38,11 +38,16 @@ function write_log($string) {
 }
 if ( ! function_exists("file_put_contents_atomic") ) {
   function file_put_contents_atomic($filename, $data, $flags = 0, $context = null) {
-    if (file_put_contents($filename."~", $data, $flags, $context) === strlen($data)) {
-      return rename($filename."~",$filename,$context) ? strlen($data) : false;  
+    $suffix = rand();
+    if ( $flags || $context) 
+      $copyResult = @copy($filename,"$filename$suffix");
+    if ( $copyResult ) {
+      if (file_put_contents("$filename$suffix"), $data, $flags, $context) === strlen($data)) {
+        return rename("$filename$suffix",$filename,$context) ? strlen($data) : false;  
+      }
     }
     exec("logger ".escapeshellarg("Failed to write $filename"));
-    @unlink($filename."~", $context);
+    @unlink("$filename$suffix");
     return false;
   }
 }
