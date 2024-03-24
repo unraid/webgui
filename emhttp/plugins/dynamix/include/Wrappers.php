@@ -149,4 +149,19 @@ function my_date($fmt, $time) {
 function my_logger($message, $logger='webgui') {
   exec('logger -t '.escapeshellarg($logger).' -- '.escapeshellarg($message));
 }
+if ( ! function_exists("file_put_contents_atomic") ) {
+  function file_put_contents_atomic($filename, $data, $flags = 0, $context = null) {
+    $suffix = rand();
+    if ( $flags || $context) 
+      $copyResult = @copy($filename,"$filename$suffix");
+    if ( $copyResult ) {
+      if (file_put_contents("$filename$suffix"), $data, $flags, $context) === strlen($data)) {
+        return rename("$filename$suffix",$filename,$context) ? strlen($data) : false;  
+      }
+    }
+    my_logger("Failed to write $filename");
+    @unlink("$filename$suffix");
+    return false;
+  }
+}
 ?>

@@ -36,6 +36,21 @@ function write_log($string) {
   echo "<script>addLog(\"{$string}\");</script>";
   @flush();
 }
+if ( ! function_exists("file_put_contents_atomic") ) {
+  function file_put_contents_atomic($filename, $data, $flags = 0, $context = null) {
+    $suffix = rand();
+    if ( $flags || $context) 
+      $copyResult = @copy($filename,"$filename$suffix");
+    if ( $copyResult ) {
+      if (file_put_contents("$filename$suffix"), $data, $flags, $context) === strlen($data)) {
+        return rename("$filename$suffix",$filename,$context) ? strlen($data) : false;  
+      }
+    }
+    exec("logger ".escapeshellarg("Failed to write $filename"));
+    @unlink("$filename$suffix");
+    return false;
+  }
+}
 // unRAID update control
 readfile('update.htm');
 flush();
@@ -75,7 +90,7 @@ if (isset($_POST['#file'])) {
       foreach ($keys as $key => $value) if (strlen($value) || !$cleanup) $text .= "$key=\"$value\"\n";
     }
     @mkdir(dirname($file));
-    file_put_contents($file, $text);
+    file_put_contents_atomic($file, $text);
   }
 }
 if (isset($_POST['#command'])) {
