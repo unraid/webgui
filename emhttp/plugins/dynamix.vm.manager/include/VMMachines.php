@@ -21,7 +21,6 @@ $_SERVER['REQUEST_URI'] = 'vms';
 require_once "$docroot/webGui/include/Translations.php";
 
 $user_prefs = '/boot/config/plugins/dynamix.vm.manager/userprefs.cfg';
-if (file_exists('/boot/config/plugins/dynamix.vm.manager/vmpreview')) $vmpreview = true ; else $vmpreview =  false ;
 $vms = $lv->get_domains();
 if (empty($vms)) {
   echo '<tr><td colspan="8" style="text-align:center;padding-top:12px">'._('No Virtual Machines installed').'</td></tr>';
@@ -110,7 +109,7 @@ foreach ($vms as $vm) {
   }
   unset($dom);
   if (!isset($domain_cfg["CONSOLE"])) $vmrcconsole = "web" ; else $vmrcconsole = $domain_cfg["CONSOLE"] ;
-  $menu = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($vm),addslashes($uuid),addslashes($template),$state,addslashes($vmrcurl),strtoupper($vmrcprotocol),addslashes($log),addslashes($fstype), $vmrcconsole,$vmpreview);
+  $menu = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($vm),addslashes($uuid),addslashes($template),$state,addslashes($vmrcurl),strtoupper($vmrcprotocol),addslashes($log),addslashes($fstype), $vmrcconsole,false);
   $kvm[] = "kvm.push({id:'$uuid',state:'$state'});";
   switch ($state) {
   case 'running':
@@ -282,7 +281,7 @@ foreach ($vms as $vm) {
         $snapshotmemory = _(ucfirst($snapshot["memory"]["@attributes"]["snapshot"]));
         $snapshotparent = $snapshot["parent"] ? $snapshot["parent"]  : "None";
         $snapshotdatetime = my_time($snapshot["creationtime"],"Y-m-d" )."<br>".my_time($snapshot["creationtime"],"H:i:s");
-        $snapmenu = sprintf("onclick=\"addVMSnapContext('%s','%s','%s','%s','%s','%s','%s')\"", addslashes($vm),addslashes($uuid),addslashes($template),$state,$snapshot["name"],$snapshot["method"],$vmpreview);
+        $snapmenu = sprintf("onclick=\"addVMSnapContext('%s','%s','%s','%s','%s','%s')\"", addslashes($vm),addslashes($uuid),addslashes($template),$state,$snapshot["name"],$snapshot["method"]);
         echo "<tr><td><span id='vmsnap-$uuid' $snapmenu class='hand'>$tab|__&nbsp;&nbsp;<i class='fa fa-clone'></i></span>&nbsp;",$snapshot["name"],"</td><td>$snapshotdesc</td><td><span class='inner' style='font-size:1.1rem;'>$snapshotdatetime</span></td><td>$snapshotstate</td><td>$snapshotparent</td><td>$snapshotmemory</td></tr>";
         $tab .="&nbsp;&nbsp;&nbsp;&nbsp;";
       }

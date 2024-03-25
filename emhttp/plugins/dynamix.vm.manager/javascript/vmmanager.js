@@ -62,7 +62,7 @@ function ajaxVMDispatchconsoleRV(params, spin){
     }
   },'json');
 }
-function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, fstype="QEMU",console="web", preview=false){  
+function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, fstype="QEMU",console="web",usage=false){  
   var opts = [];
   var path = location.pathname;
   var x = path.indexOf("?");
@@ -198,9 +198,9 @@ function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, f
       }});
     }
   }
-  context.attach('#vm-'+uuid, opts);
+  if (usage) context.attach('#vmusage-'+uuid, opts); else context.attach('#vm-'+uuid, opts);
 }
-function addVMSnapContext(name, uuid, template, state, snapshotname, method, preview=false){  
+function addVMSnapContext(name, uuid, template, state, snapshotname, method){  
   var opts = [];
   var path = location.pathname;
   var x = path.indexOf("?");
@@ -211,7 +211,7 @@ function addVMSnapContext(name, uuid, template, state, snapshotname, method, pre
 
     opts.push({text:_("Revert snapshot"), icon:"fa-fast-backward", action:function(e) {
       e.preventDefault();
-      selectsnapshot(uuid, name, snapshotname, "revert",true) ;
+      selectsnapshot(uuid, name, snapshotname, "revert",true,state,method) ;
      }});
   if (method == "QEMU") {
     opts.push({text:_("Block Commit"), icon:"fa-hdd-o", action:function(e) {
@@ -225,17 +225,12 @@ function addVMSnapContext(name, uuid, template, state, snapshotname, method, pre
       e.preventDefault();
       selectblock(uuid, name, snapshotname, "pull",true) ;
     }});
-    if (preview) {
-    opts.push({text:_("Block Copy"), icon:"fa-stop", action:function(e) {
-      e.preventDefault();
-      ajaxVMDispatch({action:"domain-stop", uuid:uuid}, "loadlist");
-    }}); }
   }
   } else {
     opts.push({text:_("Revert snapshot"), icon:"fa-fast-backward", action:function(e) {
       e.preventDefault();
       $('#vm-'+uuid).find('i').removeClass('fa-play fa-square fa-pause').addClass('fa-refresh fa-spin');
-      selectsnapshot(uuid, name, snapshotname, "revert",true) ;
+      selectsnapshot(uuid, name, snapshotname, "revert",true,state,method) ;
     }});
   }
   opts.push({text:_("Remove snapshot"), icon:"fa-trash", action:function(e) {

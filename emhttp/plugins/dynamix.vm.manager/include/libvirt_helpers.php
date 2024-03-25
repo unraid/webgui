@@ -1621,7 +1621,6 @@ private static $encoding = 'UTF-8';
 		$dom = $lv->domain_get_info($res);
 		$state = $lv->domain_state_translate($dom['state']);
 		$vmxml = $lv->domain_get_xml($res) ;
-		file_put_contents("/tmp/cloningxml" ,$vmxml) ; ## Remove before stable.
 		$storage =  $lv->_get_single_xpath_result($vm, '//domain/metadata/*[local-name()=\'vmtemplate\']/@storage');
 		if (empty($storage)) $storage = "default" ;
 		# if VM running shutdown. Record was running.
@@ -1709,7 +1708,6 @@ private static $encoding = 'UTF-8';
 		write("addLog\0".htmlspecialchars("Creating new XML $clone"));
 
 		$xml = $lv->config_to_xml($config, true) ;
-		file_put_contents("/tmp/clonexml" ,$xml) ; ## Remove before stable.
 		$rtn = $lv->domain_define($xml) ;
 		return($rtn) ;
 
@@ -1868,7 +1866,7 @@ private static $encoding = 'UTF-8';
 	  return true ;
   }
 
-  function vm_snapshot($vm,$snapshotname, $snapshotdesc, $free = "yes", $method = "QEMU",  $memorysnap = "yes") {
+  function vm_snapshot($vm,$snapshotname, $snapshotdescinput, $free = "yes", $method = "QEMU",  $memorysnap = "yes") {
 	  global $lv ;
 
 	  #Get State
@@ -1883,7 +1881,7 @@ private static $encoding = 'UTF-8';
 	  $diskspec = "" ;
 	  $capacity = 0 ;
 	  if ($snapshotname == "--generate") $name= "S" . date("YmdHis") ; else $name=$snapshotname ;
-	  if ($snapshotdesc != "") $snapshotdesc = " --description '$snapshotdesc'" ;
+	  if ($snapshotdescinput != "") $snapshotdesc = " --description '$snapshotdescinput'" ;
 
 	  foreach($disks as $disk)   {
 		  $file = $disk["file"] ;
@@ -1934,7 +1932,6 @@ private static $encoding = 'UTF-8';
 	  if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_create_snapshot($lv->domain_get_uuid($vm),$name) ;
 
 	  $xmlfile = $dirpath."/".$name.".running" ;
-	  file_put_contents("/tmp/xmltst", "$xmlfile" ) ;## Remove before stable.
 	  if ($state == "running") exec("virsh dumpxml '$vm' > ".escapeshellarg($xmlfile),$outxml,$rtnxml) ;
 
 	  $output= [] ;
@@ -1961,7 +1958,7 @@ private static $encoding = 'UTF-8';
 		  $arrResponse =  ['error' => substr($output[0],6) ] ;
 	  } else {
 		$arrResponse = ['success' => true] ;
-		$ret = write_snapshots_database("$vm","$name",$state,$snapshotdesc,$method) ;
+		$ret = write_snapshots_database("$vm","$name",$state,$snapshotdescinput,$method) ;
 		#remove meta data
 		if ($ret != "noxml") $ret = $lv->domain_snapshot_delete($vm, "$name" ,2) ;
 	  }
@@ -2017,7 +2014,6 @@ private static $encoding = 'UTF-8';
 			if ($method == "ZFS") $xml = $snapslist[$snap]['xml']; else $xml = custom::createXML('domain',$xmlobj)->saveXML();
 			if (!strpos($xml,'<vmtemplate xmlns="unraid"')) $xml=str_replace('<vmtemplate','<vmtemplate xmlns="unraid"',$xml);
 			if (!$dryrun) $new = $lv->domain_define($xml);
-			file_put_contents("/tmp/xmlrevert", "$xml" ) ;## Remove before stable.
 			if ($new) $arrResponse  = ['success' => true] ; else $arrResponse = ['error' => $lv->get_last_error()] ;
 		}
 
@@ -2028,15 +2024,13 @@ private static $encoding = 'UTF-8';
 			if ($diskname == "hda" || $diskname == "hdb") continue ;
 			$path = $disk["source"]["@attributes"]["file"] ;
 			if (is_file($path) && $action == "yes") if (!$dryrun)  unlink("$path") ;else echo "unlink $path\n";
-			file_put_contents("/tmp/rmvsnaps",$path,FILE_APPEND);
 			$item = array_search($path,$snapslist[$snap]['backing']["r".$diskname]) ;
 			$item++ ;
 			while($item > 0)
 			{
 			if (!isset($snapslist[$snap]['backing']["r".$diskname][$item])) break ;
 			$newpath =  $snapslist[$snap]['backing']["r".$diskname][$item] ;
-			file_put_contents("/tmp/rmvsnaps",$newpath,FILE_APPEND);
-				if (is_file($newpath) && $action == "yes") if (!$dryrun) unlink("$newpath"); else echo "unlink $newpath\n";
+			if (is_file($newpath) && $action == "yes") if (!$dryrun) unlink("$newpath"); else echo "unlink $newpath\n";
 			$item++ ;
 			}
 		}
@@ -2102,7 +2096,6 @@ private static $encoding = 'UTF-8';
 			$xmlobj = custom::createArray('domain',$xml) ;
 			$xml = custom::createXML('domain',$xmlobj)->saveXML();
 			if (!strpos($xml,'<vmtemplate xmlns="unraid"')) $xml=str_replace('<vmtemplate','<vmtemplate xmlns="unraid"',$xml);
-			file_put_contents("/tmp/xmlrevert2", "$xml" ) ;## Remove before stable.
 			if (!$dryrun) $rtn = $lv->domain_define($xml) ;
 
 

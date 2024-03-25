@@ -78,7 +78,6 @@ while (true) {
   }
 
   $echo = json_encode($echo);
-  file_put_contents("/tmp/vm_dashusage", $echo);
   $md5_new = md5($echo,true);
   if ($md5_new !== $md5_old) {
     $md5_old = publish('vm_dashusage',$echo)!==false ? $md5_new : -1;
