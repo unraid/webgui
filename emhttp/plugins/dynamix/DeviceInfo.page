@@ -313,7 +313,14 @@ function setGlue(form,reset) {
    {glue:'/',more:3,dev:1,type:'',min1:1,max1:4,min2:1,max2:128,min3:1,max3:4},            // highpoint
    {glue:'' ,more:1,dev:1,type:'',min1:0,max1:15},                                         // hp cciss
    {glue:'' ,more:0,dev:0,type:''},                                                        // marvell
-   {glue:',',more:1,dev:1,type:'',min1:0,max1:127}                                         // megaraid
+   {glue:',',more:1,dev:1,type:'',min1:0,max1:127},                                        // megaraid
+   {glue:',',more:1,dev:0,type:'input',min1:'',max1:'0xffffffff'},                         // cypress
+   {glue:',',more:3,dev:0,type:'select',min1:'',max1:'p',min2:'',max2:'x',min3:1,max3:128},// jmicron ata
+   {glue:'' ,more:0,dev:0,type:''},                                                        // prolific
+   {glue:'' ,more:0,dev:0,type:''},                                                        // sunplus
+   {glue:'' ,more:0,dev:0,type:''},                                                        // asmedia
+   {glue:'' ,more:0,dev:0,type:''},                                                        // jmicron nvme
+   {glue:'' ,more:0,dev:0,type:''},                                                        // realtek
   ];
   var n = form.smType.selectedIndex>0 ? form.smType.selectedIndex-1 : <?=_var($var,'smIndex',0)?>;
   var x = data[n]['more'];
@@ -1246,6 +1253,13 @@ _(SMART controller type)_:
   <?=mk_option(_var($disk,'smType'), "-d cciss", "HP cciss")?>
   <?=mk_option(_var($disk,'smType'), "-d marvell", "Marvell")?>
   <?=mk_option(_var($disk,'smType'), "-d megaraid", "MegaRAID")?>
+  <?=mk_option(_var($disk,'smType'), "-d usbcypress", "Cypress ATACB")?>
+  <?=mk_option(_var($disk,'smType'), "-d usbjmicron", "JMicron ATA pass-through")?>
+  <?=mk_option(_var($disk,'smType'), "-d usbprolific", "Prolific ATA pass-through")?>
+  <?=mk_option(_var($disk,'smType'), "-d usbsunplus", "Sunplus ATA pass-through")?>
+  <?=mk_option(_var($disk,'smType'), "-d sntasmedia", "ASMedia NVMe pass-through")?>
+  <?=mk_option(_var($disk,'smType'), "-d sntjmicron", "JMicron NVMe pass-through")?>
+  <?=mk_option(_var($disk,'smType'), "-d sntrealtek", "Realtek NVMe pass-through")?>
   </select>
   <input type="text" name="smPort1" value="<?=_var($disk,'smPort1')?>" class="option"><select name="smPort1" class="narrow option" disabled></select>
   <input type="text" name="smPort2" value="<?=_var($disk,'smPort2')?>" class="option"><select name="smPort2" class="narrow option" disabled></select>
