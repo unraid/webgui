@@ -1250,33 +1250,44 @@
 			return $tmp;
 		}
 
-		function get_cdrom_stats($domain, $sort=true) {
+		function get_cdrom_stats($domain, $sort=true,$spincheck = false) {
+			$unraiddisks = array_merge_recursive(@parse_ini_file('state/disks.ini',true)?:[], @parse_ini_file('state/devs.ini',true)?:[]);
 			$dom = $this->get_domain_object($domain);
-
+			$tmp = false;
 			$buses =  $this->get_xpath($dom, '//domain/devices/disk[@device="cdrom"]/target/@bus', false);
-			$disks =  $this->get_xpath($dom, '//domain/devices/disk[@device="cdrom"]/target/@dev', false);
+			$cds =  $this->get_xpath($dom, '//domain/devices/disk[@device="cdrom"]/target/@dev', false);
 			$files =  $this->get_xpath($dom, '//domain/devices/disk[@device="cdrom"]/source/@file', false);
 			$boot  =  $this->get_xpath($dom, '//domain/devices/disk[@device="cdrom"]/boot/@*', false);
 
 			$ret = [];
-			for ($i = 0; $i < $disks['num']; $i++) {
-				$tmp = libvirt_domain_get_block_info($dom, $disks[$i]);
+			for ($i = 0; $i < $cds['num']; $i++) {
+				$spundown = 0;
+				$reallocation = null;
+				if (isset($files[$i])) $reallocation = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($files[$i])." 2>/dev/null")); 
+				if ($spincheck) {
+					if (isset($unraiddisks[$reallocation]['spundown']) && $unraiddisks[$reallocation]['spundown'] == 1) $spundown = 1; else $tmp = libvirt_domain_get_block_info($dom, $cds[$i]);
+				} else $tmp = libvirt_domain_get_block_info($dom, $cds[$i]);
+
 				if ($tmp) {
 					$tmp['bus'] = $buses[$i];
 					$tmp["boot order"] = $boot[$i] ?? "";
+					$tmp['reallocation'] = $reallocation;
+					$tmp['spundown'] = $spundown;
 					$ret[] = $tmp;
 				}
 				else {
 					$this->_set_last_error();
 
 					$ret[] = [
-						'device' => $disks[$i],
+						'device' => $cds[$i],
 						'file'   => $files[$i],
 						'type'   => '-',
 						'capacity' => '-',
 						'allocation' => '-',
 						'physical' => '-',
-						'bus' => $buses[$i]
+						'bus' => $buses[$i],
+						'reallocation' => $reallocation,
+						'spundown' => $spundown
 					];
 				}
 			}
@@ -1294,7 +1305,7 @@
 			}
 
 			unset($buses);
-			unset($disks);
+			unset($cds);
 			unset($files);
 
 			return $ret;
