@@ -1462,7 +1462,7 @@
 			$unit = strtoupper($unit);
 
 			switch ($unit) {
-				case 'T': return number_format($value / (float)1099511627776, $decimals).'T';
+				case 'T': return number_format($value / (float)1099511627776, $decimals + 2).'T';
 				case 'G': return number_format($value / (float)(1 << 30), $decimals).'G';
 				case 'M': return number_format($value / (float)(1 << 20), $decimals).'M';
 				case 'K': return number_format($value / (float)(1 << 10), $decimals).'K';
