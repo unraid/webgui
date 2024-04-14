@@ -111,7 +111,7 @@ function array_help(&$array) {
 }
 function escapeQuotes($text) {
   // escape double quotes
-  return str_replace(["\"\n",'"'],["\" \n",'\"'],$text);
+  return str_replace(['"',"'"],["&quot;","&apos;"],$text);
 }
 function translate($key) {
   // replaces multi-line sections
