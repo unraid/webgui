@@ -95,6 +95,12 @@ $xml_file = "webGui/include/NotificationAgents.xml";
 $xml = @simplexml_load_file($xml_file) or die(_("Failed to open")." $xml_file");
 $i = 1;
 foreach ($xml->Agent as $agent) {
+  if ( isset($agent->Language) ) {
+    $guiLanguage = ($locale == "" ) ? "en_US" : $locale;
+    $acceptedLanguages = explode(" ",$agent->Language);
+    if ( ! in_array($guiLanguage,$acceptedLanguages) )
+      continue;
+  }
   $name = str_replace(' ','_',$agent->Name);
   $enabledAgent = agent_fullname("$name.sh", "enabled");
   $disabledAgent = agent_fullname("$name.sh", "disabled");
