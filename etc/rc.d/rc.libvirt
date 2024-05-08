@@ -316,9 +316,14 @@ libvirtd_cleanup(){
 
 check_cfg_status{
   if [ "$SERVICE" == "enable" ]; then
-  libvirtd_start
+    libvirtd_start
+    virtlogd_start
+    libvirtd_start
   else
-  libvirtd_stop
+    libvirtd_stop
+    virtlogd_stop
+    virtlockd_stop
+    libvirtd_cleanup
   fi
 }
 
