@@ -67,8 +67,7 @@ $libvirt_log       = file_exists("/var/log/libvirt/libvirtd.log");
 <?endif;?>
 <form markdown="1" id="settingsForm" method="POST" action="/update.php" target="progressFrame">
 <input type="hidden" name="#file" value="<?=htmlspecialchars($domain_cfgfile)?>">
-<input type="hidden" name="#command" value="/etc/rc.d/rc.libvirt">
-<input type="hidden" name="#arg[1]" value="update">
+<input type="hidden" name="#command" value="/plugins/dynamix.vm.manager/scripts/libvirt_update">
 _(Enable VMs)_:
 : <select id="SERVICE" name="SERVICE">
   <?= mk_option($libvirt_service, 'disable', _('No'))?>
