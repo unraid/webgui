@@ -290,6 +290,7 @@
 			$audios = $config['audio'];
 			$template = $config['template'];
 			$clocks = $config['clock'];
+			$evdevs = $config['evdev'];
 
 			$type = $domain['type'];
 			$name = $domain['name'];
@@ -998,6 +999,16 @@
 						</memballoon>";
 			}
 			#$osbootdev = "" ;
+			$evdevstr = "";
+			foreach($evdevs as $evdev) {
+				if ($evdev['dev'] == "") continue;
+				$evdevstr .= "<input type='evdev'>\n<source dev='{$evdev['dev']}'";
+				if  ($evdev['grab'] != "") $evdevstr .= " grab='{$evdev['grab']}' ";
+				if  ($evdev['grabToggle'] != "") $evdevstr .= " grabToggle='{$evdev['grabToggle']}' ";
+				if  ($evdev['repeat'] != "") $evdevstr .= " repeat='{$evdev['repeat']}' ";
+				$evdevstr .= "/>\n</input>\n";
+			}
+
 			$memorybackingXML = Array2XML::createXML('memoryBacking', $memorybacking);
 			$memoryBackingXML = $memorybackingXML->saveXML($memorybackingXML->documentElement);
 			return "<domain type='$type' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
@@ -1043,6 +1054,7 @@
 							$channelscopypaste
 							$swtpm
 							$memballoon
+							$evdevstr
 						</devices>
 					</domain>";
 

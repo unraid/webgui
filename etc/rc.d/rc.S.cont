@@ -222,7 +222,7 @@ if [[ -r /boot/config/passwd ]]; then
     if [[ $USERNAME == root ]]; then
       /bin/sed -i "s|^root:.*|root:x:0:0:$COMMENT:/root:/bin/bash|" /etc/passwd
     fi
-    if (( USERID >= 1000 )); then
+    if (( USERID >= 1000 )) && ! grep -q ":$USERID:" /etc/passwd ; then
       /bin/echo "$USERNAME:x:$USERID:$GROUPID:$COMMENT:/:/bin/false" >> /etc/passwd
     fi
   done </boot/config/passwd

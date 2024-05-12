@@ -174,6 +174,7 @@ function http_get_contents(string $url, array $opts = [], array &$getinfo = NULL
   curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
   curl_setopt($ch, CURLOPT_REFERER, "");
   curl_setopt($ch, CURLOPT_FAILONERROR, true);
+  curl_setopt($ch, CURLOPT_USERAGENT, 'Unraid');
   if(is_array($opts) && $opts) {
     foreach($opts as $key => $val) {
       curl_setopt($ch, $key, $val);
@@ -181,8 +182,8 @@ function http_get_contents(string $url, array $opts = [], array &$getinfo = NULL
   }
   $out = curl_exec($ch);
   if (curl_errno($ch) == 23) {
-    // error 23 detected, try CURLOPT_ENCODING = null
-    curl_setopt($ch, CURLOPT_ENCODING, null);
+    // error 23 detected, try CURLOPT_ENCODING = "deflate"
+    curl_setopt($ch, CURLOPT_ENCODING, "deflate");
     $out = curl_exec($ch);
   }
   if (isset($getinfo)) {

@@ -721,7 +721,6 @@
 								if (strpos($domain_cfg['DOMAINDIR'], dirname(dirname($arrDisk['new']))) === false ||
 									basename(dirname($arrDisk['new'])) != $arrConfig['domain']['name'] || (
 									basename($arrDisk['new']) != 'vdisk'.($i+1).'.img') && basename($arrDisk['new']) != 'vdisk'.($i+1).'.qcow2') {
-									if ($arrDisk['driver'] == "qcow2" && (basename($arrDisk['new']) == 'vdisk'.($i+1).'.qcow2')) $default_option = "auto"; else	
 									$default_option = 'manual';
 								}
 								if (file_exists(dirname(dirname($arrDisk['new'])).'/'.$arrConfig['domain']['name'].'/vdisk'.($i+1).'.img') || file_exists(dirname(dirname($arrDisk['new'])).'/'.$arrConfig['domain']['name'].'/vdisk'.($i+1).'.qcow2')) {
@@ -1627,6 +1626,141 @@
 			<p>Windows and Hyperv Hpet:no Hypervclock: yes Pit no rtc no.	</p>
 		</p>
 	</blockquote>
+	<?#echo "<span>".var_dump($arrConfig['evdev'])."</span>";
+	 if ( $arrConfig['evdev'] == false) {
+
+			$evdevxml = "<input type='evdev'>
+			<source dev=''/>
+			</input>";
+			$evdevdoc = new SimpleXMLElement($evdevxml);
+			$arrConfig['evdev']= $evdevdoc->xpath('//input[@type="evdev"] ');
+		}
+		
+	foreach ($arrConfig['evdev'] as $i => $arrEvdev) {
+		$strLabel = ($i > 0) ? appendOrdinalSuffix($i + 1) : '';
+		?>
+		<table data-category="Input" data-multiple="true" data-minimum="1" data-index="<?=$i?>" data-prefix="<?=$strLabel?>">
+			<tr>
+				<td>_(Evdev Device)_:</td>
+				<td>
+					<select name="evdev[<?=$i?>][dev]" class="dev narrow">
+					<?
+						echo mk_option($arrEvdev->source->attributes()->dev, '', _('None'));
+						foreach(getValidevDev() as $line) echo mk_option($arrEvdev->source->attributes()->dev, $line , $line);
+					?>
+					</select>
+				</td>
+
+		<tr class="advanced disk_file_options">
+			<td>_(Grab)_:</td>
+			<td>
+				<select name="evdev[<?=$i?>][grab]" class="evdev_grab"  title="_(grab options)_">
+				<?echo mk_option($arrEvdev->source->attributes()->grab, '', _('None'));
+				foreach(["all"] as $line) echo mk_option($arrEvdev->source->attributes()->grab,$line,ucfirst($line));?>
+				</select>
+			</td>
+		</tr>
+
+		<tr class="advanced disk_file_options">
+			<td>_(Repeat)_:</td>
+			<td>
+				<select name="evdev[<?=$i?>][repeat]" class="evdev_repeat narrow" title="_(grab options)_">
+				<?echo mk_option($arrEvdev->source->attributes()->repeat, '', _('None'));
+				foreach(["on","off"] as $line) echo mk_option($arrEvdev->source->attributes()->repeat,$line,ucfirst($line));?>
+				</select>
+			</td>
+		</tr>
+
+		<tr class="advanced disk_file_options">
+			<td>_(Grab Toggle)_:</td>
+			<td>
+				<select name="evdev[<?=$i?>][grabToggle]" class="evdev_grabtoggle narrow" title="_(grab options)_">
+				<?echo mk_option($arrEvdev->source->attributes()->grabToggle, '', _('None'));
+				foreach(["ctrl-ctrl", "alt-alt", "shift-shift", "meta-meta", "scrolllock" , "ctrl-scrolllock"] as $line) echo mk_option($arrEvdev->source->attributes()->grabToggle,$line,$line);?>
+				</select>
+			</td>
+		</tr>
+
+
+
+		</table>
+		<?if ($i == 0) {?>
+		<div class="advanced">
+			<blockquote class="inline_help">
+				<p>
+					<b> Event Devices</b><br>
+					Evdev is an input interface built into the Linux kernel. QEMU’s evdev passthrough support allows a user to redirect evdev events to a guest. These events can include mouse movements and key presses. By hitting both Ctrl keys at the same time, QEMU can toggle the input recipient. QEMU’s evdev passthrough also features almost no latency, making it perfect for gaming. The main downside to evdev passthrough is the lack of button rebinding – and in some cases, macro keys won’t even work at all.
+					Optional items are normally only used for keyboards.
+				</p>
+				<p>
+					<b>Device</b><br>
+					Host device to passthrough to guest.
+				</p>
+
+				<p>
+					<b>Grab</b><br>
+					All grabs all input devices instead of just one	
+				</p>
+
+				<p>
+					<b>Repeat</b><br>
+					Repeat with value 'on'/'off' to enable/disable auto-repeat events 
+				</p>
+
+				<p>	
+					<b>GrabToggle</b><br>
+					GrabToggle with values ctrl-ctrl, alt-alt, shift-shift, meta-meta, scrolllock or ctrl-scrolllock to change the grab key combination</p>
+
+				<p>Additional devices can be added/removed by clicking the symbols to the left.</p>
+			</blockquote>
+		</div>
+		<?}?>
+	<?}?>
+	<script type="text/html" id="tmplevdev">
+	<table data-category="Input" data-multiple="true" data-minimum="1"  data-index="<?=$i?>" data-prefix="<?=$strLabel?>">
+			<tr>
+				<td>_(Evdev Device)_:</td>
+				<td>
+					<select name="evdev[{{INDEX}}][dev]" class="dev narrow">
+					<?
+						echo mk_option("", '', _('None'));
+						foreach(getValidevDev() as $line) echo mk_option("", $line , $line);
+					?>
+					</select>
+				</td>
+
+			<tr class="advanced disk_file_options">
+				<td>_(Grab)_:</td>
+				<td>
+					<select name="evdev[{{INDEX}}][grab]" class="evdev_grab"  title="_(grab options)_">
+					<?echo mk_option(""	, '', _('None'));
+					foreach(["all"] as $line) echo mk_option("",$line,ucfirst($line));?>
+					</select>
+				</td>
+			</tr>
+
+			<tr class="advanced disk_file_options">
+				<td>_(Repeat)_:</td>
+				<td>
+					<select name="evdev[{{INDEX}}][repeat]" class="evdev_repeat narrow" title="_(grab options)_">
+					<?echo mk_option("", '', _('None'));
+					foreach(["on","off"] as $line) echo mk_option("",$line,ucfirst($line));?>
+					</select>
+				</td>
+			</tr>
+
+			<tr class="advanced disk_file_options">
+				<td>_(Grab Toggle)_:</td>
+				<td>
+					<select name="evdev[{{INDEX}}][grabToggle]" class="evdev_grabtoggle narrow" title="_(grab options)_">
+					<?echo mk_option("", '', _('None'));
+					foreach(["ctrl-ctrl", "alt-alt", "shift-shift", "meta-meta", "scrolllock" , "ctrl-scrolllock"] as $line) echo mk_option("",$line,$line);?>
+					</select>
+				</td>
+			</tr>
+		</table>
+	</script>
+
 
 	<table>
 		<tr>

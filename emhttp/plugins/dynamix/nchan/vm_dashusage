@@ -75,7 +75,7 @@ while (true) {
       $vmencode = $lv->domain_get_uuid($vm);
       $echo[$vmencode ]['gcpu'] =  "<span class='advanced'>"._("Guest CPU").": <span class='cpug-".$vm."'>".$vmdata['cpuguest']."%</span><div class='usage-disk mm'><span id='cpug-".$vm."' style='width:".$vmdata['cpuguest']."%;'></span><span></span></div></span>";
       $echo[$vmencode ]['hcpu'] =  "<span class='advanced'>"._("Host CPU").": <span class='cpug-".$vm."'>".$vmdata['cpuhost']."%</span><div class='usage-disk mm'><span id='cpug-".$vm."' style='width:".$vmdata['cpuhost']."%;'></span><span></span></div></span>";
-      $echo[$vmencode ]['mem'] .= "<span>Mem: ".my_scale($vmdata['mem'],$unit)."$unit / ".my_scale($vmdata['maxmem'],$unit)."$unit</span>";
+      $echo[$vmencode ]['mem'] .= "<span>Mem: ".my_scale($vmdata['mem']*1024,$unit)."$unit / ".my_scale($vmdata['maxmem']*1024,$unit)."$unit</span>";
       $echo[$vmencode ]['disk'] .= "<span>Disk: "._("Rd").": ".my_scale($vmdata['rdrate'],$unit)."$unit/s "._("Wr").": ".my_scale($vmdata['wrrate'],$unit)."$unit/s</span>";
       $echo[$vmencode ]['net'] .=  "<span>Net: "._("RX").": ".my_scale($vmdata['rxrate'],$unit)."$unit/s "._("TX").": ".my_scale($vmdata['txrate'],$unit)."$unit/s</span>";
     }

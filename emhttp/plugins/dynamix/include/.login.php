@@ -17,7 +17,7 @@ if (!empty($_COOKIE['unraid_'.md5($server_name)])) {
 
 function readFromFile($file): string {
     $text = "";
-    if (file_exists($file)) {
+    if (file_exists($file) && filesize($file) > 0) {
         $fp = fopen($file,"r");
         if (flock($fp, LOCK_EX)) {
             $text = fread($fp, filesize($file));

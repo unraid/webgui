@@ -931,6 +931,19 @@ private static $encoding = 'UTF-8';
 		return $arrValidOtherStubbedDevices;
 	}
 
+	function getValidevDev() {
+		$inputevdev = array_merge(glob("/dev/input/by-id/*event-kbd"),glob("/dev/input/by-id/*event-mouse"));
+		return $inputevdev;
+	}
+
+	function getevDev($res) {
+		global $lv ;
+		$xml = $lv->domain_get_xml($res) ;
+		$xmldoc = new SimpleXMLElement($xml);
+		$xmlpath = $xmldoc->xpath('//devices/input[@type="evdev"] ');
+		return $xmlpath;
+	}
+
 	$cacheValidUSBDevices = null;
 	function getValidUSBDevices() {
 		global $cacheValidUSBDevices;
@@ -1375,6 +1388,7 @@ private static $encoding = 'UTF-8';
 			'nic' => $arrNICs,
 			'usb' => $arrUSBDevs,
 			'shares' => $lv->domain_get_mount_filesystems($res),
+			'evdev' => getevDev($res),
 			'qemucmdline' => $cmdline,
 			'clocks' => getClocks($strDOMXML)
 		];
@@ -1427,6 +1441,7 @@ private static $encoding = 'UTF-8';
 		}
 		// settings not in the GUI, but maybe customized
 		unset($old['clock']);
+		unset($old['devices']['input']);
 		// preserve vnc/spice port settings
 		// unset($new['devices']['graphics']['@attributes']['port'],$new['devices']['graphics']['@attributes']['autoport']);
 		if (!$new['devices']['graphics']) unset($old['devices']['graphics']);

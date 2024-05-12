@@ -78,7 +78,7 @@ while (true) {
       $echodata .= "<tr><td>$vm</td>" ;
       $echodata .= "<td class='advanced'><span class='cpug-".$vm."'>".$vmdata['cpuguest']."%</span><div class='usage-disk mm'><span id='cpug-".$vm."' style='width:".$vmdata['cpuguest']."%;'></span><span></span></div></td>";
       $echodata .= "<td class='advanced'><span class='cpuh-".$vm."'>".$vmdata['cpuhost']."%</span><div class='usage-disk mm'><span id='cpuh-".$vm."' style='width:".$vmdata['cpuhost']."%;'></span><span></span></div></td><td>";
-      $echodata .= my_scale($vmdata['mem'],$unit)."$unit / ".my_scale($vmdata['maxmem'],$unit)."$unit</td><td>";
+      $echodata .= my_scale($vmdata['mem']*1024,$unit)."$unit / ".my_scale($vmdata['maxmem']*1024,$unit)."$unit</td><td>";
       $echodata .=  _("Read").": ".my_scale($vmdata['rdrate'],$unit)."$unit/s<br>"._("Write").": ".my_scale($vmdata['wrrate'],$unit)."$unit/s</td><td>";
       $echodata .=  _("RX").": ".my_scale($vmdata['rxrate'],$unit)."$unit/s<br>"._("TX").": ".my_scale($vmdata['txrate'],$unit)."$unit/s</td></tr>";
     }
