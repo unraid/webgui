@@ -48,7 +48,7 @@ $sec_nfs = parse_ini_file('state/sec_nfs.ini',true);
 
 // exit when no mountable array disks
 $nodisks = "<tr><td class='empty' colspan='7'><strong>"._('There are no mountable array or pool disks - cannot add shares').".</strong></td></tr>";
-if (!$disks) die($nodisks);
+if (!checkDisks($disks)) die($nodisks);
 
 // exit when no shares
 $noshares = "<tr><td class='empty' colspan='7'><i class='fa fa-folder-open-o icon'></i>"._('There are no exportable user shares')."</td></tr>";
@@ -62,6 +62,20 @@ $pools = implode(',', $pools_check);
 
 // Natural sorting of share names
 uksort($shares,'strnatcasecmp');
+
+/* Function to filter out unwanted disks and check if any valid disks exist. */
+function checkDisks($disks) {
+	foreach ($disks as $disk) {
+		/* Check the disk type and fsStatus. */
+		if (!in_array($disk['name'], ['flash', 'parity', 'parity2']) && $disk['fsStatus'] !== "Unmountable: unsupported or no file system") {
+			/* A valid disk is found, return true. */
+			return true;
+		}
+	}
+
+	/* No valid disks found, return false. */
+	return false;
+}
 
 // Display export settings
 function user_share_settings($protocol,$share) {
