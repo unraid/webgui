@@ -16,23 +16,8 @@ Cond="_var($var,'fsState')!='Stopped' && _var($var,'shareUser')=='e'"
  */
 ?>
 <?
-/* Function to filter out unwanted disks and check if any valid disks exist. */
-function checkDisks($disks) {
-	foreach ($disks as $disk) {
-		/* Check the disk type and fsStatus. */
-		if (!in_array($disk['name'], ['flash', 'parity', 'parity2']) && $disk['fsStatus'] !== "Unmountable: unsupported or no file system") {
-			/* A valid disk is found, return true. */
-			return true;
-		}
-	}
-
-	/* No valid disks found, return false. */
-	return false;
-}
-
 /* Are there any array disks? */
-$disks		= parse_ini_file('state/disks.ini',true) ?? [];
-$nodisks	= checkDisks($disks) ? "" : "disabled";
+$nodisks   = empty(parse_ini_file('state/disks.ini',true)) ? "disabled" : "";
 ?>
 
 <table class="unraid share_status">
