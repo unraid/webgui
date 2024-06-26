@@ -30,18 +30,18 @@ if (!$hardware) {
 function scan($area, $text) {
   return strpos($area,$text)!==false;
 }
-function detect(&$syslinux, $key) {
-  $size = count($syslinux);
+function detect(&$bootmgr, $key) {
+  $size = count($bootmgr);
   $menu = $i = 0;
   $value = '';
   // find the default section
   while ($i < $size) {
-    if (scan($syslinux[$i],'label ')) {
+    if (scan($bootmgr[$i],'label ')) {
       $n = $i + 1;
       // find the current requested setting
-      while (!scan($syslinux[$n],'label ') && $n < $size) {
-        if (scan($syslinux[$n],'menu default')) $menu = 1;
-        if (scan($syslinux[$n],'append')) foreach (explode(' ',$syslinux[$n]) as $cmd) if (scan($cmd,$key)) {$value = explode('=',$cmd)[1]; break;}
+      while (!scan($bootmgr[$n],'label ') && $n < $size) {
+        if (scan($bootmgr[$n],'menu default')) $menu = 1;
+        if (scan($bootmgr[$n],'append')) foreach (explode(' ',$bootmgr[$n]) as $cmd) if (scan($cmd,$key)) {$value = explode('=',$cmd)[1]; break;}
         $n++;
       }
       if ($menu) break; else $i = $n - 1;
@@ -50,10 +50,14 @@ function detect(&$syslinux, $key) {
   }
   return $value;
 }
-$syslinux          = file('/boot/syslinux/syslinux.cfg',FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
+if (file_exists('/boot/grub/grub.cfg')) {
+    $bootmgr       = file('/boot/grub/grub.cfg',FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
+} else {
+    $bootmgr       = file('/boot/syslinux/syslinux.cfg',FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
+}
 $arrValidNetworks  = getValidNetworks();
-$pcie_acs_override = detect($syslinux, 'pcie_acs_override');
-$vfio_allow_unsafe = detect($syslinux, 'allow_unsafe_interrupts');
+$pcie_acs_override = detect($bootmgr, 'pcie_acs_override');
+$vfio_allow_unsafe = detect($bootmgr, 'allow_unsafe_interrupts');
 $bgcolor           = strstr('white,azure',$display['theme']) ? '#f2f2f2' : '#1c1c1c';
 $started           = $var['fsState']=='Started';
 $libvirt_up        = $libvirt_running=='yes';
