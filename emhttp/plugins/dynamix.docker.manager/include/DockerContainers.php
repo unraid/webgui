@@ -87,11 +87,15 @@ foreach ($containers as $ct) {
   $icon = $info['icon'] ?: '/plugins/dynamix.docker.manager/images/question.png';
   $image = substr($icon,-4)=='.png' ? "<img src='$icon?".filemtime("$docroot{$info['icon']}")."' class='img' onerror=this.src='/plugins/dynamix.docker.manager/images/question.png';>" : (substr($icon,0,5)=='icon-' ? "<i class='$icon img'></i>" : "<i class='fa fa-$icon img'></i>");
   $wait = var_split($autostart[array_search($name,$names)]??'',1);
+  $networks = [];
+  foreach($ct['Networks'] as $netName => $netVals) {
+    $networks[] = "<span>{$netName}</span><span>{$netVals['IPAddress']}</span>";
+  }
   $ports = [];
   foreach ($ct['Ports'] as $port) {
-    $intern = $running ? ($ct['NetworkMode']=='host' ? $host : _var($port,'IP')) : $null;
-    $extern = $running ? (_var($port,'NAT') ? $host : $intern) : $null;
-    $ports[] = sprintf('%s:%s/%s<i class="fa fa-arrows-h" style="margin:0 6px"></i>%s:%s', $intern, _var($port,'PrivatePort'), strtoupper(_var($port,'Type')), $extern, _var($port,'PublicPort'));
+      $arrow_style = _var($port,'PublicPort') ? "\"fa fa-arrows-h\"" : "";
+      $ports[] = sprintf('%s:%s<i class=%s style="margin:0 6px"></i>%s', _var($port,'PrivatePort'), strtoupper(_var($port,'Type')),$arrow_style , _var($port,'PublicPort'));
+ 
   }
   $paths = [];
   $ct['Volumes'] = is_array($ct['Volumes']) ? $ct['Volumes'] : [];
@@ -141,7 +145,7 @@ foreach ($containers as $ct) {
       break;
   }
   echo "<div class='advanced'><i class='fa fa-info-circle fa-fw'></i> ".compress(_($version),12,0)."</div></td>";
-  echo "<td>{$ct['NetworkMode']}</td>";
+  echo "<td style='white-space:nowrap'><span class='docker_readmore' style='display: grid; grid-template-columns: repeat(2, 1fr);'> ".implode(' ',$networks)."</span></td>";
   echo "<td style='white-space:nowrap'><span class='docker_readmore'>".implode('<br>',$ports)."</span></td>";
   echo "<td style='word-break:break-all'><span class='docker_readmore'>".implode('<br>',$paths)."</span></td>";
   echo "<td class='advanced'><span class='cpu-$id'>0%</span><div class='usage-disk mm'><span id='cpu-$id' style='width:0'></span><span></span></div>";
