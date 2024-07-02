@@ -17,6 +17,10 @@ $header  = $display['header'];
 $backgnd = $display['background'];
 $themes1 = in_array($theme,['black','white']);
 $themes2 = in_array($theme,['gray','azure']);
+$themeHtmlClass = "Theme--$theme";
+if ($themes2) {
+  $themeHtmlClass .= " Theme--sidebar";
+}
 $config  = "/boot/config";
 $entity  = $notify['entity'] & 1 == 1;
 $alerts  = '/tmp/plugins/my_alerts.txt';
@@ -28,7 +32,7 @@ exec("sed -ri 's/^\.logLine\{color:#......;/.logLine{color:$fgcolor;/' $docroot/
 function annotate($text) {echo "\n<!--\n",str_repeat("#",strlen($text)),"\n$text\n",str_repeat("#",strlen($text)),"\n-->\n";}
 ?>
 <!DOCTYPE html>
-<html <?=$display['rtl']?>lang="<?=strtok($locale,'_')?:'en'?>">
+<html <?=$display['rtl']?>lang="<?=strtok($locale,'_')?:'en'?>" class="<?= $themeHtmlClass ?>">
 <head>
 <title><?=_var($var,'NAME')?>/<?=_var($myPage,'name')?></title>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
@@ -44,10 +48,12 @@ function annotate($text) {echo "\n<!--\n",str_repeat("#",strlen($text)),"\n$text
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/font-awesome.css")?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/context.standalone.css")?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.sweetalert.css")?>">
-<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/default-$theme.css")?>">
-<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/dynamix-$theme.css")?>">
-<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/defaultpagelayout.css")?>">
 
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/default-color-pallet.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/default-base.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/default-{$display['theme']}.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/base-dynamix.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/dynamix-{$display['theme']}.css")?>">
 <style>
 <?if (empty($display['width'])):?>
 @media (max-width:1280px){#displaybox{min-width:1280px;max-width:1280px;margin:0}}
@@ -804,7 +810,9 @@ default:
 echo "</span></span><span id='countdown'></span><span id='user-notice' class='red-text'></span>";
 echo "<span id='copyright'>Unraid&reg; webGui &copy;2024, Lime Technology, Inc.";
 echo " <a href='https://docs.unraid.net/category/manual' target='_blank' title=\""._('Online manual')."\"><i class='fa fa-book'></i> "._('manual')."</a>";
-echo "</span></div>";
+echo "</span>";
+// echo "<unraid-theme-switcher current='$theme'></unraid-theme-switcher>";
+echo "</div>";
 ?>
 <script>
 // Firefox specific workaround, not needed anymore in firefox version 100 and higher
