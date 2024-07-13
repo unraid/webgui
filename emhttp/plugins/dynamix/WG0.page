@@ -1032,14 +1032,13 @@ tstate['wg0'] = "<?=$check_wg0 ? 'active' : 'passive'?>";
 
 var statistics = new NchanSubscriber('/sub/wireguard',{subscriber:'websocket'});
 statistics.on('message', function(data) {
-  var list = [];
-  var rows = data.split('\0');
+  var list = [], n = [];
   var x = 0; var vtun = '';
   // get all existing tunnels
   $('div[id^="block-wg"]').each(function(){list.push($(this).prop('id').split('-')[1]);});
   // update active tunnels
-  for (var i=0,row; row=rows[i]; i++) {
-    var info = row.split(';');
+  var rows = JSON.parse(data);
+  for (var i=0,info; info=rows[i]; i++) {
     if (info[0] != vtun) {
       vtun = info[0];
       // remove tunnel from inactive list
@@ -1281,7 +1280,7 @@ _(Local tunnel address IPv6)_:
 </div>
 </div>
 _(Local endpoint)_:
-: <span class="input"><input type="text" id="endpoint-wg0" name="Endpoint:0" class="subnet" value="<?=$vpn_wg0?'':_var($wg0,'Endpoint:0')?>" onchange="toLC(this);quickValidate(this);" pattern="<?=$validText?>" title="_(IP address or FQDN)_" placeholder="<?=$vpn_wg0?'(_(not used)_)':preg_replace('/^(.+?\.)[0-9a-zA-Z]+(\.(my)?unraid.net)$/','$1<hash>$2',$public)?>">:
+: <span class="input"><input type="text" class="width:10%;" id="endpoint-wg0" name="Endpoint:0" class="subnet" value="<?=$vpn_wg0?'':_var($wg0,'Endpoint:0')?>" onchange="toLC(this);quickValidate(this);" pattern="<?=$validText?>" title="_(IP address or FQDN)_" placeholder="<?=$vpn_wg0?'(_(not used)_)':preg_replace('/^(.+?\.)[0-9a-zA-Z]+(\.(my)?unraid.net)$/','$1<hash>$2',$public)?>">:
   <input type="number" name="gui:ListenPort:0" class="port" min="1" max="65535" value="<?=$vpn_wg0?'':_var($wg0,'ListenPort:0')?>" onchange="if(quickValidate(this)) {portRemark($(document.wg0),'wg0',this.value)}" placeholder="<?=$vpn_wg0?'':_var($netport,'wg0')?>"></span>
   <span class="remark block" style="display:none">_(Remark)_: _(configure your router with port forwarding of port)_ **<span id="my-port-wg0"><?=_var($wg0,'ListenPort:0')?:_var($netport,'wg0')?></span>/_(UDP)_** _(to)_ **<?=$server?>:<?=_var($wg0,'ListenPort:0')?:_var($netport,'wg0')?>**</span><span class="upnp wg0 block"></span>
   <input type="hidden" name="ListenPort:0" value=""><dl id="endpoint4-wg0" style="display:none"></dl><dl id="endpoint6-wg0" style="display:none"></dl>
@@ -1318,7 +1317,7 @@ _(Local tunnel firewall)_:
 :wg_local_tunnel_firewall_help:
 
 _(MTU size)_:
-: <span class="input"><input type="number" name="MTU:0" class="trim" min="68" max="9198" value="<?=_var($wg0,'MTU:0')?>" onchange="quickValidate(this);" placeholder="(_(automatic)_)">_(bytes)_</span>
+: <span class="input"><input type="number" name="MTU:0" class="trim" min="68" max="9198" value="<?=_var($wg0,'MTU:0')?>" onchange="quickValidate(this);" placeholder="(_(auto)_)">_(bytes)_</span>
 
 :wg_mtu_size_help:
 
@@ -1362,7 +1361,7 @@ _(Peer type of access)_:
   <?=mk_option(_var($wg0,"TYPE:$i"), "7", _("VPN tunneled access for system"),count($peer_wg0)==1?'':'disabled')?>
   <?=mk_option(_var($wg0,"TYPE:$i"), "8", _("VPN tunneled access for docker"),count($peer_wg0)==1?'':'disabled')?>
   </select></span>
-  <span id="access-type-<?=$i?>" class="access-type"></span>
+  <span id="access-type-<?=$i?>"</span>
 
 <?if ($i==1):?>
 > ![](<?=autov('/webGui/images/wireguard-help.png')?>)

@@ -151,7 +151,7 @@ function vfs_type(&$disk) {
 function fs_info(&$disk) {
   global $display;
   $echo = [];
-  if (empty($disk['fsStatus']) || $disk['fsStatus']=='-')
+  if (empty(_var($disk, 'fsStatus')) || _var($disk, 'fsStatus') == '-')
     return "<td>".$disk['fsStatus']."</td><td colspan='3'></td>";
   if (_var($disk,'fsStatus')=='Mounted') {
     $echo[] = "<td>".vfs_type($disk)."</td>";
