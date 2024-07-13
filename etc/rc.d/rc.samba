@@ -146,9 +146,19 @@ samba_stop(){
     REPLY="Already stopped"
   else
     run killall smbd nmbd wsdd2 winbindd
-    # save samba 'secrets' file
-    [[ -e $PRIVATE/secrets.tdb ]] && cp -f $PRIVATE/secrets.tdb $BOOT
-    if ! samba_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+    if ! samba_running; then
+      REPLY="Stopped"
+      # save samba 'secrets' file if changed
+      if [[ -e $PRIVATE/secrets.tdb ]]; then
+        rm -f /tmp/emhttp/secrets.tdb
+        tdbdump $PRIVATE/secrets.tdb | tdbrestore /tmp/emhttp/secrets.tdb
+        if ! cmp -s /tmp/emhttp/secrets.tdb $BOOT/secrets.tdb ; then
+          cp -f /tmp/emhttp/secrets.tdb $BOOT
+        fi
+      fi
+    else
+      REPLY="Failed"
+    fi
   fi
   log "$DAEMON...  $REPLY."
 }
@@ -156,7 +166,6 @@ samba_stop(){
 samba_restart(){
   log "Restarting $DAEMON..."
   samba_stop
-  sleep 2
   samba_start
 }
 

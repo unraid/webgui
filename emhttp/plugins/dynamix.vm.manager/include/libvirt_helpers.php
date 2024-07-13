@@ -1726,6 +1726,7 @@ private static $encoding = 'UTF-8';
 
 		$files_exist = false ;
 		$files_clone = array() ;
+		if ($config['disk'][0]['new'] != "") {
 		foreach ($config["disk"] as $diskid => $disk) {
 			$file_clone[$diskid]["source"] = $config["disk"][$diskid]["new"] ;
 			$config["disk"][$diskid]["new"] = str_replace($vm,$clone,$config["disk"][$diskid]["new"]) ;
@@ -1761,6 +1762,7 @@ private static $encoding = 'UTF-8';
 			$error = execCommand_nchan_clone($cmdstr,$target,$refcmd) ;
 			if (!$error) { write("addLog\0".htmlspecialchars("Image copied failed."));  return( false) ; }
 		}
+	}
 
 		write("<p class='logLine'></p>","addLog\0<fieldset class='docker'><legend>"._("Completing Clone").": </legend><p class='logLine'></p><span id='wait-$waitID'></span></fieldset>");
 		write("addLog\0".htmlspecialchars("Creating new XML $clone"));
@@ -2363,7 +2365,14 @@ OPTIONS
 
   blockcommit Debian --path /mnt/user/domains/Debian/vdisk1.S20230513120410qcow2 --verbose --pivot --delete
   */
-	  # Error if VM Not running.
+	#Get VM State. If shutdown start as paused.
+	$res = $lv->get_domain_by_name($vm);
+	$dom = $lv->domain_get_info($res);
+	$state = $lv->domain_state_translate($dom['state']);
+	if ($state == "shutoff") {
+		$lv->domain_start($res);
+		$lv->domain_suspend($res);
+	}
 
 	  $snapslist= getvmsnapshots($vm) ;
 	  $disks =$lv->get_disk_stats($vm) ;
@@ -2409,6 +2418,9 @@ OPTIONS
 	  }
 	  # Delete NVRAM
 	  #if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_delete_snapshot($lv->domain_get_uuid($vm),$snap) ;
+	  if ($state == "shutoff") {
+		$lv->domain_destroy($res);
+	  }
 
 	  refresh_snapshots_database($vm) ;
 	  $ret = $ret = delete_snapshots_database("$vm","$snap") ; ;
@@ -2446,6 +2458,15 @@ OPTIONS
 
 
   */
+  #Get VM State. If shutdown start as paused.
+  $res = $lv->get_domain_by_name($vm);
+  $dom = $lv->domain_get_info($res);
+  $state = $lv->domain_state_translate($dom['state']);
+  if ($state == "shutoff") {
+	$lv->domain_start($res);
+  	$lv->domain_suspend($res);
+  }
+
   $snapslist= getvmsnapshots($vm) ;
   $disks =$lv->get_disk_stats($vm) ;
   foreach($disks as $disk)   {
@@ -2464,40 +2485,44 @@ OPTIONS
   $snaps_json=json_encode($snaps,JSON_PRETTY_PRINT) ;
   $pathinfo =  pathinfo($file) ;
   $dirpath = $pathinfo["dirname"] ;
-  file_put_contents("$dirpath/image.tracker",$snaps_json) ;
+  #file_put_contents("$dirpath/image.tracker",$snaps_json) ;
 
   foreach($disks as $disk)   {
-  $path = $disk['file'] ;
-  $cmdstr = "virsh blockpull '$vm' --path '$path' --verbose --pivot --delete" ;
-  $cmdstr = "virsh blockpull '$vm' --path '$path' --verbose --wait " ;
-  # Process disks and update path.
-  $snapdisks=($snapslist[$snap]['disks']) ;
-  if ($base != "--base" && $base != "") {
-	  #get file name from  snapshot.
-	  $snapdisks=($snapslist[$base]['disks']) ;
-	  $basepath = "" ;
-	  foreach ($snapdisks as $snapdisk) {
-		  $diskname = $snapdisk["@attributes"]["name"] ;
-		  if ($diskname != $disk['device']) continue ;
-		  $basepath = $snapdisk["source"]["@attributes"]["file"] ;
-		  }
-	  if ($basepath != "") $cmdstr .= " --base '$basepath' ";
+	$path = $disk['file'] ;
+	$cmdstr = "virsh blockpull '$vm' --path '$path' --verbose --pivot --delete" ;
+	$cmdstr = "virsh blockpull '$vm' --path '$path' --verbose --wait " ;
+	# Process disks and update path.
+	$snapdisks=($snapslist[$snap]['disks']) ;
+	if ($base != "--base" && $base != "") {
+		#get file name from  snapshot.
+		$snapdisks=($snapslist[$base]['disks']) ;
+		$basepath = "" ;
+		foreach ($snapdisks as $snapdisk) {
+			$diskname = $snapdisk["@attributes"]["name"] ;
+			if ($diskname != $disk['device']) continue ;
+			$basepath = $snapdisk["source"]["@attributes"]["file"] ;
+			}
+		if ($basepath != "") $cmdstr .= " --base '$basepath' ";
+	}
+
+	if ($action) $cmdstr .= " $action ";
+
+
+	$error = execCommand_nchan($cmdstr,$path) ;
+
+	if (!$error)  {
+		$arrResponse =  ['error' => "Process Failed" ] ;
+		return($arrResponse) ;
+	} else {
+		# Remove nvram snapshot
+		$arrResponse = ['success' => true] ;
+	}
+
+}
+
+  if ($state == "shutoff") {
+	$lv->domain_destroy($res);
   }
-
-  if ($action) $cmdstr .= " $action ";
-
-
-  $error = execCommand_nchan($cmdstr,$path) ;
-
-  if (!$error)  {
-	  $arrResponse =  ['error' => "Process Failed" ] ;
-	  return($arrResponse) ;
-  } else {
-	  # Remove nvram snapshot
-	  $arrResponse = ['success' => true] ;
-  }
-
-	  }
 
   refresh_snapshots_database($vm) ;
   $ret = $ret = delete_snapshots_database("$vm","$snap") ;

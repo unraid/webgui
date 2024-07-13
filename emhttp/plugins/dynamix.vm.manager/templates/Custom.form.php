@@ -404,6 +404,7 @@
 
 			// Available cache pools
 			foreach ($pools as $pool) {
+				if (isSubpool($pool)) continue;
 				$strLabel = $pool.' - '.my_scale($disks[$pool]['fsFree']*1024, $strUnit).' '.$strUnit.' '._('free');
 				echo mk_option($default_storage, $pool, $strLabel);
 			}
@@ -790,6 +791,7 @@
 
 								// Available cache pools
 								foreach ($pools as $pool) {
+									if (isSubpool($pool)) continue;
 									$strLabel = $pool.' - '.my_scale($disks[$pool]['fsFree']*1024, $strUnit).' '.$strUnit.' '._('free');
 									echo mk_option($default_option, $pool, $strLabel);
 								}
@@ -945,6 +947,7 @@
 
 								// Available cache pools
 								foreach ($pools as $pool) {
+									if (isSubpool($pool)) continue;
 									$strLabel = $pool.' - '.my_scale($disks[$pool]['fsFree']*1024, $strUnit).' '.$strUnit.' '._('free');
 									echo mk_option($default_option, $pool, $strLabel);
 								}

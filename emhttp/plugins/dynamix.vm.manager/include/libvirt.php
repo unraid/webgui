@@ -851,6 +851,7 @@
 								</graphics>
 								<video>
 									<model type='$strModelType'/>
+									<address type='pci' domain='0x0000' bus='0x00' slot='0x1e' function='0x0'/>
 								</video>
 								<audio id='1' type='$virtualaudio'/>";
 							

@@ -119,12 +119,12 @@ function assignment(&$disk) {
 function vfs_luks($fs) {
   return str_starts_with($fs,'luks:');
 }
-function vfs_type(&$disk, $parent=false) {
+function vfs_type(&$disk) {
   global $disks, $pools, $crypto;
-  $fsType = _var($disk,'fsType');
-  $name   = _var($disk,'name');
-  $type   = ($parent || _var($disk,'type')=='Cache' && !in_array($name,$pools)) ? _var($disks[prefix($name)],'fsType') : $fsType;
+  $fsType = _var($disk,'fsType','');
   $luks   = '';
+  if (empty($fsType))
+    return $fsType;
   if ($crypto) switch (_var($disk,'luksState',0)) {
     case 0:
       if (vfs_luks($fsType))
@@ -146,10 +146,10 @@ function vfs_type(&$disk, $parent=false) {
       $luks = "<a class='info'><i class='padlock fa fa-lock red-text'></i><span>"._('Device locked: unknown error')."</span></a>";
       break;
   }
-  return $luks.str_replace('luks:','',$type);
+  return $luks.str_replace('luks:','',$fsType);
 }
 function fs_info(&$disk) {
-  global $display, $pools;
+  global $display;
   $echo = [];
   if (empty(_var($disk, 'fsStatus')) || _var($disk, 'fsStatus') == '-') {
     return (_var($disk,'type')=='Cache') ? "<td>".vfs_type($disk,true)."</td><td colspan='3'>"._('Device is part of a pool')."</td>" : "<td colspan='4'></td>";
@@ -194,7 +194,7 @@ function array_offline(&$disk, $pool='') {
         if (_var($disk,'type')=='Parity') $warning = $text;
       } elseif (_var($var,'mdState')=='RECON_DISK') {
         if (in_array(_var($disk,'status'),$status)) $warning = $text;
-      } elseif (_var($disk['status'])=='DISK_NEW') {
+      } elseif (_var($disk['status'])=='DISK_NEW' && _var($var,'mdResyncAction')=='clear') {
         $warning = $text;
       }
     }
@@ -209,7 +209,9 @@ function array_offline(&$disk, $pool='') {
   case 'DISK_NP_MISSING':
     $echo[] = "<td>".device_info($disk,false)."<br><span class='diskinfo'><em>"._('Missing')."</em></span></td>";
     $echo[] = "<td>".assignment($disk)."<em>{$disk['idSb']} - ".my_scale(_var($disk,'sizeSb',0)*1024,$unit)." $unit</em></td>";
-    $echo[] = "<td colspan='8'></td>";
+    $echo[] = "<td colspan='4'></td>";
+    $echo[] = "<td>".vfs_type($disk)."</td>";
+    $echo[] = "<td colspan='3'></td>";
     break;
   case 'DISK_NP_DSBL':
     $echo[] = "<td>".device_info($disk,false)."</td>";

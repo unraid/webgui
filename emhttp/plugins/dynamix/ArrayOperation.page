@@ -18,22 +18,18 @@ Nchan="device_list,disk_load,parity_list"
 <?
 $keyfile = file_exists(_var($var,'luksKeyfile'));
 $missing = file_exists('/var/tmp/missing.tmp');
-$encrypt = false;
 $spot    = _var($var,'mdResyncPos',0)>0;
 $poolsOnly  = (_var($var,'SYS_ARRAY_SLOTS') == 0 ) ? true : false;
 
 /* only one of $present, $missing, or $wrong will be true, or all will be false */
 $forced = $present = $wrong = false;
 foreach ($disks as $disk) {
-  if (!isset($disk['fsType'])) continue;
-  if (strpos(_var($disk,'fsType'),'luks:')!==false || (_var($disk,'fsType')=='auto' && (strpos(_var($var,'defaultFsType'),'luks:')!==false || _var($disk,'luksState',0)==2 || _var($disk,'luksState',0)==3))) {
-    $encrypt = true;
-    if (_var($disk,'luksState',0)==0) $forced = true;
-    if (_var($disk,'luksState',0)==1) $present = true;
-    if (_var($disk,'luksState',0)==2) $missing = true;
-    if (_var($disk,'luksState',0)==3) $wrong = true;
-  }
+  if (strpos(_var($disk,'fsType'),'luks:')!==false || (_var($disk,'fsType')=='auto' && strpos(_var($var,'defaultFsType'),'luks:')!==false)) $forced = true;
+  if (_var($disk,'luksState',0)==1) $present = true;
+  if (_var($disk,'luksState',0)==2) $missing = true;
+  if (_var($disk,'luksState',0)==3) $wrong = true;
 }
+$encrypt = $forced || $present || $missing || $wrong;
 if ($forced && ($present || $missing || $wrong)) $forced = false;
 
 function check_encryption() {
