@@ -151,7 +151,7 @@ function vfs_type(&$disk, $parent=false) {
 function fs_info(&$disk) {
   global $display, $pools;
   $echo = [];
-  if (empty($disk['fsStatus']) || $disk['fsStatus']=='-') {
+  if (empty(_var($disk, 'fsStatus')) || _var($disk, 'fsStatus') == '-') {
     return (_var($disk,'type')=='Cache') ? "<td>".vfs_type($disk,true)."</td><td colspan='3'>"._('Device is part of a pool')."</td>" : "<td colspan='4'></td>";
   } elseif (_var($disk,'fsStatus')=='Mounted') {
     $echo[] = "<td>".vfs_type($disk)."</td>";
