@@ -50,7 +50,7 @@ fi
 # initrd has already done so):
 if [[ -d /run ]]; then
   if ! /bin/grep -wq "tmpfs /run tmpfs" /proc/mounts; then
-    /sbin/mount -v -n -t tmpfs tmpfs /run -o mode=0755,size=32M,nodev,nosuid,noexec
+    /sbin/mount -v -n -t tmpfs tmpfs /run -o mode=0755,size=128M,nodev,nosuid,noexec
   fi
 fi
 
@@ -97,10 +97,10 @@ find_device && /bin/echo "found $DEVICE" || abort "not found"
 # detect filesystem from boot device
 if /sbin/blkid -s TYPE $DEVICE | /bin/grep -q "btrfs" ; then
   NONVFAT=btrfs
-  /sbin/mount -v -t btrfs -o auto,rw,noatime,nodiratime,discard=sync $DEVICE /boot || abort "cannot mount $DEVICE"
+  /sbin/mount -v -t btrfs -o auto,rw,noatime,nodiratime,degraded,discard=sync $DEVICE /boot || abort "cannot mount $DEVICE"
 elif /sbin/blkid -s TYPE $DEVICE | /bin/grep -q "xfs" ; then
   NONVFAT=xfs
-  /sbin/mount -v -t xfs -o auto,rw,noatime,nodiratime,discard,wsync $DEVICE /boot || abort "cannot mount $DEVICE"
+  /sbin/mount -v -t xfs -o auto,rw,noatime,nodiratime,discard $DEVICE /boot || abort "cannot mount $DEVICE"
 else
   /bin/echo "Checking $DEVICE ..."
   /sbin/fsck.fat -a -w $DEVICE 2>/dev/null

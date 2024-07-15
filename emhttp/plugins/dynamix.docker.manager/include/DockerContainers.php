@@ -110,7 +110,7 @@ foreach ($containers as $ct) {
   if ($ct['BaseImage']) echo "<i class='fa fa-cubes' style='margin-right:5px'></i>".htmlspecialchars($ct['BaseImage'])."<br>";
   echo _('By').": ";
   $registry = $info['registry'];
-  [$author,$version] = my_explode(':',$ct['Image']);
+  ['strRepo' => $author, 'strTag' => $version] = DockerUtil::parseImageTag($ct['Image']);
   if ($registry) {
     echo "<a href='".htmlspecialchars($registry)."' target='_blank'>".htmlspecialchars(compress($author,24))."</a>";
   } else {
@@ -120,20 +120,25 @@ foreach ($containers as $ct) {
   switch ($updateStatus) {
   case 0:
     echo "<span class='green-text' style='white-space:nowrap;'><i class='fa fa-check fa-fw'></i> "._('up-to-date')."</span>";
-    echo "<div class='advanced'><a class='exec' onclick=\"updateContainer('".addslashes(htmlspecialchars($name))."');\"><span style='white-space:nowrap;'><i class='fa fa-cloud-download fa-fw'></i> "._('force update')."</span></a></div>";
+    if ($ct['Manager'] == "dockerman")
+      echo "<div class='advanced'><a class='exec' onclick=\"updateContainer('".addslashes(htmlspecialchars($name))."');\"><span style='white-space:nowrap;'><i class='fa fa-cloud-download fa-fw'></i> "._('force update')."</span></a></div>";
     break;
-  case 1:
-    echo "<div class='advanced'><span class='orange-text' style='white-space:nowrap;'><i class='fa fa-flash fa-fw'></i> "._('update ready')."</span></div>";
-    echo "<a class='exec' onclick=\"updateContainer('".addslashes(htmlspecialchars($name))."');\"><span style='white-space:nowrap;'><i class='fa fa-cloud-download fa-fw'></i> "._('apply update')."</span></a>";
-    break;
-  case 2:
-    echo "<div class='advanced'><span class='orange-text' style='white-space:nowrap;'><i class='fa fa-flash fa-fw'></i> "._('rebuild ready')."</span></div>";
-    echo "<a class='exec'><span style='white-space:nowrap;'><i class='fa fa-recycle fa-fw'></i> "._('rebuilding')."</span></a>";
-    break;
-  default:
-    echo "<span class='orange-text' style='white-space:nowrap;'><i class='fa fa-unlink'></i> "._('not available')."</span>";
-    echo "<div class='advanced'><a class='exec' onclick=\"updateContainer('".addslashes(htmlspecialchars($name))."');\"><span style='white-space:nowrap;'><i class='fa fa-cloud-download fa-fw'></i> "._('force update')."</span></a></div>";
-    break;
+    case 1:
+      echo "<div class='advanced'><span class='orange-text' style='white-space:nowrap;'><i class='fa fa-flash fa-fw'></i> "._('update ready')."</span></div>";
+      if ($ct['Manager'] == "dockerman")
+        echo "<a class='exec' onclick=\"updateContainer('".addslashes(htmlspecialchars($name))."');\"><span style='white-space:nowrap;'><i class='fa fa-cloud-download fa-fw'></i> "._('apply update')."</span></a>";
+      else
+        echo "<span style='white-space:nowrap;'><i class='fa fa-cloud-download fa-fw'></i> "._('update available')."</span>";
+      break;
+    case 2:
+      echo "<div class='advanced'><span class='orange-text' style='white-space:nowrap;'><i class='fa fa-flash fa-fw'></i> "._('rebuild ready')."</span></div>";
+      echo "<a class='exec'><span style='white-space:nowrap;'><i class='fa fa-recycle fa-fw'></i> "._('rebuilding')."</span></a>";
+      break;
+    default:
+      echo "<span class='orange-text' style='white-space:nowrap;'><i class='fa fa-unlink'></i> "._('not available')."</span>";
+      if ($ct['Manager'] == "dockerman")
+        echo "<div class='advanced'><a class='exec' onclick=\"updateContainer('".addslashes(htmlspecialchars($name))."');\"><span style='white-space:nowrap;'><i class='fa fa-cloud-download fa-fw'></i> "._('force update')."</span></a></div>";
+      break;
   }
   echo "<div class='advanced'><i class='fa fa-info-circle fa-fw'></i> ".compress(_($version),12,0)."</div></td>";
   echo "<td>{$ct['NetworkMode']}</td>";

@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2024, Lime Technology
+ * Copyright 2012-2024, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -136,23 +136,28 @@ if ($memory_installed >= 1024) {
 // If maximum < installed then roundup maximum to the next power of 2 size of installed. E.g. 6 -> 8 or 12 -> 16
 $low = $memory_maximum < $memory_installed;
 if ($low) $memory_maximum = pow(2,ceil(log($memory_installed)/log(2)));
+?>
+<style>
+table.info{margin-top:10px;background-color:inherit}
+table.info td:first-child{width:20%;font-weight:bold;padding-left:10px}
+tr.ram,tr.port{display:none}
+span.link{text-decoration:underline;cursor:pointer}
+</style>
 
-$style = "<style>table.info{margin-top:10px;background-color:inherit} table.info td:first-child{width:20%;font-weight:bold;padding-left:10px} tr.ram,tr.port{display:none} span.link{text-decoration:underline;cursor:pointer}</style>";
-
-$list = [];
-$list[] = "<table class='info'><tr><td>"._('Model').":</td><td>$model</td></tr>";
-$list[] = "<tr><td>".('M/B').":</td><td>{$board['Manufacturer']} {$board['Product Name']} {$board['Version']} {$board['Serial Number']}</td></tr>";
-$list[] = "<tr><td>"._('BIOS').":</td><td>{$bios['Vendor']} {$bios['Version']} {$bios['Release Date']}</td></tr>";
-$list[] = "<tr><td>"._('CPU').":</td><td>$cpumodel {$cpu['Current Speed']}</td></tr>";
-$list[] = "<tr><td>"._('HVM').":</td><td>$hvm</td></tr>";
-$list[] = "<tr><td>"._('IOMMU').":</td><td>$iommu</td></tr>";
-$list[] = "<tr><td>"._('Cache').":</td><td>".implode(', ',$cache_installed)."</td></tr>";
-$list[] = "<tr><td>$memory</td><td>$memory_installed $unit $memory_type $ecc("._('max. installable capacity')." $memory_maximum $unit".($low?'*':'').")</td></tr>";
-
+<table class='info'>
+<tr><td><?=_('Model')?>:</td><td><?=$model?></td></tr>
+<tr><td><?=('M/B')?>:</td><td><?="{$board['Manufacturer']} {$board['Product Name']} {$board['Version']} {$board['Serial Number']}"?></td></tr>
+<tr><td><?=_('BIOS')?>:</td><td><?="{$bios['Vendor']} {$bios['Version']} {$bios['Release Date']}"?></td></tr>
+<tr><td><?=_('CPU')?>:</td><td><?="$cpumodel {$cpu['Current Speed']}"?></td></tr>
+<tr><td><?=_('HVM')?>:</td><td><?=$hvm?></td></tr>
+<tr><td><?=_('IOMMU')?>:</td><td><?=$iommu?></td></tr>
+<tr><td><?=_('Cache')?>:</td><td><?=implode(', ',$cache_installed)?></td></tr>
+<tr><td><?=$memory?></td><td><?="$memory_installed $unit $memory_type $ecc("._('max. installable capacity')." $memory_maximum $unit".($low?'*':'')?>)</td></tr>
+<?
 foreach ($memory_devices as $device) {
   if (empty($device['Type']) || $device['Type']=='Unknown') continue;
   $size = preg_replace('/( .)B$/','$1iB',_var($device,'Size',0));
-  $list[] = "<tr class='ram'><td></td><td>".$device['Locator'].": "._var($device,'Manufacturer')." "._var($device,'Part Number').", $size "._var($device,'Type')." @ "._var($device,'Configured Memory Speed')."</td></tr>";
+  echo "<tr class='ram'><td></td><td>",$device['Locator'],": ",_var($device,'Manufacturer')," ",_var($device,'Part Number'),", $size ",_var($device,'Type')," @ ",_var($device,'Configured Memory Speed'),"</td></tr>";
 }
 
 exec("ls --indicator-style=none /sys/class/net|grep -Po '^(bond|eth)\d+$'",$sPorts);
@@ -167,24 +172,22 @@ foreach ($sPorts as $port) {
   if (substr($port,0,4)=='bond') {
     if ($link) {
       $bond_mode = str_replace('Bonding Mode: ','',file("/proc/net/bonding/$port",FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES)[1]);
-      $list[] = "<tr class='$more'><td>$name</td><td>$port: $bond_mode, mtu $mtu</td></tr>";
+      echo "<tr class='$more'><td>$name</td><td>$port: $bond_mode, mtu $mtu</td></tr>";
     } else {
-      $list[] = "<tr class='$more'><td>$name</td><td>$port: "._("bond down")."</td></tr>";
+      echo "<tr class='$more'><td>$name</td><td>$port: ",_('bond down'),"</td></tr>";
     }
   } else {
     if ($link) {
       $speed = file_get_contents("$int/speed");
       $duplex = file_get_contents("$int/duplex");
-      $list[] = "<tr class='$more'><td>$name</td><td>$port: $speed Mbps, $duplex duplex, mtu $mtu</td></tr>";
+      echo "<tr class='$more'><td>$name</td><td>$port: $speed Mbps, $duplex duplex, mtu $mtu</td></tr>";
     } else {
-      $list[] = "<tr class='$more'><td>$name</td><td>$port: "._("interface down")."</td></tr>";
+      echo "<tr class='$more'><td>$name</td><td>$port: ",_('interface down'),"</td></tr>";
     }
   }
 }
-
-$list[] = "<tr><td>"._('Kernel').":</td><td>$kernel</td></tr>";
-$list[] = "<tr><td>"._('OpenSSL').":</td><td>$openssl</td></tr>";
-$list[] = "<tr><td>"._('Uptime').":</td><td><span class='uptime'></span></td></tr></table>";
-
-echo $style,implode($list);
 ?>
+<tr><td><?=_('Kernel')?>:</td><td><?=$kernel?></td></tr>
+<tr><td><?=_('OpenSSL')?>:</td><td><?=$openssl?></td></tr>
+<tr><td><?=_('Uptime')?>:</td><td><span class='uptime'></span></td></tr>
+</table>

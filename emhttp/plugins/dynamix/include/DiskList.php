@@ -28,12 +28,41 @@ $var     = parse_ini_file('state/var.ini');
 $sec     = parse_ini_file('state/sec.ini',true);
 $sec_nfs = parse_ini_file('state/sec_nfs.ini',true);
 
-// exit when no disks
+/* Get the pools from the disks.ini. */
+$pools_check = pools_filter(cache_filter($disks));
+$pools = implode(',', $pools_check);
+
+/* If the configuration is pools only, then no array disks are available. */
+$poolsOnly	= ((int)$var['SYS_ARRAY_SLOTS'] <= 2) ? true : false;
+
+// exit when no mountable array disks
+$nodisks = "<tr><td class='empty' colspan='7'><strong>"._('There are no mountable array or pool disks - cannot add shares').".</strong></td></tr>";
+if (!checkDisks($disks)) die($nodisks);
+
+// No shared disks
 $nodisks = "<tr><td class='empty' colspan='7'><i class='fa fa-folder-open-o icon'></i>"._('There are no exportable disk shares')."</td></tr>";
-if (!$disks) die($nodisks);
 
 // GUI settings
 extract(parse_plugin_cfg('dynamix',true));
+
+/* Function to filter out unwanted disks, check if any valid disks exist, and ignore disks with a blank device. */
+function checkDisks($disks) {
+	global $pools, $poolsOnly;
+
+	$rc		= false;
+
+	foreach ($disks as $disk) {
+		/* Check the disk type, fsStatus, and ensure the device is not blank. */
+		if (!in_array($disk['name'], ['flash', 'parity', 'parity2']) && strpos($disk['fsStatus'], 'Unmountable') === false && !empty($disk['device'])) {
+			/* A valid disk with a non-blank device is found. */
+			$rc	= true;
+
+			break;
+		}
+	}
+
+	return $rc;
+}
 
 // Display export settings
 function disk_share_settings($protocol,$share) {
@@ -87,7 +116,7 @@ foreach ($disks as $name => $disk) {
    default: $luks = "<a class='info' onclick='return false'><i class='padlock fa fa-lock red-text'></i><span>"._('Unknown encryption state')."</span></a>"; break;
   } else $luks = "";
   echo "<tr><td><a class='view' href=\"/$path/Browse?dir=/mnt/$name\"><i class=\"icon-u-tab\" title=\"",_('Browse')," /mnt/$name\"></i></a>";
-  echo "<a class='info nohand' onclick='return false'><i class='fa fa-$orb orb $color-orb'></i><span style='left:18px'>$help</span></a>$luks<a href=\"/$path/Disk?name=$name\" onclick=\"$.cookie('one','tab1')\">",compress($name),"</a></td>";
+  echo "<a class='info nohand' onclick='return false'><i class='fa fa-$orb orb $color-orb'></i><span style='left:18px'>$help</span></a>$luks<a href=\"/$path/Disk?name=$name\" onclick=\"$.cookie('one','tab1')\">$name</a></td>";
   echo "<td>"._var($disk,'comment')."</td>";
   echo "<td>",disk_share_settings(_var($var,'shareSMBEnabled'), $sec[$name]),"</td>";
   echo "<td>",disk_share_settings(_var($var,'shareNFSEnabled'), $sec_nfs[$name]),"</td>";

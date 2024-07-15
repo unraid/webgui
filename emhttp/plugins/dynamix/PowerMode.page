@@ -1,0 +1,68 @@
+Menu="OtherSettings"
+Type="xmenu"
+Title="Power Mode"
+Icon="icon-energysaving"
+Tag="icon-energysaving"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$cpufreq = '/sys/devices/system/cpu/cpu0/cpufreq';
+$current = exec("cat $cpufreq/scaling_governor 2>/dev/null");
+exec("cat $cpufreq/scaling_available_governors 2>/dev/null | tr ' ' '\n' | sed '/^$/d' | sort -u",$governor);
+
+function value(...$modes) {
+  global $current, $governor;
+  $checked  = $value = '';
+  $disabled = ' disabled';
+  foreach ($modes as $mode) {
+    if ($mode==$current) $checked = ' checked';
+    if (in_array($mode,$governor)) {$value = "value=\"$mode\""; $disabled = '';}
+  }
+  return $value.$checked.$disabled;
+}
+?>
+<script>
+function preparePowermode(form) {
+  $(form).find('[name="#arg[1]"]').val(form.powermode.value);
+}
+$(function(){
+  $('input[type=radio]').each(function(){
+    if ($(this).prop('disabled')) $(this).next('span').html(" <i>(_(unavailable)_)</i>");
+  });
+<?if (exec("dmesg | grep -Pom1 'Hypervisor detected'")):?>
+  $('#vm').show();
+<?endif;?>
+});
+</script>
+
+<form markdown="1" name="PowerMode" method="POST" action="/update.php" target="progressFrame" onsubmit="preparePowermode(this)">
+<input type="hidden" name="#file" value="dynamix/dynamix.cfg">
+<input type="hidden" name="#section" value="powermode">
+<input type="hidden" name="#command" value="/webGui/scripts/powermode">
+<input type="hidden" name="#arg[1]" value="">
+
+_(Change power mode)_:
+: <input name="powermode" type="radio"<?=value('powersave')?>>_(Best power efficiency)_<span></span>
+
+&nbsp;
+: <input name="powermode" type="radio"<?=value('ondemand','balance_power')?>>_(Balanced operation)_<span></span>
+
+&nbsp;
+: <input name="powermode" type="radio"<?=value('performance')?>>_(Best performance)_<span></span>
+
+&nbsp;
+: <input type="submit" name="#apply" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+</form>
+
+<div id="vm" class="notice">_(When running Unraid virtualized, there are no available power modes)_</div>

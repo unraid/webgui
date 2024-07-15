@@ -178,11 +178,16 @@ foreach (explode('*',rawurldecode($argv[1])) as $value) {
   $startContainer = false;
   if (!empty($oldContainerInfo) && !empty($oldContainerInfo['State']) && !empty($oldContainerInfo['State']['Running'])) {
     // since container was already running, put it back it to a running state after update
-    $cmd = str_replace('/docker create ', '/docker run -d ', $cmd);
     $startContainer = true;
     // attempt graceful stop of container first
     stopContainer_nchan($Name);
   }
+  if ( ($argv[2]??null) == "ca_docker_run_override" ) 
+    $startContainer = true;
+
+  if ( $startContainer )
+    $cmd = str_replace('/docker create ', '/docker run -d ', $cmd);
+
   // force kill container if still running after 10 seconds
   if (empty($_GET['communityApplications'])) removeContainer_nchan($Name);
   execCommand_nchan($cmd);

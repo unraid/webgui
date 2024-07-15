@@ -1,0 +1,96 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2024, Lime Technology
+ * Copyright 2024-2024, Simon Fairweather.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$docroot = '/usr/local/emhttp';
+$varroot = '/var/local/emhttp';
+$md5_old = -1;
+
+require_once "$docroot/webGui/include/Helpers.php";
+require_once "$docroot/webGui/include/publish.php";
+require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
+global $vmusagestats;
+extract(parse_plugin_cfg('dynamix',true));
+get_vm_usage_stats();
+sleep(1);
+
+
+// add translations
+$_SERVER['REQUEST_URI'] = 'dashboard';
+$login_locale = _var($display,'locale');
+require_once "$docroot/webGui/include/Translations.php";
+
+// remember current language
+$locale_init = $locale;
+
+function update_translation($locale) {
+  global $docroot,$language;
+  $language = [];
+  if ($locale) {
+    $text = "$docroot/languages/$locale/translations.txt";
+    if (file_exists($text)) {
+      $store = "$docroot/languages/$locale/translations.dot";
+      if (!file_exists($store)) file_put_contents($store,serialize(parse_lang_file($text)));
+      $language = unserialize(file_get_contents($store));
+    }
+    $text = "$docroot/languages/$locale/dashboard.txt";
+    if (file_exists($text)) {
+      $store = "$docroot/languages/$locale/dashboard.dot";
+      if (!file_exists($store)) file_put_contents($store,serialize(parse_lang_file($text)));
+      $language = array_merge($language,unserialize(file_get_contents($store)));
+    }
+  }
+}
+
+$domain_cfgfile = "/boot/config/domain.cfg";
+$domain_cfg = parse_ini_file($domain_cfgfile);
+if (!isset($domain_cfg['USAGETIMER'])) $timer = 3 ; else $timer = $domain_cfg['USAGETIMER'];
+
+while (true) {
+
+  extract(parse_plugin_cfg('dynamix',true));
+  if (_var($display,'locale') != $locale_init) {
+    $locale_init = _var($display,'locale');
+    update_translation($locale_init);
+  }
+
+  get_vm_usage_stats();
+  $echo = [];
+  $echo = [];
+  $echodata = "";
+  $running = 0;
+  ksort($vmusagestats);
+  foreach ($vmusagestats as $vm => $vmdata) {
+
+    if ($vmdata['state'] == 1) {
+      $running++;
+      $echodata .= "<tr><td>$vm</td>" ;
+      $echodata .= "<td class='advanced'><span class='cpug-".$vm."'>".$vmdata['cpuguest']."%</span><div class='usage-disk mm'><span id='cpug-".$vm."' style='width:".$vmdata['cpuguest']."%;'></span><span></span></div></td>";
+      $echodata .= "<td class='advanced'><span class='cpuh-".$vm."'>".$vmdata['cpuhost']."%</span><div class='usage-disk mm'><span id='cpuh-".$vm."' style='width:".$vmdata['cpuhost']."%;'></span><span></span></div></td><td>";
+      $echodata .= my_scale($vmdata['mem']*1024,$unit)."$unit / ".my_scale($vmdata['maxmem']*1024,$unit)."$unit</td><td>";
+      $echodata .=  _("Read").": ".my_scale($vmdata['rdrate'],$unit)."$unit/s<br>"._("Write").": ".my_scale($vmdata['wrrate'],$unit)."$unit/s</td><td>";
+      $echodata .=  _("RX").": ".my_scale($vmdata['rxrate'],$unit)."$unit/s<br>"._("TX").": ".my_scale($vmdata['txrate'],$unit)."$unit/s</td></tr>";
+    }
+    $echo = $echodata ;
+  }
+  if ($running < 1) $echo = "<tr><td colspan='7' style='text-align:center;padding-top:12px'>"._('No VMs running')."</td></tr>";
+ 
+  $echo = json_encode($echo);
+  $md5_new = md5($echo,true);
+  if ($md5_new !== $md5_old) {
+    $md5_old = publish('vm_usage',$echo)!==false ? $md5_new : -1;
+  }
+
+  sleep($timer);
+}
+?>

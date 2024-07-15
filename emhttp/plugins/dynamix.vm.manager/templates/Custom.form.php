@@ -24,6 +24,7 @@
 	}
 
 	$arrValidMachineTypes = getValidMachineTypes();
+	$arrValidPCIDevices = getValidPCIDevices();
 	$arrValidGPUDevices = getValidGPUDevices();
 	$arrValidAudioDevices = getValidAudioDevices();
 	$arrValidOtherDevices = getValidOtherDevices();
@@ -36,6 +37,14 @@
 	$arrValidKeyMaps = getValidKeyMaps();
 	$arrValidNetworks = getValidNetworks();
 	$strCPUModel = getHostCPUModel();
+
+	$templateslocation = "/boot/config/plugins/dynamix.vm.manager/savedtemplates.json";
+
+	if (is_file($templateslocation)){
+		$arrAllTemplates["User-templates"] = "";
+		$ut = json_decode(file_get_contents($templateslocation),true) ;
+		$arrAllTemplates = array_merge($arrAllTemplates, $ut);
+	}
 
 	$arrConfigDefaults = [
 		'template' => [
@@ -50,7 +59,7 @@
 			'uuid' => $lv->domain_generate_uuid(),
 			'clock' => 'localtime',
 			'arch' => 'x86_64',
-			'machine' => 'pc',
+			'machine' => 'pc-i440fx',
 			'mem' => 1024 * 1024,
 			'maxmem' => 1024 * 1024,
 			'password' => '',
@@ -88,7 +97,7 @@
 				'protocol' => 'vnc',
 				'autoport' => 'yes',
 				'model' => 'qxl',
-				'keymap' => 'en-us',
+				'keymap' => 'none',
 				'port' => -1 ,
 				'wsport' => -1,
 				'copypaste' => 'no'
@@ -153,6 +162,13 @@
 		echo json_encode($reply);
 		exit;
 	}
+
+		// create new VM template
+		if (isset($_POST['createvmtemplate'])) {
+			$reply = addtemplatexml($_POST);
+			echo json_encode($reply);
+			exit;
+		}
 
 	// update existing VM
 	if (isset($_POST['updatevm'])) {
@@ -275,6 +291,12 @@
 		$boolNew = true;
 		$arrConfig = $arrConfigDefaults;
 		$arrVMUSBs = getVMUSBs($strXML) ;
+		$strXML = $lv->config_to_xml($arrConfig);
+		$domXML = new DOMDocument();
+		$domXML->preserveWhiteSpace = false;
+		$domXML->formatOutput = true;
+		$domXML->loadXML($strXML);
+		$strXML=  $domXML->saveXML();
 	}
 	// Add any custom metadata field defaults (e.g. os)
 	if (!$arrConfig['template']['os']) {
@@ -286,6 +308,13 @@
 			if ($arrConfig['domain']['hyperv'] == 1) $arrClocks = $arrDefaultClocks['hyperv'] ; else $arrClocks = $arrDefaultClocks['windows'] ;
 		} else $arrClocks = $arrDefaultClocks['other'] ;
 	}
+
+	if (strpos($arrConfig['template']['name'],"User-") !== false) {
+		$arrConfig['template']['name'] = str_replace("User-","",$arrConfig['template']['name']);
+		unset($arrConfig['domain']['uuid']);
+	}
+	if ($usertemplate == 1) unset($arrConfig['domain']['uuid']);
+	$xml2 = build_xml_templates($strXML);
 ?>
 
 <link rel="stylesheet" href="<?autov('/plugins/dynamix.vm.manager/scripts/codemirror/lib/codemirror.css')?>">
@@ -308,6 +337,7 @@
 		<tr>
 			<td>_(Name)_:</td>
 			<td><input type="text" name="domain[name]" id="domain_name" class="textTemplate" title="_(Name of virtual machine)_" placeholder="_(e.g.)_ _(My Workstation)_" value="<?=htmlspecialchars($arrConfig['domain']['name'])?>" required /></td>
+			<td><textarea class="xml" id="xmlname" rows=1 disabled ><?=htmlspecialchars($xml2['name'])."\n".htmlspecialchars($xml2['uuid'])."\n".htmlspecialchars($xml2['metadata'])?></textarea></td>
 		</tr>
 	</table>
 	<blockquote class="inline_help">
@@ -318,11 +348,28 @@
 		<tr class="advanced">
 			<td>_(Description)_:</td>
 			<td><input type="text" name="domain[desc]" title="_(description of virtual machine)_" placeholder="_(description of virtual machine)_ (_(optional)_)" value="<?=htmlspecialchars($arrConfig['domain']['desc'])?>" /></td>
+			<td><textarea class="xml" id="xmldesription" rows=1 disabled ><?=htmlspecialchars($xml2['description'])?></textarea></td>
 		</tr>
 	</table>
 	<div class="advanced">
 		<blockquote class="inline_help">
 			<p>Give the VM a brief description (optional field).</p>
+		</blockquote>
+	</div>
+
+	<table>
+		<tr class="advanced">
+			<td>_(WebUI)_:</td>
+			<td><input type="url" name="template[webui]" title="_(Web UI to start)_" placeholder="_(Web UI to start from menu)_ (_(optional)_)" value="<?=htmlspecialchars($arrConfig['template']['webui'])?>" /></td>
+		</tr>
+	</table>
+	<div class="advanced">
+		<blockquote class="inline_help">
+			<p>Specify a URL that for menu to start. Substitution variables are
+				<br>[IP] IP address, this will take the first IP on the VM. Guest Agent must be installed for this to work.
+				<br>[PORT:XX] Port Number in XX.
+				<br>[VMNAME] VM Name will have spaces replaced with -
+			</p>
 		</blockquote>
 	</div>
 
@@ -357,6 +404,7 @@
 
 			// Available cache pools
 			foreach ($pools as $pool) {
+				if (isSubpool($pool)) continue;
 				$strLabel = $pool.' - '.my_scale($disks[$pool]['fsFree']*1024, $strUnit).' '.$strUnit.' '._('free');
 				echo mk_option($default_storage, $pool, $strLabel);
 			}
@@ -407,6 +455,7 @@
 				?>
 				</select>
 			</td>
+			<td><textarea class="xml" id="xmlcpu" rows=1 disabled ><?=htmlspecialchars($xml2['cpu'])?></textarea></td>
 		</tr>
 	</table>
 	<div class="advanced">
@@ -449,6 +498,7 @@
 				?>
 				</div>
 			</td>
+			<td><textarea class="xml" id="xmlvcpu" rows=5 disabled ><?=htmlspecialchars($xml2['vcpu'])."\n".htmlspecialchars($xml2['cputune'])?></textarea></td>
 		</tr>
 	</table>
 	<blockquote class="inline_help">
@@ -485,6 +535,7 @@
 				?>
 				</select>
 			</td>
+			<td><textarea class="xml" id="xmlmem" rows=2  disabled ><?=htmlspecialchars($xml2['memory'])."\n".htmlspecialchars($xml2['currentMemory'])."\n".htmlspecialchars($xml2['memoryBacking'])?></textarea></td>
 		</tr>
 	</table>
 	<div class="basic">
@@ -498,6 +549,12 @@
 		</blockquote>
 	</div>
 
+	<?
+	if (!isset($arrValidMachineTypes[$arrConfig['domain']['machine']]))  {
+		$arrConfig['domain']['machine'] = ValidateMachineType($arrConfig['domain']['machine']);
+	}
+	?>
+	
 	<table>
 		<tr class="advanced">
 			<td>_(Machine)_:</td>
@@ -506,6 +563,7 @@
 				<?mk_dropdown_options($arrValidMachineTypes, $arrConfig['domain']['machine']);?>
 				</select>
 			</td>
+			<td><textarea class="xml" id="xmlos" rows=5 cols=200 disabled ><?=htmlspecialchars($xml2['os'])."\n".htmlspecialchars($xml2['features'])?></textarea></td>
 		</tr>
 	</table>
 	<div class="advanced">
@@ -624,6 +682,7 @@
 			<td>
 				<input type="text" name="media[cdrom]" autocomplete="off" spellcheck="false" data-pickcloseonfile="true" data-pickfilter="iso" data-pickmatch="^[^.].*" data-pickroot="<?=htmlspecialchars($domain_cfg['MEDIADIR'])?>" class="cdrom" value="<?=htmlspecialchars($arrConfig['media']['cdrom'])?>" placeholder="_(Click and Select cdrom image to install operating system)_">
 			</td>
+			<td><textarea class="xml" id="xmlvdiskhda" rows=1 disabled wrap="soft"><?=htmlspecialchars($xml2['devices']['disk']['hda'])?></textarea></td>
 		</tr>
 		<tr class="advanced">
 			<td>_(OS Install CDRom Bus)_:</td>
@@ -659,6 +718,7 @@
 				<?mk_dropdown_options($arrValidCdromBuses, $arrConfig['media']['driversbus']);?>
 				</select>
 			</td>
+			<td><textarea class="xml" id="xmlvdiskhdb" rows=1 disabled wrap="soft"><?=htmlspecialchars($xml2['devices']['disk']['hdb'])?></textarea></td>
 		</tr>
 	</table>
 	<div class="domain_os windows">
@@ -696,11 +756,11 @@
 
 							if (!empty($arrDisk['new'])) {
 								if (strpos($domain_cfg['DOMAINDIR'], dirname(dirname($arrDisk['new']))) === false ||
-									basename(dirname($arrDisk['new'])) != $arrConfig['domain']['name'] ||
-									basename($arrDisk['new']) != 'vdisk'.($i+1).'.img') {
+									basename(dirname($arrDisk['new'])) != $arrConfig['domain']['name'] || (
+									basename($arrDisk['new']) != 'vdisk'.($i+1).'.img') && basename($arrDisk['new']) != 'vdisk'.($i+1).'.qcow2') {
 									$default_option = 'manual';
 								}
-								if (file_exists(dirname(dirname($arrDisk['new'])).'/'.$arrConfig['domain']['name'].'/vdisk'.($i+1).'.img')) {
+								if (file_exists(dirname(dirname($arrDisk['new'])).'/'.$arrConfig['domain']['name'].'/vdisk'.($i+1).'.img') || file_exists(dirname(dirname($arrDisk['new'])).'/'.$arrConfig['domain']['name'].'/vdisk'.($i+1).'.qcow2')) {
 									// hide all the disks because the auto disk already has been created
 									$boolShowAllDisks = false;
 								}
@@ -731,6 +791,7 @@
 
 								// Available cache pools
 								foreach ($pools as $pool) {
+									if (isSubpool($pool)) continue;
 									$strLabel = $pool.' - '.my_scale($disks[$pool]['fsFree']*1024, $strUnit).' '.$strUnit.' '._('free');
 									echo mk_option($default_option, $pool, $strLabel);
 								}
@@ -757,6 +818,7 @@
 					?>
 					</select><input type="text" name="disk[<?=$i?>][new]" autocomplete="off" spellcheck="false" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="img,qcow,qcow2" data-pickmatch="^[^.].*" data-pickroot="/mnt/" class="disk" id="disk_<?=$i?>" value="<?=htmlspecialchars($arrDisk['new'])?>" placeholder="_(Separate sub-folder and image will be created based on Name)_"><div class="disk_preview"></div>
 				</td>
+				<td><textarea class="xml" id="xmlvdisk<?=$i?>" rows=4 disabled wrap="soft"><?=htmlspecialchars($xml2['devices']['disk'][$arrDisk['dev']])?></textarea></td>
 			</tr>
 
 			<input type="hidden" name="disk[<?=$i?>][storage]" id="disk[<?=$i?>][storage]" value="<?=htmlspecialchars($arrConfig['template']['storage'])?>">
@@ -771,7 +833,7 @@
 			<tr class="advanced disk_file_options">
 				<td>_(vDisk Type)_:</td>
 				<td>
-					<select name="disk[<?=$i?>][driver]" class="narrow" title="_(type of storage image)_">
+					<select name="disk[<?=$i?>][driver]" class="disk_driver narrow" title="_(type of storage image)_">
 					<?mk_dropdown_options($arrValidDiskDrivers, $arrDisk['driver']);?>
 					</select>
 				</td>
@@ -780,11 +842,14 @@
 			<tr class="advanced disk_bus_options">
 				<td>_(vDisk Bus)_:</td>
 				<td>
-					<select name="disk[<?=$i?>][bus]" class="disk_bus narrow">
+					<select name="disk[<?=$i?>][bus]" class="disk_bus narrow" onchange="BusChange(this)">
 					<?mk_dropdown_options($arrValidDiskBuses, $arrDisk['bus']);?>
 					</select>
 				_(Boot Order)_:
 				<input type="number" size="5" maxlength="5" id="disk[<?=$i?>][boot]" class="narrow bootorder" style="width: 50px;" name="disk[<?=$i?>][boot]"   title="_(Boot order)_"  value="<?=$arrDisk['boot']?>" >
+				<? if ($arrDisk['bus'] == "virtio" || $arrDisk['bus'] == "usb") $ssddisabled = "hidden "; else $ssddisabled = " ";?>
+				<span id="disk[<?=$i?>][rotatetext]" <?=$ssddisabled?>>_(SSD)_:</span>
+				<input type="checkbox"  id="disk[<?=$i?>][rotation]" class="narrow rotation" onchange="updateSSDCheck(this)"style="width: 50px;" name="disk[<?=$i?>][rotation]"  <?=$ssddisabled ?> <?=$arrDisk['rotation'] ? "checked ":"";?>  title="_(Set SDD flag)_"  value="<?=$arrDisk['rotation']?>" >
 				</td>
 			</tr>
 			<tr class="advanced disk_bus_options">
@@ -833,6 +898,11 @@
 			</p>
 
 			<p class="advanced">
+				<b>vDisk SSD Flag</b><br>
+				Specify the vdisk shows as SSD within the guest, only supported on SCSI, SATA and IDE bus types.
+			</p>
+
+			<p class="advanced">
 				<b>vDisk Serial</b><br>
 				Set the device serial number presented to the VM.
 			</p>
@@ -877,6 +947,7 @@
 
 								// Available cache pools
 								foreach ($pools as $pool) {
+									if (isSubpool($pool)) continue;
 									$strLabel = $pool.' - '.my_scale($disks[$pool]['fsFree']*1024, $strUnit).' '.$strUnit.' '._('free');
 									echo mk_option($default_option, $pool, $strLabel);
 								}
@@ -915,7 +986,7 @@
 			<tr class="advanced disk_file_options">
 				<td>_(vDisk Type)_:</td>
 				<td>
-					<select name="disk[{{INDEX}}][driver]" class="narrow" title="_(type of storage image)_">
+					<select name="disk[{{INDEX}}][driver]" class="disk_driver narrow" title="_(type of storage image)_">
 					<?mk_dropdown_options($arrValidDiskDrivers, '');?>
 					</select>
 				</td>
@@ -924,12 +995,14 @@
 			<tr class="advanced disk_bus_options">
 				<td>_(vDisk Bus)_:</td>
 				<td>
-					<select name="disk[{{INDEX}}][bus]" class="disk_bus narrow">
+					<select name="disk[{{INDEX}}][bus]" class="disk_bus narrow" onchange="BusChange(this)">
 					<?mk_dropdown_options($arrValidDiskBuses, '');?>
 					</select>
 
 				_(Boot Order)_:
 				<input type="number" size="5" maxlength="5" id="disk[{{INDEX}}][boot]" class="narrow bootorder" style="width: 50px;" name="disk[{{INDEX}}][boot]"   title="_(Boot order)_"  value="" >
+				<span id="disk[{{INDEX}}][rotatetext]" hidden>_(SSD)_:</span>
+				<input type="checkbox"  id="disk[{{INDEX}}][rotation]" class="narrow rotation" onchange="updateSSDCheck(this)"style="width: 50px;" name="disk[{{INDEX}}[rotation]" hidden title="_(Set SSD flag)_" value='0' >
 				</td>
 				<tr class="advanced disk_bus_options">
 				<td>_(Serial)_:</td>
@@ -966,6 +1039,7 @@
 						mk_dropdown_options($arrUnraidShares, $arrUnraidIndex);?>
 				</select>
 				</td>
+				<td><textarea class="xml" id="xmlshare<?=$i?>" rows=4  wrap="soft" disabled ><?=htmlspecialchars($xml2['devices']['filesystem'][$i])?></textarea></td>
 				</tr>
 
 			<tr class="advanced">
@@ -1069,14 +1143,14 @@
 						} else {
 							echo mk_option($arrGPU['id'], '', _('None'));
 						}
-
+						echo mk_option($arrGPU['id'], 'nogpu', _('No GPU'));
 						foreach($arrValidGPUDevices as $arrDev) {
 							echo mk_option($arrGPU['id'], $arrDev['id'], $arrDev['name'].' ('.$arrDev['id'].')');
 						}
 					?>
 					</select>
 					<?
-					if ($arrGPU['id'] != 'virtual') $multifunction = "" ; else $multifunction =  " disabled " ;
+					if ($arrGPU['id'] != 'virtual' && $arrGPU['id'] != 'nogpu') $multifunction = "" ; else $multifunction =  " disabled " ;
 					?>
 					<span id="GPUMulti<?=$i?>" name="gpu[<?=$i?>][multi]" class="<?if ($arrGPU['id'] != 'virtual') echo 'was';?>advanced gpumultiline<?=$i?>"   >_(Multifunction)_:</span>
 
@@ -1087,6 +1161,13 @@
 					?>
 					</select>
 				</td>
+				<?
+					if ($arrGPU['id'] == 'virtual') {
+			    ?>
+				<td><textarea class="xml" id="xmlgraphics<?=$i?>" rows=5  disabled ><?=htmlspecialchars($xml2['devices']['graphics'][0])."\n".htmlspecialchars($xml2['devices']['video'][0])."\n".htmlspecialchars($xml2['devices']['audio'][0])?></textarea></td>
+				<?} else {?>
+				<td><textarea class="xml" id="xmlgraphics<?=$i?>" rows=5  disabled ><?=htmlspecialchars($xml2['devices']['vga'][$arrGPU['id']])?></textarea></td>
+				<?}?>
 			</tr>
 
 			<?if ($i == 0) {
@@ -1104,7 +1185,7 @@
 					</select>
 				</td>
 				</tr>
-				<tr  id="copypasteline" name="copypaste" class="<?if ($arrGPU['id'] != 'virtual') echo 'was';?>advanced ">
+				<tr  id="copypasteline" name="copypaste" class="<?if ($arrGPU['id'] != 'virtual') echo 'was';?>advanced copypaste">
 					<td>_(VM Console enable Copy/paste)_:</td>
 				<td>
 					<select id="copypaste" name="gpu[<?=$i?>][copypaste]" class="narrow" >
@@ -1156,7 +1237,7 @@
 				</td>
 			</tr>
 			<?}?>
-			<tr class="<?if ($arrGPU['id'] == 'virtual') echo 'was';?>advanced romfile">
+			<tr class="<?if ($arrGPU['id'] == 'virtual' || $arrGPU['id'] == 'nogpu') echo 'was';?>advanced romfile">
 				<td>_(Graphics ROM BIOS)_:</td>
 				<td>
 					<input type="text" name="gpu[<?=$i?>][rom]" autocomplete="off" spellcheck="false" data-pickcloseonfile="true" data-pickfilter="rom,bin" data-pickmatch="^[^.].*" data-pickroot="/mnt/" value="<?=htmlspecialchars($arrGPU['rom'])?>" placeholder="_(Path to ROM BIOS file)_ (_(optional)_)" title="_(Path to ROM BIOS file)_ (_(optional)_)" />
@@ -1259,6 +1340,7 @@
 					?>
 					</select>
 				</td>
+				<td><textarea class="xml" id="xmlaudio<?=$i?>" rows=5  disabled ><?=htmlspecialchars($xml2['devices']['audio'][$arrAudio['id']])?></textarea></td>
 			</tr>
 		</table>
 		<?if ($i == 0) {?>
@@ -1303,6 +1385,7 @@
 				<td>
 					<input type="text" name="nic[<?=$i?>][mac]" class="narrow" value="<?=htmlspecialchars($arrNic['mac'])?>" title="_(random mac, you can supply your own)_" /> <i class="fa fa-refresh mac_generate" title="_(re-generate random mac address)_"></i>
 				</td>
+				<td><textarea class="xml" id="xmlnet<?=$i?>" rows=5  disabled ><?=htmlspecialchars($xml2['devices']['interface'][$i])?></textarea></td>
 			</tr>
 			<tr class="advanced">
 				<td>_(Network Source)_:</td>
@@ -1420,7 +1503,7 @@
 		<tr>
 			<td>_(USB Devices)_:</td>
 			<td>
-				<div class="textarea" style="width: 850px">
+				<div class="textarea" style="width: 780px">
 				<?
 					if (!empty($arrVMUSBs)) {
 						foreach($arrVMUSBs as $i => $arrDev) {
@@ -1428,7 +1511,8 @@
 						<label for="usb<?=$i?>">&nbsp&nbsp&nbsp&nbsp<input type="checkbox" name="usb[]" id="usb<?=$i?>" value="<?=htmlspecialchars($arrDev['id'])?>" <?if (count(array_filter($arrConfig['usb'], function($arr) use ($arrDev) { return ($arr['id'] == $arrDev['id']); }))) echo 'checked="checked"';?>
 						/> &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp <input type="checkbox" name="usbopt[<?=htmlspecialchars($arrDev['id'])?>]" id="usbopt<?=$i?>" value="<?=htmlspecialchars($arrDev['id'])?>" <?if ($arrDev["startupPolicy"] =="optional") echo 'checked="checked"';?>/>&nbsp&nbsp&nbsp&nbsp&nbsp
 						<input type="number" size="5" maxlength="5" id="usbboot<?=$i?>" class="narrow bootorder" <?=$bootdisable?>  style="width: 50px;" name="usbboot[<?=htmlspecialchars($arrDev['id'])?>]"   title="_(Boot order)_"  value="<?=$arrDev['usbboot']?>" >
-						<?=htmlspecialchars(substr($arrDev['name'],0,100))?> (<?=htmlspecialchars($arrDev['id'])?>)</label><br/>
+						<?=htmlspecialchars(substr($arrDev['name'],0,90))?> (<?=htmlspecialchars($arrDev['id'])?>)</label><br/>
+						
 						<?
 						}
 					} else {
@@ -1436,7 +1520,7 @@
 					}
 				?>
 				</div>
-			</td>
+			</td><td><textarea class="xml" id="xmlusb<?=$i?>" rows=5  disabled ><?=htmlspecialchars($xml2['devices']['allusb'])?></textarea></td>
 		</tr>
 	</table>
 	<blockquote class="inline_help">
@@ -1452,7 +1536,7 @@
 		<tr>
 			<td>_(Other PCI Devices)_:</td>
 			<td>
-				<div class="textarea" style="width: 850px">
+				<div class="textarea" style="width: 780px">
 				<?
 					$intAvailableOtherPCIDevices = 0;
 
@@ -1473,6 +1557,7 @@
 						<label for="pci<?=$i?>">&nbsp&nbsp&nbsp&nbsp<input type="checkbox" name="pci[]" id="pci<?=$i?>" value="<?=htmlspecialchars($arrDev['id'])?>" <?=$extra?>/> &nbsp
 						<input type="number" size="5" maxlength="5" id="pciboot<?=$i?>" class="narrow pcibootorder" <?=$bootdisable?>  style="width: 50px;" name="pciboot[<?=htmlspecialchars($arrDev['id'])?>]"   title="_(Boot order)_"  value="<?=$pciboot?>" >
 						<?=htmlspecialchars($arrDev['name'])?> | <?=htmlspecialchars($arrDev['type'])?> (<?=htmlspecialchars($arrDev['id'])?>)</label><br/>
+						<td><textarea class="xml" id="xmlpci<?=$i?>" rows=5  disabled ><?=htmlspecialchars($xml2['devices']['other'][$arrDev['id']])?></textarea></td>
 					<?
 						}
 					}
@@ -1483,6 +1568,7 @@
 				?>
 				</div>
 			</td>
+
 		</tr>
 	</table>
 	<blockquote class="inline_help">
@@ -1524,7 +1610,7 @@
 				if ($arrConfig['qemucmdline'] == "") $qemurows = 2 ; else $qemurows = 15 ;
 				?>
 			<td>
-			<textarea id="qemucmdline" name="qemucmdline" rows=<?=$qemurows?> style="width: 850px" onchange="QEMUChgCmd(this)"><?=htmlspecialchars($arrConfig['qemucmdline'])?> </textarea></td></tr>
+			<textarea id="qemucmdline" name="qemucmdline" class="xmlqemu" rows=<?=$qemurows?> style="width: 780px" onchange="QEMUChgCmd(this)"><?=htmlspecialchars($arrConfig['qemucmdline'])."\n".htmlspecialchars($arrConfig['qemuoverride'])?> </textarea></td></tr>
 			</td>
 		</tr>
 	</table>
@@ -1546,6 +1632,7 @@
 				?>
 				</select>
 			</td>
+			<td></td><td></td><td><textarea class="xml" id="xmlclock" rows=5 disabled ><?=htmlspecialchars($xml2['clock'])."\n".htmlspecialchars($xml2['on_poweroff'])."\n".htmlspecialchars($xml2['on_reboot'])."\n".htmlspecialchars($xml2['on_crash'])?></textarea></td>
 		</tr>
 					<?$clockcount = 0 ;
 					if (!empty($arrClocks)) {
@@ -1593,6 +1680,135 @@
 			<p>Windows and Hyperv Hpet:no Hypervclock: yes Pit no rtc no.	</p>
 		</p>
 	</blockquote>
+	<?
+	if (!isset($arrConfig['evdev'])) $arrConfig['evdev'][0] = ['dev'=>"",'grab'=>"",'repeat'=>"",'grabToggle'=>""];
+	foreach ($arrConfig['evdev'] as $i => $arrEvdev) {
+		$strLabel = ($i > 0) ? appendOrdinalSuffix($i + 1) : '';
+		?>
+		<table data-category="evdev" data-multiple="true" data-minimum="1" data-index="<?=$i?>" data-prefix="<?=$strLabel?>">
+			<tr>
+				<td>_(Evdev Device)_:</td>
+				<td>
+					<select name="evdev[<?=$i?>][dev]" class="dev narrow">
+					<?
+						echo mk_option($arrEvdev['dev'], '', _('None'));
+						foreach(getValidevDev() as $line) echo mk_option($arrEvdev['dev'], $line , $line);
+					?>
+					</select>
+				</td>
+				<td></td><td></td><td><textarea class="xml" id="xmlclock" rows=5 disabled ><?=htmlspecialchars($xml2['devices']['allinput'])?></textarea></td>
+		</tr>
+
+		<tr class="advanced disk_file_options">
+			<td>_(Grab)_:</td>
+			<td>
+				<select name="evdev[<?=$i?>][grab]" class="evdev_grab"  title="_(grab options)_">
+				<?echo mk_option($arrEvdev['grab'], '', _('None'));
+				foreach(["all"] as $line) echo mk_option($arrEvdev['grab'],$line,ucfirst($line));?>
+				</select>
+			</td>
+		</tr>
+
+		<tr class="advanced disk_file_options">
+			<td>_(Repeat)_:</td>
+			<td>
+				<select name="evdev[<?=$i?>][repeat]" class="evdev_repeat narrow" title="_(grab options)_">
+				<?echo mk_option($arrEvdev['repeat'], '', _('None'));
+				foreach(["on","off"] as $line) echo mk_option($arrEvdev['repeat'],$line,ucfirst($line));?>
+				</select>
+			</td>
+		</tr>
+
+		<tr class="advanced disk_file_options">
+			<td>_(Grab Toggle)_:</td>
+			<td>
+				<select name="evdev[<?=$i?>][grabToggle]" class="evdev_grabtoggle narrow" title="_(grab options)_">
+				<?echo mk_option($arrEvdev['grabToggle'], '', _('None'));
+				foreach(["ctrl-ctrl", "alt-alt", "shift-shift", "meta-meta", "scrolllock" , "ctrl-scrolllock"] as $line) echo mk_option($arrEvdev['grabToggle'],$line,$line);?>
+				</select>
+			</td>
+		</tr>
+
+
+
+		</table>
+		<?if ($i == 0) {?>
+		<div class="advanced">
+			<blockquote class="inline_help">
+				<p>
+					<b> Event Devices</b><br>
+					Evdev is an input interface built into the Linux kernel. QEMU’s evdev passthrough support allows a user to redirect evdev events to a guest. These events can include mouse movements and key presses. By hitting both Ctrl keys at the same time, QEMU can toggle the input recipient. QEMU’s evdev passthrough also features almost no latency, making it perfect for gaming. The main downside to evdev passthrough is the lack of button rebinding – and in some cases, macro keys won’t even work at all.
+					Optional items are normally only used for keyboards.
+				</p>
+				<p>
+					<b>Device</b><br>
+					Host device to passthrough to guest.
+				</p>
+
+				<p>
+					<b>Grab</b><br>
+					All grabs all input devices instead of just one	
+				</p>
+
+				<p>
+					<b>Repeat</b><br>
+					Repeat with value 'on'/'off' to enable/disable auto-repeat events 
+				</p>
+
+				<p>	
+					<b>GrabToggle</b><br>
+					GrabToggle with values ctrl-ctrl, alt-alt, shift-shift, meta-meta, scrolllock or ctrl-scrolllock to change the grab key combination</p>
+
+				<p>Additional devices can be added/removed by clicking the symbols to the left.</p>
+			</blockquote>
+		</div>
+		<?}?>
+	<?}?>
+	<script type="text/html" id="tmplevdev">
+	<table data-category="evdev" data-multiple="true" data-minimum="1"  data-index="<?=$i?>" data-prefix="<?=$strLabel?>">
+			<tr>
+				<td>_(Evdev Device)_:</td>
+				<td>
+					<select name="evdev[{{INDEX}}][dev]" class="dev narrow">
+					<?
+						echo mk_option("", '', _('None'));
+						foreach(getValidevDev() as $line) echo mk_option("", $line , $line);
+					?>
+					</select>
+				</td>
+
+			<tr class="advanced disk_file_options">
+				<td>_(Grab)_:</td>
+				<td>
+					<select name="evdev[{{INDEX}}][grab]" class="evdev_grab"  title="_(grab options)_">
+					<?echo mk_option(""	, '', _('None'));
+					foreach(["all"] as $line) echo mk_option("",$line,ucfirst($line));?>
+					</select>
+				</td>
+			</tr>
+
+			<tr class="advanced disk_file_options">
+				<td>_(Repeat)_:</td>
+				<td>
+					<select name="evdev[{{INDEX}}][repeat]" class="evdev_repeat narrow" title="_(grab options)_">
+					<?echo mk_option("", '', _('None'));
+					foreach(["on","off"] as $line) echo mk_option("",$line,ucfirst($line));?>
+					</select>
+				</td>
+			</tr>
+
+			<tr class="advanced disk_file_options">
+				<td>_(Grab Toggle)_:</td>
+				<td>
+					<select name="evdev[{{INDEX}}][grabToggle]" class="evdev_grabtoggle narrow" title="_(grab options)_">
+					<?echo mk_option("", '', _('None'));
+					foreach(["ctrl-ctrl", "alt-alt", "shift-shift", "meta-meta", "scrolllock" , "ctrl-scrolllock"] as $line) echo mk_option("",$line,$line);?>
+					</select>
+				</td>
+			</tr>
+		</table>
+	</script>
+
 
 	<table>
 		<tr>
@@ -1606,6 +1822,7 @@
 				<input type="button" value="_(Create)_" busyvalue="_(Creating)_..." readyvalue="_(Create)_" id="btnSubmit" />
 			<?}?>
 				<input type="button" value="_(Cancel)_" id="btnCancel" />
+				<input type="button" value=" _(Create/Modify Template)_" busyvalue="_(Creating)_..." readyvalue="_(Create)_" id="btnTemplateSubmit" />
 			</td>
 		</tr>
 	</table>
@@ -1614,6 +1831,19 @@
 		<p>Click Create to generate the vDisks and return to the Virtual Machines page where your new VM will be created.</p>
 	</blockquote>
 	<?}?>
+
+	<table>
+	<tr>
+		<tr>
+			<td class="xml">_(Other XML)_:</td>
+			<?
+				if ($arrConfig['qemucmdline'] == "") $qemurows = 2 ; else $qemurows = 15 ;
+				?>
+			<td>
+			<textarea id="xmlother" name="xmlother" disabled class="xml" rows=10 style="width: 780px"> <?=htmlspecialchars($xml2['devices']['emulator'][0])."\n".htmlspecialchars($xml2['devices']['console'][0])."\n".htmlspecialchars($xml2['devices']['serial'][0])."\n".htmlspecialchars($xml2['devices']['channel'][0])."\n"?> </textarea></td></tr>
+			</td>
+		</tr>
+	</table>
 </div>
 
 <div class="xmlview">
@@ -1634,6 +1864,7 @@
 					<input type="button" value="_(Create)_" busyvalue="_(Creating)_..." readyvalue="_(Create)_" id="btnSubmit" />
 				<?}?>
 				<input type="button" value="_(Cancel)_" id="btnCancel" />
+				<input type="button" value=" _(Create/Modify Template)_" busyvalue="_(Creating)_..." readyvalue="_(Create)_" id="btnTemplateSubmit" />
 			<?} else {?>
 				<input type="button" value="_(Back)_" id="btnCancel" />
 			<?}?>
@@ -1671,6 +1902,28 @@ function ShareChange(share) {
 			document.getElementById(name+"[target]").removeAttribute("disabled");
 			document.getElementById(name+"[source]").removeAttribute("disabled");
 		}
+}
+
+function BusChange(bus) {
+		var value = bus.value;
+		var index = bus.name.indexOf("]") + 1;
+		var name = bus.name.substr(0,index) ;
+		if (value == "virtio" || value == "usb" ) {
+		document.getElementById(name+"[rotatetext]").style.visibility="hidden";
+		document.getElementById(name+"[rotation]").style.visibility="hidden";
+		} else {
+			document.getElementById(name+"[rotation]").style.display="inline";
+			document.getElementById(name+"[rotation]").style.visibility="visible";
+			document.getElementById(name+"[rotatetext]").style.display="inline";
+			document.getElementById(name+"[rotatetext]").style.visibility="visible";
+		}
+}
+
+function updateSSDCheck(ssd) {
+		var value = ssd.value;
+		var index = ssd.name.indexOf("]") + 1;
+		var name = ssd.name.substr(0,index) ;
+		if (document.getElementById(name+"[rotation]").checked) ssd.value = "1"; else ssd.value = "0";
 }
 
 function BIOSChange(bios) {
@@ -1855,6 +2108,9 @@ $(function() {
 	$('.advancedview').change(function () {
 		if ($(this).is(':checked')) {
 			setTimeout(function() {
+				var xmlPanelHeight = window.outerHeight;
+				if (xmlPanelHeight > 1024) xmlPanelHeight = xmlPanelHeight-550;
+				editor.setSize(null,xmlPanelHeight);
 				editor.refresh();
 			}, 100);
 		}
@@ -1878,6 +2134,10 @@ $(function() {
 			var $disk_input = $table.find('.disk');
 			var $disk_preview = $table.find('.disk_preview');
 			var $disk_serial = $table.find('.disk_serial');
+			var $disk_driver = $table.find('.disk_driver').val();
+			var $disk_ext = "img";
+			if ($disk_driver == "raw") $disk_ext = "img"; 
+				else if(disk_select != 'manual') $disk_ext = $disk_driver;
 
 			if (disk_select == 'manual') {
 
@@ -1906,7 +2166,7 @@ $(function() {
 			} else if (disk_select !== '') {
 
 				// Auto disk
-				var auto_disk_path = domaindir + '/vdisk' + (index+1) + '.img';
+				var auto_disk_path = domaindir + '/vdisk' + (index+1) + '.' + $disk_ext;
 				$disk_preview.html(auto_disk_path);
 				$disk_input.fadeOut('fast', function() {
 					$disk_preview.fadeIn('fast');
@@ -2038,6 +2298,10 @@ $(function() {
 		regenerateDiskPreview($(this).closest('table').data('index'));
 	});
 
+	$("#vmform").on("change", ".disk_driver", function changeDiskSelectEvent() {
+		regenerateDiskPreview($(this).closest('table').data('index'));
+	});
+
 	$("#vmform").on("input change", ".disk", function changeDiskEvent() {
 		var $input = $(this);
 		var config = $input.data();
@@ -2070,7 +2334,7 @@ $(function() {
 		var myindex = $(this).closest('table').data('index');
 
 		if (myindex == 0) {
-			$vnc_sections = $('.autoportline,.protocol,.vncmodel,.vncpassword,.vnckeymap');
+			$vnc_sections = $('.autoportline,.protocol,.vncmodel,.vncpassword,.vnckeymap,.copypaste');
 			if (myvalue == 'virtual') {
 				$vnc_sections.filter('.wasadvanced').removeClass('wasadvanced').addClass('advanced');
 				slideDownRows($vnc_sections.not(isVMAdvancedMode() ? '.basic' : '.advanced'));
@@ -2080,12 +2344,12 @@ $(function() {
 				slideUpRows($vnc_sections);
 				$vnc_sections.filter('.advanced').removeClass('advanced').addClass('wasadvanced');
 				var MultiSel = document.getElementById("GPUMultiSel0") ;
-				MultiSel.disabled = false ;
+				if (myvalue=="nogpu") MultiSel.disabled = true ; else MultiSel.disabled = false ;
 			}
 		}
 
 		$romfile = $(this).closest('table').find('.romfile');
-		if (myvalue == 'virtual' || myvalue == '') {
+		if (myvalue == 'virtual' || myvalue == '' || myvalue =="nogpu") {
 			slideUpRows($romfile.not(isVMAdvancedMode() ? '.basic' : '.advanced'));
 			$romfile.filter('.advanced').removeClass('advanced').addClass('wasadvanced');
 		} else {
@@ -2135,7 +2399,7 @@ $(function() {
 		} while (gpu);
 		form.find('select[name="gpu[0][id]"] option').each(function(){
 			var gpu = $(this).val();
-			if (gpu != 'virtual' && !gpus.includes(gpu)) form.append('<input type="hidden" name="pci[]" value="'+gpu+'#remove">');
+			if ((gpu != 'virtual' && gpu != 'nogpu') && !gpus.includes(gpu)) form.append('<input type="hidden" name="pci[]" value="'+gpu+'#remove">');
 		});
 		// remove unused sound cards
 		var sound = [], i = 0;
@@ -2181,6 +2445,96 @@ $(function() {
 		}, "json");
 	});
 
+	$("#vmform .formview #btnTemplateSubmit").click(function frmSubmit() {
+		var $button = $(this);
+		var $panel = $('.formview');
+		var form = $button.closest('form');
+		form.append('<input type="hidden" name="createvmtemplate" value="1" />');
+		var createVmInput = form.find('input[name="createvm"],input[name="updatevm"]');
+		createVmInput.remove();
+		
+
+		$("#vmform .disk_select option:selected").not("[value='manual']").closest('table').each(function () {
+			var v = $(this).find('.disk_preview').html();
+			$(this).find('.disk').val(v);
+		});
+
+		$panel.find('input').prop('disabled', false); // enable all inputs otherwise they wont post
+
+		<?if (!$boolNew):?>
+		// signal devices to be added or removed
+		form.find('input[name="usb[]"],input[name="pci[]"],input[name="usbopt[]"]').each(function(){
+			if (!$(this).prop('checked')) $(this).prop('checked',true).val($(this).val()+'#remove');
+		});
+		// remove unused graphic cards
+		var gpus = [], i = 0;
+		do {
+			var gpu = form.find('select[name="gpu['+(i++)+'][id]"] option:selected').val();
+			if (gpu) gpus.push(gpu);
+		} while (gpu);
+		form.find('select[name="gpu[0][id]"] option').each(function(){
+			var gpu = $(this).val();
+			if ((gpu != 'virtual' && gpu != 'nogpu') && !gpus.includes(gpu)) form.append('<input type="hidden" name="pci[]" value="'+gpu+'#remove">');
+		});
+		// remove unused sound cards
+		var sound = [], i = 0;
+		do {
+			var audio = form.find('select[name="audio['+(i++)+'][id]"] option:selected').val();
+			if (audio) sound.push(audio);
+		} while (audio);
+		form.find('select[name="audio[0][id]"] option').each(function(){
+			var audio = $(this).val();
+			if (audio && !sound.includes(audio)) form.append('<input type="hidden" name="pci[]" value="'+audio+'#remove">');
+		});
+		<?endif?>
+		var postdata = form.find('input,select,textarea[name="qemucmdline"]').serialize().replace(/'/g,"%27");
+		<?if (!$boolNew):?>
+		// keep checkbox visually unchecked
+		form.find('input[name="usb[]"],input[name="usbopt[]"],input[name="pci[]"]').each(function(){
+			if ($(this).val().indexOf('#remove')>0) $(this).prop('checked',false);
+		});
+		<?endif?>
+
+		$panel.find('input').prop('disabled', true);
+		$button.val($button.attr('busyvalue'));
+
+		swal({
+			title: _("Template Name")_,
+			text: _("Enter name:\nIf name already exists it will be replaced.")_,
+			type: "input",
+			showCancelButton: true,
+			closeOnConfirm: false,
+			//animation: "slide-from-top",
+			inputPlaceholder: _("Leaving blank will use OS name.")_
+			},
+			function(inputValue){
+
+
+	  	postdata=postdata+"&templatename="+inputValue;
+		
+		$.post("/plugins/dynamix.vm.manager/templates/Custom.form.php", postdata, function( data ) {
+			if (data.success) {
+				if (data.vmrcurl) {
+					var vmrc_window=window.open(data.vmrcurl, '_blank', 'scrollbars=yes,resizable=yes');
+					try {
+						vmrc_window.focus();
+					} catch (e) {
+						swal({title:"_(Browser error)_",text:"_(Pop-up Blocker is enabled! Please add this site to your exception list)_",type:"warning",confirmButtonText:"_(Ok)_"},function(){ done() });
+						return;
+					}
+				}
+				done();
+			}
+			if (data.error) {
+				swal({title:"_(VM creation error)_",text:data.error,type:"error",confirmButtonText:"_(Ok)_"});
+				$panel.find('input').prop('disabled', false);
+				$button.val($button.attr('readyvalue'));
+				resetForm();
+			}
+		}, "json");
+	});
+});
+
 	$("#vmform .xmlview #btnSubmit").click(function frmSubmit() {
 		var $button = $(this);
 		var $panel = $('.xmlview');
@@ -2207,6 +2561,52 @@ $(function() {
 		}, "json");
 	});
 
+	$("#vmform .xmlview #btnTemplateSubmit").click(function frmSubmit() {
+		var $button = $(this);
+		var $panel = $('.xmlview');
+
+
+		editor.save();
+
+		$panel.find('input').prop('disabled', false); // enable all inputs otherwise they wont post
+		var form = $button.closest('form');
+		form.append('<input type="hidden" name="createvmtemplate" value="1" />');
+		var createVmInput = form.find('input[name="createvm"],input[name="updatevm"]');
+		createVmInput.remove();
+
+		var postdata = $panel.closest('form').serialize().replace(/'/g,"%27");
+
+		$panel.find('input').prop('disabled', true);
+		$button.val($button.attr('busyvalue'));
+
+		swal({
+			title: _("Template Name")_,
+			text: _("Enter name:\nIf name already exists it will be replaced.")_,
+			type: "input",
+			showCancelButton: true,
+			closeOnConfirm: false,
+			//animation: "slide-from-top",
+			inputPlaceholder: _("Leaving blank will use OS name.")_
+			},
+			function(inputValue){
+
+
+	  	postdata=postdata+"&templatename="+inputValue;
+
+		$.post("/plugins/dynamix.vm.manager/templates/Custom.form.php", postdata, function( data ) {
+			if (data.success) {
+				done();
+			}
+			if (data.error) {
+				swal({title:"_(VM creation error)_",text:data.error,type:"error",confirmButtonText:"_(Ok)_"});
+				$panel.find('input').prop('disabled', false);
+				$button.val($button.attr('readyvalue'));
+				resetForm();
+			}
+		}, "json");
+	});
+	});
+
 	// Fire events below once upon showing page
 	var os = $("#vmform #template_os").val() || 'linux';
 	var os_casted = (os.indexOf('windows') == -1 ? 'other' : 'windows');
@@ -2219,7 +2619,8 @@ $(function() {
 		$('#vmform #domain_clock').val('localtime');
 		$("#vmform #domain_machine option").each(function(){
 			if ($(this).val().indexOf('i440fx') != -1) {
-				$('#vmform #domain_machine').val($(this).val()).change();
+				var usertemplate = <?=$usertemplate?>;
+				if (usertemplate = 0) $('#vmform #domain_machine').val($(this).val()).change();
 				return false;
 			}
 		});
@@ -2228,7 +2629,8 @@ $(function() {
 		$('#vmform #clockoffset').val('utc');
 		$("#vmform #domain_machine option").each(function(){
 			if ($(this).val().indexOf('q35') != -1) {
-				$('#vmform #domain_machine').val($(this).val()).change();
+				var usertemplate = <?=$usertemplate?>;
+				if (usertemplate = 0) $('#vmform #domain_machine').val($(this).val()).change();
 				return false;
 			}
 		});

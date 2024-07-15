@@ -29,18 +29,18 @@ function my_scale($value, &$unit) {
 
 $md5_old = -1;
 while (true) {
-  $now = time(); $i = 0;
-  unset($dump);  $vtun = [];
+  $now = time();
+  $echo = [];
+  unset($dump);
   exec('wg show all dump',$dump);
   foreach ($dump as $row) {
     $row = preg_split('/\s+/',$row);
-    if (count($row)>5) $vtun[] = $row[0].';'.($row[5] ? $now - $row[5] : 0).';'.my_scale($row[6],$unit)." $unit;".my_scale($row[7],$unit)." $unit";
+    if (count($row)>5) $echo[] = [$row[0], $row[5]?$now-$row[5]:0, my_scale($row[6],$unit)." $unit", my_scale($row[7],$unit)." $unit"];
   }
-  $echo = implode("\0",$vtun);
+  $echo = json_encode($echo);
   $md5_new = md5($echo,true);
   if ($md5_new !== $md5_old) {
-    publish('wireguard', $echo);
-    $md5_old = $md5_new;
+    $md5_old = publish('wireguard',$echo)!==false ? $md5_new : -1;
   }
   sleep(1);
 }

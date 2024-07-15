@@ -40,16 +40,21 @@ function write_log($string) {
 readfile('update.htm');
 flush();
 
-$docroot = $_SERVER['DOCUMENT_ROOT'];
+$docroot = $_SERVER['DOCUMENT_ROOT'] ?: "/usr/local/emhttp";
+require_once "$docroot/plugins/dynamix/include/Wrappers.php";
+
 if (isset($_POST['#file'])) {
   $file = $_POST['#file'];
+  $raw_file = isset($_POST['#raw_file']) ? ($_POST['#raw_file'] === 'true') : false;
   // prepend with boot (flash) if path is relative
   if ($file && $file[0]!='/') $file = "/boot/config/plugins/$file";
   $section = $_POST['#section'] ?? false;
   $cleanup = isset($_POST['#cleanup']);
   $default = ($file && isset($_POST['#default'])) ? @parse_ini_file("$docroot/plugins/".basename(dirname($file))."/default.cfg", $section) : [];
 
-  $keys = is_file($file) ? (parse_ini_file($file, $section) ?: []) : [];
+  // if the file is not a raw file, it can be parsed 
+  $keys = (is_file($file) && !$raw_file) ? (parse_ini_file($file, $section) ?: []) : [];
+
   // the 'save' switch can be reset by the include file to disallow settings saving
   $save = true;
   if (isset($_POST['#include'])) {
@@ -72,7 +77,7 @@ if (isset($_POST['#file'])) {
       foreach ($keys as $key => $value) if (strlen($value) || !$cleanup) $text .= "$key=\"$value\"\n";
     }
     @mkdir(dirname($file));
-    file_put_contents($file, $text);
+    file_put_contents_atomic($file,$text);
   }
 }
 if (isset($_POST['#command'])) {

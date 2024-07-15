@@ -19,7 +19,7 @@ extract(parse_plugin_cfg('dynamix',true));
 // cron operation
 if ($argc==2 && $argv[1]=='cron') {
   // trim btrfs, xfs
-  echo shell_exec("fstrim -va 2>/dev/null");
+  xfs_btrfs_trim(false);
   // trim zfs
   zfs_trim(false);
   exit(0);
@@ -72,16 +72,24 @@ function zfs_trim($write) {
   }
 }
 
+function xfs_btrfs_trim($write) {
+  exec("findmnt -lnt btrfs,xfs -o target,source|awk '\$2!~\"\\\\[\"{print \$1,\$2}'",$mounts);
+  foreach ($mounts as $mount) {
+    [$target,$source] = explode(' ',$mount);
+    if (is_hdd($source)) continue;
+    if ($write) write("$target: ... <i class='fa fa-spin fa-circle-o-notch'></i>\r");
+    $trim = exec("fstrim -v $target 2>/dev/null");
+    if ($write) {
+      if ($trim) write("$trim on $source\r","\n"); else write("\r");
+    } else {
+      if ($trim) echo("$trim on $source\n");
+    }
+  }
+}
+
 write(_("TRIM operation started")."\n","\n","\n");
 // trim btrfs, xfs
-exec("findmnt -lnt btrfs,xfs -o target,source|awk '\$2!~\"\\\\[\"{print \$1,\$2}'",$mounts);
-foreach ($mounts as $mount) {
-  [$target,$source] = explode(' ',$mount);
-  if (is_hdd($source)) continue;
-  write("$target: ... <i class='fa fa-spin fa-circle-o-notch'></i>\r");
-  $trim = exec("fstrim -v $target 2>/dev/null");
-  if ($trim) write("$trim on $source\r","\n"); else write("\r");
-}
+xfs_btrfs_trim(true);
 // trim zfs
 zfs_trim(true);
 write(_("Finished")."\n",'_DONE_','');

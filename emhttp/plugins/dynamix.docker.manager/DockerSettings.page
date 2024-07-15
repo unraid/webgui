@@ -116,6 +116,7 @@ $bgcolor = strstr('white,azure',$display['theme']) ? '#f2f2f2' : '#1c1c1c';
 <input type="hidden" name="#cleanup" value="true">
 <input type="hidden" name="DOCKER_CUSTOM_NETWORKS" value="<?=implode(' ',$unset)?> ">
 <input type="hidden" name="DOCKER_IMAGE_FILE" value="<?=_var($dockercfg,'DOCKER_IMAGE_FILE')?>">
+
 _(Enable Docker)_:
 : <select id="DOCKER_ENABLED" name="DOCKER_ENABLED">
   <?=mk_option(_var($dockercfg,'DOCKER_ENABLED'), 'no', _('No'))?>
@@ -139,8 +140,8 @@ _(Enable container table readmore-js)_:
 
 :docker_readmore_help:
 
-_(Docker Stop Timeout)_:
-: <input class='narrow' id="DOCKER_TIMEOUT" type="number" name="DOCKER_TIMEOUT" min='1' value="<?=_var($dockercfg,'DOCKER_TIMEOUT')?>">_(seconds)_
+_(Docker Stop Timeout)_ (_(seconds)_):
+: <input class='narrow' id="DOCKER_TIMEOUT" type="number" name="DOCKER_TIMEOUT" min='1' value="<?=_var($dockercfg,'DOCKER_TIMEOUT')?>">
 
 :docker_timeout_help:
 
@@ -188,7 +189,7 @@ _(Docker directory)_:
 
 </div>
 _(Default appdata storage location)_:
-: <input type="text" id="DOCKER_APP_CONFIG_PATH" name="DOCKER_APP_CONFIG_PATH" autocomplete="off" spellcheck="false" value="<?=_var($dockercfg,'DOCKER_APP_CONFIG_PATH')?>" placeholder="_(e.g.)_ /mnt/user/appdata/" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="<?=is_dir('/mnt/user')?'/mnt/user':'/mnt'?>" data-pickfolders="true" pattern="^[^\\]*/$">
+: <input type="text" id="DOCKER_APP_CONFIG_PATH" name="DOCKER_APP_CONFIG_PATH" autocomplete="off" spellcheck="false" value="<?=_var($dockercfg,'DOCKER_APP_CONFIG_PATH')?>" placeholder="_(e.g.)_ /mnt/user/appdata/" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="/mnt" data-pickfolders="true" pattern="^[^\\]*/$">
   <?if ($var['fsState'] != "Started"):?>
   <span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
   <?elseif (!is_dir(_var($dockercfg,'DOCKER_APP_CONFIG_PATH'))):?>

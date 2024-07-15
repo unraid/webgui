@@ -22,6 +22,14 @@
 		require_once "$docroot/webGui/include/Translations.php";
 	}
 
+	$templateslocation = "/boot/config/plugins/dynamix.vm.manager/savedtemplates.json";
+
+	if (is_file($templateslocation)){
+		$arrAllTemplates["User-templates"] = "";
+		$ut = json_decode(file_get_contents($templateslocation),true) ;
+		$arrAllTemplates = array_merge($arrAllTemplates, $ut);
+	}
+
 	$hdrXML = "<?xml version='1.0' encoding='UTF-8'?>\n"; // XML encoding declaration
 
 	// create new VM
@@ -36,6 +44,15 @@
 		echo json_encode($reply);
 		exit;
 	}
+
+	
+		// create new VM template
+		if (isset($_POST['createvmtemplate'])) {
+			$reply = addtemplatexml($_POST);
+			echo json_encode($reply);
+			exit;
+		}
+
 
 	// update existing VM
 	if (isset($_POST['updatevm'])) {
@@ -99,6 +116,9 @@
 		<input type="button" value="_(Create)_" busyvalue="_(Creating)_..." readyvalue="_(Create)_" id="btnSubmit" />
 	<? } ?>
 	<input type="button" value="_(Cancel)_" id="btnCancel" />
+	
+	<input type="button" value=" _(Create/Modify Template)_" busyvalue="_(Creating)_..." readyvalue="_(Create)_" id="btnTemplateSubmit" />
+
 <? } else { ?>
 	<input type="button" value="_(Done)_" id="btnCancel" />
 <? } ?>
@@ -180,5 +200,43 @@ $(function() {
 			}
 		}, "json");
 	});
+
+	$("#vmform #btnTemplateSubmit").click(function frmSubmit() {
+		var $button = $(this);
+		var $form = $button.closest('form');
+
+		editor.save();
+
+		$form.find('input').prop('disabled', false); // enable all inputs otherwise they wont post
+		$form.append('<input type="hidden" name="createvmtemplate" value="1" />');
+		var createVmInput = $form.find('input[name="createvm"],input[name="updatevm"]');
+		createVmInput.remove();
+		var postdata = $form.serialize().replace(/'/g,"%27");
+
+		$form.find('input').prop('disabled', true);
+		$button.val($button.attr('busyvalue'));
+		swal({
+			title: _("Template Name")_,
+			text: _("Enter name:\nIf name already exists it will be replaced.")_,
+			type: "input",
+			showCancelButton: true,
+			closeOnConfirm: false,
+			//animation: "slide-from-top",
+			inputPlaceholder: _("Leaving blank will use OS name.")_
+			},
+			function(inputValue){
+				postdata=postdata+"&templatename="+inputValue;
+				$.post("/plugins/dynamix.vm.manager/templates/XML_Expert.form.php", postdata, function( data ) {
+					if (data.success) {
+						done();
+					}
+					if (data.error) {
+						swal({title:"_(VM creation error)_",text:data.error,type:"error",confirmButtonText:"_(Ok)_"});
+						$form.find('input').prop('disabled', false);
+						$button.val($button.attr('readyvalue'));
+					}
+				}, "json");
+			});
+		});
 });
 </script>

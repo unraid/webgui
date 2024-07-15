@@ -1,0 +1,41 @@
+Menu="VMs:0"
+Title="VM Usage Statisics"
+Nchan="vm_usage:stop"
+Cond="exec(\"grep -o '^USAGE=.Y' /boot/config/domain.cfg 2>/dev/null\") && is_file('/var/run/libvirt/libvirtd.pid')"
+---
+<?PHP
+/* Copyright 2005-2024, Lime Technology
+ * Copyright 2012-2024, Simon Fairweather.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+?>
+<table id="vmstats" class="tablesorter four shift">
+    <thead class='child'><tr><th class="th1">_(Name)_</th><th class="th2">_(Guest CPU)_</th><th>_(Host CPU)_</th><th>_(Memory)_</th><th>_(Disk IO)_</th><th>_(Network IO)_</th></tr></thead>
+    <tbody id ="vmstatsbody" class='child'>
+  </tbody>
+</table>
+
+<script>
+var vmusage = new NchanSubscriber('/sub/vm_usage',{subscriber:'websocket'});
+vmusage.on('message', function(msg){
+  var data = JSON.parse(msg);
+  $('#vmstatsbody').html(data);
+  });
+
+$(function(){
+  vmusage.start();
+});
+
+window.onunload = function(){
+  vmusage.stop();
+}
+</script>

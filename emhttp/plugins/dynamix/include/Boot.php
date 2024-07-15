@@ -59,10 +59,10 @@ boot.on('message', function(msg) {
   switch (ini['fsState']) {
     case 'Stopped'   : var status = "<span class='red'><?=_('Array Stopped')?></span>"; break;
     case 'Started'   : var status = "<span class='green'><?=_('Array Started')?></span>"; break;
-    case 'Formatting': var status = "<span class='green'><?=_('Array Started')?></span>&bullet;<span class='orange tour'><?=_('Formatting device(s)')?></span>"; break;
+    case 'Formatting': var status = "<span class='green'><?=_('Array Started')?></span><br><span class='orange'><?=_('Formatting device(s)')?></span>"; break;
     default          : var status = "<span class='orange'>"+_('Array '+ini['fsState'])+"</span>";
   }
-  if (ini['fsProgress']) status += "&bullet;<span class='blue tour'>"+_(ini['fsProgress'])+"</span>";
+  status += ini['fsProgress'] ? "<br><span class='blue'>"+_(ini['fsProgress'])+"</span>" : "<br>&nbsp;";
   $('.sub1').html(status);
 });
 
@@ -100,12 +100,12 @@ function timer() {
   return Math.round((now.getTime()-start.getTime())/1000);
 }
 function reboot_now() {
-  $('.notice').html("<?=_('Reboot')?>");
+  $('.notice').html("<?=_('Reboot')?> - <?=gethostname()?>");
   boot.start();
   reboot_online();
 }
 function shutdown_now() {
-  $('.notice').html("<?=_('Shutdown')?>");
+  $('.notice').html("<?=_('Shutdown')?> - <?=gethostname()?>");
   boot.start();
   shutdown_online();
 }
@@ -158,18 +158,18 @@ $(document).ajaxSend(function(elm, xhr, s){
 </head>
 <?
 $safemode = '/boot/unraidsafemode';
-$progress = (_var($var,'fsProgress')!='') ? "&bullet;<span class='blue tour'>{$var['fsProgress']}</span>" : "";
+$progress = (_var($var,'fsProgress')!='') ? "<br><span class='blue'>{$var['fsProgress']}</span>" : "<br>&nbsp;";
 
 switch (_var($_POST,'cmd','shutdown')) {
 case 'reboot':
   if (isset($_POST['safemode'])) touch($safemode); else @unlink($safemode);
-  exec('/sbin/reboot -n');
   echo '<body onload="reboot_now()">';
+  exec('/sbin/reboot -n');
   break;
 case 'shutdown':
   if (isset($_POST['safemode'])) touch($safemode); else @unlink($safemode);
-  exec('/sbin/poweroff -n');
   echo '<body onload="shutdown_now()">';
+  exec('/sbin/poweroff -n');
   break;
 }
 echo '<div class="notice"></div>';

@@ -35,7 +35,7 @@ if [[ -n $local_server ]]; then
     sed -ri "\$a\\\$InputUDPServerBindRuleset remote\n\\\$UDPServerRun ${server_port:-514}" $ETC
     [[ $server_protocol == udp ]] && sed -ri 's/^(\$ModLoad imtcp)/#\1/;/^\$InputTCPServerBindRuleset remote$/d;/^\$InputTCPServerRun [0-9]+$/d' $ETC
   fi
-  sed -ri "/^\\\$template remote,.*$/d;/^#\\\$UDPServerRun [0-9]+.*$/a\\\$template remote,\"${server_folder:-/mnt/user/system}/syslog-%FROMHOST-IP%.log\"" $ETC
+  sed -ri "/^\\\$template remote,.*$/d;/^#\\\$UDPServerRun [0-9]+.*$/a\\\$template remote,\"${server_folder:-/mnt/user/system}/${server_filename:-syslog-%FROMHOST-IP%.log}\"" $ETC
 else
   sed -ri '/^\$RuleSet remote$/d;/^\$FileOwner nobody$/d;/^\$FileGroup users$/d;/^\$FileCreateMode 06[46][46]$/d;/^\$IncludeConfig \/etc\/rsyslog\.d\/\*\.conf # remote$/d;/^\*\.\* \?remote$/d;/^\$template remote,".*"$/d;/^\$Input(TCP|UDP)ServerBindRuleset remote$/d;/^\$(InputTCP|UDP)ServerRun [0-9]+$/d;s/^#?\$(ModLoad imtcp|ModLoad imudp)/#\$\1/' $ETC
 fi

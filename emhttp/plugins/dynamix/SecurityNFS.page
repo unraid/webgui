@@ -17,6 +17,10 @@ Cond="(($var['shareNFSEnabled']!='no') && (isset($name)?array_key_exists($name,$
 ?>
 <?
 $width = [123,300];
+
+/* Replace spaces in NFS rule with new lines for multi line textarea. */
+$sec_nfs[$name]['hostList']	= str_replace(" ", "\n", $sec_nfs[$name]['hostList']);
+
 ?>
 :nfs_security_help:
 
@@ -73,10 +77,10 @@ _(Security)_:
 </form>
 
 <?if ($sec_nfs[$name]['security']=='private'):?>
-<form markdown="1" method="POST" name="otherForm" action="/update.htm" target="progressFrame">
+<form  id="nfsHostListForm" markdown="1" method="POST" name="otherForm" action="/update.htm" target="progressFrame">
 <input type="hidden" name="shareName" value="<?=htmlspecialchars($name)?>">
 _(Rule)_:
-: <input type="text" name="shareHostListNFS" maxlength="512" value="<?=htmlspecialchars($sec_nfs[$name]['hostList'])?>">
+: <textarea name="shareHostListNFS" cols="40" rows="5" style="width:45%" placeholder="Example: *(rw,sec=sys,insecure,anongid=100,anonuid=99,no_root_squash,lock)"><?= htmlspecialchars($sec_nfs[$name]['hostList']) ?></textarea>
 
 &nbsp;
 : <input type="submit" name="changeShareAccessNFS" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
@@ -85,58 +89,140 @@ _(Rule)_:
 
 <script>
 $(function() {
-  initDropdownNFS(false);
-  if ($.cookie('hostList')!=null) {
-    var host = $('input[name="shareHostListNFS"]');
-    host.val($.cookie('hostList'));
-    setTimeout(function(){host.trigger('change');},100);
-    $.removeCookie('hostList');
-  }
-<?if ($tabbed):?>
-<?$path=='Shares/Share' ? $t=2 : $t=1;?>
-  $('#tab<?=$t?>').bind({click:function(){initDropdownNFS(true);}});
-<?endif;?>
+	/* Initialize dropdown for NFS and check for hostList cookie. */
+	initDropdownNFS(false);
+	if ($.cookie('hostList') != null) {
+		var host = $('input[name="shareHostListNFS"]');
+		host.val($.cookie('hostList'));
+		setTimeout(function() {
+			host.trigger('change');
+		}, 100);
+		$.removeCookie('hostList');
+	}
+
+	<?if ($tabbed):?>
+	/* Conditionally bind click event to tabs if tabbed interface is used. */
+	<?$path=='Shares/Share' ? $t=2 : $t=1;?>
+	$('#tab<?=$t?>').bind({click:function() {
+		initDropdownNFS(true);
+	}});
+	<?endif;?>
 });
+
+/* Add an event listener to update the text area to make all rules into a single line before being submitted. */
+document.addEventListener("DOMContentLoaded", function() {
+	var form = document.getElementById('nfsHostListForm');
+	form.addEventListener('submit', function(event) {
+		var textarea = document.querySelector('textarea[name="shareHostListNFS"]');
+
+		/* Split the content into lines. */
+		var lines = textarea.value.split('\n');
+
+		/* Filter out empty lines or lines that contain only whitespace, and remove carriage returns and excessive spaces within lines. */
+		var cleanedLines = lines.map(function(line) {
+			/* Remove carriage returns and spaces within each line. */
+  			return line.replace(/[\r\s]+/g, '');
+		}).filter(function(line) {
+			/* Keep only non-empty lines. */
+  			return line.length > 0;
+		});
+
+		/* Join the remaining lines with a single space. */
+		textarea.value = cleanedLines.join(' ');
+	});
+});
+
+/* Function to initialize or reset the NFS dropdown */
 function initDropdownNFS(reset) {
-  if (reset) {
-    $('#nfs1').dropdownchecklist('destroy');
-  }
-  $("#nfs1").dropdownchecklist({firstItemChecksAll:true, emptyText:"_(select)_...", width:<?=$width[0]?>, explicitClose:"..._(close)_"});
+	/* Check if reset is required and destroy existing dropdown if true */
+	if (reset) {
+		$('#nfs1').dropdownchecklist('destroy');
+	}
+	/* Initialize or re-initialize the dropdown with specified options */
+	$("#nfs1").dropdownchecklist({
+		firstItemChecksAll: true,
+		emptyText: "_(select)_...",
+		width: <?=$width[0]?>,
+		explicitClose: "..._(close)_"
+	});
 }
+
+/* Function to read NFS configuration based on selected options and copy to this share. */
 function readNFS() {
-  var form = document.nfs_edit;
-  var name = $('select[name="readnfs"]').val();
-  $.get('/webGui/include/ProtocolData.php',{protocol:'nfs',name:name},function(json) {
-    var data = $.parseJSON(json);
-    form.shareExportNFS.value = data.export;
-    form.shareSecurityNFS.value = data.security;
-    if (data.hostList != '') $.cookie('hostList',data.hostList);
-    $(form).find('select').trigger('change');
-  });
+	/* Access the form for NFS editing */
+	var form = document.nfs_edit;
+
+	/* Retrieve selected NFS name from the dropdown */
+	var name = $('select[name="readnfs"]').val();
+
+	/* Perform a GET request to fetch NFS configuration data */
+	$.get('/webGui/include/ProtocolData.php', {protocol: 'nfs', name: name}, function(json) {
+		/* Parse the JSON response */
+		var data = $.parseJSON(json);
+		var textarea = $('textarea[name="shareHostListNFS"]');
+
+		/* Update form fields with fetched data */
+		form.shareExportNFS.value = data.export;
+		form.shareSecurityNFS.value = data.security;
+
+		/* Check if hostList is not empty and save it in a cookie */
+		if (data.hostList != '') {
+			$.cookie('hostList', data.hostList);
+		}
+
+        /* Replace all spaces in data.hostList with new lines. */
+        var formattedHostList = data.hostList.replace(/ /g, '\n');
+
+		/* Update textarea content. Use data from 'hostList'. */
+		textarea.val(formattedHostList);
+
+		/* Trigger change event on select elements to update UI */
+		$(form).find('select').trigger('change');
+
+	    /* Trigger an input event as if the user had typed in the textarea. */
+	    textarea.trigger('input');
+	});
 }
-function writeNFS(data,n,i) {
-  if (data) {
-    if (n<i) {
-      $.post('/update.htm',data[n], function(){setTimeout(function(){writeNFS(data,++n,i);},3000);});
-    } else {
-      toggleButton('writenfs',false);
-      $('div.spinner.fixed').hide();
-    }
-  } else {
-    var data = [], i = 0;
-    $('select#nfs1 option').map(function(i) {
-      if ($(this).prop('selected')==true && $(this).val()!='(_(All)_)') {
-        data[i] = {};
-        data[i]['shareName'] = $(this).val();
-        data[i]['shareExportNFS'] = '<?=addslashes(htmlspecialchars($sec_nfs[$name]['export']))?>';
-        data[i]['shareSecurityNFS'] = '<?=addslashes(htmlspecialchars($sec_nfs[$name]['security']))?>';
-        data[i]['changeShareSecurityNFS'] = 'Apply';
-        i++;
-      }
-    });
-    toggleButton('writenfs',true);
-    $('div.spinner.fixed').show('slow');
-    writeNFS(data,0,i);
-  }
+
+/* Function to write NFS settings based on user selection to other shares. */
+function writeNFS(data, n, i) {
+	if (data) {
+		if (n < i) {
+			$.post('/update.htm', data[n], function() {
+				setTimeout(function() { writeNFS(data, ++n, i); }, 3000);
+			});
+		} else {
+		  toggleButton('writenfs', false);
+		  $('div.spinner.fixed').hide();
+		}
+	} else {
+		var data = [];
+
+		/* Get the setting from the share config. */
+		var hostList = $('textarea[name="shareHostListNFS"]').val().trim();
+
+		/* Replace all new lines in data.hostList with spaces. */
+		var formattedHostList = <?= json_encode($sec_nfs[$name]['hostList']); ?>.replace(/\n/g, ' ');
+
+		$('select#nfs1 option').each(function() {
+			if ($(this).prop('selected') && $(this).val() != '(_(All)_)') {
+				data.push({
+				  shareName: $(this).val(),
+				  shareExportNFS: '<?=addslashes(htmlspecialchars($sec_nfs[$name]['export']))?>',
+				  shareSecurityNFS: '<?=addslashes(htmlspecialchars($sec_nfs[$name]['security']))?>',
+				  changeShareSecurityNFS: 'Apply'
+				});
+
+				data.push({
+					shareName: $(this).val(),
+					shareHostListNFS: formattedHostList,
+					changeShareSecurityNFS: 'Apply'
+				});
+			}
+		});
+		toggleButton('writenfs', true);
+		$('div.spinner.fixed').show('slow');
+		writeNFS(data, 0, data.length);
+	}
 }
 </script>

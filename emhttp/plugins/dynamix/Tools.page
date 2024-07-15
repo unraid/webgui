@@ -2,3 +2,26 @@ Menu="Tasks:90"
 Type="xmenu"
 Tabs="false"
 Code="e909"
+---
+<?PHP 
+if (!isset($display['favorites'])) {
+  $favorites = true;
+} else {
+  $favorites = $display['favorites'] == "yes" ? true : false;
+}
+?>
+<script>
+function addPage(page) {
+  $.post('/webGui/include/MyFavorites.php',{action:'add',page:page},function(){
+    swal({title:"_(Added to Favorites)_",text:"",type:"success",html:true,confirmButtonText:"_(Ok)_"},function(x){refresh();});
+  });
+}
+
+$(function(){
+  $('div.Panel').each(function(){
+    var page = $(this).find('a').prop('href').split('/').pop();
+    if (<?=$favorites?>) {$(this).find('span').append('<i class="fa fa-heart favo" title="_(Add to favorites)_" onclick="addPage(&quot;'+page+'&quot;);return false"></i>');}
+    if (<?=$favorites?>) { $(this).hover(function(){$(this).find('i.favo').show();},function(){$(this).find('i.favo').hide();});}
+  });
+});
+</script>

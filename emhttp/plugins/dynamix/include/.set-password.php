@@ -30,12 +30,13 @@ if (!empty($_POST['password']) && !empty($_POST['confirmPassword'])) {
         session_regenerate_id(true);
         session_write_close();
 
-        header("Location: /".$var['START_PAGE']);
+        // Redirect the user to the start page
+        header("Location: /".$start_page);
         exit;
     }
 
     // Error when attempting to set password
-    exec("logger -t webGUI -- \"{$VALIDATION_MESSAGES['saveError']} [REMOTE_ADDR]: {$REMOTE_ADDR}\"");
+    my_logger("{$VALIDATION_MESSAGES['saveError']} [REMOTE_ADDR]: {$REMOTE_ADDR}");
     return $POST_ERROR = $VALIDATION_MESSAGES['saveError'];
 }
 

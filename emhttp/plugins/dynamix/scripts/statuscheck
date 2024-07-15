@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2024, Lime Technology
+ * Copyright 2012-2024, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -21,6 +21,7 @@ $disks = (array)@parse_ini_file("/var/local/emhttp/disks.ini",true);
 require_once "$docroot/webGui/include/CustomMerge.php";
 
 $script = "$docroot/webGui/scripts/notify";
+// this command will set the $notify array
 extract(parse_plugin_cfg("dynamix",true));
 $output = _var($notify,'report');
 $server = strtoupper(_var($var,'NAME','tower'));
@@ -35,7 +36,7 @@ function my_temp($value) {
   global $display;
   if ($value=='*') return ' - standby';
   $unit = _var($display,'unit','C');
-  return ' - active '.($unit=='F' ? round(9/5*$value+32) : str_replace('.',_var($display,'number','.,')[0], $value)).' '.$unit;
+  return ' - active '.($unit=='F' ? fahrenheit($value) : str_replace('.',_var($display,'number','.,')[0], $value)).' '.$unit;
 }
 function my_disk($name) {
   return ucfirst(preg_replace('/(\d+)$/',' $1',$name));
@@ -94,8 +95,9 @@ function my_clock($time) {
 function my_array(&$disk) {
   global $data,$display,$error0,$error1,$error2,$error3;
   $name = _var($disk,'name');
-  $max  = _var($disk,'maxTemp')>=0 ? $disk['maxTemp'] : (_var($display,'max')>=0 ? $display['max'] : 0);
-  $hot  = _var($disk,'hotTemp')>=0 ? $disk['hotTemp'] : (_var($display,'hot')>=0 ? $display['hot'] : 0);
+  [$hotNVME,$maxNVME] = _var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'temp') : [-1,-1];
+  $hot  = _var($disk,'hotTemp',-1)>=0 ? $disk['hotTemp'] : ($hotNVME>=0 ? $hotNVME : (_var($disk,'rotational',1)==0 && $display['hotssd']>=0 ? $display['hotssd'] : $display['hot']));
+  $max  = _var($disk,'maxTemp',-1)>=0 ? $disk['maxTemp'] : ($maxNVME>=0 ? $maxNVME : (_var($disk,'rotational',1)==0 && $display['maxssd']>=0 ? $display['maxssd'] : $display['max']));
   if (strpos(_var($disk,'status'),'_NP')!==false) return false;
   $temp = _var($disk,'temp');
   if ($max>0 && $temp>=$max) {
@@ -177,7 +179,8 @@ $warn = ($error0 || $error3) ? "alert" : (($error1 || $error2) ? "warning" : "no
 $stat = $warn=="normal" ? "[PASS]" : "[FAIL]";
 $info = "Array has $size disk".($size==1 ? "" : "s").($parity ? " ({$word}parity".($pools ? " & pools)" : ")") : ($pools ? " ({$word}pools)" : ""));
 $message = implode('\n', $data);
-exec("$script -s ".escapeshellarg("Notice [$server] - array health report $stat")." -d ".escapeshellarg("$info")." -m ".escapeshellarg("$message")." -i ".escapeshellarg("$warn $output")." -l '/Main'");
+$subject = "Notice [$server] - array health report $stat";
+exec("$script -s ".escapeshellarg($subject)." -d ".escapeshellarg("$info")." -m ".escapeshellarg("$message")." -i ".escapeshellarg("$warn $output")." -l '/Main'");
 
 exit(0);
 ?>

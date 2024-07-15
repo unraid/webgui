@@ -13,33 +13,7 @@
 ?>
 <?
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
-require_once "$docroot/webGui/include/Wrappers.php";
-require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginHelpers.php";
+require_once "$docroot/plugins/dynamix.plugin.manager/include/UnraidCheck.php";
 
-// Multi-language support
-if (!function_exists('_')) {
-  function _($text) {return $text;}
-}
-
-extract(parse_plugin_cfg('dynamix', true));
-
-$var     = (array)@parse_ini_file('/var/local/emhttp/var.ini');
-$script  = "$docroot/webGui/scripts/notify";
-$server  = strtoupper(_var($var,'NAME','server'));
-$output  = _var($notify,'plugin');
-$builtin = ['unRAIDServer'];
-
-foreach ($builtin as $name) {
-  $plg  = "$name.plg";
-  plugin('check',$plg);
-  $file = "/tmp/plugins/$plg";
-  $old  = plugin('version', "/var/log/plugins/$plg");
-  $new  = plugin('version', $file);
-
-  // silently suppress bad download of PLG file
-  if (version_compare($new,$old,'>')) {
-    exec("$script -e ".escapeshellarg("System - $name [$new]")." -s ".escapeshellarg("Notice [$server] - Version update $new")." -d ".escapeshellarg("A new version of $name is available")." -i ".escapeshellarg("normal $output")." -l '/Tools/Update' -x");
-  }
-}
-exit(0);
-?>
+$unraidOsCheck = new UnraidOsCheck();
+$unraidOsCheck->checkForUpdate();

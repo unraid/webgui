@@ -1,0 +1,19 @@
+Menu="Tasks:2"
+Type="xmenu"
+Code="f08a"
+Cond="@filesize('/boot/config/favorites.cfg')"
+---
+<script>
+function delPage(page) {
+  $.post('/webGui/include/MyFavorites.php',{action:'del',page:page},function(){refresh();});
+}
+
+$(function(){
+  $('div.Panel').each(function(){
+    var page = $(this).find('a').prop('href').split('/').pop();
+    $(this).find('span').append('<i class="fa fa-trash-o favo" title="_(Remove from favorites)_" onclick="delPage(&quot;'+page+'&quot;);return false"></i>');
+    $(this).hover(function(){$(this).find('i.favo').show();},function(){$(this).find('i.favo').hide();});
+  });
+  $.post('/webGui/include/MyFavorites.php',{action:'clear'},function(){if ($('div.Panel').length==0) $('#nofavs').show();});
+});
+</script>

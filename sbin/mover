@@ -1,20 +1,9 @@
 #!/bin/bash
-#Copyright 2005-2020, Lime Technology
+#Copyright 2005-2024, Lime Technology, Inc.
 #License: GPLv2 only
 
-# This is the 'mover' script used for moving files between a pool and the main unRAID array.
+# This is the 'mover' script used for moving files between pools and/or the main unRAID array.
 # It is typically invoked via cron.
-
-# First we check if it's valid for this script run: pool use in shfs must be enabled and
-# an instance of the script must not already be running.
-
-# Next, check each of the top-level directories (shares) on each pool.
-# If, and only if, the 'Use Cache' setting for the share is set to "yes", we use 'find' to
-# list the objects (files and directories) of that share directory, moving them to the array.
-# Next, we check each of the top-level directories (shares) on each array disk (in sorted order).
-# If, and only if, the 'Use Cache' setting for the share is set to "prefer", we use 'find' to
-# list the objects (files and directories) of that share directory, moving them to the pool
-# associted with the share.
 
 # The script is set up so that hidden directories (i.e., directory names beginning with a '.'
 # character) at the topmost level of a pool or an array disk are not moved.  This behavior
@@ -37,6 +26,10 @@ PIDFILE="/var/run/mover.pid"
 CFGFILE="/boot/config/share.cfg"
 DEBUGGING=""
 
+move() {
+  /usr/bin/find "$1" -depth 2>/dev/null | /usr/libexec/unraid/move $DEBUGGING
+}
+
 start() {
   if [ -f $PIDFILE ]; then
     if ps h $(cat $PIDFILE) | grep mover ; then
@@ -52,9 +45,60 @@ start() {
       exit 2
     fi
   fi
-  if ! mountpoint -q /mnt/user0 ; then
-    echo "mover: array devices not mounted"
-    exit 3
+
+  echo $$ >/var/run/mover.pid
+  echo "mover: started"
+
+  shopt -s nullglob
+
+  for SHARECFG in /boot/config/shares/*.cfg ; do
+    SHARE=$(basename "$SHARECFG" .cfg)
+    source <(fromdos < "$SHARECFG")
+
+    # maybe move from primary to secondary
+    if [[ $shareUseCache = yes && -n $shareCachePool && -d "/mnt/$shareCachePool/$SHARE" ]]; then
+      if [[ -n $shareCachePool2 ]]; then
+        # secondary is a pool
+        if [[ -d "/mnt/$shareCachePool2" ]]; then
+          move "/mnt/$shareCachePool/$SHARE"
+        fi
+      else
+        # secondary is the unRAID array, ensure at least one data disk is present
+        disks=(/mnt/disk[1-9]/ /mnt/disk[1-9][0-9]/)
+        if [[ ${#disks[@]} -gt 0 ]]; then
+          move "/mnt/$shareCachePool/$SHARE"
+        fi
+      fi
+    fi
+
+    # maybe move from secondary to primary
+    if [[ $shareUseCache = prefer ]]; then
+      if [[ -n $shareCachePool2 ]]; then
+        # secondary is a pool (primary is also a pool)
+        if [[ -d "/mnt/$shareCachePool2/$SHARE" && -n $shareCachePool && -d "/mnt/$shareCachePool" ]]; then
+          move "/mnt/$shareCachePool2/$SHARE"
+        fi
+      else
+        # secondary is the unRAID array
+        if [[ -n $shareCachePool && -d "/mnt/$shareCachePool" ]]; then
+          for SHAREPATH in /mnt/disk[1-9]/$SHARE/ /mnt/disk[1-9][0-9]/$SHARE/ ; do
+            move "$SHAREPATH"
+          done
+        fi
+      fi
+    fi
+  done
+
+  rm -f $PIDFILE
+  echo "mover: finished"
+}
+
+empty() {
+  if [ -f $PIDFILE ]; then
+    if ps h $(cat $PIDFILE) | grep mover ; then
+        echo "mover: already running"
+        exit 1
+    fi
   fi
 
   echo $$ >/var/run/mover.pid
@@ -62,29 +106,18 @@ start() {
 
   shopt -s nullglob
 
-  # Check for objects to move from pools to array
-  for POOL in /boot/config/pools/*.cfg ; do
-    for SHAREPATH in /mnt/$(basename "$POOL" .cfg)/*/ ; do
-      SHARE=$(basename "$SHAREPATH")
-      if grep -qs 'shareUseCache="yes"' "/boot/config/shares/${SHARE}.cfg" ; then
-        find "${SHAREPATH%/}" -depth | /usr/local/bin/move $DEBUGGING
-      fi
-    done
-  done
-
-  # Check for objects to move from array to pools
-  ls -dvc1 /mnt/disk[0-9]*/*/ | while read SHAREPATH ; do
-    SHARE=$(basename "$SHAREPATH")
-    if grep -qs 'shareUseCache="prefer"' "/boot/config/shares/${SHARE}.cfg" ; then
-      eval $(grep -s shareCachePool "/boot/config/shares/${SHARE}.cfg" | tr -d '\r')
-      if [[ -z "$shareCachePool" ]]; then
-        shareCachePool="cache"
-      fi
-      if [[ -d "/mnt/$shareCachePool" ]]; then
-        find "${SHAREPATH%/}" -depth | /usr/local/bin/move $DEBUGGING
-      fi
+  for SHAREPATH in /mnt/$DISK/* ; do
+    if [[ -d "$SHAREPATH" ]]; then
+      find "$SHAREPATH" -depth 2>/dev/null | /usr/libexec/unraid/move -e $DEBUGGING
     fi
   done
+
+  # output list of files which could not be moved
+  shopt -s dotglob ; FILES=/mnt/$DISK/* ; shopt -u dotglob
+  if [ ${#files[@]} -gt 2 ]; then
+    echo "mover: not moved:"
+    ls -1 --almost-all --recursive /mnt/$DISK
+  fi
 
   rm -f $PIDFILE
   echo "mover: finished"
@@ -99,8 +132,6 @@ killtree() {
   [ $pid -ne $$ ] && kill -TERM $pid
 }
 
-# Caution: stopping mover like this can lead to partial files on the destination
-# and possible incomplete hard link transfer.  Not recommended to do this.
 stop() {
   if [ ! -f $PIDFILE ]; then
     echo "mover: not running"
@@ -112,9 +143,42 @@ stop() {
   echo "mover: stopped"
 }
 
+# Function to display usage
+usage() {
+    echo "Usage: $0 start [-e] <disk_name>"
+    echo "       $0 stop|status"
+    echo "       <disk_name> must match pattern 'disk[0-9]*'"
+    exit 1
+}
+
+# validate disk name
+validate_disk() {
+    if [[ ! "$1" =~ ^disk[0-9]+$ ]]; then
+        echo "Error: <disk_name> must match pattern 'disk[0-9]*'"
+        usage
+    fi
+}
+
+if [ "$#" -lt 1 ]; then
+    usage
+    exit 1
+fi
+
 case $1 in
 start)
-  start
+    if [ -z "$2" ]; then
+        start
+    elif [ "$2" == "-e" ]; then
+        if [ -z "$3" ]; then
+            usage
+        else
+            validate_disk "$3"
+            DISK="$3"
+            empty
+        fi
+    else
+        usage
+    fi
   ;;
 stop)
   stop
@@ -123,8 +187,6 @@ status)
   [ -f $PIDFILE ]
   ;;
 *)
-  # Default is "start"
-  # echo "Usage: $0 (start|stop|status)"
-  start
+  usage
   ;;
 esac

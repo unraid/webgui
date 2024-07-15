@@ -95,6 +95,15 @@ function safe_filename($string) {
   return trim($string);
 }
 
+/*
+   Call this when using the subject field in email or agents. Do not use when showing the subject in a browser.
+   Removes all HTML entities from subject line, is specifically targetting the my_temp() function, which adds '&#8201;&#176;'
+*/
+function clean_subject($subject) {
+  $subject = preg_replace("/&#?[a-z0-9]{2,8};/i"," ",$subject);
+  return $subject;
+}
+
 // start
 if ($argc == 1) exit(usage());
 
@@ -215,8 +224,8 @@ case 'add':
   $entity = $overrule===false ? $notify[$importance] : $overrule;
   if (!$mailtest) file_put_contents($archive,"timestamp=$timestamp\nevent=$event\nsubject=$subject\ndescription=$description\nimportance=$importance\n".($message ? "message=".str_replace('\n','<br>',$message)."\n" : ""));
   if (($entity & 1)==1 && !$mailtest && !$noBrowser) file_put_contents($unread,"timestamp=$timestamp\nevent=$event\nsubject=$subject\ndescription=$description\nimportance=$importance\nlink=$link\n");
-  if (($entity & 2)==2 || $mailtest)  if (!generate_email($event, $subject, str_replace('<br>','. ',$description), $importance, $message, $recipients, $fqdnlink)) exit(1);
-  if (($entity & 4)==4 && !$mailtest) { if (is_array($agents)) {foreach ($agents as $agent) {exec("TIMESTAMP='$timestamp' EVENT=".escapeshellarg($event)." SUBJECT=".escapeshellarg($subject)." DESCRIPTION=".escapeshellarg($description)." IMPORTANCE=".escapeshellarg($importance)." CONTENT=".escapeshellarg($message)." LINK=".escapeshellarg($fqdnlink)." bash ".$agent);};}};
+  if (($entity & 2)==2 || $mailtest)  if (!generate_email($event, clean_subject($subject), str_replace('<br>','. ',$description), $importance, $message, $recipients, $fqdnlink)) exit(1);
+  if (($entity & 4)==4 && !$mailtest) { if (is_array($agents)) {foreach ($agents as $agent) {exec("TIMESTAMP='$timestamp' EVENT=".escapeshellarg($event)." SUBJECT=".escapeshellarg(clean_subject($subject))." DESCRIPTION=".escapeshellarg($description)." IMPORTANCE=".escapeshellarg($importance)." CONTENT=".escapeshellarg($message)." LINK=".escapeshellarg($fqdnlink)." bash ".$agent);};}};
   break;
 
 case 'get':

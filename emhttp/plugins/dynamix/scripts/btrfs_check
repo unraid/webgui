@@ -1,28 +1,64 @@
 #!/bin/bash
-# btrfs_check start <dev> <id> <options> 
+# btrfs_check start <dev> <id> <options>
 # btrfs_check status <dev> <id>
 # btrfs_check cancel <dev> <id>
+# btrfs_check reset <mountpoint>
 
-# by default btrfs-check outputs to /var/lib/btrfs
+# By default btrfs-check outputs to /var/lib/btrfs
 mkdir -p /var/lib/btrfs
+
 case "$1" in
 'start')
-  exec /sbin/btrfs check $4 $2 &> /var/lib/btrfs/check.status.$3 &
+	# Start the btrfs check process in the background and log output
+	/sbin/btrfs check $4 $2 &> /var/lib/btrfs/check.status.$3 &
+	pid=$!
+	echo $pid > /var/lib/btrfs/check.pid.$3
+	exit 0
 ;;
 'status')
-  if [ -f /var/lib/btrfs/check.status.$3 ]; then
-    cat /var/lib/btrfs/check.status.$3
-  else
-    echo "Not available"
-  fi;
-  # establish retval of this script: 0 running, 1 not running
-  pgrep -f "/sbin/btrfs check .*$2" >/dev/null
+	# Check if the process is running and set the return value accordingly
+	if [ -f /var/lib/btrfs/check.pid.$3 ]; then
+		cat /var/lib/btrfs/check.status.$3
+		pid=$(cat /var/lib/btrfs/check.pid.$3)
+		if kill -0 $pid 2>/dev/null; then
+			# Process is running
+			exit 9
+		else
+			if [ -f /var/lib/btrfs/check.status.$3 ]; then
+				rm -f /var/lib/btrfs/check.pid.$3
+			fi
+		fi
+	else
+		if [ -f /var/lib/btrfs/check.status.$3 ]; then
+			cat /var/lib/btrfs/check.status.$3
+		else
+			echo "Not available"
+		fi
+	fi
+
+	exit 0
 ;;
 'cancel')
-  pkill -f "/sbin/btrfs_check.*$2"
-  while pgrep -f "/sbin/btrfs check .*$2" >/dev/null ; do
-    sleep 1
-  done
-  echo "Cancelled" >> /var/lib/btrfs/check.status.$3
+	# Cancel the btrfs check process
+	if [ -f /var/lib/btrfs/check.pid.$3 ]; then
+		pid=$(cat /var/lib/btrfs/check.pid.$3)
+		kill $pid
+		while kill -0 $pid 2>/dev/null; do
+			sleep 1
+		done
+		echo -e "\nCancelled" >> /var/lib/btrfs/check.status.$3
+		rm -f /var/lib/btrfs/check.pid.$3
+	else
+		echo "No process to cancel"
+	fi
+
+	exit 0
+;;
+'reset')
+	exec /sbin/btrfs device stats -z $2
+;;
+*)
+	echo "Invalid command"
+	exit 0
 ;;
 esac

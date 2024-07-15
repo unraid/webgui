@@ -30,6 +30,8 @@ DAEMON="Avahi mDNS/DNS-SD daemon"
 CALLER="avahi"
 AVAHI="/usr/sbin/avahi-daemon"
 CONF="/etc/avahi/avahi-daemon.conf"
+HOSTS="/etc/hosts"
+NAME=$(</etc/HOSTNAME)
 
 # run & log functions
 . /etc/rc.d/rc.runlog
@@ -47,6 +49,22 @@ enable(){
 
 disable(){
   sed -ri "s/^#?(use-$1)=.*/\1=no/" $CONF
+}
+
+# when starting avahidaemon, add name.local to the hosts file
+add_local_to_hosts(){
+  local old new
+  old="^127\.0\.0\.1.*"
+  new="127.0.0.1      $NAME $NAME.local localhost"
+  sed -i "s/$old/$new/gm;t" $HOSTS
+}
+
+# when stopping avahidaemon, remove name.local from the hosts file
+remove_local_from_hosts(){
+  local old new
+  old="^127\.0\.0\.1.*"
+  new="127.0.0.1      $NAME localhost"
+  sed -i "s/$old/$new/gm;t" $HOSTS
 }
 
 avahid_running(){
@@ -67,7 +85,7 @@ avahid_start(){
       [[ $IPV4 == no ]] && disable ipv4 || enable ipv4
       [[ $IPV6 == no ]] && disable ipv6 || enable ipv6
       run $AVAHI -D
-      if avahid_running; then REPLY="Started"; else REPLY="Failed"; fi
+      if avahid_running; then add_local_to_hosts && REPLY="Started"; else REPLY="Failed"; fi
     else
       REPLY="Bind failed"
     fi
@@ -82,7 +100,7 @@ avahid_stop(){
     REPLY="Already stopped"
   else
     run $AVAHI -k
-    if ! avahid_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+    if ! avahid_running; then remove_local_from_hosts && REPLY="Stopped"; else REPLY="Failed"; fi
   fi
   log "$DAEMON...  $REPLY."
 }
@@ -95,8 +113,7 @@ avahid_restart(){
 }
 
 avahid_reload(){
-  $AVAHI -k 2>/dev/null
-  avahid_start >/dev/null
+  $AVAHI --reload 2>/dev/null
 }
 
 avahid_update(){

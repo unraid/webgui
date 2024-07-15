@@ -73,7 +73,7 @@ case 't1load':
       } else {
         $supporturl = $module['supporturl'];
         $pluginname = $module['plugin'];
-        $supporthtml = "<span id='link$modname'><a href='$supporturl' target='_blank'><i title='"._("Support page $pluginname")."' class='fa fa-phone-square'></i></a></span>";
+        $supporthtml = "<span id='link$modname'><a href='$supporturl' target='_blank'><i title='"._("Support page")." $pluginname' class='fa fa-phone-square'></i></a></span>";
       }
     }
     if (!empty($module["version"])) $version = " (".$module["version"].")"; else $version = "";

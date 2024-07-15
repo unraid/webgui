@@ -1,0 +1,5 @@
+#!/bin/bash
+if [[ -n $1 ]]; then
+  # $1 is new governor
+  echo $1 | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor &>/dev/null
+fi

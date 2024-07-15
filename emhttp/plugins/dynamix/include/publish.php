@@ -11,16 +11,16 @@
  */
 ?>
 <?
-function curl_socket($socket, $url, $message) {
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/Wrappers.php";
+
+function curl_socket($socket, $url, $message='') {
   $com = curl_init($url);
-  curl_setopt_array($com,[
-    CURLOPT_UNIX_SOCKET_PATH => $socket,
-    CURLOPT_POST => 1,
-    CURLOPT_POSTFIELDS => $message,
-    CURLOPT_RETURNTRANSFER => 1
-  ]);
+  curl_setopt_array($com, [CURLOPT_UNIX_SOCKET_PATH => $socket, CURLOPT_RETURNTRANSFER => 1]);
+  if ($message) curl_setopt_array($com, [CURLOPT_POSTFIELDS => $message, CURLOPT_POST => 1]);
   $reply = curl_exec($com);
   curl_close($com);
+  if ($reply===false) my_logger("curl to $url failed", 'curl_socket');
   return $reply;
 }
 
@@ -33,8 +33,9 @@ function publish($endpoint, $message, $len=1) {
     CURLOPT_POSTFIELDS => $message,
     CURLOPT_RETURNTRANSFER => 1
   ]);
-  $reply = json_decode(curl_exec($com),true);
+  $reply = curl_exec($com);
   curl_close($com);
-  return $reply['subscribers'] ?? 0;
+  if ($reply===false) my_logger("curl to $endpoint failed", 'publish');
+  return $reply;
 }
 ?>

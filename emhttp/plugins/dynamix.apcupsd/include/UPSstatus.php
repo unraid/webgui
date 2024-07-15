@@ -18,6 +18,10 @@ $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 $_SERVER['REQUEST_URI'] = 'settings';
 require_once "$docroot/webGui/include/Translations.php";
 
+require_once "$docroot/webGui/include/Helpers.php";
+$cfg = parse_plugin_cfg('dynamix.apcupsd');
+$overrideUpsCapacity = (int) htmlspecialchars($cfg['OVERRIDE_UPS_CAPACITY'] ?: 0);
+
 $state = [
   'ONLINE'   => _('Online'),
   'SLAVE'    => '('._('slave').')',
@@ -34,7 +38,8 @@ $state = [
 $red     = "class='red-text'";
 $green   = "class='green-text'";
 $orange  = "class='orange-text'";
-$status  = array_fill(0,7,"<td>-</td>");
+$defaultCell = "<td>-</td>";
+$status  = array_fill(0,7,$defaultCell);
 $result  = [];
 $level   = $_POST['level'] ?: 10;
 $runtime = $_POST['runtime'] ?: 5;
@@ -86,6 +91,14 @@ if (file_exists("/var/run/apcupsd.pid")) {
     if ($i%2==1) $result[] = "</tr>";
   }
   if (count($rows)%2==1) $result[] = "<td></td><td></td></tr>";
+
+  // If the override is defined, override the power value, using the same implementation as above.
+  // This is a better implementation, as it allows the existing Unraid code to work with the override.
+  if ($overrideUpsCapacity > 0) {
+    $power = $overrideUpsCapacity;
+    $status[4] = $power>0 ? "<td $green>$power W</td>" : "<td $red>$power W</td>";
+  }
+
   if ($power && isset($load)) $status[5] = ($load<90 ? "<td $green>" : "<td $red>").round($power*$load/100)." W (".$status[5].")</td>";
   elseif (isset($load)) $status[5] = ($load<90 ? "<td $green>" : "<td $red>").$status[5]."</td>";
   $status[6] = isset($output) ? ((!$volt || ($minv<$output && $output<$maxv) ? "<td $green>" : "<td $red>").$status[6].(isset($freq) ? " ~ $freq Hz" : "")."</td>") : $status[6];

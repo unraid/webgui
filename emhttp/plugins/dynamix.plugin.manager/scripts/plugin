@@ -6,6 +6,10 @@
 // Program updates made by Bergware International (April 2020)
 // Program updates made by Bergware International (June 2022)
 
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/Wrappers.php";
+$logger = 'plugin-manager';
+
 $usage = <<<EOF
 Process plugin files.
 
@@ -275,16 +279,10 @@ function filter_url($url) {
   if (strpos($url, '.cdn') !== false) {
     $new_url = str_replace('"', '', $url);
     $new_url = str_replace('.cdn', '', $new_url);
-  }  else {
+  } else {
     $new_url = "";
   }
   return($new_url);
-}
-
-// Deal with logging message.
-//
-function logger($message) {
-  exec("logger -t 'plugin-manager' -- \"$message\"");
 }
 
 // Interpret a plugin file
@@ -295,7 +293,7 @@ function logger($message) {
 // is processed for any of those methods.
 //
 function plugin($method, $plugin_file, &$error) {
-  global $unraid;
+  global $unraid, $logger;
   $methods = ['install', 'remove'];
 
   // parse plugin definition XML file
@@ -382,12 +380,12 @@ function plugin($method, $plugin_file, &$error) {
       // If file already exists, check the SHA256/MD5 (if supplied)
       if (file_exists($name)) {
         if ($file->SHA256) {
-          logger("checking: $name - SHA256");
+          my_logger("checking: $name - SHA256", $logger);
           if (hash_file('sha256', $name) != $file->SHA256) {
             unlink($name);
           }
         } elseif ($file->MD5) {
-          logger("checking: $name - MD5");
+          my_logger("checking: $name - MD5", $logger);
           if (md5_file($name) != $file->MD5) {
             unlink($name);
           }
@@ -396,12 +394,12 @@ function plugin($method, $plugin_file, &$error) {
       // If file already exists, do not overwrite
       //
       if (file_exists($name)) {
-        logger("skipping: $name already exists");
+        my_logger("skipping: $name already exists", $logger);
       } elseif ($file->LOCAL) {
         // Create the file
         //
         // for local file, just copy it
-        logger("creating: $name - copying LOCAL file $file->LOCAL");
+        my_logger("creating: $name - copying LOCAL file $file->LOCAL", $logger);
         if (!copy($file->LOCAL, $name)) {
           $error = "unable to copy LOCAL file: $name";
           @unlink($name);
@@ -409,10 +407,10 @@ function plugin($method, $plugin_file, &$error) {
         }
       } elseif ($file->INLINE) {
         // for inline file, create with inline contents
-        logger("creating: $name - from INLINE content");
+        my_logger("creating: $name - from INLINE content", $logger);
         $contents = trim($file->INLINE).PHP_EOL;
         if ($file->attributes()->Type == 'base64') {
-          logger("decoding: $name as base64");
+          my_logger("decoding: $name as base64", $logger);
           $contents = base64_decode($contents);
           if ($contents === false) {
             $error = "unable to decode inline base64: $name";
@@ -426,20 +424,20 @@ function plugin($method, $plugin_file, &$error) {
         }
       } elseif ($file->URL) {
         // for download file, download and maybe verify the file MD5
-        logger("creating: $name - downloading from URL $file->URL");
+        my_logger("creating: $name - downloading from URL $file->URL", $logger);
         if ( (download($file->URL, $name, $error) === false) && (download(filter_url($file->URL), $name, $error) === false) ) {
           @unlink($name);
           return false;
         }
         if ($file->SHA256) {
-          logger("checking: $name - SHA256");
+          my_logger("checking: $name - SHA256", $logger);
           if (hash_file('sha256', $name) != $file->SHA256) {
             $error = "bad file SHA256: $name";
             unlink($name);
             return false;
           }
         } elseif ($file->MD5) {
-          logger("checking: $name - MD5");
+          my_logger("checking: $name - MD5", $logger);
           if (md5_file($name) != $file->MD5) {
             $error = "bad file MD5: $name";
             unlink($name);
@@ -452,7 +450,7 @@ function plugin($method, $plugin_file, &$error) {
       if ($file->attributes()->Mode) {
         // if file has 'Mode' attribute, apply it
         $mode = $file->attributes()->Mode;
-        logger("setting: $name - mode to $mode");
+        my_logger("setting: $name - mode to $mode", $logger);
         if (!chmod($name, octdec($mode))) {
           $error = "chmod failure: $name";
           return false;
@@ -464,13 +462,13 @@ function plugin($method, $plugin_file, &$error) {
     if ($file->attributes()->Run) {
       $command = $file->attributes()->Run;
       if ($name) {
-        logger("running: $command $name");
+        my_logger("running: $command $name", $logger);
         $retval = run("$command $name");
       } elseif ($file->LOCAL) {
-        logger("running: $command $file->LOCAL");
+        my_logger("running: $command $file->LOCAL", $logger);
         $retval = run("$command $file->LOCAL");
       } elseif ($file->INLINE) {
-        logger("running: 'anonymous'");
+        my_logger("running: 'anonymous'", $logger);
         $name = '/tmp/inline.sh';
         file_put_contents($name, $file->INLINE);
         $retval = run("$command $name");
@@ -691,7 +689,7 @@ if ($method == 'install') {
       $event = "Install error";
       $subject = "plugin: ".basename($plugin_file);
       $description = "Plugin failed to install";
-      exec("$notify -e $event -s $subject -d $description) -i 2");
+      exec("$notify -e ".escapeshellarg($event)." -s ".escapeshellarg($subject)." -d ".escapeshellarg($description)." -i 'warning'");
       // run hook scripts for post processing
       post_hooks($error);
       done(1);
@@ -718,10 +716,10 @@ if ($method == 'install') {
     if ($target != $plugin_file) copy($plugin_file, $target);
     symlink($target, $symlink);
     write("plugin: $plugin installed\n");
-    logger("$plugin installed");
+    my_logger("$plugin installed", $logger);
   } else {
     write("script: $plugin executed\n");
-    logger("script: $plugin executed");
+    my_logger("script: $plugin executed", $logger);
   }
   // run hook scripts for post processing
   post_hooks();
@@ -835,7 +833,7 @@ if ($method == 'update') {
   copy($plugin_file, $target);
   symlink($target, $symlink);
   write("plugin: $plugin updated\n");
-  logger("$plugin updated");
+  my_logger("$plugin updated", $logger);
   // run hook scripts for post processing
   post_hooks();
   done(0);
@@ -867,7 +865,7 @@ if ($method == 'remove') {
   // remove the plugin file
   move($installed_plugin_file, "$boot-removed");
   write("plugin: $plugin removed\n");
-  logger("$plugin removed");
+  my_logger("$plugin removed", $logger);
   exec("/usr/local/sbin/update_cron");
   // run hook scripts for post processing
   post_hooks();

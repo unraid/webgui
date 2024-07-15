@@ -30,8 +30,7 @@ if (!document.getElementsByTagName(modalsWebComponent).length) {
     $i18nHost.appendChild($modals);
 }
 </script>
-<?
-echo "
+
 <unraid-i18n-host>
-    <unraid-user-profile server='" . $serverState->getServerStateJson() . "'></unraid-user-profile>
-</unraid-i18n-host>";
+    <unraid-user-profile server="<?= $serverState->getServerStateJsonForHtmlAttr() ?>"></unraid-user-profile>
+</unraid-i18n-host>

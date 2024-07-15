@@ -14,6 +14,28 @@
 # run & log functions
 . /etc/rc.d/rc.runlog
 
+# import CA proxy
+UnProxy=/boot/config/plugins/dynamix/outgoingproxy.cfg
+CAProxy=/boot/config/plugins/community.applications/proxy.cfg
+if [[ -f "${CAProxy}" && ! -f "${UnProxy}" ]]; then
+  proxy=
+  port=
+  . "${CAProxy}"
+  # proxy and port were set by the previous command
+  if [[ -n "${proxy}" && -n "${port}" ]]; then
+cat << EOF > "${UnProxy}"
+proxy_active="1"
+proxy_url_1="${proxy}:${port}"
+proxy_name_1="Imported from CA"
+EOF
+  fi
+  mv "${CAProxy}" "${CAProxy}~"
+fi
+
+# load proxy environment vars so it is used for plugin updates and the go script
+/usr/local/emhttp/plugins/dynamix/scripts/set_proxy
+[[ -x /etc/profile.d/proxy.sh ]] && . /etc/profile.d/proxy.sh
+
 # irqbalance daemon distributes interrupts over processors and cores
 # if [[ -x /usr/sbin/irqbalance ]]; then
 #   /usr/sbin/irqbalance
@@ -54,6 +76,11 @@ fi
 /usr/local/emhttp/webGui/scripts/notify smtp-init
 /usr/local/emhttp/webGui/scripts/notify cron-init
 
+# restore favorites
+if [[ -x /usr/local/emhttp/webGui/scripts/restore_favorites ]]; then
+  /usr/local/emhttp/webGui/scripts/restore_favorites
+fi
+
 # start nchan monitoring -> stop all running nchan processes when no subscribers are connected
 if [[ -x /usr/local/sbin/monitor_nchan ]]; then
   /usr/local/sbin/monitor_nchan
@@ -64,7 +91,7 @@ rm -f /boot/plugins/unRAIDServer.plg
 rm -f $CONFIG/plugins/unRAIDServer.plg
 
 # These plugins are now integrated in the OS or obsolete and may interfere
-OBSOLETE="vfio.pci dynamix.wireguard dynamix.ssd.trim dynamix.file.manager gui.search unlimited-width"
+OBSOLETE="vfio.pci dynamix.wireguard dynamix.ssd.trim dynamix.file.manager gui.search unlimited-width proxy.editor"
 for PLUGIN in $OBSOLETE; do
   if [[ -e $CONFIG/plugins/$PLUGIN.plg ]]; then
     log "moving obsolete plugin $PLUGIN.plg to $CONFIG/plugins-error"
@@ -159,6 +186,21 @@ if [[ $PERSISTENT_BASH_HISTORY == 1 ]]; then
   rm -f /root/.bash_history
   touch /boot/config/history/bash_history
   ln -s /boot/config/history/bash_history /root/.bash_history
+fi
+
+# cleanup the 'go' script
+# delete non-commented line with emhttp and trailing & (could also have leading env vars)
+# add new line with call to emhttp (preserve any params to emhttp and CRLF line endings)
+GOTEST1='^[^#]*/usr/local/sbin/emhttp(.*)&(.*)$'
+if grep -q -E "$GOTEST1" $CONFIG/go; then
+  cp $CONFIG/go $CONFIG/go~
+  sed -i -E "s@$GOTEST1@/usr/local/sbin/emhttp\1\2@g" $CONFIG/go
+fi
+# delete lines added by ProxyEditor
+GOTEST2='# Added by ProxyEditor'
+if grep -q "$GOTEST2" $CONFIG/go; then
+  [[ ! -f $CONFIG/go~ ]] && cp $CONFIG/go $CONFIG/go~
+  sed -i "/$GOTEST2/d" $CONFIG/go
 fi
 
 # Invoke the 'go' script

@@ -15,7 +15,7 @@
 // auto_prepend_file="/usr/local/emhttp/webGui/include/local_prepend.php"
 
 function csrf_terminate($reason) {
-  exec("logger -t webGUI -- \"error: {$_SERVER['REQUEST_URI']} - {$reason} csrf_token\"");
+  exec('logger -t webGUI -- '.escapeshellarg("error: {$_SERVER['REQUEST_URI']} - {$reason} csrf_token"));
   exit;
 }
 
@@ -39,4 +39,8 @@ if ($_SERVER['SCRIPT_NAME'] != '/login.php' && $_SERVER['SCRIPT_NAME'] != '/auth
   if ($var['csrf_token'] != $_POST['csrf_token']) csrf_terminate("wrong");
   unset($_POST['csrf_token']);
 }
+$proxy_cfg = (array)@parse_ini_file('/var/local/emhttp/proxy.ini',true);
+putenv('http_proxy='.((array_key_exists('http_proxy', $proxy_cfg)) ? $proxy_cfg['http_proxy']  : ''));
+putenv('https_proxy='.((array_key_exists('https_proxy', $proxy_cfg)) ? $proxy_cfg['https_proxy'] : ''));
+putenv('no_proxy='.((array_key_exists('http_proxy', $proxy_cfg))  ? $proxy_cfg['no_proxy']    : ''));
 ?>

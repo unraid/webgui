@@ -11,6 +11,9 @@
  */
 ?>
 <?
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/Wrappers.php";
+
 // Invoke the plugin command with indicated method
 function plugin($method, $arg = '') {
   global $docroot;
@@ -27,7 +30,7 @@ function language($method, $arg = '') {
 
 function check_plugin($arg, &$ncsi) {
 // Get network connection status indicator (NCSI)
-  if ($ncsi===null) $ncsi = exec("wget --spider --no-check-certificate -nv -T10 -t1 https://www.msftncsi.com/ncsi.txt 2>&1|grep -o 'OK'");
+  if ($ncsi===null) $ncsi = check_network_connectivity();
   return $ncsi ? plugin('check',$arg) : false;
 }
 

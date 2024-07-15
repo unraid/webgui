@@ -9,6 +9,7 @@
  *
  * History:
  *
+ * 1.2.1 - exclude folders from the /mnt/ root folder
  * 1.2.0 - adapted by Bergware for use in Unraid - support UTF-8 encoding & hardening
  * 1.1.1 - SECURITY: forcing root to prevent users from determining system's file structure (per DaveBrad)
  * 1.1.0 - adding multiSelect (checkbox) support (08/22/2014)
@@ -48,27 +49,45 @@ $filters  = (array)$_POST['filter'];
 $match    = $_POST['match'];
 $checkbox = $_POST['multiSelect']=='true' ? "<input type='checkbox'>" : "";
 
+/* Excluded folders to not show in the dropdown in the '/mnt/' directory only. */
+$excludedFolders	= ["RecycleBin", "addons", "disks", "remotes", "rootshare", "user0"];
+
 echo "<ul class='jqueryFileTree'>";
 if ($_POST['show_parent']=='true' && is_top($rootdir)) echo "<li class='directory collapsed'>$checkbox<a href='#' rel=\"".htmlspecialchars(dirname($rootdir))."\">..</a></li>";
 
 if (is_low($rootdir) && is_dir($rootdir)) {
   $dirs = $files = [];
-  $names = array_filter(scandir($rootdir,SCANDIR_SORT_NONE),function($n){return $n!='.' && $n!='..';});
+  $names = array_filter(scandir($rootdir, SCANDIR_SORT_NONE), function($n) { return $n != '.' && $n != '..'; });
   natcasesort($names);
-  foreach ($names as $name) if (is_dir($rootdir.$name)) $dirs[] = $name; else $files[] = $name;
-  foreach ($dirs as $name) {
-    $htmlRel  = htmlspecialchars($rootdir.$name);
-    $htmlName = htmlspecialchars(mb_strlen($name)<=33 ? $name : mb_substr($name,0,30).'...');
-    if (is_dir($rootdir.$name)) {
-      if (empty($match)||preg_match("/$match/",$rootdir.$name)) echo "<li class='directory collapsed'>$checkbox<a href='#' rel=\"$htmlRel/\">$htmlName</a></li>";
+  foreach ($names as $name) {
+    if (is_dir($rootdir . $name)) {
+      $dirs[] = $name;
+    } else {
+      $files[] = $name;
     }
   }
+  foreach ($dirs as $name) {
+    $htmlRel  = htmlspecialchars($rootdir . $name);
+    $htmlName = htmlspecialchars(mb_strlen($name) <= 33 ? $name : mb_substr($name, 0, 30) . '...');
+
+    /* Exclude '.Recycle.Bin' from all directories */
+    if ($name === ".Recycle.Bin") continue;
+
+    /* Exclude folders only when directory is '/mnt/' */
+    if (in_array($name, $excludedFolders) && $rootdir === "/mnt/") continue;
+
+    echo "<li class='directory collapsed'>$checkbox<a href='#' rel=\"$htmlRel/\">$htmlName</a></li>";
+  }
   foreach ($files as $name) {
-    $htmlRel  = htmlspecialchars($rootdir.$name);
+    $htmlRel  = htmlspecialchars($rootdir . $name);
     $htmlName = htmlspecialchars($name);
-    $ext      = mb_strtolower(pathinfo($name,PATHINFO_EXTENSION));
-    foreach ($filters as $filter) if (empty($filter)||$ext==$filter) {
-      if (empty($match)||preg_match("/$match/",$name)) echo "<li class='file ext_$ext'>$checkbox<a href='#' rel=\"$htmlRel\">$htmlName</a></li>";
+    $ext      = mb_strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    foreach ($filters as $filter) {
+      if (empty($filter) || $ext == $filter) {
+        if (empty($match) || preg_match("/$match/", $name)) {
+          echo "<li class='file ext_$ext'>$checkbox<a href='#' rel=\"$htmlRel\">$htmlName</a></li>";
+        }
+      }
     }
   }
 }

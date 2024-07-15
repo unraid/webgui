@@ -62,7 +62,7 @@ function execCommand_nchan_clone($command,$idx,$refcmd=false) {
       $out = preg_replace("%[\t\n\x0B\f\r]+%", '',$out);
       $out = trim($out);
       $values = explode('  ',$out);
-      $string = _("Data copied: ").$values[0].' '._(" Percentage: ").$values[1].' '._(" Transfer Rate: ").$values[2].' '._(" Time remaining: ").$values[4].$values[5];
+      $string = _('Data copied').': '.$values[0].' '._('Percentage').': '.$values[1].' '._('Transfer Rate').': '.$values[2].' '._('Time remaining').': '.$values[4].$values[5];
       write("progress\0$idx\0".htmlspecialchars($string));
       if ($out) $stringsave=$string;
     }

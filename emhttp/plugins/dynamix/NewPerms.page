@@ -18,8 +18,7 @@ Tag="folder-o"
 <?
 $width = [166,300];
 function data_disks($disk) {
-  global $pools;
-  return (_var($disk,'type')=="Data" || (_var($disk,'type')=="Cache" && in_array(_var($disk,'name'),$pools))) && _var($disk,'status')=='DISK_OK';
+  return in_array(_var($disk,'type'),['Data','Cache']) && array_key_exists('exportable',$disk) && _var($disk,'fsStatus')=='Mounted';
 }
 ?>
 <script>

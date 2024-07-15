@@ -1,0 +1,23 @@
+#!/usr/bin/php -q
+<?
+$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
+require_once "$docroot/plugins/dynamix/include/Wrappers.php";
+require_once "$docroot/plugins/dynamix/include/ReplaceKey.php";
+
+$randomMinute = rand(0, 59);
+
+switch (@$argv[1] ?? '') {
+    case 'cron-init':
+        $text = <<<EOT
+        # Create replace key job:
+        $randomMinute * * * * /usr/local/emhttp/plugins/dynamix/scripts/replace_key_job &> /dev/null
+
+        EOT;
+        parse_cron_cfg("dynamix", "replace-key-job", $text);
+        break;
+
+    default:
+        $ReplaceKey = new ReplaceKey();
+        $ReplaceKey->check();
+        break;
+}

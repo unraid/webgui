@@ -664,6 +664,8 @@ will *hide* the share from *browsing* but is still accessible if you know the sh
 :smb_time_machine_volume_help:
 This limits the reported volume size, preventing Time Machine from using the entire real disk space
 for backup.  For example, setting this value to "1024" would limit the reported disk space to 1GB.
+Note that Ventura 13.6 and later require a value to be present.  No entry will prevent Time Machine
+from working correctly.
 :end
 
 :smb_case_sensitive_names_help:
@@ -941,6 +943,18 @@ A value of zero will disable the warning threshold (including notifications).
 A value of zero will disable the critical threshold (including notifications).
 :end
 
+:ssd_default_warning_temperature_help:
+*Warning SSD temperature* sets the default warning threshold for all SSD devices temperature. Exceeding this threshold will result in a warning notification.
+
+A value of zero will disable the warning threshold (including notifications).
+:end
+
+:ssd_default_critical_temperature_help:
+*Critical disk temperature* sets the default critical threshold for all SSD devices temperature. Exceeding this threshold will result in an alert notification.
+
+A value of zero will disable the critical threshold (including notifications).
+:end
+
 :disk_default_smart_notification_help:
 SMART notifications are generated on either an increasing RAW value of the attribute, or a decreasing NORMALIZED value which reaches a predefined threshold set by the manufacturer.
 
@@ -997,7 +1011,6 @@ The time in seconds to allow a container to gracefully stop before forcing it to
 :docker_pid_limit_help:
 Set a PID Limit to limit the number of PIDs that a docker can use. The default is 2048.  Set to zero for unlimited PIDs (not recommended).
 :end
-
 
 :docker_vdisk_type_help:
 Select where to keep the Docker persistent state.
@@ -1194,7 +1207,7 @@ SSL certificate.  Use this URL to access your server:
 Note that use of a self-signed SSL certificate will generate a browser
 warning.
 
-Select **Strict** to enable *exclusive* use of an Unraid.net SSL
+Select **Strict** to enable *exclusive* use of a myunraid.net SSL
 certificate for https access (see **Provision** below).  Note that a DNS
 server must be reachable.
 
@@ -1258,10 +1271,10 @@ To adjust URLs or redirects, see the help text for "Use SSL/TLS".
 :end
 
 :mgmt_certificate_expiration_help:
-**Provision** may be used to install a *free* Unraid.net SSL Certificate from
+**Provision** may be used to install a *free* myunraid.net SSL Certificate from
 [Let's Encrypt](https://letsencrypt.org/).
 
-The Unraid.net SSL certificate can be used in two ways.  First,
+The myunraid.net SSL certificate can be used in two ways.  First,
 having the certificate present enables your server to respond to an
 alternate URL of the form:
 
@@ -1275,24 +1288,20 @@ set to `*.<hash>.myunraid.net` thus validating the https connection.
 You may enable this URL exclusively on your LAN by setting **Use
 SSL/TLS** to **Strict**.
 
-The second use for an Unraid.net certificate is to enable secure
-remote access available through the My Servers plugin feature.  Note
+The second use for a myunraid.net certificate is to enable secure
+remote access available through the Unraid Connect plugin feature.  Note
 that it is possible to use secure remote access in conjunction with
 insecure local access.
 
-After an Unraid.net SSL Certificate has been installed, two
-background services are activated while the server is signed in to unraid.net:
-
-- *updatedns* - This starts 30 seconds after server reboot has completed and contacts the Lime Technology
-DNS service to register the servers local IP address. Thereafter it wakes up every 10 minutes in case
-the local IP address has changed.
+After a myunraid.net SSL Certificate has been installed, a
+background service is activated:
 
 - *renewcert* - This starts 60 seconds after server reboot has completed and contacts the Lime Technology
-certificate renewal service to determine if your Unraid.net SSL certificate needs to be renewed.
+certificate renewal service to determine if your myunraid.net SSL certificate needs to be renewed.
 Thereafter it wakes up every 24 hours. If within 30 days of expiration, a new certificate is automatically
 provisioned and downloaded to your server.
 
-**Delete** may be used to delete the Unraid.net certificate file.
+**Delete** may be used to delete the myunraid.net certificate file.
 
 **nginx certificate handling details**
 
@@ -1300,7 +1309,7 @@ nginx makes use of two certificate files stored on the USB flash boot device:<br
 
 - a self-signed certificate: `config/ssl/certs/<server-name>_unraid_bundle.pem`
 
-- an Unraid.net certificate: `config/ssl/certs/certificate_bundle.pem`
+- a myunraid.net certificate: `config/ssl/certs/certificate_bundle.pem`
 
 The self-signed SSL certificate file is automatically created when nginx
 starts; and re-created if the server hostname or local TLD is changed.
@@ -1484,12 +1493,21 @@ This will increase write performance but might possibly decrease read performanc
 Let the server act as a central syslog server and collect syslog messages from other systems.
 The server can listen on UDP, TCP or both with a selectable port number.
 
-Syslog information is stored per IP address. That is every system gets its own syslog file.
+Syslog information is stored either per IP address or per hostname. That is every system gets its own syslog file.
 :end
 
 :syslog_local_folder_help:
 Select the share folder where the syslogs will be stored.
 It is recommended that you use a share located on the cache drive to prevent array disk spinups.
+:end
+
+:syslog_remote_system_identifier_help:
+Select the identifier for the remote system (used in the logfile name). 
+
+* "IP Address" uses the IP address (IPv4 or IPv6) of the sending system.
+* "Hostname (from syslog message)" uses the hostname included in each syslog message.
+* "Hostname (from DNS reverse lookup)" performs a DNS reverse lookup for the sending IP and uses the result.
+
 :end
 
 :syslog_local_rotation_help:
@@ -1516,6 +1534,13 @@ This setting is NO by default and must be used with care to avoid unnecessary we
 
 Change this setting to YES when troubleshooting is required and it is not possible to get the regular diagnostics information.
 A mirror of the syslog file is stored in the **logs** folder of the flash device.
+:end
+
+:syslog_shutdown_flash_help:
+This setting is YES by default and enables the system to copy the syslog file to the USB device on shutdown or reboot.
+
+After rebooting, the syslog from this run will be visible on Tools > Syslog > syslog-previous;
+it will also be included in diagnostics as logs/syslog-previous.txt
 :end
 
 :confirm_reboot_help:
@@ -1588,6 +1613,10 @@ Selects the temperature unit for the disk temperature thresholds. Changing the u
 Make sure any newly entered values represent the selected temperature unit.
 :end
 
+:display_favorites_enabled_help:
+Enables favorite support. If set to no, will stop heart icon showing for additions. If existing favorites are saved, favorites tab and pre-saved options will still continue to show and function until all are deleted.
+:end
+
 :vms_enable_help:
 Stopping the VM Manager will first attempt to shutdown all running VMs. After 60 seconds, any remaining VM instances will be terminated.
 :end
@@ -1657,6 +1686,18 @@ NOTE: It's recommended to shut down guest VMs from within the VM.
 :vms_console_help:
 For setting the console options to show on context menus. Web will show only inbuild web clients(VNC and SPICE), 
 Virtual Manager Remote Viewer will only show the Remote Viewer option. Both will show both Web and Remote Viewer.
+:end
+
+:vms_rdpopt_help:
+Adds option to menu to start RDP. RDP file is downloaded. You need to set browser to open when ready.
+:end
+
+:vms_usage_help:
+Show metrics for CPU both guest and host percentage, memory, disk io and network io.
+:end
+
+:vms_usage_timer_help:
+Setting in seconds for metrics refresh time.
 :end
 
 :vms_acs_override_help:
@@ -1923,6 +1964,10 @@ Enter the *device* which corresponds to your situation, only applicable when *UP
 + **dumb** - /dev/tty**
 + **pcnet** - ipaddr:username:passphrase:port. ipaddr is the IP address of the UPS management card. username and passphrase are the credentials for which the card has been configured. port is the port number on which to listen for messages from the UPS, normally 3052. If this parameter is empty or missing, the default of 3052 will be used
 + **modbus** - /dev/tty**
+:end
+
+:apc_ups_override_ups_capacity_help:
+If your device doesn't natively report Nominal Power (`NOMPOWER`) from `apcupsd`, but does report the Load Percentage (`LOADPCT`), you can manually define the UPS capacity rating in Watts (W) (this is the 'real power' value in Watts (W), not the 'apparent power' in Volt Amps (VA), and should be detailed on your UPS manual or product listing) and the plugin will dynamically calculate a virtual Nominal Power estimate (`≈`) by comparing the Override UPS Capacity (W) and the current Load Percentage. It is only an estimate, as it doesn't factor in things like the UPS' efficiency.
 :end
 
 :apc_battery_level_help:
@@ -2464,4 +2509,50 @@ If set to 'Yes' the bash history will persist reboots, set to 'No' to disable.
 **ATTENTION:** The bash history will be written to the USB Boot device so this will introduce higher wear and tear!
 
 **Note:** Disabling and Enabling will remove the entire bash history.
+:end
+
+:WOL_intro_help:
+This page allows the setup to start/resume and stop VMs, Containters(Docker and LXC) using WOL magic packets
+
+It does not setup wake up of the Unraid server.
+
+The process will look for the defined mac address defined within the service(VM or container) with the exception of dockers. Dockers do not have a mac address until they are running so you will need to define a user mac address to allow you to start them
+
+If the service is paused a WOL Packet will resume. 
+
+For each service you can set: enable, disable or enable and shutdown
+
+When the enable and shutdown is set if the service is running when the next WOL packet is recieved a shutdown will be performed.
+:end
+
+:WOL_enable_help:
+If set to yes Unraidwold daemon is set to run.
+:end
+
+:WOL_run_docker_help:
+If set to yes when wake on lan packets are received checks are carrried out for dockers otherwise dockers will be ignored.
+:end
+
+:WOL_run_VM_help:
+If set to yes when wake on lan packets are received checks are carrried out for virtual machines otherwise virtual machines will be ignored.
+:end
+
+:WOL_run_LXC_help:
+If set to yes when wake on lan packets are received checks are carrried out for LXC otherwise LXC will be ignored. The LXC plugin needs to be installed for LXC to be processed.
+:end
+
+:WOL_run_shutdown_help:
+If set to yes when wake on lan packets are received checks are carrried out and if enabled for service and that service is running the entity will be shutdown. System has to be set to Enabled and Shutdwon for it to be action.
+:end
+
+:WOL_interface_help:
+Specify the interface to the daemon to bind to. Some interfaces may not be able to recieve etherframe packets. Recommend to bind to a physical interface.
+:end
+
+:WOL_promiscuous_mode_help:
+Enable to set the NIC not to filer packets.
+:end
+
+:WOL_log_file_help:
+Default is to log to syslog but if you want a different log location set the file name.
 :end

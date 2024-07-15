@@ -19,29 +19,30 @@ Tag="icon-disk"
 require_once "$docroot/webGui/include/Preselect.php";
 $events = explode('|',$var['smEvents'] ?? $numbers);
 
+$default = parse_ini_file("$docroot/webGui/default.cfg",true);
 $reply   = '/var/tmp/luks.reply';
 $keyfile = is_file($var['luksKeyfile']);
 $encrypt = false;
 foreach ($disks as $disk) if (isset($disk['fsType']) && strncmp($disk['fsType'],'luks:',5)===0) $encrypt = true;
-
-function displayTemp($temp) {
-  global $display;
-  return (is_numeric($temp) && _var($display,'unit')=='F') ? round(9/5*$temp)+32 : $temp;
-}
 ?>
 <script>
+String.prototype.celsius = function(){return Math.round((parseInt(this)-32)*5/9).toString();}
+
 function base64(str) {
   return window.btoa(unescape(encodeURIComponent(str)));
 }
 function doDispatch(form) {
   var fields = {};
-<?if (_var($display,'unit')=='F'):?>
-  form.display_hot.value = Math.round((form.display_hot.value-32)*5/9);
-  form.display_max.value = Math.round((form.display_max.value-32)*5/9);
+<?if ($display['unit']=='F'):?>
+  form.display_hot.value = form.display_hot.value.celsius();
+  form.display_max.value = form.display_max.value.celsius();
+  form.display_hotssd.value = form.display_hotssd.value.celsius();
+  form.display_maxssd.value = form.display_maxssd.value.celsius();
 <?endif;?>
   fields['#cfg'] = "/boot/config/plugins/dynamix/dynamix.cfg";
   fields['#cleanup'] = true;
   $(form).find('input[name^="display_"]').each(function(){fields[$(this).attr('name')] = $(this).val(); $(this).prop('disabled',true);});
+  $(form).find('select[name^="display_"]').each(function(){fields[$(this).attr('name')] = $(this).val(); $(this).prop('disabled',true);});
   $.post('/webGui/include/Dispatcher.php',fields);
 }
 function prepareDiskSettings(form) {
@@ -158,22 +159,22 @@ _(Default file system)_:
   <?=mk_option($var['defaultFsType'], "xfs", _('xfs'));?>
   <?=mk_option($var['defaultFsType'], "zfs", _('zfs'));?>
   <?=mk_option($var['defaultFsType'], "btrfs", _('btrfs'));?>
-  <?=mk_option($var['defaultFsType'], "reiserfs", _('reiserfs'));?>
+  <?=mk_option($var['defaultFsType'], "reiserfs", _('reiserfs'), "disabled");?>
   <?=mk_option($var['defaultFsType'], "luks:xfs", _('xfs')." - "._('encrypted'));?>
   <?=mk_option($var['defaultFsType'], "luks:zfs", _('zfs')." - "._('encrypted'));?>
   <?=mk_option($var['defaultFsType'], "luks:btrfs", _('btrfs')." - "._('encrypted'));?>
-  <?=mk_option($var['defaultFsType'], "luks:reiserfs", _('reiserfs')." - "._('encrypted'));?>
+  <?=mk_option($var['defaultFsType'], "luks:reiserfs", _('reiserfs')." - "._('encrypted'), "disabled");?>
   </select>
 
 :disk_default_file_system_help:
 
-_(Shutdown time-out)_:
-: <input type="text" name="shutdownTimeout" maxlength="10" value="<?=$var['shutdownTimeout']?>" class="narrow">
+_(Shutdown time-out)_ (_(seconds)_):
+: <input type="text" name="shutdownTimeout" maxlength="10" value="<?=$var['shutdownTimeout']?>" class="narrow" placeholder="90">
 
 :disk_shutdown_timeout_help:
 
 _(Tunable (poll_attributes))_:
-: <input type="text" name="poll_attributes" maxlength="10" value="<?=$var['poll_attributes']?>" class="narrow"><?=_($var['poll_attributes_status'])?>
+: <input type="text" name="poll_attributes" maxlength="10" value="<?=$var['poll_attributes']?>" class="narrow" placeholder="<?=$var['poll_attributes_default']?>">
 
 :disk_tunable_poll_attributes_help:
 
@@ -186,7 +187,7 @@ _(Tunable (enable NCQ))_:
 :disk_tunable_enable_ncq_help:
 
 _(Tunable (nr_requests))_:
-: <input type="text" name="nr_requests" maxlength="10" value="<?=$var['nr_requests']?>" class="narrow"><?=_($var['nr_requests_status'])?>
+: <input type="text" name="nr_requests" maxlength="10" value="<?=$var['nr_requests']?>" class="narrow" placeholder="<?=_($var['nr_requests_default'])?>">
 
 :disk_tunable_nr_requests_help:
 
@@ -202,17 +203,17 @@ _(Tunable (scheduler))_:
 :disk_tunable_scheduler_help:
 
 _(Tunable (md_num_stripes))_:
-: <input type="text" name="md_num_stripes" maxlength="10" value="<?=$var['md_num_stripes']?>" class="narrow"><?=_($var['md_num_stripes_status'])?>
+: <input type="text" name="md_num_stripes" maxlength="10" value="<?=$var['md_num_stripes']?>" class="narrow" placeholder="<?=$var['md_num_stripes_default']?>">
 
 :disk_tunable_md_num_stripes_help:
 
 _(Tunable (md_queue_limit))_:
-: <input type="text" name="md_queue_limit" maxlength="10" value="<?=$var['md_queue_limit']?>" class="narrow"><?=_($var['md_queue_limit_status'])?>
+: <input type="text" name="md_queue_limit" maxlength="10" value="<?=$var['md_queue_limit']?>" class="narrow" placeholder="<?=$var['md_queue_limit_default']?>">
 
 :disk_tunable_md_queue_limit_help:
 
 _(Tunable (md_sync_limit))_:
-: <input type="text" name="md_sync_limit" maxlength="10" value="<?=$var['md_sync_limit']?>" class="narrow"><?=_($var['md_sync_limit_status'])?>
+: <input type="text" name="md_sync_limit" maxlength="10" value="<?=$var['md_sync_limit']?>" class="narrow" placeholder="<?=$var['md_sync_limit_default']?>">
 
 :disk_tunable_md_sync_limit_help:
 
@@ -225,32 +226,48 @@ _(Tunable (md_write_method))_:
 
 :disk_tunable_md_write_method_help:
 
+_(Enable NVME power monitoring)_:
+: <select name="display_power">
+  <?=mk_option($display['power'], "", _('No'))?>
+  <?=mk_option($display['power'], "1", _('Yes'))?>
+  </select>
+
 _(Default warning disk utilization threshold)_ (%):
-: <input type="number" min="0" max="100" name="display_warning" class="narrow" value="<?=_var($display,'warning')?>">
+: <input type="number" min="0" max="100" name="display_warning" class="narrow" value="<?=$display['warning']?>" placeholder="<?=$default['display']['warning']?>">
 
 :disk_default_warning_utilization_help:
 
 _(Default critical disk utilization threshold)_ (%):
-: <input type="number" min="0" max="100" name="display_critical" class="narrow" value="<?=_var($display,'critical')?>">
+: <input type="number" min="0" max="100" name="display_critical" class="narrow" value="<?=$display['critical']?>" placeholder="<?=$default['display']['critical']?>">
 
 :disk_default_critical_utilization_help:
 
 _(Default warning disk temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
-: <input type="number" min="0" max="300" name="display_hot" class="narrow" value="<?=displayTemp(_var($display,'hot'))?>">
+: <input type="number" min="0" max="300" name="display_hot" class="narrow" value="<?=displayTemp($display['hot'])?>" placeholder="<?=displayTemp($default['display']['hot'])?>">
 
 :disk_default_warning_temperature_help:
 
 _(Default critical disk temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
-: <input type="number" min="0" max="300" name="display_max" class="narrow" value="<?=displayTemp(_var($display,'max'))?>">
+: <input type="number" min="0" max="300" name="display_max" class="narrow" value="<?=displayTemp($display['max'])?>" placeholder="<?=displayTemp($default['display']['max'])?>">
 
 :disk_default_critical_temperature_help:
+
+_(Default warning SSD temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
+: <input type="number" min="0" max="300" name="display_hotssd" class="narrow" value="<?=displayTemp($display['hotssd'])?>" placeholder="<?=displayTemp($default['display']['hotssd'])?>">
+
+:ssd_default_warning_temperature_help:
+
+_(Default critical SSD temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
+: <input type="number" min="0" max="300" name="display_maxssd" class="narrow" value="<?=displayTemp($display['maxssd'])?>" placeholder="<?=displayTemp($default['display']['maxssd'])?>">
+
+:ssd_default_critical_temperature_help:
 
 &nbsp;
 : <input type="submit" name="changeDisk" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
 </form>
 
 <?if ($encrypt && $var['fsState']=='Started'):?>
-<div class="title"><span class="left"><i class="title fa fa-key"></i>_(Change Encryption Key)_</span></div>
+<div class="title"><span class="left"><i class="title fa fa-key"></i>_(Change encryption key)_</span></div>
 <form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareForm(this)">
 <input type="hidden" name="#file" value="">
 <input type="hidden" name="#include" value="/webGui/include/update.encryption.php">
@@ -347,6 +364,13 @@ _(Default SMART controller type)_:
   <?=mk_option(_var($var,'smType'), "-d cciss", "HP cciss")?>
   <?=mk_option(_var($var,'smType'), "-d marvell", "Marvell")?>
   <?=mk_option(_var($var,'smType'), "-d megaraid", "MegaRAID")?>
+  <?=mk_option(_var($var,'smType'), "-d usbcypress", "Cypress ATACB")?>
+  <?=mk_option(_var($var,'smType'), "-d usbjmicron", "JMicron ATA pass-through")?>
+  <?=mk_option(_var($var,'smType'), "-d usbprolific", "Prolific ATA pass-through")?>
+  <?=mk_option(_var($var,'smType'), "-d usbsunplus", "Sunplus ATA pass-through")?>
+  <?=mk_option(_var($var,'smType'), "-d sntasmedia", "ASMedia NVMe pass-through")?>
+  <?=mk_option(_var($var,'smType'), "-d sntjmicron", "JMicron NVMe pass-through")?>
+  <?=mk_option(_var($var,'smType'), "-d sntrealtek", "Realtek NVMe pass-through")?>
   </select>
 
 :disk_default_smart_controller_help:

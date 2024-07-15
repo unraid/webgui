@@ -15,14 +15,42 @@ Cond="_var($var,'fsState')!='Stopped' && _var($var,'shareUser')=='e'"
  * all copies or substantial portions of the Software.
  */
 ?>
-<table class="share_status">
+<?
+/* Function to filter out unwanted disks, check if any valid disks exist, and ignore disks with a blank device. */
+function checkDisks($disks) {
+	global $pools, $poolsOnly;
+
+	$rc		= false;
+
+	foreach ($disks as $disk) {
+		/* Check the disk type, fsStatus, and ensure the device is not blank. */
+		if (!in_array($disk['name'], ['flash', 'parity', 'parity2']) && strpos($disk['fsStatus'], 'Unmountable') === false && !empty($disk['device'])) {
+			/* A valid disk with a non-blank device is found. */
+			$rc	= true;
+
+			break;
+		}
+	}
+
+	return $rc;
+}
+
+/* If the configuration is pools only, then no array disks are available. */
+$poolsOnly	= ((int)$var['SYS_ARRAY_SLOTS'] <= 2) ? true : false;
+
+/* Are there any array disks? */
+$disks		= parse_ini_file('state/disks.ini',true) ?? [];
+$nodisks	= checkDisks($disks) ? "" : "disabled";
+?>
+
+<table class="unraid share_status">
 <thead><tr><td>_(Name)_</td><td>_(Comment)_</td><td>_(SMB)_</td><td>_(NFS)_</td><td>_(Storage)_</td><td>_(Size)_</td><td>_(Free)_</td></tr></thead>
 <tbody id="shareslist"></tbody>
 </table>
 
 <form name="share_form" method="POST" action="<?=htmlspecialchars($path)?>/Share?name=">
 <input type="button" id="compute-shares" value="_(Compute All)_" onclick="$(this).prop('disabled',true);shareList('',-1)">
-<input type="submit" value="_(Add Share)_">
+<input type="submit" value="_(Add Share)_" <?echo $nodisks;?>>
 <input type="button" value="_(Clean Up)_" onclick="cleanup()" id="cleanup-button" disabled>
 </form>
 

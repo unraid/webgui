@@ -22,6 +22,23 @@ $_proxy_ = '__';
 $_arrow_ = '&#187;';
 
 // Wrapper functions
+function file_put_contents_atomic($filename,$data) {
+  while (true) {
+    $suffix = rand();
+    if ( ! is_file("$filename$suffix") )
+      break;
+  }
+  $renResult = false;
+  $writeResult = @file_put_contents("$filename$suffix",$data) === strlen($data);
+  if ( $writeResult )
+    $renResult = @rename("$filename$suffix",$filename);
+  if ( ! $writeResult || ! $renResult ) {
+    my_logger("File_put_contents_atomic failed to write / rename $filename");
+    @unlink("$filename$suffix");
+    return false;
+  }
+  return strlen($data);
+}
 function parse_plugin_cfg($plugin, $sections=false, $scanner=INI_SCANNER_NORMAL) {
   global $docroot;
   $ram = "$docroot/plugins/$plugin/default.cfg";
@@ -59,6 +76,16 @@ function plugin_update_available($plugin, $os=false) {
 function _var(&$name, $key=null, $default='') {
   return is_null($key) ? ($name ?? $default) : ($name[$key] ?? $default);
 }
+function celsius($temp) {
+  return round(($temp-32)*5/9);
+}
+function fahrenheit($temp) {
+  return round(9/5*$temp)+32;
+}
+function displayTemp($temp) {
+  global $display;
+  return (is_numeric($temp) && _var($display,'unit')=='F') ? fahrenheit($temp) : $temp;
+}
 function get_value(&$name, $key, $default) {
   global $var;
   $value = $name[$key] ?? -1;
@@ -76,7 +103,7 @@ function port_name($port) {
   return substr($port,-2)!='n1' ? $port : substr($port,0,-2);
 }
 function exceed($value, $limit, $top=100) {
-  return ($value>$limit && $limit>0 && $value<=$top);
+  return is_numeric($value) && $limit>0 ? ($value>$limit && $value<=$top) : false;
 }
 function ipaddr($ethX='eth0', $prot=4) {
   global $$ethX;
@@ -113,9 +140,89 @@ function isSubpool($name) {
   $subpool = my_explode($_tilde_,$name)[1];
   return in_array($subpool,$subpools) ? $subpool : false;
 }
+function get_nvme_info($device, $info) {
+  switch ($info) {
+  case 'temp':
+    exec("nvme id-ctrl /dev/$device 2>/dev/null | grep -Pom2 '^[wc]ctemp +: \K\d+'",$temp);
+    return [$temp[0]-273, $temp[1]-273];
+  case 'cctemp':
+    return exec("nvme id-ctrl /dev/$device 2>/dev/null | grep -Pom1 '^cctemp +: \K\d+'")-273;
+  case 'wctemp':
+    return exec("nvme id-ctrl /dev/$device 2>/dev/null | grep -Pom1 '^wctemp +: \K\d+'")-273;
+  case 'state':
+    $state = exec("nvme get-feature /dev/$device -f2 2>/dev/null | grep -Pom1 'value:.+\K.$'");
+    return exec("nvme id-ctrl /dev/$device 2>/dev/null | grep -Pom1 '^ps +$state : mp:\K\S+ \S+'");
+  case 'power':
+    $state = exec("nvme get-feature /dev/$device -f2 2>/dev/null | grep -Pom1 'value:.+\K.$'");
+    return exec("smartctl -c /dev/$device 2>/dev/null | grep -Pom1 '^ *$state [+-] +\K[^W]+'");
+  }
+}
 // convert strftime to date format
 function my_date($fmt, $time) {
   $legacy = ['%c' => 'D j M Y h:i A','%A' => 'l','%Y' => 'Y','%B' => 'F','%e' => 'j','%d' => 'd','%m' => 'm','%I' => 'h','%H' => 'H','%M' => 'i','%S' => 's','%p' => 'a','%R' => 'H:i', '%F' => 'Y-m-d', '%T' => 'H:i:s'];
   return date(strtr($fmt,$legacy), $time);
+}
+// ensure params passed to logger are properly escaped
+function my_logger($message, $logger='webgui') {
+  exec('logger -t '.escapeshellarg($logger).' -- '.escapeshellarg($message));
+}
+// Original PHP code by Chirp Internet: www.chirpinternet.eu
+// Please acknowledge use of this code by including this header.
+// https://www.the-art-of-web.com/php/http-get-contents/
+// Modified for Unraid
+/**
+ * Fetches URL and returns content
+ * @param string $url The URL to fetch
+ * @param array $opts Array of options to pass to curl_setopt()
+ * @param array $getinfo Empty array passed by reference, will contain results of curl_getinfo and curl_error
+ * @return string|false $out The fetched content
+ */
+function http_get_contents(string $url, array $opts = [], array &$getinfo = NULL) {
+  $ch = curl_init();
+  if(isset($getinfo)) {
+    curl_setopt($ch, CURLINFO_HEADER_OUT, TRUE);
+  }
+  curl_setopt($ch, CURLOPT_URL, $url);
+  curl_setopt($ch, CURLOPT_FRESH_CONNECT, true);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+  curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
+  curl_setopt($ch, CURLOPT_TIMEOUT, 45);
+  curl_setopt($ch, CURLOPT_ENCODING, "");
+  curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+  curl_setopt($ch, CURLOPT_REFERER, "");
+  curl_setopt($ch, CURLOPT_FAILONERROR, true);
+  curl_setopt($ch, CURLOPT_USERAGENT, 'Unraid');
+  if(is_array($opts) && $opts) {
+    foreach($opts as $key => $val) {
+      curl_setopt($ch, $key, $val);
+    }
+  }
+  $out = curl_exec($ch);
+  if (curl_errno($ch) == 23) {
+    // error 23 detected, try CURLOPT_ENCODING = "deflate"
+    curl_setopt($ch, CURLOPT_ENCODING, "deflate");
+    $out = curl_exec($ch);
+  }
+  if (isset($getinfo)) {
+    $getinfo = curl_getinfo($ch);
+  }
+  if ($errno = curl_errno($ch)) {
+    $msg = "Curl error $errno: " . (curl_error($ch) ?: curl_strerror($errno)) . ". Requested url: '$url'";
+    if(isset($getinfo)) {
+      $getinfo['error'] = $msg;
+    }
+    my_logger($msg, "http_get_contents");
+  }
+  curl_close($ch);
+  return $out;
+}
+/**
+ * Detect network connectivity via Network Connectivity Status Indicator
+ * @return bool
+ */
+function check_network_connectivity(): bool {
+  $url = 'http://www.msftncsi.com/ncsi.txt';
+  $out = http_get_contents($url);
+  return ($out=="Microsoft NCSI");
 }
 ?>

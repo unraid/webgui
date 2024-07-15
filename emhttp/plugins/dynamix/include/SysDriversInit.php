@@ -3,10 +3,11 @@
 function SysDriverslog($m, $type='NOTICE') {
   if ($type == 'DEBUG') return;
   $m = str_replace(["\n",'"'],[" ","'"],print_r($m,true));
-  exec("logger -t sysDrivers -- \"$m\"");
+  my_logger("$m", 'sysDrivers');
 }
 
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/Wrappers.php";
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/SysDriversHelpers.php";
 require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginHelpers.php";

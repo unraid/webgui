@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+  <Agent>
+    <Name>Pushover</Name>
+    <Variables>
+      <Variable Help="The User Key can be found [a href='https://pushover.net/' target='_blank'][u]here[/u].[/a]" Desc="User Key" Default="">USER_KEY</Variable>
+      <Variable Help="The App Token can be found [a href='https://pushover.net/apps' target='_blank'][u]here[/u][/a]." Desc="App Token" Default="">APP_TOKEN</Variable>
+      <Variable Help="Specify the fields which are included in the message body of the notification." Desc="Notification Message" Default="$SUBJECT,$DESCRIPTION">MESSAGE</Variable>
+    </Variables>
+    <Script>
+      <![CDATA[
+      #!/bin/bash
+      ############
+      {0}
+      ############
+      MESSAGE=$(echo -e "$MESSAGE")
+      case "$IMPORTANCE" in
+      'normal' )
+      PRIORITY="-1"
+      ;;
+      'warning' )
+      PRIORITY="0"
+      ;;
+      'alert' )
+      PRIORITY="1"
+      ;;
+      esac
+
+      curl -s -k \
+      -F "token=$APP_TOKEN" \
+      -F "user=$USER_KEY" \
+      -F "message=$MESSAGE" \
+      -F "timestamp=$TIMESTAMP" \
+      -F "priority=$PRIORITY" \
+      -F "html=1" \
+      https://api.pushover.net/1/messages.json 2>&1
+      ]]>
+    </Script>
+  </Agent>

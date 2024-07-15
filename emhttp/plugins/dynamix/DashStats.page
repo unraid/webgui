@@ -1,9 +1,8 @@
 Menu="Dashboard"
-Nchan="wg_poller,update_1,update_2,update_3,ups_status:stop"
+Nchan="wg_poller,update_1,update_2,update_3,ups_status:stop,vm_dashusage:stop"
 ---
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2023, Lime Technology * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -62,6 +61,7 @@ $conf  = glob('/etc/wireguard/wg*.conf');
 $wireguard = is_executable('/usr/bin/wg') && count($conf);
 $started = _var($var,'fsState')=='Started';
 $sleep = isset($display['sleep']);
+$poolsOnly  = (_var($var,'SYS_ARRAY_SLOTS') == 0 ) ? true : false;
 $array_size = $array_used = 0;
 $extra_size = $extra_used = 0;
 $cache_size = $cache_used = [];
@@ -70,8 +70,17 @@ $cache_type = $cache_rate = [];
 $parity = _var($var,'mdResync');
 $mover = file_exists('/var/run/mover.pid');
 $btrfs = exec('pgrep -cf /sbin/btrfs');
+$vdisk = exec("grep -Pom1 '^DOCKER_IMAGE_TYPE=\"\\K[^\"]+' /boot/config/docker.cfg 2>/dev/null")!='folder' ? _('Docker vdisk') : _('Docker folder');
 $dot = _var($display,'number','.,')[0];
 $zfs = count(array_filter(array_column($disks,'fsType'),function($fs){return str_replace('luks:','',$fs??'')=='zfs';}));
+
+$domain_cfgfile = "/boot/config/domain.cfg";
+$domain_cfg = parse_ini_file($domain_cfgfile);
+if (!isset($domain_cfg['USAGE'])) $vmusage = "N" ; else $vmusage = $domain_cfg['USAGE'];
+
+// enable/disable graph elements by making hook script executable or not
+chmod("$docroot/webGui/system/VM_usage",$libvirtd ? 0755 : 0644);
+chmod("$docroot/webGui/system/ZFS_cache",$zfs ? 0755 : 0644);
 
 foreach ($disks as $disk) {
   switch (_var($disk,'type')) {
@@ -157,16 +166,23 @@ if ($memory_installed >= 1024) {
   $unit = 'GiB';
 } else $unit = 'MiB';
 
+// get system resources size
+exec("df --output=size /boot /var/log /var/lib/docker 2>/dev/null|awk '(NR>1){print $1*1024}'",$df);
+$flashsize  = my_scale($df[0],$unit,0,-1,1024)." $unit";
+$logsize    = my_scale($df[1],$unit,0,-1,1024)." $unit";
+$dockersize = my_scale($df[2],$unit,0,-1,1024)." $unit";
+$ramsize    = my_scale($total,$unit,0,-1,1024)." $unit";
+
 // If maximum < installed then roundup maximum to the next power of 2 size of installed. E.g. 6 -> 8 or 12 -> 16
 $low = $memory_maximum < $memory_installed;
 if ($low) $memory_maximum = pow(2,ceil(log($memory_installed)/log(2)));
 
-switch ($display['theme']) {
-  case 'white': $color = '#1c1b1b'; $grid = '#e3e3e3'; break;
-  case 'black': $color = '#f2f2f2'; $grid = '#2b2b2b'; break;
-  case 'azure': $color = '#606e7f'; $grid = '#f3f0f4'; break;
-  case 'gray' : $color = '#606e7f'; $grid = '#0c0f0b'; break;
-  default     : $color = '#1c1b1b'; $grid = '#e3e3e3'; break;
+switch ($theme) {
+  case 'white': $color = '#1c1b1b'; $grid = '#e3e3e3'; $c0 = '#a8a8a8'; $c1 = '#dcdcdc'; break;
+  case 'black': $color = '#f2f2f2'; $grid = '#2b2b2b'; $c0 = '#787878'; $c1 = '#444444'; break;
+  case 'azure': $color = '#606e7f'; $grid = '#f3f0f4'; $c0 = '#606e7f'; $c1 = '#eceaec'; break;
+  case 'gray' : $color = '#606e7f'; $grid = '#0c0f0b'; $c0 = '#606e7f'; $c1 = '#232523'; break;
+  default     : $color = '#1c1b1b'; $grid = '#e3e3e3'; $c0 = '#a8a8a8'; $c1 = '#dcdcdc'; break;
 }
 ?>
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
@@ -181,10 +197,10 @@ switch ($display['theme']) {
 <div class='frame'>
 <div class='grid'>
 <div class='tile' id='tile1'>
-<table id='db-box1' class='share_status dashboard'>
+<table id='db-box1' class='dashboard'>
 <tbody class='system'>
 <tr><td><i class='icon-performance f32'></i><div class='section'><?=_var($var,'NAME')?><br>
-<span><?=_var($var,'COMMENT')?></span><span id="_current_time_" class="head_time"></span><br></div>
+<span><?=_var($var,'COMMENT')?></span><span id="current_time_" class="switch head_time"></span><br></div>
 <a href='/Dashboard/Settings/Identification'><i class='fa fa-fw fa-cog control' title="_(Go to identification settings)_"></i></a><i class='fa fa-fw fa-wrench control tile' onclick='contentMgmt()' title="_(Tile Management)_"></i>
 <span class='ctrl'>
 <?if ($parity||$mover||$btrfs):?>
@@ -198,7 +214,7 @@ switch ($display['theme']) {
 </td></tr>
 <tr><td>
 <div class='leftside'>
-<a href="/Settings/DateTime" class="hand none" title="_(Go to date and time settings)_"><span id="current_time"></span></a><br><span id="current_date"></span><br><br>
+<a href="/Settings/DateTime" class="hand none"><span id="current_time"></span></a><br><span id="current_date"></span><br><br>
 <span class='header'><i class='indent fa fa-file-text-o'></i>_(Model)_</span><br><i class='indent'></i><?=_var($var,'SYS_MODEL')?:'---'?><br><br>
 <span class='header'><i class='indent fa fa-id-badge'></i>_(Registration)_</span><br><i class='indent'></i>Unraid OS <b><em><?=_var($var,'regTy')?></em></b><br><br>
 <span class='header'><i class='indent fa fa-clock-o'></i>_(Uptime)_</span><br><i class='indent'></i><span class='uptime'></span>
@@ -230,7 +246,7 @@ switch ($display['theme']) {
 <tbody title="_(Processor Information)_" data="toggleCPU(true)">
 <tr><td><i class='icon-cpu f32'></i><div class='section'>_(Processor)_<br>
 <span class="head_info"><span id='cpu-temp'></span></span>
-<span id="head_cpu">_(Load)_:<span class="head_bar"><span class='cpu load'>0%</span><div class='usage-disk sys'><span id='_cpu_'></span><span></span></div></span></span><br></div>
+<span class="switch">_(Load)_:<span class="head_bar"><span class='cpu_ load'>0%</span><div class='usage-disk sys'><span id='cpu_'></span><span></span></div></span></span><br></div>
 <a href='/Dashboard/Settings/CPUset' title="_(Go to CPU pinning settings)_"><i class='fa fa-fw fa-cog control'></i></a>
 </td></tr>
 <tr><td><?=$cpumodel?></td></tr>
@@ -260,15 +276,21 @@ foreach ($cpus as $pair) {
 <tbody title="_(Memory Utilization)_">
 <tr><td><i class='icon-ram f32'></i><div class='section'>_(System)_<br>
 <span class="head_info"><span><i class='ups fa fa-line-chart'></i>_(Memory)_: <?="$memory_installed $unit $memory_type $ecc"?></span></span>
-<span id="head_ram">_(RAM)_:<span class="head_bar"><span class='sys0 load head'>0%</span><div class='usage-disk sys'><span id='_sys0_'></span><span></span></div></span></span><br></div>
+<span class="switch">_(RAM)_:<span class="head_bar"><span class='sys0_ load'>0%</span><div class='usage-disk sys'><span id='sys0_'></span><span></span></div></span></span><br></div>
 <a href='/Dashboard/Tools/Processes' title="_(View Running Processes)_"><i class='fa fa-fw fa-info-circle control'></i></a>
+</td></tr><tr><td>
+<span class='w26'><i class='ups fa fa-compress'></i>_(Usable size)_: <?=$ramsize?><br><i class='ups fa fa-expand'></i>_(Maximum size)_: <?="$memory_maximum $unit"?><?=$low?'*':''?></span>
+<span class='w18 center static'><a class='info hand none'>_(RAM usage)_<span>_(Percent of total used memory)_ (<?=$ramsize?>)</span></a></span>
+<span class='w18 center static'><a class='info hand none'>_(Flash device)_<span>_(Percent usage of flash usb device)_ (<?=$flashsize?>)</span></a></span>
+<span class='w18 center static'><a class='info hand none'>_(Log filesystem)_<span>_(Percent usage of LOG file system)_ (<?=$logsize?>)</span></a></span>
+<span class='w18 center static'><a class='info hand none'><?=$vdisk?><span><?=_("Percent usage of $vdisk")?> (<?=$dockersize?>)</span></a></span>
+</td></tr><tr><td>
+<span class='w26'><legend>_(Legend)_</legend><span id='dynamic'></span></span>
+<span class='w18 center'><div class='pie' id='sys0'><span class='sys0'></span><span class='var0'></span></div></span>
+<span class='w18 center'><div class='pie' id='sys1'><span class='sys1'></span><span class='var1'></span></div></span>
+<span class='w18 center'><div class='pie' id='sys2'><span class='sys2'></span><span class='var2'></span></div></span>
+<span class='w18 center'><div class='pie' id='sys3'><span class='sys3'></span><span class='var3'></span></div></span>
 </td></tr>
-<tr><td><span class='w36'><i class='ups fa fa-compress'></i>_(Usable size)_: <?=my_scale($total,$unit,1,null,1024)." $unit"?></span><i class='ups fa fa-expand'></i>_(Maximum size)_: <?="$memory_maximum $unit"?><?=$low?'*':''?></td></tr>
-<tr id='var0'><td><span class='w26'><i class='ups fa fa-fw fa-microchip'></i>_(RAM)_</span><span class='w72'><span class='sys0 load resize'>0%</span><span class="sys0_ load resize"></span><div class='usage-disk sys'><span id='sys0'></span><span></span></div></span></td></tr>
-<tr id='var1'><td><span class='w26'><i class='ups fa fa-fw fa-shield'></i>_(ZFS)_</span><span class='w72'><span class='sys1 load resize'>0%</span><span class="sys1_ load resize"></span><div class='usage-disk sys'><span id='sys1'></span><span></span></div></span></td></tr>
-<tr id='var2'><td><span class='w26'><i class='ups fa fa-fw fa-pencil-square'></i>_(Flash)_</span><span class='w72'><span class='sys2 load resize'>0%</span><span class="sys2_ load resize"></span><div class='usage-disk sys'><span id='sys2'></span><span></span></div></span></td></tr>
-<tr id='var3'><td><span class='w26'><i class='ups fa fa-fw fa-file-text'></i>_(Log)_</span><span class='w72'><span class='sys3 load resize'>0%</span><span class="sys3_ load resize"></span><div class='usage-disk sys'><span id='sys3'></span><span></span></div></span></td></tr>
-<tr id='var4'><td><span class='w26'><i class='ups fa fa-fw fa-docker'></i>_(Docker)_</span><span class='w72'><span class='sys4 load resize'>0%</span><span class="sys4_ load resize"></span><div class='usage-disk sys'><span id='sys4'></span><span></span></div></span></td></tr>
 </tbody>
 
 <tbody title="_(Interface Information)_" class="mixed">
@@ -336,9 +358,9 @@ foreach ($ports as $port) {
 
 <?if ($apcupsd):?>
 <tbody title="_(Power Status)_">
-<tr><td><i class='icon-ups f32'></i><div class='section'>_(Power)_<span class='head_gap' id='_ups_status_'></span><br>
+<tr><td><i class='icon-ups f32'></i><div class='section'>_(Power)_<span class='switch head_gap' id='ups_status_'></span><br>
 <span class="head_info"><span><i class='ups fa fa-bar-chart'></i>_(UPS Model)_: </span><span id='ups_model'></span></span>
-<span id="head_ups"><span>_(Load)_:</span><span class="head_gap" id='_ups_loadpct_'></span></span></span><br></div>
+<span class="switch"><span>_(Load)_:</span><span class="head_gap" id='ups_loadpct_'></span></span></span><br></div>
 <a href='/Dashboard/Settings/UPSsettings' title="_(Go to UPS settings)_"><i class='fa fa-fw fa-cog control'></i></a>
 </td></tr>
 <tr><td><span class='w36'><i class='ups fa fa-fw fa-plug'></i>_(UPS status)_:</span><span id='ups_status'></span></td></tr>
@@ -389,12 +411,12 @@ echo "</td></tr>";
 </div>
 
 <div class='tile' id='tile2'>
-<table id='db-box2' class='share_status dashboard'>
+<table id='db-box2' class='dashboard'>
 <?if ($dockerd):?>
 <tbody id='docker_view' title="_(Docker Containers)_" data="noApps()">
 <tr><td><i class='icon-docker f32'></i><div class='section'>_(Docker Containers)_<br>
-<span id="tile_apps"><span class='apps'><input type='checkbox' id='apps'></span></span>
-<span id="head_apps"></span><br></div>
+<span class='apps button'><input type='checkbox' id='apps'></span>
+<span class='apps switch'></span><br></div>
 <a href='/Dashboard/Settings/DockerSettings' title="_(Go to Docker settings)_"><i class='fa fa-fw fa-cog control'></i></a>
 </td></tr>
 </tbody>
@@ -402,11 +424,18 @@ echo "</td></tr>";
 <?if ($libvirtd):?>
 <tbody id='vm_view' title="_(Virtual Machines)_" data="noVMs()">
 <tr><td><i class='icon-virtualization f32'></i><div class='section'>_(Virtual Machines)_<br>
-<span id="tile_vms"><span class='vms'><input type='checkbox' id='vms'></span></span>
-<span id="head_vms"></span><br></div>
+<span class='vms button'><input type='checkbox' id='vms'></span>
+<span class='vms switch'></span><br></div>
 <a href='/Dashboard/Settings/VMSettings' title="_(Go to VM settings)_"><i class='fa fa-fw fa-cog control'></i></a>
 </td></tr>
 </tbody>
+<?if ($vmusage == "Y"):?>
+<tbody id='vm_view_usage' title="_(Virtual Machines Usage)_" >
+<tr><td><i class='icon-virtualization f32'></i><div class='section'>_(Virtual Machines Usage)_</div>
+<a href='/Dashboard/Settings/VMSettings' title="_(Go to VM settings)_"><i class='fa fa-fw fa-cog control'></i></a>
+</td></tr>
+</tbody>
+<?endif;?>
 <?endif;?>
 
 <tbody title="_(Shares Information)_"<?if ($group):?> class="mixed"<?endif;?>>
@@ -431,23 +460,22 @@ echo "</td></tr>";
 if (_var($var,'shareSMBEnabled')=='yes') {
   $i = 0;
   foreach ($shares as $name => $share) {
-    $i++;
-    $list = "<a href=\"/Dashboard/Shares/Share?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".compress($name,20)."</a>";
+    $list = "<a href=\"/Dashboard/Shares/Share?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">$name</a>";
     if ($share['luksStatus']>0) $list = str_replace('blue-text','green-text',$list);
     elseif ($share['useCache']=='only') $list = str_replace('blue-text','orange-text',$list);
-    $comment = compress($share['comment'],40) ?: '&nbsp;';
+    $comment = $share['comment'] ?: '&nbsp;';
     $security = export_settings(_var($var,'shareSMBEnabled'), $sec[$name]);
     $last = $name==array_key_last($shares) ? ' last' : '';
-    echo "<tr class='smb share share1{$last}'><td><span class='w26'><i class='icon-folder f14'></i>$list</span><span class='w44'>$comment</span><span class='w18'>$security</span><span id='share{$i}'>0</span></td></tr>";
+    echo "<tr class='smb share share1{$last}'><td><span class='w26'><i class='icon-folder f14'></i>$list</span><span class='w44'>$comment</span><span class='w18'>$security</span><span id='share",$i++,"'>0</span></td></tr>";
   }
   if (!count($shares)) echo "<tr class='smb share share1'><td class='none'>"._("No shares present")."</td></tr>";
 }
 if (_var($var,'shareNFSEnabled')=='yes') {
   foreach ($shares as $name => $share) {
-    $list = "<a href=\"/Dashboard/Shares/Share?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".compress($name,20)."</a>";
+    $list = "<a href=\"/Dashboard/Shares/Share?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">$name</a>";
     if ($share['luksStatus']>0) $list = str_replace('blue-text','green-text',$list);
     elseif ($share['useCache']=='only') $list = str_replace('blue-text','orange-text',$list);
-    $comment = compress($share['comment'],40) ?: '&nbsp;';
+    $comment = $share['comment'] ?: '&nbsp;';
     $security = export_settings(_var($var,'shareNFSEnabled'), $sec_nfs[$name]);
     $last = $name==array_key_last($shares) ? ' last' : '';
     echo "<tr class='nfs share share3{$last}'><td><span class='w26'><i class='icon-folder f14'></i>$list</span><span class='w44'>$comment</span><span class='w18'>$security</span><span>-</span></td></tr>";
@@ -456,10 +484,10 @@ if (_var($var,'shareNFSEnabled')=='yes') {
 }
 if (!$group) {
   foreach ($shares as $name => $share) {
-    $list = "<a href=\"/Dashboard/Shares/Share?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".compress($name,20)."</a>";
+    $list = "<a href=\"/Dashboard/Shares/Share?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">$name</a>";
     if ($share['luksStatus']>0) $list = str_replace('blue-text','green-text',$list);
     elseif ($share['useCache']=='only') $list = str_replace('blue-text','orange-text',$list);
-    $comment = compress($share['comment'],40) ?: '&nbsp;';
+    $comment = $share['comment'] ?: '&nbsp;';
     echo "<tr class='share'><td><span class='w26'><i class='icon-folder f14'></i>$list</span><span class='w44'>$comment</span><span class='w18'>-</span><span>-</span></td></tr>";
   }
   if (!count($shares)) echo "<tr class='share'><td class='none'>"._("No shares present")."</td></tr>";
@@ -489,8 +517,8 @@ if (!$group) {
 if (_var($var,'shareSMBEnabled')=='yes') {
   foreach ($users as $user) {
     $name = $user['name'];
-    $list = "<a href=\"/Dashboard/Users/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".compress($name,20)."</a>";
-    $desc = compress($user['desc'],40) ?: '&nbsp;';
+    $list = "<a href=\"/Dashboard/Users/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">$name</a>";
+    $desc = $user['desc'] ?: '&nbsp;';
     if ($name=='root') {
       $write = $read = '-';
     } else {
@@ -521,8 +549,8 @@ if (_var($var,'shareSMBEnabled')=='yes') {
 if (_var($var,'shareNFSEnabled')=='yes') {
   foreach ($users as $user) {
     $name = $user['name'];
-    $list = "<a href=\"/Dashboard/Users/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".compress($name,20)."</a>";
-    $desc = compress($user['desc'],40) ?: '&nbsp;';
+    $list = "<a href=\"/Dashboard/Users/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">$name</a>";
+    $desc = $user['desc'] ?: '&nbsp;';
     $write = '-'; $read = '-';
     if ($user['passwd']!='yes') $list = str_replace('blue-text','orange-text',$list);
     $last = $name==array_key_last($users) ? ' last' : '';
@@ -532,8 +560,8 @@ if (_var($var,'shareNFSEnabled')=='yes') {
 if (!$group) {
   foreach ($users as $user) {
     $name = $user['name'];
-    $list = "<a href=\"/Dashboard/Users/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".compress($name,20)."</a>";
-    $desc = compress($user['desc'],40) ?: '&nbsp;';
+    $list = "<a href=\"/Dashboard/Users/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">$name</a>";
+    $desc = $user['desc'] ?: '&nbsp;';
     if ($user['passwd']!='yes') $list = str_replace('blue-text','orange-text',$list);
     echo "<tr class='user'><td><span class='w26'><i class='icon-user f14'></i>$list</span><span class='w44'>$desc</span><span class='w18'>-</span><span>-</span></td></tr>";
   }
@@ -545,7 +573,8 @@ if (!$group) {
 </div>
 
 <div class='tile' id='tile3'>
-<table id='db-box3' class='share_status dashboard'>
+<table id='db-box3' class='dashboard'>
+<?if (!$poolsOnly):?>
 <tbody title="_(Parity Information)_">
 <tr><td><i class='icon-health f32'></i><div class='section'>_(Parity)_<br>
 <span class='parity'></span><br></div>
@@ -556,35 +585,41 @@ if (!$group) {
 <tr><td id='program' class="wrap"></td></tr>
 </tbody>
 
+<?$power = _var($display,'power') && in_array('nvme',array_column(main_filter($disks),'transport')) ? ' / '._('Power') : '';?>
 <tbody id='array_list' title="_(Array Information)_">
 <tr><td><i class='icon-disks f32'></i><div class='section'>_(Array)_<?if (!$started):?> (_(stopped)_)<?endif;?><br>
 <span><?if ($started):?><?=sprintf(_("%s used of %s (%s %%)"),my_scale($array_used*1024,$unit)." $unit",my_scale($array_size*1024,$unit,-1,-1)." $unit",$array_percent)?><?endif;?></span><br></div>
 <a href='/Dashboard/Settings/DiskSettings' title="_(Go to disk settings)_"><i class='fa fa-fw fa-cog control'></i></a>
 </td></tr>
 <tr><td id='array_info'></td></tr>
-<tr class='header'><td><span class='w26'>_(Device)_</span><span class='w18'>_(Status)_</span><span class='w18'>_(Temp)_</span><span class='w18'>_(SMART)_</span><span class='w18'>_(Utilization)_</span></td></tr>
+<tr class='header'><td><span class='w26'>_(Device)_</span><span class='w18'>_(Status)_</span><span class='w18'>_(Temp)_<?=$power?></span><span class='w18'>_(SMART)_</span><span class='w18'>_(Utilization)_</span></td></tr>
 </tbody>
+<?endif;?>
 
 <?$i=0?>
-<?foreach ($pools as $pool):?>
+<?foreach ($pools as $pool):
+  $cache = array_filter(cache_filter($disks),function($disk) use ($pool){return prefix($disk['name'])==$pool;});
+  $power = _var($display,'power') && in_array('nvme',array_column($cache,'transport')) ? ' / '._('Power') : '';
+?>
 <tbody id='pool_list<?=$i?>' title="_(<?=ucfirst($pool)?> Information)_">
 <tr><td><i class='icon-disk f32'></i><div class='section'><?=_(native($pool),3).($started ? '' : ' ('._('stopped').')')?><br>
 <span><?if ($started):?><?=sprintf(_("%s used of %s (%s %%)"),my_scale($cache_used[$pool]*1024,$unit)." $unit",my_scale($cache_size[$pool]*1024,$unit,-1,-1)." $unit",$cache_rate[$pool])?><?endif;?></span><br></div>
 <a href='/Dashboard/Settings/Device?name=<?=$pool?>' title="_(Go to disk settings)_"><i class='fa fa-fw fa-cog control'></i></a>
 </td></tr>
 <tr><td id='pool_info<?=$i++?>'></td></tr>
-<tr class='header'><td><span class='w26'>_(Device)_</span><span class='w18'>_(Status)_</span><span class='w18'>_(Temp)_</span><span class='w18'>_(SMART)_</span><span class='w18'>_(Utilization)_</span></td></tr>
+<tr class='header'><td><span class='w26'>_(Device)_</span><span class='w18'>_(Status)_</span><span class='w18'>_(Temp)_<?=$power?></span><span class='w18'>_(SMART)_</span><span class='w18'>_(Utilization)_</span></td></tr>
 </tbody>
 <?endforeach;?>
 
 <?if ($devs):?>
+<?$power = _var($display,'power') && in_array('nvme',array_column($devs,'transport')) ? ' / '._('Power') : '';?>
 <tbody id='devs_list' title="_(Unassigned Devices)_">
 <tr><td><i class='icon-disc f32'></i><div class='section'>_(Unassigned)_<?if (!$started):?> (_(stopped)_)<?endif;?><br>
 <span></span><br></div>
 <a href='/Dashboard/Settings/DiskSettings' title="_(Go to disk settings)_"><i class='fa fa-fw fa-cog control'></i></a>
 </td></tr>
 <tr><td id='devs_info'></td></tr>
-<tr class='header'><td><span class='w26'>_(Device)_</span><span class='w18'>_(Status)_</span><span class='w18'>_(Temp)_</span><span class='w18'>_(SMART)_</span><span class='w18'>_(Utilization)_</span></td></tr>
+<tr class='header'><td><span class='w26'>_(Device)_</span><span class='w18'>_(Status)_</span><span class='w18'>_(Temp)_<?=$power?></span><span class='w18'>_(SMART)_</span><span class='w18'>_(Utilization)_</span></td></tr>
 </tbody>
 <?endif;?>
 <?customTiles('column3');?>
@@ -594,7 +629,6 @@ if (!$group) {
 </div>
 
 <form name='boot' method='POST' action='/webGui/include/Boot.php'>
-<input type='hidden' name='csrf_token' value='<?=_var($var,'csrf_token')?>'>
 <input type='hidden' name='cmd' value=''>
 </form>
 
@@ -613,11 +647,11 @@ table.find('tbody').not('.system').each(function(){
   sort.push($(this).attr('sort'));
   checked.push($(this).is(':visible') ? 'checked' : '');
 });
-for (var n=0,x; x=index[n]; n++) {
+for (let n=0,x; x=index[n]; n++) {
   $('div#list').append("<span class='item'><input class='checker' type='checkbox' "+checked[n]+">"+x+"</span>");
 }
 function hideShow() {
-  var n = 0, inactive = [];
+  let n = 0, inactive = [];
   var count = {'db-box1':0, 'db-box2':0, 'db-box3':0};
   $('input.checker').each(function(){
     var tbody = $('table.dashboard').find('tbody[sort="'+sort[n]+'"]');
@@ -655,7 +689,7 @@ function hideShow() {
 <tr><td>_(Overwrite)_:</td><td><input type="checkbox" id="Overwrite" value="" ></td></tr>
 <tr hidden><td>_(Start Cloned VM)_:</td><td><input type="checkbox" id="Start" value="" ></td></tr>
 <tr hidden><td>_(Edit VM after clone)_:</td><td><input type="checkbox" id="Edit" value="" ></td></tr>
-<tr><td>_(Check Free Space)_:</td><td><input type="checkbox" id="Free" value="" ></td></tr>
+<tr><td>_(Check free space)_:</td><td><input type="checkbox" id="Free" value="" ></td></tr>
 </table>
 </div>
 
@@ -664,6 +698,8 @@ function hideShow() {
 <tr><td>_(VM Name)_:</td><td><label id="VMName"></label></td></tr>
 <tr><td>_(Snapshot Name)_:</td><td><input type="text" id="targetsnap" autocomplete="off" spellcheck="false" value="--generate" onclick="this.select()">_(Check free space)_:<input type="checkbox" id="targetsnapfspc" checked></td></tr>
 <tr><td>_(Description)_:</td><td><input type="text" id="targetsnapdesc" autocomplete="off" spellcheck="false" value="" onclick="this.select()"></td></tr>
+<tr id="memoryline"><td>_(Memory dump )_:</td><td><input type="checkbox" id="targetsnapmem"  checked></td></tr>
+<tr id="fstypeline"><td>_(FS Native Snapshot )_:</td><td><label id="fstype"></label><input type="checkbox" id="targetsnapfstype" >_(Unchecked will use QEMU External Snapshot)_</td></tr>
 </table>
 </div>
 
@@ -671,7 +707,8 @@ function hideShow() {
 Number.prototype.pad = function(size){var s=String(this);while(s.length<(size||2)){s='0'+s;}return s;}
 Array.prototype.tail = function(t){return this.slice(-t).map(function(o){return o.y;}).join(';');}
 String.prototype.build = function(){return this.replace(/\n(<!--!|!-->)\n/g,'');}
-String.prototype.md5 = function() {
+jQuery.prototype.alive = function(width,color){return this.finish().animate({width:width},{step:function(){$(this).css({'overflow':'visible'}).removeClass().addClass(color);}});}
+String.prototype.md5 = function(){
   // Original copyright (c) Paul Johnston & Greg Holt.
   var hc = '0123456789abcdef';
   function rh(n){var j,s='';for (j=0;j<=3;j++) s+=hc.charAt((n>>(j*8+4))&0x0F)+hc.charAt((n>>(j*8))&0x0F);return s;}
@@ -722,15 +759,13 @@ jQuery.prototype.hideMe = function() {
 jQuery.prototype.mixedView = function(s) {
   if (s==0) {
     this.find('tr:gt(0)').hide();
-    this.find('span[id^="head_"]').show();
-    this.find('span[id^="tile_"]').hide();
-    changeSpan(this,0)
+    this.find('span.switch').show();
+    this.find('span.button').hide();
     return;
   }
   this.find('tr:gt(0)').show();
-  this.find('span[id^="head_"]').hide();
-  this.find('span[id^="tile_"]').show();
-  changeSpan(this,1)
+  this.find('span.switch').hide();
+  this.find('span.button').show();
   if (this.attr('data')) {
     setTimeout(this.attr('data'));
   }
@@ -739,7 +774,7 @@ jQuery.prototype.mixedView = function(s) {
     select = parseInt(select.val())+1;
     this.find('tr:gt(0)').each(function(){
       var names = ($(this).attr('class')||'').split(' ');
-      for (var n=0,name; name=names[n]; n++) if (/[0-9]/.test(name.slice(-1)) && name.slice(-1)!=select) $(this).hide();
+      for (let n=0,name; name=names[n]; n++) if (/[0-9]/.test(name.slice(-1)) && name.slice(-1)!=select) $(this).hide();
     });
   }
 }
@@ -766,6 +801,8 @@ function sanitizeMultiCookie(cookieName, delimiter, removeDuplicates = false) {
   }
 }
 
+var colors  = ['<?=$c0?>','<?=$c1?>','#d77e0d','#d4ac0d','#cd5c5c','#ffc0cb','#e6e6fa','#9370db','#7cfc00','#228b22','#00ffff','#4682b4'];
+var blue    = '#486dba'; // fallback color when too many graph elements exist
 var ports   = [<?=implode(',',array_map('escapestring',$ports))?>];
 var cpu     = [];
 var rxd     = [];
@@ -778,6 +815,8 @@ var update2 = true;
 var box     = null;
 var startup = true;
 var stopgap = '<thead class="stopgap"><tr><td class="stopgap"></td></tr></thead>';
+var recall  = null;
+var recover = null;
 
 var options_cpu = {
   series:[{name:'load', data:cpu.slice()}],
@@ -907,7 +946,7 @@ function loadlist(init) {
       $('#vms').is(':checked') ? $.cookie('my_vms','startedOnly',{expires:3650}) : $.removeCookie('my_vms');
     });
   }
-  $.post('/webGui/include/DashboardApps.php',{docker:'<?=$dockerd?>',vms:'<?=$libvirtd?>'},function(d) {
+  $.post('/webGui/include/DashboardApps.php',{docker:'<?=$dockerd?>',vms:'<?=$libvirtd?>',vmusage:'<?=$vmusage?>'},function(d) {
     var data = d.split('\0');
     $('#docker_view tr.updated').remove();
     $('#docker_view').append(data[0]).hideMe();
@@ -919,8 +958,10 @@ function loadlist(init) {
     var started_vms  = $('#vm_view').find('span.outer.vms.started').length;
     var stopped_vms  = $('#vm_view').find('span.outer.vms.stopped').length;
     var paused_vms   = $('#vm_view').find('span.outer.vms.paused').length;
-    $('#head_apps').html("_(Containers)_ -- _(Started)_: "+started_apps+", _(Stopped)_: "+stopped_apps+", _(Paused)_: "+paused_apps);
-    $('#head_vms').html("_(VMs)_ -- _(Started)_: "+started_vms+", _(Stopped)_: "+stopped_vms+", _(Paused)_: "+paused_vms);
+    $('#vm_view_usage tr.useupdated').remove();
+    $('#vm_view_usage').append(data[2]).hideMe();
+    $('.apps.switch').html("_(Containers)_ -- _(Started)_: "+started_apps+", _(Stopped)_: "+stopped_apps+", _(Paused)_: "+paused_apps);
+    $('.vms.switch').html("_(VMs)_ -- _(Started)_: "+started_vms+", _(Stopped)_: "+stopped_vms+", _(Paused)_: "+paused_vms);
     if ($.cookie('my_apps')!=null) $('span.apps.stopped').hide(0,noApps());
     if ($.cookie('my_vms')!=null) $('span.vms.stopped').hide(0,noVMs());
   });
@@ -956,13 +997,6 @@ function changeMode(item) {
   }
 <?endif;?>
   $('select[name="enter_user"]').val(item);
-}
-function changeSpan(span,dir) {
-  const spans = ['cpu','sys0','ups_loadpct','ups_status','current_time'];
-  switch (dir) {
-    case 0: for (var i=0,id; id=spans[i]; i++) span.find('span#_'+id+'_').prop('id',id); break;
-    case 1: for (var i=0,id; id=spans[i]; i++) span.find('span#'+id+':first').prop('id','_'+id+'_'); break;
-  }
 }
 function changeView(item) {
   if (item==0) $.removeCookie('enter_view'); else $.cookie('enter_view',item,{expires:3650});
@@ -1015,10 +1049,10 @@ function portSelect(name) {
 }
 function moreInfo(data,table) {
   var info = [];
-  if (data[1]>0) info.push(data[1]+" _(failed device)_"+(data[1]==1?'':'s'));
-  if (data[2]>0) info.push(data[2]+" _(heat warning)_"+(data[2]==1?'':'s'));
-  if (data[3]>0) info.push(data[3]+" _(SMART error)_"+(data[3]==1?'':'s'));
-  if (data[4]>0) info.push(data[4]+" _(utilization warning)_"+(data[4]==1?'':'s'));
+  if (data[1]>0) info.push(data[1]+' '+(data[1]==1 ? "_(failed device)_" : "_(failed devices)_"));
+  if (data[2]>0) info.push(data[2]+' '+(data[2]==1 ? "_(heat warning)_" : "_(heat warnings)_"));
+  if (data[3]>0) info.push(data[3]+' '+(data[3]==1 ? "_(SMART error)_" : "_(SMART errors)_"));
+  if (data[4]>0) info.push(data[4]+' '+(data[4]==1 ? "_(utilization warning)_" : "_(utilization warnings)_"));
   return info.length ? "<div class='last'><i class='icon-u-triangle failed'></i><span class='failed'>"+table+" _(has)_ "+info.join('. ')+".</span></div>" : "";
 }
 function autoscale(value,text,size,kilo) {
@@ -1051,7 +1085,9 @@ function identity(page,disk) {
   location.replace('/Dashboard/'+page+'?name='+disk);
 }
 function acknowledge(id,disk) {
-  $.post('/webGui/include/Acknowledge.php',{disk:disk},function(){$(id).removeClass('fa-thumbs-o-down orange-text').addClass('fa-thumbs-o-up green-text');$(id.replace('smart','text')).text("<?=_('healthy')?>");});
+  $.post('/webGui/include/Acknowledge.php',{disk:disk},function(){
+    $(id).removeClass('fa-thumbs-o-down orange-text').addClass('fa-thumbs-o-up green-text');$(id.replace('smart','text')).text("<?=_('healthy')?>");
+  });
 }
 function dropdown(menu) {
   var select = 'select[name="'+menu+'"]';
@@ -1100,8 +1136,8 @@ function StopArray() {
 <?endif;?>
 }
 function StopArrayNow() {
-  $('span.hand').prop('onclick',null).off('click').addClass('busy').css('cursor','default');
-  $.post('/update.htm',{startState:'<?=_var($var,'mdState')?>',cmdStop:'Stop',csrf_token:'<?=_var($var,'csrf_token')?>'},function(){refresh();});
+  $('span.hand').prop('onclick',null).off('click').addClass('busy').css({'cursor':'default'});
+  $.post('/update.htm',{startState:'<?=htmlspecialchars(_var($var,'mdState'))?>', cmdStop:'Stop'},function(){refresh();});
 }
 function StartArray() {
 <?if ($confirm['stop']):?>
@@ -1111,8 +1147,8 @@ function StartArray() {
 <?endif;?>
 }
 function StartArrayNow() {
-  $('span.hand').prop('onclick',null).off('click').addClass('busy').css('cursor','default');
-  $.post('/update.htm',{startState:'<?=_var($var,'mdState')?>',cmdStart:'Start',csrf_token:'<?=_var($var,'csrf_token')?>'},function(){refresh();});
+  $('span.hand').prop('onclick',null).off('click').addClass('busy').css({'cursor':'default'});
+  $.post('/update.htm',{startState:'<?=htmlspecialchars(_var($var,'mdState'))?>', cmdStart:'Start'},function(){refresh();});
 }
 function Reboot() {
 <?if ($confirm['down']):?>
@@ -1183,15 +1219,16 @@ function addProperties() {
     $(this).find('td:first').prepend("<i class='fa fa-fw fa-close control tile' onclick='dismiss($(this))' title=\"_(Close Tile)_\"></i>");
   });
   $('div.frame tr').attr('title','');
-  $('tr#var0').hover(function(){if(!timers.var0){timers.var0=setTimeout(function(){timers.var0=null;$('.sys0_').hide();$('.sys0').show();},5000);$.post('/webGui/include/DashboardApps.php',{sys:0},function(val){$('.sys0').hide();$('.sys0_').text(val).show();});}});
-<?if ($zfs):?>
-  $('tr#var1').show().hover(function(){if(!timers.var1){timers.var1=setTimeout(function(){timers.var1=null;$('.sys1_').hide();$('.sys1').show();},5000);$.post('/webGui/include/DashboardApps.php',{sys:1},function(val){$('.sys1').hide();$('.sys1_').text(val).show();});}});
-<?endif;?>
-  $('tr#var2').hover(function(){if(!timers.var2){timers.var2=setTimeout(function(){timers.var2=null;$('.sys2_').hide();$('.sys2').show();},5000);$.post('/webGui/include/DashboardApps.php',{sys:2},function(val){$('.sys2').hide();$('.sys2_').text(val).show();});}});
-  $('tr#var3').hover(function(){if(!timers.var3){timers.var3=setTimeout(function(){timers.var3=null;$('.sys3_').hide();$('.sys3').show();},5000);$.post('/webGui/include/DashboardApps.php',{sys:3},function(val){$('.sys3').hide();$('.sys3_').text(val).show();});}});
-<?if ($dockerd):?>
-  $('tr#var4').show().hover(function(){if(!timers.var4){timers.var4=setTimeout(function(){timers.var4=null;$('.sys4_').hide();$('.sys4').show();},5000);$.post('/webGui/include/DashboardApps.php',{sys:4},function(val){$('.sys4').hide();$('.sys4_').text(val).show();});}});
-<?endif;?>
+  $('div#sys0').hover(function(){$('.sys0').hide();$('.var0').show();},function(){$('.sys0').show();$('.var0').hide();});
+  $('div#sys1').hover(function(){$('.sys1').hide();$('.var1').show();},function(){$('.sys1').show();$('.var1').hide();});
+  $('div#sys2').hover(function(){$('.sys2').hide();$('.var2').show();},function(){$('.sys2').show();$('.var2').hide();});
+  $('div#sys3').hover(function(){$('.sys3').hide();$('.var3').show();},function(){$('.sys3').show();$('.var3').hide();});
+  $('#current_time').hover(function(){$.post('/webGui/include/DashboardApps.php',{ntp:'ntp'},function(ntp){$('#current_time').prop('title',ntp+"\n_(Go to date and time settings)_");});});
+  // make truncated descriptions fully visible when hovering over them
+  $('span.w18').not('.static').hover(
+    function(){if ($(this)[0].offsetWidth < $(this)[0].scrollWidth) {recall = $(this).next(); recover=recall.html(); recall.html('&nbsp;');}},
+    function(){if ($(this)[0].offsetWidth < $(this)[0].scrollWidth) {recall.html(recover); recall=null;}}
+  );
 }
 function showContent() {
   var count = {'db-box1':$('table#db-box1 tbody').length, 'db-box2':$('table#db-box2 tbody').length, 'db-box3':$('table#db-box3 tbody').length}
@@ -1199,7 +1236,7 @@ function showContent() {
   var inactive = $.cookie('inactive_content');
   if (inactive) {
     inactive = inactive.split(';');
-    for (var n=0,md5; md5=inactive[n]; n++) {
+    for (let n=0,md5; md5=inactive[n]; n++) {
       var tbody = $('table.dashboard tbody[sort="'+md5+'"]');
       var id = tbody.parent().prop('id');
       count[id]--;
@@ -1211,13 +1248,12 @@ function showContent() {
   var hidden = $.cookie('hidden_content');
   if (hidden) {
     hidden = hidden.split(';');
-    for (var n=0,md5; md5=hidden[n]; n++) {
+    for (let n=0,md5; md5=hidden[n]; n++) {
       var tbody = $('div.frame tbody[sort="'+md5+'"]');
       tbody.find('.openclose').removeClass('fa-chevron-up fa-chevron-down').addClass('fa-chevron-down');
       tbody.find('tr:gt(0)').hide();
-      tbody.find('span[id^="head_"]').show();
-      tbody.find('span[id^="tile_"]').hide();
-      changeSpan(tbody,0);
+      tbody.find('span.switch').show();
+      tbody.find('span.button').hide();
     }
   }
   if (count['db-box1']>0) $('div#tile1').show();
@@ -1229,6 +1265,12 @@ function setColor(l, t1, t2) {
   case (t1 > 0 && l >= t1): return 'redbar';
   case (t2 > 0 && l >= t2): return 'orangebar';
   default: return '';}
+}
+function fontColor(l, t1, t2) {
+  switch (true) {
+  case (t1 > 0 && l >= t1): return '#f0000c';
+  case (t2 > 0 && l >= t2): return '#e68a00';
+  default: return '#4f8a10';}
 }
 function openClose(button) {
   var hidden = $.cookie('hidden_content');
@@ -1354,19 +1396,35 @@ function VMClone(uuid, name){
   });
   dialogStyle();
 }
-function selectsnapshot(uuid, name ,snaps, opt, getlist){
+function selectsnapshot(uuid, name ,snaps, opt, getlist, state,fstype){
   box = $("#iframe-popup");
   box.html($("#templatesnapshot"+opt).html());
   const capopt = opt.charAt(0).toUpperCase() + opt.slice(1);
   var optiontext = capopt + " _(Snapshot)_";
   box.find('#VMName').html(name);
+  box.find('#fstype').html(fstype);
+  if (fstype == "QEMU") box.find('#fstypeline').prop('hidden',true);
   box.find('#targetsnap').val(snaps);
   box.find('#targetsnapl').html(snaps);
   if (getlist) {
     var only = (opt == "remove") ? 0 : 1;
-    $.post("/plugins/dynamix.vm.manager/include/VMajax.php", {action:"snap-images", uuid:uuid, snapshotname:snaps, only:only}, function(data){if (data.html) box.find('#targetsnapimages').html(data.html);},'json');
+    $.post("/plugins/dynamix.vm.manager/include/VMajax.php",{action:"snap-images",uuid:uuid,snapshotname:snaps,only:only},function(data){if (data.html) box.find('#targetsnapimages').html(data.html);},'json');
   }
+  var memorydump = "no";
   document.getElementById("targetsnapfspc").checked = true;
+  if (fstype == "ZFS") {
+    box.find('#targetsnaprmv').prop('disabled',true);
+    box.find('#targetsnaprmvmeta').prop('disabled',true);
+  }
+  if (state != "running") {
+    box.find('#memoryline').prop('hidden',true);
+    box.find('#targetsnapmem').prop('hidden',true);
+    box.find('#targetsnapmem').prop('checked',false);
+  } else {
+    box.find('#memoryline').prop('hidden',false);
+    box.find('#targetsnapmem').prop('hidden',false);
+    box.find('#targetsnapmem').prop('checked',true);
+  }
   box.dialog({
     title: optiontext,
     height: 'auto',
@@ -1394,8 +1452,11 @@ function selectsnapshot(uuid, name ,snaps, opt, getlist){
         if (opt == "create") {
           free = box.find('#targetsnapfspc').prop('checked') ? 'yes' : 'no';
           desc = box.find("#targetsnapdesc").prop('value');
+          memorydump = box.find('#targetsnapmem').prop('checked') ? 'yes' : 'no';
+          fstypeuse = box.find('#targetsnapfstype').prop('checked') ? 'yes' : 'no';
+          if (fstypeuse == "no") fstype ="QEMU";
         }
-        ajaxVMDispatch({action:"snap-" + opt +'-external', uuid:uuid, snapshotname:target, remove:remove, free:free, desc:desc}, "loadlist");
+        ajaxVMDispatch({action:"snap-" + opt +'-external', uuid:uuid, snapshotname:target, remove:remove, free:free, desc:desc, fstype:fstype,memorydump:memorydump}, "loadlist");
         box.dialog('close');
       },
       "_(Cancel)_": function(){
@@ -1456,112 +1517,159 @@ function LockButton() {
     $('table.dashboard').sortable('destroy');
   }
 }
+
+function cpu_parse(msg) {
+  var parse = {}, section = '';
+  msg.split('\n').forEach(function(row) {
+    if (row.substr(0,1) == '[') {
+      section = row.substr(1,row.length-2);
+      parse[section] = {};
+    } else {
+      var data = row.split('=');
+      parse[section][data[0]] = data[1];
+    }
+  });
+  return parse;
+}
+
+<?if ($vmusage == "Y"):?>
+var vmdashusage = new NchanSubscriber('/sub/vm_dashusage',{subscriber:'websocket'});
+vmdashusage.on('message', function(msg){
+  var data = JSON.parse(msg);
+  for (const [vm, vmdata] of Object.entries(data)) {
+    for (const [displayitem, value] of Object.entries(vmdata)) {
+    $('#vmmetrics-'+displayitem + '-' + vm ).html(value); 
+    }
+  }
+  });
+<?endif;?>
+
 var dashboard = new NchanSubscriber('/sub/cpuload,update1,update2,update3<?=$wireguard?",wireguard":""?>',{subscriber:'websocket'});
 dashboard.on('message',function(msg,meta) {
   switch (meta.id.channel()) {
   case 0:
-    var ini = parseINI(msg);
+    var get = cpu_parse(msg);
     // cpu load
-    $.each(ini,function(k,v) {
-      var load = v['host'];
+    $.each(get,function(k,v) {
+      var load = v.host;
       var color = setColor(load, 90, 70);
       if (k=='cpu') {
         addChartCpu(load);
         cpuchart.updateSeries([{data:cpu}]);
+        $('.cpu_').text(load+'%');
+        $('#cpu_').alive(load+'%',color);
       }
       $('.'+k).text(load+'%');
-      $('#'+k).finish().animate({width:load+'%'},{step:function(){$('#'+k).css('overflow','visible').removeClass().addClass(color);}});
+      $('#'+k).alive(load+'%',color);
     });
     break;
   case 1:
-    var part = msg.split('\1');
+    var get = JSON.parse(msg);
     // memory & disk load
-    $.each(part[0].split('\0'),function(k,v) {
-      var load = v.slice(0,-1);
-      var color = k==1 ? '' : setColor(load,<?=_var($display,'critical',0)?>,<?=_var($display,'warning',0)?>);
-      $('.sys'+k).text(v);
-      $('#sys'+k).finish().animate({width:v},{step:function(){$('#sys'+k).css('overflow','visible').removeClass().addClass(color);}});
-    });
+    var load = get.ram[0].slice(0,-1);
+    $('.sys0').text(get.ram[0]).css({'color':fontColor(load,<?=$display['critical']?>,<?=$display['warning']?>)});
+    $('.var0').text(get.ram[1]);
+    var color = setColor(load,<?=$display['critical']?>,<?=$display['warning']?>);
+    $('.sys0_').text(get.ram[0]);
+    $('#sys0_').alive(get.ram[0],color);
+    var start = 0;
+    var end = parseInt(get.ram[4]);
+    var ring = [colors[0]+' '+start+'% '+end+'%']
+    // create individual elements of the RAM graph
+    for (var i=6; i < get.ram.length; i=i+2) {
+      start = end;
+      end += parseInt(get.ram[i]);
+      ring.push((colors[(i-2)/2]||blue)+' '+start+'% '+end+'%');
+    }
+    ring.push(colors[1]+' '+get.ram[0]+' 100%');
+    $('#sys0').css({'background':'conic-gradient('+ring.join(',')+')'});
+    // dynamic info from hook scripts
+    var html = [];
+    for (var i=0,name; name=get.name[i]; i++) if (i!=1) html.push("<i class='ups fa fa-circle' style='color:"+(colors[i]||blue)+"'></i>"+name+": "+(i==0?get.ram[5]:get.ram[i*2+3]));
+    html.push("<i class='ups fa fa-circle' style='color:"+colors[1]+"'></i>"+get.name[1]+": "+get.ram[3]);
+    $('#dynamic').html(html.join('<br>'));
+    // flash, Log & Docker graphs
+    for (var k=1,sys; sys=get.sys[k-1]; k++) {
+      var load = sys[0].slice(0,-1);
+      $('.sys'+k).text(sys[0]).css({'color':fontColor(load,<?=$display['critical']?>,<?=$display['warning']?>)});
+      $('.var'+k).text(sys[1]);
+      $('#sys'+k).css({'background':'conic-gradient('+colors[0]+' 0% '+sys[0]+','+colors[1]+' '+sys[0]+' 100%)'});
+    }
 <?if ($fans):?>
     // fans rpm
-    $.each(part[1].split('\0'),function(k,v) {$('#fan'+k).html(v);});
+    for (var k=0; k < get.fan.length; k++) $('#fan'+k).html(get.fan[k]);
 <?endif;?>
 <?if (_var($var,'fsState')=='Started' && $group):?>
     // stream counters (smb only)
-    var tag = $('.smb').is(':visible') ? 'smb' : $('.nfs').is(':visible') ? 'nfs' : '';
-    if (tag == 'smb') $.each(part[2].split('\0'),function(k,v) {$('#share'+(k+1)).html(v);});
+    if ($('.smb').is(':visible')) for (var k=0; k < get.stream.length; k++) {$('#share'+k).html(get.stream[k]); $('#share'+k).removeClass(); if (get.stream[k]>0) $('#share'+k).addClass('orange-text');}
 <?endif;?>
     break;
   case 2:
     if (!update2) break;
-    var part = msg.split('\1');
-    var data = part[0].split('\0');
-    var info = moreInfo(data,"_(Array)_");
-    // array devices
-    $('#array_list tr.updated').remove();
-    $('#array_list').append(data[0]).hideMe();
-    $('#array_info').parent().css('display',info?'':'none');
-    $('#array_info').html(info);
-    smartMenu('#array_list');
+    var get  = JSON.parse(msg);
+    if(document.getElementById('array_list') != null) {
+      var info = moreInfo(get.disk,"_(Array)_");
+      // array devices
+      $('#array_list tr.updated').remove();
+      $('#array_list').append(get.disk[0]).hideMe();
+      $('#array_info').parent().css({'display':info?'':'none'});
+      $('#array_info').html(info);
+      smartMenu('#array_list');
+    }
     // pool devices
-    var text = part[1].split('\r');
-    for (var i=0,t; t=text[i]; i++) {
-      var data = t.split('\0');
-      var info = moreInfo(data,"_(Pool)_");
-      $('#pool_list'+i+' tr.updated').remove();
-      $('#pool_list'+i).append(t).hideMe();
-      $('#pool_info'+i).parent().css('display',info?'':'none');
-      $('#pool_info'+i).html(info);
-      smartMenu('#pool_list'+i);
+    if(get.pool) {
+      for (let i=0; i < get.pool.length; i++) {
+        var info = moreInfo(get.pool[i],"_(Pool)_");
+        $('#pool_list'+i+' tr.updated').remove();
+        $('#pool_list'+i).append(get.pool[i][0]).hideMe();
+        $('#pool_info'+i).parent().css({'display':info?'':'none'});
+        $('#pool_info'+i).html(info);
+        smartMenu('#pool_list'+i);
+      }
     }
 <?if ($devs):?>
     // unassigned devices
-    var data = part[2].split('\0');
-    var info = moreInfo(data,"_(Unassigned)_");
+    var info = moreInfo(get.open,"_(Unassigned)_");
     $('#devs_list tr.updated').remove();
-    $('#devs_list').append(data[0]).hideMe();
-    $('#devs_info').parent().css('display',info?'':'none');
+    $('#devs_list').append(get.open[0]).hideMe();
+    $('#devs_info').parent().css({'display':info?'':'none'});
     $('#devs_info').html(info);
     smartMenu('#devs_list');
 <?endif;?>
     // parity status
-    $('span.parity').html(part[3]);
+    $('span.parity').html(get.parity);
     // parity schedule
-    var data = part[4].split('\0');
-    $('#parity').html(data[0]);
-    $('#program').html(data[1]);
+    $('#parity').html(get.schedule[0]);
+    $('#program').html(get.schedule[1]);
     break;
   case 3:
-    var part = msg.split('\1');
-    var ports = part[0].split('\n');
+    var get = JSON.parse(msg);
     // rx & tx speeds
-    for (var i=0,port; port=ports[i]; i++) {
-      var data = port.split('\0');
-      if (data[0] == port_select) {
-        $('#inbound').text(data[1]);
-        $('#outbound').text(data[2]);
-        addChartNet(data[3], data[4]);
+    for (let i=0,port; port=get.port[i]; i++) {
+      if (port[0] == port_select) {
+        $('#inbound').text(port[1]);
+        $('#outbound').text(port[2]);
+        addChartNet(port[3], port[4]);
         netchart.updateSeries([{data:rxd},{data:txd}]);
         break;
       }
     }
     // port counters
-    $.each(part[1].split('\0'),function(k,v) {$('#main'+k).html(v);});
-    $.each(part[2].split('\0'),function(k,v) {$('#port'+k).html(v);});
-    $.each(part[3].split('\0'),function(k,v) {$('#link'+k).html(v);});
+    for (let k=0; k < get.mode.length; k++) $('#main'+k).html(get.mode[k]);
+    for (let k=0; k < get.rxtx.length; k++) $('#port'+k).html(get.rxtx[k]);
+    for (let k=0; k < get.stat.length; k++) $('#link'+k).html(get.stat[k]);
     // current date and time
-    var timedate = part[4].split('\n');
-    $('#current_time').html(timedate[0]);
-    $('#current_date').html(timedate[1]);
+    $('#current_time').html(get.time[0]);
+    $('#current_time_').html(get.time[0]);
+    $('#current_date').html(get.time[1]);
     break;
   case 4:
     // wireguard tunnels
-    var n = {};
-    var rows = msg.split('\0');
-    for (var i=0,row; row=rows[i]; i++) {
-      var info = row.split(';');
+    var get = JSON.parse(msg);
+    let n = {};
+    for (var i=0,info; info=get[i]; i++) {
       var vtun = info[0];
-      if (typeof n[vtun]=='undefined') n[vtun] = 0; else n[vtun]++;
+      if (typeof n[vtun]=='undefined') n[vtun]=0; else n[vtun]++;
       if (info[1] == 0) {
         $('span#'+vtun+'-hs-'+n[vtun]).text("_(not received)_");
       } else if (info[1] > 86400) {
@@ -1581,15 +1689,17 @@ dashboard.on('message',function(msg,meta) {
 });
 <?if ($apcupsd):?>
 var apcups = new NchanSubscriber('/sub/apcups',{subscriber:'websocket'});
-apcups.on('message',function(data) {
-  data = data.split(';');
-  $('#ups_model').html(data[0]);
-  $('#ups_status').html(data[1]);
-  $('#ups_bcharge').html(data[2]);
-  $('#ups_timeleft').html(data[3]);
-  $('#ups_nompower').html(data[4]);
-  $('#ups_loadpct').html(data[5]);
-  $('#ups_outputv').html(data[6]);
+apcups.on('message',function(msg) {
+  var get = JSON.parse(msg);
+  $('#ups_model').html(get[0]);
+  $('#ups_status').html(get[1]);
+  $('#ups_status_').html(get[1]);
+  $('#ups_bcharge').html(get[2]);
+  $('#ups_timeleft').html(get[3]);
+  $('#ups_nompower').html(get[4]);
+  $('#ups_loadpct').html(get[5]);
+  $('#ups_loadpct_').html(get[5]);
+  $('#ups_outputv').html(get[6]);
 });
 <?endif;?>
 
@@ -1604,6 +1714,9 @@ $(function() {
   dropdown('enter_view');
   startup = false;
   dashboard.start();
+<?if ($vmusage == "Y"):?>
+  vmdashusage.start();
+<?endif;?>
 <?if ($apcupsd):?>
   apcups.start();
 <?endif;?>
@@ -1629,6 +1742,9 @@ $(function() {
 
 window.onunload = function(){
   dashboard.stop();
+<?if ($vmusage == "Y"):?>
+    vmdashusage.stop();
+<?endif;?>
 <?if ($apcupsd):?>
   apcups.stop();
 <?endif;?>

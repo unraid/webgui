@@ -1,0 +1,311 @@
+Menu="NetworkServices"
+Type="xmenu"
+Title="Outgoing Proxy Manager"
+Icon="icon-network"
+Tag="icon-network"
+---
+<?php
+/* Copyright 2024, Lime Technology
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+
+$opmPlugin		= "dynamix";
+require_once("plugins/".$opmPlugin."/include/OutgoingProxyLib.php");
+
+/* Parse the plugin config file. */
+$cfg = parse_plugin_config();
+
+/* Pid file used to track the Running/Stopped status. */
+$opm_pid		= "OutgoingProxy";
+$pid_file		= "/var/run/".$opm_pid.".pid";
+$cfg['proxy_active']	= $cfg['proxy_active'] ?? "0";
+if ($cfg['proxy_active'] != "0") {
+	file_put_contents($pid_file, "running");
+} else if (file_exists($pid_file)) {
+	unlink($pid_file);
+}
+
+/* Be sure proxy_mames are defined */
+$cfg['proxy_name_1']	= $cfg['proxy_name_1'] ?? "";
+$cfg['proxy_name_2']	= $cfg['proxy_name_2'] ?? "";
+$cfg['proxy_name_3']	= $cfg['proxy_name_3'] ?? "";
+
+/* Parse the url, user, and password from the full url for proxy 1. */
+$url_array				= get_proxy_info($cfg['proxy_url_1'] ?? "", $cfg['proxy_user_1'] ?? "", $cfg['proxy_pass_1'] ?? "");
+$cfg['proxy_url_1']		= $url_array['url'];
+$cfg['proxy_user_1']	= $url_array['user'];
+$cfg['proxy_pass_1']	= $url_array['pass'];
+$proxy_1_url			= $url_array['full_url'];
+
+/* Parse the url, user, and password from the full url for proxy 2. */
+$url_array				= get_proxy_info($cfg['proxy_url_2'] ?? "", $cfg['proxy_user_2'] ?? "", $cfg['proxy_pass_2'] ?? "");
+$cfg['proxy_url_2']		= $url_array['url'];
+$cfg['proxy_user_2']	= $url_array['user'];
+$cfg['proxy_pass_2']	= $url_array['pass'];
+$proxy_2_url			= $url_array['full_url'];
+
+/* Parse the url, user, and password from the full url for proxy 3. */
+$url_array				= get_proxy_info($cfg['proxy_url_3'] ?? "", $cfg['proxy_user_3'] ?? "", $cfg['proxy_pass_3'] ?? "");
+$cfg['proxy_url_3']		= $url_array['url'];
+$cfg['proxy_user_3']	= $url_array['user'];
+$cfg['proxy_pass_3']	= $url_array['pass'];
+$proxy_3_url			= $url_array['full_url'];
+?>
+
+<form markdown="1" name="outgoing_proxy_manager" method="POST" action="/update.php" target="progressFrame">
+<input type="hidden" name="#file" value="<?=$plg_config_file;?>">
+<input type="hidden" name="#command" value="/plugins/<?=$opmPlugin;?>/scripts/outgoingproxy">
+<input type="hidden" name="#arg[1]" value="apply">
+
+<p><strong>_(Enable Outgoing Proxy)_</strong></p>
+_(Select Proxy)_:
+: <select name="proxy_active" style="width:20%;" size="1">
+	<?=mk_option($cfg['proxy_active'], "0", "_(None)_");?>
+
+	<?if (($cfg['proxy_url_1']) && ($cfg['proxy_name_1'])):?>
+	<?=mk_option($cfg['proxy_active'], "1", $cfg['proxy_name_1'], "disabled");?>
+	<?endif;?>
+
+	<?if (($cfg['proxy_url_2']) && ($cfg['proxy_name_2'])):?>
+	<?=mk_option($cfg['proxy_active'], "2", $cfg['proxy_name_2'], "disabled");?>
+	<?endif;?>
+
+	<?if (($cfg['proxy_url_3']) && ($cfg['proxy_name_3'])):?>
+	<?=mk_option($cfg['proxy_active'], "3", $cfg['proxy_name_3'], "disabled");?>
+	<?endif;?>
+</select>
+
+:outgoing_proxy_enable_plug:
+> Select the Proxy to use.  Only online Proxies will be selectable.
+>
+> If your network environment requires an outgoing http proxy, define that here.
+>
+> Outgoing connections from the webgui and some system processes will use the specified http proxy.  Docker container installs and updates will use the proxy, but the container itself will not, neither will any VMs.
+>
+> For a more comprehensive solution you might consider setting up <u><a href='https://docs.unraid.net/unraid-os/manual/security/vpn/#configuring-vpn-tunneled-access-for-system/' target='_blank'>_(VPN tunnel access for System)_</a></u>.
+:end
+
+<p><strong>_(Outgoing Proxy)_ 1</strong></p>
+_(Name)_:
+: <input type="text" name="proxy_name_1" style="width:20%;" maxlength="25" value="<?=$cfg['proxy_name_1'];?>" placeholder="(_(Required)_)"><span id="proxy-status-1"></span>
+
+:outgoing_proxy_name_plug:
+> Outgoing Proxy name for this Proxy.
+:end
+
+_(URL)_:
+: <input type="text" name="proxy_url_1" style="width:30%;" maxlength="100" value="<?=$cfg['proxy_url_1'];?>" onchange="verifyUrl(this)" placeholder="_(http://IP:port or http://host:port)_">
+
+:outgoing_proxy_url_plug:
+> Outgoing Proxy URL for this Proxy.  The URL can be entered with or without credentials.  The credentials will be parsed from the URL.
+>
+> If you enter a User and Password, they will be used as new credentials.
+:end
+
+_(User)_:
+: <input type="text" name="proxy_user_1" class="wide" maxlength="100" value="<?=$cfg['proxy_user_1'];?>" placeholder="(_(Optional)_)">
+
+:outgoing_proxy_user_plug:
+> Outgoing Proxy User Name for this Proxy.
+:end
+
+_(Password)_:
+: <input type="text" name="proxy_pass_1" class="wide" maxlength="100" value="<?=$cfg['proxy_pass_1'];?>" placeholder="(_(Optional)_)">
+
+:outgoing_proxy_password_plug:
+> Outgoing Proxy Password for this Proxy.
+:end
+
+<p><strong>_(Outgoing Proxy)_ 2</strong></p>
+_(Name)_:
+: <input type="text" name="proxy_name_2" style="width:20%;" maxlength="25" value="<?=$cfg['proxy_name_2'];?>" placeholder="(_(Required)_)"><span id="proxy-status-2"></span>
+
+:outgoing_proxy_name_plug:
+> Outgoing Proxy name for this Proxy.
+:end
+
+_(URL)_:
+: <input type="text" name="proxy_url_2" style="width:30%;" maxlength="100" value="<?=$cfg['proxy_url_2'];?>"  onchange="verifyUrl(this)" placeholder="_(http://IP:port or http://host:port)_">
+
+:outgoing_proxy_url_plug:
+> Outgoing Proxy URL for this Proxy.  The URL can be entered with or without credentials.  The credentials will be parsed from the URL.
+>
+> If you enter a User and Password, they will be used as new credentials.
+:end
+
+_(User)_:
+: <input type="text" name="proxy_user_2" class="wide" maxlength="100" value="<?=$cfg['proxy_user_2'];?>" placeholder="(_(Optional)_)">
+
+:outgoing_proxy_user_plug:
+> Outgoing Proxy User Name for this Proxy.
+:end
+
+_(Password)_:
+: <input type="text" name="proxy_pass_2" class="wide" maxlength="100" value="<?=$cfg['proxy_pass_2'];?>" placeholder="(_(Optional)_)">
+
+:outgoing_proxy_password_plug:
+> Outgoing Proxy Password for this Proxy.
+:end
+
+<p><strong>_(Outgoing Proxy)_ 3</strong></p>
+_(Name)_:
+: <input type="text" name="proxy_name_3" style="width:20%;" maxlength="25" value="<?=$cfg['proxy_name_3'];?>" placeholder="(_(Required)_)"><span id="proxy-status-3"></span>
+
+:outgoing_proxy_name_plug:
+> Outgoing Proxy name for this Proxy.
+:end
+
+_(URL)_:
+: <input type="text" name="proxy_url_3" style="width:30%;" maxlength="100" value="<?=$cfg['proxy_url_3'];?>"  onchange="verifyUrl(this)" placeholder="_(http://IP:port or http://host:port)_">
+
+:outgoing_proxy_url_plug:
+> Outgoing Proxy URL for this Proxy.  The URL can be entered with or without credentials.  The credentials will be parsed from the URL.
+>
+> If you enter a User and Password, they will be used as new credentials.
+:end
+
+_(User)_:
+: <input type="text" name="proxy_user_3" class="wide" maxlength="100" value="<?=$cfg['proxy_user_3'];?>" placeholder="(_(Optional)_)">
+
+:outgoing_proxy_user_plug:
+> Outgoing Proxy User Name for this Proxy.
+:end
+
+_(Password)_:
+: <input type="text" name="proxy_pass_3" class="wide" maxlength="100" value="<?=$cfg['proxy_pass_3'];?>" placeholder="(_(Optional)_)">
+
+:outgoing_proxy_password_plug:
+> Outgoing Proxy Password for this Proxy.
+:end
+
+&nbsp;
+: <input type="submit" value='_(Apply)_'><input type="button" value="_(Done)_" onclick="done()">
+</form>
+
+<script>
+	/* Refresh Proxy Manager page showing updated proxy status. */
+	function refreshPage() {
+		$.post(OPMURL, {
+			action: "proxy_status",
+			proxy_1_url: "<?=$proxy_1_url;?>",
+			proxy_2_url: "<?=$proxy_2_url;?>",
+			proxy_3_url: "<?=$proxy_3_url;?>",
+			proxy_active: "<?=$cfg['proxy_active'];?>"
+		}, function(data) {
+			/* Refresh the proxy status. */
+			/* Update the proxy status div */
+			$('#proxy-status-1').html('<strong>' + data.proxy_status_1 + '</strong>');
+
+			/* Update the proxy status div */
+			$('#proxy-status-2').html('<strong>' + data.proxy_status_2 + '</strong>');
+
+			/* Update the proxy status div */
+			$('#proxy-status-3').html('<strong>' + data.proxy_status_3 + '</strong>');
+
+			//*Get a reference to the dropdown element. */
+			const dropdown = document.querySelector('select[name="proxy_active"]');
+			const options = dropdown.getElementsByTagName('option');
+
+			/* Enable the dropdown element if the proxy is available or active. */
+			const condition_1 = $('#proxy-status-1').text().trim() === '' || $('#proxy-status-1').text().trim() === 'Active';
+			const optionToEnableOrDisable_1 = options[1];
+
+			if (optionToEnableOrDisable_1) {
+				if (condition_1) {
+					/* Enable the option. */
+					optionToEnableOrDisable_1.removeAttribute('disabled');
+				} else {
+					/* Disable the option. */
+					optionToEnableOrDisable_1.setAttribute('disabled', 'disabled');
+				}
+			}
+
+			/* Enable the dropdown element if the proxy is available or active. */
+			const condition_2 = $('#proxy-status-2').text().trim() === '' || $('#proxy-status-2').text().trim() === 'Active';
+			const optionToEnableOrDisable_2 = options[2];
+
+			if (optionToEnableOrDisable_2) {
+				if (condition_2) {
+					/* Enable the option. */
+					optionToEnableOrDisable_2.removeAttribute('disabled');
+				} else {
+					/* Disable the option. */
+					optionToEnableOrDisable_2.setAttribute('disabled', 'disabled');
+				}
+			}
+
+			/* Enable the dropdown element if the proxy is available or active. */
+			const condition_3 = $('#proxy-status-3').text().trim() === '' || $('#proxy-status-3').text().trim() === 'Active';
+			const optionToEnableOrDisable_3 = options[3];
+
+			if (optionToEnableOrDisable_3) {
+				if (condition_3) {
+					/* Enable the option. */
+					optionToEnableOrDisable_3.removeAttribute('disabled');
+				} else {
+					/* Disable the option. */
+					optionToEnableOrDisable_3.setAttribute('disabled', 'disabled');
+				}
+			}
+		}, 'json');
+	}
+
+	/* polyfill to fix reportValidity() for Firefox. */
+	if (!HTMLInputElement.prototype.reportValidity || (navigator.userAgent.indexOf("Firefox") !== -1)) {
+		HTMLInputElement.prototype.reportValidity = function () {
+		if (this.checkValidity()) {
+			return true;
+		} else {
+			var labelText = "_(Invalid data)_";
+			try {
+				labelText = $(this).closest('dl').children().first()[0].textContent;
+			} catch (err) { }
+				/* the browser generates the validationMessage, we cannot translate it. */
+				swal({title:labelText,text:this.validationMessage,html:true,type:'error',confirmButtonText:"_(Ok)_"});
+				return false;
+			}
+		};
+	}
+
+	/* Verify the format of the url. */
+	function verifyUrl(inputElement) {
+		const fieldValue = inputElement.value;
+		/* Return true if the field is blank. */
+		if (fieldValue.trim() === '') {
+			return true;
+		}
+
+		/* Verify the url is in the correct format. */
+		if (fieldValue.startsWith("http://") && fieldValue.match(/:\d+$/)) {
+			inputElement.setCustomValidity("");
+			return true;
+		} else {
+			inputElement.setCustomValidity("_(Please match the requested format)_:\n\n"+"'_(http://IP:port or http://host:port)_'");
+			inputElement.reportValidity();
+			return false;
+		}
+	}
+
+	$(function() {
+		/* Status indicator on upper right of page. */
+		showStatus('pid','<?=$opm_pid;?>');
+		
+		/* Page refresh rate in milliseconds. */
+		const REFRESH_INTERVAL = 15000;
+
+		/* Set page refresh interval every 15 seconds. */
+		window.setInterval(refreshPage, REFRESH_INTERVAL);
+
+		/* Do an initial page refresh to fill in values. */
+		refreshPage();
+	});
+
+	/* URL for Outgoing Proxy PHP file. */
+	const OPMURL = '/plugins/<?=$opmPlugin;?>/include/OutgoingProxy.php';
+</script>

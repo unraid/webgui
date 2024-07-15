@@ -17,8 +17,7 @@ $varroot  = '/var/local/emhttp';
 $pool_log = '/var/tmp/pool_log.tmp';
 $smartALL = '/boot/config/smart-all.cfg';
 $smartONE = '/boot/config/smart-one.cfg';
-$md5_old  = -1;
-$fs_old   = -1;
+$md5_old  = $fs_old = -1;
 
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/publish.php";
@@ -33,26 +32,33 @@ require_once "$docroot/webGui/include/Translations.php";
 $locale_init = $locale;
 
 function initSum() {
-  return ['count'=>0, 'temp'=>0, 'fsSize'=>0, 'fsUsed'=>0, 'fsFree'=>0, 'ioReads'=>0, 'ioWrites'=>0, 'numReads'=>0, 'numWrites'=>0, 'numErrors'=>0];
+  return ['count'=>0, 'temp'=>0, 'power'=>0, 'fsSize'=>0, 'fsUsed'=>0, 'fsFree'=>0, 'ioReads'=>0, 'ioWrites'=>0, 'numReads'=>0, 'numWrites'=>0, 'numErrors'=>0];
 }
-function model($id) {
+function get_model($id) {
   return substr($id,0,strrpos($id,'_'));
 }
+function my_power($power) {
+  global $display;
+  $number = _var($display,'number','.,');
+  return _var($display,'power') && $power ? number_format($power,$power<10?2:1,$number[0]).' '._('W').' / ' : '';
+}
 function device_info(&$disk,$online) {
-  global $pools, $var, $crypto;
+  global $pools, $var;
   if (!$online || _var($disk,'fsStatus')!='Mounted' || (in_array(_var($disk,'type'),['Parity','Cache']) && (!in_array(_var($disk,'name'),$pools) || isSubpool(_var($disk,'name'))))) {
     $view = "<a class='view'></a>";
   } else {
     $dir = _var($disk,'name')=='flash' ? "/boot" : "/mnt/"._var($disk,'name');
     $view = "<a class='view' href=\"/Main/Browse?dir=".htmlspecialchars($dir)."\"><i class=\"icon-u-tab\" title=\""._('Browse')." $dir\"></i></a>";
   }
-  $name = _var($disk,'name');
-  $named = no_tilde($name);
-  $fancy = compress(_(my_disk(native($name,1)),3),16,5);
-  $type = _var($disk,'type')=='Flash' ? $disk['type'] : 'Device';
-  $pool = _var($disk,'type')=='Cache';
-  $parity = _var($disk,'type')=='Parity';
-  $action = strpos(_var($disk,'color'),'blink')===false ? 'down' : 'up';
+  $name   = _var($disk,'name');
+  $named  = no_tilde($name);
+  $fancy  = _(my_disk(native($name,1)),3);
+  $type   = _var($disk,'type');
+  $source = $type=='Flash' ? $type : 'Device';
+  $parity = $type=='Parity';
+  $data   = $type=='Data';
+  $pool   = $type=='Cache';
+  $action = str_contains(_var($disk,'color'),'blink') ? 'up' : 'down';
   switch (_var($disk,'color')) {
     case 'green-on':     $orb = 'circle';  $color = 'green';  $help = _('Normal operation, device is active'); break;
     case 'green-blink':  $orb = 'circle';  $color = 'grey';   $help = _('Device is in standby mode (spun-down)'); break;
@@ -67,44 +73,19 @@ function device_info(&$disk,$online) {
   }
   $ctrl = '';
   $disk_status = _var($disk,'status');
-  if (_var($var,'fsState')=='Started' && $type!='Flash' && strpos($disk_status,'_NP')===false) {
-    $ctrl = " style='cursor:pointer' onclick=\"toggle_state('$type','$name','$action')\"";
+  if (_var($var,'fsState')=='Started' && $source!='Flash' && !str_contains($disk_status,'_NP')) {
+    $ctrl = " style='cursor:pointer' onclick=\"toggle_state('$source','$name','$action')\"";
     $help .= "<br>"._("Click to spin $action device");
   }
   $status = "<a class='info'><i ".($ctrl?"id='dev-$named' ":"")."class='fa fa-$orb orb $color-orb'$ctrl></i><span>$help</span></a>";
-  $link   = (_var($disk,'type')=='Parity' && strpos($disk_status,'_NP')===false) ||
-            (_var($disk,'type')=='Data' && $disk_status!='DISK_NP') ||
-            (_var($disk,'type')=='Cache' && $disk_status!='DISK_NP') ||
-            (_var($disk,'name')=='flash') || in_array(_var($disk,'name'),$pools) ||
-             _var($disk,'type')=='New' ? "<a href=\"".htmlspecialchars("/Main/Settings/$type?name=$name")."\">$fancy</a>" : $fancy;
-  if ($crypto) switch (_var($disk,'luksState',0)) {
-    case 0:
-      if (!vfs_luks(_var($disk,'fsType')))
-        $luks = "<i class='nolock fa fa-lock'></i>";
-      else
-        $luks = "<a class='info'><i class='padlock fa fa-unlock orange-text'></i><span>"._('Device to be encrypted')."</span></a>";
-      break;
-    case 1:
-      if ($online) {
-        $luks = "<a class='info'><i class='padlock fa fa-unlock-alt green-text'></i><span>"._('Device encrypted and unlocked')."</span></a>";
-        break;
-      }
-      /* fall thru */
-    case 2:
-      $luks = "<a class='info'><i class='padlock fa fa-lock green-text'></i><span>"._('Device encrypted')."</span></a>";
-      break;
-    case 3:
-      $luks = "<a class='info'><i class='padlock fa fa-lock red-text'></i><span>"._('Device locked: wrong encryption key')."</span></a>";
-      break;
-   default:
-      $luks = "<a class='info'><i class='padlock fa fa-lock red-text'></i><span>"._('Device locked: unknown error')."</span></a>";
-      break;
-  } else $luks = '';
-  return $view.$status.$luks.$link;
+  $link   = (($parity || $data || $pool) && $disk_status!='DISK_NP') || $name=='flash' || in_array($name,$pools) || $type=='New'
+          ? "<a href=\"".htmlspecialchars("/Main/Settings/$source?name=$name")."\">$fancy</a>"
+          : $fancy;
+  return $view.$status.$link;
 }
 function device_desc(&$disk) {
   global $var;
-  $size = my_scale(_var($disk,'size',0)*1024 ?: _var($disk,'sectors',0)*_var($disk,'sector_size',0),$unit,-1);
+  $size = my_scale(_var($disk,'size',0)*1024 ?: _var($disk,'sectors',0)*_var($disk,'sector_size',0),$unit,-1,-1);
   switch (_var($disk,'type')) {
     case 'Flash':  $type = 'usb'; break;
     case 'Parity': $type = _var($disk,'rotational') ? 'disk' : 'nvme'; break;
@@ -115,12 +96,7 @@ function device_desc(&$disk) {
   $log = _var($var,'fsState')=='Started'
        ? "<a class='info hand' onclick=\"openTerminal('disklog','"._var($disk,'device')."','')\"><i class='icon-$type icon'></i><span>"._('Disk Log Information')."</span></a>"
        : "<a class='static'><i class='icon-$type icon'></i></a>";
-  $powerstatevalue = "";
-  if (_var($disk,'transport') == 'nvme') {
-    $powerstate = getnvmepowerstate("/dev/"._var($disk,'device')); 
-    $powerstatevalue = is_array($powerstate) ? ' &bullet; '._('PS').': '._var($powerstate,'powerstatevalue','?').' '._var($powerstate,'powerstate','?') : '';
-  }
-  return $log."<span style='font-family:bitstream'>".my_id(_var($disk,'id'))."</span> - $size $unit ("._var($disk,'device').$powerstatevalue.")";
+  return $log."<span style='font-family:bitstream'>".my_id(_var($disk,'id'))."</span> - $size $unit ("._var($disk,'device').")";
 }
 function assignment(&$disk) {
   global $var, $devs;
@@ -140,23 +116,45 @@ function assignment(&$disk) {
   $echo[] = "</select></form>";
   return implode($echo);
 }
-function vfs_type($fs) {
-  return str_replace('luks:','',$fs);
-}
 function vfs_luks($fs) {
-  return ($fs != vfs_type($fs));
+  return str_starts_with($fs,'luks:');
 }
-function vfs_info($fs) {
-  $fs = vfs_type($fs);
-  return $fs; // no special action on reiserfs (may come in future)
+function vfs_type(&$disk) {
+  global $disks, $pools, $crypto;
+  $fsType = _var($disk,'fsType','');
+  $luks   = '';
+  if (empty($fsType))
+    return $fsType;
+  if ($crypto) switch (_var($disk,'luksState',0)) {
+    case 0:
+      if (vfs_luks($fsType))
+      $luks = "<a class='info'><i class='padlock fa fa-unlock-alt orange-text'></i><span>"._('Device to be encrypted')."</span></a>";
+      break;
+    case 1:
+      if ($online) {
+        $luks = "<a class='info'><i class='padlock fa fa-unlock-alt green-text'></i><span>"._('Device encrypted and unlocked')."</span></a>";
+        break;
+      }
+      /* fall thru */
+    case 2:
+      $luks = "<a class='info'><i class='padlock fa fa-lock green-text'></i><span>"._('Device encrypted')."</span></a>";
+      break;
+    case 3:
+      $luks = "<a class='info'><i class='padlock fa fa-lock red-text'></i><span>"._('Device locked: wrong encryption key')."</span></a>";
+      break;
+   default:
+      $luks = "<a class='info'><i class='padlock fa fa-lock red-text'></i><span>"._('Device locked: unknown error')."</span></a>";
+      break;
+  }
+  return $luks.str_replace('luks:','',$fsType);
 }
 function fs_info(&$disk) {
-  global $display, $pools;
+  global $display;
   $echo = [];
-  if (empty($disk['fsStatus']) || $disk['fsStatus']=='-') {
-    return (_var($disk,'type')=='Cache' && !in_array(_var($disk,'name'),$pools)) ? "<td colspan='4'>"._('Device is part of a pool')."</td>" : "<td colspan='5'></td>";
-  } elseif (_var($disk,'fsStatus')=='Mounted') {
-    $echo[] = "<td>".vfs_info(_var($disk,'fsType'))."</td>";
+  if (empty($disk['fsStatus']) || $disk['fsStatus']=='-')
+    return "<td>".$disk['fsStatus']."</td><td colspan='3'></td>";
+  if (_var($disk,'fsStatus')=='Mounted') {
+    $echo[] = "<td>".vfs_type($disk)."</td>";
     $echo[] = "<td>".my_scale(_var($disk,'fsSize',0)*1024,$unit,-1)." $unit</td>";
     if ($display['text']%10==0) {
       $echo[] = "<td>".my_scale(_var($disk,'fsUsed',0)*1024,$unit)." $unit</td>";
@@ -171,7 +169,7 @@ function fs_info(&$disk) {
       $echo[] = "<td><div class='usage-disk'><span style='width:$free%' class='".usage_color($disk,$free,true)."'></span><span>".my_scale(_var($disk,'fsFree',0)*1024,$unit)." $unit</span></div></td>";
     }
   } else {
-    $echo[] = "<td>".vfs_info(_var($disk,'fsType'))."</td><td colspan='3' style='text-align:center'>"._(_var($disk,'fsStatus'))."</td>";
+    $echo[] = "<td>".vfs_type($disk)."</td><td colspan='3'>"._(_var($disk,'fsStatus'))."</td>";
   }
   return implode($echo);
 }
@@ -179,25 +177,31 @@ function my_diskio($data) {
   return my_scale($data,$unit,1)." $unit/s";
 }
 function array_offline(&$disk, $pool='') {
-  global $var, $disks;
+  global $var, $disks, $display;
+  $disk['power'] ??= (_var($display,'power') && _var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'power') : 0);
   $echo = []; $warning = '';
-  $status = ['DISK_DSBL','DISK_INVALID','DISK_DSBL_NEW','DISK_NEW','DISK_WRONG'];
+  $status = ['DISK_DSBL','DISK_INVALID','DISK_DSBL_NEW','DISK_WRONG'];
   $text = "<span class='red-text'><em>"._('All existing data on this device will be OVERWRITTEN when array is Started')."</em></span>";
-  if (strpos(_var($var,'mdState'),'ERROR:')===false) {
-    if (_var($disk,'type')=='Cache') {
-      if (!empty(_var($disks[$pool],'uuid')) && _var($disk,'status')=='DISK_NEW') $warning = $text;
-    } else {
-      if (_var($var,'mdState')=='NEW_ARRAY') {
-        if (_var($disk,'type')=='Parity') $warning = $text;
-      } elseif (_var($var,'mdNumInvalid',0)<=1) {
+  if (_var($disk,'type')=='Cache') {
+    if (!str_contains(_var($diks[$pool],'state'),'ERROR:')) {
+      if (_var($disks[$pool],'state')!='NEW_ARRAY') {
         if (in_array(_var($disk,'status'),$status)) $warning = $text;
       }
     }
+  } else {
+    if (!str_contains(_var($var,'mdState'),'ERROR:')) {
+      if (_var($var,'mdState')=='NEW_ARRAY') {
+        if (_var($disk,'type')=='Parity') $warning = $text;
+      } elseif (_var($var,'mdState')=='RECON_DISK') {
+        if (in_array(_var($disk,'status'),$status)) $warning = $text;
+      } elseif (_var($disk['status'])=='DISK_NEW' && _var($var,'mdResyncAction')=='clear') {
+        $warning = $text;
+      }
+    }
   }
-  $echo[] = "<tr>";
+  $echo[] = "<tr class='offline'>";
   switch (_var($disk,'status')) {
   case 'DISK_NP':
-  case 'DISK_NP_DSBL':
     $echo[] = "<td>".device_info($disk,false)."</td>";
     $echo[] = "<td>".assignment($disk)."</td>";
     $echo[] = "<td colspan='8'></td>";
@@ -205,7 +209,16 @@ function array_offline(&$disk, $pool='') {
   case 'DISK_NP_MISSING':
     $echo[] = "<td>".device_info($disk,false)."<br><span class='diskinfo'><em>"._('Missing')."</em></span></td>";
     $echo[] = "<td>".assignment($disk)."<em>{$disk['idSb']} - ".my_scale(_var($disk,'sizeSb',0)*1024,$unit)." $unit</em></td>";
-    $echo[] = "<td colspan='8'></td>";
+    $echo[] = "<td colspan='4'></td>";
+    $echo[] = "<td>".vfs_type($disk)."</td>";
+    $echo[] = "<td colspan='3'></td>";
+    break;
+  case 'DISK_NP_DSBL':
+    $echo[] = "<td>".device_info($disk,false)."</td>";
+    $echo[] = "<td>".assignment($disk)."</td>";
+    $echo[] = "<td colspan='4'></td>";
+    $echo[] = "<td>".vfs_type($disk)."</td>";
+    $echo[] = "<td colspan='3'></td>";
     break;
   case 'DISK_OK':
   case 'DISK_DSBL':
@@ -214,12 +227,12 @@ function array_offline(&$disk, $pool='') {
   case 'DISK_NEW':
     $echo[] = "<td>".device_info($disk,false)."</td>";
     $echo[] = "<td>".assignment($disk)."</td>";
-    $echo[] = "<td>".my_temp(_var($disk,'temp','*'))."</td>";
+    $echo[] = "<td>".my_power($disk['power']).my_temp(_var($disk,'temp','*'))."</td>";
     if ($warning) {
       $echo[] = "<td colspan='7'>$warning</td>";
     } else {
       $echo[] = "<td colspan='3'></td>";
-      $echo[] = "<td>".vfs_type(_var($disk,'fsType'))."</td>";
+      $echo[] = "<td>".vfs_type($disk)."</td>";
       $echo[] = "<td colspan='3'></td>";
     }
     break;
@@ -231,7 +244,7 @@ function array_offline(&$disk, $pool='') {
       $echo[] = "<td colspan='7'>$warning</td>";
     } else {
       $echo[] = "<td colspan='3'></td>";
-      $echo[] = "<td>".vfs_type(_var($disk,'fsType'))."</td>";
+      $echo[] = "<td>".vfs_type($disk)."</td>";
       $echo[] = "<td colspan='3'></td>";
     }
     break;
@@ -241,6 +254,7 @@ function array_offline(&$disk, $pool='') {
 }
 function array_online(&$disk, $fstype='') {
   global $pools, $sum, $diskio;
+  $disk['power'] ??= (_var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'power') : 0);
   $echo = [];
   $data = [0,0];
   if (_var($disk,'device')) {
@@ -253,6 +267,7 @@ function array_online(&$disk, $fstype='') {
     $sum['count']++;
     $sum['temp'] += $disk['temp'];
   }
+  $sum['power'] += _var($disk,'power',0);
   $sum['numReads'] += _var($disk,'numReads',0);
   $sum['numWrites'] += _var($disk,'numWrites',0);
   $sum['numErrors'] += _var($disk,'numErrors',0);
@@ -280,8 +295,8 @@ function array_online(&$disk, $fstype='') {
   case 'DISK_DSBL':
   default:
     $echo[] = "<td>".device_info($disk,true)."</td>";
-    $echo[] = "<td>".device_desc($disk)."</td>";
-    $echo[] = "<td>".my_temp(_var($disk,'temp','*'))."</td>";
+    $echo[] = "<td class='desc'>".device_desc($disk)."</td>";
+    $echo[] = "<td>".my_power($disk['power']).my_temp(_var($disk,'temp','*'))."</td>";
     $echo[] = "<td><span class='diskio'>".my_diskio($data[0])."</span><span class='number'>".my_number(_var($disk,'numReads',0))."</span></td>";
     $echo[] = "<td><span class='diskio'>".my_diskio($data[1])."</span><span class='number'>".my_number(_var($disk,'numWrites',0))."</span></td>";
     $echo[] = "<td>".my_number(_var($disk,'numErrors',0))."</td>";
@@ -293,15 +308,16 @@ function array_online(&$disk, $fstype='') {
 }
 function show_totals($text,$array,$name) {
   global $var, $display, $sum, $locale;
+  $number = _var($display,'number','.,');
   $ctrl1 = "onclick=\"toggle_state('Device','$name','down')\"";
   $ctrl2 = "onclick=\"toggle_state('Device','$name','up')\"";
   $help1 = _('Spin Down').' '._(ucfirst(substr($name,0,-1)));
   $help2 = _('Spin Up').' '._(ucfirst(substr($name,0,-1)));
   $echo  = [];
   $echo[] = "<tr class='tr_last'>";
-  $echo[] = "<td><a class='info'><i class='fa fa-fw fa-toggle-down control' $ctrl1></i><span>$help1</span></a><a class='info'><i class='fa fa-fw fa-toggle-up control' $ctrl2></i><span>$help2</span></a></td>";
+  $echo[] = "<td><a class='info'><i class='fa fa-toggle-down control' $ctrl1></i><span>$help1</span></a><a class='info'><i class='fa fa-fw fa-toggle-up control' $ctrl2></i><span>$help2</span></a></td>";
   $echo[] = "<td><a class='static'><i class='icon-disks icon'></i></a><span></span>$text</td>";
-  $echo[] = "<td>".($sum['count']>0 ? my_temp(round($sum['temp']/$sum['count'],1)) : '*')."</td>";
+  $echo[] = "<td>".my_power($sum['power']).($sum['count']>0 ? my_temp(round($sum['temp']/$sum['count'])) : '*')."</td>";
   $echo[] = "<td><span class='diskio'>".my_diskio($sum['ioReads'])."</span><span class='number'>".my_number($sum['numReads'])."</span></td>";
   $echo[] = "<td><span class='diskio'>".my_diskio($sum['ioWrites'])."</span><span class='number'>".my_number($sum['numWrites'])."</span></td>";
   $echo[] = "<td>".my_number($sum['numErrors'])."</td>";
@@ -321,7 +337,7 @@ function show_totals($text,$array,$name) {
       $echo[] = "<td><div class='usage-disk'><span style='width:$free%' class='".usage_color($display,$free,true)."'></span><span>".my_scale($sum['fsFree']*1024,$unit)." $unit</span></div></td>";
     }
   } else {
-    $echo[] = "<td colspan=3></td>";
+    $echo[] = "<td colspan='3'></td>";
   }
   $echo[] = "</tr>";
   return implode($echo);
@@ -335,6 +351,8 @@ function array_slots() {
   $echo[] = "<input type='hidden' name='csrf_token' value='"._var($var,'csrf_token')."'>";
   $echo[] = "<input type='hidden' name='changeSlots' value='apply'>";
   $echo[] = "<select class='narrow' name='SYS_ARRAY_SLOTS' onChange='devices.start();this.form.submit()'>";
+  if (_var($var,'mdNumDisks')=='0')
+    $echo[] = "<option value='0'>none</option>";
   for ($n=$min; $n<=$max; $n++) {
     $selected = $n==_var($var,'SYS_ARRAY_SLOTS') ? ' selected' : '';
     $echo[] = "<option value='$n'{$selected}>$n</option>";
@@ -384,9 +402,6 @@ while (true) {
   $disks  = (array)@parse_ini_file("$varroot/disks.ini",true);
   $sec    = (array)@parse_ini_file("$varroot/sec.ini",true);
   $diskio = (array)@parse_ini_file("$varroot/diskload.ini");
-  $crypto = false;
-  $pools  = pools_filter($disks);
-  $echo   = [];
   // check for language changes
   extract(parse_plugin_cfg('dynamix',true));
   if (_var($display,'locale') != $locale_init) {
@@ -394,7 +409,7 @@ while (true) {
     update_translation($locale_init);
   }
   // sort unassigned devices on disk identification
-  if (count($devs)>1) array_multisort(array_column($devs,'sectors'),SORT_DESC,array_map('model',array_column($devs,'id')),SORT_NATURAL|SORT_FLAG_CASE,array_column($devs,'device'),$devs);
+  if (count($devs)>1) array_multisort(array_column($devs,'sectors'),SORT_DESC,array_map('get_model',array_column($devs,'id')),SORT_NATURAL|SORT_FLAG_CASE,array_column($devs,'device'),$devs);
 
   // merge device custom settings
   if (file_exists($smartALL)) $var = array_merge($var,parse_ini_file($smartALL));
@@ -414,120 +429,135 @@ while (true) {
     }
   }
 
+  // initialize stuff
   $sum = initSum();
-  $echo[0] = "array_devices\n";
-  $parity = parity_filter($disks);
-  $data = data_filter($disks);
-  foreach ($data as $disk) $crypto |= _var($disk,'luksState',0)!=0 || vfs_luks(_var($disk,'fsType'));
-  if (_var($var,'fsState')=='Stopped') {
-    foreach ($parity as $disk) $echo[0] .= array_offline($disk);
-    $echo[0] .= "<tr class='tr_last'><td style='height:12px' colspan='10'></td></tr>";
-    foreach ($data as $disk) $echo[0] .= array_offline($disk);
-    $echo[0] .= "<tr class='tr_last'><td>"._('Slots').":</td><td colspan='8'>".array_slots()."</td><td></td></tr>";
-  } else {
-    foreach ($parity as $disk) if ($disk['status']!='DISK_NP_DSBL') $echo[0] .= array_online($disk);
-    foreach ($data as $disk) $echo[0] .= array_online($disk);
-    if (_var($display,'total') && _var($var,'mdNumDisks',0)>1) $echo[0] .= show_totals(sprintf(_('Array of %s devices'),my_word($var['mdNumDisks'])),true,'disk*');
+  $Parity = $Data = $Cache = $Flash = [];
+  $crypto = false;
+  $echo   = [];
+  foreach ($disks as $disk) {
+    ${$disk['type']}[$disk['name']] = &$disks[$disk['name']];
+    if (in_array($disk['type'],['Data','Cache'])) $crypto |= _var($disk,'luksState',0)!=0 || vfs_luks(_var($disk,'fsType'));
   }
+  $Flash = &$Flash['flash'];
+  $pools = array_unique(array_map('prefix',array_keys($Cache)));
 
-  $echo[1] = "boot_device\n";
-  $disk = &$disks['flash'];
-  $data = explode(' ',$diskio[_var($disk,'device')] ?? '0 0');
+  $a = 'array_devices';
+  $echo[$a] = [];
+  $poolsOnly = (_var($var,'SYS_ARRAY_SLOTS') == 0) ? true : false;
+  if (_var($var,'fsState')=='Stopped') {
+    if (!$poolsOnly) {
+      foreach ($Parity as $disk) $echo[$a][] = array_offline($disk);
+      $echo[$a][] = "<tr class='tr_last'><td colspan='10'></td></tr>";
+      foreach ($Data as $disk) $echo[$a][] = array_offline($disk);
+    }
+    $echo[$a][] = "<tr class='tr_last'><td>"._('Slots').":</td><td colspan='8'>".array_slots()."</td><td></td></tr>";
+  } else {
+    if (!$poolsOnly) {
+      foreach ($Parity as $disk) if ($disk['status']!='DISK_NP_DSBL') $echo[$a][] = array_online($disk);
+      foreach ($Data as $disk) $echo[$a][] = array_online($disk);
+      if (_var($display,'total') && _var($var,'mdNumDisks',0)>1) $echo[$a][] = show_totals(sprintf(_('Array of %s devices'),my_word($var['mdNumDisks'])),true,'disk*');
+    }
+  }
+  $echo[$a] = implode($echo[$a]);
+
+  $a = 'boot_device';
+  $echo[$a] = [];
+  $data = explode(' ',$diskio[_var($Flash,'device')] ?? '0 0');
   $flash = &$sec['flash'];
   $share = (_var($var,'shareSMBEnabled')=='yes' && _var($flash,'export')=='e' && _var($flash,'security')=='public')
            ? "&nbsp;<a class='info'><i class='fa fa-warning fa-fw orange-text'></i><span>"._('Flash device is set as public share')."<br>"._('Please change share SMB security')."<br>"._('Click on **FLASH** above this message')."</span></a>"
            : "";
-  $echo[1] .= "<tr>";
-  $echo[1] .= "<td>".device_info($disk,true).$share."</td>";
-  $echo[1] .= "<td>".device_desc($disk)."</td>";
-  $echo[1] .= "<td>*</td>";
-  $echo[1] .= "<td><span class='diskio'>".my_diskio($data[0])."</span><span class='number'>".my_number(_var($disk,'numReads',0))."</span></td>";
-  $echo[1] .= "<td><span class='diskio'>".my_diskio($data[1])."</span><span class='number'>".my_number(_var($disk,'numWrites',0))."</span></td>";
-  $echo[1] .= "<td>".my_number(_var($disk,'numErrors',0))."</td>";
-  $echo[1] .= fs_info($disk);
-  $echo[1] .= "</tr>";
+  $echo[$a][] = "<tr>";
+  $echo[$a][] = "<td>".device_info($Flash,true).$share."</td>";
+  $echo[$a][] = "<td>".device_desc($Flash)."</td>";
+  $echo[$a][] = "<td>*</td>";
+  $echo[$a][] = "<td><span class='diskio'>".my_diskio($data[0])."</span><span class='number'>".my_number(_var($Flash,'numReads',0))."</span></td>";
+  $echo[$a][] = "<td><span class='diskio'>".my_diskio($data[1])."</span><span class='number'>".my_number(_var($Flash,'numWrites',0))."</span></td>";
+  $echo[$a][] = "<td>".my_number(_var($Flash,'numErrors',0))."</td>";
+  $echo[$a][] = fs_info($Flash);
+  $echo[$a][] = "</tr>";
+  $echo[$a] = implode($echo[$a]);
 
-  $sum = initSum();
-  $cache = cache_filter($disks); $n = 2;
-  foreach ($cache as $disk) $crypto |= _var($disk,'luksState',0)!=0 || vfs_luks(_var($disk,'fsType'));
+  $sum = initSum(); $i = 0;
   foreach ($pools as $pool) {
-    $echo[$n] = "pool_device".($n-2)."\n";
+    $a = 'pool_device'.$i++;
+    $echo[$a] = [];
     $root  = explode($_tilde_,$pool)[0];
-    $print = array_filter(array_column($cache,'name'),function($name) use ($pools,$root) {return in_array($name,$pools) && strncmp($root,$name,strlen($root))==0;});
+    $print = array_filter(array_column($Cache,'name'),function($name) use ($pools,$root) {return in_array($name,$pools) && strncmp($root,$name,strlen($root))==0;});
     $print = end($print);
     if (_var($var,'fsState')=='Stopped') {
       $log = @parse_ini_file($pool_log) ?: [];
       $off = false;
-      foreach ($cache as $disk) if (prefix(_var($disk,'name'))==$pool) {
-        $echo[$n] .= array_offline($disk,$pool);
+      foreach ($Cache as $disk) if (prefix(_var($disk,'name'))==$pool) {
+        $echo[$a][] = array_offline($disk,$pool);
         $name = _var($disk,'name');
         // tilde is not allowed in array key - replace it
         $named = no_tilde($name);
         if (isset($log[$named])) $off |= ($log[$named] != _var($disk,'id')); elseif ($named) $log[$named] = _var($disk,'id');
       }
       $data = []; foreach ($log as $key => $value) $data[] = "$key=\"$value\"";
-      $off &= !empty(_var($cache[$pool],'uuid'));
+      $off &= !empty(_var($Cache[$pool],'uuid'));
       file_put_contents($pool_log,implode("\n",$data));
-      $echo[$n] .= "<tr class='tr_last'><td>"._('Slots').":</td><td colspan='8'><span class='slots'><span class='slots-left'>".cache_slots($off,$pool,_var($cache[$pool],'devicesSb'),_var($cache[$pool],'slots',0))."</span>";
-      $zfsPool = strstr(_var($cache[$pool],'fsType'),'zfs') && !isSubpool($pool);
+      $echo[$a][] = "<tr class='tr_last'><td>"._('Slots').":</td><td colspan='8'><span class='slots'><span class='slots-left'>".cache_slots($off,$pool,_var($Cache[$pool],'devicesSb'),_var($Cache[$pool],'slots',0))."</span>";
+      $zfsPool = strstr(_var($Cache[$pool],'fsType'),'zfs') && !isSubpool($pool);
       if ($zfsPool) {
-        $current_subpools = array_filter($pools, function($element) use ($pool,$_tilde_) {return strpos($element, "{$pool}{$_tilde_}")!==false;});
+        $current_subpools = array_filter($pools, function($element) use ($pool,$_tilde_) {return str_contains($element,"{$pool}{$_tilde_}");});
         $current_subpools_list = str_replace("{$pool}{$_tilde_}","", implode(',', $current_subpools));
-        $echo[$n] .= "<input type='button' value='"._('Add Subpool')."' class='subpool' onclick='addSubpoolPopup(\"$pool\",\"$current_subpools_list\")'".(count($current_subpools)<count($subpools)?'':' disabled').">";
+        $echo[$a][] = "<input type='button' value='"._('Add Subpool')."' class='subpool' onclick='addSubpoolPopup(\"$pool\",\"$current_subpools_list\")'".(count($current_subpools)<count($subpools)?'':' disabled').">";
       }
-      $echo[$n] .= "</span></td><td></td></tr>";
+      $echo[$a][] = "</span></td><td></td></tr>";
     } else {
-      foreach ($cache as $disk) if (prefix($disk['name'])==$pool) {
-        if (isset($disk['fsType'])) $fstype = vfs_type($disk['fsType']);
-        if (substr(_var($cache[$pool],'fsStatus'),0,11)=='Unmountable' && empty($disk['fsStatus'])) $disk['fsStatus'] = _var($cache[$pool],'fsStatus');
-        $echo[$n] .= array_online($disk,$fstype);
+      foreach ($Cache as $disk) if (prefix($disk['name'])==$pool) {
+        $fstype = str_replace('luks:','',_var($disk,'fsType'));
+        if (substr(_var($Cache[$pool],'fsStatus'),0,11)=='Unmountable' && empty($disk['fsStatus'])) $disk['fsStatus'] = _var($Cache[$pool],'fsStatus');
+        $echo[$a][] = array_online($disk,$fstype);
       }
-      if (strcmp($root,$pool)!=0) $cache[$root]['devices'] += $cache[$pool]['devices'];
+      if (strcmp($root,$pool)!=0) $Cache[$root]['devices'] += $Cache[$pool]['devices'];
       if (strcmp($pool,$print)==0) {
         delete_file($pool_log);
-        if (_var($display,'total') && _var($cache[$root],'devices',0)>1) $echo[$n] .= show_totals(sprintf(_('Pool of %s devices'),my_word($cache[$root]['devices'])),strpos($pool,$_tilde_)!==false,"$root*");
+        if (_var($display,'total') && _var($Cache[$root],'devices',0)>1) $echo[$a][] = show_totals(sprintf(_('Pool of %s devices'),my_word($Cache[$root]['devices'])),false,"$root*");
         $sum = initSum();
       }
-   }
-    $n++;
+    }
+    $echo[$a] = implode($echo[$a]);
   }
 
-  $echo[$n] = "open_devices\n";
+  $a = 'open_devices';
+  $echo[$a] = [];
   foreach ($devs as $disk) {
     $dev = _var($disk,'device');
     $data = explode(' ',$diskio[$dev] ?? '0 0 0 0');
     $disk['type'] = 'New';
     $disk['color'] = $disk['spundown']=="0" ? 'blue-on' : 'blue-blink';
-    $echo[$n] .= "<tr>";
-    $echo[$n] .= "<td>".device_info($disk,true)."</td>";
-    $echo[$n] .= "<td>".device_desc($disk)."</td>";
-    $echo[$n] .= "<td>".my_temp($disk['temp'])."</td>";
-    $echo[$n] .= "<td><span class='diskio'>".my_diskio($data[0])."</span><span class='number'>".my_number(_var($disk,'numReads',0))."</span></td>";
-    $echo[$n] .= "<td><span class='diskio'>".my_diskio($data[1])."</span><span class='number'>".my_number(_var($disk,'numWrites',0))."</span></td>";
-    $echo[$n] .= "<td>".my_number(_var($disk,'numErrors',0))."</td>";
+    $echo[$a][] = "<tr>";
+    $echo[$a][] = "<td>".device_info($disk,true)."</td>";
+    $echo[$a][] = "<td>".device_desc($disk)."</td>";
+    $echo[$a][] = "<td>".my_temp($disk['temp'])."</td>";
+    $echo[$a][] = "<td><span class='diskio'>".my_diskio($data[0])."</span><span class='number'>".my_number(_var($disk,'numReads',0))."</span></td>";
+    $echo[$a][] = "<td><span class='diskio'>".my_diskio($data[1])."</span><span class='number'>".my_number(_var($disk,'numWrites',0))."</span></td>";
+    $echo[$a][] = "<td>".my_number(_var($disk,'numErrors',0))."</td>";
     if (file_exists("/tmp/preclear_stat_$dev")) {
       $text = exec("cut -d'|' -f3 /tmp/preclear_stat_$dev|sed 's:\^n:\<br\>:g'");
-      if (strpos($text,'Total time')===false) $text = _('Preclear in progress').'... '.$text;
-      $echo[$n] .= "<td colspan='4' style='text-align:right'><em>$text</em></td>";
-    } else
-      $echo[$n] .= "<td colspan='4'></td>";
-    $echo[$n] .= "</tr>";
+      if (!str_contains($text,'Total time')) $text = _('Preclear in progress').'... '.$text;
+      $echo[$a][] = "<td colspan='4'><em>$text</em></td>";
+    } else {
+      $echo[$a][] = "<td colspan='4'></td>";
+    }
+    $echo[$a][] = "</tr>";
   }
+  $echo[$a] = implode($echo[$a]);
 
-  $n++;
-  $echo[$n] = _var($var,'fsState')=='Stopped' ? 1 : 0;
+  $echo['stop'] = _var($var,'fsState')=='Stopped' ? 1 : 0;
 
-  $echo = implode("\0",$echo);
+  $echo = json_encode($echo);
   $md5_new = md5($echo,true);
-  if ($md5_new !== $md5_old) {
-    publish('devices', $echo);
-    $md5_old = $md5_new;
-  }
+//  if ($md5_new !== $md5_old) {
+    $md5_old = publish('devices',$echo)!==false ? $md5_new : -1;
+//  }
   $fs_new = _var($var,'fsState')=='Started' ? 1 : 0;
-  if ($fs_new !== $fs_old) {
-    publish('arraymonitor', $fs_new);
-    $fs_old = $fs_new;
-  }
+//  if ($fs_new !== $fs_old) {
+    $fs_old = publish('arraymonitor',$fs_new)!==false ? $fs_new : -1;
+//  }
   sleep(1);
 }
 ?>

@@ -5,8 +5,8 @@ Icon="icon-key"
 Tag="expeditedssl"
 ---
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2024, Lime Technology
+ * Copyright 2012-2024, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -75,7 +75,7 @@ if ($cert1Present) {
   $cert1SelfSigned = ($cert1Subject == $cert1Issuer);
 }
 
-// unraid.net, myunraid.net LE cert. could potentially be user provided as well
+// myunraid.net LE cert. could potentially be user provided as well
 $cert2File    = "/boot/config/ssl/certs/certificate_bundle.pem";
 $cert2Present = file_exists("$cert2File");
 if ($cert2Present) {
@@ -84,6 +84,8 @@ if ($cert2Present) {
   $cert2Expires = exec("/usr/bin/openssl x509 -in $cert2File -noout -text | sed -n -e 's/^.*Not After : //p'");
   $isWildcardCert = preg_match('/.*\.myunraid\.net$/', $cert2Subject);
   $subject2URL = $cert2Subject;
+  $dnsValid = false;
+  $dnsRebindingProtection = false;
   if ($isWildcardCert) {
     exec("openssl x509 -checkend 2592000 -noout -in $cert2File 2>/dev/null", $arrout, $retval_expired);
     if (!$addr) {
@@ -115,12 +117,12 @@ if ($cert2Present) {
   }
 }
 
-$http_port       = _var($var,'PORT',80) != 80 ? ":{$var['PORT']}" : '';
-$https_port      = _var($var,'PORTSSL',443) != 443 ? ":{$var['PORTSSL']}" : '';
+$http_port       = _var($var,'PORT','80') != '80' ? ":{$var['PORT']}" : '';
+$https_port      = _var($var,'PORTSSL','443') != '443' ? ":{$var['PORTSSL']}" : '';
 $http_ip_url     = "http://"._var($nginx,'NGINX_LANIP')."{$http_port}/";
 $https_ip_url    = "https://"._var($nginx,'NGINX_LANIP')."{$https_port}/";
-$http_ip6_url    = "http://"._var($nginx,'NGINX_LANIP6')."{$http_port}/";
-$https_ip6_url   = "https://"._var($nginx,'NGINX_LANIP6')."{$https_port}/";
+$http_ip6_url    = "http://["._var($nginx,'NGINX_LANIP6')."]{$http_port}/";
+$https_ip6_url   = "https://["._var($nginx,'NGINX_LANIP6')."]{$https_port}/";
 $http_mdns_url   = "http://"._var($nginx,'NGINX_LANMDNS')."{$http_port}/";
 $https_mdns_url  = "https://"._var($nginx,'NGINX_LANMDNS')."{$https_port}/";
 $https_fqdn_url  = "https://"._var($nginx,'NGINX_LANFQDN')."{$https_port}/";
@@ -164,7 +166,6 @@ $cert_time_format   = $display['date'].($display['date']!='%c' ? ', '.str_replac
 $provisionlabel     = $isWildcardCert ? _('Renew') : _('Provision');
 $disabled_provision = $keyfile===false || ($isWildcardCert && $retval_expired===0) || !$addr ? 'disabled' : '';
 $disabled_provision_msg = !$addr ? _('Ensure the primary network card eth0 has an IP address.') : '';
-$disabled_updatedns = $keyfile!==false && $isWildcardCert ? '' : 'disabled';
 $disabled_delete    = $cert2Present && $var['USE_SSL']!='auto' ? '' : 'disabled';
 $disabled_auto      = $isWildcardCert && !$dnsRebindingProtection && $dnsValid ? '' : 'disabled';
 
@@ -188,23 +189,6 @@ function provisionHandler(event, form) { // provisions and renewals require bein
   if (event.submitter.value === 'Delete') return true; // always allow deletes
   if (event.submitter.value === 'Renew') return true; // always allow renewals
 };
-
-function updateDNS(button) {
-  $(button).prop("disabled", true).html("<i class='fa fa-circle-o-notch fa-spin fa-fw'></i>_(Update DNS)_");
-  var failure = function(data) {
-    var status = data.status;
-    var obj = data.responseJSON;
-    var msg = "_(Sorry, an error occurred updating unraid.net DNS records)_. _(The error is)_: "+obj.error+".";
-    $(button).prop("disabled", false).html("_(Update DNS)_");
-    swal({title:"_(Oops)_",text:msg,type:"error",html:true,confirmButtonText:"_(Ok)_"});
-  };
-  var success = function(data) {
-    $(button).prop("disabled", false).html("_(Update DNS)_");
-    <?$text = _('Your local IP address %s has been updated for unraid.net')?>
-    swal({title:"",text:"<?=sprintf($text,$addr)?>",type:"success",html:true,confirmButtonText:"_(Ok)_"});
-  };
-  $.post("/webGui/include/UpdateDNS.php",success).fail(failure);
-}
 
 function checkPorts(form) {
   var portsInUse = [<?=implode(',',$portsInUse)?>];
@@ -359,12 +343,10 @@ _(Local access URLs)_:
 $n = 0;
 foreach($urls as $url) {
   $msg  = "";
-  $url0 = substr_count($url[0]??'',':')>3 ? preg_replace('#(://)(.+?)(:?\d*)/$#','$1[$2]$3/',$url[0]) : $url[0]; // IPv6 - IPv4 notation
-  $url1 = substr_count($url[1]??'',':')>3 ? preg_replace('#(://)(.+?)(:?\d*)/$#','$1[$2]$3/',$url[1]) : $url[1]; // IPv6 - IPv4 notation
-  if ($url[1]) $msg .= " "._("redirects to")." <a href='$url1'>$url1</a>";
+  if ($url[1]) $msg .= " "._("redirects to")." <a href='$url[1]'>$url[1]</a>";
   if ($url[2]) $msg .= " "._("uses")." ".$url[2];
   if ($url[3]) $msg .= "<span class='warning'> <i class='fa fa-warning fa-fw'></i> "._("is a self-signed certificate, ignore the browser's warning and proceed to the GUI")."</span>";
-  echo ($n ? "<dt>&nbsp;</dt><dd>" : ""),"<a href='$url0'>$url0</a>$msg",($n++ ? "</dd>" : "");
+  echo ($n ? "<dt>&nbsp;</dt><dd>" : ""),"<a href='$url[0]'>$url[0]</a>$msg",($n++ ? "</dd>" : "");
 }?>
 
 :mgmt_local_access_urls_help:
@@ -431,7 +413,7 @@ _(CA-signed certificate file)_:
 
 <?endif;?>
 &nbsp;
-: <button type="submit" name="changePorts" value="Provision" <?=$disabled_provision?>><?=$provisionlabel?></button><button type="submit" name="changePorts" value="Delete" <?=$disabled_delete?> >_(Delete)_</button><!-- <button type="button" onclick="updateDNS(this)" <?=$disabled_updatedns?>>_(Update DNS)_</button> --><?=$disabled_provision_msg?>
+: <button type="submit" name="changePorts" value="Provision" <?=$disabled_provision?>><?=$provisionlabel?></button><button type="submit" name="changePorts" value="Delete" <?=$disabled_delete?> >_(Delete)_</button><?=$disabled_provision_msg?>
 
 :mgmt_certificate_expiration_help:
 

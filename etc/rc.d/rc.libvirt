@@ -180,17 +180,25 @@ libvirtd_start(){
     log "$DAEMON...  Already started."
     return 1
   fi
-  # convert libvirt 1.3.1 w/ eric's hyperv vendor id patch to how libvirt does it in libvirt 1.3.3+
-  sed -ri "s/<vendor id='none'\/>/<vendor_id state='on' value='none'\/>/g" /etc/libvirt/qemu/*.xml &>/dev/null
-  # remove <locked/> from xml because libvirt + virlogd + virlockd has an issue with locked
-  sed -ri "/<locked\/>/d" /etc/libvirt/qemu/*.xml &>/dev/null
-  # Remove "<watchdog model='itco' action='reset'/>" if reverting from later release.
   . /etc/unraid-version
-  [[ $(version $version) -le $(version "6.12") ]] && sed -ri "/<watchdog model='itco' action='reset'\/>/d" /etc/libvirt/qemu/*.xml &>/dev/null
+  [[ $(version $version) -le $(version "6.12") ]] && LEGACY=1 || LEGACY=
   # update interface section((s) of VM configuration files
   for XML in /etc/libvirt/qemu/*.xml; do
+    [[ -f "$XML" ]] || continue
+    if grep -qm1 "<vendor_id='none'/>" "$XML"; then
+      # convert libvirt 1.3.1 w/ eric's hyperv vendor id patch to how libvirt does it in libvirt 1.3.3+
+      sed -ri "s/<vendor id='none'\/>/<vendor_id state='on' value='none'\/>/g" "$XML"
+    fi
+    if grep -qm1 "<locked/>" "$XML"; then
+      # remove <locked/> from xml because libvirt + virlogd + virlockd has an issue with locked
+      sed -ri "/<locked\/>/d" "$file"
+    fi
+    if [[ -n $LEGACY ]] && grep -qm1 "<watchdog model='itco' action='reset'/>" "$XML"; then
+      # Remove "<watchdog model='itco' action='reset'/>" if reverting from later release.
+      sed -ri "/<watchdog model='itco' action='reset'\/>/d" "$XML"
+    fi
     # get all interface sections
-    ROW=($(grep -nhP '<interface type=' "$XML" | grep -Pom1 '^[0-9]+'))
+    ROW=($(grep -nhP '<interface type=' "$XML" | grep -Po '^[0-9]+'))
     # get all source sections
     CAT=($(grep -nhP '<source (bridge|dev)=' "$XML" | awk '{print $1$3}'))
     for i in ${!ROW[@]}; do
@@ -199,13 +207,17 @@ libvirtd_start(){
       if [[ ! -e $SYSTEM/$DEV ]]; then
         NAME=${DEV//[0-9.]/}
         if [[ $NAME == br ]]; then
-          # change to macvtap
-          log "change $DEV to macvtap in $XML"
-          sed -ri "${ROW[$i]} s/<interface type='bridge'>/<interface type='direct' trustGuestRxFilters='yes'>/; $ROW2 s/<source bridge='$DEV'\/>/<source dev='${DEV/$NAME/vhost}' mode='bridge'\/>/" "$XML"
+          if grep -qm1 "<interface type='bridge'>" "$XML"; then
+            # change to macvtap
+            log "change $DEV to macvtap in $XML"
+            sed -ri "${ROW[$i]} s/<interface type='bridge'>/<interface type='direct' trustGuestRxFilters='yes'>/; $ROW2 s/<source bridge='$DEV'\/>/<source dev='${DEV/$NAME/vhost}' mode='bridge'\/>/" "$XML"
+          fi
         else
-          # change to bridge
-          log "change $DEV to bridge in $XML"
-          sed -ri "${ROW[$i]} s/<interface type='direct'( trustGuestRxFilters='yes')?>/<interface type='bridge'>/; $ROW2 s/<source dev='$DEV' mode='bridge'\/>/<source bridge='${DEV/$NAME/br}'\/>/" "$XML"
+          if grep -qm1 "<interface type='direct'" "$XML"; then
+            # change to bridge
+            log "change $DEV to bridge in $XML"
+            sed -ri "${ROW[$i]} s/<interface type='direct'( trustGuestRxFilters='yes')?>/<interface type='bridge'>/; $ROW2 s/<source dev='$DEV' mode='bridge'\/>/<source bridge='${DEV/$NAME/br}'\/>/" "$XML"
+          fi
         fi
       fi
     done
@@ -217,6 +229,7 @@ libvirtd_start(){
   mkdir -p /etc/libvirt/qemu/swtpm/tpm-states
   # setup snapshot persistance.
   mkdir -p /etc/libvirt/qemu/snapshot
+  mkdir -p /etc/libvirt/qemu/snapshotdb
   rm -rf /var/lib/libvirt/qemu/snapshot
   ln -sf /etc/libvirt/qemu/snapshot /var/lib/libvirt/qemu/snapshot
   # create directory for pid file
@@ -224,6 +237,7 @@ libvirtd_start(){
 
   check_processor
   modprobe -a $MODULE $MODULES
+  echo 0 > /sys/module/kvm/parameters/report_ignored_msrs
   libvirtd -d -l $LIBVIRTD_OPTS
   log "$DAEMON...  Started."
 }

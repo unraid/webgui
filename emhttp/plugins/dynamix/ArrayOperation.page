@@ -18,21 +18,18 @@ Nchan="device_list,disk_load,parity_list"
 <?
 $keyfile = file_exists(_var($var,'luksKeyfile'));
 $missing = file_exists('/var/tmp/missing.tmp');
-$encrypt = false;
 $spot    = _var($var,'mdResyncPos',0)>0;
+$poolsOnly  = (_var($var,'SYS_ARRAY_SLOTS') == 0 ) ? true : false;
 
 /* only one of $present, $missing, or $wrong will be true, or all will be false */
 $forced = $present = $wrong = false;
 foreach ($disks as $disk) {
-  if (!isset($disk['fsType'])) continue;
-  if (strpos(_var($disk,'fsType'),'luks:')!==false || (_var($disk,'fsType')=='auto' && (strpos(_var($var,'defaultFsType'),'luks:')!==false || _var($disk,'luksState',0)==2 || _var($disk,'luksState',0)==3))) {
-    $encrypt = true;
-    if (_var($disk,'luksState',0)==0) $forced = true;
-    if (_var($disk,'luksState',0)==1) $present = true;
-    if (_var($disk,'luksState',0)==2) $missing = true;
-    if (_var($disk,'luksState',0)==3) $wrong = true;
-  }
+  if (strpos(_var($disk,'fsType'),'luks:')!==false || (_var($disk,'fsType')=='auto' && strpos(_var($var,'defaultFsType'),'luks:')!==false)) $forced = true;
+  if (_var($disk,'luksState',0)==1) $present = true;
+  if (_var($disk,'luksState',0)==2) $missing = true;
+  if (_var($disk,'luksState',0)==3) $wrong = true;
 }
+$encrypt = $forced || $present || $missing || $wrong;
 if ($forced && ($present || $missing || $wrong)) $forced = false;
 
 function check_encryption() {
@@ -83,7 +80,55 @@ function print_error($error) {
 ?>
 <script>
 var ctrl = '<span class="status <?=$tabbed?"":"vhshift"?>"><a style="cursor:pointer" class="tooltip_diskio" title="_(Toggle reads/writes display)_" onclick="toggle_diskio();return false"><i class="toggle fa"></i></a></span>';
+var recall = null;
+var recover = null;
 
+String.prototype.no_tilde = function(){return this.replace('<?=$_tilde_?>','<?=$_proxy_?>');}
+String.prototype.master = function(){return this.split('<?=$_tilde_?>')[0];}
+
+function toggle_state(device,name,action) {
+  var button = null;
+  if (name) {
+    var group = name.replace(/(\d+|\*)$/,'');
+    if (name.slice(-1)!='*') {
+      // single device
+      $('#dev-'+name.no_tilde()).removeClass('fa-circle fa-square fa-warning fa-times').addClass('fa-refresh fa-spin');
+    } else {
+      if (group=='disk') {
+        // array devices
+        $('[id^="dev-parity"]').removeClass('fa-circle fa-square fa-warning fa-times').addClass('fa-refresh fa-spin');
+        $('[id^="dev-disk"]').removeClass('fa-circle fa-square fa-warning fa-times').addClass('fa-refresh fa-spin');
+      } else {
+        // pool devices
+        $('[id^="dev-'+group.master()+'"]').removeClass('fa-circle fa-square fa-warning fa-times').addClass('fa-refresh fa-spin');
+      }
+    }
+  } else if (device!='Clear') {
+    // all devices
+    $('[id^="dev-"]').removeClass('fa-circle fa-square fa-warning fa-times').addClass('fa-refresh fa-spin');
+    button = '[id^=button-]';
+  }
+  devices.stop();
+  $.post('/webGui/include/ToggleState.php',{device:device,name:name,action:action},function(){setTimeout(function(){devices.start();},1000);if (button) $(button).prop('disabled',false);});
+}
+function display_diskio() {
+  if ($.cookie('diskio')===undefined) {
+    $('span.number').show(); $('span.diskio').hide();
+  } else {
+    $('span.diskio').show(); $('span.number').hide();
+  }
+}
+function toggle_diskio(init) {
+  if (!init) {
+    if ($.cookie('diskio')===undefined) $.cookie('diskio','diskio',{expires:3650}); else $.removeCookie('diskio');
+  }
+  if ($.cookie('diskio')===undefined) {
+    $('i.toggle').removeClass('fa-tachometer').addClass('fa-list');
+  } else {
+    $('i.toggle').removeClass('fa-list').addClass('fa-tachometer');
+  }
+  display_diskio();
+}
 function base64(str) {
   return window.btoa(unescape(encodeURIComponent(str)));
 }
@@ -307,40 +352,43 @@ var devices = new NchanSubscriber('/sub/devices<?=$spot?",parity":""?>',{subscri
 devices.on('message', function(msg,meta) {
   switch (<?if($spot):?>meta.id.channel()<?else:?>0<?endif;?>) {
   case 0:
-    // array + pool + ua devices
-    var tables = msg.split('\0');
-    // get array state
-    var stopped = tables.pop();
-    for (var n=0; n < tables.length; n++) {
-      // get table name and content
-      var table = tables[n].split('\n');
-      $('#'+table[0]).html(table[1]);
-    }
+    // array + pool + ua + flash devices
+    var get = JSON.parse(msg);
+    for (var name in get) $('#'+name).html(get[name]);
+    if (recall !== null) recall.html('&nbsp;');
     display_diskio();
     // stop updating when array is stopped
-    if (stopped==1) {
+    if (get.stop==1) {
+      $('thead tr').removeClass().addClass('offline');
 <?if (_var($var,'fsState')=='Started'):?>
       setTimeout(refresh);
 <?else:?>
       if (!timers.stopped) timers.stopped = setTimeout(function(){devices.stop(); arraymonitor.start();},1500);
 <?endif;?>
+    } else {
+      // make truncated descriptions fully visible when hovering over them
+      $('td.desc').hover(
+        function(){if ($(this)[0].offsetWidth < $(this)[0].scrollWidth) {recall=$(this).next(); recover=recall.html(); recall.html('&nbsp;');}},
+        function(){if ($(this)[0].offsetWidth < $(this)[0].scrollWidth) {recall.html(recover); recall=null;}}
+      );
     }
     break;
   case 1:
     // running parity status
-    $.each(msg.split(';'),function(k,v) {if ($('#line'+k).length>0) $('#line'+k).html(v);});
+    var get = JSON.parse(msg);
+    $.each(get,function(k,v) {if ($('#line'+k).length>0) $('#line'+k).html(v);});
     // button control
     if ($('#pauseButton').length>0 && $('#pauseButton').prop('disabled')==false) {
-      if (!msg && $('#cancelButton').length>0 && $('#cancelButton').val()=="_(Cancel)_") {
+      if ((get === "") && $('#cancelButton').val()=="_(Cancel)_") {
         $('#cancelButton').val("_(Done)_").prop('onclick',null).off('click').click(function(){refresh();});
         $('#pauseButton').prop('disabled',true);
         $('#cancelText').html('');
         $('#line4').html("_(completed)_");
       } else {
         var form = document.arrayOps;
-        if ($('#pauseButton').val()=="_(Pause)_" && msg.search("_(paused)_")!=-1) {
+        if ($('#pauseButton').val()=="_(Pause)_" && get[1].search("_(paused)_")!=-1) {
           $('#pauseButton').val("_(Resume)_").prop('onclick',null).off('click').click(function(){resumeParity(form);});
-        } else if ($('#pauseButton').val()=="_(Resume)_" && msg.search("_(paused)_")==-1) {
+        } else if ($('#pauseButton').val()=="_(Resume)_" && get[1].search("_(paused)_")==-1) {
           $('#pauseButton').val("_(Pause)_").prop('onclick',null).off('click').click(function(){pauseParity(form);});
         }
       }
@@ -436,6 +484,7 @@ window.onunload = function(){
 <?      elseif ($action[0]=="check"):?>
           <tr><td></td><td><input type="submit" name="cmdCheck" value="_(Check)_"></td><td>**_(Check)_** _(will start **Read-Check** of all array disks)_.</td></tr>
 <?      endif;?>
+<?      if (!$poolsOnly):?>
         <tr><td></td><td><input type="button" value="_(History)_" onclick="parityHistory()"></td>
 <?      [$date,$duration,$speed,$status,$error,$action,$size] = last_parity_log();
         if (_var($var,'sbSyncExit',0)!=0):?>
@@ -467,6 +516,7 @@ window.onunload = function(){
           <br><i class="fa fa-fw fa-clock-o"></i> _(Duration)_: <?=my_check($duration,$speed)?>
           <br><i class="fa fa-fw fa-search"></i> <?=print_error(_var($var,'sbSyncErrs',0))?></td></tr>
 <?      endif;
+        endif; // end check for poolsOnly
       endif;
     else:
       if ($action[0]=="recon"):
@@ -540,6 +590,9 @@ window.onunload = function(){
 <?  elseif (_var($var,'configValid')=="invalid"):?>
       <tr><td><?status_indicator()?>**_(Stopped)_.**</td><td><input type="submit" name="cmdStart" value="_(Start)_" disabled></td>
       <td>_(Too many attached devices. Please consider upgrading your)_ <a href="/Tools/Registration">_(registration key)_</a>.</td></tr>
+<?  elseif (_var($var,'configValid')=="ineligible"):?>
+      <tr><td><?status_indicator()?>**_(Stopped)_.**</td><td><input type="submit" name="cmdStart" value="_(Start)_" disabled></td>
+      <td>_(Ineligible to run this version of Unraid OS. Please consider extending your)_ <a href="/Tools/Registration">_(registration key)_</a>.</td></tr>
 <?  elseif (_var($var,'configValid')=="nokeyserver"):?>
       <tr><td><?status_indicator()?>**_(Stopped)_.**</td><td><input type="submit" name="cmdStart" value="_(Start)_" disabled></td>
       <td>_(Cannot contact key-server. Please check your)_ <a href="/Settings/NetworkSettings">_(network settings)_</a>.</td></tr>
@@ -642,7 +695,11 @@ window.onunload = function(){
         <tr><td><?status_indicator()?>**_(Stopped)_**. _(No data disks)_.</td><td><input type="submit" name="cmdStart" value="_(Start)_" disabled></td>
         <td>_(No array data disks have been assigned)_!</td></tr>
 <?      break;
-      endswitch;
+      case "ERROR:NO_DEVICES":?>
+        <tr><td><?status_indicator()?>**_(Stopped)_**. _(No devices)_.</td><td><input type="submit" name="cmdStart" value="_(Start)_" disabled></td>
+        <td>_(No array devices have been assigned)_!</td></tr>
+<?      break;
+endswitch;
     endif;
   endswitch;?>
   <tr><td></td><td class="line" colspan="2"></td></tr>

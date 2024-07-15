@@ -13,7 +13,7 @@
 <?
 function input_secure_users($sec) {
   global $name, $users;
-  echo "<table class='settings'>";
+  echo "<dl>";
   $write_list = explode(",", $sec[$name]['writeList']);
   foreach ($users as $user) {
     $idx = $user['idx'];
@@ -25,17 +25,17 @@ function input_secure_users($sec) {
       $userAccess = "read-write";
     else
       $userAccess = "read-only";
-    echo "<tr><td>{$user['name']}</td>";
-    echo "<td><select name='userAccess.$idx'>";
+    echo "<dt>{$user['name']}</dt>";
+    echo "<dd><select name='userAccess.$idx'>";
     echo mk_option($userAccess, "read-write", _("Read/Write"));
     echo mk_option($userAccess, "read-only", _("Read-only"));
-    echo "</select></td></tr>";
+    echo "</select></dd>";
   }
-  echo "</table>";
+  echo "</dl>";
 }
 function input_private_users($sec) {
   global $name, $users;
-  echo "<table class='settings'>";
+  echo "<dl>";
   $read_list = explode(",", $sec[$name]['readList']);
   $write_list = explode(",", $sec[$name]['writeList']);
   foreach ($users as $user) {
@@ -50,13 +50,13 @@ function input_private_users($sec) {
       $userAccess = "read-write";
     else
       $userAccess = "no-access";
-    echo "<tr><td>{$user['name']}</td>";
-    echo "<td><select name='userAccess.$idx'>";
+    echo "<dt>{$user['name']}</dt>";
+    echo "<dd><select name='userAccess.$idx'>";
     echo mk_option($userAccess, "read-write", _("Read/Write"));
     echo mk_option($userAccess, "read-only", _("Read-only"));
     echo mk_option($userAccess, "no-access", _("No Access"));
-    echo "</select></td></tr>";
+    echo "</select></dd>";
   }
-  echo "</table>";
+  echo "</dl>";
 }
 ?>

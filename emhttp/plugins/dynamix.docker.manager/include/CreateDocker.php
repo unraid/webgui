@@ -748,6 +748,7 @@ _(Categories)_:
 : <input type="hidden" name="contCategory">
   <select id="catSelect" size="1" multiple="multiple" style="display:none" onchange="prepareCategory();">
   <optgroup label="_(Categories)_">
+  <option value="AI:">_(AI)_</option>
   <option value="Backup:">_(Backup)_</option>
   <option value="Cloud:">_(Cloud)_</option>
   <option value="Crypto:">_(Crypto Currency)_</option>

@@ -1,7 +1,9 @@
 #!/bin/bash
+DISABLE="no"
 source /boot/config/domain.cfg
 if [ $DISABLE == "yes" ]
     then 
-    exit ;
+    printf '\n%s\n' "Start/autostart is disabled in VM settings." >&2 ## Send message to stderr.
+    exit 1 ;
 fi 
 eval exec /usr/bin/qemu-system-x86_64 $(/usr/local/emhttp/plugins/dynamix.vm.manager/scripts/qemu.php "$@")

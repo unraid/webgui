@@ -1,6 +1,7 @@
 Menu="Main:1"
 Title="Array Devices"
 Tag="database"
+Cond="(_var($var,'SYS_ARRAY_SLOTS') > 0 || $var['fsState']=='Stopped')"
 ---
 <?PHP
 /* Copyright 2005-2023, Lime Technology
@@ -14,68 +15,21 @@ Tag="database"
  * all copies or substantial portions of the Software.
  */
 ?>
+<?
+$power = _var($display,'power') && in_array('nvme',array_column(main_filter($disks),'transport')) ? _('Power').' / ' : '';
+?>
 <script>
-String.prototype.no_tilde = function(){return this.replace('<?=$_tilde_?>','<?=$_proxy_?>');}
-String.prototype.master = function(){return this.split('<?=$_tilde_?>')[0];}
-
-function toggle_state(device,name,action) {
-  var button = null;
-  if (name) {
-    var group = name.replace(/(\d+|\*)$/,'');
-    if (name.slice(-1)!='*') {
-      // single device
-      $('#dev-'+name.no_tilde()).removeClass('fa-circle fa-square fa-warning fa-times').addClass('fa-refresh fa-spin');
-    } else {
-      if (group=='disk') {
-        // array devices
-        $('[id^="dev-parity"]').removeClass('fa-circle fa-square fa-warning fa-times').addClass('fa-refresh fa-spin');
-        $('[id^="dev-disk"]').removeClass('fa-circle fa-square fa-warning fa-times').addClass('fa-refresh fa-spin');
-      } else {
-        // pool devices
-        $('[id^="dev-'+group.master()+'"]').removeClass('fa-circle fa-square fa-warning fa-times').addClass('fa-refresh fa-spin');
-      }
-    }
-  } else if (device!='Clear') {
-    // all devices
-    $('[id^="dev-"]').removeClass('fa-circle fa-square fa-warning fa-times').addClass('fa-refresh fa-spin');
-    button = '[id^=button-]';
-  }
-  devices.stop();
-  $.post('/webGui/include/ToggleState.php',{device:device,name:name,action:action},function(){setTimeout(function(){devices.start();},1000);if (button) $(button).prop('disabled',false);});
-}
-function display_diskio() {
-  if ($.cookie('diskio')===undefined) {
-    $('span.number').show(); $('span.diskio').hide();
-  } else {
-    $('span.diskio').show(); $('span.number').hide();
-  }
-}
-function toggle_diskio(init) {
-  if (!init) {
-    if ($.cookie('diskio')===undefined) $.cookie('diskio','diskio',{expires:3650}); else $.removeCookie('diskio');
-  }
-  if ($.cookie('diskio')===undefined) {
-    $('i.toggle').removeClass('fa-tachometer').addClass('fa-list');
-  } else {
-    $('i.toggle').removeClass('fa-list').addClass('fa-tachometer');
-  }
-  display_diskio();
-}
-
 <?if (_var($var,'fsState')=="Started"):?>
 $('#tab1').bind({click:function() {$('i.toggle').show('slow');}});
 <?endif;?>
 </script>
 
-<table class="disk_status wide">
-<thead><tr><td>_(Device)_</td><td>_(Identification)_</td><td>_(Temp)_.</td><td>_(Reads)_</td><td>_(Writes)_</td><td>_(Errors)_</td><td>_(FS)_</td><td>_(Size)_</td><td>_(Used)_</td><td>_(Free)_</td></tr></thead>
+<table class="unraid disk_status">
+<thead><tr><td>_(Device)_</td><td>_(Identification)_</td><td><?=$power?>_(Temp)_</td><td>_(Reads)_</td><td>_(Writes)_</td><td>_(Errors)_</td><td>_(FS)_</td><td>_(Size)_</td><td>_(Used)_</td><td>_(Free)_</td></tr></thead>
 <tbody id="array_devices">
 <?
-foreach ($disks as $disk):
-  if (_var($disk,'type')=='Parity' or _var($disk,'type')=='Data')
-    echo "<tr><td colspan='11'>&nbsp;</td></tr>";
-endforeach;
-if (_var($display,'total')) echo "<tr class='tr_last'><td colspan='11'>&nbsp;</td></tr>";
+foreach (main_filter($disks) as $disk) if (substr($disk['status'],0,7)!='DISK_NP') echo "<tr><td colspan='10'></td></tr>";
+if (_var($display,'total') && _var($var,'mdNumDisks',0)>1) echo "<tr class='tr_last'><td colspan='10'></td></tr>";
 ?>
 </tbody>
 </table>

@@ -12,6 +12,7 @@
 ?>
 <?
 require_once "$docroot/webGui/include/MarkdownExtra.inc.php";
+require_once "$docroot/webGui/include/Wrappers.php";
 
 function get_ini_key($key,$default) {
   $x = strpos($key, '[');
@@ -32,7 +33,7 @@ function build_pages($pattern) {
   foreach (glob($pattern,GLOB_NOSORT) as $entry) {
     [$header, $content] = my_explode("\n---\n",file_get_contents($entry));
     $page = @parse_ini_string($header);
-    if (!$page) {exec("logger -t webGUI -- \"Invalid .page format: $entry\""); continue;}
+    if (!$page) {my_logger("Invalid .page format: $entry"); continue;}
     $page['file'] = $entry;
     $page['root'] = dirname($entry);
     $page['name'] = basename($entry, '.page');

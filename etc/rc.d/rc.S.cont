@@ -67,12 +67,11 @@ if /bin/grep -wq cgroup /proc/filesystems; then
   else
     if [[ -d /sys/fs/cgroup ]]; then
       # See https://docs.kernel.org/admin-guide/cgroup-v2.html (section Mounting)
-      # Mount a tmpfs as the cgroup2 filesystem root
-      /sbin/mount -t tmpfs -o mode=0755,size=8M cgroup_root /sys/fs/cgroup
-      /sbin/mount -t cgroup2 none /sys/fs/cgroup
+      # Mount cgroup2 filesystem
+      /sbin/mount -t cgroup2 -o rw,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot cgroup2 /sys/fs/cgroup
     else
-      /bin/mkdir -p /dev/cgroup
-      /sbin/mount -t cgroup2 none /dev/cgroup
+      # Display message if /sys/fs/cgroup does not exist
+      echo "/sys/fs/cgroup does not exist. cgroup2 cannot be mounted."
     fi
   fi
 fi
@@ -209,7 +208,6 @@ fi
 /bin/echo "$NAME" >/etc/HOSTNAME
 /bin/echo "# Generated" >/etc/hosts
 /bin/echo "127.0.0.1      $NAME localhost" >>/etc/hosts
-/bin/echo "54.149.176.35  keys.lime-technology.com" >>/etc/hosts
 
 # LimeTech - restore the configured timezone
 if [[ $timeZone == custom ]]; then
@@ -224,7 +222,7 @@ if [[ -r /boot/config/passwd ]]; then
     if [[ $USERNAME == root ]]; then
       /bin/sed -i "s|^root:.*|root:x:0:0:$COMMENT:/root:/bin/bash|" /etc/passwd
     fi
-    if (( USERID >= 1000 )); then
+    if (( USERID >= 1000 )) && ! grep -q ":$USERID:" /etc/passwd ; then
       /bin/echo "$USERNAME:x:$USERID:$GROUPID:$COMMENT:/:/bin/false" >> /etc/passwd
     fi
   done </boot/config/passwd

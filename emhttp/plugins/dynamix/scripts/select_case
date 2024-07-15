@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2024, Lime Technology
+ * Copyright 2012-2024, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -24,34 +24,36 @@ require_once "$docroot/webGui/include/Translations.php";
 $boot   = "/boot/config/plugins/dynamix";
 $file   = $argv[1];
 $cmodel = is_file("$boot/$file") ? file_get_contents("$boot/$file") : '';
+?>
+<style>
+div.case-list{float:left;padding:10px;margin:0 45px 64px 0;height:128px;width:128px;text-align:center;cursor:pointer}
+div.case-list span{position:relative;top:64px;width:auto;max-width:128px;height:128px;font-size:128px}
+div.case-list span.fa{top:24px;max-width:80px;font-size:80px}
+div.case-list:hover{color:#f0000c}
+div.case-name{position:relative;top:74px;font-family:clear-sans!important}
+div.custom-name{position:relative;top:10px;font-family:clear-sans!important}
+input#file{display:none}
+</style>
 
-$style = ["<style>"];
-$style[] = "div.case-list{float:left;padding:10px;margin:0 45px 64px 0;height:128px;width:128px;text-align:center;cursor:pointer}";
-$style[] = "div.case-list span{position:relative;top:64px;width:auto;max-width:128px;height:128px;font-size:128px}";
-$style[] = "div.case-list span.fa{top:24px;max-width:80px;font-size:80px}";
-$style[] = "div.case-list:hover{color:#f0000c}";
-$style[] = "div.case-name{position:relative;top:74px;font-family:clear-sans!important}";
-$style[] = "div.custom-name{position:relative;top:10px;font-family:clear-sans!important}";
-$style[] = "</style>";
+<script>
+function selectDone() {
+  $('.sweet-alert').hide('fast').removeClass('nchan');
+  swal.close();
+  getCase();
+}
+function setCase(model) {
+  $.post('/webGui/include/SelectCase.php',{mode:'set',file:'<?=$file?>',model:model},function(){selectDone();});
+}
+function importFile(file) {
+  if (file.name.split('.').pop().toLowerCase() != 'png') return;
+  var reader = new FileReader();
+  reader.readAsDataURL(file);
+  reader.onload = function(e){$.post('/webGui/include/SelectCase.php',{mode:'file',file:'<?=$file?>',data:e.target.result},function(){selectDone();})};
+}
+</script>
 
-$script = ["<script>"];
-$script[] = "function selectDone() {";
-$script[] = "  \$('.sweet-alert').hide('fast').removeClass('nchan');";
-$script[] = "  swal.close();";
-$script[] = "  getCase();";
-$script[] = "}";
-$script[] = "function setCase(model) {";
-$script[] = "  \$.post('/webGui/include/SelectCase.php',{mode:'set',file:'$file',model:model},function(){selectDone();});";
-$script[] = "}";
-$script[] = "function importFile(file) {";
-$script[] = "  if (file.name.split('.').pop().toLowerCase() != 'png') return;";
-$script[] = "  var reader = new FileReader();";
-$script[] = "  reader.readAsDataURL(file);";
-$script[] = "  reader.onload = function(e){\$.post('/webGui/include/SelectCase.php',{mode:'file',file:'$file',data:e.target.result},function(){selectDone();})};";
-$script[] = "}";
-$script[] = "</script>";
-
-$html = ["<div>"];
+<div>
+<?
 $cases = file("$docroot/webGui/styles/default-cases.css",FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES);
 foreach ($cases as $case) if (substr($case,0,6)=='.case-') $models[] = substr($case,1,strpos($case,':')-1);
 natsort($models);
@@ -60,13 +62,11 @@ for ($i=0; $i < count($models); $i++) {
   $name = substr($model,5);
   $title = str_replace('3u-avs-10-4','3u-avs-10/4',$name);
   $select = $name==$cmodel ? 'color:#e68a00' : '';
-  $html[] = "<div id='$name' class='case-list' style='$select' onclick='setCase(\"$name\")'><span class='$model'></span><div class='case-name'>$title</div></div>";
+  echo "<div id='$name' class='case-list' style='$select' onclick='setCase(\"$name\")'><span class='$model'></span><div class='case-name'>$title</div></div>\n";
 }
 $select = $cmodel=='case-model.png' ? 'color:#e68a00' : '';
-$html[] = "<div id='Custom' class='case-list' style='$select' onclick='$(\"input#file\").trigger(\"click\")'><span class='fa fa-file-image-o'></span><div class='custom-name'>"._('custom image')."</div></div>";
-$html[] = "</div></div>";
-$html[] = "<input type='file' id='file' accept='.png' onchange='importFile(this.files[0])' style='display:none'>";
-$html[] = "</div>";
-
-echo implode($style),implode($script),implode($html);
 ?>
+<div id='Custom' class='case-list' style='<?=$select?>' onclick='$("input#file").trigger("click")'><span class='fa fa-file-image-o'></span><div class='custom-name'><?=_('custom image')?></div></div>
+</div></div>
+<input type='file' id='file' accept='.png' onchange='importFile(this.files[0])'>
+</div>

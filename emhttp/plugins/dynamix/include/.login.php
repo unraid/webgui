@@ -9,15 +9,15 @@ if (!empty($_COOKIE['unraid_'.md5($server_name)])) {
 
     // Check if the user is already logged in
     if ($_SESSION && !empty($_SESSION['unraid_user'])) {
-        // If so redirect them to the start page
-        header("Location: /".$var['START_PAGE']);
+        // Redirect the user to the start page
+        header("Location: /".$start_page);
         exit;
     }
 }
 
 function readFromFile($file): string {
     $text = "";
-    if (file_exists($file)) {
+    if (file_exists($file) && filesize($file) > 0) {
         $fp = fopen($file,"r");
         if (flock($fp, LOCK_EX)) {
             $text = fread($fp, filesize($file));
@@ -119,12 +119,12 @@ function verifyTwoFactorToken(string $username, string $token): bool {
         // This should accept 200 or 204 status codes
         if ($httpCode !== 200 && $httpCode !== 204) {
             // Log error to syslog
-            exec("logger -t webGUI -- \"2FA code for {$username} is invalid, blocking access!\"");
+            my_logger("2FA code for {$username} is invalid, blocking access!");
             return false;
         }
 
         // Log success to syslog
-        exec("logger -t webGUI -- \"2FA code for {$username} is valid, allowing login!\"");
+        my_logger("2FA code for {$username} is valid, allowing login!");
 
         // Success
         return true;
@@ -199,7 +199,7 @@ if (!empty($username) && !empty($password)) {
 
         // Check if we're limited
         if ($failCount >= $maxFails) {
-            if ($failCount == $maxFails) exec("logger -t webGUI -- \"Ignoring login attempts for {$username} from {$remote_addr}\"");
+            if ($failCount == $maxFails) my_logger("Ignoring login attempts for {$username} from {$remote_addr}");
             throw new Exception(_('Too many invalid login attempts'));
         }
 
@@ -216,17 +216,17 @@ if (!empty($username) && !empty($password)) {
         $_SESSION['unraid_user'] = $username;
         session_regenerate_id(true);
         session_write_close();
-        exec("logger -t webGUI -- \"Successful login user {$username} from {$remote_addr}\"");
+        my_logger("Successful login user {$username} from {$remote_addr}");
 
         // Redirect the user to the start page
-        header("Location: /".$var['START_PAGE']);
+        header("Location: /".$start_page);
         exit;
     } catch (Exception $exception) {
         // Set error message
         $error = $exception->getMessage();
 
         // Log error to syslog
-        exec("logger -t webGUI -- \"Unsuccessful login user {$username} from {$remote_addr}\"");
+        my_logger("Unsuccessful login user {$username} from {$remote_addr}");
         appendToFile($failFile, $time."\n");
     }
 }

@@ -189,7 +189,7 @@ if [[ -x /etc/rc.d/rc.udev ]]; then
   /etc/rc.d/rc.udev force-stop
 fi
 
-# Kill all remaining processes.
+# Kill all remaining processes (including rsyslogd)
 OMITPIDS="$(for P in $(/usr/bin/pgrep mdmon); do /bin/echo -o $P; done)" # Don't kill mdmon
 if [[ $1 != fast ]]; then
   log "Sending all processes the SIGTERM signal."
@@ -202,7 +202,22 @@ fi
 # limetech - let's keep this on the USB flash
 # Carry a random seed between reboots.
 /usr/sbin/seedrng
-/bin/cp /var/lib/seedrng/seed.credit /boot/config/random-seed 2>/dev/null
+/bin/cp -f /var/lib/seedrng/seed.credit /boot/config/random-seed 2>/dev/null
+
+# If "Mirror syslog to flash" is disabled and "Copy" is enabled (default) then copy current syslog to flash
+# The copied file will become /boot/logs/syslog-previous after next boot (see rc.M)
+# Safety feature: copy only when enough space is available on the flash device
+CFG=/boot/config/rsyslog.cfg
+[[ -r $CFG ]] && MIRROR=$(/bin/grep -Pom1 '^syslog_flash="\K[^"]+' $CFG)
+[[ -r $CFG ]] && COPY=$(/bin/grep -Pom1 '^syslog_shutdown="\K[^"]+' $CFG)
+if [[ ! -f /boot/logs/syslog && -z $MIRROR && -z $COPY ]]; then
+  AVAIL=$(/bin/df --output=avail /boot | /bin/awk '(NR>1){print $1*1024;exit}')
+  SIZE=$(($(/bin/stat -c%s /var/log/syslog)*2))
+  if [[ $AVAIL -ge $SIZE ]]; then
+    log "Saving syslog to flash"
+    /bin/cp -f /var/log/syslog /boot/logs/syslog
+  fi
+fi
 
 # Before unmounting file systems write a reboot or halt record to wtmp.
 /sbin/$SHUTDOWN_COMMAND -w

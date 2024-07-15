@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+  <Agent>
+    <Name>Slack</Name>
+    <Variables>
+      <Variable Help="Get your WebHook as explained [a href='https://api.slack.com/incoming-webhooks' target='_blank'][u]here[/u].[/a]" Desc="WebHook URL" Default="USE YOUR OWN WEBHOOK VALUE HERE">WEBH_URL</Variable>
+      <Variable Help="Application name, e.g., Unraid Server." Desc="Application Name" Default="Unraid Server">APP_NAME</Variable>
+      <Variable Help="Specify the fields which are included in the title of the notification." Desc="Notification Title" Default="$SUBJECT">TITLE</Variable>
+      <Variable Help="Specify the fields which are included in the message body of the notification." Desc="Notification Message" Default="$DESCRIPTION">MESSAGE</Variable>
+    </Variables>
+    <Script>
+      <![CDATA[
+      #!/bin/bash
+      ############
+      {0}
+      ############
+      TITLE=$(echo -e "$TITLE")
+      MESSAGE=$(echo -e "$MESSAGE")
+      curl -X POST --header 'Content-Type: application/json' \
+      -d "{\"username\": \"$APP_NAME\", \"text\": \"*$TITLE* \n $MESSAGE\"}" $WEBH_URL 2>&1
+      ]]>
+    </Script>
+  </Agent>

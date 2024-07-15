@@ -175,9 +175,10 @@
 
 					// create folder if needed
 					if (!is_dir($strImgFolder)) {
-						mkdir($strImgFolder, 0777, true);
-						chown($strImgFolder, 'nobody');
-						chgrp($strImgFolder, 'users');
+						#mkdir($strImgFolder, 0777, true);
+						my_mkdir($strImgFolder, 0777, true);
+						#chown($strImgFolder, 'nobody');
+						#chgrp($strImgFolder, 'users');
 					}
 
 					$this->set_folder_nodatacow($strImgFolder);
@@ -191,14 +192,16 @@
 
 					// create parent folder if needed
 					if (!is_dir($path_parts['dirname'])) {
-						mkdir($path_parts['dirname'], 0777, true);
-						chown($path_parts['dirname'], 'nobody');
-						chgrp($path_parts['dirname'], 'users');
+						#mkdir($path_parts['dirname'], 0777, true);
+						my_mkdir($path_parts['dirname'], 0777, true);
+						#chown($path_parts['dirname'], 'nobody');
+						#chgrp($path_parts['dirname'], 'users');
 					}
 
 					$this->set_folder_nodatacow($path_parts['dirname']);
 
-					$strImgPath = $strImgFolder;
+					$strExt = ($disk['driver'] == 'raw') ? 'img' : $disk['driver'];
+					$strImgPath = $path_parts['dirname'] . '/vdisk' . $diskid . '.' . $strExt;
 				}
 
 
@@ -216,9 +219,10 @@
 						// create folder if needed
 						$strImgRawLocationParent = dirname($strImgRawLocationPath);
 						if (!is_dir($strImgRawLocationParent)) {
-							mkdir($strImgRawLocationParent, 0777, true);
-							chown($strImgRawLocationParent, 'nobody');
-							chgrp($strImgRawLocationParent, 'users');
+							#mkdir($strImgRawLocationParent, 0777, true);
+							my_mkdir($strImgRawLocationParent, 0777, true);
+							#chown($strImgRawLocationParent, 'nobody');
+							#chgrp($strImgRawLocationParent, 'users');
 						}
 
 						$this->set_folder_nodatacow($strImgRawLocationParent);
@@ -257,6 +261,9 @@
 					if (!empty($disk['boot'])) {
 						$arrReturn['boot'] = $disk['boot'];
 					}
+					if (!empty($disk['rotation'])) {
+						$arrReturn['rotation'] = $disk['rotation'];
+					}
 					if (!empty($disk['serial'])) {
 						$arrReturn['serial'] = $disk['serial'];
 					}
@@ -283,6 +290,7 @@
 			$audios = $config['audio'];
 			$template = $config['template'];
 			$clocks = $config['clock'];
+			$evdevs = $config['evdev'];
 
 			$type = $domain['type'];
 			$name = $domain['name'];
@@ -683,13 +691,18 @@
 
 						if ($disk["serial"] != "") $serial = "<serial>".$disk["serial"]."</serial>" ; else $serial = "" ;
 
+						$rotation_rate = "";
+						if ($disk['bus'] == "scsi" || $disk['bus'] == "sata" || $disk['bus'] == "ide" ) {
+							if ($disk['rotation']) $rotation_rate = " rotation_rate='1' ";
+						}
+
 						if ($strDevType == 'file' || $strDevType == 'block') {
 							$strSourceType = ($strDevType == 'file' ? 'file' : 'dev');
 
 							$diskstr .= "<disk type='" . $strDevType . "' device='disk'>
 											<driver name='qemu' type='" . $disk['driver'] . "' cache='writeback'/>
 											<source " . $strSourceType . "='" . htmlspecialchars($disk['image'], ENT_QUOTES | ENT_XML1) . "'/>
-											<target bus='" . $disk['bus'] . "' dev='" . $disk['dev'] . "'/>
+											<target bus='" . $disk['bus'] . "' dev='" . $disk['dev'] . "' $rotation_rate />
 											$bootorder
 											$readonly
 											$serial
@@ -786,7 +799,7 @@
 					if (empty($gpu['id']) || in_array($gpu['id'], $gpudevs_used)) {
 						continue;
 					}
-
+					if ($gpu['id'] == 'nogpu') break;
 					if ($gpu['id'] == 'virtual') {
 						$strKeyMap = '';
 						if (!empty($gpu['keymap'])) {
@@ -838,6 +851,7 @@
 								</graphics>
 								<video>
 									<model type='$strModelType'/>
+									<address type='pci' domain='0x0000' bus='0x00' slot='0x1e' function='0x0'/>
 								</video>
 								<audio id='1' type='$virtualaudio'/>";
 							
@@ -986,6 +1000,16 @@
 						</memballoon>";
 			}
 			#$osbootdev = "" ;
+			$evdevstr = "";
+			foreach($evdevs as $evdev) {
+				if ($evdev['dev'] == "") continue;
+				$evdevstr .= "<input type='evdev'>\n<source dev='{$evdev['dev']}'";
+				if  ($evdev['grab'] != "") $evdevstr .= " grab='{$evdev['grab']}' ";
+				if  ($evdev['grabToggle'] != "") $evdevstr .= " grabToggle='{$evdev['grabToggle']}' ";
+				if  ($evdev['repeat'] != "") $evdevstr .= " repeat='{$evdev['repeat']}' ";
+				$evdevstr .= "/>\n</input>\n";
+			}
+
 			$memorybackingXML = Array2XML::createXML('memoryBacking', $memorybacking);
 			$memoryBackingXML = $memorybackingXML->saveXML($memorybackingXML->documentElement);
 			return "<domain type='$type' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
@@ -1031,6 +1055,7 @@
 							$channelscopypaste
 							$swtpm
 							$memballoon
+							$evdevstr
 						</devices>
 					</domain>";
 
@@ -1238,33 +1263,44 @@
 			return $tmp;
 		}
 
-		function get_cdrom_stats($domain, $sort=true) {
+		function get_cdrom_stats($domain, $sort=true,$spincheck = false) {
+			$unraiddisks = array_merge_recursive(@parse_ini_file('state/disks.ini',true)?:[], @parse_ini_file('state/devs.ini',true)?:[]);
 			$dom = $this->get_domain_object($domain);
-
+			$tmp = false;
 			$buses =  $this->get_xpath($dom, '//domain/devices/disk[@device="cdrom"]/target/@bus', false);
-			$disks =  $this->get_xpath($dom, '//domain/devices/disk[@device="cdrom"]/target/@dev', false);
+			$cds =  $this->get_xpath($dom, '//domain/devices/disk[@device="cdrom"]/target/@dev', false);
 			$files =  $this->get_xpath($dom, '//domain/devices/disk[@device="cdrom"]/source/@file', false);
 			$boot  =  $this->get_xpath($dom, '//domain/devices/disk[@device="cdrom"]/boot/@*', false);
 
 			$ret = [];
-			for ($i = 0; $i < $disks['num']; $i++) {
-				$tmp = libvirt_domain_get_block_info($dom, $disks[$i]);
+			for ($i = 0; $i < $cds['num']; $i++) {
+				$spundown = 0;
+				$reallocation = null;
+				if (isset($files[$i])) $reallocation = trim(get_realvolume($files[$i]));
+				if ($spincheck) {
+					if (isset($unraiddisks[$reallocation]['spundown']) && $unraiddisks[$reallocation]['spundown'] == 1) $spundown = 1; else $tmp = libvirt_domain_get_block_info($dom, $cds[$i]);
+				} else $tmp = libvirt_domain_get_block_info($dom, $cds[$i]);
+
 				if ($tmp) {
 					$tmp['bus'] = $buses[$i];
 					$tmp["boot order"] = $boot[$i] ?? "";
+					$tmp['reallocation'] = $reallocation;
+					$tmp['spundown'] = $spundown;
 					$ret[] = $tmp;
 				}
 				else {
 					$this->_set_last_error();
 
 					$ret[] = [
-						'device' => $disks[$i],
+						'device' => $cds[$i],
 						'file'   => $files[$i],
 						'type'   => '-',
 						'capacity' => '-',
 						'allocation' => '-',
 						'physical' => '-',
-						'bus' => $buses[$i]
+						'bus' => $buses[$i],
+						'reallocation' => $reallocation,
+						'spundown' => $spundown
 					];
 				}
 			}
@@ -1282,7 +1318,7 @@
 			}
 
 			unset($buses);
-			unset($disks);
+			unset($cds);
 			unset($files);
 
 			return $ret;
@@ -1303,6 +1339,7 @@
 				if ($tmp) {
 					$tmp['bus'] = $disk->target->attributes()->bus->__toString();
 					$tmp["boot order"] = $disk->boot->attributes()->order ?? "";
+					$tmp["rotation"] = $disk->target->attributes()->rotation_rate ?? "0";
 					$tmp['serial'] = $disk->serial ;
 
 					// Libvirt reports 0 bytes for raw disk images that haven't been
@@ -1323,7 +1360,7 @@
 					$this->_set_last_error();
 
 					$ret[] = [
-						'device' => $disk->target->attributes()->dev,
+						'device' => $disk->target->attributes()->dev->__toString(),
 						'file'   => $disk->source->attributes()->file,
 						'type'   => '-',
 						'capacity' => '-',
@@ -1331,6 +1368,7 @@
 						'physical' => '-',
 						'bus' =>  $disk->target->attributes()->bus->__toString(),
 						'boot order' => $disk->boot->attributes()->order ,
+						'rotation' => $disk->target->attributes()->rotation_rate ?? "0",
 						'serial' => $disk->serial
 					];
 				}
@@ -1409,6 +1447,20 @@
 			return $ret;
 		}
 
+		function get_disk_fstype($domain) {
+			$dom = $this->get_domain_object($domain);
+			$tmp = $this->get_disk_stats($dom);
+			$dirname = transpose_user_path($tmp[0]['file']);
+			$pathinfo = pathinfo($dirname);
+			$parent = $pathinfo["dirname"];
+			$fstype = strtoupper(trim(shell_exec(" stat -f -c '%T' $parent")));
+			if ($fstype != "ZFS") $fstype = "QEMU";
+			#if ($fstype != "ZFS" && $fstype != "BTRFS") $fstype = "QEMU";
+			unset($tmp);
+
+			return $fstype;
+		}
+
 		function format_size($value, $decimals, $unit='?') {
 			if ($value == '-')
 				return 'unknown';
@@ -1434,7 +1486,7 @@
 			$unit = strtoupper($unit);
 
 			switch ($unit) {
-				case 'T': return number_format($value / (float)1099511627776, $decimals).'T';
+				case 'T': return number_format($value / (float)1099511627776, $decimals +2).'T';
 				case 'G': return number_format($value / (float)(1 << 30), $decimals).'G';
 				case 'M': return number_format($value / (float)(1 << 20), $decimals).'M';
 				case 'K': return number_format($value / (float)(1 << 10), $decimals).'K';
@@ -1585,7 +1637,7 @@
 		}
 
 		function get_domain_by_name($name) {
-			$tmp = libvirt_domain_lookup_by_name($this->conn, $name);
+			$tmp = @libvirt_domain_lookup_by_name($this->conn, $name);
 			return ($tmp) ? $tmp : $this->_set_last_error();
 		}
 
@@ -1666,8 +1718,8 @@
 			else {
 				$doms = libvirt_list_domains($this->conn);
 				foreach ($doms as $dom) {
-					$tmp = $this->domain_get_name($dom);
-					$ret[$tmp] = libvirt_domain_get_info($dom);
+					$tmp = $this->get_domain_object($dom);
+					$ret[$dom] = libvirt_domain_get_info($tmp);
 				}
 			}
 
@@ -1743,6 +1795,11 @@
 			return ($tmp) ? $tmp : $this->_set_last_error();
 		}
 
+		function domain_get_all_domain_stats() {
+			$tmp = libvirt_connect_get_all_domain_stats($this->conn);
+			return ($tmp) ? $tmp : $this->_set_last_error();
+		}
+
 		function domain_start($dom) {
 			$dom=$this->get_domain_object($dom);
 			if ($dom) {
@@ -1757,7 +1814,7 @@
 		}
 
 		function domain_define($xml, $autostart=false) {
-			if (strpos($xml,'<qemu:commandline>')) {
+			if (strpos($xml,'<qemu:commandline>') || strpos($xml,'<qemu:override>')) {
 				$tmp = explode("\n", $xml);
 				for ($i = 0; $i < sizeof($tmp); $i++)
 					if (strpos('.'.$tmp[$i], "<domain type='kvm'") || strpos('.'.$tmp[$i], '<domain type="kvm"'))
@@ -2347,6 +2404,7 @@
 				foreach ($objNodes as $objNode) {
 					$dom  = $xpath->query('source/address/@domain', $objNode)->Item(0)->nodeValue;
 					$bus  = $xpath->query('source/address/@bus', $objNode)->Item(0)->nodeValue;
+					$rotation  = $xpath->query('target/address/@rotation_rate', $objNode)->Item(0)->nodeValue;
 					$slot = $xpath->query('source/address/@slot', $objNode)->Item(0)->nodeValue;
 					$func = $xpath->query('source/address/@function', $objNode)->Item(0)->nodeValue;
 					$rom = $xpath->query('rom/@file', $objNode);
@@ -2370,6 +2428,7 @@
 						'product' => $tmp2['product_name'],
 						'product_id' => $tmp2['product_id'],
 						'boot' => $boot,
+						'rotation' => $rotation,
 						'rom' => $rom,
 						'guest' => $guest
 					];

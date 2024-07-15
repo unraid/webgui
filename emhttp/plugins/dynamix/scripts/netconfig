@@ -12,6 +12,12 @@
  */
 ?>
 <?
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/Wrappers.php";
+
+// exit when missing parameters
+if ($argc == 1) exit;
+
 $set = $ifname = $argv[1];
 $run = $set != 'none';
 $ini = parse_ini_file('/var/local/emhttp/network.ini',true); ksort($ini,SORT_NATURAL);
@@ -25,7 +31,7 @@ function update_wireguard($ifname) {
     $vtun = basename($wg,'.conf');
     // interface has changed?
     if (exec("grep -Pom1 ' dev $nic ' $wg")=='') {
-      exec("logger -t netconfig -- \"updated wireguard $vtun configuration\"");
+      my_logger("updated wireguard $vtun configuration", 'netconfig');
       exec("sed -ri 's/ dev (br0|bond0|eth0) / dev $nic /' $wg");
     }
     // restart active wireguard tunnels

@@ -24,165 +24,228 @@ $spinner = "<tr><td colspan='".($total+2)."'><div class='spinner'></div></td></t
 $cpuset = implode(';',$cpus);
 
 function create() {
-  // create the table header. Make multiple rows when CPU cores are many ;)
-  global $total,$cpus;
-  $loop = floor(($total-1)/32)+1;
-  $text = [];
-  for ($c = 0; $c < $loop; $c++) {
-    $max = ($c==$loop-1 ? ($total%32?:32) : 32);
-    for ($n = 0; $n < $max; $n++) {
-      [$cpu1, $cpu2] = my_preg_split('/[,-]/',$cpus[$c*32+$n]);
-      if (empty($text[$n])) $text[$n] = '';
-      $text[$n] .= "$cpu1<br>";
-      if ($cpu2) $text[$n] .= "$cpu2<br>";
-    }
-  }
-  $label = implode('<br>',array_fill(0,$loop,'CPU:'.($cpu2 ? '<br>HT:':'')));
-  echo "<th>$label</th>".implode(array_map(function($t){return "<th>$t</th>";},$text));
+	// create the table header. Make multiple rows when CPU cores are many ;)
+	global $total, $cpus;
+	$loop = floor(($total-1)/32) + 1;
+	$text = [];
+	for ($c = 0; $c < $loop; $c++) {
+		$max = ($c == $loop-1 ? ($total % 32 ?: 32) : 32);
+		for ($n = 0; $n < $max; $n++) {
+			[$cpu1, $cpu2] = my_preg_split('/[,-]/', $cpus[$c * 32 + $n]);
+			if (empty($text[$n])) $text[$n] = '';
+			$text[$n] .= "$cpu1<br />";
+			if ($cpu2) $text[$n] .= "$cpu2<br />";
+		}
+	}
+	$label = implode('<br />', array_fill(0, $loop, 'CPU:' . ($cpu2 ? '<br />CPU:' : '')));
+	echo "<th>$label</th>" . implode(array_map(function($t) {
+		return "<th>$t</th>";
+	}, $text));
 }
 ?>
+
 <script>
 String.prototype.strip = function(){return this.replace(/ |\(|\)|\[|\]/g,'');}
 String.prototype.encode = function(){return this.replace(/\./g,'%2e');}
 
 function apply(form) {
-  // disable buttons
-  $(form).find('input[value="_(Apply)_"]').prop('disabled',true);
-  $(form).find('input[value="_(Reset)_"]').val("_(Done)_").prop('onclick',null).off('click').click(function(){done();});
-  $('input[value="_(Done)_"]').prop('disabled',true);
-  var wait = 0;
-  var id = $(form).prop('name');
-  var args = {};
-  args['id'] = id;
-  args['names'] = form.names.value.encode();
-  // get the 'checked' cpus
-  $(form).find('input[type=checkbox]').each(function(){
-    if ($(this).prop('checked')) args[$(this).prop('name').encode()] = 'on';
-  });
-  // show the instant wait message
-  $('#wait-'+id).show();
-  // step 1: prepare the update and report back the changes
-  $.post('/webGui/include/UpdateOne.php',args,function(reply){
-    if (reply.error) {
-      swal({type:'error',title:"_(Assignment error)_",text:reply.error,html:true,confirmButtonText:"_(Ok)_"},function(){
-        $('#wait-'+id).hide();
-        $(form).find('input[value="_(Done)_"]').val("_(Reset)_").prop('disabled',false).prop('onclick',null).off('click').click(function(){reset($('form[name="'+id+'"]'));});
-      });
-    } else if (reply.success) {
-      var data = reply.success.split(';');
-      wait = data.length;
-      for (var i=0; i < data.length; i++) {
-        var name = data[i];
-        $('#'+id+'-'+name.strip()).show('slow');
-        // step 2: apply the changes by updating the vm or container
-        $.post('/webGui/include/UpdateTwo.php',{id:id,name:encodeURIComponent(name)},function(reply){
-          if (reply.error) {
-            // report error and reload table
-            swal({type:'error',title:"_(Execution error)_",text:reply.error,html:true,confirmButtonText:"_(Ok)_"},function(){
-              $('#wait-'+id).hide();
-              $('input[value="_(Done)_"]').prop('disabled',false);
-              reset($('form[name="'+id+'"]'));
-            });
-          } else {
-            $('#'+id+'-'+reply.success.strip()).hide('slow');
-            // cleanup when all is done
-            if (!--wait) {
-              setTimeout(function(){$('#wait-'+id).hide();},500);
-              $('input[value="_(Done)_"]').prop('disabled',false);
-              // isolated cpus, need reboot notice?
-              if (id == 'is') notice();
-            }
-          }
-        });
-      }
-    } else {
-      $('#wait-'+id).hide();
-      $('input[value="_(Done)_"]').prop('disabled',false);
-      if (id == 'is') notice();
-    }
-  });
-}
-function vm() {
-  // fetch the current vm assignments
-  $.post('/webGui/include/CPUset.php',{id:'vm',cpus:'<?=$cpuset?>'},function(d){
-    var data = d.split('\0');
-    $('#table-vm').html(data[0]);
-    $('#names-vm').val(data[1]);
-    buttons(document.vm);
-  });
-}
-function thread2containers(n) {
-  const selector = $('form[name=ct]').find(`[name$=":${n}"]`);
-  const checkboxes = selector.length;
-  const checked = selector.filter(':checked').length;
-  selector.prop('checked', (checkboxes - checked > checked ? true : false)).change();
-}
-function ct() {
-  // fetch the current container assignments
-  $.post('/webGui/include/CPUset.php',{id:'ct',cpus:'<?=$cpuset?>'},function(d){
-    var data = d.split('\0');
-    $('#table-ct').html(data[0]);
-    $('#names-ct').val(data[1]);
-    buttons(document.ct);
-    // inject thread to containers toggles
-    if($('a[onclick^="thread2containers"]').length === 0) {
-      $('form[name=ct]').find('thead tr th:gt(1)').each((i, elem) => {
-        elem.innerHTML = elem.innerHTML.replace(/(\d+)/g, '<a href="#" onclick="thread2containers(this.innerText);return false;" title="_(Toggle thread to containers)_">$1</a>');
-      });
-    }
-  });
-}
-function is() {
-  // fetch the current isolcpu assignments
-  $.post('/webGui/include/CPUset.php',{id:'is',cpus:'<?=$cpuset?>'},function(d){
-    $('#table-is').html(d);
-    buttons(document.is);
-<?if ($safemode):?>
-    $('#table-is').find('input[type=checkbox]').prop('disabled',true);
-<?endif;?>
-  });
-}
-function notice() {
-  // notice to reboot system after changes
-  var message = "_(CPU Isolation: A reboot is required to apply changes)_";
+	/* disable buttons */
+	$(form).find('input[value="_(Apply)_"]').prop('disabled', true);
+	$(form).find('input[value="_(Reset)_"]').val("_(Done)_").prop('onclick', null).off('click').click(function() {
+		done();
+	});
+	$('input[value="_(Done)_"]').prop('disabled', true);
+	var id = $(form).prop('name');
+	var args = {
+		'id': id,
+		'names': form.names.value.encode(),
+		'cpus': {}
+	};
 
-  $.post('/webGui/include/CPUset.php',{id:'cmd'},function(d){
-    if (d==1) addRebootNotice(message); else removeRebootNotice(message);
-  });
+	/* get the 'checked' cpus */
+	$(form).find('input[type=checkbox]').each(function() {
+		if ($(this).prop('checked')) {
+			args['cpus'][$(this).prop('name').encode()] = 'on';
+		}
+	});
+
+	/* show the instant wait message */
+	$('#wait-' + id).show();
+
+	/* step 1: prepare the update and report back the changes */
+	$.post('/webGui/include/UpdateOne.php', {
+		data: JSON.stringify(args)
+	}, function(reply) {
+		if (reply.error) {
+			swal({
+				type: 'error',
+				title: "_(Assignment error)_",
+				text: reply.error,
+				html: true,
+				confirmButtonText: "_(Ok)_"
+			}, function() {
+				$('#wait-' + id).hide();
+				$(form).find('input[value="_(Done)_"]').val("_(Reset)_").prop('disabled', false).prop('onclick', null).off('click').click(function() {
+					reset($('form[name="' + id + '"]'));
+				});
+			});
+		} else if (reply.success) {
+			var data = reply.success.split(';');
+			wait = data.length;
+			for (var i = 0; i < data.length; i++) {
+				var name = data[i];
+				$('#' + id + '-' + name.strip()).show('slow');
+
+				/* step 2: apply the changes by updating the vm or container */
+				$.post('/webGui/include/UpdateTwo.php', {
+					id: id,
+					name: encodeURIComponent(name)
+				}, function(reply) {
+					if (reply.error) {
+						/* report error and reload table */
+						swal({
+							type: 'error',
+							title: "_(Execution error)_",
+							text: reply.error,
+							html: true,
+							confirmButtonText: "_(Ok)_"
+						}, function() {
+							$('#wait-' + id).hide();
+							$('input[value="_(Done)_"]').prop('disabled', false);
+							reset($('form[name="' + id + '"]'));
+						});
+					} else {
+						$('#' + id + '-' + reply.success.strip()).hide('slow');
+						/* cleanup when all is done */
+						if (!--wait) {
+							setTimeout(function() {
+								$('#wait-' + id).hide();
+							}, 500);
+							$('input[value="_(Done)_"]').prop('disabled', false);
+							/* isolated cpus, need reboot notice? */
+							if (id == 'is') notice();
+						}
+					}
+				});
+			}
+		} else {
+			$('#wait-' + id).hide();
+			$('input[value="_(Done)_"]').prop('disabled', false);
+			if (id == 'is') notice();
+		}
+	});
 }
+
+/* Function to fetch current VM assignments and update the table */
+function vm() {
+	$.post('/webGui/include/CPUset.php', { id: 'vm', cpus: '<?=$cpuset?>' }, function(d) {
+		var data = d.split('\0');
+		$('#table-vm').html(data[0]);
+		$('#names-vm').val(data[1]);
+		buttons(document.vm);
+	});
+}
+
+/* Function to toggle thread assignment for containers */
+function thread2containers(n) {
+	const selector = $('form[name=ct]').find(`[name$=":${n}"]`);
+	const checkboxes = selector.length;
+	const checked = selector.filter(':checked').length;
+	selector.prop('checked', (checkboxes - checked > checked ? true : false)).change();
+}
+
+/* Function to fetch current container assignments and update the table */
+function ct() {
+	$.post('/webGui/include/CPUset.php', { id: 'ct', cpus: '<?=$cpuset?>' }, function(d) {
+		var data = d.split('\0');
+		$('#table-ct').html(data[0]);
+		$('#names-ct').val(data[1]);
+		buttons(document.ct);
+
+		/* Inject thread to containers toggles */
+		if ($('a[onclick^="thread2containers"]').length === 0) {
+			$('form[name=ct]').find('thead tr th:gt(1)').each((i, elem) => {
+				elem.innerHTML = elem.innerHTML.replace(/(\d+)/g, '<a href="#" onclick="thread2containers(this.innerText);return false;" title="_(Toggle thread to containers)_">$1</a>');
+			});
+		}
+	});
+}
+
+/* Function to fetch current isolated CPU assignments and update the table */
+function is() {
+	$.post('/webGui/include/CPUset.php', { id: 'is', cpus: '<?=$cpuset?>' }, function(d) {
+		$('#table-is').html(d);
+		buttons(document.is);
+<?if ($safemode):?>
+		$('#table-is').find('input[type=checkbox]').prop('disabled', true);
+<?endif;?>
+	});
+}
+
+/* Function to display a notice to reboot the system after changes */
+function notice() {
+	var message = "_(CPU Isolation: A reboot is required to apply changes)_";
+
+	$.post('/webGui/include/CPUset.php', { id: 'cmd' }, function(d) {
+		if (d == 1) addRebootNotice(message); else removeRebootNotice(message);
+	});
+}
+
+/* Function to reset form changes without a complete page refresh */
 function reset(form) {
-  // undo changes without a complete refresh of the page
-  $(form).find('input[value="_(Apply)_"]').prop('disabled',true);
-  $(form).find('input[value="_(Reset)_"]').val("_(Done)_").prop('onclick',null).off('click').click(function(){done();});
-  switch ($(form).prop('name')) {
-    case 'vm': $('#table-vm').html("<?=$spinner?>"); $('div.spinner').html(unraid_logo); vm(); break;
-    case 'ct': $('#table-ct').html("<?=$spinner?>"); $('div.spinner').html(unraid_logo); ct(); break;
-    case 'is': $('#table-is').html("<?=$spinner?>"); $('div.spinner').html(unraid_logo); is(); break;
-  }
+	$(form).find('input[value="_(Apply)_"]').prop('disabled', true);
+	$(form).find('input[value="_(Reset)_"]').val("_(Done)_").prop('onclick', null).off('click').click(function() { done(); });
+
+	switch ($(form).prop('name')) {
+		case 'vm':
+			$('#table-vm').html("<?=$spinner?>");
+			$('div.spinner').html(unraid_logo);
+			vm();
+			break;
+		case 'ct':
+			$('#table-ct').html("<?=$spinner?>");
+			$('div.spinner').html(unraid_logo);
+			ct();
+			break;
+		case 'is':
+			$('#table-is').html("<?=$spinner?>");
+			$('div.spinner').html(unraid_logo);
+			is();
+			break;
+	}
 }
+
+/* Function to handle checkbox interactions and enable/disable form buttons */
 function buttons(form) {
-  $(form).find('input[type=checkbox]').each(function(){$(this).on('change',function(){
-    var total = $(form).find('input[type=checkbox]').length;
-    var checked = 'input[name^="'+$(this).prop('name').split(':')[0]+':'+'"]:checked';
-    var cores = $(form).find(checked).length;
-    // vms must have at least one core selected
-    if ($(form).prop('name')=='vm') $(form).find(checked).prop('disabled',cores<2);
-    // isolation may not have all cores selected
-    if ($(form).prop('name')=='is' && $(this).prop('checked')) $(this).prop('checked',cores<total);
-    // we need the Apply and Done buttons react on checkbox changes
-    $(form).find('input[value="_(Apply)_"]').prop('disabled',false);
-    $(form).find('input[value="_(Done)_"]').val("_(Reset)_").prop('onclick',null).off('click').click(function(){reset(form);});
-  });});
+	$(form).find('input[type=checkbox]').each(function() {
+		$(this).on('change', function() {
+			var total = $(form).find('input[type=checkbox]').length;
+			var checked = 'input[name^="' + $(this).prop('name').split(':')[0] + ':' + '"]:checked';
+			var cores = $(form).find(checked).length;
+
+			/* Ensure VMs have at least one core selected */
+			if ($(form).prop('name') == 'vm') $(form).find(checked).prop('disabled', cores < 2);
+
+			/* Ensure isolation does not have all cores selected */
+			if ($(form).prop('name') == 'is' && $(this).prop('checked')) $(this).prop('checked', cores < total);
+
+			/* Enable Apply and Done buttons when changes are made */
+			$(form).find('input[value="_(Apply)_"]').prop('disabled', false);
+			$(form).find('input[value="_(Done)_"]').val("_(Reset)_").prop('onclick', null).off('click').click(function() { reset(form); });
+		});
+	});
 }
-$(function(){
+
+/* Initialize the functions on document ready */
+$(function() {
 <?if ($libvirtd):?>
-  vm();
+	vm();
 <?endif;?>
 <?if ($dockerd):?>
-  ct();
+	ct();
 <?endif;?>
-  is();
-  notice();
+	is();
+	notice();
 });
 </script>
 <?if ($libvirtd):?>

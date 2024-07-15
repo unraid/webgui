@@ -39,13 +39,13 @@ foreach ($files as $file) {
   $c = 0;
   foreach ($fields as $field) {
     if ($c==5) break;
-    $text = $field ? explode('=',$field,2)[1] : "-";
+    $text = $field ? (explode('=',$field,2)[1]??"") : "-";
     $tag = ($c<4) ? "" : " data='".str_replace(['alert','warning','normal'],['0','1','2'],$text)."'";
     echo (!$c++) ? "<tr>".str_replace('*',$text,$td_).date($dynamix['notify']['date'].' '.$dynamix['notify']['time'],$text)."$_td" : "<td$tag>"._($text)."</td>";
   }
   echo "<td><a href='#' onclick='$(this).hide();$.post(\"/webGui/include/DeleteLogFile.php\",{log:\"$archive\"},function(){archiveList();});return false' title=\""._('Delete notification')."\"><i class='fa fa-trash-o'></i></a></td></tr>";
   if ($extra) {
-    $text = explode('=',$field,2)[1];
+    $text = explode('=',$field,2)[1]??"";
     echo "<tr class='tablesorter-childRow row$row'><td colspan='4'>$text</td><td></td></tr><tr class='tablesorter-childRow row$row'><td colspan='5'></td></tr>";
     $row++;
   }

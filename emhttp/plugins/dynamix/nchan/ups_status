@@ -68,44 +68,46 @@ while (true) {
     $locale_init = _var($display,'locale');
     update_translation($locale_init);
   }
-  unset($status,$rows,$power,$load,$freq,$output,$volt);
-  $status = array_fill(0,7,"<span>-</span>");
+  unset($echo,$rows,$power,$load,$freq,$output,$volt);
+  $defaultCell = "<span>-</span>";
+  $echo = array_fill(0,7,$defaultCell);
   if (file_exists("/var/run/apcupsd.pid")) {
     // get battery-level and runtime settings
     $cfg = parse_plugin_cfg('dynamix.apcupsd');
     $level = $cfg['BATTERYLEVEL'] ?: 10;
     $runtime = $cfg['MINUTES'] ?: 5;
+    $overrideUpsCapacity = (int) htmlspecialchars($cfg['OVERRIDE_UPS_CAPACITY'] ?: 0);
     exec("/sbin/apcaccess -u 2>/dev/null", $rows);
     foreach ($rows as $row) {
       [$key, $val] = array_map('trim', explode(':', $row, 2));
       switch ($key) {
       case 'MODEL':
-        $status[0] = $val;
+        $echo[0] = $val;
         break;
       case 'STATUS':
         $text = strtr($val, $state);
-        $status[1] = $val ? (strpos($val,'ONLINE')!==false ? "<span $green>$text</span>" : "<span $red>$text</span>") : "<span $orange>"._('Refreshing')."...</span>";
+        $echo[1] = $val ? (strpos($val,'ONLINE')!==false ? "<span $green>$text</span>" : "<span $red>$text</span>") : "<span $orange>"._('Refreshing')."...</span>";
         break;
       case 'BCHARGE':
         $charge = round($val);
-        $status[2] = $charge>$level ? "<span $green>$charge %</span>" : "<span $red>$charge %</span>";
+        $echo[2] = $charge>$level ? "<span $green>$charge %</span>" : "<span $red>$charge %</span>";
         break;
       case 'TIMELEFT':
         $time = round($val);
         $unit = _('minutes');
-        $status[3] = $time>$runtime ? "<span $green>$time $unit</span>" : "<span $red>$time $unit</span>";
+        $echo[3] = $time>$runtime ? "<span $green>$time $unit</span>" : "<span $red>$time $unit</span>";
         break;
       case 'NOMPOWER':
         $power = $val;
-        $status[4] = $power>0 ? "<span $green>$power W</span>" : "<span $red>$power W</span>";
+        $echo[4] = $power>0 ? "<span $green>$power W</span>" : "<span $red>$power W</span>";
         break;
       case 'LOADPCT':
         $load = $val;
-        $status[5] = round($load)." %";
+        $echo[5] = round($load)." %";
         break;
       case 'OUTPUTV':
         $output = round($val);
-        $status[6] = "$output V";
+        $echo[6] = "$output V";
         break;
       case 'NOMINV':
         $volt = $val;
@@ -117,15 +119,22 @@ while (true) {
         break;
       }
     }
-    if (isset($power) && isset($load)) $status[5] = ($load<90 ? "<span $green>" : "<span $red>").round($power*$load/100)." W (".$status[5].")</span>";
-    elseif (isset($load)) $status[5] = ($load<90 ? "<span>" : "<span $red>").$status[5]."</span>";
-    $status[6] = isset($output) ? ((!$volt || ($minv<$output && $output<$maxv) ? "<span $green>" : "<span $red>").$status[6].(isset($freq) ? " ~ $freq Hz" : "")."</span>") : $status[6];
+
+    // If the override is defined, override the power value, using the same implementation as above.
+    // This is a better implementation, as it allows the existing Unraid code to work with the override.
+    if ($overrideUpsCapacity > 0) {
+      $power = $overrideUpsCapacity;
+      $echo[4] = $power>0 ? "<span $green>$power W</span>" : "<span $red>$power W</span>";
+    }
+
+    if (isset($power) && isset($load)) $echo[5] = ($load<90 ? "<span $green>" : "<span $red>").round($power*$load/100)." W (".$echo[5].")</span>";
+    elseif (isset($load)) $echo[5] = ($load<90 ? "<span>" : "<span $red>").$echo[5]."</span>";
+    $echo[6] = isset($output) ? ((empty($volt) || ($minv<$output && $output<$maxv) ? "<span $green>" : "<span $red>").$echo[6].(isset($freq) ? " ~ $freq Hz" : "")."</span>") : $echo[6];
   }
-  $echo = implode(';', $status);
+  $echo = json_encode($echo);
   $md5_new = md5($echo,true);
   if ($md5_new !== $md5_old) {
-    publish('apcups', $echo);
-    $md5_old = $md5_new;
+    $md5_old = publish('apcups',$echo)!==false ? $md5_new : -1;
   }
   sleep(3);
 }

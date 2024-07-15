@@ -125,7 +125,7 @@ _(Libvirt storage location)_:
 
 <?endif;?>
 _(Default VM storage path)_:
-: <input type="text" id="domaindir" name="DOMAINDIR" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="<?=is_dir('/mnt/user')?'/mnt/user':'/mnt'?>" value="<?=htmlspecialchars($domain_cfg['DOMAINDIR'])?>" placeholder="_(Click to Select)_" pattern="^[^\\]*/$">
+: <input type="text" id="domaindir" name="DOMAINDIR" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="/mnt" value="<?=htmlspecialchars($domain_cfg['DOMAINDIR'])?>" placeholder="_(Click to Select)_" pattern="^[^\\]*/$">
   <?if (!$started):?><span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
   <?elseif (!is_dir($domain_cfg['DOMAINDIR'])):?><span><i class="fa fa-warning icon warning"></i> _(Path does not exist)_</span><?endif;?>
 
@@ -151,12 +151,8 @@ _(Default Windows VirtIO driver ISO)_ (_(optional)_):
 _(Default network source)_:
 : <select id="network" name="BRNAME">
   <?foreach (array_keys($arrValidNetworks) as $key) {
-
     echo mk_option("", $key, "- "._($key)." -", "disabled");
-
-    foreach ($arrValidNetworks[$key] as $strNetwork) {
-        echo mk_option($domain_cfg['BRNAME'], $strNetwork, $strNetwork);
-    }
+    foreach ($arrValidNetworks[$key] as $strNetwork) echo mk_option($domain_cfg['BRNAME'], $strNetwork, $strNetwork);
   }?>
   </select>
 
@@ -187,6 +183,27 @@ _(Console Options)_:
 
 :vms_console_help:
 
+_(Show RDP menu option)_:
+: <select id="vmsrdpopt" name="RDPOPT">
+  <?=mk_option($domain_cfg['RDPOPT'], 'no', _('Dont show RDP option'))?>
+  <?=mk_option($domain_cfg['RDPOPT'], 'yes', _('Show RDP option'))?>
+  </select>
+
+:vms_rdpopt_help:
+
+_(Show VM Usage)_:
+: <select id="vmusage" name="USAGE">
+  <?=mk_option($domain_cfg['USAGE'], 'N', _('Disabled'))?>
+  <?=mk_option($domain_cfg['USAGE'], 'Y', _('Enabled'))?>
+  </select>
+
+:vms_usage_help:
+
+_(VM Usage refresh timer(seconds))_:
+: <input type="number" id="vm_usage_timer" name="USAGETIMER" value="<?=htmlspecialchars($domain_cfg['USAGETIMER'] ?? 3) ?>" class="narrow">
+
+:vms_usage_timer_help:
+
 _(PCIe ACS override)_:
 : <select id="pcie_acs_override"<?=$safemode?' disabled':''?>>
   <?= mk_option($pcie_acs_override, '', _('Disabled'))?>
@@ -211,6 +228,8 @@ _(VFIO allow unsafe interrupts)_:
 <?else:?>
 &nbsp;
 <?endif;?>
+<?else:?>
+&nbsp;
 <?endif;?>
 : <input type="button" id="applyBtn" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
 </form>

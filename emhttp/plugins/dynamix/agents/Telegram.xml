@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+  <Agent>
+    <Name>Telegram</Name>
+    <Variables>
+      <Variable Help="[a href='https://telegram.me/botfather' target='_blank'][u]BotFather[/u][/a] is the one bot to rule them all.[br][br]
+        1. Make a bot using BotFather[br]
+        2. Paste the bot token in this field[br]
+        3. Message the bot via Telegram (either via a direct message or a message via a group)[br]
+        4. Test the bot[br][br]
+        * To reset the notifications receiving user or group, run [i]rm /boot/config/plugins/dynamix/telegram/chatid[/i] in the terminal and re-run steps 3. and 4.[/a]" Desc="Bot Access Token" Default="">BOT_TOKEN</Variable>
+      <Variable Help="Specify the fields which are included in the title of the notification." Desc="Notification Title" Default="$SUBJECT">TITLE</Variable>
+      <Variable Help="Specify the fields which are included in the message body of the notification." Desc="Notification Message" Default="$DESCRIPTION">MESSAGE</Variable>
+    </Variables>
+    <Script>
+      <![CDATA[
+      #!/bin/bash
+      ############
+      {0}
+      ############
+      LEGACY=/boot/config/telegram
+      TELEGRAM=/boot/config/plugins/dynamix/telegram
+      STORED_TOKEN=$(< $TELEGRAM/token) || "";
+
+      # move legacy folder (if existing)
+      [[ -d $LEGACY && ! -d $TELEGRAM ]] && mv $LEGACY $TELEGRAM
+
+      if [[ ! -f $TELEGRAM/token || "$STORED_TOKEN" != "$BOT_TOKEN" ]]; then
+        mkdir -p $TELEGRAM;
+        echo $BOT_TOKEN > $TELEGRAM/token;
+      fi
+
+      if [[ ! -f $TELEGRAM/chatid || "$STORED_TOKEN" != "$BOT_TOKEN" ]]; then
+        mkdir -p $TELEGRAM;
+        LASTCHATID=$(curl -s https://api.telegram.org/bot$BOT_TOKEN/getUpdates | jq ".result | last .message .chat .id");
+        [[ $LASTCHATID =~ ^-*[0-9]+$ ]] && echo $LASTCHATID > $TELEGRAM/chatid || exit 1
+      fi
+
+      CHATID=$(< $TELEGRAM/chatid);
+      MESSAGE=$(echo -e "$(hostname): $TITLE\n$MESSAGE");
+      curl -G -s "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" --data-urlencode "chat_id=$CHATID" --data-urlencode "text=$MESSAGE" 2>&1;
+      ]]>
+    </Script>
+  </Agent>

@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2024, Lime Technology
+ * Copyright 2012-2024, Bergware International.
  * Copyright 2014-2021, Guilherme Jardim, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
@@ -16,6 +16,7 @@
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Wrappers.php";
 require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
+// this command will set the $notify array
 extract(parse_plugin_cfg('dynamix', true));
 
 // Multi-language support
@@ -43,7 +44,7 @@ if (!isset($check)) {
   $DockerTemplates->getAllInfo(true);
   echo " Done.";
 } else {
-  $notify = "$docroot/webGui/scripts/notify";
+  $script = "$docroot/webGui/scripts/notify";
   $var    = (array)@parse_ini_file("/var/local/emhttp/var.ini");
   $server = strtoupper(_var($var,'NAME','tower'));
   $output = _var($notify,'docker_notify');
@@ -59,7 +60,7 @@ if (!isset($check)) {
         $event = str_replace("&apos;","'",_("Docker")." - $name [$new]");
         $subject = str_replace("&apos;","'",sprintf(_("Notice [%s] - Version update %s"),$server,$new));
         $description = str_replace("&apos;","'",sprintf(_("A new version of %s is available"),$name));
-        exec("$notify -e ".escapeshellarg($event)." -s ".escapeshellarg($subject)." -d ".escapeshellarg($description)." -i ".escapeshellarg("normal $output")." -l '/Docker' -x");
+        exec("$script -e ".escapeshellarg($event)." -s ".escapeshellarg($subject)." -d ".escapeshellarg($description)." -i ".escapeshellarg("normal $output")." -l '/Docker' -x");
       }
     }
   }

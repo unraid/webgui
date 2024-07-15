@@ -51,7 +51,7 @@ function my_temp($value) {
   global $display;
   $unit = _var($display,'unit','C');
   $number = _var($display,'number','.,');
-  return is_numeric($value) ? (($unit=='F' ? round(9/5*$value+32) : str_replace('.', $number[0], $value))." $unit") : $value;
+  return is_numeric($value) ? (($unit=='F' ? fahrenheit($value) : str_replace('.', $number[0], $value)).'&#8201;&#176;'.$unit) : $value;
 }
 function my_disk($name, $raw=false) {
   global $display;
@@ -63,6 +63,9 @@ function my_disks($disk) {
 function my_hyperlink($text, $link) {
   return str_replace(['[',']'],["<a href=\"$link\">","</a>"],$text);
 }
+function main_only($disk) {
+  return _var($disk,'type')=='Parity' || _var($disk,'type')=='Data';
+}
 function parity_only($disk) {
   return _var($disk,'type')=='Parity';
 }
@@ -71,6 +74,9 @@ function data_only($disk) {
 }
 function cache_only($disk) {
   return _var($disk,'type')=='Cache';
+}
+function main_filter($disks) {
+  return array_filter($disks,'main_only');
 }
 function parity_filter($disks) {
   return array_filter($disks,'parity_only');
@@ -206,15 +212,53 @@ function tail($file, $rows=1) {
   }
   return implode($echo);
 }
+
+/* Get the last parity check from the parity history. */
 function last_parity_log() {
-  $log = '/boot/config/parity-checks.log';
-  [$date,$duration,$speed,$status,$error,$action,$size] = file_exists($log) ? my_explode('|',tail($log),7) : array_fill(0,7,0);
-  if ($date) {
-    [$y,$m,$d,$t] = my_preg_split('/ +/',$date,4);
-    $date = strtotime("$d-$m-$y $t");
-  }
-  return [$date,$duration,$speed,$status,$error,$action,$size];
+	$log = '/boot/config/parity-checks.log';
+
+	if (file_exists($log)) {
+		list($date, $duration, $speed, $status, $error, $action, $size) = my_explode('|', tail($log), 7);
+	} else {
+		list($date, $duration, $speed, $status, $error, $action, $size) = array_fill(0, 7, 0);
+	}
+
+	if ($date) {
+		list($y, $m, $d, $t) = my_preg_split('/ +/', $date, 4);
+		$date = strtotime("$d-$m-$y $t");
+	}
+
+	return [$date, $duration, $speed, $status, $error, $action, $size];
 }
+
+/* Get the last parity check from Unraid. */
+function last_parity_check() {
+	global $var;
+
+	/* Files for the latest parity check. */
+	$stamps	= '/var/tmp/stamps.ini';
+	$resync	= '/var/tmp/resync.ini';
+
+	/* Get the latest parity information from Unraid. */
+	$synced		= file_exists($stamps) ? explode(',',file_get_contents($stamps)) : [];
+	$sbSynced	= array_shift($synced) ?: _var($var,'sbSynced',0);
+	$idle		= [];
+	while (count($synced) > 1) {
+		$idle[] = array_pop($synced) - array_pop($synced);
+	}
+	$action		= _var($var, 'mdResyncAction');
+	$size		= _var($var, 'mdResyncSize', 0);
+	if (file_exists($resync)) {
+		list($action, $size) = my_explode(',', file_get_contents($resync));
+	}
+	$duration	= $var['sbSynced2']-$sbSynced-array_sum($idle);
+	$status		= _var($var,'sbSyncExit');
+	$speed		= $status==0 ? round($size*1024/$duration) : 0;
+	$error		= _var($var,'sbSyncErrs',0);
+
+	return [$duration, $speed, $status, $error, $action, $size];
+}
+
 function urlencode_path($path) {
   return str_replace("%2F", "/", urlencode($path));
 }
@@ -264,37 +308,49 @@ function my_preg_split($split, $text, $count=2) {
 function delete_file(...$file) {
   array_map('unlink',array_filter($file,'file_exists'));
 }
-function getnvmepowerstate($device) {
-  if (!exec("which nvme 2>/dev/null")) return; // temporary check
-  exec("nvme id-ctrl $device | grep -E 'ps |wctemp|cctemp'",$rows);
-  foreach ($rows as $row){
-    if (!$row) continue;
-    $split = explode(':',$row);
-    $check = str_replace(' ','',trim($split[0]));
-    switch ($check){
-    case "wctemp":
-      $return['wctemp'] = $split[1] - 273;
-      break;
-    case "cctemp":
-      $return['cctemp'] = $split[1] - 273;
-      break;
-    case "ps0":
-    case "ps1":
-    case "ps2":
-    case "ps3":
-    case "ps4":
-    case "ps5":
-      $power = explode(' ',$split[2]);
-      $return[$check] = $power[0];
-      break;
+function my_mkdir($dirname,$permissions = 0777,$recursive = false,$own = "nobody",$grp = "users") {
+  if (is_dir($dirname)) return(false);
+  $parent = $dirname;
+  while (!is_dir($parent)){
+    if (!$recursive) return(false);
+    $pathinfo2 = pathinfo($parent);
+    $parent = $pathinfo2["dirname"];
+  }
+  if (strpos($dirname,'/mnt/user/')===0) {
+    $realdisk = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($parent)." 2>/dev/null"));
+    if (!empty($realdisk)) {
+      $dirname = str_replace('/mnt/user/', "/mnt/$realdisk/", $dirname);
+      $parent = str_replace('/mnt/user/', "/mnt/$realdisk/", $parent);
     }
   }
-  $powerstate = shell_exec("nvme get-feature $device -f 02");
-  $powersplit = explode(':',$powerstate);
-  $powerstate = substr(trim($powersplit[2]),-1);
-  # get-feature:0x02 (Power Management), Current value:0x00000003)
-  $return['powerstate'] = $powerstate;
-  $return['powerstatevalue'] = $return['ps'.$return['powerstate']];
-  return $return;
+	$fstype = trim(shell_exec(" stat -f -c '%T' $parent"));
+  $rtncode = false;
+  switch ($fstype) {
+    case "zfs":
+      $zfsdataset = trim(shell_exec("zfs list -H -o name  $parent")) ;
+      $zfsdataset .= str_replace($parent,"",$dirname);
+      if ($recursive) $rtncode=exec("zfs create -p \"$zfsdataset\"");else $rtncode=exec("zfs create \"$zfsdataset\"");
+      if (!$rtncode) mkdir($dirname, $permissions, $recursive); else chmod($zfsdataset,$permissions);
+      break;
+    case "btrfs":
+      if ($recursive) $rtncode=exec("btrfs subvolume create --parents \"$dirname\""); else $rtncode=exec("btrfs subvolume create \"$dirname\"");
+      if (!$rtncode) mkdir($dirname, $permissions, $recursive); else chmod($dirname,$permissions);
+      break;
+    default:
+      mkdir($dirname, $permissions, $recursive);
+      break;
+  }
+  chown($dirname, $own);
+  chgrp($dirname, $grp);
+  return($rtncode);
+}
+function get_realvolume($path) {
+  if (strpos($path,"/mnt/user/",0) === 0) 
+    $reallocation = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($path)." 2>/dev/null")); 
+  else {
+    $realexplode = explode("/",str_replace("/mnt/","",$path));
+    $reallocation = $realexplode[0];
+  }
+  return $reallocation;
 }
 ?>

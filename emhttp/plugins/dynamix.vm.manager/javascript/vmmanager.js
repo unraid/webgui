@@ -2,6 +2,10 @@ function displayconsole(url) {
   window.open(url, '_blank', 'scrollbars=yes,resizable=yes');
 }
 
+function displayWebUI(url) {
+  window.open(url, '_blank').focus();
+}
+
 function downloadFile(source) {
   var a = document.createElement('a');
   a.setAttribute('href',source);
@@ -62,10 +66,31 @@ function ajaxVMDispatchconsoleRV(params, spin){
     }
   },'json');
 }
-function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, console="web", preview=false){  
+function ajaxVMDispatchWebUI(params, spin){
+  if (spin) $('#vm-'+params['uuid']).parent().find('i').removeClass('fa-play fa-square fa-pause').addClass('fa-refresh fa-spin');
+  $.post("/plugins/dynamix.vm.manager/include/VMajax.php", params, function(data) {
+    if (data.error) {
+      swal({
+        title:_("Execution error"), html:true,
+        text:data.error, type:"error",
+        confirmButtonText:_('Ok')
+      },function(){
+        if (spin) setTimeout(spin+'()',500); else location=window.location.href;
+      });
+    } else {
+      if (spin) setTimeout(spin+'()',500); else location=window.location.href;
+      setTimeout('displayWebUI("'+data.vmrcurl+'")',500) ;
+    }
+  },'json');
+}
+function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, fstype="QEMU",consolein="web;no",usage=false,webui=""){  
   var opts = [];
   var path = location.pathname;
   var x = path.indexOf("?");
+  var consolesplit = consolein.split(";");
+  var console = consolesplit[0];
+  var rdpopt = consolesplit[1];
+  var rundivider = false;
   if (x!=-1) path = path.substring(0,x);
   if (vmrcurl !== "" && state == "running")  {
     if (console == "web" || console == "both") {
@@ -80,10 +105,26 @@ function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, c
         e.preventDefault();
         ajaxVMDispatchconsoleRV({action:"domain-consoleRV", uuid:uuid, vmrcurl:vmrcurl}, "loadlist") ;  
       }});
-    }
-  
-    opts.push({divider:true});
+    }  
+    rundivider = true;
   }
+  if (state == "running") {
+    if (webui != "") {
+      opts.push({text:_("Open WebUI") , icon:"fa-globe", action:function(e) {
+        e.preventDefault();
+        ajaxVMDispatchWebUI({action:"domain-openWebUI", uuid:uuid, vmrcurl:webui}, "loadlist") ;  
+      }});
+      rundivider = true;
+    }
+    if (rdpopt == "yes") {
+      opts.push({text:_("VM Remote Desktop Protocol(RDP)"), icon:"fa-desktop", action:function(e) {
+        e.preventDefault();
+        ajaxVMDispatchconsoleRV({action:"domain-consoleRDP", uuid:uuid, vmrcurl:vmrcurl}, "loadlist") ;  
+      }});
+      rundivider = true;
+    }
+  }
+  if (rundivider) opts.push({divider:true});
   context.settings({right:false,above:false});
   if (state == "running") {
     opts.push({text:_("Stop"), icon:"fa-stop", action:function(e) {
@@ -110,7 +151,7 @@ function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, c
    
     opts.push({text:_("Create Snapshot"), icon:"fa-clone", action:function(e) {
       e.preventDefault();
-      selectsnapshot(uuid , name, "--generate" , "create",false,state) ;
+      selectsnapshot(uuid , name, "--generate" , "create",false,state,fstype) ;
     }}); 
   } else if (state == "pmsuspended") {
     opts.push({text:_("Resume"), icon:"fa-play", action:function(e) {
@@ -165,7 +206,7 @@ function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, c
     opts.push({divider:true});
     opts.push({text:_("Create Snapshot"), icon:"fa-clone", action:function(e) {
       e.preventDefault();
-      selectsnapshot(uuid , name, "--generate" , "create",false,state) ;
+      selectsnapshot(uuid , name, "--generate" , "create",false,state,fstype) ;
     }});
     opts.push({text:_("Remove VM"), icon:"fa-minus", action:function(e) {
       e.preventDefault();
@@ -198,22 +239,22 @@ function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, c
       }});
     }
   }
-  context.attach('#vm-'+uuid, opts);
+  if (usage) context.attach('#vmusage-'+uuid, opts); else context.attach('#vm-'+uuid, opts);
 }
-function addVMSnapContext(name, uuid, template, state, snapshotname, preview=false){  
+function addVMSnapContext(name, uuid, template, state, snapshotname, method){  
   var opts = [];
   var path = location.pathname;
   var x = path.indexOf("?");
   if (x!=-1) path = path.substring(0,x);
 
   context.settings({right:false,above:false});
-  if (state == "running") {
+
 
     opts.push({text:_("Revert snapshot"), icon:"fa-fast-backward", action:function(e) {
       e.preventDefault();
-      selectsnapshot(uuid, name, snapshotname, "revert",true) ;
+      selectsnapshot(uuid, name, snapshotname, "revert",true,state,method) ;
      }});
-
+  if (method == "QEMU") {
     opts.push({text:_("Block Commit"), icon:"fa-hdd-o", action:function(e) {
       $('#vm-'+uuid).find('i').removeClass('fa-play fa-square fa-pause').addClass('fa-refresh fa-spin');
       e.preventDefault();
@@ -225,18 +266,8 @@ function addVMSnapContext(name, uuid, template, state, snapshotname, preview=fal
       e.preventDefault();
       selectblock(uuid, name, snapshotname, "pull",true) ;
     }});
-    if (preview) {
-    opts.push({text:_("Block Copy"), icon:"fa-stop", action:function(e) {
-      e.preventDefault();
-      ajaxVMDispatch({action:"domain-stop", uuid:uuid}, "loadlist");
-    }}); }
-  } else {
-    opts.push({text:_("Revert snapshot"), icon:"fa-fast-backward", action:function(e) {
-      e.preventDefault();
-      $('#vm-'+uuid).find('i').removeClass('fa-play fa-square fa-pause').addClass('fa-refresh fa-spin');
-      selectsnapshot(uuid, name, snapshotname, "revert",true) ;
-    }});
   }
+
   opts.push({text:_("Remove snapshot"), icon:"fa-trash", action:function(e) {
     e.preventDefault();
     $('#vm-'+uuid).find('i').removeClass('fa-play fa-square fa-pause').addClass('fa-refresh fa-spin');

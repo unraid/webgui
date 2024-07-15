@@ -42,8 +42,15 @@ SYSTEM="/sys/devices/system/cpu"
 # provides power savings on Intel processors while avoiding the ramp-up lag
 # present when using the powersave governor (which is the default if ondemand
 # is requested on these machines):
-if [[ $(cat $SYSTEM/cpu0/cpufreq/scaling_driver 2>/dev/null) == intel_pstate ]]; then
+if [[ $(cat $SYSTEM/cpu0/cpufreq/scaling_driver 2>/dev/null) == intel_pstate  ||
+      $(cat $SYSTEM/cpu0/cpufreq/scaling_driver 2>/dev/null) == amd-pstate-epp ]]; then
   SCALING_GOVERNOR="performance"
+fi
+
+# If the user has configured a power mode, take this choice
+if [[ -r /boot/config/plugins/dynamix/dynamix.cfg ]]; then
+  CUSTOM_GOVERNOR=$(grep -Pom1 '^powermode="\K[^"]+' /boot/config/plugins/dynamix/dynamix.cfg)
+  SCALING_GOVERNOR=${CUSTOM_GOVERNOR:-$SCALING_GOVERNOR}
 fi
 
 # To force a particular option without having to edit this file, uncomment the

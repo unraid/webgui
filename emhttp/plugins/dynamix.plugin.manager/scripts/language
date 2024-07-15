@@ -6,6 +6,10 @@
 // Program updates made by Bergware International (April 2020)
 // Program updates made by Bergware International (June 2022)
 
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/Wrappers.php";
+$logger = 'language-manager';
+
 $usage = <<<EOF
 Process language files.
 
@@ -146,12 +150,6 @@ function download($url, $name, &$error) {
     $error = "$plg failed to open";
     return false;
   }
-}
-
-// Deal with logging message.
-//
-function logger($message) {
-  exec("logger -t 'language-manager' -- \"$message\"");
 }
 
 // Interpret a language file
@@ -314,7 +312,7 @@ if ($method == 'install') {
   copy($xml_file, $lang_file);
   symlink($lang_file, $link_file);
   write("language: $lang language pack installed\n");
-  logger("$lang language pack installed");
+  my_logger("$lang language pack installed", $logger);
   // run hook scripts for post processing
   post_hooks();
   done(0);
@@ -396,7 +394,7 @@ if ($method == 'update') {
   copy($xml_file, $lang_file);
   symlink($lang_file, $link_file);
   write("language: $lang language pack updated\n");
-  logger("$lang language pack updated");
+  my_logger("$lang language pack updated", $logger);
   // run hook scripts for post processing
   post_hooks();
   done(0);
@@ -423,7 +421,7 @@ if ($method == 'remove') {
     done(1);
   }
   write("language: $lang language pack removed\n");
-  logger("$lang language pack removed");
+  my_logger("$lang language pack removed", $logger);
   // run hook scripts for post processing
   post_hooks();
   done(0);

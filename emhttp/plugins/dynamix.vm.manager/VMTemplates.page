@@ -20,16 +20,27 @@ Markdown="false"
 	$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 	require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 
+	$templateslocation = "/boot/config/plugins/dynamix.vm.manager/savedtemplates.json";
+
+	if (is_file($templateslocation)){
+		$arrAllTemplates["User-templates"] = "";
+		$ut = json_decode(file_get_contents($templateslocation),true) ;
+		if (is_array($ut)) ksort($ut,SORT_NATURAL);
+		$arrAllTemplates = array_merge($arrAllTemplates, $ut);
+	}
+
 	foreach($arrAllTemplates as $strName => $arrTemplate):
 	if (empty($arrTemplate)) {
 		// render header
 		echo '<div class="vmheader">'.$strName.'</div>';
 		continue;
 	}
+	if (strpos($strName,"User-") === false) $user = ""; else $user = ' class="user"'; 
 ?>
+
 <div class="vmtemplate">
 	<a href="/VMs/AddVM?template=<?=htmlspecialchars(urlencode($strName))?>">
-		<img src="/plugins/dynamix.vm.manager/templates/images/<?=htmlspecialchars($arrTemplate['icon'])?>" title="<?=htmlspecialchars($strName)?>">
+		<span name="<?=htmlspecialchars($strName)?>" <?=$user?>><img src="/plugins/dynamix.vm.manager/templates/images/<?=htmlspecialchars($arrTemplate['icon'])?>" title="<?=htmlspecialchars($strName)?>"></span>
 		<p><?=htmlspecialchars($strName)?></p>
 	</a>
 </div>
@@ -37,3 +48,26 @@ Markdown="false"
 <br>
 <center><button type='button' onclick='done()'>_(Cancel)_</button></center>
 <br>
+
+<script>
+function removeUserTemplate(template) {
+  $.post('/plugins/dynamix.vm.manager/include/VMajax.php',{action:'vm-template-remove',template:template},function(){
+    refresh();});
+}
+
+function confirmRemoveUserTemplate(template) {
+	swal({title:"_(Proceed)_?",text:"Remove user template: " + template ,type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(p){if (p) removeUserTemplate(template); else refresh();});
+}
+
+$(function(){
+  $('div.vmtemplate').each(function(){
+    var templatename = $(this).find('span').attr('name');
+    $(this).find('span.user').append('<i class="fa fa-trash bin" title="_(Remove User Template)_" onclick="confirmRemoveUserTemplate(&quot;' + templatename + '&quot;);return false"></i>');
+    $(this).hover(function(){$(this).find('i.bin').show();},function(){$(this).find('i.bin').hide();});
+  });
+});
+</script>
+<style>
+
+i.bin{display:none;font-size:1.8rem;position:absolute;margin-left:12px}
+</style>

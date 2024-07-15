@@ -25,6 +25,7 @@ $zip = $all ? ($argv[2]??'') : ($argv[1]??'');
 $cli = empty($zip);
 
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/Wrappers.php";
 
 $folders = ['/boot','/boot/config','/boot/config/plugins','/boot/syslinux','/var/log','/var/log/plugins','/boot/extra','/var/log/packages','/var/lib/pkgtools/packages','/tmp'];
@@ -51,12 +52,12 @@ function write(...$messages){
   }
   curl_close($com);
 }
-function run($cmd, &$save=null) {
+function run($cmd, &$save=null, $timeout=30) {
   global $cli,$diag;
   // output command for display
   write($cmd);
   // execute command with timeout of 30s
-  exec("timeout -s9 30 $cmd", $save);
+  exec("timeout -s9 $timeout $cmd", $save);
   return implode("\n",$save);
 }
 
@@ -114,16 +115,6 @@ function maskIP($file) {
   run("sed -ri 's/([\"\[ ]){$rfc1918}/\\1@@@\\2\\3/g; s/([\"\[ ][0-9]{1,3}\.)([0-9]{1,3}\.){2}([0-9]{1,3})([/\" .]|$)/\\1XXX.XXX.\\3\\4/g; s/@@@//g' ".escapeshellarg($file)." 2>/dev/null");
   // anonymize full IPv6 addresses
   run("sed -ri 's/([\"\[ ]([0-9a-f]{1,4}:){4})(([0-9a-f]{1,4}:){3}|:)([0-9a-f]{1,4})([/\" .]|$)/\\1XXXX:XXXX:XXXX:\\5\\6/g' ".escapeshellarg($file)." 2>/dev/null");
-}
-
-function cache_only($disk) {
-  return _var($disk,'type')=='Cache';
-}
-function cache_filter($disks) {
-  return array_filter($disks,'cache_only');
-}
-function pools_filter($disks) {
-  return array_unique(array_map('prefix',array_keys(cache_filter($disks))));
 }
 function download_url($url, $path="", $bg=false, $timeout=15) {
   $ch = curl_init();
@@ -351,6 +342,12 @@ if ($cli) {
   $date = "{$split[2]}-{$split[3]}";
 }
 
+// Run Fix Common Problems if present and results are old / not present
+if ( is_file("/usr/local/emhttp/plugins/fix.common.problems/scripts/scan.php") ) {
+  if ( ! is_file("/tmp/fix.common.problems/errors.json") || (time() - filemtime("/tmp/fix.common.problems/errors.json")) > 86400) {
+    run("/usr/local/emhttp/plugins/fix.common.problems/scripts/scan.php diagnostics",$ignore,60);
+  }
+}
 // don't anonymize system share names
 $vardomain    = (array)@parse_ini_file('/boot/config/domain.cfg');
 $vardocker    = (array)@parse_ini_file('/boot/config/docker.cfg');
@@ -653,6 +650,13 @@ if (file_exists($dhcplog)) {
   $log = "/$diag/logs/dhcplog.txt";
   run("todos <$dhcplog >".escapeshellarg($log));
   if (!$all) maskIP($log);
+}
+
+// copy phplog
+$phplog = "/var/log/phplog";
+if (file_exists($phplog)) {
+  $log = "/$diag/logs/phplog.txt";
+  run("todos <$phplog >".escapeshellarg($log));
 }
 
 // copy graphql-api.log

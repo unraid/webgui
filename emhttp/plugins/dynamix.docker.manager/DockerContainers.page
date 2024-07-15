@@ -111,6 +111,7 @@ function LockButton() {
 }
 function loadlist(init) {
   timers.docker = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
+  docker = [];
   $.get('/plugins/dynamix.docker.manager/include/DockerContainers.php',function(d) {
     clearTimeout(timers.docker);
     var data = d.split(/\0/);
@@ -177,4 +178,8 @@ $(function() {
   loadlist(true);
   dockerload.start();
 });
+
+window.onunload = function(){
+  dockerload.stop();
+}
 </script>

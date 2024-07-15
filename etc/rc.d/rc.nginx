@@ -686,8 +686,6 @@ nginx_reload(){
     if nginx_check; then
       log "Reloading $DAEMON configuration..."
       kill -HUP $(cat $PID)
-      # update DNS
-      php -f /usr/local/emhttp/webGui/include/UpdateDNS.php
       sleep 3
     else
       log "Invalid configuration, $DAEMON not reloaded"
@@ -705,8 +703,6 @@ nginx_renew(){
   build_ssl
   # start unconditionally
   $NGINX -c $CONF 2>/dev/null
-  # update DNS
-  php -f /usr/local/emhttp/webGui/include/UpdateDNS.php
 }
 
 nginx_update(){

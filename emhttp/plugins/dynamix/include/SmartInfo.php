@@ -38,6 +38,9 @@ function duration(&$hrs) {
   $age = date_diff($poh,$now);
   $hrs = "$hrs (".($age->y?"{$age->y}y, ":"").($age->m?"{$age->m}m, ":"").($age->d?"{$age->d}d, ":"")."{$age->h}h)";
 }
+function blocks_size(&$blks,$blk_size) {
+  $blks = "$blks (".my_scale($blks*$blk_size,$unit)." $unit)";
+}
 function append(&$ref, &$info) {
   if ($info) $ref .= ($ref ? " " : "").$info;
 }
@@ -58,10 +61,12 @@ case "attributes":
   $level  = get_value($disk,'smLevel',1);
   $events = explode('|',get_value($disk,'smEvents',$numbers));
   extract(parse_plugin_cfg('dynamix',true));
-  $max = ($disk['maxTemp'] ?? $display['max'] ?? 0) ?: 0;
-  $hot = ($disk['hotTemp'] ?? $display['hot'] ?? 0) ?: 0;
-  $top = $_POST['top'] ?? 120;
-  $empty = true;
+  [$hotNVME,$maxNVME] = _var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'temp') : [-1,-1];
+  $hot    = _var($disk,'hotTemp',-1)>=0 ? $disk['hotTemp'] : ($hotNVME>=0 ? $hotNVME : (_var($disk,'rotational',1)==0 && $display['hotssd']>=0 ? $display['hotssd'] : $display['hot']));
+  $max    = _var($disk,'maxTemp',-1)>=0 ? $disk['maxTemp'] : ($maxNVME>=0 ? $maxNVME : (_var($disk,'rotational',1)==0 && $display['maxssd']>=0 ? $display['maxssd'] : $display['max']));
+  $top    = $_POST['top'] ?? 120;
+  $ssd_remaining = NULL;
+  $empty  = true;
   exec("smartctl -n standby -A $type ".escapeshellarg("/dev/$port"),$output);
   // remove empty rows
   $output = array_filter($output);
@@ -82,6 +87,8 @@ case "attributes":
       }
       if ($info[8]=='-') $info[8] = 'Never';
       if ($info[0]==9 && is_numeric(size($info[9]))) duration($info[9]);
+      if (str_starts_with($info[1], 'Total_LBAs_')) blocks_size($info[9],512); // Assumes 512 byte sectors
+      if (str_ends_with($info[1], '_32MiB')) blocks_size($info[9],32*1024*1024);
       echo "<tr{$color}>".implode('',array_map('normalize', $info))."</tr>";
       $empty = false;
     }
@@ -100,15 +107,42 @@ case "attributes":
       case 'Power on hours':
         if (is_numeric(size($value))) duration($value);
         break;
+      case 'Percentage used':
+          $ssd_remaining = 100 - str_replace('%', '', $value);
+        break;
+      }
+      if (str_ends_with($name, ', hours') && str_starts_with($value, 'minutes ')) {
+        $name = substr($name, 0, -7);
+        $value = substr($value, 8);
+        if (is_numeric(size($value))) duration($value);
       }
       echo "<tr{$color}><td>-</td><td>$name</td><td colspan='8'>$value</td></tr>";
       $empty = false;
     }
   }
+  if (is_null($ssd_remaining)) {
+    // Try to look up SSD's 'Percentage Used Endurance Indicator' with special command
+    exec("smartctl -n standby -l ssd $type ".escapeshellarg("/dev/$port"), $ssd_out);
+    $ssd_out = array_filter($ssd_out);
+    foreach ($ssd_out as $row) {
+      if (str_ends_with($row, 'Percentage Used Endurance Indicator')) {
+        // Probably a SATA SSD
+        $info = explode(' ', trim(preg_replace('/\s+/',' ',$row)), 6);
+        $ssd_remaining = 100 - $info[3];
+      } elseif (str_starts_with($row, 'Percentage used endurance indicator:')) {
+        // Probably a SAS SSD
+        [$name,$value] = array_map('trim',explode(':', $row));
+        $ssd_remaining = 100 - str_replace('%','',$value);
+      }
+    }    
+  }
+  if (!is_null($ssd_remaining)) {
+    echo "<tr><td>-</td><td>SSD endurance remaining</td><td colspan='8'>$ssd_remaining %</td></tr>";
+  }  
   if ($empty) echo "<tr><td colspan='10' style='text-align:center;padding-top:12px'>"._('Attributes not available')."</td></tr>";
   break;
 case "capabilities":
-  echo '<table id="disk_capabilities_table" class="share_status small"><thead><td style="width:33%">'._('Feature').'</td><td>'._('Value').'</td><td>'._('Information').'</td></thead><tbody>' ;
+  echo '<table id="disk_capabilities_table" class="unraid"><thead><td style="width:33%">'._('Feature').'</td><td>'._('Value').'</td><td>'._('Information').'</td></thead><tbody>' ;
   exec("smartctl -n standby -c $type ".escapeshellarg("/dev/$port")."|awk 'NR>5'",$output);
   $row = ['','',''];
   $empty = true;
@@ -119,27 +153,25 @@ case "capabilities":
     $line = preg_replace('/^_/','__',preg_replace(['/__+/','/_ +_/'],'_',str_replace([chr(9),')','('],'_',$line)));
     $info = array_map('trim', explode('_', preg_replace('/_( +)_ /','__',$line), 3));
     if ($nvme && $info[0]=="Supported Power States" ) { $nvme_section="psheading" ;echo "</body></table><div class='title'><span>{$line}</span></div>"; $row = ['','',''] ; continue ;}
-    if ($nvme && $info[0]=="Supported LBA Sizes" ) {  
+    if ($nvme && $info[0]=="Supported LBA Sizes" ) {
       echo "</body></table><div class='title'>{$info[0]} {$info[1]} {$info[2]}</span></div>";
       $row = ['','',''];
-      $nvme_section="lbaheading" ; 
+      $nvme_section="lbaheading" ;
       continue ;
-    } 
+    }
     append($row[0],$info[0]);
     append($row[1],$info[1]);
     append($row[2],$info[2]);
-    
     if (substr($row[2],-1)=='.' || ($nvme && $nvme_section=="info")) {
       echo "<tr><td>{$row[0]}</td><td>{$row[1]}</td><td>{$row[2]}</td></tr>";
       $row = ['','',''];
       $empty = false;
     }
-
     if ($nvme && $nvme_section == "psheading") {
-      echo '<table id="disk_capabilities_table2" class="share_status small"><thead>' ;
+      echo '<table id="disk_capabilities_table2" class="unraid"><thead>' ;
       $nvme_section = "psdetail";
       preg_match('/^(?P<data1>.\S+)\s+(?P<data2>\S+)\s+(?P<data3>\S+)\s+(?P<data4>\S+)\s+(?P<data5>\S+)\s+(?P<data6>\S+)\s+(?P<data7>\S+)\s+(?P<data8>\S+)\s+(?P<data9>\S+)\s+(?P<data10>\S+)\s+(?P<data11>\S+)$/',$line, $psheadings);
-      for ($i = 1; $i <= 11; $i++) {   
+      for ($i = 1; $i <= 11; $i++) {
       echo "<td>"._var($psheadings,'data'.$i)."</td>" ;
       }
       $row = ['','',''];
@@ -149,17 +181,17 @@ case "capabilities":
       $nvme_section = "psdetail";
       echo '<tr>' ;
       preg_match('/^(?P<data1>.\S+)\s+(?P<data2>\S\s+)\s+(?P<data3>\S+)\s+(?P<data4>\S\s+)\s+(?P<data5>\S+)\s+(?P<data6>\S+)\s+(?P<data7>\S+)\s+(?P<data8>\S+)\s+(?P<data9>\S+)\s+(?P<data10>\S+)\s+(?P<data11>\S+)$/',$line, $psdetails);
-      for ($i = 1; $i <= 11; $i++) {   
+      for ($i = 1; $i <= 11; $i++) {
       echo "<td>"._var($psdetails,'data'.$i)."</td>" ;
       }
       $row = ['','',''];
       echo '</tr>' ;
     }
     if ($nvme && $nvme_section == "lbaheading") {
-      echo '<table id="disk_capabilities_table3" class="share_status small"><thead>' ;
+      echo '<table id="disk_capabilities_table3" class="unraid"><thead>' ;
       $nvme_section = "lbadetail";
       preg_match('/^(?P<data1>.\S+)\s+(?P<data2>\S+)\s+(?P<data3>\S+)\s+(?P<data4>\S+)\s+(?P<data5>\S+)$/',$line, $lbaheadings);
-      for ($i = 1; $i <= 5; $i++) {   
+      for ($i = 1; $i <= 5; $i++) {
         echo "<td>"._var($lbaheadings,'data'.$i)."</td>" ;
         }
         $row = ['','',''];
@@ -169,7 +201,7 @@ case "capabilities":
       $nvme_section = "lbadetail";
       preg_match('/^(?P<data1>.\S+)\s+(?P<data2>\S\s+)\s+(?P<data3>\S+)\s+(?P<data4>\S\s+)\s+(?P<data5>\S+)$/',$line, $lbadetails);
       echo '<tr>' ;
-      for ($i = 1; $i <= 5; $i++) {   
+      for ($i = 1; $i <= 5; $i++) {
         echo "<td>"._var($lbadetails,'data'.$i)."</td>" ;
         }
         $row = ['','',''];
@@ -229,12 +261,13 @@ case "stop":
   exec("smartctl -X $type ".escapeshellarg("/dev/$port"));
   break;
 case "update":
-  if ($disk["transport"] == "scsi" || $disk["transport"] == "nvme") {
+  $transport = _var($disk,'transport');
+  if ($transport == 'scsi' || $transport == 'nvme') {
     $progress = exec("smartctl -n standby -l selftest $type ".escapeshellarg("/dev/$port")."|grep -Pom1 '\d+%'");
     if ($progress) {
-      if ($disk["transport"] == "nvme") echo "<span class='big'><i class='fa fa-spinner fa-pulse'></i> "._('self-test in progress').", ".(substr($progress,0,-1))."% "._('complete')."</span>"; else echo "<span class='big'><i class='fa fa-spinner fa-pulse'></i> "._('self-test in progress').", ".(100-substr($progress,0,-1))."% "._('complete')."</span>";
+      if ($transport == 'nvme') echo "<span class='big'><i class='fa fa-spinner fa-pulse'></i> "._('self-test in progress').", ".(substr($progress,0,-1))."% "._('complete')."</span>"; else echo "<span class='big'><i class='fa fa-spinner fa-pulse'></i> "._('self-test in progress').", ".(100-substr($progress,0,-1))."% "._('complete')."</span>";
       break;
-    } 
+    }
   } else {
     $progress = exec("smartctl -n standby -c $type ".escapeshellarg("/dev/$port")."|grep -Pom1 '\d+%'");
     if ($progress) {
@@ -242,8 +275,8 @@ case "update":
       break;
     }
   }
-  if ($disk["transport"] == "scsi") $result = trim(exec("smartctl -n standby -l selftest $type ".escapeshellarg("/dev/$port")."|grep -m1 '^# 1'|cut -c24-50"));
-  else if ($disk["transport"] == "nvme") $result = trim(exec("smartctl -n standby -l selftest $type ".escapeshellarg("/dev/$port")."|grep -m1 '^ 0'|cut -c24-50"));
+  if ($transport == 'scsi') $result = trim(exec("smartctl -n standby -l selftest $type ".escapeshellarg("/dev/$port")."|grep -m1 '^# 1'|cut -c24-50"));
+  else if ($transport == 'nvme') $result = trim(exec("smartctl -n standby -l selftest $type ".escapeshellarg("/dev/$port")."|grep -m1 '^ 0'|cut -c24-50"));
   else $result = trim(exec("smartctl -n standby -l selftest $type ".escapeshellarg("/dev/$port")."|grep -m1 '^# 1'|cut -c26-55"));
   if (!$result) {
     $spundown = $disk['spundown'] ? "Device spundown, spinup to get information" : "No self-tests logged on this disk" ;

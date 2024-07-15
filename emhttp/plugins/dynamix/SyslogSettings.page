@@ -108,6 +108,15 @@ _(Local syslog folder)_:
 
 :syslog_local_folder_help:
 
+_(System identifier for logfile name)_:
+: <select name="server_filename">
+  <?=mk_option(_var($syslog, 'server_filename'), "syslog-%FROMHOST-IP%.log", _("IP Address"))?>
+  <?=mk_option(_var($syslog, 'server_filename'), "syslog-%HOSTNAME%.log", _("Hostname (from syslog message)"))?>
+  <?=mk_option(_var($syslog, 'server_filename'), "syslog-%FROMHOST%.log", _("Hostname (from DNS reverse lookup)"))?>
+  </select>
+
+:syslog_remote_system_identifier_help:
+
 _(Local syslog rotation)_:
 : <select name="log_rotation" onchange="logOptions(this.value,'slow')">
   <?=mk_option(_var($syslog,'log_rotation'), "", _("Disabled"))?>
@@ -146,8 +155,8 @@ _(Local syslog number of files)_:
 </div>
 
 _(Remote syslog server)_:
-: <span class="span"><input type="text" name="remote_server" class="narrow" value="<?=_var($syslog,'remote_server')?>" maxlength="23" placeholder="_(name or ip address)_"></span>
-  <select name="remote_protocol" class="narrow" size="1">
+: <span class="span"><input type="text" name="remote_server" class="narrow" value="<?=_var($syslog,'remote_server')?>" maxlength="50" placeholder="_(name or ip address)_"></span>
+  <select name="remote_protocol" class="narrow">
   <?=mk_option(_var($syslog,'remote_protocol'), "udp", _("UDP"))?>
   <?=mk_option(_var($syslog,'remote_protocol'), "tcp", _("TCP"))?>
   </select>
@@ -156,12 +165,20 @@ _(Remote syslog server)_:
 :syslog_remote_server_help:
 
 _(Mirror syslog to flash)_:
-: <select name="syslog_flash" size="1">
+: <select name="syslog_flash">
   <?=mk_option(_var($syslog,'syslog_flash'), "", _("No"))?>
   <?=mk_option(_var($syslog,'syslog_flash'), "1", _("Yes"))?>
   </select>
 
 :syslog_mirror_flash_help:
+
+_(Copy syslog to flash on shutdown)_:
+: <select name="syslog_shutdown">
+  <?=mk_option(_var($syslog,'syslog_shutdown'), "", _("Yes"))?>
+  <?=mk_option(_var($syslog,'syslog_shutdown'), "1", _("No"))?>
+  </select>
+
+:syslog_shutdown_flash_help:
 
 &nbsp;
 : <input type="button" value="_(Apply)_" onclick='validatePort(this.form)' disabled><input type="button" value="_(Done)_" onclick="done()">

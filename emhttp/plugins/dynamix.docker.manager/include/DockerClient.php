@@ -48,9 +48,12 @@ $port = file_exists('/sys/class/net/br0') ? 'BR0' : (file_exists('/sys/class/net
 
 // Docker configuration file - guaranteed to exist
 $docker_cfgfile = '/boot/config/docker.cfg';
-if (file_exists($docker_cfgfile) && exec("grep -Pom1 '_{$port}(_[0-9]+)?=' $docker_cfgfile")=='') {
-  # interface has changed, update configuration
-  exec("sed -ri 's/_(BR0|BOND0|ETH0)(_[0-9]+)?=/_{$port}\\2=/' $docker_cfgfile");
+if (file_exists($docker_cfgfile)) {
+  exec("grep -Pom2 '_SUBNET_|_{$port}(_[0-9]+)?=' $docker_cfgfile",$cfg);
+  if (isset($cfg[0]) && $cfg[0]=='_SUBNET_' && empty($cfg[1])) { 
+    # interface has changed, update configuration
+    exec("sed -ri 's/_(BR0|BOND0|ETH0)(_[0-9]+)?=/_{$port}\\2=/' $docker_cfgfile");
+  }
 }
 
 $defaults = (array)@parse_ini_file("$docroot/plugins/dynamix.docker.manager/default.cfg");
@@ -173,7 +176,7 @@ class DockerTemplates {
 			}
 			// if after above we don't have a valid url, check for GitLab
 			if (empty($github_api['url'])) {
-				$source = file_get_contents($url);
+				$source = $this->download_url($url);
 				// the following should always exist for GitLab Community Edition or GitLab Enterprise Edition
 				if (preg_match("/<meta content='GitLab (Community|Enterprise) Edition' name='description'>/", $source) > 0) {
 					$parse = parse_url($url);
@@ -364,7 +367,7 @@ class DockerTemplates {
 			@copy($iconRAM,$icon);
 		}
 		if (!is_file($iconRAM)) {
-			exec("logger -t webGUI -- \"$contName: Could not download icon $imgUrl\"");
+			my_logger("$contName: Could not download icon $imgUrl");
 		}
 
 		return (is_file($iconRAM)) ? str_replace($docroot, '', $iconRAM) : '';
@@ -425,7 +428,7 @@ class DockerUpdate{
 
 	// DEPRECATED: Only used for Docker Index V1 type update checks
 	public function getRemoteVersion($image) {
-		[$strRepo, $strTag] = array_pad(explode(':', DockerUtil::ensureImageTag($image)),2,'');
+		extract(DockerUtil::parseImageTag($image));
 		$apiUrl = sprintf('http://index.docker.io/v1/repositories/%s/tags/%s', $strRepo, $strTag);
 		//$this->debug("API URL: $apiUrl");
 		$apiContent = $this->download_url($apiUrl);
@@ -433,7 +436,7 @@ class DockerUpdate{
 	}
 
 	public function getRemoteVersionV2($image) {
-		[$strRepo, $strTag] = array_pad(explode(':', DockerUtil::ensureImageTag($image)),2,'');
+		extract(DockerUtil::parseImageTag($image));
 		/*
 		 * Step 1: Check whether or not the image is in a private registry, get corresponding auth data and generate manifest url
 		 */
@@ -718,7 +721,7 @@ class DockerClient {
 		$fp = stream_socket_client('unix:///var/run/docker.sock', $errno, $errstr);
 		if ($fp === false) {
 			echo "Couldn't create socket: [$errno] $errstr";
-			return null;
+			return [];
 		}
 		$protocol = $unchunk ? 'HTTP/1.0' : 'HTTP/1.1';
 		$out = "$method {$api}{$url} $protocol\r\nHost:127.0.0.1\r\nConnection:Close\r\n";
@@ -912,6 +915,7 @@ class DockerClient {
 			$c['Volumes']     = $info['HostConfig']['Binds'];
 			$c['Created']     = $this->humanTiming($ct['Created']);
 			$c['NetworkMode'] = $ct['HostConfig']['NetworkMode'];
+			$c['Manager'] 	  = $info['Config']['Labels']['net.unraid.docker.managed'] ?? false;
 			[$net, $id]       = array_pad(explode(':',$c['NetworkMode']),2,'');
 			$c['CPUset']      = $info['HostConfig']['CpusetCpus'];
 			$c['BaseImage']   = $ct['Labels']['BASEIMAGE'] ?? false;
@@ -975,9 +979,9 @@ class DockerClient {
 			$c['Id']          = $this->extractID($ct['Id']);
 			$c['ParentId']    = $this->extractID($ct['ParentId']);
 			$c['Size']        = $this->formatBytes($ct['Size']);
-			$c['VirtualSize'] = $this->formatBytes($ct['VirtualSize']);
+			$c['VirtualSize'] = $this->formatBytes($ct['VirtualSize'] ?? null);
 			$c['Tags']        = array_map('htmlspecialchars', $ct['RepoTags'] ?? []);
-			$c['Repository']  = vsprintf('%1$s/%2$s', preg_split("#[:\/]#", DockerUtil::ensureImageTag($ct['RepoTags'][0]??'')));
+			$c['Repository']  = DockerUtil::parseImageTag($ct['RepoTags'][0]??'')['strRepo'];
 			$c['usedBy']      = $this->usedBy($c['Id']);
 			$this::$imagesCache[$c['Id']] = $c;
 		}
@@ -990,18 +994,50 @@ class DockerClient {
 ##################################
 
 class DockerUtil {
-	public static function ensureImageTag($image) {
-		[$strRepo, $strTag] = array_map('trim', array_pad(explode(':', $image.':'),2,''));
-		if (strpos($strRepo, 'sha256:') === 0) {
+	public static function ensureImageTag($image): string
+	{
+		extract(static::parseImageTag($image));
+
+		return "$strRepo:$strTag";
+	}
+
+	public static function parseImageTag($image): array
+	{
+		if (strpos($image, 'sha256:') === 0) {
 			// sha256 was provided instead of actual repo name so truncate it for display:
-			$strRepo = substr($strRepo, 7, 12);
-		} elseif (strpos($strRepo, '/') === false) {
-			// Prefix library/ if there's no author (maybe a Docker offical image?)
-			$strRepo = "library/$strRepo";
+			$strRepo = substr($image, 7, 12);
+		} elseif (strpos($image, '/') === false) {
+			return static::parseImageTag('library/' . $image);
+		} else {
+			$parsedImage = static::splitImage($image);
+			if (!empty($parsedImage)) {
+				$strRepo = $parsedImage['strRepo'];
+				$strTag = $parsedImage['strTag'];
+			} else {
+				// Unprocessable input
+				$strRepo = $image;
+			}
 		}
+
 		// Add :latest tag to image if it's absent
 		if (empty($strTag)) $strTag = 'latest';
-		return "$strRepo:$strTag";
+
+		return array_map('trim', ['strRepo' => $strRepo, 'strTag' => $strTag]);
+	}
+
+	private static function splitImage($image): ?array
+	{
+		if (false === preg_match('@^(.+/)*([^/:]+)(:[^:/]*)*$@', $image, $newSections) || count($newSections) < 3) {
+			return null;
+		} else {
+			[, $strRepo, $image, $strTag] = array_merge($newSections, ['']);
+			$strTag = str_replace(':','',$strTag??'');
+
+			return [
+				'strRepo' => $strRepo . $image,
+				'strTag' => $strTag,
+			];
+		}
 	}
 
 	public static function loadJSON($path) {

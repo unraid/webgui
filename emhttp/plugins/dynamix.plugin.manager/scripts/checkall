@@ -44,7 +44,7 @@ function write(...$messages){
 }
 
 write(_("Checking connectivity")." ...\n");
-if (exec("wget --spider --no-check-certificate -nv -T10 -t1 https://www.msftncsi.com/ncsi.txt 2>&1|grep -om1 'OK'")) {
+if (check_network_connectivity()) {
   $check = popen('plugin checkall','r');
   while (!feof($check)) write(fgets($check));
   pclose($check);

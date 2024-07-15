@@ -1,85 +1,196 @@
-<?PHP
-/* Copyright 2005-2023, Lime Technology
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License version 2,
- * as published by the Free Software Foundation.
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- */
-?>
-<?
-$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
-require_once "$docroot/webGui/include/Helpers.php";
-extract(parse_plugin_cfg('dynamix',true));
+<?php
+$webguiGlobals = $GLOBALS;
+$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 
-// add translations
-$_SERVER['REQUEST_URI'] = 'tools';
-require_once "$docroot/webGui/include/Translations.php";
+class ReplaceKey
+{
+    private const KEY_SERVER_URL = 'https://keys.lime-technology.com';
 
-$var = parse_ini_file('state/var.ini');
-$keyfile = base64_encode(file_get_contents($var['regFILE']));
-?>
-<!DOCTYPE html>
-<html <?=$display['rtl']?>lang="<?=strtok($locale,'_')?:'en'?>">
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<meta http-equiv="X-UA-Compatible" content="IE=edge">
-<meta http-equiv="Content-Security-Policy" content="block-all-mixed-content">
-<meta name="format-detection" content="telephone=no">
-<meta name="viewport" content="width=1300">
-<meta name="robots" content="noindex, nofollow">
-<meta name="referrer" content="same-origin">
-<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/default-fonts.css")?>">
-<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/default-popup.css")?>">
-<script src="<?autov('/webGui/javascript/dynamix.js')?>"></script>
-<script>
-function replaceKey(email, guid, keyfile) {
-  if (email.length) {
-    var timestamp = <?=time()?>;
-    $('#status_panel').slideUp('fast');
-    $('#input_form').find('input').prop('disabled', true);
-    // Nerds love spinners, Maybe place a spinner image next to the submit button; we'll show it now:
-    $('#spinner_image').fadeIn('fast');
+    private $docroot;
+    private $var;
+    private $guid;
+    private $keyfile;
+    private $regExp;
 
-    $.post('https://keys.lime-technology.com/account/license/transfer',{timestamp:timestamp,guid:guid,email:email,keyfile:keyfile},function(data) {
-        $('#spinner_image').fadeOut('fast');
-        var msg = "<p><?=_('A registration replacement key has been created for USB Flash GUID')?> <strong>"+guid+"</strong></p>" +
-                  "<p><?=_('An email has been sent to')?> <strong>"+email+"</strong> <?=_('containing your key file URL')?>." +
-                  " <?=_('When received, please paste the URL into the *Key file URL* box and')?>" +
-                  " <?=_('click <i>Install Key</i>')?>.</p>" +
-                  "<p><?=_('If you do not receive an email, please check your spam or junk-email folder')?>.</p>";
+    public function __construct()
+    {
+        $this->docroot = $GLOBALS['docroot'] ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 
-        $('#status_panel').hide().html(msg).slideDown('fast');
-        $('#input_form').fadeOut('fast');
-    }).fail(function(data) {
-        $('#input_form').find('input').prop('disabled', false);
-        $('#spinner_image').fadeOut('fast');
-        var status = data.status;
-        var obj = data.responseJSON;
-        var msg = "<p><?=_('Sorry, an error occurred')?> <?=_('registering USB Flash GUID')?> <strong>"+guid+"</strong><p>"+"<p><?=_('The error is')?>: "+obj.error+"</p>";
+        $this->var = (array)@parse_ini_file('/var/local/emhttp/var.ini');
+        $this->guid = @$this->var['regGUID'] ?? null;
 
-        $('#status_panel').hide().html(msg).slideDown('fast');
-    });
-  }
+        $keyfileBase64 = empty($this->var['regFILE']) ? null : @file_get_contents($this->var['regFILE']);
+        if ($keyfileBase64 !== false) {
+            $keyfileBase64 = @base64_encode($keyfileBase64);
+            $this->keyfile = str_replace(['+', '/', '='], ['-', '_', ''], trim($keyfileBase64));
+        }
+
+        $this->regExp = @$this->var['regExp'] ?? null;
+    }
+
+    private function request($url, $method, $payload = null, $headers = null)
+    {
+        $ch = curl_init($url);
+
+        // Set the request method
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+        // store the response in a variable instead of printing it
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+        // Set the payload if present
+        if ($payload !== null) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+        }
+
+        if ($headers !== null) {
+            // Set the headers
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        }
+
+        // Set additional options as needed
+
+        // Execute the request
+        $response = curl_exec($ch);
+
+        // Check for errors
+        if (curl_errno($ch)) {
+            $error = [
+                'heading' => 'CurlError',
+                'message' => curl_error($ch),
+                'level' => 'error',
+                'ref' => 'curlError',
+                'type' => 'request',
+            ];
+            // @todo store error
+        }
+
+        // Close the cURL session
+        curl_close($ch);
+
+        return $response;
+    }
+
+    private function validateGuid()
+    {
+        $headers = [
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+
+        $params = [
+            'guid' => $this->guid,
+            'keyfile' => $this->keyfile,
+        ];
+
+        /**
+         * returns {JSON}
+         * hasNewerKeyfile : boolean;
+         * purchaseable: true;
+         * registered: false;
+         * replaceable: false;
+         * upgradeable: false;
+         * upgradeAllowed: string[];
+         * updatesRenewable: false;
+         */
+        $response = $this->request(
+            self::KEY_SERVER_URL . '/validate/guid',
+            'POST',
+            http_build_query($params),
+            $headers,
+        );
+
+        // Handle the response as needed (parsing JSON, etc.)
+        $decodedResponse = json_decode($response, true);
+
+        if (!empty($decodedResponse)) {
+            return $decodedResponse;
+        }
+
+        // @todo save error response somewhere
+        return [];
+    }
+
+    private function getLatestKey()
+    {
+        $headers = [
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+
+        $params = [
+            'keyfile' => $this->keyfile,
+        ];
+
+        /**
+         * returns {JSON}
+         * license: string;
+         */
+        $response = $this->request(
+            self::KEY_SERVER_URL . '/key/latest',
+            'POST',
+            http_build_query($params),
+            $headers,
+        );
+
+        // Handle the response as needed (parsing JSON, etc.)
+        $decodedResponse = json_decode($response, true);
+
+        if (!empty($decodedResponse) && !empty($decodedResponse['license'])) {
+            return $decodedResponse['license'];
+        }
+        return null;
+    }
+
+    private function installNewKey($key)
+    {
+        require_once "$this->docroot/webGui/include/InstallKey.php";
+
+        $KeyInstaller = new KeyInstaller();
+        $KeyInstaller->installKey($key);
+    }
+
+    private function writeJsonFile($file, $data)
+    {
+        if (!is_dir(dirname($file))) { // prevents errors when directory doesn't exist
+            mkdir(dirname($file));
+        }
+        file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    public function check()
+    {
+        // we don't need to check
+        if (empty($this->guid) || empty($this->keyfile) || empty($this->regExp)) {
+            return;
+        }
+
+        // set $isAlreadyExpired to true if regExp is in the past
+        $isAlreadyExpired = $this->regExp <= time();
+        // if regExp is seven days or less from now, we need to check
+        $isWithinSevenDays = $this->regExp <= strtotime('+7 days');
+
+        $shouldCheck = $isAlreadyExpired || $isWithinSevenDays;
+        if (!$shouldCheck) {
+            return;
+        }
+
+        // see if we have a new key
+        $validateGuidResponse = $this->validateGuid();
+
+        $hasNewerKeyfile = @$validateGuidResponse['hasNewerKeyfile'] ?? false;
+        if (!$hasNewerKeyfile) {
+            return; // if there is no newer keyfile, we don't need to do anything
+        }
+
+        $latestKey = $this->getLatestKey();
+        if (!$latestKey) {
+            // we supposedly have a new key, but didn't get it back…
+            $this->writeJsonFile(
+                '/tmp/ReplaceKey/error.json',
+                [
+                    'error' => 'Failed to retrieve latest key after getting a `hasNewerKeyfile` in the validation response.',
+                ]
+            );
+            return;
+        }
+        $this->installNewKey($latestKey);
+    }
 }
-</script>
-</head>
-<body>
-<div style="margin-top:20px;line-height:30px;margin-left:40px">
-<div id="status_panel"></div>
-<form markdown="1" id="input_form">
-
-Email address: <input type="text" name="email" maxlength="1024" value="" style="width:33%">
-
-<input type="button" value="Replace Key" onclick="replaceKey(this.form.email.value.trim(), '<?=$var['flashGUID']?>', '<?=$keyfile?>')">
-
-<p>A link to your replacement key will be delivered to this email address.
-
-<p><strong>Note:</strong>
-Once a replacement key is generated, your old USB Flash device will be <b>blacklisted</b>.
-</form>
-</div>
-</body>
-</html>

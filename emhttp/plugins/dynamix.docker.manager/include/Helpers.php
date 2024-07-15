@@ -59,7 +59,7 @@ function postToXML($post, $setOwnership=false) {
   $xml->DonateLink         = xml_encode($post['contDonateLink']);
   $xml->Requires           = xml_encode($post['contRequires']);
 
-  $size = is_array($post['confName']) ? count($post['confName']) : 0;
+  $size = is_array($post['confName']??null) ? count($post['confName']) : 0;
   for ($i = 0; $i < $size; $i++) {
     $Type                  = $post['confType'][$i];
     $config                = $xml->addChild('Config', xml_encode($post['confValue'][$i]));
@@ -270,6 +270,8 @@ function xmlToCommand($xml, $create_paths=false) {
     $Mode            = strval($config['Mode']);
     if ($confType != "device" && !strlen($containerConfig)) continue;
     if ($confType == "path") {
+      if ( ! trim($hostConfig) || ! trim($containerConfig) )
+        continue;
       $Volumes[] = escapeshellarg($hostConfig).':'.escapeshellarg($containerConfig).':'.escapeshellarg($Mode);
       if (!file_exists($hostConfig) && $create_paths) {
         @mkdir($hostConfig, 0777, true);

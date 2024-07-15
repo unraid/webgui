@@ -21,7 +21,6 @@ $_SERVER['REQUEST_URI'] = 'vms';
 require_once "$docroot/webGui/include/Translations.php";
 
 $user_prefs = '/boot/config/plugins/dynamix.vm.manager/userprefs.cfg';
-if (file_exists('/boot/config/plugins/dynamix.vm.manager/vmpreview')) $vmpreview = true ; else $vmpreview =  false ;
 $vms = $lv->get_domains();
 if (empty($vms)) {
   echo '<tr><td colspan="8" style="text-align:center;padding-top:12px">'._('No Virtual Machines installed').'</td></tr>';
@@ -53,7 +52,7 @@ foreach ($vms as $vm) {
   $image = substr($icon,-4)=='.png' ? "<img src='$icon' class='img'>" : (substr($icon,0,5)=='icon-' ? "<i class='$icon img'></i>" : "<i class='fa fa-$icon img'></i>");
   $arrConfig = domain_to_config($uuid);
   $snapshots = getvmsnapshots($vm) ;
-  $cdroms = $lv->get_cdrom_stats($res) ;
+  $cdroms = $lv->get_cdrom_stats($res,true,true) ;
   if ($state == 'running') {
     $mem = $dom['memory']/1024;
   } else {
@@ -66,11 +65,14 @@ foreach ($vms as $vm) {
   $log = (is_file("/var/log/libvirt/qemu/$vm.log") ? "libvirt/qemu/$vm.log" : '');
   $disks = '-';
   $diskdesc = '';
+  $fstype ="QEMU";
   if (($diskcnt = $lv->get_disk_count($res)) > 0) {
     $disks = $diskcnt.' / '.$lv->get_disk_capacity($res);
-    $diskdesc = 'Current physical size: '.$lv->get_disk_capacity($res, true);
+    $fstype = $lv->get_disk_fstype($res);
+    $diskdesc = 'Current physical size: '.$lv->get_disk_capacity($res, true)."\nDefault snapshot type: $fstype";
   }
   $arrValidDiskBuses = getValidDiskBuses();
+  $WebUI = html_entity_decode($arrConfig['template']['webui']);
   $vmrcport = $lv->domain_get_vnc_port($res);
   $autoport = $lv->domain_get_vmrc_autoport($res);
   $vmrcurl = '';
@@ -92,6 +94,7 @@ foreach ($vms as $vm) {
   if (!empty($arrConfig['gpu'])) {
     $arrValidGPUDevices = getValidGPUDevices();
     foreach ($arrConfig['gpu'] as $arrGPU) {
+      if ($arrGPU['id'] == "nogpu") {$graphics .= "No GPU"."\n";continue;}
       foreach ($arrValidGPUDevices as $arrDev) {
         if ($arrGPU['id'] == $arrDev['id']) {
           if (count(array_filter($arrValidGPUDevices, function($v) use ($arrDev) { return $v['name'] == $arrDev['name']; })) > 1) {
@@ -108,7 +111,8 @@ foreach ($vms as $vm) {
   }
   unset($dom);
   if (!isset($domain_cfg["CONSOLE"])) $vmrcconsole = "web" ; else $vmrcconsole = $domain_cfg["CONSOLE"] ;
-  $menu = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($vm),addslashes($uuid),addslashes($template),$state,addslashes($vmrcurl),strtoupper($vmrcprotocol),addslashes($log), $vmrcconsole,$vmpreview);
+  if (!isset($domain_cfg["RDPOPT"])) $vmrcconsole .= ";no" ; else $vmrcconsole .= ";".$domain_cfg["RDPOPT"] ;
+  $menu = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s', '%s')\"", addslashes($vm),addslashes($uuid),addslashes($template),$state,addslashes($vmrcurl),strtoupper($vmrcprotocol),addslashes($log),addslashes($fstype), $vmrcconsole,false,addslashes(str_replace('"',"'",$WebUI)));
   $kvm[] = "kvm.push({id:'$uuid',state:'$state'});";
   switch ($state) {
   case 'running':
@@ -130,7 +134,7 @@ foreach ($vms as $vm) {
   }
 
   /* VM information */
-  if ($snapshots != null)  $snapshotstr = _("(Snapshots :").count($snapshots).')'; else $snapshotstr = _("(Snapshots :None)");
+  if ($snapshots != null)  $snapshotstr = '('._('Snapshots').': '.count($snapshots).")"; else $snapshotstr = '('._('Snapshots').': '._('None').")";
   $cdbus = $cdbus2 = $cdfile = $cdfile2 = "";
   $cdromcount = 0;
     foreach ($cdroms as $arrCD) {
@@ -213,7 +217,7 @@ foreach ($vms as $vm) {
     $boot= $arrDisk["boot order"];
     $serial = $arrDisk["serial"];
     if ($boot < 1) $boot = _('Not set');
-    $reallocation = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($disk)." 2>/dev/null"));
+    $reallocation = trim(get_realvolume($disk));
     if (!empty($reallocation)) $reallocationstr = "($reallocation)"; else $reallocationstr = "";
     echo "<tr><td>$disk $reallocationstr</td><td>$serial</td><td>$bus</td>";
     if ($state == 'shutoff') {
@@ -235,8 +239,10 @@ foreach ($vms as $vm) {
 
   /* Display VM cdroms */
   foreach ($cdroms as $arrCD) {
+    $tooltip = "";
     $capacity = $lv->format_size($arrCD['capacity'], 0);
     $allocation = $lv->format_size($arrCD['allocation'], 0);
+    if ($arrCD['spundown']) {$capacity = $allocation = "*"; $tooltip = "Drive spun down ISO volume is ".$arrCD['reallocation'];} else $tooltip = "ISO volume is ".$arrCD['reallocation'];
     $disk = $arrCD['file'] ?? $arrCD['partition'] ?? "" ;
     $dev  = $arrCD['device'];
     $bus  = $arrValidDiskBuses[$arrCD['bus']] ?? 'VirtIO';
@@ -245,7 +251,7 @@ foreach ($vms as $vm) {
     if ($disk != "" ) {
       $title = _('Eject CD Drive');
       $changemedia = "changemedia(\"{$uuid}\",\"{$dev}\",\"{$bus}\", \"--eject\")";
-      echo "<tr><td>$disk <a title='$title' href='#' onclick='$changemedia'> <i class='fa fa-eject'></i></a></td><td></td><td>$bus</td><td>$capacity</td><td>$allocation</td><td>$boot</td></tr>";
+      echo "<tr><td>$disk <a title='$title' href='#' onclick='$changemedia'> <i class='fa fa-eject'></i></a></td><td></td><td>$bus</td><td><span title='$tooltip' data-toggle='tooltip'>$capacity</span></td><td>$allocation</td><td>$boot</td></tr>";
     } else {
       $title = _('Insert CD');
       $changemedia = "changemedia(\"{$uuid}\",\"{$dev}\",\"{$bus}\",\"--select\")";
@@ -267,7 +273,7 @@ foreach ($vms as $vm) {
       if ($snap['parent'] == "" || $snap['parent'] == "Base") $j++;
       $steps[$j] .= $snap['name'].';';
     }
-    echo "<thead class='child' child-id='$i'><tr><th><i class='fa fa-clone'></i> <b>",_('Snapshots'),"</b></th><th></th><th>",_('Date/Time'),"</th><th>",_('Type'),"</th><th>",_('Parent'),"</th><th>",_('Memory'),"</th></tr></thead>";
+    echo "<thead class='child' child-id='$i'><tr><th><i class='fa fa-clone'></i> <b>",_('Snapshots'),"</b></th><th></th><th>",_('Date/Time'),"</th><th>",_('Type (Method)'),"</th><th>",_('Parent'),"</th><th>",_('Memory'),"</th></tr></thead>";
     echo "<tbody class='child'child-id='$i'>";
     foreach ($steps as $stepsline) {
       $snapshotlist = explode(";",$stepsline);
@@ -275,12 +281,12 @@ foreach ($vms as $vm) {
       foreach ($snapshotlist as  $snapshotitem) {
         if ($snapshotitem == "") continue;
         $snapshot = $snapshots[$snapshotitem] ;
-        $snapshotstate = _(ucfirst($snapshot["state"]));
+        $snapshotstate = _(ucfirst($snapshot["state"]))." ({$snapshot["method"]})";
         $snapshotdesc = $snapshot["desc"];
         $snapshotmemory = _(ucfirst($snapshot["memory"]["@attributes"]["snapshot"]));
         $snapshotparent = $snapshot["parent"] ? $snapshot["parent"]  : "None";
         $snapshotdatetime = my_time($snapshot["creationtime"],"Y-m-d" )."<br>".my_time($snapshot["creationtime"],"H:i:s");
-        $snapmenu = sprintf("onclick=\"addVMSnapContext('%s','%s','%s','%s','%s','%s')\"", addslashes($vm),addslashes($uuid),addslashes($template),$state,$snapshot["name"],$vmpreview);
+        $snapmenu = sprintf("onclick=\"addVMSnapContext('%s','%s','%s','%s','%s','%s')\"", addslashes($vm),addslashes($uuid),addslashes($template),$state,$snapshot["name"],$snapshot["method"]);
         echo "<tr><td><span id='vmsnap-$uuid' $snapmenu class='hand'>$tab|__&nbsp;&nbsp;<i class='fa fa-clone'></i></span>&nbsp;",$snapshot["name"],"</td><td>$snapshotdesc</td><td><span class='inner' style='font-size:1.1rem;'>$snapshotdatetime</span></td><td>$snapshotstate</td><td>$snapshotparent</td><td>$snapshotmemory</td></tr>";
         $tab .="&nbsp;&nbsp;&nbsp;&nbsp;";
       }

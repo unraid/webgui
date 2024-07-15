@@ -128,6 +128,20 @@ case 'domain-start-consoleRV':
 	$arrResponse['vvfile'] = $vvfile;
 	break;
 
+case 'domain-consoleRDP':
+	requireLibvirt();
+	$dom = $lv->get_domain_by_name($domName);
+	$rdpvarray = array() ;
+	$myIP=get_vm_ip($dom);
+	if ($myIP == NULL)  {$arrResponse['error'] = "No IP, guest agent not installed?"; break; } 
+	$rdparray[] = "full address:s: $myIP\n";
+	#$rdparray[] = "administrative session:1\n";
+	if (!is_dir("/mnt/user/system/remoteviewer")) mkdir("/mnt/user/system/remoteviewer") ;
+	$rdpfile = "/mnt/user/system/remoteviewer/rv"._var($_SERVER,'HTTP_HOST').".$port.rdp" ;
+	file_put_contents($rdpfile,$rdparray) ;
+	$arrResponse['vvfile'] = $rdpfile;
+	break;
+
 case 'domain-consoleRV':
 	requireLibvirt();
 	$dom = $lv->get_domain_by_name($domName);
@@ -146,6 +160,23 @@ case 'domain-consoleRV':
 	file_put_contents($vvfile,$vvarray) ;
 	$arrResponse['vvfile'] = $vvfile;
 	break;
+
+case 'domain-openWebUI':
+	requireLibvirt();
+	$dom = $lv->get_domain_by_name($domName);
+	$WebUI = unscript(_var($_REQUEST,'vmrcurl'));
+	$myIP = get_vm_ip($dom);
+	if (strpos($WebUI,"[IP]") && $myIP == NULL)  $arrResponse['error'] = "No IP, guest agent not installed?"; 
+	$WebUI = preg_replace("%\[IP\]%", $myIP, $WebUI);
+	$vmnamehypen = str_replace(" ","-",$domName);
+	$WebUI = preg_replace("%\[VMNAME\]%", $vmnamehypen, $WebUI);
+	if (preg_match("%\[PORT:(\d+)\]%", $WebUI, $matches)) {
+		$ConfigPort = $matches[1] ?? '';
+		$WebUI = preg_replace("%\[PORT:\d+\]%", $ConfigPort, $WebUI);	
+	}
+	$arrResponse['vmrcurl'] = $WebUI;
+	break;
+
 	
 case 'domain-pause':
 	requireLibvirt();
@@ -338,7 +369,7 @@ case 'snap-create':
 
 case 'snap-create-external':
 	requireLibvirt();
-	$arrResponse = vm_snapshot($domName,$_REQUEST['snapshotname'],$_REQUEST['desc'],$_REQUEST['free']) ;
+	$arrResponse = vm_snapshot($domName,$_REQUEST['snapshotname'],$_REQUEST['desc'],$_REQUEST['free'],$_REQUEST['fstype'],$_REQUEST['memorydump']) ;
 	break;
 
 case 'snap-images':
@@ -396,7 +427,8 @@ case 'disk-create':
 	$driver = $_REQUEST['driver'];
 	$size = str_replace(["KB","MB","GB","TB","PB", " ", ","], ["K","M","G","T","P", "", ""], strtoupper($_REQUEST['size']));
 	$dir = dirname($disk);
-	if (!is_dir($dir)) mkdir($dir);
+	#if (!is_dir($dir)) mkdir($dir);
+	if (!is_dir($dir)) my_mkdir($dir);
 	// determine the actual disk if user share is being used
 	$dir = transpose_user_path($dir);
 	#@exec("chattr +C -R ".escapeshellarg($dir)." >/dev/null");
@@ -724,6 +756,17 @@ case 'virtio-win-iso-remove':
 		foreach (glob($path.$file.'*') as $name) unlink($name);
 		$arrResponse = ['success' => true];
 	}
+	break;
+
+case 'vm-template-remove':
+	$template = $_REQUEST['template'];	
+	$templateslocation = "/boot/config/plugins/dynamix.vm.manager/savedtemplates.json";
+	if (is_file($templateslocation)){
+		$ut = json_decode(file_get_contents($templateslocation),true) ;
+		unset($ut[$template]);
+		file_put_contents($templateslocation,json_encode($ut,JSON_PRETTY_PRINT));
+	}
+	$arrResponse = ['success' => true];
 	break;
 
 default:

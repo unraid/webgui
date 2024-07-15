@@ -225,7 +225,6 @@ function readSMB() {
   $.get('/webGui/include/ProtocolData.php',{protocol:'smb',name:name},function(json) {
     var data = $.parseJSON(json);
     form.shareExport.value = data.export;
-    form.shareFruit.value = data.fruit;
     form.shareSecurity.value = data.security;
   });
   $(form).find('select').trigger('change');
@@ -245,7 +244,6 @@ function writeSMB(data,n,i) {
         data[i] = {};
         data[i]['shareName'] = $(this).val();
         data[i]['shareExport'] = '<?=addslashes(htmlspecialchars($sec[$name]['export']))?>';
-        data[i]['shareFruit'] = '<?=addslashes(htmlspecialchars($sec[$name]['fruit']))?>';
         data[i]['shareSecurity'] = '<?=addslashes(htmlspecialchars($sec[$name]['security']))?>';
         data[i]['changeShareSecurity'] = 'Apply';
         i++;

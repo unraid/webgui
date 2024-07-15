@@ -101,7 +101,7 @@ function textsave(module,remove = false) {
       if (data.modprobe == "")  $('#text'+module).attr('hidden', true); else $('#text'+module).attr('rows', 3);
       if (data.supportpage == true) {
         if (data.support == true) {
-          document.getElementById("link" + module).innerHTML = "<a href='" + data.supporturl + "'target='_blank'><i title='" + _("Support page")_ + "' class='fa fa-phone-square'></i></a>";
+          document.getElementById("link" + module).innerHTML = "<a href='" + data.supporturl + "'target='_blank'><i title='"+"_(Support page)_"+"' class='fa fa-phone-square'></i></a>";
         }
       }
     }
@@ -119,5 +119,5 @@ showDrivers("all",true);
 :sysdrivers_intro_help:
 
 <form autocomplete="off" onsubmit="return false;"><span><input class="t1 search" id="driversearch" type="search" placeholder="Search..." onchange="filterDrivers();"></span></form>
-<pre><form id="sysdrivers" class="js-confirm-leave" onsubmit="return false"><table id='t1' class="t1 disk_status tablesorter"><tr><td><div class="spinner"></div></td></tr></table></form></pre><br>
+<pre><form id="sysdrivers" class="js-confirm-leave" onsubmit="return false"><table id='t1' class="unraid t1 tablesorter"><tr><td><div class="spinner"></div></td></tr></table></form></pre><br>
 <input type="button" value="_(Done)_" onclick="done()"><input type="button" id="rebuild" value="_(Rebuild Modules)_" onclick="showDriversupdate()">

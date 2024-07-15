@@ -46,10 +46,11 @@ case "${1:-start}" in
     exit 1
   fi
   # start emhttpd
-  /usr/local/bin/emhttpd
+  /usr/libexec/unraid/emhttpd
   ;;
 'stop')
   log "Stopping web services..."
+  /usr/local/sbin/monitor_nchan kill
   /etc/rc.d/rc.nginx stop
   /etc/rc.d/rc.php-fpm stop
   log "Stopping emhttpd..."
