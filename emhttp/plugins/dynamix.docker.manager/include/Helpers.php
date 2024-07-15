@@ -237,7 +237,7 @@ function xmlSecurity(&$template) {
 }
 
 function xmlToCommand($xml, $create_paths=false) {
-  global $docroot, $var, $cfg, $driver;
+  global $docroot, $var, $driver;
   $xml           = xmlToVar($xml);
   $cmdName       = strlen($xml['Name']) ? '--name='.escapeshellarg($xml['Name']) : '';
   $cmdPrivileged = strtolower($xml['Privileged'])=='true' ? '--privileged=true' : '';
@@ -299,15 +299,27 @@ function xmlToCommand($xml, $create_paths=false) {
       $Devices[] = escapeshellarg($hostConfig);
     }
   }
-  $logSize = $logFile = '';
-  if (($cfg['DOCKER_LOG_ROTATION']??'')=='yes') {
-    $logSize = $cfg['DOCKER_LOG_SIZE'] ?? '10m';
-    $logSize = "--log-opt max-size='$logSize'";
-    $logFile = $cfg['DOCKER_LOG_FILES'] ?? '1';
-    $logFile = "--log-opt max-file='$logFile'";
+
+  /* Read the docker configuration file. */
+  $cfgfile		= "/boot/config/docker.cfg";
+  $config_ini	= @parse_ini_file($cfgfile, true, INI_SCANNER_RAW);
+  $docker_cfg	= ($config_ini !== false) ? $config_ini : [];
+
+  // Add pid limit if user has not specified it as an extra parameter
+  $pidsLimit = preg_match('/--pids-limit (\d+)/', $xml['ExtraParams'], $matches) ? $matches[1] : null;
+  if ($pidsLimit === null) {
+    $pid_limit = "--pids-limit ";
+    if (($docker_cfg['DOCKER_PID_LIMIT']??'') != "") {
+      $pid_limit .= $docker_cfg['DOCKER_PID_LIMIT'];
+    } else {
+      $pid_limit .= "2048";
+    }
+  } else {
+    $pid_limit = "";
   }
-  $cmd = sprintf($docroot.'/plugins/dynamix.docker.manager/scripts/docker create %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s',
-         $cmdName, $cmdNetwork, $cmdMyIP, $cmdCPUset, $logSize, $logFile, $cmdPrivileged, implode(' -e ', $Variables), implode(' -l ', $Labels), implode(' -p ', $Ports), implode(' -v ', $Volumes), implode(' --device=', $Devices), $xml['ExtraParams'], escapeshellarg($xml['Repository']), $xml['PostArgs']);
+
+  $cmd = sprintf($docroot.'/plugins/dynamix.docker.manager/scripts/docker create %s %s %s %s %s %s %s %s %s %s %s %s %s %s',
+         $cmdName, $cmdNetwork, $cmdMyIP, $cmdCPUset, $pid_limit, $cmdPrivileged, implode(' -e ', $Variables), implode(' -l ', $Labels), implode(' -p ', $Ports), implode(' -v ', $Volumes), implode(' --device=', $Devices), $xml['ExtraParams'], escapeshellarg($xml['Repository']), $xml['PostArgs']);
   return [preg_replace('/\s\s+/', ' ', $cmd), $xml['Name'], $xml['Repository']];
 }
 function stopContainer($name, $t=false, $echo=true) {
