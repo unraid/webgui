@@ -510,34 +510,46 @@
 		<tr>
 			<td><span class="advanced">_(Initial)_ </span>_(Memory)_:</td>
 			<td>
-				<select name="domain[mem]" id="domain_mem" class="narrow" title="_(define the amount memory)_">
-				<?
-					echo mk_option($arrConfig['domain']['mem'], 128 * 1024, '128 MB');
-					echo mk_option($arrConfig['domain']['mem'], 256 * 1024, '256 MB');
-					for ($i = 1; $i <= ($maxmem*2); $i++) {
-						$label = ($i * 512) . ' MB';
-						$value = $i * 512 * 1024;
-						echo mk_option($arrConfig['domain']['mem'], $value, $label);
-					}
-				?>
-				</select>
-	
-			<span class="advanced">_(Max)_ _(Memory)_:</span>		
-				<select name="domain[maxmem]" id="domain_maxmem" class="narrow" title="_(define the maximum amount of memory)_">
-				<?
-					echo mk_option($arrConfig['domain']['maxmem'], 128 * 1024, '128 MB');
-					echo mk_option($arrConfig['domain']['maxmem'], 256 * 1024, '256 MB');
-					for ($i = 1; $i <= ($maxmem*2); $i++) {
-						$label = ($i * 512) . ' MB';
-						$value = $i * 512 * 1024;
-						echo mk_option($arrConfig['domain']['maxmem'], $value, $label);
-					}
-				?>
-				</select>
+			<div class="slider-container" style="position: relative; width: 500px; margin-top: 20px;">
+    			<output id="mem" style="position: absolute; text-align: center; width: 100%; pointer-events: none; user-select: none; top: -20px; left: 50%; transform: translateX(-50%); z-index: 1;"></output>
+    			<input type="range" name="domain[mem]" id="domain_mem" class="narrow" title="_(define the amount memory)_" style="width: 100%;"
+           			min="1048576" max="<?= $maxmem * 1024 * 1024 ?>" step="524288"
+           			value="<?= $arrConfig['domain']['mem'] ?>"
+           			oninput="updateOutput(this.value, 'mem')">
+    			<div id="tickmarks" style="position: absolute; width: 100%; height: 20px; top: 30px; left: 0;"></div>
+			</div>
 			</td>
 			<td><textarea class="xml" id="xmlmem" rows=2  disabled ><?=htmlspecialchars($xml2['memory'])."\n".htmlspecialchars($xml2['currentMemory'])."\n".htmlspecialchars($xml2['memoryBacking'])?></textarea></td>
 		</tr>
 	</table>
+	<table>
+		<tr>
+	<td><span class="advanced">_(Max)_ </span>_(Memory)_:</td>
+			<td>
+			<div class="slider-container" style="position: relative; width: 500px; margin-top: 20px;">
+    			<output id="maxmem" style="position: absolute; text-align: center; width: 100%; pointer-events: none; user-select: none; top: -20px; left: 50%; transform: translateX(-50%); z-index: 1;"></output>
+    			<input type="range" name="domain[maxmem]" id="domain_maxmem" class="narrow" title="_(define the amount memory)_" style="width: 100%;"
+           			min="1048576" max="<?= $maxmem * 1024 * 1024 ?>" step="524288"
+           			value="<?= $arrConfig['domain']['maxmem'] ?>"
+           			oninput="updateOutput(this.value, 'maxmem')">
+    			<div id="tickmarks" style="position: absolute; width: 100%; height: 20px; top: 30px; left: 0;"></div>
+			</div>
+			</td>
+		</tr>
+	</table>
+	<script>
+		function updateOutput(value, outputId) {
+			const output = document.getElementById(outputId);
+			output.textContent = (value / 1024 / 1024).toFixed(1) + ' GB';
+			output.style.left = ((value - document.getElementById('domain_mem').min) / (document.getElementById('domain_mem').max - document.getElementById('domain_mem').min) * 100) + '%';
+		}
+		document.addEventListener('DOMContentLoaded', function () {
+			updateOutput(document.getElementById('domain_mem').value, 'mem');
+			updateOutput(document.getElementById('domain_maxmem').value, 'maxmem');
+		});
+	</script>
+
+
 	<div class="basic">
 		<blockquote class="inline_help">
 			<p>Select how much memory to allocate to the VM at boot.</p>
@@ -1533,6 +1545,7 @@
 	<tr><td></td>
 		<td>_(Select)_&nbsp&nbsp_(Boot Order)_</td></tr></div>
 		<tr>
+		<tr>
 			<td>_(Other PCI Devices)_:</td>
 			<td>
 				<div class="textarea" style="width: 780px">
@@ -1556,6 +1569,7 @@
 						<label for="pci<?=$i?>">&nbsp&nbsp&nbsp&nbsp<input type="checkbox" name="pci[]" id="pci<?=$i?>" value="<?=htmlspecialchars($arrDev['id'])?>" <?=$extra?>/> &nbsp
 						<input type="number" size="5" maxlength="5" id="pciboot<?=$i?>" class="narrow pcibootorder" <?=$bootdisable?>  style="width: 50px;" name="pciboot[<?=htmlspecialchars($arrDev['id'])?>]"   title="_(Boot order)_"  value="<?=$pciboot?>" >
 						<?=htmlspecialchars($arrDev['name'])?> | <?=htmlspecialchars($arrDev['type'])?> (<?=htmlspecialchars($arrDev['id'])?>)</label><br/>
+						<td><textarea class="xml" id="xmlpci<?=$i?>" rows=5  disabled ><?=htmlspecialchars($xml2['devices']['other'][$arrDev['id']])?></textarea></td>
 					<?
 						}
 					}
@@ -1565,7 +1579,6 @@
 					}
 				?>
 				</div>
-				<td><textarea class="xml" id="xmlpci<?=$i?>" rows=2  disabled ><?=htmlspecialchars($xml2['devices']['other']["allotherpci"])?></textarea></td>
 			</td>
 
 		</tr>
