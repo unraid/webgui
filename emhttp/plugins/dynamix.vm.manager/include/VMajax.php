@@ -33,30 +33,60 @@ function scan($line, $text) {
 	return stripos($line,$text)!==false;
 }
 
-function embed(&$syslinux, $key, $value) {
-	$size = count($syslinux);
-	$make = false;
-	$new = strlen($value) ? "$key=$value" : false;
-	$i = 0;
-	while ($i < $size) {
-		// find sections and exclude safemode
-		if (scan($syslinux[$i],'label ') && !scan($syslinux[$i],'safe mode') && !scan($syslinux[$i],'safemode')) {
-			$n = $i + 1;
-			// find the current requested setting
-			while (!scan($syslinux[$n],'label ') && $n < $size) {
-				if (scan($syslinux[$n],'append ')) {
-					$cmd = preg_split('/\s+/',trim($syslinux[$n]));
-					// replace the existing setting
-					for ($c = 1; $c < count($cmd); $c++) if (scan($cmd[$c],$key)) {$make |= ($cmd[$c]!=$new); $cmd[$c] = $new; break;}
-					// or insert the new setting
-					if ($c==count($cmd) && $new) {array_splice($cmd,-1,0,$new); $make = true;}
-					$syslinux[$n] = '  '.str_replace('  ',' ',implode(' ',$cmd));
+function embed(&$bootcfg, $env, $key, $value) {
+	if ($env === 'syslinux') {
+		$size = count($bootcfg);
+		$make = false;
+		$new = strlen($value) ? "$key=$value" : false;
+		$i = 0;
+		while ($i < $size) {
+			// find sections and exclude safemode
+			if (scan($bootcfg[$i],'label ') && !scan($bootcfg[$i],'safe mode') && !scan($bootcfg[$i],'safemode')) {
+				$n = $i + 1;
+				// find the current requested setting
+				while (!scan($bootcfg[$n],'label ') && $n < $size) {
+					if (scan($bootcfg[$n],'append ')) {
+						$cmd = preg_split('/\s+/',trim($bootcfg[$n]));
+						// replace the existing setting
+						for ($c = 1; $c < count($cmd); $c++) if (scan($cmd[$c],$key)) {$make |= ($cmd[$c]!=$new); $cmd[$c] = $new; break;}
+						// or insert the new setting
+						if ($c==count($cmd) && $new) {array_splice($cmd,-1,0,$new); $make = true;}
+						$bootcfg[$n] = '  '.str_replace('  ',' ',implode(' ',$cmd));
+					}
+					$n++;
 				}
-				$n++;
+				$i = $n - 1;
 			}
-			$i = $n - 1;
+			$i++;
 		}
-		$i++;
+	} elseif ($env === 'grub') {
+		$size = count($bootcfg);
+		$make = false;
+		$new = strlen($value) ? "$key=$value" : false;
+		$i = 0;
+		while ($i < $size) {
+			// find sections and exclude safemode/memtest
+			if (scan($bootcfg[$i],'menuentry ') && !scan($bootcfg[$i],'safe mode') && !scan($bootcfg[$i],'safemode') && !scan($bootcfg[$i],'memtest')) {
+				$n = $i + 1;
+				// find the current requested setting
+				while (!scan($bootcfg[$n],'menuentry ') && $n < $size) {
+					if (scan($bootcfg[$n],'linux ')) {
+						$cmd = preg_split('/\s+/',trim($bootcfg[$n]));
+						// replace the existing setting
+						for ($c = 1; $c < count($cmd); $c++) if (scan($cmd[$c],$key)) {$make |= ($cmd[$c]!=$new); $cmd[$c] = $new; break;}
+						// or insert the new setting
+						if ($c == count($cmd) && $new) {
+							$cmd[] = $new;
+							$make = true;
+						}
+						$bootcfg[$n] = '  ' . str_replace('  ', ' ', implode(' ', $cmd));
+					}
+					$n++;
+				}
+				$i = $n - 1;
+			}
+			$i++;
+		}
 	}
 	return $make;
 }
@@ -536,26 +566,39 @@ case 'hot-detach-usb':
 	//TODO
 	break;
 
-case 'syslinux':
-	$cfg = '/boot/syslinux/syslinux.cfg';
-	$syslinux = file($cfg, FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
-	$m1 = embed($syslinux, 'pcie_acs_override', $_REQUEST['pcie']);
-	$m2 = embed($syslinux, 'vfio_iommu_type1.allow_unsafe_interrupts', $_REQUEST['vfio']);
-	if ($m1||$m2) file_put_contents($cfg, implode("\n",$syslinux)."\n");
+case 'cmdlineoverride':
+	if (is_file('/boot/syslinux/syslinux.cfg')) {
+		$cfg = '/boot/syslinux/syslinux.cfg';
+		$env = 'syslinux';
+		$bootcfg = file($cfg, FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
+	} elseif (is_file('/boot/grub/grub.cfg')) {
+		$cfg = '/boot/grub/grub.cfg';
+		$env = 'grub';
+		$bootcfg = file($cfg, FILE_IGNORE_NEW_LINES);
+	}
+	$m1 = embed($bootcfg, $env, 'pcie_acs_override', $_REQUEST['pcie']);
+	$m2 = embed($bootcfg, $env, 'vfio_iommu_type1.allow_unsafe_interrupts', $_REQUEST['vfio']);
+	if ($m1||$m2) file_put_contents($cfg, implode("\n",$bootcfg)."\n");
 	$arrResponse = ['success' => true, 'modified' => $m1|$m2];
 	break;
 
 case 'reboot':
-	$cfg = '/boot/syslinux/syslinux.cfg';
-	$syslinux = file($cfg, FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
+	if (is_file('/boot/syslinux/syslinux.cfg')) {
+		$cfg = '/boot/syslinux/syslinux.cfg';
+		$env = 'syslinux';
+	} elseif (is_file('/boot/grub/grub.cfg')) {
+		$cfg = '/boot/grub/grub.cfg';
+		$env = 'grub';
+	}
+	$bootcfg = file($cfg, FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
 	$cmdline = explode(' ',file_get_contents('/proc/cmdline'));
 	$pcie = $vfio = '';
 	foreach ($cmdline as $cmd) {
 		if (scan($cmd,'pcie_acs_override')) $pcie = explode('=',$cmd)[1];
 		if (scan($cmd,'allow_unsafe_interrupts')) $vfio = explode('=',$cmd)[1];
 	}
-	$m1 = embed($syslinux, 'pcie_acs_override', $pcie);
-	$m2 = embed($syslinux, 'vfio_iommu_type1.allow_unsafe_interrupts', $vfio);
+	$m1 = embed($bootcfg, $env, 'pcie_acs_override', $pcie);
+	$m2 = embed($bootcfg, $env, 'vfio_iommu_type1.allow_unsafe_interrupts', $vfio);
 	$arrResponse = ['success' => true, 'modified' => $m1|$m2];
 	break;
 
