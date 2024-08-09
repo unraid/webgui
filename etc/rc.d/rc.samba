@@ -37,6 +37,13 @@ samba_running(){
   [[ $(pgrep -cf $SMBD) -gt 0 ]]
 }
 
+samba_waitfor_shutdown(){
+  for i in {1..5}; do
+    if ! samba_running; then break; fi
+    sleep 1
+  done
+}
+
 samba_settings(){
   [[ -z $COMMENT ]] && COMMENT=""
   [[ -z $SECURITY ]] && SECURITY="user"
@@ -145,9 +152,17 @@ samba_stop(){
   if ! samba_running; then
     REPLY="Already stopped"
   else
+    REPLY="Stopped"
+    # stop gracefully with SIGTERM
     run killall smbd nmbd wsdd2 winbindd
+    samba_waitfor_shutdown
+    if samba_running; then
+      REPLY="Killed"
+      # stop forcibly with SIGKILL
+      run killall -SIGKILL smbd nmbd wsdd2 winbindd
+      samba_waitfor_shutdown
+    fi
     if ! samba_running; then
-      REPLY="Stopped"
       # save samba 'secrets' file if changed
       if [[ -e $PRIVATE/secrets.tdb ]]; then
         rm -f /tmp/emhttp/secrets.tdb
