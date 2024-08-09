@@ -142,24 +142,88 @@ function device_name(&$disk) {
   $fancy = _(my_disk(native($name,1)),3);
   return "<i class='icon-$type f14'></i> <a href=\"".htmlspecialchars("/Dashboard/Main/Settings/Device?name=$name")."\" title=\"$fancy settings\">$fancy</a>";
 }
+
 function device_status(&$disk, &$error, &$warning) {
-  global $var;
-  if (_var($disk,'type')!='Extra' && _var($var,'fsState')=='Stopped') {
-    $color = 'green'; $text = 'off-line';
-  } else switch (_var($disk,'color')) {
-    case 'green-on'    : $color = 'green';  $text = 'active';     break;
-    case 'green-blink' : $color = 'grey';   $text = 'standby';    break;
-    case 'blue-on'     : $color = 'blue';   $text = 'unassigned'; break;
-    case 'blue-blink'  : $color = 'grey';   $text = 'unassigned'; break;
-    case 'yellow-on'   : $color = 'yellow'; $text =  _var($disk,'type')=='Parity' ? 'invalid' : 'emulated';   $warning++; break;
-    case 'yellow-blink': $color = 'grey';   $text =  _var($disk,'type')=='Parity' ? 'invalid' : 'emulated';   $warning++; break;
-    case 'red-on'      : $color = 'red';    $text = 'disabled';   $error++; break;
-    case 'red-blink'   : $color = 'grey';   $text = 'disabled';   $error++; break;
-    case 'red-off'     : $color = 'red';    $text = 'faulty';     $error++; break;
-    case 'grey-off'    : $color = 'grey';   $text = 'no device';  break;
-  }
-  return "<i class='fa fa-circle orb $color-orb middle'></i>"._($text);
+	global $var;
+
+	if (_var($disk, 'type') != 'Extra' && _var($var, 'fsState') == 'Stopped') {
+		$color = 'green';
+		$text = 'off-line';
+	} else {
+		/* Parity sync or rebuild. */
+	    $action = preg_split('/\s+/',_var($var,'mdResyncAction'));
+		switch (_var($disk, 'color')) {
+			case 'green-on':
+				$color = 'green';
+				$text = 'active';
+				break;
+			case 'green-blink':
+				$color = 'grey';
+				$text = 'standby';
+				break;
+			case 'blue-on':
+				$color = 'blue';
+				$text = 'unassigned';
+				break;
+			case 'blue-blink':
+				$color = 'grey';
+				$text = 'unassigned';
+				break;
+			case 'yellow-on':
+				$color = 'yellow';
+				if (_var($disk, 'type') == 'Parity') {
+					if ($action[0] == 'recon') {
+						$text = 'syncing';
+					} else if ($action[0] == 'check') {
+						$text = 'checking';
+					} else {
+						$text = 'invalid';
+					}
+				} else {
+					$text = 'emulated';
+				}
+				$warning++;
+				break;
+			case 'yellow-blink':
+				$color = 'grey';
+				if (_var($disk, 'type') == 'Parity') {
+					if ($action[0] == 'recon') {
+						$text = 'syncing';
+					} else if ($action[0] == 'check') {
+						$text = 'checking';
+					} else {
+						$text = 'invalid';
+					}
+				} else {
+					$text = 'emulated';
+				}
+				$warning++;
+				break;
+			case 'red-on':
+				$color = 'red';
+				$text = 'disabled';
+				$error++;
+				break;
+			case 'red-blink':
+				$color = 'grey';
+				$text = 'disabled';
+				$error++;
+				break;
+			case 'red-off':
+				$color = 'red';
+				$text = 'faulty';
+				$error++;
+				break;
+			case 'grey-off':
+				$color = 'grey';
+				$text = 'no device';
+				break;
+		}
+	}
+
+	return "<i class='fa fa-circle orb $color-orb middle'></i>" . _($text);
 }
+
 function device_temp(&$disk, &$red, &$orange) {
   global $display;
   $spin = strpos(_var($disk,'color'),'blink')===false;
