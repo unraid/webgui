@@ -757,7 +757,7 @@ foreach ($pages as $page) {
   if (is_file($docroot.$css_stock)) echo '<link type="text/css" rel="stylesheet" href="',autov($css_stock),'">',"\n";
   if (is_file($docroot.$css_theme)) echo '<link type="text/css" rel="stylesheet" href="',autov($css_theme),'">',"\n";
   // create page content
-  empty($page['Markdown']) || $page['Markdown']=='true' ? eval('?>'.Markdown(parse_text($page['text']))) : eval('?>'.parse_text($page['text']));
+  empty(_var($page, 'Markdown')) || _var($page, 'Markdown')==='true' ? eval('?>'.Markdown(parse_text($page['text']))) : eval('?>'.parse_text($page['text']));
   if ($close) echo "</div></div>";
 }
 if (count($pages)) {
