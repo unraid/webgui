@@ -89,71 +89,128 @@ if ($all==0)
 else
   foreach (glob("state/*.ssz1",GLOB_NOSORT) as $entry) $ssz1[basename($entry,'.ssz1')] = parse_ini_file($entry);
 
+/* Define constants for magic strings */
+define('STATUS_GREEN_ON', 'green-on');
+define('STATUS_YELLOW_ON', 'yellow-on');
+define('LUKS_STATUS_UNKNOWN', 0);
+define('LUKS_STATUS_ENCRYPTED', 1);
+define('LUKS_STATUS_UNENCRYPTED', 2);
+
 // Build table
 $row = 0;
 foreach ($shares as $name => $share) {
-  $row++;
-  $color = $share['color'];
-  switch ($color) {
-    case 'green-on' : $orb = 'circle'; $color = 'green'; $help = _('All files protected'); break;
-    case 'yellow-on': $orb = 'warning'; $color = 'yellow'; $help = _('Some or all files unprotected'); break;
-  }
-  if ($crypto) switch ($share['luksStatus']) {
-    case 0: $luks = "<i class='nolock fa fa-lock'></i>"; break;
-    case 1: $luks = "<a class='info' onclick='return false'><i class='padlock fa fa-unlock-alt green-text'></i><span>"._('All files encrypted')."</span></a>"; break;
-    case 2: $luks = "<a class='info' onclick='return false'><i class='padlock fa fa-unlock-alt orange-text'></i><span>"._('Some or all files unencrypted')."</span></a>"; break;
-   default: $luks = "<a class='info' onclick='return false'><i class='padlock fa fa-lock red-text'></i><span>"._('Unknown encryption state')."</span></a>"; break;
-  } else $luks = "";
-  echo "<tr><td><a class='view' href=\"/$path/Browse?dir=/mnt/user/",rawurlencode($name),"\"><i class=\"icon-u-tab\" title=\"",_('Browse')," /mnt/user/".rawurlencode($name),"\"></i></a>";
-  echo "<a class='info nohand' onclick='return false'><i class='fa fa-$orb orb $color-orb'></i><span style='left:18px'>$help</span></a>$luks<a href=\"/$path/Share?name=";
-  echo rawurlencode($name),"\" onclick=\"$.cookie('one','tab1')\">",compress($name),"</a></td>";
-  echo "<td>{$share['comment']}</td>";
-  echo "<td>",user_share_settings($var['shareSMBEnabled'], $sec[$name]),"</td>";
-  echo "<td>",user_share_settings($var['shareNFSEnabled'], $sec_nfs[$name]),"</td>";
+	$array		= _('Array');
+	$indicator	= "<i class='fa fa-database fa-fw'></i>";
 
-  // Check for non existent pool device
-  if (isset($share['cachePool']) && !in_array($share['cachePool'], $pools_check)) $share['useCache'] = "no";
+	/* Check that the share storage assignments are valid. */
+	if (($share['cachePool']) && (! in_array($share['cachePool'], $pools_check))) {
+		$array			= compress(my_disk($share['cachePool'],$display['raw']));
+		$indicator	= "<i class='fa fa-bullseye fa-fw'></i>";
+		$share_valid	= false;
+	} else {
+		/* Is the share exclusive? */
+	    $exclusive = _var($share, 'exclusive') == 'yes' ? "<i class='fa fa-caret-right '></i> " : "";
+		$share_valid	= true;
+	}
 
-  switch ($share['useCache']) {
-  case 'no':
-    $cache = "<a class='hand info none' onclick='return false'><i class='fa fa-database fa-fw'></i>"._('Array')."<span>".sprintf(_('Primary storage %s'),_('Array'))."</span></a>";
-    break;
-  case 'yes':
-    $cache = "<a class='hand info none' onclick='return false'><i class='fa fa-bullseye fa-fw'></i>".compress(my_disk($share['cachePool'],$display['raw']))." <i class='fa fa-long-arrow-right fa-fw'></i><i class='fa fa-database fa-fw'></i>"._('Array')."<span>"._('Primary storage to Secondary storage')."</span></a>";
-    break;
-  case 'prefer':
-    $cache = "<a class='hand info none' onclick='return false'><i class='fa fa-bullseye fa-fw'></i>".compress(my_disk($share['cachePool'],$display['raw']))." <i class='fa fa-long-arrow-left fa-fw'></i><i class='fa fa-database fa-fw'></i>"._('Array')."<span>"._('Secondary storage to Primary storage')."</span></a>";
-    break;
-  case 'only':
-    $exclusive = isset($share['exclusive']) && $share['exclusive']=='yes' ? "<i class='fa fa-caret-right '></i> " : "";
-    $cache = "<a class='hand info none' onclick='return false'><i class='fa fa-bullseye fa-fw'></i>$exclusive".compress(my_disk($share['cachePool'],$display['raw']))."<span>".sprintf(_('Primary storage %s'),$share['cachePool']).($exclusive ? ", "._('Exclusive access') : "")."</span></a>";
-    break;
-  }
-  if (array_key_exists($name,$ssz1)) {
-    echo "<td>$cache</td>";
-    echo "<td>",my_scale($ssz1[$name]['disk.total'], $unit)," $unit</td>";
-    echo "<td>",my_scale($share['free']*1024, $unit)," $unit</td>";
-    echo "</tr>";
-    foreach ($ssz1[$name] as $diskname => $disksize) {
-      if ($diskname=='disk.total') continue;
-      $include = $share['include'];
-      $inside = in_array($diskname, array_filter(array_diff($myDisks, explode(',',$share['exclude'])), 'shareInclude'));
-      echo "<tr class='",($inside ? "'>" : "warning'>");
-      echo "<td><a class='view'></a><a href='#' title='",_('Recompute'),"...' onclick=\"computeShare('",rawurlencode($name),"',$(this).parent())\"><i class='fa fa-refresh icon'></i></a>&nbsp;",_(my_disk($diskname,$display['raw']),3),"</td>";
-      echo "<td>",($inside ? "" : "<em>"._('Share is outside the list of designated disks')."</em>"),"</td>";
-      echo "<td></td>";
-      echo "<td></td>";
-      echo "<td></td>";
-      echo "<td>",my_scale($disksize, $unit)," $unit</td>";
-      echo "<td>",my_scale($disks[$diskname]['fsFree']*1024, $unit)," $unit</td>";
-      echo "</tr>";
-    }
-  } else {
-    echo "<td>$cache</td>";
-    echo "<td><a href='#' onclick=\"computeShare('",rawurlencode($name),"',$(this))\">",_('Compute'),"...</a></td>";
-    echo "<td>",my_scale($share['free']*1024, $unit)," $unit</td>";
-    echo "</tr>";
-  }
+	$row++;
+	$color = $share['color'] ?? '';
+	$orb = '';
+	$help = '';
+
+	switch ($color) {
+		case STATUS_GREEN_ON:
+			$orb = 'circle';
+			$color = 'green';
+			$help = _('All files protected');
+			break;
+		case STATUS_YELLOW_ON:
+			$orb = 'warning';
+			$color = 'yellow';
+			$help = _('Some or all files unprotected');
+			break;
+		default:
+			/* Handle unexpected color values */
+			$orb = 'question';
+			$color = 'grey';
+			$help = _('Unknown protection status');
+			break;
+	}
+
+	$luks = '';
+	if ($crypto) {
+		switch ($share['luksStatus'] ?? LUKS_STATUS_UNKNOWN) {
+			case LUKS_STATUS_UNKNOWN:
+				$luks = "<i class='nolock fa fa-lock'></i>";
+				break;
+			case LUKS_STATUS_ENCRYPTED:
+				$luks = "<a class='info' onclick='return false'><i class='padlock fa fa-unlock-alt green-text'></i><span>"._('All files encrypted')."</span></a>";
+				break;
+			case LUKS_STATUS_UNENCRYPTED:
+				$luks = "<a class='info' onclick='return false'><i class='padlock fa fa-unlock-alt orange-text'></i><span>"._('Some or all files unencrypted')."</span></a>";
+				break;
+			default:
+				$luks = "<a class='info' onclick='return false'><i class='padlock fa fa-lock red-text'></i><span>"._('Unknown encryption state')."</span></a>";
+				break;
+		}
+	}
+
+	echo "<tr><td><a class='view' href=\"/$path/Browse?dir=/mnt/user/", rawurlencode($name), "\"><i class=\"icon-u-tab\" title=\"", _('Browse'), " /mnt/user/" . rawurlencode($name), "\"></i></a>";
+	echo "<a class='info nohand' onclick='return false'><i class='fa fa-$orb orb $color-orb'></i><span style='left:18px'>$help</span></a>$luks<a href=\"/$path/Share?name=";
+	echo rawurlencode($name), "\" onclick=\"$.cookie('one','tab1')\">$name</a></td>";
+	echo "<td>{$share['comment']}</td>";
+	echo "<td>", user_share_settings($var['shareSMBEnabled'], $sec[$name]), "</td>";
+	echo "<td>", user_share_settings($var['shareNFSEnabled'], $sec_nfs[$name]), "</td>";
+
+	/* If the share pool or array is not valid, indicate that to the user. */
+	if (!$share_valid) {
+		$cache = "<a class='hand info none' onclick='return false'>".$indicator." <i class='fa fa-warning red-orb'></i> ".$array."<span>"._('This share is invalid').'; '. _('It references storage that does not exist')."</span></a>";
+	} else {
+		switch ($share['useCache']) {
+			case 'no':
+				$cache = "<a class='hand info none' onclick='return false'>".$indicator.$exclusive.$array."<span>".sprintf(_('Primary storage %s'), $array)."</span></a>";
+				break;
+			case 'yes':
+				$cache = "<a class='hand info none' onclick='return false'><i class='fa fa-bullseye fa-fw'></i>".compress(my_disk($share['cachePool'], $display['raw']))." <i class='fa fa-long-arrow-right fa-fw'></i>".$indicator.$array."<span>"._('Primary storage to Secondary storage')."</span></a>";
+				break;
+			case 'prefer':
+				$cache = "<a class='hand info none' onclick='return false'><i class='fa fa-bullseye fa-fw'></i>".compress(my_disk($share['cachePool'], $display['raw']))." <i class='fa fa-long-arrow-left fa-fw'></i>".$indicator.$array."<span>"._('Secondary storage to Primary storage')."</span></a>";
+				break;
+			case 'only':
+				$cache = "<a class='hand info none' onclick='return false'><i class='fa fa-bullseye fa-fw'></i>$exclusive".my_disk($share['cachePool'], $display['raw'])."<span>".sprintf(_('Primary storage %s'), $share['cachePool']).($exclusive ? ", "._('Exclusive access') : "")."</span></a>";
+				break;
+			default:
+				/* Handle unexpected useCache values */
+				$cache = "<a class='hand info none' onclick='return false'>". $indicator . $array . "<span>"._('Unknown cache usage')."</span></a>";
+				break;
+		}
+	}
+
+	if (array_key_exists($name, $ssz1)) {
+		echo "<td>$cache</td>";
+		echo "<td>", my_scale($ssz1[$name]['disk.total'], $unit), " $unit</td>";
+		echo "<td>", my_scale($share['free'] * 1024, $unit), " $unit</td>";
+		echo "</tr>";
+		foreach ($ssz1[$name] as $diskname => $disksize) {
+			if ($diskname == 'disk.total') continue;
+			$include = $share['include'];
+			$inside = in_array($diskname, array_filter(array_diff($myDisks, explode(',', $share['exclude'])), 'shareInclude'));
+			echo "<tr class='", ($inside ? "'>" : "warning'>");
+			echo "<td><a class='view'></a><a href='#' title='", _('Recompute'), "...' onclick=\"computeShare('", rawurlencode($name), "',$(this).parent())\"><i class='fa fa-refresh icon'></i></a>&nbsp;", _(my_disk($diskname, $display['raw']), 3), "</td>";
+			echo "<td>", ($inside ? "" : "<em>"._('Share is outside the list of designated disks')."</em>"), "</td>";
+			echo "<td></td>";
+			echo "<td></td>";
+			echo "<td></td>";
+			echo "<td>", my_scale($disksize, $unit), " $unit</td>";
+			echo "<td>", my_scale($disks[$diskname]['fsFree'] * 1024, $unit), " $unit</td>";
+			echo "</tr>";
+		}
+	} else {
+		echo "<td>$cache</td>";
+		echo "<td><a href='#' onclick=\"computeShare('", rawurlencode($name), "',$(this))\">", _('Compute'), "...</a></td>";
+		echo "<td>", my_scale($share['free'] * 1024, $unit), " $unit</td>";
+		echo "</tr>";
+	}
 }
 if ($row==0) echo $noshares;
 ?>
