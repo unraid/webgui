@@ -188,11 +188,7 @@ foreach ($containers as $ct) {
   echo "<td class='advanced'><span class='cpu-$id'>0%</span><div class='usage-disk mm'><span id='cpu-$id' style='width:0'></span><span></span></div>";
   echo "<br><span class='mem-$id'>0 / 0</span></td>";
   if (empty($composestack)) {
-    if ($ct['Manager'] == "dockerman") {
-      echo "<td><input type='checkbox' id='$id-auto' class='autostart' container='".htmlspecialchars($name)."'".($info['autostart'] ? ' checked':'').">";
-    } else {
-      echo "<td><i class='fa fa-docker fa-fw'/></i> 3rd Party";
-    }
+    echo "<td><input type='checkbox' id='$id-auto' class='autostart' container='".htmlspecialchars($name)."'".($info['autostart'] ? ' checked':'').">";
   } else {
     echo "<td><i class='fa fa-docker'/></i> Compose";
   }
