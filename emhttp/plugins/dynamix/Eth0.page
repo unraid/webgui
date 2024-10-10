@@ -60,8 +60,8 @@ foreach ($ports as $ethX) {
   }
 }
 // enable interface only when VMs and Docker are stopped
-$service = exec("pgrep libvirt") ? _('VM manager') : '';
-$service .= exec("pgrep docker") ? ($service ? ' '._('and').' ' : '')._('Docker service') : '';
+$service = exec('pgrep --ns $$ libvirt') ? _('VM manager') : '';
+$service .= exec('pgrep --ns $$ docker') ? ($service ? ' '._('and').' ' : '')._('Docker service') : '';
 
 // eth0 port status
 $no_eth0 = exec("ip link show eth0|grep -Pom1 '(NO-CARRIER|state DOWN)'");

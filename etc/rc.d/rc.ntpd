@@ -76,7 +76,7 @@ ntpd_stop(){
       kill -HUP $(cat /var/run/ntpd.pid)
       rm -f /var/run/ntpd.pid
     else
-      killall -HUP -q ntpd
+      killall --ns $$  -HUP -q ntpd
     fi
     if ! ntpd_running; then REPLY="Stopped"; else REPLY="Failed"; fi
   fi
@@ -93,7 +93,7 @@ ntpd_restart(){
 }
 
 ntpd_reload(){
-  killall -HUP -q ntpd
+  killall --ns $$  -HUP -q ntpd
   . <(fromdos <$IDENT)
   ntpd_build
   $NTPD $OPTIONS 2>/dev/null

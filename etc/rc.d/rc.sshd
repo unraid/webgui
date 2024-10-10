@@ -24,13 +24,7 @@ SSH_ETC="/etc/ssh"
 sshd_running(){
   sleep 0.1
   # get all pids from sshd
-  for pid in $(pgrep -f $SSHD); do
-    # check if a sshd is running on host system
-    if ! grep -qE '/docker|/lxc' /proc/$pid/cgroup; then
-      return 0
-    fi
-  done
-  return 1
+  [[ $(pgrep --ns $$ -cf $SSHD) -gt 0 ]]
 }
 
 sshd_build(){
@@ -74,18 +68,8 @@ sshd_stop(){
     REPLY="Already stopped"
   else
     log "Stopping $DAEMON..."
-    # get all pids from sshd
-    for pid in $(pgrep -f $SSHD); do
-      # make sure to kill only sshd from host system
-      if ! grep -qE '/docker|/lxc' /proc/$pid/cgroup; then
-        kill $pid
-      fi
-    done
-    if ! sshd_running; then
-      REPLY="Stopped"
-    else
-      REPLY="Failed"
-    fi
+    killall --ns $$ sshd
+    if ! sshd_running; then REPLY="Stopped"; else REPLY="Failed"; fi
   fi
   log "$DAEMON...  $REPLY."
 }

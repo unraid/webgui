@@ -19,7 +19,7 @@ Code="e944"
 ?>
 <?
 // Remove stale /tmp/plugin/*.plg entries (check that script 'plugin' is not running to avoid clashes)
-if (!exec("pgrep -f $docroot/plugins/dynamix.plugin.manager/scripts/plugin")) {
+if (!exec('pgrep --ns $$ -f '."$docroot/plugins/dynamix.plugin.manager/scripts/plugin")) {
   foreach (glob("/tmp/plugins/*.{plg,txt}", GLOB_NOSORT+GLOB_BRACE) as $entry) if (!file_exists("/var/log/plugins/".basename($entry))) @unlink($entry);
 }
 $check = $notify['version'] ? 0 : 1;

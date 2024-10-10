@@ -34,7 +34,7 @@ PRIVATE="/var/lib/samba/private"
 
 samba_running(){
   sleep 0.1
-  [[ $(pgrep -cf $SMBD) -gt 0 ]]
+  [[ $(pgrep --ns $$ -cf $SMBD) -gt 0 ]]
 }
 
 samba_waitfor_shutdown(){

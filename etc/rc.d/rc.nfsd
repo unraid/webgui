@@ -104,11 +104,11 @@ nfsd_stop(){
   if ! nfsd_running; then
     REPLY="Already stopped"
   else
-    killall rpc.mountd 2>/dev/null
-    killall nfsd 2>/dev/null
+    killall --ns $$ rpc.mountd 2>/dev/null
+    killall --ns $$ nfsd 2>/dev/null
     sleep 1
-    killall -9 nfsd 2>/dev/null
-    killall rpc.rquotad 2>/dev/null
+    killall --ns $$ -9 nfsd 2>/dev/null
+    killall --ns $$ rpc.rquotad 2>/dev/null
     run $EXPORTFS -au
     if ! nfsd_running; then REPLY="Stopped"; else REPLY="Failed"; fi
   fi

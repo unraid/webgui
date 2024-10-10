@@ -117,7 +117,7 @@ empty() {
 killtree() {
   local pid=$1 child
     
-  for child in $(pgrep -P $pid); do
+  for child in $(pgrep --ns $$ -P $pid); do
     killtree $child
   done
   [ $pid -ne $$ ] && kill -TERM $pid

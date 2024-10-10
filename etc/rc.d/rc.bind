@@ -96,7 +96,7 @@ bind_stop() {
   fi
   # Kill named processes if there are any running:
   if ps axco command | grep -q -e "^named$"; then
-    echo "Stopping all named processes in this namespace:  /bin/killall -SIGTERM --ns \$\$ named"
+    echo "Stopping all named processes in this namespace:  /bin/killall -SIGTERM --ns $$ named"
     /bin/killall -SIGTERM --ns $$ named 2> /dev/null
   fi
 }

@@ -16,7 +16,7 @@ case "$1" in
   else
     echo "Not available"
   fi;
-  pgrep -f "/sbin/reiserfsck $2" >/dev/null
+  pgrep --ns $$ -f "/sbin/reiserfsck $2" >/dev/null
 ;;
 'cancel')
   pkill -f "/sbin/reiserfsck $2"

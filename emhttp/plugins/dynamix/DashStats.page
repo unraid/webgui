@@ -69,7 +69,7 @@ $cache_type = $cache_rate = [];
 
 $parity = _var($var,'mdResync');
 $mover = file_exists('/var/run/mover.pid');
-$btrfs = exec('pgrep -cf /sbin/btrfs');
+$btrfs = exec('pgrep --ns $$ -cf /sbin/btrfs');
 $vdisk = exec("grep -Pom1 '^DOCKER_IMAGE_TYPE=\"\\K[^\"]+' /boot/config/docker.cfg 2>/dev/null")!='folder' ? _('Docker vdisk') : _('Docker folder');
 $dot = _var($display,'number','.,')[0];
 $zfs = count(array_filter(array_column($disks,'fsType'),function($fs){return str_replace('luks:','',$fs??'')=='zfs';}));

@@ -74,7 +74,7 @@ mcelog_stop(){
     if ! mcelog_running; then
       REPLY="Already stopped"
     else
-      killall -TERM $MCELOG
+      killall --ns $$ -TERM $MCELOG
       if ! mcelog_running; then REPLY="Stopped"; else REPLY="Failed"; fi
     fi
   elif [[ $MCELOG_MODE == trigger && -f $TRIGGER ]]; then 
