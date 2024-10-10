@@ -37,7 +37,7 @@ if (isset($_POST['scan'])) {
 		/* Iterate over each item in the directory and its subdirectories */
 		foreach ($iterator as $fileinfo) {
 			/* Check if the current item is a file and not a .DS_Store file */
-			if ($fileinfo->isFile() && $fileinfo->getFilename() !== '.DS_Store') {
+			if ($fileinfo->isFile() && !preg_match('/\.DS_Store$/i', $fileinfo->getFilename())) {
 				$hasFiles = true;
 				break;
 			}
@@ -70,7 +70,7 @@ function removeDSStoreFilesAndEmptyDirs($dir) {
 	);
 
 	foreach ($iterator as $file) {
-		if ($file->isFile() && $file->getFilename() === '.DS_Store') {
+		if ($file->isFile() && preg_match('/\.DS_Store$/i', $file->getFilename())) {
 			unlink($file->getRealPath());
 		}
 	}
@@ -87,7 +87,6 @@ if (isset($_POST['cleanup'])) {
   $n = 0;
   // active shares
   $shares = array_map('strtolower',array_keys(parse_ini_file('state/shares.ini',true)));
-
   // stored shares
   foreach (glob("/boot/config/shares/*.cfg",GLOB_NOSORT) as $name) {
     if (!in_array(strtolower(basename($name,'.cfg')),$shares)) {
