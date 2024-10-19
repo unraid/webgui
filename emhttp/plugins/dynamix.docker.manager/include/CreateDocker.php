@@ -169,6 +169,8 @@ if (isset($_GET['updateContainer'])){
     $xml = file_get_contents($tmpl);
     [$cmd, $Name, $Repository] = xmlToCommand($tmpl);
     $Registry = getXmlVal($xml, "Registry");
+    $ExtraParams = getXmlVal($xml, "ExtraParams");
+    $Network = getXmlVal($xml, "Network");
     $oldImageID = $DockerClient->getImageID($Repository);
     // pull image
     if ($echo && !pullImage($Name, $Repository)) continue;
@@ -181,6 +183,24 @@ if (isset($_GET['updateContainer'])){
       $startContainer = true;
       // attempt graceful stop of container first
       stopContainer($Name, false, $echo);
+    }
+    // check if network from another container is specified in xml (Network & ExtraParams)
+    if (preg_match('/^container:(.*)/', $Network)) {
+      $Net_Container = str_replace("container:", "", $Network);
+    } else {
+      preg_match("/--(net|network)=container:[^\s]+/", $ExtraParams, $NetworkParam);
+      if (!empty($NetworkParam[0])) {
+        $Net_Container = explode(':', $NetworkParam[0])[1];
+        $Net_Container = str_replace(['"', "'"], '', $Net_Container);
+      }
+    }
+    // check if the container still exists from which the network should be used, if it doesn't exist any more recreate container with network none and don't start it
+    if (!empty($Net_Container)) {
+      $Net_Container_ID = $DockerClient->getContainerID($Net_Container);
+      if (empty($Net_Container_ID)) {
+        $cmd = str_replace('/docker run -d ', '/docker create ', $cmd);
+        $cmd = preg_replace("/--(net|network)=(['\"]?)container:[^'\"]+\\2/", "--network=none ", $cmd);
+      }
     }
     // force kill container if still running after time-out
     if (empty($_GET['communityApplications'])) removeContainer($Name, $echo);
