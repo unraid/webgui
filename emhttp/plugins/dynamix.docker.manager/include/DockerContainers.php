@@ -48,55 +48,6 @@ $null = '0.0.0.0';
 $autostart = (array)@file($autostart_file,FILE_IGNORE_NEW_LINES);
 $names = array_map('var_split',$autostart);
 
-// Grab Tailscale json from container
-function tailscale_stats($name) {
-  exec("docker exec -i ".$name." /bin/sh -c \"tailscale status --json | jq '{Self: .Self, ExitNodeStatus: .ExitNodeStatus, Version: .Version}'\" 2>/dev/null", $TS_stats);
-  if (!empty($TS_stats)) {
-    $TS_stats = implode("\n", $TS_stats);
-    return json_decode($TS_stats, true);
-  }
-  return '';
-}
-
-// Download Tailscal JSON and return Array, refresh file if older than 24 hours
-function tailscale_json_dl($file, $url) {
-  $dl_status = 0;
-  if (!is_dir('/tmp/tailscale')) {
-    mkdir('/tmp/tailscale', 0777, true);
-  }
-  if (!file_exists($file)) {
-    exec("wget -T 3 -q -O " . $file . " " . $url, $output, $dl_status);
-  } else {
-    $fileage =  time() - filemtime($file);
-    if ($fileage > 86400) {
-      unlink($file);
-      exec("wget -T 3 -q -O " . $file . " " . $url, $output, $dl_status);
-    }
-  }
-  if ($dl_status === 0) {
-    return json_decode(@file_get_contents($file), true);
-  } elseif ($dl_status === 0 && is_file($file)) {
-    return json_decode(@file_get_contents($file), true);
-  } else {
-    unlink($file);
-    return '';
-  }
-}
-
-// Grab Tailscale DERP map JSON
-$TS_derp_url = 'https://login.tailscale.com/derpmap/default';
-$TS_derp_file = '/tmp/tailscale/tailscale-derpmap.json';
-$TS_derp_list = tailscale_json_dl($TS_derp_file, $TS_derp_url);
-
-// Grab Tailscale version JSON
-$TS_version_url = 'https://pkgs.tailscale.com/stable/?mode=json';
-$TS_version_file = '/tmp/tailscale/tailscale-latest-version.json';
-// Extract tarbal version string
-$TS_latest_version = tailscale_json_dl($TS_version_file, $TS_version_url);
-if (!empty($TS_latest_version)) {
-  $TS_latest_version = $TS_latest_version["TarballsVersion"];
-}
-
 function my_lang_time($text) {
   [$number, $text] = my_explode(' ',$text,2);
   return sprintf(_("%s $text"),$number);
@@ -123,14 +74,12 @@ foreach ($containers as $ct) {
   $template = $info['template']??'';
   $shell = $info['shell']??'';
   $webGui = html_entity_decode($info['url']??'');
-  $TShostname = isset($ct['TSHostname']) ? $ct['TSHostname'] : '';
-  $TSwebGui = html_entity_decode($info['TSurl']??'');
   $support = html_entity_decode($info['Support']??'');
   $project = html_entity_decode($info['Project']??'');
   $registry = html_entity_decode($info['registry']??'');
   $donateLink = html_entity_decode($info['DonateLink']??'');
   $readme = html_entity_decode($info['ReadMe']??'');
-  $menu = sprintf("onclick=\"addDockerContainerContext('%s','%s','%s',%s,%s,%s,%s,'%s','%s','%s','%s','%s','%s','%s', '%s','%s')\"", addslashes($name), addslashes($ct['ImageId']), addslashes($template), $running, $paused, $updateStatus, $is_autostart, addslashes($webGui), addslashes($TSwebGui), $shell, $id, addslashes($support), addslashes($project),addslashes($registry),addslashes($donateLink),addslashes($readme));
+  $menu = sprintf("onclick=\"addDockerContainerContext('%s','%s','%s',%s,%s,%s,%s,'%s','%s','%s','%s','%s','%s', '%s','%s')\"", addslashes($name), addslashes($ct['ImageId']), addslashes($template), $running, $paused, $updateStatus, $is_autostart, addslashes($webGui), $shell, $id, addslashes($support), addslashes($project),addslashes($registry),addslashes($donateLink),addslashes($readme));
   $docker[] = "docker.push({name:'$name',id:'$id',state:$running,pause:$paused,update:$updateStatus});";
   $shape = $running ? ($paused ? 'pause' : 'play') : 'square';
   $status = $running ? ($paused ? 'paused' : 'started') : 'stopped';
@@ -230,95 +179,6 @@ foreach ($containers as $ct) {
       }
       break;
     }
-  // Check if Tailscale for container is enabled by checking if TShostname is set
-  if (!empty($TShostname)) {
-    if ($running) {
-      // Get stats from container and check if they are not empty
-      $TSstats = tailscale_stats($name);
-      if (!empty($TSstats)) {
-        // Construct TSinfo from TSstats
-        $TSinfo = '';
-        if (!$TSstats["Self"]["Online"]) {
-          $TSinfo .= "Online:\t\t&#10060;\nPlease check the logs!";
-        } else {
-          $TS_version = explode('-', $TSstats["Version"])[0];
-          if (!empty($TS_version)) {
-            if (!empty($TS_latest_version)) {
-              if ($TS_version !== $TS_latest_version) {
-                $TSinfo .= "Version:\t\t" . $TS_version . " &#10132; " . $TS_latest_version . " available!\n";
-              } else {
-                $TSinfo .= "Version:\t\t" . $TS_version . "\n";
-              }
-            } else {
-              $TSinfo .= "Version:\t\t" . $TS_version . "\n";
-            }
-          }
-          $TSinfo .= "Online:\t\t&#9989;\n";
-          $TS_DNSName = $TSstats["Self"]["DNSName"];
-          $TS_HostNameActual = substr($TS_DNSName, 0, strpos($TS_DNSName, '.'));
-          if (strcasecmp($TS_HostNameActual, $TShostname) !== 0 && !empty($TS_DNSName)) {
-            $TSinfo .= "Hostname:\tReal Hostname &#10132; " . $TS_HostNameActual . "\n";
-          } else {
-            $TSinfo .= "Hostname:\t" . $TShostname . "\n";
-          }
-          // Map region relay code to cleartext region if TS_derp_list is available
-          if (!empty($TS_derp_list)) {
-            foreach ($TS_derp_list['Regions'] as $region) {
-              if ($region['RegionCode'] === $TSstats["Self"]["Relay"]) {
-                $TSregion = $region['RegionName'];
-                break;
-              }
-            }
-            if (!empty($TSregion)) {
-              $TSinfo .= "Main Relay:\t" . $TSregion . "\n";
-            } else {
-              $TSinfo .= "Main Relay:\t" . $TSstats["Self"]["Relay"] . "\n";
-            }
-          } else {
-            $TSinfo .= "Main Relay:\t" . $TSstats["Self"]["Relay"] . "\n";
-          }
-          if (!empty($TSstats["Self"]["TailscaleIPs"])) {
-            $TSinfo .= "Addresses:\t" . implode("\n\t\t\t", $TSstats["Self"]["TailscaleIPs"]) . "\n";
-          }
-          if (!empty($TSstats["Self"]["PrimaryRoutes"])) {
-            $TSinfo .= "Routes:\t\t" . implode("\n\t\t\t", $TSstats["Self"]["PrimaryRoutes"]) . "\n";
-          }
-          if ($TSstats["Self"]["ExitNodeOption"]) {
-            $TSinfo .= "Is Exit Node:\t&#9989;\n";
-          } else {
-            if (!empty($TSstats["ExitNodeStatus"])) {
-              $TS_exit_node_status = ($TSstats["ExitNodeStatus"]["Online"]) ? "&#9989;" : "&#10060;";
-              $TSinfo .= "Exit Node:\t" . strstr($TSstats["ExitNodeStatus"]["TailscaleIPs"][0], '/', true) . " | Status: " . $TS_exit_node_status ."\n";
-            } else {
-              $TSinfo .= "Is Exit Node:\t&#10060;\n";
-            }
-          }
-          if (!empty($TSwebGui)) {
-            $TSinfo .= "URL:\t\t" . $TSwebGui . "\n";
-          }
-          if (!empty($TSstats["Self"]["KeyExpiry"])) {
-            $TS_expiry = new DateTime($TSstats["Self"]["KeyExpiry"]);
-            $current_Date = new DateTime();
-            $TS_expiry_formatted = $TS_expiry->format('Y-m-d');
-            $TS_expiry_diff = $current_Date->diff($TS_expiry);
-            if ($TS_expiry_diff->invert) {
-              $TSinfo .= "Key Expiry:\t&#10060; Expired! Renew/Disable key expiry!\n";
-            } else {
-              $TSinfo .= "Key Expiry:\t" . $TS_expiry_formatted . " (" . $TS_expiry_diff->days . " days)\n";
-            }
-          }
-        }
-      // Display message to refresh page if Tailscale in the container wasn't maybe ready to get the data
-      } else {
-        echo "<div title='Error gathering Tailscale information from container.\nPlease check the logs and refresh the page.'><img src='/plugins/dynamix.docker.manager/images/tailscale.png' style='height: 16px;'> Tailscale</div></td>";
-      }
-      // Display TSinfo if data was fetched correctly
-      echo "<div title='" . $TSinfo . "'><img src='/plugins/dynamix.docker.manager/images/tailscale.png' style='height: 16px;'> Tailscale</div>";
-    // Display message that container isn't running
-    } else {
-      echo "<div title='Container not runnig'><img src='/plugins/dynamix.docker.manager/images/tailscale.png' style='height: 16px;'> Tailscale</div></td>";
-    }
-  }
   echo "<div class='advanced'><i class='fa fa-info-circle fa-fw'></i> ".compress(_($version),12,0)."</div></td>";
   echo "<td style='white-space:nowrap'><span class='docker_readmore'> ".implode('<br>',$networks)."</span></td>";
   echo "<td style='white-space:nowrap'><span class='docker_readmore'> ".implode('<br>',$network_ips)."</span></td>";
@@ -351,3 +211,4 @@ foreach ($images as $image) {
 }
 echo "\0".implode($docker)."\0".(pgrep('rc.docker')!==false ? 1:0);
 ?>
+

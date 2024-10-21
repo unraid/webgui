@@ -32,65 +32,37 @@ function xml_decode($string) {
   return strval(html_entity_decode($string, ENT_XML1, 'UTF-8'));
 }
 
-function generateTSwebui($url, $serve, $webUI) {
-  if (!isset($webUI)) {
-    return '';
-  }
-  $webui_url = isset($webUI) ? parse_url($webUI) : '';
-  $webui_port = (preg_match('/\[PORT:(\d+)\]/', $webUI, $matches)) ? ':' . $matches[1] : '';
-  $webui_path = $webui_url['path'] ?? '';
-  $webui_query = isset($webui_url['query']) ? '?' . $webui_url['query'] : '';
-  if (!empty($url)) {
-    if (strpos($url, '[hostname]') !== false || strpos($url, '[noserve]') !== false) {
-      if ($serve === 'serve' || $serve === 'funnel') {
-        return 'https://[hostname][magicdns]' . $webui_path . $webui_query;
-      } elseif ($serve === 'no') {
-        return 'http://[noserve]' . $webui_port . $webui_path . $webui_query;
-      }
-    }
-    return $url;
-  } else {
-    if (!empty($webUI)) {
-      if ($serve === 'serve' || $serve === 'funnel') {
-        return 'https://[hostname][magicdns]' . $webui_path . $webui_query;
-      } elseif ($serve === 'no') {
-        return 'http://[noserve]' . $webui_port . $webui_path . $webui_query;
-    }
-  }
-  return '';
-  }
-}
-
 function postToXML($post, $setOwnership=false) {
   $dom = new domDocument;
   $dom->appendChild($dom->createElement("Container"));
   $xml = simplexml_import_dom($dom);
-  $xml['version']                  = 2;
-  $xml->Name                       = xml_encode(preg_replace('/\s+/', '', $post['contName']));
-  $xml->Repository                 = xml_encode(trim($post['contRepository']));
-  $xml->Registry                   = xml_encode(trim($post['contRegistry']));
-  if (isset($post['netCONT']) && !empty(trim($post['netCONT']))) {
-    $xml->Network                  = xml_encode($post['contNetwork'].':'.$post['netCONT']);
+  $xml['version']          = 2;
+  $xml->Name               = xml_encode(preg_replace('/\s+/', '', $post['contName']));
+  $xml->Repository         = xml_encode(trim($post['contRepository']));
+  $xml->Registry           = xml_encode(trim($post['contRegistry']));
+  if (!empty(trim($post['netCONT']))) {
+    $xml->Network          = xml_encode($post['contNetwork'].':'.$post['netCONT']);
   } else {
-    $xml->Network                  = xml_encode($post['contNetwork']);
+    $xml->Network          = xml_encode($post['contNetwork']);
   }
-  $xml->MyIP                       = xml_encode($post['contMyIP']);
-  $xml->Shell                      = xml_encode($post['contShell']);
-  $xml->Privileged                 = strtolower($post['contPrivileged']??'')=='on' ? 'true' : 'false';
-  $xml->Support                    = xml_encode($post['contSupport']);
-  $xml->Project                    = xml_encode($post['contProject']);
-  $xml->Overview                   = xml_encode($post['contOverview']);
-  $xml->Category                   = xml_encode($post['contCategory']);
-  $xml->WebUI                      = xml_encode(trim($post['contWebUI']));
-  $xml->TemplateURL                = xml_encode($post['contTemplateURL']);
-  $xml->Icon                       = xml_encode(trim($post['contIcon']));
-  $xml->ExtraParams                = xml_encode($post['contExtraParams']);
-  $xml->PostArgs                   = xml_encode($post['contPostArgs']);
-  $xml->CPUset                     = xml_encode($post['contCPUset']);
-  $xml->DateInstalled              = xml_encode(time());
-  $xml->DonateText                 = xml_encode($post['contDonateText']);
-  $xml->DonateLink                 = xml_encode($post['contDonateLink']);
-  $xml->Requires                   = xml_encode($post['contRequires']);
+  $xml->MyIP               = xml_encode($post['contMyIP']);
+  $xml->Shell              = xml_encode($post['contShell']);
+  $xml->Privileged         = strtolower($post['contPrivileged']??'')=='on' ? 'true' : 'false';
+  $xml->Support            = xml_encode($post['contSupport']);
+  $xml->Project            = xml_encode($post['contProject']);
+  $xml->Overview           = xml_encode($post['contOverview']);
+  $xml->Category           = xml_encode($post['contCategory']);
+  $xml->WebUI              = xml_encode(trim($post['contWebUI']));
+  $xml->TemplateURL        = xml_encode($post['contTemplateURL']);
+  $xml->Icon               = xml_encode(trim($post['contIcon']));
+  $xml->ExtraParams        = xml_encode($post['contExtraParams']);
+  $xml->PostArgs           = xml_encode($post['contPostArgs']);
+  $xml->CPUset             = xml_encode($post['contCPUset']);
+  $xml->DateInstalled      = xml_encode(time());
+  $xml->DonateText         = xml_encode($post['contDonateText']);
+  $xml->DonateLink         = xml_encode($post['contDonateLink']);
+  $xml->Requires           = xml_encode($post['contRequires']);
+
   $size = is_array($post['confName']??null) ? count($post['confName']) : 0;
   for ($i = 0; $i < $size; $i++) {
     $Type                  = $post['confType'][$i];
@@ -105,31 +77,6 @@ function postToXML($post, $setOwnership=false) {
     $config['Required']    = xml_encode($post['confRequired'][$i]);
     $config['Mask']        = xml_encode($post['confMask'][$i]);
   }
-  if (isset($post['contTailscale']) && strtolower($post['contTailscale']) == 'on') {
-    $xml->TailscaleEnabled             = 'true';
-    $xml->TailscaleIsExitNode          = xml_encode($post['TSisexitnode']);
-    $xml->TailscaleHostname            = xml_encode($post['TShostname']);
-    $xml->TailscaleExitNodeIP          = xml_encode($post['TSexitnodeip']);
-    $xml->TailscaleSSH                 = xml_encode($post['TSssh']);
-    $xml->TailscaleUserspaceNetworking = xml_encode($post['TSuserspacenetworking']);
-    $xml->TailscaleLANAccess           = xml_encode($post['TSallowlanaccess']);
-    $xml->TailscaleServe               = xml_encode($post['TSserve']);
-    $xml->TailscaleWebUI               = xml_encode(generateTSwebui($post['TSwebui'], $post['TSserve'], $post['contWebUI']));
-    if (isset($post['TSserve']) && strtolower($post['TSserve']) !== 'no') {
-      $xml->TailscaleServePort           = xml_encode($post['TSserveport']);
-      $xml->TailscaleServeLocalPath      = xml_encode($post['TSservelocalpath']);
-      $xml->TailscaleServeProtocol       = xml_encode($post['TSserveprotocol']);
-      $xml->TailscaleServeProtocolPort   = xml_encode($post['TSserveprotocolport']);
-      $xml->TailscaleServePath           = xml_encode($post['TSservepath']);
-    }
-    $xml->TailscaleDParams             = xml_encode($post['TSdaemonparams']);
-    $xml->TailscaleParams              = xml_encode($post['TSextraparams']);
-    $xml->TailscaleStateDir            = xml_encode($post['TSstatedir']);
-    $xml->TailscaleRoutes              = xml_encode($post['TSroutes']);;
-    if (isset($post['TStroubleshooting']) && strtolower($post['TStroubleshooting']) === 'on') {
-      $xml->TailscaleTroubleshooting     = 'true';
-    }
-  }
   $dom = new DOMDocument('1.0');
   $dom->preserveWhiteSpace = false;
   $dom->formatOutput = true;
@@ -139,48 +86,29 @@ function postToXML($post, $setOwnership=false) {
 
 function xmlToVar($xml) {
   global $subnet;
-  $xml                                 = is_file($xml) ? simplexml_load_file($xml) : simplexml_load_string($xml);
-  $out                                 = [];
-  $out['Name']                         = preg_replace('/\s+/', '', xml_decode($xml->Name));
-  $out['Repository']                   = xml_decode($xml->Repository);
-  $out['Registry']                     = xml_decode($xml->Registry);
-  $out['Network']                      = xml_decode($xml->Network);
-  $out['MyIP']                         = xml_decode($xml->MyIP ?? '');
-  $out['Shell']                        = xml_decode($xml->Shell ?? 'sh');
-  $out['Privileged']                   = xml_decode($xml->Privileged);
-  $out['Support']                      = xml_decode($xml->Support);
-  $out['Project']                      = xml_decode($xml->Project);
-  $out['Overview']                     = stripslashes(xml_decode($xml->Overview));
-  $out['Category']                     = xml_decode($xml->Category);
-  $out['WebUI']                        = xml_decode($xml->WebUI);
-  $out['TemplateURL']                  = xml_decode($xml->TemplateURL);
-  $out['Icon']                         = xml_decode($xml->Icon);
-  $out['ExtraParams']                  = xml_decode($xml->ExtraParams);
-  $out['PostArgs']                     = xml_decode($xml->PostArgs);
-  $out['CPUset']                       = xml_decode($xml->CPUset);
-  $out['DonateText']                   = xml_decode($xml->DonateText);
-  $out['DonateLink']                   = xml_decode($xml->DonateLink);
-  $out['Requires']                     = xml_decode($xml->Requires);
-  $out['TailscaleEnabled']             = xml_decode($xml->TailscaleEnabled ?? '');
-  $out['TailscaleIsExitNode']          = xml_decode($xml->TailscaleIsExitNode ?? '');
-  $out['TailscaleHostname']            = xml_decode($xml->TailscaleHostname ?? '');
-  $out['TailscaleExitNodeIP']          = xml_decode($xml->TailscaleExitNodeIP ?? '');
-  $out['TailscaleSSH']                 = xml_decode($xml->TailscaleSSH ?? '');
-  $out['TailscaleLANAccess']           = xml_decode($xml->TailscaleLANAccess ?? '');
-  $out['TailscaleUserspaceNetworking'] = xml_decode($xml->TailscaleUserspaceNetworking ?? '');
-  $out['TailscaleServe']               = xml_decode($xml->TailscaleServe ?? '');
-  $out['TailscaleServePort']           = xml_decode($xml->TailscaleServePort ?? '');
-  $out['TailscaleServeLocalPath']      = xml_decode($xml->TailscaleServeLocalPath ?? '');
-  $out['TailscaleServeProtocol']       = xml_decode($xml->TailscaleServeProtocol ?? '');
-  $out['TailscaleServeProtocolPort']   = xml_decode($xml->TailscaleServeProtocolPort ?? '');
-  $out['TailscaleServePath']           = xml_decode($xml->TailscaleServePath ?? '');
-  $out['TailscaleWebUI']               = xml_decode($xml->TailscaleWebUI ?? '');
-  $out['TailscaleRoutes']              = xml_decode($xml->TailscaleRoutes ?? '');
-  $out['TailscaleDParams']             = xml_decode($xml->TailscaleDParams ?? '');
-  $out['TailscaleParams']              = xml_decode($xml->TailscaleParams ?? '');
-  $out['TailscaleStateDir']            = xml_decode($xml->TailscaleStateDir ?? '');
-  $out['TailscaleTroubleshooting']     = xml_decode($xml->TailscaleTroubleshooting ?? '');
-  $out['Config']                       = [];
+  $xml                = is_file($xml) ? simplexml_load_file($xml) : simplexml_load_string($xml);
+  $out                = [];
+  $out['Name']        = preg_replace('/\s+/', '', xml_decode($xml->Name));
+  $out['Repository']  = xml_decode($xml->Repository);
+  $out['Registry']    = xml_decode($xml->Registry);
+  $out['Network']     = xml_decode($xml->Network);
+  $out['MyIP']        = xml_decode($xml->MyIP ?? '');
+  $out['Shell']       = xml_decode($xml->Shell ?? 'sh');
+  $out['Privileged']  = xml_decode($xml->Privileged);
+  $out['Support']     = xml_decode($xml->Support);
+  $out['Project']     = xml_decode($xml->Project);
+  $out['Overview']    = stripslashes(xml_decode($xml->Overview));
+  $out['Category']    = xml_decode($xml->Category);
+  $out['WebUI']       = xml_decode($xml->WebUI);
+  $out['TemplateURL'] = xml_decode($xml->TemplateURL);
+  $out['Icon']        = xml_decode($xml->Icon);
+  $out['ExtraParams'] = xml_decode($xml->ExtraParams);
+  $out['PostArgs']    = xml_decode($xml->PostArgs);
+  $out['CPUset']      = xml_decode($xml->CPUset);
+  $out['DonateText']  = xml_decode($xml->DonateText);
+  $out['DonateLink']  = xml_decode($xml->DonateLink);
+  $out['Requires']    = xml_decode($xml->Requires);
+  $out['Config']      = [];
   if (isset($xml->Config)) {
     foreach ($xml->Config as $config) {
       $c = [];
@@ -338,7 +266,7 @@ function xmlToCommand($xml, $create_paths=false) {
   $Variables[]   = 'TZ="'.$var['timeZone'].'"';
   // Add HOST_OS variable
   $Variables[]   = 'HOST_OS="Unraid"';
-  // Add HOST_HOSTNAME variable
+  // Add HOST_HOSTNAME variable 
   $Variables[]   = 'HOST_HOSTNAME="'.$var['NAME'].'"';
   // Add HOST_CONTAINERNAME variable
   $Variables[]   = 'HOST_CONTAINERNAME="'.$xml['Name'].'"';
@@ -346,68 +274,6 @@ function xmlToCommand($xml, $create_paths=false) {
   $Labels[]      = 'net.unraid.docker.managed=dockerman';
   if (strlen($xml['WebUI']))  $Labels[] = 'net.unraid.docker.webui='.escapeshellarg($xml['WebUI']);
   if (strlen($xml['Icon'])) $Labels[] = 'net.unraid.docker.icon='.escapeshellarg($xml['Icon']);
-
-  // Initialize Tailscale variables
-  $TS_entrypoint = '';
-  $TS_hook = '';
-  $TS_hostname = '';
-  $TS_hostname_label = '';
-  $TS_ssh = '';
-  $TS_tundev = '';
-  $TS_cap = '';
-  $TS_exitnode = '';
-  $TS_exitnode_ip = '';
-  $TS_lan_access = '';
-  $TS_userspace_networking = '';
-  $TS_daemon_params = '';
-  $TS_extra_params = '';
-  $TS_state_dir = '';
-  $TS_serve_funnel = '';
-  $TS_serve_port = '';
-  $TS_serve_local_path = '';
-  $TS_serve_protocol = '';
-  $TS_serve_protocol_port = '';
-  $TS_serve_path = '';
-  $TS_web_ui = '';
-  $TS_troubleshooting = '';
-  $TS_routes = '';
-  $TS_postargs = '';
-  // Get all information from xml and create variables for cmd
-  if ($xml['TailscaleEnabled'] == 'true') {
-    $TS_entrypoint = '--entrypoint=\'/opt/unraid/tailscale\'';
-    $TS_hook = '-v \'/usr/local/share/docker/tailscale_container_hook\':\'/opt/unraid/tailscale\'';
-    $TS_hostname = !empty($xml['TailscaleHostname']) ? '-e TAILSCALE_HOSTNAME=' . escapeshellarg($xml['TailscaleHostname']) : '';
-    $TS_hostname_label = !empty($xml['TailscaleHostname']) ? '-l net.unraid.docker.tailscale.hostname=' . escapeshellarg($xml['TailscaleHostname']) : '';
-    $TS_ssh = !empty($xml['TailscaleSSH']) ? '-e TAILSCALE_USE_SSH=' . escapeshellarg($xml['TailscaleSSH']) : '';
-    $TS_daemon_params = !empty($xml['TailscaleDParams']) ? '-e TAILSCALED_PARAMS=' . escapeshellarg($xml['TailscaleDParams']) : '';
-    $TS_extra_params = !empty($xml['TailscaleParams']) ? '-e TAILSCALE_PARAMS=' . escapeshellarg($xml['TailscaleParams']) : '';
-    $TS_state_dir = !empty($xml['TailscaleStateDir']) ? '-e TAILSCALE_STATE_DIR=' . escapeshellarg($xml['TailscaleStateDir']) : '';
-    $TS_userspace_networking = !empty($xml['TailscaleUserspaceNetworking']) ? '-e TAILSCALE_USERSPACE_NETWORKING=' . escapeshellarg($xml['TailscaleUserspaceNetworking']) : '';
-    // Only add tun, cap and specific vairables to containers which are defined as Exit Nodes and Userspace Networking disabled
-    if (_var($xml,'TailscaleIsExitNode') == 'true') {
-      $TS_tundev = preg_match('/--d(evice)?[= ](\'?\/dev\/net\/tun\'?)/', $xml['ExtraParams']) ? "" : "--device='/dev/net/tun'";
-      $TS_cap = preg_match('/--cap\-add=NET_ADMIN/', $xml['ExtraParams']) ? "" : "--cap-add=NET_ADMIN";
-      $TS_exitnode = '-e TAILSCALE_EXIT_NODE=true';
-    } elseif (_var($xml,'TailscaleUserspaceNetworking') == 'false') {
-      $TS_tundev = preg_match('/--d(evice)?[= ](\'?\/dev\/net\/tun\'?)/', $xml['ExtraParams']) ? "" : "--device='/dev/net/tun'";
-      $TS_cap = preg_match('/--cap\-add=NET_ADMIN/', $xml['ExtraParams']) ? "" : "--cap-add=NET_ADMIN";
-      $TS_lan_access = '-e TAILSCALE_ALLOW_LAN_ACCESS=' . escapeshellarg($xml['TailscaleLANAccess']);
-      $TS_exitnode_ip = !empty($xml['TailscaleExitNodeIP']) ? '-e TAILSCALE_EXIT_NODE_IP=' . escapeshellarg($xml['TailscaleExitNodeIP']) : '';
-    }
-    $TS_serve_funnel = ($xml['TailscaleServe'] == 'funnel') ? '-e TAILSCALE_FUNNEL=true' : '';
-    $TS_serve_port = !empty($xml['TailscaleServePort']) ? '-e TAILSCALE_SERVE_PORT=' . escapeshellarg($xml['TailscaleServePort']) : '';
-    $TS_serve_local_path = !empty($xml['TailscaleServeLocalPath']) ? '-e TAILSCALE_SERVE_LOCALPATH=' . escapeshellarg($xml['TailscaleServeLocalPath']) : '';
-    $TS_serve_protocol = !empty($xml['TailscaleServeProtocol']) ? '-e TAILSCALE_SERVE_PROTOCOL=' . escapeshellarg($xml['TailscaleServeProtocol']) : '';
-    $TS_serve_protocol_port = !empty($xml['TailscaleServeProtocolPort']) ? '-e TAILSCALE_SERVE_PROTOCOL_PORT=' . escapeshellarg($xml['TailscaleServeProtocolPort']) : '';
-    $TS_serve_path = !empty($xml['TailscaleServePath']) ? '-e TAILSCALE_SERVE_PATH=' . escapeshellarg($xml['TailscaleServePath']) : '';
-    $TS_web_ui = !empty($xml['TailscaleWebUI']) ? '-l net.unraid.docker.tailscale.webui=' . escapeshellarg($xml['TailscaleWebUI']) : '';
-    $TS_troubleshooting = !empty($xml['TailscaleTroubleshooting']) ? '-e TAILSCALE_TROUBLESHOOTING=' . escapeshellarg($xml['TailscaleTroubleshooting']) : '';
-    $TS_routes = !empty($xml['TailscaleRoutes']) ? '-e TAILSCALE_ADVERTISE_ROUTES=' . escapeshellarg($xml['TailscaleRoutes']) : '';
-    if (!empty($xml['PostArgs'])) {
-      $TS_postargs = '-e ORG_POSTARGS=' . escapeshellarg($xml['PostArgs']);
-      $xml['PostArgs'] = '';
-    }
-  }
 
   foreach ($xml['Config'] as $key => $config) {
     $confType        = strtolower(strval($config['Type']));
@@ -466,8 +332,8 @@ function xmlToCommand($xml, $create_paths=false) {
     $pid_limit = "";
   }
 
-  $cmd = sprintf($docroot.'/plugins/dynamix.docker.manager/scripts/docker create %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s',
-         $cmdName, $TS_entrypoint, $cmdNetwork, $cmdMyIP, $cmdCPUset, $pid_limit, $cmdPrivileged, implode(' -e ', $Variables), $TS_hostname, $TS_exitnode, $TS_exitnode_ip, $TS_lan_access, $TS_routes, $TS_ssh, $TS_userspace_networking, $TS_serve_funnel, $TS_serve_port, $TS_serve_local_path, $TS_serve_protocol, $TS_serve_protocol_port, $TS_serve_path, $TS_daemon_params, $TS_extra_params, $TS_state_dir, $TS_troubleshooting, $TS_postargs, implode(' -l ', $Labels), $TS_web_ui, $TS_hostname_label, implode(' -p ', $Ports), implode(' -v ', $Volumes), $TS_hook, $TS_cap, $TS_tundev, implode(' --device=', $Devices), $xml['ExtraParams'], escapeshellarg($xml['Repository']), $xml['PostArgs']);
+  $cmd = sprintf($docroot.'/plugins/dynamix.docker.manager/scripts/docker create %s %s %s %s %s %s %s %s %s %s %s %s %s %s',
+         $cmdName, $cmdNetwork, $cmdMyIP, $cmdCPUset, $pid_limit, $cmdPrivileged, implode(' -e ', $Variables), implode(' -l ', $Labels), implode(' -p ', $Ports), implode(' -v ', $Volumes), implode(' --device=', $Devices), $xml['ExtraParams'], escapeshellarg($xml['Repository']), $xml['PostArgs']);
   return [preg_replace('/\s\s+/', ' ', $cmd), $xml['Name'], $xml['Repository']];
 }
 function stopContainer($name, $t=false, $echo=true) {
@@ -654,7 +520,7 @@ function setXmlVal(&$xml, $value, $el, $attr=null, $pos=0) {
 
 function getAllocations() {
   global $DockerClient, $host;
-
+  
   $ports = [];
   foreach ($DockerClient->getDockerContainers() as $ct) {
     $list = $port = [];

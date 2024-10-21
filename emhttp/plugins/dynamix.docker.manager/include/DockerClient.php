@@ -292,16 +292,6 @@ class DockerTemplates {
 		return $WebUI;
 	}
 
-	private function getTailscaleJson($name) {
-		$TS_raw = [];
-		exec("docker exec -i ".$name." /bin/sh -c \"tailscale status --peers=false --json\" 2>/dev/null", $TS_raw);
-		if (!empty($TS_raw)) {
-			$TS_raw = implode("\n", $TS_raw);
-			return json_decode($TS_raw, true);
-		}
-		return '';
-	}
-
 	public function getAllInfo($reload=false,$com=true,$communityApplications=false) {
 		global $driver, $dockerManPaths, $host;
 		$DockerClient = new DockerClient();
@@ -343,39 +333,6 @@ class DockerTemplates {
 					$tmp['url'] = $ip ? (strpos($tmp['url'],$ip)!==false ? $tmp['url'] : $this->getControlURL($ct, $ip, $tmp['url'])) : $tmp['url'];
 					if (strpos($ct['NetworkMode'], 'container:') === 0)
 					  $tmp['url'] = '';
-				}
-				// Check if webui & ct TSurl is set, if set construct WebUI URL on Docker page
-				$tmp['TSurl'] = '';
-				if (!empty($webui) && !empty($ct['TSUrl'])) {
-					$TS_no_peers = $this->getTailscaleJson($name);
-					if (!empty($TS_no_peers) && (!empty($TS_no_peers['CurrentTailnet']['MagicDNSEnabled']) || $TS_no_peers['CurrentTailnet']['MagicDNSEnabled'])) {
-						$TS_container = $TS_no_peers['Self'];
-						$TS_DNSName = _var($TS_container,'DNSName','');
-						$TS_HostNameActual = substr($TS_DNSName, 0, strpos($TS_DNSName, '.'));
-						// Check if serve or funnel are enabled by checking for [hostname] and replace string with TS_DNSName
-						if (strpos($ct['TSUrl'], '[hostname]') !== false && isset($TS_DNSName)) {
-							$tmp['TSurl'] = str_replace("[hostname][magicdns]", rtrim($TS_DNSName, '.'), $ct['TSUrl']);
-						// Check if serve is disabled, construct url with port, path and query if present and replace [noserve] with url
-						} elseif (strpos($ct['TSUrl'], '[noserve]') !== false && isset($TS_container['TailscaleIPs'])) {
-							$ipv4 = '';
-							foreach ($TS_container['TailscaleIPs'] as $ip) {
-								if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-									$ipv4 = $ip;
-									break;
-								}
-							}
-							if (!empty($ipv4)) {
-								$webui_url = isset($webui) ? parse_url($webui) : '';
-								$webui_port = (preg_match('/\[PORT:(\d+)\]/', $webui, $matches)) ? ':' . $matches[1] : '';
-								$webui_path = $webui_url['path'] ?? '';
-								$webui_query = isset($webui_url['query']) ? '?' . $webui_url['query'] : '';
-								$tmp['TSurl'] = 'http://' . $ipv4 . $webui_port . $webui_path . $webui_query;
-							}
-						// Check if TailscaleWebUI in the xml is custom and display instead
-						} elseif (strpos($ct['TSUrl'], '[hostname]') === false && strpos($ct['TSUrl'], '[noserve]') === false) {
-							$tmp['TSurl'] = $ct['TSUrl'];
-						}
-					}
 				}
 				if ( ($tmp['shell'] ?? false) == false )
 					$tmp['shell'] = $this->getTemplateValue($image, 'Shell');
@@ -867,6 +824,7 @@ class DockerClient {
 		global $docroot, $dockerManPaths;
 		$id = $id ?: $name;
 		$info = DockerUtil::loadJSON($dockerManPaths['webui-info']);
+
 		// Attempt to remove container
 		$this->getDockerJSON("/containers/$id?force=1", 'DELETE', $code);
 		if (isset($info[$name])) {
@@ -980,10 +938,8 @@ class DockerClient {
 			$c['BaseImage']   = $ct['Labels']['BASEIMAGE'] ?? false;
 			$c['Icon']        = $info['Config']['Labels']['net.unraid.docker.icon'] ?? false;
 			$c['Url']         = $info['Config']['Labels']['net.unraid.docker.webui'] ?? false;
-			$c['TSUrl']       = $info['Config']['Labels']['net.unraid.docker.tailscale.webui'] ?? false;
-			$c['TSHostname']  = $info['Config']['Labels']['net.unraid.docker.tailscale.hostname'] ?? false;
-			$c['Shell']       = $info['Config']['Labels']['net.unraid.docker.shell'] ?? false;
-			$c['Manager']     = $info['Config']['Labels']['net.unraid.docker.managed'] ?? false;
+			$c['Shell']         = $info['Config']['Labels']['net.unraid.docker.shell'] ?? false;
+			$c['Manager']         = $info['Config']['Labels']['net.unraid.docker.managed'] ?? false;
 			$c['Ports']       = [];
 			$c['Networks']	  = [];
 			if ($id) $c['NetworkMode'] = $net.str_replace('/',':',DockerUtil::ctMap($id)?:'/???');
