@@ -186,12 +186,14 @@ samba_restart(){
 }
 
 samba_reload(){
-  killall --ns $$ wsdd2 2>/dev/null
+  killall --ns $$ smbd nmbd wsdd2 winbindd 2>/dev/null
   # update settings
   samba_settings
-  # reload services with smbcontrol
-  smbcontrol all reload-config 2>/dev/null
+  # restart services
+  $SMBD -D 2>/dev/null
+  [[ $USE_NETBIOS == yes ]] && $NMBD -D 2>/dev/null
   [[ $USE_WSD == yes ]] && $WSDD2 -d ${WSD2_OPT## } 2>/dev/null
+  $WINBINDD -D 2>/dev/null
 }
 
 samba_update(){
