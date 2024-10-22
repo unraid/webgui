@@ -190,6 +190,7 @@ samba_reload(){
   # update settings
   samba_settings
   # restart services
+  # cannot use smbcontrol as it will not reload interfaces
   $SMBD -D 2>/dev/null
   [[ $USE_NETBIOS == yes ]] && $NMBD -D 2>/dev/null
   [[ $USE_WSD == yes ]] && $WSDD2 -d ${WSD2_OPT## } 2>/dev/null
