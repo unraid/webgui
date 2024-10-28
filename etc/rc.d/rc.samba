@@ -185,19 +185,23 @@ samba_restart(){
   samba_start
 }
 
-samba_reload(){
-  killall --ns $$ wsdd2 2>/dev/null
-  # update settings
-  samba_settings
-  # reload services with smbcontrol
-  smbcontrol all reload-config 2>/dev/null
-  [[ $USE_WSD == yes ]] && $WSDD2 -d ${WSD2_OPT## } 2>/dev/null
-}
-
 samba_update(){
   if samba_running && check && [[ "$(this interfaces)" != "$BIND" ]]; then
     log "Updating $DAEMON..."
     samba_restart # note we need restart here, not reload in order to update interfaces
+    return 0
+  fi
+}
+
+samba_reload(){
+  if ! samba_update ; then
+    log "Reloading $DAEMON..."
+    killall --ns $$ wsdd2 2>/dev/null
+    # update settings
+    samba_settings
+    # reload services with smbcontrol
+    smbcontrol all reload-config 2>/dev/null
+    [[ $USE_WSD == yes ]] && $WSDD2 -d ${WSD2_OPT## } 2>/dev/null
   fi
 }
 
