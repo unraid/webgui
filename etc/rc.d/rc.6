@@ -241,6 +241,8 @@ while IFS= read -r LINE; do
   [[ " ${EXCLUDE_PATHS[@]} " =~ " $MOUNT_PATH " ]] && continue
   run /bin/umount -v "$MOUNT_PATH"
 done <<< "$(/bin/cat /proc/mounts)"
+# Update PATH hashes:
+hash -r
 
 # limetech - shut down the unraid driver if started
 if /bin/grep -qs 'mdState=STARTED' /proc/mdstat; then

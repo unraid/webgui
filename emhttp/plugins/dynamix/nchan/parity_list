@@ -18,6 +18,7 @@ $log      = '/boot/config/parity-checks.log';
 $stamps   = '/var/tmp/stamps.ini';
 $resync   = '/var/tmp/resync.ini';
 $md5_old  = $spot_old = $fs_old = $proc_old = -1;
+$remove_resync_files = false;
 
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/publish.php";
@@ -106,10 +107,15 @@ while (true) {
 			/* Save the result in the parity history log. */
 			file_put_contents($log, "$timestamp|$duration|$speed|$status|$error|$action|$size\n", FILE_APPEND);
 
-			delete_file($stamps, $resync);
+			/* Remove the resync files after the history file has been updated. */
+			$remove_resync_files = true;
 
 			/* Parity check is completed. */
 			$echo = "";
+		} elseif ($remove_resync_files) {
+			delete_file($stamps, $resync);
+
+			$remove_resync_files = false;
 		}
 	}
 
@@ -155,6 +161,6 @@ while (true) {
 		$proc_old = publish('mymonitor', $process) !== false ? $process : -1;
 	}
 
-	sleep(1);
+	sleep(3);
 }
 ?>

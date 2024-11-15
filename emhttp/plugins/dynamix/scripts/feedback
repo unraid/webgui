@@ -208,8 +208,8 @@ $(function(){
     var tab = '#'+$('input[name=mode]:checked').val();
     var panel = tab+'_panel';
     var enter = ['#troubleshoot'].includes(tab);
-    var email = "<?=_('Contact Email Address')?> ("+(enter ? "<?=_('required')?>" : "<?=_('optional')?>")+")";
-    $('input#email').prop('placeholder',email).prop('required',enter);
+    var email = "<?=_('Contact Email Address')?> ("+"<?=_('required')?>"+")";
+    $('input#email').prop('placeholder',email).prop('required','true');
     $('#submit_button').prop('disabled',validInput($(tab)));
     $('.allpanels').not(panel).fadeOut('fast');
     $(panel).fadeIn('fast');

@@ -195,8 +195,8 @@ _(Docker directory)_:
 <div markdown="1" id="backingfs_type" style="display:none">
 _(Docker storage driver)_:
 : <select id="DOCKER_BACKINGFS" name="DOCKER_BACKINGFS" onchange="updateBackingFS(this.value)">
-  <?=mk_option(_var($dockercfg,'DOCKER_BACKINGFS'), 'native', _('native'))?>
   <?=mk_option(_var($dockercfg,'DOCKER_BACKINGFS'), 'overlay2', _('overlay2'))?>
+  <?=mk_option(_var($dockercfg,'DOCKER_BACKINGFS'), 'native', _('native'))?>
   </select>
   <?if ($var['fsState'] != "Started"):?>
   <span id="WARNING_BACKINGFS" style="display:none;"><i class="fa fa-warning icon warning"></i>_(Only modify if this is a new installation since this can lead to unwanted behaviour!)_</span>
@@ -886,13 +886,14 @@ function btrfsScrub(path) {
     }
   });
 }
+var originalPath = $("#DOCKER_IMAGE_FILE2").val();
 function updateLocation(val) {
   var content1 = $("#DOCKER_IMAGE_FILE1");
   var content2 = $("#DOCKER_IMAGE_FILE2");
   var dropdown = $("#DOCKER_BACKINGFS");
+  var path = originalPath.split('/');
   switch (val) {
   case 'xfs':
-    var path = content2.val().split('/');
     path.splice(-1,1);
     content1.val((path.join('/') + '/docker-xfs.img'));
     $('#vdisk_file').show('slow');
@@ -903,9 +904,8 @@ function updateLocation(val) {
     dropdown.val('native');
     break;
   case 'folder':
-    var path = content2.val().split('/');
     if (path[path.length-1]=='') path.splice(-2,2); else path.splice(-1,1);
-    content2.val(path.join('/'));
+    content2.val(path.join('/') + '/');
     $('#vdisk_file').hide('slow');
     $('#vdisk_dir').show('slow');
     $('#backingfs_type').show('slow');
@@ -913,7 +913,6 @@ function updateLocation(val) {
     content2.prop('disabled',false).trigger('change');
     break;
   default:
-    var path = content2.val().split('/');
     path.splice(-1,1);
     content1.val((path.join('/') + '/docker.img'));
     $('#vdisk_file').show('slow');

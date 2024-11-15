@@ -28,7 +28,7 @@ if (!file_exists($log)) touch($log);
 :php_settings_plug:
 This utility is used for development purposes only and allows Plugin Authors to verify their PHP code by enabling different levels of PHP error reporting.
 
-By default error logging is minimum and any errors are shown on screen. Changing the **Error reporting level** will capture the selected level of errors
+By default error logging is minimum and errors are not shown on screen. Changing the **Error reporting level** will capture the selected level of errors
 into a LOG file, which can be opened in a separate window to monitor in real-time the events when visiting various GUI pages or executing background
 processes on the server.
 
@@ -46,12 +46,12 @@ under normal running conditions.
 <input type="hidden" name="log_errors" value="1">
 _(Error reporting level)_:
 : <select name="error_reporting" onchange="toggleScreen(this.selectedIndex)">
-  <?=mk_option(_var($conf,'error_reporting'), "", "_(Default)_");?>
-  <?=mk_option(_var($conf,'error_reporting'), "32767", "_(All Categories)_");?>
-  <?=mk_option(_var($conf,'error_reporting'), "1", "_(Errors Only)_");?>
-  <?=mk_option(_var($conf,'error_reporting'), "2", "_(Warnings Only)_");?>
-  <?=mk_option(_var($conf,'error_reporting'), "8", "_(Notices Only)_");?>
-  <?=mk_option(_var($conf,'error_reporting'), "8192", "_(Deprecated Only)_");?>
+  <?=mk_option(_var($conf,'error_reporting'), strval(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED), "_(Default)_");?>
+  <?=mk_option(_var($conf,'error_reporting'), strval(E_ALL), "_(All Categories)_");?>
+  <?=mk_option(_var($conf,'error_reporting'), strval(E_ERROR), "_(Errors Only)_");?>
+  <?=mk_option(_var($conf,'error_reporting'), strval(E_WARNING), "_(Warnings Only)_");?>
+  <?=mk_option(_var($conf,'error_reporting'), strval(E_NOTICE), "_(Notices Only)_");?>
+  <?=mk_option(_var($conf,'error_reporting'), strval(E_DEPRECATED), "_(Deprecated Only)_");?>
   </select>
 
 &nbsp;
@@ -147,11 +147,12 @@ function PHPinfo() {
 }
 function preset(form) {
   // reset to default settings
+  // derived from default .ini file installed at boot
   if (form.error_reporting.selectedIndex==0) {
-    form.error_log.value = "";
-    form.display_startup_errors.value = "";
-    form.display_errors.value = "";
-    form.log_errors.value = "";
+    form.error_log.value = "<?=$log?>";
+    form.display_startup_errors.value = "0";
+    form.display_errors.value = "0";
+    form.log_errors.value = "1";
   }
   $.cookie('reload_php',1);
 }

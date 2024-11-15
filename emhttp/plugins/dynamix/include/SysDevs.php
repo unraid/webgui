@@ -75,9 +75,11 @@ case 't1':
     foreach ($devicelist as $line) {
       if (!empty($line)) {
         exec('udevadm info --path=$(udevadm info -q path /dev/'.$line.' | cut -d / -f 1-7) --query=path',$linereturn);
-        preg_match_all($DBDF_PARTIAL_REGEX, $linereturn[0], $inuse);
-        foreach ($inuse[0] as $line) {
-          $lines[] = $line;
+        if(isset($linereturn[0])) {
+          preg_match_all($DBDF_PARTIAL_REGEX, $linereturn[0], $inuse);
+          foreach ($inuse[0] as $line) {
+            $lines[] = $line;
+          }
         }
         unset($inuse);
         unset($linereturn);
@@ -92,9 +94,11 @@ case 't1':
           foreach ($nics as $line) {
             if (!empty($line)) {
               exec('readlink /sys/class/net/'.$line,$linereturn);
-              preg_match_all($DBDF_PARTIAL_REGEX, $linereturn[0], $inuse);
-              foreach ($inuse[0] as $line) {
-                $lines[] = $line;
+              if(isset($linereturn[0])) {
+                preg_match_all($DBDF_PARTIAL_REGEX, $linereturn[0], $inuse);
+                foreach ($inuse[0] as $line) {
+                  $lines[] = $line;
+                }
               }
               unset($inuse);
               unset($linereturn);

@@ -127,7 +127,7 @@ all_containers(){
 
 # Running containers
 running_containers(){
-  docker ps --format='{{.Names}}' 2>/dev/null
+  docker ps --format='{{.Names}} {{.Labels}}' 2>/dev/null | grep 'net.unraid.docker.managed=' | awk '{print $1}'
 }
 
 # Network driver
@@ -264,15 +264,19 @@ docker_network_start(){
     USER_NETWORKS=$(docker inspect --format='{{range $key,$value:=.NetworkSettings.Networks}}{{$key}};{{if $value.IPAMConfig}}{{if $value.IPAMConfig.IPv4Address}}{{$value.IPAMConfig.IPv4Address}}{{end}}{{if $value.IPAMConfig.IPv6Address}},{{$value.IPAMConfig.IPv6Address}}{{end}}{{end}} {{end}}' $CONTAINER)
     for ROW in $USER_NETWORKS; do
       ROW=(${ROW/;/ })
-      MY_NETWORK=${ROW[0]}
-      MY_IP=${ROW[1]/,/;}
-      if [[ -n $MY_NETWORK && $MY_NETWORK != $MY_NETWORK ]]; then
-        LABEL=${MY_NETWORK//[0-9.]/}
-        if [[ $STOCK =~ $LABEL && $LABEL != ${PORT:0:-1} ]]; then
-          MY_NETWORK=${MY_NETWORK/$LABEL/${PORT:0:-1}}
+      USER_NETWORK=${ROW[0]}
+      USER_IP=${ROW[1]/,/;}
+      if [[ -n $USER_NETWORK && $USER_NETWORK != $MY_NETWORK ]]; then
+        LABEL=${USER_NETWORK//[0-9.]/}
+        IF_NO_PARTS=${USER_NETWORK#"$LABEL"}
+        IF_NO=${IF_NO_PARTS%%.*}
+        if [[ $STOCK =~ $LABEL && $IF_NO -gt 0 ]]; then
+          USER_NETWORK=$USER_NETWORK
+        elif [[ $STOCK =~ $LABEL && $LABEL != ${PORT:0:-1} ]]; then
+          USER_NETWORK=${USER_NETWORK/$LABEL/${PORT:0:-1}}
         fi
-        log "container $CONTAINER has an additional network that will be restored: $MY_NETWORK"
-        NETRESTORE[$MY_NETWORK]="$CONTAINER,$MY_IP ${NETRESTORE[$MY_NETWORK]}"
+        log "container $CONTAINER has an additional network that will be restored: $USER_NETWORK"
+        NETRESTORE[$USER_NETWORK]="$CONTAINER,$USER_IP ${NETRESTORE[$USER_NETWORK]}"
       fi
     done
   done
@@ -527,9 +531,7 @@ docker_container_stop(){
   log "Stopping containers..."
   if ! docker_running; then return 1; fi
   [[ -n $(running_containers) ]] && docker stop --time=${DOCKER_TIMEOUT:-10} $(running_containers) >/dev/null
-  # Kill containers if still running
-  docker kill $(docker ps -q) 2>/dev/null
-  log "Containers stopped."
+  log "Unraid managed containers stopped."
 }
 
 docker_service_start(){
@@ -564,7 +566,9 @@ docker_service_stop(){
   if [[ -r $DOCKER_PIDFILE ]]; then
     # Try to stop dockerd gracefully
     kill $(docker_pid) 2>/dev/null
-    TIMER=15
+    # show waiting message
+    echo "Waiting 30 seconds for $DAEMON to die."
+    TIMER=30
     # must ensure daemon has exited
     while [[ $TIMER -gt 0 ]]; do
       sleep 1
@@ -579,8 +583,6 @@ docker_service_stop(){
         # signal successful stop
         TIMER=-1
       else
-        # show waiting message
-        echo "$DAEMON... Waiting to die."
         ((TIMER--))
       fi
     done

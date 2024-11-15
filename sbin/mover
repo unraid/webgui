@@ -23,7 +23,6 @@
 # operation continues on to the next file.
 
 PIDFILE="/var/run/mover.pid"
-CFGFILE="/boot/config/share.cfg"
 DEBUGGING=""
 
 move() {
@@ -35,14 +34,6 @@ start() {
     if ps h $(cat $PIDFILE) | grep mover ; then
         echo "mover: already running"
         exit 1
-    fi
-  fi
-
-  if [ -f $CFGFILE ]; then
-    # Only start if shfs includes pools
-    if ! grep -qs 'shareCacheEnabled="yes"' $CFGFILE ; then
-      echo "mover: cache not enabled"
-      exit 2
     fi
   fi
 
@@ -126,7 +117,7 @@ empty() {
 killtree() {
   local pid=$1 child
     
-  for child in $(pgrep -P $pid); do
+  for child in $(pgrep --ns $$ -P $pid); do
     killtree $child
   done
   [ $pid -ne $$ ] && kill -TERM $pid

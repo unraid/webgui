@@ -169,27 +169,16 @@ case 'ct':
 	break;
 
 case 'is':
-	/* Path to syslinux configuration file */
-	$cfg = '/boot/syslinux/syslinux.cfg';
-
-	/* Read the syslinux configuration file into an array, ignoring empty lines */
-	$syslinux = file($cfg, FILE_IGNORE_NEW_LINES + FILE_SKIP_EMPTY_LINES);
-	$size = count($syslinux);
-	$make = false;
-
-	/* Path to the temporary file containing new isolcpus settings */
+ 	/* Path to the temporary file containing new isolcpus settings */
 	$file = "/var/tmp/$name.tmp";
-	$isolcpus = file_get_contents($file);
-
+ 	$isolcpus = file_get_contents($file);
 	if ($isolcpus != '') {
 		/* Convert isolcpus string to an array of numbers and sort them */
 		$numbers = explode(',', $isolcpus);
 		sort($numbers, SORT_NUMERIC);
-
 		/* Initialize variables for range conversion */
 		$isolcpus = $previous = array_shift($numbers);
 		$range = false;
-
 		/* Convert sequential numbers to a range */
 		foreach ($numbers as $number) {
 			if ($number == $previous + 1) {
@@ -206,55 +195,94 @@ case 'is':
 		if ($range) {
 			$isolcpus .= '-' . $previous;
 		}
-
-		/* Format isolcpus string for syslinux configuration */
+		/* Format isolcpus string for configuration */
 		$isolcpus = "isolcpus=$isolcpus";
 	}
-
-	/* Remove the temporary file */
-	unlink($file);
-
-	$i = 0;
-	while ($i < $size) {
-		/* Find sections in syslinux config and exclude safemode */
-		if (scan($syslinux[$i], 'label ') && !scan($syslinux[$i], 'safe mode') && !scan($syslinux[$i], 'safemode')) {
-			$n = $i + 1;
-
-			/* Find the current requested setting */
-			while ($n < $size && !scan($syslinux[$n], 'label ')) {
-				if (scan($syslinux[$n], 'append ')) {
-					$cmd = preg_split('/\s+/', trim($syslinux[$n]));
-
-					/* Replace an existing isolcpus setting */
-					for ($c = 1; $c < count($cmd); $c++) {
-						if (scan($cmd[$c], 'isolcpus')) {
-							$make |= ($cmd[$c] != $isolcpus);
-							$cmd[$c] = $isolcpus;
-							break;
+	if (is_file('/boot/syslinux/syslinux.cfg')) {
+		/* Path to syslinux configuration file */
+		$cfg = '/boot/syslinux/syslinux.cfg';
+		/* Read the syslinux configuration file into an array, ignoring empty lines */
+		$bootcfg = file($cfg, FILE_IGNORE_NEW_LINES + FILE_SKIP_EMPTY_LINES);
+		$size = count($bootcfg);
+		$make = false;
+		/* Remove the temporary file */
+		unlink($file);
+		$i = 0;
+		while ($i < $size) {
+			/* Find sections in syslinux config and exclude safemode */
+			if (scan($bootcfg[$i], 'label ') && !scan($bootcfg[$i], 'safe mode') && !scan($bootcfg[$i], 'safemode')) {
+				$n = $i + 1;
+				/* Find the current requested setting */
+				while ($n < $size && !scan($bootcfg[$n], 'label ')) {
+					if (scan($bootcfg[$n], 'append ')) {
+						$cmd = preg_split('/\s+/', trim($bootcfg[$n]));
+						/* Replace an existing isolcpus setting */
+						for ($c = 1; $c < count($cmd); $c++) {
+							if (scan($cmd[$c], 'isolcpus')) {
+								$make |= ($cmd[$c] != $isolcpus);
+								$cmd[$c] = $isolcpus;
+								break;
+							}
 						}
+						/* Or insert a new isolcpus setting if not found */
+						if ($c == count($cmd) && $isolcpus) {
+								array_splice($cmd, -1, 0, $isolcpus);
+							$make = true;
+						}
+						/* Update the syslinux configuration line */
+						$bootcfg[$n] = '  ' . str_replace('  ', ' ', implode(' ', $cmd));
 					}
-
-					/* Or insert a new isolcpus setting if not found */
-					if ($c == count($cmd) && $isolcpus) {
-						array_splice($cmd, -1, 0, $isolcpus);
-						$make = true;
-					}
-
-					/* Update the syslinux configuration line */
-					$syslinux[$n] = '  ' . str_replace('  ', ' ', implode(' ', $cmd));
+					$n++;
 				}
-				$n++;
+				$i = $n - 1;
 			}
-			$i = $n - 1;
+			$i++;
 		}
-		$i++;
+	} elseif (is_file('/boot/grub/grub.cfg')) {
+		/* Path to grub configuration file */
+		$cfg = '/boot/grub/grub.cfg';
+		/* Read the grub configuration file into an array, ignoring empty lines */
+		$bootcfg = file($cfg, FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
+		$size = count($bootcfg);
+		$make = false;
+		/* Remove the temporary file */
+		unlink($file);
+		$i = 0;
+		while ($i < $size) {
+			// find sections and exclude safemode/memtest
+			if (scan($bootcfg[$i],'menuentry ') && !scan($bootcfg[$i],'safe mode') && !scan($bootcfg[$i],'safemode') && !scan($bootcfg[$i],'memtest')) {
+				$n = $i + 1;
+				// find the current requested setting
+				while (!scan($bootcfg[$n],'menuentry ') && $n < $size) {
+					if (scan($bootcfg[$n],'linux ')) {
+						$cmd = preg_split('/\s+/',trim($bootcfg[$n]));
+						/* Replace an existing isolcpus setting */
+						for ($c = 1; $c < count($cmd); $c++) {
+							if (scan($cmd[$c], 'isolcpus')) {
+								$make |= ($cmd[$c] != $isolcpus);
+								$cmd[$c] = $isolcpus;
+								break;
+							}
+						}
+						/* Or insert a new isolcpus setting if not found */
+						if ($c == count($cmd) && $isolcpus) {
+							$cmd[] = $isolcpus;
+							$make = true;
+						}
+						/* Update the grub configuration line */
+						$bootcfg[$n] = '  ' . str_replace('  ', ' ', implode(' ', $cmd));
+					}
+					$n++;
+				}
+				$i = $n - 1;
+			}
+			$i++;
+		}
 	}
-
-	/* Write the updated syslinux configuration back to the file if changes were made */
+	/* Write the updated configuration back to the file if changes were made */
 	if ($make) {
-		file_put_contents_atomic($cfg, implode("\n", $syslinux) . "\n");
+		file_put_contents_atomic($cfg, implode("\n", $bootcfg) . "\n");
 	}
-
 	$reply = ['success' => $name];
 	break;
 }

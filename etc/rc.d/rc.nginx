@@ -18,6 +18,7 @@
 DAEMON="Nginx server daemon"
 CALLER="nginx"
 NGINX="/usr/sbin/nginx"
+TS="/usr/local/sbin/tailscale"
 PID="/var/run/nginx.pid"
 SSL="/boot/config/ssl"
 CONF="/etc/nginx/nginx.conf"
@@ -26,7 +27,13 @@ SERVERS="/etc/nginx/conf.d/servers.conf"
 LOCATIONS="/etc/nginx/conf.d/locations.conf"
 INI="/var/local/emhttp/nginx.ini.new"
 CERTPATH="$SSL/certs/certificate_bundle.pem"
+TSCERTPATH="$SSL/certs/ts_bundle.pem"
 MYSERVERS="/boot/config/plugins/dynamix.my.servers/myservers.cfg"
+DEFAULTS="/etc/default/nginx"
+
+# Load defaults
+# Defines NGINX_CUSTOMFA for custom Content-Security-Policy frame-ancestors url
+[[ -r $DEFAULTS ]] && . $DEFAULTS
 
 # hold server names
 SERVER_NAMES=()
@@ -105,6 +112,7 @@ redirect(){
         [[ $(ipv $ADDR) == 6 ]] && HOST="[$ADDR]"
         [[ -n $HOST ]] && echo "${T}listen $HOST:$*; # $(show $ADDR)"
       done
+      echo "${T}add_header Content-Security-Policy \"frame-ancestors 'self' $NGINX_CUSTOMFA\";"
       echo "${T}return 302 https://\$host:$PORTSSL\$request_uri;"
       echo "}"
       ;;
@@ -116,6 +124,7 @@ redirect(){
         if [[ -n $HOST ]]; then
           echo "server {"
           echo "${T}listen $HOST:$*; # $(show $ADDR)"
+          echo "${T}add_header Content-Security-Policy \"frame-ancestors 'self' $NGINX_CUSTOMFA\";"
           echo "${T}return 302 https://$(fqdn $ADDR)$PORTSSL_URL\$request_uri;"
           echo "}"
         fi
@@ -154,6 +163,7 @@ build_servers(){
 	server {
 	$(listen lo)
 	    #
+	    add_header Content-Security-Policy "frame-ancestors 'self' $NGINX_CUSTOMFA";
 	    include /etc/nginx/conf.d/locations.conf;
 	}
 	EOF
@@ -169,6 +179,7 @@ build_servers(){
 	server {
 	$(listen $PORT default_server)
 	    #
+	    add_header Content-Security-Policy "frame-ancestors 'self' $NGINX_CUSTOMFA";
 	    location ~ /wsproxy/$PORT/ { return 403; }
 	    include /etc/nginx/conf.d/locations.conf;
 	}
@@ -182,6 +193,7 @@ build_servers(){
 	server {
 	$(listen $PORTSSL ssl default_server)
 	    http2 on;
+	    add_header Content-Security-Policy "frame-ancestors 'self' $SELFCERTFA $NGINX_CUSTOMFA";
 	    # Ok to use concatenated pem files; nginx will do the right thing.
 	    ssl_certificate         $SELFCERTPATH;
 	    ssl_certificate_key     $SELFCERTPATH;
@@ -227,6 +239,7 @@ build_servers(){
 	server {
 	$(listen $PORTSSL ssl default_server)
 	    http2 on;
+	    add_header Content-Security-Policy "frame-ancestors 'self' $SELFCERTFA $NGINX_CUSTOMFA";
 	    # Ok to use concatenated pem files; nginx will do the right thing.
 	    ssl_certificate         $SELFCERTPATH;
 	    ssl_certificate_key     $SELFCERTPATH;
@@ -248,6 +261,7 @@ build_servers(){
 	server {
 	$(listen $PORTSSL ssl default_server)
 	    http2 on;
+	    add_header Content-Security-Policy "frame-ancestors 'self' $SELFCERTFA $NGINX_CUSTOMFA";
 	    # Ok to use concatenated pem files; nginx will do the right thing.
 	    ssl_certificate         $SELFCERTPATH;
 	    ssl_certificate_key     $SELFCERTPATH;
@@ -270,6 +284,7 @@ build_servers(){
 	$(listen $PORTSSL ssl)
 	    http2 on;
 	    server_name ${SERVER_NAMES[@]};
+	    add_header Content-Security-Policy "frame-ancestors 'self' $CERTFA $NGINX_CUSTOMFA";
 	    # Ok to use concatenated pem files; nginx will do the right thing.
 	    ssl_certificate         $CERTPATH;
 	    ssl_certificate_key     $CERTPATH;
@@ -284,6 +299,39 @@ build_servers(){
 	}
 	EOF
     fi
+  fi
+  if [[ -n $TSFQDN ]]; then
+    cat <<- EOF >>$SERVERS
+	#
+	# Redirect Tailscale http requests to https
+	# ex: http://tower.magicDNS.ts.net -> https://tower.magicDNS.ts.net
+	#
+	server {
+	$(listen $PORT)
+	    server_name $TSFQDN;
+	    return 302 https://$TSFQDN$PORTSSL_URL$request_uri;
+	}
+	#
+	# Port settings for https using Tailscale cert
+	# ex: https://tower.magicDNS.ts.net
+	#
+	server {
+	$(listen $PORTSSL ssl http2)
+	    server_name $TSFQDN;
+	    add_header Content-Security-Policy "frame-ancestors 'self' $TSFA $NGINX_CUSTOMFA";
+	    # Ok to use concatenated pem files; nginx will do the right thing.
+	    ssl_certificate         $TSCERTPATH;
+	    ssl_certificate_key     $TSCERTPATH;
+	    ssl_trusted_certificate $TSCERTPATH;
+	    #
+	    # OCSP stapling
+	    ssl_stapling on;
+	    ssl_stapling_verify on;
+	    #
+	    location ~ /wsproxy/$PORTSSL/ { return 403; }
+	    include /etc/nginx/conf.d/locations.conf;
+	}
+	EOF
   fi
 }
 
@@ -386,7 +434,9 @@ build_locations(){
 	#
 	# pass PHP scripts to FastCGI server listening on unix:/var/run/php-fpm.sock
 	#
-	location ~ \.php$ {
+	location ~ ^(.+\.php)(.*)$ {
+	    fastcgi_split_path_info  ^(.+\.php)(.*)$;
+	    fastcgi_param PATH_INFO  $fastcgi_path_info;
 	    include fastcgi_params;
 	}
 	#
@@ -493,11 +543,15 @@ build_ssl(){
   fi
   # determine if OCSP stapling should be enabled for this cert
   [[ -n $(openssl x509 -noout -ocsp_uri -in "$SELFCERTPATH") ]] && SELFCERTSTAPLE=on || SELFCERTSTAPLE=off
+  # define CSP frame-ancestors for the self-signed cert
+  [[ -n $LOCAL_TLD ]] && [[ "$LOCAL_TLD" != "local" ]] && SELFCERTFA="https://*.$LOCAL_TLD/"
 
   # handle Certificate Authority signed cert if present
   if [[ -f $CERTPATH ]]; then
     # extract common name from cert
     CERTNAME=$(openssl x509 -noout -subject -nameopt multiline -in $CERTPATH | sed -n 's/ *commonName *= //p')
+    # define CSP frame-ancestors for cert
+    CERTFA="https://*.${CERTNAME#*.}/"
     # check if Remote Access is enabled and fetch WANIP
     if [[ -L /usr/local/sbin/unraid-api ]] && grep -qs 'wanaccess="yes"' $MYSERVERS && ! grep -qs 'username=""' $MYSERVERS; then
       WANACCESS=yes
@@ -506,6 +560,8 @@ build_ssl(){
     fi
     if [[ $CERTNAME == *\.myunraid\.net ]]; then
       # wildcard LE certificate
+      # add Unraid Connect to CSP frame-ancestors for a myunraid.net cert
+      CERTFA+=" https://connect.myunraid.net/"
       [[ -n $LANIP ]] && LANFQDN=$(fqdn $LANIP) SERVER_NAMES+=($LANFQDN)
       [[ -n $LANIP6 ]] && LANFQDN6=$(fqdn $LANIP6) SERVER_NAMES+=($LANFQDN6)
       # check if remote access enabled
@@ -526,12 +582,29 @@ build_ssl(){
         done
       fi
     else
-      # custom certificate
+      # custom certificate, this would be better as SELFCERTPATH
       LANFQDN=${CERTNAME/\*/$LANNAME} # support wildcard custom certs
       SERVER_NAMES+=($LANFQDN)
     fi
     # determine if OCSP stapling should be enabled for this cert
     [[ -n $(openssl x509 -noout -ocsp_uri -in "$CERTPATH") ]] && CERTSTAPLE=on || CERTSTAPLE=off
+  fi
+
+  # handle TS cert if present
+  if [[ -f "$TSCERTPATH" ]]; then
+    # confirm TS is intalled and running
+    if [[ -x $TS ]] && $TS status &>/dev/null; then
+      # extract common name from cert
+      TSFQDN1=$(openssl x509 -noout -subject -nameopt multiline -in "$TSCERTPATH" | sed -n 's/ *commonName *= //p')
+      # get tailscale domain
+      TSFQDN2=$($TS status -json | jq ' .Self.DNSName' | tr -d '"' | sed 's/.$//')
+      if [[ -n "$TSFQDN1" ]] && [[ "$TSFQDN1" == "$TSFQDN2" ]]; then
+        # common name and tailscale domain are equal and not empty, the cert is valid, use it
+        TSFQDN=$TSFQDN1
+        # define CSP frame-ancestors for TS cert
+        TSFA="https://*.${TSFQDN#*.}/"
+      fi
+    fi
   fi
 
   # build servers configuration file
@@ -570,6 +643,8 @@ build_ssl(){
   echo "NGINX_WANIP6=\"$WANIP6\"" >>$INI
   echo "NGINX_WANFQDN=\"$WANFQDN\"" >>$INI
   echo "NGINX_WANFQDN6=\"$WANFQDN6\"" >>$INI
+  # defined if ts_bundle.pem present:
+  echo "NGINX_TAILSCALEFQDN=\"$TSFQDN\"" >>$INI
   # add included interfaces
   for NET in ${!NET_FQDN[@]}; do
     echo "NGINX_${NET^^}FQDN=\"${NET_FQDN[$NET]}\"" >>$INI
@@ -706,9 +781,10 @@ nginx_renew(){
 }
 
 nginx_update(){
-  # 0 = update needed, 1 = no action
-  if ! nginx_running; then exit 1; fi
-  if check && [[ "$(this)" == "$BIND" ]]; then exit 1; else exit 0; fi
+  if nginx_running && check && [[ "$(this)" != "$BIND" ]]; then
+    log "Updating $DAEMON..."
+    nginx_reload
+  fi
 }
 
 nginx_upgrade(){

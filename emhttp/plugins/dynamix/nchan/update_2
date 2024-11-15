@@ -142,6 +142,17 @@ function device_name(&$disk) {
   $fancy = _(my_disk(native($name,1)),3);
   return "<i class='icon-$type f14'></i> <a href=\"".htmlspecialchars("/Dashboard/Main/Settings/Device?name=$name")."\" title=\"$fancy settings\">$fancy</a>";
 }
+function yellow_text($disk) {
+  global $var;
+  if (_var($disk, 'type')=='Parity') {
+    $text = _var($var,'mdResync')==0 ? 'invalid' : 'syncing';
+  } elseif (_var($disk, 'type')=='Data') {
+    $text = _var($var,'mdResync')==0 ? 'emulated' : 'rebuilding';
+  } else {
+    $text = 'invalid';
+  }
+  return $text;
+}
 function device_status(&$disk, &$error, &$warning) {
   global $var;
   if (_var($disk,'type')!='Extra' && _var($var,'fsState')=='Stopped') {
@@ -151,8 +162,8 @@ function device_status(&$disk, &$error, &$warning) {
     case 'green-blink' : $color = 'grey';   $text = 'standby';    break;
     case 'blue-on'     : $color = 'blue';   $text = 'unassigned'; break;
     case 'blue-blink'  : $color = 'grey';   $text = 'unassigned'; break;
-    case 'yellow-on'   : $color = 'yellow'; $text =  _var($disk,'type')=='Parity' ? 'invalid' : 'emulated';   $warning++; break;
-    case 'yellow-blink': $color = 'grey';   $text =  _var($disk,'type')=='Parity' ? 'invalid' : 'emulated';   $warning++; break;
+    case 'yellow-on'   : $color = 'yellow'; $text =  yellow_text($disk); $warning++; break;
+    case 'yellow-blink': $color = 'grey';   $text =  yellow_text($disk); $warning++; break;
     case 'red-on'      : $color = 'red';    $text = 'disabled';   $error++; break;
     case 'red-blink'   : $color = 'grey';   $text = 'disabled';   $error++; break;
     case 'red-off'     : $color = 'red';    $text = 'faulty';     $error++; break;

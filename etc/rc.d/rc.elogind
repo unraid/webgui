@@ -29,7 +29,7 @@ PIDFILE="/run/elogind.pid"
 
 elogind_running(){
   sleep 0.1
-  pgrep -l -F $PIDFILE 2>/dev/null | grep -q elogind
+  pgrep --ns $$ -l -F $PIDFILE 2>/dev/null | grep -q elogind
 }
 
 elogind_start(){

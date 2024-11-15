@@ -98,24 +98,62 @@ case 'ct':
   echo "\0".implode(';',array_map('urlencode',$cts));
   break;
 case 'is':
-  $syslinux  = file('/boot/syslinux/syslinux.cfg',FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
-  $size = count($syslinux);
-  $menu = $i = 0;
-  $isol = "";
-  $isolcpus = [];
-  // find the default section
-  while ($i < $size) {
-    if (scan($syslinux[$i],'label ')) {
-      $n = $i + 1;
-      // find the current isolcpus setting
-      while (!scan($syslinux[$n],'label ') && $n < $size) {
-        if (scan($syslinux[$n],'menu default')) $menu = 1;
-        if (scan($syslinux[$n],'append')) foreach (explode(' ',$syslinux[$n]) as $cmd) if (scan($cmd,'isolcpus')) {$isol = explode('=',$cmd)[1]; break;}
-        $n++;
+  if (is_file('/boot/syslinux/syslinux.cfg')) {
+    $menu = $i = 0;
+    $isol = "";
+    $isolcpus = [];
+    $bootcfg = file('/boot/syslinux/syslinux.cfg', FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
+    $size = count($bootcfg);
+    // find the default section
+    while ($i < $size) {
+      if (scan($bootcfg[$i],'label ')) {
+        $n = $i + 1;
+        // find the current isolcpus setting
+        while (!scan($bootcfg[$n],'label ') && $n < $size) {
+          if (scan($bootcfg[$n],'menu default')) $menu = 1;
+          if (scan($bootcfg[$n],'append')) foreach (explode(' ',$bootcfg[$n]) as $cmd) if (scan($cmd,'isolcpus')) {$isol = explode('=',$cmd)[1]; break;}
+          $n++;
+        }
+        if ($menu) break; else $i = $n - 1;
       }
-      if ($menu) break; else $i = $n - 1;
+      $i++;
     }
-    $i++;
+  } elseif (is_file('/boot/grub/grub.cfg')) {
+    $isol = "";
+    $isolcpus = [];
+    $bootcfg = file('/boot/grub/grub.cfg', FILE_IGNORE_NEW_LINES);
+    // find the default section
+    $menu_entries = [];
+    foreach ($bootcfg as $line) {
+      if (preg_match('/set default=(\d+)/', $line, $match)) {
+        $bootentry = (int)$match[1];
+        break;
+      }
+    }
+    // split boot entries
+    foreach ($bootcfg as $line) {
+      if (strpos($line, 'menuentry ') === 0) {
+        $in_menuentry = true;
+        $current_entry = $line . "\n";
+      } elseif ($in_menuentry) {
+        $current_entry .= $line . "\n";
+        if (trim($line) === "}") {
+          $menu_entries[] = $current_entry;
+          $in_menuentry = false;
+        }
+      }
+    }
+    // search in selected menuentry
+    $menuentry = explode("\n", $menu_entries[$bootentry]);
+    // find the current isolcpus setting
+    if (scan($menu_entries[$bootentry],'linux ')) {
+      foreach ($menuentry as $cmd) {
+        if (scan($cmd,'isolcpus')) {
+          $isol = explode('=',$cmd)[1];
+          break;
+        }
+      }
+    }
   }
   if ($isol != '') {
     // convert to individual numbers
@@ -133,24 +171,28 @@ case 'is':
   break;
 case 'cmd':
   $isolcpus_now = $isolcpus_new = '';
-  $syslinux = file('/boot/syslinux/syslinux.cfg',FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
   $cmdline = explode(' ',file_get_contents('/proc/cmdline'));
-  foreach ($cmdline as $cmd) if (scan($cmd,'isolcpus')) {$isolcpus_now = $cmd; break;}
-  $size = count($syslinux);
-  $menu = $i = 0;
-  // find the default section
-  while ($i < $size) {
-    if (scan($syslinux[$i],'label ')) {
-      $n = $i + 1;
-      // find the current isolcpus setting
-      while (!scan($syslinux[$n],'label ') && $n < $size) {
-        if (scan($syslinux[$n],'menu default')) $menu = 1;
-        if (scan($syslinux[$n],'append')) foreach (explode(' ',$syslinux[$n]) as $cmd) if (scan($cmd,'isolcpus')) {$isolcpus_new = $cmd; break;}
-        $n++;
+  if (is_file('/boot/syslinux/syslinux.cfg')) {
+    $bootcfg = file('/boot/syslinux/syslinux.cfg',FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
+    foreach ($cmdline as $cmd) if (scan($cmd,'isolcpus')) {$isolcpus_now = $cmd; break;}
+    $size = count($bootcfg);
+    $menu = $i = 0;
+    // find the default section
+    while ($i < $size) {
+      if (scan($bootcfg[$i],'label ')) {
+        $n = $i + 1;
+        // find the current isolcpus setting
+        while (!scan($bootcfg[$n],'label ') && $n < $size) {
+          if (scan($bootcfg[$n],'menu default')) $menu = 1;
+          if (scan($bootcfg[$n],'append')) foreach (explode(' ',$bootcfg[$n]) as $cmd) if (scan($cmd,'isolcpus')) {$isolcpus_new = $cmd; break;}
+          $n++;
+        }
+        if ($menu) break; else $i = $n - 1;
       }
-      if ($menu) break; else $i = $n - 1;
+      $i++;
     }
-    $i++;
+  } elseif (is_file('/boot/grub/grub.cfg')) {
+    $bootcfg = file('/boot/grub/grub.cfg', FILE_IGNORE_NEW_LINES);
   }
   echo $isolcpus_now==$isolcpus_new ? 0 : 1;
   break;

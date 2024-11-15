@@ -35,7 +35,7 @@ ntpd_build(){
     [[ $IPV6 == no ]] && echo "interface ignore ipv6" >>$CONF
     # add listen interfaces
     for NET in $BIND; do
-      echo "interface listen $NET # $(show $NET)" >>$CONF
+      echo "interface listen $NET" >>$CONF
     done
   fi
   # add configured NTP servers
@@ -76,7 +76,7 @@ ntpd_stop(){
       kill -HUP $(cat /var/run/ntpd.pid)
       rm -f /var/run/ntpd.pid
     else
-      killall -HUP -q ntpd
+      killall --ns $$  -HUP -q ntpd
     fi
     if ! ntpd_running; then REPLY="Stopped"; else REPLY="Failed"; fi
   fi
@@ -93,16 +93,17 @@ ntpd_restart(){
 }
 
 ntpd_reload(){
-  killall -HUP -q ntpd
+  killall --ns $$  -HUP -q ntpd
   . <(fromdos <$IDENT)
   ntpd_build
   $NTPD $OPTIONS 2>/dev/null
 }
 
 ntpd_update(){
-  # 0 = update needed, 1 = no action
-  if ! ntpd_running; then exit 1; fi
-  if check && [[ "$(this 'interface listen')" == "$BIND" ]]; then exit 1; else exit 0; fi
+  if ntpd_running && check && [[ "$(this 'interface listen')" != "$BIND" ]]; then
+    log "Updating $DAEMON..."
+    ntpd_reload
+  fi
 }
 
 ntpd_status(){

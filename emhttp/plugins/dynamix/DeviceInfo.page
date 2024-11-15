@@ -20,12 +20,27 @@ require_once "$docroot/webGui/include/Preselect.php";
 $unassigned = array_key_exists($name,$devs);
 $disk       = $disks[$name] ?? $devs[$name] ?? [];
 $dev        = _var($disk,'device');
-$disk['id'] = _var($disk,'id');
 $events     = explode('|',$disk['smEvents'] ?? $var['smEvents'] ?? $numbers);
 $mode       = ['Disabled','Hourly','Daily','Weekly','Monthly'];
 $days       = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 $sheets     = [];
 $i = $n     = 0;
+
+function hasSubpools($name) {
+  global $disks, $subpools;
+  foreach ($subpools as $subpool) {
+    $index = "$name~$subpool";
+    if (isset($disks[$index])) return true;
+  }
+  return false;
+}
+if (!isSubpool($name)) {
+  $fsTypeImmutable = !(_var($var,'fsState')=='Stopped' && !hasSubpools($name) && (empty(_var($disk,'uuid')) || _var($disk,'slots',1)==1));
+  $fsProfileImmutable = $fsTypeImmutable;
+} else {
+  $fsTypeImmutable = true;
+  $fsProfileImmutable = !(_var($var,'fsState')=='Stopped' && empty(_var($disk,'fsGroups','1')));
+}
 
 foreach ($disks as $sheet) {
   if (_var($sheet,'type')=="Flash" || _var($sheet,'color')=="grey-off" || empty($sheet['name'])) continue;
@@ -43,7 +58,8 @@ $tag  = _var($disk,'name');
 $end  = count($sheets)-1;
 $prev = $i>0 ? $sheets[$i-1] : $sheets[$end];
 $next = $i<$end ? $sheets[$i+1] : $sheets[0];
-$text = isPool($name) ? _('This will ERASE content of ALL devices in the pool') : _('This will ERASE ALL device content');
+$textErase = isPool($name) ? _('This will ERASE content of ALL devices in the pool') : _('This will ERASE ALL device content');
+$textDelete = _('This will unassign all devices from the pool but will NOT modify any device contents');
 
 function disabled_if($condition) {
   if ($condition !== false) echo ' disabled';
@@ -109,17 +125,25 @@ function isPool($name) {
   global $pools;
   return in_array($name,$pools);
 }
+/* Check to see if a pool has already been upgraded. */
+function is_upgraded_ZFS_pool($pool_name) {
+
+	/* See if the pool is aready upgraded. */
+	$upgrade	= trim(shell_exec("/usr/sbin/zpool status ".escapeshellarg($pool_name)." | /usr/bin/grep 'Enable all features using.'") ?? "");
+
+	return ($upgrade ? false : true);
+}
 ?>
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.ui.css")?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/plugins/dynamix.docker.manager/styles/style-$theme.css")?>">
 
 <script>
+<?if (empty($disk)):?>
+  done();
+<?endif;?>
+
 String.prototype.celsius = function(){return Math.round((parseInt(this)-32)*5/9).toString();}
 
-if ($.cookie('deletepool')) {
-  $.removeCookie('deletepool');
-  done();
-}
 function setFloor() {
   if ($('#shareFloor').length==0) return;
   const fsSize = {<?=fsSize()?>};
@@ -198,113 +222,172 @@ function prepareZFS(form) {
 }
 <?endif;?>
 
-function selectDiskFsWidth() {
-  var num_slots = <?=_var($disk,'slots',0)?>;
-  var selected_width = <?=_var($disk,'fsWidth',0)?>;
-  $('#diskFsWidthZFS').empty();
-  if (num_slots == 0) {
-    $('#diskFsWidthZFS').prop('disabled',true).append($('<option>', {
-      value: 0,
-      text: "<?=_('no devices')?>"
-    }));
-  } else if (($('#diskFsType').val()||'').indexOf('zfs') == -1) {
-    var label = (num_slots == 1) ? "device" : "devices";
-    $('#diskFsWidthZFS').append($('<option>', {
-      value: num_slots,
-      text: _(sprintf('%s '+label,num_slots))
-    }));
-  } else if ($('#diskFsProfileZFS').val() == '') {
-    var label = (num_slots == 1) ? "device" : "devices";
-    $('#diskFsWidthZFS').append($('<option>', {
+function setDiskFsWidth(slots) {
+  $('#diskFsWidth').empty();
+  $('#diskFsWidth').append($('<option>', {value: slots, text:''}));
+  $('#diskFsWidth').val(slots);
+  $('#diskFsProfile').off('change');
+}
+function selectDiskFsProfileAuto() {
+  $('#diskFsProfile').empty();
+  $('#diskFsProfile').append($('<option>', {value: '', text:''}));
+  $('#diskFsProfile').val('');
+  setDiskFsWidth('');
+}
+function selectDiskFsProfileXFS() {
+  $('#diskFsProfile').empty();
+  $('#diskFsProfile').append($('<option>', {value: '', text:''}));
+  $('#diskFsProfile').val('');
+  setDiskFsWidth(1);
+}
+function selectDiskFsProfileBTRFS(slots,init) {
+  $('#diskFsProfile').empty();
+  $('#diskFsProfile').append($('<option>', {value: 'single', text:_('single')}));
+  if (slots >= 2) $('#diskFsProfile').append($('<option>', {value: 'raid0', text:_('raid0')}));
+  if (slots >= 2) $('#diskFsProfile').append($('<option>', {value: 'raid1', text:_('raid1')}));
+  if (slots >= 3) $('#diskFsProfile').append($('<option>', {value: 'raid1c3', text:_('raid1c3')}));
+  if (slots >= 4) $('#diskFsProfile').append($('<option>', {value: 'raid1c4', text:_('raid1c4')}));
+  if (slots >= 4) $('#diskFsProfile').append($('<option>', {value: 'raid10', text:_('raid10')}));
+  if (slots >= 3) $('#diskFsProfile').append($('<option>', {value: 'raid5', text:_('raid5')}));
+  if (slots >= 4) $('#diskFsProfile').append($('<option>', {value: 'raid6', text:_('raid6')}));
+  if (init) {
+    $('#diskFsProfile').val("<?=_var($disk,'fsProfile')?>");
+  } else {
+    if (slots == 1) $('#diskFsProfile').val('');
+    if (slots >= 2) $('#diskFsProfile').val('raid1');
+  }
+  setDiskFsWidth(slots);
+}
+function selectDiskFsWidthZFS(slots,init) {
+  var selected_width = init ? Number("<?=_var($disk,'fsWidth')?>") : 0;
+  $('#diskFsWidth').empty();
+  if ($('#diskFsProfile').val() == '') {
+    var label = (slots == 1) ? "device" : "devices";
+    $('#diskFsWidth').append($('<option>', {
       value: 1,
-      text: _(sprintf('%s '+label,num_slots))
+      text: _(sprintf('%s '+label,slots))
     }));
-  } else if ($('#diskFsProfileZFS').val() == 'mirror') {
+    if (selected_width == 0) selected_width = 1;
+  } else if ($('#diskFsProfile').val() == 'mirror') {
     var width;
-    for (width=2; width<=Math.min(num_slots,4); width++) {
-      if ((num_slots % width) == 0) {
-        var groups = num_slots / width;
-        var label = (groups == 1) ? "group" : "groups";
-        $('#diskFsWidthZFS').append($('<option>', {
+    for (width=2; width<=Math.min(slots,4); width++) {
+      if ((slots % width) == 0) {
+        var groups = slots / width;
+        var label = (groups == 1) ? "vdev" : "vdevs";
+        $('#diskFsWidth').append($('<option>', {
           value: width,
           text: _(sprintf('%s '+label+' of %s devices',groups,width)),
-          selected: (width == selected_width)
         }));
+        if (selected_width == 0) selected_width = width;
       }
     }
   } else {
     var width, min_width;
-    if ($('#diskFsProfileZFS').val() == 'raidz1') min_width = 3;
-    else if ($('#diskFsProfileZFS').val() == 'raidz2') min_width = 3;
-    else if ($('#diskFsProfileZFS').val() == 'raidz3') min_width = 4;
-    for (width=min_width; width<=num_slots; width++) {
-      if ((num_slots % width) == 0) {
-        var groups = num_slots / width;
-        var label = (groups == 1) ? "group" : "groups";
-        $('#diskFsWidthZFS').append($('<option>', {
+    if ($('#diskFsProfile').val() == 'raidz1') min_width = 3;
+    else if ($('#diskFsProfile').val() == 'raidz2') min_width = 3;
+    else if ($('#diskFsProfile').val() == 'raidz3') min_width = 4;
+    for (width=min_width; width<=slots; width++) {
+      if ((slots % width) == 0) {
+        var groups = slots / width;
+        var label = (groups == 1) ? "vdev" : "vdevs";
+        $('#diskFsWidth').append($('<option>', {
           value: width,
           text: _(sprintf('%s '+label+' of %s devices',groups,width)),
-          selected: (width == selected_width)
         }));
+        if (selected_width == 0) selected_width = width;
       }
     }
   }
+  $('#diskFsWidth').val(selected_width);
 }
-function selectDiskFsProfile(init) {
-  var num_slots = <?=_var($disk,'slots',0)?>;
-  var t = init ? null : 'slow';
-  if (($('#diskFsType').val()||'').indexOf('auto') != -1) {
-    $('#diskFsProfileBTRFS').prop('disabled',true).hide();
-    $('#diskFsProfileZFS').prop('disabled',true).hide();
-    $('#diskFsWidthZFS').hide();;
-    $('#compression').hide(t);
-    $('#autotrim').hide(t);
-  } else if (($('#diskFsType').val()||'').indexOf('btrfs') != -1) {
-    if (!init) $('#diskFsProfileBTRFS').prop('disabled',false);
-    $('#diskFsProfileBTRFS').show();
-    $('#diskFsProfileZFS').prop('disabled',true).hide();
-    $('#diskFsWidthZFS').hide();;
-    $('#compression').show(t);
-<?if (diskType('Cache')):?>
-    $('#autotrim').show(t);
-    if (!init) {
-      if (num_slots == 1) $('#diskFsProfileBTRFS').val('');
-      if (num_slots > 1) $('#diskFsProfileBTRFS').val('raid1');
+function selectDiskFsProfileZFS(slots,init,subpool) {
+  $('#diskFsProfile').empty();
+  if (slots == 1) $('#diskFsProfile').append($('<option>', {value: '', text: _('single')}));
+  if (slots >= 2) $('#diskFsProfile').append($('<option>', {value: '', text: _('stripe')}));
+  if (subpool != 'cache' && subpool != 'spares') {
+    if (slots%2 == 0 || slots%3 == 0 || slots%4 == 0) $('#diskFsProfile').append($('<option>', {value: 'mirror', text: _('mirror')}));
+    if (subpool == '') {
+      if (slots >= 3 && subpool == '') $('#diskFsProfile').append($('<option>', {value: 'raidz1', text: _('raidz1')}));
+      if (slots >= 3 && subpool == '') $('#diskFsProfile').append($('<option>', {value: 'raidz2', text: _('raidz2')}));
+      if (slots >= 4 && subpool == '') $('#diskFsProfile').append($('<option>', {value: 'raidz3', text: _('raidz3')}));
     }
-<?endif;?>
-  } else if (($('#diskFsType').val()||'').indexOf('zfs') != -1) {
-    var subpool = "<?=isSubpool(_var($disk,'name'))?>";
-    $('#diskFsProfileBTRFS').prop('disabled',true).hide();
-    if (subpool.length) {
-      $('#diskFsType').prop('disabled',true).hide();
-    }
-    if (!init) {
-      $('#diskFsProfileZFS').prop('disabled',false);
-    }
-    $('#diskFsProfileZFS').show();
-    $('#diskFsWidthZFS').show();
-    if (!init) {
-      if (num_slots == 1) $('#diskFsProfileZFS').val('');
-      if (num_slots == 2) $('#diskFsProfileZFS').val('mirror');
-      if (num_slots > 2) $('#diskFsProfileZFS').val('raidz1');
-    }
-    $('#compression').show(t);
-<?if (diskType('Cache')):?>
-    $('#autotrim').show(t);
-  } else if (($('#diskFsType').val()||'').indexOf('xfs') != -1) {
-    $('#autotrim').show(t);
-<?endif;?>
   }
-  selectDiskFsWidth();
-  $('#diskFsGroups').val(0);
+  if (init) {
+    $('#diskFsProfile').val("<?=_var($disk,'fsProfile')?>");
+  } else {
+    if (slots == 1) $('#diskFsProfile').val('');
+    if (slots == 2) $('#diskFsProfile').val('mirror');
+    if (slots >= 3) $('#diskFsProfile').val('raidz1');
+  }
+  selectDiskFsWidthZFS(slots,init);
+  $('#diskFsProfile').on('change', function() {
+    selectDiskFsWidthZFS(slots,false);
+  });
 }
-function changeFsType() {
-  var fstype = ($('#diskFsType').val()||'').replace('luks:','');
-  if (['btrfs', 'zfs'].includes(fstype)) $('#compression').show('slow'); else $('#compression').hide('slow');
-<?if (diskType('Cache')):?>
-  if (['xfs', 'btrfs', 'zfs'].includes(fstype)) $('#autotrim').show('slow'); else $('#autotrim').hide('slow');
+/* called upon page load (init==true) and when user changes file system type (init==false) */
+function selectDiskFsProfile(init) {
+  var t = init ? null : 'slow';
+
+  /* for array disks, 'slots', 'fsWidth', and 'fsGroups' is not defined */
+  var slots = Number("<?=_var($disk,'fsWidth',1)?>") * Number("<?=_var($disk,'fsGroups',1)?>");
+  if (slots == 0) slots = <?=_var($disk,'slots',1)?>;
+
+  var subpool = "<?=isSubpool($name) ?: ''?>";
+  var fsType;
+
+  if (subpool == '') {
+    fsType = init ? "<?=_var($disk,'fsType','')?>" : $('#diskFsType').val();
+  } else {
+    fsType = 'zfs';
+  }
+
+  if (slots == 1 || fsType == 'auto') {
+    $('#profile').hide(t);
+  } else {
+    $('#profile').show(t);
+    if (fsType.indexOf('zfs') != -1) {
+      if (subpool != 'cache' && subpool != 'spares') {
+        $('#diskFsProfile').show();
+      } else {
+        $('#diskFsProfile').hide();
+      }
+      $('#diskFsWidth').show();
+    } else {
+      $('#diskFsProfile').show();
+      $('#diskFsWidth').hide()
+    }
+  }
+
+  if (fsType == 'auto') {
+    selectDiskFsProfileAuto();
+  } else if (fsType.indexOf('btrfs') != -1) {
+    selectDiskFsProfileBTRFS(slots,init);
+  } else if (fsType.indexOf('zfs') != -1) {
+    selectDiskFsProfileZFS(slots,init,subpool);
+  } else if (fsType.indexOf('xfs') != -1) {
+    selectDiskFsProfileXFS();
+  }
+
+  if (subpool != '' || fsType == 'auto' || fsType.indexOf('xfs') != -1) {
+    $('#compression').hide(t);
+    $('#diskCompression').prop('disabled',true);
+  } else {
+    $('#compression').show(t);
+    $('#diskCompression').prop('disabled',false);
+  }
+
+<?if (diskType('Data') || isSubpool($name)):?>
+  $('#autotrim').hide(t);
+  $('#diskAutotrim').prop('disabled',true);
+<?else:?>
+  if (fsType == 'auto') {
+    $('#autotrim').hide(t);
+    $('#diskAutotrim').prop('disabled',true);
+  } else {
+    $('#autotrim').show(t);
+    $('#diskAutotrim').prop('disabled',false);
+  }
 <?endif;?>
-  if (fstype=='reiserfs') $('#reiserfs').show(); else $('#reiserfs').hide(); 
 }
 function prepareDeviceInfo(form) {
   var events = [];
@@ -539,17 +622,13 @@ function renamePoolPopup() {
   });
   dialogStyle();
 }
-function deletePool() {
-  $.cookie('deletepool','deletepool');
-  document.deletepool.submit();
-}
 function eraseDisk(name) {
   swal({
     title:"_(Erase Device Content)_?",
-    text:"<?=$text?><p style='font-weight:bold;color:red;margin:8px 0'>_(Existing content is permanently lost)_</p>",
+    text:"<?=$textErase?><p style='font-weight:bold;color:red;margin:8px 0'>_(Existing content is permanently lost)_</p>",
     html:true,
     type:'input',
-    inputPlaceholder:"<?=sprintf(_('To confirm your action type: %s'),$name)?>",
+    inputPlaceholder:"<?=sprintf(_('To confirm type: %s'),$name)?>",
     showCancelButton:true,
     closeOnConfirm:false,
     confirmButtonText:"_(Proceed)_",
@@ -560,8 +639,65 @@ function eraseDisk(name) {
       swal.close();
       $('#doneButton').prop('disabled',true);
       $('#eraseButton').prop('disabled',true);
+      $('#removeButton').prop('disabled',true);
       $('div.spinner.fixed').show();
-      $.get("/update.htm",{cmdWipefs:name,csrf_token:"<?=_var($var,'csrf_token')?>"},function(){
+      $.post("/update.htm",{cmdWipefs:name},function(){
+        $('div.spinner.fixed').hide();
+        refresh();
+      });
+    } else {
+      if (confirm.length) swal({title:"_(Incorrect confirmation)_",text:"_(Please try again)_!",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    }
+  });
+}
+function removePool(name) {
+  swal({
+    title:"_(Remove pool)_?",
+    text:"<?=$textDelete?>",
+    html:true,
+    type:'input',
+    inputPlaceholder:"<?=sprintf(_('To confirm type: %s'),$name)?>",
+    showCancelButton:true,
+    closeOnConfirm:false,
+    confirmButtonText:"_(Proceed)_",
+    cancelButtonText:"_(Cancel)_"
+  },
+  function(confirm){
+    if (confirm == "<?=$name?>") {
+      swal.close();
+      $('#doneButton').prop('disabled',true);
+      $('#eraseButton').prop('disabled',true);
+      $('#removeButton').prop('disabled',true);
+      $('div.spinner.fixed').show();
+      $.post("/update.htm",{changeSlots:"apply",poolName:name,poolSlots:0},function(){
+        $('div.spinner.fixed').hide();
+        refresh();
+      });
+    } else {
+      if (confirm.length) swal({title:"_(Incorrect confirmation)_",text:"_(Please try again)_!",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    }
+  });
+}
+function upgradeZpool(name) {
+  swal({
+    title:"_(Upgrade ZFS Pool)_?",
+    text:"_(This operation cannot be reversed)_. _(After upgrading the volume may not be mountable in previous versions of Unraid)_.<p style='font-weight:bold;color:red;margin:8px 0'>_(The ZFS volume will be upgraded)_</p>",
+    html:true,
+    type:'input',
+    inputPlaceholder:"<?=sprintf(_('To confirm type: %s'),$name)?>",
+    showCancelButton:true,
+    closeOnConfirm:false,
+    confirmButtonText:"_(Proceed)_",
+    cancelButtonText:"_(Cancel)_"
+  },
+  function(confirm){
+    if (confirm == "<?=$name?>") {
+      swal.close();
+      $('#doneButton').prop('disabled',true);
+      $('#eraseButton').prop('disabled',true);
+      $('#deleteButton').prop('disabled',true);
+      $('div.spinner.fixed').show();
+      $.post("/webGui/include/zfs_upgrade.php",{name:name},function(){
         $('div.spinner.fixed').hide();
         refresh();
       });
@@ -631,90 +767,35 @@ _(Spin down delay)_:
   </select><span id="smart_selftest" class='orange-text'></span>
 
 <?endif;?>
-<?if (diskType('Data') || isPool($tag)):?>
-<?$fsTypeImmutable = _var($var,'fsState')=="Started" || (isPool($tag) && _var($disk,'state')!="NEW_ARRAY")?>
-<?if (diskType('Data') || (!isSubpool($name) && _var($disk,'slots',0)==1)):?>
+<?if (diskType('Data') || (isPool($tag) && !isSubpool($tag))):?>
 _(File system status)_:
 : <?=_(_var($disk,'fsStatus'))?>&nbsp;
 
 _(File system type)_:
-: <select id="diskFsType" name="diskFsType.<?=_var($disk,'idx',0)?>" onchange="changeFsType()" <?=disabled_if($fsTypeImmutable)?>>
+: <select id="diskFsType" name="diskFsType.<?=_var($disk,'idx')?>" onchange="selectDiskFsProfile(false)"  <?=disabled_if($fsTypeImmutable)?>>
   <?=mk_option(_var($disk,'fsType'), "auto", _('auto'))?>
-  <?=mk_option(_var($disk,'fsType'), "xfs", _('xfs'))?>
+  <?if (_var($disk,'slots',1) == 1) echo mk_option(_var($disk,'fsType'), "xfs", _('xfs'))?>
   <?=mk_option(_var($disk,'fsType'), "zfs", _('zfs'))?>
   <?=mk_option(_var($disk,'fsType'), "btrfs", _('btrfs'))?>
-  <?=mk_option(_var($disk,'fsType'), "reiserfs", _('reiserfs'), "disabled")?>
-  <?=mk_option(_var($disk,'fsType'), "luks:xfs", _('xfs')." - "._('encrypted'))?>
+  <?if (_var($disk,'slots',1) == 1) echo mk_option(_var($disk,'fsType'), "reiserfs", _('reiserfs'), "disabled")?>
+  <?if (_var($disk,'slots',1) == 1) echo mk_option(_var($disk,'fsType'), "luks:xfs", _('xfs')." - "._('encrypted'))?>
   <?=mk_option(_var($disk,'fsType'), "luks:zfs", _('zfs')." - "._('encrypted'))?>
   <?=mk_option(_var($disk,'fsType'), "luks:btrfs", _('btrfs')." - "._('encrypted'))?>
-  <?=mk_option(_var($disk,'fsType'), "luks:reiserfs", _('reiserfs')." - "._('encrypted'), "disabled")?>
+  <?if (_var($disk,'slots',1) == 1) echo mk_option(_var($disk,'fsType'), "luks:reiserfs", _('reiserfs')." - "._('encrypted'), "disabled")?>
   </select><span id="reiserfs" class="warning"<?if (!fsType('reiserfs')):?> style="display:none"<?endif;?>><i class="fa fa-warning"></i>&nbsp;_(ReiserFS is deprecated, please use another file system)_!</span>
-
-:info_file_system_help:
-
-<?elseif (!isSubpool($name) && _var($disk,'slots',0)>1):?>
-_(File system status)_:
-: <?=_(_var($disk,'fsStatus'))?>&nbsp;
-
-_(File system type)_:
-: <select id="diskFsType" name="diskFsType.<?=_var($disk,'idx',0)?>" onchange="selectDiskFsProfile(false)" <?=disabled_if($fsTypeImmutable)?>>
-  <?=mk_option(_var($disk,'fsType'), "auto", _('auto'))?>
-  <?=mk_option(_var($disk,'fsType'), "zfs", _('zfs'))?>
-  <?=mk_option(_var($disk,'fsType'), "btrfs", _('btrfs'))?>
-  <?=mk_option(_var($disk,'fsType'), "luks:zfs", _('zfs')." - "._('encrypted'))?>
-  <?=mk_option(_var($disk,'fsType'), "luks:btrfs", _('btrfs')." - "._('encrypted'))?>
-  </select>
-
-_(Allocation profile)_:
-: <select id="diskFsProfileBTRFS" name="diskFsProfile.<?=_var($disk,'idx',0)?>" style="display:none" <?=disabled_if($fsTypeImmutable)?>>
-  <?=mk_option(_var($disk,'fsProfile'),"single", _('single'))?>
-  <?if (_var($disk,'slots',0)>=2) echo mk_option(_var($disk,'fsProfile'),"raid0", _('raid0'))?>
-  <?if (_var($disk,'slots',0)>=2) echo mk_option(_var($disk,'fsProfile'),"raid1", _('raid1'))?>
-  <?if (_var($disk,'slots',0)>=3) echo mk_option(_var($disk,'fsProfile'),"raid1c3", _('raid1c3'))?>
-  <?if (_var($disk,'slots',0)>=4) echo mk_option(_var($disk,'fsProfile'),"raid1c4", _('raid1c4'))?>
-  <?if (_var($disk,'slots',0)>=4) echo mk_option(_var($disk,'fsProfile'),"raid10", _('raid10'))?>
-  <?if (_var($disk,'slots',0)>=3) echo mk_option(_var($disk,'fsProfile'),"raid5", _('raid5'))?>
-  <?if (_var($disk,'slots',0)>=4) echo mk_option(_var($disk,'fsProfile'),"raid6", _('raid6'))?>
-  </select>
-  <select id="diskFsProfileZFS" name="diskFsProfile.<?=_var($disk,'idx',0)?>" style="display:none" onchange="selectDiskFsWidth()" <?=disabled_if($fsTypeImmutable)?>>
-  <?if (_var($disk,'slots',0)==1) echo mk_option(_var($disk,'fsProfile'),"", _('single'))?>
-  <?if (_var($disk,'slots',0)>=2) echo mk_option(_var($disk,'fsProfile'),"", _('stripe'))?>
-  <?if ((_var($disk,'slots',0)%2)==0 || (_var($disk,'slots',0)%3)==0 || (_var($disk,'slots',0)%4)==0) echo mk_option(_var($disk,'fsProfile'),"mirror", _('mirror'))?>
-  <?if (_var($disk,'slots',0)>=3) echo mk_option(_var($disk,'fsProfile'),"raidz1", _('raidz'))?>
-  <?if (_var($disk,'slots',0)>=3) echo mk_option(_var($disk,'fsProfile'),"raidz2", _('raidz2'))?>
-  <?if (_var($disk,'slots',0)>=4) echo mk_option(_var($disk,'fsProfile'),"raidz3", _('raidz3'))?>
-  </select>
-  <select id="diskFsWidthZFS" name="diskFsWidth.<?=_var($disk,'idx',0)?>" style="display:none" <?=disabled_if($fsTypeImmutable)?>>
-  <input  id="diskFsGroups" name="diskFsGroups.<?=_var($disk,'idx',0)?>" style="display:none" <?=disabled_if($fsTypeImmutable)?>>
-  </select>
-<?elseif (isSubpool($name)=="special" || isSubpool($name)=="logs" || isSubpool($name)=="dedup"):?>
-_(Allocation profile)_:
-: <select id="diskFsType" name="diskFsType.<?=_var($disk,'idx',0)?>" disabled>>
-  <?=mk_option(_var($disk,'fsType'), "zfs", _('zfs'))?>
-  </select>
-  <select id="diskFsProfileZFS" name="diskFsProfile.<?=_var($disk,'idx',0)?>" onchange="selectDiskFsWidth()" <?=disabled_if($fsTypeImmutable)?>>
-  <?if (_var($disk,'slots',0)==1) echo mk_option(_var($disk,'fsProfile'),"", _('single'))?>
-  <?if (_var($disk,'slots',0)>=2) echo mk_option(_var($disk,'fsProfile'),"", _('stripe'))?>
-  <?if ((_var($disk,'slots',0)%2)==0 || (_var($disk,'slots',0)%3)==0 || (_var($disk,'slots',0)%4)==0) echo mk_option(_var($disk,'fsProfile'),"mirror", _('mirror'))?>
-  </select>
-  <select id="diskFsWidthZFS" name="diskFsWidth.<?=_var($disk,'idx',0)?>" style="display:none" <?=disabled_if($fsTypeImmutable)?>>
-  </select>
-<?elseif (isSubpool($name)=="cache"):?>
-_(Allocation profile)_:
-: <select id="diskFsType" name="diskFsType.<?=_var($disk,'idx',0)?>" disabled>>
-  <?=mk_option(_var($disk,'fsType'), "zfs", _('zfs'))?>
-  </select>
-  <select id="diskFsProfileZFS" name="diskFsProfile.<?=_var($disk,'idx',0)?>" onchange="selectDiskFsWidth()" <?=disabled_if($fsTypeImmutable)?>>
-  <?if (_var($disk,'slots',0)==1) echo mk_option(_var($disk,'fsProfile'),"", _('single'))?>
-  <?if (_var($disk,'slots',0)>=2) echo mk_option(_var($disk,'fsProfile'),"", _('stripe'))?>
-  </select>
-  <select id="diskFsWidthZFS" name="diskFsWidth.<?=_var($disk,'idx',0)?>" style="display:none" <?=disabled_if($fsTypeImmutable)?>>
-  </select>
-<?elseif (isSubpool($name)=="spares"):?>
 <?endif;?>
 
-<?if (isSubpool($name)===false):?>
-<div markdown="1" id="compression" style="display:none">
+<?if (diskType('Data') || isPool($tag)):?>
+<div markdown="1" id="profile">
+_(Allocation profile)_:
+: <select id="diskFsProfile" name="diskFsProfile.<?=_var($disk,'idx')?>" <?=disabled_if($fsProfileImmutable)?>>
+  </select>
+  <select id="diskFsWidth" name="diskFsWidth.<?=_var($disk,'idx')?>" <?=disabled_if($fsProfileImmutable)?>>
+  </select>
+
+:info_profile_help:
+</div>
+<div markdown="1" id="compression">
 _(Compression)_:
 : <select id="diskCompression" name="diskCompression.<?=_var($disk,'idx',0)?>" <?=disabled_if(_var($disk,'fsStatus')=='Mounted')?>>
   <?=mk_option(_var($disk,'compression'), "off", _('Off'))?>
@@ -723,8 +804,7 @@ _(Compression)_:
 
 :info_compression_help:
 </div>
-
-<div markdown="1" id="autotrim" style="display:none">
+<div markdown="1" id="autotrim">
 _(Autotrim)_:
 : <select id="diskAutotrim" name="diskAutotrim.<?=_var($disk,'idx',0)?>" <?=disabled_if(_var($disk,'fsStatus')=='Mounted')?>>
   <?=mk_option(_var($disk,'autotrim'), "on", _('On'))?>
@@ -733,7 +813,8 @@ _(Autotrim)_:
 
 :info_autotrim_help:
 </div>
-<?if (isPool($name)):?>
+<?endif;?>
+<?if (isPool($tag) && !isSubpool($tag)):?>
 _(Enable user share assignment)_:
 : <select id="shareEnabled" name="diskShareEnabled.<?=_var($disk,'idx',0)?>" onchange="freeSpace(this.value)" <?=disabled_if(_var($var,'fsState')!="Stopped")?>>
   <?=mk_option(_var($disk,'shareEnabled'), "yes", _('Yes'))?>
@@ -749,6 +830,7 @@ _(Minimum free space)_:
 :info_free_space_help:
 
 <?endif;?>
+<?if (diskType('Data') || (isPool($tag) && !isSubpool($tag))):?>
 _(Warning disk utilization threshold)_ (%):
 : <input type="number" min="0" max="100" name="diskWarning.<?=_var($disk,'idx',0)?>" autocomplete="off" spellcheck="false" class="narrow" value="<?=_var($disk,'warning')?>" placeholder="<?=_var($display,'warning')?>">
 
@@ -760,21 +842,20 @@ _(Critical disk utilization threshold)_ (%):
 :info_critical_utilization_help:
 
 <?endif;?>
-<?endif;?>
 &nbsp;
 : <input type="submit" name="changeDisk" value="_(Apply)_" disabled><input type="button" id="doneButton" value="_(Done)_" onclick="done()">
   <?$erasable=false?>
+  <?$removeable=false?>
   <?if (diskType('Parity','Data')):?>
     <?if (_var($var,'fsState')=="Stopped" && diskStatus('_NEW')): $erasable=true; endif;?>
     <?if (_var($var,'fsState')=="Started" && _var($var,'startMode')!="Normal" && diskType('Data')): $erasable=true; endif;?>
     <input type="button" id="eraseButton" value="_(Erase)_" onclick="eraseDisk('<?=$name?>')"<?=$erasable?'':' disabled'?>>
   <?endif;?>
-  <?if (isPool($name) && strpos($name,$_tilde_)===false):?>
+  <?if (isPool($name) && isSubpool($name)===false):?>
     <?if (_var($var,'fsState')=="Stopped" || (_var($var,'fsState')=="Started" && _var($var,'startMode')!="Normal")): $erasable=true; endif;?>
     <input type="button" id="eraseButton" value="_(Erase Pool)_" onclick="eraseDisk('<?=$name?>')"<?=$erasable?'':' disabled'?>>
-  <?endif;?>
-  <?if (_var($var,'fsState')=="Stopped" && isPool($name)):?>
-    <input type="button" value="_(Delete Pool)_" onclick="deletePool()"<?=isSubpool($name)?' disabled':''?>>
+    <?if (_var($var,'fsState')=="Stopped"): $removeable=true; endif;?>
+    <input type="button" id="removeButton" value="_(Remove Pool)_" onclick="removePool('<?=$name?>')"<?=$removeable?'':' disabled'?>>
   <?endif;?>
 </form>
 
@@ -1061,6 +1142,9 @@ _(zfs pool status)_:
 
 &nbsp;
 : <input type="submit" id="zfs-button" value="<?=$zfs_cmd=='start' ? _('Scrub') : _('Clear')?>">
+<?if (! is_upgraded_ZFS_pool($name)):?>
+<input type="button" id="upgradeButton" value="_(Upgrade Pool)_" onclick="upgradeZpool('<?=$name?>')">
+<?endif;?>
 
 :info_zfs_scrub_help:
 
@@ -1372,18 +1456,12 @@ _(SMART attribute notifications)_:
 <form markdown="1" method="POST" action="/update.htm" target="progressFrame" onsubmit="return validate(this.poolName.value)">
 <input type="hidden" name="poolNameOrig" value="<?=$name?>">
 <input type="hidden" name="changeSlots" value="apply">
+<p>_(Caution)_: _(Renaming the pool will change the share storage allocations)_.  _(After renaming the pool, check that your shares are assigned to the proper primary and secondary storage locations)_.</p>
 _(Name)_:
 : <input type="text" name="poolName" maxlength="40" value="<?=$name?>">
 
 </form>
 </div>
-
-<form name="deletepool" method="POST" action="/update.htm" target="progressFrame" style="display:none">
-<input type="hidden" name="changeSlots" value="apply">
-<input type="hidden" name="poolName" value="<?=$name?>">
-<input type="hidden" name="poolSlots" value="0">
-<input type='hidden' name='csrf_token' value='<?=_var($var,'csrf_token')?>'>
-</form>
 
 <script>
 $(function() {

@@ -103,7 +103,7 @@ function checkKey(form) {
   // check syntax of ssh keys
   var rows = form.text.value.split('\n');
   for (var i=0,row; row=rows[i]; i++) {
-    if (row.search(/^(ssh-ed25519 AAAAC3NzaC1lZDI1NTE5|sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29t|ssh-rsa AAAAB3NzaC1yc2)[0-9A-Za-z+/]+[=]{0,3}(\s.*)?$/)==-1) {
+    if (row.search(/^(ssh-dss AAAAB3NzaC1kc3|ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNT|sk-ecdsa-sha2-nistp256@openssh.com AAAAInNrLWVjZHNhLXNoYTItbmlzdHAyNTZAb3BlbnNzaC5jb2|ssh-ed25519 AAAAC3NzaC1lZDI1NTE5|sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29t|ssh-rsa AAAAB3NzaC1yc2)[0-9A-Za-z+/]+[=]{0,3}(\s.*)?$/)==-1) {
       swal({title:"_(Invalid Key)_",text:"["+(i+1)+"] "+row.split(' ')[0]+": _(Syntax of the key is incorrect)_!",type:"error",html:true,confirmButtonText:"_(Ok)_"});
       return false;
     }

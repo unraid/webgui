@@ -117,9 +117,10 @@ avahid_reload(){
 }
 
 avahid_update(){
-  # 0 = update needed, 1 = no action
-  if ! avahid_running; then exit 1; fi
-  if check && [[ "$(this allow-interfaces)" == "$BIND" ]]; then exit 1; else exit 0; fi
+  if avahid_running && check && [[ "$(this allow-interfaces)" != "$BIND" ]]; then
+    log "Updating $DAEMON..."
+    avahid_restart # note we need restart here, not reload in order to update interfaces
+  fi
 }
 
 avahid_status(){

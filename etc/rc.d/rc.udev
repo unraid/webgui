@@ -191,7 +191,7 @@ case "$1" in
 'force-stop')
   log "Stopping udevd"
   udevadm control --exit
-  killall udevd 2>/dev/null
+  killall --ns $$ udevd 2>/dev/null
   ;;
 'force-restart')
   log "Restarting udevd"

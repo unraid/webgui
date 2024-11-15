@@ -50,6 +50,12 @@ $pools = array_filter($pools, function($pool) {
 	return !isSubpool($pool);
 });
 
+/* Check for cachePool2 only which is a situation where the primary device is the cachePool2 device. */
+if ((! $share['cachePool']) && ($share['cachePool2'])) {
+	$share['cachePool']		= $share['cachePool2'];
+	$share['cachePool2']	= "";
+}
+
 /* Check for non existent pool device. */
 if ($share['cachePool'] && !in_array($share['cachePool'], $pools)) {
 	$poolDefined = false;
@@ -61,16 +67,16 @@ if ($share['cachePool'] && !in_array($share['cachePool'], $pools)) {
 
 /* Check for pool 2 (or array) being defined. */
 if ((($share['useCache'] == "yes") || ($share['useCache'] == "prefer")) && ($poolsOnly) && (!$share['cachePool2'])) {
-	$poolDefined2 = false;
-	$share['useCache'] = "yes";
+	$poolDefined2 = true;
+	$share['useCache'] = "only";
 } else if ($share['cachePool2']) {
 	$poolDefined2 = in_array($share['cachePool2'], $pools);
 } else {
 	$poolDefined2 = true;
 }
 
-$cachePoolCapitalized = ucfirst($share['cachePool']);
-$cachePoolCapitalized2 = $share['cachePool2'] ? ucfirst($share['cachePool2']) : _("Array");
+$cachePoolCapitalized = compress(my_disk($share['cachePool'],$display['raw']));
+$cachePoolCapitalized2 = $share['cachePool2'] ? compress(my_disk($share['cachePool2'],$display['raw'])) : _("Array");
 
 function globalInclude($name) {
   global $var;
@@ -535,13 +541,9 @@ _(Mover action)_:
 &nbsp;
 : <input type="submit" name="cmdEditShare" value="_(Add Share)_" onclick="this.value='Add Share'"><input type="button" value="_(Done)_" onclick="done()">
 <?else:?>
-<div markdown="1" class="empty">
-_(Delete)_<input type="checkbox" name="confirmDelete" onchange="chkDelete(this.form, document.getElementById('cmdEditShare'));">
+<div markdown="1">
+<label id="deleteLabel" title="">_(Delete)_</label><input type="checkbox" name="confirmDelete" onchange="chkDelete(this.form, document.getElementById('cmdEditShare'));" title="" disabled>
 : <input type="submit" id="cmdEditShare" name="cmdEditShare" value="_(Apply)_" onclick="if (this.value=='_(Delete)_') this.value='Delete'; else this.value='Apply'; return handleDeleteClick(this)" disabled><input type="button" value="_(Done)_" onclick="done()">
-</div>
-<div markdown="1" class="full">
-&nbsp;
-: <input type="submit" name="cmdEditShare" value="_(Apply)_" onclick="this.value='Apply'" disabled><input type="button" value="_(Done)_" onclick="done()">
 </div>
 <?endif;?>
 </form>
@@ -638,6 +640,7 @@ function updateScreen(cache, slow) {
 				secondaryDropdown.options[i].disabled = true;
 			}
 			secondaryDropdown.selectedIndex = 0;
+			checkRequiredSecondary = false;
 
 			if (poolsOnly) {
 				$('#moverDirection2').hide();
@@ -1291,13 +1294,24 @@ function handleDeleteClick(button) {
 
 $(function() {
 	<?if ($name):?>
+		<?
+			$tooltip_enabled	= _('Share is empty and is safe to delete');
+			$tooltip_disabled	= _('Share must be empty to be deleted');
+		?>
+
 		$.post('/webGui/include/ShareList.php', { scan: "<?=$name?>" }, function(e) {
 			if (e == 1) {
 				$('.empty').show();
 				$('.full').hide();
+				/* Enable delete checkbox and update tooltip. */
+				$('input[name="confirmDelete"]').prop('disabled', false).attr('title', '<?= $tooltip_enabled ?>');
+				$('#deleteLabel').attr('title', '<?= $tooltip_enabled ?>');
 			} else {
 				$('.full1').hide();
 				$('.full2').show();
+				/* Disable delete checkbox and update tooltip. */
+				$('input[name="confirmDelete"]').prop('disabled', true).attr('title', '<?= $tooltip_disabled ?>');
+				$('#deleteLabel').attr('title', '<?= $tooltip_disabled ?>');
 			}
 		});
 	<?endif;?>

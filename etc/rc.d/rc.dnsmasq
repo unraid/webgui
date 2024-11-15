@@ -15,7 +15,7 @@ PIDFILE="/var/run/dnsmasq.pid"
 
 dnsmasq_running(){
   sleep 0.1
-  pgrep -l -F $PIDFILE 2>/dev/null | grep -q dnsmasq
+  pgrep --ns $$ -l -F $PIDFILE 2>/dev/null | grep -q dnsmasq
 }
 
 dnsmasq_start(){

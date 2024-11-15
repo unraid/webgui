@@ -30,7 +30,7 @@ this(){
     grep -Pom1 "^RPCBIND_OPTS=\"\K[^\"]+" $RPC ;;
   'nginx')
     MAP=();
-    for ADDR in $(awk '$1=="listen" && $2~/^[0-9]|\[/ && $0~/http2; #.*$/{print $2}' $SERVERS 2>/dev/null); do
+    for ADDR in $(awk '$1=="listen" && $2~/^[0-9]|\[/ && !/# lo/{print $2}' $SERVERS 2>/dev/null); do
       # extract ipv4 / ipv6 address
       [[ $(ipv $ADDR) == 4 ]] && ADDR=${ADDR%:*} || ADDR=${ADDR#*[} ADDR=${ADDR%]*}
       MAP+=($ADDR)
@@ -151,7 +151,7 @@ check(){
     fi
     for ADDR in ${NET[@]/$NET}; do
       ADDR=$(unmask $ADDR)
-      if [[ "avahi show" =~ "$CALLER" ]]; then
+      if [[ "ntp avahi show" =~ "$CALLER" ]]; then
         [[ -z $(good $NET) ]] && BIND+=($NET)
       else
         [[ -z $(good $ADDR) ]] && BIND+=($ADDR) || continue

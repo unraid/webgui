@@ -86,11 +86,11 @@ _(Enter route + gateway + metric)_:
   <input type="text" name="gateway" class="fixed" value="" list="device" placeholder="_(gateway name or address)_" required>
   <datalist id="device"><?foreach ($list as $port):?><?echo "<option value='$port'>"?><?endforeach;?></datalist>
   <input type="text" name="metric" min="1" max="9999" value="" class="trim" placeholder="1"><i class="fa fa-sort-numeric-asc"></i> *_(optional metric (lowest is preferred))_*
-
+  <input type="hidden" name="task" value="Add Route">
 :eth_routing_table_help:
 
 &nbsp;
-: <input type="submit" name="task" value="_(Add Route)_"><input type="button" value="_(Done)_" class="lock" onclick="done()">
+: <input type="submit" value="_(Add Route)_"><input type="button" value="_(Done)_" class="lock" onclick="done()">
 </form>
 </div>
 </div>

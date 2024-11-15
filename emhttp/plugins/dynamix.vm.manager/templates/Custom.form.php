@@ -31,6 +31,7 @@
 	$arrValidUSBDevices = getValidUSBDevices();
 	$arrValidDiskDrivers = getValidDiskDrivers();
 	$arrValidDiskBuses = getValidDiskBuses();
+	$arrValidDiskDiscard = getValidDiskDiscard();
 	$arrValidCdromBuses = getValidCdromBuses();
 	$arrValidVNCModels = getValidVNCModels();
 	$arrValidProtocols = getValidVMRCProtocols();
@@ -88,7 +89,8 @@
 				'select' => $domain_cfg['VMSTORAGEMODE'],
 				'bus' => 'virtio' ,
 				'boot' => 1,
-				'serial' => 'vdisk1'
+				'serial' => 'vdisk1',
+				'discard' => 'unmap'
 			]
 		],
 		'gpu' => [
@@ -152,7 +154,8 @@
 				$protocol = $lv->domain_get_vmrc_protocol($dom);
 				$reply = ['success' => true];
 				if ($vmrcport > 0) {
-					$reply['vmrcurl']  = autov('/plugins/dynamix.vm.manager/'.$protocol.'.html',true).'&autoconnect=true&host=' . $_SERVER['HTTP_HOST'] ;
+					if ($protocol == "vnc") $vmrcscale = "&resize=scale"; else $vmrcscale = "";
+					$reply['vmrcurl']  = autov('/plugins/dynamix.vm.manager/'.$protocol.'.html',true).'&autoconnect=true'.$vmrcscale.'&host=' . $_SERVER['HTTP_HOST'] ;
 					if ($protocol == "spice") $reply['vmrcurl']  .= '&port=/wsproxy/'.$vmrcport.'/'; else $reply['vmrcurl'] .= '&port=&path=/wsproxy/' . $wsport . '/';
 				}
 			} else {
@@ -315,6 +318,18 @@
 	}
 	if ($usertemplate == 1) unset($arrConfig['domain']['uuid']);
 	$xml2 = build_xml_templates($strXML);
+	#disable rename  if snapshots exist
+	$snapshots = getvmsnapshots($arrConfig['domain']['name']) ;
+	if ($snapshots != null && count($snapshots) && !$boolNew)  
+	{
+		$snaprenamehidden = "";
+		$namedisable = "disabled";
+		$snapcount = count($snapshots);
+	} else {
+		$snaprenamehidden = "hidden";
+		$namedisable = "";
+		$snapcount = "0";
+	};
 ?>
 
 <link rel="stylesheet" href="<?autov('/plugins/dynamix.vm.manager/scripts/codemirror/lib/codemirror.css')?>">
@@ -334,9 +349,12 @@
 <input type="hidden" name="domain[memoryBacking]" id="domain_memorybacking" value="<?=htmlspecialchars($arrConfig['domain']['memoryBacking'])?>">
 
 	<table>
+	<tr><td></td><td>
+		<span <?=$snaprenamehidden?> id="snap-rename" class="orange-text"><i class="fa fa-warning"></i> _(Rename disabled, <?=$snapcount?> snapshot(s) exists.)_</span>
+		<span hidden id="zfs-name" class="orange-text"><i class="fa fa-warning"></i> _(Name contains invalid characters or does not start with an alphanumberic for a ZFS storage location<br>Only these special characters are valid Underscore (_) Hyphen (-) Colon (:) Period (.))_</span></td></tr>
 		<tr>
 			<td>_(Name)_:</td>
-			<td><input type="text" name="domain[name]" id="domain_name" class="textTemplate" title="_(Name of virtual machine)_" placeholder="_(e.g.)_ _(My Workstation)_" value="<?=htmlspecialchars($arrConfig['domain']['name'])?>" required /></td>
+			<td><input <?=$namedisable?> type="text" name="domain[name]" id="domain_name" oninput="checkName(this.value)" class="textTemplate" title="_(Name of virtual machine)_" placeholder="_(e.g.)_ _(My Workstation)_" value="<?=htmlspecialchars($arrConfig['domain']['name'])?>" required /></td>
 			<td><textarea class="xml" id="xmlname" rows=1 disabled ><?=htmlspecialchars($xml2['name'])."\n".htmlspecialchars($xml2['uuid'])."\n".htmlspecialchars($xml2['metadata'])?></textarea></td>
 		</tr>
 	</table>
@@ -377,7 +395,7 @@
 		<tr>
 			<?if (!$boolNew) $disablestorage = " disabled "; else $disablestorage = "";?>
 			<td>_(Override Storage Location)_:</td><td>
-			<select <?=$disablestorage?> name="template[storage]" class="disk_select narrow" id="storage_location" title="_(Location of virtual machine files)_">
+			<select <?=$disablestorage?> name="template[storage]" onchange="get_storage_fstype(this)" class="disk_select narrow" id="storage_location" title="_(Location of virtual machine files)_">
 			<?
 			$default_storage=htmlspecialchars($arrConfig['template']['storage']);
 			echo mk_option($default_storage, 'default', _('Default'));
@@ -859,6 +877,10 @@
 					</select>
 				_(Boot Order)_:
 				<input type="number" size="5" maxlength="5" id="disk[<?=$i?>][boot]" class="narrow bootorder" style="width: 50px;" name="disk[<?=$i?>][boot]"   title="_(Boot order)_"  value="<?=$arrDisk['boot']?>" >
+				_(Discard)_:
+					<select name="disk[<?=$i?>][discard]" class="disk_driver narrow" title="_(Set discard option)_">
+					<?mk_dropdown_options($arrValidDiskDiscard, $arrDisk['discard']);?>
+					</select>
 				<? if ($arrDisk['bus'] == "virtio" || $arrDisk['bus'] == "usb") $ssddisabled = "hidden "; else $ssddisabled = " ";?>
 				<span id="disk[<?=$i?>][rotatetext]" <?=$ssddisabled?>>_(SSD)_:</span>
 				<input type="checkbox"  id="disk[<?=$i?>][rotation]" class="narrow rotation" onchange="updateSSDCheck(this)"style="width: 50px;" name="disk[<?=$i?>][rotation]"  <?=$ssddisabled ?> <?=$arrDisk['rotation'] ? "checked ":"";?>  title="_(Set SDD flag)_"  value="<?=$arrDisk['rotation']?>" >
@@ -907,6 +929,11 @@
 			<p class="advanced">
 				<b>vDisk Boot Order</b><br>
 				Specify the order the devices are used for booting.
+			</p>
+
+			<p class="advanced">
+				<b>vDisk Discard</b><br>
+				Specify if unmap(Trim) requests are sent to underlaying filesystem.
 			</p>
 
 			<p class="advanced">
@@ -1013,6 +1040,10 @@
 
 				_(Boot Order)_:
 				<input type="number" size="5" maxlength="5" id="disk[{{INDEX}}][boot]" class="narrow bootorder" style="width: 50px;" name="disk[{{INDEX}}][boot]"   title="_(Boot order)_"  value="" >
+				_(Discard)_:
+					<select name="disk[{{INDEX}}][discard]" class="disk_driver narrow" title="_(Set discard option)_">
+					<?mk_dropdown_options($arrValidDiskDiscard, "unmap");?>
+					</select>
 				<span id="disk[{{INDEX}}][rotatetext]" hidden>_(SSD)_:</span>
 				<input type="checkbox"  id="disk[{{INDEX}}][rotation]" class="narrow rotation" onchange="updateSSDCheck(this)"style="width: 50px;" name="disk[{{INDEX}}[rotation]" hidden title="_(Set SSD flag)_" value='0' >
 				</td>
@@ -1893,6 +1924,8 @@
 <script src="<?autov('/plugins/dynamix.vm.manager/scripts/codemirror/addon/hint/libvirt-schema.js')?>"></script>
 <script src="<?autov('/plugins/dynamix.vm.manager/scripts/codemirror/mode/xml/xml.js')?>"></script>
 <script type="text/javascript">
+var storageType = "<?=get_storage_fstype($arrConfig['template']['storage']);?>";
+var storageLoc = "<?=$arrConfig['template']['storage']?>";
 
 function ShareChange(share) {
 		var value = share.value;
@@ -2002,6 +2035,36 @@ function SetBootorderfields(usbbootvalue) {
 			if (bootpcidevs[bootpciid] === "Y") 	bootelements[i].removeAttribute("disabled");
 		}
 	}
+}
+
+
+/* Remove characters not allowed in share name. */
+function checkName(name) {
+	/* Declare variables at the function scope */
+	var isValidName
+	$('#zfs-name').hide();
+	isValidName = /^[A-Za-z0-9][A-Za-z0-9\-_.: ]*$/.test(name);
+	if (isValidName) {
+		$('#btnSubmit').prop("disabled", false);
+	} else {
+		if (storageType == "zfs")
+		{ $('#btnSubmit').prop("disabled", true); $('#zfs-name').show(); }
+		else $('#btnSubmit').prop("disabled", false);
+	}
+}
+
+function get_storage_fstype(item) {
+	storageLoc = item.value;
+	$.post("/plugins/dynamix.vm.manager/include/VMajax.php", {action:"get_storage_fstype", storage:item.value}, function( data ) {
+		if (data.success) {
+			if (data.fstype) {
+				storageType=data.fstype;
+				checkName(document.getElementById("domain_name").value);
+			}}
+
+		if (data.error) {
+		}
+	}, "json");
 }
 
 function USBBootChange(usbboot) {

@@ -117,49 +117,120 @@ if ($cert2Present) {
   }
 }
 
+// Tailscale LE cert
+$cert3File    = "/boot/config/ssl/certs/ts_bundle.pem";
+$cert3Present = file_exists("$cert3File");
+if ($cert3Present) {
+  $cert3Subject = exec("/usr/bin/openssl x509 -in $cert3File -noout -subject -nameopt multiline 2>/dev/null|sed -n 's/ *commonName *= //p'");
+  $cert3Issuer  = exec("/usr/bin/openssl x509 -in $cert3File -noout -text | sed -n -e 's/^.*Issuer: //p'");
+  $cert3Expires = exec("/usr/bin/openssl x509 -in $cert3File -noout -text | sed -n -e 's/^.*Not After : //p'");
+}
+
+// Note: this disables FQDN6 urls since they are not supported by myunraid.net DNS currently
+if (!empty($nginx['NGINX_LANFQDN6'])) unset($nginx['NGINX_LANFQDN6']);
+
 $http_port       = _var($var,'PORT','80') != '80' ? ":{$var['PORT']}" : '';
 $https_port      = _var($var,'PORTSSL','443') != '443' ? ":{$var['PORTSSL']}" : '';
-$http_ip_url     = "http://"._var($nginx,'NGINX_LANIP')."{$http_port}/";
-$https_ip_url    = "https://"._var($nginx,'NGINX_LANIP')."{$https_port}/";
-$http_ip6_url    = "http://["._var($nginx,'NGINX_LANIP6')."]{$http_port}/";
-$https_ip6_url   = "https://["._var($nginx,'NGINX_LANIP6')."]{$https_port}/";
-$http_mdns_url   = "http://"._var($nginx,'NGINX_LANMDNS')."{$http_port}/";
-$https_mdns_url  = "https://"._var($nginx,'NGINX_LANMDNS')."{$https_port}/";
-$https_fqdn_url  = "https://"._var($nginx,'NGINX_LANFQDN')."{$https_port}/";
-$https_fqdn6_url = "https://"._var($nginx,'NGINX_LANFQDN6')."{$https_port}/";
+$http_ip_url     = 'http://'._var($nginx,'NGINX_LANIP').$http_port.'/';
+$https_ip_url    = 'https://'._var($nginx,'NGINX_LANIP').$https_port.'/';
+// bare IPv6 addresses need to be surrounded in brackets
+$http_ip6_url    = 'http://'.'['._var($nginx,'NGINX_LANIP6').']'.$http_port.'/';
+$https_ip6_url   = 'https://'.'['._var($nginx,'NGINX_LANIP6').']'.$https_port.'/';
+$http_mdns_url   = 'http://'._var($nginx,'NGINX_LANMDNS').$http_port.'/';
+$https_mdns_url  = 'https://'._var($nginx,'NGINX_LANMDNS').$https_port.'/';
+$https_fqdn_url  = 'https://'._var($nginx,'NGINX_LANFQDN').$https_port.'/';
+$https_fqdn6_url = 'https://'._var($nginx,'NGINX_LANFQDN6').$https_port.'/';
 
 $urls = [];
-// push an array of four values into the $urls array:
-//   0 - the url
-//   1 - the url it redirects to, or null
-//   2 - the certificate file used, or null
-//   3 - self-signed certificate, or false
+// push an array of five values into the $urls array:
+//   0 - type of url ['LAN','WAN','WG','TAILSCALE']
+//   1 - the url
+//   3 - the url it redirects to, or null
+//   4 - the certificate file used, or null
+//   5 - self-signed certificate, or false
 
+// define LAN access urls and redirects that change based on USE_SSL setting
 switch(_var($var,'USE_SSL','no')) {
 case 'no':
-  if (!empty($nginx['NGINX_LANIP']))    $urls[] = [$http_ip_url, null, null, false];
-  if (!empty($nginx['NGINX_LANIP6']))   $urls[] = [$http_ip6_url, null, null, false];
-  if (!empty($nginx['NGINX_LANMDNS']))  $urls[] = [$http_mdns_url, null, null, false];
-  if (!empty($nginx['NGINX_LANFQDN']))  $urls[] = [$https_fqdn_url, null, "certificate_bundle.pem", false];
-  if (!empty($nginx['NGINX_LANFQDN6'])) $urls[] = [$https_fqdn6_url, null, "certificate_bundle.pem", false];
+  if (!empty($nginx['NGINX_LANIP']))    $urls[] = ['LAN', $http_ip_url, null, null, false];
+  if (!empty($nginx['NGINX_LANIP6']))   $urls[] = ['LAN', $http_ip6_url, null, null, false];
+  if (!empty($nginx['NGINX_LANMDNS']))  $urls[] = ['LAN', $http_mdns_url, null, null, false];
   break;
 case 'yes':
-  if (!empty($nginx['NGINX_LANIP']))    $urls[] = [$http_ip_url, $https_ip_url, null, false];
-  if (!empty($nginx['NGINX_LANIP']))    $urls[] = [$https_ip_url, null, "{$var['NAME']}_unraid_bundle.pem", $cert1SelfSigned];
-  if (!empty($nginx['NGINX_LANIP6']))   $urls[] = [$http_ip6_url, $https_ip6_url, null, false];
-  if (!empty($nginx['NGINX_LANIP6']))   $urls[] = [$https_ip6_url, null, "{$var['NAME']}_unraid_bundle.pem", $cert1SelfSigned];
-  if (!empty($nginx['NGINX_LANMDNS']))  $urls[] = [$http_mdns_url, $https_mdns_url, null, false];
-  if (!empty($nginx['NGINX_LANMDNS']))  $urls[] = [$https_mdns_url, null, "{$var['NAME']}_unraid_bundle.pem", $cert1SelfSigned];
-  if (!empty($nginx['NGINX_LANFQDN']))  $urls[] = [$https_fqdn_url, null, "certificate_bundle.pem", false];
-  if (!empty($nginx['NGINX_LANFQDN6'])) $urls[] = [$https_fqdn6_url, null, "certificate_bundle.pem", false];
+  if (!empty($nginx['NGINX_LANIP']))    $urls[] = ['LAN', $http_ip_url, $https_ip_url, null, false];
+  if (!empty($nginx['NGINX_LANIP']))    $urls[] = ['LAN', $https_ip_url, null, "{$var['NAME']}_unraid_bundle.pem", $cert1SelfSigned];
+  if (!empty($nginx['NGINX_LANIP6']))   $urls[] = ['LAN', $http_ip6_url, $https_ip6_url, null, false];
+  if (!empty($nginx['NGINX_LANIP6']))   $urls[] = ['LAN', $https_ip6_url, null, "{$var['NAME']}_unraid_bundle.pem", $cert1SelfSigned];
+  if (!empty($nginx['NGINX_LANMDNS']))  $urls[] = ['LAN', $http_mdns_url, $https_mdns_url, null, false];
+  if (!empty($nginx['NGINX_LANMDNS']))  $urls[] = ['LAN', $https_mdns_url, null, "{$var['NAME']}_unraid_bundle.pem", $cert1SelfSigned];
   break;
 case 'auto': // aka strict
-  if (!empty($nginx['NGINX_LANIP']))    $urls[] = [$http_ip_url, $https_fqdn_url, null, false];
-  if (!empty($nginx['NGINX_LANIP6']))   $urls[] = [$http_ip6_url, $https_fqdn6_url, null, false];
-  if (!empty($nginx['NGINX_LANMDNS']))  $urls[] = [$http_mdns_url, $https_fqdn_url, null, false];
-  if (!empty($nginx['NGINX_LANFQDN']))  $urls[] = [$https_fqdn_url, null, "certificate_bundle.pem", false];
-  if (!empty($nginx['NGINX_LANFQDN6'])) $urls[] = [$https_fqdn6_url, null, "certificate_bundle.pem", false];
+  if (!empty($nginx['NGINX_LANIP'])   && !empty($nginx['NGINX_LANFQDN']))  $urls[] = ['LAN', $http_ip_url, $https_fqdn_url, null, false];
+  if (!empty($nginx['NGINX_LANIP6'])  && !empty($nginx['NGINX_LANFQDN6'])) $urls[] = ['LAN', $http_ip6_url, $https_fqdn6_url, null, false];
+  if (!empty($nginx['NGINX_LANMDNS']) && !empty($nginx['NGINX_LANFQDN']))  $urls[] = ['LAN', $http_mdns_url, $https_fqdn_url, null, false];
   break;
+}
+
+// define FQDN urls for each interface
+// when multiple FQDN urls are available for a given interface, make sure they are sorted
+asort($nginx);
+foreach ($nginx as $key => $host) {
+  if (!$host) continue;
+  // Only process keys that include 'FQDN'
+  if (strpos($key, 'FQDN') === false) continue;
+  // Extract the interface from the key, e.g., 'NGINX_LANFQDN' -> 'LAN', 'NGINX_WANFQDN' -> 'WAN', NGINX_WG0FQDN -> WG, NGINX_TAILSCALE1FQDN -> TAILSCALE
+  // Note: this specifically excludes FQDN6 urls since they are not supported by myunraid.net DNS currently
+  if (preg_match('/^NGINX_([A-Z]+)(\d*)FQDN$/', $key, $matches)) {
+    $interface = $matches[1]; // Interface type (LAN, WAN, WG, TAILSCALE, etc.)
+    // ignore the WAN interface because we don't have access to the WANPORT here
+    if ($interface == "WAN") continue;
+    $pem = null;
+    if (str_ends_with($host, '.myunraid.net')) $pem = 'certificate_bundle.pem';
+    elseif (str_ends_with($host, '.ts.net')) $pem = 'ts_bundle.pem';
+    $url = 'https://'.$host.$https_port."/";
+    $urls[] = [$interface, $url, null, $pem, false];
+  }
+}
+
+// determine whether there are urls for a given interface
+function has_urls($interface) {
+  global $urls;
+  foreach($urls as $url) {
+    if ($url[0] == $interface) return true;
+  }
+  return false;
+}
+
+// show all urls for a given interface
+function show_urls($interface) {
+  global $urls;
+  //   0 - type of url ['LAN','WAN','WG','TAILSCALE']
+  //   1 - the url
+  //   3 - the url it redirects to, or null
+  //   4 - the certificate file used, or null
+  //   5 - self-signed certificate, or false
+  $output = "";
+  $linestart = "<dt>&nbsp;</dt><dd>";
+  $lineend = "</dd>\n";
+  $first = true;
+  foreach($urls as $url) {
+    if ($url[0] == $interface) {
+      $msg  = "<a href='$url[1]'>$url[1]</a>";
+      if ($url[2]) $msg .= " "._("redirects to")." <a href='$url[2]'>$url[2]</a>";
+      if ($url[3]) $msg .= " "._("uses")." ".$url[3];
+      if ($url[4]) $msg .= "<span class='warning'> <i class='fa fa-warning fa-fw'></i> "._("is a self-signed certificate, ignore the browser's warning and proceed to the GUI")."</span>";
+      // 2nd+ urls need leading $linestart
+      $output .= ($first ? "" : $linestart).$msg.$lineend;
+      $first = false;
+    }
+  }
+  if ($first) {
+    $output = "none";
+  } else {
+    // strip final trailing $lineend as it will be added by markdown
+    $output = substr($output, 0, strlen($lineend)*-1);
+  }
+  echo $output;
 }
 
 $cert_time_format   = $display['date'].($display['date']!='%c' ? ', '.str_replace(['%M','%R'],['%M:%S','%R:%S'],$display['time']):'');
@@ -334,24 +405,34 @@ _(Local TLD)_:
 
 </form>
 
+<hr>
+
 _(Local access URLs)_:
-: <?
-// url[0] = url
-// url[1] = redirect url or null
-// url[2] = certificate used or null
-// url[3] = is certificate self-signed T/F
-$n = 0;
-foreach($urls as $url) {
-  $msg  = "";
-  if ($url[1]) $msg .= " "._("redirects to")." <a href='$url[1]'>$url[1]</a>";
-  if ($url[2]) $msg .= " "._("uses")." ".$url[2];
-  if ($url[3]) $msg .= "<span class='warning'> <i class='fa fa-warning fa-fw'></i> "._("is a self-signed certificate, ignore the browser's warning and proceed to the GUI")."</span>";
-  echo ($n ? "<dt>&nbsp;</dt><dd>" : ""),"<a href='$url[0]'>$url[0]</a>$msg",($n++ ? "</dd>" : "");
-}?>
+: <? show_urls('LAN'); ?>
 
 :mgmt_local_access_urls_help:
 
+<?if (has_urls('WG')): ?>
+
+_(WireGuard URLs)_:
+: <? show_urls('WG'); ?>
+
+:mgmt_wg_access_urls_help:
+
+<?endif;?>
+
+<?if (has_urls('TAILSCALE')): ?>
+
+_(Tailscale URLs)_:
+: <? show_urls('TAILSCALE'); ?>
+
+:mgmt_tailscale_access_urls_help:
+
+<?endif;?>
+
 <?if ($cert1Present):?>
+<hr>
+
 _(Self-signed or user-provided certificate)_:
 : <?=$cert1File?>
 
@@ -386,6 +467,9 @@ _(Self-signed certificate file)_:
 <input type="hidden" name="server_name" value="<?=strtok(_var($_SERVER,'HTTP_HOST'),":")?>">
 <input type="hidden" name="server_addr" value="<?=_var($_SERVER,'SERVER_ADDR')?>">
 <?if ($cert2Present):?>
+
+<hr>
+
 _(Unraid Let's Encrypt certificate)_:
 : <?=$cert2File?>
 
@@ -415,6 +499,31 @@ _(CA-signed certificate file)_:
 &nbsp;
 : <button type="submit" name="changePorts" value="Provision" <?=$disabled_provision?>><?=$provisionlabel?></button><button type="submit" name="changePorts" value="Delete" <?=$disabled_delete?> >_(Delete)_</button><?=$disabled_provision_msg?>
 
+
+<?if ($cert3Present):?>
+
+<hr>
+
+_(Tailscale Let's Encrypt certificate)_:
+: <?=$cert3File?>
+
+_(Certificate URL)_:
+: <?="<a href='https://$cert3Subject$https_port'>$cert3Subject</a>"?>
+
+_(Certificate issuer)_:
+: <?=$cert3Issuer?>
+
+_(Certificate expiration)_:
+: <?=_(my_date($cert_time_format, strtotime($cert3Expires)),0)?>
+
+<?endif;?>
+
 :mgmt_certificate_expiration_help:
 
 </form>
+
+<?if (has_urls('WG')): ?>
+
+<small>"WireGuard" and the "WireGuard" logo are registered trademarks of Jason A. Donenfeld</small>
+
+<?endif;?>

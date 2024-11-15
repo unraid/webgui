@@ -28,7 +28,13 @@ $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/Wrappers.php";
 
-$folders = ['/boot','/boot/config','/boot/config/plugins','/boot/syslinux','/var/log','/var/log/plugins','/boot/extra','/var/log/packages','/var/lib/pkgtools/packages','/tmp'];
+if (is_file('/boot/syslinux/syslinux.cfg')) {
+  $bootenv = '/boot/syslinux';
+} elseif (is_file('/boot/grub/grub.cfg')) {
+  $bootenv = '/boot/grub';
+}
+
+$folders = ['/boot','/boot/config','/boot/config/plugins',$bootenv,'/var/log','/var/log/plugins','/boot/extra','/var/log/packages','/var/lib/pkgtools/packages','/tmp'];
 
 // global variables
 $path  = "/var/local/emhttp";
@@ -434,7 +440,6 @@ run("lsscsi -vgl 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsscsi.txt")
 run("lspci -knn 2>/dev/null|todos >".escapeshellarg("/$diag/system/lspci.txt"));
 run("lsusb 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsusb.txt"));
 run("free -mth 2>/dev/null|todos >".escapeshellarg("/$diag/system/memory.txt"));
-run("ps -auxf --sort=-pcpu 2>/dev/null|todos >".escapeshellarg("/$diag/system/ps.txt"));
 run("lsof -Pni 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsof.txt"));
 run("lsmod|sort 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsmod.txt"));
 run("df -h 2>/dev/null|todos >".escapeshellarg("/$diag/system/df.txt"));
@@ -717,6 +722,7 @@ newline("/$diag/system/sshd.txt");
 copy("/etc/nginx/conf.d/servers.conf", "/$diag/system/servers.conf.txt");
 maskIP("/$diag/system/servers.conf.txt");
 run("sed -Ei 's/[01234567890abcdef]+\.((my)?unraid\.net)/hash.\\1/gm;t' ".escapeshellarg("/$diag/system/servers.conf.txt")." 2>/dev/null");
+run("sed -Ei 's/\.[^\.]*\.ts\.net/\.magicdns\.ts\.net/gm' ".escapeshellarg("/$diag/system/servers.conf.txt")." 2>/dev/null");
 newline("/$diag/system/servers.conf.txt");
 
 // BEGIN - third party plugins diagnostics

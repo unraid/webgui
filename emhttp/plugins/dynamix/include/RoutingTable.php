@@ -26,8 +26,8 @@ case 'Add Route':
   if ($gateway && $route) exec("/etc/rc.d/rc.inet1 ".escapeshellarg("{$gateway}_{$route}_{$metric}_add"));
   break;
 default:
-  exec("ip -4 route show|grep -v '^127.0.0.0'",$ipv4);
-  exec("ip -6 route show|grep -Pv '^([am:]|(f[ef][0-9][0-9])::)|expires'",$ipv6);
+  exec("ip -4 route show table all|grep -Pv '^(127\\.0\\.0\\.0)|table local'",$ipv4);
+  exec("ip -6 route show table all|grep -Pv '^([am:]|(f[ef][0-9][0-9])::)|expires|table local'",$ipv6);
   foreach ($ipv4 as $info) {
     $cell = explode(' ',$info);
     $route = $cell[0];

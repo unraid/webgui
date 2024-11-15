@@ -44,14 +44,14 @@ switch ($_GET['tag']) {
 case 'ttyd':
   // check if ttyd already running
   $sock = "/var/run/ttyd.sock";
-  exec("pgrep -f '$sock'", $ttyd_pid, $retval);
+  exec('pgrep --ns $$ -f '."'$sock'", $ttyd_pid, $retval);
   if ($retval == 0) {
     // check if there are any child processes, ie, curently open tty windows
-    exec("pgrep -P ".$ttyd_pid[0], $output, $retval);
+    exec('pgrep --ns $$ -P '.$ttyd_pid[0], $output, $retval);
     // no child processes, restart ttyd to pick up possible font size change
     if ($retval != 0) exec("kill ".$ttyd_pid[0]);
   }
-  if ($retval != 0) exec("ttyd-exec -i '$sock' bash --login");
+  if ($retval != 0) exec("ttyd-exec -i '$sock' '" . posix_getpwuid(0)['shell'] . "' --login");
   break;
 case 'syslog':
   // read syslog file

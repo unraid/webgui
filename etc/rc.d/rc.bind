@@ -42,11 +42,13 @@ bind_start() {
   mkdir -p /var/run/named
   # Make sure that /var/run/named has correct ownership:
   chown -R ${NAMED_USER}:${NAMED_GROUP} /var/run/named
-  # Make sure that /var/named has correct ownership:
-  chown -R ${NAMED_USER}:${NAMED_GROUP} /var/named
-  if [ -r /etc/rndc.key ]; then
-    # Make sure that /etc/rndc.key has correct ownership:
-    chown ${NAMED_USER}:${NAMED_GROUP} /etc/rndc.key
+  if [ "$NAMED_CHOWN" = "YES" ]; then
+    # Make sure that /var/named has correct ownership:
+    chown -R ${NAMED_USER}:${NAMED_GROUP} /var/named
+    if [ -r /etc/rndc.key ]; then
+      # Make sure that /etc/rndc.key has correct ownership:
+      chown ${NAMED_USER}:${NAMED_GROUP} /etc/rndc.key
+    fi
   fi
   # Start named:
   if [ -x /usr/sbin/named ]; then
@@ -94,7 +96,7 @@ bind_stop() {
   fi
   # Kill named processes if there are any running:
   if ps axco command | grep -q -e "^named$"; then
-    echo "Stopping all named processes in this namespace:  /bin/killall -SIGTERM --ns \$\$ named"
+    echo "Stopping all named processes in this namespace:  /bin/killall -SIGTERM --ns $$ named"
     /bin/killall -SIGTERM --ns $$ named 2> /dev/null
   fi
 }

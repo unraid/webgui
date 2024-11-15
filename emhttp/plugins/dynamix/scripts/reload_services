@@ -5,13 +5,7 @@ if [[ -n $1 ]]; then
   [[ ! -e $1 ]] && touch $1 || exit 0
 fi
 
-# run & log functions
-. /etc/rc.d/rc.runlog
-
 for cmd in $SERVICES; do
-  if /etc/rc.d/rc.$cmd update; then
-    log "$cmd"
-    /etc/rc.d/rc.$cmd reload >/dev/null 2>&1
-  fi
+  /etc/rc.d/rc.$cmd update >/dev/null 2>&1
 done
 exit 0

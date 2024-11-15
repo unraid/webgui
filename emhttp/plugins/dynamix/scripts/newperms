@@ -12,11 +12,10 @@
 
 # With corrections suggested by forum member Stokkes
 
-# Here's a breakdown of chmod "u-x,go-rwx,go+u,ugo+X"
-#  u-x     Clear the 'x' bit in the user permissions (leaves rw as-is)
+# Here's a breakdown of chmod "go-rwx,u-x,go+u"
 #  go-rwx  Clear the 'rwx' bits in both the group and other permissions
+#  u-x     Clear the 'x' bit in the user permissions (leaves rw as-is)
 #  go+u    Copy the user permissions to group and other
-#  ugo+X   Set the 'x' bit for directories in user, group, and other
 
 $nchan = $argv[$argc-1] == 'nchan'; // console or nchan output
 if ($nchan) unset($argv[$argc-1]);  // remove nchan parameter
@@ -45,10 +44,13 @@ function process($path) {
   $owner = $argv[2] ?? 'nobody';
   $group = $argv[3] ?? 'users';
   if (is_dir($path) && preg_match('/^\/mnt\/.+/',$path)) {
-    write("Processing: $path\n", "... chmod -R u-x,go-rwx,go+u,ugo+X $path\n");
-    exec("chmod -R u-x,go-rwx,go+u,ugo+X ".escapeshellarg($path));
-    write("... chown -R $owner:$group $path\n");
+    write("Processing: $path\n");
+    write("... chown -R $owner:$group\n");
     exec("chown -R $owner:$group ".escapeshellarg($path));
+    write("... chmod -R go-rwx,u-x,go+u\n");
+    exec("chmod -R go-rwx,u-x,go+u ".escapeshellarg($path));
+    write("... find -type d -exec chmod 777 {} \\;\n");
+    exec("find ".escapeshellarg($path)." -type d -exec chmod 777 {} \\;");
     write("... sync\n");
     exec("sync");
     write("\n");

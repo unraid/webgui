@@ -52,7 +52,7 @@ dbus_stop(){
   else
     run kill $(cat $PIDFILE)
     # Just in case:
-    run killall dbus-daemon
+    run killall --ns $$ dbus-daemon
     rm -f $PIDFILE
     if ! dbus_running; then REPLY="Stopped"; else REPLY="Failed"; fi
   fi
@@ -65,7 +65,7 @@ dbus_reload(){
     pid=$(cat $PIDFILE)
     run kill -HUP $pid
   else
-    run killall -HUP dbus-daemon
+    run killall --ns $$ -HUP dbus-daemon
   fi
   log "$DAEMON...  Reloaded."
 }

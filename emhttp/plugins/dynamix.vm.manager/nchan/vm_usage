@@ -80,8 +80,8 @@ while (true) {
       $echodata .= my_scale($vmdata['mem']*1024,$unit)."$unit / ".my_scale($vmdata['curmem']*1024,$unit)."$unit";
       if ($vmdata['curmem'] === $vmdata['maxmem']) $echodata .= " </td><td>";
       else $echodata .= " / " .my_scale($vmdata['maxmem']*1024,$unit)."$unit </td><td>";
-      $echodata .=  _("Read").": ".my_scale($vmdata['rdrate'],$unit)."$unit/s<br>"._("Write").": ".my_scale($vmdata['wrrate'],$unit)."$unit/s</td><td>";
-      $echodata .=  _("RX").": ".my_scale($vmdata['rxrate'],$unit)."$unit/s<br>"._("TX").": ".my_scale($vmdata['txrate'],$unit)."$unit/s</td></tr>";
+      $echodata .=  _("Read").": ".my_scale($vmdata['rdrate']/$timer,$unit)."$unit/s<br>"._("Write").": ".my_scale($vmdata['wrrate']/$timer,$unit)."$unit/s</td><td>";
+      $echodata .=  _("RX").": ".my_scale($vmdata['rxrate']/$timer,$unit)."$unit/s<br>"._("TX").": ".my_scale($vmdata['txrate']/$timer,$unit)."$unit/s</td></tr>";
     }
     $echo = $echodata ;
   }

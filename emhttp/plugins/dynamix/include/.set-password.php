@@ -347,7 +347,14 @@ $THEME_DARK = in_array($display['theme'],['black','gray']);
         document.cookie = "cookietest=1";
         cookieEnabled = document.cookie.indexOf("cookietest=")!=-1;
         document.cookie = "cookietest=1; expires=Thu, 01-Jan-1970 00:00:01 GMT";
-        if (!cookieEnabled) document.write("<p class='error'><?=_('Browser cookie support required for Unraid OS webgui')?></p>");
+        if (!cookieEnabled) {
+            const errorElement = document.createElement('p');
+            errorElement.classList.add('error');
+            errorElement.textContent = "<?=_('Please enable cookies to use the Unraid webGUI')?>";
+
+            document.body.textContent = '';
+            document.body.appendChild(errorElement);
+        }
         // Password toggling
         const $passToggle = document.querySelector('.js-pass-toggle');
         const $passToggleHideSvg = $passToggle.querySelector('.js-pass-toggle-hide');

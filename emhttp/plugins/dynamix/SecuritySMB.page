@@ -19,6 +19,8 @@ Cond="(($var['shareSMBEnabled']!='no') && (isset($name)?array_key_exists($name,$
 require_once "$docroot/webGui/include/InputSecurity.php";
 
 $width = [123,300];
+/* Sort user array by keys in natural order */
+uksort($users, 'strnatcmp');
 ?>
 :smb_security_help:
 
@@ -98,11 +100,11 @@ _(Case-sensitive names)_:
 
 <?endif;?>
 _(Security)_:
-: <select name="shareSecurity">
+: <select name="shareSecurity" onchange="checkPublicSelection(this);">
   <?=mk_option($sec[$name]['security'], "public", _('Public'))?>
   <?=mk_option($sec[$name]['security'], "secure", _('Secure'))?>
   <?=mk_option($sec[$name]['security'], "private", _('Private'))?>
-  </select>
+  </select><span id="warningMessage" style="display:none; color: red;">_(Warning)_:  _(Windows may require a valid User to be defined even for Public shares)_.  _(See Help)_.</span>
 
 :smb_security_modes_help:
 
@@ -313,4 +315,25 @@ function writeUserSMB(data,n,i) {
     writeUserSMB(data,0,i);
   }
 }
+
+function checkPublicSelection(select) {
+	/* Get reference to the warning message span */
+	let warningMessage = document.getElementById("warningMessage");
+
+	/* Check if 'Public' is selected */
+	if (select.value === "public") {
+		/* Display warning for 'Public' option */
+		warningMessage.style.display = "inline";
+	} else {
+		/* Hide warning for other options */
+		warningMessage.style.display = "none";
+	}
+}
+
+/* Call checkPublicSelection with the initial selection on page load */
+document.addEventListener("DOMContentLoaded", function() {
+	let smbSecuritySelect = document.querySelector('[name="shareSecurity"]');
+	checkPublicSelection(smbSecuritySelect);
+});
+
 </script>

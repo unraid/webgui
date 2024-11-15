@@ -209,6 +209,8 @@ function VMClone(uuid, name){
   box.find('#target').val(name + "_clone");
   document.getElementById("Free").checked = true;
   document.getElementById("Overwrite").checked = true;
+  overwrite = box.find("#Overwrite");
+  overwrite.attr("checked:true");
   box.dialog({
     title: "_(VM Clone)_",
     height: 'auto',
@@ -489,6 +491,7 @@ $(function() {
 <input type="button" onclick="stopAll()" value="_(Stop All)_" style="display:none">
 
 <div id="dialogWindow"></div>
+<div id="iframe-popup"></div>
 
 <div id="templateISO" class="template">
 <dl>
@@ -548,9 +551,9 @@ _(Snapshot Name)_: <input type="text" id="targetsnap" hidden><label id="targetsn
 <table class='snapshot'>
 <tr><td>_(VM Being Cloned)_:</td><td><span id="VMBeingCloned"></span></td></tr>
 <tr><td>_(New VM)_:</td><td><input type="text" id="target" autocomplete="off" spellcheck="false" value="" onclick="this.select()" ></td></tr>
-<tr><td>_(Overwrite)_:</td><td><input type="checkbox" id="Overwrite" value="" ></td></tr>
+<tr><td>_(Overwrite)_:</td><td><input type="checkbox" id="Overwrite" value="" checked></td></tr>
 <tr hidden><td>_(Start Cloned VM)_:</td><td><input type="checkbox" id="Start" value="" ></td></tr>
 <tr hidden><td>_(Edit VM after clone)_:</td><td><input type="checkbox" id="Edit" value="" ></td></tr>
-<tr><td>_(Check free space)_:</td><td><input type="checkbox" id="Free" value="" ></td></tr>
+<tr><td>_(Check free space)_:</td><td><input type="checkbox" id="Free" value="" checked></td></tr>
 </table>
 </div>

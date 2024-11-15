@@ -99,7 +99,7 @@ if [[ -x /etc/rc.d/rc.acpid && -r /var/run/acpid.pid ]]; then # quit
 fi
 
 # Kill all processes.
-OMITPIDS="$(for P in $(pgrep mdmon); do echo -o $P; done)" # Don't kill mdmon
+OMITPIDS="$(for P in $(pgrep --ns $$  mdmon); do echo -o $P; done)" # Don't kill mdmon
 log "Sending all processes the SIGHUP signal."
 run killall5 -1 $OMITPIDS
 log "Waiting for processes to hang up"

@@ -267,6 +267,9 @@
 					if (!empty($disk['serial'])) {
 						$arrReturn['serial'] = $disk['serial'];
 					}
+					if (!empty($disk['discard'])) {
+						$arrReturn['discard'] = $disk['discard'];
+					}
 
 				}
 			}
@@ -699,8 +702,10 @@
 						if ($strDevType == 'file' || $strDevType == 'block') {
 							$strSourceType = ($strDevType == 'file' ? 'file' : 'dev');
 
+							if (isset($disk['discard'])) $strDevUnmap = " discard=\"{$disk['discard']}\" "; else $strDevUnmap = " discard=\"ignore\" ";
+
 							$diskstr .= "<disk type='" . $strDevType . "' device='disk'>
-											<driver name='qemu' type='" . $disk['driver'] . "' cache='writeback'/>
+											<driver name='qemu' type='" . $disk['driver'] . "' cache='writeback'".$strDevUnmap."/>
 											<source " . $strSourceType . "='" . htmlspecialchars($disk['image'], ENT_QUOTES | ENT_XML1) . "'/>
 											<target bus='" . $disk['bus'] . "' dev='" . $disk['dev'] . "' $rotation_rate />
 											$bootorder
@@ -905,10 +910,17 @@
 					}
 
 					if ($gpu['multi'] == "on"){
-						$newgpu_bus = dechex(hexdec($gpu_bus) + 0x20) ;
+						$newgpu_bus= 0x07;
+						if (!isset($multibus[$newgpu_bus])) {
+							$multibus[$newgpu_bus] = 0x07;
+						} else {
+							#Get next bus
+							$newgpu_bus = end($multibus) + 0x01;
+							$multibus[$newgpu_bus] = $newgpu_bus;
+						}
 						if ($machine_type == "pc") $newgpu_slot = "0x01" ; else $newgpu_slot = "0x00" ; 
-						$strSpecialAddress = "<address type='pci' domain='0x0000' bus='0x$newgpu_bus' slot='$newgpu_slot' function='0x".$gpu_function."' multifunction='on' />" ;
-						$multidevices[$gpu_bus] = "0x$gpu_bus" ;
+						$strSpecialAddress = "<address type='pci' domain='0x0000' bus='$newgpu_bus' slot='$newgpu_slot' function='0x".$gpu_function."' multifunction='on' />" ;
+						$multidevices[$gpu_bus] = $newgpu_bus ;
 					}
 
 					
@@ -937,9 +949,9 @@
 					[$audio_bus, $audio_slot, $audio_function] = my_explode(":", str_replace('.', ':', $audio['id']), 3);
 					if ($audio_function != 0) {
 						if (isset($multidevices[$audio_bus]))	{
-							$newaudio_bus = dechex(hexdec($audio_bus) + 0x20) ;
+							$newaudio_bus = $multidevices[$audio_bus] ;
 							if ($machine_type == "pc") $newaudio_slot = "0x01" ; else $newaudio_slot = "0x00" ; 
-							$strSpecialAddressAudio = "<address type='pci' domain='0x0000' bus='0x$newaudio_bus' slot='$newaudio_slot'  function='0x".$audio_function."' />" ;
+							$strSpecialAddressAudio = "<address type='pci' domain='0x0000' bus='$newaudio_bus' slot='$newaudio_slot'  function='0x".$audio_function."' />" ;
 						}
 					}
 
@@ -968,9 +980,9 @@
 					
 					if ($pci_function != 0) {
 						if (isset($multidevices[$pci_bus]))	{
-							$newpci_bus = dechex(hexdec($pci_bus) + 0x20) ;
+							$newpci_bus = $multidevices[$pci_bus];
 							if ($machine_type == "pc") $newpci_slot = "0x01" ; else $newpci_slot = "0x00" ; 
-							$strSpecialAddressOther = "<address type='pci' domain='0x0000' bus='0x$newpci_bus' slot='$newpci_slot' function='0x".$pci_function."' />" ;
+							$strSpecialAddressOther = "<address type='pci' domain='0x0000' bus='$newpci_bus' slot='$newpci_slot' function='0x".$pci_function."' />" ;
 						}
 					}
 
@@ -1339,6 +1351,7 @@
 				if ($tmp) {
 					$tmp['bus'] = $disk->target->attributes()->bus->__toString();
 					$tmp["boot order"] = $disk->boot->attributes()->order ?? "";
+					$tmp["discard"] = $disk->driver->attributes()->discard ?? "ignore";
 					$tmp["rotation"] = $disk->target->attributes()->rotation_rate ?? "0";
 					$tmp['serial'] = $disk->serial ;
 
@@ -1369,7 +1382,8 @@
 						'bus' =>  $disk->target->attributes()->bus->__toString(),
 						'boot order' => $disk->boot->attributes()->order ,
 						'rotation' => $disk->target->attributes()->rotation_rate ?? "0",
-						'serial' => $disk->serial
+						'serial' => $disk->serial,
+						'discard' => $disk->driver->attributes()->discard ?? "ignore"
 					];
 				}
 			}
@@ -1989,8 +2003,19 @@
 				if (is_file($disk)) unlink($disk);
 				if (is_file($cfg)) unlink($cfg);
 				if (is_file($xml)) unlink($xml);
-				#if (is_dir($dir) && $this->is_dir_empty($dir)) rmdir($dir);
-				if (is_dir($dir) && $this->is_dir_empty($dir)) my_rmdir($dir);
+				if (is_dir($dir) && $this->is_dir_empty($dir)) {
+					$result= my_rmdir($dir);
+					if ($result['type'] == "zfs") {
+						qemu_log("$domain","delete empty zfs $dir {$result['rtncode']}");
+						if (isset($result['dataset'])) qemu_log("$domain","dataset {$result['dataset']} ");
+						if (isset($result['cmd'])) qemu_log("$domain","Command {$result['cmd']} ");
+						if (isset($result['output'])) {
+							$outputlogs = implode(" ",$result['output']);
+							qemu_log("$domain","Output $outputlogs end");
+						}
+					}
+					else qemu_log("$domain","delete empty $dir {$result['rtncode']}");				
+				} 
 			}
 
 			return true;

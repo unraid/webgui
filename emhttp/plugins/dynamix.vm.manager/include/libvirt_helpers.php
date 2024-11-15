@@ -1091,6 +1091,15 @@ private static $encoding = 'UTF-8';
 		return $arrValidDiskBuses;
 	}
 
+	function getValidDiskDiscard() {
+		$arrValidDiskDiscard = [
+			'ignore' => 'Ignore(No Trim)',
+			'unmap' => 'Unmap(Trim)',
+		];
+
+		return $arrValidDiskDiscard;
+	}
+
 	function getValidCdromBuses() {
 		$arrValidCdromBuses = [
 			'scsi' => 'SCSI',
@@ -1106,6 +1115,7 @@ private static $encoding = 'UTF-8';
 		$arrValidVNCModels = [
 			'cirrus' => 'Cirrus',
 			'qxl' => 'QXL (best)',
+			'virtio' => 'Virtio(2d)',
 			'vmvga' => 'vmvga'
 		];
 
@@ -1316,6 +1326,7 @@ private static $encoding = 'UTF-8';
 				'driver' => $disk['type'],
 				'dev' => $disk['device'],
 				'bus' => $disk['bus'],
+				'discard' => $disk['discard'],
 				'boot' => $disk['boot order'],
 				'rotation' => $disk['rotation'],
 				'serial' => $disk['serial'],
@@ -1330,6 +1341,7 @@ private static $encoding = 'UTF-8';
 				'dev' => 'hda',
 				'select' => '',
 				'bus' => 'virtio',
+				'discard' => 'ignore',
 				'rotation' => "0"
 			];
 		}
@@ -1457,7 +1469,12 @@ private static $encoding = 'UTF-8';
 		// preserve existing disk driver settings
 		foreach ($new['devices']['disk'] as $key => $disk) {
 			$source = $disk['source']['@attributes']['file'];
-			foreach ($old['devices']['disk'] as $k => $d) if ($source==$d['source']['@attributes']['file']) $new['devices']['disk'][$key]['driver']['@attributes'] = $d['driver']['@attributes'];
+			if (isset($disk['driver']['@attributes']['discard'])) $discard = $disk['driver']['@attributes']['discard']; else $discard = null;
+			foreach ($old['devices']['disk'] as $k => $d) 
+				if ($source==$d['source']['@attributes']['file']) { 
+					if (isset($discard)) $d['driver']['@attributes']['discard'] = $discard;
+					$new['devices']['disk'][$key]['driver']['@attributes'] = $d['driver']['@attributes'];
+				}
 		}
 		// settings not in the GUI, but maybe customized
 		unset($old['clock']);
@@ -1733,6 +1750,9 @@ private static $encoding = 'UTF-8';
 			$pi = pathinfo($config["disk"][$diskid]["new"]) ;
 			$isdir = is_dir($pi['dirname']) ;
 			if (is_file($config["disk"][$diskid]["new"])) $file_exists = true ;
+			write("addLog\0".htmlspecialchars("Checking from file:".$file_clone[$diskid]["source"]));
+			write("addLog\0".htmlspecialchars("Checking to file:".$config["disk"][$diskid]["new"]));
+			write("addLog\0".htmlspecialchars("File exists value:". ($file_exists ? "True" : "False")));
 			$file_clone[$diskid]["target"] = $config["disk"][$diskid]["new"] ;
 			}
 
@@ -2821,6 +2841,28 @@ function get_vm_ip($dom) {
 		}
 	}
 	return $myIP;
+}
+
+function check_zfs_name($zfsname, $storage="default") {
+	global $lv,$domain_cfg;
+	if ($storage == "default") $storage = $domain_cfg['DOMAINDIR']; else $storage = "/mnt/$storage/";
+	$storage=transpose_user_path($storage);
+	$fstype = trim(shell_exec(" stat -f -c '%T' $storage"));
+	#Check if ZFS.
+	$allowed_chars = "/^[A-Za-z0-9][A-Za-z0-9\-_.: ]*$/";
+	if ($fstype == "zfs" && !preg_match($allowed_chars, $zfsname)) {
+		return false;
+	} else {
+		return true;
+	}
+}
+
+function get_storage_fstype($storage="default") {
+	global $domain_cfg;
+	if ($storage == "default") $storage = $domain_cfg['DOMAINDIR']; else $storage = "/mnt/$storage/";
+	$storage=transpose_user_path($storage);
+	$fstype = trim(shell_exec(" stat -f -c '%T' $storage"));
+	return $fstype;
 }
 
 ?>

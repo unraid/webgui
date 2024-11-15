@@ -78,7 +78,7 @@ function tab_title($title,$path,$tag) {
   if (!$tag || substr($tag,-4)=='.png') {
     $file = "$path/icons/".($tag ?: strtolower(str_replace(' ','',$title)).".png");
     if (file_exists("$docroot/$file")) {
-      return "<img src='/$file' class='icon'>$title";
+      return "<img src='/$file' class='icon' style='max-width: 18px; max-height: 18px; width: auto; height: auto; object-fit: contain;'>$title";
     } else {
       return "<i class='fa fa-th title'></i>$title";
     }

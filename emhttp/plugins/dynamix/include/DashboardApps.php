@@ -48,12 +48,13 @@ if ($_POST['docker']) {
     $template = $info['template'];
     $shell = $info['shell'];
     $webGui = html_entity_decode($info['url']);
+    $TSwebGui = html_entity_decode($info['TSurl']);
     $support = html_entity_decode($info['Support']);
     $project = html_entity_decode($info['Project']);
     $registry = html_entity_decode($info['registry']);
     $donateLink = html_entity_decode($info['DonateLink']);
     $readme = html_entity_decode($info['ReadMe']);
-    $menu = sprintf("onclick=\"addDockerContainerContext('%s','%s','%s',%s,%s,%s,%s,'%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($name), addslashes($ct['ImageId']), addslashes($template), $running, $paused, $updateStatus, $is_autostart, addslashes($webGui), $shell, $id, addslashes($support), addslashes($project), addslashes($registry), addslashes($donateLink), addslashes($readme));
+    $menu = sprintf("onclick=\"addDockerContainerContext('%s','%s','%s',%s,%s,%s,%s,'%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($name), addslashes($ct['ImageId']), addslashes($template), $running, $paused, $updateStatus, $is_autostart, addslashes($webGui), addslashes($TSwebGui), $shell, $id, addslashes($support), addslashes($project), addslashes($registry), addslashes($donateLink), addslashes($readme));
     $shape = $running ? ($paused ? 'pause' : 'play') : 'square';
     $status = $running ? ($paused ? 'paused' : 'started') : 'stopped';
     $color = $status=='started' ? 'green-text' : ($status=='paused' ? 'orange-text' : 'red-text');
@@ -96,7 +97,8 @@ if ($_POST['vms']) {
     if ($vmrcport > 0) {
       $wsport = $lv->domain_get_ws_port($res);
       $vmrcprotocol = $lv->domain_get_vmrc_protocol($res) ;
-      $vmrcurl = autov('/plugins/dynamix.vm.manager/'.$vmrcprotocol.'.html',true).'&autoconnect=true&host=' . $_SERVER['HTTP_HOST'] ;
+      if ($vmrcprotocol == "vnc") $vmrcscale = "&resize=scale"; else $vmrcscale = "";
+      $vmrcurl = autov('/plugins/dynamix.vm.manager/'.$vmrcprotocol.'.html',true).$vmrcscale.'&autoconnect=true&host=' . $_SERVER['HTTP_HOST'] ;
       if ($vmrcprotocol == "spice") $vmrcurl .= '&vmname='. urlencode($vm) . '&port=/wsproxy/'.$vmrcport.'/' ; else $vmrcurl .= '&port=&path=/wsproxy/' . $wsport . '/';
     } elseif ($vmrcport == -1 || $autoport) {
       $vmrcprotocol = $lv->domain_get_vmrc_protocol($res) ;
