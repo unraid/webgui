@@ -63,7 +63,7 @@ foreach (glob('plugins/*', GLOB_ONLYDIR) as $plugin) {
 }
 
 // Get general variables
-$name = untangle(_var($_GET,'name'));
+$name = rawurldecode(_var($_GET,'name'));
 $dir  = rawurldecode(_var($_GET,'dir'));
 $path = substr(strtok(_var($_SERVER,'REQUEST_URI'),'?'),1);
 

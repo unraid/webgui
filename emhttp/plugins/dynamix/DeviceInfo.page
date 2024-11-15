@@ -1,6 +1,7 @@
 Menu="Device:1"
 Title="$name _(Settings)_"
 Tag="hdd-o"
+Cond="device_exists($name)"
 ---
 <?PHP
 /* Copyright 2005-2023, Lime Technology
@@ -510,13 +511,13 @@ function deletePool() {
   $.cookie('deletepool','deletepool');
   document.deletepool.submit();
 }
-function eraseDisk(name) {
+function eraseDisk() {
   swal({
     title:"_(Erase Device Content)_?",
     text:"<?=$text?><p style='font-weight:bold;color:red;margin:8px 0'>_(Existing content is permanently lost)_</p>",
     html:true,
     type:'input',
-    inputPlaceholder:"<?=sprintf(_('To confirm your action type: %s'),$name)?>",
+    inputPlaceholder:"<?=sprintf(_('To confirm your action type: %s'),".htmlspecialchars($name).")?>",
     showCancelButton:true,
     closeOnConfirm:false,
     confirmButtonText:"_(Proceed)_",
@@ -528,7 +529,7 @@ function eraseDisk(name) {
       $('#doneButton').prop('disabled',true);
       $('#eraseButton').prop('disabled',true);
       $('div.spinner.fixed').show();
-      $.get("/update.htm",{cmdWipefs:name,csrf_token:"<?=_var($var,'csrf_token')?>"},function(){
+      $.post("/update.htm",{cmdWipefs:"<?=$name?>"},function(){
         $('div.spinner.fixed').hide();
         refresh();
       });
@@ -542,11 +543,11 @@ function eraseDisk(name) {
 <form markdown="1" method="POST" action="/update.htm" target="progressFrame" onsubmit="setFloor()">
 <?if (_var($var,'fsState')=="Stopped" && isPool($name)):?>
 _(Name)_:
-: <a onclick="renamePoolPopup()" style="cursor:pointer" title="_(Rename Pool)_"><?=$name?></a>
+: <a onclick="renamePoolPopup()" style="cursor:pointer" title="_(Rename Pool)_"><?=htmlspecialchars($name)?></a>
 
 <?else:?>
 _(Name)_:
-: <?=_(my_disk($name),3)?>
+: <?=_(my_disk(htmlspecialchars($name)),3)?>
 
 <?endif;?>
 <?if (diskStatus('_NP')):?>
@@ -704,13 +705,13 @@ _(Critical disk utilization threshold)_ (%):
     <?if (_var($var,'fsState')=="Started" && _var($var,'startMode')!="Normal" && diskType('Data')):?>
       <?$erasable=true?>
     <?endif;?>
-    <input type="button" id="eraseButton" value="_(Erase)_" onclick="eraseDisk('<?=$name?>')"<?=$erasable?'':'  disabled'?>>
+    <input type="button" id="eraseButton" value="_(Erase)_" onclick="eraseDisk()"<?=$erasable?'':'  disabled'?>>
   <?endif;?>
   <?if (isPool($name)):?>
     <?if (_var($var,'fsState')=="Stopped" || (_var($var,'fsState')=="Started" && _var($var,'startMode')!="Normal")):?>
       <?$erasable=true?>
     <?endif;?>
-    <input type="button" id="eraseButton" value="_(Erase)_" onclick="eraseDisk('<?=$name?>')"<?=$erasable?'':'  disabled'?>>
+    <input type="button" id="eraseButton" value="_(Erase)_" onclick="eraseDisk()"<?=$erasable?'':'  disabled'?>>
   <?endif;?>
   <?if (_var($var,'fsState')=="Stopped" && isPool($name)):?>
     <?$empty = _var($disk,'devices',0)==0?>
@@ -1234,9 +1235,8 @@ _(SMART attribute notifications)_:
 <input type="hidden" name="poolNameOrig" value="<?=$name?>">
 <input type="hidden" name="changeSlots" value="apply">
 _(Name)_:
-: <input type="text" name="poolName" maxlength="40" value="<?=$name?>">
+: <input type="text" name="poolName" maxlength="40" value="<?=htmlspecialchars($name)?>">
 <p>_(Caution)_: _(Renaming the pool will change the share storage allocations)_.  _(After renaming the pool, check that your shares are assigned to the proper primary and secondary storage locations)_.</p>
-
 </form>
 </div>
 

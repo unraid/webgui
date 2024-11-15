@@ -242,7 +242,7 @@ input[value=Edit]{margin:12px 0 0 0;padding:5px 10px}
 <table id='db-box1' class='share_status dashboard'>
 <tbody class='system'>
 <tr><td><i class='icon-performance f32'></i><div class='section'><?=_var($var,'NAME')?><br>
-<span><?=_var($var,'COMMENT')?></span><br></div>
+<span><?=htmlspecialchars(_var($var,'COMMENT'))?></span><br></div>
 <a href='/Dashboard/Settings/Identification'><i class='fa fa-fw fa-cog control' title="_(Go to identification settings)_"></i></a><i class='fa fa-fw fa-wrench control tile' onclick='contentMgmt()' title="_(Tile Management)_"></i>
 <span class='ctrl'>
 <?if ($parity||$mover||$btrfs):?>
@@ -256,7 +256,7 @@ input[value=Edit]{margin:12px 0 0 0;padding:5px 10px}
 </td></tr>
 <tr><td>
 <div class='leftside'>
-<span class='header'><i class='indent fa fa-file-text-o'></i>_(Model)_</span><br><i class='indent'></i><?=_var($var,'SYS_MODEL')?:'---'?><br><br>
+<span class='header'><i class='indent fa fa-file-text-o'></i>_(Model)_</span><br><i class='indent'></i><?=htmlspecialchars(_var($var,'SYS_MODEL'))?:'---'?><br><br>
 <span class='header'><i class='indent fa fa-id-badge'></i>_(Registration)_</span><br><i class='indent'></i>Unraid OS <b><em><?=_var($var,'regTy')?></em></b><br><br>
 <span class='header'><i class='indent fa fa-clock-o'></i>_(Uptime)_</span><br><i class='indent'></i><span class='uptime'></span>
 </div>
@@ -488,10 +488,10 @@ if (_var($var,'shareSMBEnabled')=='yes') {
     $list = "<a href=\"/Dashboard/Shares/Share?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".compress($name,20)."</a>";
     if ($share['luksStatus']>0) $list = str_replace('blue-text','green-text',$list);
     elseif ($share['useCache']=='only') $list = str_replace('blue-text','orange-text',$list);
-    $comment = compress($share['comment'],40) ?: '&nbsp;';
+    $comment = compress($share['comment'],40) ?: '-';
     $security = export_settings(_var($var,'shareSMBEnabled'), $sec[$name]);
     $last = $name==array_key_last($shares) ? ' last' : '';
-    echo "<tr class='smb share share1{$last}'><td><span class='w26'><i class='icon-folder f14'></i>$list</span><span class='w44'>$comment</span><span class='w18'>$security</span><span id='share{$i}'>0</span></td></tr>";
+    echo "<tr class='smb share share1{$last}'><td><span class='w26'><i class='icon-folder f14'></i>$list</span><span class='w44'>".htmlspecialchars($comment)."</span><span class='w18'>$security</span><span id='share{$i}'>0</span></td></tr>";
   }
   if (!count($shares)) echo "<tr class='smb share share1'><td class='none'>"._("No shares present")."</td></tr>";
 }
@@ -500,10 +500,10 @@ if (_var($var,'shareNFSEnabled')=='yes') {
     $list = "<a href=\"/Dashboard/Shares/Share?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".compress($name,20)."</a>";
     if ($share['luksStatus']>0) $list = str_replace('blue-text','green-text',$list);
     elseif ($share['useCache']=='only') $list = str_replace('blue-text','orange-text',$list);
-    $comment = compress($share['comment'],40) ?: '&nbsp;';
+    $comment = compress($share['comment'],40) ?: '-';
     $security = export_settings(_var($var,'shareNFSEnabled'), $sec_nfs[$name]);
     $last = $name==array_key_last($shares) ? ' last' : '';
-    echo "<tr class='nfs share share3{$last}'><td><span class='w26'><i class='icon-folder f14'></i>$list</span><span class='w44'>$comment</span><span class='w18'>$security</span><span>-</span></td></tr>";
+    echo "<tr class='nfs share share3{$last}'><td><span class='w26'><i class='icon-folder f14'></i>$list</span><span class='w44'>".htmlspecialchars($comment)."</span><span class='w18'>$security</span><span>-</span></td></tr>";
   }
   if (!count($shares)) echo "<tr class='nfs share share3'><td class='none'>"._("No shares present")."</td></tr>";
 }
@@ -512,8 +512,8 @@ if (!$group) {
     $list = "<a href=\"/Dashboard/Shares/Share?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".compress($name,20)."</a>";
     if ($share['luksStatus']>0) $list = str_replace('blue-text','green-text',$list);
     elseif ($share['useCache']=='only') $list = str_replace('blue-text','orange-text',$list);
-    $comment = compress($share['comment'],40) ?: '&nbsp;';
-    echo "<tr class='share'><td><span class='w26'><i class='icon-folder f14'></i>$list</span><span class='w44'>$comment</span><span class='w18'>-</span><span>-</span></td></tr>";
+    $comment = compress($share['comment'],40) ?: '-';
+    echo "<tr class='share'><td><span class='w26'><i class='icon-folder f14'></i>$list</span><span class='w44'>".htmlspecialchars($comment)."</span><span class='w18'>-</span><span>-</span></td></tr>";
   }
   if (!count($shares)) echo "<tr class='share'><td class='none'>"._("No shares present")."</td></tr>";
 }
@@ -543,7 +543,7 @@ if (_var($var,'shareSMBEnabled')=='yes') {
   foreach ($users as $user) {
     $name = $user['name'];
     $list = "<a href=\"/Dashboard/Users/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".compress($name,20)."</a>";
-    $desc = compress($user['desc'],40) ?: '&nbsp;';
+    $desc = compress($user['desc'],40) ?: '-';
     if ($name=='root') {
       $write = $read = '-';
     } else {
@@ -568,27 +568,27 @@ if (_var($var,'shareSMBEnabled')=='yes') {
     }
     if ($user['passwd']!='yes') $list = str_replace('blue-text','orange-text',$list);
     $last = $name==array_key_last($users) ? ' last' : '';
-    echo "<tr class='smb user user1{$last}'><td><span class='w26'><i class='icon-user f14'></i>$list</span><span class='w44'>$desc</span><span class='w18'>$write</span><span>$read</span></td></tr>";
+    echo "<tr class='smb user user1{$last}'><td><span class='w26'><i class='icon-user f14'></i>$list</span><span class='w44'>".htmlspecialchars($desc)."</span><span class='w18'>$write</span><span>$read</span></td></tr>";
   }
 }
 if (_var($var,'shareNFSEnabled')=='yes') {
   foreach ($users as $user) {
     $name = $user['name'];
     $list = "<a href=\"/Dashboard/Users/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".compress($name,20)."</a>";
-    $desc = compress($user['desc'],40) ?: '&nbsp;';
+    $desc = compress($user['desc'],40) ?: '-';
     $write = '-'; $read = '-';
     if ($user['passwd']!='yes') $list = str_replace('blue-text','orange-text',$list);
     $last = $name==array_key_last($users) ? ' last' : '';
-    echo "<tr class='nfs user user3{$last}'><td><span class='w26'><i class='icon-user f14'></i>$list</span><span class='w44'>$desc</span><span class='w18'>$write</span><span>$read</span></td></tr>";
+    echo "<tr class='nfs user user3{$last}'><td><span class='w26'><i class='icon-user f14'></i>$list</span><span class='w44'>".htmlspecialchars($desc)."</span><span class='w18'>$write</span><span>$read</span></td></tr>";
   }
 }
 if (!$group) {
   foreach ($users as $user) {
     $name = $user['name'];
     $list = "<a href=\"/Dashboard/Users/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">".compress($name,20)."</a>";
-    $desc = compress($user['desc'],40) ?: '&nbsp;';
+    $desc = compress($user['desc'],40) ?: '-';
     if ($user['passwd']!='yes') $list = str_replace('blue-text','orange-text',$list);
-    echo "<tr class='user'><td><span class='w26'><i class='icon-user f14'></i>$list</span><span class='w44'>$desc</span><span class='w18'>-</span><span>-</span></td></tr>";
+    echo "<tr class='user'><td><span class='w26'><i class='icon-user f14'></i>$list</span><span class='w44'>".htmlspecialchars($desc)."</span><span class='w18'>-</span><span>-</span></td></tr>";
   }
 }
 ?>
