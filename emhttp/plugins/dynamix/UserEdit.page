@@ -14,11 +14,11 @@ Tag="user"
  * all copies or substantial portions of the Software.
  */
 ?>
+<script>
 <?if (!array_key_exists($name, $users)):?>
-  <p class="notice"><?=sprintf(_('User %s has been deleted'),htmlspecialchars($name))?>.</p><br>
-  <input type="button" value="_(Done)_" onClick="done()">
-<?return;?>
+  done('UserEdit');
 <?endif;?>
+</script>
 <?
 $user   = "/boot/config/plugins/dynamix/users/$name.png";
 $void   = "<img src='/webGui/images/user.png' width='48' height='48' id='image' onclick='$(&quot;#drop&quot;).click()' style='cursor:pointer' title='"._('Click to select PNG file')."'>";

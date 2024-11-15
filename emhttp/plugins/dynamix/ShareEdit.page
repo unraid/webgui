@@ -14,6 +14,11 @@ Tag="share-alt-square"
  * all copies or substantial portions of the Software.
  */
 ?>
+<script>
+<?if (!empty($name) && !array_key_exists($name, $shares)):?>
+  done('Share');
+<?endif;?>
+</script>
 <?
 $width = [123,300];
 
@@ -31,13 +36,9 @@ if ($name == "") {
             "cachePool"  => "",
             "cow"        => "auto"
            ];
-} elseif (array_key_exists($name, $shares)) {
+} else {
   // edit existing share
   $share = $shares[$name];
-} else {
-  // handle share deleted case
-  echo "<p class='notice'>"._('Share')." '".htmlspecialchars($name)."' "._('has been deleted').".</p><input type='button' value=\""._('Done')."\" onclick='done()'>";
-  return;
 }
 // Check for non existent pool device
 if ($share['cachePool'] && !in_array($share['cachePool'],$pools)) $share['useCache'] = "no";

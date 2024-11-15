@@ -664,7 +664,7 @@ if (isset($myPage['Load']) && $myPage['Load']>0) echo "\n<script>timers.reload =
 echo "<div class='tabs'>";
 $tab = 1;
 $pages = [];
-if (!empty($myPage['text'])) $pages[$myPage['name']] = $myPage;
+if (!empty($myPage['text']) && page_enabled($myPage)) $pages[$myPage['name']] = $myPage;
 if (_var($myPage,'Type')=='xmenu') $pages = array_merge($pages, find_pages($myPage['name']));
 if (isset($myPage['Tabs'])) $display['tabs'] = strtolower($myPage['Tabs'])=='true' ? 0 : 1;
 $tabbed = $display['tabs']==0 && count($pages)>1;
@@ -672,7 +672,7 @@ $tabbed = $display['tabs']==0 && count($pages)>1;
 foreach ($pages as $page) {
   $close = false;
   if (isset($page['Title'])) {
-    eval("\$title=\"".htmlspecialchars($page['Title'])."\";");
+    eval("\$title=\"{$page['Title']}\";");
     if ($tabbed) {
       echo "<div class='tab'><input type='radio' id='tab{$tab}' name='tabs' onclick='settab(this.id)'><label for='tab{$tab}'>";
       echo tab_title($title,$page['root'],_var($page,'Tag',false));
@@ -689,7 +689,7 @@ foreach ($pages as $page) {
   if (isset($page['Type']) && $page['Type']=='menu') {
     $pgs = find_pages($page['name']);
     foreach ($pgs as $pg) {
-      @eval("\$title=\"".htmlspecialchars($pg['Title'])."\";");
+      @eval("\$title=\"{$pg['Title']}\";");
       $icon = _var($pg,'Icon',"<i class='icon-app PanelIcon'></i>");
       if (substr($icon,-4)=='.png') {
         $root = $pg['root'];

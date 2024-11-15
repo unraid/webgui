@@ -141,7 +141,7 @@ if ($low) $memory_maximum = pow(2,ceil(log($memory_installed)/log(2)));
 $style = "<style>table.info{margin-top:10px;background-color:inherit} table.info td:first-child{width:20%;font-weight:bold;padding-left:10px} tr.ram,tr.port{display:none} span.link{text-decoration:underline;cursor:pointer}</style>";
 
 $list = [];
-$list[] = "<table class='info'><tr><td>"._('Model').":</td><td>$model</td></tr>";
+$list[] = "<table class='info'><tr><td>"._('Model').":</td><td>".htmlspecialchars($model)."</td></tr>";
 $list[] = "<tr><td>".('M/B').":</td><td>{$board['Manufacturer']} {$board['Product Name']} {$board['Version']} {$board['Serial Number']}</td></tr>";
 $list[] = "<tr><td>"._('BIOS').":</td><td>{$bios['Vendor']} {$bios['Version']} {$bios['Release Date']}</td></tr>";
 $list[] = "<tr><td>"._('CPU').":</td><td>$cpumodel {$cpu['Current Speed']}</td></tr>";
