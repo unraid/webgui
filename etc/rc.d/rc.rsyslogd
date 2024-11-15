@@ -7,8 +7,8 @@
 # rsyslogd_reload added by Christophe Trussardi <chris@teria.org> Sept 2011
 #
 
-pidfile1=/var/run/rsyslogd.pid	# native rsyslogd pid file
-pidfile2=/var/run/syslogd.pid	# spoof the "old" syslogd file
+pidfile1="/var/run/rsyslogd.pid"  # native rsyslogd pid file
+pidfile2="/var/run/syslogd.pid" # spoof the "old" syslogd file
 
 create_xconsole()
 {
@@ -25,14 +25,14 @@ rsyslogd_start() {
     echo "Starting rsyslogd daemon: "
     echo "/usr/sbin/rsyslogd -i $pidfile1"
     /usr/sbin/rsyslogd -i "$pidfile1"
-    cp "$pidfile1" "$pidfile2"
+    ln -sf "$pidfile1" "$pidfile2"
   fi
 }
 
 rsyslogd_stop() {
-  killall rsyslogd 2> /dev/null
-  /usr/bin/rm $pidfile1 2> /dev/null
-  /usr/bin/rm $pidfile2 2> /dev/null
+  /bin/killall --ns $$ rsyslogd 2>/dev/null
+  /usr/bin/rm -f "$pidfile1" 2>/dev/null
+  /usr/bin/rm -f "$pidfile2" 2>/dev/null
 }
 
 rsyslogd_restart() {
@@ -43,7 +43,7 @@ rsyslogd_restart() {
 
 rsyslogd_reload() {
   echo "Reloading rsyslogd daemon: "
-  [ -f "$pidfile1" ] && /bin/kill -HUP $(cat $pidfile1)
+  /bin/killall -HUP --ns $$ rsyslogd 2>/dev/null
 }
 
 case "$1" in
