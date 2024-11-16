@@ -57,6 +57,11 @@ if ((! $share['cachePool']) && ($share['cachePool2'])) {
 	$share['cachePool2']	= "";
 }
 
+/* If useCache is "no" with an array, this is invalid and useCache has to be 'only'. */
+if ((! $poolsOnly) && ($share['useCache'] == "no")) {
+	$share['useCache'] = 'only';
+}
+
 /* Check for non existent pool device. */
 if ($share['cachePool'] && !in_array($share['cachePool'], $pools)) {
 	$poolDefined = false;

@@ -1528,6 +1528,10 @@ function showSubnet(bridge) {
     $('.netCONT').hide();
     $('#netCONT').val('');
   }
+  // make sure to re-trigger Tailscale check when network is changed
+  if ($('#contTailscale').prop('checked')) {
+    showTailscale(true);
+  }
 }
 
 function processExitNodeoptions(value) {

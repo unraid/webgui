@@ -58,11 +58,11 @@ if [ ! -f /usr/bin/tailscale ] || [ ! -f /usr/bin/tailscaled ]; then
 
   if [ "${TAILSCALE_TROUBLESHOOTING}" = "true" ]; then
     if which apt-get >/dev/null 2>&1; then
-      PACKAGES_TROUBLESHOOTING="curl dnsutils iputils-ping "
+      PACKAGES_TROUBLESHOOTING="curl dnsutils iputils-ping speedtest-cli "
     elif which apk >/dev/null 2>&1; then
-      PACKAGES_TROUBLESHOOTING="curl bind-tools iputils-ping "
+      PACKAGES_TROUBLESHOOTING="curl bind-tools iputils-ping speedtest-cli "
     elif which pacman >/dev/null 2>&1; then
-      PACKAGES_TROUBLESHOOTING="curl dnsutils iputils "
+      PACKAGES_TROUBLESHOOTING="curl dnsutils iputils speedtest-cli "
     fi
     echo "Tailscale Troubleshooting enabled!"
     echo "Installing additional packages: $(echo "${PACKAGES_TROUBLESHOOTING}" | sed 's/[[:blank:]]*$//' | sed 's/ /, /g')"
@@ -249,11 +249,16 @@ fi
 KEY_EXPIRY=$(tailscale status --json | jq -r '.Self.KeyExpiry')
 if [ "${KEY_EXPIRY}" != "null" ]; then
   EXPIRY_EPOCH=$(date -d "${KEY_EXPIRY}" +"%s" 2>/dev/null)
+  if [ -z "${EXPIRY_EPOCH}" ]; then
+    EXPIRY_EPOCH=$(date -d "$(echo "${KEY_EXPIRY}" | sed 's/T/ /; s/Z//')" +"%s")
+  fi
   CUR_EPOCH=$(date -u +%s)
   DIFF_EPOCH=$((EXPIRY_EPOCH - CUR_EPOCH))
   DIFF_DAYS=$((DIFF_EPOCH / 86400))
   HOST=$(tailscale status --json | jq -r '.Self.HostName')
-  if [ -n "${DIFF_DAYS}" ] && echo "${DIFF_DAYS}" | grep -Eq '^[0-9]+$'; then
+  if [ -z "${EXPIRY_EPOCH}" ]; then
+    echo "WARNING: An error occurred while retrieving the Tailscale key expiry!"
+  elif [ -n "${DIFF_DAYS}" ] && echo "${DIFF_DAYS}" | grep -Eq '^[0-9]+$'; then
     echo "WARNING: Tailscale Key will expire in ${DIFF_DAYS} days."
     echo "         Navigate to https://login.tailscale.com/admin/machines and 'Disable Key Expiry' for ${HOST}"
   else

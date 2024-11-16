@@ -213,8 +213,8 @@ foreach ($shares as $name => $share) {
 		$share_valid	= true;
 	}
 
-	/* When there is no array, all pools are treated as 'only' cache. */
-	if (($poolsOnly) && (! $share['cachePool2'])) {
+	/* When there is no array, all pools are treated as 'only' cache. If useCache is "no" with an array, this is invalid and useCache has to be 'only'. */
+	if ((($poolsOnly) && (! $share['cachePool2'])) || ((! $poolsOnly) && ($share['useCache'] == "no"))) {
 		$share['useCache'] = 'only';
 	}
 

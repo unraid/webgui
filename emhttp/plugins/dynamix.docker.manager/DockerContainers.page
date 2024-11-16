@@ -119,7 +119,15 @@ function loadlist(init) {
     $('#docker_list .TS_tooltip').tooltipster({
       animation: 'fade',
       delay: 200,
-      trigger: 'hover',
+      trigger: 'custom',
+      triggerOpen: {
+        mouseenter: true,
+        click: true
+      },
+      triggerClose: {
+        mouseleave: true,
+        click: true
+      },
       contentAsHTML: true
     });
     $('head').append('<script>'+data[1]+'<\/script>');

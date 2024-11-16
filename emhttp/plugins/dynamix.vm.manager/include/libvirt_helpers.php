@@ -712,7 +712,7 @@ private static $encoding = 'UTF-8';
 	$domain_cfgfile = "/boot/config/domain.cfg";
 	$domain_cfg = parse_ini_file($domain_cfgfile);
 
-	if ($domain_cfg['DEBUG'] != "yes") {
+	if ( ($domain_cfg['DEBUG'] ?? false) != "yes") {
 		error_reporting(0);
 	}
 
