@@ -39,12 +39,19 @@ function file_put_contents_atomic($filename,$data) {
   }
   return strlen($data);
 }
+// custom parse_ini_file/string functions to deal with '#' comment lines and remove html/php tags
+function my_parse_ini_string($text, $sections=false, $scanner=INI_SCANNER_NORMAL) {
+  return parse_ini_string(strip_tags(html_entity_decode(preg_replace('/^#.*$/m','',$text))),$sections,$scanner);
+}
+function my_parse_ini_file($file, $sections=false, $scanner=INI_SCANNER_NORMAL) {
+  return my_parse_ini_string(file_get_contents($file),$sections,$scanner);
+}
 function parse_plugin_cfg($plugin, $sections=false, $scanner=INI_SCANNER_NORMAL) {
   global $docroot;
   $ram = "$docroot/plugins/$plugin/default.cfg";
   $rom = "/boot/config/plugins/$plugin/$plugin.cfg";
-  $cfg = file_exists($ram) ? parse_ini_file($ram, $sections, $scanner) : [];
-  return file_exists($rom) ? array_replace_recursive($cfg, parse_ini_file($rom, $sections, $scanner)) : $cfg;
+  $cfg = file_exists($ram) ? my_parse_ini_file($ram, $sections, $scanner) : [];
+  return file_exists($rom) ? array_replace_recursive($cfg, my_parse_ini_file($rom, $sections, $scanner)) : $cfg;
 }
 function parse_cron_cfg($plugin, $job, $text = "") {
   $cron = "/boot/config/plugins/$plugin/$job.cron";

@@ -1,6 +1,7 @@
 Menu="Device:1"
 Title="$name _(Settings)_"
 Tag="hdd-o"
+Cond="device_exists($name)"
 ---
 <?PHP
 /* Copyright 2005-2023, Lime Technology
@@ -622,13 +623,13 @@ function renamePoolPopup() {
   });
   dialogStyle();
 }
-function eraseDisk(name) {
+function eraseDisk() {
   swal({
     title:"_(Erase Device Content)_?",
     text:"<?=$textErase?><p style='font-weight:bold;color:red;margin:8px 0'>_(Existing content is permanently lost)_</p>",
     html:true,
     type:'input',
-    inputPlaceholder:"<?=sprintf(_('To confirm type: %s'),$name)?>",
+    inputPlaceholder:"<?=sprintf(_('To confirm type: %s'),htmlspecialchars($name))?>",
     showCancelButton:true,
     closeOnConfirm:false,
     confirmButtonText:"_(Proceed)_",
@@ -641,7 +642,7 @@ function eraseDisk(name) {
       $('#eraseButton').prop('disabled',true);
       $('#removeButton').prop('disabled',true);
       $('div.spinner.fixed').show();
-      $.post("/update.htm",{cmdWipefs:name},function(){
+      $.post("/update.htm",{cmdWipefs:"<?=$name?>"},function(){
         $('div.spinner.fixed').hide();
         refresh();
       });
@@ -650,13 +651,13 @@ function eraseDisk(name) {
     }
   });
 }
-function removePool(name) {
+function removePool() {
   swal({
     title:"_(Remove pool)_?",
     text:"<?=$textDelete?>",
     html:true,
     type:'input',
-    inputPlaceholder:"<?=sprintf(_('To confirm type: %s'),$name)?>",
+    inputPlaceholder:"<?=sprintf(_('To confirm type: %s'),htmlspecialchars($name))?>",
     showCancelButton:true,
     closeOnConfirm:false,
     confirmButtonText:"_(Proceed)_",
@@ -669,7 +670,7 @@ function removePool(name) {
       $('#eraseButton').prop('disabled',true);
       $('#removeButton').prop('disabled',true);
       $('div.spinner.fixed').show();
-      $.post("/update.htm",{changeSlots:"apply",poolName:name,poolSlots:0},function(){
+      $.post("/update.htm",{changeSlots:"apply",poolName:"<?=$name?>",poolSlots:0},function(){
         $('div.spinner.fixed').hide();
         refresh();
       });
@@ -678,13 +679,13 @@ function removePool(name) {
     }
   });
 }
-function upgradeZpool(name) {
+function upgradeZpool() {
   swal({
     title:"_(Upgrade ZFS Pool)_?",
     text:"_(This operation cannot be reversed)_. _(After upgrading the volume may not be mountable in previous versions of Unraid)_.<p style='font-weight:bold;color:red;margin:8px 0'>_(The ZFS volume will be upgraded)_</p>",
     html:true,
     type:'input',
-    inputPlaceholder:"<?=sprintf(_('To confirm type: %s'),$name)?>",
+    inputPlaceholder:"<?=sprintf(_('To confirm type: %s'),htmlspecialchars($name))?>",
     showCancelButton:true,
     closeOnConfirm:false,
     confirmButtonText:"_(Proceed)_",
@@ -697,7 +698,7 @@ function upgradeZpool(name) {
       $('#eraseButton').prop('disabled',true);
       $('#deleteButton').prop('disabled',true);
       $('div.spinner.fixed').show();
-      $.post("/webGui/include/zfs_upgrade.php",{name:name},function(){
+      $.post("/webGui/include/zfs_upgrade.php",{name:"<?=$name?>"},function(){
         $('div.spinner.fixed').hide();
         refresh();
       });
@@ -711,11 +712,11 @@ function upgradeZpool(name) {
 <form markdown="1" method="POST" action="/update.htm" target="progressFrame" onsubmit="setFloor()">
 <?if (_var($var,'fsState')=="Stopped" && isPool($name) && !isSubpool($name)):?>
 _(Name)_:
-: <a onclick="renamePoolPopup()" style="cursor:pointer" title="_(Rename Pool)_"><?=$name?></a>
+: <a onclick="renamePoolPopup()" style="cursor:pointer" title="_(Rename Pool)_"><?=htmlspecialchars($name)?></a>
 
 <?else:?>
 _(Name)_:
-: <?=_(my_disk(native($name)),3)?>
+: <?=_(my_disk(native(htmlspecialchars($name))),3)?>
 
 <?endif;?>
 <?if (diskStatus('_NP')):?>
@@ -849,13 +850,13 @@ _(Critical disk utilization threshold)_ (%):
   <?if (diskType('Parity','Data')):?>
     <?if (_var($var,'fsState')=="Stopped" && diskStatus('_NEW')): $erasable=true; endif;?>
     <?if (_var($var,'fsState')=="Started" && _var($var,'startMode')!="Normal" && diskType('Data')): $erasable=true; endif;?>
-    <input type="button" id="eraseButton" value="_(Erase)_" onclick="eraseDisk('<?=$name?>')"<?=$erasable?'':' disabled'?>>
+    <input type="button" id="eraseButton" value="_(Erase)_" onclick="eraseDisk()"<?=$erasable?'':' disabled'?>>
   <?endif;?>
   <?if (isPool($name) && isSubpool($name)===false):?>
     <?if (_var($var,'fsState')=="Stopped" || (_var($var,'fsState')=="Started" && _var($var,'startMode')!="Normal")): $erasable=true; endif;?>
-    <input type="button" id="eraseButton" value="_(Erase Pool)_" onclick="eraseDisk('<?=$name?>')"<?=$erasable?'':' disabled'?>>
+    <input type="button" id="eraseButton" value="_(Erase Pool)_" onclick="eraseDisk()"<?=$erasable?'':' disabled'?>>
     <?if (_var($var,'fsState')=="Stopped"): $removeable=true; endif;?>
-    <input type="button" id="removeButton" value="_(Remove Pool)_" onclick="removePool('<?=$name?>')"<?=$removeable?'':' disabled'?>>
+    <input type="button" id="removeButton" value="_(Remove Pool)_" onclick="removePool()"<?=$removeable?'':' disabled'?>>
   <?endif;?>
 </form>
 
@@ -1143,7 +1144,7 @@ _(zfs pool status)_:
 &nbsp;
 : <input type="submit" id="zfs-button" value="<?=$zfs_cmd=='start' ? _('Scrub') : _('Clear')?>">
 <?if (! is_upgraded_ZFS_pool($name)):?>
-<input type="button" id="upgradeButton" value="_(Upgrade Pool)_" onclick="upgradeZpool('<?=$name?>')">
+<input type="button" id="upgradeButton" value="_(Upgrade Pool)_" onclick="upgradeZpool()">
 <?endif;?>
 
 :info_zfs_scrub_help:
@@ -1458,7 +1459,7 @@ _(SMART attribute notifications)_:
 <input type="hidden" name="changeSlots" value="apply">
 <p>_(Caution)_: _(Renaming the pool will change the share storage allocations)_.  _(After renaming the pool, check that your shares are assigned to the proper primary and secondary storage locations)_.</p>
 _(Name)_:
-: <input type="text" name="poolName" maxlength="40" value="<?=$name?>">
+: <input type="text" name="poolName" maxlength="40" value="<?=htmlspecialchars($name)?>">
 
 </form>
 </div>

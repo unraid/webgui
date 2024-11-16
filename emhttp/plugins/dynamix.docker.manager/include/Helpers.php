@@ -307,11 +307,9 @@ function xmlSecurity(&$template) {
       xmlSecurity($element);
     } else {
       if (is_string($element)) {
-        $tempElement = htmlspecialchars_decode($element);
-        $tempElement = str_replace("[","<",$tempElement);
-        $tempElement = str_replace("]",">",$tempElement);
-        if (preg_match('#<script(.*?)>(.*?)</script>#is',$tempElement) || preg_match('#<iframe(.*?)>(.*?)</iframe>#is',$tempElement) || (stripos($tempElement,"<link") !== false) ) {
-          $element = "REMOVED";
+        $tempElement = htmlspecialchars_decode($element??"");
+        if ( trim(strip_tags($tempElement)) !== trim($tempElement) ) {
+          $element = str_replace(["<",">"],["",""],$tempElement);
         }
       }
     }

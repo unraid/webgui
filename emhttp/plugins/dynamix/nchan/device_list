@@ -79,24 +79,26 @@ function device_info(&$disk,$online) {
   }
   $status = "<a class='info'><i ".($ctrl?"id='dev-$named' ":"")."class='fa fa-$orb orb $color-orb'$ctrl></i><span>$help</span></a>";
   $link   = (($parity || $data || $pool) && $disk_status!='DISK_NP') || $name=='flash' || in_array($name,$pools) || $type=='New'
-          ? "<a href=\"".htmlspecialchars("/Main/Settings/$source?name=$name")."\">$fancy</a>"
+          ? "<a href=\"".htmlspecialchars("/Main/$source?name=$name")."\">$fancy</a>"
           : $fancy;
   return $view.$status.$link;
 }
 function device_desc(&$disk) {
   global $var;
-  $size = my_scale(_var($disk,'size',0)*1024 ?: _var($disk,'sectors',0)*_var($disk,'sector_size',0),$unit,-1,-1);
-  switch (_var($disk,'type')) {
-    case 'Flash':  $type = 'usb'; break;
-    case 'Parity': $type = _var($disk,'rotational') ? 'disk' : 'nvme'; break;
-    case 'Data':
-    case 'Cache':  $type = _var($disk,'rotational') ? (_var($disk,'luksState') ? 'disk-encrypted' : 'disk') : 'nvme'; break;
-    default:       $type = 'disk'; break;
+  $size = my_scale(_var($disk,'size',0)*1024 ?: _var($disk,'sectors',0)*_var($disk,'sector_size',0),$unit,-1);
+  if (_var($var,'fsState')=='Started') {
+    switch (_var($disk,'type')) {
+      case 'Flash':  $type = 'usb'; break;
+      case 'Parity': $type = _var($disk,'rotational') ? 'disk' : 'nvme'; break;
+      case 'Data':
+      case 'Cache':  $type = _var($disk,'rotational') ? (_var($disk,'luksState') ? 'disk-encrypted' : 'disk') : 'nvme'; break;
+      default:       $type = 'disk'; break;
+    }
+    $log = "<a class='info hand' onclick=\"openTerminal('disklog','"._var($disk,'device')."','')\"><i class='icon-$type icon'></i><span>"._('Disk Log Information')."</span></a>";
+    return $log."<span style='font-family:bitstream'>".my_id(_var($disk,'id'))."</span> - $size $unit ("._var($disk,'device').")";
+  } else {
+    return my_id(_var($disk,'id'))." - $size $unit ("._var($disk,'device').")";
   }
-  $log = _var($var,'fsState')=='Started'
-       ? "<a class='info hand' onclick=\"openTerminal('disklog','"._var($disk,'device')."','')\"><i class='icon-$type icon'></i><span>"._('Disk Log Information')."</span></a>"
-       : "<a class='static'><i class='icon-$type icon'></i></a>";
-  return $log."<span style='font-family:bitstream'>".my_id(_var($disk,'id'))."</span> - $size $unit ("._var($disk,'device').")";
 }
 function assignment(&$disk) {
   global $var, $devs;

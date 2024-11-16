@@ -95,7 +95,7 @@ _(Local syslog server)_:
   <?=mk_option(_var($syslog,'server_protocol'), "tcp", _("TCP"))?>
   <?=mk_option(_var($syslog,'server_protocol'), "both", _("Both"))?>
   </select>
-  <input type="text" name="server_port" class="trim" value="<?=_var($syslog,'server_port')?>" maxlength="5" placeholder="514">
+  <input type="number" name="server_port" class="trim" value="<?=_var($syslog,'server_port')?>" maxlength="5" placeholder="514" pattern="([0-9]{1,5})">
 
 :syslog_local_server_help:
 
@@ -155,7 +155,7 @@ _(Local syslog number of files)_:
 </div>
 
 _(Remote syslog server)_:
-: <span class="span"><input type="text" name="remote_server" class="narrow" value="<?=_var($syslog,'remote_server')?>" maxlength="50" placeholder="_(name or ip address)_"></span>
+: <span class="span"><input type="text" name="remote_server" class="narrow" value="<?=htmlspecialchars(_var($syslog,'remote_server'))?>" maxlength="50" placeholder="_(name or ip address)_"></span>
   <select name="remote_protocol" class="narrow">
   <?=mk_option(_var($syslog,'remote_protocol'), "udp", _("UDP"))?>
   <?=mk_option(_var($syslog,'remote_protocol'), "tcp", _("TCP"))?>

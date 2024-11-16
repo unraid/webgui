@@ -34,7 +34,7 @@ function applyCfg() {
   if (string === "BIND=") {
     string = "";
   }
-  $.get( "/plugins/dynamix/include/update.vfio-pci-cfg.php", { cfg: string } )
+  $.post( "/plugins/dynamix/include/update.vfio-pci-cfg.php", { cfg: string } )
   .done(function(d) {
     if (d==1) {
       addRebootNotice(message);

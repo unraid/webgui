@@ -17,7 +17,7 @@ require_once "$docroot/webGui/include/Wrappers.php";
 
 $vfio = '/boot/config/vfio-pci.cfg';
 $old  = is_file($vfio) ? rtrim(file_get_contents($vfio)) : '';
-$new  = _var($_GET,'cfg');
+$new  = _var($_POST,'cfg');
 
 $reply = 0;
 if ($new != $old) {

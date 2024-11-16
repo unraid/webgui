@@ -480,10 +480,10 @@ $theme_dark = in_array($display['theme'], ['black', 'gray']);
         </div>
         <div class="content">
             <h1>
-                <?=$var['NAME']?>
+                <?=htmlspecialchars($var['NAME'])?>
             </h1>
             <h2>
-               	<?=$var['COMMENT']?>
+               	<?=htmlspecialchars($var['COMMENT'])?>
             </h2>
 
             <div class="case">

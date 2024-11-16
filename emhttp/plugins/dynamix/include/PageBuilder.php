@@ -42,8 +42,16 @@ function build_pages($pattern) {
   }
 }
 
+function page_enabled(&$page)
+{
+  global $var,$disks,$devs,$users,$shares,$sec,$sec_nfs,$name,$display,$pool_devices;
+  $enabled = true;
+  if (isset($page['Cond'])) eval("\$enabled={$page['Cond']};");
+  return $enabled;
+}
+
 function find_pages($item) {
-  global $docroot,$site,$var,$disks,$devs,$users,$shares,$sec,$sec_nfs,$name,$display,$pool_devices;
+  global $site;
   $pages = [];
   foreach ($site as $page) {
     if (empty($page['Menu'])) continue;
@@ -55,9 +63,7 @@ function find_pages($item) {
     while ($menu !== false) {
       [$menu,$rank] = my_explode(':',$menu);
       if ($menu == $item) {
-        $enabled = true;
-        if (isset($page['Cond'])) eval("\$enabled={$page['Cond']};");
-        if ($enabled) $pages["$rank{$page['name']}"] = $page;
+        if (page_enabled($page)) $pages["$rank{$page['name']}"] = $page;
         break;
       }
       $menu = strtok(' ');
@@ -69,6 +75,7 @@ function find_pages($item) {
 
 function tab_title($title,$path,$tag) {
   global $docroot,$pools;
+  $title=htmlspecialchars(html_entity_decode($title));
   $names = implode('|',array_merge(['disk','parity'],$pools));
   if (preg_match("/^($names)/",$title)) {
     $device = strtok($title,' ');

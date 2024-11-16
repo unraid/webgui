@@ -169,12 +169,12 @@ _(Default file system for Array disks)_:
 :disk_default_file_system_help:
 
 _(Shutdown time-out)_ (_(seconds)_):
-: <input type="text" name="shutdownTimeout" maxlength="10" value="<?=$var['shutdownTimeout']?>" class="narrow" placeholder="90">
+: <input type="number" name="shutdownTimeout" maxlength="10" value="<?=$var['shutdownTimeout']?>" class="narrow" placeholder="90">
 
 :disk_shutdown_timeout_help:
 
 _(Tunable (poll_attributes))_:
-: <input type="text" name="poll_attributes" maxlength="10" value="<?=$var['poll_attributes']?>" class="narrow" placeholder="<?=$var['poll_attributes_default']?>">
+: <input type="number" name="poll_attributes" maxlength="10" value="<?=$var['poll_attributes']?>" class="narrow" placeholder="<?=$var['poll_attributes_default']?>">
 
 :disk_tunable_poll_attributes_help:
 
@@ -187,7 +187,7 @@ _(Tunable (enable NCQ))_:
 :disk_tunable_enable_ncq_help:
 
 _(Tunable (nr_requests))_:
-: <input type="text" name="nr_requests" maxlength="10" value="<?=$var['nr_requests']?>" class="narrow" placeholder="<?=_($var['nr_requests_default'])?>">
+: <input type="text" name="nr_requests" maxlength="10" value="<?=htmlspecialchars($var['nr_requests'])?>" class="narrow" placeholder="<?=_($var['nr_requests_default'])?>">
 
 :disk_tunable_nr_requests_help:
 
@@ -203,17 +203,17 @@ _(Tunable (scheduler))_:
 :disk_tunable_scheduler_help:
 
 _(Tunable (md_num_stripes))_:
-: <input type="text" name="md_num_stripes" maxlength="10" value="<?=$var['md_num_stripes']?>" class="narrow" placeholder="<?=$var['md_num_stripes_default']?>">
+: <input type="number" name="md_num_stripes" maxlength="10" value="<?=$var['md_num_stripes']?>" class="narrow" placeholder="<?=$var['md_num_stripes_default']?>">
 
 :disk_tunable_md_num_stripes_help:
 
 _(Tunable (md_queue_limit))_:
-: <input type="text" name="md_queue_limit" maxlength="10" value="<?=$var['md_queue_limit']?>" class="narrow" placeholder="<?=$var['md_queue_limit_default']?>">
+: <input type="number" name="md_queue_limit" maxlength="10" value="<?=$var['md_queue_limit']?>" class="narrow" placeholder="<?=$var['md_queue_limit_default']?>">
 
 :disk_tunable_md_queue_limit_help:
 
 _(Tunable (md_sync_limit))_:
-: <input type="text" name="md_sync_limit" maxlength="10" value="<?=$var['md_sync_limit']?>" class="narrow" placeholder="<?=$var['md_sync_limit_default']?>">
+: <input type="number" name="md_sync_limit" maxlength="10" value="<?=$var['md_sync_limit']?>" class="narrow" placeholder="<?=$var['md_sync_limit_default']?>">
 
 :disk_tunable_md_sync_limit_help:
 
@@ -376,7 +376,7 @@ _(Default SMART controller type)_:
 :disk_default_smart_controller_help:
 
 _(Default SMART attribute notifications)_:
-: <input type="text" name="smCustom" value="<?=_var($var,'smCustom')?>" class="narrow">_(Custom attributes (use comma to separate numbers))_
+: <input type="text" name="smCustom" value="<?=htmlspecialchars(_var($var,'smCustom'))?>" class="narrow">_(Custom attributes (use comma to separate numbers))_
 
 <?for ($x = 0; $x < count($preselect); $x++):?>
 &nbsp;
