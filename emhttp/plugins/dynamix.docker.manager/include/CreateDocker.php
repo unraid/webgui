@@ -450,6 +450,8 @@ if (!empty($TS_no_peers) && !empty($TS_container)) {
     // Check if serve or funnel are enabled by checking for [hostname] and replace string with TS_DNSName
     if (!empty($xml['TailscaleWebUI']) && strpos($xml['TailscaleWebUI'], '[hostname]') !== false && isset($TS_DNSName)) {
       $TS_webui_url = str_replace("[hostname][magicdns]", rtrim($TS_DNSName, '.'), $xml['TailscaleWebUI']);
+      $TS_webui_url = preg_replace('/\[IP\]/', rtrim($TS_DNSName, '.'), $TS_webui_url);
+      $TS_webui_url = preg_replace('/\[PORT:(\d{1,5})\]/', '443', $TS_webui_url);
     // Check if serve is disabled, construct url with port, path and query if present and replace [noserve] with url
     } elseif (strpos($xml['TailscaleWebUI'], '[noserve]') !== false && isset($TS_container['TailscaleIPs'])) {
       $ipv4 = '';
@@ -464,6 +466,8 @@ if (!empty($TS_no_peers) && !empty($TS_container)) {
         $webui_port = (preg_match('/\[PORT:(\d+)\]/', $xml['WebUI'], $matches)) ? ':' . $matches[1] : '';
         $webui_path = $webui_url['path'] ?? '';
         $webui_query = isset($webui_url['query']) ? '?' . $webui_url['query'] : '';
+        $webui_query = preg_replace('/\[IP\]/', $ipv4, $webui_query);
+        $webui_query = preg_replace('/\[PORT:(\d{1,5})\]/', ltrim($webui_port, ':'), $webui_query);
         $TS_webui_url = 'http://' . $ipv4 . $webui_port . $webui_path . $webui_query;
       }
     // Check if TailscaleWebUI in the xml is custom and display instead

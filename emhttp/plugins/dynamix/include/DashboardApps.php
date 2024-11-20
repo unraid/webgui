@@ -21,8 +21,11 @@ require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 
 if (isset($_POST['ntp'])) {
-  $ntp = exec("ntpq -pn|awk '{if (NR>3 && $2!=\".INIT.\") c++} END {print c}'");
-  die($ntp ? sprintf(_('Clock synchronized with %s NTP server'.($ntp==1?'':'s')),$ntp) : _('Clock is unsynchronized with no NTP servers'));
+  if (exec("pgrep -cf /usr/sbin/ntpd")) {
+    $ntp = exec("ntpq -pn|awk '$1~/^\*/{print $9;exit}'");
+    die($ntp ? sprintf(_('Clock is synchronized using NTP, time offset: %s ms'),abs($ntp)) : _('Clock is unsynchronized with no NTP servers'));
+  }
+  die(_('Clock is unsynchronized, free-running clock'));
 }
 
 if ($_POST['docker']) {
@@ -164,12 +167,10 @@ if ($_POST['vms']) {
 
   echo "\0";
   echo "<tr title='' class='useupdated'><td>";
-  if ($vmusage == "Y") {
-    foreach ($vmusagehtml as $vmhtml) {
-      echo $vmhtml;
-     }
-    if (!count($vmusagehtml))  echo "<span id='no_usagevms'><br> "._('No running virtual machines')."<br></span>";
-    if ($running < 1 && count($vmusagehtml)) echo "<span id='no_usagevms'><br>". _('No running virtual machines')."<br></span>";
+  if ($vmusage=='Y') {
+    foreach ($vmusagehtml as $vmhtml) echo $vmhtml;
+    if (!count($vmusagehtml)) echo "<span id='no_usagevms'><br> "._('No running virtual machines')."<br></span>";
+    if ($running<1 && count($vmusagehtml)) echo "<span id='no_usagevms'><br>". _('No running virtual machines')."<br></span>";
     echo "</td></tr>";
   }
 }

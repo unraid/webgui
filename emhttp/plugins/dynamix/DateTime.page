@@ -59,6 +59,14 @@ _(Use NTP)_:
 
 :use_ntp_help:
 
+_(NTP interval)_:
+: <select name="display_ntppoll">
+  <?=mk_option(_var($display,'ntppoll'), "", _('Default'))?>
+  <?=mk_option(_var($display,'ntppoll'), "8", _('Slow'))?>
+  <?=mk_option(_var($display,'ntppoll'), "5", _('Medium'))?>
+  <?=mk_option(_var($display,'ntppoll'), "3", _('Fast'))?>
+  </select><span class="ntp orange-text">_(Use DEFAULT setting when public NTP servers are defined)_</span>
+
 _(NTP server)_ 1:
 : <input type="text" name="NTP_SERVER1" maxlength="40" class="narrow" value="<?=htmlspecialchars($var['NTP_SERVER1'])?>">
 
@@ -107,12 +115,14 @@ function presetTime(form) {
 function checkDateTimeSettings(form) {
   if (form.USE_NTP.value=="yes") {
     form.newDateTime.disabled=true;
+    form.display_ntppoll.disabled=false;
     form.NTP_SERVER1.disabled=false;
     form.NTP_SERVER2.disabled=false;
     form.NTP_SERVER3.disabled=false;
     form.NTP_SERVER4.disabled=false;
   } else {
     form.newDateTime.disabled=false;
+    form.display_ntppoll.disabled=true;
     form.NTP_SERVER1.disabled=true;
     form.NTP_SERVER2.disabled=true;
     form.NTP_SERVER3.disabled=true;

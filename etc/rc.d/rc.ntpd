@@ -13,6 +13,7 @@ NTPD="/usr/sbin/ntpd"
 OPTIONS="-g -u ntp:ntp"
 CONF="/etc/ntp.conf"
 IDENT="/boot/config/ident.cfg"
+CONFIG="/boot/config/plugins/dynamix/dynamix.cfg"
 
 # run & log functions
 . /etc/rc.d/rc.runlog
@@ -38,11 +39,24 @@ ntpd_build(){
       echo "interface listen $NET" >>$CONF
     done
   fi
-  # add configured NTP servers
-  [[ -n $NTP_SERVER1 ]] && echo "server $NTP_SERVER1 iburst" >>$CONF
-  [[ -n $NTP_SERVER2 ]] && echo "server $NTP_SERVER2 iburst" >>$CONF
-  [[ -n $NTP_SERVER3 ]] && echo "server $NTP_SERVER3 iburst" >>$CONF
-  [[ -n $NTP_SERVER4 ]] && echo "server $NTP_SERVER4 iburst" >>$CONF
+  # ntp poll interval may be adjusted to predefined values
+  if [[ -f $CONFIG ]]; then
+    NTP_POLL=$(grep -Po '^ntppoll="\K[^"]+' $CONFIG)
+    if [[ -n $NTP_POLL ]]; then
+      MINPOLL="minpoll $NTP_POLL"
+      MAXPOLL="maxpoll $NTP_POLL"
+    fi
+  fi
+  # add configured ntp servers or pools
+  for n in {1..4}; do
+    NTP="NTP_SERVER$n"
+    if [[ -n ${!NTP} ]]; then
+      # use either server or pool peers depending on remote ntp name
+      # pools use a round-robin mechanism to get a server out of the pool
+      [[ ${!NTP} =~ "pool" ]] && PEER=pool || PEER=server
+      echo "$PEER ${!NTP} iburst $MINPOLL $MAXPOLL" >>$CONF
+    fi
+  done
 }
 
 ntpd_start(){
