@@ -260,9 +260,4 @@ function my_preg_split($split, $text, $count=2) {
 function delete_file(...$file) {
   array_map('unlink',array_filter($file,'file_exists'));
 }
-function device_exists($name)
-{
-  global $disks,$devs;
-  return (array_key_exists($name, $disks) && !str_contains(_var($disks[$name],'status'),'_NP')) || (array_key_exists($name, $devs));
-}
 ?>
