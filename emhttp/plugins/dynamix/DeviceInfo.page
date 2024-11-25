@@ -1,7 +1,7 @@
 Menu="Device:1"
 Title="$name _(Settings)_"
 Tag="hdd-o"
-Cond="(array_key_exists($name, $disks) || array_key_exists($name, $devs))"
+Cond="array_key_exists($name, $disks) || array_key_exists($name, $devs)"
 ---
 <?PHP
 /* Copyright 2005-2023, Lime Technology
@@ -672,7 +672,7 @@ function removePool() {
       $('div.spinner.fixed').show();
       $.post("/update.htm",{changeSlots:"apply",poolName:"<?=$name?>",poolSlots:0},function(){
         $('div.spinner.fixed').hide();
-        refresh();
+        done();
       });
     } else {
       if (confirm.length) swal({title:"_(Incorrect confirmation)_",text:"_(Please try again)_!",type:'error',html:true,confirmButtonText:"_(Ok)_"});

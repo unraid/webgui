@@ -78,7 +78,8 @@ function device_info(&$disk,$online) {
     $help .= "<br>"._("Click to spin $action device");
   }
   $status = "<a class='info'><i ".($ctrl?"id='dev-$named' ":"")."class='fa fa-$orb orb $color-orb'$ctrl></i><span>$help</span></a>";
-  $link   = (($parity || $data || $pool) && $disk_status!='DISK_NP') || $name=='flash' || in_array($name,$pools) || $type=='New'
+
+  $link   = ($parity && $disk_status!='DISK_NP_DSBL') || (($data || $pool) && $disk_status!='DISK_NP') || $name=='flash' || in_array($name,$pools) || $type=='New'
           ? "<a href=\"".htmlspecialchars("/Main/$source?name=$name")."\">$fancy</a>"
           : $fancy;
   return $view.$status.$link;
