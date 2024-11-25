@@ -1130,9 +1130,10 @@ function isValidURL(url) {
 }
 
 $('body').on("click","a", function(e) {
-  href = $(this).attr("href").trim();
-  target = $(this).attr("target");
+  var href = $(this).attr("href");
+  var target = $(this).attr("target");
   if ( href ) {
+    href = href.trim();
     if ( href.match('https?://[^\.]*.(my)?unraid.net/') || href.indexOf("https://unraid.net/") == 0 || href == "https://unraid.net" || href.indexOf("http://lime-technology.com") == 0) {
       return;
     } 
