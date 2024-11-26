@@ -33,15 +33,6 @@ mount_devshm(){
   fi
 }
 
-install_custom_udev_rules() {
-  UDEVRULES="/boot/config/udev"
-  if [[ -d $UDEVRULES ]]; then
-    log "Installing custom udev rules..."
-    find $UDEVRULES -type f -exec install -p -m 0644 "{}" /etc/udev/rules.d \;
-    udevadm control --reload
-  fi
-}
-
 case "$1" in
 'start')
   # Sanity check #1, udev requires that the kernel support tmpfs:
@@ -118,8 +109,6 @@ case "$1" in
     cp --preserve=all --recursive --update /etc/udev/devices/* /dev 2>/dev/null
     log "Starting udevd..."
     run udevd --daemon
-    # Install custom udev rules
-    install_custom_udev_rules
     # Since udev is just now being started we want to use add events:
     log "Triggering udev events..."
     # Call udevtrigger and udevsettle to do the device configuration:
@@ -180,8 +169,6 @@ case "$1" in
       log "Updating hardware database index..."
       run udevadm hwdb --update
     fi
-    # Install custom udev rules
-    install_custom_udev_rules
     # Since udevd is running, most of the time we only need change events:
     log "Triggering udev events..."
     run udevadm trigger --type=subsystems --action=change
