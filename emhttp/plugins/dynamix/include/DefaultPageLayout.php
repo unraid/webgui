@@ -679,8 +679,6 @@ foreach ($buttons as $button) {
   if (isset($button['Nchan'])) nchan_merge($button['root'], $button['Nchan']);
 }
 
-echo "<div class='nav-user show'><a id='board' href='#' class='hand'><b id='bell' class='icon-u-bell system'></b></a></div>";
-
 if ($themes2) echo "</div>";
 echo "</div></div>";
 foreach ($buttons as $button) {
@@ -897,10 +895,6 @@ defaultPage.on('message', function(msg,meta) {
       }
 <?endif;?>
     });
-    $('#bell').removeClass('red-orb yellow-orb green-orb').prop('title',"<?=_('Alerts')?> ["+bell1+']\n'+"<?=_('Warnings')?> ["+bell2+']\n'+"<?=_('Notices')?> ["+bell3+']');
-    if (bell1) $('#bell').addClass('red-orb'); else
-    if (bell2) $('#bell').addClass('yellow-orb'); else
-    if (bell3) $('#bell').addClass('green-orb');
     break;
   }
 });
