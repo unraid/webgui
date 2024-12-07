@@ -331,30 +331,6 @@ if (isset($xml["Config"]) && is_array($xml["Config"])) {
   }
 }
 
-# Look for Exit Nodes if Tailscale plugin is installed
-$ts_exit_nodes = [];
-$ts_en_check = false;
-if (file_exists('/usr/local/sbin/tailscale') && exec('pgrep --ns $$ -f "/usr/local/sbin/tailscaled"')) {
-  exec('tailscale exit-node list', $ts_exit_node_list, $retval);
-  if ($retval === 0) {
-    foreach ($ts_exit_node_list as $line) {
-      if (!empty(trim($line))) {
-        if (preg_match('/^(\d+\.\d+\.\d+\.\d+)\s+(.+)$/', trim($line), $matches)) {
-          $parts = preg_split('/\s+/', $matches[2]);
-          $ts_exit_nodes[] = [
-            'ip' => $matches[1],
-            'hostname' => $parts[0],
-            'country' => $parts[1],
-            'city' => $parts[2],
-            'status' => $parts[3]
-          ];
-          $ts_en_check = true;
-        }
-      }
-    }
-  }
-}
-
 # Try to detect port from WebUI and set webui_url
 $TSwebuiport = '';
 $webui_url = '';
@@ -376,11 +352,36 @@ $TS_DirectMachineLink = $TS_MachinesLink;
 $TS_HostNameActual = "";
 $TS_not_approved = "";
 $TS_https_enabled = false;
+$ts_exit_nodes = [];
+$ts_en_check = false;
 // Get Tailscale information and create arrays/variables
 !empty($xml) && exec("docker exec -i " . escapeshellarg($xml['Name']) . " /bin/sh -c \"tailscale status --peers=false --json\"", $TS_raw);
 $TS_no_peers = json_decode(implode('', $TS_raw),true);
 $TS_container = json_decode(implode('', $TS_raw),true);
 $TS_container = $TS_container['Self']??'';
+
+# Look for Exit Nodes through Tailscale plugin (if installed) when container is not running
+if (empty($TS_container) && file_exists('/usr/local/sbin/tailscale') && exec('pgrep --ns $$ -f "/usr/local/sbin/tailscaled"')) {
+  exec('tailscale exit-node list', $ts_exit_node_list, $retval);
+  if ($retval === 0) {
+    foreach ($ts_exit_node_list as $line) {
+      if (!empty(trim($line))) {
+        if (preg_match('/^(\d+\.\d+\.\d+\.\d+)\s+(.+)$/', trim($line), $matches)) {
+          $parts = preg_split('/\s+/', $matches[2]);
+          $ts_exit_nodes[] = [
+            'ip' => $matches[1],
+            'hostname' => $parts[0],
+            'country' => $parts[1],
+            'city' => $parts[2],
+            'status' => $parts[3]
+          ];
+          $ts_en_check = true;
+        }
+      }
+    }
+  }
+}
+
 if (!empty($TS_no_peers) && !empty($TS_container)) {
   // define the direct link to this machine on the Tailscale website
   if (!empty($TS_container['TailscaleIPs']) && !empty($TS_container['TailscaleIPs'][0])) {
