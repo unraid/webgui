@@ -200,11 +200,11 @@ function settab(tab) {
   $.cookie('one','tab1');
 <?endif;?>
 <?break;?>
-<?case'Cache':case'Data':case'Flash':case'Parity':?>
+<?case'Cache':case'Data':case'Device':case'Flash':case'Parity':?>
   $.cookie('one',tab);
 <?break;?>
 <?default:?>
-  $.cookie(($.cookie('one')==null?'tab':'one'),tab);
+  $.cookie('one',tab);
 <?endswitch;?>
 }
 function done(key) {
@@ -586,8 +586,26 @@ function flashReport() {
   });
 }
 $(function() {
-  var tab = $.cookie('one')||$.cookie('tab')||'tab1';
-  if (tab=='tab0') tab = 'tab'+$('input[name$="tabs"]').length; else if ($('#'+tab).length==0) {initab(); tab = 'tab1';}
+  let tab;
+<?switch ($myPage['name']):?>
+<?case'Main':?>
+  tab = $.cookie('tab')||'tab1';
+<?break;?>
+<?case'Cache':case'Data':case'Device':case'Flash':case'Parity':?>
+  tab = $.cookie('one')||'tab1';
+<?break;?>
+<?default:?>
+  tab = $.cookie('one')||'tab1';
+<?endswitch;?>
+  /* Check if the tab is 'tab0' */
+  if (tab === 'tab0') {
+    /* Set tab to the last available tab based on input[name$="tabs"] length */
+    tab = 'tab' + $('input[name$="tabs"]').length;
+  } else if ($('#' + tab).length === 0) {
+    /* If the tab element does not exist, initialize a tab and set to 'tab1' */
+    initab();
+    tab = 'tab1';
+  }
   $('#'+tab).attr('checked', true);
   updateTime();
   $.jGrowl.defaults.closeTemplate = '<i class="fa fa-close"></i>';
