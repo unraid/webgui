@@ -18,9 +18,9 @@ includes the device model number, serial number, linux device id, and the device
 
 **Temp.** (temperature) is read directly from the device. You configure which units to use on
 the [Display Preferences](Settings/DisplaySettings) page.  We do not read the temperature of spun-down hard
-drives since this typically causes them to spin up; instead we display the `*` symbol.  We also
-display the `*` symbol for SSD and Flash devices, though sometimes these devices do report a valid
-temperature, and sometimes they return the value `0`.
+drives since this typically causes them to spin up; instead we display the '*' symbol.  We also
+display the '*' symbol for SSD and Flash devices, though sometimes these devices do report a valid
+temperature, and sometimes they return the value '0'.
 
 **Size, Used, Free** reports the total device size, used space, and remaining space for files.  These
 units are also configured on the [Display Preferences](Settings/DisplaySettings) page.  The
@@ -254,7 +254,7 @@ The run time is potentially very long, depending on the filesystem size and spee
 
 Unraid OS uses these default options when creating a multiple-device pool:
 
-`-dconvert=raid1 -mconvert=raid1`
+'-dconvert=raid1 -mconvert=raid1'
 
 For more complete documentation, please refer to the btrfs-balance [Manpage](https://man7.org/linux/man-pages/man8/btrfs-balance.8.html)
 
@@ -423,7 +423,7 @@ Use *Flash backup* to create a single zip file of the current contents of the fl
 :end
 
 :syslinux_cfg_help:
-Use this page to make changes to your `syslinux.cfg` file.
+Use this page to make changes to your 'syslinux.cfg' file.
 You will need to reboot your server for these changes to take effect.
 :end
 
@@ -815,7 +815,7 @@ Select your applicable time zone from the drop-down list.
 Select 'Yes' to use Network Time Protocol to keep your server time accurate.
 We **highly** recommend the use of a network time server, especially if you plan on using Active Directory.
 
-Note: if using `pool.ntp.org` time servers, please also refer to [their documentation](http://www.pool.ntp.org/en/use.html).
+Note: if using 'pool.ntp.org' time servers, please also refer to [their documentation](http://www.pool.ntp.org/en/use.html).
 :end
 
 :ntp_server1_help:
@@ -894,7 +894,7 @@ Note: You must reboot after selecting Auto for setting to take effect.
 :end
 
 :disk_tunable_nr_requests_help:
-This defines the `nr_requests` device driver setting for all array devices.
+This defines the 'nr_requests' device driver setting for all array devices.
 
 **Auto** leaves the setting for each device as-is.
 
@@ -931,7 +931,7 @@ Note: if you set to blank and click Apply, the setting is restored to its defaul
 :disk_tunable_md_write_method_help:
 Selects the method to employ when writing to enabled disk in parity protected array.
 
-*Auto* selects `read/modify/write`.
+*Auto* selects 'read/modify/write'.
 :end
 
 :disk_default_warning_utilization_help:
@@ -1223,16 +1223,16 @@ Determines how the webGUI responds to HTTP and/or HTTPS protocol on your LAN.
 
 Select **No** to use HTTP. To access your server use this URL:
 
-`http://<server-name>.<localTLD>`
+'http://<server-name>.<localTLD>'
 
 or this URL:
 
-`http://<server-ip-address>`
+'http://<server-ip-address>'
 
 Select **Yes** to enable use of an automatically-generated self-signed
 SSL certificate.  Use this URL to access your server:
 
-`https://<server-name>.<localTLD>`
+'https://<server-name>.<localTLD>'
 
 Note that use of a self-signed SSL certificate will generate a browser
 warning.
@@ -1241,11 +1241,11 @@ Select **Strict** to enable *exclusive* use of a myunraid.net SSL
 certificate for https access (see **Provision** below).  Note that a DNS
 server must be reachable.
 
-**Redirects:** When accessing `http://<server-ip-address>` or `http://<server-name>.<localTLD>`, the 
+**Redirects:** When accessing 'http://<server-ip-address>' or 'http://<server-name>.<localTLD>', the 
 behavior will change depending on the value of the Use SSL/TLS setting:
 
-* If Use SSL/TLS is set to **Strict**, you will be redirected to `https://<lan-ip>.<hash>.myunraid.net`
-* If Use SSL/TLS is set to **Yes**, you will be redirected to `https://<server-ip-address> or https://<server-name>.<localTLD>`
+* If Use SSL/TLS is set to **Strict**, you will be redirected to 'https://<lan-ip>.<hash>.myunraid.net'
+* If Use SSL/TLS is set to **Yes**, you will be redirected to 'https://<server-ip-address> or https://<server-name>.<localTLD>'
 * If Use SSL/TLS is set to **No**, then the http url will load directly.
 
 Important: **Strict** may not be selectable if your router or upstream DNS server has
@@ -1265,16 +1265,16 @@ entirely or selectively based on domain. Examples:
 **DD-WRT:** If you are using "dnsmasq" with DNS rebinding protection enabled, you can add this line to your router
 configuration file:
 
-`rebind-domain-ok=/myunraid.net/`
+'rebind-domain-ok=/myunraid.net/'
 
 **pfSense:** If you are using pfSense internal DNS resolver service, you can add these Custom Option lines:
 
-`server:`<br>
-`private-domain: "myunraid.net"`
+'server:'<br>
+'private-domain: "myunraid.net"'
 
 **Ubiquiti USG router:** you can add this configuration line:
 
-`set service dns forwarding options rebind-domain-ok=/myunraid.net/`
+'set service dns forwarding options rebind-domain-ok=/myunraid.net/'
 
 **OpenDNS:** Go to Settings -> Security and *remove* the checkbox next to
  "Suspicious Responses - Block internal IP addresses". It is an all-or-nothing setting.
@@ -1316,12 +1316,12 @@ The myunraid.net SSL certificate can be used in two ways.  First,
 having the certificate present enables your server to respond to an
 alternate URL of the form:
 
-`https://<lan-ip>.<hash>.myunraid.net`
+'https://<lan-ip>.<hash>.myunraid.net'
 
-The `<hash>` value is a 40-character hex string (160 bits) unique to
-your server.  A Lime Technology DDNS server will return your `<lan-ip>`
+The '<hash>' value is a 40-character hex string (160 bits) unique to
+your server.  A Lime Technology DDNS server will return your '<lan-ip>'
 in response to a DNS request on this URL. The certificate Subject is
-set to `*.<hash>.myunraid.net` thus validating the https connection.
+set to '*.<hash>.myunraid.net' thus validating the https connection.
 
 You may enable this URL exclusively on your LAN by setting **Use
 SSL/TLS** to **Strict**.
@@ -1345,9 +1345,9 @@ provisioned and downloaded to your server.
 
 nginx makes use of two certificate files stored on the USB flash boot device:<br>
 
-- a self-signed certificate: `config/ssl/certs/<server-name>_unraid_bundle.pem`
+- a self-signed certificate: 'config/ssl/certs/<server-name>_unraid_bundle.pem'
 
-- a myunraid.net certificate: `config/ssl/certs/certificate_bundle.pem`
+- a myunraid.net certificate: 'config/ssl/certs/certificate_bundle.pem'
 
 The self-signed SSL certificate file is automatically created when nginx
 starts; and re-created if the server hostname or local TLD is changed.
@@ -1369,13 +1369,13 @@ This setting is not saved, i.e. upon system reboot it will revert to its default
 Enter the user names (separated by spaces) permitted to access the server using FTP.
 To disallow any user access, clear this setting.
 
-**Note:** do not enter user name `root` since this may cause problems in the future.
+**Note:** do not enter user name 'root' since this may cause problems in the future.
 :end
 
 :ftp_overview_help:
 ### Overview
 
-Unraid OS includes the popular `vsftpd` FTP server.  The configuration of `vsftp` is currently very
+Unraid OS includes the popular 'vsftpd' FTP server.  The configuration of 'vsftp' is currently very
 simple: **All** user names entered above are permitted to access the server via FTP and will have
 *full read/write/delete access* to the entire server, so use with caution.
 :end
@@ -1423,7 +1423,7 @@ instructed by support to put something here.
 :end
 
 :smb_extra_conf_help:
-Use this page to make changes to your `smb-extra.conf` file.  Samba will need
+Use this page to make changes to your 'smb-extra.conf' file.  Samba will need
 to be restarted in order for changes to take effect.
 :end
 
@@ -2005,7 +2005,7 @@ Enter the *device* which corresponds to your situation, only applicable when *UP
 :end
 
 :apc_ups_override_ups_capacity_help:
-If your device doesn't natively report Nominal Power (`NOMPOWER`) from `apcupsd`, but does report the Load Percentage (`LOADPCT`), you can manually define the UPS capacity rating in Watts (W) (this is the 'real power' value in Watts (W), not the 'apparent power' in Volt Amps (VA), and should be detailed on your UPS manual or product listing) and the plugin will dynamically calculate a virtual Nominal Power estimate (`≈`) by comparing the Override UPS Capacity (W) and the current Load Percentage. It is only an estimate, as it doesn't factor in things like the UPS' efficiency.
+If your device doesn't natively report Nominal Power ('NOMPOWER') from 'apcupsd', but does report the Load Percentage ('LOADPCT'), you can manually define the UPS capacity rating in Watts (W) (this is the 'real power' value in Watts (W), not the 'apparent power' in Volt Amps (VA), and should be detailed on your UPS manual or product listing) and the plugin will dynamically calculate a virtual Nominal Power estimate ('≈') by comparing the Override UPS Capacity (W) and the current Load Percentage. It is only an estimate, as it doesn't factor in things like the UPS' efficiency.
 :end
 
 :apc_battery_level_help:
@@ -2386,8 +2386,8 @@ The system attempted to determine the correct port automatically. If it used the
 
 In most cases this port is all you will need to specify in order to Serve the website in this container, although additional options are available below for more complex containers.
 
-This value is passed to the `<serve_port>` portion of this command which starts serve or funnel:<br>
-`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> http://localhost:`**`<serve_port>`**`<local_path>`<br>
+This value is passed to the '<serve_port>' portion of this command which starts serve or funnel:<br>
+'tailscale [serve|funnel] --bg --<protocol><protocol_port><path> http://localhost:'**'<serve_port>'**'<local_path>'<br>
 For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 :end
 
@@ -2396,26 +2396,26 @@ Here there be dragons!
 :end
 
 :docker_tailscale_serve_local_path_help:
-When not specified, this value defaults to an empty string. It is passed to the `<local_path>` portion of this command which starts serve or funnel:<br>
-`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> http://localhost:<serve_port>`**`<local_path>`**<br>
+When not specified, this value defaults to an empty string. It is passed to the '<local_path>' portion of this command which starts serve or funnel:<br>
+'tailscale [serve|funnel] --bg --<protocol><protocol_port><path> http://localhost:<serve_port>'**'<local_path>'**<br>
 For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 :end
 
 :docker_tailscale_serve_protocol_help:
-When not specified, this value defaults to "https". It is passed to the `<protocol>` portion of this command which starts serve or funnel:<br>
-`tailscale [serve|funnel] --bg --`**`<protocol>`**`=<protocol_port><path> http://localhost:<serve_port><local_path>`<br>
+When not specified, this value defaults to "https". It is passed to the '<protocol>' portion of this command which starts serve or funnel:<br>
+'tailscale [serve|funnel] --bg --'**'<protocol>'**'=<protocol_port><path> http://localhost:<serve_port><local_path>'<br>
 For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 :end
 
 :docker_tailscale_serve_protocol_port_help:
-When not specified, this value defaults to "=443". It is passed to the `<protocol_port>` portion of this command which starts serve or funnel:<br>
-`tailscale [serve|funnel] --bg --<protocol>`**`<protocol_port>`**`<path> http://localhost:<serve_port><local_path>`<br>
+When not specified, this value defaults to "=443". It is passed to the '<protocol_port>' portion of this command which starts serve or funnel:<br>
+'tailscale [serve|funnel] --bg --<protocol>'**'<protocol_port>'**'<path> http://localhost:<serve_port><local_path>'<br>
 For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 :end
 
 :docker_tailscale_serve_path_help:
-When not specified, this value defaults to an empty string. It is passed to the `<path>` portion of this command which starts serve or funnel:<br>
-`tailscale [serve|funnel] --bg --<protocol><protocol_port>`**`<path>`** `http://localhost:<serve_port><local_path>`<br>
+When not specified, this value defaults to an empty string. It is passed to the '<path>' portion of this command which starts serve or funnel:<br>
+'tailscale [serve|funnel] --bg --<protocol><protocol_port>'**'<path>'** 'http://localhost:<serve_port><local_path>'<br>
 For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 :end
 
@@ -2428,31 +2428,31 @@ If they are disabled then the url will be generated from the container's main "W
 :end
 
 :docker_tailscale_advertise_routes_help:
-If desired, specify any routes that should be passed to the **`--advertise-routes=`** parameter when running **`tailscale up`**.
+If desired, specify any routes that should be passed to the **'--advertise-routes='** parameter when running **'tailscale up'**.
 For more details see the <a href="https://tailscale.com/kb/1019/subnets#connect-to-tailscale-as-a-subnet-router" target="_blank">Subnet routers</a> documentation.
 :end
 
 :docker_tailscale_accept_routes_help:
-When enabled, this will accept your subnet routes from other devices, adding the **`--accept-routes`** parameter when running **`tailscale up`**.
+When enabled, this will accept your subnet routes from other devices, adding the **'--accept-routes'** parameter when running **'tailscale up'**.
 For more details see the <a href="https://tailscale.com/kb/1019/subnets?q=allow+routes#use-your-subnet-routes-from-other-devices" target="_blank">Use your subnet routes from other devices</a> documentation.
 :end
 
 :docker_tailscale_daemon_extra_params_help:
-Specify any extra parameters to pass when starting **`tailscaled`**.
+Specify any extra parameters to pass when starting **'tailscaled'**.
 For more details see the <a href="https://tailscale.com/kb/1278/tailscaled" target="_blank">tailscaled</a> documentation.
 :end
 
 :docker_tailscale_extra_param_help:
-Specify any extra parameters to pass when running **`tailscale up`**.
+Specify any extra parameters to pass when running **'tailscale up'**.
 For more details see the <a href="https://tailscale.com/kb/1080/cli#up" target="_blank">Tailscale CLI</a> documentation.
 :end
 
 :docker_tailscale_statedir_help:
-If state directory detection fails on startup, you can specify a persistent directory in the container to override automatic detection, i.e. `/container-path/.tailscale_state`
+If state directory detection fails on startup, you can specify a persistent directory in the container to override automatic detection, i.e. '/container-path/.tailscale_state'
 :end
 
 :docker_tailscale_troubleshooting_packages_help:
-Enable this to install `ping`, `nslookup`, `curl`, and `speedtest-cli` into the container to help troubleshoot networking issues. Once the issues are resolved we recommend disabling this to reduce the size of the container.
+Enable this to install 'ping', 'nslookup', 'curl', and 'speedtest-cli' into the container to help troubleshoot networking issues. Once the issues are resolved we recommend disabling this to reduce the size of the container.
 :end
 
 :docker_privileged_help:
@@ -2462,7 +2462,7 @@ For more information, see this link: <a href="https://docs.docker.com/engine/ref
 
 ; sysdevs help - added May 18, 2020
 :sysdevs_iommu_groups_help:
-This displays a list of IOMMU groups available on your system along with the output of the `lspci` command for each IOMMU group.  The numeric identifiers are used to configure PCI pass-through.
+This displays a list of IOMMU groups available on your system along with the output of the 'lspci' command for each IOMMU group.  The numeric identifiers are used to configure PCI pass-through.
 
 Devices you select will be bound to the vfio-pci driver at boot, which makes them available for assignment to a virtual machine, and also prevents the Linux kernel from automatically binding them to any present host driver.
 
@@ -2480,11 +2480,11 @@ This displays a list of CPU thread pairings.
 :end
 
 :sysdevs_usb_devices_help:
-This displays the output of the `lsusb` command.  The numeric identifiers are used to configure PCI pass-through.
+This displays the output of the 'lsusb' command.  The numeric identifiers are used to configure PCI pass-through.
 :end
 
 :sysdevs_scsi_devices_help:
-This displays the output of the `lsscsi` command.  The numeric identifiers are used to configure PCI pass-through.
+This displays the output of the 'lsscsi' command.  The numeric identifiers are used to configure PCI pass-through.
 
 Note that linux groups ATA, SATA and SAS devices with true SCSI devices.
 :end
