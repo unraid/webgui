@@ -134,7 +134,9 @@ fi
 unset TSD_PARAMS
 unset TS_PARAMS
 
-if [ ! -z "${SERVER_DIR}" ]; then
+if [ ! -z "${TAILSCALE_STATE_DIR}" ]; then
+  TSD_STATE_DIR="${TAILSCALE_STATE_DIR}"
+elif [ ! -z "${SERVER_DIR}" ]; then
   TSD_STATE_DIR="${SERVER_DIR}/.tailscale_state"
 elif [ ! -z "${DATA_DIR}" ]; then
   TSD_STATE_DIR="${DATA_DIR}/.tailscale_state"
@@ -142,13 +144,12 @@ elif [ ! -z "${USER_HOME}" ]; then
   TSD_STATE_DIR="${USER_HOME}/.tailscale_state"
 elif [ -d "/config" ]; then
   TSD_STATE_DIR="/config/.tailscale_state"
+elif [ -d "/data" ]; then
+  TSD_STATE_DIR="/data/.tailscale_state"
 else
-  if [ -z "${TAILSCALE_STATE_DIR}" ]; then
-    TAILSCALE_STATE_DIR="/config/.tailscale_state"
-    echo "ERROR: Couldn't detect persistent Docker directory for .tailscale_state! Enable Tailscale Advanced Settings in the Docker template and set the Tailscale State Directory!"
-    sleep infinity
-  fi
-  TSD_STATE_DIR="${TAILSCALE_STATE_DIR}"
+  echo "ERROR: Couldn't detect persistent Docker directory for .tailscale_state!"
+  echo "       Please enable Tailscale Advanced Settings in the Docker template and set the Tailscale State Directory manually!"
+  sleep infinity
 fi
 echo "Settings Tailscale state dir to: ${TSD_STATE_DIR}"
 
