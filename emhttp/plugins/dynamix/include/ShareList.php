@@ -188,6 +188,11 @@ define('LUKS_STATUS_UNENCRYPTED', 2);
 // Build table
 $row = 0;
 foreach ($shares as $name => $share) {
+	/* Correct a situation in previous Unraid versions where an array only share has a useCache defined. */
+	if ((!$poolsOnly) && ($share['useCache'] == "no")) {
+		$share['cachePool'] = "";
+	}
+
 	/* Is cachePool2 defined? If it is we need to show the cache pool 2 device name instead of 'Array'. */
 	if ($share['cachePool2']) {
 		$array		= compress(my_disk($share['cachePool2'],$display['raw']));

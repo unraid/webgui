@@ -56,23 +56,27 @@ if ((! $share['cachePool']) && ($share['cachePool2'])) {
 	$share['cachePool2']	= "";
 }
 
+/* Correct a situation in previous Unraid versions where an array only share has a useCache defined. */
+if ((!$poolsOnly) && ($share['useCache'] == "no")) {
+	$share['cachePool'] = "";
+}
+
 /* Check for non existent pool device. */
-if (($share['cachePool'] && !in_array($share['cachePool'], $pools)) || ($poolsOnly && !$share['cachePool'])) {
-	$poolDefined = false;
+if (($share['cachePool'] && !in_array($share['cachePool'], $pools))) {
+
 	$share['useCache'] = $share['cachePool2'] ? "yes" : ($poolsOnly ? "no" : "yes");
+	$poolDefined = false;
 } else {
 	$share['useCache'] = $share['useCache'] ?: ($poolsOnly ? "only" : "no");
 	$poolDefined = true;
 }
 
 /* Check for pool 2 (or array) being defined. */
+$poolDefined2 = true;
 if ((($share['useCache'] == "yes") || ($share['useCache'] == "prefer")) && ($poolsOnly) && (!$share['cachePool2'])) {
-	$poolDefined2 = true;
 	$share['useCache'] = "only";
 } else if ($share['cachePool2']) {
 	$poolDefined2 = in_array($share['cachePool2'], $pools);
-} else {
-	$poolDefined2 = true;
 }
 
 $cachePoolCapitalized = compress(my_disk($share['cachePool'],$display['raw']));
