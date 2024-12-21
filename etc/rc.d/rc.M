@@ -11,7 +11,7 @@
 #          Heavily modified by Patrick Volkerding <volkerdi@slackware.com>
 #
 # LimeTech - modified for Unraid OS
-# Bergware - modified for Unraid OS, October 2023
+# Bergware - modified for Unraid OS, December 2024
 
 # run & log functions
 . /etc/rc.d/rc.runlog
@@ -107,6 +107,11 @@ fi
 
 # Mount any additional filesystem types that haven't already been mounted:
 mount -a -v 2>/dev/null | grep -v -e "already mounted" -e "ignored" | cut -f 1 -d : | tr -d ' ' | while read DEV; do mount | grep "$DEV "; done
+
+# Start the Precision Time Protocol daemon:
+if [[ -x /etc/rc.d/rc.ptpd ]]; then
+  /etc/rc.d/rc.ptpd start
+fi
 
 # Start the Network Time Protocol daemon:
 if [[ -x /etc/rc.d/rc.ntpd ]]; then
