@@ -37,7 +37,7 @@ if (isset($_POST['scan'])) {
 		/* Iterate over each item in the directory and its subdirectories */
 		foreach ($iterator as $fileinfo) {
 			/* Check if the current item is a file and not a .DS_Store file */
-			if ($fileinfo->isFile() && !preg_match('/\.DS_Store$/i', $fileinfo->getFilename())) {
+			if ($fileinfo->isFile() && $fileinfo->getFilename() !== '.DS_Store') {
 				$hasFiles = true;
 				break;
 			}
@@ -70,7 +70,7 @@ function removeDSStoreFilesAndEmptyDirs($dir) {
 	);
 
 	foreach ($iterator as $file) {
-		if ($file->isFile() && preg_match('/\.DS_Store$/i', $file->getFilename())) {
+		if ($file->isFile() && $file->getFilename() === '.DS_Store') {
 			unlink($file->getRealPath());
 		}
 	}
@@ -87,6 +87,7 @@ if (isset($_POST['cleanup'])) {
   $n = 0;
   // active shares
   $shares = array_map('strtolower',array_keys(parse_ini_file('state/shares.ini',true)));
+
   // stored shares
   foreach (glob("/boot/config/shares/*.cfg",GLOB_NOSORT) as $name) {
     if (!in_array(strtolower(basename($name,'.cfg')),$shares)) {
@@ -213,8 +214,8 @@ foreach ($shares as $name => $share) {
 		$share_valid	= true;
 	}
 
-	/* When there is no array, all pools are treated as 'only' cache. */
-	if (($poolsOnly) && (! $share['cachePool2'])) {
+	/* When there is no array, all pools are treated as 'only' cache. If useCache is "no" with an array, this is invalid and useCache has to be 'only'. */
+	if ((($poolsOnly) && (! $share['cachePool2'])) || ((! $poolsOnly) && ($share['cachePool']) && ($share['useCache'] == "no"))) {
 		$share['useCache'] = 'only';
 	}
 

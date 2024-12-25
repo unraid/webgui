@@ -10,8 +10,7 @@
  * all copies or substantial portions of the Software.
  */
 
-$opmPlugin	= "dynamix";
-require_once("plugins/".$opmPlugin."/include/OutgoingProxyLib.php");
+require_once("plugins/dynamix/include/OutgoingProxyLib.php");
 
 /* Save settings and update config. */
 function apply() {
@@ -63,7 +62,7 @@ function apply() {
 				$cfg_pass			= $cfg[$proxy_pass] ?? "";
 				$cfg[$proxy_pass]	= $cfg_pass ? $cfg_pass : urldecode($pass);
 				$encodedPass		= (strpos($cfg[$proxy_pass], '%') === false) ? urlencode($cfg[$proxy_pass]) : $cfg[$proxy_pass];
-				$cfg[$proxy_pass]	= encrypt_data($cfg[$proxy_pass]);
+				$cfg[$proxy_pass]	= addslashes(encrypt_data($cfg[$proxy_pass]));
 			} else {
 				/* The string does not contain 'http://' and/or a port designation at the end */
 				$cfg[$proxy_url]	= "";
@@ -81,7 +80,7 @@ function apply() {
 	}
 
 	/* Write the INI string to the plugin config file. */
-	file_put_contents($plg_config_file, $iniString);
+	file_put_contents(PLG_CONFIG_FILE, $iniString);
 
 	/* Let things settle. */
 	sleep(1);

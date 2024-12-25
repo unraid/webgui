@@ -77,7 +77,7 @@ _(WSD options [experimental])_:
 <script>
 function checkWSDSettings() {
   form=document.SMBEnable;
-  if (form.USE_WSD.value=="yes") {
+  if (form.USE_WSD.value=="yes" && <?=($var['fsState']=="Started")?> {
     form.WSD2_OPT.disabled=false;
   } else {
     form.WSD2_OPT.disabled=true;

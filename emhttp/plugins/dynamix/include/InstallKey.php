@@ -61,15 +61,16 @@ class KeyInstaller
             if ($returnVar === 0) {
                 $var = (array)@parse_ini_file('/var/local/emhttp/var.ini');
                 if (_var($var, 'mdState') == "STARTED") {
-                    return $this->responseComplete(200, ['status' => _('Please Stop array to complete key installation')], _('success') . ', ' . _('Please Stop array to complete key installation'));;
+                    return $this->responseComplete(200, ['status' => _('Please Stop array to complete key installation')], _('success') . ', ' . _('Please Stop array to complete key installation'));
                 } else {
-                    return $this->responseComplete(200, ['status' => ''], _('success'));;
+                    return $this->responseComplete(200, ['status' => ''], _('success'));
                 }
             } else {
-                return $this->responseComplete(406, ['error' => _('download error') . " $returnVar"]);;
+                @unlink(escapeshellarg("/boot/config/$keyFile"));
+                return $this->responseComplete(406, ['error' => _('download error') . " $returnVar"]);
             }
         } else {
-            return $this->responseComplete(406, ['error' => _('bad or missing key file') . ": $url"]);;
+            return $this->responseComplete(406, ['error' => _('bad or missing key file') . ": $url"]);
         }
     }
 }

@@ -115,12 +115,22 @@ function loadlist(init) {
   $.get('/plugins/dynamix.docker.manager/include/DockerContainers.php',function(d) {
     clearTimeout(timers.docker);
     var data = d.split(/\0/);
+    $(".TS_tooltip").tooltipster("destroy");
     $('#docker_list').html(data[0]);
-    $('#docker_list .TS_tooltip').tooltipster({
+    $('.TS_tooltip').tooltipster({
       animation: 'fade',
       delay: 200,
-      trigger: 'hover',
-      contentAsHTML: true
+      trigger: 'custom',
+      triggerOpen: {click:true,touchstart:true,mouseenter:true},
+      triggerClose:{click:true,scroll:false,mouseleave:true},
+      interactive: true,
+      viewportAware: true,
+      contentAsHTML: true,
+      functionBefore: function(instance,helper) {
+        var origin = $(helper.origin);
+        var TScontent = $(origin).attr("data-tstitle");
+        instance.content(TScontent);
+      }
     });
     $('head').append('<script>'+data[1]+'<\/script>');
 <?if (_var($display,'resize')):?>

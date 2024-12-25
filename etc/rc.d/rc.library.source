@@ -29,14 +29,7 @@ this(){
   'rpc')
     grep -Pom1 "^RPCBIND_OPTS=\"\K[^\"]+" $RPC ;;
   'nginx')
-    MAP=();
-    for ADDR in $(awk '$1=="listen" && $2~/^[0-9]|\[/ && !/# lo/{print $2}' $SERVERS 2>/dev/null); do
-      # extract ipv4 / ipv6 address
-      [[ $(ipv $ADDR) == 4 ]] && ADDR=${ADDR%:*} || ADDR=${ADDR#*[} ADDR=${ADDR%]*}
-      MAP+=($ADDR)
-    done
-    # return addresses
-    echo ${MAP[@]} ;;
+    grep -Po "^NGINX_BIND=\"\K[^\"]+" ${INI%.*} 2>/dev/null ;;
   esac
 }
 

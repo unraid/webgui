@@ -2230,6 +2230,7 @@ $(function() {
 						$disk_file_sections.filter('.advanced').removeClass('advanced').addClass('wasadvanced');
 
 						$disk_input.attr('name', $disk_input.attr('name').replace('new', 'image'));
+						if (info.isfile) $table.find('.disk_driver').val(info.format);
 					} else {
 						$disk_file_sections.filter('.wasadvanced').removeClass('wasadvanced').addClass('advanced');
 						slideDownRows($disk_file_sections.not(isVMAdvancedMode() ? '.basic' : '.advanced'));

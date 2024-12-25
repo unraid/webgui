@@ -355,6 +355,8 @@ class DockerTemplates {
 						// Check if serve or funnel are enabled by checking for [hostname] and replace string with TS_DNSName
 						if (strpos($ct['TSUrl'], '[hostname]') !== false && isset($TS_DNSName)) {
 							$tmp['TSurl'] = str_replace("[hostname][magicdns]", rtrim($TS_DNSName, '.'), $ct['TSUrl']);
+							$tmp['TSurl'] = preg_replace('/\[IP\]/', rtrim($TS_DNSName, '.'), $tmp['TSurl']);
+							$tmp['TSurl'] = preg_replace('/\[PORT:(\d{1,5})\]/', '443', $tmp['TSurl']);
 						// Check if serve is disabled, construct url with port, path and query if present and replace [noserve] with url
 						} elseif (strpos($ct['TSUrl'], '[noserve]') !== false && isset($TS_container['TailscaleIPs'])) {
 							$ipv4 = '';
@@ -369,6 +371,8 @@ class DockerTemplates {
 								$webui_port = (preg_match('/\[PORT:(\d+)\]/', $webui, $matches)) ? ':' . $matches[1] : '';
 								$webui_path = $webui_url['path'] ?? '';
 								$webui_query = isset($webui_url['query']) ? '?' . $webui_url['query'] : '';
+								$webui_query = preg_replace('/\[IP\]/', $ipv4, $webui_query);
+								$webui_query = preg_replace('/\[PORT:(\d{1,5})\]/', ltrim($webui_port, ':'), $webui_query);
 								$tmp['TSurl'] = 'http://' . $ipv4 . $webui_port . $webui_path . $webui_query;
 							}
 						// Check if TailscaleWebUI in the xml is custom and display instead

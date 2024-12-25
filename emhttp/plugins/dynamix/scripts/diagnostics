@@ -535,6 +535,16 @@ if ($files) {
   }
 }
 
+// copy cutom udev rules information
+$files = glob("/boot/config/udev/*");
+if ($files) {
+  @mkdir("/$diag/config/udev");
+  foreach ($files as $file) {
+    $dest = "/$diag/config/udev/".basename($file);
+    @copy($file,$dest);
+  }
+}
+
 // copy docker information (if existing)
 $max = 1*1024*1024; //=1MB
 $docker = "/var/log/docker.log";

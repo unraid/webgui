@@ -105,9 +105,7 @@ nfsd_stop(){
     REPLY="Already stopped"
   else
     killall --ns $$ rpc.mountd 2>/dev/null
-    killall --ns $$ nfsd 2>/dev/null
-    sleep 1
-    killall --ns $$ -9 nfsd 2>/dev/null
+    run $NFSD 0
     killall --ns $$ rpc.rquotad 2>/dev/null
     run $EXPORTFS -au
     if ! nfsd_running; then REPLY="Stopped"; else REPLY="Failed"; fi
@@ -130,7 +128,7 @@ nfsd_reload(){
 nfsd_update(){
   if nfsd_running && check && [[ "$(this)" != "-H ${BIND// / -H }" ]]; then
     log "Updating $DAEMON..."
-    nfsd_reload
+    nfsd_restart
   fi
 }
 

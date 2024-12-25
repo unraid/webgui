@@ -215,8 +215,8 @@ function show_urls($interface) {
   $first = true;
   foreach($urls as $url) {
     if ($url[0] == $interface) {
-      $msg  = "<a href='$url[1]'>$url[1]</a>";
-      if ($url[2]) $msg .= " "._("redirects to")." <a href='$url[2]'>$url[2]</a>";
+      $msg  = "<a class='localURL' href='$url[1]'>$url[1]</a>";
+      if ($url[2]) $msg .= " "._("redirects to")." <a class='localURL' href='$url[2]'>$url[2]</a>";
       if ($url[3]) $msg .= " "._("uses")." ".$url[3];
       if ($url[4]) $msg .= "<span class='warning'> <i class='fa fa-warning fa-fw'></i> "._("is a self-signed certificate, ignore the browser's warning and proceed to the GUI")."</span>";
       // 2nd+ urls need leading $linestart
@@ -438,7 +438,7 @@ _(Self-signed or user-provided certificate)_:
 
 <?if ($cert1URLvalid && _var($var,'USE_SSL')=='yes'):?>
 _(Certificate URL)_:
-: <?="<a href='https://$cert1URL$https_port'>$cert1URL</a>"?>
+: <?="<a class='localURL' href='https://$cert1URL$https_port'>$cert1URL</a>"?>
 
 <?elseif ($cert1URLvalid):?>
 _(Certificate URL)_:
@@ -474,7 +474,7 @@ _(Unraid Let's Encrypt certificate)_:
 : <?=$cert2File?>
 
 _(Certificate URL)_:
-: <?="<a href='https://$subject2URL$https_port'>$cert2Subject</a>"?>
+: <?="<a class='localURL' href='https://$subject2URL$https_port'>$cert2Subject</a>"?>
 
 _(Certificate issuer)_:
 : <?=$cert2Issuer?>
@@ -508,7 +508,7 @@ _(Tailscale Let's Encrypt certificate)_:
 : <?=$cert3File?>
 
 _(Certificate URL)_:
-: <?="<a href='https://$cert3Subject$https_port'>$cert3Subject</a>"?>
+: <?="<a class='localURL' href='https://$cert3Subject$https_port'>$cert3Subject</a>"?>
 
 _(Certificate issuer)_:
 : <?=$cert3Issuer?>

@@ -41,10 +41,12 @@ if ($var['fsState'] == "Started" || $var['fsState'] == "Starting") {
     sleep(10);
   } elseif ($domain_cfg['SERVICE'] != "enable") { 
     #Add remove_nchan_pid_entry("webGui/nchan/vm_dashusage");
+    exec("sed -i '/webGui\/nchan\/vm_dashusage/d' /var/run/nchan.pid");
     return;
   }
 } else {
   #Add remove_nchan_pid_entry("webGui/nchan/vm_dashusage");
+  exec("sed -i '/webGui\/nchan\/vm_dashusage/d' /var/run/nchan.pid");
   return;
 }
 

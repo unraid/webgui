@@ -57,7 +57,7 @@ if ((! $share['cachePool']) && ($share['cachePool2'])) {
 }
 
 /* Check for non existent pool device. */
-if ($share['cachePool'] && !in_array($share['cachePool'], $pools)) {
+if (($share['cachePool'] && !in_array($share['cachePool'], $pools)) || ($poolsOnly && !$share['cachePool'])) {
 	$poolDefined = false;
 	$share['useCache'] = $share['cachePool2'] ? "yes" : ($poolsOnly ? "no" : "yes");
 } else {
@@ -457,7 +457,7 @@ _(Excluded disk(s))_:
 </div>
 
 </div>
-<div markdown="1" class="shade-<?=$display['theme']?>">
+<div markdown="1" id="secondaryStorage" class="shade-<?=$display['theme']?>">
 _(Secondary storage)_:
 : <select id="secondary" onchange="updateScreen(z(4),'slow')">
   <?=mk_option(secondary(),'0',_('None'))?>
@@ -516,7 +516,7 @@ _(Excluded disk(s))_:
 </div>
 
 </div>
-<div markdown="1" class="shade-<?=$display['theme']?>">
+<div markdown="1" id="moverAction" class="shade-<?=$display['theme']?>">
 <div markdown="1" id="moverDirection1">
 _(Mover action)_:
 : <span class="input"><select id="direction" onchange="updateScreen(z(3),'slow')">
@@ -629,7 +629,7 @@ function updateScreen(cache, slow) {
 	const moverNoActionText = "<?= addslashes(_('Mover takes no action')) ?>";
 	const moverAction1Text = "<?= addslashes(_('Mover transfers files from Primary storage to Secondary storage')) ?>";
 	const moverAction2Text = "<?= addslashes(_('Mover transfers files from Secondary storage to Primary storage')) ?>";
-	
+
 	switch (cache) {
 		case 'no':
 			$('#primary option:eq(' + z(0) + ')').prop('selected', true);
@@ -640,7 +640,6 @@ function updateScreen(cache, slow) {
 				secondaryDropdown.options[i].disabled = true;
 			}
 			secondaryDropdown.selectedIndex = 0;
-			checkRequiredSecondary = false;
 
 			if (poolsOnly) {
 				$('#moverDirection2').hide();
@@ -759,9 +758,18 @@ function updateScreen(cache, slow) {
 			break;
 	}
 
+	/* If primary is "Array", remove secondary storage selection as it does not apply when primary is array. */
+	if (primaryDropdown.selectedIndex === 0) {
+		$('#secondaryStorage').hide(slow);
+		$('#moverAction').hide(slow);
+	} else {
+		$('#secondaryStorage').show(slow);
+		$('#moverAction').show(slow);
+	}
+
 	/* Check secondary dropdown index and show/hide moreSettings2 */
 	if (secondaryDropdown.selectedIndex === 1) {
-		$('#moreSettings2').show('slow');
+		$('#moreSettings2').show(slow);
 	} else {
 		$('#moreSettings2').hide(slow);
 	}
@@ -1075,7 +1083,7 @@ function writeShare(data, n, i) {
 			}
 		});
 		toggleButton('writeshare', true);
-		$('div.spinner.fixed').show('slow');
+		$('div.spinner.fixed').show(slow);
 		writeShare(newData, 0, i);
 	}
 }
@@ -1128,7 +1136,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 		let cachePoolOption = document.getElementById('cachePoolOption');
 		let messageSpan = document.getElementById('cachePoolMessage');
-		messageSpan.textContent = `${_('Warning: Configured Pool')} '${cachePoolCapitalized}' ${_('is missing')}.`;
+		messageSpan.textContent = `${_('Warning: Configured Pool')} '${cachePoolCapitalized || _('Array')}' ${_('is missing')}.`;
 		messageSpan.style.display = 'inline';
 		cachePoolOption.selected = true;
 

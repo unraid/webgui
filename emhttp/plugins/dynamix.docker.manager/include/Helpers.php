@@ -124,13 +124,13 @@ function postToXML($post, $setOwnership=false) {
     }
     $xml->TailscaleDParams             = xml_encode($post['TSdaemonparams']);
     $xml->TailscaleParams              = xml_encode($post['TSextraparams']);
-    $xml->TailscaleStateDir            = xml_encode($post['TSstatedir']);
     $xml->TailscaleRoutes              = xml_encode($post['TSroutes']);;
     $xml->TailscaleAcceptRoutes        = xml_encode($post['TSacceptroutes']);;
     if (isset($post['TStroubleshooting']) && strtolower($post['TStroubleshooting']) === 'on') {
       $xml->TailscaleTroubleshooting     = 'true';
     }
   }
+  $xml->TailscaleStateDir            = xml_encode($post['TSstatedir']);
   $dom = new DOMDocument('1.0');
   $dom->preserveWhiteSpace = false;
   $dom->formatOutput = true;

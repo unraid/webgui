@@ -200,11 +200,11 @@ function settab(tab) {
   $.cookie('one','tab1');
 <?endif;?>
 <?break;?>
-<?case'Cache':case'Data':case'Flash':case'Parity':?>
+<?case'Cache':case'Data':case'Device':case'Flash':case'Parity':?>
   $.cookie('one',tab);
 <?break;?>
 <?default:?>
-  $.cookie(($.cookie('one')==null?'tab':'one'),tab);
+  $.cookie('one',tab);
 <?endswitch;?>
 }
 function done(key) {
@@ -586,8 +586,26 @@ function flashReport() {
   });
 }
 $(function() {
-  var tab = $.cookie('one')||$.cookie('tab')||'tab1';
-  if (tab=='tab0') tab = 'tab'+$('input[name$="tabs"]').length; else if ($('#'+tab).length==0) {initab(); tab = 'tab1';}
+  let tab;
+<?switch ($myPage['name']):?>
+<?case'Main':?>
+  tab = $.cookie('tab')||'tab1';
+<?break;?>
+<?case'Cache':case'Data':case'Device':case'Flash':case'Parity':?>
+  tab = $.cookie('one')||'tab1';
+<?break;?>
+<?default:?>
+  tab = $.cookie('one')||'tab1';
+<?endswitch;?>
+  /* Check if the tab is 'tab0' */
+  if (tab === 'tab0') {
+    /* Set tab to the last available tab based on input[name$="tabs"] length */
+    tab = 'tab' + $('input[name$="tabs"]').length;
+  } else if ($('#' + tab).length === 0) {
+    /* If the tab element does not exist, initialize a tab and set to 'tab1' */
+    initab();
+    tab = 'tab1';
+  }
   $('#'+tab).attr('checked', true);
   updateTime();
   $.jGrowl.defaults.closeTemplate = '<i class="fa fa-close"></i>';
@@ -1112,40 +1130,93 @@ $(function() {
   $('form').append($('<input>').attr({type:'hidden', name:'csrf_token', value:csrf_token}));
 });
 
-$('body').on("click","a", function(e) {
-  href = $(this).attr("href").trim();
-  target = $(this).attr("target");
+var gui_pages_available = [];
+<?
+  $gui_pages = glob("/usr/local/emhttp/plugins/*/*.page");
+  array_walk($gui_pages,function($value,$key){ ?>
+    gui_pages_available.push('<?=basename($value,".page")?>'); <?
+  });
+?>
 
+function isValidURL(url) {
+  try {
+    var ret = new URL(url);
+    return ret;
+  } catch (err) {
+    return false;
+  }
+}
+
+$('body').on("click","a,.ca_href", function(e) {
+  if ($(this).hasClass("ca_href") ) {
+    var ca_href = true;
+    var href=$(this).attr("data-href");
+    var target=$(this).attr("data-target");
+  } else {
+    var ca_href = false;
+    var href = $(this).attr("href");
+    var target = $(this).attr("target");
+  }
   if ( href ) {
-    if ( href.indexOf("/") == 0 ) {   // all internal links start with "/"
-      return;
-    }
-    if ( href.match('https://[^\.]*.(my)?unraid.net/') || href.indexOf("https://unraid.net/") == 0 || href == "https://unraid.net" || href.indexOf("http://lime-technology.com/") == 0) {
-      return;
-    } else {
-      if (href !== "#" && href.indexOf("javascript") !== 0) {
-        e.preventDefault();
-        swal({
-          title: "<?=_('External Link')?>",
-          text: "<?=_('Clicking OK will take you to a 3rd party website not associated with Limetech')?><br><br><b>"+href,
-          html: true,
-          type: 'warning',
-          showCancelButton: true,
-          showConfirmButton: true,
-          cancelButtonText: "<?=_('Cancel')?>",
-          confirmButtonText: "<?=_('OK')?>"
-        },function(isConfirm) {
-          if (isConfirm) {
-            var popupOpen = window.open(href,target);
-            if ( !popupOpen || popupOpen.closed || typeof popupOpen == "undefined" ) {
-              var popupWarning = addBannerWarning("<?=_('Popup Blocked.');?>");
-              setTimeout(function() {
-                removeBannerWarning(popupWarning);}
-              ,10000);
-            }
-          }
-        });
+    href = href.trim();
+    if ( href.match('https?://[^\.]*.(my)?unraid.net/') || href.indexOf("https://unraid.net/") == 0 || href == "https://unraid.net" || href.indexOf("http://lime-technology.com") == 0) {
+      if ( ca_href ) {
+        window.open(href,target);
       }
+      return;
+    } 
+
+    if (href !== "#" && href.indexOf("javascript") !== 0) {
+      var dom = isValidURL(href);
+      if ( dom == false ) {
+        if ( href.indexOf("/") == 0 ) {   // all internal links start with "/"
+        return;
+      }
+      var baseURLpage = href.split("/");
+        if ( gui_pages_available.includes(baseURLpage[0]) ) {
+          return;
+        }
+      }
+      if ( $(this).hasClass("localURL") ) {
+        return;
+      }
+
+      try {
+        var domainsAllowed = JSON.parse($.cookie("allowedDomains"));
+      } catch(e) {
+        var domainsAllowed = new Object();
+      }
+      $.cookie("allowedDomains",JSON.stringify(domainsAllowed),{expires:3650}); // rewrite cookie to further extend expiration by 400 days
+
+      if ( domainsAllowed[dom.hostname] ) {
+        return;
+      }
+
+      e.preventDefault();
+      swal({
+        title: "<?=_('External Link')?>",
+        text: "<span title='"+href+"'><?=_('Clicking OK will take you to a 3rd party website not associated with Lime Technology')?><br><br><b>"+href+"<br><br><input id='Link_Always_Allow' type='checkbox'></input><?=_('Always Allow')?> "+dom.hostname+"</span>",
+        html: true,
+        type: 'warning',
+        showCancelButton: true,
+        showConfirmButton: true,
+        cancelButtonText: "<?=_('Cancel')?>",
+        confirmButtonText: "<?=_('OK')?>"
+      },function(isConfirm) {
+        if (isConfirm) {
+          if ( $("#Link_Always_Allow").is(":checked") ) {
+            domainsAllowed[dom.hostname] = true;
+            $.cookie("allowedDomains",JSON.stringify(domainsAllowed),{expires:3650});
+          }
+          var popupOpen = window.open(href,target);
+          if ( !popupOpen || popupOpen.closed || typeof popupOpen == "undefined" ) {
+            var popupWarning = addBannerWarning("<?=_('Popup Blocked.');?>");
+            setTimeout(function() {
+              removeBannerWarning(popupWarning);}
+            ,10000);
+          }
+        }
+      });
     }
   }
 });

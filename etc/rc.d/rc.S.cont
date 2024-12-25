@@ -21,6 +21,13 @@ if [[ -x /etc/rc.d/rc.modules ]]; then
   /etc/rc.d/rc.modules
 fi
 
+# Copy custom udev rules before starting udevd
+UDEVRULES="/boot/config/udev"
+if [[ -d $UDEVRULES ]]; then
+  log "Installing custom udev rules..."
+  /usr/bin/find $UDEVRULES -type f -exec /usr/bin/install -p -m 0644 "{}" /etc/udev/rules.d \;
+fi
+
 # Initialize udev to manage /dev entries and hotplugging.
 # You may turn off udev by making the /etc/rc.d/rc.udev file non-executable
 # or giving the "nohotplug" option at boot, but realize that if you turn off
