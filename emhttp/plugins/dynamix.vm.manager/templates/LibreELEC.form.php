@@ -567,7 +567,7 @@ $hdrXML = "<?xml version='1.0' encoding='UTF-8'?>\n"; // XML encoding declaratio
 
 		<table>
 			<tr>
-				<td>_(Logical CPUs)_:</td>
+				<td><a href="/Settings/CPUset" onclick="$.cookie('one','tab1')">_(Logical CPUs)_:</a></td>
 				<td>
 					<div class="textarea four">
 					<?

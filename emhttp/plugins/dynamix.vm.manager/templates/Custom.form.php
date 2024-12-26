@@ -496,7 +496,7 @@
 
 	<table>
 		<tr>
-			<td>_(Logical CPUs)_:</td>
+			<td><a href="/Settings/CPUset" onclick="$.cookie('one','tab1')">_(Logical CPUs)_:</a></td>
 			<td>
 				<div class="textarea four">
 				<?
@@ -736,7 +736,7 @@
 
 	<table class="domain_os windows">
 		<tr class="advanced">
-			<td>_(VirtIO Drivers ISO)_:</td>
+			<td><a href="/Settings/VMSettings" onclick="$.cookie('one','tab1')">_(VirtIO Drivers ISO)_:</a></td>
 			<td>
 				<input type="text" name="media[drivers]" autocomplete="off" spellcheck="false" data-pickcloseonfile="true" data-pickfilter="iso" data-pickmatch="^[^.].*" data-pickroot="<?=htmlspecialchars($domain_cfg['MEDIADIR'])?>" class="cdrom" value="<?=htmlspecialchars($arrConfig['media']['drivers'])?>" placeholder="_(Download, Click and Select virtio drivers image)_">
 			</td>
