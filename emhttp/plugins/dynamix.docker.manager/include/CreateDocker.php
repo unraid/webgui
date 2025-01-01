@@ -1145,7 +1145,7 @@ _(Container Network)_:
 <?if (!file_exists('/usr/local/sbin/tailscale')):?>
 <div markdown="1" class="TSdeploy noshow">
 <b>_(Recommendation)_</b>:
-:  <p>_(For the best experience with Tailscale, install "Tailscale (Plugin)" from)_ <a href="/Apps" target='_blank'> Community Applications</a>.</p>
+:  <p>_(For the best experience with Tailscale, install "Tailscale (Plugin)" from)_ <a href="/Apps?search=Tailscale%20(Plugin)" target='_blank'> Community Applications</a>.</p>
 </div>
 <?endif;?>
 
