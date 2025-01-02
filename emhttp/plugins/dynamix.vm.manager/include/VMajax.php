@@ -150,7 +150,9 @@ case 'domain-start-consoleRV':
 	$vvarray = array() ;
 	$vvarray[] = "[virt-viewer]\n";
 	$vvarray[] = "type=$protocol\n";
-	$vvarray[] = "host="._var($_SERVER,'HTTP_HOST')."\n" ;
+	$vvarrayhost = _var($_SERVER,'HTTP_HOST');
+	if (strpos($vvarrayhost,":")) $vvarrayhost = parse_url($vvarrayhost,PHP_URL_HOST);
+	$vvarray[] = "host=$vvarrayhost\n" ; 
 	$vvarray[] = "port=$port\n" ;
 	$vvarray[] = "delete-this-file=1\n" ;
 	if (!is_dir("/mnt/user/system/remoteviewer")) mkdir("/mnt/user/system/remoteviewer") ;
@@ -183,7 +185,9 @@ case 'domain-consoleRV':
 	$vvarray = array() ;
 	$vvarray[] = "[virt-viewer]\n";
 	$vvarray[] = "type=$protocol\n";
-	$vvarray[] = "host="._var($_SERVER,'HTTP_HOST')."\n" ;
+	$vvarrayhost = _var($_SERVER,'HTTP_HOST');
+	if (strpos($vvarrayhost,":")) $vvarrayhost = parse_url($vvarrayhost,PHP_URL_HOST);
+	$vvarray[] = "host=$vvarrayhost\n" ;
 	$vvarray[] = "port=$port\n" ;
 	$vvarray[] = "delete-this-file=1\n" ;
 	if (!is_dir("/mnt/user/system/remoteviewer")) mkdir("/mnt/user/system/remoteviewer") ;
