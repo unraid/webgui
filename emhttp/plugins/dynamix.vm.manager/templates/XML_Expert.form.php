@@ -26,7 +26,7 @@
 
 	if (is_file($templateslocation)){
 		$arrAllTemplates["User-templates"] = "";
-		$ut = json_decode(file_get_contents($templateslocation),true) ;
+		$ut = json_decode(file_get_contents($templateslocation),true);
 		$arrAllTemplates = array_merge($arrAllTemplates, $ut);
 	}
 
@@ -45,14 +45,12 @@
 		exit;
 	}
 
-	
 		// create new VM template
 		if (isset($_POST['createvmtemplate'])) {
 			$reply = addtemplatexml($_POST);
 			echo json_encode($reply);
 			exit;
 		}
-
 
 	// update existing VM
 	if (isset($_POST['updatevm'])) {
@@ -116,7 +114,7 @@
 		<input type="button" value="_(Create)_" busyvalue="_(Creating)_..." readyvalue="_(Create)_" id="btnSubmit" />
 	<? } ?>
 	<input type="button" value="_(Cancel)_" id="btnCancel" />
-	
+
 	<input type="button" value=" _(Create/Modify Template)_" busyvalue="_(Creating)_..." readyvalue="_(Create)_" id="btnTemplateSubmit" />
 
 <? } else { ?>
@@ -216,13 +214,13 @@ $(function() {
 		$form.find('input').prop('disabled', true);
 		$button.val($button.attr('busyvalue'));
 		swal({
-			title: _("Template Name")_,
-			text: _("Enter name:\nIf name already exists it will be replaced.")_,
+			title: "_(Template Name)_",
+			text: "_(Enter name)_:\n_(If name already exists it will be replaced)_.",
 			type: "input",
 			showCancelButton: true,
 			closeOnConfirm: false,
 			//animation: "slide-from-top",
-			inputPlaceholder: _("Leaving blank will use OS name.")_
+			inputPlaceholder: "_(Leaving blank will use OS name)_."
 			},
 			function(inputValue){
 				postdata=postdata+"&templatename="+inputValue;
