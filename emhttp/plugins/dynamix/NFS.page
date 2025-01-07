@@ -33,10 +33,43 @@ _(Enable NFS)_:
 :nfs_enable_help:
 
 _(Tunable (fuse_remember))_:
-: <input type="text" name="fuse_remember" maxlength="10" value="<?=$var['fuse_remember']?>" class="narrow"><?=_($var['fuse_remember_status'])?>
+: <input type="text" name="fuse_remember" maxlength="10" value="<?=$var['fuse_remember']?>" class="narrow"><?=htmlspecialchars($var['fuse_remember_status']);?>
 
 :nfs_tunable_fuse_remember_help:
 
 &nbsp;
 : <input type="submit" name="changeShare" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+</form>
+
+<form markdown="1" name="nfs_settings" method="POST" action="/update.php" target="progressFrame">
+<input type="hidden" name="#file" value="dynamix/dynamix.cfg">
+<input type="hidden" name="#section" value="nfs">
+
+_(Max Server Protocol Version)_:
+: <select name="nfs_server_version" size="1" <?if ($var['shareNFSEnabled']=="yes"):?>disabled<?endif;?>>
+  <?=mk_option($nfs['nfs_server_version'], "4", "_(NFSv4)_");?>
+  <?=mk_option($nfs['nfs_server_version'], "3", "_(NFSv3)_");?>
+  </select>
+
+:nfs_server_max_protocol_help:
+
+_(Max Client Protocol Version)_:
+: <select name="nfs_client_version" size="1" <?if ($var['shareNFSEnabled']=="yes"):?>disabled<?endif;?>>
+  <?=mk_option($nfs['nfs_client_version'], "4", "_(NFSv4)_");?>
+  <?=mk_option($nfs['nfs_client_version'], "3", "_(NFSv3)_");?>
+  </select>
+
+:nfs_client_max_protocol_help:
+
+_(Number of Threads)_:
+: <select name="nfs_threads" size="1" <?if ($var['shareNFSEnabled']=="yes"):?>disabled<?endif;?>>
+  <?=mk_option($nfs['nfs_threads'], "8", "8");?>
+  <?=mk_option($nfs['nfs_threads'], "16", "16");?>
+  <?=mk_option($nfs['nfs_threads'], "32", "32");?>
+  </select>
+
+:nfs_threads_help:
+
+&nbsp;
+: <input type="submit" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()"><?if ($var['shareNFSEnabled']=="yes"):?>&nbsp;<span>*_(NFS must be **Stopped** to change this)_*</span><?endif;?>
 </form>

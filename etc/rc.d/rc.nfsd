@@ -21,6 +21,9 @@ MOUNTD="/usr/sbin/rpc.mountd"
 OPTIONS="-u -s"
 RPC="/etc/default/rpc"
 NFS="/etc/default/nfs"
+RPC_CFG="/boot/config/default/rpc"
+NFS_CFG="/boot/config/default/nfs"
+NFS_MOUNT_CFG="/etc/nfsmount.conf"
 
 # run & log functions
 . /etc/rc.d/rc.runlog
@@ -33,8 +36,9 @@ if check && [[ -n $BIND ]]; then
   RPC_NFSD_OPTS="$OPTIONS -H ${BIND// / -H }"
 fi
 
-# source default settings:
+# source default rpc settings:
 [[ -r $RPC ]] && . $RPC
+[[ -r $RPC_CFG ]] && . $RPC_CFG
 
 nfsd_running(){
   sleep 0.1
@@ -83,7 +87,9 @@ nfsd_start(){
     fi
     # update default settings
     sed -ri "s/^(RPC_NFSD_OPTS)=.*/\1=\"$RPC_NFSD_OPTS\"/" $NFS 2>/dev/null
+    # source default nfs settings:
     [[ -r $NFS ]] && . $NFS
+    [[ -r $NFS_CFG ]] && . $NFS_CFG
     # start nfsd servers - 8 if not set extrawise (an old Sun standard):
     if [[ -x $NFSD ]]; then
       [[ -z $RPC_NFSD_COUNT ]] && RPC_NFSD_COUNT=8
@@ -104,11 +110,9 @@ nfsd_stop(){
   if ! nfsd_running; then
     REPLY="Already stopped"
   else
-    killall rpc.mountd 2>/dev/null
-    killall nfsd 2>/dev/null
-    sleep 1
-    killall -9 nfsd 2>/dev/null
-    killall rpc.rquotad 2>/dev/null
+    killall --ns $$ rpc.mountd 2>/dev/null
+    run $NFSD 0
+    killall --ns $$ rpc.rquotad 2>/dev/null
     run $EXPORTFS -au
     if ! nfsd_running; then REPLY="Stopped"; else REPLY="Failed"; fi
   fi
@@ -128,9 +132,10 @@ nfsd_reload(){
 }
 
 nfsd_update(){
-  # 0 = update needed, 1 = no action
-  if ! nfsd_running; then exit 1; fi
-  if check && [[ "$(this)" == "-H ${BIND// / -H }" ]]; then exit 1; else exit 0; fi
+  if nfsd_running && check && [[ "$(this)" != "-H ${BIND// / -H }" ]]; then
+    log "Updating $DAEMON..."
+    nfsd_restart
+  fi
 }
 
 nfsd_status(){
@@ -141,6 +146,91 @@ nfsd_status(){
     exit 1
   fi
 }
+
+nfsd_configure(){
+	# Configuration settings file path
+	CONFIG_FILE="/boot/config/plugins/dynamix/dynamix.cfg"
+
+	# Initialize variables
+	NFS_SERVER_VERSION=4  # Default value
+	NFS_CLIENT_VERSION=4  # Default value
+	NFS_THREADS=8  # Default value
+
+	# Read the file line by line
+	IN_NFS_SECTION=0
+	if [[ -f "$CONFIG_FILE" ]]; then
+		while IFS= read -r LINE || [ -n "$LINE" ]; do
+			# Check for [nfs] section
+			if [[ "$LINE" == "[nfs]" ]]; then
+				IN_NFS_SECTION=1
+				continue
+			fi
+
+			# Exit [nfs] section if another section starts
+			if [[ "$IN_NFS_SECTION" == 1 && "$LINE" =~ ^\[ ]]; then
+				break
+			fi
+
+			# Parse settings within [nfs] section
+			if [[ "$IN_NFS_SECTION" == 1 ]]; then
+				if [[ "$LINE" =~ ^nfs_server_version= ]]; then
+					VALUE="${LINE#nfs_server_version=}"
+					# Strip quotes if present
+					VALUE=${VALUE//\"/}
+					# Set NFS_SERVER_VERSION if VALUE is valid
+					if [[ "$VALUE" =~ ^[0-9]+$ ]]; then
+						NFS_SERVER_VERSION=$VALUE
+					fi
+				fi
+				if [[ "$LINE" =~ ^nfs_client_version= ]]; then
+					VALUE="${LINE#nfs_client_version=}"
+					# Strip quotes if present
+					VALUE=${VALUE//\"/}
+					# Set NFS_CLIENT_VERSION if VALUE is valid
+					if [[ "$VALUE" =~ ^[0-9]+$ ]]; then
+						NFS_CLIENT_VERSION=$VALUE
+					fi
+				fi
+				if [[ "$LINE" =~ ^nfs_threads= ]]; then
+					VALUE="${LINE#nfs_threads=}"
+					# Strip quotes if present
+					VALUE=${VALUE//\"/}
+					# Set NFS_THREADS if VALUE is valid
+					if [[ "$VALUE" =~ ^[0-9]+$ ]]; then
+						NFS_THREADS=$VALUE
+					fi
+				fi
+			fi
+		done < "$CONFIG_FILE"
+	fi
+
+	# Update NFS configuration file
+	if [[ -f "$NFS_MOUNT_CFG" ]]; then
+		# Ensure Defaultvers is updated correctly
+		sed -i "/^#*\s*Defaultvers=.*/d" "$NFS_MOUNT_CFG"
+		echo "Defaultvers=$NFS_CLIENT_VERSION" >> "$NFS_MOUNT_CFG"
+
+		# Ensure Nfsvers is updated correctly
+		sed -i "/^#*\s*Nfsvers=.*/d" "$NFS_MOUNT_CFG"
+		echo "Nfsvers=$NFS_CLIENT_VERSION" >> "$NFS_MOUNT_CFG"
+	fi
+
+	# Update NFS configuration file for NFS_THREADS
+	if [[ -f "$NFS" ]]; then
+		# Uncomment and update RPC_NFSD_COUNT with the correct value
+		sed -i "/^#*\s*RPC_NFSD_COUNT=.*/d" "$NFS"
+		echo "RPC_NFSD_COUNT=$NFS_THREADS" >> "$NFS"
+
+		# Update RPC_NFSD_OPTS based on nfs_server_version
+		if [[ $NFS_SERVER_VERSION -eq 3 ]]; then
+			# Prepend "-N 4" to RPC_NFSD_OPTS
+			RPC_NFSD_OPTS="-N 4 $RPC_NFSD_OPTS"
+		fi
+	fi
+}
+
+# Configure the NFS settings
+nfsd_configure
 
 case "$1" in
 'start')
