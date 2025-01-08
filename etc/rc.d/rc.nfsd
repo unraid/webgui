@@ -149,59 +149,30 @@ nfsd_status(){
 
 nfsd_configure(){
 	# Configuration settings file path
-	CONFIG_FILE="/boot/config/plugins/dynamix/dynamix.cfg"
+	CONFIG_FILE="/boot/config/plugins/dynamix/nfs_settings.cfg"
 
 	# Initialize variables
 	NFS_SERVER_VERSION=4  # Default value
 	NFS_CLIENT_VERSION=4  # Default value
 	NFS_THREADS=8  # Default value
 
-	# Read the file line by line
-	IN_NFS_SECTION=0
+	# Ensure the configuration file exists
 	if [[ -f "$CONFIG_FILE" ]]; then
-		while IFS= read -r LINE || [ -n "$LINE" ]; do
-			# Check for [nfs] section
-			if [[ "$LINE" == "[nfs]" ]]; then
-				IN_NFS_SECTION=1
-				continue
-			fi
+		# Source the configuration file to load variables
+		source "$CONFIG_FILE"
 
-			# Exit [nfs] section if another section starts
-			if [[ "$IN_NFS_SECTION" == 1 && "$LINE" =~ ^\[ ]]; then
-				break
-			fi
+		# Validate and use the variables
+		if [[ "$nfs_server_version" =~ ^[0-9]+$ ]]; then
+			NFS_SERVER_VERSION=$nfs_server_version
+		fi
 
-			# Parse settings within [nfs] section
-			if [[ "$IN_NFS_SECTION" == 1 ]]; then
-				if [[ "$LINE" =~ ^nfs_server_version= ]]; then
-					VALUE="${LINE#nfs_server_version=}"
-					# Strip quotes if present
-					VALUE=${VALUE//\"/}
-					# Set NFS_SERVER_VERSION if VALUE is valid
-					if [[ "$VALUE" =~ ^[0-9]+$ ]]; then
-						NFS_SERVER_VERSION=$VALUE
-					fi
-				fi
-				if [[ "$LINE" =~ ^nfs_client_version= ]]; then
-					VALUE="${LINE#nfs_client_version=}"
-					# Strip quotes if present
-					VALUE=${VALUE//\"/}
-					# Set NFS_CLIENT_VERSION if VALUE is valid
-					if [[ "$VALUE" =~ ^[0-9]+$ ]]; then
-						NFS_CLIENT_VERSION=$VALUE
-					fi
-				fi
-				if [[ "$LINE" =~ ^nfs_threads= ]]; then
-					VALUE="${LINE#nfs_threads=}"
-					# Strip quotes if present
-					VALUE=${VALUE//\"/}
-					# Set NFS_THREADS if VALUE is valid
-					if [[ "$VALUE" =~ ^[0-9]+$ ]]; then
-						NFS_THREADS=$VALUE
-					fi
-				fi
-			fi
-		done < "$CONFIG_FILE"
+		if [[ "$nfs_client_version" =~ ^[0-9]+$ ]]; then
+			NFS_CLIENT_VERSION=$nfs_client_version
+		fi
+
+		if [[ "$nfs_threads" =~ ^[0-9]+$ ]]; then
+			NFS_THREADS=$nfs_threads
+		fi
 	fi
 
 	# Update NFS configuration file
