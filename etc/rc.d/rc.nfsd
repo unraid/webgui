@@ -21,9 +21,6 @@ MOUNTD="/usr/sbin/rpc.mountd"
 OPTIONS="-u -s"
 RPC="/etc/default/rpc"
 NFS="/etc/default/nfs"
-RPC_CFG="/boot/config/default/rpc"
-NFS_CFG="/boot/config/default/nfs"
-NFS_MOUNT_CFG="/etc/nfsmount.conf"
 
 # run & log functions
 . /etc/rc.d/rc.runlog
@@ -36,9 +33,8 @@ if check && [[ -n $BIND ]]; then
   RPC_NFSD_OPTS="$OPTIONS -H ${BIND// / -H }"
 fi
 
-# source default rpc settings:
+# source default settings:
 [[ -r $RPC ]] && . $RPC
-[[ -r $RPC_CFG ]] && . $RPC_CFG
 
 nfsd_running(){
   sleep 0.1
@@ -87,9 +83,7 @@ nfsd_start(){
     fi
     # update default settings
     sed -ri "s/^(RPC_NFSD_OPTS)=.*/\1=\"$RPC_NFSD_OPTS\"/" $NFS 2>/dev/null
-    # source default nfs settings:
     [[ -r $NFS ]] && . $NFS
-    [[ -r $NFS_CFG ]] && . $NFS_CFG
     # start nfsd servers - 8 if not set extrawise (an old Sun standard):
     if [[ -x $NFSD ]]; then
       [[ -z $RPC_NFSD_COUNT ]] && RPC_NFSD_COUNT=8
@@ -146,62 +140,6 @@ nfsd_status(){
     exit 1
   fi
 }
-
-nfsd_configure(){
-	# Configuration settings file path
-	CONFIG_FILE="/boot/config/plugins/dynamix/nfs_settings.cfg"
-
-	# Initialize variables
-	NFS_SERVER_VERSION=4  # Default value
-	NFS_CLIENT_VERSION=4  # Default value
-	NFS_THREADS=8  # Default value
-
-	# Ensure the configuration file exists
-	if [[ -f "$CONFIG_FILE" ]]; then
-		# Source the configuration file to load variables
-		source "$CONFIG_FILE"
-
-		# Validate and use the variables
-		if [[ "$nfs_server_version" =~ ^[0-9]+$ ]]; then
-			NFS_SERVER_VERSION=$nfs_server_version
-		fi
-
-		if [[ "$nfs_client_version" =~ ^[0-9]+$ ]]; then
-			NFS_CLIENT_VERSION=$nfs_client_version
-		fi
-
-		if [[ "$nfs_threads" =~ ^[0-9]+$ ]]; then
-			NFS_THREADS=$nfs_threads
-		fi
-	fi
-
-	# Update NFS configuration file
-	if [[ -f "$NFS_MOUNT_CFG" ]]; then
-		# Ensure Defaultvers is updated correctly
-		sed -i "/^#*\s*Defaultvers=.*/d" "$NFS_MOUNT_CFG"
-		echo "Defaultvers=$NFS_CLIENT_VERSION" >> "$NFS_MOUNT_CFG"
-
-		# Ensure Nfsvers is updated correctly
-		sed -i "/^#*\s*Nfsvers=.*/d" "$NFS_MOUNT_CFG"
-		echo "Nfsvers=$NFS_CLIENT_VERSION" >> "$NFS_MOUNT_CFG"
-	fi
-
-	# Update NFS configuration file for NFS_THREADS
-	if [[ -f "$NFS" ]]; then
-		# Uncomment and update RPC_NFSD_COUNT with the correct value
-		sed -i "/^#*\s*RPC_NFSD_COUNT=.*/d" "$NFS"
-		echo "RPC_NFSD_COUNT=$NFS_THREADS" >> "$NFS"
-
-		# Update RPC_NFSD_OPTS based on nfs_server_version
-		if [[ $NFS_SERVER_VERSION -eq 3 ]]; then
-			# Prepend "-N 4" to RPC_NFSD_OPTS
-			RPC_NFSD_OPTS="-N 4 $RPC_NFSD_OPTS"
-		fi
-	fi
-}
-
-# Configure the NFS settings
-nfsd_configure
 
 case "$1" in
 'start')

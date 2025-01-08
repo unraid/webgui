@@ -1,0 +1,64 @@
+#!/bin/bash
+# Usage:
+# apply|nfs_version|nfs_count
+#
+
+apply() {
+	# Modify RPC_NFSD_VERS in the CONFIG file
+	if grep -q "^RPC_NFSD_VERS=" "$CONFIG"; then
+		# Update the existing value
+		sed -i "s/^RPC_NFSD_VERS=.*/RPC_NFSD_VERS=\"$RPC_NFSD_VERS\"/" "$CONFIG"
+	fi
+
+	# Modify RPC_NFSD_COUNT in the CONFIG file
+	if grep -q "^RPC_NFSD_COUNT=" "$CONFIG"; then
+		# Update the existing value
+		sed -i "s/^RPC_NFSD_COUNT=.*/RPC_NFSD_COUNT=\"$RPC_NFSD_COUNT\"/" "$CONFIG"
+	fi
+}
+
+nfs_version() {
+	echo $RPC_NFSD_VERS
+}
+
+nfs_count() {
+	echo $RPC_NFSD_COUNT
+}
+
+# Path to the configuration file
+CONFIG="/boot/config/default/nfs"
+DEFAULT_CONFIG="/etc/default/nfs"
+
+# Ensure the directory exists
+mkdir -p "/boot/default"
+
+# Make a copy of the configuration on the flash
+if [[ ! -f "$CONFIG" ]]; then
+	# File does not exist, copy the default config
+	cp "$DEFAULT_CONFIG" "$CONFIG"
+
+	# Set RPC_NFSD_BIND to blank in the copied file
+	if grep -q "^RPC_NFSD_BIND=" "$CONFIG"; then
+		# Update the existing value
+		sed -i 's/^RPC_NFSD_BIND=.*/RPC_NFSD_BIND=""/' "$CONFIG"
+	fi
+fi
+
+# Get the values from the file
+source "$CONFIG"
+
+case "$1" in
+	'apply')
+		RPC_NFSD_VERS="$2"
+		RPC_NFSD_COUNT="$3"
+		apply
+	;;
+	'nfs_version')
+		nfs_version
+	;;
+	'nfs_count')
+		nfs_count
+	;;
+	*)
+	echo "usage $0 apply|nfs_version|nfs_count"
+esac

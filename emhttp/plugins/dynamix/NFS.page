@@ -15,11 +15,11 @@ Tag="linux"
  * all copies or substantial portions of the Software.
  */
 ?>
-<?
-/* Parse the config file. */
-define('NFS_CONFIG_FILE', '/boot/config/plugins/dynamix/nfs_settings.cfg');
 
-$nfs = is_file(NFS_CONFIG_FILE) ? @parse_ini_file(NFS_CONFIG_FILE, true) : array();
+<?
+/* Get the current nfs server version and threads count. */
+$rpc_nfsd_vers	= exec( "plugins/dynamix/scripts/nfsSettings nfs_version" );
+$rpc_nfsd_count	= exec( "plugins/dynamix/scripts/nfsSettings nfs_count" );
 ?>
 
 <script>
@@ -49,29 +49,24 @@ _(Tunable (fuse_remember))_:
 </form>
 
 <form markdown="1" name="nfs_settings" method="POST" action="/update.php" target="progressFrame">
-<input type="hidden" name="#file" value="<?=NFS_CONFIG_FILE;?>">
+<input type="hidden" name="#command" value="/plugins/dynamix/scripts/nfsSettings">
+<input type="hidden" name="#arg[1]" value="apply">
+<input type="hidden" id="hidden_rpc_nfsd_vers" name="#arg[2]" value="<?=$rpc_nfsd_vers;?>">
+<input type="hidden" id="hidden_rpc_nfsd_count" name="#arg[3]" value="<?=$rpc_nfsd_count;?>">
 
 _(Max Server Protocol Version)_:
-: <select name="nfs_server_version" size="1" <?if ($var['shareNFSEnabled']=="yes"):?>disabled<?endif;?>>
-  <?=mk_option(_var($nfs['nfs_server_version']), "4", "_(NFSv4)_");?>
-  <?=mk_option(_var($nfs['nfs_server_version']), "3", "_(NFSv3)_");?>
+: <select id="nfs_version" size="1" <?if ($var['shareNFSEnabled']=="yes"):?>disabled<?endif;?>>
+  <?=mk_option($rpc_nfsd_vers, "", "_(NFSv4)_");?>
+  <?=mk_option($rpc_nfsd_vers, "-N 4", "_(NFSv3)_");?>
   </select>
 
 :nfs_server_max_protocol_help:
 
-_(Max Client Protocol Version)_:
-: <select name="nfs_client_version" size="1" <?if ($var['shareNFSEnabled']=="yes"):?>disabled<?endif;?>>
-  <?=mk_option(_var($nfs['nfs_client_version']), "4", "_(NFSv4)_");?>
-  <?=mk_option(_var($nfs['nfs_client_version']), "3", "_(NFSv3)_");?>
-  </select>
-
-:nfs_client_max_protocol_help:
-
 _(Number of Threads)_:
-: <select name="nfs_threads" size="1" <?if ($var['shareNFSEnabled']=="yes"):?>disabled<?endif;?>>
-  <?=mk_option(_var($nfs['nfs_threads']), "8", "8");?>
-  <?=mk_option(_var($nfs['nfs_threads']), "16", "16");?>
-  <?=mk_option(_var($nfs['nfs_threads']), "32", "32");?>
+: <select id="nfs_threads" size="1" <?if ($var['shareNFSEnabled']=="yes"):?>disabled<?endif;?>>
+  <?=mk_option($rpc_nfsd_count, "8", "8");?>
+  <?=mk_option($rpc_nfsd_count, "16", "16");?>
+  <?=mk_option($rpc_nfsd_count, "32", "32");?>
   </select>
 
 :nfs_threads_help:
@@ -79,3 +74,25 @@ _(Number of Threads)_:
 &nbsp;
 : <input type="submit" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()"><?if ($var['shareNFSEnabled']=="yes"):?>&nbsp;<span>*_(NFS must be **Stopped** to change this)_*</span><?endif;?>
 </form>
+
+<script>
+	document.addEventListener('DOMContentLoaded', function () {
+		/* Get references to the dropdowns and hidden inputs. */
+		const nfsServerVersion = document.getElementById('nfs_version');
+		const nfsThreads = document.getElementById('nfs_threads');
+		const hiddenRpcNfsdVers = document.getElementById('hidden_rpc_nfsd_vers');
+		const hiddenRpcNfsdCount = document.getElementById('hidden_rpc_nfsd_count');
+
+		/* Check if elements exist. */
+		if (nfsServerVersion && nfsThreads && hiddenRpcNfsdVers && hiddenRpcNfsdCount) {
+			/* Update hidden inputs when the dropdowns change. */
+			nfsServerVersion.addEventListener('change', function () {
+				hiddenRpcNfsdVers.value = this.value;
+			});
+
+			nfsThreads.addEventListener('change', function () {
+				hiddenRpcNfsdCount.value = this.value;
+			});
+		}
+	});
+</script>
