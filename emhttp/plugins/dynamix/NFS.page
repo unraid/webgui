@@ -18,8 +18,8 @@ Tag="linux"
 
 <?
 /* Get the current nfs server version and threads count. */
-$rpc_nfsd_vers	= exec( "plugins/dynamix/scripts/nfsSettings nfs_version" );
-$rpc_nfsd_count	= exec( "plugins/dynamix/scripts/nfsSettings nfs_count" );
+$rpc_nfsd_vers	= trim(exec( "plugins/dynamix/scripts/nfsSettings nfs_version" ));
+$rpc_nfsd_count	= trim(exec( "plugins/dynamix/scripts/nfsSettings nfs_count" ));
 ?>
 
 <script>
@@ -31,6 +31,7 @@ $(checkNFSenable);
 </script>
 
 <form markdown="1" name="nfs_enable" method="POST" action="/update.htm" target="progressFrame">
+
 _(Enable NFS)_:
 : <select name="shareNFSEnabled" onchange="checkNFSenable()">
   <?=mk_option($var['shareNFSEnabled'], "no", _('No'));?>
@@ -55,7 +56,7 @@ _(Tunable (fuse_remember))_:
 <input type="hidden" id="hidden_rpc_nfsd_count" name="#arg[3]" value="<?=$rpc_nfsd_count;?>">
 
 _(Max Server Protocol Version)_:
-: <select id="nfs_version" size="1" <?if ($var['shareNFSEnabled']=="yes"):?>disabled<?endif;?>>
+: <select id="nfs_version" size="1">
   <?=mk_option($rpc_nfsd_vers, "", "_(NFSv4)_");?>
   <?=mk_option($rpc_nfsd_vers, "-N 4", "_(NFSv3)_");?>
   </select>
@@ -63,7 +64,7 @@ _(Max Server Protocol Version)_:
 :nfs_server_max_protocol_help:
 
 _(Number of Threads)_:
-: <select id="nfs_threads" size="1" <?if ($var['shareNFSEnabled']=="yes"):?>disabled<?endif;?>>
+: <select id="nfs_threads" size="1">
   <?=mk_option($rpc_nfsd_count, "8", "8");?>
   <?=mk_option($rpc_nfsd_count, "16", "16");?>
   <?=mk_option($rpc_nfsd_count, "32", "32");?>
@@ -74,7 +75,7 @@ _(Number of Threads)_:
 :nfs_threads_help:
 
 &nbsp;
-: <input type="submit" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()"><?if ($var['shareNFSEnabled']=="yes"):?>&nbsp;<span>*_(NFS must be **Stopped** to change this)_*</span><?endif;?>
+: <input type="submit" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
 </form>
 
 <script>
