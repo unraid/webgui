@@ -866,7 +866,7 @@
 				_(Boot Order)_:
 				<input type="number" size="5" maxlength="5" id="disk[<?=$i?>][boot]" class="narrow bootorder" style="width: 50px;" name="disk[<?=$i?>][boot]"   title="_(Boot order)_"  value="<?=$arrDisk['boot']?>" >
 				_(Discard)_:
-					<select name="disk[<?=$i?>][discard]" class="disk_driver narrow" title="_(Set discard option)_">
+					<select name="disk[<?=$i?>][discard]" class="narrow" title="_(Set discard option)_">
 					<?mk_dropdown_options($arrValidDiskDiscard, $arrDisk['discard']);?>
 					</select>
 				<? if ($arrDisk['bus'] == "virtio" || $arrDisk['bus'] == "usb") $ssddisabled = "hidden "; else $ssddisabled = " ";?>
@@ -1029,7 +1029,7 @@
 				_(Boot Order)_:
 				<input type="number" size="5" maxlength="5" id="disk[{{INDEX}}][boot]" class="narrow bootorder" style="width: 50px;" name="disk[{{INDEX}}][boot]"   title="_(Boot order)_"  value="" >
 				_(Discard)_:
-					<select name="disk[{{INDEX}}][discard]" class="disk_driver narrow" title="_(Set discard option)_">
+					<select name="disk[{{INDEX}}][discard]" class="narrow" title="_(Set discard option)_">
 					<?mk_dropdown_options($arrValidDiskDiscard, "unmap");?>
 					</select>
 				<span id="disk[{{INDEX}}][rotatetext]" hidden>_(SSD)_:</span>
