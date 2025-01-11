@@ -78,7 +78,7 @@ if [ ! -f /usr/bin/tailscale ] || [ ! -f /usr/bin/tailscaled ]; then
   if [ ! -z "${PACKAGES_UPDATE}" ]; then
     UPDATE_LOG=$(${PACKAGES_UPDATE} 2>&1)
   fi
-  INSTALL_LOG=$(${PACKAGES_INSTALL} jq wget ${INSTALL_IPTABLES}${PACKAGES_TROUBLESHOOTING} 2>&1)
+  INSTALL_LOG=$(${PACKAGES_INSTALL} jq wget ca-certificates ${INSTALL_IPTABLES}${PACKAGES_TROUBLESHOOTING} 2>&1)
   INSTALL_RESULT=$?
 
   if [ "${INSTALL_RESULT}" -eq 0 ]; then
