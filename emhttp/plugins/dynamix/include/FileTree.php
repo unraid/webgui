@@ -50,7 +50,7 @@ $match    = $_POST['match'];
 $checkbox = $_POST['multiSelect']=='true' ? "<input type='checkbox'>" : "";
 
 /* Excluded folders to not show in the dropdown in the '/mnt/' directory only. */
-$excludedFolders	= ["RecycleBin", "addons", "remotes", "rootshare", "user0"];
+$excludedFolders	= ["RecycleBin", "addons", "rootshare", "user0"];
 
 echo "<ul class='jqueryFileTree'>";
 if ($_POST['show_parent']=='true' && is_top($rootdir)) echo "<li class='directory collapsed'>$checkbox<a href='#' rel=\"".htmlspecialchars(dirname($rootdir))."\">..</a></li>";
