@@ -99,8 +99,8 @@ fi
 # is on a network partition). NOTE: Don't put /usr on a network partition,
 # or even a separate local partition. This is not supported and is likely to
 # cause some problems...
-if [ -x /etc/rc.d/rc.syslog -a -d /var/log -a ! -r /var/run/syslogd.pid ]; then
-  . /etc/rc.d/rc.syslog start
+if [ -x /etc/rc.d/rc.rsyslogd -a -d /var/log -a ! -r /var/run/rsyslogd.pid ]; then
+  . /etc/rc.d/rc.rsyslogd start
 fi
 
 # Start the inetd server:
