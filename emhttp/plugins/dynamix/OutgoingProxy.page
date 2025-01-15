@@ -15,15 +15,15 @@ Tag="icon-network"
  * all copies or substantial portions of the Software.
  */
 
-$opmPlugin		= "dynamix";
-require_once("plugins/".$opmPlugin."/include/OutgoingProxyLib.php");
+require_once("plugins/dynamix/include/OutgoingProxyLib.php");
 
 /* Parse the plugin config file. */
 $cfg = parse_plugin_config();
 
 /* Pid file used to track the Running/Stopped status. */
-$opm_pid		= "OutgoingProxy";
-$pid_file		= "/var/run/".$opm_pid.".pid";
+$opm_pid	= "OutgoingProxy";
+$pid_file	= OPM_PID_FILE; 
+
 $cfg['proxy_active']	= $cfg['proxy_active'] ?? "0";
 if ($cfg['proxy_active'] != "0") {
 	file_put_contents($pid_file, "running");
@@ -59,25 +59,22 @@ $proxy_3_url			= $url_array['full_url'];
 ?>
 
 <form markdown="1" name="outgoing_proxy_manager" method="POST" action="/update.php" target="progressFrame">
-<input type="hidden" name="#file" value="<?=$plg_config_file;?>">
-<input type="hidden" name="#command" value="/plugins/<?=$opmPlugin;?>/scripts/outgoingproxy">
+<input type="hidden" name="#file" value="<?=PLG_CONFIG_FILE;?>">
+<input type="hidden" name="#command" value="<?= OUTGOING_PROXY_SCRIPT; ?>">
 <input type="hidden" name="#arg[1]" value="apply">
 
 <p><strong>_(Enable Outgoing Proxy)_</strong></p>
 _(Select Proxy)_:
 : <select name="proxy_active" style="width:20%;" size="1">
 	<?=mk_option($cfg['proxy_active'], "0", "_(None)_");?>
-
 	<?if (($cfg['proxy_url_1']) && ($cfg['proxy_name_1'])):?>
-	<?=mk_option($cfg['proxy_active'], "1", $cfg['proxy_name_1'], "disabled");?>
+	<?=mk_option($cfg['proxy_active'], "1", htmlspecialchars($cfg['proxy_name_1']), "disabled");?>
 	<?endif;?>
-
 	<?if (($cfg['proxy_url_2']) && ($cfg['proxy_name_2'])):?>
-	<?=mk_option($cfg['proxy_active'], "2", $cfg['proxy_name_2'], "disabled");?>
+	<?=mk_option($cfg['proxy_active'], "2", htmlspecialchars($cfg['proxy_name_2']), "disabled");?>
 	<?endif;?>
-
 	<?if (($cfg['proxy_url_3']) && ($cfg['proxy_name_3'])):?>
-	<?=mk_option($cfg['proxy_active'], "3", $cfg['proxy_name_3'], "disabled");?>
+	<?=mk_option($cfg['proxy_active'], "3", htmlspecialchars($cfg['proxy_name_3']), "disabled");?>
 	<?endif;?>
 </select>
 
@@ -93,14 +90,14 @@ _(Select Proxy)_:
 
 <p><strong>_(Outgoing Proxy)_ 1</strong></p>
 _(Name)_:
-: <input type="text" name="proxy_name_1" style="width:20%;" maxlength="25" value="<?=$cfg['proxy_name_1'];?>" placeholder="(_(Required)_)"><span id="proxy-status-1"></span>
+: <input type="text" name="proxy_name_1" style="width:20%;" maxlength="35" value="<?=$cfg['proxy_name_1'];?>" placeholder="(_(Required)_)"><span id="proxy-status-1"></span>
 
 :outgoing_proxy_name_plug:
 > Outgoing Proxy name for this Proxy.
 :end
 
 _(URL)_:
-: <input type="text" name="proxy_url_1" style="width:30%;" maxlength="100" value="<?=$cfg['proxy_url_1'];?>" onchange="verifyUrl(this)" placeholder="_(http://IP:port or http://host:port)_">
+: <input type="text" name="proxy_url_1" style="width:30%;" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_url_1']);?>" onchange="verifyUrl(this)" placeholder="_(http://IP:port or http://host:port)_">
 
 :outgoing_proxy_url_plug:
 > Outgoing Proxy URL for this Proxy.  The URL can be entered with or without credentials.  The credentials will be parsed from the URL.
@@ -109,14 +106,14 @@ _(URL)_:
 :end
 
 _(User)_:
-: <input type="text" name="proxy_user_1" class="wide" maxlength="100" value="<?=$cfg['proxy_user_1'];?>" placeholder="(_(Optional)_)">
+: <input type="text" name="proxy_user_1" class="wide" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_user_1']);?>" placeholder="(_(Optional)_)">
 
 :outgoing_proxy_user_plug:
 > Outgoing Proxy User Name for this Proxy.
 :end
 
 _(Password)_:
-: <input type="text" name="proxy_pass_1" class="wide" maxlength="100" value="<?=$cfg['proxy_pass_1'];?>" placeholder="(_(Optional)_)">
+: <input type="password" name="proxy_pass_1" class="wide" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_pass_1']);?>" placeholder="(_(Optional)_)">
 
 :outgoing_proxy_password_plug:
 > Outgoing Proxy Password for this Proxy.
@@ -124,14 +121,14 @@ _(Password)_:
 
 <p><strong>_(Outgoing Proxy)_ 2</strong></p>
 _(Name)_:
-: <input type="text" name="proxy_name_2" style="width:20%;" maxlength="25" value="<?=$cfg['proxy_name_2'];?>" placeholder="(_(Required)_)"><span id="proxy-status-2"></span>
+: <input type="text" name="proxy_name_2" style="width:20%;" maxlength="35" value="<?=$cfg['proxy_name_2'];?>" placeholder="(_(Required)_)"><span id="proxy-status-2"></span>
 
 :outgoing_proxy_name_plug:
 > Outgoing Proxy name for this Proxy.
 :end
 
 _(URL)_:
-: <input type="text" name="proxy_url_2" style="width:30%;" maxlength="100" value="<?=$cfg['proxy_url_2'];?>"  onchange="verifyUrl(this)" placeholder="_(http://IP:port or http://host:port)_">
+: <input type="text" name="proxy_url_2" style="width:30%;" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_url_2']);?>"  onchange="verifyUrl(this)" placeholder="_(http://IP:port or http://host:port)_">
 
 :outgoing_proxy_url_plug:
 > Outgoing Proxy URL for this Proxy.  The URL can be entered with or without credentials.  The credentials will be parsed from the URL.
@@ -140,14 +137,14 @@ _(URL)_:
 :end
 
 _(User)_:
-: <input type="text" name="proxy_user_2" class="wide" maxlength="100" value="<?=$cfg['proxy_user_2'];?>" placeholder="(_(Optional)_)">
+: <input type="text" name="proxy_user_2" class="wide" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_user_2']);?>" placeholder="(_(Optional)_)">
 
 :outgoing_proxy_user_plug:
 > Outgoing Proxy User Name for this Proxy.
 :end
 
 _(Password)_:
-: <input type="text" name="proxy_pass_2" class="wide" maxlength="100" value="<?=$cfg['proxy_pass_2'];?>" placeholder="(_(Optional)_)">
+: <input type="password" name="proxy_pass_2" class="wide" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_pass_2']);?>" placeholder="(_(Optional)_)">
 
 :outgoing_proxy_password_plug:
 > Outgoing Proxy Password for this Proxy.
@@ -155,14 +152,14 @@ _(Password)_:
 
 <p><strong>_(Outgoing Proxy)_ 3</strong></p>
 _(Name)_:
-: <input type="text" name="proxy_name_3" style="width:20%;" maxlength="25" value="<?=$cfg['proxy_name_3'];?>" placeholder="(_(Required)_)"><span id="proxy-status-3"></span>
+: <input type="text" name="proxy_name_3" style="width:20%;" maxlength="35" value="<?=$cfg['proxy_name_3'];?>" placeholder="(_(Required)_)"><span id="proxy-status-3"></span>
 
 :outgoing_proxy_name_plug:
 > Outgoing Proxy name for this Proxy.
 :end
 
 _(URL)_:
-: <input type="text" name="proxy_url_3" style="width:30%;" maxlength="100" value="<?=$cfg['proxy_url_3'];?>"  onchange="verifyUrl(this)" placeholder="_(http://IP:port or http://host:port)_">
+: <input type="text" name="proxy_url_3" style="width:30%;" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_url_3']);?>"  onchange="verifyUrl(this)" placeholder="_(http://IP:port or http://host:port)_">
 
 :outgoing_proxy_url_plug:
 > Outgoing Proxy URL for this Proxy.  The URL can be entered with or without credentials.  The credentials will be parsed from the URL.
@@ -171,14 +168,14 @@ _(URL)_:
 :end
 
 _(User)_:
-: <input type="text" name="proxy_user_3" class="wide" maxlength="100" value="<?=$cfg['proxy_user_3'];?>" placeholder="(_(Optional)_)">
+: <input type="text" name="proxy_user_3" class="wide" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_user_3']);?>" placeholder="(_(Optional)_)">
 
 :outgoing_proxy_user_plug:
 > Outgoing Proxy User Name for this Proxy.
 :end
 
 _(Password)_:
-: <input type="text" name="proxy_pass_3" class="wide" maxlength="100" value="<?=$cfg['proxy_pass_3'];?>" placeholder="(_(Optional)_)">
+: <input type="password" name="proxy_pass_3" class="wide" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_pass_3']);?>" placeholder="(_(Optional)_)">
 
 :outgoing_proxy_password_plug:
 > Outgoing Proxy Password for this Proxy.
@@ -190,13 +187,20 @@ _(Password)_:
 
 <script>
 	/* Refresh Proxy Manager page showing updated proxy status. */
+    const proxyUrls = <?= json_encode([
+        'proxy_1_url' => $proxy_1_url,
+        'proxy_2_url' => $proxy_2_url,
+        'proxy_3_url' => $proxy_3_url,
+        'proxy_active' => $cfg['proxy_active']
+    ]) ?>;
+
 	function refreshPage() {
 		$.post(OPMURL, {
 			action: "proxy_status",
-			proxy_1_url: "<?=$proxy_1_url;?>",
-			proxy_2_url: "<?=$proxy_2_url;?>",
-			proxy_3_url: "<?=$proxy_3_url;?>",
-			proxy_active: "<?=$cfg['proxy_active'];?>"
+			proxy_1_url: proxyUrls.proxy_1_url,
+			proxy_2_url: proxyUrls.proxy_2_url,
+			proxy_3_url: proxyUrls.proxy_3_url,
+			proxy_active: proxyUrls.proxy_active
 		}, function(data) {
 			/* Refresh the proxy status. */
 			/* Update the proxy status div */
@@ -307,5 +311,5 @@ _(Password)_:
 	});
 
 	/* URL for Outgoing Proxy PHP file. */
-	const OPMURL = '/plugins/<?=$opmPlugin;?>/include/OutgoingProxy.php';
+	const OPMURL = '<?= OUTGOING_PROXY_INCLUDE; ?>';
 </script>

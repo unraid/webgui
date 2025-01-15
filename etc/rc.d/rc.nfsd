@@ -18,9 +18,10 @@ NFSD="/usr/sbin/rpc.nfsd"
 EXPORTFS="/usr/sbin/exportfs"
 RQUOTAD="/usr/sbin/rpc.rquotad"
 MOUNTD="/usr/sbin/rpc.mountd"
-OPTIONS="-u -s"
 RPC="/etc/default/rpc"
 NFS="/etc/default/nfs"
+RPC_CFG="/boot/config/default/rpc"
+NFS_CFG="/boot/config/default/nfs"
 
 # run & log functions
 . /etc/rc.d/rc.runlog
@@ -28,13 +29,22 @@ NFS="/etc/default/nfs"
 # library functions
 . /etc/rc.d/rc.library.source
 
+# source default settings
+[[ -r $RPC ]] && . $RPC
+[[ -r $RPC_CFG ]] && . $RPC_CFG
+
+[[ -r $NFS ]] && . $NFS
+[[ -r $NFS_CFG ]] && . $NFS_CFG
+sed -ri "s/^(RPC_NFSD_VERS)=.*/\1=\"$RPC_NFSD_VERS\"/" $NFS 2>/dev/null
+sed -ri "s/^(RPC_NFSD_XPORT)=.*/\1=\"$RPC_NFSD_XPORT\"/" $NFS 2>/dev/null
+sed -ri "s/^(RPC_NFSD_OPTS)=.*/\1=\"$RPC_NFSD_OPTS\"/" $NFS 2>/dev/null
+sed -ri "s/^(RPC_NFSD_COUNT)=.*/\1=\"$RPC_NFSD_COUNT\"/" $NFS 2>/dev/null
+
 # get bind addresses
 if check && [[ -n $BIND ]]; then
-  RPC_NFSD_OPTS="$OPTIONS -H ${BIND// / -H }"
+  RPC_NFSD_BIND="-H ${BIND// / -H }"
+  sed -ri "s/^(RPC_NFSD_BIND)=.*/\1=\"$RPC_NFSD_BIND\"/" $NFS 2>/dev/null
 fi
-
-# source default settings:
-[[ -r $RPC ]] && . $RPC
 
 nfsd_running(){
   sleep 0.1
@@ -81,13 +91,9 @@ nfsd_start(){
       [[ -n $RPC_RQUOTAD_PORT ]] && RPC_RQUOTAD_OPTS="$RPC_RQUOTAD_OPTS -p $RPC_RQUOTAD_PORT"
       run $RQUOTAD $RPC_RQUOTAD_OPTS
     fi
-    # update default settings
-    sed -ri "s/^(RPC_NFSD_OPTS)=.*/\1=\"$RPC_NFSD_OPTS\"/" $NFS 2>/dev/null
-    [[ -r $NFS ]] && . $NFS
-    # start nfsd servers - 8 if not set extrawise (an old Sun standard):
+    # start nfsd servers
     if [[ -x $NFSD ]]; then
-      [[ -z $RPC_NFSD_COUNT ]] && RPC_NFSD_COUNT=8
-      run $NFSD $RPC_NFSD_OPTS $RPC_NFSD_COUNT
+      run $NFSD $RPC_NFSD_VERS $RPC_NFSD_XPORT $RPC_NFSD_BIND $RPC_NFSD_OPTS $RPC_NFSD_COUNT
     fi
     if [[ -x $MOUNTD ]]; then
       [[ -n $RPC_MOUNTD_PORT ]] && RPC_MOUNTD_OPTS="$RPC_MOUNTD_OPTS -p $RPC_MOUNTD_PORT"
@@ -105,9 +111,7 @@ nfsd_stop(){
     REPLY="Already stopped"
   else
     killall --ns $$ rpc.mountd 2>/dev/null
-    killall --ns $$ nfsd 2>/dev/null
-    sleep 1
-    killall --ns $$ -9 nfsd 2>/dev/null
+    run $NFSD 0
     killall --ns $$ rpc.rquotad 2>/dev/null
     run $EXPORTFS -au
     if ! nfsd_running; then REPLY="Stopped"; else REPLY="Failed"; fi
@@ -130,7 +134,7 @@ nfsd_reload(){
 nfsd_update(){
   if nfsd_running && check && [[ "$(this)" != "-H ${BIND// / -H }" ]]; then
     log "Updating $DAEMON..."
-    nfsd_reload
+    nfsd_restart
   fi
 }
 

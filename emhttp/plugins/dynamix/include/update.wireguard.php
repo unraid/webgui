@@ -114,7 +114,7 @@ function addDocker($vtun) {
   $error = false;
   [$index,$network] = newNet($vtun);
   if ($dockerd && dockerNet($vtun)) {
-    exec("docker network create $vtun --subnet=$network 2>/dev/null");
+    exec("docker network create -o 'com.docker.network.driver.mtu'='1420' $vtun --subnet=$network 2>/dev/null");
     $error = dockerNet($vtun);
   }
   if (!$error && !isNet($network)) {

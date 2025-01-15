@@ -9,38 +9,39 @@
  * all copies or substantial portions of the Software.
  */
 
-$opmPlugin			= "dynamix";
+/* Base paths */
+define('BASE_RUN_PATH', '/var/run');
+define('PLUGIN_SCRIPTS_PATH', '/plugins/dynamix/scripts');
+define('PLUGIN_INCLUDE_PATH', '/plugins/dynamix/include');
+
+/* Specific paths */
+define('OPM_PID_FILE', BASE_RUN_PATH . '/OutgoingProxy.pid');
+define('OUTGOING_PROXY_SCRIPT', PLUGIN_SCRIPTS_PATH . '/outgoingproxy');
+define('OUTGOING_PROXY_INCLUDE', PLUGIN_INCLUDE_PATH . '/OutgoingProxy.php');
 
 /* UI config file location. */
-$plg_config_file	= "/boot/config/plugins/".$opmPlugin."/outgoingproxy.cfg";
+define('PLG_CONFIG_FILE', '/boot/config/plugins/dynamix/outgoingproxy.cfg');
 
 /* Outgoing Proxy Manager logging tag. */
-$opm_log	= "Outgoing Proxy Manager";
+DEFINE('OPM_LOG', '"Outgoing Proxy Manager"');
 
 /* Outgoing Proxy logging. */
 function outgoingproxy_log($m) {
-	global $opm_log;
-
 	$m		= print_r($m,true);
 	$m		= str_replace("\n", " ", $m);
 	$m		= str_replace('"', "'", $m);
-	exec("/usr/bin/logger"." ".escapeshellarg($m)." -t ".escapeshellarg($opm_log));
+	exec("/usr/bin/logger"." ".escapeshellarg($m)." -t ".OPM_LOG);
 }
 
 /* Parse plugin config file. */
 function parse_plugin_config() {
-	global $plg_config_file;
-
-	$cfg = is_file($plg_config_file) ? @parse_ini_file($plg_config_file, true) : array();
+	$cfg = is_file(PLG_CONFIG_FILE) ? @parse_ini_file(PLG_CONFIG_FILE, true) : array();
 
 	return($cfg);
 }
 
 /* Write values to plugin config file. */
 function write_plugin_config($config) {
-	global $plg_config_file;
-
-	/* Rewrite config file. */
 	/* Convert the array to an INI string. */
 	$iniString = '';
 	foreach ($config as $key => $value) {
@@ -48,7 +49,7 @@ function write_plugin_config($config) {
 	}
 
 	/* Write the INI string to a file. */
-	file_put_contents($plg_config_file, $iniString);
+	file_put_contents(PLG_CONFIG_FILE, $iniString);
 }
 
 /* Check to see if the proxy is online and available. */
@@ -153,39 +154,43 @@ function set_config($variable, $value) {
 	write_plugin_config($config);
 }
 
-/* Encrypt data. */
 function encrypt_data($data) {
-	$key	= get_config("key");
-	if ((! $key) || strlen($key) != 32) {
-		$key = substr(base64_encode(openssl_random_pseudo_bytes(32)), 0, 32);
-		set_config("key", $key);
-	}
-	$iv		= get_config("iv");
-	if ((! $iv) || strlen($iv) != 16) {
-		$iv = substr(base64_encode(openssl_random_pseudo_bytes(16)), 0, 16);
-		set_config("iv", $iv);
-	}
+    $key = get_config("key");
+    if (!$key || strlen($key) != 32) {
+        $key = substr(base64_encode(openssl_random_pseudo_bytes(32)), 0, 32);
+        set_config("key", $key);
+    }
+    $iv = get_config("iv");
+    if (!$iv || strlen($iv) != 16) {
+        $iv = substr(base64_encode(openssl_random_pseudo_bytes(16)), 0, 16);
+        set_config("iv", $iv);
+    }
 
-	/* Encrypt the data using aes256. */
-	$value	= trim(openssl_encrypt($data, 'aes256', $key, $options=0, $iv));
+    /* Encrypt the data using aes-256-cbc (ensure mode and padding are specified). */
+    $encrypted = openssl_encrypt($data, 'aes-256-cbc', $key, OPENSSL_RAW_DATA, $iv);
 
-	return $value;
+    /* Base64 encode the encrypted data. */
+    $value = base64_encode($encrypted);
+
+    return $value;
 }
 
-/* Decrypt data. */
 function decrypt_data($data) {
-	$key	= get_config("key");
-	$iv		= get_config("iv");
+    $key = get_config("key");
+    $iv  = get_config("iv");
 
-    /* Decrypt the data using aes256. */
-	$value = openssl_decrypt($data, 'aes256', $key, $options=0, $iv);
+    /* Base64 decode before decryption. */
+    $encrypted_data = base64_decode(stripslashes($data));
 
-	/* Make sure the data is UTF-8 encoded. */
-	if (! mb_check_encoding($value, 'UTF-8')) {
-		outgoingproxy_log("Warning: Data is not UTF-8 encoded");
-		$value = "";
-	}
+    /* Decrypt the data using aes-256-cbc. */
+    $decrypted = openssl_decrypt($encrypted_data, 'aes-256-cbc', $key, OPENSSL_RAW_DATA, $iv);
 
-	return $value;
+    /* Ensure the decrypted data is UTF-8 encoded. */
+    if (!mb_check_encoding($decrypted, 'UTF-8')) {
+        unassigned_log("Warning: Data is not UTF-8 encoded");
+        $decrypted = "";
+    }
+
+    return $decrypted;
 }
 ?>

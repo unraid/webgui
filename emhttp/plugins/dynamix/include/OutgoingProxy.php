@@ -9,42 +9,42 @@
  * all copies or substantial portions of the Software.
  */
 
-$opmPlugin	= "dynamix";
-require_once("plugins/".$opmPlugin."/include/OutgoingProxyLib.php");
+require_once("plugins/dynamix/include/OutgoingProxyLib.php");
 
-switch ($_POST['action']) {
+function get_proxy_status($proxy_url, $proxy_active, $index) {
+    if (!$proxy_url) {
+        return "";
+    }
+
+    return proxy_online($proxy_url) 
+        ? ($proxy_active == $index ? "Active" : "") 
+        : ($proxy_active == $index ? "Offline" : "Not Available");
+}
+
+$action = htmlspecialchars($_POST['action'] ?? '', ENT_QUOTES, 'UTF-8');
+
+switch ($action) {
 	case 'proxy_status':
-		/* Get the active proxy. */
-		$proxy_active		= urldecode($_POST['proxy_active']);
+		/* Sanitize inputs. */
+		$proxy_active = htmlspecialchars($_POST['proxy_active'] ?? '', ENT_QUOTES, 'UTF-8');
+		$proxy_urls = [
+			'1' => filter_var($_POST['proxy_1_url'] ?? '', FILTER_SANITIZE_URL),
+			'2' => filter_var($_POST['proxy_2_url'] ?? '', FILTER_SANITIZE_URL),
+			'3' => filter_var($_POST['proxy_3_url'] ?? '', FILTER_SANITIZE_URL),
+		];
 
-		/* Get the proxy 1 status. */
-		$proxy_1_url	= urldecode($_POST['proxy_1_url']);
-		if ($proxy_1_url) {
-			$proxy_1_status	= proxy_online($proxy_1_url) ? ($proxy_active == "1" ? "Active" : "") : ($proxy_active == "1" ? "Offline" : "Not Available");
-		} else {
-			$proxy_1_status = "";
+		/* Generate response. */
+		$response = [];
+		foreach ($proxy_urls as $key => $url) {
+			$response["proxy_status_{$key}"] = get_proxy_status($url, $proxy_active, $key);
 		}
 
-		/* Get the proxy 2 status. */
-		$proxy_2_url	= urldecode($_POST['proxy_2_url']);
-		if ($proxy_2_url) {
-			$proxy_2_status	= proxy_online($proxy_2_url) ? ($proxy_active == "2" ? "Active" : "") : ($proxy_active == "2" ? "Offline" : "Not Available");
-		} else {
-			$proxy_2_status = "";
-		}
-		/* Get the proxy 3 status. */
-		$proxy_3_url	= urldecode($_POST['proxy_3_url']);
-		if ($proxy_3_url) {
-			$proxy_3_status	= proxy_online($proxy_3_url) ? ($proxy_active == "3" ? "Active" : "") : ($proxy_active == "3" ? "Offline" : "Not Available");
-		} else {
-			$proxy_3_status = "";
-		}
-
-		echo json_encode(array( 'proxy_status_1' => $proxy_1_status, 'proxy_status_2' => $proxy_2_status, 'proxy_status_3' => $proxy_3_status ));
+		/* Output response as JSON. */
+		echo json_encode($response);
 		break;
 
 	default:
-		outgoingproxy_log("Undefined POST action - ".$_POST['action'].".");
+		outgoingproxy_log("Undefined POST action - " . htmlspecialchars($action, ENT_QUOTES, 'UTF-8') . ".");
 		break;
 }
 ?>

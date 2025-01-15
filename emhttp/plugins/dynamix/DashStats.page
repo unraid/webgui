@@ -2,7 +2,8 @@ Menu="Dashboard"
 Nchan="wg_poller,update_1,update_2,update_3,ups_status:stop,vm_dashusage"
 ---
 <?PHP
-/* Copyright 2005-2023, Lime Technology * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -698,8 +699,8 @@ function hideShow() {
 <tr><td>_(VM Name)_:</td><td><label id="VMName"></label></td></tr>
 <tr><td>_(Snapshot Name)_:</td><td><input type="text" id="targetsnap" autocomplete="off" spellcheck="false" value="--generate" onclick="this.select()">_(Check free space)_:<input type="checkbox" id="targetsnapfspc" checked></td></tr>
 <tr><td>_(Description)_:</td><td><input type="text" id="targetsnapdesc" autocomplete="off" spellcheck="false" value="" onclick="this.select()"></td></tr>
-<tr id="memoryline"><td>_(Memory dump )_:</td><td><input type="checkbox" id="targetsnapmem"  checked></td></tr>
-<tr id="fstypeline"><td>_(FS Native Snapshot )_:</td><td><label id="fstype"></label><input type="checkbox" id="targetsnapfstype" >_(Unchecked will use QEMU External Snapshot)_</td></tr>
+<tr id="memoryline"><td>_(Memory dump)_:</td><td><input type="checkbox" id="targetsnapmem" checked></td></tr>
+<tr id="fstypeline"><td>_(FS Native Snapshot)_:</td><td><label id="fstype"></label><input type="checkbox" id="targetsnapfstype">_(Unchecked will use QEMU External Snapshot)_</td></tr>
 </table>
 </div>
 
@@ -1032,6 +1033,7 @@ function smartMenu(table) {
       opts.push({text:"_(Acknowledge)_",icon:'fa-check-square-o',action:function(e){e.preventDefault();acknowledge(id,disk);}});
     }
     $(id).bind('click',function(){update2=false;}).bind('mouseout',function(){setTimeout(function(){update2=true;},15000);});
+    context.destroy(id);
     context.attach(id,opts);
   });
 }
@@ -1539,7 +1541,7 @@ vmdashusage.on('message', function(msg){
   var data = JSON.parse(msg);
   for (const [vm, vmdata] of Object.entries(data)) {
     for (const [displayitem, value] of Object.entries(vmdata)) {
-    $('#vmmetrics-'+displayitem + '-' + vm ).html(value); 
+    $('#vmmetrics-'+displayitem + '-' + vm ).html(value);
     }
   }
   });

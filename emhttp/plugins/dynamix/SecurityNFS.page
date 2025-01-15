@@ -82,6 +82,8 @@ _(Security)_:
 _(Rule)_:
 : <textarea name="shareHostListNFS" cols="40" rows="5" style="width:45%" placeholder="Example: *(rw,sec=sys,insecure,anongid=100,anonuid=99,no_root_squash,lock)"><?= htmlspecialchars($sec_nfs[$name]['hostList']) ?></textarea>
 
+:nfs_security_rules_help:
+
 &nbsp;
 : <input type="submit" name="changeShareAccessNFS" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
 </form>
@@ -91,45 +93,41 @@ _(Rule)_:
 $(function() {
 	/* Initialize dropdown for NFS and check for hostList cookie. */
 	initDropdownNFS(false);
+
 	if ($.cookie('hostList') != null) {
-		var host = $('input[name="shareHostListNFS"]');
-		host.val($.cookie('hostList'));
-		setTimeout(function() {
-			host.trigger('change');
-		}, 100);
+		var host = $('textarea[name="shareHostListNFS"]');
+		if (host.length) {
+			host.val($.cookie('hostList'));
+			setTimeout(function() {
+				host.trigger('change');
+			}, 100);
+		}
 		$.removeCookie('hostList');
 	}
 
-	<?if ($tabbed):?>
-	/* Conditionally bind click event to tabs if tabbed interface is used. */
-	<?$path=='Shares/Share' ? $t=2 : $t=1;?>
-	$('#tab<?=$t?>').bind({click:function() {
-		initDropdownNFS(true);
-	}});
-	<?endif;?>
-});
-
-/* Add an event listener to update the text area to make all rules into a single line before being submitted. */
-document.addEventListener("DOMContentLoaded", function() {
+	/* Add submit listener to nfsHostListForm if it exists */
 	var form = document.getElementById('nfsHostListForm');
-	form.addEventListener('submit', function(event) {
-		var textarea = document.querySelector('textarea[name="shareHostListNFS"]');
-
-		/* Split the content into lines. */
-		var lines = textarea.value.split('\n');
-
-		/* Filter out empty lines or lines that contain only whitespace, and remove carriage returns and excessive spaces within lines. */
-		var cleanedLines = lines.map(function(line) {
-			/* Remove carriage returns and spaces within each line. */
-  			return line.replace(/[\r\s]+/g, '');
-		}).filter(function(line) {
-			/* Keep only non-empty lines. */
-  			return line.length > 0;
+	if (form) {
+		form.addEventListener('submit', function(event) {
+			var textarea = document.querySelector('textarea[name="shareHostListNFS"]');
+			if (textarea) {
+				var lines = textarea.value.split('\n');
+				var cleanedLines = lines.map(function(line) {
+					return line.replace(/[\r\s]+/g, '');
+				}).filter(function(line) {
+					return line.length > 0;
+				});
+				textarea.value = cleanedLines.join(' ');
+			}
 		});
+	}
 
-		/* Join the remaining lines with a single space. */
-		textarea.value = cleanedLines.join(' ');
+	/* Conditionally bind click event to tabs */
+	<?if ($tabbed):?>
+	$('#tab<?= $path == 'Shares/Share' ? 2 : 1 ?>').on('click', function() {
+		initDropdownNFS(true);
 	});
+	<?endif;?>
 });
 
 /* Function to initialize or reset the NFS dropdown */

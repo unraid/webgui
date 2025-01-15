@@ -15,6 +15,13 @@ Tag="linux"
  * all copies or substantial portions of the Software.
  */
 ?>
+
+<?
+/* Get the current nfs server version and threads count. */
+$rpc_nfsd_vers	= trim(exec( "plugins/dynamix/scripts/nfsSettings nfs_version" ));
+$rpc_nfsd_count	= trim(exec( "plugins/dynamix/scripts/nfsSettings nfs_count" ))
+?>
+
 <script>
 function checkNFSenable() {	
   var form = document.nfs_enable;
@@ -24,6 +31,7 @@ $(checkNFSenable);
 </script>
 
 <form markdown="1" name="nfs_enable" method="POST" action="/update.htm" target="progressFrame">
+
 _(Enable NFS)_:
 : <select name="shareNFSEnabled" onchange="checkNFSenable()">
   <?=mk_option($var['shareNFSEnabled'], "no", _('No'));?>
@@ -33,10 +41,61 @@ _(Enable NFS)_:
 :nfs_enable_help:
 
 _(Tunable (fuse_remember))_:
-: <input type="text" name="fuse_remember" maxlength="10" value="<?=$var['fuse_remember']?>" class="narrow"><?=_($var['fuse_remember_status'])?>
+: <input type="text" name="fuse_remember" maxlength="10" value="<?=$var['fuse_remember']?>" class="narrow"><?=htmlspecialchars($var['fuse_remember_status']);?>
 
 :nfs_tunable_fuse_remember_help:
 
 &nbsp;
 : <input type="submit" name="changeShare" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
 </form>
+
+<form markdown="1" name="nfs_settings" method="POST" action="/update.php" target="progressFrame">
+<input type="hidden" name="#command" value="/plugins/dynamix/scripts/nfsSettings">
+<input type="hidden" name="#arg[1]" value="apply">
+<input type="hidden" id="hidden_rpc_nfsd_vers" name="#arg[2]" value="<?=$rpc_nfsd_vers;?>">
+<input type="hidden" id="hidden_rpc_nfsd_count" name="#arg[3]" value="<?=$rpc_nfsd_count;?>">
+
+_(Max Server Protocol Version)_:
+: <select id="nfs_version" size="1">
+  <?=mk_option($rpc_nfsd_vers, "", "_(NFSv4)_");?>
+  <?=mk_option($rpc_nfsd_vers, "-N 4", "_(NFSv3)_");?>
+  </select>
+
+:nfs_server_max_protocol_help:
+
+_(Number of Threads)_:
+: <select id="nfs_threads" size="1">
+  <?=mk_option($rpc_nfsd_count, "8", "8");?>
+  <?=mk_option($rpc_nfsd_count, "16", "16");?>
+  <?=mk_option($rpc_nfsd_count, "32", "32");?>
+  <?=mk_option($rpc_nfsd_count, "64", "64");?>
+  <?=mk_option($rpc_nfsd_count, "128", "128");?>
+  </select>
+
+:nfs_threads_help:
+
+&nbsp;
+: <input type="submit" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+</form>
+
+<script>
+	document.addEventListener('DOMContentLoaded', function () {
+		/* Get references to the dropdowns and hidden inputs. */
+		const nfsServerVersion = document.getElementById('nfs_version');
+		const nfsThreads = document.getElementById('nfs_threads');
+		const hiddenRpcNfsdVers = document.getElementById('hidden_rpc_nfsd_vers');
+		const hiddenRpcNfsdCount = document.getElementById('hidden_rpc_nfsd_count');
+
+		/* Check if elements exist. */
+		if (nfsServerVersion && nfsThreads && hiddenRpcNfsdVers && hiddenRpcNfsdCount) {
+			/* Update hidden inputs when the dropdowns change. */
+			nfsServerVersion.addEventListener('change', function () {
+				hiddenRpcNfsdVers.value = this.value;
+			});
+
+			nfsThreads.addEventListener('change', function () {
+				hiddenRpcNfsdCount.value = this.value;
+			});
+		}
+	});
+</script>

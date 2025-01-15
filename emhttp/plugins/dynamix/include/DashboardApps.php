@@ -21,8 +21,11 @@ require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 
 if (isset($_POST['ntp'])) {
-  $ntp = exec("ntpq -pn|awk '{if (NR>3 && $2!=\".INIT.\") c++} END {print c}'");
-  die($ntp ? sprintf(_('Clock synchronized with %s NTP server'.($ntp==1?'':'s')),$ntp) : _('Clock is unsynchronized with no NTP servers'));
+  if (exec("pgrep -cf /usr/sbin/ntpd")) {
+    $ntp = exec("ntpq -pn|awk '$1~/^\*/{print $9;exit}'");
+    die($ntp ? sprintf(_('Clock is synchronized using NTP, time offset: %s ms'),abs($ntp)) : _('Clock is unsynchronized with no NTP servers'));
+  }
+  die(_('Clock is unsynchronized, free-running clock'));
 }
 
 if ($_POST['docker']) {
@@ -123,7 +126,7 @@ if ($_POST['vms']) {
     if (!isset($domain_cfg["CONSOLE"])) $vmrcconsole = "web" ; else $vmrcconsole = $domain_cfg["CONSOLE"] ;
     if (!isset($domain_cfg["RDPOPT"])) $vmrcconsole .= ";no" ; else $vmrcconsole .= ";".$domain_cfg["RDPOPT"] ;
     $WebUI = html_entity_decode($arrConfig["template"]["webui"]);
-    $menu = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($vm), addslashes($uuid), addslashes($template), $state, addslashes($vmrcurl), strtoupper($vmrcprotocol), addslashes($log),addslashes($fstype), $vmrcconsole,false,addslashes(str_replace('"',"'",$WebUI)));
+    $menu = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", htmlentities($vm,ENT_QUOTES), addslashes($uuid), addslashes($template), $state, addslashes($vmrcurl), strtoupper($vmrcprotocol), htmlentities($log,ENT_QUOTES),addslashes($fstype), $vmrcconsole,false,addslashes(str_replace('"',"'",$WebUI)));
     $icon = $lv->domain_get_icon_url($res);
     switch ($state) {
     case 'running':
@@ -164,12 +167,10 @@ if ($_POST['vms']) {
 
   echo "\0";
   echo "<tr title='' class='useupdated'><td>";
-  if ($vmusage == "Y") {
-    foreach ($vmusagehtml as $vmhtml) {
-      echo $vmhtml;
-     }
-    if (!count($vmusagehtml))  echo "<span id='no_usagevms'><br> "._('No running virtual machines')."<br></span>";
-    if ($running < 1 && count($vmusagehtml)) echo "<span id='no_usagevms'><br>". _('No running virtual machines')."<br></span>";
+  if ($vmusage=='Y') {
+    foreach ($vmusagehtml as $vmhtml) echo $vmhtml;
+    if (!count($vmusagehtml)) echo "<span id='no_usagevms'><br> "._('No running virtual machines')."<br></span>";
+    if ($running<1 && count($vmusagehtml)) echo "<span id='no_usagevms'><br>". _('No running virtual machines')."<br></span>";
     echo "</td></tr>";
   }
 }

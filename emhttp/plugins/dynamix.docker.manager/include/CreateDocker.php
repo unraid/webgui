@@ -331,30 +331,6 @@ if (isset($xml["Config"]) && is_array($xml["Config"])) {
   }
 }
 
-# Look for Exit Nodes if Tailscale plugin is installed
-$ts_exit_nodes = [];
-$ts_en_check = false;
-if (file_exists('/usr/local/sbin/tailscale') && exec('pgrep --ns $$ -f "/usr/local/sbin/tailscaled"')) {
-  exec('tailscale exit-node list', $ts_exit_node_list, $retval);
-  if ($retval === 0) {
-    foreach ($ts_exit_node_list as $line) {
-      if (!empty(trim($line))) {
-        if (preg_match('/^(\d+\.\d+\.\d+\.\d+)\s+(.+)$/', trim($line), $matches)) {
-          $parts = preg_split('/\s+/', $matches[2]);
-          $ts_exit_nodes[] = [
-            'ip' => $matches[1],
-            'hostname' => $parts[0],
-            'country' => $parts[1],
-            'city' => $parts[2],
-            'status' => $parts[3]
-          ];
-          $ts_en_check = true;
-        }
-      }
-    }
-  }
-}
-
 # Try to detect port from WebUI and set webui_url
 $TSwebuiport = '';
 $webui_url = '';
@@ -376,11 +352,36 @@ $TS_DirectMachineLink = $TS_MachinesLink;
 $TS_HostNameActual = "";
 $TS_not_approved = "";
 $TS_https_enabled = false;
+$ts_exit_nodes = [];
+$ts_en_check = false;
 // Get Tailscale information and create arrays/variables
 !empty($xml) && exec("docker exec -i " . escapeshellarg($xml['Name']) . " /bin/sh -c \"tailscale status --peers=false --json\"", $TS_raw);
 $TS_no_peers = json_decode(implode('', $TS_raw),true);
 $TS_container = json_decode(implode('', $TS_raw),true);
 $TS_container = $TS_container['Self']??'';
+
+# Look for Exit Nodes through Tailscale plugin (if installed) when container is not running
+if (empty($TS_container) && file_exists('/usr/local/sbin/tailscale') && exec('pgrep --ns $$ -f "/usr/local/sbin/tailscaled"')) {
+  exec('tailscale exit-node list', $ts_exit_node_list, $retval);
+  if ($retval === 0) {
+    foreach ($ts_exit_node_list as $line) {
+      if (!empty(trim($line))) {
+        if (preg_match('/^(\d+\.\d+\.\d+\.\d+)\s+(.+)$/', trim($line), $matches)) {
+          $parts = preg_split('/\s+/', $matches[2]);
+          $ts_exit_nodes[] = [
+            'ip' => $matches[1],
+            'hostname' => $parts[0],
+            'country' => $parts[1],
+            'city' => $parts[2],
+            'status' => $parts[3]
+          ];
+          $ts_en_check = true;
+        }
+      }
+    }
+  }
+}
+
 if (!empty($TS_no_peers) && !empty($TS_container)) {
   // define the direct link to this machine on the Tailscale website
   if (!empty($TS_container['TailscaleIPs']) && !empty($TS_container['TailscaleIPs'][0])) {
@@ -450,6 +451,8 @@ if (!empty($TS_no_peers) && !empty($TS_container)) {
     // Check if serve or funnel are enabled by checking for [hostname] and replace string with TS_DNSName
     if (!empty($xml['TailscaleWebUI']) && strpos($xml['TailscaleWebUI'], '[hostname]') !== false && isset($TS_DNSName)) {
       $TS_webui_url = str_replace("[hostname][magicdns]", rtrim($TS_DNSName, '.'), $xml['TailscaleWebUI']);
+      $TS_webui_url = preg_replace('/\[IP\]/', rtrim($TS_DNSName, '.'), $TS_webui_url);
+      $TS_webui_url = preg_replace('/\[PORT:(\d{1,5})\]/', '443', $TS_webui_url);
     // Check if serve is disabled, construct url with port, path and query if present and replace [noserve] with url
     } elseif (strpos($xml['TailscaleWebUI'], '[noserve]') !== false && isset($TS_container['TailscaleIPs'])) {
       $ipv4 = '';
@@ -464,6 +467,8 @@ if (!empty($TS_no_peers) && !empty($TS_container)) {
         $webui_port = (preg_match('/\[PORT:(\d+)\]/', $xml['WebUI'], $matches)) ? ':' . $matches[1] : '';
         $webui_path = $webui_url['path'] ?? '';
         $webui_query = isset($webui_url['query']) ? '?' . $webui_url['query'] : '';
+        $webui_query = preg_replace('/\[IP\]/', $ipv4, $webui_query);
+        $webui_query = preg_replace('/\[PORT:(\d{1,5})\]/', ltrim($webui_port, ':'), $webui_query);
         $TS_webui_url = 'http://' . $ipv4 . $webui_port . $webui_path . $webui_query;
       }
     // Check if TailscaleWebUI in the xml is custom and display instead
@@ -1140,7 +1145,7 @@ _(Container Network)_:
 <?if (!file_exists('/usr/local/sbin/tailscale')):?>
 <div markdown="1" class="TSdeploy noshow">
 <b>_(Recommendation)_</b>:
-:  <p>_(For the best experience with Tailscale, install "Tailscale (Plugin)" from)_ <a href="/Apps" target='_blank'> Community Applications</a>.</p>
+:  <p>_(For the best experience with Tailscale, install "Tailscale (Plugin)" from)_ <a href="/Apps?search=Tailscale%20(Plugin)" target='_blank'> Community Applications</a>.</p>
 </div>
 <?endif;?>
 
@@ -1528,6 +1533,10 @@ function showSubnet(bridge) {
     $('.netCONT').hide();
     $('#netCONT').val('');
   }
+  // make sure to re-trigger Tailscale check when network is changed
+  if ($('#contTailscale').prop('checked')) {
+    showTailscale(true);
+  }
 }
 
 function processExitNodeoptions(value) {
@@ -1708,6 +1717,7 @@ function showTailscale(source) {
     $('.TSadvanced').hide();
     $('.TSroutes').hide();
     $('.TSacceptroutes').hide();
+    $('.TStroubleshooting').hide();
   } else {
     // reset these vals back to what they were in the XML
     $('#TSssh').val('<?php echo (!empty($xml) && !empty($xml['TailscaleSSH'])) ? $xml['TailscaleSSH'] : 'false'; ?>');

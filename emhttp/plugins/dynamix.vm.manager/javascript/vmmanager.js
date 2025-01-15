@@ -239,7 +239,7 @@ function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, f
       }});
     }
   }
-  if (usage) context.attach('#vmusage-'+uuid, opts); else context.attach('#vm-'+uuid, opts);
+  if (usage) { context.destroy('#vmusage-'+uuid); context.attach('#vmusage-'+uuid, opts); } else { context.destroy('#vm-'+uuid); context.attach('#vm-'+uuid, opts); }
 }
 function addVMSnapContext(name, uuid, template, state, snapshotname, method){  
   var opts = [];
@@ -273,6 +273,7 @@ function addVMSnapContext(name, uuid, template, state, snapshotname, method){
     $('#vm-'+uuid).find('i').removeClass('fa-play fa-square fa-pause').addClass('fa-refresh fa-spin');
     selectsnapshot(uuid, name, snapshotname, "remove",true) ;
   }});
+  context.destroy('#vmsnap-'+uuid);
   context.attach('#vmsnap-'+uuid, opts);
 }
 function startAll() {

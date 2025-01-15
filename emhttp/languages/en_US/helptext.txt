@@ -744,6 +744,15 @@ Select the desired share name and press **Read** to copy the NFS security settin
 Select the desired destinations and press **Write** to copy the NFS security settings to the selected shares.
 :end
 
+:nfs_security_rules_help:
+Put the rule for each IP address on a separate line and terminate the Rule with a new line.
+You cannot enter a Rule in the format IP1,IP2(...).  Unraid does not format the exports file in that format.
+
+The default rules for every NFS Rule are - async and no_subtree_check.
+
+**Note:** The Public Rule used is '*(rw,sec=sys,insecure,anongid=100,anonuid=99,no_root_squash)'.
+:end
+
 :user_add_username_help:
 Usernames may be up to 40 characters long and must start with a **lower case letter** or an underscore,
 followed by **lower case letters**, digits, underscores, or dashes. They can end with a dollar sign.
@@ -1470,6 +1479,20 @@ your client.  Be aware that setting a value of -1 will cause the memory footprin
 files/directories you access via NFS this may or may not lead to out-of-memory conditions.
 :end
 
+:nfs_server_max_protocol_help:
+Select the max NFS Protocol version you want your Unraid server to support.
+:end
+
+:nfs_client_max_protocol_help:
+Select the max NFS Protocol version you want to use to mount your remote shares.
+:end
+
+:nfs_threads_help:
+Set the number of threads for NFS.  For light NFS loads, 8 is sufficient. For heaver NFS loads, a higher number of threads might be appropriate.
+
+If there aren't enough threads, NFS will probably crash.
+:end
+
 :shares_enable_disk_help:
 If set to No, disk shares are unconditionally not exported.
 
@@ -1527,6 +1550,10 @@ This will increase write performance but might possibly decrease read performanc
 *Auto* selects No.
 :end
 
+:shares_fuse_file_descriptors_io_help:
+Set the number of fuse file descriptors.  With a lot of file activity on the array, you may need to increase this value.
+:end
+
 :syslog_local_server_help:
 Let the server act as a central syslog server and collect syslog messages from other systems.
 The server can listen on UDP, TCP or both with a selectable port number.
@@ -1545,7 +1572,6 @@ Select the identifier for the remote system (used in the logfile name).
 * "IP Address" uses the IP address (IPv4 or IPv6) of the sending system.
 * "Hostname (from syslog message)" uses the hostname included in each syslog message.
 * "Hostname (from DNS reverse lookup)" performs a DNS reverse lookup for the sending IP and uses the result.
-
 :end
 
 :syslog_local_rotation_help:
@@ -2321,7 +2347,7 @@ IMPORTANT NOTE:  If adjusting port mappings, do not modify the settings for the 
 :end
 
 :docker_container_network_help:
-This allows your container to utilize the network configuration of another container. Select the appropriate container from the list.<br/>This setup can be particularly beneficial if you wish to route your container's traffic through a VPN.
+This allows your container to utilize the network configuration of another container. Select the appropriate container from the list.<br>This setup can be particularly beneficial if you wish to route your container's traffic through a VPN.
 :end
 
 :docker_tailscale_help:
@@ -2359,7 +2385,7 @@ However, systems on your LAN may not be able to access the container unless they
 
 :docker_tailscale_ssh_help:
 Tailscale SSH is similar to the Docker "Console" option in the Unraid webgui, except you connect with an SSH client and authenticate via Tailscale.
-For more details, see the <a href="https://tailscale.com/kb/1193/tailscale-ssh" target="_blank">Tailscale SSH</a> documentation..
+For more details, see the <a href="https://tailscale.com/kb/1193/tailscale-ssh" target="_blank">Tailscale SSH</a> documentation.
 :end
 
 :docker_tailscale_serve_mode_help:
@@ -2373,7 +2399,7 @@ If the documentation recommends additional settings for a more complex use case,
 
 <b>Funnel</b> is similar to <b>Serve</b>, except that the web service is made available on the open Internet. Use with care as the service will likely be attacked. As with <b>Serve</b>, the container itself is responsible for handling any authentication.
 
-We recommend reading the <a href="https://tailscale.com/kb/1223/funnel" target="_blank">Tailscale Funnel</a> documentation. before enabling this feature.
+We recommend reading the <a href="https://tailscale.com/kb/1223/funnel" target="_blank">Tailscale Funnel</a> documentation before enabling this feature.
 
 <b>Note:</b>&nbsp;Enabling <b>Serve</b> or <b>Funnel</b> publishes the Tailscale hostname to a public ledger.
 For more details, see the Tailscale Documentation: <a href="https://tailscale.com/kb/1153/enabling-https" target="_blank">Enabling HTTPS</a>.
@@ -2387,7 +2413,7 @@ The system attempted to determine the correct port automatically. If it used the
 In most cases this port is all you will need to specify in order to Serve the website in this container, although additional options are available below for more complex containers.
 
 This value is passed to the `<serve_port>` portion of this command which starts serve or funnel:<br>
-`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> http://localhost:`**`<serve_port>`**`<local_path>`<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> http://localhost:<serve_port><local_path>`<br>
 For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 :end
 
@@ -2397,25 +2423,25 @@ Here there be dragons!
 
 :docker_tailscale_serve_local_path_help:
 When not specified, this value defaults to an empty string. It is passed to the `<local_path>` portion of this command which starts serve or funnel:<br>
-`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> http://localhost:<serve_port>`**`<local_path>`**<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> http://localhost:<serve_port><local_path>`<br>
 For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 :end
 
 :docker_tailscale_serve_protocol_help:
 When not specified, this value defaults to "https". It is passed to the `<protocol>` portion of this command which starts serve or funnel:<br>
-`tailscale [serve|funnel] --bg --`**`<protocol>`**`=<protocol_port><path> http://localhost:<serve_port><local_path>`<br>
+`tailscale [serve|funnel] --bg --<protocol>=<protocol_port><path> http://localhost:<serve_port><local_path>`<br>
 For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 :end
 
 :docker_tailscale_serve_protocol_port_help:
 When not specified, this value defaults to "=443". It is passed to the `<protocol_port>` portion of this command which starts serve or funnel:<br>
-`tailscale [serve|funnel] --bg --<protocol>`**`<protocol_port>`**`<path> http://localhost:<serve_port><local_path>`<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> http://localhost:<serve_port><local_path>`<br>
 For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 :end
 
 :docker_tailscale_serve_path_help:
 When not specified, this value defaults to an empty string. It is passed to the `<path>` portion of this command which starts serve or funnel:<br>
-`tailscale [serve|funnel] --bg --<protocol><protocol_port>`**`<path>`** `http://localhost:<serve_port><local_path>`<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> http://localhost:<serve_port><local_path>`<br>
 For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 :end
 
@@ -2448,11 +2474,11 @@ For more details see the <a href="https://tailscale.com/kb/1080/cli#up" target="
 :end
 
 :docker_tailscale_statedir_help:
-If state directory detection fails on startup, you can specify a persistent directory in the container to override automatic detection.
+If state directory detection fails on startup, you can specify a persistent directory in the container to override automatic detection, i.e. `/container-path/.tailscale_state`
 :end
 
 :docker_tailscale_troubleshooting_packages_help:
-Enable this to install `ping`, `nslookup`, and `curl` into the container to help troubleshoot networking issues. Once the issues are resolved we recommend disabling this to reduce the size of the container.
+Enable this to install `ping`, `nslookup`, `curl`, and `speedtest-cli` into the container to help troubleshoot networking issues. Once the issues are resolved we recommend disabling this to reduce the size of the container.
 :end
 
 :docker_privileged_help:

@@ -20,6 +20,9 @@ Tag="share-alt"
 $disabled = _var($var,'fsState')!='Stopped' ? 'disabled' : '';
 $disks    = array_filter($disks,'my_disks');
 $width    = [166,300];
+
+/* Fetch the file-max value from the system. */
+$fileMax = (int) file_get_contents('/proc/sys/fs/file-max');
 ?>
 <script>
 $(function() {
@@ -27,8 +30,12 @@ $(function() {
   $('#s2').dropdownchecklist({emptyText:"_(None)_", width:<?=$width[0]?>, explicitClose:"..._(close)_"});
   presetShare(document.share_settings);
 });
+
+/* Maximum file count allowed. */
+const fileMax = <?=json_encode($fileMax);?>;
+
 // Simulate the original input field
-function prepareShare(form) {
+async function prepareShare(form) {
   var include = '';
   for (var i=0,item; item=form.shareUserInclude.options[i]; i++) {
     if (item.selected) {
@@ -51,7 +58,30 @@ function prepareShare(form) {
   item = form.shareUserExclude.options[0];
   item.value = exclude;
   item.selected = true;
+
+  /* Validate file count input against fileMax */
+  try {
+    const fileCountInput = form.querySelector('#file_count');
+    if (!fileCountInput) {
+      return false;
+    }
+
+    const fileCountValue = parseInt(fileCountInput.value, 10);
+    if (isNaN(fileCountValue)) {
+      return false;
+    }
+
+    if (fileCountValue > fileMax) {
+      fileCountInput.value = fileMax;
+    }
+  } catch (error) {
+    return false;
+  }
+
+  /* Allow form submission */
+  return true;
 }
+
 function presetShare(form,shares) {
   var disabled = shares==null ? <?=$disabled ? 'true':'false'?> : shares=='-';
   var onOff = disabled ? 'disable':'enable';
@@ -61,7 +91,7 @@ function presetShare(form,shares) {
   $('#s2').dropdownchecklist(onOff);
 }
 </script>
-<form markdown="1" name="share_settings" method="POST" action="/update.htm" target="progressFrame" onsubmit="prepareShare(this)">
+<form markdown="1" name="share_settings" method="POST" action="/update.htm" target="progressFrame" onsubmit="return prepareShare(this)">
 
 _(Enable disk shares)_:
 : <select name="shareDisk" <?=$disabled?>>
@@ -122,6 +152,11 @@ _(Tunable (enable Direct IO))_:
   </select>
 
 :shares_tunable_direct_io_help:
+
+_(Number of fuse File Descriptors)_:
+: <input type="text" id="file_count" name="shareNOFILE" maxlength="10" value="<?=htmlspecialchars($var['shareNOFILE']);?>" class="narrow" placeholder="40960" <?=$disabled?>><span id="file_max_display">Maximum: <?=$fileMax;?></span>
+
+:shares_fuse_file_descriptors_io_help:
 
 &nbsp;
 : <input type="submit" name="changeShare" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()"><?if ($disabled):?>*_(Array must be **Stopped** to change)_*<?endif;?>

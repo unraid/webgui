@@ -29,6 +29,11 @@ echo
 echo "Executing Unraid Docker Hook for Tailscale"
 echo
 
+if [ "$(id -u)" != "0" ]; then
+  echo "ERROR: No root privileges!"
+  error_handler
+fi
+
 if [ ! -f /usr/bin/tailscale ] || [ ! -f /usr/bin/tailscaled ]; then
   if [ ! -z "${TAILSCALE_EXIT_NODE_IP}" ]; then
     if [ ! -c /dev/net/tun ]; then
@@ -58,11 +63,11 @@ if [ ! -f /usr/bin/tailscale ] || [ ! -f /usr/bin/tailscaled ]; then
 
   if [ "${TAILSCALE_TROUBLESHOOTING}" = "true" ]; then
     if which apt-get >/dev/null 2>&1; then
-      PACKAGES_TROUBLESHOOTING="curl dnsutils iputils-ping "
+      PACKAGES_TROUBLESHOOTING="curl dnsutils iputils-ping speedtest-cli "
     elif which apk >/dev/null 2>&1; then
-      PACKAGES_TROUBLESHOOTING="curl bind-tools iputils-ping "
+      PACKAGES_TROUBLESHOOTING="curl bind-tools iputils-ping speedtest-cli "
     elif which pacman >/dev/null 2>&1; then
-      PACKAGES_TROUBLESHOOTING="curl dnsutils iputils "
+      PACKAGES_TROUBLESHOOTING="curl dnsutils iputils speedtest-cli "
     fi
     echo "Tailscale Troubleshooting enabled!"
     echo "Installing additional packages: $(echo "${PACKAGES_TROUBLESHOOTING}" | sed 's/[[:blank:]]*$//' | sed 's/ /, /g')"
@@ -129,22 +134,26 @@ fi
 unset TSD_PARAMS
 unset TS_PARAMS
 
-if [ ! -z "${SERVER_DIR}" ]; then
+if [ ! -z "${TAILSCALE_STATE_DIR}" ]; then
+  TSD_STATE_DIR="${TAILSCALE_STATE_DIR}"
+elif [ ! -z "${SERVER_DIR}" ]; then
   TSD_STATE_DIR="${SERVER_DIR}/.tailscale_state"
-  echo "Settings Tailscale state dir to: ${TSD_STATE_DIR}"
 elif [ ! -z "${DATA_DIR}" ]; then
   TSD_STATE_DIR="${DATA_DIR}/.tailscale_state"
-  echo "Settings Tailscale state dir to: ${TSD_STATE_DIR}"
 elif [ ! -z "${USER_HOME}" ]; then
   TSD_STATE_DIR="${USER_HOME}/.tailscale_state"
-  echo "Settings Tailscale state dir to: ${TSD_STATE_DIR}"
+elif [ -d "/config" ]; then
+  TSD_STATE_DIR="/config/.tailscale_state"
+elif [ -d "/data" ]; then
+  TSD_STATE_DIR="/data/.tailscale_state"
+elif [ ! -z "${TAILSCALE_FALLBACK_DIR}" ]; then
+  TSD_STATE_DIR="${TAILSCALE_FALLBACK_DIR}/.tailscale_state"
 else
-  if [ -z "${TAILSCALE_STATE_DIR}" ]; then
-    TAILSCALE_STATE_DIR="/config/.tailscale_state"
-  fi
-  TSD_STATE_DIR="${TAILSCALE_STATE_DIR}"
-  echo "Settings Tailscale state dir to: ${TSD_STATE_DIR}"
+  echo "ERROR: Couldn't detect persistent Docker directory for .tailscale_state!"
+  echo "       Please enable Tailscale Advanced Settings in the Docker template and set the Tailscale State Directory manually!"
+  sleep infinity
 fi
+echo "Settings Tailscale state dir to: ${TSD_STATE_DIR}"
 
 if [ ! -d "${TSD_STATE_DIR}" ]; then
   mkdir -p ${TSD_STATE_DIR}
@@ -249,11 +258,16 @@ fi
 KEY_EXPIRY=$(tailscale status --json | jq -r '.Self.KeyExpiry')
 if [ "${KEY_EXPIRY}" != "null" ]; then
   EXPIRY_EPOCH=$(date -d "${KEY_EXPIRY}" +"%s" 2>/dev/null)
+  if [ -z "${EXPIRY_EPOCH}" ]; then
+    EXPIRY_EPOCH=$(date -d "$(echo "${KEY_EXPIRY}" | sed 's/T/ /; s/Z//')" +"%s")
+  fi
   CUR_EPOCH=$(date -u +%s)
   DIFF_EPOCH=$((EXPIRY_EPOCH - CUR_EPOCH))
   DIFF_DAYS=$((DIFF_EPOCH / 86400))
   HOST=$(tailscale status --json | jq -r '.Self.HostName')
-  if [ -n "${DIFF_DAYS}" ] && echo "${DIFF_DAYS}" | grep -Eq '^[0-9]+$'; then
+  if [ -z "${EXPIRY_EPOCH}" ]; then
+    echo "WARNING: An error occurred while retrieving the Tailscale key expiry!"
+  elif [ -n "${DIFF_DAYS}" ] && echo "${DIFF_DAYS}" | grep -Eq '^[0-9]+$'; then
     echo "WARNING: Tailscale Key will expire in ${DIFF_DAYS} days."
     echo "         Navigate to https://login.tailscale.com/admin/machines and 'Disable Key Expiry' for ${HOST}"
   else

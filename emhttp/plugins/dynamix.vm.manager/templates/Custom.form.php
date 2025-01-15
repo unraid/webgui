@@ -2249,6 +2249,7 @@ $(function() {
 						$disk_file_sections.filter('.advanced').removeClass('advanced').addClass('wasadvanced');
 
 						$disk_input.attr('name', $disk_input.attr('name').replace('new', 'image'));
+						if (info.isfile) $table.find('.disk_driver').val(info.format);
 					} else {
 						$disk_file_sections.filter('.wasadvanced').removeClass('wasadvanced').addClass('advanced');
 						slideDownRows($disk_file_sections.not(isVMAdvancedMode() ? '.basic' : '.advanced'));
@@ -2595,13 +2596,13 @@ $(function() {
 		$button.val($button.attr('busyvalue'));
 
 		swal({
-			title: _("Template Name")_,
-			text: _("Enter name:\nIf name already exists it will be replaced.")_,
+			title: '_(Template Name)_',
+			text: "_(Enter name:\nIf name already exists it will be replaced.)_",
 			type: "input",
 			showCancelButton: true,
 			closeOnConfirm: false,
 			//animation: "slide-from-top",
-			inputPlaceholder: _("Leaving blank will use OS name.")_
+			inputPlaceholder: "_(Leaving blank will use OS name.)_"
 			},
 			function(inputValue){
 
@@ -2676,13 +2677,13 @@ $(function() {
 		$button.val($button.attr('busyvalue'));
 
 		swal({
-			title: _("Template Name")_,
-			text: _("Enter name:\nIf name already exists it will be replaced.")_,
+			title: "_(Template Name)_",
+			text: "_(Enter name:\nIf name already exists it will be replaced.)_",
 			type: "input",
 			showCancelButton: true,
 			closeOnConfirm: false,
 			//animation: "slide-from-top",
-			inputPlaceholder: _("Leaving blank will use OS name.")_
+			inputPlaceholder: "_(Leaving blank will use OS name.)_"
 			},
 			function(inputValue){
 

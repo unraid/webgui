@@ -438,6 +438,7 @@ file_put_contents("/$diag/system/loads.txt",$cpuload.implode("\r\n",$loadTxt));
 run("lscpu 2>/dev/null|todos >".escapeshellarg("/$diag/system/lscpu.txt"));
 run("lsscsi -vgl 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsscsi.txt"));
 run("lspci -knn 2>/dev/null|todos >".escapeshellarg("/$diag/system/lspci.txt"));
+run("lspci -vv 2>/dev/null| awk '/ASPM/{print $0}' RS=|grep -P '(^[a-z0-9:.]+|ASPM |Disabled;|Enabled;)'|todos >".escapeshellarg("/$diag/system/aspm-status.txt"));
 run("lsusb 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsusb.txt"));
 run("free -mth 2>/dev/null|todos >".escapeshellarg("/$diag/system/memory.txt"));
 run("lsof -Pni 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsof.txt"));
@@ -531,6 +532,16 @@ if ($files) {
   @mkdir("/$diag/config/modprobe.d");
   foreach ($files as $file) {
     $dest = "/$diag/config/modprobe.d/".basename($file);
+    @copy($file,$dest);
+  }
+}
+
+// copy cutom udev rules information
+$files = glob("/boot/config/udev/*");
+if ($files) {
+  @mkdir("/$diag/config/udev");
+  foreach ($files as $file) {
+    $dest = "/$diag/config/udev/".basename($file);
     @copy($file,$dest);
   }
 }

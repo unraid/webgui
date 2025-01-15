@@ -52,6 +52,7 @@ rm -rf /kernel
 # Ensure required config directories exist
 # these will all have permissions 0700
 CONFIG="/boot/config"
+mkdir -p $CONFIG/default
 mkdir -p $CONFIG/modprobe.d
 mkdir -p $CONFIG/plugins/dockerMan
 mkdir -p $CONFIG/plugins/dynamix/users
@@ -68,7 +69,7 @@ fi
 
 # upgrade network configuration (if needed) and (re)generates our welcome text
 if [[ -x /usr/local/sbin/create_network_ini ]]; then
-  /usr/local/sbin/create_network_ini init &>/dev/null &
+  /usr/local/sbin/create_network_ini init &
 fi
 
 # Needed by dynamix

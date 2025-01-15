@@ -49,6 +49,7 @@ function addDockerContainerContext(container, image, template, started, paused, 
     opts.push({divider:true});
     opts.push({text:_('Donate'),icon:'fa-external-link', href:donateLink,target:'_blank'});
   }
+  context.destroy('#'+id);
   context.attach('#'+id, opts);
 }
 function addDockerImageContext(image, imageTag) {

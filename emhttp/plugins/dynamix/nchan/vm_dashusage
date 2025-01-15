@@ -41,10 +41,12 @@ if ($var['fsState'] == "Started" || $var['fsState'] == "Starting") {
     sleep(10);
   } elseif ($domain_cfg['SERVICE'] != "enable") { 
     #Add remove_nchan_pid_entry("webGui/nchan/vm_dashusage");
+    exec("sed -i '/webGui\/nchan\/vm_dashusage/d' /var/run/nchan.pid");
     return;
   }
 } else {
   #Add remove_nchan_pid_entry("webGui/nchan/vm_dashusage");
+  exec("sed -i '/webGui\/nchan\/vm_dashusage/d' /var/run/nchan.pid");
   return;
 }
 
@@ -99,11 +101,11 @@ while (true) {
       $vmencode = $lv->domain_get_uuid($vm);
       $echo[$vmencode ]['gcpu'] =  "<span class='advanced'>"._("Guest CPU").": <span class='cpug-".$vm."'>".$vmdata['cpuguest']."%</span><div class='usage-disk mm'><span id='cpug-".$vm."' style='width:".$vmdata['cpuguest']."%;'>&nbsp&nbsp</span><span></span></div></span>";
       $echo[$vmencode ]['hcpu'] =  "<span class='advanced'>"._("Host CPU").": <span class='cpug-".$vm."'>".$vmdata['cpuhost']."%</span><div class='usage-disk mm'><span id='cpug-".$vm."' style='width:".$vmdata['cpuhost']."%;'>&nbsp&nbsp</span><span></span></div></span>";
-      $echo[$vmencode ]['mem'] = "<span>Mem: ".my_scale($vmdata['mem']*1024,$unit)."$unit / ".my_scale($vmdata['curmem']*1024,$unit)."$unit";
+      $echo[$vmencode ]['mem'] = "<span>Mem: ".my_scale($vmdata['mem']*1024,$unit,null,null,1024)."$unit / ".my_scale($vmdata['curmem']*1024,$unit,null,null,1024)."$unit";
       if ($vmdata['maxmem'] == $vmdata['curmem']) $echo[$vmencode ]['mem'] .="&nbsp&nbsp</span>";
-      else $echo[$vmencode ]['mem'] .= " / ".my_scale($vmdata['maxmem']*1024,$unit)."$unit&nbsp&nbsp</span>";
-      $echo[$vmencode ]['disk'] = "<span>Disk: "._("Rd").": ".my_scale($vmdata['rdrate']/$timer,$unit)."$unit/s "._("Wr").": ".my_scale($vmdata['wrrate']/$timer,$unit)."$unit/s&nbsp&nbsp</span>";
-      $echo[$vmencode ]['net'] =  "<span>Net: "._("RX").": ".my_scale($vmdata['rxrate']/$timer,$unit)."$unit/s "._("TX").": ".my_scale($vmdata['txrate']/$timer,$unit)."$unit/s&nbsp&nbsp</span>";
+      else $echo[$vmencode ]['mem'] .= " / ".my_scale($vmdata['maxmem']*1024,$unit,null,null,1024)."$unit&nbsp&nbsp</span>";
+      $echo[$vmencode ]['disk'] = "<span>Disk: "._("Rd").": ".my_scale($vmdata['rdrate']/$timer,$unit,null,null,1024)."$unit/s "._("Wr").": ".my_scale($vmdata['wrrate']/$timer,$unit,null,null,1024)."$unit/s&nbsp&nbsp</span>";
+      $echo[$vmencode ]['net'] =  "<span>Net: "._("RX").": ".my_scale($vmdata['rxrate']/$timer,$unit,null,null,1024)."$unit/s "._("TX").": ".my_scale($vmdata['txrate']/$timer,$unit,null,null,1024)."$unit/s&nbsp&nbsp</span>";
     }
   }
 

@@ -37,7 +37,7 @@ if (isset($_POST['scan'])) {
 		/* Iterate over each item in the directory and its subdirectories */
 		foreach ($iterator as $fileinfo) {
 			/* Check if the current item is a file and not a .DS_Store file */
-			if ($fileinfo->isFile() && !preg_match('/\.DS_Store$/i', $fileinfo->getFilename())) {
+			if ($fileinfo->isFile() && $fileinfo->getFilename() !== '.DS_Store') {
 				$hasFiles = true;
 				break;
 			}
@@ -70,7 +70,7 @@ function removeDSStoreFilesAndEmptyDirs($dir) {
 	);
 
 	foreach ($iterator as $file) {
-		if ($file->isFile() && preg_match('/\.DS_Store$/i', $file->getFilename())) {
+		if ($file->isFile() && $file->getFilename() === '.DS_Store') {
 			unlink($file->getRealPath());
 		}
 	}
@@ -87,6 +87,7 @@ if (isset($_POST['cleanup'])) {
   $n = 0;
   // active shares
   $shares = array_map('strtolower',array_keys(parse_ini_file('state/shares.ini',true)));
+
   // stored shares
   foreach (glob("/boot/config/shares/*.cfg",GLOB_NOSORT) as $name) {
     if (!in_array(strtolower(basename($name,'.cfg')),$shares)) {
@@ -186,7 +187,17 @@ define('LUKS_STATUS_UNENCRYPTED', 2);
 
 // Build table
 $row = 0;
+
+/* Get the first pool if needed. */
+$firstPool = $pools_check[0] ?? "";
 foreach ($shares as $name => $share) {
+	/* Correct a situation in previous Unraid versions where an array only share has a useCache defined. */
+	if ((!$poolsOnly) && ($share['useCache'] == "no")) {
+		$share['cachePool'] = "";
+	} else if (($poolsOnly) && (!$share['cachePool'])) {
+		$share['cachePool']	= $firstPool;
+	}
+
 	/* Is cachePool2 defined? If it is we need to show the cache pool 2 device name instead of 'Array'. */
 	if ($share['cachePool2']) {
 		$array		= compress(my_disk($share['cachePool2'],$display['raw']));
