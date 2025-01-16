@@ -66,6 +66,7 @@ class KeyInstaller
                     return $this->responseComplete(200, ['status' => ''], _('success'));;
                 }
             } else {
+                 @unlink(escapeshellarg("/boot/config/$keyFile"));
                 return $this->responseComplete(406, ['error' => _('download error') . " $returnVar"]);;
             }
         } else {
