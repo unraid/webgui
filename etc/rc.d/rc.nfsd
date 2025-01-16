@@ -85,9 +85,7 @@ nfsd_start() {
 
 nfsd_stop() {
   killall rpc.mountd 2>/dev/null
-  killall nfsd 2>/dev/null
-  sleep 1
-  killall -9 nfsd 2>/dev/null # make sure :)
+  $NFSD 0
   killall rpc.rquotad 2>/dev/null
   $EXPORTFS -au 2>/dev/null
 }
