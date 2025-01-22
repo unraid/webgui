@@ -399,6 +399,13 @@ build_locations() {
 	    allow all;
 	}
 	#
+	# redirect.htm available without authentication
+	#
+	location = /redirect {
+	    rewrite ^ /redirect.htm break;
+	    allow all;
+	}
+	#
 	# proxy update.htm and logging.htm scripts to emhttpd listening on local socket
 	#
 	location = /update.htm {
