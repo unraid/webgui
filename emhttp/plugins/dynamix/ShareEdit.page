@@ -14,12 +14,11 @@ Tag="share-alt-square"
  * all copies or substantial portions of the Software.
  */
 ?>
-<script>
-<?if (!empty($name) && !array_key_exists($name, $shares)):?>
-  done('Share');
-<?endif;?>
-</script>
 <?
+if (!empty($name) && !array_key_exists($name, $shares)) {
+  echo "<script>done()</script>";
+  return;
+}
 $width = [123,300];
 
 if ($name == "") {
