@@ -15,11 +15,15 @@ Tag="share-alt-square"
  */
 ?>
 <?
+if (!empty($name) && !array_key_exists($name, $shares)) {
+  echo "<script>done()</script>";
+  return;
+}
 $width = [123,300];
 
 if ($name == "") {
-  /* default values when adding new share. */
-  $share = [
+	/* default values when adding new share. */
+	$share = [
 		"nameOrig"		=> "",
 		"name"			=> "",
 		"comment"		=> "",
@@ -33,13 +37,9 @@ if ($name == "") {
 		"cachePool2"	=> "",
 		"cow"			=> "auto"
 	];
-} elseif (array_key_exists($name, $shares)) {
+} else {
 	/* edit existing share. */
 	$share = $shares[$name];
-} else {
-  /* handle share deleted case. */
-  echo "<p class='notice'>"._('Share')." '".htmlspecialchars($name)."' "._('has been deleted').".</p><input type='button' value=\""._('Done')."\" onclick='done()'>";
-  return;
 }
 
 /* If the configuration is pools only, then no array disks are available. */
@@ -56,23 +56,26 @@ if ((! $share['cachePool']) && ($share['cachePool2'])) {
 	$share['cachePool2']	= "";
 }
 
+/* Correct a situation in previous Unraid versions where an array only share has a useCache defined. */
+if ((!$poolsOnly) && ($share['useCache'] == "no")) {
+	$share['cachePool'] = "";
+}
+
 /* Check for non existent pool device. */
-if ($share['cachePool'] && !in_array($share['cachePool'], $pools)) {
-	$poolDefined = false;
+if (($share['cachePool'] && !in_array($share['cachePool'], $pools))) {
 	$share['useCache'] = $share['cachePool2'] ? "yes" : ($poolsOnly ? "no" : "yes");
+	$poolDefined = false;
 } else {
 	$share['useCache'] = $share['useCache'] ?: ($poolsOnly ? "only" : "no");
 	$poolDefined = true;
 }
 
 /* Check for pool 2 (or array) being defined. */
+$poolDefined2 = true;
 if ((($share['useCache'] == "yes") || ($share['useCache'] == "prefer")) && ($poolsOnly) && (!$share['cachePool2'])) {
-	$poolDefined2 = true;
 	$share['useCache'] = "only";
 } else if ($share['cachePool2']) {
 	$poolDefined2 = in_array($share['cachePool2'], $pools);
-} else {
-	$poolDefined2 = true;
 }
 
 $cachePoolCapitalized = compress(my_disk($share['cachePool'],$display['raw']));
@@ -111,6 +114,7 @@ function presetSpace($val) {
 	}
 
 	/* Prepare the fsSize array for each pool */
+	$fsSize	= [];
 	foreach ($pools as $pool) {
 		$fsSize[$pool] = _var($disks[$pool], 'fsSize', 0);
 	}
@@ -118,8 +122,10 @@ function presetSpace($val) {
 	/* Get the maximum value from the large array, filtering out non-numeric values */
 	if (!empty($large)) {
 		$fsSize[''] = max(array_filter($large, 'is_numeric'));
-	} else {
+	} else if (!empty($fsSize)) {
 		$fsSize[''] = $fsSize[$pool];
+	} else {
+		$fsSize['']	= "0";
 	}
 
 	/* Get the cache pool size */
@@ -250,13 +256,16 @@ function fsFree() {
 		$fsFree[$pool] = _var($disks[$pool], 'fsFree', 0);
 	}
 
-	/* Determine the free filesystem space based on the poolsOnly flag */
+	/* Determine the free filesystem space */
 	if (!empty($large)) {
 		/* Set the maximum free filesystem space from the array of enabled disks */
 		$fsFree[''] = max(array_filter($large));
-	} else {
+	} else if (!empty($fsFree)) {
 		/* Set the minimum free filesystem space from the pool array */
 		$fsFree[''] = min(array_filter($fsFree));
+	} else {
+		/* The minimum free space cannot be determined from the array or pools so it is set to zero */
+		$fsFree['']	= "0";
 	}
 
 	/* Return the free filesystem space as a JSON encoded string */
@@ -457,7 +466,7 @@ _(Excluded disk(s))_:
 </div>
 
 </div>
-<div markdown="1" class="shade-<?=$display['theme']?>">
+<div markdown="1" id="secondaryStorage" class="shade-<?=$display['theme']?>">
 _(Secondary storage)_:
 : <select id="secondary" onchange="updateScreen(z(4),'slow')">
   <?=mk_option(secondary(),'0',_('None'))?>
@@ -516,7 +525,7 @@ _(Excluded disk(s))_:
 </div>
 
 </div>
-<div markdown="1" class="shade-<?=$display['theme']?>">
+<div markdown="1" id="moverAction" class="shade-<?=$display['theme']?>">
 <div markdown="1" id="moverDirection1">
 _(Mover action)_:
 : <span class="input"><select id="direction" onchange="updateScreen(z(3),'slow')">
@@ -541,19 +550,18 @@ _(Mover action)_:
 &nbsp;
 : <input type="submit" name="cmdEditShare" value="_(Add Share)_" onclick="this.value='Add Share'"><input type="button" value="_(Done)_" onclick="done()">
 <?else:?>
-<div markdown="1" class="empty">
-_(Delete)_<input type="checkbox" name="confirmDelete" onchange="chkDelete(this.form, document.getElementById('cmdEditShare'));">
+<div markdown="1">
+<label id="deleteLabel" title="">_(Delete)_</label><input type="checkbox" name="confirmDelete" onchange="chkDelete(this.form, document.getElementById('cmdEditShare'));" title="" disabled>
 : <input type="submit" id="cmdEditShare" name="cmdEditShare" value="_(Apply)_" onclick="if (this.value=='_(Delete)_') this.value='Delete'; else this.value='Apply'; return handleDeleteClick(this)" disabled><input type="button" value="_(Done)_" onclick="done()">
-</div>
-<div markdown="1" class="full">
-&nbsp;
-: <input type="submit" name="cmdEditShare" value="_(Apply)_" onclick="this.value='Apply'" disabled><input type="button" value="_(Done)_" onclick="done()">
 </div>
 <?endif;?>
 </form>
 
 <script>
 let form = document.share_edit;
+
+/* Global flag to skip prepareEdit. */
+let skipPrepareEdit = false;
 
 /* Primary variables to check for valid selection of missing pool. */
 let changeMadePrimary = false;
@@ -573,6 +581,7 @@ function initDropdown(forceInit) {
 			destroyDropdownIfExists('#s5');
 		<?endif;?>
 	}
+
 	initializeDropdown('#s1', "_(All)_", <?=$width[1]?>);
 	initializeDropdown('#s2', "_(None)_", <?=$width[1]?>);
 	initializeDropdown('#s3', "_(All)_", <?=$width[1]?>);
@@ -584,26 +593,42 @@ function initDropdown(forceInit) {
 
 function initializeDropdown(selector, emptyText, width, firstItemChecksAll = false) {
 	try {
-		$(selector).dropdownchecklist({
-			emptyText: emptyText,
-			width: width,
-			explicitClose: "..._(close)_",
-			firstItemChecksAll: firstItemChecksAll
-		});
+		if ($(selector).length) {
+			$(selector).dropdownchecklist({
+				emptyText: emptyText,
+				width: width,
+				explicitClose: "..._(close)_",
+				firstItemChecksAll: firstItemChecksAll
+			});
+		}
 	} catch (e) {
-		console.error(`Error initializing ${selector}: ` + e.message);
 	}
 }
 
 function destroyDropdownIfExists(selector) {
 	try {
-		$(selector).dropdownchecklist('destroy');
-	} catch (e) {
-		if (e.message.includes('prior to initialization')) {
-			console.log(`${selector} not initialized, skipping destroy.`);
-		} else {
-			console.error(`Error destroying ${selector}: ` + e.message);
+		if ($(selector).length) {
+			$(selector).dropdownchecklist('destroy');
 		}
+	} catch (e) {
+	}
+}
+
+function enableDropdownIfExists(selector) {
+	try {
+		if ($(selector).length) {
+			$(selector).dropdownchecklist('enable');
+		}
+	} catch (e) {
+	}
+}
+
+function disableDropdownIfExists(selector) {
+	try {
+		if ($(selector).length) {
+			$(selector).dropdownchecklist('disable');
+		}
+	} catch (e) {
 	}
 }
 
@@ -633,7 +658,7 @@ function updateScreen(cache, slow) {
 	const moverNoActionText = "<?= addslashes(_('Mover takes no action')) ?>";
 	const moverAction1Text = "<?= addslashes(_('Mover transfers files from Primary storage to Secondary storage')) ?>";
 	const moverAction2Text = "<?= addslashes(_('Mover transfers files from Secondary storage to Primary storage')) ?>";
-	
+
 	switch (cache) {
 		case 'no':
 			$('#primary option:eq(' + z(0) + ')').prop('selected', true);
@@ -762,9 +787,18 @@ function updateScreen(cache, slow) {
 			break;
 	}
 
+	/* If primary is "Array", remove secondary storage selection as it does not apply when primary is array. */
+	if (primaryDropdown.selectedIndex === 0) {
+		$('#secondaryStorage').hide(slow);
+		$('#moverAction').hide(slow);
+	} else {
+		$('#secondaryStorage').show(slow);
+		$('#moverAction').show(slow);
+	}
+
 	/* Check secondary dropdown index and show/hide moreSettings2 */
 	if (secondaryDropdown.selectedIndex === 1) {
-		$('#moreSettings2').show('slow');
+		$('#moreSettings2').show(slow);
 	} else {
 		$('#moreSettings2').hide(slow);
 	}
@@ -778,22 +812,6 @@ function updateCOW(pool, slow) {
 		$('#cow-setting').show(slow);
 	} else {
 		$('#cow-setting').hide(slow);
-	}
-}
-
-function enableDropdownIfExists(selector) {
-	try {
-		$(selector).dropdownchecklist('enable');
-	} catch (e) {
-		console.log(`${selector} not initialized, cannot enable.`);
-	}
-}
-
-function disableDropdownIfExists(selector) {
-	try {
-		$(selector).dropdownchecklist('disable');
-	} catch (e) {
-		console.log(`${selector} not initialized, cannot disable.`);
 	}
 }
 
@@ -910,6 +928,15 @@ function parseDiskSize(sizeStr) {
 
 /* Compose input fields. */
 function prepareEdit() {
+	/* Skip the function if readShare() filled the values */
+	if (skipPrepareEdit) {
+		/* Reset the flag. */
+		skipPrepareEdit = false;
+
+		/* Allow the form to submit. */
+		return true;
+	}
+
 	/* Declare variables at the function scope */
 	let share, reserved, pools;
 
@@ -1010,38 +1037,39 @@ function prepareEdit() {
 }
 
 function readShare() {
-	/* Declare variables at the function scope */
-	var name, data, disk, include, exclude, i, j;
+    let name, data;
 
-	name = $('select[name="readshare"]').val();
-	initDropdown(true);
+    name = $('select[name="readshare"]').val();
 
-	$.get('/webGui/include/ShareData.php', { name: name }, function(json) {
-		data = $.parseJSON(json);
-		form.shareAllocator.value = data.allocator;
-		form.shareFloor.value = data.floor;
-		form.shareSplitLevel.value = data.splitLevel;
-		form.shareInclude.value = data.include;
-		form.shareExclude.value = data.exclude;
-		form.shareUseCache.value = data.useCache;
-		form.shareCOW.value = data.cow;
+    $.get('/webGui/include/ShareData.php', { name: name }, function(json) {
+        data = $.parseJSON(json);
+        let form = document.forms['share_edit'];
 
-		for (i = 0; (disk = data.include.split(',')[i]); i++) {
-			for (j = 0; (include = form.shareInclude.options[j]); j++) {
-				if (include.value == disk) include.selected = true;
-			}
+        /* Fill in the form values */
+        form.shareAllocator.value = data.allocator;
+        form.shareFloor.value = data.floor;
+        form.shareSplitLevel.value = data.splitLevel;
+        form.shareInclude.value = data.include;
+        form.shareExclude.value = data.exclude;
+        form.shareUseCache.value = data.useCache;
+        form.shareCachePool2.value = data.cachePool2;
+        form.shareCOW.value = data.cow;
+
+		/* Populate the primary storage field (shareCachePool) */
+		let primaryField = document.getElementById('primary');
+		if (primaryField) {
+ 			/* Set to retrieved value or default. */
+ 			primaryField.value = data.cachePool || '';
 		}
 
-		for (i = 0; (disk = data.exclude.split(',')[i]); i++) {
-			for (j = 0; (exclude = form.shareExclude.options[j]); j++) {
-				if (exclude.value == disk) exclude.selected = true;
-			}
-		}
+        /* Set flag to skip prepareEdit */
+        skipPrepareEdit = true;
 
-		initDropdown(false);
-	});
-
-	$(form).find('select').trigger('change');
+        /* Enable and trigger the submit button */
+        const submitButton = document.getElementById('cmdEditShare');
+        submitButton.disabled = false;
+        submitButton.click();
+    });
 }
 
 function writeShare(data, n, i) {
@@ -1073,6 +1101,8 @@ function writeShare(data, n, i) {
 				newData[i]['shareInclude'] = '<?=addslashes(htmlspecialchars($share['include']))?>';
 				newData[i]['shareExclude'] = '<?=addslashes(htmlspecialchars($share['exclude']))?>';
 				newData[i]['shareUseCache'] = '<?=addslashes(htmlspecialchars($share['useCache']))?>';
+				newData[i]['shareCachePool'] = '<?=addslashes(htmlspecialchars($share['cachePool']))?>';
+				newData[i]['shareCachePool2'] = '<?=addslashes(htmlspecialchars($share['cachePool2']))?>';
 				newData[i]['cmdEditShare'] = 'Apply';
 				i++;
 			}
@@ -1131,7 +1161,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 		let cachePoolOption = document.getElementById('cachePoolOption');
 		let messageSpan = document.getElementById('cachePoolMessage');
-		messageSpan.textContent = `${_('Warning: Configured Pool')} '${cachePoolCapitalized}' ${_('is missing')}.`;
+		messageSpan.textContent = `${_('Warning: Configured Pool')} '${cachePoolCapitalized || _('Array')}' ${_('is missing')}.`;
 		messageSpan.style.display = 'inline';
 		cachePoolOption.selected = true;
 
@@ -1297,19 +1327,30 @@ function handleDeleteClick(button) {
 
 $(function() {
 	<?if ($name):?>
+		<?
+			$tooltip_enabled	= _('Share is empty and is safe to delete');
+			$tooltip_disabled	= _('Share must be empty to be deleted');
+		?>
+
 		$.post('/webGui/include/ShareList.php', { scan: "<?=$name?>" }, function(e) {
 			if (e == 1) {
 				$('.empty').show();
 				$('.full').hide();
+				/* Enable delete checkbox and update tooltip. */
+				$('input[name="confirmDelete"]').prop('disabled', false).attr('title', '<?= $tooltip_enabled ?>');
+				$('#deleteLabel').attr('title', '<?= $tooltip_enabled ?>');
 			} else {
 				$('.full1').hide();
 				$('.full2').show();
+				/* Disable delete checkbox and update tooltip. */
+				$('input[name="confirmDelete"]').prop('disabled', true).attr('title', '<?= $tooltip_disabled ?>');
+				$('#deleteLabel').attr('title', '<?= $tooltip_disabled ?>');
 			}
 		});
 	<?endif;?>
 	initDropdown(true);
 	<?if ($tabbed):?>
-		$('#tab1').bind({
+		$('#tab1').on({
 			click: function() {
 				initDropdown(true);
 			}
