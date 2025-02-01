@@ -102,7 +102,9 @@
 				'keymap' => 'none',
 				'port' => -1 ,
 				'wsport' => -1,
-				'copypaste' => 'no'
+				'copypaste' => 'no',
+				'render' => 'auto',
+				'DisplayOptions' => ""
 			]
 		],
 		'audio' => [
@@ -464,9 +466,9 @@
 				<select id="cpu" name="domain[cpumode]" class="cpu" title="_(define type of cpu presented to this vm)_">
 				<?mk_dropdown_options(['host-passthrough' => _('Host Passthrough').' (' . $strCPUModel . ')', 'custom' => _('Emulated').' ('._('QEMU64').')'], $arrConfig['domain']['cpumode']);?>
 				</select>
-				<span class="advanced" id="domain_cpumigrate_text"<?=$migratehidden?>>_(Migratable)_:</span>
+				<span class="advanced" id="domain_cpumigrate_text" <?=$migratehidden?>>_(Migratable)_:</span>
 
-				<select name="domain[cpumigrate]" id="domain_cpumigrate"  <?=$migratehidden?> class="narrow" title="_(define if migratable)_">
+				<select name="domain[cpumigrate]" id="domain_cpumigrate" <?=$migratehidden?> hidden class="narrow" title="_(define if migratable)_">
 				<?
 				echo mk_option($arrConfig['domain']['cpumigrate'], 'on', 'On');
 				echo mk_option($arrConfig['domain']['cpumigrate'], 'off', 'Off') ;
@@ -1159,8 +1161,8 @@
 
 	<?foreach ($arrConfig['gpu'] as $i => $arrGPU) {
 		$strLabel = ($i > 0) ? appendOrdinalSuffix($i + 1) : '';
-
-		?>
+		$bootgpuhidden =  " hidden ";
+?>
 		<table data-category="Graphics_Card" data-multiple="true" data-minimum="1" data-maximum="<?=count($arrValidGPUDevices)+1?>" data-index="<?=$i?>" data-prefix="<?=$strLabel?>">
 			<tr>
 				<td>_(Graphics Card)_:</td>
@@ -1249,8 +1251,27 @@
 			<tr class="<?if ($arrGPU['id'] != 'virtual') echo 'was';?>advanced vncmodel">
 				<td>_(VM Console Video Driver)_:</td>
 				<td>
-					<select id="vncmodel" name="gpu[<?=$i?>][model]" class="narrow" title="_(video for VM Console)_">
+					<select id="vncmodel" name="gpu[<?=$i?>][model]" class="narrow" title="_(video for VM Console)_"  onchange="VMConsoleDriverChange(this)">
 					<?mk_dropdown_options($arrValidVNCModels, $arrGPU['model']);?>
+					</select>
+					<?if ($arrGPU['model'] == "virtio3d") $vmcrender = "" ; else $vmcrender = " hidden ";?>
+					<span id="vncrendertext"  <?=$vncrender?>>_(Render GPU)_:</span>
+					<select id="vncrender" name="gpu[<?=$i?>][render]">
+					<?
+						echo mk_option($arrGPU['render'], 'auto', _('Auto'));
+						foreach($arrValidGPUDevices as $arrDev) {
+							echo mk_option($arrGPU['render'], $arrDev['id'], $arrDev['name'].' ('.$arrDev['id'].')');
+						}
+					?>
+					</select>
+					<?$arrGPU['DisplayOptions'] = htmlentities($arrDisplayOptions[$arrGPU['DisplayOptions']]['qxlxml'],ENT_QUOTES);
+					if ($arrGPU['model'] == "qxl") $vncdspopt = "" ; else $vncdspopt = " hidden ";?>
+					<span id="vncdspopttext"  <?=$vncdspopt?>>_(Display(s) and RAM)_:</span>
+					<select id="vncdspopt" name="gpu[<?=$i?>][DisplayOptions]">
+					<?
+					foreach($arrDisplayOptions as $key => $value) {
+						echo mk_option($arrGPU['DisplayOptions'], htmlentities($value['qxlxml'],ENT_QUOTES), _($value['text']));
+					}?>
 					</select>
 				</td>
 			</tr>
@@ -1274,6 +1295,10 @@
 					<input type="text" name="gpu[<?=$i?>][rom]" autocomplete="off" spellcheck="false" data-pickcloseonfile="true" data-pickfilter="rom,bin" data-pickmatch="^[^.].*" data-pickroot="/mnt/" value="<?=htmlspecialchars($arrGPU['rom'])?>" placeholder="_(Path to ROM BIOS file)_ (_(optional)_)" title="_(Path to ROM BIOS file)_ (_(optional)_)" />
 				</td>
 			</tr>
+			<?
+			if ($arrValidGPUDevices[$arrGPU['id']]['bootvga'] == "1") $bootgpuhidden = ""; 
+			?>
+			<tr   id="gpubootvga<?=$i?>" <?=$bootgpuhidden?>><td>_(Graphics ROM Needed?)_:</td><td><span class="orange-text"><i class="fa fa-warning"></i> _(GPU is primary adapater, vbios may be required.)_</span></td></tr>
 		</table>
 		<?if ($i == 0 || $i == 1) {?>
 		<blockquote class="inline_help">
@@ -1350,6 +1375,7 @@
 					<input type="text" name="gpu[{{INDEX}}][rom]" autocomplete="off" spellcheck="false" data-pickcloseonfile="true" data-pickfilter="rom,bin" data-pickmatch="^[^.].*" data-pickroot="/mnt/" value="" placeholder="_(Path to ROM BIOS file)_ (_(optional)_)" title="_(Path to ROM BIOS file)_ (_(optional)_)" />
 				</td>
 			</tr>
+			<tr id="gpubootvga{{INDEX}}"><td>_(Graphics ROM Needed?)_:</td><td><span   class="orange-text"><i class="fa fa-warning"></i> _(GPU is primary adapater, vbios may be required.)_</span></td></tr>
 		</table>
 	</script>
 
@@ -2084,6 +2110,31 @@ function AutoportChange(autoport) {
 		}
 	}
 
+function VMConsoleDriverChange(driver) {
+	if (driver.value != "virtio3d") {
+		document.getElementById("vncrender").style.visibility="hidden";
+		document.getElementById("vncrendertext").style.visibility="hidden";
+		document.getElementById("vncrender").style.display="none";
+		document.getElementById("vncrendertext").style.display="none";
+
+	} else {
+		document.getElementById("vncrender").style.display="inline";
+		document.getElementById("vncrender").style.visibility="visible";
+		document.getElementById("vncrendertext").style.display="inline";
+		document.getElementById("vncrendertext").style.visibility="visible";
+	}
+	if (driver.value != "qxl") {
+		document.getElementById("vncdspopt").style.visibility="hidden";
+		document.getElementById("vncdspopttext").style.visibility="hidden";
+
+	} else {
+		document.getElementById("vncdspopt").style.display="inline";
+		document.getElementById("vncdspopt").style.visibility="visible";
+		document.getElementById("vncdspopttext").style.display="inline";
+		document.getElementById("vncdspopttext").style.visibility="visible";
+	}
+}
+
 function ProtocolChange(protocol) {
 		var autoport = document.getElementById("autoport").value ;
 		if (autoport == "yes") {
@@ -2392,6 +2443,7 @@ $(function() {
 	}) ;
 
 	$("#vmform").on("change", ".gpu", function changeGPUEvent() {
+		const ValidGPUs = <?=json_encode($arrValidGPUDevices);?>;
 		var myvalue = $(this).val();
 		var mylabel = $(this).children('option:selected').text();
 		var myindex = $(this).closest('table').data('index');
@@ -2403,12 +2455,39 @@ $(function() {
 				slideDownRows($vnc_sections.not(isVMAdvancedMode() ? '.basic' : '.advanced'));
 				var MultiSel = document.getElementById("GPUMultiSel0") ;
 				MultiSel.disabled = true ;
+				if (document.getElementById("vncmodel").value == "virtio3d")  {
+					$("#vncrender").show();
+					$("#vncrendertext").show();
+				 } else {
+					$("#vncrender").hide();
+					$("#vncrendertext").hide();
+					document.getElementById("vncrender").style.display="none";
+					document.getElementById("vncrendertext").style.display="none";
+				 }
+				 if (document.getElementById("vncmodel").value == "qxl")  {
+					$("#vncdspopt").show();
+					$("#vncdspopttext").show();
+					document.getElementById("vncdspopt").style.display="inline";
+					document.getElementById("vncdspopt").style.visibility="visible";
+					document.getElementById("vncdspopttext").style.display="inline";
+					document.getElementById("vncdspopttext").style.visibility="visible";
+				 } else {
+					$("#vncdspopt").hide();
+					$("#vncdspopttext").hide();
+					document.getElementById("vncdspopt").style.display="none";
+					document.getElementById("vncdspopttext").style.display="none";				
+				 }
 			} else {
 				slideUpRows($vnc_sections);
 				$vnc_sections.filter('.advanced').removeClass('advanced').addClass('wasadvanced');
 				var MultiSel = document.getElementById("GPUMultiSel0") ;
 				if (myvalue=="nogpu") MultiSel.disabled = true ; else MultiSel.disabled = false ;
 			}
+		}
+
+		if (mylabel == "None") $("#gpubootvga"+myindex).hide();
+		if (myvalue != 'virtual' && myvalue != '' && myvalue !="nogpu") {
+			if (ValidGPUs[myvalue].bootvga == "1") $("#gpubootvga"+myindex).show(); else $("#gpubootvga"+myindex).hide();
 		}
 
 		$romfile = $(this).closest('table').find('.romfile');

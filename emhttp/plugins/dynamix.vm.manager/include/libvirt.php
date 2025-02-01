@@ -55,6 +55,22 @@
 			return ($tmp) ? $tmp : $this->_set_last_error();
 		}
 
+		function get_domain_capabilities($emulatorbin, $arch, $machine, $virttype, $xpath) {
+			
+			#@conn [resource]:	resource for connection
+			#@emulatorbin [string]:	optional path to emulator
+			#@arch [string]:	optional domain architecture
+			#@machine [string]:	optional machine type
+			#@virttype [string]:	optional virtualization type
+			#@flags [int] :	extra flags; not used yet, so callers should always pass 0
+			#@xpath [string]:	optional xPath query to be applied on the result
+			#Returns:	: domain capabilities XML from the connection or FALSE for error
+
+			$tmp = libvirt_connect_get_domain_capabilities($this->conn, $emulatorbin, $arch, $machine, $virttype, 0, $xpath);
+			return ($tmp) ? $tmp : $this->_set_last_error();
+		}
+
+
 		function get_machine_types($arch = 'x86_64' /* or 'i686' */) {
 			$tmp = libvirt_connect_get_machine_types($this->conn);
 
@@ -383,6 +399,10 @@
 			$cpucache = '';
 			$cpufeatures = '';
 			$cpumigrate = '';
+			$cpucheck = '';
+			$cpumatch = '' ;
+			$cpucustom = '' ;
+			$cpufallback = '' ;
 			if (!empty($domain['cpumode']) && $domain['cpumode'] == 'host-passthrough') {
 				$cpumode .= "mode='host-passthrough'";
 				$cpucache = "<cache mode='passthrough'/>";
@@ -406,6 +426,8 @@
 
 				if (!empty($domain['cpumigrate'])) $cpumigrate = " migratable='".$domain['cpumigrate']."'" ;
 			}
+			#<cpu mode='custom' match='exact' check='partial'>
+			#<model fallback='allow'>Skylake-Client-noTSX-IBRS</model>
 
 			$cpustr = "<cpu $cpumode $cpumigrate>
 							<topology sockets='1' cores='{$intCores}' threads='{$intThreads}'/>
@@ -847,6 +869,25 @@
 						if (($gpu['copypaste'] == "yes") && ($strProtocol == "spice")) $vmrcmousemode = "<mouse mode='server'/>" ; else $vmrcmousemode = ""  ;
 						if ($strProtocol == "spice")  $virtualaudio = "spice" ; else  $virtualaudio = "none" ;
 
+						$strEGLHeadless = "";
+						$strAccel3d ="";
+						if ($strModelType == "virtio3d") {
+							$strModelType = "virtio";
+							if (!isset($gpu['render'])) $gpu['render'] = "auto";
+							if ($gpu['render'] == "auto") {
+								$strEGLHeadless = '<graphics type="egl-headless"><gl enable="yes"/></graphics>';
+								$strAccel3d = "<acceleration accel3d='yes'/>";
+							} else {
+								$strEGLHeadless = '<graphics type="egl-headless"><gl enable="yes" rendernode="/dev/dri/by-path/pci-0000:'.$gpu['render'].'-render"/></graphics>';
+								$strAccel3d ="<acceleration accel3d='yes'/>";
+						}}
+
+						$strDisplayOptions = "";
+						if ($strModelType == "qxl") {
+							if (empty($gpu['DisplayOptions'])) $gpu['DisplayOptions'] ="ram='65536' vram='16384' vgamem='16384' heads='1' primary='yes'";
+							$strDisplayOptions = $gpu['DisplayOptions'];
+						}
+
 						$vmrc = "<input type='tablet' bus='usb'/>
 								<input type='mouse' bus='ps2'/>
 								<input type='keyboard' bus='ps2'/>
@@ -854,8 +895,11 @@
 									<listen type='address' address='0.0.0.0'/>
 									$vmrcmousemode
 								</graphics>
+								$strEGLHeadless
 								<video>
-									<model type='$strModelType'/>
+									<model type='$strModelType' $strDisplayOptions>
+      									$strAccel3d
+    								</model>
 									<address type='pci' domain='0x0000' bus='0x00' slot='0x1e' function='0x0'/>
 								</video>
 								<audio id='1' type='$virtualaudio'/>";
@@ -2158,7 +2202,7 @@
 		}
 
 		function domain_get_vnc_port($domain) {
-			$tmp = $this->get_xpath($domain, '//domain/devices/graphics/@port', false);
+			$tmp = $this->get_xpath($domain, '//domain/devices/graphics[@type="spice" or @type="vnc"]/@port', false);
 			$var = (int)$tmp[0];
 			unset($tmp);
 
@@ -2166,7 +2210,7 @@
 		}
 
 		function domain_get_vmrc_autoport($domain) {
-			$tmp = $this->get_xpath($domain, '//domain/devices/graphics/@autoport', false);
+			$tmp = $this->get_xpath($domain, '//domain/devices/graphics[@type="spice" or @type="vnc"]/@autoport', false);
 			$var = $tmp[0];
 			unset($tmp);
 
@@ -2189,6 +2233,44 @@
 			$var = $tmp[0];
 			unset($tmp);
 
+			if ($var=="virtio") {
+				$tmp = $this->get_xpath($domain, '//domain/devices/video/model/acceleration/@accel3d', false);
+			if ($tmp[0] == "yes") $var = "virtio3d";
+				unset($tmp);
+			}
+
+			return $var;
+		}
+
+		function domain_get_vnc_render($domain) {
+			$tmp = $this->get_xpath($domain, '//domain/devices/graphics[@type="egl-headless"]/gl/@rendernode', false);
+			if (!$tmp)
+				return 'auto';
+
+			$var = $tmp[0];
+			unset($tmp);
+			
+			if (!str_contains($var,"pci")) $var = trim(shell_exec("udevadm info -q symlink  -r $var"));
+			$var = str_replace(['/dev/dri/by-path/pci-0000:','-render'],['',''],$var);
+			return $var;
+		}
+
+		function domain_get_vnc_display_options($domain) {
+			$tmp = $this->get_xpath($domain, '//domain/devices/video/model/@heads', false);
+			if (!$tmp)
+				$heads=1;
+
+			$heads = $tmp[0];
+			unset($tmp);
+
+			$tmp = $this->get_xpath($domain, '//domain/devices/video/model/@vram', false);
+			if (!$tmp)
+				$vram=16384/1024;
+
+			$vram = $tmp[0]/1024;
+			unset($tmp);
+
+			$var = "H$heads.{$vram}M";
 			return $var;
 		}
 
@@ -2263,6 +2345,40 @@
 				return 'emulated';
 
 			$var = $tmp[0];
+			unset($tmp);
+
+			return $var;
+		}
+		#  <cpu mode='custom' match='exact' check='partial'>
+		#   <model fallback='allow'>Skylake-Client-noTSX-IBRS</model>
+
+		function domain_get_cpu_custom($domain) {
+			$tmp = $this->get_xpath($domain, '//domain/cpu/@match', false);
+			if (!$tmp)
+				$tmp[0] = '';
+
+			$var['match'] = trim($tmp[0]);
+			unset($tmp);
+
+			$tmp = $this->get_xpath($domain, '//domain/cpu/@check', false);
+			if (!$tmp)
+				$tmp[0] = '';
+
+			$var['check'] = trim($tmp[0]);
+			unset($tmp);
+
+			$tmp = $this->get_xpath($domain, '//domain/cpu/model/@fallback', false);
+			if (!$tmp)
+				$tmp[0] = '';
+
+			$var['fallback'] = trim($tmp[0]);
+			unset($tmp);
+
+			$tmp = $this->get_xpath($domain, '//domain/cpu/model', false);
+			if (!$tmp)
+				$tmp[0] = '';
+
+			$var['model'] = trim($tmp[0]);
 			unset($tmp);
 
 			return $var;
