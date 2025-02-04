@@ -38,6 +38,16 @@ Markdown="false"
 	if (strpos($strName,"User-") === false) $user = ""; else $user = ' class="user"'; 
 ?>
 
+<link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.filetree.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.ui.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/plugins/dynamix.docker.manager/styles/style-$theme.css")?>">
+
+<script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
+<script src="<?autov('/plugins/dynamix.vm.manager/javascript/dynamix.vm.manager.js')?>"></script>
+<script src="<?autov('/plugins/dynamix.vm.manager/javascript/vmmanager.js')?>"></script>
+<script src="<?autov('/webGui/javascript/jquery.filetree.js')?>" charset="utf-8"></script>
+
 <div class="vmtemplate">
 	<a href="/VMs/AddVM?template=<?=htmlspecialchars(urlencode($strName))?>">
 		<span name="<?=htmlspecialchars($strName)?>" <?=$user?>><img src="/plugins/dynamix.vm.manager/templates/images/<?=htmlspecialchars($arrTemplate['icon'])?>" title="<?=htmlspecialchars($strName)?>"></span>
@@ -46,7 +56,9 @@ Markdown="false"
 </div>
 <? endforeach; ?>
 <br>
-<center><button type='button' onclick='done()'>_(Cancel)_</button></center>
+<center><button type='button' onclick='done()'>_(Cancel)_</button>
+<button type='button' onclick='import_template()'>_(Import from file)_</button>
+<button type='button' onclick='$("#fileupload").click();'>_(Upload)_</button></center>
 <br>
 
 <script>
@@ -59,15 +71,200 @@ function confirmRemoveUserTemplate(template) {
 	swal({title:"_(Proceed)_?",text:"Remove user template: " + template ,type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(p){if (p) removeUserTemplate(template); else refresh();});
 }
 
+function saveUserTemplateFile(name,template) {
+  $.post('/plugins/dynamix.vm.manager/include/VMajax.php',{action:'vm-template-save',name:name,template:template,replace:"no"},function($return){
+	if ($return.success == false) {
+		swal({title:"_(File exists)_?",text:"Replace file: " + name ,type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(No)_"},function(p){
+			if (p) {
+				$.post('/plugins/dynamix.vm.manager/include/VMajax.php',{action:'vm-template-save',name:name,template:template,replace:"yes"},function($return){
+					if ($return.success == false) swal({title:"_(Error occured)_?",text:"Action error " + name + " " + $return.error ,type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(OK)_"});
+				});
+			}
+			else {
+				if ($return.success == false) swal({title:"_(Error occured)_?",text:"Action error " + name + " " + $return.error ,type:'error',html:true,showCancelButton:true,confirmButtonText:"_(OK)_"});
+			};		
+		});
+	}
+	});
+}
+
+function saveUserTemplateImport(name,template) {
+  $.post('/plugins/dynamix.vm.manager/include/VMajax.php',{action:'vm-template-import',name:name,template:template,replace:"no"},function($return){
+	if ($return.success == false) {
+		swal({title:"_(File exists)_?",text:"Replace file: " + name.split(".")[0] ,type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(No)_"},function(p){
+			if (p) {
+				$.post('/plugins/dynamix.vm.manager/include/VMajax.php',{action:'vm-template-save',name:name,template:template,replace:"yes"},function($return){
+					if ($return.success == false) swal({title:"_(Error occured)_?",text:"Action error " + name.split(".")[0] + " " + $return.error ,type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(OK)_"});
+					if ($return.success == true) refresh();
+				});
+			}
+			else {
+				if ($return.success == false) swal({title:"_(Error occured)_?",text:"Action error " + name + " " + $return.error ,type:'error',html:true,showCancelButton:true,confirmButtonText:"_(OK)_"});
+			};
+		});
+	}
+	if ($return.success == true) refresh();
+	});	
+}
+
+
+function downloadJSON(data, filename = 'data.json') {
+    // Convert the data to a JSON string
+    const jsonString = JSON.stringify(data, null, 2); // Beautify with 2 spaces
+    // Create a Blob from the JSON string
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    // Generate a temporary URL for the Blob
+    const url = URL.createObjectURL(blob);
+    
+    // Create a link element
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename; // Specify the file name
+    
+    // Trigger the download by programmatically clicking the link
+    link.click();
+    
+    // Clean up by revoking the object URL
+    URL.revokeObjectURL(url);
+}
+
+function export_template(template){
+  const templatejson = <?=json_encode($ut)?>;
+  var json = templatejson[template];
+  var box = $("#dialogWindow");
+  box.html($("#templateexport").html());
+  box.find('#target').attr('value',template+".json");
+  box.find('#target2').attr('value',"/mnt/").fileTreeAttach(null,null,function(path){
+    box.find('#target2').val(path).change();
+  });
+  box.dialog({
+    title: "_(Select File)_",
+    height: 530,
+    width: 900,
+    resizable: false,
+    modal: true,	
+    buttons: {
+      "_(Save)_": function(){
+        var target = box.find('#target');
+        if (target.length) target = target.val(); else target = '';
+        var target2 = box.find('#target2');
+        if (target2.length) target2 = target2.val(); else target2 = '';
+        box.find('#target').prop('disabled',true);
+        box.find('#target2').prop('disabled',true);
+		    saveUserTemplateFile(target2+target,json);
+        box.dialog('close');
+      },
+      "_(Cancel)_": function(){
+        box.dialog('close');
+      },
+      "_(Download)_": function(){
+		    downloadJSON(json,template+'.json');
+        box.dialog('close');
+      }
+    }
+  });
+  dialogStyle();
+}
+
+function import_template(){
+  var box = $("#dialogWindow");
+  box.html($("#templateimport").html());
+  box.find('#targetimp').attr('value',"/mnt").fileTreeAttach(null,null,function(path){
+    box.find('#targetimp').val(path).change();
+   });
+  box.dialog({
+    title: "_(Select File)_",
+    height: 530,
+    width: 900,
+    resizable: false,
+    modal: true,
+    buttons: {
+      "_(Import)_": function(){
+        var targetimp = box.find('#targetimp');
+        if (targetimp.length) targetimp = targetimp.val(); else targetimp = '';
+        box.find('#targetimp').prop('disabled',true);
+		saveUserTemplateImport(targetimp,"*file");
+        box.dialog('close');
+      },
+      "_(Cancel)_": function(){
+        box.dialog('close');
+      }
+    }
+  });
+  dialogStyle();
+}
+
+function dialogStyle() {
+  $('.ui-dialog-titlebar-close').css({'display':'none'});
+  $('.ui-dialog-title').css({'text-align':'center','width':'100%','font-size':'1.8rem'});
+  $('.ui-dialog-content').css({'padding-top':'15px','vertical-align':'bottom'});
+  $('.ui-button-text').css({'padding':'0px 5px'});
+}
+
+function exportTemplate(template) {
+  $.post('/plugins/dynamix.vm.manager/include/VMajax.php',{action:'vm-template-export',template:template},function(){
+    refresh();});
+}
+
+function uploadFile(files,index,start,time) {
+  var file = files[0];
+  var blob = file;
+  reader.onloadend = function(e){
+	uploadedData = JSON.parse(e.target.result);
+	//alert('File uploaded successfully. Click "Process JSON" to proceed.');
+	saveUserTemplateImport(file.name,uploadedData);
+	};
+  reader.readAsText(blob);  	
+}
+
+function startUpload(files) {
+  if (files.length==0) return;
+  reader = new FileReader();
+  //window.onbeforeunload = function(e){return '';};
+  uploadFile(files);
+}
+
+var sortableHelper = function(e,ui){
+  var child = ui.next();
+  if (child.is(':visible')) child.addClass('unhide').hide();
+  ui.children().each(function(){$(this).width($(this).width());});
+  return ui;
+};
+
 $(function(){
   $('div.vmtemplate').each(function(){
     var templatename = $(this).find('span').attr('name');
     $(this).find('span.user').append('<i class="fa fa-trash bin" title="_(Remove User Template)_" onclick="confirmRemoveUserTemplate(&quot;' + templatename + '&quot;);return false"></i>');
+	$(this).find('span.user').append('<br><i class="fa fa-external-link-square export" title="_(Export User Template)_" onclick="export_template(&quot;' + templatename + '&quot;);return false"></i>');
     $(this).hover(function(){$(this).find('i.bin').show();},function(){$(this).find('i.bin').hide();});
+	$(this).hover(function(){$(this).find('i.export').show();},function(){$(this).find('i.export').hide();});
   });
 });
 </script>
 <style>
 
 i.bin{display:none;font-size:1.8rem;position:absolute;margin-left:12px}
+i.export{display:none;font-size:1.8rem;position:left;margin-left:1px}
 </style>
+	
+<div id="dialogWindow"></div>
+<div id="iframe-popup"></div>
+
+<div id="templateexport" class="template">
+<dl>
+<dt>_(Save File Name)_:</dt>
+<dd><input type="text" id="target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="iso"></dd>
+<dt>_(Save Path)_:</dt>
+<dd><input type="text" id="target2" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="iso"></dd>
+</dl>
+</div>
+
+<div id="templateimport" class="template">
+<dl>
+<dt>_(File for import)_:</dt>
+<dd><input type="text" id="targetimp" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="json"></dd>
+</dl>
+</div>
+
+
+<input hidden type="file" id="fileupload" value="" onchange="startUpload(this.files)" 

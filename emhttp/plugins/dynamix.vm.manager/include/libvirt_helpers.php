@@ -708,6 +708,55 @@ private static $encoding = 'UTF-8';
 	] ;
 
 
+	#<model type='qxl' ram='65536' vram='65536' vgamem='16384' heads='1' primary='yes'/>
+
+	$arrDisplayOptions = [
+		"H1.16M" => [ 
+			"text" => "1 Display 16Mb Memory",
+			"qxlxml" => "ram='65536' vram='16384' vgamem='16384' heads='1' primary='yes'",
+		],
+		"H1.32M" => [ 
+			"text" => "1 Display 32Mb Memory",
+			"qxlxml" => "ram='65536' vram='32768' vgamem='32768' heads='1' primary='yes'",
+		],
+		"H1.64M" => [ 
+			"text" => "1 Display 64Mb Memory",
+			"qxlxml" => "ram='65536' vram='65536' vram64='65535' vgamem='65536' heads='1' primary='yes'",
+		],
+		"H1.128M" => [ 
+			"text" => "1 Display 128Mb Memory",
+			"qxlxml"=> "ram='65536' vram='131072' vram64='131072' vgamem='65536' heads='1' primary='yes'",
+		],
+		"H1.256M" => [ 
+			"text" => "1 Display 256Mb Memory",
+			"qxlxml" => "ram='65536' vram='262144' vram64='262144' vgamem='65536' heads='1' primary='yes'",
+		],
+		"H2.64M" => [ 
+			"text" => "2 Displays 64Mb Memory",
+			"qxlxml" => "ram='65536' vram='65536' vram64='65535' vgamem='65536' heads='2' primary='yes'",
+		],
+		"H2.128M" => [ 
+			"text" => "2 Displays 128Mb Memory",
+			"qxlxml" => "ram='65536' vram='131072'vram64='131072' vgamem='65536' heads='2' primary='yes'",
+		],
+		"H2.256M" => [ 
+			"text" => "2 Displays 256Mb Memory",
+			"qxlxml" => "ram='65536' vram='262144'vram64='262144' vgamem='65536' heads='2' primary='yes'",
+		],
+		"H4.64M" => [ 
+			"text" => "4 Displays 64Mb Memory",
+			"qxlxml" => "ram='65536' vram='65536' vram64='65535' vgamem='65536' heads='4' primary='yes'",
+		],
+		"H4.128M" => [ 
+			"text" => "4 Displays 128Mb Memory",
+			"qxlxml" => "ram='65536' vram='131072'vram64='131072' vgamem='65536' heads='4' primary='yes'",
+		],
+		"H4.256M" => [ 
+			"text" => "4 Displays 256Mb Memory",
+			"qxlxml"=> "ram='65536' vram='262144' vram64='262144' vgamem='65536' heads='4' primary='yes'",
+		],
+		];
+
 	// Read configuration file (guaranteed to exist)
 	$domain_cfgfile = "/boot/config/domain.cfg";
 	$domain_cfg = parse_ini_file($domain_cfgfile);
@@ -866,6 +915,15 @@ private static $encoding = 'UTF-8';
 					}
 				}
 
+				// Attempt to get the boot_vga driver for this pci device
+				$strBootVGA = '';
+				if (is_file('/sys/bus/pci/devices/0000:' . $arrMatch['id'] . '/boot_vga') && $strClass == 'vga') {
+					$strFileVal = file_get_contents('/sys/bus/pci/devices/0000:' . $arrMatch['id'] . '/boot_vga');
+					if (!empty($strFileVal)) {
+						$strBootVGA = trim($strFileVal);
+					}
+				}
+
 				// Clean up the vendor and product name
 				$arrMatch['vendorname'] = sanitizeVendor($arrMatch['vendorname']);
 				$arrMatch['productname'] = sanitizeProduct($arrMatch['productname']);
@@ -880,6 +938,7 @@ private static $encoding = 'UTF-8';
 					'productname' => $arrMatch['productname'],
 					'class' => $strClass,
 					'driver' => $strDriver,
+					'bootvga' => $strBootVGA,
 					'name' => $arrMatch['vendorname'] . ' ' . $arrMatch['productname'],
 					'blacklisted' => $boolBlacklisted
 				];
@@ -1116,6 +1175,7 @@ private static $encoding = 'UTF-8';
 			'cirrus' => 'Cirrus',
 			'qxl' => 'QXL (best)',
 			'virtio' => 'Virtio(2d)',
+			'virtio3d' => 'Virtio(3d)',
 			'vmvga' => 'vmvga'
 		];
 
@@ -1269,6 +1329,8 @@ private static $encoding = 'UTF-8';
 				'autoport' => $autoport,
 				'copypaste' => $getcopypaste,
 				'guest' => ['multi' => 'off' ],
+				'render' => $lv->domain_get_vnc_render($res),
+				'DisplayOptions' => $lv->domain_get_vnc_display_options($res),
 			];
 		}
 
@@ -1481,7 +1543,7 @@ private static $encoding = 'UTF-8';
 		unset($old['devices']['input']);
 		// preserve vnc/spice port settings
 		// unset($new['devices']['graphics']['@attributes']['port'],$new['devices']['graphics']['@attributes']['autoport']);
-		if (!$new['devices']['graphics']) unset($old['devices']['graphics']);
+		unset($old['devices']['graphics']);
 		if (!isset($new['devices']['graphics']['@attributes']['keymap']) && isset($old['devices']['graphics']['@attributes']['keymap'])) unset($old['devices']['graphics']['@attributes']['keymap']) ;
 		// update parent arrays
 		if (!$old['devices']['hostdev']) unset($old['devices']['hostdev']);

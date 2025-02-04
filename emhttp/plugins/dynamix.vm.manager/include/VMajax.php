@@ -872,6 +872,50 @@ case 'vm-template-remove':
 	$arrResponse = ['success' => true];
 	break;
 
+case 'vm-template-save':
+	$template = $_REQUEST['template'];	
+	$name = $_REQUEST['name'];	
+	$replace = $_REQUEST['replace'];	
+
+	if (is_file($name) && $replace == "no"){
+		$arrResponse = ['success' => false, 'error' => _("File exists.")];
+	} else {
+		$error = file_put_contents($name,json_encode($template));
+		if ($error !== false)  $arrResponse = ['success' => true]; 
+		else {
+			$arrResponse = ['success' => false, 'error' => _("File write failed.")];
+		}
+	}
+	break;
+
+case 'vm-template-import':
+	$template = $_REQUEST['template'];	
+	$name = $_REQUEST['name'];	
+	$replace = $_REQUEST['replace'];	
+	$templateslocation = "/boot/config/plugins/dynamix.vm.manager/savedtemplates.json";
+
+	if ($template==="*file") {
+		$template=json_decode(file_get_contents($name));
+	}
+
+	$namepathinfo = pathinfo($name);
+	$template_name = $namepathinfo['filename'];
+
+	if (is_file($templateslocation)){
+		$ut = json_decode(file_get_contents($templateslocation),true) ;
+		if (isset($ut[$template_name]) && $replace == "no"){
+			$arrResponse = ['success' => false, 'error' => _("Template exists.")];
+		} else {
+			$ut[$template_name] = $template;
+			$error = file_put_contents($templateslocation,json_encode($ut,JSON_PRETTY_PRINT));;
+			if ($error !== false)  $arrResponse = ['success' => true]; 
+			else {
+				$arrResponse = ['success' => false, 'error' => _("Tempalte file write failed.")];
+			}
+		}
+	}
+	break;
+	
 default:
 	$arrResponse = ['error' => _('Unknown action')." '$action'"];
 	break;

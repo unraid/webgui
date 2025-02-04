@@ -78,18 +78,22 @@ foreach ($vms as $vm) {
   $vmrcurl = '';
   $graphics = '';
   $virtual = false ;
+  if (isset($arrConfig['gpu'][0]['model'])) {$vrtdriver=" "._("Driver").strtoupper(":{$arrConfig['gpu'][0]['model']} "); $vrtmodel =$arrConfig['gpu'][0]['model'];} else $vrtdriver = "";
+  if (isset($arrConfig['gpu'][0]['render']) && $vrtmodel == "virtio3d") {
+    if (isset($arrConfig['gpu'][0]['render']) && $arrConfig['gpu'][0]['render'] == "auto") $vrtdriver .= "<br>"._("RenderGPU").":"._("Auto"); else $vrtdriver .= "<br>"._("RenderGPU").":{$arrValidGPUDevices[$arrConfig['gpu'][0]['render']]['name']}";
+  }
   if ($vmrcport > 0) {
     $wsport = $lv->domain_get_ws_port($res);
     $vmrcprotocol = $lv->domain_get_vmrc_protocol($res);
     if ($vmrcprotocol == "vnc") $vmrcscale = "&resize=scale"; else $vmrcscale = "";
     $vmrcurl = autov('/plugins/dynamix.vm.manager/'.$vmrcprotocol.'.html',true).$vmrcscale.'&autoconnect=true&host='._var($_SERVER,'HTTP_HOST');
     if ($vmrcprotocol == "spice") $vmrcurl .= '&vmname='. urlencode($vm) .'&port=/wsproxy/'.$vmrcport.'/'; else $vmrcurl .= '&port=&path=/wsproxy/'.$wsport.'/';
-    $graphics = strtoupper($vmrcprotocol).":".$vmrcport."\n";
+    $graphics = strtoupper($vmrcprotocol).':'._($auto)."$vrtdriver\n";
     $virtual = true ;
   } elseif ($vmrcport == -1 || $autoport) {
     $vmrcprotocol = $lv->domain_get_vmrc_protocol($res);
     if ($autoport == "yes") $auto = "auto"; else $auto="manual";
-    $graphics = strtoupper($vmrcprotocol).':'._($auto)."\n";
+    $graphics = strtoupper($vmrcprotocol).':'._($auto)."$vrtdriver\n";
     $virtual = true ;
   }
   if (!empty($arrConfig['gpu'])) {
