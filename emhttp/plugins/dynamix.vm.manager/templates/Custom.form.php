@@ -495,12 +495,44 @@
 	</div>
 
 	<table>
+		<tr class="advanced">
+			<?$cpus = cpu_list(); 
+			$corecount = 0;
+			foreach ($cpus as $pair) {
+				unset($cpu1,$cpu2);
+				[$cpu1, $cpu2] = my_preg_split('/[,-]/',$pair);
+				if (!$cpu2) 	$corecount++; else $corecount=$corecount+2;
+			}
+			if (is_array($arrConfig['domain']['vcpu'])) {$coredisable = "disabled"; $vcpubuttontext = "Deselect all";} else {$coredisable = ""; $vcpubuttontext = "Select all";} 
+			?>
+			<td><span class="advanced">_(CPU Cores)_ </span></td>
+			<td>
+				<select id="vcpus" <?=$coredisable?> name="domain[vcpus]" class="narrow domain_vcpus" title="_(vcpu allocated to vm)_">
+				<?
+					for ($i = 1; $i <= ($corecount); $i++) {
+						echo mk_option($arrConfig['domain']['vcpus'], $i, $i);
+					}
+				?>
+				</select>
+				<input type="button" value="_(<?=$vcpubuttontext?>)_" id="btnvCPUSelect" />
+			</td>
+		</tr>
+	</table>
+	<div class="advanced">
+		<blockquote class="inline_help">
+			<p>There are two CPU modes available to choose:</p>
+			<p>
+				<b>vCPUs Allocated</b><br>
+				Set the number of vCPUs allocated to the VM when not using pinning. The host will dynamically allocate workload for the VM across the whole system.
+		</blockquote>
+	</div>
+
+	<table>
 		<tr>
 			<td>_(Logical CPUs)_:</td>
 			<td>
 				<div class="textarea four">
-				<?
-				$cpus = cpu_list();
+				<?		
 				foreach ($cpus as $pair) {
 					unset($cpu1,$cpu2);
 					[$cpu1, $cpu2] = my_preg_split('/[,-]/',$pair);
@@ -2299,10 +2331,14 @@ $(function() {
 	$("#vmform .domain_vcpu").change(function changeVCPUEvent() {
 		var $cores = $("#vmform .domain_vcpu:checked");
 
-		if ($cores.length == 1) {
-			$cores.prop("disabled", true);
-		} else {
+		if ($cores.length < 1) {
+			$("#vmform .domain_vcpus").prop("disabled", false);
 			$("#vmform .domain_vcpu").prop("disabled", false);
+			$("#vmform .formview #btnvCPUSelect").prop("value",  "_(Select All)_");
+		} else {
+			$("#vmform .domain_vcpus").prop("disabled", true).prop("value", $cores.length);
+			$("#vmform .domain_vcpu").prop("disabled", false);
+			$("#vmform .formview #btnvCPUSelect").prop("value",  "_(Deselect All)_");
 		}
 	});
 
@@ -2435,6 +2471,20 @@ $(function() {
 				$input.val(data.mac);
 			}
 		});
+	});
+
+	$("#vmform .formview #btnvCPUSelect").click(function selectcpus() {
+		if (this.value == "_(Select All)_"){
+			$('.domain_vcpu').prop('checked', true);
+			var $cores = $("#vmform .domain_vcpu:checked");
+			$("#vmform .domain_vcpus").prop("disabled", true).prop("value", $cores.length);
+			this.value = "_(Deselect All)_";
+		} else {
+			$('.domain_vcpu').prop('checked', false);
+			var $cores = $("#vmform .domain_vcpu:checked");
+			$("#vmform .domain_vcpus").prop("disabled", false).prop("value", 1);	
+			this.value = "_(Select All)_";
+		}
 	});
 
 	$("#vmform .formview #btnSubmit").click(function frmSubmit() {
