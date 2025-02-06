@@ -2,8 +2,8 @@ Menu="Dashboard"
 Nchan="wg_poller,update_1,update_2,update_3,ups_status:stop,vm_dashusage"
 ---
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -55,29 +55,29 @@ exec("sed -ri 's/^\.logLine\{color:#......;/.logLine{color:$fgcolor;/' $docroot/
 exec("/etc/rc.d/rc.docker status >/dev/null",$dummy,$dockerd);
 exec("/etc/rc.d/rc.libvirt status >/dev/null",$dummy,$libvirtd);
 
-$dockerd = $dockerd==0;
-$libvirtd = $libvirtd==0;
-$apcupsd = file_exists('/var/run/apcupsd.pid');
-$conf  = glob('/etc/wireguard/wg*.conf');
-$wireguard = is_executable('/usr/bin/wg') && count($conf);
-$started = _var($var,'fsState')=='Started';
-$sleep = isset($display['sleep']);
+$dockerd    = $dockerd==0;
+$libvirtd   = $libvirtd==0;
+$apcupsd    = file_exists('/var/run/apcupsd.pid');
+$cookie     = '/boot/config/dashboard_settings.json';
+$conf       = glob('/etc/wireguard/wg*.conf');
+$wireguard  = is_executable('/usr/bin/wg') && count($conf);
+$started    = _var($var,'fsState')=='Started';
+$sleep      = isset($display['sleep']);
 $poolsOnly  = (_var($var,'SYS_ARRAY_SLOTS') == 0 ) ? true : false;
 $array_size = $array_used = 0;
 $extra_size = $extra_used = 0;
 $cache_size = $cache_used = [];
 $cache_type = $cache_rate = [];
-
-$parity = _var($var,'mdResync');
-$mover = file_exists('/var/run/mover.pid');
-$btrfs = exec('pgrep --ns $$ -cf /sbin/btrfs');
-$vdisk = exec("grep -Pom1 '^DOCKER_IMAGE_TYPE=\"\\K[^\"]+' /boot/config/docker.cfg 2>/dev/null")!='folder' ? _('Docker vdisk') : _('Docker folder');
-$dot = _var($display,'number','.,')[0];
-$zfs = count(array_filter(array_column($disks,'fsType'),function($fs){return str_replace('luks:','',$fs??'')=='zfs';}));
+$parity     = _var($var,'mdResync');
+$mover      = file_exists('/var/run/mover.pid');
+$btrfs      = exec('pgrep --ns $$ -cf /sbin/btrfs');
+$vdisk      = exec("grep -Pom1 '^DOCKER_IMAGE_TYPE=\"\\K[^\"]+' /boot/config/docker.cfg 2>/dev/null")!='folder' ? _('Docker vdisk') : _('Docker folder');
+$dot        = _var($display,'number','.,')[0];
+$zfs        = count(array_filter(array_column($disks,'fsType'),function($fs){return str_replace('luks:','',$fs??'')=='zfs';}));
 
 $domain_cfgfile = "/boot/config/domain.cfg";
 $domain_cfg = parse_ini_file($domain_cfgfile);
-if (!isset($domain_cfg['USAGE'])) $vmusage = "N" ; else $vmusage = $domain_cfg['USAGE'];
+$vmusage = isset($domain_cfg['USAGE']) ? $domain_cfg['USAGE'] : 'N';
 
 // enable/disable graph elements by making hook script executable or not
 chmod("$docroot/webGui/system/VM",$libvirtd ? 0755 : 0644);
@@ -103,45 +103,50 @@ foreach ($disks as $disk) {
     break;
   }
 }
+
 foreach ($devs as $disk) {
   $extra_size += _var($disk,'sectors',0)*_var($disk,'sector_size',0);
 }
+
 $array_percent = number_format(100*$array_used/($array_size ?: 1),1,$dot,'');
 exec('cat /sys/devices/system/cpu/*/topology/thread_siblings_list|sort -nu', $cpus);
-$wg_up = $wireguard ? exec("wg show interfaces") : '';
-$wg_up = $wg_up ? explode(' ',$wg_up) : [];
-$up    = count($wg_up);
-$down  = max(count($conf)-$up,0);
-$fans  = exec("sensors -uA 2>/dev/null|grep -c 'fan[0-9]_input'");
-$autofan = is_executable("$docroot/plugins/dynamix.system.autofan/scripts/rc.autofan");
-$group = _var($var,'shareSMBEnabled')=='yes' | _var($var,'shareNFSEnabled')=='yes';
-$names = [];
+$wg_up      = $wireguard ? exec("wg show interfaces") : '';
+$wg_up      = $wg_up ? explode(' ',$wg_up) : [];
+$up         = count($wg_up);
+$down       = max(count($conf)-$up,0);
+$fans       = exec("sensors -uA 2>/dev/null|grep -c 'fan[0-9]_input'");
+$autofan    = is_executable("$docroot/plugins/dynamix.system.autofan/scripts/rc.autofan");
+$group      = _var($var,'shareSMBEnabled')=='yes' | _var($var,'shareNFSEnabled')=='yes';
+$names      = [];
 $cache_only = $encrypted = 0;
+
 foreach ($shares as $share) {
   if ($share['useCache']=='only') $cache_only++;
   if ($share['luksStatus']>0) $encrypted++;
 }
+
 $passwd = $nopass = 0;
 foreach ($users as $user) if ($user['passwd']=='yes') $passwd++; else $nopass++;
 
-$boot   = "/boot/config/plugins/dynamix";
-$myfile = "case-model.cfg";
-$mycase = file_exists("$boot/$myfile") ? file_get_contents("$boot/$myfile") : false;
+$boot     = "/boot/config/plugins/dynamix";
+$myfile   = "case-model.cfg";
+$mycase   = file_exists("$boot/$myfile") ? file_get_contents("$boot/$myfile") : false;
 
-$board  = dmidecode('Base Board Information','2',0);
-$serial = _("s/n").": ".($board['Serial Number'] ?? "--");
-$board  = ($board['Manufacturer'] ?? "").' '.($board['Product Name'] ?? "").' '.(isset($board['Version']) ? ", "._("Version")." ".$board['Version'] : "");
+$board    = dmidecode('Base Board Information','2',0);
+$serial   = _("s/n").": ".($board['Serial Number'] ?? "--");
+$board    = ($board['Manufacturer'] ?? "").' '.($board['Product Name'] ?? "").' '.(isset($board['Version']) ? ", "._("Version")." ".$board['Version'] : "");
 
-$bios = dmidecode('BIOS Information','0',0);
+$bios     = dmidecode('BIOS Information','0',0);
 $biosdate = _("BIOS dated").": "._(my_time(strtotime($bios['Release Date'] ?? ""),$display['date']),0);
-$bios = $bios['Vendor'].(isset($bios['Version']) ? ", "._("Version")." ".$bios['Version'] : "");
+$bios     = $bios['Vendor'].(isset($bios['Version']) ? ", "._("Version")." ".$bios['Version'] : "");
 
-$cpu = dmidecode('Processor Information','4',0);
+$cpu      = dmidecode('Processor Information','4',0);
 $cpumodel = str_ireplace(["Processor","(C)","(R)","(TM)"],["","&#169;","&#174;","&#8482;"],exec("grep -Pom1 '^model name\s+:\s*\K.+' /proc/cpuinfo") ?: $cpu['Version']);
 $cpumodel .= (strpos($cpumodel,'@')===false && !empty($cpu['Current Speed']) ? " @ {$cpu['Current Speed']}" : "");
 
 $total = exec("awk '/^MemTotal/{print $2*1024}' /proc/meminfo");
-unset($ports); exec("ls /sys/class/net|grep -Po '^(lo|(bond|eth)\d+)$'",$ports);
+unset($ports); exec("ls --indicator-style=none /sys/class/net|grep -Po '^(bond|eth|wlan)\d+$'",$ports);
+$ports[] = 'lo';
 
 $sizes = ['MB','GB','TB'];
 $memory_type = $ecc = '';
@@ -198,7 +203,7 @@ switch ($theme) {
 <div class='frame'>
 <div class='grid'>
 <div class='tile' id='tile1'>
-<table id='db-box1' class='dashboard'>
+<table id='db_box1' class='dashboard'>
 <tbody class='system'>
 <tr><td><i class='icon-performance f32'></i><div class='section'><?=_var($var,'NAME')?><br>
 <span><?=htmlspecialchars(_var($var,'COMMENT'))?></span><span id="current_time_" class="switch head_time"></span><br></div>
@@ -412,7 +417,7 @@ echo "</td></tr>";
 </div>
 
 <div class='tile' id='tile2'>
-<table id='db-box2' class='dashboard'>
+<table id='db_box2' class='dashboard'>
 <?if ($dockerd):?>
 <tbody id='docker_view' title="_(Docker Containers)_" data="noApps()">
 <tr><td><i class='icon-docker f32'></i><div class='section'>_(Docker Containers)_<br>
@@ -574,7 +579,7 @@ if (!$group) {
 </div>
 
 <div class='tile' id='tile3'>
-<table id='db-box3' class='dashboard'>
+<table id='db_box3' class='dashboard'>
 <?if (!$poolsOnly):?>
 <tbody title="_(Parity Information)_">
 <tr><td><i class='icon-health f32'></i><div class='section'>_(Parity)_<br>
@@ -653,7 +658,7 @@ for (let n=0,x; x=index[n]; n++) {
 }
 function hideShow() {
   let n = 0, inactive = [];
-  var count = {'db-box1':0, 'db-box2':0, 'db-box3':0};
+  var count = {'db_box1':0, 'db_box2':0, 'db_box3':0};
   $('input.checker').each(function(){
     var tbody = $('table.dashboard').find('tbody[sort="'+sort[n]+'"]');
     var id = tbody.parent().prop('id');
@@ -669,14 +674,15 @@ function hideShow() {
     n++;
   });
   count[table.find('tbody.system').parent().prop('id')]++;
-  if (count['db-box1']>0) $('div#tile1').show(); else $('div#tile1').hide();
-  if (count['db-box2']>0) $('div#tile2').show(); else $('div#tile2').hide();
-  if (count['db-box3']>0) $('div#tile3').show(); else $('div#tile3').hide();
+  if (count['db_box1']>0) $('div#tile1').show(); else $('div#tile1').hide();
+  if (count['db_box2']>0) $('div#tile2').show(); else $('div#tile2').hide();
+  if (count['db_box3']>0) $('div#tile3').show(); else $('div#tile3').hide();
   if (inactive.length>0) {
-    $.cookie('inactive_content',inactive.join(';'),{expires:3650});
+    cookie.inactive_content = inactive.join(';');
   } else {
-    $.removeCookie('inactive_content');
+    delete cookie.inactive_content;
   }
+  saveCookie();
 }
 </script>
 <div id="list"></div>
@@ -753,8 +759,8 @@ String.prototype.md5 = function(){
   return rh(a)+rh(b)+rh(c)+rh(d);
 }
 jQuery.prototype.hideMe = function() {
-  var hidden = $.cookie('hidden_content');
-  hidden = hidden==null ? [] : hidden.split(';');
+  var hidden = cookie.hidden_content;
+  hidden = hidden ? hidden.split(';') : [];
   if (hidden.indexOf(this.attr('sort'))>=0) this.find('tr:gt(0)').hide();
 }
 jQuery.prototype.mixedView = function(s) {
@@ -779,29 +785,12 @@ jQuery.prototype.mixedView = function(s) {
     });
   }
 }
-function sanitizeMultiCookie(cookieName, delimiter, removeDuplicates = false) {
-  // Some browser states leave multi-value cookies with nulls, empties or duplicates.
-  // This function cleans up any such cookies so that they do not break functionality.
-  try {
-    var uncleanCookie = $.cookie(cookieName);
-    if (uncleanCookie) {
-      uncleanCookie = uncleanCookie.split(delimiter);
-      var cleanCookie = uncleanCookie.filter(n => n);
-      if (removeDuplicates) { cleanCookie = [...new Set(cleanCookie)]; }
-      if (JSON.stringify(uncleanCookie) !== JSON.stringify(cleanCookie)) {
-        $.cookie(cookieName,cleanCookie.join(delimiter),{expires:3650});
-        return true;
-      } else {
-        return false;
-      }
-    } else {
-      return false;
-    }
-  } catch (ex) {
-    return false;
-  }
-}
 
+<?if (file_exists($cookie)):?>
+var cookie  = JSON.parse('<?=file_get_contents($cookie)?>');
+<?else:?>
+var cookie  = {};
+<?endif;?>
 var colors  = ['<?=$c0?>','<?=$c1?>','#d77e0d','#d4ac0d','#cd5c5c','#ffc0cb','#e6e6fa','#9370db','#7cfc00','#228b22','#00ffff','#4682b4'];
 var blue    = '#486dba'; // fallback color when too many graph elements exist
 var ports   = [<?=implode(',',array_map('escapestring',$ports))?>];
@@ -810,8 +799,8 @@ var rxd     = [];
 var txd     = [];
 var cputime = 0;
 var nettime = 0;
-var cpuline = $.cookie('cpuline')||30;
-var netline = $.cookie('netline')||30;
+var cpuline = cookie.cpuline||30;
+var netline = cookie.netline||30;
 var update2 = true;
 var box     = null;
 var startup = true;
@@ -849,8 +838,38 @@ var options_net = {
 var cpuchart = new ApexCharts(document.querySelector('#cpuchart'), options_cpu);
 var netchart = new ApexCharts(document.querySelector('#netchart'), options_net);
 
-if ($.cookie('port_select')!=null && !ports.includes($.cookie('port_select'))) $.removeCookie('port_select');
-var port_select = $.cookie('port_select')||ports[0];
+if (cookie.port_select && !ports.includes(cookie.port_select)) {
+  delete cookie.port_select;
+  saveCookie();
+}
+var port_select = cookie.port_select||ports[0];
+
+function saveCookie() {
+  $.post('/webGui/include/InitCharts.php',{cmd:'cookie',data:JSON.stringify(cookie)});
+}
+
+function sanitizeMultiCookie(cookieName, delimiter, removeDuplicates=false) {
+  // Some browser states leave multi-value cookies with nulls, empties or duplicates.
+  // This function cleans up any such cookies so that they do not break functionality.
+  try {
+    var uncleanCookie = $.cookie(cookieName);
+    if (uncleanCookie) {
+      uncleanCookie = uncleanCookie.split(delimiter);
+      var cleanCookie = uncleanCookie.filter(n => n);
+      if (removeDuplicates) { cleanCookie = [...new Set(cleanCookie)]; }
+      if (JSON.stringify(uncleanCookie) !== JSON.stringify(cleanCookie)) {
+        $.cookie(cookieName,cleanCookie.join(delimiter),{expires:3650});
+        return true;
+      } else {
+        return false;
+      }
+    } else {
+      return false;
+    }
+  } catch (ex) {
+    return false;
+  }
+}
 
 function initCharts(clear) {
   $.post('/webGui/include/InitCharts.php',{cmd:'get'},function(data) {
@@ -879,12 +898,14 @@ function initCharts(clear) {
     nettime = x + 1;
   });
 }
+
 function resetCharts() {
   // prevent unlimited graph growing
   cpu = cpu.slice(-cpuline);
   rxd = rxd.slice(-netline);
   txd = txd.slice(-netline);
 }
+
 function addChartCpu(load) {
   cputime++;
   var i = cpu.length - cpuline;
@@ -895,6 +916,7 @@ function addChartCpu(load) {
   }
   cpu.push({x:cputime, y:load});
 }
+
 function addChartNet(rx, tx) {
   nettime++;
   var i = rxd.length - netline;
@@ -908,6 +930,7 @@ function addChartNet(rx, tx) {
   rxd.push({x:nettime, y:rx});
   txd.push({x:nettime, y:tx});
 }
+
 <?if ($wireguard):?>
 function toggleVPN(id,vtun) {
   var up = $('#vpn-active');
@@ -928,23 +951,28 @@ function toggleVPN(id,vtun) {
   }
 }
 <?endif;?>
+
 function noApps() {
   if ($('span.outer.apps:visible').length==0) $('#no_apps').show(); else $('#no_apps').hide();
 }
+
 function noVMs() {
   if ($('span.outer.vms:visible').length==0) $('#no_vms').show(); else $('#no_vms').hide();
 }
+
 function loadlist(init) {
   if (init) {
-    $('#apps').switchButton({labels_placement:'right', off_label:"_(All Apps)_", on_label:"_(Started only)_", checked:$.cookie('my_apps')=='startedOnly'});
-    $('#vms').switchButton({labels_placement:'right', off_label:"_(All VMs)_", on_label:"_(Started only)_", checked:$.cookie('my_vms')=='startedOnly'});
+    $('#apps').switchButton({labels_placement:'right', off_label:"_(All Apps)_", on_label:"_(Started only)_", checked:cookie.my_apps=='startedOnly'});
+    $('#vms').switchButton({labels_placement:'right', off_label:"_(All VMs)_", on_label:"_(Started only)_", checked:cookie.my_vms=='startedOnly'});
     $('#apps').change(function(){
       $('span.outer.apps.stopped').finish().toggle('fast',function(){noApps();})
-      $('#apps').is(':checked') ? $.cookie('my_apps','startedOnly',{expires:3650}) : $.removeCookie('my_apps');
+      $('#apps').is(':checked') ? cookie.my_apps = 'startedOnly' : delete cookie.my_apps;
+      saveCookie();
     });
     $('#vms').change(function(){
       $('span.outer.vms.stopped').finish().toggle('fast',function(){noVMs();});
-      $('#vms').is(':checked') ? $.cookie('my_vms','startedOnly',{expires:3650}) : $.removeCookie('my_vms');
+      $('#vms').is(':checked') ? cookie.my_vms = 'startedOnly' : delete cookie.my_vms;
+      saveCookie();
     });
   }
   $.post('/webGui/include/DashboardApps.php',{docker:'<?=$dockerd?>',vms:'<?=$libvirtd?>',vmusage:'<?=$vmusage?>'},function(d) {
@@ -963,10 +991,11 @@ function loadlist(init) {
     $('#vm_view_usage').append(data[2]).hideMe();
     $('.apps.switch').html("_(Containers)_ -- _(Started)_: "+started_apps+", _(Stopped)_: "+stopped_apps+", _(Paused)_: "+paused_apps);
     $('.vms.switch').html("_(VMs)_ -- _(Started)_: "+started_vms+", _(Stopped)_: "+stopped_vms+", _(Paused)_: "+paused_vms);
-    if ($.cookie('my_apps')!=null) $('span.apps.stopped').hide(0,noApps());
-    if ($.cookie('my_vms')!=null) $('span.vms.stopped').hide(0,noVMs());
+    if (cookie.my_apps!=null) $('span.apps.stopped').hide(0,noApps());
+    if (cookie.my_vms!=null) $('span.vms.stopped').hide(0,noVMs());
   });
 }
+
 function getCase() {
   $.post('/webGui/include/SelectCase.php',{mode:'get',file:'<?=$myfile?>'},function(model){
     if (!model) {
@@ -979,8 +1008,10 @@ function getCase() {
     }
   });
 }
+
 function changeMode(item) {
-  if (item==0) $.removeCookie('enter_share'); else $.cookie('enter_share',item,{expires:3650});
+  if (item==0) delete cookie.enter_share; else cookie.enter_share = item;
+  if (!startup) saveCookie();
 <?if (_var($var,'shareSMBEnabled')=='yes'):?>
   if (startup || $('.smb.share1').parent().find('tr:eq(1)').is(':visible')) {
     if (item==0) $('.smb.share1').show(); else $('.smb.share1').hide();
@@ -999,23 +1030,30 @@ function changeMode(item) {
 <?endif;?>
   $('select[name="enter_user"]').val(item);
 }
+
 function changeView(item) {
-  if (item==0) $.removeCookie('enter_view'); else $.cookie('enter_view',item,{expires:3650});
+  if (item==0) delete cookie.enter_view; else cookie.enter_view = item;
+  if (!startup) saveCookie();
   if (item==0) $('.view1').show(); else $('.view1').hide();
   if (item==1) $('.view2').show(); else $('.view2').hide();
   if (item==2) $('.view3').show(); else $('.view3').hide();
   if (item==3) $('.view4').show(); else $('.view4').hide();
 }
+
 function changeCPUline(val) {
   cpuline = val;
-  if (val==30) $.removeCookie('cpuline'); else $.cookie('cpuline',val,{expires:3650});
+  if (val==30) delete cookie.cpuline; else cookie.cpuline = val;
+  saveCookie();
   cpuchart.updateOptions({xaxis:{range:cpuline-1}});
 }
+
 function changeNetline(val) {
   netline = val;
-  if (val==30) $.removeCookie('netline'); else $.cookie('netline',val,{expires:3650});
+  if (val==30) delete cookie.netline; else cookie.netline = val;
+  saveCookie();
   netchart.updateOptions({xaxis:{range:netline-1}});
 }
+
 function smartMenu(table) {
   $(table).find('[id^="smart-"]').each(function() {
     var opts = [];
@@ -1037,6 +1075,7 @@ function smartMenu(table) {
     context.attach(id,opts);
   });
 }
+
 function portMenu() {
   var select = 'select[name="port_select"]';
   var option = $(select+' option');
@@ -1044,11 +1083,14 @@ function portMenu() {
     if (option[i].value == port_select) {option[i].selected = true; break;}
   }
 }
+
 function portSelect(name) {
-  $.cookie('port_select',name,{expires:3650});
+  cookie.port_select = name;
+  saveCookie();
   initCharts(true);
   port_select = name;
 }
+
 function moreInfo(data,table) {
   var info = [];
   if (data[1]>0) info.push(data[1]+' '+(data[1]==1 ? "_(device warning)_" : "_(device warnings)_"));
@@ -1057,6 +1099,7 @@ function moreInfo(data,table) {
   if (data[4]>0) info.push(data[4]+' '+(data[4]==1 ? "_(utilization warning)_" : "_(utilization warnings)_"));
   return info.length ? "<div class='last'><i class='icon-u-triangle failed'></i><span class='failed'>"+table+" _(has)_ "+info.join('. ')+".</span></div>" : "";
 }
+
 function autoscale(value,text,size,kilo) {
   if (kilo==null) kilo = 1000;
   var unit = kilo==1024 ? ['','ki','Mi','Gi','Ti','Pi','Ei'] : ['','k','M','G','T','P','E'];
@@ -1066,42 +1109,52 @@ function autoscale(value,text,size,kilo) {
   if (data==0) base=0;
   return ((Math.round(scale*data)/scale)+' '+unit[base]+text).replace(".","<?=_var($display,'number','.,')[0]?>");
 }
+
 function update900() {
   // prevent chart overflowing, reset every 15 minutes
   resetCharts();
   setTimeout(update900,900000);
 }
+
 function attributes(page,disk) {
   var tab = page=='New' ? 'tab2' : 'tab3';
   $.cookie('one',tab);
   location.replace('/Dashboard/'+page+'?name='+disk);
 }
+
 function capabilities(page,disk) {
   var tab = page=='New' ? 'tab3' : 'tab4';
   $.cookie('one',tab);
   location.replace('/Dashboard/'+page+'?name='+disk);
 }
+
 function identity(page,disk) {
   var tab = page=='New' ? 'tab4' : 'tab5';
   $.cookie('one',tab);
   location.replace('/Dashboard/'+page+'?name='+disk);
 }
+
 function acknowledge(id,disk) {
   $.post('/webGui/include/Acknowledge.php',{disk:disk},function(){
     $(id).removeClass('fa-thumbs-o-down orange-text').addClass('fa-thumbs-o-up green-text');$(id.replace('smart','text')).text("<?=_('healthy')?>");
   });
 }
+
 function dropdown(menu) {
   var select = 'select[name="'+menu+'"]';
   var size   = $(select+' option').length;
-  var option = $.cookie(menu)||0;
+  var option = cookie[menu]||0;
   if (option >= size) option = 0;
   $(select+' option')[option].selected = true;
   $(select).change();
 }
+
 function toggleCPU(init) {
-  if (!init) {if ($.cookie('cpu')==null) $.cookie('cpu','close',{expires:3650}); else $.removeCookie('cpu');}
-  if ($.cookie('cpu')==null) {
+  if (!init) {
+    if (!cookie.cpu) cookie.cpu = 'close'; else delete cookie.cpu;
+    saveCookie();
+  }
+  if (!cookie.cpu) {
     $('.cpu_open').show();
     $('.cpu_close').text("_(Hide details)_");
   } else {
@@ -1110,13 +1163,17 @@ function toggleCPU(init) {
   }
   setTimeout(function(){toggleChart(true);});
 }
+
 function toggleChart(init) {
-  if (!init) {if ($.cookie('cpu-chart')==null) $.cookie('cpu-chart','close',{expires:3650}); else $.removeCookie('cpu-chart');}
+  if (!init) {
+    if (!cookie.cpu_chart) cookie.cpu_chart = 'close'; else delete cookie.cpu_chart;
+    saveCookie();
+  }
   $('#cpu_main').removeClass('last');
   $('.cpu_open:last').removeClass('last');
-  if ($.cookie('cpu-chart')==null) {
-    var hidden = $.cookie('hidden_content');
-    hidden = hidden==null ? [] : hidden.split(';');
+  if (!cookie.cpu_chart) {
+    var hidden = cookie.hidden_content;
+    hidden = hidden ? hidden.split(';') : [];
     if (hidden.indexOf($('#cpu_main').parent().attr('sort'))==-1) {
       $('#cpu_chart').show();
       $('#cpuline').show();
@@ -1130,6 +1187,7 @@ function toggleChart(init) {
     if ($('.cpu_open').is(':visible')) $('.cpu_open:last').addClass('last'); else $('#cpu_main').addClass('last');
   }
 }
+
 function StopArray() {
 <?if ($confirm['stop']):?>
   swal({title:"_(Proceed)_?",text:"_(This will stop the array)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){StopArrayNow();});
@@ -1137,10 +1195,12 @@ function StopArray() {
    StopArrayNow();
 <?endif;?>
 }
+
 function StopArrayNow() {
   $('span.hand').prop('onclick',null).off('click').addClass('busy').css({'cursor':'default'});
   $.post('/update.htm',{startState:'<?=htmlspecialchars(_var($var,'mdState'))?>', cmdStop:'Stop'},function(){refresh();});
 }
+
 function StartArray() {
 <?if ($confirm['stop']):?>
   swal({title:"_(Proceed)_?",text:"_(This will start the array)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){StartArrayNow();});
@@ -1148,10 +1208,12 @@ function StartArray() {
   StartArrayNow();
 <?endif;?>
 }
+
 function StartArrayNow() {
   $('span.hand').prop('onclick',null).off('click').addClass('busy').css({'cursor':'default'});
   $.post('/update.htm',{startState:'<?=htmlspecialchars(_var($var,'mdState'))?>', cmdStart:'Start'},function(){refresh();});
 }
+
 function Reboot() {
 <?if ($confirm['down']):?>
   swal({title:"_(Proceed)_?",text:"_(This will reboot the system)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){RebootNow();});
@@ -1159,10 +1221,12 @@ function Reboot() {
   RebootNow();
 <?endif;?>
 }
+
 function RebootNow() {
   document.boot.cmd.value = 'reboot';
   document.boot.submit();
 }
+
 function Shutdown() {
 <?if ($confirm['down']):?>
   swal({title:"_(Proceed)_?",text:"_(This will shutdown the system)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){ShutdownNow();});
@@ -1170,10 +1234,12 @@ function Shutdown() {
   ShutdownNow();
 <?endif;?>
 }
+
 function ShutdownNow() {
   document.boot.cmd.value = 'shutdown';
   document.boot.submit();
 }
+
 <?if ($sleep):?>
 function Sleep() {
 <?if ($confirm['sleep']):?>
@@ -1182,16 +1248,17 @@ function Sleep() {
   SleepNow();
 <?endif;?>
 }
+
 function SleepNow() {
   $('#statusraid').append('&nbsp;&bullet;&nbsp;<span class="warning" style="font-weight:bold">System in sleep mode</span>');
   $.get('/plugins/dynamix.s3.sleep/include/SleepMode.php',function(){refresh();});
 }
 <?endif;?>
+
 function sortTables() {
   $('table.dashboard').each(function(){
     var table = $(this);
-    sanitizeMultiCookie(table.prop('id'), ';', true);
-    var index = $.cookie(table.prop('id'));
+    var index = cookie[table.prop('id')];
     // sorting list exists
     if (index != null) {
       index = index.split(';');
@@ -1211,6 +1278,7 @@ function sortTables() {
   });
   $('table.dashboard tbody').before(stopgap);
 }
+
 function addProperties() {
   $('div.frame tbody.system').addClass('sortable').attr('sort','_system_information_'.md5());
   $('div.frame tbody.system').find('td:first').prepend("<i class='fa fa-fw fa-eject control' onclick='openClose()' title=\"_(Show/Hide All Content)_\"></i>");
@@ -1233,10 +1301,10 @@ function addProperties() {
     function(){if ($(this)[0].offsetWidth < $(this)[0].scrollWidth) {recall.html(recover); recall=null;}}
   );
 }
+
 function showContent() {
-  var count = {'db-box1':$('table#db-box1 tbody').length, 'db-box2':$('table#db-box2 tbody').length, 'db-box3':$('table#db-box3 tbody').length}
-  sanitizeMultiCookie('inactive_content', ';', true);
-  var inactive = $.cookie('inactive_content');
+  var count = {'db_box1':$('table#db_box1 tbody').length, 'db_box2':$('table#db_box2 tbody').length, 'db_box3':$('table#db_box3 tbody').length}
+  var inactive = cookie.inactive_content;
   if (inactive) {
     inactive = inactive.split(';');
     for (let n=0,md5; md5=inactive[n]; n++) {
@@ -1247,8 +1315,7 @@ function showContent() {
       tbody.prev().hide();
     }
   }
-  sanitizeMultiCookie('hidden_content', ';', true);
-  var hidden = $.cookie('hidden_content');
+  var hidden = cookie.hidden_content;
   if (hidden) {
     hidden = hidden.split(';');
     for (let n=0,md5; md5=hidden[n]; n++) {
@@ -1259,25 +1326,28 @@ function showContent() {
       tbody.find('span.button').hide();
     }
   }
-  if (count['db-box1']>0) $('div#tile1').show();
-  if (count['db-box2']>0) $('div#tile2').show();
-  if (count['db-box3']>0) $('div#tile3').show();
+  if (count['db_box1']>0) $('div#tile1').show();
+  if (count['db_box2']>0) $('div#tile2').show();
+  if (count['db_box3']>0) $('div#tile3').show();
 }
+
 function setColor(l, t1, t2) {
   switch (true) {
   case (t1 > 0 && l >= t1): return 'redbar';
   case (t2 > 0 && l >= t2): return 'orangebar';
   default: return '';}
 }
+
 function fontColor(l, t1, t2) {
   switch (true) {
   case (t1 > 0 && l >= t1): return '#f0000c';
   case (t2 > 0 && l >= t2): return '#e68a00';
   default: return '#4f8a10';}
 }
+
 function openClose(button) {
-  var hidden = $.cookie('hidden_content');
-  hidden = hidden==null ? [] : hidden.split(';');
+  var hidden = cookie.hidden_content;
+  hidden = hidden ? hidden.split(';') : [];
   if (button) {
     // show/hide single tile content
     var tbody = button.closest('tbody');
@@ -1290,7 +1360,7 @@ function openClose(button) {
       tbody.mixedView(1);
       hidden.splice(hidden.indexOf(tbody.attr('sort')),1);
     }
-    $.cookie('hidden_content',hidden.join(';'),{expires:3650});
+    cookie.hidden_content = hidden.join(';');
   } else {
     // show/hide all tiles content
     if (hidden.length==0) {
@@ -1299,34 +1369,39 @@ function openClose(button) {
         $(this).mixedView(0);
         hidden.push($(this).attr('sort'));
       });
-      $.cookie('hidden_content',hidden.join(';'),{expires:3650});
+      cookie.hidden_content = hidden.join(';');
     } else {
       $('div.frame tbody').each(function(){
         $(this).find('.openclose').removeClass('fa-chevron-up fa-chevron-down').addClass('fa-chevron-up');
         $(this).mixedView(1);
       });
-      $.removeCookie('hidden_content');
+      delete cookie.hidden_content;
     }
   }
+  saveCookie();
 }
+
 function dismiss(button) {
   var tbody = button.closest('tbody');
   var table = tbody.parent();
   var tile = table.parent();
-  var inactive = $.cookie('inactive_content');
+  var inactive = cookie.inactive_content;
   tbody.hide();
   tbody.prev().hide();
   if (table.find('tbody:visible').length>0) tile.show(); else tile.hide();
-  inactive = inactive==null ? [] : inactive.split(';');
+  inactive = inactive ? inactive.split(';') : [];
   inactive.push(tbody.attr('sort'));
-  $.cookie('inactive_content',inactive.join(';'),{expires:3650});
+  cookie.inactive_content = inactive.join(';');
+  saveCookie();
 }
+
 function dialogStyle() {
   $('.ui-dialog-titlebar-close').css({'display':'none'});
   $('.ui-dialog-title').css({'text-align':'center','width':'100%','font-size':'1.8rem'});
   $('.ui-dialog-content').css({'padding-top':'15px','vertical-align':'bottom'});
   $('.ui-button-text').css({'padding':'0px 5px'});
 }
+
 function contentMgmt() {
   box = $("#iframe-popup");
   box.html($("#templateContentMgmt").html().build());
@@ -1338,11 +1413,12 @@ function contentMgmt() {
     modal: true,
     buttons: {
       "_(Reset)_": function(){
-        $.removeCookie('db-box1');
-        $.removeCookie('db-box2');
-        $.removeCookie('db-box3');
-        $.removeCookie('inactive_content');
-        $.removeCookie('hidden_content');
+        delete cookie.db_box1;
+        delete cookie.db_box2;
+        delete cookie.db_box3;
+        delete cookie.inactive_content;
+        delete cookie.hidden_content;
+        saveCookie();
         box.dialog('close');
         location.reload();
       },
@@ -1363,6 +1439,7 @@ function contentMgmt() {
   });
   dialogStyle();
 }
+
 function VMClone(uuid, name){
   box = $("#iframe-popup");
   box.html($("#templateClone").html());
@@ -1399,6 +1476,7 @@ function VMClone(uuid, name){
   });
   dialogStyle();
 }
+
 function selectsnapshot(uuid, name ,snaps, opt, getlist, state,fstype){
   box = $("#iframe-popup");
   box.html($("#templatesnapshot"+opt).html());
@@ -1486,7 +1564,7 @@ function LockButton() {
     $('i.tile').show();
     $('tbody.sortable').css({'cursor':'move'});
     $('div.nav-item.LockButton span').text("_(Lock sortable items)_");
-    $('#db-box1,#db-box2,#db-box3').sortable({connectWith:'#db-box1,#db-box2,#db-box3'});
+    $('#db_box1,#db_box2,#db_box3').sortable({connectWith:'#db_box1,#db_box2,#db_box3'});
     $('table.dashboard').sortable({helper:sortableHelper,items:'.sortable',cursor:'grab',opacity:0.6,placeholder:'dashboard-sortable',zIndex:9999,forceHelperSize:true,forcePlaceholderSize:true,
     receive:function(e,ui){
       var table = ui.sender, index = [];
@@ -1500,13 +1578,14 @@ function LockButton() {
         gap.hide();
       }
       table.find('tbody').each(function(){index.push($(this).attr('sort'));});
-      $.cookie(table.prop('id'),index.join(';'),{expires:3650});
+      cookie[table.prop('id')] = index.join(';');
     },
     stop:function(e,ui){
       var table = ui.item.parent(), index = [];
       if (ui.item.prev().html().search('stopgap')>0) ui.item.after(stopgap); else ui.item.before(stopgap);
       table.find('tbody').each(function(){index.push($(this).attr('sort'));});
-      $.cookie(table.prop('id'),index.join(';'),{expires:3650});
+      cookie[table.prop('id')] = index.join(';');
+      saveCookie();
     }});
   } else {
     $.removeCookie('lockbutton');
@@ -1690,6 +1769,7 @@ dashboard.on('message',function(msg,meta) {
     break;
   }
 });
+
 <?if ($apcupsd):?>
 var apcups = new NchanSubscriber('/sub/apcups',{subscriber:'websocket'});
 apcups.on('message',function(msg) {

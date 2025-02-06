@@ -3,7 +3,7 @@
 ACTIVE_CONTAINERS="$(docker ps -q --no-trunc 2>/dev/null)"
 
 # Exit if no containers are active and return zero
-if [ -z "${ACTIVE_CONTAINERS}" ]; then
+if [[ -z $ACTIVE_CONTAINERS ]]; then
   echo "0"
   exit
 fi

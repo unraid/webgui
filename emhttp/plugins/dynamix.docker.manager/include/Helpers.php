@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  * Copyright 2014-2021, Guilherme Jardim, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
@@ -661,8 +661,8 @@ function setXmlVal(&$xml, $value, $el, $attr=null, $pos=0) {
 }
 
 function getAllocations() {
-  global $DockerClient, $host;
-
+  global $DockerClient;
+  $host = DockerUtil::host();
   $ports = [];
   foreach ($DockerClient->getDockerContainers() as $ct) {
     $list = $port = [];

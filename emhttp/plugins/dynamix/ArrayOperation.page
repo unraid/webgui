@@ -4,8 +4,8 @@ Tag="snowflake-o"
 Nchan="device_list,disk_load,parity_list"
 ---
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -113,9 +113,9 @@ function toggle_state(device,name,action) {
 }
 function display_diskio() {
   if ($.cookie('diskio')===undefined) {
-    $('span.number').show(); $('span.diskio').hide();
-  } else {
     $('span.diskio').show(); $('span.number').hide();
+  } else {
+    $('span.number').show(); $('span.diskio').hide();
   }
 }
 function toggle_diskio(init) {
@@ -123,9 +123,9 @@ function toggle_diskio(init) {
     if ($.cookie('diskio')===undefined) $.cookie('diskio','diskio',{expires:3650}); else $.removeCookie('diskio');
   }
   if ($.cookie('diskio')===undefined) {
-    $('i.toggle').removeClass('fa-tachometer').addClass('fa-list');
-  } else {
     $('i.toggle').removeClass('fa-list').addClass('fa-tachometer');
+  } else {
+    $('i.toggle').removeClass('fa-tachometer').addClass('fa-list');
   }
   display_diskio();
 }

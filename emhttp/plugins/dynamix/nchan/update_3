@@ -50,7 +50,8 @@ function update_translation($locale) {
 }
 function ports() {
   global $net;
-  exec("ls --indicator-style=none $net|grep -Po '^(lo|(bond|eth)\d+)$'",$ports);
+  exec("ls --indicator-style=none $net|grep -Po '^(bond|eth|wlan)\d+$'",$ports);
+  $ports[] = 'lo';
   return $ports;
 }
 

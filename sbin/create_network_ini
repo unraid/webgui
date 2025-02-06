@@ -2,8 +2,8 @@
 #
 # script: create_network_ini
 #
-# Copyright 2005-2023, Lime Technology
-# Copyright 2012-2023, Bergware International.
+# Copyright 2005-2025, Lime Technology
+# Copyright 2012-2025, Bergware International.
 #
 # create initial network.ini file on system start
 # create system welcome message
@@ -235,17 +235,24 @@ if [[ -n $DATA && -e /var/run/nginx.socket ]]; then
 fi
 
 # generate our welcome text (management interface only)
-if [[ -z $interface || "eth0 br0 bond0" =~ $interface ]]; then
+if [[ -z $interface || "eth0 br0 bond0 wlan0" =~ $interface ]]; then
   . /etc/unraid-version
   echo -e "Unraid Server OS version: $version" >/etc/issue
   # find management interface
   [[ -e /sys/class/net/bond0 ]] && dev=bond0 || dev=eth0
   [[ -e /sys/class/net/br0 ]] && dev=br0
-  IPv4=$(ip -br -4 addr show $dev scope global|sed -r 's/metric [0-9]+//g'|awk '{print $3;exit}')
-  IPv6=$(ip -br -6 addr show $dev scope global|sed -r 's/metric [0-9]+//g'|awk '{print $NF;exit}')
+  IPv4=$(ip -br -4 addr show $dev scope global | sed -r 's/\/[0-9]+//g' | awk '{print $3;exit}')
+  IPv6=$(ip -br -6 addr show $dev scope global -temporary -deprecated | sed -r 's/\/[0-9]+//g' | awk '{print $3;exit}')
   # show current IP assignment
-  [[ -n $IPv4 ]] && echo " IPv4 address: ${IPv4%/*}" >>/etc/issue || echo " IPv4 address: not set" >>/etc/issue
-  [[ -n $IPv6 ]] && echo " IPv6 address: ${IPv6%/*}" >>/etc/issue || echo " IPv6 address: not set" >>/etc/issue
+  [[ -n $IPv4 ]] && echo " IPv4 address: $IPv4" >>/etc/issue || echo " IPv4 address: not set" >>/etc/issue
+  [[ -n $IPv6 ]] && echo " IPv6 address: $IPv6" >>/etc/issue || echo " IPv6 address: not set" >>/etc/issue
+  if [[ -e /sys/class/net/wlan0 ]]; then
+    echo "Wireless network:" >>/etc/issue
+    IPv4=$(ip -br -4 addr show wlan0 scope global | sed -r 's/\/[0-9]+//g' | awk '{print $3;exit}')
+    IPv6=$(ip -br -6 addr show wlan0 scope global -temporary -deprecated | sed -r 's/\/[0-9]+//g' | awk '{print $3;exit}')
+    [[ -n $IPv4 ]] && echo " IPv4 address: $IPv4" >>/etc/issue || echo " IPv4 address: not set" >>/etc/issue
+    [[ -n $IPv6 ]] && echo " IPv6 address: $IPv6" >>/etc/issue || echo " IPv6 address: not set" >>/etc/issue
+  fi
   echo >>/etc/issue
 fi
 exit 0

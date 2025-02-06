@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  * Copyright 2014-2021, Guilherme Jardim, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
@@ -13,8 +13,8 @@
 ?>
 <?
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
-require_once "$docroot/plugins/dynamix.docker.manager/include/Helpers.php";
 require_once "$docroot/webGui/include/Wrappers.php";
+require_once "$docroot/plugins/dynamix.docker.manager/include/Helpers.php";
 
 // add translations
 if (_var($_SERVER,'REQUEST_URI')!='docker' && substr(_var($_SERVER,'REQUEST_URI'),0,7)!='/Docker') {
@@ -35,20 +35,10 @@ $dockerManPaths = [
 	'webui-info'     => "$docroot/state/plugins/dynamix.docker.manager/docker.json"
 ];
 
-// load network variables if needed.
-$ethX = 'eth0';
-if (!isset($$ethX)) extract(parse_ini_file("$docroot/state/network.ini",true));
-$host = ipaddr($ethX);
-
-// get network drivers
-$driver = DockerUtil::driver();
-
-// determine active port name
-$port = file_exists('/sys/class/net/br0') ? 'BR0' : (file_exists('/sys/class/net/bond0') ? 'BOND0' : 'ETH0');
-
 // Docker configuration file - guaranteed to exist
 $docker_cfgfile = '/boot/config/docker.cfg';
 if (file_exists($docker_cfgfile)) {
+	$port = strtoupper(DockerUtil::port());
 	exec("grep -Pom2 '_SUBNET_|_{$port}(_[0-9]+)?=' $docker_cfgfile",$cfg);
 	if (isset($cfg[0]) && $cfg[0]=='_SUBNET_' && empty($cfg[1])) {
 		# interface has changed, update configuration
@@ -277,9 +267,8 @@ class DockerTemplates {
 	}
 
 	private function getControlURL(&$ct, $myIP, $WebUI) {
-		global $host;
 		$port = &$ct['Ports'][0];
-		$myIP = $myIP ?: $this->getTemplateValue($ct['Image'],'MyIP') ?: (_var($ct,'NetworkMode')=='host'||_var($port,'NAT') ? $host : (_var($port,'IP') ?: DockerUtil::myIP($ct['Name'])));
+		$myIP = $myIP ?: $this->getTemplateValue($ct['Image'],'MyIP') ?: (_var($ct,'NetworkMode')=='host'||_var($port,'NAT') ? DockerUtil::host() : (_var($port,'IP') ?: DockerUtil::myIP($ct['Name'])));
 		// Get the WebUI address from the templates as a fallback
 		$WebUI = preg_replace("%\[IP\]%", $myIP, $WebUI ?? $this->getTemplateValue($ct['Image'], 'WebUI'));
 		if (preg_match("%\[PORT:(\d+)\]%", $WebUI, $matches)) {
@@ -303,9 +292,11 @@ class DockerTemplates {
 	}
 
 	public function getAllInfo($reload=false,$com=true,$communityApplications=false) {
-		global $driver, $dockerManPaths, $host;
+		global $dockerManPaths;
 		$DockerClient = new DockerClient();
 		$DockerUpdate = new DockerUpdate();
+		$driver = DockerUtil::driver();
+		$host = DockerUtil::host();
 		//$DockerUpdate->verbose = $this->verbose;
 		$info = DockerUtil::loadJSON($dockerManPaths['webui-info']);
 		$autoStart = array_map('var_split', @file($dockerManPaths['autostart-file'],FILE_IGNORE_NEW_LINES) ?: []);
@@ -957,7 +948,8 @@ class DockerClient {
 	}
 
 	public function getDockerContainers() {
-		global $driver, $host;
+		$driver = DockerUtil::driver();
+		$host = DockerUtil::host();
 		// Return cached values
 		if (is_array($this::$containersCache)) return $this::$containersCache;
 		$this::$containersCache = [];
@@ -1158,7 +1150,7 @@ class DockerUtil {
 	}
 
 	public static function custom() {
-		return static::docker("network ls --filter driver='bridge' --filter driver='macvlan' --filter driver='ipvlan' --format='{{.Name}}' 2>/dev/null|grep -v '^bridge$'",true);
+		return static::docker("network ls --filter driver='bridge' --filter driver='macvlan' --filter driver='ipvlan' --format='{{.Name}}' 2>/dev/null | grep -v '^bridge$'",true);
 	}
 
 	public static function network($custom) {
@@ -1168,11 +1160,27 @@ class DockerUtil {
 	}
 
 	public static function cpus() {
-		exec('cat /sys/devices/system/cpu/*/topology/thread_siblings_list|sort -nu', $cpus);
+		exec('cat /sys/devices/system/cpu/*/topology/thread_siblings_list | sort -nu', $cpus);
 		return $cpus;
 	}
+
 	public static function ctMap($ct, $type='Name') {
 		return static::docker("inspect --format='{{.$type}}' $ct");
+	}
+
+	public static function port() {
+		if (lan_port('br0')) return 'br0';
+		if (lan_port('bond0')) return 'bond0';
+		if (lan_port('eth0')) return 'eth0';
+		if (lan_port('wlan0')) return 'wlan0';
+		return '';
+	}
+
+	public static function host() {
+		$port = static::port();
+		if (!$port) return '';
+		$port = lan_port($port,true)==0 && lan_port('wlan0') ? 'wlan0' : $port;
+		return exec("ip -br -4 addr show $port scope global | sed -r 's/\/[0-9]+//g' | awk '{print $3;exit}'");
 	}
 }
 ?>
