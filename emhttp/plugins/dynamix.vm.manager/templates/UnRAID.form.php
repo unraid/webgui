@@ -422,8 +422,8 @@ $hdrXML = "<?xml version='1.0' encoding='UTF-8'?>\n"; // XML encoding declaratio
 		$arrVMUSBs = getVMUSBs($strXML) ;
 	}
 
-	if (array_key_exists($arrConfig['template']['unraid'], $arrLibreELECVersions)) {
-		$arrConfigDefaults['disk'][0]['image'] = $arrLibreELECVersions[$arrConfig['template']['unraid']]['localpath'];
+	if (array_key_exists($arrConfig['template']['unraid'], $arrUnRAIDVersions)) {
+		$arrConfigDefaults['disk'][0]['image'] = $arrUnRAIDVersions[$arrConfig['template']['unraid']]['localpath'];
 	}
 ?>
 
