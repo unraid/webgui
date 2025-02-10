@@ -30,6 +30,7 @@ CERTPATH="$SSL/certs/certificate_bundle.pem"
 TSCERTPATH="$SSL/certs/ts_bundle.pem"
 MYSERVERS="/boot/config/plugins/dynamix.my.servers/myservers.cfg"
 DEFAULTS="/etc/default/nginx"
+SYSTEM="/sys/class/net"
 
 # Load defaults
 # Defines NGINX_CUSTOMFA for custom Content-Security-Policy frame-ancestors url
@@ -531,10 +532,14 @@ build_ssl(){
   LANMDNS=${LANNAME}${LOCAL_TLD:+.$LOCAL_TLD}
 
   # fetch LAN IP address (read management interface eth0)
-  sed -n '/^\[eth0\]$/,/^TYPE/p' $NETWORK_INI >$NETWORK_INI.eth0
-  LANIP=$(scan IPADDR:0 $NETWORK_INI.eth0);
-  LANIP6=$(scan IPADDR6:0 $NETWORK_INI.eth0);
-  rm -f $NETWORK_INI.eth0
+  [[ -e $SYSTEM/bond0 ]] && DEV=bond0 || DEV=eth0
+  [[ -e $SYSTEM/br0 ]] && DEV=br0
+  LANIP=$(ip -4 -br addr show $DEV scope global | sed -r 's/\/[0-9]+//g' | awk '{print $3;exit}')
+  LANIP6=$(ip -6 -br addr show $DEV scope global -temporary -deprecated | sed -r 's/\/[0-9]+//g' | awk '{print $3;exit}')
+
+  # try wireless connection if no IP address on interface eth0
+  [[ -z $LANIP && -e $SYSTEM/wlan0 ]] && LANIP=$(ip -4 -br addr show wlan0 scope global | sed -r 's/\/[0-9]+//g' | awk '{print $3;exit}')
+  [[ -z $LANIP6 && -e $SYSTEM/wlan0 ]] && LANIP6=$(ip -6 -br addr show wlan0 scope global -temporary -deprecated | sed -r 's/\/[0-9]+//g' | awk '{print $3;exit}')
 
   # regenerate self-signed cert if local TLD changes */
   SELFCERTPATH=$SSL/certs/${LANNAME}_unraid_bundle.pem

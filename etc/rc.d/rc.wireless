@@ -81,7 +81,7 @@ ipaddr_up(){
   if [[ $DHCP == yes ]]; then
     # bring up interface using DHCP/SLAAC
     ipv6_addr 1 1
-    OPTIONS="-q -n -p -t 10"
+    OPTIONS="-q -n -p -t10 -J"
     [[ -n $HOSTNAME ]] && OPTIONS="$OPTIONS -h $HOSTNAME"
     [[ $DNS == yes ]] && OPTIONS="$OPTIONS -C resolv.conf"
     [[ $IP == ipv4 ]] && OPTIONS="$OPTIONS -4"
@@ -180,7 +180,7 @@ wifi_start(){
   local REPLY
   if [[ -e $SYSTEM/$PORT ]]; then
     LINK=shim-$PORT
-    [[ -e $SYSTEM/$LINK ]] || run ip link add link $PORT name $LINK type ipvlan mode l2 bridge
+    [[ -e $SYSTEM/$LINK ]] || run ip link add link $PORT name $LINK type ipvtap mode l2 bridge
     run ip link set $PORT up
     run ip link set $LINK up
     ssl_init

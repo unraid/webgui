@@ -4,8 +4,8 @@ Tag="icon-vpn"
 Nchan="wg_poller"
 ---
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -20,11 +20,11 @@ $etc = '/etc/wireguard';
 $tmp = '/tmp/list.tmp';
 
 unset($subnets,$hosts,$subnets6,$hosts6,$vtuns,$filter,$docker);
-exec("ip -4 route show scope link|awk '/^[^d].+ dev (eth|br|bond)[0-9]+(\\.[0-9]+)?/{print \$1}'",$subnets);
-exec("ip -6 route show type unicast|awk '\$0 !~ \"expires\" && \$3 !~ \"^shim-\" && /^[^dfm:]/{print \$1}'",$subnets6);
-exec("ip -br -4 addr show scope global|awk '/^(br|bond|eth)[0-9]+(\\.[0-9]+)?/{split(\$3,ip,\"/\");print ip[1]}'",$hosts);
-exec("ip -br -6 addr show scope global|awk '/^(br|bond|eth)[0-9]+(\\.[0-9]+)?/{split(\$3,ip,\"/\");print ip[1]}'",$hosts6);
-exec("ls  --indicator-style=none $etc/wg*.conf*|grep -Po wg[0-9]+",$vtuns);
+exec("ip -4 route show scope link | awk '/^[^d].+ dev (eth|br|bond|wlan)[0-9]+(\\.[0-9]+)?/{print \$1}'",$subnets);
+exec("ip -6 route show type unicast | awk '\$0 !~ \"expires\" && \$3 !~ \"^shim-\" && /^[^dfm:]/{print \$1}'",$subnets6);
+exec("ip -4 -br addr show scope global | awk '/^(br|bond|eth|wlan)[0-9]+(\\.[0-9]+)?/{split(\$3,ip,\"/\");print ip[1]}'",$hosts);
+exec("ip -6 -br addr show scope global -temporary -deprecated | awk '/^(br|bond|eth|wlan)[0-9]+(\\.[0-9]+)?/{split(\$3,ip,\"/\");print ip[1]}'",$hosts6);
+exec("ls --indicator-style=none $etc/wg*.conf* | grep -Po wg[0-9]+",$vtuns);
 exec("docker network ls --filter driver='macvlan' --filter driver='ipvlan' --format='{{.Name}}' 2>/dev/null",$filter);
 
 $nginx = (array)@parse_ini_file('state/nginx.ini');
@@ -37,23 +37,25 @@ if (count($filter)) {
     elseif (strpos($network,':')!==false && !in_array($network,$subnets6)) $subnets6[] = $network;
   }
 }
-$subnets = implode(',',$subnets);
-$hosts = implode(',',$hosts);
+$subnets  = implode(',',$subnets);
+$hosts    = implode(',',$hosts);
 $subnets6 = implode(',',$subnets6);
-$hosts6 = implode(',',$hosts6);
+$hosts6   = implode(',',$hosts6);
 
 function ifname($eth, $new) {
   return str_replace('eth',$new,$eth);
 }
+
 function iflink($eth) {
-  $system = '/sys/class/net/';
-  if (file_exists($system.ifname($eth,'br'))) return ifname($eth,'br');
-  if (file_exists($system.ifname($eth,'bond'))) return ifname($eth,'bond');
+  if (lan_port(ifname($eth,'br'))) return ifname($eth,'br');
+  if (lan_port(ifname($eth,'bond'))) return ifname($eth,'bond');
   return $eth;
 }
+
 function concat($array) {
   return implode(',',array_map(function($v){return "'$v'";},$array));
 }
+
 function readConf(&$peer_wg, &$wg, $vtun) {
   global $etc,$netbase,$netpool,$netbase6,$netpool6,$validIP4,$validIP6;
   $conf = "$etc/$vtun.conf";
@@ -125,6 +127,7 @@ function readConf(&$peer_wg, &$wg, $vtun) {
   foreach ($peer_wg as $i) if (_var($wg,"TYPE:$i",0)>=7) {$vpn = $wg["TYPE:$i"]; break;}
   return [$conf,$cfg,$file,$vpn];
 }
+
 $public    = _var($nginx,'NGINX_WANFQDN');
 $active    = explode(' ',exec('wg show interfaces'));
 $autostart = explode(' ',@file_get_contents("$etc/autostart")?:'');
@@ -139,22 +142,26 @@ $dnsserver = _var($$ethX,'DNS_SERVER1');
 
 $link      = iflink($ethX);
 $vhost     = str_replace(['eth','br','bond'],'vhost',$link);
+$wlanUp4   = "iptables -t nat -A POSTROUTING -s <source> -o wlan0 -j MASQUERADE";
+$wlanUp6   = "ip6tables -t nat -A POSTROUTING -s <source> -o wlan0 -j MASQUERADE";
+$wlanDown4 = "iptables -t nat -D POSTROUTING -s <source> -o wlan0 -j MASQUERADE";
+$wlanDown6 = "ip6tables -t nat -D POSTROUTING -s <source> -o wlan0 -j MASQUERADE";
 $postUp0   = "$script add $link WireGuard-<wg> $server <port> <port> udp";
-$postUp1   = "logger -t wireguard -- 'Tunnel WireGuard-<wg> started';$services";
-$postUp2   = "iptables -t nat -A POSTROUTING -s <source> -o $link -j MASQUERADE;iptables -t nat -A POSTROUTING -s <source> -o $vhost -j MASQUERADE";
-$postUp3   = "iptables -N WIREGUARD_DROP_<WG>;iptables -A WIREGUARD -o $link -j WIREGUARD_DROP_<WG>";
+$postUp1   = "logger -t wireguard -- 'Tunnel WireGuard-<wg> started'; $services";
+$postUp2   = "iptables -t nat -A POSTROUTING -s <source> -o $link -j MASQUERADE; iptables -t nat -A POSTROUTING -s <source> -o $vhost -j MASQUERADE; $wlanUp4";
+$postUp3   = "iptables -N WIREGUARD_DROP_<WG>; iptables -A WIREGUARD -o $link -j WIREGUARD_DROP_<WG>";
 $postUpX   = "iptables -A WIREGUARD_DROP_<WG> -s <source> -d <target> -j DROP";
-$postUpZ   = "iptables -A WIREGUARD_DROP_<WG> -s <source> -j ACCEPT;iptables -A WIREGUARD_DROP_<WG> -j RETURN";
-$postUp26  = "ip6tables -t nat -A POSTROUTING -s <source> -o $link -j MASQUERADE;ip6tables -t nat -A POSTROUTING -s <source> -o $vhost -j MASQUERADE";
-$postUp36  = "ip6tables -N WIREGUARD_DROP_<WG>;ip6tables -A WIREGUARD -o $link -j WIREGUARD_DROP_<WG>";
+$postUpZ   = "iptables -A WIREGUARD_DROP_<WG> -s <source> -j ACCEPT; iptables -A WIREGUARD_DROP_<WG> -j RETURN";
+$postUp26  = "ip6tables -t nat -A POSTROUTING -s <source> -o $link -j MASQUERADE; ip6tables -t nat -A POSTROUTING -s <source> -o $vhost -j MASQUERADE; $wlanUp6";
+$postUp36  = "ip6tables -N WIREGUARD_DROP_<WG>; ip6tables -A WIREGUARD -o $link -j WIREGUARD_DROP_<WG>";
 $postUpX6  = "ip6tables -A WIREGUARD_DROP_<WG> -s <source> -d <target> -j DROP";
-$postUpZ6  = "ip6tables -A WIREGUARD_DROP_<WG> -s <source> -j ACCEPT;ip6tables -A WIREGUARD_DROP_<WG> -j RETURN";
+$postUpZ6  = "ip6tables -A WIREGUARD_DROP_<WG> -s <source> -j ACCEPT; ip6tables -A WIREGUARD_DROP_<WG> -j RETURN";
 $postDown0 = "$script del $link <port> udp";
-$postDown1 = "logger -t wireguard -- 'Tunnel WireGuard-<wg> stopped';$services";
-$postDown2 = "iptables -t nat -D POSTROUTING -s <source> -o $link -j MASQUERADE;iptables -t nat -D POSTROUTING -s <source> -o $vhost -j MASQUERADE";
-$postDown3 = "iptables -F WIREGUARD_DROP_<WG>;iptables -D WIREGUARD -o $link -j WIREGUARD_DROP_<WG>;iptables -X WIREGUARD_DROP_<WG>";
-$postDown26= "ip6tables -t nat -D POSTROUTING -s <source> -o $link -j MASQUERADE;ip6tables -t nat -D POSTROUTING -s <source> -o $vhost -j MASQUERADE";
-$postDown36= "ip6tables -F WIREGUARD_DROP_<WG>;ip6tables -D WIREGUARD -o $link -j WIREGUARD_DROP_<WG>;ip6tables -X WIREGUARD_DROP_<WG>";
+$postDown1 = "logger -t wireguard -- 'Tunnel WireGuard-<wg> stopped'; $services";
+$postDown2 = "iptables -t nat -D POSTROUTING -s <source> -o $link -j MASQUERADE; iptables -t nat -D POSTROUTING -s <source> -o $vhost -j MASQUERADE; $wlanDown4";
+$postDown3 = "iptables -F WIREGUARD_DROP_<WG>; iptables -D WIREGUARD -o $link -j WIREGUARD_DROP_<WG>; iptables -X WIREGUARD_DROP_<WG>";
+$postDown26= "ip6tables -t nat -D POSTROUTING -s <source> -o $link -j MASQUERADE; ip6tables -t nat -D POSTROUTING -s <source> -o $vhost -j MASQUERADE; $wlanDown6";
+$postDown36= "ip6tables -F WIREGUARD_DROP_<WG>; ip6tables -D WIREGUARD -o $link -j WIREGUARD_DROP_<WG>; ip6tables -X WIREGUARD_DROP_<WG>";
 
 $tld       = @file_get_contents("$docroot/webGui/include/tld.key")?:'';
 $validDNS  = "([0-9a-z]([0-9a-z\-]{0,61}[0-9a-z])?\.)+($tld)";
@@ -197,6 +204,7 @@ foreach (glob("$docroot/webGui/WG[1-9]*.page",GLOB_NOSORT) as $wgX) {
     $build = true;
   }
 }
+
 // add additional tunnels
 foreach ($vtuns as $wgX) {
   if ($wgX == 'wg0') continue;
@@ -244,26 +252,32 @@ if (!HTMLInputElement.prototype.reportValidity || (navigator.userAgent.indexOf("
         labelText = $(this).closest('dl').children().first()[0].textContent;
       } catch (err) { }
       // the browser generates the validationMessage, we cannot translate it
-      swal({title:labelText,text:this.validationMessage,html:true,type:'error',confirmButtonText:"_(Ok)_"});
+      swal({title:labelText,text:this.validationMessage,animation:'none',html:true,type:'error',confirmButtonText:"_(Ok)_"});
       return false;
     }
   };
 }
+
 function ipv4(ip) {
   return ip.indexOf('.') > 0;
 }
+
 function ipv6(ip) {
   return ip.indexOf(':') > 0;
 }
+
 function ipset(ip) {
   return ipv4(ip) ? ip : '['+ip+']';
 }
+
 function nodefault(ip) {
   return ip != '0.0.0.0/0';
 }
+
 function nodefault6(ip) {
   return ip != '::/0';
 }
+
 function validateForm(form,vtun) {
   // this runs when the Apply button is clicked, before built-in form validation and before the form's onsubmit function
   // if any fields do not pass basic validation, ensure they are visible then manually show the validation error
@@ -282,6 +296,7 @@ function validateForm(form,vtun) {
   });
   return isValid;
 }
+
 function prepareSettings(form,vtun) {
   var subnets = '<?=$subnets?>';
   var hosts = '<?=$hosts?>';
@@ -465,6 +480,7 @@ function prepareSettings(form,vtun) {
   if (!postup.val()) postup.prop('disabled',true);
   if (!postdown.val()) postdown.prop('disabled',true);
 }
+
 function keypair(form,i) {
   $.post('/webGui/include/update.wireguard.php',{'#cmd':'keypair'},function(keys){
     var key = keys.split('\0');
@@ -472,31 +488,36 @@ function keypair(form,i) {
     form.find('.public-'+i).val(key[1]).trigger('change');
   });
 }
+
 function presharedkey(form,i) {
   $.post('/webGui/include/update.wireguard.php',{'#cmd':'presharedkey'},function(key){
     form.find('.preshared-'+i).val(key).trigger('change');
   });
 }
+
 function clearTunnel(vtun) {
   $.removeCookie('my-'+vtun);
   $.removeCookie('view-'+vtun);
   $.removeCookie('block-'+vtun);
   refresh();
 }
+
 function addTunnel() {
   $.post('/webGui/include/update.wireguard.php',{'#cmd':'addtunnel','#name':'<?=$tower?>'},function(){refresh();});
 }
+
 function delTunnel(vtun) {
-  swal({title:"_(Delete Tunnel)_ "+vtun,text:"_(This removes any connections running over this tunnel)_",type:'warning',confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_",showCancelButton:true},function(){
+  swal({title:"_(Delete Tunnel)_ "+vtun,text:"_(This removes any connections running over this tunnel)_",type:'warning',animation:'none',html:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_",showCancelButton:true},function(){
     $.post('/webGui/include/update.wireguard.php',{'#cmd':'deltunnel','#vtun':vtun,'#name':'<?=$tower?>'},function(ok){
       if (ok==0) {
         clearTunnel(vtun);
       } else {
-        setTimeout(function(){swal({title:"_(Delete tunnel failed)_",text:"_(Tunnel has running containers attached)_<br>_(Stop corresponding docker containers)_",html:true,type:'error',confirmButtonText:"_(Ok)_"});},250);
+        setTimeout(function(){swal({title:"_(Delete tunnel failed)_",text:"_(Tunnel has running containers attached)_<br>_(Stop corresponding docker containers)_",animation:'none',html:true,type:'error',confirmButtonText:"_(Ok)_"});},250);
       }
     });
   });
 }
+
 function addPeer(form,vtun) {
   // don't add peer if there are errors that would be propagated to the peer
   if (!validateForm(form,vtun)) return false;
@@ -574,6 +595,7 @@ function addPeer(form,vtun) {
     });
   });
 }
+
 function delPeer(form,peer) {
   var deleted = form.find('input[name="#deleted"]');
   var comma = deleted.val() ? ',' : '';
@@ -581,12 +603,15 @@ function delPeer(form,peer) {
   form.find(peer).remove();
   form.find('input[name="Name:0"]').trigger('change');
 }
+
 function lockEye(form,i) {
   form.find('i[class*="eye'+i+'"]').removeClass('key-off').addClass('key-off');
 }
+
 function toLC(field) {
   field.value=(field.value) ? field.value.toLowerCase() : '';
 }
+
 function updatePeer(form,i,n,vtun) {
   var unraid = form.find('input[name="#internet"]').val().replace(/^(www\.).+(\.unraid.net)$/,'$1<hash>$2');
   var type = form.find('select[name="TYPE:'+i+'"]').val();
@@ -648,6 +673,7 @@ function updatePeer(form,i,n,vtun) {
   showRoute(form,vtun);
   showAccess(form,i,n);
 }
+
 function setProtocol(form,vtun,update) {
   switch (form.find('select[name="PROT:0"]').val()) {
   case '46':
@@ -708,6 +734,7 @@ function setProtocol(form,vtun,update) {
     break;
   }
 }
+
 function quickValidate(field) {
   try {
     var form = $(field).parents('form');
@@ -716,6 +743,7 @@ function quickValidate(field) {
   } catch (err) { }
   return field.reportValidity();
 }
+
 function setPool(form,vtun) {
   // perform standard field validation on Network and Mask before custom validation
   field = form.find('input[name="gui:Network:0"]')[0];
@@ -753,6 +781,7 @@ function setPool(form,vtun) {
     $(this).val((assign).long2ip()).trigger('change');
   });
 }
+
 function setPool6(form,vtun) {
   // perform standard field validation on Network6 and Mask6 before custom validation
   field = form.find('input[name="gui:Network6:0"]')[0];
@@ -793,6 +822,7 @@ function setPool6(form,vtun) {
     $(this).val(netbase6[vtun]+assign).trigger('change');
   });
 }
+
 function verifyInSubnet(field) {
   // perform standard field validation before custom validation
   field.setCustomValidity('');
@@ -813,6 +843,7 @@ function verifyInSubnet(field) {
   }
   return true;
 }
+
 function verifyInSubnet6(field) {
   // perform standard field validation before custom validation
   field.setCustomValidity('');
@@ -835,6 +866,7 @@ function verifyInSubnet6(field) {
   }
   return true;
 }
+
 function setAllow(form,subnet,i) {
   var input = form.find('input[name="AllowedIPs:'+i+'"]');
   var type = form.find('select[name="TYPE:'+i+'"]').val();
@@ -853,6 +885,7 @@ function setAllow(form,subnet,i) {
   input.val(list.join(', '));
   lockEye(form,i);
 }
+
 function setAllow6(form,subnet6,i) {
   var input = form.find('input[name="AllowedIPs:'+i+'"]');
   var type = form.find('select[name="TYPE:'+i+'"]').val();
@@ -871,6 +904,7 @@ function setAllow6(form,subnet6,i) {
   input.val(list.join(', '));
   lockEye(form,i);
 }
+
 function ping(form,button,field) {
   $(button).val('Pinging...');
   $.post('/webGui/include/update.wireguard.php',{'#cmd':'ping','#addr':form.find(field).val().replace(/\/.+$/,'')},function(reply){
@@ -882,13 +916,16 @@ function ping(form,button,field) {
     setTimeout(function(){$(button).removeClass('ok nok').val("_(Ping)_")},3000);
   });
 }
+
 function WGconfig(icon,file,path) {
   if (!$(icon).hasClass('key-off')) openChanges('wg_config '+file+' '+path, "_(WireGuard Configuration)_");
 }
+
 function highlight(form,input,i) {
   $(input).css({'color':'#e68a00'});
   lockEye(form,i);
 }
+
 function showRemark(form) {
   var upnp = form.find('select[name="UPNP:0"]').val();
   var vpn = 0;
@@ -896,6 +933,7 @@ function showRemark(form) {
   if (upnp=='' || vpn > 0) form.find('span.remark').hide(); else form.find('span.remark').show();
   if (upnp=='' && vpn < 7) form.find('span.upnp').show(); else form.find('span.upnp').hide();
 }
+
 function showRoute(form,vtun,i) {
   var nat = form.find('select[name="NAT:0"]').val();
   var vpn = 0, lan = false;
@@ -912,6 +950,7 @@ function showRoute(form,vtun,i) {
   }
   if (i!=null) lockEye(form,i);
 }
+
 function showAccess(form,i,n) {
   switch (n) {
     case '0':
@@ -939,6 +978,7 @@ function showAccess(form,i,n) {
     case '8': form.find('span#access-type-'+i).html("_(Remark)_: _(VPN tunnel for docker containers only)_"); break;
   }
 }
+
 function portRemark(form,vtun,val) {
   $('#my-port-'+vtun).text(val);
   var port = form.find('input[name="gui:ListenPort:0"]').val()||netport[vtun];
@@ -946,6 +986,7 @@ function portRemark(form,vtun,val) {
     if (i>0 && form.find('input[name="gui:Endpoint:'+i+'"]').val()) $(this).attr('placeholder',port);
   });
 }
+
 function openClose(form,icon,zone) {
   if (icon) {
     form.find(zone).toggle('slow');
@@ -970,6 +1011,7 @@ function openClose(form,icon,zone) {
     if (!form.find(zone.replace('div.key','i.zone')).hasClass('key-off')) form.find(zone).toggle('slow');
   }
 }
+
 function blockToggle(vtun) {
   $('div#block-'+vtun).toggle('slow');
   if ($('i#block-'+vtun).hasClass('fa-chevron-up')) {
@@ -980,11 +1022,13 @@ function blockToggle(vtun) {
     $.removeCookie('block-'+vtun);
   }
 }
+
 function importFile(file) {
   var reader = new FileReader();
   reader.readAsText(file,'UTF-8');
   reader.onload = function(e){$.post('/webGui/include/update.wireguard.php',{'#cmd':'import','#name':'<?=$tower?>','#data':e.target.result},function(vtun){clearTunnel(vtun);});};
 }
+
 function isPublic(ipv4) {
   var rfc1918 = ['10.0.0.0/8','172.16.0.0/12','192.168.0.0/16'];
   for (var i=0,rfc; rfc=rfc1918[i]; i++) {
@@ -993,6 +1037,7 @@ function isPublic(ipv4) {
   }
   return true;
 }
+
 function getPublicIP(ip,wg,protocol) {
   $.post('/webGui/include/update.wireguard.php',{'#cmd':'public','#ip':ip,'#prot':protocol},function(x){
     var endpoints = [<?=concat($endpoints)?>];
@@ -1090,7 +1135,7 @@ $(function(){
     });
     if (xml.desc() != url.desc()) {
       xml = url;
-      swal({title:"_(UPnP state changed to)_ "+upnp,text:"_(Please consider re-applying all configurations)_<br>(_(enable advanced settings view)_)",type:'warning',html:true});
+      swal({title:"_(UPnP state changed to)_ "+upnp,text:"_(Please consider re-applying all configurations)_<br>(_(enable advanced settings view)_)",type:'warning',animation:'none',html:true});
     }
   });
   $('#start-wg0').switchButton({labels_placement:'left',off_label:"_(Off)_",on_label:"_(On)_",clear:false});
@@ -1196,11 +1241,12 @@ $(function(){
   else if (form.find('select[name="NAT:0"]').val()=='no' && lan) $('span#my-static1-wg0').show();
   else if (lan) $('span#my-static2-wg0').show();
 <?if (file_exists($tmp)):?>
-  setTimeout(function(){swal({title:"_(Peer update required)_",text:"<b><u>_(List of peers)_</u></b><br><span style='display:inline-block;text-align:left'><?=file_get_contents($tmp)?></span>",type:'warning',html:true});},200);
+  setTimeout(function(){swal({title:"_(Peer update required)_",text:"<b><u>_(List of peers)_</u></b><br><span style='display:inline-block;text-align:left'><?=file_get_contents($tmp)?></span>",type:'warning',animation:'none',html:true});},200);
 <?delete_file($tmp);?>
 <?endif;?>
 });
 </script>
+
 <input type='file' id='file' accept='.conf' onchange='importFile(this.files[0])' style='display:none'>
 <div markdown="1" id="block-wg0" style="display:none">
 <form markdown="1" name="wg0" autocomplete="off" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareSettings($(this),'wg0')">

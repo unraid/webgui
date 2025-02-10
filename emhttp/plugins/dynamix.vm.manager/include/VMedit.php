@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  * Copyright 2015-2021, Derek Macias, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
@@ -25,8 +25,8 @@ if (substr($_SERVER['REQUEST_URI'],0,4) != '/VMs') {
 switch ($display['theme']) {
 	case 'gray' : $bgcolor = '#121510'; $border = '#606e7f'; $top = -44; break;
 	case 'azure': $bgcolor = '#edeaef'; $border = '#606e7f'; $top = -44; break;
-	case 'black': $bgcolor = '#212121'; $border = '#2b2b2b'; $top = -58; break;
-	default     : $bgcolor = '#ededed'; $border = '#e3e3e3'; $top = -58; break;
+	case 'black': $bgcolor = '#212121'; $border = '#2b2b2b'; $top = -64; break;
+	default     : $bgcolor = '#ededed'; $border = '#e3e3e3'; $top = -64; break;
 }
 
 $templateslocation = "/boot/config/plugins/dynamix.vm.manager/savedtemplates.json";
@@ -119,34 +119,35 @@ if (strpos($strSelectedTemplate,"User-") !== false) {
 				<div id="template_img_chooser_outer">
 					<div id="template_img_chooser">
 					<?
-						$arrImagePaths = [
-							"$docroot/plugins/dynamix.vm.manager/templates/images/*.png" => '/plugins/dynamix.vm.manager/templates/images/',
-							"$docroot/boot/config/plugins/dynamix.vm.manager/templates/images/*.png" => '/boot/config/plugins/dynamix.vm.manager/templates/images/'
-						];
-						foreach ($arrImagePaths as $strGlob => $strIconURLBase) {
-							foreach (glob($strGlob) as $png_file) {
-								echo '<div class="template_img_chooser_inner"><img src="'.$strIconURLBase.basename($png_file).'" basename="'.basename($png_file).'"><p>'.basename($png_file,'.png').'</p></div>';
-							}
+					$arrImagePaths = [
+						"$docroot/plugins/dynamix.vm.manager/templates/images/*.png" => '/plugins/dynamix.vm.manager/templates/images/',
+						"$docroot/boot/config/plugins/dynamix.vm.manager/templates/images/*.png" => '/boot/config/plugins/dynamix.vm.manager/templates/images/'
+					];
+					foreach ($arrImagePaths as $strGlob => $strIconURLBase) {
+						foreach (glob($strGlob) as $png_file) {
+							echo '<div class="template_img_chooser_inner"><img src="'.$strIconURLBase.basename($png_file).'" basename="'.basename($png_file).'"><p>'.basename($png_file,'.png').'</p></div>';
 						}
+					}
 					?>
 					</div>
 				</div>
 			</td>
+			<td></td>
+		</tr>
+		<tr>
+			<td>_(Autostart)_:</td>
+			<td>
+				<span class="width"><input type="checkbox" id="domain_autostart" name="domain[autostart]" style="display:none" class="autostart" value="1" <?if ($arrLoad['autostart']) echo 'checked'?>></span>
+			</td>
+			<td></td>
 		</tr>
 	</table>
 
-	<table>
-		<tr style="line-height: 16px; vertical-align: middle;">
-			<td>_(Autostart)_:</td>
-			<td><div style="margin-left:-10px;padding-top:6px"><input type="checkbox" id="domain_autostart" name="domain[autostart]" style="display:none" class="autostart" value="1" <?if ($arrLoad['autostart']) echo 'checked'?>></div></td>
-		</tr>
-	</table>
 	<blockquote class="inline_help">
 		<p>If you want this VM to start with the array, set this to yes.</p>
 	</blockquote>
 
 	<div id="form_content"><?eval('?>'.parse_file("$docroot/plugins/dynamix.vm.manager/templates/{$arrLoad['form']}",false))?></div>
-
 	</form>
 </div>
 
@@ -167,18 +168,17 @@ function isinlineXMLMode() {
 	return ($.cookie('vmmanager_inline_mode') == 'show');
 }
 
-function hidexml(checked)
-{
+function hidexml(checked) {
 	var form = document.getElementById("vmform"); // Replace "yourFormId" with the actual ID of your form
-		var xmlElements = form.getElementsByClassName("xml");
-		if (checked == 0) xmldisplay = "none"; else xmldisplay = "";
-		// Unhide each element
-		for (var i = 0; i < xmlElements.length; i++) {
-			xmlElements[i].style.display = xmldisplay; // Setting to empty string will revert to default style
-}
+	var xmlElements = form.getElementsByClassName("xml");
+	if (checked == 0) xmldisplay = "none"; else xmldisplay = "";
+	// Unhide each element
+	for (var i = 0; i < xmlElements.length; i++) {
+		xmlElements[i].style.display = xmldisplay; // Setting to empty string will revert to default style
+	}
 }
 
-$(function() {
+$(function(){
 	$('.autostart').switchButton({
 		on_label: "_(Yes)_",
 		off_label: "_(No)_",

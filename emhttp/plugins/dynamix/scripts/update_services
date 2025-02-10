@@ -6,5 +6,5 @@ lock=/tmp/atlock.tmp
 
 log "delay = ${1:-1}s"
 rm -f $lock
-echo "sleep ${1:-1};/usr/local/emhttp/webGui/scripts/reload_services $lock"|at -M now 2>/dev/null
+echo "sleep ${1:-1};/usr/local/emhttp/webGui/scripts/reload_services $lock"|at -M now &>/dev/null
 exit 0

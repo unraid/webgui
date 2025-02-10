@@ -129,19 +129,24 @@ function exceed($value, $limit, $top=100) {
 }
 
 function ipaddr($ethX='eth0', $prot=4) {
-  global $$ethX;
-  switch (_var($$ethX,'PROTOCOL:0')) {
-  case 'ipv4':
-    return _var($$ethX,'IPADDR:0');
-  case 'ipv6':
-    return _var($$ethX,'IPADDR6:0');
-  case 'ipv4+ipv6':
-    switch ($prot) {
-    case 4: return _var($$ethX,'IPADDR:0');
-    case 6: return _var($$ethX,'IPADDR6:0');
-    default:return [_var($$ethX,'IPADDR:0'),_var($$ethX,'IPADDR6:0')];}
+  $wlan = $ethX=='eth0' && lan_port('wlan0') && lan_port('wlan0',true);
+  switch ($prot) {
+  case 4:
+    $ipv4 = exec("ip -4 -br addr show $ethX scope global | awk '{print \$3;exit}' | sed -r 's/\/[0-9]+//'");
+    if ($wlan) $ipv4 = $ipv4 ?: exec("ip -4 -br addr show wlan0 scope global | awk '{print \$3;exit}' | sed -r 's/\/[0-9]+//'");
+    return $ipv4;
+  case 6:
+    $ipv6 = exec("ip -6 -br addr show $ethX scope global -temporary -deprecated | awk '{print \$3;exit}' | sed -r 's/\/[0-9]+//'");
+    if ($wlan) $ipv6 = $ipv6 ?: exec("ip -6 -br addr show wlan0 scope global -temporary -deprecated | awk '{print \$3;exit}' | sed -r 's/\/[0-9]+//'");
+    return $ipv6;
   default:
-    return _var($$ethX,'IPADDR:0');
+    $ipv4 = exec("ip -4 -br addr show $ethX scope global | awk '{print \$3;exit}' | sed -r 's/\/[0-9]+//'");
+    $ipv6 = exec("ip -6 -br addr show $ethX scope global -temporary -deprecated | awk '{print \$3;exit}' | sed -r 's/\/[0-9]+//'");
+    if ($wlan) {
+      $ipv4 = $ipv4 ?: exec("ip -4 -br addr show wlan0 scope global | awk '{print \$3;exit}' | sed -r 's/\/[0-9]+//'");
+      $ipv6 = $ipv6 ?: exec("ip -6 -br addr show wlan0 scope global -temporary -deprecated | awk '{print \$3;exit}' | sed -r 's/\/[0-9]+//'");
+    }
+    return [$ipv4,$ipv6];
   }
 }
 

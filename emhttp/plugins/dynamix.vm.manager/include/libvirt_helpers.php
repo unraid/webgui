@@ -1230,16 +1230,8 @@ class Array2XML {
 	function getValidNetworks() {
 		global $lv;
 		$arrValidNetworks = [];
-		exec("ls --indicator-style=none /sys/class/net|grep -Po '^((vir)?br|vhost)[0-9]+(\.[0-9]+)?'",$arrBridges);
-		if (!is_array($arrBridges)) {
-			$arrBridges = [];
-		}
-
-		// Make sure the default libvirt bridge is first in the list
-		if (($key = array_search('virbr0', $arrBridges)) !== false) {
-			unset($arrBridges[$key]);
-		}
-		// We always list virbr0 because libvirt might not be started yet (thus the bridge doesn't exists)
+		exec("ls --indicator-style=none /sys/class/net | grep -Po '^(br|vhost|wlan)[0-9]+(\.[0-9]+)?'",$arrBridges);
+		// add 'virbr0' as default first choice
 		array_unshift($arrBridges, 'virbr0');
 
 		$arrValidNetworks['bridges'] = array_values($arrBridges);
@@ -1256,6 +1248,7 @@ class Array2XML {
 
 			$arrValidNetworks['libvirt'] = array_values($arrVirtual);
 		}*/
+
 		return $arrValidNetworks;
 	}
 
