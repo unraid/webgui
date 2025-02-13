@@ -200,10 +200,8 @@ foreach ($containers as $ct) {
         echo "<div class='advanced'><a class='exec' onclick=\"updateContainer('".addslashes(htmlspecialchars($name))."');\"><span style='white-space:nowrap;'><i class='fa fa-cloud-download fa-fw'></i> "._('force update')."</span></a></div>";
       } elseif (!empty($composestack)) {
         echo "<div><span><i class='fa fa-docker fa-fw'/></i> "._("Compose")."</span></div>";
-        echo "<span tyle='white-space:nowrap;'><i class='fa fa-check fa-fw'></i> "._('up-to-date')."</span>";
       } else {
         echo "<div><span><i class='fa fa-docker fa-fw'/></i> "._("3rd Party")."</span></div>";
-        echo "<span tyle='white-space:nowrap;'><i class='fa fa-check fa-fw'></i> "._('up-to-date')."</span>";
       }
       break;
     case 1:
@@ -212,10 +210,8 @@ foreach ($containers as $ct) {
         echo "<a class='exec' onclick=\"updateContainer('".addslashes(htmlspecialchars($name))."');\"><span style='white-space:nowrap;'><i class='fa fa-cloud-download fa-fw'></i> "._('apply update')."</span></a>";
       } elseif (!empty($composestack)) {
         echo "<div><span><i class='fa fa-docker fa-fw'/></i> Compose</span></a></div>";
-        echo "<span style='white-space:nowrap;'><i class='fa fa-cloud-download fa-fw'></i> "._('update available')."</span>";
       } else {
         echo "<div><span><i class='fa fa-docker fa-fw'/></i> 3rd Party</span></div>";
-        echo "<span style='white-space:nowrap;'><i class='fa fa-cloud-download fa-fw'></i> "._('update available')."</span>";
       }
       break;
     case 2:
@@ -228,10 +224,8 @@ foreach ($containers as $ct) {
         echo "<div class='advanced'><a class='exec' onclick=\"updateContainer('".addslashes(htmlspecialchars($name))."');\"><span style='white-space:nowrap;'><i class='fa fa-cloud-download fa-fw'></i> "._('force update')."</span></a></div>";
       } elseif (!empty($composestack)) {
         echo "<div><span><i class='fa fa-docker fa-fw'/></i> "._("Compose")."</span></div>";
-        echo "<span style='white-space:nowrap;'><i class='fa fa-unlink'></i> "._('not available')."</span>";
       } else {
         echo "<div><span><i class='fa fa-docker fa-fw'/></i> "._("3rd Party")."</span></div>";
-        echo "<span style='white-space:nowrap;'><i class='fa fa-unlink'></i> "._('not available')."</span>";
       }
       break;
     }
