@@ -347,11 +347,12 @@ if ($snapshots != null && count($snapshots) && !$boolNew) {
 <input type="hidden" name="domain[memoryBacking]" id="domain_memorybacking" value="<?=htmlspecialchars($arrConfig['domain']['memoryBacking'])?>">
 
 <table>
-	<tr class="hidden">
+	<tr id="zfs-name" class="hidden">
 		<td></td>
 		<td>
-			<span id="snap-rename" class="orange-text"><i class="fa fa-warning"></i> _(Rename disabled, <?=$snapcount?> snapshot(s) exists.)_</span>
-			<span id="zfs-name" class="orange-text"><i class="fa fa-warning"></i> _(Name contains invalid characters or does not start with an alphanumberic for a ZFS storage location<br>Only these special characters are valid Underscore (_) Hyphen (-) Colon (:) Period (.))_</span>
+			<span class="orange-text"><i class="fa fa-fw fa-warning"></i> _(Rename disabled, <?=$snapcount?> snapshot(s) exists)_.</span><br>
+			<span class="orange-text"><i class="fa fa-fw fa-warning"></i> _(Name contains invalid characters or does not start with an alphanumberic for a ZFS storage location)_</span><br>
+			<span class="green-text"><i class="fa fa-fw fa-info-circle"></i> _(Only these special characters are valid Underscore (_) Hyphen (-) Colon (:) Period (.))_</span>
 		</td>
 		<td></td>
 	</tr>
@@ -655,7 +656,7 @@ if (!isset($arrValidMachineTypes[$arrConfig['domain']['machine']])) {
 	<tr class="advanced">
 		<td>_(BIOS)_:</td>
 		<td>
-			<span class="width"><select name="domain[ovmf]" id="domain_ovmf" onchange="BIOSChange(this)" class="narrow">
+			<span class="width"><select name="domain[ovmf]" id="domain_ovmf" onchange="BIOSChange(this.value)" class="narrow">
 			<?
 			echo mk_option($arrConfig['domain']['ovmf'], '0', _('SeaBIOS'));
 			if (file_exists('/usr/share/qemu/ovmf-x64/OVMF_CODE-pure-efi.fd')) {
@@ -913,7 +914,7 @@ if (!isset($arrValidMachineTypes[$arrConfig['domain']['machine']])) {
 	<tr class="advanced disk_bus_options">
 		<td>_(vDisk Bus)_:</td>
 		<td>
-			<span class="width"><select name="disk[<?=$i?>][bus]" class="disk_bus narrow" onchange="BusChange(this)">
+			<span class="width"><select name="disk[<?=$i?>][bus]" class="disk_bus narrow" onchange="BusChange(this.value,<?=$i?>)">
 			<?mk_dropdown_options($arrValidDiskBuses, $arrDisk['bus']);?>
 			</select></span>
 			<span class="label">_(Boot Order)_:</span>
@@ -924,7 +925,7 @@ if (!isset($arrValidMachineTypes[$arrConfig['domain']['machine']])) {
 			</select>
 			<?if ($arrDisk['bus'] == "virtio" || $arrDisk['bus'] == "usb") $ssddisabled = "hidden"; else $ssddisabled = "";?>
 			<span id="disk[<?=$i?>][rotatetext]" class="label <?=$ssddisabled?>">_(SSD)_:</span>
-			<input type="checkbox" id="disk[<?=$i?>][rotation]" class="trim rotation second <?=$ssddisabled?>" onchange="updateSSDCheck(this)" name="disk[<?=$i?>][rotation]" <?=$arrDisk['rotation'] ? "checked ":"";?> value="<?=$arrDisk['rotation']?>">
+			<input type="checkbox" id="disk[<?=$i?>][rotation]" class="rotation <?=$ssddisabled?>" onchange="updateSSDCheck(this)" name="disk[<?=$i?>][rotation]" <?=$arrDisk['rotation'] ? "checked ":"";?> value="<?=$arrDisk['rotation']?>">
 		</td>
 		<td></td>
 	</tr>
@@ -1066,7 +1067,7 @@ if (!isset($arrValidMachineTypes[$arrConfig['domain']['machine']])) {
 	<tr class="advanced disk_bus_options">
 		<td>_(vDisk Bus)_:</td>
 		<td>
-			<span class="width"><select name="disk[{{INDEX}}][bus]" class="disk_bus narrow" onchange="BusChange(this)">
+			<span class="width"><select name="disk[{{INDEX}}][bus]" class="disk_bus narrow" onchange="BusChange(this.value,{{INDEX}})">
 			<?mk_dropdown_options($arrValidDiskBuses, '');?>
 			</select></span>
 			<span class="label">_(Boot Order)_:</span>
@@ -1076,7 +1077,7 @@ if (!isset($arrValidMachineTypes[$arrConfig['domain']['machine']])) {
 			<?mk_dropdown_options($arrValidDiskDiscard, "unmap");?>
 			</select>
 			<span id="disk[{{INDEX}}][rotatetext]" class="label hidden">_(SSD)_:</span>
-			<input type="checkbox" id="disk[{{INDEX}}][rotation]" class="trim rotation second hidden" onchange="updateSSDCheck(this)" name="disk[{{INDEX}}[rotation]" value='0'>
+			<input type="checkbox" id="disk[{{INDEX}}][rotation]" class="rotation hidden" onchange="updateSSDCheck(this)" name="disk[{{INDEX}}[rotation]" value='0'>
 		</td>
 		<td></td>
 	<tr class="advanced disk_bus_options">
@@ -1282,9 +1283,9 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 			?>
 			</select></span>
 			<span id="Porttext" class="label <?=$hiddenport?>">_(VM Console Port)_:</span>
-			<input type="number" size="5" maxlength="5" id="port" class="trim second <?=$hiddenport?>" name="gpu[<?=$i?>][port]" value="<?=$arrGPU['port']?>">
+			<input id="port" type="number" size="5" maxlength="5" class="trim second <?=$hiddenport?>" name="gpu[<?=$i?>][port]" value="<?=$arrGPU['port']?>">
 			<span id="WSPorttext" class="label <?=$hiddenwsport?>">_(VM Console WS Port)_:</span>
-			<input type="number" size="5" maxlength="5" id="wsport" class="trim second <?=$hiddenwsport?>" name="gpu[<?=$i?>][wsport]" value="<?=$arrGPU['wsport']?>">
+			<input id="wsport" type="number" size="5" maxlength="5" class="trim second <?=$hiddenwsport?>" name="gpu[<?=$i?>][wsport]" value="<?=$arrGPU['wsport']?>">
 		</td>
 		<td></td>
 	</tr>
@@ -1342,7 +1343,7 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 	<?
 	if ($arrValidGPUDevices[$arrGPU['id']]['bootvga'] == "1") $bootgpuhidden = "";
 	?>
-	<tr id="gpubootvga<?=$i?>" class="<?=$bootgpuhidden?>"><td>_(Graphics ROM Needed?)_:</td><td><span class="orange-text"><i class="fa fa-warning"></i> _(GPU is primary adapater, vbios may be required.)_</span></td></tr>
+	<tr id="gpubootvga<?=$i?>" class="<?=$bootgpuhidden?>"><td>_(Graphics ROM Needed)_?:</td><td><span class="orange-text"><i class="fa fa-warning"></i> _(GPU is primary adapter, vbios may be required)_.</span></td></tr>
 </table>
 
 <?if ($i == 0 || $i == 1) {?>
@@ -1416,7 +1417,7 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 		</td>
 		<td></td>
 	</tr>
-	<tr id="gpubootvga{{INDEX}}" class="hidden"><td>_(Graphics ROM Needed?)_:</td><td><span class="orange-text"><i class="fa fa-warning"></i> _(GPU is primary adapater, vbios may be required.)_</span></td></tr>
+	<tr id="gpubootvga{{INDEX}}" class="hidden"><td>_(Graphics ROM Needed)_?:</td><td><span class="orange-text"><i class="fa fa-warning"></i> _(GPU is primary adapter, vbios may be required)_.</span></td></tr>
 </table>
 </script>
 
@@ -1746,8 +1747,8 @@ foreach ($arrConfig['nic'] as $i => $arrNic) {
 	$clockcount = 0;
 	if (!empty($arrClocks)) {
 		foreach ($arrClocks as $i => $arrTimer) {
-			if ($i == "offset") continue;
-			if ($clockcount == 0) $clocksourcetext = _("Timer Source").":"; else $clocksourcetext = "";
+			if ($i == 'offset') continue;
+			if ($clockcount == 0) $clocksourcetext = _('Timer Source').':'; else $clocksourcetext = "";
 	?>
 	<tr>
 		<td><?=$clocksourcetext?></td>
@@ -2033,34 +2034,25 @@ function ShareChange(share) {
 	}
 }
 
-function BusChange(bus) {
-	var value = bus.value;
-	var index = bus.name.indexOf("]") + 1;
-	var name = bus.name.substr(0,index);
+function BusChange(value, index) {
+	$('input[id="disk['+index+'][rotation]"]').removeClass('hidden');
+	$('span[id="disk['+index+'][rotatetext]"]').removeClass('hidden');
 	if (value == "virtio" || value == "usb" ) {
-		$('#'+name+"[rotatetext]").hide();
-		$('#'+name+"[rotation]").hide();
-	} else {
-		$('#'+name+"[rotation]").show();
-		$('#'+name+"[rotatetext]").show();
+		$('input[id="disk['+index+'][rotation]"]').addClass('hidden');
+		$('span[id="disk['+index+'][rotatetext]"]').addClass('hidden');
 	}
 }
 
 function updateSSDCheck(ssd) {
-	var value = ssd.value;
-	var index = ssd.name.indexOf("]") + 1;
-	var name = ssd.name.substr(0,index);
-	ssd.value = $('#'+name+"[rotation]").prop('checked') ? "1" : "0";
+	ssd.value = $(ssd).prop('checked') ? "1" : "0";
 }
 
-function BIOSChange(bios) {
-	var value = bios.value;
+function BIOSChange(value) {
+	$("#USBBoottext").removeClass('hidden');
+	$("#domain_usbboot").removeClass('hidden');
 	if (value == "0") {
-		$("#USBBoottext").hide();
-		$("#domain_usbboot").hide();
-	} else {
-		$("#USBBoottext").show();
-		$("#domain_usbboot").show();
+		$("#USBBoottext").addClass('hidden');
+		$("#domain_usbboot").addClass('hidden');
 	}
 }
 
@@ -2117,17 +2109,19 @@ function SetBootorderfields(usbbootvalue) {
 
 /* Remove characters not allowed in share name. */
 function checkName(name) {
-	/* Declare variables at the function scope */
 	var isValidName
-	$('#zfs-name').hide();
 	isValidName = /^[A-Za-z0-9][A-Za-z0-9\-_.: ]*$/.test(name);
+	$('#zfs-name').removeClass();
 	if (isValidName) {
 		$('#btnSubmit').prop("disabled",false);
+		$('#zfs-name').addClass('hidden')
 	} else {
 		if (storageType == "zfs") {
-			$('#btnSubmit').prop("disabled",true); $('#zfs-name').show();
+			$('#btnSubmit').prop("disabled",true);
+		} else {
+			$('#btnSubmit').prop("disabled",false);
+			$('#zfs-name').addClass('hidden')
 		}
-		else $('#btnSubmit').prop("disabled",false);
 	}
 }
 
@@ -2151,54 +2145,50 @@ function USBBootChange(usbboot) {
 }
 
 function AutoportChange(autoport) {
+	$("#port").removeClass('hidden');
+	$("#Porttext").removeClass('hidden');
+	$("#wsport").removeClass('hidden');
+	$("#WSPorttext").removeClass('hidden');
 	if (autoport.value == "yes") {
-		$("#port").hide();
-		$("#Porttext").hide();
-		$("#wsport").hide();
-		$("#WSPorttext").hide();
+		$("#port").addClass('hidden');
+		$("#Porttext").addClass('hidden');
+		$("#wsport").addClass('hidden');
+		$("#WSPorttext").addClass('hidden');
 	} else {
 		var protocol = document.getElementById("protocol").value;
-		$("#port").show();
-		$("#Porttext").show();
-		if (protocol == "vnc") {
-			$("#wsport").show();
-			$("#WSPorttext").show();
-		} else {
-			$("#wsport").hide();
-			$("#WSPorttext").hide();
+		if (protocol != "vnc") {
+			$("#wsport").addClass('hidden');
+			$("#WSPorttext").addClass('hidden');
 		}
 	}
 }
 
 function VMConsoleDriverChange(driver) {
+	$("#vncrender").removeClass('hidden');
+	$("#vncrendertext").removeClass('hidden');
 	if (driver.value != "virtio3d") {
-		$("#vncrender").hide();
-		$("#vncrendertext").hide();
-	} else {
-		$("#vncrender").show();
-		$("#vncrendertext").show();
+		$("#vncrender").addClass('hidden');
+		$("#vncrendertext").addClass('hidden');
 	}
+	$("#vncdspopt").removeClass('hidden');
+	$("#vncdspopttext").removeClass('hidden');
 	if (driver.value != "qxl") {
-		$("#vncdspopt").hide();
-		$("#vncdspopttext").hide();
-	} else {
-		$("#vncdspopt").show();
-		$("#vncdspopttext").show();
+		$("#vncdspopt").addClass('hidden');
+		$("#vncdspopttext").addClass('hidden');
 	}
 }
 
 function ProtocolChange(protocol) {
 	var autoport = $("#autoport").val();
+	$("port").removeClass('hidden');
+	$("Porttext").removeClass('hidden');
+	$("wsport").removeClass('hidden');
+	$("WSPorttext").removeClass('hidden');
 	if (autoport == "yes") {
-		$("port").hide();
-		$("Porttext").hide();
-		$("wsport").hide();
-		$("WSPorttext").hide();
-	} else {
-		$("port").show();
-		$("Porttext").show();
-		$("wsport").show();
-		$("WSPorttext").show();
+		$("port").addClass('hidden');
+		$("Porttext").addClass('hidden');
+		$("wsport").addClass('hidden');
+		$("WSPorttext").addClass('hidden');
 	}
 }
 
@@ -2440,16 +2430,11 @@ $(function() {
 	});
 
 	$("#vmform").on("change", ".cpu", function changeCPUEvent(){
-		var myvalue = $(this).val();
-		var mylabel = $(this).children('option:selected').text();
-		var cpumigrate = document.getElementById("domain_cpumigrate_text");
-		var cpumigrate_text = document.getElementById("domain_cpumigrate");
-		if (myvalue == "custom") {
-			$("#domain_cpumigrate_text").hide();
-			$("#domain_cpumigrate").hide();
-		} else {
-			$("#domain_cpumigrate_text").show();
-			$("#domain_cpumigrate").show();
+		$("#domain_cpumigrate_text").removeClass('hidden');
+		$("#domain_cpumigrate").removeClass('hidden');
+		if ($(this).val() == "custom") {
+			$("#domain_cpumigrate_text").addClass('hidden');
+			$("#domain_cpumigrate").addClass('hidden');
 		}
 	});
 
@@ -2465,19 +2450,17 @@ $(function() {
 				slideDownRows($vnc_sections.not(isVMAdvancedMode() ? '.basic' : '.advanced'));
 				var MultiSel = document.getElementById("GPUMultiSel0");
 				MultiSel.disabled = true;
-				if ($("#vncmodel").val() == "virtio3d") {
-					$("#vncrender").show();
-					$("#vncrendertext").show();
-				} else {
-					$("#vncrender").hide();
-					$("#vncrendertext").hide();
+				$("#vncrender").removeClass('hidden');
+				$("#vncrendertext").removeClass('hidden');
+				if ($("#vncmodel").val() != "virtio3d") {
+					$("#vncrender").addClass('hidden');
+					$("#vncrendertext").addClass('hidden');
 				}
-				if ($("#vncmodel").val() == "qxl") {
-					$("#vncdspopt").show();
-					$("#vncdspopttext").show();
-				} else {
-					$("#vncdspopt").hide();
-					$("#vncdspopttext").hide();
+				$("#vncdspopt").removeClass('hidden');
+				$("#vncdspopttext").removeClass('hidden');
+				if ($("#vncmodel").val() != "qxl") {
+					$("#vncdspopt").addClass('hidden');
+					$("#vncdspopttext").addClass('hidden');
 				}
 			} else {
 				slideUpRows($vnc_sections);
@@ -2486,12 +2469,12 @@ $(function() {
 				if (myvalue=="nogpu") MultiSel.disabled = true; else MultiSel.disabled = false;
 			}
 		}
-		if (mylabel == "_(None)_") $("#gpubootvga"+myindex).hide();
-		if (myvalue != "_(virtual)_" && myvalue != '' && myvalue != "_(nogpu)_") {
-			if (ValidGPUs[myvalue].bootvga == "1") $("#gpubootvga"+myindex).show(); else $("#gpubootvga"+myindex).hide();
+		if (mylabel == "_(None)_") $("#gpubootvga"+myindex).removeClass().addClass('hidden');
+		if (myvalue != "_(virtual)_" && myvalue != "" && myvalue != "_(nogpu)_") {
+			if (ValidGPUs[myvalue].bootvga == "1") $("#gpubootvga"+myindex).removeClass(); else $("#gpubootvga"+myindex).removeClass().addClass('hidden');
 		}
 		$romfile = $(this).closest('table').find('.romfile');
-		if (myvalue == '_(virtual)_' || myvalue == '' || myvalue =="_(nogpu)_") {
+		if (myvalue == "_(virtual)_" || myvalue == "" || myvalue == "_(nogpu)_") {
 			slideUpRows($romfile.not(isVMAdvancedMode() ? '.basic' : '.advanced'));
 			$romfile.filter('.advanced').removeClass('advanced').addClass('wasadvanced');
 		} else {
@@ -2642,13 +2625,13 @@ $(function() {
 		$panel.find('input').prop('disabled', true);
 		$button.val($button.attr('busyvalue'));
 		swal({
-			title: '_(Template Name)_',
-			text: "_(Enter name:\nIf name already exists it will be replaced.)_",
+			title: "_(Template Name)_",
+			text: "_(Enter name)_:\n_(If name already exists it will be replaced)_.",
 			type: "input",
 			showCancelButton: true,
 			closeOnConfirm: false,
 			//animation: "slide-from-top",
-			inputPlaceholder: "_(Leaving blank will use OS name.)_"
+			inputPlaceholder: "_(Leaving blank will use OS name)_."
 		},
 		function(inputValue) {
 			postdata=postdata+"&templatename="+inputValue;
@@ -2710,12 +2693,12 @@ $(function() {
 		$button.val($button.attr('busyvalue'));
 		swal({
 			title: "_(Template Name)_",
-			text: "_(Enter name:\nIf name already exists it will be replaced.)_",
+			text: "_(Enter name)_:\n_(If name already exists it will be replaced)_.",
 			type: "input",
 			showCancelButton: true,
 			closeOnConfirm: false,
 			//animation: "slide-from-top",
-			inputPlaceholder: "_(Leaving blank will use OS name.)_"
+			inputPlaceholder: "_(Leaving blank will use OS name)_."
 		},
 		function(inputValue) {
 			postdata=postdata+"&templatename="+inputValue;
