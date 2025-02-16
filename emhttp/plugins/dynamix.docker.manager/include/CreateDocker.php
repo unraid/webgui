@@ -1153,7 +1153,7 @@ _(Container Network)_:
 
 <?endif;?>
 
-<div markdown="1">
+<div markdown="1" class='TSNetworkAllowed'>
 _(Use Tailscale)_:
 : <input type="checkbox" class="switch-on-off" name="contTailscale" id="contTailscale" <?php if (!empty($xml['TailscaleEnabled']) && $xml['TailscaleEnabled'] == 'true') echo 'checked'; ?> onchange="showTailscale(this)">
 
@@ -1161,6 +1161,13 @@ _(Use Tailscale)_:
 
 </div>
 
+<div markdown="1" class='TSNetworkNotAllowed'>
+_(Use Tailscale)_:
+: _(Option disabled as Network type is not bridge or custom)_
+
+:docker_tailscale_help:
+
+</div>
 <div markdown="1" class="TSdivider noshow">
 <b>_(NOTE)_</b>:
 :  <i>_(This option will install Tailscale and dependencies into the container.)_</i>
@@ -1536,8 +1543,13 @@ function showSubnet(bridge) {
     $('#netCONT').val('');
   }
   // make sure to re-trigger Tailscale check when network is changed
-  if ($('#contTailscale').prop('checked')) {
-    showTailscale(true);
+  if (bridge.match(/^(host|container)$/i) !== null) {
+    $('#contTailscale').click().switchButton({checked: false}).prop('checked',false);
+    $(".TSNetworkAllowed").hide();
+    $(".TSNetworkNotAllowed").show();
+  } else {
+    $(".TSNetworkAllowed").show();
+    $(".TSNetworkNotAllowed").hide();   
   }
 }
 
@@ -1689,6 +1701,12 @@ function showTSAdvanced(checked) {
 }
 
 function showTailscale(source) {
+  var bridge = $('select[name="contNetwork"]').val();
+  if (bridge.match(/^(host|container)$/i) !== null) {
+    $('#contTailscale').click().switchButton({checked: false}).prop('checked',false);
+    $(".TSNetworkAllowed").hide();
+    $(".TSNetworkNotAllowed").show();
+  }
   if (!$.trim($('#TSallowlanaccess').val())) {
     $('#TSallowlanaccess').val('false');
   }
