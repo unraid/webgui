@@ -1707,7 +1707,7 @@ class Array2XML {
 	}
 
 	function vm_clone($vm, $clone ,$overwrite,$start,$edit, $free, $waitID) {
-		global $lv,$domain_cfg;
+		global $lv,$domain_cfg,$arrDisplayOptions;
 		/*
 			Clone.
 
@@ -1748,7 +1748,7 @@ class Array2XML {
 		$storage =  $lv->_get_single_xpath_result($vm, '//domain/metadata/*[local-name()=\'vmtemplate\']/@storage');
 		if (empty($storage)) $storage = "default";
 		# if VM running shutdown. Record was running.
-		if ($state != 'shutoff') {write("addLog\0".htmlspecialchars(_("Shuting down $vm current $state"))); $arrResponse = $lv->domain_destroy($vm); }
+		if ($state != 'shutoff') {write("addLog\0".htmlspecialchars(_("Shuting down ").$vm._(" current ")._($state))); $arrResponse = $lv->domain_destroy($vm); }
 		# Wait for shutdown?
 
 		$disks =$lv->get_disk_stats($vm);
@@ -1762,7 +1762,7 @@ class Array2XML {
 		}
 
 		#Check free space.
-		write("addLog\0".htmlspecialchars("Checking for free space"));
+		write("addLog\0".htmlspecialchars(_("Checking for free space")));
 		$dirfree = disk_free_space($pathinfo["dirname"]);
 		$sourcedir = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($pathinfo["dirname"])." 2>/dev/null"));
 		if (!empty($sourcedir)) $repdir = str_replace('/mnt/user/', "/mnt/$sourcedir/", $pathinfo["dirname"]); else $repdir = $pathinfo["dirname"];
@@ -1791,8 +1791,8 @@ class Array2XML {
 		}
 		$config["usb"] = $usbs;
 
-		$files_exist = false;
-		$files_clone = array();
+		$file_exists = false;
+		$file_clone = array();
 		if ($config['disk'][0]['new'] != "") {
 		foreach ($config["disk"] as $diskid => $disk) {
 			$file_clone[$diskid]["source"] = $config["disk"][$diskid]["new"];
@@ -1800,18 +1800,15 @@ class Array2XML {
 			$pi = pathinfo($config["disk"][$diskid]["new"]);
 			$isdir = is_dir($pi['dirname']);
 			if (is_file($config["disk"][$diskid]["new"])) $file_exists = true;
-			write("addLog\0".htmlspecialchars("Checking from file:".$file_clone[$diskid]["source"]));
-			write("addLog\0".htmlspecialchars("Checking to file:".$config["disk"][$diskid]["new"]));
-			write("addLog\0".htmlspecialchars("File exists value:". ($file_exists ? "True" : "False")));
+			write("addLog\0".htmlspecialchars(_("Checking from file:").$file_clone[$diskid]["source"]));
+			write("addLog\0".htmlspecialchars(_("Checking to file:").$config["disk"][$diskid]["new"]));
+			write("addLog\0".htmlspecialchars(_("File exists value:"). ($file_exists ? "True" : "False")));
 			$file_clone[$diskid]["target"] = $config["disk"][$diskid]["new"];
 			}
 
 		if ($storage == "default") $clonedir = $domain_cfg['DOMAINDIR'].$clone; else $clonedir = str_replace('/mnt/user/', "/mnt/$storage/", $domain_cfg['DOMAINDIR']).$clone;
 		if (!is_dir($clonedir)) {
-			#mkdir($clonedir,0777,true);
 			my_mkdir($clonedir,0777,true);
-			#chown($clonedir, 'nobody');
-			#chgrp($clonedir, 'users');
 		}
 		write("addLog\0".htmlspecialchars("Checking for image files"));
 		if ($file_exists && $overwrite != "yes") { write("addLog\0".htmlspecialchars(_("New image file names exist and Overwrite is not allowed")));  return( false); }
@@ -1836,6 +1833,13 @@ class Array2XML {
 
 		write("<p class='logLine'></p>","addLog\0<fieldset class='docker'><legend>"._("Completing Clone").": </legend><p class='logLine'></p><span id='wait-$waitID'></span></fieldset>");
 		write("addLog\0".htmlspecialchars(_("Creating new XML ").$clone));
+
+		foreach($config['gpu'] as $ID => $arrGPU) {
+			if ($arrGPU['id'] != 'virtual') continue;
+			if ($arrGPU['model'] == 'qxl' && !empty($arrGPU['DisplayOptions'])) {
+			  $config['gpu'][$ID]['DisplayOptions'] = $arrDisplayOptions[$arrGPU['DisplayOptions']]['qxlxml'];
+			}
+		}
 
 		$xml = $lv->config_to_xml($config, true);
 		$rtn = $lv->domain_define($xml);
