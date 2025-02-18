@@ -36,8 +36,8 @@ if [ "$(id -u)" != "0" ]; then
   error_handler
 fi
 
-if [ -f /usr/local/bin/tailscale ] || [ -f /usr/local/bin/tailscaled ]; then
-  echo "Official Tailscale Sidecar container detected!"
+if [ "${OFFICIAL_TAILSCALE_SIDECAR}" = "true" ]; then
+  echo "Official Tailscale Sidecar container routine enabled!"
   echo
   OFFICIAL_TS_SIDECAR="true"
   apk update >/dev/null 2>&1
