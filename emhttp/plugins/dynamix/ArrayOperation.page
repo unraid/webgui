@@ -4,8 +4,8 @@ Tag="snowflake-o"
 Nchan="device_list,disk_load,parity_list"
 ---
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -48,6 +48,7 @@ function check_encryption() {
   echo "<tr id='copy'><td></td><td class='gap'>",_('Retype passphrase'),":</td><td><input type='password' name='copy' maxlength='512' value='' onkeyup='selectInput(this.form)'></td></tr>";
   echo "<tr id='file'><td></td><td class='gap'>",_('Keyfile'),":</td><td><input type='file' name='local' onchange='getFileContent(event,this.form)'></td></tr>";
 }
+
 function maintenance_mode() {
   echo "<tr>";
   echo "<td></td>";
@@ -55,6 +56,7 @@ function maintenance_mode() {
   echo "<td><b>",_('Maintenance mode'),"</b> - ",_('if checked, Start array but do not mount disks'),"</td>";
   echo "</tr>";
 }
+
 function status_indicator() {
   global $var;
   switch (_var($var,'mdColor')) {
@@ -65,15 +67,18 @@ function status_indicator() {
   }
   echo "<a class='info'><i class='fa fa-$orb orb $color-orb'></i><span>$help</span></a>";
 }
+
 function missing_cache() {
   global $disks;
   $missing = false;
   foreach (cache_filter($disks) as $disk) $missing |= (strpos(_var($disk,'status'),'_MISSING')!==false);
   return $missing;
 }
+
 function resync($d) {
   return in_array($d,['P','Q']) ? 'Parity-Sync' : 'Data-Rebuild';
 }
+
 function print_error($error) {
   return sprintf(_('Finding **%s** error'.($error==1?'':'s')),$error?:'0');
 }
@@ -111,27 +116,33 @@ function toggle_state(device,name,action) {
   devices.stop();
   $.post('/webGui/include/ToggleState.php',{device:device,name:name,action:action},function(){setTimeout(function(){devices.start();},1000);if (button) $(button).prop('disabled',false);});
 }
+
 function display_diskio() {
   if ($.cookie('diskio')===undefined) {
-    $('span.number').show(); $('span.diskio').hide();
-  } else {
     $('span.diskio').show(); $('span.number').hide();
+  } else {
+    $('span.number').show(); $('span.diskio').hide();
   }
 }
+
 function toggle_diskio(init) {
   if (!init) {
     if ($.cookie('diskio')===undefined) $.cookie('diskio','diskio',{expires:3650}); else $.removeCookie('diskio');
   }
   if ($.cookie('diskio')===undefined) {
-    $('i.toggle').removeClass('fa-tachometer').addClass('fa-list');
-  } else {
     $('i.toggle').removeClass('fa-list').addClass('fa-tachometer');
+    $('#clearstats').addClass('hidden');
+  } else {
+    $('i.toggle').removeClass('fa-tachometer').addClass('fa-list');
+    $('#clearstats').removeClass('hidden');
   }
   display_diskio();
 }
+
 function base64(str) {
   return window.btoa(unescape(encodeURIComponent(str)));
 }
+
 function selectInput(form) {
 <?if ($wrong && $keyfile):?>
   form.input.value = 'file';
@@ -175,19 +186,21 @@ function selectInput(form) {
     item.prop('disabled',!form.file.value);
   }
 }
+
 function getFileContent(event,form) {
   var input = event.target;
   var reader = new FileReader();
   reader.onload = function(){form.file.value=reader.result;selectInput(form);};
   reader.readAsDataURL(input.files[0]);
 }
-function prepareInput(form,button) {
-  if (button) button.disabled = true;
+
+function prepareInput(form,button,parityWarn) {
+  button.disabled = true;
   $.post('/webGui/include/Report.php',{cmd:'state',pools:'<?=implode(',',$pools)?>'},function(state) {
     if (state.length==0) {
       $(form).append('<input type="hidden" name="cmdStart" value="Start">');
       if (form.input === undefined) {
-        form.submit();
+        parityWarn ? parityWarning(form,button) : form.submit();
         return;
       }
       form.input.disabled = true;
@@ -216,11 +229,12 @@ function prepareInput(form,button) {
       data['file'] = form.file.value;
       $.post('/update.php',data,function(){form.submit();});
     } else {
-      swal({title:"_(Wrong Pool State)_",text:state,type:'error',html:true,confirmButtonText:"_(Ok)_"});
+      swal({title:"_(Wrong Pool State)_",text:state,type:'error',html:true,confirmButtonText:"_(Ok)_"},function(){button.disabled=false;});
     }
   });
 }
-function parityWarning(form) {
+
+function parityWarning(form,button) {
   if (form.md_invalidslot.checked) {
 <?if (strpos(_var($disks['parity2'],'status'),'_NP')===false):?>
     var text = "_(*Dual parity* valid requires **ALL** disks in their original slots)_";
@@ -230,12 +244,16 @@ function parityWarning(form) {
   } else {
     var text = "_(*Parity* disk(s) content will be overwritten)_";
   }
-  swal({title:"_(Proceed to start)_",text:text,html:true,type:'warning',showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){prepareInput(form);});
+  swal({title:"_(Proceed to start)_",text:text,html:true,type:'warning',showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(confirmed){
+    confirmed ? form.submit() : button.disabled=false;
+  });
 }
+
 function tab0() {
   $.removeCookie('one');
   $.cookie('tab','tab0');
 }
+
 function stopArray(form) {
   $(form).append('<input type="hidden" name="cmdStop" value="Stop">');
 <?if ($confirm['stop']):?>
@@ -244,6 +262,7 @@ function stopArray(form) {
   form.submit();
 <?endif;?>
 }
+
 function stopParity(form,text) {
   $(form).append('<input type="hidden" name="cmdCheckCancel" value="">');
 <?if ($confirm['stop']):?>
@@ -252,6 +271,7 @@ function stopParity(form,text) {
   form.submit();
 <?endif;?>
 }
+
 function pauseParity(form) {
   $.post('/webGui/include/ParityControl.php',{action:'pause'},function(){
     $('#pauseButton').val("_(Resume)_").prop('disabled',true).prop('onclick',null).off('click').click(function(){resumeParity(form);});
@@ -259,6 +279,7 @@ function pauseParity(form) {
     form.submit();
   });
 }
+
 function resumeParity(form) {
   $.post('/webGui/include/ParityControl.php',{action:'resume'},function(){
     $('#pauseButton').val("_(Pause)_").prop('disabled',true).prop('onclick',null).off('click').click(function(){pauseParity(form);});
@@ -266,9 +287,11 @@ function resumeParity(form) {
     form.submit();
   });
 }
+
 function parityHistory() {
   openChanges("parity_history", "_(Parity Operation History)_", "phistory");
 }
+
 function shutdown_now(form,cmd) {
   $(form).append('<input type="hidden" name="cmd" value="'+cmd+'">');
 <?if ($confirm['down']):?>
@@ -281,9 +304,11 @@ function shutdown_now(form,cmd) {
   form.submit();
 <?endif;?>
 }
+
 function toggleApply(checked) {
   $('input[name="#apply"]').prop('disabled',!checked);
 }
+
 <?if ($tabbed):?>
 $('.tabs').append(ctrl);
 if ($.cookie('tab')=='tab0') $('i.toggle').hide();
@@ -292,7 +317,6 @@ $('#tab'+$('input[name$="tabs"]').length).click(function(){tab0(); $('i.toggle')
 $('div[class=title]:not(":last, .disable_diskio")').each(function(){$(this).append(ctrl);});
 <?endif;?>
 $('.tooltip_diskio').tooltipster({delay:100,trigger:'custom',triggerOpen:{mouseenter:true},triggerClose:{click:false,scroll:true,mouseleave:true}});
-toggle_diskio(true);
 
 <?if (_var($var,'fsState')=='Started'):?>
 var mymonitor = new NchanSubscriber('/sub/mymonitor',{subscriber:'websocket'});
@@ -422,7 +446,9 @@ setTimeout(function(){paritymonitor.start();},5000);
 $(function(){
   var form = document.arrayOps;
   if (form.input !== undefined) selectInput(form);
+  toggle_diskio(true);
 });
+
 function formatWarning(val) {
   if (val==true) {
     swal({
@@ -640,7 +666,7 @@ window.onunload = function(){
           <td>**_(Start)_** _(will record all disk information and bring the array on-line)_.
           <br>_(The array will be immediately available, but **unprotected** since *parity* has not been assigned)_.</td></tr>
 <?      else:?>
-          <tr><td><?status_indicator()?>**_(Stopped)_**. _(Configuration valid)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="parityWarning(this.form,this)"></td>
+          <tr><td><?status_indicator()?>**_(Stopped)_**. _(Configuration valid)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this,true)"></td>
           <td>**_(Start)_** _(will record all disk information, bring the array on-line, and start Parity-Sync)_.
           <br>_(The array will be immediately available, but **unprotected** until Parity-Sync completes)_.
           <br><input type="checkbox" name="md_invalidslot" value="99">_(Parity is already valid)_.</td></tr>
@@ -720,7 +746,7 @@ endswitch;
 <table markdown="1" class="array_status noshift">
  <tr><td></td><td><input type="button" id="spinup-button" onclick="$('[id^=button-]').prop('disabled',true);toggle_state('up')" value="_(Spin Up)_"><input type="button" id="spindown-button" onclick="$('[id^=button-]').prop('disabled',true);toggle_state('down')" value="_(Spin Down)_"></td>
  <td>**_(Spin Up)_** _(will immediately spin up all disks)_.<br>**_(Spin Down)_** _(will immediately spin down all disks)_.</td></tr>
- <tr><td></td><td><input type="button" value="_(Clear Stats)_" onclick="toggle_state('Clear')"></td><td>**_(Clear Stats)_** _(will immediately clear all disk statistics)_.</td></tr>
+ <tr id="clearstats" class="hidden"><td></td><td><input type="button" value="_(Clear Stats)_" onclick="toggle_state('Clear')"></td><td>**_(Clear Stats)_** _(will immediately clear all disk statistics)_.</td></tr>
  <tr><td></td><td class="line" colspan="2"></td></tr>
 </table>
 <?if (_var($var,'shareUser')=='e' && $pool_devices):?>
