@@ -1307,6 +1307,14 @@ _(Tailscale Serve Local Path)_:
 
 </div>
 
+<div markdown="1" class="TSservetarget noshow">
+_(Tailscale Serve Target)_:
+: <input type="text" name="TSservetarget" <?php if (!empty($xml['TailscaleServeTarget'])) echo 'value="' . $xml['TailscaleServeTarget'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
+
+:docker_tailscale_serve_target_help:
+
+</div>
+    
 <div markdown="1" class="TSserveprotocol noshow">
 _(Tailscale Serve Protocol)_:
 : <input type="text" name="TSserveprotocol" <?php if (!empty($xml['TailscaleServeProtocol'])) echo 'value="' . $xml['TailscaleServeProtocol'] . '"'; ?> placeholder="_(Leave empty if unsure, defaults to https)_">
@@ -1677,6 +1685,7 @@ function showTSAdvanced(checked) {
     $('.TSservepath').hide();
     $('.TSserveprotocol').hide();
     $('.TSserveprotocolport').hide();
+    $('.TSservetarget').hide();
     $('.TSservelocalpath').hide();
     $('.TSwebui').hide();
     $('.TStroubleshooting').hide();
@@ -1690,6 +1699,7 @@ function showTSAdvanced(checked) {
     $('.TSservepath').show();
     $('.TSserveprotocol').show();
     $('.TSserveprotocolport').show();
+    $('.TSservetarget').show();
     $('.TSservelocalpath').show();
     $('.TSwebui').show();
     $('.TStroubleshooting').show();
