@@ -2413,7 +2413,7 @@ The system attempted to determine the correct port automatically. If it used the
 In most cases this port is all you will need to specify in order to Serve the website in this container, although additional options are available below for more complex containers.
 
 This value is passed to the `<serve_port>` portion of this command which starts serve or funnel:<br>
-`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> http://localhost:<serve_port><local_path>`<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
 For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 :end
 
@@ -2421,27 +2421,34 @@ For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve"
 Here there be dragons!
 :end
 
+:docker_tailscale_serve_target_help:
+When not specified, this value defaults to http://localhost. It is passed to the `<serve_target>` portion of this command which starts serve or funnel:<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.<br>
+Please note that only `localhost` or `127.0.0.1` are supported.
+:end
+
 :docker_tailscale_serve_local_path_help:
 When not specified, this value defaults to an empty string. It is passed to the `<local_path>` portion of this command which starts serve or funnel:<br>
-`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> http://localhost:<serve_port><local_path>`<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
 For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 :end
 
 :docker_tailscale_serve_protocol_help:
 When not specified, this value defaults to "https". It is passed to the `<protocol>` portion of this command which starts serve or funnel:<br>
-`tailscale [serve|funnel] --bg --<protocol>=<protocol_port><path> http://localhost:<serve_port><local_path>`<br>
+`tailscale [serve|funnel] --bg --<protocol>=<protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
 For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 :end
 
 :docker_tailscale_serve_protocol_port_help:
 When not specified, this value defaults to "=443". It is passed to the `<protocol_port>` portion of this command which starts serve or funnel:<br>
-`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> http://localhost:<serve_port><local_path>`<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
 For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 :end
 
 :docker_tailscale_serve_path_help:
 When not specified, this value defaults to an empty string. It is passed to the `<path>` portion of this command which starts serve or funnel:<br>
-`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> http://localhost:<serve_port><local_path>`<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
 For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 :end
 

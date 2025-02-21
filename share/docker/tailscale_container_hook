@@ -361,12 +361,15 @@ if [ ! -z "${TAILSCALE_SERVE_PORT}" ]; then
   if [ -z "${TAILSCALE_SERVE_PROTOCOL_PORT}" ]; then
     TAILSCALE_SERVE_PROTOCOL_PORT="=443"
   fi
+  if [ -z "${TAILSCALE_SERVE_TARGET}" ]; then
+    TAILSCALE_SERVE_TARGET="http://localhost"
+  fi
   if [ "${TAILSCALE_FUNNEL}" = "true" ]; then
     echo "Enabling Funnel! See https://tailscale.com/kb/1223/funnel"
-    eval tailscale funnel --bg --"${TAILSCALE_SERVE_PROTOCOL}"${TAILSCALE_SERVE_PROTOCOL_PORT}${TAILSCALE_SERVE_PATH} http://localhost:"${TAILSCALE_SERVE_PORT}${TAILSCALE_SERVE_LOCALPATH}" | grep -v "To disable the proxy"
+    eval tailscale funnel --bg --"${TAILSCALE_SERVE_PROTOCOL}"${TAILSCALE_SERVE_PROTOCOL_PORT}${TAILSCALE_SERVE_PATH} ${TAILSCALE_SERVE_TARGET}:"${TAILSCALE_SERVE_PORT}${TAILSCALE_SERVE_LOCALPATH}" | grep -v "To disable the proxy"
   else
     echo "Enabling Serve! See https://tailscale.com/kb/1312/serve"
-    eval tailscale serve --bg --"${TAILSCALE_SERVE_PROTOCOL}"${TAILSCALE_SERVE_PROTOCOL_PORT}${TAILSCALE_SERVE_PATH} http://localhost:"${TAILSCALE_SERVE_PORT}${TAILSCALE_SERVE_LOCALPATH}" | grep -v "To disable the proxy"
+    eval tailscale serve --bg --"${TAILSCALE_SERVE_PROTOCOL}"${TAILSCALE_SERVE_PROTOCOL_PORT}${TAILSCALE_SERVE_PATH} ${TAILSCALE_SERVE_TARGET}:"${TAILSCALE_SERVE_PORT}${TAILSCALE_SERVE_LOCALPATH}" | grep -v "To disable the proxy"
   fi
   if [ "${TAILSCALE_SERVE_PROTOCOL}" = "https" ]; then
     TS_DNSNAME="$(tailscale status --json | jq -r '.Self.DNSName' | sed 's/\.$//')"
