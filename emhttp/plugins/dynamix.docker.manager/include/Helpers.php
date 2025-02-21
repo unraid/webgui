@@ -117,6 +117,7 @@ function postToXML($post, $setOwnership=false) {
     $xml->TailscaleWebUI               = xml_encode(generateTSwebui($post['TSwebui'], $post['TSserve'], $post['contWebUI']));
     if (isset($post['TSserve']) && strtolower($post['TSserve']) !== 'no') {
       $xml->TailscaleServePort           = xml_encode($post['TSserveport']);
+      $xml->TailscaleServeTarget         = xml_encode($post['TSservetarget']);
       $xml->TailscaleServeLocalPath      = xml_encode($post['TSservelocalpath']);
       $xml->TailscaleServeProtocol       = xml_encode($post['TSserveprotocol']);
       $xml->TailscaleServeProtocolPort   = xml_encode($post['TSserveprotocolport']);
@@ -171,6 +172,7 @@ function xmlToVar($xml) {
   $out['TailscaleUserspaceNetworking'] = xml_decode($xml->TailscaleUserspaceNetworking ?? '');
   $out['TailscaleServe']               = xml_decode($xml->TailscaleServe ?? '');
   $out['TailscaleServePort']           = xml_decode($xml->TailscaleServePort ?? '');
+  $out['TailscaleServeTarget']         = xml_decode($xml->TailscaleServeTarget ?? '');
   $out['TailscaleServeLocalPath']      = xml_decode($xml->TailscaleServeLocalPath ?? '');
   $out['TailscaleServeProtocol']       = xml_decode($xml->TailscaleServeProtocol ?? '');
   $out['TailscaleServeProtocolPort']   = xml_decode($xml->TailscaleServeProtocolPort ?? '');
@@ -364,6 +366,7 @@ function xmlToCommand($xml, $create_paths=false) {
   $TS_state_dir = '';
   $TS_serve_funnel = '';
   $TS_serve_port = '';
+  $TS_server_target = '';
   $TS_serve_local_path = '';
   $TS_serve_protocol = '';
   $TS_serve_protocol_port = '';
@@ -397,6 +400,7 @@ function xmlToCommand($xml, $create_paths=false) {
     }
     $TS_serve_funnel = ($xml['TailscaleServe'] == 'funnel') ? '-e TAILSCALE_FUNNEL=true' : '';
     $TS_serve_port = !empty($xml['TailscaleServePort']) ? '-e TAILSCALE_SERVE_PORT=' . escapeshellarg($xml['TailscaleServePort']) : '';
+    $TS_serve_target = !empty($xml['TailscaleServeTarget']) ? '-e TAILSCALE_SERVE_TARGET=' . escapeshellarg($xml['TailscaleServeTarget']) : '';
     $TS_serve_local_path = !empty($xml['TailscaleServeLocalPath']) ? '-e TAILSCALE_SERVE_LOCALPATH=' . escapeshellarg($xml['TailscaleServeLocalPath']) : '';
     $TS_serve_protocol = !empty($xml['TailscaleServeProtocol']) ? '-e TAILSCALE_SERVE_PROTOCOL=' . escapeshellarg($xml['TailscaleServeProtocol']) : '';
     $TS_serve_protocol_port = !empty($xml['TailscaleServeProtocolPort']) ? '-e TAILSCALE_SERVE_PROTOCOL_PORT=' . escapeshellarg($xml['TailscaleServeProtocolPort']) : '';
@@ -474,8 +478,8 @@ function xmlToCommand($xml, $create_paths=false) {
     $pid_limit = "";
   }
 
-  $cmd = sprintf($docroot.'/plugins/dynamix.docker.manager/scripts/docker create %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s',
-         $cmdName, $TS_entrypoint, $cmdNetwork, $cmdMyIP, $cmdCPUset, $pid_limit, $cmdPrivileged, implode(' -e ', $Variables), $TS_hostname, $TS_exitnode, $TS_exitnode_ip, $TS_lan_access, $TS_routes, $TS_accept_routes, $TS_ssh, $TS_userspace_networking, $TS_serve_funnel, $TS_serve_port, $TS_serve_local_path, $TS_serve_protocol, $TS_serve_protocol_port, $TS_serve_path, $TS_daemon_params, $TS_extra_params, $TS_state_dir, $TS_troubleshooting, $TS_postargs, implode(' -l ', $Labels), $TS_web_ui, $TS_hostname_label, implode(' -p ', $Ports), implode(' -v ', $Volumes), $TS_hook, $TS_cap, $TS_tundev, implode(' --device=', $Devices), $xml['ExtraParams'], escapeshellarg($xml['Repository']), $xml['PostArgs']);
+  $cmd = sprintf($docroot.'/plugins/dynamix.docker.manager/scripts/docker create %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s',
+         $cmdName, $TS_entrypoint, $cmdNetwork, $cmdMyIP, $cmdCPUset, $pid_limit, $cmdPrivileged, implode(' -e ', $Variables), $TS_hostname, $TS_exitnode, $TS_exitnode_ip, $TS_lan_access, $TS_routes, $TS_accept_routes, $TS_ssh, $TS_userspace_networking, $TS_serve_funnel, $TS_serve_port, $TS_serve_target, $TS_serve_local_path, $TS_serve_protocol, $TS_serve_protocol_port, $TS_serve_path, $TS_daemon_params, $TS_extra_params, $TS_state_dir, $TS_troubleshooting, $TS_postargs, implode(' -l ', $Labels), $TS_web_ui, $TS_hostname_label, implode(' -p ', $Ports), implode(' -v ', $Volumes), $TS_hook, $TS_cap, $TS_tundev, implode(' --device=', $Devices), $xml['ExtraParams'], escapeshellarg($xml['Repository']), $xml['PostArgs']);
   return [preg_replace('/\s\s+/', ' ', $cmd), $xml['Name'], $xml['Repository']];
 }
 function stopContainer($name, $t=false, $echo=true) {
