@@ -45,6 +45,9 @@ rsyslogd_start(){
   if rsyslogd_running; then
     REPLY="Already started"
   else
+    if [[ -e /boot/default/02-blocklist-extra.conf ]]; then
+      cp /boot/default/02-blocklist-extra.conf /etc/rsyslog.d/
+    fi
     run /usr/sbin/rsyslogd -i "$PIDFILE"
     if rsyslogd_running; then REPLY="Started"; else REPLY="Failed"; fi
   fi
