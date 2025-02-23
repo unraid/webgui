@@ -190,6 +190,10 @@ default:
 echo '</div>';
 echo '<div class="sub2"></div>';
 echo '</body>';
+}else{
+?>
+echo <body onload="location='/Main'"></body>
+<?
 }
 ?>
 </html>
