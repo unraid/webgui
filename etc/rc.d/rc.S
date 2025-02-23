@@ -181,9 +181,13 @@ if [[ $NONVFAT == btrfs || $NONVFAT == xfs ]]; then
   /usr/bin/chmod -R 644 /boot
 fi
 
-# invoke testing hook (only for test versions)
 . /etc/unraid-version
-if [[ -f /boot/config/rc.S.extra && $version =~ beta ]]; then
+# log all PHP warnings (for beta|rc releases)
+if [[ -f /etc/php.d/errors-php.ini && $version =~ -(beta|rc) ]]; then
+  sed -i 's/^error_reporting=.*/error_reporting=E_ALL/' /etc/php.d/errors-php.ini
+fi
+# invoke testing hook (for -(beta|rc).x.y releases)
+if [[ -f /boot/config/rc.S.extra && $version =~ -(beta|rc)\.[0-9]+\.[0-9]+$ ]]; then
   . /boot/config/rc.S.extra
 fi
 # and continue in separate script

@@ -26,7 +26,7 @@ $cfg = '/boot/config/network.cfg';
 
 function port($x) {
   $sys = "/sys/class/net";
-  return file_exists("$sys/br{$x}") ? "br${x}" : (file_exists("$sys/bond{$x}") ? "bond{$x}" : "eth{$x}");
+  return file_exists("$sys/br{$x}") ? "br{$x}" : (file_exists("$sys/bond{$x}") ? "bond{$x}" : "eth{$x}");
 }
 
 function update_wireguard($ifname) {

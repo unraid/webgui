@@ -1208,19 +1208,19 @@ private static $encoding = 'UTF-8';
 	function getValidNetworks() {
 		global $lv;
 		$arrValidNetworks = [];
-		exec("ls --indicator-style=none /sys/class/net|grep -Po '^((vir)?br|vhost)[0-9]+(\.[0-9]+)?'",$arrBridges);
-		if (!is_array($arrBridges)) {
-			$arrBridges = [];
-		}
-
-		// Make sure the default libvirt bridge is first in the list
-		if (($key = array_search('virbr0', $arrBridges)) !== false) {
-			unset($arrBridges[$key]);
-		}
-		// We always list virbr0 because libvirt might not be started yet (thus the bridge doesn't exists)
+		exec("ls --indicator-style=none /sys/class/net | grep -Po '^(br|bond|eth|wlan)[0-9]+(\.[0-9]+)?'",$arrBridges);
+		// add 'virbr0' as default first choice
 		array_unshift($arrBridges, 'virbr0');
-
-		$arrValidNetworks['bridges'] = array_values($arrBridges);
+		// remove redundant references of bridge and bond interfaces
+		$remove = [];
+		foreach ($arrBridges as $name) {
+			if (substr($name,0,4) == 'bond') {
+				$remove = array_merge($remove, (array)@file("/sys/class/net/$name/bonding/slaves",FILE_IGNORE_NEW_LINES));
+			} elseif (substr($name,0,2) == 'br') {
+				$remove = array_merge($remove, array_map(function($n){return end(explode('/',$n));}, glob("/sys/class/net/$name/brif/*")));
+			} 
+		}
+		$arrValidNetworks['bridges'] = array_diff($arrBridges, $remove);
 
 		// This breaks VMSettings.page if libvirt is not running
 		/*	if ($libvirt_running == "yes") {
@@ -1684,7 +1684,7 @@ private static $encoding = 'UTF-8';
 	}
 
 	function vm_clone($vm, $clone ,$overwrite,$start,$edit, $free, $waitID) {
-		global $lv,$domain_cfg ;
+		global $lv,$domain_cfg,$arrDisplayOptions;
 		/*
 			Clone.
 
@@ -1725,7 +1725,7 @@ private static $encoding = 'UTF-8';
 		$storage =  $lv->_get_single_xpath_result($vm, '//domain/metadata/*[local-name()=\'vmtemplate\']/@storage');
 		if (empty($storage)) $storage = "default" ;
 		# if VM running shutdown. Record was running.
-		if ($state != 'shutoff') {write("addLog\0".htmlspecialchars(_("Shuting down $vm current $state"))); $arrResponse = $lv->domain_destroy($vm) ; }
+		if ($state != 'shutoff') {write("addLog\0".htmlspecialchars(_("Shuting down ").$vm._(" current ")._($state))); $arrResponse = $lv->domain_destroy($vm); }
 		# Wait for shutdown?
 
 		$disks =$lv->get_disk_stats($vm) ;
@@ -1739,8 +1739,8 @@ private static $encoding = 'UTF-8';
 		}
 
 		#Check free space.
-		write("addLog\0".htmlspecialchars("Checking for free space"));
-		$dirfree = disk_free_space($pathinfo["dirname"]) ;
+		write("addLog\0".htmlspecialchars(_("Checking for free space")));
+		$dirfree = disk_free_space($pathinfo["dirname"]);
 		$sourcedir = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($pathinfo["dirname"])." 2>/dev/null"));
 		if (!empty($sourcedir)) $repdir = str_replace('/mnt/user/', "/mnt/$sourcedir/", $pathinfo["dirname"]); else $repdir = $pathinfo["dirname"];
 		$repdirfree = disk_free_space($repdir) ;
@@ -1768,27 +1768,24 @@ private static $encoding = 'UTF-8';
 		}
 		$config["usb"] = $usbs ;
 
-		$files_exist = false ;
-		$files_clone = array() ;
+		$file_exists = false;
+		$file_clone = array();
 		if ($config['disk'][0]['new'] != "") {
 		foreach ($config["disk"] as $diskid => $disk) {
-			$file_clone[$diskid]["source"] = $config["disk"][$diskid]["new"] ;
-			$config["disk"][$diskid]["new"] = str_replace($vm,$clone,$config["disk"][$diskid]["new"]) ;
-			$pi = pathinfo($config["disk"][$diskid]["new"]) ;
-			$isdir = is_dir($pi['dirname']) ;
-			if (is_file($config["disk"][$diskid]["new"])) $file_exists = true ;
-			write("addLog\0".htmlspecialchars("Checking from file:".$file_clone[$diskid]["source"]));
-			write("addLog\0".htmlspecialchars("Checking to file:".$config["disk"][$diskid]["new"]));
-			write("addLog\0".htmlspecialchars("File exists value:". ($file_exists ? "True" : "False")));
-			$file_clone[$diskid]["target"] = $config["disk"][$diskid]["new"] ;
+			$file_clone[$diskid]["source"] = $config["disk"][$diskid]["new"];
+			$config["disk"][$diskid]["new"] = str_replace($vm,$clone,$config["disk"][$diskid]["new"]);
+			$pi = pathinfo($config["disk"][$diskid]["new"]);
+			$isdir = is_dir($pi['dirname']);
+			if (is_file($config["disk"][$diskid]["new"])) $file_exists = true;
+			write("addLog\0".htmlspecialchars(_("Checking from file:").$file_clone[$diskid]["source"]));
+			write("addLog\0".htmlspecialchars(_("Checking to file:").$config["disk"][$diskid]["new"]));
+			write("addLog\0".htmlspecialchars(_("File exists value:"). ($file_exists ? "True" : "False")));
+			$file_clone[$diskid]["target"] = $config["disk"][$diskid]["new"];
 			}
 
 		if ($storage == "default") $clonedir = $domain_cfg['DOMAINDIR'].$clone ; else $clonedir = str_replace('/mnt/user/', "/mnt/$storage/", $domain_cfg['DOMAINDIR']).$clone;
 		if (!is_dir($clonedir)) {
-			#mkdir($clonedir,0777,true);
 			my_mkdir($clonedir,0777,true);
-			#chown($clonedir, 'nobody');
-			#chgrp($clonedir, 'users');
 		}
 		write("addLog\0".htmlspecialchars("Checking for image files"));
 		if ($file_exists && $overwrite != "yes") { write("addLog\0".htmlspecialchars(_("New image file names exist and Overwrite is not allowed")));  return( false) ; }
@@ -1812,11 +1809,29 @@ private static $encoding = 'UTF-8';
 	}
 
 		write("<p class='logLine'></p>","addLog\0<fieldset class='docker'><legend>"._("Completing Clone").": </legend><p class='logLine'></p><span id='wait-$waitID'></span></fieldset>");
-		write("addLog\0".htmlspecialchars("Creating new XML $clone"));
+		write("addLog\0".htmlspecialchars(_("Creating new XML ").$clone));
 
-		$xml = $lv->config_to_xml($config, true) ;
-		$rtn = $lv->domain_define($xml) ;
-		return($rtn) ;
+		foreach($config['gpu'] as $ID => $arrGPU) {
+			if ($arrGPU['id'] != 'virtual') continue;
+			if ($arrGPU['model'] == 'qxl' && !empty($arrGPU['DisplayOptions'])) {
+			  $config['gpu'][$ID]['DisplayOptions'] = $arrDisplayOptions[$arrGPU['DisplayOptions']]['qxlxml'];
+			}
+		}
+
+		$xml = $lv->config_to_xml($config, true);
+		$rtn = $lv->domain_define($xml);
+
+		if (is_resource($rtn)) {
+			$arrResponse  = ['success' => true]; 
+			write("addLog\0".htmlspecialchars(_("Creating XML successful")));
+		} else { 
+			$lastvmerror = $lv->get_last_error();
+			$arrResponse = ['xml' => $xml,'error' => $lastvmerror];
+			write("addLog\0".htmlspecialchars(_("Creating XML Error:$lastvmerror")));
+			file_put_contents("/tmp/vmclonertn.debug", json_encode($arrResponse,JSON_PRETTY_PRINT));
+		}
+	
+		return($rtn);
 
 	}
 
@@ -2128,7 +2143,7 @@ private static $encoding = 'UTF-8';
 		# If Snapstate not running create new XML.
 		if ($snapstate != "running") {	
 			if ($method == "ZFS") $xml = $snapslist[$snap]['xml']; else $xml = custom::createXML('domain',$xmlobj)->saveXML();
-			if (!strpos($xml,'<vmtemplate xmlns="unraid"')) $xml=str_replace('<vmtemplate','<vmtemplate xmlns="unraid"',$xml);
+			if (!strpos($xml,'<vmtemplate xmlns="unraid"') && !strpos($xml,'<vmtemplate xmlns="http://unraid"') ) $xml=str_replace('<vmtemplate','<vmtemplate xmlns="http://unraid"',$xml);
 			if (!$dryrun) $new = $lv->domain_define($xml);
 			if ($new) $arrResponse  = ['success' => true] ; else $arrResponse = ['error' => $lv->get_last_error()] ;
 			if ($logging) qemu_log($vm,"Create XML $new");
@@ -2221,8 +2236,8 @@ private static $encoding = 'UTF-8';
 			$xml = file_get_contents($xmlfile) ;
 			$xmlobj = custom::createArray('domain',$xml) ;
 			$xml = custom::createXML('domain',$xmlobj)->saveXML();
-			if (!strpos($xml,'<vmtemplate xmlns="unraid"')) $xml=str_replace('<vmtemplate','<vmtemplate xmlns="unraid"',$xml);
-			if (!$dryrun) $rtn = $lv->domain_define($xml) ;
+			if (!strpos($xml,'<vmtemplate xmlns="unraid"') && !strpos($xml,'<vmtemplate xmlns="http://unraid"') ) $xml=str_replace('<vmtemplate','<vmtemplate xmlns="http://unraid"',$xml);
+			if (!$dryrun) $rtn = $lv->domain_define($xml);
 			if ($logging) qemu_log($vm,"Define XML");
 
 
@@ -2710,7 +2725,7 @@ function get_vm_usage_stats($collectcpustats = true,$collectdiskstats = true,$co
 		$currentmem = $data["balloon.current"];
 		$maximummem = $data["balloon.maximum"];
 		$meminuse = min($data["balloon.rss"],$data["balloon.current"]);
-		} else $currentmem = $meminuse = 0;
+		} else $maximummem = $currentmem = $meminuse = 0;
 
 		# Disk
 		if ($state == 1 && $collectdiskstats) {
@@ -2815,21 +2830,23 @@ function build_xml_templates($strXML) {
 	}
 	$xml2["devices"] = $devxml;
 	$xml2["devices"]["allusb"] = "";
-	foreach ($xml2['devices']["hostdev"] as $xmlhostdev) {
-		$xmlhostdevdoc = new SimpleXMLElement($xmlhostdev);
-		switch ($xmlhostdevdoc->attributes()->type) {
+	if(isset($xml2['devices']["hostdev"])) {
+		foreach ($xml2['devices']["hostdev"] as $xmlhostdev) {
+			$xmlhostdevdoc = new SimpleXMLElement($xmlhostdev);
+			switch ($xmlhostdevdoc->attributes()->type) {
 			case 'pci' :
 				$pciaddr = $xmlhostdevdoc->source->address->attributes()->bus.":".$xmlhostdevdoc->source->address->attributes()->slot.".".$xmlhostdevdoc->source->address->attributes()->function;
 				$pciaddr = str_replace("0x","",$pciaddr);
-				$xml2["devices"][$arrValidPCIDevices[$pciaddr]["class"]][$pciaddr] = $xmlhostdev; 
+				$xml2["devices"][$arrValidPCIDevices[$pciaddr]["class"]][$pciaddr] = $xmlhostdev;
 				break;
-			case "usb":  
+			case "usb":
 				$usbaddr = $xmlhostdevdoc->source->vendor->attributes()->id.":".$xmlhostdevdoc->source->product->attributes()->id;
 				$usbaddr = str_replace("0x","",$usbaddr);
-				$xml2["devices"]["usb"][$usbaddr] = $xmlhostdev; 
-				$xml2["devices"]["allusb"] .= $xmlhostdev; 
+				$xml2["devices"]["usb"][$usbaddr] = $xmlhostdev;
+				$xml2["devices"]["allusb"] .= $xmlhostdev;
 				break;
-		} 
+			}
+		}
 	}
 	foreach($xml2["devices"]["input"] as $input) $xml2["devices"]["allinput"] .= "$input\n";  
 

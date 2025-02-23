@@ -224,6 +224,7 @@ libvirtd_start(){
         fi
       fi
     done
+    sed -i 's|<vmtemplate xmlns="unraid|<vmtemplate xmlns="http://unraid|' $XML
   done
 
   # copy any new conf files we dont currently have

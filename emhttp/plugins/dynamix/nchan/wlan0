@@ -53,10 +53,12 @@ while (true) {
     $locale_init = _var($display,'locale');
     update_translation($locale_init);
   }
-  if (file_exists($ini) && file_exists($wlan0)) {
+  if (is_readable($ini) && is_readable($wlan0)) {
+    $wifi = parse_ini_file($ini);
     $up = file_get_contents($wlan0)==1;
-    $echo['color'] = $up ? 'blue-text' : 'red-text';
-    $echo['title'] = $up ? _('WiFi connected') : _('WiFi disconnected');
+    $alive = $up ? exec("iw wlan0 link 2>/dev/null | grep -Pom1 'SSID: \K.+'") : '';
+    $echo['color'] = $alive==$wifi['SSID'] ? 'blue-text' : 'red-text';
+    $echo['title'] = $alive==$wifi['SSID'] ? _('WiFi connected') : _('WiFi disconnected');
   } else {
     $echo['color'] = 'grey-text';
     $echo['title'] = _('No active WiFi');

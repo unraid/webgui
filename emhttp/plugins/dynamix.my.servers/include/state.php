@@ -114,7 +114,7 @@ class ServerState
     /**
      * Retrieve the value of a webgui global setting.
      */
-    public function getWebguiGlobal(string $key, string $subkey = null) {
+    public function getWebguiGlobal(string $key, ?string $subkey = null) {
         if (!$subkey) {
             return _var($this->webguiGlobals, $key, '');
         }

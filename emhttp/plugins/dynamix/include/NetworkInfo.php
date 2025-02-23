@@ -23,50 +23,51 @@ if (isset($_POST['listen'])) {
 function port($eth) {
   $sys = "/sys/class/net";
   if (substr($eth,0,4)=='wlan') return $eth;
-  $x = preg_replace('/[^0-9]/','',$eth);
-  return file_exists("$sys/br{$x}") ? "br${x}" : (file_exists("$sys/bond{$x}") ? "bond{$x}" : "eth{$x}");
+  $x = preg_replace('/[^0-9]/','',$eth) ?: '0';
+  return file_exists("$sys/br{$x}") ? "br{$x}" : (file_exists("$sys/bond{$x}") ? "bond{$x}" : "eth{$x}");
 }
 
 exec("grep -Po 'nameserver \K\S+' /etc/resolv.conf 2>/dev/null",$ns);
-$eth    = $_POST['port'];
-$vlan   = $_POST['vlan'];
+$eth    = $_POST['port'] ?? '';
+$vlan   = $_POST['vlan'] ?? '';
+$wlan0  = $eth == 'wlan0';
 $port   = port($eth).($vlan ? ".$vlan" : "");
 $v6on   = trim(file_get_contents("/proc/sys/net/ipv6/conf/$port/disable_ipv6"))==='0';
 $none   = _('None');
 $error  = "<span class='red-text'>"._('Missing')."</span>";
 $note   = in_array($eth,['eth0','wlan0']) && !$vlan ? $error : $none;
-$link   = _(ucfirst(exec("ethtool $eth 2>/dev/null | awk '$1==\"Link\" {print $3;exit}'")) ?: 'Unknown')." ("._(exec("ethtool $eth 2>/dev/null | grep -Pom1 '^\s+Port: \K.*'") ?: ($eth=='wlan0' ? 'wifi' :'not present')).")";
-$speed  = _(preg_replace(['/^(\d+)/','/!/'],['$1 ',''],exec("ethtool $eth 2>/dev/null | awk '$1==\"Speed:\" {print $2;exit}'")) ?: 'Unknown');
-$ipv4   = array_filter(explode(' ',exec("ip -4 -br addr show $port scope global 2>/dev/null | awk '{\$1=\$2=\"\";print;exit}' | sed -r 's/ metric [0-9]+//g; s/\/[0-9]+//g'")));
-$gw4    = exec("ip -4 route show default dev $port 2>/dev/null | awk '{print \$3;exit}'") ?: $note;
+$ipv4   = array_filter(explode(' ',exec("ip -4 -br addr show ".escapeshellarg($port)." scope global 2>/dev/null | awk '{\$1=\$2=\"\";print;exit}' | sed -r 's/ metric [0-9]+//g; s/\/[0-9]+//g'")));
+$gw4    = exec("ip -4 route show default dev ".escapeshellarg($port)." 2>/dev/null | awk '{print \$3;exit}'") ?: $note;
 $dns4   = array_filter($ns,function($ns){return strpos($ns,':')===false;});
 $domain = exec("grep -Pom1 'domain \K.*' /etc/resolv.conf 2>/dev/null") ?: '---';
 
 if ($v6on) {
-  $ipv6 = array_filter(explode(' ',exec("ip -6 -br addr show $port scope global -temporary 2>/dev/null | awk '{\$1=\$2=\"\";print;exit}' | sed -r 's/ metric [0-9]+//g; s/\/[0-9]+//g'")));
-  $gw6  = exec("ip -6 route show default dev $port 2>/dev/null | awk '{print \$3;exit}'") ?: $note;
+  $ipv6 = array_filter(explode(' ',exec("ip -6 -br addr show ".escapeshellarg($port)." scope global -temporary 2>/dev/null | awk '{\$1=\$2=\"\";print;exit}' | sed -r 's/ metric [0-9]+//g; s/\/[0-9]+//g'")));
+  $gw6  = exec("ip -6 route show default dev ".escapeshellarg($port)." 2>/dev/null | awk '{print \$3;exit}'") ?: $note;
   $dns6 = array_filter($ns,function($ns){return strpos($ns,':')!==false;});
 }
 
 echo "<table style='text-align:left;font-size:1.2rem'>";
 echo "<tr><td>&nbsp;</td><td>&nbsp;</td></tr>";
-echo "<tr><td>"._('Interface link').":</td><td>$link</td></tr>";
-echo "<tr><td>"._('Interface speed').":</td><td>$speed</td></tr>";
-if ($eth=='wlan0') {
-  $ini  = '/boot/config/wireless-networks.cfg';
-  $wifi = (array)@parse_ini_file($ini,true);
-  $att1 = $att2 = $att3 = '';
-  foreach ($wifi as $network => $option) {
-    if (isset($option['GROUP']) && $option['GROUP']=='active') {
-      $att1 = $network;
-      $att2 = $option['ATTR2'];
-      $att3 = $option['ATTR3'];
-      break;
-    }
+if ($wlan0) {
+  exec("iw wlan0 link | awk '/^\s+(SSID|signal|[rt]x bitrate): /{print $1,$2,$3,$4}'",$speed);
+  if (count($speed)==4) {
+    $network = explode(': ',$speed[0])[1];
+    $signal  = explode(': ',$speed[1])[1];
+    $rxrate  = explode(': ',$speed[2])[1];
+    $txrate  = explode(': ',$speed[3])[1];
+  } else {
+    $network = $signal = $rxrate = $txrate = _('Unknown');
   }
-  if ($att1) echo "<tr><td>"._('Network').":</td><td>$att1</td></tr>";
-  if ($att2) echo "<tr><td>"._('Health').":</td><td>$att2</td></tr>";
-  if ($att3) echo "<tr><td>"._('Security').":</td><td>$att3</td></tr>";
+  echo "<tr><td>"._('Network name').":</td><td>$network</td></tr>";
+  echo "<tr><td>"._('Signal level').":</td><td>$signal</td></tr>";
+  echo "<tr><td>"._('Receive bitrate').":</td><td>$rxrate</td></tr>";
+  echo "<tr><td>"._('Transmit bitrate').":</td><td>$txrate</td></tr>";
+} else {
+  $link  = _(ucfirst(exec("ethtool ".escapeshellarg($eth)." 2>/dev/null | awk '$1==\"Link\" {print $3;exit}'")) ?: 'Unknown')." ("._(exec("ethtool ".escapeshellarg($eth)." 2>/dev/null | grep -Pom1 '^\s+Port: \K.*'") ?: 'not present').")";
+  $speed = _(preg_replace(['/^(\d+)/','/!/'],['$1 ',''],exec("ethtool ".escapeshellarg($eth)." 2>/dev/null | awk '$1==\"Speed:\" {print $2;exit}'")) ?: 'Unknown');
+  echo "<tr><td>"._('Interface link').":</td><td>$link</td></tr>";
+  echo "<tr><td>"._('Interface speed').":</td><td>$speed</td></tr>";
 }
 if (count($ipv4)) foreach ($ipv4 as $ip) {
   echo "<tr><td>"._('IPv4 address').":</td><td>$ip</td></tr>";

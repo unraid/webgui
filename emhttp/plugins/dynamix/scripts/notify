@@ -211,9 +211,9 @@ case 'add':
       $noBrowser = true;
       break;
      case 'l':
-      $nginx = parse_ini_file('/var/local/emhttp/nginx.ini');
+      $nginx = (array)@parse_ini_file('/var/local/emhttp/nginx.ini');
       $link = $value;
-      $fqdnlink = (strpos($link,"http") === 0) ? $link : $nginx['NGINX_DEFAULTURL'].$link;
+      $fqdnlink = (strpos($link,"http") === 0) ? $link : ($nginx['NGINX_DEFAULTURL']??'').$link;
       break;
     }
   }

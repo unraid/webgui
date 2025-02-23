@@ -385,16 +385,17 @@ class DockerTemplates {
 			$tmp['Project'] = $tmp['Project'] ?? $this->getTemplateValue($image, 'Project');
 			$tmp['DonateLink'] = $tmp['DonateLink'] ?? $this->getTemplateValue($image, 'DonateLink');
 			$tmp['ReadMe'] = $tmp['ReadMe'] ?? $this->getTemplateValue($image, 'ReadMe');
-			if (empty($tmp['updated']) || $reload) {
-				if ($reload) $DockerUpdate->reloadUpdateStatus($image);
-				$tmp['updated'] = var_export($DockerUpdate->getUpdateStatus($image),true);
-			}
 			if (!$com) $tmp['updated'] = 'undef';
-			if ($ct['Manager'] !== 'dockerman')
+			if ($ct['Manager'] !== 'dockerman') {
 				$tmp['template'] = null;
-			else if (empty($tmp['template']) || $reload) {
+				$tmp['updated'] = null;
+			} else if (empty($tmp['template']) || $reload) {
 				$tmp['template'] = $this->getUserTemplate($name);
 				if ($reload) $DockerUpdate->updateUserTemplate($name);
+  				if (empty($tmp['updated']) || $reload) {
+					if ($reload) $DockerUpdate->reloadUpdateStatus($image);
+					$tmp['updated'] = var_export($DockerUpdate->getUpdateStatus($image),true);
+				}
 			}
 			//$this->debug("\n$name");
 			//foreach ($tmp as $c => $d) $this->debug(sprintf('   %-10s: %s', $c, $d));

@@ -409,10 +409,10 @@ docker_network_start(){
       if [[ $TYPE == br ]]; then
         VHOST=$NETWORK
       elif [[ $TYPE == wlan ]]; then
-        VHOST=shim-$NETWORK
+        VHOST=$NETWORK
         ATTACH=ipvlan
       else
-        VHOST=vhost${NETWORK//[^0-9.]/}
+        [[ $DOCKER_ALLOW_ACCESS == yes && -n $IPV4 ]] && VHOST=vhost${NETWORK//[^0-9.]/} || VHOST=$NETWORK
       fi
       docker network create -d $ATTACH $SUBNET $GATEWAY $SERVER $RANGE $SUBNET6 $GATEWAY6 $SERVER6 -o parent=$VHOST $NETWORK | xargs docker network inspect -f "created network $ATTACH {{.Name}} with subnets: {{range .IPAM.Config}}{{.Subnet}}; {{end}}" 2>/dev/null | log
       # connect containers to this new network
@@ -438,7 +438,7 @@ docker_network_start(){
         if [[ $DOCKER_ALLOW_ACCESS == yes && -n $IPV4 ]]; then
           # create shim interface and copy parent IPv4 address to shim interface
           [[ -e $SYSTEM/$LINK ]] || run ip link add link $NETWORK name $LINK type $ATTACH mode $MODE
-          run ip addr flush dev $LINK
+          run ip addr flush dev $LINK scope global
           run ip -4 addr add $IPV4 dev $LINK metric 0
           # disable IPv6 on shim interface
           echo 1 >$CONF6/$LINK/disable_ipv6
@@ -464,13 +464,19 @@ docker_network_start(){
         fi
       elif [[ $TYPE != wlan ]]; then
         if [[ $DOCKER_ALLOW_ACCESS == yes && -n $IPV4 ]]; then
-          run ip addr flush dev $VHOST
+          run ip addr flush dev $VHOST scope global
           # copy IPv4 address to vhost interface
           run ip -4 addr add $IPV4 dev $VHOST metric 0
           log "prepared network $VHOST for host access"
-        elif [[ -e $SYSTEM/$VHOST ]]; then
-          # remove IP addresses
-          run ip addr flush dev $VHOST
+        else
+          VHOST=vhost${NETWORK//[^0-9.]/}
+          if [[ -e $SYSTEM/$VHOST ]]; then
+            # remove IP addresses of vhost
+            run ip addr flush dev $VHOST scope global
+            # remove routing of vhost
+            run ip -4 route flush dev $VHOST
+            run ip -6 route flush dev $VHOST
+          fi
         fi
       fi
     fi

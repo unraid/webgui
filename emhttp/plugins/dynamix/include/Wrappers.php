@@ -129,19 +129,24 @@ function exceed($value, $limit, $top=100) {
 }
 
 function ipaddr($ethX='eth0', $prot=4) {
-  global $$ethX;
-  switch (_var($$ethX,'PROTOCOL:0')) {
-  case 'ipv4':
-    return _var($$ethX,'IPADDR:0');
-  case 'ipv6':
-    return _var($$ethX,'IPADDR6:0');
-  case 'ipv4+ipv6':
-    switch ($prot) {
-    case 4: return _var($$ethX,'IPADDR:0');
-    case 6: return _var($$ethX,'IPADDR6:0');
-    default:return [_var($$ethX,'IPADDR:0'),_var($$ethX,'IPADDR6:0')];}
+  $wlan = $ethX=='eth0' && lan_port('wlan0') && lan_port('wlan0',true);
+  switch ($prot) {
+  case 4:
+    $ipv4 = exec("ip -4 -br addr show $ethX scope global | awk '{print \$3;exit}' | sed -r 's/\/[0-9]+//'");
+    if ($wlan) $ipv4 = $ipv4 ?: exec("ip -4 -br addr show wlan0 scope global | awk '{print \$3;exit}' | sed -r 's/\/[0-9]+//'");
+    return $ipv4;
+  case 6:
+    $ipv6 = exec("ip -6 -br addr show $ethX scope global -temporary -deprecated | awk '{print \$3;exit}' | sed -r 's/\/[0-9]+//'");
+    if ($wlan) $ipv6 = $ipv6 ?: exec("ip -6 -br addr show wlan0 scope global -temporary -deprecated | awk '{print \$3;exit}' | sed -r 's/\/[0-9]+//'");
+    return $ipv6;
   default:
-    return _var($$ethX,'IPADDR:0');
+    $ipv4 = exec("ip -4 -br addr show $ethX scope global | awk '{print \$3;exit}' | sed -r 's/\/[0-9]+//'");
+    $ipv6 = exec("ip -6 -br addr show $ethX scope global -temporary -deprecated | awk '{print \$3;exit}' | sed -r 's/\/[0-9]+//'");
+    if ($wlan) {
+      $ipv4 = $ipv4 ?: exec("ip -4 -br addr show wlan0 scope global | awk '{print \$3;exit}' | sed -r 's/\/[0-9]+//'");
+      $ipv6 = $ipv6 ?: exec("ip -6 -br addr show wlan0 scope global -temporary -deprecated | awk '{print \$3;exit}' | sed -r 's/\/[0-9]+//'");
+    }
+    return [$ipv4,$ipv6];
   }
 }
 
@@ -209,10 +214,10 @@ function my_logger($message, $logger='webgui') {
  * Fetches URL and returns content
  * @param string $url The URL to fetch
  * @param array $opts Array of options to pass to curl_setopt()
- * @param array $getinfo Empty array passed by reference, will contain results of curl_getinfo and curl_error
+ * @param ?array $getinfo Empty array passed by reference, will contain results of curl_getinfo and curl_error, or null if not needed
  * @return string|false $out The fetched content
  */
-function http_get_contents(string $url, array $opts = [], array &$getinfo = NULL) {
+function http_get_contents(string $url, array $opts = [], ?array &$getinfo = NULL) {
   $ch = curl_init();
   if(isset($getinfo)) {
     curl_setopt($ch, CURLINFO_HEADER_OUT, TRUE);
@@ -265,6 +270,6 @@ function check_network_connectivity(): bool {
 function lan_port($port, $state=false) {
   $system = '/sys/class/net';
   $exist = file_exists("$system/$port");
-  return !$state ? $exist : ($exist ? file_get_contents("$system/$port/carrier") : false);
+  return !$state ? $exist : ($exist ? (@file_get_contents("$system/$port/carrier") ?: 0) : false);
 }
 ?>

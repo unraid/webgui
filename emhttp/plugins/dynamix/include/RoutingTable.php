@@ -27,7 +27,7 @@ case 'Add Route':
   break;
 default:
   exec("ip -4 route show table all|grep -Pv '^(127\\.0\\.0\\.0)|table local|unreachable'",$ipv4);
-  exec("ip -6 route show table all|grep -Pv '^([am:]|(f[ef][0-9][0-9])::)|expires|table local|unreachable'",$ipv6);
+  exec("ip -6 route show table all|grep -Pv '^([am:]|(f[ef][0-9][0-9])::)|table local|unreachable'",$ipv6);
   foreach ($ipv4 as $info) {
     $cell = explode(' ',$info);
     $route = $cell[0];

@@ -20,7 +20,7 @@ $tmp   = '/var/tmp/attr';
 $wifi  = is_readable($cfg) ? (array)parse_ini_file($cfg,true) : [];
 $attr  = is_readable($tmp) ? (array)parse_ini_file($tmp,true) : [];
 $md5   = md5(json_encode($attr),true);
-$cmd   = $_POST['cmd'];
+$cmd   = $_POST['cmd'] ?? '';
 $masks = [
   '255.0.0.0' => '8',        '255.255.0.0' => '16',     '255.255.128.0' => '17',   '255.255.192.0' => '18',
   '255.255.224.0' => '19',   '255.255.240.0' => '20',   '255.255.248.0' => '21',   '255.255.252.0' => '22',
@@ -74,14 +74,27 @@ function saveAttr() {
 
 switch ($cmd) {
 case 'list':
+  $load  = $_POST['load'] ?? false;
   $title = _('Connect to WiFi network');
   $port  = array_key_first($wifi);
   $carrier = "/sys/class/net/$port/carrier";
-  $wlan  = scanWifi($port);
   $echo  = [];
   $index = 0;
+  if ($load && count(array_keys($wifi)) > 1) {
+    foreach ($wifi as $network => $block) {
+      if ($network == $port) continue;
+      $wlan[$index]['bss'] = $block['ATTR1'];
+      $wlan[$index]['signal'] = $block['ATTR2'];
+      $wlan[$index]['security'] = $block['ATTR3'] ?? $block['SECURITY'];
+      $wlan[$index]['ssid'] = $network;
+      $index++;
+    }
+    $index = 0;
+  } else {
+    $wlan  = scanWifi($port);
+  }
   if (count(array_column($wlan,'ssid'))) {
-    $up    = file_exists($carrier) && file_get_contents($carrier)==1;
+    $up    = is_readable($carrier) && file_get_contents($carrier)==1;
     $alive = $up ? exec("iw ".escapeshellarg($port)." link 2>/dev/null | grep -Pom1 'SSID: \K.+'") : '';
     $state = $up ? _('Connected') : _('Disconnected');
     $color = $up ? 'blue' : 'red';
@@ -106,7 +119,7 @@ case 'list':
     }
     if (empty($echo['active'])) $echo['active'][] = "<dl><dt>"._('Connected').":</dt><dd>"._('None')."</dd>";
     if (empty($echo['saved'])) $echo['saved'][] = "<dl><dt>"._('My networks').":</dt><dd>"._('None')."</dd>";
-    if (empty($echo['other'])) $echo['other'][] = "<dl><dt>"._('Other networks').":</dt><dd>"._('None')."</dd>";
+    if (empty($echo['other'])) $echo['other'][] = $load ? "" : "<dl><dt>"._('Other networks').":</dt><dd>"._('None')."</dd>";
     $echo['active'] = implode($echo['active']);
     $echo['saved'] = implode($echo['saved']);
     $echo['other'] = implode($echo['other']);
@@ -133,7 +146,7 @@ case 'join':
   $dns6    = _var($wifi[$ssid],'DNS6','no');
   $ip6     = _var($wifi[$ssid],'IP6');
   $mask6   = _var($wifi[$ssid],'MASK6','64');
-  $gwv6    = _var($wifi[$ssid],'GATEWAY6');
+  $gw6     = _var($wifi[$ssid],'GATEWAY6');
   $server6 = _var($wifi[$ssid],'SERVER6');
   $safe    = _var($wifi[$ssid],'SECURITY');
   $attr1   = $attr[$ssid]['ATTR1'];

@@ -64,24 +64,24 @@ function enable_wifi(state) {
   $('input[name="#arg[1]"]').val(state);
 }
 
-function update_wifi() {
-  $.post('/webGui/include/Wireless.php',{cmd:'list'},function(text) {
+function update_wifi(load) {
+  $.post('/webGui/include/Wireless.php',{cmd:'list',load:load},function(text) {
     if (text.length > 0) {
       var wifi = JSON.parse(text);
       $('#connected').html(wifi.active);
       $('#my_networks').html(wifi.saved);
-      $('#other_networks').html(wifi.other);
+      if (wifi.other.length) $('#other_networks').html(wifi.other);
     }
   });
-  timers.wifi = setTimeout(update_wifi,10000);
+  timers.wifi = setTimeout(update_wifi,6000);
 }
 
 function manage_wifi(ssid,task) {
   if (task==2) {
+    clearTimeout(timers.wifi);
     $.post('/webGui/include/Wireless.php',{cmd:'forget',ssid:ssid},function(){
-      clearTimeout(timers.wifi);
       swal.close();
-      setTimeout(update_wifi);
+      setTimeout(function(){update_wifi(1);});
     });
     return;
   }
@@ -146,7 +146,7 @@ function showSecurity(val) {
 <?if (_var($wlan0,'WIFI')=='yes'):?>
 $(function() {
   $('#wifi').show();
-  update_wifi();
+  update_wifi(1);
 });
 <?endif;?>
 </script>

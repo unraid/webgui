@@ -10,7 +10,7 @@ DAEMON="WiFi network"
 CALLER="wifi"
 INI="/var/local/emhttp/wireless.ini"
 CFG="/boot/config/wireless.cfg"
-SSLINPUT="/etc/rc.d/rc.ssl.input"
+OPENSSL="/usr/local/emhttp/webGui/scripts/open_ssl"
 STARTWIFI="/usr/local/emhttp/webGui/scripts/wireless"
 WPA="/etc/wpa_supplicant.conf"
 
@@ -39,15 +39,6 @@ unzero6(){
   local A M Q
   A=${1/::/:-:}
   echo -n $(for Q in ${A//:/ }; do [[ $Q != - ]] && printf "$M%x" "0x$Q" || printf ":"; M=:; done)
-}
-
-# function to initialize openSSL variables
-ssl_init(){
-  KEY="$(dmidecode -qt1 | grep -Pom1 'Manufacturer: \K.+' | sed 's/ /_/g')ABCDEFGH"
-  IV="12$(cat $SYSTEM/$PORT/address | sed 's/://g')34"
-  echo "cipher=aes-256-cbc" >$SSLINPUT
-  echo "key=${KEY:0:63}" >>$SSLINPUT
-  echo "iv=$IV" >>$SSLINPUT
 }
 
 # function to convert text to hex
@@ -81,7 +72,7 @@ ipaddr_up(){
   if [[ $DHCP == yes ]]; then
     # bring up interface using DHCP/SLAAC
     ipv6_addr 1 1
-    OPTIONS="-q -n -p -t 10"
+    OPTIONS="-q -n -p -t10 -J"
     [[ -n $HOSTNAME ]] && OPTIONS="$OPTIONS -h $HOSTNAME"
     [[ $DNS == yes ]] && OPTIONS="$OPTIONS -C resolv.conf"
     [[ $IP == ipv4 ]] && OPTIONS="$OPTIONS -4"
@@ -180,10 +171,10 @@ wifi_start(){
   local REPLY
   if [[ -e $SYSTEM/$PORT ]]; then
     LINK=shim-$PORT
-    [[ -e $SYSTEM/$LINK ]] || run ip link add link $PORT name $LINK type ipvlan mode l2 bridge
+    [[ -e $SYSTEM/$LINK ]] || run ip link add link $PORT name $LINK type ipvtap mode l2 bridge
     run ip link set $PORT up
     run ip link set $LINK up
-    ssl_init
+    $OPENSSL load
     # start active SSID
     $STARTWIFI
     if ! carrier_up $PORT; then
@@ -216,6 +207,7 @@ wifi_stop(){
     fi
     run pkill wpa_supplicant
     run iw dev $PORT disconnect
+    run ip addr flush dev $PORT
     run rm -f $INI
     if ! wifi_running; then REPLY="Stopped"; else REPLY="Failed"; fi
   else
@@ -231,11 +223,21 @@ wifi_join(){
     log "$DAEMON...  No configuration."
     return
   fi
-  [[ -e $SSLINPUT ]] || ssl_init
-# get SSL keys
-  . $SSLINPUT
-  [[ -n $USERNAME ]] && USERNAME=$(echo $USERNAME | openssl $cipher -a -d -K $(hex $key) -iv $(hex $iv) 2>/dev/null)
-  [[ -n $PASSWORD ]] && PASSWORD=$(echo $PASSWORD | openssl $cipher -a -d -K $(hex $key) -iv $(hex $iv) 2>/dev/null)
+  $OPENSSL reload
+  [[ -n $USERNAME ]] && DECRYPT1=$($OPENSSL decrypt "$USERNAME")
+  [[ -n $DECRYPT1 ]] && USERNAME=$DECRYPT1
+  [[ -n $PASSWORD ]] && DECRYPT2=$($OPENSSL decrypt "$PASSWORD")
+  [[ -n $DECRYPT2 ]] && PASSWORD=$DECRYPT2
+# plain username, encrypt username in settings file
+  if [[ -n $USERNAME && -z $DECRYPT1 ]]; then
+    ENCRYPT1=$($OPENSSL encrypt "$USERNAME")
+    sed -ri "s/^(USERNAME=\").+$/\1$ENCRYPT1\"/" $CFG
+  fi
+# plain password, encrypt password in settings file
+  if [[ -n $PASSWORD && -z $DECRYPT2 ]]; then
+    ENCRYPT2=$($OPENSSL encrypt "$PASSWORD")
+    sed -ri "s/^(PASSWORD=\").+$/\1$ENCRYPT2\"/" $CFG
+  fi
   SECURITY=${SECURITY:-$ATTR3}
   if [[ -z $SECURITY || ${SECURITY^^} == "OPEN" ]]; then
     # open network

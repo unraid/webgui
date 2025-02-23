@@ -104,7 +104,7 @@ while (true) {
   $valid_paths = array_filter($paths, function($key) {
     $mnt_path = '/mnt/' . $key;
     /* Check if the directory exists and is a valid mount point */
-    return is_dir($mnt_path) && trim(shell_exec("mountpoint -q " . escapeshellarg($mnt_path) . " && echo 1")) === '1';
+    return is_dir($mnt_path) && trim((shell_exec("mountpoint -q " . escapeshellarg($mnt_path) . " && echo 1")) ?? '') === '1';
   });
 
   /* Construct the list of paths */
