@@ -1550,7 +1550,7 @@ function showSubnet(bridge) {
   }
   // make sure to re-trigger Tailscale check when network is changed
   if (bridge.match(/^(host|container)$/i) !== null) {
-    $('#contTailscale').click().switchButton({checked: false}).prop('checked',false);
+    $('#contTailscale').siblings('.switch-button-background').click();
     $(".TSNetworkAllowed").hide();
     $(".TSNetworkNotAllowed").show();
   } else {
@@ -1711,7 +1711,7 @@ function showTSAdvanced(checked) {
 function showTailscale(source) {
   var bridge = $('select[name="contNetwork"]').val();
   if (bridge.match(/^(host|container)$/i) !== null) {
-    $('#contTailscale').click().switchButton({checked: false}).prop('checked',false);
+    $('#contTailscale').prop('checked',false);
     $(".TSNetworkAllowed").hide();
     $(".TSNetworkNotAllowed").show();
   }
