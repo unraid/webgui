@@ -15,8 +15,7 @@ foreach ($autostart as $container) {
   }
     
   $doc = new DOMDocument();
-  $doc->load("/boot/config/plugins/dockerMan/templates-user/my-{$cont[0]}.xml");   
-  if ( ! $doc ) {
+  if (!$doc->load("/boot/config/plugins/dockerMan/templates-user/my-{$cont[0]}.xml")) {
     $newAuto[] = $container;
     continue;
   }
