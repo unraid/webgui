@@ -23,6 +23,7 @@ foreach ($autostart as $container) {
     if ( ($doc->getElementsByTagName("TailscaleEnabled")->item(0)->nodeValue ?? false) == true ) {
       exec("logger ".escapeshellarg("Autostart disabled on {$cont[0]} due to tailscale integration with host network."));
       exec("logger ".escapeshellarg("This is a security risk due to the possibility of unauthenticated access to your server's GUI and resources"));
+      exec("/usr/local/emhttp/plugins/dynamix/scripts/notify -e 'Autostart Disabled' -s 'Autostart Disabled' -d ".escapeshellarg("Autostart disabled automatically on {$cont[0]}")." -m ".escapeshellarg("Autostart has been automatically disabled on {$cont[0]} due to a security issue with container on network type host and tailscale integration enabled.  You should either switch the network type or disabled tailscale integration on this container")." -i 'alert' -l '/Docker'");
       continue;           
     }
   }
