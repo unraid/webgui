@@ -33,6 +33,10 @@ case 'start':
 	if ($container) {
 		$info = $DockerClient->getDockerContainers();
 		$key = array_search($container,array_column($info,"Id"));
+		if ( $key === false ) {
+			$arrResponse = ['success' => _('Container not found.  Try reloading this page to fix.')];
+			break;
+		}		
 		if ($info[$key]['NetworkMode'] == "host" && $info[$key]['Cmd'] == "/opt/unraid/tailscale") {
 			$arrResponse = ['success'=> _('For security reasons, containers with Network Type "Host" should not have Tailscale enabled. Please disable Tailscale in this container or change the Network Type of the container.')];
 			break;
