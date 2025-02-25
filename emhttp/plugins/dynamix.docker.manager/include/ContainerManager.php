@@ -30,6 +30,7 @@ if (file_exists($user_prefs)) {
 foreach ($containers as $ct) {
   if ( $action == "start") {
     $key = array_search($ct,array_column($info,"Name"));
+    if ( $key === false ) continue;
     if ($info[$key]['NetworkMode'] == "host" && $info[$key]['Cmd'] == "/opt/unraid/tailscale")
       continue;
   }
