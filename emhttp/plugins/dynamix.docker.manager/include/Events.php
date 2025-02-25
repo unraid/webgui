@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  * Copyright 2014-2021, Guilherme Jardim, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
@@ -30,7 +30,15 @@ $arrResponse  = ['error' => _('Missing parameters')];
 
 switch ($action) {
 case 'start':
-	if ($container) $arrResponse = ['success' => $DockerClient->startContainer($container)];
+	if ($container) {
+		$info = $DockerClient->getDockerContainers();
+		$key = array_search($container,array_column($info,"Id"));
+		if ($info[$key]['NetworkMode'] == "host" && $info[$key]['Cmd'] == "/opt/unraid/tailscale") {
+			$arrResponse = ['success'=> _('For security reasons, containers with Network Type "Host" should not have Tailscale enabled. Please disable Tailscale in this container or change the Network Type of the container.')];
+			break;
+		}
+		$arrResponse = ['success' => $DockerClient->startContainer($container)];
+	}
 	break;
 case 'pause':
 	if ($container) $arrResponse = ['success' => $DockerClient->pauseContainer($container)];
