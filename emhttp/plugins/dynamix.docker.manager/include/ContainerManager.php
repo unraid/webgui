@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  * Copyright 2014-2021, Guilherme Jardim, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
@@ -19,14 +19,20 @@ $user_prefs = $dockerManPaths['user-prefs'];
 $action     = $_POST['action'];
 $status     = $action=='start' ? 'exited' : ($action=='unpause' ? 'paused' : 'running');
 $containers = DockerUtil::docker("ps -a --filter status='$status' --format='{{.Names}}'",true);
+$dockerClient = new DockerClient();
+$info = $dockerClient->getDockerContainers();
 
 if (file_exists($user_prefs)) {
   $prefs = parse_ini_file($user_prefs); $sort = [];
   foreach ($containers as $ct) $sort[] = array_search($ct,$prefs) ?? 999;
   array_multisort($sort, ($action=='start'?SORT_ASC:SORT_DESC), SORT_NUMERIC, $containers);
 }
-
 foreach ($containers as $ct) {
+  if ( $action == "start") {
+    $key = array_search($ct,array_column($info,"Name"));
+    if ($info[$key]['NetworkMode'] == "host" && $info[$key]['Cmd'] == "/opt/unraid/tailscale")
+      continue;
+  }
   DockerUtil::docker("$action $ct >/dev/null");
   addRoute($ct);
 }
