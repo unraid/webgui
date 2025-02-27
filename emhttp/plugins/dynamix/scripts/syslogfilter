@@ -21,16 +21,27 @@ $file_contents		= str_replace($escapeSequences, "", @file_get_contents($file));
 $text				= explode("\n", $file_contents);
 
 /* Set up the log filter. */
-$filter			= array();
-foreach($text as $line) {
-	if ($line != '') {
-		$filter[] = ":msg,contains,\"".$line."\" stop\n";
+$filter = array();
+
+foreach ($text as $line) {
+	/* Trim whitespace */
+	$line = trim($line);
+
+	/* Skip empty lines */
+	if ($line === '') {
+		continue;
 	}
+
+	/* Remove unwanted characters while preserving log-friendly symbols */
+	$line = preg_replace('/[^\w\s\-_.,!@#$%^&*()<>\/:;=\[\]{}|]/u', '', $line);
+
+	/* Add the sanitized line to the filter */
+	$filter[] = ":msg,contains,\"" . $line . "\" stop\n";
 }
 
 @file_put_contents($filter_file, $filter);
 
-/* Setup log rules */
+/* Setup log rules file permission */
 @chmod($filter_file, 0644);
 
 sleep(1);
