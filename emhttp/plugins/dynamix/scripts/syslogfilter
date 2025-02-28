@@ -41,11 +41,6 @@ foreach ($text as $line) {
 
 @file_put_contents($filter_file, $filter);
 
-/* Setup log rules file permission */
-@chmod($filter_file, 0644);
-
-sleep(1);
-
 /* Adjust rsyslog.conf so filtering will work. */
 $str = file_get_contents($rsyslog_conf);
 $str = str_replace("RuleSet local", "RuleSet RSYSLOG_DefaultRuleset", $str);
