@@ -529,7 +529,7 @@ if ($snapshots!=null && count($snapshots) && !$boolNew) {
 		}
 		if (is_array($arrConfig['domain']['vcpu'])) {$coredisable = "disabled"; $vcpubuttontext = "Deselect all";} else {$coredisable = ""; $vcpubuttontext = "Select all";}
 		?>
-		<td><span class="advanced">_(CPU Cores)_:</span></td>
+		<td><span class="advanced">_(vCPUs)_:</span></td>
 		<td>
 			<span class="width"><select id="vcpus" <?=$coredisable?> name="domain[vcpus]" class="domain_vcpus narrow">
 			<?for ($i = 1; $i <= ($corecount); $i++) echo mk_option($arrConfig['domain']['vcpus'], $i, $i);?>
@@ -551,7 +551,7 @@ if ($snapshots!=null && count($snapshots) && !$boolNew) {
 
 <table>
 	<tr>
-		<td>_(Logical CPUs)_:</td>
+		<td>_(Pinned Cores)_:</td>
 		<td>
 			<div class="textarea four">
 			<?
@@ -577,8 +577,8 @@ if ($snapshots!=null && count($snapshots) && !$boolNew) {
 </table>
 
 <blockquote class="inline_help">
-	<p>The number of logical CPUs in your system is determined by multiplying the number of CPU cores on your processor(s) by the number of threads.</p>
-	<p>Select which logical CPUs you wish to allow your VM to use. (minimum 1).</p>
+	<p>The number of available cores in your system is determined by multiplying the number of CPU cores on your processor(s) by the number of threads. But this will only be for cores that support hyperthreding.</p>
+	<p>Select which pinned CPUs you wish to allow your VM to use. If no pinned cores are selected the vCPU value is used to determin the allocation within the VM.</p>
 </blockquote>
 
 <table>
@@ -1307,7 +1307,7 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 			<?
 			echo mk_option($arrGPU['render'], 'auto', _('Auto'));
 			foreach ($arrValidGPUDevices as $arrDev) {
-				if ($arrDev['vendorid'] == "10de" && !is_file("/etc/libvirt/virglnv")) continue;
+				if (($arrDev['vendorid'] == "10de" && !is_file("/etc/libvirt/virglnv")) || $arrDev['driver'] == "vfio-pci") continue;
 				echo mk_option($arrGPU['render'], $arrDev['id'], $arrDev['name'].' ('.$arrDev['id'].')');
 			}
 			?>

@@ -37,8 +37,8 @@ function create($type = "") {
 			if ($cpu2) $text[$n] .= "$cpu2<br>";
 		}
 	}
-	$label = implode('<br>', array_fill(0, $loop, 'CPU:' . ($cpu2 ? '<br>CPU:' : '')));
-	if ($type == "vm") echo "<th>VPCUS</th>";
+	$label = implode('<br>', array_fill(0, $loop, 'CORES:' . ($cpu2 ? '<br>CORES:' : '')));
+	if ($type == "vm") echo "<th>VCPUS</th>";
 	echo "<th>$label</th>" . implode(array_map(function($t) {
 		return "<th>$t</th>";
 	}, $text));
