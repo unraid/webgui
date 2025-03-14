@@ -49,6 +49,7 @@ function annotate($text) {echo "\n<!--\n",str_repeat("#",strlen($text)),"\n$text
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/dynamix-$theme.css")?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/defaultpagelayout.css")?>">
 
+<?php include 'UpdatePatchHeader.php'; ?>
 <style>
 <?if (empty($display['width'])):?>
 @media (max-width:1280px){#displaybox{min-width:1280px;max-width:1280px;margin:0}}
