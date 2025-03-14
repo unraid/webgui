@@ -86,7 +86,14 @@ class ServerState
         $this->webguiGlobals =& $webguiGlobals;
         // echo "<pre>" . json_encode($this->webguiGlobals, JSON_PRETTY_PRINT) . "</pre>";
 
-        $this->var = (array)parse_ini_file('state/var.ini');
+        $this->var = $webguiGlobals['var'];
+
+        // If we're on a patch, we need to use the combinedVersion to check for updates
+        if (file_exists('/tmp/Patcher/patches.json')) {
+            $patchJson = @json_decode(@file_get_contents('/tmp/Patcher/patches.json'), true) ?: [];
+            $this->var['version'] = $patchJson['combinedVersion'] ?? $this->var['version'];
+        }
+
         $this->nginxCfg = @parse_ini_file('/var/local/emhttp/nginx.ini') ?? [];
 
         $this->osVersion = $this->var['version'];
