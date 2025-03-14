@@ -90,7 +90,7 @@ rm -f /boot/plugins/unRAIDServer.plg
 rm -f $CONFIG/plugins/unRAIDServer.plg
 
 # These plugins are now integrated in the OS or obsolete and may interfere
-OBSOLETE="vfio.pci dynamix.wireguard dynamix.ssd.trim dynamix.file.manager gui.search unlimited-width proxy.editor"
+OBSOLETE="vfio.pci dynamix.wireguard dynamix.ssd.trim dynamix.file.manager gui.search unlimited-width proxy.editor unraid.patch AAA-UnraidPatch-BootLoader-DO_NOT_DELETE"
 for PLUGIN in $OBSOLETE; do
   if [[ -e $CONFIG/plugins/$PLUGIN.plg ]]; then
     log "moving obsolete plugin $PLUGIN.plg to $CONFIG/plugins-error"
@@ -161,7 +161,7 @@ else
     log "Installing /boot/extra packages"
     ( export -f log; find /boot/extra -maxdepth 1 -type f -exec sh -c 'upgradepkg --terse --install-new "$1" | log' -- "{}" \; )
   fi
-  PRIORITY_PLUGINS=("unraid.patch.plg" "dynamix.unraid.net.plg" "dynamix.unraid.net.staging.plg")
+  PRIORITY_PLUGINS=("dynamix.unraid.net.plg" "dynamix.unraid.net.staging.plg")
   # Install priority plugins first
   for PRIORITY_PLUGIN in "${PRIORITY_PLUGINS[@]}"; do
     PRIORITY_PLUGIN_PATH="$CONFIG/plugins/$PRIORITY_PLUGIN"
