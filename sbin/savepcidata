@@ -1,0 +1,31 @@
+#!/usr/bin/php
+<?php
+
+    $output = shell_exec('lspci -Dmn');
+    $devices = [];
+
+    foreach (explode("\n", trim($output)) as $line) {
+        $parts = explode(" ", $line);
+
+        if (count($parts) < 6) continue; // Skip malformed lines
+
+        $device = [
+            'pci_address' => $parts[0], // Full PCI address
+            'class'       => trim($parts[1], '"'),
+            'vendor_id'   => trim($parts[2], '"'),
+            'device_id'   => trim($parts[3], '"'),
+            'revision'    => (strpos($parts[4], '-r') === 0) ? substr($parts[4], 2) : null,
+        ];
+
+        // Determine correct indices for subsystem vendor/device IDs
+        $subsys_vendor_index = (isset($device['revision']) ? 5 : 4);
+        $subsys_device_index = $subsys_vendor_index + 1;
+
+        $device['subsystem_vendor_id'] = trim($parts[$subsys_vendor_index], '"');
+        $device['subsystem_device_id'] = trim($parts[$subsys_device_index], '"');
+
+        $devices[] = $device;
+    }
+
+    file_put_contents("/boot/config/savedpcidata.json",json_encode($devices,JSON_PRETTY_PRINT));
+?>
