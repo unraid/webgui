@@ -1822,6 +1822,8 @@ $(function() {
   });
 });
 
+
+<? if ( $display['dashupdate'] == "no" ):?>
 var dashboardPaused = false;
 $(window).focus(function() {
   if (dashboardPaused !== false ) {
@@ -1838,7 +1840,7 @@ $(window).focus(function() {
 });
 
 $(window).blur(function() {
-  dashboardPaused = addBannerWarning("_(Dashboard Updates Paused)_",false,true);
+  dashboardPaused = addBannerWarning("_(Dashboard Updates Paused)_",false,true );
   dashboard.stop();
   <?if ($vmusage == "Y"):?>
     vmdashusage.stop();
@@ -1847,6 +1849,7 @@ $(window).blur(function() {
     apcups.stop();
   <?endif;?>
 });
+<?endif;?>
 
 window.onunload = function(){
   dashboard.stop();
