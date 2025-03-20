@@ -1822,6 +1822,25 @@ $(function() {
   });
 });
 
+$(window).focus(function() {
+  dashboard.start();
+  <?if ($vmusage == "Y"):?>
+      vmdashusage.start();
+  <?endif;?>
+  <?if ($apcupsd):?>
+    apcups.start();
+  <?endif;?>   
+});
+
+$(window).blur(function() {
+  dashboard.stop();
+  <?if ($vmusage == "Y"):?>
+    vmdashusage.stop();
+  <?endif;?>
+  <?if ($apcupsd):?>
+    apcups.stop();
+  <?endif;?>
+});
 window.onunload = function(){
   dashboard.stop();
 <?if ($vmusage == "Y"):?>
