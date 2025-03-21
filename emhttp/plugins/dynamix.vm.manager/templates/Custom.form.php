@@ -1307,7 +1307,7 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 			<?
 			echo mk_option($arrGPU['render'], 'auto', _('Auto'));
 			foreach ($arrValidGPUDevices as $arrDev) {
-				if (($arrDev['vendorid'] == "10de" && !is_file("/etc/libvirt/virglnv")) || $arrDev['driver'] == "vfio-pci") continue;
+				if (($arrDev['vendorid'] == "10de" && ($arrDev['driver'] == "nvidia" && !is_file("/etc/libvirt/virglnv"))) || $arrDev['driver'] == "vfio-pci") continue;
 				echo mk_option($arrGPU['render'], $arrDev['id'], $arrDev['name'].' ('.$arrDev['id'].')');
 			}
 			?>
