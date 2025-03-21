@@ -843,6 +843,8 @@ if (cookie.port_select && !ports.includes(cookie.port_select)) {
 }
 var port_select = cookie.port_select||ports[0];
 
+
+
 function saveCookie() {
   $.post('/webGui/include/InitCharts.php',{cmd:'cookie',data:JSON.stringify(cookie)});
 }
@@ -974,6 +976,7 @@ function loadlist(init) {
       saveCookie();
     });
   }
+
   $.post('/webGui/include/DashboardApps.php',{docker:'<?=$dockerd?>',vms:'<?=$libvirtd?>',vmusage:'<?=$vmusage?>'},function(d) {
     var data = d.split('\0');
     $('#docker_view tr.updated').remove();
@@ -1625,7 +1628,7 @@ vmdashusage.on('message', function(msg){
   });
 <?endif;?>
 
-var dashboard = new NchanSubscriber('/sub/cpuload,update1,update2,update3<?=$wireguard?",wireguard":""?>',{subscriber:'websocket'});
+var dashboard = new NchanSubscriber('/sub/cpuload,update1,update2,update3<?=$wireguard?",wireguard":""?>',{subscriber:'websocket',reconnect:false});
 dashboard.on('message',function(msg,meta) {
   switch (meta.id.channel()) {
   case 0:
@@ -1802,6 +1805,7 @@ $(function() {
 <?if ($apcupsd):?>
   apcups.start();
 <?endif;?>
+
   update900();
   toggleChart(true);
   toggleCPU(true);
@@ -1818,9 +1822,10 @@ $(function() {
     data.cpu = cpu.tail(cpuline);
     data.rxd = rxd.tail(netline);
     data.txd = txd.tail(netline);
-    $.post('/webGui/include/InitCharts.php',{cmd:'set',data:JSON.stringify(data)});
+ //   $.post('/webGui/include/InitCharts.php',{cmd:'set',data:JSON.stringify(data)});
   });
 });
+
 
 
 <? if ( $display['dashupdate'] == "no" ):?>
@@ -1829,35 +1834,43 @@ $(window).focus(function() {
   if (dashboardPaused !== false ) {
     removeBannerWarning(dashboardPaused);
     dashboardPaused = false;
-  }
-  dashboard.start();
-  <?if ($vmusage == "Y"):?>
-      vmdashusage.start();
-  <?endif;?>
-  <?if ($apcupsd):?>
-    apcups.start();
-  <?endif;?>   
+  
+    dashboard.start();
+    <?if ($vmusage == "Y"):?>
+        vmdashusage.start();
+    <?endif;?>
+    <?if ($apcupsd):?>
+      apcups.start();
+    <?endif;?>
+  }   
 });
 
 $(window).blur(function() {
-  dashboardPaused = addBannerWarning("_(Dashboard Updates Paused)_",false,true );
-  dashboard.stop();
-  <?if ($vmusage == "Y"):?>
-    vmdashusage.stop();
-  <?endif;?>
-  <?if ($apcupsd):?>
-    apcups.stop();
-  <?endif;?>
+  if ( dashboardPaused == false ) {
+    dashboardPaused = addBannerWarning("_(Dashboard Updates Paused)_",false,true );
+    dashboard.stop();
+    <?if ($vmusage == "Y"):?>
+      vmdashusage.stop();
+    <?endif;?>
+    <?if ($apcupsd):?>
+      apcups.stop();
+    <?endif;?>
+    cpu     = [];
+    rxd     = [];
+    txd     = [];
+  }
 });
-<?endif;?>
 
+
+<?endif;?>
 window.onunload = function(){
   dashboard.stop();
 <?if ($vmusage == "Y"):?>
-    vmdashusage.stop();
+  vmdashusage.stop();
 <?endif;?>
 <?if ($apcupsd):?>
   apcups.stop();
 <?endif;?>
+
 }
 </script>
