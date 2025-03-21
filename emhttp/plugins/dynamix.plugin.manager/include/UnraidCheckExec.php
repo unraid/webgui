@@ -12,27 +12,53 @@
 class UnraidCheckExec
 {
     private const SCRIPT_PATH = '/usr/local/emhttp/plugins/dynamix.plugin.manager/scripts/unraidcheck';
+    private const ALLOWED_DOMAIN = 'releases.unraid.net';
 
     private function setupEnvironment(): void
     {
         header('Content-Type: application/json');
+        header('X-Content-Type-Options: nosniff');
+        header('X-Frame-Options: DENY');
+        header('Content-Security-Policy: default-src \'none\'');
 
         $params = [
             'json' => 'true',
         ];
-        // allows the web components to determine the OS_RELEASES url
-        if (isset($_GET['altUrl']) && filter_var($_GET['altUrl'], FILTER_VALIDATE_URL)) {
-            $params['altUrl'] = $_GET['altUrl'];
+
+        if (isset($_GET['altUrl'])) {
+            $url = filter_var($_GET['altUrl'], FILTER_VALIDATE_URL);
+            if ($url !== false) {
+                $host = parse_url($url, PHP_URL_HOST);
+                $scheme = parse_url($url, PHP_URL_SCHEME);
+
+                if ($host && $scheme === 'https' && (
+                    $host === self::ALLOWED_DOMAIN ||
+                    str_ends_with($host, '.' . self::ALLOWED_DOMAIN)
+                )) {
+                    $params['altUrl'] = $url;
+                }
+            }
         }
-        // pass the params to the unraidcheck script for usage in UnraidCheck.php
+
         putenv('QUERY_STRING=' . http_build_query($params));
     }
 
     public function execute(): string
     {
+        // Validate script with all necessary permissions
+        if (!is_file(self::SCRIPT_PATH) || 
+            !is_readable(self::SCRIPT_PATH) || 
+            !is_executable(self::SCRIPT_PATH)) {
+            throw new RuntimeException('Script not found or not executable');
+        }
+
         $this->setupEnvironment();
         $output = [];
-        exec(self::SCRIPT_PATH, $output);
+        $command = escapeshellcmd(self::SCRIPT_PATH);
+        if (exec($command, $output) === false) {
+            throw new RuntimeException('Script execution failed');
+        }
+
         return implode("\n", $output);
     }
 }
