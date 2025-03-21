@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -22,19 +22,24 @@ function write(&$rows) {
   if ($size = count($rows)) echo '<tbody>',implode(array_map(function($row){echo gzinflate($row);},$rows)),'</tbody>';
   $rows = $size;
 }
+
 function validdir($dir) {
   $path = realpath($dir);
   return in_array(explode('/',$path)[1]??'',['mnt','boot']) ? $path : '';
 }
+
 function escapeQuote($data) {
   return str_replace('"','&#34;',$data);
 }
+
 function add($number, $name, $single='', $plural='s') {
   return $number.' '._($name.($number==1 ? $single : $plural));
 }
+
 function age($number,$time) {
   return sprintf(_('%s '.($number==1 ? $time : $time.'s').' ago'),$number);
 }
+
 function my_age($time) {
   if (!is_numeric($time)) $time = time();
   $age = new DateTime('@'.$time);
@@ -46,11 +51,13 @@ function my_age($time) {
   if ($age->i > 0) return age($age->i,'minute');
   return age($age->s,'second');
 }
+
 function parent_link() {
   global $dir,$path;
   $parent = dirname($dir);
   return $parent=='/' ? false : '<a href="/'.$path.'?dir='.rawurlencode(htmlspecialchars($parent)).'">'._('Parent Directory').'</a>';
 }
+
 function my_devs(&$devs,$name,$menu) {
   global $disks,$lock;
   $text = []; $i = 0;
@@ -72,6 +79,7 @@ function my_devs(&$devs,$name,$menu) {
   }
   return implode($text);
 }
+
 function icon_class($ext) {
   switch ($ext) {
   case '3gp': case 'asf': case 'avi': case 'f4v': case 'flv': case 'm4v': case 'mkv': case 'mov': case 'mp4': case 'mpeg': case 'mpg': case 'm2ts': case 'ogm': case 'ogv': case 'vob': case 'webm': case 'wmv':
@@ -144,6 +152,7 @@ if ($user ) {
   for ($i = 0; $i < count($tmp); $i+=3) $set[basename($tmp[$i])] = explode('"',$tmp[$i+1])[1];
   unset($tmp);
 }
+
 $stat = popen("shopt -s dotglob;stat -L -c'%F|%U|%A|%s|%Y|%n' ".escapeshellarg($dir)."/* 2>/dev/null",'r');
 while (($row = fgets($stat))!==false) {
   [$type,$owner,$perm,$size,$time,$name] = explode('|',rtrim($row,"\n"),6);
@@ -178,6 +187,7 @@ while (($row = fgets($stat))!==false) {
     $total += $size;
   }
 }
+
 pclose($stat);
 if ($link = parent_link()) echo '<tbody class="tablesorter-infoOnly"><tr><td></td><td><i class="fa fa-folder-open-o"></i></td><td>',$link,'</td><td colspan="6"></td></tr></tbody>';
 echo write($dirs),write($files),'<tfoot><tr><td></td><td></td><td colspan="7">',add($objs,'object'),': ',add($dirs,'director','y','ies'),', ',add($files,'file'),' (',my_scale($total,$unit),' ',$unit,' ',_('total'),')</td></tr></tfoot>';

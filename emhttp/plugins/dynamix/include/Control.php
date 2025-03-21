@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -21,6 +21,7 @@ require_once "$docroot/webGui/include/Translations.php";
 function age($number,$time) {
   return sprintf(_('%s '.($number==1 ? $time : $time.'s').' ago'),$number);
 }
+
 function my_age($time) {
   if (!is_numeric($time)) $time = time();
   $age = new DateTime('@'.$time);
@@ -32,10 +33,12 @@ function my_age($time) {
   if ($age->i > 0) return age($age->i,'minute');
   return age($age->s,'second');
 }
+
 function validname($name) {
   $path = realpath(dirname($name));
   return in_array(explode('/',$path)[1]??'',['mnt','boot']) ? $path.'/'.basename($name) : '';
 }
+
 function escape($name) {return escapeshellarg(validname($name));}
 function quoted($name) {return is_array($name) ? implode(' ',array_map('escape',$name)) : escape($name);}
 

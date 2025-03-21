@@ -3,8 +3,8 @@ Tag="home"
 Nchan="file_manager"
 ---
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -18,21 +18,24 @@ Nchan="file_manager"
 function dfm_quote($text) {
   return "\"$text\"";
 }
+
 function dfm_array($array) {
-  return implode(',',array_map('dfm_quote',$array));
+  return implode(',', array_map('dfm_quote', $array));
 }
+
 function validdir($dir) {
   $path = realpath($dir);
-  return in_array(explode('/',$path)[1]??'',['mnt','boot']) ? $path : '';
+  return in_array(explode('/', $path)[1] ?? '', ['mnt','boot']) ? $path : '';
 }
+
 $dir     = validdir(htmlspecialchars_decode($dir));
-[$none,$root,$main,$next,$rest] = my_explode('/',$dir,5);
-$dir     = htmlspecialchars(str_replace('\\','\\\\',$dir));
-$lock    = $root=='mnt' ? ($main ?: '---') : ($root=='boot' ? _('flash') : '---');
-$isshare = $root=='mnt' && (!$main || !$next || ($main=='rootshare' && !$rest));
+[$none,$root,$main,$next,$rest] = my_explode('/', $dir,5);
+$dir     = htmlspecialchars(str_replace('\\','\\\\', $dir));
+$lock    = $root == 'mnt' ? ($main ?: '---') : ($root == 'boot' ? _('flash') : '---');
+$isshare = $root == 'mnt' && (!$main || !$next || ($main == 'rootshare' && !$rest));
 $editor  = '/boot/config/editor.cfg';
 
-if (!file_exists($editor)) file_put_contents($editor,implode("\n",['','txt','js','php','page','plg','xml','old','bak','log','css']));
+if (!file_exists($editor)) file_put_contents($editor, implode("\n",['','txt','js','php','page','plg','xml','old','bak','log','css']));
 ?>
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.filetree.css")?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.switchbutton.css")?>">
@@ -41,19 +44,20 @@ if (!file_exists($editor)) file_put_contents($editor,implode("\n",['','txt','js'
 <script src="<?autov("/webGui/javascript/jquery.switchbutton.js")?>"></script>
 <script>
 // General variables
-var dir = "<?=$dir?>";
+var dir   = "<?=$dir?>";
 var table = null;
 var thead = null;
 
 function autoscale(value) {
-  var unit = ['B','kB','MB','GB','TB','PB','EB'];
-  var base = value>1?Math.floor(Math.log(value)/Math.log(1000)):0;
-  var data = base<unit.length ? value/Math.pow(1000, base) : 0;
+  var unit  = ['B','kB','MB','GB','TB','PB','EB'];
+  var base  = value>1?Math.floor(Math.log(value)/Math.log(1000)):0;
+  var data  = base<unit.length ? value/Math.pow(1000, base) : 0;
   var scale = data<100?100:10;
-  if (data==0) base=0;
+  if (data == 0) base = 0;
   return ((Math.round(scale*data)/scale)+' '+unit[base]).replace('.','<?=$display['number'][0]?>')+'/s';
 }
-function folderContextMenu(id,button) {
+
+function folderContextMenu(id, button) {
   var opts = [];
   context.settings({button:button});
   if (dfm.running) {
@@ -81,7 +85,8 @@ function folderContextMenu(id,button) {
   }
   context.attach('#'+id, opts);
 }
-function fileContextMenu(id,button) {
+
+function fileContextMenu(id, button) {
   var opts = [];
   context.settings({button:button});
   if (dfm.running) {
@@ -106,7 +111,8 @@ function fileContextMenu(id,button) {
   }
   context.attach('#'+id, opts);
 }
-function deviceFolderContextMenu(dev,id) {
+
+function deviceFolderContextMenu(dev, id) {
   var opts = [];
   context.settings({button:'both'});
   if (dfm.running) {
@@ -121,7 +127,8 @@ function deviceFolderContextMenu(dev,id) {
   }
   context.attach('#device_'+id, opts);
 }
-function deviceFileContextMenu(dev,id) {
+
+function deviceFileContextMenu(dev, id) {
   var opts = [];
   context.settings({button:'both'});
   if (dfm.running) {
@@ -134,7 +141,8 @@ function deviceFileContextMenu(dev,id) {
   }
   context.attach('#device_'+id, opts);
 }
-function home(source,target) {
+
+function home(source, target) {
   var equal = '?';
   $.ajax({
     async: false,
@@ -146,9 +154,11 @@ function home(source,target) {
   });
   return equal;
 }
+
 function resize() {
   $('div.autoheight').height(Math.max(window.innerHeight-320,330));
 }
+
 function selectAll() {
   if (dfm.running) {
     context.attach('#check_0', [{text:"_(Job running)_", icon:"fa fa-ban"}]);
@@ -169,7 +179,8 @@ function selectAll() {
 <?endif;?>
   }
 }
-function selectOne(id,check=true) {
+
+function selectOne(id, check=true) {
   if (dfm.running && check) {
     context.attach('#'+id, [{text:"_(Job running)_", icon:"fa fa-ban"}]);
     return;
@@ -183,36 +194,42 @@ function selectOne(id,check=true) {
   var checked = 0;
   if (check) {
     $('i[id^="check_"]').each(function(){if ($(this).prop('id')!='check_0' && $(this).hasClass('fa-check-square-o')) checked++;});
-    $('input.extra').prop('disabled',checked==0);
+    $('input.extra').prop('disabled',checked == 0);
 <?if (!$isshare):?>
-    $('input.rename').prop('disabled',checked!=1);
+    $('input.rename').prop('disabled',checked != 1);
 <?endif;?>
   } else {
     $('i[id^="queue_"]').each(function(){if ($(this).hasClass('fa-check-square-o')) checked++;});
-    $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',checked==0);
+    $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',checked == 0);
   }
 }
+
 function errorSource() {
   swal({title:"_(Invalid source)_",text:"_(Not allowed to mix disk and user shares)_",html:true,type:'error',confirmButtonText:"_(Ok)_"});
 }
+
 function errorTarget() {
   swal({title:"_(Invalid target)_",text:"_(Enter a valid target)_",html:true,type:'error',confirmButtonText:"_(Ok)_"},function(x){dfm.window.find('#dfm_target').prop('disabled',false);});
 }
+
 function data(id) {
   var data = id.attr('data').dfm_quote();
 <?if ($isshare):?>
-  return id.attr('type')=='d' ? data+'/' : data;
+  return id.attr('type') == 'd' ? data+'/' : data;
 <?else:?>
   return data;
 <?endif;?>
 }
+
 function fileName(file) {
   return file.indexOf('/')>=0 ? file.split('/').pop() : file;
 }
+
 function fileExtension(file) {
   file = fileName(file);
   return file.indexOf('.')>=0 ? file.split('.').pop() : '';
 }
+
 function fileEdit(id) {
   const known = ["","cfg","conf",<?=dfm_array(file($editor,FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES))?>];
   var source = $('#'+id.dfm_proxy()).attr('data').dfm_quote();
@@ -231,16 +248,16 @@ function fileEdit(id) {
   // file editor dialog
   dfm.window.html($("#dfm_templateEditFile").html().replace('{$0}',source).dfm_build());
   dfm.window.dialog({
-    dialogClass: 'ui-dfm',
+    classes: {'ui-dialog': 'ui-dfm'},
     autoOpen: true,
     title: fileName(source),
-    height: Math.min(window.innerHeight-80,800),
-    width: Math.min(window.innerWidth,1200),
+    height: Math.min(window.innerHeight-80, 800),
+    width: Math.min(window.innerWidth, 1200),
     resizable: false,
     modal: true,
     buttons: {
       "_(Save)_": function(){
-        $.post('/webGui/include/Control.php',{mode:'save',file:encodeURIComponent(source), data:encodeURIComponent(editor.session.getValue())});
+        $.post('/webGui/include/Control.php',{mode:'save', file:encodeURIComponent(source), data:encodeURIComponent(editor.session.getValue())});
         dfm.window.dialog('destroy');
         setTimeout(loadList,100);
       },
@@ -251,6 +268,7 @@ function fileEdit(id) {
   });
   $('.ui-dfm .ui-dialog-titlebar-close').html('<i class="fa fa-expand"></i>').prop('title',"_(Expand)_").prop('onclick',null).off('click').click(function(){fullWindow();}).show();
 }
+
 function fullWindow() {
   if ($('.ui-dfm .ui-dialog-titlebar-close').html().indexOf('expand')>=0) {
     dfm.window.dialog('option','height',window.innerHeight-40);
@@ -265,11 +283,12 @@ function fullWindow() {
   }
   editor.resize();
 }
+
 function doJobs(title) {
   dfm.window = $("#dfm_dialogWindow");
   dfm.window.html($('#dfm_templateJobs').html().dfm_build());
   dfm.window.dialog({
-    dialogClass: 'ui-dfm',
+    classes: {'ui-dialog': 'ui-dfm'},
     autoOpen: true,
     title: title,
     height: 630,
@@ -278,7 +297,7 @@ function doJobs(title) {
     modal: true,
     buttons: {
       "_(Start)_": function(){
-        $.post('/webGui/include/Control.php',{mode:'start'},function(queue){
+        $.post('/webGui/include/Control.php', {mode:'start'}, function(queue){
           if (parseInt(queue) > 0) {
             if (dfm.window.find('i[id^="queue_"]').length < 2) $.removeCookie('dfm_control.jobs');
             dfm.window.dialog('close');
@@ -295,7 +314,7 @@ function doJobs(title) {
             $('#dfm_jobs').html(jobs);
             if (dfm.window.find('i[id^="queue_"]').length==0) $.removeCookie('dfm_control.jobs');
           });
-          if (parseInt(queue)==1) {
+          if (parseInt(queue) == 1) {
             setTimeout(function(){$('#dfm_jobs').html("<div id='dfm_joblist'><i class='fa fa-fw fa-minus-square-o grey-text job'></i>_(No jobs scheduled)_ ...</div>");},100);
             $('.ui-dfm .ui-dialog-buttonset button:eq(0)').prop('disabled',true);
             $('.dfm_control.jobs').prop('disabled',true);
@@ -313,25 +332,26 @@ function doJobs(title) {
   if (dfm.running) $('.ui-dfm .ui-dialog-buttonset button:eq(0)').prop('disabled',true);
   $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',true);
 }
+
 var filemonitor = new NchanSubscriber('/sub/filemonitor',{subscriber:'websocket'});
 filemonitor.on('message', function(state) {
-  if (state==1 && !dfm.running && !timers.filemonitor) timers.filemonitor = setTimeout(function(){if (dfm.running) clearTimeout(timers.filemonitor); else refresh();},1500);
+  if (state == 1 && !dfm.running && !timers.filemonitor) timers.filemonitor = setTimeout(function(){if (dfm.running) clearTimeout(timers.filemonitor); else refresh();},1500);
 });
 setTimeout(function(){filemonitor.start();},3000);
 
-function doAction(action,title,id) {
-  var link   = id.substr(0,1)=='/';
+function doAction(action, title, id) {
+  var link   = id.substr(0,1) == '/';
   var source = link ? id : data($('#'+id));
   var path   = source.substr(1).split('/');
   var zfs    = '';
 <?if ($dfm['zfs']):?>
-  if ([1,4].includes(action) && path[0]=='mnt') {
+  if ([1,4].includes(action) && path[0] == 'mnt') {
     switch (path.length) {
     case 3:
-      if (path[2]=='') zfs = path[1]+'/';
+      if (path[2] == '') zfs = path[1]+'/';
       break;
     case 4:
-      if (path[3]=='') zfs = path[1]+'/'+path[2];
+      if (path[3] == '') zfs = path[1]+'/'+path[2];
       break;
     }
   }
@@ -344,7 +364,7 @@ function doAction(action,title,id) {
   var ud     = ['disks','remotes'].includes(path[1]); // unassigned devices
   var match  = ud||user ? '' : '^(?!\\/mnt\\/user0?\\/).*$';
   var name   = path.pop()||path.pop();
-  var hdlink = "<?=$var['fuse_directio']==1?'1':''?>";
+  var hdlink = "<?=$var['fuse_directio'] == 1 ? '1' : ''?>";
   dfm.window = $("#dfm_dialogWindow");
   switch (action) {
   case 0: // create folder
@@ -446,7 +466,7 @@ function doAction(action,title,id) {
     break;
   }
   dfm.window.dialog({
-    dialogClass: 'ui-dfm',
+    classes: {'ui-dialog': 'ui-dfm'},
     autoOpen: true,
     title: title,
     height: dfm.height,
@@ -472,7 +492,7 @@ function doAction(action,title,id) {
             // check if 'mv' can be used
             if (path.length > 2) {
               if (user) {
-                if (home(source,target)==1) action++;
+                if (home(source,target) == 1) action++;
               } else {
                 var mv = '/'+path[0]+'/'+path[1]+'/';
                 if (target.substr(0,mv.length) == mv) action++;
@@ -481,7 +501,7 @@ function doAction(action,title,id) {
             break;
           case 11: // change owner
             var valid = /.+/;
-            target += (target=='root' ? ':root' : ':users');
+            target += (target == 'root' ? ':root' : ':users');
             break;
           case 12: // change permission
             var valid = /.+/;
@@ -511,7 +531,7 @@ function doAction(action,title,id) {
         dfm.window.find('#dfm_exist').prop('disabled',true);
         dfm.window.find('.dfm_sparse').css({'opacity':'0.5'});
         dfm.window.find('.dfm_exist').css({'opacity':'0.5'});
-        if (action==11) {
+        if (action == 11) {
           dfm.window.find('#dfm_owner').prop('disabled',true);
           dfm.window.find('#dfm_group').prop('disabled',true);
           dfm.window.find('#dfm_other').prop('disabled',true);
@@ -542,7 +562,7 @@ function doAction(action,title,id) {
             // check if 'mv' can be used
             if (path.length > 2) {
               if (user) {
-                if (home(source,target)==1) action++;
+                if (home(source,target) == 1) action++;
               } else {
                 var mv = '/'+path[0]+'/'+path[1]+'/';
                 if (target.substr(0,mv.length) == mv) action++;
@@ -551,7 +571,7 @@ function doAction(action,title,id) {
             break;
           case 11: // change owner
             var valid = /.+/;
-            target += (target=='root' ? ':root' : ':users');
+            target += (target == 'root' ? ':root' : ':users');
             break;
           case 12: // change permission
             var valid = /.+/;
@@ -581,10 +601,11 @@ function doAction(action,title,id) {
     }
   });
   dfm_close_button();
-  if (action==15) $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',true);
+  if (action == 15) $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',true);
   setTimeout(function(){if (dfm.window.find('#dfm_target').length) dfm.window.find('#dfm_target').focus().click(); else $('.ui-dfm .ui-dialog-buttonset button:eq(0)').focus();});
 }
-function doActions(action,title) {
+
+function doActions(action, title) {
   var source = [], type = [], owner = [], perm = [], zfs = [];
   if (action > 0) {
     $('i[id^="check_"]').each(function(){
@@ -608,7 +629,7 @@ function doActions(action,title) {
     var ud     = ['disks','remotes'].includes(path[1]); // unassigned devices
     var match  = ud||user ? '' : '^(?!.*(user0?|rootshare)).*$';
     var name   = path.pop()||path.pop();
-    var hdlink = "<?=$var['fuse_directio']==1?'1':''?>";
+    var hdlink = "<?=$var['fuse_directio'] == 1 ? '1' : ''?>";
     var u      = false;
     var d      = false;
     if (bulk) {
@@ -618,7 +639,7 @@ function doActions(action,title) {
         var p = s.substr(1).split('/');
         if (/^user0?$/.test(p[1])) u = true; else d = true;
 <?if ($dfm['zfs']):?>
-        if ([1,4].includes(action) && p[0]=='mnt' && type[i]=='d') {
+        if ([1,4].includes(action) && p[0] == 'mnt' && type[i] == 'd') {
           switch (p.length) {
           case 2:
             zfs.push(p[1]+'/');
@@ -631,7 +652,7 @@ function doActions(action,title) {
       }
     } else {
       var p = source[0].substr(1).dfm_strip().split('/');
-      if ([1,4].includes(action) && p[0]=='mnt' && type[0]=='d') {
+      if ([1,4].includes(action) && p[0] == 'mnt' && type[0] == 'd') {
         switch (p.length) {
         case 2:
           zfs.push(p[1]+'/');
@@ -667,10 +688,10 @@ function doActions(action,title) {
     dfm.window.html($('#dfm_templateCopyObject').html());
     dfm_createSource(source);
     dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match);
-    if (bulk || type[0]=='d') dfm.window.find('#dfm_target').attr('data-pickfilter','HIDE_FILES_FILTER');
+    if (bulk || type[0] == 'd') dfm.window.find('#dfm_target').attr('data-pickfilter','HIDE_FILES_FILTER');
     dfm.window.find('#dfm_target').fileTreeAttach(null,null,function(path){
       var bits = path.substr(1).split('/');
-      var auto = bulk || bits.length>3 ? '' : (type[0]=='d' ? share : '');
+      var auto = bulk || bits.length>3 ? '' : (type[0] == 'd' ? share : '');
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
     dfm.height = 630;
@@ -679,10 +700,10 @@ function doActions(action,title) {
     dfm.window.html($('#dfm_templateMoveObject').html());
     dfm_createSource(source);
     dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match);
-    if (bulk || type[0]=='d') dfm.window.find('#dfm_target').attr('data-pickfilter','HIDE_FILES_FILTER');
+    if (bulk || type[0] == 'd') dfm.window.find('#dfm_target').attr('data-pickfilter','HIDE_FILES_FILTER');
     dfm.window.find('#dfm_target').fileTreeAttach(null,null,function(path){
       var bits = path.substr(1).split('/');
-      var auto = bulk || bits.length>3 ? '' : (type[0]=='d' ? share : '');
+      var auto = bulk || bits.length > 3 ? '' : (type[0] == 'd' ? share : '');
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
     dfm.height = 630;
@@ -716,7 +737,7 @@ function doActions(action,title) {
     // folders only
     for (var i=0,t; t=type[i]; i++) if (t != 'd') source[i] = '';
     source = source.filter(n=>n);
-    if (source.length==0) source[0] = dir;
+    if (source.length == 0) source[0] = dir;
     dfm_createSource(source);
     dfm.window.find('.dfm_loc').html('&nbsp;').css({'line-height':'normal'});
     dfm.window.find('.dfm_text').html('').css({'line-height':'normal'});
@@ -725,7 +746,7 @@ function doActions(action,title) {
   }
   dfm.window.find('#dfm_source').attr('size',Math.min(dfm.tsize[action],source.length));
   dfm.window.dialog({
-    dialogClass: 'ui-dfm',
+    classes: {'ui-dialog': 'ui-dfm'},
     autoOpen: true,
     title: title,
     height: dfm.height,
@@ -750,7 +771,7 @@ function doActions(action,title) {
             // check if 'mv' can be used
             if (path.length > 2) {
               if (user) {
-                if (home(source.join('\n'),target)==1) action++;
+                if (home(source.join('\n'),target) == 1) action++;
               } else {
                 var mv = '/'+path[0]+'/'+path[1]+'/';
                 if (target.substr(0,mv.length) == mv) action++;
@@ -759,7 +780,7 @@ function doActions(action,title) {
             break;
           case 11: // change owner
             var valid = /.+/;
-            target += (target=='root' ? ':root' : ':users');
+            target += (target == 'root' ? ':root' : ':users');
             bulk = false;
             break;
           case 12: // change permission
@@ -791,7 +812,7 @@ function doActions(action,title) {
         dfm.window.find('#dfm_exist').prop('disabled',true);
         dfm.window.find('.dfm_sparse').css({'opacity':'0.5'});
         dfm.window.find('.dfm_exist').css({'opacity':'0.5'});
-        if (action==12) {
+        if (action == 12) {
           dfm.window.find('#dfm_owner').prop('disabled',true);
           dfm.window.find('#dfm_group').prop('disabled',true);
           dfm.window.find('#dfm_other').prop('disabled',true);
@@ -822,7 +843,7 @@ function doActions(action,title) {
             // check if 'mv' can be used
             if (path.length > 2) {
               if (user) {
-                if (home(source.join('\n'),target)==1) action++;
+                if (home(source.join('\n'),target) == 1) action++;
               } else {
                 var mv = '/'+path[0]+'/'+path[1]+'/';
                 if (target.substr(0,mv.length) == mv) action++;
@@ -831,7 +852,7 @@ function doActions(action,title) {
             break;
           case 11: // change owner
             var valid = /.+/;
-            target += (target=='root' ? ':root' : ':users');
+            target += (target == 'root' ? ':root' : ':users');
             bulk = false;
             break;
           case 12: // change permission
@@ -863,9 +884,10 @@ function doActions(action,title) {
     }
   });
   dfm_close_button();
-  if (action==15) $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',true);
+  if (action == 15) $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',true);
   setTimeout(function(){if (dfm.window.find('#dfm_target').length) dfm.window.find('#dfm_target').focus().click(); else $('.ui-dfm .ui-dialog-buttonset button:eq(0)').focus();});
 }
+
 function stopUpload(file,error) {
   window.onbeforeunload = null;
   $.post('/webGui/include/Control.php',{mode:'stop',file:encodeURIComponent(dfm_htmlspecialchars(file))});
@@ -876,6 +898,7 @@ function stopUpload(file,error) {
   loadList();
   if (error) setTimeout(function(){swal({title:"_(Upload Error)_",text:"_(File is removed)_",html:true,confirmButtonText:"_(Ok)_"});},200);
 }
+
 function downloadFile(source) {
   var a = document.createElement('a');
   a.setAttribute('href',source);
@@ -885,6 +908,7 @@ function downloadFile(source) {
   a.click();
   document.body.removeChild(a);
 }
+
 function uploadFile(files,index,start,time) {
   var file = files[index];
   var slice = 2097152; // 2M
@@ -893,8 +917,8 @@ function uploadFile(files,index,start,time) {
   reader.onloadend = function(e){
     if (e.target.readyState !== FileReader.DONE) return;
     $.post('/webGui/include/Control.php',{mode:'upload',file:encodeURIComponent(dir+'/'+dfm_htmlspecialchars(file.name)),start:start,data:window.btoa(e.target.result),cancel:cancel},function(reply){
-      if (reply=='stop') {stopUpload(file.name); return;}
-      if (reply=='error') {stopUpload(file.name,true); return;}
+      if (reply == 'stop') {stopUpload(file.name); return;}
+      if (reply == 'error') {stopUpload(file.name,true); return;}
       if (next < file.size) {
         var total = 0;
         for (var i=0,f; f=files[i]; i++) {
@@ -913,11 +937,12 @@ function uploadFile(files,index,start,time) {
   };
   reader.readAsBinaryString(blob);
 }
+
 var reader = {};
 var cancel = 0;
 
 function startUpload(files) {
-  if (files.length==0) return;
+  if (files.length == 0) return;
   reader = new FileReader();
   window.onbeforeunload = function(e){return '';};
   $('#dfm_uploadButton').val("_(Cancel)_").prop('onclick',null).off('click').click(function(){cancel=1;});
@@ -925,17 +950,20 @@ function startUpload(files) {
   const d = new Date();
   uploadFile(files,0,0,d.getTime());
 }
+
 function filter(ext) {
   $('td.ext').each(function(){
-    if ($(this).attr('data').search(ext)==-1) $(this).parent().hide(); else $(this).parent().show();
+    if ($(this).attr('data').search(ext) == -1) $(this).parent().hide(); else $(this).parent().show();
   });
 }
+
 function toggleTime(init) {
   $('.my_time').toggle();
   $('.my_age').toggle();
   if (init) return;
-  $.cookie('my_time')==null ? $.cookie('my_time','age') : $.removeCookie('my_time');
+  $.cookie('my_time') == null ? $.cookie('my_time','age') : $.removeCookie('my_time');
 }
+
 function loadList() {
   var col = $.cookie('col')||2;
   var ord = $.cookie('dir')||0;
@@ -952,15 +980,17 @@ function loadList() {
     $('div#buttons').show();
   });
 }
+
 function xlink(link) {
   swal({title:'',text:decodeURIComponent(link),html:true,confirmButtonText:"_(Ok)_"});
 }
+
 $(function(){
   var dirs = dir.split('/'), url = [];
   if (dirs.length > 1) {
     for (var n=1; n < dirs.length; n++) {
       var subdir = dirs.slice(1,n+1);
-      url.push('<a class="none" href="/<?=$path?>?dir=/'+encodeURIComponent(subdir.join('/'))+'" oncontextmenu="xlink(\'/'+encodeURIComponent(subdir.join('/'))+'\');return false">'+(n==1 ? '<i class="fa fa-home"></i>' : dirs[n])+'</a>');
+      url.push('<a class="none" href="/<?=$path?>?dir=/'+encodeURIComponent(subdir.join('/'))+'" oncontextmenu="xlink(\'/'+encodeURIComponent(subdir.join('/'))+'\');return false">'+(n == 1 ? '<i class="fa fa-home"></i>' : dirs[n])+'</a>');
     }
   } else {
     url.push('<i class="fa fa-home red-text"></i>');
@@ -985,6 +1015,7 @@ $(function(){
 <?endif;?>
 });
 </script>
+
 <div class="autoheight">
 <table class="indexer tablesorter shift"><thead><tr><th><?if($dir){?><i id="check_0" class="fa fa-fw fa-square-o" onclick="selectAll()"></i><?}?></th><th>_(Type)_</th><th class='sorter-text'>_(Name)_</th><th>_(Owner)_</th><th>_(Permission)_</th><th>_(Size)_</th><th>_(Last Modified)_</th><th style="width:200px">_(Location)_</th><th>_(Action)_</th></tr></thead></table>
 </div>

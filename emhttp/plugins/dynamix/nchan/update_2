@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -34,10 +34,12 @@ function my_power($device) {
   global $display;
   if (!_var($display,'power')) return '';
   $number = _var($display,'number','.,');
-  [$power,$state] = explode('W ',get_nvme_info($device,'state'));
-  $state = strtr($state, ['non-operational' => 'green', 'operational' => 'orange']);
-  return " / <span class='$state'>".number_format($power,$power<10?2:1,$number[0]).' '._('W')."</span>";
+  [$power,$state] = my_explode('W ', get_nvme_info($device,'state'));
+  $power = $power ?: 0;
+  $state = $state ? strtr($state, ['non-operational' => 'green', 'operational' => 'orange']) : '';
+  return " / <span class='$state'>".number_format($power, $power < 10 ? 2 : 1, $number[0]).' '._('W')."</span>";
 }
+
 function my_clock($time) {
   if (!$time) return _('less than a minute');
   $days = floor($time/1440);
@@ -45,12 +47,14 @@ function my_clock($time) {
   $mins = $time%60;
   return plus($days,'day',($hour|$mins)==0).plus($hour,'hour',$mins==0).plus($mins,'minute',true);
 }
+
 function find_day($D) {
   global $days;
   if ($days[0] == '*') return $D;
   foreach ($days as $d) if ($d >= $D) return $d;
   return $days[0];
 }
+
 function find_month($M) {
   global $months, $Y;
   if ($M > 12) {$M = 1; $Y++;}
@@ -58,6 +62,7 @@ function find_month($M) {
   foreach ($months as $m) if ($m >= $M) return $m;
   return $months[0];
 }
+
 function today($D) {
   global $days, $M, $Y;
   if ($days[0]=='*') return date('w',mktime(0,0,0,$M,$D,$Y));
@@ -66,18 +71,22 @@ function today($D) {
     if (in_array($day,$days)) return $day;
   }
 }
+
 function next_day($D) {
   return find_day(($D+1)%7);
 }
+
 function last_day() {
   global $M, $Y;
   return date('t',mktime(0,0,0,$M,1,$Y));
 }
+
 function mkdate($D, $s) {
   global $M, $Y;
   if ($s > last_day()) {$s = 1; $M = find_month($M+1);}
   for ($d = $s; $d < $s+7; $d++) if ($D == date('w',mktime(0,0,0,$M,$d,$Y))) return $d;
 }
+
 function stage($i) {
   global $h, $m, $D, $M, $Y, $time, $now;
   if ($i < 0) {
@@ -123,14 +132,17 @@ function stage($i) {
   }
   return $t;
 }
+
 function normalize($type,$count) {
   $words = explode('_',$type);
   foreach ($words as &$word) $word = $word==strtoupper($word) ? $word : preg_replace(['/^(ct|cnt)$/','/^blk$/'],['count','block'],strtolower($word));
   return ucfirst(implode(' ',$words)).": ".str_replace('_',' ',strtolower($count))."\n";
 }
+
 function active_disks($disk) {
   return substr(_var($disk,'status'),0,7)!='DISK_NP' && in_array(_var($disk,'type'),['Parity','Data']);
 }
+
 function device_name(&$disk) {
   switch (_var($disk,'type')) {
     case 'Extra' :
@@ -142,6 +154,7 @@ function device_name(&$disk) {
   $fancy = _(my_disk(native($name,1)),3);
   return "<i class='icon-$type f14'></i> <a href=\"".htmlspecialchars("/Dashboard/Main/Settings/Device?name=$name")."\" title=\"$fancy settings\">$fancy</a>";
 }
+
 function yellow_text($disk) {
   global $var;
   if (_var($disk, 'type')=='Parity') {
@@ -153,6 +166,7 @@ function yellow_text($disk) {
   }
   return $text;
 }
+
 function device_status(&$disk, &$error, &$warning) {
   global $var;
   if (_var($disk,'type')!='Extra' && _var($var,'fsState')=='Stopped') {
@@ -171,6 +185,7 @@ function device_status(&$disk, &$error, &$warning) {
   }
   return "<i class='fa fa-circle orb $color-orb middle'></i>"._($text);
 }
+
 function device_temp(&$disk, &$red, &$orange) {
   global $display;
   $spin = strpos(_var($disk,'color'),'blink')===false;
@@ -189,6 +204,7 @@ function device_temp(&$disk, &$red, &$orange) {
   }
   return ($spin ? "<span class='$color-text'>".my_temp($temp)."</span>" : "*").($nvme ? my_power($dev) : "");
 }
+
 function device_smart(&$disk, &$fail, &$smart) {
   global $numbers,$saved;
   if (!_var($disk,'device') || strpos(_var($disk,'color'),'blink')!==false) return "-";
@@ -222,6 +238,7 @@ function device_smart(&$disk, &$fail, &$smart) {
   $title .= _('Click for context menu');
   return "<span id='smart-$named' name=Device class='fa fa-$thumb $color-text' style='margin-right:8px' onmouseover='this.style.cursor=\"pointer\"' title='$title'></span><span id='text-$named'>$text</span>";
 }
+
 function device_usage(&$disk, &$full, &$high) {
   global $display;
   $text = $display['text'];
@@ -242,6 +259,7 @@ function device_usage(&$disk, &$full, &$high) {
     return $text%10==0 ? "-" : "<span class='load'>-</span><div class='usage-disk sys none'><span></span></div>";
   }
 }
+
 function array_group($type, $pool=false) {
   global $disks,$error,$warning,$red,$orange,$fail,$smart,$full,$high;
   if ($type != 'Data') {$error = $warning = $red = $orange = $fail = $smart = $full = $high = 0;}
@@ -257,6 +275,7 @@ function array_group($type, $pool=false) {
   }
   return implode($echo);
 }
+
 function extra_group() {
   global $devs,$error,$warning,$red,$orange,$fail,$smart,$full,$high;
   $error = $warning = $red = $orange = $fail = $smart = $full = $high = 0;
@@ -275,6 +294,7 @@ function extra_group() {
   }
   return implode($echo);
 }
+
 function update_translation($locale) {
   global $docroot,$language;
   $language = [];
@@ -293,9 +313,11 @@ function update_translation($locale) {
     }
   }
 }
+
 function create_sync($file) {
   return file_exists($file) ? explode(',',file_get_contents($file)) : [];
 }
+
 function print_error($error) {
   return sprintf(_('Finding **%s** error'.($error==1?'':'s')),$error?:'0');
 }

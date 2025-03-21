@@ -4,8 +4,8 @@ Icon="icon-u-duplicate"
 Code="e963"
 ---
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -17,7 +17,7 @@ Code="e963"
 ?>
 <?
 $dfm = [
-  'browser' => $myPage['name']=='Browse',
+  'browser' => $myPage['name'] == 'Browse',
   'running' => file_exists('/var/tmp/file.manager.active'),
   'jobs'    => file_exists('/var/tmp/file.manager.jobs'),
   'zfs'     => is_executable('/usr/sbin/zfs')
@@ -28,6 +28,7 @@ if ($dfm['running'] || $dfm['browser']) eval('?>'.parse_file("$docroot/webGui/in
 function BrowseButton() {
   location.replace('/<?=$task?>/Browse?dir=/mnt');
 }
+
 // Prototypes
 String.prototype.dfm_patch = function(){return this.replace('rw','x+rw').replace('r-','wx+r').replace('--','rwx');}
 String.prototype.dfm_proxy = function(){return this.replace('name','row');}
@@ -43,7 +44,7 @@ String.prototype.dfm_wedge = function(len){len=len||70;return this.length<=len ?
 const dfm = {window:null, dialog:false, running:false, previous:'', height:0, tsize:{0:0,1:6,2:3,3:3,4:3,11:2,12:2,14:0,15:3}};
 var dfm_read = {};
 
-function dfm_footer(action,text) {
+function dfm_footer(action, text) {
   switch (action) {
   case 'show':
     $('#countdown').show();
@@ -54,7 +55,7 @@ function dfm_footer(action,text) {
     $('#user-notice').hide();
     break;
   case 'write':
-    if ($('#countdown').html()=='') $('#countdown').html('<a class="hand" onclick="dfm_openDialog(true)" title="_(File Manager)_"><i class="icon-u-duplicate dfm"></i></a>');
+    if ($('#countdown').html() == '') $('#countdown').html('<a class="hand" onclick="dfm_openDialog(true)" title="_(File Manager)_"><i class="icon-u-duplicate dfm"></i></a>');
     $('#user-notice').html(text);
     break;
   case 'clear':
@@ -63,26 +64,32 @@ function dfm_footer(action,text) {
     break;
   }
 }
+
 function dfm_done() {
-  dfm_footer('write',"<i class='fa fa-circle-thin dfm'></i>_(Searching)_... _(Done)_");
+  dfm_footer('write', "<i class='fa fa-circle-thin dfm'></i>_(Searching)_... _(Done)_");
 }
+
 function dfm_minimize() {
   dfm.window.dialog('close');
   dfm_footer('show');
 }
+
 function dfm_close_button() {
   $('.ui-dfm .ui-dialog-titlebar-close').html('<i class="fa fa-window-minimize"></i>').prop({'title':"_(Minimize)_"}).prop('onclick',null).off('click').click(function(){dfm_minimize();}).show();
 }
+
 function dfm_htmlspecialchars(text) {
   var map = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'};
-  return text.replace(/[&<>"']/g,function(m){return map[m];});
+  return text.replace(/[&<>"']/g, function(m){return map[m];});
 }
+
 function dfm_escapeHTML(name) {
   const data = document.createElement('div');
   const text = document.createTextNode(name);
   data.appendChild(text);
   return data.innerHTML;
 }
+
 function dfm_createSource(source) {
   var select = dfm.window.find('#dfm_source');
   if (Array.isArray(source)) {
@@ -98,6 +105,7 @@ function dfm_createSource(source) {
     select.html('<option selected>'+source+'</option>');
   }
 }
+
 function dfm_showProgress(data) {
   if (!data) return 0;
   let file = null;
@@ -105,7 +113,7 @@ function dfm_showProgress(data) {
   let line = text[0].split('... ');
   let strict = /^mnt|^boot/;
   let footer = false;
-  if (text[0]=='#cat#') {
+  if (text[0] == '#cat#') {
     let loc = [], cat = [];
     for (let i=1,row; row=text[i]; i++) {
       if (!row) continue;
@@ -119,7 +127,7 @@ function dfm_showProgress(data) {
       dfm.window.find('#dfm_files').html(loc.length+" "+"_(files)_");
     }
     return cat.length;
-  } else if (text.length==1) {
+  } else if (text.length == 1) {
     text = text[0].dfm_wedge(80);
     footer = text.indexOf("_(Searching)_") != -1;
   } else {
@@ -134,10 +142,11 @@ function dfm_showProgress(data) {
       footer = true;
     }
   }
-  if (file==null || strict.test(file)) dfm.window.find('.dfm_text').html((file?line[0]+'... /'+dfm_escapeHTML(file.dfm_wedge())+'<br>':'')+text);
+  if (file == null || strict.test(file)) dfm.window.find('.dfm_text').html((file?line[0]+'... /'+dfm_escapeHTML(file.dfm_wedge())+'<br>':'')+text);
   if (footer) dfm_footer('write',text);
   return 0;
 }
+
 function dfm_fileManager(action) {
   switch (action) {
   case 'start':
@@ -161,14 +170,15 @@ function dfm_fileManager(action) {
     break;
   }
 }
+
 function dfm_makeDialog(open) {
-  if (open && dfm_read.action==15) {
+  if (open && dfm_read.action == 15) {
     dfm.window.dialog('open');
     dfm_footer('hide');
     return;
   }
   dfm.window = $('#dfm_dialogWindow');
-  if (dfm.window.dialog('instance') !== undefined) dfm.dialog = dfm.window.dialog('isOpen');
+  if (dfm.window.dialog('instance') !==  undefined) dfm.dialog = dfm.window.dialog('isOpen');
   var dfm_source = dfm_read.source.split('\r').slice(0,9);
   switch (dfm_read.action) {
   case 0: // create folder/object
@@ -245,8 +255,8 @@ function dfm_makeDialog(open) {
   dfm.window.find('.dfm_sparse').css({'opacity':'0.5'});
   dfm.window.find('.dfm_exist').css({'opacity':'0.5'});
   dfm.window.dialog({
-    dialogClass: 'ui-dfm',
-    autoOpen: open||dfm.dialog,
+    classes: {'ui-dialog': 'ui-dfm'},
+    autoOpen: open || dfm.dialog,
     title: dfm_read.title,
     height: dfm.height,
     width: 900,
@@ -254,7 +264,7 @@ function dfm_makeDialog(open) {
     modal: true,
     buttons: {
       "_(Start)_": function(){
-        if (dfm_read.action==15) {
+        if (dfm_read.action == 15) {
           var dfm_target = dfm.window.find('#dfm_target').val();
           dfm.window.find('.dfm_loc').html('&nbsp;');
           dfm.window.find('.dfm_text').html("_(Running)_...");
@@ -280,6 +290,7 @@ function dfm_makeDialog(open) {
   setTimeout(function(){$('.ui-dfm .ui-dialog-buttonset button:eq(2)').focus();});
   if (open||dfm.dialog) dfm_footer('hide'); else dfm_footer('show');
 }
+
 function dfm_openDialog(open) {
   $.post('/webGui/include/Control.php',{mode:'read'},function(data){
     if (data) {
@@ -289,6 +300,7 @@ function dfm_openDialog(open) {
     dfm_makeDialog(open);
   });
 }
+
 var nchan_filemanager = new NchanSubscriber('/sub/filemanager',{subscriber:'websocket'});
 nchan_filemanager.on('message', function(msg) {
   let data = $.parseJSON(msg);
@@ -304,7 +316,7 @@ nchan_filemanager.on('message', function(msg) {
     $('.ui-dfm .ui-dialog-buttonset button:lt(2)').prop('disabled',false);
   } else {
     let cat = dfm_showProgress(data.status);
-    if (data.done==1) {
+    if (data.done == 1) {
       setTimeout(function(){$.post('/webGui/include/Control.php',{mode:'start'},function(queue){
         switch (parseInt(queue)) {
         case 0:
@@ -324,16 +336,17 @@ nchan_filemanager.on('message', function(msg) {
           break;
         }
       })});
-    } else if (data.done==2) {
+    } else if (data.done == 2) {
       nchan_filemanager.stop();
       dfm.running = false;
       dfm.window.find('#dfm_target').prop('disabled',false).focus();
       $('.ui-dfm .ui-dialog-buttonset button:eq(0)').prop('disabled',false);
-      if (cat==0) dfm.window.find('.dfm_text').html("_(No results found)_");
+      if (cat == 0) dfm.window.find('.dfm_text').html("_(No results found)_");
       if ($('#user-notice:visible')) dfm_done();
     }
   }
 });
+
 <?if ($dfm['running']):?>
 $(function(){
   dfm_openDialog();

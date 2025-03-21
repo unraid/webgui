@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -21,46 +21,53 @@ $timer   = time();
 
 require_once "$docroot/webGui/include/Wrappers.php";
 require_once "$docroot/webGui/include/publish.php";
-extract(parse_plugin_cfg('dynamix',true));
+extract(parse_plugin_cfg('dynamix', true));
 
 // add translations
 $_SERVER['REQUEST_URI'] = '';
-$login_locale = $display['locale']??'';
+$login_locale = $display['locale'] ?? '';
 require_once "$docroot/webGui/include/Translations.php";
 
 // remember current language
 $locale_init = $locale;
 
 function pool_only(&$disks) {
-  return array_filter($disks,function($disk){return $disk['type']=='Cache' && !empty($disk['uuid']);});
+  return array_filter($disks, function($disk){return $disk['type'] == 'Cache' && !empty($disk['uuid']);});
 }
+
 function pools_filter(&$disks) {
   return array_keys(pool_only($disks));
 }
+
 function delete_file(...$file) {
-  array_map('unlink',array_filter($file,'file_exists'));
+  array_map('unlink', array_filter($file, 'file_exists'));
 }
+
 function pgrep($pid) {
   $pid = is_array($pid) ? $pid[0] : $pid;
   return $pid && file_exists("/proc/$pid") ? $pid : false;
 }
+
 function isdir($name) {
-  return mb_substr($name,-1)=='/';
+  return mb_substr($name, -1) == '/';
 }
+
 function truepath($name) {
-  $bits = array_filter(explode('/',$name),'mb_strlen');
+  $bits = array_filter(explode('/', $name), 'mb_strlen');
   $path = [];
   foreach ($bits as $bit) {
     if ($bit == '.') continue;
     if ($bit == '..') array_pop($path); else $path[] = $bit;
   }
-  return '/'.implode('/',$path);
+  return '/'.implode('/', $path);
 }
+
 function validname($name, $real=true) {
   $path = $real ? realpath(dirname($name)) : truepath(dirname($name));
-  $root = explode('/',$path)[1] ?? '';
-  return in_array($root,['mnt','boot']) ? $path.'/'.basename($name).(mb_substr($name,-1)=='/'?'/':'') : '';
+  $root = explode('/', $path)[1] ?? '';
+  return in_array($root, ['mnt','boot']) ? $path.'/'.basename($name).(mb_substr($name,-1) == '/' ? '/' : '') : '';
 }
+
 function update_translation($locale) {
   global $docroot,$language;
   $language = [];
@@ -68,59 +75,61 @@ function update_translation($locale) {
     $text = "$docroot/languages/$locale/translations.txt";
     if (file_exists($text)) {
       $store = "$docroot/languages/$locale/translations.dot";
-      if (!file_exists($store)) file_put_contents($store,serialize(parse_lang_file($text)));
+      if (!file_exists($store)) file_put_contents($store, serialize(parse_lang_file($text)));
       $language = unserialize(file_get_contents($store));
     }
   }
 }
+
 function cat($file) {
   global $null;
   $cat = $set = [];
-  $rows = file($file,FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES);
-  if (count($rows)>0) {
+  $rows = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+  if (count($rows) > 0) {
     natcasesort($rows);
-    $user = array_filter($rows,function($path){return preg_match('/^\/mnt\/user0?\//',$path);});
-    if (count($user)>0) {
+    $user = array_filter($rows, function($path){return preg_match('/^\/mnt\/user0?\//', $path);});
+    if (count($user) > 0) {
       for ($n=0; $n < count($user); $n+=100) {
-        $name = array_slice($user,$n,100);
+        $name = array_slice($user, $n, 100);
         $set[] = exec("getfattr --no-dereference --absolute-names --only-values -n system.LOCATIONS ".quoted($name)." 2>$null");
       }
-      $disks = parse_ini_file('state/disks.ini',true);
+      $disks = parse_ini_file('state/disks.ini', true);
       $tag = implode('|',array_merge(['disk'],pools_filter($disks)));
-      $set = explode(';',str_replace(',;',',',preg_replace("/($tag)/",';$1',implode($set))));
+      $set = explode(';',str_replace(',;',',',preg_replace("/($tag)/", ';$1', implode($set))));
     }
-    foreach (array_diff($rows,$user) as $row) {
-      [$none,$root,$main] = explode('/',$row,4);
-      $cat[] = ($root=='mnt' ? $main : ($root=='boot' ? 'flash' : '---'))."\0".$row;
+    foreach (array_diff($rows, $user) as $row) {
+      [$none, $root, $main] = explode('/',$row,4);
+      $cat[] = ($root == 'mnt' ? $main : ($root == 'boot' ? 'flash' : '---'))."\0".$row;
     }
     $i = 0;
     foreach ($user as $row) $cat[] = $set[++$i]."\0".$row;
   }
   return "#cat#\n".implode("\n",$cat)."\n";
 }
+
 function escape($name) {return escapeshellarg(validname($name));}
-function quoted($name) {return is_array($name) ? implode(' ',array_map('escape',$name)) : escape($name);}
-function source($name) {return is_array($name) ? implode(' ',array_map('escapeshellarg',$name)) : escapeshellarg($name);}
+function quoted($name) {return is_array($name) ? implode(' ',array_map('escape', $name)) : escape($name);}
+function source($name) {return is_array($name) ? implode(' ',array_map('escapeshellarg', $name)) : escapeshellarg($name);}
 
 while (true) {
-  unset($action,$source,$target,$H,$sparse,$exist,$zfs);
+  unset($action, $source, $target, $H, $sparse, $exist, $zfs);
   if (file_exists($active)) extract(parse_ini_file($active));
   $reply = [];
   if (isset($action)) {
     // check for language changes
-    extract(parse_plugin_cfg('dynamix',true));
+    extract(parse_plugin_cfg('dynamix', true));
     if ($display['locale'] != $locale_init) {
       $locale_init = $display['locale'];
       update_translation($locale_init);
     }
-    $source = explode("\r",$source);
+    $source = explode("\r", $source);
     switch ($action) {
     case 0: // create folder
       if (!empty($pid)) {
         $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Creating').'...';
       } else {
         $dir = $source[0].'/'.$target;
-        exec("mkdir -pm0777 ".quoted($dir)." 1>$null 2>$error & echo $!",$pid);
+        exec("mkdir -pm0777 ".quoted($dir)." 1>$null 2>$error & echo $!", $pid);
         exec("chown -Rfv nobody:users ".quoted($dir));
       }
       break;
@@ -129,7 +138,7 @@ while (true) {
       if (!empty($pid)) {
         $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Removing').'... '.exec("tail -1 $status");
       } else {
-        exec("find ".quoted($source)." -name \"*\" -print -delete 1>$status 2>$null & echo \$!",$pid);
+        exec("find ".quoted($source)." -name \"*\" -print -delete 1>$status 2>$null & echo \$!", $pid);
       }
       break;
     case 2: // rename folder
@@ -138,18 +147,18 @@ while (true) {
         $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Renaming').'...';
       } else {
         $path = dirname($source[0]);
-        exec("mv -f ".quoted($source)." ".quoted("$path/$target")." 1>$null 2>$error & echo \$!",$pid);
+        exec("mv -f ".quoted($source)." ".quoted("$path/$target")." 1>$null 2>$error & echo \$!", $pid);
       }
       break;
     case 3:  // copy folder
     case 8:  // copy file
       if (!empty($pid)) {
-        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Copying').'... '.shell_exec("tail -2 $status|awk -F\"\\r\" '{gsub(/^ +/,\"\",\$NF);print \$NF}'");
+        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Copying').'... '.shell_exec("tail -2 $status | awk -F\"\\r\" '{gsub(/^ +/,\"\",\$NF);print \$NF}'");
       } else {
-        $target = validname($target,false);
+        $target = validname($target, false);
         if ($target) {
           $mkpath = isdir($target) ? '--mkpath' : '';
-          exec("rsync -ahPIX$H $sparse $exist $mkpath --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".quoted($source)." ".escapeshellarg($target)." 1>$status 2>$error & echo \$!",$pid);
+          exec("rsync -ahPIX$H $sparse $exist $mkpath --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".quoted($source)." ".escapeshellarg($target)." 1>$status 2>$error & echo \$!", $pid);
         } else {
           $reply['error'] = 'Invalid target name';
         }
@@ -158,13 +167,13 @@ while (true) {
     case 4: // move folder (rsync)
     case 9: // move file (rsync)
       if (!empty($pid)) {
-        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Moving').'... '.($move===false ? exec("tail -1 $status") : shell_exec("tail -2 $status|awk -F\"\\r\" '{gsub(/^ +/,\"\",\$NF);print \$NF}'"));
+        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Moving').'... '.($move===false ? exec("tail -1 $status") : shell_exec("tail -2 $status | awk -F\"\\r\" '{gsub(/^ +/,\"\",\$NF);print \$NF}'"));
       } else {
-        $target = validname($target,false);
+        $target = validname($target, false);
         if ($target) {
           $move = true;
           $mkpath = isdir($target) ? '--mkpath' : '';
-          exec("rsync -ahPIX$H $sparse $exist $mkpath --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." 1>$status 2>$error & echo \$!",$pid);
+          exec("rsync -ahPIX$H $sparse $exist $mkpath --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." 1>$status 2>$error & echo \$!", $pid);
         } else {
           $reply['error'] = 'Invalid target name';
         }
@@ -175,10 +184,10 @@ while (true) {
       if (!empty($pid)) {
         $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Moving').'...';
       } else {
-        $target = validname($target,false);
+        $target = validname($target, false);
         if ($target) {
           $f = $exist ? 'f' : 'n';
-          exec("mv -{$f}t ".escapeshellarg($target)." ".quoted($source)." 1>$status 2>$error & echo \$!",$pid);
+          exec("mv -{$f}t ".escapeshellarg($target)." ".quoted($source)." 1>$status 2>$error & echo \$!", $pid);
         } else {
           $reply['error'] = 'Invalid target name';
         }
@@ -186,37 +195,37 @@ while (true) {
       break;
     case 11: // change owner
       if (!empty($pid)) {
-        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Updating').'... '.exec("tail -2 $status|grep -Pom1 \"^.+ of '\\K[^']+\"");
+        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Updating').'... '.exec("tail -2 $status | grep -Pom1 \"^.+ of '\\K[^']+\"");
       } else {
-        exec("chown -Rfv $target ".quoted($source)." 1>$status 2>$error & echo \$!",$pid);
+        exec("chown -Rfv $target ".quoted($source)." 1>$status 2>$error & echo \$!", $pid);
       }
       break;
     case 12: // change permission
       if (!empty($pid)) {
-        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Updating').'... '.exec("tail -2 $status|grep -Pom1 \"^.+ of '\\K[^']+\"");
+        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Updating').'... '.exec("tail -2 $status | grep -Pom1 \"^.+ of '\\K[^']+\"");
       } else {
-        exec("chmod -Rfv $target ".quoted($source)." 1>$status 2>$error & echo \$!",$pid);
+        exec("chmod -Rfv $target ".quoted($source)." 1>$status 2>$error & echo \$!", $pid);
       }
       break;
     case 15: // search
       if (!empty($pid)) {
-        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Searching').'... '.exec("wc -l $status|grep -Pom1 '^[0-9]+'");
+        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Searching').'... '.exec("wc -l $status | grep -Pom1 '^[0-9]+'");
       } else {
-        exec("find ".source($source)." -iname ".escapeshellarg($target)." 1>$status 2>$null & echo \$!",$pid);
+        exec("find ".source($source)." -iname ".escapeshellarg($target)." 1>$status 2>$null & echo \$!", $pid);
       }
       break;
     case 99: // kill running background process
       if (!empty($pid)) exec("kill $pid");
-      delete_file($active,$status,$error);
-      unset($pid,$move);
+      delete_file($active, $status, $error);
+      unset($pid, $move);
       break;
     default:
       continue 2;
     }
     $pid = pgrep($pid??0);
-    if ($pid===false) {
+    if ($pid === false) {
       if (!empty($move)) {
-        exec("find ".quoted($source)." -type d -empty -print -delete 1>$status 2>$null & echo \$!",$pid);
+        exec("find ".quoted($source)." -type d -empty -print -delete 1>$status 2>$null & echo \$!", $pid);
         $move = false;
         $pid = pgrep($pid);
       } else {
@@ -235,18 +244,18 @@ while (true) {
             foreach ($datasets as $dataset) if (exec("ls --indicator-style=none /mnt/$dataset|wc -l")==0) exec("zfs destroy $dataset 2>/dev/null");
           }
         }
-        if (file_exists($error)) $reply['error'] = str_replace("\n","<br>",trim(file_get_contents($error)));
-        delete_file($active,$status,$error);
-        unset($pid,$move);
+        if (file_exists($error)) $reply['error'] = str_replace("\n","<br>", trim(file_get_contents($error)));
+        delete_file($active, $status, $error);
+        unset($pid, $move);
       }
     }
   }
-  if (time()-$timer) {
+  if (time() - $timer) {
     // update every second
-    publish('filemonitor',file_exists($active) ? 1 : 0);
+    publish('filemonitor', file_exists($active) ? 1 : 0);
     $timer = time();
   }
-  publish('filemanager',json_encode($reply));
+  publish('filemanager', json_encode($reply));
   usleep(250000);
 }
 ?>
