@@ -1795,12 +1795,12 @@ $(function() {
 <?endif;?>
   dropdown('enter_view');
   startup = false;
-  dashboard.start();
+  dashboard.start().monitor();
 <?if ($vmusage == "Y"):?>
-  vmdashusage.start();
+  vmdashusage.start().monitor();
 <?endif;?>
 <?if ($apcupsd):?>
-  apcups.start();
+  apcups.start().monitor();
 <?endif;?>
   update900();
   toggleChart(true);
@@ -1818,10 +1818,18 @@ $(function() {
     data.cpu = cpu.tail(cpuline);
     data.rxd = rxd.tail(netline);
     data.txd = txd.tail(netline);
-    $.post('/webGui/include/InitCharts.php',{cmd:'set',data:JSON.stringify(data)});
+    // $.post('/webGui/include/InitCharts.php',{cmd:'set',data:JSON.stringify(data)});
   });
 });
 
+// Start graphs over again when window back in focus
+<? if ( $display['liveUpdate'] == "no" ):?>
+$(window).blur(function() {
+  cpu = [];
+  rxd = [];
+  txd = [];
+});
+<?endif;?>
 window.onunload = function(){
   dashboard.stop();
 <?if ($vmusage == "Y"):?>
