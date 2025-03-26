@@ -88,10 +88,17 @@ class ServerState
 
         $this->var = $webguiGlobals['var'];
 
-        // If we're on a patch, we need to use the combinedVersion to check for updates
+        $patcherVersion = null;
         if (file_exists('/tmp/Patcher/patches.json')) {
-            $patchJson = @json_decode(@file_get_contents('/tmp/Patcher/patches.json'), true) ?: [];
-            $this->var['version'] = $patchJson['combinedVersion'] ?? $this->var['version'];
+            $patcherData = @json_decode(file_get_contents('/tmp/Patcher/patches.json'), true);
+            $unraidVersionInfo = parse_ini_file('/etc/unraid-version');
+            if ($patcherData['unraidVersion'] === $unraidVersionInfo['version']) {
+                $patcherVersion = $patcherData['combinedVersion'] ?? null;
+            }
+        }
+        // If we're on a patch, we need to use the combinedVersion to check for updates
+        if ($patcherVersion) {
+            $this->var['version'] = $patcherVersion;
         }
 
         $this->nginxCfg = @parse_ini_file('/var/local/emhttp/nginx.ini') ?? [];

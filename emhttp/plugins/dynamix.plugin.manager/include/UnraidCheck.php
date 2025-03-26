@@ -119,7 +119,10 @@ class UnraidOsCheck
         $patcherVersion = null;
         if (file_exists('/tmp/Patcher/patches.json')) {
             $patcherData = @json_decode(file_get_contents('/tmp/Patcher/patches.json'), true);
-            $patcherVersion = $patcherData['combinedVersion'] ?? null;
+            $unraidVersionInfo = parse_ini_file('/etc/unraid-version');
+            if ($patcherData['unraidVersion'] === $unraidVersionInfo['version']) {
+                $patcherVersion = $patcherData['combinedVersion'] ?? null;
+            }
         }
         
         $params['current_version'] = $patcherVersion ?: plugin('version', self::PLG_PATH) ?: _var($var, 'version');
