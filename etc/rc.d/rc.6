@@ -219,6 +219,10 @@ if [[ ! -f /boot/logs/syslog && -z $MIRROR && -z $COPY ]]; then
   fi
 fi
 
+# Save PCI data to validate system changes at system start.
+
+/usr/sbin/savepcidata
+
 # Before unmounting file systems write a reboot or halt record to wtmp.
 /sbin/$SHUTDOWN_COMMAND -w
 
