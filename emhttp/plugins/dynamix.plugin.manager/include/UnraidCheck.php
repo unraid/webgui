@@ -115,7 +115,17 @@ class UnraidOsCheck
 
         $params  = [];
         $params['branch']          = plugin('category', self::PLG_PATH, 'stable');
-        $params['current_version'] = plugin('version', self::PLG_PATH) ?: _var($var,'version');
+        // Get current version from patches.json if it exists, otherwise fall back to plugin version or var.ini
+        $patcherVersion = null;
+        if (file_exists('/tmp/Patcher/patches.json')) {
+            $patcherData = @json_decode(file_get_contents('/tmp/Patcher/patches.json'), true);
+            $unraidVersionInfo = parse_ini_file('/etc/unraid-version');
+            if ($patcherData['unraidVersion'] === $unraidVersionInfo['version']) {
+                $patcherVersion = $patcherData['combinedVersion'] ?? null;
+            }
+        }
+
+        $params['current_version'] = $patcherVersion ?: plugin('version', self::PLG_PATH) ?: _var($var, 'version');
         if (_var($var,'regExp')) $params['update_exp'] = date('Y-m-d', _var($var,'regExp')*1);
         $defaultUrl = self::BASE_RELEASES_URL;
         // pass a param of altUrl to use the provided url instead of the default

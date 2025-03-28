@@ -36,27 +36,15 @@ a[href="/Tools/Downgrade"] .icon-update:before {
     display: inline-block; /* required otherwise the rotation won't work */
     rotate: 180deg;
 }
+/* overriding #header .logo svg */
+#header .logo .partner-logo svg {
+    fill: var(--header-text-primary);
+    width: auto;
+    height: 28px;
+}
 </style>
 <?php
-// Set the path for the local manifest file
-$localManifestFile = '/usr/local/emhttp/plugins/dynamix.my.servers/unraid-components/manifest.json';
+require_once("$docroot/plugins/dynamix.my.servers/include/web-components-extractor.php");
 
-// Load the local manifest
-$localManifest = json_decode(file_get_contents($localManifestFile), true);
-
-$searchText = 'unraid-components.client.mjs';
-$fileValue = null;
-
-foreach ($localManifest as $key => $value) {
-    if (strpos($key, $searchText) !== false && isset($value["file"])) {
-        $fileValue = $value["file"];
-        break;
-    }
-}
-
-if ($fileValue !== null) {
-    $prefixedPath = '/plugins/dynamix.my.servers/unraid-components/';
-    echo '<script src="' . $prefixedPath . $fileValue . '"></script>';
-} else {
-    echo '<script>console.error("%cNo matching key containing \'' . $searchText . '\' found.", "font-weight: bold; color: white; background-color: red");</script>';
-}
+$wcExtractor = new WebComponentsExtractor();
+echo $wcExtractor->getScriptTagHtml();

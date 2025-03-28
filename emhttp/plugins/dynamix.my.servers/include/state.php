@@ -8,12 +8,14 @@
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  */
+
 /**
  * @todo refactor globals – currently if you try to use $GLOBALS the class will break.
  */
 $webguiGlobals = $GLOBALS;
 $docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 
+require_once "$docroot/plugins/dynamix.my.servers/include/activation-code-extractor.php";
 require_once "$docroot/plugins/dynamix.my.servers/include/reboot-details.php";
 require_once "$docroot/plugins/dynamix.plugin.manager/include/UnraidCheck.php";
 /**
@@ -52,6 +54,10 @@ class ServerState
         "nokeyserver" => 'NO_KEY_SERVER',
         "withdrawn" => 'WITHDRAWN',
     ];
+    /**
+     * SSO Sub IDs from the my servers config file.
+     */
+    public $ssoEnabled = false;
     private $osVersion;
     private $osVersionBranch;
     private $rebootDetails;
@@ -66,12 +72,14 @@ class ServerState
     public $myServersMemoryCfg = [];
     public $host = 'unknown';
     public $combinedKnownOrigins = [];
- 
+
     public $nginxCfg = [];
     public $flashbackupStatus = [];
     public $registered = false;
     public $myServersMiniGraphConnected = false;
     public $keyfileBase64 = '';
+    public $activationCodeData = [];
+    public $state = 'UNKNOWN';
 
     /**
      * Constructor to initialize class properties and gather server information.
@@ -83,12 +91,27 @@ class ServerState
          * @see - getWebguiGlobal() for usage
          * */
         global $webguiGlobals;
-        $this->webguiGlobals =& $webguiGlobals;
+        $this->webguiGlobals = &$webguiGlobals;
         // echo "<pre>" . json_encode($this->webguiGlobals, JSON_PRETTY_PRINT) . "</pre>";
 
-        $this->var = (array)parse_ini_file('state/var.ini');
+        $this->var = $webguiGlobals['var'];
+
+        $patcherVersion = null;
+        if (file_exists('/tmp/Patcher/patches.json')) {
+            $patcherData = @json_decode(file_get_contents('/tmp/Patcher/patches.json'), true);
+            $unraidVersionInfo = parse_ini_file('/etc/unraid-version');
+            if ($patcherData['unraidVersion'] === $unraidVersionInfo['version']) {
+                $patcherVersion = $patcherData['combinedVersion'] ?? null;
+            }
+        }
+        // If we're on a patch, we need to use the combinedVersion to check for updates
+        if ($patcherVersion) {
+            $this->var['version'] = $patcherVersion;
+        }
+
         $this->nginxCfg = @parse_ini_file('/var/local/emhttp/nginx.ini') ?? [];
 
+        $this->state = strtoupper(empty($this->var['regCheck']) ? $this->var['regTy'] : $this->var['regCheck']);
         $this->osVersion = $this->var['version'];
         $this->osVersionBranch = trim(@exec('plugin category /var/log/plugins/unRAIDServer.plg') ?? 'stable');
 
@@ -109,12 +132,14 @@ class ServerState
         $this->updateOsResponse = $this->updateOsCheck->getUnraidOSCheckResult();
 
         $this->setConnectValues();
+        $this->detectActivationCode();
     }
 
     /**
      * Retrieve the value of a webgui global setting.
      */
-    public function getWebguiGlobal(string $key, ?string $subkey = null) {
+    public function getWebguiGlobal(string $key, ?string $subkey = null)
+    {
         if (!$subkey) {
             return _var($this->webguiGlobals, $key, '');
         }
@@ -122,14 +147,15 @@ class ServerState
         return _var($keyArray, $subkey, '');
     }
 
-    private function setConnectValues() {
+    private function setConnectValues()
+    {
         if (file_exists('/var/lib/pkgtools/packages/dynamix.unraid.net')) {
             $this->connectPluginInstalled = 'dynamix.unraid.net.plg';
         }
         if (file_exists('/var/lib/pkgtools/packages/dynamix.unraid.net.staging')) {
             $this->connectPluginInstalled = 'dynamix.unraid.net.staging.plg';
         }
-        if ($this->connectPluginInstalled && !file_exists('/usr/local/sbin/unraid-api')) {
+        if ($this->connectPluginInstalled && !file_exists('/usr/bin/unraid-api')) {
             $this->connectPluginInstalled .= '_installFailed';
         }
 
@@ -149,13 +175,15 @@ class ServerState
         $this->getFlashBackupStatus();
     }
 
-    private function getFlashBackupStatus() {
+    private function getFlashBackupStatus()
+    {
         $flashbackupCfg = '/var/local/emhttp/flashbackup.ini';
         $this->flashbackupStatus = (file_exists($flashbackupCfg)) ? @parse_ini_file($flashbackupCfg) : [];
         $this->flashBackupActivated = empty($this->flashbackupStatus['activated']) ? '' : 'true';
     }
 
-    private function getMyServersCfgValues() {
+    private function getMyServersCfgValues()
+    {
         /**
          * @todo can we read this from somewhere other than the flash? Connect page uses this path and /boot/config/plugins/dynamix.my.servers/myservers.cfg…
          * - $myservers_memory_cfg_path ='/var/local/emhttp/myservers.cfg';
@@ -188,9 +216,11 @@ class ServerState
         $this->registered = !empty($this->myServersFlashCfg['remote']['apikey']) && $this->connectPluginInstalled;
         $this->registeredTime = $this->myServersFlashCfg['remote']['regWizTime'] ?? '';
         $this->username = $this->myServersFlashCfg['remote']['username'] ?? '';
+        $this->ssoEnabled = !empty($this->myServersFlashCfg['remote']['ssoSubIds'] ?? '');
     }
 
-    private function getConnectKnownOrigins() {
+    private function getConnectKnownOrigins()
+    {
         /**
          * Allowed origins warning displayed when the current webGUI URL is NOT included in the known lists of allowed origins.
          * Include localhost in the test, but only display HTTP(S) URLs that do not include localhost.
@@ -198,7 +228,7 @@ class ServerState
         $this->host = $_SERVER['HTTP_HOST'] ?? "unknown";
         $memoryCfgPath = '/var/local/emhttp/myservers.cfg';
         $this->myServersMemoryCfg = (file_exists($memoryCfgPath)) ? @parse_ini_file($memoryCfgPath) : [];
-        $this->myServersMiniGraphConnected = (($this->myServersMemoryCfg['minigraph']??'') === 'CONNECTED');
+        $this->myServersMiniGraphConnected = (($this->myServersMemoryCfg['minigraph'] ?? '') === 'CONNECTED');
 
         $allowedOrigins = $this->myServersMemoryCfg['allowedOrigins'] ?? "";
         $extraOrigins = $this->myServersFlashCfg['api']['extraOrigins'] ?? "";
@@ -214,8 +244,8 @@ class ServerState
             $this->combinedKnownOrigins = explode(",", $combinedOrigins);
 
             if ($this->combinedKnownOrigins) {
-                foreach($this->combinedKnownOrigins as $key => $origin) {
-                    if ( (strpos($origin, "http") === false) || (strpos($origin, "localhost") !== false) ) {
+                foreach ($this->combinedKnownOrigins as $key => $origin) {
+                    if ((strpos($origin, "http") === false) || (strpos($origin, "localhost") !== false)) {
                         // clean up $this->combinedKnownOrigins, only display warning if origins still remain to display
                         unset($this->combinedKnownOrigins[$key]);
                     }
@@ -226,6 +256,23 @@ class ServerState
                 }
             }
         }
+    }
+
+    private function detectActivationCode()
+    {
+        // Fresh server and we're not loading with a callback param to install
+        if ($this->state !== 'ENOKEYFILE' || !empty($_GET['c'])) {
+            return;
+        }
+
+        $activationCodeData = new ActivationCodeExtractor();
+        $data = $activationCodeData->getData();
+
+        if (empty($data)) {
+            return;
+        }
+
+        $this->activationCodeData = $data;
     }
 
     /**
@@ -286,7 +333,8 @@ class ServerState
             "registered" => $this->registered,
             "registeredTime" => $this->registeredTime,
             "site" => _var($_SERVER, 'REQUEST_SCHEME') . "://" . _var($_SERVER, 'HTTP_HOST'),
-            "state" => strtoupper(empty($this->var['regCheck']) ? $this->var['regTy'] : $this->var['regCheck']),
+            "ssoEnabled" => $this->ssoEnabled,
+            "state" => $this->state,
             "theme" => [
                 "banner" => !empty($this->getWebguiGlobal('display', 'banner')),
                 "bannerGradient" => $this->getWebguiGlobal('display', 'showBannerGradient') === 'yes' ?? false,
@@ -318,6 +366,10 @@ class ServerState
             $serverState['updateOsResponse'] = $this->updateOsResponse;
         }
 
+        if ($this->activationCodeData) {
+            $serverState['activationCodeData'] = $this->activationCodeData;
+        }
+
         return $serverState;
     }
 
@@ -326,7 +378,8 @@ class ServerState
      *
      * @return string
      */
-    public function getServerStateJson() {
+    public function getServerStateJson()
+    {
         return json_encode($this->getServerState());
     }
 
@@ -335,7 +388,8 @@ class ServerState
      *
      * @return string
      */
-    public function getServerStateJsonForHtmlAttr() {
+    public function getServerStateJsonForHtmlAttr()
+    {
         $json = json_encode($this->getServerState());
         return htmlspecialchars($json, ENT_QUOTES, 'UTF-8');
     }
