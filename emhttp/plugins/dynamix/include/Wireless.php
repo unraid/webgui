@@ -85,18 +85,15 @@ case 'list':
   $port  = array_key_first($wifi);
   $carrier = "/sys/class/net/$port/carrier";
   $echo  = [];
-  if ($load && count(array_keys($wifi)) > 1) {
-    foreach ($wifi as $network => $block) {
-      if ($network == $port) continue;
-      $wlan[$network][0] = $block['ATTR1'] ?? '';
-      $wlan[$network][2] = $block['ATTR2'] ?? '';
-      $wlan[$network][4] = $block['ATTR3'] ?? $block['SECURITY'] ?? '';
-      $wlan[$network][1] = $block['ATTR4'] ?? '';
-      $wlan[$network][3] = $network;
-    }
-  } else {
-    $wlan  = scanWifi($port);
+  foreach ($wifi as $network => $block) {
+    if ($network == $port) continue;
+    $wlan[$network][0] = $block['ATTR1'] ?? '';
+    $wlan[$network][1] = $block['ATTR4'] ?? '';
+    $wlan[$network][2] = $block['ATTR2'] ?? '';
+    $wlan[$network][3] = $network;
+    $wlan[$network][4] = $block['ATTR3'] ?? $block['SECURITY'] ?? '';
   }
+  if (!$load) $wlan = array_replace_recursive($wlan, scanWifi($port));
   if (count($wlan)) {
     try {
       $up = @file_get_contents($carrier) == 1;
@@ -198,8 +195,8 @@ case 'join':
     echo mk_option($safe, 'IEEE 802.1X/SHA-256', _('WPA3 Enterprise'));
     echo "</select></td></tr>";
   }
-  if ($ieee1 || $manual || $safe) echo "<tr id=\"username\" class=\"$hide0\"><td>"._('Username').":</td><td><input type=\"text\" name=\"USERNAME\" class=\"narrow\" autocomplete=\"off\" spellcheck=\"false\" value=\"$user\"></td></tr>";
-  if ($attr3 || $manual || $safe) echo "<tr id=\"password\" class=\"$hide1\"><td>"._('Password').":</td><td><input type=\"password\" name=\"PASSWORD\" class=\"narrow\" autocomplete=\"off\" spellcheck=\"false\" value=\"$passwd\"><i id=\"showPass\" class=\"fa fa-eye\" onclick=\"showPassword()\"></i></td></tr>";
+  if ($ieee1 || $manual || $safe) echo "<tr id=\"username\" class=\"$hide0\"><td>"._('Username').":</td><td><input type=\"text\" name=\"USERNAME\" class=\"narrow\" maxlength=\"63\" autocomplete=\"off\" spellcheck=\"false\" value=\"$user\"></td></tr>";
+  if ($attr3 || $manual || $safe) echo "<tr id=\"password\" class=\"$hide1\"><td>"._('Password').":</td><td><input type=\"password\" name=\"PASSWORD\" class=\"narrow\" maxlength=\"63\" autocomplete=\"off\" spellcheck=\"false\" value=\"$passwd\"><i id=\"showPass\" class=\"fa fa-eye\" onclick=\"showPassword()\"></i></td></tr>";
   echo "<tr><td colspan=\"2\">&nbsp;</td></tr>";
   echo "<tr><td>"._('IPv4 address assignment').":</td><td><select name=\"DHCP4\" onclick=\"showDHCP(this.value,4)\">";
   echo mk_option($dhcp4, 'yes', _('Automatic'));

@@ -38,7 +38,7 @@ if ($arg == 'yes') {
     }
   }
   if (count($text)>2) {
-    exec("/etc/rc.d/rc.wireless stop");
+    if (file_exists($ini)) exec("/etc/rc.d/rc.wireless stop");
     file_put_contents_atomic($ini,implode("\n",$text)."\n");
     exec("/etc/rc.d/rc.wireless join &>/dev/null &");
     exec("$docroot/webGui/scripts/update_services 20");

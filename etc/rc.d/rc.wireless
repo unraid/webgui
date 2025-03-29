@@ -176,6 +176,12 @@ wifi_start(){
     [[ -e $SYSTEM/$LINK ]] || run ip link add link $PORT name $LINK type ipvtap mode l2 bridge
     run ip link set $PORT up
     run ip link set $LINK up
+    # set regulatory region (if set) upon start
+    REGION=$(grep -Pom1 '^REGION="\K[^"]+' $CFG)
+    REGION_XX=$(grep -Pom1 '^REGION_XX="\K[^"]+' $CFG)
+    [[ $REGION == '00' ]] && CC=$REGION_XX || CC=$REGION
+    [[ -n $CC ]] && run iw reg set $CC
+    # initialise openssl encryption parameters
     $OPENSSL load
     # start active SSID
     $STARTWIFI
@@ -282,8 +288,10 @@ wifi_join(){
     echo 1 >$CONF6/$PORT/disable_ipv6
   fi
   if wifi_running; then
-    CC=($(iw reg get | grep -Po '^country \K..'))
-    [[ ${CC[0]} != ${CC[1]} ]] && iw reg set ${CC[1]}
+    if [[ -z $CC ]]; then
+      CC=($(iw reg get | grep -Po '^country \K..'))
+      [[ ${CC[0]} != ${CC[1]} ]] && iw reg set ${CC[1]}
+    fi
     REPLY="Joined"
   else
     REPLY="Failed"

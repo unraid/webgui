@@ -42,7 +42,7 @@ _(Regulatory region)_:
     [$code, $country] = my_explode('|', $region);
     echo mk_option(_var($wlan0,'REGION'), $code, _($country));
   }
-?></select><span id="manual" class="hide">_(Manual input)_ [XX]: <input type="text" name="REGION_XX" class="wifi" value="<?=_var($wlan0,'REGION_XX')?>" minlength="2" maxlength="2"></span>
+?></select><span id="manual" class="hide">_(Manual input)_ [XX]: <input type="text" name="REGION_XX" class="wifi" value="<?=_var($wlan0,'REGION_XX')?>" minlength="2" maxlength="2" title="_(Two letter country code)_ (ISO 3166)"></span>
 
 &nbsp;
 : <input type="submit" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
@@ -67,7 +67,7 @@ _(Other networks)_:
 
 <div markdown="1" class="shade-<?=$display['theme']?>">
 _(Add network)_:
-: <span class="wifi"><input name="CUSTOM" type="text" class="narrow" maxlength="20" autocomplete="off" spellcheck="false" value=""></span><i class="fa fa-wifi hand grey-text" onclick="manage_wifi(encodeURIComponent($('input[name=CUSTOM]').val()),3)" title="<?=$title?>"></i>
+: <span class="wifi"><input name="CUSTOM" type="text" class="narrow" maxlength="32" autocomplete="off" spellcheck="false" value=""></span><i class="fa fa-wifi hand grey-text" onclick="manage_wifi(encodeURIComponent($('input[name=CUSTOM]').val()),3)" title="<?=$title?>"></i>
 
 </div>
 </div>
@@ -110,7 +110,7 @@ function manage_wifi(ssid,task) {
 }
 
 function showManual(val) {
-  if (val == '00') $('#manual').show(); else $('#manual').hide();
+  if (val == '00') {$('#manual').show(); $('input[name="REGION_XX"]').focus()} else $('#manual').hide();
 }
 
 function showDHCP(val, v) {
