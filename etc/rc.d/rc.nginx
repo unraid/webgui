@@ -789,6 +789,7 @@ nginx_reload(){
       fi
       # resume nchan publishers
       monitor_nchan start
+      rm -f /tmp/nginxStopped
     else
       log "Invalid configuration, $DAEMON not reloaded"
       return 1
