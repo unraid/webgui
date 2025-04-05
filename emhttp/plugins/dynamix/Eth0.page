@@ -162,13 +162,6 @@ function prepareSettings(form) {
   if (brnics.length > 1) form.BRSTP.value = 'yes';
   if ($(form).find('input[name="#arg[1]"]').val() == 'none') return true;
 
-  var metrics = [], metrics6 = [];
-  $(form).find('input[name^="METRIC:"]').each(function(){if($(this).val() > 0) metrics.push($(this).val());});
-  $(form).find('input[name^="METRIC6:"]').each(function(){if($(this).val() > 0) metrics6.push($(this).val());});
-  if (metrics.same() || metrics6.same()) {
-    swal({title:'Duplicate metrics', text:'List of default gateways contains duplicate metric values', animation:'none', type:'error', html:true, confirmButtonText:"_(Ok)_"});
-    return false;
-  }
   // enable form items for submission
   $(form).find('input,select').prop('disabled',false);
   if (form.TYPE.value == 'access') {
@@ -213,7 +206,6 @@ function prepareSettings(form) {
   $(form).find('select[name^="USE_DHCP:"]').each(function() {
     var i = $(this).prop('name').split(':')[1];
     var protocol = $(form).find('select[name="PROTOCOL:'+i+'"]').val() || 'ipv4';
-    var metric = $(form).find('input[name="METRIC:'+i+'"]').val();
     var gw4 = (port == 'eth0') ? true : $(form).find('input[name="USE_GW4:'+i+'"]').prop('checked');
     if (protocol != 'ipv6' && $(this).val() != 'no') {
       $(form).find('input[name="IPADDR:'+i+'"]').val('');
@@ -224,7 +216,6 @@ function prepareSettings(form) {
   $(form).find('select[name^="USE_DHCP6:"]').each(function() {
     var i = $(this).prop('name').split(':')[1];
     var protocol = $(form).find('select[name="PROTOCOL:'+i+'"]').val() || 'ipv4';
-    var metric = $(form).find('input[name="METRIC6:'+i+'"]').val();
     var gw6 = (port == 'eth0') ? true : $(form).find('input[name="USE_GW6:'+i+'"]').prop('checked');
     if (protocol != 'ipv4' && $(this).val() != 'no') {
       $(form).find('input[name="IPADDR6:'+i+'"]').val('');
@@ -239,6 +230,13 @@ function prepareSettings(form) {
       var data = $(this).val();
       $(form).find('input[name="'+name+'"]').val(data);
     });
+  }
+  var metrics = [], metrics6 = [];
+  $(form).find('input[name^="METRIC:"]').each(function(){if($(this).val() > 0) metrics.push($(this).val());});
+  $(form).find('input[name^="METRIC6:"]').each(function(){if($(this).val() > 0) metrics6.push($(this).val());});
+  if (metrics.same() || metrics6.same()) {
+    swal({title:"_(Duplicate metrics)_", text:"_(List of default gateways contains duplicate metric values)_", animation:'none', type:'error', html:true, confirmButtonText:"_(Ok)_"});
+    return false;
   }
   // force default MTU if jumbo frames are not enabled
   if ($(form).find('input[name="USE_MTU"]').prop('checked') == false) $(form).find('input[name="MTU"]').val('');
