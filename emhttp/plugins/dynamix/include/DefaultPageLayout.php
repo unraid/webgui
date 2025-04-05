@@ -858,28 +858,9 @@ unset($pages,$page,$pgs,$pg,$icon,$nchan,$running,$start,$stop,$row,$script,$opt
 <div class="spinner fixed"></div>
 <form name="rebootNow" method="POST" action="/webGui/include/Boot.php"><input type="hidden" name="cmd" value="reboot"></form>
 <iframe id="progressFrame" name="progressFrame" frameborder="0"></iframe>
-<?
-// Build footer
-annotate('Footer');
-echo '<div id="footer"><span id="statusraid"><span id="statusbar">';
-$progress = (_var($var,'fsProgress')!='') ? "&bullet;<span class='blue strong tour'>{$var['fsProgress']}</span>" : "";
-switch (_var($var,'fsState')) {
-case 'Stopped':
-  echo "<span class='red strong'><i class='fa fa-stop-circle'></i> ",_('Array Stopped'),"</span>$progress"; break;
-case 'Starting':
-  echo "<span class='orange strong'><i class='fa fa-pause-circle'></i> ",_('Array Starting'),"</span>$progress"; break;
-case 'Stopping':
-  echo "<span class='orange strong'><i class='fa fa-pause-circle'></i> ",_('Array Stopping'),"</span>$progress"; break;
-default:
-  echo "<span class='green strong'><i class='fa fa-play-circle'></i> ",_('Array Started'),"</span>$progress"; break;
-}
-echo "</span></span><span id='countdown'></span><span id='user-notice' class='red-text'></span>";
-if ($wlan0) echo "<span id='wlan0' class='grey-text' onclick='wlanSettings()'><i class='fa fa-wifi fa-fw'></i></span>";
-echo "<span id='copyright'>Unraid&reg; webGui &copy;2024, Lime Technology, Inc.";
-echo " <a href='https://docs.unraid.net/go/manual/' target='_blank' title=\""._('Online manual')."\"><i class='fa fa-book'></i> "._('manual')."</a>";
-echo "<unraid-theme-switcher current='$theme' themes='".htmlspecialchars(json_encode(['azure', 'gray', 'black', 'white']), ENT_QUOTES, 'UTF-8')."'></unraid-theme-switcher>";
-echo "</span></div>";
-?>
+
+<? require_once "$docroot/webGui/include/DefaultPageLayout/Footer.php"; ?>
+
 <script>
 // Firefox specific workaround, not needed anymore in firefox version 100 and higher
 //if (typeof InstallTrigger!=='undefined') $('#nav-block').addClass('mozilla');
