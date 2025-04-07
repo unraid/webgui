@@ -12,16 +12,15 @@
 ?>
 <?
 require_once "$docroot/plugins/dynamix/include/ThemeHelper.php";
-$themeHelper = new ThemeHelper($display['theme']);
+$themeHelper = new ThemeHelper($display['theme'], $display['width']);
 $theme   = $themeHelper->getThemeName(); // keep $theme, $themes1, $themes2 vars for plugin backwards compatibility for the time being
 $themes1 = $themeHelper->isTopNavTheme();
 $themes2 = $themeHelper->isSidebarTheme();
-$themeHtmlClass = $themeHelper->getThemeHtmlClass();
 $themeHelper->updateDockerLogColor($docroot);
 
 $display['font'] = filter_var($_COOKIE['fontSize'] ?? $display['font'] ?? '',FILTER_SANITIZE_NUMBER_FLOAT,FILTER_FLAG_ALLOW_FRACTION);
 
-$header  = $display['header'];
+$header  = $display['header']; // keep $header, $backgnd vars for plugin backwards compatibility for the time being
 $backgnd = $display['background'];
 
 $config  = "/boot/config";
@@ -29,10 +28,21 @@ $entity  = $notify['entity'] & 1 == 1;
 $alerts  = '/tmp/plugins/my_alerts.txt';
 $wlan0   = file_exists('/sys/class/net/wlan0');
 
+$nchan = ['webGui/nchan/notify_poller','webGui/nchan/session_check'];
+if ($wlan0) $nchan[] = 'webGui/nchan/wlan0';
+$safemode = _var($var,'safeMode')=='yes';
+$banner = "$config/plugins/dynamix/banner.png";
+
+$notes = '/var/tmp/unRAIDServer.txt';
+if (!file_exists($notes)) file_put_contents($notes,shell_exec("$docroot/plugins/dynamix.plugin.manager/scripts/plugin changes $docroot/plugins/unRAIDServer/unRAIDServer.plg"));
+
+$taskPages = find_pages('Tasks');
+$buttonPages = find_pages('Buttons');
+
 function annotate($text) {echo "\n<!--\n",str_repeat("#",strlen($text)),"\n$text\n",str_repeat("#",strlen($text)),"\n-->\n";}
 ?>
 <!DOCTYPE html>
-<html <?=$display['rtl']?>lang="<?=strtok($locale,'_')?:'en'?>" class="<?= $themeHtmlClass ?>">
+<html <?=$display['rtl']?>lang="<?=strtok($locale,'_')?:'en'?>" class="<?= $themeHelper->getThemeHtmlClass() ?>">
 <head>
 <title><?=_var($var,'NAME')?>/<?=_var($myPage,'name')?></title>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
@@ -57,53 +67,24 @@ function annotate($text) {echo "\n<!--\n",str_repeat("#",strlen($text)),"\n$text
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/themes/{$theme}.css")?>">
 
 <style>
-<?if (empty($display['width'])):?>
-@media (max-width:1280px){#displaybox{min-width:1280px;max-width:1280px;margin:0}}
-@media (min-width:1281px){#displaybox{min-width:1280px;max-width:1920px;margin:0 <?=$themeHelper->isTopNavTheme()?'10px':'auto'?>}}
-@media (min-width:1921px){#displaybox{min-width:1280px;max-width:1920px;margin:0 auto}}
-<?else:?>
-@media (max-width:1280px){#displaybox{min-width:1280px;margin:0}}
-@media (min-width:1281px){#displaybox{min-width:1280px;margin:0 <?=$themeHelper->isTopNavTheme()?'10px':'auto'?>}}
-@media (min-width:1921px){#displaybox{min-width:1280px;margin:0 <?=$themeHelper->isTopNavTheme()?'20px':'auto'?>}}
-<?endif;?>
-
-<?if ($display['font']):?>
-html{font-size:<?=$display['font']?>%}
-<?endif;?>
-
-<?if ($header):?>
-#header,#header .logo,#header .text-right a{color:#<?=$header?>}
-#header .block{background-color:transparent}
-<?endif;?>
-
-<?if ($backgnd):?>
-  #header{background-color:#<?=$backgnd?>}
-  <?if ($themeHelper->isTopNavTheme()):?>
-    .nav-tile{background-color:#<?=$backgnd?>}
-    <?if ($header):?>
-      .nav-item a,.nav-user a{color:#<?=$header?>}
-      .nav-item.active:after{background-color:#<?=$header?>}
-    <?endif;?>
+:root {
+  --customer-header-background-image: url(<?= file_exists($banner) ? autov($banner) : autov('/webGui/images/banner.png') ?>);
+  <?if ($header):?>
+    --customer-header-text-color: #<?=$header?>;
   <?endif;?>
-<?endif;?>
+  <?if ($backgnd):?>
+    --customer-header-background-color: #<?=$backgnd?>;
+  <?endif;?>
+  <?if ($display['font']):?>
+    --custom-font-size: <?=$display['font']?>%;
+  <?endif;?>
+}
 
 <?
-$nchan = ['webGui/nchan/notify_poller','webGui/nchan/session_check'];
-if ($wlan0) $nchan[] = 'webGui/nchan/wlan0';
-$safemode = _var($var,'safeMode')=='yes';
-$tasks = find_pages('Tasks');
-$buttons = find_pages('Buttons');
-$banner = "$config/plugins/dynamix/banner.png";
-echo "#header.image{background-image:url(";
-echo file_exists($banner) ? autov($banner) : '/webGui/images/banner.png';
-echo ")}\n";
+// Generate sidebar icon CSS if using sidebar theme
 if ($themeHelper->isSidebarTheme()) {
-  foreach ($tasks as $button) if (isset($button['Code'])) echo ".nav-item a[href='/{$button['name']}']:before{content:'\\{$button['Code']}'}\n";
-  echo ".nav-item.LockButton a:before{content:'\\e955'}\n";
-  foreach ($buttons as $button) if (isset($button['Code'])) echo ".nav-item.{$button['name']} a:before{content:'\\{$button['Code']}'}\n";
+  echo generate_sidebar_icon_css($taskPages, $buttonPages);
 }
-$notes = '/var/tmp/unRAIDServer.txt';
-if (!file_exists($notes)) file_put_contents($notes,shell_exec("$docroot/plugins/dynamix.plugin.manager/scripts/plugin changes $docroot/plugins/unRAIDServer/unRAIDServer.plg"));
 ?>
 </style>
 
@@ -713,7 +694,7 @@ $.ajaxPrefilter(function(s, orig, xhr){
 echo "<div id='menu'>";
 if ($themeHelper->isSidebarTheme()) echo "<div id='nav-block'>";
 echo "<div class='nav-tile'>";
-foreach ($tasks as $button) {
+foreach ($taskPages as $button) {
   $page = $button['name'];
   $play = $task==$page ? " active" : "";
   echo "<div class='nav-item{$play}'>";
@@ -721,7 +702,7 @@ foreach ($tasks as $button) {
   // create list of nchan scripts to be started
   if (isset($button['Nchan'])) nchan_merge($button['root'], $button['Nchan']);
 }
-unset($tasks);
+unset($taskPages);
 echo "</div>";
 echo "<div class='nav-tile right'>";
 if (isset($myPage['Lock'])) {
@@ -730,7 +711,7 @@ if (isset($myPage['Lock'])) {
 }
 if ($display['usage']) my_usage();
 
-foreach ($buttons as $button) {
+foreach ($buttonPages as $button) {
   if (empty($button['Link'])) {
     $icon = $button['Icon'];
     if (substr($icon,-4)=='.png') {
@@ -754,7 +735,7 @@ echo "<div class='nav-user show'><a id='board' href='#' class='hand'><b id='bell
 
 if ($themeHelper->isSidebarTheme()) echo "</div>";
 echo "</div></div>";
-foreach ($buttons as $button) {
+foreach ($buttonPages as $button) {
   annotate($button['file']);
   // include page specific stylesheets (if existing)
   $css = "/{$button['root']}/sheets/{$button['name']}";
@@ -765,7 +746,7 @@ foreach ($buttons as $button) {
   // create page content
   eval('?>'.parse_text($button['text']));
 }
-unset($buttons,$button);
+unset($buttonPages,$button);
 
 // Build page content
 // Reload page every X minutes during extended viewing?

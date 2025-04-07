@@ -243,7 +243,7 @@ $isDarkTheme = $themeHelper->isDarkTheme();
 ?>
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="<?= $themeHelper->getThemeHtmlClass() ?>">
 <head>
     <meta charset="utf-8">
     <meta http-equiv="content-type" content="text/html; charset=UTF-8">

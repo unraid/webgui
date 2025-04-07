@@ -31,41 +31,50 @@ class ThemeHelper {
     private bool $sidebarTheme;
     private bool $darkTheme;
     private bool $lightTheme;
-    private string $themeHtmlClass;
     private string $fgcolor;
+    private bool $unlimitedWidth = false;
 
     /**
      * Constructor for ThemeHelper
      * 
      * @param string|null $theme The theme name (optional)
+     * @param '1'|null $width The width of the theme (optional)
      */
-    public function __construct(?string $theme = null) {
+    public function __construct(?string $theme = null, ?string $width = null) {
         if ($theme === null) {
             throw new \RuntimeException(self::INIT_ERROR);
         }
-        $this->initWithCurrentThemeSetting($theme);
-    }
 
-    /**
-     * Initialize theme properties
-     * 
-     * @param string $theme The theme name
-     * @return void
-     */
-    public function initWithCurrentThemeSetting(string $theme): void {
         $this->themeName = strtok($theme, '-');
 
         $this->topNavTheme = in_array($this->themeName, self::TOP_NAV_THEMES);
         $this->sidebarTheme = in_array($this->themeName, self::SIDEBAR_THEMES);
         $this->darkTheme = in_array($this->themeName, self::DARK_THEMES);
         $this->lightTheme = in_array($this->themeName, self::LIGHT_THEMES);
-
-        $this->themeHtmlClass = "Theme--{$this->themeName}";
-        if ($this->sidebarTheme) {
-            $this->themeHtmlClass .= " Theme--sidebar";
-        }
-
         $this->fgcolor = self::FGCOLORS[$this->themeName] ?? self::COLOR_BLACK;
+
+        if ($width !== null) {
+            $this->setWidth($width);
+        }
+    }
+
+    /**
+     * Set the width setting
+     * 
+     * @param string $width The width setting ('1' for unlimited, empty string for boxed)
+     * @return void
+     */
+    public function setWidth(string $width): void {
+        $this->unlimitedWidth = ($width === '1');
+    }
+
+    /**
+     * Check if unlimited width is enabled
+     * 
+     * @return bool
+     */
+    public function isUnlimitedWidth(): bool {
+        return $this->unlimitedWidth;
     }
 
     public function getThemeName(): string {
@@ -88,8 +97,26 @@ class ThemeHelper {
         return $this->lightTheme;
     }
 
+    /**
+     * Get the theme HTML class string
+     * 
+     * @return string
+     */
     public function getThemeHtmlClass(): string {
-        return $this->themeHtmlClass;
+
+        $classes = ["Theme--{$this->themeName}"];
+
+        if ($this->sidebarTheme) {
+            $classes[] = "Theme--sidebar";
+        }
+
+        if ($this->topNavTheme) {
+            $classes[] = "Theme--nav-top";
+        }
+
+        $classes[] = $this->unlimitedWidth ? "Theme--width-unlimited" : "Theme--width-boxed";
+
+        return implode(' ', $classes);
     }
 
     public function getFgColor(): string {
@@ -108,7 +135,13 @@ class ThemeHelper {
      */
     public static function getThemesFromFileSystem(string $docroot): array {
         $themes = [];
-        $themeFiles = glob("$docroot/webGui/styles/themes/*.css");
+        $themePath = "$docroot/webGui/styles/themes";
+        if (!is_dir($themePath)) {
+            error_log("Theme directory not found: $themePath");
+            return $themes;
+        }
+
+        $themeFiles = glob("$themePath/*.css");
 
         foreach ($themeFiles as $themeFile) {
             $themeName = basename($themeFile, '.css');

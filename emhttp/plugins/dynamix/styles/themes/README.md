@@ -114,7 +114,7 @@ Files like `UserList.css`, `ShareList.css` that provide reusable styles:
 ### Theme Classes
 
 - Main theme: `.Theme--{themename}`
-- Layout variants: `.Theme--sidebar`, `.Theme--topnav`
+- Layout variants: `.Theme--sidebar`, `.Theme--nav-top`
 
 ## Best Practices
 

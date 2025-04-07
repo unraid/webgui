@@ -27,10 +27,9 @@ $var = parse_ini_file("/var/local/emhttp/var.ini");
 require_once "$docroot/plugins/dynamix/include/ThemeHelper.php";  
 $themeHelper = new ThemeHelper($display['theme']);
 $themeName = $themeHelper->getThemeName();
-$themeHtmlClass = $themeHelper->getThemeHtmlClass();
 ?>
 <!DOCTYPE HTML>
-<html <?=$display['rtl']?>lang="<?=strtok($locale,'_')?:'en'?>" class="<?= $themeHtmlClass ?>">
+<html <?=$display['rtl']?>lang="<?=strtok($locale,'_')?:'en'?>" class="<?= $themeHelper->getThemeHtmlClass() ?>">
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
