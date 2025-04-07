@@ -92,7 +92,7 @@ if (is_file('/boot/syslinux/syslinux.cfg')) {
 $arrValidNetworks  = getValidNetworks();
 $pcie_acs_override = detect($bootcfg, $bootenv, 'pcie_acs_override');
 $vfio_allow_unsafe = detect($bootcfg, $bootenv, 'allow_unsafe_interrupts');
-$bgcolor           = strstr('white,azure',$display['theme']) ? '#f2f2f2' : '#1c1c1c';
+$bgcolor           = $themeHelper->isLightTheme() ? '#f2f2f2' : '#1c1c1c';
 $started           = $var['fsState']=='Started';
 $libvirt_up        = $libvirt_running=='yes';
 $libvirt_log       = file_exists("/var/log/libvirt/libvirtd.log");

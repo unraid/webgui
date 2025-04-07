@@ -318,7 +318,8 @@ $authoringMode = $dockercfg['DOCKER_AUTHORING_MODE'] == "yes" ? true : false;
 $authoring     = $authoringMode ? 'advanced' : 'noshow';
 $disableEdit   = $authoringMode ? 'false' : 'true';
 $showAdditionalInfo = '';
-$bgcolor = strstr('white,azure',$display['theme']) ? '#f2f2f2' : '#1c1c1c';
+
+$bgcolor = $themeHelper->isLightTheme() ? '#f2f2f2' : '#1c1c1c'; // $themeHelper set in DefaultPageLayout.php
 
 # Search for existing TAILSCALE_ entries in the Docker template
 $TS_existing_vars = false;

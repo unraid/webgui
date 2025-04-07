@@ -20,12 +20,13 @@ Markdown="false"
 <?
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
+$themeName = $themeHelper->getThemeName();
 
 $cpus = cpu_list();
-$hover   = in_array($theme,['white','azure']) ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
-$bgcolor = in_array($theme,['white','azure']) ? '#f2f2f2' : '#1c1c1c';
-$fgcolor = in_array($theme,['white','azure']) ? '#1c1c1c' : '#f2f2f2';
-$incolor = $theme!='gray' ? $bgcolor : '#121510';
+$hover   = $themeHelper->isLightTheme() ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+$bgcolor = $themeHelper->isLightTheme() ? '#f2f2f2' : '#1c1c1c';
+$fgcolor = $themeHelper->isLightTheme() ? '#1c1c1c' : '#f2f2f2';
+$incolor = $themeName !== 'gray' ? $bgcolor : '#121510';
 
 function showCPUs($uuid) {
   global $cpus;
@@ -403,7 +404,7 @@ function LockButton() {
     $('#resetsort').removeClass('nohand').addClass('hand');
     $('i.mover').show();
     $('#kvm_list .sortable').css({'cursor':'move'});
-<?if ($themes1):?>
+<?if ($themeHelper->isTopNavTheme()):?>
     $('div.nav-item.LockButton a').prop('title',"_(Lock sortable items)_");
     $('div.nav-item.LockButton b').removeClass('icon-u-lock green-text').addClass('icon-u-lock-open red-text');
 <?endif;?>
@@ -426,7 +427,7 @@ function LockButton() {
     $('#resetsort').removeClass('hand').addClass('nohand');
     $('i.mover').hide();
     $('#kvm_list .sortable').css({'cursor':'default'});
-<?if ($themes1):?>
+<?if ($themeHelper->isTopNavTheme()):?>
     $('div.nav-item.LockButton a').prop('title',"_(Unlock sortable items)_");
     $('div.nav-item.LockButton b').removeClass('icon-u-lock-open red-text').addClass('icon-u-lock green-text');
 <?endif;?>

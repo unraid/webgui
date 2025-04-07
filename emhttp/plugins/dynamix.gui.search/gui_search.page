@@ -32,7 +32,7 @@ var browserName = (function(agent){
 })(window.navigator.userAgent.toLowerCase());
 
 $(function(){
-<?if ($themes2):?>
+<?if ($themeHelper->isSidebarTheme()):?>
 	$('.nav-item.gui_search').hover(function(){gui_search();},function(e){closeSearchBox(e);});
 <?endif;?>
 	$.post('/plugins/dynamix.gui.search/include/exec.php',function(data) {
@@ -51,7 +51,7 @@ function setupGUIsearch() {
 	window.addEventListener('keydown',function(e){
 		if (!e.shiftKey && !e.altKey && (navigator.appVersion.indexOf('Mac')==-1 ? e.ctrlKey : e.metaKey) && e.keyCode==75) {
 			e.preventDefault();
-		<?if ($themes1):?>
+		<?if ($themeHelper->isTopNavTheme()):?>
 			if (guiSearchBoxSpan()) closeSearchBox(e); else gui_search();
 		<?endif;?>
 		}
@@ -63,7 +63,7 @@ function setupGUIsearch() {
 }
 
 function gui_search() {
-<?if ($themes1):?>
+<?if ($themeHelper->isTopNavTheme()):?>
 	languageVisible = $('.nav-item.LanguageButton').is(':visible');
 	$('.nav-tile.right').prepend("<?=$guiSearchBoxSpan?>").css('overflow','visible');
 	$('.nav-item.util,.nav-user.show').hide();
@@ -86,7 +86,7 @@ function gui_search() {
 function closeSearchBox(e) {
 	e.stopPropagation();
 	$('#guiSearchBoxSpan').remove();
-<?if ($themes1):?>
+<?if ($themeHelper->isTopNavTheme()):?>
 	$('.nav-tile.right').css({'overflow-x':'auto','overflow-y':'hidden'});
 	$('.nav-item.util,.nav-user.show').show();
 	if (!languageVisible) $('.nav-item.LanguageButton').hide();

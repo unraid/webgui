@@ -24,13 +24,10 @@ $var = parse_ini_file("/var/local/emhttp/var.ini");
 /**
  * Just like DefaultPageLayout.php
  */
-$theme   = strtok($display['theme'],'-');
-$themes1 = in_array($theme,['black','white']);
-$themes2 = in_array($theme,['gray','azure']);
-$themeHtmlClass = "Theme--$theme";
-if ($themes2) {
-  $themeHtmlClass .= " Theme--sidebar";
-}
+require_once "$docroot/plugins/dynamix/include/ThemeHelper.php";  
+$themeHelper = new ThemeHelper($display['theme']);
+$themeName = $themeHelper->getThemeName();
+$themeHtmlClass = $themeHelper->getThemeHtmlClass();
 ?>
 <!DOCTYPE HTML>
 <html <?=$display['rtl']?>lang="<?=strtok($locale,'_')?:'en'?>" class="<?= $themeHtmlClass ?>">
@@ -46,7 +43,7 @@ if ($themes2) {
 
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/default-color-palette.css")?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/default-base.css")?>">
-<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/themes/{$display['theme']}.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/themes/{$themeName}.css")?>">
 
 <style>
 .boot-title {

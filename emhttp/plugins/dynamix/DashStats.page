@@ -50,8 +50,7 @@ function customTiles($column) {
 }
 
 // adjust the text color in log window
-$fgcolor = in_array($theme,['white','azure']) ? '#1c1c1c' : '#f2f2f2';
-exec("sed -ri 's/^\.logLine\{color:#......;/.logLine{color:$fgcolor;/' $docroot/plugins/dynamix.docker.manager/log.htm >/dev/null &");
+$themeHelper->updateDockerLogColor($docroot); // $themeHelper set in DefaultPageLayout.php
 exec("/etc/rc.d/rc.docker status >/dev/null",$dummy,$dockerd);
 exec("/etc/rc.d/rc.libvirt status >/dev/null",$dummy,$libvirtd);
 
@@ -192,7 +191,7 @@ $ramsize    = my_scale($total,$unit,0,-1,1024)." $unit";
 $low = $memory_maximum < $memory_installed;
 if ($low) $memory_maximum = pow(2,ceil(log($memory_installed)/log(2)));
 
-switch ($theme) {
+switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout.php
   case 'white': $color = '#1c1b1b'; $grid = '#e3e3e3'; $c0 = '#a8a8a8'; $c1 = '#dcdcdc'; break;
   case 'black': $color = '#f2f2f2'; $grid = '#2b2b2b'; $c0 = '#787878'; $c1 = '#444444'; break;
   case 'azure': $color = '#606e7f'; $grid = '#f3f0f4'; $c0 = '#606e7f'; $c1 = '#eceaec'; break;
@@ -1554,7 +1553,7 @@ var sortableHelper = function(e,ui){
 function LockButton() {
   if ($.cookie('lockbutton') == null) {
     $.cookie('lockbutton','lockbutton');
-<?if ($themes1):?>
+<?if ($themeHelper->isTopNavTheme()):?>
     $('div.nav-item.LockButton a').prop('title',"_(Lock sortable items)_");
     $('div.nav-item.LockButton b').removeClass('icon-u-lock green-text').addClass('icon-u-lock-open red-text');
 <?endif;?>
@@ -1586,7 +1585,7 @@ function LockButton() {
     }});
   } else {
     $.removeCookie('lockbutton');
-<?if ($themes1):?>
+<?if ($themeHelper->isTopNavTheme()):?>
     $('div.nav-item.LockButton a').prop('title',"_(Unlock sortable items)_");
     $('div.nav-item.LockButton b').removeClass('icon-u-lock-open red-text').addClass('icon-u-lock green-text');
 <?endif;?>

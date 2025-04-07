@@ -21,8 +21,8 @@ Nchan="docker_load:stop"
 <?
 require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
 
-$width   = in_array($theme,['white','black']) ? -58: -44;
-$top     = in_array($theme,['white','black']) ? 40 : 20;
+$width   = $themeHelper->isTopNavTheme() ? -58: -44; // $themeHelper set in DefaultPageLayout.php
+$top     = $themeHelper->isTopNavTheme() ? 40 : 20;
 $busy    = "<i class='fa fa-spin fa-circle-o-notch'></i> "._('Please wait')."... "._('starting up containers');
 $cpus    = cpu_list();
 ?>
@@ -82,7 +82,7 @@ function LockButton() {
     $('#resetsort').removeClass('nohand').addClass('hand');
     $('i.mover').show();
     $('#docker_list .sortable').css({'cursor':'move'});
-<?if ($themes1):?>
+<?if ($themeHelper->isTopNavTheme()):?>
     $('div.nav-item.LockButton').find('a').prop('title',"_(Lock sortable items)_");
     $('div.nav-item.LockButton').find('b').removeClass('icon-u-lock green-text').addClass('icon-u-lock-open red-text');
 <?endif;?>
@@ -99,7 +99,7 @@ function LockButton() {
     $('#resetsort').removeClass('hand').addClass('nohand');
     $('i.mover').hide();
     $('#docker_list .sortable').css({'cursor':'default'});
-<?if ($themes1):?>
+<?if ($themeHelper->isTopNavTheme()):?>
     $('div.nav-item.LockButton').find('a').prop('title',"_(Unlock sortable items)_");
     $('div.nav-item.LockButton').find('b').removeClass('icon-u-lock-open red-text').addClass('icon-u-lock green-text');
 <?endif;?>

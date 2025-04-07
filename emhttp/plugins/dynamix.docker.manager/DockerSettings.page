@@ -123,7 +123,7 @@ function hide_eth($network) {
   return in_array($network,$mgmt_port) && lan_port('wlan0',true)==1;
 }
 
-$bgcolor = strstr('white,azure',$display['theme']) ? '#f2f2f2' : '#1c1c1c';
+$bgcolor = $themeHelper->isLightTheme() ? '#f2f2f2' : '#1c1c1c'; // $themeHelper set in DefaultPageLayout.php
 
 //Check if docker.cfg does exist
 $no_dockercfg = !is_file('/boot/config/docker.cfg');

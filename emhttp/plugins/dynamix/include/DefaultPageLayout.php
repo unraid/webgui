@@ -11,24 +11,23 @@
  */
 ?>
 <?
+require_once "$docroot/plugins/dynamix/include/ThemeHelper.php";
+$themeHelper = new ThemeHelper($display['theme']);
+$theme   = $themeHelper->getThemeName(); // keep $theme, $themes1, $themes2 vars for plugin backwards compatibility for the time being
+$themes1 = $themeHelper->isTopNavTheme();
+$themes2 = $themeHelper->isSidebarTheme();
+$themeHtmlClass = $themeHelper->getThemeHtmlClass();
+$themeHelper->updateDockerLogColor($docroot);
+
 $display['font'] = filter_var($_COOKIE['fontSize'] ?? $display['font'] ?? '',FILTER_SANITIZE_NUMBER_FLOAT,FILTER_FLAG_ALLOW_FRACTION);
-$theme   = strtok($display['theme'],'-');
+
 $header  = $display['header'];
 $backgnd = $display['background'];
-$themes1 = in_array($theme,['black','white']);
-$themes2 = in_array($theme,['gray','azure']);
-$themeHtmlClass = "Theme--$theme";
-if ($themes2) {
-  $themeHtmlClass .= " Theme--sidebar";
-}
+
 $config  = "/boot/config";
 $entity  = $notify['entity'] & 1 == 1;
 $alerts  = '/tmp/plugins/my_alerts.txt';
 $wlan0   = file_exists('/sys/class/net/wlan0');
-
-// adjust the text color in docker log window
-$fgcolor = in_array($theme,['white','azure']) ? '#1c1c1c' : '#f2f2f2';
-exec("sed -ri 's/^\.logLine\{color:#......;/.logLine{color:$fgcolor;/' $docroot/plugins/dynamix.docker.manager/log.htm >/dev/null &");
 
 function annotate($text) {echo "\n<!--\n",str_repeat("#",strlen($text)),"\n$text\n",str_repeat("#",strlen($text)),"\n-->\n";}
 ?>
@@ -55,17 +54,17 @@ function annotate($text) {echo "\n<!--\n",str_repeat("#",strlen($text)),"\n$text
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/default-base.css")?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/default-dynamix.css")?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/plugins/dynamix/styles/dynamix-jquery-ui.css")?>">
-<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/themes/{$display['theme']}.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/themes/{$theme}.css")?>">
 
 <style>
 <?if (empty($display['width'])):?>
 @media (max-width:1280px){#displaybox{min-width:1280px;max-width:1280px;margin:0}}
-@media (min-width:1281px){#displaybox{min-width:1280px;max-width:1920px;margin:0 <?=$themes1?'10px':'auto'?>}}
+@media (min-width:1281px){#displaybox{min-width:1280px;max-width:1920px;margin:0 <?=$themeHelper->isTopNavTheme()?'10px':'auto'?>}}
 @media (min-width:1921px){#displaybox{min-width:1280px;max-width:1920px;margin:0 auto}}
 <?else:?>
 @media (max-width:1280px){#displaybox{min-width:1280px;margin:0}}
-@media (min-width:1281px){#displaybox{min-width:1280px;margin:0 <?=$themes1?'10px':'auto'?>}}
-@media (min-width:1921px){#displaybox{min-width:1280px;margin:0 <?=$themes1?'20px':'auto'?>}}
+@media (min-width:1281px){#displaybox{min-width:1280px;margin:0 <?=$themeHelper->isTopNavTheme()?'10px':'auto'?>}}
+@media (min-width:1921px){#displaybox{min-width:1280px;margin:0 <?=$themeHelper->isTopNavTheme()?'20px':'auto'?>}}
 <?endif;?>
 
 <?if ($display['font']):?>
@@ -79,7 +78,7 @@ html{font-size:<?=$display['font']?>%}
 
 <?if ($backgnd):?>
   #header{background-color:#<?=$backgnd?>}
-  <?if ($themes1):?>
+  <?if ($themeHelper->isTopNavTheme()):?>
     .nav-tile{background-color:#<?=$backgnd?>}
     <?if ($header):?>
       .nav-item a,.nav-user a{color:#<?=$header?>}
@@ -98,7 +97,7 @@ $banner = "$config/plugins/dynamix/banner.png";
 echo "#header.image{background-image:url(";
 echo file_exists($banner) ? autov($banner) : '/webGui/images/banner.png';
 echo ")}\n";
-if ($themes2) {
+if ($themeHelper->isSidebarTheme()) {
   foreach ($tasks as $button) if (isset($button['Code'])) echo ".nav-item a[href='/{$button['name']}']:before{content:'\\{$button['Code']}'}\n";
   echo ".nav-item.LockButton a:before{content:'\\e955'}\n";
   foreach ($buttons as $button) if (isset($button['Code'])) echo ".nav-item.{$button['name']} a:before{content:'\\{$button['Code']}'}\n";
@@ -712,7 +711,7 @@ $.ajaxPrefilter(function(s, orig, xhr){
 <?
 // Build page menus
 echo "<div id='menu'>";
-if ($themes2) echo "<div id='nav-block'>";
+if ($themeHelper->isSidebarTheme()) echo "<div id='nav-block'>";
 echo "<div class='nav-tile'>";
 foreach ($tasks as $button) {
   $page = $button['name'];
@@ -726,7 +725,7 @@ unset($tasks);
 echo "</div>";
 echo "<div class='nav-tile right'>";
 if (isset($myPage['Lock'])) {
-  $title = $themes2 ?  "" : _('Unlock sortable items');
+  $title = $themeHelper->isSidebarTheme() ?  "" : _('Unlock sortable items');
   echo "<div class='nav-item LockButton util'><a href='#' class='hand' onclick='LockButton();return false;' title=\"$title\"><b class='icon-u-lock system green-text'></b><span>"._('Unlock sortable items')."</span></a></div>";
 }
 if ($display['usage']) my_usage();
@@ -742,7 +741,7 @@ foreach ($buttons as $button) {
       if (substr($icon,0,3)!='fa-') $icon = "fa-$icon";
       $icon = "<b class='fa $icon system'></b>";
     }
-    $title = $themes2 ? "" : " title=\""._($button['Title'])."\"";
+    $title = $themeHelper->isSidebarTheme() ? "" : " title=\""._($button['Title'])."\"";
     echo "<div class='nav-item {$button['name']} util'><a href='"._var($button,'Href','#')."' onclick='{$button['name']}();return false;'{$title}>$icon<span>"._($button['Title'])."</span></a></div>";
   } else {
     echo "<div class='{$button['Link']}'></div>";
@@ -753,14 +752,14 @@ foreach ($buttons as $button) {
 
 echo "<div class='nav-user show'><a id='board' href='#' class='hand'><b id='bell' class='icon-u-bell system'></b></a></div>";
 
-if ($themes2) echo "</div>";
+if ($themeHelper->isSidebarTheme()) echo "</div>";
 echo "</div></div>";
 foreach ($buttons as $button) {
   annotate($button['file']);
   // include page specific stylesheets (if existing)
   $css = "/{$button['root']}/sheets/{$button['name']}";
   $css_stock = "$css.css";
-  $css_theme = "$css-$theme.css";
+  $css_theme = "$css-$theme.css"; // @todo add syslog for deprecation notice
   if (is_file($docroot.$css_stock)) echo '<link type="text/css" rel="stylesheet" href="',autov($css_stock),'">',"\n";
   if (is_file($docroot.$css_theme)) echo '<link type="text/css" rel="stylesheet" href="',autov($css_theme),'">',"\n";
   // create page content
@@ -1092,7 +1091,7 @@ $(window).scroll(function() {
   } else {
     $('.back_to_top').fadeOut(scrollDuration);
   }
-<?if ($themes1):?>
+<?if ($themeHelper->isTopNavTheme()):?>
   var top = $('div#header').height()-1; // header height has 1 extra pixel to cover overlap
   $('div#menu').css($(this).scrollTop() > top ? {position:'fixed',top:'0'} : {position:'absolute',top:top+'px'});
   // banner

@@ -40,7 +40,9 @@ if (!empty($_POST['password']) && !empty($_POST['confirmPassword'])) {
     return $POST_ERROR = $VALIDATION_MESSAGES['saveError'];
 }
 
-$THEME_DARK = in_array($display['theme'],['black','gray']);
+require_once "$docroot/plugins/dynamix/include/ThemeHelper.php";
+$themeHelper = new ThemeHelper($display['theme']);
+$isDarkTheme = $themeHelper->isDarkTheme();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -78,13 +80,13 @@ $THEME_DARK = in_array($display['theme'],['black','gray']);
     /
     /************************/
     :root {
-        --body-bg: <?= $THEME_DARK ? '#1c1b1b' : '#f2f2f2' ?>;
-        --body-text-color: <?= $THEME_DARK ? '#fff' : '#1c1b1b' ?>;
-        --section-bg: <?= $THEME_DARK ? '#1c1b1b' : '#f2f2f2' ?>;
-        --shadow: <?= $THEME_DARK ? 'rgba(115,115,115,.12)' : 'rgba(0,0,0,.12)' ?>;
-        --form-text-color:  <?= $THEME_DARK ? '#f2f2f2' : '#1c1b1b' ?>;
-        --form-bg-color: <?= $THEME_DARK ? 'rgba(26,26,26,0.4)' : '#f2f2f2' ?>;
-        --form-border-color: <?= $THEME_DARK ? '#2B2A29' : '#ccc' ?>;
+        --body-bg: <?= $isDarkTheme ? '#1c1b1b' : '#f2f2f2' ?>;
+        --body-text-color: <?= $isDarkTheme ? '#fff' : '#1c1b1b' ?>;
+        --section-bg: <?= $isDarkTheme ? '#1c1b1b' : '#f2f2f2' ?>;
+        --shadow: <?= $isDarkTheme ? 'rgba(115,115,115,.12)' : 'rgba(0,0,0,.12)' ?>;
+        --form-text-color:  <?= $isDarkTheme ? '#f2f2f2' : '#1c1b1b' ?>;
+        --form-bg-color: <?= $isDarkTheme ? 'rgba(26,26,26,0.4)' : '#f2f2f2' ?>;
+        --form-border-color: <?= $isDarkTheme ? '#2B2A29' : '#ccc' ?>;
     }
     body {
         background: var(--body-bg);

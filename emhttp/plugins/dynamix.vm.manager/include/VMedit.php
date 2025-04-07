@@ -22,7 +22,7 @@ if (substr($_SERVER['REQUEST_URI'],0,4) != '/VMs') {
 	require_once "$docroot/webGui/include/Translations.php";
 }
 
-switch ($display['theme']) {
+switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout.php
 	case 'gray' : $bgcolor = '#121510'; $border = '#606e7f'; $top = -44; break;
 	case 'azure': $bgcolor = '#edeaef'; $border = '#606e7f'; $top = -44; break;
 	case 'black': $bgcolor = '#212121'; $border = '#2b2b2b'; $top = -64; break;
