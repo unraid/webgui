@@ -156,62 +156,17 @@ if (isset($myPage['Load'])) {
 <?include "$docroot/plugins/dynamix.my.servers/include/myservers1.php"?>
 </head>
 <body>
- <div id="displaybox">
+<div id="displaybox">
   <div class="upgrade_notice" style="display:none"></div>
-  <div id="header" class="<?=$display['banner']?>">
-    <div class="logo">
-      <a href="https://unraid.net" target="_blank"><?readfile("$docroot/webGui/images/UN-logotype-gradient.svg")?></a>
-      <unraid-i18n-host><unraid-header-os-version></unraid-header-os-version></unraid-i18n-host>
-    </div>
-    <?include "$docroot/plugins/dynamix.my.servers/include/myservers2.php"?>
-  </div>
+
+  <? include "$docroot/webGui/include/DefaultPageLayout/Header.php"; ?>
+
   <a href="#" class="move_to_end" title="<?=_('Move To End')?>"><i class="fa fa-arrow-circle-down"></i></a>
   <a href="#" class="back_to_top" title="<?=_('Back To Top')?>"><i class="fa fa-arrow-circle-up"></i></a>
+
+  <? include "$docroot/webGui/include/DefaultPageLayout/Navigation/Main.php"; ?>
+
 <?
-// Build page menus
-echo "<div id='menu'>";
-if ($themeHelper->isSidebarTheme()) echo "<div id='nav-block'>";
-echo "<div class='nav-tile'>";
-foreach ($taskPages as $button) {
-  $page = $button['name'];
-  $play = $task==$page ? " active" : "";
-  echo "<div class='nav-item{$play}'>";
-  echo "<a href=\"/$page\" onclick=\"initab('/$page')\">"._(_var($button,'Name',$page))."</a></div>";
-}
-unset($taskPages);
-echo "</div>";
-echo "<div class='nav-tile right'>";
-if (isset($myPage['Lock'])) {
-  $title = $themeHelper->isSidebarTheme() ?  "" : _('Unlock sortable items');
-  echo "<div class='nav-item LockButton util'><a href='#' class='hand' onclick='LockButton();return false;' title=\"$title\"><b class='icon-u-lock system green-text'></b><span>"._('Unlock sortable items')."</span></a></div>";
-}
-if ($display['usage']) my_usage();
-
-foreach ($buttonPages as $button) {
-  if (empty($button['Link'])) {
-    $icon = $button['Icon'];
-    if (substr($icon,-4)=='.png') {
-      $icon = "<img src='/{$button['root']}/icons/$icon' class='system'>";
-    } elseif (substr($icon,0,5)=='icon-') {
-      $icon = "<b class='$icon system'></b>";
-    } else {
-      if (substr($icon,0,3)!='fa-') $icon = "fa-$icon";
-      $icon = "<b class='fa $icon system'></b>";
-    }
-    $title = $themeHelper->isSidebarTheme() ? "" : " title=\""._($button['Title'])."\"";
-    echo "<div class='nav-item {$button['name']} util'><a href='"._var($button,'Href','#')."' onclick='{$button['name']}();return false;'{$title}>$icon<span>"._($button['Title'])."</span></a></div>";
-  } else {
-    echo "<div class='{$button['Link']}'></div>";
-  }
-}
-
-echo "<div class='nav-user show'><a id='board' href='#' class='hand'><b id='bell' class='icon-u-bell system'></b></a></div>";
-
-if ($themeHelper->isSidebarTheme()) echo "</div>";
-echo "</div></div>";
-
-unset($buttonPages,$button);
-
 // Build page content
 echo "<div class='tabs'>";
 $tab = 1;
