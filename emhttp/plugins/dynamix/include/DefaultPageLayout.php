@@ -157,13 +157,9 @@ if (isset($myPage['Load'])) {
 </head>
 <body>
 <div id="displaybox">
-  <div class="upgrade_notice" style="display:none"></div>
+
 
   <? include "$docroot/webGui/include/DefaultPageLayout/Header.php"; ?>
-
-  <a href="#" class="move_to_end" title="<?=_('Move To End')?>"><i class="fa fa-arrow-circle-down"></i></a>
-  <a href="#" class="back_to_top" title="<?=_('Back To Top')?>"><i class="fa fa-arrow-circle-up"></i></a>
-
   <? include "$docroot/webGui/include/DefaultPageLayout/Navigation/Main.php"; ?>
 
 <?
@@ -227,11 +223,9 @@ foreach ($pages as $page) {
 unset($pages,$page,$pgs,$pg,$icon,$nchan,$running,$start,$stop,$row,$script,$opt,$nchan_run);
 ?>
 </div></div>
-<div class="spinner fixed"></div>
-<form name="rebootNow" method="POST" action="/webGui/include/Boot.php"><input type="hidden" name="cmd" value="reboot"></form>
-<iframe id="progressFrame" name="progressFrame" frameborder="0"></iframe>
 
-<? require_once "$docroot/webGui/include/DefaultPageLayout/Footer.php"; ?>
-<? require_once "$docroot/plugins/dynamix/include/DefaultPageLayout/BodyInlineJS.php"; ?>
+  <? require_once "$docroot/webGui/include/DefaultPageLayout/Footer.php"; ?>
+  <? require_once "$docroot/plugins/dynamix/include/DefaultPageLayout/MiscElements.php"; ?>
+  <? require_once "$docroot/plugins/dynamix/include/DefaultPageLayout/BodyInlineJS.php"; ?>
 </body>
 </html>
