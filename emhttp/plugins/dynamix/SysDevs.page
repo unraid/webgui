@@ -46,6 +46,43 @@ function applyCfg() {
     $("#applycfg").attr("disabled",true);
   });
 }
+function formatFullInput(input) {
+    return input
+        .split(';')
+        .filter(Boolean) // remove empty trailing entry
+        .map(entry => {
+            let [pci, status] = entry.split(',');
+            status = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+            return `${pci} _(${status})_`;
+        })
+        .join('<br>');
+}
+function ackPCI(pcidevice,action) {
+  switch(action) {
+    case 'removed':
+      // Remove entry from saved.
+      swaltext = "_(Acknowledge removal of PCI Address)_: "+pcidevice;
+      break;
+    case 'changed':
+      // Update saved with current
+      swaltext = "_(Acknowledge update of PCI Address)_: "+pcidevice;
+      break;
+    case 'added': 
+      // Add to saved.
+      swaltext = "_(Acknowledge addition of PCI Address)_: "+pcidevice;
+      break;
+    case 'all': 
+      // Add to saved.
+      swaltext = "_(Acknowledge all PCI Address modifications)_: <br>"+formatFullInput(pcidevice);
+      break;
+  }
+  swal({title:"Are you sure?",text:swaltext,type:"warning",html:true,showCancelButton:true},function(){
+        $.post('/webGui/include/PCIUpdate.php',{action:action,pciid:pcidevice}).done(function(d) {
+          if (d == "OK") $('#t1').load('/webGui/include/SysDevs.php',{table:'t1'});
+        });
+    });
+}
+
 </script>
 
 <?exec('ls /sys/kernel/iommu_groups/',$groups); ?>

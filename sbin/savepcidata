@@ -1,0 +1,26 @@
+#!/usr/bin/php
+<?php
+
+    $output = shell_exec('lspci -Dmn');
+    $devices = [];
+
+    foreach (explode("\n", trim($output)) as $line) {
+        $parts = explode(" ", $line);
+
+        if (count($parts) < 6) continue; // Skip malformed lines
+
+        $description_str = shell_exec(("lspci -s ".$parts[0]));
+        $description = preg_replace('/^\S+\s+/', '', $description_str);
+
+        $device = [
+            'class'       => trim($parts[1], '"'),
+            'vendor_id'   => trim($parts[2], '"'),
+            'device_id'   => trim($parts[3], '"'),
+            'description' => trim($description,'"'),
+        ];
+
+        $devices[$parts[0]] = $device;
+    }
+
+    file_put_contents("/boot/config/savedpcidata.json",json_encode($devices,JSON_PRETTY_PRINT));
+?>

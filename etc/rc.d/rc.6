@@ -76,6 +76,10 @@ if [[ -x /sbin/hwclock ]]; then
   fi
 fi
 
+# Save PCI data to validate system changes at system start.
+log "Save PCI Configuration."
+/usr/local/sbin/savepcidata
+
 # Run any local shutdown scripts:
 if [[ -x /etc/rc.d/rc.local_shutdown ]]; then
   /etc/rc.d/rc.local_shutdown stop

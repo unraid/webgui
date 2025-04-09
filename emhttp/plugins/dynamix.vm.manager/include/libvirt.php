@@ -2257,6 +2257,18 @@ class Libvirt {
 		return ['pci' => $devs_pci, 'usb' => $devs_usb];
 	}
 
+	function domain_get_vm_pciids($domain) {
+		$hostdevs=$this->domain_get_host_devices_pci($domain);
+		$vmpcidevs=[];
+		foreach($hostdevs as $key => $dev) {
+			$vmpcidevs[$dev['id']] = [
+				'vendor_id' =>  ltrim($dev['vendor_id'] ?? "", '0x'),
+				'device_id' =>  ltrim($dev['product_id'] ?? "", '0x'),
+			];
+		}
+		return $vmpcidevs;
+	}
+
 	function get_nic_info($domain) {
 		$macs = $this->get_xpath($domain, "//domain/devices/interface/mac/@address", false);
 		if (!$macs) return $this->_set_last_error();
