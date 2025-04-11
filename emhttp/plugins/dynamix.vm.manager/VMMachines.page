@@ -20,6 +20,8 @@ Markdown="false"
 <?
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
+$is_intel_cpu = is_intel_cpu();
+$core_types = $is_intel_cpu ? get_intel_core_types() : [];
 
 $cpus = cpu_list();
 $hover   = in_array($theme,['white','azure']) ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
@@ -28,7 +30,7 @@ $fgcolor = in_array($theme,['white','azure']) ? '#1c1c1c' : '#f2f2f2';
 $incolor = $theme!='gray' ? $bgcolor : '#121510';
 
 function showCPUs($uuid) {
-  global $cpus;
+  global $cpus,$is_intel_cpu,$core_types;
   $vm = domain_to_config($uuid);
   $vcpu = $vm['domain']['vcpu'];
   $nopining = "";
@@ -38,12 +40,13 @@ function showCPUs($uuid) {
     unset($cpu1,$cpu2);
     [$cpu1, $cpu2] = my_preg_split('/[,-]/',$pair);
     $check = ($vcpu && in_array($cpu1, $vcpu)) ? 'fa-circle orange-text':'fa-circle-o';
+    if ($is_intel_cpu && count($core_types) > 0) $core_type = "$core_types[$cpu1]"; else $core_type = "";
     if (!$cpu2) {
-      echo "<label><i class='fa fa-fw $check'></i>&nbsp;&nbsp;cpu $cpu1</label>";
+      echo "<label title='$core_type'><i class='fa fa-fw $check'></i>&nbsp;&nbsp;cpu $cpu1</label>";
     } else {
-      echo "<label class='cpu1'><i class='fa fa-fw $check'></i>&nbsp;&nbsp;cpu $cpu1 / $cpu2</label>";
+      echo "<label title='$core_type' class='cpu1'><i class='fa fa-fw $check'></i>&nbsp;&nbsp;cpu $cpu1 / $cpu2</label>";
       $check = ($vcpu && in_array($cpu2, $vcpu)) ? 'fa-circle orange-text':'fa-circle-o';
-      echo "<label class='cpu2'><i class='fa fa-fw $check'></i></label>";
+      echo "<label title='$core_type' class='cpu2'><i class='fa fa-fw $check'></i></label>";
     }
   }
   echo "<br><span>vCPUs: {$vm['domain']['vcpus']} $nopining</span>";

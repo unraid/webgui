@@ -211,11 +211,19 @@ EOT;
   }
   break;
 case 't2':
+  $is_intel_cpu = is_intel_cpu();
+  $core_types = $is_intel_cpu ? get_intel_core_types() : [];
   exec('cat /sys/devices/system/cpu/*/topology/thread_siblings_list|sort -nu',$pairs);
   $i = 1;
   foreach ($pairs as $line) {
+    $line2 = $line;
     $line = preg_replace(['/(\d+)[-,](\d+)/','/(\d+)\b/'],['$1 / $2','cpu $1'],$line);
-    echo "<tr><td>".(strpos($line,'/')===false?"Single":"Pair ".$i++).":</td><td>$line</td></tr>";
+    if ($is_intel_cpu && count($core_types) > 0) {
+      [$cpu1, $cpu2] = my_preg_split('/[,-]/',$line2);
+      $core = $cpu1;
+      $core_type = "({$core_types[$core]})";
+    } else $core_type = "";
+    echo "<tr><td>".(strpos($line,'/')===false?"Single":"Pair ".$i++).":</td><td>$line $core_type</td></tr>";
   }
   break;
 case 't3':

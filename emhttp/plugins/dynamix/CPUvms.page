@@ -22,10 +22,12 @@ $cpus = cpu_list();
 $total = count($cpus);
 $spinner = "<tr><td colspan='".($total+2)."'><div class='spinner'></div></td></tr>";
 $cpuset = implode(';',$cpus);
+$is_intel_cpu = is_intel_cpu();
+$core_types = $is_intel_cpu ? get_intel_core_types() : [];
 
 function create($type = "") {
 	// create the table header. Make multiple rows when CPU cores are many ;)
-	global $total, $cpus;
+	global $total, $cpus, $is_intel_cpu, $core_types;
 	$loop = floor(($total-1)/32) + 1;
 	$text = [];
 	for ($c = 0; $c < $loop; $c++) {
@@ -39,8 +41,12 @@ function create($type = "") {
 	}
 	$label = implode('<br>', array_fill(0, $loop, 'CORES:' . ($cpu2 ? '<br>CORES:' : '')));
 	if ($type == "vm") echo "<th>VCPUS</th>";
+
 	echo "<th>$label</th>" . implode(array_map(function($t) {
-		return "<th>$t</th>";
+		global $is_intel_cpu, $core_types;
+		[$cpu1, $cpu2] = my_preg_split('/[,<br>]/',$t);
+		if ($is_intel_cpu && count($core_types) > 0) $core_type = "$core_types[$cpu1]"; else $core_type = "";
+		return "<th title='$core_type'>$t</th>";
 	}, $text));
 }
 ?>
@@ -175,7 +181,10 @@ function ct() {
 		/* Inject thread to containers toggles */
 		if ($('a[onclick^="thread2containers"]').length === 0) {
 			$('form[name=ct]').find('thead tr th:gt(1)').each((i, elem) => {
-				elem.innerHTML = elem.innerHTML.replace(/(\d+)/g, '<a href="#" onclick="thread2containers(this.innerText);return false;" title="_(Toggle thread to containers)_">$1</a>');
+				// Preserve the existing title if available
+				let existingTitle = elem.title || "";
+				let newTitle = existingTitle ? existingTitle + "&#10;_(Toggle thread to containers)_" : "_(Toggle thread to containers)_";
+				elem.innerHTML = elem.innerHTML.replace(/(\d+)/g, '<a href="#" onclick="thread2containers(this.innerText);return false;" title="' + newTitle + '">$1</a>');
 			});
 		}
 	});

@@ -416,4 +416,62 @@ function device_exists($name)
   global $disks,$devs;
   return (array_key_exists($name, $disks) && !str_contains(_var($disks[$name],'status'),'_NP')) || (array_key_exists($name, $devs));
 }
+
+
+# Check for process Core Types.
+function parse_cpu_ranges($file) {
+  if (!is_file($file)) return null;
+  $ranges = file_get_contents($file);
+  $ranges = trim($ranges);
+  $cores = [];
+  foreach (explode(',', $ranges) as $range) {
+      if (strpos($range, '-') !== false) {
+          list($start, $end) = explode('-', $range);
+          $cores = array_merge($cores, range((int)$start, (int)$end));
+      } else {
+          $cores[] = (int)$range;
+      }
+  }
+  return $cores;
+}
+
+function get_intel_core_types() {
+  $core_types = array();
+  $cpu_core_file = "/sys/devices/cpu_core/cpus";
+  $cpu_atom_file = "/sys/devices/cpu_atom/cpus";
+  $p_cores = parse_cpu_ranges($cpu_core_file);
+  $e_cores = parse_cpu_ranges($cpu_atom_file);
+  if ($p_cores) {
+    foreach ($p_cores as $core) {
+      $core_types[$core] = _("P-Core");
+    }
+  }
+  if ($e_cores) {
+    foreach ($e_cores as $core) {
+      $core_types[$core] = _("E-Core");
+    }
+  }
+  return $core_types;
+}
+
+function dmidecode($key,$n,$all=true) {
+  $entries = array_filter(explode($key,shell_exec("dmidecode -qt$n")??""));
+  $properties = [];
+  foreach ($entries as $entry) {
+    $property = [];
+    foreach (explode("\n",$entry) as $line) if (strpos($line,': ')!==false) {
+      [$key,$value] = my_explode(': ',trim($line));
+      $property[$key] = $value;
+    }
+    $properties[] = $property;
+  }
+  return $all ? $properties : $properties[0]??null;
+}
+
+function is_intel_cpu() {
+  $cpu      = dmidecode('Processor Information','4',0);
+  $cpu_vendor = $cpu['Manufacturer'] ?? "";
+  $is_intel_cpu = stripos($cpu_vendor, "intel") !== false ? true : false;
+  return $is_intel_cpu;
+}
 ?>
