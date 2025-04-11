@@ -17,7 +17,8 @@ require_once "$docroot/webGui/include/Helpers.php";
 // add translations
 $_SERVER['REQUEST_URI'] = 'settings';
 require_once "$docroot/webGui/include/Translations.php";
-
+$is_intel_cpu = is_intel_cpu();
+$core_types = $is_intel_cpu ? get_intel_core_types() : [];
 $cpus = explode(';',$_POST['cpus']??'');
 $corecount = 0;
 foreach ($cpus as $pair) {
@@ -32,7 +33,7 @@ function scan($area, $text) {
 
 function create($id, $name, $vcpu) {
   // create the list of checkboxes. Make multiple rows when CPU cores are many ;)
-  global $cpus;
+  global $cpus,$is_intel_cpu,$core_types;
   $total = count($cpus);
   $loop = floor(($total-1)/32)+1;
   $text = [];
@@ -48,8 +49,12 @@ function create($id, $name, $vcpu) {
       $check1 = ($vcpu && in_array($cpu1, $vcpu)) ? 'checked':'';
       $check2 = $cpu2 ? ($vcpu && (in_array($cpu2, $vcpu)) ? 'checked':''):'';
       if (empty($text[$n])) $text[$n] = '';
-      $text[$n] .="<label class='checkbox'><input type='checkbox' $checkclass name='$name:$cpu1' $check1><span class='checkmark'></span></label><br>";
-      if ($cpu2) $text[$n] .= "<label class='checkbox'><input type='checkbox' $checkclass name='$name:$cpu2' $check2><span class='checkmark'></span></label><br>";
+      if ($is_intel_cpu && count($core_types) > 0) $core_type = "{$core_types[$cpu1]}"; else $core_type = "";
+      $text[$n] .="<label title='$core_type' class='checkbox'><input  type='checkbox' $checkclass name='$name:$cpu1' $check1><span class='checkmark'></span></label><br>";
+      if ($cpu2) {
+        if ($is_intel_cpu && count($core_types) > 0) $core_type = "{$core_types[$cpu2]}"; else $core_type = "";
+        $text[$n] .= "<label title='$core_type' class='checkbox'><input type='checkbox' $checkclass name='$name:$cpu2' $check2><span class='checkmark'></span></label><br>";
+      }
     }
   }
   echo implode(array_map(function($t){return "<td>$t</td>";},$text));

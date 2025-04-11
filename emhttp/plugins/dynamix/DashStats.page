@@ -14,19 +14,6 @@ Nchan="wg_poller,update_1,update_2,update_3,ups_status:stop,vm_dashusage"
 */
 ?>
 <?
-function dmidecode($key,$n,$all=true) {
-  $entries = array_filter(explode($key,shell_exec("dmidecode -qt$n")??""));
-  $properties = [];
-  foreach ($entries as $entry) {
-    $property = [];
-    foreach (explode("\n",$entry) as $line) if (strpos($line,': ')!==false) {
-      [$key,$value] = my_explode(': ',trim($line));
-      $property[$key] = $value;
-    }
-    $properties[] = $property;
-  }
-  return $all ? $properties : $properties[0]??null;
-}
 function export_settings($protocol,$share) {
   if ($protocol!='yes' || $share['export']=='-') return "-";
   if ($share['export']=='e') return _(ucfirst($share['security']));
@@ -160,6 +147,7 @@ $bios     = $bios['Vendor'].(isset($bios['Version']) ? ", "._("Version")." ".$bi
 $cpu      = dmidecode('Processor Information','4',0);
 $cpumodel = str_ireplace(["Processor","(C)","(R)","(TM)"],["","&#169;","&#174;","&#8482;"],exec("grep -Pom1 '^model name\s+:\s*\K.+' /proc/cpuinfo") ?: $cpu['Version']);
 $cpumodel .= (strpos($cpumodel,'@')===false && !empty($cpu['Current Speed']) ? " @ {$cpu['Current Speed']}" : "");
+$cpu_vendor = $cpu['Manufacturer'] ?? "";
 
 $total = exec("awk '/^MemTotal/{print $2*1024}' /proc/meminfo");
 unset($ports); exec("ls --indicator-style=none /sys/class/net|grep -Po '^(bond|eth|wlan)\d+$'",$ports);
@@ -263,6 +251,10 @@ switch ($theme) {
 </td></tr>
 <tr><td><?=$board?><br><?=$bios?><br><?=$biosdate?></td></tr>
 </tbody>
+<?
+$is_intel_cpu = is_intel_cpu();
+$core_types = $is_intel_cpu ? get_intel_core_types() : [];
+?>
 
 <tbody title="_(Processor Information)_" data="toggleCPU(true)">
 <tr><td><i class='icon-cpu f32'></i><div class='section'>_(Processor)_<br>
@@ -280,14 +272,16 @@ switch ($theme) {
 <?=mk_option("","120", _("2 m"));?>
 <?=mk_option("","300", _("5 m"));?>
 </select></span><a onclick='toggleChart()' title="_(Click to toggle CPU chart)_"><span class="fa fa-fw fa-bar-chart hand"></span></a></span></td></tr>
+
 <?
 foreach ($cpus as $pair) {
   [$cpu1, $cpu2] = my_preg_split('/[,-]/',$pair);
   echo "<tr class='cpu_open'>";
+  if ($is_intel_cpu && count($core_types) > 0) $core_type = "({$core_types[$cpu1]})"; else $core_type = "";
   if ($cpu2)
-    echo "<td><span class='w26'>CPU $cpu1 - HT $cpu2</span><span class='dashboard w36'><span class='cpu$cpu1 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu1'></span><span></span></div></span><span class='dashboard w36'><span class='cpu$cpu2 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu2'></span><span></span></div></span></td>";
+    echo "<td><span class='w26'>CPU $cpu1 $core_type - HT $cpu2 </span><span class='dashboard w36'><span class='cpu$cpu1 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu1'></span><span></span></div></span><span class='dashboard w36'><span class='cpu$cpu2 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu2'></span><span></span></div></span></td>";
   else
-    echo "<td><span class='w26'>CPU $cpu1</span><span class='w72'><span class='cpu$cpu1 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu1'></span><span></span></div></span></td>";
+    echo "<td><span class='w26'>CPU $cpu1 $core_type</span><span class='w72'><span class='cpu$cpu1 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu1'></span><span></span></div></span></td>";
   echo "</tr>";
 }
 ?>
