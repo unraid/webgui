@@ -27,6 +27,7 @@ $arrValidMachineTypes = getValidMachineTypes();
 $arrValidPCIDevices   = getValidPCIDevices();
 $arrValidGPUDevices   = getValidGPUDevices();
 $arrValidAudioDevices = getValidAudioDevices();
+$arrValidSoundCards   = getValidSoundCards();
 $arrValidOtherDevices = getValidOtherDevices();
 $arrValidUSBDevices   = getValidUSBDevices();
 $arrValidDiskDrivers  = getValidDiskDrivers();
@@ -1441,6 +1442,7 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 			<?
 			echo mk_option($arrAudio['id'], '', _('None'));
 			foreach ($arrValidAudioDevices as $arrDev) echo mk_option($arrAudio['id'], $arrDev['id'], $arrDev['name'].' ('.$arrDev['id'].')');
+			foreach ($arrValidSoundCards as $arrSound) echo mk_option($arrAudio['id'], $arrSound['id'], $arrSound['name'].' ('._("Virtual").')');
 			?>
 			</select></span>
 		</td>
@@ -1466,6 +1468,7 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 			<span class="width"><select name="audio[{{INDEX}}][id]" class="audio narrow">
 			<?
 			foreach ($arrValidAudioDevices as $arrDev) echo mk_option('', $arrDev['id'], $arrDev['name'].' ('.$arrDev['id'].')');
+			foreach ($arrValidSoundCards as $arrSound) echo mk_option($arrAudio['id'], $arrSound['id'], $arrSound['name'].' ('._("Virtual").')');
 			?>
 			</select></span>
 		</td>

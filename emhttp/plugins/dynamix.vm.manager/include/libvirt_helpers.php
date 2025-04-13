@@ -971,6 +971,21 @@ class Array2XML {
 		return $arrValidAudioDevices;
 	}
 
+	function getValidSoundCards() {
+		$arrValidSoundCards = [
+			'ich6'		=> ['name' => 'ich6','id' => 'virtual::ich6'],
+			'ich7' 		=> ['name' => 'ich7','id' => 'virtual::ich7'],
+			'ich9' 		=> ['name' => 'ich9','id' => 'virtual::ich9'],
+			'ac97' 		=> ['name' => 'ac97','id' => 'virtual::ac97'],
+			'es1370' 	=> ['name' => 'es1370','id' => 'virtual::es1370'],
+			'pcspk' 	=> ['name' => 'pcspk','id' => 'virtual::pcspk'],
+			'sb16' 		=> ['name' => 'sb16','id' => 'virtual::sb16'],
+			'usb' 		=> ['name' => 'usb','id' => 'virtual::usb'],
+			'virtio' 	=> ['name' => 'virtio','id' => 'virtual::virtio'],
+		];
+		return $arrValidSoundCards;
+	}
+
 	function getValidOtherDevices() {
 		$arrValidPCIDevices = getValidPCIDevices();
 
@@ -1277,6 +1292,7 @@ class Array2XML {
 		$arrNICs = $lv->get_nic_info($res);
 		$arrHostDevs = $lv->domain_get_host_devices_pci($res);
 		$arrUSBDevs = $lv->domain_get_host_devices_usb($res);
+		$arrSoundCards = $lv->domain_get_sound_cards($res);
 		$getcopypaste=getcopypaste($res);
 
 		// Metadata Parsing
@@ -1346,6 +1362,10 @@ class Array2XML {
 			$arrGPUDevices[] = [
 				'id' => 'nogpu',
 			];
+		}
+
+		if (!empty($arrSoundCards)) {
+			foreach ($arrSoundCards as $sckey => $soundcard) $arrAudioDevices[] = ['id' => "virtual::".$soundcard['model']];
 		}
 
 		// Add claimed USB devices by this VM to the available USB devices
@@ -1532,6 +1552,7 @@ class Array2XML {
 		unset($old['devices']['input']);
 		// preserve vnc/spice port settings
 		// unset($new['devices']['graphics']['@attributes']['port'],$new['devices']['graphics']['@attributes']['autoport']);
+		unset($old['devices']['sound']);
 		unset($old['devices']['graphics']);
 		if (!isset($new['devices']['graphics']['@attributes']['keymap']) && isset($old['devices']['graphics']['@attributes']['keymap'])) unset($old['devices']['graphics']['@attributes']['keymap']);
 		// update parent arrays

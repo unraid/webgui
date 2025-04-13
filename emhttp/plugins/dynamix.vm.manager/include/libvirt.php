@@ -839,6 +839,7 @@ class Libvirt {
 			}
 		}
 		$audiodevs_used=[];
+		$soundcards = "";
 		if (!empty($audios)) {
 			foreach ($audios as $i => $audio) {
 				$strSpecialAddressAudio = "";
@@ -847,21 +848,28 @@ class Libvirt {
 					continue;
 				}
 				[$audio_bus, $audio_slot, $audio_function] = my_explode(":", str_replace('.', ':', $audio['id']), 3);
-				if ($audio_function != 0) {
-					if (isset($multidevices[$audio_bus]))	{
-						$newaudio_bus = $multidevices[$audio_bus];
-						if ($machine_type == "pc") $newaudio_slot = "0x01"; else $newaudio_slot = "0x00";
-						$strSpecialAddressAudio = "<address type='pci' domain='0x0000' bus='$newaudio_bus' slot='$newaudio_slot'  function='0x".$audio_function."' />";
+				if ($audio_bus == "virtual")
+				{
+					$soundcards .= "<sound model='$audio_function'>
+      					<alias name='sound0'/>
+    					</sound>";
+				} else {
+					if ($audio_function != 0) {
+						if (isset($multidevices[$audio_bus]))	{
+							$newaudio_bus = $multidevices[$audio_bus];
+							if ($machine_type == "pc") $newaudio_slot = "0x01"; else $newaudio_slot = "0x00";
+							$strSpecialAddressAudio = "<address type='pci' domain='0x0000' bus='$newaudio_bus' slot='$newaudio_slot'  function='0x".$audio_function."' />";
+						}
 					}
+					$pcidevs .= "<hostdev mode='subsystem' type='pci' managed='yes'>
+						<driver name='vfio'/>
+						<source>
+						<address domain='0x0000' bus='0x".$audio_bus."' slot='0x".$audio_slot."' function='0x".$audio_function."'/>
+						</source>
+						$strSpecialAddressAudio
+						</hostdev>";
+					$audiodevs_used[] = $audio['id'];
 				}
-				$pcidevs .= "<hostdev mode='subsystem' type='pci' managed='yes'>
-					<driver name='vfio'/>
-					<source>
-					<address domain='0x0000' bus='0x".$audio_bus."' slot='0x".$audio_slot."' function='0x".$audio_function."'/>
-					</source>
-					$strSpecialAddressAudio
-					</hostdev>";
-				$audiodevs_used[] = $audio['id'];
 			}
 		}
 		$pcidevs_used=[];
@@ -951,6 +959,7 @@ class Libvirt {
 				$vmrc
 				<console type='pty'/>
 				$scsicontroller
+				$soundcards
 				$pcidevs
 				$usbstr
 				<channel type='unix'>
@@ -2256,6 +2265,24 @@ class Libvirt {
 		$devs_usb = $this->domain_get_host_devices_usb($domain);
 		return ['pci' => $devs_pci, 'usb' => $devs_usb];
 	}
+
+	function domain_get_sound_cards($domain) {
+		$soundcardslist = [];
+		$strDOMXML = $this->domain_get_xml($domain);
+		$xmldoc = new DOMDocument();
+		$xmldoc->loadXML($strDOMXML);
+		$xpath = new DOMXPath($xmldoc);
+		$objNodes = $xpath->query('//domain/devices/sound');
+		if ($objNodes->length > 0) {
+			foreach ($objNodes as $objNode) { 
+					$soundcardslist[] = [
+						'model' => $xpath->query('@model', $objNode)->Item(0)->nodeValue
+					];
+				}
+		}
+		return $soundcardslist;
+	}
+	  
 
 	function get_nic_info($domain) {
 		$macs = $this->get_xpath($domain, "//domain/devices/interface/mac/@address", false);
