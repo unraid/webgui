@@ -28,6 +28,18 @@ CONF6=/proc/sys/net/ipv6/conf
 [[ -r $INI ]] && . $INI
 PORT=${PORT:-wlan0}
 
+# translate security to informational text
+trans(){
+  case "$1" in
+    "open") echo "Open network" ;;
+    "PSK") echo "WPA2 Personal" ;;
+    "SAE") echo "WPA3 Personal" ;;
+    "IEEE 802.1X") echo "WPA2 Enterprise" ;;
+    "IEEE 802.1X/SHA-256") echo "WPA3 Enterprise" ;;
+    *) echo "$1" ;;
+  esac
+}
+
 # function to remove leading zeros in IPv4 address
 unzero(){
   local M Q
@@ -138,30 +150,36 @@ ipaddr_down(){
 # WPA3                    OK
 # WPA2 Enterprise         OK
 # WPA2/WPA3 Enterprise    OK
-# WPA3 Enterprise         dynamic IP NOK, static IP OK
+# WPA3 Enterprise         OK
 
 wpa_configuration(){
-  PSK=$(wpa_passphrase "$SSID" "$PASSWORD" 2>/dev/null | grep -Pom1 '^\s+psk=\K.+')
-  [[ -z $PSK ]] && PSK="\"$PASSWORD\""
-  [[ -z $2 ]] && echo "bgscan=\"\"" >$WPA || echo >$WPA
-  [[ -z $2 && -n $CC ]] && echo "country=${CC,,}" >>$WPA
+  if [[ ! -e $WPA ]]; then
+    echo "bgscan=\"\"" >$WPA
+    [[ -n $CC ]] && echo "country=${CC,,}" >>$WPA
+  fi
+  if [[ $1 == "PSK" ]]; then
+    PSK=$(wpa_passphrase "$SSID" "$PASSWORD" 2>/dev/null | grep -Pom1 '^\s+psk=\K.+')
+    [[ -z $PSK ]] && PSK="\"$PASSWORD\""
+  fi
+  [[ -z $2 && $1 == "SAE" ]] && echo "sae_pwe=1" >>$WPA
   echo "network={" >>$WPA
   echo "ssid=\"$SSID\"" >>$WPA
   echo "scan_ssid=1" >>$WPA
+  [[ $1 == "open" ]] && echo "key_mgmt=NONE" >>$WPA
   [[ $1 == "PSK" ]] && echo "key_mgmt=WPA-PSK" >>$WPA
   [[ $1 == "SAE" ]] && echo "key_mgmt=SAE" >>$WPA
-  [[ $1 =~ "IEEE" && $1 != "IEEE 802.1X/SHA-256" ]] && echo "key_mgmt=WPA-EAP" >>$WPA
+  [[ $1 == "IEEE 802.1X" ]] && echo "key_mgmt=WPA-EAP" >>$WPA
   [[ $1 == "IEEE 802.1X/SHA-256" ]] && echo "key_mgmt=WPA-EAP-SHA256" >>$WPA
-  [[ $1 =~ "IEEE 802.1X" ]] && echo "eap=PEAP" >>$WPA
-  [[ $1 != "SAE" && ! $1 =~ "IEEE" ]] && echo "psk=$PSK" >>$WPA
+  [[ $1 == "PSK" ]] && echo "psk=$PSK" >>$WPA
+  [[ $1 == "SAE" ]] && echo "sae_password=\"$PASSWORD\"" >>$WPA
+  [[ $1 =~ "IEEE" ]] && echo "eap=PEAP" >>$WPA
   [[ $1 =~ "IEEE" ]] && echo "identity=\"$USERNAME\"" >>$WPA
-  [[ $1 =~ "IEEE" && $1 != "IEEE 802.1X/SHA-256" ]] && echo "password=\"$PASSWORD\"" >>$WPA
-  [[ $1 == "SAE" || $1 == "IEEE 802.1X/SHA-256" ]] && echo "sae_password=\"$PASSWORD\"" >>$WPA
+  [[ $1 =~ "IEEE" ]] && echo "password=\"$PASSWORD\"" >>$WPA
+  [[ $1 == "IEEE 802.1X" ]] && echo "ieee80211w=1" >>$WPA
   [[ $1 == "SAE" || $1 == "IEEE 802.1X/SHA-256" ]] && echo "ieee80211w=2" >>$WPA
   [[ $1 =~ "IEEE" ]] && echo "phase2=\"auth=MSCHAPV2\"" >>$WPA
   [[ -n $2 ]] && echo "priority=$2" >>$WPA
   echo "}" >>$WPA
-  [[ -n $2 ]] && cat $WPA >>$WPA.tmp
 }
 
 wifi_running(){
@@ -182,6 +200,8 @@ wifi_start(){
   fi
   LINK=shim-$PORT
   [[ -e $SYSTEM/$LINK ]] || run ip link add link $PORT name $LINK type ipvtap mode l2 bridge
+  run ip link set $PORT up
+  run ip link set $LINK up
   # set regulatory region (if set) upon start
   REGION=$(var REGION $CFG)
   REGION_XX=$(var REGION_XX $CFG)
@@ -253,27 +273,28 @@ wifi_join(){
   REGION=$(grep -Pom1 '^REGION="\K[^"]+' $CFG)
   REGION_XX=$(grep -Pom1 '^REGION_XX="\K[^"]+' $CFG)
   [[ $REGION == '00' ]] && CC=$REGION_XX || CC=$REGION
-  if [[ ${SECURITY^^} == AUTO ]]; then
-    # auto generate config
-    log "wpa_configuration AUTO"
-    echo "bgscan=\"\"" >$WPA.tmp
-    [[ -n $CC ]] && echo "country=${CC,,}" >>$WPA.tmp
+  [[ -n $(pgrep wpa_supplicant) ]] && pkill wpa_supplicant
+  rm -f $WPA
+  if [[ $SECURITY == "auto" ]]; then
+    log "wpa_configuration: Automatic detection"
     wpa_configuration "IEEE 802.1X/SHA-256" 25
     wpa_configuration "IEEE 802.1X" 18
     wpa_configuration "SAE" 15
     wpa_configuration "PSK" 12
-    mv $WPA.tmp $WPA
-    [[ -n $(pgrep wpa_supplicant) ]] && pkill wpa_supplicant
-    run wpa_supplicant -B -i $PORT -c $WPA
-  elif [[ -z $SECURITY || ${SECURITY^^} == "OPEN" ]]; then
-    # open network
-    run iw dev $PORT connect "$SSID" auth open
+    wpa_configuration "open" 10
+  elif [[ $SECURITY == "IEEE 802.1X IEEE 802.1X/SHA-256" ]]; then
+    log "wpa_configuration: WPA2/WPA3 Enterprise"
+    wpa_configuration "IEEE 802.1X/SHA-256" 25
+    wpa_configuration "IEEE 802.1X" 18
+  elif [[ $SECURITY == "PSK SAE" ]]; then
+    log "wpa_configuration: WPA2/WPA3 Personal"
+    wpa_configuration "SAE" 15
+    wpa_configuration "PSK" 12
   else
-    # WPA encryption
-    run wpa_configuration "$SECURITY"
-    [[ -n $(pgrep wpa_supplicant) ]] && pkill wpa_supplicant
-    run wpa_supplicant -B -i $PORT -c $WPA
+    log "wpa_configuration: $(trans "$SECURITY")"
+    wpa_configuration "$SECURITY"
   fi
+  run wpa_supplicant -B -q -i $PORT -c $WPA
   # IPv4 address assignment
   IP=ipv4
   DHCP=$DHCP4

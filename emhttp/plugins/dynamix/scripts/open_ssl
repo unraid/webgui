@@ -19,7 +19,7 @@ switch ($argv[1]) {
 case 'reload':
   if (file_exists($ssl_input)) break;
 case 'load':
-  $key = exec("dmidecode -qt1 | grep -Pom1 'Manufacturer: \K.+' | sed 's/ /_/g'")."ABCDEFGH";
+  $key = exec("dmidecode -qt1 | grep -Pom1 'Manufacturer: \K.+' | sed -r 's/[^0-9a-zA-Z._-]/_/g'")."ABCDEFGH";
   $iv  = "12".exec("cat /sys/class/net/wlan0/address | sed 's/://g'")."34";
   file_put_contents($ssl_input, "cipher=aes-256-cbc\nkey=".substr($key,0,63)."\niv=$iv\n");
   break;

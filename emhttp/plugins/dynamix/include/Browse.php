@@ -25,18 +25,18 @@ function write(&$rows) {
 
 function validdir($dir) {
   $path = realpath($dir);
-  return in_array(explode('/',$path)[1]??'',['mnt','boot']) ? $path : '';
+  return in_array(explode('/', $path)[1] ?? '', ['mnt','boot']) ? $path : '';
 }
 
 function escapeQuote($data) {
-  return str_replace('"','&#34;',$data);
+  return str_replace('"','&#34;', $data);
 }
 
 function add($number, $name, $single='', $plural='s') {
   return $number.' '._($name.($number==1 ? $single : $plural));
 }
 
-function age($number,$time) {
+function age($number, $time) {
   return sprintf(_('%s '.($number==1 ? $time : $time.'s').' ago'),$number);
 }
 
@@ -44,25 +44,25 @@ function my_age($time) {
   if (!is_numeric($time)) $time = time();
   $age = new DateTime('@'.$time);
   $age = date_create('now')->diff($age);
-  if ($age->y > 0) return age($age->y,'year');
-  if ($age->m > 0) return age($age->m,'month');
-  if ($age->d > 0) return age($age->d,'day');
-  if ($age->h > 0) return age($age->h,'hour');
-  if ($age->i > 0) return age($age->i,'minute');
-  return age($age->s,'second');
+  if ($age->y > 0) return age($age->y, 'year');
+  if ($age->m > 0) return age($age->m, 'month');
+  if ($age->d > 0) return age($age->d, 'day');
+  if ($age->h > 0) return age($age->h, 'hour');
+  if ($age->i > 0) return age($age->i, 'minute');
+  return age($age->s, 'second');
 }
 
 function parent_link() {
-  global $dir,$path;
+  global $dir, $path;
   $parent = dirname($dir);
-  return $parent=='/' ? false : '<a href="/'.$path.'?dir='.rawurlencode(htmlspecialchars($parent)).'">'._('Parent Directory').'</a>';
+  return $parent == '/' ? false : '<a href="/'.$path.'?dir='.rawurlencode(htmlspecialchars($parent)).'">'._('Parent Directory').'</a>';
 }
 
 function my_devs(&$devs,$name,$menu) {
-  global $disks,$lock;
+  global $disks, $lock;
   $text = []; $i = 0;
   foreach ($devs as $dev) {
-    if ($lock=='---') {
+    if ($lock == '---') {
       $text[$i] = '<a class="info" onclick="return false"><i class="lock fa fa-fw fa-hdd-o grey-text"></i></a>&nbsp;---';
     } else {
       switch ($disks[$dev]['luksState']??0) {
@@ -72,7 +72,7 @@ function my_devs(&$devs,$name,$menu) {
         case 3: $text[$i] = '<span class="dfm_device"><a class="info" onclick="return false"><i class="lock fa fa-fw fa-lock red-text"></i><span>'._('Locked: wrong encryption key').'</span></a>'; break;
        default: $text[$i] = '<span class="dfm_device"><a class="info" onclick="return false"><i class="lock fa fa-fw fa-lock red-text"></i><span>'._('Locked: unknown error').'</span></a>'; break;
       }
-      $root = $dev=='flash' ? "/boot/$name" : "/mnt/$dev/$name";
+      $root = ($dev == 'flash' ? "/boot/$name" : "/mnt/$dev/$name");
       $text[$i] .= '<span id="device_'.$i.'" class="hand" onclick="'.$menu.'(\''.$root.'\','.$i.')" oncontextmenu="'.$menu.'(\''.$root.'\','.$i.');return false">'.compress($dev,11,0).'</span></span>';
     }
     $i++;
@@ -141,8 +141,8 @@ $path   = unscript($_GET['path']);
 $fmt    = "%F {$display['time']}";
 $dirs   = $files = [];
 $total  = $objs = 0;
-[$null,$root,$main,$next,$rest] = my_explode('/',$dir,5);
-$user   = $root=='mnt' && in_array($main,['user','user0']);
+[$null,$root,$main,$next,$rest] = my_explode('/', $dir, 5);
+$user   = $root=='mnt' && in_array($main, ['user','user0']);
 $lock   = $root=='mnt' ? ($main ?: '---') : ($root=='boot' ? _('flash') : '---');
 $ishare = $root=='mnt' && (!$main || !$next || ($main=='rootshare' && !$rest));
 $folder = $lock=='---' ? _('DEVICE') : ($ishare ? _('SHARE') : _('FOLDER'));
@@ -154,13 +154,14 @@ if ($user ) {
 }
 
 $stat = popen("shopt -s dotglob;stat -L -c'%F|%U|%A|%s|%Y|%n' ".escapeshellarg($dir)."/* 2>/dev/null",'r');
-while (($row = fgets($stat))!==false) {
+
+while (($row = fgets($stat)) !== false) {
   [$type,$owner,$perm,$size,$time,$name] = explode('|',rtrim($row,"\n"),6);
-  $dev  = explode('/',$name,5);
-  $devs = explode(',',$user ? $set[basename($name)]??$shares[$dev[3]]['cachePool']??'' : $lock);
+  $dev  = explode('/', $name, 5);
+  $devs = explode(',', $user ? $set[basename($name)] ?? $shares[$dev[3]]['cachePool'] ?? '' : $lock);
   $objs++;
   $text = [];
-  if ($type[0]=='d') {
+  if ($type[0] == 'd') {
     $text[] = '<tr><td><i id="check_'.$objs.'" class="fa fa-fw fa-square-o" onclick="selectOne(this.id)"></i></td>';
     $text[] = '<td data=""><i class="fa fa-folder-o"></i></td>';
     $text[] = '<td><a id="name_'.$objs.'" oncontextmenu="folderContextMenu(this.id,\'right\');return false" href="/'.$path.'?dir='.rawurlencode(htmlspecialchars($name)).'">'.htmlspecialchars(basename($name)).'</a></td>';
@@ -172,8 +173,8 @@ while (($row = fgets($stat))!==false) {
     $text[] = '<td><i id="row_'.$objs.'" data="'.escapeQuote($name).'" type="d" class="fa fa-plus-square-o" onclick="folderContextMenu(this.id,\'both\')" oncontextmenu="folderContextMenu(this.id,\'both\');return false">...</i></td></tr>';
     $dirs[] = gzdeflate(implode($text));
   } else {
-    $ext = strtolower(pathinfo($name,PATHINFO_EXTENSION));
-    $tag = count($devs)>1 ? 'warning' : '';
+    $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    $tag = count($devs) > 1 ? 'warning' : '';
     $text[] = '<tr><td><i id="check_'.$objs.'" class="fa fa-fw fa-square-o" onclick="selectOne(this.id)"></i></td>';
     $text[] = '<td class="ext" data="'.$ext.'"><i class="'.icon_class($ext).'"></i></td>';
     $text[] = '<td id="name_'.$objs.'" class="'.$tag.'" onclick="fileEdit(this.id)" oncontextmenu="fileContextMenu(this.id,\'right\');return false">'.htmlspecialchars(basename($name)).'</td>';
@@ -189,6 +190,7 @@ while (($row = fgets($stat))!==false) {
 }
 
 pclose($stat);
+
 if ($link = parent_link()) echo '<tbody class="tablesorter-infoOnly"><tr><td></td><td><i class="fa fa-folder-open-o"></i></td><td>',$link,'</td><td colspan="6"></td></tr></tbody>';
 echo write($dirs),write($files),'<tfoot><tr><td></td><td></td><td colspan="7">',add($objs,'object'),': ',add($dirs,'director','y','ies'),', ',add($files,'file'),' (',my_scale($total,$unit),' ',$unit,' ',_('total'),')</td></tr></tfoot>';
 ?>

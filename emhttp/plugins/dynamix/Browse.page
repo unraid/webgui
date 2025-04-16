@@ -488,7 +488,7 @@ function doAction(action, title, id) {
           case 4: // move folder
           case 9: // move file
             // disallow mixing of disk and user shares
-            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|rootshare)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)).+$|^\/boot\/.+/);
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
             // check if 'mv' can be used
             if (path.length > 2) {
               if (user) {
@@ -520,7 +520,7 @@ function doAction(action, title, id) {
             break;
           default:
             // disallow mixing of disk and user shares
-            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|rootshare)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)).+$|^\/boot\/.+/);
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
             break;
           }
           if (!target || !valid.test(target)) {errorTarget(); return;}
@@ -558,7 +558,7 @@ function doAction(action, title, id) {
           case 4: // move folder
           case 9: // move file
             // disallow mixing of disk and user shares
-            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|rootshare)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)).+$|^\/boot\/.+/);
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
             // check if 'mv' can be used
             if (path.length > 2) {
               if (user) {
@@ -583,7 +583,7 @@ function doAction(action, title, id) {
             break;
           default:
             // disallow mixing of disk and user shares
-            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|rootshare)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)).+$|^\/boot\/.+/);
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
             break;
           }
           if (!target || !valid.test(target)) {errorTarget(); return;}
@@ -767,7 +767,7 @@ function doActions(action, title) {
             break;
           case 4: // move object
             // disallow mixing of disk and user shares
-            var valid = ud ? /\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|rootshare)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)).+$|^\/boot\/.+/);
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
             // check if 'mv' can be used
             if (path.length > 2) {
               if (user) {
@@ -801,7 +801,7 @@ function doActions(action, title) {
             break;
           default:
             // disallow mixing of disk and user shares
-            var valid = ud ? /\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|rootshare)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)).+$|^\/boot\/.+/);
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
             break;
           }
           if (!target || !valid.test(target)) {errorTarget(); return;}
@@ -839,7 +839,7 @@ function doActions(action, title) {
             break;
           case 4: // move object
             // disallow mixing of disk and user shares
-            var valid = ud ? /\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|rootshare)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)).+$|^\/boot\/.+/);
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
             // check if 'mv' can be used
             if (path.length > 2) {
               if (user) {
@@ -866,7 +866,7 @@ function doActions(action, title) {
             break;
           default:
             // disallow mixing of disk and user shares
-            var valid = ud ? /\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|rootshare)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)).+$|^\/boot\/.+/);
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
             break;
           }
           if (!target || !valid.test(target)) {errorTarget(); return;}
