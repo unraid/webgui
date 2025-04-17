@@ -23,24 +23,36 @@ function curl_socket($socket, $url, $message='') {
   if ($reply===false) my_logger("curl to $url failed", 'curl_socket');
   return $reply;
 }
-
 function publish($endpoint, $message, $len=1) {
+  static $com  = [];
+  static $lens = [];
+
   if ( is_file("/tmp/publishPaused") )
     return false;
 
-  $com = curl_init("http://localhost/pub/$endpoint?buffer_length=$len");
-  curl_setopt_array($com,[
-    CURLOPT_UNIX_SOCKET_PATH => "/var/run/nginx.socket",
-    CURLOPT_HTTPHEADER => ['Accept:text/json'],
-    CURLOPT_POST => 1,
-    CURLOPT_POSTFIELDS => $message,
-    CURLOPT_RETURNTRANSFER => 1,
-    CURLOPT_FAILONERROR => true
-  ]);
-  $reply = curl_exec($com);
-  $err = curl_error($com);
-  curl_close($com);
+  // Check for the unlikely case of a buffer length change
+  if ( (($lens[$endpoint] ?? 1) !== $len) && isset($com[$endpoint]) ) {
+    curl_close($com[$endpoint]);
+    unset($com[$endpoint]);
+  }
+  if ( !isset($com[$endpoint]) ) {
+    $lens[$endpoint] = $len;
+    $com[$endpoint] = curl_init("http://localhost/pub/$endpoint?buffer_length=$len");
+    curl_setopt_array($com[$endpoint],[
+      CURLOPT_UNIX_SOCKET_PATH => "/var/run/nginx.socket",
+      CURLOPT_HTTPHEADER       => ['Accept:text/json'],
+      CURLOPT_POST             => 1,
+      CURLOPT_RETURNTRANSFER   => 1,
+      CURLOPT_FAILONERROR      => true
+    ]);
+  }
+  curl_setopt($com[$endpoint], CURLOPT_POSTFIELDS, $message);
+  $reply = curl_exec($com[$endpoint]);
+  $err   = curl_error($com[$endpoint]);
   if ($err) {
+    curl_close($com[$endpoint]);
+    unset($com[$endpoint]);
+
     preg_match_all("/[0-9]+/",$err,$matches);
     // 500: out of shared memory when creating a channel
     // 507: out of shared memory publishing a message
