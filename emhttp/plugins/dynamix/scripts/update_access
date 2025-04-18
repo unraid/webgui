@@ -15,15 +15,8 @@ SERV=/etc/services
 [[ -z $PORTSSH ]] && PORTSSH=22
 [[ -z $USE_UPNP ]] && USE_UPNP=no
 
-# update ssh daemon listening port
+# determine ssh daemon listening port
 CURRENT=$(grep -Pom1 '^#?Port \K\d+$' $CONF)
-if [[ $PORTSSH != $CURRENT ]]; then
-  if [[ $PORTSSH == 22 ]]; then
-    sed -ri 's/^#?Port [0-9]+$/#Port 22/' $CONF
-  else
-    sed -ri "s/^#?Port [0-9]+\$/Port $PORTSSH/" $CONF
-  fi
-fi
 
 # enable/disable SSH service
 if [[ $USE_SSH == yes ]]; then
@@ -31,7 +24,7 @@ if [[ $USE_SSH == yes ]]; then
     # start non-running ssh daemon
     /etc/rc.d/rc.sshd start
   else
-    # restart when port has changed
+    # restart when port has changed, rc.sshd will update value in $CONF
     [[ $PORTSSH != $CURRENT ]] && /etc/rc.d/rc.sshd restart
   fi
 elif [[ $(pgrep --ns $$ -cf $SSHD) -gt 0 ]]; then
