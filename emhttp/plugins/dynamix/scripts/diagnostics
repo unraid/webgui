@@ -722,12 +722,6 @@ if (file_exists($wgquick)) {
   run("todos <$wgquick >".escapeshellarg($log));
 }
 
-// generate unraid-api.txt
-if (file_exists("/usr/local/sbin/unraid-api")) {
-  $log = "/$diag/system/unraid-api.txt";
-  run("unraid-api report | todos >".escapeshellarg($log));
-}
-
 // generate testparm.txt
 $testparm = run("testparm -s 2>/dev/null");
 if (!$all)
