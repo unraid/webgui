@@ -450,6 +450,9 @@ run("dmidecode -qt0 2>/dev/null|todos >>".escapeshellarg("/$diag/system/motherbo
 run("cat /proc/meminfo 2>/dev/null|todos >".escapeshellarg("/$diag/system/meminfo.txt"));
 run("dmidecode --type 17 2>/dev/null|todos >>".escapeshellarg("/$diag/system/meminfo.txt"));
 
+// mask IP addresses in lsof.txt
+maskIP("/$diag/system/lsof.txt");
+
 // create ethernet information information (suppress errors)
 foreach ($ports as $port) {
   run("ethtool ".escapeshellarg($port)." 2>/dev/null|todos >>".escapeshellarg("/$diag/system/ethtool.txt"));
