@@ -46,6 +46,58 @@ function applyCfg() {
     $("#applycfg").attr("disabled",true);
   });
 }
+function formatFullInput(input) {
+    return input
+        .split(';')
+        .filter(Boolean) // remove empty trailing entry
+        .map(entry => {
+            let [pci, status] = entry.split(',');
+            status = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+            return `${pci} _(${status})_`;
+        })
+        .join('<br>');
+}
+function formatVMS(input) {
+    return input
+        .split(';')
+        .filter(Boolean) // remove empty trailing entry
+        .join('<br>');
+}
+function ackPCI(pcidevice, action) {
+  $.post('/webGui/include/PCIUpdate.php', { action: "getvm", pciid: pcidevice }).done(function(vms) {
+    let swaltext = "";
+
+    switch(action) {
+      case 'removed':
+        swaltext = "_(Acknowledge removal of PCI Address)_: " + pcidevice + "<br>_(VMs where PCI device used)_<br>" + formatVMS(vms);
+        break;
+      case 'changed':
+        swaltext = "_(Acknowledge update of PCI Address)_: " + pcidevice + "<br>_(VMs where PCI device used)_<br>"+ formatVMS(vms);
+        break;
+      case 'added':
+        swaltext = "_(Acknowledge addition of PCI Address)_: " + pcidevice + "<br>_(VMs where PCI device used)_<br>" + formatVMS(vms);
+        break;
+      case 'all':
+        swaltext = "_(Acknowledge all PCI Address modifications)_: <br>" + formatFullInput(pcidevice) + "<br>_(VMs where PCI device used)_<br>" + formatVMS(vms);
+        break;
+    }
+
+    swal({
+      title: "Are you sure?",
+      text: swaltext,
+      type: "warning",
+      html: true,
+      showCancelButton: true
+    }, function() {
+      $.post('/webGui/include/PCIUpdate.php', { action: action, pciid: pcidevice }).done(function(d) {
+        if (d === "OK") {
+          $('#t1').load('/webGui/include/SysDevs.php', { table: 't1' });
+        }
+      });
+    });
+  });
+}
+
 </script>
 
 <?exec('ls /sys/kernel/iommu_groups/',$groups); ?>

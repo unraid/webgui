@@ -83,7 +83,7 @@ function ajaxVMDispatchWebUI(params, spin){
     }
   },'json');
 }
-function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, fstype="QEMU",consolein="web;no",usage=false,webui=""){  
+function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, fstype="QEMU",consolein="web;no",usage=false,webui="",pcierror=false){  
   var opts = [];
   var path = location.pathname;
   var x = path.indexOf("?");
@@ -172,22 +172,28 @@ function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, f
       ajaxVMDispatch({action:"domain-destroy", uuid:uuid}, "loadlist");
     }});
   } else {
-    opts.push({text:_("Start"), icon:"fa-play", action:function(e) {
-      e.preventDefault();
-      ajaxVMDispatch({action:"domain-start", uuid:uuid}, "loadlist");
-    }});
-    if (vmrcprotocol == "VNC" || vmrcprotocol == "SPICE") { 
-      if (console == "web" || console == "both")  {
-        opts.push({text:_("Start with console")+ " (" + vmrcprotocol + ")" , icon:"fa-play", action:function(e) {
-          e.preventDefault();
-          ajaxVMDispatchconsole({action:"domain-start-console", uuid:uuid, vmrcurl:vmrcurl}, "loadlist") ;  
-        }});}
-      if (console == "remote" || console == "both")  {
-        opts.push({text:_("Start with remote-viewer")+ " (" + vmrcprotocol + ")" , icon:"fa-play", action:function(e) {
-          e.preventDefault();
-          ajaxVMDispatchconsoleRV({action:"domain-start-consoleRV", uuid:uuid, vmrcurl:vmrcurl}, "loadlist") ;  
-        }});
+    if (!pcierror) {
+      opts.push({text:_("Start"), icon:"fa-play", action:function(e) {
+        e.preventDefault();
+        ajaxVMDispatch({action:"domain-start", uuid:uuid}, "loadlist");
+      }});
+      if (vmrcprotocol == "VNC" || vmrcprotocol == "SPICE") { 
+        if (console == "web" || console == "both")  {
+          opts.push({text:_("Start with console")+ " (" + vmrcprotocol + ")" , icon:"fa-play", action:function(e) {
+            e.preventDefault();
+            ajaxVMDispatchconsole({action:"domain-start-console", uuid:uuid, vmrcurl:vmrcurl}, "loadlist") ;  
+          }});}
+        if (console == "remote" || console == "both")  {
+          opts.push({text:_("Start with remote-viewer")+ " (" + vmrcprotocol + ")" , icon:"fa-play", action:function(e) {
+            e.preventDefault();
+            ajaxVMDispatchconsoleRV({action:"domain-start-consoleRV", uuid:uuid, vmrcurl:vmrcurl}, "loadlist") ;  
+          }});
+        }
       }
+    } else {
+      opts.push({text:_("Start disabled due to PCI Changes"), icon:"fa fa-minus-circle orb red-orb", action:function(e) {
+        e.preventDefault();
+      }});
     }
   }
   opts.push({divider:true});

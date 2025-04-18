@@ -416,4 +416,99 @@ function device_exists($name)
   global $disks,$devs;
   return (array_key_exists($name, $disks) && !str_contains(_var($disks[$name],'status'),'_NP')) || (array_key_exists($name, $devs));
 }
+
+// Load saved PCI data
+function loadSavedData($filename) {
+  if (file_exists($filename)) {
+    $saveddata = file_get_contents($filename);
+  } else $saveddata = "";
+  
+  return json_decode($saveddata, true);
+}
+
+// Run lspci -Dmn to get the current devices
+function loadCurrentPCIData() {
+  $output = shell_exec('lspci -Dmn');
+  $devices = [];
+
+  if (file_exists("/boot/config/current.json")){
+    $devices = loadSavedData("/boot/config/current.json");    
+  } else {
+    foreach (explode("\n", trim($output)) as $line) {
+        $parts = explode(" ", $line);
+
+        if (count($parts) < 6) continue; // Skip malformed lines
+
+        $description_str = shell_exec(("lspci -s ".$parts[0]));
+        $description = preg_replace('/^\S+\s+/', '', $description_str);
+
+        $device = [
+            'class'       => trim($parts[1], '"'),
+            'vendor_id'   => trim($parts[2], '"'),
+            'device_id'   => trim($parts[3], '"'),
+            'description' => trim($description,'"'),
+        ];
+
+        $devices[$parts[0]] = $device;
+    }
+  }
+  return $devices;
+}
+
+// Compare the saved and current data
+function comparePCIData() {
+
+    $changes = [];
+    $saved = loadSavedData("/boot/config/savedpcidata.json");
+    if (!$saved) return [];
+    $current = loadCurrentPCIData();
+  
+    // Compare saved devices with current devices
+    foreach ($saved as $pci_id => $saved_device) {
+        if (!isset($current[$pci_id])) {
+            // Device has been removed
+            $changes[$pci_id] = [
+                'status' => 'removed',
+                'device' => $saved_device
+            ];
+        } else {
+            // Device exists in both, check for modifications
+            $current_device = $current[$pci_id];
+            $differences = [];
+
+            // Compare fields
+            foreach (['vendor_id', 'device_id', 'class'] as $field) {
+                if (isset($saved_device[$field]) && isset($current_device[$field]) && $saved_device[$field] !== $current_device[$field]) {
+                    $differences[$field] = [
+                        'old' => $saved_device[$field],
+                        'new' => $current_device[$field]
+                    ];
+                }
+            }
+
+            if (!empty($differences)) {
+                $changes[$pci_id] = [
+                    'status' => 'changed',
+                    'device' => $current_device,
+                    'differences' => $differences
+                ];
+            }
+        }
+    }
+
+    // Check for added devices
+    foreach ($current as $pci_id => $current_device) {
+        if (!isset($saved[$pci_id])) {
+            // Device has been added
+            $changes[$pci_id] = [
+                'status' => 'added',
+                'device' => $current_device
+            ];
+        }
+    }
+    return $changes;
+}
+
+
+
 ?>
