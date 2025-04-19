@@ -67,7 +67,9 @@ $libvirt_log       = file_exists("/var/log/libvirt/libvirtd.log");
 <?endif;?>
 <form markdown="1" id="settingsForm" method="POST" action="/update.php" target="progressFrame">
 <input type="hidden" name="#file" value="<?=htmlspecialchars($domain_cfgfile)?>">
-<input type="hidden" name="#command" value="/plugins/dynamix.vm.manager/scripts/libvirt_update">
+<input type="hidden" name="#command" value="/plugins/dynamix/scripts/emcmd">
+<input type="hidden" name="#arg[1]" value="cmdStatus=Apply">
+<input type="hidden" id="OLD_IMAGE_FILE" name="OLD_IMAGE_FILE" value="<?=htmlspecialchars($domain_cfg['IMAGE_FILE']);?>">
 _(Enable VMs)_:
 : <select id="SERVICE" name="SERVICE">
   <?= mk_option($libvirt_service, 'disable', _('No'))?>
@@ -96,6 +98,7 @@ _(Disable Autostart/Start option for VMs)_:
 <?if ($libvirt_up):?>
 <?$libvirt_info = libvirt_version('libvirt')?>
 <?$qemu_info = $lv->get_connect_information()?>
+
 _(Libvirt version)_:
 : <?=$libvirt_info['libvirt.major'].'.'.$libvirt_info['libvirt.minor'].'.'.$libvirt_info['libvirt.release']?>
 
@@ -114,7 +117,7 @@ _(Libvirt vdisk size)_:
 :vms_libvirt_vdisk_size_help:
 
 _(Libvirt storage location)_:
-: <input type="text" id="IMAGE_FILE" name="IMAGE_FILE" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars($domain_cfg['IMAGE_FILE']);?>" placeholder="e.g. /mnt/user/system/libvirt/libvirt.img" data-pickcloseonfile="true" data-pickfilter="img" data-pickroot="/mnt" data-pickfolders="true" required pattern="^[^\\]*libvirt\.img$">
+: <input type="text" id="IMAGE_FILE" name="IMAGE_FILE" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars($domain_cfg['IMAGE_FILE']);?>" placeholder="e.g. /mnt/user/system/libvirt/libvirt.img" data-pickcloseonfile="true" data-pickfilter="img" data-pickroot="/mnt" data-pickfolders="true" >
  <?if (file_exists($domain_cfg['IMAGE_FILE'])):?><span id="deletePanel"><label><input type="checkbox" id="deleteCheckbox" /> _(Delete Image File)_</label></span><?endif;?>
  <?if (!$started):?><span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
  <?elseif (!is_dir(dirname($domain_cfg['IMAGE_FILE']))):?><span><i class="fa fa-warning icon warning"></i> _(Path does not exist)_</span>
@@ -230,7 +233,7 @@ _(VFIO allow unsafe interrupts)_:
 
 <?endif;?>
 
-<?if ($libvirt_up && trim(shell_exec('stat -c %T -f /etc/libvirt'))=='btrfs'):?>
+<?if ($libvirt_up && trim(shell_exec('stat -c %T -f /etc/libvirt'))=='btrfs' && strpos($domain_cfg['IMAGE_FILE'],".img")) :?>
 <div class="advanced" markdown="1">
 <div class="title"><span class="left"><i class="title fa fa-list"></i>_(Libvirt volume info)_</span></div>
 _(btrfs filesystem show)_:
