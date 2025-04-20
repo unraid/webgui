@@ -123,7 +123,7 @@ _(Libvirt vdisk size)_:
 :vms_libvirt_vdisk_size_help:
 
 _(Libvirt storage location)_:
-: <input type="text" id="IMAGE_FILE" name="IMAGE_FILE" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars($domain_cfg['IMAGE_FILE']);?>" placeholder="e.g. /mnt/user/system/libvirt/libvirt.img" data-pickcloseonfile="true" data-pickfilter="img" data-pickroot="/mnt" data-pickfolders="true" >
+: <input type="text" id="IMAGE_FILE" name="IMAGE_FILE" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars($domain_cfg['IMAGE_FILE']);?>" placeholder="e.g. /mnt/user/system/libvirt/" data-pickcloseonfile="true" data-pickfilter="img" data-pickroot="/mnt" data-pickfolders="true" >
  <?if (file_exists($domain_cfg['IMAGE_FILE'])):?><span id="deletePanel"><label><input type="checkbox" id="deleteCheckbox" /> _(Delete Image File)_</label></span><?endif;?>
  <?if (!$started):?><span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
  <?elseif (!is_dir(dirname($domain_cfg['IMAGE_FILE']))):?><span><i class="fa fa-warning icon warning"></i> _(Path does not exist)_</span>
@@ -132,9 +132,8 @@ _(Libvirt storage location)_:
 :vms_libvirt_location_help:
 
 _(Libvirt secondary storage location)_:
-: <input type="text" id="IMAGE_FILE_SECONDARY" name="IMAGE_FILE_SECONDARY" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars($domain_cfg['IMAGE_FILE_SECONDARY']);?>" placeholder="e.g. /mnt/user/system/libvirt/libvirt.img" data-pickcloseonfile="true" data-pickfilter="img" data-pickroot="/mnt" data-pickfolders="true" >
+: <input type="text" id="IMAGE_FILE_SECONDARY" name="IMAGE_FILE_SECONDARY" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars($domain_cfg['IMAGE_FILE_SECONDARY']);?>" placeholder="e.g. /mnt/user/system/libvirt/" data-pickcloseonfile="true" data-pickfilter="img" data-pickroot="/mnt" data-pickfolders="true" >
  <?if (!$started):?><span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
- <?elseif (!is_dir(dirname($domain_cfg['IMAGE_FILE_SECONDARY']))):?><span><i class="fa fa-warning icon warning"></i> _(Path does not exist)_</span>
  <?endif;?><span id="IMAGE_ERROR_SECONDARY" class="errortext"></span>
 
 :vms_libvirt_secondary_location_help:
