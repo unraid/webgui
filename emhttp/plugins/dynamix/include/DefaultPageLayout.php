@@ -31,6 +31,41 @@ $fgcolor = in_array($theme,['white','azure']) ? '#1c1c1c' : '#f2f2f2';
 exec("sed -ri 's/^\.logLine\{color:#......;/.logLine{color:$fgcolor;/' $docroot/plugins/dynamix.docker.manager/log.htm >/dev/null &");
 
 function annotate($text) {echo "\n<!--\n",str_repeat("#",strlen($text)),"\n$text\n",str_repeat("#",strlen($text)),"\n-->\n";}
+
+/**----------------------------------------------
+ *           GUI Mode Session Fix (Hack)
+ *
+ *  Abuses the fact that pages are only accessible
+ *  with a valid session to "fix" and persist a
+ *  corrupt session upon page load.
+ * 
+ *  Since nginx ensures this behavior, the code
+ *  below should not introduce new authentication
+ *  or security vulnerabilities (e.g. localhost
+ *  spoofing attacks).
+ *
+ *  Currently, session corruption only occurs when
+ *  booting into and accessing the webgui from GUI
+ *  mode.
+ *---------------------------------------------**/
+function is_localhost() {
+  $server_name = strtok($_SERVER['HTTP_HOST'], ":");
+  return $server_name == 'localhost' || $server_name == '127.0.0.1';
+}
+
+function is_good_session() {
+  return isset($_SESSION) && isset($_SESSION['unraid_user']) && isset($_SESSION['unraid_login']);
+}
+
+if (is_localhost() && !is_good_session()) {
+  session_start();
+  $_SESSION['unraid_login'] = time();
+  $_SESSION['unraid_user'] = 'root';
+  session_write_close();
+  // This situation should only be possible when booting into GUI mode
+  my_logger("Page accessed without session; created session for root user.");
+}
+// End of GUI Mode Session Fix (Hack)
 ?>
 <!DOCTYPE html>
 <html <?=$display['rtl']?>lang="<?=strtok($locale,'_')?:'en'?>" class="<?= $themeHtmlClass ?>">
