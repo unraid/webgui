@@ -91,69 +91,78 @@ function initDropdown() {
 </form>
 <?
 $fields = ['Event','Subject','Timestamp','Description','Importance','Content','Link'];
-$xml_file = "webGui/include/NotificationAgents.xml";
-$xml = @simplexml_load_file($xml_file) or die(_("Failed to open")." $xml_file");
+$xml_files = glob("/usr/local/emhttp/plugins/dynamix/agents/*.xml");
 $i = 1;
-foreach ($xml->Agent as $agent) {
-  $name = str_replace(' ','_',$agent->Name);
-  $enabledAgent = agent_fullname("$name.sh", "enabled");
-  $disabledAgent = agent_fullname("$name.sh", "disabled");
-  if (is_file($disabledAgent)) {
-    $file = $disabledAgent;
-    if (is_file($enabledAgent)) unlink($enabledAgent);
-  } else {
-    $file = $enabledAgent;
-  }
-  $values = [];
-  $script = "";
-  if (is_file($file)) {
-    preg_match("/[#]{6,100}([^#]*?)[#]{6,100}/si", file_get_contents($file), $match);
-    if (isset($match[1])) {
-      foreach (explode(PHP_EOL, $match[1]) as $line) {
-        if (strpos($line, "=")) {
-          [$k, $v] = my_explode("=",str_replace("\"", "", $line),2);
-          $values[$k] = $v;
+foreach ($xml_files as $xml_file) {
+  $xml = @simplexml_load_file($xml_file);
+  if ( ! $xml ) continue;
+
+    if ( isset($xml->Language) ) {
+      $guiLanguage = ($locale == "" ) ? "en_US" : $locale;
+      $acceptedLanguages = explode(" ",$xml->Language);
+      if ( ! in_array($guiLanguage,$acceptedLanguages) )
+        continue;
+    }
+    $name = str_replace(' ','_',$xml->Name);
+    $enabledAgent = agent_fullname("$name.sh", "enabled");
+    $disabledAgent = agent_fullname("$name.sh", "disabled");
+    if (is_file($disabledAgent)) {
+      $file = $disabledAgent;
+      if (is_file($enabledAgent)) unlink($enabledAgent);
+    } else {
+      $file = $enabledAgent;
+    }
+    $values = [];
+    $script = "";
+    if (is_file($file)) {
+      preg_match("/[#]{6,100}([^#]*?)[#]{6,100}/si", file_get_contents($file), $match);
+      if (isset($match[1])) {
+        foreach (explode(PHP_EOL, $match[1]) as $line) {
+          if (strpos($line, "=")) {
+            [$k, $v] = my_explode("=",str_replace("\"", "", $line),2);
+            $values[$k] = $v;
+          }
         }
       }
     }
-  }
-  foreach (explode(PHP_EOL,(String) $agent->Script) as $line) if (trim($line)) $script .= trim($line)."{1}";
-  echo '<div class="title shift"><span class="left"><img src="/plugins/dynamix/icons/'.strtolower(str_replace('_','',$name)).'.png" class="icon" style="height:16px;width:16px;">'.str_replace('_',' ',$name).'</span><span class="status vhshift">'.(is_file($enabledAgent) ? '<span class="green">'._("Enabled").'</span>' : '<span class="red">'._("Disabled").'</span>').'</span></div>';
-  echo '<form method="POST" name="'.$name.'" action="/update.php" target="progressFrame">';
-  echo '<input type="hidden" name="#include" value="/webGui/include/update.file.php">';
-  echo '<input type="hidden" name="#file" value="'.$file.'">';
-  echo '<input type="hidden" name="#command" value="/webGui/scripts/agent">';
-  echo '<input type="hidden" name="#arg[1]" value="">';
-  echo '<input type="hidden" name="#arg[2]" value="">';
-  echo '<input type="hidden" name="text" value="">';
-  echo '<dl><dt>'._("Agent function").':</dt><dd><select name="Enabled">';
-  echo mk_option(is_file($disabledAgent), 'no', _('Disabled'));
-  echo mk_option(is_file($enabledAgent), 'yes', _('Enabled'));
-  echo '</select></dd></dl>';
-  echo '<script>scripts["'.$name.'"]='.json_encode($script).';enabledAgents["'.$name.'"]="'.$enabledAgent.'";disabledAgents["'.$name.'"]="'.$disabledAgent.'";</script>';
-  foreach ($agent->Variables->children() as $v) {
-    $vName = preg_replace('#\[([^\]]*)\]#', '<$1>', (string) $v);
-    $vDesc = ucfirst(strtolower(preg_replace('#\[([^\]]*)\]#', '<$1>', $v->attributes()->Desc)));
-    $vDefault = preg_replace('#\[([^\]]*)\]#', '<$1>', $v->attributes()->Default);
-    $vHelp = preg_replace('#\[([^\]]*)\]#', '<$1>', $v->attributes()->Help);
-    echo "<dl><dt>$vDesc:</dt><dd>";
-    if (preg_match('/title|message/', $vDesc)) {
-      echo '<select id="slot_'.$i++.'" name="'.$vName.'" multiple style="display:none">';
-      $value = str_replace('\n',',',isset($values[$vName]) ? $values[$vName] : $vDefault);
-      foreach ($fields as $field) echo mk_option_check($value,'$'.strtoupper($field),_($field));
-      echo '</select>';
-    } else {
-      echo '<input type="text" name="'.$vName.'" class="variable" required value="'.( isset($values[$vName]) ? $values[$vName] : $vDefault ).'">';
+    foreach (explode(PHP_EOL,(String) $xml->Script) as $line) if (trim($line)) $script .= trim($line)."{1}";
+    echo '<div class="title shift"><span class="left"><img src="/plugins/dynamix/icons/'.strtolower(str_replace('_','',$name)).'.png" class="icon" style="height:16px;width:16px;">'.str_replace('_',' ',$name).'</span><span class="status vhshift">'.(is_file($enabledAgent) ? '<span class="green">'._("Enabled").'</span>' : '<span class="red">'._("Disabled").'</span>').'</span></div>';
+    echo '<form method="POST" name="'.$name.'" action="/update.php" target="progressFrame">';
+    echo '<input type="hidden" name="#include" value="/webGui/include/update.file.php">';
+    echo '<input type="hidden" name="#file" value="'.$file.'">';
+    echo '<input type="hidden" name="#command" value="/webGui/scripts/agent">';
+    echo '<input type="hidden" name="#arg[1]" value="">';
+    echo '<input type="hidden" name="#arg[2]" value="">';
+    echo '<input type="hidden" name="text" value="">';
+    echo '<dl><dt>'._("Agent function").':</dt><dd><select name="Enabled">';
+    echo mk_option(is_file($disabledAgent), 'no', _('Disabled'));
+    echo mk_option(is_file($enabledAgent), 'yes', _('Enabled'));
+    echo '</select></dd></dl>';
+    echo '<script>scripts["'.$name.'"]='.json_encode($script).';enabledAgents["'.$name.'"]="'.$enabledAgent.'";disabledAgents["'.$name.'"]="'.$disabledAgent.'";</script>';
+    foreach ($xml->Variables->children() as $v) {
+      $vName = preg_replace('#\[([^\]]*)\]#', '<$1>', (string) $v);
+      $vDesc = ucfirst(strtolower(preg_replace('#\[([^\]]*)\]#', '<$1>', $v->attributes()->Desc)));
+      $vDefault = preg_replace('#\[([^\]]*)\]#', '<$1>', $v->attributes()->Default);
+      $vHelp = preg_replace('#\[([^\]]*)\]#', '<$1>', $v->attributes()->Help);
+      echo "<dl><dt>$vDesc:</dt><dd>";
+      if (preg_match('/title|message/', $vDesc)) {
+        echo '<select id="slot_'.$i++.'" name="'.$vName.'" multiple style="display:none">';
+        $value = str_replace('\n',',',isset($values[$vName]) ? $values[$vName] : $vDefault);
+        foreach ($fields as $field) echo mk_option_check($value,'$'.strtoupper($field),_($field));
+        echo '</select>';
+      } else {
+        echo '<input type="text" name="'.$vName.'" class="variable" required value="'.( isset($values[$vName]) ? $values[$vName] : $vDefault ).'">';
+      }
+      echo '</dd></dl>';
+      if ($vHelp) echo '<blockquote class="inline_help">'.$vHelp.'</blockquote>';
     }
-    echo '</dd></dl>';
-    if ($vHelp) echo '<blockquote class="inline_help">'.$vHelp.'</blockquote>';
-  }
-  echo '<dl><dt>&nbsp;</dt><dd><input type="submit" value='._("Apply").' onclick="prepareService(this, \''.$name.'\')" disabled>';
-  echo '<input type="button" value='._("Done").' onclick="done()">';
-  if (is_file($file)) {
-    echo '<input type="button" value='._("Delete").' onclick="execCmd(\'delete\',\''.$name.'\')">';
-    echo '<input type="button" value='._("Test").' onclick="testService(\''.$name.'\')"'.($file==$enabledAgent ? '>' : ' disabled>');
-  }
-  echo '</dd></dl></form><div style="min-height:50px;"></div>';
+    echo '<dl><dt>&nbsp;</dt><dd><input type="submit" value='._("Apply").' onclick="prepareService(this, \''.$name.'\')" disabled>';
+    echo '<input type="button" value='._("Done").' onclick="done()">';
+    if (is_file($file)) {
+      echo '<input type="button" value='._("Delete").' onclick="execCmd(\'delete\',\''.$name.'\')">';
+      echo '<input type="button" value='._("Test").' onclick="testService(\''.$name.'\')"'.($file==$enabledAgent ? '>' : ' disabled>');
+    }
+    echo '</dd></dl></form><div style="min-height:50px;"></div>';
+  
 }
 ?>

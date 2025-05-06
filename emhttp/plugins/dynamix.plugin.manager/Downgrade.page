@@ -13,37 +13,18 @@ Tag="upload"
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  */
-require_once "$docroot/plugins/dynamix.my.servers/include/reboot-details.php";
-// Create an instance of the RebootDetails class
-$rebootDetails = new RebootDetails();
 /**
  * @note icon-update is rotated via CSS in myservers1.php
- *
- * If /boot/previous/bzroot exists, then the user has the option to downgrade to the previous version.
- * Parse the text file /boot/previous/changes.txt to get the version number of the previous version.
- * Then we move some files around and reboot.
  */
-$restoreVersion = $restoreBranch = $restoreVersionReleaseDate = 'unknown';
-$restoreExists = file_exists('/boot/previous/bzroot');
-$restoreChangelogPath = '/boot/previous/changes.txt';
+require_once "$docroot/plugins/dynamix/include/ReplaceKey.php";
+$replaceKey = new ReplaceKey();
+$replaceKey->check();
+
+require_once "$docroot/plugins/dynamix.my.servers/include/reboot-details.php";
+$rebootDetails = new RebootDetails();
+$rebootDetails->setPrevious();
 
 $serverNameEscaped = htmlspecialchars(str_replace(' ', '_', strtolower($var['NAME'])));
-
-if (file_exists($restoreChangelogPath)) {
-  exec("head -n4 $restoreChangelogPath", $rows);
-  foreach ($rows as $row) {
-    $i = stripos($row,'version');
-    if ($i !== false) {
-      [$restoreVersion, $restoreVersionReleaseDate] = explode(' ', trim(substr($row, $i+7)));
-      break;
-    }
-  }
-  $restoreBranch = strpos($restoreVersion, 'rc') !== false
-    ? _('Next')
-    : (strpos($restoreVersion, 'beta') !== false
-      ? _('Beta')
-      : _('Stable'));
-}
 ?>
 
 <script>
@@ -139,7 +120,7 @@ function startDowngrade() {
   $.get(
     '/plugins/dynamix.plugin.manager/include/Downgrade.php',
     {
-      version: '<?=$restoreVersion?>',
+      version: '<?= $rebootDetails->previousVersion ?>',
     },
     function() {
       refresh();
@@ -150,7 +131,7 @@ function startDowngrade() {
 function confirmDowngrade() {
   swal({
     title: "_(Confirm Downgrade)_",
-    text: "<?= $restoreVersion ?><br>_(A reboot will be required)_",
+    text: "<?= $rebootDetails->previousVersion ?><br>_(A reboot will be required)_",
     html: true,
     type: 'warning',
     showCancelButton: true,
@@ -167,7 +148,7 @@ function confirmDowngrade() {
 
 <unraid-i18n-host>
   <unraid-downgrade-os
-    reboot-version="<?= $rebootDetails->getRebootVersion() ?>"
-    restore-version="<?= $restoreExists && $restoreVersion != 'unknown' ? $restoreVersion : '' ?>"
-    restore-release-date="<?= $restoreExists && $restoreVersionReleaseDate != 'unknown' ? $restoreVersionReleaseDate : '' ?>"></unraid-downgrade-os>
+    reboot-version="<?= $rebootDetails->rebootVersion ?>"
+    restore-version="<?= $rebootDetails->previousVersion ?>"
+    restore-release-date="<?= $rebootDetails->previousReleaseDate ?>"></unraid-downgrade-os>
 </unraid-i18n-host>

@@ -177,7 +177,11 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
             if (!$os) $updates++;
           } else {
             //status is considered outdated when older than 1 day
-            $status = filectime($filename) > (time()-86400) ? "<span class='green-text'><i class='fa fa-check fa-fw'></i>&nbsp;"._('up-to-date')."</span>" : "<span class='orange-text'><i class='fa fa-flash fa-fw'></i>&nbsp;"._('need check')."</span>";
+            if (file_exists($filename)) {
+              $status = filectime($filename) > (time()-86400) ? "<span class='green-text'><i class='fa fa-check fa-fw'></i>&nbsp;"._('up-to-date')."</span>" : "<span class='orange-text'><i class='fa fa-flash fa-fw'></i>&nbsp;"._('need check')."</span>";
+            } else {
+              $status = "<span class='red-text'><i class='fa fa-exclamation-triangle fa-fw'></i>&nbsp;"._('cannot check')."</span>";
+            }
           }
         }
       }

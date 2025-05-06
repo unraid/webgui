@@ -18,6 +18,7 @@ $log      = '/boot/config/parity-checks.log';
 $stamps   = '/var/tmp/stamps.ini';
 $resync   = '/var/tmp/resync.ini';
 $md5_old  = $spot_old = $fs_old = $proc_old = -1;
+$remove_resync_files = 0;
 
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/publish.php";
@@ -69,65 +70,99 @@ function create_file($file,...$data) {
 }
 
 while (true) {
-  $var = (array)@parse_ini_file("$varroot/var.ini");
-  // check for language changes
-  extract(parse_plugin_cfg('dynamix',true));
-  if (_var($display,'locale') != $locale_init) {
-    $locale_init = _var($display,'locale');
-    update_translation($locale_init);
-  }
-  $synced = create_sync($stamps);
-  $sbSynced = array_shift($synced) ?: _var($var,'sbSynced',0);
-  $echo = [];
-  $spot = _var($var,'mdResyncPos',0);
-  if ($spot>0) {
-    [$size,$delta,$bytes] = [_var($var,'mdResyncSize',0),_var($var,'mdResyncDt',0),_var($var,'mdResyncDb',0)];
-    create_file($resync,_var($var,'mdResyncAction'),$size);
-    $echo[] = my_scale($size*1024,$unit,-1)." $unit";
-    $echo[] = _(my_clock(floor((time()-$sbSynced)/60)),2).($delta ? '' : ' ('._('paused').')');
-    $echo[] = my_scale($spot*1024,$unit)." $unit (".number_format($spot/($size/100+1),1,$dot,'')." %)";
-    $echo[] = $delta ? my_scale($bytes*1024/$delta,$unit, 1)." $unit/sec" : '---';
-    $echo[] = $bytes ? _(my_clock(round(((($delta*(($size-$spot)/($bytes/100+1)))/100)/60),0)),2) : _('Unknown');
-    $echo[] = $var['sbSyncErrs'];
-  } elseif (_var($var,'sbSynced') && _var($var,'sbSynced2')) {
-    $timestamp = str_replace(['.0','.'],['  ',' '],date('Y.M.d H:i:s',$var['sbSynced2']));
-    if (new_parity_log($timestamp)) {
-      $idle = []; while (count($synced)>1) $idle[] = array_pop($synced)-array_pop($synced);
-      [$action,$size] = file_exists($resync) ? my_explode(',',file_get_contents($resync)) : [_var($var,'mdResyncAction'),_var($var,'mdResyncSize',0)];
-      $duration = $var['sbSynced2']-$sbSynced-array_sum($idle);
-      $status   = _var($var,'sbSyncExit');
-      $speed    = $status==0 ? round($size*1024/$duration) : 0;
-      $error    = _var($var,'sbSyncErrs',0);
-      file_put_contents($log,"$timestamp|$duration|$speed|$status|$error|$action|$size\n",FILE_APPEND);
-    }
-    delete_file($stamps,$resync);
-  }
-  if (_var($var,'fsState')=='Copying') $fsState = _var($var,'fsCopyPrcnt')."% "._('completed');
-  elseif ($var['fsState']=='Clearing') $fsState = _var($var,'fsClearPrcnt')."% "._('completed');
-  elseif (substr(_var($var,'fsState'),-3)!='ing') $fsState = 'stop';
-  else $fsState = '';
+	$var = (array)@parse_ini_file("$varroot/var.ini");
 
-  if (_var($var,'fsState')!="Started") $process = -1;
-  elseif ($spot>0 && $bytes>0) $process = 1;
-  elseif (file_exists('/var/run/mover.pid')) $process = 2;
-  elseif (exec('ps -C btrfs -o cmd=|grep -cv show')>0) $process = 3;
-  elseif (exec("zpool status|grep -c 'scrub in progress'")>0) $process = 4;
-  else $process = 0;
+	/* Check for language changes */
+	extract(parse_plugin_cfg('dynamix', true));
+	if (_var($display, 'locale') != $locale_init) {
+		$locale_init = _var($display, 'locale');
+		update_translation($locale_init);
+	}
 
-  $echo = json_encode($echo);
-  $md5_new = md5($echo,true);
-  if ($md5_new !== $md5_old) {
-    $md5_old = publish('parity',$echo)!==false ? $md5_new : -1;
-  }
-  if ($spot !== $spot_old) {
-    $spot_old = publish('paritymonitor',$spot>0 ? 1 : 0)!==false ? $spot : -1;
-  }
-  if ($fsState !== $fs_old) {
-    $fs_old = publish('fsState',$fsState)!==false ? $fsState : -1;
-  }
-  if ($process !== $proc_old) {
-    $proc_old = publish('mymonitor',$process)!==false ? $process : -1;
-  }
-  sleep(1);
+	$synced = create_sync($stamps);
+	$sbSynced = array_shift($synced) ?: _var($var, 'sbSynced', 0);
+	$echo = [];
+	$spot = _var($var, 'mdResyncPos', 0);
+
+	if ($spot > 0) {
+		$size = _var($var, 'mdResyncSize', 0);
+		$delta = _var($var, 'mdResyncDt', 0);
+		$bytes = _var($var, 'mdResyncDb', 0);
+
+		create_file($resync, _var($var, 'mdResyncAction'), $size);
+
+		$echo[] = my_scale($size * 1024, $unit, -1) . " $unit";
+		$echo[] = _(my_clock(floor((time() - $sbSynced) / 60)), 2) . ($delta ? '' : ' (' . _('paused') . ')');
+		$echo[] = my_scale($spot * 1024, $unit) . " $unit (" . number_format($spot / ($size / 100 + 1), 1, $dot, '') . " %)";
+		$echo[] = $delta ? my_scale($bytes * 1024 / $delta, $unit, 1) . " $unit/sec" : '---';
+		$echo[] = $bytes ? _(my_clock(round(((($delta * (($size - $spot) / ($bytes / 100 + 1))) / 100) / 60), 0)), 2) : _('Unknown');
+		$echo[] = $var['sbSyncErrs'];
+	} elseif (_var($var, 'sbSynced') && _var($var, 'sbSynced2')) {
+		$timestamp = str_replace(['.0', '.'], ['  ', ' '], date('Y.M.d H:i:s', $var['sbSynced2']));
+
+		if (new_parity_log($timestamp)) {
+			/* Get the results from the latest parity check. */
+			list($duration, $speed, $status, $error, $action, $size) = last_parity_check();
+
+			/* Save the result in the parity history log. */
+			file_put_contents($log, "$timestamp|$duration|$speed|$status|$error|$action|$size\n", FILE_APPEND);
+
+			/* Remove the resync files after the history file has been updated. */
+			$remove_resync_files = 1;
+
+			/* Parity check is completed. */
+			$echo = "";
+		} elseif ($remove_resync_files >= 3) {
+			delete_file($stamps, $resync);
+
+			$remove_resync_files = 0;
+		} elseif ($remove_resync_files != 0) {
+			$remove_resync_files++;
+		}
+	}
+
+	/* Handle fsState changes */
+	if (_var($var, 'fsState') == 'Copying') {
+		$fsState = _var($var, 'fsCopyPrcnt') . "% " . _('completed');
+	} elseif (_var($var, 'fsState') == 'Clearing') {
+		$fsState = _var($var, 'fsClearPrcnt') . "% " . _('completed');
+	} elseif (substr(_var($var, 'fsState'), -3) != 'ing') {
+		$fsState = 'stop';
+	} else {
+		$fsState = '';
+	}
+
+	/* Determine process state */
+	if (_var($var, 'fsState') != "Started") {
+		$process = -1;
+	} elseif ($spot > 0 && $bytes > 0) {
+		$process = 1;
+	} elseif (_var($var, 'shareMoverActive') == "yes") {
+		$process = 2;
+	} elseif (exec('ps -C btrfs -o cmd=|grep -cv show') > 0) {
+		$process = 3;
+	} elseif (exec("zpool status 2>/dev/null | grep -c 'scrub in progress'") > 0) {
+		$process = 4;
+	} else {
+		$process = 0;
+	}
+
+	/* Publish changes */
+	$echo = json_encode($echo);
+	$md5_new = md5($echo, true);
+	if ($md5_new !== $md5_old) {
+		$md5_old = publish('parity', $echo) !== false ? $md5_new : -1;
+	}
+	if ($spot !== $spot_old) {
+		$spot_old = publish('paritymonitor', $spot > 0 ? 1 : 0) !== false ? $spot : -1;
+	}
+	if ($fsState !== $fs_old) {
+		$fs_old = publish('fsState', $fsState) !== false ? $fsState : -1;
+	}
+	if ($process !== $proc_old) {
+		$proc_old = publish('mymonitor', $process) !== false ? $process : -1;
+	}
+
+	sleep(3);
 }
 ?>

@@ -32,27 +32,38 @@ _(Server name)_:
 :id_server_name_help:
 
 _(Description)_:
-: <input type="text" name="COMMENT" value="<?=htmlspecialchars(_var($var,'COMMENT'))?>" <?=$disabled?>>
+: <input type="text" name="COMMENT" id="COMMENT" value="<?=htmlspecialchars(_var($var,'COMMENT'))?>" <?=$disabled?>>
 
 :id_description_help:
 
 _(Model)_:
-: <input type="text" name="SYS_MODEL" value="<?=htmlspecialchars(_var($var,'SYS_MODEL'))?>" <?=$disabled?>>
+: <input type="text" name="SYS_MODEL" id="SYS_MODEL" value="<?=htmlspecialchars(_var($var,'SYS_MODEL'))?>" <?=$disabled?>>
 
 :id_model_help:
 
 &nbsp;
 : <input type="submit" name="changeNames" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()"><?if ($disabled):?>*_(Array must be **Stopped** to change)_*<?endif;?>
 </form>
+
 <script>
 $("#NAME").keypress(function(event) {
   return event.key.match(/[A-Za-z0-9\-\.]/)!==null;
 });
+
 $("#NAME").on("input change", function() {
   if ($(this).val().match(/<?=$name_regex;?>/) === null) {
     $('#name_warning').fadeIn('fast');
   } else {
     $('#name_warning').fadeOut('fast');
   }
+});
+
+/* Sanitize the COMMENT and SYS_MODEL fields on form submission */
+document.forms['NameSettings'].addEventListener('submit', function(event) {
+	const commentField = document.getElementById('COMMENT');
+	commentField.value = commentField.value.replace(/["\\]/g, '');
+
+	const sysModelField = document.getElementById('SYS_MODEL');
+	sysModelField.value = sysModelField.value.replace(/["\\]/g, '');
 });
 </script>

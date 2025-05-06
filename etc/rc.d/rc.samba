@@ -34,7 +34,15 @@ PRIVATE="/var/lib/samba/private"
 
 samba_running(){
   sleep 0.1
-  [[ $(pgrep -cf $SMBD) -gt 0 ]]
+  [[ $(pgrep --ns $$ -cf $SMBD) -gt 0 ]]
+}
+
+samba_waitfor_shutdown(){
+  local i
+  for i in {1..5}; do
+    if ! samba_running; then break; fi
+    sleep 1
+  done
 }
 
 samba_settings(){
@@ -65,6 +73,7 @@ samba_settings(){
     else
       echo "local master = No" >>$CONF
     fi
+    echo "nmbd bind explicit broadcast = no" >> $CONF
   else
     echo "disable netbios = yes" >>$CONF
     echo "server min protocol = SMB2" >>$CONF
@@ -145,10 +154,28 @@ samba_stop(){
   if ! samba_running; then
     REPLY="Already stopped"
   else
-    run killall smbd nmbd wsdd2 winbindd
-    # save samba 'secrets' file
-    [[ -e $PRIVATE/secrets.tdb ]] && cp -f $PRIVATE/secrets.tdb $BOOT
-    if ! samba_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+    REPLY="Stopped"
+    # stop gracefully with SIGTERM
+    run killall --ns $$ smbd nmbd wsdd2 winbindd
+    samba_waitfor_shutdown
+    if samba_running; then
+      REPLY="Killed"
+      # stop forcibly with SIGKILL
+      run killall --ns $$ -SIGKILL smbd nmbd wsdd2 winbindd
+      samba_waitfor_shutdown
+    fi
+    if ! samba_running; then
+      # save samba 'secrets' file if changed
+      if [[ -e $PRIVATE/secrets.tdb ]]; then
+        rm -f /tmp/emhttp/secrets.tdb
+        tdbdump $PRIVATE/secrets.tdb | tdbrestore /tmp/emhttp/secrets.tdb
+        if ! cmp -s /tmp/emhttp/secrets.tdb $BOOT/secrets.tdb ; then
+          cp -f /tmp/emhttp/secrets.tdb $BOOT
+        fi
+      fi
+    else
+      REPLY="Failed"
+    fi
   fi
   log "$DAEMON...  $REPLY."
 }
@@ -156,25 +183,27 @@ samba_stop(){
 samba_restart(){
   log "Restarting $DAEMON..."
   samba_stop
-  sleep 2
   samba_start
 }
 
-samba_reload(){
-  killall smbd nmbd wsdd2 winbindd 2>/dev/null
-  # update settings
-  samba_settings
-  # restart services
-  $SMBD -D 2>/dev/null
-  [[ $USE_NETBIOS == yes ]] && $NMBD -D 2>/dev/null
-  [[ $USE_WSD == yes ]] && $WSDD2 -d ${WSD2_OPT## } 2>/dev/null
-  $WINBINDD -D 2>/dev/null
+samba_update(){
+  if samba_running && check && [[ "$(this interfaces)" != "$BIND" ]]; then
+    log "Updating $DAEMON..."
+    samba_restart # note we need restart here, not reload in order to update interfaces
+    return 0
+  fi
 }
 
-samba_update(){
-  # 0 = update needed, 1 = no action
-  if ! samba_running; then exit 1; fi
-  if check && [[ "$(this interfaces)" == "$BIND" ]]; then exit 1; else exit 0; fi
+samba_reload(){
+  if ! samba_update ; then
+    log "Reloading $DAEMON..."
+    killall --ns $$ wsdd2 2>/dev/null
+    # update settings
+    samba_settings
+    # reload services with smbcontrol
+    smbcontrol all reload-config 2>/dev/null
+    [[ $USE_WSD == yes ]] && $WSDD2 -d ${WSD2_OPT## } 2>/dev/null
+  fi
 }
 
 samba_status(){

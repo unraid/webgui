@@ -1,0 +1,47 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$docroot = $_SERVER['DOCUMENT_ROOT'] ?: "/usr/local/emhttp";
+require_once "$docroot/plugins/dynamix/include/Wrappers.php";
+
+$arg   = $argv[1] ?? '';
+$state = $arg ? 'saved' : 'active';
+$ini   = '/var/local/emhttp/wireless.ini';
+$cfg   = '/boot/config/wireless.cfg';
+$wifi  = is_file($cfg) ? (array)parse_ini_file($cfg,true) : [];
+$port  = array_key_first($wifi);
+$text  = ["PORT=\"$port\""];
+
+if ($arg == 'yes') {
+  exec("/etc/rc.d/rc.wireless start &>/dev/null &");
+} elseif ($arg == 'no') {
+  exec("/etc/rc.d/rc.wireless stop");
+  exec("$docroot/webGui/scripts/update_services");
+} elseif (($wifi['wlan0']['WIFI']??'') == 'yes') {
+  foreach ($wifi as $network => $block) {
+    if ($network == $port) continue;
+    if (($block['GROUP']??'') == $state && (!$arg || $arg == $network)) {
+      $text[] = "SSID=\"$network\"";
+      unset($block['GROUP']);
+      foreach ($block as $key => $value) $text[] = "$key=\"$value\"";
+    }
+  }
+  if (count($text)>2) {
+    if (file_exists($ini)) exec("/etc/rc.d/rc.wireless stop");
+    file_put_contents_atomic($ini,implode("\n",$text)."\n");
+    exec("/etc/rc.d/rc.wireless join &>/dev/null &");
+    exec("$docroot/webGui/scripts/update_services 20");
+  }
+}
+?>

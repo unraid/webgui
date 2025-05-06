@@ -1,7 +1,7 @@
 Menu="Device:2 New:2"
 Title="Self-Test"
 Tag="wrench"
-Cond="strpos(_var($disks[$name],'status'),'_NP')===false"
+Cond="array_key_exists($name, $disks) || array_key_exists($name, $devs)"
 ---
 <?PHP
 /* Copyright 2005-2023, Lime Technology

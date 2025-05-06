@@ -1,0 +1,45 @@
+#!/bin/bash
+# Usage:
+# apply|nfs_version|nfs_count
+#
+
+apply() {
+  echo "RPC_NFSD_VERS=\"$RPC_NFSD_VERS\"" > $CONFIG_RAM
+  echo "RPC_NFSD_COUNT=\"$RPC_NFSD_COUNT\"" >> $CONFIG_RAM
+  if /etc/rc.d/rc.nfsd status >/dev/null ; then
+    /etc/rc.d/rc.nfsd restart
+  fi
+}
+
+nfs_version() {
+        echo $RPC_NFSD_VERS
+}
+
+nfs_count() {
+        echo $RPC_NFSD_COUNT
+}
+
+# Path to the configuration files
+CONFIG_ROM="/etc/default/nfs"
+CONFIG_RAM="/boot/config/default/nfs"
+
+# Get current settings
+source "$CONFIG_ROM"
+
+case "$1" in
+        'apply')
+                RPC_NFSD_VERS="$2"
+                RPC_NFSD_COUNT="$3"
+                apply
+        ;;
+        'nfs_version')
+                nfs_version
+        ;;
+        'nfs_count')
+                nfs_count
+        ;;
+        *)
+        	echo "usage $0 apply|nfs_version|nfs_count"
+		exit 1
+        ;;
+esac

@@ -1,10 +1,11 @@
 Menu="Scheduler:1"
 Title="Parity Check"
 Tag="calendar"
+Cond="$disks['parity']['device'] || $disks['parity2']['device']"
 ---
 <?PHP
-/* Copyright 2012-2023, Bergware International.
- * Copyright 2005-2023, Lime Technology
+/* Copyright 2012-2025, Bergware International.
+ * Copyright 2005-2025, Lime Technology
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -18,6 +19,7 @@ Tag="calendar"
 if (_var($disks['parity'],'status')=='DISK_NP_DSBL' && _var($disks['parity2'],'status')=='DISK_NP_DSBL') {
   echo "<p class='notice'>"._('No Parity disk present')."!</p>";
 }
+
 $width  = [166,300];
 $mode   = ['Disabled','Daily','Weekly','Monthly','Yearly','Custom'];
 $days   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];

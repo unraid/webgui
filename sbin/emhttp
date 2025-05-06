@@ -50,6 +50,7 @@ case "${1:-start}" in
   ;;
 'stop')
   log "Stopping web services..."
+  /usr/local/sbin/monitor_nchan kill
   /etc/rc.d/rc.nginx stop
   /etc/rc.d/rc.php-fpm stop
   log "Stopping emhttpd..."

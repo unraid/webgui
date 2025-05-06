@@ -1,12 +1,94 @@
-span.red{color:#E68A00}
-span.blue{color:#00529B}
-span.green{color:#4F8A10}
-span.vshift{margin-top:0!important}
-input.gap{margin-right:6px}
-input.form{font-size:1rem;padding:5px 10px;margin-left:10px}
-div.shade-white{background-color:#ededed;margin-top:10px;padding:8px 0 3px 0}
-div.shade-black{background-color:#212121;margin-top:10px;padding:8px 0 3px 0}
-div.shade-azure{background-color:#edeaef;margin-top:10px;padding:8px 0 3px 0}
-div.shade-gray{background-color:#121510;margin-top:10px;padding:8px 0 3px 0}
-select.slim{min-width:47px;margin-left:4px}
-input.slim{width:32px;margin-left:8px}
+:root {
+    /* Input styles - default values (for azure/gray themes) */
+    --eth0-narrow-input-width: 188px;
+    --eth0-narrow-input-padding: 5px 6px;
+    --eth0-narrow-input-border-color: var(--border-color);
+    --eth0-narrow-input-text-color: var(--text-color);
+    --eth0-narrow-input-border-style: 1px solid;
+}
+
+.Theme--black {
+    --eth0-narrow-input-border-color: var(--gray-100);
+    --eth0-narrow-input-text-color: var(--gray-100);
+}
+
+.Theme--white {
+    --eth0-narrow-input-border-color: var(--gray-800);
+    --eth0-narrow-input-text-color: var(--gray-800);
+}
+
+/* Status colors */
+span.red {
+    color: var(--orange-300);
+}
+span.blue {
+    color: var(--blue-700);
+}
+span.green {
+    color: var(--green-800);
+}
+span.vshift {
+    margin-top: 0 !important;
+}
+
+/* Input styles */
+input.gap {
+    margin-right: 6px;
+}
+input.form {
+    font-size: 1rem;
+    padding: 5px 10px;
+    margin-left: 10px;
+}
+
+/* Utility classes */
+select.slim {
+    min-width: 47px;
+    margin-left: 4px;
+}
+input.slim {
+    width: 32px;
+    margin-left: 8px;
+}
+.hide {
+    display: none;
+}
+select.ctrl {
+    margin-right: 20px;
+}
+
+/* Base narrow input styles */
+input[type="text"].narrow {
+    display: inline;
+    width: var(--eth0-narrow-input-width);
+    padding: var(--eth0-narrow-input-padding);
+    border: var(--eth0-narrow-input-border-style) var(--eth0-narrow-input-border-color);
+    color: var(--eth0-narrow-input-text-color);
+    font-size: 1.3rem;
+    background-color: transparent;
+    text-indent: 0;
+    height: auto;
+    min-height: 2rem;
+    line-height: 2rem;
+    outline: none;
+    margin: 0 20px 0 0;
+    box-shadow: none;
+    border-radius: 0;
+    transition: none;
+}
+
+/* Theme-specific styles - consolidated black/white theme styles */
+.Theme--black,
+.Theme--white {
+    --eth0-narrow-input-width: 166px;
+    --eth0-narrow-input-padding: 4px 0;
+    --eth0-narrow-input-border-style: none;
+
+    input[type="text"].narrow {
+        border-bottom: 1px solid var(--eth0-narrow-input-border-color);
+    }
+
+    .uplift {
+        margin-top: -30px !important;
+    }
+}

@@ -25,9 +25,7 @@ setlocale(LC_ALL,'en_US.UTF-8');
 date_default_timezone_set(substr(readlink('/etc/localtime'),20));
 $secure = array_key_exists('HTTPS', $_SERVER);
 ini_set("session.use_strict_mode", "1");
-// Safari bug prevents use of 'Strict'
-// ini_set("session.cookie_samesite", $secure?'Strict':'Lax');
-ini_set("session.cookie_samesite", 'Lax');
+ini_set("session.cookie_samesite", 'Strict');
 if (array_key_exists('HTTP_HOST', $_SERVER)) {
   session_name("unraid_".md5(strstr($_SERVER['HTTP_HOST'].':', ':', true)));
 }

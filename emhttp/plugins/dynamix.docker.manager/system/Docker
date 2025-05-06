@@ -1,0 +1,28 @@
+#!/bin/bash
+# Get active containers
+ACTIVE_CONTAINERS="$(docker ps -q --no-trunc 2>/dev/null)"
+
+# Exit if no containers are active and return zero
+if [[ -z $ACTIVE_CONTAINERS ]]; then
+  echo "0"
+  exit
+fi
+
+# Get all relevant memory entries from containers
+for container in ${ACTIVE_CONTAINERS} ; do
+  CONT_MEMORY="$(cat /sys/fs/cgroup/docker/${container}/memory.stat 2>/dev/null | grep -Ew "anon|kernel|kernel_stack|pagetables|sec_pagetables|percpu|sock|vmalloc|shmem" | awk '{print $2}')"
+  # Add up memory values
+  for value in ${CONT_MEMORY} ; do
+    if [[ ${value} =~ ^[0-9]+$ ]]; then
+      ((MEMORY_USAGE += value))
+    fi
+  done
+  unset CONT_MEMORY
+done
+
+# Check if value is a integer and return the value otherwiese return zero
+if [[ ${MEMORY_USAGE} =~ ^[0-9]+$ ]]; then
+  echo "${MEMORY_USAGE}"
+else
+  echo "0"
+fi

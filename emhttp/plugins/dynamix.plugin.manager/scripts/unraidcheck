@@ -13,7 +13,14 @@
 ?>
 <?
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
-require_once "$docroot/plugins/dynamix.plugin.manager/include/UnraidCheck.php";
 
+require_once "$docroot/plugins/dynamix/include/ReplaceKey.php";
+$replaceKey = new ReplaceKey();
+$replaceKey->check();
+
+// utilized by UnraidCheckExec.php to have UnraidCheck.php return a json response when this script is called directly
+parse_str(getenv('QUERY_STRING') ?? '', $_GET);
+
+require_once "$docroot/plugins/dynamix.plugin.manager/include/UnraidCheck.php";
 $unraidOsCheck = new UnraidOsCheck();
 $unraidOsCheck->checkForUpdate();

@@ -15,19 +15,17 @@ Tag="users"
  */
 ?>
 <?
-$submenu = !empty($display['users']) && substr($display['users'],0,5)!='Tasks';
-if ($submenu) $path = './Users';
 ksort($users);
 ?>
 <div id="title" class="title"><span class="left"><i class="fa fa-bell title"></i>_(Management Access)_</span></div>
 <?$img = "/boot/config/plugins/dynamix/users/root.png"?>
-<div class="user-list" style="text-align:center"><a class="<?=(!empty($users['root']['desc']) ? 'info' : '')?>" href="<?=$path?>/UserEdit?name=root"><img src="<?=(file_exists($img) ? autov($img) : '/webGui/images/user.png')?>" class="picture" border="0" width="48" height="48"><br>root<span><?=htmlspecialchars($users['root']['desc'])?></span></a></div>
+<div class="user-list" style="text-align:center"><a class="<?=(!empty($users['root']['desc']) ? 'info' : '')?>" href="/<?=$path?>/UserEdit?name=root"><img src="<?=(file_exists($img) ? autov($img) : '/webGui/images/user.png')?>" class="picture" border="0" width="48" height="48"><br>root<span><?=htmlspecialchars($users['root']['desc'])?></span></a></div>
 
 <div class="title"><span class="left"><i class="fa fa-cloud title"></i>_(Shares Access)_</span></div>
 <?foreach ($users as $user):?>
 <?if ($user['name'] == 'root') continue;?>
 <?$img = "/boot/config/plugins/dynamix/users/{$user['name']}.png"?>
-<div class="user-list" style="text-align:center"><a class="<?=(!empty($user['desc']) ? 'info' : '')?>" href="<?=$path?>/UserEdit?name=<?=htmlspecialchars(urlencode($user['name']))?>"><img src="<?=(file_exists($img) ? autov($img) : '/webGui/images/user.png')?>" class="picture" border="0" width="48" height="48"><br><?=htmlspecialchars($user['name'])?><span><?=htmlspecialchars($user['desc'])?></span></a></div>
+<div class="user-list" style="text-align:center"><a class="<?=(!empty($user['desc']) ? 'info' : '')?>" href="/<?=$path?>/UserEdit?name=<?=htmlspecialchars(urlencode($user['name']))?>"><img src="<?=(file_exists($img) ? autov($img) : '/webGui/images/user.png')?>" class="picture" border="0" width="48" height="48"><br><?=htmlspecialchars($user['name'])?><span><?=htmlspecialchars($user['desc'])?></span></a></div>
 <?endforeach;?>
 
 <?if (count($users)==1):?>
@@ -35,6 +33,6 @@ _(No users are defined)_. _(Click **Add User** to create a user for remote share
 <?endif;?>
 
 <div style='clear:both'></div>
-<form method="POST" action="<?=$path?>/UserAdd">
-<input type="submit" value="_(Add User)_"><?if ($submenu):?><input type="button" value="_(Done)_" onclick="done()"><?endif;?>
+<form method="POST" action="/<?=$path?>/UserAdd">
+<input type="submit" value="_(Add User)_"><input type="button" value="_(Done)_" onclick="done()">
 </form>

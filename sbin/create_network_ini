@@ -2,18 +2,20 @@
 #
 # script: create_network_ini
 #
-# Copyright 2005-2023, Lime Technology
-# Copyright 2012-2023, Bergware International.
+# Copyright 2005-2025, Lime Technology
+# Copyright 2012-2025, Bergware International.
 #
 # create initial network.ini file on system start
 # create system welcome message
-# update files on DHCP events 'BOUND[6] IPV4LL'
+# update files on DHCP events 'BOUND[6] IPV4LL EXPIRE'
 # update services listening interfaces / addresses
+# exclude non-existing interfaces from config
 
-[[ (-z $reason && -z $1) || (-n $reason && ! "BOUND6 IPV4LL" =~ $reason) ]] && exit 0
+[[ (-z $reason && -z $1) || (-n $reason && ! "BOUND6 IPV4LL EXPIRE" =~ $reason) ]] && exit 0
 
 INI=/var/local/emhttp/network.ini.new
 CFG=/boot/config/network.cfg
+SYS=/sys/class/net
 
 declare -A VLANID USE_DHCP IPADDR NETMASK GATEWAY METRIC USE_DHCP6 IPADDR6 NETMASK6 GATEWAY6 PRIVACY6 METRIC6 DESCRIPTION PROTOCOL
 
@@ -21,8 +23,9 @@ declare -A VLANID USE_DHCP IPADDR NETMASK GATEWAY METRIC USE_DHCP6 IPADDR6 NETMA
 . /etc/rc.d/rc.runlog
 
 mask(){
+  [[ -z $1 ]] && return
   # convert prefix to netmask
-  set -- $((5-(${1:-0}/8))) 255 255 255 255 $(((255<<(8-(${1:-0}%8)))&255)) 0 0 0
+  set -- $((5-($1/8))) 255 255 255 255 $(((255<<(8-($1%8)))&255)) 0 0 0
   [[ $1 -gt 1 ]] && shift $1 || shift
   echo $1.$2.$3.$4
 }
@@ -47,14 +50,14 @@ else
 fi
 # prepare empty file
 echo -n >$INI
-# clear update information
-DATA=
 
 # loop thru all defined interfaces (=1 in case of legacy)
 for ((i=0; i<${SYSNICS:-1}; i++)); do
   IFACE=${IFNAME[$i]:-eth$i}
   ETH=${IFACE/#bond/eth}
   ETH=${ETH/#br/eth}
+  # don't store when non-existing
+  [[ -e $SYS/$ETH ]] || continue
   echo "[$ETH]" >>$INI
   if [[ $i -eq 0 ]]; then
     # process legacy settings
@@ -121,22 +124,15 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
   echo "DESCRIPTION:0=\"${DESCRIPTION[$i]}\"" >>$INI
   echo "PROTOCOL:0=\"${PROTOCOL[$i]}\"" >>$INI
   echo "USE_DHCP:0=\"${USE_DHCP[$i]}\"" >>$INI
+  echo "USE_GW4:0=\"${USE_GW4[$i]}\"" >>$INI
   if [[ ${USE_DHCP[$i]} == yes ]]; then
     # get dhcp assigned ipv4 address & mask
-    NET=($(ip -br -4 addr show $IFACE|awk '{sub("/"," ",$3);print $3;exit}'))
-    GW=$(ip -4 route show default dev $IFACE|awk '{print $3;exit}')
+    NET=($(ip -4 -br addr show $IFACE | awk '{sub("/"," ",$3);print $3;exit}'))
+    GW=$(ip -4 route show default dev $IFACE | awk '{print $3;exit}')
     echo "IPADDR:0=\"${NET[0]}\"" >>$INI
     echo "NETMASK:0=\"$(mask ${NET[1]})\"" >>$INI
     echo "GATEWAY:0=\"$GW\"" >>$INI
     echo "METRIC:0=\"${METRIC[$i]}\"" >>$INI
-    DATA="${DATA}${ETH}_I_IPADDR:0=${NET[0]} ${ETH}_S_NETMASK:0=$(mask ${NET[1]}) ${ETH}_I_GATEWAY:0=$GW "
-    if [[ $i -eq 0 && -n $DNS4 ]]; then
-      x=1
-      for SERVER in $DNS4; do
-        DATA="${DATA}${ETH}_I_DNS-SERVER${x}=$SERVER "
-        ((x++))
-      done
-    fi
   else
     # get static assigned ipv4 address & mask
     echo "IPADDR:0=\"${IPADDR[$i]}\"" >>$INI
@@ -145,23 +141,16 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
     echo "METRIC:0=\"${METRIC[$i]}\"" >>$INI
   fi
   echo "USE_DHCP6:0=\"${USE_DHCP6[$i]}\"" >>$INI
+  echo "USE_GW6:0=\"${USE_GW6[$i]}\"" >>$INI
   if [[ ${USE_DHCP6[$i]} == yes ]]; then
     # get auto assigned ipv6 address & prefix
-    NET6=($(ip -br -6 addr show $IFACE scope global|awk '{sub("/"," ",$NF);print $NF;exit}'))
-    GW6=$(ip -6 route show default dev $IFACE|awk '{print $3;exit}')
+    NET6=($(ip -6 -br addr show $IFACE scope global -temporary -deprecated | awk '{sub("/"," ",$3);print $3;exit}'))
+    GW6=$(ip -6 route show default dev $IFACE | awk '{print $3;exit}')
     echo "IPADDR6:0=\"${NET6[0]}\"" >>$INI
     echo "NETMASK6:0=\"${NET6[1]}\"" >>$INI
     echo "GATEWAY6:0=\"$GW6\"" >>$INI
     echo "METRIC6:0=\"${METRIC6[$i]}\"" >>$INI
     echo "PRIVACY6:0=\"${PRIVACY6[$i]}\"" >>$INI
-    DATA="${DATA}${ETH}_I_IPADDR6:0=${NET6[0]} ${ETH}_I_NETMASK6:0=${NET6[1]} ${ETH}_I_GATEWAY6:0=$GW6 "
-    if [[ $i -eq 0 && -n $DNS6 ]]; then
-      x=1
-      for SERVER6 in $DNS6; do
-        DATA="${DATA}${ETH}_I_DNS6-SERVER${x}=$SERVER6 "
-        ((x++))
-      done
-    fi
   else
     # get static assigned ipv6 address & prefix
     echo "IPADDR6:0=\"${IPADDR6[$i]}\"" >>$INI
@@ -170,6 +159,7 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
     echo "METRIC6:0=\"${METRIC6[$i]}\"" >>$INI
     echo "PRIVACY6:0=\"\"" >>$INI
   fi
+  echo "USE_MTU=\"${USE_MTU[$i]}\"" >>$INI
   echo "MTU=\"${MTU[$i]}\"" >>$INI
   if [[ -n ${VLANS[$i]} ]]; then
     # process VLAN interfaces
@@ -179,16 +169,16 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
       echo "DESCRIPTION:$j=\"${DESCRIPTION[$i,$j]}\"" >>$INI
       echo "PROTOCOL:$j=\"${PROTOCOL[$i,$j]}\"" >>$INI
       echo "USE_DHCP:$j=\"${USE_DHCP[$i,$j]}\"" >>$INI
+      echo "USE_GW4:$j=\"${USE_GW4[$i,$j]}\"" >>$INI
       if [[ ${USE_DHCP[$i,$j]} == yes ]]; then
         DEV=$IFACE.${VLANID[$i,$j]}
         # get dhcp assigned ipv4 address & mask
-        NET=($(ip -br -4 addr show $DEV|awk '{sub("/"," ",$3);print $3;exit}'))
-        GW=$(ip -4 route show default dev $DEV|awk '{print $3;exit}')
+        NET=($(ip -4 -br addr show $DEV | awk '{sub("/"," ",$3);print $3;exit}'))
+        GW=$(ip -4 route show default dev $DEV | awk '{print $3;exit}')
         echo "IPADDR:$j=\"${NET[0]}\"" >>$INI
         echo "NETMASK:$j=\"$(mask ${NET[1]})\"" >>$INI
         echo "GATEWAY:$j=\"$GW\"" >>$INI
         echo "METRIC:$j=\"${METRIC[$i,$j]}\"" >>$INI
-        DATA="${DATA}${ETH}_I_IPADDR:$j=${NET[0]} ${ETH}_S_NETMASK:$j=$(mask ${NET[1]}) ${ETH}_I_GATEWAY:$j=$GW "
       else
         # get static assigned ipv4 address & mask
         echo "IPADDR:$j=\"${IPADDR[$i,$j]}\"" >>$INI
@@ -197,17 +187,17 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
         echo "METRIC:$j=\"${METRIC[$i,$j]}\"" >>$INI
       fi
       echo "USE_DHCP6:$j=\"${USE_DHCP6[$i,$j]}\"" >>$INI
+      echo "USE_GW6:$j=\"${USE_GW6[$i,$j]}\"" >>$INI
       if [[ ${USE_DHCP6[$i,$j]} == yes ]]; then
         DEV=$IFACE.${VLANID[$i,$j]}
         # get auto assigned ipv6 address & prefix
-        NET6=($(ip -br -6 addr show $DEV scope global|awk '{sub("/"," ",$NF);print $NF;exit}'))
-        GW6=$(ip -6 route show default dev $DEV|awk '{print $3;exit}')
+        NET6=($(ip -6 -br addr show $DEV scope global -temporary -deprecated | awk '{sub("/"," ",$3);print $3;exit}'))
+        GW6=$(ip -6 route show default dev $DEV | awk '{print $3;exit}')
         echo "IPADDR6:$j=\"${NET6[0]}\"" >>$INI
         echo "NETMASK6:$j=\"${NET6[1]}\"" >>$INI
         echo "GATEWAY6:$j=\"$GW6\"" >>$INI
         echo "METRIC6:$j=\"${METRIC6[$i,$j]}\"" >>$INI
         echo "PRIVACY6:$j=\"${PRIVACY6[$i,$j]}\"" >>$INI
-        DATA="${DATA}${ETH}_I_IPADDR6:$j=${NET6[0]} ${ETH}_I_NETMASK6:$j=${NET6[1]} ${ETH}_I_GATEWAY6:$j=$GW6 "
       else
         # get static assigned ipv6 address & prefix
         echo "IPADDR6:$j=\"${IPADDR6[$i,$j]}\"" >>$INI
@@ -227,25 +217,27 @@ mv $INI ${INI%.*}
 
 log "interface=${interface:-$1}, reason=$reason, protocol=$protocol"
 # delayed execution
-/usr/local/emhttp/webGui/scripts/update_services 45
-
-# send update information
-if [[ -n $DATA && -e /var/run/nginx.socket ]]; then
-  curl -sfd "$DATA" --unix-socket /var/run/nginx.socket http://localhost/pub/dhcp?buffer_length=1 >/dev/null 2>&1
-fi
+/usr/local/emhttp/webGui/scripts/update_services 20
 
 # generate our welcome text (management interface only)
-if [[ -z $interface || "eth0 br0 bond0" =~ $interface ]]; then
+if [[ -z $interface || "eth0 br0 bond0 wlan0" =~ $interface ]]; then
   . /etc/unraid-version
   echo -e "Unraid Server OS version: $version" >/etc/issue
   # find management interface
-  [[ -e /sys/class/net/bond0 ]] && dev=bond0 || dev=eth0
-  [[ -e /sys/class/net/br0 ]] && dev=br0
-  IPv4=$(ip -br -4 addr show $dev scope global|sed -r 's/metric [0-9]+//g'|awk '{print $3;exit}')
-  IPv6=$(ip -br -6 addr show $dev scope global|sed -r 's/metric [0-9]+//g'|awk '{print $NF;exit}')
+  [[ -e $SYS/bond0 ]] && dev=bond0 || dev=eth0
+  [[ -e $SYS/br0 ]] && dev=br0
+  IPv4=$(ip -4 -br addr show $dev scope global | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
+  IPv6=$(ip -6 -br addr show $dev scope global -temporary -deprecated | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
   # show current IP assignment
-  [[ -n $IPv4 ]] && echo " IPv4 address: ${IPv4%/*}" >>/etc/issue || echo " IPv4 address: not set" >>/etc/issue
-  [[ -n $IPv6 ]] && echo " IPv6 address: ${IPv6%/*}" >>/etc/issue || echo " IPv6 address: not set" >>/etc/issue
+  [[ -n $IPv4 ]] && echo " IPv4 address: $IPv4" >>/etc/issue || echo " IPv4 address: not set" >>/etc/issue
+  [[ -n $IPv6 ]] && echo " IPv6 address: $IPv6" >>/etc/issue || echo " IPv6 address: not set" >>/etc/issue
+  if [[ -e $SYS/wlan0 ]]; then
+    echo "Wireless network:" >>/etc/issue
+    IPv4=$(ip -4 -br addr show wlan0 scope global | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
+    IPv6=$(ip -6 -br addr show wlan0 scope global -temporary -deprecated | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
+    [[ -n $IPv4 ]] && echo " IPv4 address: $IPv4" >>/etc/issue || echo " IPv4 address: not set" >>/etc/issue
+    [[ -n $IPv6 ]] && echo " IPv6 address: $IPv6" >>/etc/issue || echo " IPv6 address: not set" >>/etc/issue
+  fi
   echo >>/etc/issue
 fi
 exit 0

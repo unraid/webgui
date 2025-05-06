@@ -15,7 +15,7 @@ $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Secure.php";
 
 function pgrep($proc) {
-  return exec("pgrep -f $proc");
+  return exec('pgrep --ns $$ -f '."$proc");
 }
 
 if (isset($_POST['kill']) && $_POST['kill'] > 1) {

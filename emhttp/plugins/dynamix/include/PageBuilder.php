@@ -42,8 +42,16 @@ function build_pages($pattern) {
   }
 }
 
+function page_enabled(&$page)
+{
+  global $var,$disks,$devs,$users,$shares,$sec,$sec_nfs,$name,$display,$pool_devices;
+  $enabled = true;
+  if (isset($page['Cond'])) eval("\$enabled={$page['Cond']};");
+  return $enabled;
+}
+
 function find_pages($item) {
-  global $docroot,$site,$var,$disks,$devs,$users,$shares,$sec,$sec_nfs,$name,$display,$pool_devices;
+  global $site;
   $pages = [];
   foreach ($site as $page) {
     if (empty($page['Menu'])) continue;
@@ -55,9 +63,7 @@ function find_pages($item) {
     while ($menu !== false) {
       [$menu,$rank] = my_explode(':',$menu);
       if ($menu == $item) {
-        $enabled = true;
-        if (isset($page['Cond'])) eval("\$enabled={$page['Cond']};");
-        if ($enabled) $pages["$rank{$page['name']}"] = $page;
+        if (page_enabled($page)) $pages["$rank{$page['name']}"] = $page;
         break;
       }
       $menu = strtok(' ');
@@ -69,6 +75,7 @@ function find_pages($item) {
 
 function tab_title($title,$path,$tag) {
   global $docroot,$pools;
+  $title=htmlspecialchars(html_entity_decode($title));
   $names = implode('|',array_merge(['disk','parity'],$pools));
   if (preg_match("/^($names)/",$title)) {
     $device = strtok($title,' ');
@@ -78,7 +85,7 @@ function tab_title($title,$path,$tag) {
   if (!$tag || substr($tag,-4)=='.png') {
     $file = "$path/icons/".($tag ?: strtolower(str_replace(' ','',$title)).".png");
     if (file_exists("$docroot/$file")) {
-      return "<img src='/$file' class='icon'>$title";
+      return "<img src='/$file' class='icon' style='max-width: 18px; max-height: 18px; width: auto; height: auto; object-fit: contain;'>$title";
     } else {
       return "<i class='fa fa-th title'></i>$title";
     }
@@ -88,6 +95,49 @@ function tab_title($title,$path,$tag) {
     if (substr($tag,0,3)!='fa-') $tag = "fa-$tag";
     return "<i class='fa $tag title'></i>$title";
   }
+}
+
+/**
+ * Generate CSS for sidebar icons
+ * 
+ * @param array $tasks Array of task pages
+ * @param array $buttons Array of button pages
+ * @return string CSS for sidebar icons
+ */
+function generate_sidebar_icon_css($tasks, $buttons) {
+  $css = '';
+
+  // Generate CSS for task icons
+  foreach ($tasks as $button) {
+    if (isset($button['Code'])) {
+      $css .= ".nav-item a[href='/{$button['name']}']:before{content:'\\{$button['Code']}'}\n";
+    }
+  }
+
+  // Add lock button icon
+  $css .= ".nav-item.LockButton a:before{content:'\\e955'}\n";
+
+  // Generate CSS for utility button icons
+  foreach ($buttons as $button) {
+    if (isset($button['Code'])) {
+      $css .= ".nav-item.{$button['name']} a:before{content:'\\{$button['Code']}'}\n";
+    }
+  }
+
+  return $css;
+}
+
+function includePageStylesheets($page) {
+  global $docroot, $theme;
+  $css = "/{$page['root']}/sheets/{$page['name']}";
+  $css_stock = "$css.css";
+  $css_theme = "$css-$theme.css"; // @todo add syslog for deprecation notice
+  if (is_file($docroot.$css_stock)) echo '<link type="text/css" rel="stylesheet" href="',autov($css_stock),'">',"\n";
+  if (is_file($docroot.$css_theme)) echo '<link type="text/css" rel="stylesheet" href="',autov($css_theme),'">',"\n";
+}
+
+function annotate($text) {
+  echo "\n<!--\n",str_repeat("#",strlen($text)),"\n$text\n",str_repeat("#",strlen($text)),"\n-->\n";
 }
 
 // hack to embed function output in a quoted string (e.g., in a page Title)

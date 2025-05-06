@@ -3,8 +3,8 @@ Title="Routing Table"
 Tag="icon-share"
 ---
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -48,49 +48,26 @@ function resetTable() {
   clearTimeout(timers.routeTable);
   routeTable();
 }
-<?if (!$tabbed):?>
-function toggleTable() {
-  var tag = '#tag_table';
-  var view = '#route_table';
-  if ($(view).is(':visible')) {
-    $(tag).removeClass('fa-chevron-up').addClass('fa-chevron-down');
-    $.cookie(view,'hide',{expires:3650});
-  } else {
-    $(tag).removeClass('fa-chevron-down').addClass('fa-chevron-up');
-    $.removeCookie(view);
-  }
-  $(view).toggle('slow');
-}
 $(function(){
-  $('div.title').last().find('span.left').append("<span class='status vhshift'><i id='tag_table' class='fa fa-fw fa-chevron-up' style='cursor:pointer' onclick='toggleTable()'></i></span>");
-  if (!$.cookie('#route_table')) $('#route_table').show(); else $('#tag_table').removeClass('fa-chevron-up').addClass('fa-chevron-down');
   routeTable();
 });
-<?else:?>
-$(function(){
-  $('#route_table').show();
-  routeTable();
-});
-<?endif;?>
 </script>
-<div markdown="1" id="route_table" style="display:none">
 <table class="unraid">
 <thead><tr><td>_(Protocol)_</td><td>_(Route)_</td><td>_(Gateway)_</td><td>_(Metric)_</td><td style="width:8%;text-align:center">_(Delete)_</td></tr></thead>
 <tbody id="route_list"></tbody>
 </table>
 
-<div class="shade-<?=$display['theme']?>" style="margin-top:12px;padding:12px 4px;">
+<div class="shade" style="margin-top:12px;padding:12px 4px;">
 <form markdown="1" name="add_routes" method="POST" action="/webGui/include/RoutingTable.php" target="progressFrame" onsubmit="setTimeout(resetTable,500)">
 _(Enter route + gateway + metric)_:
 : <input type="text" name="route" maxlength="39" value="" class="fixed" placeholder="_(IPv4/nn or IPv6/nn route)_" required>
   <input type="text" name="gateway" class="fixed" value="" list="device" placeholder="_(gateway name or address)_" required>
   <datalist id="device"><?foreach ($list as $port):?><?echo "<option value='$port'>"?><?endforeach;?></datalist>
   <input type="text" name="metric" min="1" max="9999" value="" class="trim" placeholder="1"><i class="fa fa-sort-numeric-asc"></i> *_(optional metric (lowest is preferred))_*
-
+  <input type="hidden" name="task" value="Add Route">
 :eth_routing_table_help:
 
 &nbsp;
-: <input type="submit" name="task" value="_(Add Route)_"><input type="button" value="_(Done)_" class="lock" onclick="done()">
+: <input type="submit" value="_(Add Route)_"><input type="button" value="_(Done)_" class="lock" onclick="done()">
 </form>
-</div>
 </div>

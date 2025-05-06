@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="utf-8"?>
+  <Agent>
+    <Name>Discord</Name>
+    <Variables>
+      <Variable Help="Add an '#unraid-notifications' channel to your personal Discord server, then get a WebHook URL as explained [a href='https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks' target='_blank'][u]here[/u].[/a] Note that multiple Unraid servers can use the same Webhook." Desc="WebHook URL" Default="USE YOUR OWN WEBHOOK VALUE HERE">WEBH_URL</Variable>
+      <Variable Help="Provide the https URL to an icon representing this Unraid server (using different icons for each server can help distinguish between them in the list of notifications.) To disable this feature, specify 'none'." Desc="Server Icon" Default="https://craftassets.unraid.net/uploads/logos/un-mark-gradient@2x.png">SERVER_ICON</Variable>
+      <Variable Help="In Discord, right-click the '#unraid-notifications' channel and choose Notification Settings -> Only @mentions. Then to receive an @mention on 'alert' priority notifications only, provide your personal Discord ID (it is a series of numbers, not letters). To find your ID, in Discord type \@yourusername. To disable this feature, specify 'none'." Desc="Discord Tag ID" Default="none">DISCORD_TAG_ID</Variable>
+    </Variables>
+    <Script>
+      <![CDATA[
+#!/bin/bash
+############
+{0}
+############
+
+############
+# Quick test with default values:
+#   bash /boot/config/plugins/dynamix/notifications/agents/Discord.sh
+# Quick test with values set through environment (all vars are optional)
+#   EVENT="My Event" SUBJECT="My Subject" DESCRIPTION="My Description" CONTENT="My Message" IMPORTANCE="alert" LINK="/Dashboard" bash /boot/config/plugins/dynamix/notifications/agents/Discord.sh
+# Full test of notification system (at least one param is required)
+#   /usr/local/emhttp/webGui/scripts/notify -e "My Event" -s "My Subject" -d "My Description"  -m "My Message" -i "alert" -l "/Dashboard"
+#
+# If a notification does not go through, check the /var/log/notify_Discord file for hints
+############
+
+############
+# Discord webhooks docs: https://birdie0.github.io/discord-webhooks-guide/
+#
+# Available fields from notification system
+# HOSTNAME
+# EVENT (notify -e)
+# IMPORTANCE (notify -i)
+# SUBJECT (notify -s)
+# DESCRIPTION (notify -d)
+# CONTENT (notify -m)
+# LINK (notify -l)
+# TIMESTAMP (seconds from epoch)
+
+SCRIPTNAME=$(basename "$0")
+LOG="/var/log/notify_${SCRIPTNAME%.*}"
+
+# for quick test, setup environment to mimic notify script
+[[ -z "${EVENT}" ]] && EVENT='Unraid Status'
+[[ -z "${SUBJECT}" ]] && SUBJECT='Notification'
+[[ -z "${DESCRIPTION}" ]] && DESCRIPTION='No description'
+[[ -z "${IMPORTANCE}" ]] && IMPORTANCE='normal'
+[[ -z "${TIMESTAMP}" ]] && TIMESTAMP=$(date +%s)
+# ensure link has a host
+if [[ -n "${LINK}" ]] && [[ ${LINK} != http* ]]; then
+source <(grep "NGINX_DEFAULTURL" /usr/local/emhttp/state/nginx.ini 2>/dev/null)
+LINK=${NGINX_DEFAULTURL}${LINK}
+fi
+# Discord will not allow links with bare hostname, links must have both hostname and tld or no link at all
+if [[ -n "${LINK}" ]]; then
+HOST=$(echo "${LINK}" | cut -d'/' -f3)
+[[ ${HOST} != *.* ]] && LINK=
+fi
+
+# note: there is no default for CONTENT
+
+# send DESCRIPTION and/or CONTENT. Ignore the default DESCRIPTION.
+[[ "${DESCRIPTION}" == 'No description' ]] && DESCRIPTION=""
+if [[ -n "${DESCRIPTION}" ]] && [[ -n "${CONTENT}" ]]; then
+  FULL_DETAILS="${DESCRIPTION}\n\n${CONTENT}"
+elif [[ -n "${DESCRIPTION}" ]]; then
+  FULL_DETAILS="${DESCRIPTION}"
+elif [[ -n "${CONTENT}" ]]; then
+  FULL_DETAILS="${CONTENT}"
+fi
+# split into 1024 character segments
+[[ -n "${FULL_DETAILS}" ]] && DESC_FIELD=$(
+  cat <<EOF
+        {
+          "name": "Description",
+          "value": "${FULL_DETAILS:0:1024}"
+        },
+EOF
+)
+[[ -n "${FULL_DETAILS}" ]] && [[ ${#FULL_DETAILS} -gt 1024 ]] && DESC_FIELD=$(
+  cat <<EOF
+        ${DESC_FIELD}
+        {
+          "name": "Description (cont)",
+          "value": "${FULL_DETAILS:1024:1024}"
+        },
+EOF
+)
+[[ -n "${FULL_DETAILS}" ]] && [[ ${#FULL_DETAILS} -gt 2048 ]] && DESC_FIELD=$(
+  cat <<EOF
+        ${DESC_FIELD}
+        {
+          "name": "Description (cont)",
+          "value": "${FULL_DETAILS:2048:1024}"
+        },
+EOF
+)
+
+# https://birdie0.github.io/discord-webhooks-guide/structure/embed/timestamp.html
+# https://www.cyberciti.biz/faq/linux-unix-formatting-dates-for-display/
+FORMATTED_TIMESTAMP=$(date -u +\"%Y-%m-%dT%H:%M:%S.000Z\" -d @"${TIMESTAMP}")
+
+# https://birdie0.github.io/discord-webhooks-guide/structure/embed/thumbnail.html
+# https://birdie0.github.io/discord-webhooks-guide/structure/embed/color.html
+# vary data based on IMPORTANCE
+if [[ "${IMPORTANCE}" != "normal" ]] && [[ "${IMPORTANCE}" != "warning" ]] && [[ "${IMPORTANCE}" != "alert" ]]; then
+  IMPORTANCE="normal"
+fi
+case "${IMPORTANCE}" in
+normal)
+  THUMBNAIL="https://craftassets.unraid.net/uploads/discord/notify-normal.png"
+  COLOR="39208"
+  ;;
+warning)
+  THUMBNAIL="https://craftassets.unraid.net/uploads/discord/notify-warning.png"
+  COLOR="16747567"
+  ;;
+alert)
+  THUMBNAIL="https://craftassets.unraid.net/uploads/discord/notify-alert.png"
+  COLOR="14821416"
+  [[ -n "${DISCORD_TAG_ID}" && "${DISCORD_TAG_ID}" == "none" ]] && DISCORD_TAG_ID=""
+  if [[ -n "${DISCORD_TAG_ID}" ]]; then
+    # add leading @ if needed
+    [[ "${DISCORD_TAG_ID:0:1}" != "@" ]] && DISCORD_TAG_ID="@${DISCORD_TAG_ID}"
+    # @mentions only work in the "content" area, not the "embed" area
+    DISCORD_CONTENT_AREA="\"content\": \"<${DISCORD_TAG_ID}>\","
+  fi
+  ;;
+esac
+
+# https://birdie0.github.io/discord-webhooks-guide/structure/embed/author.html
+# if SERVER_ICON is defined, use it
+[[ -n "${SERVER_ICON}" && "${SERVER_ICON:0:8}" == "https://" ]] && ICON_URL="\"icon_url\": \"${SERVER_ICON}\","
+
+# https://birdie0.github.io/discord-webhooks-guide/structure/embed/url.html
+# if LINK is defined, use it
+[[ -n "${LINK}" ]] && LINK_URL="\"url\": \"${LINK}\","
+
+DATA=$(
+  cat <<EOF
+{
+  ${DISCORD_CONTENT_AREA}
+  "embeds": [
+    {
+      "title": "${EVENT:0:256}",
+      "description": "${SUBJECT:0:2043}",
+      ${LINK_URL}
+      "timestamp": ${FORMATTED_TIMESTAMP},
+      "color": "${COLOR}",
+      "author": {
+        ${ICON_URL}
+        "name": "${HOSTNAME}"
+      },
+      "thumbnail": {
+        "url": "${THUMBNAIL}"
+      },
+      "fields": [
+        ${DESC_FIELD}
+        {
+          "name": "Priority",
+          "value": "${IMPORTANCE}",
+          "inline": true
+        }
+      ]
+    }
+  ]
+}
+EOF
+)
+
+# echo "${DATA}" >>"${LOG}"
+
+# try several times in case we are being rate limited
+# this is not foolproof, messages can still be rejected
+MAX=4
+for ((i = 1; i <= "${MAX}"; i++)); do
+  RET=$(
+    curl -s -X "POST" "$WEBH_URL" -H 'Content-Type: application/json' --data-ascii @- <<EOF
+${DATA}
+EOF
+  )
+  # if nothing was returned, message was successfully sent. exit loop
+  [[ -z "${RET}" ]] && break
+  # log the attempt
+  {
+    date
+    echo "attempt ${i} of ${MAX} failed"
+    echo "${RET}"
+  } >>"${LOG}"
+  # if there was an error with the submission, log details and exit loop
+  [[ "${RET}" != *"retry_after"* ]] && echo "${DATA}" >>"${LOG}" && logger -t "${SCRIPTNAME}" -- "Failed sending notification" && break
+  # if retries exhausted, log failure
+  [[ "${i}" -eq "${MAX}" ]] && echo "${DATA}" >>"${LOG}" && logger -t "${SCRIPTNAME}" -- "Failed sending notification - rate limited" && break
+  # we were rate limited, try again after a delay
+  sleep 1
+done
+      ]]>
+    </Script>
+  </Agent>

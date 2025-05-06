@@ -21,18 +21,16 @@ Nchan="docker_load:stop"
 <?
 require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
 
-$width   = in_array($theme,['white','black']) ? -58: -44;
-$top     = in_array($theme,['white','black']) ? 40 : 20;
+$width   = $themeHelper->isTopNavTheme() ? -58: -44; // $themeHelper set in DefaultPageLayout.php
+$top     = $themeHelper->isTopNavTheme() ? 40 : 20;
 $busy    = "<i class='fa fa-spin fa-circle-o-notch'></i> "._('Please wait')."... "._('starting up containers');
 $cpus    = cpu_list();
 ?>
-<link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.ui.css')?>">
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
-<link type="text/css" rel="stylesheet" href="<?autov("/plugins/dynamix.docker.manager/styles/style-$theme.css")?>">
 
 <table id="docker_containers" class="tablesorter shift">
-<thead><tr><th><a id="resetsort" class="nohand" onclick="resetSorting()" title="_(Reset sorting)_"><i class="fa fa-th-list"></i></a>_(Application)_</th><th>_(Version)_</th><th>_(Network)_</th><th>_(Port Mappings)_ <small>(_(App to Host)_)</small></th><th>_(Volume Mappings)_ <small>(_(App to Host)_)</small></th><th class="load advanced">_(CPU & Memory load)_</th><th class="nine">_(Autostart)_</th><th class="five">_(Uptime)_</th></tr></thead>
-<tbody id="docker_list"><tr><td colspan='8'></td></tr></tbody>
+<thead><tr><th><a id="resetsort" class="nohand" onclick="resetSorting()" title="_(Reset sorting)_"><i class="fa fa-th-list"></i></a>_(Application)_</th><th>_(Version)_</th><th>_(Network)_</th><th>_(Container IP)_</th><th>_(Container Port)_</th><th>_(LAN IP:Port)_</th><th>_(Volume Mappings)_ <small>(_(App to Host)_)</small></th><th class="load advanced">_(CPU & Memory load)_</th><th class="nine">_(Autostart)_</th><th class="five">_(Uptime)_</th></tr></thead>
+<tbody id="docker_list"><tr><td colspan='9'></td></tr></tbody>
 </table>
 <input type="button" onclick="addContainer()" value="_(Add Container)_" style="display:none">
 <input type="button" onclick="startAll()" value="_(Start All)_" style="display:none">
@@ -84,7 +82,7 @@ function LockButton() {
     $('#resetsort').removeClass('nohand').addClass('hand');
     $('i.mover').show();
     $('#docker_list .sortable').css({'cursor':'move'});
-<?if ($themes1):?>
+<?if ($themeHelper->isTopNavTheme()):?>
     $('div.nav-item.LockButton').find('a').prop('title',"_(Lock sortable items)_");
     $('div.nav-item.LockButton').find('b').removeClass('icon-u-lock green-text').addClass('icon-u-lock-open red-text');
 <?endif;?>
@@ -101,7 +99,7 @@ function LockButton() {
     $('#resetsort').removeClass('hand').addClass('nohand');
     $('i.mover').hide();
     $('#docker_list .sortable').css({'cursor':'default'});
-<?if ($themes1):?>
+<?if ($themeHelper->isTopNavTheme()):?>
     $('div.nav-item.LockButton').find('a').prop('title',"_(Unlock sortable items)_");
     $('div.nav-item.LockButton').find('b').removeClass('icon-u-lock-open red-text').addClass('icon-u-lock green-text');
 <?endif;?>
@@ -115,7 +113,23 @@ function loadlist(init) {
   $.get('/plugins/dynamix.docker.manager/include/DockerContainers.php',function(d) {
     clearTimeout(timers.docker);
     var data = d.split(/\0/);
+    $(".TS_tooltip").tooltipster("destroy");
     $('#docker_list').html(data[0]);
+    $('.TS_tooltip').tooltipster({
+      animation: 'fade',
+      delay: 200,
+      trigger: 'custom',
+      triggerOpen: {click:true,touchstart:true,mouseenter:true},
+      triggerClose:{click:true,scroll:false,mouseleave:true},
+      interactive: true,
+      viewportAware: true,
+      contentAsHTML: true,
+      functionBefore: function(instance,helper) {
+        var origin = $(helper.origin);
+        var TScontent = $(origin).attr("data-tstitle");
+        instance.content(TScontent);
+      }
+    });
     $('head').append('<script>'+data[1]+'<\/script>');
 <?if (_var($display,'resize')):?>
     resize();
@@ -176,10 +190,7 @@ $(function() {
   });
   $.removeCookie('lockbutton');
   loadlist(true);
-  dockerload.start();
+  dockerload.start().monitor();
 });
 
-window.onunload = function(){
-  dockerload.stop();
-}
 </script>

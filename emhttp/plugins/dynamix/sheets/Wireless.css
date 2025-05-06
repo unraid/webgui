@@ -1,0 +1,93 @@
+:root {
+    /* Base styles */
+    --wireless-input-focus-bg: var(--gray-100);
+    --wireless-input-focus-border: var(--blue-500);
+    --wireless-input-focus-border-style: solid;
+    --wireless-input-focus-border-width: 1px;
+}
+
+.Theme--azure {
+    --wireless-input-focus-bg: var(--theme-azure--gray-150);
+    --wireless-input-focus-border: var(--blue-500);
+}
+
+.Theme--gray {
+    --wireless-input-focus-bg: var(--theme-gray--black-alt);
+    --wireless-input-focus-border: var(--blue-500);
+}
+
+/* Base styles */
+.wifi {
+    display: inline-block;
+    width: 300px;
+}
+
+.hide {
+    display: none;
+}
+
+i.hand {
+    cursor: pointer;
+    text-decoration: none;
+}
+
+input.form {
+    font-size: 1rem;
+    padding: 5px 10px;
+    margin: 0;
+}
+
+input[type=button].form {
+    margin-left: 20px;
+}
+
+table.swal {
+    text-align: left;
+    font-size: 1.2rem;
+}
+
+table.swal td:nth-child(1) {
+    width: 42%;
+    text-align: right;
+    padding-right: 30px;
+}
+
+#showPass {
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+select.wifi {
+    max-width: 100px;
+}
+
+input.wifi {
+    margin-left: 10px;
+    width: 2.4rem;
+    text-transform: uppercase;
+}
+
+/* Theme-specific input focus styles */
+input.narrow:focus,
+input.slim:focus {
+    background-color: var(--wireless-input-focus-bg);
+    box-shadow: none;
+    outline: none;
+    border: none;
+    border: var(--wireless-input-focus-border-width) var(--wireless-input-focus-border-style) var(--wireless-input-focus-border);
+}
+
+/* Theme variants */
+.Theme--black,
+.Theme--white {
+    --wireless-input-focus-bg: var(--gray-800);
+    --wireless-input-focus-border: var(--gray-100);
+    --wireless-input-focus-border-style: solid;
+    --wireless-input-focus-border-width: 1px;
+
+    input.narrow:focus,
+    input.slim:focus {
+        border: none;
+        border-bottom: var(--wireless-input-focus-border-width) var(--wireless-input-focus-border-style) var(--wireless-input-focus-border);
+    }
+}

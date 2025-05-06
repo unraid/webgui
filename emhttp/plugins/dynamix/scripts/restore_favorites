@@ -7,6 +7,7 @@ $file = fopen($cfg,'r');
 while (($page = fgets($file))!==false) {
   // update each favorite
   $page = rtrim($page);
+  if ( ! is_file($page) ) continue;
   $line = fopen($page,'r');
   if ($line === false) continue;
   // get current Menu settings

@@ -18,6 +18,8 @@ require_once "$docroot/webGui/include/Helpers.php";
 $_SERVER['REQUEST_URI'] = 'tools';
 require_once "$docroot/webGui/include/Translations.php";
 
+$pci_device_diffs = comparePCIData();
+
 function usb_physical_port($usbbusdev) {
   if (preg_match('/^Bus (?P<bus>\S+) Device (?P<dev>\S+): ID (?P<id>\S+)(?P<name>.*)$/', $usbbusdev, $usbMatch)) {
     //udevadm info -a --name=/dev/bus/usb/003/002 | grep KERNEL==
@@ -75,9 +77,11 @@ case 't1':
     foreach ($devicelist as $line) {
       if (!empty($line)) {
         exec('udevadm info --path=$(udevadm info -q path /dev/'.$line.' | cut -d / -f 1-7) --query=path',$linereturn);
-        preg_match_all($DBDF_PARTIAL_REGEX, $linereturn[0], $inuse);
-        foreach ($inuse[0] as $line) {
-          $lines[] = $line;
+        if(isset($linereturn[0])) {
+          preg_match_all($DBDF_PARTIAL_REGEX, $linereturn[0], $inuse);
+          foreach ($inuse[0] as $line) {
+            $lines[] = $line;
+          }
         }
         unset($inuse);
         unset($linereturn);
@@ -92,9 +96,11 @@ case 't1':
           foreach ($nics as $line) {
             if (!empty($line)) {
               exec('readlink /sys/class/net/'.$line,$linereturn);
-              preg_match_all($DBDF_PARTIAL_REGEX, $linereturn[0], $inuse);
-              foreach ($inuse[0] as $line) {
-                $lines[] = $line;
+              if(isset($linereturn[0])) {
+                preg_match_all($DBDF_PARTIAL_REGEX, $linereturn[0], $inuse);
+                foreach ($inuse[0] as $line) {
+                  $lines[] = $line;
+                }
               }
               unset($inuse);
               unset($linereturn);
@@ -111,6 +117,15 @@ case 't1':
       $iommuinuse[] = (strpos($string,'/')) ? strstr($string, '/', true) : $string;
     }
     exec('lsscsi -s',$lsscsi);
+    // Filter for 'removed' devices
+    $removedArr = array_filter($pci_device_diffs, function($entry) {
+      return isset($entry['status']) && $entry['status'] === 'removed';
+    });
+    foreach ($removedArr as $removedpci => $removeddata) {
+      $groups[] = "IOMMU "._("Removed");
+      $groups[] = "\tR[{$removeddata['device']['vendor_id']}:{$removeddata['device']['device_id']}] ".str_replace("0000:","",$removedpci)." ".trim($removeddata['device']['description'],"\n");
+    }
+    $ackparm = "";
     foreach ($groups as $line) {
       if (!$line) continue;
       if ($line[0]=='I') {
@@ -122,6 +137,8 @@ case 't1':
         $line = preg_replace("/^\t/","",$line);
         $vd = trim(explode(" ", $line)[0], "[]");
         $pciaddress = explode(" ", $line)[1];
+        $removed = $line[0]=='R' ? true : false;
+        if ($removed) $line=preg_replace('/R/', '', $line, 1);
         if (preg_match($BDF_REGEX, $pciaddress)) {
           // By default lspci does not output the <Domain> when the only domain in the system is 0000. Add it back.
           $pciaddress = "0000:".$pciaddress;
@@ -136,13 +153,32 @@ case 't1':
         if ((strpos($line, 'Host bridge') === false) && (strpos($line, 'PCI bridge') === false)) {
           if (file_exists('/sys/kernel/iommu_groups/'.$iommu.'/devices/'.$pciaddress.'/reset')) echo "<i class=\"fa fa-retweet grey-orb middle\" title=\"",_('Function Level Reset (FLR) supported'),".\"></i>";
           echo "</td><td>";
+          if (!$removed) {
           echo in_array($iommu, $iommuinuse) ? '<input type="checkbox" value="" title="'._('In use by Unraid').'" disabled ' : '<input type="checkbox" class="iommu'.$iommu.'" value="'.$pciaddress."|".$vd.'" ';
           // check config file for two formats: <Domain:Bus:Device.Function>|<Vendor:Device> or just <Domain:Bus:Device.Function>
           echo (in_array($pciaddress."|".$vd, $vfio_cfg_devices) || in_array($pciaddress, $vfio_cfg_devices)) ? " checked>" : ">";
+          } 
         } else { echo "</td><td>"; }
         echo '</td><td title="';
         foreach ($outputvfio as $line2) echo htmlentities($line2,ENT_QUOTES)."&#10;";
         echo '">',$line,'</td></tr>';
+        if (array_key_exists($pciaddress,$pci_device_diffs)) {
+          echo "<tr><td></td><td><td></td><td></td><td>";
+          echo "<i class=\"fa fa-warning fa-fw orange-text\" title=\""._('PCI Change')."\n"._('Click to acknowledge').".\" onclick=\"ackPCI('".htmlentities($pciaddress)."','".htmlentities($pci_device_diffs[$pciaddress]['status'])."')\"></i>";
+          echo _("PCI Device change");
+          echo " "._("Action").":".ucfirst(_($pci_device_diffs[$pciaddress]['status']))." ";
+          $ackparm .= $pciaddress.",".$pci_device_diffs[$pciaddress]['status'].";";
+          if ($pci_device_diffs[$pciaddress]['status']!="removed") echo $pci_device_diffs[$pciaddress]['device']['description'];
+          echo "</td></tr>";
+          if ($pci_device_diffs[$pciaddress]['status']=="changed") {
+            echo "<tr><td></td><td><td></td><td></td><td>";
+            echo _("Differences");
+            foreach($pci_device_diffs[$pciaddress]['differences'] as $key => $changes){
+              echo " $key "._("before").":{$changes['old']} "._("after").":{$changes['new']} ";
+            }
+            echo "</td></tr>";
+          }
+        }
         unset($outputvfio);
         switch (true) {
           case (strpos($line, 'USB controller') !== false):
@@ -190,8 +226,10 @@ case 't1':
     if (file_exists("/var/log/vfio-pci") && filesize("/var/log/vfio-pci")) {
       echo '<input id="viewlog" type="button" value="'._('View VFIO-PCI Log').'" onclick="openTerminal(\'log\',\'vfio-pci\',\'vfio-pci\')">';
     }
+    if ($ackparm == "") $ackdisable =" disabled "; else $ackdisable = "";
     echo '<input id="applycfg" type="submit" disabled value="'._('Bind selected to VFIO at Boot').'" onclick="applyCfg();" '.(isset($noiommu) ? "style=\"display:none\"" : "").'>';
     echo '<span id="warning"></span>';
+    echo '<input id="applypci" type="submit"'.$ackdisable.' value="'._('Acknowledge all PCI changes').'" onclick="ackPCI(\''.htmlentities($ackparm).'\',\'all\')" >';
     echo '</td></tr>';
     echo <<<EOT
 <script>
@@ -207,11 +245,19 @@ EOT;
   }
   break;
 case 't2':
+  $is_intel_cpu = is_intel_cpu();
+  $core_types = $is_intel_cpu ? get_intel_core_types() : [];
   exec('cat /sys/devices/system/cpu/*/topology/thread_siblings_list|sort -nu',$pairs);
   $i = 1;
   foreach ($pairs as $line) {
+    $line2 = $line;
     $line = preg_replace(['/(\d+)[-,](\d+)/','/(\d+)\b/'],['$1 / $2','cpu $1'],$line);
-    echo "<tr><td>".(strpos($line,'/')===false?"Single":"Pair ".$i++).":</td><td>$line</td></tr>";
+    if ($is_intel_cpu && count($core_types) > 0) {
+      [$cpu1, $cpu2] = my_preg_split('/[,-]/',$line2);
+      $core = $cpu1;
+      $core_type = "({$core_types[$core]})";
+    } else $core_type = "";
+    echo "<tr><td>".(strpos($line,'/')===false?"Single":"Pair ".$i++).":</td><td>$line $core_type</td></tr>";
   }
   break;
 case 't3':

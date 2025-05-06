@@ -33,30 +33,60 @@ function scan($line, $text) {
 	return stripos($line,$text)!==false;
 }
 
-function embed(&$syslinux, $key, $value) {
-	$size = count($syslinux);
-	$make = false;
-	$new = strlen($value) ? "$key=$value" : false;
-	$i = 0;
-	while ($i < $size) {
-		// find sections and exclude safemode
-		if (scan($syslinux[$i],'label ') && !scan($syslinux[$i],'safe mode') && !scan($syslinux[$i],'safemode')) {
-			$n = $i + 1;
-			// find the current requested setting
-			while (!scan($syslinux[$n],'label ') && $n < $size) {
-				if (scan($syslinux[$n],'append ')) {
-					$cmd = preg_split('/\s+/',trim($syslinux[$n]));
-					// replace the existing setting
-					for ($c = 1; $c < count($cmd); $c++) if (scan($cmd[$c],$key)) {$make |= ($cmd[$c]!=$new); $cmd[$c] = $new; break;}
-					// or insert the new setting
-					if ($c==count($cmd) && $new) {array_splice($cmd,-1,0,$new); $make = true;}
-					$syslinux[$n] = '  '.str_replace('  ',' ',implode(' ',$cmd));
+function embed(&$bootcfg, $env, $key, $value) {
+	if ($env === 'syslinux') {
+		$size = count($bootcfg);
+		$make = false;
+		$new = strlen($value) ? "$key=$value" : false;
+		$i = 0;
+		while ($i < $size) {
+			// find sections and exclude safemode
+			if (scan($bootcfg[$i],'label ') && !scan($bootcfg[$i],'safe mode') && !scan($bootcfg[$i],'safemode')) {
+				$n = $i + 1;
+				// find the current requested setting
+				while (!scan($bootcfg[$n],'label ') && $n < $size) {
+					if (scan($bootcfg[$n],'append ')) {
+						$cmd = preg_split('/\s+/',trim($bootcfg[$n]));
+						// replace the existing setting
+						for ($c = 1; $c < count($cmd); $c++) if (scan($cmd[$c],$key)) {$make |= ($cmd[$c]!=$new); $cmd[$c] = $new; break;}
+						// or insert the new setting
+						if ($c==count($cmd) && $new) {array_splice($cmd,-1,0,$new); $make = true;}
+						$bootcfg[$n] = '  '.str_replace('  ',' ',implode(' ',$cmd));
+					}
+					$n++;
 				}
-				$n++;
+				$i = $n - 1;
 			}
-			$i = $n - 1;
+			$i++;
 		}
-		$i++;
+	} elseif ($env === 'grub') {
+		$size = count($bootcfg);
+		$make = false;
+		$new = strlen($value) ? "$key=$value" : false;
+		$i = 0;
+		while ($i < $size) {
+			// find sections and exclude safemode/memtest
+			if (scan($bootcfg[$i],'menuentry ') && !scan($bootcfg[$i],'safe mode') && !scan($bootcfg[$i],'safemode') && !scan($bootcfg[$i],'memtest')) {
+				$n = $i + 1;
+				// find the current requested setting
+				while (!scan($bootcfg[$n],'menuentry ') && $n < $size) {
+					if (scan($bootcfg[$n],'linux ')) {
+						$cmd = preg_split('/\s+/',trim($bootcfg[$n]));
+						// replace the existing setting
+						for ($c = 1; $c < count($cmd); $c++) if (scan($cmd[$c],$key)) {$make |= ($cmd[$c]!=$new); $cmd[$c] = $new; break;}
+						// or insert the new setting
+						if ($c == count($cmd) && $new) {
+							$cmd[] = $new;
+							$make = true;
+						}
+						$bootcfg[$n] = '  ' . str_replace('  ', ' ', implode(' ', $cmd));
+					}
+					$n++;
+				}
+				$i = $n - 1;
+			}
+			$i++;
+		}
 	}
 	return $make;
 }
@@ -103,7 +133,8 @@ case 'domain-start-console':
 		$vmrcurl  = autov('/plugins/dynamix.vm.manager/'.$protocol.'.html',true).'&autoconnect=true&host='._var($_SERVER,'HTTP_HOST');
 		if ($protocol == "spice") $vmrcurl  .= '&vmname='. urlencode($domName) .'&port=/wsproxy/'.$vmrcport.'/'; else $vmrcurl .= '&port=&path=/wsproxy/'.$wsport.'/';
 	}
-	$arrResponse['vmrcurl'] = $vmrcurl;
+	if ($protocol == "vnc") $vmrcscale = "&resize=scale"; else $vmrcscale = "";
+	$arrResponse['vmrcurl'] = $vmrcurl.$vmrcscale;
 	break;
 
 case 'domain-start-consoleRV':
@@ -119,13 +150,29 @@ case 'domain-start-consoleRV':
 	$vvarray = array() ;
 	$vvarray[] = "[virt-viewer]\n";
 	$vvarray[] = "type=$protocol\n";
-	$vvarray[] = "host="._var($_SERVER,'HTTP_HOST')."\n" ;
+	$vvarrayhost = _var($_SERVER,'HTTP_HOST');
+	if (strpos($vvarrayhost,":")) $vvarrayhost = parse_url($vvarrayhost,PHP_URL_HOST);
+	$vvarray[] = "host=$vvarrayhost\n" ; 
 	$vvarray[] = "port=$port\n" ;
 	$vvarray[] = "delete-this-file=1\n" ;
 	if (!is_dir("/mnt/user/system/remoteviewer")) mkdir("/mnt/user/system/remoteviewer") ;
 	$vvfile = "/mnt/user/system/remoteviewer/rv"._var($_SERVER,'HTTP_HOST').".$port.vv" ;
 	file_put_contents($vvfile,$vvarray) ;
 	$arrResponse['vvfile'] = $vvfile;
+	break;
+
+case 'domain-consoleRDP':
+	requireLibvirt();
+	$dom = $lv->get_domain_by_name($domName);
+	$rdpvarray = array() ;
+	$myIP=get_vm_ip($dom);
+	if ($myIP == NULL)  {$arrResponse['error'] = "No IP, guest agent not installed?"; break; } 
+	$rdparray[] = "full address:s: $myIP\n";
+	#$rdparray[] = "administrative session:1\n";
+	if (!is_dir("/mnt/user/system/remoteviewer")) mkdir("/mnt/user/system/remoteviewer") ;
+	$rdpfile = "/mnt/user/system/remoteviewer/rv"._var($_SERVER,'HTTP_HOST').".$port.rdp" ;
+	file_put_contents($rdpfile,$rdparray) ;
+	$arrResponse['vvfile'] = $rdpfile;
 	break;
 
 case 'domain-consoleRV':
@@ -138,7 +185,9 @@ case 'domain-consoleRV':
 	$vvarray = array() ;
 	$vvarray[] = "[virt-viewer]\n";
 	$vvarray[] = "type=$protocol\n";
-	$vvarray[] = "host="._var($_SERVER,'HTTP_HOST')."\n" ;
+	$vvarrayhost = _var($_SERVER,'HTTP_HOST');
+	if (strpos($vvarrayhost,":")) $vvarrayhost = parse_url($vvarrayhost,PHP_URL_HOST);
+	$vvarray[] = "host=$vvarrayhost\n" ;
 	$vvarray[] = "port=$port\n" ;
 	$vvarray[] = "delete-this-file=1\n" ;
 	if (!is_dir("/mnt/user/system/remoteviewer")) mkdir("/mnt/user/system/remoteviewer") ;
@@ -146,6 +195,23 @@ case 'domain-consoleRV':
 	file_put_contents($vvfile,$vvarray) ;
 	$arrResponse['vvfile'] = $vvfile;
 	break;
+
+case 'domain-openWebUI':
+	requireLibvirt();
+	$dom = $lv->get_domain_by_name($domName);
+	$WebUI = unscript(_var($_REQUEST,'vmrcurl'));
+	$myIP = get_vm_ip($dom);
+	if (strpos($WebUI,"[IP]") && $myIP == NULL)  $arrResponse['error'] = "No IP, guest agent not installed?"; 
+	$WebUI = preg_replace("%\[IP\]%", $myIP, $WebUI);
+	$vmnamehypen = str_replace(" ","-",$domName);
+	$WebUI = preg_replace("%\[VMNAME\]%", $vmnamehypen, $WebUI);
+	if (preg_match("%\[PORT:(\d+)\]%", $WebUI, $matches)) {
+		$ConfigPort = $matches[1] ?? '';
+		$WebUI = preg_replace("%\[PORT:\d+\]%", $ConfigPort, $WebUI);	
+	}
+	$arrResponse['vmrcurl'] = $WebUI;
+	break;
+
 	
 case 'domain-pause':
 	requireLibvirt();
@@ -391,13 +457,68 @@ case 'snap-desc':
 	: ['error' => $lv->get_last_error()];
 	break;
 
+case 'get_storage_fstype':
+	$fstype = get_storage_fstype(unscript(_var($_REQUEST,'storage')));
+	$arrResponse = ['fstype' => $fstype , 'success' => true] ;
+	break;
+
+case 'vm-removal':
+	requireLibvirt();
+	$arrResponse = ($data = getvmsnapshots($domName)) 
+	? ['success' => true]
+	: ['error' => $lv->get_last_error()];
+	$datartn = $disksrtn = "";
+	foreach($data as $snap=>$snapdetail) {
+		$snapshotdatetime = date("Y-m-d H:i:s",$snapdetail["creationtime"]) ;
+		$datartn  .= "$snap  $snapshotdatetime\n" ;
+	}
+	$disks = $lv->get_disk_stats($domName);
+
+	foreach($disks as $diskid=>$diskdetail) {
+	if ($diskid == 0) $pathinfo = pathinfo($diskdetail['file']);
+	}
+
+	$list = glob($pathinfo['dirname']."/*");
+	$uuid = $lv->domain_get_uuid($domName);
+
+	$list2 = glob("/etc/libvirt/qemu/nvram/*$uuid*");
+	$listnew = array();
+	$list=array_merge($list,$list2);
+	foreach($list as $key => $listent)
+	{
+		$pathinfo = pathinfo($listent);
+		$listnew[] = "{$pathinfo['basename']} ({$pathinfo['dirname']})";
+	}
+	sort($listnew,SORT_NATURAL);
+	$listcount = count($listnew);
+	$snapcount = count($data);
+	$disksrtn=implode("\n",$listnew);
+
+
+
+	if (strpos($dirname,'/mnt/user/')===0) {
+		$realdisk = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($dirname)." 2>/dev/null"));
+		if (!empty($realdisk)) {
+			$dirname = str_replace('/mnt/user/', "/mnt/$realdisk/", $dirname);
+		}
+	}
+	$fstype = trim(shell_exec(" stat -f -c '%T' $dirname"));
+	$html = '<table class="snapshot">
+	<tr><td>'._('VM Being removed').':</td><td><span id="VMBeingRemoved">'.$domName.'</span></td></tr>
+	<tr><td>'._('Remove all files').':</td><td><input type="checkbox" id="All" checked value="" ></td></tr>
+	<tr><td>'._('Files being removed').':</td><td><textarea id="textfiles" class="xml" rows="'.$listcount.'" style="white-space: pre; overflow: auto; width:600px" disabled>'.$disksrtn.'</textarea></td></tr>
+	<tr><td>'._('Snapshots being removed').':</td><td><textarea id="textsnaps" rows="'.$snapsount.'" cols="80" disabled>'.$datartn.'</textarea></td></tr>
+	</table>';
+	$arrResponse = ['html' => $html , 'success' => true] ;
+	break;
+
 case 'disk-create':
 	$disk = $_REQUEST['disk'];
 	$driver = $_REQUEST['driver'];
 	$size = str_replace(["KB","MB","GB","TB","PB", " ", ","], ["K","M","G","T","P", "", ""], strtoupper($_REQUEST['size']));
 	$dir = dirname($disk);
-	if (!is_dir($dir)) mkdir($dir);
-	#if (!is_dir($dir)) my_mkdir($dir);
+	#if (!is_dir($dir)) mkdir($dir);
+	if (!is_dir($dir)) my_mkdir($dir);
 	// determine the actual disk if user share is being used
 	$dir = transpose_user_path($dir);
 	#@exec("chattr +C -R ".escapeshellarg($dir)." >/dev/null");
@@ -505,26 +626,39 @@ case 'hot-detach-usb':
 	//TODO
 	break;
 
-case 'syslinux':
-	$cfg = '/boot/syslinux/syslinux.cfg';
-	$syslinux = file($cfg, FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
-	$m1 = embed($syslinux, 'pcie_acs_override', $_REQUEST['pcie']);
-	$m2 = embed($syslinux, 'vfio_iommu_type1.allow_unsafe_interrupts', $_REQUEST['vfio']);
-	if ($m1||$m2) file_put_contents($cfg, implode("\n",$syslinux)."\n");
+case 'cmdlineoverride':
+	if (is_file('/boot/syslinux/syslinux.cfg')) {
+		$cfg = '/boot/syslinux/syslinux.cfg';
+		$env = 'syslinux';
+		$bootcfg = file($cfg, FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
+	} elseif (is_file('/boot/grub/grub.cfg')) {
+		$cfg = '/boot/grub/grub.cfg';
+		$env = 'grub';
+		$bootcfg = file($cfg, FILE_IGNORE_NEW_LINES);
+	}
+	$m1 = embed($bootcfg, $env, 'pcie_acs_override', $_REQUEST['pcie']);
+	$m2 = embed($bootcfg, $env, 'vfio_iommu_type1.allow_unsafe_interrupts', $_REQUEST['vfio']);
+	if ($m1||$m2) file_put_contents($cfg, implode("\n",$bootcfg)."\n");
 	$arrResponse = ['success' => true, 'modified' => $m1|$m2];
 	break;
 
 case 'reboot':
-	$cfg = '/boot/syslinux/syslinux.cfg';
-	$syslinux = file($cfg, FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
+	if (is_file('/boot/syslinux/syslinux.cfg')) {
+		$cfg = '/boot/syslinux/syslinux.cfg';
+		$env = 'syslinux';
+	} elseif (is_file('/boot/grub/grub.cfg')) {
+		$cfg = '/boot/grub/grub.cfg';
+		$env = 'grub';
+	}
+	$bootcfg = file($cfg, FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
 	$cmdline = explode(' ',file_get_contents('/proc/cmdline'));
 	$pcie = $vfio = '';
 	foreach ($cmdline as $cmd) {
 		if (scan($cmd,'pcie_acs_override')) $pcie = explode('=',$cmd)[1];
 		if (scan($cmd,'allow_unsafe_interrupts')) $vfio = explode('=',$cmd)[1];
 	}
-	$m1 = embed($syslinux, 'pcie_acs_override', $pcie);
-	$m2 = embed($syslinux, 'vfio_iommu_type1.allow_unsafe_interrupts', $vfio);
+	$m1 = embed($bootcfg, $env, 'pcie_acs_override', $pcie);
+	$m2 = embed($bootcfg, $env, 'vfio_iommu_type1.allow_unsafe_interrupts', $vfio);
 	$arrResponse = ['success' => true, 'modified' => $m1|$m2];
 	break;
 
@@ -738,6 +872,50 @@ case 'vm-template-remove':
 	$arrResponse = ['success' => true];
 	break;
 
+case 'vm-template-save':
+	$template = $_REQUEST['template'];	
+	$name = $_REQUEST['name'];	
+	$replace = $_REQUEST['replace'];	
+
+	if (is_file($name) && $replace == "no"){
+		$arrResponse = ['success' => false, 'error' => _("File exists.")];
+	} else {
+		$error = file_put_contents($name,json_encode($template));
+		if ($error !== false)  $arrResponse = ['success' => true]; 
+		else {
+			$arrResponse = ['success' => false, 'error' => _("File write failed.")];
+		}
+	}
+	break;
+
+case 'vm-template-import':
+	$template = $_REQUEST['template'];	
+	$name = $_REQUEST['name'];	
+	$replace = $_REQUEST['replace'];	
+	$templateslocation = "/boot/config/plugins/dynamix.vm.manager/savedtemplates.json";
+
+	if ($template==="*file") {
+		$template=json_decode(file_get_contents($name));
+	}
+
+	$namepathinfo = pathinfo($name);
+	$template_name = $namepathinfo['filename'];
+
+	if (is_file($templateslocation)){
+		$ut = json_decode(file_get_contents($templateslocation),true) ;
+		if (isset($ut[$template_name]) && $replace == "no"){
+			$arrResponse = ['success' => false, 'error' => _("Template exists.")];
+		} else {
+			$ut[$template_name] = $template;
+			$error = file_put_contents($templateslocation,json_encode($ut,JSON_PRETTY_PRINT));;
+			if ($error !== false)  $arrResponse = ['success' => true]; 
+			else {
+				$arrResponse = ['success' => false, 'error' => _("Tempalte file write failed.")];
+			}
+		}
+	}
+	break;
+	
 default:
 	$arrResponse = ['error' => _('Unknown action')." '$action'"];
 	break;

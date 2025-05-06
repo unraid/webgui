@@ -40,7 +40,7 @@ acpid_stop(){
     REPLY="Already stopped"
   else
     run kill $(cat /var/run/acpid.pid 2>/dev/null)
-    run killall acpid
+    run killall --ns $$ acpid
     if ! acpid_running; then REPLY="Stopped"; else REPLY="Failed"; fi
   fi
   log "$DAEMON...  $REPLY."

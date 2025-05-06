@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2024, Lime Technology
- * Copyright 2012-2024, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -35,6 +35,10 @@ function dmidecode($key, $n, $all=true) {
   return $all ? $properties : $properties[0]??null;
 }
 
+function port_get_contents($port) {
+  return file_exists($port) ? @file_get_contents($port) : 0;
+}
+
 $var      = (array)@parse_ini_file('state/var.ini');
 $model    = _var($var,'SYS_MODEL',_('N/A'));
 $board    = dmidecode('Base Board Information',2,0);
@@ -64,7 +68,7 @@ if (!empty($strLoadedModules)) {
   // Yah! CPU and motherboard supported and enabled in BIOS
   $hvm = _('Enabled');
 } else {
-  $hvm = '<a href="https://docs.unraid.net/unraid-os/manual/vm-management#system-preparation" target="_blank">';
+  $hvm = '<a href="https://docs.unraid.net/go/vm-system-preparation/" target="_blank">';
   if (strpos($strCPUInfo,'vmx')===false && strpos($strCPUInfo, 'svm')===false) {
     // CPU doesn't support virtualization
     $hvm .=  _('Not Available');
@@ -82,7 +86,7 @@ if (!empty($iommu_groups)) {
   // Yah! CPU and motherboard supported and enabled in BIOS
   $iommu = _('Enabled');
 } else {
-  $iommu = '<a href="https://docs.unraid.net/unraid-os/manual/vm-management#determining-hvmiommu-hardware-support" target="_blank">';
+  $iommu = '<a href="https://docs.unraid.net/go/determining-hvmiommu-hardware-support/" target="_blank">';
   if (strpos($strCPUInfo,'vmx')===false && strpos($strCPUInfo, 'svm')===false) {
     // CPU doesn't support virtualization so iommu would be impossible
     $iommu .= _('Not Available');
@@ -145,7 +149,7 @@ span.link{text-decoration:underline;cursor:pointer}
 </style>
 
 <table class='info'>
-<tr><td><?=_('Model')?>:</td><td><?=$model?></td></tr>
+<tr><td><?=_('Model')?>:</td><td><?=htmlspecialchars($model)?></td></tr>
 <tr><td><?=('M/B')?>:</td><td><?="{$board['Manufacturer']} {$board['Product Name']} {$board['Version']} {$board['Serial Number']}"?></td></tr>
 <tr><td><?=_('BIOS')?>:</td><td><?="{$bios['Vendor']} {$bios['Version']} {$bios['Release Date']}"?></td></tr>
 <tr><td><?=_('CPU')?>:</td><td><?="$cpumodel {$cpu['Current Speed']}"?></td></tr>
@@ -160,23 +164,40 @@ foreach ($memory_devices as $device) {
   echo "<tr class='ram'><td></td><td>",$device['Locator'],": ",_var($device,'Manufacturer')," ",_var($device,'Part Number'),", $size ",_var($device,'Type')," @ ",_var($device,'Configured Memory Speed'),"</td></tr>";
 }
 
-exec("ls --indicator-style=none /sys/class/net|grep -Po '^(bond|eth)\d+$'",$sPorts);
+exec("ls --indicator-style=none /sys/class/net|grep -Po '^(bond|eth|wlan)\d+$'",$sPorts);
 $i = 0;
 $network = count($sPorts) > 1 ? "<span class='link blue-text' onclick=\"$('tr.port').toggle()\">"._('Network').":</span>" : _('Network').':';
 foreach ($sPorts as $port) {
-  $int = "/sys/class/net/$port";
-  $mtu = file_get_contents("$int/mtu");
-  $link = @file_get_contents("$int/carrier")==1;
+  $int  = "/sys/class/net/$port";
+  $mtu  = port_get_contents("$int/mtu");
+  $link = port_get_contents("$int/carrier")==1;
   $name = $i ? "" : $network;
   $more = $i++ ? "port" : "";
-  if (substr($port,0,4)=='bond') {
+  switch (substr($port,0,4)) {
+  case 'bond':
     if ($link) {
       $bond_mode = str_replace('Bonding Mode: ','',file("/proc/net/bonding/$port",FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES)[1]);
       echo "<tr class='$more'><td>$name</td><td>$port: $bond_mode, mtu $mtu</td></tr>";
     } else {
       echo "<tr class='$more'><td>$name</td><td>$port: ",_('bond down'),"</td></tr>";
     }
-  } else {
+    break;
+  case 'wlan':
+    if ($link) {
+      unset($speed);
+      exec("iw $port link | awk '/^\s+[rt]x bitrate: /{print $1,$2,$3,$4}'",$speed);
+      if (count($speed)==2) {
+        [$rxrate, $rxunit] = explode(' ',explode(': ',$speed[0])[1]);
+        [$txrate, $txunit] = explode(' ',explode(': ',$speed[1])[1]);
+        echo "<tr class='$more'><td>$name</td><td>$port: ",_('Rx'),": ",round($rxrate)," ",str_replace('Bit/s','bps',$rxunit),", ",_('Tx').": ",round($txrate)," ",str_replace('Bit/s','bps',$txunit),", mtu $mtu</td></tr>";
+      } else {
+        echo "<tr class='$more'><td>$name</td><td>$port: ",_('not connected'),"</td></tr>";
+      }
+    } else {
+      echo "<tr class='$more'><td>$name</td><td>$port: ",_('interface down'),"</td></tr>";
+    }
+    break;
+  default:
     if ($link) {
       $speed = file_get_contents("$int/speed");
       $duplex = file_get_contents("$int/duplex");
@@ -184,6 +205,7 @@ foreach ($sPorts as $port) {
     } else {
       echo "<tr class='$more'><td>$name</td><td>$port: ",_('interface down'),"</td></tr>";
     }
+    break;
   }
 }
 ?>

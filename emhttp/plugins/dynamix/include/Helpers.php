@@ -212,20 +212,58 @@ function tail($file, $rows=1) {
   }
   return implode($echo);
 }
+
+/* Get the last parity check from the parity history. */
 function last_parity_log() {
-  $log = '/boot/config/parity-checks.log';
-  [$date,$duration,$speed,$status,$error,$action,$size] = file_exists($log) ? my_explode('|',tail($log),7) : array_fill(0,7,0);
-  if ($date) {
-    [$y,$m,$d,$t] = my_preg_split('/ +/',$date,4);
-    $date = strtotime("$d-$m-$y $t");
-  }
-  return [$date,$duration,$speed,$status,$error,$action,$size];
+	$log = '/boot/config/parity-checks.log';
+
+	if (file_exists($log)) {
+		list($date, $duration, $speed, $status, $error, $action, $size) = my_explode('|', tail($log), 7);
+	} else {
+		list($date, $duration, $speed, $status, $error, $action, $size) = array_fill(0, 7, 0);
+	}
+
+	if ($date) {
+		list($y, $m, $d, $t) = my_preg_split('/ +/', $date, 4);
+		$date = strtotime("$d-$m-$y $t");
+	}
+
+	return [$date, $duration, $speed, $status, $error, $action, $size];
 }
+
+/* Get the last parity check from Unraid. */
+function last_parity_check() {
+	global $var;
+
+	/* Files for the latest parity check. */
+	$stamps	= '/var/tmp/stamps.ini';
+	$resync	= '/var/tmp/resync.ini';
+
+	/* Get the latest parity information from Unraid. */
+	$synced		= file_exists($stamps) ? explode(',',file_get_contents($stamps)) : [];
+	$sbSynced	= array_shift($synced) ?: _var($var,'sbSynced',0);
+	$idle		= [];
+	while (count($synced) > 1) {
+		$idle[] = array_pop($synced) - array_pop($synced);
+	}
+	$action		= _var($var, 'mdResyncAction');
+	$size		= _var($var, 'mdResyncSize', 0);
+	if (file_exists($resync)) {
+		list($action, $size) = my_explode(',', file_get_contents($resync));
+	}
+	$duration	= $var['sbSynced2']-$sbSynced-array_sum($idle);
+	$status		= _var($var,'sbSyncExit');
+	$speed		= $status==0 ? round($size*1024/$duration) : 0;
+	$error		= _var($var,'sbSyncErrs',0);
+
+	return [$duration, $speed, $status, $error, $action, $size];
+}
+
 function urlencode_path($path) {
   return str_replace("%2F", "/", urlencode($path));
 }
 function pgrep($process_name, $escape_arg=true) {
-  $pid = exec("pgrep ".($escape_arg?escapeshellarg($process_name):$process_name), $output, $retval);
+  $pid = exec('pgrep --ns $$ '.($escape_arg?escapeshellarg($process_name):$process_name), $output, $retval);
   return $retval==0 ? $pid : false;
 }
 function is_block($path) {
@@ -250,13 +288,6 @@ function transpose_user_path($path) {
   }
   return $path;
 }
-// custom parse_ini_file/string functions to deal with '#' comment lines
-function my_parse_ini_string($text, $sections=false, $scanner=INI_SCANNER_NORMAL) {
-  return parse_ini_string(preg_replace('/^#/m',';',$text),$sections,$scanner);
-}
-function my_parse_ini_file($file, $sections=false, $scanner=INI_SCANNER_NORMAL) {
-  return my_parse_ini_string(file_get_contents($file),$sections,$scanner);
-}
 function cpu_list() {
   exec('cat /sys/devices/system/cpu/*/topology/thread_siblings_list|sort -nu', $cpus);
   return $cpus;
@@ -270,26 +301,99 @@ function my_preg_split($split, $text, $count=2) {
 function delete_file(...$file) {
   array_map('unlink',array_filter($file,'file_exists'));
 }
-function my_mkdir($dirname,$permissions = 0777,$recursive = false) {
-  $dirname = transpose_user_path($dirname);
-	$pathinfo = pathinfo($dirname);
-	$parent = $pathinfo["dirname"];
-	$fstype = trim(shell_exec(" stat -f -c '%T' $parent"));
+function my_mkdir($dirname,$permissions = 0777,$recursive = false,$own = "nobody",$grp = "users") {
+  write_logging("Check if dir exists\n");
+  if (is_dir($dirname)) {write_logging("Dir exists\n"); return(false);}
+  write_logging("Dir does not exist\n");
+  $parent = $dirname;
+  write_logging("Getting $parent\n");
+  while (!is_dir($parent)){
+    if (!is_dir($parent)) write_logging("Not parent  $parent\n"); else write_logging("Parent $parent is\n");
+    if (!$recursive) return(false);
+    $pathinfo2 = pathinfo($parent);
+    $parent = $pathinfo2["dirname"];
+  }
+  write_logging("Parent $parent\n");
+  if (strpos($dirname,'/mnt/user/')===0) {
+    write_logging("Getting real disks\n");
+    $realdisk = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($parent)." 2>/dev/null"));
+    if (!empty($realdisk)) {
+      $dirname = str_replace('/mnt/user/', "/mnt/$realdisk/", $dirname);
+      $parent = str_replace('/mnt/user/', "/mnt/$realdisk/", $parent);
+    }
+  }
+  $fstype = trim(shell_exec(" stat -f -c '%T' $parent"));
   $rtncode = false;
-	switch ($fstype) {
-		case "zfs":
-      $zfsdataset = trim(shell_exec("zfs list -H -o name  $parent")) ;
-      $rtncode=exec("zfs create $zfsdataset/{$pathinfo['filename']}");
-      if (!$rtncode) mkdir($dirname, $permissions, $recursive);
-			break;
+  write_logging("fstype:$fstype parent $parent dir name $dirname\n");
+  switch ($fstype) {
+    case "zfs":
+      if (is_dir($parent.'/.zfs')) {
+        write_logging("ZFS Volume\n");
+        $zfsdataset = trim(shell_exec("zfs list -H -o name  $parent")); 
+        write_logging("Shell $zfsdataset\n");
+        $zfsdataset .= str_replace($parent,"",$dirname);
+        write_logging("Dataset $zfsdataset\n");
+        $zfsoutput = array();
+        if ($recursive) exec("zfs create -p \"$zfsdataset\"",$zfsoutput,$rtncode);else exec("zfs create \"$zfsdataset\"",$zfsoutput,$rtncode);
+        write_logging("Output: {$zfsoutput[0]} $rtncode"); 
+        if ($rtncode == 0)  write_logging( " ZFS Command OK\n"); else  write_logging( "ZFS Command Fail\n");
+      } else {write_logging("Not ZFS dataset\n");$rtncode = 1;}
+      if ($rtncode > 0) { mkdir($dirname, $permissions, $recursive); write_logging( "created dir:$dirname\n");} else chmod($zfsdataset,$permissions);
+      break;
     case "btrfs":
-      $rtncode=exec("btrfs subvolume create $dirname");
-      if (!$rtncode) mkdir($dirname, $permissions, $recursive);
+      $btrfsoutput = array();
+      if ($recursive) exec("btrfs subvolume create --parents \"$dirname\"",$btrfsoutput,$rtncode); else exec("btrfs subvolume create \"$dirname\"",$btrfsoutput,$rtncode);
+      if ($rtncode > 0) mkdir($dirname, $permissions, $recursive); else chmod($dirname,$permissions);
       break;
     default:
       mkdir($dirname, $permissions, $recursive);
       break;
-	}
+  }
+  chown($dirname, $own);
+  chgrp($dirname, $grp);
+  return($rtncode);
+}
+function my_rmdir($dirname) {
+  if (!is_dir("$dirname")) {
+    $return = [
+      'rtncode' => "false",
+      'type' => "NoDir",
+    ];
+    return($return);
+  }
+  if (strpos($dirname,'/mnt/user/')===0) {
+    $realdisk = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($dirname)." 2>/dev/null"));
+    if (!empty($realdisk)) {
+      $dirname = str_replace('/mnt/user/', "/mnt/$realdisk/", "$dirname");
+    }
+  }
+  $fstype = trim(shell_exec(" stat -f -c '%T' ".escapeshellarg($dirname)));
+  $rtncode = false;
+  switch ($fstype) {
+    case "zfs":
+      $zfsoutput = array();
+      $zfsdataset = trim(shell_exec("zfs list -H -o name  ".escapeshellarg($dirname))) ;
+      $cmdstr = "zfs destroy \"$zfsdataset\"  2>&1 ";
+      $error = exec($cmdstr,$zfsoutput,$rtncode);
+      $return = [
+        'rtncode' => $rtncode,
+        'output' => $zfsoutput,
+        'dataset' => $zfsdataset,
+        'type' => $fstype,
+        'cmd' => $cmdstr,
+        'error' => $error,
+      ];
+      break;
+    case "btrfs":
+    default:
+      $rtncode = rmdir($dirname);
+      $return = [
+        'rtncode' => $rtncode,
+        'type' => $fstype,
+      ];
+      break;
+  }
+  return($return);
 }
 function get_realvolume($path) {
   if (strpos($path,"/mnt/user/",0) === 0) 
@@ -300,4 +404,168 @@ function get_realvolume($path) {
   }
   return $reallocation;
 }
+
+function write_logging($value) {
+  $debug = is_file("/tmp/my_mkdir_debug");
+  if (!$debug) return;
+  file_put_contents('/tmp/my_mkdir_output', $value, FILE_APPEND);
+}
+
+function device_exists($name)
+{
+  global $disks,$devs;
+  return (array_key_exists($name, $disks) && !str_contains(_var($disks[$name],'status'),'_NP')) || (array_key_exists($name, $devs));
+}
+
+
+# Check for process Core Types.
+function parse_cpu_ranges($file) {
+  if (!is_file($file)) return null;
+  $ranges = file_get_contents($file);
+  $ranges = trim($ranges);
+  $cores = [];
+  foreach (explode(',', $ranges) as $range) {
+      if (strpos($range, '-') !== false) {
+          list($start, $end) = explode('-', $range);
+          $cores = array_merge($cores, range((int)$start, (int)$end));
+      } else {
+          $cores[] = (int)$range;
+      }
+  }
+  return $cores;
+}
+
+function get_intel_core_types() {
+  $core_types = array();
+  $cpu_core_file = "/sys/devices/cpu_core/cpus";
+  $cpu_atom_file = "/sys/devices/cpu_atom/cpus";
+  $p_cores = parse_cpu_ranges($cpu_core_file);
+  $e_cores = parse_cpu_ranges($cpu_atom_file);
+  if ($p_cores) {
+    foreach ($p_cores as $core) {
+      $core_types[$core] = _("P-Core");
+    }
+  }
+  if ($e_cores) {
+    foreach ($e_cores as $core) {
+      $core_types[$core] = _("E-Core");
+    }
+  }
+  return $core_types;
+}
+
+function dmidecode($key,$n,$all=true) {
+  $entries = array_filter(explode($key,shell_exec("dmidecode -qt$n")??""));
+  $properties = [];
+  foreach ($entries as $entry) {
+    $property = [];
+    foreach (explode("\n",$entry) as $line) if (strpos($line,': ')!==false) {
+      [$key,$value] = my_explode(': ',trim($line));
+      $property[$key] = $value;
+    }
+    $properties[] = $property;
+  }
+  return $all ? $properties : $properties[0]??null;
+}
+
+function is_intel_cpu() {
+  $cpu      = dmidecode('Processor Information','4',0);
+  $cpu_vendor = $cpu['Manufacturer'] ?? "";
+  $is_intel_cpu = stripos($cpu_vendor, "intel") !== false ? true : false;
+  return $is_intel_cpu;
+}
+// Load saved PCI data
+function loadSavedData($filename) {
+  if (file_exists($filename)) {
+    $saveddata = file_get_contents($filename);
+  } else $saveddata = "";
+  
+  return json_decode($saveddata, true);
+}
+
+// Run lspci -Dmn to get the current devices
+function loadCurrentPCIData() {
+  $output = shell_exec('lspci -Dmn');
+  $devices = [];
+
+  if (file_exists("/boot/config/current.json")){
+    $devices = loadSavedData("/boot/config/current.json");    
+  } else {
+    foreach (explode("\n", trim($output)) as $line) {
+        $parts = explode(" ", $line);
+
+        if (count($parts) < 6) continue; // Skip malformed lines
+
+        $description_str = shell_exec(("lspci -s ".$parts[0]));
+        $description = preg_replace('/^\S+\s+/', '', $description_str);
+
+        $device = [
+            'class'       => trim($parts[1], '"'),
+            'vendor_id'   => trim($parts[2], '"'),
+            'device_id'   => trim($parts[3], '"'),
+            'description' => trim($description,'"'),
+        ];
+
+        $devices[$parts[0]] = $device;
+    }
+  }
+  return $devices;
+}
+
+// Compare the saved and current data
+function comparePCIData() {
+
+    $changes = [];
+    $saved = loadSavedData("/boot/config/savedpcidata.json");
+    if (!$saved) return [];
+    $current = loadCurrentPCIData();
+  
+    // Compare saved devices with current devices
+    foreach ($saved as $pci_id => $saved_device) {
+        if (!isset($current[$pci_id])) {
+            // Device has been removed
+            $changes[$pci_id] = [
+                'status' => 'removed',
+                'device' => $saved_device
+            ];
+        } else {
+            // Device exists in both, check for modifications
+            $current_device = $current[$pci_id];
+            $differences = [];
+
+            // Compare fields
+            foreach (['vendor_id', 'device_id', 'class'] as $field) {
+                if (isset($saved_device[$field]) && isset($current_device[$field]) && $saved_device[$field] !== $current_device[$field]) {
+                    $differences[$field] = [
+                        'old' => $saved_device[$field],
+                        'new' => $current_device[$field]
+                    ];
+                }
+            }
+
+            if (!empty($differences)) {
+                $changes[$pci_id] = [
+                    'status' => 'changed',
+                    'device' => $current_device,
+                    'differences' => $differences
+                ];
+            }
+        }
+    }
+
+    // Check for added devices
+    foreach ($current as $pci_id => $current_device) {
+        if (!isset($saved[$pci_id])) {
+            // Device has been added
+            $changes[$pci_id] = [
+                'status' => 'added',
+                'device' => $current_device
+            ];
+        }
+    }
+    return $changes;
+}
+
+
+
 ?>

@@ -1,0 +1,75 @@
+#!/bin/bash
+#
+# script: rc.cgroup2unraid
+#
+# start/stop/status/restart/run Unraid cgroup2 cleanup:
+#
+# LimeTech - created for Unraid OS
+# /etc/rc.d/rc.cgroup2unraid
+
+DAEMON="Unraid cgroup2 cleanup daemon"
+CGROUP2="/usr/libexec/unraid/cgroup2-unraid"
+PID="/var/run/cgroup2-unraid.pid"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+
+cgroup2daemon_running(){
+  sleep 0.1
+  [[ $(pgrep -cf $CGROUP2) -gt 0 ]]
+}
+
+case "$1" in
+  start)
+    if cgroup2daemon_running ; then
+      REPLY="Already started"
+    else
+      $CGROUP2 --daemon
+      echo $(pgrep -f $CGROUP2) > $PID
+      if cgroup2daemon_running; then
+        REPLY="Started"
+      else
+        REPLY="Failed"
+      fi
+    fi
+    log "$DAEMON...  $REPLY."
+    ;;
+  stop)
+    if ! cgroup2daemon_running ; then
+      REPLY="Already stopped"
+    else
+      log "Stopping $DAEMON..."
+      kill $(cat $PID)
+      if cgroup2daemon_running; then
+        REPLY="Failed"
+      else
+        REPLY="Stopped"
+      fi
+    fi
+    log "$DAEMON...  $REPLY."
+    ;;
+  status)
+    if cgroup2daemon_running ; then
+      echo "$DAEMON running"
+    else
+      echo "$DAEMON not running"
+      if [[ -f $PID ]]; then
+        rm -f $PID
+      fi
+    fi
+    ;;
+  run)
+    echo "Cleaning up cgroups..."
+    $CGROUP2
+    echo "Done!"
+    ;;
+  restart)
+    $0 stop
+    $0 start
+    ;;
+  *)
+  echo "Usage: $BASENAME start|stop|status|restart|run"
+  exit 1
+esac
+exit 0

@@ -36,7 +36,41 @@ dbus_start(){
     mkdir -p $(dirname $PIDFILE)
     rm -f $(dirname $PIDFILE)/*
     if [[ -x /usr/bin/dbus-uuidgen && -x /usr/bin/dbus-daemon ]]; then
-      run /usr/bin/dbus-uuidgen --ensure
+      if [ ! -e /etc/no-machine-id ]; then
+        # Ah, the machine-id. DBus won't work right without it, and browsers and
+        # other software will make use of this identifier. If you hate that idea,
+        # you may create /etc/no-machine-id and then delete /etc/machine-id and
+        # /var/lib/dbus/machine-id and we won't try to create these again.
+        # You might pay for your "privacy" with bugs, though.
+        # It is not recommended to do this, but it's your machine.
+        #
+        # If /etc/machine-id is a symlink, get rid of it:
+        if [ -L /etc/machine-id ]; then
+          rm -f /etc/machine-id
+        fi
+        # If /var/lib/dbus/machine-id is a symlink, get rid of it:
+        if [ -L /var/lib/dbus/machine-id ]; then
+          rm -f /var/lib/dbus/machine-id
+        fi
+        # If you have both /etc/machine-id and /var/lib/dbus/machine-id then we will
+        # keep /etc/machine-id and back up /var/lib/dbus/machine-id:
+        if [ -r /etc/machine-id -a -r /var/lib/dbus/machine-id ]; then
+          mv /var/lib/dbus/machine-id /var/lib/dbus/machine-id.backup
+        fi
+        # If there's a /var/lib/dbus/machine-id file, and no /etc/machine-id, move it:
+        if [ -r /var/lib/dbus/machine-id -a ! -e /etc/machine-id ]; then
+          mv /var/lib/dbus/machine-id /etc/machine-id
+          chmod 444 /etc/machine-id
+        fi
+        # If there's no /etc/machine-id, fix that:
+        if [ ! -r /etc/machine-id ]; then
+          /usr/bin/dbus-uuidgen --ensure=/etc/machine-id
+          chmod 444 /etc/machine-id
+        fi
+        # Create the var/lib/dbus/machine-id symlink:
+        rm -f /var/lib/dbus/machine-id
+        ln -sf /etc/machine-id /var/lib/dbus/machine-id
+      fi
       run /usr/bin/dbus-daemon --system
     fi
     if dbus_running; then REPLY="Started"; else REPLY="Failed"; fi
@@ -52,7 +86,7 @@ dbus_stop(){
   else
     run kill $(cat $PIDFILE)
     # Just in case:
-    run killall dbus-daemon
+    run killall --ns $$ dbus-daemon
     rm -f $PIDFILE
     if ! dbus_running; then REPLY="Stopped"; else REPLY="Failed"; fi
   fi
@@ -65,7 +99,7 @@ dbus_reload(){
     pid=$(cat $PIDFILE)
     run kill -HUP $pid
   else
-    run killall -HUP dbus-daemon
+    run killall --ns $$ -HUP dbus-daemon
   fi
   log "$DAEMON...  Reloaded."
 }

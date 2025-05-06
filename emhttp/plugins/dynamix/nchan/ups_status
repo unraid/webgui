@@ -69,12 +69,14 @@ while (true) {
     update_translation($locale_init);
   }
   unset($echo,$rows,$power,$load,$freq,$output,$volt);
-  $echo = array_fill(0,7,"<span>-</span>");
+  $defaultCell = "<span>-</span>";
+  $echo = array_fill(0,7,$defaultCell);
   if (file_exists("/var/run/apcupsd.pid")) {
     // get battery-level and runtime settings
     $cfg = parse_plugin_cfg('dynamix.apcupsd');
     $level = $cfg['BATTERYLEVEL'] ?: 10;
     $runtime = $cfg['MINUTES'] ?: 5;
+    $overrideUpsCapacity = (int) htmlspecialchars($cfg['OVERRIDE_UPS_CAPACITY'] ?: 0);
     exec("/sbin/apcaccess -u 2>/dev/null", $rows);
     foreach ($rows as $row) {
       [$key, $val] = array_map('trim', explode(':', $row, 2));
@@ -117,6 +119,14 @@ while (true) {
         break;
       }
     }
+
+    // If the override is defined, override the power value, using the same implementation as above.
+    // This is a better implementation, as it allows the existing Unraid code to work with the override.
+    if ($overrideUpsCapacity > 0) {
+      $power = $overrideUpsCapacity;
+      $echo[4] = $power>0 ? "<span $green>$power W</span>" : "<span $red>$power W</span>";
+    }
+
     if (isset($power) && isset($load)) $echo[5] = ($load<90 ? "<span $green>" : "<span $red>").round($power*$load/100)." W (".$echo[5].")</span>";
     elseif (isset($load)) $echo[5] = ($load<90 ? "<span>" : "<span $red>").$echo[5]."</span>";
     $echo[6] = isset($output) ? ((empty($volt) || ($minv<$output && $output<$maxv) ? "<span $green>" : "<span $red>").$echo[6].(isset($freq) ? " ~ $freq Hz" : "")."</span>") : $echo[6];

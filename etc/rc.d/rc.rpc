@@ -80,13 +80,13 @@ rpc_stop(){
   if ! rpc_running; then
     REPLY="Already stopped"
   else
-    killall rpc.statd 2>/dev/null
+    killall --ns $$ rpc.statd 2>/dev/null
     sleep 1
-    killall rpcbind 2>/dev/null
+    killall --ns $$ rpcbind 2>/dev/null
     sleep 1
-    killall -9 rpc.statd 2>/dev/null # make sure :)
+    killall --ns $$ -9 rpc.statd 2>/dev/null # make sure :)
     sleep 1
-    killall -9 rpcbind 2>/dev/null   # make sure :)
+    killall --ns $$ -9 rpcbind 2>/dev/null   # make sure :)
     if ! rpc_running; then REPLY="Stopped"; else REPLY="Failed"; fi
   fi
   log "$DAEMON...  $REPLY."
@@ -105,9 +105,10 @@ rpc_reload(){
 }
 
 rpc_update(){
-  # 0 = update needed, 1 = no action
-  if ! rpc_running; then exit 1; fi
-  if check && [[ "$(this)" == "-h ${BIND// / -h }" ]]; then exit 1; else exit 0; fi
+  if rpc_running && check && [[ "$(this)" != "-h ${BIND// / -h }" ]]; then
+    log "Updating $DAEMON..."
+    rpc_reload
+  fi
 }
 
 rpc_status(){

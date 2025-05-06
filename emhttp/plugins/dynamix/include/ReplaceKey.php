@@ -1,5 +1,4 @@
 <?php
-$webguiGlobals = $GLOBALS;
 $docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 
 class ReplaceKey
@@ -144,31 +143,71 @@ class ReplaceKey
         require_once "$this->docroot/webGui/include/InstallKey.php";
 
         $KeyInstaller = new KeyInstaller();
-        $KeyInstaller->installKey($key);
+        $installResponse = $KeyInstaller->installKey($key);
+
+        $installSuccess = false;
+
+        if (!empty($installResponse)) {
+            $decodedResponse = json_decode($installResponse, true);
+            if (isset($decodedResponse['error'])) {
+                $this->writeJsonFile(
+                    '/tmp/ReplaceKey/error.json',
+                    [
+                        'error' => $decodedResponse['error'],
+                        'ts' => time(),
+                    ]
+                );
+                $installSuccess = false;
+            } else {
+                $installSuccess = true;
+            }
+        }
+
+        $keyType = basename($key, '.key');
+        $output  = isset($GLOBALS['notify']) ? _var($GLOBALS['notify'],'plugin') : '';
+        $script  = '/usr/local/emhttp/webGui/scripts/notify';
+
+        if ($installSuccess) {
+            $event = "Installed New $keyType License";
+            $subject = "Your new $keyType license key has been automatically installed";
+            $description = "";
+            $importance = "normal $output";
+        } else {
+            $event = "Failed to Install New $keyType License";
+            $subject = "Failed to automatically install your new $keyType license key";
+            $description = isset($decodedResponse['error']) ? $decodedResponse['error'] : "Unknown error occurred";
+            $importance = "alert $output";
+        }
+
+        exec("$script -e ".escapeshellarg($event)." -s ".escapeshellarg($subject)." -d ".escapeshellarg($description)." -i ".escapeshellarg($importance)." -l '/Tools/Registration' -x");
+
+        return $installSuccess;
     }
 
     private function writeJsonFile($file, $data)
     {
-        if (!is_dir(dirname($file))) { // prevents errors when directory doesn't exist
+        if (!is_dir(dirname($file))) {
             mkdir(dirname($file));
         }
+
         file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
-    public function check()
+    public function check(bool $forceCheck = false)
     {
         // we don't need to check
         if (empty($this->guid) || empty($this->keyfile) || empty($this->regExp)) {
             return;
         }
 
-        // set $isAlreadyExpired to true if regExp is in the past
-        $isAlreadyExpired = $this->regExp <= time();
-        // if regExp is seven days or less from now, we need to check
-        $isWithinSevenDays = $this->regExp <= strtotime('+7 days');
+        // Check if we're within the 7-day window before and after regExp
+        $now = time();
+        $sevenDaysBefore = strtotime('-7 days', $this->regExp);
+        $sevenDaysAfter = strtotime('+7 days', $this->regExp);
 
-        $shouldCheck = $isAlreadyExpired || $isWithinSevenDays;
-        if (!$shouldCheck) {
+        $isWithinWindow = ($now >= $sevenDaysBefore && $now <= $sevenDaysAfter);
+
+        if (!$forceCheck && !$isWithinWindow) {
             return;
         }
 
@@ -187,10 +226,12 @@ class ReplaceKey
                 '/tmp/ReplaceKey/error.json',
                 [
                     'error' => 'Failed to retrieve latest key after getting a `hasNewerKeyfile` in the validation response.',
+                    'ts' => time(),
                 ]
             );
             return;
         }
+
         $this->installNewKey($latestKey);
     }
 }

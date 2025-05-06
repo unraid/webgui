@@ -24,7 +24,7 @@ $_SERVER['REQUEST_URI'] = "scripts";
 $login_locale = _var($display,'locale');
 require_once "$docroot/webGui/include/Translations.php";
 
-exec("pgrep docker", $pid);
+exec('pgrep --ns $$ docker', $pid);
 if (count($pid) == 1) exit(0);
 
 $DockerClient = new DockerClient();

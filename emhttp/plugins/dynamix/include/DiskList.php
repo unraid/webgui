@@ -28,12 +28,36 @@ $var     = parse_ini_file('state/var.ini');
 $sec     = parse_ini_file('state/sec.ini',true);
 $sec_nfs = parse_ini_file('state/sec_nfs.ini',true);
 
-// exit when no disks
+/* Get the pools from the disks.ini. */
+$pools_check = pools_filter(cache_filter($disks));
+$pools = implode(',', $pools_check);
+
+/* If the configuration is pools only, then no array disks are available. */
+$poolsOnly	= ((int)$var['SYS_ARRAY_SLOTS'] <= 2) ? true : false;
+
+// exit when no mountable array disks
+$nodisks = "<tr><td class='empty' colspan='7'><strong>"._('There are no mounted array or pool disks - cannot add shares').".</strong></td></tr>";
+if (!checkDisks($disks)) die($nodisks);
+
+// No shared disks
 $nodisks = "<tr><td class='empty' colspan='7'><i class='fa fa-folder-open-o icon'></i>"._('There are no exportable disk shares')."</td></tr>";
-if (!$disks) die($nodisks);
 
 // GUI settings
 extract(parse_plugin_cfg('dynamix',true));
+
+/* Function to test if any Mouned volumes exist. */
+function checkDisks(&$disks) {
+        $rc             = false;
+
+        foreach ($disks as $disk) {
+                if ($disk['name']!=='flash' && _var($disk,'fsStatus',"")==='Mounted') {
+                        $rc     = true;
+                        break;
+                }
+        }
+
+        return $rc;
+}
 
 // Display export settings
 function disk_share_settings($protocol,$share) {
@@ -88,7 +112,7 @@ foreach ($disks as $name => $disk) {
   } else $luks = "";
   echo "<tr><td><a class='view' href=\"/$path/Browse?dir=/mnt/$name\"><i class=\"icon-u-tab\" title=\"",_('Browse')," /mnt/$name\"></i></a>";
   echo "<a class='info nohand' onclick='return false'><i class='fa fa-$orb orb $color-orb'></i><span style='left:18px'>$help</span></a>$luks<a href=\"/$path/Disk?name=$name\" onclick=\"$.cookie('one','tab1')\">$name</a></td>";
-  echo "<td>"._var($disk,'comment')."</td>";
+  echo "<td>",htmlspecialchars(_var($disk,'comment')),"</td>";
   echo "<td>",disk_share_settings(_var($var,'shareSMBEnabled'), $sec[$name]),"</td>";
   echo "<td>",disk_share_settings(_var($var,'shareNFSEnabled'), $sec_nfs[$name]),"</td>";
   $cmd="/webGui/scripts/disk_size&arg1=$name&arg2=ssz2";

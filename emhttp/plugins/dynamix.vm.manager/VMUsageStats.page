@@ -1,11 +1,11 @@
 Menu="VMs:0"
-Title="VM Usage Statisics"
-Nchan="vm_usage:start"
+Title="VM Usage Statistics"
+Nchan="vm_usage:stop"
 Cond="exec(\"grep -o '^USAGE=.Y' /boot/config/domain.cfg 2>/dev/null\") && is_file('/var/run/libvirt/libvirtd.pid')"
 ---
 <?PHP
-/* Copyright 2005-2024, Lime Technology
- * Copyright 2012-2024, Simon Fairweather.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Simon Fairweather.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -19,7 +19,7 @@ Cond="exec(\"grep -o '^USAGE=.Y' /boot/config/domain.cfg 2>/dev/null\") && is_fi
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 ?>
 <table id="vmstats" class="tablesorter four shift">
-    <thead class='child'><tr><th class="th1">_(Name)_</th><th class="th2">_(Guest CPU)_</th><th>_(Host CPU)_</th><th>_(Memory)_</th><th>_(Disk IO)_</th><th>_(Network IO)_</th></tr></thead>
+    <thead class='child'><tr><th class="th1">_(Name)_</th><th class="th2">_(Guest CPU)_</th><th>_(Host CPU)_</th><th>_(Memory inuse/Current/Maximum)_</th><th>_(Disk IO)_</th><th>_(Network IO)_</th></tr></thead>
     <tbody id ="vmstatsbody" class='child'>
   </tbody>
 </table>
@@ -32,10 +32,7 @@ vmusage.on('message', function(msg){
   });
 
 $(function(){
-  vmusage.start();
+  vmusage.start().monitor();
 });
 
-window.onunload = function(){
-  vmusage.stop();
-}
 </script>

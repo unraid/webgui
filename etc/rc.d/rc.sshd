@@ -11,6 +11,7 @@ DAEMON="SSH server daemon"
 CALLER="ssh"
 SSHD="/usr/sbin/sshd"
 CONF="/etc/ssh/sshd_config"
+INET=/etc/inetd.conf
 PID="/var/run/sshd.pid"
 SSH_BOOT="/boot/config/ssh"
 SSH_ETC="/etc/ssh"
@@ -21,12 +22,21 @@ SSH_ETC="/etc/ssh"
 # library functions
 . /etc/rc.d/rc.library.source
 
+# read settings
+[[ -e /boot/config/ident.cfg ]] && . <(fromdos </boot/config/ident.cfg)
+
+# preset default values
+[[ -z $USE_SSH ]] && USE_SSH=no
+[[ -z $PORTSSH ]] && PORTSSH=22
+
 sshd_running(){
   sleep 0.1
-  [[ $(pgrep -cf $SSHD) -gt 0 ]]
+  # get all pids from sshd
+  [[ $(pgrep --ns $$ -cf $SSHD) -gt 0 ]]
 }
 
 sshd_build(){
+  # update interfaces
   if check && [[ -n $BIND ]]; then
     # remove existing entries
     sed -ri '/^#?(ListenAddress|AddressFamily) /d' $CONF
@@ -36,6 +46,15 @@ sshd_build(){
     done
     sed -ri "/^#?Port /a AddressFamily $FAMILY" $CONF
   fi
+  # update ssh daemon listening port
+  CURRENT=$(grep -Pom1 '^#?Port \K\d+$' $CONF)
+  if [[ $PORTSSH != $CURRENT ]]; then
+    if [[ $PORTSSH == 22 ]]; then
+      sed -ri 's/^#?Port [0-9]+$/#Port 22/' $CONF
+    else
+      sed -ri "s/^#?Port [0-9]+\$/Port $PORTSSH/" $CONF
+    fi
+  fi
 }
 
 sshd_start(){
@@ -43,11 +62,13 @@ sshd_start(){
   local REPLY
   if sshd_running; then
     REPLY="Already started"
+  elif [[ $USE_SSH != yes ]]; then
+    REPLY="Disabled"
   else
     # make sure ssh dir exists on flash
     mkdir -p $SSH_BOOT
     # restore saved keys, config file, etc. (but not subdirs)
-    cp -n $SSH_BOOT/* $SSH_ETC 2>/dev/null
+    cp -f $SSH_BOOT/* $SSH_ETC 2>/dev/null
     chmod 600 $SSH_ETC/* 2>/dev/null
     # create host keys if needed and copy any newly generated key(s) back to flash
     ssh-keygen -A
@@ -67,7 +88,7 @@ sshd_stop(){
     REPLY="Already stopped"
   else
     log "Stopping $DAEMON..."
-    killall sshd
+    killall --ns $$ sshd
     if ! sshd_running; then REPLY="Stopped"; else REPLY="Failed"; fi
   fi
   log "$DAEMON...  $REPLY."
@@ -102,9 +123,10 @@ sshd_reload(){
 }
 
 sshd_update(){
-  # 0 = update needed, 1 = no action
-  if ! sshd_running; then exit 1; fi
-  if check && [[ "$(this ListenAddress)" == "${BIND[@]}" ]]; then exit 1; else exit 0; fi
+  if sshd_running && check && [[ "$(this ListenAddress)" != "${BIND[@]}" ]]; then
+    log "Updating $DAEMON..."
+    sshd_reload
+  fi
 }
 
 sshd_status(){

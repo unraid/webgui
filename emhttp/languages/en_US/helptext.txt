@@ -256,7 +256,7 @@ Unraid OS uses these default options when creating a multiple-device pool:
 
 `-dconvert=raid1 -mconvert=raid1`
 
-For more complete documentation, please refer to the btrfs-balance [Manpage](https://btrfs.wiki.kernel.org/index.php/Manpage/btrfs-balance)
+For more complete documentation, please refer to the btrfs-balance [Manpage](https://man7.org/linux/man-pages/man8/btrfs-balance.8.html)
 
 *Note: raid5 and raid6 are generally still considered **experimental** by the Linux community*
 :end
@@ -269,7 +269,14 @@ For more complete documentation, please refer to the btrfs-balance [Manpage](htt
 **Scrub** runs the *btrfs scrub* program which will read all data and metadata blocks from all
 devices and verify checksums.
 
-If *Repair corrupted blocks* is checked, *btrfs scrub* will repair corrupted blocks if there’s a correct copy available.
+*btrfs scrub* will repair corrupted blocks if there is a correct copy available.
+:end
+
+:info_zfs_scrub_help:
+**Scrub** runs the *zfs scrub* program which will read all data and metadata blocks from all
+devices and verify checksums.
+
+Click the **Upgrade Pool** button to upgrade the ZFS pool to enable the latest ZFS features.
 :end
 
 :info_scrub_cancel_help:
@@ -281,6 +288,10 @@ If *Repair corrupted blocks* is checked, *btrfs scrub* will repair corrupted blo
 
 The *Options* field is initialized with *--readonly* which specifies check-only.  If repair is needed, you should run
 a second Check pass, setting the *Options* to *--repair*; this will permit *btrfs check* to fix the file system.
+
+WARNING: **Do not use** *--repair* unless you are advised to do so by a developer or an experienced user,
+and then only after having accepted that no fsck successfully repair all types of filesystem corruption.
+E.g. some other software or hardware bugs can fatally damage a volume.
 
 After starting a Check, you should Refresh to monitor progress and status.  Depending on
 how large the file system is, and what errors might be present, the operation can take **a long time** to finish (hours).
@@ -695,6 +706,12 @@ Summary of security modes:
 **Secure** All users including guests have read access, you select which of your users have write access.
 
 **Private** No guest access at all, you select which of your users have read/write, read-only access or no access.
+
+Windows Server Signing:
+
+If you are unable to browse SMB shares with Windows 11 version 24H2 or newer, you need to make some changes to accomodate a new feature called Server Signing.  Server Signing is enabled in Unraid and you need to make changes to access Public shares.
+You can <u><a href='https://techcommunity.microsoft.com/t5/storage-at-microsoft/accessing-a-third-party-nas-with-smb-in-windows-11-24h2-may-fail/ba-p/4154300' target='_blank'>disable it in Windows</a></u>, or to work with Unraid with Server Signing enabled, the easiest way is to create a user (with a password set) in Unraid with the same name as the Windows account you are using, Windows should then ask you for the credentials.
+If you are using a Microsoft account, it may be better to just create a user in Unraid with a simple username and set a password, then in Windows go to Control Panel -> Credential Manager -> Windows credentials -> Add a Windows Credential and add the correct Unraid server name and credentials.
 :end
 
 :smb_secure_access_help:
@@ -725,6 +742,15 @@ Select the desired share name and press **Read** to copy the NFS security settin
 *Write settings to* is used to copy the NFS security settings of the current selected share to one or more other existing shares.
 
 Select the desired destinations and press **Write** to copy the NFS security settings to the selected shares.
+:end
+
+:nfs_security_rules_help:
+Put the rule for each IP address on a separate line and terminate the Rule with a new line.
+You cannot enter a Rule in the format IP1,IP2(...).  Unraid does not format the exports file in that format.
+
+The default rules for every NFS Rule are - async and no_subtree_check.
+
+**Note:** The Public Rule used is '*(rw,sec=sys,insecure,anongid=100,anonuid=99,no_root_squash)'.
 :end
 
 :user_add_username_help:
@@ -1008,6 +1034,10 @@ Instead of chevrons indicating more data for Port and Volume mapping, all data i
 The time in seconds to allow a container to gracefully stop before forcing it to stop
 :end
 
+:docker_pid_limit_help:
+Set a PID Limit to limit the number of PIDs that a docker can use. The default is 2048.  Set to zero for unlimited PIDs (not recommended).
+:end
+
 :docker_vdisk_type_help:
 Select where to keep the Docker persistent state.
 
@@ -1032,6 +1062,15 @@ It is recommended to create this image file outside the array, e.g. on the Cache
 You must specify a folder for Docker. The system will automatically create this folder when the Docker service is first started.
 
 It is recommended to create this folder under a share which resides on the Cache pool (setting: cache=Only). For best performance SSD devices are preferred.
+:end
+
+:docker_storage_driver_help:
+overlay2 (default): Will use overlay2 as the storage driver for Docker, regardless of the underlying filesystem.
+
+native: The native storage driver for your underlying filesystem will be used (XFS: overlay2 | ZFS: zfs | BTRFS: btrfs).
+
+ATTENTION: Changing the storage type from an existing Docker installation is not possible, you have to delete your Docker directory first, change the storage type and then reinstall your containers.
+It is recommended to take a screenshot from your Docker containers before changing the storage type. After deleting and changing the storage type, reinstall the containers by clicking Add Container on the Docker page and select one by one from the drop down to reinstall them with your previous settings).
 :end
 
 :docker_appdata_location_help:
@@ -1113,6 +1152,10 @@ This is the active Docker version.
 
 :docker_vdisk_location_active_help:
 This is the location of the Docker image.
+:end
+
+:docker_storage_driver_active_help:
+This is the storage driver for Docker.
 :end
 
 :docker_appdata_location_active_help:
@@ -1264,6 +1307,14 @@ Enter your local Top Level Domain. May be blank.
 :mgmt_local_access_urls_help:
 The Local Access URLs shown above are based on your current settings. 
 To adjust URLs or redirects, see the help text for "Use SSL/TLS".
+:end
+
+:mgmt_wg_access_urls_help:
+These URLs will only work when connected via the appropriate WireGuard tunnel as configured on ***Settings > VPN Manager***
+:end
+
+:mgmt_tailscale_access_urls_help:
+These URLs will only work when connected to the appropriate Tailscale Tailnet.
 :end
 
 :mgmt_certificate_expiration_help:
@@ -1428,6 +1479,20 @@ your client.  Be aware that setting a value of -1 will cause the memory footprin
 files/directories you access via NFS this may or may not lead to out-of-memory conditions.
 :end
 
+:nfs_server_max_protocol_help:
+Select the max NFS Protocol version you want your Unraid server to support.
+:end
+
+:nfs_client_max_protocol_help:
+Select the max NFS Protocol version you want to use to mount your remote shares.
+:end
+
+:nfs_threads_help:
+Set the number of threads for NFS.  For light NFS loads, 8 is sufficient. For heaver NFS loads, a higher number of threads might be appropriate.
+
+If there aren't enough threads, NFS will probably crash.
+:end
+
 :shares_enable_disk_help:
 If set to No, disk shares are unconditionally not exported.
 
@@ -1485,6 +1550,10 @@ This will increase write performance but might possibly decrease read performanc
 *Auto* selects No.
 :end
 
+:shares_fuse_file_descriptors_io_help:
+Set the number of fuse file descriptors.  With a lot of file activity on the array, you may need to increase this value.
+:end
+
 :syslog_local_server_help:
 Let the server act as a central syslog server and collect syslog messages from other systems.
 The server can listen on UDP, TCP or both with a selectable port number.
@@ -1503,7 +1572,6 @@ Select the identifier for the remote system (used in the logfile name).
 * "IP Address" uses the IP address (IPv4 or IPv6) of the sending system.
 * "Hostname (from syslog message)" uses the hostname included in each syslog message.
 * "Hostname (from DNS reverse lookup)" performs a DNS reverse lookup for the sending IP and uses the result.
-
 :end
 
 :syslog_local_rotation_help:
@@ -1609,6 +1677,10 @@ Selects the temperature unit for the disk temperature thresholds. Changing the u
 Make sure any newly entered values represent the selected temperature unit.
 :end
 
+:display_favorites_enabled_help:
+Enables favorite support. If set to no, will stop heart icon showing for additions. If existing favorites are saved, favorites tab and pre-saved options will still continue to show and function until all are deleted.
+:end
+
 :vms_enable_help:
 Stopping the VM Manager will first attempt to shutdown all running VMs. After 60 seconds, any remaining VM instances will be terminated.
 :end
@@ -1686,6 +1758,10 @@ NOTE: It's recommended to shut down guest VMs from within the VM.
 :vms_console_help:
 For setting the console options to show on context menus. Web will show only inbuild web clients(VNC and SPICE), 
 Virtual Manager Remote Viewer will only show the Remote Viewer option. Both will show both Web and Remote Viewer.
+:end
+
+:vms_rdpopt_help:
+Adds option to menu to start RDP. RDP file is downloaded. You need to set browser to open when ready.
 :end
 
 :vms_usage_help:
@@ -1960,6 +2036,10 @@ Enter the *device* which corresponds to your situation, only applicable when *UP
 + **dumb** - /dev/tty**
 + **pcnet** - ipaddr:username:passphrase:port. ipaddr is the IP address of the UPS management card. username and passphrase are the credentials for which the card has been configured. port is the port number on which to listen for messages from the UPS, normally 3052. If this parameter is empty or missing, the default of 3052 will be used
 + **modbus** - /dev/tty**
+:end
+
+:apc_ups_override_ups_capacity_help:
+If your device doesn't natively report Nominal Power (`NOMPOWER`) from `apcupsd`, but does report the Load Percentage (`LOADPCT`), you can manually define the UPS capacity rating in Watts (W) (this is the 'real power' value in Watts (W), not the 'apparent power' in Volt Amps (VA), and should be detailed on your UPS manual or product listing) and the plugin will dynamically calculate a virtual Nominal Power estimate (`≈`) by comparing the Override UPS Capacity (W) and the current Load Percentage. It is only an estimate, as it doesn't factor in things like the UPS' efficiency.
 :end
 
 :apc_battery_level_help:
@@ -2274,6 +2354,148 @@ Generally speaking, it is recommended to leave this setting to its default value
 IMPORTANT NOTE:  If adjusting port mappings, do not modify the settings for the Container port as only the Host port can be adjusted.
 :end
 
+:docker_container_network_help:
+This allows your container to utilize the network configuration of another container. Select the appropriate container from the list.<br>This setup can be particularly beneficial if you wish to route your container's traffic through a VPN.
+:end
+
+:docker_tailscale_help:
+Enable Tailscale to add this container as a machine on your Tailnet.
+:end
+
+:docker_tailscale_hostname_help:
+Provide the hostname for this container. It does not need to match the container name, but it must be unique on your Tailnet. Note that an HTTPS certificate will be generated for this hostname, which means it will be placed in a public ledger, so use a name that you don't mind being public.
+For more information see <a href="https://tailscale.com/kb/1153/enabling-https" target="_blank">enabling https</a>.
+:end
+
+:docker_tailscale_be_exitnode_help:
+Enable this if other machines on your Tailnet should route their Internet traffic through this container, this is most useful for containers that connect to commercial VPN services. 
+Be sure to authorize this Exit Node in your <a href="https://login.tailscale.com/admin/machines" target="_blank">Tailscale Machines Admin Panel</a>.
+For more details, see the Tailscale documentation on <a href="https://tailscale.com/kb/1103/exit-nodes" target="_blank">Exit Nodes</a>.
+:end
+
+:docker_tailscale_exitnode_ip_help:
+Optionally route this container's outgoing Internet traffic through an Exit Node on your Tailnet. Choose the Exit Node or input its Tailscale IP address.
+For more details, see <a href="https://tailscale.com/kb/1103/exit-nodes" target="_blank">Exit Nodes</a>.
+:end
+
+:docker_tailscale_lanaccess_help:
+Only applies when this container is using an Exit Node. Enable this to allow the container to access the local network.
+
+<b>WARNING:</b>&nbsp;Even with this feature enabled, systems on your LAN may not be able to access the container unless they have Tailscale installed.
+:end
+
+:docker_tailscale_userspace_networking_help:
+When enabled, this container will operate in a restricted environment. Tailscale DNS will not work, and the container will not be able to initiate connections to other Tailscale machines. However, other machines on your Tailnet will still be able to communicate with this container.
+
+When disabled, this container will have full access to your Tailnet. Tailscale DNS will work, and the container can fully communicate with other machines on the Tailnet.
+However, systems on your LAN may not be able to access the container unless they have Tailscale installed.
+:end
+
+:docker_tailscale_ssh_help:
+Tailscale SSH is similar to the Docker "Console" option in the Unraid webgui, except you connect with an SSH client and authenticate via Tailscale.
+For more details, see the <a href="https://tailscale.com/kb/1193/tailscale-ssh" target="_blank">Tailscale SSH</a> documentation.
+:end
+
+:docker_tailscale_serve_mode_help:
+Enabling <b>Serve</b> will automatically reverse proxy the primary web service from this container and make it available on your Tailnet using https with a valid certificate! 
+
+Note that when accessing the <b>Tailscale WebUI</b> url, no additional authentication layer is added beyond restricting it to your Tailnet - the container is still responsible for managing usernames/passwords that are allowed to access it. Depending on your configuration, direct access to the container may still be possible as well.
+
+For more details, see the <a href="https://tailscale.com/kb/1312/serve" target="_blank">Tailscale Serve</a> documentation.
+
+If the documentation recommends additional settings for a more complex use case, enable "Tailscale Show Advanced Settings". Support for these advanced settings is not available beyond confirming the commands are passed to Tailscale correctly.
+
+<b>Funnel</b> is similar to <b>Serve</b>, except that the web service is made available on the open Internet. Use with care as the service will likely be attacked. As with <b>Serve</b>, the container itself is responsible for handling any authentication.
+
+We recommend reading the <a href="https://tailscale.com/kb/1223/funnel" target="_blank">Tailscale Funnel</a> documentation before enabling this feature.
+
+<b>Note:</b>&nbsp;Enabling <b>Serve</b> or <b>Funnel</b> publishes the Tailscale hostname to a public ledger.
+For more details, see the Tailscale Documentation: <a href="https://tailscale.com/kb/1153/enabling-https" target="_blank">Enabling HTTPS</a>.
+:end
+
+:docker_tailscale_serve_port_help:
+This field should specify the port for the primary web service this container offers. Note: it should specify the port in the container, not a port that was remapped on the host.
+
+The system attempted to determine the correct port automatically. If it used the wrong value then there is likely an issue with the "Web UI" field for this container, visible by switching from "Basic View" to "Advanced View" in the upper right corner of this page. 
+
+In most cases this port is all you will need to specify in order to Serve the website in this container, although additional options are available below for more complex containers.
+
+This value is passed to the `<serve_port>` portion of this command which starts serve or funnel:<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+:end
+
+:docker_tailscale_show_advanced_help:
+Here there be dragons!
+:end
+
+:docker_tailscale_serve_target_help:
+When not specified, this value defaults to http://localhost. It is passed to the `<serve_target>` portion of this command which starts serve or funnel:<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.<br>
+Please note that only `localhost` or `127.0.0.1` are supported.
+:end
+
+:docker_tailscale_serve_local_path_help:
+When not specified, this value defaults to an empty string. It is passed to the `<local_path>` portion of this command which starts serve or funnel:<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+:end
+
+:docker_tailscale_serve_protocol_help:
+When not specified, this value defaults to "https". It is passed to the `<protocol>` portion of this command which starts serve or funnel:<br>
+`tailscale [serve|funnel] --bg --<protocol>=<protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+:end
+
+:docker_tailscale_serve_protocol_port_help:
+When not specified, this value defaults to "=443". It is passed to the `<protocol_port>` portion of this command which starts serve or funnel:<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+:end
+
+:docker_tailscale_serve_path_help:
+When not specified, this value defaults to an empty string. It is passed to the `<path>` portion of this command which starts serve or funnel:<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+:end
+
+:docker_tailscale_serve_webui_help:
+If <b>Serve</b> is enabled this will be an https url with a proper domain name that is accessible over your Tailnet, no port needed!
+
+If <b>Funnel</b> is enabled the same url will be available on the Internet.
+
+If they are disabled then the url will be generated from the container's main "Web UI" field, but modified to use the Tailscale IP. If the wrong port is specified here then switch from "Basic View" to "Advanced View" and review the "Web UI" field for this container.
+:end
+
+:docker_tailscale_advertise_routes_help:
+If desired, specify any routes that should be passed to the **`--advertise-routes=`** parameter when running **`tailscale up`**.
+For more details see the <a href="https://tailscale.com/kb/1019/subnets#connect-to-tailscale-as-a-subnet-router" target="_blank">Subnet routers</a> documentation.
+:end
+
+:docker_tailscale_accept_routes_help:
+When enabled, this will accept your subnet routes from other devices, adding the **`--accept-routes`** parameter when running **`tailscale up`**.
+For more details see the <a href="https://tailscale.com/kb/1019/subnets?q=allow+routes#use-your-subnet-routes-from-other-devices" target="_blank">Use your subnet routes from other devices</a> documentation.
+:end
+
+:docker_tailscale_daemon_extra_params_help:
+Specify any extra parameters to pass when starting **`tailscaled`**.
+For more details see the <a href="https://tailscale.com/kb/1278/tailscaled" target="_blank">tailscaled</a> documentation.
+:end
+
+:docker_tailscale_extra_param_help:
+Specify any extra parameters to pass when running **`tailscale up`**.
+For more details see the <a href="https://tailscale.com/kb/1080/cli#up" target="_blank">Tailscale CLI</a> documentation.
+:end
+
+:docker_tailscale_statedir_help:
+If state directory detection fails on startup, you can specify a persistent directory in the container to override automatic detection, i.e. `/container-path/.tailscale_state`
+:end
+
+:docker_tailscale_troubleshooting_packages_help:
+Enable this to install `ping`, `nslookup`, `curl`, and `speedtest-cli` into the container to help troubleshoot networking issues. Once the issues are resolved we recommend disabling this to reduce the size of the container.
+:end
+
 :docker_privileged_help:
 For containers that require the use of host-device access directly or need full exposure to host capabilities, this option will need to be selected.
 For more information, see this link: <a href="https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities" target="_blank">https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities</a>
@@ -2407,7 +2629,7 @@ Note to Cloudflare users: the Cloudflare proxy is designed for http traffic, it 
 
 :wg_local_server_uses_nat_help:
 When NAT is enabled, the server uses its own LAN address when forwarding traffic from the tunnel to other devices in the LAN network.
-Use this setting when no router modifications are desired, but this approach doesn't work with Docker containers using custom IP addressess.
+Use this setting when no router modifications are desired, but this approach doesn't work with Docker containers using custom IP addresses.
 
 When NAT is disabled, the server uses the WireGuard tunnel address when forwarding traffic.
 In this case it is required that the default gateway (router) has a static route configured to refer tunnel address back to the server.

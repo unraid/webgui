@@ -194,15 +194,15 @@ _(Syslinux configuration)_:
   $label = ($i) ? array_shift($area):$title;
   $start = in_array($menu,$area);
   if ($start) unset($area[array_search($menu,$area)]);
-?><span id="label-<?=$i?>" class="<?=$start?'array':'system'?>"><?=$label?>
+?><span id="label-<?=$i?>" class="<?=$start?'array':'system'?>"><?=htmlspecialchars($label)?>
   <?if ($i):?><span style="float:right"><input type="radio" id="input-<?=$i?>" class="menu" <?=$start?'checked':''?> title="_(Set default boot menu)_" onchange="changeMenu(this.form,this.id,true)"></span><?endif;?></span>
-  <textarea class="menu" id="menu-<?=$i++?>" spellcheck="false" cols="80" rows="<?=count($area)?>" maxlength="2048"><?=implode("\n",$area)?></textarea>
+  <textarea class="menu" id="menu-<?=$i++?>" spellcheck="false" cols="80" rows="<?=count($area)?>" maxlength="2048"><?=htmlspecialchars(implode("\n",$area))?></textarea>
   <?endforeach;?>
 
 </div>
 <div markdown="1" class="advanced">
 _(Syslinux configuration)_:
-: <textarea class="raw" name="raw" spellcheck="false" cols="80" rows="<?=substr_count($current,"\n")+1?>" maxlength="2048"><?=$current?></textarea>
+: <textarea class="raw" name="raw" spellcheck="false" cols="80" rows="<?=substr_count($current,"\n")+1?>" maxlength="2048"><?=htmlspecialchars($current)?></textarea>
 
 </div>
 _(Server boot mode)_:

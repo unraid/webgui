@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?PHP
+<?php
 /* Copyright 2005-2024, Lime Technology
  * Copyright 2012-2024, Bergware International.
  *
@@ -13,7 +13,7 @@
 
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Helpers.php";
-extract(parse_plugin_cfg('dynamix',true));
+extract(parse_plugin_cfg('dynamix', true));
 
 // add translations
 $_SERVER['REQUEST_URI'] = '';
@@ -22,8 +22,7 @@ require_once "$docroot/webGui/include/Translations.php";
 
 $var = parse_ini_file('state/var.ini');
 $unraid = parse_ini_file('/etc/unraid-version');
-$keyfile = !empty(_var($var,'regFILE')) ? trim(base64_encode(@file_get_contents($var['regFILE']))) : '';
-$width = in_array($display['theme'], ['azure','gray']) ? '98.8%' : '100%';
+$keyfile = !empty(_var($var, 'regFILE')) ? trim(base64_encode(@file_get_contents($var['regFILE']))) : '';
 $feedback = '/webGui/images/feedback_';
 
 $diagn = _('Unable to generate system diagnostics');
@@ -31,61 +30,132 @@ $sorry = _('Sorry, an error occurred');
 $again = _('Please try again later');
 ?>
 <style>
-div.spinner.fixed{z-index:100000}
-div#control_panel{position:absolute;left:0;right:0;top:0;padding-top:8px;line-height:24px;white-space:nowrap}
-div.divide{text-align:center;box-sizing:border-box;-moz-box-sizing:border-box;-webkit-box-sizing:border-box}
-div.divide label{margin-right:30px}
-div.allpanels{display:none;position:absolute;left:0;right:0;top:40px;bottom:0;overflow:auto}
-div#footer_panel{position:absolute;left:0;right:0;bottom:0;text-align:right}
-textarea.feedback{width:<?=$width?>;height:530px;margin:0;resize:none}
-@media(max-width:960px){textarea.feedback{height:330px}}
-@media(max-height:768px){textarea.feedback{height:330px}}
-input#email{float:left;padding-left:4px}
-p.note,label.note{font-size:1.1rem!important}
-span.spacer{margin:0 4px}
-img{display:inline-block;margin-bottom:30px}
-.center{text-align:center!important}
-.green-text{color:#4f8a10!important}
-.red-text{color:#f0000c!important}
+div.spinner.fixed {
+    z-index: 100000;
+}
+.feedback-control-panel {
+    padding-top: 8px;
+    line-height: 24px;
+    white-space: nowrap;
+    text-align: center;
+    box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+
+    label {
+        margin-right: 30px;
+    }
+}
+.feedback-panel {
+    display: none;
+}
+.feedback-panel-textarea {
+    width: 100%;
+    height: 530px;
+    margin: 0;
+    resize: none;
+    box-sizing: border-box;
+}
+@media (max-width: 960px) {
+    .feedback-panel-textarea {
+        height: 330px;
+    }
+}
+@media (max-height: 768px) {
+    .feedback-panel-textarea {
+        height: 330px;
+    }
+}
+.feedback-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+  gap: 1rem;
+}
+.feedback-footer-nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.feedback-email-input {
+    padding-left: 4px;
+}
+.note {
+    font-size: 1.1rem !important;
+}
+.feedback-submission-img {
+    display: inline-block;
+    margin-bottom: 30px;
+}
+.center {
+    text-align: center !important;
+}
+.green-text {
+    color: var(--green-800) !important;
+}
+.red-text {
+    color: var(--red-600) !important;
+}
 </style>
 
 <div>
-<div id="control_panel" class="divide">
-<label for="opt_featurerequest"><input type="radio" name="mode" id="opt_featurerequest" value="featurerequest" checked="checked"><?=_('Product Suggestion')?></label>
-<label for="opt_bugreport"><input type="radio" name="mode" id="opt_bugreport" value="bugreport"><?=_('Bug Report')?></label>
-<label for="opt_troubleshoot"><input type="radio" name="mode" id="opt_troubleshoot" value="troubleshoot"><?=_('Troubleshoot')?></label>
-<label for="opt_comment"><input type="radio" name="mode" id="opt_comment" value="comment"><?=_('Other Comment')?></label>
-<hr>
-</div>
+  <div class="feedback-control-panel">
+    <label for="opt_featurerequest">
+      <input type="radio" name="mode" id="opt_featurerequest" value="featurerequest" checked="checked">
+      <?=_('Product Suggestion')?>
+    </label>
+    <label for="opt_bugreport">
+      <input type="radio" name="mode" id="opt_bugreport" value="bugreport">
+      <?=_('Bug Report')?>
+    </label>
+    <label for="opt_troubleshoot">
+      <input type="radio" name="mode" id="opt_troubleshoot" value="troubleshoot">
+      <?=_('Troubleshoot')?>
+    </label>
+    <label for="opt_comment">
+      <input type="radio" name="mode" id="opt_comment" value="comment">
+      <?=_('Other Comment')?>
+    </label>
+    <hr>
+  </div>
 
-<div id="result_panel" class="allpanels"></div>
+  <div id="result_panel" class="feedback-panel"></div>
 
-<div id="featurerequest_panel" class="allpanels">
-<textarea id="featurerequest" class="feedback"></textarea>
-</div>
+  <div id="featurerequest_panel" class="feedback-panel">
+    <textarea id="featurerequest" class="feedback-panel-textarea"></textarea>
+  </div>
 
-<div id="bugreport_panel" class="allpanels">
-<textarea id="bugreport" class="feedback"></textarea>
-<label class="note" for="anonymize_bugreport"><input type="checkbox" id="anonymize_bugreport" class="anonymize" value="1"> <?=_('Anonymize diagnostics (may make troubleshooting more difficult)')?></label>
-<p class="note"><b><?=_('NOTE')?>:</b> <i><?=_('Submission of this bug report will automatically send your system diagnostics to Lime Technology')?>.</i></p>
-</div>
+  <div id="bugreport_panel" class="feedback-panel">
+    <textarea id="bugreport" class="feedback-panel-textarea"></textarea>
+    <label class="note" for="anonymize_bugreport">
+      <input type="checkbox" id="anonymize_bugreport" class="anonymize" value="1">
+      <?=_('Anonymize diagnostics (may make troubleshooting more difficult)')?>
+    </label>
+    <p class="note"><b><?=_('NOTE')?>:</b> <i><?=_('Submission of this bug report will automatically send your system diagnostics to Lime Technology')?>.</i></p>
+  </div>
 
-<div id="troubleshoot_panel" class="allpanels">
-<textarea id="troubleshoot" class="feedback"></textarea>
-<label class="note" for="anonymize_troubleshoot"><input type="checkbox" id="anonymize_troubleshoot" class="anonymize" value="1"><?=_('Anonymize diagnostics (may make troubleshooting more difficult)')?></label>
-<p class="note"><b><?=_('NOTE')?>:</b> <i><?=_('Submission of this troubleshooting request will automatically send your system diagnostics to Lime Technology')?>.</i></p>
-</div>
+  <div id="troubleshoot_panel" class="feedback-panel">
+    <textarea id="troubleshoot" class="feedback-panel-textarea"></textarea>
+    <label class="note" for="anonymize_troubleshoot">
+      <input type="checkbox" id="anonymize_troubleshoot" class="anonymize" value="1">
+      <?=_('Anonymize diagnostics (may make troubleshooting more difficult)')?>
+    </label>
+    <p class="note"><b><?=_('NOTE')?>:</b> <i><?=_('Submission of this troubleshooting request will automatically send your system diagnostics to Lime Technology')?>.</i></p>
+  </div>
 
-<div id="comment_panel" class="allpanels">
-<textarea id="comment" class="feedback"></textarea>
-</div>
+  <div id="comment_panel" class="feedback-panel">
+    <textarea id="comment" class="feedback-panel-textarea"></textarea>
+  </div>
 
-<div id="footer_panel">
-<input type="email" id="email" autocomplete="off" spellcheck="false">
-<a href="https://unraid.net" target="_blank"><?=_('Website')?></a><span class="spacer blue-text">|</span>
-<a href="https://forums.unraid.net" target="_blank"><?=_('Forum')?></a><span class="spacer blue-text">|</span>
-<a href="https://docs.unraid.net/" target="_blank"><?=_('Docs')?></a>
-</div>
+  <div class="feedback-footer">
+    <input class="feedback-email-input" type="email" autocomplete="off" spellcheck="false">
+    <nav class="feedback-footer-nav">
+      <a href="https://unraid.net" target="_blank"><?=_('Website')?></a>
+      <a href="https://forums.unraid.net" target="_blank"><?=_('Forum')?></a>
+      <a href="https://docs.unraid.net/" target="_blank"><?=_('Docs')?></a>
+    </nav>
+  </div>
 </div>
 
 <script>
@@ -136,7 +206,7 @@ String.prototype.md5 = function(){
 
 function validInput(input) {
   var validRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  var email = $('input#email');
+  var email = $('.feedback-email-input');
   return input.val().md5() == md5[input.prop('id')] || !(email.prop('required')===false || email.val().match(validRegex));
 }
 
@@ -167,13 +237,13 @@ function form_submit(url, params, tab, diagnostics) {
     }).fail(function(){
       $('div.spinner.fixed').hide();
       panel.fadeOut('fast').find('textarea').prop('disabled',false);
-      var reply = "<h2 class='center red-text'><?=_('Error')?></h2><p class='center'><img src='<?=$feedback?>error.png'><br><?="$diagn. $again"?>.</p>";
+      var reply = "<h2 class='center red-text'><?=_('Error')?></h2><p class='center'><img class='feedback-submission-img' src='<?=$feedback?>error.png'><br><?="$diagn. $again"?>.</p>";
       $('#result_panel').html(reply).fadeIn('fast');
     });
     return;
   }
   params.description = $(tab).val();
-  params.email = $('input#email').val();
+  params.email = $('.feedback-email-input').val();
   params.timestamp = "<?=time()?>";
   params.osversion = "<?=$unraid['version']?>";
   params.keyfile = "<?=$keyfile?>";
@@ -181,18 +251,18 @@ function form_submit(url, params, tab, diagnostics) {
   $.post(url, params, function(data){
     $('div.spinner.fixed').hide();
     if (data.error) {
-      var reply = "<h2 class='center red-text'><?=_('Error')?></h2><p class='center'><img src='<?=$feedback?>error.png'><br><?="$sorry. $again"?>.</p>";
+      var reply = "<h2 class='center red-text'><?=_('Error')?></h2><p class='center'><img class='feedback-submission-img' src='<?=$feedback?>error.png'><br><?="$sorry. $again"?>.</p>";
       $('#result_panel').html(reply).fadeIn('fast');
     } else {
       var name = tab.substr(1).toLowerCase();
-      var reply = "<h2 class='center green-text'><?=_('Thank You')?></h2><p class='center'><img src='<?=$feedback?>"+name+".png'><br>"+(data.message||'')+"</p>";
+      var reply = "<h2 class='center green-text'><?=_('Thank You')?></h2><p class='center'><img class='feedback-submission-img' src='<?=$feedback?>"+name+".png'><br>"+(data.message||'')+"</p>";
       $('#result_panel').html(reply).fadeIn('fast');
     }
   }).fail(function(jqXHR, textStatus, errorThrown){
     if (jqXHR.responseJSON && jqXHR.responseJSON.error) {
       errorThrown = jqXHR.responseJSON.error;
     }
-    var reply = "<h2 class='center red-text'><?=_('Error')?></h2><p class='center'><img src='<?=$feedback?>error.png'><br><?="$sorry. $again"?>.</p>";
+    var reply = "<h2 class='center red-text'><?=_('Error')?></h2><p class='center'><img class='feedback-submission-img' src='<?=$feedback?>error.png'><br><?="$sorry. $again"?>.</p>";
     $('#result_panel').html(reply).fadeIn('fast');
   }).always(function(){
     $('#spinner_image').fadeOut('fast');
@@ -208,10 +278,10 @@ $(function(){
     var tab = '#'+$('input[name=mode]:checked').val();
     var panel = tab+'_panel';
     var enter = ['#troubleshoot'].includes(tab);
-    var email = "<?=_('Contact Email Address')?> ("+(enter ? "<?=_('required')?>" : "<?=_('optional')?>")+")";
-    $('input#email').prop('placeholder',email).prop('required',enter);
+    var email = "<?=_('Contact Email Address')?> ("+"<?=_('required')?>"+")";
+    $('.feedback-email-input').prop('placeholder',email).prop('required','true');
     $('#submit_button').prop('disabled',validInput($(tab)));
-    $('.allpanels').not(panel).fadeOut('fast');
+    $('.feedback-panel').not(panel).fadeOut('fast');
     $(panel).fadeIn('fast');
   });
 
@@ -219,7 +289,7 @@ $(function(){
     $('#submit_button').prop('disabled',validInput($(this)));
   });
 
-  $('input#email').on('input change',function(){
+  $('.feedback-email-input').on('input change',function(){
     var tab = '#'+$('input[name=mode]:checked').val();
     $('#submit_button').prop('disabled',validInput($(tab)));
   });

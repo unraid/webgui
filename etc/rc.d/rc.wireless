@@ -1,0 +1,371 @@
+#!/bin/bash
+#
+# script: rc.wireless
+#
+# This script is used to bring up the wireless network interface.
+#
+# Bergware - created for Unraid OS, January 2025
+
+DAEMON="WiFi network"
+CALLER="wifi"
+INI="/var/local/emhttp/wireless.ini"
+CFG="/boot/config/wireless.cfg"
+OPENSSL="/usr/local/emhttp/webGui/scripts/open_ssl"
+STARTWIFI="/usr/local/emhttp/webGui/scripts/wireless"
+WPA="/etc/wpa_supplicant.conf"
+
+# system network references
+SYSTEM="/sys/class/net"
+CONF6="/proc/sys/net/ipv6/conf"
+
+# run & log functions
+. /etc/rc.d/rc.runlog
+
+# library functions
+. /etc/rc.d/rc.library.source
+
+# get settings
+[[ -r $INI ]] && . $INI
+PORT=${PORT:-wlan0}
+
+# translate security to informational text
+trans(){
+  case "$1" in
+    "IEEE-802.1X/SHA-256") echo "WPA3 Enterprise" ;;
+    "IEEE-802.1X") echo "WPA2 Enterprise" ;;
+    "SAE") echo "WPA3 Personal" ;;
+    "PSK") echo "WPA2 Personal" ;;
+    "WEP") echo "WEP (decprecated)" ;;
+    "open") echo "Open network" ;;
+    "FT/IEEE-802.1X" | "FT/SAE" | "FT/PSK") echo "Roaming Profile" ;;
+    *) echo "$1" ;;
+  esac
+}
+
+# set security priority
+priority(){
+  case "$1" in
+    "IEEE-802.1X/SHA-256") echo 25 ;;
+    "FT/IEEE-802.1X") echo 18 ;;
+    "IEEE-802.1X") echo 15 ;;
+    "FT/SAE") echo 12 ;;
+    "SAE") echo 10 ;;
+    "FT/PSK") echo 8 ;;
+    "PSK") echo 6 ;;
+    "WEP") echo 4 ;;
+    "open") echo 2 ;;
+    *) echo 1 ;;
+  esac
+}
+
+# remove leading zeros in IPv4 address
+unzero(){
+  local M Q
+  echo -n $(for Q in ${1//./ }; do printf "$M%x" "0x$Q"; M=.; done)
+}
+
+# remove leading zeros in IPv6 address
+unzero6(){
+  local A M Q
+  A=${1/::/:-:}
+  echo -n $(for Q in ${A//:/ }; do [[ $Q != - ]] && printf "$M%x" "0x$Q" || printf ":"; M=:; done)
+}
+
+# convert text to hex
+hex(){
+  echo -n $1 | od -An -tx1 | tr -d ' \n'
+}
+
+# wait for interface to go up
+carrier(){
+  local n e
+  [[ -e $SYSTEM/$1 ]] && e=${2:-10} || return 1
+  for ((n=0; n<$e; n++)); do
+    [[ $(cat $SYSTEM/$1/carrier 2>/dev/null) == 1 ]] && return 0
+    [[ $e -gt 1 ]] && sleep 1
+  done
+  return 1
+}
+
+# enable/disable ipv6 assignment per interface
+ipv6_addr(){
+  if [[ -d $CONF6/$1 ]]; then
+    echo $2 >$CONF6/$1/accept_ra
+    echo $2 >$CONF6/$1/accept_ra_defrtr
+    echo $3 >$CONF6/$1/autoconf
+  fi
+}
+
+# assign IP address
+ipaddr_up(){
+  # disable IPv6 per interface when IPv4 only
+  [[ $IP == ipv4 ]] && DISABLE6=1 || DISABLE6=0
+  [[ -d $CONF6/$PORT ]] && echo $DISABLE6 >$CONF6/$PORT/disable_ipv6
+  if [[ $DHCP == yes ]]; then
+    # bring up interface using DHCP/SLAAC
+    ipv6_addr 1 1
+    OPTIONS="-q -n -p -t10 -J"
+    [[ -n $HOSTNAME ]] && OPTIONS="$OPTIONS -h $HOSTNAME"
+    [[ $DNS == yes ]] && OPTIONS="$OPTIONS -C resolv.conf"
+    [[ $IP == ipv4 ]] && OPTIONS="$OPTIONS -4"
+    [[ $IP == ipv6 ]] && OPTIONS="$OPTIONS -6"
+    if carrier $PORT; then
+      # interface is UP
+      log "interface $PORT is UP, polling up to 60 sec for DHCP $IP server"
+      if ! run timeout 60 dhcpcd -w $OPTIONS $PORT; then
+        log "can't obtain IP address, continue polling in background on interface $PORT"
+        run dhcpcd -b $OPTIONS $PORT
+      fi
+    else
+      # interface is DOWN
+      log "interface $PORT is DOWN, polling DHCP $IP server in background"
+      run dhcpcd -b $OPTIONS $PORT
+    fi
+  elif [[ $DHCP == no ]]; then
+    # bring up interface using static IP address
+    if carrier $PORT; then STATE="UP"; else STATE="DOWN"; fi
+    log "interface $PORT is $STATE, setting static $IP address"
+    ipv6_addr $PORT 0 1
+    if [[ $IP == ipv4 ]]; then
+      [[ -n $IP4 && -n $MASK4 ]] && run ip -4 addr add $(unzero $IP4)/$MASK4 dev $PORT metric 3004
+      [[ -n $GATEWAY4 ]] && run ip -4 route add default via $GATEWAY4 dev $PORT metric 3004
+    fi
+    if [[ $IP == ipv6 ]]; then
+      [[ -n $IP6 && -n $MASK6 ]] && run ip -6 addr add $(unzero6 $IP6)/$MASK6 dev $PORT metric 3004
+      [[ -n $GATEWAY6 ]] && run ip -6 route add default via $GATEWAY6 dev $PORT metric 3004
+    fi
+  fi
+  if [[ $DNS == yes ]]; then
+    [[ $IP == ipv4 && -z $(grep -om1 "nameserver $SERVER4" /etc/resolv.conf) ]] && echo "nameserver $SERVER4  # $PORT:v4" >>/etc/resolv.conf
+    [[ $IP == ipv6 && -z $(grep -om1 "nameserver $SERVER6" /etc/resolv.conf) ]] && echo "nameserver $SERVER6  # $PORT:v6" >>/etc/resolv.conf
+  else
+    [[ $IP == ipv4 ]] && sed -ri '/^nameserver .+# $PORT:v4/d' /etc/resolv.conf
+    [[ $IP == ipv6 ]] && sed -ri '/^nameserver .+# $PORT:v6/d' /etc/resolv.conf
+  fi
+}
+
+# release IP address
+ipaddr_down(){
+  if [[ $DHCP == yes ]]; then
+    # release DHCP assigned address and default route
+    OPTIONS="-q -k"
+    [[ $DNS == yes ]] && OPTIONS="$OPTIONS -C resolv.conf"
+    [[ $IP == ipv4 ]] && OPTIONS="$OPTIONS -4"
+    [[ $IP == ipv6 ]] && OPTIONS="$OPTIONS -6"
+    run dhcpcd $OPTIONS $PORT
+  elif [[ $DHCP == no ]]; then
+    # release static assigned address and default route
+    [[ $IP == ipv4 ]] && run ip -4 addr flush dev $PORT
+    [[ $IP == ipv4 ]] && run ip -4 route flush default dev $PORT
+    [[ $IP == ipv6 ]] && run ip -6 addr flush dev $PORT
+    [[ $IP == ipv6 ]] && run ip -6 route flush default dev $PORT
+  fi
+}
+
+# Security protocols      Test Result
+# Open                    OK
+# WEP (deprecated)        --
+# WPA2                    OK
+# WPA2/WPA3               OK
+# WPA3                    OK
+# WPA2 Enterprise         OK
+# WPA2/WPA3 Enterprise    OK
+# WPA3 Enterprise         OK
+
+wpa_configuration(){
+  log "wpa_configuration: $(trans "$1")"
+  if [[ ! -e $WPA ]]; then
+    echo "bgscan=\"\"" >$WPA
+    echo "ctrl_interface=/run/wpa_supplicant" >>$WPA
+    [[ -n $CC ]] && echo "country=${CC,,}" >>$WPA
+  fi
+  if [[ $1 =~ "PSK" ]]; then
+    PSK=$(wpa_passphrase "$SSID" "$PASSWORD" 2>/dev/null | grep -Pom1 '^\s+psk=\K.+')
+    [[ -z $PSK ]] && PSK="\"$PASSWORD\""
+  fi
+  echo "network={" >>$WPA
+  echo "ssid=\"$SSID\"" >>$WPA
+  echo "scan_ssid=1" >>$WPA
+  [[ $1 == "open" ]] && echo "key_mgmt=NONE" >>$WPA
+  [[ $1 == "PSK" ]] && echo "key_mgmt=WPA-PSK" >>$WPA
+  [[ $1 == "FT/PSK" ]] && echo "key_mgmt=FT-PSK" >>$WPA
+  [[ $1 == "SAE" ]] && echo "key_mgmt=SAE" >>$WPA
+  [[ $1 == "FT/SAE" ]] && echo "key_mgmt=FT-SAE" >>$WPA
+  [[ $1 == "IEEE-802.1X" ]] && echo "key_mgmt=WPA-EAP" >>$WPA
+  [[ $1 == "FT/IEEE-802.1X" ]] && echo "key_mgmt=FT-EAP" >>$WPA
+  [[ $1 == "IEEE-802.1X/SHA-256" ]] && echo "key_mgmt=WPA-EAP-SHA256" >>$WPA
+  [[ $1 =~ "PSK" ]] && echo "psk=$PSK" >>$WPA
+  [[ $1 =~ "SAE" ]] && echo "sae_password=\"$PASSWORD\"" >>$WPA
+  [[ $1 =~ "IEEE" ]] && echo "eap=PEAP" >>$WPA
+  [[ $1 =~ "IEEE" ]] && echo "identity=\"$USERNAME\"" >>$WPA
+  [[ $1 =~ "IEEE" ]] && echo "password=\"$PASSWORD\"" >>$WPA
+  [[ $1 == "IEEE-802.1X" || $1 == "FT/IEEE-802.1X" ]] && echo "ieee80211w=1" >>$WPA
+  [[ $1 =~ "SAE" || $1 == "IEEE-802.1X/SHA-256" ]] && echo "ieee80211w=2" >>$WPA
+  [[ $1 =~ "IEEE" ]] && echo "phase2=\"auth=MSCHAPV2\"" >>$WPA
+  echo "priority=$(priority "$1")" >>$WPA
+  echo "}" >>$WPA
+}
+
+wifi_running(){
+  sleep 0.1
+  carrier $PORT 1
+}
+
+wifi_start(){
+  log "Starting $DAEMON..."
+  local REPLY
+  if [[ ! -e $SYSTEM/$PORT ]]; then
+    log "$DAEMON...  No Wifi present."
+    return
+  fi
+  if [[ $(var WIFI $CFG) != yes ]]; then
+    log "$DAEMON...  Wifi not enabled."
+    return
+  fi
+  LINK=shim-$PORT
+  [[ -e $SYSTEM/$LINK ]] || run ip link add link $PORT name $LINK type ipvtap mode l2 bridge
+  run ip link set $PORT up
+  run ip link set $LINK up
+  # set regulatory region (if set) upon start
+  REGION=$(var REGION $CFG)
+  REGION_XX=$(var REGION_XX $CFG)
+  [[ $REGION == '00' ]] && CC=$REGION_XX || CC=$REGION
+  [[ -n $CC ]] && run iw reg set $CC
+  # initialise openssl encryption parameters
+  $OPENSSL load
+  # start active SSID
+  $STARTWIFI
+  if ! wifi_running; then
+    # try the saved SSIDs
+    for SSID in $(grep -P '^\[.+\]$' $CFG | sed 1d | sed -r 's/\[|\]/"/g'); do
+      [[ -n $SSID ]] && $STARTWIFI "$SSID" || break
+      if wifi_running; then break; fi
+    done
+  fi
+  if wifi_running; then REPLY="Started"; else REPLY="Failed"; fi
+  log "$DAEMON...  $REPLY."
+}
+
+wifi_stop(){
+  log "Stopping $DAEMON..."
+  local REPLY
+  if [[ ! -e $SYSTEM/$PORT ]]; then
+    log "$DAEMON...  No Wifi present."
+    return
+  fi
+  IP=ipv4
+  DHCP=$DHCP4
+  DNS=$DNS4
+  ipaddr_down
+  if [[ -n $DHCP6 ]]; then
+    IP=ipv6
+    DHCP=$DHCP6
+    DNS=$DNS6
+    ipaddr_down
+  fi
+  run pkill wpa_supplicant
+  run iw dev $PORT disconnect
+  run rm -f $INI
+  if ! wifi_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+  log "$DAEMON...  $REPLY."
+}
+
+wifi_join(){
+  log "Joining $DAEMON..."
+  local REPLY
+  if [[ ! -r $CFG ]]; then
+    log "$DAEMON...  No configuration."
+    return
+  fi
+  $OPENSSL reload
+  [[ -n $USERNAME ]] && DECRYPT1=$($OPENSSL decrypt "$USERNAME")
+  [[ -n $DECRYPT1 ]] && USERNAME=$DECRYPT1
+  [[ -n $PASSWORD ]] && DECRYPT2=$($OPENSSL decrypt "$PASSWORD")
+  [[ -n $DECRYPT2 ]] && PASSWORD=$DECRYPT2
+# plain username, encrypt username in settings file
+  if [[ -n $USERNAME && -z $DECRYPT1 ]]; then
+    ENCRYPT1=$($OPENSSL encrypt "$USERNAME")
+    sed -ri "s/^(USERNAME=\").+$/\1$ENCRYPT1\"/" $CFG
+  fi
+# plain password, encrypt password in settings file
+  if [[ -n $PASSWORD && -z $DECRYPT2 ]]; then
+    ENCRYPT2=$($OPENSSL encrypt "$PASSWORD")
+    sed -ri "s/^(PASSWORD=\").+$/\1$ENCRYPT2\"/" $CFG
+  fi
+  SECURITY=${SECURITY:-$ATTR3}
+  # replace space in enterprise security type
+  SECURITY=${SECURITY//IEEE 802/IEEE-802}
+  # regulatory region
+  REGION=$(grep -Pom1 '^REGION="\K[^"]+' $CFG)
+  REGION_XX=$(grep -Pom1 '^REGION_XX="\K[^"]+' $CFG)
+  [[ $REGION == '00' ]] && CC=$REGION_XX || CC=$REGION
+  [[ -n $(pgrep wpa_supplicant) ]] && pkill wpa_supplicant
+  rm -f $WPA
+  # list of possible security types when "auto"
+  [[ $SECURITY == "auto" ]] && SECURITY="IEEE-802.1X/SHA-256 FT/IEEE-802.1X IEEE-802.1X FT/SAE SAE FT/PSK PSK open"
+  for TYPE in $SECURITY; do wpa_configuration "$TYPE"; done
+  run wpa_supplicant -B -q -i $PORT -c $WPA
+  # IPv4 address assignment
+  IP=ipv4
+  DHCP=$DHCP4
+  DNS=$DNS4
+  ipaddr_up
+  # IPv6 address assignment (if enabled)
+  if [[ -n $DHCP6 ]]; then
+    echo 0 >$CONF6/$PORT/disable_ipv6
+    IP=ipv6
+    DHCP=$DHCP6
+    DNS=$DNS6
+    ipaddr_up
+  else
+    echo 1 >$CONF6/$PORT/disable_ipv6
+  fi
+  if wifi_running; then
+    if [[ -z $CC ]]; then
+      CC=($(iw reg get | grep -Po '^country \K..'))
+      [[ ${CC[0]} != ${CC[1]} ]] && iw reg set ${CC[1]}
+    fi
+    REPLY="Joined"
+  else
+    REPLY="Failed"
+  fi
+  log "$DAEMON...  $REPLY."
+}
+
+wifi_restart(){
+  log "Restarting $DAEMON..."
+  wifi_stop
+  sleep 1
+  wifi_start
+}
+
+wifi_status(){
+  if wifi_running; then
+    echo "$DAEMON is currently connected."
+  else
+    echo "$DAEMON is not connected."
+    exit 1
+  fi
+}
+
+case "$1" in
+'start')
+  wifi_start
+  ;;
+'stop')
+  wifi_stop
+  ;;
+'join')
+  wifi_join
+  ;;
+'restart')
+  wifi_restart
+  ;;
+'status')
+  wifi_status
+  ;;
+*)
+  echo "Usage: $BASENAME start|stop|join|restart|status"
+  exit 1
+esac
+exit 0

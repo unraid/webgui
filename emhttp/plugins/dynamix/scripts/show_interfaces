@@ -7,12 +7,12 @@ CALLER="show"
 
 # include IP addresses?
 if check && [[ $1 == ip ]]; then
-  ip=()
-  for net in $bind; do
-    ip+=("$net#[$(show -4 dev $net)#$(show -6 dev $net)]")
+  IP=()
+  for NET in $BIND; do
+    IP+=("$NET [$(echo $(show dev $NET)|xargs)]")
   done
-  bind=${ip[@]}
+  BIND=${IP[@]}
 fi
 
 # return list
-echo ${bind// /, }
+echo $BIND

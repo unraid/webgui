@@ -1,0 +1,311 @@
+:root {
+    --add-vm-background: var(--black);
+    --add-vm-border: var(--gray-150);
+}
+
+.Theme--azure:root,
+.Theme--white:root {
+    --add-vm-background: var(--gray-100);
+}
+
+body {
+    -webkit-overflow-scrolling: touch;
+}
+#vmform table {
+    margin-top: 0;
+    table-layout: fixed;
+}
+#vmform div.title + table {
+    margin-top: 0;
+}
+#vmform table tr {
+    vertical-align: top;
+    line-height: 4rem;
+    height: 4rem;
+}
+#vmform table tr td:nth-child(1) {
+    width: 25%;
+    text-align: right;
+    padding-right: 10px;
+}
+#vmform table tr td:nth-child(2) {
+    width: 800px;
+}
+@media (max-width: 1280px) {
+    #vmform table tr td:first-child {
+        width: 35%;
+        padding-right: 4rem;
+    }
+}
+@media (min-width: 1281px) {
+    #vmform table tr td:first-child {
+        width: 30%;
+        padding-right: 4rem;
+    }
+}
+@media (min-width: 1921px) {
+    #vmform table tr td:first-child {
+        width: 25%;
+        padding-right: 4rem;
+    }
+}
+#vmform table tr td:last-child {
+    width: inherit;
+}
+
+#vmform textarea {
+    max-width: 500px;
+    scrollbar-width: 4px;
+}
+
+#vmform textarea::-webkit-scrollbar {
+    height: 4px;
+    width: 4px;
+}
+
+#vmform .multiple {
+    position: relative;
+}
+#vmform .sectionbutton {
+    position: absolute;
+    left: 2px;
+    cursor: pointer;
+    opacity: 0.4;
+    font-size: 1.4rem;
+    line-height: 17px;
+    z-index: 10;
+    transition-property: opacity, left;
+    transition-duration: 0.1s;
+    transition-timing-function: linear;
+}
+#vmform .sectionbutton.remove {
+    top: 0;
+    opacity: 0.3;
+}
+#vmform .sectionbutton.add {
+    bottom: 0;
+}
+#vmform .sectionbutton:hover {
+    opacity: 1;
+}
+#vmform .sectiontab {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    left: 0;
+    width: 6px;
+    border-radius: 3px;
+    background-color: var(--gray-200); /* Condensed from: #dddddd */
+    transition-property: background, width;
+    transition-duration: 0.1s;
+    transition-timing-function: linear;
+}
+#vmform .multiple:hover .sectionbutton {
+    opacity: 0.7;
+    left: 4px;
+}
+#vmform .multiple:hover .sectionbutton.remove {
+    opacity: 0.6;
+}
+#vmform .multiple:hover .sectiontab {
+    background-color: var(--gray-300);
+    width: 8px;
+}
+#vmform table.multiple:hover {
+    background-position: 0 0;
+}
+#vmform table.multiple td {
+    padding: 5px 0;
+}
+span.advancedview_panel {
+    display: none;
+    line-height: 16px;
+    margin-top: 1px;
+}
+.basic {
+    display: none;
+}
+.advanced {
+    /*Empty placeholder*/
+}
+.switch-button-label.off {
+    color: inherit;
+}
+#template_img {
+    cursor: pointer;
+}
+#template_img:hover {
+    opacity: 0.5;
+}
+#template_img:hover i {
+    opacity: 1;
+}
+.template_img_chooser_inner {
+    display: inline-block;
+    width: 80px;
+    text-align: center;
+}
+.template_img_chooser_inner:hover {
+    color: var(--orange-400);
+    cursor: pointer;
+}
+.template_img_chooser_inner img {
+    width: 48px;
+    height: 48px;
+}
+.template_img_chooser_inner p {
+    text-align: center;
+    margin: 0;
+}
+.template_img_parent {
+    position: relative;
+}
+#template_img_chooser_outer {
+    position: absolute;
+    display: none;
+    border-radius: 5px;
+    border: 1px solid var(--add-vm-border);
+    background: var(--add-vm-background);
+    z-index: 10;
+}
+#template_img_chooser {
+    width: 560px;
+    height: 300px;
+    overflow-y: scroll;
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 1rem;
+}
+#form_content {
+    display: none;
+}
+#vmform .four {
+    overflow: hidden;
+}
+#vmform .four label {
+    float: left;
+    display: table-cell;
+    width: 15%;
+}
+#vmform .four label:nth-child(4n + 4) {
+}
+#vmform .four label.cpu1 {
+    width: 28%;
+    height: 16px;
+    line-height: 16px;
+}
+#vmform .four label.cpu2 {
+    width: 3%;
+    height: 16px;
+    line-height: 16px;
+}
+#vmform .mac_generate {
+    cursor: pointer;
+    margin-left: -5px;
+    color: var(--blue-700); /* Condensed from: #08c */
+    font-size: 1.3rem;
+    transform: translate(0px, 2px);
+}
+#vmform .disk {
+    display: none;
+}
+#vmform .disk_preview {
+    display: inline-block;
+    color: var(--gray-300); /* Condensed from: #bbb */
+    transform: translate(0px, 1px);
+}
+i.fa-plus-circle,
+i.fa-minus-circle {
+    margin-left: 8px;
+}
+input[type="checkbox"] {
+    margin-left: 0;
+}
+
+span.width {
+    display: inline-block;
+    width: 280px;
+}
+
+span.column1 {
+    display: inline-block;
+    width: 140px;
+}
+
+span.column2 {
+    display: inline-block;
+    width: 220px;
+}
+
+input#btnvCPUSelect,
+input.wlan0_info {
+    font-size: 1rem;
+    padding: 5px 10px;
+    margin: 0 0 0 10px;
+}
+
+span.space {
+    display: inline-block;
+    width: 60px;
+}
+
+span.label {
+    display: inline-block;
+    width: 110px;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+span.ipvtap {
+    margin-left: 25px;
+    font-family: bitstream;
+}
+
+select.narrow {
+    min-width: 90px !important;
+}
+
+select.second {
+    margin-left: 12px;
+    max-width: 90px;
+    margin-right: 0;
+}
+
+div.wlan0 {
+    text-align: left;
+}
+
+input.trim {
+    width: 98px;
+    min-width: 98px;
+}
+
+input.second {
+    margin-left: 8px;
+}
+
+.autostart ~ .switch-button-background {
+    margin-top: 8px !important;
+    margin-left: 0 !important;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.CodeMirror {
+    border: 1px solid var(--gray-150);
+    cursor: text;
+    margin-top: 15px;
+    margin-bottom: 10px;
+}
+
+.CodeMirror pre.CodeMirror-placeholder {
+    color: var(--gray-400);
+}
+
+.fileTree {
+    position: relative;
+}

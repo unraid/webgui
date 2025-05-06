@@ -23,9 +23,6 @@ function sharename($share) {
   return basename($share,'.cfg');
 }
 ?>
-<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.ui.css")?>">
-<link type="text/css" rel="stylesheet" href="<?autov("/plugins/dynamix.docker.manager/styles/style-$theme.css")?>">
-
 <script>
 function validate(poolname) {
   var valid = /^[a-z]([a-z0-9~._-]*[a-z_-])*$/;
@@ -189,11 +186,11 @@ _(Slots)_:
 <input type="hidden" name="poolName" value="">
 _(Name)_:
 : <select name="subpool">
-  <?=mk_option("","special",_("special - Special Allocation Class"))?>
-  <?=mk_option("","logs",_("logs - ZFS Intent Log"))?>
+  <?=mk_option("","special",_("special - Metadata storage"))?>
+  <?=mk_option("","logs",_("logs - Separate Intent Log (SLOG)"))?>
   <?=mk_option("","dedup",_("dedup - Deduplication Tables"))?>
-  <?=mk_option("","cache",_("cache - Cache Devices"))?>
-  <?=mk_option("","spares",_("spares - Hot Spares"))?>
+  <?=mk_option("","cache",_("cache - L2ARC"))?>
+  <?=mk_option("","spares",_("spares - Hot Spares"),'disabled')?>
   </select>
 
 _(Slots)_:

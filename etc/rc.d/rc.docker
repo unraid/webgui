@@ -10,15 +10,15 @@
 # VMs, bare metal, OpenStack clusters, public clouds and more.
 #
 # LimeTech - modified for Unraid OS
-# Bergware - modified for Unraid OS, October 2023
+# Bergware - modified for Unraid OS, January 2025
 
 DAEMON="Docker daemon"
 UNSHARE="/usr/bin/unshare"
 SYSTEM="/sys/class/net"
 CONF6="/proc/sys/net/ipv6/conf"
-STOCK="bond br eth"
+STOCK="bond br eth wlan"
 ACTIVE=$(ls --indicator-style=none $SYSTEM | awk "/^(${STOCK// /|})[0-9]/" ORS=' ')
-NICS=$(ls --indicator-style=none $SYSTEM | awk '/^eth[0-9]+$/')
+NICS=$(ls --indicator-style=none $SYSTEM | awk '/^(eth|wlan)[0-9]+$/')
 
 DOCKERD="dockerd"
 DOCKER="/usr/bin/$DOCKERD"
@@ -35,65 +35,87 @@ TMP=/var/tmp/network.tmp
 # run & log functions
 . /etc/rc.d/rc.runlog
 
-# determine active port name
-[[ -e $SYSTEM/bond0 ]] && PORT=bond0 || PORT=eth0
-[[ -e $SYSTEM/br0 ]] && PORT=br0
-
-# Set defaults used by the docker daemon
-if [[ -f $DOCKER_CFG ]]; then
-  for NIC in $NICS; do
-    if [[ -e $SYSTEM/${NIC/eth/br} ]]; then
-      NIC=${NIC/eth/br}
-    elif [[ -e $SYSTEM/${NIC/eth/bond} ]]; then
-      NIC=${NIC/eth/bond}
-    fi
-    CFG=($(grep -Pom2 "_SUBNET_|_${NIC^^}(_[0-9]+)?=" $DOCKER_CFG))
-    if [[ ${CFG[0]} == _SUBNET_ && -z ${CFG[1]} ]]; then
-      # interface has changed, update configuration
-      X=${NIC//[^0-9]/}
-      sed -ri "s/_(BR|BOND|ETH)$X(_[0-9]+)?=/_${NIC^^}\2=/; s/(br|bond|eth)$X(\.[0-9]+)? /$NIC\2 /g" $DOCKER_CFG
-    fi
+# wait for interface to go up
+carrier(){
+  local n e
+  [[ -e $SYSTEM/$1 ]] && e=${2:-10} || return 1
+  for ((n=0; n<$e; n++)); do
+    [[ $(cat $SYSTEM/$1/carrier 2>/dev/null) == 1 ]] && return 0
+    [[ $e -gt 1 ]] && sleep 1
   done
-  # Read (updated) Unraid docker configuration file
-  . $DOCKER_CFG
-fi
+  return 1
+}
 
-# Set storage driver appropriate for backing filesystem, override user setting
-BACKINGFS=$(findmnt --output FSTYPE --noheadings $DOCKER_ROOT)
-if [[ $BACKINGFS == btrfs ]]; then
-  DOCKER_OPTS="$DOCKER_OPTS --storage-driver=btrfs"
-elif [[ $BACKINGFS == xfs ]]; then
-  DOCKER_OPTS="$DOCKER_OPTS --storage-driver=overlay2"
-elif [[ $BACKINGFS == zfs ]]; then
-  DOCKER_OPTS="$DOCKER_OPTS --storage-driver=zfs"
-fi
+# initialize docker settings
+docker_read_options(){
+  # determine active port name
+  [[ -e $SYSTEM/bond0 ]] && PORT=bond0 || PORT=eth0
+  [[ -e $SYSTEM/br0 ]] && PORT=br0
+  [[ ! $(carrier $PORT) && $(carrier wlan0 1) ]] && PORT=wlan0
 
-# Less verbose logging by default
-DOCKER_OPTS="--log-level=fatal $DOCKER_OPTS"
+  # Set defaults used by the docker daemon
+  if [[ -f $DOCKER_CFG ]]; then
+    for NIC in $NICS; do
+      if [[ ${NIC:0:3} == eth ]]; then
+        if [[ -e $SYSTEM/${NIC/eth/br} ]]; then
+          NIC=${NIC/eth/br}
+        elif [[ -e $SYSTEM/${NIC/eth/bond} ]]; then
+          NIC=${NIC/eth/bond}
+        fi
+      fi
+      CFG=($(grep -Pom2 "_SUBNET_|_${NIC^^}(_[0-9]+)?=" $DOCKER_CFG))
+      if [[ ${CFG[0]} == _SUBNET_ && -z ${CFG[1]} ]]; then
+        # interface has changed, update configuration
+        X=${NIC//[^0-9]/}
+        sed -ri "s/_(BR|BOND|ETH|WLAN)$X(_[0-9]+)?=/_${NIC^^}\2=/; s/(br|bond|eth|wlan)$X(\.[0-9]+)? /$NIC\2 /g" $DOCKER_CFG
+      fi
+    done
+    # Read (updated) Unraid docker configuration file
+    . $DOCKER_CFG
+  fi
 
-# Enable global docker LOG rotation
-if [[ $DOCKER_LOG_ROTATION == yes ]]; then
-  [[ -z $DOCKER_LOG_SIZE ]] && DOCKER_LOG_SIZE=10m
-  [[ -z $DOCKER_LOG_FILES ]] && DOCKER_LOG_FILES=1
-  DOCKER_OPTS="--log-opt max-size=$DOCKER_LOG_SIZE --log-opt max-file=$DOCKER_LOG_FILES $DOCKER_OPTS"
-fi
+  # set storage driver to overlay2 if config value is found, otherwise fall back to native FS driver
+  if [[ $(awk -F'"' '/^DOCKER_BACKINGFS=/{print $2}' $DOCKER_CFG 2>/dev/null) == overlay2 ]]; then
+    DOCKER_OPTS="$DOCKER_OPTS --storage-driver=overlay2"
+  else
+    BACKINGFS=$(findmnt --output FSTYPE --noheadings $DOCKER_ROOT)
+    if [[ $BACKINGFS == btrfs ]]; then
+      DOCKER_OPTS="$DOCKER_OPTS --storage-driver=btrfs"
+    elif [[ $BACKINGFS == xfs ]]; then
+      DOCKER_OPTS="$DOCKER_OPTS --storage-driver=overlay2"
+    elif [[ $BACKINGFS == zfs ]]; then
+      DOCKER_OPTS="$DOCKER_OPTS --storage-driver=zfs"
+    fi
+  fi
 
-# Adjust MTU size if non-default
-MTU=$(ip link show $PORT | grep -Po 'mtu \K\d+')
-[[ -n $MTU && $MTU -ne 1500 ]] && DOCKER_OPTS="--mtu=$MTU $DOCKER_OPTS"
+  # Less verbose logging by default
+  DOCKER_OPTS="--log-level=fatal $DOCKER_OPTS"
 
-# Enable IPv6 for docker bridge network
-if [[ -n $(ip -6 route show default dev $PORT) ]]; then
-  DOCKER0='fd17::/64'
-  DOCKER_OPTS="--ipv6 --fixed-cidr-v6=$DOCKER0 $DOCKER_OPTS"
-  # create IPv6 NAT rule for docker0
-  [[ -z $(ip6tables -t nat -S | grep -o "$DOCKER0") ]] && run ip6tables -t nat -A POSTROUTING -s $DOCKER0 ! -o docker0 -j MASQUERADE
-else
-  # ipv6 disabled
-  [[ -d $CONF6/docker0 ]] && echo 1 > $CONF6/docker0/disable_ipv6
-fi
+  # Enable global docker LOG rotation
+  if [[ $DOCKER_LOG_ROTATION == yes ]]; then
+    [[ -z $DOCKER_LOG_SIZE ]] && DOCKER_LOG_SIZE=10m
+    [[ -z $DOCKER_LOG_FILES ]] && DOCKER_LOG_FILES=1
+    DOCKER_OPTS="--log-opt max-size=$DOCKER_LOG_SIZE --log-opt max-file=$DOCKER_LOG_FILES $DOCKER_OPTS"
+  fi
 
-export DOCKER_RAMDISK=true
+  # Adjust MTU size if non-default
+  MTU=$(ip link show $PORT | grep -Po 'mtu \K\d+')
+  [[ -n $MTU && $MTU -ne 1500 ]] && DOCKER_OPTS="--mtu=$MTU $DOCKER_OPTS"
+
+  # Enable IPv6 for docker bridge network
+  if [[ -n $(ip -6 route show default dev $PORT) ]]; then
+    DOCKER0='fd17::/64'
+    DOCKER_OPTS="--ipv6 --fixed-cidr-v6=$DOCKER0 $DOCKER_OPTS"
+    IPV6_FORWARD=${IPV6_FORWARD:=accept}
+    # create IPv6 NAT rule for docker0
+    [[ -z $(ip6tables -t nat -S | grep -o "$DOCKER0") ]] && run ip6tables -t nat -A POSTROUTING -s $DOCKER0 ! -o docker0 -j MASQUERADE
+  else
+    # ipv6 disabled
+    [[ -d $CONF6/docker0 ]] && echo 1 > $CONF6/docker0/disable_ipv6
+  fi
+
+  export DOCKER_RAMDISK=true
+}
 
 # Get docker daemon PID (if existing)
 docker_pid(){
@@ -122,7 +144,7 @@ all_containers(){
 
 # Running containers
 running_containers(){
-  docker ps --format='{{.Names}}' 2>/dev/null
+  docker ps --format='{{.Names}} {{.Labels}}' 2>/dev/null | grep 'net.unraid.docker.managed=' | awk '{print $1}'
 }
 
 # Network driver
@@ -190,11 +212,11 @@ container_add_route(){
   local PID=${CT[0]}
   local NET=${CT[1]#*[}
   local LAN=${NET%:*}
-  if [[ $PID -gt 0 && "eth0 br0 bond0" =~ $LAN ]]; then
-    local THISIP=$(sed -n '/^\[eth0\]$/,/^TYPE/p' $INI | grep -Pom1 '^IPADDR:0="\K[^"]+')
+  if [[ $PID -gt 0 && "eth0 br0 bond0 wlan0" =~ $LAN ]]; then
+    local THISIP=$(ip -4 -br addr show dev $LAN scope global | awk '{print $3;exit}')
     for CFG in /etc/wireguard/wg*.cfg ; do
-      local NETWORK=$(grep -Pom1 '^Network:0="\K[^"]+' $CFG)
-      [[ -n $NETWORK ]] && nsenter -n -t $PID ip -4 route add $NETWORK via $THISIP dev $LAN 2>/dev/null
+      local NETWORK=$(ip -4 show route dev $LAN $THISIP | awk '{print $1;exit}')
+      [[ -n $NETWORK ]] && nsenter -n -t $PID ip -4 route add $NETWORK via ${THISIP%/*} dev $LAN 2>/dev/null
     done
   fi
 }
@@ -211,14 +233,16 @@ docker_network_start(){
         INCLUDE="${INCLUDE}${NETWORK} "
         EXCLUDE="${EXCLUDE}${NETWORK/bond/eth} "
       fi
-    else
+    elif [[ ${NETWORK:0:3} == eth ]]; then
       if [[ $INCLUDE =~ "${NETWORK/eth/br} " || $INCLUDE =~ "${NETWORK/eth/bond} " ]]; then
         [[ $EXCLUDE =~ "$NETWORK " ]] || EXCLUDE="${EXCLUDE}${NETWORK} "
       else
         INCLUDE="${INCLUDE}${NETWORK} "
       fi
+    else
+      INCLUDE="${INCLUDE}${NETWORK} "
     fi
-  done <<< $(ls --indicator-style=none $SYSTEM | grep -P '^(bond|eth)[0-9]+')
+  done <<< $(ls --indicator-style=none $SYSTEM | grep -P '^(bond|eth|wlan)[0-9]+')
   if ! docker_running; then return 1; fi
   # get container settings for custom networks to reconnect later
   declare -A NETRESTORE CTRESTORE
@@ -228,17 +252,23 @@ docker_network_start(){
     XMLFILE=$(find /boot/config/plugins/dockerMan/templates-user -maxdepth 1 -iname my-${CONTAINER}.xml)
     if [[ -n $XMLFILE ]]; then
       REBUILD=
+      MAIN=
       # update custom network reference (if changed)
       for NIC in $NICS; do
-        if [[ -e $SYSTEM/${NIC/eth/br} ]]; then
-          NIC=${NIC/eth/br}
-        elif [[ -e $SYSTEM/${NIC/eth/bond} ]]; then
-          NIC=${NIC/eth/bond}
+        if [[ ${NIC:0:3} == eth ]]; then
+          if [[ -e $SYSTEM/${NIC/eth/br} ]]; then
+            NIC=${NIC/eth/br}
+          elif [[ -e $SYSTEM/${NIC/eth/bond} ]]; then
+            NIC=${NIC/eth/bond}
+          fi
         fi
         X=${NIC//[^0-9]/}
-        REF=$(grep -Pom1 "<Network>\K(br|bond|eth)$X" $XMLFILE)
+        REF=$(grep -Pom1 "<Network>\K(br|bond|eth|wlan)$X" $XMLFILE)
+        [[ $X == 0 && ! $(carrier $NIC 1) ]] && continue
+        [[ $X == 0 && $NIC != wlan0 ]] && MAIN=$NIC
+        [[ $NIC == wlan0 && -n $MAIN ]] && continue
         if [[ -n $REF && $REF != $NIC ]]; then
-          sed -ri "s/<Network>(br|bond|eth)$X(\.[0-9]+)?<\/Network>/<Network>$NIC\2<\/Network>/" $XMLFILE
+          sed -ri "s/<Network>(br|bond|eth|wlan)$X(\.[0-9]+)?<\/Network>/<Network>$NIC\2<\/Network>/" $XMLFILE
           # flag container for later rebuild
           REBUILD=1
         fi
@@ -259,24 +289,30 @@ docker_network_start(){
     USER_NETWORKS=$(docker inspect --format='{{range $key,$value:=.NetworkSettings.Networks}}{{$key}};{{if $value.IPAMConfig}}{{if $value.IPAMConfig.IPv4Address}}{{$value.IPAMConfig.IPv4Address}}{{end}}{{if $value.IPAMConfig.IPv6Address}},{{$value.IPAMConfig.IPv6Address}}{{end}}{{end}} {{end}}' $CONTAINER)
     for ROW in $USER_NETWORKS; do
       ROW=(${ROW/;/ })
-      MY_NETWORK=${ROW[0]}
-      MY_IP=${ROW[1]/,/;}
-      if [[ -n $MY_NETWORK && $MY_NETWORK != $MY_NETWORK ]]; then
-        LABEL=${MY_NETWORK//[0-9.]/}
-        if [[ $STOCK =~ $LABEL && $LABEL != ${PORT:0:-1} ]]; then
-          MY_NETWORK=${MY_NETWORK/$LABEL/${PORT:0:-1}}
+      USER_NETWORK=${ROW[0]}
+      USER_IP=${ROW[1]/,/;}
+      if [[ -n $USER_NETWORK && $USER_NETWORK != $MY_NETWORK ]]; then
+        LABEL=${USER_NETWORK//[0-9.]/}
+        IF_NO_PARTS=${USER_NETWORK#"$LABEL"}
+        IF_NO=${IF_NO_PARTS%%.*}
+        if [[ $STOCK =~ $LABEL && $IF_NO -gt 0 ]]; then
+          USER_NETWORK=$USER_NETWORK
+        elif [[ $STOCK =~ $LABEL && $LABEL != ${PORT:0:-1} ]]; then
+          USER_NETWORK=${USER_NETWORK/$LABEL/${PORT:0:-1}}
         fi
-        log "container $CONTAINER has an additional network that will be restored: $MY_NETWORK"
-        NETRESTORE[$MY_NETWORK]="$CONTAINER,$MY_IP ${NETRESTORE[$MY_NETWORK]}"
+        log "container $CONTAINER has an additional network that will be restored: $USER_NETWORK"
+        NETRESTORE[$USER_NETWORK]="$CONTAINER,$USER_IP ${NETRESTORE[$USER_NETWORK]}"
       fi
     done
   done
   # detach custom networks
   for NIC in $NICS; do
-    if [[ -e $SYSTEM/${NIC/eth/br} ]]; then
-      NIC=${NIC/eth/br}
-    elif [[ -e $SYSTEM/${NIC/eth/bond} ]]; then
-      NIC=${NIC/eth/bond}
+    if [[ ${NIC:0:3} == eth ]]; then
+      if [[ -e $SYSTEM/${NIC/eth/br} ]]; then
+        NIC=${NIC/eth/br}
+      elif [[ -e $SYSTEM/${NIC/eth/bond} ]]; then
+        NIC=${NIC/eth/bond}
+      fi
     fi
     X=${NIC//[^0-9]/}
     driver ${NIC//[0-9]/}
@@ -305,7 +341,7 @@ docker_network_start(){
       fi
       # add auto defined networks
       SUBNET=; GATEWAY=; SERVER=; RANGE=;
-      IPV4=$(ip -br -4 addr show $NETWORK | awk '{print $3;exit}')
+      [[ -z ${!AUTO} || ${!AUTO} =~ "4" ]] && IPV4=$(ip -4 -br addr show $NETWORK scope global | awk '{print $3;exit}') || IPV4=
       if [[ -n $IPV4 ]]; then
         SUBNET=$(ip -4 route show $IPV4 dev $NETWORK | awk '{print $1;exit}')
         SERVER=${IPV4%/*}
@@ -314,16 +350,12 @@ docker_network_start(){
         RANGE=${!DHCP}
         GATEWAY=$(ip -4 route show default dev $NETWORK | awk '{print $3;exit}')
       fi
-      SUBNET6=; GATEWAY6=; SERVER6=; RANGE6=;
-      IPV6=$(ip -br -6 addr show $NETWORK scope global mngtmpaddr|awk '{print $3;exit}')
-      [[ -z $IPV6 ]] && IPV6=$(ip -br -6 addr show $NETWORK scope global permanent|awk '{print $3;exit}')
+      SUBNET6=; GATEWAY6=; SERVER6=;
+      [[ -z ${!AUTO} || ${!AUTO} =~ "6" ]] && IPV6=$(ip -6 -br addr show $NETWORK scope global -temporary -deprecated | awk '{print $3;exit}') || IPV6=
       if [[ -n $IPV6 ]]; then
         # get IPV6 subnet, preset to /64 if single host address is given
         [[ ${IPV6#*/} == 128 ]] && SUBNET6=$(echo $IPV6 | sed -r 's/^([^:]+):([^:]+):([^:]+):([^:]+).*$/\1:\2:\3:\4::\/64/') || SUBNET6=$(ip -6 route show $IPV6 dev $NETWORK | awk '{print $1;exit}')
         SERVER6=${IPV6%/*}
-        DHCP6=${NETWORK/./_}
-        DHCP6=DOCKER_DHCP6_${DHCP6^^}
-        RANGE6=${!DHCP6}
         GATEWAY6=$(ip -6 route show default dev $NETWORK | awk '{print $3;exit}')
         # replace link local address for first address in subnet
         [[ ${GATEWAY6:0:4} == fe80 ]] && GATEWAY6=${SUBNET6%/*}1
@@ -345,8 +377,6 @@ docker_network_start(){
       GATEWAY6=DOCKER_GATEWAY6_$DEVICE
       GATEWAY6=${!GATEWAY6}
       SERVER6=;
-      RANGE6=DOCKER_RANGE6_$DEVICE
-      RANGE6=${!RANGE6}
     fi
     # custom network already existing and changed?
     if [[ $NETWORKS =~ "$NETWORK " ]]; then
@@ -366,7 +396,7 @@ docker_network_start(){
       [[ -n ${SERVERS[1]} && ${SERVERS[1]} =~ '.' ]] && SERVER0=${SERVERS[1]} || SERVER1=${SERVERS[1]}
       # check for changes
       [[ $SUBNET != $SUBNET0 || $SUBNET6 != $SUBNET1 ]] && UPDATE=1
-      [[ $RANGE != $RANGE0 || $RANGE6 != $RANGE1 ]] && UPDATE=1
+      [[ $RANGE != $RANGE0 ]] && UPDATE=1
       [[ (-n $GATEWAY && $GATEWAY != $GATEWAY0) || (-n $GATEWAY6 && $GATEWAY6 != $GATEWAY1) ]] && UPDATE=1
       [[ (-n $SERVER && $SERVER != $SERVER0) || (-n $SERVER6 && $SERVER6 != $SERVER1) ]] && UPDATE=1
       if [[ -z $UPDATE ]]; then
@@ -379,20 +409,26 @@ docker_network_start(){
     fi
     # set parameters for custom network creation
     N4=$SUBNET;  R4=$RANGE;
-    N6=$SUBNET6; R6=$RANGE6;
+    N6=$SUBNET6;
     [[ -n $SUBNET && -n $GATEWAY ]] && GATEWAY="--gateway=$GATEWAY" || GATEWAY=;
     [[ -n $SUBNET && -n $SERVER ]] && SERVER="--aux-address=server=$SERVER" || SERVER=;
     [[ -n $SUBNET && -n $RANGE ]] && RANGE="--ip-range=$RANGE" || RANGE=;
     [[ -n $SUBNET ]] && SUBNET="--subnet=$SUBNET"
     [[ -n $SUBNET6 && -n $GATEWAY6 ]] && GATEWAY6="--gateway=$GATEWAY6" || GATEWAY6=;
     [[ -n $SUBNET6 && -n $SERVER6 ]] && SERVER6="--aux-address=server6=$SERVER6" || SERVER6=;
-    [[ -n $SUBNET6 && -n $RANGE6 ]] && RANGE6="--ip-range=$RANGE6" || RANGE6=;
     [[ -n $SUBNET6 ]] && SUBNET6="--ipv6 --subnet=$SUBNET6"
     if [[ -n $SUBNET || -n $SUBNET6 ]]; then
       TYPE=${NETWORK//[0-9.]/}
       driver $TYPE
-      [[ $TYPE == br ]] && VHOST=$NETWORK || VHOST=vhost${NETWORK//[^0-9.]/}
-      docker network create -d $ATTACH $SUBNET $GATEWAY $SERVER $RANGE $SUBNET6 $GATEWAY6 $SERVER6 $RANGE6 -o parent=$VHOST $NETWORK | xargs docker network inspect -f "created network $ATTACH {{.Name}} with subnets: {{range .IPAM.Config}}{{.Subnet}}; {{end}}" 2>/dev/null | log
+      if [[ $TYPE == br ]]; then
+        VHOST=$NETWORK
+      elif [[ $TYPE == wlan ]]; then
+        VHOST=$NETWORK
+        ATTACH=ipvlan
+      else
+        [[ $DOCKER_ALLOW_ACCESS == yes && -n $IPV4 ]] && VHOST=vhost${NETWORK//[^0-9.]/} || VHOST=$NETWORK
+      fi
+      docker network create -d $ATTACH $SUBNET $GATEWAY $SERVER $RANGE $SUBNET6 $GATEWAY6 $SERVER6 -o parent=$VHOST $NETWORK | xargs docker network inspect -f "created network $ATTACH {{.Name}} with subnets: {{range .IPAM.Config}}{{.Subnet}}; {{end}}" 2>/dev/null | log
       # connect containers to this new network
       for CONNECT in ${NETRESTORE[$NETWORK]}; do
         CONTAINER=${CONNECT%,*}
@@ -415,11 +451,11 @@ docker_network_start(){
         GW=($(ip -4 route show default dev $NETWORK | awk '{print $3,$5;exit}'))
         if [[ $DOCKER_ALLOW_ACCESS == yes && -n $IPV4 ]]; then
           # create shim interface and copy parent IPv4 address to shim interface
-          [[ -e $SYSTEM/$LINK ]] || run ip link add $LINK link $NETWORK type $ATTACH mode $MODE
-          run ip -4 addr flush dev $LINK
+          [[ -e $SYSTEM/$LINK ]] || run ip link add link $NETWORK name $LINK type $ATTACH mode $MODE
+          run ip addr flush dev $LINK scope global
           run ip -4 addr add $IPV4 dev $LINK metric 0
           # disable IPv6 on shim interface
-          echo 1 > $CONF6/$LINK/disable_ipv6
+          echo 1 >$CONF6/$LINK/disable_ipv6
           run ip link set $LINK up
           if [[ -n $GW ]]; then
             if [[ -z ${GW[1]} ]]; then
@@ -436,23 +472,34 @@ docker_network_start(){
         elif [[ -e $SYSTEM/$LINK ]]; then
           # remove shim interface
           [[ -n $GW ]] && ip -4 route del default via $GW dev $LINK
-          run ip -4 addr flush dev $LINK
+          run ip addr flush dev $LINK
           run ip link set $LINK down
           run ip link del $LINK
         fi
-      else
+      elif [[ $TYPE != wlan ]]; then
         if [[ $DOCKER_ALLOW_ACCESS == yes && -n $IPV4 ]]; then
-          run ip -4 addr flush dev $VHOST
-          # copy parent IPv4 address to vhost interface
+          run ip addr flush dev $VHOST scope global
+          # copy IPv4 address to vhost interface
           run ip -4 addr add $IPV4 dev $VHOST metric 0
           log "prepared network $VHOST for host access"
-        elif [[ -e $SYSTEM/$VHOST ]]; then
-          # remove IP addresses
-          run ip -4 addr flush dev $VHOST
+        else
+          VHOST=vhost${NETWORK//[^0-9.]/}
+          if [[ -e $SYSTEM/$VHOST ]]; then
+            # remove IP addresses of vhost
+            run ip addr flush dev $VHOST scope global
+            # remove routing of vhost
+            run ip -4 route flush dev $VHOST
+            run ip -6 route flush dev $VHOST
+          fi
         fi
       fi
     fi
   done
+  # create IPv6 forward accept rule
+  if [[ $IPV6_FORWARD == accept ]]; then
+    log "creating forward accept rule for IPv6 network"
+    ip6tables -P FORWARD ACCEPT
+  fi
   log "Network started."
 }
 
@@ -460,10 +507,12 @@ docker_network_stop(){
   log "Stopping network..."
   if ! docker_running; then return 1; fi
   for NIC in $NICS; do
-    if [[ -e $SYSTEM/${NIC/eth/br} ]]; then
-      NIC=${NIC/eth/br}
-    elif [[ -e $SYSTEM/${NIC/eth/bond} ]]; then
-      NIC=${NIC/eth/bond}
+    if [[ ${NIC:0:3} == eth ]]; then
+      if [[ -e $SYSTEM/${NIC/eth/br} ]]; then
+        NIC=${NIC/eth/br}
+      elif [[ -e $SYSTEM/${NIC/eth/bond} ]]; then
+        NIC=${NIC/eth/bond}
+      fi
     fi
     driver ${NIC//[0-9]/}
     for NETWORK in $(network $ATTACH ${NIC//[^0-9]/}); do
@@ -474,13 +523,13 @@ docker_network_stop(){
         if [[ -e $SYSTEM/$LINK ]]; then
           GW=$(ip -4 route show default dev $LINK | awk '{print $3;exit}')
           [[ -n $GW ]] && run ip -4 route del default via $GW dev $LINK
-          run ip -4 addr flush dev $LINK
+          run ip addr flush dev $LINK
           run ip link set $LINK down
           run ip link del $LINK
         fi
       else
         VHOST=vhost${NETWORK//[^0-9.]/}
-        [[ -e $SYSTEM/$VHOST ]] && run ip -4 addr flush dev $VHOST
+        [[ -e $SYSTEM/$VHOST ]] && run ip addr flush dev $VHOST
       fi
     done
   done
@@ -517,9 +566,7 @@ docker_container_stop(){
   log "Stopping containers..."
   if ! docker_running; then return 1; fi
   [[ -n $(running_containers) ]] && docker stop --time=${DOCKER_TIMEOUT:-10} $(running_containers) >/dev/null
-  # Kill containers if still running
-  docker kill $(docker ps -q) 2>/dev/null
-  log "Containers stopped."
+  log "Unraid managed containers stopped."
 }
 
 docker_service_start(){
@@ -554,7 +601,9 @@ docker_service_stop(){
   if [[ -r $DOCKER_PIDFILE ]]; then
     # Try to stop dockerd gracefully
     kill $(docker_pid) 2>/dev/null
-    TIMER=15
+    # show waiting message
+    echo "Waiting 30 seconds for $DAEMON to die."
+    TIMER=30
     # must ensure daemon has exited
     while [[ $TIMER -gt 0 ]]; do
       sleep 1
@@ -569,8 +618,6 @@ docker_service_stop(){
         # signal successful stop
         TIMER=-1
       else
-        # show waiting message
-        echo "$DAEMON... Waiting to die."
         ((TIMER--))
       fi
     done
@@ -599,6 +646,7 @@ docker_status(){
 
 case "$1" in
 'start')
+  docker_read_options
   docker_service_start
   docker_network_start
   docker_container_start &>/dev/null &
@@ -618,6 +666,7 @@ case "$1" in
   docker_network_stop
   docker_service_stop
   sleep 1
+  docker_read_options
   docker_service_start
   docker_network_start
   docker_container_start &>/dev/null &

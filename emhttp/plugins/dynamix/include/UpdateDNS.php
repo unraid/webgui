@@ -11,11 +11,7 @@
  */
 ?>
 <?
-$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
-require_once "$docroot/webGui/include/Wrappers.php";
-
 // This is a stub, does nothing but return success
-my_logger("This is a stub and should not be called", "UpdateDNS");
 $cli = php_sapi_name()=='cli';
 if ($cli) {
   exit("success".PHP_EOL);

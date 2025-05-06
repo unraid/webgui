@@ -1,4 +1,13 @@
 #!/bin/bash
+
 while :; do
-  curl -sfd "$(docker stats --no-stream --format='{{.ID}};{{.CPUPerc}};{{.MemUsage}}')" --unix-socket /var/run/nginx.socket http://localhost/pub/dockerload?buffer_length=0 >/dev/null 2>&1
+  output=$(docker stats --no-stream --format='{{.ID}};{{.CPUPerc}};{{.MemUsage}}' 2>&1)
+  if [[ $? -ne 0 ]]; then
+    logger -t webgui "docker stats error: $output"
+    exit 1
+  fi
+  if [[ -n "$output" ]]; then
+    curl -sfd "$output" --unix-socket /var/run/nginx.socket http://localhost/pub/dockerload?buffer_length=1 >/dev/null 2>&1
+  fi
+  sleep 1
 done

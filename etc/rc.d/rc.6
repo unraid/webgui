@@ -76,6 +76,10 @@ if [[ -x /sbin/hwclock ]]; then
   fi
 fi
 
+# Save PCI data to validate system changes at system start.
+log "Save PCI Configuration."
+/usr/local/sbin/savepcidata
+
 # Run any local shutdown scripts:
 if [[ -x /etc/rc.d/rc.local_shutdown ]]; then
   /etc/rc.d/rc.local_shutdown stop
@@ -241,6 +245,8 @@ while IFS= read -r LINE; do
   [[ " ${EXCLUDE_PATHS[@]} " =~ " $MOUNT_PATH " ]] && continue
   run /bin/umount -v "$MOUNT_PATH"
 done <<< "$(/bin/cat /proc/mounts)"
+# Update PATH hashes:
+hash -r
 
 # limetech - shut down the unraid driver if started
 if /bin/grep -qs 'mdState=STARTED' /proc/mdstat; then
@@ -257,12 +263,20 @@ fi
 # This never hurts:
 /bin/sync
 
-# now remount /boot read-only
 log "Remounting /boot read-only:"
 run /bin/mount -v -o remount,ro /boot
 
+log "Remounting /lib read-only:"
+run /bin/mount -v -o remount,ro /lib
+
+log "Remounting /usr read-only:"
+run /bin/mount -v -o remount,ro /usr
+
 log "Remounting root filesystem read-only:"
 run /bin/mount -v -n -o remount,ro /
+
+# Update PATH hashes:
+hash -r
 
 # sleep 3 fixes problems with some hard drives that don't
 # otherwise finish syncing before reboot or poweroff

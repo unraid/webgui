@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+  <Agent>
+    <Name>ntfy.sh</Name>
+    <Variables>
+      <Variable Help="The full server base URL including protocol and port. eg: https://ntfy.sh" Desc="Full Server Base URL" Default="FULL NTFY.SH URL">SERVER_URL</Variable>
+      <Variable Help="The ntfy.sh Token to use." Desc="ntfy.sh Token" Default="YOUR NTFY.SH TOKEN">NTFY_TOKEN</Variable>
+      <Variable Help="The ntfy.sh Topic to use." Desc="ntfy.sh Topic" Default="Unraid">TOPIC</Variable>
+      <Variable Help="Specify the fields which are included in the title of the notification." Desc="Notification Title" Default="$SUBJECT">TITLE</Variable>
+      <Variable Help="Specify the fields which are included in the message body of the notification." Desc="Notification Message" Default="$DESCRIPTION">MESSAGE</Variable>
+    </Variables>
+    <Script>
+      <![CDATA[
+      #!/bin/bash
+      ############
+      {0}
+      ############
+      MESSAGE=$(echo -e "$MESSAGE")
+      case "$IMPORTANCE" in
+      'normal' )
+      PRIORITY="default"
+      ;;
+      'warning' )
+      PRIORITY="high"
+      ;;
+      'alert' )
+      PRIORITY="urgent"
+      ;;
+      esac
+
+      # Remove any trailing slash
+      SERVER_URL=${SERVER_URL%/}
+
+      curl \
+        -H "Priority: $PRIORITY" \
+        -H "Icon: https://raw.githubusercontent.com/unraid/webgui/master/emhttp/plugins/dynamix.vm.manager/templates/images/unraid.png" \
+        -H "Authorization: Bearer $NTFY_TOKEN" \
+        -H "Title: $TITLE" \
+        -d "$MESSAGE" \
+        $SERVER_URL/$TOPIC
+      ]]>
+    </Script>
+  </Agent>

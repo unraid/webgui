@@ -67,7 +67,6 @@ while (true) {
   get_vm_usage_stats();
   $echo = [];
   $echo = [];
-  $ts = $time1 - $time0;
   $echodata = "";
   $running = 0;
   ksort($vmusagestats);
@@ -76,11 +75,13 @@ while (true) {
     if ($vmdata['state'] == 1) {
       $running++;
       $echodata .= "<tr><td>$vm</td>" ;
-      $echodata .= "<td class='advanced'><span class='cpug-".$vm."'>".$vmdata['cpuguest']."%</span><div class='usage-disk mm'><span id='cpug-".$vm."' style='width:".$vmdata['cpuguest']."%;'></span><span></span></div></td>";
-      $echodata .= "<td class='advanced'><span class='cpuh-".$vm."'>".$vmdata['cpuhost']."%</span><div class='usage-disk mm'><span id='cpuh-".$vm."' style='width:".$vmdata['cpuhost']."%;'></span><span></span></div></td><td>";
-      $echodata .= my_scale($vmdata['mem']*1024,$unit)."$unit / ".my_scale($vmdata['maxmem']*1024,$unit)."$unit</td><td>";
-      $echodata .=  _("Read").": ".my_scale($vmdata['rdrate'],$unit)."$unit/s<br>"._("Write").": ".my_scale($vmdata['wrrate'],$unit)."$unit/s</td><td>";
-      $echodata .=  _("RX").": ".my_scale($vmdata['rxrate'],$unit)."$unit/s<br>"._("TX").": ".my_scale($vmdata['txrate'],$unit)."$unit/s</td></tr>";
+      $echodata .= "<td class='advanced'><span class='cpug-".$vm."'>".$vmdata['cpuguest']."%</span><div class='usage-disk mm'><span id='cpug-".$vm."' style='width:".$vmdata['cpuguest']."%;'> </span><span></span></div></td>";
+      $echodata .= "<td class='advanced'><span class='cpuh-".$vm."'>".$vmdata['cpuhost']."%</span><div class='usage-disk mm'><span id='cpuh-".$vm."' style='width:".$vmdata['cpuhost']."%;'> </span><span></span></div></td><td>";
+      $echodata .= my_scale($vmdata['mem']*1024,$unit,null,null,1024)."$unit / ".my_scale($vmdata['curmem']*1024,$unit,null,null,1024)."$unit";
+      if ($vmdata['curmem'] === $vmdata['maxmem']) $echodata .= " </td><td>";
+      else $echodata .= " / " .my_scale($vmdata['maxmem']*1024,$unit,null,null,1024)."$unit </td><td>";
+      $echodata .=  _("Read").": ".my_scale($vmdata['rdrate']/$timer,$unit,null,null,1024)."$unit/s<br>"._("Write").": ".my_scale($vmdata['wrrate']/$timer,$unit,null,null,1024)."$unit/s</td><td>";
+      $echodata .=  _("RX").": ".my_scale($vmdata['rxrate']/$timer,$unit,null,null,1024)."$unit/s<br>"._("TX").": ".my_scale($vmdata['txrate']/$timer,$unit,null,null,1024)."$unit/s</td></tr>";
     }
     $echo = $echodata ;
   }
@@ -90,7 +91,6 @@ while (true) {
   $md5_new = md5($echo,true);
   if ($md5_new !== $md5_old) {
     $md5_old = publish('vm_usage',$echo)!==false ? $md5_new : -1;
-    $time0 = $time1;
   }
 
   sleep($timer);

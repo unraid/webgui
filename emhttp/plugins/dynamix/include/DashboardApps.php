@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2024, Lime Technology
+ * Copyright 2012-2024, Bergware International.
  * Copyright 2014-2021, Guilherme Jardim, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
@@ -21,8 +21,41 @@ require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 
 if (isset($_POST['ntp'])) {
-  $ntp = exec("ntpq -pn|awk '{if (NR>3 && $2!=\".INIT.\") c++} END {print c}'");
-  die($ntp ? sprintf(_('Clock synchronized with %s NTP server'.($ntp==1?'':'s')),$ntp) : _('Clock is unsynchronized with no NTP servers'));
+  if (exec("pgrep -cf /usr/sbin/ptp4l")) {
+    // ptp sync
+    if (exec("pmc -ub0 'GET TIME_STATUS'|awk '$1==\"gmPresent\"{print $2;exit}'")) {
+      $ptp = abs(exec("pmc -ub0 'GET CURRENT'|awk '$1==\"offsetFromMaster\"{print $2;exit}'"));
+      switch (true) {
+        case ($ptp == 0)   : $unit = 'ns'; $ptp = '???'; break;
+        case ($ptp  < 1E+3): $unit = 'ns'; $ptp = round($ptp); break;
+        case ($ptp  < 1E+6): $unit = 'μs'; $ptp = round($ptp/1E+3); break;
+        case ($ptp  < 1E+9): $unit = 'ms'; $ptp = round($ptp/1E+6); break;
+        default            : $unit = 's' ; $ptp = round($ptp/1E+9); break;
+      }
+      $gm = exec("pmc -ub0 'GET CURRENT'|awk '$1==\"stepsRemoved\"{print $2;exit}'")==1 ? _('grandmaster') : _('master');
+      die(sprintf(_('Clock is synchronized using %s PTP server, time offset is %s %s'),$gm,$ptp,$unit));
+    } else {
+      die(_('Clock is unsynchronized with no PTP servers'));
+    }
+  } elseif (exec("pgrep -cf /usr/sbin/ntpd")) {
+    // ntp sync
+    $ntp = exec("ntpq -pn|awk '$1~/^\*/{print $9;exit}'");
+    if ($ntp) {
+      $ntp = abs($ntp);
+      switch (true) {
+        case ($ntp == 0)   : $unit = 'μs'; $ntp = '< 1'; break;
+        case ($ntp  < 1)   : $unit = 'μs'; $ntp = round($ntp*1E+3); break;
+        case ($ntp  < 1E+3): $unit = 'ms'; $ntp = round($ntp); break;
+        default            : $unit = 's' ; $ntp = round($ntp/1E+3); break;
+      }
+      $count = exec("ntpq -pn|grep -Pc '^[*+]'");
+      die(sprintf(_('Clock is synchronized using %s NTP servers, time offset is %s %s'),$count,$ntp,$unit));
+    } else {
+      die(_('Clock is unsynchronized with no NTP servers'));
+    }
+  }
+  // manual sync
+  die(_('Clock is unsynchronized, free-running clock'));
 }
 
 if ($_POST['docker']) {
@@ -48,12 +81,13 @@ if ($_POST['docker']) {
     $template = $info['template'];
     $shell = $info['shell'];
     $webGui = html_entity_decode($info['url']);
+    $TSwebGui = html_entity_decode($info['TSurl']);
     $support = html_entity_decode($info['Support']);
     $project = html_entity_decode($info['Project']);
     $registry = html_entity_decode($info['registry']);
     $donateLink = html_entity_decode($info['DonateLink']);
     $readme = html_entity_decode($info['ReadMe']);
-    $menu = sprintf("onclick=\"addDockerContainerContext('%s','%s','%s',%s,%s,%s,%s,'%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($name), addslashes($ct['ImageId']), addslashes($template), $running, $paused, $updateStatus, $is_autostart, addslashes($webGui), $shell, $id, addslashes($support), addslashes($project), addslashes($registry), addslashes($donateLink), addslashes($readme));
+    $menu = sprintf("onclick=\"addDockerContainerContext('%s','%s','%s',%s,%s,%s,%s,'%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($name), addslashes($ct['ImageId']), addslashes($template), $running, $paused, $updateStatus, $is_autostart, addslashes($webGui), addslashes($TSwebGui), $shell, $id, addslashes($support), addslashes($project), addslashes($registry), addslashes($donateLink), addslashes($readme));
     $shape = $running ? ($paused ? 'pause' : 'play') : 'square';
     $status = $running ? ($paused ? 'paused' : 'started') : 'stopped';
     $color = $status=='started' ? 'green-text' : ($status=='paused' ? 'orange-text' : 'red-text');
@@ -81,6 +115,7 @@ if ($_POST['vms']) {
   }
   echo "<tr title='' class='updated'><td>";
   $running = 0;
+  $pci_device_changes = comparePCIData();
   foreach ($vms as $vm) {
     $res = $lv->get_domain_by_name($vm);
     $uuid = libvirt_domain_get_uuid_string($res);
@@ -95,31 +130,41 @@ if ($_POST['vms']) {
     $arrConfig = domain_to_config($uuid);
     if ($vmrcport > 0) {
       $wsport = $lv->domain_get_ws_port($res);
-      $vmrcprotocol = $lv->domain_get_vmrc_protocol($res) ;
-      $vmrcurl = autov('/plugins/dynamix.vm.manager/'.$vmrcprotocol.'.html',true).'&autoconnect=true&host=' . $_SERVER['HTTP_HOST'] ;
-      if ($vmrcprotocol == "spice") $vmrcurl .= '&vmname='. urlencode($vm) . '&port=/wsproxy/'.$vmrcport.'/' ; else $vmrcurl .= '&port=&path=/wsproxy/' . $wsport . '/';
+      $vmrcprotocol = $lv->domain_get_vmrc_protocol($res);
+      if ($vmrcprotocol == "vnc") $vmrcscale = "&resize=scale"; else $vmrcscale = "";
+      $vmrcurl = autov('/plugins/dynamix.vm.manager/'.$vmrcprotocol.'.html',true).$vmrcscale.'&autoconnect=true&host=' . $_SERVER['HTTP_HOST'];
+      if ($vmrcprotocol == "spice") $vmrcurl .= '&vmname='. urlencode($vm) . '&port=/wsproxy/'.$vmrcport.'/'; else $vmrcurl .= '&port=&path=/wsproxy/' . $wsport . '/';
     } elseif ($vmrcport == -1 || $autoport) {
-      $vmrcprotocol = $lv->domain_get_vmrc_protocol($res) ;
-      if ($autoport == "yes") $auto = "auto" ; else $auto="manual" ;
+      $vmrcprotocol = $lv->domain_get_vmrc_protocol($res);
+      $auto = ($autoport == "yes") ? "auto" : "manual";
     } elseif (!empty($arrConfig['gpu'])) {
       $arrValidGPUDevices = getValidGPUDevices();
       foreach ($arrConfig['gpu'] as $arrGPU) {
         foreach ($arrValidGPUDevices as $arrDev) {
           if ($arrGPU['id'] == $arrDev['id']) {
             if (count(array_filter($arrValidGPUDevices, function($v) use ($arrDev) { return $v['name'] == $arrDev['name']; })) > 1) {
-              $vmrcprotocol = "VGA" ;
+              $vmrcprotocol = "VGA";
             } else {
-              $vmrcprotocol = "VGA" ;
+              $vmrcprotocol = "VGA";
             }
           }
         }
       }
-     }
+    }
     $template = $lv->_get_single_xpath_result($res, '//domain/metadata/*[local-name()=\'vmtemplate\']/@name');
     if (empty($template)) $template = 'Custom';
     $log = (is_file("/var/log/libvirt/qemu/$vm.log") ? "libvirt/qemu/$vm.log" : '');
-    if (!isset($domain_cfg["CONSOLE"])) $vmrcconsole = "web" ; else $vmrcconsole = $domain_cfg["CONSOLE"] ;
-    $menu = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($vm), addslashes($uuid), addslashes($template), $state, addslashes($vmrcurl), strtoupper($vmrcprotocol), addslashes($log),addslashes($fstype), $vmrcconsole);
+    if (!isset($domain_cfg["CONSOLE"])) $vmrcconsole = "web"; else $vmrcconsole = $domain_cfg["CONSOLE"];
+    if (!isset($domain_cfg["RDPOPT"])) $vmrcconsole .= ";no"; else $vmrcconsole .= ";".$domain_cfg["RDPOPT"];
+    $WebUI = html_entity_decode($arrConfig["template"]["webui"]??"");
+    $vmpciids = $lv->domain_get_vm_pciids($vm);
+    $pcierror = false;
+    foreach($vmpciids as $pciid => $pcidetail) {
+      if (isset($pci_device_changes["0000:".$pciid])) {
+        $pcierror = true;
+      }
+    }
+    $menu = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($vm), addslashes($uuid), addslashes($template), $state, addslashes($vmrcurl), strtoupper($vmrcprotocol), addslashes($log),addslashes($fstype), $vmrcconsole,false,addslashes(str_replace('"',"'",$WebUI)),$pcierror);
     $icon = $lv->domain_get_icon_url($res);
     switch ($state) {
     case 'running':
@@ -141,12 +186,14 @@ if ($_POST['vms']) {
       break;
     }
     $image = substr($icon,-4)=='.png' ? "<img src='$icon' class='img'>" : (substr($icon,0,5)=='icon-' ? "<i class='$icon img'></i>" : "<i class='fa fa-$icon img'></i>");
-    echo "<span class='outer solid vms $status'><span id='vm-$uuid' $menu class='hand'>$image</span><span class='inner'>$vm<br><i class='fa fa-$shape $status $color'></i><span class='state'>"._($status)."</span></span></span>";
+    echo "<span class='outer solid vms $status'><span id='vm-$uuid' $menu class='hand'>$image</span><span class='inner'>$vm";
+    if ($pcierror) echo "<i class=\"fa fa-warning fa-fw orange-text\" title=\""._('PCI Changed')."\n"._('Start disabled')."\"></i>";
+    echo "<br><i class='fa fa-$shape $status $color'></i><span class='state'>"._($status)."</span></span></span>";
     if ($state == "running") {
       #Build VM Usage array.
-      $menuusage = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($vm), addslashes($uuid), addslashes($template), $state, addslashes($vmrcurl), strtoupper($vmrcprotocol), addslashes($log),addslashes($fstype), $vmrcconsole,true);
+      $menuusage = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($vm), addslashes($uuid), addslashes($template), $state, addslashes($vmrcurl), strtoupper($vmrcprotocol), addslashes($log),addslashes($fstype), $vmrcconsole,true,addslashes(str_replace('"',"'",$WebUI)));
       $vmusagehtml[] = "<span class='outer solid vmsuse $status'><span id='vmusage-$uuid' $menuusage class='hand'>$image</span><span class='inner'>$vm<br><i class='fa fa-$shape $status $color'></i><span class='state'>"._($status)."</span></span>";
-      $vmusagehtml[] =  "<br><br><span id='vmmetrics-gcpu-".$uuid."'>"._("Loading")."....</span>";
+      $vmusagehtml[] = "<br><br><span id='vmmetrics-gcpu-".$uuid."'>"._("Loading")."....</span>";
       $vmusagehtml[] = "<br><span id='vmmetrics-hcpu-".$uuid."'>"._("Loading")."....</span>";
       $vmusagehtml[] = "<br><span id='vmmetrics-mem-".$uuid."'>"._("Loading")."....</span>";
       $vmusagehtml[] = "<br><span id='vmmetrics-disk-".$uuid."'>"._("Loading")."....</span>";
@@ -160,12 +207,10 @@ if ($_POST['vms']) {
 
   echo "\0";
   echo "<tr title='' class='useupdated'><td>";
-  if ($vmusage == "Y") {
-    foreach ($vmusagehtml as $vmhtml) {
-      echo $vmhtml;
-     }
-    if (!count($vmusagehtml))  echo "<span id='no_usagevms'><br> "._('No running virtual machines')."<br></span>";
-    if ($running < 1 && count($vmusagehtml)) echo "<span id='no_usagevms'><br>". _('No running virtual machines')."<br></span>";
+  if ($vmusage=='Y') {
+    foreach ($vmusagehtml as $vmhtml) echo $vmhtml;
+    if (!count($vmusagehtml)) echo "<span id='no_usagevms'><br> "._('No running virtual machines')."<br></span>";
+    if ($running<1 && count($vmusagehtml)) echo "<span id='no_usagevms'><br>". _('No running virtual machines')."<br></span>";
     echo "</td></tr>";
   }
 }

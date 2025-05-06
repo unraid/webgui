@@ -5,10 +5,19 @@
 # Library used by nfsd, ntpd, rpc, samba, nginx, sshd, avahidaemon, show_interfaces
 #
 # Bergware - created for Unraid OS, December 2023
+# Bergware - updated January 2025
 
 WIREGUARD="/etc/wireguard"
 NETWORK_INI="/var/local/emhttp/network.ini"
 NETWORK_EXTRA="/boot/config/network-extra.cfg"
+
+var(){
+  if [[ $# -eq 3 ]]; then
+    [[ -r "$3" ]] && sed -n "/^\[$1\]\$/,/^\[/p" "$3" | grep -Pom1 "^$2=\"\K[^\"]+"
+  elif [[ $# -eq 2 ]]; then
+    [[ -r "$2" ]] && grep -Pom1 "^$1=\"\K[^\"]+" "$2"
+  fi
+}
 
 ipv(){
   local t=${1//[^:]}
@@ -29,14 +38,7 @@ this(){
   'rpc')
     grep -Pom1 "^RPCBIND_OPTS=\"\K[^\"]+" $RPC ;;
   'nginx')
-    MAP=();
-    for ADDR in $(awk '$1=="listen" && $2~/^[0-9]|\[/ && $0~/http2; #.*$/{print $2}' $SERVERS 2>/dev/null); do
-      # extract ipv4 / ipv6 address
-      [[ $(ipv $ADDR) == 4 ]] && ADDR=${ADDR%:*} || ADDR=${ADDR#*[} ADDR=${ADDR%]*}
-      MAP+=($ADDR)
-    done
-    # return addresses
-    echo ${MAP[@]} ;;
+    grep -Po "^NGINX_BIND=\"\K[^\"]+" ${INI%.*} 2>/dev/null ;;
   esac
 }
 
@@ -54,8 +56,8 @@ good(){
 
 show(){
   case $# in
-    1) ip -br addr show scope global to $1 2>/dev/null | awk '{gsub("@.+","",$1);print $1;exit}' ;;
-    2) ip -br addr show scope global $1 $2 2>/dev/null | awk '{$1=$2="";print;exit}' | sed -r 's/ metric [0-9]+//g' ;;
+    1) ip -br addr show scope global -temporary -deprecated to $1 2>/dev/null | awk '{gsub("@.+","",$1);print $1;exit}' ;;
+    2) ip -br addr show scope global -temporary -deprecated $1 $2 2>/dev/null | awk '{$1=$2="";print;exit}' | sed -r 's/ metric [0-9]+//g' ;;
   esac
 }
 
@@ -151,14 +153,14 @@ check(){
     fi
     for ADDR in ${NET[@]/$NET}; do
       ADDR=$(unmask $ADDR)
-      if [[ "avahi show" =~ "$CALLER" ]]; then
+      if [[ "ntp avahi show" =~ "$CALLER" ]]; then
         [[ -z $(good $NET) ]] && BIND+=($NET)
       else
         [[ -z $(good $ADDR) ]] && BIND+=($ADDR) || continue
       fi
       [[ $(ipv $ADDR) == 4 ]] && IPV4=yes || IPV6=yes
     done
-  done <<< $(ip -br addr show scope global | awk '$1~"^(br|bond|eth|wg)[0-9]+(.[0-9]+)?" && $3!="" {gsub("@.+","",$1);$2="";print}' | sed -r 's/ metric [0-9]+//g' | sort)
+  done <<< $(ip -br addr show scope global -temporary -deprecated | awk '$1~"^(br|bond|eth|wlan|wg)[0-9]+(.[0-9]+)?" && $3!="" {gsub("@.+","",$1);$2="";print}' | sed -r 's/ metric [0-9]+//g' | sort)
   # add loopback interface
   if [[ "smb nfs" =~ "$CALLER" ]]; then
     [[ $IPV4 == yes ]] && BIND+=(127.0.0.1)

@@ -1,2 +1,36 @@
-#!/bin/bash
+#!/usr/bin/php
+<?
 # Invoked after docker image loopback mounted but before docker is started
+$autostart = @file("/var/lib/docker/unraid-autostart",FILE_IGNORE_NEW_LINES);
+if ( ! $autostart ) exit();
+
+$flag = false;
+$newAuto = [];
+foreach ($autostart as $container) {
+  if (! trim($container) ) continue;
+
+  $cont = explode(" ",$container);
+  if ( ! is_file("/boot/config/plugins/dockerMan/templates-user/my-{$cont[0]}.xml")) {
+    $newAuto[] = $container;
+    continue;
+  }
+    
+  $doc = new DOMDocument();
+  if (!$doc->load("/boot/config/plugins/dockerMan/templates-user/my-{$cont[0]}.xml")) {
+    $newAuto[] = $container;
+    continue;
+  }
+  if ( ($doc->getElementsByTagName("Network")->item(0)->nodeValue ?? false) == "host" ) {
+    if ( ($doc->getElementsByTagName("TailscaleEnabled")->item(0)->nodeValue ?? false) == true ) {
+      exec("logger ".escapeshellarg("Autostart disabled on {$cont[0]} due to tailscale integration with host network."));
+      exec("logger ".escapeshellarg("This is a security risk due to the possibility of unauthenticated access to your server's GUI and resources"));
+      exec("/usr/local/emhttp/plugins/dynamix/scripts/notify -e 'Autostart Disabled' -s 'Autostart Disabled' -d ".escapeshellarg("Autostart disabled automatically on {$cont[0]}")." -m ".escapeshellarg("Autostart has been automatically disabled on {$cont[0]} due to a security issue with container on network type host and tailscale integration enabled.  You should either switch the network type or disabled tailscale integration on this container")." -i 'alert' -l '/Docker'");
+      $flag = true;
+      continue;           
+    }
+  }
+  $newAuto[] = $container;
+}
+if ( $flag )
+  file_put_contents("/var/lib/docker/unraid-autostart",implode("\n",$newAuto)."\n");
+?>

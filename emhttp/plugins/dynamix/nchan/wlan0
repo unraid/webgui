@@ -1,0 +1,71 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$docroot = '/usr/local/emhttp';
+require_once "$docroot/webGui/include/Helpers.php";
+require_once "$docroot/webGui/include/publish.php";
+extract(parse_plugin_cfg('dynamix',true));
+
+// add translations
+$_SERVER['REQUEST_URI'] = '';
+$login_locale = _var($display,'locale');
+require_once "$docroot/webGui/include/Translations.php";
+
+// remember current language
+$locale_init = $locale;
+
+function update_translation($locale) {
+  global $docroot,$language;
+  $language = [];
+  if ($locale) {
+    $text = "$docroot/languages/$locale/translations.txt";
+    if (file_exists($text)) {
+      $store = "$docroot/languages/$locale/translations.dot";
+      if (!file_exists($store)) file_put_contents($store,serialize(parse_lang_file($text)));
+      $language = unserialize(file_get_contents($store));
+    }
+    $text = "$docroot/languages/$locale/dashboard.txt";
+    if (file_exists($text)) {
+      $store = "$docroot/languages/$locale/dashboard.dot";
+      if (!file_exists($store)) file_put_contents($store,serialize(parse_lang_file($text)));
+      $language = array_merge($language,unserialize(file_get_contents($store)));
+    }
+  }
+}
+
+$echo  = [];
+$wlan0 = '/sys/class/net/wlan0/carrier';
+$ini   = '/var/local/emhttp/wireless.ini';
+while (true) {
+  extract(parse_plugin_cfg('dynamix',true));
+  if (_var($display,'locale') != $locale_init) {
+    $locale_init = _var($display,'locale');
+    update_translation($locale_init);
+  }
+  if (is_readable($ini) && file_exists($wlan0)) {
+    try {
+      $wifi = parse_ini_file($ini);
+      $up = @file_get_contents($wlan0) == 1;
+      $alive = $up ? exec("iw wlan0 link 2>/dev/null | grep -Pom1 'SSID: \\K.+'") : '';
+      $echo['color'] = $alive == $wifi['SSID'] ? 'blue-text' : 'red-text';
+      $echo['title'] = $alive == $wifi['SSID'] ? _('WiFi connected') : _('WiFi disconnected');
+    } catch (Exception $e) {
+      $echo['color'] = 'grey-text';
+      $echo['title'] = _('WiFi status unavailable');
+    }
+  }
+  publish('wlan0',json_encode($echo));
+  sleep(3);
+}
+?>

@@ -90,20 +90,49 @@ function resize() {
   $('pre.up').height(Math.max(window.innerHeight-320,330));
 }
 <?endif;?>
+
 function showLog(log) {
-  logfile = log;
-  $('span.label input[type=checkbox]').prop('checked',true);
-  $('span.label').each(function(){
-    var type = $(this).attr('class').replace('label','').replace(/-/g,'');
-    $(this).removeClass().addClass(type+' label');
-  });
-  timers.syslog = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
-  $.post('/webGui/include/Syslog.php',{log:log,max:$('#max').val()||<?=$max?>},function(data){
-    clearTimeout(timers.syslog);
-    $('pre.up').html(data);
-    $('div.spinner.fixed').hide('slow');
-  });
+	logfile = log;
+	$('span.label input[type=checkbox]').prop('checked', true);
+	$('span.label').each(function() {
+		var type = $(this).attr('class').replace('label', '').replace(/-/g, '');
+		$(this).removeClass().addClass(type + ' label');
+	});
+	timers.syslog = setTimeout(function() { $('div.spinner.fixed').show('slow'); }, 500);
+
+	$.post('/webGui/include/Syslog.php', { log: log, max: $('#max').val() || <?=$max?> }, function(data) {
+		clearTimeout(timers.syslog);
+		let logContainer = document.querySelector("pre.up");
+		if (!logContainer) return;  // Safety check
+
+		$('pre.up').html(data);
+		$('div.spinner.fixed').hide('slow');
+
+		/* Ensuring reliable scroll behavior on Chrome */
+		function scrollToBottom() {
+			logContainer.style.scrollBehavior = 'smooth';
+			logContainer.scrollTop = logContainer.scrollHeight;
+		}
+
+		/* 1. Delay with setTimeout */
+		setTimeout(scrollToBottom, 50);
+
+		/* 2. Force Chrome to reflow/repaint */
+		logContainer.style.display = "none";
+		setTimeout(function() {
+			logContainer.style.display = "block";
+			scrollToBottom();
+		}, 10);
+
+		/* 3. Use requestAnimationFrame */
+		requestAnimationFrame(scrollToBottom);
+
+		/* 4. Repeat scroll a few times as a backup (Fixes rare cases in Chrome) */
+		setTimeout(scrollToBottom, 100);
+		setTimeout(scrollToBottom, 500);
+	});
 }
+
 $(function() {
   $('input#max').on('keydown',function(e) {
     if (e.keyCode === 13) {

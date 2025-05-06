@@ -21,6 +21,13 @@ if [[ -x /etc/rc.d/rc.modules ]]; then
   /etc/rc.d/rc.modules
 fi
 
+# Copy custom udev rules before starting udevd
+UDEVRULES="/boot/config/udev"
+if [[ -d $UDEVRULES ]]; then
+  log "Installing custom udev rules..."
+  /usr/bin/find $UDEVRULES -type f -exec /usr/bin/install -p -m 0644 "{}" /etc/udev/rules.d \;
+fi
+
 # Initialize udev to manage /dev entries and hotplugging.
 # You may turn off udev by making the /etc/rc.d/rc.udev file non-executable
 # or giving the "nohotplug" option at boot, but realize that if you turn off
@@ -69,6 +76,8 @@ if /bin/grep -wq cgroup /proc/filesystems; then
       # See https://docs.kernel.org/admin-guide/cgroup-v2.html (section Mounting)
       # Mount cgroup2 filesystem
       /sbin/mount -t cgroup2 -o rw,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot cgroup2 /sys/fs/cgroup
+      # Start cgroup2 cleanup daemon
+      /etc/rc.d/rc.cgroup2unraid start
     else
       # Display message if /sys/fs/cgroup does not exist
       echo "/sys/fs/cgroup does not exist. cgroup2 cannot be mounted."
@@ -91,7 +100,7 @@ FREQ=0
 if [[ -r /etc/default/adjtimex ]]; then
   . /etc/default/adjtimex
 fi
-if adjtimex --tick $TICK --frequency $FREQ; then
+if /sbin/adjtimex --tick $TICK --frequency $FREQ; then
   log "Setting the system clock rate: adjtimex --tick $TICK --frequency $FREQ"
 else
   log "Failed to set system clock with adjtimex, possibly invalid parameters? (TICK=$TICK FREQ=$FREQ)"

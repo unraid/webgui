@@ -30,3 +30,7 @@ MODPROBE="/boot/config/modprobe.d"
 if [[ -d $MODPROBE ]]; then
   find $MODPROBE -type f -exec install -p -m 0644 "{}" /etc/modprobe.d \;
 fi
+
+# LimeTech - grab any user downloaded module firmware files
+FIRMWARE="/boot/config/firmware"
+[[ -d $FIRMWARE ]] && cp -rpn $FIRMWARE/* /lib/firmware

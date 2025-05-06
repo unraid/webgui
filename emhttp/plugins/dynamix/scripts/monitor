@@ -244,30 +244,47 @@ if ($warn>0) {
   }
 }
 
-// process parity check, parity sync and data-rebuild notifications
+/* Process parity check, parity sync, and data-rebuild notifications */
 $name = 'parity';
 $last = $saved[$item][$name] ?? '';
+
 if ($var['mdResyncPos']) {
-  if (!$last) {
-    $action = preg_split('/\s+/',$var['mdResyncAction']);
-    switch ($action[0]) {
-      case 'recon': $last = $action[1]=='P' ? 'Parity-Sync' : 'Data-Rebuild'; break;
-      case 'check': $last = count($action)>1 ? 'Parity-Check' : 'Read-Check'; break;
-      case 'clear': $last = 'Disk-Clear'; break;
-      default     : $last = '';
-    }
-    $info = "Size: ".my_scale($var['mdResyncSize']*1024,$unit)." $unit";
-    exec("$notify -l '/Main' -e ".escapeshellarg("Unraid $last")." -s ".escapeshellarg("Notice [$server] - $last started")." -d ".escapeshellarg("$info")." -i \"warning\" 2>/dev/null");
-    $saved[$item][$name] = $last;
-  }
+	if (!$last) {
+		$action = preg_split('/\s+/', $var['mdResyncAction']);
+		switch ($action[0]) {
+			case 'recon':
+				$last = $action[1] == 'P' ? 'Parity-Sync' : 'Data-Rebuild';
+				break;
+			case 'check':
+				$last = count($action) > 1 ? 'Parity-Check' : 'Read-Check';
+				break;
+			case 'clear':
+				$last = 'Disk-Clear';
+				break;
+			default:
+				$last = '';
+		}
+		$info = "Size: " . my_scale($var['mdResyncSize'] * 1024, $unit) . " $unit";
+		exec("$notify -l '/Main' -e " . escapeshellarg("Unraid $last") . " -s " . escapeshellarg("Notice [$server] - $last started") . " -d " . escapeshellarg("$info") . " -i \"warning\" 2>/dev/null");
+		$saved[$item][$name] = $last;
+	}
 } else {
-  if ($last) {
-    [$date,$duration,$speed,$status,$error,$action,$size] = last_parity_log();
-    $info = $status==0 ? "Duration: ".my_check($duration, $speed) : ($status==-4 ? "Canceled" : "Error code: $status");
-    $level = ($status==0 && $var['sbSyncErrs']==0) ? "normal" : "warning";
-    exec("$notify -l '/Main' -e ".escapeshellarg("Unraid $last")." -s ".escapeshellarg("Notice [$server] - $last finished ($error errors)")." -d ".escapeshellarg("$info")." -i \"$level\" 2>/dev/null");
-    unset($saved[$item][$name]);
-  }
+	if ($last) {
+		/* File for the latest parity check. */
+		$resync	= '/var/tmp/resync.ini';
+
+		if (file_exists($resync)) {
+			list($duration, $speed, $status, $error, $action, $size) = last_parity_check();
+		} else {
+			list($date, $duration, $speed, $status, $error, $action, $size) = last_parity_log();
+		}
+
+		$info = ($status == 0) ? "Duration: " . my_check($duration, $speed) : ($status == -4 ? "Canceled" : "Error code: $status");
+		$level = ($status == 0 && $var['sbSyncErrs'] == 0) ? "normal" : "warning";
+		exec("$notify -l '/Main' -e " . escapeshellarg("Unraid $last") . " -s " . escapeshellarg("Notice [$server] - $last finished ($error errors)") . " -d " . escapeshellarg("$info") . " -i \"$level\" 2>/dev/null");
+
+		unset($saved[$item][$name]);
+	}
 }
 
 // check read-write status of USB flash drive

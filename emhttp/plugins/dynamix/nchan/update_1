@@ -28,6 +28,10 @@ require_once "$docroot/webGui/include/Translations.php";
 // remember current language
 $locale_init = $locale;
 
+/* Parse the ini files */
+$shares = parse_ini_file('state/shares.ini', true);
+$disks = parse_ini_file('state/disks.ini', true);
+
 function update_translation($locale) {
   global $docroot,$language;
   $language = [];
@@ -59,7 +63,7 @@ while (true) {
   exec("sensors -uA 2>/dev/null|grep -Po 'fan\d_input: \K\d+'",$fans);
   [$total,$free] = $memory;
   $used  = $total-$free;
-  $names = [_('Services'),_('Free')];
+  $names = [_('System'),_('Free')];
   $bytes = $echo = [];
   $hooks = array_filter(glob("/usr/local/emhttp/plugins/*/system/*",GLOB_NOSORT),function($file){return is_executable($file);});
   foreach ($hooks as $hook) {
@@ -91,10 +95,32 @@ while (true) {
   }
   // add fans information
   if (count($fans)) $echo['fan'] = array_map(function($fan){return "$fan RPM";},$fans);
+
   // add streams information
-  exec('LANG="en_US.UTF8" lsof -Fn /mnt/* 2>/dev/null|awk -F/ \'$1=="n" && $2=="mnt" && $5!="" {print $4"/"$5"/"$6"/"$7}\'|sort -u|awk -F/ \'{print $1}\'',$lsof);
-  $share = array_keys(parse_ini_file("$varroot/shares.ini",true));
-  $count = array_count_values($lsof);
+  /* Extract keys from both ini files */
+  $paths = array_keys($disks);
+
+  /* Validate and filter accessible mount points */
+  $valid_paths = array_filter($paths, function($key) {
+    $mnt_path = '/mnt/' . $key;
+    /* Check if the directory exists and is a valid mount point */
+    return is_dir($mnt_path) && trim((shell_exec("mountpoint -q " . escapeshellarg($mnt_path) . " && echo 1")) ?? '') === '1';
+  });
+
+  /* Construct the list of paths */
+  $mnt_paths = array_map(function($key) {
+    return '/mnt/'.escapeshellarg($key);
+  }, $valid_paths);
+
+  /* Combine paths into the command */
+  $mnt_list = implode(' ', $mnt_paths);
+
+  /* Build and execute the modified command */
+  $command = 'LANG="en_US.UTF8" timeout 3 lsof -Fn '.$mnt_list.' 2>/dev/null | awk -F/ \'$1=="n" && $2=="mnt" && $5!="" {print $4"/"$5"/"$6"/"$7}\' | sort -u | awk -F/ \'{print $1}\'';
+  exec($command, $lsof);
+
+  $share = array_keys($shares);
+  $count = array_count_values($lsof ?? array());
   foreach ($share as $name) $echo['stream'][] = $count[$name]??0;
   $echo = json_encode($echo);
   $md5_new = md5($echo,true);

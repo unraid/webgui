@@ -13,7 +13,7 @@
 # Bergware - modified for Unraid OS, October 2023
 
 DAEMON="Syslog server daemon"
-PIDFILE=/var/run/rsyslogd.pid  # native rsyslogd pid file
+PIDFILE="/var/run/rsyslogd.pid"  # native rsyslogd pid file
 
 # run & log functions
 . /etc/rc.d/rc.runlog
@@ -29,7 +29,14 @@ create_xconsole(){
 
 rsyslogd_running(){
   sleep 0.1
-  ps axc | grep -q ' rsyslogd'
+  if pgrep --ns $$ -x rsyslogd &>/dev/null; then
+    # Daemon is alive
+    return 0
+  else
+    # Daemon is dead (remove stale PID file)
+    [[ -f $PIDFILE ]] && rm -f "$PIDFILE"
+    return 1
+  fi
 }
 
 rsyslogd_start(){
@@ -38,7 +45,7 @@ rsyslogd_start(){
   if rsyslogd_running; then
     REPLY="Already started"
   else
-    run /usr/sbin/rsyslogd -i $PIDFILE
+    run /usr/sbin/rsyslogd -i "$PIDFILE"
     if rsyslogd_running; then REPLY="Started"; else REPLY="Failed"; fi
   fi
   log "$DAEMON...  $REPLY."
@@ -50,8 +57,8 @@ rsyslogd_stop(){
   if ! rsyslogd_running; then
     REPLY="Already stopped"
   else
-    run killall rsyslogd
-    rm -f $PIDFILE
+    run killall --ns $$ rsyslogd
+    sleep 2
     if ! rsyslogd_running; then REPLY="Stopped"; else REPLY="Failed"; fi
   fi
   log "$DAEMON...  $REPLY."
@@ -67,8 +74,12 @@ rsyslogd_restart(){
 rsyslogd_reload(){
   log "Reloading $DAEMON..."
   local REPLY
-  REPLY="Reloaded"
-  [[ -f $PIDFILE ]] && run kill -HUP $(cat $PIDFILE) || REPLY="Failed"
+  if ! rsyslogd_running; then
+    REPLY="Not running"
+  else
+    REPLY="Reloaded"
+    run killall -HUP --ns $$ rsyslogd || REPLY="Failed"
+  fi
   log "$DAEMON...  $REPLY."
 }
 

@@ -24,7 +24,7 @@
 ### END INIT INFO
 
 # get correct location of binaries from configure
-sbindir=${exec_prefix}/sbin
+sbindir=/usr/sbin
 CGCONFIGPARSER_BIN=$sbindir/cgconfigparser
 CONFIG_FILE=/etc/cgconfig.conf
 CONFIG_DIR=/etc/cgconfig.d
@@ -32,6 +32,25 @@ servicename=cgconfig
 
 
 lockfile=/run/lock/subsys/$servicename
+#
+# Source LSB routines
+#
+SYSLIBFILE=/lib/lsb/init-functions
+OLDSYSLIBFILE=/etc/init.d/functions
+if [[ -x  $SYSLIBFILE ]] ; then
+  # shellcheck disable=SC1090
+  source $SYSLIBFILE
+elif  [[ -x $OLDSYSLIBFILE ]] ; then
+  # shellcheck disable=SC1090
+  source $OLDSYSLIBFILE
+  log_warning_msg() ( warning "$@" ; printf "\n" 1>&2 ; )
+  log_failure_msg() ( failure "$@" ; printf "\n" 1>&2 ; )
+  log_success_msg() ( success "$@" ; printf "\n" 1>&2 ; )
+else
+  log_warning_msg() ( printf "warning:%s\n" "$@" 1>&2 ;)
+  log_failure_msg() ( printf "failure:%s\n" "$@" 1>&2 ;)
+  log_success_msg() ( printf "success:%s\n" "$@" 1>&2 ;)
+fi
 
 # read the config
 CREATE_DEFAULT=yes
@@ -50,8 +69,8 @@ create_default_groups() {
 	    read -r user ctrl defaultcgroup <<< \
 		    "$(grep -m1 '^\*[[:space:]]\+' /etc/cgrules.conf)"
            if [[ ( -n "$defaultcgroup" ) && ( "$defaultcgroup" = "*" ) ]]; then
-                echo "/etc/cgrules.conf incorrect"
-                echo "Overriding it"
+                log_warning_msg "/etc/cgrules.conf incorrect"
+                log_warning_msg "Overriding it"
                 defaultcgroup=
             fi
         fi
@@ -94,19 +113,19 @@ create_default_groups() {
 start() {
         printf "Starting %s service: " "$servicename"
 	if [[ -f "$lockfile" ]]; then
-            echo "lock file already exists"
+            log_warning_msg "lock file already exists"
             return 0
         fi
 
         if [[ ! -s "$CONFIG_FILE" ]]; then
-          echo $CONFIG_FILE "is not configured"
+          log_failure_msg $CONFIG_FILE "is not configured"
           return 6
         fi
 
 
         if ! "$CGCONFIGPARSER_BIN" -l "$CONFIG_FILE" -L "$CONFIG_DIR"
         then
-          echo "Failed to parse " "$CONFIG_FILE"  "or" "$CONFIG_DIR"'/*'
+          log_failure_msg "Failed to parse " "$CONFIG_FILE" "or" "$CONFIG_DIR"'/*'
           return 1
         fi
 
@@ -115,22 +134,22 @@ start() {
         fi
 
         if ! mkdir -p "$lockfiledir" ; then
-          echo "Failed to mkdir $lockfiledir directory"
+          log_failure_msg "Failed to mkdir $lockfiledir directory"
           return 1
         fi
 
 
         if ! touch "$lockfile" ; then
-            echo "Failed to touch $lockfile"
+            log_failure_msg "Failed to touch $lockfile"
             return 1
         fi
-        echo "Started $servicename"
+        log_success_msg "Started $servicename"
         return 0
 }
 
 stop() {
     printf "Stopping %s service is not supported!: " "$servicename"
-    echo "Failed to stop $servicename"
+    log_failure_msg "Failed to stop $servicename"
     return 1
 }
 

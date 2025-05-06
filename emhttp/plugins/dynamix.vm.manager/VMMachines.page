@@ -20,30 +20,37 @@ Markdown="false"
 <?
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
+$is_intel_cpu = is_intel_cpu();
+$core_types = $is_intel_cpu ? get_intel_core_types() : [];
+$themeName = $themeHelper->getThemeName();
 
 $cpus = cpu_list();
-$hover   = in_array($theme,['white','azure']) ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
-$bgcolor = in_array($theme,['white','azure']) ? '#f2f2f2' : '#1c1c1c';
-$fgcolor = in_array($theme,['white','azure']) ? '#1c1c1c' : '#f2f2f2';
-$incolor = $theme!='gray' ? $bgcolor : '#121510';
+$hover   = $themeHelper->isLightTheme() ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+$bgcolor = $themeHelper->isLightTheme() ? '#f2f2f2' : '#1c1c1c';
+$fgcolor = $themeHelper->isLightTheme() ? '#1c1c1c' : '#f2f2f2';
+$incolor = $themeName !== 'gray' ? $bgcolor : '#121510';
 
 function showCPUs($uuid) {
-  global $cpus;
+  global $cpus,$is_intel_cpu,$core_types;
   $vm = domain_to_config($uuid);
   $vcpu = $vm['domain']['vcpu'];
+  $nopining = "";
+  if (!is_array($vcpu)) $nopining = _("No pinning set");
   echo "<div class='four'>";
   foreach ($cpus as $pair) {
     unset($cpu1,$cpu2);
     [$cpu1, $cpu2] = my_preg_split('/[,-]/',$pair);
     $check = ($vcpu && in_array($cpu1, $vcpu)) ? 'fa-circle orange-text':'fa-circle-o';
+    if ($is_intel_cpu && count($core_types) > 0) $core_type = "$core_types[$cpu1]"; else $core_type = "";
     if (!$cpu2) {
-      echo "<label><i class='fa fa-fw $check'></i>&nbsp;&nbsp;cpu $cpu1</label>";
+      echo "<label title='$core_type'><i class='fa fa-fw $check'></i>&nbsp;&nbsp;cpu $cpu1</label>";
     } else {
-      echo "<label class='cpu1'><i class='fa fa-fw $check'></i>&nbsp;&nbsp;cpu $cpu1 / $cpu2</label>";
+      echo "<label title='$core_type' class='cpu1'><i class='fa fa-fw $check'></i>&nbsp;&nbsp;cpu $cpu1 / $cpu2</label>";
       $check = ($vcpu && in_array($cpu2, $vcpu)) ? 'fa-circle orange-text':'fa-circle-o';
-      echo "<label class='cpu2'><i class='fa fa-fw $check'></i></label>";
+      echo "<label title='$core_type' class='cpu2'><i class='fa fa-fw $check'></i></label>";
     }
   }
+  echo "<br><span>vCPUs: {$vm['domain']['vcpus']} $nopining</span>";
   echo "</div>";
 }
 function vsize($size,$expand=true) {
@@ -110,8 +117,6 @@ if (empty($vms)) {
 ?>
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.filetree.css")?>">
-<link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.ui.css")?>">
-<link type="text/css" rel="stylesheet" href="<?autov("/plugins/dynamix.docker.manager/styles/style-$theme.css")?>">
 
 <script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
 <script src="<?autov('/plugins/dynamix.vm.manager/javascript/dynamix.vm.manager.js')?>"></script>
@@ -209,6 +214,8 @@ function VMClone(uuid, name){
   box.find('#target').val(name + "_clone");
   document.getElementById("Free").checked = true;
   document.getElementById("Overwrite").checked = true;
+  overwrite = box.find("#Overwrite");
+  overwrite.attr("checked:true");
   box.dialog({
     title: "_(VM Clone)_",
     height: 'auto',
@@ -400,7 +407,7 @@ function LockButton() {
     $('#resetsort').removeClass('nohand').addClass('hand');
     $('i.mover').show();
     $('#kvm_list .sortable').css({'cursor':'move'});
-<?if ($themes1):?>
+<?if ($themeHelper->isTopNavTheme()):?>
     $('div.nav-item.LockButton a').prop('title',"_(Lock sortable items)_");
     $('div.nav-item.LockButton b').removeClass('icon-u-lock green-text').addClass('icon-u-lock-open red-text');
 <?endif;?>
@@ -423,7 +430,7 @@ function LockButton() {
     $('#resetsort').removeClass('hand').addClass('nohand');
     $('i.mover').hide();
     $('#kvm_list .sortable').css({'cursor':'default'});
-<?if ($themes1):?>
+<?if ($themeHelper->isTopNavTheme()):?>
     $('div.nav-item.LockButton a').prop('title',"_(Unlock sortable items)_");
     $('div.nav-item.LockButton b').removeClass('icon-u-lock-open red-text').addClass('icon-u-lock green-text');
 <?endif;?>
@@ -489,6 +496,7 @@ $(function() {
 <input type="button" onclick="stopAll()" value="_(Stop All)_" style="display:none">
 
 <div id="dialogWindow"></div>
+<div id="iframe-popup"></div>
 
 <div id="templateISO" class="template">
 <dl>
@@ -510,9 +518,9 @@ $(function() {
 <table id='snapshot' class='snapshot'>
 <tr><td>_(VM Name)_:</td><td><label id="VMName"></label></td></tr>
 <tr><td>_(Snapshot Name)_:</td><td><input type="text" id="targetsnap" autocomplete="off" spellcheck="false" value="--generate" onclick="this.select()">_(Check free space)_: <input type="checkbox" id="targetsnapfspc" checked></td></tr>
-<tr><td>_(Description  )_:</td><td><input type="text" id="targetsnapdesc" autocomplete="off" spellcheck="false" value="" onclick="this.select()"></td></tr>
-<tr id="memoryline"><td>_(Memory dump )_:</td><td><input type="checkbox" id="targetsnapmem"  checked></td></tr>
-<tr id="fstypeline"><td>_(FS Native Snapshot )_:</td><td><label id="fstype"></label><input type="checkbox" id="targetsnapfstype">_(Unchecked will use QEMU External Snapshot)_</td></tr>
+<tr><td>_(Description)_:</td><td><input type="text" id="targetsnapdesc" autocomplete="off" spellcheck="false" value="" onclick="this.select()"></td></tr>
+<tr id="memoryline"><td>_(Memory dump)_:</td><td><input type="checkbox" id="targetsnapmem"  checked></td></tr>
+<tr id="fstypeline"><td>_(FS Native Snapshot)_:</td><td><label id="fstype"></label><input type="checkbox" id="targetsnapfstype">_(Unchecked will use QEMU External Snapshot)_</td></tr>
 </table>
 </div>
 
@@ -536,7 +544,7 @@ _(VM Name)_: <label id="VMName"></label><br>
 _(Snapshot Name)_: <input type="text" id="targetsnap" hidden><label id="targetsnapl"></label><br><br>
 <table id='block' class='snapshot'>
 <tr><td>_(Base Image)_:</td><td><select class="targetblockbase"></select></td></tr>
-<tr name="toprow" class="toprow" ><td>_(Top Image  )_:</td><td><select class="targetblocktop" name="targetblocktop" id="targetblocktop"></select></td><td></tr>
+<tr name="toprow" class="toprow" ><td>_(Top Image)_:</td><td><select class="targetblocktop" name="targetblocktop" id="targetblocktop"></select></td><td></tr>
 <tr name="targetpivotrow" class="targetpivotrow" ><td>_(Pivot)_:</td><td><input type="checkbox" id="targetpivot" checked></td></tr>
 <tr name="targetdeleterow" class="targetdeleterow" ><td>_(Delete)_:</td><td><input type="checkbox" id="targetdelete" checked></td></tr>
 </table>
@@ -548,9 +556,9 @@ _(Snapshot Name)_: <input type="text" id="targetsnap" hidden><label id="targetsn
 <table class='snapshot'>
 <tr><td>_(VM Being Cloned)_:</td><td><span id="VMBeingCloned"></span></td></tr>
 <tr><td>_(New VM)_:</td><td><input type="text" id="target" autocomplete="off" spellcheck="false" value="" onclick="this.select()" ></td></tr>
-<tr><td>_(Overwrite)_:</td><td><input type="checkbox" id="Overwrite" value="" ></td></tr>
+<tr><td>_(Overwrite)_:</td><td><input type="checkbox" id="Overwrite" value="" checked></td></tr>
 <tr hidden><td>_(Start Cloned VM)_:</td><td><input type="checkbox" id="Start" value="" ></td></tr>
 <tr hidden><td>_(Edit VM after clone)_:</td><td><input type="checkbox" id="Edit" value="" ></td></tr>
-<tr><td>_(Check free space)_:</td><td><input type="checkbox" id="Free" value="" ></td></tr>
+<tr><td>_(Check free space)_:</td><td><input type="checkbox" id="Free" value="" checked></td></tr>
 </table>
 </div>

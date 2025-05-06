@@ -40,10 +40,12 @@ if (!empty($_POST['password']) && !empty($_POST['confirmPassword'])) {
     return $POST_ERROR = $VALIDATION_MESSAGES['saveError'];
 }
 
-$THEME_DARK = in_array($display['theme'],['black','gray']);
+require_once "$docroot/plugins/dynamix/include/ThemeHelper.php";
+$themeHelper = new ThemeHelper($display['theme']);
+$isDarkTheme = $themeHelper->isDarkTheme();
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="<?= $themeHelper->getThemeHtmlClass() ?>">
 <head>
     <meta charset="utf-8">
     <meta http-equiv="content-type" content="text/html; charset=UTF-8">
@@ -78,13 +80,13 @@ $THEME_DARK = in_array($display['theme'],['black','gray']);
     /
     /************************/
     :root {
-        --body-bg: <?= $THEME_DARK ? '#1c1b1b' : '#f2f2f2' ?>;
-        --body-text-color: <?= $THEME_DARK ? '#fff' : '#1c1b1b' ?>;
-        --section-bg: <?= $THEME_DARK ? '#1c1b1b' : '#f2f2f2' ?>;
-        --shadow: <?= $THEME_DARK ? 'rgba(115,115,115,.12)' : 'rgba(0,0,0,.12)' ?>;
-        --form-text-color:  <?= $THEME_DARK ? '#f2f2f2' : '#1c1b1b' ?>;
-        --form-bg-color: <?= $THEME_DARK ? 'rgba(26,26,26,0.4)' : '#f2f2f2' ?>;
-        --form-border-color: <?= $THEME_DARK ? '#2B2A29' : '#ccc' ?>;
+        --body-bg: <?= $isDarkTheme ? '#1c1b1b' : '#f2f2f2' ?>;
+        --body-text-color: <?= $isDarkTheme ? '#fff' : '#1c1b1b' ?>;
+        --section-bg: <?= $isDarkTheme ? '#1c1b1b' : '#f2f2f2' ?>;
+        --shadow: <?= $isDarkTheme ? 'rgba(115,115,115,.12)' : 'rgba(0,0,0,.12)' ?>;
+        --form-text-color:  <?= $isDarkTheme ? '#f2f2f2' : '#1c1b1b' ?>;
+        --form-bg-color: <?= $isDarkTheme ? 'rgba(26,26,26,0.4)' : '#f2f2f2' ?>;
+        --form-border-color: <?= $isDarkTheme ? '#2B2A29' : '#ccc' ?>;
     }
     body {
         background: var(--body-bg);
@@ -306,8 +308,8 @@ $THEME_DARK = in_array($display['theme'],['black','gray']);
         </div>
         <div class="content">
             <header>
-                <h1><?=$var['NAME']?></h1>
-                <h2><?=$var['COMMENT']?></h2>
+                <h1><?=htmlspecialchars($var['NAME'])?></h1>
+                <h2><?=htmlspecialchars($var['COMMENT'])?></h2>
                 <p><?=_('Please set a password for the root user account')?>.</p>
                 <p><?=_('Max password length is 128 characters')?>.</p>
             </header>
@@ -347,7 +349,14 @@ $THEME_DARK = in_array($display['theme'],['black','gray']);
         document.cookie = "cookietest=1";
         cookieEnabled = document.cookie.indexOf("cookietest=")!=-1;
         document.cookie = "cookietest=1; expires=Thu, 01-Jan-1970 00:00:01 GMT";
-        if (!cookieEnabled) document.write("<p class='error'><?=_('Browser cookie support required for Unraid OS webgui')?></p>");
+        if (!cookieEnabled) {
+            const errorElement = document.createElement('p');
+            errorElement.classList.add('error');
+            errorElement.textContent = "<?=_('Please enable cookies to use the Unraid webGUI')?>";
+
+            document.body.textContent = '';
+            document.body.appendChild(errorElement);
+        }
         // Password toggling
         const $passToggle = document.querySelector('.js-pass-toggle');
         const $passToggleHideSvg = $passToggle.querySelector('.js-pass-toggle-hide');

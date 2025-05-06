@@ -15,25 +15,23 @@
 . /etc/rc.d/rc.runlog
 
 # import CA proxy
-UnProxy=/boot/config/plugins/dynamix/outgoingproxy.cfg
-CAProxy=/boot/config/plugins/community.applications/proxy.cfg
-if [[ -f "${CAProxy}" && ! -f "${UnProxy}" ]]; then
-  proxy=
-  port=
-  . "${CAProxy}"
+UNPROXY=/boot/config/plugins/dynamix/outgoingproxy.cfg
+CAPROXY=/boot/config/plugins/community.applications/proxy.cfg
+if [[ -f $CAPROXY && ! -f $UNPROXY ]]; then
+  . $CAPROXY
   # proxy and port were set by the previous command
-  if [[ -n "${proxy}" && -n "${port}" ]]; then
-cat << EOF > "${UnProxy}"
+  if [[ -n $proxy && -n $port ]]; then
+cat << EOF > $UNPROXY
 proxy_active="1"
-proxy_url_1="${proxy}:${port}"
+proxy_url_1="$proxy:$port"
 proxy_name_1="Imported from CA"
 EOF
   fi
-  mv "${CAProxy}" "${CAProxy}~"
+  mv "$CAPROXY" "$CAPROXY~"
 fi
 
 # load proxy environment vars so it is used for plugin updates and the go script
-/usr/local/sbin/set_proxy
+/usr/local/emhttp/plugins/dynamix/scripts/set_proxy
 [[ -x /etc/profile.d/proxy.sh ]] && . /etc/profile.d/proxy.sh
 
 # irqbalance daemon distributes interrupts over processors and cores
@@ -52,6 +50,7 @@ rm -rf /kernel
 # Ensure required config directories exist
 # these will all have permissions 0700
 CONFIG="/boot/config"
+mkdir -p $CONFIG/default
 mkdir -p $CONFIG/modprobe.d
 mkdir -p $CONFIG/plugins/dockerMan
 mkdir -p $CONFIG/plugins/dynamix/users
@@ -61,9 +60,14 @@ mkdir -p $CONFIG/shares
 mkdir -p $CONFIG/ssh/root
 mkdir -p $CONFIG/ssl/certs
 
+# Set default Docker backingfs type to native for existing installations
+if [[ -f "/boot/config/docker.cfg" ]]; then
+  grep -q "DOCKER_BACKINGFS=" /boot/config/docker.cfg || echo "DOCKER_BACKINGFS=\"native\"" >> /boot/config/docker.cfg
+fi
+
 # upgrade network configuration (if needed) and (re)generates our welcome text
 if [[ -x /usr/local/sbin/create_network_ini ]]; then
-  /usr/local/sbin/create_network_ini init &>/dev/null &
+  /usr/local/sbin/create_network_ini init &
 fi
 
 # Needed by dynamix
@@ -76,11 +80,6 @@ fi
 /usr/local/emhttp/webGui/scripts/notify smtp-init
 /usr/local/emhttp/webGui/scripts/notify cron-init
 
-# restore favorites
-if [[ -x /usr/local/emhttp/webGui/scripts/restore_favorites ]]; then
-  /usr/local/emhttp/webGui/scripts/restore_favorites
-fi
-
 # start nchan monitoring -> stop all running nchan processes when no subscribers are connected
 if [[ -x /usr/local/sbin/monitor_nchan ]]; then
   /usr/local/sbin/monitor_nchan
@@ -91,22 +90,38 @@ rm -f /boot/plugins/unRAIDServer.plg
 rm -f $CONFIG/plugins/unRAIDServer.plg
 
 # These plugins are now integrated in the OS or obsolete and may interfere
-OBSOLETE="vfio.pci dynamix.wireguard dynamix.ssd.trim dynamix.file.manager gui.search unlimited-width proxy.editor"
+OBSOLETE="vfio.pci dynamix.wireguard dynamix.ssd.trim dynamix.file.manager gui.search unlimited-width proxy.editor unraid.patch AAA-UnraidPatch-BootLoader-DO_NOT_DELETE"
+QUIET="unraid.patch AAA-UnraidPatch-BootLoader-DO_NOT_DELETE"
+
 for PLUGIN in $OBSOLETE; do
-  if [[ -e $CONFIG/plugins/$PLUGIN.plg ]]; then
-    log "moving obsolete plugin $PLUGIN.plg to $CONFIG/plugins-error"
+  if [[ -e "$CONFIG/plugins/$PLUGIN.plg" ]]; then
     # preserve ssd-trim config
     if [[ $PLUGIN == dynamix.ssd.trim ]]; then
-      if [[ -e $CONFIG/plugins/$PLUGIN/$PLUGIN.cfg ]]; then
-        echo "[ssd]" >> $CONFIG/plugins/dynamix/dynamix.cfg
-        cat $CONFIG/plugins/$PLUGIN/$PLUGIN.cfg >> $CONFIG/plugins/dynamix/dynamix.cfg
+      if [[ -e "$CONFIG/plugins/$PLUGIN/$PLUGIN.cfg" ]]; then
+        echo "[ssd]" >> "$CONFIG/plugins/dynamix/dynamix.cfg"
+        cat "$CONFIG/plugins/$PLUGIN/$PLUGIN.cfg" >> "$CONFIG/plugins/dynamix/dynamix.cfg"
       fi
-      if [[ -e $CONFIG/plugins/$PLUGIN/ssd-trim.cron ]]; then
-        mv $CONFIG/plugins/$PLUGIN/ssd-trim.cron $CONFIG/plugins/dynamix/ssd-trim.cron
+      if [[ -e "$CONFIG/plugins/$PLUGIN/ssd-trim.cron" ]]; then
+        mv "$CONFIG/plugins/$PLUGIN/ssd-trim.cron" "$CONFIG/plugins/dynamix/ssd-trim.cron"
       fi
     fi
-    mv $CONFIG/plugins/$PLUGIN.plg $CONFIG/plugins-error/
-    rm -rf $CONFIG/plugins/$PLUGIN
+
+    if [[ " $QUIET " == *" $PLUGIN "* ]]; then
+      rm "$CONFIG/plugins/$PLUGIN.plg"
+    else
+      log "moving obsolete plugin $PLUGIN.plg to $CONFIG/plugins-error"
+      mv "$CONFIG/plugins/$PLUGIN.plg" "$CONFIG/plugins-error/"
+    fi
+
+    # also remove $PLUGIN configuration directory
+    rm -rf "$CONFIG/plugins/$PLUGIN"
+  fi
+done
+
+# Clean up any quiet plugin plg files from previous runs
+for PLUGIN in $QUIET; do
+  if [[ -e "$CONFIG/plugins-error/$PLUGIN.plg" ]]; then
+    rm "$CONFIG/plugins-error/$PLUGIN.plg"
   fi
 done
 
@@ -150,6 +165,8 @@ obsolete "NerdPack" "2021.08.11"
 obsolete "upnp-monitor" "2020.01.04c"
 # ZFS-Companion Monitor by campusantu, breaks the dashboard
 obsolete "ZFS-companion" "2021.08.24"
+# Folder View - Latest versions are only compatible with 7.x  Older versions have issues
+obsolete "folder.view" "2024.10.02"
 
 # If "unraidsafemode" indicated, skip installing extra packages and plugins
 if [[ -f /boot/unraidsafemode ]] || grep -wq unraidsafemode /proc/cmdline; then
@@ -160,11 +177,23 @@ else
     log "Installing /boot/extra packages"
     ( export -f log; find /boot/extra -maxdepth 1 -type f -exec sh -c 'upgradepkg --terse --install-new "$1" | log' -- "{}" \; )
   fi
-  # Install plugins
-  log "Installing plugins"
+  PRIORITY_PLUGINS=("dynamix.unraid.net.plg")
+  # Install priority plugins first
+  for PRIORITY_PLUGIN in "${PRIORITY_PLUGINS[@]}"; do
+    PRIORITY_PLUGIN_PATH="$CONFIG/plugins/$PRIORITY_PLUGIN"
+    if [[ -f "$PRIORITY_PLUGIN_PATH" ]]; then
+      /usr/local/sbin/plugin install "$PRIORITY_PLUGIN_PATH" | log
+    fi
+  done  
+  # Install remaining plugins
   shopt -s nullglob
   for PLUGIN in $CONFIG/plugins/*.plg; do
-    /usr/local/sbin/plugin install $PLUGIN | log
+    PLUGIN_NAME=$(basename "$PLUGIN")
+    # Skip already installed priority plugins
+    if [[ " ${PRIORITY_PLUGINS[*]} " == *" $PLUGIN_NAME "* ]]; then
+      continue
+    fi
+    /usr/local/sbin/plugin install "$PLUGIN" | log
   done
   shopt -u nullglob
 fi
@@ -176,6 +205,11 @@ for LANGUAGE in $CONFIG/plugins/lang-*.xml; do
   /usr/local/sbin/language install $LANGUAGE | log
 done
 shopt -u nullglob
+
+# restore favorites
+if [[ -x /usr/local/emhttp/webGui/scripts/restore_favorites ]]; then
+  /usr/local/emhttp/webGui/scripts/restore_favorites
+fi
 
 # Enable persistent bash history
 PERSISTENT_BASH_HISTORY=$(grep "persist_bash_history" /boot/config/plugins/dynamix/dynamix.cfg 2>/dev/null | cut -d'=' -f2 | sed 's/"//g')

@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -50,7 +50,8 @@ function update_translation($locale) {
 }
 function ports() {
   global $net;
-  exec("ls --indicator-style=none $net|grep -Po '^(lo|(bond|eth)\d+)$'",$ports);
+  exec("ls --indicator-style=none $net|grep -Po '^(bond|eth|wlan)\d+$'",$ports);
+  $ports[] = 'lo';
   return $ports;
 }
 
@@ -100,19 +101,42 @@ while (true) {
     // interface general information
     $mtu = port_get_contents("$net/$port/mtu");
     $link = port_get_contents("$net/$port/carrier")==1;
-    if (substr($port,0,4)=='bond') {
+    switch (substr($port,0,4)) {
+    case 'bond':
       if ($link) {
         $bond_mode = file_exists("$bond/$port") ? str_replace('Bonding Mode: ','',@file("$bond/$port",FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES)[1]) : '---';
         $echo['mode'][] = "$bond_mode, mtu $mtu";
-      } else $echo['mode'][] = "bond down";
-    } elseif ($port=='lo') {
-      $echo['mode'][] = $link ? "loopback" : "not set";
-    } else {
+      } else {
+        $echo['mode'][] = "bond down";
+      }
+      break;
+    case 'wlan':
+      if ($link) {
+        unset($speed);
+        exec("iw $port link | awk '/^\s+[rt]x bitrate: /{print $1,$2,$3,$4}'",$speed);
+        if (count($speed)==2) {
+          [$rxrate, $rxunit] = explode(' ',explode(': ',$speed[0])[1]);
+          [$txrate, $txunit] = explode(' ',explode(': ',$speed[1])[1]);
+          $echo['mode'][] = _('Rx').": ".round($rxrate)." ".str_replace('Bit/s','bps',$rxunit).", "._('Tx').": ".round($txrate)." ".str_replace('Bit/s','bps',$txunit).", mtu $mtu";
+        } else {
+          $echo['mode'][] = _('not connected');
+        }
+      } else {
+        $echo['mode'][] = _('interface down');
+      }
+      break;
+    case 'lo':
+      $echo['mode'][] = $link ? _('loopback') : _('not set');
+      break;
+    default:
       if ($link) {
         $speed = port_get_contents("$net/$port/speed");
         $duplex = port_get_contents("$net/$port/duplex");
         $echo['mode'][] = "$speed Mbps, $duplex duplex, mtu $mtu";
-      } else $echo['mode'][] = "interface down";
+      } else {
+        $echo['mode'][] = _('interface down');
+      }
+      break;
     }
     // interface counters
     $echo['rxtx'][] = $rx;

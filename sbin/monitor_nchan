@@ -4,27 +4,44 @@ nchan_pid=/var/run/nchan.pid                         # keeps list of nchan proce
 disk_load=/var/local/emhttp/diskload.ini             # disk load statistics
 nginx=/var/run/nginx.socket                          # nginx local access
 status=http://localhost/pub/session?buffer_length=1  # nchan information about GUI subscribers
+nchan_list=/tmp/nchan_list.tmp
 nchan_id=$(basename "$0")
 
-# immediate kill command
-if [[ $1 == kill ]]; then
-  [[ -s $nchan_pid ]] || exit
-  echo "Killing nchan processes..."
-  while IFS=$'\n' read -r running; do
-    name="${running##*/}"
-    # kill all processes or single process
-    if [[ -z $2 || $2 == ${name/:stop/} ]]; then
-      echo "$name"
-      pkill -f "$docroot/${running/:stop/}"
+nchan_stop() {
+  echo -n >$nchan_list
+  while IFS=$'\n' read -r nchan; do
+    [[ ${nchan##*/} == '.*' ]] && continue
+    echo $nchan >>$nchan_list
+    pkill -f $nchan
+  done <<< $(ps -eo cmd | grep -Po '/usr/local/emhttp/.*/nchan/.*')
+}
+
+nchan_start() {
+  [[ -e $nchan_list ]] || return
+  while IFS=$'\n' read -r nchan; do
+    if ! pgrep -f $nchan >/dev/null; then
+      $nchan &>/dev/null &
     fi
-  done < $nchan_pid
-  if [[ -z $2 ]]; then
-    # remove pid file
-    rm -f $nchan_pid $disk_load
-  else
-    # remove single entry
-    sed -i "/$2/d" $nchan_pid
-  fi
+  done < $nchan_list
+  rm -f $nchan_list
+}
+
+if [[ $1 == kill ]]; then
+  echo "Stopping nchan processes..."
+  nchan_stop
+  rm -f $nchan_pid $disk_load
+  exit
+fi
+
+if [[ $1 == stop ]]; then
+  echo "Stopping nchan processes..."
+  nchan_stop
+  exit
+fi
+
+if [[ $1 == start ]]; then
+  echo "Starting nchan processes..."
+  nchan_start
   exit
 fi
 
@@ -33,11 +50,11 @@ while :; do
   # only act when GUI registered nchan processes are running
   if [[ -s $nchan_pid ]]; then
     # get number of GUI nchan subscribers
-    subs=$(curl --unix-socket $nginx $status 2>/dev/null|grep -Pom1 'subscribers: \K\d+')
+    subs=$(curl --unix-socket $nginx $status 2>/dev/null | grep -Pom1 'subscribers: \K\d+')
     if [[ -z $subs || $subs -eq 0 ]]; then
       sleep 5
       # steady state?
-      subs=$(curl --unix-socket $nginx $status 2>/dev/null|grep -Pom1 'subscribers: \K\d+')
+      subs=$(curl --unix-socket $nginx $status 2>/dev/null | grep -Pom1 'subscribers: \K\d+')
       if [[ -z $subs || $subs -eq 0 ]]; then
         now=$(date +%s)
         # log at 1 hour interval
@@ -45,10 +62,7 @@ while :; do
           logger -t $nchan_id -- "Stop running nchan processes"
           start=$now
         fi
-        # kill GUI registered nchan processes
-        while IFS=$'\n' read -r running; do
-          pkill -f $docroot/${running/:stop/}
-        done < $nchan_pid
+        nchan_stop
         # empty GUI registered list & statistics
         rm -f $nchan_pid $disk_load
       fi

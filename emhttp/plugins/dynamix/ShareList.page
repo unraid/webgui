@@ -15,6 +15,24 @@ Cond="_var($var,'fsState')!='Stopped' && _var($var,'shareUser')=='e'"
  * all copies or substantial portions of the Software.
  */
 ?>
+<?
+/* Function to test if any Mouned volumes exist. */
+function checkDisks(&$disks) {
+    $rc = false;
+    foreach ($disks as $disk) {
+        if ($disk['name']!=='flash' && _var($disk,'fsStatus',"")==='Mounted') {
+            $rc = true;
+            break;
+        }
+    }
+    return $rc;
+}
+
+/* Are there any array disks? */
+$disks		= parse_ini_file('state/disks.ini',true) ?? [];
+$nodisks	= checkDisks($disks) ? "" : "disabled";
+?>
+
 <table class="unraid share_status">
 <thead><tr><td>_(Name)_</td><td>_(Comment)_</td><td>_(SMB)_</td><td>_(NFS)_</td><td>_(Storage)_</td><td>_(Size)_</td><td>_(Free)_</td></tr></thead>
 <tbody id="shareslist"></tbody>
@@ -22,7 +40,7 @@ Cond="_var($var,'fsState')!='Stopped' && _var($var,'shareUser')=='e'"
 
 <form name="share_form" method="POST" action="<?=htmlspecialchars($path)?>/Share?name=">
 <input type="button" id="compute-shares" value="_(Compute All)_" onclick="$(this).prop('disabled',true);shareList('',-1)">
-<input type="submit" value="_(Add Share)_">
+<input type="submit" value="_(Add Share)_" <?echo $nodisks;?>>
 <input type="button" value="_(Clean Up)_" onclick="cleanup()" id="cleanup-button" disabled>
 </form>
 

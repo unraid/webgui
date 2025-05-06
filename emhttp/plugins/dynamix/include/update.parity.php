@@ -29,8 +29,7 @@ if (isset($_POST['#apply'])) {
     $dotm  = $_POST['dotm'] ?? '*';
     $month = $_POST['month'] ?? '*';
     $day   = $_POST['day'] ?? '*';
-    $write = $_POST['write'] ?? '';
-    $write = ($write == "yes") ? "" : "NOCORRECT";
+    $write = $_POST['write'] ?? 'NOCORRECT';
     $term  = $test = $end1 = $end2 = '';
     switch ($dotm) {
       case '28-31':
@@ -64,7 +63,7 @@ if (isset($_POST['#apply'])) {
         break;
     }
     $cron[] = "# Generated parity check schedule:";
-    if ($_POST['cumulative']==1) {
+    if (isset($_POST['cumulative']) && $_POST['cumulative']==1) {
       [$m, $h] = explode(' ',$time);
       $h = ($h + $_POST['duration']) % 24;
       if ($_POST['frequency']==7) {

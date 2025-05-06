@@ -58,7 +58,7 @@ wsdd2_stop(){
   if ! wsdd2_running; then
     REPLY="Already stopped"
   else
-    killall wsdd2
+    killall --ns $$  wsdd2
     if ! wsdd2_running; then REPLY="Stopped"; else REPLY="Failed"; fi
   fi
   log "$DAEMON...  $REPLY."

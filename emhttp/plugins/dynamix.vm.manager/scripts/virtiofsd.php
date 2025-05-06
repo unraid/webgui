@@ -27,7 +27,9 @@
  }
  # Check if options file exists. Each option should be on a new line.
  if (is_file($file)) $options = explode("\n",file_get_contents($file)) ; else $options =  ['--syslog','--inode-file-handles=mandatory','--announce-submounts'];
- $options[] = "--fd=".$argoptions['fd'];
+ if (isset($argoptions['fd'])) {
+    $options[] = "--fd=".$argoptions['fd'];
+}
  
  if (isset($argoptions['o'])) {
      $virtiofsoptions = explode(',',$argoptions["o"]);

@@ -13,6 +13,10 @@ Tag="upload"
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  */
+require_once "$docroot/plugins/dynamix/include/ReplaceKey.php";
+$replaceKey = new ReplaceKey();
+$replaceKey->check();
+
 require_once "$docroot/plugins/dynamix.my.servers/include/reboot-details.php";
 $rebootDetails = new RebootDetails();
 ?>
@@ -46,5 +50,5 @@ function flashBackup() {
 </script>
 
 <unraid-i18n-host>
-  <unraid-update-os reboot-version="<?= $rebootDetails->getRebootVersion() ?>"></unraid-update-os>
+  <unraid-update-os reboot-version="<?= $rebootDetails->rebootVersion ?>"></unraid-update-os>
 </unraid-i18n-host>

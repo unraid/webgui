@@ -32,20 +32,20 @@ class KeyInstaller
      * @param int $httpcode https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
      * @param string|array $result - strings are assumed to be encoded JSON. Arrays will be encoded to JSON.
      */
-    private function responseComplete($httpcode, $result)
+    private function responseComplete($httpcode, $result): string
     {
         $mutatedResult = is_array($result) ? json_encode($result) : $result;
 
         if ($this->isGetRequest && $this->getHasUrlParam) { // return JSON to the caller
-          header('Content-Type: application/json');
-          http_response_code($httpcode);
-          exit((string)$mutatedResult);
+            header('Content-Type: application/json');
+            http_response_code($httpcode);
+            exit((string)$mutatedResult);
         } else { // return the result to the caller
-          return $mutatedResult;
+            return $mutatedResult;
         }
     }
 
-    public function installKey($keyUrl = null)
+    public function installKey($keyUrl = null): string
     {
         $url = unscript($keyUrl ?? _var($_GET, 'url'));
         $host = parse_url($url)['host'] ?? '';
@@ -61,15 +61,19 @@ class KeyInstaller
             if ($returnVar === 0) {
                 $var = (array)@parse_ini_file('/var/local/emhttp/var.ini');
                 if (_var($var, 'mdState') == "STARTED") {
-                    return $this->responseComplete(200, ['status' => _('Please Stop array to complete key installation')], _('success') . ', ' . _('Please Stop array to complete key installation'));;
+                    return $this->responseComplete(200, [
+                        'status' => 'success',
+                        'message' => _('Please Stop array to complete key installation'),
+                    ]);
                 } else {
-                    return $this->responseComplete(200, ['status' => ''], _('success'));;
+                    return $this->responseComplete(200, ['status' => 'success']);
                 }
             } else {
-                return $this->responseComplete(406, ['error' => _('download error') . " $returnVar"]);;
+                @unlink(escapeshellarg("/boot/config/$keyFile"));
+                return $this->responseComplete(406, ['error' => _('download error') . " $returnVar"]);
             }
         } else {
-            return $this->responseComplete(406, ['error' => _('bad or missing key file') . ": $url"]);;
+            return $this->responseComplete(406, ['error' => _('bad or missing key file') . ": $url"]);
         }
     }
 }

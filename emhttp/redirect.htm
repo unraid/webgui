@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirect Page</title>
+</head>
+
+<body>
+    <div id="text" style="text-align: center; margin-top: calc(100vh - 75%); display: none; font-family: sans-serif;">
+        <h1>Redirecting...</h1>
+
+        <h2><a id="redirectButton" href="/Main">Click here if you are not redirected automatically</a></h2>
+    </div>
+    <div>
+    </div>
+    <script>
+        function parseRedirectTarget(target) {
+            if (target && target !== '/') {
+                // parse target and ensure it is a bare path with no query parameters
+                const url = new URL(target, window.location.origin);
+                return url.pathname;
+            }
+            return '/Main';
+        }
+
+        function getRedirectUrl() {
+            const search = new URLSearchParams(window.location.search);
+            const targetRoute = parseRedirectTarget(search.get('target'));
+            if (search.has('data') && (search.size === 1 || search.size === 2)) {
+                return `${window.location.origin}${targetRoute}?data=${encodeURIComponent(search.get('data'))}`;
+            }
+            return `${window.location.origin}${targetRoute}`;
+        }
+
+        function showText() {
+            document.getElementById('text').style.display = 'block';
+        }
+
+        document.getElementById('redirectButton').attributes.href.value = getRedirectUrl();
+
+        setTimeout(() => {
+            showText();
+        }, 750);
+        window.location.href = getRedirectUrl();
+    </script>
+</body>
+
+</html>
