@@ -303,7 +303,7 @@ build_servers(){
 	EOF
     fi
   fi
-  if [[ -n $TSFQDN ]]; then
+  if [[ -n $TSFQDN && $USE_SSL != no ]]; then
     cat <<- EOF >>$SERVERS
 	#
 	# Redirect Tailscale http requests to https
