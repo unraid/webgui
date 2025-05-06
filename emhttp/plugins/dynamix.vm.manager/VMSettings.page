@@ -169,13 +169,6 @@ _(Libvirt storage location)_:
 
 :vms_libvirt_location_help:
 
-_(Libvirt secondary storage location)_:
-: <input type="text" id="IMAGE_FILE_SECONDARY" name="IMAGE_FILE_SECONDARY" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars($domain_cfg['IMAGE_FILE_SECONDARY']);?>" placeholder="e.g. /mnt/user/system/libvirt/" data-pickcloseonfile="true" data-pickfilter="img" data-pickroot="/mnt" data-pickfolders="true" >
- <?if (!$started):?><span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
- <?endif;?><span id="IMAGE_ERROR_SECONDARY" class="errortext"></span>
-
-:vms_libvirt_secondary_location_help:
-
 <?endif;?>
 _(Default VM storage path)_:
 : <input type="text" id="domaindir" name="DOMAINDIR" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="/mnt" value="<?=htmlspecialchars($domain_cfg['DOMAINDIR'])?>" placeholder="_(Click to Select)_" pattern="^[^\\]*/$">
