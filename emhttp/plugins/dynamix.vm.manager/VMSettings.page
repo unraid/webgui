@@ -146,12 +146,6 @@ _(Libvirt storage location)_:
 
 :vms_libvirt_volume_help:
 
-_(Libvirt secondary storage location)_:
-: <?=htmlspecialchars($domain_cfg['IMAGE_FILE_SECONDARY'])."Test"?>
-
-:vms_libvirt_secondary_volume_help:
-
-
 <?else: /* Libvirt is stopped */ ?>
 _(Libvirt vdisk size)_:
 : <input type="number" id="IMAGE_SIZE" name="IMAGE_SIZE" min="1" value="<?=htmlspecialchars($domain_cfg['IMAGE_SIZE']);?>" style="width:50px;" required="required" />_(GB)_ <span id="SIZE_ERROR" class="errortext"></span>
@@ -482,9 +476,6 @@ $(function(){
   $("#IMAGE_FILE").fileTreeAttach(null, null, function(folder) {
     $("#IMAGE_FILE").val(folder + 'libvirt.img').change();
   });
-  $("#IMAGE_FILE_SECONDARY").fileTreeAttach(null, null, function(folder) {
-    $("#IMAGE_FILE_SECONDARY").val(folder + 'libvirt.img').change();
-  });
   $('#domaindir').fileTreeAttach();
   $('#mediadir').fileTreeAttach();
   $('#winvirtio').fileTreeAttach();
@@ -508,7 +499,6 @@ $(function(){
       $("#SERVICE").prop("disabled", checked).val('disable');
       $("#IMAGE_SIZE").prop("disabled", checked);
       $("#IMAGE_FILE").prop("disabled", checked).val("<?=$domain_cfg['IMAGE_FILE']?>");
-      $("#IMAGE_FILE_SECONDARY").prop("disabled");
       $("#domaindir").prop("disabled", checked);
       $("#mediadir").prop("disabled", checked);
       $("#winvirtio_select").prop("disabled", checked);
