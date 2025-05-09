@@ -71,32 +71,7 @@ defaultPage.on('message', function(msg,meta) {
     $('#statusbar').html(status);
     break;
   case 2:
-    // notifications
-    var bell1 = 0, bell2 = 0, bell3 = 0;
-    $.each($.parseJSON(msg), function(i, notify){
-      switch (notify.importance) {
-        case 'alert'  : bell1++; break;
-        case 'warning': bell2++; break;
-        case 'normal' : bell3++; break;
-      }
-<?if ($notify['display']==0):?>
-      if (notify.show) {
-        $.jGrowl(notify.subject+'<br>'+notify.description,{
-          group: notify.importance,
-          header: notify.event+': '+notify.timestamp,
-          theme: notify.file,
-          beforeOpen: function(e,m,o){if ($('div.jGrowl-notification').hasClass(notify.file)) return(false);},
-          afterOpen: function(e,m,o){if (notify.link) $(e).css('cursor','pointer');},
-          click: function(e,m,o){if (notify.link) location.replace(notify.link);},
-          close: function(e,m,o){$.post('/webGui/include/Notify.php',{cmd:'hide',file:"<?=$notify['path'].'/unread/'?>"+notify.file,csrf_token:csrf_token}<?if ($notify['life']==0):?>,function(){$.post('/webGui/include/Notify.php',{cmd:'archive',file:notify.file,csrf_token:csrf_token});}<?endif;?>);}
-        });
-      }
-<?endif;?>
-    });
-    $('#bell').removeClass('red-orb yellow-orb green-orb').prop('title',"<?=_('Alerts')?> ["+bell1+']\n'+"<?=_('Warnings')?> ["+bell2+']\n'+"<?=_('Notices')?> ["+bell3+']');
-    if (bell1) $('#bell').addClass('red-orb'); else
-    if (bell2) $('#bell').addClass('yellow-orb'); else
-    if (bell3) $('#bell').addClass('green-orb');
+    // notifications - moved to the Unraid API
     break;
   }
 });
