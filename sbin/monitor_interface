@@ -1,0 +1,70 @@
+#!/bin/bash
+#
+# script: monitor_interface
+#
+# Monitors a given list of interfaces and add or remove static IP addresses to these interfaces.
+# The list of interfaces is provided in the file '/var/local/emhttp/statics.ini'
+# This file is maintained by the script 'create_network_ini' which keep track of all IP assignments.
+#
+# By removing static IP addresses from inactive interfaces, these interfaces do not longer interfere with wireless.
+# In other words the wired connection can be pulled without consequences.
+#
+# Bergware - modified for Unraid OS, May 2025
+
+FILE=/var/local/emhttp/statics.ini
+SYSTEM=/sys/class/net
+
+state(){
+  cat $SYSTEM/$1/operstate 2>/dev/null
+}
+
+md5(){
+  [[ -r $FILE ]] && md5sum $FILE | awk '{print $1;exit}'
+}
+
+switch(){
+  local n
+  [[ -z $1 ]] && return 1
+  # state change should stay stable for at least 5 seconds
+  for n in {1..5}; do
+    [[ $(state $1) == $2 ]] && return 1 || sleep 1
+  done
+  return 0
+}
+
+init(){
+  PORT=(); IPV4=(); METRIC4=(); IPV6=(); METRIC6=(); STATE=();
+  if [[ -r $FILE ]]; then
+    # initialize values from file, maintained by 'create_network_ini'
+    while IFS=$'\n' read -r ROW; do
+      ROW=($ROW)
+      PORT+=(${ROW[0]})
+      IPV4+=(${ROW[1]:--})
+      METRIC4+=(${ROW[2]:--})
+      IPV6+=(${ROW[3]:--})
+      METRIC6+=(${ROW[4]:--})
+      STATE+=($(state ${ROW[0]}))
+    done <$FILE
+  fi
+  MD5=$(md5)
+}
+
+while :; do
+  # monitor file content changes
+  [[ $MD5 != $(md5) ]] && init
+  for i in ${!PORT[@]}; do
+    # did interface state change?
+    if switch ${PORT[$i]} ${STATE[$i]}; then
+      STATE[$i]=$(state ${PORT[$i]})
+      if [[ ${STATE[$i]} == up ]]; then
+        [[ ${IPV4[$i]} != '-' ]] && ip addr add ${IPV4[$i]} metric ${METRIC4[$i]} dev ${PORT[$i]}
+        [[ ${IPV6[$i]} != '-' ]] && ip addr add ${IPV6[$i]} metric ${METRIC6[$i]} dev ${PORT[$i]}
+      elif [[ ${STATE[$i]} == down ]]; then
+        ip addr flush scope global dev ${PORT[$i]}
+      fi
+    fi
+  done
+  # check every 3 seconds
+  sleep 3
+done &
+disown %%

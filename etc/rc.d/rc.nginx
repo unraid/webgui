@@ -6,7 +6,7 @@
 # Written for Slackware Linux by Cherife Li <cherife-#-dotimes.com>.
 
 # LimeTech - modified for Unraid OS
-# Bergware - modified for Unraid OS, October 2023
+# Bergware - modified for Unraid OS, May 2025
 
 # reference:
 # LANNAME                     'tower'
@@ -537,12 +537,12 @@ build_ssl(){
   # fetch LAN IP address (read management interface eth0)
   [[ -e $SYSTEM/bond0 ]] && DEV=bond0 || DEV=eth0
   [[ -e $SYSTEM/br0 ]] && DEV=br0
-  LANIP=$(ip -4 -br addr show $DEV scope global | sed -r 's/\/[0-9]+//g' | awk '{print $3;exit}')
-  LANIP6=$(ip -6 -br addr show $DEV scope global -temporary -deprecated | sed -r 's/\/[0-9]+//g' | awk '{print $3;exit}')
+  LANIP=$(ip -4 -br addr show scope global primary dev $DEV | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
+  LANIP6=$(ip -6 -br addr show scope global primary -deprecated dev $DEV | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
 
   # try wireless connection if no IP address on interface eth0
-  [[ -z $LANIP && -e $SYSTEM/wlan0 ]] && LANIP=$(ip -4 -br addr show wlan0 scope global | sed -r 's/\/[0-9]+//g' | awk '{print $3;exit}')
-  [[ -z $LANIP6 && -e $SYSTEM/wlan0 ]] && LANIP6=$(ip -6 -br addr show wlan0 scope global -temporary -deprecated | sed -r 's/\/[0-9]+//g' | awk '{print $3;exit}')
+  [[ -z $LANIP && -e $SYSTEM/wlan0 ]] && LANIP=$(ip -4 -br addr show scope global primary dev wlan0 | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
+  [[ -z $LANIP6 && -e $SYSTEM/wlan0 ]] && LANIP6=$(ip -6 -br addr show scope global primary -deprecated dev wlan0 | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
 
   # regenerate self-signed cert if local TLD changes */
   SELFCERTPATH=$SSL/certs/${LANNAME}_unraid_bundle.pem

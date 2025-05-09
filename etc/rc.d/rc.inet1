@@ -7,7 +7,7 @@
 # @(#)/etc/rc.d/rc.inet1 10.2  Sun Jul 24 12:45:56 PDT 2005 (pjv)
 
 # LimeTech - modified for Unraid OS
-# Bergware - modified for Unraid OS, February 2025
+# Bergware - modified for Unraid OS, May 2025
 
 # Adapted by Bergware for use in Unraid OS - April 2016
 # - improved interface configuration
@@ -81,6 +81,9 @@
 # - added metric value to interface IP assignment
 # - fixed DNS entries get removed when configuring interface other then eth0
 
+# Adapted by Bergware for use in Unraid OS - May 2025
+# - improved metric value to interface IP assignment
+
 ###########
 # LOGGING #
 ###########
@@ -122,7 +125,7 @@ done
 # LOOPBACK FUNCTIONS #
 ######################
 
-# function to bring up loopback interface
+# bring up loopback interface
 lo_up(){
   if [[ -e $SYSTEM/lo ]]; then
     if ! ip -4 addr show lo | grep -qw 'inet'; then
@@ -137,7 +140,7 @@ lo_up(){
   fi
 }
 
-# function to take down loopback interface
+# take down loopback interface
 lo_down(){
   if [[ -e $SYSTEM/lo ]]; then
     run ip link set lo down
@@ -150,12 +153,17 @@ lo_down(){
 # INTERFACE FUNCTIONS #
 #######################
 
-# function to get link mtu size
+# return interface index
+index(){
+  cat $SYSTEM/$1/ifindex 2>/dev/null
+}
+
+# get link mtu size
 get_mtu(){
   ip link show $1 | grep -Po 'mtu \K\d+'
 }
 
-# function to set/reset link mtu size
+# set/reset link mtu size
 set_mtu(){
   if [[ -n ${MTU[$i]} ]]; then
     # set MTU to specified value
@@ -166,8 +174,8 @@ set_mtu(){
   fi
 }
 
-# function to wait for carrier of interface
-carrier_up(){
+# wait for carrier of interface
+carrier(){
   local n
   for n in {1..10}; do
     [[ $(cat $SYSTEM/$1/carrier 2>/dev/null) == 1 ]] && return 0 || sleep 1
@@ -175,7 +183,7 @@ carrier_up(){
   return 1
 }
 
-# function to create bond interface
+# create bond interface
 bond_up(){
   [[ -d /proc/net/bonding ]] || modprobe bonding mode=${BONDING_MODE[$i]} miimon=${BONDING_MIIMON[$i]}
   run ip link add name ${BONDNAME[$i]} type bond mode ${BONDING_MODE[$i]} miimon ${BONDING_MIIMON[$i]}
@@ -194,7 +202,7 @@ bond_up(){
   [[ -n $PRIMARY ]] && run ip link set name ${BONDNAME[$i]} type bond primary $PRIMARY
 }
 
-# function to delete bond interface
+# delete bond interface
 bond_down(){
   if [[ -e $SYSTEM/${BONDNAME[$i]} ]]; then
     # loop thru attached interfaces in bond
@@ -208,7 +216,7 @@ bond_down(){
   fi
 }
 
-# function to create bridge interface
+# create bridge interface
 br_up(){
   for ((j=0;j<${VLANS[$i]:-1};j++)); do
     [[ $j -eq 0 ]] && BRIDGE=${BRNAME[$i]} || BRIDGE=${BRNAME[$i]}.${VLANID[$i,$j]}
@@ -235,7 +243,7 @@ br_up(){
   done
 }
 
-# function to delete bridge interface
+# delete bridge interface
 br_down(){
   for ((j=0;j<${VLANS[$i]:-1};j++)); do
     # loop thru main bridge and bridge VLAN interfaces
@@ -253,7 +261,7 @@ br_down(){
   done
 }
 
-# function to create VLAN interfaces
+# create VLAN interfaces
 vlan_up(){
   for PORT in ${BRNICS[$i]:-${IFNAME[$i]}}; do
     for ((j=1;j<${VLANS[$i]};j++)); do
@@ -265,7 +273,7 @@ vlan_up(){
   done
 }
 
-# function to delete VLAN interfaces
+# delete VLAN interfaces
 vlan_down(){
   for PORT in ${BRNICS[$i]:-${IFNAME[$i]}}; do
     for VLAN in $(ls --indicator-style=none $SYSTEM | grep -Po "$PORT\.\d+"); do
@@ -275,7 +283,7 @@ vlan_down(){
   done
 }
 
-# function to create macvtap interfaces
+# create macvtap interfaces
 macvtap_up(){
   PARENT=${IFNAME[$i]}
   [[ -n ${BONDNICS[$i]} ]] && PARENT=${BONDNAME[$i]}
@@ -283,16 +291,18 @@ macvtap_up(){
   MAC=$(echo $(hostname)-$VTAP | md5sum | sed -r 's/^(..)(..)(..)(..)(..).*$/02:\1:\2:\3:\4:\5/')
   run ip link add link $PARENT name $VTAP address $MAC type macvtap mode bridge
   set_mtu $VTAP
+  echo 1 >$CONF6/$VTAP/disable_ipv6
   run ip link set $VTAP up
   for ((j=1;j<${VLANS[$i]:-0};j++)); do
     VLAN=${VLANID[$i,$j]}
     run ip link add link $PARENT.$VLAN name $VTAP.$VLAN address $MAC type macvtap mode bridge
     set_mtu $VTAP.$VLAN
+    echo 1 >$CONF6/$VTAP.$VLAN/disable_ipv6
     run ip link set $VTAP.$VLAN up
   done
 }
 
-# function to delete macvtap interfaces
+# delete macvtap interfaces
 macvtap_down(){
   PARENT=${IFNAME[$i]}
   [[ -n ${BONDNICS[$i]} ]] && PARENT=${BONDNAME[$i]}
@@ -308,26 +318,26 @@ macvtap_down(){
   run ip link del $VTAP
 }
 
-# function to enable/disable ipv6 protocol per interface
+# enable/disable ipv6 protocol per interface
 ipv6_up(){
   [[ -d $CONF6/${IFACE/$1/$2} ]] && echo $4 >$CONF6/${IFACE/$1/$2}/disable_ipv6
   [[ -d $CONF6/${IFACE/$1/$3} ]] && echo $4 >$CONF6/${IFACE/$1/$3}/disable_ipv6
 }
 
-# function to enable/disable ipv6 assignment per interface
+# enable/disable ipv6 assignment per interface
 ipv6_ra(){
   echo $2 >$CONF6/$1/accept_ra
   echo $2 >$CONF6/$1/accept_ra_defrtr
   echo $3 >$CONF6/$1/autoconf
 }
 
-# function to enable/disable ipv6 assignment per interface
+# enable/disable ipv6 assignment per interface
 ipv6_conf(){
   [[ -d $CONF6/${IFACE/$1/$2} ]] && ipv6_ra ${IFACE/$1/$2} $4 $5
   [[ -d $CONF6/${IFACE/$1/$3} ]] && ipv6_ra ${IFACE/$1/$3} $4 $5
 }
 
-# function to enable/disable ipv6 assignment per interface
+# enable/disable ipv6 assignment per interface
 ipv6_addr(){
   [[ -d $CONF6/$IFACE ]] && ipv6_ra $IFACE $1 $2
   [[ -d $CONF6/$VHOST ]] && ipv6_ra $VHOST $1 $2
@@ -342,7 +352,7 @@ ipv6_addr(){
   sleep 1
 }
 
-# function to assign IP address
+# assign IP address
 ipaddr_up(){
   if [[ -z $RENEW ]]; then
     # disable IPv6 per interface when IPv4 only
@@ -371,7 +381,7 @@ ipaddr_up(){
     [[ $IP == ipv4 ]] && DHCP_OPTIONS="$DHCP_OPTIONS -4"
     [[ $IP == ipv6 ]] && DHCP_OPTIONS="$DHCP_OPTIONS -6"
     [[ $IP != ipv4 && -n $PRIV6 && -d $CONF6/$IFACE ]] && echo $PRIV6 >$CONF6/$IFACE/use_tempaddr
-    if carrier_up $IFACE; then
+    if carrier $IFACE; then
       # interface is UP
       log "interface $IFACE is UP, polling up to 60 sec for DHCP $IP server"
       if ! run timeout 60 dhcpcd -w $DHCP_OPTIONS $IFACE; then
@@ -385,21 +395,23 @@ ipaddr_up(){
     fi
   elif [[ $DHCP == no ]]; then
     # bring up interface using static IP address
-    if carrier_up $IFACE; then STATE="UP"; else STATE="DOWN"; fi
+    if carrier $IFACE; then STATE="UP"; else STATE="DOWN"; fi
     log "interface $IFACE is $STATE, setting static $IP address"
     ipv6_addr 0 1
+    INDEX=$(index $IFACE)
+    INDEX=$((1000 + ${INDEX:-$(($(index * | sort -n | tail -1) + 1))}))
     if [[ $IP != ipv6 ]]; then
       [[ $j -eq 0 ]] && ADDR=${IPADDR[$i]} || ADDR=${IPADDR[$i,$j]}
       if [[ -n $ADDR ]]; then
         [[ $j -eq 0 ]] && MASK=${NETMASK[$i]} || MASK=${NETMASK[$i,$j]}
-        [[ -n $MASK ]] && run ip -4 addr add $(unzero $ADDR)/$MASK dev $IFACE metric ${DHCP_METRIC:-1}
+        [[ -n $MASK ]] && run ip -4 addr add $(unzero $ADDR)/$MASK metric $INDEX dev $IFACE
       fi
     fi
     if [[ $IP != ipv4 ]]; then
       [[ $j -eq 0 ]] && ADDR6=${IPADDR6[$i]} || ADDR6=${IPADDR6[$i,$j]}
       if [[ -n $ADDR6 ]]; then
         [[ $j -eq 0 ]] && MASK6=${NETMASK6[$i]} || MASK6=${NETMASK6[$i,$j]}
-        [[ -n $MASK6 ]] && run ip -6 addr add $(unzero6 $ADDR6)/$MASK6 dev $IFACE metric ${DHCP_METRIC:-1}
+        [[ -n $MASK6 ]] && run ip -6 addr add $(unzero6 $ADDR6)/$MASK6 metric $INDEX dev $IFACE
         [[ -n $PRIV6 && -d $CONF6/$IFACE ]] && echo 0 >$CONF6/$IFACE/use_tempaddr
       fi
     fi
@@ -410,7 +422,7 @@ ipaddr_up(){
   fi
 }
 
-# function to release IP addresses and routes
+# release IP addresses and routes
 ipaddr_conf(){
   if [[ -e $SYSTEM/${IFACE/$1/$2} ]]; then
     run ip -$4 addr flush dev ${IFACE/$1/$2}
@@ -422,7 +434,7 @@ ipaddr_conf(){
   fi
 }
 
-# function to release IP addresses and routes
+# release IP addresses and routes
 ipaddr_flush(){
   run ip -$1 addr flush dev $IFACE
   run ip -$1 route flush dev $IFACE
@@ -436,7 +448,7 @@ ipaddr_flush(){
   fi
 }
 
-# function to release IP addresses and routes
+# release IP addresses and routes
 ipaddr_down(){
   if [[ $DHCP == yes ]]; then
     DHCP_OPTIONS="-q -k"
@@ -453,7 +465,7 @@ ipaddr_down(){
   fi
 }
 
-# function to bring up network interface
+# bring up network interface
 if_up(){
   # set index of INTERFACE in array
   i=0
@@ -555,7 +567,7 @@ if_up(){
   done
 }
 
-# function to take down network interface
+# take down network interface
 if_down(){
   # set index of INTERFACE in array
   i=0
@@ -612,7 +624,7 @@ if_down(){
 # GATEWAY FUNCTIONS #
 #####################
 
-# function to add default gateway per interface
+# add default gateway per interface
 gateway_up(){
   for GW in ${GATEWAY[@]}; do
     [[ -z $GW ]] && continue
@@ -640,7 +652,7 @@ gateway_up(){
   done
 }
 
-# function to delete default gateway per interface
+# delete default gateway per interface
 gateway_down(){
   for GW in ${GATEWAY[@]}; do
     [[ -z $GW ]] && continue
@@ -664,7 +676,7 @@ gateway_down(){
   done
 }
 
-# function to start network
+# start network
 start(){
   lo_up
   for INTERFACE in ${IFNAME[@]}; do
@@ -673,7 +685,7 @@ start(){
   gateway_up
 }
 
-# function to stop network
+# stop network
 stop(){
   gateway_down
   for INTERFACE in ${IFNAME[@]}; do
@@ -682,7 +694,7 @@ stop(){
   lo_down
 }
 
-# function to show network status
+# show network status
 status(){
   echo "INTERFACE        STATE          INFORMATION"
   echo "========================================================================"
@@ -693,7 +705,7 @@ status(){
 # STATIC ROUTE FUNCTIONS #
 ##########################
 
-# function to add static route
+# add static route
 route_up(){
   [[ -n $3 ]] && METRIC="metric $3" || METRIC=
   if [[ $2 == default ]]; then
@@ -711,7 +723,7 @@ route_up(){
   fi
 }
 
-# function to delete static route
+# delete static route
 route_down(){
   [[ -n $3 ]] && METRIC="metric $3" || METRIC=
   if [[ $2 == default ]]; then
