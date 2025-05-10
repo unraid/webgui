@@ -243,9 +243,17 @@ if grep -q "$GOTEST2" $CONFIG/go; then
 fi
 
 # Invoke the 'go' script
-if [[ -f $CONFIG/go ]]; then
-  log "Starting go script"
-  fromdos <$CONFIG/go >/var/tmp/go
-  chmod +x /var/tmp/go
-  /var/tmp/go
+GO=go
+if [[ -f /boot/unraidsafemode ]] || grep -wq unraidsafemode /proc/cmdline; then
+  GO=go.safemode
+fi
+if [[ -f $CONFIG/$GO ]]; then
+  log "Starting $GO script"
+  fromdos <$CONFIG/$GO >/var/tmp/$GO
+  chmod +x /var/tmp/$GO
+  /var/tmp/$GO
+fi
+if [[ ! -f /var/run/emhttpd.socket ]]; then
+  log "Starting emhttp"
+  /usr/local/sbin/emhttp
 fi

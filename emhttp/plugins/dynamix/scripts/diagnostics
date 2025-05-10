@@ -497,12 +497,20 @@ if (glob("/boot/config/*.conf")) {
 if (glob("/boot/config/*.dat")) {
   run("cp -- /boot/config/*.dat ".escapeshellarg("/$diag/config"));
 }
-run("cp /boot/config/go ".escapeshellarg("/$diag/config/go.txt"));
 
-// anonymize go file
-if (!$all) {
-  run("sed -i -e '/password/c ***line removed***' -e '/user/c ***line removed***' -e '/pass/c ***line removed***' ".escapeshellarg("/$diag/config/go.txt"));
+// handle go files
+foreach (['/boot/config/go', '/boot/config/go.safemode'] as $go) {
+  if (file_exists($go)) {
+    $dest = "/$diag/config/" . basename($go) . ".txt";
+    run("cp " . escapeshellarg($go) . " " . escapeshellarg($dest));
+    
+    // anonymize go file
+    if (!$all) {
+      run("sed -i -e '/password/c ***line removed***' -e '/user/c ***line removed***' -e '/pass/c ***line removed***' " . escapeshellarg($dest));
+    }
+  }
 }
+
 // anonymize configuration files
 if (!$all) {
   run("find ".escapeshellarg("/$diag/config")." -name '*.cfg' -exec sed -ri 's/^((disk|flash)(Read|Write)List.*=\")[^\"]+/\\1.../' {} \\;");
