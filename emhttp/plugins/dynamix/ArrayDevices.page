@@ -14,8 +14,6 @@ Cond="(_var($var,'SYS_ARRAY_SLOTS') > 0 || $var['fsState']=='Stopped')"
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  */
-?>
-<?
 $power = _var($display,'power') && in_array('nvme',array_column(main_filter($disks),'transport')) ? _('Power').' / ' : '';
 ?>
 <script>
@@ -23,20 +21,36 @@ $power = _var($display,'power') && in_array('nvme',array_column(main_filter($dis
 $('#tab1').bind({click:function() {$('i.toggle').show('slow');}});
 <?endif;?>
 </script>
-
-<table class="unraid disk_status">
-<thead><tr><td>_(Device)_</td><td>_(Identification)_</td><td><?=$power?>_(Temp)_</td><td>_(Reads)_</td><td>_(Writes)_</td><td>_(Errors)_</td><td>_(FS)_</td><td>_(Size)_</td><td>_(Used)_</td><td>_(Free)_</td></tr></thead>
-<tbody id="array_devices">
-<?
-foreach (main_filter($disks) as $disk) if (substr($disk['status'],0,7)!='DISK_NP') echo "<tr><td colspan='10'></td></tr>";
-if (_var($display,'total') && _var($var,'mdNumDisks',0)>1) echo "<tr class='tr_last'><td colspan='10'></td></tr>";
-?>
-</tbody>
-</table>
-
+<div class="TableContainer">
+    <table class="unraid disk_status">
+        <thead>
+            <tr>
+                <td>_(Device)_</td>
+                <td>_(Identification)_</td>
+                <td><?=$power?>_(Temp)_</td>
+                <td>_(Reads)_</td>
+                <td>_(Writes)_</td>
+                <td>_(Errors)_</td>
+                <td>_(FS)_</td>
+                <td>_(Size)_</td>
+                <td>_(Used)_</td>
+                <td>_(Free)_</td>
+            </tr>
+        </thead>
+        <tbody id="array_devices">
+            <? foreach (main_filter($disks) as $disk) :?>
+                <? if (substr($disk['status'],0,7) != 'DISK_NP') :?>
+                    <tr><td colspan='10'></td></tr>
+                <? endif;?>
+            <? endforeach;?>
+            <? if (_var($display,'total') && _var($var,'mdNumDisks',0) > 1) :?>
+                <tr class='tr_last'><td colspan='10'></td></tr>
+            <? endif;?>
+        </tbody>
+    </table>
+</div>
 :main_array_devices_help:
 
 <?if (_var($var,'fsState')=="Stopped"):?>
-<div></div>
 :main_slots_help:
 <?endif;?>

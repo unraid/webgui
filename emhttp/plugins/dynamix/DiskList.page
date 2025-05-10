@@ -15,10 +15,22 @@ Cond="_var($var,'fsState')!='Stopped' && _var($var,'shareDisk')!='no'"
  * all copies or substantial portions of the Software.
  */
 ?>
-<table class="unraid share_status">
-<thead><tr><td>_(Name)_</td><td>_(Comment)_</td><td>_(SMB)_</td><td>_(NFS)_</td><td>_(Type)_</td><td>_(Size)_</td><td>_(Free)_</td></tr></thead>
-<tbody id="disk_list"></tbody>
-</table>
+<div class="TableContainer">
+    <table class="unraid share_status">
+        <thead>
+            <tr>
+                <td>_(Name)_</td>
+                <td>_(Comment)_</td>
+                <td>_(SMB)_</td>
+                <td>_(NFS)_</td>
+                <td>_(Type)_</td>
+                <td>_(Size)_</td>
+                <td>_(Free)_</td>
+            </tr>
+        </thead>
+        <tbody id="disk_list"></tbody>
+    </table>
+</div>
 
 <input id="compute-disks" type="button" value="_(Compute All)_" onclick="$(this).prop('disabled',true);diskList('',-1)">
 

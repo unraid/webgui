@@ -142,7 +142,7 @@ case "attributes":
   if ($empty) echo "<tr><td colspan='10' style='text-align:center;padding-top:12px'>"._('Attributes not available')."</td></tr>";
   break;
 case "capabilities":
-  echo '<table id="disk_capabilities_table" class="unraid"><thead><td style="width:33%">'._('Feature').'</td><td>'._('Value').'</td><td>'._('Information').'</td></thead><tbody>' ;
+  echo '<div class="TableContainer"><table id="disk_capabilities_table" class="unraid"><thead><td style="width:33%">'._('Feature').'</td><td>'._('Value').'</td><td>'._('Information').'</td></thead><tbody>' ;
   exec("smartctl -n standby -c $type ".escapeshellarg("/dev/$port")."|awk 'NR>5'",$output);
   $row = ['','',''];
   $empty = true;
@@ -154,7 +154,7 @@ case "capabilities":
     $info = array_map('trim', explode('_', preg_replace('/_( +)_ /','__',$line), 3));
     if ($nvme && $info[0]=="Supported Power States" ) { $nvme_section="psheading" ;echo "</body></table><div class='title'><span>{$line}</span></div>"; $row = ['','',''] ; continue ;}
     if ($nvme && $info[0]=="Supported LBA Sizes" ) {
-      echo "</body></table><div class='title'>{$info[0]} {$info[1]} {$info[2]}</span></div>";
+      echo "</body></table></div><div class='title'>{$info[0]} {$info[1]} {$info[2]}</span></div>";
       $row = ['','',''];
       $nvme_section="lbaheading" ;
       continue ;

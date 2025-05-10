@@ -354,7 +354,7 @@ function array_slots() {
   $echo[] = "<form method='POST' action='/update.htm' target='progressFrame'>";
   $echo[] = "<input type='hidden' name='csrf_token' value='"._var($var,'csrf_token')."'>";
   $echo[] = "<input type='hidden' name='changeSlots' value='apply'>";
-  $echo[] = "<select class='narrow' name='SYS_ARRAY_SLOTS' onChange='devices.start();this.form.submit()'>";
+  $echo[] = "<select class='slots-amount' name='SYS_ARRAY_SLOTS' onChange='devices.start();this.form.submit()'>";
   if (_var($var,'mdNumDisks')=='0')
     $echo[] = "<option value='0'>none</option>";
   for ($n=$min; $n<=$max; $n++) {
@@ -374,7 +374,7 @@ function cache_slots($off,$pool,$min,$slots) {
   $echo[] = "<input type='hidden' name='csrf_token' value='"._var($var,'csrf_token')."'>";
   $echo[] = "<input type='hidden' name='changeSlots' value='apply'>";
   $echo[] = "<input type='hidden' name='poolName' value='$pool'>";
-  $echo[] = "<select class='narrow' name='poolSlots' onChange='devices.start();this.form.submit()'{$off}>";
+  $echo[] = "<select class='slots-amount' name='poolSlots' onChange='devices.start();this.form.submit()'{$off}>";
 //  if (_var($disks[$pool],'state')=='NEW_ARRAY' || str_contains(_var($diks[$pool],'state'),'NO_DEVICES')) {
 //    $option = _('none');
 //    $echo[] = "<option value='0'>$option</option>";

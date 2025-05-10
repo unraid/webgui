@@ -33,10 +33,22 @@ $disks		= parse_ini_file('state/disks.ini',true) ?? [];
 $nodisks	= checkDisks($disks) ? "" : "disabled";
 ?>
 
-<table class="unraid share_status">
-<thead><tr><td>_(Name)_</td><td>_(Comment)_</td><td>_(SMB)_</td><td>_(NFS)_</td><td>_(Storage)_</td><td>_(Size)_</td><td>_(Free)_</td></tr></thead>
-<tbody id="shareslist"></tbody>
-</table>
+<div class="TableContainer">
+    <table class="unraid share_status">
+        <thead>
+            <tr>
+                <td>_(Name)_</td>
+                <td>_(Comment)_</td>
+                <td>_(SMB)_</td>
+                <td>_(NFS)_</td>
+                <td>_(Storage)_</td>
+                <td>_(Size)_</td>
+                <td>_(Free)_</td>
+            </tr>
+        </thead>
+        <tbody id="shareslist"></tbody>
+    </table>
+</div>
 
 <form name="share_form" method="POST" action="<?=htmlspecialchars($path)?>/Share?name=">
 <input type="button" id="compute-shares" value="_(Compute All)_" onclick="$(this).prop('disabled',true);shareList('',-1)">
