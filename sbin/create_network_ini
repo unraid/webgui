@@ -146,7 +146,6 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
   echo "PROTOCOL:0=\"${PROTOCOL[$i]}\"" >>$INI
   echo "USE_DHCP:0=\"${USE_DHCP[$i]}\"" >>$INI
   echo "USE_GW4:0=\"${USE_GW4[$i]}\"" >>$INI
-  DATA=
   if [[ ${USE_DHCP[$i]} == yes ]]; then
     # get dhcp assigned ipv4 address & mask
     NET=($(ip -4 -br addr show scope global primary dev $IFACE | awk '{sub("/"," ",$3);print $3;exit}'))
@@ -162,7 +161,7 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
     echo "GATEWAY:0=\"${GATEWAY[$i]}\"" >>$INI
     echo "METRIC:0=\"${METRIC[$i]}\"" >>$INI
     # store static ipv4 assignment
-    [[ -n ${IPADDR[$i]} ]] && DATA="$IFACE ${IPADDR[$i]}/$(mask2cidr ${NETMASK[$i]}) ${METRIC[$i]:-0}"
+    echo "$(ip -4 -br addr show scope global primary dev $IFACE | awk '{$2="";print;exit}')" >>$STA
   fi
   echo "USE_DHCP6:0=\"${USE_DHCP6[$i]}\"" >>$INI
   echo "USE_GW6:0=\"${USE_GW6[$i]}\"" >>$INI
@@ -182,10 +181,9 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
     echo "GATEWAY6:0=\"${GATEWAY6[$i]}\"" >>$INI
     echo "METRIC6:0=\"${METRIC6[$i]}\"" >>$INI
     echo "PRIVACY6:0=\"\"" >>$INI
-    # store static ipv4 assignment
-    [[ -n ${IPADDR6[$i]} ]] && DATA="${DATA:-$IFACE} ${IPADDR6[$i]}/${NETMASK6[$i]} ${METRIC6[$i]:-0}"
+    # store static ipv6 assignment
+    echo "$(ip -6 -br addr show scope global primary -deprecated dev $IFACE | awk '{$2="";print;exit}')" >>$STA
   fi
-  [[ -n $DATA ]] && echo "$DATA" >>$STA
   echo "USE_MTU=\"${USE_MTU[$i]}\"" >>$INI
   echo "MTU=\"${MTU[$i]}\"" >>$INI
   if [[ -n ${VLANS[$i]} ]]; then
@@ -197,7 +195,6 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
       echo "PROTOCOL:$j=\"${PROTOCOL[$i,$j]}\"" >>$INI
       echo "USE_DHCP:$j=\"${USE_DHCP[$i,$j]}\"" >>$INI
       echo "USE_GW4:$j=\"${USE_GW4[$i,$j]}\"" >>$INI
-      DATA=
       if [[ ${USE_DHCP[$i,$j]} == yes ]]; then
         DEV=$IFACE.${VLANID[$i,$j]}
         # get dhcp assigned ipv4 address & cidr2mask
@@ -213,8 +210,8 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
         echo "NETMASK:$j=\"${NETMASK[$i,$j]}\"" >>$INI
         echo "GATEWAY:$j=\"${GATEWAY[$i,$j]}\"" >>$INI
         echo "METRIC:$j=\"${METRIC[$i,$j]}\"" >>$INI
-        # store static ipv6 assignment
-        [[ -n ${IPADDR[$i,$j]} ]] && DATA="$DEV ${IPADDR[$i,$j]}/$(mask2cidr ${NETMASK[$i,$j]}) ${METRIC[$i,$j]:-0}"
+        # store static ipv4 assignment
+        echo "$(ip -4 -br addr show scope global primary dev $DEV | awk '{$2="";print;exit}')" >>$STA
       fi
       echo "USE_DHCP6:$j=\"${USE_DHCP6[$i,$j]}\"" >>$INI
       echo "USE_GW6:$j=\"${USE_GW6[$i,$j]}\"" >>$INI
@@ -236,10 +233,8 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
         echo "METRIC6:$j=\"${METRIC6[$i,$j]}\"" >>$INI
         echo "PRIVACY6:$j=\"\"" >>$INI
         # store static ipv6 assignment
-        [[ -n ${IPADDR6[$i,$j]} ]] && DATA="${DATA:-$DEV} ${IPADDR6[$i,$j]}/${NETMASK6[$i,$j]} ${METRIC6[$i,$j]:-0}"
+        echo "$(ip -6 -br addr show scope global primary -deprecated dev $DEV | awk '{$2="";print;exit}')" >>$STA
       fi
-      # static IP assignments handled by rc.monitor
-      [[ -n $DATA ]] && echo "$DATA" >>$STA
     done
   else
     # interface without VLANs

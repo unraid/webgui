@@ -23,27 +23,24 @@ md5(){
 }
 
 switch(){
-  local n
+  local n status
   [[ -z $1 ]] && return 1
-  # state change should stay stable for at least 5 seconds
-  for n in {1..5}; do
-    [[ $(state $1) == $2 ]] && return 1 || sleep 1
+  status=3
+  # state should stay different for at least 3 seconds
+  for n in {1..3}; do
+    [[ $(state $1) != $2 ]] && ((status--))
+    sleep 1
   done
-  return 0
+  [[ $status -eq 0 ]]
 }
 
 init(){
-  PORT=(); IPV4=(); METRIC4=(); IPV6=(); METRIC6=(); STATE=();
+  PORT=(); STATE=();
   if [[ -r $FILE ]]; then
     # initialize values from file, maintained by 'create_network_ini'
     while IFS=$'\n' read -r ROW; do
-      ROW=($ROW)
-      PORT+=(${ROW[0]})
-      IPV4+=(${ROW[1]:--})
-      METRIC4+=(${ROW[2]:--})
-      IPV6+=(${ROW[3]:--})
-      METRIC6+=(${ROW[4]:--})
-      STATE+=($(state ${ROW[0]}))
+      PORT+=("$ROW")
+      STATE+=($(state ${ROW%% *}))
     done <$FILE
   fi
   MD5=$(md5)
@@ -52,19 +49,21 @@ init(){
 while :; do
   # monitor file content changes
   [[ $MD5 != $(md5) ]] && init
+  LAST=
   for i in ${!PORT[@]}; do
+    INT=${PORT[$i]%% *}
     # did interface state change?
-    if switch ${PORT[$i]} ${STATE[$i]}; then
-      STATE[$i]=$(state ${PORT[$i]})
-      if [[ ${STATE[$i]} == up ]]; then
-        [[ ${IPV4[$i]} != '-' ]] && ip addr add ${IPV4[$i]} metric ${METRIC4[$i]} dev ${PORT[$i]}
-        [[ ${IPV6[$i]} != '-' ]] && ip addr add ${IPV6[$i]} metric ${METRIC6[$i]} dev ${PORT[$i]}
-      elif [[ ${STATE[$i]} == down ]]; then
-        ip addr flush scope global dev ${PORT[$i]}
+    if switch $INT ${STATE[$i]}; then
+      NEW=$(state $INT)
+      STATE[$i]=$NEW
+      if [[ $NEW == up ]]; then
+        ip addr add dev ${PORT[$i]}
+      elif [[ $NEW == down && $INT != $LAST ]]; then
+        ip addr flush scope global dev $INT
       fi
     fi
+    LAST=$INT
   done
   # check every 3 seconds
   sleep 3
 done &
-disown %%
