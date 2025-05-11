@@ -14,6 +14,10 @@ if (isset($_COOKIE[session_name()])) {
   session_write_close();
 }
 
+// Include JS caching functions
+require_once '/usr/local/emhttp/webGui/include/JSCache.php';
+
+// Base whitelist of files
 $arrWhitelist = [
   '/webGui/styles/clear-sans-bold-italic.eot',
   '/webGui/styles/clear-sans-bold-italic.woff',
@@ -39,8 +43,15 @@ $arrWhitelist = [
   '/webGui/images/case-model.png',
   '/webGui/images/green-on.png',
   '/webGui/images/red-on.png',
-  '/webGui/images/yellow-on.png'
+  '/webGui/images/yellow-on.png',
+  '/webGui/images/UN-logotype-gradient.svg'
 ];
+
+// Add JS files from the unraid-components directory using cache
+$webComponentsDirectory = '/usr/local/emhttp/plugins/dynamix.my.servers/unraid-components/';
+$jsFiles = getCachedJSFiles($webComponentsDirectory);
+$arrWhitelist = array_merge($arrWhitelist, $jsFiles);
+
 if (in_array(preg_replace(['/\?v=\d+$/','/\?\d+$/'],'',$_SERVER['REQUEST_URI']),$arrWhitelist)) {
   // authorized
   http_response_code(200);

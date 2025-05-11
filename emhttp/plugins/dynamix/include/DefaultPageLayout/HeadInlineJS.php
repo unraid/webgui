@@ -477,32 +477,6 @@ function digits(number) {
   return 'three';
 }
 
-function openNotifier() {
-  $.post('/webGui/include/Notify.php',{cmd:'get',csrf_token:csrf_token},function(msg) {
-    $.each($.parseJSON(msg), function(i, notify){
-      $.jGrowl(notify.subject+'<br>'+notify.description,{
-        group: notify.importance,
-        header: notify.event+': '+notify.timestamp,
-        theme: notify.file,
-        sticky: true,
-        beforeOpen: function(e,m,o){if ($('div.jGrowl-notification').hasClass(notify.file)) return(false);},
-        afterOpen: function(e,m,o){if (notify.link) $(e).css('cursor','pointer');},
-        click: function(e,m,o){if (notify.link) location.replace(notify.link);},
-        close: function(e,m,o){$.post('/webGui/include/Notify.php',{cmd:'archive',file:notify.file,csrf_token:csrf_token});}
-      });
-    });
-  });
-}
-
-function closeNotifier() {
-  $.post('/webGui/include/Notify.php',{cmd:'get',csrf_token:csrf_token},function(msg) {
-    $.each($.parseJSON(msg), function(i, notify){
-      $.post('/webGui/include/Notify.php',{cmd:'archive',file:notify.file,csrf_token:csrf_token});
-    });
-    $('div.jGrowl').find('div.jGrowl-close').trigger('click');
-  });
-}
-
 function viewHistory() {
   location.replace('/Tools/NotificationsArchive');
 }
@@ -536,17 +510,7 @@ $(function() {
   }
   $('#'+tab).attr('checked', true);
   updateTime();
-  $.jGrowl.defaults.closeTemplate = '<i class="fa fa-close"></i>';
-  $.jGrowl.defaults.closerTemplate = '<?=$notify['position'][0]=='b' ? '<div class="bottom">':'<div class="top">'?>[ <?=_("close all notifications")?> ]</div>';
-  $.jGrowl.defaults.position = '<?=$notify['position']?>';
-  $.jGrowl.defaults.theme = '';
-  $.jGrowl.defaults.themeState = '';
-  $.jGrowl.defaults.pool = 10;
-<?if ($notify['life'] > 0):?>
-  $.jGrowl.defaults.life = <?=$notify['life']*1000?>;
-<?else:?>
-  $.jGrowl.defaults.sticky = true;
-<?endif;?>
+
   Shadowbox.setup('a.sb-enable', {modal:true});
 // add any pre-existing reboot notices
   $.post('/webGui/include/Report.php',{cmd:'notice'},function(notices){
