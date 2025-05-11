@@ -10,7 +10,7 @@
             <? $i = 0; ?>
             <? foreach ($pages as $page): ?>
                 <? if (!isset($page['Title'])) continue; ?>
-                <? $title = htmlspecialchars((string)$page['Title']); ?>
+                <? $title = processTitle($page['Title']); ?>
                 <? $tabId = "tab" . ($i+1); ?>
                 <button
                     role="tab"
@@ -32,7 +32,7 @@
             if (!isset($page['Title'])) {
                 continue;
             }
-            $title = htmlspecialchars((string)$page['Title']);
+            $title = processTitle($page['Title']);
             $tabId = "tab" . ($i+1);
             annotate($page['file']);
         ?>
@@ -40,9 +40,8 @@
             id="<?= $tabId ?>-panel"
             role="tabpanel"
             aria-labelledby="<?= $tabId ?>"
-            class="content"
+            class="tab-content content"
             tabindex="0"
-            style="display:none;"
         >
             <?= generatePanels($page, $path, $defaultIcon, $docroot) ?>
 

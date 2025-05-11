@@ -13,6 +13,27 @@ $tabbed = $display['tabs'] == 0 && count($pages) > 1;
 $contentInclude = $tabbed ? 'MainContentTabbed.php' : 'MainContentTabless.php';
 
 $defaultIcon = "<i class=\"icon-app PanelIcon\"></i>";
+
+/**
+ * Safely processes page titles by replacing PHP variables with their values
+ * 
+ * @param string $rawTitle The unprocessed title that may contain variable references
+ * @return string Processed title with variables substituted
+ */
+function processTitle($rawTitle) {
+    // Safely replace any variables in the title without eval
+    $title = htmlspecialchars((string)$rawTitle);
+    return preg_replace_callback(
+        '/\$([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)/',
+        function($matches) {
+            return isset($GLOBALS[$matches[1]]) ? 
+                   htmlspecialchars((string)$GLOBALS[$matches[1]]) : 
+                   '$'.$matches[1];
+        },
+        $title
+    );
+}
+
 function process_icon($icon, $docroot, $root) {
     global $defaultIcon;
     if (substr($icon, -4) == '.png') {
@@ -44,7 +65,8 @@ function process_icon($icon, $docroot, $root) {
  * @return string HTML for the Panel element
  */
 function generatePanel($pg, $path, $defaultIcon, $docroot, $useTabCookie = false) {
-    $panelTitle = htmlspecialchars($pg['Title']);
+    // Process title using our safe variable substitution function
+    $panelTitle = processTitle($pg['Title']);
     $icon = _var($pg, 'Icon', $defaultIcon);
     $icon = process_icon($icon, $docroot, $pg['root']);
 
@@ -85,7 +107,7 @@ function generatePanels($page, $path, $defaultIcon, $docroot, $useTabCookie = fa
     foreach ($pgs as $pg) {
         $output .= generatePanel($pg, $path, $defaultIcon, $docroot, $useTabCookie);
     }
-    return $output;
+    return '<div class="Panels">'.$output.'</div>';
 }
 
 /**

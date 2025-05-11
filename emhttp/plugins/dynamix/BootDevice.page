@@ -19,12 +19,27 @@ Tag="paw"
 $('#tab3').bind({click:function() {$('i.toggle').show('slow');}});
 <?endif;?>
 </script>
-
-<table class="unraid disk_status">
-<thead><tr><td>_(Device)_</td><td>_(Identification)_</td><td>_(Temp)_</td><td>_(Reads)_</td><td>_(Writes)_</td><td>_(Errors)_</td><td>_(FS)_</td><td>_(Size)_</td><td>_(Used)_</td><td>_(Free)_</td></tr></thead>
-<tbody id="boot_device">
-<?if (isset($disks['flash'])) echo "<tr><td colspan='10'></td></tr>";?>
-</tbody>
-</table>
-
+<div class="TableContainer">
+    <table class="unraid disk_status">
+    <thead>
+        <tr>
+            <td>_(Device)_</td>
+            <td>_(Identification)_</td>
+            <td>_(Temp)_</td>
+            <td>_(Reads)_</td>
+            <td>_(Writes)_</td>
+            <td>_(Errors)_</td>
+            <td>_(FS)_</td>
+            <td>_(Size)_</td>
+            <td>_(Used)_</td>
+            <td>_(Free)_</td>
+        </tr>
+    </thead>
+    <tbody id="boot_device">
+    <?if (isset($disks['flash'])) :?>
+        <tr><td colspan='10'></td></tr>
+    <?endif;?>
+    </tbody>
+    </table>
+</div>
 :boot_device_help:

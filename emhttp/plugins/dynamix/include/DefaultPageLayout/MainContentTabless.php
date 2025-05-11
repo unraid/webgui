@@ -8,11 +8,11 @@
     <div class="content">
         <? foreach ($pages as $page): ?>
             <? annotate($page['file']); ?>
-            <? includePageStylesheets($page); ?>
 
             <? if (isset($page['Title'])): ?>
                 <div class="title">
-                    <?= tab_title($page['Title'], $page['root'], _var($page, 'Tag', false)) ?>
+                    <? $title = processTitle($page['Title']); ?>
+                    <?= tab_title($title, $page['root'], _var($page, 'Tag', false)) ?>
                 </div>
             <? endif; ?>
 

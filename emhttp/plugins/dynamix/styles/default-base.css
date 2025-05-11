@@ -7,30 +7,15 @@ body {
     font-size: 1.3rem;
     color: var(--text-color);
     background-color: var(--background-color);
+    /* causes layout shift on scrollable pages */
+    /* height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto; */
     padding: 0;
     margin: 0;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-}
-@media (max-width: 1280px) {
-    #template {
-        min-width: 1260px;
-        max-width: 1260px;
-        margin: 0;
-    }
-}
-@media (min-width: 1281px) {
-    #template {
-        min-width: 1260px;
-        margin: 0 10px;
-    }
-}
-@media (min-width: 1921px) {
-    #template {
-        min-width: 1260px;
-        max-width: 1920px;
-        margin: 0 auto;
-    }
 }
 img {
     border: none;
@@ -39,6 +24,15 @@ img {
 }
 p {
     text-align: justify;
+}
+/**
+ * The markdown parser will often add <p> around links, scripts, and styles.
+ * Without this, spacing is off with essentially empty paragraphs.
+ */
+p:has(> link),
+p:has(> script),
+p:has(> style) {
+    margin: 0;
 }
 p.centered {
     text-align: left;
@@ -143,15 +137,17 @@ textarea,
     border-style: solid;
     border-color: var(--input-border-color);
     border-bottom-width: 1px;
-    padding: 4px 0;
+    padding: .5rem;
     text-indent: 0;
     min-height: 2rem;
     line-height: 2rem;
     outline: none;
-    width: 300px;
-    margin: 0 20px 0 0;
+    /* width: 300px; */
+    width: 100%;
+    margin: 0;
     box-shadow: none;
     border-radius: 0;
+    box-sizing: border-box;
 }
 input[type="button"],
 input[type="reset"],
@@ -280,11 +276,10 @@ select {
     -webkit-appearance: none;
     font-family: clear-sans;
     font-size: 1.3rem;
-    min-width: 166px;
-    max-width: 300px;
-    padding: 5px 8px 5px 0;
+    width: 100%;
+    padding: .5rem .8rem .5rem .5rem;
     text-indent: 0;
-    margin: 0 10px 0 0;
+    margin: 0;
     border: none;
     border-bottom: 1px solid var(--input-border-color);
     box-shadow: none;
@@ -344,8 +339,11 @@ select.slot {
     min-width: 44rem !important;
     max-width: 44rem !important;
 }
+select.slots-amount {
+    width: 7rem;
+}
 input.narrow {
-    width: 166px;
+    max-width: 166px;
 }
 input.trim {
     width: 76px;
@@ -442,7 +440,10 @@ a[href="/Tools/Downgrade"] .icon-update:before {
     margin-right: 4px;
 }
 div.title {
-    margin: 20px 0 32px 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    margin: 20px 0 0 0;
     padding: 8px 10px;
     clear: both;
     border-bottom: 1px solid var(--table-border-color);
@@ -450,6 +451,11 @@ div.title {
     letter-spacing: 1.8px;
     font-size: 1.4rem;
 }
+
+.title + .title {
+    margin-top: 0;
+}
+
 /* div.title span.left {
     font-size: 1.4rem;
 } */
@@ -466,15 +472,26 @@ div.title.shift {
     margin-top: -30px;
 }
 #menu {
-    position: sticky;
-    top: 0;
     width: 100%;
     display: grid;
-    grid-template-columns: auto max-content;
+    grid-template-columns: 1fr; /* Single column for mobile */
+    grid-template-rows: auto auto; /* Two rows stacked */
     z-index: 101;
 }
+
+/* For larger screens (desktop/tablet) switch to current horizontal layout */
+@media (min-width: 768px) {
+    #menu {
+        position: sticky;
+        top: 0;
+        grid-template-columns: auto max-content; /* Original layout */
+        grid-template-rows: auto; /* Single row */
+    }
+}
+
 .nav-tile {
-    height: 4rem;
+    height: auto; /* Allow height to adjust */
+    min-height: 4rem;
     line-height: 4rem;
     display: flex;
     padding: 0;
@@ -487,12 +504,23 @@ div.title.shift {
     overflow-y: hidden;
     scrollbar-width: thin;
 }
+
+/* For larger screens, maintain original behavior */
+@media (min-width: 768px) {
+    .nav-tile {
+        flex-wrap: nowrap;
+        height: 4rem;
+    }
+}
+
 .nav-tile::-webkit-scrollbar {
     height: 5px;
 }
-.nav-tile.right {
-    text-align: right;
-    justify-content: flex-end;
+@media (min-width: 768px) {
+    .nav-tile.right {
+        text-align: right;
+        justify-content: flex-end;
+    }
 }
 .nav-item,
 .nav-user {
@@ -561,24 +589,51 @@ div.title.shift {
     vertical-align: middle;
     padding-bottom: 2px;
 }
+#displaybox {
+    width: 100%;
+    margin: 0 auto;
+    padding: 1rem 1rem 4rem;
+    box-sizing: border-box;
+}
+
+.Theme--sidebar #displaybox {
+    padding-left: 8rem;
+}
+
+.Theme--width-boxed #displaybox {
+    max-width: 1920px;
+}
+
+@media (min-width: 1921px) {
+    .Theme--nav-top.Theme--width-unlimited #displaybox {
+        padding: 0 2rem;
+    }
+}
+
 #clear {
     clear: both;
 }
 #footer {
     box-sizing: border-box;
-    position: fixed;
-    bottom: 0;
-    left: 0;
+    position: relative;
     color: var(--footer-text);
     background-color: var(--footer-background-color);
     padding: .5rem 1rem;
     width: 100%;
     text-align: center;
-    z-index: 10000;
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 1rem;
+    margin-top: auto;
+}
+@media (min-width: 768px) {
+    #footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        z-index: 10000;
+    }
 }
 #countdown {
     margin: 0 auto;
@@ -761,6 +816,25 @@ div.title.shift {
     );
     background: linear-gradient(90deg, var(--gray-400) 0, var(--gray-200));
 }
+
+.TableContainer {
+    overflow-x: scroll;
+    -webkit-overflow-scrolling: touch;
+
+    table {
+        min-width: 900px;
+    }
+}
+
+.TableContainer--widest {
+    overflow-x: scroll;
+    -webkit-overflow-scrolling: touch;
+
+    table {
+        min-width: 1345px;
+    }
+}
+
 table {
     border-collapse: collapse;
     border-spacing: 0;
@@ -1036,10 +1110,13 @@ span.cpu-speed {
 }
 span.status {
     font-size: 1.4rem;
+    display: inline-block;
+    margin-left: auto;
 }
 span.status.vhshift {
     margin-top: 0;
-    margin-right: -9px;
+    /* leaving for reference, but should likely not be needed anymore */
+    /* margin-right: -9px; */
 }
 span.status.vshift {
     margin-top: -16px;
@@ -1162,29 +1239,34 @@ a.list {
     display: flex;
     flex-direction: row;
     align-items: center;
+    gap: .5rem;
 }
 
 .tabs {
     justify-content: space-between;
 }
 
+.tabs-container {
+    overflow-x: scroll;
+    width: 100%;
+}
+
 .tabs button[role="tab"] {
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;
-    background-color: var(--radio-background-color);
+    background-color: transparent;
     border: 1px solid var(--disabled-input-border-color);
     border-radius: 0;
     border-top-left-radius: 6px;
     border-top-right-radius: 6px;
     border-bottom: 1px solid transparent;
-    color: var(--gray-300);
+    color: var(--text-color);
     font-weight: normal;
     font-family: inherit;
     font-size: 1.4rem;
     letter-spacing: 1.8px;
-    margin-right: 4px;
-    margin-bottom: 0;
+    margin: 0;
     padding: .75rem 1rem;
     min-width: 0;
     box-shadow: none;
@@ -1192,75 +1274,84 @@ a.list {
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
     vertical-align: middle;
     line-height: 1.0;
     cursor: pointer;
     transition: border-color 0.2s, color 0.2s, background 0.2s, opacity 0.2s;
     text-transform: none;
     background-image: none;
-    opacity: .75;
+    opacity: .5;
 }
-.tabs button[role="tab"] > .tab-icon {
-    margin-right: 8px;
-    display: inline-flex;
-    align-items: center;
-}
+
 .tabs button[role="tab"]:focus,
 .tabs button[role="tab"]:hover,
 .tabs button[role="tab"][aria-selected="true"] {
-    background: transparent;
+    background-color: transparent;
     color: var(--text-color);
     border-color: var(--brand-orange);
     border-bottom: 1px solid transparent;
     opacity: 1;
 }
-.tabs button[role="tab"]:last-child {
-    margin-right: 0;
+
+.tab-content {
+    display: none;
+
+    form {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        width: 100%;
+        max-width: 80rem;
+        margin: 0 auto;
+        padding-top: 1rem;
+    }
 }
-div.Panel {
+
+.Panels {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    column-gap: 3rem;
+    row-gap: 2rem;
+    margin-top: 2rem;
+    box-sizing: border-box;
+}
+.Panel {
+    position: relative;
     text-align: center;
-    float: left;
-    margin: 0 0 30px 10px;
-    padding-right: 50px;
-    height: 8rem;
+    box-sizing: border-box;
+    background-color: transparent;
+
+    a {
+        position: relative;
+        text-decoration: none;
+        padding: 1rem;
+        display: grid;
+        gap: 1rem;
+        align-items: flex-start;
+        justify-content: center;
+    }
+
+    &:hover,
+    &:focus {
+        .PanelText {
+            text-decoration: underline;
+        }
+    }
 }
-div.Panel a {
-    text-decoration: none;
-}
-div.Panel span {
-    height: 42px;
-    display: block;
-}
-div.Panel:hover .PanelText {
-    text-decoration: underline;
-}
-div.Panel img.PanelImg {
+.PanelImg {
     width: auto;
-    max-width: 32px;
-    height: 32px;
+    max-width: 33px;
+    height: 33px;
+    margin: 0 auto;
 }
-div.Panel i.PanelIcon {
-    font-size: 32px;
+.PanelIcon {
     color: var(--text-color);
+    font-size: 32px; /* Results in height of 33px... */
+    line-height: 1;
 }
-div.user-list {
-    float: left;
-    padding: 10px;
-    margin-right: 10px;
-    margin-bottom: 24px;
-    border: 1px solid var(--border-color);
-    border-radius: 5px;
-    line-height: 2rem;
-    height: 10rem;
-    width: 10rem;
-    background-color: var(--mild-background-color);
-}
-div.user-list img {
-    width: auto;
-    max-width: 48px;
-    height: 48px;
-    margin-bottom: 16px;
-}
+
 div.up {
     margin-top: -30px;
     border: 1px solid var(--border-color);
@@ -1365,20 +1456,25 @@ iframe#progressFrame {
 }
 dl {
     margin: 0;
-    padding-left: 12px;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
     line-height: 2.6rem;
 }
+dl + dl {
+    margin-top: 1rem;
+}
 dt {
-    width: 35%;
-    clear: left;
-    float: left;
-    font-weight: normal;
-    text-align: right;
-    margin-right: 4rem;
+    font-weight: 600;
+    text-align: left;
 }
 dd {
-    margin-bottom: 12px;
-    white-space: nowrap;
+    /* display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem; */
+    margin: 0 0 1.5rem 0;
+    white-space: normal;
 }
 dd p {
     margin: 0 0 4px 0;
@@ -1386,15 +1482,47 @@ dd p {
 dd blockquote {
     padding-left: 0;
 }
+
+/* Responsive styles for definition lists */
+@media (min-width: 769px) {
+    dl {
+        grid-template-columns: 35% 1fr;
+        gap: 1rem 2rem;
+    }
+    dt {
+        text-align: right;
+    }
+    dd {
+        margin: 0;
+        white-space: nowrap;
+    }
+}
+
+/**
+ * Force remove any small empty space elements.
+ * Necessary evil to prevent needing to rewrite .page file parsing and allow for a more responsive page.
+ */
+dt, dd, p, div, span {
+    &:empty {
+        display: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        height: 0 !important;
+        min-height: 0 !important;
+    }
+}
+
 blockquote {
-    width: 90%;
-    margin: 10px auto;
+    width: 100%;
+    max-width: 160ch;
+    margin: 1rem auto;
     text-align: left;
-    padding: 4px 20px;
+    padding: .5rem 2rem;
     border-top: 2px solid var(--blue-200);
     border-bottom: 2px solid var(--blue-200);
     color: var(--blockquote-text-color);
     background-color: var(--blue-100);
+    box-sizing: border-box;
 }
 blockquote.ontop {
     margin-top: -20px;
@@ -1801,7 +1929,8 @@ span#wlan0 {
     .nav-tile {
         height: auto;
         line-height: 1;
-        display: block;
+        display: flex;
+        flex-direction: column;
         padding: 0;
         margin: 0;
         font-size: 1.2rem;
@@ -1966,13 +2095,8 @@ span#wlan0 {
     }
 
     .usage-bar {
-        float: unset;
-        position: fixed;
-        top: 64px;
-        left: 300px;
-        height: 2.2rem;
-        line-height: 2.2rem;
-        width: 11rem;
+        position: relative;
+        width: 6.4rem;
         margin: 0;
         padding: 0;
     }
@@ -2104,100 +2228,10 @@ span#wlan0 {
         background-color: var(--dashboard-background-color);
     }
 
-    label + .content {
-        margin-top: 64px;
-    }
-
-    div.tabs {
-        background-color: var(--background-color);
-    }
-
-    div.tab {
-        margin-top: 23px;
-    }
-
-    div.tab [type="radio"] + label {
-        padding: 10px;
-        border-top-left-radius: 12px;
-        border-top-right-radius: 12px;
-        background-color: var(--border-color);
-        color: var(--gray-300);
-        border: 1px solid var(--gray-500);
-        border-bottom: none;
-    }
-
-    div.tab [type="radio"] + label:hover {
-        border-color: var(--alt-border-color);
-    }
-
-    div.tab [type="radio"]:checked + label {
-        cursor: default;
-        background-color: transparent;
-        border-bottom: none;
-        border-color: var(--alt-border-color);
-        opacity: 1;
-        color: var(--text-color);
-    }
-
-    div.tab [type="radio"] + label img {
-        display: none;
-    }
-
-    div.Panel {
-        width: 25%;
-        height: auto;
-        margin: 0;
-        padding: 5px;
-        border-right: var(--table-alt-border-color) 1px solid;
-        border-bottom: 1px solid var(--table-alt-border-color);
-        box-sizing: border-box;
-    }
-
-    div.Panel:hover {
-        background-color: var(--mild-background-color);
-    }
-
-    div.Panel a {
-        display: flex;
-        justify-content: start;
-        align-items: center;
-        gap: 32px;
-    }
-
-    div.Panel span {
-        height: auto;
-    }
-
-    div.Panel br,
     .vmtemplate br {
         display: none;
     }
 
-    div.Panel img.PanelImg {
-        float: left;
-        margin: 10px;
-    }
-
-    div.Panel i.PanelIcon {
-        float: left;
-        color: var(--text-color);
-        margin: 10px;
-    }
-
-    div.Panel .PanelText {
-        font-size: 1.4rem;
-        padding-top: 0;
-        text-align: center;
-    }
-
-    div.user-list {
-        background-color: transparent;
-        border: 1px solid var(--table-alt-border-color);
-    }
-
-    div.user-list:hover {
-        background-color: var(--opac-background-color);
-    }
     div.vmheader {
         display: block;
         clear: both;
@@ -2255,69 +2289,5 @@ span#wlan0 {
     }
     label.checkbox input:checked ~ .checkmark {
         background-color: var(--brand-orange);
-    }
-}
-
-#displaybox {
-    padding: 0 1rem 4rem;
-}
-
-/* Theme width styles */
-.Theme--width-boxed #displaybox {
-    min-width: 1280px;
-    max-width: 1280px;
-    margin: 0;
-}
-
-.Theme--width-unlimited #displaybox {
-    min-width: 1280px;
-    margin: 0;
-}
-
-/* Media queries for different screen sizes */
-@media (max-width: 1280px) {
-    .Theme--width-boxed #displaybox {
-        min-width: 1280px;
-        max-width: 1280px;
-        margin: 0;
-    }
-    
-    .Theme--width-unlimited #displaybox {
-        min-width: 1280px;
-        margin: 0;
-    }
-}
-
-@media (min-width: 1281px) {
-    .Theme--width-boxed #displaybox {
-        min-width: 1280px;
-        max-width: 1920px;
-        margin: 0 auto;
-    }
-    
-    .Theme--width-unlimited #displaybox {
-        min-width: 1280px;
-        margin: 0 auto;
-    }
-    
-    .Theme--nav-top.Theme--width-unlimited #displaybox {
-        margin: 0 10px;
-    }
-}
-
-@media (min-width: 1921px) {
-    .Theme--width-boxed #displaybox {
-        min-width: 1280px;
-        max-width: 1920px;
-        margin: 0 auto;
-    }
-    
-    .Theme--width-unlimited #displaybox {
-        min-width: 1280px;
-        margin: 0 auto;
-    }
-    
-    .Theme--nav-top.Theme--width-unlimited #displaybox {
-        margin: 0 20px;
     }
 }

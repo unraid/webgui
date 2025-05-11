@@ -10,11 +10,6 @@
 .Theme--white:root {
     --dashstats-pie-after-bg-color: #f7f9f9;
 }
-
-div.frame {
-    padding-top: 1rem;
-    padding-bottom: 5rem;
-}
 div.tile,
 i.tile {
     display: none;
@@ -23,9 +18,9 @@ div#iframe-popup {
     display: none;
     -webkit-overflow-scrolling: touch;
 }
-div.last {
+/* div.last {
     padding-bottom: 12px;
-}
+} */
 div.leftside {
     float: left;
     width: 66%;
@@ -366,8 +361,18 @@ table.snapshot {
 }
 div.grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(580px, 1fr));
-    column-gap: 20px;
+    grid-template-columns: 1fr; /* 1 column by default (mobile) */
+    gap: 20px;
+}
+@media (min-width: 768px) {
+    div.grid {
+        grid-template-columns: repeat(2, 1fr); /* 2 columns for medium screens */
+    }
+}
+@media (min-width: 1600px) {
+    div.grid {
+        grid-template-columns: repeat(3, 1fr); /* 3 columns for big screens */
+    }
 }
 div.pie {
     height: 92px;
