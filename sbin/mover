@@ -27,7 +27,9 @@ CFGPATH="/boot/config/shares"
 DEBUGGING=""
 
 move() {
-  /usr/bin/find "$1" -depth 2>/dev/null | /usr/libexec/unraid/move $DEBUGGING
+  find "$1" -depth 2>/dev/null | /usr/libexec/unraid/move $2 $DEBUGGING
+  # second pass to clean up leftover empty directories
+  find "$1" -depth 2>/dev/null | /usr/libexec/unraid/move $2 $DEBUGGING
 }
 
 start() {
@@ -104,7 +106,7 @@ empty() {
   for SHAREPATH in /mnt/$DISK/* ; do
     SHARE=$(basename "$SHAREPATH")
     if [[ -d "$SHAREPATH" && -f "$CFGPATH/$SHARE.cfg" ]]; then
-      find "$SHAREPATH" -depth 2>/dev/null | /usr/libexec/unraid/move -e $DEBUGGING
+      move "$SHAREPATH" "-e"
     fi
   done
 
