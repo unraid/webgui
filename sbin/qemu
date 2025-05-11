@@ -7,7 +7,7 @@ if [ $DISABLE == "yes" ]
     exit 1 ;
 fi 
 PCI="no"
-#PCI=$(/usr/local/emhttp/plugins/dynamix.vm.manager/scripts/pcicheck.php "$@");
+PCI=$(/usr/local/emhttp/plugins/dynamix.vm.manager/scripts/pcicheck.php "$@");
 if [ $PCI == "yes" ]
     then 
     printf '\n%s\n' "Start/autostart is disabled PCI Change detected." >&2 ## Send message to stderr.
