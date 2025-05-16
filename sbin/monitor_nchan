@@ -16,7 +16,7 @@ nchan_idle(){
   idle=3
   for n in {1..3}; do
     subs=$(nchan_subs)
-    [[ -z $subs || $subs -eq 0 ]] && ((idle--))
+    [[ -z $subs || $subs =~ ^[0-9]+$ && $subs -eq 0 ]] && ((idle--))
     sleep 3
   done
   [[ $idle -eq 0 ]]

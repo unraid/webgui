@@ -161,7 +161,8 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
     echo "GATEWAY:0=\"${GATEWAY[$i]}\"" >>$INI
     echo "METRIC:0=\"${METRIC[$i]}\"" >>$INI
     # store static ipv4 assignment
-    echo "$(ip -4 -br addr show scope global primary dev $IFACE | awk '{$2="";print;exit}')" >>$STA
+    IPV4="$(ip -4 -br addr show scope global primary dev $IFACE | awk '{$2="";print;exit}')"
+    [[ -n $IPV4 ]] && echo "$IPV4" >>$STA
   fi
   echo "USE_DHCP6:0=\"${USE_DHCP6[$i]}\"" >>$INI
   echo "USE_GW6:0=\"${USE_GW6[$i]}\"" >>$INI
@@ -182,7 +183,8 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
     echo "METRIC6:0=\"${METRIC6[$i]}\"" >>$INI
     echo "PRIVACY6:0=\"\"" >>$INI
     # store static ipv6 assignment
-    echo "$(ip -6 -br addr show scope global primary -deprecated dev $IFACE | awk '{$2="";print;exit}')" >>$STA
+    IPV6="$(ip -6 -br addr show scope global primary -deprecated dev $IFACE | awk '{$2="";print;exit}')"
+    [[ -n $IPV6 ]] && echo "$IPV6" >>$STA
   fi
   echo "USE_MTU=\"${USE_MTU[$i]}\"" >>$INI
   echo "MTU=\"${MTU[$i]}\"" >>$INI
@@ -211,7 +213,8 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
         echo "GATEWAY:$j=\"${GATEWAY[$i,$j]}\"" >>$INI
         echo "METRIC:$j=\"${METRIC[$i,$j]}\"" >>$INI
         # store static ipv4 assignment
-        echo "$(ip -4 -br addr show scope global primary dev $DEV | awk '{$2="";print;exit}')" >>$STA
+        IPV4="$(ip -4 -br addr show scope global primary dev $DEV | awk '{$2="";print;exit}')"
+        [[ -n $IPV4 ]] && echo "$IPV4" >>$STA
       fi
       echo "USE_DHCP6:$j=\"${USE_DHCP6[$i,$j]}\"" >>$INI
       echo "USE_GW6:$j=\"${USE_GW6[$i,$j]}\"" >>$INI
@@ -233,7 +236,8 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
         echo "METRIC6:$j=\"${METRIC6[$i,$j]}\"" >>$INI
         echo "PRIVACY6:$j=\"\"" >>$INI
         # store static ipv6 assignment
-        echo "$(ip -6 -br addr show scope global primary -deprecated dev $DEV | awk '{$2="";print;exit}')" >>$STA
+        IPV6="$(ip -6 -br addr show scope global primary -deprecated dev $DEV | awk '{$2="";print;exit}')"
+        [[ -n $IPV6 ]] && echo "$IPV6" >>$STA
       fi
     done
   else
