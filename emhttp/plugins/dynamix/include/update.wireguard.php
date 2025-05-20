@@ -33,14 +33,14 @@ $t1 = '10'; // 10 sec timeout
 $t2 = '15'; // 15 sec timeout
 
 function isPort($dev) {
-  return file_exists("/sys/class/net/$dev");
+  return file_exists("/sys/class/net/".escapeshellarg($dev));
 }
 
 function carrier($dev, $loop=3) {
   if (!isPort($dev)) return false;
   try {
     for ($n=0; $n<$loop; $n++) {
-      if (@file_get_contents("/sys/class/net/$dev/carrier") == 1) return true;
+      if (@file_get_contents("/sys/class/net/".escapeshellarg($dev)."/carrier") == 1) return true;
       if ($loop > 1) sleep(1);
     }
   } catch (Exception $e) {
@@ -52,9 +52,9 @@ function carrier($dev, $loop=3) {
 function thisNet() {
   $dev = isPort('br0') ? 'br0' : (isPort('bond0') ? 'bond0' : 'eth0');
   if (!carrier($dev) && carrier('wlan0', 1)) $dev = 'wlan0';
-  $ip4 = exec("ip -4 -br addr show dev $dev | awk '{print \$3;exit}'");
-  $net = exec("ip -4 route show $ip4 dev $dev | awk '{print \$1;exit}'");
-  $gw  = exec("ip -4 route show default dev $dev | awk '{print \$3;exit}'");
+  $ip4 = exec("ip -4 -br addr show dev ".escapeshellarg($dev)." | awk '{print $3;exit}'");
+  $net = exec("ip -4 route show ".escapeshellarg($ip4)." dev ".escapeshellarg($dev)." | awk '{print $1;exit}'");
+  $gw  = exec("ip -4 route show default dev ".escapeshellarg($dev)." | awk '{print $3;exit}'");
   return [$dev, $net, $gw];
 }
 
@@ -105,15 +105,15 @@ function wgState($vtun, $state, $type=0) {
   global $t1, $etc;
   $tmp = '/tmp/wg-quick.tmp';
   $log = '/var/log/wg-quick.log';
-  exec("timeout $t1 wg-quick $state $vtun 2>$tmp");
+  exec("timeout $t1 wg-quick ".escapeshellarg($state).' '.escapeshellarg($vtun)." 2>$tmp");
   file_put_contents($log, "wg-quick $state $vtun\n".file_get_contents($tmp)."\n", FILE_APPEND);
   if ($type == 8) {
     // make VPN tunneled access for Docker containers only
-    $table = exec("grep -Pom1 'fwmark \K[\d]+' $tmp");
-    $route = implode(ipv4Addr(exec("grep -Pom1 '^Address=\K.+$' $etc/$vtun.conf")));
+    $table = exec("grep -Pom1 'fwmark \\K[\\d]+' ".escapeshellarg($tmp));
+    $route = implode(ipv4Addr(exec("grep -Pom1 '^Address=\\K.+$' ".escapeshellarg("$etc/$vtun.conf"))));
     sleep(1);
-    exec("ip -4 route flush table $table");
-    exec("ip -4 route add $route dev $vtun table $table");
+    exec("ip -4 route flush table ".escapeshellarg($table));
+    exec("ip -4 route add ".escapeshellarg($route)." dev ".escapeshellarg($vtun)." table ".escapeshellarg($table));
   }
   delete_file($tmp);
 }
@@ -136,7 +136,7 @@ function normalize(&$id) {
 }
 
 function dockerNet($vtun) {
-  return empty(exec("docker network ls --filter name='$vtun' --format='{{.Name}}'"));
+  return empty(exec("docker network ls --filter name=".escapeshellarg($vtun)." --format='{{.Name}}'"));
 }
 
 function addDocker($vtun) {
@@ -144,15 +144,15 @@ function addDocker($vtun) {
   $error = false;
   [$index,$network] = newNet($vtun);
   if ($dockerd && dockerNet($vtun)) {
-    exec("docker network create -o 'com.docker.network.driver.mtu'='1420' $vtun --subnet=$network 2>/dev/null");
+    exec("docker network create -o 'com.docker.network.driver.mtu'='1420' ".escapeshellarg($vtun)." --subnet=".escapeshellarg($network)." 2>/dev/null");
     $error = dockerNet($vtun);
   }
   if (!$error && !isNet($network)) {
     [$device, $thisnet, $gateway] = thisNet();
     if (!empty($device) && !empty($thisnet) && !empty($gateway)) {
-      exec("ip -4 rule add from $network table $index");
-      exec("ip -4 route add unreachable default table $index");
-      exec("ip -4 route add $thisnet via $gateway dev $device table $index");
+      exec("ip -4 rule add from ".escapeshellarg($network)." table ".escapeshellarg($index));
+      exec("ip -4 route add unreachable default table ".escapeshellarg($index));
+      exec("ip -4 route add ".escapeshellarg($thisnet)." via ".escapeshellarg($gateway)." dev ".escapeshellarg($device)." table ".escapeshellarg($index));
     }
   }
   return $error;
@@ -163,12 +163,12 @@ function delDocker($vtun) {
   $error = false;
   [$index,$network] = newNet($vtun);
   if ($dockerd && !dockerNet($vtun)) {
-    exec("docker network rm $vtun 2>/dev/null");
+    exec("docker network rm ".escapeshellarg($vtun)." 2>/dev/null");
     $error = !dockerNet($vtun);
   }
   if (!$error && isNet($network)) {
-    exec("ip -4 route flush table $index");
-    exec("ip -4 rule del from $network table $index");
+    exec("ip -4 route flush table ".escapeshellarg($index));
+    exec("ip -4 rule del from ".escapeshellarg($network)." table ".escapeshellarg($index));
   }
   return $error;
 }
@@ -250,7 +250,7 @@ function createPeerFiles($vtun) {
       $list[] = "$vtun: peer $id (".($peer[1][0] == '#' ? substr($peer[1],1) : _('no name')).')';
       file_put_contents($cfg, $cfgnew);
       $png = str_replace('.conf', '.png', $cfg);
-      exec("qrencode -t PNG -r $cfg -o $png");
+      exec("qrencode -t PNG -r ".escapeshellarg($cfg)." -o ".escapeshellarg($png));
     }
   }
   // store the peer names which are updated
@@ -397,7 +397,7 @@ $default6 = '::/0';
 switch (_var($_POST,'#cmd')) {
 case 'keypair':
   $private = exec("wg genkey");
-  $public = exec("wg pubkey <<<'$private'");
+  $public = exec("wg pubkey <<<".escapeshellarg($private));
   echo $private."\0".$public;
   break;
 case 'presharedkey':
@@ -453,8 +453,8 @@ case 'toggle':
   case 'start':
     [$index, $network] = newNet($vtun);
     if (!isNet($network)) {
-      exec("ip -4 rule add from $network table $index");
-      exec("ip -4 route add unreachable default table $index");
+      exec("ip -4 rule add from ".escapeshellarg($network)." table ".escapeshellarg($index));
+      exec("ip -4 route add unreachable default table ".escapeshellarg($index));
     }
     wgState($vtun, 'up', _var($_POST,'#type'));
     echo status($vtun) ? 0 : 1;
@@ -463,7 +463,7 @@ case 'toggle':
   break;
 case 'ping':
   $addr = $_POST['#addr'];
-  echo exec("ping -qc1 -W4 $addr | grep -Pom1 '1 received'");
+  echo exec("ping -qc1 -W4 ".escapeshellarg($addr)." | grep -Pom1 '1 received'");
   break;
 case 'public':
   $ip = _var($_POST,'#ip');
@@ -518,7 +518,7 @@ case 'import':
       }
     }
   }
-  if (_var($import,'PrivateKey:0') && !_var($import,'PublicKey:0')) $import['PublicKey:0'] = exec("wg pubkey <<<'"._var($import,'PrivateKey:0')."'");
+  if (_var($import,'PrivateKey:0') && !_var($import,'PublicKey:0')) $import['PublicKey:0'] = exec("wg pubkey <<<".escapeshellarg(_var($import,'PrivateKey:0')));
   // delete ListenPort and let WG generate a random local port
   unset($import['ListenPort:0']);
   $import['UPNP:0'] = 'no';
@@ -570,11 +570,11 @@ case 'upnp':
     $link = _var($_POST,'#link');
     $xml = @file_get_contents($upnp) ?: '';
     if ($xml) {
-      exec("timeout $t1 stdbuf -o0 upnpc -u $xml -m $link -l 2>&1|grep -qm1 'refused'",$output,$code);
+      exec("timeout $t1 stdbuf -o0 upnpc -u ".escapeshellarg($xml)." -m ".escapeshellarg($link)." -l 2>&1|grep -qm1 'refused'",$output,$code);
       if ($code != 1) $xml = '';
     }
     if (!$xml) {
-      exec("timeout $t2 stdbuf -o0 upnpc -m $link -l 2>/dev/null|grep -Po 'desc: \K.+'",$desc);
+      exec("timeout $t2 stdbuf -o0 upnpc -m ".escapeshellarg($link)." -l 2>/dev/null|grep -Po 'desc: \\K.+'",$desc);
       foreach ($desc as $url) if ($url && strpos($url,$gw) !== false) {$xml = $url; break;}
     }
   } else $xml = "";
@@ -588,12 +588,12 @@ case 'upnpc':
   $link = _var($_POST,'#link');
   $ip   = _var($_POST,'#ip');
   if (_var($_POST,'#wg') == 'active') {
-    exec("timeout $t1 stdbuf -o0 upnpc -u $xml -m $link -l 2>/dev/null|grep -Po \"^(ExternalIPAddress = \K.+|.+\KUDP.+>$ip:[0-9]+ 'WireGuard-$vtun')\"", $upnp);
+    exec("timeout $t1 stdbuf -o0 upnpc -u ".escapeshellarg($xml)." -m ".escapeshellarg($link)." -l 2>/dev/null|grep -Po \"^(ExternalIPAddress = \\K.+|.+\\KUDP.+>$ip:[0-9]+ 'WireGuard-$vtun')\"", $upnp);
     [$addr, $upnp] = array_pad($upnp, 2, '');
     [$type, $rule] = my_explode(' ', $upnp);
-    echo $rule ? "UPnP: $addr:$rule/$type" : _("UPnP: forwarding not set");
+    echo $rule ? "UPnP: $addr:$rule/$type" : _('UPnP: forwarding not set');
   } else {
-    echo _("UPnP: tunnel is inactive");
+    echo _('UPnP: tunnel is inactive');
   }
   break;
 }
