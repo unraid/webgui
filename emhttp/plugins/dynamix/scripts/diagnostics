@@ -361,7 +361,9 @@ if ($cli) {
   echo "Starting diagnostics collection... ";
   $server = isset($var['NAME']) ? str_replace(' ','_',strtolower($var['NAME'])) : 'tower';
   $date = date('Ymd-Hi');
-  $diag = "$server-diagnostics-$date";
+
+  $safeMode = (_var($var,'safeMode') == 'yes') ? "-safemode" : "";
+  $diag = "$server$safemode-diagnostics-$date";
   $zip = "/boot/logs/$diag.zip";
 } else {
   // script is called from GUI
@@ -428,11 +430,6 @@ foreach (glob("$path/*.ini") as $file) {
   $ini = basename($file,".ini");
   // skip users file in anonymized mode
   if ($all || $ini != "users") file_put_contents("/$diag/system/vars.txt",preg_replace(["/\n/","/^Array/"],["\r\n",$ini],anonymize(print_r(parse_ini_file($file,true),true),1)),FILE_APPEND);
-}
-
-// check for safe mode
-if (_var($var,'safeMode') == 'yes') {
-  file_put_contents("/$diag/system/safemode.txt", "Unraid safe mode enabled\r\n");
 }
 
 // Create loads.txt
