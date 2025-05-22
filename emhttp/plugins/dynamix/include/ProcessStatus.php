@@ -23,7 +23,8 @@ case 'crontab':
   $pid = file_exists("/boot/config/plugins/{$_POST['plugin']}/{$_POST['job']}.cron");
   break;
 case 'preclear_disk':
-  $pid = exec("ps -o pid,command --ppid 1|awk -F/ ".escapeshellarg("/$name .*{$_POST['device']}$/{print $1;exit}"));
+  $device = escapeshellarg($_POST['device']);
+  $pid = exec("ps -o pid,command --ppid 1|awk -F/ ".escapeshellarg("/$name .*{$device}$/{print $1;exit}"));
   break;
 case is_numeric($name):
   $pid = exec("lsof -i:$name -Pn|awk '/\(LISTEN\)/{print $2;exit}'");

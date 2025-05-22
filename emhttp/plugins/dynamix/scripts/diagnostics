@@ -84,7 +84,8 @@ function newline($file) {
 }
 
 function shareDisks($share) {
-  return str_replace(',',', ',exec("shopt -s dotglob; getfattr --no-dereference --absolute-names --only-values -n system.LOCATIONS ".escapeshellarg("/mnt/user/$share")." 2>/dev/null") ?: "");
+  $share_path = "/mnt/user/$share";
+  return str_replace(',',', ',exec("shopt -s dotglob; getfattr --no-dereference --absolute-names --only-values -n system.LOCATIONS ".escapeshellarg($share_path)." 2>/dev/null") ?: "");
 }
 
 function anonymize($text, $select) {
