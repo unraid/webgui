@@ -38,7 +38,7 @@ class UnraidUpdateCancel
       shell_exec("mv -f /boot/previous/* /boot");
       unlink($this->PLG_BOOT);
       unlink($this->PLG_VAR);
-      symlink(escapeshellarg("{$this->USR_LOCAL_PLUGIN_UNRAID_PATH}/{$this->PLG_FILENAME}"), $this->PLG_VAR);
+      symlink("{$this->USR_LOCAL_PLUGIN_UNRAID_PATH}/{$this->PLG_FILENAME}", $this->PLG_VAR);
 
       // Restore README.md by echoing the content into the file
       $readmeFile = "{$this->USR_LOCAL_PLUGIN_UNRAID_PATH}/README.md";
