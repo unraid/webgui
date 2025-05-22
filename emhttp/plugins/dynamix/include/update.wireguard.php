@@ -92,7 +92,7 @@ function host($ip) {
 }
 
 function isNet($network) {
-  return !empty(exec("ip rule | grep -Pom1 'from $network'"));
+  return !empty(exec("ip rule | grep -Pom1 'from ".escapeshellarg($network)."'"));
 }
 
 function newNet($vtun) {
@@ -119,7 +119,9 @@ function wgState($vtun, $state, $type=0) {
 }
 
 function status($vtun) {
-  return in_array($vtun, explode(" ", exec("wg show interfaces")));
+  $interfaces = exec("wg show interfaces");
+  $interfaces_array = array_filter(explode(" ", $interfaces));
+  return in_array($vtun, $interfaces_array);
 }
 
 function vtun() {
@@ -176,7 +178,10 @@ function delDocker($vtun) {
 function delPeer($vtun, $id='') {
   global $etc, $name;
   $dir = "$etc/peers";
-  foreach (glob("$dir/peer-$name-$vtun-$id*", GLOB_NOSORT) as $peer) delete_file($peer);
+  $sanitized_name = preg_replace('/[^\w\-]/', '', $name);
+  $sanitized_vtun = preg_replace('/[^\w\-]/', '', $vtun);
+  $sanitized_id = preg_replace('/[^\w\-]/', '', $id);
+  foreach (glob("$dir/peer-$sanitized_name-$sanitized_vtun-$sanitized_id*", GLOB_NOSORT) as $peer) delete_file($peer);
 }
 
 function addPeer(&$x) {
@@ -224,7 +229,9 @@ function createPeerFiles($vtun) {
         delPeer($n, $i);
       }
       $new = 1;
-      $peer = "$dir/peer-$name-$vtun";
+      $sanitized_name = preg_replace('/[^\w\-]/', '', $name);
+      $sanitized_vtun = preg_replace('/[^\w\-]/', '', $vtun);
+      $peer = "$dir/peer-$sanitized_name-$sanitized_vtun";
       $files = glob("$peer-*.conf", GLOB_NOSORT);
       natsort($files);
       foreach ($files as $file) {
@@ -243,7 +250,10 @@ function createPeerFiles($vtun) {
   $list = [];
   foreach ($peers as $id => $peer) {
     if (empty($peer[1])) break; // tunnel without any peers
-    $cfg    = "$dir/peer-$name-$vtun-$id.conf";
+    $sanitized_name = preg_replace('/[^\w\-]/', '', $name);
+    $sanitized_vtun = preg_replace('/[^\w\-]/', '', $vtun);
+    $sanitized_id = preg_replace('/[^\w\-]/', '', $id);
+    $cfg    = "$dir/peer-$sanitized_name-$sanitized_vtun-$sanitized_id.conf";
     $cfgold = @file_get_contents($cfg) ?: '';
     $cfgnew = implode("\n", $peer)."\n";
     if ($cfgnew !== $cfgold && $vpn == 0) {
@@ -280,12 +290,19 @@ function parseInput($vtun, &$input, &$x) {
         [$index, $network] = newNet($vtun);
         [$device, $thisnet, $gateway] = thisNet();
         if (!empty($device) && !empty($thisnet) && !empty($gateway)) {
-          $conf[]  = "PostUp=ip -4 route flush table $index";
-          $conf[]  = "PostUp=ip -4 route add default via $tunip dev $vtun table $index";
-          $conf[]  = "PostUp=ip -4 route add $thisnet via $gateway dev $device table $index";
-          $conf[]  = "PostDown=ip -4 route flush table $index";
-          $conf[]  = "PostDown=ip -4 route add unreachable default table $index";
-          $conf[]  = "PostDown=ip -4 route add $thisnet via $gateway dev $device table $index";
+          $safe_index = escapeshellarg($index);
+          $safe_tunip = escapeshellarg($tunip);
+          $safe_vtun = escapeshellarg($vtun);
+          $safe_thisnet = escapeshellarg($thisnet);
+          $safe_gateway = escapeshellarg($gateway);
+          $safe_device = escapeshellarg($device);
+          
+          $conf[]  = "PostUp=ip -4 route flush table $safe_index";
+          $conf[]  = "PostUp=ip -4 route add default via $safe_tunip dev $safe_vtun table $safe_index";
+          $conf[]  = "PostUp=ip -4 route add $safe_thisnet via $safe_gateway dev $safe_device table $safe_index";
+          $conf[]  = "PostDown=ip -4 route flush table $safe_index";
+          $conf[]  = "PostDown=ip -4 route add unreachable default table $safe_index";
+          $conf[]  = "PostDown=ip -4 route add $safe_thisnet via $safe_gateway dev $safe_device table $safe_index";
         }
       }
       $conf[] = "\n[Peer]";
@@ -588,7 +605,7 @@ case 'upnpc':
   $link = _var($_POST,'#link');
   $ip   = _var($_POST,'#ip');
   if (_var($_POST,'#wg') == 'active') {
-    exec("timeout $t1 stdbuf -o0 upnpc -u ".escapeshellarg($xml)." -m ".escapeshellarg($link)." -l 2>/dev/null|grep -Po \"^(ExternalIPAddress = \\K.+|.+\\KUDP.+>$ip:[0-9]+ 'WireGuard-$vtun')\"", $upnp);
+    exec("timeout $t1 stdbuf -o0 upnpc -u ".escapeshellarg($xml)." -m ".escapeshellarg($link)." -l 2>/dev/null|grep -Po \"^(ExternalIPAddress = \\K.+|.+\\KUDP.+>".escapeshellarg($ip).":[0-9]+ 'WireGuard-".escapeshellarg($vtun)."')\"", $upnp);
     [$addr, $upnp] = array_pad($upnp, 2, '');
     [$type, $rule] = my_explode(' ', $upnp);
     echo $rule ? "UPnP: $addr:$rule/$type" : _('UPnP: forwarding not set');

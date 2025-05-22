@@ -30,12 +30,14 @@ function PsExecute($command, $timeout = 20, $sleep = 2) {
   return false;
 }
 function PsEnded($pid) {
-  exec("ps -eo pid|grep $pid",$output);
+  $pid = (int)$pid;
+  exec("ps -eo pid|grep ".escapeshellarg($pid),$output);
   foreach ($output as $list) if (trim($list)==$pid) return false;
   return true;
 }
 function PsKill($pid) {
-  exec("kill -9 $pid");
+  $pid = (int)$pid;
+  exec("kill -9 ".escapeshellarg($pid));
 }
 if (PsExecute("$docroot/webGui/scripts/notify -s 'Unraid SMTP Test' -d 'Test message received!' -i 'alert' -l '/Settings/Notifications' -t")) {
   $result = exec("tail -3 /var/log/syslog|awk '/sSMTP/ {getline;print}'|cut -d']' -f2|cut -d'(' -f1");

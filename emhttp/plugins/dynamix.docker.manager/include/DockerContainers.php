@@ -53,7 +53,7 @@ $names = array_map('var_split',$autostart);
 
 // Grab Tailscale json from container
 function tailscale_stats($name) {
-  exec("docker exec -i ".$name." /bin/sh -c \"tailscale status --json | jq '{Self: .Self, ExitNodeStatus: .ExitNodeStatus, Version: .Version}'\" 2>/dev/null", $TS_stats);
+  exec("docker exec -i ".escapeshellarg($name)." /bin/sh -c \"tailscale status --json | jq '{Self: .Self, ExitNodeStatus: .ExitNodeStatus, Version: .Version}'\" 2>/dev/null", $TS_stats);
   if (!empty($TS_stats)) {
     $TS_stats = implode("\n", $TS_stats);
     return json_decode($TS_stats, true);
@@ -68,12 +68,12 @@ function tailscale_json_dl($file, $url) {
     mkdir('/tmp/tailscale', 0777, true);
   }
   if (!file_exists($file)) {
-    exec("wget -T 3 -q -O ".$file." ".$url, $output, $dl_status);
+    exec("wget -T 3 -q -O ".escapeshellarg($file)." ".escapeshellarg($url), $output, $dl_status);
   } else {
     $fileage =  time() - filemtime($file);
     if ($fileage > 86400) {
       unlink($file);
-      exec("wget -T 3 -q -O ".$file." ".$url, $output, $dl_status);
+      exec("wget -T 3 -q -O ".escapeshellarg($file)." ".escapeshellarg($url), $output, $dl_status);
     }
   }
   if ($dl_status === 0) {

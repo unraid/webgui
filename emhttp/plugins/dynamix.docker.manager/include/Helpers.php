@@ -627,7 +627,7 @@ function execCommand($command, $echo=true) {
     echo '<p class="logLine" id="logBody"></p></fieldset>\');show_Wait('.$waitID.');</script>';
     @flush();
   }
-  $proc = popen("$command 2>&1",'r');
+  $proc = popen(escapeshellcmd($command)." 2>&1",'r');
   while ($out = fgets($proc)) {
     $out = preg_replace("%[\t\n\x0B\f\r]+%", '', $out);
     if ($echo) {

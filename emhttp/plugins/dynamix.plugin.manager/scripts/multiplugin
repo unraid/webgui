@@ -41,7 +41,7 @@ foreach ($plugins as $plugin) {
   if (!$plugin || (!$cmd = $call[pathinfo($plugin,PATHINFO_EXTENSION)])) continue;
   $line = '';
   $pluginArg = $method == "update" ? basename($plugin) : $plugin;
-  $run = popen("$cmd $method $pluginArg",'r');
+  $run = popen("$cmd ".escapeshellarg($method)." ".escapeshellarg($pluginArg),'r');
   while (!feof($run)) {
     $line .= fgetc($run);
     if (!empty($line) && in_array($line[-1],["\r","\n"])) {write($line); $line = '';}

@@ -21,9 +21,11 @@ require_once "$docroot/webGui/include/Translations.php";
 $pci_device_diffs = comparePCIData();
 
 function usb_physical_port($usbbusdev) {
-  if (preg_match('/^Bus (?P<bus>\S+) Device (?P<dev>\S+): ID (?P<id>\S+)(?P<name>.*)$/', $usbbusdev, $usbMatch)) {
+  if (preg_match('/^Bus (?P<bus>\S+) Device (?P<dev>\S+): ID (?P<id>\S+)(?P<n>.*)$/', $usbbusdev, $usbMatch)) {
     //udevadm info -a --name=/dev/bus/usb/003/002 | grep KERNEL==
-    $udevcmd = "udevadm info -a --name=/dev/bus/usb/".$usbMatch['bus']."/".$usbMatch['dev']." | grep KERNEL==";
+    $bus = escapeshellarg($usbMatch['bus']);
+    $dev = escapeshellarg($usbMatch['dev']);
+    $udevcmd = "udevadm info -a --name=/dev/bus/usb/$bus/$dev | grep KERNEL==";
     $physical_busid = _("None");
     exec($udevcmd , $udev);
     if (isset($udev)) {
@@ -76,7 +78,8 @@ case 't1':
     $lines = array ();
     foreach ($devicelist as $line) {
       if (!empty($line)) {
-        exec('udevadm info --path=$(udevadm info -q path /dev/'.$line.' | cut -d / -f 1-7) --query=path',$linereturn);
+        $safe_line = escapeshellarg($line);
+        exec("udevadm info --path=$(udevadm info -q path /dev/$safe_line | cut -d / -f 1-7) --query=path",$linereturn);
         if(isset($linereturn[0])) {
           preg_match_all($DBDF_PARTIAL_REGEX, $linereturn[0], $inuse);
           foreach ($inuse[0] as $line) {
@@ -95,7 +98,8 @@ case 't1':
         if (!empty($nics)) {
           foreach ($nics as $line) {
             if (!empty($line)) {
-              exec('readlink /sys/class/net/'.$line,$linereturn);
+              $safe_line = escapeshellarg($line);
+              exec("readlink /sys/class/net/$safe_line",$linereturn);
               if(isset($linereturn[0])) {
                 preg_match_all($DBDF_PARTIAL_REGEX, $linereturn[0], $inuse);
                 foreach ($inuse[0] as $line) {
@@ -112,7 +116,8 @@ case 't1':
     $lines = array_values(array_unique($lines, SORT_STRING));
     $iommuinuse = array ();
     foreach ($lines as $pciinuse){
-      $string = exec("ls /sys/kernel/iommu_groups/*/devices/$pciinuse -1 -d");
+      $safe_pciinuse = escapeshellarg($pciinuse);
+      $string = exec("ls /sys/kernel/iommu_groups/*/devices/$safe_pciinuse -1 -d");
       $string = substr($string,25,2);
       $iommuinuse[] = (strpos($string,'/')) ? strstr($string, '/', true) : $string;
     }
@@ -144,7 +149,8 @@ case 't1':
           $pciaddress = "0000:".$pciaddress;
         }
         echo ($append) ? "" : "<tr><td></td><td>";
-        exec("lspci -v -s $pciaddress", $outputvfio);
+        $safe_pciaddress = escapeshellarg($pciaddress);
+        exec("lspci -v -s $safe_pciaddress", $outputvfio);
         if (preg_grep("/vfio-pci/i", $outputvfio)) {
           echo "<i class=\"fa fa-circle orb green-orb middle\" title=\"",_('Kernel driver in use: vfio-pci'),"\"></i>";
           $isbound = "true";
@@ -185,7 +191,8 @@ case 't1':
             if (isset($isbound)) {
               echo '<tr><td></td><td></td><td></td><td></td><td>',_('This controller is bound to vfio, connected USB devices are not visible'),'.</td></tr>';
             } else {
-              exec('for usb_ctrl in $(find /sys/bus/usb/devices/usb* -maxdepth 0 -type l);do path="$(realpath "${usb_ctrl}")";if [[ $path == *'.$pciaddress.'* ]];then bus="$(cat "${usb_ctrl}/busnum")";lsusb -s $bus:|sort;fi;done',$getusb);
+              $safe_pciaddress = escapeshellarg($pciaddress);
+              exec('for usb_ctrl in $(find /sys/bus/usb/devices/usb* -maxdepth 0 -type l);do path="$(realpath "${usb_ctrl}")";if [[ $path == *'.$safe_pciaddress.'* ]];then bus="$(cat "${usb_ctrl}/busnum")";lsusb -s $bus:|sort;fi;done',$getusb);
               foreach($getusb as $usbdevice) {
                 [$bus,$id] = my_explode(':',$usbdevice);
                 $usbport = usb_physical_port($usbdevice);
@@ -205,7 +212,8 @@ case 't1':
             if (isset($isbound)) {
               echo '<tr><td></td><td></td><td></td><td></td><td>',_('This controller is bound to vfio, connected drives are not visible'),'.</td></tr>';
             } else {
-              exec('ls -al /sys/block/sd* /sys/block/hd* /sys/block/sr* /sys/block/nvme* 2>/dev/null | grep -i "'.$pciaddress.'"',$getsata);
+              $safe_pciaddress = escapeshellarg($pciaddress);
+              exec('ls -al /sys/block/sd* /sys/block/hd* /sys/block/sr* /sys/block/nvme* 2>/dev/null | grep -i '.$safe_pciaddress,$getsata);
               foreach($getsata as $satadevice) {
                 $satadevice = substr($satadevice, strrpos($satadevice, '/', -1)+1);
                 $search = preg_grep('/'.$satadevice.'.*/', $lsscsi);

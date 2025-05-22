@@ -322,14 +322,14 @@ function my_mkdir($dirname,$permissions = 0777,$recursive = false,$own = "nobody
       $parent = str_replace('/mnt/user/', "/mnt/$realdisk/", $parent);
     }
   }
-  $fstype = trim(shell_exec(" stat -f -c '%T' $parent"));
+  $fstype = trim(shell_exec(" stat -f -c '%T' ".escapeshellarg($parent)));
   $rtncode = false;
   write_logging("fstype:$fstype parent $parent dir name $dirname\n");
   switch ($fstype) {
     case "zfs":
       if (is_dir($parent.'/.zfs')) {
         write_logging("ZFS Volume\n");
-        $zfsdataset = trim(shell_exec("zfs list -H -o name  $parent")); 
+        $zfsdataset = trim(shell_exec("zfs list -H -o name  ".escapeshellarg($parent))); 
         write_logging("Shell $zfsdataset\n");
         $zfsdataset .= str_replace($parent,"",$dirname);
         write_logging("Dataset $zfsdataset\n");

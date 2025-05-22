@@ -244,11 +244,15 @@ case "identify":
   }
   break;
 case "save":
-  exec("smartctl -x $type ".escapeshellarg("/dev/$port")." >".escapeshellarg("$docroot/{$_POST['file']}"));
+  // Validate file path is within docroot and does not contain directory traversal
+  $safe_file = basename(preg_replace('/[^\w\.-]/', '', $_POST['file']));
+  exec("smartctl -x $type ".escapeshellarg("/dev/$port")." >".escapeshellarg("$docroot/$safe_file"));
   break;
 case "delete":
-  if (strpos(realpath("/var/tmp/{$_POST['file']}"), "/var/tmp/") === 0) {
-    @unlink("/var/tmp/{$_POST['file']}");
+  // Validate file path to prevent path traversal attacks
+  $safe_file = basename(preg_replace('/[^\w\.-]/', '', $_POST['file']));
+  if (strpos(realpath("/var/tmp/$safe_file"), "/var/tmp/") === 0) {
+    @unlink("/var/tmp/$safe_file");
   }
   break;
 case "short":

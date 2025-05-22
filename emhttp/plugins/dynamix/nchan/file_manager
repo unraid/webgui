@@ -138,7 +138,7 @@ while (true) {
       if (!empty($pid)) {
         $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Removing').'... '.exec("tail -1 $status");
       } else {
-        exec("find ".quoted($source)." -name \"*\" -print -delete 1>$status 2>$null & echo \$!", $pid);
+        exec("find ".quoted($source)." -name ".escapeshellarg("*")." -print -delete 1>$status 2>$null & echo \$!", $pid);
       }
       break;
     case 2: // rename folder
@@ -197,14 +197,14 @@ while (true) {
       if (!empty($pid)) {
         $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Updating').'... '.exec("tail -2 $status | grep -Pom1 \"^.+ of '\\K[^']+\"");
       } else {
-        exec("chown -Rfv $target ".quoted($source)." 1>$status 2>$error & echo \$!", $pid);
+        exec("chown -Rfv ".escapeshellarg($target)." ".quoted($source)." 1>$status 2>$error & echo \$!", $pid);
       }
       break;
     case 12: // change permission
       if (!empty($pid)) {
         $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Updating').'... '.exec("tail -2 $status | grep -Pom1 \"^.+ of '\\K[^']+\"");
       } else {
-        exec("chmod -Rfv $target ".quoted($source)." 1>$status 2>$error & echo \$!", $pid);
+        exec("chmod -Rfv ".escapeshellarg($target)." ".quoted($source)." 1>$status 2>$error & echo \$!", $pid);
       }
       break;
     case 15: // search
@@ -215,7 +215,7 @@ while (true) {
       }
       break;
     case 99: // kill running background process
-      if (!empty($pid)) exec("kill $pid");
+      if (!empty($pid)) exec("kill ".escapeshellarg($pid));
       delete_file($active, $status, $error);
       unset($pid, $move);
       break;

@@ -239,7 +239,7 @@ function download($url, $name, &$error, $write=true) {
     $plg = basename($url);
     $plg = str_replace('"', '', $plg);
     $tries = (strpos($url, '.cdn') !== false) ? "1" : "3";
-    if ($file = popen("wget --compression=auto --no-cache --progress=dot --retry-connrefused --prefer-family=IPv4 --timeout=10 --tries=$tries --waitretry=$tries -O $name $url 2>&1", 'r')) {
+    if ($file = popen("wget --compression=auto --no-cache --progress=dot --retry-connrefused --prefer-family=IPv4 --timeout=10 --tries=$tries --waitretry=$tries -O ".escapeshellarg($name)." ".escapeshellarg($url)." 2>&1", 'r')) {
       if ($write) write("plugin: downloading: $plg ...\r");
       $level = -1;
         while (($line = fgets($file)) !== false) {
@@ -460,18 +460,18 @@ function plugin($method, $plugin_file, &$error) {
     // Maybe "run" the file now
     //
     if ($file->attributes()->Run) {
-      $command = $file->attributes()->Run;
+      $command = escapeshellcmd($file->attributes()->Run);
       if ($name) {
         my_logger("running: $command $name", $logger);
-        $retval = run("$command $name");
+        $retval = run("$command ".escapeshellarg($name));
       } elseif ($file->LOCAL) {
         my_logger("running: $command $file->LOCAL", $logger);
-        $retval = run("$command $file->LOCAL");
+        $retval = run("$command ".escapeshellarg($file->LOCAL));
       } elseif ($file->INLINE) {
         my_logger("running: 'anonymous'", $logger);
         $name = '/tmp/inline.sh';
         file_put_contents($name, $file->INLINE);
-        $retval = run("$command $name");
+        $retval = run("$command ".escapeshellarg($name));
         unlink($name);
       }
       if ($retval != 0) {
