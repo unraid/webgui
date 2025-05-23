@@ -1,7 +1,7 @@
 Menu="Scheduler:1"
 Title="Parity Check"
 Tag="calendar"
-Cond="$disks['parity']['device'] || $disks['parity2']['device']"
+Cond="$disks['parity']['device'] || $disks['parity2']['device'] || count(array_filter(array_column($disks,'type'),function($type){return $type=='Data';}))"
 ---
 <?PHP
 /* Copyright 2012-2025, Bergware International.

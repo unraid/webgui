@@ -47,19 +47,16 @@ var dfm_read = {};
 function dfm_footer(action, text) {
   switch (action) {
   case 'show':
-    $('#countdown').show();
     $('#user-notice').show();
     break;
   case 'hide':
-    $('#countdown').hide();
     $('#user-notice').hide();
     break;
   case 'write':
-    if ($('#countdown').html() == '') $('#countdown').html('<a class="hand" onclick="dfm_openDialog(true)" title="_(File Manager)_"><i class="icon-u-duplicate dfm"></i></a>');
-    $('#user-notice').html(text);
+    let icon = '<a class="hand" onclick="dfm_openDialog(true)" title="_(File Manager)_"><i class="icon-u-duplicate dfm"></i></a>';
+    $('#user-notice').html(icon + text);
     break;
   case 'clear':
-    $('#countdown').html('');
     $('#user-notice').html('');
     break;
   }
