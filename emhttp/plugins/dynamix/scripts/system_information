@@ -21,20 +21,6 @@ $_SERVER['REQUEST_URI'] = '';
 $login_locale = _var($display,'locale');
 require_once "$docroot/webGui/include/Translations.php";
 
-function dmidecode($key, $n, $all=true) {
-  $entries = array_filter(explode($key,shell_exec("dmidecode -qt$n")?:''));
-  $properties = [];
-  foreach ($entries as $entry) {
-    $property = [];
-    foreach (explode("\n",$entry) as $line) if (strpos($line,': ')!==false) {
-      [$key,$value] = my_explode(': ',trim($line));
-      $property[$key] = $value;
-    }
-    $properties[] = $property;
-  }
-  return $all ? $properties : $properties[0]??null;
-}
-
 function port_get_contents($port) {
   return file_exists($port) ? @file_get_contents($port) : 0;
 }
