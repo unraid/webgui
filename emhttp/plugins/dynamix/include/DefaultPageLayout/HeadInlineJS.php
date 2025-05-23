@@ -342,8 +342,17 @@ function openError(data) {
   return false;
 }
 
-function showStatus(name,plugin,job) {
-  $.post('/webGui/include/ProcessStatus.php',{name:name,plugin:plugin,job:job},function(status){$(".tabs").append(status);});
+function showStatus(name, plugin, job) {
+  $.post('/webGui/include/ProcessStatus.php',
+    {
+      name,
+      plugin,
+      job,
+    },
+    function(status) {
+      $('.title .right').eq(0).append(status);
+    }
+  );
 }
 
 function showFooter(data, id) {

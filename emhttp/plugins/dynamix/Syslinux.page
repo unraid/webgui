@@ -48,8 +48,11 @@ function prepareMenu(form) {
   $('input[name="#arg[1]"]').val(form.boot.checked?1:0);
   if ($('div.basic').is(':visible')) {
     var label = [], area = [];
-    $(form).find('span[id^=label]').each(function(){
-      label.push($(this).text());
+    $(form).find('label[id^=label]').each(function(){
+      var $label = $(this).clone();
+      $label.find('input').remove();
+      var labelText = $label.text().replace(/\s+/g, ' ').trim();
+      label.push(labelText);
     });
     $(form).find('textarea.menu').each(function(i){
       var start = $('#input-'+i).prop('checked') ? menu+'\n' : '';
@@ -186,6 +189,7 @@ $(function(){
 <input type="hidden" name="#command" value="/webGui/scripts/bootmode">
 <input type="hidden" name="#arg[1]" value="">
 <input type="hidden" name="text" value="">
+
 <div markdown="1" class="basic">
 _(Syslinux configuration)_:
 : <?$i=0;

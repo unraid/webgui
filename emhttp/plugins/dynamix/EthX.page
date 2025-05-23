@@ -73,7 +73,6 @@ $(function() {
 });
 </script>
 
-<div class="title nocontrol shift">&nbsp;</div>
 <form markdown="1" name="ethX_settings" method="POST" action="/update.php" target="progressFrame" onchange="signalRun(this,2)" onsubmit="return prepareSettings(this)">
 <input type="hidden" name="#file" value="<?=$ini?>">
 <input type="hidden" name="#include" value="/webGui/include/update.ethernet.php">
@@ -85,13 +84,16 @@ $(function() {
 <input type="hidden" name="BRNAME" value="brX">
 <input type="hidden" name="BRSTP" value="no">
 <input type="hidden" name="BRFD" value="0">
+
 _(Interface description)_:
-<?if (!$more):?>
-: <input type="text" name="DESCRIPTION:0" maxlength="80" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars(_var($ethX,"DESCRIPTION:0"))?>">
-  <input type="button" class="form" value="_(Info)_" onclick="networkInfo('ethX')">
-<?else:?>
-: <span class="<?=$class?>"><?=$reason?></span>
-<?endif;?>
+: <?if (!$more):?>
+  <input type="text" name="DESCRIPTION:0" maxlength="80" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars(_var($ethX,"DESCRIPTION:0"))?>">
+  <span class="inline-block">
+    <input type="button" class="form" value="_(Info)_" onclick="networkInfo('ethX')">
+    </span>
+  <?else:?>
+    <span class="<?=$class?>"><?=$reason?></span>
+  <?endif;?>
 
 :eth_interface_description_help:
 
@@ -252,7 +254,9 @@ _(Enable VLANs)_:
 <div markdown="1" id="index-ethX-<?=$i?>" class="access-ethX shade hide">
 _(Interface description)_:
 : <input type="text" name="DESCRIPTION:<?=$i?>" maxlength="80" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars(_var($ethX,"DESCRIPTION:$i"))?>">
-  <input type="button" class="form" value="_(Info)_" onclick="networkInfo('eth0',<?=_var($ethX,"VLANID:$i")?>)">
+  <span class="inline-block">
+    <input type="button" class="form" value="_(Info)_" onclick="networkInfo('eth0',<?=_var($ethX,"VLANID:$i")?>)">
+  </span>
 
 :eth_interface_description_help:
 
@@ -346,10 +350,15 @@ _(IPv6 privacy extensions)_:
     <input type="submit" value="_(Apply)_" onclick="$('#wait_<?=$tabbed?'eth0':'ethX'?>').show()" disabled>
     <input type="button" value="_(Done)_" onclick="done()">
   </span>
-<input type="button" name="#shut_ethX" value="<?=_('Port '.$cmd)?>" onclick="portToggle('ethX','<?=$cmd?>')">
-<?if (!$service):?>
-<input type="button" id="button-add-ethX" class="hide" value="_(Add VLAN)_" onclick="addVLAN('ethX')">
-<?else:?><?=sprintf(_('Stop **%s** to make changes, see'),$service).' (<a href="/Settings">'._('Settings').'</a>)'?><?endif;?>
+  <span class="flex flex-row flex-wrap items-center gap-4">
+    <input type="button" name="#shut_ethX" value="<?=_('Port '.$cmd)?>" onclick="portToggle('ethX','<?=$cmd?>')">
+    <?if (!$service):?>
+      <input type="button" id="button-add-ethX" class="hide" value="_(Add VLAN)_" onclick="addVLAN('ethX')">
+    <?endif;?>
+  </span>
+  <?if ($service):?>
+    <span><?=sprintf(_('Stop **%s** to make changes, see'),$service).' (<a href="/Settings">'._('Settings').'</a>)'?></span>
+  <?endif;?>
 </form>
 
 <script markdown="1" type="text/html" id="network-template-ethX">

@@ -36,6 +36,90 @@ if (file_exists($memory)) {
 }
 if ($parity['mode']<2)  $parity['cumulative'] = '';
 if ($parity['mode']==2) $parity['frequency'] = '1';
+
+// Build day options array based on mode
+$day_options = [];
+$day_select_attrs = 'name="day"';
+
+if ($parity['mode'] == 2) {
+  // Weekly mode - regular dropdown
+  for ($d = 0; $d < count($days); $d++) {
+    $day_options[] = mk_option($parity['day'], strval($d), ucfirst(_($days[$d],0)));
+  }
+} elseif ($parity['mode'] == 5) {
+  // Custom mode - multiple select
+  $day_select_attrs = 'id="s1" name="day" multiple="multiple" style="display:none"';
+  for ($d = 0; $d < count($days); $d++) {
+    $day_options[] = mk_option_check($parity['day'], strval($d), ucfirst(_($days[$d],0)));
+  }
+} else {
+  // Other modes - disabled placeholder
+  $day_options[] = mk_option($parity['day'], "*", "--------");
+}
+
+// Build dotm (day of the month/week) options array based on mode
+$dotm_options = [];
+
+if ($parity['mode'] >= 3) {
+  if ($parity['mode'] == 5) {
+    // Custom mode - week options
+    $dotm_options[] = mk_option($parity['dotm'], "*", _("Every week"));
+    $dotm_options[] = mk_option($parity['dotm'], "W1", _("First week"));
+    $dotm_options[] = mk_option($parity['dotm'], "W2", _("Second week"));
+    $dotm_options[] = mk_option($parity['dotm'], "W3", _("Third week"));
+    $dotm_options[] = mk_option($parity['dotm'], "W4", _("Fourth week"));
+    $dotm_options[] = mk_option($parity['dotm'], "WL", _("Last week"));
+  } else {
+    // Monthly/Yearly mode - day options
+    $dotm_options[] = mk_option($parity['dotm'], "1", _("First day"));
+    $dotm_options[] = mk_option($parity['dotm'], "28-31", _("Last day"));
+    for ($d = 2; $d <= 31; $d++) {
+      $dotm_options[] = mk_option($parity['dotm'], strval($d), sprintf("%02d", $d));
+    }
+  }
+} else {
+  // Other modes - disabled placeholder
+  $dotm_options[] = mk_option($parity['dotm'], "*", "--------");
+}
+
+// Set the label for dotm field based on mode
+$dotm_label = ($parity['mode'] < 5) ? _('Day of the month') : _('Week of the month');
+
+// Build month options array based on mode
+$month_options = [];
+$month_select_attrs = 'name="month"';
+
+if ($parity['mode'] >= 4) {
+  if ($parity['mode'] == 5) {
+    // Custom mode - multiple select
+    $month_select_attrs = 'id="s2" name="month" multiple="multiple" style="display:none"';
+    for ($m = 0; $m < count($months); $m++) {
+      $month_options[] = mk_option_check($parity['month'], strval($m+1), ucfirst(_($months[$m],0)));
+    }
+  } else {
+    // Yearly mode - regular dropdown
+    for ($m = 0; $m < count($months); $m++) {
+      $month_options[] = mk_option($parity['month'], strval($m+1), ucfirst(_($months[$m],0)));
+    }
+  }
+} else {
+  // Other modes - disabled placeholder
+  $month_options[] = mk_option($parity['month'], "*", "--------");
+}
+
+// Build hour options array based on mode
+$hour_options = [];
+
+if ($parity['mode'] > 0) {
+  // Active modes - generate 24-hour options with 30-minute intervals
+  for ($h = 0; $h < 24; $h++) {
+    $hour_options[] = mk_option($parity['hour'], sprintf("0 %d", $h), sprintf("%02d:00", $h));
+    $hour_options[] = mk_option($parity['hour'], sprintf("30 %d", $h), sprintf("%02d:30", $h));
+  }
+} else {
+  // Disabled mode - placeholder
+  $hour_options[] = mk_option($parity['hour'], "*", "--------");
+}
 ?>
 <script>
 <?if ($parity['mode']==5):?>
@@ -100,6 +184,7 @@ $(function(){
 <input type="hidden" name="#file" value="dynamix/dynamix.cfg"/>
 <input type="hidden" name="#section" value="parity"/>
 <input type="hidden" name="#include" value="/webGui/include/update.parity.php"/>
+
 _(Scheduled parity check)_:
 : <select name="mode" onchange="submit()">
   <?for ($m=0; $m<count($mode); $m++):?>
@@ -110,83 +195,37 @@ _(Scheduled parity check)_:
 :parity_check_scheduled_help:
 
 _(Day of the week)_:
-<?if ($parity['mode']==2):?>
-: <select name="day">
-  <?for ($d=0; $d<count($days); $d++):?>
-  <?=mk_option($parity['day'], strval($d), ucfirst(_($days[$d],0)))?>
-  <?endfor;?>
-<?elseif ($parity['mode']==5):?>
-: <select id="s1" name="day" multiple="multiple" style="display:none">
-  <?for ($d=0; $d<count($days); $d++):?>
-  <?=mk_option_check($parity['day'], strval($d), ucfirst(_($days[$d],0)))?>
-  <?endfor;?>
-<?else:?>
-: <select name="day">
-  <?=mk_option($parity['day'], "*", "--------")?>
-<?endif;?>
+: <select <?=$day_select_attrs?>>
+  <?foreach ($day_options as $option):?>
+  <?=$option?>
+  <?endforeach;?>
   </select>
 
 :parity_day_of_the_week_help:
 
-<?if ($parity['mode']<5):?>
-_(Day of the month)_:
-<?else:?>
-_(Week of the month)_:
-<?endif;?>
+<?= $dotm_label ?>:
 : <select name="dotm">
-<?if ($parity['mode']>=3):?>
-<?if ($parity['mode']==5):?>
-  <?=mk_option($parity['dotm'], "*", _("Every week"))?>
-  <?=mk_option($parity['dotm'], "W1", _("First week"))?>
-  <?=mk_option($parity['dotm'], "W2", _("Second week"))?>
-  <?=mk_option($parity['dotm'], "W3", _("Third week"))?>
-  <?=mk_option($parity['dotm'], "W4", _("Fourth week"))?>
-  <?=mk_option($parity['dotm'], "WL", _("Last week"))?>
-<?else:?>
-  <?=mk_option($parity['dotm'], "1", _("First day"))?>
-  <?=mk_option($parity['dotm'], "28-31", _("Last day"))?>
-  <?for ($d=2; $d<=31; $d++):?>
-  <?=mk_option($parity['dotm'], strval($d), sprintf("%02d", $d))?>
-  <?endfor;?>
-<?endif;?>
-<?else:?>
-  <?=mk_option($parity['dotm'], "*", "--------")?>
-<?endif;?>
+  <?foreach ($dotm_options as $option):?>
+  <?=$option?>
+  <?endforeach;?>
   </select>
 
 :parity_week_of_the_month_help:
 
 _(Time of the day)_:
 : <select name="hour">
-<?if ($parity['mode']>0):?>
-  <?for ($h=0; $h<24; $h++):?>
-  <?=mk_option($parity['hour'], sprintf("0 %d", $h), sprintf("%02d:00", $h))?>
-  <?=mk_option($parity['hour'], sprintf("30 %d",$h), sprintf("%02d:30", $h))?>
-  <?endfor;?>
-<?else:?>
-  <?=mk_option($parity['hour'], "*", "--------")?>
-<?endif;?>
+  <?foreach ($hour_options as $option):?>
+  <?=$option?>
+  <?endforeach;?>
   </select>
 
 :parity_time_of_the_day_help:
 
 _(Month of the year)_:
-<?if ($parity['mode']>=4):?>
-<?if ($parity['mode']==5):?>
-: <select id="s2" name="month" multiple="multiple" style="display:none">
-  <?for ($m=0; $m<count($months); $m++):?>
-  <?=mk_option_check($parity['month'], strval($m+1), ucfirst(_($months[$m],0)))?>
-  <?endfor;?>
-<?else:?>
-: <select name="month">
-  <?for ($m=0; $m<count($months); $m++):?>
-  <?=mk_option($parity['month'], strval($m+1), ucfirst(_($months[$m],0)))?>
-  <?endfor;?>
-<?endif;?>
-<?else:?>
-: <select name="month">
-  <?=mk_option($parity['month'], "*", "--------")?>
-<?endif;?>
+: <select <?=$month_select_attrs?>>
+  <?foreach ($month_options as $option):?>
+  <?=$option?>
+  <?endforeach;?>
   </select>
 
 :parity_month_of_the_year_help:
@@ -210,7 +249,7 @@ _(Cumulative parity check)_:
 <div markdown="1" id="cumulative" style="display:none">
 _(Accumulation frequency)_:
 : <select name="frequency">
-  <?=mk_option(_var($parity,'frequency'), "1", _("Daily"))?>
+  <?=mk_option(_var($parity,'frequency'), "1", _("Daily"),$parity['mode']==2 ? 'disabled' : '')?>
   <?=mk_option(_var($parity,'frequency'), "7", _("Weekly"),$parity['mode']==2 ? 'disabled' : '')?>
   </select>
 
@@ -226,6 +265,7 @@ _(Accumulation duration)_:
 :parity_accumulation_duration_help:
 
 </div>
+
 &nbsp;
 : <span class="inline-block">
     <input type="submit" name="#apply" value="_(Apply)_" disabled>

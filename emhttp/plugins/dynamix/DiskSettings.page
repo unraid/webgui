@@ -281,6 +281,7 @@ _(Default critical SSD temperature threshold)_ (&deg;<?=_var($display,'unit','C'
 <input type="hidden" name="olddata" value="">
 <input type="hidden" name="oldluks" value="">
 <?endif;?>
+
 _(Existing encryption key)_:
 : <select name="oldinput" class="lock" onchange='selectInput(this.value,true)' <?=$keyfile?'disabled':''?>>
   <?=mk_option(1,'text',_('Passphrase'))?>
@@ -290,9 +291,14 @@ _(Existing encryption key)_:
 <?if (!$keyfile):?>
 <div markdown="1" id="oldtext">
 _(Enter existing passphrase)_:
-: <input type="password" name="oldtext" class="lock" maxlength="512" value="" autocomplete="off" spellcheck="false"><input name="showPass" type="checkbox" class="lock" onchange="showInput(this.checked,true)">_(show passphrase)_
+: <div class="flex flex-row items-center gap-2">
+    <input type="password" name="oldtext" class="lock" maxlength="512" value="" autocomplete="off" spellcheck="false">
+    <label for="showPass">
+      <input name="showPass" type="checkbox" class="lock" onchange="showInput(this.checked,true)">
+      _(show passphrase)_
+    </label>
+  </div>
 
-</div>
 <div markdown="1" id="oldfile" style="display:none">
 _(Select existing keyfile)_:
 : <input type="file" name="oldfile" class="lock" onchange="getFileContent(event,this.form,'olddata')">
@@ -308,7 +314,13 @@ _(Change encryption key)_:
 
 <div markdown="1" id="newtext">
 _(Type new passphrase)_:
-: <input type="password" name="newtext" class="lock" maxlength="512" value="" autocomplete="off" spellcheck="false" onkeyup="checkInput(this.form)" placeholder="_(use printable characters only)_"><input name="showPass" type="checkbox" class="lock" onchange="showInput(this.checked,false)">_(show passphrase)_
+: <div class="flex flex-row items-center gap-2">
+    <input type="password" name="newtext" class="lock" maxlength="512" value="" autocomplete="off" spellcheck="false" onkeyup="checkInput(this.form)" placeholder="_(use printable characters only)_">
+    <label for="showPass">
+      <input name="showPass" type="checkbox" class="lock" onchange="showInput(this.checked,false)">
+      _(show passphrase)_
+    </label>
+  </div>
 
 _(Retype new passphrase)_:
 : <input type="password" name="newcopy" class="lock" maxlength="512" value="" autocomplete="off" spellcheck="false" onkeyup="checkInput(this.form)">
@@ -335,6 +347,7 @@ _(Select new keyfile)_:
 <input type="hidden" name="#top" value="1">
 <input type="hidden" name="smEvents" value="">
 <input type="hidden" name="smIndex" value="0">
+
 _(Default SMART notification value)_:
 : <select name="smSelect">
   <?=mk_option(_var($var,'smSelect'), "0", _('Raw'))?>

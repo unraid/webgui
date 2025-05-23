@@ -1154,7 +1154,9 @@ _(Container Network)_:
 
 <div markdown="1" class='TSNetworkAllowed'>
 _(Use Tailscale)_:
-: <input type="checkbox" class="switch-on-off" name="contTailscale" id="contTailscale" <?php if (!empty($xml['TailscaleEnabled']) && $xml['TailscaleEnabled'] == 'true') echo 'checked'; ?> onchange="showTailscale(this)">
+: <span class="flex flex-row items-center">
+    <input type="checkbox" class="switch-on-off" name="contTailscale" id="contTailscale" <?php if (!empty($xml['TailscaleEnabled']) && $xml['TailscaleEnabled'] == 'true') echo 'checked'; ?> onchange="showTailscale(this)">
+  </span>
 
 :docker_tailscale_help:
 
@@ -1411,7 +1413,9 @@ _(Console shell command)_:
   </select>
 
 _(Privileged)_:
-: <input type="checkbox" class="switch-on-off" name="contPrivileged">
+: <span class="flex flex-row items-center">
+    <input type="checkbox" class="switch-on-off" name="contPrivileged">
+  </span>
 
 :docker_privileged_help:
 
@@ -1485,7 +1489,7 @@ _(Default Value)_:
 <div id="Mode"></div>
 
 _(Description)_:
-: <textarea name="Description" spellcheck="false" cols="80" rows="3" style="width:304px;"></textarea>
+: <textarea name="Description" spellcheck="false" cols="80" rows="3"></textarea>
 
 <div markdown="1" class="advanced">
 _(Display)_:
@@ -1520,8 +1524,20 @@ _(Password Mask)_:
 <input type="hidden" name="confDisplay[]" value="{6}">
 <input type="hidden" name="confRequired[]" value="{7}">
 <input type="hidden" name="confMask[]" value="{8}">
+
 <span class="{11}"><i class="fa fa-fw fa-{13}"></i>&nbsp;&nbsp;{0}:</span>
-: <span class="boxed"><input type="text" class="setting_input" name="confValue[]" default="{2}" value="{9}" autocomplete="off" spellcheck="false" {11}>{10}<br><span class='orange-text'>{12}: {1}</span><br><span class="orange-text">{4}</span><br></span>
+: <span class="flex flex-col gap-4">
+    <span class="flex flex-row flex-wrap items-center gap-4 buttons-no-margin">
+      <input type="text" class="setting_input" name="confValue[]" default="{2}" value="{9}" autocomplete="off" spellcheck="false" {11}>
+      {10}
+    </span>
+    <span class="boxed">
+      <span class='orange-text'>{12}: {1}</span>
+      <br>
+      <span class="orange-text">{4}</span>
+      <br>
+    </span>
+  </span>
 </div>
 
 <div markdown="1" id="templateAllocations" style="display:none">
@@ -1865,11 +1881,15 @@ $(function() {
       confNum += 1;
       Opts = Settings.Config[i];
       if (Opts.Display == "always-hide" || Opts.Display == "advanced-hide") {
-        Opts.Buttons  = "<span class='advanced'><button type='button' onclick='editConfigPopup("+confNum+",<?=$disableEdit?>)'>_(Edit)_</button>";
+        Opts.Buttons = "<span class='flex flex-row items-center gap-4'>";
+        Opts.Buttons += "<span class='advanced'><button type='button' onclick='editConfigPopup("+confNum+",<?=$disableEdit?>)'>_(Edit)_</button>";
         Opts.Buttons += "<button type='button' onclick='removeConfig("+confNum+")'>_(Remove)_</button></span>";
+        Opts.Buttons += "</span>";
       } else {
-        Opts.Buttons  = "<button type='button' onclick='editConfigPopup("+confNum+",<?=$disableEdit?>)'>_(Edit)_</button>";
+        Opts.Buttons = "<span class='flex flex-row items-center gap-4'>"; 
+        Opts.Buttons += "<button type='button' onclick='editConfigPopup("+confNum+",<?=$disableEdit?>)'>_(Edit)_</button>";
         Opts.Buttons += "<button type='button' onclick='removeConfig("+confNum+")'>_(Remove)_</button>";
+        Opts.Buttons += "</span>";
       }
       Opts.Number = confNum;
       if (Opts.Type == "Device") {

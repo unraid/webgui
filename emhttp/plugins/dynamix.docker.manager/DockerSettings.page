@@ -195,7 +195,12 @@ _(Docker vDisk size)_:
 
 _(Docker vDisk location)_:
 : <input type="text" id="DOCKER_IMAGE_FILE1" name="DOCKER_IMAGE_FILE1" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars(_var($dockercfg,'DOCKER_IMAGE_FILE'))?>" placeholder="_(e.g.)_ /mnt/user/system/docker.img" data-pickcloseonfile="true" data-pickfilter="img" data-pickroot="/mnt" data-pickfolders="true" disabled required pattern="^[^\\]*(docker-xfs\.img|docker\.img)$">
-  <span class="deleteLabel"><label><input type="checkbox" class="deleteCheckbox"> _(Delete vDisk file)_</label></span>
+  <span class="deleteLabel">
+    <label>
+      <input type="checkbox" class="deleteCheckbox">
+      _(Delete vDisk file)_
+    </label>
+  </span>
 <?if ($var['fsState'] != "Started"):?>
   <span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
 <?endif;?>
@@ -207,7 +212,12 @@ _(Docker vDisk location)_:
 <div markdown="1" id="vdisk_dir" style="display:none">
 _(Docker directory)_:
 : <input type="text" id="DOCKER_IMAGE_FILE2" name="DOCKER_IMAGE_FILE2" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars(_var($dockercfg,'DOCKER_IMAGE_FILE'))?>" placeholder="_(e.g.)_ /mnt/user/system/docker" data-pickcloseonfile="true" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="/mnt" data-pickfolders="true" disabled required pattern="^[^\\]*/$">
-  <span class="deleteLabel"><label><input type="checkbox" class="deleteCheckbox"> _(Delete directory)_</label></span>
+  <span class="deleteLabel">
+    <label>
+      <input type="checkbox" class="deleteCheckbox">
+      _(Delete directory)_
+    </label>
+  </span>
 <?if ($var['fsState'] != "Started"):?>
   <span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
 <?endif;?>
@@ -283,7 +293,10 @@ _(Docker custom network type)_:
 : <select name="DOCKER_NETWORK_TYPE">
   <?=mk_option(_var($dockercfg,'DOCKER_NETWORK_TYPE'), '1', _('ipvlan'), $bridge?'':'disabled')?>
   <?=mk_option(_var($dockercfg,'DOCKER_NETWORK_TYPE'), '', _('macvlan'), $bridge?'':'selected')?>
-  </select>&nbsp;_(Please read the Help carefully)_.  _(Misconfiguration can cause problems)_.
+  </select>
+  <span class="input-instructions">
+    _(Please read the Help carefully)_.  _(Misconfiguration can cause problems)_.
+  </span>
 
 :docker_custom_network_type_help:
 
@@ -291,7 +304,10 @@ _(Host access to custom networks)_:
 : <select name="DOCKER_ALLOW_ACCESS">
   <?=mk_option(_var($dockercfg,'DOCKER_ALLOW_ACCESS'), '', _('Disabled'))?>
   <?=mk_option(_var($dockercfg,'DOCKER_ALLOW_ACCESS'), 'yes', _('Enabled'))?>
-  </select>&nbsp;_(Make sure you understand what you are doing before enabling)_.
+  </select>
+  <span class="input-instructions">
+    _(Make sure you understand what you are doing before enabling)_.
+  </span>
 
 :docker_custom_network_access_help:
 
@@ -333,32 +349,82 @@ _(IPv4 custom network on interface)_ <?=$network?> (_(optional)_):
     case ($mask < 24): $prefix = $net[0].'.'.$net[1]; $box = 2; break;
     case ($mask < 32): $prefix = $net[0].'.'.$net[1].'.'.$net[2]; $box = 3 ;break;
   }
-?>
-: <input type="checkbox" id="<?=$docker_dhcp?>_edit" onchange="changeEdit(this.id, 4)"<?=$auto?'checked':''?>>
-  <span id="<?=$docker_dhcp?>_line" class="<?=$autoDisabled?>">
-  <span class="<?=$ip4class?>">**_(Subnet)_:** <?=$route?></span>
-  <span class="<?=$gw4class?>">**_(Gateway)_:** <?=$gateway[$network]?></span>
-  <input type="checkbox" id="<?=$docker_dhcp?>_dhcp" onchange="changeDHCP(this.id, 4)"<?=$dhcp?'checked':''?><?=$autoDisabled?>>
-  **_(DHCP pool)_:**<span id="<?=$docker_dhcp?>_net" class="net <?=$dhcpDisabled?>"><?=$prefix?>.</span>
-  </span>
-<?
-  for ($b=$box; $b<=3; $b++) {
+
+  // Build network select options arrays
+  $network_selects = [];
+  for ($b = $box; $b <= 3; $b++) {
     switch ($b) {
-      case 1: $step = floor($size/65536)%256; break;
-      case 2: $step = floor($size/256)%256; break;
-      case 3: $step = $size%256; break;
+      case 1: $step = floor($size/65536) % 256; break;
+      case 2: $step = floor($size/256) % 256; break;
+      case 3: $step = $size % 256; break;
     }
-    if ($step===0) $step = 256;
-    echo "<select id=\"{$docker_dhcp}_{$b}\" class=\"net\" $dhcpDisabled>";
-    for ($n=$net[$b]; $n<=$max[$b]; $n++) echo mk_option($net_user[$b],$n,$n,$n%$step==0?'':'class="hide"');
-    echo "</select>";
+    if ($step === 0) $step = 256;
+
+    $network_selects[$b] = [
+      'id' => "{$docker_dhcp}_{$b}",
+      'options' => []
+    ];
+
+    for ($n = $net[$b]; $n <= $max[$b]; $n++) {
+      $network_selects[$b]['options'][] = mk_option($net_user[$b], $n, $n, $n % $step == 0 ? '' : 'class="hide"');
+    }
   }
-  echo "/ ";
-  echo "<select id=\"{$docker_dhcp}_mask\" class=\"mask\" onchange=\"changeMask(this.id,this.value)\" $dhcpDisabled>";
-  for ($m=$mask+1; $m<=30; $m++) echo mk_option($mask_user,$m,$m);
-  echo "</select><span id=\"{$docker_dhcp}_size\" style=\"".($dhcp?'':'display:none')."\">($size "._('hosts').")</span>";
-  echo "<input type=\"hidden\" name=\"$docker_dhcp\" value=\"\">";
+
+  // Build mask select options
+  $mask_options = [];
+  for ($m = $mask + 1; $m <= 30; $m++) {
+    $mask_options[] = mk_option($mask_user, $m, $m);
+  }
 ?>
+: <div class="flex flex-col justify-start flex-wrap gap-4">
+    <label class="flex flex-row items-center gap-2">
+      <input type="checkbox" id="<?=$docker_dhcp?>_edit" onchange="changeEdit(this.id, 4)"<?=$auto?'checked':''?>>
+      _(Edit)_
+    </label>
+
+    <span id="<?=$docker_dhcp?>_line" class="flex flex-row items-center flex-wrap gap-4 <?=$autoDisabled?>">
+      <span class="<?=$ip4class?>">
+        <strong><?=_('Subnet')?>:</strong> <?=$route?>
+      </span>
+      <span class="<?=$gw4class?>">
+        <strong><?=_('Gateway')?>:</strong> <?=$gateway[$network]?>
+      </span>
+
+      <span class="flex flex-row items-center gap-2">
+        <span class="flex flex-row items-center gap-2">
+          <label class="flex flex-row items-center gap-2">
+            <input type="checkbox" id="<?=$docker_dhcp?>_dhcp" onchange="changeDHCP(this.id, 4)"<?=$dhcp?'checked':''?><?=$autoDisabled?>>
+            <strong><?=_('DHCP pool')?>:</strong>
+          </label>
+          <span id="<?=$docker_dhcp?>_net" class="net <?=$dhcpDisabled?>">
+            <?=$prefix?>.
+          </span>
+        </span>
+
+        <span class="flex flex-row items-center gap-2">
+          <? foreach ($network_selects as $select): ?>
+            <select id="<?=$select['id']?>" class="net" <?=$dhcpDisabled?>>
+              <? foreach ($select['options'] as $option): ?>
+                <?=$option?>
+              <? endforeach; ?>
+            </select>
+          <? endforeach; ?>
+
+          <span>/</span>
+
+          <select id="<?=$docker_dhcp?>_mask" class="mask" onchange="changeMask(this.id,this.value)" <?=$dhcpDisabled?>>
+            <? foreach ($mask_options as $option): ?>
+              <?=$option?>
+            <? endforeach; ?>
+          </select>
+
+          <span id="<?=$docker_dhcp?>_size" class="flex-shrink-0" style="<?=$dhcp ? '' : 'display:none'?>">(<?=$size?> <?=_('hosts')?>)</span>
+
+          <input type="hidden" name="<?=$docker_dhcp?>" value="">
+        </span>
+      </span>
+    </span>
+  </div>
 
 <?if ($hide_wlan):?>
 </div>
@@ -384,17 +450,46 @@ $hide_eth       = hide_eth($network);
 <?endif;?>
 
 _(IPv4 custom network on interface)_ <?=$network?> (_(optional)_):
-: <input type="checkbox" id="DOCKER_CUSTOM_<?=$port?>_edit" onchange="changeCustom(this.id,4)"<?=$subnet?'checked':''?>><span id="DOCKER_CUSTOM_<?=$port?>_line" class="<?=$subnet?'':'disabled'?>">
-  <span class="<?=$ip4class?>">**_(Subnet)_:** <input type="text" id="DOCKER_CUSTOM_<?=$port?>_net" name="DOCKER_SUBNET_<?=$port?>" class="ip4" value="<?=$subnet?>" title="_(IPv4 address A.B.C.D)_"<?=$disabled?>>/
-  <select id="DOCKER_CUSTOM_<?=$port?>_mask" name="DOCKER_MASK_<?=$port?>" class="mask"<?=$disabled?>>
-  <?for ($m=16; $m<=30; $m++) echo mk_option($mask?:24,$m,$m)?></select>
-  </span>
-  <span class="<?=$gw4class?>">**_(Gateway)_:** <input type="text" id="DOCKER_CUSTOM_<?=$port?>_gw" name="DOCKER_GATEWAY_<?=$port?>" class="ip4" value="<?=htmlspecialchars(_var($dockercfg,"DOCKER_GATEWAY_$port"))?>" title="_(IPv4 address A.B.C.D)_"<?=$disabled?>></span>
-  <input type="checkbox" id="DOCKER_CUSTOM_<?=$port?>_dhcp" onchange="customDHCP(this.id,4)"<?=$subnet?'checked':''?><?=$dhcpDisabled?>>
-  **_(DHCP pool)_:** <input type="text" id="DOCKER_CUSTOM_<?=$port?>_pool" name="DOCKER_RANGE_<?=$port?>" class="ip4" value="<?=$range?>" title="_(IPv4 address A.B.C.D)_"<?=$disabled?>>/
-  <select id="DOCKER_CUSTOM_<?=$port?>_size" name="DOCKER_SIZE_<?=$port?>" class="mask" onchange="changeHosts(this.id,this.value)"<?=$disabled?>>
-  <?for ($m=16; $m<=30; $m++) echo mk_option($size?:25,$m,$m)?></select>
-  <span id="DOCKER_CUSTOM_<?=$port?>_hosts" style="<?=$subnet?'':'display:none'?>">(<?=pow(2,32-($size?:25))?> _(hosts)_)</span></span>
+: <div class="flex flex-col justify-start flex-wrap gap-4">
+    <label class="flex flex-row items-center gap-2">
+      <input type="checkbox" id="DOCKER_CUSTOM_<?=$port?>_edit" onchange="changeCustom(this.id,4)"<?=$subnet?'checked':''?>>
+      <?=_('Edit') ?>
+    </label>
+
+    <span id="DOCKER_CUSTOM_<?=$port?>_line" class="flex flex-row items-center flex-wrap gap-4 <?=$subnet?'':'disabled'?>">
+      <span class="flex flex-row items-center gap-2 <?=$ip4class?>">
+        <label class="flex flex-row items-center gap-2">
+          <strong><?=_('Subnet') ?>:</strong>
+          <input type="text" id="DOCKER_CUSTOM_<?=$port?>_net" name="DOCKER_SUBNET_<?=$port?>" class="ip4" value="<?=$subnet?>" title="_(IPv4 address A.B.C.D)_"<?=$disabled?>>
+        </label>
+        <span>/</span>
+        <select id="DOCKER_CUSTOM_<?=$port?>_mask" name="DOCKER_MASK_<?=$port?>" class="mask"<?=$disabled?>>
+          <?for ($m=16; $m<=30; $m++) echo mk_option($mask?:24,$m,$m)?>
+        </select>
+      </span>
+
+      <span class="flex flex-row items-center gap-2">
+        <label class="flex flex-row items-center gap-2 <?=$gw4class?>">
+          <strong><?=_('Gateway') ?>:</strong>
+          <input type="text" id="DOCKER_CUSTOM_<?=$port?>_gw" name="DOCKER_GATEWAY_<?=$port?>" class="ip4" value="<?=htmlspecialchars(_var($dockercfg,"DOCKER_GATEWAY_$port"))?>" title="_(IPv4 address A.B.C.D)_"<?=$disabled?>>
+        </label>
+        <span class="flex flex-row items-center gap-2">
+          <label class="flex flex-row items-center gap-2">
+            <input type="checkbox" id="DOCKER_CUSTOM_<?=$port?>_dhcp" onchange="customDHCP(this.id,4)"<?=$subnet?'checked':''?><?=$dhcpDisabled?>>
+            <strong><?=_('DHCP pool') ?>:</strong>
+          </label>
+          <input type="text" id="DOCKER_CUSTOM_<?=$port?>_pool" name="DOCKER_RANGE_<?=$port?>" class="ip4" value="<?=$range?>" title="_(IPv4 address A.B.C.D)_"<?=$disabled?>>
+          <span>/</span>
+          <select id="DOCKER_CUSTOM_<?=$port?>_size" name="DOCKER_SIZE_<?=$port?>" class="mask" onchange="changeHosts(this.id,this.value)"<?=$disabled?>>
+            <?for ($m=16; $m<=30; $m++) echo mk_option($size?:25,$m,$m)?>
+          </select>
+          <span id="DOCKER_CUSTOM_<?=$port?>_hosts" class="flex-shrink-0" style="<?=$subnet?'':'display:none'?>">
+            (<?=pow(2,32-($size?:25))?> _(hosts)_)
+          </span>
+        </span>
+      </span>
+    </span>
+  </div>
 
 <?endif;?>
 <?if ($hide_eth):?>
@@ -430,10 +525,16 @@ _(IPv6 custom network on interface)_ <?=$network?> (_(optional)_):
   $net_user = $dhcp6 ? str_replace("$net:","",base_net($dhcp6)) : '';
   $mask_user = $dhcp6 ? explode('/',$dhcp6)[1] : $mask;
 ?>
-: <input type="checkbox" id="<?=$docker_dhcp6?>_edit" onchange="changeEdit(this.id, 6)"<?=$auto6?'checked':''?>>
-  <span id="<?=$docker_dhcp6?>_line" class="<?=$auto6Disabled?>">
-  <span class="ip6">**_(Subnet)_:** <?=$route?></span>
-  <span class="gw6">**_(Gateway)_:** <?=$gateway6[$network]?></span>
+: <span class="flex flex-col justify-start flex-wrap gap-4">
+    <label class="flex flex-row items-center gap-2">
+      <input type="checkbox" id="<?=$docker_dhcp6?>_edit" onchange="changeEdit(this.id, 6)"<?=$auto6?'checked':''?>>
+      _(Edit)_
+    </label>
+    <span id="<?=$docker_dhcp6?>_line" class="<?=$auto6Disabled?>">
+      <span class="ip6">**_(Subnet)_:** <?=$route?></span>
+      <span class="gw6">**_(Gateway)_:** <?=$gateway6[$network]?></span>
+    </span>
+  </span>
 
 <?if ($hide_wlan):?>
 </div>
@@ -458,11 +559,27 @@ $hide_eth         = hide_eth($network);
 <?endif;?>
 
 _(IPv6 custom network on interface)_ <?=$network?> (_(optional)_):
-: <input type="checkbox" id="DOCKER_CUSTOM6_<?=$port?>_edit" onchange="changeCustom(this.id,6)"<?=$subnet6?'checked':''?>><span id="DOCKER_CUSTOM6_<?=$port?>_line" class="<?=$subnet6?'':'disabled'?>">
-  <span class="ip6">**_(Subnet)_:**<input type="text" id="DOCKER_CUSTOM6_<?=$port?>_net" name="DOCKER_SUBNET6_<?=$port?>" class="ip6" value="<?=$subnet6?>" title="_(IPv6 address nnnn:xxxx::yyyy)_"<?=$disabled?>>/
-  <select id="DOCKER_CUSTOM6_<?=$port?>_mask" name="DOCKER_MASK6_<?=$port?>" class="mask"<?=$disabled?>>
-  <?for ($m=64; $m<=120; $m+=8) echo mk_option($mask6?:64,$m,$m)?></select></span>
-  <span class="gw6">**_(Gateway)_:**<input type="text" id="DOCKER_CUSTOM6_<?=$port?>_gw" name="DOCKER_GATEWAY6_<?=$port?>" class="gw6" value="<?=_var($dockercfg,"DOCKER_GATEWAY6_$port")?>" title="_(IPv6 address nnnn:xxxx::yyyy)_"<?=$disabled?>></span>
+: <div class="flex flex-col justify-start flex-wrap gap-4">
+    <label class="flex flex-row items-center gap-2">
+      <input type="checkbox" id="DOCKER_CUSTOM6_<?=$port?>_edit" onchange="changeCustom(this.id,6)"<?=$subnet6?'checked':''?>>
+      <?=_('Edit') ?>
+    </label>
+
+    <span id="DOCKER_CUSTOM6_<?=$port?>_line" class="flex flex-row items-center flex-wrap gap-2 <?=$subnet6?'':'disabled'?>">
+      <span class="ip6 flex flex-row items-center gap-2">
+        <strong><?=_('Subnet') ?>:</strong>
+        <input type="text" id="DOCKER_CUSTOM6_<?=$port?>_net" name="DOCKER_SUBNET6_<?=$port?>" class="ip6" value="<?=$subnet6?>" title="_(IPv6 address nnnn:xxxx::yyyy)_"<?=$disabled?>>
+        <span>/</span>
+        <select id="DOCKER_CUSTOM6_<?=$port?>_mask" name="DOCKER_MASK6_<?=$port?>" class="mask"<?=$disabled?>>
+          <?for ($m=64; $m<=120; $m+=8) echo mk_option($mask6?:64,$m,$m)?>
+        </select>
+      </span>
+      <span class="gw6 flex flex-row items-center gap-2">
+        <strong><?=_('Gateway') ?>:</strong>
+        <input type="text" id="DOCKER_CUSTOM6_<?=$port?>_gw" name="DOCKER_GATEWAY6_<?=$port?>" class="gw6" value="<?=_var($dockercfg,"DOCKER_GATEWAY6_$port")?>" title="_(IPv6 address nnnn:xxxx::yyyy)_"<?=$disabled?>>
+      </span>
+    </span>
+  </div>
 
 <?if ($hide_eth):?>
 </div>
@@ -534,9 +651,11 @@ $hide_wlan   = hide_wlan($network);
 <?endif;?>
 
 _(IPv4 custom network on interface)_ <?=$network?>:
-: <span class="<?=$gw4class?>">**_(Subnet)_:** <?=$route?></span>
-  <span class="<?=$gw4class?>">**_(Gateway)_:** <?=$gateway[$network]?></span>
-  <span>**_(DHCP pool)_:** <?=_var($dockercfg,$docker_dhcp) ?: "_(not set)_"?><?if (isset($dockercfg[$docker_dhcp])):?>&nbsp;&nbsp;(<?=pow(2,32-my_explode('/',$dockercfg[$docker_dhcp])[1])?> _(hosts)_)<?endif;?></span>
+: <span class="flex flex-row flex-wrap items-center gap-4">
+    <span class="<?=$gw4class?>">**_(Subnet)_:** <?=$route?></span>
+    <span class="<?=$gw4class?>">**_(Gateway)_:** <?=$gateway[$network]?></span>
+    <span>**_(DHCP pool)_:** <?=_var($dockercfg,$docker_dhcp) ?: "_(not set)_"?><?if (isset($dockercfg[$docker_dhcp])):?>&nbsp;&nbsp;(<?=pow(2,32-my_explode('/',$dockercfg[$docker_dhcp])[1])?> _(hosts)_)<?endif;?></span>
+  </span>
 
 <?if ($hide_wlan):?>
 </div>
@@ -571,9 +690,11 @@ if (substr($network,0,4) != 'wlan') {
 <?endif;?>
 
 _(IPv4 custom network on interface)_ <?=$network?>:
-: <span class="<?=$gw4class?>">**_(Subnet)_:** <?=$subnet?>/<?=$mask?></span>
-  <span class="<?=$gw4class?>">**_(Gateway)_:** <?=_var($dockercfg,"DOCKER_GATEWAY_$port")?></span>
-  **_(DHCP pool)_:** <?=$range ? "$range/$size" : "_(not set)_"?><?if ($range):?>&nbsp;&nbsp;(<?=pow(2,32-($size?:25))?> _(hosts)_)<?endif;?>
+: <span class="flex flex-row flex-wrap items-center gap-4">
+    <span class="<?=$gw4class?>">**_(Subnet)_:** <?=$subnet?>/<?=$mask?></span>
+    <span class="<?=$gw4class?>">**_(Gateway)_:** <?=_var($dockercfg,"DOCKER_GATEWAY_$port")?></span>
+    <span>**_(DHCP pool)_:** <?=$range ? "$range/$size" : "_(not set)_"?><?if ($range):?>&nbsp;&nbsp;(<?=pow(2,32-($size?:25))?> _(hosts)_)<?endif;?></span>
+  </span>
 
 <?if ($hide_eth):?>
 </div>
@@ -593,8 +714,10 @@ if (isset($dockercfg[$docker_dhcp6]) || empty($dockercfg["DOCKER_AUTO_$net"])):?
 <?endif;?>
 
 _(IPv6 custom network on interface)_ <?=$network?>:
-: <span class="gw6">**_(Subnet)_:** <?=$route?></span>
-  <span class="gw6">**_(Gateway)_:** <?=$gateway6[$network]?></span>
+: <span class="flex flex-row flex-wrap items-center gap-4">
+    <span class="gw6">**_(Subnet)_:** <?=$route?></span>
+    <span class="gw6">**_(Gateway)_:** <?=$gateway6[$network]?></span>
+  </span>
 
 <?if ($hide_wlan):?>
 </div>
@@ -629,8 +752,10 @@ if (substr($network,0,4) != 'wlan') {
 <?endif;?>
 
 _(IPv6 custom network on interface)_ <?=$network?>:
-: <span class="gw6">**_(Subnet)_:** <?=$subnet6?>/<?=$mask6?></span>
-  <span class="gw6">**_(Gateway)_:** <?=_var($dockercfg,"DOCKER_GATEWAY6_$port")?></span>
+: <span class="flex flex-row flex-wrap items-center gap-4">
+    <span class="gw6">**_(Subnet)_:** <?=$subnet6?>/<?=$mask6?></span>
+    <span class="gw6">**_(Gateway)_:** <?=_var($dockercfg,"DOCKER_GATEWAY6_$port")?></span>
+  </span>
 
 <?if ($hide_eth):?>
 </div>
@@ -667,6 +792,7 @@ _(btrfs scrub status)_:
 <input type="hidden" name="#arg[1]" value="start">
 <input type="hidden" name="#arg[2]" value="/var/lib/docker">
 <input type="hidden" name="#arg[3]" value="-r">
+
 &nbsp;
 : <span class="inline-block">
     <input type="submit" value="_(Scrub)_">
@@ -679,6 +805,7 @@ _(btrfs scrub status)_:
 <input type="hidden" name="#command" value="/webGui/scripts/btrfs_scrub">
 <input type="hidden" name="#arg[1]" value="cancel">
 <input type="hidden" name="#arg[2]" value="/var/lib/docker">
+
 &nbsp;
 : <span class="inline-block">
     <input type="submit" value="_(Cancel)_">

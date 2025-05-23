@@ -202,14 +202,23 @@ _(Delete)_<input type="checkbox" name="confirmDelete" onChange="chkDelete(this.f
     <input type="button" value="_(Done)_" onclick="done('UserEdit')">
   </span>
 </form>
-<br><br>
+
 <form markdown="1" method="POST" action="/update.htm" onsubmit="return checkPassword(this)" target="progressFrame">
 <input type="hidden" name="userName" value="<?=htmlspecialchars($name)?>">
 
 _(Password)_:
-: <input type="hidden" name="userPassword" value="">
-  <input type="password" name="userPasswordGUI" maxlength="129" autocomplete="new-password" onKeyUp="validatePassword(this.value);this.form.cmdUserEdit.disabled=(this.form.userPasswordGUI.value != this.form.userPasswordConfGUI.value);">
-  <i id="showPass" class="fa fa-eye" style="cursor:pointer" title="_(Show / Hide password)_" onclick="showPassword()"></i><span><span class="usage-disk sys none"><span id="strength-bar" style="width:0"></span><span></span></span><span id="strength-text"></span></span>
+: <span class="flex flex-row items-center gap-2">
+    <input type="hidden" name="userPassword" value="">
+    <input type="password" name="userPasswordGUI" maxlength="129" autocomplete="new-password" onKeyUp="validatePassword(this.value);this.form.cmdUserEdit.disabled=(this.form.userPasswordGUI.value != this.form.userPasswordConfGUI.value);">
+    <i id="showPass" class="fa fa-eye" style="cursor:pointer" title="_(Show / Hide password)_" onclick="showPassword()"></i>
+    <span>
+      <span class="usage-disk sys none">
+        <span id="strength-bar" style="width:0"></span>
+        <span></span>
+      </span>
+      <span id="strength-text"></span>
+    </span>
+  </span>
 
 :user_password_help:
 
@@ -230,7 +239,7 @@ _(Retype password)_:
 <input type="hidden" name="#file" value="<?=$file;?>">
 
 _(SSH authorized keys)_:
-: <textarea spellcheck="false" cols="80" rows="<?=max(substr_count($text,"\n")+1,10)?>" maxlength="16384" name="text" style="resize:none;white-space:normal;font-family:bitstream;width:65.5%"><?=htmlspecialchars($text)?></textarea>
+: <textarea class="font-mono" spellcheck="false" cols="80" rows="<?=max(substr_count($text,"\n")+1,10)?>" maxlength="16384" name="text"><?=htmlspecialchars($text)?></textarea>
 
 &nbsp;
 : <span class="inline-block">

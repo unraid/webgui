@@ -149,7 +149,6 @@ textarea,
     min-height: 2rem;
     line-height: 2rem;
     outline: none;
-    /* width: 300px; */
     width: 100%;
     margin: 0;
     box-shadow: none;
@@ -196,6 +195,24 @@ a.button,
     background: var(--button-background);
     background-size: var(--button-background-size);
 }
+
+/* necessary evil until we re-write button styles */
+.buttons-no-margin {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+
+    input[type="button"],
+    input[type="reset"],
+    input[type="submit"],
+    button,
+    button[type="button"],
+    a.button,
+    .sweet-alert button {
+        margin: 0;
+    }
+}
+
 input[type="checkbox"] {
     vertical-align: middle;
     margin-right: 6px;
@@ -474,8 +491,7 @@ div.title {
     letter-spacing: 1.8px;
     font-size: 1.4rem;
 
-    /* target first title */
-    &:first-child {
+    &:first-of-type {
         margin-top: 0;
     }
 }
@@ -864,6 +880,11 @@ div.title.shift {
     table {
         min-width: 1345px;
     }
+}
+
+.TableContainer--no-min-width {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -1269,7 +1290,7 @@ a.list {
     * Force remove any small empty space elements.
     * Necessary evil to prevent needing to rewrite .page file parsing and allow for a more responsive page.
     */
-    dt, dd, p, div, span {
+    dt, dd, p {
         &:empty {
             display: none !important;
             margin: 0 !important;
@@ -1342,31 +1363,29 @@ a.list {
 .tab-content {
     display: none;
 
-    form {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 1rem;
-        width: 100%;
-        max-width: 80rem;
-        margin: 0 auto;
+    form:first-of-type {
         padding-top: 1rem;
+    }
+
+    .shade form {
+        padding-top: 0;
     }
 }
 
 .Panels {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    column-gap: 3rem;
-    row-gap: 2rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 120px));
+    gap: 1rem;
     margin-top: 2rem;
     box-sizing: border-box;
+    justify-content: start;
 }
 .Panel {
     position: relative;
     text-align: center;
     box-sizing: border-box;
     background-color: transparent;
+    max-width: 120px;
 
     a {
         position: relative;
@@ -1477,6 +1496,8 @@ pre {
     line-height: 1.8rem;
     padding: 4px 6px;
     overflow: auto;
+    width: 100%;
+    box-sizing: border-box;
 }
 iframe#progressFrame {
     position: fixed;
@@ -1514,6 +1535,7 @@ dt {
 dd {
     margin: 0;
     white-space: normal;
+    box-sizing: border-box;
 
     p {
         margin: 0 0 4px 0;
@@ -1730,6 +1752,12 @@ span#wlan0 {
     background-color: var(--shade-bg-color);
 }
 
+/* TailwindCSS inspired utility classes */
+
+.font-mono {
+    font-family: bitstream, monospace;
+}
+
 .hidden {
     display: none;
 }
@@ -1746,6 +1774,18 @@ span#wlan0 {
     display: inline-flex;
 }
 
+.flex-wrap {
+    flex-wrap: wrap;
+}
+
+.flex-wrap-reverse {
+    flex-wrap: wrap-reverse;
+}
+
+.flex-nowrap {
+    flex-wrap: nowrap;
+}
+
 .flex-col {
     flex-direction: column;
 }
@@ -1760,6 +1800,10 @@ span#wlan0 {
 
 .flex-row-reverse {
     flex-direction: row-reverse;
+}
+
+.flex-shrink-0 {
+    flex-shrink: 0;
 }
 
 .justify-start {
@@ -2304,7 +2348,7 @@ span#wlan0 {
     .title p {
         display: none;
     }
-    div.title:first-child {
+    div.title:first-of-type {
         margin-top: 0;
     }
     div.title.shift {
@@ -2467,10 +2511,6 @@ span#wlan0 {
 
     div.up {
         border: 1px solid var(--table-alt-border-color);
-    }
-
-    pre.up {
-        margin-top: 0;
     }
 
     pre {

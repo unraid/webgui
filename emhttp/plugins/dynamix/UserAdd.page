@@ -165,9 +165,18 @@ _(Custom image)_:
 :user_add_custom_image_help:
 
 _(Password)_:
-: <input type="hidden" name="userPassword" value="">
-  <input type="password" name="userPasswordGUI" maxlength="129" autocomplete="new-password" onKeyUp="validatePassword(this.value);this.form.cmdUserEdit.disabled=(this.form.userName.value=='' || this.form.userPasswordGUI.value!=this.form.userPasswordConfGUI.value)">
-  <i id="showPass" class="fa fa-eye" style="cursor:pointer" title="_(Show / Hide password)_" onclick="showPassword()"></i><span><span class="usage-disk sys none"><span id="strength-bar" style="width:0"></span><span></span></span><span id="strength-text"></span></span>
+: <span class="flex flex-row items-center gap-2">
+    <input type="hidden" name="userPassword" value="">
+    <input type="password" name="userPasswordGUI" maxlength="129" autocomplete="new-password" onKeyUp="validatePassword(this.value);this.form.cmdUserEdit.disabled=(this.form.userName.value=='' || this.form.userPasswordGUI.value!=this.form.userPasswordConfGUI.value)">
+    <i id="showPass" class="fa fa-eye" style="cursor:pointer" title="_(Show / Hide password)_" onclick="showPassword()"></i>
+    <span>
+      <span class="usage-disk sys none">
+        <span id="strength-bar" style="width:0"></span>
+        <span></span>
+      </span>
+      <span id="strength-text"></span>
+    </span>
+  </span>
 
 :user_password_help:
 

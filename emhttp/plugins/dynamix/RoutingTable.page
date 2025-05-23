@@ -74,13 +74,20 @@ $(function(){
 <div class="shade" style="margin-top:12px;padding:12px 4px;">
 <form markdown="1" name="add_routes" method="POST" action="/webGui/include/RoutingTable.php" target="progressFrame" onsubmit="setTimeout(resetTable,500)">
 _(Enter route + gateway + metric)_:
-: <input type="text" name="route" maxlength="39" value="" class="fixed" placeholder="_(IPv4/nn or IPv6/nn route)_" required>
-  <input type="text" name="gateway" class="fixed" value="" list="device" placeholder="_(gateway name or address)_" required>
-  <datalist id="device"><?foreach ($list as $port):?><?echo "<option value='$port'>"?><?endforeach;?></datalist>
-  <span class="inline-block">
-    <input type="text" name="metric" min="1" max="9999" value="" class="trim" placeholder="1"><i class="fa fa-sort-numeric-asc"></i> *_(optional metric (lowest is preferred))_*
+: <span class="flex flex-row flex-wrap items-center gap-2">
+    <input type="text" name="route" maxlength="39" value="" class="fixed" placeholder="_(IPv4/nn or IPv6/nn route)_" required>
+    <input type="text" name="gateway" class="fixed" value="" list="device" placeholder="_(gateway name or address)_" required>
+    <datalist id="device"><?foreach ($list as $port):?><?echo "<option value='$port'>"?><?endforeach;?></datalist>
+    <span class="flex flex-row flex-wrap items-center gap-2">
+      <input type="text" name="metric" min="1" max="9999" value="" class="trim" placeholder="1">
+      <span class="flex flex-row flex-wrap items-center gap-1">
+        <i class="fa fa-sort-numeric-asc"></i>
+        <span>_(optional metric (lowest is preferred))_</span>
+      </span>
+    </span>
+    <input type="hidden" name="task" value="Add Route">
   </span>
-  <input type="hidden" name="task" value="Add Route">
+
 :eth_routing_table_help:
 
 &nbsp;
