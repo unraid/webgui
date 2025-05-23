@@ -71,12 +71,6 @@
         <? endforeach; ?>
         <? unset($buttonPages, $button); ?>
 
-        <div class="nav-user show">
-            <a id="board" href="#" class="hand">
-                <b id="bell" class="icon-u-bell system"></b>
-            </a>
-        </div>
-
         <? if ($themeHelper->isSidebarTheme()): ?>
             </div>
         <? endif; ?>
