@@ -1,0 +1,37 @@
+Menu="UNRAID-OS"
+Title="Open Terminal"
+Icon="terminal"
+---
+<?PHP
+/* Copyright 2025, Lime Technology
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<script>
+$(function(){
+  var d = new Date();
+  try {
+    openTerminal('ttyd', 'Web Terminal ' + d.getTime(), '');
+  } catch (e) {
+    console.error('Failed to open terminal:', e);
+    window.location.href = '/';
+    return;
+  }
+  // Give time for terminal to open then go back to the previous page
+  var referer = '<?= htmlspecialchars($_SERVER['HTTP_REFERER'] ?? '', ENT_QUOTES) ?>';
+  setTimeout(function(){
+    // Only redirect to same origin or fallback to home
+    if (referer && referer.indexOf(window.location.origin) === 0) {
+      window.location.href = referer;
+    } else {
+      window.location.href = '/';
+    }
+  }, 5000);
+});
+</script>
