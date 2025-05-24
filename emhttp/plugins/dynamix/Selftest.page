@@ -93,8 +93,8 @@ function testUpdate(init) {
       if (!init) timers.testUpdate = setTimeout(testUpdate,3000);
     } else {
       if ($('#smart_selftest').length) $('#smart_selftest').html('');
-      $('#short_test').val("_(Start)_");
-      $('#long_test').val("_(Start)_");
+      $('#short_test').val("_(Start)_").removeAttr('disabled');
+      $('#long_test').val("_(Start)_").removeAttr('disabled');
       if (!init) {
         $.removeCookie('test.<?=$dev?>');
       }
