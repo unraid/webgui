@@ -10,8 +10,10 @@ DAEMON="WiFi network"
 CALLER="wifi"
 INI="/var/local/emhttp/wireless.ini"
 CFG="/boot/config/wireless.cfg"
+DOCKER="/boot/config/docker.cfg"
 OPENSSL="/usr/local/emhttp/webGui/scripts/open_ssl"
 STARTWIFI="/usr/local/emhttp/webGui/scripts/wireless"
+SERVICES="/usr/local/emhttp/webGui/scripts/update_services"
 WPA="/etc/wpa_supplicant.conf"
 
 # system network references
@@ -27,6 +29,16 @@ CONF6="/proc/sys/net/ipv6/conf"
 # get settings
 [[ -r $INI ]] && . $INI
 PORT=${PORT:-wlan0}
+
+# return variable value from file
+var(){
+  [[ -r "$2" ]] && grep -Pom1 "^$1=\"\K[^\"]+" "$2"
+}
+
+# return interface index
+index(){
+  cat $SYSTEM/$1/ifindex 2>/dev/null
+}
 
 # translate security to informational text
 trans(){
@@ -126,13 +138,21 @@ ipaddr_up(){
     if carrier $PORT; then STATE="UP"; else STATE="DOWN"; fi
     log "interface $PORT is $STATE, setting static $IP address"
     ipv6_addr $PORT 0 1
+    INDEX=$(index $PORT)
+    INDEX=$((3000 + ${INDEX:-$(($(index * | sort -n | tail -1) + 1))}))
     if [[ $IP == ipv4 ]]; then
-      [[ -n $IP4 && -n $MASK4 ]] && run ip -4 addr add $(unzero $IP4)/$MASK4 dev $PORT metric 3004
-      [[ -n $GATEWAY4 ]] && run ip -4 route add default via $GATEWAY4 dev $PORT metric 3004
+      if [[ -n $IP4 && -n $MASK4 ]]; then
+        run ip -4 addr add $(unzero $IP4)/$MASK4 metric $INDEX dev $PORT
+        # re-add IPv4 address of parent (if docker is running)
+        if [[ $(var DOCKER_ALLOW_ACCESS $DOCKER) == yes && -S /var/run/docker.sock ]]; then
+          ip addr add $(unzero $IP4)/$MASK4 metric $(($INDEX - 1)) dev shim-$PORT
+        fi
+      fi
+      [[ -n $GATEWAY4 ]] && run ip -4 route add default via $GATEWAY4 metric $INDEX dev $PORT
     fi
     if [[ $IP == ipv6 ]]; then
-      [[ -n $IP6 && -n $MASK6 ]] && run ip -6 addr add $(unzero6 $IP6)/$MASK6 dev $PORT metric 3004
-      [[ -n $GATEWAY6 ]] && run ip -6 route add default via $GATEWAY6 dev $PORT metric 3004
+      [[ -n $IP6 && -n $MASK6 ]] && run ip -6 addr add $(unzero6 $IP6)/$MASK6 metric $INDEX dev $PORT
+      [[ -n $GATEWAY6 ]] && run ip -6 route add default via $GATEWAY6 metric $INDEX dev $PORT
     fi
   fi
   if [[ $DNS == yes ]]; then
@@ -148,17 +168,13 @@ ipaddr_up(){
 ipaddr_down(){
   if [[ $DHCP == yes ]]; then
     # release DHCP assigned address and default route
-    OPTIONS="-q -k"
+    OPTIONS="-q -k -$1"
     [[ $DNS == yes ]] && OPTIONS="$OPTIONS -C resolv.conf"
-    [[ $IP == ipv4 ]] && OPTIONS="$OPTIONS -4"
-    [[ $IP == ipv6 ]] && OPTIONS="$OPTIONS -6"
     run dhcpcd $OPTIONS $PORT
   elif [[ $DHCP == no ]]; then
     # release static assigned address and default route
-    [[ $IP == ipv4 ]] && run ip -4 addr flush dev $PORT
-    [[ $IP == ipv4 ]] && run ip -4 route flush default dev $PORT
-    [[ $IP == ipv6 ]] && run ip -6 addr flush dev $PORT
-    [[ $IP == ipv6 ]] && run ip -6 route flush default dev $PORT
+    run ip -$1 addr flush dev $PORT
+    run ip -$1 route flush default dev $PORT
   fi
 }
 
@@ -253,19 +269,25 @@ wifi_stop(){
     log "$DAEMON...  No Wifi present."
     return
   fi
-  IP=ipv4
   DHCP=$DHCP4
   DNS=$DNS4
-  ipaddr_down
+  SRV4=$DNS
+  SRV6=
+  ipaddr_down 4
   if [[ -n $DHCP6 ]]; then
-    IP=ipv6
     DHCP=$DHCP6
     DNS=$DNS6
-    ipaddr_down
+    SRV6=$DNS
+    ipaddr_down 6
   fi
+  IPV4=$(ip -4 -br addr show scope global primary dev shim-$PORT | awk '{print $3,$4,$5;exit}')
+  [[ -n $IPV4 ]] && run ip addr del $IPV4 dev shim-$PORT
+  run ip addr flush dev $PORT
   run pkill wpa_supplicant
   run iw dev $PORT disconnect
   run rm -f $INI
+  # restart services when static assignments
+  [[ $SRV4 == no && (-z $SRV6 || $SRV6 == no) ]] && $SERVICES 5
   if ! wifi_running; then REPLY="Stopped"; else REPLY="Failed"; fi
   log "$DAEMON...  $REPLY."
 }
@@ -309,6 +331,8 @@ wifi_join(){
   IP=ipv4
   DHCP=$DHCP4
   DNS=$DNS4
+  SRV4=$DNS
+  SRV6=
   ipaddr_up
   # IPv6 address assignment (if enabled)
   if [[ -n $DHCP6 ]]; then
@@ -316,10 +340,13 @@ wifi_join(){
     IP=ipv6
     DHCP=$DHCP6
     DNS=$DNS6
+    SRV6=$DNS
     ipaddr_up
   else
     echo 1 >$CONF6/$PORT/disable_ipv6
   fi
+  # restart services when static assignments
+  [[ $SRV4 == no && (-z $SRV6 || $SRV6 == no) ]] && $SERVICES 5
   if wifi_running; then
     if [[ -z $CC ]]; then
       CC=($(iw reg get | grep -Po '^country \K..'))

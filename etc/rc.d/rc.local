@@ -80,9 +80,14 @@ fi
 /usr/local/emhttp/webGui/scripts/notify smtp-init
 /usr/local/emhttp/webGui/scripts/notify cron-init
 
+# start interface state monitoring
+if [[ -x /usr/local/sbin/monitor_interface ]]; then
+  /usr/local/sbin/monitor_interface &>/dev/null
+fi
+
 # start nchan monitoring -> stop all running nchan processes when no subscribers are connected
 if [[ -x /usr/local/sbin/monitor_nchan ]]; then
-  /usr/local/sbin/monitor_nchan
+  /usr/local/sbin/monitor_nchan &>/dev/null
 fi
 
 # First boot following Unraid Server OS update: delete plugin file
@@ -184,7 +189,7 @@ else
     if [[ -f "$PRIORITY_PLUGIN_PATH" ]]; then
       /usr/local/sbin/plugin install "$PRIORITY_PLUGIN_PATH" | log
     fi
-  done  
+  done
   # Install remaining plugins
   shopt -s nullglob
   for PLUGIN in $CONFIG/plugins/*.plg; do

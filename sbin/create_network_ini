@@ -13,23 +13,42 @@
 
 [[ (-z $reason && -z $1) || (-n $reason && ! "BOUND6 IPV4LL EXPIRE" =~ $reason) ]] && exit 0
 
-INI=/var/local/emhttp/network.ini.new
-CFG=/boot/config/network.cfg
-SYS=/sys/class/net
+INI="/var/local/emhttp/network.ini.new"
+STA="/var/local/emhttp/statics.ini.new"
+CFG="/boot/config/network.cfg"
+DOCKER="/boot/config/docker.cfg"
+SYSTEM="/sys/class/net"
 
 declare -A VLANID USE_DHCP IPADDR NETMASK GATEWAY METRIC USE_DHCP6 IPADDR6 NETMASK6 GATEWAY6 PRIVACY6 METRIC6 DESCRIPTION PROTOCOL
 
 # run & log functions
 . /etc/rc.d/rc.runlog
 
-mask(){
-  [[ -z $1 ]] && return
-  # convert prefix to netmask
-  set -- $((5-($1/8))) 255 255 255 255 $(((255<<(8-($1%8)))&255)) 0 0 0
-  [[ $1 -gt 1 ]] && shift $1 || shift
-  echo $1.$2.$3.$4
+# return variable value from file
+var(){
+  [[ -r "$2" ]] && grep -Pom1 "^$1=\"\K[^\"]+" "$2"
 }
 
+# return interface index
+index(){
+  cat $SYSTEM/$1/ifindex 2>/dev/null
+}
+
+# convert netmask to prefix
+mask2cidr(){
+  [[ -z $1 ]] && return
+  local MASK=$(eval eval echo "'\$((('{"${1//./,}"}'>>'{7..0}')%2))'")
+  eval echo '$(('"${MASK// /+}"'))'
+}
+
+# convert prefix to netmask
+cidr2mask(){
+  [[ -z $1 ]] && return
+  local MASK=$(eval echo '$(((1<<32)-1<<32-$1>>'{3..0}'*8&255))')
+  echo "${MASK// /.}"
+}
+
+# return dns nameserver entry
 dns() {
   [[ $1 == 4 ]] && ADDR='(\d{1,3}\.){3}\d+' || ADDR='([0-9a-fA-F]{1,4}::?){1,7}[0-9a-fA-F]*'
   grep -Po "^nameserver \K$ADDR" /etc/resolv.conf
@@ -48,8 +67,10 @@ else
   BONDING=yes
   BRIDGING=yes
 fi
+
 # prepare empty file
 echo -n >$INI
+echo -n >$STA
 
 # loop thru all defined interfaces (=1 in case of legacy)
 for ((i=0; i<${SYSNICS:-1}; i++)); do
@@ -57,7 +78,7 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
   ETH=${IFACE/#bond/eth}
   ETH=${ETH/#br/eth}
   # don't store when non-existing
-  [[ -e $SYS/$ETH ]] || continue
+  [[ -e $SYSTEM/$ETH ]] || continue
   echo "[$ETH]" >>$INI
   if [[ $i -eq 0 ]]; then
     # process legacy settings
@@ -127,10 +148,10 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
   echo "USE_GW4:0=\"${USE_GW4[$i]}\"" >>$INI
   if [[ ${USE_DHCP[$i]} == yes ]]; then
     # get dhcp assigned ipv4 address & mask
-    NET=($(ip -4 -br addr show $IFACE | awk '{sub("/"," ",$3);print $3;exit}'))
-    GW=$(ip -4 route show default dev $IFACE | awk '{print $3;exit}')
+    NET=($(ip -4 -br addr show scope global primary dev $IFACE | awk '{sub("/"," ",$3);print $3;exit}'))
+    GW=$(ip -4 route show to default dev $IFACE | awk '{print $3;exit}')
     echo "IPADDR:0=\"${NET[0]}\"" >>$INI
-    echo "NETMASK:0=\"$(mask ${NET[1]})\"" >>$INI
+    echo "NETMASK:0=\"$(cidr2mask ${NET[1]})\"" >>$INI
     echo "GATEWAY:0=\"$GW\"" >>$INI
     echo "METRIC:0=\"${METRIC[$i]}\"" >>$INI
   else
@@ -139,13 +160,16 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
     echo "NETMASK:0=\"${NETMASK[$i]}\"" >>$INI
     echo "GATEWAY:0=\"${GATEWAY[$i]}\"" >>$INI
     echo "METRIC:0=\"${METRIC[$i]}\"" >>$INI
+    # store static ipv4 assignment
+    IPV4="$(ip -4 -br addr show scope global primary dev $IFACE | awk '{$2="";print;exit}')"
+    [[ -n $IPV4 ]] && echo "$IPV4" >>$STA
   fi
   echo "USE_DHCP6:0=\"${USE_DHCP6[$i]}\"" >>$INI
   echo "USE_GW6:0=\"${USE_GW6[$i]}\"" >>$INI
   if [[ ${USE_DHCP6[$i]} == yes ]]; then
     # get auto assigned ipv6 address & prefix
-    NET6=($(ip -6 -br addr show $IFACE scope global -temporary -deprecated | awk '{sub("/"," ",$3);print $3;exit}'))
-    GW6=$(ip -6 route show default dev $IFACE | awk '{print $3;exit}')
+    NET6=($(ip -6 -br addr show scope global primary -deprecated dev $IFACE | awk '{sub("/"," ",$3);print $3;exit}'))
+    GW6=$(ip -6 route show to default dev $IFACE | awk '{print $3;exit}')
     echo "IPADDR6:0=\"${NET6[0]}\"" >>$INI
     echo "NETMASK6:0=\"${NET6[1]}\"" >>$INI
     echo "GATEWAY6:0=\"$GW6\"" >>$INI
@@ -158,6 +182,9 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
     echo "GATEWAY6:0=\"${GATEWAY6[$i]}\"" >>$INI
     echo "METRIC6:0=\"${METRIC6[$i]}\"" >>$INI
     echo "PRIVACY6:0=\"\"" >>$INI
+    # store static ipv6 assignment
+    IPV6="$(ip -6 -br addr show scope global primary -deprecated dev $IFACE | awk '{$2="";print;exit}')"
+    [[ -n $IPV6 ]] && echo "$IPV6" >>$STA
   fi
   echo "USE_MTU=\"${USE_MTU[$i]}\"" >>$INI
   echo "MTU=\"${MTU[$i]}\"" >>$INI
@@ -172,11 +199,11 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
       echo "USE_GW4:$j=\"${USE_GW4[$i,$j]}\"" >>$INI
       if [[ ${USE_DHCP[$i,$j]} == yes ]]; then
         DEV=$IFACE.${VLANID[$i,$j]}
-        # get dhcp assigned ipv4 address & mask
-        NET=($(ip -4 -br addr show $DEV | awk '{sub("/"," ",$3);print $3;exit}'))
-        GW=$(ip -4 route show default dev $DEV | awk '{print $3;exit}')
+        # get dhcp assigned ipv4 address & cidr2mask
+        NET=($(ip -4 -br addr show scope global primary dev $DEV | awk '{sub("/"," ",$3);print $3;exit}'))
+        GW=$(ip -4 route show to default dev $DEV | awk '{print $3;exit}')
         echo "IPADDR:$j=\"${NET[0]}\"" >>$INI
-        echo "NETMASK:$j=\"$(mask ${NET[1]})\"" >>$INI
+        echo "NETMASK:$j=\"$(cidr2mask ${NET[1]})\"" >>$INI
         echo "GATEWAY:$j=\"$GW\"" >>$INI
         echo "METRIC:$j=\"${METRIC[$i,$j]}\"" >>$INI
       else
@@ -185,14 +212,17 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
         echo "NETMASK:$j=\"${NETMASK[$i,$j]}\"" >>$INI
         echo "GATEWAY:$j=\"${GATEWAY[$i,$j]}\"" >>$INI
         echo "METRIC:$j=\"${METRIC[$i,$j]}\"" >>$INI
+        # store static ipv4 assignment
+        IPV4="$(ip -4 -br addr show scope global primary dev $DEV | awk '{$2="";print;exit}')"
+        [[ -n $IPV4 ]] && echo "$IPV4" >>$STA
       fi
       echo "USE_DHCP6:$j=\"${USE_DHCP6[$i,$j]}\"" >>$INI
       echo "USE_GW6:$j=\"${USE_GW6[$i,$j]}\"" >>$INI
       if [[ ${USE_DHCP6[$i,$j]} == yes ]]; then
         DEV=$IFACE.${VLANID[$i,$j]}
         # get auto assigned ipv6 address & prefix
-        NET6=($(ip -6 -br addr show $DEV scope global -temporary -deprecated | awk '{sub("/"," ",$3);print $3;exit}'))
-        GW6=$(ip -6 route show default dev $DEV | awk '{print $3;exit}')
+        NET6=($(ip -6 -br addr show scope global primary -deprecated dev $DEV | awk '{sub("/"," ",$3);print $3;exit}'))
+        GW6=$(ip -6 route show to default dev $DEV | awk '{print $3;exit}')
         echo "IPADDR6:$j=\"${NET6[0]}\"" >>$INI
         echo "NETMASK6:$j=\"${NET6[1]}\"" >>$INI
         echo "GATEWAY6:$j=\"$GW6\"" >>$INI
@@ -205,6 +235,9 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
         echo "GATEWAY6:$j=\"${GATEWAY6[$i,$j]}\"" >>$INI
         echo "METRIC6:$j=\"${METRIC6[$i,$j]}\"" >>$INI
         echo "PRIVACY6:$j=\"\"" >>$INI
+        # store static ipv6 assignment
+        IPV6="$(ip -6 -br addr show scope global primary -deprecated dev $DEV | awk '{$2="";print;exit}')"
+        [[ -n $IPV6 ]] && echo "$IPV6" >>$STA
       fi
     done
   else
@@ -214,6 +247,25 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
 done
 # atomically update file
 mv $INI ${INI%.*}
+mv $STA ${STA%.*}
+
+# add or remove IPv4 assignment from attached interface when Docker custom network access is allowed
+[[ ${interface:0:2} == br || $interface == wlan0 ]] && LINK=shim-$interface || LINK=vhost${interface//[^0-9.]/}
+if [[ -e $SYSTEM/$LINK && $(var DOCKER_ALLOW_ACCESS $DOCKER) == yes ]]; then
+  IPV4=$(ip -4 -br addr show scope global primary dev $interface | awk '{print $3;exit}')
+  [[ $interface == wlan0 ]] && INDEX=3000 || INDEX=1000
+  INDEX=$(($INDEX - 1 + $(index $interface)))
+  case $reason in
+  'BOUND' | 'BOUND6')
+    # re-add IPv4 address of parent (if docker is running)
+    [[ -S /var/run/docker.sock ]] && ip addr add $IPV4 metric $INDEX dev $LINK
+    ;;
+  'EXPIRE')
+    # remove IPv4 address of parent
+    ip addr del $IPV4 metric $INDEX dev $LINK
+    ;;
+  esac
+fi
 
 log "interface=${interface:-$1}, reason=$reason, protocol=$protocol"
 # delayed execution
@@ -224,19 +276,19 @@ if [[ -z $interface || "eth0 br0 bond0 wlan0" =~ $interface ]]; then
   . /etc/unraid-version
   echo -e "Unraid Server OS version: $version" >/etc/issue
   # find management interface
-  [[ -e $SYS/bond0 ]] && dev=bond0 || dev=eth0
-  [[ -e $SYS/br0 ]] && dev=br0
-  IPv4=$(ip -4 -br addr show $dev scope global | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
-  IPv6=$(ip -6 -br addr show $dev scope global -temporary -deprecated | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
+  [[ -e $SYSTEM/bond0 ]] && DEV=bond0 || DEV=eth0
+  [[ -e $SYSTEM/br0 ]] && DEV=br0
+  IPV4=$(ip -4 -br addr show scope global primary dev $DEV | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
+  IPV6=$(ip -6 -br addr show scope global primary -deprecated dev $DEV | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
   # show current IP assignment
-  [[ -n $IPv4 ]] && echo " IPv4 address: $IPv4" >>/etc/issue || echo " IPv4 address: not set" >>/etc/issue
-  [[ -n $IPv6 ]] && echo " IPv6 address: $IPv6" >>/etc/issue || echo " IPv6 address: not set" >>/etc/issue
-  if [[ -e $SYS/wlan0 ]]; then
+  [[ -n $IPV4 ]] && echo " IPv4 address: $IPV4" >>/etc/issue || echo " IPv4 address: not set" >>/etc/issue
+  [[ -n $IPV6 ]] && echo " IPv6 address: $IPV6" >>/etc/issue || echo " IPv6 address: not set" >>/etc/issue
+  if [[ -e $SYSTEM/wlan0 ]]; then
     echo "Wireless network:" >>/etc/issue
-    IPv4=$(ip -4 -br addr show wlan0 scope global | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
-    IPv6=$(ip -6 -br addr show wlan0 scope global -temporary -deprecated | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
-    [[ -n $IPv4 ]] && echo " IPv4 address: $IPv4" >>/etc/issue || echo " IPv4 address: not set" >>/etc/issue
-    [[ -n $IPv6 ]] && echo " IPv6 address: $IPv6" >>/etc/issue || echo " IPv6 address: not set" >>/etc/issue
+    IPV4=$(ip -4 -br addr show scope global primary dev wlan0 | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
+    IPV6=$(ip -6 -br addr show scope global primary -deprecated dev wlan0 | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
+    [[ -n $IPV4 ]] && echo " IPv4 address: $IPV4" >>/etc/issue || echo " IPv4 address: not set" >>/etc/issue
+    [[ -n $IPV6 ]] && echo " IPv6 address: $IPV6" >>/etc/issue || echo " IPv6 address: not set" >>/etc/issue
   fi
   echo >>/etc/issue
 fi

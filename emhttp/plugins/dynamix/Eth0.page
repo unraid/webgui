@@ -55,15 +55,13 @@ function index($key) {
   return filter_var($key, FILTER_SANITIZE_NUMBER_INT);
 }
 
-function metric($eth, $prot, $index) {
+function metric($eth) {
   $system = '/sys/class/net';
-  $bridge = str_replace('eth','br', $eth);
-  $bond   = str_replace('eth','bond', $eth);
+  $bridge = str_replace('eth', 'br', $eth);
+  $bond   = str_replace('eth', 'bond', $eth);
   $port   = file_exists("$system/$bridge") ? $bridge : (file_exists("$system/$bond") ? $bond : $eth);
-  $metric = exec("ip -$prot route show default dev $port 2>/dev/null | grep -Pom1 ' metric \K\d+'");
-  if ($metric) return $metric + $index;
-  exec("ip -$prot route show default 2>/dev/null | grep -Po ' metric \K\d+'",$metrics);
-  return (count($metrics) ? max($metrics) : 0) + $index + 1;
+  $index  = exec("cat $system/$port/ifindex 2>/dev/null");
+  return 1000 + ($index ?: exec("cat $system/*/ifindex | sort -n | tail -1") + 1);
 }
 
 // remove non-existing ethernet ports
@@ -476,9 +474,9 @@ function addVLAN(port) {
 }
 
 function removeVLAN(element) {
-  var id = $(element).prop('id').split('-');
+  var form = $(element).closest('form');
   $(element).remove();
-  $('#view-'+id[1]).find('select').first().trigger('change');
+  form.find('select').first().trigger('change');
 }
 
 function showVLAN(port) {
@@ -729,7 +727,7 @@ _(IPv4 address)_:
 
 _(IPv4 default gateway)_:
 : <input type="text" name="GATEWAY:0" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($eth0,"GATEWAY:0")?>" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
-  <input type="text" name="METRIC:0" min="0" max="9999" autocomplete="off" spellcheck="false" value="<?=_var($eth0,"METRIC:0")?:metric('eth0',4,0)?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
+  <input type="text" name="METRIC:0" min="0" max="9999" autocomplete="off" spellcheck="false" value="<?=_var($eth0,"METRIC:0")?:metric('eth0')?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
 
 :eth_ipv4_default_gateway_help:
 
@@ -752,7 +750,7 @@ _(IPv6 address)_:
 
 _(IPv6 default gateway)_:
 : <input type="text" name="GATEWAY6:0" maxlength="39" autocomplete="off" spellcheck="false" value="<?=_var($eth0,"GATEWAY6:0")?>" pattern="<?=$validIP6?>" title="_(IPv6 address nnnn:xxxx::yyyy)_">
-  <input type="text" name="METRIC6:0" min="0" max="9999" autocomplete="off" spellcheck="false" value="<?=_var($eth0,"METRIC6:0")?:metric('eth0',6,0)?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
+  <input type="text" name="METRIC6:0" min="0" max="9999" autocomplete="off" spellcheck="false" value="<?=_var($eth0,"METRIC6:0")?:metric('eth0')?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
 
 :eth_ipv6_default_gateway_help:
 
@@ -830,7 +828,7 @@ _(IPv4 address)_:
 <div markdown="1" class="more-gw4-eth0-<?=$i?> hide">
 _(IPv4 default gateway)_:
 : <input type="text" name="GATEWAY:<?=$i?>" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($eth0,"GATEWAY:$i")?>" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
-  <input type="text" name="METRIC:<?=$i?>" min="0" max="9999" autocomplete="off" spellcheck="false" value="<?=_var($eth0,"METRIC:$i")?:metric('eth0.<?=_var($eth0,"VLANID:$i")?>',4,$i)?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
+  <input type="text" name="METRIC:<?=$i?>" min="0" max="9999" autocomplete="off" spellcheck="false" value="<?=_var($eth0,"METRIC:$i")?:metric('eth0.'._var($eth0,"VLANID:$i"))?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
 
 :eth_ipv4_default_gateway_help:
 
@@ -859,7 +857,7 @@ _(IPv6 address)_:
 <div markdown="1" class="more-gw6-eth0-<?=$i?> hide">
 _(IPv6 default gateway)_:
 : <input type="text" name="GATEWAY6:<?=$i?>" maxlength="39" autocomplete="off" spellcheck="false" value="<?=_var($eth0,"GATEWAY6:$i")?>" pattern="<?=$validIP6?>" title="_(IPv6 address nnnn:xxxx::yyyy)_">
-  <input type="text" name="METRIC6:<?=$i?>" min="0" max="9999" autocomplete="off" spellcheck="false" value="<?=_var($eth0,"METRIC6:$i")?:metric('eth0.<?=_var($eth0,"VLANID:$i")?>',6,$i)?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
+  <input type="text" name="METRIC6:<?=$i?>" min="0" max="9999" autocomplete="off" spellcheck="false" value="<?=_var($eth0,"METRIC6:$i")?:metric('eth0.'._var($eth0,"VLANID:$i"))?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
 
 :eth_ipv6_default_gateway_help:
 
@@ -921,7 +919,7 @@ _(IPv4 address)_:
 <div markdown="1" class="more-gw4-eth0-INDEX hide">
 _(IPv4 default gateway)_:
 : <input type="text" name="GATEWAY:INDEX" maxlength="15" autocomplete="off" spellcheck="false" value="" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
-  <input type="text" name="METRIC:INDEX" min="1" max="9999" autocomplete="off" spellcheck="false" value="<?=metric('eth0.INDEX',4,$i+1)?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
+  <input type="text" name="METRIC:INDEX" min="1" max="9999" autocomplete="off" spellcheck="false" value="<?=metric('eth0.INDEX')?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
 
 </div>
 </div>
@@ -942,7 +940,7 @@ _(IPv6 address)_:
 <div markdown="1" class="more-gw6-eth0-INDEX hide">
 _(IPv6 default gateway)_:
 : <input type="text" name="GATEWAY6:INDEX" maxlength="39" autocomplete="off" spellcheck="false" value="" pattern="<?=$validIP6?>" title="_(IPv6 address nnnn:xxxx::yyyy)_">
-  <input type="text" name="METRIC6:INDEX" min="1" max="9999" autocomplete="off" spellcheck="false" value="<?=metric('eth0.INDEX',6,$i+1)?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
+  <input type="text" name="METRIC6:INDEX" min="1" max="9999" autocomplete="off" spellcheck="false" value="<?=metric('eth0.INDEX')?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
 
 </div>
 </div>

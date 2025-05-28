@@ -7,6 +7,21 @@ status=http://localhost/pub/session?buffer_length=1  # nchan information about G
 nchan_list=/tmp/nchan_list.tmp
 nchan_id=$(basename "$0")
 
+nchan_subs(){
+  curl -m2 --unix-socket $nginx $status 2>/dev/null | grep -Pom1 'subscribers: \K\d+'
+}
+
+nchan_idle(){
+  local n idle subs
+  idle=3
+  for n in {1..3}; do
+    subs=$(nchan_subs)
+    [[ -z $subs || $subs =~ ^[0-9]+$ && $subs -eq 0 ]] && ((idle--))
+    sleep 3
+  done
+  [[ $idle -eq 0 ]]
+}
+
 nchan_stop() {
   echo -n >$nchan_list
   while IFS=$'\n' read -r nchan; do
@@ -49,26 +64,18 @@ start=$(date +%s)
 while :; do
   # only act when GUI registered nchan processes are running
   if [[ -s $nchan_pid ]]; then
-    # get number of GUI nchan subscribers
-    subs=$(curl --unix-socket $nginx $status 2>/dev/null | grep -Pom1 'subscribers: \K\d+')
-    if [[ -z $subs || $subs -eq 0 ]]; then
-      sleep 5
-      # steady state?
-      subs=$(curl --unix-socket $nginx $status 2>/dev/null | grep -Pom1 'subscribers: \K\d+')
-      if [[ -z $subs || $subs -eq 0 ]]; then
-        now=$(date +%s)
-        # log at 1 hour interval
-        if [[ $((now-start)) -ge 3600 ]]; then
-          logger -t $nchan_id -- "Stop running nchan processes"
-          start=$now
-        fi
-        nchan_stop
-        # empty GUI registered list & statistics
-        rm -f $nchan_pid $disk_load
+    if nchan_idle; then
+      now=$(date +%s)
+      # log at 1 hour interval
+      if [[ $((now-start)) -ge 3600 ]]; then
+        logger -t $nchan_id -- "Stop running nchan processes"
+        start=$now
       fi
+      nchan_stop
+      # empty GUI registered list & statistics
+      rm -f $nchan_pid $disk_load
     fi
   fi
   # check every 30 seconds
   sleep 30
 done &
-disown %%
