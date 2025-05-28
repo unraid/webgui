@@ -181,13 +181,13 @@ function language($method, $xml_file, &$error) {
       }
     }
     $path = "$docroot/languages/$name";
-    exec("mkdir -p $path");
+    exec("mkdir -p ".escapeshellarg($path));
     @unlink("$docroot/webGui/javascript/translate.$name.js");
     foreach (glob("$path/*.dot",GLOB_NOSORT) as $dot_file) unlink($dot_file);
-    exec("unzip -qqLjo -d $path $save", $dummy, $err);
+    exec("unzip -qqLjo -d ".escapeshellarg($path)." ".escapeshellarg($save), $dummy, $err);
     if ($err > 1) {
       @unlink($save);
-      exec("rm -rf $path");
+      exec("rm -rf ".escapeshellarg($path));
       $error = "unzip failed. Error code $err";
       return false;
     }
@@ -196,7 +196,7 @@ function language($method, $xml_file, &$error) {
     $name = $xml->LanguagePack;
     if ($name) {
       $path = "$docroot/languages/$name";
-      exec("rm -rf $path");
+      exec("rm -rf ".escapeshellarg($path));
       @unlink("$docroot/webGui/javascript/translate.$name.js");
       @unlink("$boot/lang-$name.xml");
       @unlink("$plugins/lang-$name.xml");
@@ -243,7 +243,7 @@ if ($method == 'checkall') {
     $name = str_replace('lang-', '', basename($lang_file, '.xml'));
     $lang = language('Language', $lang_file, $error) ?: $name;
     write("language: checking $lang language pack ...\n");
-    exec(realpath($argv[0])." check $name >/dev/null");
+    exec(realpath($argv[0])." check ".escapeshellarg($name)." >/dev/null");
   }
   write("language: checking finished.\n");
   done(0);
@@ -265,7 +265,7 @@ if ($method == 'updateall') {
     // update only when newer
     if (strcmp($latest, $version) > 0) {
       write("language: updating $lang language pack ...\n");
-      exec(realpath($argv[0])." update $name >/dev/null");
+      exec(realpath($argv[0])." update ".escapeshellarg($name)." >/dev/null");
     }
   }
   write("language: updating finished.\n");
