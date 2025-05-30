@@ -1,0 +1,69 @@
+#!/bin/bash
+#
+# script: monitor_interface
+#
+# Monitors a given list of interfaces and add or remove static IP addresses to these interfaces.
+# The list of interfaces is provided in the file '/var/local/emhttp/statics.ini'
+# This file is maintained by the script 'create_network_ini' which keep track of all IP assignments.
+#
+# By removing static IP addresses from inactive interfaces, these interfaces do not longer interfere with wireless.
+# In other words the wired connection can be pulled without consequences.
+#
+# Bergware - modified for Unraid OS, May 2025
+
+FILE=/var/local/emhttp/statics.ini
+SYSTEM=/sys/class/net
+
+state(){
+  cat $SYSTEM/$1/operstate 2>/dev/null
+}
+
+md5(){
+  [[ -r $FILE ]] && md5sum $FILE | awk '{print $1;exit}'
+}
+
+switch(){
+  local n status
+  [[ -z $1 ]] && return 1
+  status=3
+  # state should stay different for at least 3 seconds
+  for n in {1..3}; do
+    [[ $(state $1) != $2 ]] && ((status--))
+    sleep 1
+  done
+  [[ $status -eq 0 ]]
+}
+
+init(){
+  PORT=(); STATE=();
+  if [[ -r $FILE ]]; then
+    # initialize values from file, maintained by 'create_network_ini'
+    while IFS=$'\n' read -r ROW; do
+      PORT+=("$ROW")
+      STATE+=($(state ${ROW%% *}))
+    done <$FILE
+  fi
+  MD5=$(md5)
+}
+
+while :; do
+  # monitor file content changes
+  [[ $MD5 != $(md5) ]] && init
+  LAST=
+  for i in ${!PORT[@]}; do
+    INT=${PORT[$i]%% *}
+    # did interface state change?
+    if switch $INT ${STATE[$i]}; then
+      NEW=$(state $INT)
+      STATE[$i]=$NEW
+      if [[ $NEW == up ]]; then
+        ip addr add dev ${PORT[$i]}
+      elif [[ $NEW == down && $INT != $LAST ]]; then
+        ip addr flush scope global dev $INT
+      fi
+    fi
+    LAST=$INT
+  done
+  # check every 3 seconds
+  sleep 3
+done &
