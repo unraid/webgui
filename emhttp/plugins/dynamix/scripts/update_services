@@ -15,6 +15,14 @@ else
   log "no queued job present"
 fi
 
-echo "sleep ${1:-1}; /usr/local/emhttp/webGui/scripts/reload_services" | at -M now 2>/dev/null
-log "queue new job $(queue), wait for ${1:-1}s"
+# Validate delay parameter is numeric
+if [[ -n $1 && ! $1 =~ ^[0-9]+$ ]]; then
+  log "invalid delay parameter: $1, using default"
+  DELAY=1
+else
+  DELAY=${1:-1}
+fi
+
+echo "sleep $DELAY; /usr/local/emhttp/webGui/scripts/reload_services" | at -M now 2>/dev/null
+log "queue new job $(queue), wait for ${DELAY}s"
 exit 0
