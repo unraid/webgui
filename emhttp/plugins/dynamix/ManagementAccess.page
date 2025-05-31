@@ -395,7 +395,7 @@ _(Start page)_:
 <?foreach ($tasks as $task) echo mk_option(_var($var,'START_PAGE','Main'), $task, _($task));?>
   </select>
 
-:mgmt_start_page_help:
+> Select the page which is opened first when entering the GUI. By default the *Main* page is selected.
 
 <!--
 Restrict access:
@@ -415,12 +415,13 @@ _(Use TELNET)_:
   <?=mk_option($var['USE_TELNET'], "yes", _('Yes'))?>
   </select>
 
-:mgmt_use_telnet_help:
+> By default TELNET access is enabled. TELNET is an insecure type of CLI access however,
+> and it is highly recommended to use SSH access instead and disable TELNET access.
 
 _(TELNET port)_:
 : <input type="number" name="PORTTELNET" class="narrow" min="1" max="65535" value="<?=$var['PORTTELNET']?>" placeholder="23">
 
-:mgmt_telnet_port_help:
+> Enter the TELNET port, default port is 23.
 
 _(Use SSH)_:
 : <select name="USE_SSH" onchange="updateSSH(this.form)">
@@ -428,12 +429,13 @@ _(Use SSH)_:
   <?=mk_option($var['USE_SSH'], "yes", _('Yes'))?>
   </select>
 
-:mgmt_use_ssh_help:
+> SSH is enabled by default and offers a secure way of CLI access. Upon system startup SSH keys are automatically generated
+> if not yet existing, and stored on the flash device in the folder */config/ssh*.
 
 _(SSH port)_:
 : <input type="number" name="PORTSSH" class="narrow" min="1" max="65535" value="<?=$var['PORTSSH']?>" placeholder="22">
 
-:mgmt_ssh_port_help:
+> Enter the SSH port, default port is 22.
 
 _(Use UPnP)_:
 : <select name="USE_UPNP">
@@ -441,7 +443,7 @@ _(Use UPnP)_:
   <?=mk_option($var['USE_UPNP'], "no", _('No'))?>
   </select>
 
-:mgmt_use_upnp_help:
+> Enable (default) or disable the UPnP function on the server. This function allows automatic forwarding of ports on the router, only applicable when UPnP is enabled on the router itself.
 
 _(Use SSL/TLS)_:
 : <select name="USE_SSL" onchange="$('#ssl-warning').show();">
@@ -450,22 +452,83 @@ _(Use SSL/TLS)_:
   <?=mk_option($var['USE_SSL'], "auto", _('Strict'), $disabled_auto)?>
   </select><span id="ssl-warning" class="warning" style="display:none"><i class="fa fa-warning fa-fw"></i> _(if you have trouble logging in, close all other tabs pointing to this server and clear your browser's cache)_</span>
 
-:mgmt_use_ssl_tls_help:
+> Determines how the webGUI responds to HTTP and/or HTTPS protocol on your LAN.
+> 
+> Select **No** to use HTTP. To access your server use this URL:
+> 
+> `http://<server-name>.<localTLD>`
+> 
+> or this URL:
+> 
+> `http://<server-ip-address>`
+> 
+> Select **Yes** to enable use of an automatically-generated self-signed
+> SSL certificate.  Use this URL to access your server:
+> 
+> `https://<server-name>.<localTLD>`
+> 
+> Note that use of a self-signed SSL certificate will generate a browser
+> warning.
+> 
+> Select **Strict** to enable *exclusive* use of a myunraid.net SSL
+> certificate for https access (see **Provision** below).  Note that a DNS
+> server must be reachable.
+> 
+> **Redirects:** When accessing `http://<server-ip-address>` or `http://<server-name>.<localTLD>`, the
+> behavior will change depending on the value of the Use SSL/TLS setting:
+> 
+> * If Use SSL/TLS is set to **Strict**, you will be redirected to `https://<lan-ip>.<hash>.myunraid.net`
+> * If Use SSL/TLS is set to **Yes**, you will be redirected to `https://<server-ip-address> or https://<server-name>.<localTLD>`
+> * If Use SSL/TLS is set to **No**, then the http url will load directly.
+> 
+> Important: **Strict** may not be selectable if your router or upstream DNS server has
+> [DNS rebinding protection](https://en.wikipedia.org/wiki/DNS_rebinding) enabled. DNS rebinding
+> protection prevents DNS from resolving a private IP network range. DNS rebinding protection is meant as
+> a security feature on a LAN that may include legacy devices with buggy/insecure "web" interfaces.
+> 
+> One source of DNS rebinding protection could be your ISP DNS server. In this case the problem may be solved by
+> switching to a different DNS server such as OpenDNS where DNS rebinding proection can be turned off.
+> 
+> More commonly, DNS rebinding protection could be enabled in your router. Most consumer routers do not implement DNS
+> rebinding protection; but, if they do, a configuration setting should be available to turn it off.
+> 
+> Higher end routers usually do enable DNS rebinding protection. Typically there are ways of turning it off
+> entirely or selectively based on domain. Examples:
+> 
+> **DD-WRT:** If you are using "dnsmasq" with DNS rebinding protection enabled, you can add this line to your router
+> configuration file:
+> 
+> `rebind-domain-ok=/myunraid.net/`
+> 
+> **pfSense:** If you are using pfSense internal DNS resolver service, you can add these Custom Option lines:
+> 
+> `server:`<br>
+> `private-domain: "myunraid.net"`
+> 
+> **Ubiquiti USG router:** you can add this configuration line:
+> 
+> `set service dns forwarding options rebind-domain-ok=/myunraid.net/`
+> 
+> **OpenDNS:** Go to Settings -> Security and *remove* the checkbox next to
+>  "Suspicious Responses - Block internal IP addresses". It is an all-or-nothing setting.
+> 
+> When all else fails, you may be able create an entry in your PC's *hosts* file to override external DNS and
+> directly resolve your servers myunraid.net FQDN to its local IP address.
 
 _(HTTP port)_:
 : <input type="number" name="PORT" class="narrow" min="1" max="65535" value="<?=$var['PORT']?>" placeholder="80">
 
-:mgmt_http_port_help:
+> Enter the HTTP port, default port is 80.
 
 _(HTTPS port)_:
 : <input type="number" name="PORTSSL" class="narrow" min="1" max="65535" value="<?=$var['PORTSSL']?>" placeholder="443">
 
-:mgmt_https_port_help:
+> Enter the HTTPS port, default port is 443.
 
 _(Local TLD)_:
 : <input type="text" name="LOCAL_TLD" class="narrow" value="<?=htmlspecialchars($var['LOCAL_TLD'])?>">
 
-:mgmt_local_tld_help:
+> Enter your local Top Level Domain. May be blank.
 
 &nbsp;
 : <span class="inline-block">
@@ -480,14 +543,15 @@ _(Local TLD)_:
 _(Local access URLs)_:
 : <?php show_urls(['LAN','WLAN']); ?>
 
-:mgmt_local_access_urls_help:
+> The Local Access URLs shown above are based on your current settings.
+> To adjust URLs or redirects, see the help text for "Use SSL/TLS".
 
 <?if (has_urls(['WG'])): ?>
 
 _(WireGuard URLs)_:
 : <?php show_urls(['WG']); ?>
 
-:mgmt_wg_access_urls_help:
+> These URLs will only work when connected via the appropriate WireGuard tunnel as configured on ***Settings > VPN Manager***
 
 <?endif;?>
 
@@ -496,7 +560,7 @@ _(WireGuard URLs)_:
 _(Tailscale URLs)_:
 : <?php show_urls(['TAILSCALE']); ?>
 
-:mgmt_tailscale_access_urls_help:
+> These URLs will only work when connected to the appropriate Tailscale Tailnet.
 
 <?endif;?>
 
@@ -591,7 +655,55 @@ _(Certificate expiration)_:
 
 <?endif;?>
 
-:mgmt_certificate_expiration_help:
+> **Provision** may be used to install a *free* myunraid.net SSL Certificate from
+> [Let's Encrypt](https://letsencrypt.org/).
+> 
+> The myunraid.net SSL certificate can be used in two ways.  First,
+> having the certificate present enables your server to respond to an
+> alternate URL of the form:
+> 
+> `https://<lan-ip>.<hash>.myunraid.net`
+> 
+> The `<hash>` value is a 40-character hex string (160 bits) unique to
+> your server.  A Lime Technology DDNS server will return your `<lan-ip>`
+> in response to a DNS request on this URL. The certificate Subject is
+> set to `*.<hash>.myunraid.net` thus validating the https connection.
+> 
+> You may enable this URL exclusively on your LAN by setting **Use
+> SSL/TLS** to **Strict**.
+> 
+> The second use for a myunraid.net certificate is to enable secure
+> remote access available through the Unraid Connect plugin feature.  Note
+> that it is possible to use secure remote access in conjunction with
+> insecure local access.
+> 
+> After a myunraid.net SSL Certificate has been installed, a
+> background service is activated:
+> 
+> - *renewcert* - This starts 60 seconds after server reboot has completed and contacts the Lime Technology
+> certificate renewal service to determine if your myunraid.net SSL certificate needs to be renewed.
+> Thereafter it wakes up every 24 hours. If within 30 days of expiration, a new certificate is automatically
+> provisioned and downloaded to your server.
+> 
+> **Delete** may be used to delete the myunraid.net certificate file.
+> 
+> **nginx certificate handling details**
+> 
+> nginx makes use of two certificate files stored on the USB flash boot device:<br>
+> 
+> - a self-signed certificate: `config/ssl/certs/<server-name>_unraid_bundle.pem`
+> 
+> - a myunraid.net certificate: `config/ssl/certs/certificate_bundle.pem`
+> 
+> The self-signed SSL certificate file is automatically created when nginx
+> starts; and re-created if the server hostname or local TLD is changed.
+> 
+> **nginx stapling support**
+> 
+> OCSP Stapling is automatically enabled if the certificate contains an OCSP responder URL.
+> 
+> Hence, for self-signed certificates stapling is not enabled; for CA-signed certificates
+> stabling is enabled.
 
 </form>
 

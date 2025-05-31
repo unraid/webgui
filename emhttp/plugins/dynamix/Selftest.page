@@ -31,7 +31,8 @@ _(SMART self-test history)_:
     <input type="button" value="_(Show)_" id="toggle_log" onclick="selftestLog()">
   </span>
 
-:selftest_history_help:
+> Press **Show** to view the self-test history as is kept on the disk itself.
+> This feature is only available when the disk is in active mode.
 
 <pre id="selftest" style="display:none"></pre>
 
@@ -40,7 +41,8 @@ _(SMART error log)_:
     <input type="button" value="_(Show)_" id="toggle_error" onclick="errorLog()">
   </span>
 
-:selftest_error_log_help:
+> Press **Show** to view the error report as is kept on the disk itself.
+> This feature is only available when the disk is in active mode.
 
 <pre id="errorlog" style="display:none"></pre>
 
@@ -49,7 +51,10 @@ _(SMART short self-test)_:
     <input type='button' value="_(Start)_" id='short_test' onclick="startShortTest()">
   </span>
 
-:selftest_short_test_help:
+> Starts a *short* SMART self-test, the estimated duration can be viewed under the *Capabilities* section. This is usually a few minutes.
+> 
+> When the disk is spun down, it will abort any running self-test.
+> This feature is only available when the disk is in active mode.
 
 _(SMART extended self-test)_:
 : <span class="inline-block">
@@ -57,12 +62,18 @@ _(SMART extended self-test)_:
     <?php if (!$long): ?><span>_(Disable **Spin down delay** to run a SMART extended self-test)_</span><?php endif; ?>
   </span>
 
-:selftest_long_test_help:
+> Starts an *extended* SMART self-test, the estimated duration can be viewed under the *Capabilities* section. This is usually several hours.
+> 
+> When the disk is spun down, it will abort any running self-test. It is advised to disable the spin down timer of the disk
+> to avoid interruption of this self-test.
+> 
+> This feature is only available when the disk is in active mode.
 
 _(Last SMART test result)_:
 : <span id="test_result"><i class='fa fa-circle-o-notch fa-spin fa-fw'></i></span>
 
-:selftest_result_help:
+> When no test is running it will show here the latest obtained self-test result (if available).
+> Otherwise a progress indicator (percentage value) is shown for a running test.
 
 <script>
 function cleanUp() {

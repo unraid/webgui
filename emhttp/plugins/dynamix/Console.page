@@ -92,7 +92,7 @@ _(Local keyboard layout)_:
   <?endforeach;?>
   </select>
 
-:console_keyboard_help:
+> Select your default keymap for the local console (not the web Terminal).
 
 _(Local screen blank time)_:
 : <select name="screen_blank">
@@ -103,7 +103,11 @@ _(Local screen blank time)_:
   <?endforeach;?>
   </select>
 
-:console_screen_help:
+> **Default:** 'Default' will set the blank timeout to 15 minutes and powersave to 60 minutes.
+> 
+> **Disabled:** 'Disabled' will disable the blank and powersave timeout.
+> 
+> **All other values:** Will set the blank timout to the selected value and disable the powersave timeout.
 
 _(Persistent Bash History)_:
 : <select name="persist_bash_history">
@@ -111,7 +115,11 @@ _(Persistent Bash History)_:
   <?=mk_option(_var($console,'persist_bash_history','0'), '1', _('Enabled'))?>
   </select>
 
-:console_bash_help:
+> If set to 'Yes' the bash history will persist reboots, set to 'No' to disable.
+> 
+> **ATTENTION:** The bash history will be written to the USB Boot device so this will introduce higher wear and tear!
+> 
+> **Note:** Disabling and Enabling will remove the entire bash history.
 
 &nbsp;
 : <span class="inline-block">

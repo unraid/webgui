@@ -76,7 +76,13 @@ _(Interface)_ <?=$eth?>:
   </span>
 </form>
 
-:eth_network_rules_help:
+> The interface assignment rules can be changed here and might be necessary to set the preferred interface for managing Unraid - *use with care, usually there is no need to change*.
+> 
+> **eth0** is the main interface used to manage the Unraid system. The other interfaces are optional and may be used as desired.
+> Every interface must be uniquely identified by its MAC (hardware) address.
+> 
+> The interface assignment is stored on the flash device under */config/network-rules.cfg*. This file can be viewed with any editor, but it is recommended to make changes via the webGUI only.<br>
+> Deleting the file *network-rules.cfg* from the flash device will restore automatic interface assignment after a system reboot.
 
 <?if (file_exists('/tmp/network-rules.tmp')):?>
 <br><span class="error" style="text-align:center;padding:12px 0">_(Please **Reboot** system to make new rules active)_</span>

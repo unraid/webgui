@@ -836,12 +836,97 @@ endswitch;
 </form>
 <!-- markdown fix --></p><?if (isset($display['sleep'])) eval('?>'.parse_file($display['sleep']))?>
 
-:array_status_help:
+> **Colored Status Indicator** the significance of the color indicator of the *Array* is as follows:
+> 
+> <i class='fa fa-circle orb green-orb'></i>Array is Started and Parity is valid.
+> 
+> <i class='fa fa-circle orb grey-orb'></i>Array is Stopped, Parity is valid.
+> 
+> <i class='fa fa-warning orb yellow-orb'></i>Array is Started, but Parity is invalid.
+> 
+> <i class='fa fa-warning orb grey-orb'></i>Array is Stopped, Parity is invalid.
+> 
 <?if (_var($var,'fsState') == "Stopped"):?>
-:array_devices_help:
+> #### Assigning Devices
+> 
+> An unRAID disk array consists of a number of Data disks and up to two Parity disks. The data
+> disks are exclusively used to store user data, and the Parity disk(s) provides the redundancy necessary
+> to recover from any single or double disk failure.
+> 
+> Note that we are careful to use the term *disk* when referring to an array storage device.  We
+> use the term *hard drive* (or sometimes just *drive*) when referring to an actual hard disk drive (HDD)
+> device. This is because in a RAID system it is possible to read/write an array disk whose corresponding
+> hard drive is disabled or even missing! In addition, it is useful to be able to ask, "which device is
+> assigned to be the Parity disk?"; or, "which device corresponds to disk2?".
+> 
+> We therefore need a way to assign hard drives to array disks. This is accomplished here on the
+> Main page when the array is stopped. There is a drop-down box for each array disk which lists all the
+> unassigned devices. To assign a device simply select it from the list. Each time a device
+> assignment is made, the system updates a configuration file to record the assignment.
+> 
+> #### Requirements
+> 
+> Unlike traditional RAID systems which stripe data across all the array devices, an Unraid server
+> stores files on individual hard drives. Consequently, all file write operations will involve both the
+> Data disk the file is being written to, and the Parity disk(s).  For these reasons,
+> 
+> * a Parity disk size must be as large or larger than any of the Data disks,
+> 
+> and
+> 
+> * given a choice, Parity disk(s) should be the fastest disk(s) in your collection.
+> 
+> #### Guidelines
+> 
+> Here are the steps you should follow when designing your unRAID disk array:
+> 
+> 1. Decide which hard drive you will use for parity, and which hard drives you will use for
+> Data disk1, disk2, etc., and label them in some fashion. Also, find the serial number of each hard
+> drive and jot it down somewhere; you will need this information later.
+> 
+> 2. Install your hard drive devices, boot your server and bring up the webGUI. If this is a fresh system
+> build, then the Main page will show no disks installed. This doesn't mean the system can't detect your
+> hard drives; it just means that none have been assigned yet.
+> 
+> 3. Remember the serial numbers you recorded back in step 1? For parity and each Data disk, select the
+> proper hard drive based on its serial number from the drop down list.
+> 
+> #### Hot Plug
+> 
+> You may also *hot plug* hard drives into your server if your hardware supports it. For example,
+> if you are using hard drive cages, you may simply plug them into your server while powered on and
+> with array Stopped. Refresh the Main page to have new unassigned devices appear in the assignment
+> dropdown lists.
+> 
+> #### Next Steps
+> 
+> Once you have assigned all of your hard drives, refer to the Array Status section below
+> and Start the array.
 
 <?if ($encrypt):?>
 <div></div>
-:encryption_help:
+> #### Encryption input
+> 
+> With array Stopped, the user can specify a new encryption key. Note that once a device
+> is formatted with a particular key it may only be opened using that same key. Changing the encryption key requires
+> encrypted devices to be reformatted **resulting in permanent loss of all existing data on those devices.**
+> 
+> #### Passphrase
+> 
+> Enter a passphrase of up to 512 characters. It is highly advisable to only use the 95 printable characters from the
+> first 128 characters of the [ASCII table](https://en.wikipedia.org/wiki/ASCII), as they will always have the same binary
+> representation. Other characters may have different encoding depending on system configuration and your passphrase will
+> not work with a different encoding. If you want a longer passphrase or to include binary data, upload a keyfile instead.
+> 
+> Please refer to the [cryptsetup FAQ](https://gitlab.com/cryptsetup/cryptsetup/wikis/FrequentlyAskedQuestions#5-security-aspects)
+> for what constitutes a *secure* passphrase.
+> 
+> **Memorize** this passphrase. **IF LOST, ENCRYPTED CONTENT CANNOT BE RECOVERED!**
+> 
+> #### Keyfile
+> 
+> Select a local keyfile with a stored encryption key or a binary file. The maximum size of the keyfile is 8M (8388608 byte).
+> 
+> **Backup** your local keyfile. **IF LOST, ENCRYPTED CONTENT CANNOT BE RECOVERED!**
 <?endif;?>
 <?endif;?>

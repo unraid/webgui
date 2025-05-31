@@ -97,7 +97,10 @@ _(Local syslog server)_:
   </select>
   <input type="number" name="server_port" class="trim" value="<?=_var($syslog,'server_port')?>" maxlength="5" placeholder="514" pattern="([0-9]{1,5})">
 
-:syslog_local_server_help:
+> Let the server act as a central syslog server and collect syslog messages from other systems.
+> The server can listen on UDP, TCP or both with a selectable port number.
+> 
+> Syslog information is stored either per IP address or per hostname. That is every system gets its own syslog file.
 
 <div markdown="1" id="local_folder" style="display:none">
 _(Local syslog folder)_:
@@ -106,7 +109,8 @@ _(Local syslog folder)_:
   <?foreach ($shares as $share){echo mk_option(_var($syslog,'server_folder'), '/mnt/user/'.$share['name'], $share['name']);}?>
   </select>
 
-:syslog_local_folder_help:
+> Select the share folder where the syslogs will be stored.
+> It is recommended that you use a share located on the cache drive to prevent array disk spinups.
 
 _(System identifier for logfile name)_:
 : <select name="server_filename">
@@ -115,7 +119,11 @@ _(System identifier for logfile name)_:
   <?=mk_option(_var($syslog, 'server_filename'), "syslog-%FROMHOST%.log", _("Hostname (from DNS reverse lookup)"))?>
   </select>
 
-:syslog_remote_system_identifier_help:
+> Select the identifier for the remote system (used in the logfile name).
+> 
+> * "IP Address" uses the IP address (IPv4 or IPv6) of the sending system.
+> * "Hostname (from syslog message)" uses the hostname included in each syslog message.
+> * "Hostname (from DNS reverse lookup)" performs a DNS reverse lookup for the sending IP and uses the result.
 
 _(Local syslog rotation)_:
 : <select name="log_rotation" onchange="logOptions(this.value,'slow')">
@@ -123,7 +131,9 @@ _(Local syslog rotation)_:
   <?=mk_option(_var($syslog,'log_rotation'), "1", _("Enabled"))?>
   </select>
 
-:syslog_local_rotation_help:
+> By default LOG rotation is disabled and will create a single LOG file of unlimited size.
+> 
+> Enable LOG rotation to limit the size of the LOG file and specify the number of files to keep in the rotation scheme.
 
 <div markdown="1" id="log_options" style="display:none">
 _(Local syslog maximum file size)_:
@@ -139,7 +149,7 @@ _(Local syslog maximum file size)_:
   <?=mk_option(_var($syslog,'log_size'), '500M', '500 '._('MB'))?>
   </select>
 
-:syslog_local_file_size_help:
+> Specifies the maximum LOG size. When exceeded LOG rotation will occur.
 
 _(Local syslog number of files)_:
 : <select name="log_files">
@@ -149,7 +159,7 @@ _(Local syslog number of files)_:
   <?=mk_option(_var($syslog,'log_files'), '4', '4')?>
   </select>
 
-:syslog_local_file_number_help:
+> Specifies the number of additional LOG files to keep in the rotation scheme.
 
 </div>
 </div>
@@ -162,7 +172,8 @@ _(Remote syslog server)_:
   </select>
   <input type="number" name="remote_port" class="trim" value="<?=_var($syslog,'remote_port')?>" maxlength="5" placeholder="514" pattern="([0-9]{1,5})">
 
-:syslog_remote_server_help:
+> Enter a name or IP address of a remote syslog server.
+> This will send a copy of the syslog messages to the designated server.
 
 _(Mirror syslog to flash)_:
 : <select name="syslog_flash">
@@ -170,7 +181,10 @@ _(Mirror syslog to flash)_:
   <?=mk_option(_var($syslog,'syslog_flash'), "1", _("Yes"))?>
   </select>
 
-:syslog_mirror_flash_help:
+> This setting is NO by default and must be used with care to avoid unnecessary wear and tear of the USB device.
+> 
+> Change this setting to YES when troubleshooting is required and it is not possible to get the regular diagnostics information.
+> A mirror of the syslog file is stored in the **logs** folder of the flash device.
 
 _(Copy syslog to flash on shutdown)_:
 : <select name="syslog_shutdown">
@@ -178,7 +192,10 @@ _(Copy syslog to flash on shutdown)_:
   <?=mk_option(_var($syslog,'syslog_shutdown'), "1", _("No"))?>
   </select>
 
-:syslog_shutdown_flash_help:
+> This setting is YES by default and enables the system to copy the syslog file to the USB device on shutdown or reboot.
+> 
+> After rebooting, the syslog from this run will be visible on Tools > Syslog > syslog-previous;
+> it will also be included in diagnostics as logs/syslog-previous.txt
 
 &nbsp;
 : <span class="inline-block">

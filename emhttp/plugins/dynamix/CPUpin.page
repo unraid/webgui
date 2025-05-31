@@ -45,4 +45,19 @@ Tag="icon-cpu"
 <div class="notice">_(No CPU pinning available. Docker service must be started)_</div>
 <?endif;?>
 
-:cpu_pinning_help:
+> This page gives a total view of the current CPU pinning assignments for Docker containers.<br>
+> It also allows to modify these assignments.
+> 
+> Running containers are **stopped first** and restarted after the modification.<br>
+> Stopped containers are instantly modified and new assignments become active when the user manually starts the container.
+> 
+> When ***Apply*** is pressed a scan is performed to find the changes, subsequently containers which have changes are modified in parallel.
+> 
+> *Important: Please wait until all updates are finished before leaving this page*.
+> 
+> By default NO cores are selected for a Docker container, which means it uses all available cores.<br>
+> Do not select **ALL** cores for containers, just select **NO** cores if you want unrestricted core use.
+> 
+> Do not select cores for containers which are *isolated*.
+> By design a container will only use a single core (the lowest numbered core) when multiple isolated cores are selected.<br>
+> Usually this is not what a user wants when selecting multiple cores.

@@ -19,7 +19,13 @@ $width = [123,300];
 /* Replace spaces in NFS rule with new lines for multi line textarea. */
 $sec_nfs[$name]['hostList']	= str_replace(" ", "\n", $sec_nfs[$name]['hostList']);
 ?>
-:nfs_security_help:
+> *Read settings from* is used to preset the NFS security settings of the current selected share with the settings of an existing share.
+> 
+> Select the desired share name and press **Read** to copy the NFS security settings from the selected source.
+> 
+> *Write settings to* is used to copy the NFS security settings of the current selected share to one or more other existing shares.
+> 
+> Select the desired destinations and press **Write** to copy the NFS security settings to the selected shares.
 
 <div markdown="1" class="relative">
 <div markdown="1" class="clone-settings clone-settings-less-padding shade">
@@ -94,7 +100,12 @@ _(Security)_:
 _(Rule)_:
 : <textarea name="shareHostListNFS" cols="40" rows="5" style="width:45%" placeholder="Example: *(rw,sec=sys,insecure,anongid=100,anonuid=99,no_root_squash,lock)"><?= htmlspecialchars($sec_nfs[$name]['hostList']) ?></textarea>
 
-:nfs_security_rules_help:
+> Put the rule for each IP address on a separate line and terminate the Rule with a new line.
+> You cannot enter a Rule in the format IP1,IP2(...).  Unraid does not format the exports file in that format.
+> 
+> The default rules for every NFS Rule are - async and no_subtree_check.
+> 
+> **Note:** The Public Rule used is '*(rw,sec=sys,insecure,anongid=100,anonuid=99,no_root_squash)'.
 
 &nbsp;
 : <span class="buttons-spaced">
