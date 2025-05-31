@@ -192,7 +192,7 @@ _(Scheduled parity check)_:
   <?endfor;?>
   </select>
 
-:parity_check_scheduled_help:
+> By default no parity check is scheduled. Select here the desired schedule. This can be one of the preset schedules for daily, weekly, monthly, yearly or a custom schedule.
 
 _(Day of the week)_:
 : <select <?=$day_select_attrs?>>
@@ -201,7 +201,7 @@ _(Day of the week)_:
   <?endforeach;?>
   </select>
 
-:parity_day_of_the_week_help:
+> When a **weekly** or **custom** schedule is selected then choose here the preferred *day of the week*, in the other schedules this setting is not used and unavailable.
 
 <?= $dotm_label ?>:
 : <select name="dotm">
@@ -210,7 +210,8 @@ _(Day of the week)_:
   <?endforeach;?>
   </select>
 
-:parity_week_of_the_month_help:
+> When a **monthly** or **yearly** schedule is selected then choose here the preferred *day of the month*.
+> When a **custom** schedule is selected then choose here the preferred *week of the month*, in the other schedules this setting is not used and unavailable.
 
 _(Time of the day)_:
 : <select name="hour">
@@ -219,7 +220,7 @@ _(Time of the day)_:
   <?endforeach;?>
   </select>
 
-:parity_time_of_the_day_help:
+> Choose the desired *time of the day* to start the schedule. Time granularity is given in half hour periods.
 
 _(Month of the year)_:
 : <select <?=$month_select_attrs?>>
@@ -228,7 +229,7 @@ _(Month of the year)_:
   <?endforeach;?>
   </select>
 
-:parity_month_of_the_year_help:
+> When a **yearly** or **custom** schedule is selected then choose here the preferred *month of the year*, in the other schedules this setting is not used and unavailable.
 
 _(Write corrections to parity disk)_:
 : <select name="write">
@@ -236,7 +237,7 @@ _(Write corrections to parity disk)_:
   <?=mk_option($parity['write'], "", _("Yes"))?>
   </select>
 
-:parity_write_corrections_help:
+> Choose here whether any parity errors found during the check, need to be corrected on the Parity disk or not.
 
 _(Cumulative parity check)_:
 : <select name="cumulative" onchange="showCumulative(this.value,'slow')" <?=$parity['mode']>1?'':'disabled'?>>
@@ -244,7 +245,7 @@ _(Cumulative parity check)_:
   <?=mk_option(_var($parity,'cumulative'), "1", _("Yes"))?>
   </select>
 
-:parity_cumulative_check_help:
+> Change this setting to **Yes** to divide long duration parity checks over multiple periods. This is useful when the system needs to be available and a parity check runs only during off hours.
 
 <div markdown="1" id="cumulative" style="display:none">
 _(Accumulation frequency)_:
@@ -253,7 +254,11 @@ _(Accumulation frequency)_:
   <?=mk_option(_var($parity,'frequency'), "7", _("Weekly"),$parity['mode']==2 ? 'disabled' : '')?>
   </select>
 
-:parity_accumulation_frequency_help:
+> Specifies how accumulation periods are executed.
+> 
+> **Daily** means every subsequent day the parity check continues until finished
+> 
+> **Weekly** means every subsequent week the parity check continues until finished
 
 _(Accumulation duration)_:
 : <select name="duration">
@@ -262,7 +267,7 @@ _(Accumulation duration)_:
   <?endfor;?>
   </select>
 
-:parity_accumulation_duration_help:
+> Specifies how long each accumulated period runs, expressed in hours. The **Time of the day** speficies the start time of the period.
 
 </div>
 

@@ -39,12 +39,16 @@ _(FTP server)_:
   <?=mk_option($ftp_server, "1", _("Enabled"))?>
   </select>
 
-:ftp_server_help:
+> Enable or disable the FTP server daemon. By default the FTP server is enabled.
+> This setting is not saved, i.e. upon system reboot it will revert to its default setting.
 
 _(FTP user(s))_:
 : <input type="text" name="#arg[2]" size="40" maxlength="80" value="<?=htmlspecialchars($ftp_userlist)?>">
 
-:ftp_users_help:
+> Enter the user names (separated by spaces) permitted to access the server using FTP.
+> To disallow any user access, clear this setting.
+> 
+> **Note:** do not enter user name `root` since this may cause problems in the future.
 
 &nbsp;
 : <span class="inline-block">
@@ -54,4 +58,8 @@ _(FTP user(s))_:
 
 </form>
 
-:ftp_overview_help:
+> ### Overview
+> 
+> Unraid OS includes the popular `vsftpd` FTP server.  The configuration of `vsftp` is currently very
+> simple: **All** user names entered above are permitted to access the server via FTP and will have
+> *full read/write/delete access* to the entire server, so use with caution.

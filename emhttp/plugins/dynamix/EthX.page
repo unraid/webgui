@@ -95,12 +95,13 @@ _(Interface description)_:
     <span class="<?=$class?>"><?=$reason?></span>
   <?endif;?>
 
-:eth_interface_description_help:
+> Use this optional field to provide additional information about the purpose of the connection.
 
 _(MAC address)_:
 : <?=strtoupper(exec("ip link show ethX|grep -Pom1 'ether \K\S+'"))?>
 
-:eth_mac_address_help:
+> This is the hardware address of the interface.
+> When tagging is enabled all VLANs on this interface will share the same hardware address.
 
 <div markdown="1" class="slave-ethX">
 _(Enable bonding)_:
@@ -109,7 +110,9 @@ _(Enable bonding)_:
   <?=mk_option(_var($ethX,'BONDING'), "yes", _("Yes"))?>
   </select>
 
-:eth_enable_bonding_help:
+> Bonding is a feature that combines multiple physical Ethernet interfaces into a single *bonded* interface named **bond0**.
+> This can be used to improve the connection redundancy and/or throughput of the system.
+> Different bonding modes are supported (see below), but some modes require proper switch support.
 
 <div markdown="1" id="bond-members-ethX" class="'hide">
 _(Bonding mode)_:
@@ -124,7 +127,42 @@ _(Bonding mode)_:
   </select>
   <span id="attention0" class="hide">**_(Attention)_:** _(this mode requires a network switch with proper setup and support)_...</span>
 
-:eth_bonding_mode_help:
+> **Mode 0 (balance-rr)**<br>
+> This mode transmits packets in a sequential order from the first available slave through the last.
+> If two real interfaces are slaves in the bond and two packets arrive destined out of the bonded interface the first will be transmitted on the first slave and the second frame will be transmitted on the second slave.
+> The third packet will be sent on the first and so on. This provides load balancing and fault tolerance.
+> 
+> **Mode 1 (active-backup) - default**<br>
+> This mode places one of the interfaces into a backup state and will only make it active if the link is lost by the active interface.
+> Only one slave in the bond is active at an instance of time. A different slave becomes active only when the active slave fails.
+> This mode provides fault tolerance.
+> 
+> **Mode 2 (balance-xor)**<br>
+> This mode transmits packets based on an XOR formula. Source MAC address is XOR'd with destination MAC address modula slave count.
+> This selects the same slave for each destination MAC address and provides load balancing and fault tolerance.
+> 
+> **Mode 3 (broadcast)**<br>
+> This mode transmits everything on all slave interfaces. This mode is least used (only for specific purpose) and provides only fault tolerance.
+> 
+> **Mode 4 (802.3ad)**<br>
+> This mode is known as *Dynamic Link Aggregation*. It creates aggregation groups that share the same speed and duplex settings.
+> It requires a switch that supports IEEE 802.3ad dynamic link.
+> Slave selection for outgoing traffic is done according to the transmit hash policy, which may be changed from the default simple XOR policy via the xmit_hash_policy option.
+> Note that not all transmit policies may be 802.3ad compliant, particularly in regards to the packet mis-ordering requirements of section 43.2.4 of the 802.3ad standard.
+> Different peer implementations will have varying tolerances for noncompliance.
+> 
+> **Mode 5 (balance-tlb)**<br>
+> This mode is called *Adaptive transmit load balancing*. The outgoing traffic is distributed according to the current load and queue on each slave interface.
+> Incoming traffic is received by the current slave.
+> 
+> **Mode 6 (balance-alb)**<br>
+> This mode is called *Adaptive load balancing*. This includes balance-tlb + receive load balancing (rlb) for IPV4 traffic.
+> The receive load balancing is achieved by ARP negotiation.
+> The bonding driver intercepts the ARP Replies sent by the server on their way out and overwrites the src hw address with the unique hw address of one of the slaves in the bond
+> such that different clients use different hw addresses for the server.
+> 
+> *Mode 1 (active-backup) is the recommended setting. Other modes allow you to set up a specific environment, but may require proper switch support.
+> Choosing a unsupported mode can result in a disrupted communication.*
 
 _(Bonding members of)_ bondX:
 : <select id="bond-ethX" name="BONDNICS" multiple="multiple" class="'hide">
@@ -134,7 +172,7 @@ _(Bonding members of)_ bondX:
   <?endforeach;?>
   </select>
 
-:eth_bonding_members_help:
+> Select which interfaces are member of the *bonded* interface. By default eth0 is a member, while other interfaces are optional.
 
 </div>
 _(Enable bridging)_:
@@ -143,7 +181,8 @@ _(Enable bridging)_:
   <?=mk_option(_var($ethX,'BRIDGING'), "yes", _("Yes"))?>
   </select>
 
-:eth_enable_bridging_help:
+> Bridging is a feature which creates a virtual bridge and allows VMs and Docker containers to communicate directly with the physical Ethernet port.
+> Both bonding and bridging can be combined to let VMs or containers communicate over a *bonded* interface.
 
 <div markdown="1" id="bridge-members-ethX" class="'hide">
 _(Bridging members of)_ brX:
@@ -154,7 +193,7 @@ _(Bridging members of)_ brX:
   <?endforeach;?>
   </select>
 
-:eth_bridging_members_help:
+> Select which interfaces are member of the *bridged* interface. By default eth0 is a member, while other interfaces are optional.
 
 </div>
 _(Network protocol)_:
@@ -164,7 +203,8 @@ _(Network protocol)_:
   <?=mk_option(_var($ethX,"PROTOCOL:0"), 'ipv4+ipv6', _('IPv4 + IPv6'))?>
   </select>
 
-:eth_network_protocol_help:
+> Select which protocol(s) are used. By default IPv4 only is used.<br>
+> When both IPv4 and IPv6 is selected, each protocol can be configured independently.
 
 <div markdown="1" class="ipv4-ethX-0 hide">
 _(IPv4 address assignment)_:
@@ -175,7 +215,11 @@ _(IPv4 address assignment)_:
   </select>
   <span class="gw4-ethX-0 hide"><input type="checkbox" name="USE_GW4:0" onchange="selectGW(this.form,4,0,'slow')" <?=_var($ethX,"USE_GW4:0")?'checked':''?>><?=$enable?></span>
 
-:eth_ipv4_address_assignment_help:
+> The following settings are possible:
+> 
+> *Automatic* - the server will attempt to obtain a IPv4 address from the local DHCP server<br>
+> *Static* - the IPv4 address is manually set for this interface<br>
+> *None* - no IPv4 address is assigned to the interface (only available for VLANs)
 
 <div markdown="1" class="more-ipv4-ethX-0 hide">
 _(IPv4 address)_:
@@ -183,14 +227,14 @@ _(IPv4 address)_:
   <?foreach ($masks as $mask => $prefix) echo mk_option(_var($ethX,"NETMASK:0"), $mask, $prefix, _var($ethX,"NETMASK:0")=='' && $prefix=='24'?'selected':'');?>
   </select>
 
-:eth_ipv4_address_help:
+> Greyed out when using automatic IP assignment. Otherwise specify here the IPv4 address and mask of the system.
 
 <div markdown="1" class="more-gw4-ethX-0 hide">
 _(IPv4 default gateway)_:
 : <input type="text" name="GATEWAY:0" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"GATEWAY:0")?>" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
   <input type="text" name="METRIC:0" min="0" max="9999" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"METRIC:0")?:metric('ethX')?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
 
-:eth_ipv4_default_gateway_help:
+> Greyed out when using automatic IP assignment. Otherwise specify here the IPv4 address of your router.
 
 </div>
 </div>
@@ -204,20 +248,24 @@ _(IPv6 address assignment)_:
   </select>
   <span class="gw6-ethX-0 hide"><input type="checkbox" name="USE_GW6:0" onchange="selectGW(this.form,6,0,'slow')" <?=_var($ethX,"USE_GW6:0")?'checked':''?>><?=$enable?></span>
 
-:eth_ipv6_address_assignment_help:
+> The following settings are possible:
+> 
+> *Automatic* - the server will attempt to obtain a IPv6 address from the local DHCP server or Router Advertisement (RA)<br>
+> *Static* - the IPv6 address is manually set for this interface<br>
+> *None* - no IPv6 address is assigned to the interface (only available for VLANs)
 
 <div markdown="1" class="more-ipv6-ethX-0 hide">
 _(IPv6 address)_:
 : <input type="text" name="IPADDR6:0" maxlength="39" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"IPADDR6:0")?>" pattern="<?=$validIP6?>" title="_(IPv6 address nnnn:xxxx::yyyy)_">/<input type="number" name="NETMASK6:0" min="7" max="128" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"NETMASK6:0","64")?>" class="slim">
 
-:eth_ipv6_address_help:
+> Greyed out when using automatic IP assignment. Otherwise specify here the IPv6 address of the system.
 
 <div markdown="1" class="more-gw6-ethX-0 hide">
 _(IPv6 default gateway)_:
 : <input type="text" name="GATEWAY6:0" maxlength="39" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"GATEWAY6:0")?>" pattern="<?=$validIP6?>" title="_(IPv6 address nnnn:xxxx::yyyy)_">
   <input type="text" name="METRIC6:0" min="0" max="9999" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"METRIC6:0")?:metric('ethX')?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
 
-:eth_ipv6_default_gateway_help:
+> Greyed out when using automatic IP assignment. Otherwise specify here the IPv6 address of your router.
 
 </div>
 </div>
@@ -228,7 +276,7 @@ _(IPv6 privacy extensions)_:
   <?=mk_option(_var($ethX,"PRIVACY6:0"), "2", _("Enabled"))?>
   </select>
 
-:eth_ipv6_privacy_extensions_help:
+> Enable or disable the generation of a random IPv6 interface identifier according to RFC4941. This is similar to the temporary IPv6 address generation on Windows machines.
 
 </div>
 </div>
@@ -236,7 +284,8 @@ _(Desired MTU)_:
 : <input type="number" name="MTU" min="68" max="9198" autocomplete="off" spellcheck="false" value="<?=_var($ethX,'MTU')?>" class="narrow" placeholder="1500" <?=(_var($ethX,'MTU')!='' || _var($ethX,'USE_MTU'))?'':'disabled'?>>
   <input type="checkbox" name="USE_MTU" onchange="selectMTU(this.form)" <?=_var($ethX,'USE_MTU')?'checked':''?>><?=$jumbo?>&nbsp;<i class="fa fa-info-circle blue-text hand" title="<?=$jumbo_1?>.&#10;<?=$jumbo_2?>.&#10;<?=$jumbo_3?>!"></i>
 
-:eth_desired_mtu_help:
+> This is the MTU size to use on the physical Ethernet interface.
+> If left blank, the MTU will automatically be determined (by default 1500 bytes).
 
 _(Enable VLANs)_:
 : <select name="TYPE" onchange="checkNetworkAccess(this.form)">
@@ -245,7 +294,10 @@ _(Enable VLANs)_:
   </select>
   <input type="button" id="button-vlan-ethX" class="form hide" value="_(Show)_" onclick="showVLAN('ethX')">
 
-:eth_enable_vlans_help:
+> By default no VLANs are configured.<br>
+> Enabling VLANs extends the number of logical connections over the same physical connection.
+> 
+> Note: your router and switch must support VLANs too when this feature is used.
 
 </div>
 <div id='index-ethX-0'></div>
@@ -258,13 +310,13 @@ _(Interface description)_:
     <input type="button" class="form" value="_(Info)_" onclick="networkInfo('eth0',<?=_var($ethX,"VLANID:$i")?>)">
   </span>
 
-:eth_interface_description_help:
+> Use this optional field to provide additional information about the purpose of the connection.
 
 _(VLAN number)_:
 : <input type="number" name="VLANID:<?=$i?>" min="1" max="4095" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"VLANID:$i")?>" class="narrow gap" required>
   <?if (!$service):?><input type="button" class="form" value="_(Delete VLAN)_" onclick="removeVLAN($('#index-ethX-<?=$i?>'))"><?endif;?>
 
-:eth_vlan_number_help:
+> Give each VLAN a unique identifier. Numbers range from 1 to 4095.
 
 _(Network protocol)_:
 : <select name="PROTOCOL:<?=$i?>" onchange="selectProtocol(this.form,<?=$i?>,'slow')">
@@ -273,7 +325,8 @@ _(Network protocol)_:
   <?=mk_option(_var($ethX,"PROTOCOL:$i"), 'ipv4+ipv6', _('IPv4 + IPv6'))?>
   </select>
 
-:eth_network_protocol_help:
+> Select which protocol(s) are used. By default IPv4 only is used.<br>
+> When both IPv4 and IPv6 is selected, each protocol can be configured independently.
 
 <div markdown="1" class="ipv4-ethX-<?=$i?> hide">
 _(IPv4 address assignment)_:
@@ -284,7 +337,11 @@ _(IPv4 address assignment)_:
   </select>
   <span class="gw4-ethX-<?=$i?> hide"><input type="checkbox" name="USE_GW4:<?=$i?>" onchange="selectGW(this.form,4,<?=$i?>,'slow')" <?=_var($ethX,"USE_GW4:$i")?'checked':''?>><?=$enable?></span>
 
-:eth_ipv4_address_assignment_help:
+> The following settings are possible:
+> 
+> *Automatic* - the server will attempt to obtain a IPv4 address from the local DHCP server<br>
+> *Static* - the IPv4 address is manually set for this interface<br>
+> *None* - no IPv4 address is assigned to the interface (only available for VLANs)
 
 <div markdown="1" class="more-ipv4-ethX-<?=$i?> hide">
 _(IPv4 address)_:
@@ -292,14 +349,14 @@ _(IPv4 address)_:
   <?foreach ($masks as $mask => $prefix) echo mk_option(_var($ethX,"NETMASK:$i"), $mask, $prefix, _var($ethX,"NETMASK:$i")=='' && $prefix=='24'?'selected':'');?>
   </select>
 
-:eth_ipv4_address_help:
+> Greyed out when using automatic IP assignment. Otherwise specify here the IPv4 address and mask of the system.
 
 <div markdown="1" class="more-gw4-ethX-<?=$i?> hide">
 _(IPv4 default gateway)_:
 : <input type="text" name="GATEWAY:<?=$i?>" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"GATEWAY:$i")?>" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
   <input type="text" name="METRIC:<?=$i?>" min="0" max="9999" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"METRIC:$i")?:metric('ethX.'._var($ethX,"VLANID:$i"))?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
 
-:eth_ipv4_default_gateway_help:
+> Greyed out when using automatic IP assignment. Otherwise specify here the IPv4 address of your router.
 
 </div>
 </div>
@@ -313,20 +370,24 @@ _(IPv6 address assignment)_:
   </select>
   <span class="gw6-ethX-<?=$i?> hide"><input type="checkbox" name="USE_GW6:<?=$i?>" onchange="selectGW(this.form,6,<?=$i?>,'slow')" <?=_var($ethX,"USE_GW6:$i")?'checked':''?>><?=$enable?></span>
 
-:eth_ipv6_address_assignment_help:
+> The following settings are possible:
+> 
+> *Automatic* - the server will attempt to obtain a IPv6 address from the local DHCP server or Router Advertisement (RA)<br>
+> *Static* - the IPv6 address is manually set for this interface<br>
+> *None* - no IPv6 address is assigned to the interface (only available for VLANs)
 
 <div markdown="1" class="more-ipv6-ethX-<?=$i?> hide">
 _(IPv6 address)_:
 : <input type="text" name="IPADDR6:<?=$i?>" maxlength="39" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"IPADDR6:$i")?>" pattern="<?=$validIP6?>" title="_(IPv6 address nnnn:xxxx::yyyy)_">/<input type="number" name="NETMASK6:<?=$i?>" min="7" max="128" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"NETMASK6:$i","64")?>" class="slim">
 
-:eth_ipv6_address_help:
+> Greyed out when using automatic IP assignment. Otherwise specify here the IPv6 address of the system.
 
 <div markdown="1" class="more-gw6-ethX-<?=$i?> hide">
 _(IPv6 default gateway)_:
 : <input type="text" name="GATEWAY6:<?=$i?>" maxlength="39" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"GATEWAY6:$i")?>" pattern="<?=$validIP6?>" title="_(IPv6 address nnnn:xxxx::yyyy)_">
   <input type="text" name="METRIC6:<?=$i?>" min="0" max="9999" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"METRIC6:$i")?:metric('ethX.'._var($ethX,"VLANID:$i"))?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
 
-:eth_ipv6_default_gateway_help:
+> Greyed out when using automatic IP assignment. Otherwise specify here the IPv6 address of your router.
 
 </div>
 </div>
@@ -337,7 +398,7 @@ _(IPv6 privacy extensions)_:
   <?=mk_option(_var($ethX,"PRIVACY6:$i"), "2", _("Enabled"))?>
   </select>
 
-:eth_ipv6_privacy_extensions_help:
+> Enable or disable the generation of a random IPv6 interface identifier according to RFC4941. This is similar to the temporary IPv6 address generation on Windows machines.
 
 </div>
 </div>

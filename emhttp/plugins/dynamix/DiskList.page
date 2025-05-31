@@ -34,7 +34,23 @@ Cond="_var($var,'fsState')!='Stopped' && _var($var,'shareDisk')!='no'"
 
 <input id="compute-disks" type="button" value="_(Compute All)_" onclick="$(this).prop('disabled',true);diskList('',-1)">
 
-:disk_list_help:
+> **Colored Status Indicator** -- the significance of the color indicator at the beginning of each line in *Disk Shares* is as follows:
+> 
+> <i class='fa fa-circle orb green-orb'></i>Mounted, underlying device has redundancy/protection.
+> 
+> <i class='fa fa-warning orb yellow-orb'></i>Mounted, underlying device does not have redundancy/protection.
+> 
+> **Security modes:**
+> 
+> + '-' -- disk share is not exported and unavailable on the network
+> + *Public* -- all users including guests have full read/write access (open access)
+> + *Secure* -- all users including guests have read access, write access is set per user (limited access)
+> + *Private* -- no guest access at all, read/write or read-only access is set per user (closed access)
+> 
+> **Special modes:**
+> 
+> + SMB security mode displayed in *italics* indicates exported hidden disk shares.
+> + NFS does not have special modes for disk shares.
 
 <script>
 function diskList(name,all) {

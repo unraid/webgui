@@ -49,8 +49,67 @@ $('#tab1').bind({click:function() {$('i.toggle').show('slow');}});
         </tbody>
     </table>
 </div>
-:main_array_devices_help:
+> **Colored Status Indicator** the significance of the color indicator at the beginning of each line in *Array Devices* is as follows:
+> 
+> <i class='fa fa-circle orb green-orb'></i>Normal operation, device is active.
+> 
+> <i class='fa fa-circle orb grey-orb'></i>Device is in standby mode (spun-down).
+> 
+> <i class='fa fa-warning orb yellow-orb'></i>Device contents emulated.
+> 
+> <i class='fa fa-times orb red-orb'></i>Device is disabled, contents emulated.
+> 
+> <i class='fa fa-square orb blue-orb'></i>New device.
+> 
+> <i class='fa fa-square orb grey-orb'></i>No device present, position is empty.
+> 
+> **Identification** is the *signature* that uniquely identifies a storage device. The signature
+> includes the device model number, serial number, linux device id, and the device size.
+> 
+> **Temp.** (temperature) is read directly from the device. You configure which units to use on
+> the [Display Preferences](Settings/DisplaySettings) page.  We do not read the temperature of spun-down hard
+> drives since this typically causes them to spin up; instead we display the `*` symbol.  We also
+> display the `*` symbol for SSD and Flash devices, though sometimes these devices do report a valid
+> temperature, and sometimes they return the value `0`.
+> 
+> **Size, Used, Free** reports the total device size, used space, and remaining space for files.  These
+> units are also configured on the [Display Preferences](Settings/DisplaySettings) page.  The
+> amount of space used will be non-zero even for an empty disk due to file system overhead.
+> 
+> *Note: for a multi-device cache pool, this data is for the entire pool as returned by btrfs.*
+> 
+> **Reads, Writes** are a count of I/O requests sent to the device I/O drivers.  These statistics may
+> be cleared at any time, refer to the Array Status section below.
+> 
+> **Errors** counts the number of *unrecoverable* errors reported by the device
+> I/O drivers. Missing data due to unrecoverable array read errors is filled in on-the-fly using parity
+> reconstruct (and we attempt to write this data back to the sector(s) which failed). Any unrecoverable
+> write error results in *disabling* the disk.
+> 
+> **FS** indicates the file system detected in partition 1 of the device.
+> 
+> **View** column contains a folder icon indicating the device is *mounted*. Click the icon to
+> browse the file system.
+> 
+> If "Display array totals" is enable on the [Display Preferences](Settings/DisplaySettings) page, a
+> **Total** line is included which provides a tally of the device statistics, including the average temperature
+> of your devices.
+> 
+> The Array must be Stopped in order to change Array device assignments.
+> 
+> An unRAID array consists of one or two Parity disks and a number of Data disks. The Data
+> disks are exclusively used to store user data, and the Parity disk(s) provides the redundancy necessary
+> to recover from disk failures.
+> 
+> Since data is not striped across the array, the Parity disk(s) must be as large, or larger than the largest Data
+> disk.  Parity should also be your highest performance drive.
+> 
+> Each Data disk has its own file system and can be exported as a
+> separate share.
+> 
+> Click on the Device name to configure individual device settings and launch certain utilities.
 
 <?if (_var($var,'fsState')=="Stopped"):?>
-:main_slots_help:
+> **Slots** select the number of device slots in your server designated for Array devices.
+> The minimum number of Array slots is 2, and you must have at least one device assigned to the array.
 <?endif;?>

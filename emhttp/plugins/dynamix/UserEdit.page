@@ -176,7 +176,7 @@ _(User name)_:
 _(Description)_:
 : <input type="text" name="userDesc" maxlength="64" value="<?=htmlspecialchars($users[$name]['desc'])?>" pattern='[^&:"]*'>
 
-:user_edit_description_help:
+> Up to 64 characters. The characters ampersand (&amp;) quote (&quot;) and colon (:) are not allowed.
 
 _(Custom image)_:
 : <span>
@@ -190,7 +190,7 @@ _(Custom image)_:
   </span>
   <em>_(Drag-n-drop a PNG file or click the image at the left)_</em><input type="file" id="drop" accept="image/png" style="display:none">
 
-:user_edit_custom_image_help:
+> The image will be scaled to 48x48 pixels in size. The maximum image file upload size is 512 kB (524,288 bytes).
 
 <?if ($name=="root"):?>
 &nbsp;
@@ -220,7 +220,7 @@ _(Password)_:
     </span>
   </span>
 
-:user_password_help:
+> Up to 128 characters.
 
 _(Retype password)_:
 : <input type="hidden" name="userPasswordConf" value="">

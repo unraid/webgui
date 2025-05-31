@@ -100,7 +100,12 @@ _(Enable disk shares)_:
   <?=mk_option($var['shareDisk'], "auto", _('Auto'))?>
   </select>
 
-:shares_enable_disk_help:
+> If set to No, disk shares are unconditionally not exported.
+> 
+> If set to Yes, disk shares may be exported.  **WARNING:** Do not copy data from a disk share to a user share
+> unless you *know* what you are doing.  This may result in the loss of data and is not supported.
+> 
+> If set to Auto, only disk shares not participating in User Shares may be exported.
 
 _(Enable user shares)_:
 : <select name="shareUser" onchange="presetShare(this.form,this.value)" <?=$disabled?>>
@@ -108,7 +113,7 @@ _(Enable user shares)_:
   <?=mk_option($var['shareUser'], "-", _('No'))?>
   </select>
 
-:shares_enable_shares_help:
+> If set to 'Yes' the User Shares feature is activated.
 
 _(Included disk(s))_:
 : <select id="s1" name="shareUserInclude" multiple="multiple" style="display:none">
@@ -117,7 +122,8 @@ _(Included disk(s))_:
   <?endforeach;?>
   </select>
 
-:shares_included_disks_help:
+> This setting defines the set of array disks which are *included* in User Shares.
+> Unchecking all disks will allow **all** array disks to be included.
 
 _(Excluded disk(s))_:
 : <select id="s2" name="shareUserExclude" multiple="multiple" style="display:none">
@@ -126,7 +132,11 @@ _(Excluded disk(s))_:
   <?endforeach;?>
   </select>
 
-:shares_excluded_disks_help:
+> This setting defines the set of array disk which are *excluded* from User Shares.
+> Uncheck all disks in order to not exclude any disks
+> 
+> **Note:** Each separate User Share also includes its own set of Included and Excluded
+> disks which represent a subset of the Included/Excluded disks defined here.
 
 _(Permit exclusive shares)_:
 : <select name="shareUserExclusive" <?=$disabled?>>
@@ -134,7 +144,16 @@ _(Permit exclusive shares)_:
   <?=mk_option($var['shareUserExclusive'], "yes", _('Yes'))?>
   </select>
 
-:shares_exclusive_shares_help:
+> If set to Yes, share directories under /mnt/user are actually symlinks to the share directory on a storage volume
+> provided the following conditions are met:
+> 
+> * The Primary storage for a share is set to a pool.
+> * The Secondary storage for a share is set to **none**.
+> * The share exists on a single volume.
+> * The share is **not** exported over NFS.
+> 
+> The advantage of *exclusive* shares is that transfers bypass the FUSE layer which may significantly
+> increase I/O performance.
 
 _(Tunable (support Hard Links))_:
 : <select name="fuse_useino" <?=$disabled?>>
@@ -142,7 +161,14 @@ _(Tunable (support Hard Links))_:
   <?=mk_option($var['fuse_useino'], "yes", _('Yes'))?>
   </select>
 
-:shares_tunable_hard_links_help:
+> If set to Yes then support the link() operation.
+> 
+> If set to No then hard links are not supported.
+> 
+> Notes:
+> 
+> * Setting to Yes may cause problems for older media and dvd/bluray players accessing shares using NFS.
+> * No matter how this is set, the **mover** will still properly handle any detected hard links.
 
 _(Tunable (enable Direct IO))_:
 : <select name="fuse_directio" <?=$disabled?>>
@@ -151,13 +177,16 @@ _(Tunable (enable Direct IO))_:
   <?=mk_option($var['fuse_directio'], "1", _('Yes'))?>
   </select>
 
-:shares_tunable_direct_io_help:
+> **Experimental**: If set to Yes then mount User Share file system with FUSE *direct_io* mount option.
+> This will increase write performance but might possibly decrease read performance.
+> 
+> *Auto* selects No.
 
 _(Number of fuse File Descriptors)_:
 : <input type="text" id="file_count" name="shareNOFILE" maxlength="10" value="<?=htmlspecialchars($var['shareNOFILE']);?>" class="narrow" placeholder="40960" <?=$disabled?>>
   <span id="file_max_display" class="input-instructions">Maximum: <?=$fileMax;?></span>
 
-:shares_fuse_file_descriptors_io_help:
+> Set the number of fuse file descriptors.  With a lot of file activity on the array, you may need to increase this value.
 
 &nbsp;
 : <span class="inline-block">

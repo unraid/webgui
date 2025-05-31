@@ -104,17 +104,17 @@ _(Preset service)_:
 <?=mk_option(_var($ssmtp,'service'), "::NO:NO:none", _("Custom"))?>
 </select>
 
-:smtp_preset_service_help:
+> Select a preset service to set the basic service settings.
 
 _(Sending email address)_:
 : <input type="text" name="root" value="<?=htmlspecialchars(_var($ssmtp,'root'))?>">
 
-:smtp_email_address_help:
+> Email address of your mail account. This address is used as sender of the notifications.
 
 _(Email recipients)_:
 : <input type="text" name="RcptTo" value="<?=htmlspecialchars(_var($ssmtp,'RcptTo'))?>">
 
-:smtp_recipients_help:
+> Recipients of status and error notifications. Specify one or more email addresses, separate multiple email addresses with a space.
 
 _(Priority in header)_:
 : <select name="SetEmailPriority">
@@ -122,22 +122,22 @@ _(Priority in header)_:
   <?=mk_option(_var($ssmtp,'SetEmailPriority'), "True", _("Yes"))?>
   </select>
 
-:smtp_priority_help:
+> Set email header with high importance, when there is a problem detected by Unraid OS.
 
 _(Email subject prefix)_:
 : <input type="text" name="Subject" value="<?=htmlspecialchars(_var($ssmtp,'Subject'))?>">
 
-:smtp_subject_prefix_help:
+> Set a prefix for easy recognition of Unraid OS messages.
 
 _(Mail server)_:
 : <input type="text" name="server" value="<?=htmlspecialchars(_var($ssmtp,'server'))?>">
 
-:smtp_mail_server_help:
+> Specify the name of the email server. Use the preset service selection to have this filled-in automatically.
 
 _(Mail server port)_:
 : <input type="text" name="port" class="narrow"  maxlength="5" value="<?=htmlspecialchars(_var($ssmtp,'port'))?>">
 
-:smtp_mail_server_port_help:
+> Specify the port of the email server. Use the preset service selection to have this filled-in automatically.
 
 _(Use SSL/TLS)_:
 : <select name="UseTLS">
@@ -145,7 +145,7 @@ _(Use SSL/TLS)_:
   <?=mk_option(_var($ssmtp,'UseTLS'), "YES", _("Yes"))?>
   </select>
 
-:smtp_use_ssl_tls_help:
+> Specifies whether to use SSL/TLS to talk to the SMTP server.
 
 _(Use STARTTLS)_:
 : <select name="UseSTARTTLS">
@@ -153,7 +153,7 @@ _(Use STARTTLS)_:
   <?=mk_option(_var($ssmtp,'UseSTARTTLS'), "YES", _("Yes"))?>
   </select>
 
-:smtp_use_starttls_help:
+> Specifies whether to use STARTTLS before starting SSL negotiation - See RFC 2487.
 
 _(Define a TLS certificate)_:
 : <select name="UseTLSCert" onchange="tls(this.form)">
@@ -161,12 +161,12 @@ _(Define a TLS certificate)_:
   <?=mk_option(_var($ssmtp,'UseTLSCert'), "YES", _("Yes"))?>
   </select>
 
-:smtp_define_tls_cert_help:
+> Select only when you have a certificate which required for communication.
 
 _(TLS certificate location)_:
 : <input type="text" name="TLSCert" value="<?=htmlspecialchars(_var($ssmtp,'TLSCert'))?>">
 
-:smtp_tls_cert_location_help:
+> The file name of an RSA certificate to use for TLS - as required.
 
 _(Authentication method)_:
 : <select name="AuthMethod" onchange="pwd(this.form)">
@@ -175,7 +175,7 @@ _(Authentication method)_:
   <?=mk_option(_var($ssmtp,'AuthMethod'), "login", _("Login"))?>
   </select>
 
-:smtp_authentication_method_help:
+> Select the correct authentication method for your email server. Use test to verify that access is working properly.
 
 _(Username)_:
 : <input type="text" name="AuthUser" value="<?=htmlspecialchars(_var($ssmtp,'AuthUser'))?>">
@@ -183,7 +183,7 @@ _(Username)_:
 _(Password)_:
 : <input type="password" name="AuthPass" value="<?=htmlspecialchars(_var($ssmtp,'AuthPass'))?>">
 
-:smtp_username_password_help:
+> Enter the username and password to login to your email account. Be aware that the password is stored unencrypted in the email configuration file.
 
 &nbsp;
 : <span class="inline-block">

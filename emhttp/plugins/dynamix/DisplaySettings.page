@@ -124,7 +124,9 @@ $(function() {
 });
 </script>
 
-:display_settings_help:
+> The display settings below determine how items are displayed on screen. Use these settings to tweak the visual effects to your likings.
+> 
+> You can experiment with these settings as desired, they only affect visual properties.
 
 <form markdown="1" name="display_settings" method="POST" action="/update.php" target="progressFrame" onsubmit="upload(this.locale.value)">
 <input type="hidden" name="#file" value="dynamix/dynamix.cfg">
@@ -137,7 +139,9 @@ _(Display width)_:
   <?=mk_option($display['width'], "1", _('Unlimited'))?>
   </select>
 
-:display_width_help:
+> **Boxed** is the legacy setting which constrains the content width to maximum 1920 pixels
+> 
+> **Unlimited** allows content to use all available width, which maybe useful on wide screens
 
 _(Language)_:
 : <select name="locale" class="fixed" onchange="updateDirection(this.value)">
@@ -160,7 +164,7 @@ _(Font size)_:
   <?=mk_option($display['font'], "80", _('Huge'))?>
   </select>
 
-:display_font_size_help:
+> Changes the font size in the GUI. This is a per device setting.
 
 _(Terminal font size)_:
 : <select name="tty" id="tty">
@@ -172,7 +176,7 @@ _(Terminal font size)_:
   <?=mk_option($display['tty'], "21", _('Huge'))?>
   </select>
 
-:display_tty_size_help:
+> Changes the font size of terminal windows.
 
 _(Show Terminal Button in header)_:
 : <select name="terminalButton">
@@ -207,7 +211,8 @@ _(Page view)_:
   <?=mk_option($display['tabs'], "1", _('Non-tabbed'))?>
   </select>
 
-:display_page_view_help:
+> Changes how certain pages are displayed. In **Tabbed** mode different sections will be displayed in different tabs,
+> while in **Non-tabbed** mode sections are displayed under each other.
 
 _(Placement of Users menu)_:
 : <select name="users">
@@ -215,7 +220,8 @@ _(Placement of Users menu)_:
   <?=mk_option($display['users'], "UserPreferences", _('Settings menu'))?>
   </select>
 
-:display_users_menu_help:
+> The Users Menu can be part of the header or part of the Settings menu.
+> You can move the Users Menu if insufficient space in the header is available to display all menus.
 
 _(Listing height)_:
 : <select name="resize">
@@ -223,7 +229,9 @@ _(Listing height)_:
   <?=mk_option($display['resize'], "1", _('Fixed'))?>
   </select>
 
-:display_listing_height_help:
+> **Automatic** : long listings are displayed as is, and the user needs to scroll the whole page to see the bottom
+> 
+> **Fixed** : long listings are displayed in a window with a fixed size, user can scroll this window to see the bottom
 
 _(Display device name)_:
 : <select name="raw">
@@ -237,7 +245,11 @@ _(Display world-wide-name in device ID)_:
   <?=mk_option($display['wwn'], "1", _('Automatic'))?>
   </select>
 
-:display_wwn_device_id_help:
+> World Wide Name (WWN) is a unique identifier used for SAS attached devices.
+> 
+> Select *Disabled* to suppress the appending of WWN to the device identification
+> 
+> Select "Automatic" to append WWN to the device identification in case of SAS devices
 
 _(Display array totals)_:
 : <select name="total">
@@ -257,7 +269,9 @@ _(Temperature unit)_:
   <?=mk_option($display['unit'], "F", _('Fahrenheit'))?>
   </select>
 
-:display_temperature_unit_help:
+> Selects the temperature unit for the disk temperature thresholds. Changing the unit will adjust the existing value in the disk temperature thresholds as appropriate.
+> 
+> Make sure any newly entered values represent the selected temperature unit.
 
 _(Dynamix color theme)_:
 : <select name="theme">
@@ -280,7 +294,7 @@ _(Used / Free columns)_:
 _(Header custom text color)_:
 : <input type="text" class="narrow" name="header" value="<?=$display['header']?>" maxlength="6" pattern="([0-9a-fA-F]{3}){1,2}" title="_(HTML color code of 3 or 6 hexadecimal digits)_">
 
-:display_custom_text_color_help:
+> Overrule the default text color in the header. This can be used to match the text color with a background image.
 
 _(Header custom secondary text color)_:
 : <input type="text" class="narrow" name="headermetacolor" value="<?=$display['headermetacolor']?>" maxlength="6" pattern="([0-9a-fA-F]{3}){1,2}" title="_(HTML color code of 3 or 6 hexadecimal digits)_">
@@ -288,7 +302,7 @@ _(Header custom secondary text color)_:
 _(Header custom background color)_:
 : <input type="text" class="narrow" name="background" value="<?=$display['background']?>" maxlength="6" pattern="([0-9a-fA-F]{3}){1,2}" title="_(HTML color code of 3 or 6 hexadecimal digits)_">
 
-:display_custom_background_color_help:
+> Overrule the default background color in the header. This can be used to match the background color with a custom text color.
 
 _(Header show description)_:
 : <select name="headerdescription">
@@ -314,7 +328,7 @@ _(Custom banner)_:
   </span>
   <em>_(Drag-n-drop a PNG file or click the image at the left)_.</em><input type="file" id="drop" accept="image/*" style="display:none">
 
-:display_custom_banner_help:
+> Image will be scaled to 1920x90 pixels. The maximum image file upload size is 512 kB (524,288 bytes).
 </div>
 
 <div class="js-bannerSettings" markdown="1" style="display:none">
@@ -331,7 +345,7 @@ _(Favorites enabled)_:
   <?=mk_option($display['favorites'], "no", _('No'))?>
   </select>
 
-:display_favorites_enabled_help:
+> Enables favorite support. If set to no, will stop heart icon showing for additions. If existing favorites are saved, favorites tab and pre-saved options will still continue to show and function until all are deleted.
 
 _(Allow realtime updates on inactive browsers)_:
 : <select name='liveUpdate'>

@@ -135,7 +135,7 @@ _(Enable VMs)_:
 <?endif;?>
 <?endif;?>
 
-:vms_enable_help:
+> Stopping the VM Manager will first attempt to shutdown all running VMs. After 60 seconds, any remaining VM instances will be terminated.
 
 _(Disable Autostart/Start option for VMs)_:
 : <select id="DISABLE" name="DISABLE">
@@ -143,7 +143,7 @@ _(Disable Autostart/Start option for VMs)_:
   <?= mk_option(htmlspecialchars($domain_cfg['DISABLE']), 'yes', _('Yes'))?>
   </select>
 
-:vms_disable_help:
+> Stop VMs from Autostarting\Starting when VM Manager starts or open is run from the gui to start, error message will be seen.
 
 <?if ($hardware):?>
 <div class="advanced" markdown="1">
@@ -159,13 +159,14 @@ _(QEMU version)_:
 _(Libvirt storage location)_:
 : <?=htmlspecialchars($domain_cfg['IMAGE_FILE'])?>
 
-:vms_libvirt_volume_help:
+> This is the libvirt volume.
 
 <?else: /* Libvirt is stopped */ ?>
 _(Libvirt vdisk size)_:
 : <input type="number" id="IMAGE_SIZE" name="IMAGE_SIZE" min="1" value="<?=htmlspecialchars($domain_cfg['IMAGE_SIZE']);?>" style="width:50px;" required="required" />_(GB)_ <span id="SIZE_ERROR" class="errortext"></span>
 
-:vms_libvirt_vdisk_size_help:
+> If the system needs to create a new libvirt image file, this is the default size to use specified in GB.
+> To resize an existing image file, specify the new size here. Next time the Libvirt service is started the file (and file system) will be increased to the new size (but never decreased).
 
 _(Libvirt storage location)_:
 : <input type="text" id="IMAGE_FILE" name="IMAGE_FILE" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars($domain_cfg['IMAGE_FILE']);?>" placeholder="e.g. /mnt/user/system/libvirt/libvirt.img" data-pickcloseonfile="true" data-pickfilter="img" data-pickroot="/mnt" data-pickfolders="true" required pattern="^[^\\]*libvirt\.img$">
@@ -176,7 +177,7 @@ _(Libvirt storage location)_:
 <?endif;?>
   <span id="IMAGE_ERROR" class="errortext"></span>
 
-:vms_libvirt_location_help:
+> You must specify an image file for Libvirt. The system will automatically create this file when the Libvirt service is first started.
 
 <?endif;?>
 _(Default VM storage path)_:
@@ -185,7 +186,7 @@ _(Default VM storage path)_:
   <span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
 <?endif;?>
 
-:vms_libvirt_storage_help:
+> Specify a user share that contains all your VM subdirectories with vdisks
 
 _(Default ISO storage path)_:
 : <input type="text" id="mediadir" name="MEDIADIR" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="<?=is_dir('/mnt/user') ? '/mnt/user' : '/mnt'?>" value="<?=htmlspecialchars($domain_cfg['MEDIADIR'])?>" placeholder="_(Click to Select)_" pattern="^[^\\]*/$">
@@ -193,7 +194,7 @@ _(Default ISO storage path)_:
   <span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
 <?endif;?>
 
-:vms_libvirt_iso_storage_help:
+> Specify a user share that contains all your installation media for operating systems
 
 </div>
 _(Default Windows VirtIO driver ISO)_ (_(optional)_):
@@ -202,7 +203,13 @@ _(Default Windows VirtIO driver ISO)_ (_(optional)_):
   <i class="fa fa-trash fa-fw" id="remove_button" title="_(Remove Windows VirtIO driver ISO)_"><span>&nbsp;_(Remove)_</span></i><i class="fa fa-download fa-fw" id="download_button" title="_(Download Windows VirtIO driver ISO)_"><span>&nbsp;_(Download)_</span></i><span id="download_status"></span>
 <?endif;?>
 
-:vms_virtio_driver_help:
+> Specify the virtual CD-ROM (ISO) that contains the VirtIO Windows drivers as provided by the Fedora Project.
+> Download the latest ISO from here: <a href="https://docs.fedoraproject.org/en-US/quick-docs/creating-windows-virtual-machines-using-virtio-drivers/index.html#virtio-win-direct-downloads" target="_blank">fedoraproject.org</a>
+> 
+> When installing Windows, you will reach a step where no disk devices will be found. There is an option to browse for drivers on that screen.
+> Click browse and locate the additional CD-ROM in the menu. Inside there will be various folders for the different versions of Windows.
+> Open the folder for the version of Windows you are installing and then select the AMD64 subfolder inside (even if you are on an Intel system, select AMD64).
+> Three drivers will be found. Select them all, click next, and the vDisks you have assigned will appear.
 
 <div class="advanced" markdown="1">
 _(Default network source)_:
@@ -213,7 +220,20 @@ _(Default network source)_:
   }?>
   </select>
 
-:vms_network_source_help:
+> Select the name of the network you wish to use as default for your VMs.
+> You can choose between **'bridges'** created under network settings or
+> **'libvirt'** created with virsh command in the terminal.
+> The bridge **'virbr0'** and the associated virtual network **'default'** are
+> created by libvirt.
+> Both utilizes NAT (network address translation) and act as a DHCP server to hand out IP addresses to virtual machines directly.
+> More optional selections are present for bridges under network settings or for libvirt networks with the virsh command in the terminal.
+> 
+> **If your are unsure, choose 'virbr0' as the recommended Unraid default.**
+> 
+> NOTE: You can also specify a network source on a per-VM basis.
+> 
+> **IMPORTANT: Neither Libvirt nor Unraid automatically brings up an interface that is assigned to a Libvirt network.
+> Before you use a Libvirt network, please go to Settings -> Network Settings and, if necessary, manually set the associated interface to up.**
 
 _(Upon host shutdown)_:
 : <select id="hostshutdown" name="HOSTSHUTDOWN">
@@ -221,7 +241,8 @@ _(Upon host shutdown)_:
   <?=mk_option($domain_cfg['HOSTSHUTDOWN'], 'hibernate', _('Hibernate VMs'))?>
   </select>
 
-:vms_host_shutdown_help:
+> When shutting down the server, this defines the action to take upon running VMs. If *Hibernate VMs* is chosen,
+> the VM will be instructed to hibernate (if supported) otherwise it will attempt a VM shutdown.
 
 _(VM shutdown time-out)_:
 : <input type="number" id="vm_shutdown_timeout" name="TIMEOUT" value="<?=htmlspecialchars($domain_cfg['TIMEOUT'])?>" class="narrow">
@@ -229,7 +250,8 @@ _(VM shutdown time-out)_:
   <span id="arraystopped"><i class="fa fa-warning icon warning"></i> _(exceeds Disk Shutdown)_ <?=htmlspecialchars($var['shutdownTimeout'])?>s _(time-out)_ (<a href="/Settings/DiskSettings">_(edit)_</a>)</span>
   <?endif;?>
 
-:vms_shutdown_timeout_help:
+> When shutting down the server, this defines how long to wait in seconds for *graceful* VM shutdown before forcing shutdown to continue.
+> NOTE: It's recommended to shut down guest VMs from within the VM.
 
 _(Console Options)_:
 : <select id="vmsconsole" name="CONSOLE">
@@ -238,7 +260,8 @@ _(Console Options)_:
   <?=mk_option($domain_cfg['CONSOLE'], 'both', _('Both Web & Virt-Manager Remote Viewer'))?>
   </select>
 
-:vms_console_help:
+> For setting the console options to show on context menus. Web will show only inbuild web clients(VNC and SPICE),
+> Virtual Manager Remote Viewer will only show the Remote Viewer option. Both will show both Web and Remote Viewer.
 
 _(Show RDP menu option)_:
 : <select id="vmsrdpopt" name="RDPOPT">
@@ -246,7 +269,7 @@ _(Show RDP menu option)_:
   <?=mk_option($domain_cfg['RDPOPT'], 'yes', _('Show RDP option'))?>
   </select>
 
-:vms_rdpopt_help:
+> Adds option to menu to start RDP. RDP file is downloaded. You need to set browser to open when ready.
 
 _(Show VM Usage)_:
 : <select id="vmusage" name="USAGE">
@@ -254,12 +277,12 @@ _(Show VM Usage)_:
   <?=mk_option($domain_cfg['USAGE'], 'Y', _('Enabled'))?>
   </select>
 
-:vms_usage_help:
+> Show metrics for CPU both guest and host percentage, memory, disk io and network io.
 
 _(VM Usage refresh timer(seconds))_:
 : <input type="number" id="vm_usage_timer" name="USAGETIMER" value="<?=htmlspecialchars($domain_cfg['USAGETIMER'] ?? 3) ?>" class="narrow">
 
-:vms_usage_timer_help:
+> Setting in seconds for metrics refresh time.
 
 _(PCIe ACS override)_:
 : <select id="pcie_acs_override"<?=$safemode ? ' disabled' : ''?>>
@@ -269,7 +292,13 @@ _(PCIe ACS override)_:
   <?= mk_option($pcie_acs_override, 'downstream,multifunction', _('Both'))?>
   </select><?if($safemode):?><span>*_(Setting disabled in **safe mode**)_*</span><?endif;?>
 
-:vms_acs_override_help:
+> *PCIe ACS override* allows various hardware components to expose themselves as isolated devices.
+> Typically it is sufficient to isolate *Downstream* ports.
+> A hardware component may need the setting *Multi-function* or *Both* to further isolate different hardware functions.<br>
+> A reboot is required for changes to this setting to take affect.
+> 
+> **Warning: use of this setting could cause possible data corruption with certain hardware configurations.**
+> Please visit the [Lime Technology forums](https://forums.unraid.net/forum/51-vm-engine-kvm) for more information.
 
 _(VFIO allow unsafe interrupts)_:
 : <select id="vfio_allow_unsafe"<?=$safemode ? ' disabled' : ''?>>
@@ -277,7 +306,11 @@ _(VFIO allow unsafe interrupts)_:
   <?= mk_option($vfio_allow_unsafe, '1', _('Yes'))?>
   </select><?if($safemode):?><span>*_(Setting disabled in **safe mode**)_*</span><?endif;?>
 
-:vms_vfio_interupts_help:
+> If your system doesn't support interrupt remapping, these can be enabled by allowing unsafe interrupts.<br>
+> A reboot will be required for changes to this setting to take affect.
+> 
+> **Warning: use of this setting could cause possible data corruption with certain hardware configurations.**
+> Please visit the [Lime Technology forums](https://forums.unraid.net/forum/51-vm-engine-kvm) for more information.
 
 </div>
 <?if ($libvirt_log):?>
@@ -295,7 +328,7 @@ _(VFIO allow unsafe interrupts)_:
 </form>
 <?if ($libvirt_log):?>
 
-:vms_libvirt_log_help:
+> View the log for libvirt: <a onclick="openTerminal('log','libvirt','libvirt/libvirtd.log')">View libvirtd.log</a>
 
 <?endif;?>
 
@@ -322,7 +355,8 @@ _(btrfs scrub status)_:
     <label><input type="checkbox" name="#arg[3]" value="">_(Correct file system errors)_</label>
   </span>
 
-:vms_scrub_help:
+> **Scrub** runs the *btrfs scrub* program to check file system integrity.
+> If repair is needed you should check the *Correct file system errors* and run a second Scrub pass; this will permit *btrfs scrub* to fix the file system.
 
 <?else:?>
 <input type="hidden" name="#command" value="/webGui/scripts/btrfs_scrub">
@@ -334,7 +368,7 @@ _(btrfs scrub status)_:
     <input type="submit" value="_(Cancel)_">
   </span>
 
-:vms_cancel_help:
+> **Cancel* will cancel the Scrub operation in progress.
 
 </form>
 <?endif;?>

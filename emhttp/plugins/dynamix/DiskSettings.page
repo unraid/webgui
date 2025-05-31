@@ -154,7 +154,9 @@ _(Enable auto start)_:
   <?=mk_option($var['startArray'], "yes", _('Yes'))?>
   </select>
 
-:disk_enable_autostart_help:
+> If set to 'Yes' then if the device configuration is correct upon server start-up,
+> the array will be automatically Started and shares exported.<br>
+> If set to 'No' then you must Start the array yourself.
 
 _(Default spin down delay)_:
 : <select name="spindownDelay">
@@ -173,7 +175,9 @@ _(Default spin down delay)_:
   <?=mk_option($var['spindownDelay'], "9",  "9 "._('hours'))?>
   </select>
 
-:disk_spindown_delay_help:
+> This setting defines the 'default' time-out for spinning hard drives down after a period
+> of no I/O activity.  You may override the default value for an individual disk on the Disk Settings
+> page for that disk.
 
 _(Enable spinup groups)_:
 : <select name="spinupGroups">
@@ -181,7 +185,7 @@ _(Enable spinup groups)_:
   <?=mk_option($var['spinupGroups'], "yes", _('Yes'))?>
   </select>
 
-:disk_spinup_groups_help:
+> If set to 'Yes' then the spinup groups feature is enabled.
 
 _(Default file system for Array disks)_:
 : <select name="defaultFsType">
@@ -195,17 +199,20 @@ _(Default file system for Array disks)_:
   <?=mk_option($var['defaultFsType'], "luks:reiserfs", _('reiserfs')." - "._('encrypted'), "disabled");?>
   </select>
 
-:disk_default_file_system_help:
+> Defines the default file system type to create when an *unmountable* array device is formatted.
+> 
+> The default file system type for a single or multi-device cache is always Btrfs.
 
 _(Shutdown time-out)_ (_(seconds)_):
 : <input type="number" name="shutdownTimeout" maxlength="10" value="<?=$var['shutdownTimeout']?>" class="narrow" placeholder="90">
 
-:disk_shutdown_timeout_help:
+> When shutting down the server, this defines how long to wait in seconds for *graceful* shutdown before forcing
+> shutdown to continue.
 
 _(Tunable (poll_attributes))_:
 : <input type="number" name="poll_attributes" maxlength="10" value="<?=$var['poll_attributes']?>" class="narrow" placeholder="<?=$var['poll_attributes_default']?>">
 
-:disk_tunable_poll_attributes_help:
+> This defines the disk SMART polling interval, in seconds.  A value of 0 disables SMART polling (not recommended).
 
 _(Tunable (enable NCQ))_:
 : <select name="queueDepth">
@@ -213,12 +220,20 @@ _(Tunable (enable NCQ))_:
   <?=mk_option($var['queueDepth'], "1", _('No'))?>
   </select>
 
-:disk_tunable_enable_ncq_help:
+> If set to **No** then *Native Command Queuing* is disabled for all array devices that support NCQ.
+> 
+> **Auto** leaves the setting for each device as-is.
+> 
+> Note: You must reboot after selecting Auto for setting to take effect.
 
 _(Tunable (nr_requests))_:
 : <input type="text" name="nr_requests" maxlength="10" value="<?=htmlspecialchars($var['nr_requests'])?>" class="narrow" placeholder="<?=_($var['nr_requests_default'])?>">
 
-:disk_tunable_nr_requests_help:
+> This defines the `nr_requests` device driver setting for all array devices.
+> 
+> **Auto** leaves the setting for each device as-is.
+> 
+> Note: if you set to blank and click Apply, the setting is restored to its default, and you must reboot for setting to take effect.
 
 _(Tunable (scheduler))_:
 : <select name="md_scheduler">
@@ -229,22 +244,33 @@ _(Tunable (scheduler))_:
   <?=mk_option($var['md_scheduler'], "none", _('none'))?>
   </select>
 
-:disk_tunable_scheduler_help:
+> Selects which kernel I/O scheduler to use for all array devices.
+> 
+> **Auto** leaves the setting for each device as-is (mq-deadline).
+> 
+> Note: You must reboot after selecting Auto for setting to take effect.
 
 _(Tunable (md_num_stripes))_:
 : <input type="number" name="md_num_stripes" maxlength="10" value="<?=$var['md_num_stripes']?>" class="narrow" placeholder="<?=$var['md_num_stripes_default']?>">
 
-:disk_tunable_md_num_stripes_help:
+> This is the size of the *stripe pool* in number of *stripes*.  A *stripe* refers to a data structure that facilitates parallel 4K read/write
+> operations necessary for a parity-protected array.
+> 
+> Note: if you set to blank and click Apply, the setting is restored to its default, and will take effect after reboot.
 
 _(Tunable (md_queue_limit))_:
 : <input type="number" name="md_queue_limit" maxlength="10" value="<?=$var['md_queue_limit']?>" class="narrow" placeholder="<?=$var['md_queue_limit_default']?>">
 
-:disk_tunable_md_queue_limit_help:
+> This is a number in [1..100] which is the maximum steady-load percentage of the stripe pool permitted to be in use.
+> 
+> Note: if you set to blank and click Apply, the setting is restored to its default.
 
 _(Tunable (md_sync_limit))_:
 : <input type="number" name="md_sync_limit" maxlength="10" value="<?=$var['md_sync_limit']?>" class="narrow" placeholder="<?=$var['md_sync_limit_default']?>">
 
-:disk_tunable_md_sync_limit_help:
+> This is a number in [0..100] which is the maximum percentage of the stripe pool allocated for parity sync/check in the presence of other I/O.
+> 
+> Note: if you set to blank and click Apply, the setting is restored to its default.
 
 _(Tunable (md_write_method))_:
 : <select name="md_write_method">
@@ -253,7 +279,9 @@ _(Tunable (md_write_method))_:
   <?=mk_option($var['md_write_method'], "1", _('reconstruct write'))?>
   </select>
 
-:disk_tunable_md_write_method_help:
+> Selects the method to employ when writing to enabled disk in parity protected array.
+> 
+> *Auto* selects `read/modify/write`.
 
 _(Enable NVME power monitoring)_:
 : <select name="display_power">
@@ -264,32 +292,46 @@ _(Enable NVME power monitoring)_:
 _(Default warning disk utilization threshold)_ (%):
 : <input type="number" min="0" max="100" name="display_warning" class="narrow" value="<?=$display['warning']?>" placeholder="<?=$default['display']['warning']?>">
 
-:disk_default_warning_utilization_help:
+> *Warning disk utilization* sets the default warning threshold for all hard disks utilization. Exceeding this threshold will result in a warning notification.
+> 
+> When the warning threshold is set equal or greater than the critical threshold, there will be only critical notifications (warnings are not existing).
+> 
+> A value of zero will disable the warning threshold (including notifications).
 
 _(Default critical disk utilization threshold)_ (%):
 : <input type="number" min="0" max="100" name="display_critical" class="narrow" value="<?=$display['critical']?>" placeholder="<?=$default['display']['critical']?>">
 
-:disk_default_critical_utilization_help:
+> *Critical disk utilization* sets the default critical threshold for all hard disks utilization. Exceeding this threshold will result in an alert notification.
+> 
+> A value of zero will disable the critical threshold (including notifications).
 
 _(Default warning disk temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
 : <input type="number" min="0" max="300" name="display_hot" class="narrow" value="<?=displayTemp($display['hot'])?>" placeholder="<?=displayTemp($default['display']['hot'])?>">
 
-:disk_default_warning_temperature_help:
+> *Warning disk temperature* sets the default warning threshold for all hard disks temperature. Exceeding this threshold will result in a warning notification.
+> 
+> A value of zero will disable the warning threshold (including notifications).
 
 _(Default critical disk temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
 : <input type="number" min="0" max="300" name="display_max" class="narrow" value="<?=displayTemp($display['max'])?>" placeholder="<?=displayTemp($default['display']['max'])?>">
 
-:disk_default_critical_temperature_help:
+> *Critical disk temperature* sets the default critical threshold for all hard disks temperature. Exceeding this threshold will result in an alert notification.
+> 
+> A value of zero will disable the critical threshold (including notifications).
 
 _(Default warning SSD temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
 : <input type="number" min="0" max="300" name="display_hotssd" class="narrow" value="<?=displayTemp($display['hotssd'])?>" placeholder="<?=displayTemp($default['display']['hotssd'])?>">
 
-:ssd_default_warning_temperature_help:
+> *Warning SSD temperature* sets the default warning threshold for all SSD devices temperature. Exceeding this threshold will result in a warning notification.
+> 
+> A value of zero will disable the warning threshold (including notifications).
 
 _(Default critical SSD temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
 : <input type="number" min="0" max="300" name="display_maxssd" class="narrow" value="<?=displayTemp($display['maxssd'])?>" placeholder="<?=displayTemp($default['display']['maxssd'])?>">
 
-:ssd_default_critical_temperature_help:
+> *Critical disk temperature* sets the default critical threshold for all SSD devices temperature. Exceeding this threshold will result in an alert notification.
+> 
+> A value of zero will disable the critical threshold (including notifications).
 
 &nbsp;
 : <span class="inline-block">
@@ -392,7 +434,9 @@ _(Default SMART notification value)_:
   <?=mk_option(_var($var,'smSelect'), "1", _('Normalized'))?>
   </select>
 
-:disk_default_smart_notification_help:
+> SMART notifications are generated on either an increasing RAW value of the attribute, or a decreasing NORMALIZED value which reaches a predefined threshold set by the manufacturer.
+> 
+> This section is used to set the global settings for all disks. It is possible to adjust settings for individual disks.
 
 _(Default SMART notification tolerance level)_:
 : <select name="smLevel">
@@ -405,7 +449,9 @@ _(Default SMART notification tolerance level)_:
   <?=mk_option(_var($var,'smLevel'), "1.50", "50%")?>
   </select>
 
-:disk_default_smart_tolerance_help:
+> A tolerance level may be given to prevent that small changes result in a notification. Setting a too high tolerance level may result in critical changes without a notification.
+> 
+> This section is used to set the global settings for all disks. It is possible to adjust settings for individual disks.
 
 _(Default SMART controller type)_:
 : <select name="smType" onchange="setIndex(this.form)">
@@ -430,7 +476,10 @@ _(Default SMART controller type)_:
   <?=mk_option(_var($var,'smType'), "-d sntrealtek", "Realtek NVMe pass-through")?>
   </select>
 
-:disk_default_smart_controller_help:
+> By default automatic controller selection is done by smartctl to read the SMART information. Certain controllers however need specific settings for smartctl to work.
+> Use this setting to select your controller type and fill-in the specific disk index and device name for your situation. Use the manufacturer's documentation to find the relevant information.
+> 
+> This section is used to set the global settings for all disks. It is possible to adjust settings for individual disks.
 
 _(Default SMART attribute notifications)_:
 : <input type="text" name="smCustom" value="<?=htmlspecialchars(_var($var,'smCustom'))?>" class="narrow"><span class="input-instructions">_(Custom attributes (use comma to separate numbers))_</span>
@@ -446,7 +495,12 @@ _(Default SMART attribute notifications)_:
   </span>
 <?endfor;?>
 
-:disk_default_smart_attribute_help:
+> The user can enable or disable notifications for the given SMART attributes. It is recommended to keep the default, which is ALL selected attributes,
+> when certain attributes are not present on your hard disk or do not provide the correct information, these may be excluded.
+> In addition custom SMART attributes can be entered to generate notifications. Be careful in this selection,
+> it may cause an avalance of notifcations if inappropriate SMART attributes are chosen.
+> 
+> This section is used to set the global settings for all disks. It is possible to adjust settings for individual disks.
 
 <input type="submit" name="#default" value="_(Default)_">
 : <span class="inline-block">

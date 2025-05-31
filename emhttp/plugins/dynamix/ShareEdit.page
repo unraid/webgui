@@ -330,9 +330,17 @@ $filteredShares = array_filter($shares, function($list) use ($name) {
 	return $list['name'] != $name || !$name;
 });
 ?>
-:share_edit_global1_help:
+> A *Share*, also called a *User Share*, is simply the name of a top-level directory that exists on one or more of your
+> storage volumes (array disks and pools).  Each share can be exported for network access.  When browsing a share, we return the
+> composite view of all files and subdirectories for which that top-level directory exists on each storage device.
+> 
+> *Read settings from* is used to preset the settings of the new share with the settings of an existing share.
+> 
+> Select the desired share name and press **Read** to copy the settings from the selected source.
 <?if ($name):?>
-:share_edit_global2_help:
+> *Write settings to* is used to copy the settings of the current share to one or more other existing shares.
+> 
+> Select the desired destinations and press **Write** to copy the settings to the selected shares.
 <?endif;?>
 
 <form markdown="1" name="share_edit" method="POST" action="/update.htm" target="progressFrame" onsubmit="return prepareEdit()"<?=$name?" onchange=\"toggleButton('writeshare',true);$('#s5').dropdownchecklist('disable')\">":">"?>
@@ -382,46 +390,58 @@ _(Write settings to)_ <i class="fa fa-arrow-right fa-fw"></i>
 _(Share name)_:
 : <input type="text" id="shareName" name="shareName" maxlength="40" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars($name)?>" oninput="checkName(this.value)" title="_(Hidden share names are not allowed)_" pattern="^[^\.].*"><span id="zfs-name" class="orange-text"><i class="fa fa-warning"></i> _(Share name contains invalid characters for ZFS use)_</span>
 
-:share_edit_name_help:
+> The share name can be up to 40 characters, and is case-sensitive with these restrictions:
+> 
+> * cannot contain a double-quote character (") or the following characters: / \ * < > |
+> * cannot be one of the reserved share names: flash, cache, cache2, .., disk1, disk2, ..
+> 
+> We highly recommend to make your life easier and avoid special characters.
 
 _(Comments)_:
 : <input type="text" name="shareComment" maxlength="256" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars($share['comment'])?>">
 
-:share_edit_comments_help:
+> Anything you like, up to 256 characters.
 </div>
 
 <div markdown="1" class="shade">
 _(Minimum free space)_:
 : <input type="text" name="shareFloor" maxlength="16" autocomplete="off" spellcheck="false" class="wide" value="<?=presetSpace($share['floor'])?>" placeholder="_(Free Space will be calculated)_">
 
-:share_edit_free_space_help:
+> The *minimum free space* available to allow writing to any disk belonging to the share.<br>
+> 
+> Choose a value which is equal or greater than the biggest single file size you intend to copy to the share.
+> Include units KB, MB, GB and TB as appropriate, e.g. 10MB.
 
 <?if ($name):?>
 <div markdown="1" class="empty">
 _(Share status)_:
 : _(Share is empty)_
 
-:share_edit_status_help:
+> Share does *not* contain any data and may be deleted if not needed any longer.
 </div>
 
 <div markdown="1" class="full">
 _(Share status)_:
 : <span class="full1">&nbsp;</span><span class="full2">_(Share contains data)_</span>
 
-:share_edit_delete_help:
+> Share can *not* be deleted as long as it contains data. Be aware that some data can be hidden. See also [SMB Settings](/Settings/SMB) -> Hide "dot" files.
 </div>
 
 <?if (_var($share,'exclusive')=="yes"):?>
 _(Exclusive access)_:
 : _(Yes)_
 
-:share_edit_exclusive_access_help:
+> When set to "Yes" indicates a symlink directly to a pool has been set up for the share in the /mnt/user tree.
+> 
+> Refer to [Global Share Settings](Settings/ShareSettings) -> Permit exclusive shares.
 
 <?else:?>
 _(Exclusive access)_:
 : _(No)_
 
-:share_edit_exclusive_access_help:
+> When set to "Yes" indicates a symlink directly to a pool has been set up for the share in the /mnt/user tree.
+> 
+> Refer to [Global Share Settings](Settings/ShareSettings) -> Permit exclusive shares.
 
 <?endif;?>
 <?endif;?>
@@ -439,7 +459,12 @@ _(Primary storage (for new files and folders))_:
   <?endif;?>
   </select><span id="cachePoolMessage" style="display: none; color: red;"></span>
 
-:share_edit_primary_storage_help:
+> **Primary storage** is where *new files and folders* are created.  If
+> Primary storage is below the minimum free space setting then new files
+> and folders will be created in **Secondary storage**, if configured.
+> 
+> **Important:** For *Exclusive access* shares, the Min free space
+> settings are ignored.
 
 <div markdown="1" id="cow-setting">
 _(Enable Copy-on-write)_:
@@ -448,7 +473,11 @@ _(Enable Copy-on-write)_:
   <?=mk_option($share['cow'], "auto", _('Auto'))?>
   </select></span><?if ($name):?><i class='fa fa-info i'></i>_(Set when adding new share only)_<?endif;?>
 
-:share_edit_copy_on_write_help:
+> Set to **No** to cause the *btrfs* NOCOW (No Copy-on-Write) attribute to be set on the share directory
+> when created on a device formatted with *btrfs* file system.  Once set, newly created files and
+> subdirectories on the device will inherit the NOCOW attribute. This setting has no effect on non-btrfs file systems.
+> 
+> Set to **Auto** for normal operation, meaning COW **will** be in effect on devices formatted with *btrfs*.
 
 </div>
 
@@ -460,7 +489,23 @@ _(Allocation method)_:
   <?=mk_option($share['allocator'], "mostfree", _('Most-free'))?>
   </select>
 
-:share_edit_allocation_method_help:
+> This setting determines how Unraid OS will choose which disk to use when creating a new file or directory:
+> 
+> **High-water**
+> Choose the lowest numbered disk with free space still above the current *high water mark*.  The
+> *high water mark* is initialized with the size of the largest Data disk divided by 2.  If no disk
+> has free space above the current *high water mark*, divide the *high water mark* by 2 and choose again.
+> 
+> The goal of **High-water** is to write as much data as possible to each disk (in order to minimize
+> how often disks need to be spun up), while at the same time, try to keep the same amount of free space on
+> each disk (in order to distribute data evenly across the array).
+> 
+> **Fill-up**
+> Choose the lowest numbered disk that still has free space above the current **Minimum free space**
+> setting.
+> 
+> **Most-free**
+> Choose the disk that currently has the most free space.
 
 _(Split level)_:
 : <select name="shareSplitLevel1">
@@ -473,7 +518,29 @@ _(Split level)_:
   <?=mk_option($share['splitLevel'], "0", _('Manual: do not automatically split directories'))?>
   </select>
 
-:share_edit_split_level_help:
+> Determines whether a directory is allowed to expand onto multiple disks.
+> 
+> **Automatically split any directory as required**
+> When a new file or subdirectory needs to be created in a share, Unraid OS first chooses which disk
+> it should be created on, according to the configured *Allocation method*.  If the parent directory containing
+> the new file or subdirectory does not exist on this disk, then Unraid OS will first create all necessary
+> parent directories, and then create the new file or subdirectory.
+> 
+> **Automatically split only the top level directory as required**
+> When a new file or subdirectory is being created in the first level subdirectory of a share, if that first
+> level subdirectory does not exist on the disk being written, then the subdirectory will be created first.
+> If a new file or subdirectory is being created in the second or lower level subdirectory of a share, the new
+> file or subdirectory is created on the same disk as the new file or subdirectory's parent directory.
+> 
+> **Automatically split only the top "N" level directories as required**
+> Similar to previous: when a new file or subdirectory is being created, if the parent directory is at level "N",
+> and does not exist on the chosen disk, Unraid OS will first create all necessary parent directories.  If the
+> parent directory of the new file or subdirectory is beyond level "N", then the new file or subdirectory is
+> created on the same disk where the parent directory exists.
+> 
+> **Manual: do not automatically split directories**
+> When a new file or subdirectory needs to be created in a share, Unraid OS will only consider disks where the
+> parent directory already exists.
 
 _(Included disk(s))_:
 : <select id="s1" name="shareInclude1" multiple>
@@ -482,7 +549,8 @@ _(Included disk(s))_:
   <?endforeach;?>
   </select>
 
-:share_edit_included_disks_help:
+> Specify the disks which can be used by the share. By default all disks are included; that is, if specific
+> disks are not selected here, then the share may expand into *all* array disks.
 
 _(Excluded disk(s))_:
 : <select id="s2" name="shareExclude1" multiple>
@@ -491,7 +559,7 @@ _(Excluded disk(s))_:
   <?endforeach;?>
   </select>
 
-:share_edit_excluded_disks_help:
+> Specify the disks which can *not* be used by the share. By default no disks are excluded.
 
 </div>
 
@@ -509,7 +577,9 @@ _(Secondary storage)_:
   <?endif;?>
   </select><span id="cachePoolMessage2" style="display: none; color: red;"></span>
 
-:share_edit_secondary_storage_help:
+> **Secondary storage** is where new files and directories are created if no
+> room on Primary storage.  When both Primary and Secondary storage are
+> configured the 'mover' will transfer files between them.
 
 <div markdown="1" id="moreSettings2">
 _(Allocation method)_:
@@ -519,7 +589,23 @@ _(Allocation method)_:
   <?=mk_option($share['allocator'], "mostfree", _('Most-free'))?>
   </select>
 
-:share_edit_allocation_method_help:
+> This setting determines how Unraid OS will choose which disk to use when creating a new file or directory:
+> 
+> **High-water**
+> Choose the lowest numbered disk with free space still above the current *high water mark*.  The
+> *high water mark* is initialized with the size of the largest Data disk divided by 2.  If no disk
+> has free space above the current *high water mark*, divide the *high water mark* by 2 and choose again.
+> 
+> The goal of **High-water** is to write as much data as possible to each disk (in order to minimize
+> how often disks need to be spun up), while at the same time, try to keep the same amount of free space on
+> each disk (in order to distribute data evenly across the array).
+> 
+> **Fill-up**
+> Choose the lowest numbered disk that still has free space above the current **Minimum free space**
+> setting.
+> 
+> **Most-free**
+> Choose the disk that currently has the most free space.
 
 _(Split level)_:
 : <select name="shareSplitLevel2">
@@ -532,7 +618,29 @@ _(Split level)_:
   <?=mk_option($share['splitLevel'], "0", _('Manual: do not automatically split directories'))?>
   </select>
 
-:share_edit_split_level_help:
+> Determines whether a directory is allowed to expand onto multiple disks.
+> 
+> **Automatically split any directory as required**
+> When a new file or subdirectory needs to be created in a share, Unraid OS first chooses which disk
+> it should be created on, according to the configured *Allocation method*.  If the parent directory containing
+> the new file or subdirectory does not exist on this disk, then Unraid OS will first create all necessary
+> parent directories, and then create the new file or subdirectory.
+> 
+> **Automatically split only the top level directory as required**
+> When a new file or subdirectory is being created in the first level subdirectory of a share, if that first
+> level subdirectory does not exist on the disk being written, then the subdirectory will be created first.
+> If a new file or subdirectory is being created in the second or lower level subdirectory of a share, the new
+> file or subdirectory is created on the same disk as the new file or subdirectory's parent directory.
+> 
+> **Automatically split only the top "N" level directories as required**
+> Similar to previous: when a new file or subdirectory is being created, if the parent directory is at level "N",
+> and does not exist on the chosen disk, Unraid OS will first create all necessary parent directories.  If the
+> parent directory of the new file or subdirectory is beyond level "N", then the new file or subdirectory is
+> created on the same disk where the parent directory exists.
+> 
+> **Manual: do not automatically split directories**
+> When a new file or subdirectory needs to be created in a share, Unraid OS will only consider disks where the
+> parent directory already exists.
 
 _(Included disk(s))_:
 : <select id="s3" name="shareInclude2" multiple>
@@ -541,7 +649,8 @@ _(Included disk(s))_:
   <?endforeach;?>
   </select>
 
-:share_edit_included_disks_help:
+> Specify the disks which can be used by the share. By default all disks are included; that is, if specific
+> disks are not selected here, then the share may expand into *all* array disks.
 
 _(Excluded disk(s))_:
 : <select id="s4" name="shareExclude2" multiple>
@@ -550,7 +659,7 @@ _(Excluded disk(s))_:
   <?endforeach;?>
   </select>
 
-:share_edit_excluded_disks_help:
+> Specify the disks which can *not* be used by the share. By default no disks are excluded.
 
 </div>
 
@@ -563,7 +672,8 @@ _(Mover action)_:
   <?=mk_option(direction(),'1','')?>
   </select></span><span id="moverAction1"></span>
 
-:share_edit_mover_action_help:
+> This defines the direction of file transfer between Primary and
+> Secondary storage when both are configured.
 
 </div>
 <div markdown="1" id="moverDirection2">
@@ -572,7 +682,8 @@ _(Mover action)_:
   <?=mk_option('','',"_(Not used)_")?>
   </select></span><span id="moverAction2"></span>
 
-:share_edit_mover_action_help:
+> This defines the direction of file transfer between Primary and
+> Secondary storage when both are configured.
 
 </div>
 </div>
