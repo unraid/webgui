@@ -924,7 +924,19 @@ _(Template)_:
   }
   ?></select><?if ($rmadd):?><i class="fa fa-window-close button" title="<?=htmlspecialchars($rmadd)?>" onclick="rmTemplate('<?=addslashes(htmlspecialchars($rmadd))?>')"></i><?endif;?>
 
-:docker_client_general_help:
+> Templates are a quicker way to setting up Docker Containers on your Unraid server.  There are two types of templates:
+> 
+> **Default templates**<br>
+> When valid repositories are added to your Docker Repositories page, they will appear in a section on this drop down for you to choose (master categorized by author, then by application template).
+> After selecting a default template, the page will populate with new information about the application in the Description field, and will typically provide instructions for how to setup the container.
+> Select a default template when it is the first time you are configuring this application.
+> 
+> **User-defined templates**<br>
+> Once you've added an application to your system through a Default template,
+> the settings you specified are saved to your USB flash device to make it easy to rebuild your applications in the event an upgrade were to fail or if another issue occurred.
+> To rebuild, simply select the previously loaded application from the User-defined list and all the settings for the container will appear populated from your previous setup.
+> Clicking create will redownload the necessary files for the application and should restore you to a working state.
+> To delete a User-defined template, select it from the list above and click the red X to the right of it.
 
 </div>
 <?endif;?>
@@ -933,7 +945,7 @@ _(Template)_:
 _(Name)_:
 : <input type="text" name="contName" pattern="[a-zA-Z0-9][a-zA-Z0-9_.\-]+" required>
 
-:docker_client_name_help:
+> Give the container a name or leave it as default.  Two characters minimum.  First character must be a-z A-Z 0-9  Remaining characters a-z A-Z 0-9 . - _
 
 </div>
 <div markdown="1" class="basic">
@@ -945,7 +957,7 @@ _(Overview)_:
 _(Overview)_:
 : <textarea name="contOverview" spellcheck="false" cols="80" rows="15" style="width:56%"></textarea>
 
-:docker_client_overview_help:
+> A description for the application container.  Supports basic HTML mark-up.
 
 </div>
 <div markdown="1" class="basic">
@@ -957,7 +969,7 @@ _(Additional Requirements)_:
 _(Additional Requirements)_:
 : <textarea name="contRequires" spellcheck="false" cols="80" Rows="3" style="width:56%"></textarea>
 
-:docker_client_additional_requirements_help:
+> Any additional requirements the container has.  Supports basic HTML mark-up.
 
 </div>
 
@@ -965,7 +977,8 @@ _(Additional Requirements)_:
 _(Repository)_:
 : <input type="text" name="contRepository" required>
 
-:docker_client_repository_help:
+> The repository for the application on the Docker Registry.  Format of authorname/appname.
+> Optionally you can add a : after appname and request a specific version for the container image.
 
 </div>
 <div markdown="1" class="<?=$authoring?>">
@@ -1021,24 +1034,24 @@ _(Categories)_:
 _(Support Thread)_:
 : <input type="text" name="contSupport">
 
-:docker_client_support_thread_help:
+> Link to a support thread on Lime-Technology's forum.
 
 _(Project Page)_:
 : <input type="text" name="contProject">
 
-:docker_client_project_page_help:
+> Link to the project page (eg: www.plex.tv)
 
 _(Read Me First)_:
 : <input type="text" name="contReadMe">
 
-:docker_client_readme_help:
+> Link to a readme file or page
 
 </div>
 <div markdown="1" class="advanced">
 _(Registry URL)_:
 : <input type="text" name="contRegistry"></td>
 
-:docker_client_hub_url_help:
+> The path to the container's repository location on the Docker Hub.
 
 </div>
 <div markdown="1" class="noshow"> <!-- Deprecated for author to enter or change, but needs to be present -->
@@ -1056,27 +1069,30 @@ Template URL:
 _(Icon URL)_:
 : <input type="text" name="contIcon">
 
-:docker_client_icon_url_help:
+> Link to the icon image for your application (only displayed on dashboard if Show Dashboard apps under Display Settings is set to Icons).
 
 _(WebUI)_:
 : <input type="text" name="contWebUI">
 
-:docker_client_webui_help:
+> When you click on an application icon from the Docker Containers page, the WebUI option will link to the path in this field.
+> Use [IP] to identify the IP of your host and [PORT:####] replacing the #'s for your port.
 
 _(Extra Parameters)_:
 : <input type="text" name="contExtraParams">
 
-:docker_extra_parameters_help:
+> If you wish to append additional commands to your Docker container at run-time, you can specify them here.<br>
+> For all possible Docker run-time commands, see here: <a href="https://docs.docker.com/reference/run/" target="_blank">https://docs.docker.com/reference/run/</a>
 
 _(Post Arguments)_:
 : <input type="text" name="contPostArgs">
 
-:docker_post_arguments_help:
+> If you wish to append additional arguments AFTER the container definition, you can specify them here.
+> The content of this field is container specific.
 
 _(CPU Pinning)_:
 : <span style="display:inline-block"><?cpu_pinning()?></span>
 
-:docker_cpu_pinning_help:
+> Checking a CPU core(s) will limit the container to run on the selected cores only. Selecting no cores lets the container run on all available cores (default)
 
 </div>
 _(Network Type)_:
@@ -1106,7 +1122,11 @@ _(Network Type)_:
 _(Fixed IP address)_ (_(optional)_):
 : <input type="text" name="contMyIP"><span id="myIP"></span>
 
-:docker_fixed_ip_help:
+> If the Bridge type is selected, the application’s network access will be restricted to only communicating on the ports specified in the port mappings section.
+> If the Host type is selected, the application will be given access to communicate using any port on the host that isn’t already mapped to another in-use application/service.
+> Generally speaking, it is recommended to leave this setting to its default value as specified per application template.
+> 
+> IMPORTANT NOTE:  If adjusting port mappings, do not modify the settings for the Container port as only the Host port can be adjusted.
 
 </div>
 
@@ -1124,7 +1144,7 @@ _(Container Network)_:
   ?>
 </select>
 
-:docker_container_network_help:
+> This allows your container to utilize the network configuration of another container. Select the appropriate container from the list.<br>This setup can be particularly beneficial if you wish to route your container's traffic through a VPN.
 
 </div>
 
@@ -1158,7 +1178,7 @@ _(Use Tailscale)_:
     <input type="checkbox" class="switch-on-off" name="contTailscale" id="contTailscale" <?php if (!empty($xml['TailscaleEnabled']) && $xml['TailscaleEnabled'] == 'true') echo 'checked'; ?> onchange="showTailscale(this)">
   </span>
 
-:docker_tailscale_help:
+> Enable Tailscale to add this container as a machine on your Tailnet.
 
 </div>
 
@@ -1166,7 +1186,7 @@ _(Use Tailscale)_:
 _(Use Tailscale)_:
 : _(Option disabled as Network type is not bridge or custom)_
 
-:docker_tailscale_help:
+> Enable Tailscale to add this container as a machine on your Tailnet.
 
 </div>
 <div markdown="1" class="TSdivider noshow">
@@ -1204,7 +1224,8 @@ _(Use Tailscale)_:
 _(Tailscale Hostname)_:
 : <input type="text" pattern="[A-Za-z0-9_\-]*" name="TShostname" <?php if (!empty($xml['TailscaleHostname'])) echo 'value="' . $xml['TailscaleHostname'] . '"'; ?> placeholder="_(Hostname for the container)_"> <?=$TS_HostNameWarning?>
 
-:docker_tailscale_hostname_help:
+> Provide the hostname for this container. It does not need to match the container name, but it must be unique on your Tailnet. Note that an HTTPS certificate will be generated for this hostname, which means it will be placed in a public ledger, so use a name that you don't mind being public.
+> For more information see <a href="https://tailscale.com/kb/1153/enabling-https" target="_blank">enabling https</a>.
 
 </div>
 
@@ -1216,7 +1237,9 @@ _(Be a Tailscale Exit Node)_:
   </select>
   <span id='TSisexitnode_msg' style='font-style: italic;'></span>
 
-:docker_tailscale_be_exitnode_help:
+> Enable this if other machines on your Tailnet should route their Internet traffic through this container, this is most useful for containers that connect to commercial VPN services.
+> Be sure to authorize this Exit Node in your <a href="https://login.tailscale.com/admin/machines" target="_blank">Tailscale Machines Admin Panel</a>.
+> For more details, see the Tailscale documentation on <a href="https://tailscale.com/kb/1103/exit-nodes" target="_blank">Exit Nodes</a>.
 
 </div>
 
@@ -1235,7 +1258,8 @@ _(Use a Tailscale Exit Node)_:
   </select>
   <span id='TSexitnodeip_msg' style='font-style: italic;'></span>
 
-:docker_tailscale_exitnode_ip_help:
+> Optionally route this container's outgoing Internet traffic through an Exit Node on your Tailnet. Choose the Exit Node or input its Tailscale IP address.
+> For more details, see <a href="https://tailscale.com/kb/1103/exit-nodes" target="_blank">Exit Nodes</a>.
 
 </div>
 
@@ -1246,7 +1270,9 @@ _(Tailscale Allow LAN Access)_:
     <?=mk_option(1,'true',_('Yes'))?>
   </select>
 
-:docker_tailscale_lanaccess_help:
+> Only applies when this container is using an Exit Node. Enable this to allow the container to access the local network.
+> 
+> <b>WARNING:</b>&nbsp;Even with this feature enabled, systems on your LAN may not be able to access the container unless they have Tailscale installed.
 
 </div>
 
@@ -1258,7 +1284,10 @@ _(Tailscale Userspace Networking)_:
   </select>
   <span id='TSuserspacenetworking_msg' style='font-style: italic;'></span>
 
-:docker_tailscale_userspace_networking_help:
+> When enabled, this container will operate in a restricted environment. Tailscale DNS will not work, and the container will not be able to initiate connections to other Tailscale machines. However, other machines on your Tailnet will still be able to communicate with this container.
+> 
+> When disabled, this container will have full access to your Tailnet. Tailscale DNS will work, and the container can fully communicate with other machines on the Tailnet.
+> However, systems on your LAN may not be able to access the container unless they have Tailscale installed.
 
 </div>
 
@@ -1269,7 +1298,8 @@ _(Enable Tailscale SSH)_:
     <?=mk_option(1,'true',_('Yes'))?>
   </select>
 
-:docker_tailscale_ssh_help:
+> Tailscale SSH is similar to the Docker "Console" option in the Unraid webgui, except you connect with an SSH client and authenticate via Tailscale.
+> For more details, see the <a href="https://tailscale.com/kb/1193/tailscale-ssh" target="_blank">Tailscale SSH</a> documentation.
 
 </div>
 
@@ -1282,7 +1312,20 @@ _(Tailscale Serve)_:
   </select>
 <?=$TS_HTTPSDisabledWarning?><?php if (!empty($TS_webui_url)) echo '<label for="TSserve"><a href="' . $TS_webui_url . '" target="_blank">' . $TS_webui_url . '</a></label>'; ?>
 
-:docker_tailscale_serve_mode_help:
+> Enabling <b>Serve</b> will automatically reverse proxy the primary web service from this container and make it available on your Tailnet using https with a valid certificate!
+> 
+> Note that when accessing the <b>Tailscale WebUI</b> url, no additional authentication layer is added beyond restricting it to your Tailnet - the container is still responsible for managing usernames/passwords that are allowed to access it. Depending on your configuration, direct access to the container may still be possible as well.
+> 
+> For more details, see the <a href="https://tailscale.com/kb/1312/serve" target="_blank">Tailscale Serve</a> documentation.
+> 
+> If the documentation recommends additional settings for a more complex use case, enable "Tailscale Show Advanced Settings". Support for these advanced settings is not available beyond confirming the commands are passed to Tailscale correctly.
+> 
+> <b>Funnel</b> is similar to <b>Serve</b>, except that the web service is made available on the open Internet. Use with care as the service will likely be attacked. As with <b>Serve</b>, the container itself is responsible for handling any authentication.
+> 
+> We recommend reading the <a href="https://tailscale.com/kb/1223/funnel" target="_blank">Tailscale Funnel</a> documentation before enabling this feature.
+> 
+> <b>Note:</b>&nbsp;Enabling <b>Serve</b> or <b>Funnel</b> publishes the Tailscale hostname to a public ledger.
+> For more details, see the Tailscale Documentation: <a href="https://tailscale.com/kb/1153/enabling-https" target="_blank">Enabling HTTPS</a>.
 
 </div>
 
@@ -1290,7 +1333,15 @@ _(Tailscale Serve)_:
 _(Tailscale Serve Port)_:
 : <input type="text" name="TSserveport" value="<?php echo !empty($xml['TailscaleServePort']) ? $xml['TailscaleServePort'] : (!empty($TSwebuiport) ? $TSwebuiport : ''); ?>" placeholder="_(Will be detected automatically if possible)_">
 
-:docker_tailscale_serve_port_help:
+> This field should specify the port for the primary web service this container offers. Note: it should specify the port in the container, not a port that was remapped on the host.
+> 
+> The system attempted to determine the correct port automatically. If it used the wrong value then there is likely an issue with the "Web UI" field for this container, visible by switching from "Basic View" to "Advanced View" in the upper right corner of this page.
+> 
+> In most cases this port is all you will need to specify in order to Serve the website in this container, although additional options are available below for more complex containers.
+> 
+> This value is passed to the `<serve_port>` portion of this command which starts serve or funnel:<br>
+> `tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+> For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 
 </div>
 
@@ -1298,7 +1349,7 @@ _(Tailscale Serve Port)_:
 _(Tailscale Show Advanced Settings)_:
 : <input type="checkbox" name="TSadvanced" class="switch-on-off" onchange="showTSAdvanced(this.checked)">
 
-:docker_tailscale_show_advanced_help:
+> Here there be dragons!
 
 </div>
 
@@ -1306,7 +1357,10 @@ _(Tailscale Show Advanced Settings)_:
 _(Tailscale Serve Target)_:
 : <input type="text" name="TSservetarget" <?php if (!empty($xml['TailscaleServeTarget'])) echo 'value="' . $xml['TailscaleServeTarget'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
 
-:docker_tailscale_serve_target_help:
+> When not specified, this value defaults to http://localhost. It is passed to the `<serve_target>` portion of this command which starts serve or funnel:<br>
+> `tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+> For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.<br>
+> Please note that only `localhost` or `127.0.0.1` are supported.
 
 </div>
 
@@ -1314,7 +1368,9 @@ _(Tailscale Serve Target)_:
 _(Tailscale Serve Local Path)_:
 : <input type="text" name="TSservelocalpath" <?php if (!empty($xml['TailscaleServeLocalPath'])) echo 'value="' . $xml['TailscaleServeLocalPath'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
 
-:docker_tailscale_serve_local_path_help:
+> When not specified, this value defaults to an empty string. It is passed to the `<local_path>` portion of this command which starts serve or funnel:<br>
+> `tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+> For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 
 </div>
 
@@ -1322,7 +1378,9 @@ _(Tailscale Serve Local Path)_:
 _(Tailscale Serve Protocol)_:
 : <input type="text" name="TSserveprotocol" <?php if (!empty($xml['TailscaleServeProtocol'])) echo 'value="' . $xml['TailscaleServeProtocol'] . '"'; ?> placeholder="_(Leave empty if unsure, defaults to https)_">
 
-:docker_tailscale_serve_protocol_help:
+> When not specified, this value defaults to "https". It is passed to the `<protocol>` portion of this command which starts serve or funnel:<br>
+> `tailscale [serve|funnel] --bg --<protocol>=<protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+> For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 
 </div>
 
@@ -1330,7 +1388,9 @@ _(Tailscale Serve Protocol)_:
 _(Tailscale Serve Protocol Port)_:
 : <input type="text" name="TSserveprotocolport" <?php if (!empty($xml['TailscaleServeProtocolPort'])) echo 'value="' . $xml['TailscaleServeProtocolPort'] . '"'; ?> placeholder="_(Leave empty if unsure, defaults to =443)_">
 
-:docker_tailscale_serve_protocol_port_help:
+> When not specified, this value defaults to "=443". It is passed to the `<protocol_port>` portion of this command which starts serve or funnel:<br>
+> `tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+> For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 
 </div>
 
@@ -1338,7 +1398,9 @@ _(Tailscale Serve Protocol Port)_:
 _(Tailscale Serve Path)_:
 : <input type="text" name="TSservepath" <?php if (!empty($xml['TailscaleServePath'])) echo 'value="' . $xml['TailscaleServePath'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
 
-:docker_tailscale_serve_path_help:
+> When not specified, this value defaults to an empty string. It is passed to the `<path>` portion of this command which starts serve or funnel:<br>
+> `tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+> For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
 
 </div>
 
@@ -1347,7 +1409,11 @@ _(Tailscale WebUI)_:
 : <input type="text" name="TSwebui" value="<?php echo !empty($TS_webui_url) ? $TS_webui_url : ''; ?>" placeholder="Will be determined automatically if possible" disabled>
 <input type="hidden" name="TSwebui" <?php if (!empty($xml['TailscaleWebUI'])) echo 'value="' . $xml['TailscaleWebUI'] . '"'; ?>>
 
-:docker_tailscale_serve_webui_help:
+> If <b>Serve</b> is enabled this will be an https url with a proper domain name that is accessible over your Tailnet, no port needed!
+> 
+> If <b>Funnel</b> is enabled the same url will be available on the Internet.
+> 
+> If they are disabled then the url will be generated from the container's main "Web UI" field, but modified to use the Tailscale IP. If the wrong port is specified here then switch from "Basic View" to "Advanced View" and review the "Web UI" field for this container.
 
 </div>
 
@@ -1355,7 +1421,8 @@ _(Tailscale WebUI)_:
 _(Tailscale Advertise Routes)_:
 : <input type="text" pattern="[0-9:., \/]*" name="TSroutes" <?php if (!empty($xml['TailscaleRoutes'])) echo 'value="' . $xml['TailscaleRoutes'] . '"'?> placeholder="_(Leave empty if unsure)_">
 
-:docker_tailscale_advertise_routes_help:
+> If desired, specify any routes that should be passed to the **`--advertise-routes=`** parameter when running **`tailscale up`**.
+> For more details see the <a href="https://tailscale.com/kb/1019/subnets#connect-to-tailscale-as-a-subnet-router" target="_blank">Subnet routers</a> documentation.
 
 </div>
 
@@ -1366,7 +1433,8 @@ _(Tailscale Accept Routes)_:
     <?=mk_option(1,'true',_('Yes'))?>
   </select>
 
-:docker_tailscale_accept_routes_help:
+> When enabled, this will accept your subnet routes from other devices, adding the **`--accept-routes`** parameter when running **`tailscale up`**.
+> For more details see the <a href="https://tailscale.com/kb/1019/subnets?q=allow+routes#use-your-subnet-routes-from-other-devices" target="_blank">Use your subnet routes from other devices</a> documentation.
 
 </div>
 
@@ -1374,7 +1442,8 @@ _(Tailscale Accept Routes)_:
 _(Tailscale Daemon Parameters)_:
 : <input type="text" name="TSdaemonparams" <?php if (!empty($xml['TailscaleDParams'])) echo 'value="' . $xml['TailscaleDParams'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
 
-:docker_tailscale_daemon_extra_params_help:
+> Specify any extra parameters to pass when starting **`tailscaled`**.
+> For more details see the <a href="https://tailscale.com/kb/1278/tailscaled" target="_blank">tailscaled</a> documentation.
 
 </div>
 
@@ -1382,7 +1451,8 @@ _(Tailscale Daemon Parameters)_:
 _(Tailscale Extra Parameters)_:
 : <input type="text" name="TSextraparams" <?php if (!empty($xml['TailscaleParams'])) echo 'value="' . $xml['TailscaleParams'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
 
-:docker_tailscale_extra_param_help:
+> Specify any extra parameters to pass when running **`tailscale up`**.
+> For more details see the <a href="https://tailscale.com/kb/1080/cli#up" target="_blank">Tailscale CLI</a> documentation.
 
 </div>
 
@@ -1390,7 +1460,7 @@ _(Tailscale Extra Parameters)_:
 _(Tailscale State Directory)_:
 : <input type="text" name="TSstatedir" <?php if (!empty($xml['TailscaleStateDir'])) echo 'value="' . $xml['TailscaleStateDir'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
 
-:docker_tailscale_statedir_help:
+> If state directory detection fails on startup, you can specify a persistent directory in the container to override automatic detection, i.e. `/container-path/.tailscale_state`
 
 </div>
 
@@ -1398,7 +1468,7 @@ _(Tailscale State Directory)_:
 _(Tailscale Install Troubleshooting Packages)_:
 : <input type="checkbox" class="switch-on-off" name="TStroubleshooting" <?php if (!empty($xml['TailscaleTroubleshooting']) && $xml['TailscaleTroubleshooting'] == 'true') echo 'checked'; ?>>
 
-:docker_tailscale_troubleshooting_packages_help:
+> Enable this to install `ping`, `nslookup`, `curl`, and `speedtest-cli` into the container to help troubleshoot networking issues. Once the issues are resolved we recommend disabling this to reduce the size of the container.
 
 </div>
 
@@ -1417,7 +1487,8 @@ _(Privileged)_:
     <input type="checkbox" class="switch-on-off" name="contPrivileged">
   </span>
 
-:docker_privileged_help:
+> For containers that require the use of host-device access directly or need full exposure to host capabilities, this option will need to be selected.
+> For more information, see this link: <a href="https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities" target="_blank">https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities</a>
 
 <div id="configLocation"></div>
 
