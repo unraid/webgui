@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -126,11 +126,9 @@ function vfs_type(&$disk,$online = false) {
   global $disks, $pools, $crypto;
   $fsType = _var($disk,'fsType','');
   $luks   = '';
-  if (empty($fsType))
-    return $fsType;
-  if ($crypto) switch (_var($disk,'luksState',0)) {
+  if (empty($fsType)) return;
+  if (vfs_luks($fsType) && $crypto) switch (_var($disk,'luksState',0)) {
     case 0:
-      if (vfs_luks($fsType))
       $luks = "<a class='info'><i class='padlock fa fa-unlock-alt orange-text'></i><span>"._('Device to be encrypted')."</span></a>";
       break;
     case 1:

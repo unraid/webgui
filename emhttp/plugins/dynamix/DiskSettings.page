@@ -4,8 +4,8 @@ Icon="icon-disks"
 Tag="icon-disk"
 ---
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -63,15 +63,30 @@ function setIndex(form) {
 }
 function prepareForm(form) {
 <?if (!$keyfile):?>
-  form.oldluks.value = base64(form.oldtext.value);
+  form.oldluks.value = base64(form.oldtext.value.replace(/\\"/g,'"'));
   form.oldtext.disabled = true;
   form.oldfile.disabled = true;
 <?endif;?>
-  form.newluks.value = base64(form.newtext.value);
-  form.newtext.disabled = true;
-  form.newcopy.disabled = true;
-  form.newfile.disabled = true;
+  var valid = new RegExp('^[ -~]+$');
+  if (form.newinput.value == 'file') return true;
+  if (valid.test(form.newtext.value)) {
+    form.newluks.value = base64(form.newtext.value.replace(/\\"/g,'"'));
+    form.newtext.disabled = true;
+    form.newcopy.disabled = true;
+    form.newfile.disabled = true;
+    return true;
+  } else {
+    swal({
+      title:"_(Printable Characters Only)_",
+      text:"_(Use **ASCII** characters from space ' ' to tilde '~')_<br>_(Otherwise use the **keyfile** method for UTF8 input)_",
+      html:true,
+      type:'error',
+      confirmButtonText:"_(Ok)_"
+    });
+    return false;
+  }
 }
+
 function getFileContent(event,form,file) {
   var input = event.target;
   var reader = new FileReader();
@@ -268,7 +283,7 @@ _(Default critical SSD temperature threshold)_ (&deg;<?=_var($display,'unit','C'
 
 <?if ($encrypt && $var['fsState']=='Started'):?>
 <div class="title"><span class="left"><i class="title fa fa-key"></i>_(Change encryption key)_</span></div>
-<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareForm(this)">
+<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="return prepareForm(this)">
 <input type="hidden" name="#file" value="">
 <input type="hidden" name="#include" value="/webGui/include/update.encryption.php">
 <input type="hidden" name="#reply" value="<?=$reply?>">
