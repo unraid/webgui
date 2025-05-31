@@ -17,27 +17,37 @@ Nchan="device_list,disk_load,parity_list"
 ?>
 <?
 $keyfile = file_exists(_var($var,'luksKeyfile'));
-$missing = file_exists('/var/tmp/missing.tmp');
 $spot    = _var($var,'mdResyncPos',0)>0;
 $poolsOnly  = (_var($var,'SYS_ARRAY_SLOTS') == 0 ) ? true : false;
 
 /* only one of $present, $missing, or $wrong will be true, or all will be false */
-$forced = $present = $wrong = false;
-foreach ($disks as $disk) {
-  if (strpos(_var($disk,'fsType'),'luks:')!==false || (_var($disk,'fsType')=='auto' && strpos(_var($var,'defaultFsType'),'luks:')!==false)) $forced = true;
-  if (_var($disk,'luksState',0)==1) $present = true;
-  if (_var($disk,'luksState',0)==2) $missing = true;
-  if (_var($disk,'luksState',0)==3) $wrong = true;
+$forced = $present = $missing = $wrong = false;
+
+foreach (luks_filter($disks) as $disk) {
+  $fsType = _var($disk,'fsType');
+  $luks   = str_starts_with($fsType,'luks:');
+  $auto   = $fsType == 'auto';
+  if ($luks || ($auto && str_starts_with(_var($var,'defaultFsType'),'luks:'))) $forced = true;
+  if ($luks || $auto) switch (_var($disk,'luksState',0)) {
+    case 1: $present = true; break;
+    case 2: $missing = true; break;
+    case 3: $wrong = true; break;
+  }
 }
+
 $encrypt = $forced || $present || $missing || $wrong;
 if ($forced && ($present || $missing || $wrong)) $forced = false;
 
 function check_encryption() {
   global $forced, $missing, $wrong;
-  if ($forced) $status = _('Enter new key');
-  elseif ($missing) $status = _('Missing key');
-  elseif ($wrong) $status = _('Wrong key');
-  else return;
+  if ($forced)
+    $status = _('Enter new key');
+  elseif ($missing)
+    $status = _('Missing key');
+  elseif ($wrong)
+    $status = _('Wrong key');
+  else
+    return;
   echo "<tr><td></td><td class='gap'>",_('Encryption status').":</td><td><span class='red-text'>$status</span><span id='pass'><input name='luksReformat' type='checkbox' onchange='selectInput(this.form)'>permit reformat</span></td></tr>";
   echo "<tr><td></td><td class='gap'>",_('Encryption input').":</td><td>";
   echo "<select name='input' size='1' onchange='selectInput(this.form)'>";

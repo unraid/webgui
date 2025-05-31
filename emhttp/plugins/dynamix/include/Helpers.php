@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -75,6 +75,9 @@ function data_only($disk) {
 function cache_only($disk) {
   return _var($disk,'type')=='Cache';
 }
+function luks_only($disk) {
+  return _var($disk,'type')=='Data' || _var($disk,'type')=='Cache';
+}
 function main_filter($disks) {
   return array_filter($disks,'main_only');
 }
@@ -86,6 +89,9 @@ function data_filter($disks) {
 }
 function cache_filter($disks) {
   return array_filter($disks,'cache_only');
+}
+function luks_filter($disks) {
+  return array_filter($disks, 'luks_only');
 }
 function pools_filter($disks) {
   return array_unique(array_map('prefix',array_keys(cache_filter($disks))));
@@ -329,13 +335,13 @@ function my_mkdir($dirname,$permissions = 0777,$recursive = false,$own = "nobody
     case "zfs":
       if (is_dir($parent.'/.zfs')) {
         write_logging("ZFS Volume\n");
-        $zfsdataset = trim(shell_exec("zfs list -H -o name  $parent")); 
+        $zfsdataset = trim(shell_exec("zfs list -H -o name  $parent"));
         write_logging("Shell $zfsdataset\n");
         $zfsdataset .= str_replace($parent,"",$dirname);
         write_logging("Dataset $zfsdataset\n");
         $zfsoutput = array();
         if ($recursive) exec("zfs create -p \"$zfsdataset\"",$zfsoutput,$rtncode);else exec("zfs create \"$zfsdataset\"",$zfsoutput,$rtncode);
-        write_logging("Output: {$zfsoutput[0]} $rtncode"); 
+        write_logging("Output: {$zfsoutput[0]} $rtncode");
         if ($rtncode == 0)  write_logging( " ZFS Command OK\n"); else  write_logging( "ZFS Command Fail\n");
       } else {write_logging("Not ZFS dataset\n");$rtncode = 1;}
       if ($rtncode > 0) { mkdir($dirname, $permissions, $recursive); write_logging( "created dir:$dirname\n");} else chmod($zfsdataset,$permissions);
@@ -396,8 +402,8 @@ function my_rmdir($dirname) {
   return($return);
 }
 function get_realvolume($path) {
-  if (strpos($path,"/mnt/user/",0) === 0) 
-    $reallocation = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($path)." 2>/dev/null")); 
+  if (strpos($path,"/mnt/user/",0) === 0)
+    $reallocation = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($path)." 2>/dev/null"));
   else {
     $realexplode = explode("/",str_replace("/mnt/","",$path));
     $reallocation = $realexplode[0];
@@ -411,8 +417,7 @@ function write_logging($value) {
   file_put_contents('/tmp/my_mkdir_output', $value, FILE_APPEND);
 }
 
-function device_exists($name)
-{
+function device_exists($name) {
   global $disks,$devs;
   return (array_key_exists($name, $disks) && !str_contains(_var($disks[$name],'status'),'_NP')) || (array_key_exists($name, $devs));
 }
