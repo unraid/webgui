@@ -381,7 +381,7 @@ _(IPv4 custom network on interface)_ <?=$network?> (_(optional)_):
 : <input type="checkbox" id="DOCKER_CUSTOM_<?=$port?>_edit" onchange="changeCustom(this.id,4)"<?=$subnet?'checked':''?>><span id="DOCKER_CUSTOM_<?=$port?>_line" class="<?=$subnet?'':'disabled'?>">
   <span class="<?=$ip4class?>">**_(Subnet)_:** <input type="text" id="DOCKER_CUSTOM_<?=$port?>_net" name="DOCKER_SUBNET_<?=$port?>" class="ip4" value="<?=$subnet?>" title="_(IPv4 address A.B.C.D)_"<?=$disabled?>>/
   <select id="DOCKER_CUSTOM_<?=$port?>_mask" name="DOCKER_MASK_<?=$port?>" class="mask"<?=$disabled?>>
-  <?for ($m=16; $m<=30; $m++) echo mk_option($mask?:24,$m,$m)?></select>
+  <?for ($m=25; $m<=30; $m++) echo mk_option($mask?:24,$m,$m)?></select>
   </span>
   <span class="<?=$gw4class?>">**_(Gateway)_:** <input type="text" id="DOCKER_CUSTOM_<?=$port?>_gw" name="DOCKER_GATEWAY_<?=$port?>" class="ip4" value="<?=htmlspecialchars(_var($dockercfg,"DOCKER_GATEWAY_$port"))?>" title="_(IPv4 address A.B.C.D)_"<?=$disabled?>></span>
   <input type="checkbox" id="DOCKER_CUSTOM_<?=$port?>_dhcp" onchange="customDHCP(this.id,4)"<?=$subnet?'checked':''?><?=$dhcpDisabled?>>
