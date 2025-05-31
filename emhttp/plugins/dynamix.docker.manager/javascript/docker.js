@@ -2,7 +2,7 @@ var eventURL = '/plugins/dynamix.docker.manager/include/Events.php';
 
 function addDockerContainerContext(container, image, template, started, paused, update, autostart, webui, tswebui, shell, id, Support, Project, Registry, donateLink, ReadMe) {
   var opts = [];
-  context.settings({right:false,above:'auto'});
+  context.settings({right:false,above:false});
   if (started && !paused) {
     if (webui !== '' && webui != '#') opts.push({text:_('WebUI'), icon:'fa-globe', action:function(e){e.preventDefault();window.open(webui,'_blank');}});
     if (tswebui !== '' && tswebui != '#') opts.push({text:_('Tailscale WebUI'), icon:'fa-globe', action:function(e){e.preventDefault();window.open(tswebui,'_blank');}});
