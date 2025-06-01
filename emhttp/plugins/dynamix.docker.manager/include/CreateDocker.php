@@ -924,19 +924,7 @@ _(Template)_:
   }
   ?></select><?if ($rmadd):?><i class="fa fa-window-close button" title="<?=htmlspecialchars($rmadd)?>" onclick="rmTemplate('<?=addslashes(htmlspecialchars($rmadd))?>')"></i><?endif;?>
 
-> _(Templates are a quicker way to setting up Docker Containers on your Unraid server.  There are two types of templates:)_
->
-> _(**Default templates**<br>)_
-> _(When valid repositories are added to your Docker Repositories page, they will appear in a section on this drop down for you to choose (master categorized by author, then by application template).)_
-> _(After selecting a default template, the page will populate with new information about the application in the Description field, and will typically provide instructions for how to setup the container.)_
-> _(Select a default template when it is the first time you are configuring this application.)_
->
-> _(**User-defined templates**<br>)_
-> _(Once you've added an application to your system through a Default template,)_
-> _(the settings you specified are saved to your USB flash device to make it easy to rebuild your applications in the event an upgrade were to fail or if another issue occurred.)_
-> _(To rebuild, simply select the previously loaded application from the User-defined list and all the settings for the container will appear populated from your previous setup.)_
-> _(Clicking create will redownload the necessary files for the application and should restore you to a working state.)_
-> _(To delete a User-defined template, select it from the list above and click the red X to the right of it.)_
+:docker_client_general_help:
 
 </div>
 <?endif;?>
@@ -945,7 +933,7 @@ _(Template)_:
 _(Name)_:
 : <input type="text" name="contName" pattern="[a-zA-Z0-9][a-zA-Z0-9_.\-]+" required>
 
-> _(Give the container a name or leave it as default.  Two characters minimum.  First character must be a-z A-Z 0-9  Remaining characters a-z A-Z 0-9 . - _)_
+:docker_client_name_help:
 
 </div>
 <div markdown="1" class="basic">
@@ -957,7 +945,7 @@ _(Overview)_:
 _(Overview)_:
 : <textarea name="contOverview" spellcheck="false" cols="80" rows="15" style="width:56%"></textarea>
 
-> _(A description for the application container.  Supports basic HTML mark-up.)_
+:docker_client_overview_help:
 
 </div>
 <div markdown="1" class="basic">
@@ -969,7 +957,7 @@ _(Additional Requirements)_:
 _(Additional Requirements)_:
 : <textarea name="contRequires" spellcheck="false" cols="80" Rows="3" style="width:56%"></textarea>
 
-> _(Any additional requirements the container has.  Supports basic HTML mark-up.)_
+:docker_client_additional_requirements_help:
 
 </div>
 
@@ -977,8 +965,7 @@ _(Additional Requirements)_:
 _(Repository)_:
 : <input type="text" name="contRepository" required>
 
-> _(The repository for the application on the Docker Registry.  Format of authorname/appname.)_
-> _(Optionally you can add a : after appname and request a specific version for the container image.)_
+:docker_client_repository_help:
 
 </div>
 <div markdown="1" class="<?=$authoring?>">
@@ -1034,24 +1021,24 @@ _(Categories)_:
 _(Support Thread)_:
 : <input type="text" name="contSupport">
 
-> _(Link to a support thread on Lime-Technology's forum.)_
+:docker_client_support_thread_help:
 
 _(Project Page)_:
 : <input type="text" name="contProject">
 
-> _(Link to the project page (eg: www.plex.tv))_
+:docker_client_project_page_help:
 
 _(Read Me First)_:
 : <input type="text" name="contReadMe">
 
-> _(Link to a readme file or page)_
+:docker_client_readme_help:
 
 </div>
 <div markdown="1" class="advanced">
 _(Registry URL)_:
 : <input type="text" name="contRegistry"></td>
 
-> _(The path to the container's repository location on the Docker Hub.)_
+:docker_client_hub_url_help:
 
 </div>
 <div markdown="1" class="noshow"> <!-- Deprecated for author to enter or change, but needs to be present -->
@@ -1069,30 +1056,27 @@ Template URL:
 _(Icon URL)_:
 : <input type="text" name="contIcon">
 
-> _(Link to the icon image for your application (only displayed on dashboard if Show Dashboard apps under Display Settings is set to Icons).)_
+:docker_client_icon_url_help:
 
 _(WebUI)_:
 : <input type="text" name="contWebUI">
 
-> _(When you click on an application icon from the Docker Containers page, the WebUI option will link to the path in this field.)_
-> _(Use [IP] to identify the IP of your host and [PORT:####] replacing the #'s for your port.)_
+:docker_client_webui_help:
 
 _(Extra Parameters)_:
 : <input type="text" name="contExtraParams">
 
-> _(If you wish to append additional commands to your Docker container at run-time, you can specify them here.<br>)_
-> _(For all possible Docker run-time commands, see here: <a href="https://docs.docker.com/reference/run/" target="_blank">https://docs.docker.com/reference/run/</a>)_
+:docker_extra_parameters_help:
 
 _(Post Arguments)_:
 : <input type="text" name="contPostArgs">
 
-> _(If you wish to append additional arguments AFTER the container definition, you can specify them here.)_
-> _(The content of this field is container specific.)_
+:docker_post_arguments_help:
 
 _(CPU Pinning)_:
 : <span style="display:inline-block"><?cpu_pinning()?></span>
 
-> _(Checking a CPU core(s) will limit the container to run on the selected cores only. Selecting no cores lets the container run on all available cores (default))_
+:docker_cpu_pinning_help:
 
 </div>
 _(Network Type)_:
@@ -1122,11 +1106,7 @@ _(Network Type)_:
 _(Fixed IP address)_ (_(optional)_):
 : <input type="text" name="contMyIP"><span id="myIP"></span>
 
-> _(If the Bridge type is selected, the application's network access will be restricted to only communicating on the ports specified in the port mappings section.)_
-> _(If the Host type is selected, the application will be given access to communicate using any port on the host that isn't already mapped to another in-use application/service.)_
-> _(Generally speaking, it is recommended to leave this setting to its default value as specified per application template.)_
-> 
-> _(IMPORTANT NOTE:  If adjusting port mappings, do not modify the settings for the Container port as only the Host port can be adjusted.)_
+:docker_fixed_ip_help:
 
 </div>
 
@@ -1144,7 +1124,7 @@ _(Container Network)_:
   ?>
 </select>
 
-> _(This allows your container to utilize the network configuration of another container. Select the appropriate container from the list.<br>This setup can be particularly beneficial if you wish to route your container's traffic through a VPN.)_
+:docker_container_network_help:
 
 </div>
 
@@ -1178,7 +1158,7 @@ _(Use Tailscale)_:
     <input type="checkbox" class="switch-on-off" name="contTailscale" id="contTailscale" <?php if (!empty($xml['TailscaleEnabled']) && $xml['TailscaleEnabled'] == 'true') echo 'checked'; ?> onchange="showTailscale(this)">
   </span>
 
-> _(Enable Tailscale to add this container as a machine on your Tailnet.)_
+:docker_tailscale_help:
 
 </div>
 
@@ -1186,7 +1166,7 @@ _(Use Tailscale)_:
 _(Use Tailscale)_:
 : _(Option disabled as Network type is not bridge or custom)_
 
-> _(Enable Tailscale to add this container as a machine on your Tailnet.)_
+:docker_tailscale_help:
 
 </div>
 <div markdown="1" class="TSdivider noshow">
@@ -1224,8 +1204,7 @@ _(Use Tailscale)_:
 _(Tailscale Hostname)_:
 : <input type="text" pattern="[A-Za-z0-9_\-]*" name="TShostname" <?php if (!empty($xml['TailscaleHostname'])) echo 'value="' . $xml['TailscaleHostname'] . '"'; ?> placeholder="_(Hostname for the container)_"> <?=$TS_HostNameWarning?>
 
-> _(Provide the hostname for this container. It does not need to match the container name, but it must be unique on your Tailnet. Note that an HTTPS certificate will be generated for this hostname, which means it will be placed in a public ledger, so use a name that you don't mind being public.)_
-> _(For more information see <a href="https://tailscale.com/kb/1153/enabling-https" target="_blank">enabling https</a>.)_
+:docker_tailscale_hostname_help:
 
 </div>
 
@@ -1237,9 +1216,7 @@ _(Be a Tailscale Exit Node)_:
   </select>
   <span id='TSisexitnode_msg' style='font-style: italic;'></span>
 
-> _(Enable this if other machines on your Tailnet should route their Internet traffic through this container, this is most useful for containers that connect to commercial VPN services.)_
-> _(Be sure to authorize this Exit Node in your <a href="https://login.tailscale.com/admin/machines" target="_blank">Tailscale Machines Admin Panel</a>.)_
-> _(For more details, see the Tailscale documentation on <a href="https://tailscale.com/kb/1103/exit-nodes" target="_blank">Exit Nodes</a>.)_
+:docker_tailscale_be_exitnode_help:
 
 </div>
 
@@ -1258,8 +1235,7 @@ _(Use a Tailscale Exit Node)_:
   </select>
   <span id='TSexitnodeip_msg' style='font-style: italic;'></span>
 
-> _(Optionally route this container's outgoing Internet traffic through an Exit Node on your Tailnet. Choose the Exit Node or input its Tailscale IP address.)_
-> _(For more details, see <a href="https://tailscale.com/kb/1103/exit-nodes" target="_blank">Exit Nodes</a>.)_
+:docker_tailscale_exitnode_ip_help:
 
 </div>
 
@@ -1270,9 +1246,7 @@ _(Tailscale Allow LAN Access)_:
     <?=mk_option(1,'true',_('Yes'))?>
   </select>
 
-> _(Only applies when this container is using an Exit Node. Enable this to allow the container to access the local network.)_
->
-> _(<b>WARNING:</b>&nbsp;Even with this feature enabled, systems on your LAN may not be able to access the container unless they have Tailscale installed.)_
+:docker_tailscale_lanaccess_help:
 
 </div>
 
@@ -1284,10 +1258,7 @@ _(Tailscale Userspace Networking)_:
   </select>
   <span id='TSuserspacenetworking_msg' style='font-style: italic;'></span>
 
-> _(When enabled, this container will operate in a restricted environment. Tailscale DNS will not work, and the container will not be able to initiate connections to other Tailscale machines. However, other machines on your Tailnet will still be able to communicate with this container.)_
->
-> _(When disabled, this container will have full access to your Tailnet. Tailscale DNS will work, and the container can fully communicate with other machines on the Tailnet.)_
-> _(However, systems on your LAN may not be able to access the container unless they have Tailscale installed.)_
+:docker_tailscale_userspace_networking_help:
 
 </div>
 
@@ -1298,8 +1269,7 @@ _(Enable Tailscale SSH)_:
     <?=mk_option(1,'true',_('Yes'))?>
   </select>
 
-> _(Tailscale SSH is similar to the Docker "Console" option in the Unraid webgui, except you connect with an SSH client and authenticate via Tailscale.)_
-> _(For more details, see the <a href="https://tailscale.com/kb/1193/tailscale-ssh" target="_blank">Tailscale SSH</a> documentation.)_
+:docker_tailscale_ssh_help:
 
 </div>
 
@@ -1312,20 +1282,7 @@ _(Tailscale Serve)_:
   </select>
 <?=$TS_HTTPSDisabledWarning?><?php if (!empty($TS_webui_url)) echo '<label for="TSserve"><a href="' . $TS_webui_url . '" target="_blank">' . $TS_webui_url . '</a></label>'; ?>
 
-> _(Enabling <b>Serve</b> will automatically reverse proxy the primary web service from this container and make it available on your Tailnet using https with a valid certificate!)_
->
-> _(Note that when accessing the <b>Tailscale WebUI</b> url, no additional authentication layer is added beyond restricting it to your Tailnet - the container is still responsible for managing usernames/passwords that are allowed to access it. Depending on your configuration, direct access to the container may still be possible as well.)_
->
-> _(For more details, see the <a href="https://tailscale.com/kb/1312/serve" target="_blank">Tailscale Serve</a> documentation.)_
->
-> _(If the documentation recommends additional settings for a more complex use case, enable "Tailscale Show Advanced Settings". Support for these advanced settings is not available beyond confirming the commands are passed to Tailscale correctly.)_
->
-> _(<b>Funnel</b> is similar to <b>Serve</b>, except that the web service is made available on the open Internet. Use with care as the service will likely be attacked. As with <b>Serve</b>, the container itself is responsible for handling any authentication.)_
->
-> _(We recommend reading the <a href="https://tailscale.com/kb/1223/funnel" target="_blank">Tailscale Funnel</a> documentation before enabling this feature.)_
->
-> _(<b>Note:</b>&nbsp;Enabling <b>Serve</b> or <b>Funnel</b> publishes the Tailscale hostname to a public ledger.)_
-> _(For more details, see the Tailscale Documentation: <a href="https://tailscale.com/kb/1153/enabling-https" target="_blank">Enabling HTTPS</a>.)_
+:docker_tailscale_serve_mode_help:
 
 </div>
 
@@ -1333,15 +1290,7 @@ _(Tailscale Serve)_:
 _(Tailscale Serve Port)_:
 : <input type="text" name="TSserveport" value="<?php echo !empty($xml['TailscaleServePort']) ? $xml['TailscaleServePort'] : (!empty($TSwebuiport) ? $TSwebuiport : ''); ?>" placeholder="_(Will be detected automatically if possible)_">
 
-> _(This field should specify the port for the primary web service this container offers. Note: it should specify the port in the container, not a port that was remapped on the host.)_
->
-> _(The system attempted to determine the correct port automatically. If it used the wrong value then there is likely an issue with the "Web UI" field for this container, visible by switching from "Basic View" to "Advanced View" in the upper right corner of this page.)_
->
-> _(In most cases this port is all you will need to specify in order to Serve the website in this container, although additional options are available below for more complex containers.)_
->
-> _(This value is passed to the `<serve_port>` portion of this command which starts serve or funnel:<br>)_
-> _(`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>)_
-> _(For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.)_
+:docker_tailscale_serve_port_help:
 
 </div>
 
@@ -1349,7 +1298,7 @@ _(Tailscale Serve Port)_:
 _(Tailscale Show Advanced Settings)_:
 : <input type="checkbox" name="TSadvanced" class="switch-on-off" onchange="showTSAdvanced(this.checked)">
 
-> _(Here there be dragons!)_
+:docker_tailscale_show_advanced_help:
 
 </div>
 
@@ -1357,10 +1306,7 @@ _(Tailscale Show Advanced Settings)_:
 _(Tailscale Serve Target)_:
 : <input type="text" name="TSservetarget" <?php if (!empty($xml['TailscaleServeTarget'])) echo 'value="' . $xml['TailscaleServeTarget'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
 
-> _(When not specified, this value defaults to http://localhost. It is passed to the `<serve_target>` portion of this command which starts serve or funnel:<br>)_
-> _(`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>)_
-> _(For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.<br>)_
-> _(Please note that only `localhost` or `127.0.0.1` are supported.)_
+:docker_tailscale_serve_target_help:
 
 </div>
 
@@ -1368,9 +1314,7 @@ _(Tailscale Serve Target)_:
 _(Tailscale Serve Local Path)_:
 : <input type="text" name="TSservelocalpath" <?php if (!empty($xml['TailscaleServeLocalPath'])) echo 'value="' . $xml['TailscaleServeLocalPath'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
 
-> _(When not specified, this value defaults to an empty string. It is passed to the `<local_path>` portion of this command which starts serve or funnel:<br>)_
-> _(`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>)_
-> _(For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.)_
+:docker_tailscale_serve_local_path_help:
 
 </div>
 
@@ -1378,9 +1322,7 @@ _(Tailscale Serve Local Path)_:
 _(Tailscale Serve Protocol)_:
 : <input type="text" name="TSserveprotocol" <?php if (!empty($xml['TailscaleServeProtocol'])) echo 'value="' . $xml['TailscaleServeProtocol'] . '"'; ?> placeholder="_(Leave empty if unsure, defaults to https)_">
 
-> _(When not specified, this value defaults to "https". It is passed to the `<protocol>` portion of this command which starts serve or funnel:<br>)_
-> _(`tailscale [serve|funnel] --bg --<protocol>=<protocol_port><path> <serve_target>:<serve_port><local_path>`<br>)_
-> _(For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.)_
+:docker_tailscale_serve_protocol_help:
 
 </div>
 
@@ -1388,9 +1330,7 @@ _(Tailscale Serve Protocol)_:
 _(Tailscale Serve Protocol Port)_:
 : <input type="text" name="TSserveprotocolport" <?php if (!empty($xml['TailscaleServeProtocolPort'])) echo 'value="' . $xml['TailscaleServeProtocolPort'] . '"'; ?> placeholder="_(Leave empty if unsure, defaults to =443)_">
 
-> _(When not specified, this value defaults to "=443". It is passed to the `<protocol_port>` portion of this command which starts serve or funnel:<br>)_
-> _(`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>)_
-> _(For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.)_
+:docker_tailscale_serve_protocol_port_help:
 
 </div>
 
@@ -1398,9 +1338,7 @@ _(Tailscale Serve Protocol Port)_:
 _(Tailscale Serve Path)_:
 : <input type="text" name="TSservepath" <?php if (!empty($xml['TailscaleServePath'])) echo 'value="' . $xml['TailscaleServePath'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
 
-> _(When not specified, this value defaults to an empty string. It is passed to the `<path>` portion of this command which starts serve or funnel:<br>)_
-> _(`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>)_
-> _(For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.)_
+:docker_tailscale_serve_path_help:
 
 </div>
 
@@ -1409,14 +1347,580 @@ _(Tailscale WebUI)_:
 : <input type="text" name="TSwebui" value="<?php echo !empty($TS_webui_url) ? $TS_webui_url : ''; ?>" placeholder="Will be determined automatically if possible" disabled>
 <input type="hidden" name="TSwebui" <?php if (!empty($xml['TailscaleWebUI'])) echo 'value="' . $xml['TailscaleWebUI'] . '"'; ?>>
 
-> _(If <b>Serve</b> is enabled this will be an https url with a proper domain name that is accessible over your Tailnet, no port needed!)_
->
-> _(If <b>Funnel</b> is enabled the same url will be available on the Internet.)_
->
-> _(If they are disabled then the url will be generated from the container's main "Web UI" field, but modified to use the Tailscale IP. If the wrong port is specified here then switch from "Basic View" to "Advanced View" and review the "Web UI" field for this container.)_
+:docker_tailscale_serve_webui_help:
 
 </div>
 
 <div markdown="1" class="TSroutes noshow">
 _(Tailscale Advertise Routes)_:
 : <input type="text" pattern="[0-9:., \/]*" name="TSroutes" <?php if (!empty($xml['TailscaleRoutes'])) echo 'value="' . $xml['TailscaleRoutes'] . '"'?> placeholder="_(Leave empty if unsure)_">
+
+:docker_tailscale_advertise_routes_help:
+
+</div>
+
+<div markdown="1" class="TSacceptroutes noshow">
+_(Tailscale Accept Routes)_:
+: <select name="TSacceptroutes" id="TSacceptroutes">
+    <?=mk_option(1,'false',_('No'))?>
+    <?=mk_option(1,'true',_('Yes'))?>
+  </select>
+
+:docker_tailscale_accept_routes_help:
+
+</div>
+
+<div markdown="1" class="TSdaemonparams noshow">
+_(Tailscale Daemon Parameters)_:
+: <input type="text" name="TSdaemonparams" <?php if (!empty($xml['TailscaleDParams'])) echo 'value="' . $xml['TailscaleDParams'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
+
+:docker_tailscale_daemon_extra_params_help:
+
+</div>
+
+<div markdown="1" class="TSextraparams noshow">
+_(Tailscale Extra Parameters)_:
+: <input type="text" name="TSextraparams" <?php if (!empty($xml['TailscaleParams'])) echo 'value="' . $xml['TailscaleParams'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
+
+:docker_tailscale_extra_param_help:
+
+</div>
+
+<div markdown="1" class="TSstatedir noshow">
+_(Tailscale State Directory)_:
+: <input type="text" name="TSstatedir" <?php if (!empty($xml['TailscaleStateDir'])) echo 'value="' . $xml['TailscaleStateDir'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
+
+:docker_tailscale_statedir_help:
+
+</div>
+
+<div markdown="1" class="TStroubleshooting noshow">
+_(Tailscale Install Troubleshooting Packages)_:
+: <input type="checkbox" class="switch-on-off" name="TStroubleshooting" <?php if (!empty($xml['TailscaleTroubleshooting']) && $xml['TailscaleTroubleshooting'] == 'true') echo 'checked'; ?>>
+
+:docker_tailscale_troubleshooting_packages_help:
+
+</div>
+
+<div markdown="1" class="TSdivider noshow">
+  <hr>
+</div>
+
+_(Console shell command)_:
+: <select name="contShell">
+  <?=mk_option(1,'sh',_('Shell'))?>
+  <?=mk_option(1,'bash',_('Bash'))?>
+  </select>
+
+_(Privileged)_:
+: <span class="flex flex-row items-center">
+    <input type="checkbox" class="switch-on-off" name="contPrivileged">
+  </span>
+
+:docker_privileged_help:
+
+<div id="configLocation"></div>
+
+&nbsp;
+: <span id="readmore_toggle" class="readmore_collapsed"><a onclick="toggleReadmore()" style="cursor:pointer"><i class="fa fa-fw fa-chevron-down"></i> _(Show more settings)_ ...</a></span><div id="configLocationAdvanced" style="display:none"></div>
+
+&nbsp;
+: <span id="allocations_toggle" class="readmore_collapsed"><a onclick="toggleAllocations()" style="cursor:pointer"><i class="fa fa-fw fa-chevron-down"></i> _(Show docker allocations)_ ...</a></span><div id="dockerAllocations" style="display:none"></div>
+
+&nbsp;
+: <a href="javascript:addConfigPopup()"><i class="fa fa-fw fa-plus"></i> _(Add another Path, Port, Variable, Label or Device)_</a>
+
+&nbsp;
+: <span class="inline-block">
+    <input type="submit" value="<?=$xmlType=='edit' ? "_(Apply)_" : " _(Apply)_ "?>">
+    <input type="button" value="_(Done)_" onclick="done()">
+    <?if ($authoringMode):?><button type="submit" name="dryRun" value="true" onclick="$('*[required]').prop('required', null);">_(Save)_</button><?endif;?>
+  </span>
+
+</form>
+</div>
+
+<form method="GET" id="formTemplate">
+  <input type="hidden" id="xmlTemplate" name="xmlTemplate" value="">
+</form>
+<form method="POST" id="formTemplate1">
+  <input type="hidden" name="csrf_token" value="<?=$var['csrf_token']?>">
+  <input type="hidden" id="rmTemplate" name="rmTemplate" value="">
+</form>
+
+<div id="dialogAddConfig" style="display:none"></div>
+
+<?
+#        ██╗███████╗    ████████╗███████╗███╗   ███╗██████╗ ██╗      █████╗ ████████╗███████╗███████╗
+#        ██║██╔════╝    ╚══██╔══╝██╔════╝████╗ ████║██╔══██╗██║     ██╔══██╗╚══██╔══╝██╔════╝██╔════╝
+#        ██║███████╗       ██║   █████╗  ██╔████╔██║██████╔╝██║     ███████║   ██║   █████╗  ███████╗
+#   ██   ██║╚════██║       ██║   ██╔══╝  ██║╚██╔╝██║██╔═══╝ ██║     ██╔══██║   ██║   ██╔══╝  ╚════██║
+#   ╚█████╔╝███████║       ██║   ███████╗██║ ╚═╝ ██║██║     ███████╗██║  ██║   ██║   ███████╗███████║
+#    ╚════╝ ╚══════╝       ╚═╝   ╚══════╝╚═╝     ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚══════╝
+?>
+<div markdown="1" id="templatePopupConfig" style="display:none">
+_(Config Type)_:
+: <select name="Type" onchange="toggleMode(this,false)">
+  <option value="Path">_(Path)_</option>
+  <option value="Port">_(Port)_</option>
+  <option value="Variable">_(Variable)_</option>
+  <option value="Label">_(Label)_</option>
+  <option value="Device">_(Device)_</option>
+  </select>
+
+_(Name)_:
+: <input type="text" name="Name" autocomplete="off" spellcheck="false">
+
+<div markdown="1" id="Target">
+<span id="dt1">_(Target)_</span>:
+: <input type="text" name="Target" autocomplete="off" spellcheck="false">
+</div>
+
+<div markdown="1" id="Value">
+<span id="dt2">_(Value)_</span>:
+: <input type="text" name="Value" autocomplete="off" spellcheck="false">
+</div>
+
+<div markdown="1" id="Default">
+_(Default Value)_:
+: <input type="text" name="Default" autocomplete="off" spellcheck="false">
+</div>
+
+<div id="Mode"></div>
+
+_(Description)_:
+: <textarea name="Description" spellcheck="false" cols="80" rows="3"></textarea>
+
+<div markdown="1" class="advanced">
+_(Display)_:
+: <select name="Display">
+  <option value="always" selected>_(Always)_</option>
+  <option value="always-hide">_(Always)_ - _(Hide Buttons)_</option>
+  <option value="advanced">_(Advanced)_</option>
+  <option value="advanced-hide">_(Advanced)_ - _(Hide Buttons)_</option>
+  </select>
+
+_(Required)_:
+: <select name="Required">
+  <option value="false" selected>_(No)_</option>
+  <option value="true">_(Yes)_</option>
+  </select>
+
+_(Password Mask)_:
+: <select name="Mask">
+  <option value="false" selected>_(No)_</option>
+  <option value="true">_(Yes)_</option>
+  </select>
+</div>
+</div>
+
+<div markdown="1" id="templateDisplayConfig" style="display:none">
+<input type="hidden" name="confName[]" value="{0}">
+<input type="hidden" name="confTarget[]" value="{1}">
+<input type="hidden" name="confDefault[]" value="{2}">
+<input type="hidden" name="confMode[]" value="{3}">
+<input type="hidden" name="confDescription[]" value="{4}">
+<input type="hidden" name="confType[]" value="{5}">
+<input type="hidden" name="confDisplay[]" value="{6}">
+<input type="hidden" name="confRequired[]" value="{7}">
+<input type="hidden" name="confMask[]" value="{8}">
+
+<span class="{11}"><i class="fa fa-fw fa-{13}"></i>&nbsp;&nbsp;{0}:</span>
+: <span class="flex flex-col gap-4">
+    <span class="flex flex-row flex-wrap items-center gap-4 buttons-no-margin">
+      <input type="text" class="setting_input" name="confValue[]" default="{2}" value="{9}" autocomplete="off" spellcheck="false" {11}>
+      {10}
+    </span>
+    <span class="boxed">
+      <span class='orange-text'>{12}: {1}</span>
+      <br>
+      <span class="orange-text">{4}</span>
+      <br>
+    </span>
+  </span>
+</div>
+
+<div markdown="1" id="templateAllocations" style="display:none">
+&nbsp;
+: <span class="boxed"><span class="ct">{1}</span>{2}</span>
+</div>
+
+<script>
+var subnet = {};
+<?foreach ($subnet as $network => $value):?>
+subnet['<?=$network?>'] = '<?=$value?>';
+<?endforeach;?>
+
+function showSubnet(bridge) {
+  if (bridge.match(/^(bridge|host|none)$/i) !== null) {
+    $('.myIP').hide();
+    $('input[name="contMyIP"]').val('');
+    $('.netCONT').hide();
+    $('#netCONT').val('');
+  } else if (bridge.match(/^(container)$/i) !== null) {
+    $('.netCONT').show();
+    $('#netCONT').val('<?php echo (isset($xml) && isset($xml['Network'][1])) ? $xml['Network'][1] : ''; ?>');
+    $('.myIP').hide();
+    $('input[name="contMyIP"]').val('');
+  } else {
+    $('.myIP').show();
+    $('#myIP').html('Subnet: '+subnet[bridge]);
+    $('.netCONT').hide();
+    $('#netCONT').val('');
+  }
+  // make sure to re-trigger Tailscale check when network is changed
+  if (bridge.match(/^(host|container)$/i) !== null) {
+    $('#contTailscale').siblings('.switch-button-background').click();
+    $(".TSNetworkAllowed").hide();
+    $(".TSNetworkNotAllowed").show();
+  } else {
+    $(".TSNetworkAllowed").show();
+    $(".TSNetworkNotAllowed").hide();   
+  }
+}
+
+function processExitNodeoptions(value) {
+  val = null;
+  if (value.tagName.toLowerCase() === "input") {
+    val = value.value.trim();
+  } else if (value.tagName.toLowerCase() === "select") {
+    val = value.value;
+  }
+  if (val) {
+    $('.TSallowlanaccess').show();
+  } else {
+    $('#TSallowlanaccess').val('false');
+    $('.TSallowlanaccess').hide();
+  }
+  setUserspaceNetworkOptions();
+  setIsExitNodeoptions();
+}
+
+function setUserspaceNetworkOptions() {
+  optTrueDisabled = false;
+  optFalseDisabled = false;
+  optMessage = "";
+  value = null;
+
+  var network = $('select[name="contNetwork"]')[0].value;
+  var isExitnode = $('#TSisexitnode').val();
+  if (network == 'host' || isExitnode == 'true') {
+    // in host mode or if this container is an Exit Node
+    // then Userspace Networking MUST be enabled ('true')
+    value = 'true';
+    optTrueDisabled = false;
+    optFalseDisabled = true;
+    optMessage = (isExitnode == 'true') ? "Enabled because this is an Exit Node" : "Enabled due to Docker "+network+" mode";
+  } else {
+    if (document.querySelector('input[name="TSexitnodeip"], select[name="TSexitnodeip"]').value) {
+      // If an Exit Node IP is set, Userspace Networking MUST be disabled ('false')
+      value = 'false';
+      optTrueDisabled = true;
+      optFalseDisabled = false;
+      optMessage = "Disabled due to use of an Exit Node";
+    } else {
+      // Exit Node IP is not set, user can decide whether to enable/disable Userspace Networking
+      optTrueDisabled = false;
+      optFalseDisabled = false;
+      optMessage = "";
+    }
+  }
+
+  $("#TSuserspacenetworking option[value='true']").prop("disabled", optTrueDisabled);
+  $("#TSuserspacenetworking option[value='false']").prop("disabled", optFalseDisabled);
+  if (value != null) $('#TSuserspacenetworking').val(value);
+  $('#TSuserspacenetworking_msg').text(optMessage);
+  setExitNodeoptions();
+}
+
+function setIsExitNodeoptions() {
+  optTrueDisabled = false;
+  optFalseDisabled = false;
+  optMessage = "";
+  value = null;
+
+  var network = $('select[name="contNetwork"]')[0].value;
+  if (network == 'host') {
+    // in host mode then this cannot be an Exit Node
+    value = 'false';
+    optTrueDisabled = true;
+    optFalseDisabled = false;
+    optMessage = "Disabled due to Docker "+network+" mode";
+  } else {
+    if (document.querySelector('input[name="TSexitnodeip"], select[name="TSexitnodeip"]').value) {
+      // If an Exit Node IP is set, this cannot be an Exit Node
+      value = 'false';
+      optTrueDisabled = true;
+      optFalseDisabled = false;
+      optMessage = "Disabled due to use of an Exit Node";
+    } else {
+      optTrueDisabled = false;
+      optFalseDisabled = false;
+    }
+  }
+  $("#TSisexitnode option[value='true']").prop("disabled", optTrueDisabled);
+  $("#TSisexitnode option[value='false']").prop("disabled", optFalseDisabled);
+  if (value != null) $('#TSisexitnode').val(value);
+  $('#TSisexitnode_msg').text(optMessage);
+}
+
+function setExitNodeoptions() {
+  optMessage = "";
+  var $exitNodeInput = $('input[name="TSexitnodeip"]');
+  var $exitNodeSelect = $('#TSexitnodeip');
+  // In host mode, TSuserspacenetworking is true
+  if ($('#TSuserspacenetworking').val() == 'true') {
+    // if TSuserspacenetworking is true, then TSexitnodeip must be "" and all options are disabled
+    optMessage = "Disabled because Userspace Networking is Enabled.";
+    $exitNodeInput.val('').prop('disabled', true);  // Disable the input field
+    $exitNodeSelect.val('').prop('disabled', true).find('option').each(function() {
+      if ($(this).val() === "") {
+        $(this).prop('disabled', false);  // Enable the option with value=""
+      } else {
+        $(this).prop('disabled', true);   // Disable all other options
+      }
+    });
+  } else {
+    // if TSuserspacenetworking is false, then all TSexitnodeip options can be enabled
+    $exitNodeInput.prop('disabled', false);  // Enable the input field
+    $exitNodeSelect.prop('disabled', false).find('option').each(function() {
+      $(this).prop('disabled', false);   // Enable all options
+    });
+  }
+  $('#TSexitnodeip_msg').text(optMessage);
+}
+
+function showTSAdvanced(checked) {
+  if (!checked) {
+    <?if (!empty($TSwebuiport)):?>
+      $('.TSserveport').hide();
+    <?elseif (empty($contTailscale) || $contTailscale == 'false'):?>
+      $('.TSserveport').hide();
+    <?else:?>
+      $('.TSserveport').show();
+    <?endif;?>
+    $('.TSdaemonparams').hide();
+    $('.TSextraparams').hide();
+    $('.TSstatedir').hide();
+    $('.TSservepath').hide();
+    $('.TSserveprotocol').hide();
+    $('.TSserveprotocolport').hide();
+    $('.TSservetarget').hide();
+    $('.TSservelocalpath').hide();
+    $('.TSwebui').hide();
+    $('.TStroubleshooting').hide();
+    $('.TSroutes').hide();
+    $('.TSacceptroutes').hide();
+  } else {
+    $('.TSdaemonparams').show();
+    $('.TSextraparams').show();
+    $('.TSstatedir').show();
+    $('.TSserveport').show();
+    $('.TSservepath').show();
+    $('.TSserveprotocol').show();
+    $('.TSserveprotocolport').show();
+    $('.TSservetarget').show();
+    $('.TSservelocalpath').show();
+    $('.TSwebui').show();
+    $('.TStroubleshooting').show();
+    $('.TSroutes').show();
+    $('.TSacceptroutes').show();
+  }
+}
+
+function showTailscale(source) {
+  var bridge = $('select[name="contNetwork"]').val();
+  if (bridge.match(/^(host|container)$/i) !== null) {
+    $('#contTailscale').prop('checked',false);
+    $(".TSNetworkAllowed").hide();
+    $(".TSNetworkNotAllowed").show();
+  }
+  if (!$.trim($('#TSallowlanaccess').val())) {
+    $('#TSallowlanaccess').val('false');
+  }
+  if (!$.trim($('#TSserve').val())) {
+    $('#TSserve').val('no');
+  }
+  checked = $('#contTailscale').prop('checked');
+  if (!checked) {
+    $('.TSdivider').hide();
+    $('.TSwarning').hide();
+    $('.TSdeploy').hide();
+    $('.TSisexitnode').hide();
+    $('.TShostname').hide();
+    $('.TSexitnodeip').hide();
+    $('.TSssh').hide();
+    $('.TSallowlanaccess').hide();
+    $('.TSdaemonparams').hide();
+    $('.TSextraparams').hide();
+    $('.TSstatedir').hide();
+    $('.TSserve').hide();
+    $('.TSuserspacenetworking').hide();
+    $('.TSservepath').hide();
+    $('.TSserveprotocol').hide();
+    $('.TSserveprotocolport').hide();
+    $('.TSservelocalpath').hide();
+    $('.TSwebui').hide();
+    $('.TSserveport').hide();
+    $('.TSadvanced').hide();
+    $('.TSroutes').hide();
+    $('.TSacceptroutes').hide();
+    $('.TStroubleshooting').hide();
+  } else {
+    // reset these vals back to what they were in the XML
+    $('#TSssh').val('<?php echo (!empty($xml) && !empty($xml['TailscaleSSH'])) ? $xml['TailscaleSSH'] : 'false'; ?>');
+    $('#TSallowlanaccess').val('<?php echo (!empty($xml) && !empty($xml['TailscaleLANAccess'])) ? $xml['TailscaleLANAccess'] : 'false'; ?>');
+    $('#TSserve').val('<?php echo (!empty($xml) && !empty($xml['TailscaleServe'])) ? $xml['TailscaleServe'] : 'false'; ?>');
+    $('#TSexitnodeip').val('<?php echo (!empty($xml) && !empty($xml['TailscaleExitNodeIP'])) ? $xml['TailscaleExitNodeIP'] : ''; ?>');
+    $('#TSuserspacenetworking').val('<?php echo (!empty($xml) && !empty($xml['TailscaleUserspaceNetworking'])) ? $xml['TailscaleUserspaceNetworking'] : 'false'; ?>');
+    $('#TSacceptroutes').val('<?php echo (!empty($xml) && !empty($xml['TailscaleAcceptRoutes'])) ? $xml['TailscaleAcceptRoutes'] : 'false'; ?>');
+    <?if (empty($xml['TailscaleServe']) && !empty($TSwebuiport) && empty($xml['TailscaleServePort'])):?>
+      $('#TSserve').val('serve');
+    <?elseif (empty($xml['TailscaleServe']) && empty($TSwebuiport) && empty($xml['TailscaleServePort'])):?>
+      $('#TSserve').val('no');
+    <?endif;?>
+    // don't reset this field if caller was the onchange event for this field
+    if (source.id != 'TSisexitnode') $('#TSisexitnode').val('<?php echo !empty($xml['TailscaleIsExitNode']) ? $xml['TailscaleIsExitNode'] : 'false'; ?>');
+    $('.TSisexitnode').show();
+    $('.TShostname').show();
+    $('.TSssh').show();
+    $('.TSexitnodeip').show();
+    $('.TSallowlanaccess').hide();
+    $('.TSserve').show();
+    $('.TSuserspacenetworking').show();
+    processExitNodeoptions(document.querySelector('input[name="TSexitnodeip"], select[name="TSexitnodeip"]'));
+    $('.TSdivider').show();
+    $('.TSwarning').show();
+    $('.TSdeploy').show();
+    $('.TSadvanced').show();
+  }
+}
+
+function reloadTriggers() {
+  $(".basic").toggle(!$(".advancedview").is(":checked"));
+  $(".advanced").toggle($(".advancedview").is(":checked"));
+  $(".numbersOnly").keypress(function(e){if(e.which != 45 && e.which != 8 && e.which != 0 && (e.which < 48 || e.which > 57)){return false;}});
+}
+
+function toggleReadmore() {
+  var readm = $('#readmore_toggle');
+  if (readm.hasClass('readmore_collapsed')) {
+    readm.removeClass('readmore_collapsed').addClass('readmore_expanded');
+    $('#configLocationAdvanced').slideDown('fast');
+    readm.find('a').html('<i class="fa fa-fw fa-chevron-up"></i> _(Hide more settings)_ ...');
+  } else {
+    $('#configLocationAdvanced').slideUp('fast');
+    readm.removeClass('readmore_expanded').addClass('readmore_collapsed');
+    readm.find('a').html('<i class="fa fa-fw fa-chevron-down"></i> _(Show more settings)_ ...');
+  }
+}
+
+function toggleAllocations() {
+  var readm = $('#allocations_toggle');
+  if (readm.hasClass('readmore_collapsed')) {
+    readm.removeClass('readmore_collapsed').addClass('readmore_expanded');
+    $('#dockerAllocations').slideDown('fast');
+    readm.find('a').html('<i class="fa fa-fw fa-chevron-up"></i> _(Hide docker allocations)_ ...');
+  } else {
+    $('#dockerAllocations').slideUp('fast');
+    readm.removeClass('readmore_expanded').addClass('readmore_collapsed');
+    readm.find('a').html('<i class="fa fa-fw fa-chevron-down"></i> _(Show docker allocations)_ ...');
+  }
+}
+
+function load_contOverview() {
+  var new_overview = $("textarea[name='contOverview']").val();
+  new_overview = new_overview.replaceAll("[","<").replaceAll("]",">");
+  // Handle code block being created by authors indenting (manually editing the xml and spacing)
+  new_overview = new_overview.replaceAll("    ","&nbsp;&nbsp;&nbsp;&nbsp;");
+  new_overview = marked(new_overview);
+  new_overview = new_overview.replaceAll("\n","<br>"); // has to be after marked
+  $("#contDescription").html(new_overview);
+
+  var new_requires = $("textarea[name='contRequires']").val();
+  new_requires = new_requires.replaceAll("[","<").replaceAll("]",">");
+  // Handle code block being created by authors indenting (manually editing the xml and spacing)
+  new_requires = new_requires.replaceAll("    ","&nbsp;&nbsp;&nbsp;&nbsp;");
+  new_requires = marked(new_requires);
+  new_requires = new_requires.replaceAll("\n","<br>"); // has to be after marked
+  new_requires = new_requires ? new_requires : "<em>_(None Listed)_</em>";
+  $("#contRequires").html(new_requires);
+}
+
+$(function() {
+  // Load container info on page load
+  if (typeof Settings != 'undefined') {
+    for (var key in Settings) {
+      if (Settings.hasOwnProperty(key)) {
+        var target = $('#canvas').find('*[name=cont'+key+']:first');
+        if (target.length) {
+          var value = Settings[key];
+          if (target.attr("type") == 'checkbox') {
+            target.prop('checked', (value == 'true'));
+          } else if ($(target).prop('nodeName') == 'DIV') {
+            target.html(value);
+          } else {
+            target.val(value);
+          }
+        }
+      }
+    }
+    load_contOverview();
+    // Load the confCategory input into the s1 select
+    categories=$("input[name='contCategory']").val().split(" ");
+    for (var i = 0; i < categories.length; i++) {
+      $("#catSelect option[value='"+categories[i]+"']").prop("selected", true);
+    }
+    // Remove empty description
+    if (!Settings.Description.length) {
+      $('#canvas').find('#Overview:first').hide();
+    }
+    // Load config info
+    var network = $('select[name="contNetwork"]')[0].selectedIndex;
+    for (var i = 0; i < Settings.Config.length; i++) {
+      confNum += 1;
+      Opts = Settings.Config[i];
+      if (Opts.Display == "always-hide" || Opts.Display == "advanced-hide") {
+        Opts.Buttons = "<span class='flex flex-row items-center gap-4'>";
+        Opts.Buttons += "<span class='advanced'><button type='button' onclick='editConfigPopup("+confNum+",<?=$disableEdit?>)'>_(Edit)_</button>";
+        Opts.Buttons += "<button type='button' onclick='removeConfig("+confNum+")'>_(Remove)_</button></span>";
+        Opts.Buttons += "</span>";
+      } else {
+        Opts.Buttons = "<span class='flex flex-row items-center gap-4'>"; 
+        Opts.Buttons += "<button type='button' onclick='editConfigPopup("+confNum+",<?=$disableEdit?>)'>_(Edit)_</button>";
+        Opts.Buttons += "<button type='button' onclick='removeConfig("+confNum+")'>_(Remove)_</button>";
+        Opts.Buttons += "</span>";
+      }
+      Opts.Number = confNum;
+      if (Opts.Type == "Device") {
+        Opts.Target = Opts.Value;
+      }
+      newConf = makeConfig(Opts);
+      if (Opts.Display == 'advanced' || Opts.Display == 'advanced-hide') {
+        $("#configLocationAdvanced").append(newConf);
+      } else {
+        $("#configLocation").append(newConf);
+      }
+    }
+  } else {
+    $('#canvas').find('#Overview:first').hide();
+  }
+  // Show associated subnet with fixed IP (if existing)
+  showSubnet($('select[name="contNetwork"]').val());
+  // Add list of docker allocations
+  $("#dockerAllocations").html(makeAllocations(Allocations,$('input[name="contName"]').val()));
+  // Add switchButton
+  $('.switch-on-off').switchButton({labels_placement:'right',on_label:"_(On)_",off_label:"_(Off)_"});
+  // Add dropdownchecklist to Select Categories
+  $("#catSelect").dropdownchecklist({emptyText:"_(Select categories)_...", maxDropHeight:200, width:300, explicitClose:"..._(close)_"});
+  <?if ($authoringMode){
+    echo "$('.advancedview').prop('checked','true'); $('.advancedview').change();";
+    echo "$('.advancedview').siblings('.switch-button-background').click();";
+  }?>
+});
+
+if (window.location.href.indexOf("/Apps/") > 0  && <? if (is_file($xmlTemplate)) echo "true"; else echo "false"; ?> ) {
+  $(".TemplateDropDown").hide();
+}
+</script>
+<?END:?>
