@@ -56,7 +56,23 @@ $nodisks	= checkDisks($disks) ? "" : "disabled";
 <input type="button" value="_(Clean Up)_" onclick="cleanup()" id="cleanup-button" disabled>
 </form>
 
-:share_list_help:
+> **Colored Status Indicator** -- the significance of the color indicator at the beginning of each line in *User Shares* is as follows:
+> 
+> <i class='fa fa-circle orb green-orb'></i>All files are on protected storage.
+> 
+> <i class='fa fa-warning orb yellow-orb'></i>Some or all files are on unprotected storage.
+> 
+> **Security modes:**
+> 
+> + '-' -- user share is not exported and unavailable on the network
+> + *Public* -- all users including guests have full read/write access (open access)
+> + *Secure* -- all users including guests have read access, write access is set per user (limited access)
+> + *Private* -- no guest access at all, read/write or read-only access is set per user (closed access)
+> 
+> **Special modes:**
+> 
+> + SMB security mode displayed in *italics* indicates exported hidden user shares.
+> + NFS does not have special modes for user shares.
 
 <script>
 function shareList(name,all) {

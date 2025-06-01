@@ -1924,4 +1924,3 @@ if (window.location.href.indexOf("/Apps/") > 0  && <? if (is_file($xmlTemplate))
 }
 </script>
 <?END:?>
-
