@@ -23,7 +23,7 @@ IDENT="/boot/config/ident.cfg"
 
 ntpd_running(){
   sleep 0.1
-  [[ $(pgrep -cf $NTPD) -gt 0 ]]
+  [[ $(pgrep --ns $$ -cf $NTPD) -gt 0 ]]
 }
 
 ntpd_build(){

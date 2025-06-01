@@ -21,7 +21,7 @@ require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 
 if (isset($_POST['ntp'])) {
-  if (exec("pgrep -cf /usr/sbin/ptp4l")) {
+  if (exec("pgrep --ns $$ -cf /usr/sbin/ptp4l")) {
     // ptp sync
     if (exec("pmc -ub0 'GET TIME_STATUS'|awk '$1==\"gmPresent\"{print $2;exit}'")) {
       $ptp = abs(exec("pmc -ub0 'GET CURRENT'|awk '$1==\"offsetFromMaster\"{print $2;exit}'"));
@@ -37,7 +37,7 @@ if (isset($_POST['ntp'])) {
     } else {
       die(_('Clock is unsynchronized with no PTP servers'));
     }
-  } elseif (exec("pgrep -cf /usr/sbin/ntpd")) {
+  } elseif (exec("pgrep --ns $$ -cf /usr/sbin/ntpd")) {
     // ntp sync
     $ntp = exec("ntpq -pn|awk '$1~/^\*/{print $9;exit}'");
     if ($ntp) {

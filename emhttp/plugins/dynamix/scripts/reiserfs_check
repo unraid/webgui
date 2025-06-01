@@ -19,7 +19,7 @@ case "$1" in
   pgrep --ns $$ -f "/sbin/reiserfsck $2" >/dev/null
 ;;
 'cancel')
-  pkill -f "/sbin/reiserfsck $2"
+  pkill --ns $$ -f "/sbin/reiserfsck $2"
   echo "Cancelled" >> /var/lib/reiserfs/check.status.$3
 ;;
 esac

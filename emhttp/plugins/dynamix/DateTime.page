@@ -183,7 +183,7 @@ var service = false;
 var oldDate, oldTime, oldZone;
 
 // ptp daemon is running?
-var ptpd = <?=exec("pgrep -cf /usr/sbin/ptp4l") ? 'true' : 'false'?>;
+var ptpd = <?=exec("pgrep --ns $$ -cf /usr/sbin/ptp4l") ? 'true' : 'false'?>;
 
 function hwclock(form,port) {
   // disable hardware clock if not supported

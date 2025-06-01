@@ -24,7 +24,7 @@ IDENT="/boot/config/ident.cfg"
 
 ptpd_running(){
   sleep 0.1
-  [[ $(pgrep -cf $PTPD) -gt 0 ]]
+  [[ $(pgrep --ns $$ -cf $PTPD) -gt 0 ]]
 }
 
 ptpd_build(){
@@ -83,8 +83,8 @@ ptpd_stop(){
   if ! ptpd_running; then
     REPLY="Already stopped"
   else
-    pkill -f $PTPD 2>/dev/null
-    pkill -f $PHC 2>/dev/null
+    pkill --ns $$ -f $PTPD 2>/dev/null
+    pkill --ns $$ -f $PHC 2>/dev/null
     if ! ptpd_running; then REPLY="Stopped"; else REPLY="Failed"; fi
   fi
   log "$DAEMON...  $REPLY."
