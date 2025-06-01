@@ -17,7 +17,7 @@ PID="/var/run/cgroup2-unraid.pid"
 
 cgroup2daemon_running(){
   sleep 0.1
-  [[ $(pgrep -cf $CGROUP2) -gt 0 ]]
+  [[ $(pgrep --ns $$ -cf $CGROUP2) -gt 0 ]]
 }
 
 case "$1" in
@@ -26,7 +26,7 @@ case "$1" in
       REPLY="Already started"
     else
       $CGROUP2 --daemon
-      echo $(pgrep -f $CGROUP2) > $PID
+      echo $(pgrep --ns $$ -f $CGROUP2) > $PID
       if cgroup2daemon_running; then
         REPLY="Started"
       else

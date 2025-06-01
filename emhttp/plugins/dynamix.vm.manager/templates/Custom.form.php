@@ -353,7 +353,7 @@ if ($snapshots!=null && count($snapshots) && !$boolNew) {
 <table>
 	<tr class="<?=$snaphidden?>">
 		<td></td>
-		<td><span class="orange-text"><i class="fa fa-fw fa-warning"></i> _(Rename disabled, <?=$snapcount?> snapshot(s) exists)_.</span></td>
+		<td><span class="orange-text"><i class="fa fa-fw fa-warning"></i> <?=sprintf(_('Rename disabled, %s snapshot(s) exists'), $snapcount)?>.</span></td>
 		<td></td>
 	</tr>
 	<tr id="zfs-name" class="hidden">

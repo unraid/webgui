@@ -1,6 +1,8 @@
 <?php
 // Included in login.php
 
+require_once "$docroot/plugins/dynamix.my.servers/include/state.php";
+
 // Only start a session to check if they have a cookie that looks like our session
 $server_name = strtok($_SERVER['HTTP_HOST'], ":");
 if (!empty($_COOKIE['unraid_' . md5($server_name)])) {

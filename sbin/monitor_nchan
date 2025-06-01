@@ -27,14 +27,14 @@ nchan_stop() {
   while IFS=$'\n' read -r nchan; do
     [[ ${nchan##*/} == '.*' ]] && continue
     echo $nchan >>$nchan_list
-    pkill -f $nchan
+    pkill --ns $$ -f $nchan
   done <<< $(ps -eo cmd | grep -Po '/usr/local/emhttp/.*/nchan/.*')
 }
 
 nchan_start() {
   [[ -e $nchan_list ]] || return
   while IFS=$'\n' read -r nchan; do
-    if ! pgrep -f $nchan >/dev/null; then
+    if ! pgrep --ns $$ -f $nchan >/dev/null; then
       $nchan &>/dev/null &
     fi
   done < $nchan_list

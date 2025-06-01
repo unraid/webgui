@@ -65,7 +65,7 @@ if (count($pages)) {
   foreach ($stop as $row) {
     [$script, $opt] = my_explode(':', $row);
     if ($opt == 'stop') {
-      exec("pkill -f $docroot/$script &>/dev/null &");
+      exec('pkill --ns $$ -f '.escapeshellarg($docroot.'/'.$script).' &>/dev/null &');
       array_splice($running, array_search($row, $running), 1);
     }
   }

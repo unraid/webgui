@@ -736,7 +736,7 @@ nginx_stop(){
     kill -QUIT $(cat $PID)
     nginx_waitfor_shutdown
     # safety hammer
-    pkill -f $NGINX
+    pkill --ns $$ -f $NGINX
     nginx_waitfor_shutdown
     if ! nginx_running; then REPLY="Stopped"; else REPLY="Failed"; fi
   fi
@@ -806,7 +806,7 @@ nginx_reload(){
 
 nginx_renew(){
   # stop unconditionally
-  pkill -f $NGINX
+  pkill --ns $$ -f $NGINX
   # rebuild configuration
   build_ssl
   # start unconditionally

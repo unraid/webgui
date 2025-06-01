@@ -283,7 +283,7 @@ wifi_stop(){
   IPV4=$(ip -4 -br addr show scope global primary dev shim-$PORT | awk '{print $3,$4,$5;exit}')
   [[ -n $IPV4 ]] && run ip addr del $IPV4 dev shim-$PORT
   run ip addr flush dev $PORT
-  run pkill wpa_supplicant
+  run pkill --ns $$ wpa_supplicant
   run iw dev $PORT disconnect
   run rm -f $INI
   # restart services when static assignments

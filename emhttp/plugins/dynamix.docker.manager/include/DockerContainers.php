@@ -245,7 +245,7 @@ foreach ($containers as $ct) {
           if (!empty($TS_version)) {
             if (!empty($TS_latest_version)) {
               if (version_compare($TS_version, $TS_latest_version, '<')) {
-                $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("Tailscale:")."</span><span class='ui-tailscale-value'>v".$TS_version." &#10132; v".$TS_latest_version." "._("available!")."</span></div>";
+                $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("Tailscale").":</span><span class='ui-tailscale-value'>v".$TS_version." &#10132; v".$TS_latest_version." "._("available")."!</span></div>";
               } else {
                 $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("Tailscale").":</span><span class='ui-tailscale-value'>v".$TS_version."</span></div>";
               }

@@ -1,26 +1,118 @@
-tr#copy,
-tr#file {
-    display: none;
-}
-td.gap {
-    padding-left: 26px !important;
-}
-td.wrap {
-    white-space: normal !important;
-}
-span#pass {
-    display: none;
-    margin-left: 20px;
-}
-input[type="checkbox"] {
-    margin-left: 0;
-}
+.ArrayOperation-Table {
+    --table-gap: 0.5rem;
 
-input.subpool {
-    font-size: 1rem;
-    padding: 5px 10px;
-}
+    box-sizing: border-box;
 
-.hidden {
-    display: none;
+    * {
+        box-sizing: border-box;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    input[type="number"],
+    input[type="url"],
+    input[type="email"],
+    input[type="date"],
+    input[type="file"],
+    input:not([type="submit"]),
+    input:not([type="button"]),
+    input:not([type="checkbox"]),
+    input:not([type="radio"]),
+    input:not([class*="narrow"]),
+    textarea,
+    .textarea,
+    select,
+    .ui-dropdownchecklist-selector-wrapper {
+        margin-bottom: var(--table-gap);
+    }
+
+    /* mobile and tablet */
+    @media (max-width: 769px) {
+        tbody {
+            display: flex;
+            flex-direction: column;
+            gap: var(--table-gap);
+        }
+
+        tr {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--table-gap);
+        }
+
+        td {
+            display: block;
+            padding: var(--table-gap) 0 !important; /* override `table.array_status tr > td` padding-left  */
+            height: auto; /* override `table tbody td` */
+
+            input[type="button"],
+            input[type="reset"],
+            input[type="submit"],
+            button,
+            button[type="button"],
+            a.button,
+            .sweet-alert button {
+                margin: 0;
+            }
+        }
+
+        td:empty:not(.line) {
+            display: none;
+        }
+
+        .line {
+            flex-basis: 100%;
+            margin-top: var(--table-gap);
+        }
+    }
+    /* mobile */
+    @media (max-width: 549px) {
+        td {
+            flex-basis: 100%;
+        }
+    }
+    /* tablet */
+    @media (min-width: 550px) and (max-width: 769px) {
+        td:first-child {
+            flex-basis: 100%;
+        }
+
+        --base-col-02-width: 35%;
+        --base-col-03-width: calc(100% - var(--base-col-02-width));
+
+        /* minus half the gap, otherwise the last column will be too wide and break to a new line prematurely */
+        td:nth-child(2):not(.line) {
+            flex-basis: calc(var(--base-col-02-width) - var(--table-gap) / 2);
+        }
+
+        td:nth-child(3):not(.line) {
+            flex-basis: calc(var(--base-col-03-width) - var(--table-gap) / 2);
+        }
+    }
+
+    /* desktop */
+    @media (min-width: 770px) {
+        td {
+            padding: var(--table-gap) 0; /* override `table.array_status tr > td` padding-left  */
+        }
+
+        input[type="text"],
+        input[type="password"],
+        input[type="number"],
+        input[type="url"],
+        input[type="email"],
+        input[type="date"],
+        input[type="file"],
+        input:not([type="submit"]),
+        input:not([type="button"]),
+        input:not([type="checkbox"]),
+        input:not([type="radio"]),
+        input:not([class*="narrow"]),
+        textarea,
+        .textarea,
+        select,
+        .ui-dropdownchecklist-selector-wrapper {
+            max-width: 400px;
+        }
+    }
 }
