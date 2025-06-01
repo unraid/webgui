@@ -29,21 +29,17 @@ $name_warn = preg_match('/'.$name_regex.'/', $var['NAME']) ? 'none' : 'block';
 _(Server name)_:
 : <input type="text" name="NAME" id="NAME" maxlength="15" pattern="<?=$name_regex?>" value="<?=htmlspecialchars(_var($var,'NAME'))?>" title="_(Only alphanumeric characters)_ (&quot;A-Z&quot;, &quot;a-z&quot;, and &quot;0-9&quot;), dashes (&quot;-&quot;), and dots (&quot;.&quot;); _(and, the first and last characters must be alphanumeric)_" <?=$disabled?> required> <span id="name_warning" style="display:<?=$name_warn?>"><i class="fa fa-warning icon warning"></i> _(Not compatible with NetBIOS)_</span>
 
-> The network identity of your server.  Also known as *hostname* or *short hostname*. Windows networking
-> refers to this as the *NetBIOS name* and must be 15 characters or less in length.
-> Use only alphanumeric characters (that is, "A-Z", "a-z", and "0-9"), dashes ("-"), and dots (".");
-> and, the first and last characters must be alphanumeric.
+> _(The network identity of your server.  Also known as *hostname* or *short hostname*. Windows networking refers to this as the *NetBIOS name* and must be 15 characters or less in length. Use only alphanumeric characters (that is, "A-Z", "a-z", and "0-9"), dashes ("-"), and dots ("."); and, the first and last characters must be alphanumeric.)_
 
 _(Description)_:
 : <input type="text" name="COMMENT" id="COMMENT" value="<?=htmlspecialchars(_var($var,'COMMENT'))?>" <?=$disabled?>>
 
-> This is a text field that is seen next to a server when listed within Network or File Explorer
-> (Windows), or Finder (macOS).
+> _(This is a text field that is seen next to a server when listed within Network or File Explorer (Windows), or Finder (macOS).)_
 
 _(Model)_:
 : <input type="text" name="SYS_MODEL" id="SYS_MODEL" value="<?=htmlspecialchars(_var($var,'SYS_MODEL'))?>" <?=$disabled?>>
 
-> This is the server model number.
+> _(This is the server model number.)_
 
 &nbsp;
 : <span class="inline-block">

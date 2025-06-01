@@ -152,9 +152,9 @@ _(Enable Docker)_:
   <span id="arraystopped"><i class="fa fa-warning icon warning"></i> <?=(_var($dockercfg,'DOCKER_ENABLED')=='yes') ? '_(Docker will be available after Array is Started)_' : '_(Apply to activate Docker after Array is Started)_'?></span>
 <?endif;?>
 
-> Before you can start the Docker service for the first time, please specify an image file for Docker to install to.
+> _(Before you can start the Docker service for the first time, please specify an image file for Docker to install to.)_
 > 
-> Once started, Docker will always automatically start after the array has been started.
+> _(Once started, Docker will always automatically start after the array has been started.)_
 
 _(Enable container table readmore-js)_:
 : <select id="DOCKER_READMORE" name="DOCKER_READMORE">
@@ -162,20 +162,20 @@ _(Enable container table readmore-js)_:
   <?=mk_option(_var($dockercfg,'DOCKER_READMORE'), 'no', _('No'))?>
   </select>
 
-> Some systems with a lot of docker containers may experience lag using the main Docker page.
+> _(Some systems with a lot of docker containers may experience lag using the main Docker page.)_
 > 
-> Setting this to "No" may help speed up general page usage by disabling the use of readmore-js.
-> Instead of chevrons indicating more data for Port and Volume mapping, all data is displayed.
+> _(Setting this to "No" may help speed up general page usage by disabling the use of readmore-js.)_
+> _(Instead of chevrons indicating more data for Port and Volume mapping, all data is displayed.)_
 
 _(Docker Stop Timeout)_ (_(seconds)_):
 : <input class='narrow' id="DOCKER_TIMEOUT" type="number" name="DOCKER_TIMEOUT" min='1' value="<?=htmlspecialchars(_var($dockercfg,'DOCKER_TIMEOUT'))?>">
 
-> The time in seconds to allow a container to gracefully stop before forcing it to stop
+> _(The time in seconds to allow a container to gracefully stop before forcing it to stop)_
 
 _(Docker PID Limit)_:
 : <input class='narrow' id="DOCKER_PID_LIMIT" type="number" name="DOCKER_PID_LIMIT" min='1' value="<?=htmlspecialchars(_var($dockercfg,'DOCKER_PID_LIMIT'))?>" placeholder="2048">
 
-> Set a PID Limit to limit the number of PIDs that a docker can use. The default is 2048.  Set to zero for unlimited PIDs (not recommended).
+> _(Set a PID Limit to limit the number of PIDs that a docker can use. The default is 2048.  Set to zero for unlimited PIDs (not recommended).)_
 
 <?if ($DockerStopped):?>
 
@@ -186,9 +186,9 @@ _(Docker data-root)_:
   <?=mk_option(_var($dockercfg,'DOCKER_IMAGE_TYPE'), 'folder', _('directory'))?>
   </select>
 
-> Select where to keep the Docker persistent state.
+> _(Select where to keep the Docker persistent state.)_
 > 
-> This can be an image file with a specific size or a dedicated folder.
+> _(This can be an image file with a specific size or a dedicated folder.)_
 
 <div markdown="1" id="vdisk_file" style="display:none">
 _(Docker vDisk size)_:
@@ -198,9 +198,9 @@ _(Docker vDisk size)_:
     <span id="SIZE_ERROR" class="errortext"></span>
   </span>
 
-> If the system needs to create a new docker image file, this is the default size to use specified in GB.
+> _(If the system needs to create a new docker image file, this is the default size to use specified in GB.)_
 > 
-> To resize an existing image file, specify the new size here. Next time the Docker service is started the file (and file system) will be increased to the new size (but never decreased).
+> _(To resize an existing image file, specify the new size here. Next time the Docker service is started the file (and file system) will be increased to the new size (but never decreased).)_
 
 _(Docker vDisk location)_:
 : <input type="text" id="DOCKER_IMAGE_FILE1" name="DOCKER_IMAGE_FILE1" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars(_var($dockercfg,'DOCKER_IMAGE_FILE'))?>" placeholder="_(e.g.)_ /mnt/user/system/docker.img" data-pickcloseonfile="true" data-pickfilter="img" data-pickroot="/mnt" data-pickfolders="true" disabled required pattern="^[^\\]*(docker-xfs\.img|docker\.img)$">
@@ -215,11 +215,11 @@ _(Docker vDisk location)_:
 <?endif;?>
   <span id="IMAGE_ERROR1" class="errortext"></span>
 
-> You must specify an image file for Docker. The system will automatically create this file when the Docker service is first started.
+> _(You must specify an image file for Docker. The system will automatically create this file when the Docker service is first started.)_
 > 
-> The image file name must have the extension .img, If not the input is not accepted and marked red.
+> _(The image file name must have the extension .img, If not the input is not accepted and marked red.)_
 > 
-> It is recommended to create this image file outside the array, e.g. on the Cache pool. For best performance SSD devices are preferred.
+> _(It is recommended to create this image file outside the array, e.g. on the Cache pool. For best performance SSD devices are preferred.)_
 
 </div>
 <div markdown="1" id="vdisk_dir" style="display:none">
@@ -236,9 +236,9 @@ _(Docker directory)_:
 <?endif;?>
   <span id="IMAGE_ERROR2" class="errortext"></span>
 
-> You must specify a folder for Docker. The system will automatically create this folder when the Docker service is first started.
+> _(You must specify a folder for Docker. The system will automatically create this folder when the Docker service is first started.)_
 > 
-> It is recommended to create this folder under a share which resides on the Cache pool (setting: cache=Only). For best performance SSD devices are preferred.
+> _(It is recommended to create this folder under a share which resides on the Cache pool (setting: cache=Only). For best performance SSD devices are preferred.)_
 
 </div>
 
@@ -252,12 +252,12 @@ _(Docker storage driver)_:
   <span id="WARNING_BACKINGFS" style="display:none;"><i class="fa fa-warning icon warning"></i>_(Only modify if this is a new installation since this can lead to unwanted behaviour!)_</span>
 <?endif;?>
 
-> overlay2 (default): Will use overlay2 as the storage driver for Docker, regardless of the underlying filesystem.
+> _(overlay2 (default): Will use overlay2 as the storage driver for Docker, regardless of the underlying filesystem.)_
 > 
-> native: The native storage driver for your underlying filesystem will be used (XFS: overlay2 | ZFS: zfs | BTRFS: btrfs).
+> _(native: The native storage driver for your underlying filesystem will be used (XFS: overlay2 | ZFS: zfs | BTRFS: btrfs).)_
 > 
-> ATTENTION: Changing the storage type from an existing Docker installation is not possible, you have to delete your Docker directory first, change the storage type and then reinstall your containers.
-> It is recommended to take a screenshot from your Docker containers before changing the storage type. After deleting and changing the storage type, reinstall the containers by clicking Add Container on the Docker page and select one by one from the drop down to reinstall them with your previous settings).
+> _(ATTENTION: Changing the storage type from an existing Docker installation is not possible, you have to delete your Docker directory first, change the storage type and then reinstall your containers.)_
+> _(It is recommended to take a screenshot from your Docker containers before changing the storage type. After deleting and changing the storage type, reinstall the containers by clicking Add Container on the Docker page and select one by one from the drop down to reinstall them with your previous settings).)_
 
 </div>
 
@@ -267,13 +267,13 @@ _(Default appdata storage location)_:
   <span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
 <?endif;?>
 
-> You can specify a folder to automatically generate and store subfolders containing configuration files for each Docker app (via the /config mapped volume).
+> _(You can specify a folder to automatically generate and store subfolders containing configuration files for each Docker app (via the /config mapped volume).)_
 > 
-> The folder's path must end with a trailing slash (/) character. If not the input is not accepted and marked red.
+> _(The folder's path must end with a trailing slash (/) character. If not the input is not accepted and marked red.)_
 > 
-> It is recommended to create this folder outside the array, e.g. on the Cache pool. For best performance SSD devices are preferred.
+> _(It is recommended to create this folder outside the array, e.g. on the Cache pool. For best performance SSD devices are preferred.)_
 > 
-> Only used when adding new Docker apps. Editing existing Docker apps will not be affected by this setting.
+> _(Only used when adding new Docker apps. Editing existing Docker apps will not be affected by this setting.)_
 
 <div markdown="1" class="advanced">
 _(Docker LOG rotation)_:
@@ -282,9 +282,9 @@ _(Docker LOG rotation)_:
   <?=mk_option(_var($dockercfg,'DOCKER_LOG_ROTATION'), 'yes', _('Enabled'))?>
   </select>
 
-> By default LOG rotation is disabled and will create a single LOG file of unlimited size.
+> _(By default LOG rotation is disabled and will create a single LOG file of unlimited size.)_
 > 
-> Enable LOG rotation to limit the size of the LOG file and specify the number of files to keep in the rotation scheme.
+> _(Enable LOG rotation to limit the size of the LOG file and specify the number of files to keep in the rotation scheme.)_
 
 <div markdown="1" id="DOCKER_LOG_OPTIONS" style="display:none">
 _(Docker LOG maximum file size)_:
@@ -297,7 +297,7 @@ _(Docker LOG maximum file size)_:
   <?=mk_option(_var($dockercfg,'DOCKER_LOG_SIZE'), '1g', '1000 '._('MB'))?>
   </select>
 
-> Specifies the maximum LOG size. When exceeded LOG rotation will occur.
+> _(Specifies the maximum LOG size. When exceeded LOG rotation will occur.)_
 
 _(Docker LOG number of files)_:
 : <select name="DOCKER_LOG_FILES">
@@ -306,7 +306,7 @@ _(Docker LOG number of files)_:
   <?=mk_option(_var($dockercfg,'DOCKER_LOG_FILES'), '3', '3')?>
   </select>
 
-> Specifies the number of LOG files when LOG rotation is done.
+> _(Specifies the number of LOG files when LOG rotation is done.)_
 
 </div>
 _(Template Authoring Mode)_:
@@ -315,7 +315,7 @@ _(Template Authoring Mode)_:
   <?=mk_option(_var($dockercfg,'DOCKER_AUTHORING_MODE'), 'yes', _('Yes'))?>
   </select>
 
-> If set to **Yes**, when creating/editing containers the interface will be present with some extra fields related to template authoring.
+> _(If set to **Yes**, when creating/editing containers the interface will be present with some extra fields related to template authoring.)_
 
 _(Docker custom network type)_:
 : <select name="DOCKER_NETWORK_TYPE">
@@ -326,14 +326,14 @@ _(Docker custom network type)_:
     _(Please read the Help carefully)_.  _(Misconfiguration can cause problems)_.
   </span>
 
-> The **ipvlan** type is best when connection to the physical network is not needed.
-> Please read <u><a style="color:blue" href='https://docs.docker.com/network/ipvlan/', target='_blank'>this</a></u> on implementing an ipvlan network.<br>
+> _(The **ipvlan** type is best when connection to the physical network is not needed.)_
+> _(Please read <u><a style="color:blue" href='https://docs.docker.com/network/ipvlan/', target='_blank'>this</a></u> on implementing an ipvlan network.<br>)_
 > 
-> The **macvlan** type of network allows direct connection to the physical network.
-> Please read <u><a style="color:blue" href='https://docs.docker.com/network/macvlan/', target='_blank'>this</a></u> on implementing a macvlan network.<br>
+> _(The **macvlan** type of network allows direct connection to the physical network.)_
+> _(Please read <u><a style="color:blue" href='https://docs.docker.com/network/macvlan/', target='_blank'>this</a></u> on implementing a macvlan network.<br>)_
 > 
-> **Note:** Docker uses its own dhcp service, which is the **DHCP Pool** setting.
-> When you use multiple Unraid servers, then each server must have a different Docker **DHCP Pool** range configured.
+> _(**Note:** Docker uses its own dhcp service, which is the **DHCP Pool** setting.)_
+> _(When you use multiple Unraid servers, then each server must have a different Docker **DHCP Pool** range configured.)_
 
 _(Host access to custom networks)_:
 : <select name="DOCKER_ALLOW_ACCESS">
@@ -344,7 +344,7 @@ _(Host access to custom networks)_:
     _(Make sure you understand what you are doing before enabling)_.
   </span>
 
-> Allows direct communication between the host and containers using a custom **macvlan** network.  By default this is disabled.
+> _(Allows direct communication between the host and containers using a custom **macvlan** network. By default, this is disabled.)_
 
 _(Preserve user defined networks)_:
 : <select name="DOCKER_USER_NETWORKS">
@@ -352,9 +352,9 @@ _(Preserve user defined networks)_:
   <?=mk_option(_var($dockercfg,'DOCKER_USER_NETWORKS'), 'preserve', _('Yes'))?>
   </select>
 
-> User created networks are networks created by the user outside of the GUI.  By default user created networks are removed from Docker. This is done to prevent potential conflicts with the automatic generation of custom networks.
+> _(User created networks are networks created by the user outside of the GUI. By default, user created networks are removed from Docker. This is done to prevent potential conflicts with the automatic generation of custom networks.)_
 > 
-> Change this setting to preserve user defined networks, but it is the responsibility of the user to ensure these entries work correctly and are conflict free.
+> _(Change this setting to preserve user defined networks, but it is the responsibility of the user to ensure these entries work correctly and are conflict free.)_
 
 <?foreach ($include as $network => $route):?>
 <?
@@ -469,9 +469,9 @@ _(IPv4 custom network on interface)_ <?=$network?> (_(optional)_):
 <?endforeach;?>
 
 <?if ($include):?>
-> Include (default) or exclude the above interfaces or VLANs as custom network for Docker.
-> 
-> Enter the pool range within each allocated subnet which is used for DHCPv4 assignments by Docker. E.g. 192.168.1.128/25
+> _(Include (default) or exclude the above interfaces or VLANs as custom network for Docker.)_
+>
+> _(Enter the pool range within each allocated subnet which is used for DHCPv4 assignments by Docker. E.g., 192.168.1.128/25)_
 
 <?endif;?>
 <?foreach ($unset as $network):?>
@@ -536,9 +536,9 @@ _(IPv4 custom network on interface)_ <?=$network?> (_(optional)_):
 <?endif;?>
 <?endforeach;?>
 <?if ($unset && $protocol[$network] != 'ipv6'):?>
-> Include or exclude (default) the above interfaces or VLANs as custom network for Docker.
-> 
-> Enter the pool range within each allocated subnet which is used for DHCPv4 assignments by Docker. E.g. 192.168.1.128/25
+> _(Include or exclude (default) the above interfaces or VLANs as custom network for Docker.)_
+>
+> _(Enter the pool range within each allocated subnet which is used for DHCPv4 assignments by Docker. E.g., 192.168.1.128/25)_
 
 <?endif;?>
 <?if ($include6):?>
@@ -582,9 +582,9 @@ _(IPv6 custom network on interface)_ <?=$network?> (_(optional)_):
 <?endif;?>
 <?endforeach;?>
 <?if ($include6):?>
-> Include (default) or exclude the above interfaces or VLANs as custom network for Docker.
-> 
-> Enter the pool range within each allocated subnet which is used for DHCPv6 assignments by Docker. E.g. 2a02:abcd:9ef5:100:1::/72
+> _(Include (default) or exclude the above interfaces or VLANs as custom network for Docker.)_
+>
+> _(Enter the pool range within each allocated subnet which is used for DHCPv6 assignments by Docker. E.g., 2a02:abcd:9ef5:100:1::/72)_
 
 <?endif;?>
 <?foreach ($unset as $network):?>
@@ -630,9 +630,9 @@ _(IPv6 custom network on interface)_ <?=$network?> (_(optional)_):
 <?endif;?>
 <?endforeach;?>
 <?if ($unset && $protocol[$network] != 'ipv4'):?>
-> Include or exclude (default) the above interfaces or VLANs as custom network for Docker.
-> 
-> Enter the pool range within each allocated subnet which is used for DHCPv6 assignments by Docker. E.g. 2a02:abcd:9ef5:100:1::/72
+> _(Include or exclude (default) the above interfaces or VLANs as custom network for Docker.)_
+>
+> _(Enter the pool range within each allocated subnet which is used for DHCPv6 assignments by Docker. E.g., 2a02:abcd:9ef5:100:1::/72)_
 
 <?endif;?>
 </div>
@@ -641,7 +641,7 @@ _(IPv6 custom network on interface)_ <?=$network?> (_(optional)_):
 _(Docker version)_:
 : <?$arrInfo = $DockerClient->getInfo(); echo $arrInfo['Version']?>
 
-> This is the active Docker version.
+> _(This is the active Docker version.)_
 
 <?if (_var($dockercfg,'DOCKER_IMAGE_TYPE')!='folder'):?>
 _(Docker vDisk location)_:
@@ -651,47 +651,49 @@ _(Docker directory)_:
 : <?=htmlspecialchars(_var($dockercfg,'DOCKER_IMAGE_FILE'))?>
 <?endif;?>
 
-> This is the location of the Docker image.
+> _(This is the location of the Docker image.)_
 
 _(Docker storage driver)_:
 : <?=htmlspecialchars(_var($dockercfg,'DOCKER_BACKINGFS'))?>
 
-> This is the storage driver for Docker.
+> _(This is the storage driver for Docker.)_
 
 _(Default appdata storage location)_:
 : <?=htmlspecialchars(_var($dockercfg,'DOCKER_APP_CONFIG_PATH'))?>
 
-> This is the storage location for Docker containers.
+> _(This is the storage location for Docker containers.)_
 
 <div markdown="1" class="advanced">
 _(Docker LOG rotation)_:
 : <?=_var($dockercfg,'DOCKER_LOG_ROTATION')=='yes' ? _('Enabled') : _('Disabled')?>
 
-> By default a single unlimited LOG file is created. Otherwise LOG file size and number of files are limited when LOG rotation is enabled.
+> _(By default LOG rotation is disabled and will create a single LOG file of unlimited size.)_
+> 
+> _(Enable LOG rotation to limit the size of the LOG file and specify the number of files to keep in the rotation scheme.)_
 
 _(Docker custom network type)_:
 : <?=_var($dockercfg,'DOCKER_NETWORK_TYPE')!='1' || !$bridge ? _('macvlan') : _('ipvlan')?>
 
-> The **ipvlan** type is best when connection to the physical network is not needed.
-> Please read <u><a style="color:blue" href='https://docs.docker.com/network/ipvlan/', target='_blank'>this</a></u> on implementing an ipvlan network.<br>
+> _(The **ipvlan** type is best when connection to the physical network is not needed.)_
+> _(Please read <u><a style="color:blue" href='https://docs.docker.com/network/ipvlan/', target='_blank'>this</a></u> on implementing an ipvlan network.<br>)_
 > 
-> The **macvlan** type of network allows direct connection to the physical network.
-> Please read <u><a style="color:blue" href='https://docs.docker.com/network/macvlan/', target='_blank'>this</a></u> on implementing a macvlan network.<br>
+> _(The **macvlan** type of network allows direct connection to the physical network.)_
+> _(Please read <u><a style="color:blue" href='https://docs.docker.com/network/macvlan/', target='_blank'>this</a></u> on implementing a macvlan network.<br>)_
 > 
-> **Note:** Docker uses its own dhcp service, which is the **DHCP Pool** setting.
-> When you use multiple Unraid servers, then each server must have a different Docker **DHCP Pool** range configured.
+> _(**Note:** Docker uses its own dhcp service, which is the **DHCP Pool** setting.)_
+> _(When you use multiple Unraid servers, then each server must have a different Docker **DHCP Pool** range configured.)_
 
 _(Host access to custom networks)_:
 : <?=_var($dockercfg,'DOCKER_ALLOW_ACCESS')=='yes' ? _('Enabled') : _('Disabled')?>
 
-> Allows direct communication between the host and containers using a custom **macvlan** network.  By default this is disabled.
+> _(Allows direct communication between the host and containers using a custom **macvlan** network. By default, this is disabled.)_
 
 _(Preserve user defined networks)_:
 : <?=_var($dockercfg,'DOCKER_USER_NETWORKS')=='preserve' ? _('Yes') : _('No')?>
 
-> User created networks are networks created by the user outside of the GUI.  By default user created networks are removed from Docker. This is done to prevent potential conflicts with the automatic generation of custom networks.
+> _(User created networks are networks created by the user outside of the GUI. By default, user created networks are removed from Docker. This is done to prevent potential conflicts with the automatic generation of custom networks.)_
 > 
-> Change this setting to preserve user defined networks, but it is the responsibility of the user to ensure these entries work correctly and are conflict free.
+> _(Change this setting to preserve user defined networks, but it is the responsibility of the user to ensure these entries work correctly and are conflict free.)_
 
 <?foreach ($include as $network => $route):?>
 <?
@@ -853,9 +855,9 @@ _(btrfs scrub status)_:
     <label><input type="checkbox" name="#arg[3]" value=""> _(Correct file system errors)_</label>
   </span>
 
-> **Scrub** runs the *btrfs scrub* program to check file system integrity.
+> _(**Scrub** runs the *btrfs scrub* program to check file system integrity.)_
 > 
-> If repair is needed you should check the *Correct file system errors* and run a second Scrub pass; this will permit *btrfs scrub* to fix the file system.
+> _(If repair is needed you should check the *Correct file system errors* and run a second Scrub pass; this will permit *btrfs scrub* to fix the file system.)_
 
 <?else:?>
 <input type="hidden" name="#command" value="/webGui/scripts/btrfs_scrub">
@@ -867,7 +869,7 @@ _(btrfs scrub status)_:
     <input type="submit" value="_(Cancel)_">
   </span>
 
-> **Cancel** will cancel the Scrub operation in progress.
+> _(**Cancel** will cancel the Scrub operation in progress.)_
 
 </form>
 <?endif;?>

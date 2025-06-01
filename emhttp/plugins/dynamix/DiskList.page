@@ -34,23 +34,23 @@ Cond="_var($var,'fsState')!='Stopped' && _var($var,'shareDisk')!='no'"
 
 <input id="compute-disks" type="button" value="_(Compute All)_" onclick="$(this).prop('disabled',true);diskList('',-1)">
 
-> **Colored Status Indicator** -- the significance of the color indicator at the beginning of each line in *Disk Shares* is as follows:
-> 
-> <i class='fa fa-circle orb green-orb'></i>Mounted, underlying device has redundancy/protection.
-> 
-> <i class='fa fa-warning orb yellow-orb'></i>Mounted, underlying device does not have redundancy/protection.
-> 
-> **Security modes:**
-> 
-> + '-' -- disk share is not exported and unavailable on the network
-> + *Public* -- all users including guests have full read/write access (open access)
-> + *Secure* -- all users including guests have read access, write access is set per user (limited access)
-> + *Private* -- no guest access at all, read/write or read-only access is set per user (closed access)
-> 
-> **Special modes:**
-> 
-> + SMB security mode displayed in *italics* indicates exported hidden disk shares.
-> + NFS does not have special modes for disk shares.
+> _(**Colored Status Indicator** -- the significance of the color indicator at the beginning of each line in *Disk Shares* is as follows:)_
+>
+> _(<i class='fa fa-circle orb green-orb'></i>Mounted, underlying device has redundancy/protection.)_
+>
+> _(<i class='fa fa-warning orb yellow-orb'></i>Mounted, underlying device does not have redundancy/protection.)_
+>
+> _(**Security modes:**)_
+>
+> _(+ '-' -- disk share is not exported and unavailable on the network)_
+> _(+ *Public* -- all users including guests have full read/write access (open access))_
+> _(+ *Secure* -- all users including guests have read access, write access is set per user (limited access))_
+> _(+ *Private* -- no guest access at all, read/write or read-only access is set per user (closed access))_
+>
+> _(**Special modes:**)_
+>
+> _(+ SMB security mode displayed in *italics* indicates exported hidden disk shares.)_
+> _(+ NFS does not have special modes for disk shares.)_
 
 <script>
 function diskList(name,all) {

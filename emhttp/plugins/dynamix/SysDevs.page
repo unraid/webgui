@@ -107,17 +107,17 @@ function ackPCI(pcidevice, action) {
 **_(PCI Devices (No IOMMU Groups Available))_**
 <?endif;?>
 
-> This displays a list of IOMMU groups available on your system along with the output of the `lspci` command for each IOMMU group.  The numeric identifiers are used to configure PCI pass-through.
-> 
-> Devices you select will be bound to the vfio-pci driver at boot, which makes them available for assignment to a virtual machine, and also prevents the Linux kernel from automatically binding them to any present host driver.
-> 
-> **Note that selecting a device will bind not only the specified device(s), but *all* other devices in the same IOMMU group as well.**
-> 
-> &nbsp;<i class="fa fa-circle orb green-orb middle"></i>&nbsp;This symbol indicates the device is currently bound to the vfio-pci driver.
-> 
-> &nbsp;<i class="fa fa-retweet grey-orb middle"></i>&nbsp;&nbsp;&nbsp;This symbol indicates the device supports FLR (Function Level Reset).
-> 
-> <input type="checkbox" value="" disabled>&nbsp;&nbsp;If a checkbox is greyed out it means the device is in use by Unraid OS and can not be passed through.
+> _(This displays a list of IOMMU groups available on your system along with the output of the `lspci` command for each IOMMU group.  The numeric identifiers are used to configure PCI pass-through.)_
+>
+> _(Devices you select will be bound to the vfio-pci driver at boot, which makes them available for assignment to a virtual machine, and also prevents the Linux kernel from automatically binding them to)_
+>
+> _(**Note that selecting a device will bind not only the specified device(s), but *all* other devices in the same IOMMU group as well.**)_
+>
+> _(&nbsp;<i class="fa fa-circle orb green-orb middle"></i>&nbsp;This symbol indicates the device is currently bound to the vfio-pci driver.)_
+>
+> _(&nbsp;<i class="fa fa-retweet grey-orb middle"></i>&nbsp;&nbsp;&nbsp;This symbol indicates the device supports FLR (Function Level Reset).)_
+>
+> _(<input type="checkbox" value="" disabled>&nbsp;&nbsp;If a checkbox is greyed out it means the device is in use by Unraid OS and can not be passed through.)_
 
 <?if (strpos(file_get_contents('/proc/cmdline'), 'pcie_acs_override=') !== false):?>
 <p class="notice" style="line-height:30px;height:auto">_(Warning)_: _(Your system has booted with the PCIe ACS Override setting enabled)_. _(The below list doesn't not reflect the way IOMMU would naturally group devices)_.<br>
@@ -128,21 +128,21 @@ function ackPCI(pcidevice, action) {
 
 **_(CPU Thread Pairings)_**
 
-> This displays a list of CPU thread pairings.
+> _(This displays a list of CPU thread pairings.)_
 
 <pre><table id='t2' class='pre'><tr><td><div class="spinner"></div></td></tr></table></pre><br>
 
 **_(USB Devices)_**
 
-> This displays the output of the `lsusb` command.  The numeric identifiers are used to configure PCI pass-through.
+> _(This displays the output of the `lsusb` command.  The numeric identifiers are used to configure PCI pass-through.)_
 
 <pre><table id='t3' class='pre'><tr><td><div class="spinner"></div></td></tr></table></pre><br>
 
 **_(SCSI Devices)_**
 
-> This displays the output of the `lsscsi` command.  The numeric identifiers are used to configure PCI pass-through.
-> 
-> Note that linux groups ATA, SATA and SAS devices with true SCSI devices.
+> _(This displays the output of the `lsscsi` command.  The numeric identifiers are used to configure PCI pass-through.)_
+>
+> _(Note that linux groups ATA, SATA and SAS devices with true SCSI devices.)_
 
 <pre><table id='t4' class='pre'><tr><td><div class="spinner"></div></td></tr></table></pre>
 <input type="button" value="_(Done)_" onclick="done()">

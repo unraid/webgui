@@ -118,11 +118,11 @@ _(Notifications display)_:
   <?=mk_option($notify['display'], "1", _("Summarized"))?>
   </select>
 
-> In *Detailed* view all notifications will be displayed on screen as soon as they arrive.<br>
-> Notifications can be acknowledged individually or all at once.
+> _(In *Detailed* view all notifications will be displayed on screen as soon as they arrive.<br>)_
+> _(Notifications can be acknowledged individually or all at once.)_
 > 
-> In *Summarized* view notifications will be counted only and the number of unread notifications is shown in the menu header per category.<br>
-> Click on the counters to either acknowledge or view the unread notifications.
+> _(In *Summarized* view notifications will be counted only and the number of unread notifications is shown in the menu header per category.<br>)_
+> _(Click on the counters to either acknowledge or view the unread notifications.)_
 
 _(Display position)_:
 : <select name="position">
@@ -133,15 +133,15 @@ _(Display position)_:
   <?=mk_option($notify['position'], "center", _("center"))?>
   </select>
 
-> Choose the position of where notifications appear on screen in *Detailed* view. Multiple notifications are stacked, bottom-to-top or
-> top-to-bottom depending on the selected placement.
+> _(Choose the position of where notifications appear on screen in *Detailed* view. Multiple notifications are stacked, bottom-to-top or)_
+> _(top-to-bottom depending on the selected placement.)_
 
 _(Auto-close)_ (_(seconds)_):
 : <input type="number" name="life" min="0" max="60" value="<?=$notify['life']?>">
   <span class="input-instructions">_(a value of zero means no automatic closure)_</span>
 
-> Number of seconds before notifications are automatically closed in *Detailed* view.<br>
-> A value of 0 disables automatic closure.
+> _(Number of seconds before notifications are automatically closed in *Detailed* view.<br>)_
+> _(A value of 0 disables automatic closure.)_
 
 _(Date format)_:
 : <select name="date">
@@ -150,7 +150,7 @@ _(Date format)_:
   <?=mk_option($notify['date'], "Y-m-d", _("YYYY-MM-DD"))?>
   </select>
 
-> Select the desired date format which is used in the notifications archive. Recommended is YYYY-MM-DD, which makes the date/time column sortable in a sensible way.
+> _(Select the desired date format which is used in the notifications archive. Recommended is YYYY-MM-DD, which makes the date/time column sortable in a sensible way.)_
 
 _(Time format)_:
 : <select name="time">
@@ -158,7 +158,7 @@ _(Time format)_:
   <?=mk_option($notify['time'], "H:i", _("24 hours"))?>
   </select>
 
-> Select the desired time format which is used in the notifications archive. Recommended is 24 hours, which makes the date/time column sortable in a sensible way.
+> _(Select the desired time format which is used in the notifications archive. Recommended is 24 hours, which makes the date/time column sortable in a sensible way.)_
 
 _(Store notifications to flash)_:
 : <select name="path">
@@ -166,8 +166,8 @@ _(Store notifications to flash)_:
   <?=mk_option($notify['path'], "/boot/config/plugins/dynamix/notifications", _("Yes"))?>
   </select>
 
-> By default notifications are stored on RAM disk, which will get lost upon system reboot.
-> Notifications may be stored permanently on the flash drive under folder '/boot/config/plugins/dynamix' instead.
+> _(By default notifications are stored on RAM disk, which will get lost upon system reboot.)_
+> _(Notifications may be stored permanently on the flash drive under folder '/boot/config/plugins/dynamix' instead.)_
 
 _(System notifications)_:
 : <select name="system" onchange="prepareSystem(this.selectedIndex)">
@@ -175,8 +175,8 @@ _(System notifications)_:
   <?=mk_option($notify['system'], "*/1 * * * *", _("Enabled"))?>
   </select>
 
-> By default the notifications system is disabled. Enable it here to start receiving notifications.
-> The following sections give more options about which and what type of notifications will be sent.
+> _(By default the notifications system is disabled. Enable it here to start receiving notifications.)_
+> _(The following sections give more options about which and what type of notifications will be sent.)_
 
 _(Unraid OS update notification)_:
 : <select name="unraidos" onchange="prepareUnraid(this.value)">
@@ -188,8 +188,8 @@ _(Unraid OS update notification)_:
   <?=mk_option($notify['unraidos'], "11 0 1 * *", _("Check once a month"))?>
   </select>
 
-> Start a periodic verification and notify the user when a new version of the Unraid OS system is detected.
-> Use the checkboxes below to select how notifications need to be given; by browser, by email and/or by custom agent.
+> _(Start a periodic verification and notify the user when a new version of the Unraid OS system is detected.)_
+> _(Use the checkboxes below to select how notifications need to be given; by browser, by email and/or by custom agent.)_
 
 _(Plugins update notification)_:
 : <select name="version" onchange="preparePlugin(this.value)">
@@ -201,8 +201,8 @@ _(Plugins update notification)_:
   <?=mk_option($notify['version'], "10 0 1 * *", _("Check once a month"))?>
   </select>
 
-> Start a periodic verification and notify the user when a new version of one or more of the installed plugins is detected.
-> Use the checkboxes below to select how notifications need to be given; by browser, by email and/or by custom agent.
+> _(Start a periodic verification and notify the user when a new version of one or more of the installed plugins is detected.)_
+> _(Use the checkboxes below to select how notifications need to be given; by browser, by email and/or by custom agent.)_
 
 _(Docker update notification)_:
 : <select name="docker_update" onchange="prepareDocker(this.value)">
@@ -214,8 +214,8 @@ _(Docker update notification)_:
   <?=mk_option($notify['docker_update'], "10 0 1 * *", _("Check once a month"))?>
   </select>
 
-> Start a periodic verification and notify the user when a new version of one or more of the installed dockers is detected.
-> Use the checkboxes below to select how notifications need to be given; by browser, by email and/or by custom agent.
+> _(Start a periodic verification and notify the user when a new version of one or more of the installed dockers is detected.)_
+> _(Use the checkboxes below to select how notifications need to be given; by browser, by email and/or by custom agent.)_
 
 _(Language update notification)_:
 : <select name="language_update" onchange="prepareLanguage(this.value)">
@@ -240,7 +240,7 @@ _(Array status notification)_:
   <?=mk_option($notify['status'], "20 0 1 * *", _("Send once a month"))?>
   </select>
 
-> Start a periodic array health check (preventive maintenance) and notify the user the result of this check.
+> _(Start a periodic array health check (preventive maintenance) and notify the user the result of this check.)_
 
 <span id="unraidTitle" class="unraid" style="display:none">&nbsp;</span>
 : <span class="unraid" style="display:none">
@@ -323,8 +323,8 @@ _(Array status notification)_:
     </span>
   </span>
 
-> Use the checkboxes above to select what and how notifications need to be given; by browser, by email and/or by a service.<br>
-> <b>Tip:</b> you can use custom notification agents; just add them to "/boot/config/plugins/dynamix/notification/agents" directory and check 'Agents'.
+> _(Use the checkboxes above to select what and how notifications need to be given; by browser, by email and/or by a service.)_
+> _(Tip: you can use custom notification agents; just add them to "/boot/config/plugins/dynamix/notification/agents" directory and check 'Agents.')_
 
 _(Notification entity)_:
 : <span>
@@ -373,13 +373,13 @@ _(Notification entity)_:
     </span>
   </span>
 
-> Notifications are classified as:
+> _(Notifications are classified as:)_
 > 
-> *notice* - these are informative notifications and do not indicate a problem situation, e.g. a new version is available<br>
-> *warning* - these are attentive notifications and may indicate future problems, e.g. a hard disk is hotter than usual<br>
-> *alert* - these are serious notifications and require immediate attention, e.g. a failing hard disk<br>
+> _(*notice* - these are informative notifications and do not indicate a problem situation, e.g. a new version is available)_
+> _(*warning* - these are attentive notifications and may indicate future problems, e.g. a hard disk is hotter than usual)_
+> _(*alert* - these are serious notifications and require immediate attention, e.g. a failing hard disk)_
 > 
-> Choose for each classification how you want to be notified.
+> _(Choose for each classification how you want to be notified.)_
 
 <input type="submit" name="#default" value="_(Default)_">
 : <span class="inline-block">

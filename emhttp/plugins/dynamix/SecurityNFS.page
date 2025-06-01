@@ -19,13 +19,11 @@ $width = [123,300];
 /* Replace spaces in NFS rule with new lines for multi line textarea. */
 $sec_nfs[$name]['hostList']	= str_replace(" ", "\n", $sec_nfs[$name]['hostList']);
 ?>
-> *Read settings from* is used to preset the NFS security settings of the current selected share with the settings of an existing share.
-> 
-> Select the desired share name and press **Read** to copy the NFS security settings from the selected source.
-> 
-> *Write settings to* is used to copy the NFS security settings of the current selected share to one or more other existing shares.
-> 
-> Select the desired destinations and press **Write** to copy the NFS security settings to the selected shares.
+> _(This page allows you to configure additional NFS security settings for your server.)_
+>
+> _(These settings are applied to all NFS shares on your server.)_
+>
+> _(**Note:** Changes to these settings require a restart of the NFS service to take effect.)_
 
 <div markdown="1" class="relative">
 <div markdown="1" class="clone-settings clone-settings-less-padding shade">
@@ -100,12 +98,12 @@ _(Security)_:
 _(Rule)_:
 : <textarea name="shareHostListNFS" cols="40" rows="5" style="width:45%" placeholder="Example: *(rw,sec=sys,insecure,anongid=100,anonuid=99,no_root_squash,lock)"><?= htmlspecialchars($sec_nfs[$name]['hostList']) ?></textarea>
 
-> Put the rule for each IP address on a separate line and terminate the Rule with a new line.
-> You cannot enter a Rule in the format IP1,IP2(...).  Unraid does not format the exports file in that format.
+> _(Put the rule for each IP address on a separate line and terminate the Rule with a new line.)_
+> _(You cannot enter a Rule in the format IP1,IP2(...).  Unraid does not format the exports file in that format.)_
 > 
-> The default rules for every NFS Rule are - async and no_subtree_check.
+> _(The default rules for every NFS Rule are - async and no_subtree_check.)_
 > 
-> **Note:** The Public Rule used is '*(rw,sec=sys,insecure,anongid=100,anonuid=99,no_root_squash)'.
+> _(**Note:** The Public Rule used is '*(rw,sec=sys,insecure,anongid=100,anonuid=99,no_root_squash)'.)_
 
 &nbsp;
 : <span class="buttons-spaced">

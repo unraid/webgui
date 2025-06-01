@@ -171,40 +171,40 @@ $root  = explode($_tilde_,$pool)[0];
 </table>
 </div>
 
-> **Colored Status Indicator** the significance of the color indicator at the beginning of each line in *Pool Devices* is as follows:
-> 
-> <i class='fa fa-circle orb green-orb'></i>Normal operation, device is active.
-> 
-> <i class='fa fa-circle orb grey-orb'></i>Device is in standby mode (spun-down).
-> 
-> <i class='fa fa-square orb blue-orb'></i>New device.
-> 
-> <i class='fa fa-square orb grey-orb'></i>No device present, position is empty.
-> 
-> **Pool Devices** is a single device, or pool of multiple devices, *outside* the unRAID array.  It may be exported for network access just
-> like an Array device.  Being outside the unRAID array results in significantly faster write access.
-> 
-> There are two ways to configure the Pool devices:
-> 
-> 1. As a single device, or
-> 2. As a multi-device pool.
-> 
-> When configured as a single device you may format the device using any supported file system (btrfs, reiserfs,
-> or xfs).  This configuration offers the highest performance, but at the cost of no data protection - if the
-> single pool device fails all data contained on it may be lost.
-> 
-> When configured as a multi-device pool, Unraid OS will automatically select *btrfs-raid1* format (for both data
-> and meta-data).  btrfs permits any number of devices to be added to the pool and each copy of data is guaranteed
-> to be written to two different devices.  Hence the pool can withstand a single-disk failure without losing data.
-> 
-> When [User Shares](/Settings/ShareSettings) are enabled, user shares may be configured to
-> automatically make use of the Pool device in order to
-> speed up writes.  A special background process called the *mover* can be scheduled to run
-> periodically to move user share files off the Cache and onto the Array.
+> _(**Colored Status Indicator** the significance of the color indicator at the beginning of each line in *Pool Devices* is as follows:)_
+>
+> _(<i class='fa fa-circle orb green-orb'></i>Normal operation, device is active.)_
+>
+> _(<i class='fa fa-circle orb grey-orb'></i>Device is in standby mode (spun-down).)_
+>
+> _(<i class='fa fa-square orb blue-orb'></i>New device.)_
+>
+> _(<i class='fa fa-square orb grey-orb'></i>No device present, position is empty.)_
+>
+> _(**Pool Devices** is a single device, or pool of multiple devices, *outside* the unRAID array.  It may be exported for network access just)_
+> _(like an Array device.  Being outside the unRAID array results in significantly faster write access.)_
+>
+> _(There are two ways to configure the Pool devices:)_
+>
+> _(1. As a single device, or)_
+> _(2. As a multi-device pool.)_
+>
+> _(When configured as a single device you may format the device using any supported file system (btrfs, reiserfs,)_
+> _(or xfs).  This configuration offers the highest performance, but at the cost of no data protection - if the)_
+> _(single pool device fails all data contained on it may be lost.)_
+>
+> _(When configured as a multi-device pool, Unraid OS will automatically select *btrfs-raid1* format (for both data)_
+> _(and meta-data).  btrfs permits any number of devices to be added to the pool and each copy of data is guaranteed)_
+> _(to be written to two different devices.  Hence the pool can withstand a single-disk failure without losing data.)_
+>
+> _(When [User Shares](/Settings/ShareSettings) are enabled, user shares may be configured to)_
+> _(automatically make use of the Pool device in order to)_
+> _(speed up writes.  A special background process called the *mover* can be scheduled to run)_
+> _(periodically to move user share files off the Cache and onto the Array.)_
 
 <?if (_var($var,'fsState')=="Stopped"):?>
 <div></div>
-> **Slots** select the number of device slots in your server designated for Cache devices.
+> _(**Slots** select the number of device slots in your server designated for Cache devices.)_
 <?endif;?>
 
 <div id="dialogWindow" class="template"></div>

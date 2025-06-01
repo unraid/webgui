@@ -181,6 +181,17 @@ function showSecurity(val) {
   }
 }
 
+> _(Use this optional field to provide additional information about the purpose of the connection.)_
+> _(This is the hardware address of the interface.)_
+> _(When tagging is enabled all VLANs on this interface will share the same hardware address.)_
+> _(Bonding is a feature that combines multiple physical Ethernet interfaces into a single *bonded* interface named **bond0**.)_
+> _(This can be used to improve the connection redundancy and/or throughput of the system.)_
+> _(Different bonding modes are supported (see below), but some modes require proper switch support.)_
+> _(Select which interfaces are member of the *bonded* interface. By default eth0 is a member, while other interfaces are optional.)_
+> _(Bridging is a feature which creates a virtual bridge and allows VMs and Docker containers to communicate directly with the physical Ethernet port.)_
+> _(Both bonding and bridging can be combined to let VMs or containers communicate over a *bonded* interface.)_
+> _(Select which interfaces are member of the *bridged* interface. By default eth0 is a member, while other interfaces are optional.)_
+
 <?if (_var($wlan0,'WIFI')=='yes'):?>
 $(function() {
   $('#wifi').show();

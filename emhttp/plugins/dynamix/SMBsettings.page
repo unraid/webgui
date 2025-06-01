@@ -23,10 +23,10 @@ _(Enable SMB)_:
   <?=mk_option($var['shareSMBEnabled'], "ads", _('Yes').' ('._('Active Directory').')')?>
   </select>
 
-> Select 'Yes (Workgroup)' to enable SMB (Windows Networking) protocol support. This
-> also enables Windows host discovery.
+> _(Select 'Yes (Workgroup)' to enable SMB (Windows Networking) protocol support. This)_
+> _(also enables Windows host discovery.)_
 > 
-> Select 'Yes (Active Directory)' to enable Active Directory integration.
+> _(Select 'Yes (Active Directory)' to enable Active Directory integration.)_
 
 _(Hide "dot" files)_:
 : <select name="hideDotFiles" <?if ($var['fsState']=="Started"):?>disabled<?endif;?>>
@@ -34,11 +34,11 @@ _(Hide "dot" files)_:
   <?=mk_option($var['hideDotFiles'], "yes", _('Yes'))?>
   </select>
 
-> If set to 'Yes' then files starting with a '.' (dot) will appear as *hidden files* and normally
-> will not appear in Windows folder lists unless you have "Show hidden files, folders, and drives" enabled
-> in Windows Folder Options.
+> _(If set to 'Yes' then files starting with a '.' (dot) will appear as *hidden files* and normally)_
+> _(will not appear in Windows folder lists unless you have "Show hidden files, folders, and drives" enabled)_
+> _(in Windows Folder Options.)_
 > 
-> If set to 'No' then dot files will appear in folder lists the same as any other file.
+> _(If set to 'No' then dot files will appear in folder lists the same as any other file.)_
 
 _(Enable SMB Multi Channel)_:
 : <select name="serverMultiChannel" <?if ($var['fsState']=="Started"):?>disabled<?endif;?>>
@@ -46,9 +46,9 @@ _(Enable SMB Multi Channel)_:
   <?=mk_option($var['serverMultiChannel'], "yes", _('Yes'))?>
   </select>
 
-> When set to 'Yes' enables SMB Multi Channel support in the server. From
-> [microsoft](https://docs.microsoft.com/en-us/azure-stack/hci/manage/manage-smb-multichannel):
-> "SMB Multichannel enables file servers to use multiple network connections simultaneously."
+> _(When set to 'Yes' enables SMB Multi Channel support in the server. From)_
+> _([microsoft](https://docs.microsoft.com/en-us/azure-stack/hci/manage/manage-smb-multichannel):)_
+> _("SMB Multichannel enables file servers to use multiple network connections simultaneously.)_
 
 _(Enhanced macOS interoperability)_:
 : <select name="enableFruit" <?if ($var['fsState']=="Started"):?>disabled<?endif;?>>
@@ -56,9 +56,9 @@ _(Enhanced macOS interoperability)_:
   <?=mk_option($var['enableFruit'], "yes", _('Yes'))?>
   </select>
 
-> When set to 'Yes' provides enhanced compatibility with Apple SMB clients, resulting, for example, in faster
-> Finder browsing, and ability to export Time Machine shares.  This may cause some issues with Windows clients, however.
-> Please also refer to the [VFS_FRUIT MAN PAGE](https://www.mankier.com/8/vfs_fruit).
+> _(When set to 'Yes' provides enhanced compatibility with Apple SMB clients, resulting, for example, in faster)_
+> _(Finder browsing, and ability to export Time Machine shares.  This may cause some issues with Windows clients, however.)_
+> _(Please also refer to the [VFS_FRUIT MAN PAGE](https://www.mankier.com/8/vfs_fruit).)_
 
 _(Enable NetBIOS)_:
 : <select name="USE_NETBIOS" <?if ($var['fsState']=="Started"):?>disabled<?endif;?>>
@@ -66,8 +66,8 @@ _(Enable NetBIOS)_:
   <?=mk_option($var['USE_NETBIOS'], "yes", _('Yes'))?>
   </select>
 
-> Select 'Yes' to enable NetBIOS.  If enabled, SMBv1 protocol will also be recognized.  If disabled,
-> clients must use SMBv2 or higher.
+> _(Select 'Yes' to enable NetBIOS.  If enabled, SMBv1 protocol will also be recognized.  If disabled,)_
+> _(clients must use SMBv2 or higher.)_
 
 _(Enable WSD)_:
 : <select name="USE_WSD" onchange="checkWSDSettings()" <?if ($var['fsState']=="Started"):?>disabled<?endif;?>>
@@ -75,14 +75,14 @@ _(Enable WSD)_:
   <?=mk_option($var['USE_WSD'], "yes", _('Yes'))?>
   </select>
 
-> Select 'Yes' to enable WSD (WS-Discovery).  The only reason to turn this off is when you are running an
-> old LAN setup based on SMBv1.
+> _(Select 'Yes' to enable WSD (WS-Discovery).  The only reason to turn this off is when you are running an)_
+> _(old LAN setup based on SMBv1.)_
 
 _(WSD options [experimental])_:
 : <input type="text" name="WSD2_OPT" maxlength="80" class="narrow" value="<?=htmlspecialchars($var['WSD2_OPT'])?>" <?if ($var['fsState']=="Started"):?>disabled<?endif;?>>
 
-> This is a command line options string passed to the WSD daemon upon startup. Leave this field blank unless
-> instructed by support to put something here.
+> _(This is a command line options string passed to the WSD daemon upon startup. Leave this field blank unless)_
+> _(instructed by support to put something here.)_
 
 &nbsp;
 : <span class="inline-block">
