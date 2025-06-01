@@ -96,25 +96,25 @@ _(UPS type)_:
 
 > _(Define a *UPS type*, which corresponds to the type of UPS you have (see the Description for more details).)_
 > 
-> + _(**USB** – most new UPSes are USB)_
-> + _(**APCsmart** – newer serial character device, appropriate for SmartUPS models using a serial cable (not USB))_
-> + _(**Net** – network link to a master apcupsd through apcupsd's Network Information Server. This is used if the UPS powering your computer is connected to a different computer for monitoring)_
-> + _(**SNMP** – SNMP network link to an SNMP-enabled UPS device)_
-> + _(**Dumb** – old serial character device for use with simple-signaling UPSes)_
-> + _(**PCnet** – PowerChute Network Shutdown protocol which can be used as an alternative to SNMP with the AP9617 family of smart slot cards)_
-> + _(**ModBus** – serial device for use with newest SmartUPS models supporting the MODBUS protocol)_
+> _(**USB** – most new UPSes are USB)_
+> _(**APCsmart** – newer serial character device, appropriate for SmartUPS models using a serial cable (not USB))_
+> _(**Net** – network link to a master apcupsd through apcupsd's Network Information Server. This is used if the UPS powering your computer is connected to a different computer for monitoring)_
+> _(**SNMP** – SNMP network link to an SNMP-enabled UPS device)_
+> _(**Dumb** – old serial character device for use with simple-signaling UPSes)_
+> _(**PCnet** – PowerChute Network Shutdown protocol which can be used as an alternative to SNMP with the AP9617 family of smart slot cards)_
+> _(**ModBus** – serial device for use with newest SmartUPS models supporting the MODBUS protocol)_
 
 _(Device)_:
 : <input type="text" name="DEVICE" maxlength="200" class="narrow" value="<?=htmlspecialchars($cfg['DEVICE']);?>">
 
 > _(Enter the *device* which corresponds to your situation, only applicable when *UPS type* is not set to USB.)_
 > 
-> + _(**apcsmart** – /dev/tty**)_
-> + _(**net** – hostname:port. Hostname is the IP address of the NIS server. The default port is 3551)_
-> + _(**snmp** – hostname:port:vendor:community. Hostname is the ip address or hostname of the UPS on the network. Vendor can be can be "APC" or "APC_NOTRAP". "APC_NOTRAP" will disable SNMP trap catching; you usually want "APC". Port is usually 161. Community is usually "private")_
-> + _(**dumb** – /dev/tty**)_
-> + _(**pcnet** – ipaddr:username:passphrase:port. ipaddr is the IP address of the UPS management card. username and passphrase are the credentials for which the card has been configured. port is the port number on which to listen for messages from the UPS, normally 3052. If this parameter is empty or missing, the default of 3052 will be used)_
-> + _(**modbus** – /dev/tty**)_
+> _(**apcsmart** – /dev/tty**)_
+> _(**net** – hostname:port. Hostname is the IP address of the NIS server. The default port is 3551)_
+> _(**snmp** – hostname:port:vendor:community. Hostname is the ip address or hostname of the UPS on the network. Vendor can be can be "APC" or "APC_NOTRAP". "APC_NOTRAP" will disable SNMP trap catching; you usually want "APC". Port is usually 161. Community is usually "private")_
+> _(**dumb** – /dev/tty**)_
+> _(**pcnet** – ipaddr:username:passphrase:port. ipaddr is the IP address of the UPS management card. username and passphrase are the credentials for which the card has been configured. port is the port number on which to listen for messages from the UPS, normally 3052. If this parameter is empty or missing, the default of 3052 will be used)_
+> _(**modbus** – /dev/tty**)_
 
 _(Override UPS Capacity (Watts))_:
 : <input type="number" name="OVERRIDE_UPS_CAPACITY" maxlength="5" class="narrow" value="<?=htmlspecialchars($cfg['OVERRIDE_UPS_CAPACITY']);?>">
