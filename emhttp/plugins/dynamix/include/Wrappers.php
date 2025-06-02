@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -25,14 +25,13 @@ $_arrow_ = '&#187;';
 function file_put_contents_atomic($filename,$data) {
   while (true) {
     $suffix = rand();
-    if ( ! is_file("$filename$suffix") )
-      break;
+    if (!is_file("$filename$suffix")) break;
   }
   $renResult = false;
   $writeResult = @file_put_contents("$filename$suffix",$data) === strlen($data);
-  if ( $writeResult )
+  if ($writeResult)
     $renResult = @rename("$filename$suffix",$filename);
-  if ( ! $writeResult || ! $renResult ) {
+  if (!$writeResult || !$renResult) {
     my_logger("File_put_contents_atomic failed to write / rename $filename");
     @unlink("$filename$suffix");
     return false;
@@ -154,7 +153,7 @@ function get_nvme_info($device, $info) {
   switch ($info) {
   case 'temp':
     exec("nvme id-ctrl /dev/$device 2>/dev/null | grep -Pom2 '^[wc]ctemp +: \K\d+'",$temp);
-    return [$temp[0]-273, $temp[1]-273];
+    return count($temp) >= 2 ? [$temp[0]-273, $temp[1]-273] : [0, 0];
   case 'cctemp':
     return exec("nvme id-ctrl /dev/$device 2>/dev/null | grep -Pom1 '^cctemp +: \K\d+'")-273;
   case 'wctemp':
@@ -234,5 +233,8 @@ function check_network_connectivity(): bool {
   $url = 'http://www.msftncsi.com/ncsi.txt';
   $out = http_get_contents($url);
   return ($out=="Microsoft NCSI");
+}
+function shieldarg(...$args) {
+  return implode(' ', array_map('escapeshellarg', $args));
 }
 ?>
