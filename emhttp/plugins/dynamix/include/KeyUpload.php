@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -11,21 +11,15 @@
  */
 ?>
 <?
-$var = parse_ini_file('/var/local/emhttp/var.ini');
-$ini = '/var/local/emhttp/keyfile.ini';
-$tmp = '/var/tmp/missing.tmp';
+$var  = parse_ini_file('/var/local/emhttp/var.ini');
 $luks = $var['luksKeyfile'];
 $text = $_POST['text'] ?? false;
 $file = $_POST['file'] ?? false;
 
-if ($text) {
-  file_put_contents($luks, $text);
-} elseif ($file) {
-  file_put_contents($luks, base64_decode(preg_replace('/^data:.*;base64,/','',$file)));
-  @unlink($tmp);
-} elseif (file_exists($luks)) {
+if ($file) {
+  file_put_contents($luks, base64_decode(explode(';base64,',$file)[1]));
+} elseif ($text && file_exists($luks)) {
   unlink($luks);
-  touch($tmp);
 }
 $save = false;
 ?>

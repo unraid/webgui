@@ -25,14 +25,13 @@ $_arrow_ = '&#187;';
 function file_put_contents_atomic($filename,$data) {
   while (true) {
     $suffix = rand();
-    if ( ! is_file("$filename$suffix") )
-      break;
+    if (!is_file("$filename$suffix")) break;
   }
   $renResult = false;
   $writeResult = @file_put_contents("$filename$suffix",$data) === strlen($data);
-  if ( $writeResult )
+  if ($writeResult)
     $renResult = @rename("$filename$suffix",$filename);
-  if ( ! $writeResult || ! $renResult ) {
+  if (!$writeResult || !$renResult) {
     my_logger("File_put_contents_atomic failed to write / rename $filename");
     @unlink("$filename$suffix");
     return false;
@@ -74,13 +73,13 @@ function agent_fullname($agent, $state) {
 function get_plugin_attr($attr, $file) {
   global $docroot;
   exec("$docroot/plugins/dynamix.plugin.manager/scripts/plugin ".escapeshellarg($attr)." ".escapeshellarg($file), $result, $error);
-  if ($error===0) return $result[0];
+  if ($error === 0) return $result[0];
 }
 
 function plugin_update_available($plugin, $os=false) {
   $local  = get_plugin_attr('version', "/var/log/plugins/$plugin.plg");
   $remote = get_plugin_attr('version', "/tmp/plugins/$plugin.plg");
-  if ($remote && strcmp($remote,$local)>0) {
+  if ($remote && strcmp($remote,$local) > 0) {
     if ($os) return $remote;
     if (!$unraid = get_plugin_attr('Unraid', "/tmp/plugins/$plugin.plg")) return $remote;
     $server = get_plugin_attr('version', "/var/log/plugins/unRAIDServer.plg");
@@ -102,7 +101,7 @@ function fahrenheit($temp) {
 
 function displayTemp($temp) {
   global $display;
-  return (is_numeric($temp) && _var($display,'unit')=='F') ? fahrenheit($temp) : $temp;
+  return (is_numeric($temp) && _var($display,'unit') == 'F') ? fahrenheit($temp) : $temp;
 }
 
 function get_value(&$name, $key, $default) {
@@ -217,11 +216,10 @@ function my_logger($message, $logger='webgui') {
  * @param ?array $getinfo Empty array passed by reference, will contain results of curl_getinfo and curl_error, or null if not needed
  * @return string|false $out The fetched content
  */
-function http_get_contents(string $url, array $opts = [], ?array &$getinfo = NULL) {
+function http_get_contents(string $url, array $opts=[], ?array &$getinfo=NULL) {
   $ch = curl_init();
-  if(isset($getinfo)) {
-    curl_setopt($ch, CURLINFO_HEADER_OUT, TRUE);
-  }
+  if (isset($getinfo))
+    curl_setopt($ch, CURLINFO_HEADER_OUT, true);
   curl_setopt($ch, CURLOPT_URL, $url);
   curl_setopt($ch, CURLOPT_FRESH_CONNECT, true);
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -232,8 +230,8 @@ function http_get_contents(string $url, array $opts = [], ?array &$getinfo = NUL
   curl_setopt($ch, CURLOPT_REFERER, "");
   curl_setopt($ch, CURLOPT_FAILONERROR, true);
   curl_setopt($ch, CURLOPT_USERAGENT, 'Unraid');
-  if(is_array($opts) && $opts) {
-    foreach($opts as $key => $val) {
+  if (is_array($opts) && count($opts) > 0) {
+    foreach ($opts as $key => $val) {
       curl_setopt($ch, $key, $val);
     }
   }
@@ -247,8 +245,8 @@ function http_get_contents(string $url, array $opts = [], ?array &$getinfo = NUL
     $getinfo = curl_getinfo($ch);
   }
   if ($errno = curl_errno($ch)) {
-    $msg = "Curl error $errno: " . (curl_error($ch) ?: curl_strerror($errno)) . ". Requested url: '$url'";
-    if(isset($getinfo)) {
+    $msg = "Curl error $errno: ".(curl_error($ch) ?: curl_strerror($errno)).". Requested url: '$url'";
+    if (isset($getinfo)) {
       $getinfo['error'] = $msg;
     }
     my_logger($msg, "http_get_contents");
@@ -271,5 +269,9 @@ function lan_port($port, $state=false) {
   $system = '/sys/class/net';
   $exist = file_exists("$system/$port");
   return !$state ? $exist : ($exist ? (@file_get_contents("$system/$port/carrier") ?: 0) : false);
+}
+
+function shieldarg(...$args) {
+  return implode(' ', array_map('escapeshellarg', $args));
 }
 ?>
