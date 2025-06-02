@@ -29,7 +29,7 @@ DEBUGGING=""
 move() {
   find "$1" -depth 2>/dev/null | /usr/libexec/unraid/move $2 $DEBUGGING
   # second pass to clean up leftover empty directories
-  find "$1" -depth 2>/dev/null | /usr/libexec/unraid/move $2 $DEBUGGING
+  find "$1" -depth -type d 2>/dev/null | /usr/libexec/unraid/move $2 $DEBUGGING
 }
 
 start() {
