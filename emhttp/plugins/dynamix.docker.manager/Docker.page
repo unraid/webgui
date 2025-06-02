@@ -16,14 +16,13 @@ Cond="exec(\"grep -o '^DOCKER_ENABLED=.yes' /boot/config/docker.cfg 2>/dev/null\
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  */
-?>
-<?
-  $noticeMessage = null;
-  if ($var['fsState'] != 'Started') {
-    $noticeMessage = _('Array must be **Started** to view Docker containers');
-  } elseif (!is_file('/var/run/dockerd.pid') || (!is_dir('/proc/'.@file_get_contents('/var/run/dockerd.pid')))) {
-    $noticeMessage = _('Docker Service failed to start');
-  }
+
+$noticeMessage = null;
+if ($var['fsState'] != 'Started') {
+  $noticeMessage = _('Array must be **Started** to view Docker containers');
+} elseif (!is_file('/var/run/dockerd.pid') || (!is_dir('/proc/'.@file_get_contents('/var/run/dockerd.pid')))) {
+  $noticeMessage = _('Docker Service failed to start');
+}
 ?>
 
 <? if ($noticeMessage): ?>
