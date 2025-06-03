@@ -481,6 +481,7 @@ if (!empty($TS_no_peers) && !empty($TS_container)) {
 ?>
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.switchbutton.css")?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.filetree.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/plugins/dynamix.docker.manager/sheets/CreateDocker.css")?>">
 
 <script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
 <script src="<?autov('/webGui/javascript/jquery.filetree.js')?>" charset="utf-8"></script>
@@ -1222,10 +1223,10 @@ _(Be a Tailscale Exit Node)_:
 
 <div markdown="1" class="TSexitnodeip noshow">
 _(Use a Tailscale Exit Node)_:
-<?if($ts_en_check !== true && empty($ts_exit_nodes)):?>
-: <input type="text" name="TSexitnodeip" <?php if (!empty($xml['TailscaleExitNodeIP'])) echo 'value="' . $xml['TailscaleExitNodeIP'] . '"'; ?> placeholder="_(IP/Hostname from Exit Node)_" onchange="processExitNodeoptions(this)">
+: <?if($ts_en_check !== true && empty($ts_exit_nodes)):?>
+<input type="text" name="TSexitnodeip" <?php if (!empty($xml['TailscaleExitNodeIP'])) echo 'value="' . $xml['TailscaleExitNodeIP'] . '"'; ?> placeholder="_(IP/Hostname from Exit Node)_" onchange="processExitNodeoptions(this)">
 <?else:?>
-: <select name="TSexitnodeip" id="TSexitnodeip" onchange="processExitNodeoptions(this)">
+<select name="TSexitnodeip" id="TSexitnodeip" onchange="processExitNodeoptions(this)">
   <?=mk_option(1,'',_('None'))?>
   <?foreach ($ts_exit_nodes as $ts_exit_node):?>
     <?=$node_offline = $ts_exit_node['status'] === 'offline' ? ' - OFFLINE' : '';?>
@@ -1296,7 +1297,9 @@ _(Tailscale Serve Port)_:
 
 <div markdown="1" class="TSadvanced noshow">
 _(Tailscale Show Advanced Settings)_:
-: <input type="checkbox" name="TSadvanced" class="switch-on-off" onchange="showTSAdvanced(this.checked)">
+: <span class="flex flex-row items-center">
+    <input type="checkbox" name="TSadvanced" class="switch-on-off" onchange="showTSAdvanced(this.checked)">
+  </span>
 
 :docker_tailscale_show_advanced_help:
 
@@ -1396,7 +1399,9 @@ _(Tailscale State Directory)_:
 
 <div markdown="1" class="TStroubleshooting noshow">
 _(Tailscale Install Troubleshooting Packages)_:
-: <input type="checkbox" class="switch-on-off" name="TStroubleshooting" <?php if (!empty($xml['TailscaleTroubleshooting']) && $xml['TailscaleTroubleshooting'] == 'true') echo 'checked'; ?>>
+: <span class="flex flex-row items-center">
+    <input type="checkbox" class="switch-on-off" name="TStroubleshooting" <?php if (!empty($xml['TailscaleTroubleshooting']) && $xml['TailscaleTroubleshooting'] == 'true') echo 'checked'; ?>>
+  </span>
 
 :docker_tailscale_troubleshooting_packages_help:
 
@@ -1425,7 +1430,11 @@ _(Privileged)_:
 : <span id="readmore_toggle" class="readmore_collapsed"><a onclick="toggleReadmore()" style="cursor:pointer"><i class="fa fa-fw fa-chevron-down"></i> _(Show more settings)_ ...</a></span><div id="configLocationAdvanced" style="display:none"></div>
 
 &nbsp;
-: <span id="allocations_toggle" class="readmore_collapsed"><a onclick="toggleAllocations()" style="cursor:pointer"><i class="fa fa-fw fa-chevron-down"></i> _(Show docker allocations)_ ...</a></span><div id="dockerAllocations" style="display:none"></div>
+: <span id="allocations_toggle" class="readmore_collapsed">
+    <a onclick="toggleAllocations()" style="cursor:pointer">
+      <i class="fa fa-fw fa-chevron-down"></i> _(Show docker allocations)_ ...</a>
+  </span>
+  <div id="dockerAllocations" style="display:none"></div>
 
 &nbsp;
 : <a href="javascript:addConfigPopup()"><i class="fa fa-fw fa-plus"></i> _(Add another Path, Port, Variable, Label or Device)_</a>
@@ -1533,16 +1542,14 @@ _(Password Mask)_:
     </span>
     <span class="boxed">
       <span class='orange-text'>{12}: {1}</span>
-      <br>
       <span class="orange-text">{4}</span>
-      <br>
     </span>
   </span>
 </div>
 
 <div markdown="1" id="templateAllocations" style="display:none">
-&nbsp;
-: <span class="boxed"><span class="ct">{1}</span>{2}</span>
+<span class="docker-allocation-dt">&nbsp;</span>
+: <span class="docker-allocation-row"><span>{1}</span>{2}</span>
 </div>
 
 <script>
