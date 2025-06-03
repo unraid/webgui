@@ -251,10 +251,11 @@ function fileEdit(id) {
     classes: {'ui-dialog': 'ui-dfm'},
     autoOpen: true,
     title: fileName(source),
-    height: Math.min(window.innerHeight-80, 800),
-    width: Math.min(window.innerWidth, 1200),
+    width: 'auto',
+    height: 'auto',
     resizable: false,
     modal: true,
+    draggable: false,
     buttons: {
       "_(Save)_": function(){
         $.post('/webGui/include/Control.php',{mode:'save', file:encodeURIComponent(source), data:encodeURIComponent(editor.session.getValue())});
@@ -291,9 +292,10 @@ function doJobs(title) {
     classes: {'ui-dialog': 'ui-dfm'},
     autoOpen: true,
     title: title,
-    height: 630,
-    width: 900,
+    height: 'auto',
+    width: 'auto',
     resizable: false,
+    draggable: false,
     modal: true,
     buttons: {
       "_(Start)_": function(){
@@ -470,8 +472,9 @@ function doAction(action, title, id) {
     autoOpen: true,
     title: title,
     height: dfm.height,
-    width: 900,
+    width: 'auto',
     resizable: false,
+    draggable: false,
     modal: true,
     buttons: {
       "_(Start)_": function(){
@@ -750,8 +753,9 @@ function doActions(action, title) {
     autoOpen: true,
     title: title,
     height: dfm.height,
-    width: 900,
+    width: 'auto',
     resizable: false,
+    draggable: false,
     modal: true,
     buttons: {
       "_(Start)_": function(){
@@ -990,7 +994,7 @@ $(function(){
   if (dirs.length > 1) {
     for (var n=1; n < dirs.length; n++) {
       var subdir = dirs.slice(1,n+1);
-      url.push('<a class="none" href="/<?=$path?>?dir=/'+encodeURIComponent(subdir.join('/'))+'" oncontextmenu="xlink(\'/'+encodeURIComponent(subdir.join('/'))+'\');return false">'+(n == 1 ? '<i class="fa fa-home"></i>' : dirs[n])+'</a>');
+      url.push('<a class="none" href="/<?=$path?>?dir=/'+encodeURIComponent(subdir.join('/'))+'" oncontextmenu="xlink(\'/' + encodeURIComponent(subdir.join('/')) + '\');return false">'+(n == 1 ? '<i class="fa fa-home"></i>' : dirs[n])+'</a>');
     }
   } else {
     url.push('<i class="fa fa-home red-text"></i>');
@@ -1005,8 +1009,11 @@ $(function(){
   });
 <?if ($display['resize']):?>
   resize();
-  $(window).bind('resize',function(){resize();});
 <?endif;?>
+
+$(window).bind('resize',function(){
+  resize();
+});
   loadList();
 <?if (!$dir||$isshare):?>
   $.cookie('dfm_control.common','1');

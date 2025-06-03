@@ -606,7 +606,7 @@ function addConfigPopup() {
   popup.dialog({
     title: title,
     height: 'auto',
-    width: 900,
+    width: 'auto',
     resizable: false,
     modal: true,
     buttons: {
@@ -678,7 +678,7 @@ function editConfigPopup(num,disabled) {
   popup.dialog({
     title: title,
     height: 'auto',
-    width: 900,
+    width: 'auto',
     resizable: false,
     modal: true,
     buttons: {
@@ -1471,27 +1471,27 @@ _(Config Type)_:
 _(Name)_:
 : <input type="text" name="Name" autocomplete="off" spellcheck="false">
 
-<div markdown="1" id="Target">
+<div markdown="1" id="Target" class="w-full">
 <span id="dt1">_(Target)_</span>:
 : <input type="text" name="Target" autocomplete="off" spellcheck="false">
 </div>
 
-<div markdown="1" id="Value">
+<div markdown="1" id="Value" class="w-full">
 <span id="dt2">_(Value)_</span>:
 : <input type="text" name="Value" autocomplete="off" spellcheck="false">
 </div>
 
-<div markdown="1" id="Default">
+<div markdown="1" id="Default" class="w-full">
 _(Default Value)_:
 : <input type="text" name="Default" autocomplete="off" spellcheck="false">
 </div>
 
-<div id="Mode"></div>
+<div id="Mode" class="w-full"></div>
 
 _(Description)_:
 : <textarea name="Description" spellcheck="false" cols="80" rows="3"></textarea>
 
-<div markdown="1" class="advanced">
+<div markdown="1" class="advanced" class="w-full">
 _(Display)_:
 : <select name="Display">
   <option value="always" selected>_(Always)_</option>

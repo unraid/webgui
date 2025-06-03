@@ -41,7 +41,15 @@ String.prototype.dfm_build = function(){return this.replace(/\n(<!--!|!-->)\n/g,
 String.prototype.dfm_wedge = function(len){len=len||70;return this.length<=len ? this : this.slice(0,Math.round(len/2)-2)+'...'+this.slice(-1-Math.round(len/2));}
 
 // General variables
-const dfm = {window:null, dialog:false, running:false, previous:'', height:0, tsize:{0:0,1:6,2:3,3:3,4:3,11:2,12:2,14:0,15:3}};
+const dfm = {
+  window: null,
+  dialog: false,
+  running: false,
+  draggable:  false,
+  previous: '',
+  height: 0,
+  tsize: {0: 0, 1: 6, 2: 3, 3: 3, 4: 3, 11: 2, 12: 2, 14: 0, 15: 3},
+};
 var dfm_read = {};
 
 function dfm_footer(action, text) {
@@ -256,8 +264,9 @@ function dfm_makeDialog(open) {
     autoOpen: open || dfm.dialog,
     title: dfm_read.title,
     height: dfm.height,
-    width: 900,
+    width: 'auto',
     resizable: false,
+    draggable: false,
     modal: true,
     buttons: {
       "_(Start)_": function(){

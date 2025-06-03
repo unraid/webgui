@@ -63,9 +63,9 @@ function popupWithIframe(title, cmd, reload, func) {
   $('#iframe-popup').dialog({
     autoOpen:true,
     title:title,
-    height: 600,
-    width: 900,
-    draggable:true,
+    height: 'auto',
+    width: 'auto',
+    draggable: false,
     resizable:true,
     modal:true,
     open:function(ev, ui){
