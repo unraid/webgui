@@ -199,22 +199,6 @@ pre#swaltext {
     display: block;
   }
 
-  .la-ball-fall {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    margin-left: -27px;
-    margin-top: 4px;
-    opacity: 0;
-    visibility: hidden;
-  }
-
-  button.confirm[disabled] ~ .la-ball-fall {
-    opacity: 1;
-    visibility: visible;
-    transition-delay: 0s;
-  }
-
   button::-moz-focus-inner {
     border: 0;
   }
@@ -449,8 +433,20 @@ pre#swaltext {
     max-height: 100%;
     overflow: auto;
     margin: 0;
-    padding: 0 2rem;
+    padding: 1rem 2rem;
     scrollbar-width: thin;
+
+    p {
+      margin: 0;
+    }
+
+    .logLine:empty {
+      display: none;
+    }
+
+    fieldset {
+      padding: 0 1rem;
+    }
   }
 }
 
@@ -622,6 +618,7 @@ pre#swaltext {
 
 .sa-button-container,
 .sa-confirm-button-container {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
@@ -642,10 +639,10 @@ pre#swaltext {
   position: absolute;
   left: 50%;
   top: 50%;
-  margin-left: -27px;
-  margin-top: 4px;
+  width: 70px;
   opacity: 0;
   visibility: hidden;
+  transform: translate(-50%, -50%);
 }
 
 .sweet-alert button.confirm[disabled] ~ .la-ball-fall {
