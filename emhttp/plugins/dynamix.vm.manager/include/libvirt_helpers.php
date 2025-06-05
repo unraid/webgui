@@ -1228,7 +1228,7 @@ class Array2XML {
 	}
 
 	function getValidNetworks() {
-		global $lv;
+		global $lv,$libvirt_running;
 		$arrValidNetworks = [];
 		exec("ls --indicator-style=none /sys/class/net | grep -Po '^(br|bond|eth|wlan)[0-9]+(\.[0-9]+)?'",$arrBridges);
 		// add 'virbr0' as default first choice
@@ -1244,8 +1244,7 @@ class Array2XML {
 		}
 		$arrValidNetworks['bridges'] = array_diff($arrBridges, $remove);
 
-		// This breaks VMSettings.page if libvirt is not running
-		/*	if ($libvirt_running == "yes") {
+		if ($libvirt_running == "yes") {
 			$arrVirtual = $lv->libvirt_get_net_list($lv->get_connection());
 
 			if (($key = array_search('default', $arrVirtual)) !== false) {
@@ -1255,7 +1254,7 @@ class Array2XML {
 			array_unshift($arrVirtual, 'default');
 
 			$arrValidNetworks['libvirt'] = array_values($arrVirtual);
-		}*/
+		}
 
 		return $arrValidNetworks;
 	}
