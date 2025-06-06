@@ -348,7 +348,7 @@ if ($snapshots!=null && count($snapshots) && !$boolNew) {
 <input type="hidden" name="domain[oldname]" id="domain_oldname" value="<?=htmlspecialchars($arrConfig['domain']['name'])?>">
 <!--<input type="hidden" name="template[oldstorage]" id="storage_oldname" value="<?=htmlspecialchars($arrConfig['template']['storage'])?>"> -->
 <input type="hidden" name="domain[memoryBacking]" id="domain_memorybacking" value="<?=htmlspecialchars($arrConfig['domain']['memoryBacking'])?>">
-
+<script>const previousPorts = {};</script>
 <table>
 	<tr class="<?=$snaphidden?>">
 		<td></td>
@@ -1487,6 +1487,10 @@ foreach ($arrConfig['nic'] as $i => $arrNic) {
 	$strLabel = ($i > 0) ? appendOrdinalSuffix($i + 1) : '';
 	$disabled = $arrNic['network']=='wlan0' ? 'disabled' : '';
 ?>
+    <script>
+        // Initialize previousPorts[index] = currentPort during page load
+        previousPorts[<?= json_encode($i) ?>] = <?= json_encode($arrNic['network']) ?>;
+    </script>
 <table data-category="Network" data-multiple="true" data-minimum="1" data-index="<?=$i?>" data-prefix="<?=$strLabel?>">
 	<tr class="advanced">
 		<td>_(Network MAC)_:</td>
@@ -2018,13 +2022,18 @@ var storageType = "<?=get_storage_fstype($arrConfig['template']['storage']);?>";
 var storageLoc  = "<?=$arrConfig['template']['storage']?>";
 
 function updateMAC(index,port) {
+	const prevPort = previousPorts[index];
+	previousPorts[index] = port;
 	$('input[name="nic['+index+'][mac]"').prop('disabled',port=='wlan0');
 	$('i.mac_generate.'+index).prop('disabled',port=='wlan0');
 	$('span.wlan0').removeClass('hidden');
-	if (port != 'wlan0') {
-		$('span.wlan0').addClass('hidden');
-		$('i.mac_generate.'+index).click();
-	}
+	if (port !== 'wlan0') {
+        $('span.wlan0').addClass('hidden');
+        if (prevPort === 'wlan0') {
+            // Only click if previous port was wlan0
+            $('i.mac_generate.' + index).click();
+        }
+    }
 }
 
 function ShareChange(share) {

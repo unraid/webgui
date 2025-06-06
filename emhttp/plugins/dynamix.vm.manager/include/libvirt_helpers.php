@@ -1230,7 +1230,7 @@ class Array2XML {
 	function getValidNetworks() {
 		global $lv,$libvirt_running;
 		$arrValidNetworks = [];
-		exec("ls --indicator-style=none /sys/class/net | grep -Po '^(br|bond|eth|wlan)[0-9]+(\.[0-9]+)?'",$arrBridges);
+		exec("ls --indicator-style=none /sys/class/net | grep -Po '^((vir)?br|bond|eth|wlan)[0-9]+(\.[0-9]+)?'",$arrBridges);
 		// add 'virbr0' as default first choice
 		array_unshift($arrBridges, 'virbr0');
 		// remove redundant references of bridge and bond interfaces
