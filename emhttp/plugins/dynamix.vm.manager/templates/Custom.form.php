@@ -1487,10 +1487,10 @@ foreach ($arrConfig['nic'] as $i => $arrNic) {
 	$strLabel = ($i > 0) ? appendOrdinalSuffix($i + 1) : '';
 	$disabled = $arrNic['network']=='wlan0' ? 'disabled' : '';
 ?>
-    <script>
-        // Initialize previousPorts[index] = currentPort during page load
-        previousPorts[<?= json_encode($i) ?>] = <?= json_encode($arrNic['network']) ?>;
-    </script>
+<script>
+	// Initialize previousPorts[index] = currentPort during page load
+	previousPorts[<?= json_encode($i) ?>] = <?= json_encode($arrNic['network']) ?>;
+</script>
 <table data-category="Network" data-multiple="true" data-minimum="1" data-index="<?=$i?>" data-prefix="<?=$strLabel?>">
 	<tr class="advanced">
 		<td>_(Network MAC)_:</td>
