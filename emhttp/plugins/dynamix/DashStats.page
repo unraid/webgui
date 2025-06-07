@@ -698,6 +698,7 @@ function hideShow() {
 <tr><td>_(Overwrite)_:</td><td><input type="checkbox" id="Overwrite" value="" ></td></tr>
 <tr hidden><td>_(Start Cloned VM)_:</td><td><input type="checkbox" id="Start" value="" ></td></tr>
 <tr hidden><td>_(Edit VM after clone)_:</td><td><input type="checkbox" id="Edit" value="" ></td></tr>
+<tr><td>_(Regenerate MAC addresses)_:</td><td><input type="checkbox" id="Regenmac" value="" checked ></td></tr>
 <tr><td>_(Check free space)_:</td><td><input type="checkbox" id="Free" value="" ></td></tr>
 </table>
 </div>
@@ -1464,7 +1465,8 @@ function VMClone(uuid, name){
         var edit = box.find('#Edit').prop('checked') ? 'yes' : 'no';
         var overwrite = box.find('#Overwrite').prop('checked') ? 'yes' : 'no';
         var free = box.find('#Free').prop('checked') ? 'yes' : 'no';
-        var scripturl = "VMClone.php " + encodeURIComponent("/usr/local/emhttp/plugins/dynamix.vm.manager/include/VMClone.php&" + $.param({action:"clone", name:name, clone:clone, overwrite:overwrite, edit:edit, start:start, free:free}));
+        var regenmac = box.find('#Regenmac').prop('checked') ? 'yes' : 'no';
+        var scripturl = "VMClone.php " + encodeURIComponent("/usr/local/emhttp/plugins/dynamix.vm.manager/include/VMClone.php&" + $.param({action:"clone", name:name, clone:clone, overwrite:overwrite, edit:edit, start:start, free:free, regenmac:regenmac}));
         openVMAction((scripturl),"VM Clone", "dynamix.vm.manager", "loadlist");
         box.dialog('close');
       },

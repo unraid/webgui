@@ -1243,9 +1243,10 @@ class Array2XML {
 	}
 
 	function getValidNetworks() {
-		global $lv;
+		global $lv,$libvirt_running;
 		$arrValidNetworks = [];
-		exec("ls --indicator-style=none /sys/class/net | grep -Po '^(br|bond|eth|wlan)[0-9]+(\.[0-9]+)?'",$arrBridges);
+		exec("ls --indicator-style=none /sys/class/net | grep -Po '^((vir)?br|bond|eth|wlan)[0-9]+(\.[0-9]+)?'",$arrBridges);
+		unset($arrBridges[array_search('virbr0', $arrBridges)]);
 		// add 'virbr0' as default first choice
 		array_unshift($arrBridges, 'virbr0');
 		// remove redundant references of bridge and bond interfaces
@@ -1260,7 +1261,7 @@ class Array2XML {
 		$arrValidNetworks['bridges'] = array_diff($arrBridges, $remove);
 
 		// This breaks VMSettings.page if libvirt is not running
-		/*	if ($libvirt_running == "yes") {
+			if ($libvirt_running == "yes") {
 			$arrVirtual = $lv->libvirt_get_net_list($lv->get_connection());
 
 			if (($key = array_search('default', $arrVirtual)) !== false) {
@@ -1270,7 +1271,7 @@ class Array2XML {
 			array_unshift($arrVirtual, 'default');
 
 			$arrValidNetworks['libvirt'] = array_values($arrVirtual);
-		}*/
+		}
 
 		return $arrValidNetworks;
 	}
@@ -1727,7 +1728,7 @@ class Array2XML {
 		return $copypaste;
 	}
 
-	function vm_clone($vm, $clone ,$overwrite,$start,$edit, $free, $waitID) {
+	function vm_clone($vm, $clone ,$overwrite,$start,$edit, $free, $waitID, $regenmac) {
 		global $lv,$domain_cfg,$arrDisplayOptions;
 		/*
 			Clone.
@@ -1800,9 +1801,12 @@ class Array2XML {
 
 		$config["domain"]["name"] = $clone;
 		$config["domain"]["uuid"]  = $lv->domain_generate_uuid();
-		foreach($config["nic"] as $index => $detail) {
-		$config["nic"][$index]["mac"] = $lv->generate_random_mac_addr();
-		}
+		if ($regenmac == "yes") {
+			write("addLog\0".htmlspecialchars(_("Regenerate MACs")));
+			foreach($config["nic"] as $index => $detail) {
+				$config["nic"][$index]["mac"] = $lv->generate_random_mac_addr();
+			}
+		} else write("addLog\0".htmlspecialchars(_("Retain existing MACs")));
 		$config["domain"]["type"] = "kvm";
 
 		$usbs = getVMUSBs($vmxml);
@@ -1831,7 +1835,7 @@ class Array2XML {
 		if (!is_dir($clonedir)) {
 			my_mkdir($clonedir,0777,true);
 		}
-		write("addLog\0".htmlspecialchars("Checking for image files"));
+		write("addLog\0".htmlspecialchars(_("Checking for image files")));
 		if ($file_exists && $overwrite != "yes") { write("addLog\0".htmlspecialchars(_("New image file names exist and Overwrite is not allowed")));  return( false); }
 
 		#Create duplicate files.
@@ -1844,8 +1848,18 @@ class Array2XML {
 			$reptgt = str_replace('/mnt/user/', "/mnt/$sourcerealdisk/", $target);
 			$repsrc = str_replace('/mnt/user/', "/mnt/$sourcerealdisk/", $source);
 			}
-			$cmdstr = "cp --reflink=always '$repsrc' '$reptgt'";
-					if ($reflink == true) { $refcmd = $cmdstr; } else {$refcmd = false; }
+
+			$refresult = getFilesystemAndReflinkMode($repsrc);
+			$refcmdaction = $refresult['reflink_mode'];
+			$refcmdfs = $refresult['filesystem'];
+			$cmdstr = "cp --reflink=$refcmdaction '$repsrc' '$reptgt'";
+			write("addLog\0".htmlspecialchars(_("Reflink Action")." ".$refcmdaction." "._("for filesystem")." ".$refcmdfs));
+			if ($reflink == true) { $refcmd = $cmdstr; } else {$refcmd = false; }
+			if ($refresult['filesystem'] == "zfs" && $refresult['reflink_mode'] == "skip") {
+				write("addLog\0".htmlspecialchars(_("Reflink copy not supported on ZFS skipping")));
+				$refcmd = false;
+			}
+
 			$cmdstr = "rsync -ahPIXS  --out-format=%f --info=flist0,misc0,stats0,name1,progress2 '$repsrc' '$reptgt'";
 			$error = execCommand_nchan_clone($cmdstr,$target,$refcmd);
 			if (!$error) { write("addLog\0".htmlspecialchars("Image copied failed."));  return( false); }
@@ -2936,4 +2950,71 @@ function get_storage_fstype($storage="default") {
 	$fstype = trim(shell_exec(" stat -f -c '%T' $storage"));
 	return $fstype;
 }
+
+function getFilesystemAndReflinkMode(string $filePath): array {
+    // Default return values
+    $result = [
+        'filesystem' => 'unknown',
+        'reflink_mode' => 'always' // safest fallback if unsupported
+    ];
+
+    $realPath = realpath($filePath);
+    if ($realPath === false || !file_exists($realPath)) {
+        return $result;
+    }
+
+    $dirname = dirname($realPath);
+
+    // Handle Unraid-style virtual paths
+    if (strpos($dirname, '/mnt/user/') === 0) {
+        error_log("Getting real disks\n");
+        $realdisk = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION " . escapeshellarg($dirname) . " 2>/dev/null"));
+        if (!empty($realdisk)) {
+            $dirname = str_replace('/mnt/user/', "/mnt/$realdisk/", $dirname);
+        }
+    }
+
+    // Get filesystem type
+    $fstype = trim(shell_exec("stat -f -c '%T' " . escapeshellarg($dirname)));
+    $result['filesystem'] = $fstype;
+
+    // If not ZFS, return early
+    if ($fstype !== 'zfs') {
+       return $result;
+    }
+	
+	$result['reflink_mode'] = 'skip';
+
+    // Get dataset from the file
+    $dataset = trim(shell_exec("zfs list -H -o name " . escapeshellarg($dirname) . " 2>/dev/null"));
+    if (empty($dataset)) {
+      return $result;
+    }
+
+    // Get pool from dataset
+    $parts = explode('/', $dataset);
+    $pool = $parts[0] ?? '';
+    if (empty($pool)) {
+        return $result;
+    }
+
+    // Check ZFS block_cloning feature
+    $output = [];
+    $resultCode = 0;
+    exec("zpool get -H -o value feature@block_cloning " . escapeshellarg($pool) . " 2>/dev/null", $output, $resultCode);
+    if ($resultCode !== 0 || empty($output) || (trim($output[0]) !== 'enabled' && trim($output[0]) !== 'active')) {
+        return $result;
+    }
+
+    // Check if bclone is enabled at runtime
+    $bcloneValue = @file_get_contents("/sys/module/zfs/parameters/zfs_bclone_enabled");
+    if ($bcloneValue === false || trim($bcloneValue) !== '1') {
+        return $result;
+    }
+
+    // If both checks passed, block cloning is supported
+    $result['reflink_mode'] = 'auto';
+    return $result;
+}
+
 ?>

@@ -99,7 +99,7 @@ write("addLog\0".htmlspecialchars("Cloning $name to $clone"));
 
 switch ($action) {
 case "clone":
-  $rtn = vm_clone($name,$clone,$overwrite,$start,$edit,$free,$waitID) ;
+  $rtn = vm_clone($name,$clone,$overwrite,$start,$edit,$free,$waitID,$regenmac) ;
   break ;
 }
 write("stop_Wait\0$waitID") ;
