@@ -1245,9 +1245,8 @@ class Array2XML {
 	function getValidNetworks() {
 		global $lv;
 		$arrValidNetworks = [];
+		exec("ls --indicator-style=none /sys/class/net | grep -Po '^virbr[0-9]+'",$arrBridges);
 		exec("ls --indicator-style=none /sys/class/net | grep -Po '^(br|bond|eth|wlan)[0-9]+(\.[0-9]+)?'",$arrBridges);
-		// add 'virbr0' as default first choice
-		array_unshift($arrBridges, 'virbr0');
 		// remove redundant references of bridge and bond interfaces
 		$remove = [];
 		foreach ($arrBridges as $name) {
@@ -1255,7 +1254,7 @@ class Array2XML {
 				$remove = array_merge($remove, (array)@file("/sys/class/net/$name/bonding/slaves",FILE_IGNORE_NEW_LINES));
 			} elseif (substr($name,0,2) == 'br') {
 				$remove = array_merge($remove, array_map(function($n){return end(explode('/',$n));}, glob("/sys/class/net/$name/brif/*")));
-			} 
+			}
 		}
 		$arrValidNetworks['bridges'] = array_diff($arrBridges, $remove);
 
@@ -1866,15 +1865,15 @@ class Array2XML {
 		$rtn = $lv->domain_define($xml);
 
 		if (is_resource($rtn)) {
-			$arrResponse  = ['success' => true]; 
+			$arrResponse  = ['success' => true];
 			write("addLog\0".htmlspecialchars(_("Creating XML successful")));
-		} else { 
+		} else {
 			$lastvmerror = $lv->get_last_error();
 			$arrResponse = ['xml' => $xml,'error' => $lastvmerror];
 			write("addLog\0".htmlspecialchars(_("Creating XML Error:$lastvmerror")));
 			file_put_contents("/tmp/vmclonertn.debug", json_encode($arrResponse,JSON_PRETTY_PRINT));
 		}
-	
+
 		return($rtn);
 
 	}

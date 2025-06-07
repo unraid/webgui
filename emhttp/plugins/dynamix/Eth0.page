@@ -2,7 +2,7 @@ Menu="NetworkSettings:100"
 Title="_(Interface)_ eth0"
 Tag="icon-ethernet"
 ---
-<?php
+<?PHP
 /* Copyright 2005-2025, Lime Technology
  * Copyright 2012-2025, Bergware International.
  *
@@ -14,7 +14,7 @@ Tag="icon-ethernet"
  * all copies or substantial portions of the Software.
  */
 ?>
-<?php
+<?
 $members  = parse_ini_file('state/network.ini', true);
 $build    = false;
 $template = "$docroot/webGui/EthX.page";
@@ -37,31 +37,22 @@ $masks = [
 // get available ethernet ports (excluding eth0)
 exec("ls --indicator-style=none /sys/class/net|grep -P '^eth[1-9][0-9]*$'", $ports);
 
-function locked($source, $port)
-{
-    global $members;
-    foreach ($members as $member => $value) {
-        if ($member == $source) {
-            continue;
-        }
-        if ($value['BONDING'] == 'yes' && in_array($port, explode(',', $value['BONDNICS']))) {
-            return $value['BONDNAME'].' '.$member;
-        }
-        if ($value['BRIDGING'] == 'yes' && in_array($port, explode(',', $value['BRNICS']))) {
-            return $value['BRNAME'].' '.$member;
-        }
-    }
-    return false;
+function locked($source, $port) {
+  global $members;
+  foreach ($members as $member => $value) {
+    if ($member == $source) continue;
+    if ($value['BONDING']=='yes' && in_array($port,explode(',',$value['BONDNICS']))) return $value['BONDNAME'].' '.$member;
+    if ($value['BRIDGING']=='yes' && in_array($port,explode(',',$value['BRNICS']))) return $value['BRNAME'].' '.$member;
+  }
+  return false;
 }
 
-function vlanID($cfg)
-{
-    return array_filter($cfg, function ($key) {return strpos($key, 'VLANID:') === 0;}, ARRAY_FILTER_USE_KEY);
+function vlanID($cfg) {
+  return array_filter($cfg, function($key){return strpos($key, 'VLANID:')===0;}, ARRAY_FILTER_USE_KEY);
 }
 
-function index($key)
-{
-    return filter_var($key, FILTER_SANITIZE_NUMBER_INT);
+function index($key) {
+  return filter_var($key, FILTER_SANITIZE_NUMBER_INT);
 }
 
 function metric($eth) {
@@ -70,26 +61,27 @@ function metric($eth) {
   $bond   = str_replace('eth', 'bond', $eth);
   $port   = file_exists("$system/$bridge") ? $bridge : (file_exists("$system/$bond") ? $bond : $eth);
   $index  = exec("cat $system/$port/ifindex 2>/dev/null");
-  return 1000 + ($index ?: exec("cat $system/*/ifindex | sort -n | tail -1") + 1);
+  return $index ?: exec("cat $system/*/ifindex | sort -n | tail -1") + 1;
 }
 
 // remove non-existing ethernet ports
 foreach (glob("$docroot/webGui/Eth[1-9]*.page", GLOB_NOSORT) as $port) {
-    if (!in_array(strtolower(basename($port, '.page')), $ports)) {
-        @unlink($port);
-        $build = true;
-    }
+  if (!in_array(strtolower(basename($port, '.page')), $ports)) {
+    @unlink($port);
+    $build = true;
+  }
 }
 
 // add new ethernet ports
 foreach ($ports as $ethX) {
-    $file = "$docroot/webGui/".ucfirst($ethX).".page";
-    if (!file_exists($file)) {
-        $X = filter_var($ethX, FILTER_SANITIZE_NUMBER_INT);
-        file_put_contents($file, str_replace(['parentname:nnn','tabX','bondX','brX','ethX'], ['NetworkSettings:'.($X + 100),'tab'.($X + 1),'bond'.$X,'br'.$X,$ethX], file_get_contents($template)));
-        $build = true;
-    }
+  $file = "$docroot/webGui/".ucfirst($ethX).".page";
+  if (!file_exists($file)) {
+    $X = filter_var($ethX, FILTER_SANITIZE_NUMBER_INT);
+    file_put_contents($file, str_replace(['parentname:nnn','tabX','bondX','brX','ethX'],['NetworkSettings:'.($X+100),'tab'.($X+1),'bond'.$X,'br'.$X,$ethX], file_get_contents($template)));
+    $build = true;
+  }
 }
+
 // enable interface only when VMs and Docker are stopped
 $service = exec('pgrep --ns $$ libvirt') ? _('VM manager') : '';
 $service .= exec('pgrep --ns $$ docker') ? ($service ? ' '._('and').' ' : '')._('Docker service') : '';
@@ -218,7 +210,7 @@ function prepareSettings(form) {
   $(form).find('select[name^="USE_DHCP:"]').each(function() {
     var i = $(this).prop('name').split(':')[1];
     var protocol = $(form).find('select[name="PROTOCOL:'+i+'"]').val() || 'ipv4';
-    var gw4 = (port == 'eth0') ? true : $(form).find('input[name="USE_GW4:'+i+'"]').prop('checked');
+    var gw4 = (port == 'eth0' && i == 0) ? true : $(form).find('input[name="USE_GW4:'+i+'"]').prop('checked');
     if (protocol != 'ipv6' && $(this).val() != 'no') {
       $(form).find('input[name="IPADDR:'+i+'"]').val('');
       $(form).find('input[name="GATEWAY:'+i+'"]').val('');
@@ -228,7 +220,7 @@ function prepareSettings(form) {
   $(form).find('select[name^="USE_DHCP6:"]').each(function() {
     var i = $(this).prop('name').split(':')[1];
     var protocol = $(form).find('select[name="PROTOCOL:'+i+'"]').val() || 'ipv4';
-    var gw6 = (port == 'eth0') ? true : $(form).find('input[name="USE_GW6:'+i+'"]').prop('checked');
+    var gw6 = (port == 'eth0' && i == 0) ? true : $(form).find('input[name="USE_GW6:'+i+'"]').prop('checked');
     if (protocol != 'ipv4' && $(this).val() != 'no') {
       $(form).find('input[name="IPADDR6:'+i+'"]').val('');
       $(form).find('input[name="GATEWAY6:'+i+'"]').val('');
@@ -834,7 +826,7 @@ _(IPv4 address assignment)_:
   <?=mk_option(_var($eth0, "USE_DHCP:$i"), 'no', _('Static'))?>
   <?=mk_option(_var($eth0, "USE_DHCP:$i"), '', _('None'))?>
   </select>
-  <span class="gw4-eth0-<?=$i?> hide"><input type="checkbox" name="USE_GW4:<?=$i?>" onchange="selectGW(this.form,4,<?=$i?>,'slow')" <?=_var($eth0,"USE_GW4:$i") ? 'checked' : ''?>><?=$enable?></span>
+  <span class="gw4-eth0-<?=$i?> hide"><input type="checkbox" name="USE_GW4:<?=$i?>" onchange="selectGW(this.form,4,<?=$i?>,'slow')" <?=_var($eth0,"METRIC:$i") == 0 ? '' : 'checked'?>><?=$enable?></span>
 
 :eth_ipv4_address_assignment_help:
 
@@ -865,7 +857,7 @@ _(IPv6 address assignment)_:
   <?=mk_option(_var($eth0, "USE_DHCP6:$i"), '', _('None'))?>
 <?endif;?>
   </select>
-  <span class="gw6-eth0-<?=$i?> hide"><input type="checkbox" name="USE_GW6:<?=$i?>" onchange="selectGW(this.form,6,<?=$i?>,'slow')" <?=_var($eth0,"USE_GW6:$i") ? 'checked' : ''?>><?=$enable?></span>
+  <span class="gw6-eth0-<?=$i?> hide"><input type="checkbox" name="USE_GW6:<?=$i?>" onchange="selectGW(this.form,6,<?=$i?>,'slow')" <?=_var($eth0,"METRIC6:$i") == 0 ? '' : 'checked'?>><?=$enable?></span>
 
 :eth_ipv6_address_assignment_help:
 

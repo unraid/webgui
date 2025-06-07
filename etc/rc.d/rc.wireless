@@ -6,6 +6,9 @@
 #
 # Bergware - created for Unraid OS, January 2025
 
+# Adapted by Bergware for use in Unraid OS - June 2025
+# - put metric value at end of assignment
+
 DAEMON="WiFi network"
 CALLER="wifi"
 INI="/var/local/emhttp/wireless.ini"
@@ -142,17 +145,17 @@ ipaddr_up(){
     INDEX=$((3000 + ${INDEX:-$(($(index * | sort -n | tail -1) + 1))}))
     if [[ $IP == ipv4 ]]; then
       if [[ -n $IP4 && -n $MASK4 ]]; then
-        run ip -4 addr add $(unzero $IP4)/$MASK4 metric $INDEX dev $PORT
+        run ip -4 addr add $(unzero $IP4)/$MASK4 dev $PORT metric $INDEX
         # re-add IPv4 address of parent (if docker is running)
         if [[ $(var DOCKER_ALLOW_ACCESS $DOCKER) == yes && -S /var/run/docker.sock ]]; then
-          ip addr add $(unzero $IP4)/$MASK4 metric $(($INDEX - 1)) dev shim-$PORT
+          ip addr add $(unzero $IP4)/$MASK4 dev shim-$PORT metric $(($INDEX - 1))
         fi
       fi
-      [[ -n $GATEWAY4 ]] && run ip -4 route add default via $GATEWAY4 metric $INDEX dev $PORT
+      [[ -n $GATEWAY4 ]] && run ip -4 route add default via $GATEWAY4 dev $PORT metric $INDEX
     fi
     if [[ $IP == ipv6 ]]; then
-      [[ -n $IP6 && -n $MASK6 ]] && run ip -6 addr add $(unzero6 $IP6)/$MASK6 metric $INDEX dev $PORT
-      [[ -n $GATEWAY6 ]] && run ip -6 route add default via $GATEWAY6 metric $INDEX dev $PORT
+      [[ -n $IP6 && -n $MASK6 ]] && run ip -6 addr add $(unzero6 $IP6)/$MASK6 dev $PORT metric $INDEX
+      [[ -n $GATEWAY6 ]] && run ip -6 route add default via $GATEWAY6 dev $PORT metric $INDEX
     fi
   fi
   if [[ $DNS == yes ]]; then

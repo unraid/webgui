@@ -41,6 +41,9 @@ $arrValidNetworks     = getValidNetworks();
 $strCPUModel          = getHostCPUModel();
 $templateslocation    = "/boot/config/plugins/dynamix.vm.manager/savedtemplates.json";
 
+// get MAC address of wireless interface (if existing)
+$mac = file_exists('/sys/class/net/wlan0/address') ? trim(file_get_contents('/sys/class/net/wlan0/address')) : '';
+
 if (is_file($templateslocation)){
 	$arrAllTemplates["User-templates"] = "";
 	$ut = json_decode(file_get_contents($templateslocation),true);
@@ -2023,13 +2026,17 @@ foreach ($arrConfig['evdev'] as $i => $arrEvdev) {
 var storageType = "<?=get_storage_fstype($arrConfig['template']['storage']);?>";
 var storageLoc  = "<?=$arrConfig['template']['storage']?>";
 
-function updateMAC(index,port) {
-	$('input[name="nic['+index+'][mac]"').prop('disabled',port=='wlan0');
-	$('i.mac_generate.'+index).prop('disabled',port=='wlan0');
+function updateMAC(index, port) {
+	var wlan0 = '<?=$mac?>'; // mac address of wlan0
+	var mac = $('input[name="nic['+index+'][mac]"');
+	mac.prop('disabled', port=='wlan0');
+	$('i.mac_generate.'+index).prop('disabled', port=='wlan0');
 	$('span.wlan0').removeClass('hidden');
-	if (port != 'wlan0') {
+	if (port == 'wlan0') {
+		mac.val(wlan0);
+	} else {
 		$('span.wlan0').addClass('hidden');
-		$('i.mac_generate.'+index).click();
+		if (wlan0 && mac.val()==wlan0) $('i.mac_generate.'+index).click();
 	}
 }
 
