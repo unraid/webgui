@@ -2022,7 +2022,7 @@ var storageLoc  = "<?=$arrConfig['template']['storage']?>";
 
 function updateMAC(index, port) {
 	var wlan0 = '<?=$mac?>'; // mac address of wlan0
-	var mac = $('input[name="nic['+index+'][mac]"');
+	var mac = $('input[name="nic['+index+'][mac]"]');
 	mac.prop('disabled', port=='wlan0');
 	$('i.mac_generate.'+index).prop('disabled', port=='wlan0');
 	$('span.wlan0').removeClass('hidden');
