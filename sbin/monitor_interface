@@ -14,56 +14,79 @@
 FILE=/var/local/emhttp/statics.ini
 SYSTEM=/sys/class/net
 
-state(){
-  cat $SYSTEM/$1/operstate 2>/dev/null
-}
-
 md5(){
   [[ -r $FILE ]] && md5sum $FILE | awk '{print $1;exit}'
 }
 
-switch(){
-  local n status
-  [[ -z $1 ]] && return 1
-  status=3
-  # state should stay different for at least 3 seconds
-  for n in {1..3}; do
-    [[ $(state $1) != $2 ]] && ((status--))
+wlan(){
+  [[ -e $SYSTEM/wlan0 ]]
+}
+
+carrier(){
+  cat $SYSTEM/$1/carrier 2>/dev/null
+}
+
+state(){
+  local n NEW OLD HOLD
+  OLD=$(carrier $1)
+  HOLD=4
+  # new state should hold for at least 4 seconds
+  for n in {1..4}; do
     sleep 1
+    NEW=$(carrier $1)
+    [[ $NEW != $OLD ]] && ((HOLD--))
   done
-  [[ $status -eq 0 ]]
+  [[ $HOLD -eq 0 ]] && echo $NEW || echo $OLD
 }
 
 init(){
-  PORT=(); STATE=();
+  TASK=()
   if [[ -r $FILE ]]; then
     # initialize values from file, maintained by 'create_network_ini'
     while IFS=$'\n' read -r ROW; do
-      PORT+=("$ROW")
-      STATE+=($(state ${ROW%% *}))
+      TASK+=("$ROW")
     done <$FILE
   fi
   MD5=$(md5)
 }
 
 while :; do
-  # monitor file content changes
-  [[ $MD5 != $(md5) ]] && init
-  LAST=
-  for i in ${!PORT[@]}; do
-    INT=${PORT[$i]%% *}
-    # did interface state change?
-    if switch $INT ${STATE[$i]}; then
-      NEW=$(state $INT)
-      STATE[$i]=$NEW
-      if [[ $NEW == up ]]; then
-        ip addr add dev ${PORT[$i]}
-      elif [[ $NEW == down && $INT != $LAST ]]; then
-        ip addr flush scope global dev $INT
-      fi
-    fi
-    LAST=$INT
-  done
+  if wlan; then
+    # monitor file content changes
+    [[ $MD5 != $(md5) ]] && init
+    LAST=
+    for i in ${!TASK[@]}; do
+      ADDR=(${TASK[$i]})
+      PORT=${ADDR[0]}
+      [[ $LAST != $PORT ]] && STATE=$(state $PORT)
+      case $STATE in
+      1) # up
+        case ${ADDR[1]} in
+        GW4)
+          # no existing default and new default is defined?
+          ROUTE=$(ip -4 route show to default dev $PORT)
+          [[ -z $ROUTE && "${TASK[$i]}" =~ "default" ]] && ip -4 route add dev ${TASK[$i]/GW4/}
+          ;;
+        GW6)
+          # no existing default and new default is defined?
+          ROUTE=$(ip -6 route show to default dev $PORT)
+          [[ -z $ROUTE && "${TASK[$i]}" =~ "default" ]] && ip -6 route add dev ${TASK[$i]/GW6/}
+          ;;
+        *)
+          # IP address not present? create it
+          [[ "$(ip -br addr show dev $PORT)" =~ "${ADDR[1]}" ]] || ip addr add dev ${TASK[$i]}
+          ;;
+        esac
+        ;;
+      0) # down
+        # IP address present, remove it
+        [[ "$(ip -br addr show dev $PORT)" =~ "${ADDR[1]}" ]] && ip addr del dev ${TASK[$i]}
+        ;;
+      esac
+      LAST=$PORT
+    done
+  fi
   # check every 3 seconds
   sleep 3
 done &
+

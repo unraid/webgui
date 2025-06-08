@@ -145,7 +145,6 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
   echo "DESCRIPTION:0=\"${DESCRIPTION[$i]}\"" >>$INI
   echo "PROTOCOL:0=\"${PROTOCOL[$i]}\"" >>$INI
   echo "USE_DHCP:0=\"${USE_DHCP[$i]}\"" >>$INI
-  echo "USE_GW4:0=\"${USE_GW4[$i]}\"" >>$INI
   if [[ ${USE_DHCP[$i]} == yes ]]; then
     # get dhcp assigned ipv4 address & mask
     NET=($(ip -4 -br addr show scope global primary dev $IFACE | awk '{sub("/"," ",$3);print $3;exit}'))
@@ -162,10 +161,12 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
     echo "METRIC:0=\"${METRIC[$i]}\"" >>$INI
     # store static ipv4 assignment
     IPV4="$(ip -4 -br addr show scope global primary dev $IFACE | awk '{$2="";print;exit}')"
-    [[ -n $IPV4 ]] && echo "$IPV4" >>$STA
+    if [[ -n $IPV4 ]]; then
+      echo "$IPV4" >>$STA
+      echo "$IFACE GW4 $(ip -4 route show to default dev $IFACE)" >>$STA
+    fi
   fi
   echo "USE_DHCP6:0=\"${USE_DHCP6[$i]}\"" >>$INI
-  echo "USE_GW6:0=\"${USE_GW6[$i]}\"" >>$INI
   if [[ ${USE_DHCP6[$i]} == yes ]]; then
     # get auto assigned ipv6 address & prefix
     NET6=($(ip -6 -br addr show scope global primary -deprecated dev $IFACE | awk '{sub("/"," ",$3);print $3;exit}'))
@@ -184,21 +185,23 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
     echo "PRIVACY6:0=\"\"" >>$INI
     # store static ipv6 assignment
     IPV6="$(ip -6 -br addr show scope global primary -deprecated dev $IFACE | awk '{$2="";print;exit}')"
-    [[ -n $IPV6 ]] && echo "$IPV6" >>$STA
+    if [[ -n $IPV6 ]]; then
+      echo "$IPV6" >>$STA
+      echo "$IFACE GW6 $(ip -6 route show to default dev $IFACE)" >>$STA
+    fi
   fi
   echo "USE_MTU=\"${USE_MTU[$i]}\"" >>$INI
   echo "MTU=\"${MTU[$i]}\"" >>$INI
   if [[ -n ${VLANS[$i]} ]]; then
     # process VLAN interfaces
     echo "TYPE=\"trunk\"" >>$INI
-    for ((j=1;j<${VLANS[$i]};j++)); do
+    for ((j=1; j<${VLANS[$i]}; j++)); do
       echo "VLANID:$j=\"${VLANID[$i,$j]}\"" >>$INI
       echo "DESCRIPTION:$j=\"${DESCRIPTION[$i,$j]}\"" >>$INI
       echo "PROTOCOL:$j=\"${PROTOCOL[$i,$j]}\"" >>$INI
       echo "USE_DHCP:$j=\"${USE_DHCP[$i,$j]}\"" >>$INI
-      echo "USE_GW4:$j=\"${USE_GW4[$i,$j]}\"" >>$INI
+      DEV=$IFACE.${VLANID[$i,$j]}
       if [[ ${USE_DHCP[$i,$j]} == yes ]]; then
-        DEV=$IFACE.${VLANID[$i,$j]}
         # get dhcp assigned ipv4 address & cidr2mask
         NET=($(ip -4 -br addr show scope global primary dev $DEV | awk '{sub("/"," ",$3);print $3;exit}'))
         GW=$(ip -4 route show to default dev $DEV | awk '{print $3;exit}')
@@ -214,12 +217,14 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
         echo "METRIC:$j=\"${METRIC[$i,$j]}\"" >>$INI
         # store static ipv4 assignment
         IPV4="$(ip -4 -br addr show scope global primary dev $DEV | awk '{$2="";print;exit}')"
-        [[ -n $IPV4 ]] && echo "$IPV4" >>$STA
+        if [[ -n $IPV4 ]]; then
+          echo "${IPV4/@$IFACE/}" >>$STA
+          echo "$DEV GW4 $(ip -4 route show to default dev $DEV)" >>$STA
+        fi
       fi
       echo "USE_DHCP6:$j=\"${USE_DHCP6[$i,$j]}\"" >>$INI
-      echo "USE_GW6:$j=\"${USE_GW6[$i,$j]}\"" >>$INI
+      DEV=$IFACE.${VLANID[$i,$j]}
       if [[ ${USE_DHCP6[$i,$j]} == yes ]]; then
-        DEV=$IFACE.${VLANID[$i,$j]}
         # get auto assigned ipv6 address & prefix
         NET6=($(ip -6 -br addr show scope global primary -deprecated dev $DEV | awk '{sub("/"," ",$3);print $3;exit}'))
         GW6=$(ip -6 route show to default dev $DEV | awk '{print $3;exit}')
@@ -237,7 +242,10 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
         echo "PRIVACY6:$j=\"\"" >>$INI
         # store static ipv6 assignment
         IPV6="$(ip -6 -br addr show scope global primary -deprecated dev $DEV | awk '{$2="";print;exit}')"
-        [[ -n $IPV6 ]] && echo "$IPV6" >>$STA
+        if [[ -n $IPV6 ]]; then
+          echo "${IPV6/@$IFACE/}" >>$STA
+          echo "$DEV GW6 $(ip -6 route show to default dev $DEV)" >>$STA
+        fi
       fi
     done
   else

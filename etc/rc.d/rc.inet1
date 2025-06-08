@@ -7,7 +7,7 @@
 # @(#)/etc/rc.d/rc.inet1 10.2  Sun Jul 24 12:45:56 PDT 2005 (pjv)
 
 # LimeTech - modified for Unraid OS
-# Bergware - modified for Unraid OS, May 2025
+# Bergware - modified for Unraid OS, June 2025
 
 # Adapted by Bergware for use in Unraid OS - April 2016
 # - improved interface configuration
@@ -83,6 +83,10 @@
 
 # Adapted by Bergware for use in Unraid OS - May 2025
 # - improved metric value to interface IP assignment
+
+# Adapted by Bergware for use in Unraid OS - June 2025
+# - revert metric assignment to static addresses
+# - remove duplicate ipv6 parameters
 
 ###########
 # LOGGING #
@@ -324,26 +328,26 @@ ipv6_up(){
 ipv6_ra(){
   echo $2 >$CONF6/$1/accept_ra
   echo $2 >$CONF6/$1/accept_ra_defrtr
-  echo $3 >$CONF6/$1/autoconf
+  echo $2 >$CONF6/$1/autoconf
 }
 
 # enable/disable ipv6 assignment per interface
 ipv6_conf(){
-  [[ -d $CONF6/${IFACE/$1/$2} ]] && ipv6_ra ${IFACE/$1/$2} $4 $5
-  [[ -d $CONF6/${IFACE/$1/$3} ]] && ipv6_ra ${IFACE/$1/$3} $4 $5
+  [[ -d $CONF6/${IFACE/$1/$2} ]] && ipv6_ra ${IFACE/$1/$2} $4
+  [[ -d $CONF6/${IFACE/$1/$3} ]] && ipv6_ra ${IFACE/$1/$3} $4
 }
 
 # enable/disable ipv6 assignment per interface
 ipv6_addr(){
-  [[ -d $CONF6/$IFACE ]] && ipv6_ra $IFACE $1 $2
-  [[ -d $CONF6/$VHOST ]] && ipv6_ra $VHOST $1 $2
+  [[ -d $CONF6/$IFACE ]] && ipv6_ra $IFACE $1
+  [[ -d $CONF6/$VHOST ]] && ipv6_ra $VHOST $1
   # repeat action on related interfaces
   if [[ ${IFACE:0:4} == bond ]]; then
-    ipv6_conf bond br eth $1 $2
+    ipv6_conf bond br eth $1
   elif [[ ${IFACE:0:2} == br ]]; then
-    ipv6_conf br bond eth $1 $2
+    ipv6_conf br bond eth $1
   else
-    ipv6_conf eth bond br $1 $2
+    ipv6_conf eth bond br $1
   fi
   sleep 1
 }
@@ -366,7 +370,7 @@ ipaddr_up(){
   fi
   if [[ $DHCP == yes ]]; then
     # bring up interface using DHCP/SLAAC
-    [[ -z $RENEW ]] && ipv6_addr 1 1
+    [[ -z $RENEW ]] && ipv6_addr 1
     DHCP_OPTIONS="-q -n -p -t ${DHCP_TIMEOUT[$i]:-10}"
     [[ -n $DHCP_HOSTNAME ]] && DHCP_OPTIONS="$DHCP_OPTIONS -h $DHCP_HOSTNAME"
     [[ $DHCP_KEEP_RESOLV == yes ]] && DHCP_OPTIONS="$DHCP_OPTIONS -C resolv.conf"
@@ -393,27 +397,25 @@ ipaddr_up(){
     # bring up interface using static IP address
     if carrier $IFACE; then STATE="UP"; else STATE="DOWN"; fi
     log "interface $IFACE is $STATE, setting static $IP address"
-    ipv6_addr 0 1
-    INDEX=$(index $IFACE)
-    INDEX=$((1000 + ${INDEX:-$(($(index * | sort -n | tail -1) + 1))}))
+    ipv6_addr 0
     if [[ $IP != ipv6 ]]; then
       [[ $j -eq 0 ]] && ADDR=${IPADDR[$i]} || ADDR=${IPADDR[$i,$j]}
       if [[ -n $ADDR ]]; then
         [[ $j -eq 0 ]] && MASK=${NETMASK[$i]} || MASK=${NETMASK[$i,$j]}
-        [[ -n $MASK ]] && run ip -4 addr add $(unzero $ADDR)/$MASK metric $INDEX dev $IFACE
+        [[ -n $MASK ]] && run ip -4 addr add $(unzero $ADDR)/$MASK dev $IFACE metric 1
       fi
     fi
     if [[ $IP != ipv4 ]]; then
       [[ $j -eq 0 ]] && ADDR6=${IPADDR6[$i]} || ADDR6=${IPADDR6[$i,$j]}
       if [[ -n $ADDR6 ]]; then
         [[ $j -eq 0 ]] && MASK6=${NETMASK6[$i]} || MASK6=${NETMASK6[$i,$j]}
-        [[ -n $MASK6 ]] && run ip -6 addr add $(unzero6 $ADDR6)/$MASK6 metric $INDEX dev $IFACE
+        [[ -n $MASK6 ]] && run ip -6 addr add $(unzero6 $ADDR6)/$MASK6 dev $IFACE metric 1
         [[ -n $PRIV6 && -d $CONF6/$IFACE ]] && echo 0 >$CONF6/$IFACE/use_tempaddr
       fi
     fi
   else
     # bring up interface without IP address
-    ipv6_addr 0 0
+    ipv6_addr 0
     ipaddr_down
   fi
 }
