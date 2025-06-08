@@ -68,6 +68,7 @@ add_entry(){
 del_entry(){
   touch /var/tmp/$1.down
   [[ -e $STA ]] && sed -i "/^$1 .*/d" $STA
+  sleep 0.5
 }
 
 # initialize docker settings
@@ -444,7 +445,6 @@ docker_network_start(){
         elif [[ -e $SYSTEM/$SHIM ]]; then
           # remove shim interface assignment
           del_entry $SHIM
-          sleep 0.5
           run ip -4 addr del $IPV4 dev $SHIM metric 0
         fi
       else
@@ -469,7 +469,6 @@ docker_network_start(){
         elif [[ -n $IPV4 && -e $SYSTEM/$VHOST ]]; then
           # remove vhost interface assignment
           del_entry $VHOST
-          sleep 0.5
           run ip -4 addr del $IPV4 dev $VHOST metric 0
         fi
       fi
@@ -499,14 +498,12 @@ docker_network_stop(){
         SHIM=shim-$NETWORK
         if [[ -e $SYSTEM/$SHIM ]]; then
           del_entry $SHIM
-          sleep 0.5
           run ip -4 addr del $IPV4 dev $SHIM metric 0
         fi
       else
         VHOST=vhost${NETWORK//[^0-9.]/}
         if [[ -e $SYSTEM/$VHOST ]]; then
           del_entry $VHOST
-          sleep 0.5
           run ip -4 addr del $IPV4 dev $VHOST metric 0
         fi
       fi
