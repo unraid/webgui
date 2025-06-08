@@ -163,7 +163,8 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
     IPV4="$(ip -4 -br addr show scope global primary dev $IFACE | awk '{$2="";print;exit}')"
     if [[ -n $IPV4 ]]; then
       echo "$IPV4" >>$STA
-      echo "$IFACE GW4 $(ip -4 route show to default dev $IFACE)" >>$STA
+      GW4="$(ip -4 route show to default dev $IFACE)"
+      [[ -n $GW4 ]] && echo "$IFACE GW4 $GW4" >>$STA
     fi
   fi
   echo "USE_DHCP6:0=\"${USE_DHCP6[$i]}\"" >>$INI
@@ -187,7 +188,8 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
     IPV6="$(ip -6 -br addr show scope global primary -deprecated dev $IFACE | awk '{$2="";print;exit}')"
     if [[ -n $IPV6 ]]; then
       echo "$IPV6" >>$STA
-      echo "$IFACE GW6 $(ip -6 route show to default dev $IFACE)" >>$STA
+      GW6="$(ip -6 route show to default dev $IFACE)"
+      [[ -n $GW6 ]] && echo "$IFACE GW6 $GW6" >>$STA
     fi
   fi
   echo "USE_MTU=\"${USE_MTU[$i]}\"" >>$INI
@@ -219,7 +221,8 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
         IPV4="$(ip -4 -br addr show scope global primary dev $DEV | awk '{$2="";print;exit}')"
         if [[ -n $IPV4 ]]; then
           echo "${IPV4/@$IFACE/}" >>$STA
-          echo "$DEV GW4 $(ip -4 route show to default dev $DEV)" >>$STA
+          GW4="$(ip -4 route show to default dev $DEV)"
+          [[ -n $GW4 ]] && echo "$DEV GW4 $GW4" >>$STA
         fi
       fi
       echo "USE_DHCP6:$j=\"${USE_DHCP6[$i,$j]}\"" >>$INI
@@ -244,7 +247,8 @@ for ((i=0; i<${SYSNICS:-1}; i++)); do
         IPV6="$(ip -6 -br addr show scope global primary -deprecated dev $DEV | awk '{$2="";print;exit}')"
         if [[ -n $IPV6 ]]; then
           echo "${IPV6/@$IFACE/}" >>$STA
-          echo "$DEV GW6 $(ip -6 route show to default dev $DEV)" >>$STA
+          GW6="$(ip -6 route show to default dev $DEV)"
+          [[ -n $GW6 ]] && echo "$DEV GW6 $GW6" >>$STA
         fi
       fi
     done

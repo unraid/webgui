@@ -87,6 +87,7 @@
 # Adapted by Bergware for use in Unraid OS - June 2025
 # - revert metric assignment to static addresses
 # - remove duplicate ipv6 parameters
+# - improve gateway creation
 
 ###########
 # LOGGING #
@@ -632,8 +633,13 @@ gateway_up(){
     [[ -z ${i[1]} ]] && DEV=${IFNAME[$i]} || DEV=${IFNAME[$i]}.${VLANID[$x]}
     IP=${PROTOCOL[$x]:-ipv4}
     AD=${METRIC[$x]}
-    [[ -n $AD ]] && AD="metric $AD"
-    EXIST=$(ip -4 route show to default via $(unzero $GW) dev $DEV | grep "$AD ")
+    if [[ -z $AD ]]; then
+      AD="metric 1"
+      EXIST=$(ip -4 route show to default via $(unzero $GW) dev $DEV | grep -vm1 metric)
+    else
+      AD="metric $AD"
+      EXIST=$(ip -4 route show to default via $(unzero $GW) dev $DEV | grep -m1 "$AD ")
+    fi
     [[ $IP != ipv6 && -z $EXIST ]] && run ip -4 route add default via $(unzero $GW) dev $DEV $AD
   done
   for GW6 in ${GATEWAY6[@]}; do
@@ -644,8 +650,13 @@ gateway_up(){
     [[ -z ${i[1]} ]] && DEV=${IFNAME[$i]} || DEV=${IFNAME[$i]}.${VLANID[$x]}
     IP=${PROTOCOL[$x]:-ipv4}
     AD6=${METRIC6[$x]}
-    [[ -n $AD6 ]] && AD6="metric $AD6"
-    EXIST=$(ip -6 route show to default via $(unzero6 $GW6) dev $DEV | grep "$AD6 ")
+    if [[ -z $AD6 ]]; then
+      AD6="metric 1"
+      EXIST=$(ip -6 route show to default via $(unzero6 $GW6) dev $DEV | grep -vm1 metric)
+    else
+      AD6="metric $AD6"
+      EXIST=$(ip -6 route show to default via $(unzero6 $GW6) dev $DEV | grep -m1 "$AD6 ")
+    fi
     [[ $IP != ipv4 && -z $EXIST ]] && run ip -6 route add default via $(unzero6 $GW6) dev $DEV $AD6
   done
 }
