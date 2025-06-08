@@ -66,8 +66,8 @@ add_entry(){
 
 # delete enty from watch list
 del_entry(){
-  [[ -e $STA ]] && sed -i "/^$1 .*/d" $STA
   touch /var/tmp/$1.down
+  [[ -e $STA ]] && sed -i "/^$1 .*/d" $STA
 }
 
 # initialize docker settings
@@ -433,7 +433,7 @@ docker_network_start(){
             run ip -6 addr flush dev $SHIM
           fi
           # copy parent IPv4 address to shim interface
-          run ip addr add $IPV4 dev $SHIM metric 0
+          run ip -4 addr add $IPV4 dev $SHIM metric 0
           add_entry "$SHIM $IPV4 metric 0"
           GW4=$(ip -4 route show to default dev $NETWORK | awk '{print $3;exit}')
           if [[ -n $GW4 ]]; then
@@ -444,7 +444,8 @@ docker_network_start(){
         elif [[ -e $SYSTEM/$SHIM ]]; then
           # remove shim interface assignment
           del_entry $SHIM
-          run ip -4 addr flush dev $SHIM
+          sleep 0.5
+          run ip -4 addr del $IPV4 dev $SHIM metric 0
         fi
       else
         if [[ $TYPE == wlan ]]; then
@@ -457,7 +458,7 @@ docker_network_start(){
           echo 1 >$CONF6/$VHOST/disable_ipv6
           run ip -6 addr flush dev $VHOST
           # copy parent IPv4 address to vhost interface
-          run ip addr add $IPV4 dev $VHOST metric 0
+          run ip -4 addr add $IPV4 dev $VHOST metric 0
           add_entry "$VHOST $IPV4 metric 0"
           GW4=$(ip -4 route show to default dev $NETWORK | awk '{print $3;exit}')
           if [[ -n $GW4 ]]; then
@@ -468,7 +469,8 @@ docker_network_start(){
         elif [[ -n $IPV4 && -e $SYSTEM/$VHOST ]]; then
           # remove vhost interface assignment
           del_entry $VHOST
-          run ip -4 addr flush dev $VHOST
+          sleep 0.5
+          run ip -4 addr del $IPV4 dev $VHOST metric 0
         fi
       fi
     fi
@@ -490,19 +492,22 @@ docker_network_stop(){
     [[ ${NIC:0:3} == eth ]] && NIC=$(active $NIC)
     driver ${NIC//[0-9]/} forced
     for NETWORK in $(network $ATTACH ${NIC//[^0-9]/}); do
+      IPV4=$(ip -4 -br addr show scope global primary dev $NETWORK | awk '{print $3;exit}')
       [[ $STOCK =~ ${NETWORK%%[0-9]*} || $DOCKER_USER_NETWORKS != preserve ]] && docker network rm $NETWORK &>/dev/null
       TYPE=${NETWORK//[0-9.]/}
       if [[ $TYPE == br || $TYPE == wlan ]]; then
         SHIM=shim-$NETWORK
         if [[ -e $SYSTEM/$SHIM ]]; then
           del_entry $SHIM
-          run ip addr flush dev $SHIM
+          sleep 0.5
+          run ip -4 addr del $IPV4 dev $SHIM metric 0
         fi
       else
         VHOST=vhost${NETWORK//[^0-9.]/}
         if [[ -e $SYSTEM/$VHOST ]]; then
           del_entry $VHOST
-          run ip addr flush dev $VHOST
+          sleep 0.5
+          run ip -4 addr del $IPV4 dev $VHOST metric 0
         fi
       fi
     done
