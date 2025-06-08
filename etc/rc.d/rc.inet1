@@ -634,12 +634,12 @@ gateway_up(){
     IP=${PROTOCOL[$x]:-ipv4}
     AD=${METRIC[$x]}
     if [[ -z $AD ]]; then
+      AD="metric 1"
       EXIST=$(ip -4 route show to default via $(unzero $GW) dev $DEV | grep -vm1 metric)
     else
       AD="metric $AD"
       EXIST=$(ip -4 route show to default via $(unzero $GW) dev $DEV | grep -m1 "$AD ")
     fi
-    [[ -z $AD ]] && AD="metric 1"
     [[ $IP != ipv6 && -z $EXIST ]] && run ip -4 route add default via $(unzero $GW) dev $DEV $AD
   done
   for GW6 in ${GATEWAY6[@]}; do
@@ -651,12 +651,12 @@ gateway_up(){
     IP=${PROTOCOL[$x]:-ipv4}
     AD6=${METRIC6[$x]}
     if [[ -z $AD6 ]]; then
+      AD6="metric 1"
       EXIST=$(ip -6 route show to default via $(unzero6 $GW6) dev $DEV | grep -vm1 metric)
     else
       AD6="metric $AD6"
       EXIST=$(ip -6 route show to default via $(unzero6 $GW6) dev $DEV | grep -m1 "$AD6 ")
     fi
-    [[ -z $AD6 ]] && AD6="metric 1"
     [[ $IP != ipv4 && -z $EXIST ]] && run ip -6 route add default via $(unzero6 $GW6) dev $DEV $AD6
   done
 }
