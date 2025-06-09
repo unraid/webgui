@@ -67,7 +67,7 @@ while :; do
           IPV4=$(ip -4 -br addr show scope global primary dev $PORT | awk '{print $3;exit}')
           if [[ -n $IPV4 ]]; then
             ROUTE=$(ip -4 route show to default dev $PORT)
-            [[ -z $ROUTE && "${TASK[$i]}" =~ "default" ]] && ip -4 route add dev ${TASK[$i]/GW4/}
+            [[ -z $ROUTE ]] && ip -4 route add dev ${TASK[$i]/GW4/}
           fi
           ;;
         GW6)
@@ -75,16 +75,17 @@ while :; do
           IPV6=$(ip -6 -br addr show scope global primary -deprecated dev $PORT | awk '{print $3;exit}')
           if [[ -n $IPV6 ]]; then
             ROUTE=$(ip -6 route show to default dev $PORT)
-            [[ -z $ROUTE && "${TASK[$i]}" =~ "default" ]] && ip -6 route add dev ${TASK[$i]/GW6/}
+            [[ -z $ROUTE ]] && ip -6 route add dev ${TASK[$i]/GW6/}
           fi
           ;;
         *)
+          IPA=$(ip -br addr show to ${ADDR[1]} dev $PORT)
           if [[ -f /var/tmp/$PORT.down ]]; then
             # Special treatment for shim and vhost interfaces
-            [[ -n $(ip -br -4 addr show to ${ADDR[1]} dev $PORT) ]] && ip -4 addr del dev ${TASK[$i]}
+            [[ -n $IPA ]] && ip addr del dev ${TASK[$i]}
           else
             # IP address not present? create it
-            [[ -z $(ip -br addr show to ${ADDR[1]} dev $PORT) ]] && ip addr add dev ${TASK[$i]}
+            [[ -z $IPA ]] && ip addr add dev ${TASK[$i]}
           fi
           ;;
         esac
