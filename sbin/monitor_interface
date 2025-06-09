@@ -18,8 +18,8 @@ md5(){
   [[ -r $FILE ]] && md5sum $FILE | awk '{print $1;exit}'
 }
 
-wlan(){
-  [[ -e $SYSTEM/wlan0 ]]
+port(){
+  [[ -e $SYSTEM/$1 ]]
 }
 
 carrier(){
@@ -51,41 +51,43 @@ init(){
 }
 
 while :; do
-  if wlan; then
+  if port wlan0 ]]; then
     # monitor file content changes
     [[ $MD5 != $(md5) ]] && init
     LAST=
     for i in ${!TASK[@]}; do
       ADDR=(${TASK[$i]})
       PORT=${ADDR[0]}
-      [[ $LAST != ${PORT%.*} ]] && STATE=$(state ${PORT%.*})
-      case ${ADDR[1]} in
-      GW4)
-        if [[ $STATE == 1 ]]; then
-          # no existing default and new default is defined?
-          IPV4=$(ip -4 -br addr show scope global primary dev $PORT | awk '{print $3;exit}')
-          [[ -n $IPV4 && "${TASK[$i]}" =~ "default"  && -z $(ip -4 route show to default dev $PORT) ]] && ip -4 route add dev ${TASK[$i]/GW4/}
-        fi
-        ;;
-      GW6)
-        if [[ $STATE == 1 ]]; then
-          # no existing default and new default is defined?
-          IPV6=$(ip -6 -br addr show scope global primary -deprecated dev $PORT | awk '{print $3;exit}')
-          [[ -n $IPV6 && "${TASK[$i]}" =~ "default" && -z $(ip -6 route show to default dev $PORT) ]] && ip -6 route add dev ${TASK[$i]/GW6/}
-        fi
-        ;;
-      *)
-        case $STATE in
-        0) # down
-          # IP address present, remove it
-          [[ -n $(ip -br addr show to ${ADDR[1]%/*} dev $PORT) ]] && ip addr del dev ${TASK[$i]}
+      if port $PORT; then
+        [[ $LAST != ${PORT%.*} ]] && STATE=$(state ${PORT%.*})
+        case ${ADDR[1]} in
+        GW4)
+          if [[ $STATE == 1 ]]; then
+            # no existing default and new default is defined?
+            IPV4=$(ip -4 -br addr show scope global primary dev $PORT | awk '{print $3;exit}')
+            [[ -n $IPV4 && "${TASK[$i]}" =~ "default"  && -z $(ip -4 route show to default dev $PORT) ]] && ip -4 route add dev ${TASK[$i]/GW4/}
+          fi
           ;;
-        1) # up
-          # IP address not present? create it
-          [[ ! -f /var/tmp/$PORT.down && -z $(ip -br addr show to ${ADDR[1]%/*} dev $PORT) ]] && ip addr add dev ${TASK[$i]}
+        GW6)
+          if [[ $STATE == 1 ]]; then
+            # no existing default and new default is defined?
+            IPV6=$(ip -6 -br addr show scope global primary -deprecated dev $PORT | awk '{print $3;exit}')
+            [[ -n $IPV6 && "${TASK[$i]}" =~ "default" && -z $(ip -6 route show to default dev $PORT) ]] && ip -6 route add dev ${TASK[$i]/GW6/}
+          fi
+          ;;
+        *)
+          case $STATE in
+          0) # down
+            # IP address present, remove it
+            [[ -n $(ip -br addr show to ${ADDR[1]%/*} dev $PORT) ]] && ip addr del dev ${TASK[$i]}
+            ;;
+          1) # up
+            # IP address not present? create it
+            [[ ! -f /var/tmp/$PORT.down && -z $(ip -br addr show to ${ADDR[1]%/*} dev $PORT) ]] && ip addr add dev ${TASK[$i]}
+          esac
         esac
-      esac
-      LAST=${PORT%.*}
+        LAST=${PORT%.*}
+      fi
     done
   fi
   # check every 3 seconds
