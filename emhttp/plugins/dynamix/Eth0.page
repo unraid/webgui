@@ -205,21 +205,23 @@ function prepareSettings(form) {
     var i = $(this).prop('name').split(':')[1];
     var protocol = $(form).find('select[name="PROTOCOL:'+i+'"]').val() || 'ipv4';
     var gw4 = $(form).find('input[name="USE_GW4:'+i+'"]').prop('checked');
-    if (gw4 === false) $(form).find('input[name="METRIC:'+i+'"]').val('0');
     if (protocol != 'ipv6' && $(this).val() != 'no') {
       $(form).find('input[name="IPADDR:'+i+'"]').val('');
       $(form).find('input[name="GATEWAY:'+i+'"]').val('');
+      $(form).find('input[name="METRIC:'+i+'"]').val('');
     }
+    if (gw4 === false) $(form).find('input[name="METRIC:'+i+'"]').val('0');
   });
   $(form).find('select[name^="USE_DHCP6:"]').each(function() {
     var i = $(this).prop('name').split(':')[1];
     var protocol = $(form).find('select[name="PROTOCOL:'+i+'"]').val() || 'ipv4';
     var gw6 = $(form).find('input[name="USE_GW6:'+i+'"]').prop('checked');
-    if (gw6 === false) $(form).find('input[name="METRIC6:'+i+'"]').val('0');
     if (protocol != 'ipv4' && $(this).val() != 'no') {
       $(form).find('input[name="IPADDR6:'+i+'"]').val('');
       $(form).find('input[name="GATEWAY6:'+i+'"]').val('');
+      $(form).find('input[name="METRIC6:'+i+'"]').val('');
     }
+    if (gw6 === false) $(form).find('input[name="METRIC6:'+i+'"]').val('0');
     if ($(this).val() != 'yes') $(form).find('input[name="PRIVACY6:'+i+'"]').val('');
   });
   if (port == 'eth0') {
