@@ -81,7 +81,7 @@ while :; do
         *)
           if [[ -f /var/tmp/$PORT.down ]]; then
             # Special treatment for shim and vhost interfaces
-            [[ "$(ip -br addr show dev $PORT)" =~ "${ADDR[1]}" ]] && ip -4 addr del dev ${TASK[$i]}
+            [[ -n $(ip -br -4 addr show to ${ADDR[1]} dev $PORT) ]] && ip -4 addr del dev ${TASK[$i]}
           else
             # IP address not present? create it
             [[ "$(ip -br addr show dev $PORT)" =~ "${ADDR[1]}" ]] || ip addr add dev ${TASK[$i]}
