@@ -9,7 +9,7 @@
 # By removing static IP addresses from inactive interfaces, these interfaces do not longer interfere with wireless.
 # In other words the wired connection can be pulled without consequences.
 #
-# Bergware - modified for Unraid OS, May 2025
+# Bergware - modified for Unraid OS, June 2025
 
 FILE=/var/local/emhttp/statics.ini
 SYSTEM=/sys/class/net
@@ -58,29 +58,31 @@ while :; do
     for i in ${!TASK[@]}; do
       ADDR=(${TASK[$i]})
       PORT=${ADDR[0]}
-      ADDR=${ADDR[1]%/*}
       [[ $LAST != ${PORT%.*} ]] && STATE=$(state ${PORT%.*})
-      case $STATE in
-      1) # up
-        case $ADDR in
-        GW4)
+      case ${ADDR[1]} in
+      GW4)
+        if [[ $STATE == 1 ]]; then
           # no existing default and new default is defined?
           IPV4=$(ip -4 -br addr show scope global primary dev $PORT | awk '{print $3;exit}')
           if [[ -n $IPV4 ]]; then
             ROUTE=$(ip -4 route show to default dev $PORT)
             [[ -z $ROUTE ]] && ip -4 route add dev ${TASK[$i]/GW4/}
           fi
-          ;;
-        GW6)
+        fi
+        ;;
+      GW6)
+        if [[ $STATE == 1 ]]; then
           # no existing default and new default is defined?
           IPV6=$(ip -6 -br addr show scope global primary -deprecated dev $PORT | awk '{print $3;exit}')
           if [[ -n $IPV6 ]]; then
             ROUTE=$(ip -6 route show to default dev $PORT)
             [[ -z $ROUTE ]] && ip -6 route add dev ${TASK[$i]/GW6/}
           fi
-          ;;
-        *)
-          IPA=$(ip -br addr show to $ADDR dev $PORT)
+        fi
+        ;;
+      *)
+        if [[ $STATE == 1 ]]; then
+          IPA=$(ip -br addr show to ${ADDR[1]%/*} dev $PORT)
           if [[ -f /var/tmp/$PORT.down ]]; then
             # Special treatment for shim and vhost interfaces
             [[ -n $IPA ]] && ip addr del dev ${TASK[$i]}
@@ -88,13 +90,9 @@ while :; do
             # IP address not present? create it
             [[ -z $IPA ]] && ip addr add dev ${TASK[$i]}
           fi
-          ;;
-        esac
-        ;;
-      0) # down
-        if [[ $ADDR != GW4 && $ADDR != GW6 ]]; then
+        elif [[ $STATE == 0 ]]; then
           # IP address present, remove it
-          [[ -n $(ip -br addr show to $ADDR dev $PORT) ]] && ip addr del dev ${TASK[$i]}
+          [[ -n $(ip -br addr show to ${ADDR[1]%/*} dev $PORT) ]] && ip addr del dev ${TASK[$i]}
         fi
         ;;
       esac
