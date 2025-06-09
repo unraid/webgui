@@ -84,14 +84,14 @@ while :; do
             [[ -n $(ip -br -4 addr show to ${ADDR[1]} dev $PORT) ]] && ip -4 addr del dev ${TASK[$i]}
           else
             # IP address not present? create it
-            [[ "$(ip -br addr show dev $PORT)" =~ "${ADDR[1]}" ]] || ip addr add dev ${TASK[$i]}
+            [[ -z $(ip -br addr show to ${ADDR[1]} dev $PORT) ]] && ip addr add dev ${TASK[$i]}
           fi
           ;;
         esac
         ;;
       0) # down
         # IP address present, remove it
-        [[ "$(ip -br addr show dev $PORT)" =~ "${ADDR[1]}" ]] && ip addr del dev ${TASK[$i]}
+        [[ -n $(ip -br addr show to ${ADDR[1]} dev $PORT) ]] && ip addr del dev ${TASK[$i]}
         ;;
       esac
       LAST=${PORT%.*}
