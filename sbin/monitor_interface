@@ -87,13 +87,9 @@ while :; do
           [[ -n $(ip -br addr show to ${ADDR[1]%/*} dev $PORT) ]] && ip addr del dev ${TASK[$i]}
           ;;
         1) # up
-          IPA=$(ip -br addr show to ${ADDR[1]%/*} dev $PORT)
-          if [[ -f /var/tmp/$PORT.down ]]; then
-            # Special treatment for shim and vhost interfaces
-            [[ -n $IPA ]] && ip addr del dev ${TASK[$i]}
-          else
+          if [[ ! -f /var/tmp/$PORT.down ]]; then
             # IP address not present? create it
-            [[ -z $IPA ]] && ip addr add dev ${TASK[$i]}
+            [[ -z $(ip -br addr show to ${ADDR[1]%/*} dev $PORT) ]] && ip addr add dev ${TASK[$i]}
           fi
         esac
       esac
