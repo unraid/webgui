@@ -81,7 +81,12 @@ while :; do
         fi
         ;;
       *)
-        if [[ $STATE == 1 ]]; then
+        case $STATE in
+        0) # down
+          # IP address present, remove it
+          [[ -n $(ip -br addr show to ${ADDR[1]%/*} dev $PORT) ]] && ip addr del dev ${TASK[$i]}
+          ;;
+        1) # up
           IPA=$(ip -br addr show to ${ADDR[1]%/*} dev $PORT)
           if [[ -f /var/tmp/$PORT.down ]]; then
             # Special treatment for shim and vhost interfaces
@@ -90,11 +95,7 @@ while :; do
             # IP address not present? create it
             [[ -z $IPA ]] && ip addr add dev ${TASK[$i]}
           fi
-        elif [[ $STATE == 0 ]]; then
-          # IP address present, remove it
-          [[ -n $(ip -br addr show to ${ADDR[1]%/*} dev $PORT) ]] && ip addr del dev ${TASK[$i]}
-        fi
-        ;;
+        esac
       esac
       LAST=${PORT%.*}
     done
