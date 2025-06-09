@@ -64,20 +64,14 @@ while :; do
         if [[ $STATE == 1 ]]; then
           # no existing default and new default is defined?
           IPV4=$(ip -4 -br addr show scope global primary dev $PORT | awk '{print $3;exit}')
-          if [[ -n $IPV4 ]]; then
-            ROUTE=$(ip -4 route show to default dev $PORT)
-            [[ -z $ROUTE ]] && ip -4 route add dev ${TASK[$i]/GW4/}
-          fi
+          [[ -n $IPV4 && -z $(ip -4 route show to default dev $PORT) ]] && ip -4 route add dev ${TASK[$i]/GW4/}
         fi
         ;;
       GW6)
         if [[ $STATE == 1 ]]; then
           # no existing default and new default is defined?
           IPV6=$(ip -6 -br addr show scope global primary -deprecated dev $PORT | awk '{print $3;exit}')
-          if [[ -n $IPV6 ]]; then
-            ROUTE=$(ip -6 route show to default dev $PORT)
-            [[ -z $ROUTE ]] && ip -6 route add dev ${TASK[$i]/GW6/}
-          fi
+          [[ -n $IPV6 && -z $(ip -6 route show to default dev $PORT) ]] && ip -6 route add dev ${TASK[$i]/GW6/}
         fi
         ;;
       *)
@@ -87,10 +81,8 @@ while :; do
           [[ -n $(ip -br addr show to ${ADDR[1]%/*} dev $PORT) ]] && ip addr del dev ${TASK[$i]}
           ;;
         1) # up
-          if [[ ! -f /var/tmp/$PORT.down ]]; then
-            # IP address not present? create it
-            [[ -z $(ip -br addr show to ${ADDR[1]%/*} dev $PORT) ]] && ip addr add dev ${TASK[$i]}
-          fi
+          # IP address not present? create it
+          [[ ! -f /var/tmp/$PORT.down && -z $(ip -br addr show to ${ADDR[1]%/*} dev $PORT) ]] && ip addr add dev ${TASK[$i]}
         esac
       esac
       LAST=${PORT%.*}
