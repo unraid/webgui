@@ -14,6 +14,12 @@ body.stop-scrolling {
   z-index: 10000;
 }
 
+
+/* #swaltext is the nchan live log output and #swalbody is content like a changelog */
+pre#swalbody {
+  font-family: clear-sans;
+}
+
 pre#swalbody,
 pre#swaltext {
   text-align: left;
@@ -69,6 +75,10 @@ pre#swaltext {
     margin: 0;
     padding: 0;
     line-height: normal;
+  }
+
+  pre {
+    font-size: 1.5rem;
   }
 
   hr {
@@ -424,17 +434,16 @@ pre#swaltext {
     min-height: 0;
     margin: 0 -2rem;
     padding: 0;
-    scrollbar-width: thin;
   }
 
+  pre#swalbody,
   pre#swaltext {
     flex: 1 1 auto;
     min-height: 0;
     max-height: 100%;
     overflow: auto;
     margin: 0;
-    padding: 1rem 2rem;
-    scrollbar-width: thin;
+    padding: 2rem;
 
     p {
       margin: 0;
@@ -447,6 +456,34 @@ pre#swaltext {
     fieldset {
       padding: 0 1rem;
     }
+  }
+
+  pre#swalbody {
+    line-height: 1;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+
+    /* reset all margins and paddings */
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    p,
+    ul,
+    ol,
+    li,
+    blockquote {
+      margin-top: 0;
+      margin-bottom: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+  }
+
+  pre#swaltext {
+    font-size: 1.2rem;
   }
 }
 
