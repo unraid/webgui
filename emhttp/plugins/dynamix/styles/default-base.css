@@ -25,6 +25,16 @@ img {
 p {
     text-align: justify;
 }
+
+/* these selection selectors must be kept as individual rules or they won't work */
+::selection {
+    color: var(--white);
+    background-color: var(--orange-800);
+}
+::-moz-selection {
+    color: var(--white);
+    background-color: var(--orange-800);
+}
 /**
  * The markdown parser will often add <p> around links, scripts, and styles.
  * Without this, spacing is off with essentially empty paragraphs.
