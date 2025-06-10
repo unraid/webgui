@@ -1636,26 +1636,6 @@ label.checkbox input:checked ~ .checkmark {
 label.checkbox input:disabled ~ .checkmark {
     opacity: 0.5;
 }
-a.bannerDismiss {
-    float: right;
-    cursor: pointer;
-    text-decoration: none;
-    margin-right: 1rem;
-}
-.bannerDismiss::before {
-    content: "\e92f";
-    font-family: Unraid;
-    color: var(--orange-300);
-}
-a.bannerInfo {
-    cursor: pointer;
-    text-decoration: none;
-}
-.bannerInfo::before {
-    content: "\f05a";
-    font-family: fontAwesome;
-    color: var(--orange-300);
-}
 ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -1676,7 +1656,8 @@ a.bannerInfo {
 .inline_help {
     display: none;
 }
-.upgrade_notice {
+.upgrade_notice,
+.ca_element_notice {
     color: var(--black);
     background-color: var(--yellow-200);
     border: 1px solid var(--orange-300);
@@ -1693,10 +1674,6 @@ a.bannerInfo {
     z-index: 999;
     box-sizing: border-box;
 }
-/* Add padding to the right so the icon can sit absolutely positioned in the padding */
-.upgrade_notice:has(i) {
-    padding-right: 3.5rem;
-}
 .upgrade_notice.done {
     color: var(--green-800);
     background-color: var(--green-100);
@@ -1707,12 +1684,36 @@ a.bannerInfo {
     background-color: var(--red-300);
     border-color: var(--red-600);
 }
-.upgrade_notice i {
+.bannerDismiss::before {
+    content: "\e92f";
+    font-family: Unraid;
+    color: var(--orange-300);
+}
+.ca_PluginUpdateInstall,
+.bannerInfo {
+    cursor: pointer;
+    text-decoration: none;
+    padding: 0 .5rem;
+}
+.bannerInfo::before {
+    content: "\f05a";
+    font-family: fontAwesome;
+    color: var(--orange-300);
+}
+/* Add padding to the right so the icon can sit absolutely positioned in the padding */
+.upgrade_notice:has(.bannerDismiss),
+.ca_element_notice:has(.ca_PluginUpdateDismiss) {
+    padding-right: 3.5rem;
+}
+.upgrade_notice .bannerDismiss,
+.ca_element_notice .bannerDismiss,
+.ca_PluginUpdateDismiss {
     position: absolute;
     top: 50%;
     right: 1rem;
     transform: translateY(-50%);
     cursor: pointer;
+    z-index: 1;
 }
 .back_to_top,
 .move_to_end {
