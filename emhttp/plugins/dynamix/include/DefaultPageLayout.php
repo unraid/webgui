@@ -85,7 +85,9 @@ if (count($pages)) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
   <meta name="referrer" content="same-origin">
-  <link type="image/png" rel="shortcut icon" href="/webGui/images/<?= _var($var, 'mdColor', 'red-on') ?>.png">
+
+  <? require_once "$docroot/plugins/dynamix/include/DefaultPageLayout/Favicon.php"; ?>
+
   <link type="text/css" rel="stylesheet" href="<? autov("/webGui/styles/default-fonts.css") ?>">
   <link type="text/css" rel="stylesheet" href="<? autov("/webGui/styles/default-cases.css") ?>">
   <link type="text/css" rel="stylesheet" href="<? autov("/webGui/styles/font-awesome.css") ?>">

@@ -44,7 +44,14 @@ $arrWhitelist = [
   '/webGui/images/green-on.png',
   '/webGui/images/red-on.png',
   '/webGui/images/yellow-on.png',
-  '/webGui/images/UN-logotype-gradient.svg'
+  '/webGui/images/UN-logotype-gradient.svg',
+  '/apple-touch-icon.png',
+  '/favicon-96x96.png',
+  '/favicon.ico',
+  '/favicon.svg',
+  '/web-app-manifest-192x192.png',
+  '/web-app-manifest-512x512.png',
+  '/manifest.json'
 ];
 
 // Add JS files from the unraid-components directory using cache
