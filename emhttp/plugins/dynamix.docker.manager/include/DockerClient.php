@@ -65,6 +65,7 @@ function var_split($item, $i=0) {
 
 class DockerTemplates {
 	public $verbose = false;
+	private $templateFileCache = [];
 
 	private function debug($m) {
 		if ($this->verbose) echo $m."\n";
@@ -79,6 +80,26 @@ class DockerTemplates {
 			return rmdir($path);
 		} elseif (is_file($path)) return unlink($path);
 		return false;
+	}
+
+	private function loadTemplateFiles($scope='all') {
+		if (isset($this->templateFileCache[$scope])) {
+			return $this->templateFileCache[$scope];
+		}
+		
+		$templates = [];
+		foreach ($this->getTemplates($scope) as $file) {
+			$doc = new DOMDocument();
+			if (@$doc->load($file['path'])) {
+				$repository = DockerUtil::ensureImageTag($doc->getElementsByTagName('Repository')->item(0)->nodeValue??'');
+				if ($repository) {
+					$templates[$repository] = $doc;
+				}
+			}
+		}
+		
+		$this->templateFileCache[$scope] = $templates;
+		return $templates;
 	}
 
 	public function download_url($url, $path='') {
@@ -247,18 +268,22 @@ class DockerTemplates {
 	}
 
 	public function getTemplateValue($Repository, $field, $scope='all',$name='') {
-		foreach ($this->getTemplates($scope) as $file) {
-			$doc = new DOMDocument();
-			$doc->load($file['path']);
+		$templates = $this->loadTemplateFiles($scope);
+		
+		if (isset($templates[$Repository])) {
+			$doc = $templates[$Repository];
+			
 			if ($name) {
-				if (@$doc->getElementsByTagName('Name')->item(0)->nodeValue !== $name) continue;
+				$templateName = @$doc->getElementsByTagName('Name')->item(0)->nodeValue ?? '';
+				if ($templateName !== $name) {
+					return null;
+				}
 			}
-			$TemplateRepository = DockerUtil::ensureImageTag($doc->getElementsByTagName('Repository')->item(0)->nodeValue??'');
-			if ($TemplateRepository && $TemplateRepository==$Repository) {
-				$TemplateField = $doc->getElementsByTagName($field)->item(0)->nodeValue??'';
-				return trim($TemplateField);
-			}
+			
+			$TemplateField = $doc->getElementsByTagName($field)->item(0)->nodeValue??'';
+			return trim($TemplateField);
 		}
+		
 		return null;
 	}
 
@@ -724,6 +749,7 @@ class DockerUpdate{
 class DockerClient {
 	private static $containersCache = null;
 	private static $imagesCache = null;
+	private static $imageUsageCache = null;
 	private static $codes = [
 		'200' => true, // No error
 		'201' => true,
@@ -747,6 +773,23 @@ class DockerClient {
 		return $out;
 	}
 
+	private function buildImageUsageMap() {
+		if (is_array($this::$imageUsageCache)) {
+			return $this::$imageUsageCache;
+		}
+		
+		$this::$imageUsageCache = [];
+		foreach ($this->getDockerContainers() as $ct) {
+			$imageId = $ct['ImageId'];
+			if (!isset($this::$imageUsageCache[$imageId])) {
+				$this::$imageUsageCache[$imageId] = [];
+			}
+			$this::$imageUsageCache[$imageId][] = $ct['Name'];
+		}
+		
+		return $this::$imageUsageCache;
+	}
+
 	private function flushCache(&$cache) {
 		$cache = null;
 	}
@@ -754,6 +797,7 @@ class DockerClient {
 	public function flushCaches() {
 		$this->flushCache($this::$containersCache);
 		$this->flushCache($this::$imagesCache);
+		$this->flushCache($this::$imageUsageCache);
 	}
 
 	public function humanTiming($time) {
@@ -959,8 +1003,16 @@ class DockerClient {
 		// Return cached values
 		if (is_array($this::$containersCache)) return $this::$containersCache;
 		$this::$containersCache = [];
-		foreach ($this->getDockerJSON("/containers/json?all=1") as $ct) {
-			$info = $this->getContainerDetails($ct['Id']);
+		
+		$containers = $this->getDockerJSON("/containers/json?all=1");
+		$containerDetails = [];
+		
+		foreach ($containers as $ct) {
+			$containerDetails[$ct['Id']] = $this->getContainerDetails($ct['Id']);
+		}
+		
+		foreach ($containers as $ct) {
+			$info = $containerDetails[$ct['Id']];
 			$c = [];
 			$c['Image']       = DockerUtil::ensureImageTag($info['Config']['Image']);
 			$c['ImageId']     = $this->extractID($ct['ImageID']);
@@ -1061,6 +1113,9 @@ class DockerClient {
 		// Return cached values
 		if (is_array($this::$imagesCache)) return $this::$imagesCache;
 		$this::$imagesCache = [];
+		
+		$usageMap = $this->buildImageUsageMap();
+		
 		foreach ($this->getDockerJSON("/images/json?all=0") as $ct) {
 			$c = [];
 			$c['Created']     = $this->humanTiming($ct['Created']);
@@ -1070,7 +1125,7 @@ class DockerClient {
 			$c['VirtualSize'] = $this->formatBytes($ct['VirtualSize'] ?? null);
 			$c['Tags']        = array_map('htmlspecialchars', $ct['RepoTags'] ?? []);
 			$c['Repository']  = DockerUtil::parseImageTag($ct['RepoTags'][0]??'')['strRepo'];
-			$c['usedBy']      = $this->usedBy($c['Id']);
+			$c['usedBy']      = $usageMap[$c['Id']] ?? [];
 			$this::$imagesCache[$c['Id']] = $c;
 		}
 		return $this::$imagesCache;
