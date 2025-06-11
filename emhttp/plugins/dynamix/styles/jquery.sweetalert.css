@@ -34,7 +34,7 @@ pre#swaltext {
   font-family: clear-sans;
   text-align: center;
   width: 90vw;
-  max-width: 480px;
+  max-width: 60rem;
   padding: 2rem;
   max-height: 95vh;
   position: fixed;
@@ -75,6 +75,12 @@ pre#swaltext {
     margin: 0;
     padding: 0;
     line-height: normal;
+  }
+
+  /* take p tags that don't have a pre child inside and make them break words to prevent overflow */
+  p:not(:has(pre)) {
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
   }
 
   pre {
