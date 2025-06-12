@@ -66,6 +66,7 @@ function var_split($item, $i=0) {
 class DockerTemplates {
 	public $verbose = false;
 	private $templateFileCache = [];
+	private $templateListCache = [];
 
 	private function debug($m) {
 		if ($this->verbose) echo $m."\n";
@@ -82,24 +83,39 @@ class DockerTemplates {
 		return false;
 	}
 
-	private function loadTemplateFiles($scope='all') {
-		if (isset($this->templateFileCache[$scope])) {
-			return $this->templateFileCache[$scope];
+	private function getTemplateList($scope='all') {
+		if (isset($this->templateListCache[$scope])) {
+			return $this->templateListCache[$scope];
 		}
 		
-		$templates = [];
+		$templateList = [];
 		foreach ($this->getTemplates($scope) as $file) {
 			$doc = new DOMDocument();
 			if (@$doc->load($file['path'])) {
 				$repository = DockerUtil::ensureImageTag($doc->getElementsByTagName('Repository')->item(0)->nodeValue??'');
 				if ($repository) {
-					$templates[$repository] = $doc;
+					$templateList[$repository] = $file['path'];
 				}
 			}
 		}
 		
-		$this->templateFileCache[$scope] = $templates;
-		return $templates;
+		$this->templateListCache[$scope] = $templateList;
+		return $templateList;
+	}
+
+	private function loadSingleTemplate($repository, $templatePath) {
+		$cacheKey = $repository;
+		if (isset($this->templateFileCache[$cacheKey])) {
+			return $this->templateFileCache[$cacheKey];
+		}
+		
+		$doc = new DOMDocument();
+		if (@$doc->load($templatePath)) {
+			$this->templateFileCache[$cacheKey] = $doc;
+			return $doc;
+		}
+		
+		return null;
 	}
 
 	public function download_url($url, $path='') {
@@ -268,20 +284,22 @@ class DockerTemplates {
 	}
 
 	public function getTemplateValue($Repository, $field, $scope='all',$name='') {
-		$templates = $this->loadTemplateFiles($scope);
+		$templateList = $this->getTemplateList($scope);
 		
-		if (isset($templates[$Repository])) {
-			$doc = $templates[$Repository];
+		if (isset($templateList[$Repository])) {
+			$doc = $this->loadSingleTemplate($Repository, $templateList[$Repository]);
 			
-			if ($name) {
-				$templateName = @$doc->getElementsByTagName('Name')->item(0)->nodeValue ?? '';
-				if ($templateName !== $name) {
-					return null;
+			if ($doc) {
+				if ($name) {
+					$templateName = @$doc->getElementsByTagName('Name')->item(0)->nodeValue ?? '';
+					if ($templateName !== $name) {
+						return null;
+					}
 				}
+				
+				$TemplateField = $doc->getElementsByTagName($field)->item(0)->nodeValue??'';
+				return trim($TemplateField);
 			}
-			
-			$TemplateField = $doc->getElementsByTagName($field)->item(0)->nodeValue??'';
-			return trim($TemplateField);
 		}
 		
 		return null;
