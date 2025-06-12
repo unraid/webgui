@@ -67,6 +67,7 @@ class DockerTemplates {
 	public $verbose = false;
 	private $templateFileCache = [];
 	private $templateListCache = [];
+	private $templateRepositoryCache = [];
 
 	private function debug($m) {
 		if ($this->verbose) echo $m."\n";
@@ -90,33 +91,13 @@ class DockerTemplates {
 		
 		$templateList = [];
 		foreach ($this->getTemplates($scope) as $file) {
-			$doc = new DOMDocument();
-			if (@$doc->load($file['path'])) {
-				$repository = DockerUtil::ensureImageTag($doc->getElementsByTagName('Repository')->item(0)->nodeValue??'');
-				if ($repository) {
-					$templateList[$repository] = $file['path'];
-				}
-			}
+			$templateList[] = $file['path'];
 		}
 		
 		$this->templateListCache[$scope] = $templateList;
 		return $templateList;
 	}
 
-	private function loadSingleTemplate($repository, $templatePath) {
-		$cacheKey = $repository;
-		if (isset($this->templateFileCache[$cacheKey])) {
-			return $this->templateFileCache[$cacheKey];
-		}
-		
-		$doc = new DOMDocument();
-		if (@$doc->load($templatePath)) {
-			$this->templateFileCache[$cacheKey] = $doc;
-			return $doc;
-		}
-		
-		return null;
-	}
 
 	public function download_url($url, $path='') {
 		$ch = curl_init();
@@ -283,13 +264,54 @@ class DockerTemplates {
 		return $output;
 	}
 
-	public function getTemplateValue($Repository, $field, $scope='all',$name='') {
+	private function getTemplateRepositoryMap($scope='all') {
+		if (isset($this->templateRepositoryCache[$scope])) {
+			return $this->templateRepositoryCache[$scope];
+		}
+		
+		$repositoryMap = [];
 		$templateList = $this->getTemplateList($scope);
 		
-		if (isset($templateList[$Repository])) {
-			$doc = $this->loadSingleTemplate($Repository, $templateList[$Repository]);
+		foreach ($templateList as $templatePath) {
+			$doc = new DOMDocument();
+			if (@$doc->load($templatePath)) {
+				$repository = DockerUtil::ensureImageTag($doc->getElementsByTagName('Repository')->item(0)->nodeValue??'');
+				if ($repository) {
+					$repositoryMap[$repository] = $templatePath;
+				}
+			}
+		}
+		
+		$this->templateRepositoryCache[$scope] = $repositoryMap;
+		return $repositoryMap;
+	}
+
+	public function getTemplateValue($Repository, $field, $scope='all',$name='') {
+		// Check if template is already cached
+		if (isset($this->templateFileCache[$Repository])) {
+			$doc = $this->templateFileCache[$Repository];
 			
-			if ($doc) {
+			if ($name) {
+				$templateName = @$doc->getElementsByTagName('Name')->item(0)->nodeValue ?? '';
+				if ($templateName !== $name) {
+					return null;
+				}
+			}
+			
+			$TemplateField = $doc->getElementsByTagName($field)->item(0)->nodeValue??'';
+			return trim($TemplateField);
+		}
+		
+		// Get repository-to-path mapping (built lazily on first call)
+		$repositoryMap = $this->getTemplateRepositoryMap($scope);
+		
+		if (isset($repositoryMap[$Repository])) {
+			$templatePath = $repositoryMap[$Repository];
+			$doc = new DOMDocument();
+			if (@$doc->load($templatePath)) {
+				// Cache the loaded document for future use
+				$this->templateFileCache[$Repository] = $doc;
+				
 				if ($name) {
 					$templateName = @$doc->getElementsByTagName('Name')->item(0)->nodeValue ?? '';
 					if ($templateName !== $name) {
