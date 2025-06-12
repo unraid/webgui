@@ -186,7 +186,7 @@ while (true) {
       } else {
         $target = validname($target, false);
         if ($target) {
-          $f = $exist ? 'f' : 'n';
+          $f = $exist ? 'n' : 'f';
           exec("mv -{$f}t ".escapeshellarg($target)." ".quoted($source)." 1>$status 2>$error & echo \$!", $pid);
         } else {
           $reply['error'] = 'Invalid target name';
