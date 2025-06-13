@@ -275,7 +275,8 @@ class DockerTemplates {
 		foreach ($templateList as $templatePath) {
 			$doc = new DOMDocument();
 			if (@$doc->load($templatePath)) {
-				$repository = DockerUtil::ensureImageTag($doc->getElementsByTagName('Repository')->item(0)->nodeValue??'');
+				$repoNode   = $doc->getElementsByTagName('Repository')->item(0);
+				$repository = DockerUtil::ensureImageTag($repoNode ? $repoNode->nodeValue : '');
 				if ($repository) {
 					$repositoryMap[$repository] = $templatePath;
 				}
@@ -298,7 +299,8 @@ class DockerTemplates {
 				}
 			}
 			
-			$TemplateField = $doc->getElementsByTagName($field)->item(0)->nodeValue??'';
+			$node = $doc->getElementsByTagName($field)->item(0);
+			$TemplateField = $node ? trim($node->nodeValue) : '';
 			return trim($TemplateField);
 		}
 		
