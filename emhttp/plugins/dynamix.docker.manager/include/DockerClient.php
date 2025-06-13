@@ -264,6 +264,14 @@ class DockerTemplates {
 		return $output;
 	}
 
+	private function extractRepoFast(string $path): ?string {
+		$chunk = file_get_contents($path, false, null, 0, 4096);
+		if (preg_match('/<Repository>\s*([^<]+)\s*<\/Repository>/i', $chunk, $m)) {
+			return DockerUtil::ensureImageTag(trim($m[1]));
+		}
+		return null;
+	}
+
 	private function getTemplateRepositoryMap($scope='all') {
 		if (isset($this->templateRepositoryCache[$scope])) {
 			return $this->templateRepositoryCache[$scope];
@@ -273,13 +281,19 @@ class DockerTemplates {
 		$templateList = $this->getTemplateList($scope);
 		
 		foreach ($templateList as $templatePath) {
-			$doc = new DOMDocument();
-			if (@$doc->load($templatePath)) {
-				$repoNode   = $doc->getElementsByTagName('Repository')->item(0);
-				$repository = DockerUtil::ensureImageTag($repoNode ? $repoNode->nodeValue : '');
-				if ($repository) {
-					$repositoryMap[$repository] = $templatePath;
+			$repository = $this->extractRepoFast($templatePath);
+			
+			// Fallback to DOMDocument if regex fails
+			if (!$repository) {
+				$doc = new DOMDocument();
+				if (@$doc->load($templatePath)) {
+					$repoNode = $doc->getElementsByTagName('Repository')->item(0);
+					$repository = DockerUtil::ensureImageTag($repoNode ? $repoNode->nodeValue : '');
 				}
+			}
+			
+			if ($repository) {
+				$repositoryMap[$repository] = $templatePath;
 			}
 		}
 		
@@ -288,28 +302,29 @@ class DockerTemplates {
 	}
 
 	public function getTemplateValue($Repository, $field, $scope='all',$name='') {
-		$cacheKey = $Repository . '|' . realpath($templatePath ?? '');
-		// Check if template is already cached
-		if (isset($this->templateFileCache[$cacheKey])) {
-			$doc = $this->templateFileCache[$cacheKey];
-			
-			if ($name) {
-				$templateName = @$doc->getElementsByTagName('Name')->item(0)->nodeValue ?? '';
-				if ($templateName !== $name) {
-					return null;
-				}
-			}
-			
-			$node = $doc->getElementsByTagName($field)->item(0);
-			$TemplateField = $node ? trim($node->nodeValue) : '';
-			return trim($TemplateField);
-		}
-		
 		// Get repository-to-path mapping (built lazily on first call)
 		$repositoryMap = $this->getTemplateRepositoryMap($scope);
 		
 		if (isset($repositoryMap[$Repository])) {
 			$templatePath = $repositoryMap[$Repository];
+			$cacheKey = $Repository . '|' . realpath($templatePath);
+			
+			// Check if template is already cached
+			if (isset($this->templateFileCache[$cacheKey])) {
+				$doc = $this->templateFileCache[$cacheKey];
+				
+				if ($name) {
+					$templateName = @$doc->getElementsByTagName('Name')->item(0)->nodeValue ?? '';
+					if ($templateName !== $name) {
+						return null;
+					}
+				}
+				
+				$node = $doc->getElementsByTagName($field)->item(0);
+				$TemplateField = $node ? trim($node->nodeValue) : '';
+				return trim($TemplateField);
+			}
+			
 			$doc = new DOMDocument();
 			if (@$doc->load($templatePath)) {
 				// Cache the loaded document for future use
