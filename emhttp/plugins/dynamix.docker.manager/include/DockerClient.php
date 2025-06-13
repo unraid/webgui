@@ -288,9 +288,10 @@ class DockerTemplates {
 	}
 
 	public function getTemplateValue($Repository, $field, $scope='all',$name='') {
+		$cacheKey = $Repository . '|' . realpath($templatePath ?? '');
 		// Check if template is already cached
-		if (isset($this->templateFileCache[$Repository])) {
-			$doc = $this->templateFileCache[$Repository];
+		if (isset($this->templateFileCache[$cacheKey])) {
+			$doc = $this->templateFileCache[$cacheKey];
 			
 			if ($name) {
 				$templateName = @$doc->getElementsByTagName('Name')->item(0)->nodeValue ?? '';
@@ -312,7 +313,7 @@ class DockerTemplates {
 			$doc = new DOMDocument();
 			if (@$doc->load($templatePath)) {
 				// Cache the loaded document for future use
-				$this->templateFileCache[$Repository] = $doc;
+				$this->templateFileCache[$cacheKey] = $doc;
 				
 				if ($name) {
 					$templateName = @$doc->getElementsByTagName('Name')->item(0)->nodeValue ?? '';
@@ -321,7 +322,8 @@ class DockerTemplates {
 					}
 				}
 				
-				$TemplateField = $doc->getElementsByTagName($field)->item(0)->nodeValue??'';
+				$node = $doc->getElementsByTagName($field)->item(0);  
+				$TemplateField = $node ? trim($node->nodeValue) : '';  
 				return trim($TemplateField);
 			}
 		}
