@@ -264,14 +264,6 @@ class DockerTemplates {
 		return $output;
 	}
 
-	private function extractRepoFast(string $path): ?string {
-		$chunk = file_get_contents($path, false, null, 0, 4096);
-		if ($chunk !== false && preg_match('/<Repository>\s*([^<]+)\s*<\/Repository>/i', $chunk, $m)) {
-			return DockerUtil::ensureImageTag(trim($m[1]));
-		}
-		return null;
-	}
-
 	private function getTemplateRepositoryMap($scope='all') {
 		if (isset($this->templateRepositoryCache[$scope])) {
 			return $this->templateRepositoryCache[$scope];
@@ -281,16 +273,22 @@ class DockerTemplates {
 		$templateList = $this->getTemplateList($scope);
 		
 		foreach ($templateList as $templatePath) {
-			$repository = $this->extractRepoFast($templatePath);
+			$cacheKey = realpath($templatePath);
 			
-			// Fallback to DOMDocument if regex fails
-			if (!$repository) {
+			// Check if template is already cached
+			if (isset($this->templateFileCache[$cacheKey])) {
+				$doc = $this->templateFileCache[$cacheKey];
+			} else {
 				$doc = new DOMDocument();
 				if (@$doc->load($templatePath)) {
-					$repoNode = $doc->getElementsByTagName('Repository')->item(0);
-					$repository = DockerUtil::ensureImageTag($repoNode ? $repoNode->nodeValue : '');
+					$this->templateFileCache[$cacheKey] = $doc;
+				} else {
+					continue;
 				}
 			}
+			
+			$repoNode = $doc->getElementsByTagName('Repository')->item(0);
+			$repository = DockerUtil::ensureImageTag($repoNode ? trim($repoNode->nodeValue) : '');
 			
 			if ($repository) {
 				if (!isset($repositoryMap[$repository])) {
@@ -313,40 +311,32 @@ class DockerTemplates {
 			
 			// Iterate over all template paths for this repository
 			foreach ($templatePaths as $templatePath) {
-				$cacheKey = $Repository . '|' . realpath($templatePath);
+				$cacheKey = realpath($templatePath);
 				
 				// Check if template is already cached
 				if (isset($this->templateFileCache[$cacheKey])) {
 					$doc = $this->templateFileCache[$cacheKey];
-					
-					if ($name) {
-						$templateName = @$doc->getElementsByTagName('Name')->item(0)->nodeValue ?? '';
-						if ($templateName !== $name) {
-							continue; // Try next template path
-						}
+				} else {
+					$doc = new DOMDocument();
+					if (@$doc->load($templatePath)) {
+						// Cache the loaded document for future use
+						$this->templateFileCache[$cacheKey] = $doc;
+					} else {
+						continue;
 					}
-					
-					$node = $doc->getElementsByTagName($field)->item(0);
-					$TemplateField = $node ? trim($node->nodeValue) : '';
-					return trim($TemplateField);
 				}
 				
-				$doc = new DOMDocument();
-				if (@$doc->load($templatePath)) {
-					// Cache the loaded document for future use
-					$this->templateFileCache[$cacheKey] = $doc;
-					
-					if ($name) {
-						$templateName = @$doc->getElementsByTagName('Name')->item(0)->nodeValue ?? '';
-						if ($templateName !== $name) {
-							continue; // Try next template path
-						}
+				if ($name) {
+					$node = $doc->getElementsByTagName('Name')->item(0);
+					$templateName = $node ? trim($node->nodeValue) : '';
+					if ($templateName !== $name) {
+						continue; // Try next template path
 					}
-					
-					$node = $doc->getElementsByTagName($field)->item(0);
-					$TemplateField = $node ? trim($node->nodeValue) : '';
-					return trim($TemplateField);
 				}
+				
+				$node = $doc->getElementsByTagName($field)->item(0);
+				$TemplateField = $node ? trim($node->nodeValue) : '';
+				return trim($TemplateField);
 			}
 		}
 		
