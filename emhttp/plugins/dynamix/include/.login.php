@@ -590,6 +590,7 @@ $isDarkTheme = $themeHelper->isDarkTheme();
                         <p class="error"><?= $error ?></p>
                     <?php } ?>
                 </form>
+                <?php include "$docroot/plugins/dynamix.my.servers/include/sso-login.php"; ?>
             </div>
 
             <a href="https://docs.unraid.net/go/lost-root-password/" target="_blank"><?= _('Password recovery') ?></a>
