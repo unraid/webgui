@@ -1178,7 +1178,7 @@ class DockerUtil {
 	public static function host() {
 		$port = static::port();
 		if (!$port) return '';
-		$port = lan_port($port,true)==0 && lan_port('wlan0') ? 'wlan0' : $port;
+		$port = lan_port($port,true)!=1 && lan_port('wlan0') ? 'wlan0' : $port;
 		return exec("ip -br -4 addr show $port scope global | sed -r 's/\/[0-9]+//g' | awk '{print $3;exit}'");
 	}
 }
