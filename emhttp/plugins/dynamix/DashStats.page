@@ -12,8 +12,7 @@ Nchan="wg_poller,update_1,update_2,update_3,ups_status:stop,vm_dashusage"
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
 */
-?>
-<?
+
 function export_settings($protocol,$share) {
   if ($protocol!='yes' || $share['export']=='-') return "-";
   if ($share['export']=='e') return _(ucfirst($share['security']));
@@ -195,445 +194,1022 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
   default     : $color = '#1c1b1b'; $grid = '#e3e3e3'; $c0 = '#a8a8a8'; $c1 = '#dcdcdc'; break;
 }
 ?>
-<link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
 
+<link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
 <script src="<?autov('/webGui/javascript/jquery.apexcharts.js')?>"></script>
 <script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
 <script src="<?autov('/plugins/dynamix.docker.manager/javascript/docker.js')?>"></script>
 <script src="<?autov('/plugins/dynamix.vm.manager/javascript/vmmanager.js')?>"></script>
 
 <div class='frame'>
-<div class='grid'>
-<div class='tile' id='tile1'>
-<table id='db_box1' class='dashboard'>
-<tbody class='system'>
-<tr><td><i class='icon-performance f32'></i><div class='section'><?=_var($var,'NAME')?><br>
-<span><?=htmlspecialchars(_var($var,'COMMENT'))?></span><span id="current_time_" class="switch head_time"></span><br></div>
-<a href='/Dashboard/Settings/Identification'><i class='fa fa-fw fa-cog control' title="_(Go to identification settings)_"></i></a><i class='fa fa-fw fa-wrench control tile' onclick='contentMgmt()' title="_(Tile Management)_"></i>
-<span class='ctrl'>
-<?if ($parity||$mover||$btrfs):?>
-<span class='fa fa-fw fa-<?=$started?'stop':'play'?>-circle busy' title="<?=$started?_("Stop the array"):_("Start the array")?>"></span>
-<?else:?>
-<span class='fa fa-fw fa-<?=$started?'stop':'play'?>-circle hand' title="<?=$started?_("Stop the array"):_("Start the array")?>" onclick='<?=$started?'Stop':'Start'?>Array()'></span>
-<?endif;?>
-<?if ($sleep):?><span class='fa fa-fw fa-moon-o hand' title="_(Put system to sleep)_" onclick='Sleep()'></span><?endif;?>
-<span class='fa fa-fw fa-refresh hand' title="_(Reboot the system)_" onclick='Reboot()'></span>
-<span class='fa fa-fw fa-power-off hand' title="_(Shutdown the system)_" onclick='Shutdown()'></span></span>
-</td></tr>
-<tr><td>
-<div class='leftside'>
-<a href="/Settings/DateTime" class="hand none"><span id="current_time"></span></a><br><span id="current_date"></span><br><br>
-<span class='header'><i class='indent fa fa-file-text-o'></i>_(Model)_</span><br><i class='indent'></i><?=htmlspecialchars(_var($var,'SYS_MODEL'))?:'---'?><br><br>
-<span class='header'><i class='indent fa fa-id-badge'></i>_(Registration)_</span><br><i class='indent'></i>Unraid OS <b><em><?=_var($var,'regTy')?></em></b><br><br>
-<span class='header'><i class='indent fa fa-clock-o'></i>_(Uptime)_</span><br><i class='indent'></i><span class='uptime'></span>
-</div>
-<div class='rightside'>
-<span id='casing'>
-<?if ($mycase):?>
-<?if (substr($mycase,-4)!='.png'):?>
-<i id='mycase' class='case-<?=$mycase?>'></i><br>
-<?else:?>
-<img id='mycase' src='<?=autov("/webGui/images/$mycase")?>'><br>
-<?endif;?>
-<?else:?>
-<i id='mycase' class='fa fa-hdd-o'></i><br>
-<?endif;?>
-</span>
-<input type='button' value="_(Edit)_" style="margin-right:0" onclick='openChanges("select_case <?=$myfile?>", "_(Select Case Model)_", "selectcase")'>
-</div>
-</td></tr>
-</tbody>
+    <div class='grid'>
 
-<tbody title="_(Motherboard Information)_">
-<tr><td><i class='icon-motherboard f32'></i><div class='section'>_(Motherboard)_<br><span id='mb-temp'></span><br></div>
-<a href='#' onclick='InfoButton();' title="_(Show Information)_"><i class='fa fa-fw fa-info-circle control'></i></a>
-</td></tr>
-<tr><td><?=$board?><br><?=$bios?><br><?=$biosdate?></td></tr>
-</tbody>
-<?
-$is_intel_cpu = is_intel_cpu();
-$core_types = $is_intel_cpu ? get_intel_core_types() : [];
-?>
+        <div class='tile' id='tile1'>
+            <table id='db_box1' class='dashboard'>
+                <tbody class='system'>
+                    <tr>
+                        <td>
+                            <span class='tile-header'>
+                                <span class='tile-header-left'>
+                                    <i class='icon-performance f32'></i>
 
-<tbody title="_(Processor Information)_" data="toggleCPU(true)">
-<tr><td><i class='icon-cpu f32'></i><div class='section'>_(Processor)_<br>
-<span class="head_info"><span id='cpu-temp'></span></span>
-<span class="switch">_(Load)_:<span class="head_bar"><span class='cpu_ load'>0%</span><div class='usage-disk sys'><span id='cpu_'></span><span></span></div></span></span><br></div>
-<a href='/Dashboard/Settings/CPUset' title="_(Go to CPU pinning settings)_"><i class='fa fa-fw fa-cog control'></i></a>
-</td></tr>
-<tr><td><?=$cpumodel?></td></tr>
-<tr><td><span class='w26'>_(Overall Load)_:</span><span class='w72'><span class='cpu load resize'>0%</span><div class='usage-disk sys'><span id='cpu'></span><span></span></div></span></td></tr>
-<tr id='cpu_main'><td><a onclick='toggleCPU()' title="_(Click to toggle details)_" class='cpu_close'>_(Show details)_</a><span id='chart-toggle'>
-<span><select id='cpuline' class='auto' title="_(Select time frame)_" onchange='changeCPUline(this.value)'>
-<?=mk_option("","10", _("10 s"));?>
-<?=mk_option("","30", _("30 s"));?>
-<?=mk_option("","60", _("1 m"));?>
-<?=mk_option("","120", _("2 m"));?>
-<?=mk_option("","300", _("5 m"));?>
-</select></span><a onclick='toggleChart()' title="_(Click to toggle CPU chart)_"><span class="fa fa-fw fa-bar-chart hand"></span></a></span></td></tr>
+                                    <div class='section'>
+                                        <h3 class='tile-header-main'><?=_var($var,'NAME')?></h3>
+                                        <span><?=htmlspecialchars(_var($var,'COMMENT'))?></span>
+                                        <span id="current_time_" class="switch head_time"></span><br>
+                                    </div>
+                                </span>
 
-<?
-foreach ($cpus as $pair) {
-  [$cpu1, $cpu2] = my_preg_split('/[,-]/',$pair);
-  echo "<tr class='cpu_open'>";
-  if ($is_intel_cpu && count($core_types) > 0) $core_type = "({$core_types[$cpu1]})"; else $core_type = "";
-  if ($cpu2)
-    echo "<td><span class='w26'>CPU $cpu1 $core_type - HT $cpu2 </span><span class='dashboard w36'><span class='cpu$cpu1 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu1'></span><span></span></div></span><span class='dashboard w36'><span class='cpu$cpu2 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu2'></span><span></span></div></span></td>";
-  else
-    echo "<td><span class='w26'>CPU $cpu1 $core_type</span><span class='w72'><span class='cpu$cpu1 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu1'></span><span></span></div></span></td>";
-  echo "</tr>";
-}
-?>
-<tr id='cpu_chart'><td><div id='cpuchart'></div></td></tr>
-</tbody>
+                                <span class='tile-header-right'>
+                                    <span class='tile-ctrl flex flex-row items-center gap-4'>
+                                        <?if ($parity||$mover||$btrfs):?>
+                                            <span class='fa fa-fw fa-<?=$started?'stop':'play'?>-circle busy' title="<?=$started?_("Stop the array"):_("Start the array")?>"></span>
+                                        <?else:?>
+                                            <span class='fa fa-fw fa-<?=$started?'stop':'play'?>-circle hand' title="<?=$started?_("Stop the array"):_("Start the array")?>" onclick='<?=$started?'Stop':'Start'?>Array()'></span>
+                                        <?endif;?>
+                                        <?if ($sleep):?>
+                                            <span class='fa fa-fw fa-moon-o hand' title="_(Put system to sleep)_" onclick='Sleep()'></span>
+                                        <?endif;?>
+                                        <span class='fa fa-fw fa-refresh hand' title="_(Reboot the system)_" onclick='Reboot()'></span>
+                                        <span class='fa fa-fw fa-power-off hand' title="_(Shutdown the system)_" onclick='Shutdown()'></span>
+                                    </span>
 
-<tbody title="_(Memory Utilization)_">
-<tr><td><i class='icon-ram f32'></i><div class='section'>_(System)_<br>
-<span class="head_info"><span><i class='ups fa fa-line-chart'></i>_(Memory)_: <?="$memory_installed $unit $memory_type $ecc"?></span></span>
-<span class="switch">_(RAM)_:<span class="head_bar"><span class='sys0_ load'>0%</span><div class='usage-disk sys'><span id='sys0_'></span><span></span></div></span></span><br></div>
-<a href='/Dashboard/Tools/Processes' title="_(View Running Processes)_"><i class='fa fa-fw fa-info-circle control'></i></a>
-</td></tr><tr><td>
-<span class='w26'><i class='ups fa fa-compress'></i>_(Usable size)_: <?=$ramsize?><br><i class='ups fa fa-expand'></i>_(Maximum size)_: <?="$memory_maximum $unit"?><?=$low?'*':''?></span>
-<span class='w18 center static'><a class='info hand none'>_(RAM usage)_<span>_(Percent of total used memory)_ (<?=$ramsize?>)</span></a></span>
-<span class='w18 center static'><a class='info hand none'>_(Flash device)_<span>_(Percent usage of flash usb device)_ (<?=$flashsize?>)</span></a></span>
-<span class='w18 center static'><a class='info hand none'>_(Log filesystem)_<span>_(Percent usage of LOG file system)_ (<?=$logsize?>)</span></a></span>
-<span class='w18 center static'><a class='info hand none'><?=$vdisk?><span><?=_("Percent usage of $vdisk")?> (<?=$dockersize?>)</span></a></span>
-</td></tr><tr><td>
-<span class='w26'><legend>_(Legend)_</legend><span id='dynamic'></span></span>
-<span class='w18 center'><div class='pie' id='sys0'><span class='sys0'></span><span class='var0'></span></div></span>
-<span class='w18 center'><div class='pie' id='sys1'><span class='sys1'></span><span class='var1'></span></div></span>
-<span class='w18 center'><div class='pie' id='sys2'><span class='sys2'></span><span class='var2'></span></div></span>
-<span class='w18 center'><div class='pie' id='sys3'><span class='sys3'></span><span class='var3'></span></div></span>
-</td></tr>
-</tbody>
+                                    <span class='tile-header-right-controls'>
+                                        <a href='/Dashboard/Settings/Identification'>
+                                            <i class='fa fa-fw fa-cog control' title="_(Go to identification settings)_"></i>
+                                        </a>
+                                        <i class='fa fa-fw fa-wrench control tile' onclick='contentMgmt()' title="_(Tile Management)_"></i>
+                                    </span>
+                                </span>
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div class='leftside'>
+                                <a href="/Settings/DateTime" class="hand none">
+                                    <span id="current_time"></span>
+                                </a><br>
+                                <span id="current_date"></span><br><br>
+                                <span class='header'>
+                                    <i class='indent fa fa-file-text-o'></i>_(Model)_
+                                </span><br>
+                                <i class='indent'></i><?=htmlspecialchars(_var($var,'SYS_MODEL'))?:'---'?><br><br>
+                                <span class='header'>
+                                    <i class='indent fa fa-id-badge'></i>_(Registration)_
+                                </span><br>
+                                <i class='indent'></i>Unraid OS <b><em><?=_var($var,'regTy')?></em></b><br><br>
+                                <span class='header'>
+                                    <i class='indent fa fa-clock-o'></i>_(Uptime)_
+                                </span><br>
+                                <i class='indent'></i><span class='uptime'></span>
+                            </div>
+                            <div class='rightside'>
+                                <span id='casing'>
+                                    <?if ($mycase):?>
+                                        <?if (substr($mycase,-4)!='.png'):?>
+                                            <i id='mycase' class='case-<?=$mycase?>'></i><br>
+                                        <?else:?>
+                                            <img id='mycase' src='<?=autov("/webGui/images/$mycase")?>'><br>
+                                        <?endif;?>
+                                    <?else:?>
+                                        <i id='mycase' class='fa fa-hdd-o'></i><br>
+                                    <?endif;?>
+                                </span>
+                                <input type='button' value="_(Edit)_" style="margin-right:0" onclick='openChanges("select_case <?=$myfile?>", "_(Select Case Model)_", "selectcase")'>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
 
-<tbody title="_(Interface Information)_" class="mixed">
-<tr><td><i class='icon-ethernet f32'></i><div class='section'>_(Interface)_
-<span class="head_gap"><i class='ups fa fa-angle-double-right'></i><select name="port_select" onchange="portSelect(this.value)">
-<?foreach ($ports as $port):?>
-<?=mk_option("",$port,_($port))?>
-<?endforeach;?>
-</select></span><br>
-<span class='head_info'><i class='ups fa fa-angle-double-down'></i>_(Inbound)_: <span id='inbound'>---</span></span><span><i class='ups fa fa-angle-double-up'></i>_(Outbound)_: <span id='outbound'>---</span></span><br></div>
-<a href='/Dashboard/Settings/NetworkSettings' title="_(Go to network settings)_"><i class='fa fa-fw fa-cog control'></i></a>
-</td></tr>
-<tr><td><span class='w26'><select name="enter_view" onchange="changeView(this.value)">
-<?=mk_option("", "0", _("General info"))?>
-<?=mk_option("", "1", _("Counters info"))?>
-<?=mk_option("", "2", _("Errors info"))?>
-<?=mk_option("", "3", _("Network traffic"))?>
-</select></span>
-<span class='w36'><i class='view1'>_(Mode of operation)_</i><i class='view2'>_(Received packets)_</i><i class='view3'>_(Receive counters)_</i><i class='fa fa-fw fa-arrow-down view4 red-text'></i>&nbsp;<i class='view4 red-text'>_(Inbound)_</i></span>
-<span class='w36'><i class='view1'></i><i class='view2'>_(Transmitted packets)_</i><i class='view3'>_(Transmit counters)_</i><i class='fa fa-fw fa-arrow-up view4 orange-text'></i>&nbsp;<i class='view4 orange-text'>_(Outbound)_</i>
-<span class='view4' style='float:right'><select id='netline' class='auto' title="_(Select time frame)_" onchange='changeNetline(this.value)'>
-<?=mk_option("","10", _("10 s"))?>
-<?=mk_option("","30", _("30 s"))?>
-<?=mk_option("","60", _("1 m"))?>
-<?=mk_option("","120", _("2 m"))?>
-<?=mk_option("","300", _("5 m"))?>
-</select></span></span></td></tr>
-<?
-$c = 0;
-foreach ($ports as $port) {
-  $last = $port=='lo' ? ' last' : '';
-  echo "<tr class='view1{$last}'><td><span class='w26'>$port</span><span class='w72' id='main".($c++)."'></span></td></tr>";
-}
-$c = 0;
-foreach ($ports as $port) {
-  $last = $port=='lo' ? ' last' : '';
-  echo "<tr class='view2{$last}'><td><span class='w26'>$port</span><span class='w36' id='port{$c}'></span><span class='w36' id='port".($c+1)."'></span></td></tr>";
-  $c += 2;
-}
-$c = 0;
-foreach ($ports as $port) {
-  $last = $port=='lo' ? ' last' : '';
-  echo "<tr class='view3{$last}'><td><span class='w26'>$port</span><span class='w36' id='link{$c}'></span><span class='w36' id='link".($c+1)."'></span></td></tr>";
-  $c += 2;
-}
-?>
-<tr class="view4"><td><div id="netchart"></div></td></tr>
-</tbody>
+                <tbody title="_(Motherboard Information)_">
+                    <tr>
+                        <td>
+                            <span class='tile-header'>
+                              <span class='tile-header-left'>
+                                <i class='icon-motherboard f32'></i>
+                                <div class='section'>
+                                    <h3 class='tile-header-main'>_(Motherboard)_</h3>
+                                    <span id='mb-temp'></span><br>
+                                </div>
+                              </span>
+                              <span class='tile-header-right'>
+                                <span class='tile-header-right-controls'>
+                                  <a href='#' onclick='InfoButton();' title="_(Show Information)_">
+                                      <i class='fa fa-fw fa-info-circle control'></i>
+                                  </a>
+                                </span>
+                              </span>
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <?=$board?><br>
+                            <?=$bios?><br>
+                            <?=$biosdate?>
+                        </td>
+                    </tr>
+                </tbody>
 
-<?if ($wireguard):?>
-<tbody title="_(VPN Connections)_">
-<tr><td><i class='icon-vpn f32'></i><div class='section'>_(VPN)_<br><span><span class='head_info'><i class='ups fa fa-play-circle'></i>_(Active tunnels)_: <span id='vpn-active'><?=$up?></span></span><i class='ups fa fa-pause-circle'></i>_(Inactive tunnels)_: <span id='vpn-inactive'><?=$down?></span></span><br></div>
-<a href='/Settings/VPNmanager' title="_(Go to VPN settings)_"><i class='fa fa-fw fa-cog control'></i></a>
-</td></tr>
-<?foreach ($conf as $wg):?>
-<?$vpn = basename($wg,'.conf'); $peers = vpn_peers($wg);?>
-<tr><td class='vpn'><span class='w26'><i class='icon-vpn vpn<?=in_array($vpn,$wg_up)?'':' inactive'?>' onclick="toggleVPN($(this),'<?=$vpn?>')" title="Toggle tunnel state"></i><?="Tunnel $vpn"?></span>
-<span class='w36 vpn right'>_(Activity)_</span><span class='w36 vpn right'>_(Handshake)_</span></td></tr>
-<?foreach ($peers as $i => $peer):?>
-<tr><td><span class='w26 wg1'><?=$peer?></span><span class='w36 wg2' id='<?="$vpn-rx-".($i-1)?>'>---</span><span class='w36 wg2' id='<?="$vpn-hs-".($i-1)?>'>_(inactive)_</span></td></tr>
-<?endforeach;?>
-<?endforeach;?>
-</tbody>
-<?endif;?>
+                <?
+                $is_intel_cpu = is_intel_cpu();
+                $core_types = $is_intel_cpu ? get_intel_core_types() : [];
+                ?>
 
-<?if ($apcupsd):?>
-<tbody title="_(Power Status)_">
-<tr><td><i class='icon-ups f32'></i><div class='section'>_(Power)_<span class='switch head_gap' id='ups_status_'></span><br>
-<span class="head_info"><span><i class='ups fa fa-bar-chart'></i>_(UPS Model)_: </span><span id='ups_model'></span></span>
-<span class="switch"><span>_(Load)_:</span><span class="head_gap" id='ups_loadpct_'></span></span></span><br></div>
-<a href='/Dashboard/Settings/UPSsettings' title="_(Go to UPS settings)_"><i class='fa fa-fw fa-cog control'></i></a>
-</td></tr>
-<tr><td><span class='w36'><i class='ups fa fa-fw fa-plug'></i>_(UPS status)_:</span><span id='ups_status'></span></td></tr>
-<tr><td><span class='w36'><i class='ups fa fa-fw fa-bars'></i>_(UPS Load)_: </span><span id='ups_loadpct'></span></td></tr>
-<tr><td><span class='w36'><i class='ups fa fa-fw fa-battery'></i>_(Battery charge)_:</span><span id='ups_bcharge'></span></td></tr>
-<tr><td><span class='w36'><i class='ups fa fa-fw fa-clock-o'></i>_(Runtime left)_:</span><span id='ups_timeleft'></span></td></tr>
-<tr><td><span class='w36'><i class='ups fa fa-fw fa-bolt'></i>_(Nominal power)_:</span><span id='ups_nompower'></span></td></tr>
-<tr><td><span class='w36'><i class='ups fa fa-fw fa-ellipsis-h'></i>_(Output voltage)_:</span><span id='ups_outputv'></span></td></tr>
-</tbody>
-<?endif;?>
+                <tbody title="_(Processor Information)_" data="toggleCPU(true)">
+                    <tr>
+                        <td>
+                            <span class='tile-header'>
+                                <span class='tile-header-left'>
+                                  <i class='icon-cpu f32'></i>
+                                  <div class='section'>
+                                      <h3 class='tile-header-main'>_(Processor)_</h3>
+                                      <?=$cpumodel?>
+                                  </div>
+                                </span>
+                                <span class='tile-header-right'>
+                                    <span class='tile-header-right-controls'>
+                                        <a href='/Dashboard/Settings/CPUset' title="_(Go to CPU pinning settings)_">
+                                            <i class='fa fa-fw fa-cog control'></i>
+                                        </a>
+                                    </span>
+                                </span>
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class='flex flex-row flex-wrap items-center gap-4'>
+                                <span class="head_info">
+                                    <span id='cpu-temp'></span>
+                                </span>
+                                <span class="switch">
+                                    _(Load)_:<span class="head_bar">
+                                    <span class='cpu_ load'>0%</span>
+                                    <div class='usage-disk sys'>
+                                        <span id='cpu_'></span>
+                                        <span></span>
+                                    </div>
+                                </span>
+                                <br>
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class='w26'>_(Overall Load)_:</span>
+                            <span class='w72'>
+                                <span class='cpu load resize'>0%</span>
+                                <div class='usage-disk sys'>
+                                    <span id='cpu'></span>
+                                    <span></span>
+                                </div>
+                            </span>
+                        </td>
+                    </tr>
+                    <tr id='cpu_main'>
+                        <td>
+                            <span class='flex flex-row items-center justify-between gap-4'>
+                                <a onclick='toggleCPU()' title="_(Click to toggle details)_" class='cpu_close'>_(Show details)_</a>
+                                <span id='chart-toggle' class='flex flex-row items-center gap-4'>
+                                    <span>
+                                        <select id='cpuline' class='auto' title="_(Select time frame)_" onchange='changeCPUline(this.value)'>
+                                            <?=mk_option("","10", _("10 s"));?>
+                                            <?=mk_option("","30", _("30 s"));?>
+                                            <?=mk_option("","60", _("1 m"));?>
+                                            <?=mk_option("","120", _("2 m"));?>
+                                            <?=mk_option("","300", _("5 m"));?>
+                                        </select>
+                                    </span>
+                                    <a onclick='toggleChart()' title="_(Click to toggle CPU chart)_">
+                                        <span class="fa fa-fw fa-bar-chart hand"></span>
+                                    </a>
+                                </span>
+                            </span>
+                        </td>
+                    </tr>
 
-<?if ($fans):?>
-<tbody title="_(Fan Information)_">
-<tr><td><i class='icon-fan f32'></i><div class='section'>_(Airflow)_<br><span><i class='ups fa fa-sort-amount-asc'></i>_(Fan count)_: <?=$fans?></span><br></div>
+                    <?
+                    foreach ($cpus as $pair) {
+                        [$cpu1, $cpu2] = my_preg_split('/[,-]/',$pair);
+                        echo "<tr class='cpu_open'>";
+                        if ($is_intel_cpu && count($core_types) > 0) 
+                            $core_type = "({$core_types[$cpu1]})"; 
+                        else 
+                            $core_type = "";
+                        
+                        if ($cpu2)
+                            echo "<td><span class='w26'>CPU $cpu1 $core_type - HT $cpu2 </span><span class='dashboard w36'><span class='cpu$cpu1 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu1'></span><span></span></div></span><span class='dashboard w36'><span class='cpu$cpu2 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu2'></span><span></span></div></span></td>";
+                        else
+                            echo "<td><span class='w26'>CPU $cpu1 $core_type</span><span class='w72'><span class='cpu$cpu1 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu1'></span><span></span></div></span></td>";
+                        echo "</tr>";
+                    }
+                    ?>
+                    <tr id='cpu_chart'>
+                        <td>
+                            <div id='cpuchart'></div>
+                        </td>
+                    </tr>
+                </tbody>
 
-<?if ($autofan):?>
-<a href='/Dashboard/Settings/FanSettings' title="_(Go to fan settings)_"><i class='fa fa-fw fa-cog control'></i></a>
-<?endif;?>
-</td></tr>
-<?
-$label = $value = [];
-$i = 0;
-for ($fan=0; $fan<$fans; $fan++) {
-  if ($fan > 0 && $fan % 3 == 0) $i++;
-  $class = $fan % 3 == 2 ? "" : " class='fan'";
-  $label[$i][] = "<span{$class}>"._('FAN')." ".($fan+1)."</span>";
-}
-$i = 0;
-for ($fan=0; $fan<$fans; $fan++) {
-  if ($fan > 0 && $fan % 3 == 0) $i++;
-  $class = $fan % 3 == 2 ? "" : " class='fan'";
-  $value[$i][] = "<span{$class} id='fan$fan'>--</span>";
-}
-echo "<tr><td>";
-for ($i = 0; $i < count($label); $i++) {
-  foreach ($label[$i] as $data) echo $data;
-  echo "<br>";
-  foreach ($value[$i] as $data) echo $data;
-  echo "<br>";
-  if ($i < count($value)-1) echo "<br>";
-}
-echo "</td></tr>";
-?>
-</tbody>
-<?endif;?>
-<?customTiles('column1');?>
-</table>
-</div>
+                <tbody title="_(Memory Utilization)_">
+                    <tr>
+                        <td>
+                            <span class='tile-header'>
+                                <span class='tile-header-left'>
+                                    <i class='icon-ram f32'></i>
+                                    <div class='section'>
+                                        <h3 class='tile-header-main'>_(System)_</h3>
+                                        <span class='flex flex-row flex-wrap items-center gap-4'>
+                                            <span class="head_info">
+                                                <span>
+                                                    <i class='ups fa fa-line-chart'></i>_(Memory)_: <?="$memory_installed $unit $memory_type $ecc"?>
+                                                </span>
+                                            </span>
+                                            <span class="switch">
+                                                _(RAM)_:<span class="head_bar">
+                                                    <span class='sys0_ load'>0%</span>
+                                                    <div class='usage-disk sys'>
+                                                        <span id='sys0_'></span>
+                                                        <span></span>
+                                                    </div>
+                                                </span>
+                                            </span><br>
+                                        </span>
+                                    </div>
+                                </span>
+                                <span class='tile-header-right'>
+                                    <span class='tile-header-right-controls'>
+                                        <a href='/Dashboard/Tools/Processes' title="_(View Running Processes)_">
+                                            <i class='fa fa-fw fa-info-circle control'></i>
+                                        </a>
+                                    </span>
+                                </span>
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div class="tile-system-memory-body">
+                                <div class="tile-system-memory-labels">
+                                    <div>
+                                        <i class='ups fa fa-compress'></i>_(Usable size)_: <?=$ramsize?><br>
+                                        <i class='ups fa fa-expand'></i>_(Maximum size)_: <?="$memory_maximum $unit"?><?=$low?'*':''?>
+                                    </div>
+                                    <div>
+                                        <legend>_(Legend)_</legend>
+                                        <span id='dynamic'></span>
+                                    </div>
+                                </div>
+                                <div class='tile-system-memory-charts'>
+                                  <span>
+                                      <a class='info hand none'>_(RAM usage)_<span>_(Percent of total used memory)_ (<?=$ramsize?>)</span></a>
+                                      <div class='pie' id='sys0'><span class='sys0'></span><span class='var0'></span></div>
+                                  </span>
+                                  <span>
+                                      <a class='info hand none'>_(Flash device)_<span>_(Percent usage of flash usb device)_ (<?=$flashsize?>)</span></a>
+                                      <div class='pie' id='sys1'><span class='sys1'></span><span class='var1'></span></div>
+                                  </span>
+                                  <span>
+                                      <a class='info hand none'>_(Log filesystem)_<span>_(Percent usage of LOG file system)_ (<?=$logsize?>)</span></a>
+                                      <div class='pie' id='sys2'><span class='sys2'></span><span class='var2'></span></div>
+                                  </span>
+                                  <span>
+                                      <a class='info hand none'><?=$vdisk?><span><?=_("Percent usage of $vdisk")?> (<?=$dockersize?>)</span></a>
+                                      <div class='pie' id='sys3'><span class='sys3'></span><span class='var3'></span></div>
+                                  </span>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
 
-<div class='tile' id='tile2'>
-<table id='db_box2' class='dashboard'>
-<?if ($dockerd):?>
-<tbody id='docker_view' title="_(Docker Containers)_" data="noApps()">
-<tr><td><i class='icon-docker f32'></i><div class='section'>_(Docker Containers)_<br>
-<span class='apps button'><input type='checkbox' id='apps'></span>
-<span class='apps switch'></span><br></div>
-<a href='/Dashboard/Settings/DockerSettings' title="_(Go to Docker settings)_"><i class='fa fa-fw fa-cog control'></i></a>
-</td></tr>
-</tbody>
-<?endif;?>
-<?if ($libvirtd):?>
-<tbody id='vm_view' title="_(Virtual Machines)_" data="noVMs()">
-<tr><td><i class='icon-virtualization f32'></i><div class='section'>_(Virtual Machines)_<br>
-<span class='vms button'><input type='checkbox' id='vms'></span>
-<span class='vms switch'></span><br></div>
-<a href='/Dashboard/Settings/VMSettings' title="_(Go to VM settings)_"><i class='fa fa-fw fa-cog control'></i></a>
-</td></tr>
-</tbody>
-<?if ($vmusage == "Y"):?>
-<tbody id='vm_view_usage' title="_(Virtual Machines Usage)_" >
-<tr><td><i class='icon-virtualization f32'></i><div class='section'>_(Virtual Machines Usage)_</div>
-<a href='/Dashboard/Settings/VMSettings' title="_(Go to VM settings)_"><i class='fa fa-fw fa-cog control'></i></a>
-</td></tr>
-</tbody>
-<?endif;?>
-<?endif;?>
+                <tbody title="_(Interface Information)_" class="mixed">
+                    <tr>
+                        <td>
+                            <span class='tile-header'>
+                                <span class='tile-header-left'>
+                                    <i class='icon-ethernet f32'></i>
+                                    <div class='section'>
+                                        <span class='flex flex-row items-center gap-4'>
+                                          <h3 class='tile-header-main'>_(Interface)_</h3>
+                                          <span class="head_gap flex flex-row items-center gap-4">
+                                              <i class='ups fa fa-angle-double-right'></i>
+                                              <select name="port_select" onchange="portSelect(this.value)">
+                                                  <?foreach ($ports as $port):?>
+                                                      <?=mk_option("",$port,_($port))?>
+                                                  <?endforeach;?>
+                                              </select>
+                                          </span><br>
+                                        </span>
+                                        <span class='flex flex-row flex-wrap items-center gap-4'>
+                                            <span class='head_info'>
+                                                <i class='ups fa fa-angle-double-down'></i>_(Inbound)_: <span id='inbound'>---</span>
+                                            </span>
+                                            <span>
+                                                <i class='ups fa fa-angle-double-up'></i>_(Outbound)_: <span id='outbound'>---</span>
+                                            </span><br>
+                                        </span>
+                                    </div>
+                                </span>
 
-<tbody title="_(Shares Information)_"<?if ($group):?> class="mixed"<?endif;?>>
-<tr><td><i class='icon-folder f32'></i><div class='section'>_(Shares)_
-<?if ($group):?>
-<span class="head_gap"><i class='ups fa fa-angle-double-right'></i><select name="enter_share" onchange="changeMode(this.value)">
-<?if (_var($var,'shareSMBEnabled')=='yes'):?>
-<?=mk_option("", "0", "SMB")?>
-<?endif;?>
-<?if (_var($var,'shareNFSEnabled')=='yes'):?>
-<?=mk_option("", "2", "NFS")?>
-<?endif;?>
-</select></span>
-<?endif;?>
-<br><span>
-<?=sprintf(_("Share count: %s with %s public SMB and %s public NFS"),count($shares),$SMBpublic,$NFSpublic)?>
-</span><br></div>
-<a href='/Shares' title="_(Go to Share settings)_"><i class='fa fa-fw fa-cog control'></i></a>
-</td></tr>
-<tr class='header'><td><span class='w26'>_(Name)_</span><span class='w44'>_(Description)_</span><span class='w18'>_(Security)_</span><span>_(Streams)_</span></td></tr>
-<?
-if (_var($var,'shareSMBEnabled')=='yes') {
-  $i = 0;
-  foreach ($shares as $name => $share) {
-    $list = "<a href=\"/Dashboard/Shares/".(isset($share['diskexport']) ? "Disk" : "Share")."?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">$name</a>";
-    $comment = $share['comment'] ?: '-';
-    $security = export_settings(_var($var,'shareSMBEnabled'), $sec[$name]);
-    $last = $name==array_key_last($shares) ? ' last' : '';
-    echo "<tr class='smb share share1{$last}'><td><span class='w26'><i class='icon-folder f14'></i>$list</span><span class='w44'>".htmlspecialchars($comment)."</span><span class='w18'>$security</span><span id='share",$i++,"'>0</span></td></tr>";
-  }
-  if (!count($shares)) echo "<tr class='smb share share1'><td class='none'>"._("No shares present")."</td></tr>";
-}
-if (_var($var,'shareNFSEnabled')=='yes') {
-  foreach ($shares as $name => $share) {
-    if ( ! isset($sec_nfs[$name]) ) continue;
-    $list = "<a href=\"/Dashboard/Shares/".(isset($share['diskexport']) ? "Disk" : "Share")."?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">$name</a>";
-    $comment = $share['comment'] ?: '-';
-    $security = export_settings(_var($var,'shareNFSEnabled'), $sec_nfs[$name]);
-    $last = $name==array_key_last($shares) ? ' last' : '';
-    echo "<tr class='nfs share share3{$last}'><td><span class='w26'><i class='icon-folder f14'></i>$list</span><span class='w44'>".htmlspecialchars($comment)."</span><span class='w18'>$security</span><span>-</span></td></tr>";
-  }
-  if (!count($shares)) echo "<tr class='nfs share share3'><td class='none'>"._("No shares present")."</td></tr>";
-}
-if (!$group) {
-  foreach ($shares as $name => $share) {
-    $list = "<a href=\"/Dashboard/Shares/".(isset($share['diskexport']) ? "Disk" : "Share")."?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">$name</a>";
-    $comment = $share['comment'] ?: '-';
-    echo "<tr class='share'><td><span class='w26'><i class='icon-folder f14'></i>$list</span><span class='w44'>".htmlspecialchars($comment)."</span><span class='w18'>-</span><span>-</span></td></tr>";
-  }
-  if (!count($shares)) echo "<tr class='share'><td class='none'>"._("No shares present")."</td></tr>";
-}
-?>
-</tbody>
+                                <span class="tile-header-right">
+                                    <span class='tile-header-right-controls'>
+                                        <a href='/Dashboard/Settings/NetworkSettings' title="_(Go to network settings)_">
+                                            <i class='fa fa-fw fa-cog control'></i>
+                                        </a>
+                                    </span>
+                                </span>
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class='w26'>
+                                <select name="enter_view" onchange="changeView(this.value)">
+                                    <?=mk_option("", "0", _("General info"))?>
+                                    <?=mk_option("", "1", _("Counters info"))?>
+                                    <?=mk_option("", "2", _("Errors info"))?>
+                                    <?=mk_option("", "3", _("Network traffic"))?>
+                                </select>
+                            </span>
+                            <span class='w36'>
+                                <i class='view1'>_(Mode of operation)_</i>
+                                <i class='view2'>_(Received packets)_</i>
+                                <i class='view3'>_(Receive counters)_</i>
+                                <i class='fa fa-fw fa-arrow-down view4 red-text'></i>&nbsp;
+                                <i class='view4 red-text'>_(Inbound)_</i>
+                            </span>
+                            <span class='w36'>
+                                <i class='view1'></i>
+                                <i class='view2'>_(Transmitted packets)_</i>
+                                <i class='view3'>_(Transmit counters)_</i>
+                                <i class='fa fa-fw fa-arrow-up view4 orange-text'></i>&nbsp;
+                                <i class='view4 orange-text'>_(Outbound)_</i>
+                                <span class='view4' style='float:right'>
+                                    <select id='netline' class='auto' title="_(Select time frame)_" onchange='changeNetline(this.value)'>
+                                        <?=mk_option("","10", _("10 s"))?>
+                                        <?=mk_option("","30", _("30 s"))?>
+                                        <?=mk_option("","60", _("1 m"))?>
+                                        <?=mk_option("","120", _("2 m"))?>
+                                        <?=mk_option("","300", _("5 m"))?>
+                                    </select>
+                                </span>
+                            </span>
+                        </td>
+                    </tr>
+                    <?
+                    $c = 0;
+                    foreach ($ports as $port) {
+                        $last = $port=='lo' ? ' last' : '';
+                        echo "<tr class='view1{$last}'><td><span class='w26'>$port</span><span class='w72' id='main".($c++)."'></span></td></tr>";
+                    }
+                    $c = 0;
+                    foreach ($ports as $port) {
+                        $last = $port=='lo' ? ' last' : '';
+                        echo "<tr class='view2{$last}'><td><span class='w26'>$port</span><span class='w36' id='port{$c}'></span><span class='w36' id='port".($c+1)."'></span></td></tr>";
+                        $c += 2;
+                    }
+                    $c = 0;
+                    foreach ($ports as $port) {
+                        $last = $port=='lo' ? ' last' : '';
+                        echo "<tr class='view3{$last}'><td><span class='w26'>$port</span><span class='w36' id='link{$c}'></span><span class='w36' id='link".($c+1)."'></span></td></tr>";
+                        $c += 2;
+                    }
+                    ?>
+                    <tr class="view4">
+                        <td>
+                            <div id="netchart"></div>
+                        </td>
+                    </tr>
+                </tbody>
 
-<tbody title="_(Users Information)_"<?if ($group):?> class="mixed"<?endif;?>>
-<tr><td><i class='icon-users f32'></i><div class='section'>_(Users)_
-<?if ($group):?>
-<span class="head_gap"><i class='ups fa fa-angle-double-right unused'></i><select name="enter_user" class="unused">
-<?if (_var($var,'shareSMBEnabled')=='yes'):?>
-<?=mk_option("", "0", "SMB")?>
-<?endif;?>
-<?if (_var($var,'shareNFSEnabled')=='yes'):?>
-<?=mk_option("", "2", "NFS")?>
-<?endif;?>
-</select></span>
-<?endif;?>
-<br><span>
-<?=sprintf(_("User count: %s with %s unprotected"),count($users),$nopass)?>
-</span><br></div>
-<a href='/Users' title="_(Go to User settings)_"><i class='fa fa-fw fa-cog control'></i></a>
-</td></tr>
-<tr class='header'><td><span class='w26'>_(Name)_</span><span class='w44'>_(Description)_</span><span class='w18'>_(Write)_</span><span>_(Read)_</span></td></tr>
-<?
-if (_var($var,'shareSMBEnabled')=='yes') {
-  foreach ($users as $user) {
-    $name = $user['name'];
-    $list = "<a href=\"/Dashboard/Users/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">$name</a>";
-    $desc = $user['desc'] ?: '-';
-    if ($name=='root') {
-      $write = $read = '-';
-    } else {
-      $write = $read = 0;
-      foreach ($shares as $share) {
-        $access = $sec[$share['name']];
-        if ($access['export']=='-') continue;
-        switch ($access['security']) {
-        case 'public':
-          $write++;
-          $read++;
-          break;
-        case 'secure':
-          if (in_array($name,explode(',',$access['writeList']))) {$write++; $read++;} else $read++;
-          break;
-        case 'private':
-          if (in_array($name,explode(',',$access['writeList']))) {$write++; $read++;}
-          if (in_array($name,explode(',',$access['readList']))) $read++;
-          break;
-        }
-      }
-    }
-    if ($user['passwd']!='yes') $list = str_replace('blue-text','orange-text',$list);
-    $last = $name==array_key_last($users) ? ' last' : '';
-    echo "<tr class='smb user user1{$last}'><td><span class='w26'><i class='icon-user f14'></i>$list</span><span class='w44'>".htmlspecialchars($desc)."</span><span class='w18'>$write</span><span>$read</span></td></tr>";
-  }
-}
-if (_var($var,'shareNFSEnabled')=='yes') {
-  foreach ($users as $user) {
-    $name = $user['name'];
-    $list = "<a href=\"/Dashboard/Users/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">$name</a>";
-    $desc = $user['desc'] ?: '-';
-    $write = '-'; $read = '-';
-    if ($user['passwd']!='yes') $list = str_replace('blue-text','orange-text',$list);
-    $last = $name==array_key_last($users) ? ' last' : '';
-    echo "<tr class='nfs user user3{$last}'><td><span class='w26'><i class='icon-user f14'></i>$list</span><span class='w44'>".htmlspecialchars($desc)."</span><span class='w18'>$write</span><span>$read</span></td></tr>";
-  }
-}
-if (!$group) {
-  foreach ($users as $user) {
-    $name = $user['name'];
-    $list = "<a href=\"/Dashboard/Users/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">$name</a>";
-    $desc = $user['desc'] ?: '-';
-    if ($user['passwd']!='yes') $list = str_replace('blue-text','orange-text',$list);
-    echo "<tr class='user'><td><span class='w26'><i class='icon-user f14'></i>$list</span><span class='w44'>".htmlspecialchars($desc)."</span><span class='w18'>-</span><span>-</span></td></tr>";
-  }
-}
-?>
-</tbody>
-<?customTiles('column2');?>
-</table>
-</div>
+                <?if ($wireguard):?>
+                <tbody title="_(VPN Connections)_">
+                    <tr>
+                        <td>
+                            <span class='tile-header'>
+                                <span class='tile-header-left gap-2'>
+                                    <i class='icon-vpn f32'></i>
+                                    <div class='section'>
+                                        <h3 class='tile-header-main'>_(VPN)_</h3>
+                                        <span class='flex flex-row flex-wrap items-center gap-4'>
+                                            <span class='head_info'>
+                                                <i class='ups fa fa-play-circle'></i>_(Active tunnels)_: <span id='vpn-active'><?=$up?></span>
+                                            </span>
+                                            <span>
+                                              <i class='ups fa fa-pause-circle'></i>_(Inactive tunnels)_: <span id='vpn-inactive'><?=$down?></span>
+                                            </span>
+                                        </span><br>
+                                    </div>
+                                </span>
 
-<div class='tile' id='tile3'>
-<table id='db_box3' class='dashboard'>
-<?if (!$poolsOnly):?>
-<tbody title="_(Parity Information)_">
-<tr><td><i class='icon-health f32'></i><div class='section'>_(Parity)_<br>
-<span class='parity'></span><br></div>
-<a href='/Dashboard/Settings/Scheduler' title="_(Go to scheduler settings)_"><i class='fa fa-fw fa-cog control'></i></a>
-</td></tr>
-<tr><td id='parity' class="wrap"></td></tr>
-<tr><td id='program' class="wrap"></td></tr>
-</tbody>
+                                <span class='tile-header-right'>
+                                    <span class='tile-header-right-controls'>
+                                        <a href='/Settings/VPNmanager' title="_(Go to VPN settings)_">
+                                            <i class='fa fa-fw fa-cog control'></i>
+                                        </a>
+                                    </span>
+                                </span>
+                            </span>
+                        </td>
+                    </tr>
+                    <?foreach ($conf as $wg):?>
+                        <?$vpn = basename($wg,'.conf'); $peers = vpn_peers($wg);?>
+                        <tr>
+                            <td class='vpn'>
+                                <span class='w26'>
+                                    <i class='icon-vpn vpn<?=in_array($vpn,$wg_up)?'':' inactive'?>' onclick="toggleVPN($(this),'<?=$vpn?>')" title="Toggle tunnel state"></i>
+                                    <?="Tunnel $vpn"?>
+                                </span>
+                                <span class='w36 vpn right'>_(Activity)_</span>
+                                <span class='w36 vpn right'>_(Handshake)_</span>
+                            </td>
+                        </tr>
+                        <?foreach ($peers as $i => $peer):?>
+                            <tr>
+                                <td>
+                                    <span class='w26 wg1'><?=$peer?></span>
+                                    <span class='w36 wg2' id='<?="$vpn-rx-".($i-1)?>'>---</span>
+                                    <span class='w36 wg2' id='<?="$vpn-hs-".($i-1)?>'>_(inactive)_</span>
+                                </td>
+                            </tr>
+                        <?endforeach;?>
+                    <?endforeach;?>
+                </tbody>
+                <?endif;?>
 
-<?$power = _var($display,'power') && in_array('nvme',array_column(main_filter($disks),'transport')) ? ' / '._('Power') : '';?>
-<tbody id='array_list' title="_(Array Information)_">
-<tr><td><i class='icon-disks f32'></i><div class='section'>_(Array)_<?if (!$started):?> (_(stopped)_)<?endif;?><br>
-<span><?if ($started):?><?=sprintf(_("%s used of %s (%s %%)"),my_scale($array_used*1024,$unit)." $unit",my_scale($array_size*1024,$unit,-1,-1)." $unit",$array_percent)?><?endif;?></span><br></div>
-<a href='/Dashboard/Settings/DiskSettings' title="_(Go to disk settings)_"><i class='fa fa-fw fa-cog control'></i></a>
-</td></tr>
-<tr><td id='array_info'></td></tr>
-<tr class='header'><td><span class='w26'>_(Device)_</span><span class='w18'>_(Status)_</span><span class='w18'>_(Temp)_<?=$power?></span><span class='w18'>_(SMART)_</span><span class='w18'>_(Utilization)_</span></td></tr>
-</tbody>
-<?endif;?>
+                <?if ($apcupsd):?>
+                <tbody title="_(Power Status)_">
+                    <tr>
+                        <td>
+                            <span class='tile-header'>
+                                <span class='tile-header-left'>
+                                    <i class='icon-ups f32'></i>
+                                    <div class='section'>
+                                        <h3 class='tile-header-main'>_(Power)_</h3>
+                                        <span class="flex flex-row flex-wrap items-center gap-4">
+                                            <span class='switch head_gap' id='ups_status_'></span>
+                                            <br>
+                                            <span class="head_info">
+                                                <span>
+                                                    <i class='ups fa fa-bar-chart'></i>_(UPS Model)_: 
+                                                </span>
+                                                <span id='ups_model'></span>
+                                            </span>
+                                            <span class="switch">
+                                                <span>_(Load)_:</span>
+                                                <span class="head_gap" id='ups_loadpct_'></span>
+                                            </span><br>
+                                        </span>
+                                    </div>
+                                </span>
+                                <span class='tile-header-right'>
+                                    <span class='tile-header-right-controls'>
+                                        <a href='/Dashboard/Settings/UPSsettings' title="_(Go to UPS settings)_">
+                                            <i class='fa fa-fw fa-cog control'></i>
+                                        </a>
+                                    </span>
+                                </span>
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class='w36'>
+                                <i class='ups fa fa-fw fa-plug'></i>_(UPS status)_:
+                            </span>
+                            <span id='ups_status'></span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class='w36'>
+                                <i class='ups fa fa-fw fa-bars'></i>_(UPS Load)_: 
+                            </span>
+                            <span id='ups_loadpct'></span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class='w36'>
+                                <i class='ups fa fa-fw fa-battery'></i>_(Battery charge)_:
+                            </span>
+                            <span id='ups_bcharge'></span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class='w36'>
+                                <i class='ups fa fa-fw fa-clock-o'></i>_(Runtime left)_:
+                            </span>
+                            <span id='ups_timeleft'></span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class='w36'>
+                                <i class='ups fa fa-fw fa-bolt'></i>_(Nominal power)_:
+                            </span>
+                            <span id='ups_nompower'></span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class='w36'>
+                                <i class='ups fa fa-fw fa-ellipsis-h'></i>_(Output voltage)_:
+                            </span>
+                            <span id='ups_outputv'></span>
+                        </td>
+                    </tr>
+                </tbody>
+                <?endif;?>
 
-<?$i=0?>
-<?foreach ($pools as $pool):
-  $cache = array_filter(cache_filter($disks),function($disk) use ($pool){return prefix($disk['name'])==$pool;});
-  $power = _var($display,'power') && in_array('nvme',array_column($cache,'transport')) ? ' / '._('Power') : '';
-?>
-<tbody id='pool_list<?=$i?>' title="_(<?=ucfirst($pool)?> Information)_">
-<tr><td><i class='icon-disk f32'></i><div class='section'><?=_(native($pool),3).($started ? '' : ' ('._('stopped').')')?><br>
-<span><?if ($started):?><?=sprintf(_("%s used of %s (%s %%)"),my_scale($cache_used[$pool]*1024,$unit)." $unit",my_scale($cache_size[$pool]*1024,$unit,-1,-1)." $unit",$cache_rate[$pool])?><?endif;?></span><br></div>
-<a href='/Dashboard/Settings/Device?name=<?=$pool?>' title="_(Go to disk settings)_"><i class='fa fa-fw fa-cog control'></i></a>
-</td></tr>
-<tr><td id='pool_info<?=$i++?>'></td></tr>
-<tr class='header'><td><span class='w26'>_(Device)_</span><span class='w18'>_(Status)_</span><span class='w18'>_(Temp)_<?=$power?></span><span class='w18'>_(SMART)_</span><span class='w18'>_(Utilization)_</span></td></tr>
-</tbody>
-<?endforeach;?>
+                <?if ($fans):?>
+                <tbody title="_(Fan Information)_">
+                    <tr>
+                        <td>
+                            <span class='tile-header'>
+                                <span class='tile-header-left'>
+                                    <i class='icon-fan f32'></i>
+                                    <div class='section'>
+                                        <h3 class='tile-header-main'>_(Airflow)_</h3>
+                                        <span>
+                                            <i class='ups fa fa-sort-amount-asc'></i>_(Fan count)_: <?=$fans?>
+                                        </span><br>
+                                    </div>
+                                </span>
+                                <?if ($autofan):?>
+                                    <span class='tile-header-right'>
+                                        <span class='tile-header-right-controls'>
+                                            <a href='/Dashboard/Settings/FanSettings' title="_(Go to fan settings)_">
+                                                <i class='fa fa-fw fa-cog control'></i>
+                                            </a>
+                                        </span>
+                                    </span>
+                                <?endif;?>
+                            </span>
+                        </td>
+                    </tr>
+                    <?
+                    $label = $value = [];
+                    $i = 0;
+                    for ($fan=0; $fan<$fans; $fan++) {
+                        if ($fan > 0 && $fan % 3 == 0) $i++;
+                        $class = $fan % 3 == 2 ? "" : " class='fan'";
+                        $label[$i][] = "<span{$class}>"._('FAN')." ".($fan+1)."</span>";
+                    }
+                    $i = 0;
+                    for ($fan=0; $fan<$fans; $fan++) {
+                        if ($fan > 0 && $fan % 3 == 0) $i++;
+                        $class = $fan % 3 == 2 ? "" : " class='fan'";
+                        $value[$i][] = "<span{$class} id='fan$fan'>--</span>";
+                    }
+                    echo "<tr><td>";
+                    for ($i = 0; $i < count($label); $i++) {
+                        foreach ($label[$i] as $data) echo $data;
+                        echo "<br>";
+                        foreach ($value[$i] as $data) echo $data;
+                        echo "<br>";
+                        if ($i < count($value)-1) echo "<br>";
+                    }
+                    echo "</td></tr>";
+                    ?>
+                </tbody>
+                <?endif;?>
 
-<?if ($devs):?>
-<?$power = _var($display,'power') && in_array('nvme',array_column($devs,'transport')) ? ' / '._('Power') : '';?>
-<tbody id='devs_list' title="_(Unassigned Devices)_">
-<tr><td><i class='icon-disc f32'></i><div class='section'>_(Unassigned)_<?if (!$started):?> (_(stopped)_)<?endif;?><br>
-<span></span><br></div>
-<a href='/Dashboard/Settings/DiskSettings' title="_(Go to disk settings)_"><i class='fa fa-fw fa-cog control'></i></a>
-</td></tr>
-<tr><td id='devs_info'></td></tr>
-<tr class='header'><td><span class='w26'>_(Device)_</span><span class='w18'>_(Status)_</span><span class='w18'>_(Temp)_<?=$power?></span><span class='w18'>_(SMART)_</span><span class='w18'>_(Utilization)_</span></td></tr>
-</tbody>
-<?endif;?>
-<?customTiles('column3');?>
-</table>
-</div>
-</div>
+                <?customTiles('column1');?>
+            </table>
+        </div>
+
+        <div class='tile' id='tile2'>
+            <table id='db_box2' class='dashboard'>
+                <?if ($dockerd):?>
+                    <tbody id='docker_view' title="_(Docker Containers)_" data="noApps()">
+                        <tr>
+                            <td>
+                                <span class='tile-header'>
+                                    <span class='tile-header-left'>
+                                        <i class='icon-docker f32'></i>
+                                        <div class='section'>
+                                            <h3 class='tile-header-main'>_(Docker Containers)_</h3>
+                                            <span class='apps button'>
+                                                <input type='checkbox' id='apps'>
+                                            </span>
+                                            <span class='apps switch'></span><br>
+                                        </div>
+                                    </span>
+                                    <span class='tile-header-right'>
+                                        <span class='tile-header-right-controls'>
+                                            <a href='/Dashboard/Settings/DockerSettings' title="_(Go to Docker settings)_">
+                                                <i class='fa fa-fw fa-cog control'></i>
+                                            </a>
+                                        </span>
+                                    </span>
+                                </span>
+                            </td>
+                        </tr>
+                    </tbody>
+                <?endif;?>
+                <?if ($libvirtd):?>
+                    <tbody id='vm_view' title="_(Virtual Machines)_" data="noVMs()">
+                        <tr>
+                            <td>
+                                <span class='tile-header'>
+                                    <span class='tile-header-left'>
+                                        <i class='icon-virtualization f32'></i>
+                                        <div class='section'>
+                                            <h3 class='tile-header-main'>_(Virtual Machines)_</h3>
+                                            <span class='vms button'>
+                                                <input type='checkbox' id='vms'>
+                                            </span>
+                                            <span class='vms switch'></span><br>
+                                        </div>
+                                    </span>
+
+                                    <span class='tile-header-right'>
+                                        <span class='tile-header-right-controls'>
+                                            <a href='/Dashboard/Settings/VMSettings' title="_(Go to VM settings)_">
+                                                <i class='fa fa-fw fa-cog control'></i>
+                                            </a>
+                                        </span>
+                                    </span>
+                                </span>
+                            </td>
+                        </tr>
+                    </tbody>
+
+                    <?if ($vmusage == "Y"):?>
+                        <tbody id='vm_view_usage' title="_(Virtual Machines Usage)_" >
+                            <tr>
+                                <td>
+                                    <span class='tile-header'>
+                                        <span class='tile-header-left'>
+                                            <i class='icon-virtualization f32'></i>
+                                            <div class='section'>
+                                              <h3 class='tile-header-main'>_(Virtual Machines Usage)_</h3>
+                                            </div>
+                                        </span>
+                                        <span class='tile-header-right'>
+                                            <span class='tile-header-right-controls'>
+                                                <a href='/Dashboard/Settings/VMSettings' title="_(Go to VM settings)_">
+                                                    <i class='fa fa-fw fa-cog control'></i>
+                                                </a>
+                                            </span>
+                                        </span>
+                                    </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    <?endif;?>
+                <?endif;?>
+
+                <tbody title="_(Shares Information)_"<?if ($group):?> class="mixed"<?endif;?>>
+                    <tr>
+                        <td>
+                            <span class='tile-header'>
+                                <span class='tile-header-left'>
+                                    <i class='icon-folder f32'></i>
+                                    <div class='section'>
+                                        <span class='flex flex-row flex-wrap items-center gap-4'>
+                                          <h3 class='tile-header-main'>_(Shares)_</h3>
+                                            <?if ($group):?>
+                                              <i class='ups fa fa-angle-double-right'></i>
+                                                <span class="head_gap flex flex-row flex-wrap items-center gap-4">
+                                                    <select name="enter_share" onchange="changeMode(this.value)">
+                                                        <?if (_var($var,'shareSMBEnabled')=='yes'):?>
+                                                            <?=mk_option("", "0", "SMB")?>
+                                                        <?endif;?>
+                                                        <?if (_var($var,'shareNFSEnabled')=='yes'):?>
+                                                            <?=mk_option("", "2", "NFS")?>
+                                                        <?endif;?>
+                                                    </select>
+                                                </span>
+                                            <?endif;?>
+                                        </span>
+                                        <span>
+                                            <?=sprintf(_("Share count: %s with %s public SMB and %s public NFS"),count($shares),$SMBpublic,$NFSpublic)?>
+                                        </span><br>
+                                    </div>
+                                </span>
+
+                                <span class='tile-header-right'>
+                                    <span class='tile-header-right-controls'>
+                                        <a href='/Shares' title="_(Go to Share settings)_">
+                                            <i class='fa fa-fw fa-cog control'></i>
+                                        </a>
+                                    </span>
+                                </span>
+                            </span>
+                        </td>
+                    </tr>
+                    <tr class='header'>
+                        <td>
+                            <span class='w26'>_(Name)_</span>
+                            <span class='w44'>_(Description)_</span>
+                            <span class='w18'>_(Security)_</span>
+                            <span>_(Streams)_</span>
+                        </td>
+                    </tr>
+                    <?
+                    if (_var($var,'shareSMBEnabled')=='yes') {
+                        $i = 0;
+                        foreach ($shares as $name => $share) {
+                            $list = "<a href=\"/Dashboard/Shares/".(isset($share['diskexport']) ? "Disk" : "Share")."?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">$name</a>";
+                            $comment = $share['comment'] ?: '-';
+                            $security = export_settings(_var($var,'shareSMBEnabled'), $sec[$name]);
+                            $last = $name==array_key_last($shares) ? ' last' : '';
+                            echo "<tr class='smb share share1{$last}'><td><span class='w26'><i class='icon-folder f14'></i>$list</span><span class='w44'>".htmlspecialchars($comment)."</span><span class='w18'>$security</span><span id='share",$i++,"'>0</span></td></tr>";
+                        }
+                        if (!count($shares)) echo "<tr class='smb share share1'><td class='none'>"._("No shares present")."</td></tr>";
+                    }
+                    if (_var($var,'shareNFSEnabled')=='yes') {
+                        foreach ($shares as $name => $share) {
+                            if ( ! isset($sec_nfs[$name]) ) continue;
+                            $list = "<a href=\"/Dashboard/Shares/".(isset($share['diskexport']) ? "Disk" : "Share")."?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">$name</a>";
+                            $comment = $share['comment'] ?: '-';
+                            $security = export_settings(_var($var,'shareNFSEnabled'), $sec_nfs[$name]);
+                            $last = $name==array_key_last($shares) ? ' last' : '';
+                            echo "<tr class='nfs share share3{$last}'><td><span class='w26'><i class='icon-folder f14'></i>$list</span><span class='w44'>".htmlspecialchars($comment)."</span><span class='w18'>$security</span><span>-</span></td></tr>";
+                        }
+                        if (!count($shares)) echo "<tr class='nfs share share3'><td class='none'>"._("No shares present")."</td></tr>";
+                    }
+                    if (!$group) {
+                        foreach ($shares as $name => $share) {
+                            $list = "<a href=\"/Dashboard/Shares/".(isset($share['diskexport']) ? "Disk" : "Share")."?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">$name</a>";
+                            $comment = $share['comment'] ?: '-';
+                            echo "<tr class='share'><td><span class='w26'><i class='icon-folder f14'></i>$list</span><span class='w44'>".htmlspecialchars($comment)."</span><span class='w18'>-</span><span>-</span></td></tr>";
+                        }
+                        if (!count($shares)) echo "<tr class='share'><td class='none'>"._("No shares present")."</td></tr>";
+                    }
+                    ?>
+                </tbody>
+
+                <tbody title="_(Users Information)_"<?if ($group):?> class="mixed"<?endif;?>>
+                    <tr>
+                        <td>
+                            <span class='tile-header'>
+                                <span class='tile-header-left'>
+                                    <i class='icon-users f32'></i>
+                                    <div class='section'>
+                                        <h3 class='tile-header-main'>_(Users)_</h3>
+                                        <?if ($group):?>
+                                            <span class="head_gap">
+                                                <i class='ups fa fa-angle-double-right unused'></i>
+                                                <select name="enter_user" class="unused">
+                                                    <?if (_var($var,'shareSMBEnabled')=='yes'):?>
+                                                        <?=mk_option("", "0", "SMB")?>
+                                                    <?endif;?>
+                                                    <?if (_var($var,'shareNFSEnabled')=='yes'):?>
+                                                        <?=mk_option("", "2", "NFS")?>
+                                                    <?endif;?>
+                                                </select>
+                                            </span>
+                                        <?endif;?>
+                                        <span>
+                                            <?=sprintf(_("User count: %s with %s unprotected"),count($users),$nopass)?>
+                                        </span>
+                                    </div>
+                                </span>
+                                <span class='tile-header-right'>
+                                    <span class='tile-header-right-controls'>
+                                        <a href='/Users' title="_(Go to User settings)_">
+                                            <i class='fa fa-fw fa-cog control'></i>
+                                        </a>
+                                    </span>
+                                </span>
+                            </span>
+                        </td>
+                    </tr>
+                    <tr class='header'>
+                        <td>
+                            <span class='w26'>_(Name)_</span>
+                            <span class='w44'>_(Description)_</span>
+                            <span class='w18'>_(Write)_</span>
+                            <span>_(Read)_</span>
+                        </td>
+                    </tr>
+                    <?
+                    if (_var($var,'shareSMBEnabled')=='yes') {
+                        foreach ($users as $user) {
+                            $name = $user['name'];
+                            $list = "<a href=\"/Dashboard/Users/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">$name</a>";
+                            $desc = $user['desc'] ?: '-';
+                            if ($name=='root') {
+                                $write = $read = '-';
+                            } else {
+                                $write = $read = 0;
+                                foreach ($shares as $share) {
+                                    $access = $sec[$share['name']];
+                                    if ($access['export']=='-') continue;
+                                    switch ($access['security']) {
+                                        case 'public':
+                                            $write++;
+                                            $read++;
+                                            break;
+                                        case 'secure':
+                                            if (in_array($name,explode(',',$access['writeList']))) {$write++; $read++;} else $read++;
+                                            break;
+                                        case 'private':
+                                            if (in_array($name,explode(',',$access['writeList']))) {$write++; $read++;}
+                                            if (in_array($name,explode(',',$access['readList']))) $read++;
+                                            break;
+                                    }
+                                }
+                            }
+                            if ($user['passwd']!='yes') $list = str_replace('blue-text','orange-text',$list);
+                            $last = $name==array_key_last($users) ? ' last' : '';
+                            echo "<tr class='smb user user1{$last}'><td><span class='w26'><i class='icon-user f14'></i>$list</span><span class='w44'>".htmlspecialchars($desc)."</span><span class='w18'>$write</span><span>$read</span></td></tr>";
+                        }
+                    }
+                    if (_var($var,'shareNFSEnabled')=='yes') {
+                        foreach ($users as $user) {
+                            $name = $user['name'];
+                            $list = "<a href=\"/Dashboard/Users/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">$name</a>";
+                            $desc = $user['desc'] ?: '-';
+                            $write = '-'; $read = '-';
+                            if ($user['passwd']!='yes') $list = str_replace('blue-text','orange-text',$list);
+                            $last = $name==array_key_last($users) ? ' last' : '';
+                            echo "<tr class='nfs user user3{$last}'><td><span class='w26'><i class='icon-user f14'></i>$list</span><span class='w44'>".htmlspecialchars($desc)."</span><span class='w18'>$write</span><span>$read</span></td></tr>";
+                        }
+                    }
+                    if (!$group) {
+                        foreach ($users as $user) {
+                            $name = $user['name'];
+                            $list = "<a href=\"/Dashboard/Users/UserEdit?name=".urlencode($name)."\" class=\"blue-text\" title=\"$name settings\">$name</a>";
+                            $desc = $user['desc'] ?: '-';
+                            if ($user['passwd']!='yes') $list = str_replace('blue-text','orange-text',$list);
+                            echo "<tr class='user'><td><span class='w26'><i class='icon-user f14'></i>$list</span><span class='w44'>".htmlspecialchars($desc)."</span><span class='w18'>-</span><span>-</span></td></tr>";
+                        }
+                    }
+                    ?>
+                </tbody>
+
+                <?customTiles('column2');?>
+            </table>
+        </div>
+
+        <div class='tile' id='tile3'>
+            <table id='db_box3' class='dashboard'>
+                <?if (!$poolsOnly):?>
+                    <tbody title="_(Parity Information)_">
+                        <tr>
+                            <td>
+                                <span class='tile-header'>
+                                    <span class='tile-header-left'>
+                                        <i class='icon-health f32'></i>
+                                        <div class='section'>
+                                            <h3 class='tile-header-main'>_(Parity)_</h3>
+                                            <span class='parity'></span><br>
+                                        </div>
+                                    </span>
+                                    <span class='tile-header-right'>
+                                        <span class='tile-header-right-controls'>
+                                        <a href='/Dashboard/Settings/Scheduler' title="_(Go to scheduler settings)_">
+                                            <i class='fa fa-fw fa-cog control'></i>
+                                        </a>
+                                    </span>
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td id='parity' class="wrap"></td>
+                        </tr>
+                        <tr>
+                            <td id='program' class="wrap"></td>
+                        </tr>
+                    </tbody>
+
+                    <?$power = _var($display,'power') && in_array('nvme',array_column(main_filter($disks),'transport')) ? ' / '._('Power') : '';?>
+                    <tbody id='array_list' title="_(Array Information)_">
+                        <tr>
+                            <td>
+                                <span class='tile-header'>
+                                    <span class='tile-header-left'>
+                                        <i class='icon-disks f32'></i>
+                                        <div class='section'>
+                                            <h3 class='tile-header-main'>_(Array)_<?if (!$started):?> (_(stopped)_)<?endif;?></h3>
+                                            <span>
+                                                <?if ($started):?>
+                                                    <?=sprintf(_("%s used of %s (%s %%)"),my_scale($array_used*1024,$unit)." $unit",my_scale($array_size*1024,$unit,-1,-1)." $unit",$array_percent)?>
+                                                <?endif;?>
+                                            </span><br>
+                                        </div>
+                                    </span>
+                                    <span class='tile-header-right'>
+                                        <span class='tile-header-right-controls'>
+                                            <a href='/Dashboard/Settings/DiskSettings' title="_(Go to disk settings)_">
+                                                <i class='fa fa-fw fa-cog control'></i>
+                                            </a>
+                                        </span>
+                                    </span>
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td id='array_info'></td>
+                        </tr>
+                        <tr class='header'>
+                            <td>
+                                <span class='w26'>_(Device)_</span>
+                                <span class='w18'>_(Status)_</span>
+                                <span class='w18'>_(Temp)_<?=$power?></span>
+                                <span class='w18'>_(SMART)_</span>
+                                <span class='w18'>_(Utilization)_</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                <?endif;?>
+
+                <?$i=0?>
+                <?foreach ($pools as $pool):
+                    $cache = array_filter(cache_filter($disks),function($disk) use ($pool){return prefix($disk['name'])==$pool;});
+                    $power = _var($display,'power') && in_array('nvme',array_column($cache,'transport')) ? ' / '._('Power') : '';
+                ?>
+                    <tbody id='pool_list<?=$i?>' title="_(<?=ucfirst($pool)?> Information)_">
+                        <tr>
+                            <td>
+                                <span class='tile-header'>
+                                    <span class='tile-header-left'>
+                                        <i class='icon-disk f32'></i>
+                                        <div class='section'>
+                                            <h3 class='tile-header-main'><?=_(native($pool),3).($started ? '' : ' ('._('stopped').')')?></h3>
+                                            <span>
+                                                <?if ($started):?>
+                                                    <?=sprintf(_("%s used of %s (%s %%)"),my_scale($cache_used[$pool]*1024,$unit)." $unit",my_scale($cache_size[$pool]*1024,$unit,-1,-1)." $unit",$cache_rate[$pool])?>
+                                                <?endif;?>
+                                          </span><br>
+                                        </div>
+                                    </span>
+                                    <span class='tile-header-right'>
+                                        <span class='tile-header-right-controls'>
+                                            <a href='/Dashboard/Settings/Device?name=<?=$pool?>' title="_(Go to disk settings)_">
+                                                <i class='fa fa-fw fa-cog control'></i>
+                                            </a>
+                                        </span>
+                                    </span>
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td id='pool_info<?=$i++?>'></td>
+                        </tr>
+                        <tr class='header'>
+                            <td>
+                                <span class='w26'>_(Device)_</span>
+                                <span class='w18'>_(Status)_</span>
+                                <span class='w18'>_(Temp)_<?=$power?></span>
+                                <span class='w18'>_(SMART)_</span>
+                                <span class='w18'>_(Utilization)_</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                <?endforeach;?>
+
+                <?if ($devs):?>
+                    <?$power = _var($display,'power') && in_array('nvme',array_column($devs,'transport')) ? ' / '._('Power') : '';?>
+                    <tbody id='devs_list' title="_(Unassigned Devices)_">
+                        <tr>
+                            <td>
+                                <span class='tile-header'>
+                                    <span class='tile-header-left'>
+                                        <i class='icon-disc f32'></i>
+                                        <div class='section'>
+                                            <h3 class='tile-header-main'>_(Unassigned)_<?if (!$started):?> (_(stopped)_)<?endif;?></h3>
+                                            <span></span><br>
+                                        </div>
+                                    </span>
+                                    <span class='tile-header-right'>
+                                        <span class='tile-header-right-controls'>
+                                            <a href='/Dashboard/Settings/DiskSettings' title="_(Go to disk settings)_">
+                                                <i class='fa fa-fw fa-cog control'></i>
+                                            </a>
+                                        </span>
+                                    </span>
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td id='devs_info'></td>
+                        </tr>
+                        <tr class='header'>
+                            <td>
+                                <span class='w26'>_(Device)_</span>
+                                <span class='w18'>_(Status)_</span>
+                                <span class='w18'>_(Temp)_<?=$power?></span>
+                                <span class='w18'>_(SMART)_</span>
+                                <span class='w18'>_(Utilization)_</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                <?endif;?>
+
+                <?customTiles('column3');?>
+            </table>
+        </div>
+
+    </div>
 </div>
 
 <form name='boot' method='POST' action='/webGui/include/Boot.php'>
@@ -692,25 +1268,68 @@ function hideShow() {
 </div>
 
 <div id="templateClone" class="template">
-<table class="snapshot">
-<tr><td>_(VM Being Cloned)_:</td><td><span id="VMBeingCloned"></span></td></tr>
-<tr><td>_(New VM)_:</td><td><input type="text" id="target" autocomplete="off" spellcheck="false" value="" onclick="this.select()"></td></tr>
-<tr><td>_(Overwrite)_:</td><td><input type="checkbox" id="Overwrite" value="" ></td></tr>
-<tr hidden><td>_(Start Cloned VM)_:</td><td><input type="checkbox" id="Start" value="" ></td></tr>
-<tr hidden><td>_(Edit VM after clone)_:</td><td><input type="checkbox" id="Edit" value="" ></td></tr>
-<tr><td>_(Regenerate MAC addresses)_:</td><td><input type="checkbox" id="Regenmac" value="" checked ></td></tr>
-<tr><td>_(Check free space)_:</td><td><input type="checkbox" id="Free" value="" ></td></tr>
-</table>
+    <table class="snapshot">
+        <tr>
+            <td>_(VM Being Cloned)_:</td>
+            <td><span id="VMBeingCloned"></span></td>
+        </tr>
+        <tr>
+            <td>_(New VM)_:</td>
+            <td><input type="text" id="target" autocomplete="off" spellcheck="false" value="" onclick="this.select()"></td>
+        </tr>
+        <tr>
+            <td>_(Overwrite)_:</td>
+            <td><input type="checkbox" id="Overwrite" value=""></td>
+        </tr>
+        <tr hidden>
+            <td>_(Start Cloned VM)_:</td>
+            <td><input type="checkbox" id="Start" value=""></td>
+        </tr>
+        <tr hidden>
+            <td>_(Edit VM after clone)_:</td>
+            <td><input type="checkbox" id="Edit" value=""></td>
+        </tr>
+        <tr>
+            <td>_(Regenerate MAC addresses)_:</td>
+            <td><input type="checkbox" id="Regenmac" value="" checked></td>
+        </tr>
+        <tr>
+            <td>_(Check free space)_:</td>
+            <td><input type="checkbox" id="Free" value=""></td>
+        </tr>
+    </table>
 </div>
 
 <div id="templatesnapshotcreate" class="template">
-<table id="snapshot" class="snapshot">
-<tr><td>_(VM Name)_:</td><td><label id="VMName"></label></td></tr>
-<tr><td>_(Snapshot Name)_:</td><td><input type="text" id="targetsnap" autocomplete="off" spellcheck="false" value="--generate" onclick="this.select()">_(Check free space)_:<input type="checkbox" id="targetsnapfspc" checked></td></tr>
-<tr><td>_(Description)_:</td><td><input type="text" id="targetsnapdesc" autocomplete="off" spellcheck="false" value="" onclick="this.select()"></td></tr>
-<tr id="memoryline"><td>_(Memory dump)_:</td><td><input type="checkbox" id="targetsnapmem" checked></td></tr>
-<tr id="fstypeline"><td>_(FS Native Snapshot)_:</td><td><label id="fstype"></label><input type="checkbox" id="targetsnapfstype">_(Unchecked will use QEMU External Snapshot)_</td></tr>
-</table>
+    <table id="snapshot" class="snapshot">
+        <tr>
+            <td>_(VM Name)_:</td>
+            <td><label id="VMName"></label></td>
+        </tr>
+        <tr>
+            <td>_(Snapshot Name)_:</td>
+            <td>
+                <input type="text" id="targetsnap" autocomplete="off" spellcheck="false" value="--generate" onclick="this.select()">
+                _(Check free space)_:<input type="checkbox" id="targetsnapfspc" checked>
+            </td>
+        </tr>
+        <tr>
+            <td>_(Description)_:</td>
+            <td><input type="text" id="targetsnapdesc" autocomplete="off" spellcheck="false" value="" onclick="this.select()"></td>
+        </tr>
+        <tr id="memoryline">
+            <td>_(Memory dump)_:</td>
+            <td><input type="checkbox" id="targetsnapmem" checked></td>
+        </tr>
+        <tr id="fstypeline">
+            <td>_(FS Native Snapshot)_:</td>
+            <td>
+                <label id="fstype"></label>
+                <input type="checkbox" id="targetsnapfstype">
+                _(Unchecked will use QEMU External Snapshot)_
+            </td>
+        </tr>
+    </table>
 </div>
 
 <script>
@@ -1285,9 +1904,9 @@ function sortTables() {
 
 function addProperties() {
   $('div.frame tbody.system').addClass('sortable').attr('sort','_system_information_'.md5());
-  $('div.frame tbody.system').find('td:first').prepend("<i class='fa fa-fw fa-eject control' onclick='openClose()' title=\"_(Show/Hide All Content)_\"></i>");
+  $('div.frame tbody.system').find('td:first .tile-header-right .tile-header-right-controls').append("<i class='fa fa-fw fa-eject control' onclick='openClose()' title=\"_(Show/Hide All Content)_\"></i>");
   $('div.frame tbody').each(function(){
-    $(this).find('td:first').prepend("<i class='fa fa-fw fa-chevron-up control openclose' onclick='openClose($(this))' title=\"_(Show/Hide Content)_\"></i>");
+    $(this).find('td:first .tile-header-right .tile-header-right-controls').append("<i class='fa fa-fw fa-chevron-up control openclose' onclick='openClose($(this))' title=\"_(Show/Hide Content)_\"></i>");
   });
   $('div.frame tbody').not('.system').each(function(){
     $(this).addClass('sortable').attr('sort',$(this).attr('title').md5());

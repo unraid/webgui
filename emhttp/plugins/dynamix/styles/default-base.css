@@ -1024,10 +1024,11 @@ table.share_status tr > td:nth-child(5) {
 }
 table.dashboard {
     margin: 0;
+    background-color: transparent;
     border: none;
-    background-color: var(--mild-background-color);
 }
 table.dashboard tbody {
+    background-color: var(--mild-background-color);
     border: 1px solid var(--table-border-color);
 }
 table.dashboard tbody td {
@@ -1036,11 +1037,11 @@ table.dashboard tbody td {
     padding: 3px 10px;
 }
 table.dashboard tr:first-child > td {
-    height: 3.6rem;
-    padding-top: 12px;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
     font-size: 1.6rem;
     font-weight: bold;
-    letter-spacing: 1.8px;
+    /* letter-spacing: 1.8px; */
     text-transform: none;
     vertical-align: top;
 }
@@ -1070,16 +1071,16 @@ table.dashboard td.vpn {
     font-size: 1.1rem;
     font-weight: bold;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: normal;
 }
 table.dashboard td div.section {
     display: inline-block;
     vertical-align: top;
-    margin-left: 4px;
+    /* margin-left: 4px; */
     font-size: 1.2rem;
     font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    /* text-transform: uppercase; */
+    letter-spacing: normal;
 }
 table.dashboard td div.section span {
     font-weight: normal;
@@ -1107,16 +1108,32 @@ table.dashboard td span.finish {
     float: right;
     margin-right: 24px;
 }
-table.dashboard i.control {
-    float: right;
+table.dashboard .control {
     font-size: 1.4rem !important;
-    margin: 0 3px 0 0;
     cursor: pointer;
     color: var(--dashboard-icon-color);
     background-color: var(--dashboard-title-action-color);
-    padding: 2px;
-    border-radius: 5px;
+    padding: .25rem;
+    border-radius: .5rem;
+    opacity: 1;
+
+    &:hover {
+        opacity: .75;
+    }
 }
+
+.dashboard select {
+    /* color: var(--dashboard-icon-color);
+    background-color: var(--dashboard-title-action-color);
+    border-radius: .5rem;
+    opacity: 1;
+
+    &:hover,
+    &:focus {
+        opacity: .75;
+    } */
+}
+
 span.error {
     color: var(--red-600);
     background-color: var(--red-300);
@@ -1905,6 +1922,22 @@ span#wlan0 {
     gap: 1rem;
 }
 
+.gap-5 {
+    gap: 1.25rem;
+}
+
+.gap-6 {
+    gap: 1.5rem;
+}
+
+.gap-7 {
+    gap: 1.75rem;
+}
+
+.gap-8 {
+    gap: 2rem;
+}
+
 .gap-x-1 {
     column-gap: .25rem;
 }
@@ -2528,10 +2561,11 @@ div#title.ud {
     }
 
     table.dashboard {
-        background-color: var(--dashboard-background-color);
+        background-color: transparent;
     }
-
+    
     table.dashboard tbody {
+        background-color: var(--dashboard-background-color);
         border: 1px solid var(--dashboard-border-color);
     }
 
