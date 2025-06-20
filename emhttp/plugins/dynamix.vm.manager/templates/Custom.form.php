@@ -353,6 +353,10 @@ if ($snapshots!=null && count($snapshots) && !$boolNew) {
 <!--<input type="hidden" name="template[oldstorage]" id="storage_oldname" value="<?=htmlspecialchars($arrConfig['template']['storage'])?>"> -->
 <input type="hidden" name="domain[memoryBacking]" id="domain_memorybacking" value="<?=htmlspecialchars($arrConfig['domain']['memoryBacking'])?>">
 
+<script>
+const displayOptions = <?= json_encode($arrDisplayOptions, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+</script>
+
 <table>
 	<tr class="<?=$snaphidden?>">
 		<td></td>
@@ -1327,7 +1331,10 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 			<span id="vncdspopttext" class="label <?=$vncdspopt?>">_(Display(s) and RAM)_:</span>
 			<select id="vncdspopt" name="gpu[<?=$i?>][DisplayOptions]" class="second <?=$vncdspopt?>">
 			<?
-			foreach ($arrDisplayOptions as $key => $value) echo mk_option($arrGPU['DisplayOptions'], htmlentities($value['qxlxml'],ENT_QUOTES), _($value['text']));
+			foreach ($arrDisplayOptions as $key => $value) {
+				if ($arrGPU['protocol'] == 'vnc' && substr($key,0,2) != "H1") continue;
+				echo mk_option($arrGPU['DisplayOptions'], htmlentities($value['qxlxml'],ENT_QUOTES), _($value['text']));
+			}
 			?>
 			</select>
 		</td>
@@ -2218,6 +2225,40 @@ function ProtocolChange(protocol) {
 		$("wsport").addClass('hidden');
 		$("WSPorttext").addClass('hidden');
 	}
+
+    const select = document.getElementById('vncdspopt');
+    const currentValue = select.value;
+
+    // Clear all options
+    select.innerHTML = '';
+
+    let foundMatch = false;
+
+    for (const key in displayOptions) {
+        const opt = displayOptions[key];
+        const xml = opt.qxlxml;
+        const headsMatch = xml.match(/heads='(\d+)'/);
+        const heads = headsMatch ? parseInt(headsMatch[1]) : 1;
+
+        // Only show heads=1 options if protocol is vnc
+        if (protocol.value === 'vnc' && heads !== 1) continue;
+
+        const optionEl = document.createElement('option');
+        optionEl.value = xml;
+        optionEl.textContent = opt.text;
+
+        if (!foundMatch && xml === currentValue) {
+            optionEl.selected = true;
+            foundMatch = true;
+        }
+
+        select.appendChild(optionEl);
+    }
+
+    // If selected value no longer exists, select the first one
+    if (!foundMatch && select.options.length > 0) {
+        select.options[0].selected = true;
+    }
 }
 
 function wlan0_info() {

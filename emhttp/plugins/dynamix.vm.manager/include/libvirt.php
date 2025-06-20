@@ -742,6 +742,8 @@ class Libvirt {
 					if ($strProtocol == "spice")  $virtualaudio = "spice"; else  $virtualaudio = "none";
 					$strEGLHeadless = "";
 					$strAccel3d ="";
+					$additionalqxlheads = "";
+					$qxlheads=1;
 					if ($strModelType == "virtio3d") {
 						$strModelType = "virtio";
 						if (!isset($gpu['render'])) $gpu['render'] = "auto";
@@ -756,6 +758,29 @@ class Libvirt {
 					if ($strModelType == "qxl") {
 						if (empty($gpu['DisplayOptions'])) $gpu['DisplayOptions'] ="ram='65536' vram='16384' vgamem='16384' heads='1' primary='yes'";
 						$strDisplayOptions = $gpu['DisplayOptions'];
+						preg_match_all("/(\w+)='([^']+)'/", $strDisplayOptions, $headmatches, PREG_SET_ORDER);
+						$headparams = [];
+						foreach ($headmatches as $headmatch) {
+							$headparams[$headmatch[1]] = $headmatch[2];
+						}
+
+						// Default heads to 1 if not found
+						$qxlheads = isset($headparams['heads']) ? (int)$headparams['heads'] : 1;
+
+						$additionalqxlheads= '';
+						if ($os_type == "windows") {
+							for ($i = 0; $i < $qxlheads - 1; $i++) {
+								$function = '0x' . dechex($i + 1);
+								$qxlvideo = <<<XML
+							<video> 
+							<model type='qxl' ram='{$headparams['ram']}' vram='{$headparams['vram']}' vgamem='{$headparams['vgamem']}' heads='1'/>
+							<address type='pci' domain='0x0000' bus='0x00' slot='0x1e' function='$function'/>
+							</video>
+
+							XML;
+								$additionalqxlheads .= $qxlvideo;
+							}
+						}
 					}
 					$vmrc = "<input type='tablet' bus='usb'/>
 						<input type='mouse' bus='ps2'/>
@@ -771,13 +796,16 @@ class Libvirt {
 						</model>
 						<address type='pci' domain='0x0000' bus='0x00' slot='0x1e' function='0x0'/>
 						</video>
+						$additionalqxlheads
 						<audio id='1' type='$virtualaudio'/>";
-					if ($gpu['copypaste'] == "yes") {
-						if ($strProtocol == "spice") {
+					if ($strProtocol == "spice") {
+						if ($gpu['copypaste'] == "yes" || $qxlheads > 1) {
 							$channelscopypaste = "<channel type='spicevmc'>
 								<target type='virtio' name='com.redhat.spice.0'/>
 								</channel>";
-						} else {
+						}
+					} else {
+						if ($gpu['copypaste'] == "yes") {
 							$channelscopypaste = "<channel type='qemu-vdagent'>
 								<source>
 								<clipboard copypaste='yes'/>
@@ -786,7 +814,7 @@ class Libvirt {
 								<target type='virtio' name='com.redhat.spice.0'/>
 								</channel>";
 						}
-					} else $channelcopypaste = "";
+					}
 					continue;
 				}
 				[$gpu_bus, $gpu_slot, $gpu_function] = my_explode(":", str_replace('.', ':', $gpu['id']), 3);
