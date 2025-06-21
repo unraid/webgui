@@ -265,7 +265,12 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                 <i class='indent'></i><span class='uptime'></span>
                             </div>
                             <div class='rightside'>
-                                <span id='casing'>
+                                <div
+                                  id='casing'
+                                  class='tile-select-case'
+                                  title='_(Select Case Model)_'
+                                  onclick='openChanges("select_case <?=$myfile?>", "_(Select Case Model)_", "selectcase")'
+                                >
                                     <?if ($mycase):?>
                                         <?if (substr($mycase,-4)!='.png'):?>
                                             <i id='mycase' class='case-<?=$mycase?>'></i><br>
@@ -275,8 +280,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                     <?else:?>
                                         <i id='mycase' class='fa fa-hdd-o'></i><br>
                                     <?endif;?>
-                                </span>
-                                <input type='button' value="_(Edit)_" style="margin-right:0" onclick='openChanges("select_case <?=$myfile?>", "_(Select Case Model)_", "selectcase")'>
+                                </div>
                             </div>
                         </td>
                     </tr>
