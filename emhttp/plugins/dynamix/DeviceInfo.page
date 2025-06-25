@@ -331,6 +331,7 @@ function selectDiskFsProfile(init) {
   if (slots == 0) slots = <?=_var($disk,'slots',1)?>;
 
   var subpool = "<?=isSubpool($name) ?: ''?>";
+  var fsStatus = "<?=_var($disk,'fsStatus','')?>";
   var fsType;
 
   if (subpool == '') {
@@ -371,7 +372,7 @@ function selectDiskFsProfile(init) {
     $('#diskCompression').prop('disabled',true);
   } else {
     $('#compression').show(t);
-    $('#diskCompression').prop('disabled',false);
+    $('#diskCompression').prop('disabled',(fsStatus == 'Mounted'));
   }
 
 <?if (diskType('Data') || isSubpool($name)):?>
@@ -383,7 +384,7 @@ function selectDiskFsProfile(init) {
     $('#diskAutotrim').prop('disabled',true);
   } else {
     $('#autotrim').show(t);
-    $('#diskAutotrim').prop('disabled',false);
+    $('#diskAutotrim').prop('disabled',(fsStatus == 'Mounted'));
   }
 <?endif;?>
 }
@@ -795,7 +796,7 @@ _(Allocation profile)_:
 </div>
 <div markdown="1" id="compression">
 _(Compression)_:
-: <select id="diskCompression" name="diskCompression.<?=_var($disk,'idx',0)?>" <?=disabled_if(_var($disk,'fsStatus')=='Mounted')?>>
+: <select id="diskCompression" name="diskCompression.<?=_var($disk,'idx',0)?>">
   <?=mk_option(_var($disk,'compression'), "off", _('Off'))?>
   <?=mk_option(_var($disk,'compression'), "on", _('On'))?>
   </select>
@@ -804,7 +805,7 @@ _(Compression)_:
 </div>
 <div markdown="1" id="autotrim">
 _(Autotrim)_:
-: <select id="diskAutotrim" name="diskAutotrim.<?=_var($disk,'idx',0)?>" <?=disabled_if(_var($disk,'fsStatus')=='Mounted')?>>
+: <select id="diskAutotrim" name="diskAutotrim.<?=_var($disk,'idx',0)?>">
   <?=mk_option(_var($disk,'autotrim'), "on", _('On'))?>
   <?=mk_option(_var($disk,'autotrim'), "off", _('Off'))?>
   </select>
