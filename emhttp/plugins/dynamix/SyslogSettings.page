@@ -3,7 +3,7 @@ Title="Syslog Server"
 Icon="icon-eula"
 Tag="file-text-o"
 ---
-<?PHP
+<?php
 /* Copyright 2005-2023, Lime Technology
  * Copyright 2012-2023, Bergware International.
  *
@@ -15,11 +15,12 @@ Tag="file-text-o"
  * all copies or substantial portions of the Software.
  */
 ?>
-<?
+<?php
 $syslog = (array)@parse_ini_file('/boot/config/rsyslog.cfg');
 
-function plain($ip) {
-  return str_replace(['[',']'],'',$ip);
+function plain($ip)
+{
+    return str_replace(['[',']'], '', $ip);
 }
 // Get ports in use
 $portsInUse = [];
@@ -27,12 +28,14 @@ exec("lsof -Pni|awk '/LISTEN/ && \$9!~/127.0.0.1/ && \$9!~/\\[::1\\]/{print \$9}
 
 $ethX = 'eth0';
 $addr = ipaddr($ethX);
-$bind = _var($var,'BIND_MGT')=='yes';
+$bind = _var($var, 'BIND_MGT') == 'yes';
 $list = ['*',$addr];
 
 foreach ($output as $line) {
-  [$ip, $port] = my_explode(':', $line);
-  if (!in_array($port,$portsInUse) && (!$bind || in_array(plain($ip),$list))) $portsInUse[] = $port;
+    [$ip, $port] = my_explode(':', $line);
+    if (!in_array($port, $portsInUse) && (!$bind || in_array(plain($ip), $list))) {
+        $portsInUse[] = $port;
+    }
 }
 ?>
 <script>
@@ -49,7 +52,7 @@ $(function(){
 });
 function validatePort(form) {
   var portsInUse = JSON.parse('<?=json_encode($portsInUse)?>');
-  var currentPort = "<?=(_var($syslog,'local_server') && _var($syslog,'server_protocol')!='udp') ? _var($syslog,'server_port',514) : 514?>";
+  var currentPort = "<?=(_var($syslog, 'local_server') && _var($syslog, 'server_protocol') != 'udp') ? _var($syslog, 'server_port', 514) : 514?>";
   var port = $(form).find('input[name="server_port"]');
   var remotePort = $(form).find('input[name="remote_port"]');
   var protocol = $(form).find('select[name="server_protocol"]').val();
@@ -86,23 +89,28 @@ function validatePort(form) {
 <input type="hidden" name="#command" value="/webGui/scripts/rsyslog_config">
 
 _(Local syslog server)_:
-: <span class="span"><select name="local_server" onchange="localFolder(this.value,'slow')">
-  <?=mk_option(_var($syslog,'local_server'), "", _("Disabled"))?>
-  <?=mk_option(_var($syslog,'local_server'), "1", _("Enabled"))?>
-  </select></span>
-  <select name="server_protocol" class="narrow">
-  <?=mk_option(_var($syslog,'server_protocol'), "udp", _("UDP"))?>
-  <?=mk_option(_var($syslog,'server_protocol'), "tcp", _("TCP"))?>
-  <?=mk_option(_var($syslog,'server_protocol'), "both", _("Both"))?>
+: <select name="local_server" onchange="localFolder(this.value,'slow')">
+  <?=mk_option(_var($syslog, 'local_server'), "", _("Disabled"))?>
+  <?=mk_option(_var($syslog, 'local_server'), "1", _("Enabled"))?>
   </select>
-  <input type="number" name="server_port" class="trim" value="<?=_var($syslog,'server_port')?>" maxlength="5" placeholder="514" pattern="([0-9]{1,5})">
 
 :syslog_local_server_help:
 
 <div markdown="1" id="local_folder" style="display:none">
+
+_(Local syslog protocol and port)_:
+: <span class="flex gap-2">
+    <select name="server_protocol" class="narrow">
+    <?=mk_option(_var($syslog, 'server_protocol'), "udp", _("UDP"))?>
+    <?=mk_option(_var($syslog, 'server_protocol'), "tcp", _("TCP"))?>
+    <?=mk_option(_var($syslog, 'server_protocol'), "both", _("Both"))?>
+    </select>
+    <input type="number" name="server_port" class="trim" value="<?=_var($syslog, 'server_port')?>" min="1" max="65535" step="1" placeholder="514">
+</span>
+
 _(Local syslog folder)_:
 : <select name="server_folder">
-  <?=mk_option(0,'','&lt;'._('custom').'&gt;','disabled')?>
+  <?=mk_option(0, '', '&lt;'._('custom').'&gt;', 'disabled')?>
   <?foreach ($shares as $share){echo mk_option(_var($syslog,'server_folder'), '/mnt/user/'.$share['name'], $share['name']);}?>
   </select>
 
@@ -119,8 +127,8 @@ _(System identifier for logfile name)_:
 
 _(Local syslog rotation)_:
 : <select name="log_rotation" onchange="logOptions(this.value,'slow')">
-  <?=mk_option(_var($syslog,'log_rotation'), "", _("Disabled"))?>
-  <?=mk_option(_var($syslog,'log_rotation'), "1", _("Enabled"))?>
+  <?=mk_option(_var($syslog, 'log_rotation'), "", _("Disabled"))?>
+  <?=mk_option(_var($syslog, 'log_rotation'), "1", _("Enabled"))?>
   </select>
 
 :syslog_local_rotation_help:
@@ -128,25 +136,25 @@ _(Local syslog rotation)_:
 <div markdown="1" id="log_options" style="display:none">
 _(Local syslog maximum file size)_:
 : <select name="log_size">
-  <?=mk_option(_var($syslog,'log_size'), '1M', '1 '._('MB'))?>
-  <?=mk_option(_var($syslog,'log_size'), '2M', '2 '._('MB'))?>
-  <?=mk_option(_var($syslog,'log_size'), '5M', '5 '._('MB'))?>
-  <?=mk_option(_var($syslog,'log_size'), '10M', '10 '._('MB'))?>
-  <?=mk_option(_var($syslog,'log_size'), '20M', '20 '._('MB'))?>
-  <?=mk_option(_var($syslog,'log_size'), '50M', '50 '._('MB'))?>
-  <?=mk_option(_var($syslog,'log_size'), '100M', '100 '._('MB'))?>
-  <?=mk_option(_var($syslog,'log_size'), '200M', '200 '._('MB'))?>
-  <?=mk_option(_var($syslog,'log_size'), '500M', '500 '._('MB'))?>
+  <?=mk_option(_var($syslog, 'log_size'), '1M', '1 '._('MB'))?>
+  <?=mk_option(_var($syslog, 'log_size'), '2M', '2 '._('MB'))?>
+  <?=mk_option(_var($syslog, 'log_size'), '5M', '5 '._('MB'))?>
+  <?=mk_option(_var($syslog, 'log_size'), '10M', '10 '._('MB'))?>
+  <?=mk_option(_var($syslog, 'log_size'), '20M', '20 '._('MB'))?>
+  <?=mk_option(_var($syslog, 'log_size'), '50M', '50 '._('MB'))?>
+  <?=mk_option(_var($syslog, 'log_size'), '100M', '100 '._('MB'))?>
+  <?=mk_option(_var($syslog, 'log_size'), '200M', '200 '._('MB'))?>
+  <?=mk_option(_var($syslog, 'log_size'), '500M', '500 '._('MB'))?>
   </select>
 
 :syslog_local_file_size_help:
 
 _(Local syslog number of files)_:
 : <select name="log_files">
-  <?=mk_option(_var($syslog,'log_files'), '1', '1')?>
-  <?=mk_option(_var($syslog,'log_files'), '2', '2')?>
-  <?=mk_option(_var($syslog,'log_files'), '3', '3')?>
-  <?=mk_option(_var($syslog,'log_files'), '4', '4')?>
+  <?=mk_option(_var($syslog, 'log_files'), '1', '1')?>
+  <?=mk_option(_var($syslog, 'log_files'), '2', '2')?>
+  <?=mk_option(_var($syslog, 'log_files'), '3', '3')?>
+  <?=mk_option(_var($syslog, 'log_files'), '4', '4')?>
   </select>
 
 :syslog_local_file_number_help:
@@ -155,27 +163,29 @@ _(Local syslog number of files)_:
 </div>
 
 _(Remote syslog server)_:
-: <span class="span"><input type="text" name="remote_server" class="narrow" value="<?=htmlspecialchars(_var($syslog,'remote_server'))?>" maxlength="50" placeholder="_(name or ip address)_"></span>
+: <span class="flex gap-2">
+  <input type="text" name="remote_server" class="narrow" value="<?=htmlspecialchars(_var($syslog, 'remote_server'))?>" maxlength="50" placeholder="_(name or ip address)_">
   <select name="remote_protocol" class="narrow">
-  <?=mk_option(_var($syslog,'remote_protocol'), "udp", _("UDP"))?>
-  <?=mk_option(_var($syslog,'remote_protocol'), "tcp", _("TCP"))?>
+    <?=mk_option(_var($syslog, 'remote_protocol'), "udp", _("UDP"))?>
+    <?=mk_option(_var($syslog, 'remote_protocol'), "tcp", _("TCP"))?>
   </select>
-  <input type="number" name="remote_port" class="trim" value="<?=_var($syslog,'remote_port')?>" maxlength="5" placeholder="514" pattern="([0-9]{1,5})">
+  <input type="number" name="remote_port" class="trim" value="<?=_var($syslog, 'remote_port')?>" min="1" max="65535" step="1" placeholder="514">
+</span>
 
 :syslog_remote_server_help:
 
 _(Mirror syslog to flash)_:
 : <select name="syslog_flash">
-  <?=mk_option(_var($syslog,'syslog_flash'), "", _("No"))?>
-  <?=mk_option(_var($syslog,'syslog_flash'), "1", _("Yes"))?>
+  <?=mk_option(_var($syslog, 'syslog_flash'), "", _("No"))?>
+  <?=mk_option(_var($syslog, 'syslog_flash'), "1", _("Yes"))?>
   </select>
 
 :syslog_mirror_flash_help:
 
 _(Copy syslog to flash on shutdown)_:
 : <select name="syslog_shutdown">
-  <?=mk_option(_var($syslog,'syslog_shutdown'), "", _("Yes"))?>
-  <?=mk_option(_var($syslog,'syslog_shutdown'), "1", _("No"))?>
+  <?=mk_option(_var($syslog, 'syslog_shutdown'), "", _("Yes"))?>
+  <?=mk_option(_var($syslog, 'syslog_shutdown'), "1", _("No"))?>
   </select>
 
 :syslog_shutdown_flash_help:
