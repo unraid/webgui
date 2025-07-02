@@ -39,6 +39,20 @@ jobs:
                   echo "Files generated:"
                   ls -la .github/translations/*.po || echo "No .po files found"
 
+            - name: Debug file structure for Crowdin
+              run: |
+                  echo "=== Current working directory ==="
+                  pwd
+                  echo "=== Full directory structure ==="
+                  find . -name "*.po" -o -name "*.txt" | head -20
+                  echo "=== Specific paths Crowdin will look for ==="
+                  echo "Looking for: .github/translations/*.po"
+                  ls -la .github/translations/*.po 2>/dev/null || echo "Pattern .github/translations/*.po not found"
+                  echo "Looking for: emhttp/languages/en_US/*.txt"
+                  ls -la emhttp/languages/en_US/*.txt 2>/dev/null || echo "Pattern emhttp/languages/en_US/*.txt not found"
+                  echo "=== Crowdin config file ==="
+                  cat .github/crowdin.yml
+
             - name: Upload to Crowdin
               # Only upload to Crowdin on pushes to main/master branches
               uses: crowdin/github-action@v2
