@@ -1,64 +1,71 @@
 name: Extract Translations and Upload to Crowdin
 
 on:
-  push:
-    branches:
-      - master
-      - main
-  pull_request:
-    branches:
-      - master
-      - main
-  workflow_dispatch:  # Allow manual triggering
+    push:
+        branches:
+            - master
+            - main
+    pull_request:
+        branches:
+            - master
+            - main
+    workflow_dispatch: # Allow manual triggering
 
 jobs:
-  extract-and-upload:
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-          
-      - name: Extract JavaScript translations from page files
-        run: |
-          cd .github/translations
-          python extract_js_translations_from_page.py
-          
-      - name: Extract all translations with final fixed script
-        run: |
-          cd .github/translations
-          python extract_translations_final_fixed.py ../../
-          
-      - name: List generated files
-        run: |
-          echo "Files generated:"
-          ls -la .github/translations/*.po || echo "No .po files found"
-          
-      - name: Upload to Crowdin
-        # Only upload to Crowdin on pushes to main/master branches
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-        uses: crowdin/github-action@v1
-        with:
-          upload_sources: true
-          upload_translations: false
-          download_translations: false
-          localization_branch_name: l10n_crowdin_translations
-          create_pull_request: false
-          
-        env:
-          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
-          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
-          
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: translation-files
-          path: |
-            .github/translations/*.po
-            .github/translations/*.txt
-          retention-days: 30 
+    extract-and-upload:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.x"
+
+            - name: Extract JavaScript translations from page files
+              run: |
+                  cd .github/translations
+                  python extract_js_translations_from_page.py
+
+            - name: Extract all translations with final fixed script
+              run: |
+                  cd .github/translations
+                  python extract_translations_final_fixed.py ../../
+
+            - name: List generated files
+              run: |
+                  echo "Files generated:"
+                  ls -la .github/translations/*.po || echo "No .po files found"
+
+            - name: Upload to Crowdin
+              # Only upload to Crowdin on pushes to main/master branches
+              if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+              uses: crowdin/github-action@v1
+              with:
+                  upload_sources: true
+                  upload_translations: false
+                  download_translations: false
+                  create_pull_request: false
+
+                  # Configure source files directly in workflow
+                  source: |
+                      .github/translations/unraid-webgui-js.po
+                      .github/translations/unraid-webgui-final-fixed.po
+                  translation: |
+                      translations/%locale%/webgui-js.po
+                      translations/%locale%/webgui-final-fixed.po
+
+              env:
+                  CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+                  CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
+
+            - name: Upload artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: translation-files
+                  path: |
+                      .github/translations/*.po
+                      .github/translations/*.txt
+                  retention-days: 30
