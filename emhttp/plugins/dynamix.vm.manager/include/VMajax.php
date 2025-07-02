@@ -325,7 +325,7 @@ case 'change-media':
 	requireLibvirt();
 	$dev= $_REQUEST['dev'];
 	$file= $_REQUEST['file'];
-	$cmdstr = "virsh change-media '$domName' $dev $file";
+	$cmdstr = "virsh change-media ".escapeshellarg($domName)." ".escapeshellarg($dev)." ".escapeshellarg($file); #PHPS -changed
 	$rtn=shell_exec($cmdstr)
 		? ['success' => true]
 		: ['error' => "Change Media Failed"];
@@ -342,10 +342,10 @@ case 'change-media-both':
 	}
 	$file= $_REQUEST['file'];
 	if ($file != "" && $hda == false) {
-		$cmdstr = "virsh attach-disk '$domName' '$file' hda --type cdrom --targetbus sata --config" ;
+		$cmdstr = "virsh attach-disk ".escapeshellarg($domName)." ".escapeshellarg($file)." hda --type cdrom --targetbus sata --config" ; #PHPS - Changed
 	} else {
-		if ($file == "") $cmdstr = "virsh change-media '$domName' hda --eject --current";
-		else $cmdstr = "virsh change-media '$domName' hda '$file'";
+		if ($file == "") $cmdstr = "virsh change-media ".escapeshellarg($domName)." hda --eject --current"; #PHPS - Changed
+		else $cmdstr = "virsh change-media ".escapeshellarg($domName)." hda ".escapeshellarg($file); #PHPS - Changed
 	}
 	$rtn=shell_exec($cmdstr)
 		? ['success' => true]
@@ -355,10 +355,10 @@ case 'change-media-both':
 
 	$file2 = $_REQUEST['file2'];
 	if ($file2 != "" && $hdb == false) {
-		$cmdstr = "virsh attach-disk '$domName' '$file2' hdb --type cdrom --targetbus sata --config" ;
+		$cmdstr = "virsh attach-disk ".escapeshellarg($domName)." ".escapeshellarg($file2)." hdb --type cdrom --targetbus sata --config" ; #PHPS - Changed
 	} else  {
-		if ($file2 == "") $cmdstr = "virsh change-media '$domName' hdb --eject --current";
-		else $cmdstr = "virsh change-media '$domName' hdb '$file2' ";
+		if ($file2 == "") $cmdstr = "virsh change-media ".escapeshellarg($domName)." hdb --eject --current";#PHPS - Changed
+		else $cmdstr = "virsh change-media ".escapeshellarg($domName)." hdb ".escapeshellarg($file2); #PHPS - Changed
 	}
 	$rtn=shell_exec($cmdstr)
 		? ['success' => true]
@@ -502,7 +502,7 @@ case 'vm-removal':
 			$dirname = str_replace('/mnt/user/', "/mnt/$realdisk/", $dirname);
 		}
 	}
-	$fstype = trim(shell_exec(" stat -f -c '%T' $dirname"));
+	$fstype = trim(shell_exec(" stat -f -c '%T' ".escapeshellarg($dirname))); #PHPS - Changed
 	$html = '<table class="snapshot">
 	<tr><td>'._('VM Being removed').':</td><td><span id="VMBeingRemoved">'.$domName.'</span></td></tr>
 	<tr><td>'._('Remove all files').':</td><td><input type="checkbox" id="All" checked value="" ></td></tr>
@@ -521,7 +521,6 @@ case 'disk-create':
 	if (!is_dir($dir)) my_mkdir($dir);
 	// determine the actual disk if user share is being used
 	$dir = transpose_user_path($dir);
-	#@exec("chattr +C -R ".escapeshellarg($dir)." >/dev/null");
 	$strLastLine = exec("qemu-img create -q -f ".escapeshellarg($driver)." ".escapeshellarg($disk)." ".escapeshellarg($size)." 2>&1", $out, $status);
 	$arrResponse = empty($status)
 	? ['success' => true]
@@ -727,11 +726,11 @@ case 'virtio-win-iso-download':
 		$strCleanCmd = '(chmod 777 '.escapeshellarg($_REQUEST['download_path']).' '.escapeshellarg($strTargetFile).'; chown nobody:users '.escapeshellarg($_REQUEST['download_path']).' '.escapeshellarg($strTargetFile).'; rm -f '.escapeshellarg($strMD5File).' '.escapeshellarg($strMD5StatusFile).')';
 		//$strCleanPgrep = '-f "chmod.*chown.*rm.*'.$strMD5StatusFile.'"';
 		$strAllCmd = "#!/bin/bash\n\n";
-		$strAllCmd .= $strDownloadCmd.' >>'.escapeshellarg($strLogFile)." 2>$monitor && sleep 1 && ";
+		$strAllCmd .= $strDownloadCmd.' >>'.escapeshellarg($strLogFile)." 2>".escapeshellarg($monitor)." && sleep 1 && "; #PHPS - Changed
 		$strAllCmd .= 'echo "'.$arrDownloadVirtIO['md5'].'  '.$strTargetFile.'" >'.escapeshellarg($strMD5File).' && sleep 3 && ';
 		$strAllCmd .= $strVerifyCmd.' >'.escapeshellarg($strMD5StatusFile).' 2>/dev/null && sleep 3 && ';
 		$strAllCmd .= $strCleanCmd.' >>'.escapeshellarg($strLogFile).' 2>&1 && ';
-		$strAllCmd .= 'rm -f '.escapeshellarg($strLogFile).' '.escapeshellarg($strInstallScript).' '.escapeshellarg($monitor);
+		$strAllCmd .= 'rm -f '.escapeshellarg($strLogFile).' '.escapeshellarg($strInstallScript).' '.escapeshellarg($monitor); #PHPS - Changed
 		$arrResponse = [];
 		if (file_exists($strTargetFile)) {
 			if (!file_exists($strLogFile)) {
@@ -747,7 +746,7 @@ case 'virtio-win-iso-download':
 			} else {
 				if (pgrep($strDownloadPgrep, false)) {
 					// Get Download progress and eta
-					[$done,$eta] = my_explode(' ',exec("tail -2 $monitor|awk 'NF==9 {print \$7,\$9;exit}'"));
+					[$done,$eta] = my_explode(' ',exec("tail -2 ".escapeshellarg($monitor)." |awk 'NF==9 {print \$7,\$9;exit}'")); #PHPS - Changed
 					$arrResponse['status'] = _('Downloading').$dots.$done.',&nbsp;&nbsp;'._('ETA').': '.$eta;
 				} elseif (pgrep($strVerifyPgrep, false)) {
 					// Status = running md5 check
@@ -780,7 +779,7 @@ case 'virtio-win-iso-download':
 						// Run all commands
 						file_put_contents($strInstallScript, $strAllCmd);
 						chmod($strInstallScript, 0777);
-						exec($strInstallScript.' >/dev/null 2>&1 &');
+						exec($strInstallScript.' >/dev/null 2>&1 &'); 
 					}
 				}
 			}
