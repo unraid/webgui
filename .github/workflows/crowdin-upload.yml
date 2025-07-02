@@ -57,10 +57,13 @@ jobs:
                       emhttp/languages/%locale%/webgui-js.po
                       emhttp/languages/%locale%/webgui.po
                       emhttp/languages/%locale%/helptext.txt
+
+                  # For Crowdin Enterprise, use: base_url: 'https://{organization-name}.api.crowdin.com'
+                  # For standard Crowdin, this can be omitted or use: base_url: 'https://api.crowdin.com'
+                  base_url: 'https://unraid.api.crowdin.com'
               env:
                   CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
                   CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
-                  BASE_URL: https://unraid.api.crowdin.com
 
             - name: Upload artifacts
               uses: actions/upload-artifact@v4
