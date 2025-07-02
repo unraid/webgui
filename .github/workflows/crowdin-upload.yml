@@ -41,7 +41,6 @@ jobs:
 
             - name: Upload to Crowdin
               # Only upload to Crowdin on pushes to main/master branches
-              if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
               uses: crowdin/github-action@v2
               with:
                   upload_sources: true
