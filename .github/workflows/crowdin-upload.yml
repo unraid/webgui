@@ -47,10 +47,9 @@ jobs:
                   upload_translations: false
                   download_translations: false
                   create_pull_request: false
-                  # Configure source files directly in workflow
-                  source: .github/translations/*.po,emhttp/languages/en_US/*.txt
-                  translation: emhttp/languages/%locale%/*.po,emhttp/languages/%locale%/*.txt
-
+                  # Configuration file location
+                  config: .github/crowdin.yml
+                  
                   # For Crowdin Enterprise, use: base_url: 'https://{organization-name}.api.crowdin.com'
                   # For standard Crowdin, this can be omitted or use: base_url: 'https://api.crowdin.com'
                   base_url: 'https://unraid.api.crowdin.com'
