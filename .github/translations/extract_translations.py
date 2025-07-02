@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Final fixed translation string extraction for Unraid webgui codebase.
+Translation string extraction for Unraid webgui codebase.
 Properly handles nested parentheses and complex patterns.
 """
 
@@ -89,7 +89,7 @@ def extract_nested_parens(text, start_pos):
         return text[start:pos-1], pos
     return None, start_pos
 
-def extract_translation_strings_final_fixed(directory):
+def extract_translation_strings(directory):
     """Extract all translation strings from the codebase with proper nested parentheses handling."""
     translation_strings = set()
     file_sources = defaultdict(list)  # Track which files contain each string
@@ -155,12 +155,12 @@ def extract_translation_strings_final_fixed(directory):
     
     return sorted(list(translation_strings)), file_sources
 
-def create_po_file_final_fixed(translation_strings, file_sources, output_file):
+def create_po_file(translation_strings, file_sources, output_file):
     """Create a clean .po file from the extracted translation strings."""
     
     po_content = [
         '# Translation file for Unraid webgui',
-        '# This file was automatically generated with final fixed filtering',
+        '# This file was automatically generated',
         '# Contains translatable strings found in the codebase',
         '#',
         'msgid ""',
@@ -199,11 +199,11 @@ def create_po_file_final_fixed(translation_strings, file_sources, output_file):
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write('\n'.join(po_content))
 
-def create_summary_report_final_fixed(translation_strings, file_sources, output_file):
-    """Create a summary report of the final fixed extraction."""
+def create_summary_report(translation_strings, file_sources, output_file):
+    """Create a summary report of the extraction."""
     
     report_content = [
-        '# Translation Extraction Summary (Final Fixed)',
+        '# Translation Extraction Summary',
         f'# Total unique strings found: {len(translation_strings)}',
         f'# Generated on: {__import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
         '',
@@ -267,7 +267,7 @@ def create_summary_report_final_fixed(translation_strings, file_sources, output_
 
 def main():
     if len(sys.argv) != 2:
-        print("Usage: python extract_translations_final_fixed.py <source_directory>")
+        print("Usage: python extract_translations.py <source_directory>")
         sys.exit(1)
     
     source_dir = sys.argv[1]
@@ -277,23 +277,23 @@ def main():
         sys.exit(1)
     
     print(f"Extracting translation strings from {source_dir}...")
-    translation_strings, file_sources = extract_translation_strings_final_fixed(source_dir)
+    translation_strings, file_sources = extract_translation_strings(source_dir)
     
     print(f"Found {len(translation_strings)} unique translation strings")
     
     # Create .po file
-    po_file = "unraid-webgui-final-fixed.po"
-    print(f"Creating final fixed .po file: {po_file}")
-    create_po_file_final_fixed(translation_strings, file_sources, po_file)
+    po_file = "unraid-webgui.po"
+    print(f"Creating .po file: {po_file}")
+    create_po_file(translation_strings, file_sources, po_file)
     
     # Create summary report
-    report_file = "translation-extraction-report-final-fixed.txt"
+    report_file = "translation-extraction-report.txt"
     print(f"Creating summary report: {report_file}")
-    create_summary_report_final_fixed(translation_strings, file_sources, report_file)
+    create_summary_report(translation_strings, file_sources, report_file)
     
     print("Done!")
     print(f"Files created:")
-    print(f"  - {po_file}: Final fixed .po file with {len(translation_strings)} strings (proper nested parentheses handling)")
+    print(f"  - {po_file}: .po file with {len(translation_strings)} strings")
     print(f"  - {report_file}: Summary report")
 
 if __name__ == "__main__":

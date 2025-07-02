@@ -29,10 +29,10 @@ jobs:
                   cd .github/translations
                   python extract_js_translations_from_page.py
 
-            - name: Extract all translations with final fixed script
+            - name: Extract all translations
               run: |
                   cd .github/translations
-                  python extract_translations_final_fixed.py ../../
+                  python extract_translations.py ../../
 
             - name: List generated files
               run: |
@@ -52,10 +52,10 @@ jobs:
                   # Configure source files directly in workflow
                   source: |
                       .github/translations/unraid-webgui-js.po
-                      .github/translations/unraid-webgui-final-fixed.po
+                      .github/translations/unraid-webgui.po
                   translation: |
                       translations/%locale%/webgui-js.po
-                      translations/%locale%/webgui-final-fixed.po
+                      translations/%locale%/webgui.po
 
               env:
                   CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
@@ -68,4 +68,3 @@ jobs:
                   path: |
                       .github/translations/*.po
                       .github/translations/*.txt
-                  retention-days: 30
