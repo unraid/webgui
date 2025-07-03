@@ -115,17 +115,26 @@ function generatePanels($page, $path, $defaultIcon, $docroot, $useTabCookie = fa
 /**
  * Generates the content for a page
  * 
- * @param array $page Page data array containing text and Markdown flag
+ * @param array $page Page data array containing text, Markdown flag, and ResponsiveLayout flag
  * @return string Parsed text ready for eval
  * 
  * Usage example:
  * <? eval('?>'.generateContent($page)); ?>
  */
 function generateContent($page) {
+    $content = '';
     if (empty($page['Markdown']) || $page['Markdown'] == 'true') {
-        return Markdown(parse_text($page['text']));
+        $content = Markdown(parse_text($page['text']));
+    } else {
+        $content = parse_text($page['text']);
     }
-    return parse_text($page['text']);
+
+    // Wrap in non-responsive div if specified
+    if (isset($page['ResponsiveLayout']) && $page['ResponsiveLayout'] === 'false') {
+        $content = '<div class="content--non-responsive">' . $content . '</div>';
+    }
+
+    return $content;
 }
 ?>
 

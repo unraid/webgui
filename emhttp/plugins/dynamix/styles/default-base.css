@@ -1312,11 +1312,6 @@ a.list {
     }
 }
 
-/* Necessary evil to prevent rewrites of complex page templates for responsive layout - i.e. VMedit.php */
-.Content--non-responsive {
-    min-width: 1200px;
-}
-
 .tabs {
     display: flex;
     align-items: center;
@@ -1573,6 +1568,49 @@ dd {
 
     blockquote {
         padding-left: 0;
+    }
+}
+
+/* Necessary evil to prevent rewrites of complex page templates for responsive layout - i.e. VMedit.php */
+.content--non-responsive {
+    min-width: 1200px;
+
+    /* override the dl > dt + dd responsive styles, inheriting the "desktop" styles defined below */
+    dl {
+        grid-template-columns: 35% 1fr;
+        gap: 1.5rem 2rem;
+    }
+    dt {
+        text-align: right;
+    }
+    dd {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        /* white-space: nowrap; */
+
+        input[type="text"],
+        input[type="password"],
+        input[type="number"],
+        input[type="url"],
+        input[type="email"],
+        input[type="date"],
+        input[type="file"],
+        input:not([type="submit"]),
+        input:not([type="button"]),
+        input:not([type="checkbox"]),
+        input:not([type="radio"]),
+        input:not([class*="narrow"]),
+        textarea,
+        .textarea,
+        select,
+        .ui-dropdownchecklist-selector-wrapper {
+            max-width: 400px;
+        }
+
+        .narrow {
+            max-width: 150px !important;
+        }
     }
 }
 
