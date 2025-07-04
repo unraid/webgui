@@ -353,11 +353,18 @@ class Libvirt {
 			}
 			if (!empty($domain['cpumigrate'])) $cpumigrate = " migratable='".$domain['cpumigrate']."'";
 		}
+		$cpupmemlmt ='';
+		if ($domain['cpupmemlmt'] != "None") {
+			$escaped_limit = htmlspecialchars($domain['cpupmemlmt'], ENT_QUOTES | ENT_XML1);
+			if ($domain['cpumode'] == 'host-passthrough') $cpupmemlmt = "<maxphysaddr mode='passthrough' limit='{$escaped_limit}'/>";
+			else $cpupmemlmt = "<maxphysaddr mode='emulate' bits='{$escaped_limit}'/>";
+		}
 		#<cpu mode='custom' match='exact' check='partial'>
 		#<model fallback='allow'>Skylake-Client-noTSX-IBRS</model>
 		$cpustr = "<cpu $cpumode $cpumigrate>
 			<topology sockets='1' cores='{$intCores}' threads='{$intThreads}'/>
 			$cpucache
+			$cpupmemlmt
 			$cpufeatures
 			</cpu>
 			<vcpu placement='static'>{$vcpus}</vcpu>
@@ -2031,6 +2038,23 @@ class Libvirt {
 		$var = $tmp[0];
 		unset($tmp);
 		return $var;
+	}
+
+	function domain_get_cpu_pmem_limit($domain) {
+		$cpu_mode = $this->get_xpath($domain, '//domain/cpu/@mode', false);
+		if (!$cpu_mode) return "None";
+
+		$cpu_mode = $cpu_mode[0];
+
+		if ($cpu_mode === 'host-passthrough') {
+			$limit = $this->get_xpath($domain, '//domain/cpu/maxphysaddr/@limit', false);
+			return $limit ? intval($limit[0]) : "None";
+		} elseif (in_array($cpu_mode, ['custom', 'host-model'])) {
+			$bits = $this->get_xpath($domain, '//domain/cpu/maxphysaddr/@bits', false);
+			return $bits ? intval($bits[0]) : "None";
+		}
+
+		return "None"; // no limit found or not enforced
 	}
 
 	# <cpu mode='custom' match='exact' check='partial'>

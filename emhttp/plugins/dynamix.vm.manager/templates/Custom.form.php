@@ -133,6 +133,7 @@ $arrConfigDefaults = [
 	]
 ];
 $hdrXML = "<?xml version='1.0' encoding='UTF-8'?>\n"; // XML encoding declaration
+$debug = false;
 
 // Merge in any default values from the VM template
 if ($arrAllTemplates[$strSelectedTemplate] && $arrAllTemplates[$strSelectedTemplate]['overrides']) {
@@ -256,6 +257,12 @@ if (isset($_POST['updatevm'])) {
 		if ($error = create_vdisk($_POST) === false) {
 			$arrExistingConfig = custom::createArray('domain',$strXML);
 			$arrUpdatedConfig = custom::createArray('domain',$lv->config_to_xml($_POST));
+			if ($debug) {
+				file_put_contents("/tmp/vmdebug_exist",$strXML);
+				file_put_contents("/tmp/vmdebug_new",$lv->config_to_xml($_POST));
+				file_put_contents("/tmp/vmdebug_arrayN",json_encode($arrUpdatedConfig,JSON_PRETTY_PRINT));
+				file_put_contents("/tmp/vmdebug_arrayE",json_encode($arrExistingConfig,JSON_PRETTY_PRINT));
+			}
 			array_update_recursive($arrExistingConfig, $arrUpdatedConfig);
 			$arrConfig = array_replace_recursive($arrExistingConfig, $arrUpdatedConfig);
 			$xml = custom::createXML('domain',$arrConfig)->saveXML();
@@ -1902,6 +1909,37 @@ foreach ($arrConfig['evdev'] as $i => $arrEvdev) {
 		Additional devices can be added/removed by clicking the symbols to the left.
 	</p>
 </blockquote>
+</div>
+<table>
+	</tr>
+	<tr class="advanced">
+		<td><span class="advanced">_(Physical Address Bit Limit)_ </span></td>
+		<td>
+			<span class="width"><select id="cpupmemlmt" name="domain[cpupmemlmt]" class="cpupmem">
+			<?
+			echo mk_option($arrConfig['domain']['cpupmemlmt'], 'None', 'None');
+			echo mk_option($arrConfig['domain']['cpupmemlmt'], '32', '32-bit (4 GB)');
+			echo mk_option($arrConfig['domain']['cpupmemlmt'], '36', '36-bit (64 GB)');
+			echo mk_option($arrConfig['domain']['cpupmemlmt'], '39', '39-bit (512 GB)');
+			echo mk_option($arrConfig['domain']['cpupmemlmt'], '42', '42-bit (4 TB)');
+			echo mk_option($arrConfig['domain']['cpupmemlmt'], '48', '48-bit (256 TB)');
+			?>
+		</td>
+	</tr>
+</table>
+<div class="advanced">
+<blockquote class="inline_help">
+	<p>
+		<b>Physical Address Bit Limit</b><br>
+		Sets limit on the physical address space.
+		<br>
+		Some guest systems or GPUs passed through might not work properly if mapped to high physical addresses (especially GPUs with 32-bit BARs). Using maxphysaddr=36 or maxphysaddr=39 limits the physical memory below 64 GB or 512 GB, avoiding such issues.
+		<br>	
+		<br>bits=32 Addressable Memory 4 GB   Use Case: Force 32-bit PCI compatibility
+		<br>bits=36 Addressable Memory 64 GB  Use Case: Compatibility with older devices / 32-bit BARs
+		<br>bits=39 Addressable Memory 512 GB Use Case: Safe for most modern guests
+		<br>bits=48 Addressable Memory 256 TB Use Case: Full addressing, default on modern CPUs
+	</p>
 </div>
 <?}?>
 <?}?>
