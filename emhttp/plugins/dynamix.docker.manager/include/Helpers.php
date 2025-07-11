@@ -299,7 +299,8 @@ function xmlToVar($xml) {
       }
     }
   }
-  xmlSecurity($out);
+// Allow the use of < and > in the template but leave code in place
+//xmlSecurity($out);
   return $out;
 }
 
