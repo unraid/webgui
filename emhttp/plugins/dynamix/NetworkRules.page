@@ -28,7 +28,7 @@ exec("grep -Po '^# \K.*' $cfg", $info);
 
 $link = []; $i = 0;
 foreach ($rules as $rule) {
-  [$mac, $eth] = array_map('strip', my_explode(',', $rule));
+  [$mac, $eth] = array_map('strip', explode(',', $rule));
   if (str_starts_with($eth, 'eth')) {
     $link[$eth]['mac'] = $mac;
     $link[$eth]['info'] = $info[$i];
