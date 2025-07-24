@@ -20,6 +20,7 @@ extract(parse_plugin_cfg('dynamix',true));
 $_SERVER['REQUEST_URI'] = '';
 $login_locale = _var($display,'locale');
 require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
+require_once "$docroot/webGui/include/publish.php";
 
 $var = parse_ini_file('/var/local/emhttp/var.ini');
 $DockerClient = new DockerClient();
@@ -31,18 +32,9 @@ $subnet = DockerUtil::network($custom);
 $cpus   = DockerUtil::cpus();
 
 function write(...$messages){
-  $com = curl_init();
-  curl_setopt_array($com,[
-    CURLOPT_URL => 'http://localhost/pub/docker?buffer_length=1',
-    CURLOPT_UNIX_SOCKET_PATH => '/var/run/nginx.socket',
-    CURLOPT_POST => 1,
-    CURLOPT_RETURNTRANSFER => true
-  ]);
   foreach ($messages as $message) {
-    curl_setopt($com, CURLOPT_POSTFIELDS, $message);
-    curl_exec($com);
+    publish('docker', $message);
   }
-  curl_close($com);
 }
 function stopContainer_nchan($name) {
   global $DockerClient;

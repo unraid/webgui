@@ -21,20 +21,12 @@ require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 $_SERVER['REQUEST_URI'] = '';
 $login_locale = _var($display,'locale');
 require_once "$docroot/webGui/include/Translations.php";
+require_once "$docroot/webGui/include/publish.php";
 
 function write(...$messages) {
-  $com = curl_init();
-  curl_setopt_array($com,[
-    CURLOPT_URL => 'http://localhost/pub/vmaction?buffer_length=1',
-    CURLOPT_UNIX_SOCKET_PATH => '/var/run/nginx.socket',
-    CURLOPT_POST => 1,
-    CURLOPT_RETURNTRANSFER => true
-  ]);
   foreach ($messages as $message) {
-    curl_setopt($com, CURLOPT_POSTFIELDS, $message);
-    curl_exec($com);
+    publish('vmaction', $message);
   }
-  curl_close($com);
 }
 
 function execCommand_nchan_clone($command,$idx,$refcmd=false) {

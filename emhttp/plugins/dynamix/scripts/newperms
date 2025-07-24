@@ -17,24 +17,18 @@
 #  u-x     Clear the 'x' bit in the user permissions (leaves rw as-is)
 #  go+u    Copy the user permissions to group and other
 
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 $nchan = $argv[$argc-1] == 'nchan'; // console or nchan output
 if ($nchan) unset($argv[$argc-1]);  // remove nchan parameter
+
+require_once "$docroot/webGui/include/publish.php";
 
 function write(...$messages){
   global $nchan;
   if ($nchan) {
-    $com = curl_init();
-    curl_setopt_array($com,[
-      CURLOPT_URL => 'http://localhost/pub/plugins?buffer_length=1',
-      CURLOPT_UNIX_SOCKET_PATH => '/var/run/nginx.socket',
-      CURLOPT_POST => 1,
-      CURLOPT_RETURNTRANSFER => true
-    ]);
     foreach ($messages as $message) {
-      curl_setopt($com, CURLOPT_POSTFIELDS, $message);
-      curl_exec($com);
+      publish('plugins', $message);
     }
-    curl_close($com);
   } else {
     foreach ($messages as $message) echo $message;
   }

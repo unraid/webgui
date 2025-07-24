@@ -14,6 +14,7 @@
 <?
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Wrappers.php";
+require_once "$docroot/webGui/include/publish.php";
 extract(parse_plugin_cfg('dynamix',true));
 
 // add translations
@@ -25,18 +26,9 @@ $units = ['B','kB','MB','GB','TB','PB','EB','ZB','YB'];
 $list = [];
 
 function write(...$messages){
-  $com = curl_init();
-  curl_setopt_array($com,[
-    CURLOPT_URL => 'http://localhost/pub/plugins?buffer_length=1',
-    CURLOPT_UNIX_SOCKET_PATH => '/var/run/nginx.socket',
-    CURLOPT_POST => 1,
-    CURLOPT_RETURNTRANSFER => true
-  ]);
   foreach ($messages as $message) {
-    curl_setopt($com, CURLOPT_POSTFIELDS, $message);
-    curl_exec($com);
+    publish('plugins', $message);
   }
-  curl_close($com);
 }
 function autoscale($value) {
   global $units;

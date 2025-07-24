@@ -12,6 +12,9 @@
  */
 ?>
 <?
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/publish.php";
+
 $method  = $argv[1]??'';
 $plugins = explode('*',$argv[2]??'');
 $nchan   = $argv[$argc-1] == 'nchan'; // console or nchan output
@@ -20,18 +23,9 @@ $call    = ['plg' => 'plugin', 'xml' => 'language', '' => 'language'];
 function write(...$messages){
   global $nchan;
   if ($nchan) {
-    $com = curl_init();
-    curl_setopt_array($com,[
-      CURLOPT_URL => 'http://localhost/pub/plugins?buffer_length=1',
-      CURLOPT_UNIX_SOCKET_PATH => '/var/run/nginx.socket',
-      CURLOPT_POST => 1,
-      CURLOPT_RETURNTRANSFER => true
-    ]);
     foreach ($messages as $message) {
-      curl_setopt($com, CURLOPT_POSTFIELDS, $message);
-      curl_exec($com);
+      publish('plugins', $message);
     }
-    curl_close($com);
   } else {
     foreach ($messages as $message) echo $message;
   }
