@@ -56,23 +56,21 @@ function getArrayStatus($var) {
         </span>
         <span id="user-notice" class="red-text"></span>
     </div>
-    <div class="footer-right">
-        <span id="copyright">
-            <unraid-theme-switcher
-                current="<?=$theme?>"
-                themes='<?=htmlspecialchars(json_encode(['azure', 'gray', 'black', 'white']), ENT_QUOTES, 'UTF-8')?>'>
-            </unraid-theme-switcher>
-            Unraid&reg; webGui &copy;<?=releaseDateYear()?>, Lime Technology, Inc.
-            <a
-                class="footer-link"
-                href="https://docs.unraid.net/go/manual/"
-                target="_blank"
-                rel="noopener noreferrer"
-                title="<?=_('Online manual')?>"
-            >
-                <i class="fa fa-book"></i> <?=_('manual')?>
-            </a>
-        </span>
+    <div id="copyright" class="footer-right">
+        <unraid-theme-switcher
+            current="<?=$theme?>"
+            themes='<?=htmlspecialchars(json_encode(['azure', 'gray', 'black', 'white']), ENT_QUOTES, 'UTF-8')?>'>
+        </unraid-theme-switcher>
+        <span>Unraid&reg; webGui &copy;<?=releaseDateYear()?>, Lime Technology, Inc.</span>
+        <a
+            class="footer-link"
+            href="https://docs.unraid.net/go/manual/"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="<?=_('Online manual')?>"
+        >
+            <i class="fa fa-book"></i> <?=_('manual')?>
+        </a>
         <? if ($wlan0): ?>
             <span id="wlan0" class="grey-text" onclick="wlanSettings()">
                 <i class="fa fa-wifi fa-fw"></i>

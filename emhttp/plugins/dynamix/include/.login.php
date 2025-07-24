@@ -616,46 +616,45 @@ $isDarkTheme = $themeHelper->isDarkTheme();
             document.body.appendChild(errorElement);
         }
 
-        let timeInSecs;
-        let ticker;
-
-        function startTimer(secs) {
-            timeInSecs = parseInt(secs);
-            ticker = setInterval(tick, 1000); 
-        }
-
-        function tick() {
-            var secs = timeInSecs;
-        
-            updateMessage(prettyTime(secs),"countdown");
-
-            if (secs > 0) {
-                timeInSecs--; 
-            } else {
-                clearInterval(ticker);
-                // remove the error message after 10 seconds after the timer has expired    
-                updateMessage("<?=_("Wait for this message to disappear")?>","error");
-                setTimeout(function() {
-                    updateMessage("","error");
-                }, 10000);
-                return;
-            }
-        }
-        function updateMessage(msg,ID) {
-            var element = document.getElementById(ID);
-            if (element) {
-                element.innerHTML = msg;
-            }
-        }
-        function prettyTime(secs) {
-            var mins = Math.floor(secs/60);
-            secs %= 60;
-            return ( (mins < 10) ? "0" : "" ) + mins + ":" + ( (secs < 10) ? "0" : "" ) + secs;
-        }
         <? if ($error):?>
-            if ( document.getElementById("countdown") ) {
-                startTimer(<?=$cooldown?>);  
+        if ( document.getElementById("countdown") ) {
+            let timeInSec, ticker, startTime, endTime;
+
+            startTimer(<?=$cooldown?>);  
+
+            function startTimer(secs) {
+                startTime = Math.floor(Date.now() / 1000);
+                endTime = startTime + parseInt(secs);
+                ticker = setInterval(tick, 1000); 
             }
+
+            function tick() {
+                var secs = endTime - Math.floor(Date.now() / 1000);
+            
+                if (secs <= 0) {
+                    clearInterval(ticker);
+                    // remove the error message after 10 seconds after the timer has expired    
+                    updateMessage("<?=_("Wait for this message to disappear")?>","error");
+                    setTimeout(function() {
+                        updateMessage("","error");
+                    }, 10000);
+                    return;
+                }
+                updateMessage(prettyTime(secs),"countdown");
+            }
+
+            function updateMessage(msg,ID) {
+                var element = document.getElementById(ID);
+                if (element) {
+                    element.innerHTML = msg;
+                }
+            }
+            function prettyTime(secs) {
+                var mins = Math.floor(secs/60);
+                secs %= 60;
+                return ( (mins < 10) ? "0" : "" ) + mins + ":" + ( (secs < 10) ? "0" : "" ) + secs;
+            }
+        }
         <? endif; ?>
     </script>
 </body>
