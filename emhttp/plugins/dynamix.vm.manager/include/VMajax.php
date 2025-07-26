@@ -20,6 +20,9 @@ require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 $_SERVER['REQUEST_URI'] = 'vms';
 require_once "$docroot/webGui/include/Translations.php";
 
+$domain_system_path = $domain_cfg['IMAGE_FILE'] ?? "/mnt/user/system/";
+if (is_file($domain_system_path)) $domain_system_path = pathinfo($domain_system_path,PATHINFO_DIRNAME)."/";
+
 function requireLibvirt() {
 	global $lv;
 	// Make sure libvirt is connected to qemu
@@ -155,8 +158,8 @@ case 'domain-start-consoleRV':
 	$vvarray[] = "host=$vvarrayhost\n" ;
 	$vvarray[] = "port=$port\n" ;
 	$vvarray[] = "delete-this-file=1\n" ;
-	if (!is_dir("/mnt/user/system/remoteviewer")) mkdir("/mnt/user/system/remoteviewer") ;
-	$vvfile = "/mnt/user/system/remoteviewer/rv"._var($_SERVER,'HTTP_HOST').".$port.vv" ;
+	if (!is_dir($domain_system_path."remoteviewer")) mkdir($domain_system_path."remoteviewer") ;
+	$vvfile = $domain_system_path."remoteviewer/rv"._var($_SERVER,'HTTP_HOST').".$port.vv" ;
 	file_put_contents($vvfile,$vvarray) ;
 	$arrResponse['vvfile'] = $vvfile;
 	break;
@@ -169,8 +172,8 @@ case 'domain-consoleRDP':
 	if ($myIP == NULL) {$arrResponse['error'] = _("No IP, guest agent not installed"); break;}
 	$rdparray[] = "full address:s: $myIP\n";
 	#$rdparray[] = "administrative session:1\n";
-	if (!is_dir("/mnt/user/system/remoteviewer")) mkdir("/mnt/user/system/remoteviewer") ;
-	$rdpfile = "/mnt/user/system/remoteviewer/rv"._var($_SERVER,'HTTP_HOST').".$port.rdp" ;
+	if (!is_dir($domain_system_path."remoteviewer")) mkdir($domain_system_path."remoteviewer") ;
+	$rdpfile = $domain_system_path."remoteviewer/rv"._var($_SERVER,'HTTP_HOST').".$port.rdp" ;
 	file_put_contents($rdpfile,$rdparray) ;
 	$arrResponse['vvfile'] = $rdpfile;
 	break;
@@ -190,8 +193,8 @@ case 'domain-consoleRV':
 	$vvarray[] = "host=$vvarrayhost\n" ;
 	$vvarray[] = "port=$port\n" ;
 	$vvarray[] = "delete-this-file=1\n" ;
-	if (!is_dir("/mnt/user/system/remoteviewer")) mkdir("/mnt/user/system/remoteviewer") ;
-	$vvfile = "/mnt/user/system/remoteviewer/rv"._var($_SERVER,'HTTP_HOST').".$port.vv" ;
+	if (!is_dir($domain_system_path."remoteviewer")) mkdir($domain_system_path."remoteviewer") ;
+	$vvfile = $domain_system_path."remoteviewer/rv"._var($_SERVER,'HTTP_HOST').".$port.vv" ;
 	file_put_contents($vvfile,$vvarray) ;
 	$arrResponse['vvfile'] = $vvfile;
 	break;
