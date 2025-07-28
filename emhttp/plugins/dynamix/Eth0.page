@@ -566,7 +566,7 @@ function networkInfo(port, vlan) {
 <form name="dns_settings" onchange="signalRun(this,1)">
 <div markdown="1" id="dns4" class="hide">
 _(IPv4 DNS server assignment)_:
-: <select name="DHCP_KEEPRESOLV" onchange="checkDNSsettings(eth0,'slow')">
+: <select name="DHCP_KEEPRESOLV" class="narrow" onchange="checkDNSsettings(eth0,'slow')">
   <?=mk_option(_var($eth0, 'DHCP_KEEPRESOLV'), "no", _("Automatic"))?>
   <?=mk_option(_var($eth0, 'DHCP_KEEPRESOLV'), "yes", _("Static"))?>
   </select>
@@ -593,7 +593,7 @@ _(IPv4 DNS server)_ 3:
 </div>
 <div markdown="1" id="dns6" class="hide">
 _(IPv6 DNS server assignment)_:
-: <select name="DHCP6_KEEPRESOLV" onchange="checkDNS6settings(eth0,'slow')">
+: <select name="DHCP6_KEEPRESOLV" class="narrow" onchange="checkDNS6settings(eth0,'slow')">
   <?=mk_option(_var($eth0, 'DHCP6_KEEPRESOLV'), "no", _("Automatic"))?>
   <?=mk_option(_var($eth0, 'DHCP6_KEEPRESOLV'), "yes", _("Static"))?>
   </select>
@@ -655,7 +655,7 @@ _(MAC address)_:
 :eth_mac_address_help:
 
 _(Enable bonding)_:
-: <select name="BONDING" onchange="checkBondingSettings(this.form,1)">
+: <select name="BONDING" class="narrow" onchange="checkBondingSettings(this.form,1)">
   <?=mk_option(_var($eth0, 'BONDING'), "no", _("No"))?>
   <?=mk_option(_var($eth0, 'BONDING'), "yes", _("Yes"))?>
   </select>
@@ -664,7 +664,7 @@ _(Enable bonding)_:
 
 <div markdown="1" id="bond-members-eth0" class="'hide">
 _(Bonding mode)_:
-: <select name="BONDING_MODE" onchange="checkBondingSettings(this.form,-1)">
+: <select name="BONDING_MODE" class="narrow" onchange="checkBondingSettings(this.form,-1)">
   <?=mk_option(_var($eth0, 'BONDING_MODE'), "0", _("balance-rr")." (0)")?>
   <?=mk_option(_var($eth0, 'BONDING_MODE'), "1", _("active-backup")." (1)", isset($eth0['BONDING_MODE']) ? '' : 'selected')?>
   <?=mk_option(_var($eth0, 'BONDING_MODE'), "2", _("balance-xor")." (2)")?>
@@ -678,7 +678,7 @@ _(Bonding mode)_:
 :eth_bonding_mode_help:
 
 _(Bonding members of)_ bond0:
-: <select id="bond-eth0" name="BONDNICS" multiple="multiple" class="'hide">
+: <select id="bond-eth0" name="BONDNICS" multiple="multiple" class="'hide narrow">
   <?=mk_option(_var($eth0, 'BONDNICS'), 'eth0', 'eth0', 'selected disabled')?>
   <?foreach ($ports as $port):?>
   <?if (!locked('eth0',$port)) echo mk_option_check(_var($eth0,'BONDNICS'),$port,$port)?>
@@ -689,7 +689,7 @@ _(Bonding members of)_ bond0:
 
 </div>
 _(Enable bridging)_:
-: <select name="BRIDGING" onchange="checkBridgingSettings(this.form,1)">
+: <select name="BRIDGING" class="narrow" onchange="checkBridgingSettings(this.form,1)">
   <?=mk_option(_var($eth0, 'BRIDGING'), "no", _("No"))?>
   <?=mk_option(_var($eth0, 'BRIDGING'), "yes", _("Yes"))?>
   </select>
@@ -698,7 +698,7 @@ _(Enable bridging)_:
 
 <div markdown="1" id="bridge-members-eth0" class="'hide">
 _(Bridging members of)_ br0:
-: <select id="bridge-eth0" name="BRNICS" multiple="multiple" class="'hide">
+: <select id="bridge-eth0" name="BRNICS" multiple="multiple" class="'hide narrow">
   <?=mk_option(_var($eth0, 'BRNICS'), 'eth0', 'eth0', 'selected disabled')?>
   <?foreach ($ports as $port):?>
   <?if (!locked('eth0',$port)) echo mk_option_check(_var($eth0,'BRNICS'),$port,$port)?>
@@ -709,7 +709,7 @@ _(Bridging members of)_ br0:
 
 </div>
 _(Network protocol)_:
-: <select name="PROTOCOL:0" onchange="selectProtocol(this.form,0,'slow')">
+: <select name="PROTOCOL:0" class="narrow" onchange="selectProtocol(this.form,0,'slow')">
   <?=mk_option(_var($eth0, "PROTOCOL:0"), 'ipv4', _('IPv4 only'))?>
   <?=mk_option(_var($eth0, "PROTOCOL:0"), 'ipv6', _('IPv6 only'))?>
   <?=mk_option(_var($eth0, "PROTOCOL:0"), 'ipv4+ipv6', _('IPv4 + IPv6'))?>
@@ -719,7 +719,7 @@ _(Network protocol)_:
 
 <div markdown="1" class="ipv4-eth0-0 hide">
 _(IPv4 address assignment)_:
-: <select name="USE_DHCP:0" onchange="selectProtocol(this.form,0,'slow')">
+: <select name="USE_DHCP:0" class="narrow" onchange="selectProtocol(this.form,0,'slow')">
   <?=mk_option(_var($eth0, "USE_DHCP:0"), 'yes', _('Automatic'))?>
   <?=mk_option(_var($eth0, "USE_DHCP:0"), 'no', _('Static'))?>
   </select>
@@ -744,7 +744,7 @@ _(IPv4 default gateway)_:
 </div>
 <div markdown="1" class="ipv6-eth0-0 hide">
 _(IPv6 address assignment)_:
-: <select name="USE_DHCP6:0" onchange="selectProtocol(this.form,0,'slow')">
+: <select name="USE_DHCP6:0" class="narrow" onchange="selectProtocol(this.form,0,'slow')">
   <?=mk_option(_var($eth0, "USE_DHCP6:0"), 'yes', _('Automatic'))?>
   <?=mk_option(_var($eth0, "USE_DHCP6:0"), 'no', _('Static'))?>
   </select>
@@ -766,7 +766,7 @@ _(IPv6 default gateway)_:
 </div>
 <div markdown="1" class="priv-ipv6-eth0-0 hide">
 _(IPv6 privacy extensions)_:
-: <select name="PRIVACY6:0">
+: <select name="PRIVACY6:0" class="narrow">
   <?=mk_option(_var($eth0, "PRIVACY6:0"), "0", _("Disabled"))?>
   <?=mk_option(_var($eth0, "PRIVACY6:0"), "2", _("Enabled"))?>
   </select>
@@ -782,11 +782,11 @@ _(Desired MTU)_:
 :eth_desired_mtu_help:
 
 _(Enable VLANs)_:
-: <select name="TYPE" onchange="checkNetworkAccess(this.form)">
+: <select name="TYPE" class="narrow" onchange="checkNetworkAccess(this.form)">
   <?=mk_option(_var($eth0, 'TYPE'), 'access', _('No'))?>
   <?=mk_option(_var($eth0, 'TYPE'), 'trunk', _('Yes'))?>
   </select>
-  <input type="button" id="button-vlan-eth0" class="form hide" value="_(Show)_" onclick="showVLAN('eth0')">
+  <span><input type="button" id="button-vlan-eth0" class="form hide" value="_(Show)_" onclick="showVLAN('eth0')"></span>
 
 :eth_enable_vlans_help:
 
@@ -813,7 +813,7 @@ _(VLAN number)_:
 :eth_vlan_number_help:
 
 _(Network protocol)_:
-: <select name="PROTOCOL:<?=$i?>" onchange="selectProtocol(this.form,<?=$i?>,'slow')">
+: <select name="PROTOCOL:<?=$i?>" class="narrow" onchange="selectProtocol(this.form,<?=$i?>,'slow')">
   <?=mk_option(_var($eth0, "PROTOCOL:$i"), 'ipv4', _('IPv4 only'))?>
   <?=mk_option(_var($eth0, "PROTOCOL:$i"), 'ipv6', _('IPv6 only'))?>
   <?=mk_option(_var($eth0, "PROTOCOL:$i"), 'ipv4+ipv6', _('IPv4 + IPv6'))?>
@@ -823,7 +823,7 @@ _(Network protocol)_:
 
 <div markdown="1" class="ipv4-eth0-<?=$i?> hide">
 _(IPv4 address assignment)_:
-: <select name="USE_DHCP:<?=$i?>" class="ctrl" onchange="selectProtocol(this.form,<?=$i?>,'slow')">
+: <select name="USE_DHCP:<?=$i?>" class="ctrl narrow" onchange="selectProtocol(this.form,<?=$i?>,'slow')">
   <?=mk_option(_var($eth0, "USE_DHCP:$i"), 'yes', _('Automatic'))?>
   <?=mk_option(_var($eth0, "USE_DHCP:$i"), 'no', _('Static'))?>
   <?=mk_option(_var($eth0, "USE_DHCP:$i"), '', _('None'))?>
@@ -852,7 +852,7 @@ _(IPv4 default gateway)_:
 </div>
 <div markdown="1" class="ipv6-eth0-<?=$i?> hide">
 _(IPv6 address assignment)_:
-: <select name="USE_DHCP6:<?=$i?>" class="ctrl" onchange="selectProtocol(this.form,<?=$i?>,'slow')">
+: <select name="USE_DHCP6:<?=$i?>" class="ctrl narrow" onchange="selectProtocol(this.form,<?=$i?>,'slow')">
   <?=mk_option(_var($eth0, "USE_DHCP6:$i"), 'yes', _('Automatic'))?>
   <?=mk_option(_var($eth0, "USE_DHCP6:$i"), 'no', _('Static'))?>
 <?if ($i>0):?>
@@ -880,7 +880,7 @@ _(IPv6 default gateway)_:
 </div>
 <div markdown="1" class="priv-ipv6-eth0-<?=$i?> hide">
 _(IPv6 privacy extensions)_:
-: <select name="PRIVACY6:<?=$i?>">
+: <select name="PRIVACY6:<?=$i?>" class="narrow">
   <?=mk_option(_var($eth0, "PRIVACY6:$i"), "0", _("Disabled"))?>
   <?=mk_option(_var($eth0, "PRIVACY6:$i"), "2", _("Enabled"))?>
   </select>
@@ -917,7 +917,7 @@ _(VLAN number)_:
   </span>
 
 _(Network protocol)_:
-: <select name="PROTOCOL:INDEX" onchange="selectProtocol(this.form,INDEX,'slow')">
+: <select name="PROTOCOL:INDEX" class="narrow" onchange="selectProtocol(this.form,INDEX,'slow')">
   <?=mk_option(_var($eth0, "PROTOCOL:INDEX"), 'ipv4', _('IPv4 only'))?>
   <?=mk_option(_var($eth0, "PROTOCOL:INDEX"), 'ipv6', _('IPv6 only'))?>
   <?=mk_option(_var($eth0, "PROTOCOL:INDEX"), 'ipv4+ipv6', _('IPv4 + IPv6'))?>
@@ -925,7 +925,7 @@ _(Network protocol)_:
 
 <div markdown="1" class="ipv4-eth0-INDEX">
 _(IPv4 address assignment)_:
-: <select name="USE_DHCP:INDEX" class="ctrl" onchange="selectProtocol(this.form,INDEX,'slow')">
+: <select name="USE_DHCP:INDEX" class="ctrl narrow" onchange="selectProtocol(this.form,INDEX,'slow')">
   <?=mk_option(_var($eth0, "USE_DHCP:INDEX"), 'yes', _('Automatic'))?>
   <?=mk_option(_var($eth0, "USE_DHCP:INDEX"), 'no', _('Static'))?>
   <?=mk_option(_var($eth0, "USE_DHCP:INDEX"), '', _('None'))?>
@@ -948,7 +948,7 @@ _(IPv4 default gateway)_:
 </div>
 <div markdown="1" class="ipv6-eth0-INDEX hide">
 _(IPv6 address assignment)_:
-: <select name="USE_DHCP6:INDEX" class="ctrl" onchange="selectProtocol(this.form,INDEX,'slow')">
+: <select name="USE_DHCP6:INDEX" class="ctrl narrow" onchange="selectProtocol(this.form,INDEX,'slow')">
   <?=mk_option(_var($eth0, "USE_DHCP6:INDEX"), 'yes', _('Automatic'))?>
   <?=mk_option(_var($eth0, "USE_DHCP6:INDEX"), 'no', _('Static'))?>
   <?=mk_option(_var($eth0, "USE_DHCP6:INDEX"), '', _('None'))?>
@@ -968,7 +968,7 @@ _(IPv6 default gateway)_:
 </div>
 <div markdown="1" class="priv-ipv6-eth0-INDEX hide">
 _(IPv6 privacy extensions)_:
-: <select name="PRIVACY6:INDEX">
+: <select name="PRIVACY6:INDEX" class="narrow">
   <?=mk_option(_var($eth0, 'PRIVACY6:INDEX'), "0", _("Disabled"))?>
   <?=mk_option(_var($eth0, 'PRIVACY6:INDEX'), "2", _("Enabled"))?>
   </select>
