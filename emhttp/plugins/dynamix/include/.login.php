@@ -104,7 +104,7 @@ function verifyUsernamePassword(string $username, string $password): bool
 
     $serverState = new ServerState();
     // We may have an SSO token - check if SSO is enabled and then validate the token
-    if ($serverState->ssoEnabled && strlen($password) > 500) {
+    if ($serverState->isSSOEnabled() && strlen($password) > 500) {
         if (!preg_match('/^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$/', $password)) {
             my_logger("SSO Login Attempt Failed: Invalid token format");
             return false;
@@ -124,21 +124,14 @@ function verifyUsernamePassword(string $username, string $password): bool
             return false;
         }
 
-        try {
-            // Split on first { and take everything after it
-            $jsonParts = explode('{', $output[0], 2);
-            if (count($jsonParts) < 2) {
-                my_logger("SSO Login Attempt Failed: No JSON found in response");
-                return false;
-            }
-            $response = json_decode('{' . $jsonParts[1], true);
-            if (isset($response['valid']) && $response['valid'] === true) {
-                return true;
-            }
-        } catch (Exception $e) {
-            my_logger("SSO Login Attempt Exception: " . $e->getMessage());
-            return false;
+        // Simply check if the expected JSON pattern exists in the output
+        $outputString = implode("\n", $output);
+        if (strpos($outputString, '"valid":true') !== false) {
+            return true;
         }
+        
+        my_logger("SSO Login Attempt Failed: Valid response not found");
+        return false;
     }
     return false;
 }
@@ -165,7 +158,7 @@ if (!empty($username) && !empty($password)) {
 
         // Check if we're limited
         if ($failCount >= $maxFails) {
-            throw new Exception(_('Too many previous login attempts.').'<br>'.sprintf(_('Logins prevented for %s'),'<span id="countdown"></span>'));
+            throw new Exception(_('Too many previous login attempts.') . '<br>' . sprintf(_('Logins prevented for %s'), '<span id="countdown"></span>'));
         }
 
         // Bail if username + password combo doesn't work
@@ -194,7 +187,7 @@ if (!empty($username) && !empty($password)) {
         // Log error to syslog
         $coolReset = "";
         if ($failCount == ($maxFails - 1)) {
-            $error .= '<br>'.sprintf(_('Logins prevented for %s'),'<span id="countdown"></span>');
+            $error .= '<br>' . sprintf(_('Logins prevented for %s'), '<span id="countdown"></span>');
         }
         if ($failCount >= $maxFails) {
             $coolReset = "Ignoring login attempts for {$cooldown} seconds.";
