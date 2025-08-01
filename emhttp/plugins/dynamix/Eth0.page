@@ -575,17 +575,17 @@ _(IPv4 DNS server assignment)_:
 
 <div markdown="1" id="dns4server" class="hide">
 _(IPv4 DNS server)_ 1:
-: <input type="text" name="DNS_SERVER1" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($eth0, 'DNS_SERVER1')?>" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
+: <input type="text" name="DNS_SERVER1" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($eth0, 'DNS_SERVER1')?>" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
 
 :eth_ipv4_dns_server_help:
 
 _(IPv4 DNS server)_ 2:
-: <input type="text" name="DNS_SERVER2" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($eth0, 'DNS_SERVER2')?>" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
+: <input type="text" name="DNS_SERVER2" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($eth0, 'DNS_SERVER2')?>" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
 
 :eth_ipv4_dns_server2_help:
 
 _(IPv4 DNS server)_ 3:
-: <input type="text" name="DNS_SERVER3" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($eth0, 'DNS_SERVER3')?>" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
+: <input type="text" name="DNS_SERVER3" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($eth0, 'DNS_SERVER3')?>" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
 
 :eth_ipv4_dns_server3_help:
 
@@ -728,14 +728,14 @@ _(IPv4 address assignment)_:
 
 <div markdown="1" class="more-ipv4-eth0-0 hide">
 _(IPv4 address)_:
-: <input type="text" name="IPADDR:0" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($eth0, "IPADDR:0")?>" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">/<select name="NETMASK:0" class="slim">
+: <input type="text" name="IPADDR:0" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($eth0, "IPADDR:0")?>" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">/<select name="NETMASK:0" class="slim">
   <?foreach ($masks as $mask => $prefix) echo mk_option(_var($eth0,"NETMASK:0"), $mask, $prefix, _var($eth0,"NETMASK:0")=='' && $prefix=='24'?'selected':'');?>
   </select>
 
 :eth_ipv4_address_help:
 
 _(IPv4 default gateway)_:
-: <input type="text" name="GATEWAY:0" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($eth0,"GATEWAY:0")?>" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
+: <input type="text" name="GATEWAY:0" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($eth0,"GATEWAY:0")?>" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
   <input type="text" name="METRIC:0" min="0" max="9999" autocomplete="off" spellcheck="false" value="<?=_var($eth0,"METRIC:0")?:metric('eth0')?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
 
 :eth_ipv4_default_gateway_help:
@@ -776,7 +776,7 @@ _(IPv6 privacy extensions)_:
 </div>
 </div>
 _(Desired MTU)_:
-: <input type="number" name="MTU" min="68" max="9198" autocomplete="off" spellcheck="false" value="<?=_var($eth0, 'MTU')?>" class="narrow" placeholder="1500" <?=(_var($eth0, 'MTU') != '' || _var($eth0, 'USE_MTU')) ? '' : 'disabled'?>>
+: <input type="number" name="MTU" min="68" max="9198" autocomplete="off" spellcheck="false" value="<?=_var($eth0, 'MTU')?>" placeholder="1500" <?=(_var($eth0, 'MTU') != '' || _var($eth0, 'USE_MTU')) ? '' : 'disabled'?>>
 <span><input type="checkbox" name="USE_MTU" onchange="selectMTU(this.form)" <?=_var($eth0, 'USE_MTU') ? 'checked' : ''?>><?=$jumbo?>&nbsp;<i class="fa fa-info-circle blue-text hand" title="<?=$jumbo_1?>.&#10;<?=$jumbo_2?>.&#10;<?=$jumbo_3?>!"></i></span>
 
 :eth_desired_mtu_help:
@@ -834,7 +834,7 @@ _(IPv4 address assignment)_:
 
 <div markdown="1" class="more-ipv4-eth0-<?=$i?> hide">
 _(IPv4 address)_:
-: <input type="text" name="IPADDR:<?=$i?>" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($eth0, "IPADDR:$i")?>" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">/<select name="NETMASK:<?=$i?>" class="slim">
+: <input type="text" name="IPADDR:<?=$i?>" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($eth0, "IPADDR:$i")?>" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">/<select name="NETMASK:<?=$i?>" class="slim">
   <?foreach ($masks as $mask => $prefix) echo mk_option(_var($eth0,"NETMASK:$i"), $mask, $prefix, _var($eth0,"NETMASK:$i")=='' && $prefix=='24'?'selected':'');?>
   </select>
 
@@ -842,7 +842,7 @@ _(IPv4 address)_:
 
 <div markdown="1" class="more-gw4-eth0-<?=$i?> hide">
 _(IPv4 default gateway)_:
-: <input type="text" name="GATEWAY:<?=$i?>" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($eth0,"GATEWAY:$i")?>" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
+: <input type="text" name="GATEWAY:<?=$i?>" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($eth0,"GATEWAY:$i")?>" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
   <input type="text" name="METRIC:<?=$i?>" min="0" max="9999" autocomplete="off" spellcheck="false" value="<?=_var($eth0,"METRIC:$i")?:metric('eth0.'._var($eth0,"VLANID:$i"))?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
 
 :eth_ipv4_default_gateway_help:
@@ -934,13 +934,13 @@ _(IPv4 address assignment)_:
 
 <div markdown="1" class="more-ipv4-eth0-INDEX hide">
 _(IPv4 address)_:
-: <input type="text" name="IPADDR:INDEX" maxlength="15" autocomplete="off" spellcheck="false" value="" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">/<select name="NETMASK:INDEX" class="slim">
+: <input type="text" name="IPADDR:INDEX" maxlength="15" autocomplete="off" spellcheck="false" value="" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">/<select name="NETMASK:INDEX" class="slim">
   <?foreach ($masks as $mask => $prefix) echo mk_option(0, $mask, $prefix, $prefix=='24'?'selected':'');?>
   </select>
 
 <div markdown="1" class="more-gw4-eth0-INDEX hide">
 _(IPv4 default gateway)_:
-: <input type="text" name="GATEWAY:INDEX" maxlength="15" autocomplete="off" spellcheck="false" value="" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
+: <input type="text" name="GATEWAY:INDEX" maxlength="15" autocomplete="off" spellcheck="false" value="" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
   <input type="text" name="METRIC:INDEX" min="1" max="9999" autocomplete="off" spellcheck="false" value="<?=metric('eth0.INDEX')?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
 
 </div>

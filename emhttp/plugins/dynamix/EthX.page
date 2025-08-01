@@ -179,7 +179,7 @@ _(IPv4 address assignment)_:
 
 <div markdown="1" class="more-ipv4-ethX-0 hide">
 _(IPv4 address)_:
-: <input type="text" name="IPADDR:0" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"IPADDR:0")?>" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">/<select name="NETMASK:0" class="slim">
+: <input type="text" name="IPADDR:0" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"IPADDR:0")?>" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">/<select name="NETMASK:0" class="slim">
   <?foreach ($masks as $mask => $prefix) echo mk_option(_var($ethX,"NETMASK:0"), $mask, $prefix, _var($ethX,"NETMASK:0")=='' && $prefix=='24'?'selected':'');?>
   </select>
 
@@ -187,7 +187,7 @@ _(IPv4 address)_:
 
 <div markdown="1" class="more-gw4-ethX-0 hide">
 _(IPv4 default gateway)_:
-: <input type="text" name="GATEWAY:0" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"GATEWAY:0")?>" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
+: <input type="text" name="GATEWAY:0" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"GATEWAY:0")?>" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
   <input type="text" name="METRIC:0" min="0" max="9999" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"METRIC:0")?:metric('ethX')?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
 
 :eth_ipv4_default_gateway_help:
@@ -233,7 +233,7 @@ _(IPv6 privacy extensions)_:
 </div>
 </div>
 _(Desired MTU)_:
-: <input type="number" name="MTU" min="68" max="9198" autocomplete="off" spellcheck="false" value="<?=_var($ethX,'MTU')?>" class="narrow" placeholder="1500" <?=(_var($ethX,'MTU')!='' || _var($ethX,'USE_MTU'))?'':'disabled'?>>
+: <input type="number" name="MTU" min="68" max="9198" autocomplete="off" spellcheck="false" value="<?=_var($ethX,'MTU')?>" placeholder="1500" <?=(_var($ethX,'MTU')!='' || _var($ethX,'USE_MTU'))?'':'disabled'?>>
   <input type="checkbox" name="USE_MTU" onchange="selectMTU(this.form)" <?=_var($ethX,'USE_MTU')?'checked':''?>><?=$jumbo?>&nbsp;<i class="fa fa-info-circle blue-text hand" title="<?=$jumbo_1?>.&#10;<?=$jumbo_2?>.&#10;<?=$jumbo_3?>!"></i>
 
 :eth_desired_mtu_help:
@@ -288,7 +288,7 @@ _(IPv4 address assignment)_:
 
 <div markdown="1" class="more-ipv4-ethX-<?=$i?> hide">
 _(IPv4 address)_:
-: <input type="text" name="IPADDR:<?=$i?>" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"IPADDR:$i")?>" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">/<select name="NETMASK:<?=$i?>" class="slim">
+: <input type="text" name="IPADDR:<?=$i?>" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"IPADDR:$i")?>" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">/<select name="NETMASK:<?=$i?>" class="slim">
   <?foreach ($masks as $mask => $prefix) echo mk_option(_var($ethX,"NETMASK:$i"), $mask, $prefix, _var($ethX,"NETMASK:$i")=='' && $prefix=='24'?'selected':'');?>
   </select>
 
@@ -296,7 +296,7 @@ _(IPv4 address)_:
 
 <div markdown="1" class="more-gw4-ethX-<?=$i?> hide">
 _(IPv4 default gateway)_:
-: <input type="text" name="GATEWAY:<?=$i?>" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"GATEWAY:$i")?>" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
+: <input type="text" name="GATEWAY:<?=$i?>" maxlength="15" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"GATEWAY:$i")?>" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
   <input type="text" name="METRIC:<?=$i?>" min="0" max="9999" autocomplete="off" spellcheck="false" value="<?=_var($ethX,"METRIC:$i")?:metric('ethX.'._var($ethX,"VLANID:$i"))?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
 
 :eth_ipv4_default_gateway_help:
@@ -388,13 +388,13 @@ _(IPv4 address assignment)_:
 
 <div markdown="1" class="more-ipv4-ethX-INDEX hide">
 _(IPv4 address)_:
-: <input type="text" name="IPADDR:INDEX" maxlength="15" autocomplete="off" spellcheck="false" value="" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">/<select name="NETMASK:INDEX" class="slim">
+: <input type="text" name="IPADDR:INDEX" maxlength="15" autocomplete="off" spellcheck="false" value="" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">/<select name="NETMASK:INDEX" class="slim">
   <?foreach ($masks as $mask => $prefix) echo mk_option(0, $mask, $prefix, $prefix=='24'?'selected':'');?>
   </select>
 
 <div markdown="1" class="more-gw4-ethX-INDEX hide">
 _(IPv4 default gateway)_:
-: <input type="text" name="GATEWAY:INDEX" maxlength="15" autocomplete="off" spellcheck="false" value="" class="narrow" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
+: <input type="text" name="GATEWAY:INDEX" maxlength="15" autocomplete="off" spellcheck="false" value="" pattern="<?=$validIP4?>" title="_(IPv4 address A.B.C.D)_">
   <input type="text" name="METRIC:INDEX" min="1" max="9999" autocomplete="off" spellcheck="false" value="<?=metric('ethX.INDEX')?>" class="slim"><i class="fa fa-sort-numeric-asc"></i> *<?=$metric?>*
 
 </div>

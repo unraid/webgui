@@ -162,8 +162,8 @@ _(Libvirt storage location)_:
 :vms_libvirt_volume_help:
 
 <?else: /* Libvirt is stopped */ ?>
-_(Libvirt vdisk size)_:
-: <input type="number" id="IMAGE_SIZE" name="IMAGE_SIZE" min="1" value="<?=htmlspecialchars($domain_cfg['IMAGE_SIZE']);?>" style="width:50px;" required="required" />_(GB)_ <span id="SIZE_ERROR" class="errortext"></span>
+_(Libvirt vdisk size)_ (_(GB)_):
+: <input type="number" id="IMAGE_SIZE" name="IMAGE_SIZE" min="1" value="<?=htmlspecialchars($domain_cfg['IMAGE_SIZE']);?>" required="required" /><span id="SIZE_ERROR" class="errortext"></span>
 
 :vms_libvirt_vdisk_size_help:
 
@@ -224,7 +224,7 @@ _(Upon host shutdown)_:
 :vms_host_shutdown_help:
 
 _(VM shutdown time-out)_:
-: <input type="number" id="vm_shutdown_timeout" name="TIMEOUT" value="<?=htmlspecialchars($domain_cfg['TIMEOUT'])?>" class="narrow">
+: <input type="number" id="vm_shutdown_timeout" name="TIMEOUT" value="<?=htmlspecialchars($domain_cfg['TIMEOUT'])?>">
   <?if (!empty($var['shutdownTimeout']) && !empty($domain_cfg['TIMEOUT']) && (int)$domain_cfg['TIMEOUT'] > (int)$var['shutdownTimeout']):?>
   <span id="arraystopped"><i class="fa fa-warning icon warning"></i> _(exceeds Disk Shutdown)_ <?=htmlspecialchars($var['shutdownTimeout'])?>s _(time-out)_ (<a href="/Settings/DiskSettings">_(edit)_</a>)</span>
   <?endif;?>
@@ -256,8 +256,8 @@ _(Show VM Usage)_:
 
 :vms_usage_help:
 
-_(VM Usage refresh timer(seconds))_:
-: <input type="number" id="vm_usage_timer" name="USAGETIMER" value="<?=htmlspecialchars($domain_cfg['USAGETIMER'] ?? 3) ?>" class="narrow">
+_(VM Usage refresh timer)_ (_(seconds)_):
+: <input type="number" id="vm_usage_timer" name="USAGETIMER" value="<?=htmlspecialchars($domain_cfg['USAGETIMER'] ?? 3) ?>">
 
 :vms_usage_timer_help:
 

@@ -5,8 +5,8 @@ Icon="icon-key"
 Tag="expeditedssl"
 ---
 <?php
-/* Copyright 2005-2024, Lime Technology
- * Copyright 2012-2024, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -398,18 +398,6 @@ _(Start page)_:
 
 :mgmt_start_page_help:
 
-<!--
-Restrict access:
-: <select name="BIND_MGT" class="narrow">
-  <?=mk_option($var['BIND_MGT'], "no", _('No'))?>
-  <?=mk_option($var['BIND_MGT'], "yes", _('Yes'))?>
-  </select>
-
-> By default GUI, SSH and TELNET access are available on all active interfaces of the system.
->
-> *Restrict access* limits GUI, SSH and TELNET access to the management interface only (eth0).
--->
-
 _(Use TELNET)_:
 : <select name="USE_TELNET" onchange="updateTELNET(this.form)">
   <?=mk_option($var['USE_TELNET'], "no", _('No'))?>
@@ -419,7 +407,7 @@ _(Use TELNET)_:
 :mgmt_use_telnet_help:
 
 _(TELNET port)_:
-: <input type="number" name="PORTTELNET" class="narrow" min="1" max="65535" value="<?=$var['PORTTELNET']?>" placeholder="23">
+: <input type="number" name="PORTTELNET" min="1" max="65535" value="<?=$var['PORTTELNET']?>" placeholder="23">
 
 :mgmt_telnet_port_help:
 
@@ -432,7 +420,7 @@ _(Use SSH)_:
 :mgmt_use_ssh_help:
 
 _(SSH port)_:
-: <input type="number" name="PORTSSH" class="narrow" min="1" max="65535" value="<?=$var['PORTSSH']?>" placeholder="22">
+: <input type="number" name="PORTSSH" min="1" max="65535" value="<?=$var['PORTSSH']?>" placeholder="22">
 
 :mgmt_ssh_port_help:
 
@@ -454,17 +442,17 @@ _(Use SSL/TLS)_:
 :mgmt_use_ssl_tls_help:
 
 _(HTTP port)_:
-: <input type="number" name="PORT" class="narrow" min="1" max="65535" value="<?=$var['PORT']?>" placeholder="80">
+: <input type="number" name="PORT" min="1" max="65535" value="<?=$var['PORT']?>" placeholder="80">
 
 :mgmt_http_port_help:
 
 _(HTTPS port)_:
-: <input type="number" name="PORTSSL" class="narrow" min="1" max="65535" value="<?=$var['PORTSSL']?>" placeholder="443">
+: <input type="number" name="PORTSSL" min="1" max="65535" value="<?=$var['PORTSSL']?>" placeholder="443">
 
 :mgmt_https_port_help:
 
 _(Local TLD)_:
-: <input type="text" name="LOCAL_TLD" class="narrow" value="<?=htmlspecialchars($var['LOCAL_TLD'])?>">
+: <input type="text" name="LOCAL_TLD" value="<?=htmlspecialchars($var['LOCAL_TLD'])?>">
 
 :mgmt_local_tld_help:
 

@@ -4,8 +4,8 @@ Icon="icon-linux"
 Tag="linux"
 ---
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -23,9 +23,9 @@ $rpc_nfsd_count	= trim(exec( "plugins/dynamix/scripts/nfsSettings nfs_count" ))
 ?>
 
 <script>
-function checkNFSenable() {	
+function checkNFSenable() {
   var form = document.nfs_enable;
-  form.fuse_remember.disabled = form.shareNFSEnabled.value=="_(no)_";	
+  form.fuse_remember.disabled = form.shareNFSEnabled.value=="_(no)_";
 }
 $(checkNFSenable);
 </script>
@@ -41,7 +41,7 @@ _(Enable NFS)_:
 :nfs_enable_help:
 
 _(Tunable (fuse_remember))_:
-: <input type="number" name="fuse_remember" maxlength="10" value="<?=$var['fuse_remember']?>" class="narrow">
+: <input type="number" name="fuse_remember" maxlength="10" value="<?=$var['fuse_remember']?>">
   <span><?=_($var['fuse_remember_status'])?></span>
 
 :nfs_tunable_fuse_remember_help:
