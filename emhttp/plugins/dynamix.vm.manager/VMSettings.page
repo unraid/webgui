@@ -119,7 +119,7 @@ $libvirt_log       = file_exists("/var/log/libvirt/libvirtd.log");
 &nbsp;
 : <span><input type="checkbox" class="advancedview"></span>
 <?endif;?>
-<form markdown="1" id="settingsForm" method="POST" action="/update.php" target="progressFrame">
+<form markdown="1" id="settingsForm" method="POST" action="/update.php" target="progressFrame" onsubmit="return validateFormOnSubmit();">
 <input type="hidden" name="#file" value="<?=htmlspecialchars($domain_cfgfile)?>">
 <input type="hidden" name="#command" value="/plugins/dynamix/scripts/emcmd">
 <input type="hidden" name="#arg[1]" value="cmdStatus=Apply">
@@ -180,7 +180,7 @@ _(Libvirt storage location)_:
 
 <?endif;?>
 _(Default VM storage path)_:
-: <input type="text" id="domaindir" name="DOMAINDIR" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="/mnt" value="<?=htmlspecialchars($domain_cfg['DOMAINDIR'])?>" placeholder="_(Click to Select)_" pattern="^[^\\]*/$">
+: <input type="text" id="domaindir" name="DOMAINDIR" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="/mnt" value="<?=htmlspecialchars($domain_cfg['DOMAINDIR'])?>" placeholder="_(Click to Select)_" pattern="^[^\\]*/$" onchange="validatePath(this)">
 <?if (!$started):?>
   <span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
 <?endif;?>
@@ -188,7 +188,7 @@ _(Default VM storage path)_:
 :vms_libvirt_storage_help:
 
 _(Default ISO storage path)_:
-: <input type="text" id="mediadir" name="MEDIADIR" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="<?=is_dir('/mnt/user') ? '/mnt/user' : '/mnt'?>" value="<?=htmlspecialchars($domain_cfg['MEDIADIR'])?>" placeholder="_(Click to Select)_" pattern="^[^\\]*/$">
+: <input type="text" id="mediadir" name="MEDIADIR" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="<?=is_dir('/mnt/user') ? '/mnt/user' : '/mnt'?>" value="<?=htmlspecialchars($domain_cfg['MEDIADIR'])?>" placeholder="_(Click to Select)_" pattern="^[^'\\]*/$">
 <?if (!$started):?>
   <span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
 <?endif;?>
@@ -364,6 +364,64 @@ function btrfsScrub(path) {
     }
   });
 }
+
+function validatePath(input) {
+  if (input.value.includes("'")) {
+    input.setCustomValidity(_("Single quote ' is not allowed in the path.")_);
+  } else {
+    input.setCustomValidity("");
+  }
+  input.reportValidity();
+}
+
+// Validate both domaindir and mediadir on submit
+function validateFormOnSubmit() {
+  const domaindir = document.getElementById('domaindir');
+  const mediadir = document.getElementById('mediadir');
+
+  // Run validation
+  validatePath(domaindir);
+  validatePath(mediadir);
+
+  // Check validity in order, and focus the first invalid field
+  if (!domaindir.checkValidity()) {
+    domaindir.reportValidity();
+    domaindir.focus();
+    return false;
+  }
+
+  if (!mediadir.checkValidity()) {
+    mediadir.reportValidity();
+    mediadir.focus();
+    return false;
+  }
+
+  // Both valid
+  return true;
+}
+
+document.getElementById('settingsForm').addEventListener('submit', function(e) {
+  if (!validateFormOnSubmit()) {
+    e.preventDefault();
+  }
+});
+
+// Attach validation on input events
+['domaindir', 'mediadir'].forEach(id => {
+  const input = document.getElementById(id);
+  input.addEventListener('input', () => validatePath(input));
+});
+
+// Hook into Unraid fileTreeAttach for both fields
+$('.filepicker').each(function() {
+  const input = this;
+  $(input).fileTreeAttach(null, null, function(folder) {
+    $(input).val(folder);
+    validatePath(input);
+    $(document).trigger('close.fileTree');
+  });
+});
+
 $(function(){
   $.post("/plugins/dynamix.vm.manager/include/Fedora-virtio-isos.php",{},function(isos) {
     $('#winvirtio_select').html(isos).prop('disabled',false).change().each(function(){$(this).on('change',function() {
