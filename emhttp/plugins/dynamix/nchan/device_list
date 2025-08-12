@@ -501,7 +501,7 @@ while (true) {
     $a = 'pool_device'.$i++;
     $echo[$a] = [];
     $root  = explode($_tilde_,$pool)[0];
-    $print = array_filter(array_column($Cache,'name'),function($name) use ($pools,$root) {return in_array($name,$pools) && strncmp($root,$name,strlen($root))==0;});
+    $print = array_filter(array_column($Cache,'name'),function($name) use ($pools,$root,$_tilde_) {$name_root=explode($_tilde_,$name)[0]; return in_array($name,$pools) && strcmp($root,$name_root)==0;});
     $print = end($print);
     if (_var($var,'fsState')=='Stopped') {
       $log = @parse_ini_file($pool_log) ?: []; // used to detect slot changes

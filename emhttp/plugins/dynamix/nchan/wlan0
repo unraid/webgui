@@ -65,7 +65,8 @@ while (true) {
       $echo['title'] = _('WiFi status unavailable');
     }
   }
-  publish('wlan0',json_encode($echo));
+  // Short of closing all web pages, the timeout should only happen if wifi is enabled and then disabled
+  publish_md5('wlan0',$echo,true);
   sleep(3);
 }
 ?>

@@ -1177,18 +1177,19 @@ _(Use Tailscale)_:
 
 <?if($TS_ExitNodeNeedsApproval):?>
 <div markdown="1" class="TShostname noshow">
-<b>Warning:</b>
+<b>_(Warning)_</b>:
 : Exit Node not yet approved. Navigate to the <a href="<?=$TS_DirectMachineLink?>" target='_blank'>Tailscale website</a> and approve it.
 </div>
 <?endif;?>
 
 <?if(!empty($TS_expiry_diff)):?>
 <div markdown="1" class="TSdivider noshow">
-<b>_(Warning)_</b>:
 <?if($TS_expiry_diff->invert):?>
-: <b>Tailscale Key expired!</b> <a href="<?=$TS_MachinesLink?>" target='_blank'>Renew/Disable key expiry</a> for '<b><?=$TS_HostNameActual?></b>'.
+<b>_(Warning)_</b>:
+: <span><b>Tailscale Key expired!</b> <a href="<?=$TS_MachinesLink?>" target='_blank'>Renew/Disable key expiry</a> for '<b><?=$TS_HostNameActual?></b>'.</span>
 <?else:?>
-: Tailscale Key will expire in <b><?=$TS_expiry_diff->days?> days</b>! <a href="<?=$TS_MachinesLink?>" target='_blank'>Disable Key Expiry</a> for '<b><?=$TS_HostNameActual?></b>'.
+<b>_(Warning)_</b>:
+: <span>Tailscale Key will expire in <b><?=$TS_expiry_diff->days?> days</b>! <a href="<?=$TS_MachinesLink?>" target='_blank'>Disable Key Expiry</a> for '<b><?=$TS_HostNameActual?></b>'.</span>
 <?endif;?>
 <label>See <a href="https://tailscale.com/kb/1028/key-expiry" target='_blank'>key-expiry</a>.</label>
 </div>
@@ -1197,7 +1198,7 @@ _(Use Tailscale)_:
 <?if(!empty($TS_not_approved)):?>
 <div markdown="1" class="TSdivider noshow">
 <b>_(Warning)_</b>:
-: The following route(s) are not approved: <b><?=trim($TS_not_approved)?></b>
+: <span>The following route(s) are not approved: <b><?=trim($TS_not_approved)?></b></span>
 </div>
 <?endif;?>
 

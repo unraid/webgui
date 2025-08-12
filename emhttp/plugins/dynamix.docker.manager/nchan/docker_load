@@ -1,13 +1,30 @@
-#!/bin/bash
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 
-while :; do
-  output=$(docker stats --no-stream --format='{{.ID}};{{.CPUPerc}};{{.MemUsage}}' 2>&1)
-  if [[ $? -ne 0 ]]; then
-    logger -t webgui "docker stats error: $output"
-    exit 1
-  fi
-  if [[ -n "$output" ]]; then
-    curl -sfd "$output" --unix-socket /var/run/nginx.socket http://localhost/pub/dockerload?buffer_length=1 >/dev/null 2>&1
-  fi
-  sleep 1
-done
+require_once "$docroot/webGui/include/Helpers.php";
+require_once "$docroot/webGui/include/publish.php";
+
+while (true) {
+  $output = shell_exec("docker stats --no-stream --format='{{.ID}};{{.CPUPerc}};{{.MemUsage}}' 2>&1");  
+
+  publish_md5("dockerload", $output,true);
+  if ( $output === null ) {
+    // slow down publishing if no containers are running
+    sleep(10);
+  } else {    
+    sleep(1);
+  }
+}

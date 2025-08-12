@@ -37,11 +37,7 @@ while (true) {
     $row = preg_split('/\s+/',$row);
     if (count($row)>5) $echo[] = [$row[0], $row[5]?$now-$row[5]:0, my_scale($row[6],$unit)." $unit", my_scale($row[7],$unit)." $unit"];
   }
-  $echo = json_encode($echo);
-  $md5_new = md5($echo,true);
-  if ($md5_new !== $md5_old) {
-    $md5_old = publish('wireguard',$echo)!==false ? $md5_new : -1;
-  }
+  publish_md5('wireguard',$echo,true);
   sleep(1);
 }
 ?>

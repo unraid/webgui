@@ -279,7 +279,7 @@ function parseInput($vtun, &$input, &$x) {
         // add WG routing for docker containers. Only IPv4 supported
         [$index, $network] = newNet($vtun);
         [$device, $thisnet, $gateway] = thisNet();
-        if (!empty($device) && !empty($thisnet) && !empty($gateway)) {
+        if (!empty($device) && !empty($thisnet) && !empty($tunip) && !empty($gateway)) {
           $conf[]  = "PostUp=ip -4 route flush table $index";
           $conf[]  = "PostUp=ip -4 route add default via $tunip dev $vtun table $index";
           $conf[]  = "PostUp=ip -4 route add $thisnet via $gateway dev $device table $index";

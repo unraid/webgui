@@ -464,6 +464,7 @@ function parse_cpu_ranges($file) {
   if (!is_file($file)) return null;
   $ranges = file_get_contents($file);
   $ranges = trim($ranges);
+  if ($ranges === '') return null;
   $cores = [];
   foreach (explode(',', $ranges) as $range) {
     if (strpos($range, '-') !== false) {

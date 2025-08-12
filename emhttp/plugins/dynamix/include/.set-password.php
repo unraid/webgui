@@ -414,5 +414,11 @@ $isDarkTheme = $themeHelper->isDarkTheme();
             });
         });
     </script>
+    
+    <?php 
+    if (file_exists("$docroot/plugins/dynamix.my.servers/include/welcome-modal.php")) {
+        include_once "$docroot/plugins/dynamix.my.servers/include/welcome-modal.php"; 
+    }
+    ?>
 </body>
 </html>

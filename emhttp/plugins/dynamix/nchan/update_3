@@ -159,12 +159,8 @@ while (true) {
   $date  = my_date($xdate ? 'D j M Y, T' : $display['date'].', T',$now);
   $echo['time'] = [$clock,_($date,0)];
 
-  $echo = json_encode($echo);
-  $md5_new = md5($echo,true);
-  if ($md5_new !== $md5_old) {
-    $md5_old = publish('update3',$echo)!==false ? $md5_new : -1;
-    $time0 = $time1;
-  }
+  publish_md5('update3',$echo,true);
+
   sleep(1);
   $time1 = microtime(true);
 }

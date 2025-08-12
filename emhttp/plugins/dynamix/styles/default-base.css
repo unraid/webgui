@@ -74,9 +74,11 @@ a.info span {
     display: none;
     white-space: nowrap;
     font-variant: small-caps;
-    position: absolute;
-    top: 16px;
-    left: 12px;
+    /*
+    - Must be fixed to avoid CSS limitation with overflow-x: auto; on TableContainer as overflow-y: visible; with that is not supported.
+    - position values are determined by JS in BodyInlineJS.php w/ the a.info element's offset position.
+    */
+    position: fixed;
     line-height: 2rem;
     color: var(--text-color);
     padding: 5px 8px;
@@ -673,8 +675,8 @@ div.title span img {
 
 @media (min-width: 768px) {
     #footer {
-        flex-direction: row;
-        justify-content: space-between;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
         align-items: center;
         position: fixed;
         bottom: 0;
@@ -700,7 +702,9 @@ div.title span img {
     justify-content: center;
     align-items: center;
     gap: 1rem;
-    flex: 1 1 auto; /* Take available space */
+}
+.footer-spacer {
+    display: none; /* Hidden by default on mobile */
 }
 .footer-right,
 #copyright {
@@ -732,13 +736,14 @@ div.title span img {
 @media (min-width: 768px) {
     .footer-left {
         justify-content: flex-start;
-        flex: 0 0 auto; /* Only take needed space on desktop */
+    }
+    .footer-spacer {
+        display: block; /* Show on desktop */
     }
     .footer-right,
     #copyright {
         text-align: right;
         justify-content: flex-start; /* Start from left to enable overflow */
-        flex: 1 1 0; /* Take remaining space */
         width: auto; /* Override mobile full width */
         min-width: 0; /* Critical for overflow to work */
     }

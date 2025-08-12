@@ -570,4 +570,20 @@ function fillAvailableHeight(params = { // default params
   // Add the new listener
   window.addEventListener('resize', window.fillAvailableHeightResizeHandler);
 }
+
+/**
+ * For every a.info element, we see if it has an inner span element.
+ * While the CSS will determine visibility, we still need to use JS to set the position of the "tooltip" span.
+ * Using the a.info element's offset position, we can calculate the top and left position needed for the span.
+ */
+$(document).on('mouseenter', 'a.info', function() {
+  const tooltip = $(this).find('span');
+  if (tooltip.length) {
+    const aInfoPosition = $(this).offset();
+    const addtionalOffset = 16;
+    const top = aInfoPosition.top + addtionalOffset;
+    const left = aInfoPosition.left + addtionalOffset;
+    tooltip.css({ top, left });
+  }
+});
 </script>

@@ -4,8 +4,8 @@ Icon="icon-disks"
 Tag="icon-disk"
 ---
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -200,12 +200,12 @@ _(Default file system for Array disks)_:
 :disk_default_file_system_help:
 
 _(Shutdown time-out)_ (_(seconds)_):
-: <input type="number" name="shutdownTimeout" maxlength="10" value="<?=$var['shutdownTimeout']?>" class="narrow" placeholder="90">
+: <input type="number" name="shutdownTimeout" maxlength="10" value="<?=$var['shutdownTimeout']?>" placeholder="90">
 
 :disk_shutdown_timeout_help:
 
 _(Tunable (poll_attributes))_:
-: <input type="number" name="poll_attributes" maxlength="10" value="<?=$var['poll_attributes']?>" class="narrow" placeholder="<?=$var['poll_attributes_default']?>">
+: <input type="number" name="poll_attributes" maxlength="10" value="<?=$var['poll_attributes']?>" placeholder="<?=$var['poll_attributes_default']?>">
 
 :disk_tunable_poll_attributes_help:
 
@@ -218,7 +218,7 @@ _(Tunable (enable NCQ))_:
 :disk_tunable_enable_ncq_help:
 
 _(Tunable (nr_requests))_:
-: <input type="text" name="nr_requests" maxlength="10" value="<?=htmlspecialchars($var['nr_requests'])?>" class="narrow" placeholder="<?=_($var['nr_requests_default'])?>">
+: <input type="text" name="nr_requests" maxlength="10" value="<?=htmlspecialchars($var['nr_requests'])?>" placeholder="<?=_($var['nr_requests_default'])?>">
 
 :disk_tunable_nr_requests_help:
 
@@ -234,17 +234,17 @@ _(Tunable (scheduler))_:
 :disk_tunable_scheduler_help:
 
 _(Tunable (md_num_stripes))_:
-: <input type="number" name="md_num_stripes" maxlength="10" value="<?=$var['md_num_stripes']?>" class="narrow" placeholder="<?=$var['md_num_stripes_default']?>">
+: <input type="number" name="md_num_stripes" maxlength="10" value="<?=$var['md_num_stripes']?>" placeholder="<?=$var['md_num_stripes_default']?>">
 
 :disk_tunable_md_num_stripes_help:
 
 _(Tunable (md_queue_limit))_:
-: <input type="number" name="md_queue_limit" maxlength="10" value="<?=$var['md_queue_limit']?>" class="narrow" placeholder="<?=$var['md_queue_limit_default']?>">
+: <input type="number" name="md_queue_limit" maxlength="10" value="<?=$var['md_queue_limit']?>" placeholder="<?=$var['md_queue_limit_default']?>">
 
 :disk_tunable_md_queue_limit_help:
 
 _(Tunable (md_sync_limit))_:
-: <input type="number" name="md_sync_limit" maxlength="10" value="<?=$var['md_sync_limit']?>" class="narrow" placeholder="<?=$var['md_sync_limit_default']?>">
+: <input type="number" name="md_sync_limit" maxlength="10" value="<?=$var['md_sync_limit']?>" placeholder="<?=$var['md_sync_limit_default']?>">
 
 :disk_tunable_md_sync_limit_help:
 
@@ -264,32 +264,32 @@ _(Enable NVME power monitoring)_:
   </select>
 
 _(Default warning disk utilization threshold)_ (%):
-: <input type="number" min="0" max="100" name="display_warning" class="narrow" value="<?=$display['warning']?>" placeholder="<?=$default['display']['warning']?>">
+: <input type="number" min="0" max="100" name="display_warning" value="<?=$display['warning']?>" placeholder="<?=$default['display']['warning']?>">
 
 :disk_default_warning_utilization_help:
 
 _(Default critical disk utilization threshold)_ (%):
-: <input type="number" min="0" max="100" name="display_critical" class="narrow" value="<?=$display['critical']?>" placeholder="<?=$default['display']['critical']?>">
+: <input type="number" min="0" max="100" name="display_critical" value="<?=$display['critical']?>" placeholder="<?=$default['display']['critical']?>">
 
 :disk_default_critical_utilization_help:
 
 _(Default warning disk temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
-: <input type="number" min="0" max="300" name="display_hot" class="narrow" value="<?=displayTemp($display['hot'])?>" placeholder="<?=displayTemp($default['display']['hot'])?>">
+: <input type="number" min="0" max="300" name="display_hot" value="<?=displayTemp($display['hot'])?>" placeholder="<?=displayTemp($default['display']['hot'])?>">
 
 :disk_default_warning_temperature_help:
 
 _(Default critical disk temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
-: <input type="number" min="0" max="300" name="display_max" class="narrow" value="<?=displayTemp($display['max'])?>" placeholder="<?=displayTemp($default['display']['max'])?>">
+: <input type="number" min="0" max="300" name="display_max" value="<?=displayTemp($display['max'])?>" placeholder="<?=displayTemp($default['display']['max'])?>">
 
 :disk_default_critical_temperature_help:
 
 _(Default warning SSD temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
-: <input type="number" min="0" max="300" name="display_hotssd" class="narrow" value="<?=displayTemp($display['hotssd'])?>" placeholder="<?=displayTemp($default['display']['hotssd'])?>">
+: <input type="number" min="0" max="300" name="display_hotssd" value="<?=displayTemp($display['hotssd'])?>" placeholder="<?=displayTemp($default['display']['hotssd'])?>">
 
 :ssd_default_warning_temperature_help:
 
 _(Default critical SSD temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
-: <input type="number" min="0" max="300" name="display_maxssd" class="narrow" value="<?=displayTemp($display['maxssd'])?>" placeholder="<?=displayTemp($default['display']['maxssd'])?>">
+: <input type="number" min="0" max="300" name="display_maxssd" value="<?=displayTemp($display['maxssd'])?>" placeholder="<?=displayTemp($default['display']['maxssd'])?>">
 
 :ssd_default_critical_temperature_help:
 
@@ -435,7 +435,7 @@ _(Default SMART controller type)_:
 :disk_default_smart_controller_help:
 
 _(Default SMART attribute notifications)_:
-: <input type="text" name="smCustom" value="<?=htmlspecialchars(_var($var,'smCustom'))?>" class="narrow"><span class="input-instructions">_(Custom attributes (use comma to separate numbers))_</span>
+: <input type="text" name="smCustom" value="<?=htmlspecialchars(_var($var,'smCustom'))?>"><span class="input-instructions">_(Custom attributes (use comma to separate numbers))_</span>
 
 <?for ($x = 0; $x < count($preselect); $x++):?>
 &nbsp;

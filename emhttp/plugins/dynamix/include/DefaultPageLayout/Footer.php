@@ -56,6 +56,7 @@ function getArrayStatus($var) {
         </span>
         <span id="user-notice" class="red-text"></span>
     </div>
+    <div class="footer-spacer">&nbsp;</div>
     <div id="copyright" class="footer-right">
         <unraid-theme-switcher
             current="<?=$theme?>"

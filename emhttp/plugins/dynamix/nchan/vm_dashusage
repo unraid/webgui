@@ -40,14 +40,14 @@ if ($var['fsState'] == "Started" || $var['fsState'] == "Starting") {
     } 
     sleep(10);
   } elseif ($domain_cfg['SERVICE'] != "enable") { 
-    #Add remove_nchan_pid_entry("webGui/nchan/vm_dashusage");
-    exec("sed -i '/webGui\/nchan\/vm_dashusage/d' /var/run/nchan.pid");
-    return;
+    sleep(10);
+    removeNChanScript();
+    exit;
   }
 } else {
-  #Add remove_nchan_pid_entry("webGui/nchan/vm_dashusage");
-  exec("sed -i '/webGui\/nchan\/vm_dashusage/d' /var/run/nchan.pid");
-  return;
+  sleep(10);
+  removeNChanScript();
+  exit;
 }
 
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
@@ -109,11 +109,8 @@ while (true) {
     }
   }
 
-  $echo = json_encode($echo);
-  $md5_new = md5($echo,true);
-  if ($md5_new !== $md5_old) {
-    $md5_old = publish('vm_dashusage',$echo)!==false ? $md5_new : -1;
-  }
+  publish_md5('vm_dashusage',$echo,true);
+
   sleep($timer);
 }
 ?>

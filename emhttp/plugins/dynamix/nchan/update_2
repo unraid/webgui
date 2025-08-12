@@ -499,11 +499,7 @@ while (true) {
     $echo[$a] = [implode($echo[$a]), $extra];
   }
 
-  $echo = json_encode($echo);
-  $md5_new = md5($echo,true);
-  if ($md5_new !== $md5_old) {
-    $md5_old = publish('update2',$echo)!==false ? $md5_new : -1;
-  }
+  publish_md5('update2',$echo,true);
   sleep(2);
 }
 ?>

@@ -14,7 +14,7 @@
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 
 $cmd  = $_POST['cmd'];
-$path = $_POST['path'];
+$path = escapeshellarg($_POST['path']);
 
 function btrfs($data) {return "btrfs-$data";}
 function zfs($data) {return "zfs-".strtok($data,' ');}
@@ -22,7 +22,7 @@ function zfs($data) {return "zfs-".strtok($data,' ');}
 switch ($cmd) {
 case 'status':
   exec("ps -C btrfs -o cmd=|awk '/$path\$/{print $2}'",$btrfs);
-  exec("/usr/sbin/zpool status $path|grep -Po '(scrub|resilver) in progress'",$zfs);
+  exec("/usr/sbin/zpool status $path|grep -Po '(scrub|resilver|expansion of \S+) in progress'",$zfs);
   echo implode(',',array_merge(array_map('btrfs',$btrfs),array_map('zfs',$zfs)));
   break;
 case 'btrfs-balance':
@@ -32,6 +32,7 @@ case 'btrfs-scrub':
   break;
 case 'zfs-scrub':
 case 'zfs-resilver':
+case 'zfs-expansion':
   echo shell_exec("/usr/sbin/zpool status -P $path");
   break;
 default:
@@ -44,6 +45,7 @@ default:
       case 'rfs-check': $pgrep = 'pgrep --ns $$  -f '."'/scripts/reiserfsck $dev'"; break;
       case 'xfs-check': $pgrep = 'pgrep --ns $$ -f '."'/scripts/xfs_repair.*$dev'"; break;
       case 'ext-check': $pgrep = 'pgrep --ns $$ -f '."'/scripts/ext_check.*$dev'"; break;
+      case 'ntfs-check': $pgrep = 'pgrep --ns $$ -f '."'/scripts/ntfs_check.*$dev'"; break;
     }
     echo file_get_contents($file);
     if (!exec($pgrep)) echo "\0";

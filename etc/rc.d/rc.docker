@@ -397,7 +397,7 @@ docker_network_start(){
     fi
     if [[ $SET6 == 1 ]]; then
       SUBNET6="--ipv6 --subnet=${SUBNET6// / --ipv6 --subnet=}"
-      [[ -n $GATEWAY6 && ${GATEWAY6:0:4} != fe80 ]] && GATEWAY6="--gateway=$GATEWAY6"
+      [[ -n $GATEWAY6 && ${GATEWAY6:0:4} != fe80 ]] && GATEWAY6="--gateway=$GATEWAY6" || GATEWAY6=
     else
       GATEWAY6=
     fi

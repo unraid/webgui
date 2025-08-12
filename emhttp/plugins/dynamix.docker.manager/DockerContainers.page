@@ -4,6 +4,7 @@ Tag="cubes"
 Cond="is_file('/var/run/dockerd.pid')"
 Markdown="false"
 Nchan="docker_load:stop"
+Tabs="false"
 ---
 <?PHP
 /* Copyright 2005-2023, Lime Technology
@@ -207,7 +208,7 @@ dockerload.on('message', function(msg){
   }
 });
 $(function() {
-  $(".tabs").append('<span class="status"><span><input type="checkbox" class="advancedview"></span></span>');
+  $(".title .right").append('<span class="status"><span><input type="checkbox" class="advancedview"></span></span>');
   $('.advancedview').switchButton({labels_placement:'left', on_label:"_(Advanced View)_", off_label:"_(Basic View)_", checked:$.cookie('docker_listview_mode')=='advanced'});
   $('.advancedview').change(function(){
     $('.advanced').toggle('slow');

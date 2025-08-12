@@ -1,0 +1,96 @@
+#!/bin/bash
+# ntfs_check start <dev> <id> <options>
+# ntfs_check status <dev> <id>
+# ntfs_check cancel <dev> <id>
+
+# Exit codes:
+# 0 - No corruption detected or process not found.
+# 1 - Corruption detected.
+# 4 - File system corruption fixed.
+# 8 - No check has been run yet.
+# 9 - Process is still running.
+
+# Using /var/lib because that's where btrfs puts status
+mkdir -p /var/lib/ntfs
+
+case "$1" in
+'start')
+    # Start the ntfsfix process in the background and log output
+    rm -f /var/lib/ntfs/check.status.$3
+    {
+        /bin/ntfsfix $4 $2 &> /var/lib/ntfs/check.status.$3
+        echo $? > /var/lib/ntfs/check.status.$3.exit
+    } > /dev/null 2>&1 &
+    echo $! > /var/lib/ntfs/check.pid.$3
+    exit 0
+    ;;
+
+'status')
+    # Check if the process is still running
+    if [ -f /var/lib/ntfs/check.pid.$3 ]; then
+        pid=$(cat /var/lib/ntfs/check.pid.$3)
+        if kill -0 $pid 2>/dev/null; then
+            # Process is running, return status and exit code 9
+            cat /var/lib/ntfs/check.status.$3
+            exit 9
+        else
+            # Process is not running, read the exit status if available
+            if [ -f /var/lib/ntfs/check.status.$3.exit ]; then
+                exit_status=$(cat /var/lib/ntfs/check.status.$3.exit)
+                cat /var/lib/ntfs/check.status.$3
+                rm -f /var/lib/ntfs/check.pid.$3
+    		(( exit_status & 1 )) && exit 4
+    		(( exit_status & 6 )) && exit 1
+		exit 0
+            else
+                # Exit status file does not exist, but return status file if available
+                if [ -f /var/lib/ntfs/check.status.$3 ]; then
+                    cat /var/lib/ntfs/check.status.$3
+                fi
+                exit 8
+            fi
+        fi
+    else
+        # No PID file found, check for existing status
+        if [ -f /var/lib/ntfs/check.status.$3 ]; then
+            cat /var/lib/ntfs/check.status.$3
+            # If no exit status file, assume process completed successfully
+            if [ -f /var/lib/ntfs/check.status.$3.exit ]; then
+                exit_status=$(cat /var/lib/ntfs/check.status.$3.exit)
+    		(( exit_status & 1 )) && exit 4
+    		(( exit_status & 4 )) && exit 1
+                exit 0
+            else
+                exit 8
+            fi
+        else
+            # No status file found
+            echo "Not available"
+            exit 8
+        fi
+    fi
+    ;;
+
+'cancel')
+    # Cancel the ntfsfix process
+    if [ -f /var/lib/ntfs/check.pid.$3 ]; then
+        pid=$(cat /var/lib/ntfs/check.pid.$3)
+        kill $pid
+        while kill -0 $pid 2>/dev/null; do
+            sleep 1
+        done
+        echo -e "\nCancelled" >> /var/lib/ntfs/check.status.$3
+        rm -f /var/lib/ntfs/check.pid.$3
+    else
+        echo "No process to cancel"
+    fi
+
+    exit 0
+    ;;
+
+*)
+    # Handle invalid commands
+    echo "Invalid command"
+    exit 0
+    ;;
+esac

@@ -1,7 +1,4 @@
 <?php
-// Included in login.php
-
-require_once "$docroot/plugins/dynamix.my.servers/include/state.php";
 
 // Only start a session to check if they have a cookie that looks like our session
 $server_name = strtok($_SERVER['HTTP_HOST'], ":");
@@ -102,9 +99,8 @@ function verifyUsernamePassword(string $username, string $password): bool
         return true;
     }
 
-    $serverState = new ServerState();
-    // We may have an SSO token - check if SSO is enabled and then validate the token
-    if ($serverState->ssoEnabled && strlen($password) > 500) {
+    // We may have an SSO token - validate it
+    if (strlen($password) > 500) {
         if (!preg_match('/^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$/', $password)) {
             my_logger("SSO Login Attempt Failed: Invalid token format");
             return false;

@@ -278,6 +278,12 @@ function selectDiskFsProfileEXT() {
   $('#diskFsProfile').val('');
   setDiskFsWidth(1);
 }
+function selectDiskFsProfileNTFS() {
+  $('#diskFsProfile').empty();
+  $('#diskFsProfile').append($('<option>', {value: '', text:''}));
+  $('#diskFsProfile').val('');
+  setDiskFsWidth(1);
+}
 function selectDiskFsProfileBTRFS(slots,init) {
   $('#diskFsProfile').empty();
   $('#diskFsProfile').append($('<option>', {value: 'single', text:_('single')}));
@@ -321,7 +327,7 @@ function selectDiskFsWidthZFS(slots,init) {
     }
   } else {
     var width, min_width;
-    if ($('#diskFsProfile').val() == 'raidz1') min_width = 3;
+    if ($('#diskFsProfile').val() == 'raidz1') min_width = 2;
     else if ($('#diskFsProfile').val() == 'raidz2') min_width = 3;
     else if ($('#diskFsProfile').val() == 'raidz3') min_width = 4;
     for (width=min_width; width<=slots; width++) {
@@ -345,7 +351,7 @@ function selectDiskFsProfileZFS(slots,init,subpool) {
   if (subpool != 'cache' && subpool != 'spares') {
     if (slots%2 == 0 || slots%3 == 0 || slots%4 == 0) $('#diskFsProfile').append($('<option>', {value: 'mirror', text: _('mirror')}));
     if (subpool == '') {
-      if (slots >= 3 && subpool == '') $('#diskFsProfile').append($('<option>', {value: 'raidz1', text: _('raidz1')}));
+      if (slots >= 2 && subpool == '') $('#diskFsProfile').append($('<option>', {value: 'raidz1', text: _('raidz1')}));
       if (slots >= 3 && subpool == '') $('#diskFsProfile').append($('<option>', {value: 'raidz2', text: _('raidz2')}));
       if (slots >= 4 && subpool == '') $('#diskFsProfile').append($('<option>', {value: 'raidz3', text: _('raidz3')}));
     }
@@ -407,9 +413,11 @@ function selectDiskFsProfile(init) {
     selectDiskFsProfileXFS();
   } else if (fsType.indexOf('ext') != -1) {
     selectDiskFsProfileEXT();
+  } else if (fsType.indexOf('ntfs') != -1) {
+    selectDiskFsProfileNTFS();
   }
 
-  if (subpool != '' || fsType == 'auto' || fsType.indexOf('xfs') != -1 || fsType.indexOf('ext') != -1) {
+  if (subpool != '' || fsType == 'auto' || fsType.indexOf('xfs') != -1 || fsType.indexOf('ext') != -1 || fsType.indexOf('ntfs') != -1) {
     $('#compression').hide(t);
     $('#diskCompression').prop('disabled',true);
   } else {
@@ -584,6 +592,19 @@ function zfsResilver(path) {
   });
   return false;
 }
+function zfsExpansion(path) {
+  $.post('/webGui/include/FileSystemStatus.php',{cmd:'zfs-expansion',path:path},function(data) {
+    if (/expansion of \S+ in progress/.test(data)) {
+      $('#zfs-button').prop('disabled',true);
+      $('#zfs-pool').text(data);
+      setTimeout(function(){zfsExpansion(path);},1000);
+    } else {
+      $.removeCookie('zfs-expansion-<?=$tag?>');
+      refresh();
+    }
+  });
+  return false;
+}
 function rfsCheck(path) {
   $.post('/webGui/include/FileSystemStatus.php',{cmd:'rfs-check',path:path},function(data) {
     $('#rfs-check').text(data);
@@ -615,6 +636,18 @@ function extCheck(path) {
       setTimeout(function(){extCheck(path);},1000);
     } else {
       $.removeCookie('ext-check-<?=$tag?>');
+      refresh();
+    }
+  });
+  return false;
+}
+function ntfsCheck(path) {
+  $.post('/webGui/include/FileSystemStatus.php',{cmd:'ntfs-check',path:path},function(data) {
+    $('#ntfs-check').text(data);
+    if (data.slice(-1)!='\0') {
+      setTimeout(function(){ntfsCheck(path);},1000);
+    } else {
+      $.removeCookie('ntfs-check-<?=$tag?>');
       refresh();
     }
   });
@@ -837,6 +870,7 @@ _(File system type)_:
   <?if (_var($disk,'slots',1) == 1) echo mk_option(_var($disk,'fsType'), "ext4", _('ext4'))?>
   <?if (_var($disk,'slots',1) == 1) echo mk_option(_var($disk,'fsType'), "ext3", _('ext3'), "disabled")?>
   <?if (_var($disk,'slots',1) == 1) echo mk_option(_var($disk,'fsType'), "ext2", _('ext2'), "disabled")?>
+  <?if (_var($disk,'slots',1) == 1) echo mk_option(_var($disk,'fsType'), "ntfs", _('ntfs'))?>
   <?if (_var($disk,'slots',1) == 1) echo mk_option(_var($disk,'fsType'), "reiserfs", _('reiserfs'), "disabled")?>
   <?if (_var($disk,'slots',1) == 1) echo mk_option(_var($disk,'fsType'), "luks:xfs", _('xfs')." - "._('encrypted'))?>
   <?=mk_option(_var($disk, 'fsType'), "luks:zfs", _('zfs')." - "._('encrypted'))?>
@@ -1008,7 +1042,10 @@ _(btrfs filesystem usage)_:
 <input type="hidden" name="#arg[2]" value="/mnt/<?=$tag?>">
 
 &nbsp;
-: <input type="submit" value="_(Cancel)_"> *_(Running)_*
+: <span>
+    <input type="submit" value="_(Cancel)_">
+    *_(Running)_*
+  </span>
 
 :info_balance_cancel_help:
 
@@ -1122,7 +1159,8 @@ _(btrfs scrub status)_:
 
 &nbsp;
 : <span class="buttons-spaced">
-      <input type="submit" value="_(Cancel)_"> *_(Running)_*
+    <input type="submit" value="_(Cancel)_">
+    *_(Running)_*
   </span>
 
 :info_scrub_cancel_help:
@@ -1236,7 +1274,10 @@ _(btrfs check status)_:
 <input type="hidden" name="#arg[3]" value="<?=_var($disk, 'id')?>">
 
 &nbsp;
-: <input type="submit" value="_(Cancel)_"> *_(Running)_*
+: <span>
+    <input type="submit" value="_(Cancel)_">
+    *_(Running)_*
+  </span>
 
 :info_check_cancel_help:
 
@@ -1287,7 +1328,10 @@ _(zfs pool status)_:
 <input type="hidden" name="#arg[2]" value="<?=$tag?>">
 
 &nbsp;
-: <input type="submit" value="_(Cancel)_"> *_(Running)_*
+: <span>
+    <input type="submit" value="_(Cancel)_">
+    *_(Running)_*
+  </span>
 
 :info_scrub_cancel_help:
 
@@ -1526,6 +1570,106 @@ _(xfs_repair status)_:
   </span>
 
 :info_xfs_cancel_help:
+
+<?endif;?>
+<?else:?>
+
+&nbsp;
+: <span class="inline-block">
+    <input type="submit" value="_(Check)_" disabled>
+    <span>**_(Check)_** _(is only available when array is Started in **Maintenance** mode)_.
+  </span>
+
+<?endif;?>
+</form>
+<?endif;?>
+<?if (fsType('ntfs')):?>
+<div class="title nocontrol">
+  <span class="left">
+    <i class="title fa fa-shield"></i>_(Check Filesystem Status)_
+  </span>
+</div>
+<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareFS(this,'ntfs-check-<?=$tag?>','/dev/<?=_var($disk, 'deviceSb')?> <?=_var($disk, 'id')?>')">
+<?if (maintenance_mode()):?>
+<?exec("$docroot/webGui/scripts/ntfs_check status /dev/"._var($disk,'deviceSb')." "._var($disk,'id'), $check_status, $retval)?>
+
+_(ntfsfix_ status)_:
+: <pre id='ntfs-check'><?=implode("\n", $check_status)?></pre>
+
+<?if ($retval == 0 || $retval == 8):?>
+<input type="hidden" name="#command" value="/webGui/scripts/ntfs_check">
+<input type="hidden" name="#arg[1]" value="start">
+<input type="hidden" name="#arg[2]" value="/dev/<?=_var($disk, 'deviceSb')?>">
+<input type="hidden" name="#arg[3]" value="<?=_var($disk, 'id')?>">
+<input type="hidden" name="#arg[4]" value="-d">
+
+&nbsp;
+: <span class="buttons-spaced">
+    <input type="submit" value="_(Check)_">
+    <?if ($retval == 0): ?> _(No file system corruption detected)_.<?endif; ?>
+  </span>
+
+:info_ntfs_check_help:
+
+<?elseif ($retval == 1):?>
+<input type="hidden" name="#command" value="/webGui/scripts/ntfs_check">
+<input type="hidden" name="#arg[1]" value="start">
+<input type="hidden" name="#arg[2]" value="/dev/<?=_var($disk, 'deviceSb')?>">
+<input type="hidden" name="#arg[3]" value="<?=_var($disk, 'id')?>">
+<input type="hidden" name="#arg[4]" value="-e">
+
+&nbsp;
+: <span class="buttons-spaced">
+    <input type="submit" value="_(Fix)_">
+    <span style="color: red;">_(File system corruption detected)_.</span>
+  </span>
+
+:info_ntfs_check_help:
+
+<?elseif ($retval == 2):?>
+<input type="hidden" name="#command" value="/webGui/scripts/ntfs_check">
+<input type="hidden" name="#arg[1]" value="start">
+<input type="hidden" name="#arg[2]" value="/dev/<?=_var($disk, 'deviceSb')?>">
+<input type="hidden" name="#arg[3]" value="<?=_var($disk, 'id')?>">
+<input type="hidden" name="#arg[4]" value="-eL">
+
+&nbsp;
+: <span class="buttons-spaced">
+    <input type="submit" value="_(Zero Log)_">
+    <span style="color: red;">_(Dirty log detected)_.</span>
+  </span>
+
+<p>_(Note)_: _(While there is some risk, if it is not possible to first mount the filesystem to clear the log, zeroing it is the only option to try and repair the filesystem, and in most cases it results in little or no data loss)_.</p>
+
+:info_ntfs_check_help:
+
+<?elseif ($retval == 4):?>
+<input type="hidden" name="#command" value="/webGui/scripts/ntfs_check">
+<input type="hidden" name="#arg[1]" value="start">
+<input type="hidden" name="#arg[2]" value="/dev/<?=_var($disk, 'deviceSb')?>">
+<input type="hidden" name="#arg[3]" value="<?=_var($disk, 'id')?>">
+<input type="hidden" name="#arg[4]" value="-n">
+
+&nbsp;
+: <span class="buttons-spaced">
+    <input type="submit" value="_(Check)_">
+    _(File system corruption fixed)_
+  </span>
+
+:info_ntfs_check_help:
+
+<?elseif ($retval == 9):?>
+<input type="hidden" name="#command" value="/webGui/scripts/ntfs_check">
+<input type="hidden" name="#arg[1]" value="cancel">
+<input type="hidden" name="#arg[2]" value="/dev/<?=_var($disk, 'deviceSb')?>">
+
+&nbsp;
+: <span class="buttons-spaced">
+    <input type="submit" value="_(Cancel)_">
+    *_(Running)_*
+  </span>
+
+:info_ntfs_cancel_help:
 
 <?endif;?>
 <?else:?>
@@ -1781,8 +1925,10 @@ $(function() {
   if ($.cookie('btrfs-check-<?=$tag?>')) status = btrfsCheck($.cookie('btrfs-check-<?=$tag?>'));
   if ($.cookie('zfs-scrub-<?=$tag?>')) status = zfsScrub($.cookie('zfs-scrub-<?=$tag?>'));
   if ($.cookie('zfs-resilver-<?=$tag?>')) status = zfsResilver($.cookie('zfs-resilver-<?=$tag?>'));
+  if ($.cookie('zfs-expansion-<?=$tag?>')) status = zfsExpansion($.cookie('zfs-expansion-<?=$tag?>'));
   if ($.cookie('rfs-check-<?=$tag?>')) status = rfsCheck($.cookie('rfs-check-<?=$tag?>'));
   if ($.cookie('xfs-check-<?=$tag?>')) status = xfsCheck($.cookie('xfs-check-<?=$tag?>'));
+  if ($.cookie('ntfs-check-<?=$tag?>')) status = ntfsCheck($.cookie('ntfs-check-<?=$tag?>'));
   if ($.cookie('ext-check-<?=$tag?>')) status = extCheck($.cookie('ext-check-<?=$tag?>'));
   if (status) {
     $.post('/webGui/include/FileSystemStatus.php',{cmd:'status',path:'<?=$tag?>'},function(a){
@@ -1808,6 +1954,10 @@ $(function() {
         case 'zfs-resilver':
           $.cookie('zfs-resilver-<?=$tag?>','<?=$tag?>');
           zfsResilver($.cookie('zfs-resilver-<?=$tag?>'));
+          break;
+        case 'zfs-expansion':
+          $.cookie('zfs-expansion-<?=$tag?>','<?=$tag?>');
+          zfsExpansion($.cookie('zfs-expansion-<?=$tag?>'));
           break;
         }
       }

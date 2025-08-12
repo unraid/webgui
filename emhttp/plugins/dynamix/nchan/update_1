@@ -122,11 +122,9 @@ while (true) {
   $share = array_keys($shares);
   $count = array_count_values($lsof ?? array());
   foreach ($share as $name) $echo['stream'][] = $count[$name]??0;
-  $echo = json_encode($echo);
-  $md5_new = md5($echo,true);
-  if ($md5_new !== $md5_old) {
-    $md5_old = publish('update1',$echo)!==false ? $md5_new : -1;
-  }
+
+  publish_md5('update1',$echo,true);
+  
   sleep(5);
 }
 ?>

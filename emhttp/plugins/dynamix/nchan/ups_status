@@ -131,11 +131,9 @@ while (true) {
     elseif (isset($load)) $echo[5] = ($load<90 ? "<span>" : "<span $red>").$echo[5]."</span>";
     $echo[6] = isset($output) ? ((empty($volt) || ($minv<$output && $output<$maxv) ? "<span $green>" : "<span $red>").$echo[6].(isset($freq) ? " ~ $freq Hz" : "")."</span>") : $echo[6];
   }
-  $echo = json_encode($echo);
-  $md5_new = md5($echo,true);
-  if ($md5_new !== $md5_old) {
-    $md5_old = publish('apcups',$echo)!==false ? $md5_new : -1;
-  }
+
+  publish_md5('apcups',$echo,true);
+
   sleep(3);
 }
 ?>

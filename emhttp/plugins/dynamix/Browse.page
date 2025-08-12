@@ -271,6 +271,8 @@ function fileEdit(id) {
 }
 
 function fullWindow() {
+  // this class is used to determine if the dialog is sized via the default CSS in default-dynamix.css or by JS when the user clicks the "expand" button.
+  $('.ui-dialog').toggleClass('ui-dialog-content-full');
   if ($('.ui-dfm .ui-dialog-titlebar-close').html().indexOf('expand')>=0) {
     dfm.window.dialog('option','height',window.innerHeight-40);
     dfm.window.dialog('option','width',window.innerWidth);
@@ -999,7 +1001,8 @@ $(function(){
   } else {
     url.push('<i class="fa fa-home red-text"></i>');
   }
-  $('span.left').html(url.join('<i class="fa fa-chevron-right"></i>')).append('<span class="right"><span class="dfm_filter"><input type="text" class="dfm_filter" oninput="filter(this.value)" autocomplete="off" spellcheck="false" placeholder="_(file type)_"><i class="fa fa-filter dfm_filter"></i></span><i class="fa fa-toggle-off" onclick="toggleTime()" style="cursor:pointer;margin-left:20px" title="_(Toggle Time/Age display)_"></i></span>');
+  $('.title .left').html(url.join('<i class="fa fa-chevron-right"></i>'));
+  $('.title .right').append('<span class="dfm_filter"><input type="text" id="dfm_filter" class="dfm_filter" oninput="filter(this.value)" autocomplete="off" spellcheck="false" placeholder="_(file type)_"><i class="fa fa-filter dfm_filter"></i></span><i class="fa fa-toggle-off" onclick="toggleTime()" style="cursor:pointer;" title="_(Toggle Time/Age display)_"></i>');
   table = $('table.indexer');
   thead = table.find('thead');
   table.bind('sortEnd',function(e,t){
