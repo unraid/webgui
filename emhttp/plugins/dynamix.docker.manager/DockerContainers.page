@@ -213,7 +213,7 @@ $(function() {
   $('.advancedview').change(function(){
     $('.advanced').toggle('slow');
     $('.basic').toggle('slow');
-    $.cookie('docker_listview_mode',$('.advancedview').is(':checked')?'advanced':'basic',{expires:3650});
+    $.cookie('docker_listview_mode',$(this).is(':checked')?'advanced':'basic',{expires:3650});
     listview();
   });
   $.removeCookie('lockbutton');
