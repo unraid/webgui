@@ -7,7 +7,7 @@ Nchan="docker_load"
 Tabs="false"
 ---
 <?PHP
-/* Copyright 2005-2023, Lime Technology
+/* Copyright 2005-2025, Lime Technology
  * Copyright 2012-2023, Bergware International.
  * Copyright 2014-2021, Guilherme Jardim, Eric Schultz, Jon Panozzo.
  *
@@ -29,6 +29,7 @@ $cpus    = cpu_list();
 ?>
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
 
+<div class="ToggleViewMode"><span><input type="checkbox" class="advancedview"></span></div>
 <div class="TableContainer">
     <table id="docker_containers" class="tablesorter shift">
         <thead>
@@ -208,12 +209,11 @@ dockerload.on('message', function(msg){
   }
 });
 $(function() {
-  $(".title .right").append('<span class="status"><span><input type="checkbox" class="advancedview"></span></span>');
   $('.advancedview').switchButton({labels_placement:'left', on_label:"_(Advanced View)_", off_label:"_(Basic View)_", checked:$.cookie('docker_listview_mode')=='advanced'});
   $('.advancedview').change(function(){
     $('.advanced').toggle('slow');
     $('.basic').toggle('slow');
-    $.cookie('docker_listview_mode',$('.advancedview').is(':checked')?'advanced':'basic',{expires:3650});
+    $.cookie('docker_listview_mode',$(this).is(':checked')?'advanced':'basic',{expires:3650});
     listview();
   });
   $.removeCookie('lockbutton');
