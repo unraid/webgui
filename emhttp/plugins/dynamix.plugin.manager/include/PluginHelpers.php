@@ -27,12 +27,19 @@ function plugin($method, $arg = '', $dontCache = false) {
   if ( ! $dontCache ) {
     if ( empty($pluginCache) && file_exists("/tmp/plugins/pluginAttributesCache") ) {
       $pluginCache = @unserialize(file_get_contents("/tmp/plugins/pluginAttributesCache"))??[];
+      if ( ! is_array($pluginCache) ) {
+        $pluginCache = [];
+        @unlink("/tmp/plugins/pluginAttributesCache");
+      }
     }
 
     if (!in_array($method, $allMethods)) {
       if ( $arg ) {
         if ( !isset($pluginCache[$arg]) ) {
           $pluginCache[$arg] = json_decode(plugin('attributes', $arg), true)??false;
+          if ( isset($pluginCache[$arg]['error']) ) {
+            unset($pluginCache[$arg]);
+          }
           file_put_contents_atomic("/tmp/plugins/pluginAttributesCache", serialize($pluginCache));
         }
 
@@ -40,8 +47,7 @@ function plugin($method, $arg = '', $dontCache = false) {
         if ( isset($pluginCache[$arg][$method]) ) {
           return $pluginCache[$arg][$method];
         } else {
-          $pluginCache[$arg][$method] = false;
-          return false;
+          return "";
         }
       }  
     }
@@ -119,7 +125,7 @@ function dropPluginCache($name) {
     $cached = [];
   }
   $pluginCached = array_filter($cached, function($key) use ($pluginName) {
-    if ( str_contains($key,$pluginName) ) {
+    if ( basename($key) == $pluginName ) {
       return false;
     }
     return true;
