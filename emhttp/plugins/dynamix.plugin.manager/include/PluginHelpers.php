@@ -130,7 +130,8 @@ function dropPluginCache($name) {
     }
     return true;
   },ARRAY_FILTER_USE_KEY);
-  file_put_contents_atomic("/tmp/plugins/pluginAttributesCache", serialize($pluginCached));
+  $pluginCache = $pluginCached;
+  file_put_contents_atomic("/tmp/plugins/pluginAttributesCache", serialize($pluginCache));
 }
 
 ?>
