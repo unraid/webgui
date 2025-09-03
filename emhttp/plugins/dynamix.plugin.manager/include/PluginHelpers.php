@@ -19,8 +19,6 @@ function plugin($method, $arg = '', $dontCache = false) {
   global $docroot,$pluginCache;
   
   static $allMethods = ['dump', 'changes', 'alert', 'validate', 'check', 'checkall', 'update', 'remove', 'install', 'attributes'];
-  static $dropCacheMethods = ['check','checkall','update','remove','install']; // methods that drop the cache
-
 
   if ( ! is_file("/tmp/plugins/pluginAttributesCache") ) {
     $pluginCache = [];
@@ -47,11 +45,6 @@ function plugin($method, $arg = '', $dontCache = false) {
         }
       }  
     }
-  }
-
-  if ( in_array($method, $dropCacheMethods) ) {
-    $pluginCache = [];
-    @unlink("/tmp/plugins/pluginAttributesCache");
   }
 
   exec("$docroot/plugins/dynamix.plugin.manager/scripts/plugin ".escapeshellarg($method)." ".escapeshellarg($arg), $output, $retval);
@@ -125,14 +118,12 @@ function dropPluginCache($name) {
   if ( ! $cached ) {
     $cached = [];
   }
-  file_put_contents("/tmp/blah",print_r($cached,true));
   $pluginCached = array_filter($cached, function($key) use ($pluginName) {
     if ( str_contains($key,$pluginName) ) {
       return false;
     }
     return true;
   },ARRAY_FILTER_USE_KEY);
-  file_put_contents("/tmp/blah2",print_r($pluginCached,true));
   file_put_contents_atomic("/tmp/plugins/pluginAttributesCache", serialize($pluginCached));
 }
 
