@@ -290,14 +290,23 @@ function plugin($method, $plugin_file, &$error) {
 
   // parse plugin definition XML file
   $xml = file_exists($plugin_file) ? @simplexml_load_file($plugin_file, NULL, LIBXML_NOCDATA) : false;
-  if ($xml === false) {
-    $error = "XML file doesn't exist or xml parse error";
-    return false;
-  }
 
   // return all attributes
   if ($method == 'attributes') {
-    return json_encode($xml->attributes());
+    if ($xml === false) {
+      return json_encode(["error" => "XML file doesn't exist or xml parse error"]);
+    }
+    $attributes = $xml->attributes();
+    $json = json_decode(json_encode($attributes), true);
+
+    $attributes = $json['@attributes'] ?: ["error" => "no attributes present"];
+    return json_encode($attributes);
+  }
+
+
+  if ($xml === false) {
+    $error = "XML file doesn't exist or xml parse error";
+    return false;
   }
 
   // dump

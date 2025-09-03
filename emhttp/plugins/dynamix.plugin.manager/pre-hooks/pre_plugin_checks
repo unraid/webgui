@@ -27,6 +27,8 @@ $unraid  = ['unRAIDServer.plg','unRAIDServer-.plg'];
 if (!is_dir($pending)) mkdir($pending);
 if ($method != 'check') file_put_contents("$pending/$name",$method);
 
+dropPluginCache($name); // drop the cache for any plugins with the same basename
+
 switch ($type) {
 case 'plugin':
   switch ($method) {
@@ -45,6 +47,7 @@ case 'plugin':
         echo "$status\n";
         // restore original plugin and undo update
         copy($plugin, $new_plugin);
+        dropPluginCache($name);
       }
     }
     break;
@@ -54,4 +57,5 @@ case 'language':
   // nothing defined
   break;
 }
+
 ?>

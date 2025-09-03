@@ -15,23 +15,44 @@ $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Wrappers.php";
 
 // Invoke the plugin command with indicated method
-function plugin($method, $arg = '') {
-  global $docroot;
+function plugin($method, $arg = '', $dontCache = false) {
+  global $docroot,$pluginCache;
   
-  static $methods = ['dump', 'changes', 'alert', 'validate', 'check', 'checkall', 'update', 'remove', 'install', 'attributes'];
-  static $pluginCache = [];
+  static $allMethods = ['dump', 'changes', 'alert', 'validate', 'check', 'checkall', 'update', 'remove', 'install', 'attributes'];
+  static $dropCacheMethods = ['check','checkall','update','remove','install']; // methods that drop the cache
 
-  if (!in_array($method, $methods)) {
-    if ( $arg ) {
-      if ( !isset($pluginCache[$arg]) ) {
-        $pluginCache[$arg] = json_decode(plugin('attributes', $arg), true)['@attributes']??false;
-      }
-      if ( $pluginCache[$arg][$method]) {
-        return $pluginCache[$arg][$method];
-      }
-    }  
+
+  if ( ! is_file("/tmp/plugins/pluginAttributesCache") ) {
+    $pluginCache = [];
   }
-  
+
+  if ( ! $dontCache ) {
+    if ( empty($pluginCache) && file_exists("/tmp/plugins/pluginAttributesCache") ) {
+      $pluginCache = @unserialize(file_get_contents("/tmp/plugins/pluginAttributesCache"))??[];
+    }
+
+    if (!in_array($method, $allMethods)) {
+      if ( $arg ) {
+        if ( !isset($pluginCache[$arg]) ) {
+          $pluginCache[$arg] = json_decode(plugin('attributes', $arg), true)??false;
+          file_put_contents_atomic("/tmp/plugins/pluginAttributesCache", serialize($pluginCache));
+        }
+
+        // return the cached result if it exists.  If it doesn't return false;;
+        if ( isset($pluginCache[$arg][$method]) ) {
+          return $pluginCache[$arg][$method];
+        } else {
+          $pluginCache[$arg][$method] = false;
+          return false;
+        }
+      }  
+    }
+  }
+
+  if ( in_array($method, $dropCacheMethods) ) {
+    $pluginCache = [];
+    @unlink("/tmp/plugins/pluginAttributesCache");
+  }
 
   exec("$docroot/plugins/dynamix.plugin.manager/scripts/plugin ".escapeshellarg($method)." ".escapeshellarg($arg), $output, $retval);
   return $retval==0 ? implode("\n", $output) : false;
@@ -93,4 +114,26 @@ function icon($name) {
 function mk_options($select,$value) {
   return "<option value='$value'".($select==$value?" selected":"").">"._(ucfirst($value))."</option>";
 }
+
+// Drop the cache for any plugins with the same basename
+function dropPluginCache($name) {
+  global $pluginCache;
+
+
+  $pluginName = basename($name);
+  $cached = @unserialize(@file_get_contents("/tmp/plugins/pluginAttributesCache"));
+  if ( ! $cached ) {
+    $cached = [];
+  }
+  file_put_contents("/tmp/blah",print_r($cached,true));
+  $pluginCached = array_filter($cached, function($key) use ($pluginName) {
+    if ( str_contains($key,$pluginName) ) {
+      return false;
+    }
+    return true;
+  },ARRAY_FILTER_USE_KEY);
+  file_put_contents("/tmp/blah2",print_r($pluginCached,true));
+  file_put_contents_atomic("/tmp/plugins/pluginAttributesCache", serialize($pluginCached));
+}
+
 ?>

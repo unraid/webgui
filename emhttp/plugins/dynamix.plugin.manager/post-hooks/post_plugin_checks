@@ -35,6 +35,9 @@ $error   = $argv[4]??'';   // error code (empty if none)
 $plugin  = "/boot/config/plugins/$name";
 $pending = "/tmp/plugins/pluginPending";
 
+// delete the cached attributes
+dropPluginCache($name);
+
 switch ($type) {
 case 'plugin':
   switch ($method) {
@@ -59,6 +62,7 @@ case 'plugin':
         }
         echo "Updating support link\n";
         file_put_contents($plugin, $xml->saveXML());
+        dropPluginCache($name);
       }
     }
   }
@@ -67,6 +71,9 @@ case 'language':
   // nothing defined
   break;
 }
+
+// delete the cached attributes after the operation
+dropPluginCache($name);
 
 // unset pending status
 if ($method != 'check') @unlink("$pending/$name");
