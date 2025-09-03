@@ -295,6 +295,11 @@ function plugin($method, $plugin_file, &$error) {
     return false;
   }
 
+  // return all attributes
+  if ($method == 'attributes') {
+    return json_encode($xml->attributes());
+  }
+
   // dump
   if ($method == 'dump') {
     // dump file: debugging

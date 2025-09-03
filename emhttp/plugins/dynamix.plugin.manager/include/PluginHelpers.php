@@ -17,6 +17,22 @@ require_once "$docroot/webGui/include/Wrappers.php";
 // Invoke the plugin command with indicated method
 function plugin($method, $arg = '') {
   global $docroot;
+  
+  static $methods = ['dump', 'changes', 'alert', 'validate', 'check', 'checkall', 'update', 'remove', 'install', 'attributes'];
+  static $pluginCache = [];
+
+  if (!in_array($method, $methods)) {
+    if ( $arg ) {
+      if ( !isset($pluginCache[$arg]) ) {
+        $pluginCache[$arg] = json_decode(plugin('attributes', $arg), true)['@attributes']??false;
+      }
+      if ( $pluginCache[$arg][$method]) {
+        return $pluginCache[$arg][$method];
+      }
+    }  
+  }
+  
+
   exec("$docroot/plugins/dynamix.plugin.manager/scripts/plugin ".escapeshellarg($method)." ".escapeshellarg($arg), $output, $retval);
   return $retval==0 ? implode("\n", $output) : false;
 }
