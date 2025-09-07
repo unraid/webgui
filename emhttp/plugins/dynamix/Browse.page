@@ -459,6 +459,10 @@ function doAction(action, title, id) {
       clearTimeout(timers.calc);
       $('div.spinner.fixed').hide('slow');
       swal({title:"_(Calculate Occupied Space)_",text:text,html:true,confirmButtonText:"_(Ok)_"});
+    }).fail(function(xhr){
+      clearTimeout(timers.calc);
+      $('div.spinner.fixed').hide('slow');
+      swal({title:"Error", text:"Calculate failed: "+xhr.status+" "+xhr.statusText, type:"error"});
     });
     return;
   case 15: // search
@@ -735,6 +739,10 @@ function doActions(action, title) {
       clearTimeout(timers.calc);
       $('div.spinner.fixed').hide('slow');
       swal({title:"_(Calculate Occupied Space)_",text:text,html:true,confirmButtonText:"_(Ok)_"});
+    }).fail(function(xhr){
+      clearTimeout(timers.calc);
+      $('div.spinner.fixed').hide('slow');
+      swal({title:"Error", text:"Calculate failed: "+xhr.status+" "+xhr.statusText, type:"error"});
     });
     return;
   case 15: // search
