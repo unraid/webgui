@@ -12,7 +12,7 @@ function findJsFiles($directory) {
   
   try {
     foreach ($iterator as $file) {
-      if ($file->isFile() && $file->getExtension() === 'js') {
+      if ($file->isFile() && ($file->getExtension() === 'js' || $file->getExtension() === 'css') {
         $path = $file->getPathname();
         $baseDir = '/usr/local/emhttp';
         if (strpos($path, $baseDir) === 0) {
