@@ -23,7 +23,6 @@
 #
 # If a notification does not go through, check the /var/log/notify_Discord file for hints
 ############
-
 ############
 # Discord webhooks docs: https://birdie0.github.io/discord-webhooks-guide/
 #
@@ -36,31 +35,37 @@
 # CONTENT (notify -m)
 # LINK (notify -l)
 # TIMESTAMP (seconds from epoch)
-
 SCRIPTNAME=$(basename "$0")
 LOG="/var/log/notify_${SCRIPTNAME%.*}"
-
 # for quick test, setup environment to mimic notify script
-[[ -z "${EVENT}" ]] && EVENT='Unraid Status'
-[[ -z "${SUBJECT}" ]] && SUBJECT='Notification'
-[[ -z "${DESCRIPTION}" ]] && DESCRIPTION='No description'
-[[ -z "${IMPORTANCE}" ]] && IMPORTANCE='normal'
-[[ -z "${TIMESTAMP}" ]] && TIMESTAMP=$(date +%s)
+EVENT="${EVENT:-Unraid Status}"
+SUBJECT="${SUBJECT:-Notification}"
+DESCRIPTION="${DESCRIPTION:-No description}"
+IMPORTANCE="${IMPORTANCE:-normal}"
+CONTENT="${CONTENT:-}"
+LINK="${LINK:-}"
+HOSTNAME="${HOSTNAME:-$(hostname)}"
+TIMESTAMP="${TIMESTAMP:-$(date +%s)}"
+
 # ensure link has a host
 if [[ -n "${LINK}" ]] && [[ ${LINK} != http* ]]; then
-source <(grep "NGINX_DEFAULTURL" /usr/local/emhttp/state/nginx.ini 2>/dev/null)
-LINK=${NGINX_DEFAULTURL}${LINK}
+  if [[ -r /usr/local/emhttp/state/nginx.ini ]]; then
+    # shellcheck disable=SC1090
+    source <(grep "NGINX_DEFAULTURL" /usr/local/emhttp/state/nginx.ini || true)
+    LINK="${NGINX_DEFAULTURL}${LINK}"
+  fi
 fi
+
 # Discord will not allow links with bare hostname, links must have both hostname and tld or no link at all
 if [[ -n "${LINK}" ]]; then
-HOST=$(echo "${LINK}" | cut -d'/' -f3)
-[[ ${HOST} != *.* ]] && LINK=
+  HOST=$(echo "${LINK}" | cut -d'/' -f3)
+  [[ ${HOST} != *.* ]] && LINK=
 fi
 
 # note: there is no default for CONTENT
-
 # send DESCRIPTION and/or CONTENT. Ignore the default DESCRIPTION.
 [[ "${DESCRIPTION}" == 'No description' ]] && DESCRIPTION=""
+FULL_DETAILS=""
 if [[ -n "${DESCRIPTION}" ]] && [[ -n "${CONTENT}" ]]; then
   FULL_DETAILS="${DESCRIPTION}\n\n${CONTENT}"
 elif [[ -n "${DESCRIPTION}" ]]; then
@@ -68,131 +73,158 @@ elif [[ -n "${DESCRIPTION}" ]]; then
 elif [[ -n "${CONTENT}" ]]; then
   FULL_DETAILS="${CONTENT}"
 fi
-# split into 1024 character segments
-[[ -n "${FULL_DETAILS}" ]] && DESC_FIELD=$(
-  cat <<EOF
-        {
-          "name": "Description",
-          "value": "${FULL_DETAILS:0:1024}"
-        },
-EOF
-)
-[[ -n "${FULL_DETAILS}" ]] && [[ ${#FULL_DETAILS} -gt 1024 ]] && DESC_FIELD=$(
-  cat <<EOF
-        ${DESC_FIELD}
-        {
-          "name": "Description (cont)",
-          "value": "${FULL_DETAILS:1024:1024}"
-        },
-EOF
-)
-[[ -n "${FULL_DETAILS}" ]] && [[ ${#FULL_DETAILS} -gt 2048 ]] && DESC_FIELD=$(
-  cat <<EOF
-        ${DESC_FIELD}
-        {
-          "name": "Description (cont)",
-          "value": "${FULL_DETAILS:2048:1024}"
-        },
-EOF
-)
 
-# https://birdie0.github.io/discord-webhooks-guide/structure/embed/timestamp.html
-# https://www.cyberciti.biz/faq/linux-unix-formatting-dates-for-display/
-FORMATTED_TIMESTAMP=$(date -u +\"%Y-%m-%dT%H:%M:%S.000Z\" -d @"${TIMESTAMP}")
+# split into 1024 character segments
+DESC_FIELD=""; DESC_FIELD2=""; DESC_FIELD3=""
+if [[ "${FULL_DETAILS}" ]]; then
+  DESC_FIELD="${FULL_DETAILS:0:1024}"
+  if [[ ${#FULL_DETAILS} -gt 1024 ]]; then
+    DESC_FIELD2="${FULL_DETAILS:1024:1024}"
+    if [[ ${#FULL_DETAILS} -gt 1024 ]]; then
+      DESC_FIELD3="${FULL_DETAILS:2048:1024}"
+    fi
+  fi
+fi
+
+# Timestamp ISO 8601 (UTC) für Discord
+ISO_TS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z -d @"${TIMESTAMP}")
 
 # https://birdie0.github.io/discord-webhooks-guide/structure/embed/thumbnail.html
 # https://birdie0.github.io/discord-webhooks-guide/structure/embed/color.html
 # vary data based on IMPORTANCE
-if [[ "${IMPORTANCE}" != "normal" ]] && [[ "${IMPORTANCE}" != "warning" ]] && [[ "${IMPORTANCE}" != "alert" ]]; then
-  IMPORTANCE="normal"
-fi
 case "${IMPORTANCE}" in
-normal)
-  THUMBNAIL="https://craftassets.unraid.net/uploads/discord/notify-normal.png"
-  COLOR="39208"
-  ;;
-warning)
-  THUMBNAIL="https://craftassets.unraid.net/uploads/discord/notify-warning.png"
-  COLOR="16747567"
-  ;;
-alert)
-  THUMBNAIL="https://craftassets.unraid.net/uploads/discord/notify-alert.png"
-  COLOR="14821416"
-  [[ -n "${DISCORD_TAG_ID}" && "${DISCORD_TAG_ID}" == "none" ]] && DISCORD_TAG_ID=""
-  if [[ -n "${DISCORD_TAG_ID}" ]]; then
-    # add leading @ if needed
-    [[ "${DISCORD_TAG_ID:0:1}" != "@" ]] && DISCORD_TAG_ID="@${DISCORD_TAG_ID}"
-    # @mentions only work in the "content" area, not the "embed" area
-    DISCORD_CONTENT_AREA="\"content\": \"<${DISCORD_TAG_ID}>\","
-  fi
+  normal)
+    THUMBNAIL="https://craftassets.unraid.net/uploads/discord/notify-normal.png"
+    COLOR="39208"
+    ;;
+  warning)
+    THUMBNAIL="https://craftassets.unraid.net/uploads/discord/notify-warning.png"
+    COLOR="16747567"
+    ;;
+  alert)
+    THUMBNAIL="https://craftassets.unraid.net/uploads/discord/notify-alert.png"
+    COLOR="14821416"
+    ;;
+  *)
+    IMPORTANCE="normal"
+    THUMBNAIL="https://craftassets.unraid.net/uploads/discord/notify-normal.png"
+    COLOR="39208"
   ;;
 esac
 
+# @mentions only for alert
+CONTENT_AREA=""
+if [[ "${IMPORTANCE}" == "alert" ]]; then
+  if [[ -n "${DISCORD_TAG_ID}" && "${DISCORD_TAG_ID}" != "none" ]]; then
+    # add missing "@"
+    [[ "${DISCORD_TAG_ID:0:1}" != "@" ]] && DISCORD_TAG_ID="@${DISCORD_TAG_ID}"
+    CONTENT_AREA="<${DISCORD_TAG_ID}>"
+  fi
+fi
+
 # https://birdie0.github.io/discord-webhooks-guide/structure/embed/author.html
 # if SERVER_ICON is defined, use it
-[[ -n "${SERVER_ICON}" && "${SERVER_ICON:0:8}" == "https://" ]] && ICON_URL="\"icon_url\": \"${SERVER_ICON}\","
+ICON_URL=""
+if [[ -n "${SERVER_ICON}" && "${SERVER_ICON}" == "https://"* ]]; then
+  ICON_URL="$SERVER_ICON"
+fi
 
-# https://birdie0.github.io/discord-webhooks-guide/structure/embed/url.html
-# if LINK is defined, use it
-[[ -n "${LINK}" ]] && LINK_URL="\"url\": \"${LINK}\","
+# shellcheck disable=SC2016
+jq_filter='
+  # basic object
+  {
+    embeds: [
+      {
+        title:        $event | tostring,
+        description:  $subject | tostring,
+        timestamp:    $ts | tostring,
+        color:        ($color | tonumber),
+        author: {
+          name: $hostname
+        },
+        thumbnail: { url: $thumb },
+        fields: []
+      }
+    ]
+  }
 
-DATA=$(
-  cat <<EOF
-{
-  ${DISCORD_CONTENT_AREA}
-  "embeds": [
-    {
-      "title": "${EVENT:0:256}",
-      "description": "${SUBJECT:0:2043}",
-      ${LINK_URL}
-      "timestamp": ${FORMATTED_TIMESTAMP},
-      "color": "${COLOR}",
-      "author": {
-        ${ICON_URL}
-        "name": "${HOSTNAME}"
-      },
-      "thumbnail": {
-        "url": "${THUMBNAIL}"
-      },
-      "fields": [
-        ${DESC_FIELD}
-        {
-          "name": "Priority",
-          "value": "${IMPORTANCE}",
-          "inline": true
-        }
-      ]
-    }
-  ]
-}
-EOF
+  # Optional: content (Mentions)
+  | if ($content_area | length) > 0 then . + {content: $content_area} else . end
+
+  # Optional: URL
+  | if ($link | length) > 0 then .embeds[0].url = $link else . end
+
+  # Optional: icon_url
+  | if ($icon | length) > 0 then .embeds[0].author.icon_url = $icon else . end
+
+  # Description
+  | .embeds[0].fields += [ { name: "Description", value: $desc_field } ]
+  | if ($desc_field2 | length) > 0 then .embeds[0].fields += [ { name: "Description (cont)", value: $desc_field2 } ]
+  | if ($desc_field3 | length) > 0 then .embeds[0].fields += [ { name: "Description (cont)", value: $desc_field3 } ]
+
+  # Priority
+  | .embeds[0].fields += [ { name: "Priority", value: $importance, inline: true } ]
+'
+
+args=(
+  -n
+  --arg event        "${EVENT:0:256}"
+  --arg subject      "${SUBJECT:0:2043}"
+  --arg ts           "$ISO_TS"
+  --arg color        "$COLOR"
+  --arg hostname     "$HOSTNAME"
+  --arg thumb        "$THUMBNAIL"
+  --arg link         "$LINK"
+  --arg icon         "$ICON_URL"
+  --arg importance   "$IMPORTANCE"
+  --arg desc_field   "$DESC_FIELD"
+  --arg desc_field2  "$DESC_FIELD2"
+  --arg desc_field3  "$DESC_FIELD3"
+  --arg content_area "${CONTENT_AREA}"
+  "$jq_filter"
 )
-
-# echo "${DATA}" >>"${LOG}"
+data_binary=$(jq "${args[@]}")
 
 # try several times in case we are being rate limited
 # this is not foolproof, messages can still be rejected
+args=(
+  -s
+  -X POST "$WEBH_URL"
+  -H 'Content-Type: application/json'
+  --data-binary "$data_binary"
+)
 MAX=4
-for ((i = 1; i <= "${MAX}"; i++)); do
-  RET=$(
-    curl -s -X "POST" "$WEBH_URL" -H 'Content-Type: application/json' --data-ascii @- <<EOF
-${DATA}
-EOF
-  )
+for ((i=1; i<=MAX; i++)); do
+  ret=$(curl "${args[@]}")
+
   # if nothing was returned, message was successfully sent. exit loop
-  [[ -z "${RET}" ]] && break
-  # log the attempt
+  if [[ -z "$ret" ]]; then
+    break
+  fi
+
   {
     date
-    echo "attempt ${i} of ${MAX} failed"
-    echo "${RET}"
-  } >>"${LOG}"
+    echo "attempt $i of $MAX failed"
+    echo "$ret"
+  } >>"$LOG"
+
   # if there was an error with the submission, log details and exit loop
-  [[ "${RET}" != *"retry_after"* ]] && echo "${DATA}" >>"${LOG}" && logger -t "${SCRIPTNAME}" -- "Failed sending notification" && break
+  if [[ "$ret" != *"retry_after"* ]]; then
+    echo "$payload" >>"$LOG"
+    logger -t "$SCRIPTNAME" -- "Failed sending notification"
+    break
+  fi
+
   # if retries exhausted, log failure
-  [[ "${i}" -eq "${MAX}" ]] && echo "${DATA}" >>"${LOG}" && logger -t "${SCRIPTNAME}" -- "Failed sending notification - rate limited" && break
+  if (( i == MAX )); then
+    echo "$payload" >>"$LOG"
+    logger -t "$SCRIPTNAME" -- "Failed sending notification - rate limited"
+    break
+  fi
+
   # we were rate limited, try again after a delay
   sleep 1
+
 done
       ]]>
     </Script>
