@@ -80,7 +80,7 @@ if [[ "${FULL_DETAILS}" ]]; then
   DESC_FIELD="${FULL_DETAILS:0:1024}"
   if [[ ${#FULL_DETAILS} -gt 1024 ]]; then
     DESC_FIELD2="${FULL_DETAILS:1024:1024}"
-    if [[ ${#FULL_DETAILS} -gt 1024 ]]; then
+    if [[ ${#FULL_DETAILS} -gt 2048 ]]; then
       DESC_FIELD3="${FULL_DETAILS:2048:1024}"
     fi
   fi
@@ -210,14 +210,14 @@ for ((i=1; i<=MAX; i++)); do
 
   # if there was an error with the submission, log details and exit loop
   if [[ "$ret" != *"retry_after"* ]]; then
-    echo "$payload" >>"$LOG"
+    echo "$data_binary" >>"$LOG"
     logger -t "$SCRIPTNAME" -- "Failed sending notification"
     break
   fi
 
   # if retries exhausted, log failure
   if (( i == MAX )); then
-    echo "$payload" >>"$LOG"
+    echo "$data_binary" >>"$LOG"
     logger -t "$SCRIPTNAME" -- "Failed sending notification - rate limited"
     break
   fi
