@@ -907,7 +907,10 @@ _(File system type)_:
   <?endif;?>
   </select>
 <?endif;?>
-<span id="reiserfs" class="warning"<?if (!fsType('reiserfs')):?> style="display:none"<?endif;?>><i class="fa fa-warning"></i>&nbsp;_(ReiserFS is deprecated)_!</span>
+<?php
+// Use shared helper to display filesystem warnings
+echo get_inline_fs_warnings($disk);
+?>
 <?endif;?>
 
 <?if (diskType('Data') || isPool($tag)):?>

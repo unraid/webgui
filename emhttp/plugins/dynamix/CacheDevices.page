@@ -129,6 +129,12 @@ $('#tab2').bind({click:function() {$('i.toggle').show('slow');}});
 <?endif;?>
 </script>
 
+<?
+// Check for deprecated filesystems using shared function
+$deprecatedPools = check_deprecated_filesystems_array($disks, 'cache_filter');
+?>
+
+
 <div class="TableContainer">
 <table class="unraid disk_status">
 <?$i = 0?>
@@ -170,6 +176,8 @@ $root  = explode($_tilde_,$pool)[0];
 <?endforeach;?>
 </table>
 </div>
+
+<?=display_deprecated_filesystem_warning($deprecatedPools, 'pool')?>
 
 :cache_devices_help:
 

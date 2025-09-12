@@ -15,6 +15,9 @@ Cond="(_var($var,'SYS_ARRAY_SLOTS') > 0 || $var['fsState']=='Stopped')"
  * all copies or substantial portions of the Software.
  */
 $power = _var($display,'power') && in_array('nvme',array_column(main_filter($disks),'transport')) ? _('Power').' / ' : '';
+
+// Check for deprecated filesystems using shared function
+$deprecatedDisks = check_deprecated_filesystems_array($disks, 'main_filter');
 ?>
 <script>
 <?if (_var($var,'fsState')=="Started"):?>
@@ -49,6 +52,9 @@ $('#tab1').bind({click:function() {$('i.toggle').show('slow');}});
         </tbody>
     </table>
 </div>
+
+<?=display_deprecated_filesystem_warning($deprecatedDisks, 'array')?>
+
 :main_array_devices_help:
 
 <?if (_var($var,'fsState')=="Stopped"):?>

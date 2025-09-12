@@ -297,6 +297,60 @@ function urlencode_path($path) {
   return str_replace("%2F", "/", urlencode($path));
 }
 
+function check_deprecated_filesystem($disk) {
+  $fsType = _var($disk, 'fsType', '');
+  $name = _var($disk, 'name', '');
+  $warnings = [];
+  
+  // Check for ReiserFS
+  if (stripos($fsType, 'reiserfs') !== false) {
+    $warnings[] = [
+      'type' => 'reiserfs',
+      'severity' => 'critical',
+      'message' => _('ReiserFS is deprecated and will not be supported in future Unraid releases')
+    ];
+  }
+  
+  // Check for XFS v4 (lacks CRC checksums)
+  if (stripos($fsType, 'xfs') !== false) {
+    // Check if disk is mounted to determine XFS version
+    $mountPoint = "/mnt/$name";
+    if (is_dir($mountPoint) && exec("mountpoint -q " . escapeshellarg($mountPoint) . " 2>/dev/null", $output, $ret) && $ret == 0) {
+      // Check for crc=0 which indicates XFS v4
+      $xfsInfo = shell_exec("xfs_info " . escapeshellarg($mountPoint) . " 2>/dev/null");
+      if ($xfsInfo && strpos($xfsInfo, 'crc=0') !== false) {
+        $warnings[] = [
+          'type' => 'xfs_v4',
+          'severity' => 'critical',
+          'message' => _('XFS v4 is deprecated and will not be supported in future Unraid releases. Please migrate to XFS v5 immediately')
+        ];
+      }
+    }
+  }
+  
+  return $warnings;
+}
+
+function get_filesystem_warning_icon($warnings) {
+  if (empty($warnings)) return '';
+  
+  $hasCritical = false;
+  $messages = [];
+  
+  foreach ($warnings as $warning) {
+    if ($warning['severity'] == 'critical') {
+      $hasCritical = true;
+    }
+    $messages[] = $warning['message'];
+  }
+  
+  $icon = $hasCritical ? 'exclamation-triangle' : 'exclamation-circle';
+  $color = $hasCritical ? 'red-text' : 'orange-text';
+  $tooltip = implode('. ', $messages);
+  
+  return " <i class='fa fa-$icon $color' title='$tooltip'></i>";
+}
+
 function pgrep($process_name, $escape_arg=true) {
   $pid = exec('pgrep --ns $$ '.($escape_arg ? escapeshellarg($process_name) : $process_name), $output, $retval);
   return $retval == 0 ? $pid : false;
@@ -603,5 +657,205 @@ function comparePCIData() {
 function clone_list($disk) {
   global $pools;
   return strpos($disk['status'],'_NP') === false && ($disk['type'] == 'Data' || in_array($disk['name'], $pools));
+}
+
+// Deprecated filesystem detection and display functions
+
+// Core function to check a single disk for deprecated filesystems
+function check_disk_for_deprecated_fs($disk) {
+  $deprecated = [];
+  $fsType = strtolower(_var($disk, 'fsType', ''));
+  
+  // Check for ReiserFS
+  if (strpos($fsType, 'reiserfs') !== false) {
+    $deprecated[] = [
+      'name' => _var($disk, 'name'),
+      'fsType' => 'ReiserFS',
+      'severity' => 'critical',
+      'message' => 'ReiserFS is deprecated and will not be supported in future Unraid releases'
+    ];
+  }
+  
+  // Check for XFS v4 (lacks CRC checksums)
+  if (strpos($fsType, 'xfs') !== false) {
+    $name = _var($disk, 'name');
+    $mountPoint = "/mnt/$name";
+    
+    // Check if disk is mounted
+    if (is_dir($mountPoint)) {
+      exec("mountpoint -q " . escapeshellarg($mountPoint) . " 2>/dev/null", $output, $ret);
+      if ($ret == 0) {
+        // Get XFS info to check for crc=0 which indicates XFS v4
+        $xfsInfo = shell_exec("xfs_info " . escapeshellarg($mountPoint) . " 2>/dev/null");
+        if ($xfsInfo && strpos($xfsInfo, 'crc=0') !== false) {
+          $deprecated[] = [
+            'name' => $name,
+            'fsType' => 'XFS v4',
+            'severity' => 'notice',
+            'message' => 'XFS v4 is deprecated and will not be supported in future Unraid releases. You have until 2030 to migrate to XFS v5.'
+          ];
+        }
+      }
+    }
+  }
+  
+  return $deprecated;
+}
+
+// Generate inline warning HTML for a single disk
+function get_inline_fs_warnings($disk) {
+  $warnings = check_disk_for_deprecated_fs($disk);
+  $html = '';
+  
+  foreach ($warnings as $warning) {
+    if ($warning['severity'] === 'critical') {
+      // ReiserFS - critical warning
+      $html .= '<span id="reiserfs" class="warning"><i class="fa fa-exclamation-triangle"></i>&nbsp;' . 
+               htmlspecialchars(_($warning['message'])) . '</span>';
+    } else {
+      // XFS v4 - notice (without .notice class to avoid duplicate icon)
+      $html .= '<div id="xfsv4" style="color:#0066cc; margin: 5px 0; line-height: 1.5;">' . 
+               '<i class="fa fa-info-circle"></i>&nbsp;' . 
+               htmlspecialchars(_($warning['message'])) . '</div>';
+    }
+  }
+  
+  return $html;
+}
+
+// Check array of disks for deprecated filesystems (used by Main page)
+function check_deprecated_filesystems_array($disks, $filter_function) {
+  $deprecated = [];
+  
+  foreach ($filter_function($disks) as $disk) {
+    if (substr($disk['status'],0,7) != 'DISK_NP') {
+      $disk_warnings = check_disk_for_deprecated_fs($disk);
+      $deprecated = array_merge($deprecated, $disk_warnings);
+    }
+  }
+  
+  return $deprecated;
+}
+
+function display_deprecated_filesystem_warning($deprecated_disks, $type = 'array') {
+  if (empty($deprecated_disks)) return '';
+  
+  // Separate warnings by severity
+  $critical_disks = [];
+  $notice_disks = [];
+  
+  foreach ($deprecated_disks as $disk) {
+    if (_var($disk, 'severity', 'critical') === 'critical') {
+      $critical_disks[] = $disk;
+    } else {
+      $notice_disks[] = $disk;
+    }
+  }
+  
+  $html = '';
+  
+  // Critical warnings (ReiserFS) - severe styling, reappears on every page load
+  if (!empty($critical_disks)) {
+    $id = $type === 'array' ? 'array-critical-warning' : 'pool-critical-warning';
+    $title = htmlspecialchars($type === 'array' ? 'Critical: Deprecated Filesystem' : 'Critical: Pool Deprecated Filesystem');
+    $description = htmlspecialchars($type === 'array' ? 
+      'The following array devices are using deprecated filesystems:' : 
+      'The following pool devices are using deprecated filesystems:');
+    
+    $diskList = '';
+    foreach ($critical_disks as $disk) {
+      $name = htmlspecialchars($disk['name']);
+      $fsType = htmlspecialchars($disk['fsType']);
+      $message = htmlspecialchars($disk['message']);
+      $diskList .= "<li><strong>{$name}:</strong> {$fsType} - {$message}</li>\n";
+    }
+    
+    $html .= <<<HTML
+<div id="{$id}" style="margin: 20px 0;">
+    <div style="background: #feefb3; border: 1px solid #ff8c2f; border-radius: 4px; padding: 15px; position: relative;">
+        <button onclick="$('#{$id}').fadeOut();" 
+                style="position: absolute; right: 10px; top: 10px; background: transparent; border: none; color: #ff8c2f; cursor: pointer; font-size: 1.2em;">
+            <i class="fa fa-times"></i>
+        </button>
+        <div style="display: flex; align-items: start;">
+            <i class="fa fa-exclamation-triangle" style="color: #ff8c2f; margin-right: 10px; font-size: 1.2em;"></i>
+            <div style="flex: 1; color: #000;">
+                <div style="font-weight: bold; margin-bottom: 10px; color: #ff8c2f;">
+                    {$title}
+                </div>
+                <div style="margin-bottom: 10px;">
+                    {$description}
+                </div>
+                <ul style="margin: 10px 0 10px 20px;">
+                    {$diskList}
+                </ul>
+                <div style="margin-top: 10px;">
+                    <strong>Action Required:</strong> Migrate to a supported filesystem (XFS v5, BTRFS, or ZFS). 
+                    <a href="https://docs.unraid.net/go/convert-reiser-and-xfs" 
+                       target="_blank" style="color: #ff8c2f;">View migration guide →</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+HTML;
+  }
+  
+  // Notice warnings (XFS v4) - less severe styling, dismissible until reboot via sessionStorage
+  if (!empty($notice_disks)) {
+    $id = $type === 'array' ? 'array-notice-warning' : 'pool-notice-warning';
+    $title = htmlspecialchars($type === 'array' ? 'Notice: Filesystem Update Available' : 'Notice: Pool Filesystem Update Available');
+    $description = htmlspecialchars($type === 'array' ? 
+      'The following array devices are using older filesystem versions:' : 
+      'The following pool devices are using older filesystem versions:');
+    
+    $diskList = '';
+    foreach ($notice_disks as $disk) {
+      $name = htmlspecialchars($disk['name']);
+      $fsType = htmlspecialchars($disk['fsType']);
+      $message = htmlspecialchars($disk['message']);
+      $diskList .= "<li><strong>{$name}:</strong> {$fsType} - {$message}</li>\n";
+    }
+    
+    $html .= <<<HTML
+<script>
+// Check if XFS warning was dismissed this session
+if (!sessionStorage.getItem('xfs-{$id}-dismissed')) {
+  document.write(`
+<div id="{$id}" style="margin: 20px 0;">
+    <div style="background: #e7f3ff; border: 1px solid #0066cc; border-radius: 4px; padding: 15px; position: relative;">
+        <button onclick="sessionStorage.setItem('xfs-{$id}-dismissed', 'true'); $('#{$id}').fadeOut();" 
+                style="position: absolute; right: 10px; top: 10px; background: transparent; border: none; color: #0066cc; cursor: pointer; font-size: 1.2em;"
+                title="Dismiss until reboot">
+            <i class="fa fa-times"></i>
+        </button>
+        <div style="display: flex; align-items: start;">
+            <i class="fa fa-info-circle" style="color: #0066cc; margin-right: 10px; font-size: 1.2em;"></i>
+            <div style="flex: 1; color: #000;">
+                <div style="font-weight: bold; margin-bottom: 10px; color: #0066cc;">
+                    {$title}
+                </div>
+                <div style="margin-bottom: 10px;">
+                    {$description}
+                </div>
+                <ul style="margin: 10px 0 10px 20px;">
+                    {$diskList}
+                </ul>
+                <div style="margin-top: 10px;">
+                    <strong>Recommendation:</strong> Plan to migrate to XFS v5, BTRFS, or ZFS within the next 5 years. 
+                    <a href="https://docs.unraid.net/go/convert-reiser-and-xfs" 
+                       target="_blank" style="color: #0066cc;">View migration guide →</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+  `);
+}
+</script>
+HTML;
+  }
+  
+  return $html;
 }
 ?>
