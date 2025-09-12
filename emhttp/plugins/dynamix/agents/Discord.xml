@@ -23,6 +23,7 @@
 #
 # If a notification does not go through, check the /var/log/notify_Discord file for hints
 ############
+
 ############
 # Discord webhooks docs: https://birdie0.github.io/discord-webhooks-guide/
 #
@@ -35,8 +36,10 @@
 # CONTENT (notify -m)
 # LINK (notify -l)
 # TIMESTAMP (seconds from epoch)
+
 SCRIPTNAME=$(basename "$0")
 LOG="/var/log/notify_${SCRIPTNAME%.*}"
+
 # for quick test, setup environment to mimic notify script
 EVENT="${EVENT:-Unraid Status}"
 SUBJECT="${SUBJECT:-Notification}"
