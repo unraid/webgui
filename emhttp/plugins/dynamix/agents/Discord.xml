@@ -70,7 +70,7 @@ fi
 [[ "${DESCRIPTION}" == 'No description' ]] && DESCRIPTION=""
 FULL_DETAILS=""
 if [[ -n "${DESCRIPTION}" ]] && [[ -n "${CONTENT}" ]]; then
-  FULL_DETAILS="${DESCRIPTION}\n\n${CONTENT}"
+  FULL_DETAILS="${DESCRIPTION}"$'\n\n'"${CONTENT}"
 elif [[ -n "${DESCRIPTION}" ]]; then
   FULL_DETAILS="${DESCRIPTION}"
 elif [[ -n "${CONTENT}" ]]; then
@@ -169,6 +169,7 @@ jq_filter='
   | .embeds[0].fields += [ { name: "Priority", value: $importance, inline: true } ]
 '
 
+# create valid json
 args=(
   -n
   --arg event        "${EVENT:0:256}"
@@ -186,7 +187,13 @@ args=(
   --arg content_area "${CONTENT_AREA}"
   "$jq_filter"
 )
-data_binary=$(jq "${args[@]}")
+json=$(jq "${args[@]}" 2>&1)
+jq_status=$?
+if [[ "$jq_status" -ne 0 ]]; then
+  echo "jq error $json" >>"$LOG"
+  logger -t "$SCRIPTNAME" -- "Failed sending notification ($json)"
+  exit 1
+fi
 
 # try several times in case we are being rate limited
 # this is not foolproof, messages can still be rejected
@@ -194,7 +201,7 @@ args=(
   -s
   -X POST "$WEBH_URL"
   -H 'Content-Type: application/json'
-  --data-binary "$data_binary"
+  --data-binary "$json"
 )
 MAX=4
 for ((i=1; i<=MAX; i++)); do
@@ -213,14 +220,14 @@ for ((i=1; i<=MAX; i++)); do
 
   # if there was an error with the submission, log details and exit loop
   if [[ "$ret" != *"retry_after"* ]]; then
-    echo "$data_binary" >>"$LOG"
+    echo "$json" >>"$LOG"
     logger -t "$SCRIPTNAME" -- "Failed sending notification"
     break
   fi
 
   # if retries exhausted, log failure
   if (( i == MAX )); then
-    echo "$data_binary" >>"$LOG"
+    echo "$json" >>"$LOG"
     logger -t "$SCRIPTNAME" -- "Failed sending notification - rate limited"
     break
   fi
