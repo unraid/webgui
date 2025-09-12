@@ -119,9 +119,12 @@ esac
 CONTENT_AREA=""
 if [[ "${IMPORTANCE}" == "alert" ]]; then
   if [[ -n "${DISCORD_TAG_ID}" && "${DISCORD_TAG_ID}" != "none" ]]; then
-    # add missing "@"
-    [[ "${DISCORD_TAG_ID:0:1}" != "@" ]] && DISCORD_TAG_ID="@${DISCORD_TAG_ID}"
-    CONTENT_AREA="<${DISCORD_TAG_ID}>"
+    id="${DISCORD_TAG_ID}"
+    # Strip surrounding angle brackets if present
+    [[ "$id" == \<*\> ]] && id="${id:1:${#id}-2}"
+    # If it already starts with @, @! or @& keep it; else prefix @ (user)
+    [[ "$id" =~ ^@(|!|&)[0-9]+$ ]] || id="@${id}"
+    CONTENT_AREA="<${id}>"
   fi
 fi
 
