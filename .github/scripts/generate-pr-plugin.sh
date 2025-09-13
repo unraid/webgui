@@ -60,6 +60,57 @@ cat > "$PLUGIN_NAME" << 'EOF'
 - Original files are backed up and restored upon removal
 </CHANGES>
 
+<!-- Update method - restore originals first, then apply new changes -->
+<FILE Run="/bin/bash" Method="install">
+<INLINE>
+<![CDATA[
+BACKUP_DIR="/boot/config/plugins/webgui-pr-PR_PLACEHOLDER/backups"
+MANIFEST="/boot/config/plugins/webgui-pr-PR_PLACEHOLDER/installed_files.txt"
+
+# First restore original files to ensure clean state
+if [ -f "$MANIFEST" ]; then
+    echo "===================================="
+    echo "WebGUI PR Test Plugin Update"
+    echo "===================================="
+    echo "Version: &version;"
+    echo ""
+    
+    echo "Step 1: Restoring original files before update..."
+    echo "------------------------------------------------"
+    
+    while IFS='|' read -r system_file backup_file; do
+        if [ "$backup_file" == "NEW" ]; then
+            # This was a new file from previous version, remove it
+            if [ -f "$system_file" ]; then
+                echo "Removing PR file: $system_file"
+                rm -f "$system_file"
+            fi
+        else
+            # Restore original from backup
+            if [ -f "$backup_file" ]; then
+                echo "Restoring original: $system_file"
+                cp -f "$backup_file" "$system_file"
+            fi
+        fi
+    done < "$MANIFEST"
+    
+    echo ""
+    echo "✅ Original files restored"
+    echo ""
+else
+    echo "⚠️  No previous manifest found, proceeding with fresh install"
+    echo ""
+fi
+
+# Clear the old manifest for the new version
+> "$MANIFEST"
+
+echo "Step 2: Update will now proceed with installation of new PR files..."
+echo ""
+]]>
+</INLINE>
+</FILE>
+
 <!-- Create backup directory -->
 <FILE Run="/bin/bash" Method="install">
 <INLINE>
@@ -198,55 +249,27 @@ echo "⚠️  Remove this plugin before applying production updates"
 ]]>
 </INLINE>
 </FILE>
-
-<!-- Update method - restore originals first, then apply new changes -->
-<FILE Run="/bin/bash" Method="update">
+<!-- Add a banner to warn user this plugin is installed, and also if an update is available to it-->
+<FILE Name="/usr/local/emhttp/plugins/webgui-pr-PR_PLACEHOLDER/Banner-PR_PLACEHOLDER.page">
 <INLINE>
 <![CDATA[
-echo "===================================="
-echo "WebGUI PR Test Plugin Update"
-echo "===================================="
-echo "Version: &version;"
-echo ""
-
-BACKUP_DIR="/boot/config/plugins/webgui-pr-PR_PLACEHOLDER/backups"
-MANIFEST="/boot/config/plugins/webgui-pr-PR_PLACEHOLDER/installed_files.txt"
-
-# First restore original files to ensure clean state
-if [ -f "$MANIFEST" ]; then
-    echo "Step 1: Restoring original files before update..."
-    echo "------------------------------------------------"
-    
-    while IFS='|' read -r system_file backup_file; do
-        if [ "$backup_file" == "NEW" ]; then
-            # This was a new file from previous version, remove it
-            if [ -f "$system_file" ]; then
-                echo "Removing PR file: $system_file"
-                rm -f "$system_file"
-            fi
-        else
-            # Restore original from backup
-            if [ -f "$backup_file" ]; then
-                echo "Restoring original: $system_file"
-                cp -f "$backup_file" "$system_file"
-            fi
-        fi
-    done < "$MANIFEST"
-    
-    echo ""
-    echo "✅ Original files restored"
-    echo ""
-else
-    echo "⚠️  No previous manifest found, proceeding with fresh install"
-    echo ""
-fi
-
-# Clear the old manifest for the new version
-> "$MANIFEST"
-
-echo "Step 2: Update will now proceed with installation of new PR files..."
-echo ""
+Menu='Buttons'
+Link='nav-user'
+---
+<script>
+  $(function() {
+    caPluginUpdateCheck("webgui-pr-PR_PLACEHOLDER.plg");
+    addBannerWarning("Modified GUI installed via webgui-pr-PR_PLACEHOLDER plugin",false,true);
+});
+</script>
 ]]>
+</INLINE>
+</FILE>
+
+<!-- Remove the banner when uninstalling the plugin -->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+rm /usr/local/emhttp/plugins/webgui-pr-PR_PLACEHOLDER
 </INLINE>
 </FILE>
 
@@ -291,9 +314,6 @@ fi
 echo "Cleaning up plugin files..."
 # Remove the plugin directory (which includes the tarball and backups)
 rm -rf "/boot/config/plugins/webgui-pr-PR_PLACEHOLDER"
-# Remove the plugin file itself
-rm -f "/boot/config/plugins/webgui-pr-PR_PLACEHOLDER.plg"
-
 echo ""
 echo "✅ Plugin removed successfully"
 ]]>
