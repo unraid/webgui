@@ -269,7 +269,7 @@ Link='nav-user'
 <!-- Remove the banner when uninstalling the plugin -->
 <FILE Run="/bin/bash" Method="remove">
 <INLINE>
-rm /usr/local/emhttp/plugins/webgui-pr-PR_PLACEHOLDER
+rm -rf "/usr/local/emhttp/plugins/webgui-pr-PR_PLACEHOLDER"
 </INLINE>
 </FILE>
 
