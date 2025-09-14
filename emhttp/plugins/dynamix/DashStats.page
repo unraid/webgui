@@ -398,11 +398,11 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                     foreach ($cpus as $pair) {
                         [$cpu1, $cpu2] = my_preg_split('/[,-]/',$pair);
                         echo "<tr class='cpu_open'>";
-                        if ($is_intel_cpu && count($core_types) > 0) 
-                            $core_type = "({$core_types[$cpu1]})"; 
-                        else 
+                        if ($is_intel_cpu && count($core_types) > 0)
+                            $core_type = "({$core_types[$cpu1]})";
+                        else
                             $core_type = "";
-                        
+
                         if ($cpu2)
                             echo "<td><span class='w26'>CPU $cpu1 $core_type - HT $cpu2 </span><span class='dashboard w36'><span class='cpu$cpu1 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu1'></span><span></span></div></span><span class='dashboard w36'><span class='cpu$cpu2 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu2'></span><span></span></div></span></td>";
                         else
@@ -658,7 +658,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                             <br>
                                             <span class="head_info">
                                                 <span>
-                                                    <i class='ups fa fa-bar-chart'></i>_(UPS Model)_: 
+                                                    <i class='ups fa fa-bar-chart'></i>_(UPS Model)_:
                                                 </span>
                                                 <span id='ups_model'></span>
                                             </span>
@@ -690,7 +690,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                     <tr>
                         <td>
                             <span class='w36'>
-                                <i class='ups fa fa-fw fa-bars'></i>_(UPS Load)_: 
+                                <i class='ups fa fa-fw fa-bars'></i>_(UPS Load)_:
                             </span>
                             <span id='ups_loadpct'></span>
                         </td>
@@ -1518,27 +1518,27 @@ $(function() {
    // Set the visibility true if one or more are visible
    const cpuOpenElements = document.querySelectorAll('.cpu_open');
    let cpuOpenVisibilityStates = new Map(); // Track visibility state of each element
-   
+
    const cpuOpenObserver = new IntersectionObserver((entries) => {
      let stateChanged = false;
-     
+
      entries.forEach(entry => {
        const element = entry.target;
        const isVisible = entry.isIntersecting;
        const wasVisible = cpuOpenVisibilityStates.get(element) || false;
-       
+
        // Only update if state actually changed
        if (wasVisible !== isVisible) {
          cpuOpenVisibilityStates.set(element, isVisible);
          stateChanged = true;
        }
      });
-     
+
      // Only dispatch event if at least one element changed state
      if (stateChanged) {
        // Check if ALL elements have the same visibility state
        const allHidden = Array.from(cpuOpenVisibilityStates.values()).every(state => state === false);
-       
+
        cpuchart.customData.coresVisible = !allHidden;
      }
    }, {
@@ -1558,7 +1558,7 @@ $(function() {
    }
 
    // Page visibility observer
-  function handlePageVisibilityChange() {  
+  function handlePageVisibilityChange() {
     if (!document.hidden) {
       netchart.customData.BrowserVisibility = true;
       cpuchart.customData.BrowserVisibility = true;
@@ -2526,7 +2526,7 @@ $(function() {
 <?endif;?>
   dropdown('enter_view');
   startup = false;
-  
+
   // Start GraphQL CPU subscription with retry logic
   let cpuInitAttempts = 0, cpuRetryMs = 100;
   function initCpuSubscription() {
@@ -2543,7 +2543,7 @@ $(function() {
           }
         }
       `);
-      
+
       cpuSubscription = window.apolloClient.subscribe({
         query: CPU_SUBSCRIPTION
       }).subscribe({
@@ -2552,7 +2552,7 @@ $(function() {
             const cpuData = result.data.systemMetricsCpu;
             const load = Math.round(cpuData.percentTotal);
             const color = setColor(load, <?=$display['critical']?>, <?=$display['warning']?>);
-            
+
             // Update main CPU display but only send to ApexCharts if the chart is visible
             addChartCpu(load);
             if (cpuchart.customData.BrowserVisibility && cpuchart.customData.isVisible) {
@@ -2562,7 +2562,7 @@ $(function() {
             $('#cpu_').alive(load+'%', color);
             $('.cpu').text(load+'%').css({'color':fontColor(load, <?=$display['critical']?>, <?=$display['warning']?>)});
             $('#cpu').alive(load+'%', color);
-            
+
             // Update individual CPU cores if they are visible
             if (cpuchart.customData.BrowserVisibility && cpuchart.customData.coresVisible ) {
               cpuData.cpus.forEach((cpuCore, index) => {
@@ -2587,7 +2587,7 @@ $(function() {
       setTimeout(initCpuSubscription, Math.min(cpuRetryMs *= 2, 2000));
     }
   }
-  
+
   initCpuSubscription();
   dashboard.start();
 <?if ($vmusage == "Y"):?>
@@ -2607,7 +2607,7 @@ $(function() {
   $('#netline').val(netline);
   $.removeCookie('lockbutton');
   // remember latest graph values
-  
+
   // Cleanup GraphQL subscription on page unload
   $(window).on('beforeunload', function() {
     if (cpuSubscription) {
