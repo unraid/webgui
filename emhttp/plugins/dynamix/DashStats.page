@@ -1466,6 +1466,115 @@ var options_net = {
 var cpuchart = new ApexCharts(document.querySelector('#cpuchart'), options_cpu);
 var netchart = new ApexCharts(document.querySelector('#netchart'), options_net);
 
+// Add custom global variable to ncharts (won't affect ApexCharts functionality)
+netchart.customData = {isVisible: false,BrowserVisibility: true};
+cpuchart.customData = {isVisible: false,BrowserVisibility: true};
+
+$(function() {
+  // Visibility observer for #netchart
+  const netchartElement = document.querySelector('#netchart');
+  const netchartObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.target === netchartElement) {
+        netchart.customData.isVisible = entry.isIntersecting;
+      }
+    });
+  }, {
+    root: null, // Use viewport as root
+    rootMargin: '0px', // No margin
+    threshold: 0.1 // Trigger when 10% of element is visible
+  });
+
+
+  // Start observing the netchart element
+  if (netchartElement) {
+    netchartObserver.observe(netchartElement);
+  } else {
+    console.warn('NetChart element not found for visibility observer');
+  }
+
+  // Visibility observer for #cpuchart
+  const cpuchartElement = document.querySelector('#cpuchart');
+  const cpuchartObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.target === cpuchartElement) {
+        cpuchart.customData.isVisible = entry.isIntersecting;
+      }
+    });
+  }, {
+    root: null, // Use viewport as root
+    rootMargin: '0px', // No margin
+    threshold: 0.1 // Trigger when 10% of element is visible
+  });
+
+   // Start observing the cpuchart element
+   if (cpuchartElement) {
+     cpuchartObserver.observe(cpuchartElement);
+   } else {
+     console.warn('CpuChart element not found for visibility observer');
+   }
+
+   // Visibility observer for the cpu core load visibility
+   // Set the visibility true if one or more are visible
+   const cpuOpenElements = document.querySelectorAll('.cpu_open');
+   let cpuOpenVisibilityStates = new Map(); // Track visibility state of each element
+   
+   const cpuOpenObserver = new IntersectionObserver((entries) => {
+     let stateChanged = false;
+     
+     entries.forEach(entry => {
+       const element = entry.target;
+       const isVisible = entry.isIntersecting;
+       const wasVisible = cpuOpenVisibilityStates.get(element) || false;
+       
+       // Only update if state actually changed
+       if (wasVisible !== isVisible) {
+         cpuOpenVisibilityStates.set(element, isVisible);
+         stateChanged = true;
+       }
+     });
+     
+     // Only dispatch event if at least one element changed state
+     if (stateChanged) {
+       // Check if ALL elements have the same visibility state
+       const allHidden = Array.from(cpuOpenVisibilityStates.values()).every(state => state === false);
+       
+       cpuchart.customData.coresVisible = !allHidden;
+     }
+   }, {
+     root: null, // Use viewport as root
+     rootMargin: '0px', // No margin
+     threshold: 0.1 // Trigger when 10% of element is visible
+   });
+
+   // Start observing all .cpu_open elements
+   cpuchart.customData.coresVisible = false;
+   if (cpuOpenElements.length > 0) {
+     cpuOpenElements.forEach(element => {
+       cpuOpenObserver.observe(element);
+     });
+   } else {
+     console.warn('No .cpu_open elements found for visibility observer');
+   }
+
+   // Page visibility observer
+  function handlePageVisibilityChange() {  
+    if (!document.hidden) {
+      netchart.customData.BrowserVisibility = true;
+      cpuchart.customData.BrowserVisibility = true;
+    } else {
+      netchart.customData.BrowserVisibility = false;
+      cpuchart.customData.BrowserVisibility = false;
+    }
+  }
+
+  // Set up page visibility change listener
+  document.addEventListener('visibilitychange', handlePageVisibilityChange);
+
+  // Trigger initial state check
+  handlePageVisibilityChange();
+});
+
 if (cookie.port_select && !ports.includes(cookie.port_select)) {
   delete cookie.port_select;
   saveCookie();
@@ -1527,10 +1636,10 @@ function initCharts(clear) {
 }
 
 function resetCharts() {
-  // prevent unlimited graph growing
-  cpu = cpu.slice(-cpuline);
-  rxd = rxd.slice(-netline);
-  txd = txd.slice(-netline);
+  // prevent unlimited graph growing - limit to 300 (5 minutes) of data
+  cpu = cpu.slice(-300);
+  rxd = rxd.slice(-300);
+  txd = txd.slice(-300);
 }
 
 function addChartCpu(load) {
@@ -1738,9 +1847,10 @@ function autoscale(value,text,size,kilo) {
 }
 
 function update900() {
-  // prevent chart overflowing, reset every 15 minutes
+  // prevent chart overflowing, reset every 5 minutes
+  console.log("resetting charts");
   resetCharts();
-  setTimeout(update900,900000);
+  setTimeout(update900,300000);
 }
 
 function attributes(page,disk) {
@@ -2343,8 +2453,11 @@ dashboard.on('message',function(msg,meta) {
       if (port[0] == port_select) {
         $('#inbound').text(port[1]);
         $('#outbound').text(port[2]);
+        // update the netchart but only send to ApexCharts if the chart is visible
         addChartNet(port[3], port[4]);
-        netchart.updateSeries([{data:rxd},{data:txd}]);
+        if (netchart.customData.BrowserVisibility && netchart.customData.isVisible) {
+          netchart.updateSeries([{data:rxd},{data:txd}]);
+        }
         break;
       }
     }
@@ -2440,21 +2553,25 @@ $(function() {
             const load = Math.round(cpuData.percentTotal);
             const color = setColor(load, <?=$display['critical']?>, <?=$display['warning']?>);
             
-            // Update main CPU display
+            // Update main CPU display but only send to ApexCharts if the chart is visible
             addChartCpu(load);
-            cpuchart.updateSeries([{data:cpu}]);
+            if (cpuchart.customData.BrowserVisibility && cpuchart.customData.isVisible) {
+              cpuchart.updateSeries([{data:cpu}]);
+            }
             $('.cpu_').text(load+'%').css({'color':fontColor(load, <?=$display['critical']?>, <?=$display['warning']?>)});
             $('#cpu_').alive(load+'%', color);
             $('.cpu').text(load+'%').css({'color':fontColor(load, <?=$display['critical']?>, <?=$display['warning']?>)});
             $('#cpu').alive(load+'%', color);
             
-            // Update individual CPU cores
-            cpuData.cpus.forEach((cpuCore, index) => {
-              const coreLoad = Math.round(cpuCore.percentTotal);
-              const coreColor = setColor(coreLoad, <?=$display['critical']?>, <?=$display['warning']?>);
-              $('.cpu'+index).text(coreLoad+'%').css({'color':fontColor(coreLoad, <?=$display['critical']?>, <?=$display['warning']?>)});
-              $('#cpu'+index).alive(coreLoad+'%', coreColor);
-            });
+            // Update individual CPU cores if they are visible
+            if (cpuchart.customData.BrowserVisibility && cpuchart.customData.coresVisible ) {
+              cpuData.cpus.forEach((cpuCore, index) => {
+                const coreLoad = Math.round(cpuCore.percentTotal);
+                const coreColor = setColor(coreLoad, <?=$display['critical']?>, <?=$display['warning']?>);
+                $('.cpu'+index).text(coreLoad+'%').css({'color':fontColor(coreLoad, <?=$display['critical']?>, <?=$display['warning']?>)});
+                $('#cpu'+index).alive(coreLoad+'%', coreColor);
+              });
+            }
           }
         },
         error: (err) => {
