@@ -269,10 +269,10 @@ function array_online(&$disk, $fstype='') {
   global $pools, $sum, $diskio;
   $disk['power'] ??= (_var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'power') : 0);
   $echo = [];
-  $data = [0, 0, 0];
+  $data = [0,0,0];
   if (_var($disk,'device')) {
     $dev = $disk['device'];
-    $data = explode(' ', $diskio[$dev] ?? '0 0 0 0 0');
+    $data = explode(' ',$diskio[$dev] ?? '0 0 0 0 0');
     $sum['ioReads'] += $data[0];
     $sum['ioWrites'] += $data[1];
   }
@@ -482,7 +482,7 @@ while (true) {
 
   $a = 'boot_device';
   $echo[$a] = [];
-    $data = explode(' ', $diskio[_var($Flash, 'device')] ?? '0 0 0 0 0');
+    $data = explode(' ',$diskio[_var($Flash,'device')] ?? '0 0 0 0 0');
   $flash = &$sec['flash'];
   $share = (_var($var,'shareSMBEnabled')=='yes' && _var($flash,'export')=='e' && _var($flash,'security')=='public')
            ? "&nbsp;<a class='info'><i class='fa fa-warning fa-fw orange-text'></i><span>"._('Flash device is set as public share')."<br>"._('Please change share SMB security')."<br>"._('Click on **FLASH** above this message')."</span></a>"
@@ -519,7 +519,7 @@ while (true) {
       $data = []; foreach ($log as $key => $value) $data[] = "$key=\"$value\"";
       $off &= !empty(_var($Cache[$root],'uuid'));
       file_put_contents($pool_log,implode("\n",$data));
-        $echo[$a][] = "<tr class='tr_last'><td>" . _('Slots') . ":</td><td colspan='9'><span class='slots'><span class='slots-left'>" . cache_slots($off, $pool, _var($Cache[$pool], 'devicesSb'), _var($Cache[$pool], 'slots', 0)) . "</span>";
+        $echo[$a][] = "<tr class='tr_last'><td>"._('Slots').":</td><td colspan='9'><span class='slots'><span class='slots-left'>".cache_slots($off,$pool,_var($Cache[$pool],'devicesSb'),_var($Cache[$pool],'slots',0))."</span>";
       $zfsPool = strstr(_var($Cache[$pool],'fsType'),'zfs') && !isSubpool($pool);
       if ($zfsPool) {
         $current_subpools = array_filter($pools, function($element) use ($pool,$_tilde_) {return str_contains($element,"{$pool}{$_tilde_}");});
