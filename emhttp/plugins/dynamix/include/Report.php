@@ -37,6 +37,9 @@ case 'config':
     }
     if ($flag) break;
   }
+  if ($flag) {
+    my_logger("$filename corrupted or missing");
+  }
   echo $flag;
   break;
 case 'notice':
