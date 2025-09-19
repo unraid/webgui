@@ -37,6 +37,9 @@ function guiSearchBoxSpan() {
 function setupGUIsearch() {
 	window.addEventListener('keydown',function(e){
 		if (!e.shiftKey && !e.altKey && (navigator.appVersion.indexOf('Mac')==-1 ? e.ctrlKey : e.metaKey) && e.keyCode==75) {
+			// If a modal is visible, don't open the search box
+			if ($('[role="modal"]').is(':visible')) return;
+
 			e.preventDefault();
 		<?if ($themeHelper->isTopNavTheme()):?>
 			if (guiSearchBoxSpan()) closeSearchBox(e); else gui_search();
@@ -79,6 +82,9 @@ function closeSearchBox(e) {
 }
 
 function guiSearch() {
+	// If a modal is visible, don't navigate away from the page
+	if ($('[role="modal"]').is(':visible')) return;
+
 	var searchInfo = $('#guiSearchBox').val().split('**');
 	var separator  = ('fragmentDirective' in document) ? '#:~:text=' : '#';
 	var scrollText = (typeof searchInfo[1] != 'undefined') ? separator+searchInfo[1].replace(' ','%20').replace('-','%2d') : '';
