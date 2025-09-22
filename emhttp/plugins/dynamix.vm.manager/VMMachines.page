@@ -461,30 +461,6 @@ function loadlist() {
     $('input[type=button]').prop('disabled',false).show('slow');
     $('.text').click(showInput);
     $('.input').blur(hideInput);
-    <?if (_var($display,'resize')):?>
-      fillAvailableHeight({
-        targetElementSelector: '.js-fill-available-height',
-        elementSelectorsForHeight: [
-          '.js-actions',
-          '#kvm_table thead',
-        ],
-        elementSelectorsForSpacing: [
-          '#kvm_table',
-        ],
-        manualSpacingOffset: 30, // without this, the main content will still be scrollable by like 20px
-      });
-      // Handle table header fixed positioning after resize
-      function tableHeaderResize() {
-        $('#kvm_table thead,#kvm_table tbody').removeClass('fixed');
-        $('#kvm_table thead tr th').each(function(){$(this).width($(this).width());});
-        $('#kvm_table tbody tr td').each(function(){$(this).width($(this).width());});
-        $('#kvm_table thead,#kvm_table tbody').not('.child').addClass('fixed');
-      }
-      tableHeaderResize();
-      $(window).bind('resize',function(){
-        tableHeaderResize();
-      });
-  <?endif;?>
   });
 }
 $(function() {

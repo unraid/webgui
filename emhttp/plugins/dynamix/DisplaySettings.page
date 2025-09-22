@@ -217,13 +217,16 @@ _(Placement of Users menu)_:
 
 :display_users_menu_help:
 
+<span style="display:none">
+
 _(Listing height)_:
 : <select name="resize">
-  <?=mk_option($display['resize'], "0", _('Automatic'))?>
-  <?=mk_option($display['resize'], "1", _('Fixed'))?>
+  <!-- <?=mk_option($display['resize'], "0", _('Automatic'))?> -->
+  <!-- <?=mk_option($display['resize'], "1", _('Fixed'))?> -->
+  <!-- Force automatic listing style when user changes any setting -->
+   <?=mk_option(0, "0", _('Automatic'))?>
   </select>
-
-:display_listing_height_help:
+</span>
 
 _(Display device name)_:
 : <select name="raw">

@@ -49,19 +49,7 @@ function openInstall(cmd,title,plg,func) {
     }
   });
 }
-<?if ($display['resize']):?>
-function resize(bind) {
-  var width = [];
-  var h = $('#plugin_list').height();
-  var s = Math.max(window.innerHeight-340,330);
-  if (h>s || bind) {
-    $('#plugin_list').height(s);
-    $('#plugin_table tbody tr:first-child td').each(function(){width.push($(this).width());});
-    $('#plugin_table thead tr th').each(function(i){$(this).width(width[i]);});
-    if (!bind) $('#plugin_table thead,#plugin_table tbody').addClass('fixed');
-  }
-}
-<?endif;?>
+
 function multiRemove() {
   if ($('input.remove:checked').length > 1) $('#removeall').show(); else $('#removeall').hide();
 }
@@ -100,10 +88,6 @@ function initlist() {
   $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{init:true,check:<?=$check?>},function(data) {
     clearTimeout(timers.plugins);
     $('#plugin_list').html(data);
-<?if ($display['resize']):?>
-    resize();
-    $(window).bind('resize',function(){resize(true);});
-<?endif;?>
     if (data.search("colspan='6'")==-1) {
       $('#plugin_table').tablesorter({sortList:[[4,0],[1,0]],sortAppend:[[1,0]],headers:{0:{sorter:false},5:{sorter:false}},textAttribute:'data'});
       $('.desc_readmore').readmore({maxHeight:80,moreLink:"<a href='#'><i class='fa fa-chevron-down'></i></a>",lessLink:"<a href='#'><i class='fa fa-chevron-up'></i></a>"});
