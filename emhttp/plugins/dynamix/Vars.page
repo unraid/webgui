@@ -22,18 +22,6 @@ foreach ($names as $name) $globals[$name] = $$name;
 // show outgoing proxy information, is in the environment but not a superglobal
 $globals['environment'] = ['http_proxy' => getenv('http_proxy'), 'no_proxy' => getenv('no_proxy')];
 ?>
-<?if (_var($display,'resize')):?>
-<script>
-$(function() {
-  fillAvailableHeight({
-    targetElementSelector: '.js-fill-available-height',
-    elementSelectorsForHeight: [
-      '.js-actions',
-    ],
-  });
-});
-</script>
-<?endif;?>
 
 <pre class='js-fill-available-height up'><?= htmlspecialchars(print_r($globals,true));?></pre>
 
