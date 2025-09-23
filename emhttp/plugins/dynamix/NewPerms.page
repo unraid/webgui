@@ -91,36 +91,50 @@ Closing the window before completion will terminate the background process - so 
 Note that this tool may negatively affect any docker containers if you allow your **appdata** share to be included.
 :end
 
-<form method="POST" action="/update.htm" target="progressFrame">
-<span class="block">
-<select name="select" onchange="selection(this.value,true)">
-<?=mk_option(0,"0","_(Disks)_")?>
-<?=mk_option(0,"1","_(Shares)_")?>
-</select>
-</span>
+<form markdown="1" method="POST" action="/update.htm" target="progressFrame">
+<div style="display:flex;flex-direction:column;gap:1rem;align-items:flex-start;">
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:1rem;">
+    <span style="font-weight:600;">_(Target)_:</span>
+    <div class="inline-block">
+      <select name="select" onchange="selection(this.value,true)">
+        <?=mk_option(0,"0","_(Disks)_")?>
+        <?=mk_option(0,"1","_(Shares)_")?>
+      </select>
+    </div>
+  </div>
 
-<span id="disks" class="block">
-<select id="s1" name="disks" style="display:none" multiple>
-<option value=''>_(All)_</option>
-<?foreach (array_filter($disks,'data_disks') as $disk):?>
-<?=mk_option(1,"/mnt/{$disk['name']}",_(my_disk($disk['name'])),3)?>
-<?endforeach;?>
-</select>
-</span>
+  <div style="display:flex;flex-direction:column;gap:1rem;align-items:flex-start;">
+    <span style="font-weight:600;">_(Items)_:</span>
+    <div class="flex flex-col gap-2" style="align-items:flex-start;">
+      <div id="disks">
+        <select id="s1" name="disks" style="display:none" multiple>
+          <option value=''>_(All)_</option>
+          <?foreach (array_filter($disks,'data_disks') as $disk):?>
+          <?=mk_option(1,"/mnt/{$disk['name']}",_(my_disk($disk['name'])),3)?>
+          <?endforeach;?>
+        </select>
+      </div>
+      <div id="shares" style="display:none">
+        <select id="s2" name="shares" style="display:none" multiple>
+          <option value=''>_(All)_</option>
+          <?uksort($shares,'strnatcasecmp');?>
+          <?foreach ($shares as $share):?>
+          <?=mk_option(1,"/mnt/user/{$share['name']}",$share['name'])?>
+          <?endforeach;?>
+        </select>
+      </div>
+    </div>
+  </div>
 
-<span id="shares" class="block" style="display:none">
-<select id="s2" name="shares" style="display:none" multiple>
-<option value=''>_(All)_</option>
-<?uksort($shares,'strnatcasecmp');?>
-<?foreach ($shares as $share):?>
-<?=mk_option(1,"/mnt/user/{$share['name']}",$share['name'])?>
-<?endforeach;?>
-</select>
-</span>
-
-<?if (_var($var,'fsState')=="Started"):?>
-<div><input type="button" value="_(Start)_" onclick="setNewPerms(this.form)"><input type="button" value="_(Done)_" class="lock" onclick="done()"></div>
-<?else:?>
-<div><input type="button" value="_(Start)_" disabled><input type="button" value="_(Done)_" class="lock" onclick="done()">_(Array must be **Started** to change permissions)_.</div>
-<?endif;?>
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:1rem;">
+    <?if (_var($var,'fsState')=="Started"):?>
+      <input type="button" value="_(Start)_" onclick="setNewPerms(this.form)">
+      <input type="button" value="_(Done)_" class="lock" onclick="done()">
+    <?else:?>
+      <input type="button" value="_(Start)_" disabled>
+      <input type="button" value="_(Done)_" class="lock" onclick="done()">
+      <span>_(Array must be **Started** to change permissions)_.</span>
+    <?endif;?>
+  </div>
+</div>
 </form>

@@ -62,30 +62,38 @@ effect of making it ***impossible*** to rebuild an existing failed drive - you h
 <input type="hidden" name="preserveArray" value="yes" disabled>
 <input type="hidden" name="preserveCache" value="yes" disabled>
 
-_(Preserve current assignments)_:
-: <select id="s1" name="preset" multiple="multiple" style="display:none">
-    <option value=''>_(All)_</option>
-    <?=mk_option_check(0,'array',_('Array slots'))?>
-    <?=mk_option_check(0,'cache',_('Pool slots'))?>
-  </select>
+<div style="display:flex;flex-direction:column;gap:1rem;align-items:flex-start;">
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:1rem;">
+    <span style="font-weight:600;">_(Preserve current assignments)_:</span>
+    <div class="inline-block">
+      <select id="s1" name="preset" multiple="multiple" style="display:none">
+        <option value=''>_(All)_</option>
+        <?=mk_option_check(0,'array',_('Array slots'))?>
+        <?=mk_option_check(0,'cache',_('Pool slots'))?>
+      </select>
+    </div>
+  </div>
 
-&nbsp;
-: <span class="inline-block">
-    <?if ($newarray):?>
-      _(Array has been **Reset**)_ (_(please configure)_)
-    <?elseif ($disabled):?>
-      _(Array must be **Stopped** to change)_
-    <?else:?>
-      <label>
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:1rem;">
+    <?if ($newarray) {?>
+      <span>
+        _(Array has been **Reset**)_ (_(please configure)_)
+      </span>
+    <?} elseif ($disabled) {?>
+      <span>
+        _(Array must be **Stopped** to change)_
+      </span>
+    <?} else {?>
+      <label class="flex flex-row items-center gap-2">
         <input type="checkbox" onClick="cmdInit.disabled=!this.checked">
-        _(Yes, I want to do this)_
+        <span>_(Yes, I want to do this)_</span>
       </label>
-    <?endif;?>
-  </span>
+    <?}?>
+  </div>
 
-&nbsp;
-: <span class="inline-block">
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:1rem;">
     <input type="submit" class="lock" name="cmdInit" value="_(Apply)_" disabled>
     <input type="button" class="lock" value="_(Done)_" onclick="done()">
-  </span>
+  </div>
+</div>
 </form>
