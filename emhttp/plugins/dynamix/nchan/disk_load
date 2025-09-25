@@ -1,30 +1,34 @@
 #!/bin/bash
 ini=/var/local/emhttp/diskload.ini
 tmp=/var/local/emhttp/diskload.tmp
-declare -a reads writes
+declare -a reads writes use_time
 
 # t = poll interval in seconds
 t=2
 
 # initialize array values upon first start
-stats=($(awk '/(sd[a-z]*|nvme[0-9]*n1|vd[a-z]*) /{print $3,$6,$10,$4,$8}' /proc/diskstats))
+stats=($(awk '/(sd[a-z]*|nvme[0-9]*n1|vd[a-z]*) /{print $3,$6,$10,$4,$8,$13}' /proc/diskstats))
 c=0; s=${#stats[@]}
-for ((i=0;i<s;i+=5)); do
+for ((i=0;i<s;i+=6)); do
   reads[c]=${stats[i+1]}
   writes[c]=${stats[i+2]}
+  use_time[c]=${stats[i+5]}
   ((c++))
 done
 sleep $t
 
 while :; do
-  stats=($(awk '/(sd[a-z]*|nvme[0-9]*n1|vd[a-z]*) /{print $3,$6,$10,$4,$8}' /proc/diskstats))
+  stats=($(awk '/(sd[a-z]*|nvme[0-9]*n1|vd[a-z]*) /{print $3,$6,$10,$4,$8,$13}' /proc/diskstats))
   c=0; s=${#stats[@]}
-  for ((i=0;i<s;i+=5)); do
+  for ((i=0;i<s;i+=6)); do
     reads[c]=$((stats[i+1]-reads[c]))
     writes[c]=$((stats[i+2]-writes[c]))
-    echo ${stats[i]}=$((reads[c]*512/t)) $((writes[c]*512/t)) ${stats[i+3]} ${stats[i+4]} >>$tmp
+    util=$((((stats[i+5]-use_time[c])*100)/(t*1000)))
+    if [ $util -gt 100 ]; then util=100; fi
+    echo ${stats[i]}=$((reads[c]*512/t)) $((writes[c]*512/t)) ${stats[i+3]} ${stats[i+4]} $util >>$tmp
     reads[c]=${stats[i+1]}
     writes[c]=${stats[i+2]}
+    use_time[c]=${stats[i+5]}
     ((c++))
   done
   mv -f $tmp $ini
