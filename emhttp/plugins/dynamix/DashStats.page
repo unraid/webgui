@@ -498,14 +498,14 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                     <div class='section'>
                                         <span class='flex flex-row items-center gap-4'>
                                           <h3 class='tile-header-main'>_(Interface)_</h3>
-                                          <span class="head_gap flex flex-row items-center gap-4">
+                                          <span class="head_gap flex flex-row items-center gap-4 network-selects">
                                               <i class='ups fa fa-angle-double-right'></i>
-                                              <select name="port_select" onchange="portSelect(this.value)">
+                                              <select name="port_select" class="network-select network-interface" onchange="portSelect(this.value)">
                                                   <?foreach ($ports as $port):?>
                                                       <?=mk_option("",$port,_($port))?>
                                                   <?endforeach;?>
                                               </select>
-                                              <select name="enter_view" onchange="changeView(this.value)" style="min-width: 100px">
+                                              <select name="enter_view" class="network-select network-type" onchange="changeView(this.value)">
                                                   <?=mk_option("", "0", _("General info"))?>
                                                   <?=mk_option("", "1", _("Counters info"))?>
                                                   <?=mk_option("", "2", _("Errors info"))?>
