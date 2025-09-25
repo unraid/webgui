@@ -541,9 +541,9 @@ case 'import':
     $vpn = (in_array($default4,$vpn) || in_array($default6,$vpn)) ? 8 : 0;
     if ($vpn==8) $import["Address:$n"] = '';
     $import["TYPE:$n"] = $vpn;
-    $allowedIPs = _var($import,"AllowedIPs:$n")
+    $allowedIPs = _var($import, "AllowedIPs:$n");
     ipfilter($allowedIPs);
-    if (_var($import,"TYPE:$n") == 0) $var['subnets1'] = "AllowedIPs=".$allowedIPs);
+    if (_var($import,"TYPE:$n") == 0) $var['subnets1'] = "AllowedIPs=$allowedIPs";
   }
   foreach ($import as $key => $val) $sort[] = explode(':',$key)[1];
   array_multisort($sort, $import);
