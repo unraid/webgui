@@ -31,7 +31,7 @@ _(Read settings from)_ <i class="fa fa-arrow-left fa-fw"></i>
 		if (isset($disks[$name])) {
 		  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name) echo mk_option("", $list['name'], _(my_disk($list['name']),3));
 		} else {
-		  foreach ($shares as $list) if ($list['name']!=$name) echo mk_option("", $list['name'], compress($list['name']));
+		  foreach ($shares as $list) if (strpos($list['name'],"'") === false && $list['name']!=$name) echo mk_option("", $list['name'], compress($list['name']));
 		}
 		?>
 	</select>
@@ -48,7 +48,7 @@ _(Write settings to)_ <i class="fa fa-arrow-right fa-fw"></i>
 		if (isset($disks[$name])) {
 		  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name) $rows[] = mk_option("", $list['name'], _(my_disk($list['name']),3));
 		} else {
-		  foreach ($shares as $list) if ($list['name']!=$name) $rows[] = mk_option("", $list['name'], compress($list['name']));
+		  foreach ($shares as $list) if (strpos($list['name'],"'") === false && $list['name']!=$name) $rows[] = mk_option("", $list['name'], compress($list['name']));
 		}
 		if ($rows) echo "<option>("._('All').")</option>";
 		foreach ($rows as $row) echo $row;

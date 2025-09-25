@@ -327,7 +327,7 @@ function direction() {
 $myDisks = array_filter(array_diff(array_keys(array_filter($disks,'my_disks')), explode(',',$var['shareUserExclude'])), 'globalInclude');
 
 $filteredShares = array_filter($shares, function($list) use ($name) {
-	return $list['name'] != $name || !$name;
+	return (strpos($list['name'],"'") === false) && ($list['name'] != $name || !$name) ;
 });
 ?>
 :share_edit_global1_help:
