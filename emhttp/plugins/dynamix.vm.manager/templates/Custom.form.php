@@ -347,6 +347,40 @@ if ($snapshots!=null && count($snapshots) && !$boolNew) {
 	$namedisable = "";
 	$snapcount = "0";
 }
+
+function getSliderPosition($currentValue) {
+	global $maxmem;
+	$values = [128 * 1024, 256 * 1024];
+	for ($i = 1; $i <= ($maxmem*2); $i++) {
+		$values[] = $i * 512 * 1024;
+	}
+	
+	$position = 0;
+	foreach ($values as $index => $value) {
+		if ($currentValue <= $value) {
+			$position = $index;
+			break;
+		}
+	}
+	return $position;
+}
+
+function formatMemoryDisplay($value) {
+	if ($value >= 1024 * 1024) {
+		return ($value / (1024 * 1024)) . ' GB';
+	} else {
+		return ($value / 1024) . ' MB';
+	}
+}
+
+$memoryValues = [
+    128 * 1024,
+    256 * 1024,
+];
+
+for ($i = 1; $i <= ($maxmem * 2); $i++) {
+    $memoryValues[] = $i * 512 * 1024;
+}
 ?>
 
 <link rel="stylesheet" href="<?autov('/plugins/dynamix.vm.manager/scripts/codemirror/lib/codemirror.css')?>">
@@ -602,40 +636,238 @@ const displayOptions = <?= json_encode($arrDisplayOptions, JSON_HEX_TAG | JSON_H
 </blockquote>
 
 <table>
-	<tr>
-		<td>
-			<span class="advanced">_(Initial)_ </span>_(Memory)_:
-		</td>
-		<td>
-			<span class="width"><select name="domain[mem]" id="domain_mem" class="narrow">
-			<?
-			echo mk_option($arrConfig['domain']['mem'], 128 * 1024, '128 MB');
-			echo mk_option($arrConfig['domain']['mem'], 256 * 1024, '256 MB');
-			for ($i = 1; $i <= ($maxmem*2); $i++) {
-				$label = ($i * 512).' MB';
-				$value = $i * 512 * 1024;
-				echo mk_option($arrConfig['domain']['mem'], $value, $label);
-			}
-			?>
-			</select></span>
-			<span class="advanced label">_(Max)_ _(Memory)_:</span>
-			<select name="domain[maxmem]" id="domain_maxmem" class="narrow second">
-			<?
-			echo mk_option($arrConfig['domain']['maxmem'], 128 * 1024, '128 MB');
-			echo mk_option($arrConfig['domain']['maxmem'], 256 * 1024, '256 MB');
-			for ($i = 1; $i <= ($maxmem*2); $i++) {
-				$label = ($i * 512).' MB';
-				$value = $i * 512 * 1024;
-				echo mk_option($arrConfig['domain']['maxmem'], $value, $label);
-			}
-			?>
-			</select>
-		</td>
-		<td>
-			<textarea class="xml" id="xmlmem" rows="2" disabled ><?=htmlspecialchars($xml2['memory'])."\n".htmlspecialchars($xml2['currentMemory'])."\n".htmlspecialchars($xml2['memoryBacking'])?></textarea>
-		</td>
-	</tr>
+  <tr>
+    <td>
+      <span class="advanced">Initial/Max </span>Memory:
+    </td>
+    <td>
+      <input type="hidden" name="domain[mem]" id="domain_mem_hidden" value="<?=$arrConfig['domain']['mem']?>">
+      <input type="hidden" name="domain[maxmem]" id="domain_maxmem_hidden" value="<?=$arrConfig['domain']['maxmem']?>">
+      
+      <div id="memory-slider-range"></div>
+      
+      <div class="memory-selects">
+        <div>
+            <span>Initial:</span>
+            <select id="mem_select"></select>
+        </div>
+        <div>
+            <span>Maximum:</span>
+            <select id="maxmem_select"></select>
+        </div>
+      </div>
+    </td>
+    <td>
+      <textarea class="xml" id="xmlmem" rows="2" disabled><?=htmlspecialchars($xml2['memory'])."\n".htmlspecialchars($xml2['currentMemory'])."\n".htmlspecialchars($xml2['memoryBacking'])?></textarea>
+    </td>
+  </tr>
 </table>
+
+<script>
+// Memory values array - make it globally accessible
+window.memoryValues = [
+    128 * 1024,   // 128 MB
+    256 * 1024,   // 256 MB
+    <?php for ($i = 1; $i <= ($maxmem*2); $i++) { ?>
+    <?=$i * 512 * 1024?>,  // <?=$i * 512?> MB
+    <?php } ?>
+];
+
+// Format memory value for display
+function formatMemoryDisplay(value) {
+    return (value >= 1024 * 1024) ? 
+        (value / (1024 * 1024)).toFixed(1) + ' GB' : 
+        (value / 1024) + ' MB';
+}
+
+// Update display function - converts values to human-readable format
+function updateDisplay(field, value) {
+    var hidden = document.getElementById('domain_' + field + '_hidden');
+    if (hidden) hidden.value = value;
+    var select = document.getElementById(field + '_select');
+    if (select) {
+        for (var i = 0; i < window.memoryValues.length; i++) {
+            if (window.memoryValues[i] == value) {
+                select.selectedIndex = i;
+                break;
+            }
+        }
+    }
+}
+
+// Update the select dropdowns to disable invalid options
+function updateSelectOptions() {
+    var memSelect = document.getElementById('mem_select');
+    var maxmemSelect = document.getElementById('maxmem_select');
+    var currentMemIndex = $("#memory-slider-range").slider("values", 0);
+    var currentMaxmemIndex = $("#memory-slider-range").slider("values", 1);
+    
+    // Update mem select - disable options greater than current max
+    for (var i = 0; i < memSelect.options.length; i++) {
+        if (i > currentMaxmemIndex) {
+            memSelect.options[i].disabled = true;
+        } else {
+            memSelect.options[i].disabled = false;
+        }
+    }
+    
+    // Update maxmem select - disable options less than current mem
+    for (var i = 0; i < maxmemSelect.options.length; i++) {
+        if (i < currentMemIndex) {
+            maxmemSelect.options[i].disabled = true;
+        } else {
+            maxmemSelect.options[i].disabled = false;
+        }
+    }
+}
+
+// Populate select dropdowns
+function populateSelects() {
+    var memSelect = document.getElementById('mem_select');
+    var maxmemSelect = document.getElementById('maxmem_select');
+    
+    // Clear existing options
+    memSelect.innerHTML = '';
+    maxmemSelect.innerHTML = '';
+    
+    // Add options for each memory value
+    for (var i = 0; i < window.memoryValues.length; i++) {
+        var value = window.memoryValues[i];
+        var displayText = formatMemoryDisplay(value);
+        
+        var memOption = document.createElement('option');
+        memOption.value = i;
+        memOption.textContent = displayText;
+        memSelect.appendChild(memOption);
+        
+        var maxmemOption = document.createElement('option');
+        maxmemOption.value = i;
+        maxmemOption.textContent = displayText;
+        maxmemSelect.appendChild(maxmemOption);
+    }
+}
+
+$(function() {
+    // Populate the select dropdowns
+    populateSelects();
+    
+    // Initialize jQuery UI slider
+    $("#memory-slider-range").slider({
+        range: true,
+        min: 0,
+        max: <?=($maxmem*2)+1?>,
+        values: [<?=getSliderPosition($arrConfig['domain']['mem'])?>, <?=getSliderPosition($arrConfig['domain']['maxmem'])?>],
+        slide: function(event, ui) {
+            // Convert slider positions back to actual memory values
+            var memValue = window.memoryValues[ui.values[0]] || window.memoryValues[0];
+            var maxmemValue = window.memoryValues[ui.values[1]] || window.memoryValues[0];
+            
+            // Update displays with human-readable values and hidden inputs with actual values
+            updateDisplay('mem', memValue);
+            updateDisplay('maxmem', maxmemValue);
+            
+            // Update select options to reflect new constraints
+            updateSelectOptions();
+        }
+    });
+    
+    // Bind select changes to slider
+    $('#mem_select').change(function() {
+        var sliderValue = parseInt($(this).val());
+        var currentValues = $("#memory-slider-range").slider("values");
+        
+        if (sliderValue <= currentValues[1]) {
+            $("#memory-slider-range").slider("values", 0, sliderValue);
+            var memValue = window.memoryValues[sliderValue] || window.memoryValues[0];
+            updateDisplay('mem', memValue);
+            updateSelectOptions(); // Update disabled options
+        } else {
+            // Reset select to current value
+            var currentIndex = <?=getSliderPosition($arrConfig['domain']['mem'])?>;
+            $(this).val(currentIndex);
+        }
+    });
+    
+    $('#maxmem_select').change(function() {
+        var sliderValue = parseInt($(this).val());
+        var currentValues = $("#memory-slider-range").slider("values");
+        
+        if (sliderValue >= currentValues[0]) {
+            $("#memory-slider-range").slider("values", 1, sliderValue);
+            var maxmemValue = window.memoryValues[sliderValue] || window.memoryValues[0];
+            updateDisplay('maxmem', maxmemValue);
+            updateSelectOptions(); // Update disabled options
+        } else {
+            // Reset select to current value
+            var currentIndex = <?=getSliderPosition($arrConfig['domain']['maxmem'])?>;
+            $(this).val(currentIndex);
+        }
+    });
+    
+    // Fix handle selection when values are equal
+    var slider = $("#memory-slider-range").slider("instance");
+    
+    // Store original _mouseCapture
+    var originalMouseCapture = slider._mouseCapture;
+    
+    // Override _mouseCapture to handle equal values correctly
+    slider._mouseCapture = function(event) {
+        var result = originalMouseCapture.apply(this, arguments);
+        
+        if (result === false) return false;
+        
+        // Remove active state from all handles first
+        this.handles.removeClass("ui-state-active");
+        
+        // If we clicked directly on a handle, use that handle
+        var $handleClicked = $(event.target).closest(".ui-slider-handle");
+        if ($handleClicked.length) {
+            var handleIndex = this.handles.index($handleClicked);
+            if (handleIndex !== -1) {
+                this._handleIndex = handleIndex;
+                // Ensure the handle gets focus for keyboard navigation
+                $handleClicked.focus();
+                // Add active class to the clicked handle
+                $handleClicked.addClass("ui-state-active");
+                return true;
+            }
+        }
+        
+        // For clicks on the slider track, determine which handle to use
+        var position = this._normValueFromMouse(event);
+        var closestHandle = 0;
+        var distance = Math.abs(this.values(0) - position);
+        
+        // Find the closest handle
+        for (var i = 1; i < this.handles.length; i++) {
+            var thisDistance = Math.abs(this.values(i) - position);
+            if (thisDistance < distance) {
+                distance = thisDistance;
+                closestHandle = i;
+            }
+        }
+        
+        this._handleIndex = closestHandle;
+        // Focus the selected handle for keyboard navigation
+        this.handles.eq(closestHandle).focus();
+        // Add active class to the selected handle
+        this.handles.eq(closestHandle).addClass("ui-state-active");
+        
+        return true;
+    };
+    
+    // Initialize displays on page load
+    var initialMemValue = <?=$arrConfig['domain']['mem']?>;
+    var initialMaxmemValue = <?=$arrConfig['domain']['maxmem']?>;
+    updateDisplay('mem', initialMemValue);
+    updateDisplay('maxmem', initialMaxmemValue);
+    
+	<?php if ($boolRunning): ?>
+		$("#memory-slider-range").slider("option", "disabled", true);
+	<?php endif; ?>
+    updateSelectOptions();
+});
+</script>
 
 <div class="basic">
 	<blockquote class="inline_help">
