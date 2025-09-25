@@ -344,6 +344,7 @@ $('body').on('click','a,.ca_href', function(e) {
       $.cookie('allowedDomains',JSON.stringify(domainsAllowed),{expires:3650}); // rewrite cookie to further extend expiration by 400 days
       if (domainsAllowed[dom.hostname]) return;
       e.preventDefault();
+      $('.sweet-alert').removeClass('nchan'); // Prevent GUI issues if clicking external link from a changelog
       swal({
         title: "<?=_('External Link')?>",
         text: "<span title='"+href+"'><?=_('Clicking OK will take you to a 3rd party website not associated with Lime Technology')?><br><br><b>"+href+"<br><br><input id='Link_Always_Allow' type='checkbox'></input><?=_('Always Allow')?> "+dom.hostname+"</span>",
