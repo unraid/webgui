@@ -110,15 +110,16 @@ to the system log.*
 *Use* **Anonymize diagnostics** *when publishing the diagnostics file in the public forum. In private communication with Limetech it is recommended to uncheck this setting and capture all information unaltered.*
 :end
 
-<br>
+<div class="flex flex-col gap-4 items-start">
+  <div class="flex flex-wrap items-center gap-4">
+    <label for="anonymize" class="inline-flex flex-row items-center gap-2">
+      <input type="checkbox" id="anonymize" checked>
+      <span>_(Anonymize diagnostics)_</span>
+    </label>
+  </div>
 
-<label for="anonymize">
-  <input type="checkbox" id="anonymize" checked>
-  _(Anonymize diagnostics)_
-</label>
-
-<span class="inline-block">
-  <input id='download' type="button" value="_(Download)_" onclick="$(this).attr('disabled',true);diagnostics(zipfile())">
-  <input type="button" value="_(Done)_" onclick="done()">
-</span>
-
+  <div class="flex flex-wrap items-center gap-4">
+    <input id='download' type="button" value="_(Download)_" onclick="$(this).attr('disabled',true);diagnostics(zipfile())">
+    <input type="button" value="_(Done)_" onclick="done()">
+  </div>
+</div>
