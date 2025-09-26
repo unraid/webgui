@@ -62,11 +62,11 @@ effect of making it ***impossible*** to rebuild an existing failed drive - you h
 <input type="hidden" name="preserveArray" value="yes" disabled>
 <input type="hidden" name="preserveCache" value="yes" disabled>
 
-<div style="display:flex;flex-direction:column;gap:1rem;align-items:flex-start;">
-  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:1rem;">
-    <span style="font-weight:600;">_(Preserve current assignments)_:</span>
+<div class="flex flex-col gap-4 items-start">
+  <div class="flex flex-wrap items-center gap-4">
+    <span class="strong">_(Preserve current assignments)_:</span>
     <div class="inline-block">
-      <select id="s1" name="preset" multiple="multiple" style="display:none">
+      <select id="s1" name="preset" multiple="multiple" class="hidden">
         <option value=''>_(All)_</option>
         <?=mk_option_check(0,'array',_('Array slots'))?>
         <?=mk_option_check(0,'cache',_('Pool slots'))?>
@@ -74,7 +74,7 @@ effect of making it ***impossible*** to rebuild an existing failed drive - you h
     </div>
   </div>
 
-  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:1rem;">
+  <div class="flex flex-wrap items-center gap-4">
     <?if ($newarray) {?>
       <span>
         _(Array has been **Reset**)_ (_(please configure)_)
@@ -91,7 +91,7 @@ effect of making it ***impossible*** to rebuild an existing failed drive - you h
     <?}?>
   </div>
 
-  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:1rem;">
+  <div class="flex flex-wrap items-center gap-4">
     <input type="submit" class="lock" name="cmdInit" value="_(Apply)_" disabled>
     <input type="button" class="lock" value="_(Done)_" onclick="done()">
   </div>

@@ -92,9 +92,9 @@ Note that this tool may negatively affect any docker containers if you allow you
 :end
 
 <form markdown="1" method="POST" action="/update.htm" target="progressFrame">
-<div style="display:flex;flex-direction:column;gap:1rem;align-items:flex-start;">
-  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:1rem;">
-    <span style="font-weight:600;">_(Target)_:</span>
+<div class="flex flex-col gap-4 items-start">
+  <div class="flex flex-wrap items-center gap-4">
+    <span class="strong">_(Target)_:</span>
     <div class="inline-block">
       <select name="select" onchange="selection(this.value,true)">
         <?=mk_option(0,"0","_(Disks)_")?>
@@ -103,19 +103,19 @@ Note that this tool may negatively affect any docker containers if you allow you
     </div>
   </div>
 
-  <div style="display:flex;flex-direction:column;gap:1rem;align-items:flex-start;">
-    <span style="font-weight:600;">_(Items)_:</span>
-    <div class="flex flex-col gap-2" style="align-items:flex-start;">
+  <div class="flex flex-col gap-4 items-start">
+    <span class="strong">_(Items)_:</span>
+    <div class="flex flex-col gap-2 items-start">
       <div id="disks">
-        <select id="s1" name="disks" style="display:none" multiple>
+        <select id="s1" name="disks" class="hidden" multiple>
           <option value=''>_(All)_</option>
           <?foreach (array_filter($disks,'data_disks') as $disk):?>
           <?=mk_option(1,"/mnt/{$disk['name']}",_(my_disk($disk['name'])),3)?>
           <?endforeach;?>
         </select>
       </div>
-      <div id="shares" style="display:none">
-        <select id="s2" name="shares" style="display:none" multiple>
+      <div id="shares" class="hidden">
+        <select id="s2" name="shares" class="hidden" multiple>
           <option value=''>_(All)_</option>
           <?uksort($shares,'strnatcasecmp');?>
           <?foreach ($shares as $share):?>
@@ -126,7 +126,7 @@ Note that this tool may negatively affect any docker containers if you allow you
     </div>
   </div>
 
-  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:1rem;">
+  <div class="flex flex-wrap items-center gap-4">
     <?if (_var($var,'fsState')=="Started"):?>
       <input type="button" value="_(Start)_" onclick="setNewPerms(this.form)">
       <input type="button" value="_(Done)_" class="lock" onclick="done()">
