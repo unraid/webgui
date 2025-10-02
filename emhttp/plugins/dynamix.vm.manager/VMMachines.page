@@ -484,6 +484,12 @@ function loadlist() {
       $(window).bind('resize',function(){
         tableHeaderResize();
       });
+      // Handle table header resizing when tab is clicked
+      <?if (count($pages) > 2):?>
+        $("#tab1").on('click',function(){
+          tableHeaderResize();
+        });
+      <?endif;?>    
   <?endif;?>
   });
 }
