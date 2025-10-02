@@ -117,11 +117,16 @@ foreach ($memory_array as $device) {
   if ($base>=1) $memory_maximum += $size*pow(1024,$base);
   if (!$ecc && isset($device['Error Correction Type']) && $device['Error Correction Type']!='None') $ecc = $device['Error Correction Type']." ";
 }
+if ($memory_installed >= 1048576) {
+  $memory_installed = round($memory_installed/1048576);
+  $memory_maximum = round($memory_maximum/1048576);
+  $unit = 'TiB';
+} else { 
 if ($memory_installed >= 1024) {
   $memory_installed = round($memory_installed/1024);
   $memory_maximum = round($memory_maximum/1024);
-  $unit = 'GiB';
-} else $unit = 'MiB';
+  $unit = 'GiB';}
+else $unit = 'MiB'; }
 
 // If maximum < installed then roundup maximum to the next power of 2 size of installed. E.g. 6 -> 8 or 12 -> 16
 $low = $memory_maximum < $memory_installed;
@@ -187,7 +192,8 @@ foreach ($sPorts as $port) {
     if ($link) {
       $speed = file_get_contents("$int/speed");
       $duplex = file_get_contents("$int/duplex");
-      echo "<tr class='$more'><td>$name</td><td>$port: $speed Mbps, $duplex duplex, mtu $mtu</td></tr>";
+      $speed = ($speed >= 1000) ? ($speed/1000)." Gbps" : $speed." Mbps";
+      echo "<tr class='$more'><td>$name</td><td>$port: $speed, $duplex duplex, mtu $mtu</td></tr>";
     } else {
       echo "<tr class='$more'><td>$name</td><td>$port: ",_('interface down'),"</td></tr>";
     }
