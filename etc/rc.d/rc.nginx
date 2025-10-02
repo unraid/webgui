@@ -25,7 +25,7 @@ CONF="/etc/nginx/nginx.conf"
 IDENT="/boot/config/ident.cfg"
 SERVERS="/etc/nginx/conf.d/servers.conf"
 LOCATIONS="/etc/nginx/conf.d/locations.conf"
-INI="/var/local/emhttp/nginx.ini.new"
+INI="/var/local/emhttp/nginx.ini"
 CERTPATH="$SSL/certs/certificate_bundle.pem"
 TSCERTPATH="$SSL/certs/ts_bundle.pem"
 CONNECT_CONFIG="/boot/config/plugins/dynamix.my.servers/configs/connect.json"
@@ -158,7 +158,18 @@ redirect(){
 # build our servers
 # pay attention to escaping
 build_servers(){
-  cat <<- 'EOF' >$SERVERS
+  # Use atomic write to prevent race conditions from multiple instances
+  local TEMPFILE
+  TEMPFILE=$(mktemp /tmp/servers.conf.XXXXXX)
+  
+  # Cleanup function to remove temp file on exit
+  # shellcheck disable=SC2329
+  cleanup_temp() {
+    [[ -f $TEMPFILE ]] && rm -f $TEMPFILE
+  }
+  trap cleanup_temp EXIT
+  
+  cat <<- 'EOF' >$TEMPFILE
 	#
 	# Listen on local socket for nchan publishers
 	#
@@ -175,7 +186,7 @@ build_servers(){
 	    }
 	}
 	EOF
-  cat <<- EOF >>$SERVERS
+  cat <<- EOF >>$TEMPFILE
 	#
 	# Always accept http requests from localhost
 	# ex: http://localhost
@@ -190,7 +201,7 @@ build_servers(){
 	}
 	EOF
   if [[ $USE_SSL == no ]]; then
-    cat <<- EOF >>$SERVERS
+    cat <<- EOF >>$TEMPFILE
 	#
 	# Port settings for http protocol
 	# ex: http://tower  (IP address resolved via NetBIOS)
@@ -207,7 +218,7 @@ build_servers(){
 	}
 	EOF
   elif [[ $USE_SSL == yes ]]; then
-    cat <<- EOF >>$SERVERS
+    cat <<- EOF >>$TEMPFILE
 	#
 	# Port settings for https protocol (self-signed cert)
 	# ex: https://tower.local
@@ -236,7 +247,7 @@ build_servers(){
 	EOF
   elif [[ $USE_SSL == auto ]]; then
     if [[ -n $LANFQDN ]]; then
-      cat <<- EOF >>$SERVERS
+      cat <<- EOF >>$TEMPFILE
 	#
 	# Redirect http requests to https
 	# ex: http://tower.local -> https://lan-ip.hash.myunraid.net
@@ -246,7 +257,7 @@ build_servers(){
 	EOF
     fi
     if [[ -n $LANFQDN6 ]]; then
-      cat <<- EOF >>$SERVERS
+      cat <<- EOF >>$TEMPFILE
 	#
 	# Redirect http requests to https
 	# ex: http://[::ffff:192.168.1.100] -> https://lan-ip.hash.myunraid.net
@@ -254,7 +265,7 @@ build_servers(){
 	$(redirect fqdn 6 $PORT default_server)
 	EOF
     fi
-    cat <<- EOF >>$SERVERS
+    cat <<- EOF >>$TEMPFILE
 	#
 	# Return 404 (Not Found) as default ssl action, using self-signed cert
 	#
@@ -276,7 +287,7 @@ build_servers(){
   fi
   if [[ -f $CERTPATH ]]; then
     if [[ $USE_SSL == no ]]; then
-      cat <<- EOF >>$SERVERS
+      cat <<- EOF >>$TEMPFILE
 	#
 	# Return 404 (Not Found) as default ssl action
 	#
@@ -297,7 +308,7 @@ build_servers(){
 	EOF
     fi
     if [[ -n $LANFQDN || -n $LANFQDN6 ]]; then
-      cat <<- EOF >>$SERVERS
+      cat <<- EOF >>$TEMPFILE
 	#
 	# Port settings for https using CA-signed cert
 	# ex: https://lan-ip.hash.myunraid.net
@@ -323,7 +334,7 @@ build_servers(){
     fi
   fi
   if [[ -n $TSFQDN ]]; then
-    cat <<- EOF >>$SERVERS
+    cat <<- EOF >>$TEMPFILE
 	#
 	# Redirect Tailscale http requests to https
 	# ex: http://tower.magicDNS.ts.net -> https://tower.magicDNS.ts.net
@@ -355,12 +366,26 @@ build_servers(){
 	}
 	EOF
   fi
+  
+  # Atomically replace the servers configuration file
+  mv $TEMPFILE $SERVERS
 }
 
 # build our locations
 # pay attention to escaping
 build_locations(){
-  cat <<- EOF >$LOCATIONS
+  # Use atomic write to prevent race conditions from multiple instances
+  local TEMPFILE
+  TEMPFILE=$(mktemp /tmp/locations.conf.XXXXXX)
+  
+  # Cleanup function to remove temp file on exit
+  # shellcheck disable=SC2329
+  cleanup_temp() {
+    [[ -f $TEMPFILE ]] && rm -f $TEMPFILE
+  }
+  trap cleanup_temp EXIT
+  
+  cat <<- EOF >$TEMPFILE
 	#
 	# Default start page
 	#
@@ -368,7 +393,7 @@ build_locations(){
 	    return 302 \$scheme://\$http_host/$START_PAGE;
 	}
 	EOF
-  cat <<- 'EOF' >>$LOCATIONS
+  cat <<- 'EOF' >>$TEMPFILE
 	#
 	# Redirect to login page for authentication
 	#
@@ -526,6 +551,75 @@ build_locations(){
 	    proxy_set_header Connection $connection_upgrade;
 	}
 	EOF
+  
+  # Atomically replace the locations configuration file
+  mv $TEMPFILE $LOCATIONS
+}
+
+# build ini configuration file
+build_ini(){
+  # define the default URL used to access the server
+  if [[ $USE_SSL == auto ]]; then
+    [[ -n $LANIP && $(ipv $LANIP) == 4 ]] && DEFAULTURL="https://$LANFQDN$PORTSSL_URL"
+    [[ -n $LANIP && $(ipv $LANIP) == 6 ]] && DEFAULTURL="https://[$LANFQDN6]$PORTSSL_URL"
+  elif [[ $USE_SSL == yes ]]; then
+    DEFAULTURL="https://$LANMDNS$PORTSSL_URL"
+  else
+    DEFAULTURL="http://$LANMDNS$PORT_URL"
+  fi
+
+  # Use atomic write to prevent race conditions from multiple instances
+  local TEMPFILE
+  TEMPFILE=$(mktemp /tmp/nginx.ini.XXXXXX)
+  
+  # Cleanup function to remove temp file on exit
+  # shellcheck disable=SC2329
+  cleanup_temp() {
+    [[ -f $TEMPFILE ]] && rm -f $TEMPFILE
+  }
+  trap cleanup_temp EXIT
+  
+  # Write all configuration to temp file
+  {
+    # always defined:
+    echo "NGINX_LANIP=\"$LANIP\""
+    echo "NGINX_LANIP6=\"$LANIP6\""
+    echo "NGINX_LANNAME=\"$LANNAME\""
+    echo "NGINX_LANMDNS=\"$LANMDNS\""
+    echo "NGINX_BIND=\"$BIND\""
+    echo "NGINX_CERTPATH=\"$CERTPATH\""
+    echo "NGINX_USESSL=\"$USE_SSL\""
+    echo "NGINX_PORT=\"$PORT\""
+    echo "NGINX_PORTSSL=\"$PORTSSL\""
+    echo "NGINX_DEFAULTURL=\"$DEFAULTURL\""
+    # defined if certificate_bundle.pem present:
+    echo "NGINX_CERTNAME=\"$CERTNAME\""
+    echo "NGINX_LANFQDN=\"$LANFQDN\""
+    echo "NGINX_LANFQDN6=\"$LANFQDN6\""
+    # defined if remote access enabled:
+    echo "NGINX_WANACCESS=\"$WANACCESS\""
+    echo "NGINX_WANIP=\"$WANIP\""
+    echo "NGINX_WANIP6=\"$WANIP6\""
+    echo "NGINX_WANFQDN=\"$WANFQDN\""
+    echo "NGINX_WANFQDN6=\"$WANFQDN6\""
+    # defined if ts_bundle.pem present:
+    echo "NGINX_TAILSCALEFQDN=\"$TSFQDN\""
+    # add included interfaces
+    for NET in "${!NET_FQDN[@]}"; do
+      echo "NGINX_${NET^^}FQDN=\"${NET_FQDN[$NET]}\""
+    done
+    if [[ $IPV6MYUNRAIDNET == 1 ]]; then
+      for NET in "${!NET_FQDN6[@]}"; do
+        echo "NGINX_${NET^^}FQDN6=\"${NET_FQDN6[$NET]}\""
+      done
+    fi
+  } >$TEMPFILE
+  
+  # Ensure directory exists before atomic write
+  mkdir -p $(dirname "$INI")
+  
+  # Atomically replace the ini file
+  mv $TEMPFILE $INI
 }
 
 # check if certificate common name or any alternative name matches LANMDNS
@@ -650,52 +744,8 @@ build_ssl(){
   build_servers
   # build locations configuration file
   build_locations
-
-  # define the default URL used to access the server
-  if [[ $USE_SSL == auto ]]; then
-    [[ -n $LANIP && $(ipv $LANIP) == 4 ]] && DEFAULTURL="https://$LANFQDN$PORTSSL_URL"
-    [[ -n $LANIP && $(ipv $LANIP) == 6 ]] && DEFAULTURL="https://[$LANFQDN6]$PORTSSL_URL"
-  elif [[ $USE_SSL == yes ]]; then
-    DEFAULTURL="https://$LANMDNS$PORTSSL_URL"
-  else
-    DEFAULTURL="http://$LANMDNS$PORT_URL"
-  fi
-
-  mkdir -p $(dirname "$INI")
-  # always defined:
-  echo "NGINX_LANIP=\"$LANIP\"" >$INI
-  echo "NGINX_LANIP6=\"$LANIP6\"" >>$INI
-  echo "NGINX_LANNAME=\"$LANNAME\"" >>$INI
-  echo "NGINX_LANMDNS=\"$LANMDNS\"" >>$INI
-  echo "NGINX_BIND=\"$BIND\"" >>$INI
-  echo "NGINX_CERTPATH=\"$CERTPATH\"" >>$INI
-  echo "NGINX_USESSL=\"$USE_SSL\"" >>$INI
-  echo "NGINX_PORT=\"$PORT\"" >>$INI
-  echo "NGINX_PORTSSL=\"$PORTSSL\"" >>$INI
-  echo "NGINX_DEFAULTURL=\"$DEFAULTURL\"" >>$INI
-  # defined if certificate_bundle.pem present:
-  echo "NGINX_CERTNAME=\"$CERTNAME\"" >>$INI
-  echo "NGINX_LANFQDN=\"$LANFQDN\"" >>$INI
-  echo "NGINX_LANFQDN6=\"$LANFQDN6\"" >>$INI
-  # defined if remote access enabled:
-  echo "NGINX_WANACCESS=\"$WANACCESS\"" >>$INI
-  echo "NGINX_WANIP=\"$WANIP\"" >>$INI
-  echo "NGINX_WANIP6=\"$WANIP6\"" >>$INI
-  echo "NGINX_WANFQDN=\"$WANFQDN\"" >>$INI
-  echo "NGINX_WANFQDN6=\"$WANFQDN6\"" >>$INI
-  # defined if ts_bundle.pem present:
-  echo "NGINX_TAILSCALEFQDN=\"$TSFQDN\"" >>$INI
-  # add included interfaces
-  for NET in "${!NET_FQDN[@]}"; do
-    echo "NGINX_${NET^^}FQDN=\"${NET_FQDN[$NET]}\"" >>$INI
-  done
-  if [[ $IPV6MYUNRAIDNET == 1 ]]; then
-    for NET in "${!NET_FQDN6[@]}"; do
-      echo "NGINX_${NET^^}FQDN6=\"${NET_FQDN6[$NET]}\"" >>$INI
-    done
-  fi
-  # atomically update file
-  mv $INI ${INI%.*}
+  # build ini configuration file
+  build_ini
 }
 
 unraid_api_control(){
