@@ -8,6 +8,12 @@ queue(){
   atq | grep -Pom1 '^\d+'
 }
 
+if [[ ! -r /usr/local/emhttp/state/var.ini ]]; then
+    # sanity check - exit if no var.ini file, implies emhttpd is not running yet
+    log "/usr/local/emhttp/state/var.ini does not exist, aborting."
+    exit 1
+fi
+
 JOB=$(queue)
 if [[ -n $JOB ]]; then
   atrm $JOB 2>/dev/null

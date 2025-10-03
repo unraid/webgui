@@ -27,6 +27,12 @@ PRIVATE="/var/lib/samba/private"
 # library functions
 . /etc/rc.d/rc.library.source
 
+if [[ ! -r /usr/local/emhttp/state/var.ini ]]; then
+    # sanity check - exit if no var.ini file, implies emhttpd is not running yet
+    log "/usr/local/emhttp/state/var.ini does not exist, aborting."
+    exit 1
+fi
+
 # read Unraid settings
 [[ -r $IDENT ]] && . <(fromdos <$IDENT)
 # disable ipv6 when netbios is used

@@ -39,6 +39,12 @@ NAME=$(</etc/HOSTNAME)
 # library functions
 . /etc/rc.d/rc.library.source
 
+if [[ ! -r /usr/local/emhttp/state/var.ini ]]; then
+    # sanity check - exit if no var.ini file, implies emhttpd is not running yet
+    log "/usr/local/emhttp/state/var.ini does not exist, aborting."
+    exit 1
+fi
+
 allow(){
   sed -ri "s/^#?(allow-interfaces)=.*/\1=$*/" $CONF
 }
