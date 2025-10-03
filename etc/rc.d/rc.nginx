@@ -776,8 +776,12 @@ nginx_start(){
   if nginx_running; then
     REPLY="Already started"
   elif [[ ! -r $CONF ]]; then
-    # sanity checks, no config file, exit
+    # sanity check - exit if no nginx config file
     log "$CONF does not exist, aborting."
+    exit 1
+  elif [[ ! -r /usr/local/emhttp/state/var.ini ]]; then
+    # sanity check - exit if no var.ini file, implies emhttpd is not running yet
+    log "/usr/local/emhttp/state/var.ini does not exist, aborting."
     exit 1
   else
     # build ssl configuration file
