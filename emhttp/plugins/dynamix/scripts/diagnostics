@@ -90,6 +90,7 @@ function shareDisks($share) {
 function anonymize($text, $select) {
   global $all,$var,$pools,$customShares;
   if ($all) return $text;
+  anonymize_domain($text);
   switch ($select) {
   case 1:
     // remove any stray references to the GUID that may wind up in .ini files (notably Unassigned Devices)
@@ -320,6 +321,8 @@ function geturls() {
     $dirlisting[1] = "Directory not found";
   }
   $urls .= "\n\n".implode("\n", $dirlisting)."\n";
+  anonymize_domain($urls);
+  
   return str_replace("\n", "\r\n", $urls);
 }
 
@@ -351,6 +354,45 @@ function anonymize_syslog($file) {
   // truncate syslog if too big
   if (basename($file)=='syslog' && filesize($file)>=$max) run("tail -n 200 ".escapeshellarg("$log.txt")." >".escapeshellarg("$log.last200.txt"));
   run("truncate -s '<$max' ".escapeshellarg("$log.txt"));
+  anonymize_domain_file("$log.txt");
+}
+
+// anonymize email addresses
+function anonymize_email($file) {
+  global $diag, $all;
+
+  $log = "/$diag/logs/".pathinfo($file, PATHINFO_FILENAME).".txt";
+  run("todos <".escapeshellarg($file)." >".escapeshellarg($log));
+  if (!$all) {
+    run("sed -ri 's/\b[^[:space:]\/<>\"'\'']+@[^[:space:]\/<>\"'\'']+\.[^[:space:]\/<>\"'\'']+/email@removed.com/g' ".escapeshellarg($log));
+  }
+}
+
+function anonymize_domain_file($file) {
+  global $all;
+  
+  if ( !$all ) {
+    $text = @file_get_contents($file);
+    if ( $text !== false) {
+      anonymize_domain($text);
+      file_put_contents($file, $text);
+    }
+  }
+}
+
+function anonymize_domain(&$text) {
+  global $all;
+  static $domain = "";
+
+  if (!$all) {
+    if ($domain == "") {
+      $ident = @parse_ini_file('/boot/config/ident.cfg');
+      $domain = strtolower(is_array($ident) ? ($ident['LOCAL_TLD'] ?? ($ident['LOCAL_TLD'] ?? "local")) : "local");
+    }
+    if (strpos($domain,".") !== false) {
+      $text = str_ireplace($domain,"removed_TLD",$text);
+    }
+  }
 }
 
 // diagnostics start
@@ -499,6 +541,8 @@ if (glob("/boot/config/*.conf")) {
 if (glob("/boot/config/*.dat")) {
   run("cp -- /boot/config/*.dat ".escapeshellarg("/$diag/config"));
 }
+// anonymize ident.cfg
+anonymize_domain_file("/$diag/config/ident.cfg");
 
 // handle go files
 foreach (['/boot/config/go', '/boot/config/go.safemode'] as $go) {
@@ -729,8 +773,7 @@ if (file_exists($phplog)) {
 // copy graphql-api.log
 $graphql = "/var/log/graphql-api.log";
 if (file_exists($graphql)) {
-  $log = "/$diag/logs/graphql-api.txt";
-  run("todos <$graphql >".escapeshellarg($log));
+  anonymize_email($graphql);
 }
 
 // copy vfio-pci log
@@ -766,6 +809,7 @@ newline("/$diag/system/sshd.txt");
 
 // copy servers.conf
 copy("/etc/nginx/conf.d/servers.conf", "/$diag/system/servers.conf.txt");
+anonymize_domain_file("/$diag/system/servers.conf.txt");
 maskIP("/$diag/system/servers.conf.txt");
 run("sed -Ei 's/[01234567890abcdef]+\.((my)?unraid\.net)/hash.\\1/gm;t' ".escapeshellarg("/$diag/system/servers.conf.txt"));
 run("sed -Ei 's/\.[^\.]*\.ts\.net/\.magicdns\.ts\.net/gm' ".escapeshellarg("/$diag/system/servers.conf.txt"));
