@@ -155,19 +155,23 @@ redirect(){
   fi
 }
 
+# cleanup function to remove temp file on exit
+cleanup_temp() {
+  local tempfile="$1"
+  [[ -f "$tempfile" ]] && rm -f "$tempfile"
+}
+
 # build our servers
 # pay attention to escaping
 build_servers(){
   # Use atomic write to prevent race conditions from multiple instances
   local TEMPFILE
+  mkdir -p $(dirname "$SERVERS")
   TEMPFILE=$(mktemp "$SERVERS.XXXXXX")
   
-  # Cleanup function to remove temp file on exit
+  # Cleanup temp file on exit
   # shellcheck disable=SC2329
-  cleanup_temp() {
-    [[ -f $TEMPFILE ]] && rm -f $TEMPFILE
-  }
-  trap cleanup_temp EXIT
+  trap 'cleanup_temp "$TEMPFILE"' EXIT
   
   cat <<- 'EOF' >$TEMPFILE
 	#
@@ -376,14 +380,12 @@ build_servers(){
 build_locations(){
   # Use atomic write to prevent race conditions from multiple instances
   local TEMPFILE
+  mkdir -p $(dirname "$LOCATIONS")
   TEMPFILE=$(mktemp "$LOCATIONS.XXXXXX")
   
-  # Cleanup function to remove temp file on exit
+  # Cleanup temp file on exit
   # shellcheck disable=SC2329
-  cleanup_temp() {
-    [[ -f $TEMPFILE ]] && rm -f $TEMPFILE
-  }
-  trap cleanup_temp EXIT
+  trap 'cleanup_temp "$TEMPFILE"' EXIT
   
   cat <<- EOF >$TEMPFILE
 	#
@@ -570,14 +572,12 @@ build_ini(){
 
   # Use atomic write to prevent race conditions from multiple instances
   local TEMPFILE
+  mkdir -p $(dirname "$INI")
   TEMPFILE=$(mktemp "$INI.XXXXXX")
   
-  # Cleanup function to remove temp file on exit
+  # Cleanup temp file on exit
   # shellcheck disable=SC2329
-  cleanup_temp() {
-    [[ -f $TEMPFILE ]] && rm -f $TEMPFILE
-  }
-  trap cleanup_temp EXIT
+  trap 'cleanup_temp "$TEMPFILE"' EXIT
   
   # Write all configuration to temp file
   {
@@ -614,9 +614,6 @@ build_ini(){
       done
     fi
   } >$TEMPFILE
-  
-  # Ensure directory exists before atomic write
-  mkdir -p $(dirname "$INI")
   
   # Atomically replace the ini file
   mv $TEMPFILE $INI
