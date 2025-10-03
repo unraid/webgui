@@ -160,7 +160,7 @@ redirect(){
 build_servers(){
   # Use atomic write to prevent race conditions from multiple instances
   local TEMPFILE
-  TEMPFILE=$(mktemp /tmp/servers.conf.XXXXXX)
+  TEMPFILE=$(mktemp "$SERVERS.XXXXXX")
   
   # Cleanup function to remove temp file on exit
   # shellcheck disable=SC2329
@@ -376,7 +376,7 @@ build_servers(){
 build_locations(){
   # Use atomic write to prevent race conditions from multiple instances
   local TEMPFILE
-  TEMPFILE=$(mktemp /tmp/locations.conf.XXXXXX)
+  TEMPFILE=$(mktemp "$LOCATIONS.XXXXXX")
   
   # Cleanup function to remove temp file on exit
   # shellcheck disable=SC2329
@@ -570,7 +570,7 @@ build_ini(){
 
   # Use atomic write to prevent race conditions from multiple instances
   local TEMPFILE
-  TEMPFILE=$(mktemp /tmp/nginx.ini.XXXXXX)
+  TEMPFILE=$(mktemp "$INI.XXXXXX")
   
   # Cleanup function to remove temp file on exit
   # shellcheck disable=SC2329
