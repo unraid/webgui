@@ -1,6 +1,6 @@
 <?php
-/* Copyright 2005-2024, Lime Technology
- * Copyright 2012-2024, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -19,7 +19,18 @@ $themes2 = $themeHelper->isSidebarTheme();
 $themeHelper->updateDockerLogColor($docroot);
 
 $display['font'] = filter_var($_COOKIE['fontSize'] ?? $display['font'] ?? '', FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-
+// adjust font size if cookie was set to a value that is not supported
+switch ($display['font']) {
+    case "50": 
+        $display['font'] = "56.25";
+        break;
+    case "75":
+        $display['font'] = "68.75";
+        break;
+    case "80":
+        $display['font'] = "68.75";
+        break;
+}
 $header  = $display['header']; // keep $header, $backgnd vars for plugin backwards compatibility for the time being
 $backgnd = $display['background'];
 

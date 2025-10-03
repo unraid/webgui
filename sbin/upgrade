@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2021 Lime Technology, Inc.
+# Copyright 2025 Lime Technology, Inc.
 
 # Unraid OS upgrade script.
 # Invoked early in emhttpd execution.
@@ -30,6 +30,9 @@ fi
 
 # stating with 6.10 'USE_SSL="auto"' without a LE cert is invalid
 [[ ! -f /boot/config/ssl/certs/certificate_bundle.pem ]] && sed -i s/USE_SSL=\"auto\"/USE_SSL=\"no\"/ /boot/config/ident.cfg
+
+# remove support for huge / very large / very small font sizes (replace with nearest size still supported)
+[ -f "/boot/config/plugins/dynamix/dynamix.cfg" ] && sed -ri -e 's/font="(80|75)"/font="68.75"/g' -e 's/font="50"/font="56.25"/g' -e 's/tty="11"/tty="13"/g' -e 's/tty="(19|21)"/tty="17"/g' "/boot/config/plugins/dynamix/dynamix.cfg"
 
 # delete any temp dir left over from a version downgrade (see dynamix.plugin.manager/include/Downgrade.php)
 rm -rf /boot/deletemedowngrade.*
