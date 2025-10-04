@@ -78,6 +78,7 @@ if (count($pages)) {
         @unlink($nchan_pid);
     }
 }
+
 ?>
 <!DOCTYPE html>
 <html <?= $display['rtl'] ?>lang="<?= strtok($locale, '_') ?: 'en' ?>" class="<?= $themeHelper->getThemeHtmlClass() ?>">
@@ -132,16 +133,23 @@ if (count($pages)) {
 
   <?php require_once "$docroot/webGui/include/DefaultPageLayout/HeadInlineJS.php"; ?>
   <?php
-  foreach ($buttonPages as $button) {
-      annotate($button['file']);
-      includePageStylesheets($button);
-      eval('?>' . parse_text($button['text']));
-  }
+    foreach ($buttonPages as $button) {
+        annotate($button['file']);
+        includePageStylesheets($button);
+        $evalContent = '?>' . parse_text($button['text']);
+        $evalFile = $button['file'];
+        if ( filter_var($button['Eval']??false, FILTER_VALIDATE_BOOLEAN) ) {
+            eval($evalContent);
+        } else {
+            include "$docroot/webGui/include/DefaultPageLayout/evalContent.php";
+        }
+    }
+ 
 
-foreach ($pages as $page) {
-    annotate($page['file']);
-    includePageStylesheets($page);
-}
+    foreach ($pages as $page) {
+        annotate($page['file']);
+        includePageStylesheets($page);
+    }
 ?>
 
   <?php include "$docroot/plugins/dynamix.my.servers/include/myservers1.php" ?>

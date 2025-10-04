@@ -44,9 +44,15 @@ function build_pages($pattern) {
 
 function page_enabled(&$page)
 {
-  global $var,$disks,$devs,$users,$shares,$sec,$sec_nfs,$name,$display,$pool_devices;
+  global $docroot,$var,$disks,$devs,$users,$shares,$sec,$sec_nfs,$name,$display,$pool_devices;
   $enabled = true;
-  if (isset($page['Cond'])) eval("\$enabled={$page['Cond']};");
+  if (isset($page['Cond'])) {
+    $enabled = false;
+    $evalContent= "\$enabled={$page['Cond']};";
+    $evalFile = $page['file'];
+    $evalNoBanner = true;
+    include "$docroot/webGui/include/DefaultPageLayout/evalContent.php";
+  }
   return $enabled;
 }
 

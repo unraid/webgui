@@ -43,7 +43,13 @@
                 if (isset($page['text'])) {
                     $skipIndexIncrement = true;
                     annotate($page['file']);
-                    eval('?>'.generateContent($page));
+                    $evalContent = '?>'.generateContent($page);
+                    $evalFile = $page['file'];
+                    if ( filter_var($page['Eval']??false, FILTER_VALIDATE_BOOLEAN) ) {
+                        eval($evalContent);
+                    } else {    
+                        include "$docroot/webGui/include/DefaultPageLayout/evalContent.php";
+                    }
                 }
                 continue;
             }
@@ -60,7 +66,15 @@
         >
             <?= generatePanels($page, $path, $defaultIcon, $docroot) ?>
 
-            <? eval('?>'.generateContent($page)); ?>
+            <? 
+            $evalContent = '?>'.generateContent($page);
+            $evalFile = $page['file'];
+            if ( filter_var($page['Eval']??false, FILTER_VALIDATE_BOOLEAN) ) {
+                eval($evalContent);
+            } else {
+                include "$docroot/webGui/include/DefaultPageLayout/evalContent.php";
+            }
+            ?>
         </section>
         <?
             if ($skipIndexIncrement) {

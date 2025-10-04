@@ -19,7 +19,15 @@
 
             <?= generatePanels($page, $path, $defaultIcon, $docroot, true) ?>
 
-            <? eval('?>'.generateContent($page)); ?>
+            <? 
+            $evalContent = '?>'.generateContent($page);
+            $evalFile = $page['file'];
+            if ( filter_var($page['Eval']??false, FILTER_VALIDATE_BOOLEAN) ) {
+                eval($evalContent);
+            } else {
+                include "$docroot/webGui/include/DefaultPageLayout/evalContent.php";
+            }
+            ?>
         <? endforeach; ?>
     </div>
 </div>
