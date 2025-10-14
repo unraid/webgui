@@ -91,7 +91,8 @@ _(Day of the month)_:
 :mover_day_of_the_month_help:
 
 _(Time of the day)_:
-: <span id="H1"<?if ($move==0):?> style="display:none"<?endif;?>><select name="hour1" class="narrow">
+: <span>
+  <span id="H1"<?if ($move==0):?> style="display:none"<?endif;?>><select name="hour1" class="narrow">
   <?for ($d=0; $d<=23; $d++):?>
   <?=mk_option($cron[1], strval($d), sprintf("%02d", $d))?>
   <?endfor;?>
@@ -101,7 +102,7 @@ _(Time of the day)_:
   <?=mk_option($cron[0], strval($d), sprintf("%02d", $d))?>
   <?endfor;?>
   </select>&nbsp;&nbsp;_(HH:MM)_</span>
-: <span id="H2"<?if ($move!=0):?> style="display:none"<?endif;?>><select name="hour2">
+  <span id="H2"<?if ($move!=0):?> style="display:none"<?endif;?>><select name="hour2">
   <?=mk_option($cron[1], "*/1", _("Every hour"))?>
   <?=mk_option($cron[1], "*/2", _("Every 2 hours"))?>
   <?=mk_option($cron[1], "*/3", _("Every 3 hours"))?>
@@ -109,6 +110,7 @@ _(Time of the day)_:
   <?=mk_option($cron[1], "*/6", _("Every 6 hours"))?>
   <?=mk_option($cron[1], "*/8", _("Every 8 hours"))?>
   </select></span>
+</span>
 
 :mover_time_of_the_day_help:
 

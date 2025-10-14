@@ -97,7 +97,8 @@ _(Day of the month)_:
 :end
 
 _(Time of the day)_:
-: <span id="hour1" style="display:none"><select name="hour1" class="narrow">
+: <span>
+  <span id="hour1" style="display:none"><select name="hour1" class="narrow">
   <?for ($d=0; $d<=23; $d++):?>
   <?=mk_option(_var($ssd,'hour'), strval($d), sprintf("%02d", $d))?>
   <?endfor;?>
@@ -107,7 +108,7 @@ _(Time of the day)_:
   <?=mk_option(_var($ssd,'min'), strval($d), sprintf("%02d", $d))?>
   <?endfor;?>
   </select>&nbsp;&nbsp;_(HH:MM)_</span>
-: <span id="hour2" style="display:none"><select name="hour2">
+  <span id="hour2" style="display:none"><select name="hour2">
   <?=mk_option(_var($ssd,'hour'), "*/1", _("Every hour"))?>
   <?=mk_option(_var($ssd,'hour'), "*/2", _("Every 2 hours"))?>
   <?=mk_option(_var($ssd,'hour'), "*/3", _("Every 3 hours"))?>
@@ -115,6 +116,7 @@ _(Time of the day)_:
   <?=mk_option(_var($ssd,'hour'), "*/6", _("Every 6 hours"))?>
   <?=mk_option(_var($ssd,'hour'), "*/8", _("Every 8 hours"))?>
   </select></span>
+</span>
 
 :trim_time_of_the_day_plug:
 > When an hourly schedule is selected this will set the interval in hours. An interval always starts on the whole hour (minute 0).
