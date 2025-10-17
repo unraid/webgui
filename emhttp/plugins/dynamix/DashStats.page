@@ -94,7 +94,7 @@ foreach ($devs as $disk) {
 }
 
 $array_percent = number_format(100*$array_used/($array_size ?: 1),1,$dot,'');
-exec('cat /sys/devices/system/cpu/*/topology/thread_siblings_list|sort -nu', $cpus);
+$cpus=get_cpu_packages();
 $wg_up      = $wireguard ? exec("wg show interfaces") : '';
 $wg_up      = $wg_up ? explode(' ',$wg_up) : [];
 $up         = count($wg_up);
@@ -351,6 +351,9 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                         <td>
                             <span class='flex flex-row flex-wrap items-center gap-4'>
                                 <span class="head_info">
+                                    <span id='cpu-total-power'><i class='fa fa-fw  fa-plug'></i>_(Total Power)_: N/A</span>
+                                </span>
+                                <span class="head_info">
                                     <span id='cpu-temp'></span>
                                 </span>
                                 <span class="switch">
@@ -400,20 +403,23 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                     </tr>
 
                     <?
-                    foreach ($cpus as $pair) {
-                        [$cpu1, $cpu2] = my_preg_split('/[,-]/',$pair);
-                        echo "<tr class='cpu_open'>";
-                        if ($is_intel_cpu && count($core_types) > 0)
-                            $core_type = "({$core_types[$cpu1]})";
-                        else
-                            $core_type = "";
+                    foreach ($cpus as $cpu_index=>$package)  {
+                      echo "<td><span class='w72'>"._("Physical")." CPU $cpu_index "._("Power").": <span id='cpu-power$cpu_index'>N/A</span></td></span></tr>";
+                      foreach ($package as $pair) {
+                          [$cpu1, $cpu2] = my_preg_split('/[,-]/',$pair);
+                          echo "<tr class='cpu_open'>";
+                          if ($is_intel_cpu && count($core_types) > 0)
+                              $core_type = "({$core_types[$cpu1]})";
+                          else
+                              $core_type = "";
 
-                        if ($cpu2)
-                            echo "<td><span class='w26'>CPU $cpu1 $core_type - HT $cpu2 </span><span class='dashboard w36'><span class='cpu$cpu1 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu1'></span><span></span></div></span><span class='dashboard w36'><span class='cpu$cpu2 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu2'></span><span></span></div></span></td>";
-                        else
-                            echo "<td><span class='w26'>CPU $cpu1 $core_type</span><span class='w72'><span class='cpu$cpu1 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu1'></span><span></span></div></span></td>";
-                        echo "</tr>";
-                    }
+                          if ($cpu2)
+                              echo "<td><span class='w26'>CPU $cpu1 $core_type - HT $cpu2 </span><span class='dashboard w36'><span class='cpu$cpu1 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu1'></span><span></span></div></span><span class='dashboard w36'><span class='cpu$cpu2 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu2'></span><span></span></div></span></td>";
+                          else
+                              echo "<td><span class='w26'>CPU $cpu1 $core_type</span><span class='w72'><span class='cpu$cpu1 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu1'></span><span></span></div></span></td>";
+                          echo "</tr>";
+                      }
+                  }
                     ?>
                     <tr id='cpu_chart'>
                         <td>
