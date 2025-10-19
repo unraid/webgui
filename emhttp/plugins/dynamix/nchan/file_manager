@@ -210,9 +210,9 @@ while (true) {
           while (!file_exists($target_for_stat) && $target_for_stat != '/') {
             $target_for_stat = dirname($target_for_stat);
           }
-          $stat_cmd = "stat -c %m -- ".escapeshellarg($target_for_stat);
-          exec("$stat_cmd 2>&1", $target_mount_point, $rc);
+          exec("stat -c %m -- ".escapeshellarg($target_for_stat)." 2>/dev/null", $target_mount_point);
  
+          // check all source paths
           if (!empty($target_mount_point)) {
             $use_rsync_rename = true; // assume we can use it, then check for disqualifying conditions
 
@@ -227,8 +227,8 @@ while (true) {
 
               // mount points of source and target must be equal
               $source_mount_point = [];
-              exec("stat -c %m -- ".escapeshellarg($valid_source_path)."", $source_mount_point);
-              if ($source_mount_point[0] != $target_mount_point[0]) {
+              exec("stat -c %m -- ".escapeshellarg($valid_source_path)." 2>/dev/null", $source_mount_point);
+              if (empty($source_mount_point) || $source_mount_point[0] != $target_mount_point[0]) {
                 $use_rsync_rename = false;
                 break;
               }
@@ -239,6 +239,12 @@ while (true) {
                 break;
               }
               $last_dirname = dirname($valid_source_path);
+
+              // target must be a directory
+              if (!is_dir(rtrim($target,'/'))) {
+                $use_rsync_rename = false;
+                break;
+              }
 
               // selected source files and directories must not exist on target when "Overwrite existing files" is not set
               if (!empty($exist)) { // would add "--ignore-existing" to rsync
