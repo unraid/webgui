@@ -112,15 +112,22 @@ function escape($name) {return escapeshellarg(validname($name));}
 function quoted($name) {return is_array($name) ? implode(' ',array_map('escape', $name)) : escape($name);}
 function source($name) {return is_array($name) ? implode(' ',array_map('escapeshellarg', $name)) : escapeshellarg($name);}
 
+// Escape rsync filter meta characters in a single path component
+function rsync_escape_component($s) {
+  // escape: *, ?, [, ], \
+  return preg_replace('/([*?\[\]\\\\])/', '\\\\$1', $s);
+}
+
 function quoted_rsync_include($paths) {
   // note: this function is never called with invalid names because of "if (!$valid_source_path)"
   $result = [];
   foreach ($paths as $path) {
     $valid_path = validname($path);
-    if (is_dir($valid_path)) {
-      $result[] = "--include=".escapeshellarg("/".basename($valid_path)."/***");
+    $base = rsync_escape_component(basename($valid_path));
+    if (is_dir($valid_path) && !is_link($valid_path)) {
+      $result[] = "--include=" . escapeshellarg("/{$base}/***");
     } else {
-      $result[] = "--include=".escapeshellarg("/".basename($valid_path));
+      $result[] = "--include=" . escapeshellarg("/{$base}");
     }
   }
   return implode(' ', $result);
