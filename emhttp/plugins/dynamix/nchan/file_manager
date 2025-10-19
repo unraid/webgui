@@ -12,10 +12,11 @@
  */
 ?>
 <?
-$docroot = '/usr/local/emhttp';
-$active  = '/var/tmp/file.manager.active';
-$status  = '/var/tmp/file.manager.status';
-$error   = '/var/tmp/file.manager.error';
+$docroot   = '/usr/local/emhttp';
+$active    = '/var/tmp/file.manager.active';
+$status    = '/var/tmp/file.manager.status';
+$error     = '/var/tmp/file.manager.error';
+$empty_dir = '/var/tmp/file.manager.empty_dir/'; // trailing slash is required for rsync
 $null    = '/dev/null';
 $timer   = time();
 
@@ -111,6 +112,25 @@ function escape($name) {return escapeshellarg(validname($name));}
 function quoted($name) {return is_array($name) ? implode(' ',array_map('escape', $name)) : escape($name);}
 function source($name) {return is_array($name) ? implode(' ',array_map('escapeshellarg', $name)) : escapeshellarg($name);}
 
+function quoted_rsync_include($paths) {
+  // note: this function is never called with invalid names because of "if (!$valid_source_path)"
+  $result = [];
+  foreach ($paths as $path) {
+    $valid_path = validname($path);
+    if (is_dir($valid_path)) {
+      $result[] = "--include=".escapeshellarg("/".basename($valid_path)."/***");
+    } else {
+      $result[] = "--include=".escapeshellarg("/".basename($valid_path));
+    }
+  }
+  return implode(' ', $result);
+}
+
+// create empty directory for optimized move if not exists
+if (!file_exists($empty_dir)) {
+  mkdir($empty_dir);
+}
+
 while (true) {
   unset($action, $source, $target, $H, $sparse, $exist, $zfs);
   if (file_exists($active)) extract(parse_ini_file($active));
@@ -165,7 +185,9 @@ while (true) {
       }
       break;
     case 4: // move folder (rsync)
+    case 5: // move folder (mv) - this case needs to be removed from Browse.page
     case 9: // move file (rsync)
+    case 10: // move file (mv) - this case needs to be removed from Browse.page
       if (!empty($pid)) {
         $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Moving').'... '.($move===false ? exec("tail -1 $status") : shell_exec("tail -2 $status | awk -F\"\\r\" '{gsub(/^ +/,\"\",\$NF);print \$NF}'"));
       } else {
@@ -173,21 +195,79 @@ while (true) {
         if ($target) {
           $move = true;
           $mkpath = isdir($target) ? '--mkpath' : '';
-          exec("rsync -ahPIX$H $sparse $exist $mkpath --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." 1>$status 2>$error & echo \$!", $pid);
-        } else {
-          $reply['error'] = 'Invalid target name';
-        }
-      }
-      break;
-    case 5: // move folder (mv)
-    case 10: // move file (mv)
-      if (!empty($pid)) {
-        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Moving').'...';
-      } else {
-        $target = validname($target, false);
-        if ($target) {
-          $f = $exist ? 'n' : 'f';
-          exec("mv -{$f}t ".escapeshellarg($target)." ".quoted($source)." 1>$status 2>$error & echo \$!", $pid);
+
+          // determine if we can use rsync with rename(2)
+          // requirements: 
+          // 1. all sources and target must be on the same mount point
+          // 2. all sources must have the same parent directory
+          // 3. either no --ignore-existing flag OR no conflicts with existing files on target
+          $use_rsync_rename = false;
+          $last_dirname = '';
+          $target_mount_point = [];
+
+          // for mount point check, find first existing parent directory
+          $target_for_stat = $target;
+          while (!file_exists($target_for_stat) && $target_for_stat != '/') {
+            $target_for_stat = dirname($target_for_stat);
+          }
+          $stat_cmd = "stat -c %m -- ".escapeshellarg($target_for_stat);
+          exec("$stat_cmd 2>&1", $target_mount_point, $rc);
+ 
+          if (!empty($target_mount_point)) {
+            $use_rsync_rename = true; // assume we can use it, then check for disqualifying conditions
+
+            foreach ($source as $source_path) {
+
+              // source path must be valid
+              $valid_source_path = validname($source_path);
+              if (!$valid_source_path) {
+                $use_rsync_rename = false;
+                break;
+              }
+
+              // mount points of source and target must be equal
+              $source_mount_point = [];
+              exec("stat -c %m -- ".escapeshellarg($valid_source_path)."", $source_mount_point);
+              if ($source_mount_point[0] != $target_mount_point[0]) {
+                $use_rsync_rename = false;
+                break;
+              }
+
+              // parent directory of all source paths must be equal (not sure if this is really required, but keeping for now)
+              if (!empty($last_dirname) && $last_dirname != dirname($valid_source_path) ) {
+                $use_rsync_rename = false;
+                break;
+              }
+              $last_dirname = dirname($valid_source_path);
+
+              // selected source files and directories must not exist on target when "Overwrite existing files" is not set
+              if (!empty($exist)) { // would add "--ignore-existing" to rsync
+                $target_item = rtrim($target, '/') . '/' . basename($valid_source_path);
+                if (file_exists($target_item)) {
+                  $use_rsync_rename = false;
+                  break;
+                }
+              }
+
+            }
+          }
+
+          // use rsync rename
+          // let rsync act like "mv" by syncing an empty directory against the source location, which moves the files to --backup-dir
+          // notes:
+          // - existing files are overwritten in --backup-dir  (like not using --ignore-existing)
+          // - missing directories are created in --backup-dir (like using --mkpath)
+          if ($use_rsync_rename) {
+            $parent_dir = dirname(validname($source[0]));
+            $cmd = "rsync -r --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --delete --backup --backup-dir=".escapeshellarg($target)." ".quoted_rsync_include($source)." --exclude='*' ".escapeshellarg($empty_dir)." ".escapeshellarg($parent_dir)." 1>$status 2>$error & echo \$!";
+            exec($cmd, $pid);
+
+          // use rsync copy-delete
+          } else {
+            $cmd = "rsync -ahPIX$H $sparse $exist $mkpath --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." 1>$status 2>$error & echo \$!";
+            exec($cmd, $pid);
+          }
+
         } else {
           $reply['error'] = 'Invalid target name';
         }
