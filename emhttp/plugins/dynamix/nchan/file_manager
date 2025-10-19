@@ -198,22 +198,22 @@ while (true) {
 
           // determine if we can use rsync with rename(2)
           // requirements: 
-          // 1. all sources and target must be on the same mount point
+          // 1. all sources and target must be on the same filesystem (device)
           // 2. all sources must have the same parent directory
           // 3. either no --ignore-existing flag OR no conflicts with existing files on target
           $use_rsync_rename = false;
           $last_dirname = '';
-          $target_mount_point = [];
+          $target_device_id = [];
 
-          // for mount point check, find first existing parent directory
+          // for filesystem check, find first existing parent directory
           $target_for_stat = $target;
           while (!file_exists($target_for_stat) && $target_for_stat != '/') {
             $target_for_stat = dirname($target_for_stat);
           }
-          exec("stat -c %m -- ".escapeshellarg($target_for_stat)." 2>/dev/null", $target_mount_point);
+          exec("stat -c %d -- ".escapeshellarg($target_for_stat)." 2>/dev/null", $target_device_id);
  
           // check all source paths
-          if (!empty($target_mount_point)) {
+          if (!empty($target_device_id)) {
             $use_rsync_rename = true; // assume we can use it, then check for disqualifying conditions
 
             foreach ($source as $source_path) {
@@ -225,10 +225,10 @@ while (true) {
                 break;
               }
 
-              // mount points of source and target must be equal
-              $source_mount_point = [];
-              exec("stat -c %m -- ".escapeshellarg($valid_source_path)." 2>/dev/null", $source_mount_point);
-              if (empty($source_mount_point) || $source_mount_point[0] != $target_mount_point[0]) {
+              // filesystem (device) of source and target must be equal
+              $source_device_id = [];
+              exec("stat -c %d -- ".escapeshellarg($valid_source_path)." 2>/dev/null", $source_device_id);
+              if (empty($source_device_id) || $source_device_id[0] != $target_device_id[0]) {
                 $use_rsync_rename = false;
                 break;
               }
