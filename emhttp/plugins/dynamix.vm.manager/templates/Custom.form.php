@@ -2597,7 +2597,7 @@ $(function() {
 		}
 		$("#gpubootvga"+myindex).removeClass();
 		if (mylabel == "_(None)_") $("#gpubootvga"+myindex).addClass('hidden');
-		if (myvalue != "_(virtual)_" && myvalue != "" && myvalue != "_(nogpu)_") {
+		if (myvalue != "virtual" && myvalue != "" && myvalue != "nogpu") {
 			if (ValidGPUs[myvalue].bootvga != "1") $("#gpubootvga"+myindex).addClass('hidden');
 		} else {
 			$("#gpubootvga"+myindex).addClass('hidden');
