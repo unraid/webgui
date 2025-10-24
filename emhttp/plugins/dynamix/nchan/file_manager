@@ -14,6 +14,7 @@
 <?
 $docroot   = '/usr/local/emhttp';
 $active    = '/var/tmp/file.manager.active';
+$pid_file  = '/var/tmp/file.manager.pid';
 $status    = '/var/tmp/file.manager.status';
 $error     = '/var/tmp/file.manager.error';
 $empty_dir = '/var/tmp/file.manager.empty_dir/'; // trailing slash is required for rsync
@@ -140,7 +141,14 @@ if (!file_exists($empty_dir)) {
 
 while (true) {
   unset($action, $source, $target, $H, $sparse, $exist, $zfs);
+  
   if (file_exists($active)) extract(parse_ini_file($active));
+  
+  // Read PID from separate file if exists
+  if (file_exists($pid_file)) {
+    $pid = trim(file_get_contents($pid_file));
+  }
+  
   $reply = [];
   if (isset($action)) {
     // check for language changes
@@ -309,7 +317,7 @@ while (true) {
       break;
     case 99: // kill running background process
       if (!empty($pid)) exec("kill $pid");
-      delete_file($active, $status, $error);
+      delete_file($active, $pid_file, $status, $error);
       unset($pid, $move);
       break;
     default:
@@ -317,19 +325,9 @@ while (true) {
     }
     $pid = pgrep($pid??0);
     
-    // Save PID to active file to survive file_manager restarts
-    if ($pid !== false && file_exists($active)) {
-      $ini = parse_ini_file($active);
-      if (!isset($ini['pid']) || $ini['pid'] != $pid) {
-        $ini['pid'] = $pid;
-        $content = '';
-        foreach ($ini as $key => $value) {
-          // Escape double quotes and backslashes for INI format
-          $escaped_value = str_replace(['\\', '"'], ['\\\\', '\\"'], $value);
-          $content .= "$key=\"$escaped_value\"\n";
-        }
-        file_put_contents($active, $content);
-      }
+    // Save PID to separate file to survive file_manager restarts
+    if ($pid !== false) {
+      file_put_contents($pid_file, $pid);
     }
     
     if ($pid === false) {
@@ -354,7 +352,7 @@ while (true) {
           }
         }
         if (file_exists($error)) $reply['error'] = str_replace("\n","<br>", trim(file_get_contents($error)));
-        delete_file($active, $status, $error);
+        delete_file($active, $pid_file, $status, $error);
         unset($pid, $move);
       }
     }
