@@ -1,0 +1,146 @@
+name: Cleanup PR Plugin from R2
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Pull Request number to cleanup'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  cleanup-r2:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      SHELLOPTS: errexit:pipefail
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          repository: ${{ github.repository }}
+
+      - name: Determine PR number
+        id: pr
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PR_NUMBER="${{ inputs.pr_number }}"
+          else
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+          fi
+
+          # Validate PR_NUMBER is non-empty and purely numeric
+          if [[ -z "$PR_NUMBER" ]]; then
+            echo "Error: PR_NUMBER is empty" >&2
+            exit 1
+          fi
+
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "Error: PR_NUMBER '$PR_NUMBER' is not a valid number (must be purely numeric)" >&2
+            exit 1
+          fi
+
+          # Only proceed with output and cleanup if validation passes
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "Cleaning up PR #$PR_NUMBER"
+
+      - name: Delete PR folder from R2
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          CLOUDFLARE_PREVIEW_BUCKET_NAME: ${{ secrets.CLOUDFLARE_PREVIEW_BUCKET_NAME }}
+          CLOUDFLARE_S3_URL: ${{ secrets.CLOUDFLARE_S3_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_PREVIEW_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_PREVIEW_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: true
+          AWS_SHARED_CREDENTIALS_FILE: /dev/null
+          AWS_CONFIG_FILE: /dev/null
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+
+          # Validate PR_NUMBER is numeric (double-check)
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "Error: PR_NUMBER '$PR_NUMBER' is not numeric" >&2
+            exit 1
+          fi
+
+          # Construct PR folder with expected prefix
+          PR_FOLDER="pr-plugins/pr-${PR_NUMBER}/"
+
+          # Validate the folder prefix for safety
+          if ! [[ "$PR_FOLDER" =~ ^pr-plugins/pr-[0-9]+/$ ]]; then
+            echo "Error: Invalid PR_FOLDER format: '$PR_FOLDER'" >&2
+            exit 1
+          fi
+
+          echo "Checking for objects in folder: $PR_FOLDER"
+
+          # Use list-objects-v2 for safer existence check
+          RESPONSE=$(aws s3api list-objects-v2 \
+            --bucket "$CLOUDFLARE_PREVIEW_BUCKET_NAME" \
+            --prefix "$PR_FOLDER" \
+            --endpoint-url "$CLOUDFLARE_S3_URL" \
+            --max-keys 1 \
+            2>&1) || {
+            EXIT_CODE=$?
+            echo "Error: Failed to list objects (exit code: $EXIT_CODE)" >&2
+            echo "Response: $RESPONSE" >&2
+            exit $EXIT_CODE
+          }
+
+          # Check if any objects exist
+          KEY_COUNT=$(echo "$RESPONSE" | grep -o '"KeyCount":[0-9]*' | cut -d: -f2 || echo "0")
+
+          if [[ "$KEY_COUNT" == "0" ]]; then
+            echo "No objects found in $PR_FOLDER - nothing to delete"
+            exit 0
+          fi
+
+          echo "Found objects in $PR_FOLDER - proceeding with deletion"
+
+          # Delete all objects recursively
+          aws s3 rm "s3://$CLOUDFLARE_PREVIEW_BUCKET_NAME/$PR_FOLDER" \
+            --endpoint-url "$CLOUDFLARE_S3_URL" \
+            --recursive || {
+            EXIT_CODE=$?
+            echo "Error: Failed to delete objects (exit code: $EXIT_CODE)" >&2
+            exit $EXIT_CODE
+          }
+
+          # Remove directory marker object if it exists (the key with trailing slash)
+          DIR_MARKER="${PR_FOLDER%/}"  # Remove trailing slash for the marker
+          aws s3api delete-object \
+            --bucket "$CLOUDFLARE_PREVIEW_BUCKET_NAME" \
+            --key "$DIR_MARKER/" \
+            --endpoint-url "$CLOUDFLARE_S3_URL" \
+            2>/dev/null || true  # Ignore if marker doesn't exist
+
+          echo "Successfully deleted all files for PR #$PR_NUMBER"
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          number: ${{ steps.pr.outputs.pr_number }}
+          header: pr-plugin-cleanup
+          message: |
+            ## 🧹 PR Test Plugin Cleaned Up
+
+            The test plugin and associated files for this PR have been removed from the preview environment.
+
+            ---
+            <sub>🤖 This comment is automatically generated when a PR is closed.</sub>

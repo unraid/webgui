@@ -1,6 +1,6 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2023, Lime Technology
+/* Copyright 2005-2025, Lime Technology
  * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
@@ -15,7 +15,7 @@
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/publish.php";
 
-function my_scale($value, &$unit) {
+function wg_scale($value, &$unit) {
   $units = ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi','Yi'];
   $size = count($units);
   $base = $value ? floor(log($value, 1024)) : 0;
@@ -27,7 +27,6 @@ function my_scale($value, &$unit) {
   return number_format($value, $decimals, '.', $value>9999 ? ',':'');
 }
 
-$md5_old = -1;
 while (true) {
   $now = time();
   $echo = [];
@@ -35,13 +34,10 @@ while (true) {
   exec('wg show all dump',$dump);
   foreach ($dump as $row) {
     $row = preg_split('/\s+/',$row);
-    if (count($row)>5) $echo[] = [$row[0], $row[5]?$now-$row[5]:0, my_scale($row[6],$unit)." $unit", my_scale($row[7],$unit)." $unit"];
+    if (count($row)>5) $echo[] = [$row[0], $row[5]?$now-$row[5]:0, wg_scale($row[6],$unit)." $unit", wg_scale($row[7],$unit)." $unit"];
   }
-  $echo = json_encode($echo);
-  $md5_new = md5($echo,true);
-  if ($md5_new !== $md5_old) {
-    $md5_old = publish('wireguard',$echo)!==false ? $md5_new : -1;
-  }
+  publish_noDupe('wireguard',json_encode($echo));
+  ping('dashboardPing');
   sleep(1);
 }
 ?>

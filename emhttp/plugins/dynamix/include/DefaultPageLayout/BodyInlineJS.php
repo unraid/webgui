@@ -71,32 +71,7 @@ defaultPage.on('message', function(msg,meta) {
     $('#statusbar').html(status);
     break;
   case 2:
-    // notifications
-    var bell1 = 0, bell2 = 0, bell3 = 0;
-    $.each($.parseJSON(msg), function(i, notify){
-      switch (notify.importance) {
-        case 'alert'  : bell1++; break;
-        case 'warning': bell2++; break;
-        case 'normal' : bell3++; break;
-      }
-<?if ($notify['display']==0):?>
-      if (notify.show) {
-        $.jGrowl(notify.subject+'<br>'+notify.description,{
-          group: notify.importance,
-          header: notify.event+': '+notify.timestamp,
-          theme: notify.file,
-          beforeOpen: function(e,m,o){if ($('div.jGrowl-notification').hasClass(notify.file)) return(false);},
-          afterOpen: function(e,m,o){if (notify.link) $(e).css('cursor','pointer');},
-          click: function(e,m,o){if (notify.link) location.replace(notify.link);},
-          close: function(e,m,o){$.post('/webGui/include/Notify.php',{cmd:'hide',file:"<?=$notify['path'].'/unread/'?>"+notify.file,csrf_token:csrf_token}<?if ($notify['life']==0):?>,function(){$.post('/webGui/include/Notify.php',{cmd:'archive',file:notify.file,csrf_token:csrf_token});}<?endif;?>);}
-        });
-      }
-<?endif;?>
-    });
-    $('#bell').removeClass('red-orb yellow-orb green-orb').prop('title',"<?=_('Alerts')?> ["+bell1+']\n'+"<?=_('Warnings')?> ["+bell2+']\n'+"<?=_('Notices')?> ["+bell3+']');
-    if (bell1) $('#bell').addClass('red-orb'); else
-    if (bell2) $('#bell').addClass('yellow-orb'); else
-    if (bell3) $('#bell').addClass('green-orb');
+    // notifications - moved to the Unraid API
     break;
   }
 });
@@ -233,12 +208,6 @@ $(window).scroll(function() {
   } else {
     $('.back_to_top').fadeOut(scrollDuration);
   }
-<?if ($themeHelper->isTopNavTheme()):?>
-  var top = $('div#header').height()-1; // header height has 1 extra pixel to cover overlap
-  $('div#menu').css($(this).scrollTop() > top ? {position:'fixed',top:'0'} : {position:'absolute',top:top+'px'});
-  // banner
-  $('div.upgrade_notice').css($(this).scrollTop() > 24 ? {position:'fixed',top:'0'} : {position:'absolute',top:'24px'});
-<?endif;?>
 });
 
 $('.move_to_end').click(function(event) {
@@ -285,8 +254,10 @@ $(function() {
       $(this).attr('onsubmit','clearTimeout(timers.flashReport);escapeQuotes(this);'+onsubmit);
     }
   });
-  var top = ($.cookie('top')||0) - $('.tabs').offset().top - 75;
-  if (top>0) {$('html,body').scrollTop(top);}
+  const top = parseInt($.cookie('top') || '0', 10);
+  if (top > 0) {
+    $('html, body').scrollTop(top);
+  }
   $.removeCookie('top');
   if ($.cookie('addAlert') != null) bannerAlert(addAlert.text,addAlert.cmd,addAlert.plg,addAlert.func);
 <?if ($safemode):?>
@@ -296,13 +267,6 @@ $(function() {
   addBannerWarning("<?=_('System notifications are')?> <b><?=_('disabled')?></b>. <?=_('Click')?> <a href='/Settings/Notifications'><?=_('here')?></a> <?=_('to change notification settings')?>.",true,true);
 <?endif;?>
 <?endif;?>
-  var opts = [];
-  context.settings({above:false});
-  opts.push({header:"<?=_('Notifications')?>"});
-  opts.push({text:"<?=_('View')?>",icon:'fa-folder-open-o',action:function(e){e.preventDefault();openNotifier();}});
-  opts.push({text:"<?=_('History')?>",icon:'fa-file-text-o',action:function(e){e.preventDefault();viewHistory();}});
-  opts.push({text:"<?=_('Acknowledge')?>",icon:'fa-check-square-o',action:function(e){e.preventDefault();closeNotifier();}});
-  context.attach('#board',opts);
   if (location.pathname.search(/\/(AddVM|UpdateVM|AddContainer|UpdateContainer)/)==-1) {
     $('blockquote.inline_help').each(function(i) {
       $(this).attr('id','helpinfo'+i);
@@ -360,14 +324,14 @@ $('body').on('click','a,.ca_href', function(e) {
     href = href.trim();
     // Sanitize href to prevent XSS
     href = href.replace(/[<>"]/g, '');
-    if (href.match('https?://[^\.]*.(my)?unraid.net/') || href.indexOf('https://unraid.net/') == 0 || href == 'https://unraid.net' || href.indexOf('http://lime-technology.com') == 0) {
+    if (href.match('https?://[^\.]*.(my)?unraid.net/') || href.startsWith('https://unraid.net/') || href == 'https://unraid.net' || href.startsWith('http://lime-technology.com')) {
       if (ca_href) window.open(href,target);
       return;
     }
-    if (href !== '#' && href.indexOf('javascript') !== 0) {
+    if (href !== '#' && !href.startsWith('javascript') && !href.startsWith('blob:')) {
       var dom = isValidURL(href);
       if (dom == false) {
-        if (href.indexOf('/') == 0) return;  // all internal links start with "/"
+        if (href.startsWith('/')) return;  // all internal links start with "/"
       var baseURLpage = href.split('/');
         if (gui_pages_available.includes(baseURLpage[0])) return;
       }
@@ -380,6 +344,7 @@ $('body').on('click','a,.ca_href', function(e) {
       $.cookie('allowedDomains',JSON.stringify(domainsAllowed),{expires:3650}); // rewrite cookie to further extend expiration by 400 days
       if (domainsAllowed[dom.hostname]) return;
       e.preventDefault();
+      $('.sweet-alert').removeClass('nchan'); // Prevent GUI issues if clicking external link from a changelog
       swal({
         title: "<?=_('External Link')?>",
         text: "<span title='"+href+"'><?=_('Clicking OK will take you to a 3rd party website not associated with Lime Technology')?><br><br><b>"+href+"<br><br><input id='Link_Always_Allow' type='checkbox'></input><?=_('Always Allow')?> "+dom.hostname+"</span>",
@@ -407,79 +372,145 @@ $('body').on('click','a,.ca_href', function(e) {
   }
 });
 
-// Only include window focus/blur event handlers when live updates are disabled
-// to prevent unnecessary page reloads when live updates are already handling data refreshes
-// nchanPaused / blurTimer used elsewhere so need to always be defined
-var nchanPaused = false;
-var blurTimer = false;
+/**
+ * Calculates and sets the height of a target element to fill the available viewport space.
+ * 
+ * This function dynamically resizes an element to occupy the remaining vertical space
+ * after accounting for other page elements like headers, footers, controls, and their
+ * margins/padding. Useful for creating full-height scrollable content areas.
+ * 
+ * The function includes default elements that are commonly present on pages:
+ * - elementsForHeight: '#header', '#menu', '#footer' (plus any additional provided)
+ * - elementsForSpacing: '.displaybox' (plus any additional provided)
+ * 
+ * @param {Object} params - Configuration object for height calculation
+ * @param {string} [params.targetElementSelector='.js-fill-available-height'] - CSS selector for the element to resize
+ * @param {string[]} [params.elementSelectorsForHeight=[]] - Additional CSS selectors for elements 
+ *   whose full height (including margins) should be subtracted from available space.
+ *   These are added to the default selectors: '#header', '#menu', '#footer'
+ * @param {string[]} [params.elementSelectorsForSpacing=[]] - Additional CSS selectors for elements 
+ *   whose spacing (margins and padding only) should be subtracted from available space.
+ *   These are added to the default selector: '.displaybox'
+ * @param {number} [params.minHeight=330] - Minimum height in pixels for the target element
+ * @param {number} [params.manualSpacingOffset=10] - Additional pixels to subtract for manual spacing
+ * 
+ * @example
+ * // Use with default parameters - targets '.js-fill-available-height'
+ * fillAvailableHeight();
+ * 
+ * @example
+ * // Custom configuration with additional elements
+ * // MUST BE USED IN JQUERY ON READY
+ * $(function() { // or $(document).ready(function() {
+ *   fillAvailableHeight({
+ *     targetElementSelector: '.my-content',
+ *     elementSelectorsForHeight: ['.my-controls', '.my-actions'],
+ *     elementSelectorsForSpacing: ['.my-content'],
+ *     minHeight: 500,
+ *     manualSpacingOffset: 20
+ *   });
+ * });
+ */
+function fillAvailableHeight(params = { // default params
+  targetElementSelector: '.js-fill-available-height',
+  elementSelectorsForHeight: [],
+  elementSelectorsForSpacing: [],
+  minHeight: 330,
+  manualSpacingOffset: 10,
+}) {  
+  const minHeight = params.minHeight || 330;
 
-<? if ( $display['liveUpdate'] == "no" ):?>
-$(window).focus(function() {
-  nchanFocusStart();
-});
+  // default elementsForHeight
+  const elementsForHeight = [
+    '#header',
+    '#menu',
+    '#footer',
+    '.title',
+    ...(params.elementSelectorsForHeight ? params.elementSelectorsForHeight : []),
+  ];
 
-// Stop nchan on loss of focus
-$(window).blur(function() {
-  blurTimer = setTimeout(function(){
-    nchanFocusStop();
-  },30000);
-});
+  // elements with a height and margin we want to subtract from the target height
+  let targetHeight = window.innerHeight - elementsForHeight.reduce((acc, selector) => {
+    const element = document.querySelector(selector);
 
-document.addEventListener("visibilitychange", (event) => {
-  if (document.hidden) {
-    nchanFocusStop();
-  } else {
-    <? if (isset($myPage['Load']) && $myPage['Load'] > 0):?>
-      if ( dialogOpen() ) {
-        clearInterval(timers.reload);
-        setTimerReload();
-        nchanFocusStart();
-      } else {
-        window.location.reload();
-      }
-    <?else:?>
-      nchanFocusStart();
-    <?endif;?>
-  }
-});
-
-function nchanFocusStart() {
-  if ( blurTimer !== false ) {
-    clearTimeout(blurTimer);
-    blurTimer = false;
-  }
-
-  if (nchanPaused !== false ) {
-    removeBannerWarning(nchanPaused);
-    nchanPaused = false;
-
-    try {
-      pageFocusFunction();
-    } catch(error) {}
-
-    subscribers.forEach(function(e) {
-      e.start();
-    });
-  }
-}
-
-function nchanFocusStop(banner=true) {
-  if ( subscribers.length ) {
-    if ( nchanPaused === false ) {
-      var newsub = subscribers;
-      subscribers.forEach(function(e) {
-        try {
-          e.stop();
-        } catch(err) {
-          newsub.splice(newsub.indexOf(e,1));
-        }
-      });
-      subscribers = newsub;
-      if ( banner && subscribers.length ) {
-        nchanPaused = addBannerWarning("<?=_('Live Updates Paused');?>",false,true );
-      }
+    if (!element) {
+      return acc;
     }
+
+    const computedStyle = getComputedStyle(element);
+    const height = element.offsetHeight;
+    const marginTop = parseFloat(computedStyle.marginTop) || 0;
+    const marginBottom = parseFloat(computedStyle.marginBottom) || 0;
+    // we don't need to calculate padding because it's already included in the height
+    const totalForElement = height + marginTop + marginBottom;
+
+    return acc + totalForElement;
+  }, 0);
+  
+  // elements with spacing that we want to subtract from the target height, but not their actual height.
+  const elementsForSpacing = [
+    '#displaybox',
+    ...(params.targetElementSelector ? [params.targetElementSelector] : []),
+    ...(params.elementSelectorsForSpacing ? params.elementSelectorsForSpacing : []),
+  ];
+  
+  targetHeight -= elementsForSpacing.reduce((acc, selector) => {
+    const element = document.querySelector(selector);
+
+    if (!element) {
+      return acc;
+    }
+
+    const computedStyle = getComputedStyle(element);
+    const marginTop = parseFloat(computedStyle.marginTop) || 0;
+    const marginBottom = selector !== '#displaybox' ? parseFloat(computedStyle.marginBottom) || 0 : 0;
+    const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+    const paddingBottom = selector !== '#displaybox' ? parseFloat(computedStyle.paddingBottom) || 0 : 0;
+    // we don't want to subtract paddingBottom or marginBottom for #displaybox b/c it adds unnecessary spacing in the calculations
+    // b/c the paddingBottom is accounting for the fixed footer.
+
+    const totalForElement = marginTop + marginBottom + paddingTop + paddingBottom;
+
+    return acc + totalForElement;
+  }, 0);
+
+  // subtract addtional spacing from the target height to provide spacing between the actions & the footer
+  targetHeight -= params.manualSpacingOffset || 10;
+
+  const finalHeight = Math.max(targetHeight, minHeight);
+
+  $(params.targetElementSelector).height(finalHeight);
+
+  // Set up resize listener to call itself with same params
+  // Remove existing listener first to avoid duplicates
+  if (window.fillAvailableHeightResizeHandler) {
+    window.removeEventListener('resize', window.fillAvailableHeightResizeHandler);
   }
+  
+  // Create debounced handler that calls this function with same params
+  window.fillAvailableHeightResizeHandler = debounce(function() {
+    fillAvailableHeight(params);
+  }, 150);
+  
+  // Add the new listener
+  window.addEventListener('resize', window.fillAvailableHeightResizeHandler);
 }
-<?endif;?>
+
+/**
+ * For every a.info element, we see if it has an inner span element.
+ * While the CSS will determine visibility, we still need to use JS to set the position of the "tooltip" span.
+ * Using the a.info element's offset position, we can calculate the top and left position needed for the span.
+ */
+$(document).on('mouseenter', 'a.info', function() {
+  const tooltip = $(this).find('span');
+  if (tooltip.length) {
+    const aInfoPosition = $(this).offset();
+    const scrollTop = $(window).scrollTop();
+    const scrollLeft = $(window).scrollLeft();
+    const addtionalOffset = 16;
+    const top = aInfoPosition.top - scrollTop + addtionalOffset;
+    const left = aInfoPosition.left - scrollLeft + addtionalOffset;
+    tooltip.css({ top, left });
+  }
+});
 </script>

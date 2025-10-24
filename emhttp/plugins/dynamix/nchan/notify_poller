@@ -18,6 +18,7 @@ $md5_old = -1;
 
 require_once "$docroot/webGui/include/publish.php";
 
+// Not necessary to check for listeners.  This will automatically exit if there are no listeners anywhere
 while (true) {
   $echo = shell_exec("$notify get");
   if ( $echo ) {

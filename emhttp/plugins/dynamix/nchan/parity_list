@@ -147,21 +147,14 @@ while (true) {
 		$process = 0;
 	}
 
-	/* Publish changes */
-	$echo = json_encode($echo);
-	$md5_new = md5($echo, true);
-	if ($md5_new !== $md5_old) {
-		$md5_old = publish('parity', $echo) !== false ? $md5_new : -1;
-	}
-	if ($spot !== $spot_old) {
-		$spot_old = publish('paritymonitor', $spot > 0 ? 1 : 0) !== false ? $spot : -1;
-	}
-	if ($fsState !== $fs_old) {
-		$fs_old = publish('fsState', $fsState) !== false ? $fsState : -1;
-	}
-	if ($process !== $proc_old) {
-		$proc_old = publish('mymonitor', $process) !== false ? $process : -1;
-	}
+  // publish but don't republish duplicate messages
+  	publish_noDupe('parity', json_encode($echo));
+	publish_noDupe('paritymonitor', $spot > 0 ? 1 : 0);
+	publish_noDupe('fsState', $fsState);
+	publish_noDupe('mymonitor', $process);
+
+	// ping the page so we can terminate if nobody is listening
+	ping("mainPingListener");
 
 	sleep(3);
 }

@@ -111,16 +111,9 @@ $(function(){
 <input type="hidden" name="docker_notify">
 <input type="hidden" name="language_notify">
 <input type="hidden" name="report">
-_(Notifications display)_:
-: <select class="a" name="display">
-  <?=mk_option($notify['display'], "0", _("Detailed"))?>
-  <?=mk_option($notify['display'], "1", _("Summarized"))?>
-  </select>
-
-:notifications_display_help:
 
 _(Display position)_:
-: <select name="position" class="a">
+: <select name="position">
   <?=mk_option($notify['position'], "top-left", _("top-left"))?>
   <?=mk_option($notify['position'], "top-right", _("top-right"))?>
   <?=mk_option($notify['position'], "bottom-left", _("bottom-left"))?>
@@ -130,13 +123,8 @@ _(Display position)_:
 
 :notifications_display_position_help:
 
-_(Auto-close)_ (_(seconds)_):
-: <input type="number" name="life" class="a" min="0" max="60" value="<?=$notify['life']?>"> _(a value of zero means no automatic closure)_
-
-:notifications_auto_close_help:
-
 _(Date format)_:
-: <select name="date" class="a">
+: <select name="date">
   <?=mk_option($notify['date'], "d-m-Y", _("DD-MM-YYYY"))?>
   <?=mk_option($notify['date'], "m-d-Y", _("MM-DD-YYYY"))?>
   <?=mk_option($notify['date'], "Y-m-d", _("YYYY-MM-DD"))?>
@@ -145,7 +133,7 @@ _(Date format)_:
 :notifications_date_format_help:
 
 _(Time format)_:
-: <select name="time" class="a">
+: <select name="time">
   <?=mk_option($notify['time'], "h:i A", _("12 hours"))?>
   <?=mk_option($notify['time'], "H:i", _("24 hours"))?>
   </select>
@@ -153,7 +141,7 @@ _(Time format)_:
 :notifications_time_format_help:
 
 _(Store notifications to flash)_:
-: <select name="path" class="a">
+: <select name="path">
   <?=mk_option($notify['path'], "/tmp/notifications", _("No"))?>
   <?=mk_option($notify['path'], "/boot/config/plugins/dynamix/notifications", _("Yes"))?>
   </select>
@@ -161,7 +149,7 @@ _(Store notifications to flash)_:
 :notifications_store_flash_help:
 
 _(System notifications)_:
-: <select name="system" class="a" onchange="prepareSystem(this.selectedIndex)">
+: <select name="system" onchange="prepareSystem(this.selectedIndex)">
   <?=mk_option($notify['system'], "", _("Disabled"))?>
   <?=mk_option($notify['system'], "*/1 * * * *", _("Enabled"))?>
   </select>
@@ -169,7 +157,7 @@ _(System notifications)_:
 :notifications_system_help:
 
 _(Unraid OS update notification)_:
-: <select name="unraidos" class="a" onchange="prepareUnraid(this.value)">
+: <select name="unraidos" onchange="prepareUnraid(this.value)">
   <?=mk_option($notify['unraidos'], "", _("Never check"))?>
   <?=mk_option($notify['unraidos'], "11 */6 * * *", _("Check four times a day"))?>
   <?=mk_option($notify['unraidos'], "11 0,12 * * *", _("Check twice a day"))?>
@@ -181,7 +169,7 @@ _(Unraid OS update notification)_:
 :notifications_os_update_help:
 
 _(Plugins update notification)_:
-: <select name="version" class="a" onchange="preparePlugin(this.value)">
+: <select name="version" onchange="preparePlugin(this.value)">
   <?=mk_option($notify['version'], "", _("Never check"))?>
   <?=mk_option($notify['version'], "10 */6 * * *", _("Check four times a day"))?>
   <?=mk_option($notify['version'], "10 0,12 * * *", _("Check twice a day"))?>
@@ -193,7 +181,7 @@ _(Plugins update notification)_:
 :notifications_plugins_update_help:
 
 _(Docker update notification)_:
-: <select name="docker_update" class="a" onchange="prepareDocker(this.value)">
+: <select name="docker_update" onchange="prepareDocker(this.value)">
   <?=mk_option($notify['docker_update'], "", _("Never check"))?>
   <?=mk_option($notify['docker_update'], "10 */6 * * *", _("Check four times a day"))?>
   <?=mk_option($notify['docker_update'], "10 0,12 * * *", _("Check twice a day"))?>
@@ -205,7 +193,7 @@ _(Docker update notification)_:
 :notifications_docker_update_help:
 
 _(Language update notification)_:
-: <select name="language_update" class="a" onchange="prepareLanguage(this.value)">
+: <select name="language_update" onchange="prepareLanguage(this.value)">
   <?=mk_option($notify['language_update'], "", _("Never check"))?>
   <?=mk_option($notify['language_update'], "10 */6 * * *", _("Check four times a day"))?>
   <?=mk_option($notify['language_update'], "10 0,12 * * *", _("Check twice a day"))?>
@@ -215,7 +203,7 @@ _(Language update notification)_:
   </select>
 
 _(Array status notification)_:
-: <select name="status" class="a" onchange="prepareReport(this.value)">
+: <select name="status" onchange="prepareReport(this.value)">
   <?=mk_option($notify['status'], "", _("Never send"))?>
   <?=mk_option($notify['status'], "20 * * * *", _("Send every hour"))?>
   <?=mk_option($notify['status'], "20 */2 * * *", _("Send every two hours"))?>
@@ -230,57 +218,140 @@ _(Array status notification)_:
 :notifications_array_status_help:
 
 <span id="unraidTitle" class="unraid" style="display:none">&nbsp;</span>
-: <span class="unraid" style="display:none"><span class="a">_(Unraid OS update)_</span>
-  <input type="checkbox" name="unraid1"<?=($notify['unraid'] & 1)==1 ? ' checked' : ''?>>_(Browser)_ &nbsp;
-  <input type="checkbox" name="unraid2"<?=($notify['unraid'] & 2)==2 ? ' checked' : ''?>>_(Email)_ &nbsp;
-  <input type="checkbox" name="unraid3"<?=($notify['unraid'] & 4)==4 ? ' checked' : ''?>>_(Agents)_ &nbsp;</span>
+: <span class="unraid" style="display:none">
+    <span class="notifications-checkbox-group-title">_(Unraid OS update)_</span>
+    <span class="inline-block">
+      <label class="inline-block">
+        <input type="checkbox" name="unraid1"<?=($notify['unraid'] & 1)==1 ? ' checked' : ''?>>_(Browser)_ &nbsp;
+      </label>
+      <label class="inline-block">
+        <input type="checkbox" name="unraid2"<?=($notify['unraid'] & 2)==2 ? ' checked' : ''?>>_(Email)_ &nbsp;
+      </label>
+      <label class="inline-block">
+        <input type="checkbox" name="unraid3"<?=($notify['unraid'] & 4)==4 ? ' checked' : ''?>>_(Agents)_ &nbsp;
+      </label>
+    </span>
+  </span>
 
 <span id="pluginTitle" class="plugin" style="display:none">&nbsp;</span>
-: <span class="plugin" style="display:none"><span class="a">_(Plugins update)_</span>
-  <input type="checkbox" name="plugin1"<?=($notify['plugin'] & 1)==1 ? ' checked' : ''?>>_(Browser)_ &nbsp;
-  <input type="checkbox" name="plugin2"<?=($notify['plugin'] & 2)==2 ? ' checked' : ''?>>_(Email)_ &nbsp;
-  <input type="checkbox" name="plugin3"<?=($notify['plugin'] & 4)==4 ? ' checked' : ''?>>_(Agents)_ &nbsp;</span>
+: <span class="plugin" style="display:none">
+    <span class="notifications-checkbox-group-title">_(Plugins update)_</span>
+    <span class="inline-block">
+      <label class="inline-block">
+        <input type="checkbox" name="plugin1"<?=($notify['plugin'] & 1)==1 ? ' checked' : ''?>>_(Browser)_ &nbsp;
+      </label>
+      <label class="inline-block">
+        <input type="checkbox" name="plugin2"<?=($notify['plugin'] & 2)==2 ? ' checked' : ''?>>_(Email)_ &nbsp;
+      </label>
+      <label class="inline-block">
+        <input type="checkbox" name="plugin3"<?=($notify['plugin'] & 4)==4 ? ' checked' : ''?>>_(Agents)_ &nbsp;
+      </label>
+    </span>
+  </span>
 
 <span id="dockerTitle" class="docker" style="display:none">&nbsp;</span>
-: <span class="docker" style="display:none"><span class="a">_(Docker update)_</span>
-  <input type="checkbox" name="docker_notify1"<?=($notify['docker_notify'] & 1)==1 ? ' checked' : ''?>>_(Browser)_ &nbsp;
-  <input type="checkbox" name="docker_notify2"<?=($notify['docker_notify'] & 2)==2 ? ' checked' : ''?>>_(Email)_ &nbsp;
-  <input type="checkbox" name="docker_notify3"<?=($notify['docker_notify'] & 4)==4 ? ' checked' : ''?>>_(Agents)_ &nbsp;</span>
+: <span class="docker" style="display:none">
+    <span class="notifications-checkbox-group-title">_(Docker update)_</span>
+    <span class="inline-block">
+      <label class="inline-block">
+        <input type="checkbox" name="docker_notify1"<?=($notify['docker_notify'] & 1)==1 ? ' checked' : ''?>>_(Browser)_ &nbsp;
+      </label>
+      <label class="inline-block">
+        <input type="checkbox" name="docker_notify2"<?=($notify['docker_notify'] & 2)==2 ? ' checked' : ''?>>_(Email)_ &nbsp;
+      </label>
+      <label class="inline-block">
+        <input type="checkbox" name="docker_notify3"<?=($notify['docker_notify'] & 4)==4 ? ' checked' : ''?>>_(Agents)_ &nbsp;
+      </label>
+    </span>
+  </span>
 
 <span id="languageTitle" class="language" style="display:none">&nbsp;</span>
-: <span class="language" style="display:none"><span class="a">_(Language update)_</span>
-  <input type="checkbox" name="language_notify1"<?=($notify['language_notify'] & 1)==1 ? ' checked' : ''?>>_(Browser)_ &nbsp;
-  <input type="checkbox" name="language_notify2"<?=($notify['language_notify'] & 2)==2 ? ' checked' : ''?>>_(Email)_ &nbsp;
-  <input type="checkbox" name="language_notify3"<?=($notify['language_notify'] & 4)==4 ? ' checked' : ''?>>_(Agents)_ &nbsp;</span>
+: <span class="language" style="display:none">
+    <span class="notifications-checkbox-group-title">_(Language update)_</span>
+    <span class="inline-block">
+      <label class="inline-block">
+        <input type="checkbox" name="language_notify1"<?=($notify['language_notify'] & 1)==1 ? ' checked' : ''?>>_(Browser)_ &nbsp;
+      </label>
+      <label class="inline-block">
+        <input type="checkbox" name="language_notify2"<?=($notify['language_notify'] & 2)==2 ? ' checked' : ''?>>_(Email)_ &nbsp;
+      </label>
+      <label class="inline-block">
+        <input type="checkbox" name="language_notify3"<?=($notify['language_notify'] & 4)==4 ? ' checked' : ''?>>_(Agents)_ &nbsp;
+      </label>
+    </span>
+  </span>
 
 <span id="reportTitle" class="report" style="display:none">&nbsp;</span>
-: <span class="report" style="display:none"><span class="a">_(Array status)_</span>
-  <input type="checkbox" name="report1"<?=($notify['report'] & 1)==1 ? ' checked' : ''?>>_(Browser)_ &nbsp;
-  <input type="checkbox" name="report2"<?=($notify['report'] & 2)==2 ? ' checked' : ''?>>_(Email)_ &nbsp;
-  <input type="checkbox" name="report3"<?=($notify['report'] & 4)==4 ? ' checked' : ''?>>_(Agents)_ &nbsp;</span>
+: <span class="report" style="display:none">
+    <span class="notifications-checkbox-group-title">_(Array status)_</span>
+      <span>
+        <span>
+          <input type="checkbox" name="report1"<?=($notify['report'] & 1)==1 ? ' checked' : ''?>>_(Browser)_ &nbsp;
+        </span>
+        <span>
+          <input type="checkbox" name="report2"<?=($notify['report'] & 2)==2 ? ' checked' : ''?>>_(Email)_ &nbsp;
+        </span>
+        <span>
+          <input type="checkbox" name="report3"<?=($notify['report'] & 4)==4 ? ' checked' : ''?>>_(Agents)_ &nbsp;
+        </span>
+      </span>
+    </span>
+  </span>
 
 :notifications_agent_selection_help:
 
 _(Notification entity)_:
-: <span class="a">_(Notices)_</span>
-  <input type="checkbox" class="checkbox" name="normal1"<?=($notify['normal'] & 1)==1 ? " checked $disabled" : $disabled?>>_(Browser)_ &nbsp;
-  <input type="checkbox" class="checkbox" name="normal2"<?=($notify['normal'] & 2)==2 ? " checked $disabled" : $disabled?>>_(Email)_ &nbsp;
-  <input type="checkbox" class="checkbox" name="normal3"<?=($notify['normal'] & 4)==4 ? " checked $disabled" : $disabled?>>_(Agents)_ &nbsp;
+: <span>
+    <span class="notifications-checkbox-group-title">_(Notices)_</span>
+    <span class="inline-block">
+      <label class="inline-block">
+        <input type="checkbox" class="checkbox" name="normal1"<?=($notify['normal'] & 1)==1 ? " checked $disabled" : $disabled?>>_(Browser)_ &nbsp;
+      </label>
+      <label class="inline-block">
+        <input type="checkbox" class="checkbox" name="normal2"<?=($notify['normal'] & 2)==2 ? " checked $disabled" : $disabled?>>_(Email)_ &nbsp;
+      </label>
+      <label class="inline-block">
+        <input type="checkbox" class="checkbox" name="normal3"<?=($notify['normal'] & 4)==4 ? " checked $disabled" : $disabled?>>_(Agents)_ &nbsp;
+      </label>
+    </span>
+  </span>
 
 &nbsp;
-: <span class="a">_(Warnings)_</span>
-  <input type="checkbox" class="checkbox" name="warning1"<?=($notify['warning'] & 1)==1 ? " checked $disabled" : $disabled?>>_(Browser)_ &nbsp;
-  <input type="checkbox" class="checkbox" name="warning2"<?=($notify['warning'] & 2)==2 ? " checked $disabled" : $disabled?>>_(Email)_ &nbsp;
-  <input type="checkbox" class="checkbox" name="warning3"<?=($notify['warning'] & 4)==4 ? " checked $disabled" : $disabled?>>_(Agents)_ &nbsp;
+: <span>
+    <span class="notifications-checkbox-group-title">_(Warnings)_</span>
+    <span class="inline-block">
+      <label class="inline-block">
+        <input type="checkbox" class="checkbox" name="warning1"<?=($notify['warning'] & 1)==1 ? " checked $disabled" : $disabled?>>_(Browser)_ &nbsp;
+      </label>
+      <label class="inline-block">
+        <input type="checkbox" class="checkbox" name="warning2"<?=($notify['warning'] & 2)==2 ? " checked $disabled" : $disabled?>>_(Email)_ &nbsp;
+      </label>
+      <label class="inline-block">
+        <input type="checkbox" class="checkbox" name="warning3"<?=($notify['warning'] & 4)==4 ? " checked $disabled" : $disabled?>>_(Agents)_ &nbsp;
+      </label>
+    </span>
+  </span>
 
 &nbsp;
-: <span class="a">_(Alerts)_</span>
-  <input type="checkbox" class="checkbox" name="alert1"<?=($notify['alert'] & 1)==1 ? " checked $disabled" : $disabled?>>_(Browser)_ &nbsp;
-  <input type="checkbox" class="checkbox" name="alert2"<?=($notify['alert'] & 2)==2 ? " checked $disabled" : $disabled?>>_(Email)_ &nbsp;
-  <input type="checkbox" class="checkbox" name="alert3"<?=($notify['alert'] & 4)==4 ? " checked $disabled" : $disabled?>>_(Agents)_ &nbsp;
+: <span>
+    <span class="notifications-checkbox-group-title">_(Alerts)_</span>
+    <span>
+      <span>
+      <input type="checkbox" class="checkbox" name="alert1"<?=($notify['alert'] & 1)==1 ? " checked $disabled" : $disabled?>>_(Browser)_ &nbsp;
+    </span>
+    <span>
+      <input type="checkbox" class="checkbox" name="alert2"<?=($notify['alert'] & 2)==2 ? " checked $disabled" : $disabled?>>_(Email)_ &nbsp;
+    </span>
+    <span>
+      <input type="checkbox" class="checkbox" name="alert3"<?=($notify['alert'] & 4)==4 ? " checked $disabled" : $disabled?>>_(Agents)_ &nbsp;
+    </span>
+  </span>
 
 :notifications_classification_help:
 
 <input type="submit" name="#default" value="_(Default)_">
-: <input type="submit" name="#apply" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+: <span class="inline-block">
+    <input type="submit" name="#apply" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
 </form>

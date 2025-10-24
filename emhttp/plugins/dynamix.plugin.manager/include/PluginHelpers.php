@@ -15,11 +15,31 @@ $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Wrappers.php";
 
 // Invoke the plugin command with indicated method
-function plugin($method, $arg = '') {
+function plugin($method, $arg = '', $dontCache = false) {
   global $docroot;
-  exec("$docroot/plugins/dynamix.plugin.manager/scripts/plugin ".escapeshellarg($method)." ".escapeshellarg($arg), $output, $retval);
-  return $retval==0 ? implode("\n", $output) : false;
-}
+  
+  static $methods = ['dump', 'changes', 'alert', 'validate', 'check', 'checkall', 'update', 'remove', 'install'];
+  static $pluginAttributeCache = [];
+
+  if ( in_array($method, $methods) || !$arg || $dontCache ) {
+    $pluginAttributeCache = [];
+    exec("$docroot/plugins/dynamix.plugin.manager/scripts/plugin ".escapeshellarg($method)." ".escapeshellarg($arg), $output, $retval);
+    return $retval==0 ? implode("\n", $output) : false;
+  }
+
+  if ( !isset($pluginAttributeCache[$arg]) ) {
+    $pluginAttributeCache = [];
+    $xml = file_exists($arg) ? @simplexml_load_file($arg, NULL, LIBXML_NOCDATA) : false;
+    if ( $xml ) {
+      $attributes = $xml->attributes();
+      $pluginAttributeCache[$arg] = (array)$attributes ?: ["error" => "no attributes present"];
+    }
+  }
+  if ( $method == 'attributes' ) {
+    return is_file($arg) ? json_encode($pluginAttributeCache[$arg]['@attributes']) : false;
+  }
+  return (is_file($arg) && isset($pluginAttributeCache[$arg]['@attributes'][$method]) ) ? (string)$pluginAttributeCache[$arg]['@attributes'][$method] : false;
+} 
 
 // Invoke the language command with indicated method
 function language($method, $arg = '') {

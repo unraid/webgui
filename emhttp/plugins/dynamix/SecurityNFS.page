@@ -1,7 +1,7 @@
 Menu="Disk Share"
 Title="NFS Security Settings"
 Tag="linux"
-Cond="(($var['shareNFSEnabled']!='no') && (isset($name)?array_key_exists($name,$sec_nfs):0))"
+Cond="(($var['shareNFSEnabled']!='no') && (isset($name)?array_key_exists($name,$sec_nfs)&&($shares[$name]['hasCfg']??false)!='similar':0))"
 ---
 <?PHP
 /* Copyright 2005-2023, Lime Technology
@@ -14,45 +14,53 @@ Cond="(($var['shareNFSEnabled']!='no') && (isset($name)?array_key_exists($name,$
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  */
-?>
-<?
-$width = [123,300];
 
+$width = [123,300];
 /* Replace spaces in NFS rule with new lines for multi line textarea. */
 $sec_nfs[$name]['hostList']	= str_replace(" ", "\n", $sec_nfs[$name]['hostList']);
-
 ?>
 :nfs_security_help:
 
-<div class="clone1">
-<span class="clone">_(Read settings from)_</span><i class="fa fa-arrow-left fa-fw"></i>
-<span class="wrap"><select name="readnfs" class="clone" onchange="toggleButton('readnfs',false)">
-<option disabled selected>_(select)_...</option>
-<?
-if (isset($disks[$name])) {
-  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name) echo mk_option("", $list['name'], _(my_disk($list['name']),3));
-} else {
-  foreach ($shares as $list) if ($list['name']!=$name) echo mk_option("", $list['name'], compress($list['name']));
-}
-?>
-</select></span><input type="button" id="readnfs" value="_(Read)_" class="clone" onclick="readNFS()" disabled>
-</div>
-<div class="clone2">
-<span class="clone">_(Write settings to)_</span><i class="fa fa-arrow-right fa-fw"></i>
-<span class="wrap"><select id="nfs1" name="writenfs" multiple="multiple" style="display:none" onchange="toggleButton('writenfs',this.id)">
-<?
-$rows = [];
-if (isset($disks[$name])) {
-  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name) $rows[] = mk_option("", $list['name'], _(my_disk($list['name']),3));
-} else {
-  foreach ($shares as $list) if ($list['name']!=$name) $rows[] = mk_option("", $list['name'], compress($list['name']));
-}
-if ($rows) echo "<option>("._('All').")</option>";
-foreach ($rows as $row) echo $row;
-?>
-</select></span><input type="button" id="writenfs" value="_(Write)_" class="clone" onclick="writeNFS()" disabled>
+<div markdown="1" class="relative">
+<div markdown="1" class="clone-settings shade">
+_(Read settings from)_ <i class="fa fa-arrow-left fa-fw"></i>
+: <span class="flex flex-row items-center gap-4">
+	<select name="readnfs" onchange="toggleButton('readnfs',false)">
+		<option disabled selected>_(select)_...</option>
+		<?
+		if (isset($disks[$name])) {
+		  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name) echo mk_option("", $list['name'], _(my_disk($list['name']),3));
+		} else {
+		  foreach ($shares as $list) if (strpos($list['name'],"'") === false && $list['name']!=$name) echo mk_option("", $list['name'], compress($list['name']));
+		}
+		?>
+	</select>
+	<span class="buttons-spaced">
+		<input type="button" id="readnfs" value="_(Read)_" class="clone" onclick="readNFS()" disabled>
+	</span>
+</span>
+
+_(Write settings to)_ <i class="fa fa-arrow-right fa-fw"></i>
+: <span class="flex flex-row items-center gap-4">
+	<select id="nfs1" name="writenfs" multiple onchange="toggleButton('writenfs',this.id)">
+		<?
+		$rows = [];
+		if (isset($disks[$name])) {
+		  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name) $rows[] = mk_option("", $list['name'], _(my_disk($list['name']),3));
+		} else {
+		  foreach ($shares as $list) if (strpos($list['name'],"'") === false && $list['name']!=$name) $rows[] = mk_option("", $list['name'], compress($list['name']));
+		}
+		if ($rows) echo "<option>("._('All').")</option>";
+		foreach ($rows as $row) echo $row;
+		?>
+	</select>
+	<span class="buttons-spaced">
+		<input type="button" id="writenfs" value="_(Write)_" class="clone" onclick="writeNFS()" disabled>
+	</span>
+</span>
 </div>
 
+<div markdown="1" class="shade">
 <form markdown="1" name="nfs_edit" method="POST" action="/update.htm" target="progressFrame" onchange="toggleButton('writenfs',true);$('#nfs1').dropdownchecklist('disable')">
 <input type="hidden" name="shareName" value="<?=htmlspecialchars($name)?>">
 
@@ -73,21 +81,30 @@ _(Security)_:
   </select>
 
 &nbsp;
-: <input type="submit" name="changeShareSecurityNFS" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+: <span class="buttons-spaced">
+	<input type="submit" name="changeShareSecurityNFS" value="_(Apply)_" disabled>
+	<input type="button" value="_(Done)_" onclick="done()">
+  </span>
 </form>
 
 <?if ($sec_nfs[$name]['security']=='private'):?>
-<form  id="nfsHostListForm" markdown="1" method="POST" name="otherForm" action="/update.htm" target="progressFrame">
+<form class="shade" id="nfsHostListForm" markdown="1" method="POST" name="otherForm" action="/update.htm" target="progressFrame">
 <input type="hidden" name="shareName" value="<?=htmlspecialchars($name)?>">
+
 _(Rule)_:
 : <textarea name="shareHostListNFS" cols="40" rows="5" style="width:45%" placeholder="Example: *(rw,sec=sys,insecure,anongid=100,anonuid=99,no_root_squash,lock)"><?= htmlspecialchars($sec_nfs[$name]['hostList']) ?></textarea>
 
 :nfs_security_rules_help:
 
 &nbsp;
-: <input type="submit" name="changeShareAccessNFS" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+: <span class="buttons-spaced">
+	<input type="submit" name="changeShareAccessNFS" value="_(Apply)_" disabled>
+	<input type="button" value="_(Done)_" onclick="done()">
+  </span>
 </form>
 <?endif;?>
+</div>
+</div>
 
 <script>
 $(function() {

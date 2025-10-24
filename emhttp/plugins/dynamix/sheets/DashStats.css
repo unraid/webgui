@@ -1,5 +1,8 @@
 :root {
     --dashstats-pie-after-bg-color: #262626;
+
+    --dashstats-medium-breakpoint: 768px;
+    --dashstats-large-breakpoint: 1600px;
 }
 .Theme--gray:root {
     --dashstats-pie-after-bg-color: #3d3c3a;
@@ -10,11 +13,6 @@
 .Theme--white:root {
     --dashstats-pie-after-bg-color: #f7f9f9;
 }
-
-div.frame {
-    padding-top: 14px;
-    padding-bottom: 160px;
-}
 div.tile,
 i.tile {
     display: none;
@@ -23,9 +21,9 @@ div#iframe-popup {
     display: none;
     -webkit-overflow-scrolling: touch;
 }
-div.last {
+/* div.last {
     padding-bottom: 12px;
-}
+} */
 div.leftside {
     float: left;
     width: 66%;
@@ -44,7 +42,7 @@ input#upload {
     display: none;
 }
 span.head_info {
-    width: 250px;
+    /* width: 250px; */
     display: inline-block;
 }
 span.switch {
@@ -55,7 +53,32 @@ span.head_bar {
     width: 180px;
 }
 span.head_gap {
-    padding-left: 14px;
+    /* padding-left: 14px; */
+}
+span.head_gap.network-selects {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 1 1 auto;
+}
+span.head_gap.network-selects > * {
+    min-width: 0;
+}
+select.network-select {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+select.network-interface {
+    flex: 0 0 auto;
+    width: auto;
+}
+select.network-type {
+    flex: 1 1 auto;
+    width: 100%;
 }
 span.head_time {
     padding-left: 40px;
@@ -76,9 +99,9 @@ span.orange {
     padding-left: 0;
 }
 span.ctrl {
-    float: right;
+    /* float: right; */
     margin-top: 0;
-    margin-right: 10px;
+    /* margin-right: 10px; */
 }
 span.ctrl span {
     font-size: 2rem !important;
@@ -104,9 +127,9 @@ span.dense {
 span#ups_model {
     margin-right: 30px;
 }
-span#chart-toggle {
+/* span#chart-toggle {
     float: right;
-}
+} */
 span.header,
 tr.header {
     font-size: 1.1rem !important;
@@ -126,7 +149,7 @@ span[id^="sys"] {
 }
 span[class^="fa "] {
     font-size: 1.6rem;
-    margin-right: 18px;
+    /* margin-right: 18px; */
 }
 span.load.resize {
     font-size: 1.1rem;
@@ -238,7 +261,7 @@ i[class^="icon-u-"] {
     font-size: inherit;
 }
 i#mycase[class^="case-"] {
-    font-size: 128px;
+    font-size: clamp(80px, 5vw, 128px);
 }
 i#mycase[class^="fa "] {
     font-size: 96px;
@@ -246,16 +269,16 @@ i#mycase[class^="fa "] {
 a.cpu_close,
 span.hand {
     cursor: pointer;
-    z-index: 1001;
+    z-index: 100;
 }
-a.info {
+/* a.info {
     white-space: normal;
     word-spacing: 100px;
     word-break: break-word;
 }
 a.info span {
     word-spacing: normal;
-}
+} */
 tr#var0,
 tr#var1,
 tr#var2,
@@ -290,7 +313,7 @@ input[value="Edit"] {
 }
 .port_view,
 .control {
-    z-index: 10000;
+    z-index: 100;
 }
 .flat {
     height: 0;
@@ -352,11 +375,9 @@ input[value="Edit"] {
 }
 #current_time {
     font-size: 4rem;
-    margin-left: 8px;
 }
 #current_date {
     font-size: 1.3rem;
-    margin-left: 18px;
 }
 table.snapshot {
     margin-top: 0;
@@ -366,8 +387,19 @@ table.snapshot {
 }
 div.grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(580px, 1fr));
-    column-gap: 20px;
+    grid-template-columns: 1fr; /* 1 column by default (mobile) */
+    gap: 2rem;
+    box-sizing: border-box;
+}
+@media (min-width: 768px) {
+    div.grid {
+        grid-template-columns: repeat(2, 1fr); /* 2 columns for medium screens */
+    }
+}
+@media (min-width: 1600px) {
+    div.grid {
+        grid-template-columns: repeat(3, 1fr); /* 3 columns for big screens */
+    }
 }
 div.pie {
     height: 92px;
@@ -376,6 +408,7 @@ div.pie {
     display: flex;
     justify-content: center;
     align-items: center;
+    margin: 1rem auto;
 }
 div.pie::after {
     content: "";
@@ -400,4 +433,124 @@ div.pie span {
 legend {
     font-variant: small-caps;
     margin-bottom: 4px;
+}
+
+.tile-header {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: start;
+    gap: 1rem;
+}
+
+.tile-header-main {
+    font-size: 1.6rem;
+    line-height: 1;
+    margin: 0 0 0.5rem 0;
+    text-transform: uppercase;
+}
+
+.tile-header-left {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: start;
+    justify-content: flex-start;
+    gap: 1rem;
+}
+.tile-header-right {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap-reverse;
+    flex-shrink: 0;
+    align-items: start;
+    justify-content: flex-end;
+    gap: 1rem;
+}
+
+.tile-header-right-controls {
+    display: inline-flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: .5rem;
+
+    /* prevents random spacing above the nested `i` */
+    a {
+        display: inline-flex;
+    }
+}
+
+.tile-ctrl span {
+    font-size: 2rem !important; /* tragic usage of !important */
+}
+
+.tile-system-memory-body {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    align-items: start;
+}
+
+@media (min-width: 768px) {
+    .tile-system-memory-body {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.tile-system-memory-labels {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+@media (min-width: 768px) {
+    .tile-system-memory-labels {
+        grid-template-columns: 1fr;
+    }
+}
+
+.tile-system-memory-charts {
+    text-align: center;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+@media (min-width: 450px) {
+    .tile-system-memory-charts {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@media (min-width: 768px) {
+    .tile-system-memory-charts {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 1190px) {
+    .tile-system-memory-charts {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+.tile-select-case {
+    cursor: pointer;
+    transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.tile-select-case:hover {
+    color: var(--orange-800);
+}
+
+.tile-select-case:has(img) {
+    opacity: 1;
+}
+
+.tile-select-case:has(img):hover {
+    opacity: .75;
 }

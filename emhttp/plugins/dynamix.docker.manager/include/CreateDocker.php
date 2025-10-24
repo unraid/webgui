@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  * Copyright 2014-2021, Guilherme Jardim, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
@@ -481,6 +481,7 @@ if (!empty($TS_no_peers) && !empty($TS_container)) {
 ?>
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.switchbutton.css")?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.filetree.css")?>">
+<link type="text/css" rel="stylesheet" href="<?autov("/plugins/dynamix.docker.manager/sheets/CreateDocker.css")?>">
 
 <script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
 <script src="<?autov('/webGui/javascript/jquery.filetree.js')?>" charset="utf-8"></script>
@@ -606,7 +607,7 @@ function addConfigPopup() {
   popup.dialog({
     title: title,
     height: 'auto',
-    width: 900,
+    width: 'auto',
     resizable: false,
     modal: true,
     buttons: {
@@ -678,7 +679,7 @@ function editConfigPopup(num,disabled) {
   popup.dialog({
     title: title,
     height: 'auto',
-    width: 900,
+    width: 'auto',
     resizable: false,
     modal: true,
     buttons: {
@@ -863,11 +864,11 @@ function prepareCategory() {
 }
 
 $(function() {
-  var ctrl = "<span class='status <?=$tabbed?'':'vhshift'?>'><input type='checkbox' class='advancedview'></span>";
+  var ctrl = "<span class='status'><input type='checkbox' class='advancedview'></span>";
 <?if ($tabbed):?>
   $('.tabs').append(ctrl);
 <?else:?>
-  $('div[class=title]').append(ctrl);
+  $('div[class=title] .right').append(ctrl);
 <?endif;?>
   $('.advancedview').switchButton({labels_placement:'left', on_label: "_(Advanced View)_", off_label: "_(Basic View)_"});
   $('.advancedview').change(function() {
@@ -1093,8 +1094,8 @@ _(Network Type)_:
     $n = $x ? 1 : 0; while (isset($$eth["VLANID:$n"]) && $$eth["VLANID:$n"] != $x) $n++;
     if (!empty($$eth["DESCRIPTION:$n"])) $name .= ' -- '.compress(trim($$eth["DESCRIPTION:$n"]));
   } elseif (preg_match('/^wg[0-9]+$/',$network)) {
-    $conf = file("/etc/wireguard/$network.conf");
-    if ($conf[1][0]=='#') $name .= ' -- '.compress(trim(substr($conf[1],1)));
+    $conf = is_file("/etc/wireguard/$network.conf") ? file("/etc/wireguard/$network.conf") : [];
+    if ( ($conf[1][0]??'')=='#') $name .= ' -- '.compress(trim(substr($conf[1],1)));
   } elseif (substr($network,0,4)=='wlan') {
     $name .= '  -- '._('Wireless interface');
   }
@@ -1154,7 +1155,9 @@ _(Container Network)_:
 
 <div markdown="1" class='TSNetworkAllowed'>
 _(Use Tailscale)_:
-: <input type="checkbox" class="switch-on-off" name="contTailscale" id="contTailscale" <?php if (!empty($xml['TailscaleEnabled']) && $xml['TailscaleEnabled'] == 'true') echo 'checked'; ?> onchange="showTailscale(this)">
+: <span class="flex flex-row items-center">
+    <input type="checkbox" class="switch-on-off" name="contTailscale" id="contTailscale" <?php if (!empty($xml['TailscaleEnabled']) && $xml['TailscaleEnabled'] == 'true') echo 'checked'; ?> onchange="showTailscale(this)">
+  </span>
 
 :docker_tailscale_help:
 
@@ -1174,18 +1177,19 @@ _(Use Tailscale)_:
 
 <?if($TS_ExitNodeNeedsApproval):?>
 <div markdown="1" class="TShostname noshow">
-<b>Warning:</b>
+<b>_(Warning)_</b>:
 : Exit Node not yet approved. Navigate to the <a href="<?=$TS_DirectMachineLink?>" target='_blank'>Tailscale website</a> and approve it.
 </div>
 <?endif;?>
 
 <?if(!empty($TS_expiry_diff)):?>
 <div markdown="1" class="TSdivider noshow">
-<b>_(Warning)_</b>:
 <?if($TS_expiry_diff->invert):?>
-: <b>Tailscale Key expired!</b> <a href="<?=$TS_MachinesLink?>" target='_blank'>Renew/Disable key expiry</a> for '<b><?=$TS_HostNameActual?></b>'.
+<b>_(Warning)_</b>:
+: <span><b>Tailscale Key expired!</b> <a href="<?=$TS_MachinesLink?>" target='_blank'>Renew/Disable key expiry</a> for '<b><?=$TS_HostNameActual?></b>'.</span>
 <?else:?>
-: Tailscale Key will expire in <b><?=$TS_expiry_diff->days?> days</b>! <a href="<?=$TS_MachinesLink?>" target='_blank'>Disable Key Expiry</a> for '<b><?=$TS_HostNameActual?></b>'.
+<b>_(Warning)_</b>:
+: <span>Tailscale Key will expire in <b><?=$TS_expiry_diff->days?> days</b>! <a href="<?=$TS_MachinesLink?>" target='_blank'>Disable Key Expiry</a> for '<b><?=$TS_HostNameActual?></b>'.</span>
 <?endif;?>
 <label>See <a href="https://tailscale.com/kb/1028/key-expiry" target='_blank'>key-expiry</a>.</label>
 </div>
@@ -1194,7 +1198,7 @@ _(Use Tailscale)_:
 <?if(!empty($TS_not_approved)):?>
 <div markdown="1" class="TSdivider noshow">
 <b>_(Warning)_</b>:
-: The following route(s) are not approved: <b><?=trim($TS_not_approved)?></b>
+: <span>The following route(s) are not approved: <b><?=trim($TS_not_approved)?></b></span>
 </div>
 <?endif;?>
 
@@ -1220,10 +1224,10 @@ _(Be a Tailscale Exit Node)_:
 
 <div markdown="1" class="TSexitnodeip noshow">
 _(Use a Tailscale Exit Node)_:
-<?if($ts_en_check !== true && empty($ts_exit_nodes)):?>
-: <input type="text" name="TSexitnodeip" <?php if (!empty($xml['TailscaleExitNodeIP'])) echo 'value="' . $xml['TailscaleExitNodeIP'] . '"'; ?> placeholder="_(IP/Hostname from Exit Node)_" onchange="processExitNodeoptions(this)">
+: <?if($ts_en_check !== true && empty($ts_exit_nodes)):?>
+<input type="text" name="TSexitnodeip" <?php if (!empty($xml['TailscaleExitNodeIP'])) echo 'value="' . $xml['TailscaleExitNodeIP'] . '"'; ?> placeholder="_(IP/Hostname from Exit Node)_" onchange="processExitNodeoptions(this)">
 <?else:?>
-: <select name="TSexitnodeip" id="TSexitnodeip" onchange="processExitNodeoptions(this)">
+<select name="TSexitnodeip" id="TSexitnodeip" onchange="processExitNodeoptions(this)">
   <?=mk_option(1,'',_('None'))?>
   <?foreach ($ts_exit_nodes as $ts_exit_node):?>
     <?=$node_offline = $ts_exit_node['status'] === 'offline' ? ' - OFFLINE' : '';?>
@@ -1294,7 +1298,9 @@ _(Tailscale Serve Port)_:
 
 <div markdown="1" class="TSadvanced noshow">
 _(Tailscale Show Advanced Settings)_:
-: <input type="checkbox" name="TSadvanced" class="switch-on-off" onchange="showTSAdvanced(this.checked)">
+: <span class="flex flex-row items-center">
+    <input type="checkbox" name="TSadvanced" class="switch-on-off" onchange="showTSAdvanced(this.checked)">
+  </span>
 
 :docker_tailscale_show_advanced_help:
 
@@ -1394,7 +1400,9 @@ _(Tailscale State Directory)_:
 
 <div markdown="1" class="TStroubleshooting noshow">
 _(Tailscale Install Troubleshooting Packages)_:
-: <input type="checkbox" class="switch-on-off" name="TStroubleshooting" <?php if (!empty($xml['TailscaleTroubleshooting']) && $xml['TailscaleTroubleshooting'] == 'true') echo 'checked'; ?>>
+: <span class="flex flex-row items-center">
+    <input type="checkbox" class="switch-on-off" name="TStroubleshooting" <?php if (!empty($xml['TailscaleTroubleshooting']) && $xml['TailscaleTroubleshooting'] == 'true') echo 'checked'; ?>>
+  </span>
 
 :docker_tailscale_troubleshooting_packages_help:
 
@@ -1411,7 +1419,9 @@ _(Console shell command)_:
   </select>
 
 _(Privileged)_:
-: <input type="checkbox" class="switch-on-off" name="contPrivileged">
+: <span class="flex flex-row items-center">
+    <input type="checkbox" class="switch-on-off" name="contPrivileged">
+  </span>
 
 :docker_privileged_help:
 
@@ -1421,14 +1431,21 @@ _(Privileged)_:
 : <span id="readmore_toggle" class="readmore_collapsed"><a onclick="toggleReadmore()" style="cursor:pointer"><i class="fa fa-fw fa-chevron-down"></i> _(Show more settings)_ ...</a></span><div id="configLocationAdvanced" style="display:none"></div>
 
 &nbsp;
-: <span id="allocations_toggle" class="readmore_collapsed"><a onclick="toggleAllocations()" style="cursor:pointer"><i class="fa fa-fw fa-chevron-down"></i> _(Show docker allocations)_ ...</a></span><div id="dockerAllocations" style="display:none"></div>
+: <span id="allocations_toggle" class="readmore_collapsed">
+    <a onclick="toggleAllocations()" style="cursor:pointer">
+      <i class="fa fa-fw fa-chevron-down"></i> _(Show docker allocations)_ ...</a>
+  </span>
+  <div id="dockerAllocations" style="display:none"></div>
 
 &nbsp;
 : <a href="javascript:addConfigPopup()"><i class="fa fa-fw fa-plus"></i> _(Add another Path, Port, Variable, Label or Device)_</a>
 
 &nbsp;
-: <input type="submit" value="<?=$xmlType=='edit' ? "_(Apply)_" : " _(Apply)_ "?>"><input type="button" value="_(Done)_" onclick="done()">
-  <?if ($authoringMode):?><button type="submit" name="dryRun" value="true" onclick="$('*[required]').prop('required', null);">_(Save)_</button><?endif;?>
+: <span class="inline-block">
+    <input type="submit" value="<?=$xmlType=='edit' ? "_(Apply)_" : " _(Apply)_ "?>">
+    <input type="button" value="_(Done)_" onclick="done()">
+    <?if ($authoringMode):?><button type="submit" name="dryRun" value="true" onclick="$('*[required]').prop('required', null);">_(Save)_</button><?endif;?>
+  </span>
 
 </form>
 </div>
@@ -1464,27 +1481,27 @@ _(Config Type)_:
 _(Name)_:
 : <input type="text" name="Name" autocomplete="off" spellcheck="false">
 
-<div markdown="1" id="Target">
+<div markdown="1" id="Target" class="w-full">
 <span id="dt1">_(Target)_</span>:
 : <input type="text" name="Target" autocomplete="off" spellcheck="false">
 </div>
 
-<div markdown="1" id="Value">
+<div markdown="1" id="Value" class="w-full">
 <span id="dt2">_(Value)_</span>:
 : <input type="text" name="Value" autocomplete="off" spellcheck="false">
 </div>
 
-<div markdown="1" id="Default">
+<div markdown="1" id="Default" class="w-full">
 _(Default Value)_:
 : <input type="text" name="Default" autocomplete="off" spellcheck="false">
 </div>
 
-<div id="Mode"></div>
+<div id="Mode" class="w-full"></div>
 
 _(Description)_:
-: <textarea name="Description" spellcheck="false" cols="80" rows="3" style="width:304px;"></textarea>
+: <textarea name="Description" spellcheck="false" cols="80" rows="3"></textarea>
 
-<div markdown="1" class="advanced">
+<div markdown="1" class="advanced" class="w-full">
 _(Display)_:
 : <select name="Display">
   <option value="always" selected>_(Always)_</option>
@@ -1517,13 +1534,23 @@ _(Password Mask)_:
 <input type="hidden" name="confDisplay[]" value="{6}">
 <input type="hidden" name="confRequired[]" value="{7}">
 <input type="hidden" name="confMask[]" value="{8}">
+
 <span class="{11}"><i class="fa fa-fw fa-{13}"></i>&nbsp;&nbsp;{0}:</span>
-: <span class="boxed"><input type="text" class="setting_input" name="confValue[]" default="{2}" value="{9}" autocomplete="off" spellcheck="false" {11}>{10}<br><span class='orange-text'>{12}: {1}</span><br><span class="orange-text">{4}</span><br></span>
+: <span class="flex flex-col gap-4">
+    <span class="flex flex-row flex-wrap items-center gap-4 buttons-no-margin">
+      <input type="text" class="setting_input" name="confValue[]" default="{2}" value="{9}" autocomplete="off" spellcheck="false" {11}>
+      {10}
+    </span>
+    <span class="boxed">
+      <span class='orange-text'>{12}: {1}</span>
+      <span class="orange-text">{4}</span>
+    </span>
+  </span>
 </div>
 
 <div markdown="1" id="templateAllocations" style="display:none">
-&nbsp;
-: <span class="boxed"><span class="ct">{1}</span>{2}</span>
+<span class="docker-allocation-dt">&nbsp;</span>
+: <span class="docker-allocation-row"><span>{1}</span>{2}</span>
 </div>
 
 <script>
@@ -1545,7 +1572,7 @@ function showSubnet(bridge) {
     $('input[name="contMyIP"]').val('');
   } else {
     $('.myIP').show();
-    $('#myIP').html('Subnet: '+subnet[bridge]);
+    $('#myIP').html('<?=_('Subnet')?>: '+subnet[bridge]);
     $('.netCONT').hide();
     $('#netCONT').val('');
   }
@@ -1556,7 +1583,7 @@ function showSubnet(bridge) {
     $(".TSNetworkNotAllowed").show();
   } else {
     $(".TSNetworkAllowed").show();
-    $(".TSNetworkNotAllowed").hide();   
+    $(".TSNetworkNotAllowed").hide();
   }
 }
 
@@ -1862,11 +1889,15 @@ $(function() {
       confNum += 1;
       Opts = Settings.Config[i];
       if (Opts.Display == "always-hide" || Opts.Display == "advanced-hide") {
-        Opts.Buttons  = "<span class='advanced'><button type='button' onclick='editConfigPopup("+confNum+",<?=$disableEdit?>)'>_(Edit)_</button>";
+        Opts.Buttons = "<span class='flex flex-row items-center gap-4'>";
+        Opts.Buttons += "<span class='advanced'><button type='button' onclick='editConfigPopup("+confNum+",<?=$disableEdit?>)'>_(Edit)_</button>";
         Opts.Buttons += "<button type='button' onclick='removeConfig("+confNum+")'>_(Remove)_</button></span>";
+        Opts.Buttons += "</span>";
       } else {
-        Opts.Buttons  = "<button type='button' onclick='editConfigPopup("+confNum+",<?=$disableEdit?>)'>_(Edit)_</button>";
+        Opts.Buttons = "<span class='flex flex-row items-center gap-4'>";
+        Opts.Buttons += "<button type='button' onclick='editConfigPopup("+confNum+",<?=$disableEdit?>)'>_(Edit)_</button>";
         Opts.Buttons += "<button type='button' onclick='removeConfig("+confNum+")'>_(Remove)_</button>";
+        Opts.Buttons += "</span>";
       }
       Opts.Number = confNum;
       if (Opts.Type == "Device") {

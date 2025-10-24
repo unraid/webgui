@@ -2,27 +2,6 @@
  * This CSS is specifically for overwriting CSS libraries that dynamix.js uses
  */
 :root {
-    --dynamix-jgrowl-bg-color: var(--gray-500);
-    --dynamix-jgrowl-border-color: var(--gray-600);
-    --dynamix-jgrowl-shadow-color: var(--gray-500);
-    --dynamix-jgrowl-text-color: var(--gray-600);
-
-    --dynamix-jgrowl-alert-bg-color: var(--red-300);
-    --dynamix-jgrowl-alert-border-color: var(--red-600);
-    --dynamix-jgrowl-alert-text-color: var(--red-600);
-
-    --dynamix-jgrowl-warning-bg-color: var(--yellow-200);
-    --dynamix-jgrowl-warning-border-color: var(--orange-300);
-    --dynamix-jgrowl-warning-text-color: var(--orange-300);
-
-    --dynamix-jgrowl-normal-bg-color: var(--green-100);
-    --dynamix-jgrowl-normal-border-color: var(--green-800);
-    --dynamix-jgrowl-normal-text-color: var(--green-800);
-
-    --dynamix-jgrowl-close-text-color: var(--gray-500);
-    --dynamix-jgrowl-close-bg-color: var(--black);
-    --dynamix-jgrowl-close-border: 2px solid var(--gray-300);
-
     --dynamix-ui-dropdownchecklist-color: var(--gray-100);
     --dynamix-ui-dropdownchecklist-color-alt1: var(--gray-700);
     --dynamix-ui-dropdownchecklist-color-alt2: var(--gray-500);
@@ -87,132 +66,6 @@
     --dynamix-awesomplete-mark-bg-color: var(--yellow-500);
     --dynamix-awesomplete-mark-hover-bg-color: var(--orange-500); /* OG val = hsl(68, 100%, 41%) */
     --dynamix-awesomplete-mark-selected-bg-color: var(--green-900);
-}
-
-.jGrowl {
-    position: fixed;
-    font-size: 1.3rem;
-    z-index: 10001;
-}
-.jGrowl.top-left {
-    left: 10px;
-    top: 130px;
-}
-.jGrowl.top-right {
-    right: 10px;
-    top: 130px;
-}
-.jGrowl.bottom-left {
-    left: 10px;
-    bottom: 24px;
-}
-.jGrowl.bottom-right {
-    right: 10px;
-    bottom: 24px;
-}
-.jGrowl.center {
-    top: 130px;
-    left: 40%;
-}
-.jGrowl.center .jGrowl-closer,
-.jGrowl.center .jGrowl-notification {
-    margin-left: auto;
-    margin-right: auto;
-}
-.jGrowl-notification {
-    opacity: 0.96;
-    min-height: 1.2rem;
-    width: 380px;
-    padding: 10px;
-    margin: 5px 0;
-    text-align: left;
-    border-radius: 6px;
-
-    &.alert {
-        color: var(--dynamix-jgrowl-alert-text-color);
-        background-color: var(--dynamix-jgrowl-alert-bg-color);
-        border: 1px solid var(--dynamix-jgrowl-alert-border-color);
-        box-shadow: 2px 2px 1px var(--dynamix-jgrowl-shadow-color);
-    }
-
-    &.warning {
-        color: var(--dynamix-jgrowl-warning-text-color);
-        background-color: var(--dynamix-jgrowl-warning-bg-color);
-        border: 1px solid var(--dynamix-jgrowl-warning-border-color);
-        box-shadow: 2px 2px 1px var(--dynamix-jgrowl-shadow-color);
-    }
-
-    &.normal {
-        color: var(--dynamix-jgrowl-normal-text-color);
-        background-color: var(--dynamix-jgrowl-normal-bg-color);
-        border: 1px solid var(--dynamix-jgrowl-normal-border-color);
-        box-shadow: 2px 2px 1px var(--dynamix-jgrowl-shadow-color);
-    }
-
-    &.default {
-        color: var(--dynamix-jgrowl-text-color);
-        background-color: var(--dynamix-jgrowl-bg-color);
-        border: 1px solid var(--dynamix-jgrowl-border-color);
-        box-shadow: 2px 2px 1px var(--dynamix-jgrowl-shadow-color);
-    }
-}
-.jGrowl-notification .jGrowl-header {
-    font-weight: bold;
-}
-.jGrowl-notification .jGrowl-close {
-    float: right;
-    text-align: right;
-    margin: 0;
-    padding: 0;
-    background: none;
-    color: inherit;
-    border: none;
-    cursor: pointer;
-    font-size: 1.8rem;
-    min-width: auto;
-    margin-left: 2rem;
-    line-height: 1;
-}
-.jGrowl-notification .jGrowl-close:hover {
-    color: inherit;
-    background: none;
-}
-.jGrowl-closer {
-    width: 400px;
-    color: var(--dynamix-jgrowl-close-text-color);
-    background-color: var(--dynamix-jgrowl-close-bg-color);
-    opacity: 0.96;
-    border: 2px solid var(--dynamix-jgrowl-close-border-color);
-    margin: 5px 0;
-    padding: 4px 0;
-    cursor: pointer;
-    font-weight: bold;
-    text-align: center;
-    border-radius: 6px;
-}
-.jGrowl-closer.top {
-    position: fixed;
-    top: 130px;
-}
-#jGrowl {
-    pointer-events: none !important;
-}
-.jGrowl-notification:first-of-type {
-    pointer-events: none !important;
-}
-.jGrowl-notification {
-    pointer-events: all !important;
-}
-.jGrowl-closer.top {
-    pointer-events: all !important;
-}
-.jGrowl-closer.bottom {
-    pointer-events: all !important;
-}
-@media print {
-    .jGrowl {
-        display: none;
-    }
 }
 
 #sb-info-inner,
@@ -464,9 +317,9 @@ table.tablesorter.left td:last-child {
     text-align: right;
     width: 4%;
 }
-table.tablesorter.shift {
+/* table.tablesorter.shift {
     margin-top: -30px;
-}
+} */
 table.tablesorter.kvm {
     display: block;
     padding-top: 24px;
@@ -505,7 +358,7 @@ table.t1.tablesorter tbody tr.normal-row {
     background-color: var(--dynamix-tablesorter-tbody-row-bg-color);
 }
 input.t1.search {
-    color: var(--gray-100);
+    color: var(--text-color);
     background-color: var(--dynamix-tablesorter-tbody-row-bg-color);
 }
 span.select ul {
@@ -1409,9 +1262,6 @@ div.icon-zip {
 #guiSearchBox:placeholder-shown {
     caret-color: transparent;
 }
-.guiSearchBoxResults {
-    width: 450px;
-}
 .awesomplete [hidden] {
     display: none;
 }
@@ -1507,18 +1357,6 @@ div.icon-zip {
  * @see https://caniuse.com/?search=nesting
  */
 .Theme--sidebar {
-    .jGrowl.top-left {
-        top: 90px;
-    }
-    .jGrowl.top-right {
-        top: 90px;
-    }
-    .jGrowl.center {
-        top: 90px;
-    }
-    .jGrowl-notification {
-        min-height: 4rem;
-    }
     table.tablesorter thead tr th {
         font-size: 1.3rem;
         padding: 5px 20px 5px 6px;
@@ -1535,9 +1373,9 @@ div.icon-zip {
     table.tablesorter tbody.tablesorter-infoOnly {
         border-bottom: 1px solid var(--dynamix-tablesorter-tbody-row-border-color);
     }
-    table.tablesorter.shift {
+    /* table.tablesorter.shift {
         margin-top: 10px;
-    }
+    } */
     table.tablesorter.indexer tfoot tr {
         border-bottom: none;
     }
@@ -1561,11 +1399,6 @@ div.icon-zip {
     }
     div.box {
         line-height: 2.4rem;
-    }
-    .guiSearchBoxResults {
-        position: fixed !important;
-        top: 90px !important;
-        left: 250px !important;
     }
     select[name="port_select"] {
         border: none;
@@ -1627,75 +1460,115 @@ div.icon-zip {
 }
 
 .ui-dialog {
-    .ui-dialog-buttonpane {
-        .ui-dialog-buttonset {
-            button {
-                font-family: clear-sans;
-                font-size: 1.1rem;
-                font-weight: bold;
-                letter-spacing: 2px;
-                text-transform: uppercase;
-                margin: 10px 12px 10px 0;
-                padding: 9px 18px;
-                text-decoration: none;
-                white-space: nowrap;
-                cursor: pointer;
-                outline: none;
-                border-radius: 4px;
-                border: 0;
-                color: var(--dynamix-jquery-ui-button-text-color);
-                background:
-                    -webkit-gradient(
-                            linear,
-                            left top,
-                            right top,
-                            from(var(--dynamix-jquery-ui-button-background-start)),
-                            to(var(--dynamix-jquery-ui-button-background-end))
-                        )
-                        0 0 no-repeat,
-                    -webkit-gradient(
-                            linear,
-                            left top,
-                            right top,
-                            from(var(--dynamix-jquery-ui-button-background-start)),
-                            to(var(--dynamix-jquery-ui-button-background-end))
-                        ) 0 100% no-repeat,
-                    -webkit-gradient(
-                            linear,
-                            left bottom,
-                            left top,
-                            from(var(--dynamix-jquery-ui-button-background-start)),
-                            to(var(--dynamix-jquery-ui-button-background-start))
-                        ) 0 100% no-repeat,
-                    -webkit-gradient(
-                            linear,
-                            left bottom,
-                            left top,
-                            from(var(--dynamix-jquery-ui-button-background-end)),
-                            to(var(--dynamix-jquery-ui-button-background-end))
-                        ) 100% 100% no-repeat;
-                background:
-                    linear-gradient(90deg, var(--dynamix-jquery-ui-button-background-start) 0, var(--dynamix-jquery-ui-button-background-end)) 0 0 no-repeat,
-                    linear-gradient(90deg, var(--dynamix-jquery-ui-button-background-start) 0, var(--dynamix-jquery-ui-button-background-end)) 0 100% no-repeat,
-                    linear-gradient(0deg, var(--dynamix-jquery-ui-button-background-start) 0, var(--dynamix-jquery-ui-button-background-start)) 0 100% no-repeat,
-                    linear-gradient(0deg, var(--dynamix-jquery-ui-button-background-end) 0, var(--dynamix-jquery-ui-button-background-end)) 100% 100% no-repeat;
-                background-size:
-                    100% 2px,
-                    100% 2px,
-                    2px 100%,
-                    2px 100%;
+    box-sizing: border-box;
 
-                &:hover {
-                    color: var(--dynamix-jquery-ui-button-hover-color);
-                    background: -webkit-gradient(
+    * {
+        box-sizing: border-box;
+    }
+}
+
+.ui-dialog:not(.ui-dialog-content-full) {
+    /*
+    - If there is no .ui-dialog-content-full class, then we need to center the dialog no matter what the library JS sets on the element.
+    - Otherwise, if we do have .ui-dialog-content-full on the element, then we need to use the library JS to position the dialog at "full screen" size.
+    */
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    box-sizing: border-box;
+    width: 100% !important;
+    max-width: 100rem;
+
+    .ui-dialog-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        height: auto !important;
+        min-height: 35vh !important;
+        max-height: 70vh !important;
+        overflow-y: auto;
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+
+        dl {
+            width: 100%;
+        }
+    }
+
+    .dfm_info {
+        margin-top: auto;
+    }
+
+}
+
+.ui-dialog-buttonpane {
+    .ui-dialog-buttonset {
+        button {
+            font-family: clear-sans;
+            font-size: 1.1rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin: 10px 12px 10px 0;
+            padding: 9px 18px;
+            text-decoration: none;
+            white-space: nowrap;
+            cursor: pointer;
+            outline: none;
+            border-radius: 4px;
+            border: 0;
+            color: var(--dynamix-jquery-ui-button-text-color);
+            background:
+                -webkit-gradient(
                         linear,
                         left top,
                         right top,
                         from(var(--dynamix-jquery-ui-button-background-start)),
                         to(var(--dynamix-jquery-ui-button-background-end))
-                    );
-                    background: linear-gradient(90deg, var(--dynamix-jquery-ui-button-background-start) 0, var(--dynamix-jquery-ui-button-background-end));
-                }
+                    )
+                    0 0 no-repeat,
+                -webkit-gradient(
+                        linear,
+                        left top,
+                        right top,
+                        from(var(--dynamix-jquery-ui-button-background-start)),
+                        to(var(--dynamix-jquery-ui-button-background-end))
+                    ) 0 100% no-repeat,
+                -webkit-gradient(
+                        linear,
+                        left bottom,
+                        left top,
+                        from(var(--dynamix-jquery-ui-button-background-start)),
+                        to(var(--dynamix-jquery-ui-button-background-start))
+                    ) 0 100% no-repeat,
+                -webkit-gradient(
+                        linear,
+                        left bottom,
+                        left top,
+                        from(var(--dynamix-jquery-ui-button-background-end)),
+                        to(var(--dynamix-jquery-ui-button-background-end))
+                    ) 100% 100% no-repeat;
+            background:
+                linear-gradient(90deg, var(--dynamix-jquery-ui-button-background-start) 0, var(--dynamix-jquery-ui-button-background-end)) 0 0 no-repeat,
+                linear-gradient(90deg, var(--dynamix-jquery-ui-button-background-start) 0, var(--dynamix-jquery-ui-button-background-end)) 0 100% no-repeat,
+                linear-gradient(0deg, var(--dynamix-jquery-ui-button-background-start) 0, var(--dynamix-jquery-ui-button-background-start)) 0 100% no-repeat,
+                linear-gradient(0deg, var(--dynamix-jquery-ui-button-background-end) 0, var(--dynamix-jquery-ui-button-background-end)) 100% 100% no-repeat;
+            background-size:
+                100% 2px,
+                100% 2px,
+                2px 100%,
+                2px 100%;
+
+            &:hover {
+                color: var(--dynamix-jquery-ui-button-hover-color);
+                background: -webkit-gradient(
+                    linear,
+                    left top,
+                    right top,
+                    from(var(--dynamix-jquery-ui-button-background-start)),
+                    to(var(--dynamix-jquery-ui-button-background-end))
+                );
+                background: linear-gradient(90deg, var(--dynamix-jquery-ui-button-background-start) 0, var(--dynamix-jquery-ui-button-background-end));
             }
         }
     }
@@ -1752,12 +1625,27 @@ div.icon-zip {
     outline: none;
     display: inline-block;
     cursor: pointer;
+    width: 100%;
     padding: 1px 0;
 }
 
 .ui-dropdownchecklist-selector-wrapper {
     vertical-align: middle;
     font-size: 0;
+    width: 100%;
+
+    /**
+     * override the defined with set by the jquery library
+     *
+     * @note - commented out b/c it causes overflow issues if too many items are selected
+     */
+    /* .ui-dropdownchecklist-selector {
+        width: 100% !important;
+    } */
+
+    .ui-dropdownchecklist-text {
+        padding-left: .5rem;
+    }
 }
 
 .ui-dropdownchecklist-dropcontainer {

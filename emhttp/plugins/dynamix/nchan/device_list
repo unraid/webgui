@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -34,14 +34,17 @@ $locale_init = $locale;
 function initSum() {
   return ['count'=>0, 'temp'=>0, 'power'=>0, 'fsSize'=>0, 'fsUsed'=>0, 'fsFree'=>0, 'ioReads'=>0, 'ioWrites'=>0, 'numReads'=>0, 'numWrites'=>0, 'numErrors'=>0];
 }
+
 function get_model($id) {
   return substr($id,0,strrpos($id,'_'));
 }
+
 function my_power($power) {
   global $display;
   $number = _var($display,'number','.,');
   return _var($display,'power') && $power ? number_format($power,$power<10?2:1,$number[0]).' '._('W').' / ' : '';
 }
+
 function device_info(&$disk,$online) {
   global $pools, $var;
   if (!$online || _var($disk,'fsStatus')!='Mounted' || (in_array(_var($disk,'type'),['Parity','Cache']) && (!in_array(_var($disk,'name'),$pools) || isSubpool(_var($disk,'name'))))) {
@@ -84,6 +87,7 @@ function device_info(&$disk,$online) {
           : $fancy;
   return $view.$status.$link;
 }
+
 function device_desc(&$disk) {
   global $var;
   $size = my_scale(_var($disk,'sectors',0)*_var($disk,'sector_size',0),$unit,-1);
@@ -101,6 +105,7 @@ function device_desc(&$disk) {
     return my_id(_var($disk,'id'))." - $size $unit ("._var($disk,'device').")";
   }
 }
+
 function assignment(&$disk) {
   global $var, $devs;
   $echo = [];
@@ -119,18 +124,18 @@ function assignment(&$disk) {
   $echo[] = "</select></form>";
   return implode($echo);
 }
+
 function vfs_luks($fs) {
   return str_starts_with($fs,'luks:');
 }
+
 function vfs_type(&$disk,$online = false) {
   global $disks, $pools, $crypto;
   $fsType = _var($disk,'fsType','');
   $luks   = '';
-  if (empty($fsType))
-    return $fsType;
-  if ($crypto) switch (_var($disk,'luksState',0)) {
+  if (empty($fsType)) return;
+  if (vfs_luks($fsType) && $crypto) switch (_var($disk,'luksState',0)) {
     case 0:
-      if (vfs_luks($fsType))
       $luks = "<a class='info'><i class='padlock fa fa-unlock-alt orange-text'></i><span>"._('Device to be encrypted')."</span></a>";
       break;
     case 1:
@@ -151,6 +156,7 @@ function vfs_type(&$disk,$online = false) {
   }
   return $luks.str_replace('luks:','',$fsType);
 }
+
 function fs_info(&$disk,$online = false) {
   global $display;
   $echo = [];
@@ -176,9 +182,11 @@ function fs_info(&$disk,$online = false) {
   }
   return implode($echo);
 }
+
 function my_diskio($data) {
   return my_scale($data,$unit,1)." $unit/s";
 }
+
 function array_offline(&$disk, $pool='') {
   global $var, $disks, $display;
   $disk['power'] ??= (_var($display,'power') && _var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'power') : 0);
@@ -256,6 +264,7 @@ function array_offline(&$disk, $pool='') {
   $echo[] = "</tr>";
   return implode($echo);
 }
+
 function array_online(&$disk, $fstype='') {
   global $pools, $sum, $diskio;
   $disk['power'] ??= (_var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'power') : 0);
@@ -310,6 +319,7 @@ function array_online(&$disk, $fstype='') {
   $echo[] = "</tr>";
   return implode($echo);
 }
+
 function show_totals($text,$array,$name) {
   global $var, $display, $sum, $locale;
   $number = _var($display,'number','.,');
@@ -346,6 +356,7 @@ function show_totals($text,$array,$name) {
   $echo[] = "</tr>";
   return implode($echo);
 }
+
 function array_slots() {
   global $var;
   $min  = max(_var($var,'sbNumDisks',0),3);
@@ -354,7 +365,7 @@ function array_slots() {
   $echo[] = "<form method='POST' action='/update.htm' target='progressFrame'>";
   $echo[] = "<input type='hidden' name='csrf_token' value='"._var($var,'csrf_token')."'>";
   $echo[] = "<input type='hidden' name='changeSlots' value='apply'>";
-  $echo[] = "<select class='narrow' name='SYS_ARRAY_SLOTS' onChange='devices.start();this.form.submit()'>";
+  $echo[] = "<select class='slots-amount' name='SYS_ARRAY_SLOTS' onChange='devices.start();this.form.submit()'>";
   if (_var($var,'mdNumDisks')=='0')
     $echo[] = "<option value='0'>none</option>";
   for ($n=$min; $n<=$max; $n++) {
@@ -364,21 +375,18 @@ function array_slots() {
   $echo[] = "</select></form>";
   return implode($echo);
 }
+
 function cache_slots($off,$pool,$min,$slots) {
   global $var, $disks;
-//  $off  = $off && $min ? ' disabled' : '';
-  $off = _var($disks[$pool],'fsType','auto')!='auto' && empty(_var($disks[$pool],'uuid')) ? ' disabled' : '';
-  $max  = _var($var,'MAX_CACHESZ');
+  $off  = $off && $min ? ' disabled' : '';
+  $fsType = _var($disks[$pool],'fsType','auto');
+  $max  = ($fsType=='auto' || str_contains($fsType,'btrfs') || str_contains($fsType,'zfs')) ? _var($var,'MAX_CACHESZ') : 1;
   $echo = [];
   $echo[] = "<form method='POST' action='/update.htm' target='progressFrame'>";
   $echo[] = "<input type='hidden' name='csrf_token' value='"._var($var,'csrf_token')."'>";
   $echo[] = "<input type='hidden' name='changeSlots' value='apply'>";
   $echo[] = "<input type='hidden' name='poolName' value='$pool'>";
-  $echo[] = "<select class='narrow' name='poolSlots' onChange='devices.start();this.form.submit()'{$off}>";
-//  if (_var($disks[$pool],'state')=='NEW_ARRAY' || str_contains(_var($diks[$pool],'state'),'NO_DEVICES')) {
-//    $option = _('none');
-//    $echo[] = "<option value='0'>$option</option>";
-//  }
+  $echo[] = "<select class='slots-amount' name='poolSlots' onChange='devices.start();this.form.submit()'{$off}>";
   for ($n=$min; $n<=$max; $n++) {
     $selected = ($n==$slots) ? ' selected' : '';
     $echo[] = "<option value='$n'{$selected}>$n</option>";
@@ -386,6 +394,7 @@ function cache_slots($off,$pool,$min,$slots) {
   $echo[] = "</select></form>";
   return implode($echo);
 }
+
 function update_translation($locale) {
   global $docroot,$language;
   $language = [];
@@ -404,6 +413,7 @@ function update_translation($locale) {
     }
   }
 }
+
 while (true) {
   $var    = (array)@parse_ini_file("$varroot/var.ini");
   $devs   = (array)@parse_ini_file("$varroot/devs.ini",true);
@@ -491,10 +501,10 @@ while (true) {
     $a = 'pool_device'.$i++;
     $echo[$a] = [];
     $root  = explode($_tilde_,$pool)[0];
-    $print = array_filter(array_column($Cache,'name'),function($name) use ($pools,$root) {return in_array($name,$pools) && strncmp($root,$name,strlen($root))==0;});
+    $print = array_filter(array_column($Cache,'name'),function($name) use ($pools,$root,$_tilde_) {$name_root=explode($_tilde_,$name)[0]; return in_array($name,$pools) && strcmp($root,$name_root)==0;});
     $print = end($print);
     if (_var($var,'fsState')=='Stopped') {
-      $log = @parse_ini_file($pool_log) ?: [];
+      $log = @parse_ini_file($pool_log) ?: []; // used to detect slot changes
       $off = false;
       foreach ($Cache as $disk) if (prefix(_var($disk,'name'))==$pool) {
         $echo[$a][] = array_offline($disk,$pool);
@@ -504,14 +514,14 @@ while (true) {
         if (isset($log[$named])) $off |= ($log[$named] != _var($disk,'id')); elseif ($named) $log[$named] = _var($disk,'id');
       }
       $data = []; foreach ($log as $key => $value) $data[] = "$key=\"$value\"";
-      $off &= !empty(_var($Cache[$pool],'uuid'));
+      $off &= !empty(_var($Cache[$root],'uuid'));
       file_put_contents($pool_log,implode("\n",$data));
       $echo[$a][] = "<tr class='tr_last'><td>"._('Slots').":</td><td colspan='8'><span class='slots'><span class='slots-left'>".cache_slots($off,$pool,_var($Cache[$pool],'devicesSb'),_var($Cache[$pool],'slots',0))."</span>";
       $zfsPool = strstr(_var($Cache[$pool],'fsType'),'zfs') && !isSubpool($pool);
       if ($zfsPool) {
         $current_subpools = array_filter($pools, function($element) use ($pool,$_tilde_) {return str_contains($element,"{$pool}{$_tilde_}");});
         $current_subpools_list = str_replace("{$pool}{$_tilde_}","", implode(',', $current_subpools));
-        $echo[$a][] = "<input type='button' value='"._('Add Subpool')."' class='subpool' onclick='addSubpoolPopup(\"$pool\",\"$current_subpools_list\")'".(count($current_subpools)<count($subpools)?'':' disabled').">";
+        $echo[$a][] = "<input type='button' value='"._('Add Subpool')."' class='subpool button-small' onclick='addSubpoolPopup(\"$pool\",\"$current_subpools_list\")'".(count($current_subpools)<count($subpools)?'':' disabled').">";
       }
       $echo[$a][] = "</span></td><td></td></tr>";
     } else {
@@ -556,15 +566,13 @@ while (true) {
 
   $echo['stop'] = _var($var,'fsState')=='Stopped' ? 1 : 0;
 
-  $echo = json_encode($echo);
-  $md5_new = md5($echo,true);
-//  if ($md5_new !== $md5_old) {
-    $md5_old = publish('devices',$echo)!==false ? $md5_new : -1;
-//  }
+  // publish without a timeout for no listeners
+  publish('devices',json_encode($echo));
   $fs_new = _var($var,'fsState')=='Started' ? 1 : 0;
-//  if ($fs_new !== $fs_old) {
-    $fs_old = publish('arraymonitor',$fs_new)!==false ? $fs_new : -1;
-//  }
+  publish('arraymonitor',$fs_new);
+
+  // ping the page so we can terminate if nobody is listening
+  ping('mainPingListener');
   sleep(1);
 }
 ?>

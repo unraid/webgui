@@ -1007,7 +1007,7 @@ class DockerClient {
 			foreach($ct['NetworkSettings']['Networks'] as $netName => $netVals) {
 				$i = $c['NetworkMode']=='host' ? $host : $netVals['IPAddress'];
 				$c['Networks'][$netName] = [ 'IPAddress' => $i ];
-				if ($driver[$netName]=='ipvlan' || $driver[$netName]=='macvlan') {
+				if ( isset($driver[$netName]) && ($driver[$netName]=='ipvlan' || $driver[$netName]=='macvlan') ) {
 					if (!isset($c['Ports']['vlan'])) $c['Ports']['vlan'] = [];
 					$c['Ports']['vlan']["$i"] = $i;
 				}
@@ -1178,7 +1178,7 @@ class DockerUtil {
 	public static function host() {
 		$port = static::port();
 		if (!$port) return '';
-		$port = lan_port($port,true)==0 && lan_port('wlan0') ? 'wlan0' : $port;
+		$port = lan_port($port,true)!=1 && lan_port('wlan0') ? 'wlan0' : $port;
 		return exec("ip -br -4 addr show $port scope global | sed -r 's/\/[0-9]+//g' | awk '{print $3;exit}'");
 	}
 }

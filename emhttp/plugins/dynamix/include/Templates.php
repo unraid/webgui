@@ -15,16 +15,14 @@
 <input type="file" id="dfm_upload" value="" onchange="startUpload(this.files)" multiple>
 
 <div markdown="1" id="dfm_templateCreateFolder">
-&nbsp;
-: &nbsp;
-
 _(New folder name)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="">
 
 &nbsp;
 : <span class="dfm_text"></span>
 
-<div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This creates a folder at the current level)_</div>
+&nbsp;
+: <div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This creates a folder at the current level)_</div>
 </div>
 
 <div markdown="1" id="dfm_templateDeleteFolder">
@@ -34,7 +32,8 @@ _(Folder name)_:
 &nbsp;
 : <span class="dfm_text"></span>
 
-<div class="dfm_info"><i class="fa fa-warning dfm"></i><?=_("This deletes the folder and all its content")?></div>
+&nbsp;
+: <div class="dfm_info"><i class="fa fa-warning dfm"></i><?=_("This deletes the folder and all its content")?></div>
 </div>
 
 <div markdown="1" id="dfm_templateRenameFolder">
@@ -50,7 +49,8 @@ _(New folder name)_:
 &nbsp;
 : <span class="dfm_text"></span>
 
-<div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This renames the folder to the new name)_</div>
+&nbsp;
+: <div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This renames the folder to the new name)_</div>
 </div>
 
 <div markdown="1" id="dfm_templateCopyFolder">
@@ -58,17 +58,28 @@ _(Source folder)_:
 : <span id="dfm_source"></span>
 
 &nbsp;
+: <span class="flex flex-col gap-4">
+  <label for="dfm_sparse" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_sparse">_(Use sparse option)_</span>
+  </label>
+  <label for="dfm_exist" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_exist" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_exist">_(Overwrite existing files)_</span>
+  </label>
+  <span class="dfm_text"></span>
+</span>
+
+&nbsp;
 : _(copy to)_ ...
+
+<dt class="dfm_noticeLabel">&nbsp;</dt>
+<dd class="dfm_notice">
+  <div class="dfm_info"><i class="fa fa-warning dfm"></i><?=_("This copies the folder and all its content to another folder")?></div>
+</dd>
 
 _(Target folder)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickmatch="" data-pickroot="" data-picktop="">
-
-<input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''"><span class="dfm_sparse">_(Use sparse option)_</span><br>
-<input type="checkbox" id="dfm_exist" value="" onchange="this.value=this.checked?'1':''"><span class="dfm_exist">_(Overwrite existing files)_</span>
-: <span class="dfm_text"></span>
-
-
-<div class="dfm_info"><i class="fa fa-warning dfm"></i><?=_("This copies the folder and all its content to another folder")?></div>
 </div>
 
 <div markdown="1" id="dfm_templateMoveFolder">
@@ -76,16 +87,28 @@ _(Source folder)_:
 : <span id="dfm_source"></span>
 
 &nbsp;
+: <span class="flex flex-col gap-4">
+  <label for="dfm_sparse" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_sparse">_(Use sparse option)_</span>
+  </label>
+  <label for="dfm_exist" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_exist" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_exist">_(Overwrite existing files)_</span>
+  </label>
+  <span class="dfm_text"></span>
+</span>
+
+&nbsp;
 : _(move to)_ ...
+
+<dt class="dfm_noticeLabel">&nbsp;</dt>
+<dd class="dfm_notice">
+  <div class="dfm_info"><i class="fa fa-warning dfm"></i><?=_("This moves the folder and all its content to another folder")?></div>
+</dd>
 
 _(Target folder)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickmatch="" data-pickroot="" data-picktop="">
-
-<input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''"><span class="dfm_sparse">_(Use sparse option)_</span><br>
-<input type="checkbox" id="dfm_exist" value="" onchange="this.value=this.checked?'1':''"><span class="dfm_exist">_(Overwrite existing files)_</span>
-: <span class="dfm_text"></span>
-
-<div class="dfm_info"><i class="fa fa-warning dfm"></i><?=_("This moves the folder and all its content to another folder")?></div>
 </div>
 
 <div markdown="1" id="dfm_templateDeleteFile">
@@ -95,7 +118,8 @@ _(File name)_:
 &nbsp;
 : <span class="dfm_text"></span>
 
-<div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This deletes the selected file)_</div>
+&nbsp;
+: <div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This deletes the selected file)_</div>
 </div>
 
 <div markdown="1" id="dfm_templateRenameFile">
@@ -111,7 +135,8 @@ _(New file name)_:
 &nbsp;
 : <span class="dfm_text"></span>
 
-<div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This renames the selected file)_</div>
+&nbsp;
+: <div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This renames the selected file)_</div>
 </div>
 
 <div markdown="1" id="dfm_templateCopyFile">
@@ -119,16 +144,28 @@ _(Source file)_:
 : <span id="dfm_source"></span>
 
 &nbsp;
+: <span class="flex flex-col gap-4">
+  <label for="dfm_sparse" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_sparse">_(Use sparse option)_</span>
+  </label>
+  <label for="dfm_exist" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_exist" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_exist">_(Overwrite existing files)_</span>
+  </label>
+  <span class="dfm_text"></span>
+</span>
+
+&nbsp;
 : _(copy to)_ ...
+
+<dt class="dfm_noticeLabel">&nbsp;</dt>
+<dd class="dfm_notice">
+  <div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This copies the selected file)_</div>
+</dd>
 
 _(Target file)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="" data-pickmatch="" data-pickroot="" data-picktop="">
-
-<input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''"><span class="dfm_sparse">_(Use sparse option)_</span><br>
-<input type="checkbox" id="dfm_exist" value="" onchange="this.value=this.checked?'1':''"><span class="dfm_exist">_(Overwrite existing files)_</span>
-: <span class="dfm_text"></span>
-
-<div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This copies the selected file)_</div>
 </div>
 
 <div markdown="1" id="dfm_templateMoveFile">
@@ -136,16 +173,28 @@ _(Source file)_:
 : <span id="dfm_source"></span>
 
 &nbsp;
+: <span class="flex flex-col gap-4">
+  <label for="dfm_sparse" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_sparse">_(Use sparse option)_</span>
+  </label>
+  <label for="dfm_exist" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_exist" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_exist">_(Overwrite existing files)_</span>
+  </label>
+  <span class="dfm_text"></span>
+</span>
+
+&nbsp;
 : _(move to)_ ...
+
+<dt class="dfm_noticeLabel">&nbsp;</dt>
+<dd class="dfm_notice">
+  <div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This moves the selected file)_</div>
+</dd>
 
 _(Target file)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="" data-pickmatch="" data-pickroot="" data-picktop="">
-
-<input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''"><span class="dfm_sparse">_(Use sparse option)_</span><br>
-<input type="checkbox" id="dfm_exist" value="" onchange="this.value=this.checked?'1':''"><span class="dfm_exist">_(Overwrite existing files)_</span>
-: <span class="dfm_text"></span>
-
-<div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This moves the selected file)_</div>
 </div>
 
 <div markdown="1" id="dfm_templateDeleteObject">
@@ -155,7 +204,8 @@ _(Source)_:
 &nbsp;
 : <span class="dfm_text"></span>
 
-<div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This deletes all selected sources)_</div>
+&nbsp;
+: <div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This deletes all selected sources)_</div>
 </div>
 
 <div markdown="1" id="dfm_templateRenameObject">
@@ -168,7 +218,8 @@ _(Source)_:
 _(Target)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="">
 
-<div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This renames the selected source)_</div>
+&nbsp;
+: <div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This renames the selected source)_</div>
 </div>
 
 <div markdown="1" id="dfm_templateCopyObject">
@@ -176,16 +227,28 @@ _(Source)_:
 : <select id="dfm_source"></select>
 
 &nbsp;
+: <span class="flex flex-col gap-4">
+  <label for="dfm_sparse" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_sparse">_(Use sparse option)_</span>
+  </label>
+  <label for="dfm_exist" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_exist" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_exist">_(Overwrite existing files)_</span>
+  </label>
+  <span class="dfm_text"></span>
+</span>
+
+&nbsp;
 : _(copy to)_ ...
+
+<dt class="dfm_noticeLabel">&nbsp;</dt>
+<dd class="dfm_notice">
+  <div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This copies all the selected sources)_</div>
+</dd>
 
 _(Target)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="" data-pickmatch="" data-pickroot="" data-picktop="">
-
-<input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''"><span class="dfm_sparse">_(Use sparse option)_</span><br>
-<input type="checkbox" id="dfm_exist" value="" onchange="this.value=this.checked?'1':''"><span class="dfm_exist">_(Overwrite existing files)_</span>
-: <span class="dfm_text"></span>
-
-<div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This copies all the selected sources)_</div>
 </div>
 
 <div markdown="1" id="dfm_templateMoveObject">
@@ -193,16 +256,28 @@ _(Source)_:
 : <select id="dfm_source"></select>
 
 &nbsp;
+: <span class="flex flex-col gap-4">
+  <label for="dfm_sparse" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_sparse">_(Use sparse option)_</span>
+  </label>
+  <label for="dfm_exist" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_exist" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_exist">_(Overwrite existing files)_</span>
+  </label>
+  <span class="dfm_text"></span>
+</span>
+
+&nbsp;
 : _(move to)_ ...
+
+<dt class="dfm_noticeLabel">&nbsp;</dt>
+<dd class="dfm_notice">
+  <div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This moves all the selected sources)_</div>
+</dd>
 
 _(Target)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="" data-pickmatch="" data-pickroot="" data-picktop="">
-
-<input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''"><span class="dfm_sparse">_(Use sparse option)_</span><br>
-<input type="checkbox" id="dfm_exist" value="" onchange="this.value=this.checked?'1':''"><span class="dfm_exist">_(Overwrite existing files)_</span>
-: <span class="dfm_text"></span>
-
-<div class="dfm_info"><i class="fa fa-warning dfm"></i>_(This moves all the selected sources)_</div>
 </div>
 
 <div markdown="1" id="dfm_templateChangeOwner">
@@ -233,22 +308,30 @@ _(Source)_:
 
 _(New permission)_:
 : <input type="hidden" id="dfm_target" value="">
-  _(Owner)_:<select id="dfm_owner" class="narrow dfm">
-  <?=mk_option(0,'u-rwx',_('No Access'))?>
-  <?=mk_option(0,'u-wx+r',_('Read-only'))?>
-  <?=mk_option(0,'u-x+rw',_('Read/Write'))?>
-  </select>
-  _(Group)_:<select id="dfm_group" class="narrow dfm">
-  <?=mk_option(0,'g-rwx',_('No Access'))?>
-  <?=mk_option(0,'g-wx+r',_('Read-only'))?>
-  <?=mk_option(0,'g-x+rw',_('Read/Write'))?>
-  </select>
-  _(Other)_:<select id="dfm_other" class="narrow dfm">
-  <?=mk_option(0,'o-rwx',_('No Access'))?>
-  <?=mk_option(0,'o-wx+r',_('Read-only'))?>
-  <?=mk_option(0,'o-x+rw',_('Read/Write'))?>
-  </select>
-
+  <label for="dfm_owner" class="inline-flex flex-wrap items-center gap-4">
+    _(Owner)_:
+    <select id="dfm_owner" class="narrow dfm">
+      <?=mk_option(0,'u-rwx',_('No Access'))?>
+      <?=mk_option(0,'u-wx+r',_('Read-only'))?>
+      <?=mk_option(0,'u-x+rw',_('Read/Write'))?>
+    </select>
+  </label>
+  <label for="dfm_group" class="inline-flex flex-wrap items-center gap-4">
+    _(Group)_:
+    <select id="dfm_group" class="narrow dfm">
+    <?=mk_option(0,'g-rwx',_('No Access'))?>
+    <?=mk_option(0,'g-wx+r',_('Read-only'))?>
+    <?=mk_option(0,'g-x+rw',_('Read/Write'))?>
+    </select>
+  </label>
+  <label for="dfm_other" class="inline-flex flex-wrap items-center gap-4">
+    _(Other)_:
+    <select id="dfm_other" class="narrow dfm">
+    <?=mk_option(0,'o-rwx',_('No Access'))?>
+    <?=mk_option(0,'o-wx+r',_('Read-only'))?>
+    <?=mk_option(0,'o-x+rw',_('Read/Write'))?>
+    </select>
+  </label>
 &nbsp;
 : <span class="dfm_text"></span>
 
@@ -310,7 +393,6 @@ $('#dfm_viewer').click();
 
 <div id="dfm_templateJobs">
 <!--!
-<style>div#dfm_jobs{position:absolute;top:0;bottom:0;left:0;right:0;line-height:3rem}</style>
 <div id="dfm_jobs"></div>
 <script>
 $.post('/webGui/include/Control.php',{mode:'jobs'},function(jobs){

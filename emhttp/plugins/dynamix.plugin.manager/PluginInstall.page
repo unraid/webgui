@@ -24,7 +24,7 @@ Tag="download"
       return;
     }
     file = file.trim();
-    if (!file) return;
+    if (!file) return console.warn('No plugin file selected');
     $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php', {
       cmd: 'alert'
     }, function(data) {
@@ -47,21 +47,33 @@ Tag="download"
       e.preventDefault();
       installPlugin($('#plugin_file').val());
     });
+
+    $('#plugin_tree').fileTree({
+      root: '/boot/',
+      top: '/boot/',
+      filter:'plg',
+    }, function(file) {
+      $('#plugin_file').val(file);
+    });
   });
 </script>
 
-**_(Enter URL of remote plugin file or local plugin file)_**
 
-<form name="plugin_install" method="POST" target="progressFrame">
-  <input type="text" name="file" id="plugin_file" maxlength="1024" value="" style="width:33%">
-  <label style="margin-right: 10px;" title="_(Allows you to install the same or older version of a plugin)_">
-    <input type="checkbox" id="force_install" name="force_install">
-    _(Force Install)_
-  </label>
-  <input type="submit" value="_(Install)_">
+<form class="max-w-20 mx-auto" name="plugin_install" method="POST" target="progressFrame">
+  <p><strong>_(Enter URL of remote plugin file or local plugin file)_</strong></p>
+  <div>
+    <input type="text" name="file" id="plugin_file" maxlength="1024" value="">
+    <label style="margin-right: 10px;" title="_(Allows you to install the same or older version of a plugin)_">
+      <input type="checkbox" id="force_install" name="force_install">
+      _(Force Install)_
+    </label>
+    <input type="submit" value="_(Install)_">
+  </div>
 </form>
 
 :plugin_install_help:
 
-**_(Select local plugin file)_**
-<div id="plugin_tree" class="textarea"></div>
+<div class="max-w-20 mx-auto">
+  <p><strong>_(Select local plugin file)_</strong></p>
+  <div id="plugin_tree" class="textarea h-50 overflow-y-auto"></div>
+</div>

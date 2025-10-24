@@ -24,49 +24,163 @@ require_once "$docroot/webGui/include/Translations.php";
 $boot   = "/boot/config/plugins/dynamix";
 $file   = $argv[1];
 $cmodel = is_file("$boot/$file") ? file_get_contents("$boot/$file") : '';
+
+$cases = file("$docroot/webGui/styles/default-cases.css", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+$models = [];
+
+// Extract case model names from CSS file
+foreach ($cases as $case) {
+  if (substr($case, 0, 6) == '.case-') {
+    $models[] = substr($case, 1, strpos($case, ':') - 1);
+  }
+}
+
+natsort($models);
 ?>
 <style>
-div.case-list{float:left;padding:10px;margin:0 45px 64px 0;height:128px;width:128px;text-align:center;cursor:pointer}
-div.case-list span{position:relative;top:64px;width:auto;max-width:128px;height:128px;font-size:128px}
-div.case-list span.fa{top:24px;max-width:80px;font-size:80px}
-div.case-list:hover{color:#f0000c}
-div.case-name{position:relative;top:74px;font-family:clear-sans!important}
-div.custom-name{position:relative;top:10px;font-family:clear-sans!important}
-input#file{display:none}
-</style>
+:root {
+    --case-size: 80px;
+    --case-gap: 12px;
+    --hover-color: var(--orange-800);
+    --active-color: var(--orange-500);
+    --font-family: clear-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
 
+.SelectCase {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--case-size), 1fr));
+    gap: var(--case-gap);
+    justify-items: center;
+    /* offset the swal body automatically being a <pre>... :( */
+    margin-top: -3rem;
+    margin-bottom: -3rem;
+}
+
+.SelectCase-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    width: var(--case-size);
+    padding: 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: color 0.2s ease;
+    border-radius: 8px;
+}
+
+.SelectCase-item:hover {
+    color: var(--hover-color);
+}
+
+.SelectCase-item--active {
+    color: var(--active-color);
+}
+
+.SelectCase-item span {
+    font-size: 40px;
+    line-height: 1;
+}
+.SelectCase-item-name {
+    font-family: var(--font-family);
+    font-size: 10px;
+    font-weight: 500;
+    word-wrap: break-word;
+    max-width: 100%;
+}
+
+/* Tablet and up */
+@media (min-width: 640px) {
+    :root {
+        --case-size: 100px;
+        --case-gap: 16px;
+    }
+
+    .SelectCase-item span {
+        font-size: 56px;
+    }
+
+    .SelectCase-item-name {
+        font-size: 11px;
+    }
+}
+
+/* Desktop and up */
+@media (min-width: 1024px) {
+    :root {
+        --case-size: 128px;
+        --case-gap: 24px;
+    }
+
+    .SelectCase-item span {
+        font-size: 64px;
+    }
+
+    .SelectCase-item-name {
+        font-size: 12px;
+    }
+}
+</style>
 <script>
+window.select_case_file = '<?=$file?>';
+
 function selectDone() {
-  $('.sweet-alert').hide('fast').removeClass('nchan');
-  swal.close();
-  getCase();
+    $('.sweet-alert').hide('fast').removeClass('nchan');
+    swal.close();
+    getCase();
 }
 function setCase(model) {
-  $.post('/webGui/include/SelectCase.php',{mode:'set',file:'<?=$file?>',model:model},function(){selectDone();});
+    $.post('/webGui/include/SelectCase.php',{
+        mode: 'set',
+        file: window.select_case_file,
+        model: model,
+    }, function() {
+        selectDone();
+    });
 }
 function importFile(file) {
-  if (file.name.split('.').pop().toLowerCase() != 'png') return;
-  var reader = new FileReader();
-  reader.readAsDataURL(file);
-  reader.onload = function(e){$.post('/webGui/include/SelectCase.php',{mode:'file',file:'<?=$file?>',data:e.target.result},function(){selectDone();})};
+    if (file.name.split('.').pop().toLowerCase() != 'png') return;
+    var reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = function(e){
+        $.post('/webGui/include/SelectCase.php',{
+            mode: 'file',
+            file: window.select_case_file,
+            data: e.target.result,
+        }, function() {
+            selectDone();
+        });
+    };
 }
 </script>
-
 <div>
-<?
-$cases = file("$docroot/webGui/styles/default-cases.css",FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES);
-foreach ($cases as $case) if (substr($case,0,6)=='.case-') $models[] = substr($case,1,strpos($case,':')-1);
-natsort($models);
-for ($i=0; $i < count($models); $i++) {
-  $model = $models[$i];
-  $name = substr($model,5);
-  $title = str_replace('3u-avs-10-4','3u-avs-10/4',$name);
-  $select = $name==$cmodel ? 'color:#e68a00' : '';
-  echo "<div id='$name' class='case-list' style='$select' onclick='setCase(\"$name\")'><span class='$model'></span><div class='case-name'>$title</div></div>\n";
-}
-$select = $cmodel=='case-model.png' ? 'color:#e68a00' : '';
-?>
-<div id='Custom' class='case-list' style='<?=$select?>' onclick='$("input#file").trigger("click")'><span class='fa fa-file-image-o'></span><div class='custom-name'><?=_('custom image')?></div></div>
-</div></div>
-<input type='file' id='file' accept='.png' onchange='importFile(this.files[0])'>
+<div class="SelectCase">
+    <?
+    foreach ($models as $model) {
+      $name = substr($model, 5);
+      $title = str_replace('3u-avs-10-4', '3u-avs-10/4', $name);
+      $caseActive = $name == $cmodel ? 'SelectCase-item--active' : '';
+    ?>
+    <div
+      id="<?=$name?>"
+      class="SelectCase-item <?=$caseActive?>"
+      onclick="setCase('<?=$name?>')"
+    >
+      <span class="<?=$model?>"></span>
+      <div class="SelectCase-item-name"><?=$title?></div>
+    </div>
+    <? } ?>
+
+    <div
+      id="Custom"
+      class="SelectCase-item <?=$cmodel == 'case-model.png' ? 'SelectCase-item--active' : ''?>"
+      onclick="$('input#file').trigger('click')"
+    >
+      <span class="fa fa-file-image-o"></span>
+      <div class="SelectCase-item-name"><?=_('custom image')?></div>
+    </div>
+  </div>
+
+  <input class="hidden" type="file" id="file" accept=".png" onchange="importFile(this.files[0])">
 </div>

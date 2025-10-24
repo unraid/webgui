@@ -63,9 +63,11 @@ $proxy_3_url			= $url_array['full_url'];
 <input type="hidden" name="#command" value="<?= OUTGOING_PROXY_SCRIPT; ?>">
 <input type="hidden" name="#arg[1]" value="apply">
 
-<p><strong>_(Enable Outgoing Proxy)_</strong></p>
+_(Enable Outgoing Proxy)_
+: &nbsp;
+
 _(Select Proxy)_:
-: <select name="proxy_active" style="width:20%;" size="1">
+: <select name="proxy_active" size="1">
 	<?=mk_option($cfg['proxy_active'], "0", "_(None)_");?>
 	<?if (($cfg['proxy_url_1']) && ($cfg['proxy_name_1'])):?>
 	<?=mk_option($cfg['proxy_active'], "1", htmlspecialchars($cfg['proxy_name_1']), "disabled");?>
@@ -88,16 +90,20 @@ _(Select Proxy)_:
 > For a more comprehensive solution you might consider setting up <u><a href='https://docs.unraid.net/go/configuring-vpn-tunneled-access-for-system/' target='_blank'>_(VPN tunnel access for System)_</a></u>.
 :end
 
-<p><strong>_(Outgoing Proxy)_ 1</strong></p>
+<div markdown="1" class="shade">
+_(Outgoing Proxy)_ 1
+: &nbsp;
+
 _(Name)_:
-: <input type="text" name="proxy_name_1" style="width:20%;" maxlength="35" value="<?=$cfg['proxy_name_1'];?>" placeholder="(_(Required)_)"><span id="proxy-status-1"></span>
+: <input type="text" name="proxy_name_1" maxlength="35" value="<?=$cfg['proxy_name_1'];?>" placeholder="(_(Required)_)">
+  <span id="proxy-status-1"></span>
 
 :outgoing_proxy_name_plug:
 > Outgoing Proxy name for this Proxy.
 :end
 
 _(URL)_:
-: <input type="text" name="proxy_url_1" style="width:30%;" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_url_1']);?>" onchange="verifyUrl(this)" placeholder="_(http://IP:port or http://host:port)_">
+: <input type="text" name="proxy_url_1" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_url_1']);?>" onchange="verifyUrl(this)" placeholder="_(http://IP:port or http://host:port)_">
 
 :outgoing_proxy_url_plug:
 > Outgoing Proxy URL for this Proxy.  The URL can be entered with or without credentials.  The credentials will be parsed from the URL.
@@ -106,29 +112,33 @@ _(URL)_:
 :end
 
 _(User)_:
-: <input type="text" name="proxy_user_1" class="wide" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_user_1']);?>" placeholder="(_(Optional)_)">
+: <input type="text" name="proxy_user_1" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_user_1']);?>" placeholder="(_(Optional)_)">
 
 :outgoing_proxy_user_plug:
 > Outgoing Proxy User Name for this Proxy.
 :end
 
 _(Password)_:
-: <input type="password" name="proxy_pass_1" class="wide" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_pass_1']);?>" placeholder="(_(Optional)_)">
+: <input type="password" name="proxy_pass_1" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_pass_1']);?>" placeholder="(_(Optional)_)">
 
 :outgoing_proxy_password_plug:
 > Outgoing Proxy Password for this Proxy.
 :end
+</div>
 
-<p><strong>_(Outgoing Proxy)_ 2</strong></p>
+<div markdown="1" class="shade">
+_(Outgoing Proxy)_ 2
+: &nbsp;
+
 _(Name)_:
-: <input type="text" name="proxy_name_2" style="width:20%;" maxlength="35" value="<?=$cfg['proxy_name_2'];?>" placeholder="(_(Required)_)"><span id="proxy-status-2"></span>
+: <input type="text" name="proxy_name_2" maxlength="35" value="<?=$cfg['proxy_name_2'];?>" placeholder="(_(Required)_)"><span id="proxy-status-2"></span>
 
 :outgoing_proxy_name_plug:
 > Outgoing Proxy name for this Proxy.
 :end
 
 _(URL)_:
-: <input type="text" name="proxy_url_2" style="width:30%;" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_url_2']);?>"  onchange="verifyUrl(this)" placeholder="_(http://IP:port or http://host:port)_">
+: <input type="text" name="proxy_url_2" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_url_2']);?>"  onchange="verifyUrl(this)" placeholder="_(http://IP:port or http://host:port)_">
 
 :outgoing_proxy_url_plug:
 > Outgoing Proxy URL for this Proxy.  The URL can be entered with or without credentials.  The credentials will be parsed from the URL.
@@ -137,29 +147,34 @@ _(URL)_:
 :end
 
 _(User)_:
-: <input type="text" name="proxy_user_2" class="wide" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_user_2']);?>" placeholder="(_(Optional)_)">
+: <input type="text" name="proxy_user_2" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_user_2']);?>" placeholder="(_(Optional)_)">
 
 :outgoing_proxy_user_plug:
 > Outgoing Proxy User Name for this Proxy.
 :end
 
 _(Password)_:
-: <input type="password" name="proxy_pass_2" class="wide" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_pass_2']);?>" placeholder="(_(Optional)_)">
+: <input type="password" name="proxy_pass_2" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_pass_2']);?>" placeholder="(_(Optional)_)">
 
 :outgoing_proxy_password_plug:
 > Outgoing Proxy Password for this Proxy.
 :end
 
-<p><strong>_(Outgoing Proxy)_ 3</strong></p>
+</div>
+
+<div markdown="1" class="shade">
+_(Outgoing Proxy)_ 3
+: &nbsp;
+
 _(Name)_:
-: <input type="text" name="proxy_name_3" style="width:20%;" maxlength="35" value="<?=$cfg['proxy_name_3'];?>" placeholder="(_(Required)_)"><span id="proxy-status-3"></span>
+: <input type="text" name="proxy_name_3" maxlength="35" value="<?=$cfg['proxy_name_3'];?>" placeholder="(_(Required)_)"><span id="proxy-status-3"></span>
 
 :outgoing_proxy_name_plug:
 > Outgoing Proxy name for this Proxy.
 :end
 
 _(URL)_:
-: <input type="text" name="proxy_url_3" style="width:30%;" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_url_3']);?>"  onchange="verifyUrl(this)" placeholder="_(http://IP:port or http://host:port)_">
+: <input type="text" name="proxy_url_3" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_url_3']);?>"  onchange="verifyUrl(this)" placeholder="_(http://IP:port or http://host:port)_">
 
 :outgoing_proxy_url_plug:
 > Outgoing Proxy URL for this Proxy.  The URL can be entered with or without credentials.  The credentials will be parsed from the URL.
@@ -168,21 +183,26 @@ _(URL)_:
 :end
 
 _(User)_:
-: <input type="text" name="proxy_user_3" class="wide" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_user_3']);?>" placeholder="(_(Optional)_)">
+: <input type="text" name="proxy_user_3" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_user_3']);?>" placeholder="(_(Optional)_)">
 
 :outgoing_proxy_user_plug:
 > Outgoing Proxy User Name for this Proxy.
 :end
 
 _(Password)_:
-: <input type="password" name="proxy_pass_3" class="wide" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_pass_3']);?>" placeholder="(_(Optional)_)">
+: <input type="password" name="proxy_pass_3" maxlength="100" value="<?=htmlspecialchars($cfg['proxy_pass_3']);?>" placeholder="(_(Optional)_)">
 
 :outgoing_proxy_password_plug:
 > Outgoing Proxy Password for this Proxy.
 :end
+
+</div>
 
 &nbsp;
-: <input type="submit" value='_(Apply)_'><input type="button" value="_(Done)_" onclick="done()">
+: <span class="inline-block">
+	<input type="submit" value='_(Apply)_'>
+	<input type="button" value="_(Done)_" onclick="done()">
+  </span>
 </form>
 
 <script>

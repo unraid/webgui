@@ -64,7 +64,8 @@ foreach ($vms as $vm) {
   } else {
     $mem = $lv->domain_get_memory($res)/1024;
   }
-  $mem = round($mem).'M';
+  $memRounded = round($mem);
+  $mem = ($memRounded >= 1024) ? ($memRounded / 1024) . 'G' : $memRounded . 'M';
   $vcpu = $dom['nrVirtCpu'];
   $template = $lv->_get_single_xpath_result($res, '//domain/metadata/*[local-name()=\'vmtemplate\']/@name');
   if (empty($template)) $template = 'Custom';

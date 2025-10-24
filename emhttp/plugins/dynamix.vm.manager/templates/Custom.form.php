@@ -41,6 +41,9 @@ $arrValidNetworks     = getValidNetworks();
 $strCPUModel          = getHostCPUModel();
 $templateslocation    = "/boot/config/plugins/dynamix.vm.manager/savedtemplates.json";
 
+// get MAC address of wireless interface (if existing)
+$mac = file_exists('/sys/class/net/wlan0/address') ? trim(file_get_contents('/sys/class/net/wlan0/address')) : '';
+
 if (is_file($templateslocation)){
 	$arrAllTemplates["User-templates"] = "";
 	$ut = json_decode(file_get_contents($templateslocation),true);
@@ -130,6 +133,7 @@ $arrConfigDefaults = [
 	]
 ];
 $hdrXML = "<?xml version='1.0' encoding='UTF-8'?>\n"; // XML encoding declaration
+$debug = false;
 
 // Merge in any default values from the VM template
 if ($arrAllTemplates[$strSelectedTemplate] && $arrAllTemplates[$strSelectedTemplate]['overrides']) {
@@ -148,6 +152,7 @@ if (isset($_POST['createvm'])) {
 		}
 	} else {
 		// form view
+		#file_put_contents("/tmp/createpost",json_encode($_POST));
 		if ($lv->domain_new($_POST)) {
 			// Fire off the vnc/spice popup if available
 			$dom = $lv->get_domain_by_name($_POST['domain']['name']);
@@ -253,6 +258,12 @@ if (isset($_POST['updatevm'])) {
 		if ($error = create_vdisk($_POST) === false) {
 			$arrExistingConfig = custom::createArray('domain',$strXML);
 			$arrUpdatedConfig = custom::createArray('domain',$lv->config_to_xml($_POST));
+			if ($debug) {
+				file_put_contents("/tmp/vmdebug_exist",$strXML);
+				file_put_contents("/tmp/vmdebug_new",$lv->config_to_xml($_POST));
+				file_put_contents("/tmp/vmdebug_arrayN",json_encode($arrUpdatedConfig,JSON_PRETTY_PRINT));
+				file_put_contents("/tmp/vmdebug_arrayE",json_encode($arrExistingConfig,JSON_PRETTY_PRINT));
+			}
 			array_update_recursive($arrExistingConfig, $arrUpdatedConfig);
 			$arrConfig = array_replace_recursive($arrExistingConfig, $arrUpdatedConfig);
 			$xml = custom::createXML('domain',$arrConfig)->saveXML();
@@ -350,10 +361,14 @@ if ($snapshots!=null && count($snapshots) && !$boolNew) {
 <!--<input type="hidden" name="template[oldstorage]" id="storage_oldname" value="<?=htmlspecialchars($arrConfig['template']['storage'])?>"> -->
 <input type="hidden" name="domain[memoryBacking]" id="domain_memorybacking" value="<?=htmlspecialchars($arrConfig['domain']['memoryBacking'])?>">
 
+<script>
+const displayOptions = <?= json_encode($arrDisplayOptions, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+</script>
+
 <table>
 	<tr class="<?=$snaphidden?>">
 		<td></td>
-		<td><span class="orange-text"><i class="fa fa-fw fa-warning"></i> _(Rename disabled, <?=$snapcount?> snapshot(s) exists)_.</span></td>
+		<td><span class="orange-text"><i class="fa fa-fw fa-warning"></i> <?=sprintf(_('Rename disabled, %s snapshot(s) exists'), $snapcount)?>.</span></td>
 		<td></td>
 	</tr>
 	<tr id="zfs-name" class="hidden">
@@ -485,7 +500,7 @@ if ($snapshots!=null && count($snapshots) && !$boolNew) {
 	<tr class="advanced">
 		<td><span class="advanced">_(CPU)_ </span>_(Mode)_:</td>
 		<td>
-			<span class="width"><select id="cpu" name="domain[cpumode]" class="cpu narrow">
+			<span class="width"><select id="cpu" name="domain[cpumode]" class="cpu">
 			<?mk_dropdown_options(['host-passthrough' => _('Host Passthrough').' ('.$strCPUModel.')', 'custom' => _('Emulated').' ('._('QEMU64').')'], $arrConfig['domain']['cpumode']);?>
 			</select></span>
 			<span class="advanced label <?=$migratehidden?>" id="domain_cpumigrate_text">_(Migratable)_:</span>
@@ -596,9 +611,17 @@ if ($snapshots!=null && count($snapshots) && !$boolNew) {
 			<?
 			echo mk_option($arrConfig['domain']['mem'], 128 * 1024, '128 MB');
 			echo mk_option($arrConfig['domain']['mem'], 256 * 1024, '256 MB');
+
 			for ($i = 1; $i <= ($maxmem*2); $i++) {
-				$label = ($i * 512).' MB';
-				$value = $i * 512 * 1024;
+				$sizeMB = $i * 512;
+				$value = $sizeMB * 1024;
+
+				if ($sizeMB >= 1024) {
+					$label = number_format($sizeMB / 1024, 1) . ' GB';
+				} else {
+					$label = $sizeMB . ' MB';
+				}
+
 				echo mk_option($arrConfig['domain']['mem'], $value, $label);
 			}
 			?>
@@ -608,9 +631,17 @@ if ($snapshots!=null && count($snapshots) && !$boolNew) {
 			<?
 			echo mk_option($arrConfig['domain']['maxmem'], 128 * 1024, '128 MB');
 			echo mk_option($arrConfig['domain']['maxmem'], 256 * 1024, '256 MB');
+
 			for ($i = 1; $i <= ($maxmem*2); $i++) {
-				$label = ($i * 512).' MB';
-				$value = $i * 512 * 1024;
+				$sizeMB = $i * 512;
+				$value = $sizeMB * 1024;
+
+				if ($sizeMB >= 1024) {
+					$label = number_format($sizeMB / 1024, 1) . ' GB';
+				} else {
+					$label = $sizeMB . ' MB';
+				}
+
 				echo mk_option($arrConfig['domain']['maxmem'], $value, $label);
 			}
 			?>
@@ -1088,7 +1119,7 @@ if (!isset($arrValidMachineTypes[$arrConfig['domain']['machine']])) {
 			<?mk_dropdown_options($arrValidDiskDiscard, "unmap");?>
 			</select>
 			<span id="disk[{{INDEX}}][rotatetext]" class="label hidden">_(SSD)_:</span>
-			<input type="checkbox" id="disk[{{INDEX}}][rotation]" class="rotation hidden" onchange="updateSSDCheck(this)" name="disk[{{INDEX}}[rotation]" value='0'>
+			<input type="checkbox" id="disk[{{INDEX}}][rotation]" class="rotation hidden" onchange="updateSSDCheck(this)" name="disk[{{INDEX}}][rotation]" value='0'>
 		</td>
 		<td></td>
 	<tr class="advanced disk_bus_options">
@@ -1324,7 +1355,10 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 			<span id="vncdspopttext" class="label <?=$vncdspopt?>">_(Display(s) and RAM)_:</span>
 			<select id="vncdspopt" name="gpu[<?=$i?>][DisplayOptions]" class="second <?=$vncdspopt?>">
 			<?
-			foreach ($arrDisplayOptions as $key => $value) echo mk_option($arrGPU['DisplayOptions'], htmlentities($value['qxlxml'],ENT_QUOTES), _($value['text']));
+			foreach ($arrDisplayOptions as $key => $value) {
+				if ($arrGPU['protocol'] == 'vnc' && substr($key,0,2) != "H1") continue;
+				echo mk_option($arrGPU['DisplayOptions'], htmlentities($value['qxlxml'],ENT_QUOTES), _($value['text']));
+			}
 			?>
 			</select>
 		</td>
@@ -1893,6 +1927,37 @@ foreach ($arrConfig['evdev'] as $i => $arrEvdev) {
 	</p>
 </blockquote>
 </div>
+<table>
+	</tr>
+	<tr class="advanced">
+		<td><span class="advanced">_(Physical Address Bit Limit)_ </span></td>
+		<td>
+			<span class="width"><select id="cpupmemlmt" name="domain[cpupmemlmt]" class="cpupmem">
+			<?
+			echo mk_option($arrConfig['domain']['cpupmemlmt'], 'None', 'None');
+			echo mk_option($arrConfig['domain']['cpupmemlmt'], '32', '32-bit (4 GB)');
+			echo mk_option($arrConfig['domain']['cpupmemlmt'], '36', '36-bit (64 GB)');
+			echo mk_option($arrConfig['domain']['cpupmemlmt'], '39', '39-bit (512 GB)');
+			echo mk_option($arrConfig['domain']['cpupmemlmt'], '42', '42-bit (4 TB)');
+			echo mk_option($arrConfig['domain']['cpupmemlmt'], '48', '48-bit (256 TB)');
+			?>
+		</td>
+	</tr>
+</table>
+<div class="advanced">
+<blockquote class="inline_help">
+	<p>
+		<b>Physical Address Bit Limit</b><br>
+		Sets limit on the physical address space.
+		<br>
+		Some guest systems or GPUs passed through might not work properly if mapped to high physical addresses (especially GPUs with 32-bit BARs). Using maxphysaddr=36 or maxphysaddr=39 limits the physical memory below 64 GB or 512 GB, avoiding such issues.
+		<br>	
+		<br>bits=32 Addressable Memory 4 GB   Use Case: Force 32-bit PCI compatibility
+		<br>bits=36 Addressable Memory 64 GB  Use Case: Compatibility with older devices / 32-bit BARs
+		<br>bits=39 Addressable Memory 512 GB Use Case: Safe for most modern guests
+		<br>bits=48 Addressable Memory 256 TB Use Case: Full addressing, default on modern CPUs
+	</p>
+</div>
 <?}?>
 <?}?>
 
@@ -2023,13 +2088,17 @@ foreach ($arrConfig['evdev'] as $i => $arrEvdev) {
 var storageType = "<?=get_storage_fstype($arrConfig['template']['storage']);?>";
 var storageLoc  = "<?=$arrConfig['template']['storage']?>";
 
-function updateMAC(index,port) {
-	$('input[name="nic['+index+'][mac]"').prop('disabled',port=='wlan0');
-	$('i.mac_generate.'+index).prop('disabled',port=='wlan0');
+function updateMAC(index, port) {
+	var wlan0 = '<?=$mac?>'; // mac address of wlan0
+	var mac = $('input[name="nic['+index+'][mac]"');
+	mac.prop('disabled', port=='wlan0');
+	$('i.mac_generate.'+index).prop('disabled', port=='wlan0');
 	$('span.wlan0').removeClass('hidden');
-	if (port != 'wlan0') {
+	if (port == 'wlan0') {
+		mac.val(wlan0);
+	} else {
 		$('span.wlan0').addClass('hidden');
-		$('i.mac_generate.'+index).click();
+		if (wlan0 && mac.val()==wlan0) $('i.mac_generate.'+index).click();
 	}
 }
 
@@ -2211,6 +2280,40 @@ function ProtocolChange(protocol) {
 		$("wsport").addClass('hidden');
 		$("WSPorttext").addClass('hidden');
 	}
+
+    const select = document.getElementById('vncdspopt');
+    const currentValue = select.value;
+
+    // Clear all options
+    select.innerHTML = '';
+
+    let foundMatch = false;
+
+    for (const key in displayOptions) {
+        const opt = displayOptions[key];
+        const xml = opt.qxlxml;
+        const headsMatch = xml.match(/heads='(\d+)'/);
+        const heads = headsMatch ? parseInt(headsMatch[1]) : 1;
+
+        // Only show heads=1 options if protocol is vnc
+        if (protocol.value === 'vnc' && heads !== 1) continue;
+
+        const optionEl = document.createElement('option');
+        optionEl.value = xml;
+        optionEl.textContent = opt.text;
+
+        if (!foundMatch && xml === currentValue) {
+            optionEl.selected = true;
+            foundMatch = true;
+        }
+
+        select.appendChild(optionEl);
+    }
+
+    // If selected value no longer exists, select the first one
+    if (!foundMatch && select.options.length > 0) {
+        select.options[0].selected = true;
+    }
 }
 
 function wlan0_info() {
@@ -2404,15 +2507,6 @@ $(function() {
 		}
 	});
 
-	$("#vmform #domain_machine").change(function changeMachineEvent(){
-		// Cdrom Bus: select IDE for i440 and SATA for q35
-		if ($(this).val().indexOf('i440fx') != -1) {
-			$('#vmform .cdrom_bus').val('ide');
-		} else {
-			$('#vmform .cdrom_bus').val('sata');
-		}
-	});
-
 	$("#vmform #domain_ovmf").change(function changeBIOSEvent(){
 		// using OVMF - disable vmvga vnc option
 		if ($(this).val() != '0' && $("#vmform #vncmodel").val() == 'vmvga') {
@@ -2503,7 +2597,7 @@ $(function() {
 		}
 		$("#gpubootvga"+myindex).removeClass();
 		if (mylabel == "_(None)_") $("#gpubootvga"+myindex).addClass('hidden');
-		if (myvalue != "_(virtual)_" && myvalue != "" && myvalue != "_(nogpu)_") {
+		if (myvalue != "virtual" && myvalue != "" && myvalue != "nogpu") {
 			if (ValidGPUs[myvalue].bootvga != "1") $("#gpubootvga"+myindex).addClass('hidden');
 		} else {
 			$("#gpubootvga"+myindex).addClass('hidden');

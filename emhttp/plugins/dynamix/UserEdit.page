@@ -99,11 +99,65 @@ function upload(remove) {
   }
 }
 function checkKey(form) {
-  // check syntax of ssh keys
-  var rows = form.text.value.split('\n');
-  for (var i=0,row; row=rows[i]; i++) {
-    if (row.search(/^(ssh-dss AAAAB3NzaC1kc3|ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNT|sk-ecdsa-sha2-nistp256@openssh.com AAAAInNrLWVjZHNhLXNoYTItbmlzdHAyNTZAb3BlbnNzaC5jb2|ssh-ed25519 AAAAC3NzaC1lZDI1NTE5|sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29t|ssh-rsa AAAAB3NzaC1yc2)[0-9A-Za-z+/]+[=]{0,3}(\s.*)?$/)==-1) {
-      swal({title:"_(Invalid Key)_",text:"["+(i+1)+"] "+row.split(' ')[0]+": _(Syntax of the key is incorrect)_!",type:"error",html:true,confirmButtonText:"_(Ok)_"});
+  const rows = form.text.value.split('\n');
+  for (let i = 0; i < rows.length; i++) {
+    const line = rows[i].trim();
+    if (!line || line.startsWith('#')) continue;
+    // Split options and key (optional options before key type)
+    const optionPattern = /^((?:[a-zA-Z0-9\-]+(?:="[^"]*"|=[^",\s]+)?)(?:,(?:[a-zA-Z0-9\-]+(?:="[^"]*"|=[^",\s]+)?))*)\s+(ssh-[^\s]+|ecdsa-[^\s]+|sk-[^\s]+)\s+/;
+    let optionsStr = null;
+    let keyLine = line;
+    const match = line.match(optionPattern);
+    if (match) {
+      optionsStr = match[1];
+      const keyStart = line.indexOf(match[2]);
+      keyLine = line.slice(keyStart);
+    }
+    // Validate options (if any)
+    if (optionsStr) {
+      const options = optionsStr.split(',');
+      for (const opt of options) {
+        const [key, val] = opt.split('=');
+        if (key === 'from' && val) {
+          const fromValue = val.replace(/^"|"$/g, ''); // strip quotes
+          const entries = fromValue.split(',');
+          const ipRegex = /^!?(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\/(?:3[0-2]|[12]?[0-9]))?$/;
+          const ipv6Regex = /^!?(([a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}|(([a-fA-F0-9]{1,4}:){1,7}:)|(([a-fA-F0-9]{1,4}:){1,6}:[a-fA-F0-9]{1,4})|(([a-fA-F0-9]{1,4}:){1,5}(:[a-fA-F0-9]{1,4}){1,2})|(([a-fA-F0-9]{1,4}:){1,4}(:[a-fA-F0-9]{1,4}){1,3})|(([a-fA-F0-9]{1,4}:){1,3}(:[a-fA-F0-9]{1,4}){1,4})|(([a-fA-F0-9]{1,4}:){1,2}(:[a-fA-F0-9]{1,4}){1,5})|([a-fA-F0-9]{1,4}:)((:[a-fA-F0-9]{1,4}){1,6})|:((:[a-fA-F0-9]{1,4}){1,7}|:))(\/\d{1,3})?$/;
+          const hostnameRegex = /^!?([a-zA-Z0-9*.-]+\.[a-zA-Z]{2,})$/;
+          const wildcardIPRegex = /^!?(\d{1,3}\.){0,3}\*$/;
+          for (const entryRaw of entries) {
+            const entry = entryRaw.trim();
+            if (
+              !ipRegex.test(entry) &&
+              !ipv6Regex.test(entry) &&
+              !hostnameRegex.test(entry) &&
+              !wildcardIPRegex.test(entry)
+            ) {
+              swal({
+                title: "Invalid `from=` Option",
+                text: `[Line ${i + 1}] Invalid from= entry: ${entry}`,
+                type: "error",
+                html: true,
+                confirmButtonText: "OK"
+              });
+              return false;
+            }
+          }
+        }
+        // Additional option validation can go here
+      }
+    }
+    // Validate SSH key
+    const keyRegex = /^(ssh-(rsa|dss)|ecdsa-sha2-nistp(256|384|521)|sk-(ecdsa-sha2-nistp256|ssh-ed25519)@openssh\.com|ssh-ed25519) [A-Za-z0-9+/=]+(?: .*)?$/;
+    if (!keyRegex.test(keyLine)) {
+      const keyType = keyLine.split(' ')[0];
+      swal({
+        title: "Invalid Key Format",
+        text: `[Line ${i + 1}] Invalid key or unsupported type: ${keyType}`,
+        type: "error",
+        html: true,
+        confirmButtonText: "OK"
+      });
       return false;
     }
   }
@@ -169,6 +223,7 @@ $(function(){
 <div class="spinner fixed"></div>
 <form markdown="1" method="POST" action="/update.htm" target="progressFrame" onsubmit="upload(<?=$name=="root" ? 'false' : 'this.confirmDelete.checked'?>)">
 <input type="hidden" name="userName" value="<?=htmlspecialchars($name)?>">
+
 _(User name)_:
 : <?=htmlspecialchars($name)?>
 
@@ -178,13 +233,16 @@ _(Description)_:
 :user_edit_description_help:
 
 _(Custom image)_:
-: <span id="dropbox">
+: <span>
+    <span id="dropbox">
 <?if (file_exists($user)):?>
   <img src="<?=autov($user)?>" id="image" width="48" height="48" onclick="$('#drop').click()" style="cursor:pointer" title="_(Click to select PNG file)_"><?=$icon?>
 <?else:?>
   <?=$void?>
 <?endif;?>
-  </span><em>_(Drag-n-drop a PNG file or click the image at the left)_</em><input type="file" id="drop" accept="image/png" style="display:none">
+    </span>
+  </span>
+  <em>_(Drag-n-drop a PNG file or click the image at the left)_</em><input type="file" id="drop" accept="image/png" style="display:none">
 
 :user_edit_custom_image_help:
 
@@ -193,35 +251,55 @@ _(Custom image)_:
 <?else:?>
 _(Delete)_<input type="checkbox" name="confirmDelete" onChange="chkDelete(this.form, this.form.cmdUserEdit)">
 <?endif;?>
-: <input type="submit" name="cmdUserEdit" value="_(Apply)_" onclick="if (this.value=='_(Delete)_') this.value='Delete'; else this.value='Apply';" disabled><input type="button" value="_(Done)_" onclick="done('UserEdit')">
+: <span class="inline-block">
+    <input type="submit" name="cmdUserEdit" value="_(Apply)_" onclick="if (this.value=='_(Delete)_') this.value='Delete'; else this.value='Apply';" disabled>
+    <input type="button" value="_(Done)_" onclick="done('UserEdit')">
+  </span>
 </form>
-<br><br>
+
 <form markdown="1" method="POST" action="/update.htm" onsubmit="return checkPassword(this)" target="progressFrame">
 <input type="hidden" name="userName" value="<?=htmlspecialchars($name)?>">
+
 _(Password)_:
-<input type="hidden" name="userPassword" value="">
-: <input type="password" name="userPasswordGUI" maxlength="129" autocomplete="new-password" onKeyUp="validatePassword(this.value);this.form.cmdUserEdit.disabled=(this.form.userPasswordGUI.value != this.form.userPasswordConfGUI.value);">
-  <i id="showPass" class="fa fa-eye" style="cursor:pointer" title="_(Show / Hide password)_" onclick="showPassword()"></i><span><span class="usage-disk sys none"><span id="strength-bar" style="width:0"></span><span></span></span><span id="strength-text"></span></span>
+: <span class="flex flex-row items-center gap-2">
+    <input type="hidden" name="userPassword" value="">
+    <input type="password" name="userPasswordGUI" maxlength="129" autocomplete="new-password" onKeyUp="validatePassword(this.value);this.form.cmdUserEdit.disabled=(this.form.userPasswordGUI.value != this.form.userPasswordConfGUI.value);">
+    <i id="showPass" class="fa fa-eye" style="cursor:pointer" title="_(Show / Hide password)_" onclick="showPassword()"></i>
+    <span>
+      <span class="usage-disk sys none">
+        <span id="strength-bar" style="width:0"></span>
+        <span></span>
+      </span>
+      <span id="strength-text"></span>
+    </span>
+  </span>
 
 :user_password_help:
 
 _(Retype password)_:
-<input type="hidden" name="userPasswordConf" value="">
-: <input type="password" name="userPasswordConfGUI" maxlength="129" autocomplete="new-password" onKeyUp="this.form.cmdUserEdit.disabled=(this.form.userPasswordGUI.value != this.form.userPasswordConfGUI.value);">
+: <input type="hidden" name="userPasswordConf" value="">
+  <input type="password" name="userPasswordConfGUI" maxlength="129" autocomplete="new-password" onKeyUp="this.form.cmdUserEdit.disabled=(this.form.userPasswordGUI.value != this.form.userPasswordConfGUI.value);">
 
 &nbsp;
-: <input type="submit" name="cmdUserEdit" value="_(Change)_" onclick="this.value='Change'" disabled><input type="button" value="_(Done)_" onclick="done('UserEdit')">
+: <span class="inline-block">
+    <input type="submit" name="cmdUserEdit" value="_(Change)_" onclick="this.value='Change'" disabled>
+    <input type="button" value="_(Done)_" onclick="done('UserEdit')">
+  </span>
 </form>
 
 <?if ($name == 'root'):?>
 <form markdown="1" method="POST" action="/update.php" onsubmit="return checkKey(this)" target="progressFrame">
 <input type="hidden" name="#include" value="/webGui/include/update.file.php">
 <input type="hidden" name="#file" value="<?=$file;?>">
+
 _(SSH authorized keys)_:
-: <textarea spellcheck="false" cols="80" rows="<?=max(substr_count($text,"\n")+1,10)?>" maxlength="16384" name="text" style="resize:none;white-space:normal;font-family:bitstream;width:65.5%"><?=htmlspecialchars($text)?></textarea>
+: <textarea class="font-mono" spellcheck="false" cols="80" rows="<?=max(substr_count($text,"\n")+1,10)?>" maxlength="16384" name="text"><?=htmlspecialchars($text)?></textarea>
 
 &nbsp;
-: <input type="submit" value="_(Save)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+: <span class="inline-block">
+    <input type="submit" value="_(Save)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
 
 </form>
 <?endif;?>
@@ -318,6 +396,9 @@ echo "</table>";
 ?>
 
 &nbsp;
-: <input type="button" value="_(Apply)_" onclick="updateAccess(this.form)" disabled><input type="button" value="_(Done)_" onclick="done('UserEdit')">
+: <span class="inline-block">
+    <input type="button" value="_(Apply)_" onclick="updateAccess(this.form)" disabled>
+    <input type="button" value="_(Done)_" onclick="done('UserEdit')">
+  </span>
 </form>
 <?endif;?>

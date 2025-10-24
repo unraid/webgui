@@ -251,10 +251,11 @@ function fileEdit(id) {
     classes: {'ui-dialog': 'ui-dfm'},
     autoOpen: true,
     title: fileName(source),
-    height: Math.min(window.innerHeight-80, 800),
-    width: Math.min(window.innerWidth, 1200),
+    width: 'auto',
+    height: 'auto',
     resizable: false,
     modal: true,
+    draggable: false,
     buttons: {
       "_(Save)_": function(){
         $.post('/webGui/include/Control.php',{mode:'save', file:encodeURIComponent(source), data:encodeURIComponent(editor.session.getValue())});
@@ -270,6 +271,8 @@ function fileEdit(id) {
 }
 
 function fullWindow() {
+  // this class is used to determine if the dialog is sized via the default CSS in default-dynamix.css or by JS when the user clicks the "expand" button.
+  $('.ui-dialog').toggleClass('ui-dialog-content-full');
   if ($('.ui-dfm .ui-dialog-titlebar-close').html().indexOf('expand')>=0) {
     dfm.window.dialog('option','height',window.innerHeight-40);
     dfm.window.dialog('option','width',window.innerWidth);
@@ -291,9 +294,10 @@ function doJobs(title) {
     classes: {'ui-dialog': 'ui-dfm'},
     autoOpen: true,
     title: title,
-    height: 630,
-    width: 900,
+    height: 'auto',
+    width: 'auto',
     resizable: false,
+    draggable: false,
     modal: true,
     buttons: {
       "_(Start)_": function(){
@@ -455,6 +459,10 @@ function doAction(action, title, id) {
       clearTimeout(timers.calc);
       $('div.spinner.fixed').hide('slow');
       swal({title:"_(Calculate Occupied Space)_",text:text,html:true,confirmButtonText:"_(Ok)_"});
+    }).fail(function(xhr){
+      clearTimeout(timers.calc);
+      $('div.spinner.fixed').hide('slow');
+      swal({title:"Error", text:"Calculate failed: "+xhr.status+" "+xhr.statusText, type:"error"});
     });
     return;
   case 15: // search
@@ -470,8 +478,9 @@ function doAction(action, title, id) {
     autoOpen: true,
     title: title,
     height: dfm.height,
-    width: 900,
+    width: 'auto',
     resizable: false,
+    draggable: false,
     modal: true,
     buttons: {
       "_(Start)_": function(){
@@ -730,6 +739,10 @@ function doActions(action, title) {
       clearTimeout(timers.calc);
       $('div.spinner.fixed').hide('slow');
       swal({title:"_(Calculate Occupied Space)_",text:text,html:true,confirmButtonText:"_(Ok)_"});
+    }).fail(function(xhr){
+      clearTimeout(timers.calc);
+      $('div.spinner.fixed').hide('slow');
+      swal({title:"Error", text:"Calculate failed: "+xhr.status+" "+xhr.statusText, type:"error"});
     });
     return;
   case 15: // search
@@ -750,8 +763,9 @@ function doActions(action, title) {
     autoOpen: true,
     title: title,
     height: dfm.height,
-    width: 900,
+    width: 'auto',
     resizable: false,
+    draggable: false,
     modal: true,
     buttons: {
       "_(Start)_": function(){
@@ -990,12 +1004,13 @@ $(function(){
   if (dirs.length > 1) {
     for (var n=1; n < dirs.length; n++) {
       var subdir = dirs.slice(1,n+1);
-      url.push('<a class="none" href="/<?=$path?>?dir=/'+encodeURIComponent(subdir.join('/'))+'" oncontextmenu="xlink(\'/'+encodeURIComponent(subdir.join('/'))+'\');return false">'+(n == 1 ? '<i class="fa fa-home"></i>' : dirs[n])+'</a>');
+      url.push('<a class="none" href="/<?=$path?>?dir=/'+encodeURIComponent(subdir.join('/'))+'" oncontextmenu="xlink(\'/' + encodeURIComponent(subdir.join('/')) + '\');return false">'+(n == 1 ? '<i class="fa fa-home"></i>' : dirs[n])+'</a>');
     }
   } else {
     url.push('<i class="fa fa-home red-text"></i>');
   }
-  $('span.left').html(url.join('<i class="fa fa-chevron-right"></i>')).append('<span class="right"><span class="dfm_filter"><input type="text" class="dfm_filter" oninput="filter(this.value)" autocomplete="off" spellcheck="false" placeholder="_(file type)_"><i class="fa fa-filter dfm_filter"></i></span><i class="fa fa-toggle-off" onclick="toggleTime()" style="cursor:pointer;margin-left:20px" title="_(Toggle Time/Age display)_"></i></span>');
+  $('.title .left').html(url.join('<i class="fa fa-chevron-right"></i>'));
+  $('.title .right').append('<span class="dfm_filter"><input type="text" id="dfm_filter" class="dfm_filter" oninput="filter(this.value)" autocomplete="off" spellcheck="false" placeholder="_(file type)_"><i class="fa fa-filter dfm_filter"></i></span><i class="fa fa-toggle-off" onclick="toggleTime()" style="cursor:pointer;" title="_(Toggle Time/Age display)_"></i>');
   table = $('table.indexer');
   thead = table.find('thead');
   table.bind('sortEnd',function(e,t){
@@ -1005,8 +1020,11 @@ $(function(){
   });
 <?if ($display['resize']):?>
   resize();
-  $(window).bind('resize',function(){resize();});
 <?endif;?>
+
+$(window).bind('resize',function(){
+  resize();
+});
   loadList();
 <?if (!$dir||$isshare):?>
   $.cookie('dfm_control.common','1');
@@ -1017,7 +1035,23 @@ $(function(){
 </script>
 
 <div class="autoheight">
-<table class="indexer tablesorter shift"><thead><tr><th><?if($dir){?><i id="check_0" class="fa fa-fw fa-square-o" onclick="selectAll()"></i><?}?></th><th>_(Type)_</th><th class='sorter-text'>_(Name)_</th><th>_(Owner)_</th><th>_(Permission)_</th><th>_(Size)_</th><th>_(Last Modified)_</th><th style="width:200px">_(Location)_</th><th>_(Action)_</th></tr></thead></table>
+  <div class="TableContainer">
+    <table class="indexer tablesorter">
+      <thead>
+        <tr>
+          <th><?if($dir){?><i id="check_0" class="fa fa-fw fa-square-o" onclick="selectAll()"></i><?}?></th>
+          <th>_(Type)_</th>
+          <th class='sorter-text'>_(Name)_</th>
+          <th>_(Owner)_</th>
+          <th>_(Permission)_</th>
+          <th>_(Size)_</th>
+          <th>_(Last Modified)_</th>
+          <th style="width:200px">_(Location)_</th>
+          <th>_(Action)_</th>
+        </tr>
+      </thead>
+    </table>
+  </div>
 </div>
 <div id="buttons">
 <input type="button" value="_(Done)_" onclick="done('Browse')">

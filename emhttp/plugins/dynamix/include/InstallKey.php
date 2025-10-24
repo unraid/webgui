@@ -47,33 +47,33 @@ class KeyInstaller
 
     public function installKey($keyUrl = null): string
     {
-        $url = unscript($keyUrl ?? _var($_GET, 'url'));
-        $host = parse_url($url)['host'] ?? '';
+        try {
+            $url = unscript($keyUrl ?? _var($_GET, 'url'));
+            $host = parse_url($url)['host'] ?? '';
 
-        if (!function_exists('_')) {
-            function _($text) {return $text;}
-        }
+            if (!function_exists('_')) {
+                function _($text) {return $text;}
+            }
 
-        if ($host && in_array($host, ['keys.lime-technology.com', 'lime-technology.com'])) {
-            $keyFile = basename($url);
-            exec("/usr/bin/wget -q -O " . escapeshellarg("/boot/config/$keyFile") . " " . escapeshellarg($url), $output, $returnVar);
+            if ($host && in_array($host, ['keys.lime-technology.com', 'lime-technology.com'])) {
+                $keyFile = basename($url);
+                exec("/usr/bin/wget -q -O " . escapeshellarg("/boot/config/$keyFile") . " " . escapeshellarg($url), $output, $returnVar);
 
-            if ($returnVar === 0) {
-                $var = (array)@parse_ini_file('/var/local/emhttp/var.ini');
-                if (_var($var, 'mdState') == "STARTED") {
+                if ($returnVar === 0) {
+                    exec('emcmd '.escapeshellarg('checkRegistration=Apply'));
                     return $this->responseComplete(200, [
                         'status' => 'success',
-                        'message' => _('Please Stop array to complete key installation'),
+                        'message' => _('Key installed'),
                     ]);
                 } else {
-                    return $this->responseComplete(200, ['status' => 'success']);
+                    @unlink(escapeshellarg("/boot/config/$keyFile"));
+                    return $this->responseComplete(406, ['error' => _('download error') . " $returnVar"]);
                 }
             } else {
-                @unlink(escapeshellarg("/boot/config/$keyFile"));
-                return $this->responseComplete(406, ['error' => _('download error') . " $returnVar"]);
+                return $this->responseComplete(406, ['error' => _('bad or missing key file') . ": $url"]);
             }
-        } else {
-            return $this->responseComplete(406, ['error' => _('bad or missing key file') . ": $url"]);
+        } catch (Exception $e) {
+            return $this->responseComplete(500, ['error' => _('installation failed') . ": " . $e->getMessage()]);
         }
     }
 }

@@ -3,7 +3,7 @@ Title="Date and Time"
 Icon="icon-clock"
 Tag="clock-o"
 ---
-<?PHP
+<?php
 /* Copyright 2005-2025, Lime Technology
  * Copyright 2012-2025, Bergware International.
  *
@@ -15,35 +15,42 @@ Tag="clock-o"
  * all copies or substantial portions of the Software.
  */
 ?>
-<?
+<?php
 $validIP4 = "^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$";
 $validIP6 = "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(:|([0-9a-fA-F]{1,4}:)+):(([0-9a-fA-F]{1,4}:)*[0-9a-fA-F]{1,4})?)$";
 $validMAC = "^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$";
-$tmzones  = file("$docroot/webGui/include/timezones.key",FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES);
+$tmzones  = file("$docroot/webGui/include/timezones.key", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 $system   = "/sys/class/net";
 $hwclock  = $ports = $member = [];
 
-exec("ls --indicator-style=none $system|grep -P '^(bond|br|eth)[0-9]*$'",$net);
+exec("ls --indicator-style=none $system|grep -P '^(bond|br|eth)[0-9]*$'", $net);
 foreach ($net as $port) {
-  switch (preg_replace('/[0-9]+$/','',$port)) {
-  case 'bond':
-    if (!file_exists($system.'/'.str_replace('bond','br',$port))) $ports[] = $port;
-    $member = array_merge($member,explode(' ',exec("cat $system/$port/bonding/slaves")));
-    break;
-  case 'br':
-    $member = array_merge($member,explode(' ',exec("ls --indicator-style=none $system/$port/brif")));
-    break;
-  case 'eth':
-    if (!in_array($port,$member)) $ports[] = $port;
-    break;
-  }
+    switch (preg_replace('/[0-9]+$/', '', $port)) {
+        case 'bond':
+            if (!file_exists($system.'/'.str_replace('bond', 'br', $port))) {
+                $ports[] = $port;
+            }
+            $member = array_merge($member, explode(' ', exec("cat $system/$port/bonding/slaves")));
+            break;
+        case 'br':
+            $member = array_merge($member, explode(' ', exec("ls --indicator-style=none $system/$port/brif")));
+            break;
+        case 'eth':
+            if (!in_array($port, $member)) {
+                $ports[] = $port;
+            }
+            break;
+    }
 }
-foreach ($ports as $port) $hwclock[$port] = exec("ethtool -T $port|grep -Pom1 '^PTP Hardware Clock: \K.+'")=='none' ? 'disabled' : '';
+foreach ($ports as $port) {
+    $hwclock[$port] = exec("ethtool -T $port|grep -Pom1 '^PTP Hardware Clock: \K.+'") == 'none' ? 'disabled' : '';
+}
 ?>
 <form markdown="1" name="datetime_settings" method="POST" action="/update.htm" target="progressFrame" onchange="signal(this)">
 <input type="hidden" name="setDateTime" value="apply">
+
 _(Current date and time)_:
-: <?=_(my_time(time()),0)?>
+: <?=_(my_time(time()), 0)?>
 
 _(Date format)_:
 : <select name="display_date" onchange="presetTime(this.form)">
@@ -64,10 +71,10 @@ _(Time format)_:
   </select>
 
 _(Time zone)_:
-: <select name="timeZone"><?
+: <select name="timeZone"><?php
   foreach ($tmzones as $zone) {
-    [$timezone, $city] = my_explode('|', $zone);
-    echo mk_option($var['timeZone'], $timezone, $city);
+      [$timezone, $city] = my_explode('|', $zone);
+      echo mk_option($var['timeZone'], $timezone, $city);
   }
 ?></select>
 
@@ -87,25 +94,25 @@ _(Time sync)_:
 <div markdown="1" id="ntp-setup" class="extra">
 _(NTP interval)_:
 : <select name="NTP_POLL">
-  <?=mk_option(_var($NTP,'POLL'), "", _('Default'))?>
-  <?=mk_option(_var($NTP,'POLL'), "8", _('Slow'))?>
-  <?=mk_option(_var($NTP,'POLL'), "5", _('Medium'))?>
-  <?=mk_option(_var($NTP,'POLL'), "3", _('Fast'))?>
+  <?=mk_option(_var($NTP, 'POLL'), "", _('Default'))?>
+  <?=mk_option(_var($NTP, 'POLL'), "8", _('Slow'))?>
+  <?=mk_option(_var($NTP, 'POLL'), "5", _('Medium'))?>
+  <?=mk_option(_var($NTP, 'POLL'), "3", _('Fast'))?>
   </select>
-  <span class="orange-text">_(Use DEFAULT setting when public NTP servers are defined)_</span>
+  <span class="input-instructions orange-text">_(Use DEFAULT setting when public NTP servers are defined)_</span>
 
 _(NTP server)_ 1:
-: <input type="text" name="NTP_SERVER1" maxlength="40" class="narrow" value="<?=htmlspecialchars($var['NTP_SERVER1'])?>">
-  <span class="orange-text">_(Input a NTP server name, NTP pool name or IP address)_</span>
+: <input type="text" name="NTP_SERVER1" maxlength="40" value="<?=htmlspecialchars($var['NTP_SERVER1'])?>">
+  <span class="input-instructions orange-text">_(Input a NTP server name, NTP pool name or IP address)_</span>
 
 _(NTP server)_ 2:
-: <input type="text" name="NTP_SERVER2" maxlength="40" class="narrow" value="<?=htmlspecialchars($var['NTP_SERVER2'])?>">
+: <input type="text" name="NTP_SERVER2" maxlength="40" value="<?=htmlspecialchars($var['NTP_SERVER2'])?>">
 
 _(NTP server)_ 3:
-: <input type="text" name="NTP_SERVER3" maxlength="40" class="narrow" value="<?=htmlspecialchars($var['NTP_SERVER3'])?>">
+: <input type="text" name="NTP_SERVER3" maxlength="40" value="<?=htmlspecialchars($var['NTP_SERVER3'])?>">
 
 _(NTP server)_ 4:
-: <input type="text" name="NTP_SERVER4" maxlength="40" class="narrow" value="<?=htmlspecialchars($var['NTP_SERVER4'])?>">
+: <input type="text" name="NTP_SERVER4" maxlength="40" value="<?=htmlspecialchars($var['NTP_SERVER4'])?>">
 
 </div>
 <div markdown="1" id="ptp-setup" class="extra">
@@ -114,57 +121,60 @@ _(PTP profile)_:
 
 _(PTP transport)_:
 : <select name="PTP_TRANSPORT" onchange="updatePage(this.form,'slow')">
-  <?=mk_option(_var($PTP,'TRANSPORT'), "UDPv4", _('UDPv4'))?>
-  <?=mk_option(_var($PTP,'TRANSPORT'), "UDPv6", _('UDPv6'))?>
-  <?=mk_option(_var($PTP,'TRANSPORT'), "L2", _('IEEE 802.3'))?>
+  <?=mk_option(_var($PTP, 'TRANSPORT'), "UDPv4", _('UDPv4'))?>
+  <?=mk_option(_var($PTP, 'TRANSPORT'), "UDPv6", _('UDPv6'))?>
+  <?=mk_option(_var($PTP, 'TRANSPORT'), "L2", _('IEEE 802.3'))?>
   </select>
 
 _(PTP mode)_:
 : <select name="PTP_MODE" onchange="updatePage(this.form,'slow')">
-  <?=mk_option(_var($PTP,'MODE'), "multicast", _('Multicast'))?>
-  <?=mk_option(_var($PTP,'MODE'), "unicast", _('Unicast'))?>
+  <?=mk_option(_var($PTP, 'MODE'), "multicast", _('Multicast'))?>
+  <?=mk_option(_var($PTP, 'MODE'), "unicast", _('Unicast'))?>
   </select>
 
 <div markdown="1" id="unicast" class="extra">
 _(PTP server)_ 1:
-: <input type="text" name="PTP_SERVER1" maxlength="40" class="narrow" value="<?=htmlspecialchars(_var($PTP,'SERVER1'))?>">
+: <input type="text" name="PTP_SERVER1" maxlength="40" value="<?=htmlspecialchars(_var($PTP, 'SERVER1'))?>">
   <span class="ipv4 orange-text">_(Input a IPv4 address)_</span><span class="ipv6 orange-text">_(Input a IPv6 address)_</span><span class="mac orange-text">_(Input a MAC address)_</span>
 
 _(PTP server)_ 2:
-: <input type="text" name="PTP_SERVER2" maxlength="40" class="narrow" value="<?=htmlspecialchars(_var($PTP,'SERVER2'))?>">
+: <input type="text" name="PTP_SERVER2" maxlength="40" value="<?=htmlspecialchars(_var($PTP, 'SERVER2'))?>">
 
 _(PTP server)_ 3:
-: <input type="text" name="PTP_SERVER3" maxlength="40" class="narrow" value="<?=htmlspecialchars(_var($PTP,'SERVER3'))?>">
+: <input type="text" name="PTP_SERVER3" maxlength="40" value="<?=htmlspecialchars(_var($PTP, 'SERVER3'))?>">
 
 _(PTP server)_ 4:
-: <input type="text" name="PTP_SERVER4" maxlength="40" class="narrow" value="<?=htmlspecialchars(_var($PTP,'SERVER4'))?>">
+: <input type="text" name="PTP_SERVER4" maxlength="40" value="<?=htmlspecialchars(_var($PTP, 'SERVER4'))?>">
 
 </div>
 _(PTP interface)_:
 : <select name="PTP_PORT" onchange="hwclock(this.form,this.value)">
   <?if (empty($ports)) echo mk_option(0, '', '---');?>
   <?foreach($ports as $port):?>
-  <?=mk_option(_var($PTP,'PORT','eth0'), $port, $port)?>
+  <?=mk_option(_var($PTP, 'PORT', 'eth0'), $port, $port)?>
   <?endforeach;?>
   </select>
 
 _(PTP clock)_:
 : <select name="PTP_CLOCK">
-  <?=mk_option(_var($PTP,'CLOCK'), "hardware", _('Hardware'), empty($ports) ? 'disabled' : _var($hwclock,_var($PTP,'PORT')))?>
-  <?=mk_option(_var($PTP,'CLOCK'), "software", _('Software'))?>
+  <?=mk_option(_var($PTP, 'CLOCK'), "hardware", _('Hardware'), empty($ports) ? 'disabled' : _var($hwclock, _var($PTP, 'PORT')))?>
+  <?=mk_option(_var($PTP, 'CLOCK'), "software", _('Software'))?>
   </select>
 
 </div>
 <div markdown="1" id="manual-setup" class="extra">
 _(New date and time)_:
-: <input type="text" name="newDateTime" maxlength="20" class="narrow" value="<?=my_time(time(),"%F %T")?>">
+: <input type="text" name="newDateTime" maxlength="20" value="<?=my_time(time(), "%F %T")?>">
   <span class="orange-text">_(Input the correct date and time manually)_</span>
 
 :current_time_help:
 
 </div>
 &nbsp;
-: <input type="button" value="_(Apply)_" onclick="dispatch(this.form)" disabled><input type="button" value="_(Done)_" onclick="done()">
+: <span class="inline-block">
+    <input type="button" value="_(Apply)_" onclick="dispatch(this.form)" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
 </form>
 
 <script>
@@ -173,7 +183,7 @@ var service = false;
 var oldDate, oldTime, oldZone;
 
 // ptp daemon is running?
-var ptpd = <?=exec("pgrep -cf /usr/sbin/ptp4l") ? 'true' : 'false'?>;
+var ptpd = <?=exec("pgrep --ns $$ -cf /usr/sbin/ptp4l") ? 'true' : 'false'?>;
 
 function hwclock(form,port) {
   // disable hardware clock if not supported
@@ -313,7 +323,7 @@ $(function() {
   oldDate = form.display_date.selectedIndex;
   oldTime = form.display_time.selectedIndex;
   oldZone = form.timeZone.selectedIndex;
-  form.USE_NTP.selectedIndex = <?=_var($PTP,'SYNC')=='yes' ? 1 : ($var['USE_NTP']=='yes' ? 0 : 2)?>;
+  form.USE_NTP.selectedIndex = <?=_var($PTP,'SYNC') == 'yes' ? 1 : ($var['USE_NTP'] == 'yes' ? 0 : 2)?>;
 <?if (empty($ports)):?>
   if (form.USE_NTP.selectedIndex==1) $('#noports').show();
 <?endif;?>

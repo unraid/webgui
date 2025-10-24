@@ -19,20 +19,23 @@ Cond="file_exists('/boot/config/network-rules.cfg')"
 $cfg = '/boot/config/network-rules.cfg';
 
 function strip($item) {
-  [$key,$val] = explode('"',$item);
+  [$key, $val] = explode('"', $item);
   return $val;
 }
 
-exec("awk '/NAME=\"eth/{print $4 $8}' $cfg",$rules);
-exec("grep -Po '^# \K.*' $cfg",$info);
+exec("awk '/^SUBSYSTEM==/ {print $4 $8}' $cfg", $rules);
+exec("grep -Po '^# \K.*' $cfg", $info);
 
 $link = []; $i = 0;
 foreach ($rules as $rule) {
-  [$mac,$eth] = array_map('strip',my_explode(',',$rule));
-  $link[$eth]['mac'] = $mac;
-  $link[$eth]['info'] = $info[$i++];
+  [$mac, $eth] = array_map('strip', my_explode(',', $rule));
+  if (str_starts_with($eth, 'eth')) {
+    $link[$eth]['mac'] = $mac;
+    $link[$eth]['info'] = $info[$i];
+  }
+  $i++;
 }
-ksort($link,SORT_NATURAL);
+ksort($link, SORT_NATURAL);
 ?>
 <script>
 var info = {};
@@ -44,7 +47,7 @@ function check_rules(form) {
   var mac = [];
   $(form).find('select[name^="eth"]').each(function(){mac.push($(this).val());});
   if (mac.same()) {
-    swal({title:"_(MAC address mismatch)_",text:"_(Rules contain duplicate MAC address assignments)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    swal({title:"_(MAC address mismatch)_", text:"_(Rules contain duplicate MAC address assignments)_", type:'error', html:true, confirmButtonText:"_(Ok)_"});
     return false;
   } else {
     return true;
@@ -54,7 +57,6 @@ function update_info(id,mac) {
   $('#info-'+id).html(info['_'+mac.replace(/:/g,'')]);
 }
 </script>
-<div class="title nocontrol shift">&nbsp;</div>
 <form markdown="1" name="network_rules" method="POST" action="/update.php" target="progressFrame" onsubmit="return check_rules(this)">
 <input type="hidden" name="#file" value="not-used">
 <input type="hidden" name="#include" value="/webGui/include/update.rules.php">
@@ -64,14 +66,17 @@ function update_info(id,mac) {
 _(Interface)_ <?=$eth?>:
 : <select name="<?=$eth?>" onchange="update_info(this.name,this.value)">
   <?foreach ($link as $my => $val):?>
-  <?=mk_option($file['mac'],$val['mac'],strtoupper($val['mac']));?>
+  <?=mk_option($file['mac'],$val['mac'], strtoupper($val['mac']));?>
   <?endforeach;?>
   </select><span id="info-<?=$eth?>"><?=$file['info']?></span>
 
 <?endforeach;?>
 
 &nbsp;
-: <input type="submit" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+: <span class="inline-block">
+    <input type="submit" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
 </form>
 
 :eth_network_rules_help:

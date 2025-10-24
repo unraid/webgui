@@ -1,0 +1,154 @@
+name: Build PR Plugin
+
+on:
+  pull_request:
+    paths:
+      - 'emhttp/**'
+      - '.github/workflows/pr-plugin-build.yml'
+      - '.github/scripts/**'
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+jobs:
+  build-plugin:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Get changed files
+        id: changed-files
+        run: |
+          set -euo pipefail
+          
+          # Get list of changed files in emhttp directory using PR SHAs
+          git diff --name-only "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}" | grep '^emhttp/' > changed_files.txt || true
+          
+          # Output for debugging
+          echo "Changed files:"
+          cat changed_files.txt
+          
+          # Check if we have any changes
+          if [ ! -s "changed_files.txt" ]; then
+            echo "No emhttp files changed"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+      
+      - name: Generate plugin version
+        if: steps.changed-files.outputs.has_changes == 'true'
+        id: version
+        run: |
+          # Generate version with proper timestamp format: YYYY.MM.DD.HHMM
+          VERSION=$(date -u +"%Y.%m.%d.%H%M")
+          # Also keep PR info for reference
+          PR_VERSION="pr.${{ github.event.pull_request.number }}.$(git rev-parse --short HEAD)"
+          
+          # Generate URLs with versioned TXZ to prevent SHA conflicts
+          S3_BASE_URL="${{ secrets.CLOUDFLARE_PREVIEW_BUCKET_BASE_URL }}/pr-plugins/pr-${{ github.event.pull_request.number }}"
+          
+          # Define filenames
+          LOCAL_TXZ_NAME="webgui-pr-${{ github.event.pull_request.number }}.tar.gz"
+          REMOTE_TXZ_NAME="webgui-pr-${{ github.event.pull_request.number }}-${VERSION}.tar.gz"
+          PLUGIN_NAME="webgui-pr-${{ github.event.pull_request.number }}.plg"
+          
+          # TXZ gets unique versioned path to prevent SHA conflicts on updates
+          TXZ_URL="${S3_BASE_URL}/${REMOTE_TXZ_NAME}"
+          PLUGIN_URL="${S3_BASE_URL}/${PLUGIN_NAME}"
+          TXZ_KEY="pr-plugins/pr-${{ github.event.pull_request.number }}/${REMOTE_TXZ_NAME}"
+          PLUGIN_KEY="pr-plugins/pr-${{ github.event.pull_request.number }}/${PLUGIN_NAME}"
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "pr_version=$PR_VERSION" >> $GITHUB_OUTPUT
+          echo "local_txz=$LOCAL_TXZ_NAME" >> $GITHUB_OUTPUT
+          echo "remote_txz=$REMOTE_TXZ_NAME" >> $GITHUB_OUTPUT
+          echo "plugin_name=$PLUGIN_NAME" >> $GITHUB_OUTPUT
+          echo "txz_url=$TXZ_URL" >> $GITHUB_OUTPUT
+          echo "plugin_url=$PLUGIN_URL" >> $GITHUB_OUTPUT
+          echo "txz_key=$TXZ_KEY" >> $GITHUB_OUTPUT
+          echo "plugin_key=$PLUGIN_KEY" >> $GITHUB_OUTPUT
+          echo "Generated version: $VERSION (PR: $PR_VERSION)"
+      
+      - name: Create plugin package
+        if: steps.changed-files.outputs.has_changes == 'true'
+        run: |
+          # Create build directory
+          mkdir -p build/usr/local
+          
+          # Copy changed files preserving directory structure
+          while IFS= read -r file; do
+            if [ -f "$file" ]; then
+              # Create directory structure in build
+              dir=$(dirname "$file")
+              mkdir -p "build/usr/local/$dir"
+              cp "$file" "build/usr/local/$dir/"
+              echo "Added: $file"
+            fi
+          done < changed_files.txt
+          
+          # Create tarball - consistent filename for updates
+          cd build
+          echo "Creating tarball with contents:"
+          find usr/ -type f
+          tar -czf ../${{ steps.version.outputs.local_txz }} usr/
+          cd ..
+          
+          # Generate file list for plugin
+          find build/usr/local/emhttp -type f | sed 's|^build||' > file_list.txt
+          echo "File list for plugin:"
+          cat file_list.txt
+          
+          # Verify tarball contents
+          echo "Tarball contents:"
+          tar -tzf ${{ steps.version.outputs.local_txz }}
+      
+      - name: Generate plugin file
+        if: steps.changed-files.outputs.has_changes == 'true'
+        run: |
+          # Generate with placeholder URLs - will be updated by upload workflow
+          bash .github/scripts/generate-pr-plugin.sh \
+            "${{ steps.version.outputs.version }}" \
+            "${{ github.event.pull_request.number }}" \
+            "$(git rev-parse --short HEAD)" \
+            "${{ steps.version.outputs.local_txz }}" \
+            "${{ steps.version.outputs.remote_txz }}" \
+            "PENDING_UPLOAD" \
+            "PENDING_UPLOAD"
+      
+      - name: Save metadata for upload workflow
+        if: steps.changed-files.outputs.has_changes == 'true'
+        run: |
+          cat > pr-metadata.json << EOF
+          {
+            "pr_number": ${{ github.event.pull_request.number }},
+            "version": "${{ steps.version.outputs.version }}",
+            "pr_version": "${{ steps.version.outputs.pr_version }}",
+            "local_txz": "${{ steps.version.outputs.local_txz }}",
+            "remote_txz": "${{ steps.version.outputs.remote_txz }}",
+            "plugin_name": "${{ steps.version.outputs.plugin_name }}",
+            "changed_files": $(cat changed_files.txt | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          }
+          EOF
+
+          echo "Metadata saved:"
+          cat pr-metadata.json
+
+      - name: Upload artifacts to GitHub
+        if: steps.changed-files.outputs.has_changes == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: webgui-pr-plugin-${{ github.event.pull_request.number }}
+          path: |
+            webgui-pr-*.plg
+            webgui-pr-*.tar.gz
+            pr-metadata.json
+            changed_files.txt
+          retention-days: 30
+      

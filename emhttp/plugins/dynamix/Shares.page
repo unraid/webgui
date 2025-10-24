@@ -2,10 +2,20 @@ Menu="Tasks:2"
 Type="xmenu"
 Code="e92a"
 ---
-<?PHP
-if ($var['fsState']=="Stopped") {
-  echo "<p class='notice shift'>"._('Array must be **Started** to view Shares').".</p>";
-  return;
+<?
+  $noticeMessage = null;
+  if ($var['fsState'] == "Stopped") {
+    $noticeMessage = _('Array must be **Started** to view Shares');
+  }
+?>
+
+<? if ($noticeMessage): ?>
+  <p class="notice"><?= $noticeMessage ?></p>
+  <? return; ?>
+<? endif; ?>
+
+<?
+if (count($pages) == 2) {
+  $tabbed = false;
 }
-if (count($pages)==2) $tabbed = false;
 ?>

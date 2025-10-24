@@ -3,6 +3,7 @@ Type="xmenu"
 Code="e90b"
 Lock="true"
 Cond="exec(\"grep -o '^DOCKER_ENABLED=.yes' /boot/config/docker.cfg 2>/dev/null\")"
+Tabs="false"
 ---
 <?PHP
 /* Copyright 2005-2023, Lime Technology
@@ -16,11 +17,15 @@ Cond="exec(\"grep -o '^DOCKER_ENABLED=.yes' /boot/config/docker.cfg 2>/dev/null\
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  */
-?>
-<?
+
+$noticeMessage = null;
 if ($var['fsState'] != 'Started') {
-  echo "<div class='notice shift'>_(Array must be **Started** to view Docker containers)_.</div>";
+  $noticeMessage = _('Array must be **Started** to view Docker containers');
 } elseif (!is_file('/var/run/dockerd.pid') || (!is_dir('/proc/'.@file_get_contents('/var/run/dockerd.pid')))) {
-  echo "<div class='notice shift'>_(Docker Service failed to start)_.</div>";
+  $noticeMessage = _('Docker Service failed to start');
 }
 ?>
+
+<? if ($noticeMessage): ?>
+  <p class="notice"><?= $noticeMessage ?></p>
+<? endif; ?>

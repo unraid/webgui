@@ -36,7 +36,11 @@ _(Samba extra configuration)_:
 : <textarea spellcheck="false" cols="80" rows="<?=substr_count($text,"\n")+1?>" maxlength="2048" name="text" <?if ($var['fsState']=="Started"):?>disabled<?endif;?>><?=htmlspecialchars($text)?></textarea>
 
 &nbsp;
-: <input type="submit" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()"><?if ($var['fsState']=="Started"):?>*_(Array must be **Stopped** to change)_*<?endif;?>
+: <span class="inline-block">
+    <input type="submit" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
+<?if ($var['fsState']=="Started"):?>*_(Array must be **Stopped** to change)_*<?endif;?>
 
 :smb_extra_button_help:
 

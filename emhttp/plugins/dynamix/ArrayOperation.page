@@ -17,42 +17,52 @@ Nchan="device_list,disk_load,parity_list"
 ?>
 <?
 $keyfile = file_exists(_var($var,'luksKeyfile'));
-$missing = file_exists('/var/tmp/missing.tmp');
 $spot    = _var($var,'mdResyncPos',0)>0;
-$poolsOnly  = (_var($var,'SYS_ARRAY_SLOTS') == 0 ) ? true : false;
+$poolsOnly = (_var($var,'SYS_ARRAY_SLOTS') == 0 ) ? true : false;
 
 /* only one of $present, $missing, or $wrong will be true, or all will be false */
-$forced = $present = $wrong = false;
-foreach ($disks as $disk) {
-  if (strpos(_var($disk,'fsType'),'luks:')!==false || (_var($disk,'fsType')=='auto' && strpos(_var($var,'defaultFsType'),'luks:')!==false)) $forced = true;
-  if (_var($disk,'luksState',0)==1) $present = true;
-  if (_var($disk,'luksState',0)==2) $missing = true;
-  if (_var($disk,'luksState',0)==3) $wrong = true;
+$forced = $present = $missing = $wrong = false;
+
+foreach (luks_filter($disks) as $disk) {
+  $fsType = _var($disk,'fsType');
+  $luks   = str_starts_with($fsType,'luks:');
+  $auto   = $fsType == 'auto';
+  if ($luks || ($auto && str_starts_with(_var($var,'defaultFsType'),'luks:'))) $forced = true;
+  if ($luks || $auto) switch (_var($disk,'luksState',0)) {
+    case 1: $present = true; break;
+    case 2: $missing = true; break;
+    case 3: $wrong = true; break;
+  }
 }
+
 $encrypt = $forced || $present || $missing || $wrong;
 if ($forced && ($present || $missing || $wrong)) $forced = false;
 
 function check_encryption() {
   global $forced, $missing, $wrong;
-  if ($forced) $status = _('Enter new key');
-  elseif ($missing) $status = _('Missing key');
-  elseif ($wrong) $status = _('Wrong key');
-  else return;
-  echo "<tr><td></td><td class='gap'>",_('Encryption status').":</td><td><span class='red-text'>$status</span><span id='pass'><input name='luksReformat' type='checkbox' onchange='selectInput(this.form)'>permit reformat</span></td></tr>";
-  echo "<tr><td></td><td class='gap'>",_('Encryption input').":</td><td>";
-  echo "<select name='input' size='1' onchange='selectInput(this.form)'>";
+  if ($forced)
+    $status = _('Enter new key');
+  elseif ($missing)
+    $status = _('Missing key');
+  elseif ($wrong)
+    $status = _('Wrong key');
+  else
+    return;
+  echo "<tr><td></td><td>",_('Encryption status').":</td><td><span class='red-text'>$status</span><span id='pass' class='hidden'><label class='inline-flex flex-row items-center gap-2 flex-shrink-0'><input name='luksReformat' type='checkbox' onchange='selectInput(this.form)'>permit reformat</label></span></td></tr>";
+  echo "<tr><td></td><td><label for='encryption-input'>",_('Encryption input').":</label></td><td>";
+  echo "<select id='encryption-input' name='input' size='1' onchange='selectInput(this.form)'>";
   echo mk_option(1,'text',_('Passphrase'));
   echo mk_option(1,'file',_('Keyfile'));
   echo "</select></td></tr>";
-  echo "<tr id='text'><td></td><td class='gap'>",_('Passphrase'),":</td><td><input type='password' name='text' maxlength='512' value='' onkeyup='selectInput(this.form)' placeholder=\""._('use printable characters only')."\"><input name='showPass' type='checkbox' onchange='selectInput(this.form)'>"._('show passphrase')."</td></tr>";
-  echo "<tr id='copy'><td></td><td class='gap'>",_('Retype passphrase'),":</td><td><input type='password' name='copy' maxlength='512' value='' onkeyup='selectInput(this.form)'></td></tr>";
-  echo "<tr id='file'><td></td><td class='gap'>",_('Keyfile'),":</td><td><input type='file' name='local' onchange='getFileContent(event,this.form)'></td></tr>";
+  echo "<tr id='text'><td></td><td><label for='key-passphrase'>",_('Passphrase'),":</label></td><td><div class='flex flex-row items-center gap-2'><input id='key-passphrase' type='password' name='text' maxlength='512' value='' onkeyup='selectInput(this.form)' placeholder=\""._('use printable characters only')."\"><label class='inline-flex flex-row items-center gap-2 flex-shrink-0'><input name='showPass' type='checkbox' onchange='selectInput(this.form)'>"._('show passphrase')."</label></div></td></tr>";
+  echo "<tr id='copy' class='hidden'><td></td><td><label for='key-retype-passphrase'>",_('Retype passphrase'),":</label></td><td><input id='key-retype-passphrase' type='password' name='copy' maxlength='512' value='' onkeyup='selectInput(this.form)'></td></tr>";
+  echo "<tr id='file' class='hidden'><td></td><td><label for='key-file-upload'>",_('Keyfile'),":</label></td><td><input id='key-file-upload' type='file' name='local' onchange='getFileContent(event,this.form)'></td></tr>";
 }
 
 function maintenance_mode() {
   echo "<tr>";
   echo "<td></td>";
-  echo "<td><input type='checkbox' name='startMode' value='Maintenance'>",_('Maintenance mode'),"</td>";
+  echo "<td><label class='flex flex-row items-center gap-2'><input type='checkbox' name='startMode' value='Maintenance'>",_('Maintenance mode'),"</label></td>";
   echo "<td><b>",_('Maintenance mode'),"</b> - ",_('if checked, Start array but do not mount disks'),"</td>";
   echo "</tr>";
 }
@@ -84,22 +94,22 @@ function print_error($error) {
 }
 ?>
 <script>
-var ctrl = '<span class="status <?=$tabbed?"":"vhshift"?>"><a style="cursor:pointer" class="tooltip_diskio" title="_(Toggle reads/writes display)_" onclick="toggle_diskio();return false"><i class="toggle fa"></i></a></span>';
+var ctrl = '<span class="status"><a style="cursor:pointer" class="tooltip_diskio" title="_(Toggle reads/writes display)_" onclick="toggle_diskio();return false"><i class="toggle fa"></i></a></span>';
 var recall = null;
 var recover = null;
 
 String.prototype.no_tilde = function(){return this.replace('<?=$_tilde_?>','<?=$_proxy_?>');}
 String.prototype.master = function(){return this.split('<?=$_tilde_?>')[0];}
 
-function toggle_state(device,name,action) {
+function toggle_state(device, name, action) {
   var button = null;
   if (name) {
     var group = name.replace(/(\d+|\*)$/,'');
-    if (name.slice(-1)!='*') {
+    if (name.slice(-1) != '*') {
       // single device
       $('#dev-'+name.no_tilde()).removeClass('fa-circle fa-square fa-warning fa-times').addClass('fa-refresh fa-spin');
     } else {
-      if (group=='disk') {
+      if (group == 'disk') {
         // array devices
         $('[id^="dev-parity"]').removeClass('fa-circle fa-square fa-warning fa-times').addClass('fa-refresh fa-spin');
         $('[id^="dev-disk"]').removeClass('fa-circle fa-square fa-warning fa-times').addClass('fa-refresh fa-spin');
@@ -108,17 +118,17 @@ function toggle_state(device,name,action) {
         $('[id^="dev-'+group.master()+'"]').removeClass('fa-circle fa-square fa-warning fa-times').addClass('fa-refresh fa-spin');
       }
     }
-  } else if (device!='Clear') {
+  } else if (device != 'Clear') {
     // all devices
     $('[id^="dev-"]').removeClass('fa-circle fa-square fa-warning fa-times').addClass('fa-refresh fa-spin');
     button = '[id^=button-]';
   }
   devices.stop();
-  $.post('/webGui/include/ToggleState.php',{device:device,name:name,action:action},function(){setTimeout(function(){devices.start().monitor();},1000);if (button) $(button).prop('disabled',false);});
+  $.post('/webGui/include/ToggleState.php', {device:device,name:name,action:action}, function(){setTimeout(function(){devices.start();},1000);if (button) $(button).prop('disabled',false);});
 }
 
 function display_diskio() {
-  if ($.cookie('diskio')===undefined) {
+  if ($.cookie('diskio') === undefined) {
     $('span.diskio').show(); $('span.number').hide();
   } else {
     $('span.number').show(); $('span.diskio').hide();
@@ -127,9 +137,9 @@ function display_diskio() {
 
 function toggle_diskio(init) {
   if (!init) {
-    if ($.cookie('diskio')===undefined) $.cookie('diskio','diskio',{expires:3650}); else $.removeCookie('diskio');
+    if ($.cookie('diskio') === undefined) $.cookie('diskio','diskio',{expires:3650}); else $.removeCookie('diskio');
   }
-  if ($.cookie('diskio')===undefined) {
+  if ($.cookie('diskio') === undefined) {
     $('i.toggle').removeClass('fa-list').addClass('fa-tachometer');
     $('#clearstats').addClass('hidden');
   } else {
@@ -148,7 +158,7 @@ function selectInput(form) {
   form.input.value = 'file';
   form.input.disabled = true;
 <?endif;?>
-  if (form.input.value=='text') {
+  if (form.input.value == 'text') {
     form.file.value = '';
     form.local.value = '';
 <?if ($forced):?>
@@ -187,17 +197,17 @@ function selectInput(form) {
   }
 }
 
-function getFileContent(event,form) {
+function getFileContent(event, form) {
   var input = event.target;
   var reader = new FileReader();
   reader.onload = function(){form.file.value=reader.result;selectInput(form);};
   reader.readAsDataURL(input.files[0]);
 }
 
-function prepareInput(form,button,parityWarn) {
+function prepareInput(form, button, parityWarn) {
   button.disabled = true;
   $.post('/webGui/include/Report.php',{cmd:'state',pools:'<?=implode(',',$pools)?>'},function(state) {
-    if (state.length==0) {
+    if (state.length == 0) {
       $(form).append('<input type="hidden" name="cmdStart" value="Start">');
       if (form.input === undefined) {
         parityWarn ? parityWarning(form,button) : form.submit();
@@ -219,7 +229,13 @@ function prepareInput(form,button,parityWarn) {
           form.file.disabled = false;
           form.text.disabled = false;
           form.copy.disabled = false;
-          swal({title:"_(Printable Characters Only)_",text:"_(Use **ASCII** characters from space ' ' to tilde '~')_<br>_(Otherwise use the **keyfile** method for UTF8 input)_",html:true,type:'error',confirmButtonText:"_(Ok)_"});
+          swal({
+            title:"_(Printable Characters Only)_",
+            text:"_(Use **ASCII** characters from space ' ' to tilde '~')_<br>_(Otherwise use the **keyfile** method for UTF8 input)_",
+            html:true,
+            type:'error',
+            confirmButtonText:"_(Ok)_"
+          });
         }
         return;
       }
@@ -229,12 +245,20 @@ function prepareInput(form,button,parityWarn) {
       data['file'] = form.file.value;
       $.post('/update.php',data,function(){form.submit();});
     } else {
-      swal({title:"_(Wrong Pool State)_",text:state,type:'error',html:true,confirmButtonText:"_(Ok)_"},function(){button.disabled=false;});
+      swal({
+        title:"_(Wrong Pool State)_",
+        text:state,
+        type:'error',
+        html:true,
+        confirmButtonText:"_(Ok)_"
+      },function(){
+        button.disabled=false;
+      });
     }
   });
 }
 
-function parityWarning(form,button) {
+function parityWarning(form, button) {
   if (form.md_invalidslot.checked) {
 <?if (strpos(_var($disks['parity2'],'status'),'_NP')===false):?>
     var text = "_(*Dual parity* valid requires **ALL** disks in their original slots)_";
@@ -244,7 +268,15 @@ function parityWarning(form,button) {
   } else {
     var text = "_(*Parity* disk(s) content will be overwritten)_";
   }
-  swal({title:"_(Proceed to start)_",text:text,html:true,type:'warning',showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(confirmed){
+  swal({
+    title:"_(Proceed to start)_",
+    text:text,
+    html:true,
+    type:'warning',
+    showCancelButton:true,
+    confirmButtonText:"_(Proceed)_",
+    cancelButtonText:"_(Cancel)_"
+  },function(confirmed){
     confirmed ? form.submit() : button.disabled=false;
   });
 }
@@ -257,16 +289,36 @@ function tab0() {
 function stopArray(form) {
   $(form).append('<input type="hidden" name="cmdStop" value="Stop">');
 <?if ($confirm['stop']):?>
-  swal({title:"_(Proceed)_?",text:"_(This will stop the array)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(p){if (p) form.submit(); else $('input[name="cmdStop"]').remove();});
+  swal({
+    title:"_(Proceed)_?",
+    text:"_(This will stop the array)_",
+    type:'warning',
+    html:true,
+    showCancelButton:true,
+    confirmButtonText:"_(Proceed)_",
+    cancelButtonText:"_(Cancel)_"
+  },function(p){
+    if (p) form.submit(); else $('input[name="cmdStop"]').remove();
+  });
 <?else:?>
   form.submit();
 <?endif;?>
 }
 
-function stopParity(form,text) {
+function stopParity(form, text) {
   $(form).append('<input type="hidden" name="cmdCheckCancel" value="">');
 <?if ($confirm['stop']):?>
-  swal({title:"_(Proceed)_?",text:"_(This will stop the running operation)_: "+text,type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(p){if (p) form.submit(); else $('input[name="cmdCheckCancel"]').remove();});
+  swal({
+    title:"_(Proceed)_?",
+    text:"_(This will stop the running operation)_: "+text,
+    type:'warning',
+    html:true,
+    showCancelButton:true,
+    confirmButtonText:"_(Proceed)_",
+    cancelButtonText:"_(Cancel)_"
+  },function(p){
+    if (p) form.submit(); else $('input[name="cmdCheckCancel"]').remove();
+  });
 <?else:?>
   form.submit();
 <?endif;?>
@@ -292,14 +344,24 @@ function parityHistory() {
   openChanges("parity_history", "_(Parity Operation History)_", "phistory");
 }
 
-function shutdown_now(form,cmd) {
+function shutdown_now(form, cmd) {
   $(form).append('<input type="hidden" name="cmd" value="'+cmd+'">');
 <?if ($confirm['down']):?>
   switch (cmd) {
     case 'reboot': var text = "_(This will reboot the system)_"; break;
     case 'shutdown': var text = "_(This will shutdown the system)_"; break;
   }
-  swal({title:"_(Proceed)_?",text:text,type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(p){if (p) form.submit(); else $('input[name="cmd"]').remove();});
+  swal({
+    title:"_(Proceed)_?",
+    text:text,
+    type:'warning',
+    html:true,
+    showCancelButton:true,
+    confirmButtonText:"_(Proceed)_",
+    cancelButtonText:"_(Cancel)_"
+  },function(p){
+    if (p) form.submit(); else $('input[name="cmd"]').remove();
+  });
 <?else:?>
   form.submit();
 <?endif;?>
@@ -311,25 +373,25 @@ function toggleApply(checked) {
 
 <?if ($tabbed):?>
 $('.tabs').append(ctrl);
-if ($.cookie('tab')=='tab0') $('i.toggle').hide();
+if ($.cookie('tab') == 'tab0') $('i.toggle').hide();
 $('#tab'+$('input[name$="tabs"]').length).click(function(){tab0(); $('i.toggle').hide('slow');});
 <?else:?>
-$('div[class=title]:not(":last, .disable_diskio")').each(function(){$(this).append(ctrl);});
+$('div[class=title]:not(":last, .disable_diskio") .right').each(function(){$(this).append(ctrl);});
 <?endif;?>
 $('.tooltip_diskio').tooltipster({delay:100,trigger:'custom',triggerOpen:{mouseenter:true},triggerClose:{click:false,scroll:true,mouseleave:true}});
 
-<?if (_var($var,'fsState')=='Started'):?>
+<?if (_var($var,'fsState') == 'Started'):?>
 var mymonitor = new NchanSubscriber('/sub/mymonitor',{subscriber:'websocket', reconnectTimeout:5000});
 mymonitor.on('message', function(state) {
   switch (state) {
   case '0': // normal operation
     $('#stop-button').prop('disabled',false);
     $('#stop-text').html("");
-<?if (_var($var,'fsState')!="Stopped"):?>
+<?if (_var($var,'fsState') != "Stopped"):?>
     $('#spinup-button').prop('disabled',false);
     $('#spindown-button').prop('disabled',false);
 <?endif;?>
-<?if (_var($var,'shareUser')=='e' && $pool_devices):?>
+<?if (_var($var,'shareUser') == 'e' && $pool_devices):?>
     $('#mover-button').prop('disabled',false);
     $('#mover-text').html("<b>_(Move)_</b> _(will immediately invoke the Mover)_.&nbsp;<a href=\"/Main/Settings/Scheduler\"<?if($tabbed):?> onclick=\"$.cookie('one','tab2')\"<?endif;?>>(_(Schedule)_)</a>");
 <?endif;?>
@@ -337,11 +399,11 @@ mymonitor.on('message', function(state) {
   case '1': // parity running
     $('#stop-button').prop('disabled',true);
     $('#stop-text').html("<br><small>_(Disabled)_ -- _(Parity operation is running)_</small>");
-<?if (_var($var,'fsState')!="Stopped" && _var($var,'mdResync',0)>0):?>
+<?if (_var($var,'fsState') != "Stopped" && _var($var,'mdResync',0) > 0):?>
     $('#spinup-button').prop('disabled',true);
     $('#spindown-button').prop('disabled',true);
 <?endif;?>
-<?if (_var($var,'shareUser')=='e' && $pool_devices):?>
+<?if (_var($var,'shareUser') == 'e' && $pool_devices):?>
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ -- _(Parity operation is running)_");
 <?endif;?>
@@ -349,7 +411,7 @@ mymonitor.on('message', function(state) {
   case '2': // mover running
     $('#stop-button').prop('disabled',true);
     $('#stop-text').html("<br><small>_(Disabled)_ -- _(Mover is running)_</small>");
-<?if (_var($var,'shareUser')=='e' && $pool_devices):?>
+<?if (_var($var,'shareUser') == 'e' && $pool_devices):?>
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ - _(Mover is running)_.");
 <?endif;?>
@@ -357,7 +419,7 @@ mymonitor.on('message', function(state) {
   case '3': // btrfs running
     $('#stop-button').prop('disabled',true);
     $('#stop-text').html("<br><small>_(Disabled)_ -- _(BTRFS operation is running)_</small>");
-<?if (_var($var,'shareUser')=='e' && $pool_devices):?>
+<?if (_var($var,'shareUser') == 'e' && $pool_devices):?>
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ -- _(BTRFS operation is running)_");
 <?endif;?>
@@ -369,11 +431,11 @@ mymonitor.start();
 
 var arraymonitor = new NchanSubscriber('/sub/arraymonitor',{subscriber:'websocket', reconnectTimeout:5000});
 arraymonitor.on('message', function(state) {
-  if (state==1 && !timers.arraymonitor) timers.arraymonitor = setTimeout(refresh,1250);
+  if (state == 1 && !timers.arraymonitor) timers.arraymonitor = setTimeout(refresh,1250);
 });
 
 var devices = new NchanSubscriber('/sub/devices<?=$spot?",parity":""?>',{subscriber:'websocket', reconnectTimeout:5000});
-devices.on('message', function(msg,meta) {
+devices.on('message', function(msg, meta) {
   switch (<?if($spot):?>meta.id.channel()<?else:?>0<?endif;?>) {
   case 0:
     // array + pool + ua + flash devices
@@ -382,9 +444,9 @@ devices.on('message', function(msg,meta) {
     if (recall !== null) recall.html('&nbsp;');
     display_diskio();
     // stop updating when array is stopped
-    if (get.stop==1) {
+    if (get.stop == 1) {
       $('thead tr').removeClass().addClass('offline');
-<?if (_var($var,'fsState')=='Started'):?>
+<?if (_var($var,'fsState') == 'Started'):?>
       setTimeout(refresh);
 <?else:?>
       if (!timers.stopped) timers.stopped = setTimeout(function(){devices.stop(); arraymonitor.start();},1500);
@@ -402,17 +464,17 @@ devices.on('message', function(msg,meta) {
     var get = JSON.parse(msg);
     $.each(get,function(k,v) {if ($('#line'+k).length>0) $('#line'+k).html(v);});
     // button control
-    if ($('#pauseButton').length>0 && $('#pauseButton').prop('disabled')==false) {
-      if ((get === "") && $('#cancelButton').val()=="_(Cancel)_") {
+    if ($('#pauseButton').length > 0 && $('#pauseButton').prop('disabled') == false) {
+      if ((get === "") && $('#cancelButton').val() == "_(Cancel)_") {
         $('#cancelButton').val("_(Done)_").prop('onclick',null).off('click').click(function(){refresh();});
         $('#pauseButton').prop('disabled',true);
         $('#cancelText').html('');
         $('#line4').html("_(completed)_");
       } else {
         var form = document.arrayOps;
-        if ($('#pauseButton').val()=="_(Pause)_" && get[1].search("_(paused)_")!=-1) {
+        if ($('#pauseButton').val() == "_(Pause)_" && get[1].search("_(paused)_") != -1) {
           $('#pauseButton').val("_(Resume)_").prop('onclick',null).off('click').click(function(){resumeParity(form);});
-        } else if ($('#pauseButton').val()=="_(Resume)_" && get[1].search("_(paused)_")==-1) {
+        } else if ($('#pauseButton').val() == "_(Resume)_" && get[1].search("_(paused)_") == -1) {
           $('#pauseButton').val("_(Pause)_").prop('onclick',null).off('click').click(function(){pauseParity(form);});
         }
       }
@@ -420,9 +482,9 @@ devices.on('message', function(msg,meta) {
     break;
   }
 });
-devices.start().monitor();
+devices.start();
 
-<?if (substr(_var($var,'fsState'),-3)=='ing'):?>
+<?if (substr(_var($var,'fsState'),-3) == 'ing'):?>
 var fsState = new NchanSubscriber('/sub/fsState',{subscriber:'websocket', reconnectTimeout:5000});
 fsState.on('message', function(msg) {
   switch (msg) {
@@ -439,18 +501,23 @@ fsState.start();
 setTimeout(function(){$('#pauseButton').prop('disabled',false);$('#cancelButton').prop('disabled',false);},250);
 <?else:?>
 var paritymonitor = new NchanSubscriber('/sub/paritymonitor',{subscriber:'websocket', reconnectTimeout:5000});
-paritymonitor.on('message', function(busy){if (busy==1) refresh();});
+paritymonitor.on('message', function(busy){if (busy == 1) refresh();});
 setTimeout(function(){paritymonitor.start();},5000);
 <?endif;?>
 
 $(function(){
+// Create ping listener for parity monitor and device info to monitor for listeners
+  var mainPingListener = new NchanSubscriber('/sub/mainPingListener',{subscriber:'websocket', reconnectTimeout:5000});
+  mainPingListener.on('message', function(msg){});
+  mainPingListener.start();
+
   var form = document.arrayOps;
   if (form.input !== undefined) selectInput(form);
   toggle_diskio(true);
 });
 
 function formatWarning(val) {
-  if (val==true) {
+  if (val == true) {
     swal({
       title:"_(Format Unmountable disks)_",
       text: "_(Create an empty file system on the disks shown as **Unmountable** discarding all data currently on the disks and update parity to reflect this)_. "+
@@ -465,11 +532,11 @@ function formatWarning(val) {
 }
 
 window.onunload = function(){
-<?if (_var($var,'fsState')=='Started'):?>
+<?if (_var($var,'fsState') == 'Started'):?>
   try {mymonitor.stop();} catch(e) {}
   try {devices.stop();} catch(e) {}
 <?endif;?>
-<?if ($spot==0):?>
+<?if ($spot == 0):?>
   try {paritymonitor.stop();} catch(e) {}
 <?endif;?>
 }
@@ -477,95 +544,104 @@ window.onunload = function(){
 <form name="arrayOps" method="POST" action="/update.htm" target="progressFrame">
 <input type="hidden" name="startState" value="<?=htmlspecialchars(_var($var,'mdState'))?>">
 <input type="hidden" name="file" value="">
-<table markdown="1" class="array_status">
+
+<table markdown="1" class="ArrayOperation-Table array_status">
 <?switch (_var($var,'fsState')):
   case "Started":?>
     <tr><td><?status_indicator()?>**_(Started)_<?=((_var($var,'startMode')=='Maintenance')?' - _(Maintenance Mode)_':'')?>**</td>
     <td><input type="button" id="stop-button" value="_(Stop)_" onclick="stopArray(this.form)"></td>
     <td>**_(Stop)_** _(will take the array off-line)_.<span id="stop-text"></span></td></tr>
-<?  if (_var($var,'fsNumUnmountable',0)>0):?>
-      <tr><td>**<?=_('Unmountable disk'.(_var($var,'fsNumUnmountable',0)==1?'':'s').' present')?>:**<br>
+<?  if (_var($var,'fsNumUnmountable',0) > 0):?>
+      <tr><td>**<?=_('Unmountable disk'.(_var($var,'fsNumUnmountable',0) == 1 ? '' : 's').' present')?>:**<br>
 <?    $cache = [];
-      foreach ($disks as $disk) if (substr(_var($disk,'fsStatus'),0,11)=='Unmountable' || in_array(pool_name(_var($disk,'name')),$cache)) {
+      foreach ($disks as $disk) if (substr(_var($disk,'fsStatus'),0,11) == 'Unmountable' || in_array(pool_name(_var($disk,'name')),$cache)) {
         if (strlen(_var($disk,'id'))) echo "<span class='blue-text'>".my_disk(_var($disk,'name'))."</span> &bullet; ".my_id(_var($disk,'id'))." ("._var($disk,'device').")<br>";
         if (in_array(_var($disk,'name'),$pools)) $cache[] = $disk['name'];
       }
 ?>    </td><td><input type="submit" id="btnFormat" name="cmdFormat" value="_(Format)_" disabled><input type="hidden" name="unmountable_mask" value="<?=_var($var,'fsUnmountableMask')?>"></td>
       <td>**_(Format)_** _(will create a file system in all **Unmountable** disks)_.<br>
       <a class="info none img nohand"><input type="checkbox" name="confirmFormat" value="OFF" onclick="formatWarning(this.checked),$('#btnFormat').prop('disabled',!arrayOps.confirmFormat.checked)">
-     <small>_(Yes, I want to do this)_</small></a>
+      <small>_(Yes, I want to do this)_</small></a>
       </td></tr>
 <?  endif;
     $action = preg_split('/\s+/',_var($var,'mdResyncAction'));
     if (!$spot):
-      if ($action[0]=="recon"):
+      if ($action[0] == "recon"):
         $resync = resync($action[1]);
 ?>      <tr><td></td><td><input type="submit" name="cmdCheckSync" value="_(Sync)_"></td><td>**<?=_('Sync')?>** <?=_("will start **$resync**")?>.</td></tr>
 <?    elseif ($action[0]=="clear"):?>
         <tr><td></td><td><input type="submit" name="cmdCheckClear" value="_(Clear)_"></td><td>**_(Clear)_** _(will start **Disk-Clear** of new data disk(s))_.</td></tr>
 <?    else:
-        if ($action[0]=="check" && count($action)>1):?>
+        if ($action[0] == "check" && count($action) > 1):?>
           <tr><td>_(Parity is valid)_.</td><td><input type="submit" name="cmdCheck" value="_(Check)_"></td><td>**_(Check)_** _(will start **Parity-Check**)_.&nbsp;<a href="/Main/Settings/Scheduler"<?if ($tabbed):?> onclick="$.cookie('one','tab1')"<?endif;?>>(_(Schedule)_)</a>
           <br><input type="checkbox" name="optionCorrect" value="correct" checked><small>_(Write corrections to parity)_</small></td></tr>
-<?      elseif ($action[0]=="check"):?>
+<?      elseif ($action[0] == "check"):?>
           <tr><td></td><td><input type="submit" name="cmdCheck" value="_(Check)_"></td><td>**_(Check)_** _(will start **Read-Check** of all array disks)_.</td></tr>
 <?      endif;?>
 <?      if (!$poolsOnly):?>
         <tr><td></td><td><input type="button" value="_(History)_" onclick="parityHistory()"></td>
-<?      [$date,$duration,$speed,$status,$error,$action,$size] = last_parity_log();
-        if (_var($var,'sbSyncExit',0)!=0):?>
-          <td class="wrap"><?=sprintf(_('Last check incomplete on **%s**'),_(my_time(_var($var,'sbSynced2',0)).day_count(_var($var,'sbSynced2',0)),0))?><?if (_var($var,'sbSynced2')):?>
+<?      [$date, $duration, $speed, $status, $error, $action, $size] = last_parity_log();
+        if (_var($var,'sbSyncExit',0) != 0):?>
+          <td class="whitespace-normal"><?=sprintf(_('Last check incomplete on **%s**'),_(my_time(_var($var,'sbSynced2',0)).day_count(_var($var,'sbSynced2',0)),0))?><?if (_var($var,'sbSynced2')):?>
           <br><i class="fa fa-fw fa-dot-circle-o"></i> _(Error code)_: <?=my_error(_var($var,'sbSyncExit'))?>
           <br><i class="fa fa-fw fa-search"></i> <?=print_error(_var($var,'sbSyncErrs',0))?><?endif;?></td></tr>
-<?      elseif (_var($var,'sbSynced',0)==0):
-          if ($status==0):?>
-            <td class="wrap"><?=sprintf(_('Last checked on **%s**'),_(my_time($date).day_count($date),0))?>
+<?      elseif (_var($var,'sbSynced',0) == 0):
+          if ($status == 0):?>
+            <td class="whitespace-normal"><?=sprintf(_('Last checked on **%s**'),_(my_time($date).day_count($date),0))?>
             <br><i class="fa fa-fw fa-clock-o"></i> _(Duration)_: <?=my_check($duration,$speed)?>
             <br><i class="fa fa-fw fa-search"></i> <?=print_error($error)?></td></tr>
 <?        else:?>
-            <td class="wrap"><?=sprintf(_('Last check incomplete on **%s**'),_(my_time($date).day_count($date),0))?>
+            <td class="whitespace-normal"><?=sprintf(_('Last check incomplete on **%s**'),_(my_time($date).day_count($date),0))?>
             <br><i class="fa fa-fw fa-dot-circle-o"></i> _(Error code)_: <?=my_error($status)?>
             <br><i class="fa fa-fw fa-search"></i> <?=print_error($error)?></td></tr>
 <?        endif;
         elseif (_var($var,'sbSynced2',0)==0):
-          if ($status==0):?>
-            <td class="wrap"><?=sprintf(_('Last checked on **%s**'),_(my_time(_var($var,'sbSynced',0)).day_count(_var($var,'sbSynced',0)),0))?>
+          if ($status == 0):?>
+            <td class="whitespace-normal"><?=sprintf(_('Last checked on **%s**'),_(my_time(_var($var,'sbSynced',0)).day_count(_var($var,'sbSynced',0)),0))?>
             <br><i class="fa fa-fw fa-clock-o"></i> _(Duration)_: <?=my_check($duration,$speed)?>
             <br><i class="fa fa-fw fa-search"></i> <?=print_error($error)?></td></tr>
 <?        else:?>
-            <td class="wrap"><?=sprintf(_('Last check incomplete on **%s**'),_(my_time(_var($var,'sbSynced',0)).day_count(_var($var,'sbSynced',0)),0))?>
+            <td class="whitespace-normal"><?=sprintf(_('Last check incomplete on **%s**'),_(my_time(_var($var,'sbSynced',0)).day_count(_var($var,'sbSynced',0)),0))?>
             <br><i class="fa fa-fw fa-dot-circle-o"></i> _(Error code)_: <?=my_error($status)?>
             <br><i class="fa fa-fw fa-search"></i> <?=print_error($error)?></td></tr>
 <?        endif;
         else:?>
-          <td class="wrap"><?=sprintf(_('Last check completed on **%s**'),_(my_time(_var($var,'sbSynced2',0)).day_count(_var($var,'sbSynced2',0)),0))?>
+          <td class="whitespace-normal"><?=sprintf(_('Last check completed on **%s**'),_(my_time(_var($var,'sbSynced2',0)).day_count(_var($var,'sbSynced2',0)),0))?>
           <br><i class="fa fa-fw fa-clock-o"></i> _(Duration)_: <?=my_check($duration,$speed)?>
           <br><i class="fa fa-fw fa-search"></i> <?=print_error(_var($var,'sbSyncErrs',0))?></td></tr>
 <?      endif;
         endif; // end check for poolsOnly
       endif;
     else:
-      if ($action[0]=="recon"):
+      if ($action[0] == "recon"):
         $resync = resync($action[1]);
 ?>      <tr><td><?=_("$resync in progress")?>.</td><td>
+        <span class="buttons-spaced">
         <input type="button" id="pauseButton"<?if (_var($var,'mdResync')):?> value="_(Pause)_" onclick="pauseParity(this.form)"<?else:?> value="_(Resume)_" onclick="resumeParity(this.form)"<?endif;?> disabled>
-        <input type="button" id="cancelButton" value="_(Cancel)_" onclick="stopParity(this.form,'<?=$resync?>')" disabled></td>
+        <input type="button" id="cancelButton" value="_(Cancel)_" onclick="stopParity(this.form,'<?=$resync?>')" disabled>
+        </span></td>
         <td id="cancelText"><?if (_var($var,'mdResync')):?>**<?=_('Pause')?>** <?=_("will pause $resync")?>.<?else:?>**<?=_('Resume')?>** <?=_("will resume $resync")?>.<?endif;?><br>**<?=_('Cancel')?>** <?=_("will stop $resync")?>.
         <br>_(WARNING: canceling may leave the array unprotected)_!</td></tr>
-<?    elseif ($action[0]=="clear"):?>
+<?    elseif ($action[0] == "clear"):?>
         <tr><td>_(Disk-Clear in progress)_.</td><td>
+        <span class="buttons-spaced">
         <input type="button" id="pauseButton"<?if (_var($var,'mdResync')):?> value="_(Pause)_" onclick="pauseParity(this.form)"<?else:?> value="_(Resume)_" onclick="resumeParity(this.form)"<?endif;?> disabled>
-        <input type="button" id="cancelButton" value="_(Cancel)_" onclick="stopParity(this.form,'Disk-Clear')" disabled></td>
+        <input type="button" id="cancelButton" value="_(Cancel)_" onclick="stopParity(this.form,'Disk-Clear')" disabled>
+        </span></td>
         <td id="cancelText"><?if (_var($var,'mdResync')):?>**_(Pause)_** _(will pause Disk-Clear)_.<?else:?>**_(Resume)_** _(will resume Disk-Clear)_.<?endif;?><br>**_(Cancel)_** _(will stop Disk-Clear)_.</td></tr>
-<?    elseif ($action[0]=="check" && count($action)>1):?>
+<?    elseif ($action[0] == "check" && count($action) > 1):?>
         <tr><td>_(Parity-Check in progress)_.</td><td>
+        <span class="buttons-spaced">
         <input type="button" id="pauseButton"<?if (_var($var,'mdResync')):?> value="_(Pause)_" onclick="pauseParity(this.form)"<?else:?> value="_(Resume)_" onclick="resumeParity(this.form)"<?endif;?> disabled>
-        <input type="button" id="cancelButton" value="_(Cancel)_" onclick="stopParity(this.form,'Parity-Check')" disabled></td>
+        <input type="button" id="cancelButton" value="_(Cancel)_" onclick="stopParity(this.form,'Parity-Check')" disabled>
+        </span></td>
         <td id="cancelText"><?if (_var($var,'mdResync')):?>**_(Pause)_** _(will pause Parity-Check)_.<?else:?>**_(Resume)_** _(will resume Parity-Check)_.<?endif;?><br>**_(Cancel)_** _(will stop Parity-Check)_.</td></tr>
-<?    elseif ($action[0]=="check"):?>
+<?    elseif ($action[0] == "check"):?>
         <tr><td>_(Read-Check in progress)_.</td><td>
+        <span class="buttons-spaced">
         <input type="button" id="pauseButton"<?if (_var($var,'mdResync')):?> value="_(Pause)_" onclick="pauseParity(this.form)"<?else:?> value="_(Resume)_" onclick="resumeParity(this.form)"<?endif;?> disabled>
-        <input type="button" id="cancelButton" value="_(Cancel)_" onclick="stopParity(this.form,'Read-Check')" disabled></td>
+        <input type="button" id="cancelButton" value="_(Cancel)_" onclick="stopParity(this.form,'Read-Check')" disabled>
+        </span></td>
         <td id="cancelText"><?if (_var($var,'mdResync')):?>**_(Pause)_** _(will pause Read-Check)_.<?else:?>**_(Resume)_** _(will resume Read-Check)_.<?endif;?><br>**_(Cancel)_** _(will stop Read-Check)_.</td></tr>
 <?    endif;
       $stamps = '/var/tmp/stamps.ini';
@@ -579,11 +655,11 @@ window.onunload = function(){
       <tr><td>_(Current position)_:</td><td id="line2"></td><td></td></tr>
       <tr><td>_(Estimated speed)_:</td><td id="line3"></td><td></td></tr>
       <tr><td>_(Estimated finish)_:</td><td id="line4"></td><td></td></tr>
-<?    if ($action[0]=="check"):?>
-<?    if (count($action)>1):?>
-      <tr><td><?=_var($var,'mdResyncCorr')==0 ? _('Sync errors detected') : _('Sync errors corrected')?>:</td><td id="line5"></td><td></td></tr>
+<?    if ($action[0] == "check"):?>
+<?    if (count($action) > 1):?>
+      <tr><td><?=_var($var,'mdResyncCorr') == 0 ? _('Sync errors detected') : _('Sync errors corrected')?>:</td><td id="line5"></td><td></td></tr>
 <?    else:?>
-      <tr><td><?=_var($var,'mdResyncCorr')==0 ? _('Read errors detected') : _('Read errors corrected')?>:</td><td id="line5"></td><td></td></tr>
+      <tr><td><?=_var($var,'mdResyncCorr') == 0 ? _('Read errors detected') : _('Read errors corrected')?>:</td><td id="line5"></td><td></td></tr>
 <?    endif;
       endif;
     endif;
@@ -610,19 +686,19 @@ window.onunload = function(){
     <tr><td><?status_indicator()?>**_(Stopping)_...**</td><td><input type="submit" name="cmdStop" value="_(Stop)_" disabled></td><td></td></tr>
 <?  break;
   case "Stopped":
-    if (_var($var,'configValid')=="error"):?>
+    if (_var($var,'configValid') == "error"):?>
       <tr><td><?status_indicator()?>**_(Stopped)_.**</td><td><input type="submit" name="cmdStart" value="_(Start)_" disabled></td>
       <td>_(Invalid, missing or expired)_ <a href="/Tools/Registration">_(registration key)_</a>.</td></tr>
-<?  elseif (_var($var,'configValid')=="invalid"):?>
+<?  elseif (_var($var,'configValid') == "invalid"):?>
       <tr><td><?status_indicator()?>**_(Stopped)_.**</td><td><input type="submit" name="cmdStart" value="_(Start)_" disabled></td>
       <td>_(Too many attached devices. Please consider upgrading your)_ <a href="/Tools/Registration">_(registration key)_</a>.</td></tr>
-<?  elseif (_var($var,'configValid')=="ineligible"):?>
+<?  elseif (_var($var,'configValid') == "ineligible"):?>
       <tr><td><?status_indicator()?>**_(Stopped)_.**</td><td><input type="submit" name="cmdStart" value="_(Start)_" disabled></td>
       <td>_(Ineligible to run this version of Unraid OS. Please consider extending your)_ <a href="/Tools/Registration">_(registration key)_</a>.</td></tr>
-<?  elseif (_var($var,'configValid')=="nokeyserver"):?>
+<?  elseif (_var($var,'configValid') == "nokeyserver"):?>
       <tr><td><?status_indicator()?>**_(Stopped)_.**</td><td><input type="submit" name="cmdStart" value="_(Start)_" disabled></td>
       <td>_(Cannot contact key-server. Please check your)_ <a href="/Settings/NetworkSettings">_(network settings)_</a>.</td></tr>
-<?  elseif (_var($var,'configValid')=="withdrawn"):?>
+<?  elseif (_var($var,'configValid') == "withdrawn"):?>
       <tr><td><?status_indicator()?>**_(Stopped)_.**</td><td><input type="submit" name="cmdStart" value="_(Start)_" disabled></td>
       <td>_(This Unraid OS release has been withdrawn and may no longer be used. Please)_ <a href="/Plugins">_(update)_</a> _(your server)_.</td></tr>
 <?  else:
@@ -635,18 +711,18 @@ window.onunload = function(){
         break;
       case "STOPPED":
         $action = explode(' ',_var($var,'mdResyncAction'));
-        if ($action[0]=="recon"):
+        if ($action[0] == "recon"):
           $resync = resync($action[1]);
 ?>        <tr><td><?status_indicator()?>**_(Stopped)_**. _(Configuration valid)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
           <td>**<?=_('Start')?>** <?=_("will bring the array on-line and start **$resync**")?>.</td></tr>
-<?      elseif ($action[0]=="clear"):?>
+<?      elseif ($action[0] == "clear"):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(New data disk(s) detected)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
           <td>**_(Start)_** _(will bring the array on-line and start **Disk-Clear** of new data disk(s))_.</td></tr>
-<?      elseif (_var($var,'sbClean')!="yes" && $action[0]=="check" && count($action)>1):?>
+<?      elseif (_var($var,'sbClean') != "yes" && $action[0] == "check" && count($action) > 1):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Unclean shutdown detected)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
           <td>**_(Start)_** _(will bring the array on-line and start **Parity-Check**)_.
           <br><input type="checkbox" name="optionCorrect" value="correct" checked><small>_(Write corrections to parity)_</small></td></tr>
-<?      elseif (_var($var,'sbClean')!="yes" && $action[0]=="check"):?>
+<?      elseif (_var($var,'sbClean') != "yes" && $action[0] == "check"):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Unclean shutdown detected)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
           <td>**_(Start)_** _(will bring the array on-line)_.</td></tr>
 <?      elseif (missing_cache()):?>
@@ -661,7 +737,7 @@ window.onunload = function(){
         check_encryption();
         break;
       case "NEW_ARRAY":
-        if (strpos(_var($disks['parity'],'status'),"DISK_NP")===0 && strpos(_var($disks['parity2'],'status'),"DISK_NP")===0):?>
+        if (strpos(_var($disks['parity'],'status'),"DISK_NP") === 0 && strpos(_var($disks['parity2'],'status'),"DISK_NP") === 0):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Configuration valid)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
           <td>**_(Start)_** _(will record all disk information and bring the array on-line)_.
           <br>_(The array will be immediately available, but **unprotected** since *parity* has not been assigned)_.</td></tr>
@@ -688,7 +764,7 @@ window.onunload = function(){
         check_encryption();
         break;
       case "SWAP_DSBL":
-        if (_var($var,'fsCopyPrcnt')=="100"):?>
+        if (_var($var,'fsCopyPrcnt') == "100"):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Upgrading disk/swapping parity)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
           <td>**_(Start)_** _(will expand the file system of the data disk (if possible); then bring the array on-line and start Data-Rebuild)_.</td></tr>
 <?        maintenance_mode();
@@ -731,27 +807,27 @@ endswitch;
   <tr><td></td><td class="line" colspan="2"></td></tr>
 </table>
 </form>
-<?if (_var($var,'fsState')!="Stopped"):?>
+<?if (_var($var,'fsState') != "Stopped"):?>
 <?if ($keyfile):?>
 <form name="delete_keyfile" method="POST" action="/update.php" target="progressFrame">
 <input type="hidden" name="#file" value="unused">
 <input type="hidden" name="#include" value="webGui/include/KeyUpload.php">
-<table markdown="1" class="array_status noshift">
+<table markdown="1" class="ArrayOperation-Table array_status noshift">
 <tr><td></td><td><input type="submit" name="#apply" value="_(Delete)_" disabled></td><td>**_(Delete)_** _(will delete the encryption keyfile)_.
 <br><input type="checkbox" onchange="toggleApply(this.checked)"><small>_(Yes, I want to do this)_</small></td></tr>
 <tr><td></td><td class="line" colspan="2"></td></tr>
 </table>
 </form>
 <?endif;?><!-- markdown fix -->
-<table markdown="1" class="array_status noshift">
- <tr><td></td><td><input type="button" id="spinup-button" onclick="$('[id^=button-]').prop('disabled',true);toggle_state('up')" value="_(Spin Up)_"><input type="button" id="spindown-button" onclick="$('[id^=button-]').prop('disabled',true);toggle_state('down')" value="_(Spin Down)_"></td>
+<table markdown="1" class="ArrayOperation-Table array_status noshift">
+ <tr><td></td><td><span class="buttons-spaced"><input type="button" id="spinup-button" onclick="$('[id^=button-]').prop('disabled',true);toggle_state('up')" value="_(Spin Up)_"><input type="button" id="spindown-button" onclick="$('[id^=button-]').prop('disabled',true);toggle_state('down')" value="_(Spin Down)_"></span></td>
  <td>**_(Spin Up)_** _(will immediately spin up all disks)_.<br>**_(Spin Down)_** _(will immediately spin down all disks)_.</td></tr>
  <tr id="clearstats" class="hidden"><td></td><td><input type="button" value="_(Clear Stats)_" onclick="toggle_state('Clear')"></td><td>**_(Clear Stats)_** _(will immediately clear all disk statistics)_.</td></tr>
  <tr><td></td><td class="line" colspan="2"></td></tr>
 </table>
-<?if (_var($var,'shareUser')=='e' && $pool_devices):?>
+<?if (_var($var,'shareUser') == 'e' && $pool_devices):?>
 <form name="mover_schedule" method="POST" action="/update.htm" target="progressFrame">
-<table markdown="1" class="array_status noshift">
+<table markdown="1" class="ArrayOperation-Table array_status noshift">
 <tr><td></td><td><input type="submit" id="mover-button" name="cmdStartMover" value="_(Move)_"></td><td id="mover-text"></td></tr>
 </table>
 </form>
@@ -760,23 +836,23 @@ endswitch;
 <form name="delete_keyfile" method="POST" action="/update.php" target="progressFrame">
 <input type="hidden" name="#file" value="unused">
 <input type="hidden" name="#include" value="webGui/include/KeyUpload.php">
-<table markdown="1" class="array_status noshift">
+<table markdown="1" class="ArrayOperation-Table array_status noshift">
  <tr><td></td><td><input type="submit" name="#apply" value="_(Delete)_"></td><td>**_(Delete)_** _(will delete the encryption keyfile)_.</td></tr>
  <tr><td></td><td class="line" colspan="2"></td></tr>
 </table>
 </form>
 <?endif;?><!-- markdown fix -->
 <form name="shutdownOps" method="POST" action="/webGui/include/Boot.php">
-<table markdown="1" class="array_status noshift">
- <tr><td></td><td><input type="button" name="reboot" value="_(Reboot)_" onclick="shutdown_now(this.form,'reboot')"><input type="button" name="shutdown" value="_(Shutdown)_" onclick="shutdown_now(this.form,'shutdown')"></td>
- <td>**_(Reboot)_** _(will activate a *clean* system reset)_.<br>**_(Shutdown)_** _(will activate a *clean* system power down)_.<br><input type="checkbox" name="safemode"><small>_(Reboot in safe mode)_</small></td></tr>
+<table markdown="1" class="ArrayOperation-Table array_status noshift">
+ <tr><td></td><td><span class="buttons-spaced"><input type="button" name="reboot" value="_(Reboot)_" onclick="shutdown_now(this.form,'reboot')"><input type="button" name="shutdown" value="_(Shutdown)_" onclick="shutdown_now(this.form,'shutdown')"></span></td>
+ <td>**_(Reboot)_** _(will activate a *clean* system reset)_.<br>**_(Shutdown)_** _(will activate a *clean* system power down)_.<br><label class="flex flex-row items-center gap-2"><input type="checkbox" name="safemode">_(Reboot in safe mode)_</label></td></tr>
  <tr><td></td><td class="line" colspan="2"></td></tr>
 </table>
 </form>
 <!-- markdown fix --></p><?if (isset($display['sleep'])) eval('?>'.parse_file($display['sleep']))?>
 
 :array_status_help:
-<?if (_var($var,'fsState')=="Stopped"):?>
+<?if (_var($var,'fsState') == "Stopped"):?>
 :array_devices_help:
 
 <?if ($encrypt):?>

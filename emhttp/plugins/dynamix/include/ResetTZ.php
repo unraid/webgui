@@ -22,7 +22,7 @@ if (!is_file($pidfile)) exit;
 foreach ($scripts as $script) {
   if (exec("grep -Pom1 '^$nchan/$script' $pidfile")) {
     // restart selected script
-    exec("pkill -f $nchan/$script");
+    exec('pkill --ns $$ -f '.escapeshellarg($nchan.'/'.$script));
     exec("$docroot/$nchan/$script &>/dev/null &");
   }
 }

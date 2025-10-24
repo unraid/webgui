@@ -1,0 +1,368 @@
+name: Upload PR Plugin to R2
+
+concurrency:
+  # Use the PR number from the workflow run or manual input to group uploads for the same PR
+  # This ensures previous in-progress uploads for the same PR are cancelled
+  group: pr-plugin-${{ inputs.pr_number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+on:
+  workflow_run:
+    workflows: ["Build PR Plugin"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Pull Request number to build and upload'
+        required: true
+        type: string
+      run_id:
+        description: 'Workflow run ID to get artifacts from (optional, uses latest if not specified)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+jobs:
+  upload-to-r2:
+    runs-on: ubuntu-latest
+    # Only run if the build workflow succeeded or manual trigger
+    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || github.event_name == 'workflow_dispatch' }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      SHELLOPTS: errexit:pipefail
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # SECURITY: Always checkout the default branch (trusted code)
+          # Never checkout PR code in workflow_run context
+          ref: ${{ github.event.repository.default_branch }}
+          # Ensure we're checking out the base repository, not a fork
+          repository: ${{ github.repository }}
+
+      - name: Prepare artifact extraction directory
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          mkdir -p "${{ runner.temp }}/artifacts/"
+
+      - name: Download artifacts from build workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Determine run_id based on trigger type
+            let run_id;
+            if (context.eventName === 'workflow_dispatch') {
+              const inputRunId = '${{ inputs.run_id }}';
+              if (inputRunId && inputRunId !== '') {
+                run_id = parseInt(inputRunId);
+              } else {
+                // Get latest run for the PR
+                const workflowRuns = await github.rest.actions.listWorkflowRuns({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  workflow_id: 'pr-plugin-build.yml',
+                  status: 'success'
+                });
+
+                // Filter for runs from the specified PR
+                const prNumber = parseInt('${{ inputs.pr_number }}');
+                const prRuns = workflowRuns.data.workflow_runs.filter(run =>
+                  run.pull_requests && run.pull_requests.some(pr => pr.number === prNumber)
+                );
+
+                if (prRuns.length === 0) {
+                  core.setFailed(`No successful build runs found for PR #${prNumber}`);
+                  return;
+                }
+
+                run_id = prRuns[0].id;
+                console.log(`Using latest build run ${run_id} for PR #${prNumber}`);
+              }
+            } else {
+              // For workflow_run events
+              run_id = '${{ github.event.workflow_run.id }}';
+              if (!run_id || run_id === '') {
+                core.setFailed('No workflow run ID available');
+                return;
+              }
+              run_id = parseInt(run_id);
+            }
+
+            let allArtifacts = await github.rest.actions.listWorkflowRunArtifacts({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               run_id: run_id,
+            });
+
+            let matchArtifact = allArtifacts.data.artifacts.filter((artifact) => {
+              return artifact.name.startsWith('webgui-pr-plugin-')
+            })[0];
+
+            if (!matchArtifact) {
+              core.setFailed('No artifacts found from build workflow');
+              return;
+            }
+
+            let download = await github.rest.actions.downloadArtifact({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               artifact_id: matchArtifact.id,
+               archive_format: 'zip',
+            });
+
+            let fs = require('fs');
+            // Write to secure temp location
+            const zipPath = process.env['RUNNER_TEMP'] + '/artifacts/artifacts.zip';
+            fs.writeFileSync(zipPath, Buffer.from(download.data));
+
+            core.setOutput('artifact_name', matchArtifact.name);
+
+      - name: Extract artifacts
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          mkdir -p "${{ runner.temp }}/artifacts/unpacked"
+
+          # Validate archive contents before extraction
+          unzip -l "${{ runner.temp }}/artifacts/artifacts.zip" | awk '
+            NR <= 3 || /^-/ || /^Archive:/ {next}
+            /files$/ {exit}
+            {
+              # Extract the filename from unzip -l output (last field)
+              filename = $NF
+              if (filename ~ /^\// || filename ~ /\.\.\//) {
+                print "INVALID:" filename > "/dev/stderr";
+                exit 1
+              }
+            }
+          '
+
+          # Safe extraction using unzip
+          unzip -o "${{ runner.temp }}/artifacts/artifacts.zip" -d "${{ runner.temp }}/artifacts/unpacked"
+          ls -la "${{ runner.temp }}/artifacts/unpacked"
+
+          # Check if metadata exists
+          if [ ! -f "${{ runner.temp }}/artifacts/unpacked/pr-metadata.json" ]; then
+            echo "No metadata file found, build may not have produced any changes"
+            echo "has_artifacts=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          echo "has_artifacts=true" >> "$GITHUB_ENV"
+
+          # Validate metadata schema
+          echo "Metadata present; proceeding with schema validation."
+
+      - name: Parse metadata
+        if: env.has_artifacts == 'true'
+        id: metadata
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          # Extract values from metadata
+          PR_NUMBER=$(jq -r '.pr_number' "${{ runner.temp }}/artifacts/unpacked/pr-metadata.json")
+          VERSION=$(jq -r '.version' "${{ runner.temp }}/artifacts/unpacked/pr-metadata.json")
+          PR_VERSION=$(jq -r '.pr_version' "${{ runner.temp }}/artifacts/unpacked/pr-metadata.json")
+          LOCAL_TXZ=$(jq -r '.local_txz' "${{ runner.temp }}/artifacts/unpacked/pr-metadata.json")
+          REMOTE_TXZ=$(jq -r '.remote_txz' "${{ runner.temp }}/artifacts/unpacked/pr-metadata.json")
+          PLUGIN_NAME=$(jq -r '.plugin_name' "${{ runner.temp }}/artifacts/unpacked/pr-metadata.json")
+
+          # Generate R2 URLs and keys
+          S3_BASE_URL="${{ secrets.CLOUDFLARE_PREVIEW_BUCKET_BASE_URL }}/pr-plugins/pr-${PR_NUMBER}"
+          TXZ_URL="${S3_BASE_URL}/${REMOTE_TXZ}"
+          PLUGIN_URL="${S3_BASE_URL}/${PLUGIN_NAME}"
+          TXZ_KEY="pr-plugins/pr-${PR_NUMBER}/${REMOTE_TXZ}"
+          PLUGIN_KEY="pr-plugins/pr-${PR_NUMBER}/${PLUGIN_NAME}"
+
+          # Output for next steps
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "pr_version=$PR_VERSION" >> $GITHUB_OUTPUT
+          echo "local_txz=$LOCAL_TXZ" >> $GITHUB_OUTPUT
+          echo "remote_txz=$REMOTE_TXZ" >> $GITHUB_OUTPUT
+          echo "plugin_name=$PLUGIN_NAME" >> $GITHUB_OUTPUT
+          echo "txz_url=$TXZ_URL" >> $GITHUB_OUTPUT
+          echo "plugin_url=$PLUGIN_URL" >> $GITHUB_OUTPUT
+          echo "txz_key=$TXZ_KEY" >> $GITHUB_OUTPUT
+          echo "plugin_key=$PLUGIN_KEY" >> $GITHUB_OUTPUT
+
+          # Also extract changed files for comment (limit to 100 files)
+          jq -r '.changed_files[:100][]' "${{ runner.temp }}/artifacts/unpacked/pr-metadata.json" > "${{ runner.temp }}/artifacts/unpacked/changed_files.txt"
+          FILE_COUNT=$(jq '.changed_files | length' "${{ runner.temp }}/artifacts/unpacked/pr-metadata.json")
+          if [ "$FILE_COUNT" -gt 100 ]; then
+            echo "Note: Showing first 100 of $FILE_COUNT changed files"
+            echo "truncated=true" >> $GITHUB_OUTPUT
+          else
+            echo "truncated=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload TXZ to R2
+        if: env.has_artifacts == 'true'
+        env:
+          LOCAL_TXZ: ${{ steps.metadata.outputs.local_txz }}
+          TXZ_KEY: ${{ steps.metadata.outputs.txz_key }}
+          CLOUDFLARE_PREVIEW_BUCKET_NAME: ${{ secrets.CLOUDFLARE_PREVIEW_BUCKET_NAME }}
+          CLOUDFLARE_S3_URL: ${{ secrets.CLOUDFLARE_S3_URL }}
+          TXZ_URL: ${{ steps.metadata.outputs.txz_url }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_PREVIEW_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_PREVIEW_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: true
+          AWS_SHARED_CREDENTIALS_FILE: /dev/null
+          AWS_CONFIG_FILE: /dev/null
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          # Copy from temp directory to working directory
+          cp "${{ runner.temp }}/artifacts/unpacked/$LOCAL_TXZ" "./"
+
+          # Upload to R2 with versioned filename
+          aws s3 cp "$LOCAL_TXZ" \
+            "s3://$CLOUDFLARE_PREVIEW_BUCKET_NAME/$TXZ_KEY" \
+            --endpoint-url "$CLOUDFLARE_S3_URL" \
+            --acl public-read
+
+          echo "Uploaded TXZ to: $TXZ_URL"
+
+      - name: Regenerate plugin file with correct R2 URLs
+        if: env.has_artifacts == 'true'
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+          PR_NUMBER: ${{ steps.metadata.outputs.pr_number }}
+          PR_VERSION: ${{ steps.metadata.outputs.pr_version }}
+          LOCAL_TXZ: ${{ steps.metadata.outputs.local_txz }}
+          REMOTE_TXZ: ${{ steps.metadata.outputs.remote_txz }}
+          TXZ_URL: ${{ steps.metadata.outputs.txz_url }}
+          PLUGIN_URL: ${{ steps.metadata.outputs.plugin_url }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          # Regenerate the plugin with the actual R2 URLs
+          bash .github/scripts/generate-pr-plugin.sh \
+            "$VERSION" \
+            "$PR_NUMBER" \
+            "$(echo "$PR_VERSION" | cut -d. -f3)" \
+            "$LOCAL_TXZ" \
+            "$REMOTE_TXZ" \
+            "$TXZ_URL" \
+            "$PLUGIN_URL"
+
+      - name: Upload PLG to R2
+        if: env.has_artifacts == 'true'
+        env:
+          PLUGIN_NAME: ${{ steps.metadata.outputs.plugin_name }}
+          PLUGIN_KEY: ${{ steps.metadata.outputs.plugin_key }}
+          CLOUDFLARE_PREVIEW_BUCKET_NAME: ${{ secrets.CLOUDFLARE_PREVIEW_BUCKET_NAME }}
+          CLOUDFLARE_S3_URL: ${{ secrets.CLOUDFLARE_S3_URL }}
+          PLUGIN_URL: ${{ steps.metadata.outputs.plugin_url }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_PREVIEW_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_PREVIEW_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: true
+          AWS_SHARED_CREDENTIALS_FILE: /dev/null
+          AWS_CONFIG_FILE: /dev/null
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          # Upload PLG - overwrite existing for updates
+          aws s3 cp "$PLUGIN_NAME" \
+            "s3://$CLOUDFLARE_PREVIEW_BUCKET_NAME/$PLUGIN_KEY" \
+            --endpoint-url "$CLOUDFLARE_S3_URL" \
+            --acl public-read
+
+          echo "Uploaded PLG to: $PLUGIN_URL"
+
+      - name: Format changed files list
+        if: env.has_artifacts == 'true'
+        id: format-files
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          # Format the file list for the comment with random delimiter
+          DELIM="FILES_$(openssl rand -hex 8)"
+          {
+            echo "files<<$DELIM"
+            cat "${{ runner.temp }}/artifacts/unpacked/changed_files.txt"
+            echo "$DELIM"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Get PR info
+        if: env.has_artifacts == 'true'
+        id: pr-info
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ steps.metadata.outputs.pr_number }}
+        with:
+          script: |
+            const pr_number = parseInt(process.env.PR_NUMBER);
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr_number
+            });
+            core.setOutput('pr_number', pr_number);
+
+      - name: Comment on PR
+        if: env.has_artifacts == 'true'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          number: ${{ steps.pr-info.outputs.pr_number }}
+          header: pr-plugin
+          message: |
+            ## 🔧 PR Test Plugin Available
+
+            A test plugin has been generated for this PR that includes the modified files.
+
+            **Version:** `${{ steps.metadata.outputs.version }}`
+            **Build:** [View Workflow Run](${{ github.event.workflow_run.html_url || github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            ### 📥 Installation Instructions:
+
+            **Install via Unraid Web UI:**
+            1. Go to **Plugins → Install Plugin**
+            2. Copy and paste this URL:
+            ```
+            ${{ steps.metadata.outputs.plugin_url }}
+            ```
+            3. Click **Install**
+
+            **Alternative: Direct Download**
+            - [📦 Download PLG](${{ steps.metadata.outputs.plugin_url }})
+            - [📦 Download TXZ](${{ steps.metadata.outputs.txz_url }})
+
+            ### ⚠️ Important Notes:
+
+            - **Testing only:** This plugin is for testing PR changes
+            - **Backup included:** Original files are automatically backed up
+            - **Easy removal:** Files are restored when plugin is removed
+            - **Conflicts:** Remove this plugin before installing production updates
+
+            ### 📝 Modified Files:
+
+            <details>
+            <summary>Click to expand file list</summary>
+
+            ```
+            ${{ steps.format-files.outputs.files }}
+            ```
+
+            </details>
+
+            ### 🔄 To Remove:
+
+            Navigate to Plugins → Installed Plugins and remove `webgui-pr-${{ steps.metadata.outputs.pr_number }}`, or run:
+            ```bash
+            plugin remove webgui-pr-${{ steps.metadata.outputs.pr_number }}
+            ```
+
+            ---
+            <sub>🤖 This comment is automatically generated and will be updated with each new push to this PR.</sub>

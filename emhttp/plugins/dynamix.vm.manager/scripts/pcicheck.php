@@ -16,7 +16,7 @@
 
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Helpers.php";
-require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
+
 
 $pci_device_changes = comparePCIData();
 $pcierror = false;

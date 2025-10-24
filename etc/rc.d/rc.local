@@ -80,9 +80,14 @@ fi
 /usr/local/emhttp/webGui/scripts/notify smtp-init
 /usr/local/emhttp/webGui/scripts/notify cron-init
 
+# start interface state monitoring
+if [[ -x /usr/local/sbin/monitor_interface ]]; then
+  /usr/local/sbin/monitor_interface &>/dev/null
+fi
+
 # start nchan monitoring -> stop all running nchan processes when no subscribers are connected
 if [[ -x /usr/local/sbin/monitor_nchan ]]; then
-  /usr/local/sbin/monitor_nchan
+  /usr/local/sbin/monitor_nchan &>/dev/null
 fi
 
 # First boot following Unraid Server OS update: delete plugin file
@@ -90,7 +95,7 @@ rm -f /boot/plugins/unRAIDServer.plg
 rm -f $CONFIG/plugins/unRAIDServer.plg
 
 # These plugins are now integrated in the OS or obsolete and may interfere
-OBSOLETE="vfio.pci dynamix.wireguard dynamix.ssd.trim dynamix.file.manager gui.search unlimited-width proxy.editor unraid.patch AAA-UnraidPatch-BootLoader-DO_NOT_DELETE"
+OBSOLETE="flash.remount vfio.pci dynamix.wireguard dynamix.ssd.trim dynamix.file.manager gui.search unlimited-width proxy.editor unraid.patch AAA-UnraidPatch-BootLoader-DO_NOT_DELETE theme.engine dark.theme"
 QUIET="unraid.patch AAA-UnraidPatch-BootLoader-DO_NOT_DELETE"
 
 for PLUGIN in $OBSOLETE; do
@@ -167,6 +172,10 @@ obsolete "upnp-monitor" "2020.01.04c"
 obsolete "ZFS-companion" "2021.08.24"
 # Folder View - Latest versions are only compatible with 7.x  Older versions have issues
 obsolete "folder.view" "2024.10.02"
+# Unraid Connect - requires version "2025.07.15.1837" or higher
+obsolete "dynamix.unraid.net" "2025.07.15.1836"
+# Dynamix Date & Time - Removes options from Settings - Date Time settings block everything older than 2025.08.01 (current 2023.10.28)
+obsolete "dynamix.date.time" "2025.08.01"
 
 # If "unraidsafemode" indicated, skip installing extra packages and plugins
 if [[ -f /boot/unraidsafemode ]] || grep -wq unraidsafemode /proc/cmdline; then
@@ -184,7 +193,7 @@ else
     if [[ -f "$PRIORITY_PLUGIN_PATH" ]]; then
       /usr/local/sbin/plugin install "$PRIORITY_PLUGIN_PATH" | log
     fi
-  done  
+  done
   # Install remaining plugins
   shopt -s nullglob
   for PLUGIN in $CONFIG/plugins/*.plg; do
@@ -238,9 +247,16 @@ if grep -q "$GOTEST2" $CONFIG/go; then
 fi
 
 # Invoke the 'go' script
-if [[ -f $CONFIG/go ]]; then
-  log "Starting go script"
-  fromdos <$CONFIG/go >/var/tmp/go
-  chmod +x /var/tmp/go
-  /var/tmp/go
+GO=go
+if [[ -f /boot/unraidsafemode ]] || grep -wq unraidsafemode /proc/cmdline; then
+  GO=go.safemode
+fi
+if [[ -f $CONFIG/$GO ]]; then
+  log "Starting $GO script"
+  fromdos <$CONFIG/$GO >/var/tmp/$GO
+  chmod +x /var/tmp/$GO
+  /var/tmp/$GO
+else
+  log "Starting emhttp"
+  /usr/local/sbin/emhttp
 fi

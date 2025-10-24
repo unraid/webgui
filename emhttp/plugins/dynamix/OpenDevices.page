@@ -25,15 +25,30 @@ $('<?=$tabX?>').bind({click:function() {$('i.toggle').show('slow');}});
 <?endif;?>
 </script>
 
-<table class="unraid disk_status">
-<thead><tr><td>_(Device)_</td><td>_(Identification)_</td><td><?=$power?>_(Temp)_</td><td>_(Reads)_</td><td>_(Writes)_</td><td>_(Errors)_</td><td>_(FS)_</td><td>_(Size)_</td><td>_(Used)_</td><td>_(Free)_</td></tr></thead>
-<tbody id="open_devices">
-<?
-foreach ($devs as $dev):
-  echo "<tr><td colspan='10'></td></tr>";
-endforeach;
-?>
-</tbody>
-</table>
+<div class="TableContainer">
+  <table class="unraid disk_status">
+    <thead>
+      <tr>
+        <td>_(Device)_</td>
+        <td>_(Identification)_</td>
+        <td><?=$power?>_(Temp)_</td>
+        <td>_(Reads)_</td>
+        <td>_(Writes)_</td>
+        <td>_(Errors)_</td>
+        <td>_(FS)_</td>
+        <td>_(Size)_</td>
+        <td>_(Used)_</td>
+        <td>_(Free)_</td>
+      </tr>
+    </thead>
+    <tbody id="open_devices">
+    <?
+    foreach ($devs as $dev):
+      echo "<tr><td colspan='10'></td></tr>";
+    endforeach;
+    ?>
+    </tbody>
+  </table>
+</div>
 
 :open_devices_help:

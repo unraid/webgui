@@ -24,7 +24,7 @@ function newurl($url) {
   return str_replace($oldURL,$newURL,$url);
 }
 function searchLink(&$db,$url) {
-  if ($url) for ($i = 0; $i < count($db); $i++) if ( ($db[$i]['PluginURL']??null)==$url) return $db[$i]['Support']??null;
+  if ($url && is_array($db)) for ($i = 0; $i < count($db); $i++) if ( ($db[$i]['PluginURL']??null)==$url) return $db[$i]['Support']??null;
 }
 
 $type    = $argv[1]??'';   // plugin or language

@@ -3,10 +3,11 @@ Type="xmenu"
 Title="Management Access"
 Icon="icon-key"
 Tag="expeditedssl"
+Tabs="true"
 ---
-<?PHP
-/* Copyright 2005-2024, Lime Technology
- * Copyright 2012-2024, Bergware International.
+<?php
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -16,130 +17,147 @@ Tag="expeditedssl"
  * all copies or substantial portions of the Software.
  */
 ?>
-<?
-function find_tasks() {
-  global $site;
-  $tasks = [];
-  foreach ($site as $page) {
-    if (empty($page['Menu'])) continue;
-    $menu = strtok($page['Menu'], ' ');
-    switch ($menu[0]) {
-      case '$': $menu = get_ini_key($menu,strtok(' ')); break;
-      case '/': $menu = get_file_key($menu,strtok(' ')); break;
+<?php
+function find_tasks()
+{
+    global $site;
+    $tasks = [];
+    foreach ($site as $page) {
+        if (empty($page['Menu'])) {
+            continue;
+        }
+        $menu = strtok($page['Menu'], ' ');
+        switch ($menu[0]) {
+            case '$': $menu = get_ini_key($menu, strtok(' '));
+                break;
+            case '/': $menu = get_file_key($menu, strtok(' '));
+                break;
+        }
+        while ($menu !== false) {
+            if (substr($menu, 0, 5) == 'Tasks') {
+                if (empty($page['Cond'])) {
+                    $tasks[] = $page['name'];
+                }
+                break;
+            }
+            $menu = strtok(' ');
+        }
     }
-    while ($menu !== false) {
-      if (substr($menu,0,5) == 'Tasks') {
-        if (empty($page['Cond'])) $tasks[] = $page['name'];
-        break;
-      }
-      $menu = strtok(' ');
-    }
-  }
-  sort($tasks);
-  return $tasks;
+    sort($tasks);
+    return $tasks;
 }
-function acceptableCert($certFile, $hostname, $expectedURL) {
-  if (!file_exists($certFile)) return false;
-  $certURLs=null;
-  // get Subject URL and all SAN URLs from cert
-  exec("openssl x509 -noout -subject -nameopt multiline -in $certFile | sed -n 's/ *commonName *= //p' ; openssl x509 -noout -ext subjectAltName -in $certFile | grep -Eo \"DNS:[a-zA-Z 0-9.*-]*\" | sed \"s/DNS://g\"", $certURLs);
-  foreach($certURLs as $certURL) {
-    // adjust for wildcard certs
-    $certURL = str_replace('*', $hostname, $certURL);
-    // case-insensitive compare
-    if (strcasecmp($certURL, $expectedURL) == 0) return true;
-  }
-  return false;
+function acceptableCert($certFile, $hostname, $expectedURL)
+{
+    if (!file_exists($certFile)) {
+        return false;
+    }
+    $certURLs = null;
+    // get Subject URL and all SAN URLs from cert
+    exec("openssl x509 -noout -subject -nameopt multiline -in $certFile | sed -n 's/ *commonName *= //p' ; openssl x509 -noout -ext subjectAltName -in $certFile | grep -Eo \"DNS:[a-zA-Z 0-9.*-]*\" | sed \"s/DNS://g\"", $certURLs);
+    foreach ($certURLs as $certURL) {
+        // adjust for wildcard certs
+        $certURL = str_replace('*', $hostname, $certURL);
+        // case-insensitive compare
+        if (strcasecmp($certURL, $expectedURL) == 0) {
+            return true;
+        }
+    }
+    return false;
 }
 $tasks       = find_tasks();
 $nginx       = (array)@parse_ini_file('/var/local/emhttp/nginx.ini');
-$addr        = _var($nginx,'NGINX_LANIP') ?: _var($nginx,'NGINX_LANIP6');
-$keyfile     = empty(_var($var,'regFILE')) ? false : @file_get_contents(_var($var,'regFILE'));
+$addr        = _var($nginx, 'NGINX_LANIP') ?: _var($nginx, 'NGINX_LANIP6');
+$warnipv6    = !empty(_var($nginx, 'NGINX_LANIP6')) || !empty(_var($nginx, 'NGINX_WANIP6')) || (strpos(_var($nginx, 'NGINX_BIND'), ':') !== false);
+$keyfile     = empty(_var($var, 'regFILE')) ? false : @file_get_contents(_var($var, 'regFILE'));
 $cert2Issuer = '';
 $isWildcardCert = false;
-if ($keyfile !== false) $keyfile = base64_encode($keyfile);
+if ($keyfile !== false) {
+    $keyfile = base64_encode($keyfile);
+}
 
 // self-signed or user-provided cert
-$cert1File = "/boot/config/ssl/certs/"._var($var,'NAME','tower')."_unraid_bundle.pem";
+$cert1File = "/boot/config/ssl/certs/"._var($var, 'NAME', 'tower')."_unraid_bundle.pem";
 $cert1Present = file_exists("$cert1File");
 $cert1SelfSigned = $cert1URLvalid = false;
 $cert1Issuer = '&nbsp;';
 
 if ($cert1Present) {
-  $cert1URL = _var($var,'NAME','tower').(_var($var,'LOCAL_TLD') ? '.'._var($var,'LOCAL_TLD') : '');
-  // if user replaced cert without reloading nginx, the cert on the flash could be invalid
-  $cert1URLvalid = acceptableCert($cert1File, _var($var,'NAME','tower'), $cert1URL);
-  $cert1Subject = exec("/usr/bin/openssl x509 -in $cert1File -noout -text | sed -n 's/^.*Subject: //p'");
-  $cert1Issuer  = exec("/usr/bin/openssl x509 -in $cert1File -noout -text | sed -n -e 's/^.*Issuer: //p'");
-  $cert1Expires = exec("/usr/bin/openssl x509 -in $cert1File -noout -text | sed -n -e 's/^.*Not After : //p'");
-  $cert1SelfSigned = ($cert1Subject == $cert1Issuer);
+    $cert1URL = _var($var, 'NAME', 'tower').(_var($var, 'LOCAL_TLD') ? '.'._var($var, 'LOCAL_TLD') : '');
+    // if user replaced cert without reloading nginx, the cert on the flash could be invalid
+    $cert1URLvalid = acceptableCert($cert1File, _var($var, 'NAME', 'tower'), $cert1URL);
+    $cert1Subject = exec("/usr/bin/openssl x509 -in $cert1File -noout -text | sed -n 's/^.*Subject: //p'");
+    $cert1Issuer  = exec("/usr/bin/openssl x509 -in $cert1File -noout -text | sed -n -e 's/^.*Issuer: //p'");
+    $cert1Expires = exec("/usr/bin/openssl x509 -in $cert1File -noout -text | sed -n -e 's/^.*Not After : //p'");
+    $cert1SelfSigned = ($cert1Subject == $cert1Issuer);
 }
 
 // myunraid.net LE cert. could potentially be user provided as well
 $cert2File    = "/boot/config/ssl/certs/certificate_bundle.pem";
 $cert2Present = file_exists("$cert2File");
 if ($cert2Present) {
-  $cert2Subject = exec("/usr/bin/openssl x509 -in $cert2File -noout -subject -nameopt multiline 2>/dev/null|sed -n 's/ *commonName *= //p'");
-  $cert2Issuer  = exec("/usr/bin/openssl x509 -in $cert2File -noout -text | sed -n -e 's/^.*Issuer: //p'");
-  $cert2Expires = exec("/usr/bin/openssl x509 -in $cert2File -noout -text | sed -n -e 's/^.*Not After : //p'");
-  $isWildcardCert = preg_match('/.*\.myunraid\.net$/', $cert2Subject);
-  $subject2URL = $cert2Subject;
-  $dnsValid = false;
-  $dnsRebindingProtection = false;
-  if ($isWildcardCert) {
-    exec("openssl x509 -checkend 2592000 -noout -in $cert2File 2>/dev/null", $arrout, $retval_expired);
-    if (!$addr) {
-      // if eth0 doesn't have an IP address, then show noip.hash.myunraid.net as a placeholder url
-      $subject2URL = str_replace("*", 'noip', $subject2URL);
-      $dnsValid = false;
-      $dnsRebindingProtection = false;
-    } elseif (strpos($addr, ":") === false) {
-      // eth0 is IPv4
-      $subject2URL = str_replace("*", str_replace(".", "-", $addr), $subject2URL);
-      $rebindtest_ip = exec("host -4 -t A rebindtest4.myunraid.net 2>/dev/null|awk '{print \$4}'");
-      $dnsRebindingProtection = ($rebindtest_ip != "192.168.42.42");
-      if (!$dnsRebindingProtection) {
-        $cert_ip = exec("host -4 -t A $subject2URL 2>/dev/null|awk '{print \$4}'");
-        $dnsValid = $cert_ip==$addr;
-      }
-    } else {
-      // eth0 is IPv6
-      $subject2URL = str_replace("*", str_replace(":", "-", $addr), $subject2URL);
-      $rebindtest_ip = exec("host -6 -t AAAA rebindtest6.myunraid.net 2>/dev/null|awk '{print \$4}'");
-      // more: restore this after TTL expires
-      // $dnsRebindingProtection = ($rebindtest_ip != "fd42::42");
-      $dnsRebindingProtection = ($rebindtest_ip != "fd42::42") && ($rebindtest_ip != "fd42::");
-      if (!$dnsRebindingProtection) {
-        $cert_ip = exec("host -6 -t AAAA $subject2URL 2>/dev/null|awk '{print \$4}'");
-        $dnsValid = $cert_ip==$addr;
-      }
+    $cert2Subject = exec("/usr/bin/openssl x509 -in $cert2File -noout -subject -nameopt multiline 2>/dev/null|sed -n 's/ *commonName *= //p'");
+    $cert2Issuer  = exec("/usr/bin/openssl x509 -in $cert2File -noout -text | sed -n -e 's/^.*Issuer: //p'");
+    $cert2Expires = exec("/usr/bin/openssl x509 -in $cert2File -noout -text | sed -n -e 's/^.*Not After : //p'");
+    $isWildcardCert = preg_match('/.*\.myunraid\.net$/', $cert2Subject);
+    $subject2URL = $cert2Subject;
+    $dnsValid = false;
+    $dnsRebindingProtection = false;
+    if ($isWildcardCert) {
+        exec("openssl x509 -checkend 2592000 -noout -in $cert2File 2>/dev/null", $arrout, $retval_expired);
+        if (!$addr) {
+            // if eth0 doesn't have an IP address, then show noip.hash.myunraid.net as a placeholder url
+            $subject2URL = str_replace("*", 'noip', $subject2URL);
+            $dnsValid = false;
+            $dnsRebindingProtection = false;
+        } elseif (strpos($addr, ":") === false) {
+            // eth0 is IPv4
+            $subject2URL = str_replace("*", str_replace(".", "-", $addr), $subject2URL);
+            $rebindtest_ip = exec("host -4 -t A rebindtest4.myunraid.net 2>/dev/null|awk '{print \$4}'");
+            $dnsRebindingProtection = ($rebindtest_ip != "192.168.42.42");
+            if (!$dnsRebindingProtection) {
+                $cert_ip = exec("host -4 -t A $subject2URL 2>/dev/null|awk '{print \$4}'");
+                $dnsValid = $cert_ip == $addr;
+            }
+        } else {
+            // eth0 is IPv6
+            $subject2URL = str_replace("*", str_replace(":", "-", $addr), $subject2URL);
+            $rebindtest_ip = exec("host -6 -t AAAA rebindtest6.myunraid.net 2>/dev/null|awk '{print \$4}'");
+            // more: restore this after TTL expires
+            // $dnsRebindingProtection = ($rebindtest_ip != "fd42::42");
+            $dnsRebindingProtection = ($rebindtest_ip != "fd42::42") && ($rebindtest_ip != "fd42::");
+            if (!$dnsRebindingProtection) {
+                $cert_ip = exec("host -6 -t AAAA $subject2URL 2>/dev/null|awk '{print \$4}'");
+                $dnsValid = $cert_ip == $addr;
+            }
+        }
     }
-  }
 }
 
 // Tailscale LE cert
 $cert3File    = "/boot/config/ssl/certs/ts_bundle.pem";
 $cert3Present = file_exists("$cert3File");
 if ($cert3Present) {
-  $cert3Subject = exec("/usr/bin/openssl x509 -in $cert3File -noout -subject -nameopt multiline 2>/dev/null|sed -n 's/ *commonName *= //p'");
-  $cert3Issuer  = exec("/usr/bin/openssl x509 -in $cert3File -noout -text | sed -n -e 's/^.*Issuer: //p'");
-  $cert3Expires = exec("/usr/bin/openssl x509 -in $cert3File -noout -text | sed -n -e 's/^.*Not After : //p'");
+    $cert3Subject = exec("/usr/bin/openssl x509 -in $cert3File -noout -subject -nameopt multiline 2>/dev/null|sed -n 's/ *commonName *= //p'");
+    $cert3Issuer  = exec("/usr/bin/openssl x509 -in $cert3File -noout -text | sed -n -e 's/^.*Issuer: //p'");
+    $cert3Expires = exec("/usr/bin/openssl x509 -in $cert3File -noout -text | sed -n -e 's/^.*Not After : //p'");
 }
 
 // Note: this disables FQDN6 urls since they are not supported by myunraid.net DNS currently
-if (!empty($nginx['NGINX_LANFQDN6'])) unset($nginx['NGINX_LANFQDN6']);
+if (!empty($nginx['NGINX_LANFQDN6'])) {
+    unset($nginx['NGINX_LANFQDN6']);
+}
 
-$http_port       = _var($var,'PORT','80') != '80' ? ":{$var['PORT']}" : '';
-$https_port      = _var($var,'PORTSSL','443') != '443' ? ":{$var['PORTSSL']}" : '';
-$http_ip_url     = 'http://'._var($nginx,'NGINX_LANIP').$http_port.'/';
-$https_ip_url    = 'https://'._var($nginx,'NGINX_LANIP').$https_port.'/';
+$http_port       = _var($var, 'PORT', '80') != '80' ? ":{$var['PORT']}" : '';
+$https_port      = _var($var, 'PORTSSL', '443') != '443' ? ":{$var['PORTSSL']}" : '';
+$http_ip_url     = 'http://'._var($nginx, 'NGINX_LANIP').$http_port.'/';
+$https_ip_url    = 'https://'._var($nginx, 'NGINX_LANIP').$https_port.'/';
 // bare IPv6 addresses need to be surrounded in brackets
-$http_ip6_url    = 'http://'.'['._var($nginx,'NGINX_LANIP6').']'.$http_port.'/';
-$https_ip6_url   = 'https://'.'['._var($nginx,'NGINX_LANIP6').']'.$https_port.'/';
-$http_mdns_url   = 'http://'._var($nginx,'NGINX_LANMDNS').$http_port.'/';
-$https_mdns_url  = 'https://'._var($nginx,'NGINX_LANMDNS').$https_port.'/';
-$https_fqdn_url  = 'https://'._var($nginx,'NGINX_LANFQDN').$https_port.'/';
-$https_fqdn6_url = 'https://'._var($nginx,'NGINX_LANFQDN6').$https_port.'/';
+$http_ip6_url    = 'http://'.'['._var($nginx, 'NGINX_LANIP6').']'.$http_port.'/';
+$https_ip6_url   = 'https://'.'['._var($nginx, 'NGINX_LANIP6').']'.$https_port.'/';
+$http_mdns_url   = 'http://'._var($nginx, 'NGINX_LANMDNS').$http_port.'/';
+$https_mdns_url  = 'https://'._var($nginx, 'NGINX_LANMDNS').$https_port.'/';
+$https_fqdn_url  = 'https://'._var($nginx, 'NGINX_LANFQDN').$https_port.'/';
+$https_fqdn6_url = 'https://'._var($nginx, 'NGINX_LANFQDN6').$https_port.'/';
 
 $urls = [];
 // push an array of five values into the $urls array:
@@ -150,94 +168,138 @@ $urls = [];
 //   5 - self-signed certificate, or false
 
 // define LAN access urls and redirects that change based on USE_SSL setting
-switch(_var($var,'USE_SSL','no')) {
-case 'no':
-  if (!empty($nginx['NGINX_LANIP']))    $urls[] = ['LAN', $http_ip_url, null, null, false];
-  if (!empty($nginx['NGINX_LANIP6']))   $urls[] = ['LAN', $http_ip6_url, null, null, false];
-  if (!empty($nginx['NGINX_LANMDNS']))  $urls[] = ['LAN', $http_mdns_url, null, null, false];
-  break;
-case 'yes':
-  if (!empty($nginx['NGINX_LANIP']))    $urls[] = ['LAN', $http_ip_url, $https_ip_url, null, false];
-  if (!empty($nginx['NGINX_LANIP']))    $urls[] = ['LAN', $https_ip_url, null, "{$var['NAME']}_unraid_bundle.pem", $cert1SelfSigned];
-  if (!empty($nginx['NGINX_LANIP6']))   $urls[] = ['LAN', $http_ip6_url, $https_ip6_url, null, false];
-  if (!empty($nginx['NGINX_LANIP6']))   $urls[] = ['LAN', $https_ip6_url, null, "{$var['NAME']}_unraid_bundle.pem", $cert1SelfSigned];
-  if (!empty($nginx['NGINX_LANMDNS']))  $urls[] = ['LAN', $http_mdns_url, $https_mdns_url, null, false];
-  if (!empty($nginx['NGINX_LANMDNS']))  $urls[] = ['LAN', $https_mdns_url, null, "{$var['NAME']}_unraid_bundle.pem", $cert1SelfSigned];
-  break;
-case 'auto': // aka strict
-  if (!empty($nginx['NGINX_LANIP'])   && !empty($nginx['NGINX_LANFQDN']))  $urls[] = ['LAN', $http_ip_url, $https_fqdn_url, null, false];
-  if (!empty($nginx['NGINX_LANIP6'])  && !empty($nginx['NGINX_LANFQDN6'])) $urls[] = ['LAN', $http_ip6_url, $https_fqdn6_url, null, false];
-  if (!empty($nginx['NGINX_LANMDNS']) && !empty($nginx['NGINX_LANFQDN']))  $urls[] = ['LAN', $http_mdns_url, $https_fqdn_url, null, false];
-  break;
+switch (_var($var, 'USE_SSL', 'no')) {
+    case 'no':
+        if (!empty($nginx['NGINX_LANIP'])) {
+            $urls[] = ['LAN', $http_ip_url, null, null, false];
+        }
+        if (!empty($nginx['NGINX_LANIP6'])) {
+            $urls[] = ['LAN', $http_ip6_url, null, null, false];
+        }
+        if (!empty($nginx['NGINX_LANMDNS'])) {
+            $urls[] = ['LAN', $http_mdns_url, null, null, false];
+        }
+        break;
+    case 'yes':
+        if (!empty($nginx['NGINX_LANIP'])) {
+            $urls[] = ['LAN', $http_ip_url, $https_ip_url, null, false];
+        }
+        if (!empty($nginx['NGINX_LANIP'])) {
+            $urls[] = ['LAN', $https_ip_url, null, "{$var['NAME']}_unraid_bundle.pem", $cert1SelfSigned];
+        }
+        if (!empty($nginx['NGINX_LANIP6'])) {
+            $urls[] = ['LAN', $http_ip6_url, $https_ip6_url, null, false];
+        }
+        if (!empty($nginx['NGINX_LANIP6'])) {
+            $urls[] = ['LAN', $https_ip6_url, null, "{$var['NAME']}_unraid_bundle.pem", $cert1SelfSigned];
+        }
+        if (!empty($nginx['NGINX_LANMDNS'])) {
+            $urls[] = ['LAN', $http_mdns_url, $https_mdns_url, null, false];
+        }
+        if (!empty($nginx['NGINX_LANMDNS'])) {
+            $urls[] = ['LAN', $https_mdns_url, null, "{$var['NAME']}_unraid_bundle.pem", $cert1SelfSigned];
+        }
+        break;
+    case 'auto': // aka strict
+        if (!empty($nginx['NGINX_LANIP'])   && !empty($nginx['NGINX_LANFQDN'])) {
+            $urls[] = ['LAN', $http_ip_url, $https_fqdn_url, null, false];
+        }
+        if (!empty($nginx['NGINX_LANIP6'])  && !empty($nginx['NGINX_LANFQDN6'])) {
+            $urls[] = ['LAN', $http_ip6_url, $https_fqdn6_url, null, false];
+        }
+        if (!empty($nginx['NGINX_LANMDNS']) && !empty($nginx['NGINX_LANFQDN'])) {
+            $urls[] = ['LAN', $http_mdns_url, $https_fqdn_url, null, false];
+        }
+        break;
 }
 
 // define FQDN urls for each interface
 // when multiple FQDN urls are available for a given interface, make sure they are sorted
 asort($nginx);
 foreach ($nginx as $key => $host) {
-  if (!$host) continue;
-  // Only process keys that include 'FQDN'
-  if (strpos($key, 'FQDN') === false) continue;
-  // Extract the interface from the key, e.g., 'NGINX_LANFQDN' -> 'LAN', 'NGINX_WANFQDN' -> 'WAN', NGINX_WG0FQDN -> WG, NGINX_TAILSCALE1FQDN -> TAILSCALE
-  // Note: this specifically excludes FQDN6 urls since they are not supported by myunraid.net DNS currently
-  if (preg_match('/^NGINX_([A-Z]+)(\d*)FQDN$/', $key, $matches)) {
-    $interface = $matches[1]; // Interface type (LAN, WAN, WG, TAILSCALE, etc.)
-    // ignore the WAN interface because we don't have access to the WANPORT here
-    if ($interface == "WAN") continue;
-    $pem = null;
-    if (str_ends_with($host, '.myunraid.net')) $pem = 'certificate_bundle.pem';
-    elseif (str_ends_with($host, '.ts.net')) $pem = 'ts_bundle.pem';
-    $url = 'https://'.$host.$https_port."/";
-    $urls[] = [$interface, $url, null, $pem, false];
-  }
+    if (!$host) {
+        continue;
+    }
+    // Only process keys that include 'FQDN'
+    if (strpos($key, 'FQDN') === false) {
+        continue;
+    }
+    // Extract the interface from the key, e.g., 'NGINX_LANFQDN' -> 'LAN', 'NGINX_WANFQDN' -> 'WAN', NGINX_WG0FQDN -> WG, NGINX_TAILSCALE1FQDN -> TAILSCALE
+    // Note: this specifically excludes FQDN6 urls since they are not supported by myunraid.net DNS currently
+    if (preg_match('/^NGINX_([A-Z]+)(\d*)FQDN$/', $key, $matches)) {
+        $interface = $matches[1]; // Interface type (LAN, WAN, WG, TAILSCALE, etc.)
+        // ignore the WAN interface because we don't have access to the WANPORT here
+        if ($interface == "WAN") {
+            continue;
+        }
+        $pem = null;
+        if (str_ends_with($host, '.myunraid.net')) {
+            $pem = 'certificate_bundle.pem';
+        } elseif (str_ends_with($host, '.ts.net')) {
+            $pem = 'ts_bundle.pem';
+        }
+        $url = 'https://'.$host.$https_port."/";
+        $urls[] = [$interface, $url, null, $pem, false];
+    }
 }
 
 // determine whether there are urls for a given list of interfaces
-function has_urls(array $interfaces) {
-  global $urls;
-  foreach($urls as $url) {
-    if (in_array($url[0], $interfaces)) return true;
-  }
-  return false;
+function has_urls(array $interfaces)
+{
+    global $urls;
+    foreach ($urls as $url) {
+        if (in_array($url[0], $interfaces)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // show all urls for a given list of interface
-function show_urls(array $interfaces) {
-  global $urls;
-  //   0 - type of url ['LAN','WLAN','WAN','WG','TAILSCALE']
-  //   1 - the url
-  //   3 - the url it redirects to, or null
-  //   4 - the certificate file used, or null
-  //   5 - self-signed certificate, or false
-  $output = "";
-  $linestart = "<dt>&nbsp;</dt><dd>";
-  $lineend = "</dd>\n";
-  $first = true;
-  foreach($urls as $url) {
-    if (in_array($url[0], $interfaces)) {
-      $msg  = "<a class='localURL' href='$url[1]'>$url[1]</a>";
-      if ($url[2]) $msg .= " "._("redirects to")." <a class='localURL' href='$url[2]'>$url[2]</a>";
-      if ($url[3]) $msg .= " "._("uses")." ".$url[3];
-      if ($url[4]) $msg .= "<span class='warning'> <i class='fa fa-warning fa-fw'></i> "._("is a self-signed certificate, ignore the browser's warning and proceed to the GUI")."</span>";
-      // 2nd+ urls need leading $linestart
-      $output .= ($first ? "" : $linestart).$msg.$lineend;
-      $first = false;
+function show_urls(array $interfaces)
+{
+    global $urls;
+    //   0 - type of url ['LAN','WLAN','WAN','WG','TAILSCALE']
+    //   1 - the url
+    //   3 - the url it redirects to, or null
+    //   4 - the certificate file used, or null
+    //   5 - self-signed certificate, or false
+    $output = "";
+    $linestart = "<dt>&nbsp;</dt><dd>";
+    $lineend = "</dd>\n";
+    $first = true;
+    foreach ($urls as $url) {
+        if (in_array($url[0], $interfaces)) {
+            $msg  = "<span class='inline-block'><a class='localURL' href='$url[1]'>$url[1]</a>";
+            if ($url[2]) {
+                $msg .= " "._("redirects to")." <a class='localURL' href='$url[2]'>$url[2]</a>";
+            }
+            if ($url[3]) {
+                $msg .= " "._("uses")." ".$url[3];
+            }
+            $msg .= "</span>";
+            if ($url[4]) {
+                $msg .= "<span class='warning'> <i class='fa fa-warning fa-fw'></i> "._("is a self-signed certificate, ignore the browser's warning and proceed to the GUI")."</span>";
+            }
+            // 2nd+ urls need leading $linestart
+            $output .= ($first ? "" : $linestart).$msg.$lineend;
+            $first = false;
+        }
     }
-  }
-  if ($first) {
-    $output = "none";
-  } else {
-    // strip final trailing $lineend as it will be added by markdown
-    $output = substr($output, 0, strlen($lineend)*-1);
-  }
-  echo $output;
+    if ($first) {
+        $output = "none";
+    } else {
+        // strip final trailing $lineend as it will be added by markdown
+        $output = substr($output, 0, strlen($lineend) * -1);
+    }
+    echo $output;
 }
 
-$cert_time_format   = $display['date'].($display['date']!='%c' ? ', '.str_replace(['%M','%R'],['%M:%S','%R:%S'],$display['time']):'');
+$cert_time_format   = $display['date'].($display['date'] != '%c' ? ', '.str_replace(['%M','%R'], ['%M:%S','%R:%S'], $display['time']) : '');
 $provisionlabel     = $isWildcardCert ? _('Renew') : _('Provision');
-$disabled_provision = $keyfile===false || ($isWildcardCert && $retval_expired===0) || !$addr ? 'disabled' : '';
+$disabled_provision = $keyfile === false || ($isWildcardCert && $retval_expired === 0) || !$addr ? 'disabled' : '';
 $disabled_provision_msg = !$addr ? _('Ensure the primary network card eth0 has an IP address.') : '';
-$disabled_delete    = $cert2Present && $var['USE_SSL']!='auto' ? '' : 'disabled';
+$disabled_delete    = $cert2Present && $var['USE_SSL'] != 'auto' ? '' : 'disabled';
 $disabled_auto      = $isWildcardCert && !$dnsRebindingProtection && $dnsValid ? '' : 'disabled';
 
 // Get ports in use
@@ -246,14 +308,20 @@ exec("lsof -Pni|awk '/LISTEN/ && \$9!~/127.0.0.1/ && \$9!~/\\[::1\\]/{print \$9}
 
 $bind = false; //= $var['BIND_MGT']=='yes'; - not used in 6.10
 $list = ['*'];
-if ($addr) array_push($list, $addr);
+if ($addr) {
+    array_push($list, $addr);
+}
 
 foreach ($output as $line) {
-  [$ip, $port] = my_explode($line[0]=='[' ? ']:' : ':',$line);
-  if ($ip[0]=='[') $ip = substr($ip,1); // ipv6 address
-  if (!in_array($port,$portsInUse) && (!$bind || in_array($ip,$list))) $portsInUse[] = $port;
+    [$ip, $port] = my_explode($line[0] == '[' ? ']:' : ':', $line);
+    if ($ip[0] == '[') {
+        $ip = substr($ip, 1);
+    } // ipv6 address
+    if (!in_array($port, $portsInUse) && (!$bind || in_array($ip, $list))) {
+        $portsInUse[] = $port;
+    }
 }
-sort($portsInUse,SORT_NUMERIC);
+sort($portsInUse, SORT_NUMERIC);
 ?>
 <script>
 function provisionHandler(event, form) { // provisions and renewals require being Signed In to Unraid.net
@@ -262,13 +330,13 @@ function provisionHandler(event, form) { // provisions and renewals require bein
 };
 
 function checkPorts(form) {
-  var portsInUse = [<?=implode(',',$portsInUse)?>];
+  var portsInUse = [<?=implode(',', $portsInUse)?>];
   var range = [], list = [], duplicates = [];
   var checks = [
-    {'key':"PORTTELNET", 'used':"<?=$var['USE_TELNET']=='yes'?>", 'port':"<?=$var['PORTTELNET']?>", 'default':"23" , 'name':"_(TELNET port)_"},
-    {'key':"PORTSSH"   , 'used':"<?=$var['USE_SSH']=='yes'?>"   , 'port':"<?=$var['PORTSSH']?>"   , 'default':"22" , 'name':"_(SSH port)_"},
-    {'key':"PORT"      , 'used':"<?=$var['USE_SSL']=='no'?>"    , 'port':"<?=$var['PORT']?>"      , 'default':"80" , 'name':"_(HTTP port)_"},
-    {'key':"PORTSSL"   , 'used':"<?=$var['USE_SSL']!='no'?>"    , 'port':"<?=$var['PORTSSL']?>"   , 'default':"443", 'name':"_(HTTPS port)_"}
+    {'key':"PORTTELNET", 'used':"<?=$var['USE_TELNET'] == 'yes'?>", 'port':"<?=$var['PORTTELNET']?>", 'default':"23" , 'name':"_(TELNET port)_"},
+    {'key':"PORTSSH"   , 'used':"<?=$var['USE_SSH'] == 'yes'?>"   , 'port':"<?=$var['PORTSSH']?>"   , 'default':"22" , 'name':"_(SSH port)_"},
+    {'key':"PORT"      , 'used':"<?=$var['USE_SSL'] == 'no'?>"    , 'port':"<?=$var['PORT']?>"      , 'default':"80" , 'name':"_(HTTP port)_"},
+    {'key':"PORTSSL"   , 'used':"<?=$var['USE_SSL'] != 'no'?>"    , 'port':"<?=$var['PORTSSL']?>"   , 'default':"443", 'name':"_(HTTPS port)_"}
   ];
   for (var i=0,check; check=checks[i]; i++) {
     var item = $(form).find('input[name="'+check['key']+'"]');
@@ -318,8 +386,9 @@ $(function(){
 </script>
 <form markdown="1" name="SSLSettings" method="POST" action="/update.htm" target="progressFrame">
 <input type="hidden" name="changePorts" value="Apply">
-<input type="hidden" name="server_name" value="<?=strtok(_var($_SERVER,'HTTP_HOST'),":")?>">
-<input type="hidden" name="server_addr" value="<?=_var($_SERVER,'SERVER_ADDR')?>">
+<input type="hidden" name="server_name" value="<?=strtok(_var($_SERVER, 'HTTP_HOST'), ":")?>">
+<input type="hidden" name="server_addr" value="<?=_var($_SERVER, 'SERVER_ADDR')?>">
+
 _(User 'root')_:
 : [_(Manage)_](/Settings/Users/ManagementAccess/UserEdit?name=root)
 
@@ -330,18 +399,6 @@ _(Start page)_:
 
 :mgmt_start_page_help:
 
-<!--
-Restrict access:
-: <select name="BIND_MGT" class="narrow">
-  <?=mk_option($var['BIND_MGT'], "no", _('No'))?>
-  <?=mk_option($var['BIND_MGT'], "yes", _('Yes'))?>
-  </select>
-
-> By default GUI, SSH and TELNET access are available on all active interfaces of the system.
->
-> *Restrict access* limits GUI, SSH and TELNET access to the management interface only (eth0).
--->
-
 _(Use TELNET)_:
 : <select name="USE_TELNET" onchange="updateTELNET(this.form)">
   <?=mk_option($var['USE_TELNET'], "no", _('No'))?>
@@ -351,7 +408,7 @@ _(Use TELNET)_:
 :mgmt_use_telnet_help:
 
 _(TELNET port)_:
-: <input type="number" name="PORTTELNET" class="narrow" min="1" max="65535" value="<?=$var['PORTTELNET']?>" placeholder="23">
+: <input type="number" name="PORTTELNET" min="1" max="65535" value="<?=$var['PORTTELNET']?>" placeholder="23">
 
 :mgmt_telnet_port_help:
 
@@ -364,7 +421,7 @@ _(Use SSH)_:
 :mgmt_use_ssh_help:
 
 _(SSH port)_:
-: <input type="number" name="PORTSSH" class="narrow" min="1" max="65535" value="<?=$var['PORTSSH']?>" placeholder="22">
+: <input type="number" name="PORTSSH" min="1" max="65535" value="<?=$var['PORTSSH']?>" placeholder="22">
 
 :mgmt_ssh_port_help:
 
@@ -386,36 +443,39 @@ _(Use SSL/TLS)_:
 :mgmt_use_ssl_tls_help:
 
 _(HTTP port)_:
-: <input type="number" name="PORT" class="narrow" min="1" max="65535" value="<?=$var['PORT']?>" placeholder="80">
+: <input type="number" name="PORT" min="1" max="65535" value="<?=$var['PORT']?>" placeholder="80">
 
 :mgmt_http_port_help:
 
 _(HTTPS port)_:
-: <input type="number" name="PORTSSL" class="narrow" min="1" max="65535" value="<?=$var['PORTSSL']?>" placeholder="443">
+: <input type="number" name="PORTSSL" min="1" max="65535" value="<?=$var['PORTSSL']?>" placeholder="443">
 
 :mgmt_https_port_help:
 
 _(Local TLD)_:
-: <input type="text" name="LOCAL_TLD" class="narrow" value="<?=htmlspecialchars($var['LOCAL_TLD'])?>">
+: <input type="text" name="LOCAL_TLD" value="<?=htmlspecialchars($var['LOCAL_TLD'])?>">
 
 :mgmt_local_tld_help:
 
 &nbsp;
-: <input type="button" value="_(Apply)_" onclick="checkPorts(this.form)" disabled><input type="button" value="_(Done)_" onclick="done()">
+: <span class="inline-block">
+    <input type="button" value="_(Apply)_" onclick="checkPorts(this.form)" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
 
 </form>
 
 <hr>
 
 _(Local access URLs)_:
-: <? show_urls(['LAN','WLAN']); ?>
+: <?php show_urls(['LAN','WLAN']); ?>
 
 :mgmt_local_access_urls_help:
 
 <?if (has_urls(['WG'])): ?>
 
 _(WireGuard URLs)_:
-: <? show_urls(['WG']); ?>
+: <?php show_urls(['WG']); ?>
 
 :mgmt_wg_access_urls_help:
 
@@ -424,7 +484,7 @@ _(WireGuard URLs)_:
 <?if (has_urls(['TAILSCALE'])): ?>
 
 _(Tailscale URLs)_:
-: <? show_urls(['TAILSCALE']); ?>
+: <?php show_urls(['TAILSCALE']); ?>
 
 :mgmt_tailscale_access_urls_help:
 
@@ -439,11 +499,9 @@ _(Self-signed or user-provided certificate)_:
 <?if ($cert1URLvalid && _var($var,'USE_SSL')=='yes'):?>
 _(Certificate URL)_:
 : <?="<a class='localURL' href='https://$cert1URL$https_port'>$cert1URL</a>"?>
-
 <?elseif ($cert1URLvalid):?>
 _(Certificate URL)_:
 : <?=$cert1URL?>
-
 <?else:?>
 _(Certificate URL)_:
 : _(Certificate not valid for)_ <?=$cert1URL?>
@@ -456,7 +514,7 @@ _(Certificate issuer)_:
 <?endif;?>
 
 _(Certificate expiration)_:
-: <?=_(my_date($cert_time_format, strtotime($cert1Expires)),0)?>
+: <?=_(my_date($cert_time_format, strtotime($cert1Expires)), 0)?>
 
 <?else:?>
 _(Self-signed certificate file)_:
@@ -464,8 +522,9 @@ _(Self-signed certificate file)_:
 <?endif;?>
 
 <form markdown="1" name="Provision" method="POST" target="progressFrame" action="/update.htm" onsubmit="provisionHandler(event, this)">
-<input type="hidden" name="server_name" value="<?=strtok(_var($_SERVER,'HTTP_HOST'),":")?>">
-<input type="hidden" name="server_addr" value="<?=_var($_SERVER,'SERVER_ADDR')?>">
+<input type="hidden" name="server_name" value="<?=strtok(_var($_SERVER, 'HTTP_HOST'), ":")?>">
+<input type="hidden" name="server_addr" value="<?=_var($_SERVER, 'SERVER_ADDR')?>">
+
 <?if ($cert2Present):?>
 
 <hr>
@@ -474,13 +533,13 @@ _(Unraid Let's Encrypt certificate)_:
 : <?=$cert2File?>
 
 _(Certificate URL)_:
-: <?="<a class='localURL' href='https://$subject2URL$https_port'>$cert2Subject</a>"?>
+: <?="<a class='localURL' href='https://$subject2URL$https_port'>$cert2Subject</a>"?><?php if ($warnipv6): ?> _((does not support IPv6 addresses))_<?php endif; ?>
 
 _(Certificate issuer)_:
 : <?=$cert2Issuer?>
 
 _(Certificate expiration)_:
-: <?=_(my_date($cert_time_format, strtotime($cert2Expires)),0)?>
+: <?=_(my_date($cert_time_format, strtotime($cert2Expires)), 0)?>
 
 <?if ($dnsRebindingProtection):?>
 &nbsp;
@@ -492,13 +551,17 @@ _(Certificate expiration)_:
 
 <?endif;?>
 <?else:?>
+
 _(CA-signed certificate file)_:
 : _(Not present)_
 
 <?endif;?>
 &nbsp;
-: <button type="submit" name="changePorts" value="Provision" <?=$disabled_provision?>><?=$provisionlabel?></button><button type="submit" name="changePorts" value="Delete" <?=$disabled_delete?> >_(Delete)_</button><?=$disabled_provision_msg?>
-
+: <span class="inline-block">
+    <button type="submit" name="changePorts" value="Provision" <?=$disabled_provision?>><?=$provisionlabel?></button>
+    <button type="submit" name="changePorts" value="Delete" <?=$disabled_delete?> >_(Delete)_</button>
+  </span>
+  <span class="inline-block"><?=$disabled_provision_msg?></span>
 
 <?if ($cert3Present):?>
 
@@ -514,7 +577,7 @@ _(Certificate issuer)_:
 : <?=$cert3Issuer?>
 
 _(Certificate expiration)_:
-: <?=_(my_date($cert_time_format, strtotime($cert3Expires)),0)?>
+: <?=_(my_date($cert_time_format, strtotime($cert3Expires)), 0)?>
 
 <?endif;?>
 

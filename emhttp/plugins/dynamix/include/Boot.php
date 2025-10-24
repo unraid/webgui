@@ -27,6 +27,47 @@ $var = parse_ini_file("/var/local/emhttp/var.ini");
 require_once "$docroot/plugins/dynamix/include/ThemeHelper.php";  
 $themeHelper = new ThemeHelper($display['theme']);
 $themeName = $themeHelper->getThemeName();
+
+$onload_function = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+  $safemode = '/boot/unraidsafemode';
+  $progress = (_var($var,'fsProgress')!='') ? "<br><span class='blue'>{$var['fsProgress']}</span>" : "<br>&nbsp;";
+  
+  // Determine the onload function and execute system command
+  switch (_var($_POST,'cmd','shutdown')) {
+    case 'reboot':
+      if (isset($_POST['safemode'])) touch($safemode); else @unlink($safemode);
+      $onload_function = 'reboot_now()';
+      exec('/sbin/reboot -n');
+      break;
+    case 'shutdown':
+      if (isset($_POST['safemode'])) touch($safemode); else @unlink($safemode);
+      $onload_function = 'shutdown_now()';
+      exec('/sbin/poweroff -n');
+      break;
+  }
+  
+  // Determine array status display
+  $array_status = '';
+  switch (_var($var,'fsState')) {
+    case 'Stopped':
+      $array_status = "<span class='red'>" . _('Array Stopped') . "</span>$progress";
+      break;
+    case 'Starting':
+      $array_status = "<span class='orange'>" . _('Array Starting') . "</span>$progress";
+      break;
+    case 'Stopping':
+      $array_status = "<span class='orange'>" . _('Array Stopping') . "</span>$progress";
+      break;
+    default:
+      $array_status = "<span class='green'>" . _('Array Started') . "</span>$progress";
+      break;
+  }
+} else {
+  $onload_function = 'redirectToMainPage()';
+}
 ?>
 <!DOCTYPE HTML>
 <html <?=$display['rtl']?>lang="<?=strtok($locale,'_')?:'en'?>" class="<?= $themeHelper->getThemeHtmlClass() ?>">
@@ -35,7 +76,7 @@ $themeName = $themeHelper->getThemeName();
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta http-equiv="Content-Security-Policy" content="block-all-mixed-content">
 <meta name="format-detection" content="telephone=no">
-<meta name="viewport" content="width=1300">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="same-origin">
 <link type="image/png" rel="shortcut icon" href="/webGui/images/<?=_var($var,'mdColor','red-on')?>.png">
@@ -45,18 +86,20 @@ $themeName = $themeHelper->getThemeName();
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/themes/{$themeName}.css")?>">
 
 <style>
+body {
+  padding: 2rem 1rem;
+}
 .boot-title {
-  background-image: none;
   color: var(--orange-300);
-  font-size: 6rem;
+  font-size: 4rem;
   text-transform: uppercase;
   text-align: center;
-  padding: 4rem 0;
 }
 .boot-subtext {
-  margin: 6rem 0;
   text-align: center;
-  font-size: 3rem;
+  font-size: 2.5rem;
+  font-weight: 400;
+  line-height: 1.5;
 }
 </style>
 
@@ -85,6 +128,10 @@ boot.on('message', function(msg) {
   status += ini['fsProgress'] ? "<br><span class='blue'>"+_(ini['fsProgress'])+"</span>" : "<br>&nbsp;";
   $('.js-arrayStatus').html(status);
 });
+
+function redirectToMainPage() {
+  window.location = '/Main';
+}
 
 function parseINI(msg) {
   var regex = {
@@ -139,7 +186,7 @@ function reboot_online() {
 }
 function reboot_offline() {
   $.ajax({url:'/webGui/include/ProcessStatus.php',type:'POST',data:{name:'emhttpd',update:true},timeout:500})
-  .done(function(){location = '/Main';})
+  .done(function(){redirectToMainPage();})
   .fail(function(){
     $('.js-powerStatus').html("<?=_('System is rebooting')?>... "+timer());
     setTimeout(reboot_offline,500);
@@ -165,9 +212,10 @@ function shutdown_offline() {
 }
 function power_on() {
   $.ajax({url:'/webGui/include/ProcessStatus.php',type:'POST',data:{name:'emhttpd',update:true},timeout:500})
-  .done(function(){location = '/Main';})
+  .done(function(){redirectToMainPage();})
   .fail(function(){setTimeout(power_on,500);});
 }
+
 $(document).ajaxSend(function(elm, xhr, s){
   if (s.type == 'POST') {
     s.data += s.data?"&":"";
@@ -176,44 +224,9 @@ $(document).ajaxSend(function(elm, xhr, s){
 });
 </script>
 </head>
-<?
-if ($_SERVER['REQUEST_METHOD'] === 'POST'){
-
-
-$safemode = '/boot/unraidsafemode';
-$progress = (_var($var,'fsProgress')!='') ? "<br><span class='blue'>{$var['fsProgress']}</span>" : "<br>&nbsp;";
-
-switch (_var($_POST,'cmd','shutdown')) {
-case 'reboot':
-  if (isset($_POST['safemode'])) touch($safemode); else @unlink($safemode);
-  echo '<body onload="reboot_now()">';
-  exec('/sbin/reboot -n');
-  break;
-case 'shutdown':
-  if (isset($_POST['safemode'])) touch($safemode); else @unlink($safemode);
-  echo '<body onload="shutdown_now()">';
-  exec('/sbin/poweroff -n');
-  break;
-}
-echo '<div class="js-bootTitle boot-title"></div>';
-echo '<div class="js-arrayStatus boot-subtext">';
-switch (_var($var,'fsState')) {
-case 'Stopped':
-  echo "<span class='red'>",_('Array Stopped'),"</span>$progress"; break;
-case 'Starting':
-  echo "<span class='orange'>",_('Array Starting'),"</span>$progress"; break;
-case 'Stopping':
-  echo "<span class='orange'>",_('Array Stopping'),"</span>$progress"; break;
-default:
-  echo "<span class='green'>",_('Array Started'),"</span>$progress"; break;
-}
-echo '</div>';
-echo '<div class="js-powerStatus boot-subtext"></div>';
-echo '</body>';
-}else{
-?>
-echo <body onload="location='/Main'"></body>
-<?
-}
-?>
+<body onload="<?= $onload_function ?>">
+  <h1 class="js-bootTitle boot-title"></h1>
+  <h2 class="js-arrayStatus boot-subtext"><?= $array_status ?></h2>
+  <h3 class="js-powerStatus boot-subtext"></h3>
+</body>
 </html>

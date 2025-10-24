@@ -1,6 +1,6 @@
-Menu="VMs:0"
+Menu="VMs:2"
 Title="VM Usage Statistics"
-Nchan="vm_usage:stop"
+Nchan="vm_usage"
 Cond="exec(\"grep -o '^USAGE=.Y' /boot/config/domain.cfg 2>/dev/null\") && is_file('/var/run/libvirt/libvirtd.pid')"
 ---
 <?PHP
@@ -32,7 +32,12 @@ vmusage.on('message', function(msg){
   });
 
 $(function(){
-  vmusage.start().monitor();
+  // ping subscriber to check for listeners
+  var vmPing = new NchanSubscriber('/sub/vmPing',{subscriber:'websocket', reconnectTimeout:5000});
+  vmPing.on('message', function(msg){});
+  vmPing.start();
+  
+  vmusage.start();
 });
 
 </script>

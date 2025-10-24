@@ -82,7 +82,11 @@ $(function() {
   $('input.view').change(function(){$('.user,.developer').toggle('slow');});
 });
 </script>
-<span class="status vhshift"><input type="checkbox" class="view"></span>
+
+&nbsp;
+: <span class="inline-block">
+    <input type="checkbox" class="view">
+  </span>
 
 <div markdown="1" class="user">
 <div class="notice">_(Use this to install official language packs)_</div>
@@ -90,7 +94,10 @@ _(Installed languages)_:
 : <span class="installed"><?=implode(', ',$installed)?></span>
 
 _(Enter URL of language pack XML file)_:
-: <input type="text" id="xml_file" maxlength="1024" value=""><input type="button" id="install" value="_(Install)_" onclick="installXML($('#xml_file').val())">
+: <input type="text" id="xml_file" maxlength="1024" value="">
+  <span class="inline-block">
+    <input type="button" id="install" value="_(Install)_" onclick="installXML($('#xml_file').val())">
+  </span>
 
 </div>
 
@@ -114,6 +121,9 @@ _(Select language file)_:
 
 </div>
 &nbsp;
-: <input id="uploadbutton" type="button" value="_(Upload)_" onclick="upload(this.form)" disabled><input type="button" value="_(Done)_" class="lock" onclick="done()">
+: <span class="inline-block">
+    <input id="uploadbutton" type="button" value="_(Upload)_" onclick="upload(this.form)" disabled>
+    <input type="button" value="_(Done)_" class="lock" onclick="done()">
+  </span>
 </form>
 </div>

@@ -8,13 +8,13 @@
 <script>
 String.prototype.actionName = function(){return this.split(/[\\/]/g).pop();}
 String.prototype.channel = function(){return this.split(':')[1].split(',').findIndex((e)=>/\[\d\]/.test(e));}
-NchanSubscriber.prototype.monitor = function(){subscribers.push(this);}
 
 Shadowbox.init({skipSetup:true});
 context.init();
 
-// list of nchan subscribers to start/stop at focus change
-var subscribers = [];
+// Legacy code.  No longer used in webGUI, and its purpose is removed, but plugins might still reference this prototype and its a fatal error to remove it.
+NchanSubscriber.prototype.monitor = function(){return null;}
+
 
 // server uptime
 var uptime = <?=strtok(exec("cat /proc/uptime"),' ')?>;
@@ -94,33 +94,17 @@ function refresh(top) {
   if (typeof top === 'undefined') {
     for (var i=0,element; element=document.querySelectorAll('input,button,select')[i]; i++) {element.disabled = true;}
     for (var i=0,link; link=document.getElementsByTagName('a')[i]; i++) { link.style.color = "gray"; } //fake disable
-    location.reload();
+    location.replace(location.href);
   } else {
     $.cookie('top',top);
-    location.reload();
+    location.replace(location.href);
   }
 }
 
-function initab(page) {
+function initab(page) { // @todo remove in the future
   $.removeCookie('one');
   $.removeCookie('tab');
   if (page != null) location.replace(page);
-}
-
-function settab(tab) {
-<?switch ($myPage['name']):?>
-<?case'Main':?>
-  $.cookie('tab',tab);
-<?if (_var($var,'fsState')=='Started'):?>
-  $.cookie('one','tab1');
-<?endif;?>
-<?break;?>
-<?case'Cache':case'Data':case'Device':case'Flash':case'Parity':?>
-  $.cookie('one',tab);
-<?break;?>
-<?default:?>
-  $.cookie('one',tab);
-<?endswitch;?>
 }
 
 function done(key) {
@@ -179,6 +163,9 @@ function openTerminal(tag,name,more) {
   // open terminal window (run in background)
   name = name.replace(/[ #]/g,"_");
   tty_window = makeWindow(name+(more=='.log'?more:''),Math.min(screen.availHeight,800),Math.min(screen.availWidth,1200));
+  if ( tty_window === null ) {
+    throw new Error('Failed to open terminal window');
+  }
   var socket = ['ttyd','syslog'].includes(tag) ? '/webterminal/'+tag+'/' : '/logterminal/'+name+(more=='.log'?more:'')+'/';
   $.get('/webGui/include/OpenTerminal.php',{tag:tag,name:name,more:more},function(){setTimeout(function(){tty_window.location=socket; tty_window.focus();},200);});
 }
@@ -233,7 +220,7 @@ function openPlugin(cmd,title,plg,func,start=0,button=0) {
       $(".upgrade_notice").addClass('alert');
       return;
     }
-    swal({title:title,text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:button==0,confirmButtonText:"<?=_('Close')?>"},function(close){
+    swal({title:title + ' - <span id="pluginProgressTitle"><?=_('In Progress');?> <i class="fa fa-refresh fa-spin"></i></span>',text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:button==0,confirmButtonText:"<?=_('Close')?>"},function(close){
       nchan_plugins.stop();
       $('div.spinner.fixed').hide();
       $('.sweet-alert').hide('fast').removeClass('nchan');
@@ -257,7 +244,7 @@ function openDocker(cmd,title,plg,func,start=0,button=0) {
       $(".upgrade_notice").addClass('alert');
       return;
     }
-    swal({title:title,text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:button!=0,confirmButtonText:"<?=_('Close')?>"},function(close){
+    swal({title:title + ' - <span id="pluginProgressTitle"><?=_('In Progress');?> <i class="fa fa-refresh fa-spin"></i></span>',text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:button!=0,confirmButtonText:"<?=_('Close')?>"},function(close){
       nchan_docker.stop();
       $('div.spinner.fixed').hide();
       $('.sweet-alert').hide('fast').removeClass('nchan');
@@ -281,7 +268,7 @@ function openVMAction(cmd,title,plg,func,start=0,button=0) {
       $(".upgrade_notice").addClass('alert');
       return;
     }
-    swal({title:title,text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:button!=0,confirmButtonText:"<?=_('Close')?>"},function(close){
+    swal({title:title + ' - <span id="pluginProgressTitle"><?=_('In Progress');?> <i class="fa fa-refresh fa-spin"></i></span>',text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:button!=0,confirmButtonText:"<?=_('Close')?>"},function(close){
       nchan_vmaction.stop();
       $('div.spinner.fixed').hide();
       $('.sweet-alert').hide('fast').removeClass('nchan');
@@ -344,6 +331,7 @@ function openDone(data) {
         ca_done_override = false;
       }
     }
+    $('#pluginProgressTitle').text("<?=_('Finished');?>");
     return true;
   }
   return false;
@@ -353,13 +341,23 @@ function openError(data) {
   if (data == '_ERROR_') {
     $('div.spinner.fixed').hide();
     $('button.confirm').text("<?=_('Error')?>").prop('disabled',false).show();
+    $('#pluginProgressTitle').text("<?=_('Error');?>");
     return true;
   }
   return false;
 }
 
-function showStatus(name,plugin,job) {
-  $.post('/webGui/include/ProcessStatus.php',{name:name,plugin:plugin,job:job},function(status){$(".tabs").append(status);});
+function showStatus(name, plugin, job) {
+  $.post('/webGui/include/ProcessStatus.php',
+    {
+      name,
+      plugin,
+      job,
+    },
+    function(status) {
+      $('.title .right').eq(0).append(status);
+    }
+  );
 }
 
 function showFooter(data, id) {
@@ -493,36 +491,6 @@ function digits(number) {
   return 'three';
 }
 
-function openNotifier() {
-  $.post('/webGui/include/Notify.php',{cmd:'get',csrf_token:csrf_token},function(msg) {
-    $.each($.parseJSON(msg), function(i, notify){
-      $.jGrowl(notify.subject+'<br>'+notify.description,{
-        group: notify.importance,
-        header: notify.event+': '+notify.timestamp,
-        theme: notify.file,
-        sticky: true,
-        beforeOpen: function(e,m,o){if ($('div.jGrowl-notification').hasClass(notify.file)) return(false);},
-        afterOpen: function(e,m,o){if (notify.link) $(e).css('cursor','pointer');},
-        click: function(e,m,o){if (notify.link) location.replace(notify.link);},
-        close: function(e,m,o){$.post('/webGui/include/Notify.php',{cmd:'archive',file:notify.file,csrf_token:csrf_token});}
-      });
-    });
-  });
-}
-
-function closeNotifier() {
-  $.post('/webGui/include/Notify.php',{cmd:'get',csrf_token:csrf_token},function(msg) {
-    $.each($.parseJSON(msg), function(i, notify){
-      $.post('/webGui/include/Notify.php',{cmd:'archive',file:notify.file,csrf_token:csrf_token});
-    });
-    $('div.jGrowl').find('div.jGrowl-close').trigger('click');
-  });
-}
-
-function viewHistory() {
-  location.replace('/Tools/NotificationsArchive');
-}
-
 function flashReport() {
   $.post('/webGui/include/Report.php',{cmd:'config'},function(check){
     if (check>0) addBannerWarning("<?=_('Your flash drive is corrupted or offline').'. '._('Post your diagnostics in the forum for help').'.'?> <a target='_blank' href='https://docs.unraid.net/go/changing-the-flash-device/'><?=_('See also here')?></a>");
@@ -552,17 +520,7 @@ $(function() {
   }
   $('#'+tab).attr('checked', true);
   updateTime();
-  $.jGrowl.defaults.closeTemplate = '<i class="fa fa-close"></i>';
-  $.jGrowl.defaults.closerTemplate = '<?=$notify['position'][0]=='b' ? '<div class="bottom">':'<div class="top">'?>[ <?=_("close all notifications")?> ]</div>';
-  $.jGrowl.defaults.position = '<?=$notify['position']?>';
-  $.jGrowl.defaults.theme = '';
-  $.jGrowl.defaults.themeState = '';
-  $.jGrowl.defaults.pool = 10;
-<?if ($notify['life'] > 0):?>
-  $.jGrowl.defaults.life = <?=$notify['life']*1000?>;
-<?else:?>
-  $.jGrowl.defaults.sticky = true;
-<?endif;?>
+
   Shadowbox.setup('a.sb-enable', {modal:true});
 // add any pre-existing reboot notices
   $.post('/webGui/include/Report.php',{cmd:'notice'},function(notices){
@@ -590,8 +548,8 @@ $.ajaxPrefilter(function(s, orig, xhr){
   // Reload page every X minutes during extended viewing?
   function setTimerReload() {
       timers.reload = setInterval(function(){
-        if (nchanPaused === false && ! dialogOpen() ) {
-          location.reload();
+        if (! dialogOpen() ) {
+          location.replace(location.href);
         }
       },<?=$myPage['Load'] * 60000?>);
     }
@@ -604,4 +562,12 @@ $.ajaxPrefilter(function(s, orig, xhr){
     }
     setTimerReload();
 <?endif;?>
+
+function debounce(func, wait = 300) {
+  let timeout;
+  return function(...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), wait);
+  };
+}
 </script>

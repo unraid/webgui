@@ -3,4 +3,55 @@ Type="menu"
 Title="My Favorites"
 Tag="heart"
 ---
-<div id="nofavs" style="display:none;width:100%"><center>_(No favorites available)_</center></div>
+<script>
+function delPage(page) {
+    if (!page || typeof page !== 'string') {
+        console.error('Invalid page parameter');
+        return;
+    }
+    $.post('/webGui/include/MyFavorites.php', {
+        action: 'del',
+        page: page,
+    })
+    .done(function() {
+        refresh();
+    })
+    .fail(function(xhr, status, error) {
+        console.error('Failed to remove favorite:', error);
+    });
+}
+
+$(function(){
+    const $panels = $('.Panel');
+    if ($panels.length === 0) {
+        $('#nofavs').show();
+        return;
+    }
+
+    $panels.each(function(){
+        const href = $(this).find('a').prop('href');
+        const urlParts = href.split('/');
+        const page = urlParts[urlParts.length - 1];
+
+        if (!page || page.includes('..') || page.includes('/')) {
+            console.warn('Invalid page extracted from href:', href);
+            return;
+        }
+
+        const trashIcon = $('<i class="fa fa-trash-o favo" title="_(Remove from favorites)_"></i>');
+        trashIcon.on('click', function(e) {
+            e.preventDefault();
+            delPage(page);
+            return false;
+        });
+        $(this).find('span').append(trashIcon);
+        $(this).hover(function() {
+            $(this).find('i.favo').toggle();
+        });
+    });
+});
+</script>
+
+<h3 id="nofavs" class="text-center" style="display: none">
+    _(No favorites available)_
+</h3>

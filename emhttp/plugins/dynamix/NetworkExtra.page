@@ -2,7 +2,7 @@ Menu="NetworkSettings"
 Title="Interface Extra"
 Tag="icon-custom"
 ---
-<?PHP
+<?php
 /* Copyright 2005-2025, Lime Technology
  * Copyright 2012-2025, Bergware International.
  *
@@ -14,16 +14,16 @@ Tag="icon-custom"
  * all copies or substantial portions of the Software.
  */
 ?>
-<?
+<?php
 $cfg = '/boot/config/network-extra.cfg';
 
 if (file_exists($cfg)) {
-  extract(parse_ini_file($cfg));
-  $include_interfaces = str_replace(" ","\n",$include_interfaces);
-  $exclude_interfaces = str_replace(" ","\n",$exclude_interfaces);
+    extract(parse_ini_file($cfg));
+    $include_interfaces = str_replace(" ", "\n", $include_interfaces);
+    $exclude_interfaces = str_replace(" ", "\n", $exclude_interfaces);
 } else {
-  $include_interfaces = "";
-  $exclude_interfaces = "";
+    $include_interfaces = "";
+    $exclude_interfaces = "";
 }
 ?>
 <script>
@@ -60,7 +60,6 @@ $(function(){
 });
 </script>
 
-<div class="title nocontrol shift">&nbsp;</div>
 <form markdown="1" name="network_extra" method="POST" action="/update.php" target="progressFrame" onsubmit="return prepareText(this)">
 <input type="hidden" name="#file" value="<?=$cfg?>">
 <input type="hidden" name="#command" value="/webGui/scripts/update_services">
@@ -68,19 +67,21 @@ $(function(){
 <input type="hidden" name="exclude_interfaces" value="">
 
 _(Current listening interfaces)_:
-: <span id="listen"><?=exec("$docroot/webGui/scripts/show_interfaces")?:_('Any')?></span><span class="red-text" style="margin-left:30px"><?=exec("$docroot/webGui/scripts/error_interfaces")?></span>
-<hr>
+: <span id="listen"><?=exec("$docroot/webGui/scripts/show_interfaces") ?: _('Any')?></span><span class="red-text" style="margin-left:30px"><?=exec("$docroot/webGui/scripts/error_interfaces")?></span>
 
 _(Include listening interfaces)_:
-: <textarea name="include" spellcheck="false" cols="80" rows="<?=substr_count($include_interfaces,"\n")+1?>" maxlength="2048" name="text" style="resize:none;width:200px"><?=htmlspecialchars($include_interfaces)?></textarea>
+: <textarea name="include" spellcheck="false" cols="80" rows="<?=substr_count($include_interfaces, "\n") + 1?>" maxlength="2048" name="text" class="resize-none"><?=htmlspecialchars($include_interfaces)?></textarea>
 
 :eth_network_extra_include_help:
 
 _(Exclude listening interfaces)_:
-: <textarea name="exclude" spellcheck="false" cols="80" rows="<?=substr_count($exclude_interfaces,"\n")+1?>" maxlength="2048" name="text" style="resize:none;width:200px"><?=htmlspecialchars($exclude_interfaces)?></textarea>
+: <textarea name="exclude" spellcheck="false" cols="80" rows="<?=substr_count($exclude_interfaces, "\n") + 1?>" maxlength="2048" name="text" class="resize-none"><?=htmlspecialchars($exclude_interfaces)?></textarea>
 
 :eth_network_extra_exclude_help:
 
 &nbsp;
-: <input type="submit" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+: <span class="inline-block">
+    <input type="submit" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
 </form>

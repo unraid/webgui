@@ -20,6 +20,9 @@ require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 $_SERVER['REQUEST_URI'] = 'vms';
 require_once "$docroot/webGui/include/Translations.php";
 
+$domain_system_path = $domain_cfg['IMAGE_FILE'] ?? "/mnt/user/system/";
+if (is_file($domain_system_path)) $domain_system_path = pathinfo($domain_system_path,PATHINFO_DIRNAME)."/";
+
 function requireLibvirt() {
 	global $lv;
 	// Make sure libvirt is connected to qemu
@@ -152,11 +155,11 @@ case 'domain-start-consoleRV':
 	$vvarray[] = "type=$protocol\n";
 	$vvarrayhost = _var($_SERVER,'HTTP_HOST');
 	if (strpos($vvarrayhost,":")) $vvarrayhost = parse_url($vvarrayhost,PHP_URL_HOST);
-	$vvarray[] = "host=$vvarrayhost\n" ; 
+	$vvarray[] = "host=$vvarrayhost\n" ;
 	$vvarray[] = "port=$port\n" ;
 	$vvarray[] = "delete-this-file=1\n" ;
-	if (!is_dir("/mnt/user/system/remoteviewer")) mkdir("/mnt/user/system/remoteviewer") ;
-	$vvfile = "/mnt/user/system/remoteviewer/rv"._var($_SERVER,'HTTP_HOST').".$port.vv" ;
+	if (!is_dir($domain_system_path."remoteviewer")) mkdir($domain_system_path."remoteviewer") ;
+	$vvfile = $domain_system_path."remoteviewer/rv"._var($_SERVER,'HTTP_HOST').".$port.vv" ;
 	file_put_contents($vvfile,$vvarray) ;
 	$arrResponse['vvfile'] = $vvfile;
 	break;
@@ -165,12 +168,12 @@ case 'domain-consoleRDP':
 	requireLibvirt();
 	$dom = $lv->get_domain_by_name($domName);
 	$rdpvarray = array() ;
-	$myIP=get_vm_ip($dom);
-	if ($myIP == NULL)  {$arrResponse['error'] = "No IP, guest agent not installed?"; break; } 
+	$myIP = get_vm_ip($dom);
+	if ($myIP == NULL) {$arrResponse['error'] = _("No IP, guest agent not installed"); break;}
 	$rdparray[] = "full address:s: $myIP\n";
 	#$rdparray[] = "administrative session:1\n";
-	if (!is_dir("/mnt/user/system/remoteviewer")) mkdir("/mnt/user/system/remoteviewer") ;
-	$rdpfile = "/mnt/user/system/remoteviewer/rv"._var($_SERVER,'HTTP_HOST').".$port.rdp" ;
+	if (!is_dir($domain_system_path."remoteviewer")) mkdir($domain_system_path."remoteviewer") ;
+	$rdpfile = $domain_system_path."remoteviewer/rv"._var($_SERVER,'HTTP_HOST').".$port.rdp" ;
 	file_put_contents($rdpfile,$rdparray) ;
 	$arrResponse['vvfile'] = $rdpfile;
 	break;
@@ -190,8 +193,8 @@ case 'domain-consoleRV':
 	$vvarray[] = "host=$vvarrayhost\n" ;
 	$vvarray[] = "port=$port\n" ;
 	$vvarray[] = "delete-this-file=1\n" ;
-	if (!is_dir("/mnt/user/system/remoteviewer")) mkdir("/mnt/user/system/remoteviewer") ;
-	$vvfile = "/mnt/user/system/remoteviewer/rv"._var($_SERVER,'HTTP_HOST').".$port.vv" ;
+	if (!is_dir($domain_system_path."remoteviewer")) mkdir($domain_system_path."remoteviewer") ;
+	$vvfile = $domain_system_path."remoteviewer/rv"._var($_SERVER,'HTTP_HOST').".$port.vv" ;
 	file_put_contents($vvfile,$vvarray) ;
 	$arrResponse['vvfile'] = $vvfile;
 	break;
@@ -201,18 +204,18 @@ case 'domain-openWebUI':
 	$dom = $lv->get_domain_by_name($domName);
 	$WebUI = unscript(_var($_REQUEST,'vmrcurl'));
 	$myIP = get_vm_ip($dom);
-	if (strpos($WebUI,"[IP]") && $myIP == NULL)  $arrResponse['error'] = "No IP, guest agent not installed?"; 
+	if (strpos($WebUI,"[IP]") && $myIP == NULL)  $arrResponse['error'] = _("No IP, guest agent not installed");
 	$WebUI = preg_replace("%\[IP\]%", $myIP, $WebUI);
 	$vmnamehypen = str_replace(" ","-",$domName);
 	$WebUI = preg_replace("%\[VMNAME\]%", $vmnamehypen, $WebUI);
 	if (preg_match("%\[PORT:(\d+)\]%", $WebUI, $matches)) {
 		$ConfigPort = $matches[1] ?? '';
-		$WebUI = preg_replace("%\[PORT:\d+\]%", $ConfigPort, $WebUI);	
+		$WebUI = preg_replace("%\[PORT:\d+\]%", $ConfigPort, $WebUI);
 	}
 	$arrResponse['vmrcurl'] = $WebUI;
 	break;
 
-	
+
 case 'domain-pause':
 	requireLibvirt();
 	$arrResponse = $lv->domain_suspend($domName)
@@ -325,7 +328,7 @@ case 'change-media':
 	requireLibvirt();
 	$dev= $_REQUEST['dev'];
 	$file= $_REQUEST['file'];
-	$cmdstr = "virsh change-media '$domName' $dev $file";
+	$cmdstr = "virsh change-media ".escapeshellarg($domName)." ".escapeshellarg($dev)." ".escapeshellarg($file); #PHPS -changed
 	$rtn=shell_exec($cmdstr)
 		? ['success' => true]
 		: ['error' => "Change Media Failed"];
@@ -342,10 +345,10 @@ case 'change-media-both':
 	}
 	$file= $_REQUEST['file'];
 	if ($file != "" && $hda == false) {
-		$cmdstr = "virsh attach-disk '$domName' '$file' hda --type cdrom --targetbus sata --config" ;
+		$cmdstr = "virsh attach-disk ".escapeshellarg($domName)." ".escapeshellarg($file)." hda --type cdrom --targetbus sata --config" ; #PHPS - Changed
 	} else {
-		if ($file == "") $cmdstr = "virsh change-media '$domName' hda --eject --current";
-		else $cmdstr = "virsh change-media '$domName' hda '$file'";
+		if ($file == "") $cmdstr = "virsh change-media ".escapeshellarg($domName)." hda --eject --current"; #PHPS - Changed
+		else $cmdstr = "virsh change-media ".escapeshellarg($domName)." hda ".escapeshellarg($file); #PHPS - Changed
 	}
 	$rtn=shell_exec($cmdstr)
 		? ['success' => true]
@@ -355,10 +358,10 @@ case 'change-media-both':
 
 	$file2 = $_REQUEST['file2'];
 	if ($file2 != "" && $hdb == false) {
-		$cmdstr = "virsh attach-disk '$domName' '$file2' hdb --type cdrom --targetbus sata --config" ;
+		$cmdstr = "virsh attach-disk ".escapeshellarg($domName)." ".escapeshellarg($file2)." hdb --type cdrom --targetbus sata --config" ; #PHPS - Changed
 	} else  {
-		if ($file2 == "") $cmdstr = "virsh change-media '$domName' hdb --eject --current";
-		else $cmdstr = "virsh change-media '$domName' hdb '$file2' ";
+		if ($file2 == "") $cmdstr = "virsh change-media ".escapeshellarg($domName)." hdb --eject --current";#PHPS - Changed
+		else $cmdstr = "virsh change-media ".escapeshellarg($domName)." hdb ".escapeshellarg($file2); #PHPS - Changed
 	}
 	$rtn=shell_exec($cmdstr)
 		? ['success' => true]
@@ -415,7 +418,7 @@ case 'snap-images':
 
 case 'snap-list':
 	requireLibvirt();
-	$arrResponse = ($data = getvmsnapshots($domName)) 
+	$arrResponse = ($data = getvmsnapshots($domName))
 	? ['success' => true]
 	: ['error' => $lv->get_last_error()];
 	$datartn = "";
@@ -464,7 +467,7 @@ case 'get_storage_fstype':
 
 case 'vm-removal':
 	requireLibvirt();
-	$arrResponse = ($data = getvmsnapshots($domName)) 
+	$arrResponse = ($data = getvmsnapshots($domName))
 	? ['success' => true]
 	: ['error' => $lv->get_last_error()];
 	$datartn = $disksrtn = "";
@@ -502,7 +505,7 @@ case 'vm-removal':
 			$dirname = str_replace('/mnt/user/', "/mnt/$realdisk/", $dirname);
 		}
 	}
-	$fstype = trim(shell_exec(" stat -f -c '%T' $dirname"));
+	$fstype = trim(shell_exec(" stat -f -c '%T' ".escapeshellarg($dirname))); #PHPS - Changed
 	$html = '<table class="snapshot">
 	<tr><td>'._('VM Being removed').':</td><td><span id="VMBeingRemoved">'.$domName.'</span></td></tr>
 	<tr><td>'._('Remove all files').':</td><td><input type="checkbox" id="All" checked value="" ></td></tr>
@@ -521,7 +524,6 @@ case 'disk-create':
 	if (!is_dir($dir)) my_mkdir($dir);
 	// determine the actual disk if user share is being used
 	$dir = transpose_user_path($dir);
-	#@exec("chattr +C -R ".escapeshellarg($dir)." >/dev/null");
 	$strLastLine = exec("qemu-img create -q -f ".escapeshellarg($driver)." ".escapeshellarg($disk)." ".escapeshellarg($size)." 2>&1", $out, $status);
 	$arrResponse = empty($status)
 	? ['success' => true]
@@ -538,7 +540,7 @@ case 'disk-resize':
 		? ['success' => true]
 		: ['error' => $strLastLine];
 	} else {
-		$arrResponse = ['error' => "Disk capacity has to be greater than ".$old_capacity];
+		$arrResponse = ['error' => sprintf(_("Disk capacity has to be greater than %s"), $old_capacity)];
 	}
 	break;
 
@@ -704,7 +706,7 @@ case 'virtio-win-iso-download':
 		$_REQUEST['download_path'] = realpath($_REQUEST['download_path']).'/';
 		// Check free space
 		if (disk_free_space($_REQUEST['download_path']) < $arrDownloadVirtIO['size']+10000) {
-			$arrResponse['error'] = _('Not enough free space, need at least').' '.ceil($arrDownloadVirtIO['size']/1000000).'MB';
+			$arrResponse['error'] = sprintf(_('Not enough free space, need at least %s MB'), ceil($arrDownloadVirtIO['size']/1000000));
 			break;
 		}
 		$boolCheckOnly = !empty($_REQUEST['checkonly']);
@@ -727,11 +729,11 @@ case 'virtio-win-iso-download':
 		$strCleanCmd = '(chmod 777 '.escapeshellarg($_REQUEST['download_path']).' '.escapeshellarg($strTargetFile).'; chown nobody:users '.escapeshellarg($_REQUEST['download_path']).' '.escapeshellarg($strTargetFile).'; rm -f '.escapeshellarg($strMD5File).' '.escapeshellarg($strMD5StatusFile).')';
 		//$strCleanPgrep = '-f "chmod.*chown.*rm.*'.$strMD5StatusFile.'"';
 		$strAllCmd = "#!/bin/bash\n\n";
-		$strAllCmd .= $strDownloadCmd.' >>'.escapeshellarg($strLogFile)." 2>$monitor && sleep 1 && ";
+		$strAllCmd .= $strDownloadCmd.' >>'.escapeshellarg($strLogFile)." 2>".escapeshellarg($monitor)." && sleep 1 && "; #PHPS - Changed
 		$strAllCmd .= 'echo "'.$arrDownloadVirtIO['md5'].'  '.$strTargetFile.'" >'.escapeshellarg($strMD5File).' && sleep 3 && ';
 		$strAllCmd .= $strVerifyCmd.' >'.escapeshellarg($strMD5StatusFile).' 2>/dev/null && sleep 3 && ';
 		$strAllCmd .= $strCleanCmd.' >>'.escapeshellarg($strLogFile).' 2>&1 && ';
-		$strAllCmd .= 'rm -f '.escapeshellarg($strLogFile).' '.escapeshellarg($strInstallScript).' '.escapeshellarg($monitor);
+		$strAllCmd .= 'rm -f '.escapeshellarg($strLogFile).' '.escapeshellarg($strInstallScript).' '.escapeshellarg($monitor); #PHPS - Changed
 		$arrResponse = [];
 		if (file_exists($strTargetFile)) {
 			if (!file_exists($strLogFile)) {
@@ -747,7 +749,7 @@ case 'virtio-win-iso-download':
 			} else {
 				if (pgrep($strDownloadPgrep, false)) {
 					// Get Download progress and eta
-					[$done,$eta] = my_explode(' ',exec("tail -2 $monitor|awk 'NF==9 {print \$7,\$9;exit}'"));
+					[$done,$eta] = my_explode(' ',exec("tail -2 ".escapeshellarg($monitor)." |awk 'NF==9 {print \$7,\$9;exit}'")); #PHPS - Changed
 					$arrResponse['status'] = _('Downloading').$dots.$done.',&nbsp;&nbsp;'._('ETA').': '.$eta;
 				} elseif (pgrep($strVerifyPgrep, false)) {
 					// Status = running md5 check
@@ -780,7 +782,7 @@ case 'virtio-win-iso-download':
 						// Run all commands
 						file_put_contents($strInstallScript, $strAllCmd);
 						chmod($strInstallScript, 0777);
-						exec($strInstallScript.' >/dev/null 2>&1 &');
+						exec($strInstallScript.' >/dev/null 2>&1 &'); 
 					}
 				}
 			}
@@ -862,7 +864,7 @@ case 'virtio-win-iso-remove':
 	break;
 
 case 'vm-template-remove':
-	$template = $_REQUEST['template'];	
+	$template = $_REQUEST['template'];
 	$templateslocation = "/boot/config/plugins/dynamix.vm.manager/savedtemplates.json";
 	if (is_file($templateslocation)){
 		$ut = json_decode(file_get_contents($templateslocation),true) ;
@@ -873,25 +875,25 @@ case 'vm-template-remove':
 	break;
 
 case 'vm-template-save':
-	$template = $_REQUEST['template'];	
-	$name = $_REQUEST['name'];	
-	$replace = $_REQUEST['replace'];	
+	$template = $_REQUEST['template'];
+	$name = $_REQUEST['name'];
+	$replace = $_REQUEST['replace'];
 
 	if (is_file($name) && $replace == "no"){
-		$arrResponse = ['success' => false, 'error' => _("File exists.")];
+		$arrResponse = ['success' => false, 'error' => _("File exists")];
 	} else {
 		$error = file_put_contents($name,json_encode($template));
-		if ($error !== false)  $arrResponse = ['success' => true]; 
+		if ($error !== false)  $arrResponse = ['success' => true];
 		else {
-			$arrResponse = ['success' => false, 'error' => _("File write failed.")];
+			$arrResponse = ['success' => false, 'error' => _("File write failed")];
 		}
 	}
 	break;
 
 case 'vm-template-import':
-	$template = $_REQUEST['template'];	
-	$name = $_REQUEST['name'];	
-	$replace = $_REQUEST['replace'];	
+	$template = $_REQUEST['template'];
+	$name = $_REQUEST['name'];
+	$replace = $_REQUEST['replace'];
 	$templateslocation = "/boot/config/plugins/dynamix.vm.manager/savedtemplates.json";
 
 	if ($template==="*file") {
@@ -904,18 +906,18 @@ case 'vm-template-import':
 	if (is_file($templateslocation)){
 		$ut = json_decode(file_get_contents($templateslocation),true) ;
 		if (isset($ut[$template_name]) && $replace == "no"){
-			$arrResponse = ['success' => false, 'error' => _("Template exists.")];
+			$arrResponse = ['success' => false, 'error' => _("Template exists")];
 		} else {
 			$ut[$template_name] = $template;
 			$error = file_put_contents($templateslocation,json_encode($ut,JSON_PRETTY_PRINT));;
-			if ($error !== false)  $arrResponse = ['success' => true]; 
+			if ($error !== false)  $arrResponse = ['success' => true];
 			else {
-				$arrResponse = ['success' => false, 'error' => _("Tempalte file write failed.")];
+				$arrResponse = ['success' => false, 'error' => _("Template file write failed")];
 			}
 		}
 	}
 	break;
-	
+
 default:
 	$arrResponse = ['error' => _('Unknown action')." '$action'"];
 	break;

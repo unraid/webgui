@@ -12,24 +12,11 @@ Code='e956'
 ###################################################
 
 $currentUnraidPage = str_replace('Browse','Main',basename(explode('?',$_SERVER['REQUEST_URI'])[0]));
-$guiSearchBoxSpan  = "<span id='guiSearchBoxSpan'><input type='text' id='guiSearchBox' autocomplete='new-password'></input></span><span class='guiSearchBoxResults'></span>";
+$guiSearchBoxSpan  = "<span id='guiSearchBoxSpan'><input type='text' id='guiSearchBox' autocomplete='new-password'></input></span>";
 ?>
 <script>
 var languageVisible;
 var guiSearchSuggestions;
-
-var browserName = (function(agent){
-	switch (true) {
-		case agent.indexOf('edge') >= 0: return 'Edge'; // Edge
-		case agent.indexOf('edg/') >= 0: return 'Edge'; // Edge Chromium Based
-		case agent.indexOf('opr') >= 0 && !!window.opr: return 'Opera';
-		case agent.indexOf('chrome') >= 0 && !!window.chrome: return 'Chrome';
-		case agent.indexOf('trident') >= 0: return 'MS IE';
-		case agent.indexOf('firefox') >= 0: return 'Mozilla Firefox';
-		case agent.indexOf('safari') >= 0: return 'Safari';
-		default: return 'other';
-	}
-})(window.navigator.userAgent.toLowerCase());
 
 $(function(){
 <?if ($themeHelper->isSidebarTheme()):?>
@@ -50,16 +37,15 @@ function guiSearchBoxSpan() {
 function setupGUIsearch() {
 	window.addEventListener('keydown',function(e){
 		if (!e.shiftKey && !e.altKey && (navigator.appVersion.indexOf('Mac')==-1 ? e.ctrlKey : e.metaKey) && e.keyCode==75) {
+			// If a modal is visible, don't open the search box
+			if ($('[role="modal"]').is(':visible')) return;
+
 			e.preventDefault();
 		<?if ($themeHelper->isTopNavTheme()):?>
 			if (guiSearchBoxSpan()) closeSearchBox(e); else gui_search();
 		<?endif;?>
 		}
 	});
-	if (browserName != 'Chrome' && browserName != 'Edge') {
-		var hashTag = (window.location.hash||'').substr(1).replace('%20',' ').replace('%2d','-');
-		if (hashTag.length) $('body').mark(hashTag,{'accuracy': {'value': 'exactly','limiters': ['.',':','?']},'separateWordSearch': false});
-	}
 }
 
 function gui_search() {
@@ -96,20 +82,25 @@ function closeSearchBox(e) {
 }
 
 function guiSearch() {
+	// If a modal is visible, don't navigate away from the page
+	if ($('[role="modal"]').is(':visible')) return;
+
 	var searchInfo = $('#guiSearchBox').val().split('**');
-	var separator  = (browserName == 'Chrome' || browserName == 'Edge') ? '#:~:text=' : '#';
+	var separator  = ('fragmentDirective' in document) ? '#:~:text=' : '#';
 	var scrollText = (typeof searchInfo[1] != 'undefined') ? separator+searchInfo[1].replace(' ','%20').replace('-','%2d') : '';
 	var newPage    = "<?=$currentUnraidPage?>/Settings/Tools".replace(searchInfo[0]+'/','');
 
 	closeSearchBox(event);
 	if (newPage == 'Dashboard/Settings/Tools') newPage = 'Settings';
-	location.replace('/'+newPage+'/'+searchInfo[0]+scrollText);
-}
-
-if (browserName != 'Chrome' && browserName != 'Edge') {
-  var script  = document.createElement('script');
-  script.type = 'text/javascript';
-  script.src  = '<?autov('/plugins/dynamix.gui.search/javascript/jquery.mark.js')?>';
-  document.getElementsByTagName('head')[0].appendChild(script);
+  
+	/**
+	 * Prevents Community Apps from crashing
+	 * Hook script provided by CA - https://github.com/unraid/community.applications/blob/master/source/community.applications/usr/local/emhttp/plugins/community.applications/javascript/helpers.js
+	 */
+ 	if ( typeof guiSearchOnUnload === "function" ) {
+		guiSearchOnUnload();
+	}
+  
+	location.assign('/'+newPage+'/'+searchInfo[0]+scrollText);
 }
 </script>

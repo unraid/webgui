@@ -228,22 +228,20 @@ function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, f
         ajaxVMDispatch({action:"domain-undefine",uuid:uuid}, "loadlist");
       });
     }});
-    if (template != 'OpenELEC') {
-      opts.push({text:_("Remove VM")+" & "+_("Disks"), icon:"fa-trash", action:function(e) {
-        e.preventDefault();
-        swal({
-          title:_("Are you sure?"),
-          text:_("Completely REMOVE")+" "+name+" "+_("disk image and definition"),
-          type:"warning",
-          showCancelButton:true,
-          confirmButtonText:_('Proceed'),
-          cancelButtonText:_('Cancel')
-        },function(){
-          $('#vm-'+uuid).find('i').removeClass('fa-play fa-square fa-pause').addClass('fa-refresh fa-spin');
-          ajaxVMDispatch({action:"domain-delete",uuid:uuid}, "loadlist");
-        });
-      }});
-    }
+    opts.push({text:_("Remove VM")+" & "+_("Disks"), icon:"fa-trash", action:function(e) {
+      e.preventDefault();
+      swal({
+        title:_("Are you sure?"),
+        text:_("Completely REMOVE")+" "+name+" "+_("disk image and definition"),
+        type:"warning",
+        showCancelButton:true,
+        confirmButtonText:_('Proceed'),
+        cancelButtonText:_('Cancel')
+      },function(){
+        $('#vm-'+uuid).find('i').removeClass('fa-play fa-square fa-pause').addClass('fa-refresh fa-spin');
+        ajaxVMDispatch({action:"domain-delete",uuid:uuid}, "loadlist");
+      });
+    }});
   }
   if (usage) { context.destroy('#vmusage-'+uuid); context.attach('#vmusage-'+uuid, opts); } else { context.destroy('#vm-'+uuid); context.attach('#vm-'+uuid, opts); }
 }

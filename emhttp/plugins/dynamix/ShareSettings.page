@@ -5,8 +5,8 @@ Icon="icon-share"
 Tag="share-alt"
 ---
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -28,6 +28,7 @@ $fileMax = (int) file_get_contents('/proc/sys/fs/file-max');
 $(function() {
   $('#s1').dropdownchecklist({emptyText:"_(All)_", width:<?=$width[0]?>, explicitClose:"..._(close)_"});
   $('#s2').dropdownchecklist({emptyText:"_(None)_", width:<?=$width[0]?>, explicitClose:"..._(close)_"});
+  $('#s3').dropdownchecklist({emptyText:"_(None)_", width:<?=$width[0]?>, explicitClose:"..._(close)_"});
   presetShare(document.share_settings);
 });
 
@@ -47,6 +48,7 @@ async function prepareShare(form) {
   item = form.shareUserInclude.options[0];
   item.value = include;
   item.selected = true;
+
   var exclude = '';
   for (var i=0,item; item=form.shareUserExclude.options[i]; i++) {
     if (item.selected) {
@@ -57,6 +59,18 @@ async function prepareShare(form) {
   }
   item = form.shareUserExclude.options[0];
   item.value = exclude;
+  item.selected = true;
+
+  var emptying = '';
+  for (var i=0,item; item=form.shareUserEmptying.options[i]; i++) {
+    if (item.selected) {
+      if (emptying.length) emptying += ',';
+      emptying += item.value;
+      item.selected = false;
+    }
+  }
+  item = form.shareUserEmptying.options[0];
+  item.value = emptying;
   item.selected = true;
 
   /* Validate file count input against fileMax */
@@ -87,8 +101,10 @@ function presetShare(form,shares) {
   var onOff = disabled ? 'disable':'enable';
   form.shareUserInclude.disabled = disabled;
   form.shareUserExclude.disabled = disabled;
+  form.shareUserEmptying.disabled = disabled;
   $('#s1').dropdownchecklist(onOff);
   $('#s2').dropdownchecklist(onOff);
+  $('#s3').dropdownchecklist(onOff);
 }
 </script>
 <form markdown="1" name="share_settings" method="POST" action="/update.htm" target="progressFrame" onsubmit="return prepareShare(this)">
@@ -128,6 +144,15 @@ _(Excluded disk(s))_:
 
 :shares_excluded_disks_help:
 
+_(Emptying disk(s))_:
+: <select id="s3" name="shareUserEmptying" multiple="multiple" style="display:none">
+  <?foreach ($disks as $disk):?>
+  <?=mk_option_luks(_var($disk,'name'),_var($var,'shareUserEmptying'),strstr(_var($disk,'fsType'),':',true))?>
+  <?endforeach;?>
+  </select>
+
+:shares_emptying_disks_help:
+
 _(Permit exclusive shares)_:
 : <select name="shareUserExclusive" <?=$disabled?>>
   <?=mk_option($var['shareUserExclusive'], "no", _('No'))?>
@@ -154,10 +179,15 @@ _(Tunable (enable Direct IO))_:
 :shares_tunable_direct_io_help:
 
 _(Number of fuse File Descriptors)_:
-: <input type="text" id="file_count" name="shareNOFILE" maxlength="10" value="<?=htmlspecialchars($var['shareNOFILE']);?>" class="narrow" placeholder="40960" <?=$disabled?>><span id="file_max_display">Maximum: <?=$fileMax;?></span>
+: <input type="text" id="file_count" name="shareNOFILE" maxlength="10" value="<?=htmlspecialchars($var['shareNOFILE']);?>" placeholder="40960" <?=$disabled?>>
+  <span id="file_max_display" class="input-instructions">Maximum: <?=$fileMax;?></span>
 
 :shares_fuse_file_descriptors_io_help:
 
 &nbsp;
-: <input type="submit" name="changeShare" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()"><?if ($disabled):?>*_(Array must be **Stopped** to change)_*<?endif;?>
+: <span class="inline-block">
+    <input type="submit" name="changeShare" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
+<?if ($disabled):?>*_(Array must be **Stopped** to change)_*<?endif;?>
 </form>

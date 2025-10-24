@@ -22,7 +22,7 @@ $conf = file_exists($ini) ? parse_ini_file($ini) : [];
 if (!file_exists($log)) touch($log);
 ?>
 
-<div markdown="1" style="width:43%;margin-bottom:40px;padding:5px 15px;border:solid 1px">
+<div markdown="1" class="php-settings-description">
 :php_settings_plug:
 This utility is used for development purposes only and allows Plugin Authors to verify their PHP code by enabling different levels of PHP error reporting.
 
@@ -42,6 +42,17 @@ under normal running conditions.
 <input type="hidden" name="display_startup_errors" value="0">
 <input type="hidden" name="display_errors" value="<?=_var($conf,'display_errors',0)?>">
 <input type="hidden" name="log_errors" value="1">
+
+&nbsp;
+: <div class="inline-block">
+    <input type="button" value="_(PHP Info)_" onclick="PHPinfo()">
+    <input type="button" id="clearlog" value="_(Clear Log)_" onclick="clearLog()" <?= filesize($log) > 0 ? '' : ' disabled'?>>
+    <input type="button" id="viewlog" value="_(View Log)_" onclick="viewLog()" disabled>
+    <span class="inline-block">
+      _(LOG size)_:&nbsp;<span id="logsize"></span>
+    </span>
+  </div>
+
 _(Error reporting level)_:
 : <select name="error_reporting" onchange="toggleScreen(this.selectedIndex)">
   <?=mk_option(_var($conf,'error_reporting'), strval(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED), "_(Default)_");?>
@@ -53,10 +64,16 @@ _(Error reporting level)_:
   </select>
 
 &nbsp;
-: <input type="checkbox" id="screenlog" onclick="screenLog()" <?=_var($conf,'display_errors',0)?'checked':''?> disabled><span id="screentext" class="dim">_(Show errors on screen)_</span>
+: <label for="screenlog">
+    <input type="checkbox" id="screenlog" onclick="screenLog()" <?=_var($conf,'display_errors',0)?'checked':''?> disabled>
+    <span id="screentext" class="dim">_(Show errors on screen)_</span>
+  </label>
 
-<input type="button" value="_(PHP Info)_" onclick="PHPinfo()"><input type="button" id="clearlog" value="_(Clear Log)_" onclick="clearLog()"<?=filesize($log)>0?'':' disabled'?>><input type="button" id="viewlog" value="_(View Log)_" onclick="viewLog()" disabled>_(LOG size)_:&nbsp;<span id="logsize"></span>
-: <input type="submit" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+&nbsp;
+: <span class="inline-block">
+    <input type="submit" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
 </form>
 
 <div id="dialogWindow"></div>

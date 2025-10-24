@@ -116,14 +116,14 @@ case 'list':
       if (isset($wifi[$network]['GROUP'])) {
         if ($network == $alive || $wifi[$network]['GROUP'] == 'active') {
           $echo['active'][] = "<dl><dt>$state:</dt>";
-          $echo['active'][] = "<dd><span class=\"wifi\">$network</span><i class=\"fa fa-fw fa-wifi hand $color-text\" onclick=\"manage_wifi(encodeURIComponent('$network'),1)\" title=\"$title\"></i><input type=\"button\" class=\"form\" value=\""._('Info')."\" onclick=\"networkInfo('$port')\"></dd>";
+          $echo['active'][] = "<dd><span class=\"inline-flex flex-row items-center gap-2\"><span>$network</span><i class=\"fa fa-fw fa-wifi hand $color-text\" onclick=\"manage_wifi(encodeURIComponent('$network'),1)\" title=\"$title\"></i><input type=\"button\" class=\"form\" value=\""._('Info')."\" onclick=\"networkInfo('$port')\"></span></dd>";
         } else {
           $echo['saved'][] = empty($echo['saved']) ? "<dl><dt>"._('My networks').":</dt>" : "<dt>&nbsp;</dt>";
-          $echo['saved'][] = "<dd><span class=\"wifi\">$network</span><i class=\"fa fa-wifi hand blue-text\" onclick=\"manage_wifi(encodeURIComponent('$network'),1)\" title=\"$title\"></i></dd>";
+          $echo['saved'][] = "<dd><span class=\"inline-flex flex-row items-center gap-2\"><span>$network</span><i class=\"fa fa-wifi hand blue-text\" onclick=\"manage_wifi(encodeURIComponent('$network'),1)\" title=\"$title\"></i></span></dd>";
         }
       } else {
         $echo['other'][] = empty($echo['other']) ? "<dl><dt>"._('Other networks').":</dt>" : "<dt>&nbsp;</dt>";
-        $echo['other'][] = "<dd><span class=\"wifi\">$network</span><i class=\"fa fa-wifi hand grey-text\" onclick=\"manage_wifi(encodeURIComponent('$network'),0)\" title=\"$title\"></i></dd>";
+        $echo['other'][] = "<dd><span class=\"inline-flex flex-row items-center gap-2\"><span>$network</span><i class=\"fa fa-wifi hand grey-text\" onclick=\"manage_wifi(encodeURIComponent('$network'),0)\" title=\"$title\"></i></span></dd>";
       }
     }
     if (empty($echo['active'])) $echo['active'][] = "<dl><dt>"._('Connected').":</dt><dd>"._('None')."</dd>";
@@ -199,35 +199,35 @@ case 'join':
     echo mk_option($safe, 'IEEE 802.1X/SHA-256', _('WPA3 Enterprise'));
     echo "</select></td></tr>";
   }
-  if ($ieee1 || $manual || $safe) echo "<tr id=\"username\" class=\"$hide0\"><td>"._('Username').":</td><td><input type=\"text\" name=\"USERNAME\" class=\"narrow\" maxlength=\"63\" value=\"$user\"></td></tr>";
-  if ($attr3 || $manual || $safe) echo "<tr id=\"password\" class=\"$hide1\"><td>"._('Password').":</td><td><input type=\"password\" name=\"PASSWORD\" class=\"narrow\" maxlength=\"63\" value=\"$passwd\"><i id=\"showPass\" class=\"fa fa-eye\" onclick=\"showPassword()\"></i></td></tr>";
+  if ($ieee1 || $manual || $safe) echo "<tr id=\"username\" class=\"$hide0\"><td>"._('Username').":</td><td><input type=\"text\" name=\"USERNAME\" class=\"narrow swal-input-show\" maxlength=\"63\" value=\"$user\"></td></tr>";
+  if ($attr3 || $manual || $safe) echo "<tr id=\"password\" class=\"$hide1\"><td>"._('Password').":</td><td><input type=\"password\" name=\"PASSWORD\" class=\"narrow swal-input-show\" maxlength=\"63\" value=\"$passwd\"><i id=\"showPass\" class=\"fa fa-eye\" onclick=\"showPassword()\"></i></td></tr>";
   echo "<tr><td colspan=\"2\">&nbsp;</td></tr>";
   echo "<tr><td>"._('IPv4 address assignment').":</td><td><select name=\"DHCP4\" onclick=\"showDHCP(this.value,4)\">";
   echo mk_option($dhcp4, 'yes', _('Automatic'));
   echo mk_option($dhcp4, 'no', _('Static'));
   echo "</select></td></tr>";
-  echo "<tr class=\"static4 $hide2\"><td>"._('IPv4 address').":</td><td><input type=\"text\" name=\"IP4\" class=\"narrow\" maxlength=\"15\" value=\"$ip4\">/<select name=\"MASK4\" class=\"slim\">";
+  echo "<tr class=\"static4 $hide2\"><td>"._('IPv4 address').":</td><td><input type=\"text\" name=\"IP4\" class=\"narrow swal-input-show\" maxlength=\"15\" value=\"$ip4\">/<select name=\"MASK4\" class=\"slim\">";
   foreach ($masks as $mask => $prefix) echo mk_option($mask4, $mask, $prefix);
   echo "</select></td></tr>";
-  echo "<tr class=\"static4 $hide2\"><td>"._('IPv4 default gateway').":</td><td><input type=\"text\" name=\"GATEWAY4\" class=\"narrow\" maxlength=\"15\" value=\"$gw4\"></td></tr>";
+  echo "<tr class=\"static4 $hide2\"><td>"._('IPv4 default gateway').":</td><td><input type=\"text\" name=\"GATEWAY4\" class=\"narrow swal-input-show\" maxlength=\"15\" value=\"$gw4\"></td></tr>";
   echo "<tr class=\"dns4\"><td>"._('IPv4 DNS assignment').":</td><td><select name=\"DNS4\" onclick=\"showDNS(this.value,4)\">";
   echo mk_option($dns4, "no", _("Automatic"));
   echo mk_option($dns4, "yes", _("Static"));
   echo "</select></td></tr>";
-  echo "<tr class=\"server4 $hide3\"><td>"._('DNSv4 server').":</td><td><input type=\"text\" name=\"SERVER4\" class=\"narrow\" value=\"$server4\"></td></tr>";
+  echo "<tr class=\"server4 $hide3\"><td>"._('DNSv4 server').":</td><td><input type=\"text\" name=\"SERVER4\" class=\"narrow swal-input-show\" value=\"$server4\"></td></tr>";
   echo "<tr><td colspan=\"2\">&nbsp;</td></tr>";
   echo "<tr><td>"._('IPv6 address assignment').":</td><td><select name=\"DHCP6\" onclick=\"showDHCP(this.value,6)\">";
   echo mk_option($dhcp6, '', _('None'));
   echo mk_option($dhcp6, 'yes', _('Automatic'));
   echo mk_option($dhcp6, 'no', _('Static'));
   echo "</select></td></tr>";
-  echo "<tr class=\"static6 $hide4\"><td>"._('IPv6 address').":</td><td><input type=\"text\" name=\"IP6\" class=\"narrow\" maxlength=\"39\" value=\"$ip6\">/<input type=\"number\" min=\"1\" max=\"128\" maxlength=\"3\" name=\"MASK6\" class=\"slim\" value=\"$mask6\"></td></tr>";
-  echo "<tr class=\"static6 $hide4\"><td>"._('IPv6 default gateway').":</td><td><input type=\"text\" name=\"GATEWAY6\" class=\"narrow\" maxlength=\"39\" value=\"$gw6\"></td></tr>";
+  echo "<tr class=\"static6 $hide4\"><td>"._('IPv6 address').":</td><td><input type=\"text\" name=\"IP6\" class=\"narrow swal-input-show\" maxlength=\"39\" value=\"$ip6\">/<input type=\"number\" min=\"1\" max=\"128\" maxlength=\"3\" name=\"MASK6\" class=\"slim\" value=\"$mask6\"></td></tr>";
+  echo "<tr class=\"static6 $hide4\"><td>"._('IPv6 default gateway').":</td><td><input type=\"text\" name=\"GATEWAY6\" class=\"narrow swal-input-show\" maxlength=\"39\" value=\"$gw6\"></td></tr>";
   echo "<tr class=\"dns6 $hide5\"><td>"._('IPv6 DNS assignment').":</td><td><select name=\"DNS6\" onclick=\"showDNS(this.value,6)\">";
   echo mk_option($dns6, "no", _("Automatic"));
   echo mk_option($dns6, "yes", _("Static"));
   echo "</select></td></tr>";
-  echo "<tr class=\"server6 $hide6\"><td>"._('DNSv6 server').":</td><td><input type=\"text\" name=\"SERVER6\" class=\"narrow\" value=\"$server6\"></td></tr>";
+  echo "<tr class=\"server6 $hide6\"><td>"._('DNSv6 server').":</td><td><input type=\"text\" name=\"SERVER6\" class=\"narrow swal-input-show\" value=\"$server6\"></td></tr>";
   echo "<tr><td colspan=\"2\">&nbsp;</td></tr>";
   echo "</table>";
   echo "</form>";

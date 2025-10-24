@@ -51,7 +51,11 @@ function upload(lang) {
   }
 }
 function presetBanner(form) {
-  if (form.banner.selectedIndex == 0) $('.js-bannerSettings').hide(); else $('.js-bannerSettings').show();
+  if (form.banner && form.banner.selectedIndex == 0) {
+    $('.js-bannerSettings').hide();
+  } else {
+    $('.js-bannerSettings').show()
+  }
 }
 function presetRefresh(form) {
   for (var i=0,item; item=form.refresh.options[i]; i++) item.value *= -1;
@@ -136,7 +140,7 @@ _(Display width)_:
 :display_width_help:
 
 _(Language)_:
-: <select name="locale" class="fixed" onchange="updateDirection(this.value)">
+: <select name="locale" onchange="updateDirection(this.value)">
 <?echo mk_option($display['locale'], "","English");
   foreach (glob("$plugins/lang-*.xml",GLOB_NOSORT) as $xml_file) {
     $lang = language('Language', $xml_file);
@@ -148,27 +152,27 @@ _(Language)_:
 
 _(Font size)_:
 : <select name="font" id='font'>
-  <?=mk_option($display['font'], "50", _('Very small'))?>
   <?=mk_option($display['font'], "56.25", _('Small'))?>
   <?=mk_option($display['font'], "", _('Normal'))?>
   <?=mk_option($display['font'], "68.75", _('Large'))?>
-  <?=mk_option($display['font'], "75", _('Very large'))?>
-  <?=mk_option($display['font'], "80", _('Huge'))?>
   </select>
 
 :display_font_size_help:
 
 _(Terminal font size)_:
 : <select name="tty" id="tty">
-  <?=mk_option($display['tty'], "11", _('Very small'))?>
   <?=mk_option($display['tty'], "13", _('Small'))?>
   <?=mk_option($display['tty'], "15", _('Normal'))?>
   <?=mk_option($display['tty'], "17", _('Large'))?>
-  <?=mk_option($display['tty'], "19", _('Very large'))?>
-  <?=mk_option($display['tty'], "21", _('Huge'))?>
   </select>
 
 :display_tty_size_help:
+
+_(Show Terminal Button in header)_:
+: <select name="terminalButton">
+  <?=mk_option($display['terminalButton'],"no",_("No"))?>
+  <?=mk_option($display['terminalButton'],"yes",_("Yes"))?>
+  </select>
 
 _(Number format)_:
 : <select name="number">
@@ -268,15 +272,15 @@ _(Used / Free columns)_:
   </select>
 
 _(Header custom text color)_:
-: <input type="text" class="narrow" name="header" value="<?=$display['header']?>" maxlength="6" pattern="([0-9a-fA-F]{3}){1,2}" title="_(HTML color code of 3 or 6 hexadecimal digits)_">
+: <input type="text" name="header" value="<?=$display['header']?>" maxlength="6" pattern="([0-9a-fA-F]{3}){1,2}" title="_(HTML color code of 3 or 6 hexadecimal digits)_">
 
 :display_custom_text_color_help:
 
 _(Header custom secondary text color)_:
-: <input type="text" class="narrow" name="headermetacolor" value="<?=$display['headermetacolor']?>" maxlength="6" pattern="([0-9a-fA-F]{3}){1,2}" title="_(HTML color code of 3 or 6 hexadecimal digits)_">
+: <input type="text" name="headermetacolor" value="<?=$display['headermetacolor']?>" maxlength="6" pattern="([0-9a-fA-F]{3}){1,2}" title="_(HTML color code of 3 or 6 hexadecimal digits)_">
 
 _(Header custom background color)_:
-: <input type="text" class="narrow" name="background" value="<?=$display['background']?>" maxlength="6" pattern="([0-9a-fA-F]{3}){1,2}" title="_(HTML color code of 3 or 6 hexadecimal digits)_">
+: <input type="text" name="background" value="<?=$display['background']?>" maxlength="6" pattern="([0-9a-fA-F]{3}){1,2}" title="_(HTML color code of 3 or 6 hexadecimal digits)_">
 
 :display_custom_background_color_help:
 
@@ -294,14 +298,15 @@ _(Show banner)_:
 
 <div class="js-bannerSettings" markdown="1" style="display:none">
 _(Custom banner)_:
-<input type="hidden" name="#custom" value="">
-: <span id="dropbox">
+: <input type="hidden" name="#custom" value="">
+  <span id="dropbox">
 <?if (file_exists($banner)):?>
   <img src="<?=autov($banner)?>" width="330" height="30" onclick="$('#drop').click()" style="cursor:pointer" title="_(Click to select PNG file)_"><?=$icon?>
 <?else:?>
   <?=$void?>
 <?endif;?>
-  </span><em>_(Drag-n-drop a PNG file or click the image at the left)_.</em><input type="file" id="drop" accept="image/*" style="display:none">
+  </span>
+  <em>_(Drag-n-drop a PNG file or click the image at the left)_.</em><input type="file" id="drop" accept="image/*" style="display:none">
 
 :display_custom_banner_help:
 </div>
@@ -322,12 +327,9 @@ _(Favorites enabled)_:
 
 :display_favorites_enabled_help:
 
-_(Allow realtime updates on inactive browsers)_:
-: <select name='liveUpdate'>
-  <?=mk_option($display['liveUpdate'], "no", _('No'))?>
-  <?=mk_option($display['liveUpdate'], "yes", _('Yes'))?>
-  </select>
-
 <input type="submit" name="#default" value="_(Default)_" onclick="filename='reset'">
-: <input type="submit" name="#apply" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+: <span class="inline-block">
+    <input type="submit" name="#apply" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
 </form>

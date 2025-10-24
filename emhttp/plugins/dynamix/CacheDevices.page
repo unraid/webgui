@@ -129,6 +129,13 @@ $('#tab2').bind({click:function() {$('i.toggle').show('slow');}});
 <?endif;?>
 </script>
 
+<?
+// Check for deprecated filesystems using shared function
+$deprecatedPools = check_deprecated_filesystems_array($disks, 'cache_filter');
+?>
+
+
+<div class="TableContainer">
 <table class="unraid disk_status">
 <?$i = 0?>
 <?foreach ($pools as $pool):?>
@@ -139,9 +146,26 @@ $power = _var($display,'power') && in_array('nvme',array_column($cache,'transpor
 $root  = explode($_tilde_,$pool)[0];
 ?>
 <?if ($i==0):?>
-<thead><tr><td>_(Device)_</td><td>_(Identification)_</td><td><?=$power?>_(Temp)_</td><td>_(Reads)_</td><td>_(Writes)_</td><td>_(Errors)_</td><td>_(FS)_</td><td>_(Size)_</td><td>_(Used)_</td><td>_(Free)_</td></tr></thead>
+<thead>
+  <tr>
+    <td>_(Device)_</td>
+    <td>_(Identification)_</td>
+    <td><?=$power?>_(Temp)_</td>
+    <td>_(Reads)_</td>
+    <td>_(Writes)_</td>
+    <td>_(Errors)_</td>
+    <td>_(FS)_</td>
+    <td>_(Size)_</td>
+    <td>_(Used)_</td>
+    <td>_(Free)_</td>
+  </tr>
+</thead>
 <?else:?>
-<thead><tr><td class="divider" colspan="10"></td></td></tr></thead>
+<thead>
+  <tr>
+    <td class="divider" colspan="10"></td>
+  </tr>
+</thead>
 <?endif;?>
 <?endif;?>
 <tbody id="pool_device<?=$i++?>">
@@ -151,6 +175,9 @@ $root  = explode($_tilde_,$pool)[0];
 <?endif;?>
 <?endforeach;?>
 </table>
+</div>
+
+<?=display_deprecated_filesystem_warning($deprecatedPools, 'pool')?>
 
 :cache_devices_help:
 
@@ -167,6 +194,7 @@ $root  = explode($_tilde_,$pool)[0];
 <div id="templatePopupPool" class="template">
 <form markdown="1" method="POST" action="/update.htm" target="progressFrame" onsubmit="return validate(this.poolName.value)">
 <input type="hidden" name="changeSlots" value="apply">
+
 _(Name)_:
 : <input type="text" name="poolName" maxlength="40" value="<?=count($pools)==0?'cache':''?>">
 
@@ -184,6 +212,7 @@ _(Slots)_:
 <form markdown="1" method="POST" action="/update.htm" target="progressFrame">
 <input type="hidden" name="changeSlots" value="apply">
 <input type="hidden" name="poolName" value="">
+
 _(Name)_:
 : <select name="subpool">
   <?=mk_option("","special",_("special - Metadata storage"))?>

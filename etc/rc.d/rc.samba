@@ -39,7 +39,7 @@ samba_running(){
 
 samba_waitfor_shutdown(){
   local i
-  for i in {1..5}; do
+  for i in {1..10}; do
     if ! samba_running; then break; fi
     sleep 1
   done

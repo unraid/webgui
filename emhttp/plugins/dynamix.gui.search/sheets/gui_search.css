@@ -4,8 +4,10 @@
 }
 
 #guiSearchBoxSpan {
-    display: inline-block;
-    padding: 0;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 1rem;
     text-align: left;
     height: auto;
     line-height: normal;
@@ -13,29 +15,39 @@
 }
 
 #guiSearchBox {
-    width: 50rem;
+    width: 40rem;
     border: none;
     border-radius: 20px;
     color: var(--gui-search-search-box-text-color);
     background-color: var(--gui-search-search-box-background-color);
+    padding-left: 2.4rem;
 }
 
 .Theme--black,
 .Theme--white {
     #guiSearchBoxSpan {
-        position: relative;
-        margin: 4px 2px 2px 2px;
+        width: 100%;
+
+        .awesomplete,
+        #guiSearchBox {
+            width: 100%;
+        }
     }
+
+    @media (min-width: 768px) {
+        #guiSearchBoxSpan {
+            min-width: 40rem;
+        }
+    }
+
     #guiSearchBoxSpan:after {
         font-family: unraid;
         content: "\e956";
         position: absolute;
-        top: 0.8rem;
+        top: 50%;
         left: 1.5rem;
+        transform: translateY(-50%);
         font-size: 1.3rem;
-    }
-    #guiSearchBox {
-        padding-left: 4rem;
     }
 }
 
@@ -44,7 +56,8 @@
     --gui-search-search-box-background-color: var(--yellow-200);
 
     #guiSearchBoxSpan {
-        margin: 0 0 0 20px;
+        margin: 0;
+        padding: 0;
     }
     #guiSearchBox {
         position: relative;

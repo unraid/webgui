@@ -14,6 +14,10 @@ if (isset($_COOKIE[session_name()])) {
   session_write_close();
 }
 
+// Include JS caching functions
+require_once '/usr/local/emhttp/webGui/include/JSCache.php';
+
+// Base whitelist of files
 $arrWhitelist = [
   '/webGui/styles/clear-sans-bold-italic.eot',
   '/webGui/styles/clear-sans-bold-italic.woff',
@@ -39,9 +43,23 @@ $arrWhitelist = [
   '/webGui/images/case-model.png',
   '/webGui/images/green-on.png',
   '/webGui/images/red-on.png',
-  '/webGui/images/yellow-on.png'
+  '/webGui/images/yellow-on.png',
+  '/webGui/images/UN-logotype-gradient.svg',
+  '/apple-touch-icon.png',
+  '/favicon-96x96.png',
+  '/favicon.ico',
+  '/favicon.svg',
+  '/web-app-manifest-192x192.png',
+  '/web-app-manifest-512x512.png',
+  '/manifest.json'
 ];
-if (in_array(preg_replace(['/\?v=\d+$/','/\?\d+$/'],'',$_SERVER['REQUEST_URI']),$arrWhitelist)) {
+
+// Whitelist ALL files from the unraid-components directory
+$webComponentsDirectory = '/plugins/dynamix.my.servers/unraid-components/';
+$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '/';
+
+// Check if the request is for any file in the unraid-components directory
+if (str_starts_with($requestUri, $webComponentsDirectory) || in_array($requestUri, $arrWhitelist)) {
   // authorized
   http_response_code(200);
 } else {

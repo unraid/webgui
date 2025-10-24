@@ -123,15 +123,6 @@ if (empty($vms)) {
 <script src="<?autov('/plugins/dynamix.vm.manager/javascript/vmmanager.js')?>"></script>
 <script src="<?autov("/webGui/javascript/jquery.filetree.js")?>"></script>
 <script>
-<?if (_var($display,'resize')):?>
-function resize() {
-  $('#kvm_list').height(Math.max(window.innerHeight-340,330));
-  $('#kvm_table thead,#kvm_table tbody').removeClass('fixed');
-  $('#kvm_table thead tr th').each(function(){$(this).width($(this).width());});
-  $('#kvm_table tbody tr td').each(function(){$(this).width($(this).width());});
-  $('#kvm_table thead,#kvm_table tbody').not('.child').addClass('fixed');
-}
-<?endif;?>
 function resetSorting() {
   if ($.cookie('lockbutton')==null) return;
   $('input[type=button]').prop('disabled',true);
@@ -158,8 +149,8 @@ function getisoimageboth(uuid,dev,bus,file,dev2,bus2,file2){
   });
   box.dialog({
     title: "_(Select ISOs for CDROMs)_",
-    height: 530,
-    width: 900,
+    height: 'auto',
+    width: 'auto',
     resizable: false,
     modal: true,
     buttons: {
@@ -188,8 +179,8 @@ function getisoimage(uuid,dev,bus,file){
   });
   box.dialog({
     title: "_(Select ISO)_",
-    height: 530,
-    width: 900,
+    height: 'auto',
+    width: 'auto',
     resizable: false,
     modal: true,
     buttons: {
@@ -234,7 +225,8 @@ function VMClone(uuid, name){
         var edit = box.find('#Edit').prop('checked') ? 'yes' : 'no';
         var overwrite = box.find('#Overwrite').prop('checked') ? 'yes' : 'no';
         var free = box.find('#Free').prop('checked') ? 'yes' : 'no';
-        scripturl =  "VMClone.php " + encodeURIComponent("/usr/local/emhttp/plugins/dynamix.vm.manager/include/VMClone.php&" + $.param({action:"clone", name:name, clone:clone, overwrite:overwrite, edit:edit, start:start, free:free}));
+        var regenmac = box.find('#Regenmac').prop('checked') ? 'yes' : 'no';
+        scripturl =  "VMClone.php " + encodeURIComponent("/usr/local/emhttp/plugins/dynamix.vm.manager/include/VMClone.php&" + $.param({action:"clone", name:name, clone:clone, overwrite:overwrite, edit:edit, start:start, free:free, regenmac:regenmac}));
         openVMAction((scripturl),"VM Clone", "dynamix.vm.manager", "loadlist");
         box.dialog('close');
       },
@@ -445,10 +437,6 @@ function loadlist() {
     var data = d.split(/\0/);
     $('#kvm_list').html(data[0]);
     $('head').append('<script>'+data[1]+'<\/script>');
-<?if (_var($display,'resize')):?>
-    resize();
-    $(window).bind('resize',function(){resize();});
-<?endif;?>
 <?foreach ($vms as $vm) {
   $res = $lv->get_domain_by_name($vm);
   $uuid = $lv->domain_get_uuid($res);
@@ -473,6 +461,36 @@ function loadlist() {
     $('input[type=button]').prop('disabled',false).show('slow');
     $('.text').click(showInput);
     $('.input').blur(hideInput);
+    <?if (_var($display,'resize')):?>
+      fillAvailableHeight({
+        targetElementSelector: '.js-fill-available-height',
+        elementSelectorsForHeight: [
+          '.js-actions',
+          '#kvm_table thead',
+        ],
+        elementSelectorsForSpacing: [
+          '#kvm_table',
+        ],
+        manualSpacingOffset: 50, // without this, the main content will still be scrollable by like 20px
+      });
+      // Handle table header fixed positioning after resize
+      function tableHeaderResize() {
+        $('#kvm_table thead,#kvm_table tbody').removeClass('fixed');
+        $('#kvm_table thead tr th').each(function(){$(this).width($(this).width());});
+        $('#kvm_table tbody tr td').each(function(){$(this).width($(this).width());});
+        $('#kvm_table thead,#kvm_table tbody').not('.child').addClass('fixed');
+      }
+      tableHeaderResize();
+      $(window).bind('resize',function(){
+        tableHeaderResize();
+      });
+      // Handle table header resizing when tab is clicked
+      <?if (count($pages) > 2):?>
+        $("#tab1").on('click',function(){
+          tableHeaderResize();
+        });
+      <?endif;?>    
+  <?endif;?>
   });
 }
 $(function() {
@@ -486,14 +504,29 @@ $(function() {
 });
 </script>
 
-<table id="kvm_table" class="tablesorter four shift">
-<thead><tr><th class="th1"><a id="resetsort" class="nohand" onclick="resetSorting()" title="Reset sorting"><i class="fa fa-th-list"></i></a>_(Name)_</th><th class="th2">_(Description)_</th><th>_(CPUs)_</th><th>_(Memory)_</th><th>_(vDisks / vCDs)_</th><th>_(Graphics)_</th><th>_(IP Address)_</th><th class="th3">_(Autostart)_</th></tr></thead>
-<tbody id="kvm_list"><tr><td colspan='8'></td></tr></tbody>
-</table>
+<div class="TableContainer">
+    <table id="kvm_table" class="tablesorter four shift">
+        <thead>
+            <tr>
+                <th class="th1"><a id="resetsort" class="nohand" onclick="resetSorting()" title="Reset sorting"><i class="fa fa-th-list"></i></a>_(Name)_</th>
+                <th class="th2">_(Description)_</th>
+                <th>_(CPUs)_</th>
+                <th>_(Memory)_</th>
+                <th>_(vDisks / vCDs)_</th>
+                <th>_(Graphics)_</th>
+                <th>_(IP Address)_</th>
+                <th class="th3">_(Autostart)_</th>
+            </tr>
+        </thead>
+        <tbody id="kvm_list" class="js-fill-available-height"><tr><td colspan='8'></td></tr></tbody>
+    </table>
+</div>
 
-<input type="button" onclick="addVM()" id="btnAddVM" value="_(Add VM)_" style="display:none">
-<input type="button" onclick="startAll()" value="_(Start All)_" style="display:none">
-<input type="button" onclick="stopAll()" value="_(Stop All)_" style="display:none">
+<div class="js-actions">
+  <input type="button" onclick="addVM()" id="btnAddVM" value="_(Add VM)_" style="display:none">
+  <input type="button" onclick="startAll()" value="_(Start All)_" style="display:none">
+  <input type="button" onclick="stopAll()" value="_(Stop All)_" style="display:none">
+</div>
 
 <div id="dialogWindow"></div>
 <div id="iframe-popup"></div>
@@ -559,6 +592,7 @@ _(Snapshot Name)_: <input type="text" id="targetsnap" hidden><label id="targetsn
 <tr><td>_(Overwrite)_:</td><td><input type="checkbox" id="Overwrite" value="" checked></td></tr>
 <tr hidden><td>_(Start Cloned VM)_:</td><td><input type="checkbox" id="Start" value="" ></td></tr>
 <tr hidden><td>_(Edit VM after clone)_:</td><td><input type="checkbox" id="Edit" value="" ></td></tr>
+<tr><td>_(Regenerate MAC addresses)_:</td><td><input type="checkbox" id="Regenmac" value="" checked ></td></tr>
 <tr><td>_(Check free space)_:</td><td><input type="checkbox" id="Free" value="" checked></td></tr>
 </table>
 </div>

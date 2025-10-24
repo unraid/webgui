@@ -1,7 +1,7 @@
 Menu="Disk Share Flash"
 Title="SMB Security Settings"
 Tag="windows"
-Cond="(($var['shareSMBEnabled']!='no') && (isset($name)?array_key_exists($name,$sec):0))"
+Cond="(($var['shareSMBEnabled']!='no') && (isset($name)?array_key_exists($name,$sec)&&($shares[$name]['hasCfg']??false)!='similar':0))"
 ---
 <?PHP
 /* Copyright 2005-2023, Lime Technology
@@ -24,37 +24,52 @@ uksort($users, 'strnatcmp');
 ?>
 :smb_security_help:
 
-<div class="clone1">
-<span class="clone">_(Read settings from)_</span><i class="fa fa-arrow-left fa-fw"></i>
-<span class="wrap"><select name="readsmb" class="clone" onchange="toggleButton('readsmb',false)">
-<option disabled selected>_(select)_...</option>
-<?
-if (isset($disks[$name])) {
-  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name) echo mk_option("", $list['name'], _(my_disk($list['name']),3));
-} else {
-  foreach ($shares as $list) if ($list['name']!=$name) echo mk_option("", $list['name'], compress($list['name']));
-}
-?>
-</select></span><input type="button" id="readsmb" value="_(Read)_" class="clone" onclick="readSMB()" disabled>
+<div markdown="1" class="relative">
+<div markdown="1" class="clone-settings shade">
+_(Read settings from)_ <i class="fa fa-arrow-left fa-fw"></i>
+: <span class="flex flex-row items-center gap-4">
+	<select name="readsmb" onchange="toggleButton('readsmb',false)">
+		<option disabled selected>_(select)_...</option>
+		<?
+		if (isset($disks[$name])) {
+		  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name) echo mk_option("", $list['name'], _(my_disk($list['name']),3));
+		} else {
+		  foreach ($shares as $list) if (strpos($list['name'],"'") === false && $list['name']!=$name) echo mk_option("", $list['name'], compress($list['name']));
+		}
+		?>
+	</select>
+	<span class="buttons-spaced">
+		<input type="button" id="readsmb" value="_(Read)_" class="clone" onclick="readSMB()" disabled>
+	</span>
+</span>
+
+_(Write settings to)_ <i class="fa fa-arrow-right fa-fw"></i>
+: <span class="flex flex-row items-center gap-4">
+	<select id="smb1" name="writesmb" multiple onchange="toggleButton('writesmb',this.id)">
+		<?
+		$rows = [];
+		if (isset($disks[$name])) {
+		  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name) $rows[] = mk_option("", $list['name'], _(my_disk($list['name']),3));
+		} else {
+		  foreach ($shares as $list) if (strpos($list['name'],"'") === false && $list['name']!=$name) $rows[] = mk_option("", $list['name'], compress($list['name']));
+		}
+		if ($rows) echo "<option>("._('All').")</option>";
+		foreach ($rows as $row) echo $row;
+		?>
+	</select>
+	<span class="buttons-spaced">
+		<input type="button" id="writesmb" value="_(Write)_" class="clone" onclick="writeSMB()" disabled>
+	</span>
+</span>
 </div>
-<div class="clone2">
-<span class="clone">_(Write settings to)_</span><i class="fa fa-arrow-right fa-fw"></i>
-<span class="wrap"><select id="smb1" name="writesmb" multiple="multiple" style="display:none" onchange="toggleButton('writesmb',this.id)">
-<?
-$rows = [];
-if (isset($disks[$name])) {
-  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name) $rows[] = mk_option("", $list['name'], _(my_disk($list['name']),3));
-} else {
-  foreach ($shares as $list) if ($list['name']!=$name) $rows[] = mk_option("", $list['name'], compress($list['name']));
-}
-if ($rows) echo "<option>("._('All').")</option>";
-foreach ($rows as $row) echo $row;
-?>
-</select></span><input type="button" id="writesmb" value="_(Write)_" class="clone" onclick="writeSMB()" disabled>
 </div>
 
+<div markdown="1" class="shade">
 <form markdown="1" name="smb_edit" method="POST" action="/update.htm" target="progressFrame" onchange="toggleButton('writesmb',true);$('#smb1').dropdownchecklist('disable')">
 <input type="hidden" name="shareName" value="<?=htmlspecialchars($name)?>">
+<?if (($name=='flash')||($var['enableFruit']!='yes')):?>
+  <input type="hidden" name="shareVolsizelimit" value="">
+<?endif;?>
 
 _(Share name)_:
 : <?=htmlspecialchars($name)?>
@@ -69,7 +84,6 @@ _(Export)_:
 
 :smb_export_help:
 
-<input type="hidden" name="shareVolsizelimit" value="">
 <?else:?>
 _(Export)_:
 : <select name="shareExport" onchange="checkShareSettingsSMB(this.form)">
@@ -83,7 +97,9 @@ _(Export)_:
 :smb_export_help:
 
 _(Time Machine volume size limit)_:
-: <input type="text" name="shareVolsizelimit" maxlen="20" value="<?=$sec[$name]['volsizelimit']?>"> MB
+: <span class="inline-flex flex-row items-center gap-2">
+  <input type="text" name="shareVolsizelimit" maxlen="20" value="<?=$sec[$name]['volsizelimit']?>"> MB
+</span>
 
 :smb_time_machine_volume_help:
 
@@ -104,97 +120,146 @@ _(Security)_:
   <?=mk_option($sec[$name]['security'], "public", _('Public'))?>
   <?=mk_option($sec[$name]['security'], "secure", _('Secure'))?>
   <?=mk_option($sec[$name]['security'], "private", _('Private'))?>
-  </select><span id="warningMessage" style="display:none; color: red;">_(Warning)_:  _(Windows may require a valid User to be defined even for Public shares)_.  _(See Help)_.</span>
+  </select>
+  <span id="warningMessage" style="display:none; color: red;">_(Warning)_:  _(Windows may require a valid User to be defined even for Public shares)_.  _(See Help)_.</span>
 
 :smb_security_modes_help:
 
 &nbsp;
-: <input type="submit" name="changeShareSecurity" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+: <span class="inline-block">
+    <input type="submit" name="changeShareSecurity" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
 </form>
+</div>
 
 <?if ($sec[$name]['security']=='secure'):?>
-<div class="title nocontrol"><dt>_(SMB)_ _(User Access)_</dt><i>_(Guests have **read-only** access)_.</i></div>
+
+<div class="title nocontrol">
+  <span class="left">_(SMB)_ _(User Access)_</span>
+  <span class="right">
+    <i>_(Guests have **read-only** access)_.</i>
+  </span>
+</div>
 
 :smb_secure_access_help:
 
-<div class="clone1">
-<span class="clone">_(Read settings from)_</span><i class="fa fa-arrow-left fa-fw"></i>
-<span class="wrap"><select name="readusersmb" class="clone" onchange="toggleButton('readusersmb',false)">
-<option disabled selected>_(select)_...</option>
-<?
-if (isset($disks[$name])) {
-  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='secure') echo mk_option("", $list['name'], _(my_disk($list['name']),3));
-} else {
-  foreach ($shares as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='secure') echo mk_option("", $list['name'], compress($list['name']));
-}
-?>
-</select></span><input type="button" id="readusersmb" value="_(Read)_" class="clone" onclick="readUserSMB()" disabled>
-</div>
-<div class="clone2">
-<span class="clone">_(Write settings to)_</span><i class="fa fa-arrow-right fa-fw"></i>
-<span class="wrap"><select id="smb2" name="writeusersmb" multiple="multiple" style="display:none" onchange="toggleButton('writeusersmb',this.id)">
-<?
-$rows = [];
-if (isset($disks[$name])) {
-  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='secure') $rows[] = mk_option("", $list['name'], _(my_disk($list['name']),3));
-} else {
-  foreach ($shares as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='secure') $rows[] = mk_option("", $list['name'], compress($list['name']));
-}
-if ($rows) echo "<option>("._('All').")</option>";
-foreach ($rows as $row) echo $row;
-?>
-</select></span><input type="button" id="writeusersmb" value="_(Write)_" class="clone" onclick="writeUserSMB()" disabled>
+<div markdown="1" class="relative">
+<div markdown="1" class="clone-settings shade">
+_(Read settings from)_ <i class="fa fa-arrow-left fa-fw"></i>
+: <span class="flex flex-row items-center gap-4">
+	<select name="readusersmb" onchange="toggleButton('readusersmb',false)">
+		<option disabled selected>_(select)_...</option>
+		<?
+		if (isset($disks[$name])) {
+		  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='secure') echo mk_option("", $list['name'], _(my_disk($list['name']),3));
+		} else {
+		  foreach ($shares as $list) if (strpos($list['name'],"'") === false && $list['name']!=$name && $sec[$list['name']]['security']=='secure') echo mk_option("", $list['name'], compress($list['name']));
+		}
+		?>
+	</select>
+	<span class="buttons-spaced">
+		<input type="button" id="readusersmb" value="_(Read)_" class="clone" onclick="readUserSMB()" disabled>
+	</span>
+</span>
+
+_(Write settings to)_ <i class="fa fa-arrow-right fa-fw"></i>
+: <span class="flex flex-row items-center gap-4">
+	<select id="smb2" name="writeusersmb" multiple onchange="toggleButton('writeusersmb',this.id)">
+		<?
+		$rows = [];
+		if (isset($disks[$name])) {
+		  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='secure') $rows[] = mk_option("", $list['name'], _(my_disk($list['name']),3));
+		} else {
+		  foreach ($shares as $list) if (strpos($list['name'],"'") === false && $list['name']!=$name && $sec[$list['name']]['security']=='secure') $rows[] = mk_option("", $list['name'], compress($list['name']));
+		}
+		if ($rows) echo "<option>("._('All').")</option>";
+		foreach ($rows as $row) echo $row;
+		?>
+	</select>
+	<span class="buttons-spaced">
+		<input type="button" id="writeusersmb" value="_(Write)_" class="clone" onclick="writeUserSMB()" disabled>
+	</span>
+</span>
 </div>
 
+<div markdown="1" class="shade">
 <form markdown="1" name="smb_user_edit" method="POST" action="/update.htm" target="progressFrame" onchange="toggleButton('writeusersmb',true);$('#smb2').dropdownchecklist('disable')">
 <input type="hidden" name="shareName" value="<?=htmlspecialchars($name)?>">
 <?input_secure_users($sec)?>
 
 &nbsp;
-: <input type="submit" name="changeShareAccess" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+: <span class="inline-block">
+    <input type="submit" name="changeShareAccess" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
 </form>
+</div>
+</div>
 
 <?elseif ($sec[$name]['security']=='private'):?>
-<div class="title nocontrol"><dt>_(SMB)_ _(User Access)_</dt><i>_(Guests have **no** access)_.</i></div>
+<div class="title nocontrol">
+  <span class="left">_(SMB)_ _(User Access)_</span>
+  <span class="right">
+    <i>_(Guests have **no** access)_.</i>
+  </span>
+</div>
 
 :smb_private_access_help:
 
-<div class="clone1">
-<span class="clone">_(Read settings from)_</span><i class="fa fa-arrow-left fa-fw"></i>
-<span class="wrap"><select name="readusersmb" class="clone" onchange="toggleButton('readusersmb',false)">
-<option disabled selected>_(select)_...</option>
-<?
-if (isset($disks[$name])) {
-  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='private') echo mk_option("", $list['name'], _(my_disk($list['name']),3));
-} else {
-  foreach ($shares as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='private') echo mk_option("", $list['name'], compress($list['name']));
-}
-?>
-</select></span><input type="button" id="readusersmb" value="_(Read)_" class="clone" onclick="readUserSMB()" disabled>
-</div>
-<div class="clone2">
-<span class="clone">_(Write settings to)_</span><i class="fa fa-arrow-right fa-fw"></i>
-<span class="wrap"><select id="smb2" name="writeusersmb" multiple="multiple" style="display:none" onchange="toggleButton('writeusersmb',this.id)">
-<?
-$rows = [];
-if (isset($disks[$name])) {
-  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='private') $rows[] = mk_option("", $list['name'], _(my_disk($list['name']),3));
-} else {
-  foreach ($shares as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='private') $rows[] = mk_option("", $list['name'], compress($list['name']));
-}
-if ($rows) echo "<option>("._('All').")</option>";
-foreach ($rows as $row) echo $row;
-?>
-</select></span><input type="button" id="writeusersmb" value="_(Write)_" class="clone" onclick="writeUserSMB()" disabled>
+<div markdown="1" class="relative">
+<div markdown="1" class="clone-settings shade">
+_(Read settings from)_ <i class="fa fa-arrow-left fa-fw"></i>
+: <span class="flex flex-row items-center gap-4">
+	<select name="readusersmb" onchange="toggleButton('readusersmb',false)">
+		<option disabled selected>_(select)_...</option>
+		<?
+		if (isset($disks[$name])) {
+		  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='private') echo mk_option("", $list['name'], _(my_disk($list['name']),3));
+		} else {
+		  foreach ($shares as $list) if (strpos($list['name'],"'") === false && $list['name']!=$name && $sec[$list['name']]['security']=='private') echo mk_option("", $list['name'], compress($list['name']));
+		}
+		?>
+	</select>
+	<span class="buttons-spaced">
+		<input type="button" id="readusersmb" value="_(Read)_" class="clone" onclick="readUserSMB()" disabled>
+	</span>
+</span>
+
+_(Write settings to)_ <i class="fa fa-arrow-right fa-fw"></i>
+: <span class="flex flex-row items-center gap-4">
+	<select id="smb2" name="writeusersmb" multiple onchange="toggleButton('writeusersmb',this.id)">
+		<?
+		$rows = [];
+		if (isset($disks[$name])) {
+		  foreach (array_filter($disks,'clone_list') as $list) if ($list['name']!=$name && $sec[$list['name']]['security']=='private') $rows[] = mk_option("", $list['name'], _(my_disk($list['name']),3));
+		} else {
+		  foreach ($shares as $list) if (strpos($list['name'],"'") === false && $list['name']!=$name && $sec[$list['name']]['security']=='private') $rows[] = mk_option("", $list['name'], compress($list['name']));
+		}
+		if ($rows) echo "<option>("._('All').")</option>";
+		foreach ($rows as $row) echo $row;
+		?>
+	</select>
+	<span class="buttons-spaced">
+		<input type="button" id="writeusersmb" value="_(Write)_" class="clone" onclick="writeUserSMB()" disabled>
+	</span>
+</span>
 </div>
 
+<div markdown="1" class="shade">
 <form markdown="1" name="smb_user_edit" method="POST" action="/update.htm" target="progressFrame" onchange="toggleButton('writeusersmb',true);$('#smb2').dropdownchecklist('disable')">
 <input type="hidden" name="shareName" value="<?=htmlspecialchars($name)?>">
+
 <?input_private_users($sec)?>
 
 &nbsp;
-: <input type="submit" name="changeShareAccess" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+: <span class="buttons-spaced">
+    <input type="submit" name="changeShareAccess" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
 </form>
+</div>
+</div>
 <?endif;?>
 
 <script>
@@ -202,7 +267,7 @@ $(function() {
   checkShareSettingsSMB(document.smb_edit);
   initDropdownSMB(false);
 <?if ($tabbed):?>
-  $('#tab'+$('input[name$="tabs"]').length).bind({click:function(){initDropdownSMB(true);}});
+  $('#tab'+$('.tabs-container button').length).bind({click:function(){initDropdownSMB(true);}});
 <?endif;?>
 <?if (count($users)==1):?>
   toggleButton('readusersmb',true);

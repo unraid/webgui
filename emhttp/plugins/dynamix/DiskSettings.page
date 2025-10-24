@@ -4,8 +4,8 @@ Icon="icon-disks"
 Tag="icon-disk"
 ---
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -31,6 +31,7 @@ String.prototype.celsius = function(){return Math.round((parseInt(this)-32)*5/9)
 function base64(str) {
   return window.btoa(unescape(encodeURIComponent(str)));
 }
+
 function doDispatch(form) {
   var fields = {};
 <?if ($display['unit']=='F'):?>
@@ -45,6 +46,7 @@ function doDispatch(form) {
   $(form).find('select[name^="display_"]').each(function(){fields[$(this).attr('name')] = $(this).val(); $(this).prop('disabled',true);});
   $.post('/webGui/include/Dispatcher.php',fields);
 }
+
 function prepareDiskSettings(form) {
   var events = [];
   for (var i=0; i < <?=count($preselect)?>; i++) {
@@ -58,26 +60,44 @@ function prepareDiskSettings(form) {
   if (form.smEvents.value == '<?=$numbers?>') form.smEvents.value = '';
   if (form.smLevel.value == 1.00) form.smLevel.value = '';
 }
+
 function setIndex(form) {
   form.smIndex.value = form.smType.selectedIndex;
 }
+
 function prepareForm(form) {
 <?if (!$keyfile):?>
-  form.oldluks.value = base64(form.oldtext.value);
+  form.oldluks.value = base64(form.oldtext.value.replace(/\\"/g,'"'));
   form.oldtext.disabled = true;
   form.oldfile.disabled = true;
 <?endif;?>
-  form.newluks.value = base64(form.newtext.value);
-  form.newtext.disabled = true;
-  form.newcopy.disabled = true;
-  form.newfile.disabled = true;
+  var valid = new RegExp('^[ -~]+$');
+  if (form.newinput.value == 'file') return true;
+  if (valid.test(form.newtext.value)) {
+    form.newluks.value = base64(form.newtext.value.replace(/\\"/g,'"'));
+    form.newtext.disabled = true;
+    form.newcopy.disabled = true;
+    form.newfile.disabled = true;
+    return true;
+  } else {
+    swal({
+      title:"_(Printable Characters Only)_",
+      text:"_(Use **ASCII** characters from space ' ' to tilde '~')_<br>_(Otherwise use the **keyfile** method for UTF8 input)_",
+      html:true,
+      type:'error',
+      confirmButtonText:"_(Ok)_"
+    });
+    return false;
+  }
 }
+
 function getFileContent(event,form,file) {
   var input = event.target;
   var reader = new FileReader();
   reader.onload = function(){$(form).find('input[name="'+file+'"]').val(reader.result);};
   reader.readAsDataURL(input.files[0]);
 }
+
 function selectInput(val,old) {
   if (val=='text') {
     if (old==true) {
@@ -86,7 +106,7 @@ function selectInput(val,old) {
     } else {
       $('div#newfile').hide('slow');
       $('div#newtext').show('slow');
-      $('input[name="newkey"]').prop('disabled',$('input[name="newtext"]').val()=='' || $('input[name="newtext"]').val()!=$('input[name="newcopy"]').val());
+      $('input[name="newkey"]').prop('disabled',$('input[name="newtext"]').val() == '' || $('input[name="newtext"]').val() != $('input[name="newcopy"]').val());
     }
   } else if (val=='file') {
     if (old==true) {
@@ -95,25 +115,34 @@ function selectInput(val,old) {
     } else {
       $('div#newtext').hide('slow');
       $('div#newfile').show('slow');
-      $('input[name="newkey"]').prop('disabled',$('input[name="newfile"]').val()=='');
+      $('input[name="newkey"]').prop('disabled',$('input[name="newfile"]').val() == '');
     }
   }
 }
-function showInput(show,old) {
+
+function showInput(show, old) {
   if (old==true) {
     var input = $('input[name="oldtext"]');
   } else {
     var input = $('input[name="newtext"],input[name="newcopy"]');
   }
-  input.attr('type',show ? 'text' : 'password');
+  input.attr('type', show ? 'text' : 'password');
 }
+
 function checkInput(form) {
-  $(form).find('input[name="newkey"]').prop('disabled',form.newtext.value=='' || form.newtext.value!=form.newcopy.value);
+  $(form).find('input[name="newkey"]').prop('disabled',form.newtext.value == '' || form.newtext.value != form.newcopy.value);
 }
+
 <?if (is_file($reply)):?>
 <?[$text,$type] = explode("\0",file_get_contents($reply)); unlink($reply);?>
 $(function() {
-  swal({title:"_(Encryption Key Update)_",text:"<?=$text?>",html:true,type:"<?=$type?>",confirmButtonText:"_(Ok)_"});
+  swal({
+    title:"_(Encryption Key Update)_",
+    text:"<?=$text?>",
+    html:true,
+    type:"<?=$type?>",
+    confirmButtonText:"_(Ok)_"
+  });
 });
 <?endif;?>
 </script>
@@ -159,22 +188,24 @@ _(Default file system for Array disks)_:
   <?=mk_option($var['defaultFsType'], "xfs", _('xfs'));?>
   <?=mk_option($var['defaultFsType'], "zfs", _('zfs'));?>
   <?=mk_option($var['defaultFsType'], "btrfs", _('btrfs'));?>
+  <?=mk_option($var['defaultFsType'], "ext4", _('ext4'));?>
   <?=mk_option($var['defaultFsType'], "reiserfs", _('reiserfs'), "disabled");?>
   <?=mk_option($var['defaultFsType'], "luks:xfs", _('xfs')." - "._('encrypted'));?>
   <?=mk_option($var['defaultFsType'], "luks:zfs", _('zfs')." - "._('encrypted'));?>
   <?=mk_option($var['defaultFsType'], "luks:btrfs", _('btrfs')." - "._('encrypted'));?>
+  <?=mk_option($var['defaultFsType'], "luks:ext4", _('ext4')." - "._('encrypted'));?>
   <?=mk_option($var['defaultFsType'], "luks:reiserfs", _('reiserfs')." - "._('encrypted'), "disabled");?>
   </select>
 
 :disk_default_file_system_help:
 
 _(Shutdown time-out)_ (_(seconds)_):
-: <input type="number" name="shutdownTimeout" maxlength="10" value="<?=$var['shutdownTimeout']?>" class="narrow" placeholder="90">
+: <input type="number" name="shutdownTimeout" maxlength="10" value="<?=$var['shutdownTimeout']?>" placeholder="90">
 
 :disk_shutdown_timeout_help:
 
 _(Tunable (poll_attributes))_:
-: <input type="number" name="poll_attributes" maxlength="10" value="<?=$var['poll_attributes']?>" class="narrow" placeholder="<?=$var['poll_attributes_default']?>">
+: <input type="number" name="poll_attributes" maxlength="10" value="<?=$var['poll_attributes']?>" placeholder="<?=$var['poll_attributes_default']?>">
 
 :disk_tunable_poll_attributes_help:
 
@@ -187,7 +218,7 @@ _(Tunable (enable NCQ))_:
 :disk_tunable_enable_ncq_help:
 
 _(Tunable (nr_requests))_:
-: <input type="text" name="nr_requests" maxlength="10" value="<?=htmlspecialchars($var['nr_requests'])?>" class="narrow" placeholder="<?=_($var['nr_requests_default'])?>">
+: <input type="text" name="nr_requests" maxlength="10" value="<?=htmlspecialchars($var['nr_requests'])?>" placeholder="<?=_($var['nr_requests_default'])?>">
 
 :disk_tunable_nr_requests_help:
 
@@ -203,17 +234,17 @@ _(Tunable (scheduler))_:
 :disk_tunable_scheduler_help:
 
 _(Tunable (md_num_stripes))_:
-: <input type="number" name="md_num_stripes" maxlength="10" value="<?=$var['md_num_stripes']?>" class="narrow" placeholder="<?=$var['md_num_stripes_default']?>">
+: <input type="number" name="md_num_stripes" maxlength="10" value="<?=$var['md_num_stripes']?>" placeholder="<?=$var['md_num_stripes_default']?>">
 
 :disk_tunable_md_num_stripes_help:
 
 _(Tunable (md_queue_limit))_:
-: <input type="number" name="md_queue_limit" maxlength="10" value="<?=$var['md_queue_limit']?>" class="narrow" placeholder="<?=$var['md_queue_limit_default']?>">
+: <input type="number" name="md_queue_limit" maxlength="10" value="<?=$var['md_queue_limit']?>" placeholder="<?=$var['md_queue_limit_default']?>">
 
 :disk_tunable_md_queue_limit_help:
 
 _(Tunable (md_sync_limit))_:
-: <input type="number" name="md_sync_limit" maxlength="10" value="<?=$var['md_sync_limit']?>" class="narrow" placeholder="<?=$var['md_sync_limit_default']?>">
+: <input type="number" name="md_sync_limit" maxlength="10" value="<?=$var['md_sync_limit']?>" placeholder="<?=$var['md_sync_limit_default']?>">
 
 :disk_tunable_md_sync_limit_help:
 
@@ -233,42 +264,49 @@ _(Enable NVME power monitoring)_:
   </select>
 
 _(Default warning disk utilization threshold)_ (%):
-: <input type="number" min="0" max="100" name="display_warning" class="narrow" value="<?=$display['warning']?>" placeholder="<?=$default['display']['warning']?>">
+: <input type="number" min="0" max="100" name="display_warning" value="<?=$display['warning']?>" placeholder="<?=$default['display']['warning']?>">
 
 :disk_default_warning_utilization_help:
 
 _(Default critical disk utilization threshold)_ (%):
-: <input type="number" min="0" max="100" name="display_critical" class="narrow" value="<?=$display['critical']?>" placeholder="<?=$default['display']['critical']?>">
+: <input type="number" min="0" max="100" name="display_critical" value="<?=$display['critical']?>" placeholder="<?=$default['display']['critical']?>">
 
 :disk_default_critical_utilization_help:
 
 _(Default warning disk temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
-: <input type="number" min="0" max="300" name="display_hot" class="narrow" value="<?=displayTemp($display['hot'])?>" placeholder="<?=displayTemp($default['display']['hot'])?>">
+: <input type="number" min="0" max="300" name="display_hot" value="<?=displayTemp($display['hot'])?>" placeholder="<?=displayTemp($default['display']['hot'])?>">
 
 :disk_default_warning_temperature_help:
 
 _(Default critical disk temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
-: <input type="number" min="0" max="300" name="display_max" class="narrow" value="<?=displayTemp($display['max'])?>" placeholder="<?=displayTemp($default['display']['max'])?>">
+: <input type="number" min="0" max="300" name="display_max" value="<?=displayTemp($display['max'])?>" placeholder="<?=displayTemp($default['display']['max'])?>">
 
 :disk_default_critical_temperature_help:
 
 _(Default warning SSD temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
-: <input type="number" min="0" max="300" name="display_hotssd" class="narrow" value="<?=displayTemp($display['hotssd'])?>" placeholder="<?=displayTemp($default['display']['hotssd'])?>">
+: <input type="number" min="0" max="300" name="display_hotssd" value="<?=displayTemp($display['hotssd'])?>" placeholder="<?=displayTemp($default['display']['hotssd'])?>">
 
 :ssd_default_warning_temperature_help:
 
 _(Default critical SSD temperature threshold)_ (&deg;<?=_var($display,'unit','C')?>):
-: <input type="number" min="0" max="300" name="display_maxssd" class="narrow" value="<?=displayTemp($display['maxssd'])?>" placeholder="<?=displayTemp($default['display']['maxssd'])?>">
+: <input type="number" min="0" max="300" name="display_maxssd" value="<?=displayTemp($display['maxssd'])?>" placeholder="<?=displayTemp($default['display']['maxssd'])?>">
 
 :ssd_default_critical_temperature_help:
 
 &nbsp;
-: <input type="submit" name="changeDisk" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+: <span class="inline-block">
+    <input type="submit" name="changeDisk" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
 </form>
 
 <?if ($encrypt && $var['fsState']=='Started'):?>
-<div class="title"><span class="left"><i class="title fa fa-key"></i>_(Change encryption key)_</span></div>
-<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareForm(this)">
+<div class="title">
+  <span class="left">
+    <i class="title fa fa-key"></i>_(Change encryption key)_
+  </span>
+</div>
+<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="return prepareForm(this)">
 <input type="hidden" name="#file" value="">
 <input type="hidden" name="#include" value="/webGui/include/update.encryption.php">
 <input type="hidden" name="#reply" value="<?=$reply?>">
@@ -278,16 +316,23 @@ _(Default critical SSD temperature threshold)_ (&deg;<?=_var($display,'unit','C'
 <input type="hidden" name="olddata" value="">
 <input type="hidden" name="oldluks" value="">
 <?endif;?>
+
 _(Existing encryption key)_:
 : <select name="oldinput" class="lock" onchange='selectInput(this.value,true)' <?=$keyfile?'disabled':''?>>
   <?=mk_option(1,'text',_('Passphrase'))?>
   <?=mk_option(1,'file',_('Keyfile'),$keyfile ? 'selected' : '')?>
-  </select><br>
+  </select>
 
 <?if (!$keyfile):?>
 <div markdown="1" id="oldtext">
 _(Enter existing passphrase)_:
-: <input type="password" name="oldtext" class="lock" maxlength="512" value="" autocomplete="off" spellcheck="false"><input name="showPass" type="checkbox" class="lock" onchange="showInput(this.checked,true)">_(show passphrase)_
+: <div class="flex flex-row items-center gap-2">
+    <input type="password" name="oldtext" class="lock" maxlength="512" value="" autocomplete="off" spellcheck="false">
+    <label for="showPass">
+      <input name="showPass" type="checkbox" class="lock" onchange="showInput(this.checked,true)">
+      _(show passphrase)_
+    </label>
+  </div>
 
 </div>
 <div markdown="1" id="oldfile" style="display:none">
@@ -301,11 +346,17 @@ _(Change encryption key)_:
 : <select name="newinput" class="lock" onchange='selectInput(this.value,false)'>
   <?=mk_option(1,'text',_('Passphrase'))?>
   <?=mk_option(1,'file',_('Keyfile'))?>
-  </select><br>
+  </select>
 
 <div markdown="1" id="newtext">
 _(Type new passphrase)_:
-: <input type="password" name="newtext" class="lock" maxlength="512" value="" autocomplete="off" spellcheck="false" onkeyup="checkInput(this.form)" placeholder="_(use printable characters only)_"><input name="showPass" type="checkbox" class="lock" onchange="showInput(this.checked,false)">_(show passphrase)_
+: <div class="flex flex-row items-center gap-2">
+    <input type="password" name="newtext" class="lock" maxlength="512" value="" autocomplete="off" spellcheck="false" onkeyup="checkInput(this.form)" placeholder="_(use printable characters only)_">
+    <label for="showPass">
+      <input name="showPass" type="checkbox" class="lock" onchange="showInput(this.checked,false)">
+      _(show passphrase)_
+    </label>
+  </div>
 
 _(Retype new passphrase)_:
 : <input type="password" name="newcopy" class="lock" maxlength="512" value="" autocomplete="off" spellcheck="false" onkeyup="checkInput(this.form)">
@@ -317,11 +368,18 @@ _(Select new keyfile)_:
 
 </div>
 &nbsp;
-: <input type="submit" name="newkey" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+: <span class="inline-block">
+    <input type="submit" name="newkey" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
 </form>
 <?endif;?>
 
-<div class="title"><span class="left"><i class="title fa fa-plus-square"></i>_(Global SMART Settings)_</span></div>
+<div class="title">
+  <span class="left">
+    <i class="title fa fa-plus-square"></i>_(Global SMART Settings)_
+  </span>
+</div>
 <form markdown="1" name="smart_settings" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareDiskSettings(this)">
 <input type="hidden" name="#file" value="/boot/config/smart-all.cfg">
 <input type="hidden" name="#include" value="webGui/include/update.smart.php">
@@ -329,6 +387,7 @@ _(Select new keyfile)_:
 <input type="hidden" name="#top" value="1">
 <input type="hidden" name="smEvents" value="">
 <input type="hidden" name="smIndex" value="0">
+
 _(Default SMART notification value)_:
 : <select name="smSelect">
   <?=mk_option(_var($var,'smSelect'), "0", _('Raw'))?>
@@ -376,15 +435,24 @@ _(Default SMART controller type)_:
 :disk_default_smart_controller_help:
 
 _(Default SMART attribute notifications)_:
-: <input type="text" name="smCustom" value="<?=htmlspecialchars(_var($var,'smCustom'))?>" class="narrow">_(Custom attributes (use comma to separate numbers))_
+: <input type="text" name="smCustom" value="<?=htmlspecialchars(_var($var,'smCustom'))?>"><span class="input-instructions">_(Custom attributes (use comma to separate numbers))_</span>
 
 <?for ($x = 0; $x < count($preselect); $x++):?>
 &nbsp;
-: <input type="checkbox" name="at<?=$x?>" value="<?=_var($preselect[$x],'code')?>"<?=in_array(_var($preselect[$x],'code'),$events)?' checked':''?>><span class="code">_(Attribute)_ = <?=_var($preselect[$x],'code')?></span><?=_var($preselect[$x],'text')?>
+: <span>
+    <input type="checkbox" name="at<?=$x?>" value="<?=_var($preselect[$x],'code')?>" <?=in_array(_var($preselect[$x],'code'),$events)?' checked':''?>>
+    <span class="code">
+      _(Attribute)_ = <?=_var($preselect[$x],'code')?>
+    </span>
+    <?=_var($preselect[$x],'text')?>
+  </span>
 <?endfor;?>
 
 :disk_default_smart_attribute_help:
 
 <input type="submit" name="#default" value="_(Default)_">
-: <input type="submit" name="#apply" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+: <span class="inline-block">
+    <input type="submit" name="#apply" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
 </form>

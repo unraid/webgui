@@ -3,10 +3,11 @@ Title="Docker Containers"
 Tag="cubes"
 Cond="is_file('/var/run/dockerd.pid')"
 Markdown="false"
-Nchan="docker_load:stop"
+Nchan="docker_load"
+Tabs="false"
 ---
 <?PHP
-/* Copyright 2005-2023, Lime Technology
+/* Copyright 2005-2025, Lime Technology
  * Copyright 2012-2023, Bergware International.
  * Copyright 2014-2021, Guilherme Jardim, Eric Schultz, Jon Panozzo.
  *
@@ -23,23 +24,42 @@ require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
 
 $width   = $themeHelper->isTopNavTheme() ? -58: -44; // $themeHelper set in DefaultPageLayout.php
 $top     = $themeHelper->isTopNavTheme() ? 40 : 20;
-$busy    = "<i class='fa fa-spin fa-circle-o-notch'></i> "._('Please wait')."... "._('starting up containers');
+$busy    = "<i class='fa fa-spin fa-circle-o-notch'></i> <span class='font-sans'>"._('Please wait')."... "._('starting up containers')."</span>";
 $cpus    = cpu_list();
 ?>
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
 
-<table id="docker_containers" class="tablesorter shift">
-<thead><tr><th><a id="resetsort" class="nohand" onclick="resetSorting()" title="_(Reset sorting)_"><i class="fa fa-th-list"></i></a>_(Application)_</th><th>_(Version)_</th><th>_(Network)_</th><th>_(Container IP)_</th><th>_(Container Port)_</th><th>_(LAN IP:Port)_</th><th>_(Volume Mappings)_ <small>(_(App to Host)_)</small></th><th class="load advanced">_(CPU & Memory load)_</th><th class="nine">_(Autostart)_</th><th class="five">_(Uptime)_</th></tr></thead>
-<tbody id="docker_list"><tr><td colspan='9'></td></tr></tbody>
-</table>
-<input type="button" onclick="addContainer()" value="_(Add Container)_" style="display:none">
-<input type="button" onclick="startAll()" value="_(Start All)_" style="display:none">
-<input type="button" onclick="stopAll()" value="_(Stop All)_" style="display:none">
-<input type="button" onclick="pauseAll()" value="_(Pause All)_" style="display:none">
-<input type="button" onclick="resumeAll()" value="_(Resume All)_" style="display:none">
-<input type="button" onclick="checkAll()" value="_(Check for Updates)_" id="checkAll" style="display:none">
-<input type="button" onclick="updateAll()" value="_(Update All)_" id="updateAll" style="display:none">
-<input type="button" onclick="contSizes()" value="_(Container Size)_" style="display:none">
+<div class="ToggleViewMode"><span><input type="checkbox" class="advancedview"></span></div>
+<div class="TableContainer">
+    <table id="docker_containers" class="tablesorter shift">
+        <thead>
+            <tr>
+                <th><a id="resetsort" class="nohand" onclick="resetSorting()" title="_(Reset sorting)_"><i class="fa fa-th-list"></i></a>_(Application)_</th>
+                <th>_(Version)_</th>
+                <th>_(Network)_</th>
+                <th>_(Container IP)_</th>
+                <th>_(Container Port)_</th>
+                <th>_(LAN IP:Port)_</th>
+                <th>_(Volume Mappings)_ <small>(_(App to Host)_)</small></th>
+                <th class="load advanced">_(CPU & Memory load)_</th>
+                <th class="nine">_(Autostart)_</th>
+                <th class="five">_(Uptime)_</th>
+            </tr>
+        </thead>
+        <tbody id="docker_list" class="js-fill-available-height"><tr><td colspan='9'></td></tr></tbody>
+    </table>
+</div>
+
+<div class="js-actions">
+  <input type="button" onclick="addContainer()" value="_(Add Container)_" style="display:none">
+  <input type="button" onclick="startAll()" value="_(Start All)_" style="display:none">
+  <input type="button" onclick="stopAll()" value="_(Stop All)_" style="display:none">
+  <input type="button" onclick="pauseAll()" value="_(Pause All)_" style="display:none">
+  <input type="button" onclick="resumeAll()" value="_(Resume All)_" style="display:none">
+  <input type="button" onclick="checkAll()" value="_(Check for Updates)_" id="checkAll" style="display:none">
+  <input type="button" onclick="updateAll()" value="_(Update All)_" id="updateAll" style="display:none">
+  <input type="button" onclick="contSizes()" value="_(Container Size)_" style="display:none">
+</div>
 <div id="iframe-popup" style="display:none;-webkit-overflow-scrolling:touch;"></div>
 
 <script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
@@ -50,15 +70,6 @@ var docker = [];
 $('.title').append("<span id='busy' class='red-text strong' style='display:none;margin-left:40px'><?=$busy?></span>");
 <?else:?>
 $('.tabs').append("<span id='busy' class='red-text strong' style='display:none;position:relative;top:<?=$top?>px;left:40px;font-size:1.4rem;letter-spacing:2px'><?=$busy?></span>");
-<?endif;?>
-<?if (_var($display,'resize')):?>
-function resize() {
-  $('#docker_list').height(Math.max(window.innerHeight-340,330));
-  $('#docker_containers thead,#docker_containers tbody').removeClass('fixed');
-  $('#docker_containers thead tr th').each(function(){$(this).width($(this).width());});
-  $('#docker_containers tbody tr td').each(function(){$(this).width($(this).width());});
-  $('#docker_containers thead,#docker_containers tbody').addClass('fixed');
-}
 <?endif;?>
 function resetSorting() {
   if ($.cookie('lockbutton')==null) return;
@@ -131,10 +142,6 @@ function loadlist(init) {
       }
     });
     $('head').append('<script>'+data[1]+'<\/script>');
-<?if (_var($display,'resize')):?>
-    resize();
-    if (init) $(window).bind('resize',function(){resize();});
-<?endif;?>
     $('.iconstatus').each(function(){
       if ($(this).hasClass('stopped')) $('div.'+$(this).prop('id')).hide();
     });
@@ -159,6 +166,28 @@ function loadlist(init) {
     listview();
     $('div.spinner.fixed').hide('slow');
     if (data[2]==1) {$('#busy').show(); setTimeout(loadlist,5000);} else if ($('#busy').is(':visible')) {$('#busy').hide(); setTimeout(loadlist,3000);}
+    <?if (_var($display,'resize')):?>
+        function resizeTableColumns() { // Handle table header fixed positioning after resize
+          $('#docker_containers thead,#docker_containers tbody').removeClass('fixed');
+          $('#docker_containers thead tr th').each(function(){$(this).width($(this).width());});
+          $('#docker_containers tbody tr td').each(function(){$(this).width($(this).width());});
+          $('#docker_containers thead,#docker_containers tbody').addClass('fixed');
+        };
+        fillAvailableHeight({
+          targetElementSelector: '.js-fill-available-height',
+          elementSelectorsForHeight: [
+            '.js-actions',
+            '#docker_containers thead',
+          ],
+          manualSpacingOffset: 30, // without this, the main content will still be scrollable by like 20px
+        });
+        resizeTableColumns()
+        if (init) {
+          $(window).bind('resize',function(){
+            resizeTableColumns();
+          });
+        }
+    <?endif;?>
     if (!update) $('input#updateAll').prop('disabled',true);
     if (rebuild) rebuildAll();
   });
@@ -180,17 +209,16 @@ dockerload.on('message', function(msg){
   }
 });
 $(function() {
-  $(".tabs").append('<span class="status"><span><input type="checkbox" class="advancedview"></span></span>');
   $('.advancedview').switchButton({labels_placement:'left', on_label:"_(Advanced View)_", off_label:"_(Basic View)_", checked:$.cookie('docker_listview_mode')=='advanced'});
   $('.advancedview').change(function(){
     $('.advanced').toggle('slow');
     $('.basic').toggle('slow');
-    $.cookie('docker_listview_mode',$('.advancedview').is(':checked')?'advanced':'basic',{expires:3650});
+    $.cookie('docker_listview_mode',$(this).is(':checked')?'advanced':'basic',{expires:3650});
     listview();
   });
   $.removeCookie('lockbutton');
   loadlist(true);
-  dockerload.start().monitor();
+  dockerload.start();
 });
 
 </script>

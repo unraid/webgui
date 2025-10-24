@@ -132,7 +132,8 @@ while (true) {
       if ($link) {
         $speed = port_get_contents("$net/$port/speed");
         $duplex = port_get_contents("$net/$port/duplex");
-        $echo['mode'][] = "$speed Mbps, $duplex duplex, mtu $mtu";
+        $speed = ($speed >= 1000) ? ($speed/1000)." Gbps" : $speed." Mbps";
+        $echo['mode'][] = "$speed, $duplex duplex, mtu $mtu";
       } else {
         $echo['mode'][] = _('interface down');
       }
@@ -159,12 +160,10 @@ while (true) {
   $date  = my_date($xdate ? 'D j M Y, T' : $display['date'].', T',$now);
   $echo['time'] = [$clock,_($date,0)];
 
-  $echo = json_encode($echo);
-  $md5_new = md5($echo,true);
-  if ($md5_new !== $md5_old) {
-    $md5_old = publish('update3',$echo)!==false ? $md5_new : -1;
-    $time0 = $time1;
-  }
+  publish_noDupe('update3',json_encode($echo));
+  ping('dashboardPing');
+
   sleep(1);
+  $time0 = $time1;
   $time1 = microtime(true);
 }

@@ -503,6 +503,7 @@ function clearTunnel(vtun) {
 }
 
 function addTunnel() {
+  console.log('addTunnel');
   $.post('/webGui/include/update.wireguard.php',{'#cmd':'addtunnel','#name':'<?=$tower?>'},function(){refresh();});
 }
 
@@ -1048,20 +1049,20 @@ function getPublicIP(ip,wg,protocol) {
     var ext_ipv6 = ips[3];
     if ((protocol==''||protocol=='46') && ext_ipv4 && ip) {
       if (!wgx_ipv4) {
-        if (!wgx_ipv6) $('#endpoint4-'+wg).html("<dt>&nbsp;</dt><dd><span class='input'></span>  <span class='block'>_(Remark)_: _(The Local endpoint does not resolve to an IPv4 address)_. _(In most cases, this should be your public WAN IPv4)_: <b>"+ext_ipv4+"</b></span></dd>\n").show();
+        if (!wgx_ipv6) $('#endpoint4-'+wg).html("<dt>&nbsp;</dt><dd></span>  <span class='inline-block'>_(Remark)_: _(The Local endpoint does not resolve to an IPv4 address)_. _(In most cases, this should be your public WAN IPv4)_: <b>"+ext_ipv4+"</b></dd>\n").show();
       } else if (wgx_ipv4 != ext_ipv4) {
-        $('#endpoint4-'+wg).html("<dt>&nbsp;</dt><dd><span class='input'></span>  <span class='block'>_(Remark)_: _(The Local endpoint resolves to)_ <b>"+wgx_ipv4+".</b> _(In most cases, this should be your public WAN IPv4 instead)_: <b>"+ext_ipv4+"</b></span></dd>\n").show();
+        $('#endpoint4-'+wg).html("<dt>&nbsp;</dt><dd></span>  <span class='inline-block'>_(Remark)_: _(The Local endpoint resolves to)_ <b>"+wgx_ipv4+".</b> _(In most cases, this should be your public WAN IPv4 instead)_: <b>"+ext_ipv4+"</b></dd>\n").show();
       } else if (endpoints.includes(wgx_ipv4) && isPublic(wgx_ipv4)) {
-        $('#endpoint4-'+wg).html("<dt>&nbsp;</dt><dd><span class='input'></span>  <span class='block'>_(Remark)_: _(The Local endpoint resolves to)_ <b>"+wgx_ipv4+".</b> _(Your Unraid Server is reachable from the internet)_</span></dd>\n").show();
+        $('#endpoint4-'+wg).html("<dt>&nbsp;</dt><dd></span>  <span class='inline-block'>_(Remark)_: _(The Local endpoint resolves to)_ <b>"+wgx_ipv4+".</b> _(Your Unraid Server is reachable from the internet)_</dd>\n").show();
       }
     }
     if ((protocol=='6'||protocol=='46') && ext_ipv6 && ip) {
       if (!wgx_ipv6) {
-        if (!wgx_ipv4) $('#endpoint6-'+wg).html("<dt>&nbsp;</dt><dd><span class='input'></span>  <span class='block'>_(Remark)_: _(The Local endpoint does not resolve to an IPv6 address)_. _(In most cases, this should be your public WAN IPv6)_: <b>"+ext_ipv6+"</b></span></dd>\n").show();
+        if (!wgx_ipv4) $('#endpoint6-'+wg).html("<dt>&nbsp;</dt><dd></span>  <span class='inline-block'>_(Remark)_: _(The Local endpoint does not resolve to an IPv6 address)_. _(In most cases, this should be your public WAN IPv6)_: <b>"+ext_ipv6+"</b></dd>\n").show();
       } else if (wgx_ipv6 != ext_ipv6) {
-        $('#endpoint6-'+wg).html("<dt>&nbsp;</dt><dd><span class='input'></span>  <span class='block'>_(Remark)_: _(The Local endpoint resolves to)_ <b>"+wgx_ipv6+".</b> _(In most cases, this should be your public WAN IPv6 instead)_: <b>"+ext_ipv6+"</b></span></dd>\n").show();
+        $('#endpoint6-'+wg).html("<dt>&nbsp;</dt><dd></span>  <span class='inline-block'>_(Remark)_: _(The Local endpoint resolves to)_ <b>"+wgx_ipv6+".</b> _(In most cases, this should be your public WAN IPv6 instead)_: <b>"+ext_ipv6+"</b></dd>\n").show();
       } else if (endpoints.includes(wgx_ipv6)) {
-        $('#endpoint6-'+wg).html("<dt>&nbsp;</dt><dd><span class='input'></span>  <span class='block'>_(Remark)_: _(The Local endpoint resolves to)_ <b>"+wgx_ipv6+".</b> _(Your Unraid Server is reachable from the internet)_</span></dd>\n").show();
+        $('#endpoint6-'+wg).html("<dt>&nbsp;</dt><dd></span>  <span class='inline-block'>_(Remark)_: _(The Local endpoint resolves to)_ <b>"+wgx_ipv6+".</b> _(Your Unraid Server is reachable from the internet)_</dd>\n").show();
       }
     }
 <?if (!$public):?>
@@ -1111,14 +1112,16 @@ statistics.on('message', function(data) {
 
 $(function(){
   var form = $(document.wg0);
-  var ctrl = "<span class='status vhshift hshift'><i id='block-wg0' class='fa fa-fw fa-chevron-up' style='cursor:pointer' onclick='blockToggle(&quot;wg0&quot;)'></i></span>";
-  ctrl += "<span class='even wide'><span class='status vshift label'>_(Autostart)_</span><span class='status vhshift'><input type='checkbox' id='start-wg0' style='display:none'<?=$start_wg0?' checked':''?>></span></span>";
-  ctrl += "<span class='even'><span class='status vhshift'><input type='checkbox' id='view-wg0' style='display:none'></span></span>";
-  ctrl += "<span class='even'><span class='status vhshift'><input type='checkbox' id='toggle-wg0' style='display:none'></span></span>";
+  var ctrl = "<span class='js-wg-ctrl inline-flex flex-row items-center gap-3'>";
+  ctrl += "<span class='inline-flex flex-row items-center gap-2'><span class='label'>_(Autostart)_</span><span class=''><input type='checkbox' id='start-wg0' style='display:none'<?=$start_wg0?' checked':''?>></span></span>";
+  ctrl += "<span class='inline-flex flex-row items-center gap-2'><span class=''><input type='checkbox' id='view-wg0' style='display:none'></span></span>";
+  ctrl += "<span class='inline-flex flex-row items-center gap-2'><span class=''><input type='checkbox' id='toggle-wg0' style='display:none'></span></span>";
+  ctrl += "<span class='inline-flex flex-row items-center gap-2'><i id='block-wg0' class='fa fa-fw fa-chevron-up' style='cursor:pointer' onclick='blockToggle(&quot;wg0&quot;)'></i></span>";
+  ctrl += "</span>";
   statistics.start();
   getPublicIP($('#endpoint-wg0').val(),'wg0',$('#protocol-wg0').val());
-  $('div.content').prepend('<div class="preset"><input type="button" value="_(Import Tunnel)_" onclick="$(&apos;input#file&apos;).trigger(&apos;click&apos;);"><input type="button" value="_(Add Tunnel)_" onclick="addTunnel()";<?=$this_wg0?"":" disabled"?>></div>');
-  $('div.title').eq(0).find('span.left').append(ctrl);
+  $('div.content').prepend('<div class="preset"><small>"WireGuard" and the "WireGuard" logo are registered trademarks of Jason A. Donenfeld</small><div class="inline-flex flex-row items-center gap-2"><input type="button" value="_(Import Tunnel)_" onclick="$(&apos;input#file&apos;).trigger(&apos;click&apos;);"><input type="button" value="_(Add Tunnel)_" onclick="addTunnel()";<?=$this_wg0?"":" disabled"?>></div></div>');
+  $('div.title').eq(0).find('.right').append(ctrl);
   $.post('/webGui/include/update.wireguard.php',{'#cmd':'upnp','#gw':"<?=$$ethX['GATEWAY:0']?>",'#link':"<?=$link?>"},function(url){
     if (url) {
       $('div.upnp').show();
@@ -1265,30 +1268,40 @@ $(function(){
 <input type="hidden" name="#shared2" value="">
 <input type="hidden" name="#deleted" value="">
 <input type="hidden" name="#locale" value="<?=$locale?>">
+
 _(Local name)_:
-: <span class="input"><input type="text" name="Name:0" class="wide" maxlength="99" value="<?=_var($wg0,"Name:0")?>" pattern="<?=$validname?>" title="_(Use only letters A-Z, digits or space,dash,underscore)_" placeholder="(_(optional)_)"></span>
-  <span class="pin"><i class="fa fa-fw fa-eye eye0<?=$this_wg0?'':' key-off'?>" style="cursor:pointer" onclick="WGconfig(this,'wg0','')" title="_(View Local Config)_"></i>
-  <i class="fa fa-fw fa-key zone0<?=isset($wg0['PublicKey:0'])?'':' key-off'?>" style="cursor:pointer" onclick="openClose($(document.wg0),null,'div.key0')" title="_(Toggle keys)_"></i>
-  <i id="chevron-wg0-0" class="fa fa-fw fa-chevron-down" style="cursor:pointer" onclick="openClose($(document.wg0),this,'div.zone0')" title="_(Toggle view)_"></i></span>
+: <span class="flex flex-row items-center gap-2">
+    <input type="text" name="Name:0" class="wide" maxlength="99" value="<?=_var($wg0,"Name:0")?>" pattern="<?=$validname?>" title="_(Use only letters A-Z, digits or space,dash,underscore)_" placeholder="(_(optional)_)">
+    <span class="flex flex-row items-center gap-2">
+        <i class="fa fa-fw fa-eye eye0<?=$this_wg0?'':' key-off'?>" style="cursor:pointer" onclick="WGconfig(this,'wg0','')" title="_(View Local Config)_"></i>
+        <i class="fa fa-fw fa-key zone0<?=isset($wg0['PublicKey:0'])?'':' key-off'?>" style="cursor:pointer" onclick="openClose($(document.wg0),null,'div.key0')" title="_(Toggle keys)_"></i>
+        <i id="chevron-wg0-0" class="fa fa-fw fa-chevron-down" style="cursor:pointer" onclick="openClose($(document.wg0),this,'div.zone0')" title="_(Toggle view)_"></i>
+    </span>
+  </span>
 
 :wg_local_name_help:
 
-<div markdown="1" class="keys wg0 key0"<?=isset($wg0['PublicKey:0'])?' style="display:none">':'>'?>
+<div markdown="1" class="keys wg0 key0" style="<?= isset($wg0['PublicKey:0']) ? 'display:none' : '' ?>">
 _(Local private key)_:
-: <span class="input"><input type="text" name="PrivateKey:0" class="wide private-0" maxlength="64" value="<?=_var($wg0,'PrivateKey:0')?>" onchange="highlight($(document.wg0),this,0)" placeholder="(_(mandatory)_)" required></span>
-  <input type="button" class="form" value="_(Generate Keypair)_" onclick="keypair($(document.wg0),'0')">
+: <input type="text" name="PrivateKey:0" class="wide private-0" maxlength="64" value="<?=_var($wg0,'PrivateKey:0')?>" onchange="highlight($(document.wg0),this,0)" placeholder="(_(mandatory)_)" required>
+  <span class="inline-block">
+    <input type="button" class="form" value="_(Generate Keypair)_" onclick="keypair($(document.wg0),'0')">
+  </span>
 
 :wg_generate_keypair_help:
 
 _(Local public key)_:
-: <span class="input"><input type="text" name="PublicKey:0" class="wide public-0" maxlength="64" value="<?=_var($wg0,'PublicKey:0')?>" onchange="highlight($(document.wg0),this,0)" placeholder="(_(mandatory)_)" required></span>
+: <input type="text" name="PublicKey:0" class="wide public-0" maxlength="64" value="<?=_var($wg0,'PublicKey:0')?>" onchange="highlight($(document.wg0),this,0)" placeholder="(_(mandatory)_)" required>
+  <span class="inline-block">
+      <input type="button" class="form" value="_(Generate Keypair)_" onclick="keypair($(document.wg0),'0')">
+  </span>
 
 :wg_generate_keypair_help:
 
 </div>
 <div markdown="1" class="advanced wg0 zone0" style="display:none">
 _(Network protocol)_:
-: <span class="input"><select id="protocol-wg0" name="PROT:0" class="subnet" onchange="setProtocol($(document.wg0),'wg0',true)">
+: <span class="input"><select id="protocol-wg0" name="PROT:0" onchange="setProtocol($(document.wg0),'wg0',true)">
   <?=mk_option(_var($wg0,'PROT:0'), "", "_(IPv4 only)_")?>
   <?=mk_option(_var($wg0,'PROT:0'), "6", "_(IPv6 only)_")?>
   <?=mk_option(_var($wg0,'PROT:0'), "46", "_(IPv4 + IPv6)_")?>
@@ -1296,74 +1309,94 @@ _(Network protocol)_:
 
 <div markdown="1" class="ipv4 wg0" style="display:none">
 _(Local tunnel network pool)_:
-<input type="hidden" name="Network:0" value="">
-: <span class="input"><input type="text" name="gui:Network:0" class="subnet" maxlength="15" value="<?=explode('/',_var($wg0,'Network:0'))[0]?>" onchange="setPool($(document.wg0),'wg0')" pattern="<?=$validIP4?>" title="_(IPv4 network)_" placeholder="<?=_var($netpool,'wg0')?>">/
- <input type="number" name="gui:Mask:0" class="mask" min="1" max="32" value="<?=my_explode('/',_var($wg0,'Network:0'))[1]?>" onchange="if(quickValidate(this)) {setPool($(document.wg0),'wg0')}" placeholder="24"></span>
+: <input type="hidden" name="Network:0" value="">
+  <span class="flex flex-row items-center gap-2">
+    <input type="text" name="gui:Network:0" maxlength="15" value="<?=explode('/',_var($wg0,'Network:0'))[0]?>" onchange="setPool($(document.wg0),'wg0')" pattern="<?=$validIP4?>" title="_(IPv4 network)_" placeholder="<?=_var($netpool,'wg0')?>">
+    <span>/</span>
+    <input type="number" name="gui:Mask:0" class="mask" min="1" max="32" value="<?=my_explode('/',_var($wg0,'Network:0'))[1]?>" onchange="if(quickValidate(this)) {setPool($(document.wg0),'wg0')}" placeholder="24">
+  </span>
 
 </div>
 <div markdown="1" class="ipv6 wg0" style="display:none">
 _(Local tunnel network pool IPv6)_:
-<input type="hidden" name="Network6:0" value="">
-: <span class="input"><input type="text" name="gui:Network6:0" class="subnet" maxlength="40" value="<?=explode('/',_var($wg0,'Network6:0'))[0]?>" onchange="setPool6($(document.wg0),'wg0')" pattern="<?=$validIP6?>" title="_(IPv6 network)_" placeholder="<?=_var($netpool6,'wg0')?>">/
- <input type="number" name="gui:Mask6:0" class="mask" min="1" max="128" value="<?=my_explode('/',_var($wg0,'Network6:0'))[1]?>" onchange="if(quickValidate(this)) {setPool6($(document.wg0),'wg0')}" placeholder="64"></span>
+: <input type="hidden" name="Network6:0" value="">
+  <span class="flex flex-row items-center gap-2">
+    <input type="text" name="gui:Network6:0" maxlength="40" value="<?=explode('/',_var($wg0,'Network6:0'))[0]?>" onchange="setPool6($(document.wg0),'wg0')" pattern="<?=$validIP6?>" title="_(IPv6 network)_" placeholder="<?=_var($netpool6,'wg0')?>">
+    <span>/</span>
+    <input type="number" name="gui:Mask6:0" class="mask" min="1" max="128" value="<?=my_explode('/',_var($wg0,'Network6:0'))[1]?>" onchange="if(quickValidate(this)) {setPool6($(document.wg0),'wg0')}" placeholder="64">
+  </span>
 
 </div>
 :wg_local_tunnel_network_pool_help:
 
 <div markdown="1" class="ipv4 wg0" style="display:none">
 _(Local tunnel address)_:
-: <span class="input"><input type="text" name="Address:0" class="subnet" maxlength="15" value="<?=_var($wg0,'Address:0')?:long2ip(_var($netbase,'wg0')+1)?>" onchange="verifyInSubnet(this)" pattern="<?=$validIP4?>" title="_(IPv4 address)_"></span>
+: <input type="text" name="Address:0" maxlength="15" value="<?=_var($wg0,'Address:0')?:long2ip(_var($netbase,'wg0')+1)?>" onchange="verifyInSubnet(this)" pattern="<?=$validIP4?>" title="_(IPv4 address)_">
 
 :wg_local_tunnel_address_help:
 
 </div>
 <div markdown="1" class="ipv6 wg0" style="display:none">
 _(Local tunnel address IPv6)_:
-: <span class="input"><input type="text" name="Address6:0" class="subnet" maxlength="40" value="<?=_var($wg0,'Address6:0')?:(_var($netbase6,'wg0').'1')?>" onchange="verifyInSubnet6(this)" pattern="<?=$validIP6?>" title="_(IPv6 address)_"></span>
+: <input type="text" name="Address6:0" maxlength="40" value="<?=_var($wg0,'Address6:0')?:(_var($netbase6,'wg0').'1')?>" onchange="verifyInSubnet6(this)" pattern="<?=$validIP6?>" title="_(IPv6 address)_">
 
 :wg_local_tunnel_address_help:
 
 </div>
 </div>
 _(Local endpoint)_:
-: <span class="input"><input type="text" class="width:10%;" id="endpoint-wg0" name="Endpoint:0" class="subnet" value="<?=$vpn_wg0?'':_var($wg0,'Endpoint:0')?>" onchange="toLC(this);quickValidate(this);" pattern="<?=$validText?>" title="_(IP address or FQDN)_" placeholder="<?=$vpn_wg0?'(_(not used)_)':preg_replace('/^(.+?\.)[0-9a-zA-Z]+(\.(my)?unraid.net)$/','$1<hash>$2',$public)?>">:
-  <input type="number" name="gui:ListenPort:0" class="port" min="1" max="65535" value="<?=$vpn_wg0?'':_var($wg0,'ListenPort:0')?>" onchange="if(quickValidate(this)) {portRemark($(document.wg0),'wg0',this.value)}" placeholder="<?=$vpn_wg0?'':_var($netport,'wg0')?>"></span>
-  <span class="remark block" style="display:none">_(Remark)_: _(configure your router with port forwarding of port)_ **<span id="my-port-wg0"><?=_var($wg0,'ListenPort:0')?:_var($netport,'wg0')?></span>/_(UDP)_** _(to)_ **<?=$server?>:<?=_var($wg0,'ListenPort:0')?:_var($netport,'wg0')?>**</span><span class="upnp wg0 block"></span>
-  <input type="hidden" name="ListenPort:0" value=""><dl id="endpoint4-wg0" style="display:none"></dl><dl id="endpoint6-wg0" style="display:none"></dl>
+: <span class="flex flex-row items-center gap-2">
+    <input type="text" class="width:10%;" id="endpoint-wg0" name="Endpoint:0" value="<?=$vpn_wg0?'':_var($wg0,'Endpoint:0')?>" onchange="toLC(this);quickValidate(this);" pattern="<?=$validText?>" title="_(IP address or FQDN)_" placeholder="<?=$vpn_wg0?'(_(not used)_)':preg_replace('/^(.+?\.)[0-9a-zA-Z]+(\.(my)?unraid.net)$/','$1<hash>$2',$public)?>">
+    <span>:</span>
+    <input type="number" name="gui:ListenPort:0" class="port" min="1" max="65535" value="<?=$vpn_wg0?'':_var($wg0,'ListenPort:0')?>" onchange="if(quickValidate(this)) {portRemark($(document.wg0),'wg0',this.value)}" placeholder="<?=$vpn_wg0?'':_var($netport,'wg0')?>">
+  </span>
+  <span class="remark inline-block" style="display:none">_(Remark)_: _(configure your router with port forwarding of port)_ **<span id="my-port-wg0"><?=_var($wg0,'ListenPort:0')?:_var($netport,'wg0')?></span>/_(UDP)_** _(to)_ **<?=$server?>:<?=_var($wg0,'ListenPort:0')?:_var($netport,'wg0')?>**</span><span class="upnp wg0 inline-block"></span>
+  <input type="hidden" name="ListenPort:0" value="">
+  <dl id="endpoint4-wg0" style="display:none"></dl>
+  <dl id="endpoint6-wg0" style="display:none"></dl>
 
 :wg_local_endpoint_help:
 
 <div markdown="1" class="advanced wg0 zone0" style="display:none">
 _(Local server uses NAT)_:
-: <span class="input"><select name="NAT:0" class="narrow" onchange="showRoute($(document.wg0),'wg0',0)">
+: <select name="NAT:0" onchange="showRoute($(document.wg0),'wg0',0)">
   <?=mk_option(_var($wg0,'NAT:0'), "", _("Yes"))?>
   <?=mk_option(_var($wg0,'NAT:0'), "no", _("No"))?>
-  </select></span>
-  <span id="my-static1-wg0" class="block" style="display:none">_(Remark)_: _(configure your router with a static route of)_ **<?=_var($wg0,'Network:0')?>** _(to)_ **<?=$server?>**</span><span id="my-static2-wg0" class="block" style="display:none">_(Remark)_: _(docker containers on custom networks need static routing)_ **<?=_var($wg0,'Network:0')?>** _(to)_ **<?=$server?>**</span>
+  </select>
+  <span id="my-static1-wg0" class="inline-block" style="display:none">_(Remark)_: _(configure your router with a static route of)_ **<?=_var($wg0,'Network:0')?>** _(to)_ **<?=$server?>**</span>
+  <span id="my-static2-wg0" class="inline-block" style="display:none">_(Remark)_: _(docker containers on custom networks need static routing)_ **<?=_var($wg0,'Network:0')?>** _(to)_ **<?=$server?>**</span>
 
 :wg_local_server_uses_nat_help:
 
 <div markdown="1" class="upnp wg0" style="display:none">
 _(Local gateway uses UPnP)_:
-: <span class="input"><select name="UPNP:0" class="narrow" onchange="showRemark($(document.wg0))">
+: <select name="UPNP:0" onchange="showRemark($(document.wg0))">
   <?=mk_option(_var($wg0,'UPNP:0'), "", _("Yes"))?>
   <?=mk_option(_var($wg0,'UPNP:0'), "no", _("No"))?>
-  </select></span>
+  </select>
 
 :wg_local_gateway_uses_upnp_help:
 
 </div>
 _(Local tunnel firewall)_:
-: <span class="input"><input type="text" name="DROP:0" class="wide" value="<?=_var($wg0,'DROP:0')?>" onchange="quickValidate(this);" pattern="<?=$validList?>" title="_(Comma separated list of IPv4 and IPv6 IP addresses)_, _(CIDR optional)_" placeholder="(_(optional)_)"></span>
-  _(Rule)_: <select name="RULE:0" class="auto">
-  <?=mk_option(_var($wg0,'RULE:0'), "", _("Deny"))?>
-  <?=mk_option(_var($wg0,'RULE:0'), "1", _("Allow"))?>
-  </select>
+: <span class="flex flex-row items-center gap-2">
+    <input type="text" name="DROP:0" class="wide" value="<?=_var($wg0,'DROP:0')?>" onchange="quickValidate(this);" pattern="<?=$validList?>" title="_(Comma separated list of IPv4 and IPv6 IP addresses)_, _(CIDR optional)_" placeholder="(_(optional)_)">
+    <span class="flex flex-row items-center gap-2">
+      <span>_(Rule)_: </span>
+      <select name="RULE:0" class="auto">
+        <?=mk_option(_var($wg0,'RULE:0'), "", _("Deny"))?>
+        <?=mk_option(_var($wg0,'RULE:0'), "1", _("Allow"))?>
+      </select>
+    </span>
+  </span>
 
 :wg_local_tunnel_firewall_help:
 
 _(MTU size)_:
-: <span class="input"><input type="number" name="MTU:0" class="trim" min="68" max="9198" value="<?=_var($wg0,'MTU:0')?>" onchange="quickValidate(this);" placeholder="(_(auto)_)">_(bytes)_</span>
+: <span class="flex flex-row items-center gap-2">
+    <input type="number" name="MTU:0" class="trim" min="68" max="9198" value="<?=_var($wg0,'MTU:0')?>" onchange="quickValidate(this);" placeholder="(_(auto)_)">
+    <span>_(bytes)_</span>
+  </span>
 
 :wg_mtu_size_help:
 
@@ -1387,16 +1420,22 @@ _(DNS servers)_:
 <?foreach ($peer_wg0 as $i):?>
 <div markdown="1" id="index-wg0-<?=$i?>" class="shade">
 _(Peer name)_:
-: <span class="input"><input type="text" name="Name:<?=$i?>" class="wide" maxlength="99" value="<?=_var($wg0,"Name:$i")?>" onchange="quickValidate(this);" pattern="<?=$validname?>" title="_(Use only letters A-Z, digits or space,dash,underscore)_" placeholder="(_(optional)_)"></span>
-  <input type="button" class="form" value="_(Delete Peer)_" onclick="delPeer($(document.wg0),'#index-wg0-<?=$i?>')">
-  <span class="pin"><i class="fa fa-fw fa-eye eye<?=$i?><?=(file_exists("$etc/peers/peer-$tower-wg0-$i.conf")&&isset($wg0["TYPE:$i"])&&$wg0["TYPE:$i"]<=6)?'':' key-off'?>" style="cursor:pointer" onclick="WGconfig(this,'peer-<?=$tower?>-wg0-<?=$i?>','/peers')" title="_(View Peer Config)_"></i>
-  <i class="fa fa-fw fa-key zone<?=$i?><?=isset($wg0["PublicKey:$i"])?'':' key-off'?>" style="cursor:pointer" onclick="openClose($(document.wg0),null,'div.key<?=$i?>')" title="_(Toggle keys)_"></i>
-  <i id="chevron-wg0-<?=$i?>" class="fa fa-fw fa-chevron-down" style="cursor:pointer" onclick="openClose($(document.wg0),this,'div.zone<?=$i?>')" title="_(Toggle view)_"></i></span>
+: <span class="flex flex-row items-center gap-2">
+    <input type="text" name="Name:<?=$i?>" class="wide" maxlength="99" value="<?=_var($wg0,"Name:$i")?>" onchange="quickValidate(this);" pattern="<?=$validname?>" title="_(Use only letters A-Z, digits or space,dash,underscore)_" placeholder="(_(optional)_)">
+    <span class="flex flex-row items-center gap-2">
+      <i class="fa fa-fw fa-eye eye<?=$i?><?=(file_exists("$etc/peers/peer-$tower-wg0-$i.conf")&&isset($wg0["TYPE:$i"])&&$wg0["TYPE:$i"]<=6)?'':' key-off'?>" style="cursor:pointer" onclick="WGconfig(this,'peer-<?=$tower?>-wg0-<?=$i?>','/peers')" title="_(View Peer Config)_"></i>
+      <i class="fa fa-fw fa-key zone<?=$i?><?=isset($wg0["PublicKey:$i"])?'':' key-off'?>" style="cursor:pointer" onclick="openClose($(document.wg0),null,'div.key<?=$i?>')" title="_(Toggle keys)_"></i>
+      <i id="chevron-wg0-<?=$i?>" class="fa fa-fw fa-chevron-down" style="cursor:pointer" onclick="openClose($(document.wg0),this,'div.zone<?=$i?>')" title="_(Toggle view)_"></i>
+    </span>
+  </span>
+  <span class="inline-block">
+    <input type="button" class="form" value="_(Delete Peer)_" onclick="delPeer($(document.wg0),'#index-wg0-<?=$i?>')">
+  </span>
 
 :wg_peer_name_help:
 
 _(Peer type of access)_:
-: <span class="input"><select name="TYPE:<?=$i?>" class="auto" onchange="updatePeer($(document.wg0),<?=$i?>,this.value,'wg0')">
+: <select name="TYPE:<?=$i?>" class="auto" onchange="updatePeer($(document.wg0),<?=$i?>,this.value,'wg0')">
   <?=mk_option(_var($wg0,"TYPE:$i"), "0", _("Remote access to server"))?>
   <?=mk_option(_var($wg0,"TYPE:$i"), "1", _("Remote access to LAN"))?>
   <?=mk_option(_var($wg0,"TYPE:$i"), "2", _("Server to server access"))?>
@@ -1406,7 +1445,7 @@ _(Peer type of access)_:
   <?=mk_option(_var($wg0,"TYPE:$i"), "6", _("Remote tunneled access"))?>
   <?=mk_option(_var($wg0,"TYPE:$i"), "7", _("VPN tunneled access for system"),count($peer_wg0)==1?'':'disabled')?>
   <?=mk_option(_var($wg0,"TYPE:$i"), "8", _("VPN tunneled access for docker"),count($peer_wg0)==1?'':'disabled')?>
-  </select></span>
+  </select>
   <span id="access-type-<?=$i?>"</span>
 
 <?if ($i==1):?>
@@ -1415,19 +1454,23 @@ _(Peer type of access)_:
 
 <div markdown="1" class="keys wg0 key<?=$i?>"<?=isset($wg0["PublicKey:$i"])?' style="display:none">':'>'?>
 _(Peer private key)_:
-: <span class="input"><input type="text" name="PrivateKey:<?=$i?>" class="wide private-<?=$i?>" maxlength="64" value="<?=_var($wg0,"PrivateKey:$i")?>" onchange="highlight($(document.wg0),this,<?=$i?>)" placeholder="(_(optional)_)"></span>
-  <input type="button" class="form" value="_(Generate Keypair)_" onclick="keypair($(document.wg0),'<?=$i?>')">
+: <input type="text" name="PrivateKey:<?=$i?>" class="wide private-<?=$i?>" maxlength="64" value="<?=_var($wg0,"PrivateKey:$i")?>" onchange="highlight($(document.wg0),this,<?=$i?>)" placeholder="(_(optional)_)">
+  <span class="inline-block">
+    <input type="button" class="form" value="_(Generate Keypair)_" onclick="keypair($(document.wg0),'<?=$i?>')">
+  </span>
 
 :wg_generate_keypair_help:
 
 _(Peer public key)_:
-: <span class="input"><input type="text" name="PublicKey:<?=$i?>" class="wide public-<?=$i?>" maxlength="64" value="<?=_var($wg0,"PublicKey:$i")?>" onchange="highlight($(document.wg0),this,<?=$i?>)" placeholder="(_(mandatory)_)" required></span>
+: <input type="text" name="PublicKey:<?=$i?>" class="wide public-<?=$i?>" maxlength="64" value="<?=_var($wg0,"PublicKey:$i")?>" onchange="highlight($(document.wg0),this,<?=$i?>)" placeholder="(_(mandatory)_)" required>
 
 :wg_generate_keypair_help:
 
 _(Peer preshared key)_:
-: <span class="input"><input type="text" name="PresharedKey:<?=$i?>" class="wide preshared-<?=$i?>" maxlength="64" value="<?=_var($wg0,"PresharedKey:$i")?>" onchange="highlight($(document.wg0),this,<?=$i?>)" placeholder="(_(optional)_)"></span>
-  <input type="button" class="form" value="_(Generate Key)_" onclick="presharedkey($(document.wg0),'<?=$i?>')">
+: <input type="text" name="PresharedKey:<?=$i?>" class="wide preshared-<?=$i?>" maxlength="64" value="<?=_var($wg0,"PresharedKey:$i")?>" onchange="highlight($(document.wg0),this,<?=$i?>)" placeholder="(_(optional)_)">
+  <span class="inline-block">
+    <input type="button" class="form" value="_(Generate Key)_" onclick="presharedkey($(document.wg0),'<?=$i?>')">
+  </span>
 
 :wg_peer_preshared_key_help:
 
@@ -1435,64 +1478,89 @@ _(Peer preshared key)_:
 <div markdown="1" class="advanced wg0 zone<?=$i?>" style="display:none">
 <div markdown="1" class="ipv4 wg0" style="display:none">
 _(Peer tunnel address)_:
-: <span class="input"><input type="text" name="Address:<?=$i?>" class="subnet" maxlength="15" value="<?=_var($wg0,"Address:$i")?>" onchange="if(verifyInSubnet(this)){setAllow($(document.wg0),this.value,<?=$i?>)}" pattern="<?=$validIP4?>" title="_(IPv4 address)_"></span>
-  <input type="button" class="form ping-button1-<?=$i?>" value="_(Ping)_" onclick="ping($(document.wg0),this,'input[name=&quot;Address:<?=$i?>&quot;]')"<?=isset($wg0["Address:$i"])?'':' disabled'?>>
-
+: <input type="text" name="Address:<?=$i?>" maxlength="15" value="<?=_var($wg0,"Address:$i")?>" onchange="if(verifyInSubnet(this)){setAllow($(document.wg0),this.value,<?=$i?>)}" pattern="<?=$validIP4?>" title="_(IPv4 address)_">
+  <span class="inline-block">
+    <input type="button" class="form ping-button1-<?=$i?>" value="_(Ping)_" onclick="ping($(document.wg0),this,'input[name=&quot;Address:<?=$i?>&quot;]')"<?=isset($wg0["Address:$i"])?'':' disabled'?>>
+  </span>
 </div>
 <div markdown="1" class="ipv6 wg0" style="display:none">
 _(Peer tunnel address IPv6)_:
-: <span class="input"><input type="text" name="Address6:<?=$i?>" class="subnet" maxlength="40" value="<?=_var($wg0,"Address6:$i")?>" onchange="if(verifyInSubnet6(this)){setAllow6($(document.wg0),this.value,<?=$i?>)}" pattern="<?=$validIP6?>" title="_(IPv6 address)_"></span>
-  <input type="button" class="form ping-button6-<?=$i?>" value="_(Ping)_" onclick="ping($(document.wg0),this,'input[name=&quot;Address6:<?=$i?>&quot;]')"<?=isset($wg0["Address6:$i"])?'':' disabled'?>>
-
+: <input type="text" name="Address6:<?=$i?>" maxlength="40" value="<?=_var($wg0,"Address6:$i")?>" onchange="if(verifyInSubnet6(this)){setAllow6($(document.wg0),this.value,<?=$i?>)}" pattern="<?=$validIP6?>" title="_(IPv6 address)_">
+  <span class="inline-block">
+    <input type="button" class="form ping-button6-<?=$i?>" value="_(Ping)_" onclick="ping($(document.wg0),this,'input[name=&quot;Address6:<?=$i?>&quot;]')"<?=isset($wg0["Address6:$i"])?'':' disabled'?>>
+  </span>
 </div>
 :wg_peer_tunnel_address_help:
 
 _(Peer endpoint)_:
-<input type="hidden" name="Endpoint:<?=$i?>" value="">
-: <span class="input"><input type="text" name="gui:Endpoint:<?=$i?>" class="subnet" value="<?=_var($wg0,"Endpoint:$i")?>" pattern="<?=$validText?>" title="_(IP address or FQDN)_" onchange="toLC(this);quickValidate(this);" <?=($vpn_wg0||(int)_var($wg0,"TYPE:$i",0)==2||(int)_var($wg0,"TYPE:$i",0)==3)?'placeholder="(_(mandatory)_)" required':'placeholder="(_(not used)_)"'?>>:
-  <input type="number" name="gui:ListenPort:<?=$i?>" class="port" min="1" max="65535" value="<?=_var($wg0,"ListenPort:$i")?>" onchange="quickValidate(this);"<?=isset($wg0["Endpoint:$i"])?" placeholder=\"".(_var($wg0,'ListenPort:0')?:_var($netport,'wg0'))."\"":""?>></span>
-  <input type="button" class="form ping-button2-<?=$i?>" value="_(Ping)_" onclick="ping($(document.wg0),this,'input[name=&quot;gui:Endpoint:<?=$i?>&quot;]')"<?=isset($wg0["Endpoint:$i"])?'':' disabled'?>>
+: <input type="hidden" name="Endpoint:<?=$i?>" value="">
+  <span class="flex flex-row items-center gap-2">
+    <input type="text" name="gui:Endpoint:<?=$i?>" value="<?=_var($wg0,"Endpoint:$i")?>" pattern="<?=$validText?>" title="_(IP address or FQDN)_" onchange="toLC(this);quickValidate(this);" <?=($vpn_wg0||(int)_var($wg0,"TYPE:$i",0)==2||(int)_var($wg0,"TYPE:$i",0)==3)?'placeholder="(_(mandatory)_)" required':'placeholder="(_(not used)_)"'?>>
+    <span>:</span>
+    <input type="number" name="gui:ListenPort:<?=$i?>" class="port" min="1" max="65535" value="<?=_var($wg0,"ListenPort:$i")?>" onchange="quickValidate(this);"<?=isset($wg0["Endpoint:$i"])?" placeholder=\"".(_var($wg0,'ListenPort:0')?:_var($netport,'wg0'))."\"":""?>>
+  </span>
+  <span class="inline-block">
+    <input type="button" class="form ping-button2-<?=$i?>" value="_(Ping)_" onclick="ping($(document.wg0),this,'input[name=&quot;gui:Endpoint:<?=$i?>&quot;]')"<?=isset($wg0["Endpoint:$i"])?'':' disabled'?>>
+  </span>
 
 :wg_peer_endpoint_help:
 
 _(Peer allowed IPs)_:
-: <span class="input"><input type="text" name="AllowedIPs:<?=$i?>" class="wide" value="<?=_var($wg0,"AllowedIPs:$i")?>" onchange="quickValidate(this);" pattern="<?=$validList?>" title="_(Comma separated list of IPv4 and IPv6 IP addresses)_, _(CIDR optional)_" placeholder="(_(mandatory)_)" required></span>
+: <input type="text" name="AllowedIPs:<?=$i?>" class="wide" value="<?=_var($wg0,"AllowedIPs:$i")?>" onchange="quickValidate(this);" pattern="<?=$validList?>" title="_(Comma separated list of IPv4 and IPv6 IP addresses)_, _(CIDR optional)_" placeholder="(_(mandatory)_)" required>
 
 :wg_peer_allowed_ips_help:
 
 _(Peer DNS server)_:
-: <span class="input"><input type="text" name="DNS:<?=$i?>" class="subnet" maxlength="60" value="<?=_var($wg0,"DNS:$i")?>" onchange="quickValidate(this);" pattern="<?=$validDNSServerList?>" title="_(Comma separated list of IPv4 and IPv6 IP addresses)_" <?=(int)_var($wg0,"TYPE:$i",0)!=6?'placeholder="(_(optional)_)"':'placeholder="(_(mandatory)_)" required'?>></span>
+: <input type="text" name="DNS:<?=$i?>" maxlength="60" value="<?=_var($wg0,"DNS:$i")?>" onchange="quickValidate(this);" pattern="<?=$validDNSServerList?>" title="_(Comma separated list of IPv4 and IPv6 IP addresses)_" <?=(int)_var($wg0,"TYPE:$i",0)!=6?'placeholder="(_(optional)_)"':'placeholder="(_(mandatory)_)" required'?>>
 
 :wg_peer_dns_server_help:
 
 _(Persistent keepalive)_:
-: <span class="input"><input type="number" name="PersistentKeepalive:<?=$i?>" class="trim" min="0" max="600" value="<?=_var($wg0,"PersistentKeepalive:$i")?>" onchange="quickValidate(this);" placeholder="(_(disabled)_)">_(seconds)_</span>
+: <span class="flex flex-row items-center gap-2">
+    <input type="number" name="PersistentKeepalive:<?=$i?>" class="trim" min="0" max="600" value="<?=_var($wg0,"PersistentKeepalive:$i")?>" onchange="quickValidate(this);" placeholder="(_(disabled)_)">
+    <span>_(seconds)_</span>
+  </span>
 
 :wg_persistent_keepalive_help:
 
 </div>
+
+_(Data received)_:
+: <span class="rx-wg0-<?=$i?>">0 B</span>
+
+_(Data sent)_:
+: <span class="tx-wg0-<?=$i?>">0 B</span>
+
+_(Last handshake)_:
+: <span class="hs-wg0-<?=$i?>">_(unknown)_</span>
 </div>
-<span class="pin">_(Data received)_: <span class="rx-wg0-<?=$i?>">0 B</span>_(Data sent)_: <span class="tx-wg0-<?=$i?>">0 B</span><br>_(Last handshake)_: <span class="hs-wg0-<?=$i?>">_(unknown)_</span></span>
 <?endforeach;?>
 
 &nbsp;
-: <input type="submit" value="_(Apply)_" onclick="return(validateForm($(document.wg0),'wg0'))" disabled><input type="button" value="_(Done)_" onclick="done()"><input type="button" id="addpeer-wg0" value="_(Add Peer)_" onclick="addPeer($(document.wg0),'wg0')">
-  <input type="button" class="advanced wg0" value="_(Delete Tunnel)_" style="float:right;display:none" onclick="delTunnel('wg0')"<?=file_exists($conf_wg0)?'':' disabled'?>>
+: <span class="inline-block">
+    <input type="submit" value="_(Apply)_" onclick="return(validateForm($(document.wg0),'wg0'))" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+    <input type="button" id="addpeer-wg0" value="_(Add Peer)_" onclick="addPeer($(document.wg0),'wg0')">
+    <input type="button" class="advanced wg0" value="_(Delete Tunnel)_" style="display:none" onclick="delTunnel('wg0')"<?=file_exists($conf_wg0)?'':' disabled'?>>
+  </span>
 </form>
-<small style="position:absolute;left:10px;top:30px">"WireGuard" and the "WireGuard" logo are registered trademarks of Jason A. Donenfeld</small>
 
 <script markdown="1" type="text/html" id="peer-template-wg0">
 <div markdown="1" id="index-wg0-INDEX" class="shade">
 _(Peer name)_:
-: <span class="input"><input type="text" name="Name:INDEX" class="wide" maxlength="99" value="" onchange="quickValidate(this);" pattern="<?=$validname?>" title="_(Use only letters A-Z, digits or space,dash,underscore)_" placeholder="(_(optional)_)"></span>
-  <span class="pin"><i class="fa fa-fw fa-eye eyeINDEX key-off" title="_(Show Peer Config)_"></i>
-  <i class="fa fa-fw fa-key zoneINDEX key-off" title="_(Toggle keys)_"></i>
-  <i id="chevron-wg0-INDEX" class="fa fa-fw fa-chevron-down" style="cursor:pointer" onclick="openClose($(document.wg0),this,'div.zoneINDEX')" title="_(Toggle view)_"></i></span>
+: <span class="flex flex-row items-center gap-2">
+    <input type="text" name="Name:INDEX" class="wide" maxlength="99" value="" onchange="quickValidate(this);" pattern="<?=$validname?>" title="_(Use only letters A-Z, digits or space,dash,underscore)_" placeholder="(_(optional)_)">
+    <span class="flex flex-row items-center gap-2">
+      <i class="fa fa-fw fa-eye eyeINDEX key-off" title="_(Show Peer Config)_"></i>
+      <i class="fa fa-fw fa-key zoneINDEX key-off" title="_(Toggle keys)_"></i>
+      <i id="chevron-wg0-INDEX" class="fa fa-fw fa-chevron-down" style="cursor:pointer" onclick="openClose($(document.wg0),this,'div.zoneINDEX')" title="_(Toggle view)_"></i>
+    </span>
+  </span>
 
 :wg_peer_name_help:
 
 _(Peer type of access)_:
-: <span class="input"><select name="TYPE:INDEX" class="auto" onchange="updatePeer($(document.wg0),INDEX,this.value,'wg0')">
+: <select name="TYPE:INDEX" class="auto" onchange="updatePeer($(document.wg0),INDEX,this.value,'wg0')">
   <?=mk_option(0, "0", _("Remote access to server"))?>
   <?=mk_option(0, "1", _("Remote access to LAN"))?>
   <?=mk_option(0, "2", _("Server to server access"))?>
@@ -1502,26 +1570,30 @@ _(Peer type of access)_:
   <?=mk_option(0, "6", _("Remote tunneled access"))?>
   <?=mk_option(0, "7", _("VPN tunneled access for system"),'disabled')?>
   <?=mk_option(0, "8", _("VPN tunneled access for docker"),'disabled')?>
-  </select></span>
+  </select>
   <span id="access-type-INDEX" class="access-type"></span>
 
 > ![](<?=autov('/webGui/images/wireguard-help.png')?>)
 
 <div markdown="1" class="keys wg0 keyINDEX">
 _(Peer private key)_:
-: <span class="input"><input type="text" name="PrivateKey:INDEX" class="wide private-INDEX" maxlength="64" value="" onchange="highlight($(document.wg0),this,0)" placeholder="(_(optional)_)"></span>
-  <input type="button" class="form" value="_(Generate Keypair)_" onclick="keypair($(document.wg0),'INDEX')">
+: <input type="text" name="PrivateKey:INDEX" class="wide private-INDEX" maxlength="64" value="" onchange="highlight($(document.wg0),this,0)" placeholder="(_(optional)_)">
+  <span class="inline-block">
+    <input type="button" class="form" value="_(Generate Keypair)_" onclick="keypair($(document.wg0),'INDEX')">
+  </span>
 
 :wg_generate_keypair_help:
 
 _(Peer public key)_:
-: <span class="input"><input type="text" name="PublicKey:INDEX" class="wide public-INDEX" maxlength="64" onchange="highlight($(document.wg0),this,0)" placeholder="(_(mandatory)_)" value="" required></span>
+: <input type="text" name="PublicKey:INDEX" class="wide public-INDEX" maxlength="64" onchange="highlight($(document.wg0),this,0)" placeholder="(_(mandatory)_)" value="" required>
 
 :wg_generate_keypair_help:
 
 _(Peer preshared key)_:
-: <span class="input"><input type="text" name="PresharedKey:INDEX" class="wide preshared-INDEX" maxlength="64" value="" onchange="highlight($(document.wg0),this,0)" placeholder="(_(optional)_)"></span>
-  <input type="button" class="form" value="_(Generate Key)_" onclick="presharedkey($(document.wg0),'INDEX')">
+: <input type="text" name="PresharedKey:INDEX" class="wide preshared-INDEX" maxlength="64" value="" onchange="highlight($(document.wg0),this,0)" placeholder="(_(optional)_)">
+  <span class="inline-block">
+    <input type="button" class="form" value="_(Generate Key)_" onclick="presharedkey($(document.wg0),'INDEX')">
+  </span>
 
 :wg_peer_preshared_key_help:
 
@@ -1529,38 +1601,48 @@ _(Peer preshared key)_:
 <div markdown="1" class="advanced wg0 zoneINDEX" style="display:none">
 <div markdown="1" class="ipv4 wg0" style="display:none">
 _(Peer tunnel address)_:
-: <span class="input"><input type="text" name="Address:INDEX" class="subnet" maxlength="15" value="" onchange="if(verifyInSubnet(this)){setAllow($(document.wg0),this.value,INDEX)}" pattern="<?=$validIP4?>" title="_(IPv4 address)_"></span>
-  <input type="button" class="form ping-button1-INDEX" value="_(Ping)_" onclick="ping($(document.wg0),this,'input[name=&quot;Address:INDEX&quot;]')" disabled>
-
+: <input type="text" name="Address:INDEX" maxlength="15" value="" onchange="if(verifyInSubnet(this)){setAllow($(document.wg0),this.value,INDEX)}" pattern="<?=$validIP4?>" title="_(IPv4 address)_">
+  <span class="inline-block">
+    <input type="button" class="form ping-button1-INDEX" value="_(Ping)_" onclick="ping($(document.wg0),this,'input[name=&quot;Address:INDEX&quot;]')" disabled>
+  </span>
 </div>
 <div markdown="1" class="ipv6 wg0" style="display:none">
 _(Peer tunnel address IPv6)_:
-: <span class="input"><input type="text" name="Address6:INDEX" class="subnet" maxlength="40" value="" onchange="if(verifyInSubnet6(this)){setAllow6($(document.wg0),this.value,INDEX)}" pattern="<?=$validIP6?>" title="_(IPv6 address)_"></span>
-  <input type="button" class="form ping-button6-INDEX" value="_(Ping)_" onclick="ping($(document.wg0),this,'input[name=&quot;Address6:INDEX&quot;]')" disabled>
-
+: <input type="text" name="Address6:INDEX" maxlength="40" value="" onchange="if(verifyInSubnet6(this)){setAllow6($(document.wg0),this.value,INDEX)}" pattern="<?=$validIP6?>" title="_(IPv6 address)_">
+  <span class="inline-block">
+    <input type="button" class="form ping-button6-INDEX" value="_(Ping)_" onclick="ping($(document.wg0),this,'input[name=&quot;Address6:INDEX&quot;]')" disabled>
+  </span>
 </div>
 :wg_peer_tunnel_address_help:
 
 _(Peer endpoint)_:
-<input type="hidden" name="Endpoint:INDEX" value="">
-: <span class="input"><input type="text" name="gui:Endpoint:INDEX" class="subnet" value="" pattern="<?=$validText?>" title="_(IP address or FQDN)_" onchange="toLC(this);quickValidate(this);" placeholder="(_(not used)_)">:
-  <input type="number" name="gui:ListenPort:INDEX" class="port" min="1" max="65535" value="" onchange="quickValidate(this);"></span>
-  <input type="button" class="form ping-button2-INDEX" value="_(Ping)_" onclick="ping($(document.wg0),this,'input[name=&quot;gui:Endpoint:INDEX&quot;]')" disabled>
+: <input type="hidden" name="Endpoint:INDEX" value="">
+  <span class="flex flex-row items-center gap-2">
+    <input type="text" name="gui:Endpoint:INDEX" value="" pattern="<?=$validText?>" title="_(IP address or FQDN)_" onchange="toLC(this);quickValidate(this);" placeholder="(_(not used)_)">
+    <span>:</span>
+    <input type="number" name="gui:ListenPort:INDEX" class="port" min="1" max="65535" value="" onchange="quickValidate(this);">
+  </span>
+  <span class="inline-block">
+    <input type="button" class="form ping-button2-INDEX" value="_(Ping)_" onclick="ping($(document.wg0),this,'input[name=&quot;gui:Endpoint:INDEX&quot;]')" disabled>
+  </span>
 
 :wg_peer_endpoint_help:
 
 _(Peer allowed IPs)_:
-: <span class="input"><input type="text" name="AllowedIPs:INDEX" class="wide" value="" onchange="quickValidate(this);" pattern="<?=$validList?>" title="_(Comma separated list of IPv4 and IPv6 IP addresses)_, _(CIDR optional)_" placeholder="(_(mandatory)_)" required></span>
+: <input type="text" name="AllowedIPs:INDEX" class="wide" value="" onchange="quickValidate(this);" pattern="<?=$validList?>" title="_(Comma separated list of IPv4 and IPv6 IP addresses)_, _(CIDR optional)_" placeholder="(_(mandatory)_)" required>
 
 :wg_peer_allowed_ips_help:
 
 _(Peer DNS server)_:
-: <span class="input"><input type="text" name="DNS:INDEX" class="subnet" maxlength="60" value="" onchange="quickValidate(this);" pattern="<?=$validDNSServerList?>" title="_(Comma separated list of IPv4 and IPv6 IP addresses)_" placeholder="(_(optional)_)"></span>
+: <input type="text" name="DNS:INDEX" maxlength="60" value="" onchange="quickValidate(this);" pattern="<?=$validDNSServerList?>" title="_(Comma separated list of IPv4 and IPv6 IP addresses)_" placeholder="(_(optional)_)">
 
 :wg_peer_dns_server_help:
 
 _(Persistent keepalive)_:
-: <span class="input"><input type="number" name="PersistentKeepalive:INDEX" class="trim" min="0" max="600" value="" onchange="quickValidate(this);" placeholder="(_(disabled)_)">_(seconds)_</span>
+: <span class="flex flex-row items-center gap-2">
+    <input type="number" name="PersistentKeepalive:INDEX" class="trim" min="0" max="600" value="" onchange="quickValidate(this);" placeholder="(_(disabled)_)">
+    <span>_(seconds)_</span>
+  </span>
 
 :wg_persistent_keepalive_help:
 

@@ -1,5 +1,15 @@
 #!/usr/bin/php
 <?php
+    $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+    require_once "$docroot/webGui/include/Helpers.php";
+
+
+    $pci_device_changes = comparePCIData();
+
+    if (count($pci_device_changes) > 0) {
+        my_logger("PCI Changes not acknowledged skip save","savepcidata.");
+        return;
+    }
 
     $output = shell_exec('lspci -Dmn');
     $devices = [];

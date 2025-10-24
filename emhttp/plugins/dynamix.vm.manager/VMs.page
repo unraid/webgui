@@ -2,6 +2,7 @@ Menu="Tasks:70"
 Type="xmenu"
 Code="e918"
 Lock="true"
+Tabs="true"
 Cond="exec(\"grep -o '^SERVICE=.enable' /boot/config/domain.cfg 2>/dev/null\")"
 ---
 <?PHP
@@ -18,10 +19,13 @@ Cond="exec(\"grep -o '^SERVICE=.enable' /boot/config/domain.cfg 2>/dev/null\")"
  */
 ?>
 <?
-if ($var['fsState'] != "Started") {
-  echo "<div class='notice shift'>"._('Array must be **started** to view Virtual Machines').".</div>";
-} elseif (!is_file('/var/run/libvirt/libvirtd.pid') || (!is_dir('/proc/'.@file_get_contents('/var/run/libvirt/libvirtd.pid')))) {
-  echo "<div class='notice shift'>"._('Libvirt Service failed to start').".</div>";
-}
-if (count($pages)==2) $tabbed = false;
+  $noticeMessage = null;
+  if ($var['fsState'] != "Started") {
+    $noticeMessage = _('Array must be **started** to view Virtual Machines');
+  } elseif (!is_file('/var/run/libvirt/libvirtd.pid') || (!is_dir('/proc/'.@file_get_contents('/var/run/libvirt/libvirtd.pid')))) {
+    $noticeMessage = _('Libvirt Service failed to start');
+  }
 ?>
+<? if ($noticeMessage): ?>
+  <p class="notice"><?= $noticeMessage ?></p>
+<? endif; ?>

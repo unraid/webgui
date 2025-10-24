@@ -11,6 +11,10 @@
 # Set the path.
 PATH=/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin
 
+# Limetech - Mount /dev on a devtmpfs
+/bin/mkdir -p /dev
+/sbin/mount -n -t devtmpfs devtmpfs /dev
+
 # Mount /proc if it is not already mounted:
 if [[ ! -d /proc/sys ]]; then
   /sbin/mount -v proc /proc -n -t proc 2>/dev/null
@@ -60,21 +64,25 @@ fi
 # LimeTech - determine if the 'unraidlabel' kernel append parameter was
 # provided to override which device is mounted for /boot (default: UNRAID)
 UNRAIDLABEL="UNRAID"
-UNRAIDROOT=
+UNRAIDBOOT=
+ROOT=
 set -- $(/bin/cat /proc/cmdline)
 for x in "$@"; do
   case "$x" in
+  unraidboot=*)
+    UNRAIDBOOT="${x#unraidboot=}"
+    ;;
   unraidlabel=*)
     UNRAIDLABEL="${x#unraidlabel=}"
     ;;
   root=*)
-    UNRAIDROOT="${x#root=}"
+    ROOT="${x#root=}"
     ;;
   esac
 done
+[[ -z "$UNRAIDBOOT" ]] && UNRAIDBOOT="$UNRAIDLABEL"
 
-# LimeTech - poll for device with $UNRAIDLABEL present, with 30-sec timeout
-# this serves to synchronize this script with USB subsystem
+# terminate the boot sequence
 abort() {
   /bin/umount -a
   read -p "$1 - press ENTER key to reboot..."
@@ -82,17 +90,19 @@ abort() {
   /sbin/reboot -fd
 }
 
+# find which device/partition has the UNRAIDBOOT label
 find_device() {
-  # find which USB flash device/partition has the indicated label
   local i
   for i in {1..30}; do
-    DEVICE=$(/sbin/blkid -L $UNRAIDLABEL)
+    DEVICE=$(/sbin/blkid -L $UNRAIDBOOT)
     [[ -z $DEVICE ]] && /bin/sleep 1 || return 0
   done
   return 1
 }
 
-/bin/echo -n "waiting up to 30 sec for device with label $UNRAIDLABEL to come online ... "
+# LimeTech - poll for device with $UNRAIDBOOT present, with 30-sec timeout
+# this serves to synchronize this script with kernel device discovery
+/bin/echo -n "waiting up to 30 sec for device with BOOT $UNRAIDBOOT to come online ... "
 find_device && /bin/echo "found $DEVICE" || abort "not found"
 
 # detect filesystem from boot device
@@ -140,7 +150,7 @@ bzmount(){
   /sbin/mount -v -t overlay overlay -o lowerdir=/$MNTDIR,upperdir=/var/local/overlay/$MNTDIR,workdir=/var/local/overlay-work/$MNTDIR /$MNTDIR
 }
 
-if [[ $UNRAIDROOT == "" ]]; then
+if [[ $ROOT == "" ]]; then
   bzcheck "bzimage"
   bzcheck "bzroot"
   bzcheck "bzroot-gui"
@@ -164,15 +174,15 @@ if [[ $UNRAIDROOT == "" ]]; then
   /bin/mv -f /var/empty/* /var/log
 else
   /bin/echo "Checking root filesystem"
-  /sbin/fsck -C -a $UNRAIDROOT
+  /sbin/fsck -C -a $ROOT
   RETVAL=$?
   [[ $RETVAL -ge 2 ]] && abort "fsck failed with return value $RETVAL"
   # Remount the root filesystem in read-write mode
-  /bin/echo "Remounting $UNRAIDROOT with read-write enabled."
+  /bin/echo "Remounting $ROOT with read-write enabled."
   /sbin/mount -w -v -n -o remount /
   RETVAL=$?
-  [[ $RETVAL -gt 0 ]] && abort "failed to remount $UNRAIDROOT r/w with return value $RETVAL"
-  [[ ! -f /etc/rc.d/rc.S.cont ]] && abort "unable to continue - you must remove 'root=$UNRAIDROOT' from syslinux.cfg"
+  [[ $RETVAL -gt 0 ]] && abort "failed to remount $ROOT r/w with return value $RETVAL"
+  [[ ! -f /etc/rc.d/rc.S.cont ]] && abort "unable to continue - you must remove 'root=$ROOT' from syslinux.cfg"
 fi
 
 # set permissions for non vfat boot on /boot

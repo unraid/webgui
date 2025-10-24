@@ -23,9 +23,12 @@ fi
 
 # Copy custom udev rules before starting udevd
 UDEVRULES="/boot/config/udev"
-if [[ -d $UDEVRULES ]]; then
-  log "Installing custom udev rules..."
-  /usr/bin/find $UDEVRULES -type f -exec /usr/bin/install -p -m 0644 "{}" /etc/udev/rules.d \;
+if [[ -d "${UDEVRULES}" ]]; then
+  log "Installing custom udev rules and scripts..."
+  # Install .rule files with 0644 permissions
+  /usr/bin/find "${UDEVRULES}" -type f -name "*.rules" -exec /usr/bin/install -p -D -m 0644 -- "{}" /etc/udev/rules.d/ \;
+  # Install .sh files with 0755 permissions
+  /usr/bin/find "${UDEVRULES}" -type f -name "*.sh" -exec /usr/bin/install -p -D -m 0755 -- "{}" /etc/udev/scripts/ \;
 fi
 
 # Initialize udev to manage /dev entries and hotplugging.

@@ -8,9 +8,6 @@ queue(){
   atq | grep -Pom1 '^\d+'
 }
 
-# delayed execution
-sleep ${1:-1}
-
 JOB=$(queue)
 if [[ -n $JOB ]]; then
   atrm $JOB 2>/dev/null

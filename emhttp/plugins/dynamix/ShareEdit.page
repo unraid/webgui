@@ -13,8 +13,7 @@ Tag="share-alt-square"
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  */
-?>
-<?
+
 if (!empty($name) && !array_key_exists($name, $shares)) {
   echo "<script>done()</script>";
   exit;
@@ -326,35 +325,51 @@ function direction() {
 
 /* global shares include/exclude. */
 $myDisks = array_filter(array_diff(array_keys(array_filter($disks,'my_disks')), explode(',',$var['shareUserExclude'])), 'globalInclude');
+
+$filteredShares = array_filter($shares, function($list) use ($name) {
+	return (strpos($list['name'],"'") === false) && ($list['name'] != $name || !$name) ;
+});
 ?>
 :share_edit_global1_help:
 <?if ($name):?>
 :share_edit_global2_help:
 <?endif;?>
 
-<br>
-<div class="clone1">
-<span class="clone">_(Read settings from)_</span><i class="fa fa-arrow-left fa-fw"></i>
-<span class="wrap"><select name="readshare" class="clone" onchange="toggleButton('readshare',false)">
-<option disabled selected>_(select)_...</option>
-<?
-foreach ($shares as $list) if ($list['name']!=$name || !$name) echo mk_option("", $list['name'], compress($list['name']));
-?>
-</select></span><input type="button" id="readshare" value="_(Read)_" class="clone" onclick="readShare()" disabled>
-</div>
+<div markdown="1" class="relative">
+<?if (($share['hasCfg']??false)!='similar'):?>
+<?if (!empty($filteredShares)):?>
+<div markdown="1" class="clone-settings shade">
+_(Read settings from)_ <i class="fa fa-arrow-left fa-fw"></i>
+: <span class="flex flex-row items-center gap-4">
+	<select name="readshare" onchange="toggleButton('readshare',false)">
+		<option disabled selected>_(select)_...</option>
+		<? foreach ($filteredShares as $list):?>
+			<?=mk_option("", $list['name'], compress($list['name']))?>
+		<?endforeach;?>
+	</select>
+	<span class="buttons-spaced">
+		<input type="button" id="readshare" value="_(Read)_" class="clone" onclick="readShare()" disabled>
+	</span>
+</span>
 
 <?if ($name):?>
-<div class="clone2">
-<span class="clone">_(Write settings to)_</span><i class="fa fa-arrow-right fa-fw"></i>
-<span class="wrap"><select id="s5" name="writeshare" multiple onchange="toggleButton('writeshare',this.id)">
-<?
-$rows = [];
-foreach ($shares as $list) if ($list['name']!=$name) $rows[] = mk_option("", $list['name'], compress($list['name']));
-if ($rows) echo "<option>("._('All').")</option>";
-foreach ($rows as $row) echo $row;
-?>
-</select></span><input type="button" id="writeshare" value="_(Write)_" class="clone" onclick="writeShare()" disabled>
+_(Write settings to)_ <i class="fa fa-arrow-right fa-fw"></i>
+: <span class="flex flex-row items-center gap-4">
+	<select id="s5" name="writeshare" multiple onchange="toggleButton('writeshare',this.id)">
+		<?if (!empty($filteredShares)):?>
+			<option>(<?=_('All')?>)</option>
+		<?endif;?>
+		<? foreach ($filteredShares as $list):?>
+			<?=mk_option("", $list['name'], compress($list['name']))?>
+		<?endforeach;?>
+	</select>
+	<span class="buttons-spaced">
+		<input type="button" id="writeshare" value="_(Write)_" class="clone" onclick="writeShare()" disabled>
+	</span>
+</span>
+<?endif;?>
 </div>
+<?endif;?>
 <?endif;?>
 
 <form markdown="1" name="share_edit" method="POST" action="/update.htm" target="progressFrame" onsubmit="return prepareEdit()"<?=$name?" onchange=\"toggleButton('writeshare',true);$('#s5').dropdownchecklist('disable')\">":">"?>
@@ -368,7 +383,7 @@ foreach ($rows as $row) echo $row;
 
 <div markdown="1" class="shade">
 _(Share name)_:
-: <input type="text" id="shareName" name="shareName" maxlength="40" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars($name)?>" oninput="checkName(this.value)" title="_(Hidden share names are not allowed)_" pattern="^[^\.].*"><span id="zfs-name" class="orange-text"><i class="fa fa-warning"></i> _(Share name contains invalid characters for ZFS use)_</span>
+: <input type="text" id="shareName" name="shareName" maxlength="40" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars($name)?>" oninput="checkName(this.value)" title="_(Hidden share names are not allowed)_" pattern="^[^\.].*"><span id="zfs-name" class="orange-text"><i class="fa fa-warning"></i> _(Share name contains restricted character(s))_</span>
 
 :share_edit_name_help:
 
@@ -376,21 +391,20 @@ _(Comments)_:
 : <input type="text" name="shareComment" maxlength="256" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars($share['comment'])?>">
 
 :share_edit_comments_help:
+</div>
 
-<div markdown="1">
+<div markdown="1" class="shade">
 _(Minimum free space)_:
-: <span class="input"><input type="text" name="shareFloor" maxlength="16" autocomplete="off" spellcheck="false" class="wide" value="<?=presetSpace($share['floor'])?>" placeholder="_(Free Space will be calculated)_">
+: <input type="text" name="shareFloor" maxlength="16" autocomplete="off" spellcheck="false" class="wide" value="<?=presetSpace($share['floor'])?>" placeholder="_(Free Space will be calculated)_">
 
 :share_edit_free_space_help:
 
-</div>
 <?if ($name):?>
 <div markdown="1" class="empty">
 _(Share status)_:
 : _(Share is empty)_
 
 :share_edit_status_help:
-
 </div>
 
 <div markdown="1" class="full">
@@ -398,7 +412,6 @@ _(Share status)_:
 : <span class="full1">&nbsp;</span><span class="full2">_(Share contains data)_</span>
 
 :share_edit_delete_help:
-
 </div>
 
 <?if (_var($share,'exclusive')=="yes"):?>
@@ -568,14 +581,27 @@ _(Mover action)_:
 </div>
 <?if (!$name):?>
 &nbsp;
-: <input type="submit" name="cmdEditShare" value="_(Add Share)_" onclick="this.value='Add Share'"><input type="button" value="_(Done)_" onclick="done()">
+: <span class="inline-block">
+    <input type="submit" name="cmdEditShare" value="_(Add Share)_" onclick="this.value='Add Share'">
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
 <?else:?>
 <div markdown="1">
-<label id="deleteLabel" title="">_(Delete)_</label><input type="checkbox" name="confirmDelete" onchange="chkDelete(this.form, document.getElementById('cmdEditShare'));" title="" disabled>
-: <input type="submit" id="cmdEditShare" name="cmdEditShare" value="_(Apply)_" onclick="if (this.value=='_(Delete)_') this.value='Delete'; else this.value='Apply'; return handleDeleteClick(this)" disabled><input type="button" value="_(Done)_" onclick="done()">
+<label id="deleteLabel" title="" class="inline-flex flex-row items-center justify-end gap-2">
+	_(Delete)_
+    <input type="checkbox" name="confirmDelete" onchange="chkDelete(this.form, document.getElementById('cmdEditShare'));" title="" disabled>
+</label>
+: <span class="inline-flex flex-row items-center gap-2">
+	<input type="submit" id="cmdEditShare" name="cmdEditShare" value="_(Apply)_" onclick="if (this.value=='_(Delete)_') this.value='Delete'; else this.value='Apply'; return handleDeleteClick(this)" disabled>
+	<input type="button" value="_(Done)_" onclick="done()">
+        <?if (($share['hasCfg']??false)=='similar'):?>
+                <span class="orange-text"><i class="fa fa-warning"></i> _(Case-insensitive Share name is not unique)_</span>
+        <?endif;?>
+  </span>
 </div>
 <?endif;?>
 </form>
+</div>
 
 <script>
 let form = document.share_edit;
@@ -963,22 +989,22 @@ function prepareEdit() {
 	/* Check if a change was required and not made for primary dropdown */
 	if (checkRequiredPrimary && !changeMadePrimary) {
 		swal({
-			title: "Primary Storage",
-			text: "Selected Pool is not available and cannot be used.",
+			title: "_(Primary Storage)_",
+			text: "_(Selected Pool is not available and cannot be used.)_",
 			type: 'error',
 			html: true,
-			confirmButtonText: "Ok"
+			confirmButtonText: "_(Ok)_"
 		});
 		return false;
 	}
 	/* Check if a change was required and not made for secondary dropdown */
 	if (checkRequiredSecondary && !changeMadeSecondary) {
 		swal({
-			title: "Secondary Storage",
-			text: "Selected Pool is not available and cannot be used.",
+			title: "_(Secondary Storage)_",
+			text: "_(Selected Pool is not available and cannot be used.)_",
 			type: 'error',
 			html: true,
-			confirmButtonText: "Ok"
+			confirmButtonText: "_(Ok)_"
 		});
 		return false;
 	}
@@ -988,39 +1014,100 @@ function prepareEdit() {
 
 	if (share.length == 0) {
 		swal({
-			title: "Missing share name",
-			text: "Enter a name for the share",
+			title: "_(Missing share name)_",
+			text: "_(Enter a name for the share)_",
 			type: 'error',
 			html: true,
-			confirmButtonText: "Ok"
+			confirmButtonText: "_(Ok)_"
 		});
 		return false;
 	}
 
-	reserved = [<?=implode(',',array_map('escapestring',explode(',',$var['reservedNames'])))?>];
-	if (reserved.includes(share)) {
+	// Length check
+	if (share.length > 40) {
+	    swal({
+	        title: "_(Invalid share name)_",
+	        text: "_(Share name must be 40 characters or less)_",
+	        type: 'error',
+			html: true,
+	        confirmButtonText: "_(Ok)_"
+	    });
+	    return false;
+
+	}
+
+	// Validate share name when creating new share or renaming existing share
+	if (share != form.shareNameOrig.value.trim()) {
+	    // Must start with a letter
+	    if (!/^[A-Za-z]/.test(share)) {
+	        swal({
+	            title: "_(Invalid share name)_",
+	            text: "_(Share name must begin with a letter)_",
+	            type: 'error',
+				html: true,
+	            confirmButtonText: "_(Ok)_"
+	        });
+	        return false;
+	    }
+	    // Allowed characters check
+	    if (!/^[A-Za-z0-9._-]+$/.test(share)) {
+	        swal({
+	            title: "_(Invalid share name)_",
+	            text: "_(Share name may only contain letters, digits, '.', '_', or '-')_",
+	            type: 'error',
+				html: true,
+	            confirmButtonText: "_(Ok)_"
+	        });
+	        return false;
+	    }
+	    // Must not end with '.'
+	    if (/[.]$/.test(share)) {
+	        swal({
+	            title: "_(Invalid share name)_",
+	            text: "_(Share name cannot end with '.')_",
+	            type: 'error',
+				html: true,
+	            confirmButtonText: "_(Ok)_"
+	        });
+	        return false;    
+	    }
+	    // Must not be one of our reserved strings
+	    reserved = [<?=implode(',',array_map('escapestring',explode(',',$var['reservedNames'])))?>];
+            if (reserved.some(name => name.toLowerCase() === share.toLowerCase())) {
 		swal({
-			title: "Invalid share name",
-			text: "Do not use reserved names",
+			title: "_(Invalid share name)_",
+			text: "_(Do not use reserved names)_",
 			type: 'error',
-			confirmButtonText: "Ok"
+			html: true,
+			confirmButtonText: "_(Ok)_"
 		});
 		return false;
-	}
-
-	pools = [<?=implode(',',array_map('escapestring',$pools))?>];
-	if (pools.includes(share)) {
+	    }
+	    // Must not be same name as a pool
+	    pools = [<?=implode(',',array_map('escapestring',$pools))?>];
+            if (pools.some(name => name.toLowerCase() === share.toLowerCase())) {
 		swal({
-			title: "Invalid share name",
-			text: "Do not use pool names",
+			title: "_(Invalid share name)_",
+			text: "_(Do not use pool names)_",
 			type: 'error',
-			confirmButtonText: "Ok"
+			html: true,
+			confirmButtonText: "_(Ok)_"
 		});
 		return false;
+	    }
+	    // Must not be same name as existing share
+	    shares = <?=json_encode(array_column($shares,'name'))?>;
+            if (shares.some(name => name.toLowerCase() === share.toLowerCase())) {
+		swal({
+			title: "_(Invalid share name)_",
+			text: "_(Share already exists)_",
+			type: 'error',
+			html: true,
+			confirmButtonText: "_(Ok)_"
+		});
+		return false;
+	    }
 	}
-
-	/* Clean up the share name. */
-	share = safeName(share);
 
 	/* Update settings. */
 	form.shareName.value = share;
@@ -1290,38 +1377,12 @@ document.addEventListener('DOMContentLoaded', function() {
 	programmaticChange = false;
 });
 
-/* Clean up the share name by removing invalid characters. */
-function safeName(name) {
-	/* Declare variables at the function scope */
-	const validChars = /^[A-Za-z0-9-_.: ]*$/;
-	let isValidName, sanitizedString, i;
-
-	/* Check if the name contains only valid characters */
-	isValidName = validChars.test(name);
-	
-	/* If valid, return the name as it is */
-	if (isValidName) {
-		return name;
-	}
-	
-	/* If not valid, sanitize the name by removing invalid characters */
-	sanitizedString = '';
-	for (i = 0; i < name.length; i++) {
-		if (validChars.test(name[i])) {
-			sanitizedString += name[i];
-		}
-	}
-	
-	/* Return the sanitized string */
-	return sanitizedString;
-}
-
-/* Remove characters not allowed in share name. */
+/* Check for characters not allowed in share name. */
 function checkName(name) {
 	/* Declare variables at the function scope */
 	var isValidName;
 
-	isValidName = /^[A-Za-z0-9-_.: ]*$/.test(name);
+	isValidName = /^[A-Za-z0-9-_.]*$/.test(name);
 
 	if (isValidName) {
 		$('#zfs-name').hide();
@@ -1379,5 +1440,16 @@ $(function() {
 	updateScreen(form.shareUseCache.value);
 	if ($.cookie('autosize-' + $('#shareName').val())) $('#autosize').show();
 	checkName($('#shareName').val());
+	<?if (($share['hasCfg']??false)=='similar'):?>
+		form.shareComment.disabled = true;
+		form.shareFloor.disabled = true;
+		form.shareCachePool.disabled = true;
+		form.shareCOW.disabled = true;
+		form.shareAllocator1.disabled = true;
+		form.shareSplitLevel1.disabled = true;
+		form.shareInclude1.disabled = true;
+		form.shareExclude1.disabled = true;
+		form.secondary.disabled = true;
+	<?endif;?>
 });
 </script>

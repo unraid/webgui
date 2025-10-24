@@ -70,7 +70,7 @@ case "changed":
     file_put_contents($savedfile,json_encode($saved,JSON_PRETTY_PRINT));
     break;
 case "getvm":
-    $pcimap = build_pci_vm_map();
+    $pcimap = ($libvirt_running == "yes") ? build_pci_vm_map() : [];
     $pciaddrs = explode(";", $pciaddr);
     $vmact =[];
 

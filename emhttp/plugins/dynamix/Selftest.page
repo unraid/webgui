@@ -22,29 +22,39 @@ $zip  = str_replace(' ','_',strtolower(_var($var,'NAME','tower')))."-smart-$date
 $long = !isset($disks[$name]['spindownDelay']) || _var($disks[$name],'spindownDelay')==0 || (_var($disks[$name],'spindownDelay')==-1 && _var($var,'spindownDelay')==0);
 ?>
 _(Download SMART report)_:
-: <input type='button' value="_(Download)_" onclick='saveSMART()'>
+: <span class="inline-block">
+    <input type='button' value="_(Download)_" onclick='saveSMART()'>
+  </span>
 
 _(SMART self-test history)_:
-: <input type="button" value="_(Show)_" id="toggle_log" onclick="selftestLog()">
+: <span class="inline-block">
+    <input type="button" value="_(Show)_" id="toggle_log" onclick="selftestLog()">
+  </span>
 
 :selftest_history_help:
 
 <pre id="selftest" style="display:none"></pre>
 
 _(SMART error log)_:
-: <input type="button" value="_(Show)_" id="toggle_error" onclick="errorLog()">
+: <span class="inline-block">
+    <input type="button" value="_(Show)_" id="toggle_error" onclick="errorLog()">
+  </span>
 
 :selftest_error_log_help:
 
 <pre id="errorlog" style="display:none"></pre>
 
 _(SMART short self-test)_:
-: <input type='button' value="_(Start)_" id='short_test' onclick="startShortTest()">
+: <span class="inline-block">
+    <input type='button' value="_(Start)_" id='short_test' onclick="startShortTest()">
+  </span>
 
 :selftest_short_test_help:
 
 _(SMART extended self-test)_:
-: <input type='button' value="_(Start)_" id='long_test' onclick="startLongTest()"<?=$long ? ">" : " disabled> _(Disable **Spin down delay** to run a SMART extended self-test)_"?>
+: <span class="inline-block">
+    <input type='button' value="_(Start)_" id='long_test' onclick="startLongTest()"<?=$long ? "" : " disabled"?>>
+  </span>
 
 :selftest_long_test_help:
 
@@ -82,8 +92,8 @@ function testUpdate(init) {
       if (!init) timers.testUpdate = setTimeout(testUpdate,3000);
     } else {
       if ($('#smart_selftest').length) $('#smart_selftest').html('');
-      $('#short_test').val("_(Start)_");
-      $('#long_test').val("_(Start)_");
+      $('#short_test').val("_(Start)_").removeAttr('disabled');
+      $('#long_test').val("_(Start)_").removeAttr('disabled');
       if (!init) {
         $.removeCookie('test.<?=$dev?>');
       }

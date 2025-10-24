@@ -13,10 +13,6 @@ Type="xmenu"
  */
 ?>
 <?
-function clone_list($disk) {
-  global $pools;
-  return strpos($disk['status'],'_NP')===false && ($disk['type']=='Data' || in_array($disk['name'],$pools));
-}
 if (count($pages)==2) $tabbed = false;
 $refs = []; $n = 0;
 
@@ -32,7 +28,7 @@ $prev = urlencode($i>0 ? $refs[$i-1] : $refs[$end]);
 $next = urlencode($i<$end ? $refs[$i+1] : $refs[0]);
 ?>
 <script>
-var ctrl = "<span class='ctrl2 status <?=$tabbed?'vhshift':'vshift'?>'><a href='/Shares/Disk?name=<?=$prev?>' title='previous disk share'><button type='button' style='margin-right:4px'><i class='fa fa-chevron-left fa-fw'></i></button></a><a href='/Shares/Disk?name=<?=$next?>' title='next disk share'><button type='button'><i class='fa fa-chevron-right fa-fw'></i></button></a></span>";
+var ctrl = "<span class='ctrl2 status'><a href='/Shares/Disk?name=<?=$prev?>' title='previous disk share'><button type='button' style='margin-right:4px'><i class='fa fa-chevron-left fa-fw'></i></button></a><a href='/Shares/Disk?name=<?=$next?>' title='next disk share'><button type='button'><i class='fa fa-chevron-right fa-fw'></i></button></a></span>";
 
 function toggleButton(button,id) {
   var disabled = true;
@@ -51,7 +47,7 @@ $(function() {
 <?if ($tabbed):?>
   $('.tabs').append(ctrl);
 <?else:?>
-  $('div[class=title]:first').append(ctrl);
+  $('div[class=title]:first .right').append(ctrl);
 <?endif;?>
 });
 </script>

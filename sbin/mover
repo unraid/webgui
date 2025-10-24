@@ -13,7 +13,8 @@
 # Files at the top level of a pool or an array disk are never moved.
 
 # The 'find' command generates a list of all files and directories of a share.
-# For each file, if the file is not "in use" by any process (as detected by 'in_use' command),
+# For each file, if the file is not "in use" by any process (as detected by 'fuser' command)
+# and not attached to any loop device (as detected by 'losetup' command),
 # then the file is moved, and upon success, deleted from the source disk.  If the file already
 # exists on the target, it is not moved and the source is not deleted.  All meta-data of moved
 # files/directories is preserved: permissions, ownership, extended attributes, and access/modified
@@ -27,7 +28,9 @@ CFGPATH="/boot/config/shares"
 DEBUGGING=""
 
 move() {
-  /usr/bin/find "$1" -depth 2>/dev/null | /usr/libexec/unraid/move $DEBUGGING
+  find "$1" -depth 2>/dev/null | /usr/libexec/unraid/move $2 $DEBUGGING
+  # second pass to clean up leftover empty directories
+  find "$1" -depth -type d 2>/dev/null | /usr/libexec/unraid/move $2 $DEBUGGING
 }
 
 start() {
@@ -81,6 +84,29 @@ start() {
     fi
   done
 
+  # maybe empty an array disk
+  EMPTYING=$(grep '^shareUserEmptying=' /boot/config/share.cfg | cut -d'"' -f2)
+  IFS=',' read -ra arr <<< "$EMPTYING"
+  for DISK in "${arr[@]}"; do
+    # we can only empty share directories
+    for SHAREPATH in /mnt/$DISK/* ; do
+      SHARE=$(basename "$SHAREPATH")
+      if [[ -d "$SHAREPATH" && -f "$CFGPATH/$SHARE.cfg" ]]; then
+        move "$SHAREPATH" "-e"
+      fi
+    done
+
+    # output list of files which could not be moved
+    # use 'find' in case huge number of files left in /mnt/$DISK
+    count=$(find /mnt/$DISK -mindepth 1 | wc -l)
+    if [ "$count" -gt 0 ]; then
+      find /mnt/$DISK -mindepth 1 -depth -printf 'move: %p Not moved\n' | head -n 100
+      if [ "$count" -gt 100 ]; then
+        echo "[output truncated to first 100 entries]"
+      fi
+    fi
+  done
+
   rm -f $PIDFILE
   echo "mover: finished"
 }
@@ -104,7 +130,7 @@ empty() {
   for SHAREPATH in /mnt/$DISK/* ; do
     SHARE=$(basename "$SHAREPATH")
     if [[ -d "$SHAREPATH" && -f "$CFGPATH/$SHARE.cfg" ]]; then
-      find "$SHAREPATH" -depth 2>/dev/null | /usr/libexec/unraid/move -e $DEBUGGING
+      move "$SHAREPATH" "-e"
     fi
   done
 

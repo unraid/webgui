@@ -17,16 +17,19 @@ Tag="cogs"
 ?>
 <?if (_var($display,'resize')):?>
 <script>
-function resize() {
-  $('pre.up').height(Math.max(window.innerHeight-320,330));
-}
 $(function() {
-  resize();
-  $(window).bind('resize',function(){resize();});
+  fillAvailableHeight({
+    targetElementSelector: '.js-fill-available-height',
+    elementSelectorsForHeight: [
+      '.js-actions',
+    ],
+  });
 });
 </script>
 <?endif;?>
-<?
-echo "<pre class='up'>",shell_exec('ps -aux'),"</pre>";
-?>
-<input type="button" value="_(Done)_" onclick="done()">
+
+<pre class='js-fill-available-height up'><?= shell_exec('ps -aux');?></pre>
+
+<div class="js-actions">
+  <input type="button" value="_(Done)_" onclick="done()">
+</div>

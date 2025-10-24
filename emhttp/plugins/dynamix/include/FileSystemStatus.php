@@ -14,7 +14,7 @@
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 
 $cmd  = $_POST['cmd'];
-$path = $_POST['path'];
+$path = escapeshellarg($_POST['path']);
 
 function btrfs($data) {return "btrfs-$data";}
 function zfs($data) {return "zfs-".strtok($data,' ');}
@@ -22,7 +22,7 @@ function zfs($data) {return "zfs-".strtok($data,' ');}
 switch ($cmd) {
 case 'status':
   exec("ps -C btrfs -o cmd=|awk '/$path\$/{print $2}'",$btrfs);
-  exec("/usr/sbin/zpool status $path|grep -Po '(scrub|resilver) in progress'",$zfs);
+  exec("/usr/sbin/zpool status $path|grep -Po '(scrub|resilver|expansion of \S+) in progress'",$zfs);
   echo implode(',',array_merge(array_map('btrfs',$btrfs),array_map('zfs',$zfs)));
   break;
 case 'btrfs-balance':
@@ -32,23 +32,21 @@ case 'btrfs-scrub':
   break;
 case 'zfs-scrub':
 case 'zfs-resilver':
+case 'zfs-expansion':
   echo shell_exec("/usr/sbin/zpool status -P $path");
   break;
 default:
-  [$dev,$id] = array_pad(explode(' ',$path),2,'');
-  $dir = explode('-',$cmd)[0];
-  $file = "/var/lib/$dir/check.status.$id";
-  if (file_exists($file)) {
-    switch ($cmd) {
-      case 'btrfs-check': $pgrep = 'pgrep --ns $$ -f '."'/sbin/btrfs check .*$dev'"; break;
-      case 'rfs-check': $pgrep = 'pgrep --ns $$  -f '."'/sbin/reiserfsck $dev'"; break;
-      case 'xfs-check': $pgrep = 'pgrep --ns $$ -f '."'/sbin/xfs_repair.*$dev'"; break;
-    }
-    echo file_get_contents($file);
-    if (!exec($pgrep)) echo "\0";
-  } else {
-    echo "Not available\0";
+  switch ($cmd) {
+    case 'btrfs-check':
+    case 'xfs-check':
+    case 'ext-check':
+    case 'ntfs-check':
+    case 'exfat-check':
+    case 'reiserfs-check':
+      $fs = explode('-',$cmd)[0];
+      [$dev,$id] = array_pad(explode(' ',trim($path,"'")),2,'');
+      passthru("$docroot/webGui/scripts/{$fs}_check status $dev $id", $retval);
+      if ($retval != 9) echo "\0";
   }
-  break;
 }
 ?>

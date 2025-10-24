@@ -279,7 +279,7 @@ function parseInput($vtun, &$input, &$x) {
         // add WG routing for docker containers. Only IPv4 supported
         [$index, $network] = newNet($vtun);
         [$device, $thisnet, $gateway] = thisNet();
-        if (!empty($device) && !empty($thisnet) && !empty($gateway)) {
+        if (!empty($device) && !empty($thisnet) && !empty($tunip) && !empty($gateway)) {
           $conf[]  = "PostUp=ip -4 route flush table $index";
           $conf[]  = "PostUp=ip -4 route add default via $tunip dev $vtun table $index";
           $conf[]  = "PostUp=ip -4 route add $thisnet via $gateway dev $device table $index";
@@ -541,8 +541,9 @@ case 'import':
     $vpn = (in_array($default4,$vpn) || in_array($default6,$vpn)) ? 8 : 0;
     if ($vpn==8) $import["Address:$n"] = '';
     $import["TYPE:$n"] = $vpn;
-    ipfilter(_var($import,"AllowedIPs:$n"));
-    if (_var($import,"TYPE:$n") == 0) $var['subnets1'] = "AllowedIPs="._var($import,"AllowedIPs:$n");
+    $allowedIPs = _var($import, "AllowedIPs:$n");
+    ipfilter($allowedIPs);
+    if (_var($import,"TYPE:$n") == 0) $var['subnets1'] = "AllowedIPs=$allowedIPs";
   }
   foreach ($import as $key => $val) $sort[] = explode(':',$key)[1];
   array_multisort($sort, $import);

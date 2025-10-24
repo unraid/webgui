@@ -316,10 +316,6 @@ Not much info is printed in the window, but you can verify the operation is runn
 increasing for the device on the Main page.
 :end
 
-:info_reiserfs_cancel_help:
-**Cancel** will cancel the Check operation in progress.
-:end
-
 :info_xfs_check_help:
 **Check** will run the *xfs_repair* program to check file system integrity on the device.
 
@@ -332,8 +328,35 @@ Not much info is printed in the window, but you can verify the operation is runn
 increasing for the device on the Main page.
 :end
 
-:info_xfs_cancel_help:
-**Cancel** will cancel the Check operation in progress.
+:info_ext_check_help:
+**Check** will run the *e2fsck* program to check file system integrity on the device. Despite its name, *e2fsck* is used
+to check the whole family of ext2/ext3/ext4 file systems.
+
+For **Fix** the *Options* field is initialized with *-p* option to automatically fix any file system problems that can be safely fixed
+without intervention.  If a problem is discovered which may require additional corrective action, e2fsck will print a
+description of the problem and then exit.
+
+After starting a Check, you should monitor progress and status. Depending on how large the file system is, and what errors
+might be present, the operation can take a **long time** to finish (hours).
+Not much info is printed in the window, but you can verify the operation is running by observing the read/write counters
+increasing for the device on the Main page.
+:end
+
+:info_ntfs_check_help:
+**Check** will run the *ntfsfix* program to check file system integrity on the device. This utility fixes some common NTFS
+problems; however, it is NOT a Linux version of *chkdsk*. It only repairs some fundamental NTFS inconsistencies and resets
+the NTFS journal file. If you suspect file system corruption, we recommend using the Windows *chkdsk* utility.
+
+Note: *ntfsfix* will immediately exit if a hibernation file is detected (to prevent corruption).
+
+The *Options* field is initialized with *-d* to clear the volume dirty flag if the volume can be fixed and mounted.
+:end
+
+:info_exfat_check_help:
+**Check** will run the *fsck.exfat* program to check file system integrity on the device.
+
+For **Fix** the *Options* field is initialized with *-p* to repair the filesystem without user interaction if it can
+be done safely.
 :end
 
 :info_smart_notifications_help:
@@ -517,10 +540,9 @@ Select the desired destinations and press **Write** to copy the settings to the 
 :share_edit_name_help:
 The share name can be up to 40 characters, and is case-sensitive with these restrictions:
 
-* cannot contain a double-quote character (") or the following characters: / \ * < > |
-* cannot be one of the reserved share names: flash, cache, cache2, .., disk1, disk2, ..
-
-We highly recommend to make your life easier and avoid special characters.
+* must start with a letter
+* subsequent characters can be a letter, digit, period, underscore, or dash, except the last character may not be a period
+* cannot be one of the reserved names: homes, global, printers, flash, boot, user, user0, dev, remotes, RecycleBin, rootshare, addons, mirror, raidz*, draid, spare, log, disk*, parity*
 :end
 
 :share_edit_comments_help:
@@ -1526,7 +1548,6 @@ provided the following conditions are met:
 * The Primary storage for a share is set to a pool.
 * The Secondary storage for a share is set to **none**.
 * The share exists on a single volume.
-* The share is **not** exported over NFS.
 
 The advantage of *exclusive* shares is that transfers bypass the FUSE layer which may significantly
 increase I/O performance.

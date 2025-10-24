@@ -196,11 +196,22 @@ class Array2XML {
 				'domain' => [
 					'ovmf' => 2,
 					'mem' => 4096 * 1024,
-					'maxmem' => 4096 * 1024
+					'maxmem' => 4096 * 1024,
+					'vcpus' => 2,
+					'vcpu' => [0,1],
 				],
+				'media' => [
+					'cdrombus' => 'sata',
+					'driversbus' => 'sata' ,
+				],			
 				'disk' => [
 					[
 						'size' => '64G'
+					]
+				],
+				'nic'=>[
+					[
+						'model' => 'e1000'
 					]
 				]
 			]
@@ -343,17 +354,6 @@ class Array2XML {
 			]
 		],
 
-		' Pre-packaged ' => '', /* Pre-built Header */
-
-		'LibreELEC' => [
-			'form' => 'LibreELEC.form.php',
-			'icon' => 'libreelec.png'
-		],
-
-		'OpenELEC' => [
-			'form' => 'OpenELEC.form.php',
-			'icon' => 'openelec.png'
-		],
 
 		' Linux ' => '', /* Linux Header */
 
@@ -441,51 +441,6 @@ class Array2XML {
 		]
 	];
 
-	$arrOpenELECVersions = [
-		'6.0.3_1' => [
-			'name' => '6.0.3',
-			'url' => 'https://s3.amazonaws.com/dnld.lime-technology.com/images/OpenELEC/OpenELEC-unRAID.x86_64-6.0.3_1.tar.xz',
-			'size' => 178909136,
-			'md5' => 'c584312831d7cd93a40e61ac9f186d32',
-			'localpath' => '',
-			'valid' => '0'
-		],
-		'6.0.0_1' => [
-			'name' => '6.0.0',
-			'url' => 'https://s3.amazonaws.com/dnld.lime-technology.com/images/OpenELEC/OpenELEC-unRAID.x86_64-6.0.0_1.tar.xz',
-			'size' => 165658636,
-			'md5' => '66fb6c3f1b6db49c291753fb3ec7c15c',
-			'localpath' => '',
-			'valid' => '0'
-		],
-		'5.95.3_1' => [
-			'name' => '5.95.3 (6.0.0 Beta3)',
-			'url' => 'https://s3.amazonaws.com/dnld.lime-technology.com/images/OpenELEC/OpenELEC-unRAID.x86_64-5.95.3_1.tar.xz',
-			'size' => 153990180,
-			'md5' => '8936cda74c28ddcaa165cc49ff2a477a',
-			'localpath' => '',
-			'valid' => '0'
-		],
-		'5.95.2_1' => [
-			'name' => '5.95.2 (6.0.0 Beta2)',
-			'url' => 'https://s3.amazonaws.com/dnld.lime-technology.com/images/OpenELEC/OpenELEC-unRAID.x86_64-5.95.2_1.tar.xz',
-			'size' => 156250392,
-			'md5' => 'ac70048eecbda4772e386c6f271cb5e9',
-			'localpath' => '',
-			'valid' => '0'
-		]
-	];
-
-	$arrLibreELECVersions = [
-		'7.0.1_1' => [
-			'name' => '7.0.1',
-			'url' => 'https://s3.amazonaws.com/dnld.lime-technology.com/images/LibreELEC/LibreELEC-unRAID.x86_64-7.0.1_1.tar.xz',
-			'size' => 209748564,
-			'md5' => 'c1e8def2ffb26a355e7cc598311697f6',
-			'localpath' => '',
-			'valid' => '0'
-		]
-	];
 
 	$fedora = '/var/tmp/fedora-virtio-isos';
 	// set variable to obtained information
@@ -1058,7 +1013,7 @@ class Array2XML {
 
 				if (empty($arrMatch['name'])) {
 					// Device name is blank, attempt to lookup usb details
-					exec("lsusb -d ".$arrMatch['id']." -v 2>/dev/null | grep -Po '^\s+(iManufacturer|iProduct)\s+[1-9]+ \K[^\\n]+'", $arrAltName);
+					exec("lsusb -d ".$arrMatch['id']." -v 2>/dev/null | grep -Po '^\s+(iManufacturer|iProduct)\s+[1-9]+ \K[^\\n]+'", $arrAltName); #PHPS
 					$arrMatch['name'] = trim(implode(' ', (array)$arrAltName));
 
 					if (empty($arrMatch['name'])) {
@@ -1243,11 +1198,10 @@ class Array2XML {
 	}
 
 	function getValidNetworks() {
-		global $lv;
+		global $lv,$libvirt_running;
 		$arrValidNetworks = [];
+		exec("ls --indicator-style=none /sys/class/net | grep -Po '^virbr[0-9]+'",$arrBridges);
 		exec("ls --indicator-style=none /sys/class/net | grep -Po '^(br|bond|eth|wlan)[0-9]+(\.[0-9]+)?'",$arrBridges);
-		// add 'virbr0' as default first choice
-		array_unshift($arrBridges, 'virbr0');
 		// remove redundant references of bridge and bond interfaces
 		$remove = [];
 		foreach ($arrBridges as $name) {
@@ -1255,12 +1209,12 @@ class Array2XML {
 				$remove = array_merge($remove, (array)@file("/sys/class/net/$name/bonding/slaves",FILE_IGNORE_NEW_LINES));
 			} elseif (substr($name,0,2) == 'br') {
 				$remove = array_merge($remove, array_map(function($n){return end(explode('/',$n));}, glob("/sys/class/net/$name/brif/*")));
-			} 
+			}
 		}
 		$arrValidNetworks['bridges'] = array_diff($arrBridges, $remove);
 
 		// This breaks VMSettings.page if libvirt is not running
-		/*	if ($libvirt_running == "yes") {
+			if ($libvirt_running == "yes") {
 			$arrVirtual = $lv->libvirt_get_net_list($lv->get_connection());
 
 			if (($key = array_search('default', $arrVirtual)) !== false) {
@@ -1270,7 +1224,7 @@ class Array2XML {
 			array_unshift($arrVirtual, 'default');
 
 			$arrValidNetworks['libvirt'] = array_values($arrVirtual);
-		}*/
+		}
 
 		return $arrValidNetworks;
 	}
@@ -1462,6 +1416,7 @@ class Array2XML {
 				'maxmem' => $lv->domain_get_memory($res),
 				'password' => '', //TODO?
 				'cpumode' => $lv->domain_get_cpu_type($res),
+				'cpupmemlmt' => $lv->domain_get_cpu_pmem_limit($res),
 				'cpumigrate' => $lv->domain_get_cpu_migrate($res),
 				'vcpus' => $dom['nrVirtCpu'],
 				'vcpu' => $lv->domain_get_vcpu_pins($res),
@@ -1563,7 +1518,7 @@ class Array2XML {
 		// remove existing auto-generated settings
 		unset($old['cputune']['vcpupin'],$old['devices']['video'],$old['devices']['disk'],$old['devices']['interface'],$old['devices']['filesystem'],$old['cpu']['@attributes'],$old['os']['boot'],$old['os']['loader'],$old['os']['nvram']);
 		// Remove old CPU cache and features
-		unset($old['cpu']['cache'], $old['cpu']['feature']);
+		unset($old['cpu']['cache'], $old['cpu']['feature'], $old['cpu']['maxphysaddr']);
 		unset($old['features']['hyperv'],$old['devices']['channel']);
 		// set namespace
 		$new['metadata']['vmtemplate']['@attributes']['xmlns'] = 'unraid';
@@ -1727,7 +1682,7 @@ class Array2XML {
 		return $copypaste;
 	}
 
-	function vm_clone($vm, $clone ,$overwrite,$start,$edit, $free, $waitID) {
+	function vm_clone($vm, $clone ,$overwrite,$start,$edit, $free, $waitID, $regenmac) {
 		global $lv,$domain_cfg,$arrDisplayOptions;
 		/*
 			Clone.
@@ -1800,9 +1755,12 @@ class Array2XML {
 
 		$config["domain"]["name"] = $clone;
 		$config["domain"]["uuid"]  = $lv->domain_generate_uuid();
-		foreach($config["nic"] as $index => $detail) {
-		$config["nic"][$index]["mac"] = $lv->generate_random_mac_addr();
-		}
+		if ($regenmac == "yes") {
+			write("addLog\0".htmlspecialchars(_("Regenerate MACs")));
+			foreach($config["nic"] as $index => $detail) {
+				$config["nic"][$index]["mac"] = $lv->generate_random_mac_addr();
+			}
+		} else write("addLog\0".htmlspecialchars(_("Retain existing MACs")));
 		$config["domain"]["type"] = "kvm";
 
 		$usbs = getVMUSBs($vmxml);
@@ -1831,7 +1789,7 @@ class Array2XML {
 		if (!is_dir($clonedir)) {
 			my_mkdir($clonedir,0777,true);
 		}
-		write("addLog\0".htmlspecialchars("Checking for image files"));
+		write("addLog\0".htmlspecialchars(_("Checking for image files")));
 		if ($file_exists && $overwrite != "yes") { write("addLog\0".htmlspecialchars(_("New image file names exist and Overwrite is not allowed")));  return( false); }
 
 		#Create duplicate files.
@@ -1844,10 +1802,20 @@ class Array2XML {
 			$reptgt = str_replace('/mnt/user/', "/mnt/$sourcerealdisk/", $target);
 			$repsrc = str_replace('/mnt/user/', "/mnt/$sourcerealdisk/", $source);
 			}
-			$cmdstr = "cp --reflink=always '$repsrc' '$reptgt'";
-					if ($reflink == true) { $refcmd = $cmdstr; } else {$refcmd = false; }
+
+			$refresult = getFilesystemAndReflinkMode($repsrc);
+			$refcmdaction = $refresult['reflink_mode'];
+			$refcmdfs = $refresult['filesystem'];
+			$cmdstr = "cp --reflink=$refcmdaction '$repsrc' '$reptgt'";
+			write("addLog\0".htmlspecialchars(_("Reflink Action")." ".$refcmdaction." "._("for filesystem")." ".$refcmdfs));
+			if ($reflink == true) { $refcmd = $cmdstr; } else {$refcmd = false; }
+			if ($refresult['filesystem'] == "zfs" && $refresult['reflink_mode'] == "skip") {
+				write("addLog\0".htmlspecialchars(_("Reflink copy not supported on ZFS skipping")));
+				$refcmd = false;
+			}
+
 			$cmdstr = "rsync -ahPIXS  --out-format=%f --info=flist0,misc0,stats0,name1,progress2 '$repsrc' '$reptgt'";
-			$error = execCommand_nchan_clone($cmdstr,$target,$refcmd);
+			$error = execCommand_nchan_clone($cmdstr,$target,$refcmd); #PHPS
 			if (!$error) { write("addLog\0".htmlspecialchars("Image copied failed."));  return( false); }
 		}
 	}
@@ -1866,15 +1834,15 @@ class Array2XML {
 		$rtn = $lv->domain_define($xml);
 
 		if (is_resource($rtn)) {
-			$arrResponse  = ['success' => true]; 
+			$arrResponse  = ['success' => true];
 			write("addLog\0".htmlspecialchars(_("Creating XML successful")));
-		} else { 
+		} else {
 			$lastvmerror = $lv->get_last_error();
 			$arrResponse = ['xml' => $xml,'error' => $lastvmerror];
 			write("addLog\0".htmlspecialchars(_("Creating XML Error:$lastvmerror")));
 			file_put_contents("/tmp/vmclonertn.debug", json_encode($arrResponse,JSON_PRETTY_PRINT));
 		}
-	
+
 		return($rtn);
 
 	}
@@ -1939,7 +1907,7 @@ class Array2XML {
 				$file = $disk["file"];
 				if ($disk['device'] == "hdc" ) $primarypath = dirname(transpose_user_path($file));
 				$output = array();
-				exec("qemu-img info --backing-chain -U '$file'  | grep image:",$output);
+				exec("qemu-img info --backing-chain -U '$file'  | grep image:",$output); #PHPS
 				foreach($output as $key => $line) {
 					$line=str_replace("image: ","",$line);
 					$output[$key] = $line;
@@ -2936,4 +2904,71 @@ function get_storage_fstype($storage="default") {
 	$fstype = trim(shell_exec(" stat -f -c '%T' $storage"));
 	return $fstype;
 }
+
+function getFilesystemAndReflinkMode(string $filePath): array {
+    // Default return values
+    $result = [
+        'filesystem' => 'unknown',
+        'reflink_mode' => 'always' // safest fallback if unsupported
+    ];
+
+    $realPath = realpath($filePath);
+    if ($realPath === false || !file_exists($realPath)) {
+        return $result;
+    }
+
+    $dirname = dirname($realPath);
+
+    // Handle Unraid-style virtual paths
+    if (strpos($dirname, '/mnt/user/') === 0) {
+        error_log("Getting real disks\n");
+        $realdisk = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION " . escapeshellarg($dirname) . " 2>/dev/null"));
+        if (!empty($realdisk)) {
+            $dirname = str_replace('/mnt/user/', "/mnt/$realdisk/", $dirname);
+        }
+    }
+
+    // Get filesystem type
+    $fstype = trim(shell_exec("stat -f -c '%T' " . escapeshellarg($dirname)));
+    $result['filesystem'] = $fstype;
+
+    // If not ZFS, return early
+    if ($fstype !== 'zfs') {
+       return $result;
+    }
+	
+	$result['reflink_mode'] = 'skip';
+
+    // Get dataset from the file
+    $dataset = trim(shell_exec("zfs list -H -o name " . escapeshellarg($dirname) . " 2>/dev/null"));
+    if (empty($dataset)) {
+      return $result;
+    }
+
+    // Get pool from dataset
+    $parts = explode('/', $dataset);
+    $pool = $parts[0] ?? '';
+    if (empty($pool)) {
+        return $result;
+    }
+
+    // Check ZFS block_cloning feature
+    $output = [];
+    $resultCode = 0;
+    exec("zpool get -H -o value feature@block_cloning " . escapeshellarg($pool) . " 2>/dev/null", $output, $resultCode);
+    if ($resultCode !== 0 || empty($output) || (trim($output[0]) !== 'enabled' && trim($output[0]) !== 'active')) {
+        return $result;
+    }
+
+    // Check if bclone is enabled at runtime
+    $bcloneValue = @file_get_contents("/sys/module/zfs/parameters/zfs_bclone_enabled");
+    if ($bcloneValue === false || trim($bcloneValue) !== '1') {
+        return $result;
+    }
+
+    // If both checks passed, block cloning is supported
+    $result['reflink_mode'] = 'auto';
+    return $result;
+}
+
 ?>

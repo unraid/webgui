@@ -19,6 +19,7 @@ Tag="check-square"
 <form markdown="1" name="confirm_settings" method="POST" action="/update.php" target="progressFrame">
 <input type="hidden" name="#file" value="dynamix/dynamix.cfg"/>
 <input type="hidden" name="#section" value="confirm"/>
+
 _(Confirm reboot & powerdown commands)_:
 : <select name="down">
   <?=mk_option($confirm['down'], "0", _('No'))?>
@@ -42,7 +43,10 @@ _(Confirm sleep command)_:
   <?=mk_option($confirm['sleep'], "1", _('Yes'))?>
   </select>
 <?endif;?>
-
 &nbsp;
-: <input type="submit" name="#apply" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+: <span class="inline-block">
+  <input type="submit" name="#apply" value="_(Apply)_" disabled>
+  <input type="button" value="_(Done)_" onclick="done()">
+</span>
+
 </form>

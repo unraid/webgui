@@ -18,7 +18,11 @@ function get_ini_key($key,$default) {
   $x = strpos($key, '[');
   $var = $x>0 ? substr($key,1,$x-1) : substr($key,1);
   global $$var;
-  eval("\$var=$key;");
+  try {
+    eval("\$var=$key;");
+  } catch (Throwable $e) {
+    return $default;
+  }
   return $var ?: $default;
 }
 
@@ -44,10 +48,14 @@ function build_pages($pattern) {
 
 function page_enabled(&$page)
 {
-  global $var,$disks,$devs,$users,$shares,$sec,$sec_nfs,$name,$display,$pool_devices;
-  $enabled = true;
-  if (isset($page['Cond'])) eval("\$enabled={$page['Cond']};");
-  return $enabled;
+  global $docroot,$var,$disks,$devs,$users,$shares,$sec,$sec_nfs,$name,$display,$pool_devices;
+  $enabled = $evalSuccess = true;
+  if (isset($page['Cond'])) {
+    $evalContent= "\$enabled={$page['Cond']};";
+    $evalFile = $page['file'];
+    include "$docroot/webGui/include/DefaultPageLayout/evalContent.php";
+  }
+  return ($enabled && $evalSuccess);
 }
 
 function find_pages($item) {
@@ -82,18 +90,19 @@ function tab_title($title,$path,$tag) {
     $title = str_replace($device,_(my_disk($device),3),$title);
   }
   $title = _(parse_text($title));
+  $wrapperClasses = 'left inline-flex flex-row items-center gap-1';
   if (!$tag || substr($tag,-4)=='.png') {
     $file = "$path/icons/".($tag ?: strtolower(str_replace(' ','',$title)).".png");
     if (file_exists("$docroot/$file")) {
-      return "<img src='/$file' class='icon' style='max-width: 18px; max-height: 18px; width: auto; height: auto; object-fit: contain;'>$title";
+      return "<span class='$wrapperClasses'><img src='/$file' class='icon' style='max-width: 18px; max-height: 18px; width: auto; height: auto; object-fit: contain;'>$title</span>";
     } else {
-      return "<i class='fa fa-th title'></i>$title";
+      return "<span class='$wrapperClasses'><i class='fa fa-th title'></i>$title</span>";
     }
   } elseif (substr($tag,0,5)=='icon-') {
-    return "<i class='$tag title'></i>$title";
+    return "<span class='$wrapperClasses'><i class='$tag title'></i>$title</span>";
   } else {
     if (substr($tag,0,3)!='fa-') $tag = "fa-$tag";
-    return "<i class='fa $tag title'></i>$title";
+    return "<span class='$wrapperClasses'><i class='fa $tag title'></i>$title</span>";
   }
 }
 

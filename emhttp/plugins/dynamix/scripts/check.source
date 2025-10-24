@@ -1,0 +1,70 @@
+# source this file in "xxx_check" scripts
+# variable FSCK should be set to the file sysem check program
+
+# $FSCK start <dev> <id> <options>
+# $FSCK status <dev> <id>
+# $FSCK cancel <dev> <id>
+
+# Exit codes:
+# 0 - No corruption detected
+# N - refer to individual file system check programs
+# 8 - No check has been run yet or previous check cancelled
+# 9 - Process is still running.
+
+DEV="$2"
+ID="$3"
+OPTIONS="$4"
+
+START_CMD="$(basename $0) start $2 $3"
+OUTDIR="/var/lib/check"
+mkdir -p "$OUTDIR"
+
+case "$1" in
+'start')
+    # Start the process in the background and log output
+    rm -f "${OUTDIR}/check.status.${ID}"
+    rm -f "${OUTDIR}/check.status.${ID}.exit"
+    (
+        $FSCK $OPTIONS $DEV &> "${OUTDIR}/check.status.${ID}"
+        echo $? > "${OUTDIR}/check.status.${ID}.exit"
+
+    ) </dev/null &>/dev/null &
+    exit 0
+    ;;
+
+'status')
+    # return status file if available
+    if [[ -f "${OUTDIR}/check.status.${ID}" ]]; then
+        cat "${OUTDIR}/check.status.${ID}"
+    else
+        echo "Not available"
+    fi
+    # Check if the process is still running
+    if pgrep -f "$START_CMD" &> /dev/null ; then
+        # Process is running, return exit code 9
+        exit 9
+    fi
+    # Process is not running, read the exit status if available
+    if [[ -f "${OUTDIR}/check.status.${ID}.exit" ]]; then
+        exit_status=$(cat "${OUTDIR}/check.status.${ID}.exit")
+        if [[ $exit_status -lt 8 ]]; then
+            exit $exit_status
+        fi
+    fi
+    exit 8
+    ;;
+
+'cancel')
+    # Cancel the process
+    if pkill -f "$START_CMD" &> /dev/null ; then
+        echo -e "\nCancelled" >> "${OUTDIR}/check.status.${ID}"
+    fi
+    exit 8
+    ;;
+
+*)
+    # Handle invalid commands
+    echo "Invalid command"
+    exit 0
+    ;;
+esac

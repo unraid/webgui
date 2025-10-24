@@ -11,19 +11,13 @@
  */
 ?>
 <?
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/publish.php";
+
 function write(...$messages){
-  $com = curl_init();
-  curl_setopt_array($com,[
-    CURLOPT_URL => 'http://localhost/pub/plugins?buffer_length=1',
-    CURLOPT_UNIX_SOCKET_PATH => '/var/run/nginx.socket',
-    CURLOPT_POST => 1,
-    CURLOPT_RETURNTRANSFER => true
-  ]);
   foreach ($messages as $message) {
-    curl_setopt($com, CURLOPT_POSTFIELDS, $message);
-    curl_exec($com);
+    publish('plugins', $message,1,false);
   }
-  curl_close($com);
 }
 
 $url = rawurldecode($argv[1]??'');
@@ -31,14 +25,11 @@ $host = parse_url($url)['host'];
 
 if (in_array($host,['keys.lime-technology.com','lime-technology.com'])) {
   $key_file = basename($url);
-  write("Downloading $keyfile ...\n");
+  write("Downloading $key_file ...\n");
   exec("/usr/bin/wget -q -O ".escapeshellarg("/boot/config/$key_file")." ".escapeshellarg($url), $output, $return_var);
   if ($return_var === 0) {
-    if (parse_ini_file('/var/local/emhttp/var.ini')['mdState'] == 'STARTED') {
-      write("Installing ... Please Stop array to complete key installation.\n");
-    } else {
-      write("Installed ...\n");
-    }
+    exec('emcmd '.escapeshellarg('checkRegistration=Apply'));
+    write("Key installed ...\n");
   } else {
     write("ERROR: $return_var\n");
     switch($return_var) {

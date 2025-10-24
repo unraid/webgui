@@ -21,20 +21,6 @@ $_SERVER['REQUEST_URI'] = '';
 $login_locale = _var($display,'locale');
 require_once "$docroot/webGui/include/Translations.php";
 
-function dmidecode($key, $n, $all=true) {
-  $entries = array_filter(explode($key,shell_exec("dmidecode -qt$n")?:''));
-  $properties = [];
-  foreach ($entries as $entry) {
-    $property = [];
-    foreach (explode("\n",$entry) as $line) if (strpos($line,': ')!==false) {
-      [$key,$value] = my_explode(': ',trim($line));
-      $property[$key] = $value;
-    }
-    $properties[] = $property;
-  }
-  return $all ? $properties : $properties[0]??null;
-}
-
 function port_get_contents($port) {
   return file_exists($port) ? @file_get_contents($port) : 0;
 }
@@ -131,11 +117,17 @@ foreach ($memory_array as $device) {
   if ($base>=1) $memory_maximum += $size*pow(1024,$base);
   if (!$ecc && isset($device['Error Correction Type']) && $device['Error Correction Type']!='None') $ecc = $device['Error Correction Type']." ";
 }
-if ($memory_installed >= 1024) {
+if ($memory_installed >= 1048576) {
+  $memory_installed = round($memory_installed/1048576);
+  $memory_maximum = round($memory_maximum/1048576);
+  $unit = 'TiB';
+} elseif ($memory_installed >= 1024) {
   $memory_installed = round($memory_installed/1024);
   $memory_maximum = round($memory_maximum/1024);
   $unit = 'GiB';
-} else $unit = 'MiB';
+} else {
+  $unit = 'MiB';
+}
 
 // If maximum < installed then roundup maximum to the next power of 2 size of installed. E.g. 6 -> 8 or 12 -> 16
 $low = $memory_maximum < $memory_installed;
@@ -201,7 +193,8 @@ foreach ($sPorts as $port) {
     if ($link) {
       $speed = file_get_contents("$int/speed");
       $duplex = file_get_contents("$int/duplex");
-      echo "<tr class='$more'><td>$name</td><td>$port: $speed Mbps, $duplex duplex, mtu $mtu</td></tr>";
+      $speed = ($speed >= 1000) ? ($speed/1000)." Gbps" : $speed." Mbps";
+      echo "<tr class='$more'><td>$name</td><td>$port: $speed, $duplex duplex, mtu $mtu</td></tr>";
     } else {
       echo "<tr class='$more'><td>$name</td><td>$port: ",_('interface down'),"</td></tr>";
     }

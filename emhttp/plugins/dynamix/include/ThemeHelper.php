@@ -18,10 +18,10 @@ class ThemeHelper {
     private const LIGHT_THEMES = [self::THEME_WHITE, self::THEME_AZURE];
 
     private const FGCOLORS = [
-        self::THEME_BLACK => self::COLOR_BLACK,
+        self::THEME_AZURE => self::COLOR_BLACK,
         self::THEME_WHITE => self::COLOR_BLACK,
+        self::THEME_BLACK => self::COLOR_WHITE,
         self::THEME_GRAY => self::COLOR_WHITE,
-        self::THEME_AZURE => self::COLOR_WHITE
     ];
 
     private const INIT_ERROR = 'ThemeHelper not initialized. Call initWithCurrentThemeSetting() first.';

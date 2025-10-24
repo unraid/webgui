@@ -1,0 +1,50 @@
+:root {
+    --update-container-file-tree-background: var(--black);
+}
+
+.Theme--azure:root,
+.Theme--white:root {
+    --update-container-file-tree-background: var(--gray-100);
+}
+
+.noshow,
+.advanced {
+    display: none;
+}
+.required:after {
+    content: " *";
+    color: var(--red-800);
+}
+span.boxed {
+    display: inline-flex;
+    flex-direction: column;
+    gap: .5rem;
+    max-width: 100ch;
+}
+span.cpu,
+label.checkbox {
+    display: inline-block;
+    width: 32px;
+}
+#dockerAllocations {
+    dt {
+        /* on mobile whit is empty and creates a big gap between each allocation dd */
+        display: none;
+    }
+
+    dl {
+        padding: 0;
+    }
+}
+
+@media (min-width: 769px) {
+    /* allowing this to be block means the allowcations align with the rest of the dd elements on the page */
+    #dockerAllocations dt {
+        display: block;
+    }
+}
+.docker-allocation-row {
+    display: grid;
+    grid-template-columns: minmax(0, 230px) minmax(0, 120px) minmax(0, 160px) 1fr;
+    gap: .25rem;
+}
