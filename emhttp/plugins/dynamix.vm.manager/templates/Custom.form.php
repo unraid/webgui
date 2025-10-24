@@ -255,7 +255,7 @@ if (isset($_POST['updatevm'])) {
 		$xml = str_replace($olduuid,$newuuid,$xml);
 	} else {
 		// form view
-		if ($error = create_vdisk($_POST) === false) {
+		if (($error = create_vdisk($_POST)) === false) {
 			$arrExistingConfig = custom::createArray('domain',$strXML);
 			$arrUpdatedConfig = custom::createArray('domain',$lv->config_to_xml($_POST));
 			if ($debug) {
