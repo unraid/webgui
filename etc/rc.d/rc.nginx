@@ -165,7 +165,7 @@ build_servers(){
 	server {
 	    listen unix:/var/run/nginx.socket default_server;
       # filemanager should not display outdated messages
-	    location /pub/filemanager {
+	    location = /pub/filemanager {
 	        nchan_publisher;
 	        nchan_channel_id "filemanager";
 	        nchan_message_buffer_length $arg_buffer_length;
