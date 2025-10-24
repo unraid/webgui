@@ -316,6 +316,22 @@ while (true) {
       continue 2;
     }
     $pid = pgrep($pid??0);
+    
+    // Save PID to active file to survive file_manager restarts
+    if ($pid !== false && file_exists($active)) {
+      $ini = parse_ini_file($active);
+      if (!isset($ini['pid']) || $ini['pid'] != $pid) {
+        $ini['pid'] = $pid;
+        $content = '';
+        foreach ($ini as $key => $value) {
+          // Escape double quotes and backslashes for INI format
+          $escaped_value = str_replace(['\\', '"'], ['\\\\', '\\"'], $value);
+          $content .= "$key=\"$escaped_value\"\n";
+        }
+        file_put_contents($active, $content);
+      }
+    }
+    
     if ($pid === false) {
       if (!empty($move)) {
         exec("find ".quoted($source)." -type d -empty -print -delete 1>$status 2>$null & echo \$!", $pid);
