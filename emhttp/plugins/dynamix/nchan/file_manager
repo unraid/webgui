@@ -139,16 +139,20 @@ if (!file_exists($empty_dir)) {
   mkdir($empty_dir);
 }
 
+// initialize $move state: null = not a move operation (yet), true = rsync phase, false = cleanup phase
+$move = null;
+
 while (true) {
   unset($action, $source, $target, $H, $sparse, $exist, $zfs);
-  
+
+  // read job parameters from ini file: $action, $title, $source, $target, $H, $sparse, $exist, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
   if (file_exists($active)) extract(parse_ini_file($active));
-  
-  // Read PID from separate file if exists
-  if (file_exists($pid_file)) {
+
+  // read PID from file (file_manager may have been restarted)
+  if (!$pid && file_exists($pid_file)) {
     $pid = trim(file_get_contents($pid_file));
   }
-  
+
   $reply = [];
   if (isset($action)) {
     // check for language changes
@@ -204,6 +208,8 @@ while (true) {
     case 9: // move file (rsync)
     case 10: // move file (mv) - this case needs to be removed from Browse.page
       if (!empty($pid)) {
+        // Set move state for resume: true=rsync phase, false=cleanup phase
+        if ($move === null) $move = true;
         $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Moving').'... '.($move===false ? exec("tail -1 $status") : shell_exec("tail -2 $status | awk -F\"\\r\" '{gsub(/^ +/,\"\",\$NF);print \$NF}'"));
       } else {
         $target = validname($target, false);
@@ -324,12 +330,12 @@ while (true) {
       continue 2;
     }
     $pid = pgrep($pid??0);
-    
-    // Save PID to separate file to survive file_manager restarts
+
+    // Store PID to survive file_manager restarts
     if ($pid !== false) {
       file_put_contents($pid_file, $pid);
     }
-    
+
     if ($pid === false) {
       if (!empty($move)) {
         exec("find ".quoted($source)." -type d -empty -print -delete 1>$status 2>$null & echo \$!", $pid);
