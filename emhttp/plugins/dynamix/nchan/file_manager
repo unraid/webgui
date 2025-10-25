@@ -54,6 +54,34 @@ function isdir($name) {
   return mb_substr($name, -1) == '/';
 }
 
+function mb_strimhalf($text, $width, $trim_marker = "") {
+  if (mb_strlen($text) <= $width) return $text;
+  $half = (int)($width / 2) - 2;
+  return mb_substr($text, 0, $half) . $trim_marker . mb_substr($text, -1 - $half);
+}
+
+function parse_rsync_progress($status, $action_label) {
+  // obtain last status
+  $last_status = shell_exec("tail -n 2 $status | tr '\r' '\n' | tr -s '[:space:]'");
+  $lines = array_filter(explode("\n", trim($last_status)));
+
+  // parse status and generate text array
+  $text = [];
+  foreach ($lines as $line) {
+    // progress line like "6.51G 56% 58.66MB/s 0:01:45 (xfr#2458, ir-chk=3439/5912)"
+    if (preg_match('/\d+%.*\d+:\d+:\d+/', $line)) {
+      $parts = explode(' ', $line);
+      if (count($parts) >= 4) {
+        $text[1] = _('Completed') . ": " . $parts[1] . ",&nbsp;&nbsp;" . _('Speed') . ": " . $parts[2] . ",&nbsp;&nbsp;" . _('ETA') . ": " . $parts[3];
+      }
+    // file line like "mnt/disk3/sharename/file.bin"
+    } else {
+      $text[0] = $action_label . "... " . htmlspecialchars(mb_strimhalf($line, 70, '...'), ENT_QUOTES, 'UTF-8');
+    }
+  }
+  return $text;
+}
+
 function truepath($name) {
   $bits = array_filter(explode('/', $name), 'mb_strlen');
   $path = [];
@@ -113,7 +141,6 @@ function escape($name) {return escapeshellarg(validname($name));}
 function quoted($name) {return is_array($name) ? implode(' ',array_map('escape', $name)) : escape($name);}
 function source($name) {return is_array($name) ? implode(' ',array_map('escapeshellarg', $name)) : escapeshellarg($name);}
 
-// Escape rsync filter meta characters in a single path component
 function rsync_escape_component($s) {
   // escape: *, ?, [, ], \
   return preg_replace('/([*?\[\]\\\\])/', '\\\\$1', $s);
@@ -174,8 +201,15 @@ while (true) {
       break;
     case 1: // delete folder
     case 6: // delete file
+
+      // return status of running action
       if (!empty($pid)) {
-        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Removing').'... '.exec("tail -1 $status");
+        $reply['status'] = json_encode([
+          'action' => $action,
+          'text' => [htmlspecialchars(mb_strimhalf(exec("tail -1 $status"), 70, '...'), ENT_QUOTES, 'UTF-8')]
+        ]);
+
+      // start action
       } else {
         exec("find ".quoted($source)." -name \"*\" -print -delete 1>$status 2>$null & echo \$!", $pid);
       }
@@ -191,8 +225,15 @@ while (true) {
       break;
     case 3:  // copy folder
     case 8:  // copy file
+
+      // return status of running action
       if (!empty($pid)) {
-        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Copying').'... '.shell_exec("tail -2 $status | awk -F\"\\r\" '{gsub(/^ +/,\"\",\$NF);print \$NF}'");
+        $reply['status'] = json_encode([
+          'action' => $action,
+          'text' => parse_rsync_progress($status, _('Copying'))
+        ]);
+
+      // start action
       } else {
         $target = validname($target, false);
         if ($target) {
@@ -203,14 +244,31 @@ while (true) {
         }
       }
       break;
-    case 4: // move folder (rsync)
-    case 5: // move folder (mv) - this case needs to be removed from Browse.page
-    case 9: // move file (rsync)
-    case 10: // move file (mv) - this case needs to be removed from Browse.page
+    case 4: // move folder
+    case 9: // move file
+
+      // return status of running action
       if (!empty($pid)) {
-        // Set move state for resume: true=rsync phase, false=cleanup phase
+
+        // set move state for resume: true=rsync phase, false=cleanup phase
         if ($move === null) $move = true;
-        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Moving').'... '.($move===false ? exec("tail -1 $status") : shell_exec("tail -2 $status | awk -F\"\\r\" '{gsub(/^ +/,\"\",\$NF);print \$NF}'"));
+
+        // cleanup empty directories: simple status
+        if ($move === false) {
+          $reply['status'] = json_encode([
+            'action' => $action,
+            'text' => [htmlspecialchars(mb_strimhalf(exec("tail -1 $status"), 70, '...'), ENT_QUOTES, 'UTF-8')]
+          ]);
+
+        // moving: progress
+        } else {
+          $reply['status'] = json_encode([
+            'action' => $action,
+            'text' => parse_rsync_progress($status, _('Moving'))
+          ]);
+        }
+
+      // start action
       } else {
         $target = validname($target, false);
         if ($target) {

@@ -498,15 +498,6 @@ function doAction(action, title, id) {
           case 9: // move file
             // disallow mixing of disk and user shares
             var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
-            // check if 'mv' can be used
-            if (path.length > 2) {
-              if (user) {
-                if (home(source,target) == 1) action++;
-              } else {
-                var mv = '/'+path[0]+'/'+path[1]+'/';
-                if (target.substr(0,mv.length) == mv) action++;
-              }
-            }
             break;
           case 11: // change owner
             var valid = /.+/;
@@ -568,15 +559,6 @@ function doAction(action, title, id) {
           case 9: // move file
             // disallow mixing of disk and user shares
             var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
-            // check if 'mv' can be used
-            if (path.length > 2) {
-              if (user) {
-                if (home(source,target) == 1) action++;
-              } else {
-                var mv = '/'+path[0]+'/'+path[1]+'/';
-                if (target.substr(0,mv.length) == mv) action++;
-              }
-            }
             break;
           case 11: // change owner
             var valid = /.+/;
@@ -782,15 +764,6 @@ function doActions(action, title) {
           case 4: // move object
             // disallow mixing of disk and user shares
             var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
-            // check if 'mv' can be used
-            if (path.length > 2) {
-              if (user) {
-                if (home(source.join('\n'),target) == 1) action++;
-              } else {
-                var mv = '/'+path[0]+'/'+path[1]+'/';
-                if (target.substr(0,mv.length) == mv) action++;
-              }
-            }
             break;
           case 11: // change owner
             var valid = /.+/;
@@ -854,15 +827,6 @@ function doActions(action, title) {
           case 4: // move object
             // disallow mixing of disk and user shares
             var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
-            // check if 'mv' can be used
-            if (path.length > 2) {
-              if (user) {
-                if (home(source.join('\n'),target) == 1) action++;
-              } else {
-                var mv = '/'+path[0]+'/'+path[1]+'/';
-                if (target.substr(0,mv.length) == mv) action++;
-              }
-            }
             break;
           case 11: // change owner
             var valid = /.+/;
