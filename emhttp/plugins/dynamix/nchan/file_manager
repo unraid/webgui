@@ -67,7 +67,7 @@ function parse_rsync_progress($status, $action_label) {
   $lines = array_filter(explode("\n", trim($last_status)));
 
   // parse status and generate text array
-  $text = [];
+  $text = [$action_label . "..."];  // ensure text[0] is always set
   foreach ($lines as $line) {
     // progress line like "6.51G 56% 58.66MB/s 0:01:45 (xfr#2458, ir-chk=3439/5912)"
     if (preg_match('/\d+%.*\d+:\d+:\d+/', $line)) {
