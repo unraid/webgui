@@ -62,25 +62,28 @@ function mb_strimhalf($text, $width, $trim_marker = "") {
 }
 
 function parse_rsync_progress($status, $action_label) {
-  // obtain last status
-  $last_status = shell_exec("tail -n 2 $status | tr '\r' '\n' | tr -s '[:space:]'");
-  $lines = array_filter(explode("\n", trim($last_status)));
 
-  // parse status and generate text array
-  $text = [$action_label . "..."];  // ensure text[0] is always set
-  foreach ($lines as $line) {
-    // progress line like "6.51G 56% 58.66MB/s 0:01:45 (xfr#2458, ir-chk=3439/5912)"
-    if (preg_match('/\d+%.*\d+:\d+:\d+/', $line)) {
-      $parts = explode(' ', $line);
-      if (count($parts) >= 4) {
-        $text[1] = _('Completed') . ": " . $parts[1] . ",&nbsp;&nbsp;" . _('Speed') . ": " . $parts[2] . ",&nbsp;&nbsp;" . _('ETA') . ": " . $parts[3];
-      }
-    // file line like "mnt/disk3/sharename/file.bin"
-    } else {
-      $text[0] = $action_label . "... " . htmlspecialchars(mb_strimhalf($line, 70, '...'), ENT_QUOTES, 'UTF-8');
+  // obtain filename line like "/mnt/disk6/images/image.jpg"
+  $file_line = exec("tac $status | grep -m1 -v -E -C1 '\\d+%.*\\d+:\\d+:\\d+' | tr -s ' \\t' ' ' || echo ''");
+  $text[0] = $action_label . "... ";
+  if ($file_line) {
+    $text[0] .= htmlspecialchars(mb_strimhalf($file_line, 70, '...'), ENT_QUOTES, 'UTF-8');
+  }
+
+  // obtain progress line like:
+  // currently running: "          7.77G  66%   28.61MB/s    0:02:11"
+  // finished transfer: "          7.78G  66%   23.39MB/s    0:05:17 (xfr#2907, ir-chk=2990/5913)"
+  // note: we do not loop with PHP as there could be a huge amount of progress lines b
+  $progress_line = exec("tac $status | grep -m1 -E -C1 '\\d+%.*\\d+:\\d+:\\d+' | tr -s ' \\t' ' ' || echo ''");
+  if ($progress_line) {
+    $parts = explode(' ', $progress_line);
+    if (count($parts) >= 4) {
+      $text[1] = _('Completed') . ": " . $parts[1] . ",&nbsp;&nbsp;" . _('Speed') . ": " . $parts[2] . ",&nbsp;&nbsp;" . _('ETA') . ": " . $parts[3];
     }
   }
+
   return $text;
+
 }
 
 function truepath($name) {
@@ -239,7 +242,7 @@ while (true) {
         $target = validname($target, false);
         if ($target) {
           $mkpath = isdir($target) ? '--mkpath' : '';
-          exec("rsync -ahPIX$H $sparse $exist $mkpath --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".quoted($source)." ".escapeshellarg($target)." 1>$status 2>$error & echo \$!", $pid);
+          exec("rsync -ahPIX$H $sparse $exist $mkpath --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".quoted($source)." ".escapeshellarg($target)." | tr '\\r' '\\n' | tee -a $status >/dev/null 2>$error & echo \$!", $pid);
         } else {
           $reply['error'] = 'Invalid target name';
         }
@@ -352,13 +355,13 @@ while (true) {
           // - missing directories are created in --backup-dir (like using --mkpath)
           if ($use_rsync_rename) {
             $parent_dir = dirname(validname($source[0]));
-            $cmd = "rsync -r --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --delete --backup --backup-dir=".escapeshellarg($target)." ".quoted_rsync_include($source)." --exclude='*' ".escapeshellarg($empty_dir)." ".escapeshellarg($parent_dir)." 1>$status 2>$error & echo \$!";
+            $cmd = "rsync -r --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --delete --backup --backup-dir=".escapeshellarg($target)." ".quoted_rsync_include($source)." --exclude='*' ".escapeshellarg($empty_dir)." ".escapeshellarg($parent_dir)." | tr '\\r' '\\n' | tee -a $status >/dev/null 2>$error & echo \$!";
             exec($cmd, $pid);
 
           // use rsync copy-delete
           } else {
             $delete_empty_dirs = true; // cleanup needed: rsync --remove-source-files leaves empty directories
-            $cmd = "rsync -ahPIX$H $sparse $exist $mkpath --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." 1>$status 2>$error & echo \$!";
+            $cmd = "rsync -ahPIX$H $sparse $exist $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." | tr '\\r' '\\n' | tee -a $status >/dev/null 2>$error & echo \$!";
             exec($cmd, $pid);
           }
 
