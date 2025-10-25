@@ -113,6 +113,28 @@ function dfm_createSource(source) {
 
 function dfm_showProgress(data) {
   if (!data) return 0;
+
+  // Try to parse as JSON first
+  try {
+    let parsed = JSON.parse(data);
+
+    // Universal JSON format: {action: int, text: [text0, text1]}
+    // text[0] = file/main text, text[1] = progress info (optional)
+    if (parsed.action !== undefined && Array.isArray(parsed.text)) {
+      let icon = "<i class='fa fa-circle-o-notch fa-spin dfm'></i>";
+      let footer = icon + (parsed.text[1] || parsed.text[0] || '');
+      let dialog = parsed.text[0] ? (icon + parsed.text[0] + (parsed.text[1] ? '<br>' + footer : '')) : footer;
+
+      dfm.window.find('.dfm_text').html(dialog);
+      dfm_footer('write', footer);
+      dfm.previous = footer;
+      return 0;
+    }
+  } catch(e) {
+    // Not JSON, fallback to old string parsing
+  }
+
+  // Legacy string parsing for non-migrated operations
   let file = null;
   let text = data.split('\n');
   let line = text[0].split('... ');
@@ -206,8 +228,7 @@ function dfm_makeDialog(open) {
     dfm.window.find('#dfm_exist').prop('checked',dfm_read.exist ? false : true);
     dfm.height = 630;
     break;
-  case 4: // move folder/object (rsync)
-  case 5: // move folder/object (mv)
+  case 4: // move folder/object
     dfm.window.html($('#dfm_templateMoveFolder').html());
     dfm.window.find('#dfm_target').val(dfm_read.target).prop('disabled',true);
     dfm.window.find('#dfm_sparse').prop('checked',dfm_read.sparse ? true : false);
@@ -225,8 +246,7 @@ function dfm_makeDialog(open) {
     dfm.window.find('#dfm_exist').prop('checked',dfm_read.exist ? false : true);
     dfm.height = 630;
     break;
-  case 9: // move file (rsync)
-  case 10: // move file (mv)
+  case 9: // move file
     dfm.window.html($('#dfm_templateMoveFile').html());
     dfm.window.find('#dfm_target').val(dfm_read.target).prop('disabled',true);
     dfm.window.find('#dfm_sparse').prop('checked',dfm_read.sparse ? true :false);

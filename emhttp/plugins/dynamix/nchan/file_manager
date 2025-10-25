@@ -12,10 +12,12 @@
  */
 ?>
 <?
-$docroot = '/usr/local/emhttp';
-$active  = '/var/tmp/file.manager.active';
-$status  = '/var/tmp/file.manager.status';
-$error   = '/var/tmp/file.manager.error';
+$docroot   = '/usr/local/emhttp';
+$active    = '/var/tmp/file.manager.active';
+$pid_file  = '/var/tmp/file.manager.pid';
+$status    = '/var/tmp/file.manager.status';
+$error     = '/var/tmp/file.manager.error';
+$empty_dir = '/var/tmp/file.manager.empty_dir/'; // trailing slash is required for rsync
 $null    = '/dev/null';
 $timer   = time();
 
@@ -50,6 +52,35 @@ function pgrep($pid) {
 
 function isdir($name) {
   return mb_substr($name, -1) == '/';
+}
+
+function mb_strimhalf($text, $width, $trim_marker = "") {
+  if (mb_strlen($text) <= $width) return $text;
+  if ($width < 8) return mb_substr($text, 0, $width);
+  $half = (int)($width / 2) - 2;
+  return mb_substr($text, 0, $half) . $trim_marker . mb_substr($text, -1 - $half);
+}
+
+function parse_rsync_progress($status, $action_label) {
+  // obtain last status
+  $last_status = shell_exec("tail -n 2 $status | tr '\r' '\n' | tr -s '[:space:]'");
+  $lines = array_filter(explode("\n", trim($last_status)));
+
+  // parse status and generate text array
+  $text = [$action_label . "..."];  // ensure text[0] is always set
+  foreach ($lines as $line) {
+    // progress line like "6.51G 56% 58.66MB/s 0:01:45 (xfr#2458, ir-chk=3439/5912)"
+    if (preg_match('/\d+%.*\d+:\d+:\d+/', $line)) {
+      $parts = explode(' ', $line);
+      if (count($parts) >= 4) {
+        $text[1] = _('Completed') . ": " . $parts[1] . ",&nbsp;&nbsp;" . _('Speed') . ": " . $parts[2] . ",&nbsp;&nbsp;" . _('ETA') . ": " . $parts[3];
+      }
+    // file line like "mnt/disk3/sharename/file.bin"
+    } else {
+      $text[0] = $action_label . "... " . htmlspecialchars(mb_strimhalf($line, 70, '...'), ENT_QUOTES, 'UTF-8');
+    }
+  }
+  return $text;
 }
 
 function truepath($name) {
@@ -111,9 +142,45 @@ function escape($name) {return escapeshellarg(validname($name));}
 function quoted($name) {return is_array($name) ? implode(' ',array_map('escape', $name)) : escape($name);}
 function source($name) {return is_array($name) ? implode(' ',array_map('escapeshellarg', $name)) : escapeshellarg($name);}
 
+function rsync_escape_component($s) {
+  // escape: *, ?, [, ], \
+  return preg_replace('/([*?\[\]\\\\])/', '\\\\$1', $s);
+}
+
+function quoted_rsync_include($paths) {
+  // note: this function is never called with invalid names because of "if (!$valid_source_path)"
+  $result = [];
+  foreach ($paths as $path) {
+    $valid_path = validname($path);
+    $base = rsync_escape_component(basename($valid_path));
+    if (is_dir($valid_path) && !is_link($valid_path)) {
+      $result[] = "--include=" . escapeshellarg("/{$base}/***");
+    } else {
+      $result[] = "--include=" . escapeshellarg("/{$base}");
+    }
+  }
+  return implode(' ', $result);
+}
+
+// create empty directory for optimized move if not exists
+if (!file_exists($empty_dir)) {
+  mkdir($empty_dir);
+}
+
+// initialize $delete_empty_dirs state: null = not a move operation (yet), true = rsync copy-delete phase, false = cleanup phase (done)
+$delete_empty_dirs = null;
+
 while (true) {
   unset($action, $source, $target, $H, $sparse, $exist, $zfs);
+
+  // read job parameters from ini file: $action, $title, $source, $target, $H, $sparse, $exist, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
   if (file_exists($active)) extract(parse_ini_file($active));
+
+  // read PID from file (file_manager may have been restarted)
+  if (!$pid && file_exists($pid_file)) {
+    $pid = trim(file_get_contents($pid_file));
+  }
+
   $reply = [];
   if (isset($action)) {
     // check for language changes
@@ -135,8 +202,15 @@ while (true) {
       break;
     case 1: // delete folder
     case 6: // delete file
+
+      // return status of running action
       if (!empty($pid)) {
-        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Removing').'... '.exec("tail -1 $status");
+        $reply['status'] = json_encode([
+          'action' => $action,
+          'text' => [htmlspecialchars(mb_strimhalf(exec("tail -1 $status"), 70, '...'), ENT_QUOTES, 'UTF-8')]
+        ]);
+
+      // start action
       } else {
         exec("find ".quoted($source)." -name \"*\" -print -delete 1>$status 2>$null & echo \$!", $pid);
       }
@@ -152,8 +226,15 @@ while (true) {
       break;
     case 3:  // copy folder
     case 8:  // copy file
+
+      // return status of running action
       if (!empty($pid)) {
-        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Copying').'... '.shell_exec("tail -2 $status | awk -F\"\\r\" '{gsub(/^ +/,\"\",\$NF);print \$NF}'");
+        $reply['status'] = json_encode([
+          'action' => $action,
+          'text' => parse_rsync_progress($status, _('Copying'))
+        ]);
+
+      // start action
       } else {
         $target = validname($target, false);
         if ($target) {
@@ -164,30 +245,123 @@ while (true) {
         }
       }
       break;
-    case 4: // move folder (rsync)
-    case 9: // move file (rsync)
+    case 4: // move folder
+    case 9: // move file
+
+      // return status of running action
       if (!empty($pid)) {
-        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Moving').'... '.($move===false ? exec("tail -1 $status") : shell_exec("tail -2 $status | awk -F\"\\r\" '{gsub(/^ +/,\"\",\$NF);print \$NF}'"));
-      } else {
-        $target = validname($target, false);
-        if ($target) {
-          $move = true;
-          $mkpath = isdir($target) ? '--mkpath' : '';
-          exec("rsync -ahPIX$H $sparse $exist $mkpath --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." 1>$status 2>$error & echo \$!", $pid);
+
+        // set delete_empty_dirs state for resume after file_manager restart (only relevant for rsync copy-delete)
+        if ($delete_empty_dirs === null) $delete_empty_dirs = true;
+
+        // cleanup empty directories: simple status
+        if ($delete_empty_dirs === false) {
+          $reply['status'] = json_encode([
+            'action' => $action,
+            'text' => [htmlspecialchars(mb_strimhalf(exec("tail -1 $status"), 70, '...'), ENT_QUOTES, 'UTF-8')]
+          ]);
+
+        // moving: progress
         } else {
-          $reply['error'] = 'Invalid target name';
+          $reply['status'] = json_encode([
+            'action' => $action,
+            'text' => parse_rsync_progress($status, _('Moving'))
+          ]);
         }
-      }
-      break;
-    case 5: // move folder (mv)
-    case 10: // move file (mv)
-      if (!empty($pid)) {
-        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Moving').'...';
+
+      // start action
       } else {
         $target = validname($target, false);
         if ($target) {
-          $f = $exist ? 'n' : 'f';
-          exec("mv -{$f}t ".escapeshellarg($target)." ".quoted($source)." 1>$status 2>$error & echo \$!", $pid);
+          $mkpath = isdir($target) ? '--mkpath' : '';
+
+          // determine if we can use rsync with rename(2)
+          // requirements: 
+          // 1. all sources and target must be on the same filesystem (device)
+          // 2. all sources must have the same parent directory
+          // 3. either no --ignore-existing flag OR no conflicts with existing files on target
+          $use_rsync_rename = false;
+          $last_dirname = '';
+          $target_device_id = [];
+
+          // for filesystem check, find first existing parent directory
+          $target_for_stat = $target;
+          while (!file_exists($target_for_stat) && $target_for_stat != '/') {
+            $target_for_stat = dirname($target_for_stat);
+          }
+          exec("stat -c %d -- ".escapeshellarg($target_for_stat)." 2>/dev/null", $target_device_id);
+ 
+          // check all source paths
+          if (!empty($target_device_id)) {
+            $use_rsync_rename = true; // assume we can use it, then check for disqualifying conditions
+
+            foreach ($source as $source_path) {
+
+              // source path must be valid
+              $valid_source_path = validname($source_path);
+              if (!$valid_source_path) {
+                $use_rsync_rename = false;
+                break;
+              }
+
+              // filesystem (device) of source and target must be equal
+              $source_device_id = [];
+              exec("stat -c %d -- ".escapeshellarg($valid_source_path)." 2>/dev/null", $source_device_id);
+              if (empty($source_device_id) || $source_device_id[0] != $target_device_id[0]) {
+                $use_rsync_rename = false;
+                break;
+              }
+
+              // parent directory of all source paths must be equal (not sure if this is really required, but keeping for now)
+              if (!empty($last_dirname) && $last_dirname != dirname($valid_source_path) ) {
+                $use_rsync_rename = false;
+                break;
+              }
+              $last_dirname = dirname($valid_source_path);
+
+              // target must be a directory
+              if (!is_dir(rtrim($target,'/'))) {
+                $use_rsync_rename = false;
+                break;
+              }
+
+              // selected source files and directories must not exist on target when "Overwrite existing files" is not set
+              if (!empty($exist)) { // would add "--ignore-existing" to rsync
+                $target_item = rtrim($target, '/') . '/' . basename($valid_source_path);
+                if (file_exists($target_item)) {
+                  $use_rsync_rename = false;
+                  break;
+                }
+              }
+
+              // target must not be a subdirectory of any source (backup-dir should be outside source tree)
+              $parent_dir = dirname($valid_source_path);
+              if (strpos(rtrim($target,'/') . '/', rtrim($parent_dir,'/') . '/') === 0) {
+                $reply['error'] = 'Cannot move directory into its own subdirectory';
+                $use_rsync_rename = false;
+                break 2; // break out of both foreach and if
+              }
+
+            }
+          }
+
+          // use rsync rename
+          // let rsync act like "mv" by syncing an empty directory against the source location, which moves the files to --backup-dir
+          // notes:
+          // - existing files are overwritten in --backup-dir  (like not using --ignore-existing)
+          // - missing directories are created in --backup-dir (like using --mkpath)
+          if ($use_rsync_rename) {
+            $parent_dir = dirname(validname($source[0]));
+            $cmd = "rsync -r --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --delete --backup --backup-dir=".escapeshellarg($target)." ".quoted_rsync_include($source)." --exclude='*' ".escapeshellarg($empty_dir)." ".escapeshellarg($parent_dir)." 1>$status 2>$error & echo \$!";
+            exec($cmd, $pid);
+
+          // use rsync copy-delete
+          } else {
+            $delete_empty_dirs = true; // cleanup needed: rsync --remove-source-files leaves empty directories
+            $cmd = "rsync -ahPIX$H $sparse $exist $mkpath --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." 1>$status 2>$error & echo \$!";
+            exec($cmd, $pid);
+          }
+
         } else {
           $reply['error'] = 'Invalid target name';
         }
@@ -216,17 +390,24 @@ while (true) {
       break;
     case 99: // kill running background process
       if (!empty($pid)) exec("kill $pid");
-      delete_file($active, $status, $error);
-      unset($pid, $move);
+      delete_file($active, $pid_file, $status, $error);
+      unset($pid);
+      $delete_empty_dirs = null;
       break;
     default:
       continue 2;
     }
     $pid = pgrep($pid??0);
+
+    // Store PID to survive file_manager restarts
+    if ($pid !== false) {
+      file_put_contents($pid_file, $pid);
+    }
+
     if ($pid === false) {
-      if (!empty($move)) {
+      if (!empty($delete_empty_dirs)) {
         exec("find ".quoted($source)." -type d -empty -print -delete 1>$status 2>$null & echo \$!", $pid);
-        $move = false;
+        $delete_empty_dirs = false;
         $pid = pgrep($pid);
       } else {
         if ($action != 15) {
@@ -245,8 +426,9 @@ while (true) {
           }
         }
         if (file_exists($error)) $reply['error'] = str_replace("\n","<br>", trim(file_get_contents($error)));
-        delete_file($active, $status, $error);
-        unset($pid, $move);
+        delete_file($active, $pid_file, $status, $error);
+        unset($pid);
+        $delete_empty_dirs = null;
       }
     }
   }
