@@ -334,13 +334,13 @@ while (true) {
                 }
               }
 
-              // // target must not be a subdirectory of source parent (backup-dir should be outside source tree)
-              // $source_parent_dir = dirname($valid_source_path);
-              // if (strpos(rtrim($target,'/'), rtrim($source_parent_dir,'/') . '/') === 0) {
-              //   $reply['error'] = 'Cannot move directory into its own subdirectory';
-              //   $use_rsync_rename = false;
-              //   break 2; // break out of both foreach and if
-              // }
+              // target must not be a subdirectory of any source (backup-dir should be outside source tree)
+              $parent_dir = dirname($valid_source_path);
+              if (strpos(rtrim($target,'/') . '/', rtrim($parent_dir,'/') . '/') === 0) {
+                $reply['error'] = 'Cannot move directory into its own subdirectory';
+                $use_rsync_rename = false;
+                break 2; // break out of both foreach and if
+              }
 
             }
           }
