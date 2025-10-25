@@ -56,6 +56,7 @@ function isdir($name) {
 
 function mb_strimhalf($text, $width, $trim_marker = "") {
   if (mb_strlen($text) <= $width) return $text;
+  if ($width < 8) return mb_substr($text, 0, $width);
   $half = (int)($width / 2) - 2;
   return mb_substr($text, 0, $half) . $trim_marker . mb_substr($text, -1 - $half);
 }
