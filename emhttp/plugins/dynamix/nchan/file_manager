@@ -176,6 +176,9 @@ if (!file_exists($empty_dir)) {
 // initialize $delete_empty_dirs state: null = not a move operation (yet), true = rsync copy-delete phase, false = cleanup phase (done)
 $delete_empty_dirs = null;
 
+
+// infinite loop to monitor and execute file operations
+// Note: exec() uses /bin/sh which is symlinked to bash in unraid and a requirement for process substitution syntax >(...)
 while (true) {
   unset($action, $source, $target, $H, $sparse, $exist, $zfs);
 
