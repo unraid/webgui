@@ -76,7 +76,7 @@ function parse_rsync_progress($status, $action_label) {
   // transfer of single file finished (ETA changes temporarily to estimated time)
   // "         37.93G   4%   53.80MB/s    0:11:12 (xfr#32, to-chk=554/596)"
   // note: we do not loop with PHP as there could be a huge amount of progress lines b
-  $progress_line = exec("tac $status | grep -m1 -E -C1 '[0-9]+%.*[0-9]+:[0-9]+:[0-9]+' | tr -s ' ' || echo ''");
+  $progress_line = trim(exec("tac $status | grep -m1 -E -C1 '[0-9]+%.*[0-9]+:[0-9]+:[0-9]+' | tr -s ' ' || echo ''"));
   if ($progress_line) {
     $parts = explode(' ', $progress_line);
     if (count($parts) >= 4) {
@@ -167,7 +167,8 @@ function quoted_rsync_include($paths) {
   return implode(' ', $result);
 }
 
-// create empty directory for optimized move if not exists
+// create empty directory for "rsync rename" if not exists
+// note: as only file_manager creates and uses this directory no "is empty" check and rebuild mechanism is required
 if (!file_exists($empty_dir)) {
   mkdir($empty_dir);
 }
@@ -257,7 +258,11 @@ while (true) {
       // return status of running action
       if (!empty($pid)) {
 
-        // set delete_empty_dirs state for resume after file_manager restart (only relevant for rsync copy-delete)
+        // set delete_empty_dirs state for resume after file_manager restart (only relevant for rsync copy-delete))
+        // note: would be theoretically enabled for "rsync rename", too, so find would even then try to delete 
+        //       source empty directories which do not exist, but as "rsync-rename" is very fast and the file_manager
+        //       runs for several seconds in the background even if the user directly closes the WebGUI it should be
+        //       nearly impossible that the user is able to see any errors
         if ($delete_empty_dirs === null) $delete_empty_dirs = true;
 
         // cleanup empty directories: simple status
