@@ -244,7 +244,7 @@ while (true) {
         $target = validname($target, false);
         if ($target) {
           $mkpath = isdir($target) ? '--mkpath' : '';
-          exec("stdbuf -oL rsync -ahPIX$H $sparse $exist $mkpath --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".quoted($source)." ".escapeshellarg($target)." | tr '\\r' '\\n' | tee -a $status >/dev/null 2>$error & echo \$!", $pid);
+          exec("stdbuf -o0 rsync -ahPIX$H $sparse $exist $mkpath --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".quoted($source)." ".escapeshellarg($target)." | { echo \$!; tr '\\r' '\\n' } | tee -a $status >/dev/null 2>$error", $pid);
         } else {
           $reply['error'] = 'Invalid target name';
         }
@@ -357,13 +357,13 @@ while (true) {
           // - missing directories are created in --backup-dir (like using --mkpath)
           if ($use_rsync_rename) {
             $parent_dir = dirname(validname($source[0]));
-            $cmd = "stdbuf -oL rsync -r --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --delete --backup --backup-dir=".escapeshellarg($target)." ".quoted_rsync_include($source)." --exclude='*' ".escapeshellarg($empty_dir)." ".escapeshellarg($parent_dir)." | tr '\\r' '\\n' | tee -a $status >/dev/null 2>$error & echo \$!";
+            $cmd = "stdbuf -o0 rsync -r --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --delete --backup --backup-dir=".escapeshellarg($target)." ".quoted_rsync_include($source)." --exclude='*' ".escapeshellarg($empty_dir)." ".escapeshellarg($parent_dir)." | { echo \$!; tr '\\r' '\\n' } | tee -a $status >/dev/null 2>$error";
             exec($cmd, $pid);
 
           // use rsync copy-delete
           } else {
             $delete_empty_dirs = true; // cleanup needed: rsync --remove-source-files leaves empty directories
-            $cmd = "stdbuf -oL rsync -ahPIX$H $sparse $exist $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." | tr '\\r' '\\n' | tee -a $status >/dev/null 2>$error & echo \$!";
+            $cmd = "stdbuf -o0 rsync -ahPIX$H $sparse $exist $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." | { echo \$!; tr '\\r' '\\n' } | tee -a $status >/dev/null 2>$error";
             exec($cmd, $pid);
           }
 
