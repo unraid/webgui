@@ -89,17 +89,12 @@ function dfm_footer(action, text, $icon) {
           return this.nodeType === 3; // Text nodes only
         }).remove();
 
-        // Remove existing progress span if present
-        $notice.find('.whitespace-nowrap').remove();
-
         // Update text after icon (which stays in place)
-        let $progressSpan = $('<span/>').addClass('whitespace-nowrap').text(text);
-        $existingIcon.after($progressSpan);
+        $existingIcon.after(document.createTextNode(text));
 
       // First time - insert icon + text
       } else {
-        let $progressSpan = $('<span/>').addClass('whitespace-nowrap').text(text);
-        $notice.empty().append(fileManagerIcon).append($icon.clone()).append($progressSpan);
+        $notice.empty().append(fileManagerIcon).append($icon.clone()).append(document.createTextNode(text));
       }
 
     // No icon or no text - insert as-is
@@ -186,7 +181,7 @@ function dfm_showProgress(data) {
             return this.nodeType === 3; // Text nodes only
           }).remove();
           
-          // Remove <br> if present
+          // Remove <br> elements
           $dialogContainer.find('br').remove();
 
           // Insert updated text after first icon (which stays in place)
@@ -197,13 +192,11 @@ function dfm_showProgress(data) {
             let $secondIcon = $existingIcons.eq(1);
             if ($secondIcon.length === 0) {
               // Need to add second icon
-              let $progressSpan = $('<span/>').addClass('whitespace-nowrap').text(parsed.text[1]);
-              $dialogContainer.append('<br>').append($icon.clone()).append($progressSpan);
+              $dialogContainer.append('<br>').append($icon.clone()).append(document.createTextNode(parsed.text[1]));
             } else {
               // Second icon exists, just update text
               $secondIcon.before('<br>');
-              let $progressSpan = $('<span/>').addClass('whitespace-nowrap').text(parsed.text[1]);
-              $secondIcon.after($progressSpan);
+              $secondIcon.after(document.createTextNode(parsed.text[1]));
             }
           }
 
@@ -213,8 +206,7 @@ function dfm_showProgress(data) {
 
           // Optionally add second line of icon + text
           if (parsed.text[1]) {
-            let $progressSpan = $('<span/>').addClass('whitespace-nowrap').text(parsed.text[1]);
-            $dialogContainer.append('<br>').append($icon.clone()).append($progressSpan);
+            $dialogContainer.append('<br>').append($icon.clone()).append(document.createTextNode(parsed.text[1]));
           }
 
         }
