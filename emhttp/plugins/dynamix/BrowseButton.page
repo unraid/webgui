@@ -70,12 +70,6 @@ function dfm_footer(action, text, $icon) {
     // Add icon and text
     if ($icon && text) {
 
-      // Ensure $icon is a jQuery object with elements
-      if (!($icon instanceof jQuery) || $icon.length === 0) {
-        $notice.html(fileManagerIcon + text);
-        break;
-      }
-
       // Extract selector from icon classes
       let iconSelector = '.' + $icon.attr('class').split(' ').join('.');
 
