@@ -70,8 +70,8 @@ function dfm_footer(action, text, $icon) {
     // Add icon and text
     if ($icon && text) {
 
-      // Ensure $icon is a jQuery object
-      if (!($icon instanceof jQuery)) {
+      // Ensure $icon is a jQuery object with elements
+      if (!($icon instanceof jQuery) || $icon.length === 0) {
         $notice.html(fileManagerIcon + text);
         break;
       }
@@ -180,7 +180,7 @@ function dfm_showProgress(data) {
           $dialogContainer.contents().filter(function() {
             return this.nodeType === 3; // Text nodes only
           }).remove();
-          
+
           // Remove <br> elements
           $dialogContainer.find('br').remove();
 
