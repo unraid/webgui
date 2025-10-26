@@ -61,6 +61,44 @@ function mb_strimhalf($text, $width, $trim_marker = "") {
   return mb_substr($text, 0, $half) . $trim_marker . mb_substr($text, -1 - $half);
 }
 
+function calculate_eta($transferred, $percent, $speed) {
+  // Convert transferred size to bytes
+  $multipliers = ['K' => 1024, 'M' => 1024*1024, 'G' => 1024*1024*1024, 'T' => 1024*1024*1024*1024];
+  $transferred_bytes = floatval($transferred);
+  foreach ($multipliers as $unit => $mult) {
+    if (stripos($transferred, $unit) !== false) {
+      $transferred_bytes *= $mult;
+      break;
+    }
+  }
+  
+  // Convert speed to bytes/sec
+  $speed_bytes = floatval($speed);
+  if (stripos($speed, 'kB/s') !== false) {
+    $speed_bytes *= 1024;
+  } elseif (stripos($speed, 'MB/s') !== false) {
+    $speed_bytes *= 1024 * 1024;
+  } elseif (stripos($speed, 'GB/s') !== false) {
+    $speed_bytes *= 1024 * 1024 * 1024;
+  }
+  
+  // Calculate total size from percent
+  $percent_val = intval(str_replace('%', '', $percent));
+  if ($percent_val > 0 && $percent_val < 100 && $speed_bytes > 0) {
+    $total_bytes = $transferred_bytes * 100 / $percent_val;
+    $remaining_bytes = $total_bytes - $transferred_bytes;
+    $eta_seconds = intval($remaining_bytes / $speed_bytes);
+    
+    // Format as HH:MM:SS
+    $hours = intval($eta_seconds / 3600);
+    $minutes = intval(($eta_seconds % 3600) / 60);
+    $seconds = $eta_seconds % 60;
+    return sprintf("%d:%02d:%02d", $hours, $minutes, $seconds);
+  }
+  
+  return "N/A";
+}
+
 function parse_rsync_progress($status, $action_label) {
 
   // initialize text array with action label
@@ -76,7 +114,19 @@ function parse_rsync_progress($status, $action_label) {
   if ($progress_line) {
     $parts = explode(' ', $progress_line);
     if (count($parts) >= 4) {
-      $text[1] = _('Completed') . ": " . $parts[1] . ",  " . _('Speed') . ": " . $parts[2] . ",  " . _('ETA') . ": " . $parts[3];
+      $transferred = $parts[0];
+      $percent = $parts[1];
+      $speed = $parts[2];
+      $time = $parts[3];
+      
+      // Check if this is an ETA line or elapsed time line
+      // ETA lines have only 4 parts, elapsed time lines have additional (xfr#...) info
+      if (isset($parts[4])) {
+        // Calculate our own ETA from transferred size, percent, and speed
+        $time = calculate_eta($transferred, $percent, $speed);
+      }
+      
+      $text[1] = _('Completed') . ": " . $percent . ",  " . _('Speed') . ": " . $speed . ",  " . _('ETA') . ": " . $time;
     }
   }
 
