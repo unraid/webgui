@@ -52,7 +52,7 @@ const dfm = {
 };
 var dfm_read = {};
 
-function dfm_footer(action, text) {
+function dfm_footer(action, text, $icon) {
   switch (action) {
   case 'show':
     $('#user-notice').show();
@@ -61,8 +61,35 @@ function dfm_footer(action, text) {
     $('#user-notice').hide();
     break;
   case 'write':
-    let icon = '<a class="hand" onclick="dfm_openDialog(true)" title="_(File Manager)_"><i class="icon-u-duplicate dfm"></i></a>';
-    $('#user-notice').html(icon + text);
+    let fileManagerIcon = '<a class="hand" onclick="dfm_openDialog(true)" title="_(File Manager)_"><i class="icon-u-duplicate dfm"></i></a>';
+    let $notice = $('#user-notice');
+
+    // Ensure text is a string
+    text = text || '';
+
+    // Add icon and text
+    if ($icon && text) {
+
+      // Extract selector from icon classes
+      let iconSelector = '.' + $icon.attr('class').split(' ').join('.');
+
+      // Check if icon already exists in DOM to preserve animation
+      let $existingIcon = $notice.find(iconSelector);
+
+      // Reuse existing icon element, update only text
+      if ($existingIcon.length > 0) {
+        $notice.empty().append(fileManagerIcon).append($existingIcon).append(document.createTextNode(text));
+
+      // First time - insert icon + text
+      } else {
+        $notice.empty().append(fileManagerIcon).append($icon.clone()).append(document.createTextNode(text));
+      }
+
+    // No icon or no text - insert as-is
+    } else {
+      $notice.html(fileManagerIcon + text);
+    }
+
     break;
   case 'clear':
     $('#user-notice').html('');
@@ -121,14 +148,54 @@ function dfm_showProgress(data) {
     // Universal JSON format: {action: int, text: [text0, text1]}
     // text[0] = file/main text, text[1] = progress info (optional)
     if (parsed.action !== undefined && Array.isArray(parsed.text)) {
-      let icon = "<i class='fa fa-circle-o-notch fa-spin dfm'></i>";
-      let footer = icon + (parsed.text[1] || parsed.text[0] || '');
-      let dialog = parsed.text[0] ? (icon + parsed.text[0] + (parsed.text[1] ? '<br>' + footer : '')) : footer;
 
-      dfm.window.find('.dfm_text').html(dialog);
-      dfm_footer('write', footer);
-      dfm.previous = footer;
+      // Define spinning icon as jQuery object
+      let $icon = $('<i/>').addClass('fa fa-circle-o-notch fa-spin dfm');
+
+      // Extract selector from icon classes
+      let iconSelector = '.' + $icon.attr('class').split(' ').join('.');
+
+      // Build dialog text - preserve existing icon if present to avoid animation restart
+      let $dialogContainer = dfm.window.find('.dfm_text');
+      let dialogText = parsed.text[0] || '';
+      if (dialogText) {
+
+        // Find existing icon elements (there might be two: one for file, one for progress)
+        let $existingIcons = $dialogContainer.find(iconSelector);
+        if ($existingIcons.length > 0) {
+
+          // Update content while preserving icon elements
+          let $firstIcon = $existingIcons.first();
+          $dialogContainer.empty().append($firstIcon).append(document.createTextNode(dialogText));
+
+          // Add progress line with its own icon (reuse second or clone first)
+          if (parsed.text[1]) {
+            let $secondIcon = $existingIcons.length > 1 ? $existingIcons.eq(1) : $icon.clone();
+            $dialogContainer.append('<br>').append($secondIcon).append(document.createTextNode(parsed.text[1]));
+          }
+
+        // First time - insert icon + text
+        } else {
+          $dialogContainer.empty().append($icon.clone()).append(document.createTextNode(dialogText));
+
+          // Optionally add second line of icon + text
+          if (parsed.text[1]) {
+            $dialogContainer.append('<br>').append($icon.clone()).append(document.createTextNode(parsed.text[1]));
+          }
+
+        }
+
+      // No text - clear everything including icon
+      } else {
+        $dialogContainer.empty();
+      }
+
+      // Build footer text (progress info only)
+      let footerText = parsed.text[1] || parsed.text[0] || '';
+      dfm_footer('write', footerText, $icon);
+      dfm.previous = footerText;
       return 0;
+
     }
   } catch(e) {
     // Not JSON, fallback to old string parsing
