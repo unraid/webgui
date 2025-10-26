@@ -377,6 +377,9 @@ while (true) {
           } else {
             $delete_empty_dirs = true; // cleanup needed: rsync --remove-source-files leaves empty directories
             $cmd = "rsync -ahPIX$H $sparse $exist $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
+            // note: rsync defaults to "inc_recurse mode" which causes creating the whole directory structure at target before transfering files.
+            //       This is a problem because those target directories get temporary permissions of "root:root" and "chmod 0700", which
+            //       breaks access for all unraid users through /mnt/user/sharename. We avoid this behavior by using "--no-inc-recursive".
             exec($cmd, $pid);
           }
 
