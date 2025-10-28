@@ -4,16 +4,24 @@
  * Translation String Extractor
  * 
  * This script scans through the plugins folder looking for translation strings
- * in two formats:
- * 1. _(text)_ - outputs to translations.po
- * 2. _('text') or _("text") - outputs to translations_function.po
+ * and organizes them by file type:
+ * - JavaScript files (.js) → translations_js.po
+ * - PHP/HTML files (.php, .page, .html, .htm) → translations_php.po
+ * 
+ * Patterns detected:
+ * 1. _(text)_
+ * 2. _('text') or _("text")
+ * 3. tr('text') or tr("text")
  */
 
 // Configuration
 $baseDir = __DIR__;
-$outputFile1 = $baseDir . '/translations.po';
-$outputFile2 = $baseDir . '/translations_function.po';
+//$baseDir = "/Volumes/GitHub/community.applications/source/community.applications/usr/local/emhttp/plugins/community.applications";
+$outputFileJS = $baseDir . '/translations_js.po';
+$outputFilePHP = $baseDir . '/translations_php.po';
 $fileExtensions = ['js', 'html', 'htm', 'php', 'page'];
+$jsExtensions = ['js'];
+$phpExtensions = ['html', 'htm', 'php', 'page'];
 
 // Pattern 1: Match _(text)_ - handles escaped characters and nested content
 $pattern1 = '/_\(((?:[^)]|\\.)*?)\)_/s';
@@ -21,23 +29,26 @@ $pattern1 = '/_\(((?:[^)]|\\.)*?)\)_/s';
 // Pattern 2: Match _('text') or _("text") - function call pattern
 $pattern2 = '/_\((["\'])((?:(?!\1).)*)\1\)/s';
 
+// Pattern 3: Match tr('text') or tr("text") - function call pattern
+$pattern3 = '/\btr\((["\'])((?:(?!\1).)*)\1\)/s';
+
 echo "Translation String Extractor\n";
 echo "============================\n\n";
 echo "Base directory: $baseDir\n";
 echo "Output files:\n";
-echo "  - $outputFile1 (for _(text)_ pattern)\n";
-echo "  - $outputFile2 (for _('text') pattern)\n\n";
+echo "  - $outputFileJS (for JavaScript files)\n";
+echo "  - $outputFilePHP (for PHP/HTML files)\n\n";
 
 // Store found strings with their locations
-$translations1 = [];
-$translations2 = [];
-$fileCount1 = 0;
-$fileCount2 = 0;
+$translationsJS = [];
+$translationsPHP = [];
+$fileCountJS = 0;
+$fileCountPHP = 0;
 
 /**
  * Recursively scan directory for files
  */
-function scanDirectory($dir, $extensions, $pattern1, $pattern2, &$translations1, &$translations2, &$fileCount1, &$fileCount2) {
+function scanDirectory($dir, $extensions, $jsExtensions, $phpExtensions, $pattern1, $pattern2, $pattern3, &$translationsJS, &$translationsPHP, &$fileCountJS, &$fileCountPHP) {
     $items = scandir($dir);
     
     foreach ($items as $item) {
@@ -49,21 +60,21 @@ function scanDirectory($dir, $extensions, $pattern1, $pattern2, &$translations1,
         
         if (is_dir($path)) {
             // Recursively scan subdirectories
-            scanDirectory($path, $extensions, $pattern1, $pattern2, $translations1, $translations2, $fileCount1, $fileCount2);
+            scanDirectory($path, $extensions, $jsExtensions, $phpExtensions, $pattern1, $pattern2, $pattern3, $translationsJS, $translationsPHP, $fileCountJS, $fileCountPHP);
         } elseif (is_file($path)) {
             // Check if file has one of the target extensions
             $ext = pathinfo($path, PATHINFO_EXTENSION);
             if (in_array($ext, $extensions)) {
-                processFile($path, $pattern1, $pattern2, $translations1, $translations2, $fileCount1, $fileCount2);
+                processFile($path, $ext, $jsExtensions, $phpExtensions, $pattern1, $pattern2, $pattern3, $translationsJS, $translationsPHP, $fileCountJS, $fileCountPHP);
             }
         }
     }
 }
 
 /**
- * Process a single file for both patterns
+ * Process a single file for all patterns
  */
-function processFile($filePath, $pattern1, $pattern2, &$translations1, &$translations2, &$fileCount1, &$fileCount2) {
+function processFile($filePath, $ext, $jsExtensions, $phpExtensions, $pattern1, $pattern2, $pattern3, &$translationsJS, &$translationsPHP, &$fileCountJS, &$fileCountPHP) {
     // Skip the extract_translations.php script itself
     if (basename($filePath) === 'extract_translations.php') {
         return;
@@ -75,17 +86,35 @@ function processFile($filePath, $pattern1, $pattern2, &$translations1, &$transla
         return;
     }
     
-    $found1 = processPattern1($filePath, $content, $pattern1, $translations1);
-    $found2 = processPattern2($filePath, $content, $pattern2, $translations2);
+    // Determine target translation array based on file extension
+    $isJS = in_array($ext, $jsExtensions);
+    $fileType = $isJS ? 'JS' : 'PHP';
     
-    if ($found1 > 0) {
-        $fileCount1++;
-        echo "Found $found1 _(text)_ string(s) in: " . basename($filePath) . "\n";
+    // Process all patterns - route to appropriate translation array
+    if ($isJS) {
+        $found1 = processPattern1($filePath, $content, $pattern1, $translationsJS);
+        $found2 = processPattern2($filePath, $content, $pattern2, $translationsJS);
+        $found3 = processPattern3($filePath, $content, $pattern3, $translationsJS);
+    } else {
+        $found1 = processPattern1($filePath, $content, $pattern1, $translationsPHP);
+        $found2 = processPattern2($filePath, $content, $pattern2, $translationsPHP);
+        $found3 = processPattern3($filePath, $content, $pattern3, $translationsPHP);
     }
     
-    if ($found2 > 0) {
-        $fileCount2++;
-        echo "Found $found2 _('text') string(s) in: " . basename($filePath) . "\n";
+    $totalFound = $found1 + $found2 + $found3;
+    
+    if ($totalFound > 0) {
+        if ($isJS) {
+            $fileCountJS++;
+        } else {
+            $fileCountPHP++;
+        }
+        
+        echo "Found $totalFound translation string(s) in [$fileType] " . basename($filePath);
+        if ($found1 > 0) echo " (_(text)_: $found1)";
+        if ($found2 > 0) echo " (_(): $found2)";
+        if ($found3 > 0) echo " (tr(): $found3)";
+        echo "\n";
     }
 }
 
@@ -179,6 +208,45 @@ function processPattern2($filePath, $content, $pattern, &$translations) {
 }
 
 /**
+ * Process Pattern 3: tr('text') or tr("text")
+ */
+function processPattern3($filePath, $content, $pattern, &$translations) {
+    $matches = [];
+    $count = preg_match_all($pattern, $content, $matches, PREG_OFFSET_CAPTURE);
+    $foundCount = 0;
+    
+    if ($count > 0) {
+        // Group 2 contains the actual text (group 1 is the quote type)
+        foreach ($matches[2] as $match) {
+            $text = trim($match[0]);
+            $offset = $match[1];
+            
+            // Calculate line number from offset
+            $beforeMatch = substr($content, 0, $offset);
+            $lineNumber = substr_count($beforeMatch, "\n") + 1;
+            
+            // Text is already without quotes (captured between quotes)
+            // Just unescape any escaped quotes
+            $text = stripslashes($text);
+            
+            // Skip empty strings
+            if (empty($text)) {
+                continue;
+            }
+            
+            // Store the translation with its location and line number
+            if (!isset($translations[$text])) {
+                $translations[$text] = [];
+            }
+            $translations[$text][] = $filePath . ':' . $lineNumber;
+            $foundCount++;
+        }
+    }
+    
+    return $foundCount;
+}
+
+/**
  * Generate .po file
  */
 function generatePoFile($outputFile, $translations, $patternName) {
@@ -222,62 +290,62 @@ function generatePoFile($outputFile, $translations, $patternName) {
 // Main execution
 echo "Scanning for translation strings...\n\n";
 
-scanDirectory($baseDir, $fileExtensions, $pattern1, $pattern2, $translations1, $translations2, $fileCount1, $fileCount2);
+scanDirectory($baseDir, $fileExtensions, $jsExtensions, $phpExtensions, $pattern1, $pattern2, $pattern3, $translationsJS, $translationsPHP, $fileCountJS, $fileCountPHP);
 
 echo "\n";
 echo "============================\n";
 echo "Scan complete!\n\n";
 
-// Report for Pattern 1: _(text)_
-echo "Pattern _(text)_:\n";
-echo "  Files processed: $fileCount1\n";
-echo "  Unique strings found: " . count($translations1) . "\n";
-echo "  Total occurrences: " . array_sum(array_map('count', $translations1)) . "\n\n";
+// Report for JavaScript
+echo "JavaScript Files:\n";
+echo "  Files processed: $fileCountJS\n";
+echo "  Unique strings found: " . count($translationsJS) . "\n";
+echo "  Total occurrences: " . array_sum(array_map('count', $translationsJS)) . "\n\n";
 
-// Report for Pattern 2: _('text')
-echo "Pattern _('text'):\n";
-echo "  Files processed: $fileCount2\n";
-echo "  Unique strings found: " . count($translations2) . "\n";
-echo "  Total occurrences: " . array_sum(array_map('count', $translations2)) . "\n\n";
+// Report for PHP/HTML
+echo "PHP/HTML Files:\n";
+echo "  Files processed: $fileCountPHP\n";
+echo "  Unique strings found: " . count($translationsPHP) . "\n";
+echo "  Total occurrences: " . array_sum(array_map('count', $translationsPHP)) . "\n\n";
 
 // Generate .po files
-if (count($translations1) > 0) {
-    echo "Generating $outputFile1...\n";
-    if (generatePoFile($outputFile1, $translations1, "_(text)_ pattern")) {
-        echo "Successfully created: $outputFile1\n";
+if (count($translationsJS) > 0) {
+    echo "Generating $outputFileJS...\n";
+    if (generatePoFile($outputFileJS, $translationsJS, "JavaScript translations")) {
+        echo "Successfully created: $outputFileJS\n";
         echo "  Sample entries:\n";
-        $sample = array_slice(array_keys($translations1), 0, 5);
+        $sample = array_slice(array_keys($translationsJS), 0, 5);
         foreach ($sample as $text) {
             echo "    - \"$text\"\n";
         }
-        if (count($translations1) > 5) {
-            echo "    ... and " . (count($translations1) - 5) . " more\n";
+        if (count($translationsJS) > 5) {
+            echo "    ... and " . (count($translationsJS) - 5) . " more\n";
         }
         echo "\n";
     } else {
-        echo "Error: Could not write to $outputFile1\n";
+        echo "Error: Could not write to $outputFileJS\n";
     }
 } else {
-    echo "No _(text)_ translation strings found.\n\n";
+    echo "No JavaScript translation strings found.\n\n";
 }
 
-if (count($translations2) > 0) {
-    echo "Generating $outputFile2...\n";
-    if (generatePoFile($outputFile2, $translations2, "_('text') pattern")) {
-        echo "Successfully created: $outputFile2\n";
+if (count($translationsPHP) > 0) {
+    echo "Generating $outputFilePHP...\n";
+    if (generatePoFile($outputFilePHP, $translationsPHP, "PHP/HTML translations")) {
+        echo "Successfully created: $outputFilePHP\n";
         echo "  Sample entries:\n";
-        $sample = array_slice(array_keys($translations2), 0, 5);
+        $sample = array_slice(array_keys($translationsPHP), 0, 5);
         foreach ($sample as $text) {
             echo "    - \"$text\"\n";
         }
-        if (count($translations2) > 5) {
-            echo "    ... and " . (count($translations2) - 5) . " more\n";
+        if (count($translationsPHP) > 5) {
+            echo "    ... and " . (count($translationsPHP) - 5) . " more\n";
         }
     } else {
-        echo "Error: Could not write to $outputFile2\n";
+        echo "Error: Could not write to $outputFilePHP\n";
     }
 } else {
-    echo "No _('text') translation strings found.\n";
+    echo "No PHP/HTML translation strings found.\n";
 }
 
 echo "\nDone!\n";
