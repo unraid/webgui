@@ -86,7 +86,7 @@ $id = 1 ;
 write(implode($style)."<p class='logLine'></p>");
 $process = " " ;
 $actiontxt = ucfirst($action) ;
-write("<p class='logLine'></p>","addLog\0<fieldset class='docker'><legend>"._("Options for $actiontxt").": </legend><p class='logLine'></p></fieldset>");
+write("<p class='logLine'></p>","addLog\0<fieldset class='docker'><legend>".sprintf(_("Options for %s"),$actiontxt).": </legend><p class='logLine'></p></fieldset>");
 write("addLog\0".htmlspecialchars("Cloning $name to $clone"));
 
 switch ($action) {
