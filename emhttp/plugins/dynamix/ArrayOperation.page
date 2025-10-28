@@ -649,7 +649,7 @@ window.onunload = function(){
       $sbSynced = array_shift($synced) ?: _var($var,'sbSynced');
       $sbUpdate = _var($var,'mdResyncDt') ? $sbSynced : _var($var,'sbUpdated');?>
       <tr><td></td><td><input type="button" value="_(History)_" onclick="parityHistory()"></td>
-      <td><?=sprintf(_('Current operation %1s on **%2s**'),(_var($var,'mdResyncDt')?_('started'):_('paused')),_(my_time($sbUpdate).day_count($sbUpdate),0))?></td></tr>
+      <td><?=sprintf(_('Current operation %1$s on **%2$s**'),(_var($var,'mdResyncDt')?_('started'):_('paused')),_(my_time($sbUpdate).day_count($sbUpdate),0))?></td></tr>
       <tr><td>_(Total size)_:</td><td id="line0"></td><td></td></tr>
       <tr><td>_(Elapsed time)_:</td><td id="line1"></td><td></td></tr>
       <tr><td>_(Current position)_:</td><td id="line2"></td><td></td></tr>
@@ -675,7 +675,7 @@ window.onunload = function(){
   case "Copying":?>
     <tr><td><?status_indicator()?>**_(Starting, copying)_... <span id="fsState"></span>**</td><td><input type="submit" name="cmdNoCopy" value="_(Cancel)_"></td><td></td></tr>
     <tr><td></td><td><input type="button" value="_(History)_" onclick="parityHistory()"></td>
-    <td><?=sprintf(_('Current operation %1s on **%2s**'),_('started'),_(my_time(_var($var,'sbUpdated',0)).day_count(_var($var,'sbSynced',0)),0))?></td></tr>
+    <td><?=sprintf(_('Current operation %1$s on **%2$s**'),_('started'),_(my_time(_var($var,'sbUpdated',0)).day_count(_var($var,'sbSynced',0)),0))?></td></tr>
 <?  break;
   case "Clearing":?>
     <tr><td><?status_indicator()?>**_(Started, clearing)_... <span id="fsState"></span>**</td><td><input type="submit" name="cmdNoClear" value="_(Cancel)_"></td><td></td></tr>

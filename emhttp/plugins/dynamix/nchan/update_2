@@ -393,7 +393,7 @@ while (true) {
   $sbSynced = array_shift($synced) ?: _var($var,'sbSynced');
   $sbUpdate = $delta ? $sbSynced : _var($var,'sbUpdated');
   if ($spot) {
-    $echo[$a][] = sprintf(_('Current operation %1s on **%2s**'),($delta?_('started'):_('paused')),_(my_time($sbUpdate).day_count($sbUpdate),0));
+    $echo[$a][] = sprintf(_('Current operation %1$s on **%2$s**'),($delta?_('started'):_('paused')),_(my_time($sbUpdate).day_count($sbUpdate),0));
     $echo[$a][] = "<i class='fa fa-fw fa-clock-o'></i> "._('Elapsed time').": "._(my_clock(floor((time()-$sbSynced)/60)),2)."<br><i class='fa fa-fw fa-flag-checkered'></i> "._('Estimated finish').': '.($bytes ? _(my_clock(round(((($delta*(($size-$spot)/($bytes/100+1)))/100)/60),0)),2) : _('Unknown'))."<br><i class='fa fa-fw fa-search'></i> ".print_error(_var($var,'sbSyncErrs',0));
   } else {
     [$date,$duration,$speed,$status,$error,$action,$size] = last_parity_log();
