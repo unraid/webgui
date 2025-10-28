@@ -67,7 +67,7 @@ foreach (explode('&', $url) as $chunk) {
 $id = 1 ;
 write(implode($style)."<p class='logLine'></p>");
 $process = " " ;
-write("<p class='logLine'></p>","addLog\0<fieldset class='docker'><legend>"._("Options for Block $action").": </legend><p class='logLine'></p><span id='wait-$waitID'>"._('Please wait')." </span></fieldset>");
+write("<p class='logLine'></p>","addLog\0<fieldset class='docker'><legend>".sprintf(_("Options for Block %s"),$action).": </legend><p class='logLine'></p><span id='wait-$waitID'>"._('Please wait')." </span></fieldset>");
 write("addLog\0".htmlspecialchars("VMName $name "));
 write("addLog\0".htmlspecialchars("SNAP $snapshotname "));
 write("addLog\0".htmlspecialchars("Base $targetbase "));
