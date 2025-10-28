@@ -544,14 +544,14 @@ const displayOptions = <?= json_encode($arrDisplayOptions, JSON_HEX_TAG | JSON_H
 			[$cpu1, $cpu2] = my_preg_split('/[,-]/',$pair);
 			if (!$cpu2) 	$corecount++; else $corecount=$corecount+2;
 		}
-		if (is_array($arrConfig['domain']['vcpu'])) {$coredisable = "disabled"; $vcpubuttontext = "Deselect all";} else {$coredisable = ""; $vcpubuttontext = "Select all";}
+		if (is_array($arrConfig['domain']['vcpu'])) {$coredisable = "disabled"; $vcpubuttontext = _("Deselect all");} else {$coredisable = ""; $vcpubuttontext = _("Select all");}
 		?>
 		<td><span class="advanced">_(vCPUs)_:</span></td>
 		<td>
 			<span class="width"><select id="vcpus" <?=$coredisable?> name="domain[vcpus]" class="domain_vcpus narrow">
 			<?for ($i = 1; $i <= ($corecount); $i++) echo mk_option($arrConfig['domain']['vcpus'], $i, $i);?>
 			</select>
-			<input type="button" value="_(<?=$vcpubuttontext?>)_" id="btnvCPUSelect"/></span>
+			<input type="button" value="<?=$vcpubuttontext?>" id="btnvCPUSelect"/></span>
 		</td>
 		<td></td>
 	</tr>
@@ -2571,7 +2571,7 @@ $(function() {
 		}
 	});
 
-	$("#vmform").on("change", ".gpu", function changeGPUEvent(){
+	$("#vmform").on("change", ".gpu", function changeGPUEvent(){  
 		const ValidGPUs = <?=json_encode($arrValidGPUDevices)?>;
 		var myvalue = $(this).val();
 		var mylabel = $(this).children('option:selected').text();

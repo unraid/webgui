@@ -86,7 +86,7 @@ function missing_cache() {
 }
 
 function resync($d) {
-  return in_array($d,['P','Q']) ? 'Parity-Sync' : 'Data-Rebuild';
+  return in_array($d,['P','Q']) ? _('Parity-Sync') : _('Data-Rebuild');
 }
 
 function print_error($error) {
@@ -568,7 +568,7 @@ window.onunload = function(){
     if (!$spot):
       if ($action[0] == "recon"):
         $resync = resync($action[1]);
-?>      <tr><td></td><td><input type="submit" name="cmdCheckSync" value="_(Sync)_"></td><td>**<?=_('Sync')?>** <?=_("will start **$resync**")?>.</td></tr>
+?>      <tr><td></td><td><input type="submit" name="cmdCheckSync" value="_(Sync)_"></td><td>**<?=_('Sync')?>** <?=sprintf(_("will start **%s**"),$resync)?>.</td></tr>
 <?    elseif ($action[0]=="clear"):?>
         <tr><td></td><td><input type="submit" name="cmdCheckClear" value="_(Clear)_"></td><td>**_(Clear)_** _(will start **Disk-Clear** of new data disk(s))_.</td></tr>
 <?    else:
@@ -615,12 +615,12 @@ window.onunload = function(){
     else:
       if ($action[0] == "recon"):
         $resync = resync($action[1]);
-?>      <tr><td><?=_("$resync in progress")?>.</td><td>
+?>      <tr><td><?=sprintf(_("%s in progress"),$resync)?>.</td><td>
         <span class="buttons-spaced">
         <input type="button" id="pauseButton"<?if (_var($var,'mdResync')):?> value="_(Pause)_" onclick="pauseParity(this.form)"<?else:?> value="_(Resume)_" onclick="resumeParity(this.form)"<?endif;?> disabled>
         <input type="button" id="cancelButton" value="_(Cancel)_" onclick="stopParity(this.form,'<?=$resync?>')" disabled>
         </span></td>
-        <td id="cancelText"><?if (_var($var,'mdResync')):?>**<?=_('Pause')?>** <?=_("will pause $resync")?>.<?else:?>**<?=_('Resume')?>** <?=_("will resume $resync")?>.<?endif;?><br>**<?=_('Cancel')?>** <?=_("will stop $resync")?>.
+        <td id="cancelText"><?if (_var($var,'mdResync')):?>**<?=_('Pause')?>** <?=sprintf(_("will pause %s"),$resync)?>.<?else:?>**<?=_('Resume')?>** <?=sprintf(_("will resume %s"),$resync)?>.<?endif;?><br>**<?=_('Cancel')?>** <?=sprintf(_("will stop %s"),$resync)?>.
         <br>_(WARNING: canceling may leave the array unprotected)_!</td></tr>
 <?    elseif ($action[0] == "clear"):?>
         <tr><td>_(Disk-Clear in progress)_.</td><td>
