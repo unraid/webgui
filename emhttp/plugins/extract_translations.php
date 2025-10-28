@@ -127,9 +127,22 @@ function processFile($filePath, $ext, $jsExtensions, $phpExtensions, $pattern1, 
 }
 
 /**
+ * Convert absolute path to relative path from base directory
+ */
+function getRelativePath($filePath, $baseDir) {
+    // Normalize paths
+    $baseDir = rtrim($baseDir, '/') . '/';
+    if (strpos($filePath, $baseDir) === 0) {
+        return substr($filePath, strlen($baseDir));
+    }
+    return $filePath;
+}
+
+/**
  * Process Pattern 1: _(text)_
  */
 function processPattern1($filePath, $content, $pattern, &$translations) {
+    global $baseDir;
     $matches = [];
     $count = preg_match_all($pattern, $content, $matches, PREG_OFFSET_CAPTURE);
     $foundCount = 0;
@@ -168,7 +181,8 @@ function processPattern1($filePath, $content, $pattern, &$translations) {
             if (!isset($translations[$text])) {
                 $translations[$text] = [];
             }
-            $translations[$text][] = $filePath . ':' . $lineNumber;
+            $relativePath = getRelativePath($filePath, $baseDir);
+            $translations[$text][] = $relativePath . ':' . $lineNumber;
             $foundCount++;
         }
     }
@@ -180,6 +194,7 @@ function processPattern1($filePath, $content, $pattern, &$translations) {
  * Process Pattern 2: _('text') or _("text")
  */
 function processPattern2($filePath, $content, $pattern, &$translations) {
+    global $baseDir;
     $matches = [];
     $count = preg_match_all($pattern, $content, $matches, PREG_OFFSET_CAPTURE);
     $foundCount = 0;
@@ -207,7 +222,8 @@ function processPattern2($filePath, $content, $pattern, &$translations) {
             if (!isset($translations[$text])) {
                 $translations[$text] = [];
             }
-            $translations[$text][] = $filePath . ':' . $lineNumber;
+            $relativePath = getRelativePath($filePath, $baseDir);
+            $translations[$text][] = $relativePath . ':' . $lineNumber;
             $foundCount++;
         }
     }
@@ -219,6 +235,7 @@ function processPattern2($filePath, $content, $pattern, &$translations) {
  * Process Pattern 3: tr('text') or tr("text")
  */
 function processPattern3($filePath, $content, $pattern, &$translations) {
+    global $baseDir;
     $matches = [];
     $count = preg_match_all($pattern, $content, $matches, PREG_OFFSET_CAPTURE);
     $foundCount = 0;
@@ -246,7 +263,8 @@ function processPattern3($filePath, $content, $pattern, &$translations) {
             if (!isset($translations[$text])) {
                 $translations[$text] = [];
             }
-            $translations[$text][] = $filePath . ':' . $lineNumber;
+            $relativePath = getRelativePath($filePath, $baseDir);
+            $translations[$text][] = $relativePath . ':' . $lineNumber;
             $foundCount++;
         }
     }
