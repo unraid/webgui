@@ -899,8 +899,8 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                             <?endif;?>
                                         </span>
                                         <span>
-                                            <?=sprintf(_("Share count: %s with %s public SMB and %s public NFS"),count($shares),$SMBpublic,$NFSpublic)?>
-                                        </span><br>
+                                              <?=sprintf(_("Share count: %1s with %2s public SMB and %3s public NFS"),count($shares),$SMBpublic,$NFSpublic)?>
+                                          </span><br>
                                     </div>
                                 </span>
 
@@ -978,7 +978,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                             </span>
                                         <?endif;?>
                                         <span>
-                                            <?=sprintf(_("User count: %s with %s unprotected"),count($users),$nopass)?>
+                                            <?=sprintf(_("User count: %1s with %2s unprotected"),count($users),$nopass)?>
                                         </span>
                                     </div>
                                 </span>
@@ -1102,7 +1102,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                             <h3 class='tile-header-main'>_(Array)_<?if (!$started):?> (_(stopped)_)<?endif;?></h3>
                                             <span>
                                                 <?if ($started):?>
-                                                    <?=sprintf(_("%s used of %s (%s %%)"),my_scale($array_used*1024,$unit)." $unit",my_scale($array_size*1024,$unit,-1,-1)." $unit",$array_percent)?>
+                                                    <?=sprintf(_("%1s used of %2s (%3s %%)"),my_scale($array_used*1024,$unit)." $unit",my_scale($array_size*1024,$unit,-1,-1)." $unit",$array_percent)?>
                                                 <?endif;?>
                                             </span><br>
                                         </div>
@@ -1147,7 +1147,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                             <h3 class='tile-header-main'><?=_(native($pool),3).($started ? '' : ' ('._('stopped').')')?></h3>
                                             <span>
                                                 <?if ($started):?>
-                                                    <?=sprintf(_("%s used of %s (%s %%)"),my_scale($cache_used[$pool]*1024,$unit)." $unit",my_scale($cache_size[$pool]*1024,$unit,-1,-1)." $unit",$cache_rate[$pool])?>
+                                                    <?=sprintf(_("%1s used of %2s (%3s %%)"),my_scale($cache_used[$pool]*1024,$unit)." $unit",my_scale($cache_size[$pool]*1024,$unit,-1,-1)." $unit",$cache_rate[$pool])?>
                                                 <?endif;?>
                                           </span><br>
                                         </div>
