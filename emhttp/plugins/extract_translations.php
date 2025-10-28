@@ -15,8 +15,8 @@ $outputFile1 = $baseDir . '/translations.po';
 $outputFile2 = $baseDir . '/translations_function.po';
 $fileExtensions = ['js', 'html', 'htm', 'php', 'page'];
 
-// Pattern 1: Match _(text)_
-$pattern1 = '/_\(([^)]+)\)_/';
+// Pattern 1: Match _(text)_ - handles escaped characters and nested content
+$pattern1 = '/_\(((?:[^)]|\\.)*?)\)_/s';
 
 // Pattern 2: Match _('text') or _("text") - function call pattern
 $pattern2 = '/_\((["\'])((?:(?!\1).)*)\1\)/s';
@@ -64,6 +64,11 @@ function scanDirectory($dir, $extensions, $pattern1, $pattern2, &$translations1,
  * Process a single file for both patterns
  */
 function processFile($filePath, $pattern1, $pattern2, &$translations1, &$translations2, &$fileCount1, &$fileCount2) {
+    // Skip the extract_translations.php script itself
+    if (basename($filePath) === 'extract_translations.php') {
+        return;
+    }
+    
     $content = file_get_contents($filePath);
     if ($content === false) {
         echo "Warning: Could not read file: $filePath\n";
@@ -199,8 +204,7 @@ function generatePoFile($outputFile, $translations, $patternName) {
         }
         
         // Escape the text for .po format
-        $escapedText = addcslashes($text, "\"\n\r\t");
-        
+        $escapedText = addcslashes($text, "\\\"\n\r\t"); // Add backslash to escape quotes and other special characters
         // Add msgid (original text)
         $content .= "msgid \"$escapedText\"\n";
         
