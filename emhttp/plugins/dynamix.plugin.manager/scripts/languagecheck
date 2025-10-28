@@ -46,7 +46,7 @@ foreach (glob("/$tmp/lang-*.xml", GLOB_NOSORT) as $file) {
   // silently suppress bad download of XML file
   if (strcmp($new, $old) > 0) {
     $event = apos(_("Language")." - $lang [$new]");
-    $subject = apos(sprintf(_("Notice [%1$s] - Version update %2$s"),$server,$new));
+    $subject = apos(sprintf(_('Notice [%1$s] - Version update %2$s'),$server,$new));
     $description = apos(sprintf(_("A new version of %s is available"),$lang));
     exec("$script -e ".escapeshellarg($event)." -s ".escapeshellarg($subject)." -d ".escapeshellarg($description)." -i ".escapeshellarg("normal $output")." -l '/Apps' -x");
   }
