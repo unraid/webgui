@@ -588,7 +588,7 @@ Summary of security modes:
 
 Windows Server Signing:
 
-If you are unable to browse SMB shares with Windows 11 version 24H2 or newer, you need to make some changes to accomodate a new feature called Server Signing.  Server Signing is enabled in Unraid and you need to make changes to access Public shares. You can <u><a href='https://techcommunity.microsoft.com/t5/storage-at-microsoft/accessing-a-third-party-nas-with-smb-in-windows-11-24h2-may-fail/ba-p/4154300' target='_blank'>disable it in Windows</a></u>, or to work with Unraid with Server Signing enabled, the easiest way is to create a user (with a password set) in Unraid with the same name as the Windows account you are using, Windows should then ask you for the credentials. If you are using a Microsoft account, it may be better to just create a user in Unraid with a simple username and set a password, then in Windows go to Control Panel -> Credential Manager -> Windows credentials -> Add a Windows Credential and add the correct Unraid server name and credentials.
+If you are unable to browse SMB shares with Windows 11 version 24H2 or newer, you need to make some changes to accomodate a new feature called Server Signing.  Server Signing is enabled in Unraid and you need to make changes to access Public shares. You can [disable it in Windows](https://techcommunity.microsoft.com/t5/storage-at-microsoft/accessing-a-third-party-nas-with-smb-in-windows-11-24h2-may-fail/ba-p/4154300), or to work with Unraid with Server Signing enabled, the easiest way is to create a user (with a password set) in Unraid with the same name as the Windows account you are using, Windows should then ask you for the credentials. If you are using a Microsoft account, it may be better to just create a user in Unraid with a simple username and set a password, then in Windows go to Control Panel -> Credential Manager -> Windows credentials -> Add a Windows Credential and add the correct Unraid server name and credentials.
 :end
 
 :smb_secure_access_help:
@@ -1477,7 +1477,7 @@ Specify a user share that contains all your installation media for operating sys
 :end
 
 :vms_virtio_driver_help:
-Specify the virtual CD-ROM (ISO) that contains the VirtIO Windows drivers as provided by the Fedora Project. Download the latest ISO from here: <a href="https://docs.fedoraproject.org/en-US/quick-docs/creating-windows-virtual-machines-using-virtio-drivers/index.html#virtio-win-direct-downloads" target="_blank">fedoraproject.org</a>
+Specify the virtual CD-ROM (ISO) that contains the VirtIO Windows drivers as provided by the Fedora Project. Download the latest ISO from here: [fedoraproject.org](https://docs.fedoraproject.org/en-US/quick-docs/creating-windows-virtual-machines-using-virtio-drivers/index.html#virtio-win-direct-downloads)
 
 When installing Windows, you will reach a step where no disk devices will be found. There is an option to browse for drivers on that screen. Click browse and locate the additional CD-ROM in the menu. Inside there will be various folders for the different versions of Windows. Open the folder for the version of Windows you are installing and then select the AMD64 subfolder inside (even if you are on an Intel system, select AMD64). Three drivers will be found. Select them all, click next, and the vDisks you have assigned will appear.
 :end
@@ -1883,7 +1883,7 @@ Start a periodic array health check (preventive maintenance) and notify the user
 :end
 
 :notifications_agent_selection_help:
-Use the checkboxes above to select what and how notifications need to be given; by browser, by email and/or by a service. <b>Tip:</b> you can use custom notification agents; just add them to "/boot/config/plugins/dynamix/notification/agents" directory and check 'Agents'.
+Use the checkboxes above to select what and how notifications need to be given; by browser, by email and/or by a service. **Tip:** you can use custom notification agents; just add them to "/boot/config/plugins/dynamix/notification/agents" directory and check 'Agents'.
 :end
 
 :notifications_classification_help:
@@ -2012,7 +2012,7 @@ When you click on an application icon from the Docker Containers page, the WebUI
 :end
 
 :docker_extra_parameters_help:
-If you wish to append additional commands to your Docker container at run-time, you can specify them here. For all possible Docker run-time commands, see here: <a href="https://docs.docker.com/reference/run/" target="_blank">https://docs.docker.com/reference/run/</a>
+If you wish to append additional commands to your Docker container at run-time, you can specify them here. For all possible Docker run-time commands, see here: [https://docs.docker.com/reference/run/](https://docs.docker.com/reference/run/)
 :end
 
 :docker_post_arguments_help:
@@ -2038,21 +2038,21 @@ Enable Tailscale to add this container as a machine on your Tailnet.
 :end
 
 :docker_tailscale_hostname_help:
-Provide the hostname for this container. It does not need to match the container name, but it must be unique on your Tailnet. Note that an HTTPS certificate will be generated for this hostname, which means it will be placed in a public ledger, so use a name that you don't mind being public. For more information see <a href="https://tailscale.com/kb/1153/enabling-https" target="_blank">enabling https</a>.
+Provide the hostname for this container. It does not need to match the container name, but it must be unique on your Tailnet. Note that an HTTPS certificate will be generated for this hostname, which means it will be placed in a public ledger, so use a name that you don't mind being public. For more information see [enabling https](https://tailscale.com/kb/1153/enabling-https).
 :end
 
 :docker_tailscale_be_exitnode_help:
-Enable this if other machines on your Tailnet should route their Internet traffic through this container, this is most useful for containers that connect to commercial VPN services. Be sure to authorize this Exit Node in your <a href="https://login.tailscale.com/admin/machines" target="_blank">Tailscale Machines Admin Panel</a>. For more details, see the Tailscale documentation on <a href="https://tailscale.com/kb/1103/exit-nodes" target="_blank">Exit Nodes</a>.
+Enable this if other machines on your Tailnet should route their Internet traffic through this container, this is most useful for containers that connect to commercial VPN services. Be sure to authorize this Exit Node in your [Tailscale Machines Admin Panel](https://login.tailscale.com/admin/machines). For more details, see the Tailscale documentation on [Exit Nodes](https://tailscale.com/kb/1103/exit-nodes).
 :end
 
 :docker_tailscale_exitnode_ip_help:
-Optionally route this container's outgoing Internet traffic through an Exit Node on your Tailnet. Choose the Exit Node or input its Tailscale IP address. For more details, see <a href="https://tailscale.com/kb/1103/exit-nodes" target="_blank">Exit Nodes</a>.
+Optionally route this container's outgoing Internet traffic through an Exit Node on your Tailnet. Choose the Exit Node or input its Tailscale IP address. For more details, see [Exit Nodes](https://tailscale.com/kb/1103/exit-nodes).
 :end
 
 :docker_tailscale_lanaccess_help:
 Only applies when this container is using an Exit Node. Enable this to allow the container to access the local network.
 
-<b>WARNING:</b>&nbsp;Even with this feature enabled, systems on your LAN may not be able to access the container unless they have Tailscale installed.
+**WARNING:**&nbsp;Even with this feature enabled, systems on your LAN may not be able to access the container unless they have Tailscale installed.
 :end
 
 :docker_tailscale_userspace_networking_help:
@@ -2062,23 +2062,23 @@ When disabled, this container will have full access to your Tailnet. Tailscale D
 :end
 
 :docker_tailscale_ssh_help:
-Tailscale SSH is similar to the Docker "Console" option in the Unraid webgui, except you connect with an SSH client and authenticate via Tailscale. For more details, see the <a href="https://tailscale.com/kb/1193/tailscale-ssh" target="_blank">Tailscale SSH</a> documentation.
+Tailscale SSH is similar to the Docker "Console" option in the Unraid webgui, except you connect with an SSH client and authenticate via Tailscale. For more details, see the [Tailscale SSH](https://tailscale.com/kb/1193/tailscale-ssh) documentation.
 :end
 
 :docker_tailscale_serve_mode_help:
-Enabling <b>Serve</b> will automatically reverse proxy the primary web service from this container and make it available on your Tailnet using https with a valid certificate!
+Enabling **Serve** will automatically reverse proxy the primary web service from this container and make it available on your Tailnet using https with a valid certificate!
 
-Note that when accessing the <b>Tailscale WebUI</b> url, no additional authentication layer is added beyond restricting it to your Tailnet - the container is still responsible for managing usernames/passwords that are allowed to access it. Depending on your configuration, direct access to the container may still be possible as well.
+Note that when accessing the **Tailscale WebUI** url, no additional authentication layer is added beyond restricting it to your Tailnet - the container is still responsible for managing usernames/passwords that are allowed to access it. Depending on your configuration, direct access to the container may still be possible as well.
 
-For more details, see the <a href="https://tailscale.com/kb/1312/serve" target="_blank">Tailscale Serve</a> documentation.
+For more details, see the [Tailscale Serve](https://tailscale.com/kb/1312/serve) documentation.
 
 If the documentation recommends additional settings for a more complex use case, enable "Tailscale Show Advanced Settings". Support for these advanced settings is not available beyond confirming the commands are passed to Tailscale correctly.
 
-<b>Funnel</b> is similar to <b>Serve</b>, except that the web service is made available on the open Internet. Use with care as the service will likely be attacked. As with <b>Serve</b>, the container itself is responsible for handling any authentication.
+**Funnel** is similar to **Serve**, except that the web service is made available on the open Internet. Use with care as the service will likely be attacked. As with **Serve**, the container itself is responsible for handling any authentication.
 
-We recommend reading the <a href="https://tailscale.com/kb/1223/funnel" target="_blank">Tailscale Funnel</a> documentation before enabling this feature.
+We recommend reading the [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) documentation before enabling this feature.
 
-<b>Note:</b>&nbsp;Enabling <b>Serve</b> or <b>Funnel</b> publishes the Tailscale hostname to a public ledger. For more details, see the Tailscale Documentation: <a href="https://tailscale.com/kb/1153/enabling-https" target="_blank">Enabling HTTPS</a>.
+**Note:**&nbsp;Enabling **Serve** or **Funnel** publishes the Tailscale hostname to a public ledger. For more details, see the Tailscale Documentation: [Enabling HTTPS](https://tailscale.com/kb/1153/enabling-https).
 :end
 
 :docker_tailscale_serve_port_help:
@@ -2090,7 +2090,7 @@ In most cases this port is all you will need to specify in order to Serve the we
 
 This value is passed to the `<serve_port>` portion of this command which starts serve or funnel:
 `tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`
-For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+For more details see the [Tailscale Serve Command Line](https://tailscale.com/kb/1242/tailscale-serve) documentation.
 :end
 
 :docker_tailscale_show_advanced_help:
@@ -2100,55 +2100,55 @@ Here there be dragons!
 :docker_tailscale_serve_target_help:
 When not specified, this value defaults to http://localhost. It is passed to the `<serve_target>` portion of this command which starts serve or funnel:
 `tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`
-For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation. Please note that only `localhost` or `127.0.0.1` are supported.
+For more details see the [Tailscale Serve Command Line](https://tailscale.com/kb/1242/tailscale-serve) documentation. Please note that only `localhost` or `127.0.0.1` are supported.
 :end
 
 :docker_tailscale_serve_local_path_help:
 When not specified, this value defaults to an empty string. It is passed to the `<local_path>` portion of this command which starts serve or funnel:
 `tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`
-For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+For more details see the [Tailscale Serve Command Line](https://tailscale.com/kb/1242/tailscale-serve) documentation.
 :end
 
 :docker_tailscale_serve_protocol_help:
 When not specified, this value defaults to "https". It is passed to the `<protocol>` portion of this command which starts serve or funnel:
 `tailscale [serve|funnel] --bg --<protocol>=<protocol_port><path> <serve_target>:<serve_port><local_path>`
-For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+For more details see the [Tailscale Serve Command Line](https://tailscale.com/kb/1242/tailscale-serve) documentation.
 :end
 
 :docker_tailscale_serve_protocol_port_help:
 When not specified, this value defaults to "=443". It is passed to the `<protocol_port>` portion of this command which starts serve or funnel:
 `tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`
-For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+For more details see the [Tailscale Serve Command Line](https://tailscale.com/kb/1242/tailscale-serve) documentation.
 :end
 
 :docker_tailscale_serve_path_help:
 When not specified, this value defaults to an empty string. It is passed to the `<path>` portion of this command which starts serve or funnel:
 `tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`
-For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+For more details see the [Tailscale Serve Command Line](https://tailscale.com/kb/1242/tailscale-serve) documentation.
 :end
 
 :docker_tailscale_serve_webui_help:
-If <b>Serve</b> is enabled this will be an https url with a proper domain name that is accessible over your Tailnet, no port needed!
+If **Serve** is enabled this will be an https url with a proper domain name that is accessible over your Tailnet, no port needed!
 
-If <b>Funnel</b> is enabled the same url will be available on the Internet.
+If **Funnel** is enabled the same url will be available on the Internet.
 
 If they are disabled then the url will be generated from the container's main "Web UI" field, but modified to use the Tailscale IP. If the wrong port is specified here then switch from "Basic View" to "Advanced View" and review the "Web UI" field for this container.
 :end
 
 :docker_tailscale_advertise_routes_help:
-If desired, specify any routes that should be passed to the **`--advertise-routes=`** parameter when running **`tailscale up`**. For more details see the <a href="https://tailscale.com/kb/1019/subnets#connect-to-tailscale-as-a-subnet-router" target="_blank">Subnet routers</a> documentation.
+If desired, specify any routes that should be passed to the **`--advertise-routes=`** parameter when running **`tailscale up`**. For more details see the [Subnet routers](https://tailscale.com/kb/1019/subnets#connect-to-tailscale-as-a-subnet-router) documentation.
 :end
 
 :docker_tailscale_accept_routes_help:
-When enabled, this will accept your subnet routes from other devices, adding the **`--accept-routes`** parameter when running **`tailscale up`**. For more details see the <a href="https://tailscale.com/kb/1019/subnets?q=allow+routes#use-your-subnet-routes-from-other-devices" target="_blank">Use your subnet routes from other devices</a> documentation.
+When enabled, this will accept your subnet routes from other devices, adding the **`--accept-routes`** parameter when running **`tailscale up`**. For more details see the [Use your subnet routes from other devices](https://tailscale.com/kb/1019/subnets?q=allow+routes#use-your-subnet-routes-from-other-devices) documentation.
 :end
 
 :docker_tailscale_daemon_extra_params_help:
-Specify any extra parameters to pass when starting **`tailscaled`**. For more details see the <a href="https://tailscale.com/kb/1278/tailscaled" target="_blank">tailscaled</a> documentation.
+Specify any extra parameters to pass when starting **`tailscaled`**. For more details see the [tailscaled](https://tailscale.com/kb/1278/tailscaled) documentation.
 :end
 
 :docker_tailscale_extra_param_help:
-Specify any extra parameters to pass when running **`tailscale up`**. For more details see the <a href="https://tailscale.com/kb/1080/cli#up" target="_blank">Tailscale CLI</a> documentation.
+Specify any extra parameters to pass when running **`tailscale up`**. For more details see the [Tailscale CLI](https://tailscale.com/kb/1080/cli#up) documentation.
 :end
 
 :docker_tailscale_statedir_help:
@@ -2160,7 +2160,7 @@ Enable this to install `ping`, `nslookup`, `curl`, and `speedtest-cli` into the 
 :end
 
 :docker_privileged_help:
-For containers that require the use of host-device access directly or need full exposure to host capabilities, this option will need to be selected. For more information, see this link: <a href="https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities" target="_blank">https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities</a>
+For containers that require the use of host-device access directly or need full exposure to host capabilities, this option will need to be selected. For more information, see this link: [https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities](https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities)
 :end
 
 ; sysdevs help - added May 18, 2020
@@ -2224,11 +2224,11 @@ Provide a comma separated list of urls that are allowed to access the unraid-api
 :end
 
 :myservers_remote_t2fa_help:
-When Transparent 2FA for Remote Access is enabled, you will access your server by clicking the "Remote Access" link on the <a href="https://connect.myunraid.net/" target="_blank" rel="noopener noreferrer">Go to Connect</a>. The system will transparently request a 2FA token from your server and embed it in the server's login form. Your server will deny any Remote Access login attempt that does not include a valid token. Each token can be used only once, and is only valid for five minutes.
+When Transparent 2FA for Remote Access is enabled, you will access your server by clicking the "Remote Access" link on the [Go to Connect](https://connect.myunraid.net/). The system will transparently request a 2FA token from your server and embed it in the server's login form. Your server will deny any Remote Access login attempt that does not include a valid token. Each token can be used only once, and is only valid for five minutes.
 :end
 
 :myservers_local_t2fa_help:
-When Transparent 2FA for Local Access is enabled, you will access your server by clicking the "Local Access" link on the <a href="https://connect.myunraid.net/" target="_blank" rel="noopener noreferrer">Go to Connect</a>. The system will transparently request a 2FA token from your server and embed it in the server's login form. Your server will deny any Local Access login attempt that does not include a valid token. Each token can be used only once, and is only valid for five minutes.
+When Transparent 2FA for Local Access is enabled, you will access your server by clicking the "Local Access" link on the [Go to Connect](https://connect.myunraid.net/). The system will transparently request a 2FA token from your server and embed it in the server's login form. Your server will deny any Local Access login attempt that does not include a valid token. Each token can be used only once, and is only valid for five minutes.
 
 This is fairly extreme for Local Access, and in most cases is not needed. It requires a solid Internet connection. If you need to access the webGUI while the Internet is down, SSH to the server and run 'use_ssl no', this will give you access via http://<?=$nginx['NGINX_LANIP']?><?=$nginx['NGINX_PORT'] !== '80' ? ':'.$nginx['NGINX_PORT'] : '' ?>
 :end
