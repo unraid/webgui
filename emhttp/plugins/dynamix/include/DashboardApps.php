@@ -33,7 +33,7 @@ if (isset($_POST['ntp'])) {
         default            : $unit = 's' ; $ptp = round($ptp/1E+9); break;
       }
       $gm = exec("pmc -ub0 'GET CURRENT'|awk '$1==\"stepsRemoved\"{print $2;exit}'")==1 ? _('grandmaster') : _('master');
-      die(sprintf(_('Clock is synchronized using %s PTP server, time offset is %s %s'),$gm,$ptp,$unit));
+      die(sprintf(_('Clock is synchronized using %1s PTP server, time offset is %2s %3s'),$gm,$ptp,$unit));
     } else {
       die(_('Clock is unsynchronized with no PTP servers'));
     }
@@ -49,7 +49,7 @@ if (isset($_POST['ntp'])) {
         default            : $unit = 's' ; $ntp = round($ntp/1E+3); break;
       }
       $count = exec("ntpq -pn|grep -Pc '^[*+]'");
-      die(sprintf(_('Clock is synchronized using %s NTP servers, time offset is %s %s'),$count,$ntp,$unit));
+      die(sprintf(_('Clock is synchronized using %1s NTP servers, time offset is %2s %3s'),$count,$ntp,$unit));
     } else {
       die(_('Clock is unsynchronized with no NTP servers'));
     }
