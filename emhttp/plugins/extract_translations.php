@@ -80,6 +80,14 @@ function processFile($filePath, $ext, $jsExtensions, $phpExtensions, $pattern1, 
         return;
     }
     
+    // Skip dynamix.js and all files in the ace directory
+    if (basename($filePath) === 'dynamix.js' && strpos($filePath, 'dynamix/javascript/') !== false) {
+        return;
+    }
+    if (strpos($filePath, '/dynamix/javascript/ace/') !== false) {
+        return;
+    }
+    
     $content = file_get_contents($filePath);
     if ($content === false) {
         echo "Warning: Could not read file: $filePath\n";
