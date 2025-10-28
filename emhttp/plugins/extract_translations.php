@@ -19,9 +19,9 @@ $baseDir = __DIR__;
 //$baseDir = "/Volumes/GitHub/community.applications/source/community.applications/usr/local/emhttp/plugins/community.applications";
 $outputFileJS = $baseDir . '/translations_js.po';
 $outputFilePHP = $baseDir . '/translations_php.po';
-$fileExtensions = ['js', 'html', 'htm', 'php', 'page'];
+$fileExtensions = ['js', 'html', 'htm', 'php', 'page', '']; // '' for files with no extension
 $jsExtensions = ['js'];
-$phpExtensions = ['html', 'htm', 'php', 'page'];
+$phpExtensions = ['html', 'htm', 'php', 'page', '']; // '' for files with no extension
 
 // Pattern 1: Match _(text)_ - handles escaped characters and nested content
 $pattern1 = '/_\(((?:[^)]|\\.)*?)\)_/s';
@@ -62,8 +62,8 @@ function scanDirectory($dir, $extensions, $jsExtensions, $phpExtensions, $patter
             // Recursively scan subdirectories
             scanDirectory($path, $extensions, $jsExtensions, $phpExtensions, $pattern1, $pattern2, $pattern3, $translationsJS, $translationsPHP, $fileCountJS, $fileCountPHP);
         } elseif (is_file($path)) {
-            // Check if file has one of the target extensions
-            $ext = pathinfo($path, PATHINFO_EXTENSION);
+            // Check if file has one of the target extensions (case-insensitive)
+            $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
             if (in_array($ext, $extensions)) {
                 processFile($path, $ext, $jsExtensions, $phpExtensions, $pattern1, $pattern2, $pattern3, $translationsJS, $translationsPHP, $fileCountJS, $fileCountPHP);
             }
