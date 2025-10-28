@@ -167,7 +167,7 @@ function parse_rsync_progress($status, $action_label) {
   // obtain filename line like:
   // "/mnt/disk6/images/image.jpg"
   // note: -v is used to obtain the opposite of the progress line regex and to filter out empty lines
-  $file_line = exec("tail -n5 $status | grep -v -E '(^\$|^ .*[0-9]+%.*[0-9]+:[0-9]+:[0-9]+)' | tail -1 | tr -s ' ' || echo ''");
+  $file_line = exec("tac $status | grep -v -E '(^\$|^ .*[0-9]+%.*[0-9]+:[0-9]+:[0-9]+)' | tr -s ' ' || echo ''");
   if ($file_line) {
     $text[0] .= htmlspecialchars(mb_strimhalf($file_line, 70, '...'), ENT_QUOTES, 'UTF-8');
   }
