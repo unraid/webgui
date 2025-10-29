@@ -57,8 +57,10 @@ function isdir($name) {
 function mb_strimhalf($text, $width, $trim_marker = "") {
   if (mb_strlen($text) <= $width) return $text;
   if ($width < 8) return mb_substr($text, 0, $width);
-  $half = (int)($width / 2) - 2;
-  return mb_substr($text, 0, $half) . $trim_marker . mb_substr($text, -1 - $half);
+  $marker_len = mb_strlen($trim_marker);
+  $available = $width - $marker_len;
+  $half = (int)($available / 2);
+  return mb_substr($text, 0, $half) . $trim_marker . mb_substr($text, -($available - $half));
 }
 
 function time_to_seconds($time_str) {
@@ -108,11 +110,11 @@ function calculate_eta($transferred, $percent, $speed, $last_rsync_eta_seconds =
     return "N/A";
   }
   
-  if ($percent_val > 0 && $percent_val < 100 && $speed_bytes > 0) {
+  if ($percent_val > 0 && $percent_val < 100 && $speed_bytes > 1.0) {
     $total_bytes = $transferred_bytes * 100 / $percent_val;
     $remaining_bytes = $total_bytes - $transferred_bytes;
     $calculated_eta_seconds = intval($remaining_bytes / $speed_bytes);
-    
+
     // Apply hysteresis: blend with last known rsync ETA to smooth out fluctuations
     if ($last_rsync_eta_seconds !== null && $last_rsync_eta_seconds > 0) {
       // Weight: 70% last rsync ETA, 30% calculated ETA
