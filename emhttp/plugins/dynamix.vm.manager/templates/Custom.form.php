@@ -1465,7 +1465,7 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 		</td>
 		<td></td>
 	</tr>
-	<tr id="gpubootvga{{INDEX}}" class="hidden"><td>_(Graphics ROM Needed)_?:</td><td><span class="orange-text"><i class="fa fa-warning"></i> _(GPU is primary adapter, vbios may be required)_.</span></td></tr>
+	<tr id="gpubootvga{{INDEX}}" class="hidden"><td>_(Graphics ROM Needed)_:</td><td><span class="orange-text"><i class="fa fa-warning"></i> _(GPU is primary adapter, vbios may be required)_.</span></td></tr>
 </table>
 </script>
 

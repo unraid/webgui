@@ -64,20 +64,20 @@ function removeUserTemplate(template) {
 }
 
 function confirmRemoveUserTemplate(template) {
-	swal({title:"_(Proceed)_?",text:"Remove user template: " + template ,type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(p){if (p) removeUserTemplate(template); else refresh();});
+	swal({title:"_(Proceed?)_",text:"Remove user template: " + template ,type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(p){if (p) removeUserTemplate(template); else refresh();});
 }
 
 function saveUserTemplateFile(name,template) {
   $.post('/plugins/dynamix.vm.manager/include/VMajax.php',{action:'vm-template-save',name:name,template:template,replace:"no"},function($return){
 	if ($return.success == false) {
-		swal({title:"_(File exists)_?",text:"Replace file: " + name ,type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(No)_"},function(p){
+		swal({title:"_(File exists)_",text:"Replace file: " + name ,type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(No)_"},function(p){
 			if (p) {
 				$.post('/plugins/dynamix.vm.manager/include/VMajax.php',{action:'vm-template-save',name:name,template:template,replace:"yes"},function($return){
-					if ($return.success == false) swal({title:"_(Error occurred)_?",text:"Action error " + name + " " + $return.error ,type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(OK)_"});
+					if ($return.success == false) swal({title:"_(Error occurred)_",text:"Action error " + name + " " + $return.error ,type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(OK)_"});
 				});
 			}
 			else {
-				if ($return.success == false) swal({title:"_(Error occurred)_?",text:"Action error " + name + " " + $return.error ,type:'error',html:true,showCancelButton:true,confirmButtonText:"_(OK)_"});
+				if ($return.success == false) swal({title:"_(Error occurred)_",text:"Action error " + name + " " + $return.error ,type:'error',html:true,showCancelButton:true,confirmButtonText:"_(OK)_"});
 			};		
 		});
 	}
@@ -87,7 +87,7 @@ function saveUserTemplateFile(name,template) {
 function saveUserTemplateImport(name,template) {
   $.post('/plugins/dynamix.vm.manager/include/VMajax.php',{action:'vm-template-import',name:name,template:template,replace:"no"},function($return){
 	if ($return.success == false) {
-		swal({title:"_(File exists)_?",text:"Replace file: " + name.split(".")[0] ,type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(No)_"},function(p){
+		swal({title:"_(File exists)_",text:"Replace file: " + name.split(".")[0] ,type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(No)_"},function(p){
 			if (p) {
 				$.post('/plugins/dynamix.vm.manager/include/VMajax.php',{action:'vm-template-save',name:name,template:template,replace:"yes"},function($return){
 					if ($return.success == false) swal({title:"_(Error occurred)_?",text:"Action error " + name.split(".")[0] + " " + $return.error ,type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(OK)_"});
@@ -95,7 +95,7 @@ function saveUserTemplateImport(name,template) {
 				});
 			}
 			else {
-				if ($return.success == false) swal({title:"_(Error occurred)_?",text:"Action error " + name + " " + $return.error ,type:'error',html:true,showCancelButton:true,confirmButtonText:"_(OK)_"});
+				if ($return.success == false) swal({title:"_(Error occurred)_",text:"Action error " + name + " " + $return.error ,type:'error',html:true,showCancelButton:true,confirmButtonText:"_(OK)_"});
 			};
 		});
 	}
