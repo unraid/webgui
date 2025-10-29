@@ -284,8 +284,17 @@ function generatePoFile($outputFile, $translations, $patternName) {
     $content .= "#\n";
     $content .= "msgid \"\"\n";
     $content .= "msgstr \"\"\n";
+    $content .= "\"Project-Id-Version: Unraid WebGUI\\n\"\n";
+    $content .= "\"Report-Msgid-Bugs-To: \\n\"\n";
+    $content .= "\"POT-Creation-Date: " . date('Y-m-d H:i:sO') . "\\n\"\n";
+    $content .= "\"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\\n\"\n";
+    $content .= "\"Last-Translator: FULL NAME <EMAIL@ADDRESS>\\n\"\n";
+    $content .= "\"Language-Team: English\\n\"\n";
+    $content .= "\"Language: en_US\\n\"\n";
+    $content .= "\"MIME-Version: 1.0\\n\"\n";
     $content .= "\"Content-Type: text/plain; charset=UTF-8\\n\"\n";
-    $content .= "\"Content-Transfer-Encoding: 8bit\\n\"\n\n";
+    $content .= "\"Content-Transfer-Encoding: 8bit\\n\"\n";
+    $content .= "\"Plural-Forms: nplurals=2; plural=(n != 1);\\n\"\n\n";
     
     // Sort translations alphabetically
     ksort($translations);
