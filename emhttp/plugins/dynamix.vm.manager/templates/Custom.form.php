@@ -488,7 +488,7 @@ const displayOptions = <?= json_encode($arrDisplayOptions, JSON_HEX_TAG | JSON_H
 
 <blockquote class="inline_help">
 	<p>
-		Specify the overide storage pool for VM. This option allows you to specify the physical pool/disk used to store the disk images and snapshot data.
+		Specify the override storage pool for VM. This option allows you to specify the physical pool/disk used to store the disk images and snapshot data.
 		Default will follow standard processing and store images in the default location for the share defined in the settings.
 		A pool/disk(Volume) will be the location for images if the default is overridden.
 	</p>
