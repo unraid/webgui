@@ -397,7 +397,7 @@ while (true) {
           if (!empty($target_device_id)) {
             $use_rsync_rename = true; // assume we can use it, then check for disqualifying conditions
 
-            foreach ($source as $source_path) {
+            foreach ($source as $source_path) { // this can be a file or directory
 
               // source path must be valid
               $valid_source_path = validname($source_path);
@@ -437,11 +437,11 @@ while (true) {
               }
 
               // target must not be a subdirectory of any source (backup-dir should be outside source tree)
-              $parent_dir = dirname($valid_source_path);
-              if (strpos(rtrim($target,'/') . '/', rtrim($parent_dir,'/') . '/') === 0) {
+              $source_dirname = is_dir($valid_source_path) ? $valid_source_path : dirname($valid_source_path);
+              if (strpos(rtrim($target,'/') . '/', rtrim($source_dirname,'/') . '/') === 0) {
                 $reply['error'] = 'Cannot move directory into its own subdirectory';
                 $use_rsync_rename = false;
-                break 2; // break out of both foreach and if
+                break 2; // break out of both: foreach and case
               }
 
             }
