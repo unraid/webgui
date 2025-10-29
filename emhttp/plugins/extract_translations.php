@@ -351,11 +351,123 @@ function generatePoFile($outputFile, $translations, $patternName, $plurals = [])
     $content .= "\"Content-Transfer-Encoding: 8bit\\n\"\n";
     $content .= "\"Plural-Forms: nplurals=2; plural=(n != 1);\\n\"\n\n";
     
-    // Sort translations alphabetically
-    ksort($translations);
+    // Separate standard date/time translations from other translations
+    $standardDateTimeTranslations = [];
+    $standardDateTimePlurals = [];
+    $otherTranslations = [];
+    $otherPlurals = [];
+    
+    // Standard date/time keywords
+    $standardKeywords = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+        "Jan", "Feb", "Mar", "Apr", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+        "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun",
+        "am", "pm", "AM", "PM"
+    ];
+    
+    $standardPluralKeywords = ["hour", "Hour", "minute", "Minute", "second", "Second", 
+                                "day", "Day", "year", "Year", "sec", "Sec", "min", "Min"];
+    
+    // Separate translations
+    foreach ($translations as $text => $locations) {
+        if (in_array($text, $standardKeywords)) {
+            $standardDateTimeTranslations[$text] = $locations;
+        } else {
+            $otherTranslations[$text] = $locations;
+        }
+    }
+    
+    // Separate plurals
+    foreach ($plurals as $singular => $data) {
+        if (in_array($singular, $standardPluralKeywords)) {
+            $standardDateTimePlurals[$singular] = $data;
+        } else {
+            $otherPlurals[$singular] = $data;
+        }
+    }
+    
+    // Add section header for standard date/time translations
+    if (!empty($standardDateTimeTranslations) || !empty($standardDateTimePlurals)) {
+        $content .= "# ============================================================================\n";
+        $content .= "# STANDARD DATE/TIME TRANSLATIONS\n";
+        $content .= "# ============================================================================\n\n";
+    }
+    
+    // Define logical order for standard date/time translations
+    $orderedStandardTranslations = [
+        // Full month names
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+        // Short month names
+        "Jan", "Feb", "Mar", "Apr", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        // Full day names
+        "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+        // Short day names
+        "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
+        // AM/PM markers
+        "am", "pm", "AM", "PM"
+    ];
+    
+    // Add standard date/time translations in logical order
+    foreach ($orderedStandardTranslations as $text) {
+        if (isset($standardDateTimeTranslations[$text])) {
+            $locations = $standardDateTimeTranslations[$text];
+            foreach (array_unique($locations) as $location) {
+                $content .= "#: " . $location . "\n";
+            }
+            $escapedText = addcslashes($text, "\\\"\n\r\t");
+            $content .= "msgid \"$escapedText\"\n";
+            $content .= "msgstr \"\"\n\n";
+        }
+    }
+    
+    // Define logical order for plural forms
+    $orderedStandardPlurals = [
+        // Capitalized time units
+        "Year", "Day", "Hour", "Minute", "Second",
+        // Lowercase time units
+        "year", "day", "hour", "minute", "second",
+        // Short forms capitalized
+        "Min", "Sec",
+        // Short forms lowercase
+        "min", "sec"
+    ];
+    
+    // Add standard date/time plurals in logical order
+    foreach ($orderedStandardPlurals as $singular) {
+        if (isset($standardDateTimePlurals[$singular])) {
+            $data = $standardDateTimePlurals[$singular];
+            $plural = $data['plural'];
+            $locations = $data['locations'];
+            
+            foreach (array_unique($locations) as $location) {
+                $content .= "#: " . $location . "\n";
+            }
+            
+            $escapedSingular = addcslashes($singular, "\\\"\n\r\t");
+            $escapedPlural = addcslashes($plural, "\\\"\n\r\t");
+            
+            $content .= "msgid \"$escapedSingular\"\n";
+            $content .= "msgid_plural \"$escapedPlural\"\n";
+            $content .= "msgstr[0] \"\"\n";
+            $content .= "msgstr[1] \"\"\n\n";
+        }
+    }
+    
+    // Add section header for other translations
+    if (!empty($otherTranslations) || !empty($otherPlurals)) {
+        $content .= "# ============================================================================\n";
+        $content .= "# APPLICATION TRANSLATIONS\n";
+        $content .= "# ============================================================================\n\n";
+    }
+    
+    // Sort other translations alphabetically
+    ksort($otherTranslations);
     
     // Add each translation
-    foreach ($translations as $text => $locations) {
+    foreach ($otherTranslations as $text => $locations) {
         // Add reference comments (file locations)
         foreach (array_unique($locations) as $location) {
             $content .= "#: " . $location . "\n";
@@ -370,11 +482,11 @@ function generatePoFile($outputFile, $translations, $patternName, $plurals = [])
         $content .= "msgstr \"\"\n\n";
     }
     
-    // Add plural forms
-    if (!empty($plurals)) {
-        ksort($plurals);
+    // Add other plural forms
+    if (!empty($otherPlurals)) {
+        ksort($otherPlurals);
         
-        foreach ($plurals as $singular => $data) {
+        foreach ($otherPlurals as $singular => $data) {
             $plural = $data['plural'];
             $locations = $data['locations'];
             
@@ -424,6 +536,51 @@ echo "PHP/HTML Files:\n";
 echo "  Files processed: $fileCountPHP\n";
 echo "  Unique strings found: " . count($translationsPHP) . "\n";
 echo "  Total occurrences: " . array_sum(array_map('count', $translationsPHP)) . "\n\n";
+
+// Add standard date/time translations that should always be included
+$standardTranslations = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+    "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun",
+    "am", "pm", "AM", "PM"
+];
+
+$standardPlurals = [
+    "hour" => "hours",
+    "Hour" => "Hours",
+    "minute" => "minutes",
+    "Minute" => "Minutes",
+    "second" => "seconds",
+    "Second" => "Seconds",
+    "day" => "days",
+    "Day" => "Days",
+    "year" => "years",
+    "Year" => "Years",
+    "sec" => "secs",
+    "Sec" => "Secs",
+    "min" => "mins",
+    "Min" => "Mins"
+];
+
+// Add standard translations to PHP translations if not already present
+foreach ($standardTranslations as $text) {
+    if (!isset($translationsPHP[$text])) {
+        $translationsPHP[$text] = ['(standard date/time translation)'];
+    }
+}
+
+// Add standard plurals to PHP plurals if not already present
+foreach ($standardPlurals as $singular => $plural) {
+    if (!isset($pluralsPHP[$singular])) {
+        $pluralsPHP[$singular] = [
+            'plural' => $plural,
+            'locations' => ['(standard date/time translation)']
+        ];
+    }
+}
 
 // Generate .po files
 if (count($translationsJS) > 0 || count($pluralsJS) > 0) {
