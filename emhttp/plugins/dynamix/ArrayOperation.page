@@ -90,7 +90,8 @@ function resync($d) {
 }
 
 function print_error($error) {
-  return sprintf(ngettext('Finding **%d** error','Finding **%d** errors',$error),$error);
+  $n = (int)($error ?: 0);
+  return sprintf(ngettext('Finding **%d** error','Finding **%d** errors',$n),$n);
 }
 ?>
 <script>
