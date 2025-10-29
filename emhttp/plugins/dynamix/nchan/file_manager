@@ -454,9 +454,10 @@ while (true) {
           // notes:
           // - existing files are overwritten in --backup-dir  (like not using --ignore-existing)
           // - missing directories are created in --backup-dir (like using --mkpath)
+          // - rsync prefixes the moved files with "deleting " in the output, which we strip with sed, to not confuse the user
           if ($use_rsync_rename) {
             $parent_dir = dirname(validname($source[0]));
-            $cmd = "rsync -r --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --delete --backup --backup-dir=".escapeshellarg($target)." ".quoted_rsync_include($source)." --exclude='*' ".escapeshellarg($empty_dir)." ".escapeshellarg($parent_dir)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
+            $cmd = "rsync -r --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --delete --backup --backup-dir=".escapeshellarg($target)." ".quoted_rsync_include($source)." --exclude='*' ".escapeshellarg($empty_dir)." ".escapeshellarg($parent_dir)." > >(stdbuf -o0 tr '\\r' '\\n' | sed 's/^deleting //' >$status) 2>$error & echo \$!";
             exec($cmd, $pid);
 
           // use rsync copy-delete
