@@ -820,7 +820,7 @@ function loadTemplate(el) {
 
 function rmTemplate(tmpl) {
   var name = tmpl.split(/[\/]+/).pop();
-  swal({title:"_(Are you sure)_?",text:"_(Remove template)_: "+name,type:"warning",html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){$("#rmTemplate").val(tmpl);$("#formTemplate1").submit();});
+  swal({title:"_(Are you sure?)_",text:"_(Remove template)_: "+name,type:"warning",html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){$("#rmTemplate").val(tmpl);$("#formTemplate1").submit();});
 }
 
 function openFileBrowser(el, top, root, filter, on_folders, on_files, close_on_select) {
