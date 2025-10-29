@@ -243,6 +243,8 @@ container_add_route(){
 
 docker_network_start(){
   log "Starting network..."
+  # ensure br_netfilter modules is loaded, re: https://github.com/moby/moby/issues/48948
+  modprobe br_netfilter
   # create list of possible custom networks
   EXCLUDE=; INCLUDE=$(ls --indicator-style=none $SYSTEM | awk '/^br[0-9]+/' ORS=' ')
   while IFS=$'\n' read -r NETWORK; do
