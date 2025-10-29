@@ -12,6 +12,7 @@
  * 1. _(text)_
  * 2. _('text') or _("text")
  * 3. tr('text') or tr("text")
+ * 4. ngettext('singular', 'plural', $n) - for plural forms
  */
 
 // Configuration
@@ -32,6 +33,9 @@ $pattern2 = '/_\((["\'])((?:(?!\1).)*)\1\)/s';
 // Pattern 3: Match tr('text') or tr("text") - function call pattern
 $pattern3 = '/\btr\((["\'])((?:(?!\1).)*)\1\)/s';
 
+// Pattern 4: Match ngettext('singular', 'plural', $n) - plural form pattern
+$pattern4 = '/\bngettext\s*\(\s*(["\'])((?:(?!\1).)*)\1\s*,\s*(["\'])((?:(?!\3).)*)\3\s*,\s*[^)]+\)/s';
+
 echo "Translation String Extractor\n";
 echo "============================\n\n";
 echo "Base directory: $baseDir\n";
@@ -42,13 +46,15 @@ echo "  - $outputFilePHP (for PHP/HTML files)\n\n";
 // Store found strings with their locations
 $translationsJS = [];
 $translationsPHP = [];
+$pluralsJS = []; // Store plural forms separately
+$pluralsPHP = []; // Store plural forms separately
 $fileCountJS = 0;
 $fileCountPHP = 0;
 
 /**
  * Recursively scan directory for files
  */
-function scanDirectory($dir, $extensions, $jsExtensions, $phpExtensions, $pattern1, $pattern2, $pattern3, &$translationsJS, &$translationsPHP, &$fileCountJS, &$fileCountPHP) {
+function scanDirectory($dir, $extensions, $jsExtensions, $phpExtensions, $pattern1, $pattern2, $pattern3, $pattern4, &$translationsJS, &$translationsPHP, &$pluralsJS, &$pluralsPHP, &$fileCountJS, &$fileCountPHP) {
     $items = scandir($dir);
     
     foreach ($items as $item) {
@@ -60,12 +66,12 @@ function scanDirectory($dir, $extensions, $jsExtensions, $phpExtensions, $patter
         
         if (is_dir($path)) {
             // Recursively scan subdirectories
-            scanDirectory($path, $extensions, $jsExtensions, $phpExtensions, $pattern1, $pattern2, $pattern3, $translationsJS, $translationsPHP, $fileCountJS, $fileCountPHP);
+            scanDirectory($path, $extensions, $jsExtensions, $phpExtensions, $pattern1, $pattern2, $pattern3, $pattern4, $translationsJS, $translationsPHP, $pluralsJS, $pluralsPHP, $fileCountJS, $fileCountPHP);
         } elseif (is_file($path)) {
             // Check if file has one of the target extensions (case-insensitive)
             $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
             if (in_array($ext, $extensions)) {
-                processFile($path, $ext, $jsExtensions, $phpExtensions, $pattern1, $pattern2, $pattern3, $translationsJS, $translationsPHP, $fileCountJS, $fileCountPHP);
+                processFile($path, $ext, $jsExtensions, $phpExtensions, $pattern1, $pattern2, $pattern3, $pattern4, $translationsJS, $translationsPHP, $pluralsJS, $pluralsPHP, $fileCountJS, $fileCountPHP);
             }
         }
     }
@@ -74,7 +80,7 @@ function scanDirectory($dir, $extensions, $jsExtensions, $phpExtensions, $patter
 /**
  * Process a single file for all patterns
  */
-function processFile($filePath, $ext, $jsExtensions, $phpExtensions, $pattern1, $pattern2, $pattern3, &$translationsJS, &$translationsPHP, &$fileCountJS, &$fileCountPHP) {
+function processFile($filePath, $ext, $jsExtensions, $phpExtensions, $pattern1, $pattern2, $pattern3, $pattern4, &$translationsJS, &$translationsPHP, &$pluralsJS, &$pluralsPHP, &$fileCountJS, &$fileCountPHP) {
     // Skip the extract_translations.php script itself
     if (basename($filePath) === 'extract_translations.php') {
         return;
@@ -103,13 +109,15 @@ function processFile($filePath, $ext, $jsExtensions, $phpExtensions, $pattern1, 
         $found1 = processPattern1($filePath, $content, $pattern1, $translationsJS);
         $found2 = processPattern2($filePath, $content, $pattern2, $translationsJS);
         $found3 = processPattern3($filePath, $content, $pattern3, $translationsJS);
+        $found4 = processPattern4($filePath, $content, $pattern4, $pluralsJS);
     } else {
         $found1 = processPattern1($filePath, $content, $pattern1, $translationsPHP);
         $found2 = processPattern2($filePath, $content, $pattern2, $translationsPHP);
         $found3 = processPattern3($filePath, $content, $pattern3, $translationsPHP);
+        $found4 = processPattern4($filePath, $content, $pattern4, $pluralsPHP);
     }
     
-    $totalFound = $found1 + $found2 + $found3;
+    $totalFound = $found1 + $found2 + $found3 + $found4;
     
     if ($totalFound > 0) {
         if ($isJS) {
@@ -122,6 +130,7 @@ function processFile($filePath, $ext, $jsExtensions, $phpExtensions, $pattern1, 
         if ($found1 > 0) echo " (_(text)_: $found1)";
         if ($found2 > 0) echo " (_(): $found2)";
         if ($found3 > 0) echo " (tr(): $found3)";
+        if ($found4 > 0) echo " (ngettext(): $found4)";
         echo "\n";
     }
 }
@@ -273,9 +282,55 @@ function processPattern3($filePath, $content, $pattern, &$translations) {
 }
 
 /**
+ * Process Pattern 4: ngettext('singular', 'plural', $n)
+ */
+function processPattern4($filePath, $content, $pattern, &$plurals) {
+    global $baseDir;
+    $matches = [];
+    $count = preg_match_all($pattern, $content, $matches, PREG_OFFSET_CAPTURE);
+    $foundCount = 0;
+    
+    if ($count > 0) {
+        // Group 2 contains singular text, group 4 contains plural text
+        for ($i = 0; $i < count($matches[2]); $i++) {
+            $singular = trim($matches[2][$i][0]);
+            $plural = trim($matches[4][$i][0]);
+            $offset = $matches[2][$i][1];
+            
+            // Calculate line number from offset
+            $beforeMatch = substr($content, 0, $offset);
+            $lineNumber = substr_count($beforeMatch, "\n") + 1;
+            
+            // Unescape any escaped quotes
+            $singular = stripslashes($singular);
+            $plural = stripslashes($plural);
+            
+            // Skip empty strings
+            if (empty($singular) || empty($plural)) {
+                continue;
+            }
+            
+            // Store the plural translation with its location and line number
+            // Use singular as key, store both singular and plural
+            if (!isset($plurals[$singular])) {
+                $plurals[$singular] = [
+                    'plural' => $plural,
+                    'locations' => []
+                ];
+            }
+            $relativePath = getRelativePath($filePath, $baseDir);
+            $plurals[$singular]['locations'][] = $relativePath . ':' . $lineNumber;
+            $foundCount++;
+        }
+    }
+    
+    return $foundCount;
+}
+
+/**
  * Generate .po file
  */
-function generatePoFile($outputFile, $translations, $patternName) {
+function generatePoFile($outputFile, $translations, $patternName, $plurals = []) {
     $content = "";
     
     // Add .po file header
@@ -315,6 +370,33 @@ function generatePoFile($outputFile, $translations, $patternName) {
         $content .= "msgstr \"\"\n\n";
     }
     
+    // Add plural forms
+    if (!empty($plurals)) {
+        ksort($plurals);
+        
+        foreach ($plurals as $singular => $data) {
+            $plural = $data['plural'];
+            $locations = $data['locations'];
+            
+            // Add reference comments (file locations)
+            foreach (array_unique($locations) as $location) {
+                $content .= "#: " . $location . "\n";
+            }
+            
+            // Escape the texts for .po format
+            $escapedSingular = addcslashes($singular, "\\\"\n\r\t");
+            $escapedPlural = addcslashes($plural, "\\\"\n\r\t");
+            
+            // Add msgid and msgid_plural
+            $content .= "msgid \"$escapedSingular\"\n";
+            $content .= "msgid_plural \"$escapedPlural\"\n";
+            
+            // Add empty msgstr[0] and msgstr[1] (to be filled with translations)
+            $content .= "msgstr[0] \"\"\n";
+            $content .= "msgstr[1] \"\"\n\n";
+        }
+    }
+    
     // Write to file
     if (file_put_contents($outputFile, $content) !== false) {
         return true;
@@ -325,7 +407,7 @@ function generatePoFile($outputFile, $translations, $patternName) {
 // Main execution
 echo "Scanning for translation strings...\n\n";
 
-scanDirectory($baseDir, $fileExtensions, $jsExtensions, $phpExtensions, $pattern1, $pattern2, $pattern3, $translationsJS, $translationsPHP, $fileCountJS, $fileCountPHP);
+scanDirectory($baseDir, $fileExtensions, $jsExtensions, $phpExtensions, $pattern1, $pattern2, $pattern3, $pattern4, $translationsJS, $translationsPHP, $pluralsJS, $pluralsPHP, $fileCountJS, $fileCountPHP);
 
 echo "\n";
 echo "============================\n";
@@ -344,17 +426,25 @@ echo "  Unique strings found: " . count($translationsPHP) . "\n";
 echo "  Total occurrences: " . array_sum(array_map('count', $translationsPHP)) . "\n\n";
 
 // Generate .po files
-if (count($translationsJS) > 0) {
+if (count($translationsJS) > 0 || count($pluralsJS) > 0) {
     echo "Generating $outputFileJS...\n";
-    if (generatePoFile($outputFileJS, $translationsJS, "JavaScript translations")) {
+    if (generatePoFile($outputFileJS, $translationsJS, "JavaScript translations", $pluralsJS)) {
         echo "Successfully created: $outputFileJS\n";
-        echo "  Sample entries:\n";
-        $sample = array_slice(array_keys($translationsJS), 0, 5);
-        foreach ($sample as $text) {
-            echo "    - \"$text\"\n";
+        echo "  Regular entries: " . count($translationsJS) . "\n";
+        echo "  Plural entries: " . count($pluralsJS) . "\n";
+        if (count($translationsJS) > 0) {
+            echo "  Sample regular entries:\n";
+            $sample = array_slice(array_keys($translationsJS), 0, 3);
+            foreach ($sample as $text) {
+                echo "    - \"$text\"\n";
+            }
         }
-        if (count($translationsJS) > 5) {
-            echo "    ... and " . (count($translationsJS) - 5) . " more\n";
+        if (count($pluralsJS) > 0) {
+            echo "  Sample plural entries:\n";
+            $sample = array_slice(array_keys($pluralsJS), 0, 3);
+            foreach ($sample as $text) {
+                echo "    - \"$text\" / \"" . $pluralsJS[$text]['plural'] . "\"\n";
+            }
         }
         echo "\n";
     } else {
@@ -364,17 +454,25 @@ if (count($translationsJS) > 0) {
     echo "No JavaScript translation strings found.\n\n";
 }
 
-if (count($translationsPHP) > 0) {
+if (count($translationsPHP) > 0 || count($pluralsPHP) > 0) {
     echo "Generating $outputFilePHP...\n";
-    if (generatePoFile($outputFilePHP, $translationsPHP, "PHP/HTML translations")) {
+    if (generatePoFile($outputFilePHP, $translationsPHP, "PHP/HTML translations", $pluralsPHP)) {
         echo "Successfully created: $outputFilePHP\n";
-        echo "  Sample entries:\n";
-        $sample = array_slice(array_keys($translationsPHP), 0, 5);
-        foreach ($sample as $text) {
-            echo "    - \"$text\"\n";
+        echo "  Regular entries: " . count($translationsPHP) . "\n";
+        echo "  Plural entries: " . count($pluralsPHP) . "\n";
+        if (count($translationsPHP) > 0) {
+            echo "  Sample regular entries:\n";
+            $sample = array_slice(array_keys($translationsPHP), 0, 3);
+            foreach ($sample as $text) {
+                echo "    - \"$text\"\n";
+            }
         }
-        if (count($translationsPHP) > 5) {
-            echo "    ... and " . (count($translationsPHP) - 5) . " more\n";
+        if (count($pluralsPHP) > 0) {
+            echo "  Sample plural entries:\n";
+            $sample = array_slice(array_keys($pluralsPHP), 0, 3);
+            foreach ($sample as $text) {
+                echo "    - \"$text\" / \"" . $pluralsPHP[$text]['plural'] . "\"\n";
+            }
         }
     } else {
         echo "Error: Could not write to $outputFilePHP\n";
