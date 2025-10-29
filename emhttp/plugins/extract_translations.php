@@ -24,6 +24,9 @@ $fileExtensions = ['js', 'html', 'htm', 'php', 'page', '']; // '' for files with
 $jsExtensions = ['js'];
 $phpExtensions = ['html', 'htm', 'php', 'page', '']; // '' for files with no extension
 
+// Map of .page relative path => ['title' => string, 'line' => int]
+$pageHeaders = [];
+
 // Pattern 1: Match _(text)_ - handles escaped characters and nested content
 $pattern1 = '/_\(((?:[^)]|\\.)*?)\)_/s';
 
@@ -81,6 +84,7 @@ function scanDirectory($dir, $extensions, $jsExtensions, $phpExtensions, $patter
  * Process a single file for all patterns
  */
 function processFile($filePath, $ext, $jsExtensions, $phpExtensions, $pattern1, $pattern2, $pattern3, $pattern4, &$translationsJS, &$translationsPHP, &$pluralsJS, &$pluralsPHP, &$fileCountJS, &$fileCountPHP) {
+    global $baseDir;
     // Skip the extract_translations.php script itself
     if (basename($filePath) === 'extract_translations.php') {
         return;
@@ -104,6 +108,15 @@ function processFile($filePath, $ext, $jsExtensions, $phpExtensions, $pattern1, 
     $isJS = in_array($ext, $jsExtensions);
     $fileType = $isJS ? 'JS' : 'PHP';
     
+    // If this is a .page file, extract its Title/Name header for context comments later
+    if (strtolower($ext) === 'page') {
+        $headerMeta = extractPageHeaderTitle($filePath, $content);
+        if (!empty($headerMeta['title'])) {
+            $relativePath = getRelativePath($filePath, $baseDir);
+            $GLOBALS['pageHeaders'][$relativePath] = $headerMeta;
+        }
+    }
+
     // Process all patterns - route to appropriate translation array
     if ($isJS) {
         $found1 = processPattern1($filePath, $content, $pattern1, $translationsJS);
@@ -145,6 +158,39 @@ function getRelativePath($filePath, $baseDir) {
         return substr($filePath, strlen($baseDir));
     }
     return $filePath;
+}
+
+/**
+ * Extract Title or Name from a .page file header (before the '---' separator).
+ * Returns ['title' => string, 'line' => int] or ['title' => '', 'line' => 0] if none found.
+ */
+function extractPageHeaderTitle($filePath, $content) {
+    $maxHeaderBytes = 8192; // read a small portion from the start
+    $headerSection = substr($content, 0, $maxHeaderBytes);
+
+    // Stop at the first '---' line if present
+    $posSeparator = strpos($headerSection, "\n---");
+    if ($posSeparator !== false) {
+        $headerSection = substr($headerSection, 0, $posSeparator);
+    }
+
+    $result = ['title' => '', 'line' => 0];
+
+    // Prefer Title over Name; compute line number using offset
+    if (preg_match('/^\s*Title="([^"]*)"/m', $headerSection, $m, PREG_OFFSET_CAPTURE)) {
+        $result['title'] = trim($m[1][0]);
+        $before = substr($headerSection, 0, $m[0][1]);
+        $result['line'] = substr_count($before, "\n") + 1;
+        return $result;
+    }
+    if (preg_match('/^\s*Name="([^"]*)"/m', $headerSection, $m, PREG_OFFSET_CAPTURE)) {
+        $result['title'] = trim($m[1][0]);
+        $before = substr($headerSection, 0, $m[0][1]);
+        $result['line'] = substr_count($before, "\n") + 1;
+        return $result;
+    }
+
+    return $result;
 }
 
 /**
@@ -466,6 +512,52 @@ function generatePoFile($outputFile, $translations, $patternName, $plurals = [])
     // Sort other translations alphabetically
     ksort($otherTranslations);
     
+    // Build PAGE TITLES section as actual translatable entries
+    $referencedPageFiles = [];
+    foreach ($otherTranslations as $locations) {
+        foreach (array_unique($locations) as $location) {
+            $parts = explode(':', $location, 2);
+            $filePart = $parts[0];
+            if (substr($filePart, -5) === '.page') {
+                $referencedPageFiles[$filePart] = true;
+            }
+        }
+    }
+    foreach ($otherPlurals as $data) {
+        foreach (array_unique($data['locations']) as $location) {
+            $parts = explode(':', $location, 2);
+            $filePart = $parts[0];
+            if (substr($filePart, -5) === '.page') {
+                $referencedPageFiles[$filePart] = true;
+            }
+        }
+    }
+
+    if (!empty($referencedPageFiles)) {
+        $content .= "# ============================================================================\n";
+        $content .= "# PAGE TITLES\n";
+        $content .= "# ============================================================================\n\n";
+        ksort($referencedPageFiles);
+        // Aggregate by title text to group multiple files using same title
+        $pageTitleEntries = [];
+        foreach (array_keys($referencedPageFiles) as $pagePath) {
+            if (!isset($GLOBALS['pageHeaders'][$pagePath]['title']) || $GLOBALS['pageHeaders'][$pagePath]['title'] === '') continue;
+            $title = $GLOBALS['pageHeaders'][$pagePath]['title'];
+            $line = isset($GLOBALS['pageHeaders'][$pagePath]['line']) ? (int)$GLOBALS['pageHeaders'][$pagePath]['line'] : 1;
+            if (!isset($pageTitleEntries[$title])) $pageTitleEntries[$title] = [];
+            $pageTitleEntries[$title][] = $pagePath . ':' . $line;
+        }
+        ksort($pageTitleEntries);
+        foreach ($pageTitleEntries as $title => $locations) {
+            foreach (array_unique($locations) as $location) {
+                $content .= "#: " . $location . "\n";
+            }
+            $escaped = addcslashes($title, "\\\"\n\r\t");
+            $content .= "msgid \"$escaped\"\n";
+            $content .= "msgstr \"\"\n\n";
+        }
+    }
+
     // Add each translation
     foreach ($otherTranslations as $text => $locations) {
         // Add reference comments (file locations)
