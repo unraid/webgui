@@ -344,9 +344,9 @@ function selectDiskFsWidthZFS(slots,init) {
           value: width,
           text: _(sprintf('%s '+label+' of %s devices',groups,width)),
         }));
+        if (selected_width == 0) selected_width = width;
       }
     }
-    if (selected_width == 0) selected_width = width;
   }
   $('#diskFsWidth').val(selected_width);
 }

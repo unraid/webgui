@@ -36,13 +36,13 @@ move() {
 start() {
   if [ -f $PIDFILE ]; then
     if ps h $(cat $PIDFILE) | grep mover ; then
-        echo "mover: already running"
+        echo "mover: already running" >&2
         exit 1
     fi
   fi
 
   echo $$ >/var/run/mover.pid
-  echo "mover: started"
+  echo "mover: started" >&2
 
   shopt -s nullglob
 
@@ -108,7 +108,7 @@ start() {
   done
 
   rm -f $PIDFILE
-  echo "mover: finished"
+  echo "mover: finished" >&2
 }
 
 empty() {
@@ -116,13 +116,13 @@ empty() {
 
   if [ -f $PIDFILE ]; then
     if ps h $(cat $PIDFILE) | grep mover ; then
-        echo "mover: already running"
+        echo "mover: already running" >&2
         exit 1
     fi
   fi
 
   echo $$ >/var/run/mover.pid
-  echo "mover: started"
+  echo "mover: started" >&2
 
   shopt -s nullglob
 
@@ -145,7 +145,7 @@ empty() {
   fi
 
   rm -f $PIDFILE
-  echo "mover: finished"
+  echo "mover: finished" >&2
 }
 
 killtree() {
