@@ -102,7 +102,7 @@ if (!empty($TS_latest_version)) {
 
 function my_lang_time($text) {
   [$number, $text] = my_explode(' ',$text,2);
-  return sprintf(_("%s $text"),$number);
+  return sprintf(_('%1$s %2$s'),$number, $text);
 }
 function my_lang_log($text) {
   global $language;

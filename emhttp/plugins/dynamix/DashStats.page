@@ -485,7 +485,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                       <div class='pie' id='sys2'><span class='sys2'></span><span class='var2'></span></div>
                                   </span>
                                   <span>
-                                      <a class='info hand none'><?=$vdisk?><span><?=_("Percent usage of $vdisk")?> (<?=$dockersize?>)</span></a>
+                                      <a class='info hand none'><?=$vdisk?><span><?=sprintf(_("Percent usage of %s"),$vdisk)?> (<?=$dockersize?>)</span></a>
                                       <div class='pie' id='sys3'><span class='sys3'></span><span class='var3'></span></div>
                                   </span>
                                 </div>
@@ -899,8 +899,8 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                             <?endif;?>
                                         </span>
                                         <span>
-                                            <?=sprintf(_("Share count: %s with %s public SMB and %s public NFS"),count($shares),$SMBpublic,$NFSpublic)?>
-                                        </span><br>
+                                              <?=sprintf(_('Share count: %1$s with %2$s public SMB and %3$s public NFS'),count($shares),$SMBpublic,$NFSpublic)?>
+                                          </span><br>
                                     </div>
                                 </span>
 
@@ -978,7 +978,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                             </span>
                                         <?endif;?>
                                         <span>
-                                            <?=sprintf(_("User count: %s with %s unprotected"),count($users),$nopass)?>
+                                            <?=sprintf(_('User count: %1$s with %2$s unprotected'),count($users),$nopass)?>
                                         </span>
                                     </div>
                                 </span>
@@ -1102,7 +1102,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                             <h3 class='tile-header-main'>_(Array)_<?if (!$started):?> (_(stopped)_)<?endif;?></h3>
                                             <span>
                                                 <?if ($started):?>
-                                                    <?=sprintf(_("%s used of %s (%s %%)"),my_scale($array_used*1024,$unit)." $unit",my_scale($array_size*1024,$unit,-1,-1)." $unit",$array_percent)?>
+                                                    <?=sprintf(_('%1$s used of %2$s (%3$s %%)'),my_scale($array_used*1024,$unit)." $unit",my_scale($array_size*1024,$unit,-1,-1)." $unit",$array_percent)?>
                                                 <?endif;?>
                                             </span><br>
                                         </div>
@@ -1147,7 +1147,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                             <h3 class='tile-header-main'><?=_(native($pool),3).($started ? '' : ' ('._('stopped').')')?></h3>
                                             <span>
                                                 <?if ($started):?>
-                                                    <?=sprintf(_("%s used of %s (%s %%)"),my_scale($cache_used[$pool]*1024,$unit)." $unit",my_scale($cache_size[$pool]*1024,$unit,-1,-1)." $unit",$cache_rate[$pool])?>
+                                                    <?=sprintf(_('%1$s used of %2$s (%3$s %%)'),my_scale($cache_used[$pool]*1024,$unit)." $unit",my_scale($cache_size[$pool]*1024,$unit,-1,-1)." $unit",$cache_rate[$pool])?>
                                                 <?endif;?>
                                           </span><br>
                                         </div>
@@ -2069,7 +2069,7 @@ function toggleChart(init) {
 
 function StopArray() {
 <?if ($confirm['stop']):?>
-  swal({title:"_(Proceed)_?",text:"_(This will stop the array)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){StopArrayNow();});
+  swal({title:"_(Proceed?)_",text:"_(This will stop the array)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){StopArrayNow();});
 <?else:?>
    StopArrayNow();
 <?endif;?>
@@ -2082,7 +2082,7 @@ function StopArrayNow() {
 
 function StartArray() {
 <?if ($confirm['stop']):?>
-  swal({title:"_(Proceed)_?",text:"_(This will start the array)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){StartArrayNow();});
+  swal({title:"_(Proceed?)_",text:"_(This will start the array)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){StartArrayNow();});
 <?else:?>
   StartArrayNow();
 <?endif;?>
@@ -2095,7 +2095,7 @@ function StartArrayNow() {
 
 function Reboot() {
 <?if ($confirm['down']):?>
-  swal({title:"_(Proceed)_?",text:"_(This will reboot the system)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){RebootNow();});
+  swal({title:"_(Proceed?)_",text:"_(This will reboot the system)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){RebootNow();});
 <?else:?>
   RebootNow();
 <?endif;?>
@@ -2108,7 +2108,7 @@ function RebootNow() {
 
 function Shutdown() {
 <?if ($confirm['down']):?>
-  swal({title:"_(Proceed)_?",text:"_(This will shutdown the system)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){ShutdownNow();});
+  swal({title:"_(Proceed?)_",text:"_(This will shutdown the system)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){ShutdownNow();});
 <?else:?>
   ShutdownNow();
 <?endif;?>
@@ -2122,7 +2122,7 @@ function ShutdownNow() {
 <?if ($sleep):?>
 function Sleep() {
 <?if ($confirm['sleep']):?>
-  swal({title:"_(Proceed)_?",text:"_(This will put the system to sleep)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){SleepNow();});
+  swal({title:"_(Proceed?)_",text:"_(This will put the system to sleep)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){SleepNow();});
 <?else:?>
   SleepNow();
 <?endif;?>

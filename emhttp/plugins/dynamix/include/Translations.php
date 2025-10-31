@@ -13,6 +13,7 @@
 <?
 require_once "$docroot/webGui/include/MarkdownExtra.inc.php";
 
+
 // start new session as required
 if (!headers_sent() && session_status()==PHP_SESSION_NONE && !isset($login_locale)) {
   session_start();
@@ -27,6 +28,8 @@ if (file_exists($session)) {
 function _($text, $do=-1) {
   // PHP translation function _
   global $language;
+
+
   $text = trim($text);
   if (!$text) return '';
   switch ($do) {
