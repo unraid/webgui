@@ -338,7 +338,10 @@ while (true) {
         $target = validname($target, false);
         if ($target) {
           $mkpath = isdir($target) ? '--mkpath' : '';
-          $cmd = "rsync -ahPIX$H $sparse $exist $mkpath --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
+          $cmd = "rsync -ahPIX$H $sparse $exist $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
+          // note: rsync defaults to "inc_recurse mode" which causes creating the whole directory structure at target before transfering files.
+          //       This is a problem because those target directories get temporary permissions of "root:root" and "chmod 0700", which
+          //       breaks access for all unraid users through /mnt/user/sharename. We avoid this behavior by using "--no-inc-recursive".
           exec($cmd, $pid);
         } else {
           $reply['error'] = 'Invalid target name';
