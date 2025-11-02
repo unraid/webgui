@@ -136,12 +136,12 @@ function parse_rsync_progress($status, $action_label) {
   $text[0] = $action_label . "... ";
 
   // obtain progress line like:
-  // currently running (showing total ETA):
+  // currently running (timestamp represents total ETA):
   // "         37.91G   4%   58.59MB/s    3:47:20"
-  // transfer of single file finished (ETA changes temporarily to elapsed time):
+  // transfer of single file finished (note: timestamp now represents total elapsed time):
   // "         37.93G   4%   53.80MB/s    0:11:12 (xfr#32, to-chk=554/596)"
   // note: we do not loop with PHP as there could be a huge amount of progress lines
-  // note: leading space in regex ensures we only match progress lines, not filenames
+  // note: leading space in regex ensures we only match progress lines, not filename lines
   // note: tac --before prevents line concatenation when $status lacks trailing \n
   $progress_line = trim(exec("tac --before $status | grep -m1 -E '^ .*[0-9]+%.*[0-9]+:[0-9]+:[0-9]+' | tr -s ' ' || echo ''"));
   if ($progress_line) {
@@ -265,7 +265,6 @@ if (!file_exists($empty_dir)) {
 
 // initialize $delete_empty_dirs state: null = not a move operation (yet), true = rsync copy-delete phase, false = cleanup phase (done)
 $delete_empty_dirs = null;
-
 
 // infinite loop to monitor and execute file operations
 // Note: exec() uses /bin/sh which is symlinked to bash in unraid and a requirement for process substitution syntax >(...)
