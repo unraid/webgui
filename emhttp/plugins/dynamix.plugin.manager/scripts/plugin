@@ -342,7 +342,9 @@ function plugin($method, $plugin_file, &$error) {
 
   // Process FILE elements in order
   //
+  $current_file = 0;
   foreach ($xml->FILE as $file) {
+    $current_file++;
     // skip if not our $method
     if (isset($file->attributes()->Method)) {
       if (!in_array($method, explode(" ", $file->attributes()->Method))) continue;
@@ -460,10 +462,12 @@ function plugin($method, $plugin_file, &$error) {
         my_logger("running: $command $file->LOCAL", $logger);
         $retval = run("$command $file->LOCAL");
       } elseif ($file->INLINE) {
-        my_logger("running: 'anonymous'", $logger);
-        $name = '/tmp/inline.sh';
+
+        $name = '/tmp/inline'.$current_file.'-'.pathinfo($plugin_file, PATHINFO_FILENAME).'.sh';
         file_put_contents($name, $file->INLINE);
-        $retval = run("$command $name");
+        $exec = $command." ".escapeshellarg($name);
+        my_logger("executing inline script: $exec", $logger);
+        $retval = run($exec);
         unlink($name);
       }
       if ($retval != 0) {

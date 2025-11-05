@@ -13,7 +13,8 @@
 # Files at the top level of a pool or an array disk are never moved.
 
 # The 'find' command generates a list of all files and directories of a share.
-# For each file, if the file is not "in use" by any process (as detected by 'in_use' command),
+# For each file, if the file is not "in use" by any process (as detected by 'fuser' command)
+# and not attached to any loop device (as detected by 'losetup' command),
 # then the file is moved, and upon success, deleted from the source disk.  If the file already
 # exists on the target, it is not moved and the source is not deleted.  All meta-data of moved
 # files/directories is preserved: permissions, ownership, extended attributes, and access/modified
@@ -35,13 +36,13 @@ move() {
 start() {
   if [ -f $PIDFILE ]; then
     if ps h $(cat $PIDFILE) | grep mover ; then
-        echo "mover: already running"
+        echo "mover: already running" >&2
         exit 1
     fi
   fi
 
   echo $$ >/var/run/mover.pid
-  echo "mover: started"
+  echo "mover: started" >&2
 
   shopt -s nullglob
 
@@ -107,7 +108,7 @@ start() {
   done
 
   rm -f $PIDFILE
-  echo "mover: finished"
+  echo "mover: finished" >&2
 }
 
 empty() {
@@ -115,13 +116,13 @@ empty() {
 
   if [ -f $PIDFILE ]; then
     if ps h $(cat $PIDFILE) | grep mover ; then
-        echo "mover: already running"
+        echo "mover: already running" >&2
         exit 1
     fi
   fi
 
   echo $$ >/var/run/mover.pid
-  echo "mover: started"
+  echo "mover: started" >&2
 
   shopt -s nullglob
 
@@ -144,7 +145,7 @@ empty() {
   fi
 
   rm -f $PIDFILE
-  echo "mover: finished"
+  echo "mover: finished" >&2
 }
 
 killtree() {

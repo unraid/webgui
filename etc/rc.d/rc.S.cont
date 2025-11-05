@@ -12,6 +12,14 @@
 # run & log functions
 . /etc/rc.d/rc.runlog
 
+# LimeTech - restore machine-id
+SRC="/boot/config/machine-id"
+DEST="/etc/machine-id"
+if [[ ! -f "$SRC" ]] || ! grep -Eq '^[0-9a-f]{32}$' "$SRC" ; then
+  /usr/bin/dbus-uuidgen --ensure="$SRC"
+fi
+/usr/bin/install -m 0644 "$SRC" "$DEST"
+
 # LimeTech - bind selected devices to vfio-pci
 /usr/local/sbin/vfio-pci 1>/var/log/vfio-pci 2>/var/log/vfio-pci-errors
 

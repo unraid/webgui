@@ -344,9 +344,9 @@ function selectDiskFsWidthZFS(slots,init) {
           value: width,
           text: _(sprintf('%s '+label+' of %s devices',groups,width)),
         }));
+        if (selected_width == 0) selected_width = width;
       }
     }
-    selected_width = slots;
   }
   $('#diskFsWidth').val(selected_width);
 }
@@ -990,7 +990,7 @@ _(Critical disk utilization threshold)_ (%):
 </form>
 
 <?if (fsType('btrfs')):?>
-<?if (!maintenance_mode()):?>
+<?if (_var($disk,'fsStatus')=="Mounted"):?>
 <div class="title nocontrol">
   <span class="left">
     <i class="title fa fa-hdd-o"></i> _(Pool Device Status)_

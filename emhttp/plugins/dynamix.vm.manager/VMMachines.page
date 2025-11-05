@@ -471,7 +471,7 @@ function loadlist() {
         elementSelectorsForSpacing: [
           '#kvm_table',
         ],
-        manualSpacingOffset: 30, // without this, the main content will still be scrollable by like 20px
+        manualSpacingOffset: 50, // without this, the main content will still be scrollable by like 20px
       });
       // Handle table header fixed positioning after resize
       function tableHeaderResize() {
@@ -484,6 +484,12 @@ function loadlist() {
       $(window).bind('resize',function(){
         tableHeaderResize();
       });
+      // Handle table header resizing when tab is clicked
+      <?if (count($pages) > 2):?>
+        $("#tab1").on('click',function(){
+          tableHeaderResize();
+        });
+      <?endif;?>    
   <?endif;?>
   });
 }

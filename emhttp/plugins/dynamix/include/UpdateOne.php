@@ -68,6 +68,7 @@ switch ($data['id']) {
 		foreach ($map as $name => $cpuset) {
 			/* set full path of template file */
 			$file = $DockerTemplates->getUserTemplate($name);
+			if ( ! is_file($file) ) continue;
 			$xml = simplexml_load_file($file);
 			if ($xml->CPUset) {
 				/* update node */

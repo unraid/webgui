@@ -180,7 +180,6 @@ function my_error($code) {
 }
 
 function mk_option($select, $value, $text, $extra="") {
-  $text = htmlspecialchars($text);
   return "<option value='$value'".($value == $select ? " selected" : "").(strlen($extra) ? " $extra" : "").">$text</option>";
 }
 
@@ -566,10 +565,8 @@ function dmidecode($key, $n, $all=true) {
 }
 
 function is_intel_cpu() {
-  $cpu = dmidecode('Processor Information','4',0);
-  $cpu_vendor = $cpu['Manufacturer'] ?? "";
-  $is_intel_cpu = stripos($cpu_vendor, "intel") !== false ? true : false;
-  return $is_intel_cpu;
+  $cpu_vendor_check = exec("grep -Pom1 '^model name\s+:\s*\K.+' /proc/cpuinfo") ?? "";
+  return stripos($cpu_vendor_check, "intel") !== false;
 }
 
 // Load saved PCI data

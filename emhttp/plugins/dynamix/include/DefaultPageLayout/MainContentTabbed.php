@@ -19,6 +19,9 @@
                     aria-controls="<?= $tabId ?>-panel"
                     tabindex="<?= $i === 0 ? '0' : '-1' ?>"
                     aria-selected="<?= $i === 0 ? 'true' : 'false' ?>"
+                    <? if ( isset($page['Focus']) ): ?>
+                        data-focus="<?= htmlspecialchars($page['Focus'], ENT_QUOTES, 'UTF-8') ?>"
+                    <? endif; ?>
                 >
                     <?= tab_title($title, $page['root'], _var($page, 'Tag', false)) ?>
                 </button>
@@ -43,7 +46,13 @@
                 if (isset($page['text'])) {
                     $skipIndexIncrement = true;
                     annotate($page['file']);
-                    eval('?>'.generateContent($page));
+                    $evalContent = '?>'.generateContent($page);
+                    $evalFile = $page['file'];
+                    if ( filter_var($page['Eval']??false, FILTER_VALIDATE_BOOLEAN) ) {
+                        eval($evalContent);
+                    } else {    
+                        include "$docroot/webGui/include/DefaultPageLayout/evalContent.php";
+                    }
                 }
                 continue;
             }
@@ -60,7 +69,15 @@
         >
             <?= generatePanels($page, $path, $defaultIcon, $docroot) ?>
 
-            <? eval('?>'.generateContent($page)); ?>
+            <? 
+            $evalContent = '?>'.generateContent($page);
+            $evalFile = $page['file'];
+            if ( filter_var($page['Eval']??false, FILTER_VALIDATE_BOOLEAN) ) {
+                eval($evalContent);
+            } else {
+                include "$docroot/webGui/include/DefaultPageLayout/evalContent.php";
+            }
+            ?>
         </section>
         <?
             if ($skipIndexIncrement) {
@@ -137,6 +154,15 @@ tabs.forEach((tab, i) => {
         });
         $.cookie(cookieName, tab.id);
         tab.focus();
+        // call the focus function if it exists
+        if (tab.getAttribute('data-focus') ) {
+            const focusFnName = tab.getAttribute('data-focus');
+            if (typeof window[focusFnName] === 'function') {
+                window[focusFnName]();
+            } else {
+                console.error('Focus function not found: ' + focusFnName);
+            }
+        }
     });
     tab.addEventListener('keydown', e => {
         let idx = Array.prototype.indexOf.call(tabs, document.activeElement);

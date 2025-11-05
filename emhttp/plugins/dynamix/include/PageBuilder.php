@@ -18,7 +18,11 @@ function get_ini_key($key,$default) {
   $x = strpos($key, '[');
   $var = $x>0 ? substr($key,1,$x-1) : substr($key,1);
   global $$var;
-  eval("\$var=$key;");
+  try {
+    eval("\$var=$key;");
+  } catch (Throwable $e) {
+    return $default;
+  }
   return $var ?: $default;
 }
 
@@ -44,10 +48,14 @@ function build_pages($pattern) {
 
 function page_enabled(&$page)
 {
-  global $var,$disks,$devs,$users,$shares,$sec,$sec_nfs,$name,$display,$pool_devices;
-  $enabled = true;
-  if (isset($page['Cond'])) eval("\$enabled={$page['Cond']};");
-  return $enabled;
+  global $docroot,$var,$disks,$devs,$users,$shares,$sec,$sec_nfs,$name,$display,$pool_devices;
+  $enabled = $evalSuccess = true;
+  if (isset($page['Cond'])) {
+    $evalContent= "\$enabled={$page['Cond']};";
+    $evalFile = $page['file'];
+    include "$docroot/webGui/include/DefaultPageLayout/evalContent.php";
+  }
+  return ($enabled && $evalSuccess);
 }
 
 function find_pages($item) {

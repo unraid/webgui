@@ -1,6 +1,6 @@
 <?php
-/* Copyright 2005-2024, Lime Technology
- * Copyright 2012-2024, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -19,7 +19,18 @@ $themes2 = $themeHelper->isSidebarTheme();
 $themeHelper->updateDockerLogColor($docroot);
 
 $display['font'] = filter_var($_COOKIE['fontSize'] ?? $display['font'] ?? '', FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-
+// adjust font size if cookie was set to a value that is not supported
+switch ($display['font']) {
+    case "50": 
+        $display['font'] = "56.25";
+        break;
+    case "75":
+        $display['font'] = "68.75";
+        break;
+    case "80":
+        $display['font'] = "68.75";
+        break;
+}
 $header  = $display['header']; // keep $header, $backgnd vars for plugin backwards compatibility for the time being
 $backgnd = $display['background'];
 
@@ -78,6 +89,7 @@ if (count($pages)) {
         @unlink($nchan_pid);
     }
 }
+
 ?>
 <!DOCTYPE html>
 <html <?= $display['rtl'] ?>lang="<?= strtok($locale, '_') ?: 'en' ?>" class="<?= $themeHelper->getThemeHtmlClass() ?>">
@@ -132,16 +144,23 @@ if (count($pages)) {
 
   <?php require_once "$docroot/webGui/include/DefaultPageLayout/HeadInlineJS.php"; ?>
   <?php
-  foreach ($buttonPages as $button) {
-      annotate($button['file']);
-      includePageStylesheets($button);
-      eval('?>' . parse_text($button['text']));
-  }
+    foreach ($buttonPages as $button) {
+        annotate($button['file']);
+        includePageStylesheets($button);
+        $evalContent = '?>' . parse_text($button['text']);
+        $evalFile = $button['file'];
+        if ( filter_var($button['Eval']??false, FILTER_VALIDATE_BOOLEAN) ) {
+            eval($evalContent);
+        } else {
+            include "$docroot/webGui/include/DefaultPageLayout/evalContent.php";
+        }
+    }
+ 
 
-foreach ($pages as $page) {
-    annotate($page['file']);
-    includePageStylesheets($page);
-}
+    foreach ($pages as $page) {
+        annotate($page['file']);
+        includePageStylesheets($page);
+    }
 ?>
 
   <?php include "$docroot/plugins/dynamix.my.servers/include/myservers1.php" ?>

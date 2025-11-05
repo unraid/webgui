@@ -196,11 +196,22 @@ class Array2XML {
 				'domain' => [
 					'ovmf' => 2,
 					'mem' => 4096 * 1024,
-					'maxmem' => 4096 * 1024
+					'maxmem' => 4096 * 1024,
+					'vcpus' => 2,
+					'vcpu' => [0,1],
 				],
+				'media' => [
+					'cdrombus' => 'sata',
+					'driversbus' => 'sata' ,
+				],			
 				'disk' => [
 					[
 						'size' => '64G'
+					]
+				],
+				'nic'=>[
+					[
+						'model' => 'e1000'
 					]
 				]
 			]

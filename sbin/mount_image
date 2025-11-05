@@ -1,5 +1,5 @@
 #!/bin/bash
-#Copyright 2005-2021, Lime Technology
+#Copyright 2005-2025, Lime Technology
 #License: GPLv2 only
 
 # mount_image filepath mountpoint size
@@ -89,15 +89,20 @@ else
     echo "'$FILEPATH' is not a file"
     exit 1
   fi
-  # check that the file is not already in-use (or being moved by 'mover')
-  if /usr/local/sbin/in_use "$FILEPATH" ; then
-    echo "'$FILEPATH' is in-use, cannot mount"
-    exit 1
-  fi
   # if image file is located on a "user share" dereference to get real device path
   DISK=$(getfattr -n system.LOCATION --only-values --absolute-names "$FILEPATH" 2>/dev/null)
   if [[ $DISK != "" ]]; then
     FILEPATH=${FILEPATH/user/$DISK}
+  fi
+  # verify no process has the file open
+  if fuser -s "$FILEPATH" ; then
+    echo "'$FILEPATH' is in-use, cannot mount"
+    exit 1
+  fi
+  # verify file is not attached to a loop device
+  if [[ -n $(losetup -j "$FILEPATH") ]]; then
+    echo "'$FILEPATH' attached to loop device, cannot mount"
+    exit 1
   fi
   # (maybe) extend file size
   # try to use fallocate first, will never make the file smaller
