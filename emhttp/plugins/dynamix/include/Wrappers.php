@@ -28,9 +28,12 @@ function file_put_contents_atomic($filename,$data) {
     if (!is_file("$filename$suffix")) break;
   }
   $renResult = false;
+  my_logger("Writing to $filename$suffix");
   $writeResult = @file_put_contents("$filename$suffix",$data) === strlen($data);
+  my_logger("Write result: $writeResult");
   if ($writeResult)
     $renResult = @rename("$filename$suffix",$filename);
+  my_logger("Rename result: $renResult");
   if (!$writeResult || !$renResult) {
     my_logger("File_put_contents_atomic failed to write / rename $filename");
     @unlink("$filename$suffix");
