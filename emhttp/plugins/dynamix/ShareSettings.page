@@ -73,6 +73,20 @@ async function prepareShare(form) {
   item.value = emptying;
   item.selected = true;
 
+  /* Don't allow emptying of shares if the Mover Tuning plugin is installed */
+  if ( emptying.length > 0 && <?= is_file('/var/log/plugins/ca.mover.tuning.plg') ? "true" : "false" ?>) {
+    event.preventDefault();
+    swal({
+      title: "_(Mover Tuning Installed)_",
+      text: "_(The Mover Tuning plugin is installed.  This plugin will interfere with emptying of shares.  You will need to uninstall this plugin to be able to set disks to be emptied.)_",
+      type: 'error',
+      html: true,
+      showConfirmButton: true,
+      confirmButtonText: "_(OK)_",
+    });
+    return false;
+  }
+
   /* Validate file count input against fileMax */
   try {
     const fileCountInput = form.querySelector('#file_count');
