@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+  <Agent>
+    <Name>Apprise</Name>
+    <Variables>
+      <Variable Help="The server URL including protocol and port - /notify will be automatically appended" Desc="Server URL" Default="http://localhost:8000">SERVER_URL</Variable>
+      <Variable Help="Optional Stateful Key (if configured in Apprise). NOTE: This will override any Stateless URLs provided. Set this field to 'none' if not being used." Desc="Stateful Key" Default="none">STATEFUL_KEY</Variable>
+      <Variable Help="Optional Tags (if configured in Apprise). Set to 'none' if not being used." Desc="Tags" Default="none">TAGS</Variable>
+      <Variable Help="Optional Comma or Space Separated List of Stateless Urls - mailto://user:pass@gmail.com, gotify://host/token. NOTE: This value is ignored if a Stateful Key is provided. Set this field to 'none' if not being used." Desc="Stateless Urls" Default="">STATELESS_URLS</Variable>
+      <Variable Help="Specify the fields which are included in the title of the notification." Desc="Notification Title" Default="$SUBJECT">TITLE</Variable>
+      <Variable Help="Specify the fields which are included in the message body of the notification." Desc="Notification Message" Default="$DESCRIPTION">MESSAGE</Variable>
+    </Variables>
+    <Script>
+      <![CDATA[
+      #!/bin/bash
+      ############
+      {0}
+      ############
+      MESSAGE=$(echo -e "$MESSAGE")
+      case "$IMPORTANCE" in
+      'normal' )
+      PRIORITY="info"
+      ;;
+      'warning' )
+      PRIORITY="warning"
+      ;;
+      'alert' )
+      PRIORITY="failure"
+      ;;
+      esac
+
+      if [ $STATEFUL_KEY == 'none' ]; then STATEFUL_KEY=; fi
+      if [ $STATELESS_URLS == 'none' ]; then STATELESS_URLS=; fi
+      if [ $TAGS == 'none' ]; then TAGS=; fi
+
+      # Remove any trailing slash
+      SERVER_URL=${SERVER_URL%/}
+
+      JSON="{\"urls\":\"$STATELESS_URLS\",\"tag\":\"$TAGS\",\"type\":\"$PRIORITY\",\"title\":\"$TITLE\",\"body\":\"$MESSAGE\"}"
+
+      curl -X POST \
+        -H "Content-Type: application/json" \
+        -d "$JSON" \
+        $SERVER_URL/notify${STATEFUL_KEY:+/$STATEFUL_KEY} 2>&1
+      ]]>
+    </Script>
+  </Agent>
