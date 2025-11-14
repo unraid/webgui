@@ -527,7 +527,7 @@ class Markdown implements MarkdownInterface {
 	 *
 	 * We need to escape raw HTML in Markdown source before doing anything
 	 * else. This need to be done for each block, and not only at the
-	 * begining in the Markdown function since hashed blocks can be part of
+	 * beginning in the Markdown function since hashed blocks can be part of
 	 * list items and could have been indented. Indented blocks would have
 	 * been seen as a code block in a previous pass of hashHTMLBlocks.
 	 *
