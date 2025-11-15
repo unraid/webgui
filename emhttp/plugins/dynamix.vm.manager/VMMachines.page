@@ -3,6 +3,7 @@ Title="Virtual Machines"
 Tag="columns"
 Cond="is_file('/var/run/libvirt/libvirtd.pid')"
 Markdown="false"
+Focus="tableHeaderResize"
 ---
 <?PHP
 /* Copyright 2005-2023, Lime Technology
@@ -462,37 +463,43 @@ function loadlist() {
     $('.text').click(showInput);
     $('.input').blur(hideInput);
     <?if (_var($display,'resize')):?>
-      fillAvailableHeight({
-        targetElementSelector: '.js-fill-available-height',
-        elementSelectorsForHeight: [
-          '.js-actions',
-          '#kvm_table thead',
-        ],
-        elementSelectorsForSpacing: [
-          '#kvm_table',
-        ],
-        manualSpacingOffset: 50, // without this, the main content will still be scrollable by like 20px
-      });
-      // Handle table header fixed positioning after resize
-      function tableHeaderResize() {
-        $('#kvm_table thead,#kvm_table tbody').removeClass('fixed');
-        $('#kvm_table thead tr th').each(function(){$(this).width($(this).width());});
-        $('#kvm_table tbody tr td').each(function(){$(this).width($(this).width());});
-        $('#kvm_table thead,#kvm_table tbody').not('.child').addClass('fixed');
-      }
       tableHeaderResize();
-      $(window).bind('resize',function(){
-        tableHeaderResize();
-      });
-      // Handle table header resizing when tab is clicked
-      <?if (count($pages) > 2):?>
-        $("#tab1").on('click',function(){
+
+      // Handle table header resizing when window is resized with debouncing
+      var resizeTimeout;
+      $(window).off('resize.vmTableResize').on('resize.vmTableResize',function(){
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(function(){
           tableHeaderResize();
-        });
-      <?endif;?>    
-  <?endif;?>
+        }, 150);
+      });
+    <?endif;?>
   });
 }
+
+// Handle table header fixed positioning after resize
+// Only applicable to listing height: fixed
+// Function needs to exist in the global scope due to "Focus" attribute in the page
+function tableHeaderResize() {
+  <?if (_var($display,'resize')):?>
+    fillAvailableHeight({
+      targetElementSelector: '.js-fill-available-height',
+      elementSelectorsForHeight: [
+        '.js-actions',
+        '#kvm_table thead',
+      ],
+      elementSelectorsForSpacing: [
+        '#kvm_table',
+      ],
+      manualSpacingOffset: 50, // without this, the main content will still be scrollable by like 20px
+    });
+    $('#kvm_table thead,#kvm_table tbody').removeClass('fixed');
+    $('#kvm_table thead tr th').each(function(){$(this).width($(this).width());});
+    $('#kvm_table tbody tr td').each(function(){$(this).width($(this).width());});
+    $('#kvm_table thead,#kvm_table tbody').not('.child').addClass('fixed');
+  <?endif;?>
+}
+
 $(function() {
 <?if ($msg):?>
   <?$color = strpos($msg, "rror:")!==false ? 'red-text':'green-text'?>
