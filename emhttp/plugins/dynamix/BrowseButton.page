@@ -52,7 +52,7 @@ const dfm = {
 };
 var dfm_read = {};
 
-function dfm_footer(action, text) {
+function dfm_footer(action, text, $icon) {
   switch (action) {
   case 'show':
     $('#user-notice').show();
@@ -61,8 +61,41 @@ function dfm_footer(action, text) {
     $('#user-notice').hide();
     break;
   case 'write':
-    let icon = '<a class="hand" onclick="dfm_openDialog(true)" title="_(File Manager)_"><i class="icon-u-duplicate dfm"></i></a>';
-    $('#user-notice').html(icon + text);
+    let fileManagerIcon = '<a class="hand" onclick="dfm_openDialog(true)" title="_(File Manager)_"><i class="icon-u-duplicate dfm"></i></a>';
+    let $notice = $('#user-notice');
+
+    // Ensure text is a string
+    text = text || '';
+
+    // Add icon and text
+    if ($icon && text) {
+
+      // Extract selector from icon classes
+      let iconSelector = '.' + $icon.attr('class').split(' ').join('.');
+
+      // Check if icon already exists in DOM to preserve animation
+      let $existingIcon = $notice.find(iconSelector);
+
+      // Reuse existing icon element, update only text
+      if ($existingIcon.length > 0) {
+        // Preserve icon in DOM, only update text nodes
+        $notice.contents().filter(function() {
+          return this.nodeType === 3; // Text nodes only
+        }).remove();
+
+        // Update text after icon (which stays in place)
+        $existingIcon.after(document.createTextNode(text));
+
+      // First time - insert icon + text
+      } else {
+        $notice.empty().append(fileManagerIcon).append($icon.clone()).append(document.createTextNode(text));
+      }
+
+    // No icon or no text - insert as-is
+    } else {
+      $notice.html(fileManagerIcon + text);
+    }
+
     break;
   case 'clear':
     $('#user-notice').html('');
@@ -113,6 +146,82 @@ function dfm_createSource(source) {
 
 function dfm_showProgress(data) {
   if (!data) return 0;
+
+  // Try to parse as JSON first
+  try {
+    let parsed = JSON.parse(data);
+
+    // Universal JSON format: {action: int, text: [text0, text1]}
+    // text[0] = file/main text, text[1] = progress info (optional)
+    if (parsed.action !== undefined && Array.isArray(parsed.text)) {
+
+      // Define spinning icon as jQuery object
+      let $icon = $('<i/>').addClass('fa fa-circle-o-notch fa-spin dfm');
+
+      // Extract selector from icon classes
+      let iconSelector = '.' + $icon.attr('class').split(' ').join('.');
+
+      // Build dialog text - preserve existing icon if present to avoid animation restart
+      let $dialogContainer = dfm.window.find('.dfm_text');
+      let dialogText = parsed.text[0] || '';
+      if (dialogText) {
+
+        // Find existing icon elements (there might be two: one for file, one for progress)
+        let $existingIcons = $dialogContainer.find(iconSelector);
+        if ($existingIcons.length > 0) {
+
+          // Preserve icons in DOM, only update text nodes
+          $dialogContainer.contents().filter(function() {
+            return this.nodeType === 3; // Text nodes only
+          }).remove();
+
+          // Remove <br> elements
+          $dialogContainer.find('br').remove();
+
+          // Insert updated text after first icon (which stays in place)
+          $existingIcons.first().after(document.createTextNode(dialogText));
+
+          // Add progress line with its own icon (reuse or create second icon)
+          if (parsed.text[1]) {
+            let $secondIcon = $existingIcons.eq(1);
+            if ($secondIcon.length === 0) {
+              // Need to add second icon
+              $dialogContainer.append('<br>').append($icon.clone()).append(document.createTextNode(parsed.text[1]));
+            } else {
+              // Second icon exists, just update text
+              $secondIcon.before('<br>');
+              $secondIcon.after(document.createTextNode(parsed.text[1]));
+            }
+          }
+
+        // First time - insert icon + text
+        } else {
+          $dialogContainer.empty().append($icon.clone()).append(document.createTextNode(dialogText));
+
+          // Optionally add second line of icon + text
+          if (parsed.text[1]) {
+            $dialogContainer.append('<br>').append($icon.clone()).append(document.createTextNode(parsed.text[1]));
+          }
+
+        }
+
+      // No text - clear everything including icon
+      } else {
+        $dialogContainer.empty();
+      }
+
+      // Build footer text (progress info only)
+      let footerText = parsed.text[1] || parsed.text[0] || '';
+      dfm_footer('write', footerText, $icon);
+      dfm.previous = footerText;
+      return 0;
+
+    }
+  } catch(e) {
+    // Not JSON, fallback to old string parsing
+  }
+
+  // Legacy string parsing for non-migrated operations
   let file = null;
   let text = data.split('\n');
   let line = text[0].split('... ');
@@ -206,8 +315,7 @@ function dfm_makeDialog(open) {
     dfm.window.find('#dfm_exist').prop('checked',dfm_read.exist ? false : true);
     dfm.height = 630;
     break;
-  case 4: // move folder/object (rsync)
-  case 5: // move folder/object (mv)
+  case 4: // move folder/object
     dfm.window.html($('#dfm_templateMoveFolder').html());
     dfm.window.find('#dfm_target').val(dfm_read.target).prop('disabled',true);
     dfm.window.find('#dfm_sparse').prop('checked',dfm_read.sparse ? true : false);
@@ -225,8 +333,7 @@ function dfm_makeDialog(open) {
     dfm.window.find('#dfm_exist').prop('checked',dfm_read.exist ? false : true);
     dfm.height = 630;
     break;
-  case 9: // move file (rsync)
-  case 10: // move file (mv)
+  case 9: // move file
     dfm.window.html($('#dfm_templateMoveFile').html());
     dfm.window.find('#dfm_target').val(dfm_read.target).prop('disabled',true);
     dfm.window.find('#dfm_sparse').prop('checked',dfm_read.sparse ? true :false);
