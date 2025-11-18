@@ -86,11 +86,12 @@ function missing_cache() {
 }
 
 function resync($d) {
-  return in_array($d,['P','Q']) ? 'Parity-Sync' : 'Data-Rebuild';
+  return in_array($d,['P','Q']) ? _('Parity-Sync') : _('Data-Rebuild');
 }
 
 function print_error($error) {
-  return sprintf(_('Finding **%s** error'.($error==1?'':'s')),$error?:'0');
+  $n = (int)($error ?: 0);
+  return sprintf(ngettext('Finding **%d** error','Finding **%d** errors',$n),$n);
 }
 ?>
 <script>
@@ -290,7 +291,7 @@ function stopArray(form) {
   $(form).append('<input type="hidden" name="cmdStop" value="Stop">');
 <?if ($confirm['stop']):?>
   swal({
-    title:"_(Proceed)_?",
+    title:"_(Proceed?)_",
     text:"_(This will stop the array)_",
     type:'warning',
     html:true,
@@ -309,7 +310,7 @@ function stopParity(form, text) {
   $(form).append('<input type="hidden" name="cmdCheckCancel" value="">');
 <?if ($confirm['stop']):?>
   swal({
-    title:"_(Proceed)_?",
+    title:"_(Proceed?)_",
     text:"_(This will stop the running operation)_: "+text,
     type:'warning',
     html:true,
@@ -352,7 +353,7 @@ function shutdown_now(form, cmd) {
     case 'shutdown': var text = "_(This will shutdown the system)_"; break;
   }
   swal({
-    title:"_(Proceed)_?",
+    title:"_(Proceed?)_",
     text:text,
     type:'warning',
     html:true,
@@ -568,7 +569,7 @@ window.onunload = function(){
     if (!$spot):
       if ($action[0] == "recon"):
         $resync = resync($action[1]);
-?>      <tr><td></td><td><input type="submit" name="cmdCheckSync" value="_(Sync)_"></td><td>**<?=_('Sync')?>** <?=_("will start **$resync**")?>.</td></tr>
+?>      <tr><td></td><td><input type="submit" name="cmdCheckSync" value="_(Sync)_"></td><td>**<?=_('Sync')?>** <?=sprintf(_("will start **%s**"),$resync)?>.</td></tr>
 <?    elseif ($action[0]=="clear"):?>
         <tr><td></td><td><input type="submit" name="cmdCheckClear" value="_(Clear)_"></td><td>**_(Clear)_** _(will start **Disk-Clear** of new data disk(s))_.</td></tr>
 <?    else:
@@ -615,12 +616,12 @@ window.onunload = function(){
     else:
       if ($action[0] == "recon"):
         $resync = resync($action[1]);
-?>      <tr><td><?=_("$resync in progress")?>.</td><td>
+?>      <tr><td><?=sprintf(_("%s in progress"),$resync)?>.</td><td>
         <span class="buttons-spaced">
         <input type="button" id="pauseButton"<?if (_var($var,'mdResync')):?> value="_(Pause)_" onclick="pauseParity(this.form)"<?else:?> value="_(Resume)_" onclick="resumeParity(this.form)"<?endif;?> disabled>
         <input type="button" id="cancelButton" value="_(Cancel)_" onclick="stopParity(this.form,'<?=$resync?>')" disabled>
         </span></td>
-        <td id="cancelText"><?if (_var($var,'mdResync')):?>**<?=_('Pause')?>** <?=_("will pause $resync")?>.<?else:?>**<?=_('Resume')?>** <?=_("will resume $resync")?>.<?endif;?><br>**<?=_('Cancel')?>** <?=_("will stop $resync")?>.
+        <td id="cancelText"><?if (_var($var,'mdResync')):?>**<?=_('Pause')?>** <?=sprintf(_("will pause %s"),$resync)?>.<?else:?>**<?=_('Resume')?>** <?=sprintf(_("will resume %s"),$resync)?>.<?endif;?><br>**<?=_('Cancel')?>** <?=sprintf(_("will stop %s"),$resync)?>.
         <br>_(WARNING: canceling may leave the array unprotected)_!</td></tr>
 <?    elseif ($action[0] == "clear"):?>
         <tr><td>_(Disk-Clear in progress)_.</td><td>
@@ -649,7 +650,7 @@ window.onunload = function(){
       $sbSynced = array_shift($synced) ?: _var($var,'sbSynced');
       $sbUpdate = _var($var,'mdResyncDt') ? $sbSynced : _var($var,'sbUpdated');?>
       <tr><td></td><td><input type="button" value="_(History)_" onclick="parityHistory()"></td>
-      <td><?=sprintf(_('Current operation %s on **%s**'),(_var($var,'mdResyncDt')?_('started'):_('paused')),_(my_time($sbUpdate).day_count($sbUpdate),0))?></td></tr>
+      <td><?=(_('Current operation %1$s on **%2$s**'),(_var($var,'mdResyncDt')?_('started'):_('paused')),_(my_time($sbUpdate).day_count($sbUpdate),0))?></td></tr>
       <tr><td>_(Total size)_:</td><td id="line0"></td><td></td></tr>
       <tr><td>_(Elapsed time)_:</td><td id="line1"></td><td></td></tr>
       <tr><td>_(Current position)_:</td><td id="line2"></td><td></td></tr>
@@ -675,12 +676,12 @@ window.onunload = function(){
   case "Copying":?>
     <tr><td><?status_indicator()?>**_(Starting, copying)_... <span id="fsState"></span>**</td><td><input type="submit" name="cmdNoCopy" value="_(Cancel)_"></td><td></td></tr>
     <tr><td></td><td><input type="button" value="_(History)_" onclick="parityHistory()"></td>
-    <td><?=sprintf(_('Current operation %s on **%s**'),_('started'),_(my_time(_var($var,'sbUpdated',0)).day_count(_var($var,'sbSynced',0)),0))?></td></tr>
+    <td><?=sprintf(_('Current operation started on **%s**'),_(my_time(_var($var,'sbUpdated',0)).day_count(_var($var,'sbUpdated',0)),0))?></td></tr>
 <?  break;
   case "Clearing":?>
     <tr><td><?status_indicator()?>**_(Started, clearing)_... <span id="fsState"></span>**</td><td><input type="submit" name="cmdNoClear" value="_(Cancel)_"></td><td></td></tr>
     <tr><td></td><td><input type="button" value="_(History)_" onclick="parityHistory()"></td>
-    <td><?=sprintf(_('Current operation %s on **%s**'),_('started'),_(my_time(_var($var,'sbUpdated',0)).day_count(_var($var,'sbSynced',0)),0))?></td></tr>
+    <td><?=sprintf(_('Current operation started on **%s**'),_(my_time(_var($var,'sbUpdated',0)).day_count(_var($var,'sbUpdated',0)),0))?></td></tr>
 <?  break;
   case "Stopping":?>
     <tr><td><?status_indicator()?>**_(Stopping)_...**</td><td><input type="submit" name="cmdStop" value="_(Stop)_" disabled></td><td></td></tr>
@@ -714,7 +715,7 @@ window.onunload = function(){
         if ($action[0] == "recon"):
           $resync = resync($action[1]);
 ?>        <tr><td><?status_indicator()?>**_(Stopped)_**. _(Configuration valid)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-          <td>**<?=_('Start')?>** <?=_("will bring the array on-line and start **$resync**")?>.</td></tr>
+          <td>**<?=_('Start')?>** <?=sprintf(_("will bring the array on-line and start **%s**"),$resync)?>.</td></tr>
 <?      elseif ($action[0] == "clear"):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(New data disk(s) detected)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
           <td>**_(Start)_** _(will bring the array on-line and start **Disk-Clear** of new data disk(s))_.</td></tr>
