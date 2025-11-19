@@ -10,9 +10,13 @@
 #
 # LimeTech - modified for Unraid OS
 # Bergware - modified for Unraid OS, October 2023
+# Simon Fairweather - modified for Unraid OS, November 2025(SRIOV)
 
 # run & log functions
 . /etc/rc.d/rc.runlog
+
+# LimeTech/SF - setup selected devices for sriov
+/usr/local/sbin/sriov 1>/var/log/sriov 2>/var/log/sriov-errors
 
 # import CA proxy
 UNPROXY=/boot/config/plugins/dynamix/outgoingproxy.cfg

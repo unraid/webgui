@@ -776,6 +776,20 @@ if (file_exists($graphql)) {
   anonymize_email($graphql);
 }
 
+// copy sriov log
+$sriov = "/var/log/sriov";
+if (file_exists($sriov)) {
+  $log = "/$diag/logs/sriov.txt";
+  run("todos <$sriov >".escapeshellarg($log));
+}
+
+// copy sriov log
+$srioverrors = "/var/log/sriov-errors";
+if (file_exists($srioverrors)) {
+  $log = "/$diag/logs/sriov-errors.txt";
+  run("todos <$srioverrors >".escapeshellarg($log));
+}
+
 // copy vfio-pci log
 $vfiopci = "/var/log/vfio-pci";
 if (file_exists($vfiopci)) {
