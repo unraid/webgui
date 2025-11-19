@@ -176,6 +176,12 @@ obsolete "folder.view" "2024.10.02"
 obsolete "dynamix.unraid.net" "2025.07.15.1836"
 # Dynamix Date & Time - Removes options from Settings - Date Time settings block everything older than 2025.08.01 (current 2023.10.28)
 obsolete "dynamix.date.time" "2025.08.01"
+# clean up api.json if Connect is not installed
+if [[ ! -f /boot/config/plugins/dynamix.unraid.net.plg ]] && \
+   [[ -f /boot/config/plugins/dynamix.my.servers/configs/api.json ]] && \
+   grep -qE '[[:space:]]*"unraid-api-plugin-connect"[[:space:]]*' /boot/config/plugins/dynamix.my.servers/configs/api.json; then
+  sed -i '/[[:space:]]*"unraid-api-plugin-connect"[[:space:]]*/d' /boot/config/plugins/dynamix.my.servers/configs/api.json
+fi
 
 # If "unraidsafemode" indicated, skip installing extra packages and plugins
 if [[ -f /boot/unraidsafemode ]] || grep -wq unraidsafemode /proc/cmdline; then
