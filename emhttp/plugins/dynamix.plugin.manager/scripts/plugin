@@ -618,8 +618,7 @@ if ($method == 'install' || $method == 'download') {
       done(1);
     }
   }
-  $non_flag_options = array_diff($options, ['force', 'forced']);
-  $forced = in_array('force', $options, true) || in_array('forced', $options, true) || !empty($non_flag_options);
+  $forced = !empty($options);
   if (pathinfo($plugin, PATHINFO_EXTENSION) != "plg") {
     write("plugin: $plugin is not a plg file\n");
     done(1);
