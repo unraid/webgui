@@ -211,7 +211,8 @@ function run($command) {
 // hook programs receives three parameters: type=plugin and method and plugin-name
 //
 function pre_hooks() {
-  global $method, $plugin;
+  global $method, $plugin, $download_only;
+  if ($download_only) return;
   $hooks = "/usr/local/emhttp/plugins/dynamix.plugin.manager/pre-hooks";
   foreach (glob("$hooks/*") as $hook) if (is_executable($hook)) {
     write("Executing hook script: ".basename($hook)."\n");
@@ -224,7 +225,8 @@ function pre_hooks() {
 // hook programs receives four parameters: type=plugin and method and plugin-name and error (empty if none)
 //
 function post_hooks($error='') {
-  global $method, $plugin;
+  global $method, $plugin, $download_only;
+  if ($download_only) return;
   $hooks = "/usr/local/emhttp/plugins/dynamix.plugin.manager/post-hooks";
   foreach (glob("$hooks/*") as $hook) if (is_executable($hook)) {
     write("Executing hook script: ".basename($hook)."\n");
@@ -631,18 +633,14 @@ if ($method == 'install' || $method == 'download') {
   if (preg_match('#^https?://#',$argv[2])) {
     $pluginURL = $argv[2];
     // run hook scripts for pre processing
-    if (!$download_only) {
-      pre_hooks();
-    }
+    pre_hooks();
     $plugin_file = "$tmp/$plugin";
     write("plugin: downloading: $plugin\n");
     if ( (download($pluginURL, $plugin_file, $error) === false) && (download(filter_url($pluginURL), $plugin_file, $error) === false) ) {
       write("plugin: $error\n");
       @unlink($plugin_file);
       // run hook scripts for post processing
-      if (!$download_only) {
-        post_hooks($error);
-      }
+      post_hooks($error);
       done(1);
     }
   } else {
@@ -656,9 +654,7 @@ if ($method == 'install' || $method == 'download') {
       move($plugin_file, "$boot-error");
     }
     // run hook scripts for post processing
-    if (!$download_only) {
-      post_hooks($error);
-    }
+    post_hooks($error);
     done(1);
   }
   $max = plugin('max', $plugin_file, $error) ?: plugin('Unraid', $plugin_file, $error);
@@ -668,9 +664,7 @@ if ($method == 'install' || $method == 'download') {
       move($plugin_file, "$boot-error");
     }
     // run hook scripts for post processing
-    if (!$download_only) {
-      post_hooks($error);
-    }
+    post_hooks($error);
     done(1);
   }
   $symlink = "$plugins/$plugin";
@@ -680,9 +674,7 @@ if ($method == 'install' || $method == 'download') {
     if ($plugin_file == $installed_plugin_file) {
       write("plugin: not re-installing same plugin\n");
       // run hook scripts for post processing
-      if (!$download_only) {
-        post_hooks($error);
-      }
+      post_hooks($error);
       done(1);
     }
     // must have version attributes for re-install
@@ -690,18 +682,14 @@ if ($method == 'install' || $method == 'download') {
     if ($version === false) {
       write("plugin: $error\n");
       // run hook scripts for post processing
-      if (!$download_only) {
-        post_hooks($error);
-      }
+      post_hooks($error);
       done(1);
     }
     $installed_version = plugin('version', $installed_plugin_file, $error);
     if ($installed_version === false) {
       write("plugin: $error\n");
       // run hook scripts for post processing
-      if (!$download_only) {
-        post_hooks($error);
-      }
+      post_hooks($error);
       done(1);
     }
     // check version installation?
@@ -710,24 +698,18 @@ if ($method == 'install' || $method == 'download') {
       if (strcmp($version, $installed_version) < 0) {
         write("plugin: not installing older version\n");
         // run hook scripts for post processing
-        if (!$download_only) {
-          post_hooks($error);
-        }
+        post_hooks($error);
         done(1);
       }
       if (strcmp($version, $installed_version) === 0) {
         write("plugin: not reinstalling same version\n");
         // run hook scripts for post processing
-        if (!$download_only) {
-          post_hooks($error);
-        }
+        post_hooks($error);
         done(1);
       }
     }
     // run hook scripts for pre processing
-    if (!$download_only) {
-      pre_hooks();
-    }
+    pre_hooks();
     if (plugin('install', $plugin_file, $error) === false) {
       write("plugin: $error\n");
       if (dirname($plugin_file) == "$boot") {
@@ -738,18 +720,14 @@ if ($method == 'install' || $method == 'download') {
       $description = "Plugin failed to install";
       exec("$notify -e ".escapeshellarg($event)." -s ".escapeshellarg($subject)." -d ".escapeshellarg($description)." -i 'warning'");
       // run hook scripts for post processing
-      if (!$download_only) {
-        post_hooks($error);
-      }
+      post_hooks($error);
       done(1);
     }
     // remove symlink for re-install
     unlink($symlink);
   } else {
     // run hook scripts for pre processing
-    if (!$download_only) {
-      pre_hooks();
-    }
+    pre_hooks();
     // fresh install
     if (plugin('install', $plugin_file, $error) === false) {
       write("plugin: $error\n");
@@ -757,9 +735,7 @@ if ($method == 'install' || $method == 'download') {
         move($plugin_file, "$boot-error");
       }
       // run hook scripts for post processing
-      if (!$download_only) {
-        post_hooks($error);
-      }
+      post_hooks($error);
       done(1);
     }
   }
@@ -777,9 +753,7 @@ if ($method == 'install' || $method == 'download') {
     my_logger("script: $plugin $script_action", $logger);
   }
   // run hook scripts for post processing
-  if (!$download_only) {
-    post_hooks();
-  }
+  post_hooks();
   done(0);
 }
 
