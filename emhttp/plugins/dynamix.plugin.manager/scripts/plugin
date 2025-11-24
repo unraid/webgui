@@ -23,18 +23,6 @@ Usage: plugin install PLUGIN-FILE [forced]
 
   forced is optional and can be used to install a lower version than currently running.
 
-Usage: plugin download PLUGIN-FILE [forced]
-  download plugin files without executing any Run commands defined for the install method
-
-  PLUGIN-FILE is a plugin definition XML file with ".plg" extension.
-
-  PLUGIN-FILE can be a local file, or a URL.  If a URL, the plugin file is first downloaded to /tmp/plugins.
-
-  forced is optional and can be used to download a lower version than currently running.
-
-  Both install and download commands will process all FILE elements in PLUGIN-FILE which are tagged with the
-  \"install\" method (or that have no method tag).
-
   This command has two major use cases:
 
   1) Invoked at system startup by /etc/rc.d/rc.local on each .plg file found int /boot/config/plugins.
@@ -87,6 +75,15 @@ Usage: plugin update PLUGIN
 
   Note: to support `plugin check` and `plugin update` the plugin file must contain both "pluginURL" and
   "version" attributes.
+
+Usage: plugin download PLUGIN-FILE [TARGET-VERSION] [forced]
+  Downloads plugin files without executing any Run commands defined for the install method.
+  This method first updates the plugin definition file (.plg) to the latest version, then
+  downloads all required files but skips script execution. This makes it suitable for
+  preparing plugin files before an Unraid OS upgrade.
+
+  TARGET-VERSION is optional and specifies the Unraid version to use for version compatibility
+  checks (Min/Max attributes). If omitted, the current Unraid version is used.
 
 Usage: plugin [attribute name] PLUGIN-FILE
 
@@ -296,7 +293,7 @@ function filter_url($url) {
 // is processed for any of those methods.
 //
 function plugin($method, $plugin_file, &$error) {
-  global $unraid, $logger, $download_only;
+  global $logger, $download_only, $check_version;
   $methods = ['install', 'remove'];
 
   // parse plugin definition XML file
@@ -363,13 +360,17 @@ function plugin($method, $plugin_file, &$error) {
     $name = $file->attributes()->Name ?: '';
     // bergware - check Unraid version dependency (if present)
     $min = $file->attributes()->Min;
-    if ($min && version_compare($unraid['version'],$min,'<')) {
-      write("plugin: skipping: ".basename($name)." - Unraid version too low, requires at least version $min\n");
+    if ($min && version_compare($check_version,$min,'<')) {
+      if (!$download_only) {
+        write("plugin: skipping: ".basename($name)." - Unraid version too low, requires at least version $min\n");
+      }
       continue;
     }
     $max = $file->attributes()->Max;
-    if ($max && version_compare($unraid['version'],$max,'>')) {
-      write("plugin: skipping: ".basename($name)." - Unraid version too high, requires at most version $max\n");
+    if ($max && version_compare($check_version,$max,'>')) {
+      if (!$download_only) {
+        write("plugin: skipping: ".basename($name)." - Unraid version too high, requires at most version $max\n");
+      }
       continue;
     }
     // Name can be missing but only makes sense if Run attribute is present
@@ -478,7 +479,6 @@ function plugin($method, $plugin_file, &$error) {
         my_logger("running: $command $file->LOCAL", $logger);
         $retval = run("$command $file->LOCAL");
       } elseif ($file->INLINE) {
-
         $name = '/tmp/inline'.$current_file.'-'.pathinfo($plugin_file, PATHINFO_FILENAME).'.sh';
         file_put_contents($name, $file->INLINE);
         $exec = $command." ".escapeshellarg($name);
@@ -511,15 +511,31 @@ $args          = array_slice($argv, 2);
 $extra_args    = array_slice($args, 1); // anything after the plugin path
 $builtin       = ['unRAIDServer','unRAIDServer-'];
 
+// Load Unraid version and initialize check_version
+$unraid = parse_ini_file('/etc/unraid-version');
+$check_version = $unraid['version'];
+
 // Optional flags
+// nchan must be the final argument
 $nchan = ($argc > 0) && ($argv[$argc-1] === 'nchan'); // console or nchan output
 if ($nchan) array_pop($extra_args);
-$forced = !empty($extra_args); // any extra arg (besides nchan) signals forced
 
-// Normalize download to reuse the install flow while skipping run steps.
+// Extract target version if present (for download/update methods)
+// Version pattern: starts with digit, contains dots, optionally has dash suffix (e.g., "7.2.0", "7.2.0-rc.1")
+if (!empty($extra_args) && ($method === 'download' || $method === 'update')) {
+  $first_arg = $extra_args[0];
+  if (preg_match('/^\d+\.\d+\.\d+(-.*)?$/', $first_arg)) {
+    $check_version = $first_arg;
+    array_shift($extra_args);
+  }
+}
+
+$forced = !empty($extra_args); // any extra arg (besides nchan and TARGET-VERSION) signals forced
+
+// Normalize download to reuse the update flow while skipping run steps.
 if ($method === 'download') {
   $download_only = true;
-  $method = 'install';
+  $method = 'update';
 }
 
 // In following code,
@@ -616,7 +632,6 @@ if ($argc < 3) {
 // b) [plugin_file] is a URL
 // c) dirname of [plugin_file] is not /boot/config/plugins
 //
-$unraid = parse_ini_file('/etc/unraid-version');
 if ($method == 'install') {
   $argv[2] = preg_replace('#[\x00-\x1F\x80-\xFF]#', '', $argv[2]);
   $plugin = basename($argv[2]);
@@ -647,8 +662,9 @@ if ($method == 'install') {
     $plugin_file = realpath($argv[2]);
   }
   // bergware - check Unraid version dependency (if present)
+  global $check_version;
   $min = plugin('min', $plugin_file, $error);
-  if ($min && version_compare($unraid['version'], $min, '<')) {
+  if ($min && version_compare($check_version, $min, '<')) {
     write("plugin: installed Unraid version is too low, require at least version $min\n");
     if (dirname($plugin_file) == "$boot") {
       move($plugin_file, "$boot-error");
@@ -658,7 +674,7 @@ if ($method == 'install') {
     done(1);
   }
   $max = plugin('max', $plugin_file, $error) ?: plugin('Unraid', $plugin_file, $error);
-  if ($max && version_compare($unraid['version'], $max, '>')) {
+  if ($max && version_compare($check_version, $max, '>')) {
     write("plugin: installed Unraid version is too high, require at most version $max\n");
     if (dirname($plugin_file) == "$boot") {
       move($plugin_file, "$boot-error");
@@ -813,7 +829,11 @@ if ($method == 'check') {
 if ($method == 'update') {
   $plugin = $argv[2];
   $symlink = "$plugins/$plugin";
-  write("plugin: updating: $plugin\n");
+  if ($download_only) {
+    write("plugin: download-only mode enabled, skipping install commands\n");
+  }
+  $action = $download_only ? 'downloading' : 'updating';
+  write("plugin: $action: $plugin\n");
   $installed_plugin_file = @readlink($symlink);
   if ($installed_plugin_file === false) {
     write("plugin: $plugin not installed\n");
@@ -829,14 +849,14 @@ if ($method == 'update') {
   }
   // bergware - check Unraid version dependency (if present)
   $min = plugin('min', $plugin_file, $error);
-  if ($min && version_compare($unraid['version'], $min, '<')) {
+  if ($min && version_compare($check_version, $min, '<')) {
     write("plugin: installed Unraid version is too low, require at least version $min\n");
     // run hook scripts for post processing
     post_hooks($error);
     done(1);
   }
   $max = plugin('max', $plugin_file, $error) ?: plugin('Unraid', $plugin_file, $error);
-  if ($max && version_compare($unraid['version'], $max, '>')) {
+  if ($max && version_compare($check_version, $max, '>')) {
     write("plugin: installed Unraid version is too high, require at most version $max\n");
     // run hook scripts for post processing
     post_hooks($error);
@@ -863,8 +883,9 @@ if ($method == 'update') {
   $target = "$boot/$plugin";
   copy($plugin_file, $target);
   symlink($target, $symlink);
-  write("plugin: $plugin updated\n");
-  my_logger("$plugin updated", $logger);
+  $status = $download_only ? 'downloaded' : 'updated';
+  write("plugin: $plugin $status\n");
+  my_logger("$plugin $status", $logger);
   // run hook scripts for post processing
   post_hooks();
   done(0);
