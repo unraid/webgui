@@ -14,7 +14,7 @@ $logger = 'plugin-manager';
 $usage = <<<EOF
 Process plugin files.
 
-Usage: plugin install PLUGIN-FILE [forced]
+Usage: plugin install PLUGIN-FILE [forced] [download-only]
   install a plugin
 
   PLUGIN-FILE is a plugin definition XML file with ".plg" extension.
@@ -22,6 +22,9 @@ Usage: plugin install PLUGIN-FILE [forced]
   PLUGIN-FILE can be a local file, or a URL.  If a URL, the plugin file is first downloaded to /tmp/plugins.
 
   forced is optional and can be used to install a lower version than currently running.
+
+  download-only is optional and can be used to download and replace plugin files without executing any
+  Run commands defined for the install method.
 
   This command will process all FILE elements in PLUGIN-FILE which are tagged with the "install" method (or
   that have no method tag).
@@ -285,7 +288,7 @@ function filter_url($url) {
 // is processed for any of those methods.
 //
 function plugin($method, $plugin_file, &$error) {
-  global $unraid, $logger;
+  global $unraid, $logger, $download_only;
   $methods = ['install', 'remove'];
 
   // parse plugin definition XML file
@@ -455,6 +458,11 @@ function plugin($method, $plugin_file, &$error) {
     //
     if ($file->attributes()->Run) {
       $command = $file->attributes()->Run;
+      if ($download_only) {
+        $target = $name ?: ($file->LOCAL ?: 'inline script');
+        my_logger("skipping run: $command $target - download-only mode", $logger);
+        continue;
+      }
       if ($name) {
         my_logger("running: $command $name", $logger);
         $retval = run("$command $name");
@@ -484,13 +492,16 @@ function move($src_file, $tar_dir) {
   return rename($src_file, $tar_dir."/".basename($src_file));
 }
 
-$notify  = '/usr/local/emhttp/webGui/scripts/notify';
-$boot    = '/boot/config/plugins';
-$plugins = '/var/log/plugins';
-$tmp     = '/tmp/plugins';
-$method  = $argv[1];
-$builtin = ['unRAIDServer','unRAIDServer-'];
-$nchan   = $argv[$argc-1] == 'nchan'; // console or nchan output
+$notify        = '/usr/local/emhttp/webGui/scripts/notify';
+$boot          = '/boot/config/plugins';
+$plugins       = '/var/log/plugins';
+$tmp           = '/tmp/plugins';
+$download_only = false;
+$script        = $argv[0];
+$method        = $argv[1];
+$optional_args = array_slice($argv, 2);
+$builtin       = ['unRAIDServer','unRAIDServer-'];
+$nchan         = in_array('nchan', $optional_args, true); // console or nchan output
 
 // In following code,
 //  $plugin - is a basename of a plugin, eg, "myplugin.plg"
@@ -506,8 +517,8 @@ if ($argc < 2) {
 // check all installed plugins, except built-in
 //
 if ($method == 'checkall') {
-  if (!$cmd = realpath($argv[0])) {
-    write("Unknown command: {$argv[0]}\n");
+  if (!$cmd = realpath($script)) {
+    write("Unknown command: {$script}\n");
     done(1);
   }
   foreach (glob("$plugins/*.plg", GLOB_NOSORT) as $link) {
@@ -529,8 +540,8 @@ if ($method == 'checkall') {
 // update all installed plugins, which have a update available
 //
 if ($method == 'updateall') {
-  if (!$cmd = realpath($argv[0])) {
-    write("Unknown command: {$argv[0]}\n");
+  if (!$cmd = realpath($script)) {
+    write("Unknown command: {$script}\n");
     done(1);
   }
   foreach (glob("$plugins/*.plg", GLOB_NOSORT) as $link) {
@@ -557,8 +568,8 @@ if ($method == 'updateall') {
 // check built-in only
 //
 if ($method == 'checkos') {
-  if (!$cmd = realpath($argv[0])) {
-    write("Unknown command: {$argv[0]}\n");
+  if (!$cmd = realpath($script)) {
+    write("Unknown command: {$script}\n");
     done(1);
   }
   foreach ($builtin as $link) {
@@ -590,23 +601,34 @@ $unraid = parse_ini_file('/etc/unraid-version');
 if ($method == 'install') {
   $argv[2] = preg_replace('#[\x00-\x1F\x80-\xFF]#', '', $argv[2]);
   $plugin = basename($argv[2]);
+  $options = array_slice($argv, 3);
+  $download_only = in_array('download-only', $options, true) || in_array('download', $options, true);
+  $non_download_options = array_diff($options, ['download-only', 'download']);
+  $forced = in_array('force', $options, true) || in_array('forced', $options, true) || !empty($non_download_options);
   if (pathinfo($plugin, PATHINFO_EXTENSION) != "plg") {
     write("plugin: $plugin is not a plg file\n");
     done(1);
+  }
+  if ($download_only) {
+    write("plugin: download-only mode enabled, skipping install commands\n");
   }
   write("plugin: installing: $plugin\n");
   // check for URL
   if (preg_match('#^https?://#',$argv[2])) {
     $pluginURL = $argv[2];
     // run hook scripts for pre processing
-    pre_hooks();
+    if (!$download_only) {
+      pre_hooks();
+    }
     $plugin_file = "$tmp/$plugin";
     write("plugin: downloading: $plugin\n");
     if ( (download($pluginURL, $plugin_file, $error) === false) && (download(filter_url($pluginURL), $plugin_file, $error) === false) ) {
       write("plugin: $error\n");
       @unlink($plugin_file);
       // run hook scripts for post processing
-      post_hooks($error);
+      if (!$download_only) {
+        post_hooks($error);
+      }
       done(1);
     }
   } else {
@@ -620,7 +642,9 @@ if ($method == 'install') {
       move($plugin_file, "$boot-error");
     }
     // run hook scripts for post processing
-    post_hooks($error);
+    if (!$download_only) {
+      post_hooks($error);
+    }
     done(1);
   }
   $max = plugin('max', $plugin_file, $error) ?: plugin('Unraid', $plugin_file, $error);
@@ -630,7 +654,9 @@ if ($method == 'install') {
       move($plugin_file, "$boot-error");
     }
     // run hook scripts for post processing
-    post_hooks($error);
+    if (!$download_only) {
+      post_hooks($error);
+    }
     done(1);
   }
   $symlink = "$plugins/$plugin";
@@ -640,7 +666,9 @@ if ($method == 'install') {
     if ($plugin_file == $installed_plugin_file) {
       write("plugin: not re-installing same plugin\n");
       // run hook scripts for post processing
-      post_hooks($error);
+      if (!$download_only) {
+        post_hooks($error);
+      }
       done(1);
     }
     // must have version attributes for re-install
@@ -648,35 +676,44 @@ if ($method == 'install') {
     if ($version === false) {
       write("plugin: $error\n");
       // run hook scripts for post processing
-      post_hooks($error);
+      if (!$download_only) {
+        post_hooks($error);
+      }
       done(1);
     }
     $installed_version = plugin('version', $installed_plugin_file, $error);
     if ($installed_version === false) {
       write("plugin: $error\n");
       // run hook scripts for post processing
-      post_hooks($error);
+      if (!$download_only) {
+        post_hooks($error);
+      }
       done(1);
     }
     // check version installation?
-    $forced = $nchan ? ($argc==5 ? $argv[4] : false) : ($argc==4 ? $argv[3] : false);
     if (!$forced) {
       // do not re-install if same plugin already installed or has higher version
       if (strcmp($version, $installed_version) < 0) {
         write("plugin: not installing older version\n");
         // run hook scripts for post processing
-        post_hooks($error);
+        if (!$download_only) {
+          post_hooks($error);
+        }
         done(1);
       }
       if (strcmp($version, $installed_version) === 0) {
         write("plugin: not reinstalling same version\n");
         // run hook scripts for post processing
-        post_hooks($error);
+        if (!$download_only) {
+          post_hooks($error);
+        }
         done(1);
       }
     }
     // run hook scripts for pre processing
-    pre_hooks();
+    if (!$download_only) {
+      pre_hooks();
+    }
     if (plugin('install', $plugin_file, $error) === false) {
       write("plugin: $error\n");
       if (dirname($plugin_file) == "$boot") {
@@ -687,14 +724,18 @@ if ($method == 'install') {
       $description = "Plugin failed to install";
       exec("$notify -e ".escapeshellarg($event)." -s ".escapeshellarg($subject)." -d ".escapeshellarg($description)." -i 'warning'");
       // run hook scripts for post processing
-      post_hooks($error);
+      if (!$download_only) {
+        post_hooks($error);
+      }
       done(1);
     }
     // remove symlink for re-install
     unlink($symlink);
   } else {
     // run hook scripts for pre processing
-    pre_hooks();
+    if (!$download_only) {
+      pre_hooks();
+    }
     // fresh install
     if (plugin('install', $plugin_file, $error) === false) {
       write("plugin: $error\n");
@@ -702,7 +743,9 @@ if ($method == 'install') {
         move($plugin_file, "$boot-error");
       }
       // run hook scripts for post processing
-      post_hooks($error);
+      if (!$download_only) {
+        post_hooks($error);
+      }
       done(1);
     }
   }
@@ -718,7 +761,9 @@ if ($method == 'install') {
     my_logger("script: $plugin executed", $logger);
   }
   // run hook scripts for post processing
-  post_hooks();
+  if (!$download_only) {
+    post_hooks();
+  }
   done(0);
 }
 
