@@ -505,11 +505,16 @@ $boot          = '/boot/config/plugins';
 $plugins       = '/var/log/plugins';
 $tmp           = '/tmp/plugins';
 $download_only = false;
-$script        = $argv[0];
-$method        = $argv[1];
-$optional_args = array_slice($argv, 2);
+$script        = $argv[0] ?? '';
+$method        = $argv[1] ?? '';
+$args          = array_slice($argv, 2);
+$extra_args    = array_slice($args, 1); // anything after the plugin path
 $builtin       = ['unRAIDServer','unRAIDServer-'];
-$nchan         = in_array('nchan', $optional_args, true); // console or nchan output
+
+// Optional flags
+$nchan = ($argc > 0) && ($argv[$argc-1] === 'nchan'); // console or nchan output
+if ($nchan) array_pop($extra_args);
+$forced = !empty($extra_args); // any extra arg (besides nchan) signals forced
 
 // Normalize download to reuse the install flow while skipping run steps.
 if ($method === 'download') {
@@ -615,8 +620,6 @@ $unraid = parse_ini_file('/etc/unraid-version');
 if ($method == 'install') {
   $argv[2] = preg_replace('#[\x00-\x1F\x80-\xFF]#', '', $argv[2]);
   $plugin = basename($argv[2]);
-  $options = array_slice($argv, 3);
-  $forced = !empty($options);
   if (pathinfo($plugin, PATHINFO_EXTENSION) != "plg") {
     write("plugin: $plugin is not a plg file\n");
     done(1);
