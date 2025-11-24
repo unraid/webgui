@@ -511,6 +511,12 @@ $optional_args = array_slice($argv, 2);
 $builtin       = ['unRAIDServer','unRAIDServer-'];
 $nchan         = in_array('nchan', $optional_args, true); // console or nchan output
 
+// Normalize download to reuse the install flow while skipping run steps.
+if ($method === 'download') {
+  $download_only = true;
+  $method = 'install';
+}
+
 // In following code,
 //  $plugin - is a basename of a plugin, eg, "myplugin.plg"
 //  $plugin_file - is an absolute path, eg, "/boot/config/plugins/myplugin.plg"
@@ -606,11 +612,10 @@ if ($argc < 3) {
 // c) dirname of [plugin_file] is not /boot/config/plugins
 //
 $unraid = parse_ini_file('/etc/unraid-version');
-if ($method == 'install' || $method == 'download') {
+if ($method == 'install') {
   $argv[2] = preg_replace('#[\x00-\x1F\x80-\xFF]#', '', $argv[2]);
   $plugin = basename($argv[2]);
   $options = array_slice($argv, 3);
-  $download_only = ($method === 'download');
   $forced = !empty($options);
   if (pathinfo($plugin, PATHINFO_EXTENSION) != "plg") {
     write("plugin: $plugin is not a plg file\n");
