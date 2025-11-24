@@ -14,7 +14,7 @@ $logger = 'plugin-manager';
 $usage = <<<EOF
 Process plugin files.
 
-Usage: plugin install PLUGIN-FILE [forced] [download-only]
+Usage: plugin install PLUGIN-FILE [forced]
   install a plugin
 
   PLUGIN-FILE is a plugin definition XML file with ".plg" extension.
@@ -23,11 +23,17 @@ Usage: plugin install PLUGIN-FILE [forced] [download-only]
 
   forced is optional and can be used to install a lower version than currently running.
 
-  download-only is optional and can be used to download and replace plugin files without executing any
-  Run commands defined for the install method.
+Usage: plugin download PLUGIN-FILE [forced]
+  download plugin files without executing any Run commands defined for the install method
 
-  This command will process all FILE elements in PLUGIN-FILE which are tagged with the "install" method (or
-  that have no method tag).
+  PLUGIN-FILE is a plugin definition XML file with ".plg" extension.
+
+  PLUGIN-FILE can be a local file, or a URL.  If a URL, the plugin file is first downloaded to /tmp/plugins.
+
+  forced is optional and can be used to download a lower version than currently running.
+
+  Both install and download commands will process all FILE elements in PLUGIN-FILE which are tagged with the
+  \"install\" method (or that have no method tag).
 
   This command has two major use cases:
 
@@ -591,20 +597,27 @@ if ($argc < 3) {
   done(1);
 }
 
-// plugin install [plugin_file]
+// plugin install [plugin_file] / plugin download [plugin_file]
 // cases:
 // a) dirname of [plugin_file] is /boot/config/plugins (system startup)
 // b) [plugin_file] is a URL
 // c) dirname of [plugin_file] is not /boot/config/plugins
 //
 $unraid = parse_ini_file('/etc/unraid-version');
-if ($method == 'install') {
+if ($method == 'install' || $method == 'download') {
   $argv[2] = preg_replace('#[\x00-\x1F\x80-\xFF]#', '', $argv[2]);
   $plugin = basename($argv[2]);
   $options = array_slice($argv, 3);
-  $download_only = in_array('download-only', $options, true) || in_array('download', $options, true);
-  $non_download_options = array_diff($options, ['download-only', 'download']);
-  $forced = in_array('force', $options, true) || in_array('forced', $options, true) || !empty($non_download_options);
+  $download_only = ($method === 'download');
+  if (!$download_only) {
+    $legacy_download_flags = array_intersect($options, ['download-only', 'download']);
+    if (!empty($legacy_download_flags)) {
+      write("plugin: use 'plugin download' instead of 'plugin install ... download-only'\n");
+      done(1);
+    }
+  }
+  $non_flag_options = array_diff($options, ['force', 'forced']);
+  $forced = in_array('force', $options, true) || in_array('forced', $options, true) || !empty($non_flag_options);
   if (pathinfo($plugin, PATHINFO_EXTENSION) != "plg") {
     write("plugin: $plugin is not a plg file\n");
     done(1);
@@ -612,7 +625,8 @@ if ($method == 'install') {
   if ($download_only) {
     write("plugin: download-only mode enabled, skipping install commands\n");
   }
-  write("plugin: installing: $plugin\n");
+  $action = $download_only ? 'downloading' : 'installing';
+  write("plugin: $action: $plugin\n");
   // check for URL
   if (preg_match('#^https?://#',$argv[2])) {
     $pluginURL = $argv[2];
@@ -754,11 +768,13 @@ if ($method == 'install') {
   if (!plugin('noInstall', $plugin_file, $error)) {
     if ($target != $plugin_file) copy($plugin_file, $target);
     symlink($target, $symlink);
-    write("plugin: $plugin installed\n");
-    my_logger("$plugin installed", $logger);
+    $status = $download_only ? 'downloaded' : 'installed';
+    write("plugin: $plugin $status\n");
+    my_logger("$plugin $status", $logger);
   } else {
-    write("script: $plugin executed\n");
-    my_logger("script: $plugin executed", $logger);
+    $script_action = $download_only ? 'staged' : 'executed';
+    write("script: $plugin $script_action\n");
+    my_logger("script: $plugin $script_action", $logger);
   }
   // run hook scripts for post processing
   if (!$download_only) {
