@@ -611,13 +611,6 @@ if ($method == 'install' || $method == 'download') {
   $plugin = basename($argv[2]);
   $options = array_slice($argv, 3);
   $download_only = ($method === 'download');
-  if (!$download_only) {
-    $legacy_download_flags = array_intersect($options, ['download-only', 'download']);
-    if (!empty($legacy_download_flags)) {
-      write("plugin: use 'plugin download' instead of 'plugin install ... download-only'\n");
-      done(1);
-    }
-  }
   $forced = !empty($options);
   if (pathinfo($plugin, PATHINFO_EXTENSION) != "plg") {
     write("plugin: $plugin is not a plg file\n");
