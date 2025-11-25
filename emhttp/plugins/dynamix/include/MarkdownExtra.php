@@ -778,7 +778,7 @@ class MarkdownExtra extends \Michelf\Markdown {
 
 	/**
 	 * Called whenever a tag must be hashed when a function inserts a "clean" tag
-	 * in $text, it passes through this function and is automaticaly escaped,
+	 * in $text, it passes through this function and is automatically escaped,
 	 * blocking invalid nested overlap.
 	 * @param  string $text
 	 * @return string
