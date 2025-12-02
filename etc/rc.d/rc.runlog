@@ -18,8 +18,11 @@ run(){
 log(){
   # log message to syslog
   while IFS=$'\n' read -r LINE; do
-    /usr/bin/logger -t $BASENAME -- "$LINE"
-  done <<< ${1:-$(</dev/stdin)}
-  # echo message to console
-  [[ -t 1 && -n $1 ]] && /bin/echo "$BASENAME: $1"
+    /usr/bin/logger -t "$BASENAME" -- "$LINE"
+  done <<< "${1:-$(</dev/stdin)}"
+  # echo message to console (only when stdout is a TTY)
+  if [[ -t 1 && -n ${1:-} ]]; then
+    /bin/echo "$BASENAME: $1"
+  fi
+  return 0
 }
