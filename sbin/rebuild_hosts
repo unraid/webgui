@@ -19,7 +19,7 @@ set -euo pipefail
 # run & log functions
 . /etc/rc.d/rc.runlog
 
-trap 'log "rebuild_hosts FAILED with status $? (see previous log lines for context)" || true' ERR
+trap 'log "rebuild_hosts FAILED with status $? (see previous log lines for context)"' ERR
 
 HOSTS_DIR=/etc/hosts.d
 HOSTS_FILE=/etc/hosts
@@ -88,7 +88,7 @@ add_hosts_line() {
   IP_TO_HOSTS["$ip"]="${current_hosts# }"
 
   # Track which fragment files contributed to this IP.
-  # This is just for the trailing "# from 00-base 10-avahi" comment.
+  # This is just for the trailing "# from hostname avahi" comment.
   if [[ -n "$CURRENT_SOURCE" ]]; then
     local current_sources="${IP_TO_SOURCES[$ip]:-}"
 
@@ -145,11 +145,10 @@ for f in "${fragment_files[@]}"; do
   process_file "$f"
 done
 
-# If no fragments defined any IPs, provide a minimal fallback
-if [[ ${#IP_ORDER[@]} -eq 0 ]]; then
-  CURRENT_SOURCE="fallback"
-  add_hosts_line "127.0.0.1" "localhost"
-fi
+# Define the minimum
+CURRENT_SOURCE="builtin"
+add_hosts_line "127.0.0.1" "localhost"
+add_hosts_line "::1" "localhost"
 
 # Emit merged lines in original IP discovery order
 for ip in "${IP_ORDER[@]}"; do
