@@ -155,8 +155,42 @@ case 't1':
         }
         if ( in_array($pciaddress,$sriovvfs)) continue;
         echo ($append) ? "" : "<tr><td></td><td>";
-        exec("lspci -v -s $pciaddress", $outputvfio);
-        if (preg_grep("/vfio-pci/i", $outputvfio)) {
+      exec("lspci -vv -s $pciaddress", $outputvfio);
+      $pcie_speed = '';
+      $pcie_speed_max   = '';
+      $pcie_width = '';
+      $pcie_width_max = '';
+      $speed_downgraded = false;
+      $width_downgraded = false;
+      foreach ($outputvfio as $l) {
+          if (preg_match('/LnkSta:\s+(.+)/', $l, $m)) {
+            $parts = explode(',', $m[1]);
+            
+            $pcie_speed = preg_split('/\s+/', trim($parts[0]))[1];
+            $speed_downgraded = in_array('(downgraded)', preg_split('/\s+/', trim($parts[0])));
+            
+            $pcie_width = preg_split('/\s+/', trim($parts[1]))[1];
+            $width_downgraded = in_array('(downgraded)', preg_split('/\s+/', trim($parts[1])));
+        }
+          if (preg_match('/LnkCap:.*Speed\s+([0-9\.]+GT\/s).*?Width\s+(x\d+)/i', $l, $m)) {
+              $pcie_speed_max = $m[1];
+              $pcie_width_max = $m[2];
+          }
+      }
+
+      preg_match('/([0-9.]+)(.+)/', $pcie_speed, $m);
+      $pcie_speed = $m[1];
+      $pcie_rate = $m[2];
+      $pcie_width = str_replace('x', '', $pcie_width);
+      $pcie_speed_max = str_replace('GT/s', '', $pcie_speed_max);
+      $pcie_width_max = str_replace('x', '', $pcie_width_max);
+
+      $speedcol = $speed_downgraded ? '<span style="color:#fb923c; font-weight:bold;">'.$pcie_speed.'</span>' : $pcie_speed;
+      if ($pcie_speed_max) $speedcol .= '/'.$pcie_speed_max.' '.$pcie_rate;
+      $widthcol = $width_downgraded ? '<span style="color:#fb923c; font-weight:bold;">'.$pcie_width.'</span>' : $pcie_width;
+      if ($pcie_width_max) $widthcol = 'x'.$widthcol.'/'.$pcie_width_max;
+
+       if (preg_grep("/vfio-pci/i", $outputvfio)) {
           echo "<i class=\"fa fa-circle orb green-orb middle\" title=\"",_('Kernel driver in use: vfio-pci'),"\"></i>";
           $isbound = "true";
         }
@@ -170,9 +204,9 @@ case 't1':
           echo (in_array($pciaddress."|".$vd, $vfio_cfg_devices) || in_array($pciaddress, $vfio_cfg_devices)) ? " checked>" : ">";
           } 
         } else { echo "</td><td>"; }
-        echo '</td><td title="';
+        echo '</td><td style="padding-right:12px;" title="';
         foreach ($outputvfio as $line2) echo htmlentities($line2,ENT_QUOTES)."&#10;";
-        echo '">',$line,'</td></tr>';
+        echo '">', $line, '</td><td>', $speedcol, '</td><td>', $widthcol,'</td></tr>';
         if (array_key_exists($pciaddress,$pci_device_diffs)) {
           echo "<tr><td></td><td><td></td><td></td><td>";
           echo "<i class=\"fa fa-warning fa-fw orange-text\" title=\""._('PCI Change')."\n"._('Click to acknowledge').".\" onclick=\"ackPCI('".htmlentities($pciaddress)."','".htmlentities($pci_device_diffs[$pciaddress]['status'])."')\"></i>";
