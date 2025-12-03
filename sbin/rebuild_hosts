@@ -28,6 +28,10 @@ trap 'log "rebuild_hosts FAILED with status $? (see previous log lines for conte
 HOSTS_DIR=/etc/hosts.d
 HOSTS_FILE=/etc/hosts
 
+# Resolve hostname placeholder once.
+HOSTNAME_VALUE=$(cat /etc/HOSTNAME 2>/dev/null || echo "Tower")
+HOST_PLACEHOLDER='@HOSTNAME@'
+
 # Create temp file in same FS as HOSTS_FILE so mv is atomic
 tmpfile=$(mktemp "${HOSTS_FILE}.XXXXXX")
 
@@ -145,6 +149,9 @@ process_file() {
 
     # Skip empty lines
     [[ -z "$line" ]] && continue
+
+    # Replace @HOSTNAME@ placeholder, if present
+    line="${line//$HOST_PLACEHOLDER/$HOSTNAME_VALUE}"
 
     # Split line into fields:
     #   $1 = IP, remaining = hostnames/aliases.
