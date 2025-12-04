@@ -29,7 +29,7 @@ HOSTS_DIR=/etc/hosts.d
 HOSTS_FILE=/etc/hosts
 
 # Resolve hostname placeholder once.
-HOSTNAME_VALUE=$(cat /etc/HOSTNAME 2>/dev/null || echo "Tower")
+HOSTNAME_VALUE=$(hostname -s 2>/dev/null || echo "Tower")
 HOST_PLACEHOLDER='@HOSTNAME@'
 
 # Create temp file in same FS as HOSTS_FILE so mv is atomic

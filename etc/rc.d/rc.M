@@ -31,9 +31,6 @@ if [[ -x /etc/rc.d/rc.setterm ]]; then
   /etc/rc.d/rc.setterm
 fi
 
-# Set the hostname:
-hostname $(cat /etc/HOSTNAME)
-
 # Set the permissions on /var/log/dmesg according to whether the kernel
 # permits non-root users to access kernel dmesg information:
 if [[ -r /proc/sys/kernel/dmesg_restrict ]]; then
