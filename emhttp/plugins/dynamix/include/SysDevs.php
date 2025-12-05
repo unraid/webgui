@@ -39,13 +39,26 @@ function usb_physical_port($usbbusdev) {
   return($physical_busid);
 }
 
-$sriov =  json_decode(getSriovInfoJson(true),true);
-$sriovvfs = getVfListByIommuGroup();
-$sriov_devices=parseVFvalues();
-$sriov_devices_settings=parseVFSettings();
-
 switch ($_POST['table']) {
 case 't1':
+  $sriov =  json_decode(getSriovInfoJson(true),true);
+  $sriovvfs = getVfListByIommuGroup();
+  $sriov_devices=parseVFvalues();
+  $sriov_devices_settings=parseVFSettings();
+
+  $filter =[];
+  $pciothers = ["0x00","0x05","0x06","0x07","0x08","0x09","0x0A","0x0B","0x0C","0x0D","0x0E","0x0F","0x10","0x11","0x12","0x13"];
+
+  $showall = $_POST['showall'];
+  if ($showall == "no") {
+    if ($_POST['showdisplay'] == 'no') $filter = array_merge($filter,["0x03","0x04"]);
+    if ($_POST['shownetwork'] == 'no') $filter[]="0x02";
+    if ($_POST['showstorage'] == 'no') $filter[]="0x01";
+    if ($_POST['showusb'] == 'no') $filter[]="0x0c";
+    if ($_POST['showother'] == 'no') $filter=array_merge($filter,$pciothers);
+    if ($_POST['showsriov'] == 'yes') $showsriov = true; else $showsriov=false;
+  }
+
   exec('for group in $(ls /sys/kernel/iommu_groups/ -1|sort -n);do echo "IOMMU group $group";for device in $(ls -1 "/sys/kernel/iommu_groups/$group"/devices/);do echo -n $\'\t\';lspci -ns "$device"|awk \'BEGIN{ORS=" "}{print "["$3"]"}\';lspci -s "$device";done;done',$groups);
   if (empty($groups)) {
     exec('lspci -n|awk \'{print "["$3"]"}\'',$iommu);
@@ -59,6 +72,32 @@ case 't1':
     $BDF_REGEX = '/^[[:xdigit:]]{2}:[[:xdigit:]]{2}\.[[:xdigit:]]$/';
     $DBDF_PARTIAL_REGEX = '/[[:xdigit:]]{4}:[[:xdigit:]]{2}:[[:xdigit:]]{2}\.[[:xdigit:]]/';
     $vfio_cfg_devices = array ();
+
+    $lsiommu = [];
+    $current = null;
+
+    foreach ($groups as $line) {
+        $line = trim($line);
+
+        // Detect "IOMMU group X"
+        if (preg_match('/^IOMMU group\s+(\d+)/i', $line, $m)) {
+            $current = (int)$m[1];
+            $lsiommu[$current] = [];
+            continue;
+        }
+
+        // Match PCI ID block + PCI address
+        // Example: [8086:7d67] 00:02.0 ...
+        if ($current !== null && preg_match('/\[[0-9a-fA-F]{4}:[0-9a-fA-F]{4}\]\s+([0-9a-fA-F:.]+)/', $line, $m)) {
+            $bdf = $m[1]; // 00:02.0 or 0000:00:02.0
+            // If no domain, prepend 0000:
+            if (!preg_match('/^[0-9a-fA-F]{4}:/', $bdf)) {
+                $bdf = "0000:" . $bdf;
+            }
+            $lsiommu[$current][$bdf] = $line;
+        }
+    }
+    
     if (is_file("/boot/config/vfio-pci.cfg")) {
       // accepts space-separated list of <Bus:Device.Function> or <Domain:Bus:Device.Function> followed by an optional "|" and <Vendor:Device>
       // example: BIND=03:00.0 0000:03:00.0 03:00.0|8086:1533 0000:03:00.0|8086:1533
@@ -120,6 +159,7 @@ case 't1':
     }
     $lines = array_values(array_unique($lines, SORT_STRING));
     $iommuinuse = array ();
+
     foreach ($lines as $pciinuse){
       $string = exec("ls /sys/kernel/iommu_groups/*/devices/$pciinuse -1 -d");
       $string = substr($string,25,2);
@@ -135,25 +175,34 @@ case 't1':
       $groups[] = "\tR[{$removeddata['device']['vendor_id']}:{$removeddata['device']['device_id']}] ".str_replace("0000:","",$removedpci)." ".trim($removeddata['device']['description'],"\n");
     }
     $ackparm = "";
-    foreach ($groups as $line) {
-      if (!$line) continue;
-      if (in_array($line,$sriovvfs)) continue;
-      if ($line[0]=='I') {
-        if (isset($spacer)) echo "<tr><td colspan='2' class='thin'></td>"; else $spacer = true;
-        echo "</tr><tr><td>$line:</td><td>";
-        $iommu = substr($line, 12);
-        $append = true;
-      } else {
+    #echo "<tr><td>Filter:";var_dump($filter); echo "</td></tr>";
+    foreach ($lsiommu as $key => $group) {
+      $pciidcheck = array_key_first($group);
+      if (in_array($pciidcheck,$sriovvfs)) continue;
+      # Filter devices.
+      if ($showsriov == "yes" && !array_key_exists($pciidcheck,$sriov)) continue;
+      if ($showsriov == "yes" && !in_array(substr($sriov[$pciidcheck]['class_id'],0,4),$allowedPCIClass)) continue;    
+      $iommu = $key;
+      $iommushow = true;
+      foreach ($group as $pciaddress => $line) {
+        if (!$line) continue;
+        [$class, $class_id, $name] = getPciClassNameAndId($pciaddress);
+        if (in_array(substr($class_id,0,4),$filter)) continue;
+        if ($iommushow) {
+          if (isset($spacer)) echo "<tr><td colspan='2' class='thin'></td>"; else $spacer = true;
+          echo "</tr><tr><td>IOMMU group $key:</td><td>";
+          $iommushow = false;
+          $append = true;
+        }
         $line = preg_replace("/^\t/","",$line);
         $vd = trim(explode(" ", $line)[0], "[]");
-        $pciaddress = explode(" ", $line)[1];
         $removed = $line[0]=='R' ? true : false;
         if ($removed) $line=preg_replace('/R/', '', $line, 1);
         if (preg_match($BDF_REGEX, $pciaddress)) {
           // By default lspci does not output the <Domain> when the only domain in the system is 0000. Add it back.
           $pciaddress = "0000:".$pciaddress;
         }
-        if ( in_array($pciaddress,$sriovvfs)) continue;
+        [$class, $class_id, $name] = getPciClassNameAndId($pciaddress);
         echo ($append) ? "" : "<tr><td></td><td>";
         exec("lspci -v -s $pciaddress", $outputvfio);
         if (preg_grep("/vfio-pci/i", $outputvfio)) {
@@ -190,16 +239,59 @@ case 't1':
             echo "</td></tr>";
           }
         }
-      
+
+        switch (true) {
+          case (strpos($line, 'USB controller') !== false):
+            if (isset($isbound)) {
+              echo '<tr><td></td><td></td><td></td><td></td><td>',_('This controller is bound to vfio, connected USB devices are not visible'),'.</td></tr>';
+            } else {
+              exec('for usb_ctrl in $(find /sys/bus/usb/devices/usb* -maxdepth 0 -type l);do path="$(realpath "${usb_ctrl}")";if [[ $path == *'.$pciaddress.'* ]];then bus="$(cat "${usb_ctrl}/busnum")";lsusb -s $bus:|sort;fi;done',$getusb);
+              foreach($getusb as $usbdevice) {
+                [$bus,$id] = my_explode(':',$usbdevice);
+                $usbport = usb_physical_port($usbdevice);
+                if (strlen($usbport) > 7 ) {$usbport .= "\t"; } else { $usbport .= "\t\t"; }
+                echo "<tr><td></td><td></td><td></td><td></td><td>$bus Port $usbport",trim($id),"</td></tr>";
+              }
+              unset($getusb);
+            }
+            break;
+          case (strpos($line, 'SATA controller') !== false):
+          case (strpos($line, 'Serial Attached SCSI controller') !== false):
+          case (strpos($line, 'RAID bus controller') !== false):
+          case (strpos($line, 'SCSI storage controller') !== false):
+          case (strpos($line, 'IDE interface') !== false):
+          case (strpos($line, 'Mass storage controller') !== false):
+          case (strpos($line, 'Non-Volatile memory controller') !== false):
+            if (isset($isbound)) {
+              echo '<tr><td></td><td></td><td></td><td></td><td>',_('This controller is bound to vfio, connected drives are not visible'),'.</td></tr>';
+            } else {
+              exec('ls -al /sys/block/sd* /sys/block/hd* /sys/block/sr* /sys/block/nvme* 2>/dev/null | grep -i "'.$pciaddress.'"',$getsata);
+              foreach($getsata as $satadevice) {
+                $satadevice = substr($satadevice, strrpos($satadevice, '/', -1)+1);
+                $search = preg_grep('/'.$satadevice.'.*/', $lsscsi);
+                foreach ($search as $deviceline) {
+                  echo '<tr><td></td><td></td><td></td><td></td><td>',$deviceline,'</td></tr>';
+                }
+              }
+              unset($search);
+              unset($getsata);
+            }
+            break;
+          case (strpos($line, 'Ethernet controller') !== false):
+          case (strpos($line, 'Network controller') !== false):
+            $pciips = getIpAddressesByPci($pciidcheck);
+            foreach($pciips as $network => $pciip) {
+              foreach ($pciip as $ip) echo '<tr><td></td><td></td><td></td><td></td><td>',_("Network name"),":",$network," IP:",$ip,'</td></tr>'; 
+            }
+            break;
+        }
 
         if (array_key_exists($pciaddress,$sriov) && in_array(substr($sriov[$pciaddress]['class_id'],0,4),$allowedPCIClass)) {
           echo "<tr><td></td><td></td><td></td><td></td><td>";
           echo _("SRIOV Available VFs").":{$sriov[$pciaddress]['total_vfs']}";
           $num_vfs= $sriov[$pciaddress]['num_vfs'];
           
-          if (isset($sriov_devices[$pciaddress])) 
-            $file_numvfs = $sriov_devices[$pciaddress]['vf_count'];
-          else $file_numvfs = 0;
+          if (isset($sriov_devices[$pciaddress])) $file_numvfs = $sriov_devices[$pciaddress]['vf_count'];else $file_numvfs = 0;
 
           echo '<label for="vf'.$pciaddress.'"> '._('Select number of VFs').': </label>';
           echo '<select class="narrow" name="vf'.$pciaddress.'" id="vf'.$pciaddress.'">';
@@ -210,8 +302,8 @@ case 't1':
 
           // Generate numeric options
           for ($i = 1; $i <= $sriov[$pciaddress]['total_vfs']; $i++) {
-          $selected = ($file_numvfs == $i) ? ' selected' : '';
-          echo "<option value=\"$i\"$selected>$i</option>";
+            $selected = ($file_numvfs == $i) ? ' selected' : '';
+            echo "<option value=\"$i\"$selected>$i</option>";
           }
 
           echo '</select>';
@@ -295,62 +387,30 @@ case 't1':
             echo "</td></tr>";  
           }
         }
-
         unset($outputvfio);
-        switch (true) {
-          case (strpos($line, 'USB controller') !== false):
-            if (isset($isbound)) {
-              echo '<tr><td></td><td></td><td></td><td></td><td>',_('This controller is bound to vfio, connected USB devices are not visible'),'.</td></tr>';
-            } else {
-              exec('for usb_ctrl in $(find /sys/bus/usb/devices/usb* -maxdepth 0 -type l);do path="$(realpath "${usb_ctrl}")";if [[ $path == *'.$pciaddress.'* ]];then bus="$(cat "${usb_ctrl}/busnum")";lsusb -s $bus:|sort;fi;done',$getusb);
-              foreach($getusb as $usbdevice) {
-                [$bus,$id] = my_explode(':',$usbdevice);
-                $usbport = usb_physical_port($usbdevice);
-                if (strlen($usbport) > 7 ) {$usbport .= "\t"; } else { $usbport .= "\t\t"; }
-                echo "<tr><td></td><td></td><td></td><td></td><td>$bus Port $usbport",trim($id),"</td></tr>";
-              }
-              unset($getusb);
-            }
-            break;
-          case (strpos($line, 'SATA controller') !== false):
-          case (strpos($line, 'Serial Attached SCSI controller') !== false):
-          case (strpos($line, 'RAID bus controller') !== false):
-          case (strpos($line, 'SCSI storage controller') !== false):
-          case (strpos($line, 'IDE interface') !== false):
-          case (strpos($line, 'Mass storage controller') !== false):
-          case (strpos($line, 'Non-Volatile memory controller') !== false):
-            if (isset($isbound)) {
-              echo '<tr><td></td><td></td><td></td><td></td><td>',_('This controller is bound to vfio, connected drives are not visible'),'.</td></tr>';
-            } else {
-              exec('ls -al /sys/block/sd* /sys/block/hd* /sys/block/sr* /sys/block/nvme* 2>/dev/null | grep -i "'.$pciaddress.'"',$getsata);
-              foreach($getsata as $satadevice) {
-                $satadevice = substr($satadevice, strrpos($satadevice, '/', -1)+1);
-                $search = preg_grep('/'.$satadevice.'.*/', $lsscsi);
-                foreach ($search as $deviceline) {
-                  echo '<tr><td></td><td></td><td></td><td></td><td>',$deviceline,'</td></tr>';
-                }
-              }
-              unset($search);
-              unset($getsata);
-            }
-            break;
-        }
         unset($isbound);
         $append = false;
+
       }
+      $iommushow = true;
     }
     echo '<tr><td></td><td></td><td></td><td></td><td><br>';
     if (file_exists("/var/log/vfio-pci") && filesize("/var/log/vfio-pci")) {
       echo '<input id="viewlog" type="button" value="'._('View VFIO-PCI Log').'" onclick="openTerminal(\'log\',\'vfio-pci\',\'vfio-pci\')">';
     }
     if ($ackparm == "") $ackdisable =" disabled "; else $ackdisable = "";
-    echo '<input id="applycfg" type="submit" disabled value="'._('Bind selected to VFIO at Boot').'" onclick="applyCfg();" '.(isset($noiommu) ? "style=\"display:none\"" : "").'>';
+    if ($showall == "yes") $applyhidden = ""; else $applyhidden = " hidden ";
+    echo '<input id="applycfg" type="submit"'.$applyhidden.' disabled value="'._('Bind selected to VFIO at Boot').'" onclick="applyCfg();" '.(isset($noiommu) ? "style=\"display:none\"" : "").'>';
     echo '<span id="warning"></span>';
     echo '<input id="applypci" type="submit"'.$ackdisable.' value="'._('Acknowledge all PCI changes').'" onclick="ackPCI(\''.htmlentities($ackparm).'\',\'all\')" >';
     echo '</td></tr>';
     echo <<<EOT
 <script>
 $("#t1 input[type='checkbox']").change(function() {
+  // Only allow mass-changing when showall is ON
+  if (!$(".showall").is(":checked")) {
+    return; // showall = filtered → do nothing
+  }
   var matches = document.querySelectorAll("." + this.className);
   for (var i=0, len=matches.length|0; i<len; i=i+1|0) {
     matches[i].checked = this.checked ? true : false;

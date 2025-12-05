@@ -15,13 +15,136 @@ Tag="server"
  * all copies or substantial portions of the Software.
  */
 ?>
+<link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
+<script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
 <script>
-$(function(){
-  $('#t1').load('/webGui/include/SysDevs.php',{table:'t1'});
-  $('#t2').load('/webGui/include/SysDevs.php',{table:'t2'});
-  $('#t3').load('/webGui/include/SysDevs.php',{table:'t3'});
-  $('#t4').load('/webGui/include/SysDevs.php',{table:'t4'});
+function getSwitchStates() {
+  return {
+    table: 't1',
+    showall: $('.showall').is(':checked') ? 'yes' : 'no',
+    showdisplay: $('.showdisplay').is(':checked') ? 'yes' : 'no',
+    shownetwork: $('.shownetwork').is(':checked') ? 'yes' : 'no',
+    showstorage: $('.showstorage').is(':checked') ? 'yes' : 'no',
+    showusb: $('.showusb').is(':checked') ? 'yes' : 'no',
+    showother: $('.showother').is(':checked') ? 'yes' : 'no',
+    showsriov: $('.showsriov').is(':checked') ? 'yes' : 'no'
+  };
+}
+
+function reloadT1() {
+  $('#t1').load('/webGui/include/SysDevs.php', getSwitchStates());
+}
+  
+$(function() {
+
+  const otherSwitches = ['showdisplay', 'shownetwork', 'showstorage', 'showusb', 'showsriov', 'showother'];
+  let suppress = false;
+
+  function updateApplyButtonVisibility() {
+    if ($('.showall').is(':checked')) {
+      $('#applycfg').show();
+    } else {
+      $('#applycfg').hide();
+    }
+  }
+
+  // Set raw checkbox state BEFORE initializing switchButton
+  function setRawCheckbox(cls, state) {
+    $('.' + cls).prop('checked', state);
+  }
+
+  function setSwitch(cls, state) {
+    setRawCheckbox(cls, state);
+    $('.' + cls).switchButton('option', 'checked', state);
+  }
+
+  // --------------------------------------------------
+  // INITIAL STATES (raw checkboxes only)
+  // --------------------------------------------------
+  setRawCheckbox('showall', true);
+  otherSwitches.forEach(sw => setRawCheckbox(sw, false));
+
+  const switchDefs = [
+    {cls:'showall', cookie:'sysdev_showall', on:'_(Show All)_', off:'_(Filtered)_' },
+    {cls:'showdisplay', cookie:'sysdev_showdisplay', on:'_(Show GPUs/Audio)_', off:'_(Don\'t show GPUs/Audio)_' },
+    {cls:'shownetwork', cookie:'sysdev_shownetwork', on:'_(Show Networks)_', off:'_(Don\'t show networks)_' },
+    {cls:'showstorage', cookie:'sysdev_showstorage', on:'_(Show storage)_', off:'_(Don\'t show storage)_' },
+    {cls:'showusb', cookie:'sysdev_showusb', on:'_(Show USB)_', off:'_(Don\'t show USB)_' },
+    {cls:'showother', cookie:'sysdev_showusb', on:'_(Show all other devs)_', off:'_(Don\'t show all others)_' },
+    {cls:'showsriov', cookie:'sysdev_showsriov', on:'_(Show sriov)_', off:'_(Don\'t filter SRIOVs)_' }
+  ];
+
+  // --------------------------------------------------
+  // Initialize visual switchButtons
+  // --------------------------------------------------
+  switchDefs.forEach(sw => {
+    $('.' + sw.cls).switchButton({
+      labels_placement: "left",
+      on_label: sw.on,
+      off_label: sw.off,
+      checked: $('.' + sw.cls).is(':checked')
+    });
+  });
+
+  // --------------------------------------------------
+  // INITIAL LOADS
+  // --------------------------------------------------
+  reloadT1();
+  ['t2','t3','t4'].forEach(tbl => {
+    $('#' + tbl).load('/webGui/include/SysDevs.php', { table: tbl });
+  });
+
+  // --------------------------------------------------
+  // SWITCH LOGIC
+  // --------------------------------------------------
+  switchDefs.forEach(sw => {
+
+    $('.' + sw.cls).on('change', function () {
+      if (suppress) return;
+
+      const state = $('.' + sw.cls).is(':checked');
+      $.cookie(sw.cookie, state ? 'yes' : 'no', {expires:3650});
+
+      suppress = true;
+
+      // --------------------------------------------------
+      // MASTER SWITCH: showall
+      // --------------------------------------------------
+      if (sw.cls === 'showall') {
+        if (state) {
+          // turn OFF all other switches
+          otherSwitches.forEach(s => setSwitch(s, false));
+        }
+        suppress = false;
+        reloadT1();
+        return;
+      }
+
+      // --------------------------------------------------
+      // CHILD SWITCHES
+      // --------------------------------------------------
+      if (state) {
+        // any child ON → showall OFF
+        setSwitch('showall', false);
+        $.cookie('sysdev_showall', 'no', {expires:3650});
+
+        // If sriov ON → also turn ON network
+        if (sw.cls === 'showsriov') {
+          setSwitch('shownetwork', true);
+          $.cookie('sysdev_shownetwork', 'yes', {expires:3650});
+        }
+      }
+
+      suppress = false;
+          // NEW: update apply button visibility
+    updateApplyButtonVisibility();
+      reloadT1();
+    });
+
+  });
+
 });
+
 function applyCfg() {
   var message = "_(System Devices)_: _(A reboot is required to apply changes)_";
   var string = "BIND=";
@@ -89,7 +212,7 @@ function saveVFSettingsConfig(pciId,vd,interactive=1) {
           showConfirmButton: false
         });
     } 
-    if (interactive == 1)  $('#t1').load('/webGui/include/SysDevs.php', { table: 't1' });
+    if (interactive == 1)  reloadT1();
   });
 }
 function saveVFsConfig(pciId,vd,interactive=1) {
@@ -108,7 +231,7 @@ function saveVFsConfig(pciId,vd,interactive=1) {
           showConfirmButton: false
         });
     } 
-    if (interactive == 1)  $('#t1').load('/webGui/include/SysDevs.php', { table: 't1' });
+    if (interactive == 1)  reloadT1();
   });
 
 }
@@ -435,7 +558,7 @@ function doVFSettingApply(pciId, vd, vfio, mac, currentvfio, currentmac, message
     }
 
     // Always reload the table
-    $('#t1').load('/webGui/include/SysDevs.php', { table: 't1' });
+    reloadT1();
   })
 
   // Network failure
@@ -500,7 +623,7 @@ function doVFApply(pciId, vd, numvfs, message) {
     });
 
       // Reload table
-      $('#t1').load('/webGui/include/SysDevs.php', { table: 't1' });
+      reloadT1();
     })
   .fail(function (xhr, status, error) {
     swal({
@@ -581,7 +704,7 @@ function ackPCI(pcidevice, action) {
     }, function() {
       $.post('/webGui/include/PCIUpdate.php', { action: action, pciid: pcidevice }).done(function(d) {
         if (d === "OK") {
-          $('#t1').load('/webGui/include/SysDevs.php', { table: 't1' });
+          reloadT1();
         }
       });
     });
@@ -604,7 +727,17 @@ function ackPCI(pcidevice, action) {
 <?=my_hyperlink(_("To see natural IOMMU groups for your hardware, go to the [VM Manager] page and set the **PCIe ACS override** setting to **Disabled**"),'/Settings/VMSettings')?>.</p>
 <?endif;?>
 
-<pre><form id="vfiopci" class="js-confirm-leave" onsubmit="return false"><table id='t1' class='pre'><tr><td><div class="spinner"></div></td></tr></table></form></pre><br>
+<pre><form id="vfiopci" class="js-confirm-leave" onsubmit="return false">
+<span class="buttons-spaced" >
+<input type="checkbox" hidden class="showall">_(Filter options when not all)_:
+<input type="checkbox" hidden class="showsriov">
+<input type="checkbox" hidden class="showdisplay">
+<input type="checkbox" hidden class="shownetwork">
+<input type="checkbox" hidden class="showstorage">
+<input type="checkbox" hidden class="showusb">
+<input type="checkbox" hidden class="showother">
+</span>
+<table id='t1' class='pre'><tr><td><div class="spinner"></div></td></tr></table></form></pre><br>
 
 **_(CPU Thread Pairings)_**
 

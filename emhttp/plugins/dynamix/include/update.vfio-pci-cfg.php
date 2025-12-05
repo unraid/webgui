@@ -15,17 +15,35 @@ $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Secure.php";
 require_once "$docroot/webGui/include/Wrappers.php";
 
+function stripVFPrefix($str)
+{
+    return preg_replace('/^VFSETTINGS=/','', trim($str));
+}
+
 function parseVF($str)
 {
+    $str = stripVFPrefix($str);
+    if ($str === '') return [];
+
     $blocks = preg_split('/\s+/', trim($str));
     $result = [];
+
     foreach ($blocks as $block) {
         if ($block === '') continue;
+
         $parts = explode('|', $block);
-        for ($i = 0; $i < 4; $i++) if (!isset($parts[$i])) $parts[$i] = '';
-        $key = $parts[0] . '|' . $parts[1];
-        $result[$key] = [$parts[2], $parts[3]];
+
+        // Normalize fields: pci|vd|fn|mac
+        $pci = $parts[0] ?? '';
+        $vd  = $parts[1] ?? '';
+        $fn  = $parts[2] ?? '';
+        $mac = $parts[3] ?? '';
+
+        // Unique key: pci + vendor:device
+        $key = $pci . '|' . $vd;
+        $result[$key] = [$fn, $mac];
     }
+
     return $result;
 }
 
@@ -33,42 +51,63 @@ function isValidVF($fields)
 {
     list($fn, $mac) = $fields;
     $mac = strtolower(trim($mac));
-    $isZeroMac = ($mac === '00:00:00:00:00:00');
-    $hasMac = ($mac !== '' && !$isZeroMac);
-    if ($fn === 1) return true;
-    if ($fn > 1) return true;
-    if ($fn === 0) return $hasMac;
-    return $hasMac;
+
+    // Common empty MAC
+    $isZeroMac = ($mac === '' || $mac === '00:00:00:00:00:00');
+
+    // Rule fixes:
+    // - fn=0 is allowed even if empty MAC
+    // - fn=1 must always be accepted
+    // - fn>1 always accepted
+    if ($fn === '0') return true;
+    if ($fn === '1') return true;
+    if (intval($fn) > 1) return true;
+
+    // fallback: require some MAC
+    return !$isZeroMac;
 }
 
 function updateVFSettings($input, $saved)
 {
     $inputParsed = parseVF($input);
     $savedParsed = parseVF($saved);
+
     $updated = [];
-    foreach ($savedParsed as $key => $_) {
-        if (isset($inputParsed[$key]) && isValidVF($inputParsed[$key])) $updated[$key] = $inputParsed[$key];
+
+    // Update existing entries
+    foreach ($savedParsed as $key => $oldFields) {
+        if (isset($inputParsed[$key]) && isValidVF($inputParsed[$key])) {
+            $updated[$key] = $inputParsed[$key];
+        }
     }
+
+    // Add new entries not in saved
     foreach ($inputParsed as $key => $fields) {
-        if (!isset($savedParsed[$key]) && isValidVF($fields)) $updated[$key] = $fields;
+        if (!isset($savedParsed[$key]) && isValidVF($fields)) {
+            $updated[$key] = $fields;
+        }
     }
+
+    // Reassemble output
     $result = [];
-    foreach ($savedParsed as $key => $_) {
-        if (!isset($updated[$key])) continue;
-        list($pci,$vd) = explode('|',$key);
-        list($fn,$mac) = $updated[$key];
-        if ($fn === '1' && ($mac === '' || $mac === null)) $mac = '00:00:00:00:00:00';
+
+    foreach ($updated as $key => $fields) {
+        list($pci, $vd) = explode('|', $key);
+        list($fn, $mac) = $fields;
+
+        // Normalize MAC for fn=1 if empty
+        if ($fn === '1' && trim($mac) === '') {
+            $mac = '00:00:00:00:00:00';
+        }
+
         $result[] = "$pci|$vd|$fn|$mac";
     }
-    foreach ($inputParsed as $key => $_) {
-        if (isset($savedParsed[$key])) continue;
-        if (!isset($updated[$key])) continue;
-        list($pci,$vd) = explode('|',$key);
-        list($fn,$mac) = $updated[$key];
-        if ($fn === '1' && ($mac === '' || $mac === null)) $mac = '00:00:00:00:00:00';
-        $result[] = "$pci|$vd|$fn|$mac";
+
+    if (empty($result)) {
+        return "";
     }
-    return implode(' ', $result);
+
+    return "VFSETTINGS=" . implode(' ', $result);
 }
 
 
@@ -92,7 +131,6 @@ $newvfcfg  = _var($_POST,'vfcfg');
 $oldvfcfg_updated = updateVFSettings($newvfcfg,$oldvfcfg);
 if (strpos($oldvfcfg_updated,"VFSETTINGS=") !== 0 && $oldvfcfg_updated != "") $oldvfcfg_updated = "VFSETTINGS=".$oldvfcfg_updated;
 
-#file_put_contents("/tmp/updatevfs",[json_encode($oldvfcfg_updated),json_encode($oldvfcfg)]);
 if ($oldvfcfg_updated != $oldvfcfg) {
   if ($oldvfcfg) copy($sriovvfs,"$sriovvfs.bak");
   if ($oldvfcfg_updated) file_put_contents($sriovvfs,$oldvfcfg_updated); else @unlink($sriovvfs);
