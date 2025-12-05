@@ -488,7 +488,7 @@ const displayOptions = <?= json_encode($arrDisplayOptions, JSON_HEX_TAG | JSON_H
 
 <blockquote class="inline_help">
 	<p>
-		Specify the overide storage pool for VM. This option allows you to specify the physical pool/disk used to store the disk images and snapshot data.
+		Specify the override storage pool for VM. This option allows you to specify the physical pool/disk used to store the disk images and snapshot data.
 		Default will follow standard processing and store images in the default location for the share defined in the settings.
 		A pool/disk(Volume) will be the location for images if the default is overridden.
 	</p>
@@ -544,14 +544,14 @@ const displayOptions = <?= json_encode($arrDisplayOptions, JSON_HEX_TAG | JSON_H
 			[$cpu1, $cpu2] = my_preg_split('/[,-]/',$pair);
 			if (!$cpu2) 	$corecount++; else $corecount=$corecount+2;
 		}
-		if (is_array($arrConfig['domain']['vcpu'])) {$coredisable = "disabled"; $vcpubuttontext = "Deselect all";} else {$coredisable = ""; $vcpubuttontext = "Select all";}
+		if (is_array($arrConfig['domain']['vcpu'])) {$coredisable = "disabled"; $vcpubuttontext = _("Deselect all");} else {$coredisable = ""; $vcpubuttontext = _("Select all");}
 		?>
 		<td><span class="advanced">_(vCPUs)_:</span></td>
 		<td>
 			<span class="width"><select id="vcpus" <?=$coredisable?> name="domain[vcpus]" class="domain_vcpus narrow">
 			<?for ($i = 1; $i <= ($corecount); $i++) echo mk_option($arrConfig['domain']['vcpus'], $i, $i);?>
 			</select>
-			<input type="button" value="_(<?=$vcpubuttontext?>)_" id="btnvCPUSelect"/></span>
+			<input type="button" value="<?=$vcpubuttontext?>" id="btnvCPUSelect"/></span>
 		</td>
 		<td></td>
 	</tr>
@@ -1465,7 +1465,7 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 		</td>
 		<td></td>
 	</tr>
-	<tr id="gpubootvga{{INDEX}}" class="hidden"><td>_(Graphics ROM Needed)_?:</td><td><span class="orange-text"><i class="fa fa-warning"></i> _(GPU is primary adapter, vbios may be required)_.</span></td></tr>
+	<tr id="gpubootvga{{INDEX}}" class="hidden"><td>_(Graphics ROM Needed)_:</td><td><span class="orange-text"><i class="fa fa-warning"></i> _(GPU is primary adapter, vbios may be required)_.</span></td></tr>
 </table>
 </script>
 
@@ -2583,7 +2583,7 @@ $(function() {
 		}
 	});
 
-	$("#vmform").on("change", ".gpu", function changeGPUEvent(){
+	$("#vmform").on("change", ".gpu", function changeGPUEvent(){  
 		const ValidGPUs = <?=json_encode($arrValidGPUDevices)?>;
 		var myvalue = $(this).val();
 		var mylabel = $(this).children('option:selected').text();

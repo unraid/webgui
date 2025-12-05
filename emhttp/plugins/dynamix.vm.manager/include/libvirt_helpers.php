@@ -1839,7 +1839,7 @@ class Array2XML {
 		} else {
 			$lastvmerror = $lv->get_last_error();
 			$arrResponse = ['xml' => $xml,'error' => $lastvmerror];
-			write("addLog\0".htmlspecialchars(_("Creating XML Error:$lastvmerror")));
+			write("addLog\0".htmlspecialchars(sprintf(_("Creating XML Error: %s"),$lastvmerror)));
 			file_put_contents("/tmp/vmclonertn.debug", json_encode($arrResponse,JSON_PRETTY_PRINT));
 		}
 
