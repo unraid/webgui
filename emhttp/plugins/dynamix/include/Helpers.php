@@ -856,4 +856,137 @@ HTML;
   
   return $html;
 }
+
+function get_cpu_packages(string $separator = ','): array {
+    $packages = [];
+    foreach (glob("/sys/devices/system/cpu/cpu[0-9]*/topology/thread_siblings_list") as $path) {
+        $pkg_id   = (int)file_get_contents(dirname($path) . "/physical_package_id");
+        $siblings = str_replace(",", $separator, trim(file_get_contents($path)));
+        if (!in_array($siblings, $packages[$pkg_id] ?? [])) {
+            $packages[$pkg_id][] = $siblings;
+        }
+    }
+    foreach ($packages as &$list) {
+        $keys = array_map(fn($s) => (int)explode($separator, $s)[0], $list);
+        array_multisort($keys, SORT_ASC, SORT_NUMERIC, $list);
+    }
+    unset($list);
+    return $packages;
+}
+
+
+function getIpAddressesByPci(string $pciAddress): array
+{
+    $base = "/sys/bus/pci/devices/$pciAddress/net";
+
+    if (!is_dir($base)) {
+        return [];  // PCI address not found or not a network device
+    }
+
+    $interfaces = scandir($base);
+    $ips = [];
+
+    foreach ($interfaces as $iface) {
+        if ($iface === '.' || $iface === '..') continue;
+
+        // Use `ip` command for IPv4 + IPv6
+        $cmd = sprintf('ip -o addr show dev %s 2>/dev/null', escapeshellarg($iface));
+        $output = shell_exec($cmd);
+
+        if (!$output) continue;
+
+        foreach (explode("\n", trim($output)) as $line) {
+
+            // Match IPv4 like: inet 192.168.1.195/24
+            if (preg_match('/inet\s+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+)/', $line, $m)) {
+                $ips[$iface][] = $m[1];
+            }
+
+            // Match IPv6 like: inet6 fe80::1234:abcd/64
+            if (preg_match('/inet6\s+([0-9a-fA-F:]+\/[0-9]+)/', $line, $m)) {
+                $ips[$iface][] = $m[1];
+            }
+        }
+    }
+
+    return $ips;
+}
+
+function getSystemNumaNodeCount() {
+    return count(glob("/sys/devices/system/node/node*"));
+}
+
+function normalizeNumaNode($node, $numNodes) {
+    // If system has only 1 node, interpret -1 as node 0
+    if ($numNodes === 1 && $node === -1) {
+        return 0;
+    }
+    return $node;
+}
+
+function getCpuNumaInfo($numNodes) {
+    $cpus = [];
+
+    foreach (glob("/sys/devices/system/cpu/cpu[0-9]*") as $cpuPath) {
+        $cpu = basename($cpuPath);
+
+        $nodes = glob("$cpuPath/node*");
+        $node = -1;
+
+        if (!empty($nodes)) {
+            $node = intval(str_replace("node", "", basename($nodes[0])));
+        }
+
+        $node = normalizeNumaNode($node, $numNodes);
+
+        $cpus[$cpu] = [
+            "cpu_id" => intval(str_replace("cpu", "", $cpu)),
+            "numa_node" => $node
+        ];
+    }
+
+    return $cpus;
+}
+
+function getPciNumaInfo($numNodes) {
+    $pci = [];
+
+    foreach (glob("/sys/bus/pci/devices/*") as $devPath) {
+        $dev = basename($devPath);
+
+        $numaNodeFile = "$devPath/numa_node";
+        $node = file_exists($numaNodeFile) ? intval(trim(file_get_contents($numaNodeFile))) : -1;
+
+        $node = normalizeNumaNode($node, $numNodes);
+
+        $desc = trim(shell_exec("lspci -mm -s $dev 2>/dev/null"));
+
+        $pci[$dev] = [
+            "pci_address" => $dev,
+            "numa_node" => $node,
+            "description" => $desc
+        ];
+    }
+
+    return $pci;
+}
+
+function getNumaInfo() {
+$numNodes = getSystemNumaNodeCount();
+
+$result = [
+    "system" => [
+        "numa_nodes" => $numNodes
+    ],
+    "cpus" => getCpuNumaInfo($numNodes),
+    "pci_devices" => getPciNumaInfo($numNodes)
+];
+
+if (is_file("/tmp/numain")) {
+  $numain = file_get_contents("/tmp/numain");
+  $result = json_decode($numain,true);
+}
+return $result;
+
+}
 ?>

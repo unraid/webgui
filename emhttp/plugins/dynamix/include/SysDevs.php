@@ -56,7 +56,7 @@ case 't1':
     if ($_POST['showstorage'] == 'no') $filter[]="0x01";
     if ($_POST['showusb'] == 'no') $filter[]="0x0c";
     if ($_POST['showother'] == 'no') $filter=array_merge($filter,$pciothers);
-    if ($_POST['showsriov'] == 'yes') $showsriov = true; else $showsriov=false;
+    $showsriov = ($_POST['showsriov'] == 'yes');
   }
 
   exec('for group in $(ls /sys/kernel/iommu_groups/ -1|sort -n);do echo "IOMMU group $group";for device in $(ls -1 "/sys/kernel/iommu_groups/$group"/devices/);do echo -n $\'\t\';lspci -ns "$device"|awk \'BEGIN{ORS=" "}{print "["$3"]"}\';lspci -s "$device";done;done',$groups);
@@ -180,8 +180,8 @@ case 't1':
       $pciidcheck = array_key_first($group);
       if (in_array($pciidcheck,$sriovvfs)) continue;
       # Filter devices.
-      if ($showsriov == "yes" && !array_key_exists($pciidcheck,$sriov)) continue;
-      if ($showsriov == "yes" && !in_array(substr($sriov[$pciidcheck]['class_id'],0,4),$allowedPCIClass)) continue;    
+      if ($showsriov && !array_key_exists($pciidcheck,$sriov)) continue;
+      if ($showsriov && !in_array(substr($sriov[$pciidcheck]['class_id'],0,4),$allowedPCIClass)) continue;    
       $iommu = $key;
       $iommushow = true;
       foreach ($group as $pciaddress => $line) {
@@ -279,9 +279,10 @@ case 't1':
             break;
           case (strpos($line, 'Ethernet controller') !== false):
           case (strpos($line, 'Network controller') !== false):
-            $pciips = getIpAddressesByPci($pciidcheck);
+            $pciips = getIpAddressesByPci($pciaddress);
             foreach($pciips as $network => $pciip) {
-              foreach ($pciip as $ip) echo '<tr><td></td><td></td><td></td><td></td><td>',_("Network name"),":",$network," IP:",$ip,'</td></tr>'; 
+              echo '<tr><td></td><td></td><td></td><td></td><td>',_("Network name"),": ",$network,'</td></tr>'; 
+              foreach ($pciip as $ip) echo '<tr><td></td><td></td><td></td><td></td><td> IP: ',$ip,'</td></tr>'; 
             }
             break;
         }
