@@ -104,8 +104,8 @@ $arrConfigDefaults = [
 			'autoport' => 'yes',
 			'model' => 'qxl',
 			'keymap' => 'none',
-			'port' => -1 ,
-			'wsport' => -1,
+			'port' => 5900,
+			'wsport' => 5901,
 			'copypaste' => 'no',
 			'render' => 'auto',
 			'DisplayOptions' => ""
@@ -256,7 +256,7 @@ if (isset($_POST['updatevm'])) {
 		$xml = str_replace($olduuid,$newuuid,$xml);
 	} else {
 		// form view
-		if ($error = create_vdisk($_POST) === false) {
+		if (($error = create_vdisk($_POST)) === false) {
 			$arrExistingConfig = custom::createArray('domain',$strXML);
 			$arrUpdatedConfig = custom::createArray('domain',$lv->config_to_xml($_POST));
 			if ($debug) {
@@ -1327,9 +1327,9 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 			?>
 			</select></span>
 			<span id="Porttext" class="label <?=$hiddenport?>">_(VM Console Port)_:</span>
-			<input id="port" type="number" size="5" maxlength="5" class="trim second <?=$hiddenport?>" name="gpu[<?=$i?>][port]" value="<?=$arrGPU['port']?>">
+			<input id="port" onchange="checkVNCPorts()" min="5900" max="65535" type="number" size="5" maxlength="5" class="trim second <?=$hiddenport?>" name="gpu[<?=$i?>][port]" value="<?=$arrGPU['port']?>">
 			<span id="WSPorttext" class="label <?=$hiddenwsport?>">_(VM Console WS Port)_:</span>
-			<input id="wsport" type="number" size="5" maxlength="5" class="trim second <?=$hiddenwsport?>" name="gpu[<?=$i?>][wsport]" value="<?=$arrGPU['wsport']?>">
+			<input id="wsport" onchange="checkVNCPorts()" min="5900" max="65535" type="number" size="5" maxlength="5" class="trim second <?=$hiddenwsport?>" name="gpu[<?=$i?>][wsport]" value="<?=$arrGPU['wsport']?>">
 		</td>
 		<td></td>
 	</tr>
@@ -2124,6 +2124,18 @@ foreach ($arrConfig['evdev'] as $i => $arrEvdev) {
 var storageType = "<?=get_storage_fstype($arrConfig['template']['storage']);?>";
 var storageLoc  = "<?=$arrConfig['template']['storage']?>";
 
+function checkVNCPorts() {
+	const port = $("#port").val();
+	const wsport = $("#wsport").val();
+	if (port < 5900 || port > 65535 || wsport < 5900 || wsport > 65535 || port == wsport) {
+		swal({
+			title: "_(Invalid Port)_",
+			text: "_(VNC/SPICE ports must be between 5900 and 65535, and cannot be equal to each other)_",
+			type: "error",
+			confirmButtonText: "_(Ok)_"
+		});
+	}
+}
 function updateMAC(index, port) {
 	var wlan0 = '<?=$mac?>'; // mac address of wlan0
 	var mac = $('input[name="nic['+index+'][mac]"');
@@ -2634,6 +2646,13 @@ $(function() {
 		regenerateDiskPreview();
 	});
 	<?endif?>
+
+	$("#vmform #domain_machine").change(function changeMachineEvent(){
+		// Cdrom Bus: select IDE for i440 and SATA for q35
+		if ($(this).val().indexOf('q35') != -1) {		
+			$('#vmform .cdrom_bus').val('sata');
+		}
+	});
 
 	$("#vmform .domain_vcpu").change(function changeVCPUEvent(){
 		var $cores = $("#vmform .domain_vcpu:checked");

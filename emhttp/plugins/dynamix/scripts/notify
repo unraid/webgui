@@ -104,6 +104,37 @@ function clean_subject($subject) {
   return $subject;
 }
 
+/**
+ * Wrap string values in double quotes for INI compatibility and escape quotes/backslashes.
+ * Numeric types remain unquoted so they can be parsed as-is.
+ */
+function ini_encode_value($value) {
+  if (is_int($value) || is_float($value)) return $value;
+  if (is_bool($value)) return $value ? 'true' : 'false';
+  $value = (string)$value;
+  return '"'.strtr($value, ["\\"=>"\\\\", '"' => '\\"']).'"';
+}
+
+function build_ini_string(array $data) {
+  $lines = [];
+  foreach ($data as $key => $value) {
+    $lines[] = "{$key}=".ini_encode_value($value);
+  }
+  return implode("\n", $lines)."\n";
+}
+
+/**
+ * Trims and unescapes strings (eg quotes, backslashes) if necessary.
+ */
+function ini_decode_value($value) {
+  $value = trim($value);
+  $length = strlen($value);
+  if ($length >= 2 && $value[0] === '"' && $value[$length-1] === '"') {
+    return stripslashes(substr($value, 1, -1));
+  }
+  return $value;
+}
+
 // start
 if ($argc == 1) exit(usage());
 
@@ -222,10 +253,29 @@ case 'add':
   $archive = "{$archive}/".safe_filename("{$event}-{$ticket}.notify");
   if (file_exists($archive)) break;
   $entity = $overrule===false ? $notify[$importance] : $overrule;
-  if (!$mailtest) file_put_contents($archive,"timestamp=$timestamp\nevent=$event\nsubject=$subject\ndescription=$description\nimportance=$importance\n".($message ? "message=".str_replace('\n','<br>',$message)."\n" : ""));
-  if (($entity & 1)==1 && !$mailtest && !$noBrowser) file_put_contents($unread,"timestamp=$timestamp\nevent=$event\nsubject=$subject\ndescription=$description\nimportance=$importance\nlink=$link\n");
-  if (($entity & 2)==2 || $mailtest) generate_email($event, clean_subject($subject), str_replace('<br>','. ',$description), $importance, $message, $recipients, $fqdnlink);
-  if (($entity & 4)==4 && !$mailtest) { if (is_array($agents)) {foreach ($agents as $agent) {exec("TIMESTAMP='$timestamp' EVENT=".escapeshellarg($event)." SUBJECT=".escapeshellarg(clean_subject($subject))." DESCRIPTION=".escapeshellarg($description)." IMPORTANCE=".escapeshellarg($importance)." CONTENT=".escapeshellarg($message)." LINK=".escapeshellarg($fqdnlink)." bash ".$agent);};}};
+  $cleanSubject = clean_subject($subject);
+  $archiveData = [
+    'timestamp' => $timestamp,
+    'event' => $event,
+    'subject' => $cleanSubject,
+    'description' => $description,
+    'importance' => $importance,
+  ];
+  if ($message) $archiveData['message'] = str_replace('\n','<br>',$message);
+  if (!$mailtest) file_put_contents($archive, build_ini_string($archiveData));
+  if (($entity & 1)==1 && !$mailtest && !$noBrowser) {
+    $unreadData = [
+      'timestamp' => $timestamp,
+      'event' => $event,
+      'subject' => $cleanSubject,
+      'description' => $description,
+      'importance' => $importance,
+      'link' => $link,
+    ];
+    file_put_contents($unread, build_ini_string($unreadData));
+  }
+  if (($entity & 2)==2 || $mailtest) generate_email($event, $cleanSubject, str_replace('<br>','. ',$description), $importance, $message, $recipients, $fqdnlink);
+  if (($entity & 4)==4 && !$mailtest) { if (is_array($agents)) {foreach ($agents as $agent) {exec("TIMESTAMP='$timestamp' EVENT=".escapeshellarg($event)." SUBJECT=".escapeshellarg($cleanSubject)." DESCRIPTION=".escapeshellarg($description)." IMPORTANCE=".escapeshellarg($importance)." CONTENT=".escapeshellarg($message)." LINK=".escapeshellarg($fqdnlink)." bash ".$agent);};}};
   break;
 
 case 'get':
@@ -241,9 +291,12 @@ case 'get':
     $output[$i]['show'] = (fileperms($file) & 0x0FFF)==0400 ? 0 : 1;
     foreach ($fields as $field) {
       if (!$field) continue;
-      [$key,$val] = array_pad(explode('=', $field),2,'');
+      # limit the explode('=', …) used during reads to two pieces so values containing = remain intact
+      [$key,$val] = array_pad(explode('=', $field, 2),2,'');
       if ($time) {$val = date($notify['date'].' '.$notify['time'], $val); $time = false;}
-      $output[$i][trim($key)] = trim($val);
+      # unescape the value before emitting JSON, so the browser UI
+      # and any scripts calling `notify get` still see plain strings
+      $output[$i][trim($key)] = ini_decode_value($val);
     }
     $i++;
   }

@@ -497,7 +497,7 @@ run("lscpu 2>/dev/null|todos >".escapeshellarg("/$diag/system/lscpu.txt"));
 run("lsscsi -vgl 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsscsi.txt"));
 run("lspci -knn 2>/dev/null|todos >".escapeshellarg("/$diag/system/lspci.txt"));
 run("lspci -vv 2>/dev/null| awk -b '/ASPM/{print $0}' RS=|grep -P '(^[a-z0-9:.]+|ASPM |Disabled;|Enabled;)'|todos >".escapeshellarg("/$diag/system/aspm-status.txt"));
-run("lsusb 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsusb.txt"));
+run("lsusb -vt 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsusb.txt"));
 run("free -mth 2>/dev/null|todos >".escapeshellarg("/$diag/system/memory.txt"));
 run("lsof -Pni 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsof.txt"));
 run("lsmod|sort 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsmod.txt"));

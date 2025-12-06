@@ -1,9 +1,10 @@
 Menu="Notifications:3"
 Title="Notification Agents"
 Tag="rss-square"
+Focus="initDropdown"
 ---
 <?php
-/* Copyright 2005-2023, Lime Technology
+/* Copyright 2005-2025, Lime Technology
  * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
@@ -21,12 +22,14 @@ var disabledAgents = new Object();
 var openPage = true;
 
 <?$width = [166,300]?>
-<?if ($tabbed):?>
-$('#tab3').bind({click:function(){initDropdown();}});
-$(function(){if ($('#tab3').is(':checked')) initDropdown();});
-<?else:?>
+
+<? if (!$tabbed): ?>
 $(function(){initDropdown();});
-<?endif;?>
+<? else: ?>
+$(function(){
+  if ( $('#tab3').attr('checked') ) initDropdown();
+});
+<? endif; ?>
 
 if (!String.prototype.format) {
   String.prototype.format = function() {

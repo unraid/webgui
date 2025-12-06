@@ -190,6 +190,26 @@ else
     log "Installing /boot/extra packages"
     ( export -f log; find /boot/extra -maxdepth 1 -type f -exec sh -c 'upgradepkg --terse --install-new "$1" | log' -- "{}" \; )
   fi
+  # Move any downloaded plugins in $CONFIG/plugins-nextboot to $CONFIG/plugins so they can be installed
+  if [[ -d "$CONFIG/plugins-nextboot" ]]; then
+    shopt -s nullglob
+    for ITEM in "$CONFIG/plugins-nextboot"/*; do
+      if [[ -f "$ITEM" && "$ITEM" == *.plg ]]; then
+        # Move .plg files
+        mv "$ITEM" "$CONFIG/plugins/" && log "Moved $(basename "$ITEM") from plugins-nextboot to plugins"
+      elif [[ -d "$ITEM" ]]; then
+        # Merge plugin directories
+        PLUGIN_NAME=$(basename "$ITEM")
+        DEST_DIR="$CONFIG/plugins/$PLUGIN_NAME"
+        mkdir -p "$DEST_DIR"
+        cp -r "$ITEM"/* "$DEST_DIR/" 2>/dev/null
+        rm -rf "$ITEM"
+        log "Moved plugin directory $PLUGIN_NAME and contents from plugins-nextboot to plugins"
+      fi
+    done
+    shopt -u nullglob
+    rmdir "$CONFIG/plugins-nextboot" 2>/dev/null;
+  fi
   PRIORITY_PLUGINS=("dynamix.unraid.net.plg")
   # Install priority plugins first
   for PRIORITY_PLUGIN in "${PRIORITY_PLUGINS[@]}"; do
