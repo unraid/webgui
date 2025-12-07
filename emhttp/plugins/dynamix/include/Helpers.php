@@ -1021,28 +1021,46 @@ function getPciLinkInfo($pciAddress)
         "generation"       => null,
     ];
 
-    // Read sysfs values
+    // Read speeds
     foreach ($files as $key => $file) {
         if (!file_exists($file)) continue;
-
-        $value = trim(file_get_contents($file));  // ex: "16.0 GT/s" or "x8"
-        // Speeds
+        $value = trim(file_get_contents($file));
+        // Handle speeds
         if (strpos($key, 'speed') !== false) {
             if (preg_match('/([0-9.]+)/', $value, $m)) {
                 $out[$key] = floatval($m[1]);
             }
         }
-        // Widths
-        elseif (strpos($key, 'width') !== false) {
-            $width = intval(str_replace('x', '', $value));
-            // Suppress invalid widths: 0 or 255
-            if ($width === 0 || $width === 255) {
-                $out[$key] = null;
-            } else {
-                $out[$key] = $width;
-            }
+
+        // Handle widths (do not apply suppression yet)
+        if ($key === 'max_width') {
+            $out['max_width_raw'] = intval(str_replace('x', '', $value));
+        }
+        if ($key === 'current_width') {
+            $out['current_width_raw'] = intval(str_replace('x', '', $value));
         }
     }
+
+    // Apply width rules
+    $max = $out['max_width_raw'] ?? null;
+    $cur = $out['current_width_raw'] ?? null;
+
+    if ($max === 255) {
+        // Invalid / not reported
+        $out["max_width"] = null;
+        $out["current_width"] = null;
+    } else {
+        // Valid max width → keep 0 as 0
+        $out["max_width"] = $max;
+
+        if ($cur === 0) {
+            // 0 is valid when max != 255
+            $out["current_width"] = 0;
+        } else {
+            $out["current_width"] = $cur;
+        }
+    }
+    unset($out["max_width_raw"], $out["current_width_raw"]);  // Cleanup
     // Downgrade flags
     if ($out["current_speed"] && $out["max_speed"]) {
         $out["speed_downgraded"] = ($out["current_speed"] < $out["max_speed"]);
