@@ -245,7 +245,8 @@ case 't1':
         $pcispeed = getPciLinkInfo($pciaddress);
         $speedcol = $pcispeed['speed_downgraded'] ? '<span class="orange-text">'.$pcispeed['current_speed'].'</span>' : $pcispeed['current_speed'];
         if ($pcispeed['max_speed']) $speedcol .= '/'.$pcispeed['max_speed'].' '.$pcispeed['rate'];
-        $widthcol = $pcispeed['width_downgraded'] ? '<span class="orange-text">x'.$pcispeed['current_width'].'</span>' : 'x'.$pcispeed['current_width'];
+        if (isset($pcispeed['current_width'])) $current_width = 'x'.$pcispeed['current_width']; else $current_width = '';
+        $widthcol = $pcispeed['width_downgraded'] ? '<span class="orange-text">'.$current_width.'</span>' : $current_width;
         if ($pcispeed['max_width']) $widthcol = $widthcol.'/'.$pcispeed['max_width'];
         echo $speedcol, '</td><td>', $widthcol;
         if (isset($pcispeed['generation'])) echo'(Gen:'.$pcispeed['generation'].')';
