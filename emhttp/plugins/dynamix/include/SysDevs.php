@@ -241,7 +241,15 @@ case 't1':
         } else { echo "</td><td>"; }
         echo '</td><td title="';
         foreach ($outputvfio as $line2) echo htmlentities($line2,ENT_QUOTES)."&#10;";
-        echo '">',$line,'</td></tr>';
+        echo '">',$line,'</td><td>';
+        $pcispeed = getPciLinkInfo($pciaddress);
+        $speedcol = $pcispeed['speed_downgraded'] ? '<span class="orange-text">'.$pcispeed['current_speed'].'</span>' : $pcispeed['current_speed'];
+        if ($pcispeed['max_speed']) $speedcol .= '/'.$pcispeed['max_speed'].' '.$pcispeed['rate'];
+        $widthcol = $pcispeed['width_downgraded'] ? '<span class="orange-text">x'.$pcispeed['current_width'].'</span>' : $pcispeed['current_width'];
+        if ($pcispeed['max_width']) $widthcol = $widthcol.'/'.$pcispeed['max_width'];
+        echo $speedcol, '</td><td>', $widthcol;
+        if (isset($pcispeed['generation'])) echo'(Gen:'.$pcispeed['generation'].')';
+        echo '</td></tr>';
         if (array_key_exists($pciaddress,$pci_device_diffs)) {
           echo "<tr><td></td><td><td></td><td></td><td>";
           echo "<i class=\"fa fa-warning fa-fw orange-text\" title=\""._('PCI Change')."\n"._('Click to acknowledge').".\" onclick=\"ackPCI('".htmlentities($pciaddress)."','".htmlentities($pci_device_diffs[$pciaddress]['status'])."')\"></i>";

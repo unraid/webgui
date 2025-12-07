@@ -992,4 +992,87 @@ function getNumaInfo() {
 
     return $result;
 }
+/**
+ * Get PCIe link data from sysfs with generation + clean GT/s rate.
+ * Suppresses width values of 0 or 255.
+ *
+ * @param string $pciAddress
+ * @return array
+ */
+function getPciLinkInfo($pciAddress)
+{
+    $base = "/sys/bus/pci/devices/$pciAddress";
+
+    $files = [
+        "current_speed" => "$base/current_link_speed",
+        "max_speed"     => "$base/max_link_speed",
+        "current_width" => "$base/current_link_width",
+        "max_width"     => "$base/max_link_width",
+    ];
+
+    $out = [
+        "current_speed"    => null,
+        "max_speed"        => null,
+        "current_width"    => null,
+        "max_width"        => null,
+        "speed_downgraded" => false,
+        "width_downgraded" => false,
+        "rate"             => "GT/s",
+        "generation"       => null,
+    ];
+
+    // Read sysfs values
+    foreach ($files as $key => $file) {
+        if (!file_exists($file)) continue;
+
+        $value = trim(file_get_contents($file));  // ex: "16.0 GT/s" or "x8"
+        // Speeds
+        if (strpos($key, 'speed') !== false) {
+            if (preg_match('/([0-9.]+)/', $value, $m)) {
+                $out[$key] = floatval($m[1]);
+            }
+        }
+        // Widths
+        elseif (strpos($key, 'width') !== false) {
+            $width = intval(str_replace('x', '', $value));
+            // Suppress invalid widths: 0 or 255
+            if ($width === 0 || $width === 255) {
+                $out[$key] = null;
+            } else {
+                $out[$key] = $width;
+            }
+        }
+    }
+    // Downgrade flags
+    if ($out["current_speed"] && $out["max_speed"]) {
+        $out["speed_downgraded"] = ($out["current_speed"] < $out["max_speed"]);
+    }
+    if (
+        $out["current_width"] !== null &&
+        $out["max_width"]     !== null &&
+        $out["current_width"] < $out["max_width"]
+    ) {
+        $out["width_downgraded"] = true;
+    }
+    // PCIe Generation Table
+    $genTable = [
+        1 => 2.5,
+        2 => 5.0,
+        3 => 8.0,
+        4 => 16.0,
+        5 => 32.0,
+        6 => 64.0,
+    ];
+    // Determine generation from max_speed
+    if (!empty($out["max_speed"])) {
+        $speed = $out["max_speed"];
+        foreach ($genTable as $gen => $gt) {
+            if (abs($speed - $gt) < 0.5) {
+                $out["generation"] = $gen;
+                break;
+            }
+        }
+    }
+    return $out;
+}
 ?>
