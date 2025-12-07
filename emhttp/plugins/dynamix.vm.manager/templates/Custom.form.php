@@ -348,6 +348,7 @@ if ($snapshots!=null && count($snapshots) && !$boolNew) {
 	$namedisable = "";
 	$snapcount = "0";
 }
+$PCIchanges= comparePCIData();
 ?>
 
 <link rel="stylesheet" href="<?autov('/plugins/dynamix.vm.manager/scripts/codemirror/lib/codemirror.css')?>">
@@ -364,6 +365,7 @@ if ($snapshots!=null && count($snapshots) && !$boolNew) {
 
 <script>
 const displayOptions = <?= json_encode($arrDisplayOptions, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+const PCIchanges = <?= json_encode($PCIchanges) ?>;
 </script>
 
 <table>
@@ -1395,6 +1397,7 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 	if ($arrValidGPUDevices[$arrGPU['id']]['bootvga'] == "1") $bootgpuhidden = "";
 	?>
 	<tr id="gpubootvga<?=$i?>" class="<?=$bootgpuhidden?>"><td>_(Graphics ROM Needed)_?:</td><td><span class="orange-text"><i class="fa fa-warning"></i> _(GPU is primary adapter, vbios may be required)_.</span></td></tr>
+	<tr id="gpupcichange<?=$i?>" class="hidden"><td>_(PCI Check)_:</td><td><span class="orange-text"><i class="fa fa-warning"></i></span></td></tr>
 </table>
 
 <?if ($i == 0 || $i == 1) {?>
@@ -1470,6 +1473,8 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 		<td></td>
 	</tr>
 	<tr id="gpubootvga{{INDEX}}" class="hidden"><td>_(Graphics ROM Needed)_?:</td><td><span class="orange-text"><i class="fa fa-warning"></i> _(GPU is primary adapter, vbios may be required)_.</span></td></tr>
+	<tr id="gpupcichange{{INDEX}}" class="hidden"><td>_(PCI Check)_:</td><td><span class="orange-text"><i class="fa fa-warning"></i></span></td></tr>
+
 </table>
 </script>
 
@@ -1493,6 +1498,7 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 			<textarea class="xml" id="xmlaudio<?=$i?>" rows="5" disabled ><?=htmlspecialchars($xml2['devices']['audio'][$arrAudio['id']])?></textarea>
 		</td>
 	</tr>
+	<tr id="audiopcichange<?=$i?>" class="hidden"><td></td><td><span class="orange-text"><i class="fa fa-warning"></i></span></td></tr>
 </table>
 
 <?if ($i == 0) {?>
@@ -1518,6 +1524,7 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 		</td>
 		<td></td>
 	</tr>
+	<tr id="audiopcichange{{INDEX}}" class="hidden"><td></td><td><span class="orange-text"><i class="fa fa-warning"></i></span></td></tr>
 </table>
 </script>
 
@@ -1696,7 +1703,6 @@ foreach ($arrConfig['nic'] as $i => $arrNic) {
 			<span class="space">_(Select)_</span><span class="space">_(Boot Order)_</span><br>
 			<?
 			$intAvailableOtherPCIDevices = 0;
-			$PCIchanges= comparePCIData();
 			if (!empty($arrValidOtherDevices)) {
 				foreach ($arrValidOtherDevices as $i => $arrDev) {
 					$bootdisable = $extra = $pciboot = '';
@@ -1723,9 +1729,7 @@ foreach ($arrConfig['nic'] as $i => $arrNic) {
 						echo ucfirst($PCIchanges["0000:".$i]['status']);
 					}
 				}
-				
 				?>
-
 				</label><span id="numapci<?=$i?>" class="status-warn" style="display:none;"></span><br>
 				<?
 				}
@@ -2486,6 +2490,23 @@ function attachNumaHandlers() {
     });
 }
 
+// ------------------------------------------------------------
+// Run all NUMA warnings on initial page load
+// ------------------------------------------------------------
+window.addEventListener("load", () => {
+
+    // CPU NUMA warning
+    const cpuNodes = getSelectedCpuNodes();
+    if (cpuNodes.length > 1) {
+        updateWarn(cpuWarnEl, _("Warning: Selected CPUs span multiple NUMA nodes."));
+        showWarn(cpuWarnEl);
+    } else {
+        hideWarn(cpuWarnEl);
+    }
+
+    // GPU / AUDIO / PCI NUMA warnings
+    refreshAllDeviceWarnings();
+});
 
 
 
@@ -2693,9 +2714,11 @@ $(function() {
 		if (sectiondata.category == 'Graphics_Card') {
 			$(section).find(".gpu").change();
 			attachNumaHandlers();
+			refreshAllDeviceWarnings();
 		}
 		if (sectiondata.category == 'Sound_Card') {
 			attachNumaHandlers();
+			refreshAllDeviceWarnings();
 		}
 	});
 
@@ -2705,9 +2728,11 @@ $(function() {
 		}
 		if (sectiondata.category == 'Graphics_Card') {
 			attachNumaHandlers();
+			refreshAllDeviceWarnings();
 		}
 		if (sectiondata.category == 'Sound_Card') {
 			attachNumaHandlers();
+			refreshAllDeviceWarnings();
 		}
 	});
 
@@ -2794,6 +2819,87 @@ $(function() {
 					$(this).prop("selectedIndex", 0).change();
 				}
 			});
+		}
+
+
+		// --- GPU PCI change display logic ---
+		var gpuPciRow = $("#gpupcichange" + myindex);
+		gpuPciRow.addClass("hidden");  // hide by default
+
+		// Build the PCI ID 0000:xx the same way PHP does
+		var pciId = "0000:" + myvalue;
+
+		// Only continue if we have a change entry for this GPU
+		if (PCIchanges[pciId]) {
+
+			var change = PCIchanges[pciId];
+
+			// Build tooltip text exactly like PHP output
+			var tooltip = "<?= _('PCI Change') ?>\n";
+
+			if (change.status === "changed") {
+				tooltip += "<?= _('Differences') ?>\n";
+
+				for (var key in change.differences) {
+					tooltip += `${key} <?= _('before') ?>: ${change.differences[key].old} `
+							+ `<?= _('after') ?>: ${change.differences[key].new}\n`;
+				}
+
+				tooltip += change.device.description;
+			}
+
+			// Build the HTML content for the row
+			gpuPciRow.find("td:last").html(
+				`<span class="orange-text">
+					<i class="fa fa-warning fa-fw" title="${tooltip}"></i>
+					${change.status.charAt(0).toUpperCase() + change.status.slice(1)}
+				</span>`
+			);
+
+			gpuPciRow.removeClass("hidden");
+		}
+	});
+
+	$("#vmform").on("change", ".audio", function changeAudioEvent(){
+		var myvalue = $(this).val();
+		var mylabel = $(this).children('option:selected').text();
+		var myindex = $(this).closest('table').data('index');
+
+		// --- AUDIO PCI change display logic ---
+		var audioPciRow = $("#audiopcichange" + myindex);
+		audioPciRow.addClass("hidden");  // hide by default
+
+		// Build the PCI ID using same format as PHP (0000:xx)
+		var pciId = "0000:" + myvalue;
+
+		// Only continue if we have a change entry for this audio device
+		if (PCIchanges[pciId]) {
+
+			var change = PCIchanges[pciId];
+
+			// Build tooltip text exactly like PHP logic
+			var tooltip = "<?= _('PCI Change') ?>\n";
+
+			if (change.status === "changed") {
+				tooltip += "<?= _('Differences') ?>\n";
+
+				for (var key in change.differences) {
+					tooltip += `${key} <?= _('before') ?>: ${change.differences[key].old} `
+							+ `<?= _('after') ?>: ${change.differences[key].new}\n`;
+				}
+
+				tooltip += change.device.description;
+			}
+
+			// Build the HTML content for the row
+			audioPciRow.find("td:last").html(
+				`<span class="orange-text">
+					<i class="fa fa-warning fa-fw" title="${tooltip}"></i>
+					${change.status.charAt(0).toUpperCase() + change.status.slice(1)}
+				</span>`
+			);
+
+			audioPciRow.removeClass("hidden");
 		}
 	});
 
@@ -3059,6 +3165,7 @@ $(function() {
 	}
 	$("#vmform #usbmode option[value^='usb3']").prop('disabled', noUSB3);
 	$("#vmform .gpu").change();
+	$("#vmform .audio").change();
 	$('#vmform .cdrom').change();
 	regenerateDiskPreview();
 	resetForm();
