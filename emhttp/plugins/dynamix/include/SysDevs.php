@@ -279,7 +279,7 @@ case 't1':
                 [$bus,$id] = my_explode(':',$usbdevice);
                 $usbport = usb_physical_port($usbdevice);
                 if (strlen($usbport) > 7 ) {$usbport .= "\t"; } else { $usbport .= "\t\t"; }
-                echo "<tr><td></td><td></td><td></td><td></td><td>$bus Port $usbport",trim($id),"</td></tr>";
+                echo "<tr><td></td><td></td><td></td><td></td><td>$bus Port $usbport",trim(substr($id,0,120)),"</td></tr>";
               }
               unset($getusb);
             }
