@@ -1514,7 +1514,7 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 			foreach ($arrValidSoundCards as $arrSound) echo mk_option($arrAudio['id'], $arrSound['id'], $arrSound['name'].' ('._("Virtual").')');
 			?>
 			</select></span>			
-			<span id="numaaudio{{INDEX}}}}" class="status-warn"></span>
+			<span id="numaaudio{{INDEX}}" class="status-warn"></span>
 		</td>
 		<td></td>
 	</tr>
@@ -1705,7 +1705,6 @@ foreach ($arrConfig['nic'] as $i => $arrNic) {
 						$extra .= ' checked="checked"';
 						foreach ($pcidevice as $pcikey => $pcidev) $pciboot = $pcidev["boot"]; ;
 					} elseif (!in_array($arrDev['driver'], ['pci-stub', 'vfio-pci'])) {
-						//$extra .= ' disabled="disabled"';
 						continue;
 					}
 					$intAvailableOtherPCIDevices++;
@@ -1713,20 +1712,21 @@ foreach ($arrConfig['nic'] as $i => $arrNic) {
 				<label for="pci<?=$i?>">&nbsp&nbsp&nbsp&nbsp<input type="checkbox" name="pci[]" id="pci<?=$i?>" value="<?=htmlspecialchars($arrDev['id'])?>" <?=$extra?> data-numawarn="numapci<?=$i?>"/> &nbsp
 				<input type="number" size="5" maxlength="5" id="pciboot<?=$i?>" class="trim pcibootorder" <?=$bootdisable?> name="pciboot[<?=htmlspecialchars($arrDev['id'])?>]" value="<?=$pciboot?>" >
 				<?=htmlspecialchars($arrDev['name'])?> | <?=htmlspecialchars($arrDev['type'])?> (<?=htmlspecialchars($arrDev['id'])?>)
-				<? if (isset($PCIchanges["0000:".$i])) { echo " ".ucfirst($PCIchanges["0000:".$i]['status']);
-				    echo "<i class=\"fa fa-warning fa-fw orange-text\" title=\""._('PCI Change')."\n";
+				<? if (isset($PCIchanges["0000:".$i])) { 
+				    echo " <i class=\"fa fa-warning fa-fw orange-text\" title=\""._('PCI Change')."\n";
 					if ($PCIchanges["0000:".$i]['status']=="changed") {						
 						echo _("Differences");
 						foreach($PCIchanges["0000:".$i]['differences'] as $key => $changes){
 						echo " $key "._("before").":{$changes['old']} "._("after").":{$changes['new']} ";
 						}	
 						echo "\n".$PCIchanges["0000:".$i]['device']['description']."\"></i>";
+						echo ucfirst($PCIchanges["0000:".$i]['status']);
 					}
 				}
 				
 				?>
 
-				</label>				<span id="numapci<?=$i?>" class="status-warn" style="display:none;"></span><br>
+				</label><span id="numapci<?=$i?>" class="status-warn" style="display:none;"></span><br>
 				<?
 				}
 			}
@@ -1739,7 +1739,7 @@ foreach ($arrConfig['nic'] as $i => $arrNic) {
 						<label for="pci<?=$i?>">&nbsp&nbsp&nbsp&nbsp<input type="checkbox" name="pci[]" id="pci<?=$i?>" value="<?=htmlspecialchars($pci['id'])?>" checked="checked" data-numawarn="numapci<?=$i?>"/> &nbsp
 						<input type="number" size="5" maxlength="5" id="pciboot<?=$i?>" class="trim pcibootorder" disabled="disabled" name="pciboot[<?=htmlspecialchars($i)?>]" value="<?=$pci['boot']?>" >
 						_(Old PCI Address)_:<?=htmlspecialchars($i);?>
-						<?  if (isset($PCIchanges["0000:".$i])) echo " ".ucfirst($PCIchanges["0000:".$i]['status'])."  <i class=\"fa fa-warning fa-fw orange-text\" title=\""._('PCI Removed')."\"></i>".$PCIchanges["0000:".$i]['device']['description'];?> 
+						<?if (isset($PCIchanges["0000:".$i])) echo " <i class=\"fa fa-warning fa-fw orange-text\" title=\""._('PCI Removed')."\"></i>"." ".ucfirst($PCIchanges["0000:".$i]['status'])." ".$PCIchanges["0000:".$i]['device']['description'];?> 
 						<span id="numapci<?=$i?>" class="status-warn"></span>
 						</label><br>
 						<?

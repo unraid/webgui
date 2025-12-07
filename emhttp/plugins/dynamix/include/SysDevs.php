@@ -50,12 +50,16 @@ case 't1':
   $pciothers = ["0x00","0x05","0x06","0x07","0x08","0x09","0x0A","0x0B","0x0C","0x0D","0x0E","0x0F","0x10","0x11","0x12","0x13"];
 
   $showall = $_POST['showall'];
+  $showsriov = false;
+
   if ($showall == "no") {
     if ($_POST['showdisplay'] == 'no') $filter = array_merge($filter,["0x03","0x04"]);
     if ($_POST['shownetwork'] == 'no') $filter[]="0x02";
     if ($_POST['showstorage'] == 'no') $filter[]="0x01";
     if ($_POST['showusb'] == 'no') $filter[]="0x0c";
-    if ($_POST['showother'] == 'no') $filter=array_merge($filter,$pciothers);
+    if ($_POST['showother'] == 'no') $filter = array_merge($filter,$pciothers);
+    // Normalize filter prefixes for case-insensitive matching
+    $filter = array_map('strtolower', $filter);
     $showsriov = ($_POST['showsriov'] == 'yes');
   }
 
@@ -166,16 +170,27 @@ case 't1':
       $iommuinuse[] = (strpos($string,'/')) ? strstr($string, '/', true) : $string;
     }
     exec('lsscsi -s',$lsscsi);
-    // Filter for 'removed' devices
+    // Build synthetic "Removed" group for devices no longer present
     $removedArr = array_filter($pci_device_diffs, function($entry) {
       return isset($entry['status']) && $entry['status'] === 'removed';
     });
-    foreach ($removedArr as $removedpci => $removeddata) {
-      $groups[] = "IOMMU "._("Removed");
-      $groups[] = "\tR[{$removeddata['device']['vendor_id']}:{$removeddata['device']['device_id']}] ".str_replace("0000:","",$removedpci)." ".trim($removeddata['device']['description'],"\n");
+    if (!empty($removedArr)) {
+      $removedKey = _("Removed");
+      if (!isset($lsiommu[$removedKey])) {
+        $lsiommu[$removedKey] = [];
+      }
+      foreach ($removedArr as $removedpci => $removeddata) {
+        $bdf = $removedpci;
+        if (!preg_match('/^[0-9a-fA-F]{4}:/', $bdf)) {
+          $bdf = "0000:".$bdf;
+        }
+        $line = "R[{$removeddata['device']['vendor_id']}:{$removeddata['device']['device_id']}] "
+              . str_replace("0000:","",$removedpci)." "
+              . trim($removeddata['device']['description'],"\n");
+        $lsiommu[$removedKey][$bdf] = $line;
+      }
     }
     $ackparm = "";
-    #echo "<tr><td>Filter:";var_dump($filter); echo "</td></tr>";
     foreach ($lsiommu as $key => $group) {
       $pciidcheck = array_key_first($group);
       if (in_array($pciidcheck,$sriovvfs)) continue;
@@ -187,7 +202,8 @@ case 't1':
       foreach ($group as $pciaddress => $line) {
         if (!$line) continue;
         [$class, $class_id, $name] = getPciClassNameAndId($pciaddress);
-        if (in_array(substr($class_id,0,4),$filter)) continue;
+        $class_prefix = substr(strtolower((string)$class_id), 0, 4);
+        if (in_array($class_prefix, $filter, true)) continue;
         if ($iommushow) {
           if (isset($spacer)) echo "<tr><td colspan='2' class='thin'></td>"; else $spacer = true;
           echo "</tr><tr><td>IOMMU group $key:</td><td>";

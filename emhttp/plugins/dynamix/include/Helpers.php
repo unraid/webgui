@@ -910,7 +910,10 @@ function getIpAddressesByPci(string $pciAddress): array
 }
 
 function getSystemNumaNodeCount() {
-    return count(glob("/sys/devices/system/node/node*"));
+    $nodes = glob("/sys/devices/system/node/node*") ?: [];
+    $count = count($nodes);
+    // Treat “no NUMA directory” as a single-node system
+    return $count > 0 ? $count : 1;
 }
 
 function normalizeNumaNode($node, $numNodes) {
@@ -969,21 +972,24 @@ function getPciNumaInfo($numNodes) {
 }
 
 function getNumaInfo() {
-$numNodes = getSystemNumaNodeCount();
+    $numNodes = getSystemNumaNodeCount();
 
-$result = [
-    "system" => [
-        "numa_nodes" => $numNodes
-    ],
-    "cpus" => getCpuNumaInfo($numNodes),
-    "pci_devices" => getPciNumaInfo($numNodes)
-];
+    $result = [
+        "system" => [
+            "numa_nodes" => $numNodes,
+        ],
+        "cpus" => getCpuNumaInfo($numNodes),
+        "pci_devices" => getPciNumaInfo($numNodes),
+    ];
 
-if (is_file("/tmp/numain")) {
-  $numain = file_get_contents("/tmp/numain");
-  $result = json_decode($numain,true);
-}
-return $result;
+    if (is_file("/tmp/numain")) {
+        $numain  = file_get_contents("/tmp/numain");
+        $override = json_decode($numain, true);
+        if (is_array($override)) {
+            $result = $override;
+        }
+    }
 
+    return $result;
 }
 ?>
