@@ -184,6 +184,9 @@ case 't1':
         if (!preg_match('/^[0-9a-fA-F]{4}:/', $bdf)) {
           $bdf = "0000:".$bdf;
         }
+        $class_id = "0x".$removeddata['device']['class'];
+        $class_prefix = substr(strtolower((string)$class_id), 0, 4);
+        if (in_array($class_prefix, $filter, true)) continue;
         $line = "R[{$removeddata['device']['vendor_id']}:{$removeddata['device']['device_id']}] "
               . str_replace("0000:","",$removedpci)." "
               . trim($removeddata['device']['description'],"\n");
@@ -191,6 +194,7 @@ case 't1':
       }
     }
     $ackparm = "";
+ 
     foreach ($lsiommu as $key => $group) {
       $pciidcheck = array_key_first($group);
       if (in_array($pciidcheck,$sriovvfs)) continue;
