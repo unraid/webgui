@@ -1062,14 +1062,11 @@ function getPciLinkInfo($pciAddress)
     }
     unset($out["max_width_raw"], $out["current_width_raw"]);  // Cleanup
     // Downgrade flags
-    if ($out["current_speed"] && $out["max_speed"]) {
+    $class_check=  strpos(trim(file_get_contents("$base/class")),"0x06",0);
+    if ($out["current_speed"] && $out["max_speed"] && $class_check === false) {
         $out["speed_downgraded"] = ($out["current_speed"] < $out["max_speed"]);
     }
-    if (
-        $out["current_width"] !== null &&
-        $out["max_width"]     !== null &&
-        $out["current_width"] < $out["max_width"]
-    ) {
+    if ($out["current_width"] !== null && $out["max_width"]     !== null && $out["current_width"] < $out["max_width"] && $class_check === false) {
         $out["width_downgraded"] = true;
     }
     // PCIe Generation Table
