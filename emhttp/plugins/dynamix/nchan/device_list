@@ -78,7 +78,7 @@ function device_info(&$disk,$online) {
   $disk_status = _var($disk,'status');
   if (_var($var,'fsState')=='Started' && $source!='Flash' && !str_contains($disk_status,'_NP')) {
     $ctrl = " style='cursor:pointer' onclick=\"toggle_state('$source','$name','$action')\"";
-    $help .= "<br>"._("Click to spin $action device");
+    $help .= "<br>".sprintf(_("Click to spin %s device"),$action);
   }
   $status = "<a class='info'><i ".($ctrl?"id='dev-$named' ":"")."class='fa fa-$orb orb $color-orb'$ctrl></i><span>$help</span></a>";
 
