@@ -155,12 +155,17 @@ samba_stop(){
     REPLY="Already stopped"
   else
     REPLY="Stopped"
+    # stop gracefully with SIGTERM the "master" smbd process first
+    master=$(pgrep --ns $$ -o smbd)
+    [[ -n "$master" ]] && run kill "$master"
+    sleep 1
     # stop gracefully with SIGTERM
     run killall --ns $$ smbd nmbd wsdd2 winbindd
     samba_waitfor_shutdown
     if samba_running; then
       REPLY="Killed"
       # stop forcibly with SIGKILL
+      [[ -n "$master" ]] && run kill -SIGKILL "$master"
       run killall --ns $$ -SIGKILL smbd nmbd wsdd2 winbindd
       samba_waitfor_shutdown
     fi

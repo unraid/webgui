@@ -990,7 +990,7 @@ _(Critical disk utilization threshold)_ (%):
 </form>
 
 <?if (fsType('btrfs')):?>
-<?if (!maintenance_mode()):?>
+<?if (_var($disk,'fsStatus')=="Mounted"):?>
 <div class="title nocontrol">
   <span class="left">
     <i class="title fa fa-hdd-o"></i> _(Pool Device Status)_

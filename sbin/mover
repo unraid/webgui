@@ -28,9 +28,9 @@ CFGPATH="/boot/config/shares"
 DEBUGGING=""
 
 move() {
-  find "$1" -depth 2>/dev/null | /usr/libexec/unraid/move $2 $DEBUGGING
+  find "$1" -depth 2>/dev/null | /usr/libexec/unraid/move $DEBUGGING
   # second pass to clean up leftover empty directories
-  find "$1" -depth -type d 2>/dev/null | /usr/libexec/unraid/move $2 $DEBUGGING
+  find "$1" -depth -type d 2>/dev/null | /usr/libexec/unraid/move $DEBUGGING
 }
 
 start() {
@@ -92,7 +92,7 @@ start() {
     for SHAREPATH in /mnt/$DISK/* ; do
       SHARE=$(basename "$SHAREPATH")
       if [[ -d "$SHAREPATH" && -f "$CFGPATH/$SHARE.cfg" ]]; then
-        move "$SHAREPATH" "-e"
+        move "$SHAREPATH"
       fi
     done
 
@@ -106,43 +106,6 @@ start() {
       fi
     fi
   done
-
-  rm -f $PIDFILE
-  echo "mover: finished" >&2
-}
-
-empty() {
-  DISK="$1"
-
-  if [ -f $PIDFILE ]; then
-    if ps h $(cat $PIDFILE) | grep mover ; then
-        echo "mover: already running" >&2
-        exit 1
-    fi
-  fi
-
-  echo $$ >/var/run/mover.pid
-  echo "mover: started" >&2
-
-  shopt -s nullglob
-
-  # we can only empty share directories
-  for SHAREPATH in /mnt/$DISK/* ; do
-    SHARE=$(basename "$SHAREPATH")
-    if [[ -d "$SHAREPATH" && -f "$CFGPATH/$SHARE.cfg" ]]; then
-      move "$SHAREPATH" "-e"
-    fi
-  done
-
-  # output list of files which could not be moved
-  # use 'find' in case huge number of files left in /mnt/$DISK
-  count=$(find /mnt/$DISK -mindepth 1 | wc -l)
-  if [ "$count" -gt 0 ]; then
-    find /mnt/$DISK -mindepth 1 -depth -printf 'move: %p Not moved\n' | head -n 100
-    if [ "$count" -gt 100 ]; then
-      echo "[output truncated to first 100 entries]"
-    fi
-  fi
 
   rm -f $PIDFILE
   echo "mover: finished" >&2
@@ -170,43 +133,18 @@ stop() {
 
 # display usage and then exit
 usage() {
-    echo "Usage: $0 start [-e <disk_name>]"
-    echo "       $0 stop|status"
-    echo "       <disk_name> must match pattern 'disk[0-9]*' and /mnt/<disk_name> must be a mountpoint"
+    echo "Usage: $0 start|stop|status"
     exit 1
 }
 
-# validate disk name
-validate_disk() {
-  if [[ ! "$1" =~ ^disk[0-9]+$ ]]; then
-    echo "Error: <disk_name> must match pattern 'disk[0-9]+$'"
-    usage
-  fi
-  if ! mountpoint --nofollow /mnt/$1 > /dev/null 2>&1; then
-    echo "Error: nothing mounted at /mnt/$1"
-    usage
-  fi
-}
-
-if [ "$#" -lt 1 ]; then
+if [ "$#" -ne 1 ]; then
     usage
     exit 1
 fi
 
 case $1 in
 start)
-    if [ -z "$2" ]; then
-        start
-    elif [ "$2" == "-e" ]; then
-        if [ -z "$3" ]; then
-            usage
-        else
-            validate_disk "$3"
-            empty "$3"
-        fi
-    else
-        usage
-    fi
+  start
   ;;
 stop)
   stop

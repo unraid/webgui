@@ -1,0 +1,25 @@
+<Agent>
+  <Name>Join</Name>
+  <Variables>
+    <Variable Help="The API key can be found [a href='https://joinjoaomgcd.appspot.com' target='_blank'] [u]here[/u].[/a]" Desc="API key" Default="">API_KEY</Variable>
+    <Variable Help="Specify the fields which are included in the title of the notification." Desc="Notification Title" Default="$SUBJECT">TITLE</Variable>
+    <Variable Help="Specify the fields which are included in the message body of the notification." Desc="Notification Message" Default="$DESCRIPTION">MESSAGE</Variable>
+  </Variables>
+  <Script>
+    <![CDATA[
+    #!/bin/bash
+    ##########
+    {0}
+    ##########
+    TITLE=$(echo -e "$TITLE")
+    MESSAGE=$(echo -e "$MESSAGE")
+  
+    curl -s -k -G \
+    -d "apikey=$API_KEY" \
+    --data-urlencode "title=$TITLE" \
+    --data-urlencode "text=$MESSAGE" \
+    -d "deviceId=group.all" \
+    https://joinjoaomgcd.appspot.com/_ah/api/messaging/v1/sendPush 2>&1
+    ]]>
+  </Script>
+</Agent>

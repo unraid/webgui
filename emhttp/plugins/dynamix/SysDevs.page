@@ -25,43 +25,533 @@ $(function(){
 function applyCfg() {
   var message = "_(System Devices)_: _(A reboot is required to apply changes)_";
   var string = "BIND=";
+  var string2 = "VFSETTINGS=";
   var elements = document.getElementById("vfiopci").elements;
   for (var i = 0, element; element = elements[i++];) {
-    if (element.type === "checkbox"  && element.checked === true)
+    if (element.type === "checkbox"  && element.checked === true && element.className.substring(0, 5) === "iommu")
     string = string + element.value + " ";
+    if (element.type === "checkbox" && element.className.substring(0, 7) === "vfiommu") {
+      var pciId = element.id.replace(/^vfvfio/, "");
+      var mac = document.getElementById("vfmac" + pciId).value;
+      var elvfio = document.getElementById("vfvfio" + pciId).checked;
+      if (elvfio == true) var vfio = "1"; else vfio = "0";
+      string2 = string2 + element.value + "|" + vfio + "|" + mac + " ";
+    }
+
   }
   string = string.trim();
   if (string === "BIND=") {
     string = "";
   }
-  $.post( "/plugins/dynamix/include/update.vfio-pci-cfg.php", { cfg: string } )
+  string2 = string2.trim();
+  if (string2 === "VFSETTINGS=") {
+    string2 = "";
+  }
+  
+  $.post( "/plugins/dynamix/include/update.vfio-pci-cfg.php", { cfg: string, vfcfg:string2} )
   .done(function(d) {
-    if (d==1) {
-      addRebootNotice(message);
-      document.getElementById("warning").innerHTML = "<b>_(ALERT)_: _(Changes saved)_. _(Reboot to take effect)_.</b>";
-    } else {
-      removeRebootNotice(message);
-      document.getElementById("warning").innerHTML = "<b>_(No changes)_.</b>";
-    }
+        switch (d) {
+          case "1":
+            addRebootNotice(message);
+            document.getElementById("warning").innerHTML = "<b>_(ALERT)_: VFIO _(Changes saved)_. _(Reboot to take effect)_.</b>";
+            break;
+          case "2":
+            addRebootNotice(message);
+            document.getElementById("warning").innerHTML = "<b>_(ALERT)_: SRIOV VFs _(Changes saved)_. _(Reboot to take effect)_.</b>";
+            break;
+          case "3":
+            addRebootNotice(message);
+            document.getElementById("warning").innerHTML = "<b>_(ALERT)_: VFIO _(and)_ SRIOV VFs _(saved)_. _(Reboot to take effect)_.</b>";
+            break;
+          default:
+            removeRebootNotice(message);
+            document.getElementById("warning").innerHTML = "<b>_(No changes)_.</b>";
+            break;
+        }
     $("#applycfg").attr("disabled",true);
   });
 }
+
+function saveVFSettingsConfig(pciId,vd,interactive=1) {
+  var message = "_(System Devices)_: _(A reboot is required to apply changes)_";
+  var mac = document.getElementById("vfmac" + pciId).value;
+  var vfio = document.getElementById("vfvfio" + pciId).checked;
+
+  $.post( "/plugins/dynamix/include/update.sriov-cfg.php", { type:"sriovsettings", pciid: pciId, vd:vd, vfio:vfio, mac:mac } )
+  .done(function(d) {
+    if (d==1) {
+      if (interactive == 1)         
+        swal({
+          title: _("VF Settings"),
+          text: _("Configuration saved") + ".",
+          type: "success",
+          timer: 3000,
+          showConfirmButton: false
+        });
+    } 
+    if (interactive == 1)  $('#t1').load('/webGui/include/SysDevs.php', { table: 't1' });
+  });
+}
+function saveVFsConfig(pciId,vd,interactive=1) {
+  var message = "_(System Devices)_: _(A reboot is required to apply changes)_";
+  var numvfs = document.getElementById("vf" + pciId).value;
+
+  $.post( "/plugins/dynamix/include/update.sriov-cfg.php", { type:"sriov", pciid: pciId, vd:vd, numvfs:numvfs } )
+  .done(function(d) {
+    if (d==1) {
+      if (interactive == 1) 
+        swal({
+          title: "VFs",
+          text: _("Configuration saved") + ".",
+          type: "success",
+          timer: 3000,
+          showConfirmButton: false
+        });
+    } 
+    if (interactive == 1)  $('#t1').load('/webGui/include/SysDevs.php', { table: 't1' });
+  });
+
+}
+
+function generateMAC(pciId) {
+  if (!pciId) {
+    swal("Error", _("No PCI ID provided to generateMAC()"), "error");
+    return;
+  }
+
+  // Validate PCI ID format
+  var pciPattern = /^([0-9a-fA-F]{4}):([0-9a-fA-F]{2}):([0-9a-fA-F]{2})\.([0-7])$/;
+  var match = pciId.match(pciPattern);
+  if (!match) {
+    swal(_("Invalid PCI ID"), _("Expected format: 0000:03:00.2"), "error");
+    return;
+  }
+
+  // Ask for host ID using Unraid swal input
+swal({
+  title: _("Enter Host ID"),
+  text: _("Provide a 2-digit hex host ID (e.g. 01)"),
+  type: "input",
+  showCancelButton: true,
+  closeOnConfirm: false,
+  inputPlaceholder: "00",
+  customClass: "swal-hostid-input",
+  onOpen: function() {
+    const input = document.querySelector(".sa-input");
+    if (input) {
+      input.maxLength = 2;                // Limit to 2 chars
+      input.style.textTransform = "uppercase"; // Auto uppercase
+      input.pattern = "[0-9A-Fa-f]{2}";   // Hex pattern
+      input.autocomplete = "off";
+
+      // Optional: restrict keypresses to hex characters only
+      input.addEventListener("keypress", function (e) {
+        if (!/[0-9A-Fa-f]/.test(e.key)) e.preventDefault();
+      });
+    }
+  }
+  }, function(hostId) {
+    if (hostId === false) return; // cancelled
+    if (!/^[0-9a-fA-F]{1,2}$/.test(hostId)) {
+      swal.showInputError(_("Please enter 1–2 hex digits (00–ff)"));
+      return false;
+    }
+
+    // Extract PCI parts
+    var domain = match[1];
+    var bus = match[2];
+    var dev = match[3];
+    var func = match[4];
+    var dom_lo = ("0" + (parseInt(domain, 16) & 0xFF).toString(16)).slice(-2);
+
+    // Format: 62:<domain>:<bus>:<device>:<function>:<host>
+    var mac = [
+      "62",
+      dom_lo,
+      bus.padStart(2, "0"),
+      dev.padStart(2, "0"),
+      func.padStart(2, "0"),
+      hostId.padStart(2, "0")
+    ].join(":").toUpperCase();
+
+    // Build target input ID (e.g., #vfmac0000:04:11.1)
+    var inputId = "vfmac" + pciId;
+
+    // Update the field if it exists
+    var $field = $("#" + CSS.escape(inputId));
+    if ($field.length) {
+      $field.val(mac);
+    }
+
+    swal({
+      title: _("MAC"),
+      text: _("Generated successfully."),
+      type: "success",
+      timer: 3000,
+      showConfirmButton: false
+    });
+  });
+}
+
+function applyVFsConfig(pciId, vd, vfs) {
+
+  const message = "_(System Devices)_: _(A reboot is required to apply changes)_";
+  const numvfs = parseInt(document.getElementById("vf" + pciId).value, 10);
+  vfs = parseInt(vfs, 10);
+
+  // --- Step 1: Check for active VMs (always returns JSON) ---
+  $.post("/plugins/dynamix/include/apply.sriov-cfg.php", { 
+      type: "inuse", 
+      pciid: pciId,  
+      pcitype: "PF" 
+  }, null, "json") // automatically parse JSON
+  .done(function (data) {
+    console.log("Active check result:", data);
+
+    // If device is in use, show VM list and stop here
+    if (data.inuse === true) {
+      let vmListText = "";
+      let vmCount = Array.isArray(data.vms) ? data.vms.length : 0;
+
+      if (vmCount > 0) {
+        vmListText = data.vms.join("\n");
+      } else {
+        vmListText = "No VM names returned.";
+      }
+
+      const plural = vmCount === 1 ? _("VM is") : _("VMs are");
+      const messageText =
+        _("The following") + " " + plural + " " + _("currently using this device") + ":\n\n" +
+        vmListText +
+        "\n\n" + _("Please stop") +  " " +
+        (vmCount === 1 ? "it" : "them") +
+        _(" before applying changes.");
+
+      swal({
+        title: _("Active VMs Detected"),
+        text: messageText,
+        type: "warning",
+        confirmButtonText: _("OK"),
+        closeOnConfirm: true
+      });
+
+      return;
+    }
+
+    // --- Step 2: Continue only if NOT in use ---
+
+    // Case 1: VFs will be removed
+    if (vfs !== 0 && numvfs === 0) {
+      swal({
+        title: _("VFs will be removed"),
+        text: _("Physical card will reset."),
+        type: "warning",
+        showCancelButton: true,
+        confirmButtonText: _("OK"),
+        cancelButtonText: _("Cancel"),
+        closeOnConfirm: true
+      }, function(isConfirm) {
+        if (isConfirm) {
+          setTimeout(function() {
+            doVFApply(pciId, vd, numvfs, message);
+          }, 300);
+        } else {
+          swal(_("Cancelled"), _("No changes were made."), "info");
+        }
+      });
+      return;
+    }
+
+    // Case 2: Number of VFs changed
+    if (vfs !== numvfs && vfs !== 0) {
+      swal({
+        title: _("Number of VFs changed"),
+        text: _("Will need to remove and re-add VFs."),
+        type: "warning",
+        showCancelButton: true,
+        confirmButtonText: _("OK"),
+        cancelButtonText: _("Cancel"),
+        closeOnConfirm: true
+      }, function(isConfirm) {
+        if (isConfirm) {
+          setTimeout(function() {
+            doVFApply(pciId, vd, numvfs, message);
+          }, 300);
+        } else {
+          swal(_("Cancelled"), _("No changes were made."), "info");
+        }
+      });
+      return;
+    }
+
+    // Case 3: All VFs removed
+    if (vfs !== numvfs && vfs === 0) {
+      doVFApply(pciId, vd, numvfs, message);
+    }
+  })
+  .fail(function (xhr, status, error) {
+    console.error("Active check failed:", status, error, xhr.responseText);
+    swal({
+      title: _("Error"),
+      text: _("Could not verify active device state."),
+      type: "error",
+      showConfirmButton: true
+    });
+  });
+}
+
+function applyVFSettings(pciId, vd, currentvfio, currentmac) {
+
+  const message = "_(System Devices)_: _(A reboot is required to apply changes)_";
+  const mac = document.getElementById("vfmac" + pciId).value;
+  const vfio = document.getElementById("vfvfio" + pciId).checked;
+
+  // --- Step 1: Check for active VMs (always returns JSON) ---
+  $.post("/plugins/dynamix/include/apply.sriov-cfg.php", { 
+      type: "inuse", 
+      pciid: pciId,  
+      pcitype: "VF" 
+  }, null, "json") // automatically parse JSON
+  .done(function (data) {
+    console.log("Active check result:", data);
+
+    // If device is in use, show VM list and stop here
+    if (data.inuse === true) {
+      let vmListText = "";
+      let vmCount = Array.isArray(data.vms) ? data.vms.length : 0;
+
+      if (vmCount > 0) {
+        vmListText = data.vms.join("\n");
+      } else {
+        vmListText = "No VM names returned.";
+      }
+
+      const plural = vmCount === 1 ? _("VM is") : _("VMs are");
+      const messageText =
+        _("The following") + " " + plural + " " + _("currently using this device") + ":\n\n" +
+        vmListText +
+        "\n\n" + _("Please stop") +  " " +
+        (vmCount === 1 ? "it" : "them") +
+        _(" before applying changes.");
+
+      swal({
+        title: _("Active VMs Detected"),
+        text: messageText,
+        type: "warning",
+        confirmButtonText: _("OK"),
+        closeOnConfirm: true
+      });
+
+      return;
+    }
+    doVFSettingApply(pciId, vd, vfio, mac, currentvfio,currentmac,message);
+  })
+  .fail(function (xhr, status, error) {
+    console.error("Active check failed:", status, error, xhr.responseText);
+    swal({
+      title: _("Error"),
+      text: _("Could not verify active device state."),
+      type: "error",
+      showConfirmButton: true
+    });
+  });
+}
+function doVFSettingApply(pciId, vd, vfio, mac, currentvfio, currentmac, message) {
+  // Show "updating" alert
+  swal({
+    title: _("Updating..."),
+    text: _("Please wait while configuration is applied."),
+    type: "info",
+    showConfirmButton: false,
+    allowOutsideClick: false,
+    closeOnConfirm: false
+  });
+
+  // Perform the POST
+  $.post("/plugins/dynamix/include/apply.sriov-cfg.php", {
+      type: "sriovsettings",
+      pciid: pciId,
+      vd: vd,
+      vfio: vfio,
+      mac: mac,
+      currentvfio: currentvfio,
+      currentmac: currentmac
+  })
+  .done(function (response) {
+    let data;
+
+    // Safe JSON parse
+    try {
+      data = (typeof response === "string") ? JSON.parse(response) : response;
+    } catch (e) {
+      swal({
+        title: _("Error"),
+        text: _("Invalid JSON response from server."),
+        type: "error",
+        showConfirmButton: true
+      });
+      return;
+    }
+
+    // SUCCESS
+    if (data.success) {
+
+      saveVFSettingsConfig(pciId, vd, 0);
+
+      // data.details may be:
+      // - string
+      // - array
+      // - undefined
+      let msg = _("Configuration successfully applied.");
+
+      if (Array.isArray(data.details)) {
+        msg = data.details.join("\n");
+      } else if (typeof data.details === "string") {
+        msg = data.details;
+      }
+
+      swal({
+        title: _("Update Complete"),
+        text: msg,
+        type: "success",
+        timer: 3000,
+        showConfirmButton: false
+      });
+    }
+
+    // FAILURE
+    else {
+      const errorMsg = data.error || _("Operation failed.");
+
+      document.getElementById("warning").innerHTML =
+        "<b>" + errorMsg + "</b>";
+
+      swal({
+        title: _("Operation Failed"),
+        text: errorMsg,
+        type: "error",
+        showConfirmButton: true
+      });
+    }
+
+    // Always reload the table
+    $('#t1').load('/webGui/include/SysDevs.php', { table: 't1' });
+  })
+
+  // Network failure
+  .fail(function (xhr, status, error) {
+    swal({
+      title: _("Network Error"),
+      text: _("Failed to communicate with the server.") + "\n" + (error || status),
+      type: "error",
+      showConfirmButton: true
+    });
+  });
+}
+
+function doVFApply(pciId, vd, numvfs, message) {
+  // Show "updating" alert
+  swal({
+    title: _("Updating..."),
+    text: _("Please wait while configuration is applied."),
+    type: "info",
+    showConfirmButton: false,
+    allowOutsideClick: false,
+    closeOnConfirm: false
+  });
+
+  // Perform the POST
+  $.post("/plugins/dynamix/include/apply.sriov-cfg.php", { 
+      type: "sriov", 
+      pciid: pciId, 
+      vd: vd, 
+      numvfs: numvfs 
+  })
+    .done(function (data) {
+      // Parse JSON safely
+      if (typeof data === "string") {
+        try { data = JSON.parse(data); }
+        catch (e) {
+          data = { success: false, error: _("Invalid JSON: ") + e.message };
+        }
+      }
+
+    // Build message
+    let msg = "";
+    if (data.error) {
+      msg = _("Error") + ": " + data.error;
+    } else if (data.details) {
+      msg = formatDetailsSettings(data.details);
+    } else {
+      msg = _("Configuration successfully applied.");
+    }
+
+    // Show alert
+    const ok = data.success === true || data.success === 1;
+
+    if (ok) saveVFsConfig(pciId, vd, 0);
+
+    swal({
+      title: ok ? _("Update Complete") : _("Update Failed"),
+      text: msg,
+      type: ok ? "success" : "error",
+      timer: ok ? 3000: null,
+      showConfirmButton: !ok
+    });
+
+      // Reload table
+      $('#t1').load('/webGui/include/SysDevs.php', { table: 't1' });
+    })
+  .fail(function (xhr, status, error) {
+    swal({
+      title: _("Network Error"),
+      text: _("Failed to communicate with the server.") + "\n" + (error || status),
+      type: "error",
+      showConfirmButton: true
+    });
+  });
+}
+
+// Helper: recursively format details Settings to plain text
+function formatDetailsSettings(obj, indent = 0) {
+  const pad = "  ".repeat(indent);
+  if (obj == null) return "";
+  if (typeof obj === "string") return pad + obj;
+  if (typeof obj === "number" || typeof obj === "boolean") return pad + obj;
+  if (Array.isArray(obj)) return obj.map(x => formatDetailsSettings(x, indent)).join("\n");
+  if (typeof obj === "object") {
+    return Object.entries(obj).map(([key, val]) => {
+      if (typeof val === "object" && val !== null) {
+        // Special case for VF result objects
+        if ("success" in val || "error" in val || "details" in val) {
+          const symbol = val.success ? "✔" : "✖";
+          const msg = val.error || val.details || "";
+          return `${pad}${key}\n${pad}  ${symbol} ${msg}`;
+        }
+        return `${pad}${key}:\n${formatDetailsSettings(val, indent + 1)}`;
+      }
+      return `${pad}${key}: ${val}`;
+    }).join("\n");
+  }
+  return pad + String(obj);
+}
+
 function formatFullInput(input) {
-    return input
-        .split(';')
-        .filter(Boolean) // remove empty trailing entry
-        .map(entry => {
-            let [pci, status] = entry.split(',');
-            status = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
-            return `${pci} _(${status})_`;
-        })
-        .join('<br>');
+  return input
+    .split(';')
+    .filter(Boolean) // remove empty trailing entry
+    .map(entry => {
+        let [pci, status] = entry.split(',');
+        status = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+        return `${pci} _(${status})_`;
+    })
+    .join('<br>');
 }
 function formatVMS(input) {
-    return input
-        .split(';')
-        .filter(Boolean) // remove empty trailing entry
-        .join('<br>');
+  return input
+    .split(';')
+    .filter(Boolean) // remove empty trailing entry
+    .join('<br>');
 }
 function ackPCI(pcidevice, action) {
   $.post('/webGui/include/PCIUpdate.php', { action: "getvm", pciid: pcidevice }).done(function(vms) {
@@ -83,7 +573,7 @@ function ackPCI(pcidevice, action) {
     }
 
     swal({
-      title: "Are you sure?",
+      title: _("Are you sure?"),
       text: swaltext,
       type: "warning",
       html: true,

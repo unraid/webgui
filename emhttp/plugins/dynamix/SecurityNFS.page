@@ -214,7 +214,7 @@ function writeNFS(data, n, i) {
 		var data = [];
 
 		/* Get the setting from the share config. */
-		var hostList = $('textarea[name="shareHostListNFS"]').val().trim();
+                var hostList = $('textarea[name="shareHostListNFS"]').val()?.trim() || "";
 
 		/* Replace all new lines in data.hostList with spaces. */
 		var formattedHostList = <?= json_encode($sec_nfs[$name]['hostList']); ?>.replace(/\n/g, ' ');

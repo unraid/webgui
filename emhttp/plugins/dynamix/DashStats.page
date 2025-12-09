@@ -94,7 +94,7 @@ foreach ($devs as $disk) {
 }
 
 $array_percent = number_format(100*$array_used/($array_size ?: 1),1,$dot,'');
-exec('cat /sys/devices/system/cpu/*/topology/thread_siblings_list|sort -nu', $cpus);
+$cpus=get_cpu_packages();
 $wg_up      = $wireguard ? exec("wg show interfaces") : '';
 $wg_up      = $wg_up ? explode(' ',$wg_up) : [];
 $up         = count($wg_up);
@@ -351,8 +351,13 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                         <td>
                             <span class='flex flex-row flex-wrap items-center gap-4'>
                                 <span class="head_info">
-                                    <span id='cpu-temp'></span>
+                                    <span id='cpu-total-power'><i class='fa fa-fw fa-plug'></i>_(Total)_ _(Power)_: N/A</span>
                                 </span>
+                                <?if (count($cpus)<2):?>
+                                <span class="head_info">
+                                  <i class="fa fa-thermometer"></i> _(Temperature)_: <span id='cpu-temp0'>N/A</span>
+                                </span>
+                                <?endif;?>
                                 <span class="switch">
                                     _(Load)_:<span class="head_bar">
                                     <span class='cpu_ load'>0%</span>
@@ -398,22 +403,29 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                             </span>
                         </td>
                     </tr>
-
+                    <tr>
                     <?
-                    foreach ($cpus as $pair) {
-                        [$cpu1, $cpu2] = my_preg_split('/[,-]/',$pair);
-                        echo "<tr class='cpu_open'>";
-                        if ($is_intel_cpu && count($core_types) > 0)
-                            $core_type = "({$core_types[$cpu1]})";
-                        else
-                            $core_type = "";
+                    foreach ($cpus as $cpu_index=>$package)  {
+                      if (count($cpus) > 1) {
+                        echo "<td><span class='cpu_open w72'><i class='fa fa-plug'></i> "._("Physical")." CPU $cpu_index "._("Power").": <span id='cpu-power$cpu_index'>N/A </span> ";
+                        if (count($cpus)>1) echo "<i class='fa fa-thermometer'></i> "._("Temperature").": <span id='cpu-temp$cpu_index'>N/A</span>";
+                        echo "</td></span></tr>";
+                      }
+                      foreach ($package as $pair) {
+                          [$cpu1, $cpu2] = my_preg_split('/[,-]/',$pair);
+                          echo "<tr class='cpu_open'>";
+                          if ($is_intel_cpu && count($core_types) > 0)
+                              $core_type = "({$core_types[$cpu1]})";
+                          else
+                              $core_type = "";
 
-                        if ($cpu2)
-                            echo "<td><span class='w26'>CPU $cpu1 $core_type - HT $cpu2 </span><span class='dashboard w36'><span class='cpu$cpu1 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu1'></span><span></span></div></span><span class='dashboard w36'><span class='cpu$cpu2 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu2'></span><span></span></div></span></td>";
-                        else
-                            echo "<td><span class='w26'>CPU $cpu1 $core_type</span><span class='w72'><span class='cpu$cpu1 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu1'></span><span></span></div></span></td>";
-                        echo "</tr>";
-                    }
+                          if ($cpu2)
+                              echo "<td><span class='w26'>CPU $cpu1 $core_type - HT $cpu2 </span><span class='dashboard w36'><span class='cpu$cpu1 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu1'></span><span></span></div></span><span class='dashboard w36'><span class='cpu$cpu2 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu2'></span><span></span></div></span></td>";
+                          else
+                              echo "<td><span class='w26'>CPU $cpu1 $core_type</span><span class='w72'><span class='cpu$cpu1 load resize'>0%</span><div class='usage-disk sys'><span id='cpu$cpu1'></span><span></span></div></span></td>";
+                          echo "</tr>";
+                      }
+                  }
                     ?>
                     <tr id='cpu_chart'>
                         <td>
@@ -1441,6 +1453,7 @@ var startup = true;
 var stopgap = '<thead class="stopgap"><tr><td class="stopgap"></td></tr></thead>';
 var recall  = null;
 var recover = null;
+var tempunit="<?=_var($display,'unit','C');?>";
 
 // Helper function to calculate millisPerPixel based on container width
 function getMillisPerPixel(timeInSeconds, containerId) {
@@ -1693,6 +1706,39 @@ function addChartNet(rx, tx) {
   var now = new Date().getTime();
   rxTimeSeries.append(now, Math.floor(rx / 1000));
   txTimeSeries.append(now, Math.floor(tx / 1000));
+}
+
+function updateCPUPower() {
+  if (!cpupower) return;
+
+  // Update total power
+  const totalEl = document.getElementById('cpu-total-power');
+  const totalPower = cpupower.totalPower ?? 0;
+  if (totalEl) {
+    totalEl.innerHTML = `<i class="fa fa-fw fa-plug"></i> _(Total)_ _(Power)_: ${totalPower.toFixed(2)} W`;
+  }
+
+  // Update each core's span
+  const cpuspower = cpupower.power ?? [];
+  cpuspower.forEach((power, index) => {
+    const coreEl = document.getElementById(`cpu-power${index}`);
+    if (coreEl) {
+      coreEl.innerHTML = `${power.toFixed(2)} W`;
+    }
+  });
+
+  const cpustemps = cpupower.temp ?? [];
+  cpustemps.forEach((temp, index) => {
+    const coreTempEl = document.getElementById(`cpu-temp${index}`);
+      if (coreTempEl) {
+        tempdisplay = temp.toFixed(0);
+        if (tempunit === "F") {
+          tempdisplay = ((temp.toFixed(0))* 9 / 5) + 32;
+        } 
+      coreTempEl.innerHTML = Math.round(tempdisplay)+`&#8201;&#176;`+tempunit;;
+    }
+  });
+
 }
 
 // Cache for last values to avoid unnecessary DOM updates
@@ -2770,6 +2816,60 @@ $(function() {
   setTimeout(function() {
     // Charts initialized
   },500);
+
+ 
+
+  // Start GraphQL CPU power subscription with retry logic
+  let cpuInitPWRAttempts = 0, cpuPWRRetryMs = 100;
+  function initPwrCpuSubscription() {
+  
+
+    if (window.gql && window.apolloClient) {
+      // Define the subscription query when GraphQL is available
+      // corepower has the temps currently.
+      CPU_POWER_SUBSCRIPTION = window.gql(`
+        subscription SystemMetricsCpuTelemetry {
+           systemMetricsCpuTelemetry {
+            totalPower,
+            power,
+            temp,
+            }
+          }
+      `);
+      cpuPowerSubscription = window.apolloClient.subscribe({
+        query: CPU_POWER_SUBSCRIPTION
+      }).subscribe({
+        next: (result) => {
+
+
+          if (result.data?.systemMetricsCpuTelemetry){
+            cpupower = result.data.systemMetricsCpuTelemetry;
+            
+  	   updateCPUPower();
+          }
+        },
+        error: (err) => {
+          console.error('CPU power subscription error:', err);
+          // Try to resubscribe with capped backoff
+          if (cpuPowerSubscription) { try { cpuPowerSubscription.unsubscribe(); } catch(e){} }
+          setTimeout(initPwrCpuSubscription, Math.min(cpuPWRRetryMs *= 2, 5000));
+        }
+      });
+    } else {
+      // Retry with capped backoff if GraphQL client not ready
+      cpuInitPWRAttempts++;
+      setTimeout(initPwrCpuSubscription, Math.min(cpuPWRRetryMs *= 2, 2000));
+    }
+  }
+  initPwrCpuSubscription();
+  // Cleanup GraphQL subscription on page unload
+  $(window).on('beforeunload', function() {
+    if (cpuPowerSubscription) {
+      cpuPowerSubscription.unsubscribe();
+    }
+  });
+  
+
     
   // Cleanup GraphQL subscription on page unload
   $(window).on('beforeunload', function() {

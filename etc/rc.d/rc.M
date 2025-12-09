@@ -31,9 +31,6 @@ if [[ -x /etc/rc.d/rc.setterm ]]; then
   /etc/rc.d/rc.setterm
 fi
 
-# Set the hostname:
-hostname $(cat /etc/HOSTNAME)
-
 # Set the permissions on /var/log/dmesg according to whether the kernel
 # permits non-root users to access kernel dmesg information:
 if [[ -r /proc/sys/kernel/dmesg_restrict ]]; then
@@ -246,7 +243,8 @@ fi
 # Start avahi:
 if [[ -x /etc/rc.d/rc.avahidaemon ]]; then
   /etc/rc.d/rc.avahidaemon start
-  /etc/rc.d/rc.avahidnsconfd start
+  # disable by default, users can start manually if needed
+  # /etc/rc.d/rc.avahidnsconfd start
 fi
 
 # Start Samba (a file/print server for Windows machines).

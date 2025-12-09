@@ -484,11 +484,11 @@ docker_network_start(){
       fi
     fi
   done
-  # create IPv6 forward accept rule
-  if [[ $IPV6_FORWARD == accept ]]; then
-    ip6tables -P FORWARD ACCEPT
-    log "created forward accept rule for IPv6 network"
-  fi
+#  # create IPv6 forward accept rule
+#  if [[ $IPV6_FORWARD == accept ]]; then
+#    ip6tables -P FORWARD ACCEPT
+#    log "created forward accept rule for IPv6 network"
+#  fi
   log "Network started."
 }
 
@@ -575,6 +575,9 @@ docker_service_start(){
     fi
     nohup $UNSHARE --propagation slave -- $DOCKER -p $DOCKER_PIDFILE $DOCKER_OPTS >>$DOCKER_LOG 2>&1 &
     wait_daemon
+    # after docket started, continue to accept non-docker IPv6 traffic on br0
+    ip6tables -P FORWARD ACCEPT
+#    log "created forward accept rule for IPv6 network"
     if docker_running; then REPLY="Started"; else REPLY="Failed"; fi
   fi
   log "$DAEMON...  $REPLY."
