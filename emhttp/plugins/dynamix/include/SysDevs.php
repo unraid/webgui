@@ -247,7 +247,7 @@ case 't1':
         if ($pcispeed['max_speed']) $speedcol .= '/'.$pcispeed['max_speed'].' '.$pcispeed['rate'];
         if (isset($pcispeed['current_width'])) $current_width = 'x'.$pcispeed['current_width']; else $current_width = '';
         $widthcol = $pcispeed['width_downgraded'] ? '<span class="orange-text">'.$current_width.'</span>' : $current_width;
-        if ($pcispeed['max_width']) $widthcol = $widthcol.'/'.$pcispeed['max_width'];
+        if ($pcispeed['max_width']) $widthcol = $widthcol.'/x'.$pcispeed['max_width'];
         echo $speedcol, '</td><td>', $widthcol;
         if (isset($pcispeed['generation'])) echo'(Gen:'.$pcispeed['generation'].')';
         echo '</td></tr>';
