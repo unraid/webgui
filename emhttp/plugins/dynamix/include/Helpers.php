@@ -1022,6 +1022,11 @@ function getPciLinkInfo($pciAddress)
         "generation"       => null,
     ];
 
+    // If the device path doesn't exist, just return empty defaults
+    if (!is_dir($base)) {
+        return $out;
+    }
+
     // Read speeds
     foreach ($files as $key => $file) {
         if (!file_exists($file)) continue;
@@ -1063,7 +1068,12 @@ function getPciLinkInfo($pciAddress)
     }
     unset($out["max_width_raw"], $out["current_width_raw"]);  // Cleanup
     // Downgrade flags
-    $class_check=  strpos(trim(file_get_contents("$base/class")),"0x06",0);
+    if (file_exists("$base/class")) {
+        $class_raw   = trim(file_get_contents("$base/class"));
+        $class_check = strpos($class_raw, "0x06", 0);
+    } else {
+        $class_check = false;
+    }
     if ($out["current_speed"] && $out["max_speed"] && $class_check === false) {
         $out["speed_downgraded"] = ($out["current_speed"] < $out["max_speed"]);
     }

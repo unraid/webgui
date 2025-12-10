@@ -196,6 +196,9 @@ case 't1':
     $ackparm = "";
  
     foreach ($lsiommu as $key => $group) {
+      if (empty($group)) {
+        continue;
+      }
       $pciidcheck = array_key_first($group);
       if (in_array($pciidcheck,$sriovvfs)) continue;
       # Filter devices.
