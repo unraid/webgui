@@ -995,7 +995,7 @@ function getNumaInfo() {
 /**
  * Get PCIe link data from sysfs with generation + clean GT/s rate.
  * Suppresses sentinel max‑width value 255 (unreported/invalid); preserves 0 when reported.
- * Downgraded indicted for only for non root ports
+ * Downgrade flags are set only for non‑bridge/root‑port devices (PCI class != 0x06).
  *
  * @param string $pciAddress
  * @return array
