@@ -872,41 +872,72 @@ function get_cpu_packages(string $separator = ','): array {
     return $packages;
 }
 
+
 function getIpAddressesByPci(string $pciAddress): array
 {
     $base = "/sys/bus/pci/devices/$pciAddress/net";
 
     if (!is_dir($base)) {
-        return [];  // PCI address not found or not a network device
+        return [];
     }
 
     $interfaces = scandir($base);
-    $ips = [];
+    $result = [];
 
     foreach ($interfaces as $iface) {
         if ($iface === '.' || $iface === '..') continue;
 
-        // Use `ip` command for IPv4 + IPv6
-        $cmd = sprintf('ip -o addr show dev %s 2>/dev/null', escapeshellarg($iface));
-        $output = shell_exec($cmd);
+        //
+        // Walk upward (eth0 → bond0 → br0 → ...)
+        //
+        $chain = [];
+        $curr = $iface;
 
-        if (!$output) continue;
+        while (true) {
+            $chain[] = $curr;
 
-        foreach (explode("\n", trim($output)) as $line) {
-
-            // Match IPv4 like: inet 192.168.1.195/24
-            if (preg_match('/inet\s+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+)/', $line, $m)) {
-                $ips[$iface][] = $m[1];
+            $masterLink = "/sys/class/net/$curr/master";
+            if (!is_link($masterLink)) {
+                break;
             }
 
-            // Match IPv6 like: inet6 fe80::1234:abcd/64
-            if (preg_match('/inet6\s+([0-9a-fA-F:]+\/[0-9]+)/', $line, $m)) {
-                $ips[$iface][] = $m[1];
+            $curr = basename(readlink($masterLink));
+        }
+
+        //
+        // Now $chain contains all relevant interfaces
+        // Example: [eth0, bond0, br0]
+        //
+
+        foreach ($chain as $dev) {
+            $cmd = sprintf('ip -o addr show dev %s 2>/dev/null', escapeshellarg($dev));
+            $output = shell_exec($cmd);
+
+            if (!$output) continue;
+
+            foreach (explode("\n", trim($output)) as $line) {
+
+                // IPv4
+                if (preg_match('/inet\s+(\d+\.\d+\.\d+\.\d+\/\d+)/', $line, $m)) {
+                    $result[$dev][] = $m[1];
+                }
+
+                // IPv6
+                if (preg_match('/inet6\s+([0-9a-fA-F:]+\/\d+)/', $line, $m)) {
+                    $result[$dev][] = $m[1];
+                }
             }
         }
     }
 
-    return $ips;
+    //
+    // Remove duplicates while preserving interface keys
+    //
+    foreach ($result as $iface => $ips) {
+        $result[$iface] = array_values(array_unique($ips));
+    }
+
+    return $result;
 }
 
 function getSystemNumaNodeCount() {
