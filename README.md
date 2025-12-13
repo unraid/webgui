@@ -1,4 +1,6 @@
 # Unraid webgui repo
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Funraid%2Fwebgui.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Funraid%2Fwebgui?ref=badge_shield)
+
 
 ## Structure
 
@@ -19,3 +21,7 @@ We recommend using VS Code with the following plugins:
 * Install [DavidAnson.vscode-markdownlint](https://marketplace.visualstudio.com/items?itemName=DavidAnson.vscode-markdownlint) and when reasonable, implement its recommendations for markdown code.
 * Install [foxundermoon.shell-format](https://marketplace.visualstudio.com/items?itemName=foxundermoon.shell-format) and [timonwong.shellcheck](https://marketplace.visualstudio.com/items?itemName=timonwong.shellcheck) and when reasonable, implement their recommendations when making changes to bash scripts.
 * Install [esbenp.prettier-vscode](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode) and when reasonable, use it for formatting files.
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Funraid%2Fwebgui.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Funraid%2Fwebgui?ref=badge_large)
