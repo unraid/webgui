@@ -151,14 +151,17 @@ function applyCfg() {
   var string2 = "VFSETTINGS=";
   var elements = document.getElementById("vfiopci").elements;
   for (var i = 0, element; element = elements[i++];) {
-    if (element.type === "checkbox"  && element.checked === true && element.className.substring(0, 5) === "iommu")
-    string = string + element.value + " ";
+    if (element.type === "checkbox"  && element.className.substring(0, 5) === "iommu") {
+      var elvfio = element.checked;
+      if (elvfio == true) var vfio = "1"; else vfio = "0";
+      string = string + element.value + "|" + vfio + " ";
+    }
     if (element.type === "checkbox" && element.className.substring(0, 7) === "vfiommu") {
       var pciId = element.id.replace(/^vfvfio/, "");
       var mac = document.getElementById("vfmac" + pciId).value;
-      var elvfio = document.getElementById("vfvfio" + pciId).checked;
-      if (elvfio == true) var vfio = "1"; else vfio = "0";
-      string2 = string2 + element.value + "|" + vfio + "|" + mac + " ";
+      var elvfvfio = document.getElementById("vfvfio" + pciId).checked;
+      if (elvfvfio == true) var vfvfio = "1"; else vfvfio = "0";
+      string2 = string2 + element.value + "|" + vfvfio + "|" + mac + " ";
     }
 
   }

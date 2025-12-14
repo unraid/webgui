@@ -39,6 +39,16 @@ function usb_physical_port($usbbusdev) {
   return($physical_busid);
 }
 
+function  createIOMMUCheckBox($pciaddress,$vd,$iommu,$line) {
+  global $iommuinuse,$vfio_cfg_devices;
+    if ((strpos($line, 'Host bridge') === false) && (strpos($line, 'PCI bridge') === false)) {
+      echo in_array($iommu, $iommuinuse) ? '<tr hidden><td><input type="checkbox" value="" title="'._('In use by Unraid').'" disabled ' : '<tr hidden><td><input type="checkbox" hidden class="iommu'.$iommu.'" value="'.$pciaddress."|".$vd.'" ';
+      // check config file for two formats: <Domain:Bus:Device.Function>|<Vendor:Device> or just <Domain:Bus:Device.Function>
+      echo (in_array($pciaddress."|".$vd, $vfio_cfg_devices) || in_array($pciaddress, $vfio_cfg_devices)) ? " checked>" : ">";
+      echo "</td></tr>";
+    }
+}
+
 switch ($_POST['table']) {
 case 't1':
   $sriov =  json_decode(getSriovInfoJson(true),true);
@@ -202,23 +212,39 @@ case 't1':
       $pciidcheck = array_key_first($group);
       if (in_array($pciidcheck,$sriovvfs)) continue;
       # Filter devices.
-      if ($showsriov && !array_key_exists($pciidcheck,$sriov)) continue;
-      if ($showsriov && !in_array(substr($sriov[$pciidcheck]['class_id'],0,4),$allowedPCIClass)) continue;    
+
       $iommu = $key;
       $iommushow = true;
       foreach ($group as $pciaddress => $line) {
         if (!$line) continue;
         [$class, $class_id, $name] = getPciClassNameAndId($pciaddress);
         $class_prefix = substr(strtolower((string)$class_id), 0, 4);
-        if (in_array($class_prefix, $filter, true)) continue;
+
+        # Do filter checks, but if filtered still create IOMMU check box.
+        $line = preg_replace("/^\t/","",$line);
+        $vd = trim(explode(" ", $line)[0], "[]");
+
+        if ($showsriov && !array_key_exists($pciidcheck,$sriov)) {
+          createIOMMUCheckBox($pciaddress, $vd, $iommu, $line);
+          break;
+        }
+        if ($showsriov && !in_array(substr($sriov[$pciidcheck]['class_id'],0,4),$allowedPCIClass)) {
+          createIOMMUCheckBox($pciaddress, $vd, $iommu, $line);
+          break;
+        }
+  
+        if (in_array($class_prefix, $filter, true)) {
+          createIOMMUCheckBox($pciaddress, $vd, $iommu, $line);
+          continue;
+        }
+
         if ($iommushow) {
           if (isset($spacer)) echo "<tr><td colspan='2' class='thin'></td>"; else $spacer = true;
           echo "</tr><tr><td>IOMMU group $key:</td><td>";
           $iommushow = false;
           $append = true;
         }
-        $line = preg_replace("/^\t/","",$line);
-        $vd = trim(explode(" ", $line)[0], "[]");
+
         $removed = $line[0]=='R' ? true : false;
         if ($removed) $line=preg_replace('/R/', '', $line, 1);
         if (preg_match($BDF_REGEX, $pciaddress)) {
@@ -432,7 +458,6 @@ case 't1':
       echo '<input id="viewlog" type="button" value="'._('View VFIO-PCI Log').'" onclick="openTerminal(\'log\',\'vfio-pci\',\'vfio-pci\')">';
     }
     if ($ackparm == "") $ackdisable =" disabled "; else $ackdisable = "";
-    if ($showall == "yes") $applyhidden = ""; else $applyhidden = " hidden ";
     echo '<input id="applycfg" type="submit"'.$applyhidden.' disabled value="'._('Bind selected to VFIO at Boot').'" onclick="applyCfg();" '.(isset($noiommu) ? "style=\"display:none\"" : "").'>';
     echo '<span id="warning"></span>';
     echo '<input id="applypci" type="submit"'.$ackdisable.' value="'._('Acknowledge all PCI changes').'" onclick="ackPCI(\''.htmlentities($ackparm).'\',\'all\')" >';
@@ -440,10 +465,6 @@ case 't1':
     echo <<<EOT
 <script>
 $("#t1 input[type='checkbox']").change(function() {
-  // Only allow mass-changing when showall is ON
-  if (!$(".showall").is(":checked")) {
-    return; // showall = filtered → do nothing
-  }
   var matches = document.querySelectorAll("." + this.className);
   for (var i=0, len=matches.length|0; i<len; i=i+1|0) {
     matches[i].checked = this.checked ? true : false;

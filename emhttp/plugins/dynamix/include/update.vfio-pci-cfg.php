@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -15,126 +15,152 @@ $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Secure.php";
 require_once "$docroot/webGui/include/Wrappers.php";
 
-function stripVFPrefix($str)
-{
-    return preg_replace('/^VFSETTINGS=/','', trim($str));
+/* ============================================================
+ * VFIO CONFIG
+ * Format: BIND=pci|vendor pci|vendor ...
+ * Input : BIND=pci|vendor|1 pci|vendor|0 ...
+ * ============================================================ */
+
+function parseVFIO($str) {
+    if (!preg_match('/^BIND=(.*)$/', trim($str), $m)) return [];
+    $out = [];
+    foreach (preg_split('/\s+/', trim($m[1])) as $e) {
+        if ($e === '') continue;
+        [$pci, $vd] = array_pad(explode('|', $e, 2), 2, '');
+        if ($pci && $vd) $out[$pci] = $vd;
+    }
+    return $out;
 }
 
-function parseVF($str)
-{
-    $str = stripVFPrefix($str);
-    if ($str === '') return [];
+function parseVFIOInput($str) {
+    if (!preg_match('/^BIND=(.*)$/', trim($str), $m)) return [];
+    $out = [];
+    foreach (preg_split('/\s+/', trim($m[1])) as $e) {
+        if ($e === '') continue;
+        [$pci, $vd, $req] = array_pad(explode('|', $e, 3), 3, '1');
+        if ($pci && $vd && ($req === '0' || $req === '1')) {
+            $out[$pci] = [$vd, $req];
+        }
+    }
+    return $out;
+}
 
-    $blocks = preg_split('/\s+/', trim($str));
-    $result = [];
+function updateVFIO($input, $saved) {
+    $existing  = parseVFIO($saved);
+    $requested = parseVFIOInput($input);
 
-    foreach ($blocks as $block) {
-        if ($block === '') continue;
-
-        $parts = explode('|', $block);
-
-        // Normalize fields: pci|vd|fn|mac
-        $pci = $parts[0] ?? '';
-        $vd  = $parts[1] ?? '';
-        $fn  = $parts[2] ?? '';
-        $mac = $parts[3] ?? '';
-
-        // Unique key: pci + vendor:device
-        $key = $pci . '|' . $vd;
-        $result[$key] = [$fn, $mac];
+    foreach ($requested as $pci => [$vd, $req]) {
+        if ($req === '1') {
+            $existing[$pci] = $vd;
+        } else {
+            unset($existing[$pci]);
+        }
     }
 
-    return $result;
+    if (empty($existing)) return '';
+
+    ksort($existing, SORT_NATURAL);
+    $out = [];
+    foreach ($existing as $pci => $vd) $out[] = "$pci|$vd";
+
+    return 'BIND=' . implode(' ', $out);
 }
 
-function isValidVF($fields)
-{
-    list($fn, $mac) = $fields;
+/* ============================================================
+ * SR-IOV CONFIG
+ * Format: VFSETTINGS=pci|vd|fn|mac ...
+ * ============================================================ */
+
+function stripVFPrefix($str) {
+    return preg_replace('/^VFSETTINGS=/', '', trim($str));
+}
+
+function parseVF($str) {
+    $str = stripVFPrefix($str);
+    if ($str === '') return [];
+    $out = [];
+    foreach (preg_split('/\s+/', $str) as $b) {
+        if ($b === '') continue;
+        [$pci, $vd, $fn, $mac] = array_pad(explode('|', $b), 4, '');
+        if ($pci && $vd) $out["$pci|$vd"] = [$fn, $mac];
+    }
+    return $out;
+}
+
+function isValidVF($fields) {
+    [$fn, $mac] = $fields;
     $mac = strtolower(trim($mac));
 
-    // Common empty MAC
-    $isZeroMac = ($mac === '' || $mac === '00:00:00:00:00:00');
-
-    // Rule fixes:
-    // - fn=0 is allowed even if empty MAC
-    // - fn=1 must always be accepted
-    // - fn>1 always accepted
-    if ($fn === '0') return true;
-    if ($fn === '1') return true;
+    if ($fn === '0' || $fn === '1') return true;
     if (intval($fn) > 1) return true;
 
-    // fallback: require some MAC
-    return !$isZeroMac;
+    return ($mac !== '' && $mac !== '00:00:00:00:00:00');
 }
 
-function updateVFSettings($input, $saved)
-{
+function updateVFSettings($input, $saved) {
     $inputParsed = parseVF($input);
     $savedParsed = parseVF($saved);
 
-    $updated = [];
-
-    // Update existing entries
-    foreach ($savedParsed as $key => $oldFields) {
-        if (isset($inputParsed[$key]) && isValidVF($inputParsed[$key])) {
-            $updated[$key] = $inputParsed[$key];
-        }
-    }
-
-    // Add new entries not in saved
     foreach ($inputParsed as $key => $fields) {
-        if (!isset($savedParsed[$key]) && isValidVF($fields)) {
-            $updated[$key] = $fields;
+        if (isValidVF($fields)) {
+            $savedParsed[$key] = $fields;
         }
     }
 
-    // Reassemble output
-    $result = [];
+    if (empty($savedParsed)) return '';
 
-    foreach ($updated as $key => $fields) {
-        list($pci, $vd) = explode('|', $key);
-        list($fn, $mac) = $fields;
-
-        // Normalize MAC for fn=1 if empty
+    ksort($savedParsed, SORT_NATURAL);
+    $out = [];
+    foreach ($savedParsed as $key => [$fn, $mac]) {
+        [$pci, $vd] = explode('|', $key);
         if ($fn === '1' && trim($mac) === '') {
             $mac = '00:00:00:00:00:00';
         }
-
-        $result[] = "$pci|$vd|$fn|$mac";
+        $out[] = "$pci|$vd|$fn|$mac";
     }
 
-    if (empty($result)) {
-        return "";
-    }
-
-    return "VFSETTINGS=" . implode(' ', $result);
+    return 'VFSETTINGS=' . implode(' ', $out);
 }
 
+/* ============================================================
+ * FILE PATHS
+ * ============================================================ */
 
-$vfio = '/boot/config/vfio-pci.cfg';
+$vfio     = '/boot/config/vfio-pci.cfg';
 $sriovvfs = '/boot/config/sriovvfs.cfg';
+$reply    = 0;
 
-#Save Normal VFIOs
-$old  = is_file($vfio) ? rtrim(file_get_contents($vfio)) : '';
-$new  = _var($_POST,'cfg');
+/* ================= VFIO ================= */
 
-$reply = 0;
-if ($new != $old) {
-  if ($old) copy($vfio,"$vfio.bak");
-  if ($new) file_put_contents($vfio,$new); else @unlink($vfio);
-  $reply |= 1;  
+$old_vfio = is_file($vfio) ? rtrim(file_get_contents($vfio)) : '';
+$new_vfio = _var($_POST, 'cfg');
+$merged_vfio = updateVFIO($new_vfio, $old_vfio);
+
+if ($merged_vfio !== $old_vfio) {
+    if ($old_vfio) copy($vfio, "$vfio.bak");
+    if ($merged_vfio) file_put_contents($vfio, $merged_vfio);
+    else @unlink($vfio);
 }
 
-#Save SRIOV VFS
-$oldvfcfg  = is_file($sriovvfs) ? rtrim(file_get_contents($sriovvfs)) : '';
-$newvfcfg  = _var($_POST,'vfcfg');
-$oldvfcfg_updated = updateVFSettings($newvfcfg,$oldvfcfg);
-if (strpos($oldvfcfg_updated,"VFSETTINGS=") !== 0 && $oldvfcfg_updated != "") $oldvfcfg_updated = "VFSETTINGS=".$oldvfcfg_updated;
+/* Reply bit 1: differs from boot */
+$boot_vfio = is_file("$vfio.boot") ? rtrim(file_get_contents("$vfio.boot")) : '';
+if ($merged_vfio !== $boot_vfio) {
+    $reply |= 1;
+}
 
-if ($oldvfcfg_updated != $oldvfcfg) {
-  if ($oldvfcfg) copy($sriovvfs,"$sriovvfs.bak");
-  if ($oldvfcfg_updated) file_put_contents($sriovvfs,$oldvfcfg_updated); else @unlink($sriovvfs);
-  $reply |= 2;  
+/* ================= SR-IOV ================= */
+
+$old_vfcfg = is_file($sriovvfs) ? rtrim(file_get_contents($sriovvfs)) : '';
+$new_vfcfg = _var($_POST, 'vfcfg');
+$merged_vfcfg = updateVFSettings($new_vfcfg, $old_vfcfg);
+
+if ($merged_vfcfg !== $old_vfcfg) {
+    if ($old_vfcfg) copy($sriovvfs, "$sriovvfs.bak");
+    if ($merged_vfcfg) file_put_contents($sriovvfs, $merged_vfcfg);
+    else @unlink($sriovvfs);
+
+    /* Reply bit 2: changed from previous version */
+    $reply |= 2;
 }
 
 echo $reply;
