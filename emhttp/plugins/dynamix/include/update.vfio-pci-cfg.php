@@ -122,6 +122,12 @@ function updateVFSettings($input, $saved) {
     return 'VFSETTINGS=' . implode(' ', $out);
 }
 
+function normalizeVFIO($str) {
+    $parsed = parseVFIO($str);
+    ksort($parsed, SORT_NATURAL);
+    return $parsed;
+}
+
 /* ============================================================
  * FILE PATHS
  * ============================================================ */
@@ -143,8 +149,13 @@ if ($merged_vfio !== $old_vfio) {
 }
 
 /* Reply bit 1: differs from boot */
-$boot_vfio = is_file("$vfio.boot") ? rtrim(file_get_contents("$vfio.boot")) : '';
-if ($merged_vfio !== $boot_vfio) {
+$boot_vfio_file = dirname($vfio) . '/vfio-pci.boot';
+$boot_vfio_raw  = is_file($boot_vfio_file) ? rtrim(file_get_contents($boot_vfio_file)) : '';
+
+$norm_merged = normalizeVFIO($merged_vfio);
+$norm_boot   = normalizeVFIO($boot_vfio_raw);
+
+if ($norm_merged !== $norm_boot) {
     $reply |= 1;
 }
 
