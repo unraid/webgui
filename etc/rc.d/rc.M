@@ -246,7 +246,8 @@ fi
 # Start avahi:
 if [[ -x /etc/rc.d/rc.avahidaemon ]]; then
   /etc/rc.d/rc.avahidaemon start
-  /etc/rc.d/rc.avahidnsconfd start
+  # disable by default, users can start manually if needed
+  # /etc/rc.d/rc.avahidnsconfd start
 fi
 
 # Start Samba (a file/print server for Windows machines).
