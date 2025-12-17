@@ -79,6 +79,7 @@ function postToXML($post, $setOwnership=false) {
   $xml->Privileged                 = strtolower($post['contPrivileged']??'')=='on' ? 'true' : 'false';
   $xml->Support                    = xml_encode($post['contSupport']);
   $xml->Project                    = xml_encode($post['contProject']);
+  $xml->ReadMe                     = xml_encode($post['contReadMe']);
   $xml->Overview                   = xml_encode($post['contOverview']);
   $xml->Category                   = xml_encode($post['contCategory']);
   $xml->WebUI                      = xml_encode(trim($post['contWebUI']));
@@ -152,6 +153,7 @@ function xmlToVar($xml) {
   $out['Privileged']                   = xml_decode($xml->Privileged);
   $out['Support']                      = xml_decode($xml->Support);
   $out['Project']                      = xml_decode($xml->Project);
+  $out['ReadMe']                       = xml_decode($xml->ReadMe);
   $out['Overview']                     = stripslashes(xml_decode($xml->Overview));
   $out['Category']                     = xml_decode($xml->Category);
   $out['WebUI']                        = xml_decode($xml->WebUI);
