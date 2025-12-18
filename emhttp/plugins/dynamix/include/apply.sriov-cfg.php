@@ -29,7 +29,8 @@ function acknowledge_PCI($pciaddr)
     if (!$saved) {echo "ERROR"; return;};
     $current = loadCurrentPCIData();
     $saved[$pciaddr] = $current[$pciaddr];
-    file_put_contents($savedfile,json_encode($saved,JSON_PRETTY_PRINT));
+    $bytes = file_put_contents($savedfile, json_encode($saved, JSON_PRETTY_PRINT));
+    if ($bytes === false) { throw new RuntimeException(_("Failed to write PCI data")); }
 }
 
 function json_response($success, $error = null, $details = [])

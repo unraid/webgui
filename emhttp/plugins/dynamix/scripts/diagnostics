@@ -541,6 +541,16 @@ if (glob("/boot/config/*.conf")) {
 if (glob("/boot/config/*.dat")) {
   run("cp -- /boot/config/*.dat ".escapeshellarg("/$diag/config"));
 }
+// Current Saved PCI data.
+
+if (glob("/boot/config/savedpcidata.json")) {
+  run("cp -- /boot/config/savedpcidata.json ".escapeshellarg("/$diag/config"));
+}
+
+// Generate PCI Changes
+$pci_diffs = comparePCIData();
+file_put_contents("/$diag/config/pci_diffs.json",json_encode($pci_diffs,JSON_PRETTY_PRINT));
+
 // anonymize ident.cfg
 anonymize_domain_file("/$diag/config/ident.cfg");
 

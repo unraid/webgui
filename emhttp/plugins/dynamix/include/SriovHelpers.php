@@ -274,7 +274,6 @@ function getVfListByIommuGroup(): array {
             $iommu_group = "unknown";
         }
 
-        $groups[] = "IOMMU group " . $iommu_group;
         $groups[] = $vf_pci;
     }
 
