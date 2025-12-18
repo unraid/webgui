@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+  <Agent>
+    <Name>ZentikNotifier</Name>
+    <Variables>
+      <Variable Help="Server base URL (Can be your selfhosted instance). Example: https://notifier-api.zentik.app. See docs [a href='https://notifier-docs.zentik.app/docs/intro' target='_blank'][u]here[/u].[/a]" Desc="Server URL" Default="https://notifier-api.zentik.app">SERVER_URL</Variable>
+      <Variable Help="Bucket ID." Desc="Bucket ID" Default="">BUCKET_ID</Variable>
+      <Variable Help="Access Token used as Bearer token in Authorization header." Desc="Access Token" Default="">ACCESS_TOKEN</Variable>
+      <Variable Help="Optional comma-separated list of Zentik user IDs to target. Use 'none' to omit." Desc="User IDs" Default="none">USER_IDS</Variable>
+      <Variable Help="Specify the fields which are included in the title of the notification." Desc="Notification Title" Default="$SUBJECT">TITLE</Variable>
+      <Variable Help="Specify the fields which are included in the subtitle of the notification." Desc="Notification Subtitle" Default="$EVENT">SUBTITLE</Variable>
+      <Variable Help="Specify the fields which are included in the message body of the notification." Desc="Notification Message" Default="$DESCRIPTION,$CONTENT,$LINK">MESSAGE</Variable>
+    </Variables>
+    <Script>
+      <![CDATA[
+#!/bin/bash
+############
+{0}
+############
+
+############
+# Zentik Notifier agent for Unraid (Dynamix)
+#
+# Available fields from notification system:
+# HOSTNAME, EVENT, IMPORTANCE, SUBJECT, DESCRIPTION, CONTENT, LINK, TIMESTAMP
+############
+
+for bin in curl jq; do
+  command -v "$bin" >/dev/null 2>&1 || { echo "Missing dependency: $bin"; exit 10; }
+done
+
+SCRIPTNAME=$(basename "$0")
+LOG="/var/log/notify_${SCRIPTNAME%.*}"
+
+# for quick test, setup environment to mimic notify script
+EVENT="${EVENT:-ZentikNotifier test}"
+SUBJECT="${SUBJECT:-Notification}"
+DESCRIPTION="${DESCRIPTION:-No description}"
+IMPORTANCE="${IMPORTANCE:-normal}"
+CONTENT="${CONTENT:-}"
+LINK="${LINK:-}"
+HOSTNAME="${HOSTNAME:-$(hostname)}"
+TIMESTAMP="${TIMESTAMP:-$(date +%s)}"
+
+# If TITLE/SUBTITLE/MESSAGE were expanded before defaults (e.g. direct test), fallback now
+TITLE="${TITLE:-$SUBJECT}"
+SUBTITLE="${SUBTITLE:-$EVENT}"
+MESSAGE="${MESSAGE:-$DESCRIPTION}"
+
+# Expand multi-select values into strings
+TITLE=$(echo -e "$TITLE" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g' | sed 's/^ //; s/ $//')
+SUBTITLE=$(echo -e "$SUBTITLE" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g' | sed 's/^ //; s/ $//')
+MESSAGE=$(echo -e "$MESSAGE")
+
+# Map Unraid importance -> Zentik deliveryType
+case "$IMPORTANCE" in
+  alert|warning|critical)
+    DELIVERY_TYPE="CRITICAL"
+    ;;
+  normal|info)
+    DELIVERY_TYPE="NORMAL"
+    ;;
+  *)
+    DELIVERY_TYPE="SILENT"
+    ;;
+esac
+
+# Timestamp (seconds)
+TS="$TIMESTAMP"
+
+# Build endpoint from base server URL
+SERVER_URL=${SERVER_URL%/}
+ENDPOINT="${SERVER_URL}/message"
+if [[ -z "$SERVER_URL" ]]; then
+  echo "Missing SERVER_URL" >>"$LOG"
+  exit 1
+fi
+if [[ -z "$BUCKET_ID" || -z "$ACCESS_TOKEN" ]]; then
+  echo "Missing BUCKET_ID and/or ACCESS_TOKEN" >>"$LOG"
+  exit 1
+fi
+
+# userIds: optional comma-separated list
+USER_IDS_JSON="null"
+if [[ -n "$USER_IDS" && "$USER_IDS" != "none" ]]; then
+  # split by comma, trim whitespace, drop empties
+  USER_IDS_JSON=$(printf '%s\n' "$USER_IDS" | tr ',' '\n' | sed 's/^ *//; s/ *$//' | awk 'NF' | jq -R . | jq -s .)
+  [[ "$USER_IDS_JSON" == "[]" ]] && USER_IDS_JSON="null"
+fi
+
+# Build payload
+PAYLOAD=$(jq -n \
+  --arg bucketId "$BUCKET_ID" \
+  --arg title "$TITLE" \
+  --arg subtitle "$SUBTITLE" \
+  --arg body "$MESSAGE" \
+  --arg deliveryType "$DELIVERY_TYPE" \
+  --argjson userIds "$USER_IDS_JSON" \
+  '{bucketId:$bucketId,title:$title,subtitle:$subtitle,body:$body,deliveryType:$deliveryType,userIds:$userIds}')
+
+jq_status=$?
+if [[ "$jq_status" -ne 0 ]]; then
+  echo "jq error building payload" >>"$LOG"
+  exit 1
+fi
+
+# POST
+args=(
+  -s -k -X POST
+  -m 10
+  -w "\n%{http_code}"
+  -H "Authorization: Bearer ${ACCESS_TOKEN}"
+  -H 'Content-Type: application/json'
+  --data-binary "$PAYLOAD"
+  "$ENDPOINT"
+)
+curl "${args[@]}" 2>&1
+      ]]>
+    </Script>
+  </Agent>
