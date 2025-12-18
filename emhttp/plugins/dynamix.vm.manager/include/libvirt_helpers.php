@@ -1308,9 +1308,9 @@ class Array2XML {
 
 			$arrFoundOtherDevices = array_filter($arrValidOtherDevices, function($arrDev) use ($arrHostDev) {return ($arrDev['id'] == $arrHostDev['id']);});
 			if (!empty($arrFoundOtherDevices)) {
-				$arrOtherDevices[] = ['id' => $arrHostDev['id'],'boot' => $arrHostDev['boot'], 'guest' => $arrHostDev['guest']];
+				$arrOtherDevices[] = ['id' => $arrHostDev['id'],'boot' => $arrHostDev['boot'], 'guest' => $arrHostDev['guest'], 'found' => true];
 				continue;
-			}
+			} else {$arrOtherDevices[] = ['id' => $arrHostDev['id'],'boot' => $arrHostDev['boot'], 'guest' => $arrHostDev['guest'], 'found'=>false];}
 		}
 		if (empty($arrGPUDevices)) {
 			$arrGPUDevices[] = [

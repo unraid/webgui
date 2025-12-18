@@ -871,4 +871,265 @@ function get_cpu_packages(string $separator = ','): array {
     unset($list);
     return $packages;
 }
+
+
+function getIpAddressesByPci(string $pciAddress): array
+{
+    $base = "/sys/bus/pci/devices/$pciAddress/net";
+
+    if (!is_dir($base)) {
+        return [];
+    }
+
+    $interfaces = scandir($base);
+    $result = [];
+
+    foreach ($interfaces as $iface) {
+        if ($iface === '.' || $iface === '..') continue;
+
+        //
+        // Walk upward (eth0 → bond0 → br0 → ...)
+        //
+        $chain = [];
+        $curr = $iface;
+
+        while (true) {
+            $chain[] = $curr;
+
+            $masterLink = "/sys/class/net/$curr/master";
+            if (!is_link($masterLink)) {
+                break;
+            }
+
+            $curr = basename(readlink($masterLink));
+        }
+
+        //
+        // Now $chain contains all relevant interfaces
+        // Example: [eth0, bond0, br0]
+        //
+
+        foreach ($chain as $dev) {
+            $cmd = sprintf('ip -o addr show dev %s 2>/dev/null', escapeshellarg($dev));
+            $output = shell_exec($cmd);
+
+            if (!$output) continue;
+
+            foreach (explode("\n", trim($output)) as $line) {
+
+                // IPv4
+                if (preg_match('/inet\s+(\d+\.\d+\.\d+\.\d+\/\d+)/', $line, $m)) {
+                    $result[$dev][] = $m[1];
+                }
+
+                // IPv6
+                if (preg_match('/inet6\s+([0-9a-fA-F:]+\/\d+)/', $line, $m)) {
+                    $result[$dev][] = $m[1];
+                }
+            }
+        }
+    }
+
+    //
+    // Remove duplicates while preserving interface keys
+    //
+    foreach ($result as $iface => $ips) {
+        $result[$iface] = array_values(array_unique($ips));
+    }
+
+    return $result;
+}
+
+function getSystemNumaNodeCount() {
+    $nodes = glob("/sys/devices/system/node/node*") ?: [];
+    $count = count($nodes);
+    // Treat “no NUMA directory” as a single-node system
+    return $count > 0 ? $count : 1;
+}
+
+function normalizeNumaNode($node, $numNodes) {
+    // If system has only 1 node, interpret -1 as node 0
+    if ($numNodes === 1 && $node === -1) {
+        return 0;
+    }
+    return $node;
+}
+
+function getCpuNumaInfo($numNodes) {
+    $cpus = [];
+
+    foreach (glob("/sys/devices/system/cpu/cpu[0-9]*") as $cpuPath) {
+        $cpu = basename($cpuPath);
+
+        $nodes = glob("$cpuPath/node*");
+        $node = -1;
+
+        if (!empty($nodes)) {
+            $node = intval(str_replace("node", "", basename($nodes[0])));
+        }
+
+        $node = normalizeNumaNode($node, $numNodes);
+
+        $cpus[$cpu] = [
+            "cpu_id" => intval(str_replace("cpu", "", $cpu)),
+            "numa_node" => $node
+        ];
+    }
+
+    return $cpus;
+}
+
+function getPciNumaInfo($numNodes) {
+    $pci = [];
+
+    foreach (glob("/sys/bus/pci/devices/*") as $devPath) {
+        $dev = basename($devPath);
+
+        $numaNodeFile = "$devPath/numa_node";
+        $node = file_exists($numaNodeFile) ? intval(trim(file_get_contents($numaNodeFile))) : -1;
+
+        $node = normalizeNumaNode($node, $numNodes);
+
+        $desc = trim(shell_exec("lspci -mm -s $dev 2>/dev/null"));
+
+        $pci[$dev] = [
+            "pci_address" => $dev,
+            "numa_node" => $node,
+            "description" => $desc
+        ];
+    }
+
+    return $pci;
+}
+
+function getNumaInfo() {
+    $numNodes = getSystemNumaNodeCount();
+
+    $result = [
+        "system" => [
+            "numa_nodes" => $numNodes,
+        ],
+        "cpus" => getCpuNumaInfo($numNodes),
+        "pci_devices" => getPciNumaInfo($numNodes),
+    ];
+
+    if (is_file("/tmp/numain")) {
+        $numain  = file_get_contents("/tmp/numain");
+        $override = json_decode($numain, true);
+        if (is_array($override)) {
+            $result = $override;
+        }
+    }
+
+    return $result;
+}
+/**
+ * Get PCIe link data from sysfs with generation + clean GT/s rate.
+ * Suppresses sentinel max‑width value 255 (unreported/invalid); preserves 0 when reported.
+ * Downgrade flags are set only for non‑bridge/root‑port devices (PCI class != 0x06).
+ *
+ * @param string $pciAddress
+ * @return array
+ */
+function getPciLinkInfo($pciAddress)
+{
+    $base = "/sys/bus/pci/devices/$pciAddress";
+
+    $files = [
+        "current_speed" => "$base/current_link_speed",
+        "max_speed"     => "$base/max_link_speed",
+        "current_width" => "$base/current_link_width",
+        "max_width"     => "$base/max_link_width",
+    ];
+
+    $out = [
+        "current_speed"    => null,
+        "max_speed"        => null,
+        "current_width"    => null,
+        "max_width"        => null,
+        "speed_downgraded" => false,
+        "width_downgraded" => false,
+        "rate"             => "GT/s",
+        "generation"       => null,
+    ];
+
+    // If the device path doesn't exist, just return empty defaults
+    if (!is_dir($base)) {
+        return $out;
+    }
+
+    // Read speeds
+    foreach ($files as $key => $file) {
+        if (!file_exists($file)) continue;
+        $value = trim(file_get_contents($file));
+        // Handle speeds
+        if (strpos($key, 'speed') !== false) {
+            if (preg_match('/([0-9.]+)/', $value, $m)) {
+                $out[$key] = floatval($m[1]);
+            }
+        }
+
+        // Handle widths (do not apply suppression yet)
+        if ($key === 'max_width') {
+            $out['max_width_raw'] = intval(str_replace('x', '', $value));
+        }
+        if ($key === 'current_width') {
+            $out['current_width_raw'] = intval(str_replace('x', '', $value));
+        }
+    }
+
+    // Apply width rules
+    $max = $out['max_width_raw'] ?? null;
+    $cur = $out['current_width_raw'] ?? null;
+
+    if ($max === 255) {
+        // Invalid / not reported
+        $out["max_width"] = null;
+        $out["current_width"] = null;
+    } else {
+        // Valid max width → keep 0 as 0
+        $out["max_width"] = $max;
+
+        if ($cur === 0) {
+            // 0 is valid when max != 255
+            $out["current_width"] = 0;
+        } else {
+            $out["current_width"] = $cur;
+        }
+    }
+    unset($out["max_width_raw"], $out["current_width_raw"]);  // Cleanup
+    // Downgrade flags
+    if (file_exists("$base/class")) {
+        $class_raw   = trim(file_get_contents("$base/class"));
+        $class_check = strpos($class_raw, "0x06", 0);
+    } else {
+        $class_check = false;
+    }
+    if ($out["current_speed"] && $out["max_speed"] && $class_check === false) {
+        $out["speed_downgraded"] = ($out["current_speed"] < $out["max_speed"]);
+    }
+    if ($out["current_width"] !== null && $out["max_width"]     !== null && $out["current_width"] < $out["max_width"] && $class_check === false) {
+        $out["width_downgraded"] = true;
+    }
+    // PCIe Generation Table
+    $genTable = [
+        1 => 2.5,
+        2 => 5.0,
+        3 => 8.0,
+        4 => 16.0,
+        5 => 32.0,
+        6 => 64.0,
+    ];
+    // Determine generation from max_speed
+    if (!empty($out["max_speed"])) {
+        $speed = $out["max_speed"];
+        foreach ($genTable as $gen => $gt) {
+            if (abs($speed - $gt) < 0.5) {
+                $out["generation"] = $gen;
+                break;
+            }
+        }
+    }
+    return $out;
+}
 ?>
