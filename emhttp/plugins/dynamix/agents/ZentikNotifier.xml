@@ -3,6 +3,7 @@
     <Name>ZentikNotifier</Name>
     <Variables>
       <Variable Help="Server base URL (Can be your selfhosted instance). Example: https://notifier-api.zentik.app. See docs [a href='https://notifier-docs.zentik.app/docs/intro' target='_blank'][u]here[/u].[/a]" Desc="Server URL" Default="https://notifier-api.zentik.app">SERVER_URL</Variable>
+      <Variable Help="Skip TLS certificate validation (insecure). Use 'yes' only if you understand the risks." Desc="Allow Insecure" Default="no">ALLOW_INSECURE</Variable>
       <Variable Help="Bucket ID." Desc="Bucket ID" Default="">BUCKET_ID</Variable>
       <Variable Help="Access Token used as Bearer token in Authorization header." Desc="Access Token" Default="">ACCESS_TOKEN</Variable>
       <Variable Help="Optional comma-separated list of Zentik user IDs to target. Use 'none' to omit." Desc="User IDs" Default="none">USER_IDS</Variable>
@@ -67,9 +68,6 @@ esac
 # Timestamp (seconds)
 TS="$TIMESTAMP"
 
-# Build endpoint from base server URL
-SERVER_URL=${SERVER_URL%/}
-ENDPOINT="${SERVER_URL}/message"
 if [[ -z "$SERVER_URL" ]]; then
   echo "Missing SERVER_URL" >>"$LOG"
   exit 1
@@ -78,6 +76,10 @@ if [[ -z "$BUCKET_ID" || -z "$ACCESS_TOKEN" ]]; then
   echo "Missing BUCKET_ID and/or ACCESS_TOKEN" >>"$LOG"
   exit 1
 fi
+
+# Build endpoint from base server URL
+SERVER_URL=${SERVER_URL%/}
+ENDPOINT="${SERVER_URL}/message"
 
 # userIds: optional comma-separated list
 USER_IDS_JSON="null"
@@ -105,7 +107,7 @@ fi
 
 # POST
 args=(
-  -s -k -X POST
+  -s -X POST
   -m 10
   -w "\n%{http_code}"
   -H "Authorization: Bearer ${ACCESS_TOKEN}"
@@ -113,7 +115,16 @@ args=(
   --data-binary "$PAYLOAD"
   "$ENDPOINT"
 )
-curl "${args[@]}" 2>&1
+[[ "${ALLOW_INSECURE}" == "yes" ]] && args+=( -k )
+
+RESPONSE=$(curl "${args[@]}" 2>&1)
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+
+# Check if HTTP status indicates success (2xx)
+if [[ ! "$HTTP_CODE" =~ ^2[0-9]{2}$ ]]; then
+  echo "HTTP request failed with status $HTTP_CODE" >>"$LOG"
+  exit 1
+fi
       ]]>
     </Script>
   </Agent>
