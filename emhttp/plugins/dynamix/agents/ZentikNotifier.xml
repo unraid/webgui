@@ -47,10 +47,12 @@ TITLE="${TITLE:-$SUBJECT}"
 SUBTITLE="${SUBTITLE:-$EVENT}"
 MESSAGE="${MESSAGE:-$DESCRIPTION}"
 
-# Expand multi-select values into strings
-TITLE=$(echo -e "$TITLE" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g' | sed 's/^ //; s/ $//')
-SUBTITLE=$(echo -e "$SUBTITLE" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g' | sed 's/^ //; s/ $//')
-MESSAGE=$(echo -e "$MESSAGE")
+# Expand multi-select values into strings.
+# Note: Dynamix multi-select stores separators as literal "\n" sequences.
+# We intentionally interpret escape sequences here to support formatted input.
+TITLE=$(printf '%b' "$TITLE" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g' | sed 's/^ //; s/ $//')
+SUBTITLE=$(printf '%b' "$SUBTITLE" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g' | sed 's/^ //; s/ $//')
+MESSAGE=$(printf '%b' "$MESSAGE")
 
 # Map Unraid importance -> Zentik deliveryType
 case "$IMPORTANCE" in
@@ -64,9 +66,6 @@ case "$IMPORTANCE" in
     DELIVERY_TYPE="SILENT"
     ;;
 esac
-
-# Timestamp (seconds)
-TS="$TIMESTAMP"
 
 if [[ -z "$SERVER_URL" ]]; then
   echo "Missing SERVER_URL" >>"$LOG"
@@ -84,7 +83,8 @@ ENDPOINT="${SERVER_URL}/message"
 # userIds: optional comma-separated list
 USER_IDS_JSON="null"
 if [[ -n "$USER_IDS" && "$USER_IDS" != "none" ]]; then
-  # split by comma, trim whitespace, drop empties
+  # Parse comma-separated list into JSON array:
+  # 1. Split by comma, 2. Trim whitespace, 3. Drop empties, 4. Quote as JSON strings, 5. Collect into array
   USER_IDS_JSON=$(printf '%s\n' "$USER_IDS" | tr ',' '\n' | sed 's/^ *//; s/ *$//' | awk 'NF' | jq -R . | jq -s .)
   [[ "$USER_IDS_JSON" == "[]" ]] && USER_IDS_JSON="null"
 fi
@@ -118,6 +118,13 @@ args=(
 [[ "${ALLOW_INSECURE}" == "yes" ]] && args+=( -k )
 
 RESPONSE=$(curl "${args[@]}" 2>&1)
+CURL_EXIT=$?
+
+if [[ $CURL_EXIT -ne 0 ]]; then
+  echo "curl failed with exit code $CURL_EXIT" >>"$LOG"
+  exit 1
+fi
+
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
 
 # Check if HTTP status indicates success (2xx)
