@@ -162,8 +162,18 @@ case 'file':
   $jobs   = '/var/tmp/file.manager.jobs';
   $data[] = 'action="'.($_POST['action']??'').'"';
   $data[] = 'title="'.rawurldecode($_POST['title']??'').'"';
-  $data[] = 'source="'.htmlspecialchars_decode(rawurldecode($_POST['source']??'')).'"';
-  $data[] = 'target="'.rawurldecode($_POST['target']??'').'"';
+  // Safely quote values for INI: escape backslashes, quotes, and prevent constant interpolation via ${
+  $src = htmlspecialchars_decode(rawurldecode($_POST['source'] ?? ''));
+  $src = str_replace('\\', '\\\\', $src);   // escape backslashes FIRST
+  $src = str_replace('"', '\\"', $src);     // then escape inner double quotes
+  $src = str_replace('${', '\\${', $src);   // escape ${ to avoid INI constant substitution
+  $data[] = 'source="'.$src.'"';
+
+  $dst = rawurldecode($_POST['target'] ?? '');
+  $dst = str_replace('\\', '\\\\', $dst);     // escape backslashes FIRST
+  $dst = str_replace('"', '\\"', $dst);       // then escape inner double quotes
+  $dst = str_replace('${', '\\${', $dst);     // escape ${ to avoid INI constant substitution
+  $data[] = 'target="'.$dst.'"';
   $data[] = 'H="'.(empty($_POST['hdlink']) ? '' : 'H').'"';
   $data[] = 'sparse="'.(empty($_POST['sparse']) ? '' : '--sparse').'"';
   $data[] = 'exist="'.(empty($_POST['exist']) ? '--ignore-existing' : '').'"';

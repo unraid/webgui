@@ -149,14 +149,21 @@ $folder = $lock=='---' ? _('DEVICE') : ($ishare ? _('SHARE') : _('FOLDER'));
 
 if ($user ) {
   exec("shopt -s dotglob;getfattr --no-dereference --absolute-names -n system.LOCATIONS ".escapeshellarg($dir)."/* 2>/dev/null",$tmp);
-  for ($i = 0; $i < count($tmp); $i+=3) $set[basename($tmp[$i])] = explode('"',$tmp[$i+1])[1];
+  // Decode octal escapes from getfattr output to match actual filenames
+  // Reason: "getfattr" outputs \012 (newline) but the below "find" returns actual newline character
+  for ($i = 0; $i < count($tmp); $i+=3) {
+    $filename = preg_replace_callback('/\\\\([0-7]{3})/', function($m) { return chr(octdec($m[1])); }, $tmp[$i]);
+    $set[basename($filename)] = explode('"',$tmp[$i+1])[1];
+  }
   unset($tmp);
 }
 
-$stat = popen("shopt -s dotglob;stat -L -c'%F|%U|%A|%s|%Y|%n' ".escapeshellarg($dir)."/* 2>/dev/null",'r');
+// Get directory listing with stat info NULL-separated to support newlines in file/dir names
+$stat = popen("cd ".escapeshellarg($dir)." && find . -maxdepth 1 -mindepth 1 -exec stat -L --printf '%F|%U|%A|%s|%Y|%n\\0' {} + 2>/dev/null", 'r');
 
-while (($row = fgets($stat)) !== false) {
-  [$type,$owner,$perm,$size,$time,$name] = explode('|',rtrim($row,"\n"),6);
+while (($row = stream_get_line($stat, 65536, "\0")) !== false) {
+  [$type,$owner,$perm,$size,$time,$name] = explode('|',$row,6);
+  $name = $dir.'/'.substr($name, 2); // Remove './' prefix from find output
   $dev  = explode('/', $name, 5);
   $devs = explode(',', $user ? $set[basename($name)] ?? $shares[$dev[3]]['cachePool'] ?? '' : $lock);
   $objs++;
@@ -164,7 +171,8 @@ while (($row = fgets($stat)) !== false) {
   if ($type[0] == 'd') {
     $text[] = '<tr><td><i id="check_'.$objs.'" class="fa fa-fw fa-square-o" onclick="selectOne(this.id)"></i></td>';
     $text[] = '<td data=""><i class="fa fa-folder-o"></i></td>';
-    $text[] = '<td><a id="name_'.$objs.'" oncontextmenu="folderContextMenu(this.id,\'right\');return false" href="/'.$path.'?dir='.rawurlencode(htmlspecialchars($name)).'">'.htmlspecialchars(basename($name)).'</a></td>';
+    // nl2br() is used to preserve newlines in file/dir names
+    $text[] = '<td><a id="name_'.$objs.'" oncontextmenu="folderContextMenu(this.id,\'right\');return false" href="/'.$path.'?dir='.rawurlencode(htmlspecialchars($name)).'">'.nl2br(htmlspecialchars(basename($name))).'</a></td>';
     $text[] = '<td id="owner_'.$objs.'">'.$owner.'</td>';
     $text[] = '<td id="perm_'.$objs.'">'.$perm.'</td>';
     $text[] = '<td data="0">&lt;'.$folder.'&gt;</td>';
@@ -177,7 +185,7 @@ while (($row = fgets($stat)) !== false) {
     $tag = count($devs) > 1 ? 'warning' : '';
     $text[] = '<tr><td><i id="check_'.$objs.'" class="fa fa-fw fa-square-o" onclick="selectOne(this.id)"></i></td>';
     $text[] = '<td class="ext" data="'.$ext.'"><i class="'.icon_class($ext).'"></i></td>';
-    $text[] = '<td id="name_'.$objs.'" class="'.$tag.'" onclick="fileEdit(this.id)" oncontextmenu="fileContextMenu(this.id,\'right\');return false">'.htmlspecialchars(basename($name)).'</td>';
+    $text[] = '<td id="name_'.$objs.'" class="'.$tag.'" onclick="fileEdit(this.id)" oncontextmenu="fileContextMenu(this.id,\'right\');return false">'.nl2br(htmlspecialchars(basename($name))).'</td>';
     $text[] = '<td id="owner_'.$objs.'" class="'.$tag.'">'.$owner.'</td>';
     $text[] = '<td id="perm_'.$objs.'" class="'.$tag.'">'.$perm.'</td>';
     $text[] = '<td data="'.$size.'" class="'.$tag.'">'.my_scale($size,$unit).' '.$unit.'</td>';
