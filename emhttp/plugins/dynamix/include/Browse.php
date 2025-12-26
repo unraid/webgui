@@ -179,7 +179,7 @@ pclose($stat);
 $fields_array = explode("\0", $all_output);
 
 // Process in groups of 7 fields per entry
-for ($i = 0; $i < count($fields_array) - 7; $i += 7) {
+for ($i = 0; $i + 7 <= count($fields_array); $i += 7) {
   $fields = array_slice($fields_array, $i, 7);
   [$type,$owner,$perm,$size,$time,$name,$target] = $fields;
   $time = (int)$time;

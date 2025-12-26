@@ -272,7 +272,10 @@ while (true) {
   unset($action, $source, $target, $H, $sparse, $exist, $zfs);
 
   // read job parameters from JSON file: $action, $title, $source, $target, $H, $sparse, $exist, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
-  if (file_exists($active)) extract(json_decode(file_get_contents($active), true));
+  if (file_exists($active)) {
+    $data = json_decode(file_get_contents($active), true);
+    if (is_array($data)) extract($data);
+  }
 
   // read PID from file (file_manager may have been restarted)
   if (!$pid && file_exists($pid_file)) {
