@@ -271,8 +271,8 @@ $delete_empty_dirs = null;
 while (true) {
   unset($action, $source, $target, $H, $sparse, $exist, $zfs);
 
-  // read job parameters from ini file: $action, $title, $source, $target, $H, $sparse, $exist, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
-  if (file_exists($active)) extract(parse_ini_file($active));
+  // read job parameters from JSON file: $action, $title, $source, $target, $H, $sparse, $exist, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
+  if (file_exists($active)) extract(json_decode(file_get_contents($active), true));
 
   // read PID from file (file_manager may have been restarted)
   if (!$pid && file_exists($pid_file)) {

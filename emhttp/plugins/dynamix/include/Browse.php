@@ -82,6 +82,8 @@ function my_devs(&$devs,$name,$menu) {
 
 function icon_class($ext) {
   switch ($ext) {
+  case 'broken-symlink':
+    return 'fa fa-chain-broken red-text';
   case '3gp': case 'asf': case 'avi': case 'f4v': case 'flv': case 'm4v': case 'mkv': case 'mov': case 'mp4': case 'mpeg': case 'mpg': case 'm2ts': case 'ogm': case 'ogv': case 'vob': case 'webm': case 'wmv':
     return 'fa fa-film';
   case '7z': case 'bz2': case 'gz': case 'rar': case 'tar': case 'xz': case 'zip':
@@ -152,6 +154,8 @@ if ($user ) {
   // Decode octal escapes from getfattr output to match actual filenames
   // Reason: "getfattr" outputs \012 (newline) but the below "find" returns actual newline character
   for ($i = 0; $i < count($tmp); $i+=3) {
+    // Check bounds: if getfattr fails for a file, we might not have all 3 lines
+    if (!isset($tmp[$i+1])) break;
     $filename = preg_replace_callback('/\\\\([0-7]{3})/', function($m) { return chr(octdec($m[1])); }, $tmp[$i]);
     $set[basename($filename)] = explode('"',$tmp[$i+1])[1];
   }
@@ -235,15 +239,15 @@ for ($i = 0; $i < count($fields_array) - 7; $i += 7) {
     $text[] = '<td><i id="row_'.$objs.'" data="'.escapeQuote($name).'" type="d" class="fa fa-plus-square-o" onclick="folderContextMenu(this.id,\'both\')" oncontextmenu="folderContextMenu(this.id,\'both\');return false">...</i></td></tr>';
     $dirs[] = gzdeflate(implode($text));
   } else {
-    $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    $is_broken = ($type == 'broken');
+    $ext = $is_broken ? 'broken-symlink' : strtolower(pathinfo($name, PATHINFO_EXTENSION));
     $tag = count($devs) > 1 ? 'warning' : '';
-    $is_broken_symlink = ($type == 'broken');
     $text[] = '<tr><td><i id="check_'.$objs.'" class="fa fa-fw fa-square-o" onclick="selectOne(this.id)"></i></td>';
     $text[] = '<td class="ext" data="'.$ext.'"><i class="'.icon_class($ext).'"></i></td>';
-    $text[] = '<td id="name_'.$objs.'" class="'.$tag.'" onclick="fileEdit(this.id)" oncontextmenu="fileContextMenu(this.id,\'right\');return false">'.nl2br(htmlspecialchars(basename($name))).'</td>';
+    $text[] = '<td id="name_'.$objs.'" class="'.$tag.'"'.($is_broken ? '' : ' onclick="fileEdit(this.id)"').' oncontextmenu="fileContextMenu(this.id,\'right\');return false">'.nl2br(htmlspecialchars(basename($name))).'</td>';
     $text[] = '<td id="owner_'.$objs.'" class="'.$tag.'">'.$owner.'</td>';
     $text[] = '<td id="perm_'.$objs.'" class="'.$tag.'">'.$perm.'</td>';
-    $text[] = '<td data="'.$size.'" class="'.$tag.'">'.($is_broken_symlink ? '<i class="fa fa-chain-broken red-text"></i>' : my_scale($size,$unit).' '.$unit).'</td>';
+    $text[] = '<td data="'.$size.'" class="'.$tag.'">'.my_scale($size,$unit).' '.$unit.'</td>';
     $text[] = '<td data="'.$time.'" class="'.$tag.'"><span class="my_time">'.my_time($time,$fmt).'</span><span class="my_age" style="display:none">'.my_age($time).'</span></td>';
     $text[] = '<td class="loc '.$tag.'">'.my_devs($devs,$dev_name,'deviceFileContextMenu').'</td>';
     $text[] = '<td><i id="row_'.$objs.'" data="'.escapeQuote($name).'" type="f" class="fa fa-plus-square-o" onclick="fileContextMenu(this.id,\'both\')" oncontextmenu="fileContextMenu(this.id,\'both\');return false">...</i></td></tr>';
