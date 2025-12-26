@@ -169,7 +169,7 @@ case 'file':
   $src = str_replace('${', '\\${', $src);   // escape ${ to avoid INI constant substitution
   $data[] = 'source="'.$src.'"';
 
-  $dst = rawurldecode($_POST['target'] ?? '');
+  $dst = htmlspecialchars_decode(rawurldecode($_POST['target'] ?? ''));
   $dst = str_replace('\\', '\\\\', $dst);     // escape backslashes FIRST
   $dst = str_replace('"', '\\"', $dst);       // then escape inner double quotes
   $dst = str_replace('${', '\\${', $dst);     // escape ${ to avoid INI constant substitution
