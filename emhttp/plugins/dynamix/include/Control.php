@@ -156,12 +156,10 @@ case 'undo':
   $jobs = '/var/tmp/file.manager.jobs';
   $undo = '0';
   if (file_exists($jobs)) {
-    // With JSON format, each job is one line (previously 9 lines in INI format)
-    // Convert INI row numbers (1, 10, 19, ...) to line numbers (1, 2, 3, ...)
     $rows = array_reverse(explode(',',$_POST['row']));
     $lines = file($jobs, FILE_IGNORE_NEW_LINES);
     foreach ($rows as $row) {
-      $line_number = intdiv($row - 1, 9); // convert INI row to line index (0-based)
+      $line_number = $row - 1; // Convert 1-based job number to 0-based array index
       if (isset($lines[$line_number])) {
         unset($lines[$line_number]);
       }

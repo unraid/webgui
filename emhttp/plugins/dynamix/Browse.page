@@ -312,7 +312,7 @@ function doJobs(title) {
       },
       "_(Delete)_": function(){
         let row = [];
-        dfm.window.find('i[id^="queue_"]').each(function(){if ($(this).hasClass('fa-check-square-o')) row.push((($(this).prop('id').split('_')[1]-1)*9)+1);});
+        dfm.window.find('i[id^="queue_"]').each(function(){if ($(this).hasClass('fa-check-square-o')) row.push($(this).prop('id').split('_')[1]);});
         $.post('/webGui/include/Control.php',{mode:'undo',row:row.join(',')},function(queue){
           $.post('/webGui/include/Control.php',{mode:'jobs'},function(jobs){
             $('#dfm_jobs').html(jobs);
