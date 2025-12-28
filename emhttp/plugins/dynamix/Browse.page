@@ -889,31 +889,52 @@ function downloadFile(source) {
 
 function uploadFile(files,index,start,time) {
   var file = files[index];
-  var slice = 2097152; // 2M
+  var slice = 20971520; // 20MB chunks - no Base64 overhead, raw binary
   var next = start + slice;
   var blob = file.slice(start, next);
-  reader.onloadend = function(e){
-    if (e.target.readyState !== FileReader.DONE) return;
-    $.post('/webGui/include/Control.php',{mode:'upload',file:encodeURIComponent(dir+'/'+dfm_htmlspecialchars(file.name)),start:start,data:window.btoa(e.target.result),cancel:cancel},function(reply){
-      if (reply == 'stop') {stopUpload(file.name); return;}
-      if (reply == 'error') {stopUpload(file.name,true); return;}
-      if (next < file.size) {
-        var total = 0;
-        for (var i=0,f; f=files[i]; i++) {
-          if (i < index) start += f.size;
-          total += f.size;
-        }
-        const d = new Date();
-        var speed = autoscale(((start + slice) * 8) / (d.getTime() - time));
-        var percent = Math.floor((start + slice) / total * 100);
-        $('#dfm_uploadStatus').html("_(Uploading)_: <span class='dfm_percent'>"+percent+"%</span><span class='dfm_speed'>Speed: "+speed+"</span><span class='orange-text'> ["+(index+1)+'/'+files.length+']&nbsp;&nbsp;'+file.name+"</span>");
-        uploadFile(files,index,next,time);
-      } else if (index < files.length-1) {
-        uploadFile(files,index+1,0,time);
-      } else {stopUpload(file.name); return;}
-    });
+  
+  var xhr = new XMLHttpRequest();
+  var url = '/webGui/include/Control.php?mode=upload&file=' + encodeURIComponent(dir + '/' + dfm_htmlspecialchars(file.name)) + '&start=' + start + '&cancel=' + cancel;
+  xhr.open('POST', url, true);
+  xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+  xhr.setRequestHeader('X-CSRF-Token', '<?=$var['csrf_token']?>');
+  xhr.timeout = 600000; // 10 minutes per chunk
+  
+  xhr.onload = function() {
+    if (xhr.status < 200 || xhr.status >= 300) {
+      stopUpload(file.name, true);
+      return;
+    }
+    var reply = xhr.responseText;
+    if (reply == 'stop') {stopUpload(file.name); return;}
+    if (reply == 'error') {stopUpload(file.name,true); return;}
+    if (next < file.size) {
+      var total = 0;
+      for (var i=0,f; f=files[i]; i++) {
+        if (i < index) start += f.size;
+        total += f.size;
+      }
+      const d = new Date();
+      var bytesTransferred = start + slice;
+      var elapsedSeconds = (d.getTime() - time) / 1000;
+      var speed = autoscale(bytesTransferred / elapsedSeconds);
+      var percent = Math.floor(bytesTransferred / total * 100);
+      $('#dfm_uploadStatus').html("_(Uploading)_: <span class='dfm_percent'>"+percent+"%</span><span class='dfm_speed'>Speed: "+speed+"</span><span class='orange-text'> ["+(index+1)+'/'+files.length+']&nbsp;&nbsp;'+file.name+"</span>");
+      uploadFile(files,index,next,time);
+    } else if (index < files.length-1) {
+      uploadFile(files,index+1,0,time);
+    } else {stopUpload(file.name); return;}
   };
-  reader.readAsBinaryString(blob);
+  
+  xhr.onerror = function() {
+    stopUpload(file.name,true);
+  };
+  
+  xhr.ontimeout = function() {
+    stopUpload(file.name,true);
+  };
+  
+  xhr.send(blob);
 }
 
 var reader = {};
