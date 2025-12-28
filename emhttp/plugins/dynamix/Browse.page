@@ -947,7 +947,8 @@ function uploadFile(files,index,start,time) {
       file: dir + '/' + dfm_htmlspecialchars(file.name),
       start: 0,
       cancel: 1
-    }, function() {
+    }).always(function() {
+      // Cleanup UI regardless of POST success/failure
       stopUpload(file.name, false);
     });
   };
