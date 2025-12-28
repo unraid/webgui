@@ -910,12 +910,13 @@ function uploadFile(files,index,start,time) {
     if (reply == 'error') {stopUpload(file.name,true); return;}
     if (next < file.size) {
       var total = 0;
+      var completed = 0;
       for (var i=0,f; f=files[i]; i++) {
-        if (i < index) start += f.size;
+        if (i < index) completed += f.size;
         total += f.size;
       }
       const d = new Date();
-      var bytesTransferred = start + slice;
+      var bytesTransferred = completed + next;
       var elapsedSeconds = (d.getTime() - time) / 1000;
       var speed = autoscale(bytesTransferred / elapsedSeconds);
       var percent = Math.floor(bytesTransferred / total * 100);

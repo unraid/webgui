@@ -60,6 +60,10 @@ case 'upload':
     chmod($file,0666);
   }
   $file = file_get_contents($local);
+  // Temp file does not exist
+  if ($file === false) {
+    die('error');
+  }
   if ($cancel==1) {
     delete_file($file);
     die('stop');
