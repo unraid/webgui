@@ -46,10 +46,10 @@ switch ($_POST['mode'] ?? $_GET['mode'] ?? '') {
 case 'upload':
   $file = validname(htmlspecialchars_decode(rawurldecode($_POST['file'] ?? $_GET['file'] ?? '')));
   if (!$file) die('stop');
-  $start = $_POST['start'] ?? $_GET['start'] ?? 0;
-  $cancel = $_POST['cancel'] ?? $_GET['cancel'] ?? 0;
+  $start = (int)($_POST['start'] ?? $_GET['start'] ?? 0);
+  $cancel = (int)($_POST['cancel'] ?? $_GET['cancel'] ?? 0);
   $local = "/var/tmp/".basename($file).".tmp";
-  if ($start==0) {
+  if ($start === 0) {
     $my = pathinfo($file); $n = 0;
     while (file_exists($file)) $file = $my['dirname'].'/'.preg_replace('/ \(\d+\)$/','',$my['filename']).' ('.++$n.')'.($my['extension'] ? '.'.$my['extension'] : '');
     file_put_contents($local,$file);
@@ -62,7 +62,7 @@ case 'upload':
   $file = file_get_contents($local);
   // Temp file does not exist
   if ($file === false) {
-    die('error');
+    die('error:tempfile');
   }
   if ($cancel==1) {
     delete_file($file);
@@ -75,10 +75,15 @@ case 'upload':
   } else {
     // New raw binary upload method (read from request body)
     $chunk = file_get_contents('php://input');
+    if (strlen($chunk) > 21000000) { // slightly more than 20MB to allow overhead
+      unlink($local);
+      die('error:chunksize:'.strlen($chunk));
+    }
   }
   if (file_put_contents($file,$chunk,FILE_APPEND)===false) {
     delete_file($file);
-    die('error');
+    delete_file($local);
+    die('error:write');
   }
   die();
 case 'calc':

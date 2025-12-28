@@ -866,7 +866,7 @@ function doActions(action, title) {
   setTimeout(function(){if (dfm.window.find('#dfm_target').length) dfm.window.find('#dfm_target').focus().click(); else $('.ui-dfm .ui-dialog-buttonset button:eq(0)').focus();});
 }
 
-function stopUpload(file,error) {
+function stopUpload(file,error,errorType) {
   window.onbeforeunload = null;
   $.post('/webGui/include/Control.php',{mode:'stop',file:encodeURIComponent(dfm_htmlspecialchars(file))});
   $('#dfm_uploadButton').val("_(Upload)_").prop('onclick',null).off('click').click(function(){$('#dfm_upload').click();});
@@ -874,7 +874,12 @@ function stopUpload(file,error) {
   $('#dfm_upload').val('');
   dfm.running = false;
   loadList();
-  if (error) setTimeout(function(){swal({title:"_(Upload Error)_",text:"_(File is removed)_",html:true,confirmButtonText:"_(Ok)_"});},200);
+  if (error) {
+    var message = "_(File is removed)_";
+    if (errorType === 'timeout') message += "<br><br>_(Upload timed out. Please check your network connection and try again.)_";
+    else if (errorType === 'network') message += "<br><br>_(Network error occurred. Please check your connection and try again.)_";
+    setTimeout(function(){swal({title:"_(Upload Error)_",text:message,html:true,confirmButtonText:"_(Ok)_"});},200);
+  }
 }
 
 function downloadFile(source) {
@@ -898,16 +903,20 @@ function uploadFile(files,index,start,time) {
   xhr.open('POST', url, true);
   xhr.setRequestHeader('Content-Type', 'application/octet-stream');
   xhr.setRequestHeader('X-CSRF-Token', '<?=$var['csrf_token']?>');
-  xhr.timeout = 600000; // 10 minutes per chunk
+  xhr.timeout = Math.max(600000, slice / 1024 * 60); // ~1 minute per MB, minimum 10 minutes
   
   xhr.onload = function() {
     if (xhr.status < 200 || xhr.status >= 300) {
-      stopUpload(file.name, true);
+      stopUpload(file.name, true, 'http');
       return;
     }
     var reply = xhr.responseText;
     if (reply == 'stop') {stopUpload(file.name); return;}
-    if (reply == 'error') {stopUpload(file.name,true); return;}
+    if (reply.indexOf('error') === 0) {
+      console.error('Upload error:', reply);
+      stopUpload(file.name,true); 
+      return;
+    }
     if (next < file.size) {
       var total = 0;
       var completed = 0;
@@ -923,27 +932,27 @@ function uploadFile(files,index,start,time) {
       $('#dfm_uploadStatus').html("_(Uploading)_: <span class='dfm_percent'>"+percent+"%</span><span class='dfm_speed'>Speed: "+speed+"</span><span class='orange-text'> ["+(index+1)+'/'+files.length+']&nbsp;&nbsp;'+file.name+"</span>");
       uploadFile(files,index,next,time);
     } else if (index < files.length-1) {
+      // Clean up temp file for completed upload before starting next file
+      $.post('/webGui/include/Control.php',{mode:'stop',file:encodeURIComponent(dfm_htmlspecialchars(file.name))});
       uploadFile(files,index+1,0,time);
     } else {stopUpload(file.name); return;}
   };
   
   xhr.onerror = function() {
-    stopUpload(file.name,true);
+    stopUpload(file.name, true, 'network');
   };
   
   xhr.ontimeout = function() {
-    stopUpload(file.name,true);
+    stopUpload(file.name, true, 'timeout');
   };
   
   xhr.send(blob);
 }
 
-var reader = {};
 var cancel = 0;
 
 function startUpload(files) {
   if (files.length == 0) return;
-  reader = new FileReader();
   window.onbeforeunload = function(e){return '';};
   $('#dfm_uploadButton').val("_(Cancel)_").prop('onclick',null).off('click').click(function(){cancel=1;});
   dfm.running = true;
