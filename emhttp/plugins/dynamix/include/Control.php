@@ -49,6 +49,15 @@ case 'upload':
   $start = (int)($_POST['start'] ?? $_GET['start'] ?? 0);
   $cancel = (int)($_POST['cancel'] ?? $_GET['cancel'] ?? 0);
   $local = "/var/tmp/".basename($file).".tmp";
+  // Check cancel BEFORE creating new file
+  if ($cancel==1) {
+    if (file_exists($local)) {
+      $file = file_get_contents($local);
+      if ($file !== false) delete_file($file);
+    }
+    delete_file($local);
+    die('stop');
+  }
   if ($start === 0) {
     $my = pathinfo($file); $n = 0;
     while (file_exists($file)) $file = $my['dirname'].'/'.preg_replace('/ \(\d+\)$/','',$my['filename']).' ('.++$n.')'.($my['extension'] ? '.'.$my['extension'] : '');
@@ -63,10 +72,6 @@ case 'upload':
   // Temp file does not exist
   if ($file === false) {
     die('error:tempfile');
-  }
-  if ($cancel==1) {
-    delete_file($file);
-    die('stop');
   }
   // Support both legacy base64 method and new raw binary method
   if (isset($_POST['data'])) {

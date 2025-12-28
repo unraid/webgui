@@ -878,6 +878,7 @@ function stopUpload(file,error,errorType) {
     var message = "_(File is removed)_";
     if (errorType === 'timeout') message += "<br><br>_(Upload timed out. Please check your network connection and try again.)_";
     else if (errorType === 'network') message += "<br><br>_(Network error occurred. Please check your connection and try again.)_";
+    else if (errorType && errorType.indexOf('http') === 0) message += "<br><br>_(HTTP error: )_" + errorType.substring(5);
     setTimeout(function(){swal({title:"_(Upload Error)_",text:message,html:true,confirmButtonText:"_(Ok)_"});},200);
   }
 }
@@ -899,6 +900,7 @@ function uploadFile(files,index,start,time) {
   var blob = file.slice(start, next);
   
   var xhr = new XMLHttpRequest();
+  currentXhr = xhr; // Store for abort capability
   var url = '/webGui/include/Control.php?mode=upload&file=' + encodeURIComponent(dir + '/' + dfm_htmlspecialchars(file.name)) + '&start=' + start + '&cancel=' + cancel;
   xhr.open('POST', url, true);
   xhr.setRequestHeader('Content-Type', 'application/octet-stream');
@@ -907,7 +909,7 @@ function uploadFile(files,index,start,time) {
   
   xhr.onload = function() {
     if (xhr.status < 200 || xhr.status >= 300) {
-      stopUpload(file.name, true, 'http');
+      stopUpload(file.name, true, 'http:' + xhr.status);
       return;
     }
     var reply = xhr.responseText;
@@ -938,7 +940,21 @@ function uploadFile(files,index,start,time) {
     } else {stopUpload(file.name); return;}
   };
   
+  xhr.onabort = function() {
+    // User cancelled upload - trigger deletion via cancel=1 parameter
+    $.post('/webGui/include/Control.php', {
+      mode: 'upload',
+      file: dir + '/' + dfm_htmlspecialchars(file.name),
+      start: 0,
+      cancel: 1
+    }, function() {
+      stopUpload(file.name, false);
+    });
+  };
+  
   xhr.onerror = function() {
+    // Don't show error if it was a user cancel
+    if (cancel === 1) return;
     stopUpload(file.name, true, 'network');
   };
   
@@ -950,11 +966,16 @@ function uploadFile(files,index,start,time) {
 }
 
 var cancel = 0;
+var currentXhr = null;
 
 function startUpload(files) {
   if (files.length == 0) return;
+  cancel = 0; // Reset cancel flag
   window.onbeforeunload = function(e){return '';};
-  $('#dfm_uploadButton').val("_(Cancel)_").prop('onclick',null).off('click').click(function(){cancel=1;});
+  $('#dfm_uploadButton').val("_(Cancel)_").prop('onclick',null).off('click').click(function(){
+    cancel=1;
+    if (currentXhr) currentXhr.abort();
+  });
   dfm.running = true;
   const d = new Date();
   uploadFile(files,0,0,d.getTime());
