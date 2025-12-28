@@ -47,6 +47,7 @@ if (
   if (!hash_equals($var['csrf_token'], $csrf_token)) csrf_terminate("wrong");
 
   unset($_POST['csrf_token']);
+  unset($_SERVER['HTTP_X_CSRF_TOKEN']);
 }
 $proxy_cfg = (array)@parse_ini_file('/var/local/emhttp/proxy.ini',true);
 putenv('http_proxy='.((array_key_exists('http_proxy', $proxy_cfg)) ? $proxy_cfg['http_proxy']  : ''));
