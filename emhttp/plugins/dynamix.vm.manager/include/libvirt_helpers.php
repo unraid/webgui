@@ -2673,8 +2673,11 @@ function addtemplatexml($post) {
 	unset($usertemplate['pci']);
 	unset($usertemplate['usb']);
 	unset($usertemplate['usbboot']);
-	unset($usertemplate['nic']['mac']);
-
+	if (isset($usertemplate['nic'])) {
+		foreach($usertemplate['nic'] as $nickey => $nicdata) {
+			if (isset($usertemplate['nic'][$nickey]['mac'])) unset($usertemplate['nic'][$nickey]['mac']);
+		}
+	}
 	$templatename=$usertemplate['templatename'];
 	if ($templatename == "") $templatename=$usertemplate['template']['os'];
 	unset($usertemplate['templatename']);
