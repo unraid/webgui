@@ -868,6 +868,7 @@ function doActions(action, title) {
 
 function stopUpload(file,error,errorType) {
   window.onbeforeunload = null;
+  currentXhr = null;
   $.post('/webGui/include/Control.php',{mode:'stop',file:encodeURIComponent(dfm_htmlspecialchars(file))});
   $('#dfm_uploadButton').val("_(Upload)_").prop('onclick',null).off('click').click(function(){$('#dfm_upload').click();});
   $('#dfm_uploadStatus').html('');
@@ -901,7 +902,8 @@ function uploadFile(files,index,start,time) {
   
   var xhr = new XMLHttpRequest();
   currentXhr = xhr; // Store for abort capability
-  var url = '/webGui/include/Control.php?mode=upload&file=' + encodeURIComponent(dir + '/' + dfm_htmlspecialchars(file.name)) + '&start=' + start + '&cancel=' + cancel;
+  var filePath = dir.replace(/\/+$/, '') + '/' + dfm_htmlspecialchars(file.name);
+  var url = '/webGui/include/Control.php?mode=upload&file=' + encodeURIComponent(filePath) + '&start=' + start + '&cancel=' + cancel;
   xhr.open('POST', url, true);
   xhr.setRequestHeader('Content-Type', 'application/octet-stream');
   xhr.setRequestHeader('X-CSRF-Token', '<?=$var['csrf_token']?>');
@@ -944,7 +946,7 @@ function uploadFile(files,index,start,time) {
     // User cancelled upload - trigger deletion via cancel=1 parameter
     $.post('/webGui/include/Control.php', {
       mode: 'upload',
-      file: dir + '/' + dfm_htmlspecialchars(file.name),
+      file: filePath,
       start: 0,
       cancel: 1
     }).always(function() {
