@@ -13,6 +13,7 @@
 <?
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Helpers.php";
+require_once "$docroot/plugins/dynamix/include/PopularDestinations.php";
 
 // add translations
 $_SERVER['REQUEST_URI'] = '';
@@ -42,12 +43,23 @@ function validname($name) {
 function escape($name) {return escapeshellarg(validname($name));}
 function quoted($name) {return is_array($name) ? implode(' ',array_map('escape',$name)) : escape($name);}
 
-switch ($_POST['mode']) {
+switch ($_POST['mode'] ?? $_GET['mode'] ?? '') {
 case 'upload':
-  $file = validname(htmlspecialchars_decode(rawurldecode($_POST['file'])));
+  $file = validname(htmlspecialchars_decode(rawurldecode($_POST['file'] ?? $_GET['file'] ?? '')));
   if (!$file) die('stop');
+  $start = (int)($_POST['start'] ?? $_GET['start'] ?? 0);
+  $cancel = (int)($_POST['cancel'] ?? $_GET['cancel'] ?? 0);
   $local = "/var/tmp/".basename($file).".tmp";
-  if ($_POST['start']==0) {
+  // Check cancel BEFORE creating new file
+  if ($cancel==1) {
+    if (file_exists($local)) {
+      $file = file_get_contents($local);
+      if ($file !== false) delete_file($file);
+    }
+    delete_file($local);
+    die('stop');
+  }
+  if ($start === 0) {
     $my = pathinfo($file); $n = 0;
     while (file_exists($file)) $file = $my['dirname'].'/'.preg_replace('/ \(\d+\)$/','',$my['filename']).' ('.++$n.')'.($my['extension'] ? '.'.$my['extension'] : '');
     file_put_contents($local,$file);
@@ -58,13 +70,26 @@ case 'upload':
     chmod($file,0666);
   }
   $file = file_get_contents($local);
-  if ($_POST['cancel']==1) {
-    delete_file($file);
-    die('stop');
+  // Temp file does not exist
+  if ($file === false) {
+    die('error:tempfile');
   }
-  if (file_put_contents($file,base64_decode($_POST['data']),FILE_APPEND)===false) {
+  // Support both legacy base64 method and new raw binary method
+  if (isset($_POST['data'])) {
+    // Legacy base64 upload method (backward compatible)
+    $chunk = base64_decode($_POST['data']);
+  } else {
+    // New raw binary upload method (read from request body)
+    $chunk = file_get_contents('php://input');
+    if (strlen($chunk) > 21000000) { // slightly more than 20MB to allow overhead
+      unlink($local);
+      die('error:chunksize:'.strlen($chunk));
+    }
+  }
+  if (file_put_contents($file,$chunk,FILE_APPEND)===false) {
     delete_file($file);
-    die('error');
+    delete_file($local);
+    die('error:write');
   }
   die();
 case 'calc':
@@ -109,11 +134,13 @@ case 'jobs':
   $file = '/var/tmp/file.manager.jobs';
   $rows = file_exists($file) ? file($file,FILE_IGNORE_NEW_LINES) : [];
   $job  = 1;
-  for ($x = 0; $x < count($rows); $x+=9) {
-    $data = parse_ini_string(implode("\n",array_slice($rows,$x,9)));
-    $task = $data['task'];
-    $source = explode("\r",$data['source']);
-    $target = $data['target'];
+  foreach ($rows as $row) {
+    if (empty($row)) continue;
+    $data = json_decode($row, true);
+    if (!$data) continue;
+    $task = $data['task'] ?? '';
+    $source = explode("\r",$data['source'] ?? '');
+    $target = $data['target'] ?? '';
     $more = count($source) > 1 ? " (".sprintf("and %s more",count($source)-1).") " : "";
     $jobs[] = '<i id="queue_'.$job.'" class="fa fa-fw fa-square-o blue-text job" onclick="selectOne(this.id,false)"></i>'._('Job')." [".sprintf("%'.04d",$job++)."] - $task ".$source[0].$more.($target ? " --> $target" : "");
   }
@@ -134,10 +161,20 @@ case 'start':
   $jobs   = '/var/tmp/file.manager.jobs';
   $start  = '0';
   if (file_exists($jobs)) {
-    exec("sed -n '2,9 p' $jobs > $active");
-    exec("sed -i '1,9 d' $jobs");
-    $start = filesize($jobs) > 0 ? '2' : '1';
-    if ($start=='1') delete_file($jobs);
+    // read first JSON line from jobs file and write to active
+    $lines = file($jobs, FILE_IGNORE_NEW_LINES);
+    if (!empty($lines)) {
+      file_put_contents($active, $lines[0]);
+      // remove first line from jobs file
+      array_shift($lines);
+      if (count($lines) > 0) {
+        file_put_contents($jobs, implode("\n", $lines)."\n");
+        $start = '2';
+      } else {
+        delete_file($jobs);
+        $start = '1';
+      }
+    }
   }
   die($start);
 case 'undo':
@@ -145,37 +182,56 @@ case 'undo':
   $undo = '0';
   if (file_exists($jobs)) {
     $rows = array_reverse(explode(',',$_POST['row']));
+    $lines = file($jobs, FILE_IGNORE_NEW_LINES);
     foreach ($rows as $row) {
-      $end = $row + 8;
-      exec("sed -i '$row,$end d' $jobs");
+      $line_number = $row - 1; // Convert 1-based job number to 0-based array index
+      if (isset($lines[$line_number])) {
+        unset($lines[$line_number]);
+      }
     }
-    $undo = filesize($jobs) > 0 ? '2' : '1';
-    if ($undo=='1') delete_file($jobs);
+    if (count($lines) > 0) {
+      file_put_contents($jobs, implode("\n", $lines)."\n");
+      $undo = '2';
+    } else {
+      delete_file($jobs);
+      $undo = '1';
+    }
   }
   die($undo);
 case 'read':
   $active = '/var/tmp/file.manager.active';
-  $read = file_exists($active) ? json_encode(parse_ini_file($active)) : '';
+  $read = file_exists($active) ? file_get_contents($active) : '';
   die($read);
 case 'file':
   $active = '/var/tmp/file.manager.active';
   $jobs   = '/var/tmp/file.manager.jobs';
-  $data[] = 'action="'.($_POST['action']??'').'"';
-  $data[] = 'title="'.rawurldecode($_POST['title']??'').'"';
-  $data[] = 'source="'.htmlspecialchars_decode(rawurldecode($_POST['source']??'')).'"';
-  $data[] = 'target="'.rawurldecode($_POST['target']??'').'"';
-  $data[] = 'H="'.(empty($_POST['hdlink']) ? '' : 'H').'"';
-  $data[] = 'sparse="'.(empty($_POST['sparse']) ? '' : '--sparse').'"';
-  $data[] = 'exist="'.(empty($_POST['exist']) ? '--ignore-existing' : '').'"';
-  $data[] = 'zfs="'.rawurldecode($_POST['zfs']??'').'"';
+  $data = [
+    'action' => $_POST['action'] ?? '',
+    'title' => rawurldecode($_POST['title'] ?? ''),
+    'source' => htmlspecialchars_decode(rawurldecode($_POST['source'] ?? '')),
+    'target' => htmlspecialchars_decode(rawurldecode($_POST['target'] ?? '')),
+    'H' => empty($_POST['hdlink']) ? '' : 'H',
+    'sparse' => empty($_POST['sparse']) ? '' : '--sparse',
+    'exist' => empty($_POST['exist']) ? '--ignore-existing' : '',
+    'zfs' => rawurldecode($_POST['zfs'] ?? '')
+  ];
   if (isset($_POST['task'])) {
     // add task to queue
-    $task = rawurldecode($_POST['task']);
-    $data = "task=\"$task\"\n".implode("\n",$data)."\n";
-    file_put_contents($jobs,$data,FILE_APPEND);
+    $data['task'] = rawurldecode($_POST['task']);
+    file_put_contents($jobs, json_encode($data)."\n", FILE_APPEND);
+    
+    // Update popular destinations for copy/move operations
+    if (in_array($data['action'], ['3', '4', '8', '9']) && !empty($data['target'])) {
+      updatePopularDestinations($data['target']);
+    }
   } else {
     // start operation
-    file_put_contents($active,implode("\n",$data));
+    file_put_contents($active, json_encode($data));
+    
+    // Update popular destinations for copy/move operations
+    if (in_array($data['action'], ['3', '4', '8', '9']) && !empty($data['target'])) {
+      updatePopularDestinations($data['target']);
+    }
   }
   die();
 }

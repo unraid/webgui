@@ -57,6 +57,14 @@ function autoscale(value) {
   return ((Math.round(scale*data)/scale)+' '+unit[base]).replace('.','<?=$display['number'][0]?>')+'/s';
 }
 
+function preventFileTreeClose() {
+  // Prevent fileTree dropdown from closing when clicking inside the dialog
+  // by stopping mousedown events from bubbling to the document handler
+  $('.ui-dfm').off('mousedown.dfmFileTree').on('mousedown.dfmFileTree', function(e) {
+    e.stopPropagation();
+  });
+}
+
 function folderContextMenu(id, button) {
   var opts = [];
   context.settings({button:button});
@@ -312,7 +320,7 @@ function doJobs(title) {
       },
       "_(Delete)_": function(){
         let row = [];
-        dfm.window.find('i[id^="queue_"]').each(function(){if ($(this).hasClass('fa-check-square-o')) row.push((($(this).prop('id').split('_')[1]-1)*9)+1);});
+        dfm.window.find('i[id^="queue_"]').each(function(){if ($(this).hasClass('fa-check-square-o')) row.push($(this).prop('id').split('_')[1]);});
         $.post('/webGui/include/Control.php',{mode:'undo',row:row.join(',')},function(queue){
           $.post('/webGui/include/Control.php',{mode:'jobs'},function(jobs){
             $('#dfm_jobs').html(jobs);
@@ -342,6 +350,298 @@ filemonitor.on('message', function(state) {
   if (state == 1 && !dfm.running && !timers.filemonitor) timers.filemonitor = setTimeout(function(){if (dfm.running) clearTimeout(timers.filemonitor); else refresh();},1500);
 });
 setTimeout(function(){filemonitor.start();},3000);
+
+function setupTargetNavigation() {
+  var $target = dfm.window.find('#dfm_target');
+  if (!$target.length) return;
+  
+  var navigationTimeout;
+  var inputElement = $target[0];
+  var isNavigatingFromPopular = false;
+  var isProgrammaticNavigation = false;  // Flag for programmatic tree navigation
+  var savedInputValue = '';  // Save input value during programmatic navigation
+  var lastNavigatedPath = '';  // Track last navigated path for backward navigation
+  
+  // Event handlers for capture phase to prevent fileTree from closing
+  var preventClose = function(e) {
+    console.log('preventClose called, event:', e.type);
+    
+    // Re-open tree if it was closed (must do this BEFORE stopImmediatePropagation)
+    if (e.type === 'click') {
+      var $tree = $target.closest('dd').find('.fileTree');
+      console.log('Tree found:', $tree.length, 'visible:', $tree.is(':visible'));
+      if ($tree.length && !$tree.is(':visible')) {
+        // Only show if tree has content
+        var $content = $tree.find('.jqueryFileTree');
+        console.log('Content found:', $content.length, 'children:', $content.children().length);
+        console.log('Condition check: length?', $content.length > 0, 'children?', $content.children().length > 0);
+        if ($content.length && $content.children().length > 0) {
+          console.log('Showing tree NOW');
+          try {
+            $tree.show();
+            console.log('Tree.show() completed, visible now:', $tree.is(':visible'));
+          } catch(err) {
+            console.error('Error showing tree:', err);
+          }
+        } else {
+          console.log('Tree has no content, not showing');
+        }
+      } else {
+        console.log('Tree already visible or not found');
+      }
+    }
+    
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+  };
+  
+  // Attach to input element in capture phase (runs before jquery.filetree.js handler)
+  if (inputElement) {
+    inputElement.addEventListener('mousedown', preventClose, true);
+    inputElement.addEventListener('focus', preventClose, true);
+    inputElement.addEventListener('click', preventClose, true);
+  }
+  
+  // Handle clicks on ANY tree item to remove popular destinations
+  var treeClickHandler = function(e) {
+    var $link = $(e.target).closest('.jqueryFileTree a');
+    if ($link.length === 0) return;
+    
+    // Remove popular section when clicking on any tree item (except popular items themselves)
+    if (!$link.closest('.popular-destination').length) {
+      var $tree = $('.fileTree .jqueryFileTree');
+      $tree.find('.popular-header, .popular-destination, .popular-separator').remove();
+    }
+  };
+  
+  // Attach tree click handler in capture phase
+  document.addEventListener('click', treeClickHandler, true);
+  
+  // Handle clicks on popular destinations - use capture phase to run before jQueryFileTree handler
+  var popularClickHandler = function(e) {
+    var $link = $(e.target).closest('.popular-destination a');
+    if ($link.length === 0) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    
+    // Get path from data-path attribute
+    var path = $link.attr('data-path');
+    if (!path) return;
+    
+    // Remove trailing slash for input field
+    var cleanPath = path.replace(/\/+$/, '');
+    
+    // Remove popular section immediately (before any navigation)
+    var $tree = $('.fileTree .jqueryFileTree');
+    $tree.find('.popular-header, .popular-destination, .popular-separator').remove();
+    
+    // Set flag to prevent input handler from triggering
+    isNavigatingFromPopular = true;
+    
+    // Set input field value (this triggers 'input' event)
+    $target.val(cleanPath + '/');
+    
+    // Trigger navigation to expand the path in normal tree
+    navigateFileTree(cleanPath + '/');
+    lastNavigatedPath = cleanPath + '/';
+    
+    // Reset flag after a short delay
+    setTimeout(function() {
+      isNavigatingFromPopular = false;
+    }, 100);
+    
+    return false;
+  };
+  
+  // Attach in capture phase to run before jQueryFileTree handlers
+  document.addEventListener('click', popularClickHandler, true);
+  
+  // Hide/show popular destinations based on input field content
+  $target.on('input', function() {
+    // Ignore input events triggered by popular click or programmatic navigation
+    if (isNavigatingFromPopular || isProgrammaticNavigation) {
+      console.log('Input event ignored, isNavigatingFromPopular:', isNavigatingFromPopular, 'isProgrammaticNavigation:', isProgrammaticNavigation);
+      return;
+    }
+    
+    var inputValue = this.value.trim();
+    console.log('Input event, value:', inputValue);
+    var $tree = $('.fileTree .jqueryFileTree');
+    
+    if (inputValue) {
+      // Input is not empty - remove popular destinations completely
+      $tree.find('.popular-header, .popular-destination, .popular-separator').remove();
+    } else {
+      // Input is empty - popular destinations will be shown on next tree reload
+    }
+    
+    clearTimeout(navigationTimeout);
+    
+    if (!inputValue) {
+      // Reset tree to initial state when input is cleared
+      console.log('Input cleared, resetting tree to initial state');
+      resetFileTree($target);
+      lastNavigatedPath = '';
+      return;
+    }
+    if (inputValue[inputValue.length - 1] !== '/') return;
+    
+    // Check if we're navigating backward (path got shorter)
+    if (lastNavigatedPath && inputValue.length < lastNavigatedPath.length && lastNavigatedPath.startsWith(inputValue)) {
+      // Close all folders between the new path and the old path
+      var pathToClose = lastNavigatedPath;
+      while (pathToClose.length > inputValue.length) {
+        closeFolderPath(pathToClose);
+        // Remove the last segment to go up one level
+        pathToClose = pathToClose.replace(/\/+$/, '');  // Remove trailing slashes
+        var lastSlash = pathToClose.lastIndexOf('/');
+        if (lastSlash === -1) break;
+        pathToClose = pathToClose.substring(0, lastSlash + 1);
+      }
+      lastNavigatedPath = inputValue;
+      return;
+    }
+    
+    navigationTimeout = setTimeout(function() {
+      navigateFileTree(inputValue);
+      lastNavigatedPath = inputValue;
+    }, 200);
+  });
+  
+  // Restore input value if changed during programmatic navigation
+  $target.on('change', function() {
+    var isProgrammaticNav = $target.data('isProgrammaticNavigation');
+    var savedValue = $target.data('savedInputValue');
+    console.log('Change event, isProgrammaticNav:', isProgrammaticNav, 'savedValue:', savedValue);
+    if (isProgrammaticNav && savedValue) {
+      console.log('Restoring input value from', this.value, 'to', savedValue);
+      this.value = savedValue;
+    }
+  });
+  
+  // Cleanup on dialog close
+  dfm.window.on('dialogclose', function() {
+    document.removeEventListener('click', treeClickHandler, true);
+    document.removeEventListener('click', popularClickHandler, true);
+    if (inputElement) {
+      inputElement.removeEventListener('mousedown', preventClose, true);
+      inputElement.removeEventListener('focus', preventClose, true);
+      inputElement.removeEventListener('click', preventClose, true);
+    }
+  });
+}
+
+function closeFolderPath(path) {
+  var $tree = $('.jqueryFileTree').first();
+  if ($tree.length === 0) return;
+  
+  // Remove trailing slash for searching
+  var cleanPath = path.replace(/\/+$/, '');
+  
+  // Find the folder link by rel attribute
+  var $folderLink = $tree.find('a[rel="' + cleanPath + '/"]');
+  if ($folderLink.length === 0) return;
+  
+  var $folderLi = $folderLink.closest('li');
+  
+  // Close the folder: change class from expanded to collapsed
+  $folderLi.removeClass('expanded').addClass('collapsed');
+  
+  // Remove all child elements (the nested <ul>)
+  $folderLi.find('ul').remove();
+}
+
+function resetFileTree($target) {
+  console.log('Resetting file tree to initial state');
+  
+  // Find the .fileTree container (not the jqueryFileTree inside it)
+  var $treeContainer = $target.siblings('.fileTree');
+  if ($treeContainer.length === 0) {
+    console.log('No fileTree container found');
+    return;
+  }
+  
+  // Hide the tree first
+  $treeContainer.hide();
+  
+  // Empty the container - this will cause fileTreeAttach to reload on next click
+  $treeContainer.empty();
+  console.log('Tree container emptied');
+  
+  // Show the tree again by simulating a click
+  // fileTreeAttach checks if html() is empty and will reload
+  setTimeout(function() {
+    $target.click();
+    console.log('Tree reload triggered');
+  }, 100);
+}
+
+function navigateFileTree(path) {
+  console.log('navigateFileTree called with path:', path);
+  var $tree = $('.jqueryFileTree').first();
+  if ($tree.length === 0) {
+    console.log('No tree found');
+    return;
+  }
+  
+  var $target = dfm.window.find('#dfm_target');
+  var pickroot = $target.attr('data-pickroot') || '/mnt';
+  
+  path = path.replace(/\/+$/, '');
+  console.log('Cleaned path:', path, 'pickroot:', pickroot);
+  
+  if (path.indexOf(pickroot) !== 0) {
+    console.log('Path does not start with pickroot');
+    return;
+  }
+  
+  var relativePath = path.substring(pickroot.length).replace(/^\/+/, '');
+  var parts = relativePath.split('/').filter(function(p) { return p.length > 0; });
+  console.log('Parts to navigate:', parts);
+  
+  // Use jQuery.data() to store values accessible from anywhere
+  console.log('Setting savedInputValue to:', path + '/');
+  $target.data('savedInputValue', path + '/');
+  console.log('Setting isProgrammaticNavigation to true');
+  $target.data('isProgrammaticNavigation', true);
+  console.log('isProgrammaticNavigation now:', $target.data('isProgrammaticNavigation'));
+  
+  openFolderRecursive($tree, pickroot, parts, 0);
+  
+  // Reset flag after navigation completes
+  setTimeout(function() {
+    console.log('Resetting isProgrammaticNavigation flag');
+    $target.data('isProgrammaticNavigation', false);
+    $target.data('savedInputValue', '');
+  }, parts.length * 300 + 500);
+}
+
+function openFolderRecursive($tree, pickroot, parts, index) {
+  if (index >= parts.length) return;
+  
+  var pathSoFar = pickroot + '/' + parts.slice(0, index + 1).join('/');
+  var $folderLink = $tree.find('a[rel="' + pathSoFar + '/"]');
+  
+  if ($folderLink.length === 0) return;
+  
+  var $folderLi = $folderLink.parent();
+  
+  if ($folderLi.hasClass('expanded')) {
+    setTimeout(function() {
+      openFolderRecursive($tree, pickroot, parts, index + 1);
+    }, 100);
+    return;
+  }
+  
+  if ($folderLi.hasClass('collapsed') || $folderLi.hasClass('directory')) {
+    $folderLink.trigger('click');
+    setTimeout(function() {
+      openFolderRecursive($tree, pickroot, parts, index + 1);
+    }, 300);
+  }
+}
 
 function doAction(action, title, id) {
   var link   = id.substr(0,1) == '/';
@@ -395,7 +695,7 @@ function doAction(action, title, id) {
       var auto = bits.length>3 ? '' : share;
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
-    dfm.height = 630;
+    dfm.height = 800;
     break;
   case 4: // move folder
     dfm.window.html($('#dfm_templateMoveFolder').html());
@@ -405,7 +705,7 @@ function doAction(action, title, id) {
       var auto = bits.length>3 ? '' : share;
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
-    dfm.height = 630;
+    dfm.height = 800;
     break;
   case 6: // delete file
     dfm.window.html($('#dfm_templateDeleteFile').html());
@@ -424,7 +724,7 @@ function doAction(action, title, id) {
     dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
     });
-    dfm.height = 630;
+    dfm.height = 800;
     break;
   case 9: // move file
     dfm.window.html($('#dfm_templateMoveFile').html());
@@ -432,7 +732,7 @@ function doAction(action, title, id) {
     dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
     });
-    dfm.height = 630;
+    dfm.height = 800;
     break;
   case 11: // change owner
     dfm.window.html($('#dfm_templateChangeOwner').html());
@@ -482,6 +782,9 @@ function doAction(action, title, id) {
     resizable: false,
     draggable: false,
     modal: true,
+    close: function() {
+      $('.ui-dfm').off('mousedown.dfmFileTree');
+    },
     buttons: {
       "_(Start)_": function(){
         if (dfm.running) return;
@@ -592,6 +895,13 @@ function doAction(action, title, id) {
     }
   });
   dfm_close_button();
+  preventFileTreeClose();
+  
+  // Setup file tree navigation for target input in copy/move dialogs (action 3=copy folder, 4=move folder, 8=copy file, 9=move file)
+  if ([3,4,8,9].includes(action) && dfm.window.find('#dfm_target').length) {
+    setupTargetNavigation();
+  }
+  
   if (action == 15) $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',true);
   setTimeout(function(){if (dfm.window.find('#dfm_target').length) dfm.window.find('#dfm_target').focus().click(); else $('.ui-dfm .ui-dialog-buttonset button:eq(0)').focus();});
 }
@@ -685,7 +995,7 @@ function doActions(action, title) {
       var auto = bulk || bits.length>3 ? '' : (type[0] == 'd' ? share : '');
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
-    dfm.height = 630;
+    dfm.height = 800;
     break;
   case 4: // move object
     dfm.window.html($('#dfm_templateMoveObject').html());
@@ -697,7 +1007,7 @@ function doActions(action, title) {
       var auto = bulk || bits.length > 3 ? '' : (type[0] == 'd' ? share : '');
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
-    dfm.height = 630;
+    dfm.height = 800;
     break;
   case 11: // change owner
     dfm.window.html($('#dfm_templateChangeOwner').html());
@@ -749,6 +1059,9 @@ function doActions(action, title) {
     resizable: false,
     draggable: false,
     modal: true,
+    close: function() {
+      $('.ui-dfm').off('mousedown.dfmFileTree');
+    },
     buttons: {
       "_(Start)_": function(){
         if (dfm.running) return;
@@ -862,19 +1175,33 @@ function doActions(action, title) {
     }
   });
   dfm_close_button();
+  preventFileTreeClose();
+  
+  // Setup file tree navigation for target input in copy/move dialogs (action 3=copy, 4=move)
+  if ([3,4].includes(action) && dfm.window.find('#dfm_target').length) {
+    setupTargetNavigation();
+  }
+  
   if (action == 15) $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',true);
   setTimeout(function(){if (dfm.window.find('#dfm_target').length) dfm.window.find('#dfm_target').focus().click(); else $('.ui-dfm .ui-dialog-buttonset button:eq(0)').focus();});
 }
 
-function stopUpload(file,error) {
+function stopUpload(file,error,errorType) {
   window.onbeforeunload = null;
+  currentXhr = null;
   $.post('/webGui/include/Control.php',{mode:'stop',file:encodeURIComponent(dfm_htmlspecialchars(file))});
   $('#dfm_uploadButton').val("_(Upload)_").prop('onclick',null).off('click').click(function(){$('#dfm_upload').click();});
   $('#dfm_uploadStatus').html('');
   $('#dfm_upload').val('');
   dfm.running = false;
   loadList();
-  if (error) setTimeout(function(){swal({title:"_(Upload Error)_",text:"_(File is removed)_",html:true,confirmButtonText:"_(Ok)_"});},200);
+  if (error) {
+    var message = "_(File is removed)_";
+    if (errorType === 'timeout') message += "<br><br>_(Upload timed out. Please check your network connection and try again.)_";
+    else if (errorType === 'network') message += "<br><br>_(Network error occurred. Please check your connection and try again.)_";
+    else if (errorType && errorType.indexOf('http') === 0) message += "<br><br>_(HTTP error: )_" + errorType.substring(5);
+    setTimeout(function(){swal({title:"_(Upload Error)_",text:message,html:true,confirmButtonText:"_(Ok)_"});},200);
+  }
 }
 
 function downloadFile(source) {
@@ -889,41 +1216,89 @@ function downloadFile(source) {
 
 function uploadFile(files,index,start,time) {
   var file = files[index];
-  var slice = 2097152; // 2M
+  var slice = 20971520; // 20MB chunks - no Base64 overhead, raw binary
   var next = start + slice;
   var blob = file.slice(start, next);
-  reader.onloadend = function(e){
-    if (e.target.readyState !== FileReader.DONE) return;
-    $.post('/webGui/include/Control.php',{mode:'upload',file:encodeURIComponent(dir+'/'+dfm_htmlspecialchars(file.name)),start:start,data:window.btoa(e.target.result),cancel:cancel},function(reply){
-      if (reply == 'stop') {stopUpload(file.name); return;}
-      if (reply == 'error') {stopUpload(file.name,true); return;}
-      if (next < file.size) {
-        var total = 0;
-        for (var i=0,f; f=files[i]; i++) {
-          if (i < index) start += f.size;
-          total += f.size;
-        }
-        const d = new Date();
-        var speed = autoscale(((start + slice) * 8) / (d.getTime() - time));
-        var percent = Math.floor((start + slice) / total * 100);
-        $('#dfm_uploadStatus').html("_(Uploading)_: <span class='dfm_percent'>"+percent+"%</span><span class='dfm_speed'>Speed: "+speed+"</span><span class='orange-text'> ["+(index+1)+'/'+files.length+']&nbsp;&nbsp;'+file.name+"</span>");
-        uploadFile(files,index,next,time);
-      } else if (index < files.length-1) {
-        uploadFile(files,index+1,0,time);
-      } else {stopUpload(file.name); return;}
+  
+  var xhr = new XMLHttpRequest();
+  currentXhr = xhr; // Store for abort capability
+  var filePath = dir.replace(/\/+$/, '') + '/' + dfm_htmlspecialchars(file.name);
+  var url = '/webGui/include/Control.php?mode=upload&file=' + encodeURIComponent(filePath) + '&start=' + start + '&cancel=' + cancel;
+  xhr.open('POST', url, true);
+  xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+  xhr.setRequestHeader('X-CSRF-Token', '<?=$var['csrf_token']?>');
+  xhr.timeout = Math.max(600000, slice / 1024 * 60); // ~1 minute per MB, minimum 10 minutes
+  
+  xhr.onload = function() {
+    if (xhr.status < 200 || xhr.status >= 300) {
+      stopUpload(file.name, true, 'http:' + xhr.status);
+      return;
+    }
+    var reply = xhr.responseText;
+    if (reply == 'stop') {stopUpload(file.name); return;}
+    if (reply.indexOf('error') === 0) {
+      console.error('Upload error:', reply);
+      stopUpload(file.name,true); 
+      return;
+    }
+    if (next < file.size) {
+      var total = 0;
+      var completed = 0;
+      for (var i=0,f; f=files[i]; i++) {
+        if (i < index) completed += f.size;
+        total += f.size;
+      }
+      const d = new Date();
+      var bytesTransferred = completed + next;
+      var elapsedSeconds = (d.getTime() - time) / 1000;
+      var speed = autoscale(bytesTransferred / elapsedSeconds);
+      var percent = Math.floor(bytesTransferred / total * 100);
+      $('#dfm_uploadStatus').html("_(Uploading)_: <span class='dfm_percent'>"+percent+"%</span><span class='dfm_speed'>Speed: "+speed+"</span><span class='orange-text'> ["+(index+1)+'/'+files.length+']&nbsp;&nbsp;'+file.name+"</span>");
+      uploadFile(files,index,next,time);
+    } else if (index < files.length-1) {
+      // Clean up temp file for completed upload before starting next file
+      $.post('/webGui/include/Control.php',{mode:'stop',file:encodeURIComponent(dfm_htmlspecialchars(file.name))});
+      uploadFile(files,index+1,0,time);
+    } else {stopUpload(file.name); return;}
+  };
+  
+  xhr.onabort = function() {
+    // User cancelled upload - trigger deletion via cancel=1 parameter
+    $.post('/webGui/include/Control.php', {
+      mode: 'upload',
+      file: filePath,
+      start: 0,
+      cancel: 1
+    }).always(function() {
+      // Cleanup UI regardless of POST success/failure
+      stopUpload(file.name, false);
     });
   };
-  reader.readAsBinaryString(blob);
+  
+  xhr.onerror = function() {
+    // Don't show error if it was a user cancel
+    if (cancel === 1) return;
+    stopUpload(file.name, true, 'network');
+  };
+  
+  xhr.ontimeout = function() {
+    stopUpload(file.name, true, 'timeout');
+  };
+  
+  xhr.send(blob);
 }
 
-var reader = {};
 var cancel = 0;
+var currentXhr = null;
 
 function startUpload(files) {
   if (files.length == 0) return;
-  reader = new FileReader();
+  cancel = 0; // Reset cancel flag
   window.onbeforeunload = function(e){return '';};
-  $('#dfm_uploadButton').val("_(Cancel)_").prop('onclick',null).off('click').click(function(){cancel=1;});
+  $('#dfm_uploadButton').val("_(Cancel)_").prop('onclick',null).off('click').click(function(){
+    cancel=1;
+    if (currentXhr) currentXhr.abort();
+  });
   dfm.running = true;
   const d = new Date();
   uploadFile(files,0,0,d.getTime());
@@ -960,7 +1335,62 @@ function loadList() {
 }
 
 function xlink(link) {
-  swal({title:'',text:decodeURIComponent(link),html:true,confirmButtonText:"_(Ok)_"});
+  var path = decodeURIComponent(link).trim();
+  
+  // Always show dialog with selectable textarea (better mobile support)
+  var inputId = 'dfm_path_input_' + Date.now();
+  var inputHtml = '<textarea id="' + inputId + '" class="text-center font-mono" readonly style="resize:none; overflow:hidden; height:auto; min-height:2.6rem; line-height:1.3rem; padding:.5rem; width:100%; box-sizing:border-box; border:1px solid var(--inverse-border-color); border-radius:3px; background-color:var(--background-color);">' + path + '</textarea>';
+  
+  swal({
+    title: '',
+    text: inputHtml,
+    html: true,
+    showCancelButton: true,
+    confirmButtonText: "_(Ok)_",
+    cancelButtonText: "_(Terminal)_"
+  }, function(isConfirm) {
+    if (isConfirm === false) {
+      // Terminal button was clicked (cancel button)
+      var d = new Date();
+      openTerminal('ttyd', 'File_Manager_' + d.getTime(), path);
+    }
+    // Ok button (isConfirm === true) or dialog dismissed - just close
+  });
+  
+  // Enable input visibility and hide SweetAlert's own fieldset
+  $('.sweet-alert').addClass('show-input');
+  $('.sweet-alert fieldset').hide();
+  
+  // Auto-select text and handle clipboard on click
+  setTimeout(function() {
+    var input = document.getElementById(inputId);
+    if (input) {
+      input.select();
+      input.focus();
+      
+      // Copy to clipboard when user clicks/taps
+      $(input).on('click', function() {
+        this.select();
+        
+        // Try to copy to clipboard
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(path).then(function() {
+            // Show success tooltip
+            var tooltip = $('<span class="clipboard-tooltip"><i class="fa fa-check green-text"></i> _(Copied to clipboard)_</span>');
+            $('.sweet-alert').append(tooltip);
+            
+            setTimeout(function() {
+              tooltip.fadeOut(300, function() { 
+                $(this).remove(); 
+              });
+            }, 1000);
+          }).catch(function() {
+            // Silent fail - user can still manually copy
+          });
+        }
+      });
+    }
+  }, 100);
 }
 
 $(function(){
