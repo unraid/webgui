@@ -364,30 +364,19 @@ function setupTargetNavigation() {
   
   // Event handlers for capture phase to prevent fileTree from closing
   var preventClose = function(e) {
-    console.log('preventClose called, event:', e.type);
-    
     // Re-open tree if it was closed (must do this BEFORE stopImmediatePropagation)
     if (e.type === 'click') {
       var $tree = $target.closest('dd').find('.fileTree');
-      console.log('Tree found:', $tree.length, 'visible:', $tree.is(':visible'));
       if ($tree.length && !$tree.is(':visible')) {
         // Only show if tree has content
         var $content = $tree.find('.jqueryFileTree');
-        console.log('Content found:', $content.length, 'children:', $content.children().length);
-        console.log('Condition check: length?', $content.length > 0, 'children?', $content.children().length > 0);
         if ($content.length && $content.children().length > 0) {
-          console.log('Showing tree NOW');
           try {
             $tree.show();
-            console.log('Tree.show() completed, visible now:', $tree.is(':visible'));
           } catch(err) {
             console.error('Error showing tree:', err);
           }
-        } else {
-          console.log('Tree has no content, not showing');
         }
-      } else {
-        console.log('Tree already visible or not found');
       }
     }
     
@@ -462,12 +451,10 @@ function setupTargetNavigation() {
   $target.on('input', function() {
     // Ignore input events triggered by popular click or programmatic navigation
     if (isNavigatingFromPopular || isProgrammaticNavigation) {
-      console.log('Input event ignored, isNavigatingFromPopular:', isNavigatingFromPopular, 'isProgrammaticNavigation:', isProgrammaticNavigation);
       return;
     }
     
     var inputValue = this.value.trim();
-    console.log('Input event, value:', inputValue);
     var $tree = $('.fileTree .jqueryFileTree');
     
     if (inputValue) {
@@ -481,7 +468,6 @@ function setupTargetNavigation() {
     
     if (!inputValue) {
       // Reset tree to initial state when input is cleared
-      console.log('Input cleared, resetting tree to initial state');
       resetFileTree($target);
       lastNavigatedPath = '';
       return;
@@ -514,9 +500,7 @@ function setupTargetNavigation() {
   $target.on('change', function() {
     var isProgrammaticNav = $target.data('isProgrammaticNavigation');
     var savedValue = $target.data('savedInputValue');
-    console.log('Change event, isProgrammaticNav:', isProgrammaticNav, 'savedValue:', savedValue);
     if (isProgrammaticNav && savedValue) {
-      console.log('Restoring input value from', this.value, 'to', savedValue);
       this.value = savedValue;
     }
   });
@@ -554,12 +538,9 @@ function closeFolderPath(path) {
 }
 
 function resetFileTree($target) {
-  console.log('Resetting file tree to initial state');
-  
   // Find the .fileTree container (not the jqueryFileTree inside it)
   var $treeContainer = $target.siblings('.fileTree');
   if ($treeContainer.length === 0) {
-    console.log('No fileTree container found');
     return;
   }
   
@@ -568,21 +549,17 @@ function resetFileTree($target) {
   
   // Empty the container - this will cause fileTreeAttach to reload on next click
   $treeContainer.empty();
-  console.log('Tree container emptied');
   
   // Show the tree again by simulating a click
   // fileTreeAttach checks if html() is empty and will reload
   setTimeout(function() {
     $target.click();
-    console.log('Tree reload triggered');
   }, 100);
 }
 
 function navigateFileTree(path) {
-  console.log('navigateFileTree called with path:', path);
   var $tree = $('.jqueryFileTree').first();
   if ($tree.length === 0) {
-    console.log('No tree found');
     return;
   }
   
@@ -590,29 +567,22 @@ function navigateFileTree(path) {
   var pickroot = $target.attr('data-pickroot') || '/mnt';
   
   path = path.replace(/\/+$/, '');
-  console.log('Cleaned path:', path, 'pickroot:', pickroot);
   
   if (path.indexOf(pickroot) !== 0) {
-    console.log('Path does not start with pickroot');
     return;
   }
   
   var relativePath = path.substring(pickroot.length).replace(/^\/+/, '');
   var parts = relativePath.split('/').filter(function(p) { return p.length > 0; });
-  console.log('Parts to navigate:', parts);
   
   // Use jQuery.data() to store values accessible from anywhere
-  console.log('Setting savedInputValue to:', path + '/');
   $target.data('savedInputValue', path + '/');
-  console.log('Setting isProgrammaticNavigation to true');
   $target.data('isProgrammaticNavigation', true);
-  console.log('isProgrammaticNavigation now:', $target.data('isProgrammaticNavigation'));
   
   openFolderRecursive($tree, pickroot, parts, 0);
   
   // Reset flag after navigation completes
   setTimeout(function() {
-    console.log('Resetting isProgrammaticNavigation flag');
     $target.data('isProgrammaticNavigation', false);
     $target.data('savedInputValue', '');
   }, parts.length * 300 + 500);

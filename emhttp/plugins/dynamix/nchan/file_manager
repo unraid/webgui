@@ -129,6 +129,17 @@ function calculate_eta($transferred, $percent, $speed, $last_rsync_eta_seconds =
   return "N/A";
 }
 
+/**
+ * Parse rsync progress output and track transfer statistics.
+ *
+ * Uses static variables to maintain state across multiple calls during a single operation.
+ * Call with $reset=true before starting a new copy/move operation to clear previous state.
+ *
+ * @param string $status Raw rsync output line to parse
+ * @param string $action_label Label to display for the current action (e.g. "Copying", "Moving")
+ * @param bool $reset If true, resets static state variables (call before new operation)
+ * @return array Associative array with progress information: 'text', 'percent', 'eta', 'speed', etc.
+ */
 function parse_rsync_progress($status, $action_label, $reset = false) {
   static $last_rsync_eta_seconds = null;
   static $total_size = null;
@@ -343,8 +354,14 @@ while (true) {
 
   // read job parameters from JSON file: $action, $title, $source, $target, $H, $sparse, $exist, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
   if (file_exists($active)) {
-    $data = json_decode(file_get_contents($active), true);
-    if (is_array($data)) extract($data);
+    $json = file_get_contents($active);
+    $data = json_decode($json, true);
+    if (is_array($data)) {
+      extract($data);
+    } elseif ($json !== false && trim($json) !== '') {
+      // Log JSON parse failure for debugging (non-empty file that failed to parse)
+      exec('logger -t file_manager "Warning: Failed to parse active job JSON: ' . escapeshellarg(substr($json, 0, 100)) . '"');
+    }
   }
 
   // read PID from file (file_manager may have been restarted)

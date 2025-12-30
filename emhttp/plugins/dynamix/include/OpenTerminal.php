@@ -68,13 +68,15 @@ case 'ttyd':
     $name = unbundle($_GET['name']);
     $exec = "/var/tmp/$name.run.sh";
     $escaped_path = str_replace("'", "'\\''", $real_path);
+    // Escape sed metacharacters: & (matched string), \\ (escape char), / (delimiter)
+    $sed_escaped = str_replace(['\\', '&', '/'], ['\\\\', '\\&', '\\/'], $escaped_path);
     
     // Create startup script similar to ~/.bashrc
     // Note: We can not use ~/.bashrc as it loads /etc/profile which does 'cd $HOME'
     $script_content = <<<BASH
 #!/bin/bash
 # Modify /etc/profile to replace 'cd \$HOME' with our target path
-sed 's#^cd \$HOME#cd '\''$escaped_path'\''#' /etc/profile > /tmp/$name.profile
+sed 's#^cd \$HOME#cd '\''$sed_escaped'\''#' /etc/profile > /tmp/$name.profile
 source /tmp/$name.profile
 source /root/.bash_profile 2>/dev/null
 rm /tmp/$name.profile

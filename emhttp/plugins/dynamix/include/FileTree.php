@@ -59,6 +59,7 @@ $topdir   = str_replace($userdir, $mntdir, $rootdir);
 $filters  = (array)$_POST['filter'];
 $match    = $_POST['match'];
 $checkbox = $_POST['multiSelect'] == 'true' ? "<input type='checkbox'>" : "";
+$autocomplete = isset($_POST['autocomplete']) ? (bool)$_POST['autocomplete'] : false;
 
 // Excluded UD shares to hide under '/mnt'
 $UDexcluded = ['RecycleBin', 'addons', 'rootshare'];

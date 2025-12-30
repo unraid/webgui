@@ -42,7 +42,10 @@ function loadPopularDestinations() {
  */
 function savePopularDestinations($data) {
   $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-  file_put_contents(POPULAR_DESTINATIONS_FILE, $json);
+  $result = file_put_contents(POPULAR_DESTINATIONS_FILE, $json, LOCK_EX);
+  if ($result === false) {
+    exec('logger -t webGUI "Error: Failed to write popular destinations file: ' . POPULAR_DESTINATIONS_FILE . '"');
+  }
 }
 
 /**
