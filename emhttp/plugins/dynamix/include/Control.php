@@ -219,20 +219,16 @@ case 'file':
     // add task to queue
     $data['task'] = rawurldecode($_POST['task']);
     file_put_contents($jobs, json_encode($data)."\n", FILE_APPEND);
-    
-    // Update popular destinations for copy/move operations
-    if (in_array($data['action'], ['3', '4', '8', '9']) && !empty($data['target'])) {
-      updatePopularDestinations($data['target']);
-    }
   } else {
     // start operation
     file_put_contents($active, json_encode($data));
-    
-    // Update popular destinations for copy/move operations
-    if (in_array($data['action'], ['3', '4', '8', '9']) && !empty($data['target'])) {
-      updatePopularDestinations($data['target']);
-    }
   }
+  
+  // Update popular destinations for copy/move operations
+  if (in_array($data['action'], ['3', '4', '8', '9']) && !empty($data['target'])) {
+    updatePopularDestinations($data['target']);
+  }
+  
   die();
 }
 ?>
