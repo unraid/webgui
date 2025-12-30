@@ -351,6 +351,10 @@ filemonitor.on('message', function(state) {
 });
 setTimeout(function(){filemonitor.start();},3000);
 
+// File tree navigation constants
+var FOLDER_EXPAND_DELAY = 300;  // Delay per folder expansion in openFolderRecursive (ms)
+var NAVIGATION_BUFFER = 500;    // Additional buffer time for navigation completion (ms)
+
 function setupTargetNavigation() {
   var $target = dfm.window.find('#dfm_target');
   if (!$target.length) return;
@@ -585,7 +589,7 @@ function navigateFileTree(path) {
   setTimeout(function() {
     $target.data('isProgrammaticNavigation', false);
     $target.data('savedInputValue', '');
-  }, parts.length * 300 + 500);
+  }, parts.length * FOLDER_EXPAND_DELAY + NAVIGATION_BUFFER);
 }
 
 function openFolderRecursive($tree, pickroot, parts, index) {
@@ -609,7 +613,7 @@ function openFolderRecursive($tree, pickroot, parts, index) {
     $folderLink.trigger('click');
     setTimeout(function() {
       openFolderRecursive($tree, pickroot, parts, index + 1);
-    }, 300);
+    }, FOLDER_EXPAND_DELAY);
   }
 }
 
