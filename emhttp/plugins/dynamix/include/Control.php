@@ -140,20 +140,23 @@ case 'start':
     // read first JSON line from jobs file and write to active
     $lines = file($jobs, FILE_IGNORE_NEW_LINES);
     if (!empty($lines)) {
-      // Validate JSON before passing to backend
-      $data = json_decode($lines[0], true);
-      if (!$data) {
-        // Skip invalid JSON entry and try next
-        array_shift($lines);
-        if (count($lines) > 0) {
-          file_put_contents($jobs, implode("\n", $lines)."\n");
-          // Recursively try next entry
-          return;
-        } else {
-          delete_file($jobs);
-          die('0');
+      // Skip invalid JSON entries (loop until we find valid JSON or run out of entries)
+      while (!empty($lines)) {
+        $data = json_decode($lines[0], true);
+        if ($data) {
+          // Valid JSON found, use it
+          break;
         }
+        // Invalid JSON, remove this entry and try next
+        array_shift($lines);
       }
+      
+      if (empty($lines)) {
+        // No valid JSON entries found
+        delete_file($jobs);
+        die('0');
+      }
+      
       file_put_contents($active, $lines[0]);
       // remove first line from jobs file
       array_shift($lines);
