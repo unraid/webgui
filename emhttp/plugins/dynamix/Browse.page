@@ -759,6 +759,20 @@ function doAction(action, title, id) {
     close: function() {
       $('.ui-dfm').off('mousedown.dfmFileTree');
     },
+    open: function() {
+      // Move warning to buttonpane for copy/move actions (3=copy folder, 4=move folder, 8=copy file, 9=move file)
+      if ([3,4,8,9].includes(action)) {
+        var $warning = $('#dfm_warning');
+        if ($warning.length) {
+          $warning.css({
+            'float': 'left',
+            'margin-left': '10px',
+            'line-height': '36px'
+          });
+          $('.ui-dfm .ui-dialog-buttonpane').prepend($warning);
+        }
+      }
+    },
     buttons: {
       "_(Start)_": function(){
         if (dfm.running) return;
@@ -874,18 +888,6 @@ function doAction(action, title, id) {
   // Setup file tree navigation for target input in copy/move dialogs (action 3=copy folder, 4=move folder, 8=copy file, 9=move file)
   if ([3,4,8,9].includes(action) && dfm.window.find('#dfm_target').length) {
     setupTargetNavigation();
-  }
-  
-  // Add warning to buttonpane for copy folder (testing)
-  if (action == 3) {
-    var warningHtml = dfm.window.find('.dfm_warning').clone();
-    if (warningHtml.length) {
-      $('.ui-dfm .ui-dialog-buttonpane').prepend($('<div>').css({
-        'float': 'left',
-        'margin-left': '10px',
-        'line-height': '36px'
-      }).append(warningHtml));
-    }
   }
   
   if (action == 15) $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',true);
