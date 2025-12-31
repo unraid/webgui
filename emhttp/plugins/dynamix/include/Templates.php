@@ -236,8 +236,7 @@ _(Source)_:
 _(Target)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="" data-pickmatch="" data-pickroot="" data-picktop="">
 
-&nbsp;
-: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This copies all the selected sources)_</span>
+<div id="dfm_warning"><i class="fa fa-warning dfm"></i>_(This copies all the selected sources)_</div>
 </div>
 
 <div markdown="1" id="dfm_templateMoveObject">
@@ -263,8 +262,7 @@ _(Source)_:
 _(Target)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="" data-pickmatch="" data-pickroot="" data-picktop="">
 
-&nbsp;
-: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This moves all the selected sources)_</span>
+<div id="dfm_warning"><i class="fa fa-warning dfm"></i>_(This moves all the selected sources)_</div>
 </div>
 
 <div markdown="1" id="dfm_templateChangeOwner">

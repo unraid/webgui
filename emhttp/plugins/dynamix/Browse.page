@@ -1050,6 +1050,20 @@ function doActions(action, title) {
     close: function() {
       $('.ui-dfm').off('mousedown.dfmFileTree');
     },
+    open: function() {
+      // Move warning to buttonpane for copy/move actions (3=copy, 4=move)
+      if ([3,4].includes(action)) {
+        var $warning = $('#dfm_warning');
+        if ($warning.length) {
+          $warning.css({
+            'float': 'left',
+            'margin-left': '10px',
+            'line-height': '36px'
+          });
+          $('.ui-dfm .ui-dialog-buttonpane').prepend($warning);
+        }
+      }
+    },
     buttons: {
       "_(Start)_": function(){
         if (dfm.running) return;
