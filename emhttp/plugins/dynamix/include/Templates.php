@@ -20,9 +20,6 @@ _(New folder name)_:
 
 &nbsp;
 : <span class="dfm_text"></span>
-
-&nbsp;
-: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This creates a folder at the current level)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateDeleteFolder">
@@ -31,9 +28,6 @@ _(Folder name)_:
 
 &nbsp;
 : <span class="dfm_text"></span>
-
-&nbsp;
-: <span class="dfm_warning"><i class="fa fa-warning dfm"></i><?=_("This deletes the folder and all its content")?></span>
 </div>
 
 <div markdown="1" id="dfm_templateRenameFolder">
@@ -48,9 +42,6 @@ _(New folder name)_:
 
 &nbsp;
 : <span class="dfm_text"></span>
-
-&nbsp;
-: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This renames the folder to the new name)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateCopyFolder">
@@ -107,9 +98,6 @@ _(File name)_:
 
 &nbsp;
 : <span class="dfm_text"></span>
-
-&nbsp;
-: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This deletes the selected file)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateRenameFile">
@@ -124,9 +112,6 @@ _(New file name)_:
 
 &nbsp;
 : <span class="dfm_text"></span>
-
-&nbsp;
-: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This renames the selected file)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateCopyFile">
@@ -183,9 +168,6 @@ _(Source)_:
 
 &nbsp;
 : <span class="dfm_text"></span>
-
-&nbsp;
-: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This deletes all selected sources)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateRenameObject">
@@ -200,9 +182,6 @@ _(Target)_:
 
 &nbsp;
 : <span class="dfm_text"></span>
-
-&nbsp;
-: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This renames the selected source)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateCopyObject">
@@ -268,9 +247,6 @@ _(New owner)_:
 
 &nbsp;
 : <span class="dfm_text"></span>
-
-&nbsp;
-: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This changes the owner of the source recursively)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateChangePermission">
@@ -309,9 +285,6 @@ _(New permission)_:
 
 &nbsp;
 : <span class="dfm_text"></span>
-
-&nbsp;
-: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This changes the permission of the source recursively)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateSearch">

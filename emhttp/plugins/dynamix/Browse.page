@@ -760,25 +760,30 @@ function doAction(action, title, id) {
       $('.ui-dfm').off('mousedown.dfmFileTree');
     },
     open: function() {
-      // Move warning to buttonpane for copy/move actions (3=copy folder, 4=move folder, 8=copy file, 9=move file)
-      if ([3,4,8,9].includes(action)) {
-        var warningTexts = {
-          3: "<?=_("This copies the folder and all its content to another folder")?>",
-          4: "<?=_("This moves the folder and all its content to another folder")?>",
-          8: "<?=_("This copies the selected file")?>",
-          9: "<?=_("This moves the selected file")?>" 
-        };
-        var warningText = warningTexts[action];
-        if (warningText) {
-          var $warning = $('<div>').css({
-            'margin-right': '10px',
-            'line-height': '36px',
-            'display': 'inline-block',
-            'vertical-align': 'middle',
-            'color': '#888'
-          }).html('<i class="fa fa-warning dfm"></i> ' + warningText);
-          $('.ui-dfm .ui-dialog-buttonset').prepend($warning);
-        }
+      // Add warning to buttonpane for all relevant actions
+      var warningTexts = {
+        0: "<?=_("This creates a folder at the current level")?>",
+        1: "<?=_("This deletes the folder and all its content")?>",
+        2: "<?=_("This renames the folder to the new name")?>",
+        3: "<?=_("This copies the folder and all its content to another folder")?>",
+        4: "<?=_("This moves the folder and all its content to another folder")?>",
+        6: "<?=_("This deletes the selected file")?>",
+        7: "<?=_("This renames the selected file")?>",
+        8: "<?=_("This copies the selected file")?>",
+        9: "<?=_("This moves the selected file")?>",
+        11: "<?=_("This changes the owner of the source recursively")?>",
+        12: "<?=_("This changes the permission of the source recursively")?>"
+      };
+      var warningText = warningTexts[action];
+      if (warningText) {
+        var $warning = $('<div>').css({
+          'margin-right': '10px',
+          'line-height': '36px',
+          'display': 'inline-block',
+          'vertical-align': 'middle',
+          'color': '#888'
+        }).html('<i class="fa fa-warning dfm"></i> ' + warningText);
+        $('.ui-dfm .ui-dialog-buttonset').prepend($warning);
       }
     },
     buttons: {
@@ -1059,23 +1064,26 @@ function doActions(action, title) {
       $('.ui-dfm').off('mousedown.dfmFileTree');
     },
     open: function() {
-      // Move warning to buttonpane for copy/move actions (3=copy, 4=move)
-      if ([3,4].includes(action)) {
-        var warningTexts = {
-          3: "<?=_("This copies all the selected sources")?>",
-          4: "<?=_("This moves all the selected sources")?>" 
-        };
-        var warningText = warningTexts[action];
-        if (warningText) {
-          var $warning = $('<div>').css({
-            'margin-right': '10px',
-            'line-height': '36px',
-            'display': 'inline-block',
-            'vertical-align': 'middle',
-            'color': '#888'
-          }).html('<i class="fa fa-warning dfm"></i> ' + warningText);
-          $('.ui-dfm .ui-dialog-buttonset').prepend($warning);
-        }
+      // Add warning to buttonpane for all relevant actions (bulk operations)
+      var warningTexts = {
+        0: "<?=_("This creates a folder at the current level")?>",
+        1: "<?=_("This deletes all selected sources")?>",
+        2: "<?=_("This renames the selected source")?>",
+        3: "<?=_("This copies all the selected sources")?>",
+        4: "<?=_("This moves all the selected sources")?>",
+        11: "<?=_("This changes the owner of the source recursively")?>",
+        12: "<?=_("This changes the permission of the source recursively")?>"
+      };
+      var warningText = warningTexts[action];
+      if (warningText) {
+        var $warning = $('<div>').css({
+          'margin-right': '10px',
+          'line-height': '36px',
+          'display': 'inline-block',
+          'vertical-align': 'middle',
+          'color': '#888'
+        }).html('<i class="fa fa-warning dfm"></i> ' + warningText);
+        $('.ui-dfm .ui-dialog-buttonset').prepend($warning);
       }
     },
     buttons: {
