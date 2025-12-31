@@ -762,14 +762,21 @@ function doAction(action, title, id) {
     open: function() {
       // Move warning to buttonpane for copy/move actions (3=copy folder, 4=move folder, 8=copy file, 9=move file)
       if ([3,4,8,9].includes(action)) {
-        var $warning = $('#dfm_warning');
-        if ($warning.length) {
-          $warning.css({
+        var warningTexts = {
+          3: "<?=_("This copies the folder and all its content to another folder")?>",
+          4: "<?=_("This moves the folder and all its content to another folder")?>",
+          8: "<?=_("This copies the selected file")?>",
+          9: "<?=_("This moves the selected file")?>" 
+        };
+        var warningText = warningTexts[action];
+        if (warningText) {
+          var $warning = $('<div>').css({
             'margin-right': '10px',
             'line-height': '36px',
             'display': 'inline-block',
-            'vertical-align': 'middle'
-          });
+            'vertical-align': 'middle',
+            'color': '#888'
+          }).html('<i class="fa fa-warning dfm"></i> ' + warningText);
           $('.ui-dfm .ui-dialog-buttonset').prepend($warning);
         }
       }
@@ -1054,14 +1061,19 @@ function doActions(action, title) {
     open: function() {
       // Move warning to buttonpane for copy/move actions (3=copy, 4=move)
       if ([3,4].includes(action)) {
-        var $warning = $('#dfm_warning');
-        if ($warning.length) {
-          $warning.css({
+        var warningTexts = {
+          3: "<?=_("This copies all the selected sources")?>",
+          4: "<?=_("This moves all the selected sources")?>" 
+        };
+        var warningText = warningTexts[action];
+        if (warningText) {
+          var $warning = $('<div>').css({
             'margin-right': '10px',
             'line-height': '36px',
             'display': 'inline-block',
-            'vertical-align': 'middle'
-          });
+            'vertical-align': 'middle',
+            'color': '#888'
+          }).html('<i class="fa fa-warning dfm"></i> ' + warningText);
           $('.ui-dfm .ui-dialog-buttonset').prepend($warning);
         }
       }
