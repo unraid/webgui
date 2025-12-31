@@ -648,18 +648,15 @@ function doAction(action, title, id) {
   case 0: // create folder
     dfm.window.html($('#dfm_templateCreateFolder').html());
     source = dir;
-    dfm.height = 330;
     break;
   case 1: // delete folder
     dfm.window.html($('#dfm_templateDeleteFolder').html());
     dfm_createSource(source.dfm_strip());
-    dfm.height = 330;
     break;
   case 2: // rename folder
     dfm.window.html($('#dfm_templateRenameFolder').html());
     dfm_createSource(name);
     dfm.window.find('#dfm_target').val(name);
-    dfm.height = 330;
     break;
   case 3: // copy folder
     dfm.window.html($('#dfm_templateCopyFolder').html());
@@ -668,8 +665,8 @@ function doAction(action, title, id) {
       var bits = path.substr(1).split('/');
       var auto = bits.length>3 ? '' : share;
       dfm.window.find('#dfm_target').val(path+auto).change();
-    }).css('margin-bottom', '40vh');
-    dfm.height = 800;
+    });
+    dfm.window.find('#dfm_target').css('margin-bottom', '20vh');
     break;
   case 4: // move folder
     dfm.window.html($('#dfm_templateMoveFolder').html());
@@ -678,42 +675,39 @@ function doAction(action, title, id) {
       var bits = path.substr(1).split('/');
       var auto = bits.length>3 ? '' : share;
       dfm.window.find('#dfm_target').val(path+auto).change();
-    }).css('margin-bottom', '40vh');
-    dfm.height = 800;
+    });
+    dfm.window.find('#dfm_target').css('margin-bottom', '20vh');
     break;
   case 6: // delete file
     dfm.window.html($('#dfm_templateDeleteFile').html());
     dfm_createSource(source);
-    dfm.height = 330;
     break;
   case 7: // rename file
     dfm.window.html($('#dfm_templateRenameFile').html());
     dfm_createSource(name);
     dfm.window.find('#dfm_target').val(name);
-    dfm.height = 330;
     break;
   case 8: // copy file
     dfm.window.html($('#dfm_templateCopyFile').html());
     dfm_createSource(source);
     dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
-    }).css('margin-bottom', '40vh');
-    dfm.height = 800;
+    });
+    dfm.window.find('#dfm_target').css('margin-bottom', '20vh');
     break;
   case 9: // move file
     dfm.window.html($('#dfm_templateMoveFile').html());
     dfm_createSource(source);
     dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
-    }).css('margin-bottom', '40vh');
-    dfm.height = 800;
+    });
+    dfm.window.find('#dfm_target').css('margin-bottom', '20vh');
     break;
   case 11: // change owner
     dfm.window.html($('#dfm_templateChangeOwner').html());
     var owner = $('#'+id.dfm_bring('owner')).text();
     dfm_createSource(source.dfm_strip());
     dfm.window.find('#dfm_target').val(owner);
-    dfm.height = 330;
     break;
   case 12: // change permission
     dfm.window.html($('#dfm_templateChangePermission').html());
@@ -722,7 +716,6 @@ function doAction(action, title, id) {
     dfm.window.find('#dfm_owner').val('u-'+perm.substr(1,2).dfm_patch());
     dfm.window.find('#dfm_group').val('g-'+perm.substr(4,2).dfm_patch());
     dfm.window.find('#dfm_other').val('o-'+perm.substr(7,2).dfm_patch());
-    dfm.height = 330;
     break;
   case 13: // download file
     downloadFile(source,name);
@@ -744,14 +737,12 @@ function doAction(action, title, id) {
     dfm_createSource(source.dfm_strip());
     dfm.window.find('.dfm_loc').html('&nbsp;').css({'line-height':'normal'});
     dfm.window.find('.dfm_text').html('').css({'line-height':'normal'});
-    dfm.height = 630;
     break;
   }
   dfm.window.dialog({
     classes: {'ui-dialog': 'ui-dfm'},
     autoOpen: true,
     title: title,
-    height: dfm.height,
     width: 'auto',
     resizable: false,
     draggable: false,
@@ -967,18 +958,15 @@ function doActions(action, title) {
   case 0: // create folder
     dfm.window.html($('#dfm_templateCreateFolder').html());
     source[0] = dir;
-    dfm.height = 330;
     break;
   case 1: // delete object
     dfm.window.html($('#dfm_templateDeleteObject').html());
     dfm_createSource(source);
-    dfm.height = 330;
     break;
   case 2: // rename object
     dfm.window.html($('#dfm_templateRenameObject').html());
     dfm_createSource(name);
     dfm.window.find('#dfm_target').val(name);
-    dfm.height = 330;
     break;
   case 3: // copy object
     dfm.window.html($('#dfm_templateCopyObject').html());
@@ -990,8 +978,7 @@ function doActions(action, title) {
       var auto = bulk || bits.length>3 ? '' : (type[0] == 'd' ? share : '');
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
-    dfm.window.find('#dfm_target').css('margin-bottom', '40vh');
-    dfm.height = 800;
+    dfm.window.find('#dfm_target').css('margin-bottom', '20vh');
     break;
   case 4: // move object
     dfm.window.html($('#dfm_templateMoveObject').html());
@@ -1003,14 +990,12 @@ function doActions(action, title) {
       var auto = bulk || bits.length > 3 ? '' : (type[0] == 'd' ? share : '');
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
-    dfm.window.find('#dfm_target').css('margin-bottom', '40vh');
-    dfm.height = 800;
+    dfm.window.find('#dfm_target').css('margin-bottom', '20vh');
     break;
   case 11: // change owner
     dfm.window.html($('#dfm_templateChangeOwner').html());
     dfm_createSource(source);
     if (!bulk) dfm.window.find('#dfm_target').val(owner[0]);
-    dfm.height = 330;
     break;
   case 12: // change permission
     dfm.window.html($('#dfm_templateChangePermission').html());
@@ -1020,7 +1005,6 @@ function doActions(action, title) {
       dfm.window.find('#dfm_group').val('g-'+perm[0].substr(4,2).dfm_patch());
       dfm.window.find('#dfm_other').val('o-'+perm[0].substr(7,2).dfm_patch());
     }
-    dfm.height = 330;
     break;
   case 14: // calculate occupied space
     timers.calc = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
@@ -1043,7 +1027,6 @@ function doActions(action, title) {
     dfm_createSource(source);
     dfm.window.find('.dfm_loc').html('&nbsp;').css({'line-height':'normal'});
     dfm.window.find('.dfm_text').html('').css({'line-height':'normal'});
-    dfm.height = 630;
     break;
   }
   dfm.window.find('#dfm_source').attr('size',Math.min(dfm.tsize[action],source.length));
@@ -1051,7 +1034,6 @@ function doActions(action, title) {
     classes: {'ui-dialog': 'ui-dfm'},
     autoOpen: true,
     title: title,
-    height: dfm.height,
     width: 'auto',
     resizable: false,
     draggable: false,
