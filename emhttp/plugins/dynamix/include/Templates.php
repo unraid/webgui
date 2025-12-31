@@ -75,8 +75,6 @@ _(Source folder)_:
 
 _(Target folder)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickmatch="" data-pickroot="" data-picktop="">
-
-<div id="dfm_warning"><i class="fa fa-warning dfm"></i><?=_("This copies the folder and all its content to another folder")?></div>
 </div>
 
 <div markdown="1" id="dfm_templateMoveFolder">
@@ -101,8 +99,6 @@ _(Source folder)_:
 
 _(Target folder)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickmatch="" data-pickroot="" data-picktop="">
-
-<div id="dfm_warning"><i class="fa fa-warning dfm"></i><?=_("This moves the folder and all its content to another folder")?></div>
 </div>
 
 <div markdown="1" id="dfm_templateDeleteFile">
@@ -155,8 +151,6 @@ _(Source file)_:
 
 _(Target file)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="" data-pickmatch="" data-pickroot="" data-picktop="">
-
-<div id="dfm_warning"><i class="fa fa-warning dfm"></i>_(This copies the selected file)_</div>
 </div>
 
 <div markdown="1" id="dfm_templateMoveFile">
@@ -181,8 +175,6 @@ _(Source file)_:
 
 _(Target file)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="" data-pickmatch="" data-pickroot="" data-picktop="">
-
-<div id="dfm_warning"><i class="fa fa-warning dfm"></i>_(This moves the selected file)_</div>
 </div>
 
 <div markdown="1" id="dfm_templateDeleteObject">
@@ -235,8 +227,6 @@ _(Source)_:
 
 _(Target)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="" data-pickmatch="" data-pickroot="" data-picktop="">
-
-<div id="dfm_warning"><i class="fa fa-warning dfm"></i>_(This copies all the selected sources)_</div>
 </div>
 
 <div markdown="1" id="dfm_templateMoveObject">
@@ -261,8 +251,6 @@ _(Source)_:
 
 _(Target)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="" data-pickmatch="" data-pickroot="" data-picktop="">
-
-<div id="dfm_warning"><i class="fa fa-warning dfm"></i>_(This moves all the selected sources)_</div>
 </div>
 
 <div markdown="1" id="dfm_templateChangeOwner">
