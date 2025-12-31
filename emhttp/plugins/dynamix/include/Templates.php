@@ -22,7 +22,7 @@ _(New folder name)_:
 : <span class="dfm_text"></span>
 
 &nbsp;
-: <span class="dfm_text"><i class="fa fa-warning dfm"></i>_(This creates a folder at the current level)_</span>
+: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This creates a folder at the current level)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateDeleteFolder">
@@ -33,7 +33,7 @@ _(Folder name)_:
 : <span class="dfm_text"></span>
 
 &nbsp;
-: <span class="dfm_text"><i class="fa fa-warning dfm"></i><?=_("This deletes the folder and all its content")?></span>
+: <span class="dfm_warning"><i class="fa fa-warning dfm"></i><?=_("This deletes the folder and all its content")?></span>
 </div>
 
 <div markdown="1" id="dfm_templateRenameFolder">
@@ -50,7 +50,7 @@ _(New folder name)_:
 : <span class="dfm_text"></span>
 
 &nbsp;
-: <span class="dfm_text"><i class="fa fa-warning dfm"></i>_(This renames the folder to the new name)_</span>
+: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This renames the folder to the new name)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateCopyFolder">
@@ -73,11 +73,11 @@ _(Source folder)_:
 &nbsp;
 : _(copy to)_ ...
 
-&nbsp;
-: <span class="dfm_text"><i class="fa fa-warning dfm"></i><?=_("This copies the folder and all its content to another folder")?></span>
-
 _(Target folder)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickmatch="" data-pickroot="" data-picktop="">
+
+&nbsp;
+: <span class="dfm_warning"><i class="fa fa-warning dfm"></i><?=_("This copies the folder and all its content to another folder")?></span>
 </div>
 
 <div markdown="1" id="dfm_templateMoveFolder">
@@ -100,11 +100,11 @@ _(Source folder)_:
 &nbsp;
 : _(move to)_ ...
 
-&nbsp;
-: <span class="dfm_text"><i class="fa fa-warning dfm"></i><?=_("This moves the folder and all its content to another folder")?></span>
-
 _(Target folder)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickmatch="" data-pickroot="" data-picktop="">
+
+&nbsp;
+: <span class="dfm_warning"><i class="fa fa-warning dfm"></i><?=_("This moves the folder and all its content to another folder")?></span>
 </div>
 
 <div markdown="1" id="dfm_templateDeleteFile">
@@ -115,7 +115,7 @@ _(File name)_:
 : <span class="dfm_text"></span>
 
 &nbsp;
-: <span class="dfm_text"><i class="fa fa-warning dfm"></i>_(This deletes the selected file)_</span>
+: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This deletes the selected file)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateRenameFile">
@@ -132,7 +132,7 @@ _(New file name)_:
 : <span class="dfm_text"></span>
 
 &nbsp;
-: <span class="dfm_text"><i class="fa fa-warning dfm"></i>_(This renames the selected file)_</span>
+: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This renames the selected file)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateCopyFile">
@@ -155,11 +155,11 @@ _(Source file)_:
 &nbsp;
 : _(copy to)_ ...
 
-&nbsp;
-: <span class="dfm_text"><i class="fa fa-warning dfm"></i>_(This copies the selected file)_</span>
-
 _(Target file)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="" data-pickmatch="" data-pickroot="" data-picktop="">
+
+&nbsp;
+: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This copies the selected file)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateMoveFile">
@@ -182,11 +182,11 @@ _(Source file)_:
 &nbsp;
 : _(move to)_ ...
 
-&nbsp;
-: <span class="dfm_text"><i class="fa fa-warning dfm"></i>_(This moves the selected file)_</span>
-
 _(Target file)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="" data-pickmatch="" data-pickroot="" data-picktop="">
+
+&nbsp;
+: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This moves the selected file)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateDeleteObject">
@@ -197,7 +197,7 @@ _(Source)_:
 : <span class="dfm_text"></span>
 
 &nbsp;
-: <span class="dfm_text"><i class="fa fa-warning dfm"></i>_(This deletes all selected sources)_</span>
+: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This deletes all selected sources)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateRenameObject">
@@ -214,7 +214,7 @@ _(Target)_:
 : <span class="dfm_text"></span>
 
 &nbsp;
-: <span class="dfm_text"><i class="fa fa-warning dfm"></i>_(This renames the selected source)_</span>
+: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This renames the selected source)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateCopyObject">
@@ -237,11 +237,11 @@ _(Source)_:
 &nbsp;
 : _(copy to)_ ...
 
-&nbsp;
-: <span class="dfm_text"><i class="fa fa-warning dfm"></i>_(This copies all the selected sources)_</span>
-
 _(Target)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="" data-pickmatch="" data-pickroot="" data-picktop="">
+
+&nbsp;
+: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This copies all the selected sources)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateMoveObject">
@@ -264,11 +264,11 @@ _(Source)_:
 &nbsp;
 : _(move to)_ ...
 
-&nbsp;
-: <span class="dfm_text"><i class="fa fa-warning dfm"></i>_(This moves all the selected sources)_</span>
-
 _(Target)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="" data-pickmatch="" data-pickroot="" data-picktop="">
+
+&nbsp;
+: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This moves all the selected sources)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateChangeOwner">
@@ -288,7 +288,7 @@ _(New owner)_:
 : <span class="dfm_text"></span>
 
 &nbsp;
-: <span class="dfm_text"><i class="fa fa-warning dfm"></i>_(This changes the owner of the source recursively)_</span>
+: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This changes the owner of the source recursively)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateChangePermission">
@@ -329,7 +329,7 @@ _(New permission)_:
 : <span class="dfm_text"></span>
 
 &nbsp;
-: <span class="dfm_text"><i class="fa fa-warning dfm"></i>_(This changes the permission of the source recursively)_</span>
+: <span class="dfm_warning"><i class="fa fa-warning dfm"></i>_(This changes the permission of the source recursively)_</span>
 </div>
 
 <div markdown="1" id="dfm_templateSearch">
