@@ -876,6 +876,18 @@ function doAction(action, title, id) {
     setupTargetNavigation();
   }
   
+  // Add warning to buttonpane for copy folder (testing)
+  if (action == 3) {
+    var warningHtml = dfm.window.find('.dfm_warning').clone();
+    if (warningHtml.length) {
+      $('.ui-dfm .ui-dialog-buttonpane').prepend($('<div>').css({
+        'float': 'left',
+        'margin-left': '10px',
+        'line-height': '36px'
+      }).append(warningHtml));
+    }
+  }
+  
   if (action == 15) $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',true);
   setTimeout(function(){if (dfm.window.find('#dfm_target').length) dfm.window.find('#dfm_target').focus().click(); else $('.ui-dfm .ui-dialog-buttonset button:eq(0)').focus();});
 }
