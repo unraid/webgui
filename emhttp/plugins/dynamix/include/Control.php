@@ -199,7 +199,7 @@ case 'file':
   $active = '/var/tmp/file.manager.active';
   $jobs   = '/var/tmp/file.manager.jobs';
   $data = [
-    'action' => $_POST['action'] ?? '',
+    'action' => (int)($_POST['action'] ?? 0),
     'title' => rawurldecode($_POST['title'] ?? ''),
     'source' => htmlspecialchars_decode(rawurldecode($_POST['source'] ?? '')),
     'target' => htmlspecialchars_decode(rawurldecode($_POST['target'] ?? '')),
@@ -218,7 +218,8 @@ case 'file':
   }
   
   // Update popular destinations for copy/move operations
-  if (in_array($data['action'], ['3', '4', '8', '9']) && !empty($data['target'])) {
+  // Action types: 3=copy file, 4=move file, 8=copy file (upload), 9=move file (upload)
+  if (in_array((int)$data['action'], [3, 4, 8, 9]) && !empty($data['target'])) {
     updatePopularDestinations($data['target']);
   }
   

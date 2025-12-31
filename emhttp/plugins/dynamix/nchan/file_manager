@@ -21,6 +21,10 @@ $empty_dir = '/var/tmp/file.manager.empty_dir/'; // trailing slash is required f
 $null    = '/dev/null';
 $timer   = time();
 
+// Rsync progress calculation constants
+define('RSYNC_MIN_PROGRESS_PERCENT', 3);   // Minimum progress percentage before calculating total size
+define('RSYNC_TOTAL_SIZE_SAMPLES', 5);     // Number of measurements to average for total size calculation
+
 require_once "$docroot/webGui/include/Wrappers.php";
 require_once "$docroot/webGui/include/publish.php";
 extract(parse_plugin_cfg('dynamix', true));
@@ -77,26 +81,50 @@ function seconds_to_time($seconds) {
   return sprintf("%d:%02d:%02d", $hours, $minutes, $secs);
 }
 
-function calculate_eta($transferred, $percent, $speed, $last_rsync_eta_seconds = null) {
-  // Convert transferred size to bytes
+/**
+ * Convert human-readable size string to bytes.
+ *
+ * @param string $size Size string (e.g., "1.5G", "250M", "1024K")
+ * @return float Size in bytes
+ */
+function size_to_bytes($size) {
   $multipliers = ['K' => 1024, 'M' => 1024*1024, 'G' => 1024*1024*1024, 'T' => 1024*1024*1024*1024];
-  $transferred_bytes = floatval($transferred);
+  $bytes = floatval($size);
   foreach ($multipliers as $unit => $mult) {
-    if (stripos($transferred, $unit) !== false) {
-      $transferred_bytes *= $mult;
+    if (stripos($size, $unit) !== false) {
+      $bytes *= $mult;
       break;
     }
   }
+  return $bytes;
+}
 
-  // Convert speed to bytes/sec
-  $speed_bytes = floatval($speed);
-  if (stripos($speed, 'kB/s') !== false) {
-    $speed_bytes *= 1024;
-  } elseif (stripos($speed, 'MB/s') !== false) {
-    $speed_bytes *= 1024 * 1024;
-  } elseif (stripos($speed, 'GB/s') !== false) {
-    $speed_bytes *= 1024 * 1024 * 1024;
+/**
+ * Format bytes to human-readable size string.
+ *
+ * @param float $bytes Size in bytes
+ * @return string Formatted size (e.g., "1.50GB", "250.00MB")
+ */
+function bytes_to_size($bytes) {
+  $display = $bytes;
+  $unit = 'B';
+  $units = ['KB' => 1024, 'MB' => 1024*1024, 'GB' => 1024*1024*1024, 'TB' => 1024*1024*1024*1024];
+  foreach (array_reverse($units, true) as $u => $divisor) {
+    if ($bytes >= $divisor) {
+      $display = $bytes / $divisor;
+      $unit = $u;
+      break;
+    }
   }
+  return number_format($display, 2) . $unit;
+}
+
+function calculate_eta($transferred, $percent, $speed, $last_rsync_eta_seconds = null) {
+  // Convert transferred size to bytes
+  $transferred_bytes = size_to_bytes($transferred);
+
+  // Convert speed to bytes/sec (speed format: "50.00MB/s")
+  $speed_bytes = size_to_bytes(str_replace('/s', '', $speed));
 
   // Calculate total size from percent
   $percent_val = intval(str_replace('%', '', $percent));
@@ -177,33 +205,26 @@ function parse_rsync_progress($status, $action_label, $reset = false) {
 
       // Calculate total size by averaging multiple measurements
       // rsync truncates percent (not rounds), so 47.9% shows as 47%
-      // This causes ~2% error per percent point. We average 5 measurements at different percents.
-      if ($total_size === null || count($total_calculations) < 5) {
+      // This causes ~2% error per percent point. We average multiple measurements at different percents.
+      if ($total_size === null || count($total_calculations) < RSYNC_TOTAL_SIZE_SAMPLES) {
         $percent_val = intval(str_replace('%', '', $percent));
         
         // Track if this is a "running transfer" line (no xfr# info)
         $is_running_line = !isset($parts[4]);
         
-        // Calculate total when we have at least 3% progress on a running transfer line
+        // Calculate total when we have minimum progress on a running transfer line
         // and the percent changed since last calculation
-        if ($is_running_line && $percent_val >= 3 && $last_calc_percent !== $percent_val) {
+        if ($is_running_line && $percent_val >= RSYNC_MIN_PROGRESS_PERCENT && $last_calc_percent !== $percent_val) {
           // Convert transferred size to bytes
-          $multipliers = ['K' => 1024, 'M' => 1024*1024, 'G' => 1024*1024*1024, 'T' => 1024*1024*1024*1024];
-          $transferred_bytes = floatval($transferred);
-          foreach ($multipliers as $unit => $mult) {
-            if (stripos($transferred, $unit) !== false) {
-              $transferred_bytes *= $mult;
-              break;
-            }
-          }
+          $transferred_bytes = size_to_bytes($transferred);
           
           // Calculate total from transferred and percent (rsync truncates, so add 0.5% for better accuracy)
           $calculated_total = $transferred_bytes * 100 / ($percent_val + 0.5);
           $total_calculations[] = $calculated_total;
           $last_calc_percent = $percent_val;
           
-          // Once we have 5 measurements, average them and lock the value
-          if (count($total_calculations) >= 5) {
+          // Once we have enough measurements, average them and lock the value
+          if (count($total_calculations) >= RSYNC_TOTAL_SIZE_SAMPLES) {
             $total_size = array_sum($total_calculations) / count($total_calculations);
           }
         }
@@ -227,18 +248,7 @@ function parse_rsync_progress($status, $action_label, $reset = false) {
       
       // Always show Total (either calculated or N/A)
       if ($total_size !== null) {
-        // Format total size for display
-        $total_display = $total_size;
-        $unit_display = 'B';
-        $units = ['KB' => 1024, 'MB' => 1024*1024, 'GB' => 1024*1024*1024, 'TB' => 1024*1024*1024*1024];
-        foreach (array_reverse($units, true) as $unit => $divisor) {
-          if ($total_size >= $divisor) {
-            $total_display = $total_size / $divisor;
-            $unit_display = $unit;
-            break;
-          }
-        }
-        $progress_parts[] = _('Total') . ": ~" . number_format($total_display, 2) . $unit_display;
+        $progress_parts[] = _('Total') . ": ~" . bytes_to_size($total_size);
       } else {
         $progress_parts[] = _('Total') . ": N/A";
       }
