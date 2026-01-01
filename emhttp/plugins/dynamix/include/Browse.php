@@ -133,7 +133,7 @@ function icon_class($ext) {
   }
 }
 
-$dir = validdir(htmlspecialchars_decode(rawurldecode($_GET['dir'])));
+$dir = validdir(rawurldecode($_GET['dir']));
 if (!$dir) {echo '<tbody><tr><td></td><td></td><td colspan="6">',_('Invalid path'),'</td><td></td></tr></tbody>'; exit;}
 
 extract(parse_plugin_cfg('dynamix',true));
@@ -157,7 +157,10 @@ if ($user ) {
     // Check bounds: if getfattr fails for a file, we might not have all 3 lines
     if (!isset($tmp[$i+1])) break;
     $filename = preg_replace_callback('/\\\\([0-7]{3})/', function($m) { return chr(octdec($m[1])); }, $tmp[$i]);
-    $set[basename($filename)] = explode('"',$tmp[$i+1])[1];
+    $parts = explode('"', $tmp[$i+1]);
+    if (count($parts) >= 2) {
+      $set[basename($filename)] = $parts[1];
+    }
   }
   unset($tmp);
 }
