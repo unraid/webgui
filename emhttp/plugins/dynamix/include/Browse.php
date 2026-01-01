@@ -84,6 +84,8 @@ function icon_class($ext) {
   switch ($ext) {
   case 'broken-symlink':
     return 'fa fa-chain-broken red-text';
+  case 'symlink':
+    return 'fa fa-link';
   case '3gp': case 'asf': case 'avi': case 'f4v': case 'flv': case 'm4v': case 'mkv': case 'mov': case 'mp4': case 'mpeg': case 'mpg': case 'm2ts': case 'ogm': case 'ogv': case 'vob': case 'webm': case 'wmv':
     return 'fa fa-film';
   case '7z': case 'bz2': case 'gz': case 'rar': case 'tar': case 'xz': case 'zip':
@@ -149,6 +151,15 @@ $lock   = $root=='mnt' ? ($main ?: '---') : ($root=='boot' ? _('flash') : '---')
 $ishare = $root=='mnt' && (!$main || !$next || ($main=='rootshare' && !$rest));
 $folder = $lock=='---' ? _('DEVICE') : ($ishare ? _('SHARE') : _('FOLDER'));
 
+// Build device ID to device name mapping for all /mnt/* directories
+$device_map = [];
+exec("find /mnt -mindepth 1 -maxdepth 1 -type d -printf '%p %D\n' 2>/dev/null", $device_lines);
+foreach ($device_lines as $line) {
+  if (preg_match('#^/mnt/([^ ]+) (\d+)$#', $line, $m)) {
+    $device_map[$m[2]] = $m[1]; // Map device ID to device name (e.g., '2305' => 'disk1')
+  }
+}
+
 if ($user ) {
   exec("shopt -s dotglob;getfattr --no-dereference --absolute-names -n system.LOCATIONS ".escapeshellarg($dir)."/* 2>/dev/null",$tmp);
   // Decode octal escapes from getfattr output to match actual filenames
@@ -163,13 +174,11 @@ if ($user ) {
 }
 
 // Get directory listing with stat info NULL-separated to support newlines in file/dir names
-// Two separate finds: working symlinks with target info, broken symlinks marked as such
-// Format: 7 fields per entry separated by \0: type\0owner\0perms\0size\0timestamp\0name\0symlinkTarget\0
+// Format: 8 fields per entry separated by \0: type\0linktype\0owner\0perms\0size\0timestamp\0name\0deviceID\0
+// Use find -L to follow symlinks: shows target properties in disk view, link properties in user share
+// %y=file type, %Y=target type (N=broken), %u=owner, %M=perms, %s=size, %T@=timestamp, %p=path, %D=device ID
 $cmd = <<<'BASH'
-cd %s && {
-  find . -maxdepth 1 -mindepth 1 ! -xtype l -printf '%%y\0%%u\0%%M\0%%s\0%%T@\0%%p\0%%l\0' 2>/dev/null
-  find . -maxdepth 1 -mindepth 1 -xtype l -printf 'broken\0%%u\0%%M\0%%s\0%%T@\0%%p\0%%l\0' 2>/dev/null
-}
+cd %s && find -L . -maxdepth 1 -mindepth 1 -printf '%%y\0%%Y\0%%u\0%%M\0%%s\0%%T@\0%%p\0%%D\0' 2>/dev/null
 BASH;
 $stat = popen(sprintf($cmd, escapeshellarg($dir)), 'r');
 
@@ -178,49 +187,27 @@ $all_output = stream_get_contents($stat);
 pclose($stat);
 $fields_array = explode("\0", $all_output);
 
-// Process in groups of 7 fields per entry
-for ($i = 0; $i + 7 <= count($fields_array); $i += 7) {
-  $fields = array_slice($fields_array, $i, 7);
-  [$type,$owner,$perm,$size,$time,$name,$target] = $fields;
+// Process in groups of 8 fields per entry
+for ($i = 0; $i + 8 <= count($fields_array); $i += 8) {
+  $fields = array_slice($fields_array, $i, 8);
+  [$type,$link_type,$owner,$perm,$size,$time,$name,$device_id] = $fields;
   $time = (int)$time;
   $name = $dir.'/'.substr($name, 2); // Remove './' prefix from find output
-
+  $is_broken = ($link_type == 'N'); // Broken symlink (target doesn't exist)
+  $is_symlink = ($type == 'l'); // Is a symlink
+  
   // Determine device name for LOCATION column
-  // For symlinks with absolute targets, use the target path to determine the device
-  // For everything else, use the source path
-  if ($target && $target[0] == '/') {
-
-    // Absolute symlink: extract device from target path
-    // Example: /mnt/disk2/foo/bar -> dev[2] = 'disk2'
-    $dev = explode('/', $target, 5);
-    $dev_name = $dev[2] ?? '';
-
-  } else {
-
-    // Regular file/folder or relative symlink: extract from source path
-    // Example: /mnt/disk1/sharename/foo -> dev[3] = 'sharename', dev[2] = 'disk1'
+  if ($user) {
+    // User share: use xattr (system.LOCATIONS) or share config
+    // Extract share name from path: /mnt/user/sharename/... -> sharename
     $dev = explode('/', $name, 5);
     $dev_name = $dev[3] ?? $dev[2];
-
-  }
-
-  // Build device list for LOCATION column
-  // In user share: get device list from xattr (system.LOCATIONS) or share config
-  if ($user) {
     $devs_value = $set[basename($name)] ?? $shares[$dev_name]['cachePool'] ?? '';
 
-  // On direct disk path:
   } else {
-
-    // For absolute symlinks: use the target's device name
-    if ($target && $target[0] == '/') {
-      $devs_value = $dev_name;
-
-    // For regular files/folders: use current device name like disk1, boot, etc.
-    } else {
-      $devs_value = $lock;
-    }
-
+    // Disk path: use device ID from find output
+    $dev_name = $device_map[$device_id] ?? $lock;
+    $devs_value = $dev_name;
   }
   $devs = explode(',', $devs_value);
 
@@ -239,8 +226,16 @@ for ($i = 0; $i + 7 <= count($fields_array); $i += 7) {
     $text[] = '<td><i id="row_'.$objs.'" data="'.escapeQuote($name).'" type="d" class="fa fa-plus-square-o" onclick="folderContextMenu(this.id,\'both\')" oncontextmenu="folderContextMenu(this.id,\'both\');return false">...</i></td></tr>';
     $dirs[] = gzdeflate(implode($text));
   } else {
-    $is_broken = ($type == 'broken');
-    $ext = $is_broken ? 'broken-symlink' : strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    // Determine file extension for icon
+    // In user share: show symlink icon for symlinks
+    // In disk path: show target file icon (symlinks are followed by find -L)
+    if ($is_broken) {
+      $ext = 'broken-symlink';
+    } elseif ($is_symlink && $user) {
+      $ext = 'symlink';
+    } else {
+      $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    }
     $tag = count($devs) > 1 ? 'warning' : '';
     $text[] = '<tr><td><i id="check_'.$objs.'" class="fa fa-fw fa-square-o" onclick="selectOne(this.id)"></i></td>';
     $text[] = '<td class="ext" data="'.$ext.'"><i class="'.icon_class($ext).'"></i></td>';
