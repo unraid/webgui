@@ -78,20 +78,20 @@ if (!$autocomplete && $rootdir === $root) {
     
     if ($isUserContext) {
       // In /mnt/user context: only show /mnt/user paths OR non-/mnt paths (external mounts)
-      $popularPaths = array_filter($popularPaths, function($path) {
+      $popularPaths = array_values(array_filter($popularPaths, function($path) {
         return (strpos($path, '/mnt/user') === 0 || strpos($path, '/mnt/rootshare') === 0 || strpos($path, '/mnt/') !== 0);
-      });
+      }));
     } else if (strpos($root, '/mnt/') === 0) {
       // In /mnt/diskX or /mnt/cache context: exclude /mnt/user and /mnt/rootshare paths
-      $popularPaths = array_filter($popularPaths, function($path) {
+      $popularPaths = array_values(array_filter($popularPaths, function($path) {
         return (strpos($path, '/mnt/user') !== 0 && strpos($path, '/mnt/rootshare') !== 0);
-      });
+      }));
     }
     // If root is not under /mnt/, no filtering needed
   }
   
   if (!empty($popularPaths)) {
-    echo "<li class='popular-header small-caps-label' style='list-style:none;padding:5px 0 5px 20px;'>Popular</li>";
+    echo "<li class='popular-header small-caps-label' style='list-style:none;padding:5px 0 5px 20px;'>"._('Popular')."</li>";
     
     foreach ($popularPaths as $path) {
       $pathName = basename($path);

@@ -58,6 +58,12 @@ function updatePopularDestinations($targetPath) {
     return;
   }
   
+  // Block path traversal attempts
+  if (strpos($targetPath, '..') !== false) {
+    exec('logger -t webGUI "Security: Blocked path traversal attempt in popular destinations: ' . escapeshellarg($targetPath) . '"');
+    return;
+  }
+  
   // Normalize path (remove trailing slash)
   $targetPath = rtrim($targetPath, '/');
   

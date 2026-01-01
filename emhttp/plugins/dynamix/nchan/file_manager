@@ -25,6 +25,7 @@ $timer   = time();
 define('RSYNC_MIN_PROGRESS_PERCENT', 3);   // Minimum progress percentage before calculating total size
 define('RSYNC_TOTAL_SIZE_SAMPLES', 5);     // Number of measurements to average for total size calculation
 
+require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/Wrappers.php";
 require_once "$docroot/webGui/include/publish.php";
 extract(parse_plugin_cfg('dynamix', true));
@@ -116,7 +117,7 @@ function bytes_to_size($bytes) {
       break;
     }
   }
-  return number_format($display, 2) . $unit;
+  return my_number($display, 2) . $unit;
 }
 
 function calculate_eta($transferred, $percent, $speed, $last_rsync_eta_seconds = null) {

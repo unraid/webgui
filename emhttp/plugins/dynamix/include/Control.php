@@ -58,13 +58,13 @@ case 'upload':
     chown($file,'nobody');
     chmod($file,0666);
   }
-  $file = file_get_contents($local);
+  $targetFile = file_get_contents($local);
   if ($_POST['cancel']==1) {
-    delete_file($file);
+    delete_file($targetFile);
     die('stop');
   }
-  if (file_put_contents($file,base64_decode($_POST['data']),FILE_APPEND)===false) {
-    delete_file($file);
+  if (file_put_contents($targetFile,base64_decode($_POST['data']),FILE_APPEND)===false) {
+    delete_file($targetFile);
     die('error');
   }
   die();
@@ -174,7 +174,7 @@ case 'undo':
   $jobs = '/var/tmp/file.manager.jobs';
   $undo = '0';
   if (file_exists($jobs)) {
-    $rows = array_reverse(explode(',',$_POST['row']));
+    $rows = explode(',',$_POST['row']);
     $lines = file($jobs, FILE_IGNORE_NEW_LINES);
     foreach ($rows as $row) {
       $line_number = $row - 1; // Convert 1-based job number to 0-based array index
