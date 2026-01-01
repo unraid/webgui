@@ -32,8 +32,8 @@ function path($dir) {
 }
 
 function is_top($dir) {
-  global $root;
-  return mb_strlen($dir) > mb_strlen($root);
+  global $fileTreeRoot;
+  return mb_strlen($dir) > mb_strlen($fileTreeRoot);
 }
 
 function no_dots($name) {
@@ -45,11 +45,13 @@ function my_dir($name) {
   return ($rootdir === $userdir && in_array($name, $UDincluded)) ? $topdir : $rootdir;
 }
 
-$root = path(realpath($_POST['root']));
-if (!$root) exit("ERROR: Root filesystem directory not set in jqueryFileTree.php");
+$fileTreeRoot = path(realpath($_POST['root']));
+if (!$fileTreeRoot) exit("ERROR: Root filesystem directory not set in jqueryFileTree.php");
 
 $docroot = '/usr/local/emhttp';
 require_once "$docroot/webGui/include/Secure.php";
+$_SERVER['REQUEST_URI'] = '';
+require_once "$docroot/webGui/include/Translations.php";
 require_once "$docroot/plugins/dynamix/include/PopularDestinations.php";
 
 $mntdir   = '/mnt/';
@@ -59,29 +61,30 @@ $topdir   = str_replace($userdir, $mntdir, $rootdir);
 $filters  = (array)$_POST['filter'];
 $match    = $_POST['match'];
 $checkbox = $_POST['multiSelect'] == 'true' ? "<input type='checkbox'>" : "";
-$autocomplete = isset($_POST['autocomplete']) ? (bool)$_POST['autocomplete'] : false;
 
 // Excluded UD shares to hide under '/mnt'
 $UDexcluded = ['RecycleBin', 'addons', 'rootshare'];
 // Included UD shares to show under '/mnt/user'
 $UDincluded = ['disks','remotes'];
 
+$showPopular = in_array('SHOW_POPULAR', $filters);
+
 echo "<ul class='jqueryFileTree'>";
 
-// Show popular destinations at the top (only at root level and not in autocomplete mode)
-if (!$autocomplete && $rootdir === $root) {
+// Show popular destinations at the top (only at root level when SHOW_POPULAR filter is set)
+if ($rootdir === $fileTreeRoot && $showPopular) {
   $popularPaths = getPopularDestinations(5);
   
   // Filter popular paths to prevent FUSE conflicts between /mnt/user and /mnt/diskX
   if (!empty($popularPaths)) {
-    $isUserContext = (strpos($root, '/mnt/user') === 0 || strpos($root, '/mnt/rootshare') === 0);
+    $isUserContext = (strpos($fileTreeRoot, '/mnt/user') === 0 || strpos($fileTreeRoot, '/mnt/rootshare') === 0);
     
     if ($isUserContext) {
       // In /mnt/user context: only show /mnt/user paths OR non-/mnt paths (external mounts)
       $popularPaths = array_values(array_filter($popularPaths, function($path) {
         return (strpos($path, '/mnt/user') === 0 || strpos($path, '/mnt/rootshare') === 0 || strpos($path, '/mnt/') !== 0);
       }));
-    } else if (strpos($root, '/mnt/') === 0) {
+    } else if (strpos($fileTreeRoot, '/mnt/') === 0) {
       // In /mnt/diskX or /mnt/cache context: exclude /mnt/user and /mnt/rootshare paths
       $popularPaths = array_values(array_filter($popularPaths, function($path) {
         return (strpos($path, '/mnt/user') !== 0 && strpos($path, '/mnt/rootshare') !== 0);
@@ -94,12 +97,11 @@ if (!$autocomplete && $rootdir === $root) {
     echo "<li class='popular-header small-caps-label' style='list-style:none;padding:5px 0 5px 20px;'>"._('Popular')."</li>";
     
     foreach ($popularPaths as $path) {
-      $pathName = basename($path);
       $htmlPath = htmlspecialchars($path);
-      $htmlName = htmlspecialchars(mb_strlen($pathName) <= 33 ? $pathName : mb_substr($pathName, 0, 30).'...');
+      $displayPath = htmlspecialchars($path);  // Show full path instead of basename
       // Use data-path instead of rel to prevent jQueryFileTree from handling these links
       // Use 'directory' class so jQueryFileTree CSS handles the icon
-      echo "<li class='directory popular-destination' style='list-style:none;'>$checkbox<a href='#' data-path='$htmlPath'>$htmlName</a></li>";
+      echo "<li class='directory popular-destination' style='list-style:none;'>$checkbox<a href='#' data-path='$htmlPath'>$displayPath</a></li>";
     }
     
     // Separator line
@@ -107,7 +109,7 @@ if (!$autocomplete && $rootdir === $root) {
   }
 }
 
-// Read directory contents first (needed for both normal and autocomplete mode)
+// Read directory contents
 $dirs = $files = [];
 if (is_dir($rootdir)) {
   $names = array_filter(scandir($rootdir, SCANDIR_SORT_NONE), 'no_dots');

@@ -256,7 +256,7 @@ function fileEdit(id) {
   // file editor dialog
   dfm.window.html($("#dfm_templateEditFile").html().replace('{$0}',source).dfm_build());
   dfm.window.dialog({
-    classes: {'ui-dialog': 'ui-dfm'},
+    classes: {'ui-dialog': 'ui-dfm ui-corner-all'},
     autoOpen: true,
     title: fileName(source),
     width: 'auto',
@@ -299,7 +299,7 @@ function doJobs(title) {
   dfm.window = $("#dfm_dialogWindow");
   dfm.window.html($('#dfm_templateJobs').html().dfm_build());
   dfm.window.dialog({
-    classes: {'ui-dialog': 'ui-dfm'},
+    classes: {'ui-dialog': 'ui-dfm ui-corner-all'},
     autoOpen: true,
     title: title,
     height: 'auto',
@@ -661,22 +661,22 @@ function doAction(action, title, id) {
   case 3: // copy folder
     dfm.window.html($('#dfm_templateCopyFolder').html());
     dfm_createSource(source.dfm_strip());
-    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).fileTreeAttach(null,null,function(path){
+    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-show-popular','true').fileTreeAttach(null,null,function(path){
       var bits = path.substr(1).split('/');
       var auto = bits.length>3 ? '' : share;
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
-    dfm.window.find('#dfm_target').css('margin-bottom', '20vh');
+    dfm.window.find('#dfm_target').css('margin-bottom', '320px');
     break;
   case 4: // move folder
     dfm.window.html($('#dfm_templateMoveFolder').html());
     dfm_createSource(source.dfm_strip());
-    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).fileTreeAttach(null,null,function(path){
+    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       var bits = path.substr(1).split('/');
       var auto = bits.length>3 ? '' : share;
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
-    dfm.window.find('#dfm_target').css('margin-bottom', '20vh');
+    dfm.window.find('#dfm_target').css('margin-bottom', '320px');
     break;
   case 6: // delete file
     dfm.window.html($('#dfm_templateDeleteFile').html());
@@ -690,18 +690,18 @@ function doAction(action, title, id) {
   case 8: // copy file
     dfm.window.html($('#dfm_templateCopyFile').html());
     dfm_createSource(source);
-    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).fileTreeAttach(null,null,function(path){
+    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
     });
-    dfm.window.find('#dfm_target').css('margin-bottom', '20vh');
+    dfm.window.find('#dfm_target').css('margin-bottom', '320px');
     break;
   case 9: // move file
     dfm.window.html($('#dfm_templateMoveFile').html());
     dfm_createSource(source);
-    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).fileTreeAttach(null,null,function(path){
+    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
     });
-    dfm.window.find('#dfm_target').css('margin-bottom', '20vh');
+    dfm.window.find('#dfm_target').css('margin-bottom', '320px');
     break;
   case 11: // change owner
     dfm.window.html($('#dfm_templateChangeOwner').html());
@@ -740,7 +740,7 @@ function doAction(action, title, id) {
     break;
   }
   dfm.window.dialog({
-    classes: {'ui-dialog': 'ui-dfm'},
+    classes: {'ui-dialog': 'ui-dfm ui-corner-all'},
     autoOpen: true,
     title: title,
     width: 'auto',
@@ -972,25 +972,27 @@ function doActions(action, title) {
     dfm.window.html($('#dfm_templateCopyObject').html());
     dfm_createSource(source);
     dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match);
-    if (bulk || type[0] == 'd') dfm.window.find('#dfm_target').attr('data-pickfilter','HIDE_FILES_FILTER');
+    if (bulk || type[0] == 'd') dfm.window.find('#dfm_target').attr('data-pickfilter','SHOW_POPULAR,HIDE_FILES_FILTER');
+    else dfm.window.find('#dfm_target').attr('data-pickfilter','SHOW_POPULAR');
     dfm.window.find('#dfm_target').fileTreeAttach(null,null,function(path){
       var bits = path.substr(1).split('/');
       var auto = bulk || bits.length>3 ? '' : (type[0] == 'd' ? share : '');
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
-    dfm.window.find('#dfm_target').css('margin-bottom', '20vh');
+    dfm.window.find('#dfm_target').css('margin-bottom', '320px');
     break;
   case 4: // move object
     dfm.window.html($('#dfm_templateMoveObject').html());
     dfm_createSource(source);
     dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match);
-    if (bulk || type[0] == 'd') dfm.window.find('#dfm_target').attr('data-pickfilter','HIDE_FILES_FILTER');
+    if (bulk || type[0] == 'd') dfm.window.find('#dfm_target').attr('data-pickfilter','SHOW_POPULAR,HIDE_FILES_FILTER');
+    else dfm.window.find('#dfm_target').attr('data-pickfilter','SHOW_POPULAR');
     dfm.window.find('#dfm_target').fileTreeAttach(null,null,function(path){
       var bits = path.substr(1).split('/');
       var auto = bulk || bits.length > 3 ? '' : (type[0] == 'd' ? share : '');
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
-    dfm.window.find('#dfm_target').css('margin-bottom', '20vh');
+    dfm.window.find('#dfm_target').css('margin-bottom', '320px');
     break;
   case 11: // change owner
     dfm.window.html($('#dfm_templateChangeOwner').html());
@@ -1031,7 +1033,7 @@ function doActions(action, title) {
   }
   dfm.window.find('#dfm_source').attr('size',Math.min(dfm.tsize[action],source.length));
   dfm.window.dialog({
-    classes: {'ui-dialog': 'ui-dfm'},
+    classes: {'ui-dialog': 'ui-dfm ui-corner-all'},
     autoOpen: true,
     title: title,
     width: 'auto',
