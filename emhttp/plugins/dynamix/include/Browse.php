@@ -55,7 +55,7 @@ function my_age($time) {
 function parent_link() {
   global $dir, $path;
   $parent = dirname($dir);
-  return $parent == '/' ? false : '<a href="/'.$path.'?dir='.rawurlencode(htmlspecialchars($parent)).'">'._('Parent Directory').'</a>';
+  return $parent == '/' ? false : '<a href="/'.$path.'?dir='.rawurlencode($parent).'">'._("Parent Directory").'</a>';
 }
 
 function my_devs(&$devs,$name,$menu) {
@@ -219,7 +219,7 @@ for ($i = 0; $i + 8 <= count($fields_array); $i += 8) {
     $text[] = '<td data=""><i class="fa fa-folder-o"></i></td>';
     // nl2br() is used to preserve newlines in file/dir names
     $symlink_tooltip = $is_symlink ? '<a class="info" href="#" onclick="return false;"><i class="fa fa-external-link" style="margin-left:4px;"></i><span>'.htmlspecialchars($symlinks[basename($name)]['target'] ?? '').'</span></a>' : '';
-    $text[] = '<td><a id="name_'.$objs.'" oncontextmenu="folderContextMenu(this.id,\'right\');return false" href="/'.$path.'?dir='.rawurlencode(htmlspecialchars($name)).'">'.nl2br(htmlspecialchars(basename($name))).'</a>'.$symlink_tooltip.'</td>';
+    $text[] = '<td><a id="name_'.$objs.'" oncontextmenu="folderContextMenu(this.id,\'right\');return false" href="/'.$path.'?dir='.rawurlencode($name).'">'.nl2br(htmlspecialchars(basename($name))).'</a>'.$symlink_tooltip.'</td>';
     $text[] = '<td id="owner_'.$objs.'">'.$owner.'</td>';
     $text[] = '<td id="perm_'.$objs.'">'.$perm.'</td>';
     $text[] = '<td data="0">&lt;'.$folder.'&gt;</td>';
