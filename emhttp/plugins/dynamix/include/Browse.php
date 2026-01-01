@@ -84,8 +84,6 @@ function icon_class($ext) {
   switch ($ext) {
   case 'broken-symlink':
     return 'fa fa-chain-broken red-text';
-  case 'symlink':
-    return 'fa fa-link';
   case '3gp': case 'asf': case 'avi': case 'f4v': case 'flv': case 'm4v': case 'mkv': case 'mov': case 'mp4': case 'mpeg': case 'mpg': case 'm2ts': case 'ogm': case 'ogv': case 'vob': case 'webm': case 'wmv':
     return 'fa fa-film';
   case '7z': case 'bz2': case 'gz': case 'rar': case 'tar': case 'xz': case 'zip':
@@ -151,15 +149,6 @@ $lock   = $root=='mnt' ? ($main ?: '---') : ($root=='boot' ? _('flash') : '---')
 $ishare = $root=='mnt' && (!$main || !$next || ($main=='rootshare' && !$rest));
 $folder = $lock=='---' ? _('DEVICE') : ($ishare ? _('SHARE') : _('FOLDER'));
 
-// Build device ID to device name mapping for all /mnt/* directories
-$device_map = [];
-exec("find /mnt -mindepth 1 -maxdepth 1 -type d -printf '%p %D\n' 2>/dev/null", $device_lines);
-foreach ($device_lines as $line) {
-  if (preg_match('#^/mnt/([^ ]+) (\d+)$#', $line, $m)) {
-    $device_map[$m[2]] = $m[1]; // Map device ID to device name (e.g., '2305' => 'disk1')
-  }
-}
-
 if ($user ) {
   exec("shopt -s dotglob;getfattr --no-dereference --absolute-names -n system.LOCATIONS ".escapeshellarg($dir)."/* 2>/dev/null",$tmp);
   // Decode octal escapes from getfattr output to match actual filenames
@@ -173,10 +162,22 @@ if ($user ) {
   unset($tmp);
 }
 
+// Detect symlinks: run find without -L to identify symlinks (type='l')
+// Build map of basenames with their device IDs and link targets
+// Include broken symlinks to show their target in tooltip
+$symlinks = [];
+exec("cd ".escapeshellarg($dir)." && find . -maxdepth 1 -mindepth 1 -type l -printf '%f\t%D\t%l\n' 2>/dev/null", $symlink_list);
+foreach ($symlink_list as $line) {
+  $parts = explode("\t", $line);
+  if (count($parts) == 3) {
+    $symlinks[$parts[0]] = ['device_id' => $parts[1], 'target' => $parts[2]];
+  }
+}
+
 // Get directory listing with stat info NULL-separated to support newlines in file/dir names
 // Format: 8 fields per entry separated by \0: type\0linktype\0owner\0perms\0size\0timestamp\0name\0deviceID\0
-// Use find -L to follow symlinks: shows target properties in disk view, link properties in user share
-// %y=file type, %Y=target type (N=broken), %u=owner, %M=perms, %s=size, %T@=timestamp, %p=path, %D=device ID
+// Always use find -L to show target properties (size, type, perms of symlink target)
+// %y=file type (follows symlink with -L), %Y=target type (N=broken), %u=owner, %M=perms, %s=size, %T@=timestamp, %p=path, %D=device ID
 $cmd = <<<'BASH'
 cd %s && find -L . -maxdepth 1 -mindepth 1 -printf '%%y\0%%Y\0%%u\0%%M\0%%s\0%%T@\0%%p\0%%D\0' 2>/dev/null
 BASH;
@@ -194,7 +195,7 @@ for ($i = 0; $i + 8 <= count($fields_array); $i += 8) {
   $time = (int)$time;
   $name = $dir.'/'.substr($name, 2); // Remove './' prefix from find output
   $is_broken = ($link_type == 'N'); // Broken symlink (target doesn't exist)
-  $is_symlink = ($type == 'l'); // Is a symlink
+  $is_symlink = isset($symlinks[basename($name)]); // Check if this item is a symlink
   
   // Determine device name for LOCATION column
   if ($user) {
@@ -203,13 +204,13 @@ for ($i = 0; $i + 8 <= count($fields_array); $i += 8) {
     $dev = explode('/', $name, 5);
     $dev_name = $dev[3] ?? $dev[2];
     $devs_value = $set[basename($name)] ?? $shares[$dev_name]['cachePool'] ?? '';
-
   } else {
-    // Disk path: use device ID from find output
-    $dev_name = $device_map[$device_id] ?? $lock;
+    // Disk path: always shows current disk in LOCATION
+    $dev_name = $lock;
     $devs_value = $dev_name;
   }
   $devs = explode(',', $devs_value);
+  $tag = count($devs) > 1 ? 'warning' : '';
 
   $objs++;
   $text = [];
@@ -217,7 +218,8 @@ for ($i = 0; $i + 8 <= count($fields_array); $i += 8) {
     $text[] = '<tr><td><i id="check_'.$objs.'" class="fa fa-fw fa-square-o" onclick="selectOne(this.id)"></i></td>';
     $text[] = '<td data=""><i class="fa fa-folder-o"></i></td>';
     // nl2br() is used to preserve newlines in file/dir names
-    $text[] = '<td><a id="name_'.$objs.'" oncontextmenu="folderContextMenu(this.id,\'right\');return false" href="/'.$path.'?dir='.rawurlencode(htmlspecialchars($name)).'">'.nl2br(htmlspecialchars(basename($name))).'</a></td>';
+    $symlink_tooltip = $is_symlink ? '<a class="info" href="#" onclick="return false;"><i class="fa fa-external-link" style="margin-left:4px;"></i><span>'.htmlspecialchars($symlinks[basename($name)]['target'] ?? '').'</span></a>' : '';
+    $text[] = '<td><a id="name_'.$objs.'" oncontextmenu="folderContextMenu(this.id,\'right\');return false" href="/'.$path.'?dir='.rawurlencode(htmlspecialchars($name)).'">'.nl2br(htmlspecialchars(basename($name))).'</a>'.$symlink_tooltip.'</td>';
     $text[] = '<td id="owner_'.$objs.'">'.$owner.'</td>';
     $text[] = '<td id="perm_'.$objs.'">'.$perm.'</td>';
     $text[] = '<td data="0">&lt;'.$folder.'&gt;</td>';
@@ -226,20 +228,17 @@ for ($i = 0; $i + 8 <= count($fields_array); $i += 8) {
     $text[] = '<td><i id="row_'.$objs.'" data="'.escapeQuote($name).'" type="d" class="fa fa-plus-square-o" onclick="folderContextMenu(this.id,\'both\')" oncontextmenu="folderContextMenu(this.id,\'both\');return false">...</i></td></tr>';
     $dirs[] = gzdeflate(implode($text));
   } else {
-    // Determine file extension for icon
-    // In user share: show symlink icon for symlinks
-    // In disk path: show target file icon (symlinks are followed by find -L)
+    // Determine file extension for icon - always show target file icon (symlinks are followed by find -L)
     if ($is_broken) {
       $ext = 'broken-symlink';
-    } elseif ($is_symlink && $user) {
-      $ext = 'symlink';
     } else {
       $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
     }
     $tag = count($devs) > 1 ? 'warning' : '';
     $text[] = '<tr><td><i id="check_'.$objs.'" class="fa fa-fw fa-square-o" onclick="selectOne(this.id)"></i></td>';
     $text[] = '<td class="ext" data="'.$ext.'"><i class="'.icon_class($ext).'"></i></td>';
-    $text[] = '<td id="name_'.$objs.'" class="'.$tag.'"'.($is_broken ? '' : ' onclick="fileEdit(this.id)"').' oncontextmenu="fileContextMenu(this.id,\'right\');return false">'.nl2br(htmlspecialchars(basename($name))).'</td>';
+    $symlink_tooltip = $is_symlink ? '<a class="info" href="#" onclick="return false;"><i class="fa fa-external-link" style="margin-left:4px;"></i><span>'.htmlspecialchars($symlinks[basename($name)]['target'] ?? '').'</span></a>' : '';
+    $text[] = '<td id="name_'.$objs.'" class="'.$tag.'" oncontextmenu="fileContextMenu(this.id,\'right\');return false">'.($is_broken ? nl2br(htmlspecialchars(basename($name))) : '<span style="cursor:pointer" onclick="fileEdit(\'name_'.$objs.'\')">'.nl2br(htmlspecialchars(basename($name))).'</span>').$symlink_tooltip.'</td>';
     $text[] = '<td id="owner_'.$objs.'" class="'.$tag.'">'.$owner.'</td>';
     $text[] = '<td id="perm_'.$objs.'" class="'.$tag.'">'.$perm.'</td>';
     $text[] = '<td data="'.$size.'" class="'.$tag.'">'.my_scale($size,$unit).' '.$unit.'</td>';
