@@ -82,8 +82,6 @@ function my_devs(&$devs,$name,$menu) {
 
 function icon_class($ext) {
   switch ($ext) {
-  case 'broken-symlink':
-    return 'fa fa-chain-broken red-text';
   case '3gp': case 'asf': case 'avi': case 'f4v': case 'flv': case 'm4v': case 'mkv': case 'mov': case 'mp4': case 'mpeg': case 'mpg': case 'm2ts': case 'ogm': case 'ogv': case 'vob': case 'webm': case 'wmv':
     return 'fa fa-film';
   case '7z': case 'bz2': case 'gz': case 'rar': case 'tar': case 'xz': case 'zip':
@@ -151,110 +149,47 @@ $folder = $lock=='---' ? _('DEVICE') : ($ishare ? _('SHARE') : _('FOLDER'));
 
 if ($user ) {
   exec("shopt -s dotglob;getfattr --no-dereference --absolute-names -n system.LOCATIONS ".escapeshellarg($dir)."/* 2>/dev/null",$tmp);
-  // Decode octal escapes from getfattr output to match actual filenames
-  // Reason: "getfattr" outputs \012 (newline) but the below "find" returns actual newline character
-  for ($i = 0; $i < count($tmp); $i+=3) {
-    // Check bounds: if getfattr fails for a file, we might not have all 3 lines
-    if (!isset($tmp[$i+1])) break;
-    $filename = preg_replace_callback('/\\\\([0-7]{3})/', function($m) { return chr(octdec($m[1])); }, $tmp[$i]);
-    $set[basename($filename)] = explode('"',$tmp[$i+1])[1];
-  }
+  for ($i = 0; $i < count($tmp); $i+=3) $set[basename($tmp[$i])] = explode('"',$tmp[$i+1])[1];
   unset($tmp);
 }
 
-// Get directory listing with stat info NULL-separated to support newlines in file/dir names
-// Two separate finds: working symlinks with target info, broken symlinks marked as such
-// Format: 7 fields per entry separated by \0: type\0owner\0perms\0size\0timestamp\0name\0symlinkTarget\0
-$cmd = <<<'BASH'
-cd %s && {
-  find . -maxdepth 1 -mindepth 1 ! -xtype l -printf '%%y\0%%u\0%%M\0%%s\0%%T@\0%%p\0%%l\0' 2>/dev/null
-  find . -maxdepth 1 -mindepth 1 -xtype l -printf 'broken\0%%u\0%%M\0%%s\0%%T@\0%%p\0%%l\0' 2>/dev/null
-}
-BASH;
-$stat = popen(sprintf($cmd, escapeshellarg($dir)), 'r');
+$stat = popen("shopt -s dotglob;stat -L -c'%F|%U|%A|%s|%Y|%n' ".escapeshellarg($dir)."/* 2>/dev/null",'r');
 
-// Read all output and split by \0 into array
-$all_output = stream_get_contents($stat);
-pclose($stat);
-$fields_array = explode("\0", $all_output);
-
-// Process in groups of 7 fields per entry
-for ($i = 0; $i + 7 <= count($fields_array); $i += 7) {
-  $fields = array_slice($fields_array, $i, 7);
-  [$type,$owner,$perm,$size,$time,$name,$target] = $fields;
-  $time = (int)$time;
-  $name = $dir.'/'.substr($name, 2); // Remove './' prefix from find output
-
-  // Determine device name for LOCATION column
-  // For symlinks with absolute targets, use the target path to determine the device
-  // For everything else, use the source path
-  if ($target && $target[0] == '/') {
-
-    // Absolute symlink: extract device from target path
-    // Example: /mnt/disk2/foo/bar -> dev[2] = 'disk2'
-    $dev = explode('/', $target, 5);
-    $dev_name = $dev[2] ?? '';
-
-  } else {
-
-    // Regular file/folder or relative symlink: extract from source path
-    // Example: /mnt/disk1/sharename/foo -> dev[3] = 'sharename', dev[2] = 'disk1'
-    $dev = explode('/', $name, 5);
-    $dev_name = $dev[3] ?? $dev[2];
-
-  }
-
-  // Build device list for LOCATION column
-  // In user share: get device list from xattr (system.LOCATIONS) or share config
-  if ($user) {
-    $devs_value = $set[basename($name)] ?? $shares[$dev_name]['cachePool'] ?? '';
-
-  // On direct disk path:
-  } else {
-
-    // For absolute symlinks: use the target's device name
-    if ($target && $target[0] == '/') {
-      $devs_value = $dev_name;
-
-    // For regular files/folders: use current device name like disk1, boot, etc.
-    } else {
-      $devs_value = $lock;
-    }
-
-  }
-  $devs = explode(',', $devs_value);
-
+while (($row = fgets($stat)) !== false) {
+  [$type,$owner,$perm,$size,$time,$name] = explode('|',rtrim($row,"\n"),6);
+  $dev  = explode('/', $name, 5);
+  $devs = explode(',', $user ? $set[basename($name)] ?? $shares[$dev[3]]['cachePool'] ?? '' : $lock);
   $objs++;
   $text = [];
-  if ($type == 'd') {
+  if ($type[0] == 'd') {
     $text[] = '<tr><td><i id="check_'.$objs.'" class="fa fa-fw fa-square-o" onclick="selectOne(this.id)"></i></td>';
     $text[] = '<td data=""><i class="fa fa-folder-o"></i></td>';
-    // nl2br() is used to preserve newlines in file/dir names
-    $text[] = '<td><a id="name_'.$objs.'" oncontextmenu="folderContextMenu(this.id,\'right\');return false" href="/'.$path.'?dir='.rawurlencode(htmlspecialchars($name)).'">'.nl2br(htmlspecialchars(basename($name))).'</a></td>';
+    $text[] = '<td><a id="name_'.$objs.'" oncontextmenu="folderContextMenu(this.id,\'right\');return false" href="/'.$path.'?dir='.rawurlencode(htmlspecialchars($name)).'">'.htmlspecialchars(basename($name)).'</a></td>';
     $text[] = '<td id="owner_'.$objs.'">'.$owner.'</td>';
     $text[] = '<td id="perm_'.$objs.'">'.$perm.'</td>';
     $text[] = '<td data="0">&lt;'.$folder.'&gt;</td>';
     $text[] = '<td data="'.$time.'"><span class="my_time">'.my_time($time,$fmt).'</span><span class="my_age" style="display:none">'.my_age($time).'</span></td>';
-    $text[] = '<td class="loc">'.my_devs($devs,$dev_name,'deviceFolderContextMenu').'</td>';
+    $text[] = '<td class="loc">'.my_devs($devs,$dev[3]??$dev[2],'deviceFolderContextMenu').'</td>';
     $text[] = '<td><i id="row_'.$objs.'" data="'.escapeQuote($name).'" type="d" class="fa fa-plus-square-o" onclick="folderContextMenu(this.id,\'both\')" oncontextmenu="folderContextMenu(this.id,\'both\');return false">...</i></td></tr>';
     $dirs[] = gzdeflate(implode($text));
   } else {
-    $is_broken = ($type == 'broken');
-    $ext = $is_broken ? 'broken-symlink' : strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
     $tag = count($devs) > 1 ? 'warning' : '';
     $text[] = '<tr><td><i id="check_'.$objs.'" class="fa fa-fw fa-square-o" onclick="selectOne(this.id)"></i></td>';
     $text[] = '<td class="ext" data="'.$ext.'"><i class="'.icon_class($ext).'"></i></td>';
-    $text[] = '<td id="name_'.$objs.'" class="'.$tag.'"'.($is_broken ? '' : ' onclick="fileEdit(this.id)"').' oncontextmenu="fileContextMenu(this.id,\'right\');return false">'.nl2br(htmlspecialchars(basename($name))).'</td>';
+    $text[] = '<td id="name_'.$objs.'" class="'.$tag.'" onclick="fileEdit(this.id)" oncontextmenu="fileContextMenu(this.id,\'right\');return false">'.htmlspecialchars(basename($name)).'</td>';
     $text[] = '<td id="owner_'.$objs.'" class="'.$tag.'">'.$owner.'</td>';
     $text[] = '<td id="perm_'.$objs.'" class="'.$tag.'">'.$perm.'</td>';
     $text[] = '<td data="'.$size.'" class="'.$tag.'">'.my_scale($size,$unit).' '.$unit.'</td>';
     $text[] = '<td data="'.$time.'" class="'.$tag.'"><span class="my_time">'.my_time($time,$fmt).'</span><span class="my_age" style="display:none">'.my_age($time).'</span></td>';
-    $text[] = '<td class="loc '.$tag.'">'.my_devs($devs,$dev_name,'deviceFileContextMenu').'</td>';
+    $text[] = '<td class="loc '.$tag.'">'.my_devs($devs,$dev[3]??$dev[2],'deviceFileContextMenu').'</td>';
     $text[] = '<td><i id="row_'.$objs.'" data="'.escapeQuote($name).'" type="f" class="fa fa-plus-square-o" onclick="fileContextMenu(this.id,\'both\')" oncontextmenu="fileContextMenu(this.id,\'both\');return false">...</i></td></tr>';
     $files[] = gzdeflate(implode($text));
     $total += $size;
   }
 }
+
+pclose($stat);
 
 if ($link = parent_link()) echo '<tbody class="tablesorter-infoOnly"><tr><td></td><td><i class="fa fa-folder-open-o"></i></td><td>',$link,'</td><td colspan="6"></td></tr></tbody>';
 echo write($dirs),write($files),'<tfoot><tr><td></td><td></td><td colspan="7">',add($objs,'object'),': ',add($dirs,'director','y','ies'),', ',add($files,'file'),' (',my_scale($total,$unit),' ',$unit,' ',_('total'),')</td></tr></tfoot>';
