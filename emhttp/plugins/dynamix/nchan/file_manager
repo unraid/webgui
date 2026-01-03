@@ -42,15 +42,11 @@ function pool_only(&$disks) {
   return array_filter($disks, function($disk){return $disk['type'] == 'Cache' && !empty($disk['uuid']);});
 }
 
-function pools_filter(&$disks) {
+function fm_pools_filter(&$disks) {
   return array_keys(pool_only($disks));
 }
 
-function delete_file(...$file) {
-  array_map('unlink', array_filter($file, 'file_exists'));
-}
-
-function pgrep($pid) {
+function pid_exists($pid) {
   $pid = is_array($pid) ? $pid[0] : $pid;
   return $pid && file_exists("/proc/$pid") ? $pid : false;
 }
@@ -312,7 +308,7 @@ function cat($file) {
         $set[] = exec("getfattr --no-dereference --absolute-names --only-values -n system.LOCATIONS ".quoted($name)." 2>$null");
       }
       $disks = parse_ini_file('state/disks.ini', true);
-      $tag = implode('|',array_merge(['disk'],pools_filter($disks)));
+      $tag = implode('|',array_merge(['disk'],fm_pools_filter($disks)));
       $set = explode(';',str_replace(',;',',',preg_replace("/($tag)/", ';$1', implode($set))));
     }
     foreach (array_diff($rows, $user) as $row) {
@@ -357,6 +353,7 @@ if (!file_exists($empty_dir)) {
 
 // initialize $delete_empty_dirs state: null = not a move operation (yet), true = rsync copy-delete phase, false = cleanup phase (done)
 $delete_empty_dirs = null;
+$pid = false;
 
 // infinite loop to monitor and execute file operations
 // Note: exec() uses /bin/sh which is symlinked to bash in unraid and a requirement for process substitution syntax >(...)
@@ -610,7 +607,7 @@ while (true) {
     default:
       continue 2;
     }
-    $pid = pgrep($pid??0);
+    $pid = pid_exists($pid??0);
 
     // Store PID to survive file_manager restarts
     if ($pid !== false) {
@@ -621,7 +618,7 @@ while (true) {
       if (!empty($delete_empty_dirs)) {
         exec("find ".quoted($source)." -type d -empty -print -delete 1>$status 2>$null & echo \$!", $pid);
         $delete_empty_dirs = false;
-        $pid = pgrep($pid);
+        $pid = pid_exists($pid);
       } else {
         if ($action != 15) {
           $reply['status'] = _('Done');

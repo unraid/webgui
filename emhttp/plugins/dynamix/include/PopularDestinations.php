@@ -21,6 +21,8 @@ define('MAX_ENTRIES', 50);
 
 /**
  * Load popular destinations from JSON file
+ * Note: This is for read-only operations. For updates, use the atomic
+ * read-modify-write operation in updatePopularDestinations().
  */
 function loadPopularDestinations() {
   if (!file_exists(POPULAR_DESTINATIONS_FILE)) {
@@ -35,17 +37,6 @@ function loadPopularDestinations() {
   }
   
   return $data;
-}
-
-/**
- * Save popular destinations to JSON file
- */
-function savePopularDestinations($data) {
-  $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-  $result = file_put_contents(POPULAR_DESTINATIONS_FILE, $json, LOCK_EX);
-  if ($result === false) {
-    exec('logger -t webGUI "Error: Failed to write popular destinations file: ' . POPULAR_DESTINATIONS_FILE . '"');
-  }
 }
 
 /**
@@ -67,8 +58,31 @@ function updatePopularDestinations($targetPath) {
   // Normalize path (remove trailing slash)
   $targetPath = rtrim($targetPath, '/');
   
-  // Load current data
-  $data = loadPopularDestinations();
+  // Open file for read+write, create if doesn't exist
+  $fp = fopen(POPULAR_DESTINATIONS_FILE, 'c+');
+  if ($fp === false) {
+    exec('logger -t webGUI "Error: Cannot open popular destinations file: ' . POPULAR_DESTINATIONS_FILE . '"');
+    return;
+  }
+  
+  // Acquire exclusive lock for entire read-modify-write cycle
+  if (!flock($fp, LOCK_EX)) {
+    exec('logger -t webGUI "Error: Cannot lock popular destinations file: ' . POPULAR_DESTINATIONS_FILE . '"');
+    fclose($fp);
+    return;
+  }
+  
+  // Read current data
+  $json = stream_get_contents($fp);
+  if ($json === false || $json === '') {
+    $data = ['destinations' => []];
+  } else {
+    $data = json_decode($json, true);
+    if (!is_array($data) || !isset($data['destinations'])) {
+      $data = ['destinations' => []];
+    }
+  }
+  
   $destinations = $data['destinations'];
   
   // Find target path first (before decay)
@@ -119,9 +133,26 @@ function updatePopularDestinations($targetPath) {
   // Re-index array
   $destinations = array_values($destinations);
   
-  // Save
+  // Write back atomically (still holding the lock)
   $data['destinations'] = $destinations;
-  savePopularDestinations($data);
+  $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+  
+  // Truncate and write from beginning
+  if (ftruncate($fp, 0) === false || fseek($fp, 0) === -1) {
+    exec('logger -t webGUI "Error: Cannot truncate popular destinations file: ' . POPULAR_DESTINATIONS_FILE . '"');
+    flock($fp, LOCK_UN);
+    fclose($fp);
+    return;
+  }
+  
+  $result = fwrite($fp, $json);
+  if ($result === false) {
+    exec('logger -t webGUI "Error: Failed to write popular destinations file: ' . POPULAR_DESTINATIONS_FILE . '"');
+  }
+  
+  // Release lock and close file
+  flock($fp, LOCK_UN);
+  fclose($fp);
 }
 
 /**

@@ -177,6 +177,11 @@ case 'undo':
     $rows = explode(',',$_POST['row']);
     $lines = file($jobs, FILE_IGNORE_NEW_LINES);
     foreach ($rows as $row) {
+      // Validate and convert to integer to prevent non-numeric input
+      if (!is_numeric($row)) {
+        continue; // Skip invalid entries
+      }
+      $row = (int)$row;
       $line_number = $row - 1; // Convert 1-based job number to 0-based array index
       if (isset($lines[$line_number])) {
         unset($lines[$line_number]);

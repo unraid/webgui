@@ -8,6 +8,19 @@
  *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
+ *
+ * NOTE: The templates below use Markdown syntax for definition lists.
+ * 
+ * The <wbr /> (word break opportunity) elements serve two purposes:
+ * 1. They trigger Markdown to generate proper <dl><dt><dd> HTML structure
+ *    (the Markdown parser requires a "term" before the colon to create definition lists)
+ *    Syntax reference: https://www.markdownguide.org/extended-syntax/#definition-lists
+ * 2. They allow CSS to hide empty <dt> spacer rows in mobile layouts using dt:has(wbr)
+ *    (see @media (max-width: 768px) in default-dynamix.css)
+ * 
+ * Without <wbr />, the colon-prefixed lines would be rendered as <p> paragraphs instead
+ * of definition list items, breaking the intended layout structure. And using &nbsp; 
+ * would not allow CSS to target those rows for hiding in mobile views.
  */
 ?>
 <div class="dfm_template">
@@ -18,7 +31,7 @@
 _(New folder name)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="">
 
-&nbsp;
+<wbr />
 : <span class="dfm_text"></span>
 </div>
 
@@ -26,7 +39,7 @@ _(New folder name)_:
 _(Folder name)_:
 : <span id="dfm_source"></span>
 
-&nbsp;
+<wbr />
 : <span class="dfm_text"></span>
 </div>
 
@@ -34,13 +47,13 @@ _(Folder name)_:
 _(Current folder name)_:
 : <span id="dfm_source"></span>
 
-&nbsp;
+<wbr />
 : _(rename to)_ ...
 
 _(New folder name)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="">
 
-&nbsp;
+<wbr />
 : <span class="dfm_text"></span>
 </div>
 
@@ -48,7 +61,7 @@ _(New folder name)_:
 _(Source folder)_:
 : <span id="dfm_source"></span>
 
-&nbsp;
+<wbr />
 : <span class="flex flex-col gap-4">
   <label for="dfm_sparse" class="inline-flex flex-wrap items-center gap-4">
     <input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''">
@@ -61,7 +74,7 @@ _(Source folder)_:
   <span class="dfm_text"></span>
 </span>
 
-&nbsp;
+<wbr />
 : _(copy to)_ ...
 
 _(Target folder)_:
@@ -72,7 +85,7 @@ _(Target folder)_:
 _(Source folder)_:
 : <span id="dfm_source"></span>
 
-&nbsp;
+<wbr />
 : <span class="flex flex-col gap-4">
   <label for="dfm_sparse" class="inline-flex flex-wrap items-center gap-4">
     <input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''">
@@ -85,7 +98,7 @@ _(Source folder)_:
   <span class="dfm_text"></span>
 </span>
 
-&nbsp;
+<wbr />
 : _(move to)_ ...
 
 _(Target folder)_:
@@ -96,7 +109,7 @@ _(Target folder)_:
 _(File name)_:
 : <span id="dfm_source"></span>
 
-&nbsp;
+<wbr />
 : <span class="dfm_text"></span>
 </div>
 
@@ -104,13 +117,13 @@ _(File name)_:
 _(Current file name)_:
 : <span id="dfm_source"></span>
 
-&nbsp;
+<wbr />
 : _(rename to)_ ...
 
 _(New file name)_:
 : <input type="text" id="dfm_target" autocomplete="off" value="">
 
-&nbsp;
+<wbr />
 : <span class="dfm_text"></span>
 </div>
 
@@ -118,7 +131,7 @@ _(New file name)_:
 _(Source file)_:
 : <span id="dfm_source"></span>
 
-&nbsp;
+<wbr />
 : <span class="flex flex-col gap-4">
   <label for="dfm_sparse" class="inline-flex flex-wrap items-center gap-4">
     <input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''">
@@ -131,7 +144,7 @@ _(Source file)_:
   <span class="dfm_text"></span>
 </span>
 
-&nbsp;
+<wbr />
 : _(copy to)_ ...
 
 _(Target file)_:
@@ -142,7 +155,7 @@ _(Target file)_:
 _(Source file)_:
 : <span id="dfm_source"></span>
 
-&nbsp;
+<wbr />
 : <span class="flex flex-col gap-4">
   <label for="dfm_sparse" class="inline-flex flex-wrap items-center gap-4">
     <input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''">
@@ -155,7 +168,7 @@ _(Source file)_:
   <span class="dfm_text"></span>
 </span>
 
-&nbsp;
+<wbr />
 : _(move to)_ ...
 
 _(Target file)_:
@@ -166,7 +179,7 @@ _(Target file)_:
 _(Source)_:
 : <select id="dfm_source"></select>
 
-&nbsp;
+<wbr />
 : <span class="dfm_text"></span>
 </div>
 
@@ -174,13 +187,13 @@ _(Source)_:
 _(Source)_:
 : <span id="dfm_source"></span>
 
-&nbsp;
+<wbr />
 : _(rename to)_ ...
 
 _(Target)_:
 : <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="">
 
-&nbsp;
+<wbr />
 : <span class="dfm_text"></span>
 </div>
 
@@ -188,7 +201,7 @@ _(Target)_:
 _(Source)_:
 : <select id="dfm_source"></select>
 
-&nbsp;
+<wbr />
 : <span class="flex flex-col gap-4">
   <label for="dfm_sparse" class="inline-flex flex-wrap items-center gap-4">
     <input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''">
@@ -201,7 +214,7 @@ _(Source)_:
   <span class="dfm_text"></span>
 </span>
 
-&nbsp;
+<wbr />
 : _(copy to)_ ...
 
 _(Target)_:
@@ -212,7 +225,7 @@ _(Target)_:
 _(Source)_:
 : <select id="dfm_source"></select>
 
-&nbsp;
+<wbr />
 : <span class="flex flex-col gap-4">
   <label for="dfm_sparse" class="inline-flex flex-wrap items-center gap-4">
     <input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''">
@@ -225,7 +238,7 @@ _(Source)_:
   <span class="dfm_text"></span>
 </span>
 
-&nbsp;
+<wbr />
 : _(move to)_ ...
 
 _(Target)_:
@@ -236,7 +249,7 @@ _(Target)_:
 _(Source)_:
 : <select id="dfm_source"></select>
 
-&nbsp;
+<wbr />
 : _(change owner)_ ...
 
 _(New owner)_:
@@ -245,7 +258,7 @@ _(New owner)_:
   echo mk_option(0,'nobody','nobody');
 ?></select>
 
-&nbsp;
+<wbr />
 : <span class="dfm_text"></span>
 </div>
 
@@ -253,7 +266,7 @@ _(New owner)_:
 _(Source)_:
 : <select id="dfm_source"></select>
 
-&nbsp;
+<wbr />
 : _(change permission)_ ...
 
 _(New permission)_:
@@ -283,7 +296,7 @@ _(New permission)_:
     </select>
   </label>
 
-&nbsp;
+<wbr />
 : <span class="dfm_text"></span>
 </div>
 

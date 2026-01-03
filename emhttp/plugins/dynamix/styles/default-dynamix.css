@@ -1753,12 +1753,39 @@ div.icon-zip {
 
 /* File Manager dialog warnings - responsive */
 @media (max-width: 768px) {
+    /* Remove padding-bottom from dialog content for better mobile layout */
+    .ui-dialog:not(.ui-dialog-content-full) {
+        .ui-dialog-content {
+            padding-bottom: 0 !important;
+        }
+    }
+    
+    /* Remove padding-bottom from jQuery UI dialog content */
+    .ui-dialog .ui-dialog-content {
+        padding-bottom: 0 !important;
+    }
+    
+    /* Remove padding-bottom from dl elements in dialogs */
+    dl {
+        padding-bottom: 0 !important;
+    }
+    
+    /* Hide dt elements containing wbr (spacers) - these create unwanted gaps in mobile layout */
+    dt:has(wbr) {
+        display: none;
+    }
+    
+    /* Center dd elements that follow hidden dt spacers */
+    dt:has(wbr) + dd {
+        text-align: center;
+    }
+    
     .ui-dialog-buttonpane {
         .dfm-warning {
             display: block;
             width: 100%;
             margin-right: 0;
-            margin-bottom: 10px;
+            margin-top: 10px;
             text-align: center;
         }
         
