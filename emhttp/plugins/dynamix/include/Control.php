@@ -223,7 +223,7 @@ case 'file':
   }
   
   // Update popular destinations for copy/move operations
-  // Action types: 3=copy file, 4=move file, 8=copy file (upload), 9=move file (upload)
+  // Action types: 3=copy folder, 4=move folder, 8=copy file, 9=move file
   if (in_array((int)$data['action'], [3, 4, 8, 9]) && !empty($data['target'])) {
     updatePopularDestinations($data['target']);
   }

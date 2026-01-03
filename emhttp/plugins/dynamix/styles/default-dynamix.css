@@ -1751,35 +1751,33 @@ div.icon-zip {
     }
 }
 
-/* File Manager dialog warnings - responsive */
-@media (max-width: 768px) {
+/* Mobile dialog improvements (<767px)
+ * Note: These rules apply to ALL dialogs (Docker, VM, Share settings, File Manager, etc.)
+ * to improve mobile UX across the entire application.
+ */
+@media (max-width: 767px) {
     /* Remove padding-bottom from dialog content for better mobile layout */
-    .ui-dialog:not(.ui-dialog-content-full) {
-        .ui-dialog-content {
-            padding-bottom: 0 !important;
-        }
-    }
-    
-    /* Remove padding-bottom from jQuery UI dialog content */
     .ui-dialog .ui-dialog-content {
         padding-bottom: 0 !important;
     }
     
     /* Remove padding-bottom from dl elements in dialogs */
-    dl {
+    .ui-dialog dl {
         padding-bottom: 0 !important;
     }
     
-    /* Hide dt elements containing wbr (spacers) - these create unwanted gaps in mobile layout */
-    dt:has(wbr) {
+    /* Hide dt elements containing wbr (spacers) - these create unwanted gaps in mobile layout
+     * Note: <wbr /> is used in File Manager templates as markdown definition list trigger */
+    .ui-dialog dt:has(wbr) {
         display: none;
     }
     
-    /* Center dd elements that follow hidden dt spacers */
-    dt:has(wbr) + dd {
+    /* Center dd elements that follow hidden dt spacers (e.g., "copy to ...", "move to ...") */
+    .ui-dialog dt:has(wbr) + dd {
         text-align: center;
     }
     
+    /* File Manager specific: warning text and button layout */
     .ui-dialog-buttonpane {
         .dfm-warning {
             display: block;

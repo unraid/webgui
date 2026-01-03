@@ -21,8 +21,12 @@ define('MAX_ENTRIES', 50);
 
 /**
  * Load popular destinations from JSON file
- * Note: This is for read-only operations. For updates, use the atomic
- * read-modify-write operation in updatePopularDestinations().
+ * 
+ * Note: This function reads without locking, which means it may observe partially
+ * written data if updatePopularDestinations() is writing concurrently. This is
+ * acceptable for display purposes where momentary inconsistency is tolerable.
+ * For updates, always use the atomic read-modify-write operation in
+ * updatePopularDestinations() which uses flock(LOCK_EX).
  */
 function loadPopularDestinations() {
   if (!file_exists(POPULAR_DESTINATIONS_FILE)) {
