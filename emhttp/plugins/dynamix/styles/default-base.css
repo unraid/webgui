@@ -17,12 +17,15 @@ body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
+
+@layer default {
+@scope (:root) to (.unapi) {
 img {
     border: none;
     text-decoration: none;
     vertical-align: middle;
 }
-p:where(:not(.unapi *)) {
+p {
     text-align: justify;
 }
 
@@ -139,15 +142,15 @@ hr {
     resize: none;
 }
 
-input[type="text"]:where(:not(.unapi *)),
-input[type="password"]:where(:not(.unapi *)),
-input[type="number"]:where(:not(.unapi *)),
-input[type="url"]:where(:not(.unapi *)),
-input[type="email"]:where(:not(.unapi *)),
-input[type="date"]:where(:not(.unapi *)),
-input[type="file"]:where(:not(.unapi *)),
-textarea:where(:not(.unapi *)),
-.textarea:where(:not(.unapi *)) {
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="url"],
+input[type="email"],
+input[type="date"],
+input[type="file"],
+textarea,
+.textarea {
     color: var(--text-color);
     font-family: clear-sans;
     font-size: 1.3rem;
@@ -181,12 +184,12 @@ select:focus {
     }
 }
 
-input[type="button"]:where(:not(.unapi *)),
-input[type="reset"]:where(:not(.unapi *)),
-input[type="submit"]:where(:not(.unapi *)),
-button:where(:not(.unapi *)),
-button[type="button"]:where(:not(.unapi *)),
-a.button:where(:not(.unapi *)) {
+input[type="button"],
+input[type="reset"],
+input[type="submit"],
+button,
+button[type="button"],
+a.button {
     font-family: clear-sans;
     font-size: 1.1rem;
     font-weight: bold;
@@ -250,50 +253,50 @@ input[type="number"]::-webkit-inner-spin-button {
 input[type="number"] {
     -moz-appearance: textfield;
 }
-input:focus[type="text"]:where(:not(.unapi *)),
-input:focus[type="password"]:where(:not(.unapi *)),
-input:focus[type="number"]:where(:not(.unapi *)),
-input:focus[type="url"]:where(:not(.unapi *)),
-input:focus[type="email"]:where(:not(.unapi *)),
-input:focus[type="file"]:where(:not(.unapi *)),
-textarea:focus:where(:not(.unapi *)) {
+input:focus[type="text"],
+input:focus[type="password"],
+input:focus[type="number"],
+input:focus[type="url"],
+input:focus[type="email"],
+input:focus[type="file"],
+textarea:focus {
     background-color: var(--focus-input-bg-color);
     outline: 0;
 }
-input:hover[type="button"]:where(:not(.unapi *)),
-input:hover[type="reset"]:where(:not(.unapi *)),
-input:hover[type="submit"]:where(:not(.unapi *)),
-button:hover:where(:not(.unapi *)),
-button:hover[type="button"]:where(:not(.unapi *)),
-a.button:hover:where(:not(.unapi *)) {
+input:hover[type="button"],
+input:hover[type="reset"],
+input:hover[type="submit"],
+button:hover,
+button:hover[type="button"],
+a.button:hover {
     color: var(--hover-button-text-color);
     background: var(--hover-button-background);
 }
-input[disabled]:where(:not(.unapi *)),
-textarea[disabled]:where(:not(.unapi *)) {
+input[disabled],
+textarea[disabled] {
     color: var(--text-color);
     border-bottom-color: var(--disabled-input-border-color);
     opacity: 0.5;
     cursor: default;
 }
-input[type="button"][disabled]:where(:not(.unapi *)),
-input[type="reset"][disabled]:where(:not(.unapi *)),
-input[type="submit"][disabled]:where(:not(.unapi *)),
-button[disabled]:where(:not(.unapi *)),
-button[type="button"][disabled]:where(:not(.unapi *)),
-a.button[disabled]:where(:not(.unapi *)),
-input:hover[type="button"][disabled]:where(:not(.unapi *)),
-input:hover[type="reset"][disabled]:where(:not(.unapi *)),
-input:hover[type="submit"][disabled]:where(:not(.unapi *)),
-button:hover[disabled]:where(:not(.unapi *)),
-button:hover[type="button"][disabled]:where(:not(.unapi *)),
-a.button:hover[disabled]:where(:not(.unapi *)),
-input:active[type="button"][disabled]:where(:not(.unapi *)),
-input:active[type="reset"][disabled]:where(:not(.unapi *)),
-input:active[type="submit"][disabled]:where(:not(.unapi *)),
-button:active[disabled]:where(:not(.unapi *)),
-button:active[type="button"][disabled]:where(:not(.unapi *)),
-a.button:active[disabled]:where(:not(.unapi *)) {
+input[type="button"][disabled],
+input[type="reset"][disabled],
+input[type="submit"][disabled],
+button[disabled],
+button[type="button"][disabled],
+a.button[disabled],
+input:hover[type="button"][disabled],
+input:hover[type="reset"][disabled],
+input:hover[type="submit"][disabled],
+button:hover[disabled],
+button:hover[type="button"][disabled],
+a.button:hover[disabled],
+input:active[type="button"][disabled],
+input:active[type="reset"][disabled],
+input:active[type="submit"][disabled],
+button:active[disabled],
+button:active[type="button"][disabled],
+a.button:active[disabled] {
     opacity: 0.5;
     cursor: default;
     color: var(--disabled-text-color);
@@ -335,7 +338,7 @@ a.button:active[disabled]:where(:not(.unapi *)) {
 input::-webkit-input-placeholder {
     color: var(--link-text-color);
 }
-select:where(:not(.unapi *)) {
+select {
     -webkit-appearance: none;
     font-family: clear-sans;
     font-size: 1.3rem;
@@ -358,18 +361,18 @@ select:where(:not(.unapi *)) {
     display: inline-block;
     cursor: pointer;
 }
-select:where(:not(.unapi *)) option {
+select option {
     color: var(--text-color);
     background-color: var(--mild-background-color);
 }
-select:where(:not(.unapi *)) option:disabled {
+select option:disabled {
     color: var(--disabled-text-color);
 }
-select:focus:where(:not(.unapi *)) {
+select:focus {
     background-color: var(--focus-input-bg-color);
     outline: 0;
 }
-select[disabled]:where(:not(.unapi *)) {
+select[disabled] {
     color: var(--text-color);
     border-bottom-color: var(--disabled-border-color);
     opacity: 0.5;
@@ -416,7 +419,7 @@ input.trim {
     width: 76px;
     min-width: 76px;
 }
-textarea:where(:not(.unapi *)) {
+textarea {
     resize: none;
     padding: 6px;
     border: 1px solid var(--textarea-border-color);
@@ -953,7 +956,7 @@ div.title span img {
     -webkit-overflow-scrolling: touch;
 }
 
-table:where(:not(.unapi *)) {
+table {
     border-collapse: collapse;
     border-spacing: 0;
     border-style: hidden;
@@ -961,12 +964,12 @@ table:where(:not(.unapi *)) {
     width: 100%;
     background-color: var(--background-color);
 }
-table:where(:not(.unapi *)) thead td {
+table thead td {
     line-height: 2.8rem;
     height: 2.8rem;
     white-space: nowrap;
 }
-table:where(:not(.unapi *)) tbody td {
+table tbody td {
     line-height: 2.6rem;
     height: 2.6rem;
     white-space: nowrap;
@@ -2198,7 +2201,7 @@ div#title.ud {
  * @see https://developer.mozilla.org/en-US/docs/Web/CSS/Nesting_selector
  * @see https://caniuse.com/?search=nesting
  */
-.Theme--sidebar {
+:scope.Theme--sidebar {
     p {
         text-align: left;
     }
@@ -2789,4 +2792,6 @@ div#title.ud {
     label.checkbox input:checked ~ .checkmark {
         background-color: var(--brand-orange);
     }
+}
+}
 }
