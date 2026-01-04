@@ -112,6 +112,14 @@ $(function(){
 <input type="hidden" name="language_notify">
 <input type="hidden" name="report">
 
+_(Store notifications to flash)_:
+: <select name="path">
+  <?=mk_option($notify['path'], "/tmp/notifications", _("No"))?>
+  <?=mk_option($notify['path'], "/boot/config/plugins/dynamix/notifications", _("Yes"))?>
+  </select>
+
+:notifications_store_flash_help:
+
 _(Display position)_:
 : <select name="position">
   <?=mk_option($notify['position'], "top-left", _("top-left"))?>
@@ -140,14 +148,6 @@ _(Time format)_:
   </select>
 
 :notifications_time_format_help:
-
-_(Store notifications to flash)_:
-: <select name="path">
-  <?=mk_option($notify['path'], "/tmp/notifications", _("No"))?>
-  <?=mk_option($notify['path'], "/boot/config/plugins/dynamix/notifications", _("Yes"))?>
-  </select>
-
-:notifications_store_flash_help:
 
 _(System notifications)_:
 : <select name="system" onchange="prepareSystem(this.selectedIndex)">
