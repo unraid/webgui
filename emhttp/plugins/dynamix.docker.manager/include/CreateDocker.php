@@ -515,6 +515,10 @@ function makeConfig(opts) {
   confNum += 1;
   var icons = {'Path':'folder-o', 'Port':'minus-square-o', 'Variable':'file-text-o', 'Label':'tags', 'Device':'play-circle-o'};
   var newConfig = $("#templateDisplayConfig").html();
+  var popout = '';
+  if (opts.Type == "Path") {
+    popout = "<a class='view dfm-popout hand' onclick='openFileManagerFromInput(this)' title=\"_(Browse)_\"><i class=\"icon-u-tab\"></i></a>";
+  }
   newConfig =  newConfig.format(
     stripTags(opts.Name),
     opts.Target,
@@ -529,7 +533,8 @@ function makeConfig(opts) {
     opts.Buttons,
     opts.Required=='true' ? 'required' : '',
     sprintf('Container %s',opts.Type),
-    icons[opts.Type] || 'question'
+    icons[opts.Type] || 'question',
+    popout
   );
   newConfig = "<div id='ConfigNum"+opts.Number+"' class='config_"+opts.Display+"'' >"+newConfig+"</div>";
   newConfig = $($.parseHTML(newConfig));
@@ -829,12 +834,15 @@ function openFileBrowser(el, top, root, filter, on_folders, on_files, close_on_s
   if (!filter && !on_files) filter = 'HIDE_FILES_FILTER';
   if (!root.trim()) {root = "/mnt/user/"; top = "/mnt/";}
   p = $(el);
+  ensureFileManagerPopout(p);
+  var popout = p.siblings('.dfm-popout');
+  var insertAfter = popout.length ? popout : p;
   // Skip if fileTree is already open
-  if (p.next().hasClass('fileTree')) return null;
+  if (p.siblings('.fileTree').length) return null;
   // create a random id
   var r = Math.floor((Math.random()*10000)+1);
   // Add a new span and load fileTree
-  p.after("<span id='fileTree"+r+"' class='textarea fileTree'></span>");
+  insertAfter.after("<span id='fileTree"+r+"' class='textarea fileTree'></span>");
   var ft = $('#fileTree'+r);
   ft.fileTree({top:top, root:root, filter:filter, allowBrowsing:true},
     function(file){if(on_files){p.val(file);p.trigger('change');if(close_on_select){ft.slideUp('fast',function(){ft.remove();});}}},
@@ -848,6 +856,25 @@ function openFileBrowser(el, top, root, filter, on_folders, on_files, close_on_s
   p.bind("keydown", function(){ft.slideUp('fast', function(){$(ft).remove();});});
   // Open fileTree
   ft.slideDown('fast');
+}
+
+function openFileManagerPath(path) {
+  var trimmed = (path || '').trim();
+  if (!trimmed.length) return;
+  window.open('/Main/Browse?dir=' + encodeURIComponent(trimmed), '_blank', 'noopener');
+}
+
+function openFileManagerFromInput(el) {
+  var input = $(el).siblings('input[type="text"]').first();
+  if (!input.length) {
+    input = $(el).closest('span').find('input[type="text"]').first();
+  }
+  openFileManagerPath(input.val());
+}
+
+function ensureFileManagerPopout(input) {
+  if ($(input).siblings('.dfm-popout').length) return;
+  $(input).after('<a class="view dfm-popout hand" onclick="openFileManagerFromInput(this)" title="_(Browse)_"><i class="icon-u-tab"></i></a>');
 }
 
 function resetField(el) {
@@ -1539,6 +1566,7 @@ _(Password Mask)_:
 : <span class="flex flex-col gap-4">
     <span class="flex flex-row flex-wrap items-center gap-4 buttons-no-margin">
       <input type="text" class="setting_input" name="confValue[]" default="{2}" value="{9}" autocomplete="off" spellcheck="false" {11}>
+      {14}
       {10}
     </span>
     <span class="boxed">
@@ -1932,4 +1960,3 @@ if (window.location.href.indexOf("/Apps/") > 0  && <? if (is_file($xmlTemplate))
 }
 </script>
 <?END:?>
-
