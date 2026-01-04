@@ -862,6 +862,15 @@ function openFileBrowser(el, top, root, filter, on_folders, on_files, close_on_s
 function openFileManagerPath(path) {
   var trimmed = (path || '').trim();
   if (!trimmed.length) return;
+  if (trimmed.slice(-1) !== '/') {
+    var lastSlash = trimmed.lastIndexOf('/');
+    if (lastSlash > 0) {
+      var tail = trimmed.slice(lastSlash + 1);
+      if (tail.indexOf('.') !== -1) {
+        trimmed = trimmed.slice(0, lastSlash + 1);
+      }
+    }
+  }
   window.open('/Main/Browse?dir=' + encodeURIComponent(trimmed), '_blank', 'noopener');
 }
 
