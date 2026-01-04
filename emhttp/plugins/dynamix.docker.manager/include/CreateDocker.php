@@ -873,6 +873,7 @@ function openFileManagerFromInput(el) {
 }
 
 function ensureFileManagerPopout(input) {
+  $(input).addClass('dfm-popout-target');
   if ($(input).siblings('.dfm-popout').length) return;
   $(input).after('<a class="view dfm-popout hand" onclick="openFileManagerFromInput(this)" title="_(Browse)_"><i class="icon-u-tab"></i></a>');
 }
