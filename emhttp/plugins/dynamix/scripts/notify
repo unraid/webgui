@@ -31,6 +31,7 @@ notify [-e "event"] [-s "subject"] [-d "description"] [-i "normal|warning|alert"
   use -r to specify recipients and not use default
   use -t to force send email only (for testing)
   use -b to NOT send a browser notification
+  use -u to specify a custom filename (API use only)
   all options are optional
 
 notify init
@@ -87,12 +88,13 @@ function generate_email($event, $subject, $description, $importance, $message, $
   return mail($to, $subj, implode("\n", $body), implode("\n", $headers));
 }
 
-function safe_filename($string) {
+function safe_filename($string, $maxLength=255) {
   $special_chars = ["?", "[", "]", "/", "\\", "=", "<", ">", ":", ";", ",", "'", "\"", "&", "$", "#", "*", "(", ")", "|", "~", "`", "!", "{", "}"];
   $string = trim(str_replace($special_chars, "", $string));
-  $string = preg_replace('~[^0-9a-z -_]~i', '', $string);
+  $string = preg_replace('~[^0-9a-z -_.]~i', '', $string);
   $string = preg_replace('~[- ]~i', '_', $string);
-  return trim($string);
+  // limit filename length to $maxLength characters
+  return substr(trim($string), 0, $maxLength);
 }
 
 /*
@@ -112,7 +114,7 @@ function ini_encode_value($value) {
   if (is_int($value) || is_float($value)) return $value;
   if (is_bool($value)) return $value ? 'true' : 'false';
   $value = (string)$value;
-  return '"'.strtr($value, ["\\"=>"\\\\", '"' => '\\"']).'"';
+  return '"'.strtr($value, ["\\" => "\\\\", '"' => '\\"']).'"';
 }
 
 function build_ini_string(array $data) {
@@ -134,6 +136,7 @@ function ini_decode_value($value) {
   }
   return $value;
 }
+
 
 // start
 if ($argc == 1) exit(usage());
@@ -209,8 +212,9 @@ case 'add':
   $mailtest = false;
   $overrule = false;
   $noBrowser = false;
+  $customFilename = false;
 
-  $options = getopt("l:e:s:d:i:m:r:xtb");
+  $options = getopt("l:e:s:d:i:m:r:u:xtb");
   foreach ($options as $option => $value) {
     switch ($option) {
      case 'e':
@@ -246,11 +250,26 @@ case 'add':
       $link = $value;
       $fqdnlink = (strpos($link,"http") === 0) ? $link : ($nginx['NGINX_DEFAULTURL']??'').$link;
       break;
+     case 'u':
+      $customFilename = $value;
+      break;
     }
   }
 
-  $unread = "{$unread}/".safe_filename("{$event}-{$ticket}.notify");
-  $archive = "{$archive}/".safe_filename("{$event}-{$ticket}.notify");
+  if ($customFilename) {
+    $filename = safe_filename($customFilename);
+  } else {
+    // suffix length: _{timestamp}.notify = 1+10+7 = 18 chars.
+    $suffix = "_{$ticket}.notify";
+    $max_name_len = 255 - strlen($suffix);
+    // sanitize event, truncating it to leave room for suffix
+    $clean_name = safe_filename($event, $max_name_len);
+    // construct filename with suffix (underscore separator matches safe_filename behavior)
+    $filename = "{$clean_name}{$suffix}";
+  }
+
+  $unread = "{$unread}/{$filename}";
+  $archive = "{$archive}/{$filename}";
   if (file_exists($archive)) break;
   $entity = $overrule===false ? $notify[$importance] : $overrule;
   $cleanSubject = clean_subject($subject);
@@ -274,8 +293,8 @@ case 'add':
     ];
     file_put_contents($unread, build_ini_string($unreadData));
   }
-  if (($entity & 2)==2 || $mailtest) generate_email($event, $cleanSubject, str_replace('<br>','. ',$description), $importance, $message, $recipients, $fqdnlink);
-  if (($entity & 4)==4 && !$mailtest) { if (is_array($agents)) {foreach ($agents as $agent) {exec("TIMESTAMP='$timestamp' EVENT=".escapeshellarg($event)." SUBJECT=".escapeshellarg($cleanSubject)." DESCRIPTION=".escapeshellarg($description)." IMPORTANCE=".escapeshellarg($importance)." CONTENT=".escapeshellarg($message)." LINK=".escapeshellarg($fqdnlink)." bash ".$agent);};}};
+  if (($entity & 2)==2 || $mailtest) generate_email($event, clean_subject($subject), str_replace('<br>','. ',$description), $importance, $message, $recipients, $fqdnlink);
+  if (($entity & 4)==4 && !$mailtest) { if (is_array($agents)) {foreach ($agents as $agent) {exec("TIMESTAMP='$timestamp' EVENT=".escapeshellarg($event)." SUBJECT=".escapeshellarg(clean_subject($subject))." DESCRIPTION=".escapeshellarg($description)." IMPORTANCE=".escapeshellarg($importance)." CONTENT=".escapeshellarg($message)." LINK=".escapeshellarg($fqdnlink)." bash ".$agent);};}};
   break;
 
 case 'get':
