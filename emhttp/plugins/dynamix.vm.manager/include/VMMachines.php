@@ -95,7 +95,7 @@ foreach ($vms as $vm) {
     if ($vmrcprotocol == "vnc") $vmrcscale = "&resize=scale"; else $vmrcscale = "";
     $vmrcurl = autov('/plugins/dynamix.vm.manager/'.$vmrcprotocol.'.html',true).$vmrcscale.'&autoconnect=true&host='._var($_SERVER,'HTTP_HOST');
     if ($vmrcprotocol == "spice") $vmrcurl .= '&vmname='. urlencode($vm) .'&port=/wsproxy/'.$vmrcport.'/'; else $vmrcurl .= '&port=&path=/wsproxy/'.$wsport.'/';
-    $graphics = strtoupper($vmrcprotocol).':'._($auto)."$vrtdriver\n";
+    $graphics = strtoupper($vmrcprotocol).':'.$vmrcport."$vrtdriver\n";
     $virtual = true ;
   } elseif ($vmrcport == -1 || $autoport) {
     $vmrcprotocol = $lv->domain_get_vmrc_protocol($res);
