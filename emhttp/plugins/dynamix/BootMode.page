@@ -1,0 +1,45 @@
+Menu="Flash:999"
+Title="Boot Mode"
+Tag="edit"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+
+<script>
+function prepareBootMode(form) {
+  form['#arg[1]'].value = form.boot.checked ? 1 : 0;
+}
+</script>
+<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareBootMode(this)">
+<input type="hidden" name="#include" value="/webGui/include/update.file.php">
+<input type="hidden" name="#command" value="/webGui/scripts/bootmode">
+<input type="hidden" name="#arg[1]" value="">
+
+_(Server boot mode)_:
+: <?=is_dir('/sys/firmware/efi') ? 'UEFI' : 'Legacy'?>
+
+_(Boot system in UEFI mode)_:
+: <label>
+    <input type="checkbox" name="boot" <?=is_dir('/boot/EFI')?'checked':''?>>
+    _(Permit UEFI boot mode)_
+  </label>
+  *_(Please check your system settings to support UEFI boot mode)_.*
+
+&nbsp;
+: <span class="inline-block">
+    <input type="submit" value="_(Apply)_">
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
+
+</form>
+
