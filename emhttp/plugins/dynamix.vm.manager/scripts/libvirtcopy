@@ -108,10 +108,11 @@ foreach ($domains as $dom) {
         $storage_name = $metadata_storage;
     }
 
-    /* Shell-safe path (VM name quoted) */
+
     $path = $path_root
-        ? $path_root . '/"' . $vm_name . '"'
+        ? $path_root . '/' . $vm_name
         : null;
+
 
     /* Filesystem existence check (remove quotes for is_dir) */
     $exists = ($path_root && is_dir($path_root . '/' . $vm_name));
@@ -119,11 +120,11 @@ foreach ($domains as $dom) {
     /* -----------------------------------------------------
      * Store result
      * ----------------------------------------------------- */
-    $vms[] = [
-        'name'    => $vm_name,
+    $vms[$vm_name] = [
         'uuid'    => $uuid,
         'storage' => $storage_name,
         'path'    => $path,
+        'path_shell' => $path ? escapeshellarg($path) : null,
         'exists'  => $exists,
     ];
 }
@@ -134,4 +135,16 @@ foreach ($domains as $dom) {
 #print_r($vms);
 
 file_put_contents("/boot/config/plugins/dynamix.vm.manager/vms.json",json_encode($vms,JSON_PRETTY_PRINT));
+
+
+foreach ($vms as $vm => $vmdetail) {
+  file_put_contents("/tmp/Stopcopy","");
+  $from_file = "/etc/libvirt/qemu/$vm.xml";
+  $to_file = $vmdetail['path']."/$vm.xml";
+  #echo " from:$from_file     to:$to_file";
+  if ($vmdetail['exists']) {
+    file_put_contents("/tmp/Stopcopy","$vm from:$from_file     to:$to_file\n",FILE_APPEND);    #echo " from:$from_file     to:$to_file";
+    #copy($from_file,$to_file);
+  } else       file_put_contents("/tmp/Stopcopy","Nocpy $vm from:$from_file     to:$to_file\n",FILE_APPEND);    #echo " from:$from_file     to:$to_file";
+}
 ?>

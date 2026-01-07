@@ -1,0 +1,28 @@
+#!/usr/bin/php 
+<?PHP
+/* Copyright 2015-2026, Lime Technology
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+
+$vmsjson = file_get_contents("/boot/config/plugins/dynamix.vm.manager/vms.json");
+$vms = json_decode($vmsjson,true);
+
+foreach ($vms as $vm => $vmdetail) {
+  file_put_contents("/tmp/Stopcopy","");
+  $to_file = "/etc/libvirt/qemu/$vm.xml";
+  $from_file = $vmdetail['path']."/$vm.xml";
+  #echo " from:$from_file     to:$to_file";
+  if (file_exists($from_file)) {
+    file_put_contents("/tmp/libvirtrestore","$vm from:$from_file     to:$to_file\n",FILE_APPEND);    #echo " from:$from_file     to:$to_file";
+    #copy($from_file,$to_file);
+  } else       file_put_contents("/tmp/libvirtrestore","Nocpy $vm from:$from_file     to:$to_file\n",FILE_APPEND);    #echo " from:$from_file     to:$to_file";
+}
+?>
