@@ -57,6 +57,14 @@ function autoscale(value) {
   return ((Math.round(scale*data)/scale)+' '+unit[base]).replace('.','<?=$display['number'][0]?>')+'/s';
 }
 
+function preventFileTreeClose() {
+  // Prevent fileTree dropdown from closing when clicking inside the dialog
+  // by stopping mousedown events from bubbling to the document handler
+  $('.ui-dfm').off('mousedown.dfmFileTree').on('mousedown.dfmFileTree', function(e) {
+    e.stopPropagation();
+  });
+}
+
 function folderContextMenu(id, button) {
   var opts = [];
   context.settings({button:button});
@@ -482,6 +490,9 @@ function doAction(action, title, id) {
     resizable: false,
     draggable: false,
     modal: true,
+    close: function() {
+      $('.ui-dfm').off('mousedown.dfmFileTree');
+    },
     buttons: {
       "_(Start)_": function(){
         if (dfm.running) return;
@@ -592,6 +603,7 @@ function doAction(action, title, id) {
     }
   });
   dfm_close_button();
+  preventFileTreeClose();
   if (action == 15) $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',true);
   setTimeout(function(){if (dfm.window.find('#dfm_target').length) dfm.window.find('#dfm_target').focus().click(); else $('.ui-dfm .ui-dialog-buttonset button:eq(0)').focus();});
 }
@@ -749,6 +761,9 @@ function doActions(action, title) {
     resizable: false,
     draggable: false,
     modal: true,
+    close: function() {
+      $('.ui-dfm').off('mousedown.dfmFileTree');
+    },
     buttons: {
       "_(Start)_": function(){
         if (dfm.running) return;
@@ -862,6 +877,7 @@ function doActions(action, title) {
     }
   });
   dfm_close_button();
+  preventFileTreeClose();
   if (action == 15) $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',true);
   setTimeout(function(){if (dfm.window.find('#dfm_target').length) dfm.window.find('#dfm_target').focus().click(); else $('.ui-dfm .ui-dialog-buttonset button:eq(0)').focus();});
 }
