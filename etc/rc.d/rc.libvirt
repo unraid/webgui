@@ -247,6 +247,9 @@ libvirtd_start(){
 }
 
 libvirtd_stop(){
+  # Save VM locations
+  /usr/local/emhttp/plugins/dynamix.vm.manager/scripts/libvirtlocation
+  #
   log "Stopping $DAEMON..."
   if [[ ! -f $LIBVIRTD_PIDFILE ]]; then
     log "$DAEMON...  Already stopped."

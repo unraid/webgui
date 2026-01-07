@@ -162,14 +162,15 @@ _(Libvirt storage location)_:
 
 :vms_libvirt_volume_help:
 
-<?else: /* Libvirt is stopped */ ?>
-_(Libvirt vdisk size)_ (_(GB)_):
+<?else : /* Libvirt is stopped */ ?>
+
+ _(Libvirt vdisk size)_ (_(GB)_):
 : <input type="number" id="IMAGE_SIZE" name="IMAGE_SIZE" min="1" value="<?=htmlspecialchars($domain_cfg['IMAGE_SIZE']);?>" required="required" /><span id="SIZE_ERROR" class="errortext"></span>
 
 :vms_libvirt_vdisk_size_help:
 
 _(Libvirt storage location)_:
-: <input type="text" id="IMAGE_FILE" name="IMAGE_FILE" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars($domain_cfg['IMAGE_FILE']);?>" placeholder="e.g. /mnt/user/system/libvirt/libvirt.img" data-pickcloseonfile="true" data-pickfilter="img" data-pickroot="/mnt" data-pickfolders="true" required pattern="^[^\\]*libvirt\.img$">
+: <input type="text" id="IMAGE_FILE" name="IMAGE_FILE" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars($domain_cfg['IMAGE_FILE']);?>" placeholder="e.g. /mnt/user/system/libvirt/libvirt.img" data-pickcloseonfile="true" data-pickfilter="img" data-pickroot="/mnt" data-pickfolders="true" >
 <?if (file_exists($domain_cfg['IMAGE_FILE'])):?>
   <span id="deletePanel"><label><input type="checkbox" id="deleteCheckbox" /> _(Delete Image File)_</label></span><?endif;?>
 <?if (!$started):?>
@@ -180,6 +181,7 @@ _(Libvirt storage location)_:
 :vms_libvirt_location_help:
 
 <?endif;?>
+
 _(Default VM storage path)_:
 : <input type="text" id="domaindir" name="DOMAINDIR" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="/mnt" value="<?=htmlspecialchars($domain_cfg['DOMAINDIR'])?>" placeholder="_(Click to Select)_" pattern="^[^\\]*/$" onchange="validatePath(this)">
 <?if (!$started):?>

@@ -1,0 +1,137 @@
+#!/usr/bin/php 
+<?PHP
+/* Copyright 2015-2026, Lime Technology
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+
+/* ---------------------------------------------------------
+ * Read default VM directory from Unraid domain.cfg
+ * --------------------------------------------------------- */
+function get_default_domain_dir() {
+    $cfg = '/boot/config/domain.cfg';
+
+    if (!file_exists($cfg)) {
+        return null;
+    }
+
+    $lines = file($cfg, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if ($lines === false) {
+        return null;
+    }
+
+    foreach ($lines as $line) {
+        $line = trim($line);
+
+        if ($line === '' || $line[0] === '#') {
+            continue;
+        }
+
+        if (preg_match('/^DOMAINDIR="([^"]+)"/', $line, $m)) {
+            return rtrim($m[1], '/');
+        }
+    }
+
+    return null;
+}
+
+/* ---------------------------------------------------------
+ * Connect to libvirt
+ * --------------------------------------------------------- */
+$lv = libvirt_connect('qemu:///system', false);
+if (!$lv) {
+    die("Failed to connect to libvirt\n");
+}
+
+/* Running VMs (or all, if you prefer libvirt_list_all_domains) */
+$domains = libvirt_list_domains($lv);
+if ($domains === false) {
+    die("Failed to list domains\n");
+}
+
+$default_domain_dir = get_default_domain_dir();
+
+$vms = [];
+
+/* ---------------------------------------------------------
+ * Enumerate VMs
+ * --------------------------------------------------------- */
+foreach ($domains as $dom) {
+
+    $domget = libvirt_domain_lookup_by_name($lv, $dom);
+    if ($domget === false) {
+        continue;
+    }
+
+    $xml = libvirt_domain_get_xml_desc($domget, 0);
+    if ($xml === false) {
+        continue;
+    }
+
+    $sx = new SimpleXMLElement($xml);
+
+    $vm_name = (string)$sx->name;
+    $uuid    = (string)$sx->uuid;
+
+    /* -----------------------------------------------------
+     * Read storage metadata (Unraid vmtemplate)
+     * ----------------------------------------------------- */
+    $metadata_storage = null;
+
+    if (isset($sx->metadata)) {
+        foreach ($sx->metadata->children() as $child) {
+            if ($child->getName() === 'vmtemplate') {
+                $metadata_storage = trim((string)$child['storage']);
+                break;
+            }
+        }
+    }
+
+    /* -----------------------------------------------------
+     * Resolve filesystem path
+     * Treat empty, null, or "default" as DOMAINDIR
+     * ----------------------------------------------------- */
+    if ($metadata_storage === null || $metadata_storage === '' || strtolower($metadata_storage) === 'default') {
+        /* TRUE default storage */
+        $path_root    = $default_domain_dir;   // e.g. /mnt/user/domains2
+        $storage_name = 'default';
+    } else {
+        /* Explicit Unraid pool */
+        $path_root    = '/mnt/user/' . $metadata_storage;
+        $storage_name = $metadata_storage;
+    }
+
+    /* Shell-safe path (VM name quoted) */
+    $path = $path_root
+        ? $path_root . '/"' . $vm_name . '"'
+        : null;
+
+    /* Filesystem existence check (remove quotes for is_dir) */
+    $exists = ($path_root && is_dir($path_root . '/' . $vm_name));
+
+    /* -----------------------------------------------------
+     * Store result
+     * ----------------------------------------------------- */
+    $vms[] = [
+        'name'    => $vm_name,
+        'uuid'    => $uuid,
+        'storage' => $storage_name,
+        'path'    => $path,
+        'exists'  => $exists,
+    ];
+}
+
+/* ---------------------------------------------------------
+ * Output
+ * --------------------------------------------------------- */
+#print_r($vms);
+
+file_put_contents("/boot/config/plugins/dynamix.vm.manager/vms.json",json_encode($vms,JSON_PRETTY_PRINT));
+?>
