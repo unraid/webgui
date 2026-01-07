@@ -882,15 +882,22 @@ function doActions(action, title) {
   setTimeout(function(){if (dfm.window.find('#dfm_target').length) dfm.window.find('#dfm_target').focus().click(); else $('.ui-dfm .ui-dialog-buttonset button:eq(0)').focus();});
 }
 
-function stopUpload(file,error) {
+function stopUpload(file,error,errorType) {
   window.onbeforeunload = null;
+  currentXhr = null;
   $.post('/webGui/include/Control.php',{mode:'stop',file:encodeURIComponent(dfm_htmlspecialchars(file))});
   $('#dfm_uploadButton').val("_(Upload)_").prop('onclick',null).off('click').click(function(){$('#dfm_upload').click();});
   $('#dfm_uploadStatus').html('');
   $('#dfm_upload').val('');
   dfm.running = false;
   loadList();
-  if (error) setTimeout(function(){swal({title:"_(Upload Error)_",text:"_(File is removed)_",html:true,confirmButtonText:"_(Ok)_"});},200);
+  if (error) {
+    var message = "_(File is removed)_";
+    if (errorType === 'timeout') message += "<br><br>_(Upload timed out. Please check your network connection and try again.)_";
+    else if (errorType === 'network') message += "<br><br>_(Network error occurred. Please check your connection and try again.)_";
+    else if (errorType && errorType.indexOf('http') === 0) message += "<br><br>_(HTTP error: )_" + errorType.substring(5);
+    setTimeout(function(){swal({title:"_(Upload Error)_",text:message,html:true,confirmButtonText:"_(Ok)_"});},200);
+  }
 }
 
 function downloadFile(source) {
@@ -905,41 +912,89 @@ function downloadFile(source) {
 
 function uploadFile(files,index,start,time) {
   var file = files[index];
-  var slice = 2097152; // 2M
+  var slice = 20971520; // 20MB chunks - no Base64 overhead, raw binary
   var next = start + slice;
   var blob = file.slice(start, next);
-  reader.onloadend = function(e){
-    if (e.target.readyState !== FileReader.DONE) return;
-    $.post('/webGui/include/Control.php',{mode:'upload',file:encodeURIComponent(dir+'/'+dfm_htmlspecialchars(file.name)),start:start,data:window.btoa(e.target.result),cancel:cancel},function(reply){
-      if (reply == 'stop') {stopUpload(file.name); return;}
-      if (reply == 'error') {stopUpload(file.name,true); return;}
-      if (next < file.size) {
-        var total = 0;
-        for (var i=0,f; f=files[i]; i++) {
-          if (i < index) start += f.size;
-          total += f.size;
-        }
-        const d = new Date();
-        var speed = autoscale(((start + slice) * 8) / (d.getTime() - time));
-        var percent = Math.floor((start + slice) / total * 100);
-        $('#dfm_uploadStatus').html("_(Uploading)_: <span class='dfm_percent'>"+percent+"%</span><span class='dfm_speed'>Speed: "+speed+"</span><span class='orange-text'> ["+(index+1)+'/'+files.length+']&nbsp;&nbsp;'+file.name+"</span>");
-        uploadFile(files,index,next,time);
-      } else if (index < files.length-1) {
-        uploadFile(files,index+1,0,time);
-      } else {stopUpload(file.name); return;}
+  
+  var xhr = new XMLHttpRequest();
+  currentXhr = xhr; // Store for abort capability
+  var filePath = dir.replace(/\/+$/, '') + '/' + dfm_htmlspecialchars(file.name);
+  var url = '/webGui/include/Control.php?mode=upload&file=' + encodeURIComponent(filePath) + '&start=' + start + '&cancel=' + cancel;
+  xhr.open('POST', url, true);
+  xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+  xhr.setRequestHeader('X-CSRF-Token', '<?=$var['csrf_token']?>');
+  xhr.timeout = Math.max(600000, slice / 1024 * 60); // ~1 minute per MB, minimum 10 minutes
+  
+  xhr.onload = function() {
+    if (xhr.status < 200 || xhr.status >= 300) {
+      stopUpload(file.name, true, 'http:' + xhr.status);
+      return;
+    }
+    var reply = xhr.responseText;
+    if (reply == 'stop') {stopUpload(file.name); return;}
+    if (reply.indexOf('error') === 0) {
+      console.error('Upload error:', reply);
+      stopUpload(file.name,true); 
+      return;
+    }
+    if (next < file.size) {
+      var total = 0;
+      var completed = 0;
+      for (var i=0,f; f=files[i]; i++) {
+        if (i < index) completed += f.size;
+        total += f.size;
+      }
+      const d = new Date();
+      var bytesTransferred = completed + next;
+      var elapsedSeconds = (d.getTime() - time) / 1000;
+      var speed = autoscale(bytesTransferred / elapsedSeconds);
+      var percent = Math.floor(bytesTransferred / total * 100);
+      $('#dfm_uploadStatus').html("_(Uploading)_: <span class='dfm_percent'>"+percent+"%</span><span class='dfm_speed'>Speed: "+speed+"</span><span class='orange-text'> ["+(index+1)+'/'+files.length+']&nbsp;&nbsp;'+file.name+"</span>");
+      uploadFile(files,index,next,time);
+    } else if (index < files.length-1) {
+      // Clean up temp file for completed upload before starting next file
+      $.post('/webGui/include/Control.php',{mode:'stop',file:encodeURIComponent(dfm_htmlspecialchars(file.name))});
+      uploadFile(files,index+1,0,time);
+    } else {stopUpload(file.name); return;}
+  };
+  
+  xhr.onabort = function() {
+    // User cancelled upload - trigger deletion via cancel=1 parameter
+    $.post('/webGui/include/Control.php', {
+      mode: 'upload',
+      file: filePath,
+      start: 0,
+      cancel: 1
+    }).always(function() {
+      // Cleanup UI regardless of POST success/failure
+      stopUpload(file.name, false);
     });
   };
-  reader.readAsBinaryString(blob);
+  
+  xhr.onerror = function() {
+    // Don't show error if it was a user cancel
+    if (cancel === 1) return;
+    stopUpload(file.name, true, 'network');
+  };
+  
+  xhr.ontimeout = function() {
+    stopUpload(file.name, true, 'timeout');
+  };
+  
+  xhr.send(blob);
 }
 
-var reader = {};
 var cancel = 0;
+var currentXhr = null;
 
 function startUpload(files) {
   if (files.length == 0) return;
-  reader = new FileReader();
+  cancel = 0; // Reset cancel flag
   window.onbeforeunload = function(e){return '';};
-  $('#dfm_uploadButton').val("_(Cancel)_").prop('onclick',null).off('click').click(function(){cancel=1;});
+  $('#dfm_uploadButton').val("_(Cancel)_").prop('onclick',null).off('click').click(function(){
+    cancel=1;
+    if (currentXhr) currentXhr.abort();
+  });
   dfm.running = true;
   const d = new Date();
   uploadFile(files,0,0,d.getTime());
