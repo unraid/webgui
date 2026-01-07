@@ -38,6 +38,7 @@ $arrValidVNCModels    = getValidVNCModels();
 $arrValidProtocols    = getValidVMRCProtocols();
 $arrValidKeyMaps      = getValidKeyMaps();
 $arrValidNetworks     = getValidNetworks();
+$arrNumaInfo          = getNumaInfo();
 $strCPUModel          = getHostCPUModel();
 $templateslocation    = "/boot/config/plugins/dynamix.vm.manager/savedtemplates.json";
 
@@ -103,8 +104,8 @@ $arrConfigDefaults = [
 			'autoport' => 'yes',
 			'model' => 'qxl',
 			'keymap' => 'none',
-			'port' => -1 ,
-			'wsport' => -1,
+			'port' => 5900,
+			'wsport' => 5901,
 			'copypaste' => 'no',
 			'render' => 'auto',
 			'DisplayOptions' => ""
@@ -255,7 +256,7 @@ if (isset($_POST['updatevm'])) {
 		$xml = str_replace($olduuid,$newuuid,$xml);
 	} else {
 		// form view
-		if ($error = create_vdisk($_POST) === false) {
+		if (($error = create_vdisk($_POST)) === false) {
 			$arrExistingConfig = custom::createArray('domain',$strXML);
 			$arrUpdatedConfig = custom::createArray('domain',$lv->config_to_xml($_POST));
 			if ($debug) {
@@ -347,6 +348,7 @@ if ($snapshots!=null && count($snapshots) && !$boolNew) {
 	$namedisable = "";
 	$snapcount = "0";
 }
+$PCIchanges= comparePCIData();
 ?>
 
 <link rel="stylesheet" href="<?autov('/plugins/dynamix.vm.manager/scripts/codemirror/lib/codemirror.css')?>">
@@ -363,6 +365,7 @@ if ($snapshots!=null && count($snapshots) && !$boolNew) {
 
 <script>
 const displayOptions = <?= json_encode($arrDisplayOptions, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+const PCIchanges = <?= json_encode($PCIchanges) ?>;
 </script>
 
 <table>
@@ -552,6 +555,7 @@ const displayOptions = <?= json_encode($arrDisplayOptions, JSON_HEX_TAG | JSON_H
 			<?for ($i = 1; $i <= ($corecount); $i++) echo mk_option($arrConfig['domain']['vcpus'], $i, $i);?>
 			</select>
 			<input type="button" value="_(<?=$vcpubuttontext?>)_" id="btnvCPUSelect"/></span>
+			<span id="numacpu" class="status-warn"></span>
 		</td>
 		<td></td>
 	</tr>
@@ -1254,7 +1258,7 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 	<tr>
 		<td>_(Graphics Card)_:</td>
 		<td>
-			<span class="width"><select name="gpu[<?=$i?>][id]" class="gpu narrow">
+			<span class="width"><select name="gpu[<?=$i?>][id]" class="gpu narrow" data-numawarn="numagpu<?=$i?>">
 			<?
 			if ($i == 0) {
 				// Only the first video card can be VNC or SPICE
@@ -1325,9 +1329,9 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 			?>
 			</select></span>
 			<span id="Porttext" class="label <?=$hiddenport?>">_(VM Console Port)_:</span>
-			<input id="port" type="number" size="5" maxlength="5" class="trim second <?=$hiddenport?>" name="gpu[<?=$i?>][port]" value="<?=$arrGPU['port']?>">
+			<input id="port" onchange="checkVNCPorts()" min="5900" max="65535" type="number" size="5" maxlength="5" class="trim second <?=$hiddenport?>" name="gpu[<?=$i?>][port]" value="<?=$arrGPU['port']?>">
 			<span id="WSPorttext" class="label <?=$hiddenwsport?>">_(VM Console WS Port)_:</span>
-			<input id="wsport" type="number" size="5" maxlength="5" class="trim second <?=$hiddenwsport?>" name="gpu[<?=$i?>][wsport]" value="<?=$arrGPU['wsport']?>">
+			<input id="wsport" onchange="checkVNCPorts()" min="5900" max="65535" type="number" size="5" maxlength="5" class="trim second <?=$hiddenwsport?>" name="gpu[<?=$i?>][wsport]" value="<?=$arrGPU['wsport']?>">
 		</td>
 		<td></td>
 	</tr>
@@ -1385,6 +1389,7 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 		<td>_(Graphics ROM BIOS)_:</td>
 		<td>
 			<span class="width"><input type="text" name="gpu[<?=$i?>][rom]" autocomplete="off" spellcheck="false" data-pickcloseonfile="true" data-pickfilter="rom,bin" data-pickmatch="^[^.].*" data-pickroot="/mnt/" value="<?=htmlspecialchars($arrGPU['rom'])?>" placeholder="_(Path to ROM BIOS file)_ (_(optional)_)"></span>
+			<span id="numagpu<?=$i?>" class="status-warn"></span>
 		</td>
 		<td></td>
 	</tr>
@@ -1392,6 +1397,7 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 	if ($arrValidGPUDevices[$arrGPU['id']]['bootvga'] == "1") $bootgpuhidden = "";
 	?>
 	<tr id="gpubootvga<?=$i?>" class="<?=$bootgpuhidden?>"><td>_(Graphics ROM Needed)_?:</td><td><span class="orange-text"><i class="fa fa-warning"></i> _(GPU is primary adapter, vbios may be required)_.</span></td></tr>
+	<tr id="gpupcichange<?=$i?>" class="hidden"><td>_(PCI Check)_:</td><td><span class="orange-text"><i class="fa fa-warning"></i></span></td></tr>
 </table>
 
 <?if ($i == 0 || $i == 1) {?>
@@ -1442,7 +1448,7 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 	<tr>
 		<td>_(Graphics Card)_:</td>
 		<td>
-			<span class="width"><select name="gpu[{{INDEX}}][id]" class="gpu narrow">
+			<span class="width"><select name="gpu[{{INDEX}}][id]" class="gpu narrow" data-numawarn="numagpu{{INDEX}}">
 			<?
 			echo mk_option('', '', _('None'));
 			foreach ($arrValidGPUDevices as $arrDev) echo mk_option('', $arrDev['id'], $arrDev['name'].' ('.$arrDev['id'].')');
@@ -1462,10 +1468,13 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 		<td>_(Graphics ROM BIOS)_:</td>
 		<td>
 			<span class="width"><input type="text" name="gpu[{{INDEX}}][rom]" autocomplete="off" spellcheck="false" data-pickcloseonfile="true" data-pickfilter="rom,bin" data-pickmatch="^[^.].*" data-pickroot="/mnt/" value="" placeholder="_(Path to ROM BIOS file)_ (_(optional)_)"></span>
+			<span id="numagpu{{INDEX}}" class="status-warn"></span>
 		</td>
 		<td></td>
 	</tr>
 	<tr id="gpubootvga{{INDEX}}" class="hidden"><td>_(Graphics ROM Needed)_?:</td><td><span class="orange-text"><i class="fa fa-warning"></i> _(GPU is primary adapter, vbios may be required)_.</span></td></tr>
+	<tr id="gpupcichange{{INDEX}}" class="hidden"><td>_(PCI Check)_:</td><td><span class="orange-text"><i class="fa fa-warning"></i></span></td></tr>
+
 </table>
 </script>
 
@@ -1476,18 +1485,20 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 	<tr>
 		<td>_(Sound Card)_:</td>
 		<td>
-			<span class="width"><select name="audio[<?=$i?>][id]" class="audio narrow">
+			<span class="width"><select name="audio[<?=$i?>][id]" class="audio narrow" data-numawarn="numaaudio<?=$i?>">
 			<?
 			echo mk_option($arrAudio['id'], '', _('None'));
 			foreach ($arrValidAudioDevices as $arrDev) echo mk_option($arrAudio['id'], $arrDev['id'], $arrDev['name'].' ('.$arrDev['id'].')');
 			foreach ($arrValidSoundCards as $arrSound) echo mk_option($arrAudio['id'], $arrSound['id'], $arrSound['name'].' ('._("Virtual").')');
 			?>
 			</select></span>
+			<span id="numaaudio<?=$i?>" class="status-warn"></span>
 		</td>
 		<td>
 			<textarea class="xml" id="xmlaudio<?=$i?>" rows="5" disabled ><?=htmlspecialchars($xml2['devices']['audio'][$arrAudio['id']])?></textarea>
 		</td>
 	</tr>
+	<tr id="audiopcichange<?=$i?>" class="hidden"><td></td><td><span class="orange-text"><i class="fa fa-warning"></i></span></td></tr>
 </table>
 
 <?if ($i == 0) {?>
@@ -1503,15 +1514,17 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 	<tr>
 		<td>_(Sound Card)_:</td>
 		<td>
-			<span class="width"><select name="audio[{{INDEX}}][id]" class="audio narrow">
+			<span class="width"><select name="audio[{{INDEX}}][id]" class="audio narrow" data-numawarn="numaaudio{{INDEX}}">
 			<?
 			foreach ($arrValidAudioDevices as $arrDev) echo mk_option('', $arrDev['id'], $arrDev['name'].' ('.$arrDev['id'].')');
 			foreach ($arrValidSoundCards as $arrSound) echo mk_option($arrAudio['id'], $arrSound['id'], $arrSound['name'].' ('._("Virtual").')');
 			?>
-			</select></span>
+			</select></span>			
+			<span id="numaaudio{{INDEX}}" class="status-warn"></span>
 		</td>
 		<td></td>
 	</tr>
+	<tr id="audiopcichange{{INDEX}}" class="hidden"><td></td><td><span class="orange-text"><i class="fa fa-warning"></i></span></td></tr>
 </table>
 </script>
 
@@ -1698,16 +1711,43 @@ foreach ($arrConfig['nic'] as $i => $arrNic) {
 						$extra .= ' checked="checked"';
 						foreach ($pcidevice as $pcikey => $pcidev) $pciboot = $pcidev["boot"]; ;
 					} elseif (!in_array($arrDev['driver'], ['pci-stub', 'vfio-pci'])) {
-						//$extra .= ' disabled="disabled"';
 						continue;
 					}
 					$intAvailableOtherPCIDevices++;
 				?>
-				<label for="pci<?=$i?>">&nbsp&nbsp&nbsp&nbsp<input type="checkbox" name="pci[]" id="pci<?=$i?>" value="<?=htmlspecialchars($arrDev['id'])?>" <?=$extra?>/> &nbsp
+				<label for="pci<?=$i?>">&nbsp&nbsp&nbsp&nbsp<input type="checkbox" name="pci[]" id="pci<?=$i?>" value="<?=htmlspecialchars($arrDev['id'])?>" <?=$extra?> data-numawarn="numapci<?=$i?>"/> &nbsp
 				<input type="number" size="5" maxlength="5" id="pciboot<?=$i?>" class="trim pcibootorder" <?=$bootdisable?> name="pciboot[<?=htmlspecialchars($arrDev['id'])?>]" value="<?=$pciboot?>" >
 				<?=htmlspecialchars($arrDev['name'])?> | <?=htmlspecialchars($arrDev['type'])?> (<?=htmlspecialchars($arrDev['id'])?>)
-				</label><br>
+				<? if (isset($PCIchanges["0000:".$i])) { 
+				    echo " <i class=\"fa fa-warning fa-fw orange-text\" title=\""._('PCI Change')."\n";
+					if ($PCIchanges["0000:".$i]['status']=="changed") {						
+						echo _("Differences");
+						foreach($PCIchanges["0000:".$i]['differences'] as $key => $changes){
+						echo " $key "._("before").":{$changes['old']} "._("after").":{$changes['new']} ";
+						}	
+						echo "\n".$PCIchanges["0000:".$i]['device']['description']."\"></i>";
+						echo ucfirst($PCIchanges["0000:".$i]['status']);
+					}
+				}
+				?>
+				</label><span id="numapci<?=$i?>" class="status-warn" style="display:none;"></span><br>
 				<?
+				}
+			}
+			if (!empty($arrConfig['pci'])) {
+				foreach ($arrConfig['pci'] as $pci) {
+					if (!$pci['found']) {
+						$i = $pci['id'];
+						$intAvailableOtherPCIDevices++;
+						?>
+						<label for="pci<?=$i?>">&nbsp&nbsp&nbsp&nbsp<input type="checkbox" name="pci[]" id="pci<?=$i?>" value="<?=htmlspecialchars($pci['id'])?>" checked="checked" data-numawarn="numapci<?=$i?>"/> &nbsp
+						<input type="number" size="5" maxlength="5" id="pciboot<?=$i?>" class="trim pcibootorder" disabled="disabled" name="pciboot[<?=htmlspecialchars($i)?>]" value="<?=$pci['boot']?>" >
+						_(Old PCI Address)_:<?=htmlspecialchars($i);?>
+						<?if (isset($PCIchanges["0000:".$i])) echo " <i class=\"fa fa-warning fa-fw orange-text\" title=\""._('PCI Removed')."\"></i>"." ".ucfirst($PCIchanges["0000:".$i]['status'])." ".$PCIchanges["0000:".$i]['device']['description'];?> 
+						<span id="numapci<?=$i?>" class="status-warn"></span>
+						</label><br>
+						<?
+					}
 				}
 			}
 			if (empty($intAvailableOtherPCIDevices)) {
@@ -2088,6 +2128,18 @@ foreach ($arrConfig['evdev'] as $i => $arrEvdev) {
 var storageType = "<?=get_storage_fstype($arrConfig['template']['storage']);?>";
 var storageLoc  = "<?=$arrConfig['template']['storage']?>";
 
+function checkVNCPorts() {
+	const port = $("#port").val();
+	const wsport = $("#wsport").val();
+	if (port < 5900 || port > 65535 || wsport < 5900 || wsport > 65535 || port == wsport) {
+		swal({
+			title: "_(Invalid Port)_",
+			text: "_(VNC/SPICE ports must be between 5900 and 65535, and cannot be equal to each other)_",
+			type: "error",
+			confirmButtonText: "_(Ok)_"
+		});
+	}
+}
 function updateMAC(index, port) {
 	var wlan0 = '<?=$mac?>'; // mac address of wlan0
 	var mac = $('input[name="nic['+index+'][mac]"');
@@ -2327,6 +2379,138 @@ function wlan0_info() {
 	});
 }
 
+// NUMA info injected from PHP
+var numaInfo = <?php echo json_encode($arrNumaInfo); ?>;
+
+// ------------------------------------------------------------
+// Helpers
+// ------------------------------------------------------------
+function getSelectedCpuNodes() {
+    const nodes = new Set();
+    document.querySelectorAll('.domain_vcpu:checked').forEach(cb => {
+        const info = numaInfo.cpus["cpu" + cb.value];
+        if (info) nodes.add(info.numa_node);
+    });
+    return [...nodes];
+}
+
+function showWarn(el) { if (el) el.style.display = "inline"; }
+function hideWarn(el) { if (el) el.style.display = "none"; }
+function updateWarn(el, text) { if (el) el.textContent = text; }
+
+// ------------------------------------------------------------
+// CPU Warning (only for CPU)
+// ------------------------------------------------------------
+const cpuWarnEl = document.getElementById("numacpu");
+
+document.querySelectorAll(".domain_vcpu").forEach(cb => {
+    cb.addEventListener("change", () => {
+        const cpuNodes = getSelectedCpuNodes();
+
+        if (cpuNodes.length > 1) {
+            updateWarn(cpuWarnEl, _("Warning: Selected CPUs span multiple NUMA nodes."));
+            showWarn(cpuWarnEl);
+        } else {
+            hideWarn(cpuWarnEl);
+        }
+
+        // Refresh GPU / Audio / PCI warnings when CPUs change
+        refreshAllDeviceWarnings();
+    });
+});
+
+// ------------------------------------------------------------
+// Device NUMA checker (PCI, GPU, Audio)
+// ------------------------------------------------------------
+function handleNumaCheck(el) {
+    const warnId = el.dataset.numawarn;      // NEW: using data-numawarn
+    const warnEl = document.getElementById(warnId);
+    const cpuNodes = getSelectedCpuNodes();
+
+    hideWarn(warnEl);
+
+    let dev = el.value;
+
+    // Logic for PCI checkbox
+    if (el.tagName === "INPUT" && el.type === "checkbox") {
+        if (!el.checked || cpuNodes.length === 0)
+            return;
+    } else {
+        // Selects: ignore empty or virtual audio
+        if (!dev || (el.classList.contains("audio") && dev.startsWith("virtual::")))
+            return;
+    }
+
+    const node = numaInfo.pci_devices["0000:" + dev]?.numa_node;
+    if (node === undefined) return;
+
+    if (cpuNodes.length && !cpuNodes.includes(node)) {
+
+        let msg = _("Warning: Device is on a different NUMA node than selected CPUs.");
+
+        if (el.classList.contains("gpu"))
+            msg = _("Warning: Selected GPU is on a different NUMA node than CPUs.");
+
+        if (el.classList.contains("audio"))
+            msg = _("Warning: Selected audio device is on a different NUMA node than CPUs.");
+
+        if (el.type === "checkbox")
+            msg = _("Warning: This PCI device is on a different NUMA node than selected CPUs.");
+
+        updateWarn(warnEl, msg);
+        showWarn(warnEl);
+    }
+}
+
+// ------------------------------------------------------------
+// Re-check all device warnings (called when CPUs change)
+// ------------------------------------------------------------
+function refreshAllDeviceWarnings() {
+    document.querySelectorAll('input[name="pci[]"]').forEach(cb => handleNumaCheck(cb));
+    document.querySelectorAll('select.gpu, select.audio').forEach(sel => handleNumaCheck(sel));
+}
+
+// ------------------------------------------------------------
+// Attach event handlers to devices
+// ------------------------------------------------------------
+function attachNumaHandlers() {
+
+    // PCI checkboxes
+    document.querySelectorAll('input[name="pci[]"]').forEach(cb => {
+        cb.removeEventListener("change", cb._numaHandler);
+        cb._numaHandler = () => handleNumaCheck(cb);
+        cb.addEventListener("change", cb._numaHandler);
+    });
+
+    // GPU + Audio selects
+    document.querySelectorAll('select.gpu, select.audio').forEach(sel => {
+        sel.removeEventListener("change", sel._numaHandler);
+        sel._numaHandler = () => handleNumaCheck(sel);
+        sel.addEventListener("change", sel._numaHandler);
+    });
+}
+
+// ------------------------------------------------------------
+// Run all NUMA warnings on initial page load
+// ------------------------------------------------------------
+window.addEventListener("load", () => {
+
+    // CPU NUMA warning
+    const cpuNodes = getSelectedCpuNodes();
+    if (cpuNodes.length > 1) {
+        updateWarn(cpuWarnEl, _("Warning: Selected CPUs span multiple NUMA nodes."));
+        showWarn(cpuWarnEl);
+    } else {
+        hideWarn(cpuWarnEl);
+    }
+
+    // GPU / AUDIO / PCI NUMA warnings
+    refreshAllDeviceWarnings();
+});
+
+
+
+
 $(function() {
 	function completeAfter(cm, pred) {
 		var cur = cm.getCursor();
@@ -2484,6 +2668,13 @@ $(function() {
 	});
 	<?endif?>
 
+	$("#vmform #domain_machine").change(function changeMachineEvent(){
+		// Cdrom Bus: select IDE for i440 and SATA for q35
+		if ($(this).val().indexOf('q35') != -1) {		
+			$('#vmform .cdrom_bus').val('sata');
+		}
+	});
+
 	$("#vmform .domain_vcpu").change(function changeVCPUEvent(){
 		var $cores = $("#vmform .domain_vcpu:checked");
 		if ($cores.length < 1) {
@@ -2519,15 +2710,29 @@ $(function() {
 		if (sectiondata.category == 'vDisk') {
 			regenerateDiskPreview(sectiondata.index);
 			setDiskserial(sectiondata.index);
-		}
+		}	
 		if (sectiondata.category == 'Graphics_Card') {
 			$(section).find(".gpu").change();
+			attachNumaHandlers();
+			refreshAllDeviceWarnings();
+		}
+		if (sectiondata.category == 'Sound_Card') {
+			attachNumaHandlers();
+			refreshAllDeviceWarnings();
 		}
 	});
 
 	$("#vmform").on("destroy_section", function destroySectionEvent(evt, section, sectiondata){
 		if (sectiondata.category == 'vDisk') {
 			regenerateDiskPreview();
+		}
+		if (sectiondata.category == 'Graphics_Card') {
+			attachNumaHandlers();
+			refreshAllDeviceWarnings();
+		}
+		if (sectiondata.category == 'Sound_Card') {
+			attachNumaHandlers();
+			refreshAllDeviceWarnings();
 		}
 	});
 
@@ -2614,6 +2819,87 @@ $(function() {
 					$(this).prop("selectedIndex", 0).change();
 				}
 			});
+		}
+
+
+		// --- GPU PCI change display logic ---
+		var gpuPciRow = $("#gpupcichange" + myindex);
+		gpuPciRow.addClass("hidden");  // hide by default
+
+		// Build the PCI ID 0000:xx the same way PHP does
+		var pciId = "0000:" + myvalue;
+
+		// Only continue if we have a change entry for this GPU
+		if (PCIchanges[pciId]) {
+
+			var change = PCIchanges[pciId];
+
+			// Build tooltip text exactly like PHP output
+			var tooltip = "<?= _('PCI Change') ?>\n";
+
+			if (change.status === "changed") {
+				tooltip += "<?= _('Differences') ?>\n";
+
+				for (var key in change.differences) {
+					tooltip += `${key} <?= _('before') ?>: ${change.differences[key].old} `
+							+ `<?= _('after') ?>: ${change.differences[key].new}\n`;
+				}
+
+				tooltip += change.device.description;
+			}
+
+			// Build the HTML content for the row
+			gpuPciRow.find("td:last").html(
+				`<span class="orange-text">
+					<i class="fa fa-warning fa-fw" title="${tooltip}"></i>
+					${change.status.charAt(0).toUpperCase() + change.status.slice(1)}
+				</span>`
+			);
+
+			gpuPciRow.removeClass("hidden");
+		}
+	});
+
+	$("#vmform").on("change", ".audio", function changeAudioEvent(){
+		var myvalue = $(this).val();
+		var mylabel = $(this).children('option:selected').text();
+		var myindex = $(this).closest('table').data('index');
+
+		// --- AUDIO PCI change display logic ---
+		var audioPciRow = $("#audiopcichange" + myindex);
+		audioPciRow.addClass("hidden");  // hide by default
+
+		// Build the PCI ID using same format as PHP (0000:xx)
+		var pciId = "0000:" + myvalue;
+
+		// Only continue if we have a change entry for this audio device
+		if (PCIchanges[pciId]) {
+
+			var change = PCIchanges[pciId];
+
+			// Build tooltip text exactly like PHP logic
+			var tooltip = "<?= _('PCI Change') ?>\n";
+
+			if (change.status === "changed") {
+				tooltip += "<?= _('Differences') ?>\n";
+
+				for (var key in change.differences) {
+					tooltip += `${key} <?= _('before') ?>: ${change.differences[key].old} `
+							+ `<?= _('after') ?>: ${change.differences[key].new}\n`;
+				}
+
+				tooltip += change.device.description;
+			}
+
+			// Build the HTML content for the row
+			audioPciRow.find("td:last").html(
+				`<span class="orange-text">
+					<i class="fa fa-warning fa-fw" title="${tooltip}"></i>
+					${change.status.charAt(0).toUpperCase() + change.status.slice(1)}
+				</span>`
+			);
+
+			audioPciRow.removeClass("hidden");
 		}
 	});
 
@@ -2879,8 +3165,11 @@ $(function() {
 	}
 	$("#vmform #usbmode option[value^='usb3']").prop('disabled', noUSB3);
 	$("#vmform .gpu").change();
+	$("#vmform .audio").change();
 	$('#vmform .cdrom').change();
 	regenerateDiskPreview();
 	resetForm();
 });
+// Run once on load
+attachNumaHandlers();
 </script>

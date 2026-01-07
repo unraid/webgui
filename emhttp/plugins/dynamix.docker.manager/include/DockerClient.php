@@ -139,7 +139,12 @@ class DockerTemplates {
 		return $tmpls;
 	}
 
-	public function downloadTemplates($Dest=null, $Urls=null) {
+	public function downloadTemplates($Dest=null, $Urls=null) {	
+		/* Don't download any templates.  Leave code in place for future reference. */
+		/* remove existing limetech templates that are all not valid */
+		exec("rm -rf /boot/config/plugins/dockerMan/templates/limetech");
+		return [];
+
 		global $dockerManPaths;
 		$Dest = $Dest ?: $dockerManPaths['templates-usb'];
 		$Urls = $Urls ?: $dockerManPaths['template-repos'];

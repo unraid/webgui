@@ -1,0 +1,75 @@
+#!/bin/bash
+# limetech - wrapper for SRIOV processing
+#
+# Invoked early in startup before any devices are bound.
+#
+# Order does not matter. If both are provided, must be separated by "|".
+# Multiple entries must be separated by space.
+#
+
+# Invoke script for each device referenced via /boot/config/sriov.cfg & sriovvfs.cfg
+# Accept string enclosed in quotes or not
+# accepts space-separated list of <Bus:Device.Function> or <Domain:Bus:Device.Function> followed by an optional "|" and <Vendor:Device> | <Number of VFs>
+# example: VFS=0000:04:00.1|8086:1521|3 0000:04:00.0|8086:1521|2
+# accepts space-separated list of <Bus:Device.Function> or <Domain:Bus:Device.Function> followed by an optional "|" and <Vendor:Device> | <MAC Address>
+# example:VFSETTINGS=0000:04:11.5|8086:1520|62:00:04:11:05:01
+
+SRIOV_DISABLED_FILE=/boot/config/sriov_disabled
+if [[ -f $SRIOV_DISABLED_FILE ]] ; then
+    echo 'SRIOV Processing disabled.'
+    exit
+fi
+
+CFG=/boot/config/sriov.cfg
+
+[[ ! -f "$CFG" ]] && exit
+grep -q "^VFS=" "$CFG" || exit
+echo -e "Loading VFs config from $CFG\n"
+cat $CFG
+echo "---"
+
+if [[ ! "$(ls -A /sys/kernel/iommu_groups/)" ]]; then
+    echo "Error: IOMMU not available"
+    exit 1
+fi
+
+# Read the line properly (don’t let bash squash the spaces)
+VFS_LINE=$(grep "^VFS=" "$CFG" | cut -d= -f2- | tr -d '"')
+[[ -z "$VFS_LINE" ]] && exit
+
+for PARAM in $VFS_LINE; do
+    IFS='|' read -r arg1 arg2 arg3 <<< "$PARAM"
+    echo "Processing $arg1 $arg2 set VFs to $arg3"
+    /usr/local/sbin/sriov-setvfs.sh "$arg1" "$arg2" "$arg3"
+    echo "---"
+done
+
+echo 'Devices VFs defined:'
+ls -l /sys/bus/pci/devices/*/virtfn*| egrep [[:xdigit:]]{4}:
+
+printf "\n"
+
+CFG_VFS=/boot/config/sriovvfs.cfg
+
+[[ ! -f "$CFG_VFS" ]] && exit
+grep -q "VFSETTINGS=" "$CFG_VFS" || exit
+echo -e "Loading settings config from $CFG_VFS/n"
+cat "$CFG_VFS"
+echo "---"
+
+if [[ ! "$(ls -A /sys/kernel/iommu_groups/ 2>/dev/null)" ]]; then
+    echo "Error: IOMMU not available"
+    exit 1
+fi
+
+VFSETTINGS_LINE=$(grep "^VFSETTINGS=" "$CFG_VFS" | cut -d= -f2- | tr -d '"')
+
+for PARAM_VFS in $VFSETTINGS_LINE; do
+    IFS='|' read -r arg1 arg2 arg3 arg4 <<< "$PARAM_VFS"
+    echo "Processing $arg1 $arg2 set Mac to $arg4"
+    /usr/local/sbin/sriov-vfsettings.sh "$arg1" "$arg2" "$arg3" "$arg4"
+    echo "---"
+done
+
+
+echo "SRIOV processing complete"

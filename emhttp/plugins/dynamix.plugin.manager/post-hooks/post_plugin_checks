@@ -67,6 +67,8 @@ case 'language':
   // nothing defined
   break;
 }
+// unset GUI search cache
+@unlink("/tmp/gui.search/searchResults.json");
 
 // unset pending status
 if ($method != 'check') @unlink("$pending/$name");

@@ -37,10 +37,12 @@
             </div>
         <? endif; ?>
 
-        <? if ($display['usage']): ?>
+        <? if ($display['usage'] && ! $themeHelper->isSidebarTheme()): ?>
             <? my_usage(); ?>
         <? endif; ?>
-
+        <? if ($display['usage'] && $themeHelper->isSidebarTheme()): ?>
+            <script>$("#array-usage-sidenav").html("<?my_usage();?>");</script>
+        <? endif; ?>
         <? foreach ($buttonPages as $button): ?>
             <? if (empty($button['Link'])): ?>
                 <? $icon = $button['Icon']; ?>

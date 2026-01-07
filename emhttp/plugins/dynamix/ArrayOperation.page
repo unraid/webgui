@@ -348,8 +348,40 @@ function shutdown_now(form, cmd) {
   $(form).append('<input type="hidden" name="cmd" value="'+cmd+'">');
 <?if ($confirm['down']):?>
   switch (cmd) {
-    case 'reboot': var text = "_(This will reboot the system)_"; break;
-    case 'shutdown': var text = "_(This will shutdown the system)_"; break;
+    case 'reboot': 
+      if ($('input[name="safemode"]').prop('checked')) {
+        <?
+          $nginx = @parse_ini_file("/var/local/emhttp/nginx.ini") ?: [];
+          $tailscaleUI = false;
+          $connectRemote = false;
+          foreach ($nginx as $key => $value) {
+            if (strpos($key, 'NGINX_TAILSCALE') !== false && $value == $_SERVER['HTTP_HOST'])  {
+              $tailscaleUI = true;
+              break;
+            }
+            if (strpos($key, 'NGINX_WANFQDN') !== false && $value == $_SERVER['HTTP_HOST'])  {
+              $connectRemote = true;
+              break;
+            }
+          }
+        ?>
+        var text = "_(This will reboot the server in safe mode.)_\n\n" + "_(No plugins will be loaded in safe mode.)_";
+        <? if (is_file("/var/log/plugins/tailscale.plg") || is_file("/var/log/plugins/tailscale-preview.plg") || is_file("/var/log/plugins/dynamix.unraid.net.plg")): ?>
+          text += "  _(If you use Tailscale or Unraid Connect Remote Access to access the webGUI or services of the server, this access will be lost.)_";
+          <? if ($tailscaleUI): ?>
+            text += "\n\n<span class='strong'>_(You are currently accessing the webGUI of the server via Tailscale.)_</span>";
+          <? endif; ?>
+          <? if ($connectRemote): ?>
+            text += "\n\n<span class='strong'>_(You are currently accessing the webGUI of the server via Unraid Connect Remote Access.)_</span>";
+          <? endif; ?>
+        <? endif; ?>
+      } else {
+        var text = "_(This will reboot the server.)_";
+      }
+      break;
+    case 'shutdown': 
+      var text = "_(This will shutdown the server.)_";
+      break;
   }
   swal({
     title:"_(Proceed)_?",

@@ -15,6 +15,8 @@ Tag="calendar-check-o"
  */
 ?>
 <?
+$mode = ['Disabled','Hourly','Daily','Weekly','Monthly'];
+$days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 $setup = true;
 if (!$pool_devices) {
   echo "<p class='notice'>"._('No Cache device present')."!</p>";
@@ -23,11 +25,13 @@ if (!$pool_devices) {
   echo "<p class='notice'>"._('User shares not enabled')."!</p>";
   $setup = false;
 }
-$cron = explode(' ',$var['shareMoverSchedule']);
-$move = $cron[2]!='*' ? 3 : ($cron[4]!='*' ? 2 : (substr($cron[1],0,1)!='*' ? 1 : 0));
-$mode = ['Hourly','Daily','Weekly','Monthly'];
-$days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-
+if (empty($var['shareMoverSchedule'])) {
+  $cron = explode(' ', "* * * * *");
+  $move = 0;
+} else {
+  $cron = explode(' ', $var['shareMoverSchedule']);
+  $move = $cron[2]!='*' ? 4 : ($cron[4]!='*' ? 3 : (substr($cron[1],0,1)!='*' ? 2 : 1));
+}
 $showMoverButton = $setup && $pool_devices;
 $moverRunning = file_exists('/var/run/mover.pid');
 ?>
@@ -37,26 +41,32 @@ $(function() {
   presetMover(document.mover_schedule);
 });
 <? endif; ?>
+function presetMover(form) {
+  var mode = form.shareMoverSchedule.value;
+  form.min.disabled = mode==0;
+  form.day.disabled = mode==0 || mode!=3;
+  form.dotm.disabled = mode==0 || mode!=4;
+  form.hour1.disabled = mode==0;
+  form.hour2.disabled = mode==0;
+  form.day.value = form.day.disabled ? '*' : (form.day.value=='*' ? 0 : form.day.value);
+  form.dotm.value = form.dotm.disabled ? '*' : (form.dotm.value=='*' ? 1 : form.dotm.value);
+  if (mode==1) {$('#H1').hide(); $('#H2').show();} else {$('#H2').hide(); $('#H1').show();}
+}
 // Fool Unraid by simulating the original input field
 function prepareMover(form) {
   var mode = form.shareMoverSchedule.value;
-  var min = mode!=0 ? form.min.value : 0;
-  var hour = mode!=0 ? form.hour1.value : form.hour2.value;
-  form.shareMoverSchedule.options[mode].value = min+' '+hour+' '+form.dotm.value+' * '+form.day.value;
+  if (mode == 0)
+    form.shareMoverSchedule.options[mode].value = '';
+  else {
+    var hour = mode!=1 ? form.hour1.value : form.hour2.value;
+    var min = mode!=1 ? form.min.value : 0;
+    form.shareMoverSchedule.options[mode].value = min+' '+hour+' '+form.dotm.value+' * '+form.day.value;
+  }
   form.min.disabled = true;
   form.hour1.disabled = true;
   form.hour2.disabled = true;
   form.dotm.disabled = true;
   form.day.disabled = true;
-}
-function presetMover(form) {
-  var mode = form.shareMoverSchedule.value;
-  form.min.disabled = false;
-  form.day.disabled = mode!=2;
-  form.dotm.disabled = mode!=3;
-  form.day.value = form.day.disabled ? '*' : (form.day.value=='*' ? 0 : form.day.value);
-  form.dotm.value = form.dotm.disabled ? '*' : (form.dotm.value=='*' ? 1 : form.dotm.value);
-  if (mode==0) {$('#H1').hide(); $('#H2').show();} else {$('#H2').hide(); $('#H1').show();}
 }
 </script>
 <form markdown="1" name="mover_schedule" method="POST" action="/update.htm" target="progressFrame" onsubmit="prepareMover(this)">
@@ -92,7 +102,7 @@ _(Day of the month)_:
 
 _(Time of the day)_:
 : <span>
-  <span id="H1"<?if ($move==0):?> style="display:none"<?endif;?>><select name="hour1" class="narrow">
+  <span id="H1"<?if ($move==1):?> style="display:none"<?endif;?>><select name="hour1" class="narrow">
   <?for ($d=0; $d<=23; $d++):?>
   <?=mk_option($cron[1], strval($d), sprintf("%02d", $d))?>
   <?endfor;?>
@@ -102,7 +112,7 @@ _(Time of the day)_:
   <?=mk_option($cron[0], strval($d), sprintf("%02d", $d))?>
   <?endfor;?>
   </select>&nbsp;&nbsp;_(HH:MM)_</span>
-  <span id="H2"<?if ($move!=0):?> style="display:none"<?endif;?>><select name="hour2">
+  <span id="H2"<?if ($move!=1):?> style="display:none"<?endif;?>><select name="hour2">
   <?=mk_option($cron[1], "*/1", _("Every hour"))?>
   <?=mk_option($cron[1], "*/2", _("Every 2 hours"))?>
   <?=mk_option($cron[1], "*/3", _("Every 3 hours"))?>

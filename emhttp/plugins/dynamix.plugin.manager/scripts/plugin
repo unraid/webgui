@@ -23,9 +23,6 @@ Usage: plugin install PLUGIN-FILE [forced]
 
   forced is optional and can be used to install a lower version than currently running.
 
-  This command will process all FILE elements in PLUGIN-FILE which are tagged with the "install" method (or
-  that have no method tag).
-
   This command has two major use cases:
 
   1) Invoked at system startup by /etc/rc.d/rc.local on each .plg file found int /boot/config/plugins.
@@ -79,6 +76,17 @@ Usage: plugin update PLUGIN
   Note: to support `plugin check` and `plugin update` the plugin file must contain both "pluginURL" and
   "version" attributes.
 
+Usage: plugin download PLUGIN-FILE [TARGET-VERSION] [forced]
+  Downloads newer versions of installed plugin files without executing any Run commands.
+  This method downloads the updated plugin definition file (.plg) to /boot/config/plugins-nextboot/
+  then downloads all required files to the same directory but skips script execution.
+  On the next boot, rc.local will move the files from /boot/config/plugins-nextboot/ to /boot/config/plugins/
+  and install them normally.
+  This method is suitable for updating plugin files before an Unraid OS upgrade.
+
+  TARGET-VERSION is optional and specifies the Unraid version to use for version compatibility
+  checks (Min/Max attributes). If omitted, the current Unraid version is used.
+
 Usage: plugin [attribute name] PLUGIN-FILE
 
 Any method which is not one of the actions listed above is assumed to be the name of an attribute of
@@ -126,6 +134,12 @@ Here is the set of directories and files used by the plugin system:
   This directory contains the plugin files for plugins to be (re)installed at boot-time. Upon
   successful `plugin install`, the plugin file is copied here (if not here already).  Upon successful
   `plugin remove`, the plugin file is deleted from here.
+
+/boot/config/plugins-nextboot/
+  This directory contains the plugin files for plugins to be updated at next boot-time. 
+  Upon successful `plugin download`, plugin files will be located here.
+  On the next boot, rc.local will move the files from /boot/config/plugins-nextboot/ to /boot/config/plugins/
+  and install them normally.
 
 /boot/config/plugins-error/
   This directory contains plugin files that failed to install.
@@ -202,7 +216,8 @@ function run($command) {
 // hook programs receives three parameters: type=plugin and method and plugin-name
 //
 function pre_hooks() {
-  global $method, $plugin;
+  global $method, $plugin, $download_only;
+  if ($download_only) return;
   $hooks = "/usr/local/emhttp/plugins/dynamix.plugin.manager/pre-hooks";
   foreach (glob("$hooks/*") as $hook) if (is_executable($hook)) {
     write("Executing hook script: ".basename($hook)."\n");
@@ -215,7 +230,8 @@ function pre_hooks() {
 // hook programs receives four parameters: type=plugin and method and plugin-name and error (empty if none)
 //
 function post_hooks($error='') {
-  global $method, $plugin;
+  global $method, $plugin, $download_only;
+  if ($download_only) return;
   $hooks = "/usr/local/emhttp/plugins/dynamix.plugin.manager/post-hooks";
   foreach (glob("$hooks/*") as $hook) if (is_executable($hook)) {
     write("Executing hook script: ".basename($hook)."\n");
@@ -285,7 +301,7 @@ function filter_url($url) {
 // is processed for any of those methods.
 //
 function plugin($method, $plugin_file, &$error) {
-  global $unraid, $logger;
+  global $logger, $download_only, $check_version, $boot, $nextboot;
   $methods = ['install', 'remove'];
 
   // parse plugin definition XML file
@@ -352,17 +368,31 @@ function plugin($method, $plugin_file, &$error) {
     $name = $file->attributes()->Name ?: '';
     // bergware - check Unraid version dependency (if present)
     $min = $file->attributes()->Min;
-    if ($min && version_compare($unraid['version'],$min,'<')) {
-      write("plugin: skipping: ".basename($name)." - Unraid version too low, requires at least version $min\n");
+    if ($min && version_compare($check_version,$min,'<')) {
+      if (!$download_only) {
+        write("plugin: skipping: ".basename($name)." - Unraid version too low, requires at least version $min\n");
+      }
       continue;
     }
     $max = $file->attributes()->Max;
-    if ($max && version_compare($unraid['version'],$max,'>')) {
-      write("plugin: skipping: ".basename($name)." - Unraid version too high, requires at most version $max\n");
+    if ($max && version_compare($check_version,$max,'>')) {
+      if (!$download_only) {
+        write("plugin: skipping: ".basename($name)." - Unraid version too high, requires at most version $max\n");
+      }
       continue;
     }
     // Name can be missing but only makes sense if Run attribute is present
     if ($name) {
+      // If download_only mode, only process files that go to $boot/ (persistent location)
+      if ($download_only) {
+        if (strpos($name, "$boot/") === 0) {
+          // Redirect $boot/ paths to $nextboot/ to be installed at next boot
+          $name = "$nextboot/" . substr($name, strlen("$boot/"));
+        } else {
+          // Skip other files - they won't persist after boot
+          continue;
+        }
+      }
       // Ensure parent directory exists
       //
       if (!file_exists(dirname($name))) {
@@ -455,6 +485,11 @@ function plugin($method, $plugin_file, &$error) {
     //
     if ($file->attributes()->Run) {
       $command = $file->attributes()->Run;
+      if ($download_only) {
+        $target = $name ?: ($file->LOCAL ?: 'inline script');
+        my_logger("skipping run: $command $target - download-only mode", $logger);
+        continue;
+      }
       if ($name) {
         my_logger("running: $command $name", $logger);
         $retval = run("$command $name");
@@ -462,7 +497,6 @@ function plugin($method, $plugin_file, &$error) {
         my_logger("running: $command $file->LOCAL", $logger);
         $retval = run("$command $file->LOCAL");
       } elseif ($file->INLINE) {
-
         $name = '/tmp/inline'.$current_file.'-'.pathinfo($plugin_file, PATHINFO_FILENAME).'.sh';
         file_put_contents($name, $file->INLINE);
         $exec = $command." ".escapeshellarg($name);
@@ -484,13 +518,44 @@ function move($src_file, $tar_dir) {
   return rename($src_file, $tar_dir."/".basename($src_file));
 }
 
-$notify  = '/usr/local/emhttp/webGui/scripts/notify';
-$boot    = '/boot/config/plugins';
-$plugins = '/var/log/plugins';
-$tmp     = '/tmp/plugins';
-$method  = $argv[1];
-$builtin = ['unRAIDServer','unRAIDServer-'];
-$nchan   = $argv[$argc-1] == 'nchan'; // console or nchan output
+$notify        = '/usr/local/emhttp/webGui/scripts/notify';
+$boot          = '/boot/config/plugins';
+$nextboot      = '/boot/config/plugins-nextboot';
+$plugins       = '/var/log/plugins';
+$tmp           = '/tmp/plugins';
+$download_only = false;
+$script        = $argv[0] ?? '';
+$method        = $argv[1] ?? '';
+$args          = array_slice($argv, 2);
+$extra_args    = array_slice($args, 1); // anything after the plugin path
+$builtin       = ['unRAIDServer','unRAIDServer-'];
+
+// Load Unraid version and initialize check_version
+$unraid = parse_ini_file('/etc/unraid-version');
+$check_version = $unraid['version'];
+
+// Optional flags
+// nchan must be the final argument
+$nchan = ($argc > 0) && ($argv[$argc-1] === 'nchan'); // console or nchan output
+if ($nchan) array_pop($extra_args);
+
+// Extract target version if present (for download/update methods)
+// Version pattern: starts with digit, contains dots, optionally has dash suffix (e.g., "7.2.0", "7.2.0-rc.1")
+if (!empty($extra_args) && ($method === 'download' || $method === 'update')) {
+  $first_arg = $extra_args[0];
+  if (preg_match('/^\d+\.\d+\.\d+(-.*)?$/', $first_arg)) {
+    $check_version = $first_arg;
+    array_shift($extra_args);
+  }
+}
+
+$forced = !empty($extra_args); // any extra arg (besides nchan and TARGET-VERSION) signals forced
+
+// Normalize download to reuse the update flow while skipping run steps.
+if ($method === 'download') {
+  $download_only = true;
+  $method = 'update';
+}
 
 // In following code,
 //  $plugin - is a basename of a plugin, eg, "myplugin.plg"
@@ -506,8 +571,8 @@ if ($argc < 2) {
 // check all installed plugins, except built-in
 //
 if ($method == 'checkall') {
-  if (!$cmd = realpath($argv[0])) {
-    write("Unknown command: {$argv[0]}\n");
+  if (!$cmd = realpath($script)) {
+    write("Unknown command: {$script}\n");
     done(1);
   }
   foreach (glob("$plugins/*.plg", GLOB_NOSORT) as $link) {
@@ -529,8 +594,8 @@ if ($method == 'checkall') {
 // update all installed plugins, which have a update available
 //
 if ($method == 'updateall') {
-  if (!$cmd = realpath($argv[0])) {
-    write("Unknown command: {$argv[0]}\n");
+  if (!$cmd = realpath($script)) {
+    write("Unknown command: {$script}\n");
     done(1);
   }
   foreach (glob("$plugins/*.plg", GLOB_NOSORT) as $link) {
@@ -557,8 +622,8 @@ if ($method == 'updateall') {
 // check built-in only
 //
 if ($method == 'checkos') {
-  if (!$cmd = realpath($argv[0])) {
-    write("Unknown command: {$argv[0]}\n");
+  if (!$cmd = realpath($script)) {
+    write("Unknown command: {$script}\n");
     done(1);
   }
   foreach ($builtin as $link) {
@@ -580,13 +645,12 @@ if ($argc < 3) {
   done(1);
 }
 
-// plugin install [plugin_file]
+// plugin install [plugin_file] / plugin download [plugin_file]
 // cases:
 // a) dirname of [plugin_file] is /boot/config/plugins (system startup)
 // b) [plugin_file] is a URL
 // c) dirname of [plugin_file] is not /boot/config/plugins
 //
-$unraid = parse_ini_file('/etc/unraid-version');
 if ($method == 'install') {
   $argv[2] = preg_replace('#[\x00-\x1F\x80-\xFF]#', '', $argv[2]);
   $plugin = basename($argv[2]);
@@ -594,7 +658,8 @@ if ($method == 'install') {
     write("plugin: $plugin is not a plg file\n");
     done(1);
   }
-  write("plugin: installing: $plugin\n");
+  $action = 'installing';
+  write("plugin: $action: $plugin\n");
   // check for URL
   if (preg_match('#^https?://#',$argv[2])) {
     $pluginURL = $argv[2];
@@ -613,8 +678,9 @@ if ($method == 'install') {
     $plugin_file = realpath($argv[2]);
   }
   // bergware - check Unraid version dependency (if present)
+  global $check_version;
   $min = plugin('min', $plugin_file, $error);
-  if ($min && version_compare($unraid['version'], $min, '<')) {
+  if ($min && version_compare($check_version, $min, '<')) {
     write("plugin: installed Unraid version is too low, require at least version $min\n");
     if (dirname($plugin_file) == "$boot") {
       move($plugin_file, "$boot-error");
@@ -624,7 +690,7 @@ if ($method == 'install') {
     done(1);
   }
   $max = plugin('max', $plugin_file, $error) ?: plugin('Unraid', $plugin_file, $error);
-  if ($max && version_compare($unraid['version'], $max, '>')) {
+  if ($max && version_compare($check_version, $max, '>')) {
     write("plugin: installed Unraid version is too high, require at most version $max\n");
     if (dirname($plugin_file) == "$boot") {
       move($plugin_file, "$boot-error");
@@ -659,7 +725,6 @@ if ($method == 'install') {
       done(1);
     }
     // check version installation?
-    $forced = $nchan ? ($argc==5 ? $argv[4] : false) : ($argc==4 ? $argv[3] : false);
     if (!$forced) {
       // do not re-install if same plugin already installed or has higher version
       if (strcmp($version, $installed_version) < 0) {
@@ -711,11 +776,13 @@ if ($method == 'install') {
   if (!plugin('noInstall', $plugin_file, $error)) {
     if ($target != $plugin_file) copy($plugin_file, $target);
     symlink($target, $symlink);
-    write("plugin: $plugin installed\n");
-    my_logger("$plugin installed", $logger);
+    $status = 'installed';
+    write("plugin: $plugin $status\n");
+    my_logger("$plugin $status", $logger);
   } else {
-    write("script: $plugin executed\n");
-    my_logger("script: $plugin executed", $logger);
+    $script_action = 'executed';
+    write("script: $plugin $script_action\n");
+    my_logger("script: $plugin $script_action", $logger);
   }
   // run hook scripts for post processing
   post_hooks();
@@ -778,7 +845,11 @@ if ($method == 'check') {
 if ($method == 'update') {
   $plugin = $argv[2];
   $symlink = "$plugins/$plugin";
-  write("plugin: updating: $plugin\n");
+  if ($download_only) {
+    write("plugin: download-only mode enabled, skipping install commands\n");
+  }
+  $action = $download_only ? 'downloading' : 'updating';
+  write("plugin: $action: $plugin\n");
   $installed_plugin_file = @readlink($symlink);
   if ($installed_plugin_file === false) {
     write("plugin: $plugin not installed\n");
@@ -794,14 +865,14 @@ if ($method == 'update') {
   }
   // bergware - check Unraid version dependency (if present)
   $min = plugin('min', $plugin_file, $error);
-  if ($min && version_compare($unraid['version'], $min, '<')) {
+  if ($min && version_compare($check_version, $min, '<')) {
     write("plugin: installed Unraid version is too low, require at least version $min\n");
     // run hook scripts for post processing
     post_hooks($error);
     done(1);
   }
   $max = plugin('max', $plugin_file, $error) ?: plugin('Unraid', $plugin_file, $error);
-  if ($max && version_compare($unraid['version'], $max, '>')) {
+  if ($max && version_compare($check_version, $max, '>')) {
     write("plugin: installed Unraid version is too high, require at most version $max\n");
     // run hook scripts for post processing
     post_hooks($error);
@@ -824,12 +895,17 @@ if ($method == 'update') {
     done(1);
   }
   // install was successful, save the updated plugin so it installs again next boot
-  unlink($symlink);
-  $target = "$boot/$plugin";
+  $target = $download_only ? "$nextboot/$plugin" : "$boot/$plugin";
+  $status = $download_only ? 'downloaded' : 'updated';
+  // For normal update, unlink existing symlink before copying
+  if (!$download_only) unlink($symlink);
+  // Ensure target directory exists and copy plugin file
+  @mkdir(dirname($target), 0770, true);
   copy($plugin_file, $target);
-  symlink($target, $symlink);
-  write("plugin: $plugin updated\n");
-  my_logger("$plugin updated", $logger);
+  // For normal update, create symlink to mark as installed
+  if (!$download_only) symlink($target, $symlink);
+  write("plugin: $plugin $status\n");
+  my_logger("$plugin $status", $logger);
   // run hook scripts for post processing
   post_hooks();
   done(0);
