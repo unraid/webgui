@@ -1,223 +1,3850 @@
 Menu="Flash"
-Title="Syslinux Configuration"
+Title="Boot Parameters"
 Tag="edit"
 Cond="file_exists('/boot/syslinux/syslinux.cfg')"
 ---
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License version 2,
- * as published by the Free Software Foundation.
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- */
-?>
-<?
-function strip($area) {
-  return preg_replace(["/^|(\n)  /","/\n$/"],["$1",""],$area);
-}
-$file    = '/boot/syslinux/syslinux.cfg';
-$current = @file_get_contents($file);
-$default = @file_get_contents("$file-") ?: $current;
-$current = preg_replace(["/\r\n/","/\r/","/\n$/"],["\n","\n",""],$current);
-$default = preg_replace(["/\r\n/","/\r/","/\n$/"],["\n","\n",""],$default);
+$docroot = $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
+require_once "$docroot/webGui/include/Wrappers.php";
 
-$title   = _('Global Configuration');
-$menu    = 'menu default';
-$mark    = 'label ';
+# Get CSRF token from Unraid's variable system
+$csrf_token = $var['csrf_token'] ?? '';
 ?>
-<link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
 
-<script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
+<link type="text/css" rel="stylesheet" href="/webGui/styles/jquery.switchbutton.css">
+<script src="/webGui/javascript/jquery.switchbutton.js"></script>
+
+<div class="main-content">
+    <!-- Top View Toggle -->
+    <div class="top-view-toggle-wrapper">
+        <input type="checkbox" id="syslinux-view-toggle-top" class="switch narrow">
+    </div>
+
+    <hr style="margin: 16px 0;">
+
+    <p>
+        Configure kernel boot parameters to control hardware initialization, PCIe passthrough, GPU framebuffers, power management, and boot menu behavior. Use Menu View for guided configuration with toggles and help text, or switch to Raw View to directly edit the bootloader configuration. Changes include automatic backups and validation for safety.
+    </p>
+
+    <hr style="margin: 16px 0;">
+
+    <!-- Menu Mode Controls Container - Hidden when Raw View is active -->
+    <div id="menu-mode-controls">
+
+    <!-- Hardware Change Warning (hidden by default, shown via JavaScript) -->
+    <div id="hardware-change-warning" class="info-box" style="display:none; margin-bottom: 24px;">
+        <div style="font-size: 16px; font-weight: bold; margin-bottom: 8px;">
+            ⚠ Hardware Change Detected
+        </div>
+        <div style="margin-bottom: 12px;">
+            Your system hardware has changed: <span id="hardware-changes-list" style="font-weight: bold;"></span>
+        </div>
+        <div style="margin-bottom: 16px;">
+            Hardware changes may make your boot configuration invalid or unsafe. Please review all boot parameters below before making changes.
+        </div>
+        <div style="text-align: center;">
+            <input type="button" value="I Understand" class="btn" onclick="acknowledgeHardwareChange()" id="acknowledge-hardware-btn">
+        </div>
+    </div>
+
+    <!-- VM Passthrough Section -->
+    <section class="section" id="boot-parameters">
+        <h3 class="section-header">VM Passthrough</h3>
+
+        <div class="warning-box">
+            These options work around hardware limitations that can sometimes prevent PCIe device passthrough.
+            <br>
+            PCIe ACS Override helps when multiple devices are grouped together, preventing them from being passed through individually.
+            <br>
+            VFIO Allow Unsafe Interrupts enables passthrough on systems that lack hardware interrupt remapping support.
+            <br><br>
+            Important: These options reduce hardware isolation. Safe for home labs, but use caution with untrusted VMs or sensitive hardware.
+        </div>
+
+        <dl>
+            <dt class="help-label">PCIe ACS Override (details):</dt>
+            <dd>
+                <select id="acs-dropdown" onchange="updateConfig()" style="width: auto;">
+                    <option value="">Disabled</option>
+                    <option value="downstream">Downstream</option>
+                    <option value="multifunction">Multi-function</option>
+                    <option value="downstream,multifunction">Both</option>
+                </select>
+                <br>
+                <span class="parameter-code">pcie_acs_override=...</span>
+                <blockquote class="inline_help">
+                    Splits IOMMU groups to allow individual device passthrough. Use when devices are grouped together preventing passthrough. Typically Downstream is sufficient; Multi-function or Both may be needed for devices with multiple hardware functions.
+                    <br><br>
+                    Applies to GPUs, network cards, storage controllers, and other PCIe devices.
+                    <br><br>
+                    <strong>Note:</strong> This bypasses hardware isolation between devices. While generally safe for GPU passthrough in home labs, use caution with untrusted VMs or certain hardware configurations. See <a href="https://forums.unraid.net/forum/51-vm-engine-kvm" target="_blank">Lime Technology forums</a> for hardware-specific guidance.
+                </blockquote>
+            </dd>
+        </dl>
+
+        <dl>
+            <dt class="help-label">VFIO Allow Unsafe Interrupts (details):</dt>
+            <dd>
+                <input type="checkbox" id="vfio-toggle" class="switch narrow" onchange="updateConfig()">
+                <br>
+                <span class="parameter-code">vfio_iommu_type1.allow_unsafe_interrupts=1</span>
+                <blockquote class="inline_help">
+                    Allows VFIO passthrough to work on systems without interrupt remapping support (common on older hardware and some consumer motherboards). Required when attempting GPU or device passthrough results in VFIO errors about missing interrupt remapping.
+                    <br><br>
+                    <strong>Note:</strong> This bypasses interrupt isolation between devices. While generally safe for GPU passthrough in home labs, certain hardware configurations may experience stability issues. See <a href="https://forums.unraid.net/forum/51-vm-engine-kvm" target="_blank">Lime Technology forums</a> for hardware-specific guidance.
+                </blockquote>
+            </dd>
+        </dl>
+    </section>
+
+    <!-- Framebuffer Section -->
+    <section class="section">
+        <h3 class="section-header">Framebuffer</h3>
+
+        <div class="warning-box">
+            Passing your primary GPU to a VM can cause black screen issues. Disabling framebuffers solves this by preventing the kernel from claiming the GPU at boot. For complete GPU isolation, also bind the GPU to VFIO via <a href="/Tools/SysDevs">Tools &gt; System Devices</a>.
+            <br><br>
+            1. Start by disabling your boot mode's framebuffer (EFI for UEFI, VESA for Legacy BIOS) - one will be disabled based on your boot mode
+            <br>2. If issues persist, also disable Simple Framebuffer
+            <br>3. If still having problems, use "Block All Framebuffers" as a last resort
+            <br><br>
+            Important: Do not add framebuffer parameters to GUI Mode boot configurations, as they will prevent GUI Mode from displaying.
+        </div>
+
+        <!-- Info box for auto-correction notice (hidden by default) -->
+        <div id="boot-mode-auto-correct-notice" class="info-box" style="display:none; margin-bottom: 12px;">
+            <span id="boot-mode-notice-text"></span>
+            <span class="close-notice" onclick="this.parentElement.style.display='none'" style="cursor:pointer; float:right; margin-left: 12px;">&times;</span>
+        </div>
+
+        <dl>
+            <dt class="help-label">Disable EFI Framebuffer (details):</dt>
+            <dd>
+                <input type="checkbox" id="efifb-toggle" class="narrow" onchange="updateConfig()" disabled>
+                <br>
+                <span class="parameter-code">video=efifb:off</span>
+                <blockquote class="inline_help">
+                    Prevents the kernel from attaching to the GPU via EFI framebuffer at boot. Required when passing through the primary or only GPU to a VM on UEFI servers.
+                    <br><br>
+                    This is the first step for UEFI servers. If you still experience GPU passthrough issues after enabling this, also try enabling "Disable Simple Framebuffer" below.
+                </blockquote>
+            </dd>
+        </dl>
+
+        <dl>
+            <dt class="help-label">Disable VESA Framebuffer (details):</dt>
+            <dd>
+                <input type="checkbox" id="vesafb-toggle" class="narrow" onchange="updateConfig()" disabled>
+                <br>
+                <span class="parameter-code">video=vesafb:off</span>
+                <blockquote class="inline_help">
+                    Prevents the kernel from attaching to the GPU via VESA framebuffer at boot. Required when passing through the primary or only GPU to a VM on legacy BIOS servers.
+                    <br><br>
+                    This is the first step for Legacy BIOS servers. If you still experience GPU passthrough issues after enabling this, also try enabling "Disable Simple Framebuffer" below.
+                </blockquote>
+            </dd>
+        </dl>
+
+        <dl>
+            <dt class="help-label">Disable Simple Framebuffer (details):</dt>
+            <dd>
+                <input type="checkbox" id="simplefb-toggle" class="switch narrow" onchange="updateConfig()">
+                <br>
+                <span class="parameter-code">video=simplefb:off</span>
+                <blockquote class="inline_help">
+                    Prevents the kernel from using the Simple Framebuffer driver, which can sometimes interfere with GPU passthrough even when the primary framebuffer (EFI or VESA) is already disabled.
+                    <br><br>
+                    Enable this as a second step if disabling your boot mode's primary framebuffer (EFI or VESA above) didn't fully resolve GPU passthrough issues.
+                </blockquote>
+            </dd>
+        </dl>
+
+        <dl>
+            <dt class="help-label">Block All Framebuffers (details):</dt>
+            <dd>
+                <input type="checkbox" id="sysfb-blacklist-toggle" class="switch narrow" onchange="updateConfig()">
+                <br>
+                <span class="parameter-code">initcall_blacklist=sysfb_init</span>
+                <blockquote class="inline_help">
+                    This is the most comprehensive approach: blocks the kernel's framebuffer initialization, preventing it from creating any framebuffer devices that could claim your GPU.
+                    <br><br>
+                    <strong>When to use this:</strong>
+                    <br>- Individual framebuffer options above didn't fully resolve GPU passthrough issues
+                    <br>- You want the most aggressive GPU isolation method
+                    <br><br>
+                    <strong>Important warnings:</strong>
+                    <br>- Completely disables console and graphical video output after boot
+                    <br>- You MUST have WebGUI or SSH access to manage your server
+                    <br><br>
+                    When enabled, individual framebuffer options above are automatically disabled (this replaces them all).
+                </blockquote>
+            </dd>
+        </dl>
+    </section>
+
+    <!-- Hardware Compatibility Section -->
+    <section class="section">
+        <h3 class="section-header">Hardware Compatibility</h3>
+
+        <div class="warning-box">
+            Hardware compatibility fixes for common issues. Use these when: system logs show hardware errors, devices fail to initialize properly, resource allocation conflicts occur, or hardware monitoring features aren't working.
+        </div>
+
+        <dl>
+            <dt class="help-label">Enable Sensor Access (details):</dt>
+            <dd>
+                <input type="checkbox" id="acpi-toggle" class="switch narrow" onchange="updateConfig()">
+                <br>
+                <span class="parameter-code">acpi_enforce_resources=lax</span>
+                <blockquote class="inline_help">
+                    May be required on some motherboards to allow sensor drivers (such as nct6775) to access hardware monitoring chips for temperature, fan speed, and voltage readings. Only needed if monitoring isn't working and you've confirmed this parameter resolves it. May cause instability on some hardware.
+                </blockquote>
+            </dd>
+        </dl>
+
+        <dl>
+            <dt class="help-label">Disable ACPI Hardware Error Reporting (details):</dt>
+            <dd>
+                <input type="checkbox" id="ghes-toggle" class="switch narrow" onchange="updateConfig()">
+                <br>
+                <span class="parameter-code">ghes.disable=1</span>
+                <blockquote class="inline_help">
+                    Disables ACPI Generic Hardware Error Source reporting. Use this if you're seeing spurious hardware error messages in logs or experiencing crashes on systems with buggy BIOS ACPI tables. Common on certain Supermicro and ASRock motherboards.
+                </blockquote>
+            </dd>
+        </dl>
+
+        <dl>
+            <dt class="help-label">Disable PCIe Error Reporting (details):</dt>
+            <dd>
+                <input type="checkbox" id="noaer-toggle" class="switch narrow" onchange="updateConfig()">
+                <br>
+                <span class="parameter-code">pci=noaer</span>
+                <blockquote class="inline_help">
+                    Disables PCIe Advanced Error Reporting. May silence excessive error messages in the system log from some GPUs, HBAs, or other PCIe devices. Note: This suppresses error reporting, not the errors themselves - use only if the messages are confirmed to be benign.
+                </blockquote>
+            </dd>
+        </dl>
+
+        <dl>
+            <dt class="help-label">Enable PCI Resource Reallocation (details):</dt>
+            <dd>
+                <input type="checkbox" id="pci-realloc-toggle" class="switch narrow" onchange="updateConfig()">
+                <br>
+                <span class="parameter-code">pci=realloc</span>
+                <blockquote class="inline_help">
+                    Forces the kernel to reallocate PCI resources, fixing detection issues when devices aren't assigned proper memory regions by the BIOS. Useful for multi-GPU systems, many NVMe drives, or when devices show in lspci but don't work properly.
+                </blockquote>
+            </dd>
+        </dl>
+    </section>
+
+    <!-- Power Management Section -->
+    <section class="section">
+        <h3 class="section-header">
+            Power Management
+            <span class="section-badge">Advanced</span>
+        </h3>
+
+        <div class="warning-box">
+            These options disable power-saving features that can cause stability issues. Use when experiencing random USB disconnects, device freezes, or system lockups during idle periods. Increases power consumption slightly.
+        </div>
+
+        <dl>
+            <dt class="help-label">Disable USB Autosuspend (details):</dt>
+            <dd>
+                <input type="checkbox" id="usb-autosuspend-toggle" class="switch narrow" onchange="updateConfig()">
+                <br>
+                <span class="parameter-code">usbcore.autosuspend=-1</span>
+                <blockquote class="inline_help">
+                    Prevents USB devices from being automatically suspended when idle. Enable this if USB devices disconnect randomly, mice/keyboards become unresponsive after inactivity, or you experience issues with USB passthrough to VMs. Note: Increases power consumption slightly as USB devices remain fully powered even when not in use.
+                </blockquote>
+            </dd>
+        </dl>
+
+        <dl>
+            <dt class="help-label">Disable NVMe Deep Power States (details):</dt>
+            <dd>
+                <input type="checkbox" id="nvme-toggle" class="switch narrow" onchange="updateConfig()">
+                <br>
+                <span class="parameter-code">nvme_core.default_ps_max_latency_us=0</span>
+                <blockquote class="inline_help">
+                    Prevents buggy NVMe drives from entering deep power states they cannot wake from. Use this if NVMe drives disappear and require a cold reboot (power cycle) to recover. Common on certain Samsung, Intel, and WD drives.
+                    <br><br>
+                    <strong>Note:</strong> Increases idle power slightly (typically 1-2W per drive). Dashboard may show inflated NVMe power readings - this is a display artifact.
+                </blockquote>
+            </dd>
+        </dl>
+
+        <dl>
+            <dt class="help-label">Disable PCIe ASPM (details):</dt>
+            <dd>
+                <input type="checkbox" id="aspm-toggle" class="switch narrow" onchange="updateConfig()">
+                <br>
+                <span class="parameter-code">pcie_aspm=off</span>
+                <blockquote class="inline_help">
+                    Disables PCIe Active State Power Management for all devices. May resolve log spam or stability issues with some GPUs (particularly Nvidia). Increases idle power for all PCIe devices.
+                </blockquote>
+            </dd>
+        </dl>
+
+        <dl>
+            <dt class="help-label">Disable PCIe Port PM (details):</dt>
+            <dd>
+                <input type="checkbox" id="portpm-toggle" class="switch narrow" onchange="updateConfig()">
+                <br>
+                <span class="parameter-code">pcie_port_pm=off</span>
+                <blockquote class="inline_help">
+                    Prevents PCIe root ports from entering low-power states. May help when devices disappear after idle periods. Often used alongside ASPM disable.
+                </blockquote>
+            </dd>
+        </dl>
+    </section>
+
+    <!-- Custom Parameters Section -->
+    <section class="section">
+        <h3 class="section-header">
+            Custom Parameters
+            <span class="section-badge">Advanced</span>
+        </h3>
+
+        <div class="warning-box">
+            <strong>Warning:</strong> Only add parameters you understand - incorrect values may prevent your server from booting. Add custom kernel parameters not covered by the options above. Use the comment field to document what each parameter does.
+        </div>
+
+        <div id="custom-params-list"></div>
+
+        <!-- Inline Add Custom Parameter Form -->
+        <dl>
+            <dt>Add Custom Parameter:</dt>
+            <dd>
+                <input type="text" id="new-custom-param" placeholder="e.g., mitigations=off" style="width: 300px;">
+                <input type="text" id="new-custom-comment" placeholder="Optional comment (e.g., Disables CPU mitigations)" style="width: 400px; margin-left: 8px;">
+                <button type="button" id="add-param-btn" class="btn-add-param" onclick="addCustomParamFromForm()" style="margin-left: 8px;">Add</button>
+            </dd>
+        </dl>
+    </section>
+
+    <!-- Parameters Preview -->
+    <div id="params-preview">
+        <strong>Parameters to Apply:</strong>
+        <pre id="preview-content"></pre>
+    </div>
+
+    </div><!-- End menu-mode-controls -->
+
+    <!-- Config Preview -->
+    <div id="config-preview">
+        <div class="config-header">
+            <strong>Current Syslinux Configuration:</strong>
+            <div class="view-toggle-wrapper">
+                <input type="checkbox" id="syslinux-view-toggle" class="switch narrow">
+            </div>
+        </div>
+
+        <!-- Menu View -->
+        <div id="syslinux-menu-view">
+            <div class="syslinux-section global-config">
+                <h4>Global Configuration</h4>
+                <pre id="global-config-content"></pre>
+            </div>
+
+            <div class="syslinux-section boot-entries">
+                <h4>Boot Entries</h4>
+                <div class="boot-entries-legend">
+                    <span class="legend-item"><span class="legend-radio"></span>&nbsp;Default boot entry</span><span class="legend-separator">&nbsp;|&nbsp;</span><span class="legend-item">Toggle =&nbsp;Apply&nbsp;parameters to entry</span>
+                </div>
+                <div id="boot-entries-container">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Raw View (editable) -->
+        <div id="syslinux-raw-view" style="display:none;">
+            <div class="warning-box" style="margin-bottom: 12px;">
+                <strong>⚠️ Manual Editing Mode</strong> You are directly editing the bootloader configuration file. Syntax errors can prevent your server from booting. A backup will be created automatically before saving.
+            </div>
+            <textarea id="raw-config-editor" style="width: 100%; font-family: 'Courier New', Monaco, 'Cascadia Code', monospace; font-size: 13px; padding: 8px; border: 1px solid var(--border-color, #ddd); border-radius: 3px; resize: vertical; overflow-y: hidden; min-height: 100px;"></textarea>
+            <div class="page-footer" style="margin-top: 12px;">
+                <input type="button" value="Save Raw Config" id="save-raw-btn" class="btn btn-secondary" onclick="saveRawConfig(this)">
+                <input type="button" value="Done" id="raw-done-button" class="btn" onclick="done()">
+                <input type="button" value="Reset" id="raw-reset-button" class="btn" onclick="resetRawView()" style="display:none;">
+                <input type="button" value="Default" class="btn btn-secondary" onclick="resetToDefault()">
+                <input type="button" value="Restore Backup" class="btn btn-secondary" onclick="showRestoreDialog()">
+            </div>
+            <!-- Hidden pre element to store raw config for loading into textarea -->
+            <pre id="config-content" style="display:none;"></pre>
+        </div>
+    </div>
+
+    <!-- Footer Buttons (positioned after config preview) -->
+    <div class="page-footer" id="menu-footer-buttons">
+        <input type="button" value="Apply" id="apply-btn" class="btn btn-primary" onclick="applyBootParams(this)" disabled>
+        <input type="button" value="Done" id="done-button" class="btn" onclick="done()">
+        <input type="button" value="Reset" id="reset-button" class="btn" onclick="resetMenuView()" style="display:none;">
+        <input type="button" value="Default" class="btn btn-secondary" onclick="resetToDefault()">
+        <input type="button" value="Restore Backup" class="btn btn-secondary" onclick="showRestoreDialog()">
+    </div>
+
+    <!-- Reboot Notice -->
+    <div class="reboot-notice" id="reboot-notice">
+        <strong>✓ Changes Applied</strong> A reboot is required for the new boot parameters to take effect. If you encounter boot issues, boot into Safe Mode to access this page and restore a previous backup.
+    </div>
+
+    <!-- Unraid Spinner -->
+    <div id="apply-spinner-wrap" style="display: none; text-align: center; margin: 24px 0;">
+        <div id="apply-spinner" class="spinner" style="width: 120px; height: 70px; margin: 0 auto;"></div>
+        <div id="apply-spinner-msg" style="margin-top: 12px; font-size: 14px;">Working...</div>
+    </div>
+
+    <!-- Safe Mode Confirmation Modal -->
+    <div id="safe-mode-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>⚠️ Apply Settings to Safe Mode?</h3>
+            <p>You are about to modify Safe Mode boot entries.</p>
+            <p><strong>Have you already tested these parameters in normal boot?</strong></p>
+            <ul style="margin: 12px 0; padding-left: 24px;">
+                <li>If YES: These settings worked and you want them in Safe Mode too</li>
+                <li>If NO: Cancel and test in normal boot first</li>
+            </ul>
+            <p><strong>Warning:</strong> If you apply untested parameters to Safe Mode, you may not be able to boot your server at all without physical access to manually edit the boot drive.</p>
+            <div class="modal-buttons" style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
+                <input type="button" value="Cancel" class="btn btn-secondary" onclick="cancelSafeModeApply()">
+                <input type="button" value="I've Tested - Apply to Safe Mode" class="btn btn-primary" onclick="confirmSafeModeApply()">
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
-const title = '<?=$title?>';
-const menu = '<?=$menu?>';
-const mark = '<?=$mark?>';
+// Make CSRF token available to JavaScript
+var csrf_token = '<?=$csrf_token?>';
 
-Array.prototype.indent = function(o) {
-  if (o) for (var i=0; i < this.length; i++) this[i] = '  '+this[i];
-  return this;
-};
-Array.prototype.spliceArray = function(i,n,a) {
-  return Array.prototype.splice.apply(this,[i,n].concat(a));
-};
-function prepareMenu(form) {
-  if ($('div.basic').is(':visible')) {
-    var label = [], area = [];
-    $(form).find('label[id^=label]').each(function(){
-      var $label = $(this).clone();
-      $label.find('input').remove();
-      var labelText = $label.text().replace(/\s+/g, ' ').trim();
-      label.push(labelText);
-    });
-    $(form).find('textarea.menu').each(function(i){
-      var start = $('#input-'+i).prop('checked') ? menu+'\n' : '';
-      area.push(start+$(this).val());
-    });
-    var text = [];
-    for (var i=0; i < label.length; i++) {
-      if (i==0) {
-        text.push(area[i]);
-      } else {
-        text.push(mark+label[i]);
-        text.push(area[i].replace(/^|(\n)/g,'$1  '));
-      }
-    }
-    // menu view
-    form.text.value = text.join('\n')+'\n';
-  } else {
-    // raw view
-    form.text.value = form.raw.value+'\n';
-  }
-  form.raw.disabled = true;
-}
-function setDefault(form) {
-  var text = <?=json_encode(array_map('strip',explode($mark,$default)))?>;
-  $(form).find('textarea.menu').each(function(i){
-    if (i < text.length) {
-      var area = text[i].split('\n');
-      var label = (i) ? area.shift():title;
-      var start = (area[0]==menu);
-      var checked = start ? ' checked':'';
-      if (i) label += "<span style='float:right'><input type='radio' id='input-"+i+"' title='<?=_('Set default boot menu')?>' onchange='changeMenu(this.form,this.id,true)'"+checked+"></span>";
-      $('#label-'+i).html(label).prop('class',start ? 'array':'system');
-      if (start) area.shift();
-      $(this).val(area.join('\n')).prop('rows',area.length).trigger('change');
-    } else {
-      $('#label-'+i).remove();
-      $(this).remove();
-    }
-  });
-  $(form).find('textarea.raw').val(<?=json_encode($default)?>).prop('rows',$(this).val().match(/\n/g).length+1).trigger('change');
-}
-function changeMenu(form,id,update) {
-  $(form).find('input.menu').each(function(){
-    // highlight default boot menu
-    var i = $(this).prop('id');
-    var label = $('#'+i.replace('input','label'));
-    if (i == id) {
-      label.prop('class','array');
-      $(this).prop('checked',true);
-    } else {
-      label.prop('class','system');
-      $(this).prop('checked',false);
-    }
-  });
-  if (update) {
-    // menu view -> update raw view
-    var n = 0, o = null;
-    var x = id.split('-')[1];
-    var text = form.raw.value.split('\n');
-    for (var i=0; i < text.length; i++) {
-      if (text[i].indexOf(mark) >= 0) if (++n == x) o = i + 1;
-      if (text[i].indexOf(menu) >= 0) text.splice(i,1);
-    }
-    if (o) text.splice(o,0,'  '+menu);
-    $(form).find('textarea.raw').val(text.join('\n')).prop('rows',text.length);
-  }
-}
-$(function(){
-  $('form').find('textarea').each(function(){$(this).on('input change',function(event){
-    $(this).prop('rows',($(this).val().match(/\n/g)||[]).length+1);
-    if (event.type == 'input') return;
-    // propogate changes to 'other' view mode
-    var form = $(this).closest('form');
-    if ($(this).prop('class')=='menu') {
-      // menu view -> update raw view
-      var n = 0, o = 0, x = null;
-      var id = $(this).prop('id').split('-')[1];
-      var area = $(this).val().split('\n');
-      var raw = form.find('textarea.raw');
-      var text = raw.val().split('\n');
-      for (var i=0; i < text.length; i++) {
-        if (text[i].indexOf(mark) >= 0) {
-          if (n++ == id) x = i; else o = i + 1;
-        }
-        if (text[i].indexOf(menu) >= 0) o++;
-        if (x) break;
-      }
-      text.spliceArray(o,(x||text.length)-o,area.indent(o));
-      raw.val(text.join('\n')).prop('rows',text.length);
-    } else {
-      // raw view -> update menu view
-      var n = 0, id = null, area = [];
-      var text = $(this).val().split('\n');
-      for (var i=0; i < text.length; i++) {
-        if (text[i].indexOf(mark) >= 0) {
-          $('#menu-'+(n++)).val(area.join('\n')).prop('rows',area.length);
-          var label = $('#label-'+n);
-          label.html(label.html().replace(/^.*(<span.*)/,text[i].replace(mark,'')+'$1'));
-          area = [];
+// Custom parameters array
+var customParams = [];
+
+// Custom parameters comments object (parameter -> comment mapping)
+var customParamsComments = {};
+
+// Track if form has been modified
+var formModified = false;
+
+// Track if raw config has been modified
+var rawConfigOriginal = '';
+var rawConfigModified = false;
+
+// Track if custom parameter input has content
+var customParamInputModified = false;
+
+// Prevent marking as modified during initial page load
+var isInitializing = true;
+
+// Store current append line from syslinux.cfg for comparison
+var currentAppendLine = '';
+
+// Theme detection function (matches Unraid's approach)
+function getModalColors() {
+    // Check body background color to detect theme
+    const bodyBg = window.getComputedStyle(document.body).backgroundColor;
+    const rgb = bodyBg.match(/\d+/g);
+
+    if (rgb) {
+        const brightness = (parseInt(rgb[0]) + parseInt(rgb[1]) + parseInt(rgb[2])) / 3;
+        const isDark = brightness < 128;
+
+        if (isDark) {
+            // Dark theme colors (matching Unraid's SweetAlert dark theme)
+            return {
+                background: 'rgb(28, 28, 28)',
+                color: 'rgb(224, 224, 224)',
+                border: 'rgb(68, 68, 68)'
+            };
         } else {
-          if (text[i].indexOf(menu) >= 0) id = 'input-'+n; else if (text[i].length) area.push(text[i].replace(/^  /,''));
+            // Light theme colors (matching Unraid's SweetAlert light theme)
+            return {
+                background: 'rgb(242, 242, 242)',
+                color: 'rgb(29, 27, 27)',
+                border: 'rgb(211, 211, 211)'
+            };
         }
-      }
-      $('#menu-'+n).val(area.join('\n')).prop('rows',area.length);
-      if (id) changeMenu(form,id,false);
     }
-  });});
-  if ($.cookie('syslinux_viewmode')=='advanced') {
-    $('.advanced').show();
-    $('.basic').hide();
-  }
-  $('.advancedview').switchButton({
-    labels_placement: 'left',
-    off_label: "_(Menu View)_",
-    on_label: "_(Raw View)_",
-    checked: $.cookie('syslinux_viewmode')=='advanced'
-  });
-  $('.advancedview').change(function() {
-    $('.advanced').toggle('slow');
-    $('.basic').toggle('slow');
-    $.cookie('syslinux_viewmode', $('.advancedview').is(':checked') ? 'advanced':'basic', {expires:3650});
-  });
+
+    // Fallback to dark theme
+    return {
+        background: 'rgb(28, 28, 28)',
+        color: 'rgb(224, 224, 224)',
+        border: 'rgb(68, 68, 68)'
+    };
+}
+
+/**
+ * Unraid Spinner Functions
+ * Based on verified implementation from Unraid Main page
+ */
+var spinnerTimer = null;
+
+function showApplySpinner(message) {
+    const spinner = document.getElementById('apply-spinner');
+    const wrap = document.getElementById('apply-spinner-wrap');
+    const msg = document.getElementById('apply-spinner-msg');
+
+    if (!spinner || !wrap || !msg) return;
+
+    // Set message
+    msg.textContent = message || 'Working...';
+
+    // Inject Unraid wave SVG (global variable from Unraid page layout)
+    if (typeof unraid_logo !== 'undefined' && unraid_logo) {
+        spinner.innerHTML = unraid_logo;
+    } else {
+        // Fallback if unraid_logo not available
+        spinner.innerHTML = '';
+    }
+
+    // Delay showing to prevent flicker on fast operations
+    // Unraid uses 500ms for page-load, 200ms for action spinners
+    clearTimeout(spinnerTimer);
+    spinnerTimer = setTimeout(function() {
+        wrap.style.display = 'block';
+    }, 200);
+}
+
+function hideApplySpinner() {
+    // Cancel pending timeout to avoid duplicate execution
+    clearTimeout(spinnerTimer);
+
+    const spinner = document.getElementById('apply-spinner');
+    const wrap = document.getElementById('apply-spinner-wrap');
+
+    if (!spinner || !wrap) return;
+
+    // Clear SVG and hide
+    spinner.innerHTML = '';
+    wrap.style.display = 'none';
+}
+
+// Function to mark form as modified
+function markFormModified() {
+    if (isInitializing) return;  // Don't mark as modified during initial setup
+    formModified = true;
+    updateApplyButton();
+}
+
+// Function to update Apply button state and Done/Reset toggle
+function updateApplyButton() {
+    const applyBtn = document.getElementById('apply-btn');
+    const doneBtn = document.getElementById('done-button');
+    const resetBtn = document.getElementById('reset-button');
+
+    if (applyBtn) {
+        applyBtn.disabled = !formModified;
+    }
+
+    // Toggle between Done and Reset buttons
+    if (doneBtn && resetBtn) {
+        if (formModified) {
+            // Changes made: hide Done, show Reset
+            doneBtn.style.display = 'none';
+            resetBtn.style.display = 'inline-block';
+        } else {
+            // No changes: show Done, hide Reset
+            doneBtn.style.display = 'inline-block';
+            resetBtn.style.display = 'none';
+        }
+    }
+}
+
+// Function to update Raw Config button state and Done/Reset toggle
+function updateRawConfigButton() {
+    const saveBtn = document.getElementById('save-raw-btn');
+    const rawDoneBtn = document.getElementById('raw-done-button');
+    const rawResetBtn = document.getElementById('raw-reset-button');
+
+    if (saveBtn) {
+        saveBtn.disabled = !rawConfigModified;
+    }
+
+    // Toggle between Done and Reset buttons in Raw View
+    if (rawDoneBtn && rawResetBtn) {
+        if (rawConfigModified) {
+            // Changes made: hide Done, show Reset
+            rawDoneBtn.style.display = 'none';
+            rawResetBtn.style.display = 'inline-block';
+        } else {
+            // No changes: show Done, hide Reset
+            rawDoneBtn.style.display = 'inline-block';
+            rawResetBtn.style.display = 'none';
+        }
+    }
+}
+
+// Function to update Add Custom Parameter button state
+function updateAddParamButton() {
+    const addBtn = document.getElementById('add-param-btn');
+    if (addBtn) {
+        addBtn.disabled = !customParamInputModified;
+    }
+}
+
+/**
+ * Reset Menu View to original configuration
+ * Reloads the page to restore all form elements to their original state
+ */
+function resetMenuView() {
+    // Simply reload the page to reset all form elements to their original server-loaded state
+    location.reload();
+}
+
+/**
+ * Reset Raw View textarea to original configuration
+ */
+function resetRawView() {
+    const rawEditor = document.getElementById('raw-config-editor');
+    if (rawEditor) {
+        // Restore textarea to original content
+        rawEditor.value = rawConfigOriginal;
+
+        // Auto-resize textarea
+        autoResizeTextarea(rawEditor);
+
+        // Reset modification flags
+        rawConfigModified = false;
+
+        // Update button states (will show Done, hide Reset, disable Save)
+        updateRawConfigButton();
+    }
+}
+
+/**
+ * Navigate back to Settings menu
+ * Clears view preference so user starts fresh next time
+ */
+function done() {
+    // Clear view preference from localStorage
+    localStorage.removeItem('bootParamsView');
+
+    // Navigate back to settings
+    location.href = '/Settings';
+}
+
+// Auto-resize textarea to fit content
+function autoResizeTextarea(textarea) {
+    // Reset height to auto to get the correct scrollHeight
+    textarea.style.height = 'auto';
+
+    // Set height to scrollHeight plus a small buffer for padding
+    textarea.style.height = (textarea.scrollHeight + 2) + 'px';
+}
+
+// Update configuration preview
+function updateConfig() {
+    // Handle mutual exclusivity for sysfb_blacklist toggle
+    handleFramebufferMutualExclusivity();
+
+    markFormModified();
+    updatePreview();
+}
+
+// ===== MANAGED PARAMETER DETECTION =====
+// Lookup table for boot parameters managed by toggles and dropdowns
+// Prevents adding parameters that are already managed by toggles/dropdowns
+// When detected, automatically enables the toggle or sets the dropdown value
+const MANAGED_PARAMS = [
+    // Toggle-managed parameters (13 total)
+    {
+        pattern: /^modprobe\.blacklist=nvme$/i,
+        type: 'toggle',
+        elementId: 'nvme-toggle',
+        displayName: 'Disable NVMe',
+        exactValue: 'modprobe.blacklist=nvme'
+    },
+    {
+        pattern: /^pci=noaer$/i,
+        type: 'toggle',
+        elementId: 'noaer-toggle',
+        displayName: 'Disable PCIe AER',
+        exactValue: 'pci=noaer'
+    },
+    {
+        pattern: /^pci=realloc$/i,
+        type: 'toggle',
+        elementId: 'pci-realloc-toggle',
+        displayName: 'Enable PCIe Realloc',
+        exactValue: 'pci=realloc'
+    },
+    {
+        pattern: /^vfio_iommu_type1\.allow_unsafe_interrupts=1$/i,
+        type: 'toggle',
+        elementId: 'vfio-toggle',
+        displayName: 'VFIO Allow Unsafe Interrupts',
+        exactValue: 'vfio_iommu_type1.allow_unsafe_interrupts=1'
+    },
+    {
+        pattern: /^video=efifb:off$/i,
+        type: 'toggle',
+        elementId: 'efifb-toggle',
+        displayName: 'Disable EFI Framebuffer',
+        exactValue: 'video=efifb:off'
+    },
+    {
+        pattern: /^video=vesafb:off$/i,
+        type: 'toggle',
+        elementId: 'vesafb-toggle',
+        displayName: 'Disable VESA Framebuffer',
+        exactValue: 'video=vesafb:off'
+    },
+    {
+        pattern: /^video=simplefb:off$/i,
+        type: 'toggle',
+        elementId: 'simplefb-toggle',
+        displayName: 'Disable Simple Framebuffer',
+        exactValue: 'video=simplefb:off'
+    },
+    {
+        pattern: /^initcall_blacklist=sysfb_init$/i,
+        type: 'toggle',
+        elementId: 'sysfb-blacklist-toggle',
+        displayName: 'Blacklist System Framebuffer',
+        exactValue: 'initcall_blacklist=sysfb_init'
+    },
+    {
+        pattern: /^acpi_enforce_resources=lax$/i,
+        type: 'toggle',
+        elementId: 'acpi-toggle',
+        displayName: 'ACPI Enforce Resources Lax',
+        exactValue: 'acpi_enforce_resources=lax'
+    },
+    {
+        pattern: /^ghes\.disable=1$/i,
+        type: 'toggle',
+        elementId: 'ghes-toggle',
+        displayName: 'Disable GHES',
+        exactValue: 'ghes.disable=1'
+    },
+    {
+        pattern: /^usbcore\.autosuspend=-1$/i,
+        type: 'toggle',
+        elementId: 'usb-autosuspend-toggle',
+        displayName: 'Disable USB Autosuspend',
+        exactValue: 'usbcore.autosuspend=-1'
+    },
+    {
+        pattern: /^pcie_aspm=off$/i,
+        type: 'toggle',
+        elementId: 'aspm-toggle',
+        displayName: 'Disable PCIe ASPM',
+        exactValue: 'pcie_aspm=off'
+    },
+    {
+        pattern: /^pcie_port_pm=off$/i,
+        type: 'toggle',
+        elementId: 'portpm-toggle',
+        displayName: 'Disable PCIe Port PM',
+        exactValue: 'pcie_port_pm=off'
+    },
+
+    // Dropdown-managed parameters (1 total)
+    {
+        pattern: /^pcie_acs_override=(.+)$/i,
+        type: 'dropdown',
+        elementId: 'acs-dropdown',
+        displayName: 'PCIe ACS Override',
+        extractValue: function(param) {
+            var match = param.match(/^pcie_acs_override=(.+)$/i);
+            return match ? match[1] : null;
+        },
+        validValues: ['downstream', 'multifunction', 'downstream,multifunction'],
+        // Custom validation for id:nnnn:nnnn format
+        validateCustom: function(value) {
+            // Check if it's a valid preset
+            if (this.validValues.indexOf(value.toLowerCase()) !== -1) {
+                return { valid: true, normalizedValue: value.toLowerCase() };
+            }
+            // Check for id:XXXX:YYYY format (case-insensitive hex digits)
+            if (/^id:[0-9a-f]{4}:[0-9a-f]{4}$/i.test(value)) {
+                return { valid: true, normalizedValue: value.toLowerCase() };
+            }
+            return { valid: false };
+        }
+    }
+];
+
+// Handle mutual exclusivity between initcall_blacklist=sysfb_init and individual framebuffer options
+function handleFramebufferMutualExclusivity() {
+    const sysfbBlacklist = document.getElementById('sysfb-blacklist-toggle');
+    const efifbToggle = document.getElementById('efifb-toggle');
+    const vesafbToggle = document.getElementById('vesafb-toggle');
+    const simplefbToggle = document.getElementById('simplefb-toggle');
+
+    if (!sysfbBlacklist) return; // Element not loaded yet
+
+    if (sysfbBlacklist.checked) {
+        // sysfb_blacklist is enabled - disable and uncheck other framebuffer options
+        // Disable efifb (but respect boot mode - only disable if not already disabled by boot mode)
+        if (!efifbToggle.hasAttribute('data-boot-mode-disabled')) {
+            $('#efifb-toggle').switchButton('option', 'checked', false);
+            // Do NOT use .switchButton('option', 'disabled', ...) - it causes double labels!
+            // Instead, manually set disabled state and opacity
+            efifbToggle.disabled = true;
+            $(efifbToggle).next('.switch-button-background').css('opacity', '0.5');
+            efifbToggle.setAttribute('data-sysfb-disabled', 'true');
+        }
+
+        // Disable vesafb (but respect boot mode)
+        if (!vesafbToggle.hasAttribute('data-boot-mode-disabled')) {
+            $('#vesafb-toggle').switchButton('option', 'checked', false);
+            // Do NOT use .switchButton('option', 'disabled', ...) - it causes double labels!
+            vesafbToggle.disabled = true;
+            $(vesafbToggle).next('.switch-button-background').css('opacity', '0.5');
+            vesafbToggle.setAttribute('data-sysfb-disabled', 'true');
+        }
+
+        // Disable simplefb (always available on both boot modes, so safe to disable)
+        $('#simplefb-toggle').switchButton('option', 'checked', false);
+        // Use DOM disabled attribute directly; switchButton cannot modify disabled state
+        simplefbToggle.disabled = true;
+        $(simplefbToggle).next('.switch-button-background').css('opacity', '0.5');
+        simplefbToggle.setAttribute('data-sysfb-disabled', 'true');
+    } else {
+        // sysfb_blacklist is disabled - re-enable other framebuffer options (if they were disabled by sysfb)
+        // CRITICAL: Only re-enable if NOT disabled by boot mode!
+        if (efifbToggle.hasAttribute('data-sysfb-disabled') && !efifbToggle.hasAttribute('data-boot-mode-disabled')) {
+            // Use DOM disabled attribute directly; switchButton API does not support disabling
+            efifbToggle.disabled = false;
+            $(efifbToggle).next('.switch-button-background').css('opacity', '1');
+            efifbToggle.removeAttribute('data-sysfb-disabled');
+        }
+
+        if (vesafbToggle.hasAttribute('data-sysfb-disabled') && !vesafbToggle.hasAttribute('data-boot-mode-disabled')) {
+            vesafbToggle.disabled = false;
+            $(vesafbToggle).next('.switch-button-background').css('opacity', '1');
+            vesafbToggle.removeAttribute('data-sysfb-disabled');
+        }
+
+        if (simplefbToggle.hasAttribute('data-sysfb-disabled')) {
+            simplefbToggle.disabled = false;
+            $(simplefbToggle).next('.switch-button-background').css('opacity', '1');
+            simplefbToggle.removeAttribute('data-sysfb-disabled');
+        }
+    }
+}
+
+// Build proposed parameters based on current form state
+function buildProposedParams() {
+    var params = [];
+
+    // NVMe deep power states
+    if (document.getElementById('nvme-toggle').checked) {
+        params.push('nvme_core.default_ps_max_latency_us=0');
+    }
+
+    // PCIe ACS Override
+    var acsValue = document.getElementById('acs-dropdown').value;
+    if (acsValue) {
+        params.push('pcie_acs_override=' + acsValue);
+    }
+
+    // VFIO unsafe interrupts
+    if (document.getElementById('vfio-toggle').checked) {
+        params.push('vfio_iommu_type1.allow_unsafe_interrupts=1');
+    }
+
+    // EFI framebuffer
+    if (document.getElementById('efifb-toggle').checked) {
+        params.push('video=efifb:off');
+    }
+
+    // VESA framebuffer
+    if (document.getElementById('vesafb-toggle').checked) {
+        params.push('video=vesafb:off');
+    }
+
+    // Simple framebuffer
+    if (document.getElementById('simplefb-toggle').checked) {
+        params.push('video=simplefb:off');
+    }
+
+    // System framebuffer blacklist (nuclear option)
+    if (document.getElementById('sysfb-blacklist-toggle').checked) {
+        params.push('initcall_blacklist=sysfb_init');
+    }
+
+    // ACPI sensors
+    if (document.getElementById('acpi-toggle').checked) {
+        params.push('acpi_enforce_resources=lax');
+    }
+
+    // USB autosuspend
+    if (document.getElementById('usb-autosuspend-toggle').checked) {
+        params.push('usbcore.autosuspend=-1');
+    }
+
+    // PCIe ASPM
+    if (document.getElementById('aspm-toggle').checked) {
+        params.push('pcie_aspm=off');
+    }
+
+    // PCIe Port PM
+    if (document.getElementById('portpm-toggle').checked) {
+        params.push('pcie_port_pm=off');
+    }
+
+    // ===== PCI OPTIONS - MERGE FROM ALL SOURCES =====
+    // Linux kernel documentation specifies pci= sub-options should be comma-separated
+    // (e.g., pci=noaer,realloc) rather than separate pci= parameters.
+    // This section collects PCI options from both toggles and custom parameters,
+    // then merges them into a single pci= parameter.
+    var pciOptions = [];
+
+    // Collect toggle-controlled PCI options
+    if (document.getElementById('noaer-toggle').checked) {
+        pciOptions.push('noaer');
+    }
+    if (document.getElementById('pci-realloc-toggle').checked) {
+        pciOptions.push('realloc');
+    }
+
+    // Extract PCI options from custom parameters
+    for (var i = 0; i < customParams.length; i++) {
+        var param = customParams[i].trim();
+        if (param.startsWith('pci=')) {
+            // Extract the value after pci=
+            var pciValue = param.substring(4); // Remove 'pci='
+
+            // Split by comma in case user already used comma format
+            var options = pciValue.split(',');
+            for (var j = 0; j < options.length; j++) {
+                var opt = options[j].trim();
+                if (opt.length > 0) {
+                    pciOptions.push(opt);
+                }
+            }
+        }
+    }
+
+    // Deduplicate PCI options (case-insensitive comparison, preserve original case)
+    if (pciOptions.length > 0) {
+        var uniquePciOptions = [];
+        var seenLowercase = {};
+        for (var i = 0; i < pciOptions.length; i++) {
+            var optLower = pciOptions[i].toLowerCase();
+            if (!seenLowercase[optLower]) {
+                seenLowercase[optLower] = true;
+                uniquePciOptions.push(pciOptions[i]); // Keep original case
+            }
+        }
+
+        // Add merged parameter
+        params.push('pci=' + uniquePciOptions.join(','));
+    }
+
+    // ACPI Hardware Error Reporting
+    if (document.getElementById('ghes-toggle').checked) {
+        params.push('ghes.disable=1');
+    }
+
+    // ===== CUSTOM PARAMETERS (EXCLUDING PCI) =====
+    // Add all custom parameters except pci= (already merged above)
+    const activeCustomParams = customParams.filter(p => p && p.trim() !== '');
+    for (var i = 0; i < activeCustomParams.length; i++) {
+        var param = activeCustomParams[i].trim();
+        // Skip pci= parameters - they're already merged above
+        if (!param.startsWith('pci=')) {
+            params.push(param);
+        }
+    }
+
+    return params;
+}
+
+// Compare current syslinux.cfg append line to what form would generate
+// Returns true if they match (no changes needed), false if different (Apply should be enabled)
+function compareConfigToForm() {
+    const proposed = buildProposedParams();
+    // Build proposed line without trailing space when params array is empty
+    const proposedLine = proposed.length > 0
+        ? 'initrd=/bzroot ' + proposed.join(' ')
+        : 'initrd=/bzroot';
+
+    // Normalize whitespace for comparison (multiple spaces → single space)
+    const currentNormalized = currentAppendLine.trim().replace(/\s+/g, ' ');
+    const proposedNormalized = proposedLine.trim().replace(/\s+/g, ' ');
+
+    return currentNormalized === proposedNormalized;
+}
+
+// Update preview showing final boot parameters after changes
+function updatePreview() {
+    // Build the parameters that will be in effect after changes
+    var proposedParams = buildProposedParams();
+
+    // Build the preview HTML
+    var html = '<span style="color: var(--text-color, #333);">append initrd=/bzroot</span> ';
+
+    // Add all proposed parameters in bright green with bold weight for visibility
+    if (proposedParams.length > 0) {
+        html += '<span style="color: #5FD275; font-weight: bold;">' + proposedParams.join(' ') + '</span>';
+    }
+
+    // Update preview content
+    document.getElementById('preview-content').innerHTML = html;
+
+    // Update all boot entry diffs that have APPLY enabled
+    if (typeof updateAllAppliedEntryDiffs === 'function') {
+        updateAllAppliedEntryDiffs();
+    }
+}
+
+/**
+ * Parse syslinux.cfg into structured format
+ */
+function parseSyslinuxConfig(raw_config) {
+    const lines = raw_config.split('\n');
+    const parsed = {
+        global: [],
+        entries: []
+    };
+
+    let currentEntry = null;
+    let inGlobal = true;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        // Start of a label (boot entry)
+        if (trimmed.startsWith('label ')) {
+            inGlobal = false;
+            if (currentEntry) {
+                parsed.entries.push(currentEntry);
+            }
+            currentEntry = {
+                label: trimmed.substring(6).trim(),
+                lines: [line],
+                isDefault: false
+            };
+        } else if (currentEntry) {
+            // Inside a boot entry
+            currentEntry.lines.push(line);
+            if (trimmed === 'menu default') {
+                currentEntry.isDefault = true;
+            }
+        } else if (inGlobal) {
+            // Global configuration
+            parsed.global.push(line);
+        }
+    }
+
+    // Add last entry
+    if (currentEntry) {
+        parsed.entries.push(currentEntry);
+    }
+
+    return parsed;
+}
+
+/**
+ * Helper function to create boot entry content with optional diff display
+ */
+function createEntryContent(entry, showApply) {
+    const content = $('<pre>').addClass('boot-entry-content');
+
+    // Find the append line index
+    let appendLineIndex = -1;
+    for (let i = 0; i < entry.lines.length; i++) {
+        if (entry.lines[i].trim().startsWith('append ')) {
+            appendLineIndex = i;
+            break;
+        }
+    }
+
+    // Build the content
+    let contentHtml = '';
+    entry.lines.forEach((line, idx) => {
+        if (idx === appendLineIndex && showApply) {
+            // Show diff: removed line (original) and added line (with parameters)
+            const originalAppend = line;
+            // Build the new append line with all proposed parameters
+            const proposedParams = buildProposedParams();
+            const newAppend = '  append initrd=/bzroot' + (proposedParams.length > 0 ? ' ' + proposedParams.join(' ') : '');
+            contentHtml += '<span class="diff-line-removed">' + originalAppend + '</span>\n';
+            contentHtml += '<span class="diff-line-added">' + newAppend + '</span>\n';
+        } else if (idx !== appendLineIndex || !showApply) {
+            // Regular line or SKIP mode - just show as-is
+            contentHtml += line + '\n';
+        }
+    });
+
+    content.html(contentHtml.trimEnd());
+    return content;
+}
+
+/**
+ * Helper function to update entry diff when toggle changes
+ */
+function updateEntryDiff(entryDiv, entry, showApply) {
+    const content = createEntryContent(entry, showApply);
+    entryDiv.find('.boot-entry-content').replaceWith(content);
+}
+
+/**
+ * Update all boot entries that have APPLY toggle enabled
+ */
+function updateAllAppliedEntryDiffs() {
+    $('.boot-entry').each(function() {
+        const entryDiv = $(this);
+        const entry = entryDiv.data('entry');
+        if (!entry) return; // Skip if no entry data
+
+        // Find the toggle for this entry
+        const toggle = entryDiv.find('.boot-entry-apply-toggle');
+        if (toggle.length > 0 && toggle.prop('checked')) {
+            // Toggle is in APPLY state - update the diff
+            updateEntryDiff(entryDiv, entry, true);
+        }
+    });
+}
+
+/**
+ * Render menu view from parsed configuration
+ */
+function renderMenuView(parsed) {
+    // Render global configuration with interactive timeout dropdown
+    const globalContent = $('#global-config-content');
+    globalContent.empty();
+
+    parsed.global.forEach(function(line) {
+        const trimmed = line.trim();
+
+        // Replace timeout line with dropdown
+        if (trimmed.startsWith('timeout ')) {
+            const parsedTimeout = parseInt(trimmed.split(' ')[1], 10);
+            const timeoutDeci = Number.isFinite(parsedTimeout) ? parsedTimeout : 50; // deciseconds
+            const timeoutOptions = [0, 10, 20, 30, 50, 100, 150, 200, 300, 450, 600]; // deciseconds
+            const formatSeconds = (deci) => (deci % 10 === 0 ? (deci / 10).toString() : (deci / 10).toFixed(1));
+
+            const timeoutDiv = $('<div>').css('margin', '2px 0');
+            timeoutDiv.append('timeout ');
+
+            const dropdown = $('<select>')
+                .attr('id', 'timeout-dropdown')
+                .css({
+                    'width': 'auto',
+                    'margin': '0 4px'
+                })
+                .on('change', function() {
+                    markFormModified();
+                });
+
+            let matchedPreset = false;
+
+            // Add timeout options (0-60 seconds)
+            timeoutOptions.forEach(function(deci) {
+                const secLabel = formatSeconds(deci);
+                const option = $('<option>')
+                    .val(deci)
+                    .text(deci === 0 ? '0 seconds (boot immediately)' : secLabel + ' second' + (secLabel === '1' ? '' : 's'));
+
+                if (deci === timeoutDeci) {
+                    matchedPreset = true;
+                    option.prop('selected', true);
+                }
+                dropdown.append(option);
+            });
+
+            // Inject custom option if current value is not a preset
+            if (!matchedPreset) {
+                const customLabel = formatSeconds(timeoutDeci);
+                const customOption = $('<option>')
+                    .val(timeoutDeci)
+                    .text(customLabel + ' seconds (custom)')
+                    .prop('selected', true);
+                dropdown.append(customOption);
+            }
+
+            timeoutDiv.append(dropdown);
+            globalContent.append(timeoutDiv);
+        } else {
+            // Regular line - just display as text
+            globalContent.append($('<div>').text(line).css('margin', '2px 0'));
+        }
+    });
+
+    // Render boot entries
+    const container = $('#boot-entries-container');
+    container.empty();
+
+    parsed.entries.forEach((entry, index) => {
+        const entryDiv = $('<div>').addClass('boot-entry');
+        if (entry.isDefault) {
+            entryDiv.addClass('default');
+        }
+
+        // Store entry data for later diff updates
+        entryDiv.data('entry', entry);
+
+        const header = $('<div>').addClass('boot-entry-header');
+
+        // Check if this is a Memtest entry (skip radio and toggle for Memtest)
+        const isMemtest = entry.label.toLowerCase().includes('memtest');
+
+        // Radio button for selecting default boot entry (not for Memtest)
+        if (!isMemtest) {
+            const radio = $('<input>')
+                .attr('type', 'radio')
+                .attr('name', 'default-boot')
+                .attr('id', 'boot-entry-radio-' + index)
+                .attr('data-label', entry.label)
+                .prop('checked', entry.isDefault)
+                .on('change', function() {
+                    markFormModified();
+                });
+            header.append(radio);
+        }
+
+        // Toggle switch for applying parameters to this entry (not for Memtest)
+        if (!isMemtest) {
+            const toggle = $('<input>')
+                .attr('type', 'checkbox')
+                .attr('id', 'boot-entry-toggle-' + index)
+                .attr('data-label', entry.label)
+                .addClass('switch narrow boot-entry-apply-toggle')
+                .prop('checked', entry.isDefault) // Default entry starts with toggle ON
+                .on('change', function() {
+                    markFormModified();
+                    updateEntryDiff(entryDiv, entry, $(this).prop('checked'));
+                });
+            header.append(toggle);
+        }
+
+        const label = $('<label>')
+            .attr('for', 'boot-entry-radio-' + index)
+            .addClass('boot-entry-label')
+            .text(entry.label);
+
+        header.append(label);
+
+        // Create content with initial diff state
+        const content = createEntryContent(entry, !isMemtest && (entry.isDefault));
+
+        entryDiv.append(header).append(content);
+        container.append(entryDiv);
+    });
+
+    // Initialize switchButton on all boot entry toggles
+    $('.boot-entry-apply-toggle').switchButton({
+        labels_placement: 'right',
+        on_label: 'Apply',
+        off_label: 'Skip'
+    });
+}
+
+// Load current configuration on page load
+$(function() {
+    // Check if we should show the green reboot notice banner after page reload
+    // (set by DEFAULT button before reload)
+    if (sessionStorage.getItem('showRebootNotice') === 'true') {
+        document.getElementById('reboot-notice').classList.add('visible');
+        sessionStorage.removeItem('showRebootNotice');
+    }
+
+    // Initialize jQuery switchbutton on all toggle switches EXCEPT the view toggles and framebuffer toggles
+    // Framebuffer toggles are initialized separately after boot mode detection
+    $('.switch').not('#syslinux-view-toggle, #syslinux-view-toggle-top, #efifb-toggle, #vesafb-toggle, #simplefb-toggle, #sysfb-blacklist-toggle').switchButton({
+        labels_placement: 'right',
+        on_label: 'On',
+        off_label: 'Off'
+    });
+
+    // Sync with Unraid's global help toggle state on page load
+    if ($('.nav-item.HelpButton').hasClass('active')) {
+        // Global help is enabled - show all help boxes and update indicators
+        $('dd blockquote.inline_help').show();
+        $('.parameter-code').addClass('expanded');
+    }
+
+    // Make parameter codes clickable to expand/collapse help
+    // Uses jQuery show/hide to integrate with Unraid's global help toggle
+    $('.parameter-code').on('click', function() {
+        const $code = $(this);
+        const $help = $code.siblings('blockquote.inline_help');
+
+        // Check current visibility state
+        if ($help.is(':visible')) {
+            // Currently visible - hide it
+            $help.hide('slow');
+            $code.removeClass('expanded');
+        } else {
+            // Currently hidden - show it
+            $help.show('slow');
+            $code.addClass('expanded');
+        }
+    });
+
+    // Make help labels clickable to expand/collapse help
+    $('.help-label').on('click', function() {
+        const $label = $(this);
+        const $dd = $label.next('dd');
+        const $help = $dd.find('blockquote.inline_help');
+        const $code = $dd.find('.parameter-code');
+
+        // Check current visibility state
+        if ($help.is(':visible')) {
+            // Currently visible - hide it
+            $help.hide('slow');
+            $code.removeClass('expanded');
+        } else {
+            // Currently hidden - show it
+            $help.show('slow');
+            $code.addClass('expanded');
+        }
+    });
+
+    // Flag to prevent infinite loop when setting toggle states in switchView
+    var isSettingToggleState = false;
+
+    // Function to handle view switching (shared by both toggles)
+    function switchView(isRawView) {
+        // Save view preference to localStorage
+        if (isRawView) {
+            localStorage.setItem('bootParamsView', 'raw');
+        } else {
+            // Explicitly switching to Menu View - clear preference
+            localStorage.removeItem('bootParamsView');
+        }
+
+        if (isRawView) {
+            // Show raw view, hide menu view and controls
+            $('#menu-mode-controls').hide();
+            $('#menu-footer-buttons').hide();
+            $('#syslinux-menu-view').hide();
+            $('#syslinux-raw-view').show();
+
+            // Hide the bottom toggle (only show top toggle in raw view)
+            $('.view-toggle-wrapper').hide();
+
+            // Set top toggle to Raw View state (update visual without retriggering handler)
+            isSettingToggleState = true;
+            $('#syslinux-view-toggle-top').prop('checked', true);
+            $('#syslinux-view-toggle-top').switchButton('option', 'checked', true);
+            isSettingToggleState = false;
+
+            // Load current config into textarea
+            const rawEditor = document.getElementById('raw-config-editor');
+            $('#raw-config-editor').val($('#config-content').text());
+
+            // Store original content and disable button until changes made
+            rawConfigOriginal = $('#config-content').text();
+            rawConfigModified = false;
+            updateRawConfigButton();
+
+            // Auto-resize textarea to fit content
+            autoResizeTextarea(rawEditor);
+        } else {
+            // Show menu view, hide raw view
+            $('#syslinux-raw-view').hide();
+            $('#menu-mode-controls').show();
+            $('#menu-footer-buttons').show();
+            $('#syslinux-menu-view').show();
+
+            // Show the bottom toggle again
+            $('.view-toggle-wrapper').show();
+
+            // Set both toggles to Menu View state (update visual without retriggering handler)
+            isSettingToggleState = true;
+            $('#syslinux-view-toggle-top').prop('checked', false);
+            $('#syslinux-view-toggle-top').switchButton('option', 'checked', false);
+            $('#syslinux-view-toggle').prop('checked', false);
+            $('#syslinux-view-toggle').switchButton('option', 'checked', false);
+            isSettingToggleState = false;
+        }
+    }
+
+    // Initialize top view toggle
+    $('#syslinux-view-toggle-top').switchButton({
+        labels_placement: 'right',
+        on_label: 'Raw View',
+        off_label: 'Menu View'
+    }).on('change', function() {
+        // Only switch view if this is a user action, not a programmatic state update
+        if (!isSettingToggleState) {
+            switchView($(this).is(':checked'));
+        }
+    });
+
+    // Initialize bottom view toggle (existing)
+    $('#syslinux-view-toggle').switchButton({
+        labels_placement: 'right',
+        on_label: 'Raw View',
+        off_label: 'Menu View'
+    }).on('change', function() {
+        // Only switch view if this is a user action, not a programmatic state update
+        if (!isSettingToggleState) {
+            switchView($(this).is(':checked'));
+        }
+    });
+
+    // Listen to all checkboxes
+    document.querySelectorAll('input[type="checkbox"]').forEach(function(checkbox) {
+        checkbox.addEventListener('change', markFormModified);
+    });
+
+    // Listen to dropdown
+    const acsDropdown = document.getElementById('acs-dropdown');
+    if (acsDropdown) {
+        acsDropdown.addEventListener('change', markFormModified);
+    }
+
+    // Add auto-resize listener to raw config editor
+    const rawEditor = document.getElementById('raw-config-editor');
+    if (rawEditor) {
+        rawEditor.addEventListener('input', function() {
+            // Check if content has changed from original
+            rawConfigModified = (this.value !== rawConfigOriginal);
+            updateRawConfigButton();
+
+            // Auto-resize textarea
+            autoResizeTextarea(this);
+        });
+    }
+
+    // Add input listener to custom parameter field
+    const customParamInput = document.getElementById('new-custom-param');
+    if (customParamInput) {
+        customParamInput.addEventListener('input', function() {
+            // Enable button only if parameter field has content
+            customParamInputModified = (this.value.trim() !== '');
+            updateAddParamButton();
+        });
+    }
+
+    // Initial button states (disabled)
+    updateApplyButton();
+    updateAddParamButton();
+
+    // Load config
+    loadCurrentConfig();
+
+    // Check for hardware changes
+    checkHardwareChange();
 });
+
+/**
+ * Detect boot mode and auto-correct framebuffer settings
+ * @param {Object} mainConfig - Full configuration object from loadCurrentConfig() containing all framebuffer settings
+ */
+function detectBootModeAndAutoCorrect(mainConfig) {
+    const postData = {
+        operation: 'detect_boot_mode'
+    };
+
+    // Only add CSRF token if it exists
+    if (csrf_token && csrf_token !== '') {
+        postData.csrf_token = csrf_token;
+    }
+
+    $.ajax({
+        url: '/plugins/dynamix/include/boot_params_handler.php',
+        type: 'POST',
+        data: postData,
+        dataType: 'json',
+        success: function(response) {
+            const bootMode = response.boot_mode; // 'uefi' or 'legacy'
+            const currentConfig = response.current_config;
+
+            let autoCorrectionOccurred = false;
+            let noticeText = '';
+
+            if (bootMode === 'uefi') {
+                // UEFI boot: Enable EFI toggle, keep VESA toggle disabled
+                // Remove disabled attribute from EFI toggle, initialize switchButton
+                $('#efifb-toggle').prop('disabled', false).switchButton({
+                    labels_placement: 'right',
+                    on_label: 'On',
+                    off_label: 'Off',
+                    checked: (currentConfig.efifb === '1')
+                });
+
+                // Initialize VESA toggle as DISABLED (can never be enabled in UEFI mode)
+                // Keep disabled attribute, initialize switchButton in disabled state
+                $('#vesafb-toggle').switchButton({
+                    labels_placement: 'right',
+                    on_label: 'On',
+                    off_label: 'Off',
+                    checked: false,
+                    disabled: true
+                });
+                // Mark as disabled by boot mode so mutual exclusivity respects it
+                document.getElementById('vesafb-toggle').setAttribute('data-boot-mode-disabled', 'true');
+
+                // Auto-adjust: UEFI boot requires VESA framebuffer disabled, enable EFI instead
+                if (currentConfig.vesafb === '1') {
+                    $('#efifb-toggle').switchButton('option', 'checked', true);
+                    autoCorrectionOccurred = true;
+                    noticeText = '<strong>Settings Adjusted:</strong> Detected UEFI boot mode. VESA framebuffer disabled, EFI framebuffer enabled to match your boot mode. Click Apply to save changes.';
+                } else {
+                    noticeText = '<strong>Info:</strong> Detected UEFI boot mode. VESA framebuffer toggle is disabled (not applicable for UEFI boot).';
+                }
+            } else {
+                // Legacy boot: Enable VESA toggle, keep EFI toggle disabled
+                // Remove disabled attribute from VESA toggle, initialize switchButton
+                $('#vesafb-toggle').prop('disabled', false).switchButton({
+                    labels_placement: 'right',
+                    on_label: 'On',
+                    off_label: 'Off',
+                    checked: (currentConfig.vesafb === '1')
+                });
+
+                // Initialize EFI toggle as DISABLED (can never be enabled in Legacy mode)
+                // Keep disabled attribute, initialize switchButton in disabled state
+                $('#efifb-toggle').switchButton({
+                    labels_placement: 'right',
+                    on_label: 'On',
+                    off_label: 'Off',
+                    checked: false,
+                    disabled: true
+                });
+                // Mark as disabled by boot mode so mutual exclusivity respects it
+                document.getElementById('efifb-toggle').setAttribute('data-boot-mode-disabled', 'true');
+
+                // Auto-adjust: Legacy BIOS boot requires VESA framebuffer, disable EFI
+                if (currentConfig.efifb === '1') {
+                    $('#vesafb-toggle').switchButton('option', 'checked', true);
+                    autoCorrectionOccurred = true;
+                    noticeText = '<strong>Settings Adjusted:</strong> Detected Legacy BIOS boot mode. EFI framebuffer disabled, VESA framebuffer enabled to match your boot mode. Click Apply to save changes.';
+                } else {
+                    noticeText = '<strong>Info:</strong> Detected Legacy BIOS boot mode. EFI framebuffer toggle is disabled (not applicable for Legacy BIOS boot).';
+                }
+            }
+
+            // Initialize simplefb toggle (always available in both UEFI and Legacy modes)
+            $('#simplefb-toggle').switchButton({
+                labels_placement: 'right',
+                on_label: 'On',
+                off_label: 'Off',
+                checked: (mainConfig.simplefb_off === '1')
+            });
+
+            // Initialize nuclear option toggle (always available in both modes)
+            $('#sysfb-blacklist-toggle').switchButton({
+                labels_placement: 'right',
+                on_label: 'On',
+                off_label: 'Off',
+                checked: (mainConfig.sysfb_blacklist === '1')
+            });
+
+            // Detect conflicting framebuffer settings: sysfb_blacklist should be used alone
+            // If initcall_blacklist=sysfb_init exists with individual framebuffer params, remove the redundant individual params
+            if (mainConfig.sysfb_blacklist === '1') {
+                let nuclearConflictFound = false;
+
+                // Check if any individual framebuffer parameters are also enabled
+                if (mainConfig.efifb === '1') {
+                    $('#efifb-toggle').switchButton('option', 'checked', false);
+                    nuclearConflictFound = true;
+                }
+                if (mainConfig.vesafb === '1') {
+                    $('#vesafb-toggle').switchButton('option', 'checked', false);
+                    nuclearConflictFound = true;
+                }
+                if (mainConfig.simplefb_off === '1') {
+                    $('#simplefb-toggle').switchButton('option', 'checked', false);
+                    nuclearConflictFound = true;
+                }
+
+                // If conflict found, show notification
+                if (nuclearConflictFound) {
+                    autoCorrectionOccurred = true;
+                    noticeText = '<strong>Settings Adjusted:</strong> Detected initcall_blacklist=sysfb_init already blocks all framebuffers. Removed redundant individual framebuffer parameters. Click Apply to save changes.';
+                }
+            }
+
+            // NOW that all framebuffer toggles are initialized, handle mutual exclusivity
+            handleFramebufferMutualExclusivity();
+
+            // Only show the blue info box if auto-correction actually occurred
+            if (autoCorrectionOccurred) {
+                $('#boot-mode-notice-text').html(noticeText);
+                $('#boot-mode-auto-correct-notice').show();
+            }
+
+            // Mark form as modified only if we actually corrected something
+            if (autoCorrectionOccurred) {
+                formModified = true;
+                updateApplyButton();
+                updatePreview();
+            }
+
+            // Verify form state matches syslinux.cfg after auto-correction
+            // Disable Apply button if no actual changes are needed (prevents spurious modifications)
+            if (currentAppendLine && compareConfigToForm()) {
+                formModified = false;
+                updateApplyButton();
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Failed to detect boot mode:', status, error);
+        }
+    });
+}
+
+/**
+ * Check for hardware changes on page load
+ */
+function checkHardwareChange() {
+    const postData = {
+        operation: 'check_hardware'
+    };
+
+    // Only add CSRF token if it exists
+    if (csrf_token && csrf_token !== '') {
+        postData.csrf_token = csrf_token;
+    }
+
+    $.ajax({
+        url: '/plugins/dynamix/include/boot_params_handler.php',
+        type: 'POST',
+        data: postData,
+        dataType: 'json',
+        success: function(response) {
+            if (response.error) {
+                console.error('Error checking hardware:', response.error);
+                return;
+            }
+
+            // If hardware changed, show warning box
+            if (response.changed === true) {
+                const changesList = response.what_changed || 'Unknown';
+                document.getElementById('hardware-changes-list').textContent = changesList;
+                document.getElementById('hardware-change-warning').style.display = 'block';
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Failed to check hardware changes:', status, error);
+        }
+    });
+}
+
+/**
+ * Acknowledge hardware change and update stored IDs
+ */
+function acknowledgeHardwareChange() {
+    const btn = document.getElementById('acknowledge-hardware-btn');
+    const originalText = btn.value;
+
+    // Show loading state
+    btn.value = 'Updating...';
+    btn.disabled = true;
+
+    const postData = {
+        operation: 'acknowledge_hardware_change'
+    };
+
+    // Only add CSRF token if it exists
+    if (csrf_token && csrf_token !== '') {
+        postData.csrf_token = csrf_token;
+    }
+
+    $.ajax({
+        url: '/plugins/dynamix/include/boot_params_handler.php',
+        type: 'POST',
+        data: postData,
+        dataType: 'json',
+        success: function(response) {
+            if (response.error) {
+                swal("Error", "Error acknowledging hardware change:\n\n" + response.error, "error");
+                btn.value = originalText;
+                btn.disabled = false;
+                return;
+            }
+
+            // Success - hide the warning box
+            document.getElementById('hardware-change-warning').style.display = 'none';
+        },
+        error: function(xhr, status, error) {
+            swal("Error", "Failed to acknowledge hardware change:\n\n" + error, "error");
+            btn.value = originalText;
+            btn.disabled = false;
+        }
+    });
+}
+
+/**
+ * Load current configuration from backend
+ */
+function loadCurrentConfig() {
+    const postData = {
+        operation: 'read_config'
+    };
+
+    // Only add CSRF token if it exists
+    if (csrf_token && csrf_token !== '') {
+        postData.csrf_token = csrf_token;
+    }
+
+    $.ajax({
+        url: '/plugins/dynamix/include/boot_params_handler.php',
+        type: 'POST',
+        data: postData,
+        dataType: 'json',
+        success: function(config) {
+            if (config.error) {
+                swal("Error", "Error loading configuration: " + config.error, "error");
+                return;
+            }
+
+            // Populate toggles and dropdowns
+            // Use switchButton API to update toggle states (not .checked property)
+            // NOTE: ALL framebuffer toggles (efifb, vesafb, simplefb, sysfb-blacklist) are initialized separately in detectBootModeAndAutoCorrect
+            $('#nvme-toggle').switchButton('option', 'checked', (config.nvme_disable === '1'));
+            document.getElementById('acs-dropdown').value = config.acs_override || '';
+            $('#vfio-toggle').switchButton('option', 'checked', (config.vfio_unsafe === '1'));
+            // Framebuffer toggles are NOT set here - they're initialized with correct state in detectBootModeAndAutoCorrect
+            $('#acpi-toggle').switchButton('option', 'checked', (config.acpi_lax === '1'));
+            $('#ghes-toggle').switchButton('option', 'checked', (config.ghes_disable === '1'));
+            $('#usb-autosuspend-toggle').switchButton('option', 'checked', (config.usb_autosuspend === '1'));
+            $('#aspm-toggle').switchButton('option', 'checked', (config.pcie_aspm_off === '1'));
+            $('#portpm-toggle').switchButton('option', 'checked', (config.pcie_port_pm_off === '1'));
+            $('#noaer-toggle').switchButton('option', 'checked', (config.pci_noaer === '1'));
+            $('#pci-realloc-toggle').switchButton('option', 'checked', (config.pci_realloc === '1'));
+
+            // Framebuffer mutual exclusivity is handled AFTER toggle initialization in detectBootModeAndAutoCorrect()
+
+            // Populate custom parameters
+            customParams = [];
+            customParamsComments = {};
+
+            if (config.custom_params && config.custom_params.trim() !== '') {
+                const params = config.custom_params.trim().split(/\s+/);
+
+                params.forEach(param => {
+                    if (param) {
+                        customParams.push(param);
+                    }
+                });
+            }
+
+            // Load comments if provided
+            // IMPORTANT: Ensure we always have an object, never an array
+            if (config.custom_params_comments) {
+                // Defensive check: Ensure comments structure is an object, not array
+                if (Array.isArray(config.custom_params_comments)) {
+                    console.warn('[WARN] Invalid comments format (array instead of object), using empty object');
+                    customParamsComments = {};
+                } else {
+                    customParamsComments = config.custom_params_comments;
+                }
+            }
+
+            // Render all custom parameters
+            renderCustomParams();
+
+            // Store current append line for comparison
+            if (config.current_append_line) {
+                currentAppendLine = config.current_append_line.trim();
+            }
+
+            // Display current configuration (full syslinux.cfg file)
+            if (config.full_config) {
+                document.getElementById('config-content').textContent = config.full_config;
+
+                // Parse config and render menu view
+                const parsed = parseSyslinuxConfig(config.full_config);
+                renderMenuView(parsed);
+            }
+
+            // Update preview
+            updatePreview();
+
+            // Detect boot mode and auto-correct framebuffer settings
+            // Must be called AFTER toggles are populated so auto-correction can override if needed
+            detectBootModeAndAutoCorrect(config);
+
+            // Complete initialization - allow form modifications to be tracked
+            // IMPORTANT: Must be called AFTER detectBootModeAndAutoCorrect completes
+            // The comparison check is now inside detectBootModeAndAutoCorrect's AJAX callback
+            isInitializing = false;
+
+            // Restore Raw View if user was previously working in it
+            const savedView = localStorage.getItem('bootParamsView');
+            if (savedView === 'raw') {
+                // Small delay to ensure all rendering is complete
+                setTimeout(function() {
+                    // Set toggle state and switch to Raw View
+                    $('#syslinux-view-toggle').prop('checked', true).trigger('change');
+                }, 100);
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Failed to load configuration:', status, error);
+        }
+    });
+}
+
+/**
+ * Apply boot parameters
+ */
+function applyBootParams(btn) {
+    // PRIORITY 1: Check if any Safe Mode toggle is enabled (most critical warning)
+    let anySafeModeEnabled = false;
+    $('.boot-entry-apply-toggle').each(function() {
+        const label = $(this).attr('data-label');
+        const isChecked = $(this).prop('checked');
+        if (isChecked && label && label.toLowerCase().includes('safe mode')) {
+            anySafeModeEnabled = true;
+            return false; // break out of loop
+        }
+    });
+
+    if (anySafeModeEnabled) {
+        // Store button reference for potential framebuffer modal chaining
+        window.pendingSafeModeApplyBtn = btn;
+
+        // Apply theme colors to safe mode modal
+        const colors = getModalColors();
+        const safeModal = document.getElementById('safe-mode-modal');
+        const safeModalContent = safeModal.querySelector('.modal-content');
+        safeModalContent.style.backgroundColor = colors.background;
+        safeModalContent.style.color = colors.color;
+        safeModalContent.style.borderColor = colors.border;
+
+        // Show safe mode confirmation modal
+        safeModal.style.display = 'flex';
+        return;
+    }
+
+    // PRIORITY 2: Check for framebuffer + GUI mode conflict
+    const hasFramebufferDisable =
+        document.getElementById('efifb-toggle').checked ||
+        document.getElementById('vesafb-toggle').checked ||
+        document.getElementById('simplefb-toggle').checked ||
+        document.getElementById('sysfb-blacklist-toggle').checked;
+
+    // Check which GUI mode entries have Apply enabled
+    const guiModeEntries = [];
+    $('.boot-entry-apply-toggle').each(function() {
+        const label = $(this).attr('data-label');
+        const isChecked = $(this).prop('checked');
+
+        // Detect GUI mode entries (including GUI Safe Mode)
+        if (isChecked && label &&
+            (label.includes('GUI Mode') || label.includes('GUI Safe Mode')) &&
+            !label.includes('(no plugins, no GUI)')) {
+            guiModeEntries.push(label);
+        }
+    });
+
+    // If framebuffer disables + GUI mode entries both enabled, show warning
+    if (hasFramebufferDisable && guiModeEntries.length > 0) {
+        showFramebufferConflictModal(btn, guiModeEntries);
+        return; // Stop apply process until user chooses
+    }
+
+    // Normal apply (no warnings needed)
+    actuallyApplyBootParams(btn);
+}
+
+function confirmSafeModeApply() {
+    // Hide safe mode modal
+    document.getElementById('safe-mode-modal').style.display = 'none';
+
+    // Retrieve stored button reference
+    const btn = window.pendingSafeModeApplyBtn || document.getElementById('apply-btn');
+    delete window.pendingSafeModeApplyBtn;
+
+    // After safe mode confirmation, check if we also need framebuffer warning
+    const hasFramebufferDisable =
+        document.getElementById('efifb-toggle').checked ||
+        document.getElementById('vesafb-toggle').checked ||
+        document.getElementById('simplefb-toggle').checked ||
+        document.getElementById('sysfb-blacklist-toggle').checked;
+
+    // Check which GUI mode entries have Apply enabled
+    const guiModeEntries = [];
+    $('.boot-entry-apply-toggle').each(function() {
+        const label = $(this).attr('data-label');
+        const isChecked = $(this).prop('checked');
+
+        // Detect GUI mode entries (including GUI Safe Mode)
+        if (isChecked && label &&
+            (label.includes('GUI Mode') || label.includes('GUI Safe Mode')) &&
+            !label.includes('(no plugins, no GUI)')) {
+            guiModeEntries.push(label);
+        }
+    });
+
+    // If framebuffer disables + GUI mode entries both enabled, show framebuffer modal
+    if (hasFramebufferDisable && guiModeEntries.length > 0) {
+        showFramebufferConflictModal(btn, guiModeEntries);
+        return; // Stop and wait for framebuffer modal choice
+    }
+
+    // No framebuffer conflict, proceed with apply
+    actuallyApplyBootParams(btn);
+}
+
+function cancelSafeModeApply() {
+    // Hide the modal
+    document.getElementById('safe-mode-modal').style.display = 'none';
+    // Clean up stored button reference
+    delete window.pendingSafeModeApplyBtn;
+}
+
+// Framebuffer Conflict Modal Functions
+function showFramebufferConflictModal(applyBtn, guiModeEntries) {
+    // Get theme colors
+    const colors = getModalColors();
+
+    // Create modal HTML
+    const entriesList = guiModeEntries.map(entry => `<li>${entry}</li>`).join('');
+
+    const modalHtml = `
+        <div id="framebuffer-conflict-modal" class="modal" style="display: flex; align-items: center; justify-content: center;">
+            <div class="modal-content" style="background-color: ${colors.background}; color: ${colors.color}; border-color: ${colors.border};">
+                <h3 style="margin-top: 0;">⚠️ Framebuffer Conflict Warning</h3>
+
+                <p>
+                    Framebuffer disables will be added to the following GUI Mode entries:
+                </p>
+
+                <ul style="margin-left: 20px;">
+                    ${entriesList}
+                </ul>
+
+                <p style="margin-top: 16px;">
+                    <strong>Important:</strong> Do not add framebuffer parameters to GUI Mode boot configurations,
+                    as they will prevent GUI Mode from displaying. You will only be able to access your Unraid
+                    server from another computer on your network.
+                </p>
+
+                <div class="modal-section-divider">
+                    <p style="margin-bottom: 16px;">
+                        <strong>What would you like to do?</strong>
+                    </p>
+
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <input type="button" value="Exclude Framebuffer Disable from GUI Mode (Recommended)"
+                               class="btn btn-primary"
+                               onclick="confirmRemoveFramebufferFromGui()"
+                               style="width: 100%;">
+
+                        <input type="button" value="Include Framebuffer Disable in GUI Mode"
+                               class="btn btn-secondary"
+                               onclick="confirmFramebufferConflict()"
+                               style="width: 100%;">
+
+                        <input type="button" value="Cancel"
+                               class="btn"
+                               onclick="closeFramebufferConflictModal()"
+                               style="width: 100%;">
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remove existing modal if present
+    const existingModal = document.getElementById('framebuffer-conflict-modal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Store apply button reference for later use
+    window.pendingApplyBtn = applyBtn;
+}
+
+function confirmRemoveFramebufferFromGui() {
+    // Close modal
+    closeFramebufferConflictModal();
+
+    // Set exclusion flag and apply
+    window.excludeFramebufferFromGui = true;
+    actuallyApplyBootParams(window.pendingApplyBtn);
+
+    // Cleanup happens in AJAX success callback (after POST data is sent)
+}
+
+function confirmFramebufferConflict() {
+    // Close modal
+    closeFramebufferConflictModal();
+
+    // Apply anyway without exclusion
+    window.excludeFramebufferFromGui = false;
+    actuallyApplyBootParams(window.pendingApplyBtn);
+
+    // Cleanup happens in AJAX success callback (after POST data is sent)
+}
+
+function closeFramebufferConflictModal() {
+    const modal = document.getElementById('framebuffer-conflict-modal');
+    if (modal) {
+        modal.remove();
+    }
+    // Note: All flag cleanup happens in AJAX success/error callbacks
+    // Do not delete flags here - they are needed for the AJAX request
+}
+
+function actuallyApplyBootParams(btn) {
+    // Gather all form data
+    // Filter out empty custom parameters
+    const activeCustomParams = customParams.filter(p => p && p.trim() !== '');
+    const commentsStringified = JSON.stringify(customParamsComments);
+
+    // Collect toggle states for each boot entry
+    const bootEntryToggles = {};
+    $('.boot-entry-apply-toggle').each(function() {
+        const label = $(this).attr('data-label');
+        const isChecked = $(this).prop('checked');
+        bootEntryToggles[label] = isChecked ? '1' : '0';
+    });
+
+    // Get selected default boot entry from radio button
+    let selectedDefaultEntry = '';
+    $('input[name="default-boot"]:checked').each(function() {
+        selectedDefaultEntry = $(this).attr('data-label');
+    });
+
+    // Get timeout value from dropdown (if exists)
+    const timeoutDropdown = document.getElementById('timeout-dropdown');
+    const timeoutValue = timeoutDropdown ? timeoutDropdown.value : '50';
+
+    const postData = {
+        operation: 'write_config',
+        nvme_disable: document.getElementById('nvme-toggle').checked ? '1' : '0',
+        acs_override: document.getElementById('acs-dropdown').value,
+        vfio_unsafe: document.getElementById('vfio-toggle').checked ? '1' : '0',
+        efifb_off: document.getElementById('efifb-toggle').checked ? '1' : '0',
+        vesafb_off: document.getElementById('vesafb-toggle').checked ? '1' : '0',
+        simplefb_off: document.getElementById('simplefb-toggle').checked ? '1' : '0',
+        sysfb_blacklist: document.getElementById('sysfb-blacklist-toggle').checked ? '1' : '0',
+        acpi_lax: document.getElementById('acpi-toggle').checked ? '1' : '0',
+        ghes_disable: document.getElementById('ghes-toggle').checked ? '1' : '0',
+        usb_autosuspend: document.getElementById('usb-autosuspend-toggle').checked ? '1' : '0',
+        pcie_aspm_off: document.getElementById('aspm-toggle').checked ? '1' : '0',
+        pcie_port_pm_off: document.getElementById('portpm-toggle').checked ? '1' : '0',
+        pci_noaer: document.getElementById('noaer-toggle').checked ? '1' : '0',
+        pci_realloc: document.getElementById('pci-realloc-toggle').checked ? '1' : '0',
+        custom_params: activeCustomParams.join(' '),
+        custom_params_comments: commentsStringified,
+        default_boot_entry: selectedDefaultEntry,
+        timeout: timeoutValue,
+        // Add individual boot entry toggles
+        apply_to_unraid_os: bootEntryToggles['Unraid OS'] || '0',
+        apply_to_gui_mode: bootEntryToggles['Unraid OS GUI Mode'] || '0',
+        apply_to_safe_mode: bootEntryToggles['Unraid OS Safe Mode (no plugins, no GUI)'] || '0',
+        apply_to_gui_safe_mode: bootEntryToggles['Unraid OS GUI Safe Mode (no plugins)'] || '0',
+        // Framebuffer exclusion flag (set by modal)
+        exclude_framebuffer_from_gui: (window.excludeFramebufferFromGui === true) ? '1' : '0'
+    };
+
+    // Only add CSRF token if it exists
+    if (csrf_token && csrf_token !== '') {
+        postData.csrf_token = csrf_token;
+    }
+
+    // Show loading state
+    const applyBtn = btn;
+    const originalText = applyBtn.textContent;
+    applyBtn.textContent = 'Applying...';
+    applyBtn.disabled = true;
+
+    // Show Unraid spinner
+    showApplySpinner('Applying settings...');
+
+    $.ajax({
+        url: '/plugins/dynamix/include/boot_params_handler.php',
+        type: 'POST',
+        data: postData,
+        dataType: 'json',
+        success: function(response) {
+            applyBtn.textContent = originalText;
+            applyBtn.disabled = false;
+
+            if (response.error) {
+                swal("Error", response.error, "error");
+                // Clean up framebuffer conflict flags even on error
+                delete window.pendingApplyBtn;
+                delete window.excludeFramebufferFromGui;
+                return;
+            }
+
+            // Success - reset form modified flag
+            formModified = false;
+            updateApplyButton();
+
+            // Update configuration display
+            if (response.config) {
+                document.getElementById('config-content').textContent = response.config;
+
+                // Parse and update menu view
+                const parsed = parseSyslinuxConfig(response.config);
+                renderMenuView(parsed);
+
+                // Update preview with new parameters
+                updatePreview();
+            }
+
+            document.getElementById('reboot-notice').classList.add('visible');
+
+            // Remove any existing Boot Parameters notices only (preserve other plugins' notices)
+            removeRebootNotice("Boot Parameters: A reboot is required to apply changes");
+            removeRebootNotice("Boot Parameters: Previous configuration restored - A reboot is required");
+
+            // Add persistent reboot banner across all Unraid pages
+            addRebootNotice("Boot Parameters: A reboot is required to apply changes");
+
+            // Force button state reset after DOM updates complete
+            setTimeout(function() {
+                formModified = false;
+                updateApplyButton();
+            }, 100);
+
+            // Clean up framebuffer conflict flags after successful apply
+            delete window.pendingApplyBtn;
+            delete window.excludeFramebufferFromGui;
+        },
+        error: function() {
+            applyBtn.textContent = originalText;
+            applyBtn.disabled = false;
+            swal("Error", "Failed to apply boot parameters", "error");
+            // Clean up framebuffer conflict flags on AJAX error
+            delete window.pendingApplyBtn;
+            delete window.excludeFramebufferFromGui;
+        },
+        complete: function() {
+            // Hide spinner after operation completes (success or error)
+            hideApplySpinner();
+        }
+    });
+}
+
+/**
+ * Reset to default configuration
+ */
+function resetToDefault() {
+    swal({
+        title: "Reset to Default?",
+        text: "Reset all boot parameters to default (disabled)? This will remove all custom settings.",
+        type: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#DD6B55",
+        confirmButtonText: "Yes, reset to default",
+        closeOnConfirm: false
+    }, function(isConfirm) {
+        if (!isConfirm) return;
+
+        const postData = {
+            operation: 'reset_default'
+        };
+
+    // Only add CSRF token if it exists
+    if (csrf_token && csrf_token !== '') {
+        postData.csrf_token = csrf_token;
+    }
+
+    $.ajax({
+        url: '/plugins/dynamix/include/boot_params_handler.php',
+        type: 'POST',
+        data: postData,
+        dataType: 'json',
+        success: function(response) {
+            if (response.error) {
+                swal("Error", response.error, "error");
+                return;
+            }
+
+            // Add reboot notifications (same pattern as Apply/Save buttons)
+            removeRebootNotice("Boot Parameters: A reboot is required to apply changes");
+            removeRebootNotice("Boot Parameters: Previous configuration restored - A reboot is required");
+            addRebootNotice("Boot Parameters: A reboot is required to apply changes");
+
+            // Set flag to show green banner after page reload
+            sessionStorage.setItem('showRebootNotice', 'true');
+
+            // Reload page to refresh form
+            location.reload();
+        },
+        error: function() {
+            swal("Error", "Failed to reset to default", "error");
+        }
+    });
+    });
+}
+
+/**
+ * Format backup filename to readable date with grouping data
+ * Parses: "syslinux.cfg.bak.2025-Dec-27_22-08-35" or "2025-Dec-27_22-08"
+ * Returns: Object with {display, minuteKey, seconds, filename}
+ */
+function formatBackupDate(filename) {
+    // Match pattern: 2025-Dec-27_22-08-35 or 2025-Dec-27_22-08 (case-insensitive)
+    const match = filename.match(/(\d{4})-([A-Za-z]{3})-(\d{2})_(\d{2})-(\d{2})(-(\d{2}))?/i);
+    if (!match) {
+        return {
+            display: filename,
+            minuteKey: filename,
+            seconds: '00',
+            filename: filename
+        };
+    }
+
+    const [, year, month, day, hour, min, , sec] = match;
+    const months = {
+        'JAN': 'Jan', 'FEB': 'Feb', 'MAR': 'Mar', 'APR': 'Apr',
+        'MAY': 'May', 'JUN': 'Jun', 'JUL': 'Jul', 'AUG': 'Aug',
+        'SEP': 'Sep', 'OCT': 'Oct', 'NOV': 'Nov', 'DEC': 'Dec'
+    };
+
+    // Convert month to uppercase for lookup (handles "Dec" → "DEC")
+    const monthKey = month.toUpperCase();
+    const displayDate = `${day} ${months[monthKey]} ${year}, ${hour}:${min}`;
+
+    // Return object with grouping data
+    return {
+        display: displayDate,                          // "27 Dec 2025, 22:08"
+        minuteKey: `${year}-${month}-${day}_${hour}-${min}`,  // For grouping
+        seconds: sec || '00',                          // Store seconds for sorting
+        filename: filename                             // Original filename
+    };
+}
+
+/**
+ * Show restore backup dialog with radio button selection
+ */
+function showRestoreDialog() {
+    const postData = {
+        operation: 'list_backups'
+    };
+
+    // Only add CSRF token if it exists
+    if (csrf_token && csrf_token !== '') {
+        postData.csrf_token = csrf_token;
+    }
+
+    $.ajax({
+        url: '/plugins/dynamix/include/boot_params_handler.php',
+        type: 'POST',
+        data: postData,
+        dataType: 'json',
+        success: function(backups) {
+            if (!backups || backups.length === 0) {
+                swal("Info", "No backups available", "info");
+                return;
+            }
+
+            // Parse and group backups by minute
+            const parsedBackups = backups.map(backup => formatBackupDate(backup.filename));
+
+            // Group by minuteKey
+            const grouped = {};
+            parsedBackups.forEach(parsed => {
+                const key = parsed.minuteKey;
+                if (!grouped[key]) {
+                    grouped[key] = [];
+                }
+                grouped[key].push(parsed);
+            });
+
+            // Sort each group by seconds and assign letters
+            Object.keys(grouped).forEach(key => {
+                const group = grouped[key];
+                // Sort by seconds (ascending)
+                group.sort((a, b) => parseInt(a.seconds) - parseInt(b.seconds));
+
+                // Assign letters if multiple backups in same minute
+                if (group.length > 1) {
+                    group.forEach((item, index) => {
+                        const letter = String.fromCharCode(65 + index); // 65 = 'A'
+                        item.displayWithSuffix = `${item.display} (${letter})`;
+                    });
+                } else {
+                    // Single backup: no suffix needed
+                    group[0].displayWithSuffix = group[0].display;
+                }
+            });
+
+            // Flatten back to array and sort by filename (newest first)
+            const displayBackups = [];
+            Object.values(grouped).forEach(group => {
+                group.forEach(item => displayBackups.push(item));
+            });
+            displayBackups.sort((a, b) => b.filename.localeCompare(a.filename));
+
+            // Build radio button list with grouped display
+            let backupListHtml = '';
+            displayBackups.forEach((backup) => {
+                backupListHtml += `
+                    <label class="backup-list-item">
+                        <input type="radio" name="backup-selection" value="${backup.filename}"
+                               data-display="${backup.displayWithSuffix}" onchange="enableRestoreButton()">
+                        &nbsp;${backup.displayWithSuffix}
+                    </label>
+                `;
+            });
+
+            // Get theme colors
+            const colors = getModalColors();
+
+            // Create dialog HTML
+            const dialogHtml = `
+                <div id="restore-backup-overlay" class="modal" style="display: flex;">
+                    <div class="modal-content" style="min-width: 400px; max-width: 600px; background-color: ${colors.background}; color: ${colors.color}; border-color: ${colors.border};">
+                        <h3 style="margin-top: 0;">Select a backup to restore:</h3>
+                        <div id="backup-list-container" style="max-height: 400px; overflow-y: auto;
+                             margin: 20px 0; border: 1px solid ${colors.border}; border-radius: 4px;">
+                            ${backupListHtml}
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 20px; gap: 12px;">
+                            <input type="button" value="Delete All Backups" onclick="confirmDeleteAllBackups()"
+                                   class="btn btn-danger">
+                            <div style="display: flex; gap: 12px;">
+                                <input type="button" value="Cancel" onclick="closeRestoreDialog()" class="btn">
+                                <input type="button" value="Restore" onclick="confirmRestoreSelected()"
+                                       id="restore-btn" class="btn btn-primary" disabled>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Add dialog to page
+            $('body').append(dialogHtml);
+        },
+        error: function() {
+            swal("Error", "Failed to list backups", "error");
+        }
+    });
+}
+
+/**
+ * Enable the Restore button when a backup is selected
+ */
+function enableRestoreButton() {
+    $('#restore-btn').prop('disabled', false);
+}
+
+/**
+ * Close the restore backup dialog
+ */
+function closeRestoreDialog() {
+    $('#restore-backup-overlay').remove();
+}
+
+/**
+ * Confirm and restore selected backup
+ */
+function confirmRestoreSelected() {
+    const selectedRadio = $('input[name="backup-selection"]:checked');
+    const selected = selectedRadio.val();
+    if (!selected) {
+        swal("Warning", "Please select a backup to restore", "warning");
+        return;
+    }
+
+    const displayDate = selectedRadio.data('display');  // Get stored display text with suffix
+    swal({
+        title: "Restore from Backup?",
+        text: `Restore from backup:\n${displayDate}?\n\nThis will replace your current boot configuration.`,
+        type: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#DD6B55",
+        confirmButtonText: "Yes, restore backup",
+        closeOnConfirm: true
+    }, function(isConfirm) {
+        if (isConfirm) {
+            closeRestoreDialog();
+            restoreBackup(selected);
+        }
+    });
+}
+
+/**
+ * Confirm and delete all backups
+ */
+function confirmDeleteAllBackups() {
+    swal({
+        title: "Delete All Backups?",
+        text: "Are you sure you want to delete all backup files?\nThis action cannot be undone.",
+        type: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#DD6B55",
+        confirmButtonText: "Yes, delete all backups",
+        closeOnConfirm: false
+    }, function(isConfirm) {
+        if (!isConfirm) return;
+
+        const postData = {
+            operation: 'delete_all_backups'
+        };
+
+    if (csrf_token && csrf_token !== '') {
+        postData.csrf_token = csrf_token;
+    }
+
+    $.ajax({
+        url: '/plugins/dynamix/include/boot_params_handler.php',
+        type: 'POST',
+        data: postData,
+        dataType: 'json',
+        success: function(response) {
+            if (response.success) {
+                closeRestoreDialog();
+                swal("Success", "All backups deleted successfully", "success");
+            } else {
+                swal("Error", response.error || 'Failed to delete backups', "error");
+            }
+        },
+        error: function() {
+            swal("Error", "Failed to delete backups", "error");
+        }
+    });
+    });
+}
+
+/**
+ * Restore from specific backup
+ */
+function restoreBackup(filename) {
+    // No confirmation here - already confirmed in confirmRestoreSelected()
+    const postData = {
+        operation: 'restore_backup',
+        backup_filename: filename
+    };
+
+    // Only add CSRF token if it exists
+    if (csrf_token && csrf_token !== '') {
+        postData.csrf_token = csrf_token;
+    }
+
+    $.ajax({
+        url: '/plugins/dynamix/include/boot_params_handler.php',
+        type: 'POST',
+        data: postData,
+        dataType: 'json',
+        success: function(response) {
+            if (response.error) {
+                swal("Error", response.error, "error");
+                return;
+            }
+
+            // Remove any existing Boot Parameters notices only (preserve other plugins' notices)
+            removeRebootNotice("Boot Parameters: A reboot is required to apply changes");
+            removeRebootNotice("Boot Parameters: Previous configuration restored - A reboot is required");
+
+            // Add persistent reboot banner with different message for restore
+            addRebootNotice("Boot Parameters: Previous configuration restored - A reboot is required");
+
+            swal({
+                title: "Success",
+                text: "Backup restored successfully. Page will reload.",
+                type: "success",
+                timer: 2000
+            }, function() {
+                location.reload();
+            });
+        },
+        error: function() {
+            swal("Error", "Failed to restore backup", "error");
+        }
+    });
+}
+
+/**
+ * Validate custom parameter for Syslinux bootloader
+ * Returns true if valid, false if invalid (with error modal shown)
+ */
+function validateCustomParam_Syslinux(param) {
+    // Check 1: Detect "append" FIRST (before space check)
+    // This catches common forum paste errors with better error messages
+    if (param.toLowerCase().startsWith('append')) {
+        // Scenario A: Just "append" alone
+        if (param.trim().toLowerCase() === 'append') {
+            swal({
+                title: "Invalid Custom Parameter",
+                text: "'append' is a reserved syslinux configuration directive.\n\n" +
+                      "This directive is already managed by the plugin and Unraid system.",
+                type: "error"
+            });
+            return false;
+        }
+        // Scenario B: "append" followed by parameters (user copied full config line)
+        else {
+            swal({
+                title: "Invalid Custom Parameter",
+                text: "It looks like you copied a complete boot configuration line.\n\n" +
+                      "What you pasted:\n" +
+                      param + "\n\n" +
+                      "What you should enter:\n" +
+                      "[only your custom boot parameters]\n\n" +
+                      "Note: 'append' and 'initrd=' are already managed by Unraid.",
+                type: "error"
+            });
+            return false;
+        }
+    }
+
+    // Check 2: No spaces (multiple parameters)
+    if (param.includes(' ')) {
+        swal({
+            title: "Invalid Custom Parameter",
+            text: "You entered multiple parameters separated by spaces.\n\n" +
+                  "Please add only ONE parameter at a time.\n\n" +
+                  "Examples:\n" +
+                  "✓ Correct: pcie_aspm=off\n" +
+                  "✓ Correct: acpi=off\n" +
+                  "✗ Wrong: pcie_aspm=off acpi=off\n\n" +
+                  "To add multiple parameters, click 'Add Custom Parameter' again for each parameter.",
+            type: "error"
+        });
+        return false;
+    }
+
+    // Check 3: Detect "initrd" (including comma-separated values)
+    if (param.toLowerCase().startsWith('initrd')) {
+        swal({
+            title: "Invalid Custom Parameter",
+            text: "The 'initrd=' parameter is already managed by Unraid.\n\n" +
+                  "Please remove 'initrd=' (including comma-separated values) and only add your custom parameters.\n\n" +
+                  "Examples:\n" +
+                  "✗ Wrong: initrd=/bzroot\n" +
+                  "✗ Wrong: initrd=/bzroot,/bzroot-gui\n" +
+                  "✓ Correct: pcie_aspm=off",
+            type: "error"
+        });
+        return false;
+    }
+
+    // Check 4: Other reserved syslinux directives
+    const reserved = ['label', 'kernel', 'menu', 'default', 'timeout', 'unraidsafemode'];
+    const lowerParam = param.toLowerCase();
+    for (const directive of reserved) {
+        if (lowerParam.startsWith(directive)) {
+            swal({
+                title: "Invalid Custom Parameter",
+                text: "'" + directive + "' is a reserved syslinux configuration directive.\n\n" +
+                      "Reserved directives: label, kernel, menu, default, timeout, unraidsafemode\n\n" +
+                      "These are already managed by the plugin or Unraid system.",
+                type: "error"
+            });
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Placeholder for GRUB bootloader validation (not yet implemented)
+ * Returns true if valid, false if invalid (with error modal shown)
+ *
+ * Future implementation will check for: linux, menuentry, initrd, set
+ * and detect deprecated "append" syntax for clarity
+ */
+function validateCustomParam_GRUB(param) {
+    // Placeholder - allow all parameters for now
+    return true;
+}
+
+/**
+ * Main validation router - dispatches to bootloader-specific validation
+ * Returns true if valid, false if invalid (with error modal shown)
+ */
+function validateCustomParam(param) {
+    // TODO: Get bootloader type from server-side detection
+    // For now, hardcoded to syslinux (USB boot)
+    const bootloaderType = 'syslinux';
+
+    if (bootloaderType === 'grub') {
+        return validateCustomParam_GRUB(param);
+    } else {
+        return validateCustomParam_Syslinux(param);
+    }
+}
+
+/**
+ * Add custom parameter from inline form
+ */
+function addCustomParamFromForm() {
+    const paramInput = document.getElementById('new-custom-param');
+    const commentInput = document.getElementById('new-custom-comment');
+
+    const param = paramInput.value.trim();
+    const comment = commentInput.value.trim();
+
+    // Button should be disabled if empty, but check anyway
+    if (!param) {
+        return;
+    }
+
+    // Validate custom parameter syntax
+    if (!validateCustomParam(param)) {
+        return; // Validation failed, error modal already shown
+    }
+
+    // Check if parameter already exists
+    if (customParams.includes(param)) {
+        swal("Warning", "This parameter is already added", "warning");
+        return;
+    }
+
+    // ========== MANAGED PARAMETER DETECTION ==========
+    // Check if this parameter is managed by a toggle or dropdown
+    // If so, auto-enable the toggle or set the dropdown value instead of adding as custom param
+    var managedMatch = detectManagedParameter(param);
+    if (managedMatch) {
+        handleManagedParameter(param, managedMatch);
+
+        // Clear input fields after auto-conversion
+        paramInput.value = '';
+        commentInput.value = '';
+        customParamInputModified = false;
+        updateAddParamButton();
+
+        return; // Stop processing - parameter was auto-converted to toggle/dropdown
+    }
+    // ========== END MANAGED PARAMETER DETECTION ==========
+
+    // Special handling for pci= parameters - warn about automatic merging
+    if (param.startsWith('pci=')) {
+        var newPciValue = param.substring(4); // Remove 'pci='
+        var newOptions = newPciValue.split(',').map(function(opt) {
+            return opt.trim().toLowerCase();
+        }).filter(function(opt) {
+            return opt.length > 0;
+        });
+
+        var toggleWarnings = [];
+
+        // Check if PCI options conflict with enabled toggles
+        if (document.getElementById('noaer-toggle').checked &&
+            newOptions.indexOf('noaer') !== -1) {
+            toggleWarnings.push('noaer (already enabled via toggle)');
+        }
+        if (document.getElementById('pci-realloc-toggle').checked &&
+            newOptions.indexOf('realloc') !== -1) {
+            toggleWarnings.push('realloc (already enabled via toggle)');
+        }
+
+        if (toggleWarnings.length > 0) {
+            swal({
+                title: 'PCI Parameter Notice',
+                text: 'The following PCI options are already enabled via toggles:\n\n' +
+                      toggleWarnings.join(', ') +
+                      '\n\nAll pci= options will be automatically merged into a single parameter following Linux kernel documentation standards.\n\nContinue?',
+                type: 'info',
+                showCancelButton: true,
+                confirmButtonText: 'Continue',
+                cancelButtonText: 'Cancel'
+            }, function(confirmed) {
+                if (confirmed) {
+                    // Add parameter
+                    customParams.push(param);
+
+                    // Add comment if provided
+                    if (comment) {
+                        customParamsComments[param] = comment;
+                    }
+
+                    // Clear form
+                    paramInput.value = '';
+                    commentInput.value = '';
+
+                    // Reset button state
+                    customParamInputModified = false;
+                    updateAddParamButton();
+
+                    // Re-render and update
+                    renderCustomParams();
+                    markFormModified();
+                    updatePreview();
+                }
+            });
+            return;
+        }
+    }
+
+    // Add parameter
+    customParams.push(param);
+
+    // Add comment if provided
+    if (comment) {
+        customParamsComments[param] = comment;
+    }
+
+    // Clear form
+    paramInput.value = '';
+    commentInput.value = '';
+
+    // Reset button state (disabled since field is now empty)
+    customParamInputModified = false;
+    updateAddParamButton();
+
+    // Re-render all custom parameters
+    renderCustomParams();
+    markFormModified();
+    updatePreview();
+}
+
+/**
+ * Detect if a parameter matches any managed toggle or dropdown
+ * @param {string} param - The parameter to check
+ * @returns {object|null} - Match object with details, or null if no match
+ */
+function detectManagedParameter(param) {
+    var trimmedParam = param.trim();
+
+    for (var i = 0; i < MANAGED_PARAMS.length; i++) {
+        var managed = MANAGED_PARAMS[i];
+        var match = trimmedParam.match(managed.pattern);
+
+        if (match) {
+            var element = document.getElementById(managed.elementId);
+            if (!element) {
+                console.warn('Managed element not found:', managed.elementId);
+                continue;
+            }
+
+            var matchDetails = {
+                managed: managed,
+                element: element,
+                param: trimmedParam
+            };
+
+            if (managed.type === 'toggle') {
+                matchDetails.currentState = element.checked;
+                matchDetails.targetState = true; // We want to enable the toggle
+            } else if (managed.type === 'dropdown') {
+                matchDetails.currentValue = element.value;
+
+                // Extract the value from the parameter
+                var extractedValue = managed.extractValue(trimmedParam);
+
+                // Validate the extracted value
+                if (managed.validateCustom) {
+                    var validation = managed.validateCustom(extractedValue);
+                    if (!validation.valid) {
+                        matchDetails.invalidValue = extractedValue;
+                        return matchDetails; // Return so we can show error
+                    }
+                    matchDetails.targetValue = validation.normalizedValue;
+                } else {
+                    matchDetails.targetValue = extractedValue;
+                }
+            }
+
+            return matchDetails;
+        }
+    }
+
+    return null; // No managed parameter match
+}
+
+/**
+ * Handle a parameter that matches a managed toggle or dropdown
+ * Auto-enables/sets the control and shows appropriate modal
+ * @param {string} param - The original parameter string
+ * @param {object} matchDetails - Details from detectManagedParameter()
+ */
+function handleManagedParameter(param, matchDetails) {
+    var managed = matchDetails.managed;
+    var element = matchDetails.element;
+
+    // Handle invalid dropdown values
+    if (matchDetails.invalidValue !== undefined) {
+        swal({
+            title: 'Invalid Parameter Value',
+            text: 'The parameter "' + param + '" is managed by the "' + managed.displayName + '" dropdown, but the value "' + matchDetails.invalidValue + '" is not valid.\n\n' +
+                  'Valid values are:\n' +
+                  '• ' + managed.validValues.join('\n• ') + '\n' +
+                  '• id:XXXX:YYYY (custom device ID format)\n\n' +
+                  'Please use the dropdown or enter a valid custom value.',
+            type: 'warning',
+            confirmButtonText: 'OK'
+        });
+        return;
+    }
+
+    if (managed.type === 'toggle') {
+        // Check if already enabled
+        if (matchDetails.currentState === true) {
+            swal({
+                title: 'Already Configured',
+                text: 'The parameter "' + param + '" is already enabled via the "' + managed.displayName + '" toggle.\n\n' +
+                      'No changes needed.',
+                type: 'info',
+                confirmButtonText: 'OK'
+            });
+        } else {
+            // Auto-enable the toggle
+            enableToggle(element);
+
+            // Use double rAF to ensure checkbox is visually rendered before modal shows
+            // First rAF queues for next paint, second rAF runs after paint completes
+            requestAnimationFrame(function() {
+                requestAnimationFrame(function() {
+                    swal({
+                        title: 'Toggle Enabled',
+                        text: 'The parameter "' + param + '" is managed by the "' + managed.displayName + '" toggle.\n\n' +
+                              'We\'ve enabled it for you.',
+                        type: 'success',
+                        confirmButtonText: 'OK'
+                    });
+                });
+            });
+        }
+    } else if (managed.type === 'dropdown') {
+        var currentValue = matchDetails.currentValue;
+        var targetValue = matchDetails.targetValue;
+
+        // Check if already set to the same value
+        if (currentValue === targetValue) {
+            swal({
+                title: 'Already Configured',
+                text: 'The parameter "' + param + '" is already configured via the "' + managed.displayName + '" dropdown.\n\n' +
+                      'Current value: ' + (currentValue || '(disabled)') + '\n\n' +
+                      'No changes needed.',
+                type: 'info',
+                confirmButtonText: 'OK'
+            });
+        } else {
+            // Auto-set the dropdown value
+            setDropdownValue(element, targetValue);
+
+            // Use double rAF to ensure dropdown is visually rendered before modal shows
+            // First rAF queues for next paint, second rAF runs after paint completes
+            var previousValueText = currentValue ? '"' + currentValue + '"' : 'disabled';
+            requestAnimationFrame(function() {
+                requestAnimationFrame(function() {
+                    swal({
+                        title: 'Dropdown Updated',
+                        text: 'The parameter "' + param + '" is managed by the "' + managed.displayName + '" dropdown.\n\n' +
+                              'Previous value: ' + previousValueText + '\n' +
+                              'New value: "' + targetValue + '"\n\n' +
+                              'We\'ve updated it for you.',
+                        type: 'success',
+                        confirmButtonText: 'OK'
+                    });
+                });
+            });
+        }
+    }
+}
+
+/**
+ * Enable a toggle programmatically and trigger change events
+ * @param {HTMLElement} toggleElement - The checkbox element to enable
+ */
+function enableToggle(toggleElement) {
+    // Check if toggle is disabled (e.g., framebuffer toggles)
+    if (toggleElement.disabled) {
+        console.warn('Cannot enable disabled toggle:', toggleElement.id);
+        swal({
+            title: 'Toggle Unavailable',
+            text: 'This toggle is currently disabled (possibly due to boot mode or mutual exclusivity). Please check the UI constraints.',
+            type: 'warning',
+            confirmButtonText: 'OK'
+        });
+        return;
+    }
+
+    // Only click if toggle is currently unchecked
+    // (clicking when already checked would toggle it off)
+    if (!toggleElement.checked) {
+        // CRITICAL: Unraid's toggle switches use a CSS framework where:
+        // - The checkbox itself has display:none (not clickable)
+        // - The visual switch is the .switch-button-background sibling
+        // - Clicking the background triggers a jQuery handler that:
+        //   1. Sets checkbox.checked = true
+        //   2. Adds 'checked' class to background element
+        //   3. Triggers change event
+        //
+        // Therefore, we must click the background element, not the checkbox!
+        const backgroundElement = toggleElement.nextElementSibling;
+        if (backgroundElement && backgroundElement.classList.contains('switch-button-background')) {
+            backgroundElement.click();
+        } else {
+            // Fallback: try clicking the checkbox directly (shouldn't be needed)
+            console.warn('Background element not found for toggle:', toggleElement.id);
+            toggleElement.click();
+        }
+    }
+
+    // Note: background.click() will automatically trigger:
+    // - jQuery click handler on background
+    // - Sets checkbox.checked = true
+    // - Adds 'checked' class to background
+    // - Triggers change event → updateConfig() is called
+    // - markFormModified() via change handler
+    // - updatePreview() via updateConfig()
+}
+
+/**
+ * Set a dropdown value programmatically and trigger change events
+ * @param {HTMLElement} dropdownElement - The select element to update
+ * @param {string} value - The value to set
+ */
+function setDropdownValue(dropdownElement, value) {
+    // Check if the value exists in the dropdown options
+    var optionExists = false;
+    for (var i = 0; i < dropdownElement.options.length; i++) {
+        if (dropdownElement.options[i].value === value) {
+            optionExists = true;
+            break;
+        }
+    }
+
+    if (!optionExists) {
+        // Value doesn't exist - need to add it as a custom option
+        var customOption = document.createElement('option');
+        customOption.value = value;
+        customOption.text = value + ' (custom)';
+        dropdownElement.appendChild(customOption);
+    }
+
+    // Set the value
+    dropdownElement.value = value;
+
+    // Trigger the onchange event to ensure updateConfig() is called
+    $(dropdownElement).trigger('change');
+
+    // Mark form as modified
+    markFormModified();
+
+    // Update preview
+    updatePreview();
+}
+
+/**
+ * Render all custom parameters with dl/dt/dd structure
+ */
+function renderCustomParams() {
+    const container = document.getElementById('custom-params-list');
+    container.innerHTML = '';
+
+    // Filter out empty entries
+    const activeParams = customParams.filter(p => p && p.trim() !== '');
+
+    if (activeParams.length === 0) {
+        return;
+    }
+
+    activeParams.forEach((param, index) => {
+        let comment = customParamsComments[param] || '';
+        let isAutoGeneratedComment = false;
+
+        // Auto-generate helpful comment for isolcpus= parameters if no manual comment exists
+        if (!comment && param.startsWith('isolcpus=')) {
+            comment = 'CPU pinning/isolation - configure at <a href="/Settings/CPUset">Settings &gt; CPUset</a>';
+            isAutoGeneratedComment = true;
+        }
+
+        // Auto-generate warning for legacy VFIO binding
+        if (!comment && param.startsWith('vfio-pci.ids=')) {
+            comment = '⚠️ Legacy VFIO binding. Remove this and use <a href="/Tools/SysDevs">Tools &gt; System Devices</a> instead';
+            isAutoGeneratedComment = true;
+        }
+
+        // Auto-generate warning for legacy stub driver binding
+        if (!comment && param.startsWith('pci-stub.ids=')) {
+            comment = '⚠️ Legacy stub driver binding. Remove this and use <a href="/Tools/SysDevs">Tools &gt; System Devices</a> instead';
+            isAutoGeneratedComment = true;
+        }
+
+        const displayComment = comment || 'No comment added';
+
+        const dl = document.createElement('dl');
+
+        // Create label with parameter (no details link - comments always visible)
+        const dt = document.createElement('dt');
+        dt.innerHTML = `Custom: <span class="custom-parameter-code">${escapeHtml(param)}</span>`;
+
+        const dd = document.createElement('dd');
+
+        // Add always-visible comment (comment comes FIRST)
+        // Don't escape auto-generated comments (they contain safe HTML links)
+        const commentHtml = `
+            <div class="custom-param-comment">
+                ${isAutoGeneratedComment ? displayComment : escapeHtml(displayComment)}
+            </div>
+        `;
+
+        // Add buttons (below comment)
+        const buttonsHtml = `
+            <span class="buttons-spaced" style="margin-top: 8px;">
+                <input type="button" class="btn-edit-param" value="EDIT" onclick="editCustomParam('${escapeHtml(param)}')">
+                <input type="button" class="btn-remove-param" value="REMOVE" onclick="removeCustomParam('${escapeHtml(param)}')">
+            </span>
+        `;
+
+        dd.innerHTML = commentHtml + buttonsHtml;
+
+        dl.appendChild(dt);
+        dl.appendChild(dd);
+        container.appendChild(dl);
+    });
+}
+
+/**
+ * Edit custom parameter (both parameter and comment)
+ */
+function editCustomParam(param) {
+    const comment = customParamsComments[param] || '';
+
+    const newParam = prompt('Edit parameter:', param);
+    if (newParam === null) return; // User cancelled
+
+    const newParamTrimmed = newParam.trim();
+    if (!newParamTrimmed) {
+        swal("Warning", "Parameter cannot be empty", "warning");
+        return;
+    }
+
+    const newComment = prompt('Edit comment (leave empty for no comment):', comment);
+    if (newComment === null) return; // User cancelled
+
+    // Remove old parameter
+    const index = customParams.indexOf(param);
+    if (index > -1) {
+        customParams.splice(index, 1);
+    }
+    delete customParamsComments[param];
+
+    // Add new parameter
+    customParams.push(newParamTrimmed);
+    if (newComment.trim()) {
+        customParamsComments[newParamTrimmed] = newComment.trim();
+    }
+
+    renderCustomParams();
+    markFormModified();
+    updatePreview();
+}
+
+/**
+ * Remove custom parameter
+ */
+function removeCustomParam(param) {
+    swal({
+        title: "Remove Parameter?",
+        text: "Remove this custom parameter?",
+        type: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#DD6B55",
+        confirmButtonText: "Yes, remove it",
+        closeOnConfirm: true
+    }, function(isConfirm) {
+        if (!isConfirm) return;
+
+        const index = customParams.indexOf(param);
+    if (index > -1) {
+        customParams.splice(index, 1);
+    }
+
+        delete customParamsComments[param];
+
+        renderCustomParams();
+        markFormModified();
+        updatePreview();
+    });
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+/**
+ * Save raw configuration from textarea
+ */
+function saveRawConfig(btn) {
+    const rawConfig = document.getElementById('raw-config-editor').value;
+
+    // Confirm before saving
+    swal({
+        title: "Confirm Save?",
+        text: "You are about to save direct changes to the bootloader configuration.\n\n" +
+              "A backup will be created automatically, but syntax errors can prevent your server from booting.\n\n" +
+              "Have you verified your changes are correct?",
+        type: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#DD6B55",
+        confirmButtonText: "Yes, save changes",
+        closeOnConfirm: false
+    }, function(isConfirm) {
+        if (!isConfirm) return;
+
+        const postData = {
+            operation: 'write_raw_config',
+            raw_config: rawConfig
+        };
+
+    // Only add CSRF token if it exists
+    if (csrf_token && csrf_token !== '') {
+        postData.csrf_token = csrf_token;
+    }
+
+    // Show loading state
+    const originalText = btn.textContent;
+    btn.textContent = 'Saving...';
+    btn.disabled = true;
+
+    // Show Unraid spinner
+    showApplySpinner('Saving configuration...');
+
+    $.ajax({
+        url: '/plugins/dynamix/include/boot_params_handler.php',
+        type: 'POST',
+        data: postData,
+        dataType: 'json',
+        success: function(response) {
+            btn.textContent = originalText;
+            btn.disabled = false;
+
+            if (response.error) {
+                swal("Error", "Error saving raw configuration:\n\n" + response.error, "error");
+                return;
+            }
+
+            // Success - show reboot notice and reload page
+            document.getElementById('reboot-notice').classList.add('visible');
+
+            // Remove any existing Boot Parameters notices only (preserve other plugins' notices)
+            removeRebootNotice("Boot Parameters: A reboot is required to apply changes");
+            removeRebootNotice("Boot Parameters: Previous configuration restored - A reboot is required");
+
+            // Add persistent reboot banner across all Unraid pages
+            addRebootNotice("Boot Parameters: A reboot is required to apply changes");
+
+            // Reset raw config tracking (page will reload anyway)
+            rawConfigOriginal = rawConfig;
+            rawConfigModified = false;
+            updateRawConfigButton();
+
+            swal({
+                title: "Success",
+                text: "Configuration saved successfully!\n\nThe bootloader configuration has been updated.\n\nThe page will now reload to refresh the configuration display.",
+                type: "success",
+                timer: 3000
+            }, function() {
+                location.reload();
+            });
+        },
+        error: function(xhr, status, error) {
+            btn.textContent = originalText;
+            btn.disabled = false;
+            swal("Error", "Failed to save configuration\n\n" + error, "error");
+        },
+        complete: function() {
+            // Hide spinner after operation completes (success or error)
+            hideApplySpinner();
+        }
+    });
+    });
+}
+
 </script>
 
-&nbsp;
-: <span><input type="checkbox" class="advancedview"></span>
+<style>
+/* Theme-compatible styling that works across Unraid light/dark themes (versions 7.1-7.2) */
+/* NOTE: This style block is placed at the END of the document to ensure it loads */
+/* AFTER Unraid's global CSS (loaded by Wrappers.php), allowing our overrides to work */
 
-:syslinux_cfg_help:
+* {
+    box-sizing: border-box;
+}
 
-<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareMenu(this)">
-<input type="hidden" name="#include" value="/webGui/include/update.file.php">
-<input type="hidden" name="#file" value="<?=$file;?>">
-<input type="hidden" name="text" value="">
+/* Main container - centered with max-width */
+.main-content {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px 16px;
+}
 
-<div markdown="1" class="basic">
-_(Syslinux configuration)_:
-: <?$i=0;
-  foreach (array_map('strip',explode($mark,$current)) as $area):
-  $area = explode("\n", $area);
-  $label = ($i) ? array_shift($area):$title;
-  $start = in_array($menu,$area);
-  if ($start) unset($area[array_search($menu,$area)]);
-?><span class="config-item flex flex-col">
-    <span class="<?= $start ? 'array' : 'system' ?> config-item-label-wrapper flex flex-row justify-between">
-      <label id="label-<?=$i?>">
-        <?if ($i):?><input type="radio" id="input-<?=$i?>" class="menu" <?=$start?'checked':''?> title="_(Set default boot menu)_" onchange="changeMenu(this.form,this.id,true)"><?endif;?>
-        <?=htmlspecialchars($label)?>
-      </label>
-    </span>
-    <textarea class="menu" id="menu-<?=$i++?>" spellcheck="false" cols="80" rows="<?=count($area)?>" maxlength="2048"><?=htmlspecialchars(implode("\n",$area))?></textarea>
-  </span>
-  <?endforeach;?>
+/* Section styling */
+.section {
+    margin-bottom: 32px;
+}
 
-</div>
-<div markdown="1" class="advanced">
-_(Syslinux configuration)_:
-: <textarea class="raw config-raw" name="raw" spellcheck="false" cols="80" rows="<?=substr_count($current,"\n")+1?>" maxlength="2048"><?=htmlspecialchars($current)?></textarea>
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #FF8C2F;
+    color: #FF8C2F;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
 
-</div>
-<input type="button" value="_(Default)_" onclick="setDefault(this.form)">
-: <span class="inline-block">
-    <input type="submit" value="_(Apply)_">
-    <input type="button" value="_(Done)_" onclick="done()">
-  </span>
+.section-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background-color: rgba(255, 140, 47, 0.15);
+    color: #FF8C2F;
+    font-weight: 500;
+}
 
-:syslinux_button_help:
+/* Subsection headers */
+.subsection-header {
+    margin: 20px 0 12px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
 
-</form>
+/* Parameter code styling - clickable to expand help */
+.parameter-code {
+    font-family: 'Courier New', Monaco, 'Cascadia Code', monospace;
+    font-size: 13px;
+    color: var(--text-color, #e0e0e0);
+    background-color: rgba(0, 0, 0, 0.15);
+    padding: 3px 8px;
+    border-radius: 3px;
+    display: inline-block;
+    cursor: pointer;
+    user-select: none;
+}
+
+.parameter-code:hover {
+    opacity: 0.8;
+}
+
+/* Add expand/collapse indicator */
+.parameter-code::after {
+    content: " ▼";
+    font-size: 10px;
+    margin-left: 4px;
+    opacity: 0.6;
+}
+
+.parameter-code.expanded::after {
+    content: " ▲";
+}
+
+/* Force toggle switch wrapper and label to stay inline - stronger selectors */
+dd > .switchButton {
+    display: inline-block !important;
+    vertical-align: middle !important;
+    margin-right: 8px;
+}
+
+/* Ensure dd doesn't force block layout */
+dd {
+    display: block;
+}
+
+/* Force the switchbutton label spans to stay inline */
+.switchButton .switchOn,
+.switchButton .switchOff {
+    display: inline !important;
+}
+
+/* Collapsible help boxes - hidden by default, matches Unraid native behavior */
+dd blockquote.inline_help {
+    display: none;
+    margin-top: 8px;
+}
+
+/* Clickable help labels */
+dt.help-label {
+    cursor: pointer;
+    user-select: none;
+}
+
+dt.help-label:hover {
+    color: var(--link-hover-color, #2e6da4);
+}
+
+/* Info and warning boxes */
+.info-box,
+.warning-box {
+    margin: 12px 0;
+    padding: 12px 16px;
+    border-radius: 5px;
+    display: block;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.info-box {
+    background-color: rgba(33, 150, 243, 0.08);
+    border: 1px solid rgba(33, 150, 243, 0.3);
+    border-left: 4px solid #2196F3;
+    color: var(--text-color, #333);
+}
+
+.warning-box {
+    background-color: rgba(240, 173, 78, 0.08);
+    border: 1px solid rgba(240, 173, 78, 0.3);
+    border-left: 4px solid #f0ad4e;
+    color: var(--text-color, #333);
+}
+
+/* Close button for dismissible notices */
+.close-notice {
+    cursor: pointer;
+    float: right;
+    font-size: 20px;
+    line-height: 1;
+    font-weight: bold;
+    color: var(--text-secondary, #666);
+    transition: color 0.2s ease;
+}
+
+.close-notice:hover {
+    color: var(--text-color, #333);
+}
+
+/* Badge styling for boot mode indicator */
+.badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 3px;
+    background-color: rgba(255, 140, 47, 0.1);
+    border: 1px solid rgba(255, 140, 47, 0.3);
+    font-size: 12px;
+    font-weight: bold;
+    font-family: 'Courier New', Monaco, 'Cascadia Code', monospace;
+    transition: all 0.2s ease;
+}
+
+/* Force disabled appearance for framebuffer toggles when disabled attribute is present */
+input#efifb-toggle[disabled] + .switch-button-background,
+input#vesafb-toggle[disabled] + .switch-button-background,
+input#simplefb-toggle[disabled] + .switch-button-background {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+
+input#efifb-toggle[disabled] + .switch-button-background *,
+input#vesafb-toggle[disabled] + .switch-button-background *,
+input#simplefb-toggle[disabled] + .switch-button-background * {
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+
+/* Synced badge */
+.synced-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--text-muted, #888);
+    background-color: rgba(0, 0, 0, 0.05);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: normal;
+    font-style: italic;
+}
+
+/* Custom parameters */
+#custom-params-container {
+    margin-top: 10px;
+}
+
+.custom-param-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background-color: rgba(0, 0, 0, 0.02);
+    padding: 12px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color, #ddd);
+    margin-bottom: 8px;
+}
+
+.custom-param-input {
+    flex: 1;
+    background-color: var(--bg-input, #fff);
+    border: 1px solid var(--border-color, #ccc);
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-family: 'Courier New', Monaco, monospace;
+    font-size: 13px;
+    color: var(--text-color, #333);
+    transition: border-color 0.2s ease;
+}
+
+.custom-param-input:focus {
+    outline: none;
+    border-color: #FF8C2F;
+}
+
+.custom-param-input::placeholder {
+    color: var(--text-muted, #999);
+}
+
+/* Custom parameter comment - always visible with minimal left border */
+.custom-param-comment {
+    margin-top: 8px;
+    padding-left: 12px;
+    border-left: 3px solid rgba(255, 140, 47, 0.4);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-secondary, #666);
+    font-style: italic;
+}
+
+.btn-remove-param {
+    padding: 6px 12px;
+    border: 1px solid #d9534f;
+    background-color: transparent;
+    color: #d9534f;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.btn-remove-param:hover {
+    background-color: rgba(217, 83, 79, 0.1);
+}
+
+.btn-add-param {
+    display: inline-block;
+    align-items: center;
+    gap: 8px;
+    background-color: transparent;
+    border: 1px dashed var(--border-color, #ccc);
+    border-radius: 6px;
+    padding: 12px 16px;
+    color: var(--text-secondary, #888);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-add-param:hover {
+    border-color: #FF8C2F;
+    color: #FF8C2F;
+    background-color: rgba(255, 140, 47, 0.05);
+}
+
+/* Custom parameter code - same as .parameter-code but without dropdown arrow */
+.custom-parameter-code {
+    font-family: 'Courier New', Monaco, 'Cascadia Code', monospace;
+    font-size: 13px;
+    color: var(--text-color, #e0e0e0);
+    background-color: rgba(0, 0, 0, 0.15);
+    padding: 3px 8px;
+    border-radius: 3px;
+    display: inline-block;
+    font-weight: normal;  /* Override inherited bold from <dt> parent */
+}
+
+/* Custom parameters list container - top border for visual balance */
+#custom-params-list {
+    border-top: 1px solid var(--border-color, #ddd);
+    padding-top: 12px;
+    margin-top: 12px;
+}
+
+/* Custom parameters list - dividers between entries */
+#custom-params-list dl {
+    border-top: 1px solid var(--border-color, #ddd);
+    padding-top: 12px;
+    margin-top: 12px;
+}
+
+#custom-params-list dl:first-child {
+    border-top: none;
+    padding-top: 0;
+    margin-top: 0;
+}
+
+/* Stronger separator before "Add Custom Parameter" form */
+#custom-params-list + dl {
+    border-top: 2px solid var(--border-color, #ddd);
+    padding-top: 16px;
+    margin-top: 16px;
+}
+
+/* Config preview */
+#config-preview {
+    background-color: rgba(0, 0, 0, 0.02);
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 6px;
+    padding: 16px;
+    margin-top: 24px;
+}
+
+#config-preview strong {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary, #888);
+}
+
+#config-content {
+    font-family: 'Courier New', Monaco, monospace;
+    font-size: 12px;
+    color: var(--text-color, #333);
+    background-color: rgba(0, 0, 0, 0.03);
+    padding: 12px;
+    border-radius: 4px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin-top: 10px;
+}
+
+/* Parameters Preview */
+#params-preview {
+    background-color: rgba(0, 0, 0, 0.02);
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 6px;
+    padding: 16px;
+    margin-top: 24px;
+}
+
+#preview-content {
+    font-family: 'Courier New', Monaco, monospace;
+    font-size: 13px;
+    color: var(--text-color, #333);
+    background-color: rgba(0, 0, 0, 0.03);
+    padding: 12px;
+    border-radius: 4px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin-top: 10px;
+}
+
+/* Reboot notice */
+.reboot-notice {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    background-color: rgba(92, 184, 92, 0.05);
+    border: 1px solid #d4edda;
+    border-left: 4px solid #5cb85c;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-top: 16px;
+}
+
+.reboot-notice.visible {
+    display: flex;
+}
+
+.reboot-notice strong {
+    color: #5cb85c;
+}
+
+/* Footer buttons */
+.page-footer {
+    display: flex;
+    gap: 12px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border-color, #ddd);
+    margin-top: 16px;
+}
+
+.btn {
+    padding: 10px 24px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid var(--border-color, #ccc);
+    background-color: transparent;
+    color: var(--text-color, #333);
+}
+
+.btn:hover:not(:disabled) {
+    background-color: #FF8C2F;
+    color: #000;
+    border-color: #FF8C2F;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: transparent;
+    color: #FF8C2F;
+    border-color: #FF8C2F;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: #FF8C2F;
+    color: #000;
+    border-color: #FF8C2F;
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    background-color: transparent;
+    color: var(--text-color, #333);
+    border-color: var(--border-color, #ccc);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background-color: #FF8C2F;
+    color: #000;
+    border-color: #FF8C2F;
+}
+
+.btn-outline {
+    background-color: transparent;
+    color: #FF8C2F;
+    border-color: #FF8C2F;
+}
+
+.btn-outline:hover:not(:disabled) {
+    background-color: rgba(255, 140, 47, 0.1);
+}
+
+.btn-danger {
+    background-color: #d9534f;
+    color: #fff;
+    border-color: #d9534f;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background-color: #c9302c;
+    border-color: #c9302c;
+}
+
+/* Modal styles */
+.modal {
+    position: fixed;
+    z-index: 9999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: var(--content-bg, #1c1c1c);
+    color: var(--text-color, #e0e0e0);
+    padding: 24px;
+    border-radius: 8px;
+    max-width: 600px;
+    margin: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--border-color, #444);
+}
+
+.modal-content h3 {
+    margin-top: 0;
+    color: var(--text-color, #e0e0e0);
+}
+
+.modal-content p, .modal-content ul {
+    color: var(--text-color, #e0e0e0);
+}
+
+.modal-section-divider {
+    margin-top: 24px;
+    border-top: 1px solid var(--border-color, #444);
+    padding-top: 16px;
+}
+
+.backup-list-item {
+    display: block;
+    padding: 8px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--separator-color, #ddd);
+}
+
+/* Syslinux Configuration View Toggle */
+.config-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.view-toggle-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Top view toggle - right aligned */
+.top-view-toggle-wrapper {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.view-toggle-label {
+    font-size: 14px;
+    font-weight: normal;
+    color: var(--text-color, #333);
+}
+
+/* Syslinux Menu View Sections */
+.syslinux-section {
+    margin-bottom: 20px;
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 5px;
+    padding: 12px;
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.syslinux-section h4 {
+    margin: 0 0 8px 0;
+    color: var(--text-color, #333);
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.syslinux-section pre {
+    margin: 0;
+    padding: 8px;
+    background-color: rgba(0, 0, 0, 0.03);
+    border-radius: 3px;
+    overflow-x: auto;
+}
+
+/* Override font for global config to match boot entry content exactly */
+#global-config-content {
+    font-family: 'Courier New', Monaco, 'Cascadia Code', monospace;
+    font-size: 13px;
+}
+
+/* Ensure timeout dropdown uses same font size */
+#timeout-dropdown {
+    font-family: 'Courier New', Monaco, 'Cascadia Code', monospace;
+    font-size: 13px;
+}
+
+/* Boot Entry Styling */
+.boot-entry {
+    margin-bottom: 12px;
+    padding: 12px;
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 3px;
+}
+
+.boot-entry.default {
+    border-left: 4px solid #4CAF50;
+    background-color: rgba(76, 175, 80, 0.05);
+}
+
+.boot-entry-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    gap: 12px;
+}
+
+.boot-entry-header input[type="radio"] {
+    margin: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.boot-entry-header .switchButton {
+    flex-shrink: 0;
+}
+
+.boot-entry-label {
+    font-weight: bold;
+    color: var(--text-color, #333);
+    cursor: pointer;
+    user-select: none;
+    flex-grow: 1;
+}
+
+.boot-entry-content {
+    margin-left: 24px;
+    font-family: 'Courier New', Monaco, 'Cascadia Code', monospace;
+    font-size: 13px;
+    padding: 8px;
+    background-color: rgba(0, 0, 0, 0.03);
+    border-radius: 3px;
+    overflow-x: auto;
+}
+
+/* Diff Display Styles */
+.diff-line-removed {
+    background-color: rgba(255, 0, 0, 0.1);
+    color: var(--text-color, #333);
+}
+
+.diff-line-removed::before {
+    content: '- ';
+    color: #d32f2f;
+    font-weight: bold;
+}
+
+.diff-line-added {
+    background-color: rgba(0, 255, 0, 0.1);
+    color: var(--text-color, #333);
+}
+
+.diff-line-added::before {
+    content: '+ ';
+    color: #388e3c;
+    font-weight: bold;
+}
+
+/* Boot entries legend styling */
+.boot-entries-legend {
+    font-size: 13px;
+    color: var(--text-muted, #999);
+    margin: -8px 0 12px 0;
+    line-height: 1.4;
+}
+
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+}
+
+.legend-separator {
+    color: var(--text-muted, #666);
+}
+
+/* Small radio button indicator */
+.legend-radio {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--text-muted, #999);
+    border-radius: 50%;
+    background: white;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+/* Bold text utility class */
+.text-bold {
+    font-weight: bold;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .page-footer {
+        flex-direction: column;
+    }
+
+    .btn {
+        width: 100%;
+    }
+}
+</style>
