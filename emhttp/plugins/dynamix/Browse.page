@@ -30,7 +30,7 @@ function validdir($dir) {
 
 $dir     = validdir(htmlspecialchars_decode(rawurldecode($dir)));
 [$none,$root,$main,$next,$rest] = my_explode('/', $dir,5);
-$dir     = htmlspecialchars(str_replace('\\','\\\\', $dir));
+$dir     = htmlspecialchars(str_replace(['\\', "\n", "\r", "\t"], ['\\\\', '\\n', '\\r', '\\t'], $dir));
 $lock    = $root == 'mnt' ? ($main ?: '---') : ($root == 'boot' ? _('flash') : '---');
 $isshare = $root == 'mnt' && (!$main || !$next || ($main == 'rootshare' && !$rest));
 $editor  = '/boot/config/editor.cfg';

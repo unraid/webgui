@@ -133,7 +133,7 @@ function icon_class($ext) {
   }
 }
 
-$dir = validdir(rawurldecode($_GET['dir']));
+$dir = validdir(htmlspecialchars_decode(rawurldecode($_GET['dir'])));
 if (!$dir) {echo '<tbody><tr><td></td><td></td><td colspan="6">',_('Invalid path'),'</td><td></td></tr></tbody>'; exit;}
 
 extract(parse_plugin_cfg('dynamix',true));
