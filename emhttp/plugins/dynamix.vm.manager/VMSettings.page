@@ -433,7 +433,7 @@ $(function(){
 <?if ($safemode):?>
     if (run) $("#settingsForm").submit();
 <?else:?>
-    if (run) $.post("/plugins/dynamix.vm.manager/include/VMajax.php", {action:'cmdlineoverride',pcie:$('#pcie_acs_override').val(),vfio:$('#vfio_allow_unsafe').val()}, function(data){
+    if (run) $.post("/plugins/dynamix.vm.manager/include/VMajax.php", {action:'cmdlineoverride'}, function(data){
       $("#settingsForm").submit();
     });
 <?endif;?>
