@@ -267,10 +267,12 @@ function fileEdit(id) {
     buttons: {
       "_(Save)_": function(){
         $.post('/webGui/include/Control.php',{mode:'save', file:encodeURIComponent(source), data:encodeURIComponent(editor.session.getValue())});
+        dfm.window.dialog('close');
         dfm.window.dialog('destroy');
         setTimeout(loadList,100);
       },
       "_(Cancel)_": function(){
+        dfm.window.dialog('close');
         dfm.window.dialog('destroy');
       }
     }
@@ -336,6 +338,7 @@ function doJobs(title) {
         });
       },
       "_(Done)_": function(){
+        dfm.window.dialog('close');
         dfm.window.dialog('destroy');
       }
     }
@@ -869,6 +872,7 @@ function doAction(action, title, id) {
           if (!target || !valid.test(target)) {errorTarget(); return;}
         } else target = '';
         $.post('/webGui/include/Control.php',{mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs)});
+        dfm.window.dialog('close');
         dfm.window.dialog('destroy');
         $('.dfm_control.jobs').prop('disabled',false);
         $.cookie('dfm_control.jobs','1');
@@ -876,6 +880,7 @@ function doAction(action, title, id) {
       "_(Cancel)_": function(){
         if (dfm.running) $.post('/webGui/include/Control.php',{mode:'file',action:99},function(){setTimeout(loadList,500);});
         dfm_fileManager('stop');
+        dfm.window.dialog('close');
         dfm.window.dialog('destroy');
       }
     }
@@ -1161,6 +1166,7 @@ function doActions(action, title) {
           if (!target || !valid.test(target)) {errorTarget(); return;}
         } else target = '';
         $.post('/webGui/include/Control.php',{mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs.join('\r'))});
+        dfm.window.dialog('close');
         dfm.window.dialog('destroy');
         $('.dfm_control.jobs').prop('disabled',false);
         $.cookie('dfm_control.jobs','1');
@@ -1168,6 +1174,7 @@ function doActions(action, title) {
       "_(Cancel)_": function(){
         if (dfm.running) $.post('/webGui/include/Control.php',{mode:'file',action:99},function(){setTimeout(loadList,500);});
         dfm_fileManager('stop');
+        dfm.window.dialog('close');
         dfm.window.dialog('destroy');
       }
     }
