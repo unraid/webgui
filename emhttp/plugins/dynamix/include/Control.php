@@ -43,12 +43,23 @@ function validname($name) {
 function escape($name) {return escapeshellarg(validname($name));}
 function quoted($name) {return is_array($name) ? implode(' ',array_map('escape',$name)) : escape($name);}
 
-switch ($_POST['mode']) {
+switch ($_POST['mode'] ?? $_GET['mode'] ?? '') {
 case 'upload':
-  $file = validname(htmlspecialchars_decode(rawurldecode($_POST['file'])));
+  $file = validname(htmlspecialchars_decode(rawurldecode($_POST['file'] ?? $_GET['file'] ?? '')));
   if (!$file) die('stop');
+  $start = (int)($_POST['start'] ?? $_GET['start'] ?? 0);
+  $cancel = (int)($_POST['cancel'] ?? $_GET['cancel'] ?? 0);
   $local = "/var/tmp/".basename($file).".tmp";
-  if ($_POST['start']==0) {
+  // Check cancel BEFORE creating new file
+  if ($cancel==1) {
+    if (file_exists($local)) {
+      $file = file_get_contents($local);
+      if ($file !== false) delete_file($file);
+    }
+    delete_file($local);
+    die('stop');
+  }
+  if ($start === 0) {
     $my = pathinfo($file); $n = 0;
     while (file_exists($file)) $file = $my['dirname'].'/'.preg_replace('/ \(\d+\)$/','',$my['filename']).' ('.++$n.')'.($my['extension'] ? '.'.$my['extension'] : '');
     file_put_contents($local,$file);
@@ -58,14 +69,27 @@ case 'upload':
     chown($file,'nobody');
     chmod($file,0666);
   }
-  $targetFile = file_get_contents($local);
-  if ($_POST['cancel']==1) {
-    delete_file($targetFile);
-    die('stop');
+  $file = file_get_contents($local);
+  // Temp file does not exist
+  if ($file === false) {
+    die('error:tempfile');
   }
-  if (file_put_contents($targetFile,base64_decode($_POST['data']),FILE_APPEND)===false) {
-    delete_file($targetFile);
-    die('error');
+  // Support both legacy base64 method and new raw binary method
+  if (isset($_POST['data'])) {
+    // Legacy base64 upload method (backward compatible)
+    $chunk = base64_decode($_POST['data']);
+  } else {
+    // New raw binary upload method (read from request body)
+    $chunk = file_get_contents('php://input');
+    if (strlen($chunk) > 21000000) { // slightly more than 20MB to allow overhead
+      unlink($local);
+      die('error:chunksize:'.strlen($chunk));
+    }
+  }
+  if (file_put_contents($file,$chunk,FILE_APPEND)===false) {
+    delete_file($file);
+    delete_file($local);
+    die('error:write');
   }
   die();
 case 'calc':
