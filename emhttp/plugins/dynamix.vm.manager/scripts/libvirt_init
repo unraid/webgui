@@ -94,3 +94,7 @@ if [ -s /var/log/vfio-pci-errors ]; then
   echo "vfio-pci bind error" > /run/libvirt/qemu/autostarted
   /usr/local/emhttp/webGui/scripts/notify -e "VM Autostart disabled" -s "vfio-pci-errors " -d "VM Autostart disabled due to vfio-bind error" -m "Please review /var/log/vfio-pci-errors" -i "alert" -l "/VMs"
 fi
+
+# Copy XML from VM Directories to QEMU directory/
+/usr/local/emhttp/plugins/dynamix.vm.manager/scripts/libvirtrestore
+#

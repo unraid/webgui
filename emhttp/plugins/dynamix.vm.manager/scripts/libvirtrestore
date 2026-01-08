@@ -15,8 +15,8 @@
 $vmsjson = file_get_contents("/boot/config/plugins/dynamix.vm.manager/vms.json");
 $vms = json_decode($vmsjson,true);
 
+file_put_contents("/tmp/libvirtrestore","");
 foreach ($vms as $vm => $vmdetail) {
-  file_put_contents("/tmp/Stopcopy","");
   $to_file = "/etc/libvirt/qemu/$vm.xml";
   $from_file = $vmdetail['path']."/$vm.xml";
   #echo " from:$from_file     to:$to_file";

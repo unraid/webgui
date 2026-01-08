@@ -104,7 +104,7 @@ foreach ($domains as $dom) {
         $storage_name = 'default';
     } else {
         /* Explicit Unraid pool */
-        $path_root    = '/mnt/user/' . $metadata_storage;
+        $path_root    = str_replace("/mnt/user/","/mnt/$metadata_storage/",$default_domain_dir);
         $storage_name = $metadata_storage;
     }
 
@@ -133,12 +133,12 @@ foreach ($domains as $dom) {
  * Output
  * --------------------------------------------------------- */
 #print_r($vms);
-
+ksort($vms,SORT_NATURAL);
 file_put_contents("/boot/config/plugins/dynamix.vm.manager/vms.json",json_encode($vms,JSON_PRETTY_PRINT));
 
-
+file_put_contents("/tmp/Stopcopy","");
 foreach ($vms as $vm => $vmdetail) {
-  file_put_contents("/tmp/Stopcopy","");
+
   $from_file = "/etc/libvirt/qemu/$vm.xml";
   $to_file = $vmdetail['path']."/$vm.xml";
   #echo " from:$from_file     to:$to_file";
