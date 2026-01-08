@@ -28,7 +28,7 @@ function validdir($dir) {
   return in_array(explode('/', $path)[1] ?? '', ['mnt','boot']) ? $path : '';
 }
 
-$dir     = validdir(htmlspecialchars_decode($dir));
+$dir     = validdir(htmlspecialchars_decode(rawurldecode($dir)));
 [$none,$root,$main,$next,$rest] = my_explode('/', $dir,5);
 $dir     = htmlspecialchars(str_replace('\\','\\\\', $dir));
 $lock    = $root == 'mnt' ? ($main ?: '---') : ($root == 'boot' ? _('flash') : '---');
