@@ -34,22 +34,22 @@ $csrf_token = $var['csrf_token'] ?? '';
     <!-- Hardware Change Warning (hidden by default, shown via JavaScript) -->
     <div id="hardware-change-warning" class="info-box" style="display:none; margin-bottom: 24px;">
         <div style="font-size: 16px; font-weight: bold; margin-bottom: 8px;">
-            ⚠ Hardware Change Detected
+            _(⚠ Hardware Change Detected)_
         </div>
         <div style="margin-bottom: 12px;">
-            Your system hardware has changed: <span id="hardware-changes-list" style="font-weight: bold;"></span>
+            _(Your system hardware has changed)_: <span id="hardware-changes-list" style="font-weight: bold;"></span>
         </div>
         <div style="margin-bottom: 16px;">
-            Hardware changes may make your boot configuration invalid or unsafe. Please review all boot parameters below before making changes.
+            _(Hardware changes may make your boot configuration invalid or unsafe. Please review all boot parameters below before making changes)_.
         </div>
         <div style="text-align: center;">
-            <input type="button" value="I Understand" class="btn" onclick="acknowledgeHardwareChange()" id="acknowledge-hardware-btn">
+            <input type="button" value="_(I Understand)_" class="btn" onclick="acknowledgeHardwareChange()" id="acknowledge-hardware-btn">
         </div>
     </div>
 
     <!-- VM Passthrough Section -->
     <section class="section" id="boot-parameters">
-        <h3 class="section-header">VM Passthrough</h3>
+        <h3 class="section-header">_(VM Passthrough)_</h3>
 
         <div class="warning-box">
             These options work around hardware limitations that can sometimes prevent PCIe device passthrough.
@@ -62,36 +62,36 @@ $csrf_token = $var['csrf_token'] ?? '';
         </div>
 
         <dl>
-            <dt class="help-label">PCIe ACS Override (details):</dt>
+            <dt class="help-label">_(PCIe ACS Override)_ _(details)_:</dt>
             <dd>
                 <select id="acs-dropdown" onchange="updateConfig()" style="width: auto;">
-                    <option value="">Disabled</option>
-                    <option value="downstream">Downstream</option>
-                    <option value="multifunction">Multi-function</option>
-                    <option value="downstream,multifunction">Both</option>
+                    <option value="">_(Disabled)_</option>
+                    <option value="downstream">_(Downstream)_</option>
+                    <option value="multifunction">_(Multi-function)_</option>
+                    <option value="downstream,multifunction">_(Both)_</option>
                 </select>
                 <br>
                 <span class="parameter-code">pcie_acs_override=...</span>
                 <blockquote class="inline_help">
-                    Splits IOMMU groups to allow individual device passthrough. Use when devices are grouped together preventing passthrough. Typically Downstream is sufficient; Multi-function or Both may be needed for devices with multiple hardware functions.
+                    _(Splits IOMMU groups to allow individual device passthrough. Use when devices are grouped together preventing passthrough. Typically Downstream is sufficient; Multi-function or Both may be needed for devices with multiple hardware functions.)_
                     <br><br>
-                    Applies to GPUs, network cards, storage controllers, and other PCIe devices.
+                    _(Applies to GPUs, network cards, storage controllers, and other PCIe devices.)_
                     <br><br>
-                    <strong>Note:</strong> This bypasses hardware isolation between devices. While generally safe for GPU passthrough in home labs, use caution with untrusted VMs or certain hardware configurations. See <a href="https://forums.unraid.net/forum/51-vm-engine-kvm" target="_blank">Lime Technology forums</a> for hardware-specific guidance.
+                    <strong>_(Note)_:</strong> _(This bypasses hardware isolation between devices. While generally safe for GPU passthrough in home labs, use caution with untrusted VMs or certain hardware configurations.)_ _(See)_ <a href="https://forums.unraid.net/forum/51-vm-engine-kvm" target="_blank">_(Lime Technology forums)_</a> _(for hardware-specific guidance.)_
                 </blockquote>
             </dd>
         </dl>
 
         <dl>
-            <dt class="help-label">VFIO Allow Unsafe Interrupts (details):</dt>
+            <dt class="help-label">_(VFIO Allow Unsafe Interrupts)_ _(details)_:</dt>
             <dd>
                 <input type="checkbox" id="vfio-toggle" class="switch narrow" onchange="updateConfig()">
                 <br>
                 <span class="parameter-code">vfio_iommu_type1.allow_unsafe_interrupts=1</span>
                 <blockquote class="inline_help">
-                    Allows VFIO passthrough to work on systems without interrupt remapping support (common on older hardware and some consumer motherboards). Required when attempting GPU or device passthrough results in VFIO errors about missing interrupt remapping.
+                    _(Allows VFIO passthrough to work on systems without interrupt remapping support (common on older hardware and some consumer motherboards). Required when attempting GPU or device passthrough results in VFIO errors about missing interrupt remapping.)_
                     <br><br>
-                    <strong>Note:</strong> This bypasses interrupt isolation between devices. While generally safe for GPU passthrough in home labs, certain hardware configurations may experience stability issues. See <a href="https://forums.unraid.net/forum/51-vm-engine-kvm" target="_blank">Lime Technology forums</a> for hardware-specific guidance.
+                    <strong>_(Note)_:</strong> _(This bypasses interrupt isolation between devices. While generally safe for GPU passthrough in home labs, certain hardware configurations may experience stability issues.)_ _(See)_ <a href="https://forums.unraid.net/forum/51-vm-engine-kvm" target="_blank">_(Lime Technology forums)_</a> _(for hardware-specific guidance.)_
                 </blockquote>
             </dd>
         </dl>
@@ -99,16 +99,16 @@ $csrf_token = $var['csrf_token'] ?? '';
 
     <!-- Framebuffer Section -->
     <section class="section">
-        <h3 class="section-header">Framebuffer</h3>
+        <h3 class="section-header">_(Framebuffer)_</h3>
 
         <div class="warning-box">
-            Passing your primary GPU to a VM can cause black screen issues. Disabling framebuffers solves this by preventing the kernel from claiming the GPU at boot. For complete GPU isolation, also bind the GPU to VFIO via <a href="/Tools/SysDevs">Tools &gt; System Devices</a>.
+            _(Passing your primary GPU to a VM can cause black screen issues. Disabling framebuffers solves this by preventing the kernel from claiming the GPU at boot.)_ _(For complete GPU isolation, also bind the GPU to VFIO via)_ <a href="/Tools/SysDevs">_(Tools &gt; System Devices)_</a>.
             <br><br>
-            1. Start by disabling your boot mode's framebuffer (EFI for UEFI, VESA for Legacy BIOS) - one will be disabled based on your boot mode
-            <br>2. If issues persist, also disable Simple Framebuffer
-            <br>3. If still having problems, use "Block All Framebuffers" as a last resort
+            _(1. Start by disabling your boot mode's framebuffer (EFI for UEFI, VESA for Legacy BIOS) - one will be disabled based on your boot mode)_
+            <br>_(2. If issues persist, also disable Simple Framebuffer)_
+            <br>_(3. If still having problems, use "Block All Framebuffers" as a last resort)_
             <br><br>
-            Important: Do not add framebuffer parameters to GUI Mode boot configurations, as they will prevent GUI Mode from displaying.
+            _(Important: Do not add framebuffer parameters to GUI Mode boot configurations, as they will prevent GUI Mode from displaying.)_
         </div>
 
         <!-- Info box for auto-correction notice (hidden by default) -->
@@ -118,65 +118,65 @@ $csrf_token = $var['csrf_token'] ?? '';
         </div>
 
         <dl>
-            <dt class="help-label">Disable EFI Framebuffer (details):</dt>
+            <dt class="help-label">_(Disable EFI Framebuffer)_ _(details)_:</dt>
             <dd>
                 <input type="checkbox" id="efifb-toggle" class="narrow" onchange="updateConfig()" disabled>
                 <br>
                 <span class="parameter-code">video=efifb:off</span>
                 <blockquote class="inline_help">
-                    Prevents the kernel from attaching to the GPU via EFI framebuffer at boot. Required when passing through the primary or only GPU to a VM on UEFI servers.
+                    _(Prevents the kernel from attaching to the GPU via EFI framebuffer at boot. Required when passing through the primary or only GPU to a VM on UEFI servers.)_
                     <br><br>
-                    This is the first step for UEFI servers. If you still experience GPU passthrough issues after enabling this, also try enabling "Disable Simple Framebuffer" below.
+                    _(This is the first step for UEFI servers. If you still experience GPU passthrough issues after enabling this, also try enabling "Disable Simple Framebuffer" below.)_
                 </blockquote>
             </dd>
         </dl>
 
         <dl>
-            <dt class="help-label">Disable VESA Framebuffer (details):</dt>
+            <dt class="help-label">_(Disable VESA Framebuffer)_ _(details)_:</dt>
             <dd>
                 <input type="checkbox" id="vesafb-toggle" class="narrow" onchange="updateConfig()" disabled>
                 <br>
                 <span class="parameter-code">video=vesafb:off</span>
                 <blockquote class="inline_help">
-                    Prevents the kernel from attaching to the GPU via VESA framebuffer at boot. Required when passing through the primary or only GPU to a VM on legacy BIOS servers.
+                    _(Prevents the kernel from attaching to the GPU via VESA framebuffer at boot. Required when passing through the primary or only GPU to a VM on legacy BIOS servers.)_
                     <br><br>
-                    This is the first step for Legacy BIOS servers. If you still experience GPU passthrough issues after enabling this, also try enabling "Disable Simple Framebuffer" below.
+                    _(This is the first step for Legacy BIOS servers. If you still experience GPU passthrough issues after enabling this, also try enabling "Disable Simple Framebuffer" below.)_
                 </blockquote>
             </dd>
         </dl>
 
         <dl>
-            <dt class="help-label">Disable Simple Framebuffer (details):</dt>
+            <dt class="help-label">_(Disable Simple Framebuffer)_ _(details)_:</dt>
             <dd>
                 <input type="checkbox" id="simplefb-toggle" class="switch narrow" onchange="updateConfig()">
                 <br>
                 <span class="parameter-code">video=simplefb:off</span>
                 <blockquote class="inline_help">
-                    Prevents the kernel from using the Simple Framebuffer driver, which can sometimes interfere with GPU passthrough even when the primary framebuffer (EFI or VESA) is already disabled.
+                    _(Prevents the kernel from using the Simple Framebuffer driver, which can sometimes interfere with GPU passthrough even when the primary framebuffer (EFI or VESA) is already disabled.)_
                     <br><br>
-                    Enable this as a second step if disabling your boot mode's primary framebuffer (EFI or VESA above) didn't fully resolve GPU passthrough issues.
+                    _(Enable this as a second step if disabling your boot mode's primary framebuffer (EFI or VESA above) didn't fully resolve GPU passthrough issues.)_
                 </blockquote>
             </dd>
         </dl>
 
         <dl>
-            <dt class="help-label">Block All Framebuffers (details):</dt>
+            <dt class="help-label">_(Block All Framebuffers)_ _(details)_:</dt>
             <dd>
                 <input type="checkbox" id="sysfb-blacklist-toggle" class="switch narrow" onchange="updateConfig()">
                 <br>
                 <span class="parameter-code">initcall_blacklist=sysfb_init</span>
                 <blockquote class="inline_help">
-                    This is the most comprehensive approach: blocks the kernel's framebuffer initialization, preventing it from creating any framebuffer devices that could claim your GPU.
+                    _(This is the most comprehensive approach: blocks the kernel's framebuffer initialization, preventing it from creating any framebuffer devices that could claim your GPU.)_
                     <br><br>
-                    <strong>When to use this:</strong>
-                    <br>- Individual framebuffer options above didn't fully resolve GPU passthrough issues
-                    <br>- You want the most aggressive GPU isolation method
+                    <strong>_(When to use this)_:</strong>
+                    <br>_(- Individual framebuffer options above didn't fully resolve GPU passthrough issues)_
+                    <br>_(- You want the most aggressive GPU isolation method)_
                     <br><br>
-                    <strong>Important warnings:</strong>
-                    <br>- Completely disables console and graphical video output after boot
-                    <br>- You MUST have WebGUI or SSH access to manage your server
+                    <strong>_(Important warnings)_:</strong>
+                    <br>_(- Completely disables console and graphical video output after boot)_
+                    <br>_(- You MUST have WebGUI or SSH access to manage your server)_
                     <br><br>
-                    When enabled, individual framebuffer options above are automatically disabled (this replaces them all).
+                    _(When enabled, individual framebuffer options above are automatically disabled (this replaces them all).)_
                 </blockquote>
             </dd>
         </dl>
@@ -184,56 +184,56 @@ $csrf_token = $var['csrf_token'] ?? '';
 
     <!-- Hardware Compatibility Section -->
     <section class="section">
-        <h3 class="section-header">Hardware Compatibility</h3>
+        <h3 class="section-header">_(Hardware Compatibility)_</h3>
 
         <div class="warning-box">
-            Hardware compatibility fixes for common issues. Use these when: system logs show hardware errors, devices fail to initialize properly, resource allocation conflicts occur, or hardware monitoring features aren't working.
+            _(Hardware compatibility fixes for common issues. Use these when: system logs show hardware errors, devices fail to initialize properly, resource allocation conflicts occur, or hardware monitoring features aren't working.)_
         </div>
 
         <dl>
-            <dt class="help-label">Enable Sensor Access (details):</dt>
+            <dt class="help-label">_(Enable Sensor Access)_ _(details)_:</dt>
             <dd>
                 <input type="checkbox" id="acpi-toggle" class="switch narrow" onchange="updateConfig()">
                 <br>
                 <span class="parameter-code">acpi_enforce_resources=lax</span>
                 <blockquote class="inline_help">
-                    May be required on some motherboards to allow sensor drivers (such as nct6775) to access hardware monitoring chips for temperature, fan speed, and voltage readings. Only needed if monitoring isn't working and you've confirmed this parameter resolves it. May cause instability on some hardware.
+                    _(May be required on some motherboards to allow sensor drivers (such as nct6775) to access hardware monitoring chips for temperature, fan speed, and voltage readings. Only needed if monitoring isn't working and you've confirmed this parameter resolves it. May cause instability on some hardware.)_
                 </blockquote>
             </dd>
         </dl>
 
         <dl>
-            <dt class="help-label">Disable ACPI Hardware Error Reporting (details):</dt>
+            <dt class="help-label">_(Disable ACPI Hardware Error Reporting)_ _(details)_:</dt>
             <dd>
                 <input type="checkbox" id="ghes-toggle" class="switch narrow" onchange="updateConfig()">
                 <br>
                 <span class="parameter-code">ghes.disable=1</span>
                 <blockquote class="inline_help">
-                    Disables ACPI Generic Hardware Error Source reporting. Use this if you're seeing spurious hardware error messages in logs or experiencing crashes on systems with buggy BIOS ACPI tables. Common on certain Supermicro and ASRock motherboards.
+                    _(Disables ACPI Generic Hardware Error Source reporting. Use this if you're seeing spurious hardware error messages in logs or experiencing crashes on systems with buggy BIOS ACPI tables. Common on certain Supermicro and ASRock motherboards.)_
                 </blockquote>
             </dd>
         </dl>
 
         <dl>
-            <dt class="help-label">Disable PCIe Error Reporting (details):</dt>
+            <dt class="help-label">_(Disable PCIe Error Reporting)_ _(details)_:</dt>
             <dd>
                 <input type="checkbox" id="noaer-toggle" class="switch narrow" onchange="updateConfig()">
                 <br>
                 <span class="parameter-code">pci=noaer</span>
                 <blockquote class="inline_help">
-                    Disables PCIe Advanced Error Reporting. May silence excessive error messages in the system log from some GPUs, HBAs, or other PCIe devices. Note: This suppresses error reporting, not the errors themselves - use only if the messages are confirmed to be benign.
+                    _(Disables PCIe Advanced Error Reporting. May silence excessive error messages in the system log from some GPUs, HBAs, or other PCIe devices.)_ _(Note: This suppresses error reporting, not the errors themselves - use only if the messages are confirmed to be benign.)_
                 </blockquote>
             </dd>
         </dl>
 
         <dl>
-            <dt class="help-label">Enable PCI Resource Reallocation (details):</dt>
+            <dt class="help-label">_(Enable PCI Resource Reallocation)_ _(details)_:</dt>
             <dd>
                 <input type="checkbox" id="pci-realloc-toggle" class="switch narrow" onchange="updateConfig()">
                 <br>
                 <span class="parameter-code">pci=realloc</span>
                 <blockquote class="inline_help">
-                    Forces the kernel to reallocate PCI resources, fixing detection issues when devices aren't assigned proper memory regions by the BIOS. Useful for multi-GPU systems, many NVMe drives, or when devices show in lspci but don't work properly.
+                    _(Forces the kernel to reallocate PCI resources, fixing detection issues when devices aren't assigned proper memory regions by the BIOS. Useful for multi-GPU systems, many NVMe drives, or when devices show in lspci but don't work properly.)_
                 </blockquote>
             </dd>
         </dl>
@@ -242,60 +242,60 @@ $csrf_token = $var['csrf_token'] ?? '';
     <!-- Power Management Section -->
     <section class="section">
         <h3 class="section-header">
-            Power Management
-            <span class="section-badge">Advanced</span>
+            _(Power Management)_
+            <span class="section-badge">_(Advanced)_</span>
         </h3>
 
         <div class="warning-box">
-            These options disable power-saving features that can cause stability issues. Use when experiencing random USB disconnects, device freezes, or system lockups during idle periods. Increases power consumption slightly.
+            _(These options disable power-saving features that can cause stability issues. Use when experiencing random USB disconnects, device freezes, or system lockups during idle periods. Increases power consumption slightly.)_
         </div>
 
         <dl>
-            <dt class="help-label">Disable USB Autosuspend (details):</dt>
+            <dt class="help-label">_(Disable USB Autosuspend)_ _(details)_:</dt>
             <dd>
                 <input type="checkbox" id="usb-autosuspend-toggle" class="switch narrow" onchange="updateConfig()">
                 <br>
                 <span class="parameter-code">usbcore.autosuspend=-1</span>
                 <blockquote class="inline_help">
-                    Prevents USB devices from being automatically suspended when idle. Enable this if USB devices disconnect randomly, mice/keyboards become unresponsive after inactivity, or you experience issues with USB passthrough to VMs. Note: Increases power consumption slightly as USB devices remain fully powered even when not in use.
+                    _(Prevents USB devices from being automatically suspended when idle. Enable this if USB devices disconnect randomly, mice/keyboards become unresponsive after inactivity, or you experience issues with USB passthrough to VMs.)_ _(Note: Increases power consumption slightly as USB devices remain fully powered even when not in use.)_
                 </blockquote>
             </dd>
         </dl>
 
         <dl>
-            <dt class="help-label">Disable NVMe Deep Power States (details):</dt>
+            <dt class="help-label">_(Disable NVMe Deep Power States)_ _(details)_:</dt>
             <dd>
                 <input type="checkbox" id="nvme-toggle" class="switch narrow" onchange="updateConfig()">
                 <br>
                 <span class="parameter-code">nvme_core.default_ps_max_latency_us=0</span>
                 <blockquote class="inline_help">
-                    Prevents buggy NVMe drives from entering deep power states they cannot wake from. Use this if NVMe drives disappear and require a cold reboot (power cycle) to recover. Common on certain Samsung, Intel, and WD drives.
+                    _(Prevents buggy NVMe drives from entering deep power states they cannot wake from. Use this if NVMe drives disappear and require a cold reboot (power cycle) to recover. Common on certain Samsung, Intel, and WD drives.)_
                     <br><br>
-                    <strong>Note:</strong> Increases idle power slightly (typically 1-2W per drive). Dashboard may show inflated NVMe power readings - this is a display artifact.
+                    <strong>_(Note)_:</strong> _(Increases idle power slightly (typically 1-2W per drive). Dashboard may show inflated NVMe power readings - this is a display artifact.)_
                 </blockquote>
             </dd>
         </dl>
 
         <dl>
-            <dt class="help-label">Disable PCIe ASPM (details):</dt>
+            <dt class="help-label">_(Disable PCIe ASPM)_ _(details)_:</dt>
             <dd>
                 <input type="checkbox" id="aspm-toggle" class="switch narrow" onchange="updateConfig()">
                 <br>
                 <span class="parameter-code">pcie_aspm=off</span>
                 <blockquote class="inline_help">
-                    Disables PCIe Active State Power Management for all devices. May resolve log spam or stability issues with some GPUs (particularly Nvidia). Increases idle power for all PCIe devices.
+                    _(Disables PCIe Active State Power Management for all devices. May resolve log spam or stability issues with some GPUs (particularly Nvidia). Increases idle power for all PCIe devices.)_
                 </blockquote>
             </dd>
         </dl>
 
         <dl>
-            <dt class="help-label">Disable PCIe Port PM (details):</dt>
+            <dt class="help-label">_(Disable PCIe Port PM)_ _(details)_:</dt>
             <dd>
                 <input type="checkbox" id="portpm-toggle" class="switch narrow" onchange="updateConfig()">
                 <br>
                 <span class="parameter-code">pcie_port_pm=off</span>
                 <blockquote class="inline_help">
-                    Prevents PCIe root ports from entering low-power states. May help when devices disappear after idle periods. Often used alongside ASPM disable.
+                    _(Prevents PCIe root ports from entering low-power states. May help when devices disappear after idle periods. Often used alongside ASPM disable.)_
                 </blockquote>
             </dd>
         </dl>
@@ -304,30 +304,30 @@ $csrf_token = $var['csrf_token'] ?? '';
     <!-- Custom Parameters Section -->
     <section class="section">
         <h3 class="section-header">
-            Custom Parameters
-            <span class="section-badge">Advanced</span>
+            _(Custom Parameters)_
+            <span class="section-badge">_(Advanced)_</span>
         </h3>
 
         <div class="warning-box">
-            <strong>Warning:</strong> Only add parameters you understand - incorrect values may prevent your server from booting. Add custom kernel parameters not covered by the options above. Use the comment field to document what each parameter does.
+            <strong>_(Warning)_:</strong> _(Only add parameters you understand - incorrect values may prevent your server from booting. Add custom kernel parameters not covered by the options above. Use the comment field to document what each parameter does.)_
         </div>
 
         <div id="custom-params-list"></div>
 
         <!-- Inline Add Custom Parameter Form -->
         <dl>
-            <dt>Add Custom Parameter:</dt>
+            <dt>_(Add Custom Parameter)_:</dt>
             <dd>
-                <input type="text" id="new-custom-param" placeholder="e.g., mitigations=off" style="width: 300px;">
-                <input type="text" id="new-custom-comment" placeholder="Optional comment (e.g., Disables CPU mitigations)" style="width: 400px; margin-left: 8px;">
-                <button type="button" id="add-param-btn" class="btn-add-param" onclick="addCustomParamFromForm()" style="margin-left: 8px;">Add</button>
+                <input type="text" id="new-custom-param" placeholder="_(e.g., mitigations=off)_" style="width: 300px;">
+                <input type="text" id="new-custom-comment" placeholder="_(Optional comment (e.g., Disables CPU mitigations))_" style="width: 400px; margin-left: 8px;">
+                <button type="button" id="add-param-btn" class="btn-add-param" onclick="addCustomParamFromForm()" style="margin-left: 8px;">_(Add)_</button>
             </dd>
         </dl>
     </section>
 
     <!-- Parameters Preview -->
     <div id="params-preview">
-        <strong>Parameters to Apply:</strong>
+        <strong>_(Parameters to Apply)_:</strong>
         <pre id="preview-content"></pre>
     </div>
 
@@ -336,7 +336,7 @@ $csrf_token = $var['csrf_token'] ?? '';
     <!-- Config Preview -->
     <div id="config-preview">
         <div class="config-header">
-            <strong>Current Syslinux Configuration:</strong>
+            <strong>_(Current Syslinux Configuration)_:</strong>
             <div class="view-toggle-wrapper">
                 <input type="checkbox" id="syslinux-view-toggle" class="switch narrow">
             </div>
@@ -345,14 +345,14 @@ $csrf_token = $var['csrf_token'] ?? '';
         <!-- Menu View -->
         <div id="syslinux-menu-view">
             <div class="syslinux-section global-config">
-                <h4>Global Configuration</h4>
+                <h4>_(Global Configuration)_</h4>
                 <pre id="global-config-content"></pre>
             </div>
 
             <div class="syslinux-section boot-entries">
-                <h4>Boot Entries</h4>
+                <h4>_(Boot Entries)_</h4>
                 <div class="boot-entries-legend">
-                    <span class="legend-item"><span class="legend-radio"></span>&nbsp;Default boot entry</span><span class="legend-separator">&nbsp;|&nbsp;</span><span class="legend-item">Toggle =&nbsp;Apply&nbsp;parameters to entry</span>
+                    <span class="legend-item"><span class="legend-radio"></span>&nbsp;_(Default boot entry)_</span><span class="legend-separator">&nbsp;|&nbsp;</span><span class="legend-item">_(Toggle = Apply parameters to entry)_</span>
                 </div>
                 <div id="boot-entries-container">
                     <!-- Dynamically populated -->
@@ -367,11 +367,11 @@ $csrf_token = $var['csrf_token'] ?? '';
             </div>
             <textarea id="raw-config-editor" style="width: 100%; font-family: 'Courier New', Monaco, 'Cascadia Code', monospace; font-size: 13px; padding: 8px; border: 1px solid var(--border-color, #ddd); border-radius: 3px; resize: vertical; overflow-y: hidden; min-height: 100px;"></textarea>
             <div class="page-footer" style="margin-top: 12px;">
-                <input type="button" value="Save Raw Config" id="save-raw-btn" class="btn btn-secondary" onclick="saveRawConfig(this)">
-                <input type="button" value="Done" id="raw-done-button" class="btn" onclick="done()">
-                <input type="button" value="Reset" id="raw-reset-button" class="btn" onclick="resetRawView()" style="display:none;">
-                <input type="button" value="Default" class="btn btn-secondary" onclick="resetToDefault()">
-                <input type="button" value="Restore Backup" class="btn btn-secondary" onclick="showRestoreDialog()">
+                <input type="button" value="_(Save Raw Config)_" id="save-raw-btn" class="btn btn-secondary" onclick="saveRawConfig(this)">
+                <input type="button" value="_(Done)_" id="raw-done-button" class="btn" onclick="done()">
+                <input type="button" value="_(Reset)_" id="raw-reset-button" class="btn" onclick="resetRawView()" style="display:none;">
+                <input type="button" value="_(Default)_" class="btn btn-secondary" onclick="resetToDefault()">
+                <input type="button" value="_(Restore Backup)_" class="btn btn-secondary" onclick="showRestoreDialog()">
             </div>
             <!-- Hidden pre element to store raw config for loading into textarea -->
             <pre id="config-content" style="display:none;"></pre>
@@ -380,11 +380,11 @@ $csrf_token = $var['csrf_token'] ?? '';
 
     <!-- Footer Buttons (positioned after config preview) -->
     <div class="page-footer" id="menu-footer-buttons">
-        <input type="button" value="Apply" id="apply-btn" class="btn btn-primary" onclick="applyBootParams(this)" disabled>
-        <input type="button" value="Done" id="done-button" class="btn" onclick="done()">
-        <input type="button" value="Reset" id="reset-button" class="btn" onclick="resetMenuView()" style="display:none;">
-        <input type="button" value="Default" class="btn btn-secondary" onclick="resetToDefault()">
-        <input type="button" value="Restore Backup" class="btn btn-secondary" onclick="showRestoreDialog()">
+        <input type="button" value="_(Apply)_" id="apply-btn" class="btn btn-primary" onclick="applyBootParams(this)" disabled>
+        <input type="button" value="_(Done)_" id="done-button" class="btn" onclick="done()">
+        <input type="button" value="_(Reset)_" id="reset-button" class="btn" onclick="resetMenuView()" style="display:none;">
+        <input type="button" value="_(Default)_" class="btn btn-secondary" onclick="resetToDefault()">
+        <input type="button" value="_(Restore Backup)_" class="btn btn-secondary" onclick="showRestoreDialog()">
     </div>
 
     <!-- Reboot Notice -->
@@ -410,8 +410,8 @@ $csrf_token = $var['csrf_token'] ?? '';
             </ul>
             <p><strong>Warning:</strong> If you apply untested parameters to Safe Mode, you may not be able to boot your server at all without physical access to manually edit the boot drive.</p>
             <div class="modal-buttons" style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
-                <input type="button" value="Cancel" class="btn btn-secondary" onclick="cancelSafeModeApply()">
-                <input type="button" value="I've Tested - Apply to Safe Mode" class="btn btn-primary" onclick="confirmSafeModeApply()">
+                <input type="button" value="_(Cancel)_" class="btn btn-secondary" onclick="cancelSafeModeApply()">
+                <input type="button" value="_(I've Tested - Apply to Safe Mode)_" class="btn btn-primary" onclick="confirmSafeModeApply()">
             </div>
         </div>
     </div>
@@ -834,11 +834,17 @@ function handleFramebufferMutualExclusivity() {
 function buildProposedParams() {
     var params = [];
 
-    // NVMe deep power states
-    if (document.getElementById('nvme-toggle').checked) {
-        params.push('nvme_core.default_ps_max_latency_us=0');
-    }
+    // ===== CANONICAL PARAMETER ORDER =====
+    // This order MUST match the backend build_append_line() function exactly
+    // to prevent spurious diffs when config is read back after writing.
+    //
+    // 1. VM Passthrough (pcie_acs_override, vfio_iommu_type1)
+    // 2. Framebuffers (video=efifb, video=vesafb, video=simplefb, initcall_blacklist=sysfb_init)
+    // 3. Hardware Compatibility (acpi_enforce_resources, ghes.disable, pci= merged)
+    // 4. Power Management (usbcore.autosuspend, nvme_core, pcie_aspm, pcie_port_pm)
+    // 5. Custom Parameters (in array order, excluding pci=)
 
+    // === 1. VM PASSTHROUGH ===
     // PCIe ACS Override
     var acsValue = document.getElementById('acs-dropdown').value;
     if (acsValue) {
@@ -850,6 +856,7 @@ function buildProposedParams() {
         params.push('vfio_iommu_type1.allow_unsafe_interrupts=1');
     }
 
+    // === 2. FRAMEBUFFERS ===
     // EFI framebuffer
     if (document.getElementById('efifb-toggle').checked) {
         params.push('video=efifb:off');
@@ -870,27 +877,18 @@ function buildProposedParams() {
         params.push('initcall_blacklist=sysfb_init');
     }
 
+    // === 3. HARDWARE COMPATIBILITY ===
     // ACPI sensors
     if (document.getElementById('acpi-toggle').checked) {
         params.push('acpi_enforce_resources=lax');
     }
 
-    // USB autosuspend
-    if (document.getElementById('usb-autosuspend-toggle').checked) {
-        params.push('usbcore.autosuspend=-1');
+    // ACPI Hardware Error Reporting
+    if (document.getElementById('ghes-toggle').checked) {
+        params.push('ghes.disable=1');
     }
 
-    // PCIe ASPM
-    if (document.getElementById('aspm-toggle').checked) {
-        params.push('pcie_aspm=off');
-    }
-
-    // PCIe Port PM
-    if (document.getElementById('portpm-toggle').checked) {
-        params.push('pcie_port_pm=off');
-    }
-
-    // ===== PCI OPTIONS - MERGE FROM ALL SOURCES =====
+    // PCI OPTIONS - MERGE FROM ALL SOURCES
     // Linux kernel documentation specifies pci= sub-options should be comma-separated
     // (e.g., pci=noaer,realloc) rather than separate pci= parameters.
     // This section collects PCI options from both toggles and custom parameters,
@@ -939,12 +937,28 @@ function buildProposedParams() {
         params.push('pci=' + uniquePciOptions.join(','));
     }
 
-    // ACPI Hardware Error Reporting
-    if (document.getElementById('ghes-toggle').checked) {
-        params.push('ghes.disable=1');
+    // === 4. POWER MANAGEMENT ===
+    // USB autosuspend
+    if (document.getElementById('usb-autosuspend-toggle').checked) {
+        params.push('usbcore.autosuspend=-1');
     }
 
-    // ===== CUSTOM PARAMETERS (EXCLUDING PCI) =====
+    // NVMe deep power states
+    if (document.getElementById('nvme-toggle').checked) {
+        params.push('nvme_core.default_ps_max_latency_us=0');
+    }
+
+    // PCIe ASPM
+    if (document.getElementById('aspm-toggle').checked) {
+        params.push('pcie_aspm=off');
+    }
+
+    // PCIe Port PM
+    if (document.getElementById('portpm-toggle').checked) {
+        params.push('pcie_port_pm=off');
+    }
+
+    // === 5. CUSTOM PARAMETERS (EXCLUDING PCI) ===
     // Add all custom parameters except pci= (already merged above)
     const activeCustomParams = customParams.filter(p => p && p.trim() !== '');
     for (var i = 0; i < activeCustomParams.length; i++) {
@@ -1235,8 +1249,8 @@ function renderMenuView(parsed) {
     // Initialize switchButton on all boot entry toggles
     $('.boot-entry-apply-toggle').switchButton({
         labels_placement: 'right',
-        on_label: 'Apply',
-        off_label: 'Skip'
+        on_label: '<?= _('Apply') ?>',
+        off_label: '<?= _('Skip') ?>'
     });
 }
 
@@ -1253,8 +1267,8 @@ $(function() {
     // Framebuffer toggles are initialized separately after boot mode detection
     $('.switch').not('#syslinux-view-toggle, #syslinux-view-toggle-top, #efifb-toggle, #vesafb-toggle, #simplefb-toggle, #sysfb-blacklist-toggle').switchButton({
         labels_placement: 'right',
-        on_label: 'On',
-        off_label: 'Off'
+        on_label: '<?= _('On') ?>',
+        off_label: '<?= _('Off') ?>'
     });
 
     // Sync with Unraid's global help toggle state on page load
@@ -1364,8 +1378,8 @@ $(function() {
     // Initialize top view toggle
     $('#syslinux-view-toggle-top').switchButton({
         labels_placement: 'right',
-        on_label: 'Raw View',
-        off_label: 'Menu View'
+        on_label: '<?= _('Raw View') ?>',
+        off_label: '<?= _('Menu View') ?>'
     }).on('change', function() {
         // Only switch view if this is a user action, not a programmatic state update
         if (!isSettingToggleState) {
@@ -1376,8 +1390,8 @@ $(function() {
     // Initialize bottom view toggle (existing)
     $('#syslinux-view-toggle').switchButton({
         labels_placement: 'right',
-        on_label: 'Raw View',
-        off_label: 'Menu View'
+        on_label: '<?= _('Raw View') ?>',
+        off_label: '<?= _('Menu View') ?>'
     }).on('change', function() {
         // Only switch view if this is a user action, not a programmatic state update
         if (!isSettingToggleState) {
@@ -1461,8 +1475,8 @@ function detectBootModeAndAutoCorrect(mainConfig) {
                 // Remove disabled attribute from EFI toggle, initialize switchButton
                 $('#efifb-toggle').prop('disabled', false).switchButton({
                     labels_placement: 'right',
-                    on_label: 'On',
-                    off_label: 'Off',
+                    on_label: '<?= _('On') ?>',
+                    off_label: '<?= _('Off') ?>',
                     checked: (currentConfig.efifb === '1')
                 });
 
@@ -1470,8 +1484,8 @@ function detectBootModeAndAutoCorrect(mainConfig) {
                 // Keep disabled attribute, initialize switchButton in disabled state
                 $('#vesafb-toggle').switchButton({
                     labels_placement: 'right',
-                    on_label: 'On',
-                    off_label: 'Off',
+                    on_label: '<?= _('On') ?>',
+                    off_label: '<?= _('Off') ?>',
                     checked: false,
                     disabled: true
                 });
@@ -1491,8 +1505,8 @@ function detectBootModeAndAutoCorrect(mainConfig) {
                 // Remove disabled attribute from VESA toggle, initialize switchButton
                 $('#vesafb-toggle').prop('disabled', false).switchButton({
                     labels_placement: 'right',
-                    on_label: 'On',
-                    off_label: 'Off',
+                    on_label: '<?= _('On') ?>',
+                    off_label: '<?= _('Off') ?>',
                     checked: (currentConfig.vesafb === '1')
                 });
 
@@ -1500,8 +1514,8 @@ function detectBootModeAndAutoCorrect(mainConfig) {
                 // Keep disabled attribute, initialize switchButton in disabled state
                 $('#efifb-toggle').switchButton({
                     labels_placement: 'right',
-                    on_label: 'On',
-                    off_label: 'Off',
+                    on_label: '<?= _('On') ?>',
+                    off_label: '<?= _('Off') ?>',
                     checked: false,
                     disabled: true
                 });
@@ -1521,16 +1535,16 @@ function detectBootModeAndAutoCorrect(mainConfig) {
             // Initialize simplefb toggle (always available in both UEFI and Legacy modes)
             $('#simplefb-toggle').switchButton({
                 labels_placement: 'right',
-                on_label: 'On',
-                off_label: 'Off',
+                on_label: '<?= _('On') ?>',
+                off_label: '<?= _('Off') ?>',
                 checked: (mainConfig.simplefb_off === '1')
             });
 
             // Initialize nuclear option toggle (always available in both modes)
             $('#sysfb-blacklist-toggle').switchButton({
                 labels_placement: 'right',
-                on_label: 'On',
-                off_label: 'Off',
+                on_label: '<?= _('On') ?>',
+                off_label: '<?= _('Off') ?>',
                 checked: (mainConfig.sysfb_blacklist === '1')
             });
 
@@ -1728,7 +1742,8 @@ function loadCurrentConfig() {
             // Load comments if provided
             // IMPORTANT: Ensure we always have an object, never an array
             if (config.custom_params_comments) {
-                // Defensive check: Ensure comments structure is an object, not array
+                // Ensure comments are always an object for frontend compatibility
+                // (defensive check prevents errors when JSON file contains array instead of object)
                 if (Array.isArray(config.custom_params_comments)) {
                     console.warn('[WARN] Invalid comments format (array instead of object), using empty object');
                     customParamsComments = {};
@@ -2487,17 +2502,21 @@ function validateCustomParam_Syslinux(param) {
         }
     }
 
-    // Check 2: No spaces (multiple parameters)
-    if (param.includes(' ')) {
+    // Check 2: Character whitelist validation
+    // Only allow characters that appear in valid kernel boot parameters
+    // Whitelist: alphanumeric, underscore, hyphen, dot, comma, equals, colon, slash, at-sign
+    if (!param.match(/^[a-zA-Z0-9_.,=:/@-]+$/)) {
         swal({
             title: "Invalid Custom Parameter",
-            text: "You entered multiple parameters separated by spaces.\n\n" +
-                  "Please add only ONE parameter at a time.\n\n" +
+            text: "Custom parameters can only contain letters, numbers, and these symbols:\n\n" +
+                  "_ - . , = : / @\n\n" +
+                  "Quotes, spaces, and special shell characters are not allowed.\n\n" +
                   "Examples:\n" +
-                  "✓ Correct: pcie_aspm=off\n" +
-                  "✓ Correct: acpi=off\n" +
-                  "✗ Wrong: pcie_aspm=off acpi=off\n\n" +
-                  "To add multiple parameters, click 'Add Custom Parameter' again for each parameter.",
+                  "✓ Correct: nvme_core.default_ps_max_latency_us=0\n" +
+                  "✓ Correct: video=efifb:off\n" +
+                  "✓ Correct: pci=noaer,realloc\n" +
+                  "✗ Wrong: param\"with\"quotes\n" +
+                  "✗ Wrong: param with spaces",
             type: "error"
         });
         return false;
@@ -2554,8 +2573,8 @@ function validateCustomParam_GRUB(param) {
  * Returns true if valid, false if invalid (with error modal shown)
  */
 function validateCustomParam(param) {
-    // TODO: Get bootloader type from server-side detection
-    // For now, hardcoded to syslinux (USB boot)
+    // Bootloader detection: Currently hardcoded to syslinux (USB boot)
+    // Future: Server-side detection will support GRUB when available
     const bootloaderType = 'syslinux';
 
     if (bootloaderType === 'grub') {

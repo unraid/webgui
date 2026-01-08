@@ -22,6 +22,26 @@ if [[ -z "$OPERATION" ]]; then
     error_exit "No operation specified"
 fi
 
+#############################################
+# JSON Escaping Function
+#############################################
+
+# Escape special characters for safe JSON output (pure Bash, no dependencies)
+# Prevents JSON injection when custom parameters contain quotes, backslashes, etc.
+escape_json_string() {
+    local str="$1"
+    # Escape backslashes first (MUST be first to avoid double-escaping!)
+    str="${str//\\/\\\\}"
+    # Escape double quotes
+    str="${str//\"/\\\"}"
+    # Escape newlines (shouldn't exist in our use case, but be defensive)
+    str="${str//$'\n'/\\n}"
+    # Escape tabs
+    str="${str//$'\t'/\\t}"
+    # Escape carriage returns
+    str="${str//$'\r'/\\r}"
+    echo "$str"
+}
 
 #############################################
 # JSON Comment Management Functions
@@ -91,7 +111,7 @@ save_comments() {
     fi
 
     # Ensure file has correct permissions for future writes
-    chmod 666 "$COMMENTS_FILE" 2>/dev/null || true
+    chmod 644 "$COMMENTS_FILE" 2>/dev/null || true
 }
 
 #############################################
@@ -167,7 +187,7 @@ save_hardware_tracking() {
     fi
 
     # Ensure file has correct permissions for future writes
-    chmod 666 "$COMMENTS_FILE" 2>/dev/null || true
+    chmod 644 "$COMMENTS_FILE" 2>/dev/null || true
 }
 
 # Check if hardware has changed
@@ -410,10 +430,10 @@ read_config() {
   "pcie_port_pm_off": "$([[ "$pcie_port_pm" == "off" ]] && echo "1" || echo "0")",
   "pci_noaer": "$pci_noaer",
   "pci_realloc": "$pci_realloc",
-  "custom_params": "$custom_params",
+  "custom_params": "$(escape_json_string "$custom_params")",
   "custom_params_comments": $all_comments,
-  "current_config": "$append_line",
-  "current_append_line": "$append_line",
+  "current_config": "$(escape_json_string "$append_line")",
+  "current_append_line": "$(escape_json_string "$append_line")",
   "timeout": "$timeout"
 }
 EOF
@@ -427,12 +447,19 @@ EOF
 validate_custom_param() {
     local param="$1"
 
-    # Check for spaces (multiple parameters)
+    # Check 1: Character whitelist validation (defense in depth - matches frontend validation)
+    # Only allow characters that appear in valid kernel boot parameters
+    # Whitelist: alphanumeric, underscore, hyphen, dot, comma, equals, colon, slash, at-sign
+    if ! [[ "$param" =~ ^[a-zA-Z0-9_.,=:/@-]+$ ]]; then
+        error_exit "Invalid custom parameter: '$param' contains disallowed characters. Only letters, numbers, and _ - . , = : / @ are allowed."
+    fi
+
+    # Check 2: No spaces (multiple parameters) - redundant with whitelist but kept for clarity
     if [[ "$param" =~ [[:space:]] ]]; then
         error_exit "Invalid custom parameter: contains spaces. Only one parameter per entry allowed."
     fi
 
-    # Check for reserved syslinux directives (case-insensitive)
+    # Check 3: Reserved syslinux directives (case-insensitive)
     local lower_param=$(echo "$param" | tr '[:upper:]' '[:lower:]')
     if [[ "$lower_param" =~ ^(append|initrd|label|kernel|menu|default|timeout|unraidsafemode) ]]; then
         error_exit "Invalid custom parameter: '$param' is a reserved syslinux directive"
@@ -444,20 +471,29 @@ validate_custom_param() {
 #############################################
 # Build new append line from environment variables
 #############################################
+# CANONICAL PARAMETER ORDER:
+# This order MUST match the frontend buildProposedParams() function exactly
+# to prevent spurious diffs when config is read back after writing.
+#
+# 1. VM Passthrough (pcie_acs_override, vfio_iommu_type1)
+# 2. Framebuffers (video=efifb, video=vesafb, video=simplefb, initcall_blacklist=sysfb_init)
+# 3. Hardware Compatibility (acpi_enforce_resources, ghes.disable, pci= merged)
+# 4. Power Management (usbcore.autosuspend, nvme_core, pcie_aspm, pcie_port_pm)
+# 5. Custom Parameters (in array order, excluding pci=)
 build_append_line() {
     local params="initrd=/bzroot"
 
-    # VM Passthrough
+    # 1. VM Passthrough
     [[ -n "${ACS_OVERRIDE}" ]] && params="$params pcie_acs_override=${ACS_OVERRIDE}"
     [[ "${VFIO_UNSAFE}" == "1" ]] && params="$params vfio_iommu_type1.allow_unsafe_interrupts=1"
 
-    # GPU Passthrough - Framebuffer
+    # 2. Framebuffers
     [[ "${EFIFB_OFF}" == "1" ]] && params="$params video=efifb:off"
     [[ "${VESAFB_OFF}" == "1" ]] && params="$params video=vesafb:off"
     [[ "${SIMPLEFB_OFF}" == "1" ]] && params="$params video=simplefb:off"
     [[ "${SYSFB_BLACKLIST}" == "1" ]] && params="$params initcall_blacklist=sysfb_init"
 
-    # Hardware Compatibility
+    # 3. Hardware Compatibility
     [[ "${ACPI_LAX}" == "1" ]] && params="$params acpi_enforce_resources=lax"
     [[ "${GHES_DISABLE}" == "1" ]] && params="$params ghes.disable=1"
 
@@ -495,13 +531,13 @@ build_append_line() {
         params="$params pci=$pci_options"
     fi
 
-    # Power Management
+    # 4. Power Management
     [[ "${USB_AUTOSUSPEND}" == "1" ]] && params="$params usbcore.autosuspend=-1"
     [[ "${NVME_DISABLE}" == "1" ]] && params="$params nvme_core.default_ps_max_latency_us=0"
     [[ "${PCIE_ASPM_OFF}" == "1" ]] && params="$params pcie_aspm=off"
     [[ "${PCIE_PORT_PM_OFF}" == "1" ]] && params="$params pcie_port_pm=off"
 
-    # Add custom parameters (PCI options already merged above)
+    # 5. Custom Parameters (PCI options already merged above)
     if [[ -n "${CUSTOM_PARAMS}" ]]; then
         local filtered_custom=$(echo "${CUSTOM_PARAMS}" | sed 's/\bpci=[^ ]*//g' | xargs)
         if [[ -n "$filtered_custom" ]]; then
@@ -519,16 +555,22 @@ build_append_line() {
 #############################################
 # Build append line for GUI mode entries (excludes framebuffer parameters)
 #############################################
+# CANONICAL PARAMETER ORDER (same as build_append_line, but framebuffers excluded):
+# 1. VM Passthrough (pcie_acs_override, vfio_iommu_type1)
+# 2. Framebuffers (EXCLUDED for GUI mode - ensures display works)
+# 3. Hardware Compatibility (acpi_enforce_resources, ghes.disable, pci= merged)
+# 4. Power Management (usbcore.autosuspend, nvme_core, pcie_aspm, pcie_port_pm)
+# 5. Custom Parameters (in array order, excluding pci=)
 build_append_line_gui_safe() {
     local params="initrd=/bzroot"
 
-    # VM Passthrough (safe for GUI mode)
+    # 1. VM Passthrough (safe for GUI mode)
     [[ -n "${ACS_OVERRIDE}" ]] && params="$params pcie_acs_override=${ACS_OVERRIDE}"
     [[ "${VFIO_UNSAFE}" == "1" ]] && params="$params vfio_iommu_type1.allow_unsafe_interrupts=1"
 
-    # Framebuffer parameters are excluded to ensure GUI display works
+    # 2. Framebuffers - EXCLUDED to ensure GUI display works
 
-    # Hardware Compatibility (safe for GUI mode)
+    # 3. Hardware Compatibility (safe for GUI mode)
     [[ "${ACPI_LAX}" == "1" ]] && params="$params acpi_enforce_resources=lax"
     [[ "${GHES_DISABLE}" == "1" ]] && params="$params ghes.disable=1"
 
@@ -558,13 +600,13 @@ build_append_line_gui_safe() {
         params="$params pci=$pci_options"
     fi
 
-    # Power Management (safe for GUI mode)
+    # 4. Power Management (safe for GUI mode)
     [[ "${USB_AUTOSUSPEND}" == "1" ]] && params="$params usbcore.autosuspend=-1"
     [[ "${NVME_DISABLE}" == "1" ]] && params="$params nvme_core.default_ps_max_latency_us=0"
     [[ "${PCIE_ASPM_OFF}" == "1" ]] && params="$params pcie_aspm=off"
     [[ "${PCIE_PORT_PM_OFF}" == "1" ]] && params="$params pcie_port_pm=off"
 
-    # Add custom parameters (PCI options already merged above)
+    # 5. Custom Parameters (PCI options already merged above)
     if [[ -n "${CUSTOM_PARAMS}" ]]; then
         local filtered_custom=$(echo "${CUSTOM_PARAMS}" | sed 's/\bpci=[^ ]*//g' | xargs)
         if [[ -n "$filtered_custom" ]]; then
@@ -904,9 +946,24 @@ EOF
 # Restore from backup
 #############################################
 restore_backup() {
+    # Validate backup filename format (defense-in-depth - prevents path traversal)
+    # Expected format: syslinux.cfg.bak.YYYY-MMM-DD_HH-MM-SS
+    # Example: syslinux.cfg.bak.2025-Jan-08_14-30-45
+    # Regex breakdown:
+    #   ^syslinux\.cfg\.bak\.        - Literal prefix (escaped dots)
+    #   [0-9]{4}                     - Year (4 digits)
+    #   -[A-Za-z]{3}                 - Month (3 letters: Jan, Feb, etc.)
+    #   -[0-9]{2}                    - Day (2 digits)
+    #   _[0-9]{2}-[0-9]{2}-[0-9]{2}  - Time (HH-MM-SS)
+    #   $                            - End of string (prevents path traversal)
+    # This matches the PHP validation pattern exactly (line 188 in boot_params_handler.php)
+    if [[ ! "$BACKUP_FILENAME" =~ ^syslinux\.cfg\.bak\.[0-9]{4}-[A-Za-z]{3}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
+        error_exit "Invalid backup filename format: $BACKUP_FILENAME"
+    fi
+
     local backup_file="$BACKUP_DIR/${BACKUP_FILENAME}"
 
-
+    # Verify file exists
     if [[ ! -f "$backup_file" ]]; then
         error_exit "Backup file not found: $backup_file"
     fi

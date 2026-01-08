@@ -12,6 +12,10 @@ require_once "$docroot/webGui/include/Wrappers.php";
 
 $operation = $_POST['operation'] ?? '';
 
+// Set JSON response headers
+header('Content-Type: application/json; charset=utf-8');
+header('X-Content-Type-Options: nosniff');
+
 if (empty($operation)) {
     echo json_encode(['error' => 'No operation specified']);
     exit;
@@ -180,8 +184,8 @@ switch ($operation) {
 
         // Sanitize filename
         $backup_filename = basename($backup_filename);
-        // Format: syslinux.cfg.bak.YYYY-MMM-DD_HH-MM or YYYY-MMM-DD_HH-MM-SS
-        if (!preg_match('/^syslinux\.cfg\.bak\.[0-9]{4}-[A-Za-z]{3}-[0-9]{2}_[0-9]{2}-[0-9]{2}(-[0-9]{2})?$/i', $backup_filename)) {
+        // Format: syslinux.cfg.bak.YYYY-MMM-DD_HH-MM-SS
+        if (!preg_match('/^syslinux\.cfg\.bak\.[0-9]{4}-[A-Za-z]{3}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}$/i', $backup_filename)) {
             echo json_encode(['error' => 'Invalid backup filename format']);
             exit;
         }
@@ -227,10 +231,15 @@ switch ($operation) {
             'VFIO_UNSAFE' => '0',
             'EFIFB_OFF' => '0',
             'VESAFB_OFF' => '0',
+            'SIMPLEFB_OFF' => '0',
+            'SYSFB_BLACKLIST' => '0',
             'ACPI_LAX' => '0',
+            'GHES_DISABLE' => '0',
+            'USB_AUTOSUSPEND' => '0',
             'PCIE_ASPM_OFF' => '0',
             'PCIE_PORT_PM_OFF' => '0',
             'PCI_NOAER' => '0',
+            'PCI_REALLOC' => '0',
             'CUSTOM_PARAMS' => '',
             'CUSTOM_PARAMS_COMMENTS' => '{}',
             'DEFAULT_BOOT_ENTRY' => '',
@@ -239,7 +248,8 @@ switch ($operation) {
             'APPLY_TO_UNRAID_OS' => '1',
             'APPLY_TO_GUI_MODE' => '1',
             'APPLY_TO_SAFE_MODE' => '1',
-            'APPLY_TO_GUI_SAFE_MODE' => '1'
+            'APPLY_TO_GUI_SAFE_MODE' => '1',
+            'EXCLUDE_FRAMEBUFFER_FROM_GUI' => '0'
         ];
 
         $result = executeShellScript($env);
