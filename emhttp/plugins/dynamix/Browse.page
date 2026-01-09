@@ -28,9 +28,11 @@ function validdir($dir) {
   return in_array(explode('/', $path)[1] ?? '', ['mnt','boot']) ? $path : '';
 }
 
-$dir     = validdir(htmlspecialchars_decode(rawurldecode($dir)));
+$dir     = validdir(rawurldecode($dir));
 [$none,$root,$main,$next,$rest] = my_explode('/', $dir,5);
-$dir     = htmlspecialchars(str_replace(['\\', "\n", "\r", "\t"], ['\\\\', '\\n', '\\r', '\\t'], $dir));
+// For JavaScript context: json_encode() properly escapes quotes, backslashes, newlines, etc.
+// JSON_UNESCAPED_SLASHES keeps paths readable, JSON_UNESCAPED_UNICODE preserves UTF-8
+$dir_js  = json_encode($dir, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 $lock    = $root == 'mnt' ? ($main ?: '---') : ($root == 'boot' ? _('flash') : '---');
 $isshare = $root == 'mnt' && (!$main || !$next || ($main == 'rootshare' && !$rest));
 $editor  = '/boot/config/editor.cfg';
@@ -44,7 +46,7 @@ if (!file_exists($editor)) file_put_contents($editor, implode("\n",['','txt','js
 <script src="<?autov("/webGui/javascript/jquery.switchbutton.js")?>"></script>
 <script>
 // General variables
-var dir   = "<?=$dir?>";
+var dir   = <?=$dir_js?>;
 var table = null;
 var thead = null;
 
@@ -55,6 +57,36 @@ function autoscale(value) {
   var scale = data<100?100:10;
   if (data == 0) base = 0;
   return ((Math.round(scale*data)/scale)+' '+unit[base]).replace('.','<?=$display['number'][0]?>')+'/s';
+}
+
+// Add warning to dialog buttonpane based on action type
+function addActionWarning(action, isBulk) {
+  var warningTexts = isBulk ? {
+    0: "<?=_("This creates a folder at the current level")?>",
+    1: "<?=_("This deletes all selected sources")?>",
+    2: "<?=_("This renames the selected source")?>",
+    3: "<?=_("This copies all the selected sources")?>",
+    4: "<?=_("This moves all the selected sources")?>",
+    11: "<?=_("This changes the owner of the source recursively")?>",
+    12: "<?=_("This changes the permission of the source recursively")?>"
+  } : {
+    0: "<?=_("This creates a folder at the current level")?>",
+    1: "<?=_("This deletes the folder and all its content")?>",
+    2: "<?=_("This renames the folder to the new name")?>",
+    3: "<?=_("This copies the folder and all its content to another folder")?>",
+    4: "<?=_("This moves the folder and all its content to another folder")?>",
+    6: "<?=_("This deletes the selected file")?>",
+    7: "<?=_("This renames the selected file")?>",
+    8: "<?=_("This copies the selected file")?>",
+    9: "<?=_("This moves the selected file")?>",
+    11: "<?=_("This changes the owner of the source recursively")?>",
+    12: "<?=_("This changes the permission of the source recursively")?>"
+  };
+  var warningText = warningTexts[action];
+  if (warningText) {
+    var $warning = $('<div class="dfm-warning">').html('<i class="fa fa-warning dfm"></i> ' + warningText);
+    $('.ui-dfm .ui-dialog-buttonset').prepend($warning);
+  }
 }
 
 function preventFileTreeClose() {
@@ -664,12 +696,12 @@ function doAction(action, title, id) {
   case 3: // copy folder
     dfm.window.html($('#dfm_templateCopyFolder').html());
     dfm_createSource(source.dfm_strip());
-    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-show-popular','true').fileTreeAttach(null,null,function(path){
+    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       var bits = path.substr(1).split('/');
       var auto = bits.length>3 ? '' : share;
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
-    dfm.window.find('#dfm_target').css('margin-bottom', '320px');
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
     break;
   case 4: // move folder
     dfm.window.html($('#dfm_templateMoveFolder').html());
@@ -679,7 +711,7 @@ function doAction(action, title, id) {
       var auto = bits.length>3 ? '' : share;
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
-    dfm.window.find('#dfm_target').css('margin-bottom', '320px');
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
     break;
   case 6: // delete file
     dfm.window.html($('#dfm_templateDeleteFile').html());
@@ -696,7 +728,7 @@ function doAction(action, title, id) {
     dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
     });
-    dfm.window.find('#dfm_target').css('margin-bottom', '320px');
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
     break;
   case 9: // move file
     dfm.window.html($('#dfm_templateMoveFile').html());
@@ -704,7 +736,7 @@ function doAction(action, title, id) {
     dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
     });
-    dfm.window.find('#dfm_target').css('margin-bottom', '320px');
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
     break;
   case 11: // change owner
     dfm.window.html($('#dfm_templateChangeOwner').html());
@@ -754,25 +786,7 @@ function doAction(action, title, id) {
       $('.ui-dfm').off('mousedown.dfmFileTree');
     },
     open: function() {
-      // Add warning to buttonpane for all relevant actions
-      var warningTexts = {
-        0: "<?=_("This creates a folder at the current level")?>",
-        1: "<?=_("This deletes the folder and all its content")?>",
-        2: "<?=_("This renames the folder to the new name")?>",
-        3: "<?=_("This copies the folder and all its content to another folder")?>",
-        4: "<?=_("This moves the folder and all its content to another folder")?>",
-        6: "<?=_("This deletes the selected file")?>",
-        7: "<?=_("This renames the selected file")?>",
-        8: "<?=_("This copies the selected file")?>",
-        9: "<?=_("This moves the selected file")?>",
-        11: "<?=_("This changes the owner of the source recursively")?>",
-        12: "<?=_("This changes the permission of the source recursively")?>"
-      };
-      var warningText = warningTexts[action];
-      if (warningText) {
-        var $warning = $('<div class="dfm-warning">').html('<i class="fa fa-warning dfm"></i> ' + warningText);
-        $('.ui-dfm .ui-dialog-buttonset').prepend($warning);
-      }
+      addActionWarning(action, false);
     },
     buttons: {
       "_(Start)_": function(){
@@ -984,7 +998,7 @@ function doActions(action, title) {
       var auto = bulk || bits.length>3 ? '' : (type[0] == 'd' ? share : '');
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
-    dfm.window.find('#dfm_target').css('margin-bottom', '320px');
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
     break;
   case 4: // move object
     dfm.window.html($('#dfm_templateMoveObject').html());
@@ -997,7 +1011,7 @@ function doActions(action, title) {
       var auto = bulk || bits.length > 3 ? '' : (type[0] == 'd' ? share : '');
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
-    dfm.window.find('#dfm_target').css('margin-bottom', '320px');
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
     break;
   case 11: // change owner
     dfm.window.html($('#dfm_templateChangeOwner').html());
@@ -1073,11 +1087,12 @@ function doActions(action, title) {
           target = target.val();
           switch (action) {
           case 0: // create folder
-            bulk = false;
-          case 2: // rename object
+          case 2: // rename folder
+          case 7: // rename file
             var valid = /^[^\/]*$/; // no slashes allowed
             break;
-          case 4: // move object
+          case 4: // move folder
+          case 9: // move file
             // disallow mixing of disk and user shares
             var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
             break;
@@ -1344,7 +1359,7 @@ function xlink(link) {
   
   // Always show dialog with selectable textarea (better mobile support)
   var inputId = 'dfm_path_input_' + Date.now();
-  var inputHtml = '<textarea id="' + inputId + '" class="text-center font-mono" readonly style="resize:none; overflow:hidden; height:auto; min-height:2.6rem; line-height:1.3rem; padding:.5rem; width:100%; box-sizing:border-box; border:1px solid var(--inverse-border-color); border-radius:3px; background-color:var(--background-color);">' + path + '</textarea>';
+  var inputHtml = '<textarea id="' + inputId + '" class="dfm-path-textarea text-center font-mono" readonly>' + path + '</textarea>';
   
   swal({
     title: '',

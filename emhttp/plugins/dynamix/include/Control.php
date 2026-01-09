@@ -45,7 +45,7 @@ function quoted($name) {return is_array($name) ? implode(' ',array_map('escape',
 
 switch ($_POST['mode'] ?? $_GET['mode'] ?? '') {
 case 'upload':
-  $file = validname(htmlspecialchars_decode(rawurldecode($_POST['file'] ?? $_GET['file'] ?? '')));
+  $file = validname(rawurldecode($_POST['file'] ?? $_GET['file'] ?? ''));
   if (!$file) die('stop');
   $start = (int)($_POST['start'] ?? $_GET['start'] ?? 0);
   $cancel = (int)($_POST['cancel'] ?? $_GET['cancel'] ?? 0);
@@ -94,7 +94,7 @@ case 'upload':
   die();
 case 'calc':
   extract(parse_plugin_cfg('dynamix',true));
-  $source = explode("\n",htmlspecialchars_decode(rawurldecode($_POST['source'])));
+  $source = explode("\n",rawurldecode($_POST['source']));
   [$null,$root,$main,$rest] = my_explode('/',$source[0],4);
   if ($root=='mnt' && in_array($main,['user','user0'])) {
     $disks = parse_ini_file('state/disks.ini',true);
@@ -121,8 +121,8 @@ case 'calc':
   $calc   = '<div style="text-align:left;margin-left:56px">'.implode('<br>',$calc).'</div>';
   die($calc);
 case 'home':
-  $source = explode("\n",htmlspecialchars_decode(rawurldecode($_POST['source'])));
-  $target = htmlspecialchars_decode(rawurldecode($_POST['target']));
+  $source = explode("\n",rawurldecode($_POST['source']));
+  $target = rawurldecode($_POST['target']);
   $disks = parse_ini_file('state/disks.ini',true);
   $tag  = implode('|',array_merge(['disk'],pools_filter($disks)));
   $loc1 = implode(',',array_unique(array_filter(explode(',',preg_replace("/($tag)/",',$1',exec("getfattr --no-dereference --absolute-names --only-values -n system.LOCATIONS ".quoted($source)." 2>/dev/null"))))));
@@ -153,7 +153,7 @@ case 'save':
   if ($file = validname(rawurldecode($_POST['file']))) file_put_contents($file,rawurldecode($_POST['data']));
   die();
 case 'stop':
-  $file = htmlspecialchars_decode(rawurldecode($_POST['file']));
+  $file = rawurldecode($_POST['file']);
   delete_file("/var/tmp/$file.tmp");
   die();
 case 'start':
@@ -172,6 +172,7 @@ case 'start':
           break;
         }
         // Invalid JSON, remove this entry and try next
+        exec('logger -t webGUI "Warning: Skipped invalid JSON in file manager job queue"');
         array_shift($lines);
       }
       
@@ -230,8 +231,8 @@ case 'file':
   $data = [
     'action' => (int)($_POST['action'] ?? 0),
     'title' => rawurldecode($_POST['title'] ?? ''),
-    'source' => htmlspecialchars_decode(rawurldecode($_POST['source'] ?? '')),
-    'target' => htmlspecialchars_decode(rawurldecode($_POST['target'] ?? '')),
+    'source' => rawurldecode($_POST['source'] ?? ''),
+    'target' => rawurldecode($_POST['target'] ?? ''),
     'H' => empty($_POST['hdlink']) ? '' : 'H',
     'sparse' => empty($_POST['sparse']) ? '' : '--sparse',
     'exist' => empty($_POST['exist']) ? '--ignore-existing' : '',
