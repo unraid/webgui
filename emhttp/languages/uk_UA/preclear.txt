@@ -1,0 +1,78 @@
+A disk must be cleared of all partitions before it can be precleared=Диск має бути очищений від усіх розділів, перш ніж його можна буде попередньо очистити
+Cannot Preclear=Не вдається виконати попереднє очищення
+Clear Disk=Очистити диск
+Clear Signature=Очистити сигнатуру
+Clear Stats=Очистити статистику
+Click to show reports=Натисніть, щоб показати звіти
+Concurrent Sessions=Паралельні сеанси
+Cycles=Цикли
+Device Model=Модель пристрою
+Disk Log Information=Інформація журналу диска
+Disk Size=Розмір диска
+Download Logs=Завантажити журнали
+Enable Testing for debugging=Увімкнути тестування для налагодження
+Fast Post-read=Швидке читання після запису
+Firmware=Прошивка
+Fix Preclear=Виправити попереднє очищення
+Identification=Ідентифікація
+If you set a queue limit, all running preclear sessions above that limit will be paused and remain in the queue until a session finishes=Якщо ви встановите ліміт черги, усі запущені сеанси попереднього очищення понад цей ліміт буде призупинено й вони залишатимуться в черзі, доки не завершиться один із сеансів
+Notifications=Сповіщення
+On every cycle and step end=Наприкінці кожного циклу та кроку
+On every 25% of progress=Кожні 25% прогресу
+On every cycle end=Наприкінці кожного циклу
+On preclear end=Після завершення попереднього очищення
+Operation=Операція
+Post-read Verify=Перевірка читання після запису
+Preclear Disks=Попереднє очищення дисків
+Preclear Disk Log=Журнал попереднього очищення диска
+Preclear Log=Журнал попереднього очищення
+Preclear Status=Стан попереднього очищення
+Preview Progress=Попередній перегляд прогресу
+Read size=Розмір читання
+Remove Report=Видалити звіт
+Resume all Sessions=Відновити всі сеанси
+Resume Preclear=Відновити попереднє очищення
+Preview Progress Report=Звіт попереднього перегляду прогресу
+Select Disks=Вибрати диски
+Serial Number=Серійний номер
+Set Preclear Queue=Встановити чергу попереднього очищення
+Show Preclear Report=Показати звіт попереднього очищення
+Skip Pre-read=Пропустити читання перед записом
+Skip Post-Read=Пропустити читання після запису
+Start Multiple Sessions=Запустити кілька сеансів
+Start New=Почати новий
+Start Preclear=Почати попереднє очищення
+Stop all Sessions=Зупинити всі сеанси
+Stop Preclear=Зупинити попереднє очищення
+Temp=Температура
+Testing=Тестування
+There are no disks that can be precleared=Немає дисків, які можна попередньо очистити
+Verify Signature=Перевірити сигнатуру
+Write size=Розмір запису
+You can use Unassigned Devices to clear the disk=Ви можете використати Unassigned Devices, щоб очистити диск
+
+:preclear_general_help_plug:
+> The Unassigned Devices Pre-clear can be used to prepare disks for inclusion in the array, clear disks for disposal, and perform stress tests before disks are used in the array.
+>
+> Only disks that are not being used in the array and have no partitions with file systems will be listed as candidates for pre-clearing.
+>
+> When a disk is being pre-cleared, you can follow the status on this page, on the Unassigned Devices page, or the pre-clear status icon in the footer of the Unraid web page.
+> 
+> There are multiple choices for pre-clearing:
+>
+> The **Enhanced** script authored by user **gfjardim** has the advantage that it supports the enhanced features like pause and resume pre-clearing. It also has extensive logging.
+>
+> The **Docker** option refers to the binhex Docker container that performs pre-clear. The advantage is that pre-clearing is isolated within the container.
+>
+> Pre-clear operations:
+>
+> + Clear Disk - The disk is cleared and the Unraid signature is written to the disk. This will create an empty partition on the disk.
+> + Erase Disk - Erase the entire disk by writing all zeros. The pre-clear signature is removed.
+> + Erase and Clear Disk - Random patterns are written to the disk and then zeros are written. This is a good choice for a disk to be discarded to ensure all traces of files are removed.
+> + Verify Signature - The disk signature is checked.
+> + Verify Disk - The disk signature is checked and the disk is verified to be zeroed.
+> + Post-read Verify - Perform a post-read verify to check the disk.
+> + Clear Signature - Remove the pre-clear signature from the disk.
+>
+> The text <em style='color:#00BE37;'>Pre-cleared</em> next to the disk serial number indicates that the disk has a pre-cleared signature. This will only show when the disk is pre-cleared and the Pre-clear Stats have been removed.
+:end

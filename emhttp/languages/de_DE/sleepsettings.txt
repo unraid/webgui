@@ -1,0 +1,116 @@
+Console=Konsole
+Counters only=Nur Zähler
+Custom commands after wake-up=Benutzerdefinierte Befehle nach dem Aufwachen
+Custom commands before sleep=Benutzerdefinierte Befehle vor dem Ruhezustand
+Device activity monitoring=Überwachung der Geräteaktivität
+DHCP renewal after wake-up=DHCP-Erneuerung nach dem Aufwachen
+Enable DEBUG mode=DEBUG-Modus aktivieren
+Enter custom commands here=Benutzerdefinierte Befehle hier eingeben
+Ethernet interface=Ethernet-Schnittstelle
+Excluded days=Ausgeschlossene Tage
+Excluded hours=Ausgeschlossene Stunden
+Execute function=Funktion ausführen
+Extra delay after array inactivity=Zusätzliche Verzögerung nach Inaktivität des Arrays
+Force gigabit speed after wake-up=Gigabit-Geschwindigkeit nach dem Aufwachen erzwingen
+High traffic=Hoher Traffic
+IP address=IP-Adresse
+Local Remote=Lokal & Entfernt
+Local=Lokal
+Log will be stored in bootlogss3_sleeplog=Das Protokoll wird in **/boot/logs/s3_sleep.log** gespeichert
+Low traffic=Geringer Traffic
+Medium traffic=Mittlerer Traffic
+Mega traffic=Starker Traffic
+Monitor disks outside array=Datenträger außerhalb des Arrays überwachen
+Network idle threshold=Schwellenwert für Leerlauf im Netzwerk
+no host=Kein Host
+Remote=Entfernt
+Set WOL options before sleep=WOL-Optionen vor dem Ruhezustand festlegen
+Silent traffic=Ruhiger Traffic
+Status counters=Status & Zähler
+Status only=Nur Status
+Syslog and flash=Systemprotokoll and Flash
+Syslog=Systemprotokoll
+Wait for array inactivity=Auf Inaktivität des Arrays warten
+Wait for host inactivity=Auf Inaktivität des Hosts warten
+Wait for network inactivity=Auf Inaktivität des Netzwerks warten
+Wait for user login inactivity=Auf Inaktivität bei der Benutzeranmeldung warten
+Yes, exclude Cache=Ja, Cache ausschließen
+
+:s3sleep_function_plug:
+> Wähle die Betriebsart. Das System kann entweder in den Ruhezustand versetzt (und aufgeweckt) oder komplett abgeschaltet werden.
+>
+> Die folgenden Einstellungen legen die Bedingungen fest, unter denen das System in den Ruhezustand versetzt oder heruntergefahren wird.
+:end
+
+:s3sleep_excluded_days_plug:
+> Standardmäßig werden alle Tage berücksichtigt. Wähle hier die Tage aus, an denen der Ruhezustand oder das Herunterfahren nicht wirksam sein sollen. Diese Einstellung funktioniert in Kombination mit ausgeschlossenen Stunden.
+:end
+
+:s3sleep_excluded_hours_plug:
+> Standardmäßig werden alle Stunden berücksichtigt. Wähle hier die Stunden aus, an denen der Ruhezustand oder das Herunterfahren nicht wirksam sein sollen. Diese Einstellung funktioniert in Kombination mit ausgeschlossenen Tagen.
+:end
+
+:s3sleep_inactivity_plug:
+> Wähle aus, ob das Array vollständig inaktiv sein muss (alle Datenträger sind heruntergefahren), bevor der Wechsel in den Ruhezustand oder das Herunterfahren erfolgen kann.
+>
+> Die Cache-Datenträger können in diese Einstellung einbezogen oder ausgeschlossen werden, z.B. wenn die Cache-Datenträger ständig verwendet werden und nie herunterfahren.
+
+:s3sleep_activity_plug:
+> *Status* überwacht den Hardware-Status des Datenträgers
+>
+> *Zähler* überwacht die Lese-/Schreibzähler des Datenträgers
+:end
+
+:s3sleep_outside_plug:
+> Wenn außerhalb des Arrays weitere Datenträger vorhanden sind, können diese separat überwacht werden.
+:end
+
+:s3sleep_extra_delay_plug:
+> Lege eine zusätzliche Verzögerung fest, nachdem das Array inaktiv wurde. Der Wert kann 0 für keine Verzögerung sein.
+:end
+
+:s3sleep_network_plug:
+> Lege fest, ob die Netzwerkaktivität als Bedingung für den Übergang in den Ruhezustand oder das Herunterfahren berücksichtigt werden soll.
+:end
+
+:s3sleep_ethernet_plug:
+> Falls mehrere Netzwerkschnittstellen vorhanden sind, wähle hier die Schnittstelle aus, die für die Überprüfung der Netzwerkaktivität verwendet werden soll.
+:end
+
+:s3sleep_idle_plug:
+> Die Netzaktivität wird anhand verschiedener Schwellenwerte gemessen. Die Spanne reicht von völliger Stille bis zu Megabit-Traffic. Experimentiere mit dieser Einstellung, um die richtige Balance für deine Bedürfnisse zu finden.
+:end
+
+:s3sleep_host_plug:
+> Lege fest, ob externe Hosts überwacht werden müssen und ob das Ausbleiben einer Antwort als Bedingung für den Ruhezustand oder das Herunterfahren gewertet werden soll.
+>
+> Externe Hosts werden durch ihre IP-Adresse definiert. Verwende ein Komma, um mehrere IP-Adressen zu trennen. Solange einer der externen Hosts auf einen Ping antwortet, wird der Ruhezustand bzw. das Herunterfahren nicht ausgelöst.
+:end
+
+:s3sleep_login_plug:
+> Lege fest, ob sich lokal (Konsole) oder entfernt (Telnet oder ssh) angemeldete Benutzer zuerst abmelden müssen, bevor der Wechsel in den Ruhezustand oder das Herunterfahren erfolgen kann.
+:end
+
+:s3sleep_wol_plug:
+> Lege zusätzliche WOL-Optionen für die ordnungsgemäße Unterstützung des S3-Ruhezustands fest. Informationen zu den Möglichkeiten findest du in deiner Systemdokumentation.
+:end
+
+:s3sleep_before_plug:
+> Alle zusätzlichen Befehle vor dem Wechsel in den Ruhezustand oder dem Herunterfahren können hier eingetragen werden. Dies können Aufräumaktionen oder andere gewünschte Aktionen sein.
+:end
+
+:s3sleep_after_plug:
+> Alle zusätzlichen Befehle nach dem Aufwachen aus dem Ruhezustand können hier eingetragen werden. Dies kann hilfreich sein, um einen früheren Zustand wiederherzustellen.
+:end
+
+:s3sleep_gigabit_plug:
+> Lasse diese Voreinstellung auf AUS, falls die Schnittstelle nach dem Aufwachen nicht ordnungsgemäß startet. Überprüfe, ob das Erzwingen dieser Einstellung hilft.
+:end
+
+:s3sleep_dhcp_plug:
+> Lasse diese Voreinstellung auf AUS, falls das System nach dem Aufwachen nicht ordnungsgemäß startet. Überprüfe, ob das Erzwingen dieser Einstellung hilft.
+:end
+
+:s3sleep_debug_plug:
+> Standardmäßig ist der Debug-Modus ausgeschaltet. Verwende diese Einstellung nur im Falle einer Fehlersuche. Sie erzeugt zusätzliche Meldungen, um die verschiedenen Phasen innerhalb des s3_sleep-Skripts zu protokollieren.
+:end

@@ -1,0 +1,117 @@
+Console=Console
+Counters only=Alleen tellers
+Custom commands after wake-up=Aangepaste commando's no ontwaken
+Custom commands before sleep=Aangepaste commando's voor slaap modus
+Device activity monitoring=Apparaat activiteit toezicht
+DHCP renewal after wake-up=DHCP vernieuwing na ontwaken
+Enable DEBUG mode=DEBUG mode inschakelen
+Enter custom commands here=Aangepaste commando's hier invoeren
+Ethernet interface=Ethernet interface
+Excluded days=Uitgesloten dagen
+Excluded hours=Uitgesloten uren
+Execute function=Functie uitvoeren
+Extra delay after array inactivity=Extra vertraging na inactiviteit array
+Force gigabit speed after wake-up=Forceer gigabit snelheid na ontwaken
+High traffic=Veel verkeer
+IP address=IP adres
+Local Remote=Lokaal & Op afstand
+Local=Lokaal
+Log will be stored in bootlogss3_sleeplog=Log zal opgeslagen worden in **/boot/logs/s3_sleep.log**
+Low traffic=Weinig verkeer
+Medium traffic=Medium verkeer
+Mega traffic=Mega veel verkeer
+Monitor disks outside array=Activiteiten toezicht van schijven buiten array
+Network idle threshold=Netwerk inactief drempel
+no host=geen host
+Remote=Op afstand
+Set WOL options before sleep=WOL opties instellen voor slaap
+Silent traffic=Stil verkeer
+Status counters=Status & tellers
+Status only=Alleen status
+Syslog and flash=Syslog en flash
+Syslog=Syslog
+Wait for array inactivity=Wacht op array inactiviteit
+Wait for host inactivity=Wachten op host inactiviteit
+Wait for network inactivity=Wacht op netwerk inactiviteit
+Wait for user login inactivity=Wacht op gebruikers login inactiviteit
+Yes, exclude Cache=Ja, Cache uitsluiten
+
+:s3sleep_function_plug:
+> Selecteer de werkingsmodus. Het systeem kan ofwel in slaapstand worden gezet (en ontwaken) of volledig worden afgesloten.
+>
+> De volgende instellingen bepalen onder welke omstandigheden het systeem in slaapstand wordt gezet of wordt afgesloten.
+:end
+
+:s3sleep_excluded_days_plug:
+>  Standaard zijn alle dagen inbegrepen, selecteer hier de dagen dat slaap of shutdown niet effectief is. Deze instelling werkt in combinatie met uitgesloten uren.
+:end
+
+:s3sleep_excluded_hours_plug:
+> Standaard zijn alle uren inbegrepen, selecteer hier de uren dat slaap of uitschakeling niet effectief is. Deze instelling werkt in combinatie met uitgesloten dagen.
+:end
+
+:s3sleep_inactivity_plug:
+> Selecteer of de array volledig inactief moet zijn (alle schijven zullen stoppen met draaien) voordat slaapstand of afsluiten kan plaatsvinden.
+>
+> De Cache-schijf kan in deze instelling worden opgenomen of uitgesloten, bijv. wanneer de Cache-schijf continu wordt gebruikt en nooit wordt stilgelegd.
+:end
+
+:s3sleep_activity_plug:
+> *Status* controleert de hardwarestatus van het apparaat
+>
+> *Counters* controleert de lees/schrijftellers van het apparaat
+:end
+
+:s3sleep_outside_plug:
+> Als er nog andere schijven buiten de array aanwezig zijn, dan kunnen deze apart gemonitord worden.
+:end
+
+:s3sleep_extra_delay_plug:
+>  Geef een extra vertraging op nadat de array inactief is geworden. De waarde kan 0 zijn voor geen vertraging.
+:end
+
+:s3sleep_network_plug:
+> Selecteer of netwerkactiviteit als voorwaarde moet worden genomen voor het in slaap gaan of afsluiten.
+:end
+
+:s3sleep_ethernet_plug:
+> In geval van meerdere netwerkinterfaces, selecteert u hier de interface die moet worden gebruikt voor het controleren van de netwerkactiviteit.
+:end
+
+:s3sleep_idle_plug:
+> De netwerkactiviteit wordt gemeten onder verschillende grenswaarden. Variërend van volledig stil tot megabit verkeer. Experimenteer met deze instelling om de juiste balans te vinden voor uw situatie.
+:end
+
+:s3sleep_host_plug:
+> Selecteer of externe hosts moeten worden bewaakt en niet reageren als een slaap- of afsluitconditie.
+>
+> Externe hosts worden opgegeven met hun IP-adres, gebruik een komma om meerdere IP-adressen te scheiden. Zolang een van de externe hosts reageert op een ping dan zal slaap/afsluiten niet worden uitgevoerd.
+:end
+
+:s3sleep_login_plug:
+> Selecteer of lokaal (console) of op afstand (telnet of ssh) ingelogde gebruikers eerst moeten uitloggen voordat sleep of shutdown kan plaatsvinden.
+:end
+
+:s3sleep_wol_plug:
+> Stel extra WOL opties in voor een goede ondersteuning van S3 sleep. Raadpleeg uw systeemdocumentatie voor de mogelijkheden.
+:end
+
+:s3sleep_before_plug:
+> Eventuele extra commando's voordat de slaap of shutdown wordt aangeroepen kunnen hier worden geplaatst. Dit kan opruiming zijn of andere gewenste acties.
+:end
+
+:s3sleep_after_plug:
+> Eventuele extra commando's na het ontwaken van de slaap kunnen hier geplaatst worden. Dit kan handig zijn voor het herstellen van een eerdere situatie.
+:end
+
+:s3sleep_gigabit_plug:
+> Laat deze standaard UIT, voor het geval de interface niet goed opstart na het ontwaken, kijk of het forceren van deze instelling helpt.
+:end
+
+:s3sleep_dhcp_plug:
+> Laat deze instelling standaard UIT staan, voor het geval dat het systeem niet goed opstart na het wakker worden, kijk dan of het helpt om deze instelling te forceren.
+:end
+
+:s3sleep_debug_plug:
+> Standaard staat debug UIT. Gebruik deze instelling alleen in geval van troubleshooting, het zal extra berichten genereren om de verschillende stadia in het s3_sleep script te rapporteren.
+:end

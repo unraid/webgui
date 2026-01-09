@@ -1,0 +1,134 @@
+Apple metadata=Metadati Apple
+Array must be Started to use this feature=L’**Array** deve essere **AVVIATO** per utilizzare questa funzione.
+Automatically protect new and modified files=Proteggi automaticamente i file nuovi e modificati
+BLAKE2=BLAKE2
+Build=Build
+Continue=Continua
+Corz=Corz
+Custom files=File personalizzati
+Custom folders=Cartelle personalizzate
+Day of the month=Giorno del mese
+Day of the week=Giorno della settimana
+Disk selection=Selezione disco
+Disk verification schedule=Programmazione verifica del disco
+Dont start=Non avviare
+Download Now=Scarica ora
+Dynamix File Integrity=Integrità dei File Dynamix
+Error logging=Registro errori
+Excluded files=File esclusi
+Excluded folders and files=Cartelle e file esclusi
+Excluded folders=Cartelle escluse
+File Duplicates Check=Controlla File duplicati
+Find=Trova
+Generate Corz Files=Genera File Corz
+hash files=hash dei file
+Hashing method=Metodo di hashing
+Header menu=Menu intestazione
+HHMM=HH:MM
+Import=Importa
+Include duplicate file hashes in Find command=Includi gli hash dei file duplicati nel comando Trova.
+log files=File di log
+Low=Basso
+MD5=MD5
+Output file=File di output
+Placement of file integrity control=Posizione del controllo di integrità dei file
+Process priority=Priorità del processo
+Save new hashing results to flash=Salva i nuovi risultati di hashing sull’Unità Flash
+saved files=File salvati
+Send notifications=Invia notifiche
+SHA2=SHA2
+Syslog only=Solo Syslog
+Syslog Output file=File di Output Syslog
+Task=Attività
+Time of the day=Ora del giorno
+Toggle all=Attiva/Disattiva tutto
+Tools menu=Menu Strumenti
+Verification tasks=Operazioni di verifica
+view hash files=visualizza file di hash
+view log files=visualizza file di log
+view saved files=visualizza file salvati
+When parity operation is running=Quando l’operazione di parità è in esecuzione
+
+:integrity_control_plug:
+> Seleziona la posizione della pagina del controllo di integrità dei file. Per impostazione predefinita è posizionata nel menu *Strumenti*, ma può essere spostata nel menu *intestazione*.
+>
+> Tieni presente che il menu *intestazione* ha uno spazio limitato.
+:end
+
+:integrity_service_plug:
+> Quando abilitato, viene calcolato automaticamente un valore di checksum e aggiunto agli attributi estesi del file appena creato o modificato.
+> Quando viene rilevata una modifica a un file, ma l’ora di modifica non è cambiata, viene eseguita automaticamente una verifica del checksum per individuare eventuali corruzioni di file 'silenziose'.
+>
+> La selezione dell’area può essere filtrata escludendo cartelle (Condivisioni) e/o escludendo completamente i dischi (vedi tabella qui sotto).
+>
+> Quando l’hashing automatico è disabilitato, è richiesto un controllo manuale per mantenere le informazioni aggiornate.
+:end
+
+:integrity_hashing_plug:
+> Seleziona il metodo di hashing preferito. SHA2 genera un valore di checksum di 256 bit, MD5 genera un valore di checksum di 128 bit, mentre BLAKE2 genera un valore di checksum di 512 bit per file.
+>
+> MD5 è il metodo più comunemente usato e dovrebbe essere selezionato quando è richiesta la compatibilità con programmi esterni. BLAKE2 è il metodo più veloce e offre un’elevata capacità di rilevamento; è open source e ampiamente supportato.
+> SHA2 è lo standard ufficiale ed è selezionato di default. È però il più lento dei tre metodi. L’opzione BLAKE2 viene disabilitata se non è supportata dal tuo processore.
+> Tutti i metodi richiedono una notevole potenza di calcolo del processore e una CPU poco performante potrebbe non essere in grado di funzionare come ci si aspetta.
+:end
+
+:integrity_flash_plug:
+> Quando abilitato, verrà creato un file giornaliero sul dispositivo flash, contenente i risultati del checksum per tutti i file appena creati o modificati in quel giorno specifico.
+> Il formato di questo file è lo stesso del file di esportazione standard. Il file giornaliero viene salvato come */config/plugins/dynamix.file.integrity/saved/disks.export.<date>.new.hash*
+:end
+
+:integrity_exluded_plug:
+> Seleziona qui le cartelle (Condivisioni) che desideri escludere dalle funzionalità di hashing e di verifica automatiche. Una 'Condivisione' riguardante più dischi verrà ignorata su ogni disco in cui è presente.
+>
+> Usa **Cartelle personalizzate/File personalizzati** per inserire manualmente le esclusioni. Le esclusioni multiple sono separate da una virgola.<br>
+> Alcuni esempi sono i nomi delle cartelle come '**.Recycle.Bin**', i nomi dei file come '**my_workfile.tmp**' o le estensioni dei file come '**.tmp**'.
+>
+> Seleziona **Metadati Apple** per escludere i file di metadati creati da macOS o da Netatalk (ad es. '.AppleDB' e '.DS_Store').
+:end
+
+:integrity_verification_plug:
+> Quando abilitato, viene creata una *Operazione Pianificata* **cron** per eseguire la verifica dei file in **background**. Devi selezionare quali dischi faranno parte del processo automatico di hashing e di verifica (vedi tabella qui sotto).
+> L’*Operazione Pianificata* **cron** può essere eseguita a scelta su base giornaliera, settimanale o mensile.
+>
+> È possibile creare una o più operazioni pianificate, ognuna contenente uno o più dischi. Tutti i dischi nella stessa operazione pianificata vengono verificati in parallelo. Questo diminuisce il tempo di esecuzione totale, ma aumenta
+> il carico del processore. Assicurati che il tuo processore possa gestire questo carico e modifica i raggruppamenti di conseguenza. Da un lato, tutti i dischi possono essere inseriti in una singola operazione pianificata ottenendo la massima concorrenza.
+> Dall’altro lato ogni disco può essere inserito nella propria operazione pianificata ottenendo il minimo carico del processore.
+>
+> Un disco con una casella di checksum disabilitata e uno sfondo rosso indica che un processo di verifica in background è attualmente in corso per quel disco e non può essere fermato.
+>
+> Quando esistono più operazioni pianificate, ognuna di esse viene eseguita a rotazione. Ad esempio, se hai scelto una pianificazione settimanale per 3 diverse operazioni pianificate, ogni settimana ne verrà eseguita una. Ciò significa 
+> che al termine delle 3 settimane le operazioni pianificate saranno state tutte completate.
+>
+> Quando le operazioni pianificate di verifica sono disabilitate, è richiesto il **controllo manuale** per verificare la correttezza dei file.
+:end
+
+:integrity_priority_plug:
+> I processi in background possono essere eseguiti con priorità normale o bassa.
+:end
+
+:integrity_parity_plug:
+> Prima che un’operazione pianificata di verifica inizi, se è in corso un’operazione di parità, potrebbe capitare sia che venga avviata normalmente, sia che venga ignorata e quindi non essere eseguita affatto.
+> In quest’ultimo caso, devi attendere il prossimo orario programmato per eseguire l’operazione pianificata.
+:end
+
+:integrity_day_of_the_week_plug:
+> Quando viene scelta una **pianificazione settimanale**, seleziona qui il giorno di esecuzione.
+:end
+
+:integrity_day_of_the_month_plug:
+> Quando viene scelta una **pianificazione mensile**, seleziona qui la data di esecuzione.
+:end
+
+:integrity_time_of_the_day_plug:
+> Imposta l’Orario (scegliendo ora e minuti) in cui desideri che l’operazione pianificata venga eseguita. L’intervallo minimo è di 5 minuti.
+:end
+
+:integrity_notifications_plug:
+> Imposta su 'Sì' se desideri ricevere notifiche quando viene rilevata una corruzione dei dati.
+> Vedi le impostazioni delle notifiche per sapere come impostare e ricevere notifiche di avviso.
+:end
+
+:integrity_logging_plug:
+> La rilevazione degli errori, incluse le informazioni riguardanti i dati corrotti, può essere scritta nel log di sistema o salvata in un file di log sull’Unità Flash.
+> Disabilitando la rilevazione degli errori anche la creazione del file di log verrà disabilitata. È comunque possibile continuare a ricevere le notifiche.
+:end

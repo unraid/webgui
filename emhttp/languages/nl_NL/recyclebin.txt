@@ -1,0 +1,136 @@
+Age Days=Leeftijd in Dagen
+Array=Array
+Array is stopped=Array is gestopt
+Browse the Share Recycle Bin=Blader door de Prullenbak
+Deleted Files=Verwijderde bestanden
+Deleted Files Log=Verwijderen van de log bestanden
+Empty=Leegmaken
+Empty the=Leegmaken van
+Empty All Trash=Maak alle prullenbak leeg
+Empty Trash=Prullenbak leegmaken
+Enable on Unassigned Devices=Update de grootte van de Prullenbak op de achtergrond
+Enable Recycle Bin=Schakel Prullenbak in
+Excluded Directories=Uitgesloten mappen
+Excluded Files=Uitgesloten bestanden
+Excluded Shares=Uitgesloten mappen
+Log Deleted Files=Log verwijderde bestanden
+Recycle Bin=Prullenbak
+Recycle Bin Log=Prullenbak logboek
+Recycle Bin parameters=Prullenbak parameters
+Recycle Bin permissions=Prullenbak rechten
+Recycle Bin Total Size=Totale grootte Prullenbak
+Refresh the Recycle Bin page=Vernieuw de Prullenbak pagina
+Remove Aged Files=Verwijder verouderde bestanden
+Remove aged files from the Recycle Bin=Verwijder verouderde bestanden uit de Prullenbak
+Remove Aged Files Notification=Melding van verwijderen verouderde bestanden
+Remove Aged Files on Schedule=Verwijder verouderde bestanden volgens schema
+Remove all files from the Recycle Bin=Verwijder alle bestanden uit de Prullenbak
+Restart the Recycle Bin=Start de Prullenbak opnieuw
+Share Type=Map Type
+SMB Share=SMB map
+Start the Recycle Bin=Start de Prullenbak
+Starting and stopping the Recycle Bin can cause SMB shares to go offline for a short period=Het starten en stoppen van de Prullenbak kan ertoe leiden dat SMB-shares voor een korte periode offline gaan
+Stop the Recycle Bin=Stop de Prullenbak
+These actions apply to all shares=Deze acties zijn van toepassing op alle shares
+Trash Size=Prullenbakgrootte
+Update Recycle Bin Size in Background=Bijwerken van de Prullenbak grootte op de achtergrond
+;
+; Help
+;
+:recycle_bin_shares_plug:
+Het starten en stoppen van de Prullenbak kan ertoe leiden dat SMB-shares voor een korte periode offline gaan.
+Deze acties zijn van toepassing op alle mappen: 
+> Prullenbak mappen: 
+>
+> De mappen met de inhoud van de Prullenbak worden weergegeven samen met de grootte van de Prullenbak van de gedeelde map.
+> Klik op het pictogram <strong>Bladeren</strong> om door de verwijderde bestanden in die gedeelde map te bladeren.
+> Klik op de knop <strong>Leeg</strong> om de verwijderde bestanden te verwijderen.
+>
+> Mappen op niet-toegewezen apparaten worden alleen weergegeven als de Prullenbak is ingeschakeld voor niet-toegewezen apparaten en als er niet-toegewezen apparaten zijn aangekoppeld, gedeeld en de Prullenbak inhoud bevat.
+>
+> Klik op de kolommen 'SMB map', 'Map Type' of 'Trash Size' van de tabelkop en de inhoud wordt gesorteerd. De 'Prullenbakgrootte' is een alfanumerieke en geen numerieke sortering. 
+:end
+
+:recycle_bin_enable_plug:
+> Stel in op 'Ja' om de Prullenbak-functionaliteit in te schakelen voor verwijderde bestanden wanneer de server wordt gestart. 
+>
+> To hide the Recycle Bin folder, set 'Hide Dot Files to 'Yes' in the SMB settings <a href='/Settings/SMB'>here</a>.
+:end
+
+:recycle_bin_hide_folder_plug:
+> Set to **No** to show the Recycle Bin folder in user shares.  The SMB setting "Hide dot files" controls if hidden folders show in user shares.
+:end
+
+:recycle_bin_background_plug:
+> Stel in op 'Ja' om ervoor te zorgen dat de grootte van de Prullenbak elke minuut op de achtergrond wordt bijgewerkt. Dit kan ervoor zorgen dat de pagina's Prullenbakinstellingen en Gedeelde bestanden sneller reageren en voorkomen dat de schijf opnieuw opstart wanneer de Prullenbak wordt geopend. Het kan wel een minuut duren voordat de grootte van de Prullenbak is vernieuwd wanneer dit is ingeschakeld. 
+:end
+
+:recycle_bin_ud_plug:
+> Stel in op 'Ja' om de Prullenbak-functionaliteit voor verwijderde bestanden in schijfmappen van niet-toegewezen apparaten in te schakelen wanneer de plug-in voor niet-toegewezen apparaten is geïnstalleerd. SMB/NFS-koppelingen en iso-koppelingen zijn uitgesloten van de Prullenbak-functionaliteit op deze server. Schakel de Prullenbak in op de externe server waar de externe map vandaan komt als het een Unraid-server is. 
+:end
+
+:recycle_bin_parameters_plug:
+> Aanvullende parameters voor Prullenbak. Hieronder volgen enkele opties die u kunt instellen om de bestandsstructuur van de verwijderde bestanden te beheren.
+> Voer de parameters in een lijst in zonder spaties of komma's ertussen.
+> De volgorde van de parameters is van invloed op de bestandsstructuur in de Prullenbak.
+> Als u dit veld leeg laat, worden alle verwijderde bestanden in de Prullenbak geplaatst zonder locatieinformatie.
+>
+> Tip: gebruik de '/' voor meer controle over de directorystructuur in de Prullenbak.
+> Bijvoorbeeld '%m /%S' zal de verwijderde bestanden ordenen op de apparaatnaam die het bestand heeft verwijderd en vervolgens op de mapnaam structuur.
+>
+> + '%S' Samba map naam (die in Unraid gelijk is aan de mapnaam), bijv. Opslag
+> + '%P' Volledige locatie van de door gebruiker gedeelde map, bijv. /Mnt/user/Storage, /mnt/disk1, /mnt/disks/unassigned_device, /flash
+> + '%u' Gebruikersnaam van de huidige service, indien van toepassing.
+> + '%m' Apparaatnaam van de gebruiker die het bestand heeft verwijderd 
+:end
+
+:recycle_bin_permissions_plug:
+> Stel de directory- en subdirectory-machtigingen van de Prullenbak in.  Stel machtigingen in op 07xx om de Prullenbak correct te laten werken.  Wijzig dit niet van de standaardwaarde als u niet weet hoe u machtigingen moet gebruiken.
+:end
+
+:recycle_bin_excluded_files_plug:
+> Lijst met bestanden die moeten worden uitgesloten van de Prullenbak, gescheiden door komma's. Wildcards '*' en '?' zijn toegestaan. 
+:end
+
+:recycle_bin_excluded_dirs_plug:
+> List of directories to exclude from the Recycle Bin separated by commas.  To specify a particular share directory, use 'share/directory'.  Unassigned Devices are specified the same way using 'mountpoint/directory'.  Wild cards '*' and '?' are allowed in the directory name.
+:end
+
+:recycle_bin_excluded_shares_plug:
+> Lijst met mappen welke uitgesloten dienen te worden van de Prullenbak, gescheiden door komma's. Deze lijst kan niet-toegewezen mappen op apparaten bevatten. De mapnaam is hoofdlettergevoelig.
+>
+> De uitgesloten map kan een deel van een mapnaam bevatten en zal dan alle mappen welke de deze mapnaam bevatten in de daadwerkelijke mapnaam uitsluiten. Als je een exacte match wilt, gebruik dan de volledige mapnaam. 
+>
+> Bijvoorbeeld: 'Squidbait' (zonder aanhalingstekens) sluit alle mappen uit die door de Ransom Ware-plug-in zijn gemaakt. 
+>
+> Opmerking: als u een map uitsluit, wordt deze alleen uitgesloten van verwijderde bestanden die naar de map .Recycle.Bin in de map gaan. Bestanden in de bestaande .Recycle.Bin-map worden nog steeds weergegeven in de totale grootte en op het tabblad 'Mappen'. 
+:end
+
+:recycle_bin_age_day_plug:
+> Alle bestanden die ouder zijn dan het ingestelde aantal dagen worden verwijderd volgens het schema of wanneer op de knop 'Verouderde bestanden verwijderen' wordt geklikt. 
+:end
+
+:recycle_bin_remove_age_files_plug:
+> Stel het gewenste schema in om verouderde bestanden te verwijderen. Elk uur zal elk uur op het hele uur zijn. Dagelijks is elke dag om 3 uur 's ochtends. Wekelijks is elke week om 03.00 uur op zondag. 
+:end
+
+:recycle_bin_age_files_notification_plug:
+> Als dit is ingesteld op "Ja", wordt er een melding verzonden wanneer de geplande taak voor het verwijderen van bestanden wordt uitgevoerd. 
+:end
+
+:recycle_bin_log_deleted_files_plug:
+> Indien ingesteld op "Ja" worden verwijderde bestanden begehouden in het log bestand. 
+:end
+
+:recycle_bin_show_log_plug:
+> Prullenbak logboek:
+>
+> De verwijderde bestanden worden in het logboek weergegeven als niet-gekoppelde bestanden.
+> Klik op de knop 'Wissen' om het logboek te wissen.
+:end
+
+; Note: December 8, 2024 - 4 missing translations
+Enable Empty All Trash Button=Knop "Alle prullenbak legen" inschakelen
+Enable Empty Share Trash Button=Knop "Share-prullenbak legen" inschakelen
+Enable Remove Aged Files Button=Knop "Verouderde bestanden verwijderen" inschakelen
+Recycle Bin is empty=Prullenbak is leeg

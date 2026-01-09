@@ -1,0 +1,134 @@
+Apple metadata=Apple-Metadaten
+Array must be Started to use this feature=Das Array muss **gestartet** sein, um diese Funktion zu verwenden
+Automatically protect new and modified files=Automatischer Schutz neuer und geänderter Dateien
+BLAKE2=BLAKE2
+Build=Build
+Continue=Weiter
+Corz=Corz
+Custom files=Benutzerdefinierte Dateien
+Custom folders=Benutzerdefinierte Ordner
+Day of the month=Tag im Monat
+Day of the week=Wochentag
+Disk selection=Auswahl des Datenträgers
+Disk verification schedule=Zeitplan für die Datenträgerüberprüfung
+Dont start=Nicht anfangen
+Download Now=Jetzt herunterladen
+Dynamix File Integrity=Dynamix File Integrity
+Error logging=Fehler-Protokollierung
+Excluded files=Dateien ausschließen
+Excluded folders and files=Ordner und Dateien ausschließen
+Excluded folders=Ordner ausschließen
+File Duplicates Check=Überprüfung von Dateiduplikaten
+Find=Find
+Generate Corz Files=Corz-Dateien generieren
+hash files=Hash-Dateien
+Hashing method=Hashing-Methode
+Header menu=Kopfzeilen-Menü
+HHMM=SS:MM
+Import=Importieren
+Include duplicate file hashes in Find command=Doppelte Datei-Hashes im **Find**-Befehl mit einbeziehen
+log files=Protokolldateien
+Low=Niedrig
+MD5=MD5
+Output file=Ausgabedatei
+Placement of file integrity control=Platzierung der Dateiintegritätsprüfung
+Process priority=Prozesspriorität
+Save new hashing results to flash=Neue Hashing-Ergebnisse auf dem Flash-Speicher speichern
+saved files=Gespeicherte Dateien
+Send notifications=Benachrichtigungen senden
+SHA2=SHA2
+Syslog only=Nur Systemprotokoll
+Syslog Output file=Systemprotokoll & Ausgabedatei
+Task=Aufgabe
+Time of the day=Tageszeit
+Toggle all=Alles Ein/Ausschalten
+Tools menu=Werkzeug-Menü
+Verification tasks=Überprüfungsausgaben
+view hash files=Hash-Dateien anzeigen
+view log files=Protokolldateien anzeigen
+view saved files=Gespeicherte Dateien anzeigen
+When parity operation is running=Wenn ein Paritätsvorgang läuft
+
+:integrity_control_plug:
+> Wähle die Position der Kontrollseite für die Dateiintegrität. Standardmäßig befindet sie sich unter dem *Werkzeuge*-Menü, sie kann aber auch unter das *Kopfzeilen*-Menü verschoben werden.
+>
+> Denke daran, dass der Platz im *Kopfzeilen*-Menü begrenzt ist.
+:end
+
+:integrity_service_plug:
+> Wenn diese Funktion aktiviert ist, wird automatisch eine Prüfsumme berechnet und zu den erweiterten Attributen der neu erstellten oder geänderten Datei hinzugefügt.
+> Wenn festgestellt wird, dass eine Datei verändert wurde, aber die Änderungszeit sich nicht geändert hat, wird eine automatische Prüfsummen-Verifizierung durchgeführt, um nach unbemerkten Datei-Beschädigungen zu suchen.
+>
+> Die Bereichsauswahl kann durch den Ausschluss von Ordnern (Freigaben) und/oder den vollständigen Ausschluss von Datenträgern gefiltert werden (siehe Tabelle unten).
+>
+> Wenn das automatische Hashing deaktiviert ist, ist eine manuelle Kontrolle erforderlich, um die Informationen aktuell zu halten.
+:end
+
+:integrity_hashing_plug:
+> Wähle die bevorzugte Hashing-Methode. SHA2 erzeugt einen 256-Bit-Prüfsummenwert, MD5 erzeugt einen 128-Bit-Prüfsummenwert, während BLAKE2 einen 512-Bit-Prüfsummenwert pro Datei erzeugt.
+>
+> MD5 ist die am häufigsten verwendete Methode und sollte gewählt werden, wenn Kompatibilität mit externen Programmen erforderlich ist. BLAKE2 ist die schnellste Methode und hat den höchsten Erkennungsgrad, allerdings ist dies eine proprietäre Lösung.
+> SHA2 ist der offizielle Standard und wird standardmäßig ausgewählt. Sie ist allerdings die langsamste der drei Methoden. Die BLAKE2-Option ist deaktiviert, wenn sie von deinem Prozessor nicht unterstützt wird.
+> Alle Methoden erfordern eine erhebliche Rechenleistung des Prozessors und ein zu schwacher Prozessor ist möglicherweise nicht in der Lage, die Erwartungen zu erfüllen.
+:end
+
+:integrity_flash_plug:
+> Wenn diese Funktion aktiviert ist, wird täglich eine Datei auf dem Flashdatenträger erstellt, die die Prüfsummen-Ergebnisse für alle neuen oder geänderten Dateien des jeweiligen Tages enthält.
+> Das Format dieser Datei ist dasselbe wie das der Standard-Exportdatei. Die tägliche Datei wird als */config/plugins/dynamix.file.integrity/saved/disks.export.&lt;date&gt;.new.hash* gespeichert.
+:end
+
+:integrity_exluded_plug:
+> Wähle hier alle Ordner (Freigaben) aus, die du von der automatischen Hashing- und Verifizierungsfunktion ausschließen möchtest. Eine Freigabe, die auf mehreren Datenträgern vorhanden ist, wird auf jedem Datenträger, auf dem sie vorhanden ist, übersprungen.
+>
+> Verwende **Benutzerdefinierte Ordner / Benutzerdefinierte Dateien**, um Ausnahmen manuell einzugeben. Mehrere Ausschlüsse werden durch ein Komma getrennt.<br>
+> Beispiele sind Ordnernamen, z. B. **".Recycle.Bin"**, Dateinamen, z. B. **"Meine_Arbeitsdatei.tmp"** oder Dateierweiterungen, z. B. **"*.tmp"**.
+>
+> Wähle **Apple-Metadaten**, um Metadaten-Dateien auszuschließen, die von Apples Netatalk erstellt wurden (.AppleDB und .DS_Store).
+:end
+
+:integrity_verification_plug:
+> Wenn diese Funktion aktiviert ist, wird ein Cron-Zeitplan erstellt, der die Dateiverifizierung im Hintergrund durchführt. Du musst auswählen, welche Datenträger am automatischen Hashing- und Verifizierungsprozess teilnehmen (siehe Tabelle unten).
+> Der Cron-Zeitplan kann wahlweise täglich, wöchentlich oder monatlich ausgeführt werden.
+>
+> Es können eine oder mehrere Aufgaben erstellt werden, die jeweils eine oder mehrere Datenträger enthalten. Alle Datenträger unter derselben Aufgabe werden parallel verifiziert. Dies verkürzt die Gesamtlaufzeit, erhöht aber die Prozessorlast.
+> Stelle sicher, dass dein Prozessor diese Last bewältigen kann und ändere die Gruppierung entsprechend. Auf der einen Seite können alle Datenträger in einer einzigen Aufgabe zusammengefasst werden, was zu höchster Parallelität führt.
+> Auf der anderen Seite kann jeder Datenträger in eine eigene Aufgabe eingebunden werden, was zu einer möglichst geringen Prozessorbelastung führt.
+>
+> Ein Datenträger mit deaktiviertem Prüfsummenfeld und rotem Hintergrund zeigt an, dass für diesen Datenträger gerade eine Hintergrundverifizierung durchgeführt wird. Diese kann nicht gestoppt werden.
+>
+> Wenn mehrere Aufgaben vorhanden sind, wird jede Aufgabe im nächsten Zeitplan in einer rotierenden Weise ausgeführt. Wenn du z.B. einen wöchentlichen Zeitplan mit 3 Aufgaben erstellt hast, wird jede Woche
+> eine weitere Aufgabe ausgeführt und nach 3 Wochen hat die Verifizierungsfunktion alle ausgewählten Datenträger überprüft.
+>
+> Wenn der Verifizierungsplan deaktiviert ist, ist eine manuelle Kontrolle erforderlich, um die Richtigkeit der Dateien zu überprüfen.
+:end
+
+:integrity_priority_plug:
+> Hintergrundprozesse können entweder im normalen oder im niedrigen Prioritätsmodus ausgeführt werden.
+:end
+
+:integrity_parity_plug:
+> Bevor eine Verifizierungsaufgabe startet, kann sie entweder wie üblich fortgesetzt werden, wenn ein Paritätsvorgang läuft, oder die Verifizierungsaufgabe wird überhaupt nicht gestartet.
+> In letzterem Fall musst du auf den nächsten geplanten Zeitpunkt für die Ausführung der Aufgabe warten.
+:end
+
+:integrity_day_of_the_week_plug:
+> Wenn du einen wöchentlichen Zeitplan ausgewählt hast, wähle hier den Tag der Ausführung aus.
+:end
+
+:integrity_day_of_the_month_plug:
+> Wenn du einen monatlichen Zeitplan ausgewählt hast, wähle hier das Datum der Ausführung aus.
+:end
+
+:integrity_time_of_the_day_plug:
+> Wähle die Stunde und Minute aus, zu der die geplante Aufgabe ausgeführt werden soll. Die Genauigkeit beträgt 5 Minuten.
+:end
+
+:integrity_notifications_plug:
+> Auf JA stellen, falls du Benachrichtigungen erhalten möchtest, wenn eine Dateibeschädigung erkannt wird.
+> In den Benachrichtigungseinstellungen erfährst du, wie du "Alarm"-Benachrichtigungen einrichten und erhalten kannst.
+:end
+
+:integrity_logging_plug:
+> Die Fehlerprotokollierung, einschließlich der Informationen zur Erkennung von Dateibeschädigungen, kann im Systemprotokoll angegeben oder als Datei auf dem Flashdatenträger gespeichert werden.
+> Durch die Deaktivierung der Fehlerprotokollierung wird die Erstellung von Protokollen unterdrückt aber es ist weiterhin möglich Benachrichtigungen zu erhalten.
+:end

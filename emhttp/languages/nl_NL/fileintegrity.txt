@@ -1,0 +1,135 @@
+Apple metadata=Apple metadata
+Array must be Started to use this feature=Array moet **gestart** zijn om deze functie te gebruiken
+Automatically protect new and modified files=Automatisch beschermen van nieuwe en gewijzigde bestanden
+BLAKE2=BLAKE2
+Build=Build
+Continue=Doorgaan
+Corz=Corz
+Custom files=Aangepaste bestanden
+Custom folders=Aangepaste mappen
+Day of the month=Dag van de maand
+Day of the week=Dag van de week
+Disk selection=Schijf selectie
+Disk verification schedule=Schijfverificatieschema
+Dont start=Start niet
+Download Now=Download Nu
+Dynamix File Integrity=Dynamix Bestands Integriteit
+Error logging=Error logging
+Excluded files=Uitgesloten bestanden
+Excluded folders and files=Uitgesloten mappen en bestanden
+Excluded folders=Uitgesloten mappen
+File Duplicates Check=Bestand Duplicaten Check
+Find=Zoek
+Generate Corz Files=Genereer Corz bestanden
+hash files=hash bestanden
+Hashing method=Hashing methode
+Header menu=Header menu
+HHMM=HH:MM
+Import=Importeer
+Include duplicate file hashes in Find command=Dubbele hashes van bestanden opnemen in **Find**-opdracht
+log files=log bestanden
+Low=Laag
+MD5=MD5
+Output file=Output bestand
+Placement of file integrity control=Plaatsing van integriteitscontrole van bestanden
+Process priority=Procesprioriteit
+Save new hashing results to flash=Sla nieuwe hashing resultaten op in flash
+saved files=opgeslagen bestanden
+Send notifications=Stuur meldingen
+SHA2=SHA2
+Syslog only=Alleen Syslog
+Syslog Output file=Syslog & Output bestand
+Task=Taak
+Time of the day=Tijdstip van de dag
+Toggle all=Allemaal inschakelen
+Tools menu=Tools menu
+Verification tasks=Verificatie taken
+view hash files=toon hash bestanden
+view log files=toon log bestanden
+view saved files=toon opgeslagen bestanden
+When parity operation is running=Wanneer de pariteitsoperatie loopt
+
+:integrity_control_plug:
+> Kies de plaats van de controlepagina voor bestandsintegriteit. Standaard staat deze onder het *Tools* menu, maar hij kan verplaatst worden naar het *header* menu.
+>
+> Houd er rekening mee dat het *header* menu beperkte ruimte heeft.
+:end
+
+:integrity_service_plug:
+> Indien ingeschakeld wordt automatisch een checksum waarde berekend en toegevoegd aan de uitgebreide attributen van het nieuw aangemaakte of gewijzigde bestand.
+> Wanneer wordt gedetecteerd dat een bestand is gewijzigd, maar de wijzigingstijd is niet veranderd, dan wordt een automatische controlesomverificatie uitgevoerd om te controleren op eventuele verborgen bestandscorruptie.
+>
+> De gebiedsselectie kan worden gefilterd door mappen (shares) uit te sluiten en/of schijven in hun geheel uit te sluiten (zie onderstaande tabel).
+>
+> Wanneer de automatische hashing is uitgeschakeld, is handmatige controle vereist om de informatie up-to-date te houden.
+:end
+
+:integrity_hashing_plug:
+> Selecteer de gewenste hashing methode. SHA2 genereert een 256 bits checksumwaarde, MD5 genereert een 128 bits checksumwaarde, terwijl BLAKE2 een 512 bits checksumwaarde per bestand genereert.
+>
+> MD5 is de meest gebruikte methode en moet worden gekozen wanneer compatibiliteit met externe programma's vereist is, BLAKE2 is de snelste methode en heeft de hoogste detectie graad, dit is echter een propriëtaire oplossing.
+> SHA2 is de officiële standaard en wordt standaard geselecteerd. Het is echter de langzaamste van de drie methoden. De BLAKE2 optie is uitgeschakeld als deze niet wordt ondersteund door uw processor.
+> Alle methoden vereisen een aanzienlijke rekenkracht van de processor en een te zwakke processor kan misschien niet aan de verwachtingen voldoen.
+:end
+
+:integrity_flash_plug:
+> Indien ingeschakeld zal een dagelijks bestand op het flash-apparaat worden aangemaakt, dat de checksum-resultaten bevat voor alle nieuwe of gewijzigde bestanden van die bepaalde dag.
+> Het formaat van dit bestand is hetzelfde als het standaard exportbestand. Het dagelijkse bestand wordt opgeslagen als */config/plugins/dynamix.file.integrity/saved/disks.export.&lt;date&gt;.new.hash*
+:end
+
+:integrity_exluded_plug:
+> Selecteer hier de mappen (shares) die u wilt uitsluiten van de automatische hashing en verificatie functionaliteit. Een share die op meerdere schijven bestaat, zal worden overgeslagen op elke schijf waar hij aanwezig is.
+>
+> Gebruik **Custom mappen / Custom bestanden** om handmatig uitsluitingen in te voeren. Meerdere uitsluitingen worden gescheiden door een komma.<br>
+> Voorbeelden zijn mapnamen, bijv. **`.Recycle.Bin`**, bestandsnamen, bijv. **`my_workfile.tmp`** of bestandsextensies, bijv. **`*.tmp`**.
+>
+> Selecteer **Apple metadata** om meta bestanden gemaakt door Apple's netatalk (.AppleDB en .DS_Store) uit te sluiten.
+:end
+
+:integrity_verification_plug:
+> Indien ingeschakeld wordt een cron schema aangemaakt om de bestandsverificatie op de achtergrond uit te voeren. U moet selecteren welke schijven deelnemen aan het automatische hashing- en verificatieproces (zie onderstaande tabel).
+> Het cron-schema kan op een selecteerbare dagelijkse, wekelijkse of maandelijkse basis worden uitgevoerd.
+>
+> Er kunnen een of meer taken worden aangemaakt, die elk een of meer schijven bevatten. Alle schijven onder dezelfde taak worden parallel geverifieerd. Dit vermindert de totale run-time, maar verhoogt de
+> processorbelasting. Zorg ervoor dat uw processor deze belasting aankan, en wijzig de groepering dienovereenkomstig. Aan het ene uiteinde kunnen alle schijven in een enkele taak worden gezet, wat resulteert in de hoogste concurrency.
+> Aan de andere kant kan elke schijf in zijn eigen taak worden gezet, wat resulteert in de laagste processorbelasting.
+>
+> Een schijf met een uitgeschakeld controlesomvakje en een rode achtergrond, geeft aan dat er momenteel een verificatieproces op de achtergrond aan de gang is voor deze schijf. Het kan niet worden gestopt.
+>
+> Als er meerdere taken bestaan, wordt elke taak in het volgende schema op een roterende manier uitgevoerd. Als u bijvoorbeeld een wekelijks schema met 3 taken hebt opgezet, dan wordt elke week
+> een andere taak worden uitgevoerd en na 3 weken heeft de verificatiefunctie alle geselecteerde schijven gedaan.
+>
+> Als het verificatieschema is uitgeschakeld, is handmatige controle vereist om de juistheid van de bestanden te verifiëren.
+:end
+
+:integrity_priority_plug:
+> Achtergrondprocessen kunnen worden uitgevoerd in normale of lage prioriteitsmodus.
+:end
+
+:integrity_parity_plug:
+> Voordat een verificatietaak start, kan deze ofwel gewoon doorgaan wanneer een pariteitsoperatie loopt, of de verificatietaak start helemaal niet.
+> In het laatste geval moet u wachten op het volgende geplande tijdstip om de taak uit te voeren.
+:end
+
+:integrity_day_of_the_week_plug:
+> Wanneer een weekschema is gekozen, kies dan hier de dag van uitvoering. 
+:end
+
+:integrity_day_of_the_month_plug:
+> Wanneer een maandschema is gekozen, kies dan hier de dag van uitvoering. 
+:end
+
+:integrity_time_of_the_day_plug:
+> Selecteer het uur en de minuut waarop de geplande taak zal worden uitgevoerd. De stiptheid is 5 minuten.
+:end
+
+:integrity_notifications_plug:
+> Stel in op JA als u meldingen wilt ontvangen wanneer bestandscorruptie wordt gedetecteerd.
+> Zie de meldingsinstellingen 
+> Zie de meldingsinstellingen voor het instellen en ontvangen van "waarschuwings"-meldingen.
+:end
+
+:integrity_logging_plug:
+> Foutlogging, inclusief informatie over detectie van bestandscorruptie, kan in het systeemlogboek worden opgenomen, of als een bestand op flash worden opgeslagen.
+> Het uitschakelen van foutenlogging stopt het aanmaken van logboeken, maar het is nog steeds mogelijk om meldingen te ontvangen.
+:end

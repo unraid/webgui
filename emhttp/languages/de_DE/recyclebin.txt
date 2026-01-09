@@ -1,0 +1,132 @@
+Age Days=Ablauftage
+Array=Array
+Array is stopped=Array ist gestoppt
+Browse the Share Recycle Bin=Freigabe-Papierkorb durchsuchen
+Deleted Files=Gelöschte Dateien
+Deleted Files Log=Protokoll der Gelöschten Dateien
+Empty=Leeren
+Empty the=Leere den
+Empty All Trash=Alle Papierkörbe leeren
+Empty Trash=Papierkorb leeren
+Enable Empty All Trash Button=Alle Papierkörbe leeren Button aktivieren
+Enable Empty Share Trash Button=Freigabe-Papierkorb leeren Button aktivieren
+Enable on Unassigned Devices=Auf nicht zugewiesenen Datenträgern aktivieren
+Enable Recycle Bin=Papierkorb aktivieren
+Enable Remove Aged Files Button=Alte Dateien entfernen Button aktivieren
+Excluded Directories=Ausgeschlossene Verzeichnisse
+Excluded Files=Ausgeschlossene Dateien
+Excluded Shares=Ausgeschlossene Freigaben
+Log Deleted Files=Gelöschte Dateien protokollieren
+Recycle Bin=Papierkorb
+Recycle Bin is empty=Der Papierkorb ist leer
+Recycle Bin Log=Papierkorb-Protokoll
+Recycle Bin parameters=Papierkorb-Parameter
+Recycle Bin permissions=Papierkorb-Berechtigungen
+Recycle Bin Total Size=Gesamtgröße des Papierkorbs
+Refresh the Recycle Bin page=Papierkorbseite neu laden
+Remove Aged Files=Alte Dateien entfernen
+Remove aged files from the Recycle Bin=Alte Dateien aus dem Papierkorb entfernen
+Remove Aged Files Notification=Benachrichtigung beim Entfernen alter Dateien
+Remove Aged Files on Schedule=Geplantes Entfernen alter Dateien
+Remove all files from the Recycle Bin=Alle Dateien im Papierkorb entfernen
+Restart the Recycle Bin=Papierkorb neu starten
+Share Type=Freigabetyp
+SMB Share=SMB-Freigabe
+Start the Recycle Bin=Papierkorb aktivieren
+Starting and stopping the Recycle Bin can cause SMB shares to go offline for a short period=Durch das Aktivieren/Deaktivieren des Papierkorbs können die SMB-Freigaben kurzzeitig als Offline angezeigt werden
+Stop the Recycle Bin=Papierkorb deaktivieren
+These actions apply to all shares=Diese Einstellungen gelten für alle Freigaben
+Trash Size=Papierkorbgröße
+Update Recycle Bin Size in Background=Größe des Papierkorbs im Hintergrund aktualisieren
+;
+; Help
+;
+:recycle_bin_shares_plug:
+> Papierkorb-Freigaben:
+>
+> Die Freigaben mit Papierkorbinhalten werden zusammen mit der Größe des Papierkorbs der Freigabe angezeigt.
+> Klicke auf das <strong>Durchsuchen</strong>-Symbol, um die gelöschten Dateien in dieser Freigabe zu durchsuchen.
+> Klicke auf den <strong>Leeren</strong>-Button, um die gelöschten Dateien zu entfernen.
+>
+> Freigaben von nicht zugewiesene Datenträgern werden nur angezeigt, wenn der Papierkorb für nicht zugewiesene Datenträger aktiviert ist und es nicht zugewiesene Datenträger gibt, die eingehängt und freigegeben sind und Papierkorb-Inhalte enthalten.
+>
+> Klicke auf die Spalten "SMB-Freigabe", "Freigabetyp" oder "Papierkorbgröße" in der Kopfzeile der Tabelle und der Inhalt wird sortiert. Bei der "Papierkorbgröße" handelt es sich um eine alphanumerische und nicht um eine numerische Sortierung.
+:end
+
+:recycle_bin_enable_plug:
+> Setze diese Option auf **Ja**, um die Papierkorbfunktion für gelöschte Dateien beim Start des Servers zu aktivieren.
+>
+> Um den Papierkorb-Ordner auszublenden, setze <a href='/Settings/SMB'>hier</a> in den SMB-Einstellungen "Dateien mit einem Punkt am Anfang (.datei) verstecken" auf "Ja".
+:end
+
+:recycle_bin_hide_folder_plug:
+> Auf **Nein** stellen, um den Papierkorb-Ordner in Benutzerfreigaben anzuzeigen. Die SMB-Einstellung "Punktdateien (.datei) ausblenden" steuert, ob versteckte Ordner in Benutzerfreigaben angezeigt werden.
+:end
+
+:recycle_bin_background_plug:
+> Setze diese Option auf **Ja**, damit die Größe des Papierkorbs alle fünf Minuten im Hintergrund aktualisiert wird. Dies kann das Aufrufen der Papierkorb-Einstellungen und Freigabe-Seiten beschleunigen und vermeidet das Hochfahren von Datenträgern beim Zugriff auf den Papierkorb. Die Aktualisierung der Papierkorbgröße kann bis zu fünf Minuten dauern, wenn diese Funktion aktiviert ist.
+:end
+
+:recycle_bin_ud_plug:
+> Setze diese Option auf **Ja**, um den Papierkorb für Freigaben von nicht zugewiesene Datenträgern zu aktivieren, wenn das Plugin "Unassigned Devices" installiert ist. SMB/NFS-Freigaben und eingehängten ISO-Dateien sind von der Papierkorb-Funktionalität auf diesem Server ausgeschlossen. Aktiviere den Papierkorb auf dem entfernten Server der entfernten Freigabe, wenn es sich um einen Unraid-Server handelt.
+:end
+
+:recycle_bin_parameters_plug:
+> Weitere Parameter für den Papierkorb. Im Folgenden findest du Optionen, mit denen du die Dateistruktur der gelöschten Dateien kontrollieren kannst.
+> Gib die Parameter in eine Liste ohne Leerzeichen oder Kommas dazwischen ein.
+> Die Reihenfolge der Parameter wirkt sich auf die Dateistruktur im Papierkorb aus.
+> Wenn du dieses Feld leer lässt, werden alle gelöschten Dateien ohne Pfadangaben im Papierkorb abgelegt.
+>
+> Tipp: Benutze "/" für mehr Kontrolle der Verzeichnisstruktur im Papierkorb.
+> Zum Beispiel sortiert "%m/%S" die gelöschten Dateien nach Rechnernamen, der die Datei gelöscht hat und dann nach der Struktur des Freigabenamens.
+>
+> + "%S" Samba-Freigabenamen (in Unraid auch Freigabename genannt), zB: Speicher
+> + "%P" Kompletter Pfad der Benutzerfreigabe, zB: /mnt/user/Speicher, /mnt/disk1, /mnt/disks/unassigned_device, /flash
+> + "%u" Benutzername des aktuellen Dienstes, falls vorhanden
+> + "%m" Computernamen des Benutzers, der die Datei gelöscht hat
+:end
+
+:recycle_bin_permissions_plug:
+> Lege die Berechtigungen für das Verzeichnis und die Unterverzeichnisse des Papierkorbs fest. Setze die Berechtigungen auf 07xx, damit der Papierkorb ordnungsgemäß funktioniert. Ändere die Standardeinstellung nicht, wenn du nicht weißt, wie man mit Berechtigungen umgeht.
+:end
+
+:recycle_bin_excluded_files_plug:
+> Durch Kommas getrennte Liste der Dateien, die vom Papierkorb ausgeschlossen werden sollen. Platzhalter "*" und "?" sind erlaubt.
+:end
+
+:recycle_bin_excluded_dirs_plug:
+> Durch Kommas getrennte Liste der Dateien, die vom Papierkorb ausgeschlossen werden sollen. Um ein bestimmtes Freigabeverzeichnis anzugeben, verwende "Freigabe/Verzeichnis". Nicht zugewiesene Datenträger werden auf die gleiche Weise mit "Einhängeverzeichnis/Verzeichnis" angegeben. Platzhalter "*" und "?" sind erlaubt.
+:end
+
+:recycle_bin_excluded_shares_plug:
+> Durch Kommas getrennte Liste der Dateien, die vom Papierkorb ausgeschlossen werden sollen. Diese Liste kann Freigaben für nicht zugewiesene Datenträger enthalten. Beim Freigabenamen wird zwischen Groß- und Kleinschreibung unterschieden.
+>
+> Die ausgeschlossene Freigabe kann einen Teil des Freigabenamens enthalten und schließt alle Freigaben aus, die den Text der ausgeschlossenen Freigabe im eigentlichen Freigabenamen enthalten. Wenn du eine exakte Übereinstimmung wünscht, verwende den vollständigen Freigabenamen.
+>
+> Zum Beispiel: "Squidbait" (ohne Anführungszeichen) schließt alle Freigaben aus, die vom Ransomware-Plugin erstellt wurden.
+>
+> Hinweis: Wenn du eine Freigabe ausschließt, werden gelöschte Dateien nur nicht in den Ordner ".Recycle.Bin" der Freigabe verschoben. Bereits vorhandene Dateien in ".Recycle.Bin" werden trotzdem bei der Gesamtgröße und im Freigaben-Reiter angezeigt.
+:end
+
+:recycle_bin_age_day_plug:
+> Alle Dateien, die älter als die eingestellte Anzahl von Tagen sind, werden nach dem eingestellten Intervall oder durch Anklicken des Buttons "Alte Dateien entfernen" entfernt.
+:end
+
+:recycle_bin_remove_age_files_plug:
+> Lege den gewünschten Intervall zum Löschen alter Dateien fest. Stündlich wird zur vollen Stunde ausgeführt. Täglich wird täglich um 03:00 Uhr ausgeführt. Wöchentlich wird jeden Sonntag um 03:00 Uhr ausgeführt.
+:end
+
+:recycle_bin_age_files_notification_plug:
+> Mit der Einstellung **Ja** wird eine Benachrichtigung gesendet, wenn die geplante Aufgabe zum Entfernen von Dateien ausgeführt wird.
+:end
+
+:recycle_bin_log_deleted_files_plug:
+> Mit der Einstellung **Ja** werden gelöschte Dateien protokolliert.
+:end
+
+:recycle_bin_show_log_plug:
+> Papierkorb-Protokoll:
+>
+> Die gelöschten Dateien werden im Protokoll als nicht verknüpfte Dateien angezeigt.
+> Klicke auf den "Leeren"-Button, um das Protokoll zu leeren.
+:end

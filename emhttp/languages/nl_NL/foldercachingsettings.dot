@@ -1,0 +1,79 @@
+a:41:{s:8:"Adaptive";s:9:"Adaptieve";s:39:"Cache pressure of directories on system";s:32:"Cache druk van mappen op systeem";s:29:"Check HELP for filter example";s:30:"Zie HELP voor filtervoorbeeld=";s:15:"Disk Idle Timer";s:20:"Schijf in rust timer";s:23:"Folder caching function";s:19:"Map caching functie";s:18:"for adaptive depth";s:21:"voor adaptieve diepte";s:39:"Important - check HELP if disks spin up";s:52:"Belangrijk - controleer HELP als de schijven draaien";s:16:"Included folders";s:17:"Inbegrepen mappen";s:7:"Logging";s:7:"Logging";s:37:"Maximum interval between folder scans";s:36:"Maximum interval tussen mappen scans";s:19:"Maximum level depth";s:21:"Maximum mappen diepte";s:37:"Minimum interval between folder scans";s:36:"Minimum interval tussen mappen scans";s:19:"Minimum level depth";s:21:"Minimum mappen diepte";s:6:"or see";s:6:"of zie";s:42:"Run scan of each disk in a separate thread";s:50:"Voer scan van elke schijf uit in een aparte thread";s:24:"Scan user shares mntuser";s:33:"Scan gebruiker shares (/mnt/user)";s:28:"Suspend during Mover process";s:27:"Stop tijdens 'Mover' proces";s:9:"unlimited";s:9:"onbeperkt";s:12:"Unraid forum";s:12:"Unraid forum";s:18:"Use Adaptive depth";s:24:"Gebruik Adaptieve diepte";s:20:"User defined options";s:35:"Door gebruiker gedefinieerde opties";s:20:"_cachedirs_info_plug";s:1107:"
+> Map Caching Info
+>
+> The map caching (cache_mappen) leest voortdurend mappen om ze in het geheugen te houden.
+> Het programma weet niet of een directory al in het geheugen zit of opnieuw van schijf moet worden ingelezen.
+> Daarom kan het niet voorkomen dat schijven gaan spinnen wanneer de linux geheugen cache een directory uitwist en cache_mappen de directory opnieuw scant.
+> Als een groot aantal bestanden in het geheugen wordt bewaard, lijkt het onvermijdelijk dat sommige mappen uit de cache worden verwijderd als het systeem onder belasting staat.
+>
+> Het programma gebruikt standaard een adaptieve modus waarbij het de diepte van de mappenstructuur die het in het geheugen probeert te houden, vermindert.
+> Wanneer het een cache-miss (langzame scantijd) detecteert, zal het de diepte verminderen tot de schijven weer idle zijn,
+> maar loopt nog steeds het risico dat de schijven gedurende een minuut of twee worden belast totdat het programma het opgeeft en wacht op ongebruikte schijven.
+> Hoe minder bestanden de cache moet bevatten, des te kleiner is de kans dat het programma schijven spint.
+";s:24:"_cachedirs_function_plug";s:243:"
+> Selecteer of map caching is ingeschakeld of uitgeschakeld. Caching zal alleen effectief plaatsvinden wanneer de array wordt gestart.
+> De caching-functie wordt automatisch opnieuw gestart of gestopt wanneer de array online of offline gaat.
+";s:24:"_cachedirs_pressure_plug";s:1002:"
+> Stel cache_druk in op NN (standaard = 10). Een waarde van 0 betekent dat er nooit cache wordt teruggehaald.
+>
+> Een waarde van 1 werkt prima voor veel gebruikers. Als uw schijven spinnen of cache_mappen logging geeft aan dat het vaak schijven heeft benaderd na het scannen, probeer dan cache-druk te verlagen naar 1. Als het systeem geheugen tekort komt verhoog cache-druk.
+>
+> Als CPU en schijven regelmatig zwaar worden belast door cache_mappen is dit ook een aanwijzing dat cache_mappen alles opnieuw moet scannen.
+>
+> Waarschuwing: een waarde van 0 zal ertoe leiden dat de kernel nooit het geheugen van directories vrijgeeft, en als er te weinig geheugen beschikbaar is,
+> zal dit het systeem doen crashen. cache_mappen reset de cache-druk niet na het afsluiten,
+> om de cache-druk te resetten voert u 'sudo sysctl vm.vfs_cache_pressure=100' uit, of voer cache-mappen uit met cache_druk 100.
+>
+>  Zie 'vfs_cache_pressure' in [kernel.org](https://www.kernel.org/doc/Documentation/sysctl/vm.txt).
+";s:23:"_cachedirs_suspend_plug";s:255:"
+> Stop met cachen terwijl de mover in gebruik is om conflicten te voorkomen. Bij gebruik van adaptieve diepte zal het waarschijnlijk goed werken - NEE optie.
+> Bij vaste diepte zal het vrijwel zeker minder belasting van de schijven opleveren - JA optie.
+";s:32:"_cachedirs_included_folders_plug";s:326:"
+> Het dropdown menu toont alle beschikbare mappen, standaard zijn alle mappen opgenomen. Selecteer hier de beperkte lijst van mappen die moeten worden opgenomen.
+>
+> Als een ingesloten map wordt uitgesloten, dan wordt de map uitgesloten. Het is het eenvoudigst om ingesloten en uitgesloten mappen niet tegelijk te gebruiken.
+";s:32:"_cachedirs_excluded_folders_plug";s:299:"
+> Het dropdown menu toont alle beschikbare mappen, standaard zijn alle mappen uitgesloten. Selecteer hier de mappen die uitgesloten moeten worden.
+>
+> Het is mogelijk om een ingesloten map uit te sluiten. Het is het eenvoudigst om ingesloten en uitgesloten mappen niet tegelijkertijd te gebruiken.
+";s:30:"_cachedirs_adaptive_depth_plug";s:378:"
+> Als adaptief is ingeschakeld zal de diepte automatisch worden aangepast, maar nooit groter zijn dan de maximale diepte
+> Het zal beginnen op diepte 1 en de scandiepte blijven verhogen naar het maximum niveau zolang het niet te lang duurt om de scans te voltooien (zie scan timeout). 
+> Als adaptief is uitgeschakeld dan zal cache_dirs altijd tot het maximum niveau scannen. 
+";s:25:"_cachedirs_min_level_plug";s:130:"
+> Stelt het minimum mapniveau in voor de adaptieve scan (ouder > kind > kleinkind is twee niveaus). De standaardinstelling is 4.
+";s:25:"_cachedirs_max_level_plug";s:140:"
+> Stelt het maximum mapniveau in voor de scan (ouder > kind > kleinkind). Stel in op 'onbeperkt' (of 0) om de maximumwaarde te verwijderen
+";s:26:"_cachedirs_idle_timer_plug";s:122:"
+> Als de schijven zo lang niet gebruikt zijn, begint cache_mappen adaptive scan te werken aan het opbouwen van de cache.
+";s:28:"_cachedirs_timeout_scan_plug";s:287:"
+> De scantime-out is de maximale duur dat een enkele scan door alle directories op het huidige niveau diepte (dat adaptief kan veranderen).
+> Verhoog het als cache_mappen er niet in slaagt om al uw bestanden te cachen. Deze time-out wordt altijd gebruikt als adaptive is uitgeschakeld.
+";s:31:"_cachedirs_timeout_initial_plug";s:129:"
+> Verhoog het als u wilt dat cache_mappen meer tijd geeft bij de initiële scan, en wanneer het bestandssysteem bezig kan zijn.
+";s:30:"_cachedirs_timeout_cached_plug";s:258:"
+> Verlaag het als u wilt dat cache_mappen het systeem minder belast wanneer cache uit het geheugen wordt verwijderd, en schijven niet ongebruikt zijn.
+> Verhoog als je wilt dat cache_mappen een grotere kans heeft om mappen terug in het geheugen te krijgen.
+";s:28:"_cachedirs_min_interval_plug";s:151:"
+> Het caching interval kan aangepast worden voor tragere systemen. De standaardwaarde is 1 seconde, wat voor de meeste systemen goed zou moeten zijn.
+";s:28:"_cachedirs_max_interval_plug";s:153:"
+> Het caching interval kan aangepast worden voor tragere systemen. De standaardwaarde is 10 seconden, wat voor de meeste systemen goed zou moeten zijn.
+";s:25:"_cachedirs_scan_disk_plug";s:285:"
+> Elke schijf wordt in een afzonderlijke thread gescand, zodat de schijven gelijktijdig worden gelezen. 
+> Als de gebruikers share ook wordt gescand, zal de gebruikers share in een enkele thread worden gescand nadat alle schijven zijn gescand, om thrashing van schijven te voorkomen.
+";s:28:"_cachedirs_limit_memory_plug";s:179:"
+> stel ulimit in op NN om het geheugengebruik van het script te beperken (standaardwaarde=50000), '-U 0' stelt helemaal geen ulimit in en erft de standaardwaarde van de shells).
+";s:23:"_cachedirs_logging_plug";s:264:"
+> Selecteer of log is ingeschakeld of uitgeschakeld. Er wordt gelogd naar /var/log/cache_dirs.log en /var/log/cache_dirs_lost_cache.csv.
+> Wees op je hoede dat de cache_mappen logs in het geheugen op unRAID worden geplaatst en niet automatisch worden verwijderd.
+";s:28:"_cachedirs_user_defined_plug";s:820:"
+> Het cache_mappen script heeft extra opties die gebruikt kunnen worden.
+> Raadpleeg de online documentatie om deze waar nodig te gebruiken,
+> of raadpleeg het cache_dirs script zelf dat zich bevindt onder /usr/local/emhttp/plugins/dynamix.cache.dirs/scripts/cache_dirs
+>
+> Het is mogelijk om cache_mappen te vertellen dat het niet alle mappen met een bepaalde naam moet doorzoeken. Het volgende voorbeeld vermijdt '.Recycle.Bin', 'temp' en 'log' mappen: 
+>
+> <span class="strong orange-text">-a '-noleaf -name .Recycle.Bin -prune -o -name log -prune -o -name temp -prune -o -print'</span>
+>
+> Merk op dat de enkele aanhalingstekens rond het argument voor -a belangrijk zijn. Dubbele aanhalingstekens werken niet in de huidige versie, dus helaas is het momenteel niet mogelijk om te filteren met '-name "*Old" -prune'.
+";s:61:"Memory available to the cache_dirs script increase if it dies";s:63:"Memory available to the cache_dirs script (increase if it dies)";}

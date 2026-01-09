@@ -1,0 +1,79 @@
+a:44:{s:8:"Adaptive";s:8:"Adattivo";s:39:"Cache pressure of directories on system";s:49:"Pressione della cache delle directory nel sistema";s:29:"Check HELP for filter example";s:47:"Controlla la **GUIDA** per un esempio di filtro";s:15:"Disk Idle Timer";s:23:"Timer inattività disco";s:23:"Folder caching function";s:34:"Funzione di caching delle cartelle";s:18:"for adaptive depth";s:24:"per profondità adattiva";s:39:"Important - check HELP if disks spin up";s:70:"Importante - Consulta la **GUIDA** se i dischi continuano ad attivarsi";s:16:"Included folders";s:16:"Cartelle incluse";s:61:"Memory available to the cache_dirs script increase if it dies";s:69:"Memoria disponibile per lo script *cache_dirs* (aumenta se si blocca)";s:7:"Logging";s:7:"Logging";s:37:"Maximum interval between folder scans";s:50:"Intervallo massimo tra le scansioni delle cartelle";s:19:"Maximum level depth";s:31:"Profondità massima del livello";s:37:"Minimum interval between folder scans";s:49:"Intervallo minimo tra le scansioni delle cartelle";s:19:"Minimum level depth";s:30:"Profondità minima del livello";s:6:"or see";s:11:"oppure vedi";s:42:"Run scan of each disk in a separate thread";s:55:"Esegui la scansione di ogni disco in un thread separato";s:31:"Timeout during disk-idle period";s:51:"Timeout durante il periodo di inattività del disco";s:50:"Timeout during initial startup or less-idle period";s:65:"Timeout durante l’avvio iniziale o periodo di attività ridotta";s:45:"Timeout when all directories have been cached";s:68:"Timeout quando tutte le directory sono state memorizzate nella cache";s:24:"Scan user shares mntuser";s:44:"Scansiona le Condivisioni utente (/mnt/user)";s:28:"Suspend during Mover process";s:36:"Sospendi durante il processo 'Mover'";s:9:"unlimited";s:10:"illimitato";s:12:"Unraid forum";s:12:"Forum Unraid";s:18:"Use Adaptive depth";s:24:"Usa profondità adattiva";s:20:"User defined options";s:30:"Opzioni definite dall’utente";s:20:"_cachedirs_info_plug";s:1091:"
+> Informazioni sul Caching delle Cartelle
+>
+> Il caching delle cartelle (cache_dirs) legge continuamente le directory per mantenerle in memoria.
+> Il programma non sa se una directory è già in memoria o se deve essere riletta dal disco.
+> Pertanto, non può evitare di attivare i dischi quando succede che la cache di memoria di Linux elimina una directory e *cache_dirs* riesegue la scansione della directory.
+> Se un grande numero di file è mantenuto in memoria, è inevitabile che alcune directory vengano eliminate dalla cache quando il sistema è sotto carico.
+>
+> Per impostazione predefinita, il programma utilizza una modalità adattiva in cui riduce la profondità della struttura delle directory che cerca di mantenere in memoria.
+> Quando rileva un *cache-miss* (scansione lenta), riduce la profondità finché i dischi diventano inattivi,
+> ma rimane comunque il rischio di caricare i dischi per qualche minuto finché il programma non si arresta e attende che i dischi siano inattivi.
+> Meno file la cache deve contenere, meno è probabile che il programma attivi i dischi.
+";s:24:"_cachedirs_function_plug";s:249:"
+> Seleziona se il caching delle cartelle è abilitato o disabilitato. Il caching avviene effettivamente solo quando l’array è avviato.
+> La funzione di caching viene automaticamente riavviata o arrestata quando l’array passa online o offline.
+";s:24:"_cachedirs_pressure_plug";s:1076:"
+> Imposta *cache_pressure* su 'NN' (default = 10). Il valore **0** indica di non recuperare mai la cache.
+>
+> Il valore **1** è ottimale per la maggior parte degli utenti. Se i tuoi dischi si attivano o i log di *cache_dirs* indicano che accede frequentemente ai dischi dopo la scansione, prova a diminuire *cache_pressure* a **1**. Se il sistema esaurisce la memoria, allora aumenta il valore di *cache_pressure*.
+>
+> Se la CPU e i dischi sono fortemente influenzati da *cache_dirs* ad intervalli frequenti, ciò potrebbe indicare che *cache_dirs* deve rieseguire la scansione completa.
+>
+> Avviso: il valore **0** farà sì che il kernel non liberi mai la memoria delle directory e, se la memoria disponibile è insufficiente,
+> il sistema potrebbe andare in crash; *cache_dirs* non reimposta *cache_pressure* alla chiusura.
+> Per reimpostare *cache_pressure* esegui 'sudo sysctl vm.vfs_cache_pressure=100', oppure esegui *cache-dirs* con *cache_pressure* **100**.
+>
+> Vedi ‘vfs_cache_pressure’ su [kernel.org](https://www.kernel.org/doc/Documentation/sysctl/vm.txt).
+";s:23:"_cachedirs_suspend_plug";s:275:"
+> Interrompi il caching mentre il 'Mover' è in esecuzione per evitare conflitti. Quando si utilizza la profondità adattiva probabilmente funzionerà bene selezionando 'NO'.
+> Con profondità fissa, quasi certamente scegliere 'SÌ' comporterà un carico minore sui dischi.
+";s:32:"_cachedirs_included_folders_plug";s:337:"
+> Il menu a discesa mostra tutte le cartelle disponibili; per impostazione predefinita tutte le cartelle sono incluse. Seleziona dall’elenco 'Cartelle Limitate' quelle da includere.
+>
+> Se una cartella inclusa viene esclusa, allora la cartella viene esclusa. È preferibile non utilizzare inclusioni ed esclusioni contemporaneamente.
+";s:32:"_cachedirs_excluded_folders_plug";s:288:"
+> Il menu a discesa mostra tutte le cartelle disponibili; per impostazione predefinita nessuna cartella è esclusa. Seleziona qui eventuali cartelle da escludere.
+>
+> È possibile escludere una cartella inclusa. È preferibile non utilizzare inclusioni ed esclusioni contemporaneamente.
+";s:30:"_cachedirs_adaptive_depth_plug";s:423:"
+> Se l’opzione 'adattiva' è abilitata, la profondità verrà regolata automaticamente ma non supererà mai il valore massimo impostato.
+> Inizierà dalla profondità **1** e aumenterà fino al livello massimo finché i tempi di scansione non diventano troppo lunghi (vedere timeout di scansione).
+> Se l’opzione 'adattiva' è disabilitata, allora **cache_dirs** eseguirà sempre la scansione fino al livello massimo.
+";s:25:"_cachedirs_min_level_plug";s:213:"
+> Imposta il livello minimo di cartella per la scansione adattiva (ad esempio, il percorso 'Condivisioni Utente → Cartella figlia → Sotto-cartella' è considerato su due livelli). Il valore predefinito è 4.
+";s:25:"_cachedirs_max_level_plug";s:216:"
+> Imposta il numero massimo di livelli di cartelle per la scansione ('Cartella padre → Cartella figlia → Sotto-cartella'). Impostare su 'illimitato' (il cui valore equivale a 0) per rimuovere il limite massimo.
+";s:26:"_cachedirs_idle_timer_plug";s:145:"
+> Quando i dischi sono rimasti inattivi per tutto questo tempo, la scansione adattiva di 'cache_dirs' inizia a lavorare per costruire la cache.
+";s:28:"_cachedirs_timeout_scan_plug";s:368:"
+> Il timeout di scansione è la durata massima che una singola scansione può impiegare per attraversare tutte le directory al livello di profondità attuale (che può variare in modo adattivo).
+> Puoi aumentarlo se 'cache_dirs' non riesce a memorizzare nella cache tutti i tuoi file. Questo timeout viene sempre utilizzato se l’opzione 'adattiva' è disabilitata.
+";s:31:"_cachedirs_timeout_initial_plug";s:147:"
+> Aumenta questo valore se desideri che 'cache_dirs' conceda più tempo alla scansione iniziale o quando il file system potrebbe essere occupato.
+";s:30:"_cachedirs_timeout_cached_plug";s:280:"
+> Diminuisci questo valore se desideri che 'cache_dirs' abbia un carico minore sul sistema quando la cache viene rimossa dalla memoria e i dischi non sono inattivi.
+> Puoi aumentarlo se desideri che 'cache_dirs' abbia maggiori possibilità di ricaricare le directory in memoria.
+";s:28:"_cachedirs_min_interval_plug";s:204:"
+> La regolazione dell’intervallo di caching può essere effettuata per sistemi più lenti. Il valore minimo predefinito è di **un secondo**, che dovrebbe andare bene per la maggior parte dei sistemi.
+";s:28:"_cachedirs_max_interval_plug";s:205:"
+> La regolazione dell’intervallo di caching può essere effettuata per sistemi più lenti. Il valore massimo predefinito è di **10 secondi**, che dovrebbe andare bene per la maggior parte dei sistemi.
+";s:25:"_cachedirs_scan_disk_plug";s:311:"
+> Ogni disco verrà scansionato in un thread separato, quindi i dischi saranno letti in parallelo. Se viene scansionata anche una Condivisione Utente,
+> questa operazione avverrà in un singolo thread dopo che tutte le scansioni dei dischi saranno completate, per evitare un eccessivo sovraccarico dei dischi.
+";s:28:"_cachedirs_limit_memory_plug";s:184:"
+> Imposta *ulimit* su 'NN' per limitare la memoria utilizzata dallo script (predefinito=50000); '-U 0' disabilita completamente *ulimit* ed eredita il valore predefinito della shell.
+";s:23:"_cachedirs_logging_plug";s:271:"
+> Seleziona se abilitare o disabilitare il logging. Il log verrà registrato in '/var/log/cache_dirs.log' e '/var/log/cache_dirs_lost_cache.csv'.
+> Tieni presente che i log di 'cache_dirs' sono archiviati in memoria su Unraid e non vengono sovrascritti automaticamente.
+";s:28:"_cachedirs_user_defined_plug";s:741:"
+> Lo script *cache_dirs* ha opzioni aggiuntive che possono essere utilizzate.
+> Consulta la documentazione online per usarle secondo necessità, 
+> oppure controlla lo script situato in '/usr/local/emhttp/plugins/dynamix.cache.dirs/scripts/cache_dirs'.
+>
+> Puoi impedire a *cache_dirs* di attraversare directory con determinati nomi. L’esempio seguente esclude le cartelle '.Recycle.Bin', 'log' e 'temp':
+>
+> <span class="strong orange-text">-a '-noleaf -name .Recycle.Bin -prune -o -name log -prune -o -name temp -prune -o -print'</span>
+>
+> Nota: le virgolette singole intorno all’argomento di -a sono importanti. Le virgolette doppie non funzionano nella versione attuale, quindi non è possibile filtrare con '-name "*Old" -prune'.
+";}

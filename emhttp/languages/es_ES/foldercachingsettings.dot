@@ -1,0 +1,78 @@
+a:44:{s:8:"Adaptive";s:9:"Adaptable";s:39:"Cache pressure of directories on system";s:62:"Presión de la memoria caché de los directorios en el sistema";s:29:"Check HELP for filter example";s:47:"Consulte la AYUDA para ver un ejemplo de filtro";s:15:"Disk Idle Timer";s:32:"Temporizador de reposo del disco";s:23:"Folder caching function";s:51:"Función de almacenamiento de la caché de carpetas";s:18:"for adaptive depth";s:30:"para una profundidad adaptable";s:39:"Important - check HELP if disks spin up";s:42:"Importante - compruebe si los discos giran";s:16:"Included folders";s:18:"Carpetas incluidas";s:61:"Memory available to the cache_dirs script increase if it dies";s:72:"Memoria disponible para el script cache_dirs (aumentar si se interrumpe)";s:7:"Logging";s:8:"Registro";s:37:"Maximum interval between folder scans";s:49:"Intervalo máximo entre exploraciones de carpetas";s:19:"Maximum level depth";s:28:"Profundidad de nivel máxima";s:37:"Minimum interval between folder scans";s:44:"Intervalo mínimo entre escaneos de carpetas";s:19:"Minimum level depth";s:28:"Profundidad de nivel mínima";s:6:"or see";s:5:"o ver";s:42:"Run scan of each disk in a separate thread";s:53:"Ejecutar el escaneo de cada disco en un hilo separado";s:31:"Timeout during disk-idle period";s:61:"Tiempo de espera durante el período de inactividad del disco";s:50:"Timeout during initial startup or less-idle period";s:76:"Tiempo de espera durante el arranque inicial o período de menor inactividad";s:45:"Timeout when all directories have been cached";s:73:"Tiempo de espera cuando se han almacenado en caché todos los directorios";s:24:"Scan user shares mntuser";s:57:"Escanear los recursos compartidos del usuario (/mnt/user)";s:28:"Suspend during Mover process";s:39:"Suspender durante el proceso de 'Mover'";s:9:"unlimited";s:9:"ilimitado";s:12:"Unraid forum";s:11:"Foro Unraid";s:18:"Use Adaptive depth";s:30:"Usar la profundidad adaptativa";s:20:"User defined options";s:33:"Opciones definidas por el usuario";s:20:"_cachedirs_info_plug";s:1138:"
+> Información sobre la caché de carpetas
+>
+> La caché de carpetas (cache_dirs) lee continuamente los directorios para mantenerlos en memoria.
+> El programa no sabe si un directorio ya está en la memoria o necesita ser releído del disco.
+> Por lo tanto, no puede evitar girar los discos cuando ocurre que la memoria caché de linux desaloja un directorio y cache_dirs vuelve a explorar el directorio.
+> Si se mantiene un gran número de archivos en la memoria, parece inevitable que algunos directorios sean desalojados de la caché cuando el sistema está bajo carga.
+>
+> El programa utiliza por defecto un modo adaptativo en el que reduce la profundidad de la estructura de directorios que intenta mantener en memoria.
+> Cuando detecta una pérdida de caché (tiempo de escaneo lento) reducirá la profundidad hasta que los discos vuelvan a estar inactivos,
+> pero seguirá corriendo el riesgo de cargar los discos durante uno o dos minutos hasta que el programa se rinda y espere a que los discos estén inactivos.
+> Cuantos menos archivos tenga que contener la caché, menos probable será que el programa haga girar los discos.
+";s:24:"_cachedirs_function_plug";s:299:"
+> Seleccione si el almacenamiento en caché de la carpeta está activado o desactivado. El almacenamiento en caché sólo se producirá efectivamente cuando se inicie el Array.
+> La función de almacenamiento en caché se reinicia o detiene automáticamente cuando el Array se inicia o se detiene.
+";s:24:"_cachedirs_pressure_plug";s:1034:"
+> Establezca cache_pressure en NN (por defecto = 10). Un valor de 0 significa que nunca se recupera la caché.
+>
+> Un valor de 1 funciona muy bien para muchos usuarios. Si los discos giran o el registro de cache_dirs indica que se ha accedido con frecuencia a los discos después del escaneo, intente reducir cache-pressure a 1. Si el sistema se queda sin memoria, aumente cache-pressure.
+>
+> Si la CPU y los discos se ven muy afectados por cache_dirs en intervalos frecuentes, esto también es una indicación de que cache_dirs tiene que volver a escanear todo.
+>
+> Advertencia: un valor de 0 hará que el kernel nunca libere la memoria de los directorios, y si hay muy poca memoria disponible,
+> causará la caída del sistema. cache_dirs no restablece el cachePressure después de salir,
+> para restablecer la presión de la caché ejecute 'sudo sysctl vm.vfs_cache_pressure=100', o ejecute cache-dirs con cache_pressure 100.
+>
+> Vease 'vfs_cache_pressure' en [kernel.org](https://www.kernel.org/doc/Documentation/sysctl/vm.txt).
+";s:23:"_cachedirs_suspend_plug";s:264:"
+> Detenga el almacenamiento en caché mientras se ejecuta Mover para evitar conflictos. Cuando se utiliza la profundidad adaptativa probablemente funcione bien en NO.
+> Con la profundidad fija es casi seguro que los discos tendrán menos carga y puede elegir SI.
+";s:32:"_cachedirs_included_folders_plug";s:306:"
+> El menú desplegable muestra todas las carpetas disponibles, por defecto se incluyen todas las carpetas. Seleccione aquí la lista restringida de carpetas a incluir.
+>
+> Si se excluye una carpeta incluida, entonces la carpeta se excluye. Lo más sencillo es no usar includes y excludes al mismo tiempo.
+";s:32:"_cachedirs_excluded_folders_plug";s:268:"
+> El menú desplegable muestra todas las carpetas disponibles, por defecto no se excluye ninguna carpeta. Seleccione aquí las carpetas que desee excluir.
+> Es posible excluir una carpeta incluida. Lo más sencillo es no utilizar includes y excludes al mismo tiempo.
+";s:30:"_cachedirs_adaptive_depth_plug";s:439:"
+> Si se activa la adaptación, la profundidad se ajustará automáticamente, pero nunca superará la profundidad máxima del nivel.
+> Comenzará en la profundidad 1 y seguirá aumentando la profundidad de escaneo hacia el nivel máximo siempre que los escaneos no tarden demasiado en completarse (véase el tiempo de espera del escaneo).
+> Si se desactiva la función de adaptación, cache_dirs siempre escaneará hasta el nivel máximo.
+";s:25:"_cachedirs_min_level_plug";s:159:"
+> Establece el nivel mínimo de la carpeta para el escaneo adaptativo (user-share > child folder > grand child es dos niveles). El valor predeterminado es 4.
+";s:25:"_cachedirs_max_level_plug";s:173:"
+> Establece los niveles máximos de las carpetas para la exploración (parent > child folder > grand child). Establezca el valor "ilimitado" (o 0) para eliminar el máximo
+";s:26:"_cachedirs_idle_timer_plug";s:137:"
+> Cuando los discos han estado inactivos este tiempo, el escaneo adaptativo de cache_dirs comienza a trabajar para construir la caché.
+";s:28:"_cachedirs_timeout_scan_plug";s:341:"
+> El tiempo de espera del escaneo es la duración máxima de un solo escaneo a través de todos los directorios en el nivel actual de profundidad (que puede cambiar adaptativamente).
+> Auméntelo si cache_dirs no consigue almacenar en caché todos sus archivos. Este tiempo de espera se utiliza siempre si la adaptación está desactivada.
+";s:31:"_cachedirs_timeout_initial_plug";s:136:"
+> Auméntelo si quiere que cache_dirs dé más tiempo en la exploración inicial, y cuando el sistema de archivos pueda estar ocupado.
+";s:30:"_cachedirs_timeout_cached_plug";s:258:"
+> Disminúyalo si quiere que cache_dirs ponga menos carga en el sistema cuando la caché sea desalojada de la memoria, y los discos no estén inactivos.
+> Aumente si quiere que cache_dirs tenga más posibilidades de recuperar los directorios en la memoria.
+";s:28:"_cachedirs_min_interval_plug";s:184:"
+> Se puede ajustar el intervalo de almacenamiento en caché para los sistemas más lentos. El valor por defecto es de 1 segundo, debería estar bien para la mayoría de los sistemas.
+";s:28:"_cachedirs_max_interval_plug";s:186:"
+> Se puede ajustar el intervalo de almacenamiento en caché para los sistemas más lentos. El valor por defecto es de 10 segundos, debería estar bien para la mayoría de los sistemas.
+";s:25:"_cachedirs_scan_disk_plug";s:314:"
+> Cada disco se escaneará en un hilo separado, por lo que los discos se leerán simultáneamente. Si el recurso compartido del usuario también es escaneado, el usuario
+> se escaneará en un solo hilo después de que se hayan completado los escaneos de todos los discos, para evitar que los discos se estropeen.
+";s:28:"_cachedirs_limit_memory_plug";s:175:"
+> establece ulimit a NN para limitar la memoria utilizada por el script (por defecto=50000), '-U 0' no establece ningún ulimit y hereda el valor por defecto de los shells).
+";s:23:"_cachedirs_logging_plug";s:270:"
+> Seleccione si el registro está activado o desactivado. El registro se realizará en /var/log/cache_dirs.log y /var/log/cache_dirs_lost_cache.csv.
+> Tenga en cuenta que los registros de cache_dirs se colocan en la memoria de Unraid y no se contraen automáticamente.
+";s:28:"_cachedirs_user_defined_plug";s:803:"
+> El script cache_dirs tiene opciones adicionales que pueden ser utilizadas.
+> Consulte la documentación en línea para utilizarlos según sea necesario,
+> o ver el propio script cache_dirs ubicado en /usr/local/emhttp/plugins/dynamix.cache.dirs/scripts/cache_dirs
+>
+> Es posible indicar a cache_dirs que evite recorrer todos los directorios con un determinado nombre. El siguiente ejemplo evita las carpetas '.Recycle.Bin', 'temp' y 'log':
+>
+> <span class="strong orange-text">-a '-noleaf -name .Recycle.Bin -prune -o -name log -prune -o -name temp -prune -o -print'</span>
+>
+> Tenga en cuenta que las comillas simples alrededor del argumento de -a son importantes. Las comillas dobles no funcionan en la versión actual, por lo que lamentablemente no es posible filtrar con '-nombre "*Old" -prune'.
+";}

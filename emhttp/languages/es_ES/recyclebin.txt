@@ -1,0 +1,132 @@
+Age Days=Días de edad
+Array=Array
+Array is stopped=Array detenido
+Browse the Share Recycle Bin=Examinar la papelera de reciclaje compartida
+Deleted Files=Archivos eliminados
+Deleted Files Log=Registro de archivos eliminados
+Empty=Vacío
+Empty the=Vaciar el
+Empty All Trash=Vaciar todas las papeleras
+Empty Trash=Vaciar papelera
+Enable Empty All Trash Button=Habilitar el Botón Vaciar toda la Papelera
+Enable Empty Share Trash Button=Habilitar el Botón Vaciar Papelera Compartida
+Enable on Unassigned Devices=Habilitar para dispositivos no asignados
+Enable Recycle Bin=Habilitar papelera de reciclaje
+Enable Remove Aged Files Button=Habilitar el Botón Eliminar Archivos Antiguos
+Excluded Directories=Directorios excluidos
+Excluded Files=Archivos Excluidos
+Excluded Shares=Recursos compartidos excluidos
+Log Deleted Files=Registo de archivos eliminados
+Recycle Bin=Papelera de reciclaje
+Recycle Bin is empty=Papelera de reciclaje vacía
+Recycle Bin Log=Registro de la papelera de reciclaje
+Recycle Bin parameters=Parámetros de la papelera de reciclaje
+Recycle Bin permissions=Permisos de la papelera de reciclaje
+Recycle Bin Total Size=Tamaño total de la papelera de reciclaje
+Refresh the Recycle Bin page=Actualizar la página de la papelera de reciclaje
+Remove Aged Files=Eliminar archivos antiguos
+Remove aged files from the Recycle Bin=Eliminar archivos de la papelera de reciclaje
+Remove Aged Files Notification=Remover notificaciónes de archivos antiguos
+Remove Aged Files on Schedule=Remover archivos antiguos en horario
+Remove all files from the Recycle Bin=Eliminar todos los archivos de la papelera de reciclaje
+Restart the Recycle Bin=Reiniciar la papelera de reciclaje
+Share Type=Tipos de archivos compartidos
+SMB Share=Recursos compartidos SMB
+Start the Recycle Bin=Iniciar la papelera de reciclaje
+Starting and stopping the Recycle Bin can cause SMB shares to go offline for a short period=El inicio y la detención de la papelera de reciclaje pueden hacer que los recursos compartidos SMB se desconecten durante un breve período
+Stop the Recycle Bin=Deterner la papelera de reciclaje
+These actions apply to all shares=Estas acciones se aplican a todos los shares
+Trash Size=Tamaño de papelera
+Update Recycle Bin Size in Background=Actualizar el tamaño de la papelera de reciclaje en segundo plano
+;
+; Help
+;
+:recycle_bin_shares_plug:
+> Papelera de Reciclaje Compartida:
+>
+> Los recursos compartidos con el contenido de la Papelera de reciclaje se mostrarán junto con el tamaño de la Papelera de recursos Compartidos.
+> Haga clic en el icono <strong> Examinar </strong> para explorar los archivos eliminados en ese recurso compartido.
+> Haga clic en el botón <strong> Vacío </strong> para eliminar los archivos eliminados.
+>
+> Los recursos compartidos de Dispositivos sin asignar solo se mostrarán si la Papelera de reciclaje está habilitada para Dispositivos sin asignar y hay Dispositivos sin asignar que están montados & compartidos y tienen contenido de Papelera de reciclaje.
+>
+> Haga clic en las columnas 'Recursos Compartidos SMB', 'Tipos de recursos Compatidos' o 'Tamaño de Papelera' del encabezado de la tabla y los contenidos se ordenarán. El 'Tamaño de la papelera' es un tipo alfanumérico y no numérico.
+:end
+
+:recycle_bin_enable_plug:
+> Establezca 'Sí' para habilitar la funcionalidad de la Papelera de reciclaje para archivos eliminados cuando se inicia el servidor.
+>
+> To hide the Recycle Bin folder, set 'Hide Dot Files to 'Yes' in the SMB settings <a href='/Settings/SMB'>here</a>.
+:end
+
+:recycle_bin_hide_folder_plug:
+> Set to **No** to show the Recycle Bin folder in user shares.  The SMB setting "Hide dot files" controls if hidden folders show in user shares.
+:end
+
+:recycle_bin_background_plug:
+> Establézcalo 'Sí' para permitir que el Tamaño de la Papelera de reciclaje se actualice en segundo plano cada minuto. Esto puede hacer que la configuración de la papelera de reciclaje y las páginas de recursos compartidos sean más receptivas y evite la rotación de los discos al acceder a la papelera de reciclaje. El tamaño de la Papelera de reciclaje puede tardar hasta un minuto en actualizarse cuando está habilitado.
+:end
+
+:recycle_bin_ud_plug:
+> Establezca 'Sí' para habilitar la funcionalidad del archivo eliminado de la Papelera de reciclaje en las unidades compartidas de dispositivos no asignados cuando se instala el complemento Dispositivos no asignados. Los montajes SMB/NFS y los montajes iso están excluidos de la funcionalidad de la Papelera de reciclaje en el servidor. Habilite la Papelera de reciclaje en el servidor remoto donde se origina el recurso compartido remoto si se trata de un servidor Unraid.
+:end
+
+:recycle_bin_parameters_plug:
+> Parámetros adicionales para la papelera de reciclaje. Las siguientes son algunas opciones que puede configurar para controlar la estructura de archivos eliminados.
+> Ingrese los parámetros en una lista sin espacios ni comas entre ellos.
+> El orden de los parámetros afectará la estructura del archivo en la Papelera de reciclaje.
+> Dejar este campo en blanco colocará todos los archivos eliminados en la Papelera de reciclaje sin ninguna información de ruta.
+>
+> Sugerencia: use '/' para obtener más control de la estructura de directorios en la Papelera de reciclaje.
+> Por ejemplo, '%m/%S' organizará los archivos eliminados por el nombre de la máquina que eliminó el archivo y la estructura del nombre compartido.
+>
+> + '%S' Nombre compartido de Samba (que en Unraid es igual al nombre compartido), por ejemplo. Almacenamiento
+> + '%P' Ruta compartida del usuario, por ejemplo /mnt/user/Storage, /mnt/disk1, /mnt/disks/ unassigned_device, /flash
+> + '%u' Nombre de usuario del servicio actual, si lo hay
+> + '%m' Nombre de la máquina del usuario que eliminó el archivo
+:end
+
+:recycle_bin_permissions_plug:
+> Set the directory and sub-directory permissions of the Recycle Bin.  Set permissions to 07xx for the Recycle Bin to operate properly.  Don't change this from the default if you don't know how to use permissions.
+:end
+
+:recycle_bin_excluded_files_plug:
+> Lista de archivos para excluir de la Papelera de reciclaje separados por comas; Comillas '*' y '?' están permitidos.
+:end
+
+:recycle_bin_excluded_dirs_plug:
+> List of directories to exclude from the Recycle Bin separated by commas.  To specify a particular share directory, use 'share/directory'.  Unassigned Devices are specified the same way using 'mountpoint/directory'.  Wild cards '*' and '?' are allowed in the directory name.
+:end
+
+:recycle_bin_excluded_shares_plug:
+> Lista de recursos compartidos para excluir de la Papelera de reciclaje separados por comas. Esta lista puede incluir recursos compartidos de dispositivos no asignados. El nombre compartido es sensible a mayúsculas y minúsculas.
+>
+> El recurso compartido excluido puede incluir parte del nombre de un recurso compartido y excluirá todos los recursos compartidos con el texto del recurso compartido excluido en el nombre real del recurso compartido. Si desea una coincidencia exacta, use el nombre compartido completo.
+>
+> Por ejemplo: 'Squidbait' (sin comillas) excluirá todos los recursos compartidos creados por el complemento "Ransom Ware".
+>
+> Nota: Excluir un recurso compartido solo lo excluye de los archivos eliminados que van a la carpeta ".Papelera.de.Reciclaje" en el recurso compartido. Los archivos en la carpeta ".Papelera.de.Reciclaje" existente todavía se mostrarán en el tamaño total y en la pestaña 'Recursos compartidos'.
+:end
+
+:recycle_bin_age_day_plug:
+> Cualquier archivo anterior al número de días establecido se elimina en la programación del horario o cuando se hace clic en el botón "Eliminar archivos antiguos".
+:end
+
+:recycle_bin_remove_age_files_plug:
+> Establezca la programación del horario deseado para eliminar los archivos antiguos. Cada hora estará en la hora cada hora. Diariamente será todos los días a las 3 AM. Semanalmente será cada semana a las 3 AM el domingo.
+:end
+
+:recycle_bin_age_files_notification_plug:
+> Cuando se establece "Sí", se enviará una notificación cuando se ejecute la tarea programada para eliminar archivos.
+:end
+
+:recycle_bin_log_deleted_files_plug:
+> Cuando se establece "Sí", se registrarán los archivos eliminados.
+:end
+
+:recycle_bin_show_log_plug:
+> Registro de papelera de reciclaje:
+>
+> Los archivos eliminados se mostrarán en el registro como archivos no vinculados.
+> Haga clic en el botón "Borrar" para borrar el registro.
+:end

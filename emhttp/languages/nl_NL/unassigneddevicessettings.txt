@@ -1,0 +1,191 @@
+Add=Toevoegen
+Auto Mount USB Devices=Automatische koppelen van USB apparaat
+Change Disk UUID=Wijzig schijf UUID
+Change UUID=Wijzig UUID
+Change Disk UUID=Wijzig schijf UUID
+Common Script=Standaard script
+Common Settings=Standaard instellingen
+Destructive Mode=Destructieve modus
+Disk spin down is managed by Unraid=Het langzamer draaien van de schijf wordt beheerd door unRAID
+Enable NFS export=Schakel NFS-export in
+Enable SMB Security=Schakel SMB beveiliging in
+Enter Disk Password=Voer het schijfwachtwoord in
+Enter Pool Mount Point=Voer het Pool Mount punt in
+Legacy Mount Point Compatibility=Legacy Mount punt compatibiliteit
+Mount SSDs with discard option=Mount SSD's met de optie discard
+NFS Security=NFS beveiliging
+NFS Settings=NFS instellingen
+NFS must be enabled in Settings->NFS to enable NFS Export=NFS moet ingeschakeld zijn in de instellingen->NFS om NFS export in the shakelen
+NFS Version to use when Mounting Remote Shares=NFS versie om the gebruiken voor het koppelen van externe gedeelde mappen
+Rule=Regel
+Select Disk=Selecteer Schijf
+Set Encrypted Disk Password=Stel een beveiligd schijfwachtwoord in
+Set Password=Stel een wachtwoord in
+Set Pool Mount Point=Stel Pool Mount punt in
+Set the Pool Mount Point for this disk=Zet het Pool Mount Point voor deze schijf
+Set the disk Password=Stel het schijfwachtwoord in
+Specify SMB Version when Mounting Remote Shares=Specificeer de SMB-versie bij het koppelen van externe gedeelde mappen
+Spin down disks=Laat schijven langzamer draaien
+The Unassigned Devices Plus plugin must be installed to enable Destructive Mode=De Unassigned Devices Plus plugin moet geïnstalleerd zijn om destructieve modus in te schakelen
+to SMB share config=naar SMB map configuratie
+Unassigned Devices=Niet-toegewezen apparaten
+Unraid 6.10 or later is required for NFSv4 support=Unraid 6.10 of later is vereist voor NFSv4 ondersteuning
+
+; Help
+;
+:ud_settings_plus_plug:
+> ** Opmerking: ** De plug-in 'Unassigned Devices Plus' moet zijn geïnstalleerd om HFS + en exFAT-schijfindelingen te kunnen koppelen en de destructieve modus in te schakelen. 
+:end
+
+:ud_settings_common_script_plug:
+> Indien ingesteld, wordt dit script uitgevoerd vóór het apparaatscript. De actie is in de omgevingsvariabele **$ACTION**. Zorg ervoor dat u naar alle opdrachten verwijst met hun volledige pad. 
+:end
+
+:ud_settings_destructive_plug:
+> Indien ingeschakeld, kunt u partities wissen en formatteren met Unassigned Devices. Dit kan niet worden ingeschakeld tenzij de plug-in 'Unassigned Devices Plus' is geïnstalleerd. 
+:end
+
+:ud_settings_mount_usb_devices_plug:
+> Indien ingesteld op **Ja**, wordt automatisch een nieuw USB-apparaat gekoppeld en gedeeld zonder tussenkomst van de gebruiker. 
+:end
+
+:ud_settings_discard_plug:
+> Koppel SSD's die weggooien ondersteunen met de optie 'discard'. Als u de SSD-triminstellingen gebruikt om een periodieke trim van SSD's uit te voeren, kunt u dit instellen op ** Nee **. 
+:end
+
+:ud_settings_symlinks_plug:
+> Stel in op **Ja**  om symlinks te maken voor /mnt/remotes/ bij /mnt/disks/.
+>
+> Dit is voor achterwaartse compatibiliteit van VM- en Docker Container-toewijzingen aan het /mnt/disks/ koppel punt.
+> U wordt aanbevolen om uw toewijzingen te wijzigen in het /mnt/remotes/ koppel punt.
+>
+> Als u de achterwaartse compatibiliteit niet nodig hebt, laat u deze op **Nee** staan.
+:end
+
+:ud_settings_remote_share_wait_plug:
+> This is the time in seconds to wait before mounting remote shares when the array is first started.
+>
+:end
+
+:ud_settings_specify_smb_vers_plug:
+Stel in op **Nee** voor niet-toegewezen apparaten om eerst externe shares te koppelen door de SMB-versie niet in te stellen bij het koppelen.
+>
+> Stel in op **Ja** voor niet-toegewezen apparaten om alleen externe SMB-shares te koppelen met vermelding van de SMB-versie.
+>
+> Sommige externe servers moeten de opgegeven versie hebben.
+:end
+
+:ud_settings_debug_level_plug:
+>Het instellen van een Debug Log-niveau voegt extra logboekregistratie toe in specifieke gebieden van UD voor het oplossen van problemen.
+>
+> Stel in op **None** om debug logging uit te schakelen.
+>
+> Stel het niveau van het Debug Log Level in op een numerieke waarde om fouten op te sporen in een specifiek gebied van UD.
+>
+> **Opmerking:** Laat het Debug Log Level niet voor langere tijd ingeschakeld. Het kan veel logberichten aan de syslog toevoegen.
+:end
+
+:ud_settings_specify_nfs_vers_plug:
+> Stel in op **NFSv3** om alle NFS Remote Shares met NFSv3 te koppelen
+>
+> Stel in op **NFSv4** om alle NFS Remote Shares met NFSv4 te koppelen.
+>
+> Alle externe NFS-shares worden aangekoppeld met de opgegeven versie.
+:end
+
+:ud_settings_smb_security_plug:
+> Stel het gebruikersniveau van SMB-beveiliging in.
+>
+> + Stel in op **Ja** om SMB-beveiliging op SMB mappen in te schakelen. Stel toegang per gebruiker in, om toegang toe te staan en of de gebruiker al dan niet naar de gedeelde map kan schrijven.
+> + Stel in op **Verborgen** om SMB-beveiliging in te schakelen op SMB mappen die niet zichtbaar zijn. Stel toegang per gebruiker in om toegang toe te staan en of de gebruiker al dan niet naar de gedeelde map kan schrijven.
+> + Stel in op **Nee** om apparaten, SMB / NFS en iso koppelingen publiekelijk te delen met lees- en schrijftoegang. 
+:end
+
+:ud_settings_case_sensitive_plug:
+> Bepaalt of bestandsnamen hoofdlettergevoelig zijn.
+>
+> De standaardinstelling **Auto** kunnen clients die hoofdlettergevoelige bestandsnamen ondersteunen (Linux CIFSVFS) de Samba-server per pakket laten weten dat ze hoofdlettergevoelig toegang willen krijgen tot het bestandsysteem (om  UNIX hoofdletters te ondersteunen). Geen enkel Windows-systeem ondersteunt hoofdlettergevoelige bestandsnamen, dus het instellen van deze optie op automatisch is hetzelfde als het instellen op Nee;  het geval van bestandsnamen die door een Windows-client zijn doorgegeven, blijft echter behouden. Deze instelling kan resulteren in verminderde prestaties bij zeer grote mappen omdat Samba moet zoeken op bestandsnamen en moet overeenkomen met doorgegeven namen.
+>
+> Een instelling van **Ja** betekent dat bestanden worden gemaakt met de case die de client doorgeeft, en alleen toegankelijk zijn met dezelfde case. Dit versnelt de toegang tot zeer grote mappen, maar sommige Windows-toepassingen werken mogelijk niet goed met deze instelling. Als bijvoorbeeld "MijnBestand" is gemaakt, maar een Windows-app probeert "MIJNBESTAND" te openen (wat is toegestaan ​​in Windows), zal het niet worden gevonden.
+>
+> Een waarde van **Gedwongen lager** is speciaal: het geval van alle inkomende clientbestandsnamen, niet alleen nieuwe bestandsnamen, wordt ingesteld op kleine letters. Met andere woorden, het maakt niet uit welke naam in hoofdletters aan de Windows-kant wordt gemaakt, deze wordt opgeslagen en geopend in kleine letters. Dit zorgt ervoor dat alle Windows-apps elk bestand correct kunnen vinden, ongeacht het geval, maar het geval wordt niet bewaard in maplijsten.
+:end
+
+:ud_time_machine_plug:
+> Set to **Yes** to enable Time Machine settings on the SMB shares.
+:end
+
+:ud_time_machine_vol_size_plug:
+> This limits the reported volume size, preventing Time Machine from using the entire real disk space for backup. For example, setting this value to "1024" would limit the reported disk space to 1GB.
+:end
+
+:ud_settings_force_user_plug:
+> Er zijn momenten waarop machtigingen voor SMB mappen niet worden afgehandeld zoals verwacht. Het inschakelen van deze functie kan helpen met die machtigingen.
+> Dit is van toepassing op alle apparaten die zijn gekoppeld met Unassigned Devices.
+> De keerzijde is dat het Linux-groepsmachtigingen opheft. Als u niet zeker weet of dit nodig is, laat het dan ingeschakeld. 
+:end
+
+:ud_settings_nfs_security_plug:
+> Set to **Yes** to export Unassigned Devices with NFS sharing. Shares are exported Public with read and write access or Private with the rule you set. Access is controlled with permission settings on files and folders.
+:end
+
+:ud_settings_nfs_rules_plug:
+> **Note:** The normal rule used by UD is '*(rw,sec=sys,insecure,anongid=100,anonuid=99,no_root_squash)'.
+:end
+
+:ud_settings_disk_pass_plug:
+> Selecteer de schijf waarvoor u een wachtwoord wilt instellen. Dit is alleen het wachtwoord voor deze schijf en heeft geen invloed op het wachtwoord/wachtwoordzin van de array. Laat het wachtwoord leeg om het arraywachtwoord/wachtwoordzin te gebruiken. 
+:end
+
+:ud_settings_change_uuid_plug:
+> Selecteer de schijf waarvan u de UUID wilt wijzigen. Dit is handig als een schijf uit de array is verwijderd en dezelfde UUID heeft als een array-schijf. De schijf moet worden ontkoppeld om de UUID te wijzigen.
+:end
+
+:ud_settings_zfs_upgrade_plug:
+> Select the disk that you want to upgrade to the latest ZFS version. Drive must be mounted to upgrade ZFS.
+:end
+
+:ud_remote_server_test_plug:
+> Remote Servers need to have SMB and/or NFS enabled.  This will check that the SMB and/or NFS ports are open.  The 'showmount -e <server>' command on Unraid must also show NFS mounts available.
+> For SMB to be considered online, the Remote Server has to have the SMB port open.
+> For NFS to be considered online, the Remote Server has to have the NFS port open and the 'showmount -e' command has to show NFS shares.
+> There can be a case where the port is open and 'showmount -e' doesn't show NFS shares and NFS will not work.
+> If showmount does not return any NFS shares on a reachable remote server like a Synology, it generally means one of the following:
+> No NFS Shares Exported:
+> The server might not have any directories configured for NFS export. Check the NFS configuration on the Synology device and ensure that folders intended for NFS sharing are explicitly exported.
+> Access Restrictions:
+> NFS shares may be configured with IP-based access restrictions. Synology devices allow you to specify which IP addresses or networks can access each NFS share. If your IP address is not allowed, the NFS share will not appear in showmount output.
+> NFS Service Not Enabled:
+> The NFS service on the Synology might not be enabled. Verify this in the Synology DSM settings under Control Panel > File Services > NFS. Enable NFS if it is currently disabled.
+> Firewall or Network Configuration:
+> The Synology device may have firewall rules blocking the showmount request or the required RPC communication. Ensure that the firewall settings allow traffic on NFS-related ports (typically 2049 for NFS and 111 for RPC).
+> Synology Export Options:
+> The Synology NFS settings can sometimes require enabling Enable NFS at the top level and specifying Allow NFSv3 if you are using clients that expect NFSv3. Check Control Panel > File Services > NFS to ensure proper configuration.
+> By ensuring that NFS is enabled, configured with the correct permissions, and exported directories are allowed for your client IP, showmount should list the available exports.
+:end
+
+; Note: December 8, 2024 - 24 missing translations
+Case-sensitive names=Hoofdlettergevoelige namen
+Command times=Opdracht­tijden
+Disabled=Uitgeschakeld
+Enable Time Machine=Time Machine inschakelen
+Enter the Remote Server name or IP address and the results from the Remote Server Test will show in the Result text area=Voer de naam of het IP-adres van de externe server in en de resultaten van de test verschijnen in het Resultaat-veld
+Public=Openbaar
+Private=Privé
+Private Hidden=Privé (verborgen)
+Refresh and Update=Vernieuwen en bijwerken
+Remote Share Mount Wait Time=Wachttijd voor het koppelen van externe shares
+See Help=Zie Help
+SMB Settings=SMB-instellingen
+SMB Sharing=SMB-deling
+Test=Test
+Testing=Bezig met testen
+Test the Remote Server=Test de externe server
+This is a tool to help troubleshoot Remote Servers ability to serve SMB and NFS shares=Dit is een hulpmiddel om problemen op te lossen met de mogelijkheid van externe servers om SMB- en NFS-shares aan te bieden
+Time Machine volume size limit=Time Machine volume-grootte­limiet
+Udev and Hotplug=Udev en hotplug
+Upgrade ZFS Pool=ZFS-pool upgraden
+Use only when directed for support because the messages can flood the log=Alleen gebruiken op instructie van support, omdat de berichten het log kunnen overspoelen
+Warning=Waarschuwing
+Windows may require a valid User to be defined even for Public shares=Windows kan vereisen dat een geldige gebruiker is ingesteld, zelfs voor openbare shares
+Working=Bezig

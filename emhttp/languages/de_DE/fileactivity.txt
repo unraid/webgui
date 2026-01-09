@@ -1,0 +1,40 @@
+Display Events=Ereignisse anzeigen
+File Activity=Dateiaktivitäten
+File Activity Monitoring=Dateiaktivitäten-Überwachung
+Start File Activity=Dateiaktivitäten-Dienst starten
+Stop File Activity Monitoring=Dateiaktivitäten-Überwachung stoppen
+Clear the File Activity log=Dateiaktivitäten-Protokoll löschen
+Refresh Page=Seite neu laden
+Enable File Activity Monitoring=Dateiaktivitäten-Überwachung aktivieren
+Enable for Unassigned Devices=Für nicht zugewiesene Datenträger aktivieren
+Enable for Cache and Pool Disks=Für Cache- und Pool-Datenträger aktivieren
+;
+; Help
+;
+:file_activity_loggging_plug:
+> Überwachung von Datei-Aktivitäten:
+>
+> Das Lesen, Schreiben & Ändern von Dateien wird mithilfe von inotify auf dem Array überwacht und nach Datenträger, Freigabe, nicht zugewiesene Datenträger und Cache sortiert angezeigt.
+> Du musst den Datei-Aktivitäten-Dienst starten, um Datenträgern-Aktivitäten zu protokollieren.
+> Der Datei-Aktivitäten-Dienst sollte nur für kurze Zeit ausgeführt werden, damit du die Datenträger-Aktivitäten überprüfen kannst
+> Ein Server mit viel Dateiaktivität kann schnell zu einer großen Protokolldatei führen bzw. den Speicherplatz im Protokoll-Verzeichnis aufbrauchen.
+> Die Verzeichnisse "appdata", "Syslogs" und "System" sind ausgeschlossen.
+>
+> Hinweis: Der Datei-Aktivitäten-Dienst wird beendet, sobald das Array gestoppt wird und wird wieder gestartet, wenn das Array startet, falls dies aktiviert ist.
+:end
+
+:file_activity_enable_logging_plug:
+> Auf **Ja** stellen, um die Überwachung von Dateiaktivitäten beim Serverstart zu aktivieren.
+:end
+
+:file_activity_enable_ud_plug:
+> Auf **Ja** stellen, um die Überwachung von Dateiaktivitäten auf nicht zugewiesenen Datenträgern zu aktivieren, falls das Plugin "Unassigned Devices" installiert ist.
+:end
+
+:file_activity_enable_cache_plug:
+> Auf **Ja** stellen, um die Überwachung von Dateiaktivitäten auf Cache- und Pool-Datenträgern zu aktivieren. Gilt für Pool-Datenträger nur mit Unraid 6.9
+:end
+
+:file_activity_display_events_plug:
+> Dies ist die Anzahl der Dateiereignisse, die auf Datenträgern und Freigaben aus dem Dateiaktivitäten-Protokoll für jede Freigabe oder jeden Datenträger angezeigt werden.
+:end

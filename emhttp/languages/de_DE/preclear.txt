@@ -1,0 +1,78 @@
+A disk must be cleared of all partitions before it can be precleared=Vom Datenträger müssen alle Partitionen gelöscht werden, bevor der Preclear-Prozess möglich ist
+Cannot Preclear=Preclear nicht möglich
+Clear Disk=Datenträger löschen
+Clear Signature=Signatur löschen
+Clear Stats=Statistiken löschen
+Click to show reports=Klicken, um Berichte anzuzeigen
+Concurrent Sessions=Gleichzeitige Sitzungen
+Cycles=Durchläufe
+Device Model=Gerätemodel
+Disk Log Information=Datenträger-Protokollinformationen
+Disk Size=Datenträgergröße
+Download Logs=Protokolle herunterladen
+Enable Testing for debugging=Testen für Debugging aktivieren
+Fast Post-read=Schnelles Post-Read
+Firmware=Firmware
+Fix Preclear=Preclear löschen
+Identification=Identifikation
+If you set a queue limit, all running preclear sessions above that limit will be paused and remain in the queue until a session finishes=Wenn du ein Warteschlangen-Limit festlegst, werden alle laufenden Preclear-Sitzungen, die dieses Limit überschreiten, pausiert und bleiben in der Warteschlange, bis eine Sitzung beendet ist
+Notifications=Benachrichtigungen
+On every cycle and step end=Bei jedem Durchlauf und Ende eines Schritts
+On every 25% of progress=Bei jedem Fortschritt von 25%
+On every cycle end=Bei jedem Ende eines Durchlaufs
+On preclear end=Bei Preclear-Ende
+Operation=Vorgang
+Post-read Verify=Post-Read-Verifizierung
+Preclear Disks=Preclear-Datenträger
+Preclear Disk Log=Preclear-Datenträgerprotokoll
+Preclear Log=Preclear-Protokoll
+Preclear Status=Preclear-Status
+Preview Progress=Vorschau-Fortschritt
+Read size=Lesegröße
+Remove Report=Bericht löschen
+Resume all Sessions=Alle Sitzungen fortsetzen
+Resume Preclear=Preclear fortsetzen
+Preview Progress Report=Vorschau auf Fortschrittsbericht
+Select Disks=Datenträger auswählen
+Serial Number=Seriennummer
+Set Preclear Queue=Preclear-Warteschlange festlegen
+Show Preclear Report=Preclear-Bericht anzeigen
+Skip Pre-read=Pre-Read überspringen
+Skip Post-Read=Post-Read überspringen
+Start Multiple Sessions=Mehrere Sitzungen starten
+Start New=Neue Sitzung starten
+Start Preclear=Preclear starten
+Stop all Sessions=Alle Sitzungen stoppen
+Stop Preclear=Preclear stoppen
+Temp=Temperatur
+Testing=Testen
+There are no disks that can be precleared=Es gibt keine Datenträger, bei denen der Preclear-Prozess möglich ist
+Verify Signature=Signatur verifizieren
+Write size=Schreibgröße
+You can use Unassigned Devices to clear the disk=Du kannst Unassigned Devices verwenden, um den Datenträger zu löschen
+
+:preclear_general_help_plug:
+> Unassigned Devices Preclear kann verwendet werden, um Datenträger für die Aufnahme in das Array vorzubereiten, Datenträger für die Entsorgung zu löschen und Stresstests durchzuführen, bevor Datenträger im Array verwendet werden.
+>
+> Nur Datenträger, die nicht im Array verwendet werden und keine Partitionen mit Dateisystemen haben, werden als Kandidaten für den Preclear-Prozess aufgeführt.
+>
+> Wenn auf einem Datenträger der Preclear-Prozess ausgeführt wird, kannst du den Status auf dieser Seite, auf der Seite für nicht zugewiesene Datenträger oder über das Preclear-Statussymbol in der Fußzeile der Unraid-Webseite verfolgen.
+> 
+> Es gibt mehrere Möglichkeiten für den Preclear-Prozess:
+>
+> Das **erweiterte** Skript von Benutzer **gfjardim** hat den Vorteil, dass es die erweiterten Funktionen wie das Pausieren und Fortsetzen des Preclear-Prozesses unterstützt. Außerdem verfügt es über eine umfangreiche Protokollierung.
+>
+> **Docker** ist der binhex Docker-Container, der den Preclear-Prozess durchführt. Dies hat den Vorteil, dass der Preclear-Prozess im Docker-Container isoliert ist.
+>
+> Preclear-Vorgänge:
+>
+> + Datenträger löschen (Clear Disk) - Der Datenträger wird gelöscht und die Unraid-Signatur wird auf den Datenträger geschrieben. Dadurch wird eine leere Partition auf dem Datenträger erstellt.
+> + Datenträger überschreiben (Erase Disk) - Überschreibt den gesamten Datenträger ausschließlich mit Nullen. Die Preclear-Signatur wird entfernt.
+> + Datenträger überschreiben und löschen (Erase and Clear Disk) - Zufallsmuster werden auf den Datenträger geschrieben und dann mit Nullen überschrieben. Dies ist eine gute Wahl für einen Datenträger, der entsorgt werden soll, um sicherzustellen, dass sämtliche Spuren von Dateien entfernt werden.
+> + Signatur verifizieren (Verify Signature) - Die Signatur des Datenträgers wird überprüft.
+> + Datenträger verifizieren - (Verify Disk) Die Signatur und die Überschreibung mit Nullen des Datenträgers wird überprüft 
+> + Post-Read-Verifizierung (Post-read Verify) - Führt eine Post-Read-Verifizierung durch, um den Datenträger zu überprüfen.
+> + Signatur löschen (Clear Signature) - Entfernt die Preclear-Signatur vom Datenträger.
+>
+> Der Text <em style='color:#00BE37;'>Precleared</em> neben der Seriennummer des Datenträgers zeigt an, dass der Datenträger eine Precleared-Signatur hat. Dies wird nur angezeigt, wenn auf dem Datenträger der Preclear-Prozess durchgeführt wurde und die Preclear-Statistiken entfernt wurden.
+:end

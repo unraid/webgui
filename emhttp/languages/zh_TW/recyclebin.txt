@@ -1,0 +1,136 @@
+Age Days=過期天數
+Array=陣列
+Array is stopped=陣列已停止
+Browse the Share Recycle Bin=瀏覽此共享的回收站內容
+Deleted Files=已刪除文件
+Deleted Files Log=刪除記錄
+Empty=清空
+Empty the=清空
+Empty All Trash=清空所有垃圾
+Empty Trash=清空回收站
+Enable on Unassigned Devices=在未分配的設備上啟用
+Enable Recycle Bin=啟用回收站
+Excluded Directories=排除目錄
+Excluded Files=排除文件
+Excluded Shares=排除共享
+Log Deleted Files=記錄刪除的文件
+Recycle Bin=回收站
+Recycle Bin Log=回收站日誌
+Recycle Bin parameters=回收站參數
+Recycle Bin permissions=回收站權限
+Recycle Bin Total Size=回收站容量
+Refresh the Recycle Bin page=刷新回收站頁面
+Remove Aged Files=刪除過期文件
+Remove aged files from the Recycle Bin=刪除回收站過期文件
+Remove Aged Files Notification=刪除過期文件通知
+Remove Aged Files on Schedule=按計劃刪除過期文件
+Remove all files from the Recycle Bin=清空回收站
+Restart the Recycle Bin=重啟回收站
+Share Type=共享類型
+SMB Share=SMB 共享
+Start the Recycle Bin=啟動回收站
+Starting and stopping the Recycle Bin can cause SMB shares to go offline for a short period=啟動和停止回收站時可能會導致SMB共享短時間脫機
+Stop the Recycle Bin=停止回收站
+Trash Size=回收站大小
+Update Recycle Bin Size in Background=在後台更新回收站大小
+;
+; Help
+;
+:recycle_bin_shares_plug:
+> 共享回收站：
+>
+> 包含回收站內容的共享將與共享的垃圾箱大小一起顯示
+> 點擊<strong>瀏覽</strong> 圖標查看該共享中已刪除的文件
+> 點擊<strong>清空</strong>按鈕移除該共享所有已刪除的文件
+>
+> 未分配的設備共享僅在為未分配的設備啟用回收站並且有未分配的設備已安裝且具有回收站內容時才會顯示
+>
+> 點擊表格標題列內容將被排序。“大小”列是按字母數字排序而非數字排序
+:end
+
+:recycle_bin_enable_plug:
+> 設置為**是** 以在服務器啟動時**啟用**已刪除文件的回收站功能
+>
+> 要隱藏回收站文件夾，請在SMB 設置中將“隱藏(.) 文件”設置為“是”。<a href='/Settings/SMB'>去設置</a>
+:end
+
+:recycle_bin_hide_folder_plug:
+> Set to **No** to show the Recycle Bin folder in user shares.  The SMB setting "Hide dot files" controls if hidden folders show in user shares.
+:end
+
+:recycle_bin_background_plug:
+> 設置為**是** 時會每分鐘在後台更新回收站佔用大小
+> 這可以使回收站設置和共享頁面更具響應性，並在訪問回收站時防止磁盤喚醒
+> 啟用此功能後，可能需要一分鐘才能刷新回收站佔用大小。
+:end
+
+:recycle_bin_ud_plug:
+> 設置為**是** 以在安裝Unassigned Devices 插件時為未分配的設備驅動器啟用回收站功能
+> 回收站功能不包括SMB/NFS 掛載及ISO 掛載
+> 如果遠程共享的來源是Unraid 服務器，請在遠程服務器上啟用回收站
+:end
+
+:recycle_bin_parameters_plug:
+> 回收站的附加參數。以下是可以設置的一些選項來控制已刪除文件的文件結構
+> 在列表中輸入參數，它們之間沒有空格或逗號，參數的順序會影響回收站中的文件結構
+> 將此字段留空會將所有已刪除的文件放入回收站，而沒有任何路徑信息。
+>
+> Hint: Use the '/' for more control of the directory structure in the Recycle Bin.
+> 提示：使用**'/'** 可以更好地控制回收站中的目錄結構
+> 例如：**'%m/%S'**將按刪除文件的計算機名稱和共享名結構來組織已刪除的文件
+>
+> + '%S' Samba 共享名稱（在Unraid 中等於共享名稱），例如：Storage
+> + '%P' 用戶共享完整路徑，例如：/mnt/user/Storage, /mnt/disk1, /mnt/disks/unassigned_device, /flash
+> + '%u' 當前服務的用戶名（如果有）
+> + '%m' 刪除文件的用戶的計算機名稱
+:end
+
+:recycle_bin_permissions_plug:
+> 設置回收站的目錄和子目錄權限
+> 將權限設置為07xx 以使回收站正常運行，如果不知道如何使用權限，請不要將其從默認值更改
+:end
+
+:recycle_bin_excluded_files_plug:
+> 要從回收站中排除的文件列表，以英文逗號(,)分隔，允許使用'*' 和'?' 通配符
+:end
+
+:recycle_bin_excluded_dirs_plug:
+> 要從回收站中排除的目錄列表，以英文逗號(,)分隔，允許使用'*' 和'?' 通配符。要指定特定共享目錄請使用'共享名稱/目錄名稱' 的形式，未分配的設備同樣使用'掛載點/目錄' 的形式
+:end
+
+:recycle_bin_excluded_shares_plug:
+> 要從回收站中排除的共享列表，以英文逗號分隔且共享名區分大小寫，此列表可以包括未分配的設備共享
+>
+> 排除的共享可以包含共享名稱的一部分，並且將排除實際共享名稱中包含排除共享文本的所有共享。如果您想要完全匹配，請使用完整的共享名稱
+>
+> 例如：'Squidbait'（不帶引號）將排除Ransom Ware 插件創建的所有共享
+>
+> 注意：排除共享只會將其從已刪除的文件中排除到共享上的'.Recycle.Bin' 文件夾中。現有'.Recycle.Bin' 文件夾中的文件仍將顯示在總大小和'Shares' 選項卡上。
+:end
+
+:recycle_bin_age_day_plug:
+> 任何存放超過設置的過期天數的文件都會在計劃中刪除，或者在單擊“刪除過期文件”按鈕時刪除
+:end
+
+:recycle_bin_remove_age_files_plug:
+> 設置刪除過期文件的計劃任務，每小時為每小時一次，每日為每天凌晨三點，每週為周日的凌晨三點
+:end
+
+:recycle_bin_age_files_notification_plug:
+> 當設置為**是** 時，將在計劃任務運行時發送通知
+:end
+
+:recycle_bin_log_deleted_files_plug:
+> 當設置為**是** 時，將記錄已刪除的文件日誌
+:end
+
+:recycle_bin_show_log_plug:
+> 回收站日誌：
+>
+> 刪除的文件將在日誌中顯示為未鏈接的文件
+> 單擊“清除”按鈕以清除日誌
+:end
+
+; Note: April 28, 2023 - 2 missing translations
+Recycle Bin is empty=
+These actions apply to all shares=

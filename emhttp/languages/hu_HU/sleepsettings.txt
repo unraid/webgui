@@ -1,0 +1,117 @@
+Console=Konzol
+Counters only=Csak számlálók
+Custom commands after wake-up=Egyéni parancsok ébresztés után
+Custom commands before sleep=Egyéni parancsok elalvás előtt
+Device activity monitoring=Eszköz tevékenységének figyelése
+DHCP renewal after wake-up=DHCP megújítás ébredés után
+Enable DEBUG mode=DEBUG mód engedélyezése
+Enter custom commands here=Ide írja be az egyéni parancsokat
+Ethernet interface=Ethernet interfész
+Excluded days=Kizárt napok
+Excluded hours=Kizárt órák
+Execute function=Funkció végrehajtása
+Extra delay after array inactivity=Extra késleltetés a tömb inaktivitása után
+Force gigabit speed after wake-up=A gigabites sebesség kényszerítése ébredés után
+High traffic=Forgalom nagysága
+IP address=IP cím
+Local Remote=Helyi & Távoli
+Local=Helyi
+Log will be stored in bootlogss3_sleeplog=A napló mentésre kerül a **/boot/logs/s3_sleep.log**
+Low traffic=Alacsony forgalom
+Medium traffic=Közepes forgalom
+Mega traffic=Magas forgalom
+Monitor disks outside array=Monitor lemezek tömbön kívül
+Network idle threshold=Hálózati tétlenségi küszöb
+no host=nincs házigazda
+Remote=Távoli
+Set WOL options before sleep=Állítsa be a WOL-beállításokat elalvás előtt
+Silent traffic=Csendes forgalom
+Status counters=Állapot & számlálók
+Status only=Csak állapot
+Syslog and flash=Syslog és flash
+Syslog=Syslog
+Wait for array inactivity=Várja meg a tömb inaktivitását
+Wait for host inactivity=Várja meg a gazdagép inaktivitását
+Wait for network inactivity=Várja meg a hálózati inaktivitást
+Wait for user login inactivity=Várja meg, amíg a felhasználó nem jelentkezik ki
+Yes, exclude Cache=Igen, zárja ki a gyorsítótárat
+
+:s3sleep_function_plug:
+> Válassza ki a működési módot. A rendszer alvó állapotba helyezhető (és felébreszthető), vagy teljesen leállítható.
+>
+> A következő beállítások határozzák meg azokat a feltételeket, amelyek mellett a rendszer alvó állapotba kerül vagy leáll.
+:end
+
+:s3sleep_excluded_days_plug:
+> Alapértelmezés szerint az összes nap szerepel, itt válassza ki azokat a napokat, amikor az alvás vagy a a leállást kizárja. Ez a beállítás a kizárt órákkal együtt működik.
+:end
+
+:s3sleep_excluded_hours_plug:
+> Alapértelmezés szerint az összes óra szerepel, itt válassza ki azokat az órákat, amikor az alvás vagy a leállást kizárja. Ez a beállítás a kizárt napokkal együtt működik.
+:end
+
+:s3sleep_inactivity_plug:
+> Válassza ki, hogy a tömbnek teljesen inaktívnak kell lennie (minden lemez le van-e pörgetve), mielőtt alvó állapotba ó vagy leáll az Unraid Server.
+>
+> Ebben a beállításban a Cache lemez szerepelhet vagy kizárhatóak, pl. amikor a Gyorsítótár lemezt folyamatosan használják, és soha nem pörög le.
+:end
+
+:s3sleep_activity_plug:
+> *Status* figyeli az eszköz hardver állapotát
+>
+> *Counters* figyeli a készülék olvasási/írási számlálóit
+:end
+
+:s3sleep_outside_plug:
+> Ha a tömbön kívül más lemezek is vannak, akkor ezek külön figyelhetők.
+:end
+
+:s3sleep_extra_delay_plug:
+> Adjon meg egy további késleltetést, miután a tömb inaktívvá vált. Az érték 0 lehet, késedelem nélkül.
+:end
+
+:s3sleep_network_plug:
+> Válassza ki, hogy a hálózati tevékenységet feltételnek kell-e tekinteni az elalvás vagy a leállás előtt.
+:end
+
+:s3sleep_ethernet_plug:
+> Több hálózati interfész esetén itt válassza ki a hálózati tevékenység ellenőrzéséhez használandó interfészt.
+:end
+
+:s3sleep_idle_plug:
+> A hálózati aktivitás mérése különböző küszöbértékek alatt történik. A teljesen csendestől a megabites forgalomig. Kísérletezzen ezzel a beállítással, hogy megtalálja a helyzetének megfelelő egyensúlyt.
+:end
+
+:s3sleep_host_plug:
+> Válassza ki, hogy a külső gazdagépeket figyelni kell-e, és nem kell-e válaszolni alvó vagy leállási állapotként.
+>
+> A külső gazdagépeket az IP-címük adja meg, vesszővel válassza el több IP-címet. Amíg az egyik külső gazdagép válaszol a ping-re, a rendszer nem hívja meg az alvást/leállítást.
+:end
+
+:s3sleep_login_plug:
+> Válassza ki, hogy a helyi (konzol) vagy távoli (telnet vagy ssh) bejelentkezett felhasználóknak először ki kell jelentkezniük, mielőtt az alvó állapot vagy a leállítás folytatódhat.
+:end
+
+:s3sleep_wol_plug:
+> Állítson be további WOL-beállításokat az S3 alvás megfelelő támogatásához. A lehetőségeket a rendszer dokumentációjában találja.
+:end
+
+:s3sleep_before_plug:
+> Ide helyezhető az elalvás vagy a kikapcsolás előtti további parancsok. Ez lehet tisztítás vagy egyéb kívánatos művelet.
+:end
+
+:s3sleep_after_plug:
+> Ide helyezhető az alvás utáni további parancsok. Ez hasznos lehet egy korábbi helyzet visszaállításához.
+:end
+
+:s3sleep_gigabit_plug:
+> Hagyja ezt az alapértelmezést KI, ha az interfész nem indul el megfelelően az ébresztés után, nézze meg, hogy a beállítás kényszerítése segít-e.
+:end
+
+:s3sleep_dhcp_plug:
+> Hagyja ezt az alapértelmezést KI, ha a rendszer nem indul el megfelelően az ébredés után, nézze meg, hogy a beállítás kényszerítése segít-e.
+:end
+
+:s3sleep_debug_plug:
+> Alapértelmezés szerint a hibakeresés KI. Ezt a beállítást csak hibaelhárítás esetén használja, ez további üzeneteket generál az s3_sleep parancsfájl különböző szakaszainak jelentésére.
+:end

@@ -1,0 +1,59 @@
+a:18:{s:10:"Dont start";s:11:"Don't start";s:4:"HHMM";s:5:"HH:MM";s:23:"_integrity_control_plug";s:212:"
+> Select the placement of the file integrity control page. By default it is placed under the *Tools* menu, but it may be moved under the *header* menu.
+>
+> Keep in mind that the *header* menu has limited space.
+";s:23:"_integrity_service_plug";s:558:"
+> When enabled a checksum value is automatically calculated and added to the extended attributes of the newly created or modified file.
+> When it is detected that a file change has occured, but its modification time hasn't changed, then an automatic checksum verification is performed to check for any silent file corruption.
+>
+> The area selection can be filtered by excluding folders (shares) and/or excluding disks all together (see table below).
+>
+> When the automatic hashing is disabled then manual control is required to keep information up-to-date.
+";s:23:"_integrity_hashing_plug";s:726:"
+> Select the preferred hashing method. SHA2 generates a 256 bits checksum value, MD5 generates a 128 bits checksum value, while BLAKE2 generates a 512 bits checksum value per file.
+>
+> MD5 is the most commonly used method and should be selected when compatibility with external programs is required, BLAKE2 is the fastest method and has the highest detection grade, this is a proprietary solution though.
+> SHA2 is the official standard and is selected by default. It is the slowest of all three methods though. The BLAKE2 option is disabled if it is not supported by your processor.
+> All methods require substantial computing power from the processor and a too weak processor may not be able to perform up to expectations.
+";s:21:"_integrity_flash_plug";s:327:"
+> When enabled a daily file on the flash device will be created, holding the checksum results for all newly or modified files of that particular day.
+> The format of this file is the same as the standard export file. The daily file is saved as */config/plugins/dynamix.file.integrity/saved/disks.export.&lt;date&gt;.new.hash*
+";s:23:"_integrity_exluded_plug";s:562:"
+> Select here any folders (shares) you want to exclude from the automatic hashing and verification functionality. A share existing on multiple disks will be skipped on any disk where it is present.
+>
+> Use **Custom folders / Custom files** to manually enter exclusions. Multiple exclusions are separated by a comma.<br>
+> Examples are folder names, e.g. **`.Recycle.Bin`**, file names, e.g. **`my_workfile.tmp`** or file extensions, e.g. **`*.tmp`**.
+>
+> Select **Apple metadata** to exclude metadata files created by Apple's netatalk (.AppleDB and .DS_Store).
+";s:28:"_integrity_verification_plug";s:1302:"
+> When enabled a cron schedule is created to do file verification in the background. You need to select which disks participate in the automatic hashing and verification process (see table below).
+> The cron schedule can run on a selectable daily, weekly or monthly basis.
+>
+> One or more tasks can be created, each containing one or more disks. All disks under the same task are verified in parallel. This decreases the total run-time, but increases the
+> processor load. Make sure your processor can handle this load, and change grouping accordingly. At one end all disks can be put in a single task, resulting in the highest concurrency.
+> At the other end every disk can be put in its own task, resulting in the lowest processor load.
+>
+> A disk with a disabled checksum box and a red background, indicates a background verification process is currently in progress for this disk. It can not be stopped.
+>
+> When multiple tasks exist then each task is executed in the next schedule in a rotating fashion. E.g. when you have set up a weekly schedule with 3 tasks then every week
+> another task is executed and after 3 weeks the verification function has done all selected disks.
+>
+> When the verification schedule is disabled then manual control is required to verify the correctness of the files.
+";s:24:"_integrity_priority_plug";s:74:"
+> Background processes can be run in either normal or low priority mode.
+";s:22:"_integrity_parity_plug";s:239:"
+> Before a verification task starts it can either continue as usual when a parity operation is running, or the verification task doesn't start at all.
+> In the latter case you need to wait for the next scheduled time to execute the task.
+";s:31:"_integrity_day_of_the_week_plug";s:76:"
+> When a weekly schedule is chosen, then select here the day of execution.
+";s:32:"_integrity_day_of_the_month_plug";s:78:"
+> When a monthly schedule is chosen, then select here the date of execution.
+";s:31:"_integrity_time_of_the_day_plug";s:107:"
+> Select the hour and minute at which time the scheduled task will be executed. Granularity is 5 minutes.
+";s:29:"_integrity_notifications_plug";s:169:"
+> Set to YES if you want to receive notifications when file corruption is detected.
+> See the notification settings on how to set up and receive "alert" notifications.
+";s:23:"_integrity_logging_plug";s:232:"
+> Error logging, including file corruption detection information can be given in the system log, or saved as a file on flash.
+> Disabling error logging will suppress log creation, but it is still possible to receive notifications.
+";s:41:"Array must be Started to use this feature";s:45:"Array must be **Started** to use this feature";s:45:"Include duplicate file hashes in Find command";s:49:"Include duplicate file hashes in **Find** command";s:18:"Syslog Output file";s:20:"Syslog & Output file";}

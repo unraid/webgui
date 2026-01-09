@@ -1,0 +1,141 @@
+Adaptive=Adaptiv
+Cache pressure of directories on system=Cache-Druck von Verzeichnissen auf dem System
+Check HELP for filter example=Sieh dir für ein Filterbeispiel die HILFE an
+Disk Idle Timer=Timer für Datenträger-Leerlauf
+Folder caching function=Ordner-Caching-Funktion
+for adaptive depth=für adaptive Tiefe
+Important - check HELP if disks spin up=Wichtig - Sieh dir die HILFE an, wenn Datenträger hochfahren
+Included folders=Ordner einschließen
+Memory available to the cache_dirs script increase if it dies=Dem cache_dirs-Skript zur Verfügung stehender Arbeitsspeicher (erhöhen, wenn es abstürzt)
+Logging=Protokollieren
+Maximum interval between folder scans=Maximales Intervall zwischen den Ordnerprüfungen
+Maximum level depth=Maximale Ebenentiefe
+Minimum interval between folder scans=Minimales Intervall zwischen den Ordnerprüfungen
+Minimum level depth=Minimale Ebenentiefe
+or see=oder siehe
+Run scan of each disk in a separate thread=Die Überprüfung jedes Datenträgers in einem separaten Thread durchführen
+Timeout during disk-idle period=Timeout während der Datenträger-Leerlaufzeit
+Timeout during initial startup or less-idle period=Timeout während des ersten Hochfahrens oder außerhalb von Leerlaufzeiten
+Timeout when all directories have been cached=Timeout, wenn alle Verzeichnisse zwischengespeichert wurden
+Scan user shares mntuser=Benutzerfreigaben überprüfen (/mnt/user)
+Suspend during Mover process=Aussetzen während des Mover-Prozesses
+unlimited=Unbegrenzt
+Unraid forum=Unraid-Forum
+Use Adaptive depth=Adaptive Tiefe verwenden
+User defined options=Benutzerdefinierte Optionen
+
+:cachedirs_info_plug:
+> Information zum Ordner-Caching
+>
+> Beim Ordner-Caching (cache_dirs) werden kontinuierlich Verzeichnisse ausgelesen, um sie im Arbeitsspeicher zu speichern.
+> Das Programm weiß nicht, ob sich ein Verzeichnis bereits im Arbeitsspeicher befindet oder ob es von einem Datenträger neu ausgelesen werden muss.
+> Daher kann es nicht verhindern, dass Datenträger hochgefahren werden, wenn der Linux Arbeitsspeicher-Cache ein Verzeichnis auslagert und cache_dirs das Verzeichnis erneut einliest.
+> Wenn eine große Anzahl von Dateien im Arbeitsspeicher gespeichert wird, scheint es unvermeidlich, dass einige Verzeichnisse aus dem Cache verdrängt werden, wenn das System unter Last steht.
+>
+> Das Programm verwendet standardmäßig einen adaptiven Modus, bei dem es die Tiefe der Verzeichnisstruktur, die es im Speicher zu halten versucht, reduziert.
+> Wenn es einen Cache-Fehler (langsame Überprüfungszeit) feststellt, wird die Tiefe reduziert, bis die Datenträger wieder im Leerlauf sind,
+> aber es besteht immer noch die Gefahr, dass die Datenträger für ein oder zwei Minuten belastet werden, bis das Programm aufgibt und auf sich im Leerlauf befindliche Datenträger wartet.
+> Je weniger Dateien im Cache gespeichert werden müssen, desto geringer ist die Wahrscheinlichkeit, dass das Programm Datenträger hochfährt.
+:end
+
+:cachedirs_function_plug:
+> Wähle aus, ob das Ordner-Caching aktiviert oder deaktiviert ist. Das Caching wird nur durchgeführt, wenn das Array gestartet ist.
+> Die Caching-Funktion wird automatisch neu gestartet oder gestoppt, wenn das Array online oder offline geht.
+:end
+
+:cachedirs_pressure_plug:
+> cache_pressure auf NN stellen (Standard = 10). Ein Wert von 0 bedeutet, dass der Cache nie wieder verwendet wird.
+>
+> Ein Wert von 1 ist für viele Benutzer gut geeignet. Wenn deine Datenträger hochfahren oder die cache_dirs-Protokollierung anzeigt, dass nach der Überprüfung häufig auf Datenträger zugegriffen wurde, versuche cache-pressure auf 1 zu senken. Wenn dem System der Arbeitsspeicher ausgeht, erhöhe cache-pressure.
+>
+> Wenn CPU und Datenträger durch cache_dirs in regelmäßigen Abständen stark belastet werden, ist dies ebenfalls ein Hinweis darauf, dass cache_dirs alles neu überprüfen muss.
+>
+> Warnung: Ein Wert von 0 führt dazu, dass der Kernel den Arbeitsspeicher von Verzeichnissen nie freigibt. Wenn zu wenig Arbeitsspeicher verfügbar ist,
+> wird das System zum Absturz gebracht. Cache_dirs setzt den Cache-Druck nach dem Beenden nicht zurück.
+> Um den Cache-Druck zurückzusetzen, führe "sudo sysctl vm.vfs_cache_pressure=100" aus oder lasse cache-dirs mit cache_pressure 100 laufen.
+>
+> Siehe "vfs_cache_pressure" auf [kernel.org](https://www.kernel.org/doc/Documentation/sysctl/vm.txt).
+:end
+
+:cachedirs_suspend_plug:
+> Stoppe das Caching, während der Mover läuft, um Konflikte zu vermeiden. Bei der Verwendung von adaptiver Tiefe wird es wahrscheinlich gut mit NEIN funktionieren.
+> Mit fester Tiefe werden die Datenträger mit Sicherheit weniger belastet, wenn du dich für JA entscheidest.
+:end
+
+:cachedirs_included_folders_plug:
+> Das Dropdown-Menü zeigt alle verfügbaren Ordner an, standardmäßig sind alle Ordner enthalten. Wähle hier die Liste der einzuschließenden Ordner aus.
+>
+> Wenn ein eingeschlossener Ordner ausgeschlossen wird, dann wird der Ordner ausgeschlossen. Am einfachsten ist es, nicht gleichzeitig Ein- und Ausschlüsse zu verwenden.
+:end
+
+:cachedirs_excluded_folders_plug:
+> Das Dropdown-Menü zeigt alle verfügbaren Ordner an, standardmäßig sind keine Ordner ausgeschlossen. Wähle hier die Ordner aus, die ausgeschlossen werden sollen.
+>
+> Es ist möglich, einen eingeschlossenen Ordner auszuschließen. Am einfachsten ist es, Ein- und Ausschlüsse nicht gleichzeitig zu verwenden.
+:end
+
+:cachedirs_adaptive_depth_plug:
+> Wenn die adaptive Funktion aktiviert ist, wird die Tiefe automatisch angepasst, überschreitet aber nie die maximale Ebenentiefe.
+> Sie beginnt bei Tiefe 1 und erhöht die Überprüfungstiefe bis zur maximalen Tiefe, solange die Überprüfung nicht zu lange dauert (siehe Überprüfungs-Timeout).
+> Wenn die adaptive Funktion deaktiviert ist, überprüft cache_dirs immer bis zur maximalen Ebene.
+:end
+
+:cachedirs_min_level_plug:
+> Stellt die minimale Ordnerebene für die adaptive Überprüfung ein (Benutzerfreigabe > Unterordner > Unter-Unterordner sind zwei Ebenen). Standard ist 4.
+:end
+
+:cachedirs_max_level_plug:
+> Stellt die maximale Ordnerebene für die Überprüfung ein (Benutzerfreigabe > Unterordner > Unter-Unterordner). Auf "Unbegrenzt" (oder 0) stellen, um das Maximum zu entfernen.
+:end
+
+:cachedirs_idle_timer_plug:
+> Wenn die Datenträger so lange im Leerlauf waren, beginnt die adaptive Überprüfung von cache_dirs mit dem Aufbau des Caches.
+:end
+
+:cachedirs_timeout_scan_plug:
+> Das Überprüfungs-Timeout ist die maximale Dauer, die eine einzelne Überprüfung durch alle Verzeichnisse auf der aktuellen Ebenentiefe (die sich adaptiv ändern kann).
+> Erhöhe den Wert, wenn cache_dirs nicht alle deine Dateien zwischenspeichern kann. Dieser Timeout wird immer verwendet, wenn die adaptive Funktion deaktiviert ist.
+:end
+
+:cachedirs_timeout_initial_plug:
+> Erhöhe den Wert, wenn du cache_dirs bei der ersten Überprüfung mehr Zeit geben möchtest und wenn das Dateisystem ausgelastet sein könnte.
+:end
+
+:cachedirs_timeout_cached_plug:
+> Verringere den Wert, wenn du willst, dass cache_dirs das System weniger belastet, wenn der Cache aus dem Arbeitsspeicher entfernt wird und die Datenträger nicht im Leerlauf sind.
+> Erhöhe den Wert, wenn du willst, dass cache_dirs eine größere Chance haben soll, Verzeichnisse wieder in den Arbeitsspeicher zu laden.
+:end
+
+:cachedirs_min_interval_plug:
+> Für langsamere Systeme kann das Caching-Intervall angepasst werden. Der Standardwert ist 1 Sekunde, was für die meisten Systeme ausreichen sollte.
+:end
+
+:cachedirs_max_interval_plug:
+> Für langsamere Systeme kann das Caching-Intervall angepasst werden. Der Standardwert sind 10 Sekunden, was für die meisten Systeme ausreichen sollte.
+:end
+
+:cachedirs_scan_disk_plug:
+> Jeder Datenträger wird in einem eigenen Prozess überprüft, so dass die Datenträger gleichzeitig gelesen werden. Wenn Benutzerfreigaben ebenfalls überprüft werden,
+> wird die Benutzerfreigabe in einem einzigen Prozess überprüft, nachdem alle Datenträger überprüft wurden, um eine Überlastung der Datenträger zu vermeiden.
+:end
+
+:cachedirs_limit_memory_plug:
+> ulimit auf NN stellen, um den vom Skript benutzten Arbeitsspeicher zu begrenzen (Voreinstellung=50000). Durch "-U 0" wird überhaupt kein ulimit eingestellt und es werden die Voreinstellung der Shell übernommen.
+:end
+
+:cachedirs_logging_plug:
+> Wähle aus, ob die Protokollierung aktiviert oder deaktiviert sein soll. Die Protokolle werden in /var/log/cache_dirs.log und /var/log/cache_dirs_lost_cache.csv erstellt.
+> Beachte, dass die cache_dirs-Protokolle im Arbeitsspeicher von unRAID abgelegt werden und keine automatische Protokoll-Rotation statt findet.
+:end
+
+:cachedirs_user_defined_plug:
+> Das cache_dirs-Skript verfügt über zusätzliche Optionen, die verwendet werden können.
+> Schau in der Online-Dokumentation nach, um diese je nach Bedarf zu verwenden
+> oder sieh dir das cache_dirs-Skript selbst an, das sich unter /usr/local/emhttp/plugins/dynamix.cache.dirs/scripts/cache_dirs befindet
+>
+> Es ist möglich, cache_dirs anzuweisen, alle Verzeichnisse mit einem bestimmten Namen nicht zu überprüfen. Im folgenden Beispiel werden die Verzeichnisse ".Recycle.Bin", "temp" und "log" vermieden:
+>
+> <span class="strong orange-text">-a '-noleaf -name .Recycle.Bin -prune -o -name log -prune -o -name temp -prune -o -print'</span>
+>
+> Beachte, dass die einfachen Anführungszeichen um das Argument für -a wichtig sind. Doppelte Anführungszeichen funktionieren in der aktuellen Version nicht, daher ist es derzeit leider nicht möglich, mit "-name "*Old" -prune" zu filtern.
+:end

@@ -1,0 +1,216 @@
+Add=添加
+Auto Mount USB Devices=自动挂载 USB 设备
+Case-sensitive names=区分大小写的名称
+Change Disk UUID=更改磁盘 UUID
+Change UUID=更改 UUID
+Change Disk UUID=更改磁盘 UUID
+Command times=命令计时
+Common Script=通用脚本
+Common Settings=通用设置
+Destructive Mode=破坏性模式
+Disabled=已禁用
+Disk spin down is managed by Unraid=磁盘休眠由 Unraid 管理
+Enable NFS export=开启 NFS 导出
+Enable SMB Security=开启 SMB 安全
+Enable Time Machine=开启时间机器（Time Machine）
+Enter Disk Password=输入磁盘密码
+Enter Pool Mount Point=输入存储池挂载点
+Legacy Mount Point Compatibility=旧版挂载点兼容性
+Mount SSDs with discard option=在挂载 SSD 时启用 discard 选项
+NFS Security=NFS 安全
+NFS Settings=NFS 设置
+NFS must be enabled in Settings->NFS to enable NFS Export=若要使用 NFS 导出，必须在 “设置->NFS” 中启用 NFS
+NFS Version to use when Mounting Remote Shares=挂载远程共享时使用的 NFS 版本
+Public=公共
+Private=私有
+Private Hidden=私有且隐藏
+Refresh and Update=刷新和更新
+Remote Share Mount Wait Time=远程共享挂载等待时间
+Rule=规则
+Select Disk=选择磁盘
+See Help=查看帮助
+Set Encrypted Disk Password=设置加密的磁盘的密码
+Set Password=设置密码
+Set Pool Mount Point=设置存储池挂载点
+Set the Pool Mount Point for this disk=为此磁盘设置存储池挂载点
+Set the disk Password=设置磁盘密码
+SMB Settings=SMB 设置
+SMB Sharing=SMB 共享
+Specify SMB Version when Mounting Remote Shares=挂载远程共享时使用的 SMB 版本
+Spin down disks=停转磁盘
+Test=测试
+Testing=正在测试
+Test the Remote Server=测试远程服务器
+The Unassigned Devices Plus plugin must be installed to enable Destructive Mode=必须安装 Unassigned Devices Plus 才能启用破坏性模式
+This is a tool to help troubleshoot Remote Servers ability to serve SMB and NFS shares=该工具可帮助排查 SMB 和 NFS 共享远端服务器的问题
+Time Machine volume size limit=时间机器（Time Machine）卷大小限制
+to SMB share config=到 SMB 共享配置
+Udev and Hotplug=udev 与热插拔
+Unassigned Devices=未分配的设备
+Unraid 6.10 or later is required for NFSv4 support=NFSv4 支持要求 Unraid 6.10 或更高版本
+Upgrade ZFS Pool=升级 ZFS 存储池
+Use only when directed for support because the messages can flood the log=只在寻求支持时使用，否则会有大量消息充斥日志
+Warning=警告
+Windows may require a valid User to be defined even for Public shares=Windows 可能要求有效的用户凭证，即使共享是公共的
+Working=工作中
+
+; Help
+;
+:ud_settings_plus_plug:
+> **注意**： 必须安装“Unassigned Devices Plus”插件才能挂载 HFS+ 和 exFAT 文件系统或启用破坏性模式。
+:end
+
+:ud_settings_common_script_plug:
+> 如果设置，此脚本将先于设备脚本执行。动作（action）通过环境变量 **$ACTION** 设置。请确保以完整路径引用命令。
+:end
+
+:ud_settings_destructive_plug:
+> 如果启用，可使用 Unassigned Devices 擦除与格式化分区。必须安装“Unassigned Devices Plus”才能启用此功能。
+:end
+
+:ud_settings_mount_usb_devices_plug:
+> 设为**是**时，将自动挂载新的 USB 设备并共享，无需用户操作。
+:end
+
+:ud_settings_discard_plug:
+> 对于支持 discard 操作的 SSD，带“discard”选项挂载它们。如果你使用 SSD trim 设置定期运行 trim，可选**否**。
+:end
+
+:ud_settings_symlinks_plug:
+> 设为**是**以创建符号链接，将 /mnt/disks/ 指向 /mnt/remotes/。
+>
+> 此项设置用于向后兼容映射了 /mnt/disks/ 挂载点的虚拟机和 Docker 容器。
+> 建议将映射更改为 /mnt/remotes/ 挂载点。
+>
+> 如果你不需要向后兼容，保持此项为**否**。
+:end
+
+:ud_settings_remote_share_wait_plug:
+> 当阵列首先启动时，挂载远程共享前等待的秒数。
+>
+:end
+
+:ud_settings_specify_smb_vers_plug:
+> 设为**否**，Unassigned Devices 首先尝试不指定版本挂载 SMB 远程共享。
+>
+> 设为**是**，Unassigned Devices 只挂载指定了版本的 SMB 远程共享。
+>
+> 某些远程服务器需要指定 SMB 版本。
+:end
+
+:ud_settings_debug_level_plug:
+> 排除故障时，设置调试日志等级让 Unassiged Devices 在特定区域增加额外的日志记录，以此调试 Unassiged Devices 的特定区域。
+>
+> 设为**无**以关闭调试日志记录。
+>
+> **udev 与热插拔** udev、磁盘发现与热插拔调试。
+>
+> **刷新和更新** 查找导致 Unassiged Devices 停止响应的问题。
+>
+> **命令时间** 命令执行时间。**警告**： 日志记录将非常繁杂。
+>
+> **注意**：不要长时间开启调试日志等级，否则可导致系统日志内充斥大量消息。
+:end
+
+:ud_settings_specify_nfs_vers_plug:
+> 设为**自动**，在挂载所有 NFS 远程共享时自动协商使用的 NFS 版本。
+>
+> 如果**自动**项无效或只能挂载 NFSv3，你需要将此项设为 **NFSv4**，因为你的 Unraid 版本不会自动协商使用 NFSv4。
+:end
+
+:ud_settings_smb_security_plug:
+> 设置 SMB 共享的用户等级。
+>
+> + 设为**关闭**以关闭 SMB 共享。
+> + 设为**公共**将以公共读写权限共享设备、远程 SMB/NFS 共享和 ISO 挂载。
+> + 设为**私有**为 SMB 共享启用 SMB 安全。按用户设置读写权限。
+> + 设为**私有且隐藏**为不可见的 SMB 共享启用 SMB 安全。按用户设置读写权限。
+>
+> Windows 服务器签名：
+>
+> 在使用 Windows 11 24H2 或更新版本时，如无法浏览 SMB 共享，你需要针对一项叫作“服务器签名”的新功能作出更改。服务器签名在 Unraid 中为启用状态，你需要更改一些配置才能访问公共共享。
+> 你可以<u><a href='https://techcommunity.microsoft.com/t5/storage-at-microsoft/accessing-a-third-party-nas-with-smb-in-windows-11-24h2-may-fail/ba-p/4154300', target='_blank'>_(disable it in Windows)_</a></u>，或者在启用服务器签名的情况下使用 Unraid——最简单的方法是在 Unraid 中创建一个与 Windows 账户同名的用户并设置密码，然后 Windows 将要求你提供凭据。
+> 如果你使用的是微软账户，最好先在 Unraid 中创建一个带密码的用户，然后在 Windows 的“控制面板->凭证管理器->Windows 凭证->添加 Windows 凭证”处添加正确的 Unraid 服务器名称和凭证。
+:end
+
+:ud_settings_case_sensitive_plug:
+> 决定文件名是否区别大小写。
+>
+> 默认值**自动**允许 Linux CIFS 和 NFS 等区别文件名大小写的客户端以封包为单位报告 Samba 服务器它们希望以区别文件名大小写的方式访问文件系统（以支持 Unix 文件名区别大小写的语义）。Windows 系统不区别文件名大小写，因此设为自动对于 Windows 系统来说等效于设为否；不过，Windows 客户端传递的文件名的大小写会被保留。此选项可导致处理大型目录时性能下降，因为 Samba 必须搜索匹配传递的文件名。
+>
+> **是**意味着创建文件时，文件名使用客户端传递的大小写，并且只有使用同样大小写的文件名才能访问此文件。相比之下，这不会影响大型目录的访问速度，但在此项设置下，某些 Windows 应用程序可能无法正常运转。比如，远程文件名为“MyFile”，Windows 应用程序在打开“MYFILE”时就会失败，尽管在 Windows 的原生环境中，文件名大小写是不区别的。
+>
+> **强制小写**特殊在于，来自客户端的所有文件名，不仅仅是新文件名，都将转为小写。换句话说，无论在 Windows 一侧有着怎样大小写的文件名，此文件都将在远程端以小写文件名存储和访问。这保证了所有 Windows 应用程序都能正确寻找任何文件，而不管文件名大小写；但在列出文件夹时，文件名的大小写不会保留。
+:end
+
+:ud_time_machine_plug:
+> 设为**是**对 SMB 共享开启时间机器（Time Machine）。
+:end
+
+:ud_time_machine_vol_size_plug:
+> 此项限制报告的卷大小，防止时间机器占用磁盘实际的全部剩余空间来备份。例如，设为“1024”将限制报告的磁盘空间为 1 GB。
+:end
+
+:ud_settings_force_user_plug:
+> 有时 SMB 共享的权限没有按预期处理，开启此功能可帮助解决此类权限问题。
+> 此项设置应用于所有使用 Unassigned Devices 挂载的设备。
+> 弊端是它覆盖了 Linux 组权限。如果你不确定此功能是否必要，请保持关闭。
+:end
+
+:ud_settings_nfs_security_plug:
+> 设为**是**以 NFS 共享的方式导出未分配设备。共享以公共读写权限导出，也可以遵循你设置的私有规则。访问操作由文件和文件夹的权限控制。
+:end
+
+:ud_settings_nfs_rules_plug:
+> **注意：**Unassigned Devices 使用的常规规则是“*(rw,sec=sys,insecure,anongid=100,anonuid=99,no_root_squash)”。
+:end
+
+:ud_settings_disk_pass_plug:
+> 选择你要设置密码的磁盘。此密码设置只为该磁盘所用，不影响阵列密码。对于 LUKS 加密的磁盘，留空以使用阵列密码。
+:end
+
+:ud_settings_change_uuid_plug:
+> 选择你要更改 UUID 的磁盘。当一块 XFS 格式磁盘从阵列移除，还保留阵列磁盘的 UUID 时，此功能很有用。磁盘必须卸载才能更改 UUID。
+>
+> **注意**：不要更改包含在存储池中的磁盘的 UUID。
+:end
+
+:ud_settings_zfs_upgrade_plug:
+> 选择想要升级到最新 ZFS 版本的磁盘。磁盘必须被挂载才能升级 ZFS。
+:end
+
+:ud_remote_server_test_plug:
+> 需要远程服务器启用 SMB 和/或 NFS。此功能将检查 SMB 和/或 NFS 端口联通性。此外，还要求 Unraid 的“showmount -e &lt;server&gt;”指令能够显示可用 NFS 挂载。
+
+> 若要 SMB 显示为在线状态，远程服务器的 SMB 端口必须能够联通。
+
+> 若要 NFS 显示为在线状态，远程服务器的 NFS 端口必须能够联通，并且 Unraid 侧“showmount -e”指令能够显示 NFS 共享。
+> 某些情况下，端口能够联通，但“showmount -e”不显示 NFS 共享，此时 NFS 也无法使用。
+
+> 对于实际能够连接的远程服务器，比如一台 Synology 设备，若 showmount 指令不返回任何 NFS 共享，你可能遇到了以下几种情况之一： 
+
+> NFS 共享没有导出：
+
+> 服务器可能没有配置以 NFS 导出任何目录。请检查 Synology 设备的 NFS 配置，确保 NFS 共享的目录已导出。
+
+> 访问受限：
+
+> NFS 共享可能配置了 IP 访问限制。Synology 设备允许为每个 NFS 共享指定允许访问的 IP 地址或网络。如果你的 IP 地址被限制，NFS 共享就不会在 showmount 指令输出中列出。
+
+> 未启用 NFS 服务：
+
+> Synology 设备上的 NFS 服务可能没有启用。在 Synology DSM 的“控制面板->文件服务->NFS”处检查 NFS 服务配置，如果发现 NFS 服务关闭，请开启它。
+
+> 防火墙或网络配置不当：
+
+> Synology 设备的防火墙规则可能阻止了 showmount 指令的请求或必需的 RPC 通信。确保防火墙配置允许 NFS 相关端口的流量。通常，NFS 服务使用端口 2049，RPC 使用端口 111。
+
+> Synology 导出选项配置不当:
+
+> 对于 NFSv3 协议的客户端，Synology NFS 设置有时会要求在顶层启用 NFS 服务并允许 NFSv3 协议。检查“控制面板->文件服务->NFS”，确保配置得当。
+
+> 确保 NFS 服务启用，配置了正确的权限，并且允许向你的客户端 IP 导出目录后，showmount 指令应该能够列出可用的导出。
+:end
+
+; Note: December 8, 2024 - 1 missing translations
+Enter the Remote Server name or IP address and the results from the Remote Server Test will show in the Result text area=Enter the Remote Server name or IP address and the results from the Remote Server Test will show in the **Result** text area

@@ -1,0 +1,79 @@
+a:45:{s:8:"Adaptive";s:8:"Adaptív";s:39:"Cache pressure of directories on system";s:61:"A rendszeren lévő könyvtárak gyorsítótárának nyomása";s:29:"Check HELP for filter example";s:43:"Nézze meg a SÚGÓ-t a szűrőpéldákért";s:15:"Disk Idle Timer";s:29:"Lemez üresjárati időzítő";s:16:"Excluded folders";s:15:"Kizárt mappák";s:23:"Folder caching function";s:31:"Mappa gyorsítótár funkciója";s:18:"for adaptive depth";s:26:"alkalmazkodó mélységhez";s:39:"Important - check HELP if disks spin up";s:62:"Fontos – ellenőrizze a SÚGÓ-t, ha a lemezek felpörögnek";s:16:"Included folders";s:20:"Tartalmazott mappák";s:84:"Limit the memory available to the shell in which the script runs increase if it dies";s:107:"Korlátozza a rendelkezésre álló memóriát arra a shellre, amelyben a szkript fut (ha meghal, növelje)";s:7:"Logging";s:10:"Naplózás";s:37:"Maximum interval between folder scans";s:48:"Maximális időköz a mappavizsgálatok között";s:19:"Maximum level depth";s:25:"Maximális szintmélység";s:37:"Minimum interval between folder scans";s:48:"Minimális időköz a mappavizsgálatok között";s:19:"Minimum level depth";s:25:"Minimális szintmélység";s:6:"or see";s:10:"vagy lásd";s:42:"Run scan of each disk in a separate thread";s:59:"Futtassa le az egyes lemezek vizsgálatát külön szálban";s:47:"Scan timeout for a scan during disk-idle period";s:83:"Keresési időtúllépés a lemez tétlenségi időszakában végzett vizsgálathoz";s:66:"Scan timeout for a scan during initial startup or less-idle period";s:94:"Keresési időtúllépés a kezdeti indításkor vagy a kevésbé üresjárati időszak során";s:73:"Scan timeout for a scan when all directories have been succesfully cached";s:84:"Vizsgálat időtúllépése, ha az összes könyvtárat sikeresen gyorsítótárazta";s:24:"Scan user shares mntuser";s:51:"Felhasználói megosztások vizsgálata (/mnt/user)";s:28:"Suspend during Mover process";s:51:"felhasználni a „Költöztető” folyamat során";s:9:"unlimited";s:10:"korlátlan";s:12:"Unraid forum";s:13:"Unraid fórum";s:18:"Use Adaptive depth";s:34:"Használja az adaptív mélységet";s:20:"User defined options";s:43:"Felhasználó által meghatározott opciók";s:20:"_cachedirs_info_plug";s:983:"
+> Folder Caching Info
+>
+> The folder caching (cache_dirs) reads directories continously to keep them in memory.
+> The program does not know whether a directory is already in memory or need to be reread from disk.
+> Therefore it cannot avoid spinning up disks when it happens that the linux memory cache evicts a directory and cache_dirs rescans the directoy.
+> If a large number of files are being kept in memory then it seems inevitably that some diretories get evicted from the cache when the system is under load.
+>
+> The program by default uses an adaptive mode where it reduces the depth of the directory structure which it tries to keep in memory.
+> When it detects a cache-miss (slow scan time) it will reduce the depth until disks are idle again,
+> but will still be at risk of putting load on the disks for a minute or two until the program gives up and waits for idle disks.
+> The less files the cache needs to hold, the less likely it is that the program spins up disks.
+";s:24:"_cachedirs_function_plug";s:220:"
+> Select whether folder caching is enabled or disabled. Caching will only effectively occur when the array is started.
+> The caching function is automatically restarted or stopped when the array goes online or offline.
+";s:24:"_cachedirs_pressure_plug";s:914:"
+> Set cache_pressure to NN (default = 10). A value of 0 means never reclaim cache.
+>
+> A value of 1 works great for many users. If your disks spin up or cache_dirs logging indicates it frequently has accessed disks after scan, try lowering cache-pressure to 1. If the system runs out of memory increase cache-pressure.
+>
+> If CPU and disks is heavily affected by cache_dirs on frequent intervals this is also an indication that cache_dirs has to rescan everything.
+>
+> Warning: a value of 0 will cause kernel never to release the memory of directories, and if too little memory is available,
+> it will cause the system to crash. cache_dirs does not reset the cachePressure after quitting,
+> to reset the cache-pressure execute 'sudo sysctl vm.vfs_cache_pressure=100', or run cache-dirs with cache_pressure 100.
+>
+> See 'vfs_cache_pressure' in [kernel.org](https://www.kernel.org/doc/Documentation/sysctl/vm.txt).
+";s:23:"_cachedirs_suspend_plug";s:206:"
+> Stop caching while the mover is running to avoid conflicts. When using adaptive depth it will probably work well NO.
+> With fixed depth it will almost certainly put less load on the disks to choose YES.
+";s:32:"_cachedirs_included_folders_plug";s:282:"
+> The dropdown menu shows all available folders, by default all folders are included. Select here the restricted list of folders to be included.
+>
+> If an included folder is excluded, then the folder gets excluded. It is simplest to not use includes and excludes at the same time.
+";s:32:"_cachedirs_excluded_folders_plug";s:242:"
+> The dropdown menu shows all available folders, by default no folders are excluded. Select here any folders to be excluded.
+>
+> It is possible to exclude an included folder. It is simplest to not use includes and excludes at the same time.
+";s:30:"_cachedirs_adaptive_depth_plug";s:337:"
+> If adaptive is enabled the depth will be automatically adjusted but will never exceed max level depth.
+> It will start at depth 1 and keep increasing the scan depth towards maximum level as long as scans do not take too long to complete (see scan timeout).
+> If adaptive is disabled then cache_dirs will always scan to the max level.
+";s:25:"_cachedirs_min_level_plug";s:126:"
+> Sets the minimum folder level for the adaptive scan (user-share > child folder > grand child is two levels). Default is 4.
+";s:25:"_cachedirs_max_level_plug";s:130:"
+> Sets the maximum folder levels for the scan (parent > child folder > grand child). Set to 'unlimited' (or 0) to remove maximum
+";s:26:"_cachedirs_idle_timer_plug";s:112:"
+> When the disks have been idle this long, cache_dirs adaptive scan starts working towards building the cache.
+";s:28:"_cachedirs_timeout_scan_plug";s:258:"
+> Scan timeout is the maximum duration that a single scan through all directories at the current level af depth (which may change adaptively).
+> Increase it if cache_dirs fails in caching all your files. This timeout is always used if adaptive is disabled.
+";s:31:"_cachedirs_timeout_initial_plug";s:107:"
+> Increase it if you want cache_dirs too give more time in initial scan, and when filesystem may be busy.
+";s:30:"_cachedirs_timeout_cached_plug";s:224:"
+> Decrease it if you want cache_dirs to put less load on system when cache is evicted from memory, and disks are not idle.
+> Increase if you want cache_dirs to have a greater chance af getting directories back into memory.
+";s:28:"_cachedirs_min_interval_plug";s:131:"
+> Tweaking of the caching interval can be done for slower systems. Default value is 1 second, should be alright for most systems.
+";s:28:"_cachedirs_max_interval_plug";s:133:"
+> Tweaking of the caching interval can be done for slower systems. Default value is 10 seconds, should be alright for most systems.
+";s:25:"_cachedirs_scan_disk_plug";s:236:"
+> Each disk will be scanned in a separate thread, so the disks will be read concurrently. If user share is also scanned the user
+> share will be scanned in a single thread after all disks scans are completed, to avoid thrashing disks.
+";s:28:"_cachedirs_limit_memory_plug";s:131:"
+> set ulimit to NN to limit memory used by script (default=50000), '-U 0' sets no ulimit at all and inherits the shells default).
+";s:23:"_cachedirs_logging_plug";s:238:"
+> Select whether logging is enabled or disabled. Logging will be made to /var/log/cache_dirs.log and /var/log/cache_dirs_lost_cache.csv.
+> Be wary that the cache_dirs logs are placed in memory on unRAID and are not automatically rolled.
+";s:28:"_cachedirs_user_defined_plug";s:745:"
+> The cache_dirs script has additional options which may be used.
+> Refer to the online documentation to use these as needed,
+> or see the cache_dirs script itself located under /usr/local/emhttp/plugins/dynamix.cache.dirs/scripts/cache_dirs
+>
+> Its possible to tell cache_dirs to avoid traversing all directories with a certain name. The following example avoids '.Recycle.Bin' and 'temp' and 'log' folders: 
+>
+> <span class="strong orange-text">-a '-noleaf -name .Recycle.Bin -prune -o -name log -prune -o -name temp -prune -o -print'</span>
+>
+> Note that the single quotes around argument to -a is important. Double-quotes do not work in the current version, so unfortunately its not currently possible to filter with '-name "*Old" -prune'.
+";}

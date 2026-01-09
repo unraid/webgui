@@ -1,0 +1,73 @@
+a:18:{s:22:"_ud_settings_plus_plug";s:144:"
+> **Note:** The 'Unassigned Devices Plus' plugin must be installed in order to mount HFS+ and exFAT disk formats, and enable destructive mode.
+";s:31:"_ud_settings_common_script_plug";s:170:"
+> If set, this script will run before the device script. The action is in the environment variable **$ACTION**. Be sure you reference all commands with their full path.
+";s:29:"_ud_settings_destructive_plug";s:173:"
+> If enabled, this will allow you to erase and format partitions using Unassigned Devices. This cannot be enabled unless the 'Unassigned Devices Plus' plugin is installed.
+";s:35:"_ud_settings_mount_usb_devices_plug";s:97:"
+> When set to **Yes**, will auto mount a new USB device and share it without user intervention.
+";s:25:"_ud_settings_discard_plug";s:155:"
+> Mount SSDs that support discard with 'discard' option. If you are using the SSD Trim Settings to do a periodic trim of SSDs you can set this to **No**.
+";s:26:"_ud_settings_symlinks_plug";s:334:"
+> Set to **Yes** to create symlinks for /mnt/remotes/ at /mnt/disks/.
+>
+> This is for backwards compatibility of VM and Docker Container mappings to the /mnt/disks/ mount point.
+> You are encouraged to change your mappings to the /mnt/remotes/ mount point.
+>
+> If you do not need the backwards compatibility, leave it set to **No**.
+";s:35:"_ud_settings_remote_share_wait_plug";s:104:"
+> This is the time in seconds to wait before mounting remote shares when the array is first started.
+>
+";s:34:"_ud_settings_specify_smb_vers_plug";s:284:"
+> Set to **No** for Unassigned Devices to first try to mount remote shares by not setting the SMB version when mounting.
+>
+> Set to **Yes** for Unassigned Devices to only mount SMB remote shares specifying the SMB version.
+>
+> Some remote servers need to have the version specified.
+";s:29:"_ud_settings_debug_level_plug";s:352:"
+> Setting a Debug Log Level adds additional logging in specific areas of UD for troubleshooting.
+>
+> Set to **None** to turn off debug logging.
+>
+> Set the Debug Log Level to a numeric value to debug a specific area of UD.
+>
+> **Note:** Don't leave the Debug Log Level on for extended periods of time.  It can add a lot of log messages to the syslog.
+";s:34:"_ud_settings_specify_nfs_vers_plug";s:197:"
+> Set to **NFSv3** to mount all NFS Remote Shares with NFSv3.
+>
+> Set to **NFSv4** to mount all NFS Remote Shares with NFSv4.
+>
+> All NFS remote shares will be mounted with the specified version.
+";s:30:"_ud_settings_smb_security_plug";s:454:"
+> Set the user level of SMB Security.
+>
+> + Set to **Yes** to enable SMB Security on SMB shares. Set access by user to allow access and whether or not the user can write to the share.
+> + Set to **Hidden** to enable SMB Security on SMB shares that will not be visible. Set access by user to allow access and whether or not the user can write to the share.
+> + Set to **No** will share devices, SMB/NFS, and iso Mounts Public with read and write access.
+";s:32:"_ud_settings_case_sensitive_plug";s:1443:"
+> Controls whether filenames are case-sensitive.
+>
+> The default setting of **Auto** allows clients that support case sensitive filenames (Linux CIFSVFS) to tell the Samba server on a per-packet basis that they wish to access the file system in a case-sensitive manner (to support UNIX case sensitive semantics). No Windows system supports case-sensitive filenames so setting this option to auto is the same as setting it to No for them; however, the case of filenames passed by a Windows client will be preserved. This setting can result in reduced performance with very large directories because Samba must do a filename search and match on passed names.
+>
+> A setting of **Yes** means that files are created with the case that the client passes, and only accessible using this same case. This will speed very large directory access, but some Windows applications may not function properly with this setting. For example, if "MyFile" is created but a Windows app attempts to open "MYFILE" (which is permitted in Windows), it will not be found.
+>
+> A value of **Forced lower** is special: the case of all incoming client filenames, not just new filenames, will be set to lower-case. In other words, no matter what mixed case name is created on the Windows side, it will be stored and accessed in all lower-case. This ensures all Windows apps will properly find any file regardless of case, but case will not be preserved in folder listings.
+";s:28:"_ud_settings_force_user_plug";s:336:"
+> There are times when permissions on SMB shares aren't handled as expected. Turning this feature on can help with those permissions.
+> This applies to all devices mounted with Unassigned Devices.
+> The down side is that it overrides Linux group permissions. If you are unsure about whether or not this is necessary, leave it enabled.
+";s:30:"_ud_settings_nfs_security_plug";s:221:"
+> Set to **Yes** to export Unassigned Devices with NFS sharing. Shares are exported Public with read and write access or Private with the rule you set. Access is controlled with permission settings on files and folders.
+";s:28:"_ud_settings_nfs_shares_plug";s:300:"
+> Set to **Yes** to export NFS shares. Shares are exported Public with read and write access or Private with the rule you set. Access is controlled with permission settings on files and folders.
+>
+> **Note:** The normal rule used by UD is '*(sec=sys,rw,insecure,anongid=100,anonuid=99,all_squash)'.
+";s:27:"_ud_settings_disk_pass_plug";s:227:"
+> Select the disk that you want to set a Password. This is the password for this disk only and does not affect the array password/passphrase. Leave password blank to use the array password/passphrase for luks encrypted disks.
+";s:29:"_ud_settings_change_uuid_plug";s:264:"
+> Select the disk that you want to change the UUID. This is useful when a XFS formatted disk has been removed from the array and has the same UUID as an array disk. Drive must be unmounted to change the UUID.
+>
+> **Note:** Don't change the UUID of a pooled disk.
+";s:29:"_ud_settings_zfs_upgrade_plug";s:109:"
+> Select the disk that you want to upgrade to the latest ZFS version. Drive must be mounted to upgrade ZFS.
+";}

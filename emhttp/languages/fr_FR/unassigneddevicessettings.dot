@@ -1,0 +1,69 @@
+a:43:{s:3:"Add";s:7:"Ajouter";s:22:"Auto Mount USB Devices";s:39:"Montage automatique Périphériques USB";s:16:"Change Disk UUID";s:24:"Changer l'UUID du disque";s:11:"Change UUID";s:12:"Changer UUID";s:13:"Common Script";s:13:"Script commun";s:15:"Common Settings";s:19:"Paramètres communs";s:16:"Destructive Mode";s:16:"Mode destructeur";s:35:"Disk spin down is managed by Unraid";s:44:"La rotation du disque est gérée par Unraid";s:17:"Enable NFS export";s:23:"Activer exportation NFS";s:19:"Enable SMB Security";s:25:"Activer la sécurité SMB";s:19:"Enter Disk Password";s:32:"Entrer le mot de passe du disque";s:32:"Legacy Mount Point Compatibility";s:46:"Compatibilité des points de montage hérités";s:30:"Mount SSDs with discard option";s:46:"Monter les disques SSD avec l'option défausse";s:12:"NFS Security";s:14:"Sécurité NFS";s:12:"NFS Settings";s:15:"Paramètres NFS";s:4:"Rule";s:6:"Règle";s:11:"Select Disk";s:20:"Sélectionner disque";s:27:"Set Encrypted Disk Password";s:43:"Définir le mot de passe du disque chiffré";s:12:"Set Password";s:24:"Définir le mot de passe";s:21:"Set the disk Password";s:34:"Définir le mot de passe du disque";s:47:"Specify SMB Version when Mounting Remote Shares";s:62:"Spécifier la version SMB lors du montage de partages distants";s:15:"Spin down disks";s:25:"Faire tourner les disques";s:79:"The Unassigned Devices Plus plugin must be installed to enable Destructive Mode";s:86:"Le plugin Unassigned Devices Plus doit être installé pour activer le mode destructif";s:19:"to SMB share config";s:36:"vers la configuration de partage SMB";s:18:"Unassigned Devices";s:18:"Unassigned Devices";s:22:"_ud_settings_plus_plug";s:144:"
+> **Note:** The 'Unassigned Devices Plus' plugin must be installed in order to mount HFS+ and exFAT disk formats, and enable destructive mode.
+";s:31:"_ud_settings_common_script_plug";s:171:"
+> If set, this script will run before the device script.  The action is in the environment variable **$ACTION**. Be sure you reference all commands with their full path.
+";s:29:"_ud_settings_destructive_plug";s:173:"
+> If enabled, this will allow you to erase and format partitions using Unassigned Devices. This cannot be enabled unless the 'Unassigned Devices Plus' plugin is installed.
+";s:35:"_ud_settings_mount_usb_devices_plug";s:97:"
+> When set to **Yes**, will auto mount a new USB device and share it without user intervention.
+";s:25:"_ud_settings_discard_plug";s:156:"
+> Mount SSDs that support discard with 'discard' option.  If you are using the SSD Trim Settings to do a periodic trim of SSDs you can set this to **No**.
+";s:26:"_ud_settings_symlinks_plug";s:334:"
+> Set to **Yes** to create symlinks for /mnt/remotes/ at /mnt/disks/.
+>
+> This is for backwards compatibility of VM and Docker Container mappings to the /mnt/disks/ mount point.
+> You are encouraged to change your mappings to the /mnt/remotes/ mount point.
+>
+> If you do not need the backwards compatibility, leave it set to **No**.
+";s:35:"_ud_settings_remote_share_wait_plug";s:104:"
+> This is the time in seconds to wait before mounting remote shares when the array is first started.
+>
+";s:34:"_ud_settings_specify_smb_vers_plug";s:284:"
+> Set to **No** for Unassigned Devices to first try to mount remote shares by not setting the SMB version when mounting.
+>
+> Set to **Yes** for Unassigned Devices to only mount SMB remote shares specifying the SMB version.
+>
+> Some remote servers need to have the version specified.
+";s:29:"_ud_settings_debug_level_plug";s:352:"
+> Setting a Debug Log Level adds additional logging in specific areas of UD for troubleshooting.
+>
+> Set to **None** to turn off debug logging.
+>
+> Set the Debug Log Level to a numeric value to debug a specific area of UD.
+>
+> **Note:** Don't leave the Debug Log Level on for extended periods of time.  It can add a lot of log messages to the syslog.
+";s:34:"_ud_settings_specify_nfs_vers_plug";s:197:"
+> Set to **NFSv3** to mount all NFS Remote Shares with NFSv3.
+>
+> Set to **NFSv4** to mount all NFS Remote Shares with NFSv4.
+>
+> All NFS remote shares will be mounted with the specified version.
+";s:30:"_ud_settings_smb_security_plug";s:456:"
+> Set the user level of SMB Security.
+>
+> + Set to **Yes** to enable SMB Security on SMB shares.  Set access by user to allow access and whether or not the user can write to the share.
+> + Set to **Hidden** to enable SMB Security on SMB shares that will not be visible.  Set access by user to allow access and whether or not the user can write to the share.
+> + Set to **No** will share devices, SMB/NFS, and iso Mounts Public with read and write access.
+";s:32:"_ud_settings_case_sensitive_plug";s:1443:"
+> Controls whether filenames are case-sensitive.
+>
+> The default setting of **Auto** allows clients that support case sensitive filenames (Linux CIFSVFS) to tell the Samba server on a per-packet basis that they wish to access the file system in a case-sensitive manner (to support UNIX case sensitive semantics). No Windows system supports case-sensitive filenames so setting this option to auto is the same as setting it to No for them; however, the case of filenames passed by a Windows client will be preserved. This setting can result in reduced performance with very large directories because Samba must do a filename search and match on passed names.
+>
+> A setting of **Yes** means that files are created with the case that the client passes, and only accessible using this same case. This will speed very large directory access, but some Windows applications may not function properly with this setting. For example, if "MyFile" is created but a Windows app attempts to open "MYFILE" (which is permitted in Windows), it will not be found.
+>
+> A value of **Forced lower** is special: the case of all incoming client filenames, not just new filenames, will be set to lower-case. In other words, no matter what mixed case name is created on the Windows side, it will be stored and accessed in all lower-case. This ensures all Windows apps will properly find any file regardless of case, but case will not be preserved in folder listings.
+";s:28:"_ud_settings_force_user_plug";s:338:"
+> There are times when permissions on SMB shares aren't handled as expected.  Turning this feature on can help with those permissions.
+> This applies to all devices mounted with Unassigned Devices.
+> The down side is that it overrides Linux group permissions.  If you are unsure about whether or not this is necessary, leave it enabled.
+";s:30:"_ud_settings_nfs_security_plug";s:221:"
+> Set to **Yes** to export Unassigned Devices with NFS sharing. Shares are exported Public with read and write access or Private with the rule you set. Access is controlled with permission settings on files and folders.
+";s:28:"_ud_settings_nfs_shares_plug";s:198:"
+> Set to **Yes** to export NFS shares.  Shares are exported Public with read and write access or Private with the rule you set.  Access is controlled with permission settings on files and folders.
+";s:27:"_ud_settings_disk_pass_plug";s:229:"
+> Select the disk that you want to set a Password.  This is the password for this disk only and does not affect the array password/passphrase.  Leave password blank to use the array password/passphrase for luks encrypted disks.
+";s:29:"_ud_settings_change_uuid_plug";s:212:"
+> Select the disk that you want to change the UUID.  This is useful when a XFS formatted disk has been removed from the array and has the same UUID as an array disk.  Drive must be unmounted to change the UUID.
+";s:29:"_ud_settings_zfs_upgrade_plug";s:109:"
+> Select the disk that you want to upgrade to the latest ZFS version. Drive must be mounted to upgrade ZFS.
+";}

@@ -1,0 +1,117 @@
+Console=Consola
+Counters only=Sólo para los contadores
+Custom commands after wake-up=Comandos personalizados después de despertar
+Custom commands before sleep=Órdenes personalizadas antes de dormir
+Device activity monitoring=Seguimiento de la actividad del dispositivo
+DHCP renewal after wake-up=Renovación de DHCP después de despertar
+Enable DEBUG mode=Activar el modo DEBUG
+Enter custom commands here=Introduce aquí los comandos personalizados
+Ethernet interface=Interfaz Ethernet
+Excluded days=Días excluidos
+Excluded hours=Horas excluidas
+Execute function=Ejecutar la función
+Extra delay after array inactivity=Retraso adicional tras la inactividad del Array
+Force gigabit speed after wake-up=Forzar la velocidad gigabit tras el despertar
+High traffic=Tráfico alto
+IP address=Dirección IP
+Local Remote=Local y remoto
+Local=Local
+Log will be stored in bootlogss3_sleeplog=El registro se almacenará en **/boot/logs/s3_sleep.log**
+Low traffic=Tráfico bajo
+Medium traffic=Tráfico medio
+Mega traffic=Mega tráfico
+Monitor disks outside array=Supervisar los discos fuera del Array
+Network idle threshold=Umbral de inactividad de la red
+no host=no hay anfitrión
+Remote=Remoto
+Set WOL options before sleep=Configurar las opciones de WOL (Wake on Lan) antes de dormir
+Silent traffic=Tráfico silencioso
+Status counters=Estado de los contadores
+Status only=Sólo el estado
+Syslog and flash=Log del sistema y Flash
+Syslog=Log del sistema
+Wait for array inactivity=Esperar a la inactividad del Array
+Wait for host inactivity=Esperar a la inactividad del anfitrión
+Wait for network inactivity=Esperar a la inactividad de la red
+Wait for user login inactivity=Esperar a la inactividad del usuario
+Yes, exclude Cache=Sí, excluir la caché
+
+:s3sleep_function_plug:
+> Seleccione el modo de funcionamiento. El sistema puede ponerse en reposo (y despertarse) o apagarse por completo.
+>
+> Los siguientes ajustes determinan las condiciones en las que el sistema se pondrá en reposo o se apagará.
+:end
+
+:s3sleep_excluded_days_plug:
+> Por defecto se incluyen todos los días, seleccione aquí los días en los que el reposo o el apagado no son efectivos. Este ajuste funciona en combinación con las horas excluidas.
+:end
+
+:s3sleep_excluded_hours_plug:
+> Por defecto se incluyen todas las horas, seleccione aquí las horas en las que el sueño o el apagado no son efectivos. Este ajuste funciona en combinación con los días excluidos.
+:end
+
+:s3sleep_inactivity_plug:
+> Seleccione si el Array debe estar completamente inactivo (todos los discos están apagados) antes de que pueda tener lugar el reposo o el apagado.
+>
+> El disco de caché puede incluirse o excluirse en esta configuración, por ejemplo, cuando el disco de caché se utiliza de forma continua y nunca se apaga.
+:end
+
+:s3sleep_activity_plug:
+> *Estado* supervisa el estado del hardware del dispositivo
+>
+> *Contadores* supervisa los contadores de lectura/escritura del dispositivo
+:end
+
+:s3sleep_outside_plug:
+> Si hay otros discos presentes fuera del Array, entonces estos pueden ser monitoreados por separado.
+:end
+
+:s3sleep_extra_delay_plug:
+> Especifica un retardo adicional después de que el Array se haya vuelto inactivo. El valor puede ser 0 para que no haya retardo.
+:end
+
+:s3sleep_network_plug:
+> Seleccione si la actividad de la red debe ser tomada como condición antes de pasar al estado de reposo o apagado.
+:end
+
+:s3sleep_ethernet_plug:
+> En el caso de múltiples interfaces de red, seleccione aquí la interfaz que se utilizará para comprobar la actividad de la red.
+:end
+
+:s3sleep_idle_plug:
+> La actividad de la red se mide bajo diferentes umbrales. Desde el silencio total hasta el tráfico de megabits. Experimenta con esta configuración para encontrar el equilibrio adecuado para tu situación.
+:end
+
+:s3sleep_host_plug:
+> Seleccione si los hosts externos deben ser monitoreados y no responden como una condición de reposo o apagado.
+>
+> Los hosts externos se indican por su dirección IP, utilice una coma para separar varias direcciones IP. Mientras uno de los hosts externos responda a un ping, no se invocará el reposo o el apagado.
+:end
+
+:s3sleep_login_plug:
+> Seleccione si los usuarios registrados locales (consola) o remotos (telnet o ssh) deben cerrar la sesión antes de proceder al reposo o al apagado.
+:end
+
+:s3sleep_wol_plug:
+> Configure las opciones adicionales de WOL para el soporte adecuado del reposo de S3. Consulte la documentación de su sistema para conocer las posibilidades.
+:end
+
+:s3sleep_before_plug:
+> Cualquier comando extra antes de que se invoque el reposo o el apagado puede colocarse aquí. Esto puede ser la limpieza u otras acciones deseables.
+:end
+
+:s3sleep_after_plug:
+> Cualquier comando extra después de despertar del reposo puede ser colocado aquí. Esto puede ser útil para restaurar una situación anterior.
+:end
+
+:s3sleep_gigabit_plug:
+> Deje este valor por defecto en OFF, en caso de que la interfaz no se inicie correctamente después del reposo, vea si forzar esta configuración ayuda.
+:end
+
+:s3sleep_dhcp_plug:
+> Deje este valor por defecto en OFF, en caso de que el sistema no se inicie correctamente después del reposo, vea si forzar esta configuración ayuda.
+:end
+
+:s3sleep_debug_plug:
+> Por defecto la depuración está desactivada. Utilice esta configuración sólo en caso de resolución de problemas, generará mensajes adicionales para informar de las distintas etapas dentro del script s3_sleep.
+:end

@@ -1,0 +1,117 @@
+Console=콘솔
+Counters only=카운터만
+Custom commands after wake-up=절전 모드 해제 후 사용자 지정 명령
+Custom commands before sleep=절전 모드 진입 전 사용자 지정 명령
+Device activity monitoring=장치 활성 모니터링
+DHCP renewal after wake-up=절전 모드 해제 후 DHCP 갱신
+Enable DEBUG mode=디버그 모드 활성화
+Enter custom commands here=여기에 사용자 정의 명령을 입력하세요
+Ethernet interface=이더넷 인터페이스
+Excluded days=제외된 날
+Excluded hours=제외된 시간
+Execute function=제외 기능
+Extra delay after array inactivity=어레이 비활성화 후 추가 지연
+Force gigabit speed after wake-up=절전 모드 해제 후 기가비트 속도 강제
+High traffic=높은 트래픽
+IP address=IP 주소
+Local Remote=로컬 및 원격
+Local=로컬
+Log will be stored in bootlogss3_sleeplog=로그는 **/boot/logs/s3_sleep.log** 파일에 저장됩니다
+Low traffic=낮은 트래픽
+Medium traffic=중간 트래픽
+Mega traffic=메가 트래픽
+Monitor disks outside array=어레이 외부의 디스크 모니터링
+Network idle threshold=네트워크 유휴 임계값
+no host=호스트 없음
+Remote=원격
+Set WOL options before sleep=절전 모드 진입 전 WOL 옵션 구성
+Silent traffic=무음 트래픽
+Status counters=상태 및 카운터
+Status only=상태만
+Syslog and flash=Syslog 및 플래시
+Syslog=Syslog(시스템 로그)
+Wait for array inactivity=어레이 비활성 대기
+Wait for host inactivity=호스트 비활성 대기
+Wait for network inactivity=네트워크 비활성 대기
+Wait for user login inactivity=로그인 비활성 대기
+Yes, exclude Cache=예, 캐시 제외
+
+:s3sleep_function_plug:
+> Select the mode of operation. The system can be either put to sleep (and wake-up) or completely shutdown.
+>
+> The next settings determine the conditions under which the system will be put to sleep or shutdown.
+:end
+
+:s3sleep_excluded_days_plug:
+> By default all days are included, select here the days that sleep or shutdown is not effective. This setting works in combination with excluded hours.
+:end
+
+:s3sleep_excluded_hours_plug:
+> By default all hours are included, select here the hours that sleep or shutdown is not effective. This setting works in combination with excluded days.
+:end
+
+:s3sleep_inactivity_plug:
+> Select whether the array must be completely inactive (all disks are spun down) before sleep or shutdown can take place.
+>
+> The Cache disk can be included or excluded in this setting, e.g. when the Cache disk is used continuously and never spins down.
+:end
+
+:s3sleep_activity_plug:
+> *Status* monitors the hardware status of the device
+>
+> *Counters* monitors the read/write counters of the device
+:end
+
+:s3sleep_outside_plug:
+> If there any other disks present outside the array, then these can be monitored separately.
+:end
+
+:s3sleep_extra_delay_plug:
+> Specify an additional delay after the array has become inactive. Value may be 0 for no delay.
+:end
+
+:s3sleep_network_plug:
+> Select whether network activity must be taken as a condition before going to sleep or shutdown.
+:end
+
+:s3sleep_ethernet_plug:
+> In case of multiple network interfaces, select here the interface to use for checking the network activity.
+:end
+
+:s3sleep_idle_plug:
+> Network activity is measured under different thresholds. Ranging from completely silent to megabit traffic. Experiment with this setting to find to right balance for your situation.
+:end
+
+:s3sleep_host_plug:
+> Select whether external hosts need to be monitored and non-responding as a sleep or shutdown condition.
+>
+> External hosts are given by their IP address, use a comma to separate multiple IP addresses. As long as one of the external hosts responds to a ping then sleep/shutdown won't be invoked.
+:end
+
+:s3sleep_login_plug:
+> Select whether local (console) or remote (telnet or ssh) logged in users need to log out first before sleep or shutdown can proceed.
+:end
+
+:s3sleep_wol_plug:
+> Set additional WOL options for proper support of S3 sleep. Refer to your system documentation for possibilities.
+:end
+
+:s3sleep_before_plug:
+> Any extra commands before sleep or shutdown is invoked can be placed here. This maybe cleanup or other desirable actions.
+:end
+
+:s3sleep_after_plug:
+> Any extra commands after wake-up of sleep can be placed here. This might be helpful for restoring a previous situation.
+:end
+
+:s3sleep_gigabit_plug:
+> Leave this default OFF, in case the interface doesn't start properly after wake-up, see if forcing this setting helps.
+:end
+
+:s3sleep_dhcp_plug:
+> Leave this default OFF, in case the system doesn't start properly after wake-up, see if forcing this setting helps.
+:end
+
+:s3sleep_debug_plug:
+> By default debug is OFF. Use this setting only in case of troubleshooting, it will generate additional messages to report the various stages within the s3_sleep script.
+:end

@@ -1,0 +1,1920 @@
+a:397:{s:24:"_main_array_devices_help";s:3213:"
+>**Colored Status Indicator** the significance of the color indicator at the beginning of each line in *Array Devices* is as follows:
+>
+><i class='fa fa-circle orb green-orb'></i>Normal operation, device is active.
+>
+><i class='fa fa-circle orb grey-orb'></i>Device is in standby mode (spun-down).
+>
+><i class='fa fa-warning orb yellow-orb'></i>Device contents emulated.
+>
+><i class='fa fa-times orb red-orb'></i>Device is disabled, contents emulated.
+>
+><i class='fa fa-square orb blue-orb'></i>New device.
+>
+><i class='fa fa-square orb grey-orb'></i>No device present, position is empty.
+>
+>**Identification** is the *signature* that uniquely identifies a storage device. The signature
+>includes the device model number, serial number, linux device id, and the device size.
+>
+>**Temp.** (temperature) is read directly from the device. You configure which units to use on
+>the [Display Preferences](Settings/DisplaySettings) page.  We do not read the temperature of spun-down hard
+>drives since this typically causes them to spin up; instead we display the `*` symbol.  We also
+>display the `*` symbol for SSD and Flash devices, though sometimes these devices do report a valid
+>temperature, and sometimes they return the value `0`.
+>
+>**Size, Used, Free** reports the total device size, used space, and remaining space for files.  These
+>units are also configured on the [Display Preferences](Settings/DisplaySettings) page.  The
+>amount of space used will be non-zero even for an empty disk due to file system overhead.
+>
+>*Note: for a multi-device cache pool, this data is for the entire pool as returned by btrfs.*
+>
+>**Reads, Writes** are a count of I/O requests sent to the device I/O drivers.  These statistics may
+>be cleared at any time, refer to the Array Status section below.
+>
+>**Errors** counts the number of *unrecoverable* errors reported by the device
+>I/O drivers. Missing data due to unrecoverable array read errors is filled in on-the-fly using parity
+>reconstruct (and we attempt to write this data back to the sector(s) which failed). Any unrecoverable
+>write error results in *disabling* the disk.
+>
+>**FS** indicates the file system detected in partition 1 of the device.
+>
+>**View** column contains a folder icon indicating the device is *mounted*. Click the icon to
+>browse the file system.
+>
+>If "Display array totals" is enable on the [Display Preferences](Settings/DisplaySettings) page, a
+>**Total** line is included which provides a tally of the device statistics, including the average temperature
+>of your devices.
+>
+>The Array must be Stopped in order to change Array device assignments.
+>
+>An Unraid array consists of one or two Parity disks and a number of Data disks. The Data
+>disks are exclusively used to store user data, and the Parity disk(s) provides the redundancy necessary
+>to recover from disk failures.
+>
+>Since data is not striped across the array, the Parity disk(s) must be as large, or larger than the largest Data
+>disk.  Parity should also be your highest performance drive.
+>
+>Each Data disk has its own file system and can be exported as a
+>separate share.
+>
+>Click on the Device name to configure individual device settings and launch certain utilities.
+";s:16:"_main_slots_help";s:193:"
+>**Slots** select the number of device slots in your server designated for Array devices.
+>The minimum number of Array slots is 2, and you must have at least one device assigned to the array.
+";s:19:"_cache_devices_help";s:1730:"
+>**Colored Status Indicator** the significance of the color indicator at the beginning of each line in *Pool Devices* is as follows:
+>
+><i class='fa fa-circle orb green-orb'></i>Normal operation, device is active.
+>
+><i class='fa fa-circle orb grey-orb'></i>Device is in standby mode (spun-down).
+>
+><i class='fa fa-square orb blue-orb'></i>New device.
+>
+><i class='fa fa-square orb grey-orb'></i>No device present, position is empty.
+>
+>**Pool Devices** is a single device, or pool of multiple devices, *outside* the Unraid array.  It may be exported for network access just
+>like an Array device.  Being outside the Unraid array results in significantly faster write access.
+>
+>There are two ways to configure the Pool devices:
+>
+>1. As a single device, or
+>2. As a multi-device pool.
+>
+>When configured as a single device you may format the device using any supported file system (btrfs, reiserfs,
+>or xfs).  This configuration offers the highest performance, but at the cost of no data protection - if the
+>single pool device fails all data contained on it may be lost.
+>
+>When configured as a multi-device pool, Unraid OS will automatically select *btrfs-raid1* format (for both data
+>and meta-data).  btrfs permits any number of devices to be added to the pool and each copy of data is guaranteed
+>to be written to two different devices.  Hence the pool can withstand a single-disk failure without losing data.
+>
+>When [User Shares](/Settings/ShareSettings) are enabled, user shares may be configured to
+>automatically make use of the Pool device in order to
+>speed up writes.  A special background process called the *mover* can be scheduled to run
+>periodically to move user share files off the Cache and onto the Array.
+";s:17:"_cache_slots_help";s:91:"
+>**Slots** select the number of device slots in your server designated for Cache devices.
+";s:17:"_boot_device_help";s:359:"
+>Vital array configuration is maintained on the USB Flash device; for this reason, it must remain
+>plugged in to your server.  Click on [Flash](/Main/Flash?name=flash) to see the GUID and registration
+>information, and to configure export settings.  Since the USB Flash device is formatted using FAT file system,
+>it may only be exported using SMB protocol.
+";s:18:"_array_status_help";s:435:"
+>**Colored Status Indicator** the significance of the color indicator of the *Array* is as follows:
+>
+><i class='fa fa-circle orb green-orb'></i>Array is Started and Parity is valid.
+>
+><i class='fa fa-circle orb grey-orb'></i>Array is Stopped, Parity is valid.
+>
+><i class='fa fa-warning orb yellow-orb'></i>Array is Started, but Parity is invalid.
+>
+><i class='fa fa-warning orb grey-orb'></i>Array is Stopped, Parity is invalid.
+>
+";s:19:"_array_devices_help";s:2885:"
+>#### Assigning Devices
+>
+>An unRAID disk array consists of a single parity disk and a number of data disks. The data
+>disks are exclusively used to store user data, and the parity disk provides the redundancy necessary
+>to recover from any single disk failure.
+>
+>Note that we are careful to use the term *disk* when referring to an array storage device.  We
+>use the term *hard drive* (or sometimes just *drive*) when referring to an actual hard disk drive (HDD)
+>device. This is because in a RAID system it is possible to read/write an array disk whose corresponding
+>hard drive is disabled or even missing! In addition, it is useful to be able to ask, "which device is
+>assigned to be the parity disk?"; or, "which device corresponds to disk2?".
+>
+>We therefore need a way to assign hard drives to array disks. This is accomplished here on the
+>Main page when the array is stopped. There is a drop-down box for each array disk which lists all the
+>unassigned devices. To assign a device simply select it from the list. Each time a device
+>assignment is made, the system updates a configuration file to record the assignment.
+>
+>#### Requirements
+>
+>Unlike traditional RAID systems which stripe data across all the array devices, an unRAID server
+>stores files on individual hard drives. Consequently, all file write operations will involve both the
+>data disk the file is being written to, and the parity disk. For these reasons,
+>
+>* the parity disk size must be as large or larger than any of the data disks,
+>
+>and
+>
+>* given a choice, the parity disk should be the fastest disk in your collection.
+>
+>#### Guidelines
+>
+>Here are the steps you should follow when designing your unRAID disk array:
+>
+>1. Decide which hard drive you will use for parity, and which hard drives you will use for
+>data disk1, disk2, etc., and label them in some fashion. Also, find the serial number of each hard
+>drive and jot it down somewhere; you will need this information later.
+>
+>2. Install your hard drive devices, boot unRAID Server and bring up the webGui. If this is a fresh system
+>build, then the Main page will show no disks installed. This doesn't mean the system can't detect your
+>hard drives; it just means that none have been assigned yet.
+>
+>3. Remember the serial numbers you recorded back in step 1? For parity and each data disk, select the
+>proper hard drive based on its serial number from the drop down list.
+>
+>#### Hot Plug
+>
+>You may also *hot plug* hard drives into your server if your hardware supports it. For example,
+>if you are using hard drive cages, you may simply plug them into your server while powered on and
+>with array Stopped. Refresh the Main page to have new unassigned devices appear in the assignment
+>dropdown lists.
+>
+>#### Next Steps
+>
+>Once you have assigned all of your hard drives, refer to the Array Status section below
+>and Start the array.
+";s:16:"_encryption_help";s:1332:"
+>#### Encryption input
+>
+>With array Stopped, the user can specify a new encryption key. Note that once a device
+>is formatted with a particular key it may only be opened using that same key. Changing the encryption key requires
+>encrypted devices to be reformatted **resulting in permanent loss of all existing data on those devices.**
+>
+>#### Passphrase
+>
+>Enter a passphrase of up to 512 characters. It is highly advisable to only use the 95 printable characters from the
+>first 128 characters of the [ASCII table](https://en.wikipedia.org/wiki/ASCII), as they will always have the same binary
+>representation. Other characters may have different encoding depending on system configuration and your passphrase will
+>not work with a different encoding. If you want a longer passphrase or to include binary data, upload a keyfile instead.
+>
+>Please refer to the [cryptsetup FAQ](https://gitlab.com/cryptsetup/cryptsetup/wikis/FrequentlyAskedQuestions#5-security-aspects)
+>for what constitutes a *secure* passphrase.
+>
+>**Memorize** this passphrase. **IF LOST, ENCRYPTED CONTENT CANNOT BE RECOVERED!**
+>
+>#### Keyfile
+>
+>Select a local keyfile with a stored encryption key or a binary file. The maximum size of the keyfile is 8M (8388608 byte).
+>
+>**Backup** your local keyfile. **IF LOST, ENCRYPTED CONTENT CANNOT BE RECOVERED!**
+";s:23:"_info_warning_temp_help";s:233:"
+>*Warning disk temperature* sets the warning threshold for this hard disk temperature. Exceeding this threshold will result in a warning notification.
+>
+>A value of zero will disable the warning threshold (including notifications).
+";s:24:"_info_critical_temp_help";s:235:"
+>*Critical disk temperature* sets the critical threshold for this hard disk temperature. Exceeding this threshold will result in an alert notification.
+>
+>A value of zero will disable the critical threshold (including notifications).
+";s:22:"_info_file_system_help";s:214:"
+>Enter the desired file system type.  Changing the file system type of a device will permit you to reformat
+>that device using the new file system.  Be aware that **all existing data on the device will be lost**.
+";s:19:"_info_comments_help";s:135:"
+>This text will appear under the *Comments* column for the share in Windows Explorer.
+>Enter anything you like, up to 256 characters.
+";s:30:"_info_warning_utilization_help";s:387:"
+>*Warning disk utilization* sets the warning threshold for this hard disk utilization. Exceeding this threshold will result in a warning notification.
+>
+>When the warning threshold is set equal or greater than the critical threshold, there will be only critical notifications (warnings are not existing).
+>
+>A value of zero will disable the warning threshold (including notifications).
+";s:31:"_info_critical_utilization_help";s:235:"
+>*Critical disk utilization* sets the critical threshold for this hard disk utilization. Exceeding this threshold will result in an alert notification.
+>
+>A value of zero will disable the critical threshold (including notifications).
+";s:24:"_info_btrfs_balance_help";s:868:"
+>**Balance** will run the *btrfs balance* program to restripe the extents across all pool devices, for example,
+>to convert the pool from raid1 to raid0 or vice-versa.
+>
+>When a *full balance* is performed, it basically rewrites everything in the current filesystem.
+>
+>A *mode conversion* affects the btrfs data extents; metadata always uses raid1 and is converted to raid1 if necessary by any balance operation.
+>
+>The run time is potentially very long, depending on the filesystem size and speed of the device.
+>
+>Unraid uses these default options when creating a multiple-device pool:
+>
+>`-dconvert=raid1 -mconvert=raid1`
+>
+>For more complete documentation, please refer to the btrfs-balance [Manpage](https://btrfs.wiki.kernel.org/index.php/Manpage/btrfs-balance)
+>
+>*Note: raid5 and raid6 are generally still considered **experimental** by the Linux community*
+";s:25:"_info_balance_cancel_help";s:60:"
+>**Cancel** will cancel the balance operation in progress.
+";s:22:"_info_btrfs_scrub_help";s:254:"
+>**Scrub** runs the *btrfs scrub* program which will read all data and metadata blocks from all
+>devices and verify checksums.
+>
+>If *Repair corrupted blocks* is checked, *btrfs scrub* will repair corrupted blocks if there’s a correct copy available.
+";s:23:"_info_scrub_cancel_help";s:58:"
+>**Cancel** will cancel the Scrub operation in progress.
+";s:22:"_info_btrfs_check_help";s:710:"
+>**Check** will run the *btrfs check* program to check file system integrity on the device.
+>
+>The *Options* field is initialized with *--readonly* which specifies check-only.  If repair is needed, you should run
+>a second Check pass, setting the *Options* to *--repair*; this will permit *btrfs check* to fix the file system.
+>
+>After starting a Check, you should Refresh to monitor progress and status.  Depending on
+>how large the file system is, and what errors might be present, the operation can take **a long time** to finish (hours).
+>Not much info is printed in the window, but you can verify the operation is running by observing the read/write counters
+>increasing for the device on the Main page.
+";s:23:"_info_check_cancel_help";s:58:"
+>**Cancel** will cancel the Check operation in progress.
+";s:25:"_info_reiserfs_check_help";s:799:"
+>**Check** will run the *reiserfsck* program to check file system integrity on the device.
+>
+>The *Options* field may be filled in with specific options used to fix problems in the file system. Typically, you
+>first run a Check pass leaving *Options* blank.  Upon completion, if *reiserfsck* finds any problems, you must
+>run a second Check pass, using a specific option as instructed by the first *reiserfsck* pass.
+>
+>After starting a Check you should Refresh to monitor progress and status.  Depending on
+>how large the file system is, and what errors might be present, the operation can take **a long time** to finish (hours).
+>Not much info is printed in the window, but you can verify the operation is running by observing the read/write counters
+>increasing for the device on the Main page.
+";s:26:"_info_reiserfs_cancel_help";s:58:"
+>**Cancel** will cancel the Check operation in progress.
+";s:20:"_info_xfs_check_help";s:692:"
+>**Check** will run the *xfs_repair* program to check file system integrity on the device.
+>
+>The *Options* field is initialized with *-n* which specifies check-only.  If repair is needed, you should run
+>a second Check pass, setting the *Options* blank; this will permit *xfs_repair* to fix the file system.
+>
+>After starting a Check, you should Refresh to monitor progress and status.  Depending on
+>how large the file system is, and what errors might be present, the operation can take **a long time** to finish (hours).
+>Not much info is printed in the window, but you can verify the operation is running by observing the read/write counters
+>increasing for the device on the Main page.
+";s:21:"_info_xfs_cancel_help";s:58:"
+>**Cancel** will cancel the Check operation in progress.
+";s:30:"_info_smart_notifications_help";s:312:"
+>SMART notifications are generated on either an increasing RAW value of the attribute, or a decreasing NORMALIZED value which reaches a predefined threshold set by the manufacturer.
+>
+>Each disk may have its own specific setting overruling the 'default' setting (see global SMART settings under Disk Settings).
+";s:26:"_info_tolerance_level_help";s:308:"
+>A tolerance level may be given to prevent that small changes result in a notification. Setting a too high tolerance level may result in critical changes without a notification.
+>
+>Each disk may have its own specific setting overruling the 'default' setting (see global SMART settings under Disk Settings).
+";s:26:"_info_controller_type_help";s:489:"
+>By default automatic controller selection is done by smartctl to read the SMART information. Certain controllers however need specific settings for smartctl to work.
+>Use this setting to select your controller type and fill-in the specific disk index and device name for your situation. Use the manufacturer's documentation to find the relevant information.
+>
+>Each disk may have its own specific setting overruling the 'default' setting (see global SMART settings under Disk Settings).
+";s:34:"_info_attribute_notifications_help";s:603:"
+>The user can enable or disable notifications for the given SMART attributes. It is recommended to keep the default, which is ALL selected attributes,
+>when certain attributes are not present on your hard disk or do not provide the correct information, these may be excluded.
+>In addition custom SMART attributes can be entered to generate notifications. Be careful in this selection,
+>it may cause an avalance of notifcations if inappropriate SMART attributes are chosen.
+>
+>Each disk may have its own specific setting overruling the 'default' setting (see global SMART settings under Disk Settings).
+";s:22:"_selftest_history_help";s:143:"
+>Press **Show** to view the self-test history as is kept on the disk itself.
+>This feature is only available when the disk is in active mode.
+";s:24:"_selftest_error_log_help";s:138:"
+>Press **Show** to view the error report as is kept on the disk itself.
+>This feature is only available when the disk is in active mode.
+";s:25:"_selftest_short_test_help";s:271:"
+>Starts a *short* SMART self-test, the estimated duration can be viewed under the *Capabilities* section. This is usually a few minutes.
+>
+>When the disk is spun down, it will abort any running self-test.
+>This feature is only available when the disk is in active mode.
+";s:24:"_selftest_long_test_help";s:376:"
+>Starts an *extended* SMART self-test, the estimated duration can be viewed under the *Capabilities* section. This is usually several hours.
+>
+>When the disk is spun down, it will abort any running self-test. It is advised to disable the spin down timer of the disk
+>to avoid interruption of this self-test.
+>
+>This feature is only available when the disk is in active mode.
+";s:21:"_selftest_result_help";s:177:"
+>When no test is running it will show here the latest obtained self-test result (if available).
+>Otherwise a progress indicator (percentage value) is shown for a running test.
+";s:22:"_smart_attributes_help";s:444:"
+>This list shows the SMART attributes supported by this disk. For more information about each SMART attribute, it is recommended to search online.
+>
+>Attributes in *orange* may require your attention. They have a **raw value** greater than zero and may indicate a pending disk failure.
+>
+>Special attention is required when the particular attribute raw value starts to increase over time. When in doubt, consult the Limetech forum for advice.
+";s:24:"_smart_capabilities_help";s:148:"
+>This list shows the SMART capabilities supported by this disk.
+>
+>Observe here the estimated duration of the SMART short and extended self-tests.
+";s:20:"_smart_identity_help";s:62:"
+>This list shows the SMART identity information of this disk
+";s:18:"_open_devices_help";s:124:"
+>These are devices installed in your server but not assigned to either the parity-protected
+>array or the cache disk/pool.
+";s:18:"_flash_backup_help";s:132:"
+>Use *Flash backup* to create a single zip file of the current contents of the flash device and store it locally on your computer.
+";s:18:"_syslinux_cfg_help";s:132:"
+>Use this page to make changes to your `syslinux.cfg` file.
+>You will need to reboot your server for these changes to take effect.
+";s:21:"_syslinux_button_help";s:318:"
+>Click the **Default** button to initialize the edit box with the
+>factory-default contents.  You still need to click **Apply** in order to
+>commit the change.
+>
+>Click the **Apply** button to commit the current edits.  Click **Reset** to
+>undo any changes you make (before Saving). Click **Done** to exit this page.
+";s:27:"_info_share_assignment_help";s:50:"
+>The selected pool is available for user shares.
+";s:21:"_info_free_space_help";s:568:"
+>This defines a "floor" for the amount of free space remaining in the volume.
+>If the free space becomes less than this value, then new files written via user shares will fail with "not enough space" error.
+>
+>Enter a numeric value with one of these suffixes:
+>
+>**KB** = 1,000<br>
+>**MB** = 1,000,000<br>
+>**GB** = 1,000,000,000<br>
+>**TB** = 1,000,000,000,000<br>
+>**K** = 1,024 (ie, 2^10)<br>
+>**M** = 1,048,576 (ie, 2^20)<br>
+>**G** = 1,073,741,824 (ie, 2^30)<br>
+>**T** = 1,099,511,627,776 (ie, 2^40)<br>
+>
+>If no suffix, a count of 1024-byte blocks is assumed.
+";s:16:"_share_list_help";s:855:"
+>**Colored Status Indicator** -- the significance of the color indicator at the beginning of each line in *User Shares* is as follows:
+>
+><i class='fa fa-circle orb green-orb'></i>All files are on protected storage.
+>
+><i class='fa fa-warning orb yellow-orb'></i>Some or all files are on unprotected storage.
+>
+>**Security modes:**
+>
+>+ '-' -- user share is not exported and unavailable on the network
+>+ *Public* -- all users including guests have full read/write access (open access)
+>+ *Secure* -- all users including guests have read access, write access is set per user (limited access)
+>+ *Private* -- no guest access at all, read/write or read-only access is set per user (closed access)
+>
+>**Special modes:**
+>
+>+ SMB security mode displayed in *italics* indicates exported hidden user shares.
+>+ NFS does not have special modes for user shares.
+";s:15:"_disk_list_help";s:891:"
+>**Colored Status Indicator** -- the significance of the color indicator at the beginning of each line in *Disk Shares* is as follows:
+>
+><i class='fa fa-circle orb green-orb'></i>Mounted, underlying device has redundancy/protection.
+>
+><i class='fa fa-warning orb yellow-orb'></i>Mounted, underlying device does not have redundancy/protection.
+>
+>**Security modes:**
+>
+>+ '-' -- disk share is not exported and unavailable on the network
+>+ *Public* -- all users including guests have full read/write access (open access)
+>+ *Secure* -- all users including guests have read access, write access is set per user (limited access)
+>+ *Private* -- no guest access at all, read/write or read-only access is set per user (closed access)
+>
+>**Special modes:**
+>
+>+ SMB security mode displayed in *italics* indicates exported hidden disk shares.
+>+ NFS does not have special modes for disk shares.
+";s:24:"_share_edit_global1_help";s:567:"
+>A *Share*, also called a *User Share*, is simply the name of a top-level directory that exists on one or more of your
+>storage devices (array and cache).  Each share can be exported for network access.  When browsing a share, we return the
+>composite view of all files and subdirectories for which that top-level directory exists on each storage device.
+>
+>*Read settings from* is used to preset the settings of the new share with the settings of an existing share.
+>
+>Select the desired share name and press **Read** to copy the settings from the selected source.
+";s:24:"_share_edit_global2_help";s:210:"
+>*Write settings to* is used to copy the settings of the current share to one or more other existing shares.
+>
+>Select the desired destinations and press **Write** to copy the settings to the selected shares.
+";s:21:"_share_edit_name_help";s:349:"
+>The share name can be up to 40 characters, and is case-sensitive with these restrictions:
+>
+>* cannot contain a double-quote character (") or the following characters: / \ * < > |
+>* cannot be one of the reserved share names: flash, cache, cache2, .., disk1, disk2, ..
+>
+>We highly recommend to make your life easier and avoid special characters.
+";s:25:"_share_edit_comments_help";s:43:"
+>Anything you like, up to 256 characters.
+";s:34:"_share_edit_allocation_method_help";s:902:"
+>This setting determines how Unraid OS will choose which disk to use when creating a new file or directory:
+>
+>**High-water**
+>Choose the lowest numbered disk with free space still above the current *high water mark*.  The
+>*high water mark* is initialized with the size of the largest data disk divided by 2.  If no disk
+>has free space above the current *high water mark*, divide the *high water mark* by 2 and choose again.
+>
+>The goal of **High-water** is to write as much data as possible to each disk (in order to minimize
+>how often disks need to be spun up), while at the same time, try to keep the same amount of free space on
+>each disk (in order to distribute data evenly across the array).
+>
+>**Fill-up**
+>Choose the lowest numbered disk that still has free space above the current **Minimum free space**
+>setting.
+>
+>**Most-free**
+>Choose the disk that currently has the most free space.
+";s:27:"_share_edit_free_space_help";s:265:"
+>The *minimum free space* available to allow writing to any disk belonging to the share.<br>
+>
+>Choose a value which is equal or greater than the biggest single file size you intend to copy to the share.
+>Include units KB, MB, GB and TB as appropriate, e.g. 10MB.
+";s:28:"_share_edit_split_level_help";s:1671:"
+>Determines whether a directory is allowed to expand onto multiple disks.
+>
+>**Automatically split any directory as required**
+>When a new file or subdirectory needs to be created in a share, Unraid OS first chooses which disk
+>it should be created on, according to the configured *Allocation method*.  If the parent directory containing
+>the new file or subdirectory does not exist on this disk, then Unraid OS will first create all necessary
+>parent directories, and then create the new file or subdirectory.
+>
+>**Automatically split only the top level directory as required**
+>When a new file or subdirectory is being created in the first level subdirectory of a share, if that first
+>level subdirectory does not exist on the disk being written, then the subdirectory will be created first.
+>If a new file or subdirectory is being created in the second or lower level subdirectory of a share, the new
+>file or subdirectory is created on the same disk as the new file or subdirectory's parent directory.
+>
+>**Automatically split only the top "N" level directories as required**
+>Similar to previous: when a new file or subdirectory is being created, if the parent directory is at level "N",
+>and does not exist on the chosen disk, Unraid OS will first create all necessary parent directories.  If the
+>parent directory of the new file or subdirectory is beyond level "N", then the new file or subdirectory is
+>created on the same disk where the parent directory exists.
+>
+>**Manual: do not automatically split directories**
+>When a new file or subdirectory needs to be created in a share, Unraid OS will only consider disks where the
+>parent directory already exists.
+";s:31:"_share_edit_included_disks_help";s:188:"
+>Specify the disks which can be used by the share. By default all disks are included; that is, if specific
+>disks are not selected here, then the share may expand into *all* array disks.
+";s:31:"_share_edit_excluded_disks_help";s:92:"
+>Specify the disks which can *not* be used by the share. By default no disks are excluded.
+";s:27:"_share_edit_cache_pool_help";s:1691:"
+>Specify whether new files and directories written on the share can be written onto the Cache disk/pool if present.
+>This setting also affects *mover* behavior.
+>
+>**No** prohibits new files and subdirectories from being written onto the Cache disk/pool.
+>*Mover* will take no action so any existing files for this share that are on the cache are left there.
+>
+>**Yes** indicates that all new files and subdirectories should be written to the Cache disk/pool, provided
+>enough free space exists on the Cache disk/pool.
+>If there is insufficient space on the Cache disk/pool, then new files and directories are created on the array.
+>When the *mover* is invoked, files and subdirectories are transferred off the Cache disk/pool and onto the array.
+>
+>**Only** indicates that all new files and subdirectories must be written to the Cache disk/pool.
+>If there is insufficient free space on the Cache disk/pool, *create* operations will fail with *out of space* status.
+>*Mover* will take no action so any existing files for this share that are on the array are left there.
+>
+>**Prefer** indicates that all new files and subdirectories should be written to the Cache disk/pool, provided
+>enough free space exists on the Cache disk/pool.
+>If there is insufficient space on the Cache disk/pool, then new files and directories are created on the array.
+>When the *mover* is invoked, files and subdirectories are transferred off the array and onto the Cache disk/pool.
+>
+>**NOTE:** Mover will never move any files that are currently in use.
+>This means if you want to move files associated with system services such as Docker or VMs then you need to
+>disable these services while mover is running.
+";s:30:"_share_edit_copy_on_write_help";s:541:"
+>Set to **No** to cause the *btrfs* NOCOW (No Copy-on-Write) attribute to be set on the share directory
+>when created on a device formatted with *btrfs* file system.  Once set, newly created files and
+>subdirectories on the device will inherit the NOCOW attribute.  We recommend this setting for shares
+>used to store vdisk images, including the Docker loopback image file.  This setting has no effect
+>on non-btrfs file systems.
+>
+>Set to **Auto** for normal operation, meaning COW **will** be in effect on devices formatted with *btrfs*.
+";s:23:"_share_edit_status_help";s:81:"
+>Share does *not* contain any data and may be deleted if not needed any longer.
+";s:23:"_share_edit_delete_help";s:157:"
+>Share can *not* be deleted as long as it contains data. Be aware that some data can be hidden. See also [SMB Settings](/Settings/SMB) -> Hide "dot" files.
+";s:18:"_smb_security_help";s:495:"
+>*Read settings from* is used to preset the SMB security settings of the current selected share with the settings of an existing share.
+>
+>Select the desired share name and press **Read** to copy the SMB security settings from the selected source.
+>
+>*Write settings to* is used to copy the SMB security settings of the current selected share to one or more other existing shares.
+>
+>Select the desired destinations and press **Write** to copy the SMB security settings to the selected shares.
+";s:16:"_smb_export_help";s:193:"
+>This setting determines whether the share is visible and/or accessible.  The 'Yes (hidden)' setting
+>will *hide* the share from *browsing* but is still accessible if you know the share name.
+";s:29:"_smb_time_machine_volume_help";s:202:"
+>This limits the reported volume size, preventing Time Machine from using the entire real disk space
+>for backup.  For example, setting this value to "1024" would limit the reported disk space to 1GB.
+";s:30:"_smb_case_sensitive_names_help";s:1515:"
+>Controls whether filenames are case-sensitive.
+>
+>The default setting of **auto** allows clients that support case sensitive filenames (Linux CIFSVFS)
+>to tell the Samba server on a per-packet basis that they wish to access the file system in a case-sensitive manner (to support UNIX
+>case sensitive semantics). No Windows system supports case-sensitive filenames so setting this option to **auto** is the same as
+>setting it to No for them; however, the case of filenames passed by a Windows client will be preserved.  This setting can result
+>in reduced performance with very large directories because Samba must do a filename search and match on passed names.
+>
+>A setting of **Yes** means that files are created with the case that the client passes, and only accessible using this same case.
+>This will speed very large directory access, but some Windows applications may not function properly with this setting.  For
+>example, if "MyFile" is created but a Windows app attempts to open "MYFILE" (which is permitted in Windows), it will not be found.
+>
+>A value of **Forced lower** is special: the case of all incoming client filenames, not just new filenames, will be set to lower-case.
+>In other words, no matter what mixed case name is created on the Windows side, it will be stored and accessed in all lower-case.  This
+>ensures all Windows apps will properly find any file regardless of case, but case will not be preserved in folder listings.
+>Note this setting should only be configured for new shares.
+";s:24:"_smb_security_modes_help";s:326:"
+>Summary of security modes:
+>
+>**Public** All users including guests have full read/write access.
+>
+>**Secure** All users including guests have read access, you select which of your users have write access.
+>
+>**Private** No guest access at all, you select which of your users have read/write, read-only access or no access.
+";s:23:"_smb_secure_access_help";s:495:"
+>*Read settings from* is used to preset the SMB User Access settings of the current selected share with the settings of an existing share.
+>
+>Select the desired share name and press **Read** to copy the SMB security settings from the selected source.
+>
+>*Write settings to* is used to copy the SMB User Access settings of the current share to one or more other existing shares.
+>
+>Select the desired destinations and press **Write** to copy the SMB User access settings to the selected shares.
+";s:24:"_smb_private_access_help";s:495:"
+>*Read settings from* is used to preset the SMB User Access settings of the current selected share with the settings of an existing share.
+>
+>Select the desired share name and press **Read** to copy the SMB security settings from the selected source.
+>
+>*Write settings to* is used to copy the SMB User Access settings of the current share to one or more other existing shares.
+>
+>Select the desired destinations and press **Write** to copy the SMB User access settings to the selected shares.
+";s:18:"_nfs_security_help";s:495:"
+>*Read settings from* is used to preset the NFS security settings of the current selected share with the settings of an existing share.
+>
+>Select the desired share name and press **Read** to copy the NFS security settings from the selected source.
+>
+>*Write settings to* is used to copy the NFS security settings of the current selected share to one or more other existing shares.
+>
+>Select the desired destinations and press **Write** to copy the NFS security settings to the selected shares.
+";s:23:"_user_add_username_help";s:208:"
+>Usernames may be up to 40 characters long and must start with a **lower case letter** or an underscore,
+>followed by **lower case letters**, digits, underscores, or dashes. They can end with a dollar sign.
+";s:26:"_user_add_description_help";s:102:"
+>Up to 64 characters. The characters ampersand (&amp;) quote (&quot;) and colon (:) are not allowed.
+";s:27:"_user_add_custom_image_help";s:112:"
+>The image will be scaled to 48x48 pixels in size. The maximum image file upload size is 95 kB (97,280 bytes).
+";s:19:"_user_password_help";s:24:"
+>Up to 128 characters.
+";s:27:"_user_edit_description_help";s:102:"
+>Up to 64 characters. The characters ampersand (&amp;) quote (&quot;) and colon (:) are not allowed.
+";s:28:"_user_edit_custom_image_help";s:114:"
+>The image will be scaled to 48x48 pixels in size. The maximum image file upload size is 512 kB (524,288 bytes).
+";s:13:"_cpu_vms_help";s:525:"
+>This page gives a total view of the current CPU pinning assignments for VMs.<br>
+>It also allows to modify these assignments.
+>
+>Running VMs are **stopped first** and restarted after the modification.<br>
+>Stopped VMs are instantly modified and new assignments become active when the VM is started.
+>
+>When ***Apply*** is pressed a scan is performed to find the changes, subsequently only VMs which have changes are modified in parallel.
+>
+>*Important: Please wait until all updates are finished before leaving this page*.
+";s:17:"_cpu_pinning_help";s:1041:"
+>This page gives a total view of the current CPU pinning assignments for Docker containers.<br>
+>It also allows to modify these assignments.
+>
+>Running containers are **stopped first** and restarted after the modification.<br>
+>Stopped containers are instantly modified and new assignments become active when the user manually starts the container.
+>
+>When ***Apply*** is pressed a scan is performed to find the changes, subsequently containers which have changes are modified in parallel.
+>
+>*Important: Please wait until all updates are finished before leaving this page*.
+>
+>By default NO cores are selected for a Docker container, which means it uses all available cores.<br>
+>Do not select **ALL** cores for containers, just select **NO** cores if you want unrestricted core use.
+>
+>Do not select cores for containers which are *isolated*.
+>By design a container will only use a single core (the lowest numbered core) when multiple isolated cores are selected.<br>
+>Usually this is not what a user wants when selecting multiple cores.
+";s:19:"_cpu_isolation_help";s:458:"
+>CPU isolation allows the user to specify CPU cores that are to be explicitly reserved for assignment (to VMs or Docker containers).
+>
+>This is incredibly important for gaming VMs to run smoothly because even if you manually pin your Docker containers to not overlap with your gaming VM,
+>the host OS can still utilize those same cores as the guest VM needs for things like returning responses for the webGui, running a parity check, btrfs operations, etc.
+";s:14:"_timezone_help";s:60:"
+>Select your applicable time zone from the drop-down list.
+";s:13:"_use_ntp_help";s:316:"
+>Select 'Yes' to use Network Time Protocol to keep your server time accurate.
+>We **highly** recommend the use of a network time server, especially if you plan on using Active Directory.
+>
+>Note: if using `pool.ntp.org` time servers, please also refer to [their documentation](http://www.pool.ntp.org/en/use.html).
+";s:17:"_ntp_server1_help";s:73:"
+>This is the primary NTP server to use.  Enter a FQDN or an IP address.
+";s:17:"_ntp_server2_help";s:67:"
+>This is the alternate NTP server to use if NTP Server 1 is down.
+";s:17:"_ntp_server3_help";s:80:"
+>This is the alternate NTP Server to use if NTP Servers 1 and 2 are both down.
+";s:17:"_ntp_server4_help";s:83:"
+>This is the alternate NTP Server to use if NTP Servers 1, 2, and 3 are all down.
+";s:18:"_current_time_help";s:93:"
+>Enter the current time-of-day.  Use format YYYY-MM-DD HH:MM:SS. Greyed out when using NTP.
+";s:27:"_disk_enable_autostart_help";s:206:"
+>If set to 'Yes' then if the device configuration is correct upon server start-up,
+>the array will be automatically Started and shares exported.<br>
+>If set to 'No' then you must Start the array yourself.
+";s:25:"_disk_spindown_delay_help";s:213:"
+>This setting defines the 'default' time-out for spinning hard drives down after a period
+>of no I/O activity.  You may override the default value for an individual disk on the Disk Settings
+>page for that disk.
+";s:24:"_disk_spinup_groups_help";s:70:"
+>If set to 'Yes' then the [Spinup Groups](/Help) feature is enabled.
+";s:35:"_disk_default_partition_format_help";s:882:"
+>Defines the type of partition layout to create when formatting hard drives 2TB in size and
+>smaller **only**. (All devices larger than 2TB are always set up with GPT partition tables.)
+>
+>**MBR: unaligned** setting will create MBR-style partition table, where the single
+>partition 1 will start in the **63rd sector** from the start of the disk.  This is the *traditional*
+>setting for virtually all MBR-style partition tables.
+>
+>**MBR: 4K-aligned** setting will create an MBR-style partition table, where the single
+>partition 1 will start in the **64th sector** from the start of the disk. Since the sector size is 512 bytes,
+>this will *align* the start of partition 1 on a 4K-byte boundary.  This is required for proper
+>support of so-called *Advanced Format* drives.
+>
+>Unless you have a specific requirement do not change this setting from the default **MBR: 4K-aligned**.
+";s:30:"_disk_default_file_system_help";s:182:"
+>Defines the default file system type to create when an *unmountable* array device is formatted.
+>
+>The default file system type for a single or multi-device cache is always Btrfs.
+";s:27:"_disk_shutdown_timeout_help";s:136:"
+>When shutting down the server, this defines how long to wait in seconds for *graceful* shutdown before forcing
+>shutdown to continue.
+";s:34:"_disk_tunable_poll_attributes_help";s:116:"
+>This defines the disk SMART polling interval, in seconds.  A value of 0 disables SMART polling (not recommended).
+";s:29:"_disk_tunable_enable_ncq_help";s:229:"
+>If set to **No** then *Native Command Queuing* is disabled for all array devices that support NCQ.
+>
+>**Auto** leaves the setting for each device as-is.
+>
+>Note: You must reboot after selecting Auto for setting to take effect.
+";s:30:"_disk_tunable_nr_requests_help";s:266:"
+>This defines the `nr_requests` device driver setting for all array devices.
+>
+>**Auto** leaves the setting for each device as-is.
+>
+>Note: if you set to blank and click Apply, the setting is restored to its default, and you must reboot for setting to take effect.
+";s:28:"_disk_tunable_scheduler_help";s:209:"
+>Selects which kernel I/O scheduler to use for all array devices.
+>
+>**Auto** leaves the setting for each device as-is (mq-deadline).
+>
+>Note: You must reboot after selecting Auto for setting to take effect.
+";s:33:"_disk_tunable_md_num_stripes_help";s:316:"
+>This is the size of the *stripe pool* in number of *stripes*.  A *stripe* refers to a data structure that facilitates parallel 4K read/write
+>operations necessary for a parity-protected array.
+>
+>Note: if you set to blank and click Apply, the setting is restored to its default, and will take effect after reboot.
+";s:33:"_disk_tunable_md_queue_limit_help";s:204:"
+>This is a number in [1..100] which is the maximum steady-load percentage of the stripe pool permitted to be in use.
+>
+>Note: if you set to blank and click Apply, the setting is restored to its default.
+";s:32:"_disk_tunable_md_sync_limit_help";s:230:"
+>This is a number in [0..100] which is the maximum percentage of the stripe pool allocated for parity sync/check in the presence of other I/O.
+>
+>Note: if you set to blank and click Apply, the setting is restored to its default.
+";s:34:"_disk_tunable_md_write_method_help";s:126:"
+>Selects the method to employ when writing to enabled disk in parity protected array.
+>
+>*Auto* selects `read/modify/write`.
+";s:38:"_disk_default_warning_utilization_help";s:395:"
+>*Warning disk utilization* sets the default warning threshold for all hard disks utilization. Exceeding this threshold will result in a warning notification.
+>
+>When the warning threshold is set equal or greater than the critical threshold, there will be only critical notifications (warnings are not existing).
+>
+>A value of zero will disable the warning threshold (including notifications).
+";s:39:"_disk_default_critical_utilization_help";s:243:"
+>*Critical disk utilization* sets the default critical threshold for all hard disks utilization. Exceeding this threshold will result in an alert notification.
+>
+>A value of zero will disable the critical threshold (including notifications).
+";s:38:"_disk_default_warning_temperature_help";s:241:"
+>*Warning disk temperature* sets the default warning threshold for all hard disks temperature. Exceeding this threshold will result in a warning notification.
+>
+>A value of zero will disable the warning threshold (including notifications).
+";s:39:"_disk_default_critical_temperature_help";s:243:"
+>*Critical disk temperature* sets the default critical threshold for all hard disks temperature. Exceeding this threshold will result in an alert notification.
+>
+>A value of zero will disable the critical threshold (including notifications).
+";s:37:"_disk_default_smart_notification_help";s:305:"
+>SMART notifications are generated on either an increasing RAW value of the attribute, or a decreasing NORMALIZED value which reaches a predefined threshold set by the manufacturer.
+>
+>This section is used to set the global settings for all disks. It is possible to adjust settings for individual disks.
+";s:34:"_disk_default_smart_tolerance_help";s:301:"
+>A tolerance level may be given to prevent that small changes result in a notification. Setting a too high tolerance level may result in critical changes without a notification.
+>
+>This section is used to set the global settings for all disks. It is possible to adjust settings for individual disks.
+";s:35:"_disk_default_smart_controller_help";s:482:"
+>By default automatic controller selection is done by smartctl to read the SMART information. Certain controllers however need specific settings for smartctl to work.
+>Use this setting to select your controller type and fill-in the specific disk index and device name for your situation. Use the manufacturer's documentation to find the relevant information.
+>
+>This section is used to set the global settings for all disks. It is possible to adjust settings for individual disks.
+";s:34:"_disk_default_smart_attribute_help";s:596:"
+>The user can enable or disable notifications for the given SMART attributes. It is recommended to keep the default, which is ALL selected attributes,
+>when certain attributes are not present on your hard disk or do not provide the correct information, these may be excluded.
+>In addition custom SMART attributes can be entered to generate notifications. Be careful in this selection,
+>it may cause an avalance of notifcations if inappropriate SMART attributes are chosen.
+>
+>This section is used to set the global settings for all disks. It is possible to adjust settings for individual disks.
+";s:25:"_docker_repositories_help";s:382:"
+>Use this field to add template repositories.
+>Docker templates are used to facilitate the creation and re-creation of Docker containers.  Please setup one per line.
+>
+>For a list of popular community-supported repositories, visit here: <a href="http://lime-technology.com/forum/index.php?topic=37958.0" target="_blank">http://lime-technology.com/forum/index.php?topic=37958.0</a>
+";s:19:"_docker_enable_help";s:207:"
+>Before you can start the Docker service for the first time, please specify an image file for Docker to install to.
+>
+>Once started, Docker will always automatically start after the array has been started.
+";s:20:"_docker_timeout_help";s:88:"
+>The time in seconds to allow a container to gracefully stop before forcing it to stop
+";s:23:"_docker_vdisk_type_help";s:125:"
+>Select where to keep the Docker persistent state.
+>
+>This can be an image file with a specific size or a dedicated folder.
+";s:23:"_docker_vdisk_size_help";s:294:"
+>If the system needs to create a new docker image file, this is the default size to use specified in GB.
+>
+>To resize an existing image file, specify the new size here. Next time the Docker service is started the file (and file system) will be increased to the new size (but never decreased).
+";s:27:"_docker_vdisk_location_help";s:374:"
+>You must specify an image file for Docker. The system will automatically create this file when the Docker service is first started.
+>
+>The image file name must have the extension .img, If not the input is not accepted and marked red.
+>
+>It is recommended to create this image file outside the array, e.g. on the Cache pool. For best performance SSD devices are preferred.
+";s:28:"_docker_vdisk_directory_help";s:291:"
+>You must specify a folder for Docker. The system will automatically create this folder when the Docker service is first started.
+>
+>It is recommended to create this folder under a share which resides on the Cache pool (setting: cache=Only). For best performance SSD devices are preferred.
+";s:29:"_docker_appdata_location_help";s:517:"
+>You can specify a folder to automatically generate and store subfolders containing configuration files for each Docker app (via the /config mapped volume).
+>
+>The folder's path must end with a trailing slash (/) character. If not the input is not accepted and marked red.
+>
+>It is recommended to create this folder outside the array, e.g. on the Cache pool. For best performance SSD devices are preferred.
+>
+>Only used when adding new Docker apps. Editing existing Docker apps will not be affected by this setting.
+";s:25:"_docker_log_rotation_help";s:212:"
+>By default LOG rotation is disabled and will create a single LOG file of unlimited size.
+>
+>Enable LOG rotation to limit the size of the LOG file and specify the number of files to keep in the rotation scheme.
+";s:26:"_docker_log_file_size_help";s:73:"
+>Specifies the maximum LOG size. When exceeded LOG rotation will occur.
+";s:28:"_docker_log_file_number_help";s:63:"
+>Specifies the number of LOG files when LOG rotation is done.
+";s:27:"_docker_authoring_mode_help";s:138:"
+>If set to **Yes**, when creating/editing containers the interface will be present with some extra fields related to template authoring.
+";s:34:"_docker_custom_network_access_help";s:132:"
+>Allows direct communication between the host and containers using a custom (macvlan) network.<br>
+>By default this is prohibited.
+";s:33:"_docker_user_defined_network_help";s:395:"
+>User created networks are networks created by the user outside of the GUI.<br>
+>By default user created networks are removed from Docker. This is done to prevent potential conflicts with the automatic generation of custom networks.
+>
+>Change this setting to preserve user defined networks, but it is the responsibility of the user to ensure these entries work correctly and are conflict free.
+";s:40:"_docker_include_interface_vlan_ipv4_help";s:214:"
+>Include (default) or exclude the above interfaces or VLANs as custom network for Docker.
+>
+>Enter the pool range within each allocated subnet which is used for DHCPv4 assignments by Docker. E.g. 192.168.1.128/25
+";s:40:"_docker_exclude_interface_vlan_ipv4_help";s:214:"
+>Include or exclude (default) the above interfaces or VLANs as custom network for Docker.
+>
+>Enter the pool range within each allocated subnet which is used for DHCPv4 assignments by Docker. E.g. 192.168.1.128/25
+";s:40:"_docker_include_interface_vlan_ipv6_help";s:223:"
+>Include (default) or exclude the above interfaces or VLANs as custom network for Docker.
+>
+>Enter the pool range within each allocated subnet which is used for DHCPv6 assignments by Docker. E.g. 2a02:abcd:9ef5:100:1::/72
+";s:40:"_docker_exclude_interface_vlan_ipv6_help";s:223:"
+>Include or exclude (default) the above interfaces or VLANs as custom network for Docker.
+>
+>Enter the pool range within each allocated subnet which is used for DHCPv6 assignments by Docker. E.g. 2a02:abcd:9ef5:100:1::/72
+";s:20:"_docker_version_help";s:37:"
+>This is the active Docker version.
+";s:34:"_docker_vdisk_location_active_help";s:44:"
+>This is the location of the Docker image.
+";s:36:"_docker_appdata_location_active_help";s:54:"
+>This is the storage location for Docker containers.
+";s:32:"_docker_log_rotation_active_help";s:139:"
+>By default a single unlimited LOG file is created. Otherwise LOG file size and number of files are limited when LOG rotation is enabled.
+";s:34:"_docker_custom_network_active_help";s:132:"
+>Allows direct communication between the host and containers using a custom (macvlan) network.<br>
+>By default this is prohibited.
+";s:40:"_docker_user_defined_network_active_help";s:196:"
+>Shows whether networks created outside of the GUI are removed or preserved for Docker. When preserved *user defined networks* become available in the *Network type* dropdown list of containers.
+";s:18:"_docker_scrub_help";s:232:"
+>**Scrub** runs the *btrfs scrub* program to check file system integrity.
+>
+>If repair is needed you should check the *Correct file system errors* and run a second Scrub pass; this will permit *btrfs scrub* to fix the file system.
+";s:19:"_docker_cancel_help";s:58:"
+>**Cancel** will cancel the Scrub operation in progress.
+";s:20:"_id_server_name_help";s:346:"
+>The network identity of your server.  Also known as *hostname* or *short hostname*. Windows networking
+>refers to this as the *NetBIOS name* and must be 15 characters or less in length.
+>Use only alphanumeric characters (that is, "A-Z", "a-z", and "0-9"), dashes ("-"), and dots (".");
+>and, the first and last characters must be alphanumeric.
+";s:20:"_id_description_help";s:128:"
+>This is a text field that is seen next to a server when listed within Network or File Explorer
+>(Windows), or Finder (macOS).
+";s:14:"_id_model_help";s:35:"
+>This is the server model number.
+";s:21:"_mgmt_start_page_help";s:103:"
+>Select the page which is opened first when entering the GUI. By default the *Main* page is selected.
+";s:21:"_mgmt_use_telnet_help";s:172:"
+>By default TELNET access is enabled. TELNET is an insecure type of CLI access however,
+>and it is highly recommended to use SSH access instead and disable TELNET access.
+";s:22:"_mgmt_telnet_port_help";s:45:"
+>Enter the TELNET port, default port is 23.
+";s:18:"_mgmt_use_ssh_help";s:206:"
+>SSH is enabled by default and offers a secure way of CLI access. Upon system startup SSH keys are automatically generated
+>if not yet existing, and stored on the flash device in the folder */config/ssh*.
+";s:19:"_mgmt_ssh_port_help";s:42:"
+>Enter the SSH port, default port is 22.
+";s:19:"_mgmt_use_upnp_help";s:188:"
+>Enable (default) or disable the UPnP function on the server. This function allows automatic forwarding of ports on the router, only applicable when UPnP is enabled on the router itself.
+";s:22:"_mgmt_use_ssl_tls_help";s:2133:"
+>Determines how the webGUI responds to HTTP and/or HTTPS protocol.
+>
+>Select **No** to disable HTTPS
+>
+>Select **Yes** to enable HTTPS and redirect HTTP to HTTPS. If a Let's Encrypt SSL certificate has not
+>been provisioned, then an automatically generated self-signed SSL certificate will be used.
+>
+>Select **Auto** if you are using or plan to use a Let's Encrypt SSL certificate provisioned
+>by Lime Technology. Before the certificate is provisioned, the webGUI remains
+>in http-mode. After provisioning, the webGUI automatically switches to https-mode. In addition
+>two background processes are enabled:
+>
+>- *updatedns* - This starts 30 seconds after server reboot has completed and contacts the Lime Technology
+>DNS service to register the servers local IP address. Thereafter it wakes up every 10 minutes in case
+>the local IP address has changed again.
+>
+>- *renewcert* - This starts 60 seconds after server reboot has completed and contacts the Lime Technology
+>certificate renewal service to determine if your Let's Encrypt SSL certificate needs to be renewed.
+>Thereafter it wakes up every 24 hours. If within 30 days of expiration, a new certificate is automatically
+>provisioned and downloaded to your server.
+>
+>Note: After provisioning a Let's Encrypt SSL certificate you may turn off the *updatedns* and *newcert*
+>background processes by changing this field to **Yes**.
+>
+>**nginx certificate handling details**
+>
+>The nginx startup script looks for a SSL certificate on the USB boot flash in this order:<br>
+>`config/ssl/certs/certificate_bundle.pem`<br>
+>`config/ssl/certs/<server-name>_unraid_bundle.pem`
+>
+>If neither file exists, a self-signed SSL certificate is automatically created and stored in<br>
+>`config/ssl/certs/<server-name>_unraid_bundle.pem`<br>
+>
+>Provisioning a Let's Encrypt certificate writes the certificate to<br>
+>`config/ssl/certs/certificate_bundle.pem`<br>
+>
+>**nginx stapling support**
+>
+>Whether nginx enables OCSP Staping is determined by which certificate is in use:<br>
+>`config/ssl/certs/certificate_bundle.pem` => Yes<br>
+>`config/ssl/certs/<server-name>_unraid_bundle.pem` => No
+";s:20:"_mgmt_http_port_help";s:43:"
+>Enter the HTTP port, default port is 80.
+";s:21:"_mgmt_https_port_help";s:45:"
+>Enter the HTTPS port, default port is 443.
+";s:20:"_mgmt_local_tld_help";s:51:"
+>Enter your local Top Level Domain. May be blank.
+";s:33:"_mgmt_certificate_expiration_help";s:2196:"
+>**Provision** may be used to allocate a *free* SSL Certficiate from [Let's Encrypt](https://letsencrypt.org/) and
+>then upload to your server. Note: We **highly** recommend using a static IP address in this case.
+>
+>**Update DNS** may be used to manually initiate updating the DNS A-record of your server FQDN on unraid.net. Note
+>that DNS propagation change could take anywhere from 1 minute to several hours (we set TTL to 60 seconds).
+>
+>Note: **Provision** may fail if your router or upstream DNS server has
+>[DNS rebinding protection](https://en.wikipedia.org/wiki/DNS_rebinding) enabled. DNS rebinding
+>protection prevents DNS from resolving a private IP network range. DNS rebinding protection is meant as
+>a security feature on a local LAN which includes legacy devices with buggy/insecure "web" interfaces.
+>
+>One source of DNS rebinding protection could be your ISP DNS server. In this case the problem may be solved by
+>switching to a different DNS server such as Google's public DNS.
+>
+>More commonly, DNS rebinding protection could be enabled in your router. Most consumer routers do not implement DNS
+>rebinding protection; but, if they do, a configuration setting should be available to turn it off.
+>
+>Higher end routers usually do enable DNS rebinding protection however. Typically there are ways of turning it off
+>entirely or selectively based on domain. Examples:
+>
+>**DD-WRT:** If you are using "dnsmasq" with DNS rebinding protection enabled, you can add this line to your router
+>configuration file:
+>
+>`rebind-domain-ok=/unraid.net/`
+>
+>**pfSense:** If you are using pfSense internal DNS resolver service, you can add these Custom Option lines:
+>
+>`server:`<br>
+>`private-domain: "unraid.net"`
+>
+>**Ubiquiti USG router:** you can add this configuration line:
+>
+>`set service dns forwarding options rebind-domain-ok=/unraid.net/`
+>
+>**OpenDNS:** Go to Settings -> Security and *remove* the checkbox next to
+> "Suspicious Responses - Block internal IP addresses". It is an all-or-nothing setting.
+>
+>When all else fails, you can create an entry in your PC's *hosts* file to override external DNS and
+>directly resolve your servers unraid.net FQDN to its local IP address.
+";s:16:"_ftp_server_help";s:172:"
+>Enable or disable the FTP server daemon. By default the FTP server is enabled.
+>This setting is not saved, i.e. upon system reboot it will revert to its default setting.
+";s:15:"_ftp_users_help";s:225:"
+>Enter the user names (separated by spaces) permitted to access the server using FTP.
+>To disallow any user access, clear this setting.
+>
+>**Note:** do not enter user name `root` since this may cause problems in the future.
+";s:18:"_ftp_overview_help";s:290:"
+>### Overview
+>
+>Unraid includes the popular `vsftpd` FTP server.  The configuration of `vsftp` is currently very
+>simple: **All** user names entered above are permitted to access the server via FTP and will have
+>*full read/write/delete access* to the entire server, so use with caution.
+";s:16:"_smb_enable_help";s:198:"
+>Select 'Yes (Workgroup)' to enable SMB (Windows Networking) protocol support. This
+>also enables Windows host discovery.
+>
+>Select 'Yes (Active Directory)' to enable Active Directory integration.
+";s:20:"_smb_hide_files_help";s:321:"
+>If set to 'Yes' then files starting with a '.' (dot) will appear as *hidden files* and normally
+>will not appear in Windows folder lists unless you have "Show hidden files, folders, and drives" enabled
+>in Windows Folder Options.
+>
+>If set to 'No' then dot files will appear in folder lists the same as any other file.
+";s:24:"_smb_enhanced_macos_help";s:315:"
+>When set to 'Yes' provides enhanced compatibility with Apple SMB clients, resulting, for example, in faster
+>Finder browsing, and ability to export Time Machine shares.  This may cause some issues with Windows clients, however.
+>Please also refer to the [VFS_FRUIT MAN PAGE](https://www.mankier.com/8/vfs_fruit).
+";s:24:"_smb_enable_netbios_help";s:136:"
+>Select 'Yes' to enable NetBIOS.  If enabled, SMBv1 protocol will also be recognized.  If disabled,
+>clients must use SMBv2 or higher.
+";s:20:"_smb_enable_wsd_help";s:137:"
+>Select 'Yes' to enable WSD (WS-Discovery).  The only reason to turn this off is when you are running an
+>old LAN setup based on SMBv1.
+";s:21:"_smb_wsd_options_help";s:155:"
+>This is a command line options string passed to the WSD daemon upon startup. Leave this field blank unless
+>instructed by support to put something here.
+";s:20:"_smb_extra_conf_help";s:134:"
+>Use this page to make changes to your `smb-extra.conf` file.  Samba will need
+>to be restarted in order for changes to take effect.
+";s:22:"_smb_extra_button_help";s:156:"
+>Click the **Apply** button to commit the current edits.  Click **Reset** to
+>undo any changes you make (before Saving). Click **Done** to exit this page.
+";s:19:"_smb_workgroup_help";s:72:"
+>Enter your local network Workgroup name. Usually this is "WORKGROUP".
+";s:22:"_smb_local_master_help";s:163:"
+>If set to 'Yes' then the server will fully participate in browser elections, and in the absence
+>of other servers, will usually become the local Master Browser.
+";s:16:"_nfs_enable_help";s:43:"
+>Select 'Yes' to enable the NFS protocol.
+";s:31:"_nfs_tunable_fuse_remember_help";s:1384:"
+>When NFS is enabled, this Tunable may be used to alleviate or solve instances of "NFS Stale File Handles" 
+>you might encounter with your NFS client.
+>
+>In essence, (fuse_remember) tells an internal subsystem (named "fuse") how long to "remember" or "cache" 
+>file and directory information associated with user shares.  When an NFS client attempts to access a file
+>(or directory) on the server, and that file (or directory) name is not cached, then you could encounter
+>"stale file handle".
+>
+>The numeric value of this tunable is the number of seconds to cache file/directory name entries,
+>where the default value of 330 indicates 5 1/2 minutes.  There are two special values you may also set
+>this to:
+>
+>* 0 which means, do not cache file/directory names at all, and
+>* -1 which means cache file/directory names forever (or until array is stopped)
+>
+>A value of 0 would be appropriate if you are enabling NFS but only plan to use it for disk shares,
+>not user shares.
+>
+>A value of -1 would be appropriate if no other timeout seems to solve the "stale file handle" on
+>your client.  Be aware that setting a value of -1 will cause the memory footprint to grow by approximately
+>108 bytes per file/directory name cached.  Depending how much RAM is installed in your server and how many
+>files/directories you access via NFS this may or may not lead to out-of-memory conditions.
+";s:24:"_shares_enable_disk_help";s:358:"
+>If set to No, disk shares are unconditionally not exported.
+>
+>If set to Yes, disk shares may be exported.  **WARNING:** Do not copy data from a disk share to a user share
+>unless you *know* what you are doing.  This may result in the loss of data and is not supported.
+>
+>If set to Auto, only disk shares not participating in User Shares may be exported.
+";s:26:"_shares_enable_shares_help";s:56:"
+>If set to 'Yes' the User Shares feature is activated.
+";s:27:"_shares_included_disks_help";s:152:"
+>This setting defines the set of array disks which are *included* in User Shares.
+>Unchecking all disks will allow **all** array disks to be included.
+";s:27:"_shares_excluded_disks_help";s:303:"
+>This setting defines the set of array disk which are *excluded* from User Shares.
+>Uncheck all disks in order to not exclude any disks
+>
+>**Note:** Each separate User Share also includes its own set of Included and Excluded
+>disks which represent a subset of the Included/Excluded disks defined here.
+";s:31:"_shares_tunable_hard_links_help";s:314:"
+>If set to Yes then support the link() operation.
+>
+>If set to No then hard links are not supported.
+>
+>Notes:
+>
+>* Setting to Yes may cause problems for older media and dvd/bluray players accessing shares using NFS.
+>* No matter how this is set, the **mover** will still properly handle any detected hard links.
+";s:30:"_shares_tunable_direct_io_help";s:210:"
+>**Experimental**: If set to Yes then mount User Share file system with FUSE *direct_io* mount option.
+>This will increase write performance but might possibly decrease read performance.
+>
+>*Auto* selects No.
+";s:25:"_syslog_local_server_help";s:265:"
+>Let the server act as a central syslog server and collect syslog messages from other systems.
+>The server can listen on UDP, TCP or both with a selectable port number.
+>
+>Syslog information is stored per IP address. That is every system gets its own syslog file.
+";s:25:"_syslog_local_folder_help";s:158:"
+>Select the share folder where the syslogs will be stored.
+>It is recommended that you use a share located on the cache drive to prevent array disk spinups.
+";s:27:"_syslog_local_rotation_help";s:212:"
+>By default LOG rotation is disabled and will create a single LOG file of unlimited size.
+>
+>Enable LOG rotation to limit the size of the LOG file and specify the number of files to keep in the rotation scheme.
+";s:28:"_syslog_local_file_size_help";s:73:"
+>Specifies the maximum LOG size. When exceeded LOG rotation will occur.
+";s:30:"_syslog_local_file_number_help";s:79:"
+>Specifies the number of additional LOG files to keep in the rotation scheme.
+";s:26:"_syslog_remote_server_help";s:128:"
+>Enter a name or IP address of a remote syslog server.
+>This will send a copy of the syslog messages to the designated server.
+";s:25:"_syslog_mirror_flash_help";s:326:"
+>This setting is NO by default and must be used with care to avoid unnecessary wear and tear of the USB device.
+>
+>Change this setting to YES when troubleshooting is required and it is not possible to get the regular diagnostics information.
+>A mirror of the syslog file is stored in the **logs** folder of the flash device.
+";s:20:"_confirm_reboot_help";s:81:"
+>Choose if rebooting or powering down the server needs a confirmation checkbox.
+";s:24:"_confirm_array_stop_help";s:62:"
+>Choose if stopping the array needs a confirmation checkbox.
+";s:22:"_display_settings_help";s:228:"
+>The display settings below determine how items are displayed on screen. Use these settings to tweak the visual effects to your likings.
+>
+>You can experiment with these settings as desired, they only affect visual properties.
+";s:23:"_display_font_size_help";s:31:"
+>This is a per device setting
+";s:27:"_display_wwn_device_id_help";s:249:"
+>World Wide Name (WWN) is a unique identifier used for SAS attached devices.
+>
+>Select *Disabled* to suppress the appending of WWN to the device identification
+>
+>Select "Automatic" to append WWN to the device identification in case of SAS devices
+";s:31:"_display_custom_text_color_help";s:115:"
+>Overrule the default text color in the header. This can be used to match the text color with a background image.
+";s:37:"_display_custom_background_color_help";s:128:"
+>Overrule the default background color in the header. This can be used to match the background color with a custom text color.
+";s:27:"_display_custom_banner_help";s:104:"
+>Image will be scaled to 1920x90 pixels. The maximum image file upload size is 512 kB (524,288 bytes).
+";s:30:"_display_temperature_unit_help";s:247:"
+>Selects the temperature unit for the disk temperature thresholds. Changing the unit will adjust the existing value in the disk temperature thresholds as appropriate.
+>
+>Make sure any newly entered values represent the selected temperature unit.
+";s:16:"_vms_enable_help";s:139:"
+>Stopping the VM Manager will first attempt to shutdown all running VMs. After 60 seconds, any remaining VM instances will be terminated.
+";s:24:"_vms_libvirt_volume_help";s:30:"
+>This is the libvirt volume.
+";s:28:"_vms_libvirt_vdisk_size_help";s:294:"
+>If the system needs to create a new libvirt image file, this is the default size to use specified in GB.
+>To resize an existing image file, specify the new size here. Next time the Libvirt service is started the file (and file system) will be increased to the new size (but never decreased).
+";s:26:"_vms_libvirt_location_help";s:136:"
+>You must specify an image file for Libvirt. The system will automatically create this file when the Libvirt service is first started.
+";s:25:"_vms_libvirt_storage_help";s:76:"
+>Specify a user share that contains all your VM subdirectories with vdisks
+";s:29:"_vms_libvirt_iso_storage_help";s:87:"
+>Specify a user share that contains all your installation media for operating systems
+";s:23:"_vms_virtio_driver_help";s:880:"
+>Specify the virtual CD-ROM (ISO) that contains the VirtIO Windows drivers as provided by the Fedora Project.
+>Download the latest ISO from here: <a href="https://docs.fedoraproject.org/en-US/quick-docs/creating-windows-virtual-machines-using-virtio-drivers/index.html#virtio-win-direct-downloads" target="_blank">fedoraproject.org</a>
+>
+>When installing Windows, you will reach a step where no disk devices will be found. There is an option to browse for drivers on that screen.
+>Click browse and locate the additional CD-ROM in the menu. Inside there will be various folders for the different versions of Windows.
+>Open the folder for the version of Windows you are installing and then select the AMD64 subfolder inside (even if you are on an Intel system, select AMD64).
+>Three drivers will be found. Select them all, click next, and the vDisks you have assigned will appear.
+";s:23:"_vms_host_shutdown_help";s:209:"
+>When shutting down the server, this defines the action to take upon running VMs. If *Hibernate VMs* is chosen,
+>the VM will be instructed to hibernate (if supported) otherwise it will attempt a VM shutdown.
+";s:26:"_vms_shutdown_timeout_help";s:205:"
+>When shutting down the server, this defines how long to wait in seconds for *graceful* VM shutdown before forcing shutdown to continue.
+>NOTE: It's recommended to shut down guest VMs from within the VM.
+";s:22:"_vms_acs_override_help";s:573:"
+>*PCIe ACS override* allows various hardware components to expose themselves as isolated devices.
+>Typically it is sufficient to isolate *Downstream* ports.
+>A hardware component may need the setting *Multi-function* or *Both* to further isolate different hardware functions.<br>
+>A reboot is required for changes to this setting to take affect.
+>
+>**Warning: use of this setting could cause possible data corruption with certain hardware configurations.**
+>Please visit the [Lime Technology forums](https://forums.unraid.net/forum/51-vm-engine-kvm) for more information.
+";s:24:"_vms_vfio_interupts_help";s:407:"
+>If your system doesn't support interrupt remapping, these can be enabled by allowing unsafe interrupts.<br>
+>A reboot will be required for changes to this setting to take affect.
+>
+>**Warning: use of this setting could cause possible data corruption with certain hardware configurations.**
+>Please visit the [Lime Technology forums](https://forums.unraid.net/forum/51-vm-engine-kvm) for more information.
+";s:21:"_vms_libvirt_log_help";s:116:"
+>View the log for libvirt: <a onclick="openTerminal('log','libvirt','libvirt/libvirtd.log')">View libvirtd.log</a>
+";s:15:"_vms_scrub_help";s:230:"
+>**Scrub** runs the *btrfs scrub* program to check file system integrity.
+>If repair is needed you should check the *Correct file system errors* and run a second Scrub pass; this will permit *btrfs scrub* to fix the file system.
+";s:16:"_vms_cancel_help";s:57:"
+>**Cancel* will cancel the Scrub operation in progress.
+";s:31:"_eth_interface_description_help";s:97:"
+>Use this optional field to provide additional information about the purpose of the connection.
+";s:21:"_eth_mac_address_help";s:140:"
+>This is the hardware address of the interface.
+>When tagging is enabled all VLANs on this interface will share the same hardware address.
+";s:24:"_eth_enable_bonding_help";s:311:"
+>Bonding is a feature that combines multiple physical Ethernet interfaces into a single *bonded* interface named **bond0**.
+>This can be used to improve the connection redundancy and/or throughput of the system.
+>Different bonding modes are supported (see below), but some modes require proper switch support.
+";s:22:"_eth_bonding_mode_help";s:2815:"
+>**Mode 0 (balance-rr)**<br>
+>This mode transmits packets in a sequential order from the first available slave through the last.
+>If two real interfaces are slaves in the bond and two packets arrive destined out of the bonded interface the first will be transmitted on the first slave and the second frame will be transmitted on the second slave.
+>The third packet will be sent on the first and so on. This provides load balancing and fault tolerance.
+>
+>**Mode 1 (active-backup) - default**<br>
+>This mode places one of the interfaces into a backup state and will only make it active if the link is lost by the active interface.
+>Only one slave in the bond is active at an instance of time. A different slave becomes active only when the active slave fails.
+>This mode provides fault tolerance.
+>
+>**Mode 2 (balance-xor)**<br>
+>This mode transmits packets based on an XOR formula. Source MAC address is XOR'd with destination MAC address modula slave count.
+>This selects the same slave for each destination MAC address and provides load balancing and fault tolerance.
+>
+>**Mode 3 (broadcast)**<br>
+>This mode transmits everything on all slave interfaces. This mode is least used (only for specific purpose) and provides only fault tolerance.
+>
+>**Mode 4 (802.3ad)**<br>
+>This mode is known as *Dynamic Link Aggregation*. It creates aggregation groups that share the same speed and duplex settings.
+>It requires a switch that supports IEEE 802.3ad dynamic link.
+>Slave selection for outgoing traffic is done according to the transmit hash policy, which may be changed from the default simple XOR policy via the xmit_hash_policy option.
+>Note that not all transmit policies may be 802.3ad compliant, particularly in regards to the packet mis-ordering requirements of section 43.2.4 of the 802.3ad standard.
+>Different peer implementations will have varying tolerances for noncompliance.
+>
+>**Mode 5 (balance-tlb)**<br>
+>This mode is called *Adaptive transmit load balancing*. The outgoing traffic is distributed according to the current load and queue on each slave interface.
+>Incoming traffic is received by the current slave.
+>
+>**Mode 6 (balance-alb)**<br>
+>This mode is called *Adaptive load balancing*. This includes balance-tlb + receive load balancing (rlb) for IPV4 traffic.
+>The receive load balancing is achieved by ARP negotiation.
+>The bonding driver intercepts the ARP Replies sent by the server on their way out and overwrites the src hw address with the unique hw address of one of the slaves in the bond
+>such that different clients use different hw addresses for the server.
+>
+>*Mode 1 (active-backup) is the recommended setting. Other modes allow you to set up a specific environment, but may require proper switch support.
+>Choosing a unsupported mode can result in a disrupted communication.*
+";s:25:"_eth_bonding_members_help";s:130:"
+>Select which interfaces are member of the *bonded* interface. By default eth0 is a member, while other interfaces are optional.
+";s:25:"_eth_enable_bridging_help";s:256:"
+>Bridging is a feature which creates a virtual bridge and allows VMs and Docker containers to communicate directly with the physical Ethernet port.
+>Both bonding and bridging can be combined to let VMs or containers communicate over a *bonded* interface.
+";s:26:"_eth_bridging_members_help";s:131:"
+>Select which interfaces are member of the *bridged* interface. By default eth0 is a member, while other interfaces are optional.
+";s:26:"_eth_network_protocol_help";s:156:"
+>Select which protocol(s) are used. By default IPv4 only is used.<br>
+>When both IPv4 and IPv6 is selected, each protocol can be configured independently.
+";s:33:"_eth_ipv4_address_assignment_help";s:286:"
+>The following settings are possible:
+>
+>*Automatic* - the server will attempt to obtain a IPv4 address from the local DHCP server<br>
+>*Static* - the IPv4 address is manually set for this interface<br>
+>*None* - no IPv4 address is assigned to the interface (only available for VLANs)
+";s:22:"_eth_ipv4_address_help";s:113:"
+>Greyed out when using automatic IP assignment. Otherwise specify here the IPv4 address and mask of the system.
+";s:30:"_eth_ipv4_default_gateway_help";s:105:"
+>Greyed out when using automatic IP assignment. Otherwise specify here the IPv4 address of your router.
+";s:36:"_eth_ipv4_dns_server_assignment_help";s:306:"
+>If set to *Automatic* the server will use IPv4 DNS server(s) returned by the local automatic assignment.<br>
+>If set to *Static* you may enter your own list.
+>
+>This is useful in Active Directory configurations where you need to set the first DNS Server entry to the IP address of your AD Domain server.
+";s:25:"_eth_ipv4_dns_server_help";s:176:"
+>This is the primary IPv4 DNS server to use. Enter a IPv4 address.
+>
+>Note: for *Active Directory* you **must** ensure this is set to the IP address of your AD Domain server.
+";s:26:"_eth_ipv4_dns_server2_help";s:69:"
+>This is the IPv4 DNS server to use when IPv4 DNS server 1 is down.
+";s:26:"_eth_ipv4_dns_server3_help";s:82:"
+>This is the IPv4 DNS server to use when IPv4 DNS servers 1 and 2 are both down.
+";s:33:"_eth_ipv6_address_assignment_help";s:315:"
+>The following settings are possible:
+>
+>*Automatic* - the server will attempt to obtain a IPv6 address from the local DHCP server or Router Advertisement (RA)<br>
+>*Static* - the IPv6 address is manually set for this interface<br>
+>*None* - no IPv6 address is assigned to the interface (only available for VLANs)
+";s:22:"_eth_ipv6_address_help";s:104:"
+>Greyed out when using automatic IP assignment. Otherwise specify here the IPv6 address of the system.
+";s:30:"_eth_ipv6_default_gateway_help";s:105:"
+>Greyed out when using automatic IP assignment. Otherwise specify here the IPv6 address of your router.
+";s:33:"_eth_ipv6_privacy_extensions_help";s:173:"
+>Enable or disable the generation of a random IPv6 interface identifier according to RFC4941. This is similar to the temporary IPv6 address generation on Windows machines.
+";s:36:"_eth_ipv6_dns_server_assignment_help";s:160:"
+>If set to *Automatic* the server will use IPv6 DNS server(s) returned by the local automatic assignment.<br>
+>If set to *Static* you may enter your own list.
+";s:25:"_eth_ipv6_dns_server_help";s:68:"
+>This is the primary IPv6 DNS server to use. Enter a IPv6 address.
+";s:26:"_eth_ipv6_dns_server2_help";s:69:"
+>This is the IPv6 DNS server to use when IPv6 DNS server 1 is down.
+";s:26:"_eth_ipv6_dns_server3_help";s:82:"
+>This is the IPv6 DNS server to use when IPv6 DNS servers 1 and 2 are both down.
+";s:21:"_eth_desired_mtu_help";s:148:"
+>This is the MTU size to use on the physical Ethernet interface.
+>If left blank, the MTU will automatically be determined (by default 1500 bytes).
+";s:22:"_eth_enable_vlans_help";s:217:"
+>By default no VLANs are configured.<br>
+>Enabling VLANs extends the number of logical connections over the same physical connection.
+>
+>Note: your router and switch must support VLANs too when this feature is used.
+";s:21:"_eth_vlan_number_help";s:68:"
+>Give each VLAN a unique identifier. Numbers range from 1 to 4095.
+";s:23:"_eth_network_rules_help";s:713:"
+>The interface assignment rules can be changed here and might be necessary to set the preferred interface for managing Unraid - *use with care, usually there is no need to change*.
+>
+>**eth0** is the main interface used to manage the Unraid system. The other interfaces are optional and may be used as desired.
+>Every interface must be uniquely identified by its MAC (hardware) address.
+>
+>The interface assignment is stored on the flash device under */config/network-rules.cfg*. This file can be viewed with any editor, but it is recommended to make changes via the webGUI only.<br>
+>Deleting the file *network-rules.cfg* from the flash device will restore automatic interface assignment after a system reboot.
+";s:23:"_eth_routing_table_help";s:435:"
+>Enter a valid IPv4 route in the format *nnn.nnn.nnn.nnn/xx*, e.g. *192.168.1.0/24*<br>
+>or enter a valid IPv6 route in the format *nnnn:nnnn:nnnn::nnnn/xxx*, e.g. *fe80::3ad8:2fff:fe25:9709/64*
+>
+>Select the gateway from the dropdown list or enter a valid IPv4/IPv6 address as gateway value.
+>
+>The metric value is optional, it defaults to 1. Use it to select the preferred gateway when more than one entry of the same route exists.
+";s:20:"_apc_ups_daemon_help";s:107:"
+>Set to 'Yes' to enable apcupsd and start the daemon, set to 'No' to disable apcupsd and stop the daemon.
+";s:19:"_apc_ups_cable_help";s:176:"
+>Defines the type of cable connecting the UPS to your computer.Possible generic choices for 'cable' are:
+>
+>+ USB, Simple, Smart, Ether, or Custom to specify a special cable.
+";s:26:"_apc_ups_custom_cable_help";s:272:"
+>Specify a special cable by model number, only applicable when *UPS cable* is set to Custom.
+>
+>+ 940-0119A, 940-0127A, 940-0128A, 940-0020B
+>+ 940-0020C, 940-0023A, 940-0024B, 940-0024C
+>+ 940-1524C, 940-0024G, 940-0095A, 940-0095B
+>+ 940-0095C, 940-0625A, M-04-02-2000
+";s:18:"_apc_ups_type_help";s:826:"
+>Define a *UPS type*, which corresponds to the type of UPS you have (see the Description for more details).
+>
+>+ **USB** - most new UPSes are USB
+>+ **APCsmart** - newer serial character device, appropriate for SmartUPS models using a serial cable (not USB)
+>+ **Net** - network link to a master apcupsd through apcupsd's Network Information Server. This is used if the UPS powering your computer is connected to a different computer for monitoring
+>+ **SNMP** - SNMP network link to an SNMP-enabled UPS device
+>+ **Dumb** - old serial character device for use with simple-signaling UPSes
+>+ **PCnet** - PowerChute Network Shutdown protocol which can be used as an alternative to SNMP with the AP9617 family of smart slot cards
+>+ **ModBus** - serial device for use with newest SmartUPS models supporting the MODBUS protocol
+";s:20:"_apc_ups_device_help";s:912:"
+>Enter the *device* which corresponds to your situation, only applicable when *UPS type* is not set to USB.
+>
+>+ **apcsmart** - /dev/tty**
+>+ **net** - hostname:port. Hostname is the IP address of the NIS server. The default port is 3551
+>+ **snmp** - hostname:port:vendor:community. Hostname is the ip address or hostname of the UPS on the network. Vendor can be can be "APC" or "APC_NOTRAP". "APC_NOTRAP" will disable SNMP trap catching; you usually want "APC". Port is usually 161. Community is usually "private" 
+>+ **dumb** - /dev/tty**
+>+ **pcnet** - ipaddr:username:passphrase:port. ipaddr is the IP address of the UPS management card. username and passphrase are the credentials for which the card has been configured. port is the port number on which to listen for messages from the UPS, normally 3052. If this parameter is empty or missing, the default of 3052 will be used
+>+ **modbus** - /dev/tty**
+";s:23:"_apc_battery_level_help";s:166:"
+>If during a power failure, the remaining battery percentage (as reported by the UPS) is below or equal to *Battery level*, apcupsd will initiate a system shutdown.
+";s:22:"_apc_runtime_left_help";s:175:"
+>If during a power failure, the remaining runtime in minutes (as calculated internally by the UPS) is below or equal to this field, apcupsd, will initiate a system shutdown.
+";s:22:"_apc_battery_time_help";s:676:"
+>If during a power failure, the UPS has run on batteries for *time-out* many seconds or longer; apcupsd will initiate a system shutdown. A value of zero disables this timer.
+>
+>If you have a Smart UPS, you will most likely want to disable this timer by setting it to zero.
+>That way, your UPS will continue on batteries until either the % charge remaining drops to or below *Battery level* or the remaining battery runtime drops to or below *minutes*.
+>
+>Of course - when testing - setting this to 60 causes a quick system shutdown if you pull the power plug.
+>If you have an older dumb UPS, you will want to set this to less than the time you know you can run on batteries.
+";s:14:"_apc_note_help";s:154:"
+>**Note:** *Battery level*, *Runtime left*, and *Time on battery* work in conjunction, so the first that occurs will cause the initiation of a shutdown.
+";s:17:"_apc_killups_help";s:66:"
+>Set to *Yes* to turn off the power to the UPS after a shutdown.
+";s:28:"_parity_check_scheduled_help";s:174:"
+>By default no parity check is scheduled. Select here the desired schedule. This can be one of the preset schedules for daily, weekly, monthly, yearly or a custom schedule.
+";s:28:"_parity_day_of_the_week_help";s:170:"
+>When a **weekly** or **custom** schedule is selected then choose here the preferred *day of the week*, in the other schedules this setting is not used and unavailable.
+";s:30:"_parity_week_of_the_month_help";s:264:"
+>When a **monthly** or **yearly** schedule is selected then choose here the preferred *day of the month*.
+>When a **custom** schedule is selected then choose here the preferred *week of the month*, in the other schedules this setting is not used and unavailable.
+";s:28:"_parity_time_of_the_day_help";s:110:"
+>Choose the desired *time of the day* to start the schedule. Time granularity is given in half hour periods.
+";s:30:"_parity_month_of_the_year_help";s:172:"
+>When a **yearly** or **custom** schedule is selected then choose here the preferred *month of the year*, in the other schedules this setting is not used and unavailable.
+";s:30:"_parity_write_corrections_help";s:112:"
+>Choose here whether any parity errors found during the check, need to be corrected on the parity disk or not.
+";s:20:"_mover_schedule_help";s:163:"
+>Choose a mover schedule ranging from hourly, daily, weekly and monthly.
+>
+>The interval determines how fast the mover will activated, it runs in the background.
+";s:27:"_mover_day_of_the_week_help";s:73:"
+>Choose a day when the weekly schedule is selected. Otherwise disabled.
+";s:28:"_mover_day_of_the_month_help";s:75:"
+>Choose a date when the monthly schedule is selected. Otherwise disabled.
+";s:27:"_mover_time_of_the_day_help";s:214:"
+>When an hourly schedule is selected this will set the interval in hours. An interval always starts on the whole hour (minute 0).
+>
+>For the other schedules choose here the time of the day the mover should start.
+";s:19:"_mover_logging_help";s:43:"
+>Write mover messages to the syslog file.
+";s:27:"_notifications_display_help";s:382:"
+>In *Detailed* view all notifications will be displayed on screen as soon as they arrive.<br>
+>Notifications can be acknowledged individually or all in once.
+>
+>In *Summarized* view notifications will be counted only and the number of unread notifications is shown in the menu header per category.<br>
+>Click on the counters to either acknowledge or view the unread notifications.
+";s:31:"_notifications_date_format_help";s:165:"
+>Select the desired date format which is used in the notifications archive. Recommended is YYYY-MM-DD, which makes the date/time column sortable in a sensible way.
+";s:31:"_notifications_time_format_help";s:163:"
+>Select the desired time format which is used in the notifications archive. Recommended is 24 hours, which makes the date/time column sortable in a sensible way.
+";s:36:"_notifications_display_position_help";s:167:"
+>Choose the position of where notifications appear on screen. Multiple notifications are stacked, bottom-to-top or top-to-bottom depending on the selected placement.
+";s:31:"_notifications_store_flash_help";s:204:"
+>By default notifications are stored on RAM disk, which will get lost upon system reboot.
+>Notifications may be stored permanently on the flash drive under folder '/boot/config/plugins/dynamix' instead.
+";s:26:"_notifications_system_help";s:199:"
+>By default the notifications system is disabled. Enable it here to start receiving notifications.
+>The following sections give more options about which and what type of notifications will be sent.
+";s:29:"_notifications_os_update_help";s:225:"
+>Start a periodic verification and notify the user when a new version of the Unraid OS system is detected.
+>Use the checkboxes below to select how notifications need to be given; by browser, by email and/or by custom agent.
+";s:34:"_notifications_plugins_update_help";s:241:"
+>Start a periodic verification and notify the user when a new version of one or more of the installed plugins is detected.
+>Use the checkboxes below to select how notifications need to be given; by browser, by email and/or by custom agent.
+";s:33:"_notifications_docker_update_help";s:241:"
+>Start a periodic verification and notify the user when a new version of one or more of the installed dockers is detected.
+>Use the checkboxes below to select how notifications need to be given; by browser, by email and/or by custom agent.
+";s:32:"_notifications_array_status_help";s:109:"
+>Start a periodic array health check (preventive maintenance) and notify the user the result of this check.
+";s:35:"_notifications_agent_selection_help";s:279:"
+>Use the checkboxes above to select what and how notifications need to be given; by browser, by email and/or by a service.<br>
+><b>Tip:</b> you can use custom notification agents; just add them to "/boot/config/plugins/dynamix/notification/agents" directory and check 'Agents'.
+";s:34:"_notifications_classification_help";s:453:"
+>Notifications are classified as:
+>
+>*notice* - these are informative notifications and do not indicate a problem situation, e.g. a new version is available<br>
+>*warning* - these are attentive notifications and may indicate future problems, e.g. a hard disk is hotter than usual<br>
+>*alert* - these are serious notifications and require immediate attention, e.g. a failing hard disk<br>
+>
+>Choose for each classification how you want to be notified.
+";s:25:"_smtp_preset_service_help";s:61:"
+>Select a preset service to set the basic service settings.
+";s:24:"_smtp_email_address_help";s:91:"
+>Email address of your mail account. This address is used as sender of the notifications.
+";s:21:"_smtp_recipients_help";s:133:"
+>Recipients of status and error notifications. Specify one or more email addresses, separate multiple email addresses with a space.
+";s:19:"_smtp_priority_help";s:78:"
+>Set email header with high importance, when there is a problem with unRaid.
+";s:25:"_smtp_subject_prefix_help";s:56:"
+>Set a prefix for easy recognition of Unraid messages.
+";s:22:"_smtp_mail_server_help";s:111:"
+>Specify the name of the email server. Use the preset service selection to have this filled-in automatically.
+";s:27:"_smtp_mail_server_port_help";s:111:"
+>Specify the port of the email server. Use the preset service selection to have this filled-in automatically.
+";s:22:"_smtp_use_ssl_tls_help";s:63:"
+>Specifies whether to use SSL/TLS to talk to the SMTP server.
+";s:23:"_smtp_use_starttls_help";s:84:"
+>Specifies whether to use STARTTLS before starting SSL negotiation - See RFC 2487.
+";s:26:"_smtp_define_tls_cert_help";s:76:"
+>Select only when you have a certificate which required for communication.
+";s:28:"_smtp_tls_cert_location_help";s:68:"
+>The file name of an RSA certificate to use for TLS - as required.
+";s:32:"_smtp_authentication_method_help";s:118:"
+>Select the correct authentication method for your email server. Use test to verify that access is working properly.
+";s:28:"_smtp_username_password_help";s:148:"
+>Enter the username and password to login to your email account. Be aware that the password is stored unencrypted in the email configuration file.
+";s:20:"_plugin_install_help";s:247:"
+>To download and install a plugin, enter the plg file URL and click **Install**. A window will open
+>that displays install progress. Do not close this window until install has completed. You may also specify
+>the local file name of an extension.
+";s:18:"_plugin_error_help";s:147:"
+>These plugins were not installed because of some kind of installation error.  You should delete these
+>plugins and then **reboot** your server.*
+";s:18:"_plugin_stale_help";s:106:"
+>These plugins were not installed because newer code already exists.  It is safe to simply delete these.
+";s:27:"_docker_client_general_help";s:1321:"
+>Templates are a quicker way to setting up Docker Containers on your Unraid server.  There are two types of templates:
+>
+>**Default templates**<br>
+>When valid repositories are added to your Docker Repositories page, they will appear in a section on this drop down for you to choose (master categorized by author, then by application template).
+>After selecting a default template, the page will populate with new information about the application in the Description field, and will typically provide instructions for how to setup the container.
+>Select a default template when it is the first time you are configuring this application.
+>
+>**User-defined templates**<br>
+>Once you've added an application to your system through a Default template,
+>the settings you specified are saved to your USB flash device to make it easy to rebuild your applications in the event an upgrade were to fail or if another issue occurred.
+>To rebuild, simply select the previously loaded application from the User-defined list and all the settings for the container will appear populated from your previous setup.
+>Clicking create will redownload the necessary files for the application and should restore you to a working state.
+>To delete a User-defined template, select it from the list above and click the red X to the right of it.
+";s:24:"_docker_client_name_help";s:154:"
+>Give the container a name or leave it as default.  Two characters minimum.  First character must be a-z A-Z 0-9  Remaining characters a-z A-Z 0-9 . - _
+";s:28:"_docker_client_overview_help";s:77:"
+>A description for the application container.  Supports basic HTML mark-up.
+";s:30:"_docker_client_repository_help";s:190:"
+>The repository for the application on the Docker Registry.  Format of authorname/appname.
+>Optionally you can add a : after appname and request a specific version for the container image.
+";s:34:"_docker_client_support_thread_help";s:55:"
+>Link to a support thread on Lime-Technology's forum.
+";s:32:"_docker_client_project_page_help";s:45:"
+>Link to the project page (eg: www.plex.tv)
+";s:27:"_docker_client_hub_url_help";s:69:"
+>The path to the container's repository location on the Docker Hub.
+";s:32:"_docker_client_template_url_help";s:49:"
+>This URL is used to keep the template updated.
+";s:28:"_docker_client_icon_url_help";s:139:"
+>Link to the icon image for your application (only displayed on dashboard if Show Dashboard apps under Display Settings is set to Icons).
+";s:25:"_docker_client_webui_help";s:218:"
+>When you click on an application icon from the Docker Containers page, the WebUI option will link to the path in this field.
+>Use [IP] to identify the IP of your host and [PORT:####] replacing the #'s for your port.
+";s:29:"_docker_extra_parameters_help";s:275:"
+>If you wish to append additional commands to your Docker container at run-time, you can specify them here.<br>
+>For all possible Docker run-time commands, see here: <a href="https://docs.docker.com/reference/run/" target="_blank">https://docs.docker.com/reference/run/</a>
+";s:27:"_docker_post_arguments_help";s:154:"
+>If you wish to append additional arguments AFTER the container definition, you can specify them here.
+>The content of this field is container specific.
+";s:24:"_docker_cpu_pinning_help";s:160:"
+>Checking a CPU core(s) will limit the container to run on the selected cores only. Selecting no cores lets the container run on all available cores (default)
+";s:21:"_docker_fixed_ip_help";s:598:"
+>If the Bridge type is selected, the application’s network access will be restricted to only communicating on the ports specified in the port mappings section.
+>If the Host type is selected, the application will be given access to communicate using any port on the host that isn’t already mapped to another in-use application/service.
+>Generally speaking, it is recommended to leave this setting to its default value as specified per application template.
+>
+>IMPORTANT NOTE:  If adjusting port mappings, do not modify the settings for the Container port as only the Host port can be adjusted.
+";s:23:"_docker_privileged_help";s:393:"
+>For containers that require the use of host-device access directly or need full exposure to host capabilities, this option will need to be selected.
+>For more information, see this link: <a href="https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities" target="_blank">https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities</a>
+";s:26:"_sysdevs_iommu_groups_help";s:997:"
+>This displays a list of IOMMU groups available on your system along with the output of the `lspci` command for each IOMMU group.  The numeric identifiers are used to configure PCI pass-through.
+>
+>Devices you select will be bound to the vfio-pci driver at boot, which makes them available for assignment to a virtual machine, and also prevents the Linux kernel from automatically binding them to any present host driver.
+>
+>**Note that selecting a device will bind not only the specified device(s), but *all* other devices in the same IOMMU group as well.**
+>
+>&nbsp;<i class="fa fa-circle orb green-orb middle"></i>&nbsp;This symbol indicates the device is currently bound to the vfio-pci driver.
+>
+>&nbsp;<i class="fa fa-retweet grey-orb middle"></i>&nbsp;&nbsp;&nbsp;This symbol indicates the device supports FLR (Function Level Reset).
+>
+><input type="checkbox" value="" disabled>&nbsp;&nbsp;If a checkbox is greyed out it means the device is in use by Unraid and can not be passed through.
+";s:29:"_sysdevs_thread_pairings_help";s:47:"
+>This displays a list of CPU thread pairings.
+";s:25:"_sysdevs_usb_devices_help";s:116:"
+>This displays the output of the `lsusb` command.  The numeric identifiers are used to configure PCI pass-through.
+";s:26:"_sysdevs_scsi_devices_help";s:193:"
+>This displays the output of the `lsscsi` command.  The numeric identifiers are used to configure PCI pass-through.
+>
+>Note that linux groups ATA, SATA and SAS devices with true SCSI devices.
+";s:24:"_unraidnet_wanpanel_help";s:166:"
+>WAN Port is the external TCP port number setup on your router to NAT/Port Forward traffic from the internet to this
+>Unraid server SSL port for secure web traffic.
+";s:30:"_unraidnet_inactivespanel_help";s:150:"
+>Click Activate to set up a local git repo for your local USB Flash boot device and connect to a dedicated remote on unraid.net tied to this server.
+";s:28:"_unraidnet_changespanel_help";s:197:"
+>The Not Up-to-date status indicates there are local files which are changed vs. the remote on unraid.net.
+>
+>Click Update to push changes to the remote.
+>
+>Click Changes to see what has changed.
+";s:29:"_unraidnet_uptodatepanel_help";s:105:"
+>The Up-to-date status indicates your local configuration matches that stored on the unraid.net remote.
+";s:27:"_unraidnet_activepanel_help";s:161:"
+>Click Deactivate to pause communication with your remote on unraid.net.
+>
+>Click Reinitialize to erase all change history in both local and unraid.net remote.
+";s:19:"_wg_local_name_help";s:145:"
+>Use this field to set a name for this connection and make it easily recognizable. The same name will appear in the configuration of any peers.
+";s:25:"_wg_generate_keypair_help";s:219:"
+>Use the **Generate Keypair** button to automatically create a uniqe private and public key combination.<br>
+>Or paste in an existing private key, generated by WireGuard. Do **NOT** share this private key with others!
+";s:34:"_wg_local_tunnel_network_pool_help";s:402:"
+>WireGuard tunnels need an internal IP address. Assign a network pool using the default IPv4 network <?=$netpool['wg0']?>/24
+>or the default IPv6 network <?=$netpool6['wg0']?>/64 or assign your own network pool from which automatic assignment can be done for both this server and any peers.
+>
+>The *tunnel network pool* must be a unique network not already existing on the server or any of the peers.
+";s:36:"_wg_local_tunnel_network_pool_X_help";s:402:"
+>WireGuard tunnels need an internal IP address. Assign a network pool using the default IPv4 network <?=$netpool['wgX']?>/24 or
+>the default IPv6 network <?=$netpool6['wgX']?>/64 or assign your own network pool from which automatic assignment can be done for both this server and any peers.
+>
+>The *tunnel network pool* must be a unique network not already existing on the server or any of the peers.
+";s:29:"_wg_local_tunnel_address_help";s:193:"
+>This field is auto filled-in when a local tunnel network pool is created. It is allowed to overwrite the assignment, but this is normally not necessary. Use with care when changing manually.
+";s:23:"_wg_local_endpoint_help";s:790:"
+>This field is automatically filled in with the public management domain name *www.&lt;hash&gt;.unraid.net* or the public address of the server.<br>
+>This allows VPN tunnels to be established from external peers to the server.<br>
+>Configure the correct port forwarding on your router (default port is <?=$netport['wg0']?> but this may be changed) to allow any incoming connections to reach the server.
+>
+>Users with a registered domain name can use this field to specify how their server is known on the Internet. E.g. www.myserver.mydomain.<br>
+>Again make sure your router is properly set up.
+>
+>Note to Cloudflare users: the Cloudflare proxy is designed for http traffic, it is not able to proxy VPN traffic. You must disable the Cloudflare proxy in order to use VPN with your domain.
+";s:25:"_wg_local_endpoint_X_help";s:790:"
+>This field is automatically filled in with the public management domain name *www.&lt;hash&gt;.unraid.net* or the public address of the server.<br>
+>This allows VPN tunnels to be established from external peers to the server.<br>
+>Configure the correct port forwarding on your router (default port is <?=$netport['wgX']?> but this may be changed) to allow any incoming connections to reach the server.
+>
+>Users with a registered domain name can use this field to specify how their server is known on the Internet. E.g. www.myserver.mydomain.<br>
+>Again make sure your router is properly set up.
+>
+>Note to Cloudflare users: the Cloudflare proxy is designed for http traffic, it is not able to proxy VPN traffic. You must disable the Cloudflare proxy in order to use VPN with your domain.
+";s:30:"_wg_local_server_uses_nat_help";s:510:"
+>When NAT is enabled, the server uses its own LAN address when forwarding traffic from the tunnel to other devices in the LAN network.
+>Use this setting when no router modifications are desired, but this approach doesn't work with Docker containers using custom IP addressess.
+>
+>When NAT is disabled, the server uses the WireGuard tunnel address when forwarding traffic.
+>In this case it is required that the default gateway (router) has a static route configured to refer tunnel address back to the server.
+";s:32:"_wg_local_gateway_uses_upnp_help";s:243:"
+>Defaults to YES if the local gateway has UPnP enabled and is responding to requests.<br>
+>When UPnP is enabled, it is not necessary to configure port forwarding on the router to allow incoming tunnel connections. This is done automatically.
+";s:30:"_wg_local_tunnel_firewall_help";s:418:"
+>The firewall function controls remote access over the WireGuard tunnel to specific hosts and/or subnets.<br>
+>The default rule is "deny" and blocks addresses specified in this field, while allowing all others.<br>
+>Changing the rule to "allow" inverts the selection, meaning only the specified addresses are allowed and all others are blocked.<br>
+>Use a comma as separator when more than one IP address is entered.
+";s:17:"_wg_mtu_size_help";s:117:"
+>Leave this to the default automatic mode to select the MTU size. This MTU size is common for all peer connections.
+";s:27:"_wg_peer_configuration_help";s:477:"
+>The <i class='fa fa-fw fa-eye'></i> icon is used to view a peer's configuration. A configuration can be downloaded or read directly for instant set up of the peer.<br>
+>The icon is disabled when no peer configuration exists or the user has made changes to the existing settings which are not applied yet.
+>
+>The <i class='fa fa-fw fa-key'></i> icon is used to show or hide the private, public and preshared keys. Note that these fields are always shown when no keys are set.
+";s:18:"_wg_peer_name_help";s:170:"
+>Use this field to set a name for this peer connection and make it easily recognizable. The same name will appear in the configuration of the peer at the opposite side.
+";s:27:"_wg_peer_preshared_key_help";s:233:"
+>For added security a preshared key can be used. Use the **Generate Key** button to automatically create a unique preshared key.<br>
+>This key is the same at both server and peer side and is added to the peer configuration as well.
+";s:28:"_wg_peer_tunnel_address_help";s:246:"
+>This field is auto filled-in when a local tunnel network pool is created. It is allowed to overwrite the assignment, but this is normally not necessary. Use with care when changing manually.<br>
+>Each peer must have a unique tunnel IP address.
+";s:22:"_wg_peer_endpoint_help";s:395:"
+>When this field is left empty, the server operates in *passive mode* to establish the tunnel. It must be the peer which starts the tunnel.
+>
+>When an IP address is entered to connect to the peer, the server operates in *active mode* and establishes the tunnel to the peer as soon as there is data to send.
+>
+>*Note: this field is mandatory for "server-to-server" and "LAN-to-LAN" connections*
+";s:25:"_wg_peer_allowed_ips_help";s:295:"
+>This field is automatically filled in with the tunnel address of the peer. This allows the server to reach the peer over the tunnel.<br>
+>When the peer is another server or router with additional networks, then their subnets can be added here to make these networks reachable over the tunnel.
+";s:24:"_wg_peer_dns_server_help";s:76:"
+>Use this entry to overwrite the current DNS server assignment of the Peer
+";s:29:"_wg_persistent_keepalive_help";s:422:"
+>By default a WireGuard tunnel stays silent when no traffic is present, which may cause the connection to drop.
+>Normally this isn't a problem since a WireGuard tunnel is automatically re-established when it is needed.<br>
+>A keepalive timer will hold the connection open, for most situations a timer value of 20 seconds is suitable.
+>
+>Note that for mobile devices this will use more data and drain your battery faster.
+";s:43:"_docker_client_additional_requirements_help";s:79:"
+>Any additional requirements the container has.  Supports basic HTML mark-up.
+";s:26:"_docker_client_readme_help";s:32:"
+>Link to a readme file or page
+";s:29:"_parity_cumulative_check_help";s:189:"
+>Change this setting to **Yes** to divide long duration parity checks over multiple periods. This is useful the system needs to be available and a parity check runs only during off hours.
+";s:35:"_parity_accumulation_frequency_help";s:219:"
+>Specifies how accumulation periods are executed.
+>
+>**Daily** means every subsequent day the parity check continuous until finished
+>
+>**Weekly** means every subsequent week the parity check continuous until finished
+";s:34:"_parity_accumulation_duration_help";s:135:"
+>Specifies how long each accumulated period runs, expressed in hours. The **Time of the day** speficies the start time of the period.
+";s:22:"_display_tty_size_help";s:45:"
+>Changes the font size of terminal windows.
+";s:23:"_display_page_view_help";s:189:"
+>Changes how certain pages are displayed. In **Tabbed** mode different sections will be displayed in different tabs,
+>while in **Non-tabbed** mode sections are displayed under each other.
+";s:24:"_display_users_menu_help";s:173:"
+>The Users Menu can be part of the header or part of the Settings menu.
+>You can move the Users Menu if insufficient space in the header is available to display all menus.
+";s:28:"_display_listing_height_help";s:235:"
+>**Automatic** : long listings are displayed as is, and the user needs to scroll the whole page to see the bottom
+>
+>**Fixed** : long listings are displayed in a window with a fixed size, user can scroll this window to see the bottom
+";s:28:"_unraidnet_extraorigins_help";s:144:"
+>Provide a comma separated list of urls that are allowed to access the unraid-api (https://abc.myreverseproxy.com,https://xyz.rvrsprx.com,…)
+";s:27:"_myservers_remote_t2fa_help";s:495:"
+>When Transparent 2FA for Remote Access is enabled, you will access your server by clicking the "Remote Access" link on the <a href="https://connect.myunraid.net/" target="_blank" rel="noopener noreferrer">Go to Connect</a>. The system will transparently request a 2FA token from your server and embed it in the server's login form. Your server will deny any Remote Access login attempt that does not include a valid token. Each token can be used only once, and is only valid for five minutes.
+";s:26:"_myservers_local_t2fa_help";s:824:"
+>When Transparent 2FA for Local Access is enabled, you will access your server by clicking the "Local Access" link on the <a href="https://connect.myunraid.net/" target="_blank" rel="noopener noreferrer">Go to Connect</a>. The system will transparently request a 2FA token from your server and embed it in the server's login form. Your server will deny any Local Access login attempt that does not include a valid token. Each token can be used only once, and is only valid for five minutes.
+>
+>This is fairly extreme for Local Access, and in most cases is not needed. It requires a solid Internet connection. If you need to access the webgui while the Internet is down, SSH to the server and run 'use_ssl no', this will give you access via http://<?=['NGINX_LANIP']?><?=['NGINX_PORT'] !== '80' ? ':'.['NGINX_PORT'] : '' ?>
+";s:23:"_smb_multi_channel_help";s:263:"
+>When set to 'Yes' enables SMB Multi Channel support in the server. From
+>[microsoft](https://docs.microsoft.com/en-us/azure-stack/hci/manage/manage-smb-multichannel):
+>"SMB Multichannel enables file servers to use multiple network connections simultaneously." 
+";s:21:"_docker_readmore_help";s:286:"
+>Some systems with a lot of docker containers may experience lag using the main Docker page.
+>
+>Setting this to "No" may help speed up general page usage by disabling the use of readmore-js.
+>Instead of chevrons indicating more data for Port and Volume mapping, all data is displayed.
+";s:32:"_docker_custom_network_type_help";s:679:"
+>The **ipvlan** type is best when connection to the physical network is not needed.
+>Please read <u><a style="color:blue" href='https://docs.docker.com/network/ipvlan/', target='_blank'>this</a></u> on implementing an ipvlan network.<br>
+>
+>The **macvlan** type of network allows direct connection to the physical network.
+>Please read <u><a style="color:blue" href='https://docs.docker.com/network/macvlan/', target='_blank'>this</a></u> on implementing a macvlan network.<br>
+>
+>**Note:** Docker uses its own dhcp service, which is the **DHCP Pool** setting.
+>When you use multiple Unraid servers, then each server must have a different Docker **DHCP Pool** range configured.
+";s:28:"_mgmt_local_access_urls_help";s:140:"
+>The Local Access URLs shown above are based on your current settings. 
+>To adjust URLs or redirects, see the help text for "Use SSL/TLS".
+";s:24:"_vms_network_source_help";s:978:"
+>Select the name of the network you wish to use as default for your VMs.
+>You can choose between **'bridges'** created under network settings or
+>**'libvirt'** created with virsh command in the terminal.
+>The bridge **'virbr0'** and the associated virtual network **'default'** are
+>created by libvirt.  
+>Both utilizes NAT (network address translation) and act as a DHCP server to hand out IP addresses to virtual machines directly.
+>More optional selections are present for bridges under network settings or for libvirt networks with the virsh command in the terminal.
+>
+>**If your are unsure, choose 'virbr0' as the recommended Unraid default.**
+>
+>NOTE: You can also specify a network source on a per-VM basis.
+>
+>**IMPORTANT: Neither Libvirt nor Unraid automatically brings up an interface that is assigned to a Libvirt network.
+>Before you use a Libvirt network, please go to Settings -> Network Settings and, if necessary, manually set the associated interface to up.**
+";s:33:"_share_edit_exclusive_access_help";s:282:"
+>When set to "yes" indicates a bind-mount directly to a pool has been set up for the share in the /mnt/user tree, provided the following
+>conditions are met:
+>
+>- Primary storage is a pool.
+>- Secondary storage is set to **none**.
+>- The share does not exist on any other volumes.
+";s:32:"_share_edit_primary_storage_help";s:305:"
+>**Primary storage** is where *new files and folders* are created.  If
+>Primary storage is below the minimum free space setting then new files
+>and folders will be created in **Secondary storage**, if configured.
+>
+>**Important:** For *Exclusive access* shares, the Min free space
+>settings are ignored.
+";s:34:"_share_edit_secondary_storage_help";s:206:"
+>**Secondary storage** is where new files and directories are created if no
+>room on Primary storage.  When both Primary and Secondary storage are
+>configured the 'mover' will transfer files between them.
+";s:29:"_share_edit_mover_action_help";s:111:"
+>This defines the direction of file transfer between Primary and
+>Secondary storage when both are configured.
+";s:17:"_vms_console_help";s:231:"
+>For setting the console options to show on context menus. Web will show only inbuild web clients(VNC and SPICE), 
+>Virtual Manager Remote Viewer will only show the Remote Viewer option. Both will show both Web and Remote Viewer.
+";s:29:"_shares_exclusive_shares_help";s:485:"
+>If set to Yes, share directories under /mnt/user are actually symlinks to the share directory on a storage volume
+>provided the following conditions are met:
+>
+>* The Primary storage for a share is set to a pool.
+>* The Secondary storage for a share is set to **none**.
+>* The share exists on a single volume.
+>* The share is **not** exported over NFS.
+>
+>The advantage of *exclusive* shares is that transfers bypass the FUSE layer which may significantly
+>increase I/O performance.
+";s:31:"_eth_network_extra_include_help";s:285:"
+>Enter one or more interface names or IP addresses which will be included in the list of listening interfaces for local system services.
+>
+>This is particularly useful when you have created custom interfaces (e.g. tailscale VPN tunnel) which are used to access local system services.
+";s:31:"_eth_network_extra_exclude_help";s:307:"
+>Enter one or more interface names or IP addresses which will be excluded from the list of listening interfaces for local system services.
+>
+>This can be used to exclude dedicated local interfaces (e.g. p-t-p connections) or exclude dynamic interfaces (WireGuard tunnels) from using local system services.
+";s:22:"_sysdrivers_intro_help";s:427:"
+>This page displays all the drivers available on this system. Filter the list according to whether the driver is Inuse or not, or search for a specific driver if desired.
+>
+>Any 3rd party driver installed by a plugin will have a support symbol next to it, click this to get support for the plugin.
+>
+>Click the edit button to add/modify/delete any modprobe.d config file in the config/modprobe.d directory on the flash drive.
+";s:19:"_display_width_help";s:187:"
+>**Boxed** is the legacy setting which constrains the content width to maximum 1920 pixels
+>
+>**Unlimited** allows content to use all available width, which maybe useful on wide screens
+";s:17:"_vms_disable_help";s:127:"
+>Stop VMs from Autostarting\Starting when VM Manager starts or open is run from the gui to start, error message will be seen.
+";s:30:"_notifications_auto_close_help";s:132:"
+>Number of seconds before notifications are automatically closed in *Detailed* view.<br>
+>A value of 0 disables automatic closure.
+";s:22:"_console_keyboard_help";s:75:"
+>Select your default keymap for the local console (not the web Terminal).
+";s:20:"_console_screen_help";s:277:"
+>**Default:** 'Default' will set the blank timeout to 15 minutes and powersave to 60 minutes.
+>
+>**Disabled:** 'Disabled' will disable the blank and powersave timeout.
+>
+>**All other values:** Will set the blank timout to the selected value and disable the powersave timeout.
+";s:18:"_console_bash_help";s:273:"
+>If set to 'Yes' the bash history will persist reboots, set to 'No' to disable.
+>
+>**ATTENTION:** The bash history will be written to the USB Boot device so this will introduce higher wear and tear!
+>
+>**Note:** Disabling and Enabling will remove the entire bash history.
+";s:37:"_ssd_default_warning_temperature_help";s:241:"
+>*Warning SSD temperature* sets the default warning threshold for all SSD devices temperature. Exceeding this threshold will result in a warning notification.
+>
+>A value of zero will disable the warning threshold (including notifications).
+";s:38:"_ssd_default_critical_temperature_help";s:244:"
+>*Critical disk temperature* sets the default critical threshold for all SSD devices temperature. Exceeding this threshold will result in an alert notification.
+>
+>A value of zero will disable the critical threshold (including notifications).
+";s:27:"_syslog_shutdown_flash_help";s:288:"
+>This setting is YES by default and enables the system to copy the syslog file to the USB device on shutdown or reboot.
+>
+>After rebooting, the syslog from this run will be visible on Tools > Syslog > syslog-previous;
+>it will also be included in diagnostics as logs/syslog-previous.txt
+";s:16:"_WOL_enable_help";s:49:"
+>If set to yes Unraidwold daemon is set to run.
+";s:16:"_WOL_run_VM_help";s:143:"
+>If set to yes when wake on lan packets are received checks are carrried out for virtual machines otherwise virtual machines will be ignored.
+";s:17:"_WOL_run_LXC_help";s:179:"
+>If set to yes when wake on lan packets are received checks are carrried out for LXC otherwise LXC will be ignored. The LXC plugin needs to be installed for LXC to be processed.
+";s:19:"_WOL_interface_help";s:156:"
+>Specify the interface to the daemon to bind to. Some interfaces may not be able to recieve etherframe packets. Recommend to bind to a physical interface.
+";s:26:"_WOL_promiscuous_mode_help";s:46:"
+>Enable to set the NIC not to filer packets.
+";s:18:"_WOL_log_file_help";s:90:"
+>Default is to log to syslog but if you want a different log location set the file name.
+";s:15:"_WOL_intro_help";s:675:"
+>This page allows the setup to start/resume and stop VMs, Containters(Docker and LXC) using WOL magic packets
+>
+>It does setup wake up of the Unraid server.
+>
+>The process will look for the defined mac address defined within the service(VM or container) with the exception of dockers. Dockers do not have a mac address until they are running so you will need to define a user mac address to allow you to start them
+>
+>If the service is paused a WOL Packet will resume. 
+>
+>For each service you can set: enable, disable or enable and shutdown
+>
+>When the enable and shutdown is set if the service is running when the next WOL packet is recieved a shutdown will be performed.
+";s:22:"_WOL_run_shutdown_help";s:228:"
+>If set to yes when wake on lan packets are received checks are carrried out and if enabled for service and that service is running the entity will be shutdown. System has to be set to Enabled and Shutdwon for it to be action.
+";s:20:"_info_zfs_scrub_help";s:222:"
+>**Scrub** runs the *zfs scrub* program which will read all data and metadata blocks from all
+>devices and verify checksums.
+>
+>Click the **Upgrade Pool** button to upgrade the ZFS pool to enable the latest ZFS features.
+";s:22:"_docker_pid_limit_help";s:141:"
+>Set a PID Limit to limit the number of PIDs that a docker can use. The default is 2048.  Set to zero for unlimited PIDs (not recommended).
+";s:27:"_docker_storage_driver_help";s:748:"
+>overlay2 (default): Will use overlay2 as the storage driver for Docker, regardless of the underlying filesystem.
+>
+>native: The native storage driver for your underlying filesystem will be used (XFS: overlay2 | ZFS: zfs | BTRFS: btrfs).
+>
+>ATTENTION: Changing the storage type from an existing Docker installation is not possible, you have to delete your Docker directory first, change the storage type and then reinstall your containers.
+>It is recommended to take a screenshot from your Docker containers before changing the storage type. After deleting and changing the storage type, reinstall the containers by clicking Add Container on the Docker page and select one by one from the drop down to reinstall them with your previous settings).
+";s:34:"_docker_storage_driver_active_help";s:41:"
+>This is the storage driver for Docker.
+";s:25:"_mgmt_wg_access_urls_help";s:126:"
+>These URLs will only work when connected via the appropriate WireGuard tunnel as configured on ***Settings > VPN Manager***
+";s:32:"_mgmt_tailscale_access_urls_help";s:81:"
+>These URLs will only work when connected to the appropriate Tailscale Tailnet.
+";s:37:"_syslog_remote_system_identifier_help";s:350:"
+>Select the identifier for the remote system (used in the logfile name). 
+>
+>* "IP Address" uses the IP address (IPv4 or IPv6) of the sending system.
+>* "Hostname (from syslog message)" uses the hostname included in each syslog message.
+>* "Hostname (from DNS reverse lookup)" performs a DNS reverse lookup for the sending IP and uses the result.
+>
+";s:31:"_display_favorites_enabled_help";s:219:"
+>Enables favorite support. If set to no, will stop heart icon showing for additions. If existing favorites are saved, favorites tab and pre-saved options will still continue to show and function until all are deleted.
+";s:16:"_vms_rdpopt_help";s:104:"
+>Adds option to menu to start RDP. RDP file is downloaded. You need to set browser to open when ready.
+";s:15:"_vms_usage_help";s:87:"
+>Show metrics for CPU both guest and host percentage, memory, disk io and network io.
+";s:21:"_vms_usage_timer_help";s:47:"
+>Setting in seconds for metrics refresh time.
+";s:35:"_apc_ups_override_ups_capacity_help";s:586:"
+>If your device doesn't natively report Nominal Power ('NOMPOWER') from 'apcupsd', but does report the Load Percentage ('LOADPCT'), you can manually define the UPS capacity rating in Watts (W) (this is the 'real power' value in Watts (W), not the 'apparent power' in Volt Amps (VA), and should be detailed on your UPS manual or product listing) and the plugin will dynamically calculate a virtual Nominal Power estimate ('≈') by comparing the Override UPS Capacity (W) and the current Load Percentage. It is only an estimate, as it doesn't factor in things like the UPS' efficiency.
+";s:30:"_docker_container_network_help";s:243:"
+>This allows your container to utilize the network configuration of another container. Select the appropriate container from the list.<br/>This setup can be particularly beneficial if you wish to route your container's traffic through a VPN.
+";s:22:"_docker_tailscale_help";s:71:"
+>Enable Tailscale to add this container as a machine on your Tailnet.
+";s:31:"_docker_tailscale_hostname_help";s:411:"
+>Provide the hostname for this container. It does not need to match the container name, but it must be unique on your Tailnet. Note that an HTTPS certificate will be generated for this hostname, which means it will be placed in a public ledger, so use a name that you don't mind being public.
+>For more information see <a href="https://tailscale.com/kb/1153/enabling-https" target="_blank">enabling https</a>.
+";s:34:"_docker_tailscale_be_exitnode_help";s:472:"
+>Enable this if other machines on your Tailnet should route their Internet traffic through this container, this is most useful for containers that connect to commercial VPN services. 
+>Be sure to authorize this Exit Node in your <a href="https://login.tailscale.com/admin/machines" target="_blank">Tailscale Machines Admin Panel</a>.
+>For more details, see the Tailscale documentation on <a href="https://tailscale.com/kb/1103/exit-nodes" target="_blank">Exit Nodes</a>.
+";s:34:"_docker_tailscale_exitnode_ip_help";s:262:"
+>Optionally route this container's outgoing Internet traffic through an Exit Node on your Tailnet. Choose the Exit Node or input its Tailscale IP address.
+>For more details, see <a href="https://tailscale.com/kb/1103/exit-nodes" target="_blank">Exit Nodes</a>.
+";s:32:"_docker_tailscale_lanaccess_help";s:276:"
+>Only applies when this container is using an Exit Node. Enable this to allow the container to access the local network.
+>
+><b>WARNING:</b>&nbsp;Even with this feature enabled, systems on your LAN may not be able to access the container unless they have Tailscale installed.
+";s:43:"_docker_tailscale_userspace_networking_help";s:566:"
+>When enabled, this container will operate in a restricted environment. Tailscale DNS will not work, and the container will not be able to initiate connections to other Tailscale machines. However, other machines on your Tailnet will still be able to communicate with this container.
+>
+>When disabled, this container will have full access to your Tailnet. Tailscale DNS will work, and the container can fully communicate with other machines on the Tailnet.
+>However, systems on your LAN may not be able to access the container unless they have Tailscale installed.
+";s:26:"_docker_tailscale_ssh_help";s:281:"
+>Tailscale SSH is similar to the Docker "Console" option in the Unraid webgui, except you connect with an SSH client and authenticate via Tailscale.
+>For more details, see the <a href="https://tailscale.com/kb/1193/tailscale-ssh" target="_blank">Tailscale SSH</a> documentation..
+";s:33:"_docker_tailscale_serve_mode_help";s:1559:"
+>Enabling <b>Serve</b> will automatically reverse proxy the primary web service from this container and make it available on your Tailnet using https with a valid certificate! 
+>
+>Note that when accessing the <b>Tailscale WebUI</b> url, no additional authentication layer is added beyond restricting it to your Tailnet - the container is still responsible for managing usernames/passwords that are allowed to access it. Depending on your configuration, direct access to the container may still be possible as well.
+>
+>For more details, see the <a href="https://tailscale.com/kb/1312/serve" target="_blank">Tailscale Serve</a> documentation.
+>
+>If the documentation recommends additional settings for a more complex use case, enable "Tailscale Show Advanced Settings". Support for these advanced settings is not available beyond confirming the commands are passed to Tailscale correctly.
+>
+><b>Funnel</b> is similar to <b>Serve</b>, except that the web service is made available on the open Internet. Use with care as the service will likely be attacked. As with <b>Serve</b>, the container itself is responsible for handling any authentication.
+>
+>We recommend reading the <a href="https://tailscale.com/kb/1223/funnel" target="_blank">Tailscale Funnel</a> documentation. before enabling this feature.
+>
+><b>Note:</b>&nbsp;Enabling <b>Serve</b> or <b>Funnel</b> publishes the Tailscale hostname to a public ledger.
+>For more details, see the Tailscale Documentation: <a href="https://tailscale.com/kb/1153/enabling-https" target="_blank">Enabling HTTPS</a>.
+";s:33:"_docker_tailscale_serve_port_help";s:1006:"
+>This field should specify the port for the primary web service this container offers. Note: it should specify the port in the container, not a port that was remapped on the host.
+>
+>The system attempted to determine the correct port automatically. If it used the wrong value then there is likely an issue with the "Web UI" field for this container, visible by switching from "Basic View" to "Advanced View" in the upper right corner of this page. 
+>
+>In most cases this port is all you will need to specify in order to Serve the website in this container, although additional options are available below for more complex containers.
+>
+>This value is passed to the '<serve_port>' portion of this command which starts serve or funnel:<br>
+>'tailscale [serve|funnel] --bg --<protocol><protocol_port><path> http://localhost:'**'<serve_port>'**'<local_path>'<br>
+>For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+";s:36:"_docker_tailscale_show_advanced_help";s:25:"
+>Here there be dragons!
+";s:39:"_docker_tailscale_serve_local_path_help";s:420:"
+>When not specified, this value defaults to an empty string. It is passed to the '<local_path>' portion of this command which starts serve or funnel:<br>
+>'tailscale [serve|funnel] --bg --<protocol><protocol_port><path> http://localhost:<serve_port>'**'<local_path>'**<br>
+>For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+";s:37:"_docker_tailscale_serve_protocol_help";s:413:"
+>When not specified, this value defaults to "https". It is passed to the '<protocol>' portion of this command which starts serve or funnel:<br>
+>'tailscale [serve|funnel] --bg --'**'<protocol>'**'=<protocol_port><path> http://localhost:<serve_port><local_path>'<br>
+>For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+";s:42:"_docker_tailscale_serve_protocol_port_help";s:416:"
+>When not specified, this value defaults to "=443". It is passed to the '<protocol_port>' portion of this command which starts serve or funnel:<br>
+>'tailscale [serve|funnel] --bg --<protocol>'**'<protocol_port>'**'<path> http://localhost:<serve_port><local_path>'<br>
+>For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+";s:33:"_docker_tailscale_serve_path_help";s:416:"
+>When not specified, this value defaults to an empty string. It is passed to the '<path>' portion of this command which starts serve or funnel:<br>
+>'tailscale [serve|funnel] --bg --<protocol><protocol_port>'**'<path>'** 'http://localhost:<serve_port><local_path>'<br>
+>For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+";s:34:"_docker_tailscale_serve_webui_help";s:484:"
+>If <b>Serve</b> is enabled this will be an https url with a proper domain name that is accessible over your Tailnet, no port needed!
+>
+>If <b>Funnel</b> is enabled the same url will be available on the Internet.
+>
+>If they are disabled then the url will be generated from the container's main "Web UI" field, but modified to use the Tailscale IP. If the wrong port is specified here then switch from "Basic View" to "Advanced View" and review the "Web UI" field for this container.
+";s:39:"_docker_tailscale_advertise_routes_help";s:295:"
+>If desired, specify any routes that should be passed to the **'--advertise-routes='** parameter when running **'tailscale up'**.
+>For more details see the <a href="https://tailscale.com/kb/1019/subnets#connect-to-tailscale-as-a-subnet-router" target="_blank">Subnet routers</a> documentation.
+";s:36:"_docker_tailscale_accept_routes_help";s:356:"
+>When enabled, this will accept your subnet routes from other devices, adding the **'--accept-routes'** parameter when running **'tailscale up'**.
+>For more details see the <a href="https://tailscale.com/kb/1019/subnets?q=allow+routes#use-your-subnet-routes-from-other-devices" target="_blank">Use your subnet routes from other devices</a> documentation.
+";s:42:"_docker_tailscale_daemon_extra_params_help";s:194:"
+>Specify any extra parameters to pass when starting **'tailscaled'**.
+>For more details see the <a href="https://tailscale.com/kb/1278/tailscaled" target="_blank">tailscaled</a> documentation.
+";s:34:"_docker_tailscale_extra_param_help";s:194:"
+>Specify any extra parameters to pass when running **'tailscale up'**.
+>For more details see the <a href="https://tailscale.com/kb/1080/cli#up" target="_blank">Tailscale CLI</a> documentation.
+";s:31:"_docker_tailscale_statedir_help";s:178:"
+>If state directory detection fails on startup, you can specify a persistent directory in the container to override automatic detection, i.e. '/container-path/.tailscale_state'
+";s:47:"_docker_tailscale_troubleshooting_packages_help";s:226:"
+>Enable this to install 'ping', 'nslookup', 'curl', and 'speedtest-cli' into the container to help troubleshoot networking issues. Once the issues are resolved we recommend disabling this to reduce the size of the container.
+";s:20:"_WOL_run_docker_help";s:125:"
+>If set to yes when wake on lan packets are received checks are carrried out for dockers otherwise dockers will be ignored.
+";s:24:"_nfs_security_rules_help";s:379:"
+>Put the rule for each IP address on a separate line and terminate the Rule with a new line.
+>You cannot enter a Rule in the format IP1,IP2(...).  Unraid does not format the exports file in that format.
+>
+>The default rules for every NFS Rule are - async and no_subtree_check.
+>
+>**Note:** The Public Rule used is '*(rw,sec=sys,insecure,anongid=100,anonuid=99,no_root_squash)'.
+";s:29:"_nfs_server_max_protocol_help";s:78:"
+>Select the max NFS Protocol version you want your Unraid server to support.
+";s:17:"_nfs_threads_help";s:207:"
+>Set the number of threads for NFS.  For light NFS loads, 8 is sufficient. For heaver NFS loads, a higher number of threads might be appropriate.
+>
+>If there aren't enough threads, NFS will probably crash.
+";s:37:"_shares_fuse_file_descriptors_io_help";s:123:"
+>Set the number of fuse file descriptors.  With a lot of file activity on the array, you may need to increase this value.
+";s:29:"_nfs_client_max_protocol_help";s:83:"
+>Select the max NFS Protocol version you want to use to mount your remote shares.
+";}

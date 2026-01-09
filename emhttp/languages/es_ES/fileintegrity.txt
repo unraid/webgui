@@ -1,0 +1,134 @@
+Apple metadata=Metadatos de Apple
+Array must be Started to use this feature=El Array debe estar **iniciado** para utilizar esta función
+Automatically protect new and modified files=Proteja automáticamente los archivos nuevos y modificados
+BLAKE2=BLAKE2
+Build=Construir
+Continue=Continuar
+Corz=Corz
+Custom files=Archivos personalizados
+Custom folders=Carpetas personalizadas
+Day of the month=Día del mes
+Day of the week=Día de la semana
+Disk selection=Selección de discos
+Disk verification schedule=Programa de verificación de discos
+Dont start=No empieces
+Download Now=Descargar ahora
+Dynamix File Integrity=Dynamix File Integrity
+Error logging=Registro de errores
+Excluded files=Archivos excluidos
+Excluded folders and files=Carpetas y archivos excluidos
+Excluded folders=Carpetas excluidas
+File Duplicates Check=Comprobación de duplicados de archivos
+Find=Encontrar
+Generate Corz Files=Generar archivos Corz
+hash files=archivos hash
+Hashing method=Método Hashing
+Header menu=Menú de cabecera
+HHMM=HH:MM
+Import=Importar
+Include duplicate file hashes in Find command=Incluir hashes de archivos duplicados en el comando **Encontrar**.
+log files=archivos de registro
+Low=Bajo
+MD5=MD5
+Output file=Archivo de salida
+Placement of file integrity control=Colocación del control de integridad de los archivos
+Process priority=Prioridad del proceso
+Save new hashing results to flash=Guardar los nuevos resultados del hashing en la memoria Flash
+saved files=archivos guardados
+Send notifications=Enviar notificaciones
+SHA2=SHA2
+Syslog only=Sólo Syslog
+Syslog Output file=Archivo Syslog y Output
+Task=Tarea
+Time of the day=Hora del día
+Toggle all=Alternar todo
+Tools menu=Menú de herramientas
+Verification tasks=Tareas de verificación
+view hash files=ver archivos hash
+view log files=ver los archivos de registro
+view saved files=ver los archivos guardados
+When parity operation is running=Cuando la operación de paridad está en marcha
+
+:integrity_control_plug:
+> Seleccione la ubicación de la página de control de la integridad de los archivos. Por defecto se coloca bajo el menú *Herramientas*, pero puede moverse bajo el menú *cabecera*.
+>
+> Tenga en cuenta que el menú *cabecera* tiene un espacio limitado.
+:end
+
+:integrity_service_plug:
+> Cuando se activa, se calcula automáticamente un valor de suma de comprobación y se añade a los atributos extendidos del archivo recién creado o modificado.
+> Cuando se detecta que se ha producido un cambio en el archivo, pero su tiempo de modificación no ha cambiado, se realiza una verificación automática de la suma de comprobación para comprobar si hay alguna corrupción silenciosa del archivo.
+>
+> La selección de áreas puede filtrarse excluyendo las carpetas (recursos compartidos) y/o excluyendo todos los discos (véase la tabla siguiente).
+>
+> Cuando se desactiva el hashing automático, se requiere un control manual para mantener la información actualizada.
+:end
+
+:integrity_hashing_plug:
+> Seleccione el método de hash preferido. SHA2 genera un valor de suma de control de 256 bits, MD5 genera un valor de suma de control de 128 bits, mientras que BLAKE2 genera un valor de suma de control de 512 bits por archivo.
+>
+> MD5 es el método más utilizado y debe seleccionarse cuando se requiere compatibilidad con programas externos, BLAKE2 es el método más rápido y tiene el mayor grado de detección, aunque es una solución propietaria.
+> SHA2 es el estándar oficial y se selecciona por defecto. Sin embargo, es el más lento de los tres métodos. La opción BLAKE2 se desactiva si su procesador no la soporta.
+> Todos los métodos requieren una gran potencia de cálculo del procesador y un procesador demasiado lento puede no estar a la altura de las expectativas.
+:end
+
+:integrity_flash_plug:
+> Cuando se activa, se crea un archivo diario en el dispositivo Flash, que contiene los resultados de la suma de comprobación de todos los archivos nuevos o modificados de ese día en particular.
+> El formato de este archivo es el mismo que el del archivo de exportación estándar. El archivo diario se guarda como */config/plugins/dynamix.file.integrity/saved/disks.export.&lt;date&gt;.new.hash*.
+:end
+
+:integrity_exluded_plug:
+> Seleccione aquí las carpetas (recursos compartidos) que desee excluir de la función de hash y verificación automática. Un recurso compartido que exista en varios discos se omitirá en cualquier disco en el que esté presente.
+>
+> Utilice **Carpetas personalizadas / Archivos personalizados** para introducir manualmente las exclusiones. Las exclusiones múltiples se separan con una coma.<br>
+> Algunos ejemplos son los nombres de las carpetas, por ejemplo **`.Recycle.Bin`**, los nombres de los archivos, por ejemplo **`my_workfile.tmp`** o las extensiones de los archivos, por ejemplo **`*.tmp`**.
+>
+> Seleccione **Metadatos de Apple** para excluir los archivos de metadatos creados por netatalk de Apple (.AppleDB y .DS_Store).
+:end
+
+:integrity_verification_plug:
+> Cuando se activa, se crea una programación cron para realizar la verificación de archivos en segundo plano. Es necesario seleccionar qué discos participan en el proceso de hashing y verificación automáticos (véase la tabla siguiente).
+> El programa cron puede ejecutarse de forma diaria, semanal o mensual.
+>
+> Se pueden crear una o varias tareas, cada una de las cuales contiene uno o varios discos. Todos los discos bajo la misma tarea se verifican en paralelo. Esto disminuye el tiempo total de ejecución, pero aumenta el
+> de carga del procesador. Asegúrese de que su procesador puede soportar esta carga y cambie la agrupación en consecuencia. En un extremo se pueden poner todos los discos en una sola tarea, lo que resulta en la mayor concurrencia.
+> En el otro extremo, cada disco puede colocarse en su propia tarea, lo que da lugar a una menor carga del procesador.
+>
+> Un disco con una casilla de suma de comprobación desactivada y un fondo rojo, indica que un proceso de verificación en segundo plano está actualmente en curso para ese disco. No se puede detener.
+>
+> Cuando existen múltiples tareas, cada una de ellas se ejecuta en el siguiente horario de forma rotativa. Por ejemplo, si ha establecido un programa semanal con 3 tareas, cada semana
+> se ejecuta otra tarea y después de 3 semanas la función de verificación se ha realizado sobre todos los discos seleccionados.
+>
+> Cuando el programa de verificación está desactivado, se requiere un control manual para verificar la corrección de los archivos.
+:end
+
+:integrity_priority_plug:
+> Los procesos en segundo plano pueden ejecutarse en modo normal o de baja prioridad.
+:end
+
+:integrity_parity_plug:
+> Antes de que se inicie una tarea de verificación, ésta puede continuar como de costumbre cuando se está ejecutando una operación de paridad, o la tarea de verificación no se inicia en absoluto.
+> En este último caso hay que esperar a la siguiente hora programada para ejecutar la tarea.
+:end
+
+:integrity_day_of_the_week_plug:
+> Si se elige una programación semanal, seleccione aquí el día de ejecución.
+:end
+
+:integrity_day_of_the_month_plug:
+> Si se elige una programación mensual, seleccione aquí la fecha de ejecución.
+:end
+
+:integrity_time_of_the_day_plug:
+> Seleccione la hora y el minuto en que se ejecutará la tarea programada. La granularidad es de 5 minutos.
+:end
+
+:integrity_notifications_plug:
+> Establezca en SÍ si desea recibir notificaciones cuando se detecte la corrupción de archivos.
+> Consulte la configuración de las notificaciones para saber cómo configurar y recibir notificaciones de las "alertas".
+:end
+
+:integrity_logging_plug:
+> El registro de errores, incluyendo la información de detección de corrupción de archivos se puede dar en el registro del sistema, o guardar como un archivo en la memoria Flash.
+> Si se desactiva el registro de errores se suprime la creación de registros, pero sigue siendo posible recibir notificaciones.
+:end

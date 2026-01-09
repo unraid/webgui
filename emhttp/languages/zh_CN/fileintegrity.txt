@@ -1,0 +1,133 @@
+Apple metadata=Apple 元数据
+Array must be Started to use this feature=阵列必须**启动**才能使用此功能
+Automatically protect new and modified files=自动保护新建和修改的文件
+BLAKE2=BLAKE2
+Build=构建
+Continue=继续
+Corz=Corz
+Custom files=自定义文件
+Custom folders=自定义文件夹
+Day of the month=几月几日
+Day of the week=星期几
+Disk selection=选择磁盘
+Disk verification schedule=磁盘验证计划
+Dont start=不要开始
+Download Now=立即下载
+Dynamix File Integrity=动态文件完整性
+Error logging=错误日志
+Excluded files=排除的文件
+Excluded folders and files=排除的文件夹和文件
+Excluded folders=排除的文件夹
+File Duplicates Check=重复文件检查
+Find=查找
+Generate Corz Files=生成 Corz 文件
+hash files=哈希值
+Hashing method=哈希算法
+Header menu=标题菜单
+HHMM=时:分
+Import=导入
+Include duplicate file hashes in Find command=在**查找**命令中包含重复文件的哈希值
+log files=日志文件
+Low=低
+MD5=MD5
+Output file=输出文件
+Placement of file integrity control=文件完整性控制的配置‌
+Process priority=进程优先级
+Save new hashing results to flash=将新的哈希值保存至闪存中
+saved files=已保存文件
+Send notifications=发送通知
+SHA2=SHA2
+Syslog only=仅系统日志
+Syslog Output file=系统日志输出到文件
+Task=任务
+Time of the day=时间段
+Toggle all=全部开启
+Tools menu=工具菜单
+Verification tasks=验证任务
+view hash files=查看哈希值
+view log files=查看日志文件
+view saved files=查看保存文件
+When parity operation is running=当奇偶校验操作正在运行时
+
+:integrity_control_plug:
+> 选择 文件完整性控制的配置‌ 页面的放置位置。默认放在**工具菜单**下，也可移至标题菜单。
+>
+> 注意，**标题菜单**空间有限。
+:end
+
+:integrity_service_plug:
+> 当启用时，会自动计算校验值并添加到新创建或修改的文件扩展属性中‌。
+> 当检测到文件变化，但修改时间并未更新时，自动执行校验和验证，以检查文件是否损坏。
+>
+> 保护范围可通过排除文件夹（共享）和磁盘来选择，（参见下表）。
+>
+> 自动哈希功能禁用时，需手动更新哈希值来确保信息及时更新。
+:end
+
+:integrity_hashing_plug:
+> 选择默认哈希算法。对于每个文件，SHA2 生成 256 位校验和值，MD5 生成 128 位校验和值，BLAKE2 生成 512 位校验和值。
+>
+> MD5是最常用的方法，当需要与外部程序兼容时，应选择MD5。BLAKE2则是最快的方法，且具有最高的检测等级，不过这是一个专有解决方案。
+> SHA2是官方标准且默认被选中，尽管它是三种方法中最慢的。如果处理器不支持BLAKE2，则该选项会被禁用‌。
+> 所有哈希方法（如MD5、SHA2、BLAKE2等）都需要处理器提供强大的计算能力，如果处理器性能过弱，可能无法达到预期的性能表现‌。
+:end
+
+:integrity_flash_plug:
+> 当在闪存设备上启用此功能时，每天都会创建一个文件，用于保存当天所有新文件或修改过的文件的校验和值结果‌。
+> 此文件与标准导出文件格式相同。每日文件保存为 */config/plugins/dynamix.file.integrity/saved/disks.export.&lt;date&gt;.new.hash*。
+:end
+
+:integrity_exluded_plug:
+> 在此选择任何从自动哈希计算和验证功能中排除的文件夹（共享）。排除后，建立在多块磁盘上的共享在对应磁盘执行计算时会跳过。
+>
+> 使用**自定义文件夹/自定义文件**手动输入排除项。多个排除项以逗号分隔。<br>
+> 例如文件夹名 **`.Recycle.Bin`**，文件名 **`my_workfile.tmp`** 和扩展名 **`*.tmp`**。
+>
+> 选择 **Apple 元数据**以排除 Apple 的 Netatalk 创建的元数据文件（.AppleDB 和 .DS_Store）。
+:end
+
+:integrity_verification_plug:
+> 启用后，将创建 cron 计划以在后台执行文件验证。 需要决定哪些磁盘参与自动哈希计算和验证，见下方表单。
+> cron 计划可按日、周或月运行。
+>
+> 可创建多个任务，每个任务可包含多块磁盘。同一任务中的所有磁盘并行验证。如此可减少总运行时间，但增加了处理器负载。
+> 依据处理器算力调整磁盘的任务分组，确保你的处理器能承受如此的负载。一方面，所有磁盘都可放入同一任务以到达最高并发。
+> 另一方面，可为每块磁盘建立它自己的任务，实现最低处理器负载。
+>
+> 复选框不可用且带有红色背景的磁盘，正在后台执行验证任务。后台验证任务无法停止。
+>
+> 存在多个任务时，每个任务按计划轮流执行。例如，创建包含 3 个任务的每周计划，每周都依次执行 1 个任务，3 周后所选磁盘上的验证全部完成。
+>
+> 验证计划关闭时，需手动操控以验证文件完整性。
+:end
+
+:integrity_priority_plug:
+> 后台任务可以正常或低优先级运行。
+:end
+
+:integrity_parity_plug:
+> 若系统校验操作正在运行，验证任务可跳过或正常执行。
+> 如果跳过，到下一轮计划时才会执行验证任务。
+:end
+
+:integrity_day_of_the_week_plug:
+> 若制定周计划，在此选择执行日。
+:end
+
+:integrity_day_of_the_month_plug:
+> 若制定月计划，在此选择执行日期。
+:end
+
+:integrity_time_of_the_day_plug:
+> 选择计划任务执行时分，以 5 分钟为粒度。
+:end
+
+:integrity_notifications_plug:
+> 选择是，检测到文件损坏时接收通知。
+> 如何设置并接收“警告”通知，请参阅系统通知设置页面。
+:end
+
+:integrity_logging_plug:
+> 错误日志记录，包含文件损坏检测信息，可记入系统日志或作为文件存入闪存。
+> 关闭错误日志记录将停止日志创建，但仍可接收通知。
+:end
