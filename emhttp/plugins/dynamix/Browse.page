@@ -1245,7 +1245,7 @@ function uploadFile(files,index,start,time) {
   
   var xhr = new XMLHttpRequest();
   currentXhr = xhr; // Store for abort capability
-  var filePath = dir.replace(/\/+$/, '') + '/' + dfm_htmlspecialchars(file.name);
+  var filePath = dir.replace(/\/+$/, '') + '/' + file.name;
   var url = '/webGui/include/Control.php?mode=upload&file=' + encodeURIComponent(filePath) + '&start=' + start + '&cancel=' + cancel;
   xhr.open('POST', url, true);
   xhr.setRequestHeader('Content-Type', 'application/octet-stream');
@@ -1276,11 +1276,11 @@ function uploadFile(files,index,start,time) {
       var elapsedSeconds = (d.getTime() - time) / 1000;
       var speed = autoscale(bytesTransferred / elapsedSeconds);
       var percent = Math.floor(bytesTransferred / total * 100);
-      $('#dfm_uploadStatus').html("_(Uploading)_: <span class='dfm_percent'>"+percent+"%</span><span class='dfm_speed'>Speed: "+speed+"</span><span class='orange-text'> ["+(index+1)+'/'+files.length+']&nbsp;&nbsp;'+file.name+"</span>");
+      $('#dfm_uploadStatus').html("_(Uploading)_: <span class='dfm_percent'>"+percent+"%</span><span class='dfm_speed'>Speed: "+speed+"</span><span class='orange-text'> ["+(index+1)+'/'+files.length+']&nbsp;&nbsp;'+escapeHtml(file.name)+"</span>");
       uploadFile(files,index,next,time);
     } else if (index < files.length-1) {
       // Clean up temp file for completed upload before starting next file
-      $.post('/webGui/include/Control.php',{mode:'stop',file:encodeURIComponent(dfm_htmlspecialchars(file.name))});
+      $.post('/webGui/include/Control.php',{mode:'stop',file:encodeURIComponent(file.name)});
       uploadFile(files,index+1,0,time);
     } else {stopUpload(file.name); return;}
   };
