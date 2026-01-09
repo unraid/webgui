@@ -76,6 +76,31 @@ function addPoolPopup() {
   });
   dialogStyle();
 }
+function addBootPoolPopup() {
+  var popup = $('#dialogWindow');
+  // Load popup with the template info
+  popup.html($("#templatePopupBootPool").html());
+  // Start Dialog section
+  popup.dialog({
+    title: "_(Add Bootable Pool)_",
+    height: 'auto',
+    width: 600,
+    resizable: false,
+    modal: true,
+    buttons: {
+    "_(Add)_": function() {
+        if (validate($(this).find('input[name="poolName"]').val())) {
+          $(this).find('form').submit();
+          $(this).dialog('close');
+        }
+      },
+    "_(Cancel)_": function() {
+        $(this).dialog('close');
+      }
+    }
+  });
+  dialogStyle();
+}
 function removeOption(inputString,value) {
   // Define a regular expression to match <option>...</option> substrings
   const optionPattern = /<option .*?<\/option>/g;
@@ -190,9 +215,30 @@ $root  = explode($_tilde_,$pool)[0];
 
 <?if (_var($var,'fsState')=="Stopped"):?>
 <input type="button" value="_(Add Pool)_" style="margin:0" onclick="addPoolPopup()">
+<?if (_var($var,'bootEligible')=="yes"):?>
+<input type="button" value="_(Add Bootable Pool)_" style="margin:0" onclick="addBootPoolPopup()">
+<?endif;?>
 
 <div id="templatePopupPool" class="template">
 <form markdown="1" method="POST" action="/update.htm" target="progressFrame" onsubmit="return validate(this.poolName.value)">
+<input type="hidden" name="changeSlots" value="apply">
+
+_(Name)_:
+: <input type="text" name="poolName" maxlength="40" value="<?=count($pools)==0?'cache':''?>">
+
+_(Slots)_:
+: <select name="poolSlots">
+  <?for ($n=1; $n<=2; $n++):?>
+  <?=mk_option(1,$n,$n)?>
+  <?endfor;?>
+  </select>
+
+</form>
+</div>
+
+<div id="templatePopupBootPool" class="template">
+<form markdown="1" method="POST" action="/update.htm" target="progressFrame" onsubmit="return validate(this.poolName.value)">
+<input type="hidden" name="poolBootable" value="yes">
 <input type="hidden" name="changeSlots" value="apply">
 
 _(Name)_:
@@ -204,6 +250,9 @@ _(Slots)_:
   <?=mk_option(1,$n,$n)?>
   <?endfor;?>
   </select>
+
+_(Boot reserved size)_ (_(MiB)_):
+: <input type="number" name="poolBootSize" maxlength="10" value="<?=_var($var,'bootSizeDefault')?>" class="narrow">
 
 </form>
 </div>
