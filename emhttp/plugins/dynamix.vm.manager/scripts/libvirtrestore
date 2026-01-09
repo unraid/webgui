@@ -12,6 +12,10 @@
 ?>
 <?
 
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/Helpers.php";
+require_once "$docroot/plugins/dynamix.vm.manager/include/fs_helpers.php";
+
 $vmsjson = file_get_contents("/boot/config/plugins/dynamix.vm.manager/vms.json");
 $vms = json_decode($vmsjson,true);
 
@@ -21,8 +25,20 @@ foreach ($vms as $vm => $vmdetail) {
   $from_file = $vmdetail['path']."/$vm.xml";
   #echo " from:$from_file     to:$to_file";
   if (file_exists($from_file)) {
-    file_put_contents("/tmp/libvirtrestore","$vm from:$from_file     to:$to_file\n",FILE_APPEND);    #echo " from:$from_file     to:$to_file";
-    #copy($from_file,$to_file);
-  } else       file_put_contents("/tmp/libvirtrestore","Nocpy $vm from:$from_file     to:$to_file\n",FILE_APPEND);    #echo " from:$from_file     to:$to_file";
+    $res = copy_if_different($from_file, $to_file, false);
+    $msg = "$vm from:$from_file to:$to_file";
+    if (!empty($res['error'])) {
+        $msg .= " ERROR:" . $res['error'];
+    } elseif (!empty($res['copied'])) {
+        $msg .= " COPIED";
+    } elseif (!empty($res['would_copy'])) {
+        $msg .= " WOULD_COPY";
+    } else {
+        $msg .= " SKIPPED_IDENTICAL";
+    }
+    file_put_contents("/tmp/libvirtrestore", $msg . "\n", FILE_APPEND);
+  } else {
+    file_put_contents("/tmp/libvirtrestore","Nocpy $vm from:$from_file     to:$to_file\n",FILE_APPEND);
+  }
 }
 ?>
