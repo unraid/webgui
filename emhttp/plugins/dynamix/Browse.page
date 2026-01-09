@@ -59,7 +59,10 @@ function autoscale(value) {
   return ((Math.round(scale*data)/scale)+' '+unit[base]).replace('.','<?=$display['number'][0]?>')+'/s';
 }
 
-// HTML-escape function to preserve literal &amp; and other entities
+// HTML-escape function for displaying literal text in HTML context
+// Converts text to HTML entities (e.g. & -> &amp;) so browsers display the literal characters.
+// For filenames like "foo&amp;bar" (literal), this produces "foo&amp;amp;bar" in HTML,
+// which browsers then decode back to "foo&amp;bar" for display - preserving the literal text.
 function escapeHtml(text) {
   var div = document.createElement('div');
   div.textContent = text;
@@ -68,6 +71,10 @@ function escapeHtml(text) {
 
 // Add warning to dialog buttonpane based on action type
 function addActionWarning(action, isBulk) {
+  if (typeof action !== 'number' || action < 0) {
+    console.warn('Invalid action parameter:', action);
+    return;
+  }
   var warningTexts = isBulk ? {
     0: "<?=_("This creates a folder at the current level")?>",
     1: "<?=_("This deletes all selected sources")?>",
@@ -627,15 +634,18 @@ function navigateFileTree(path) {
   
   openFolderRecursive($tree, pickroot, parts, 0);
   
-  // Reset flag after navigation completes
+  // Reset flag after navigation completes (cap at 10 seconds for deep paths)
+  var maxTimeout = 10000;
+  var calculatedTimeout = parts.length * FOLDER_EXPAND_DELAY + NAVIGATION_BUFFER;
   setTimeout(function() {
     $target.data('isProgrammaticNavigation', false);
     $target.data('savedInputValue', '');
-  }, parts.length * FOLDER_EXPAND_DELAY + NAVIGATION_BUFFER);
+  }, Math.min(calculatedTimeout, maxTimeout));
 }
 
-function openFolderRecursive($tree, pickroot, parts, index) {
-  if (index >= parts.length) return;
+function openFolderRecursive($tree, pickroot, parts, index, maxDepth) {
+  maxDepth = maxDepth || 100; // Default maximum depth
+  if (index >= parts.length || index >= maxDepth) return;
   
   var pathSoFar = pickroot + '/' + parts.slice(0, index + 1).join('/');
   var $folderLink = $tree.find('a[rel="' + pathSoFar + '/"]');
@@ -646,7 +656,7 @@ function openFolderRecursive($tree, pickroot, parts, index) {
   
   if ($folderLi.hasClass('expanded')) {
     setTimeout(function() {
-      openFolderRecursive($tree, pickroot, parts, index + 1);
+      openFolderRecursive($tree, pickroot, parts, index + 1, maxDepth);
     }, 100);
     return;
   }
@@ -654,7 +664,7 @@ function openFolderRecursive($tree, pickroot, parts, index) {
   if ($folderLi.hasClass('collapsed') || $folderLi.hasClass('directory')) {
     $folderLink.trigger('click');
     setTimeout(function() {
-      openFolderRecursive($tree, pickroot, parts, index + 1);
+      openFolderRecursive($tree, pickroot, parts, index + 1, maxDepth);
     }, FOLDER_EXPAND_DELAY);
   }
 }
