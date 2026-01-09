@@ -387,8 +387,8 @@ filemonitor.on('message', function(state) {
 setTimeout(function(){filemonitor.start();},3000);
 
 // File tree navigation constants
-var FOLDER_EXPAND_DELAY = 300;  // Delay per folder expansion in openFolderRecursive (ms)
-var NAVIGATION_BUFFER = 500;    // Additional buffer time for navigation completion (ms)
+var FOLDER_EXPAND_DELAY = 300;  // Delay per folder expansion in openFolderRecursive (ms) - allows DOM updates to complete
+var NAVIGATION_BUFFER = 500;    // Additional buffer time for navigation completion (ms) - ensures all async operations finish
 
 function setupTargetNavigation() {
   var $target = dfm.window.find('#dfm_target');
@@ -591,9 +591,9 @@ function resetFileTree($target) {
   
   // Show the tree again by simulating a click
   // fileTreeAttach checks if html() is empty and will reload
-  setTimeout(function() {
+  requestAnimationFrame(function() {
     $target.click();
-  }, 100);
+  });
 }
 
 function navigateFileTree(path) {
