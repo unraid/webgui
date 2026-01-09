@@ -404,6 +404,9 @@ setTimeout(function(){filemonitor.start();},3000);
 var FOLDER_EXPAND_DELAY = 300;  // Delay per folder expansion in openFolderRecursive (ms) - allows DOM updates to complete
 var NAVIGATION_BUFFER = 500;    // Additional buffer time for navigation completion (ms) - ensures all async operations finish
 
+// Global cleanup function for dialog close - set by setupTargetNavigation() if navigation is used
+var dfm_cleanupNavigationListeners = null;
+
 function setupTargetNavigation() {
   var $target = dfm.window.find('#dfm_target');
   if (!$target.length) return;
@@ -558,8 +561,8 @@ function setupTargetNavigation() {
     }
   });
   
-  // Cleanup on dialog close
-  dfm.window.on('dialogclose', function() {
+  // Set global cleanup function to remove event listeners on dialog close
+  dfm_cleanupNavigationListeners = function() {
     document.removeEventListener('click', treeClickHandler, true);
     document.removeEventListener('click', popularClickHandler, true);
     if (inputElement) {
@@ -567,7 +570,11 @@ function setupTargetNavigation() {
       inputElement.removeEventListener('focus', preventClose, true);
       inputElement.removeEventListener('click', preventClose, true);
     }
-  });
+    dfm_cleanupNavigationListeners = null; // Clear reference after cleanup
+  };
+  
+  // Also bind to dialogclose event as additional safety
+  dfm.window.on('dialogclose', dfm_cleanupNavigationListeners);
 }
 
 function closeFolderPath(path) {
@@ -652,7 +659,7 @@ function openFolderRecursive($tree, pickroot, parts, index, maxDepth) {
   
   if ($folderLink.length === 0) return;
   
-  var $folderLi = $folderLink.parent();
+  var $folderLi = $folderLink.closest('li');
   
   if ($folderLi.hasClass('expanded')) {
     setTimeout(function() {
@@ -801,6 +808,10 @@ function doAction(action, title, id) {
     modal: true,
     close: function() {
       $('.ui-dfm').off('mousedown.dfmFileTree');
+      // Cleanup navigation event listeners if navigation was set up
+      if (typeof dfm_cleanupNavigationListeners === 'function') {
+        dfm_cleanupNavigationListeners();
+      }
     },
     open: function() {
       addActionWarning(action, false);
@@ -1078,6 +1089,10 @@ function doActions(action, title) {
     modal: true,
     close: function() {
       $('.ui-dfm').off('mousedown.dfmFileTree');
+      // Cleanup navigation event listeners if navigation was set up
+      if (typeof dfm_cleanupNavigationListeners === 'function') {
+        dfm_cleanupNavigationListeners();
+      }
     },
     open: function() {
       addActionWarning(action, true);
