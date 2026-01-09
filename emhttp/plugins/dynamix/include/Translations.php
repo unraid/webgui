@@ -27,7 +27,7 @@ if (file_exists($session)) {
 
 function _($text, $do=-1) {
   // PHP translation function _
-  global $language;
+  global $language, $locale;
 
 
   $text = trim($text);
@@ -50,6 +50,11 @@ function _($text, $do=-1) {
     [$p1,$p2] = array_pad(preg_split('/(?<=[a-z])(?= ?[0-9]+)/i',$text),2,'');
     return _($p1).$p2;
   default: // regular translation
+    if (!$locale || $locale == 'en_US') {
+      return $text;
+    } else {
+      return gettext($text);
+    }
     $text = $language[preg_replace(['/\&amp;|[\?\{\}\|\&\~\!\[\]\(\)\/\\:\*^\.\"\']|<.+?\/?>/','/^(null|yes|no|true|false|on|off|none)$/i','/  +/'],['','$1.',' '],$text)] ?? $text;
     return preg_replace(['/\*\*(.+?)\*\*/','/\*(.+?)\*/',"/'/"],['<b>$1</b>','<i>$1</i>','&apos;'],$text);
   }
@@ -130,6 +135,11 @@ $return   = "function _(t){return t;}";
 $jscript  = "$docroot/webGui/javascript/translate.en_US.js";
 $root     = "$docroot/languages/en_US/helptext.txt";
 $help     = "$docroot/languages/en_US/helptext.dot";
+
+setlocale(LC_ALL, 'en_US.UTF-8');
+bindtextdomain($locale ?: "en_US", "/usr/local/emhttp/locale");
+bind_textdomain_codeset($locale ?: "en_US", "UTF-8");
+textdomain($locale ?: "en_US");
 
 if ($locale) {
   $text = "$docroot/languages/$locale/translations.txt";

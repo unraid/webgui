@@ -21,4 +21,5 @@ if (file_exists($file)) {
 } else {
   file_put_contents($file, "[display]\nlocale=\"$lang\"\n");
 }
+exec("/usr/local/emhttp/plugins/dynamix/scripts/buildTranslations.php $lang");
 ?>

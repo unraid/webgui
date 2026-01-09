@@ -802,8 +802,8 @@ HTML;
     $id = $type === 'array' ? 'array-notice-warning' : 'pool-notice-warning';
     $title = htmlspecialchars($type === 'array' ? 'Notice: Filesystem Update Available' : 'Notice: Pool Filesystem Update Available');
     $description = htmlspecialchars($type === 'array' ? 
-      'The following array devices are using older filesystem versions:' : 
-      'The following pool devices are using older filesystem versions:');
+      _('The following array devices are using older filesystem versions:') : 
+      _('The following pool devices are using older filesystem versions:'));
     
     $diskList = '';
     foreach ($notice_disks as $disk) {
