@@ -237,7 +237,7 @@ fi
 # limetech - but not /, /lib, /usr or /boot (yet)
 log "Unmounting local file systems:"
 EXCLUDE_TYPES=("proc" "sysfs" "tmpfs" "devtmpfs" "devpts" "nfsd")
-EXCLUDE_PATHS=("/" "/lib" "/usr" "/boot")
+EXCLUDE_PATHS=("/" "/lib" "/usr" "/boot" "/tmp/boot")
 while IFS= read -r LINE; do
   MOUNT_TYPE=$(/bin/echo "$LINE" | awk '{print $3}')
   MOUNT_PATH=$(/bin/echo "$LINE" | awk '{print $2}')
@@ -265,6 +265,25 @@ fi
 
 log "Remounting /boot read-only:"
 run /bin/mount -v -o remount,ro /boot
+
+# Check for boot transfer
+if /bin/mountpoint /tmp/boot ; then
+  log "Transfering boot configuration"
+  /usr/bin/rsync -av \
+    --exclude='/EFI*' \
+    --exclude='/FOUND*' \
+    --exclude='/FSCK*' \
+    --exclude='/System*' \
+    --exclude='/grub' \
+    --exclude='/ldlinux*' \
+    --exclude='/make_bootable*' \
+    --exclude='/syslinux' \
+    /boot/ /tmp/boot
+  log "sync"
+  /bin/sync
+  /bin/umount /tmp/boot
+  /bin/rmdir /tmp/boot
+fi
 
 log "Remounting /lib read-only:"
 run /bin/mount -v -o remount,ro /lib

@@ -1,0 +1,32 @@
+Menu="NetworkServices"
+Icon="tailscale.png"
+Title="Tailscale"
+---
+<?PHP
+/* Copyright 2005-2023, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+*/
+?>
+<script>
+function installPlugin(file) {
+  openPlugin("plugin install "+file,"_(Install Plugin)_","","refresh");
+}
+</script>
+
+<div class="notice">_(Click **Install** to download and install the **Tailscale** plugin)_</div>
+
+<form markdown="1" name="ca_install" method="POST" target="progressFrame">
+<input type="hidden" name="file" value="https://ca.unraid.net/dl/https://raw.githubusercontent.com/unraid/unraid-tailscale/main/plugin/tailscale.plg">
+
+&nbsp;
+: <span class="inline-block">
+    <input type="button" value="_(Install)_" onclick="installPlugin(this.form.file.value)">
+  </span>
+</form>

@@ -130,17 +130,18 @@ function dfm_escapeHTML(name) {
 
 function dfm_createSource(source) {
   var select = dfm.window.find('#dfm_source');
+  select.empty(); // Clear existing options
   if (Array.isArray(source)) {
     for (var i=0,object; object=source[i]; i++) {
       if (i < 10) {
-        select.html(select.html()+'<option'+(i==0?' selected':'')+'>'+object+'</option>');
+        $('<option></option>').text(object).prop('selected', i==0).appendTo(select);
       } else {
-        select.html(select.html()+'<option>&lt;_(more)_&gt; ...</option>');
+        select.append('<option>&lt;_(more)_&gt; ...</option>');
         break;
       }
     }
   } else {
-    select.html('<option selected>'+source+'</option>');
+    $('<option selected></option>').text(source).appendTo(select);
   }
 }
 

@@ -51,7 +51,45 @@ case 'ttyd':
     // no child processes, restart ttyd to pick up possible font size change
     if ($retval != 0) exec("kill ".$ttyd_pid[0]);
   }
-  if ($retval != 0) exec("ttyd-exec -i '$sock' '" . posix_getpwuid(0)['shell'] . "' --login");
+  
+  $more = $_GET['more'] ?? '';
+  if (!empty($more) && substr($more, 0, 1) === '/') {
+    // Terminal at specific path - use 'more' parameter to pass path
+    // Note: openTerminal(tag, name, more) in JS only has 3 params, so we reuse 'more'
+    // Note: Used by File Manager to open terminal at specific folder
+    
+    // Validate path
+    $real_path = realpath($more);
+    if ($real_path === false) {
+      // Path doesn't exist - fall back to home directory
+      $real_path = '/root';
+    }
+    
+    $name = unbundle($_GET['name']);
+    $exec = "/var/tmp/$name.run.sh";
+    $escaped_path = str_replace("'", "'\\''", $real_path);
+    // Escape sed metacharacters: & (matched string), \\ (escape char), / (delimiter)
+    $sed_escaped = str_replace(['\\', '&', '/'], ['\\\\', '\\&', '\\/'], $escaped_path);
+    
+    // Create startup script similar to ~/.bashrc
+    // Note: We can not use ~/.bashrc as it loads /etc/profile which does 'cd $HOME'
+    $script_content = <<<BASH
+#!/bin/bash
+# Modify /etc/profile to replace 'cd \$HOME' with our target path
+sed 's#^cd \$HOME#cd '\''$sed_escaped'\''#' /etc/profile > /tmp/$name.profile
+source /tmp/$name.profile
+source /root/.bash_profile 2>/dev/null
+rm /tmp/$name.profile
+exec bash --norc -i
+BASH;
+    
+    file_put_contents($exec, $script_content);
+    chmod($exec, 0755);
+    exec("ttyd-exec -i '$sock' $exec");
+  } else {
+    // Standard login shell
+    if ($retval != 0) exec("ttyd-exec -i '$sock' '" . posix_getpwuid(0)['shell'] . "' --login");
+  }
   break;
 case 'syslog':
   // read syslog file
