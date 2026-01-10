@@ -132,6 +132,8 @@ $(function() {
         if (sw.cls === 'showsriov') {
           setSwitch('shownetwork', true);
           $.cookie('sysdev_shownetwork', 'yes', {expires:3650});
+          setSwitch('showdisplay', true);
+          $.cookie('sysdev_showdisplay', 'yes', {expires:3650});
         }
       }
 
@@ -198,12 +200,12 @@ function applyCfg() {
   });
 }
 
-function saveVFSettingsConfig(pciId,vd,interactive=1) {
+function saveVFSettingsConfig(pciId,vd,class_id,interactive=1) {
   var message = "_(System Devices)_: _(A reboot is required to apply changes)_";
-  var mac = document.getElementById("vfmac" + pciId).value;
+  if (class_id == '0x02') mac = document.getElementById("vfmac" + pciId).value; else mac = null;
   var vfio = document.getElementById("vfvfio" + pciId).checked;
 
-  $.post( "/plugins/dynamix/include/update.sriov-cfg.php", { type:"sriovsettings", pciid: pciId, vd:vd, vfio:vfio, mac:mac } )
+  $.post( "/plugins/dynamix/include/update.sriov-cfg.php", { type:"sriovsettings", pciid: pciId, vd:vd, vfio:vfio, mac:mac, class_id:class_id } )
   .done(function(d) {
     if (d==1) {
       if (interactive == 1)         
@@ -426,10 +428,10 @@ function applyVFsConfig(pciId, vd, vfs) {
   });
 }
 
-function applyVFSettings(pciId, vd, currentvfio, currentmac) {
+function applyVFSettings(pciId, vd, currentvfio, currentmac,class_id) {
 
   const message = "_(System Devices)_: _(A reboot is required to apply changes)_";
-  const mac = document.getElementById("vfmac" + pciId).value;
+  if (class_id == '0x02') mac = document.getElementById("vfmac" + pciId).value; else mac = null;
   const vfio = document.getElementById("vfvfio" + pciId).checked;
 
   // --- Step 1: Check for active VMs (always returns JSON) ---
@@ -470,7 +472,7 @@ function applyVFSettings(pciId, vd, currentvfio, currentmac) {
 
       return;
     }
-    doVFSettingApply(pciId, vd, vfio, mac, currentvfio,currentmac,message);
+    doVFSettingApply(pciId, vd, vfio, mac, currentvfio,currentmac,class_id, message);
   })
   .fail(function (xhr, status, error) {
     console.error("Active check failed:", status, error, xhr.responseText);
@@ -482,7 +484,7 @@ function applyVFSettings(pciId, vd, currentvfio, currentmac) {
     });
   });
 }
-function doVFSettingApply(pciId, vd, vfio, mac, currentvfio, currentmac, message) {
+function doVFSettingApply(pciId, vd, vfio, mac, currentvfio, currentmac, class_id, message) {
   // Show "updating" alert
   swal({
     title: _("Updating..."),
@@ -501,7 +503,8 @@ function doVFSettingApply(pciId, vd, vfio, mac, currentvfio, currentmac, message
       vfio: vfio,
       mac: mac,
       currentvfio: currentvfio,
-      currentmac: currentmac
+      currentmac: currentmac,
+      class_id: class_id
   })
   .done(function (response) {
     let data;
@@ -522,7 +525,7 @@ function doVFSettingApply(pciId, vd, vfio, mac, currentvfio, currentmac, message
     // SUCCESS
     if (data.success) {
 
-      saveVFSettingsConfig(pciId, vd, 0);
+      saveVFSettingsConfig(pciId, vd, class_id, 0);
 
       // data.details may be:
       // - string
