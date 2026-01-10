@@ -13,6 +13,7 @@
 <?
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Helpers.php";
+require_once "$docroot/plugins/dynamix/include/PopularDestinations.php";
 
 // add translations
 $_SERVER['REQUEST_URI'] = '';
@@ -44,7 +45,7 @@ function quoted($name) {return is_array($name) ? implode(' ',array_map('escape',
 
 switch ($_POST['mode'] ?? $_GET['mode'] ?? '') {
 case 'upload':
-  $file = validname(htmlspecialchars_decode(rawurldecode($_POST['file'] ?? $_GET['file'] ?? '')));
+  $file = validname(rawurldecode($_POST['file'] ?? $_GET['file'] ?? ''));
   if (!$file) die('stop');
   $start = (int)($_POST['start'] ?? $_GET['start'] ?? 0);
   $cancel = (int)($_POST['cancel'] ?? $_GET['cancel'] ?? 0);
@@ -93,7 +94,7 @@ case 'upload':
   die();
 case 'calc':
   extract(parse_plugin_cfg('dynamix',true));
-  $source = explode("\n",htmlspecialchars_decode(rawurldecode($_POST['source'])));
+  $source = explode("\n",rawurldecode($_POST['source'] ?? ''));
   [$null,$root,$main,$rest] = my_explode('/',$source[0],4);
   if ($root=='mnt' && in_array($main,['user','user0'])) {
     $disks = parse_ini_file('state/disks.ini',true);
@@ -120,8 +121,8 @@ case 'calc':
   $calc   = '<div style="text-align:left;margin-left:56px">'.implode('<br>',$calc).'</div>';
   die($calc);
 case 'home':
-  $source = explode("\n",htmlspecialchars_decode(rawurldecode($_POST['source'])));
-  $target = htmlspecialchars_decode(rawurldecode($_POST['target']));
+  $source = explode("\n",rawurldecode($_POST['source'] ?? ''));
+  $target = rawurldecode($_POST['target'] ?? '');
   $disks = parse_ini_file('state/disks.ini',true);
   $tag  = implode('|',array_merge(['disk'],pools_filter($disks)));
   $loc1 = implode(',',array_unique(array_filter(explode(',',preg_replace("/($tag)/",',$1',exec("getfattr --no-dereference --absolute-names --only-values -n system.LOCATIONS ".quoted($source)." 2>/dev/null"))))));
@@ -152,8 +153,9 @@ case 'save':
   if ($file = validname(rawurldecode($_POST['file']))) file_put_contents($file,rawurldecode($_POST['data']));
   die();
 case 'stop':
-  $file = htmlspecialchars_decode(rawurldecode($_POST['file']));
-  delete_file("/var/tmp/$file.tmp");
+  // Prevent path traversal: only use basename (no directory components)
+  $file = basename(rawurldecode($_POST['file'] ?? ''));
+  if ($file !== '') delete_file("/var/tmp/$file.tmp");
   die();
 case 'start':
   $active = '/var/tmp/file.manager.active';
@@ -163,6 +165,30 @@ case 'start':
     // read first JSON line from jobs file and write to active
     $lines = file($jobs, FILE_IGNORE_NEW_LINES);
     if (!empty($lines)) {
+      // Skip invalid JSON entries (scan once, slice once)
+      $skipped = 0;
+      $data = null;
+      for ($i = 0, $n = count($lines); $i < $n; $i++) {
+        $data = json_decode($lines[$i], true);
+        if ($data) break;
+        $skipped++;
+      }
+      if ($skipped > 0) {
+        exec('logger -t webGUI "Warning: Skipped '.$skipped.' invalid JSON entr'.($skipped===1?'y':'ies').' in file manager job queue"');
+        $lines = array_slice($lines, $skipped);
+      }
+      
+      if (empty($lines)) {
+        // No valid JSON entries found
+        delete_file($jobs);
+        die('0');
+      }
+      
+      // Update popular destinations when dequeuing a job
+      if (in_array((int)($data['action'] ?? 0), [3, 4, 8, 9]) && !empty($data['target'] ?? '')) {
+        updatePopularDestinations($data['target']);
+      }
+      
       file_put_contents($active, $lines[0]);
       // remove first line from jobs file
       array_shift($lines);
@@ -180,9 +206,13 @@ case 'undo':
   $jobs = '/var/tmp/file.manager.jobs';
   $undo = '0';
   if (file_exists($jobs)) {
-    $rows = array_reverse(explode(',',$_POST['row']));
+    $rows = explode(',', $_POST['row'] ?? '');
     $lines = file($jobs, FILE_IGNORE_NEW_LINES);
     foreach ($rows as $row) {
+      $row = trim($row);
+      if ($row === '' || !ctype_digit($row)) continue;
+      $row = (int)$row;
+      if ($row < 1) continue;
       $line_number = $row - 1; // Convert 1-based job number to 0-based array index
       if (isset($lines[$line_number])) {
         unset($lines[$line_number]);
@@ -205,10 +235,10 @@ case 'file':
   $active = '/var/tmp/file.manager.active';
   $jobs   = '/var/tmp/file.manager.jobs';
   $data = [
-    'action' => $_POST['action'] ?? '',
+    'action' => (int)($_POST['action'] ?? 0),
     'title' => rawurldecode($_POST['title'] ?? ''),
-    'source' => htmlspecialchars_decode(rawurldecode($_POST['source'] ?? '')),
-    'target' => htmlspecialchars_decode(rawurldecode($_POST['target'] ?? '')),
+    'source' => rawurldecode($_POST['source'] ?? ''),
+    'target' => rawurldecode($_POST['target'] ?? ''),
     'H' => empty($_POST['hdlink']) ? '' : 'H',
     'sparse' => empty($_POST['sparse']) ? '' : '--sparse',
     'exist' => empty($_POST['exist']) ? '--ignore-existing' : '',
@@ -221,7 +251,13 @@ case 'file':
   } else {
     // start operation
     file_put_contents($active, json_encode($data));
+    // Update popular destinations only when an operation actually starts
+    // Action types: 3=copy folder, 4=move folder, 8=copy file, 9=move file
+    if (in_array((int)$data['action'], [3, 4, 8, 9]) && !empty($data['target'])) {
+      updatePopularDestinations($data['target']);
+    }
   }
+  
   die();
 }
 ?>

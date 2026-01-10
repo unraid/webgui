@@ -1484,7 +1484,7 @@ div.icon-zip {
         flex-direction: column;
         align-items: center;
         height: auto !important;
-        min-height: 35vh !important;
+        min-height: 20vh !important;
         max-height: 70vh !important;
         overflow-y: auto;
         padding-top: 2rem;
@@ -1495,13 +1495,39 @@ div.icon-zip {
         }
     }
 
-    .dfm_info {
-        margin-top: auto;
-    }
+}
 
+/* File Manager: Target input with file tree navigation needs large bottom margin
+ * to prevent tree dropdown from being cut off by dialog bounds.
+ * Value: 320px accommodates typical tree height in copy/move dialogs */
+.dfm-target-with-tree {
+    margin-bottom: 320px !important;
+}
+
+/* File Manager: Path display textarea in xlink() dialog
+ * Shows selectable file/folder paths with auto-copy on click */
+.dfm-path-textarea {
+    resize: none;
+    overflow: hidden;
+    height: auto;
+    min-height: 2.6rem;
+    line-height: 1.3rem;
+    padding: 0.5rem;
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--inverse-border-color);
+    border-radius: 3px;
+    background-color: var(--background-color);
 }
 
 .ui-dialog-buttonpane {
+    .dfm-warning {
+        margin-right: 10px;
+        display: inline-block;
+        vertical-align: middle;
+        color: var(--alt-text-color);
+    }
+    
     .ui-dialog-buttonset {
         button {
             font-family: clear-sans;
@@ -1745,5 +1771,48 @@ div.icon-zip {
 
     &-value {
         flex: 3;
+    }
+}
+
+/* Mobile dialog improvements (<767px)
+ * Note: These rules apply to ALL dialogs (Docker, VM, Share settings, File Manager, etc.)
+ * to improve mobile UX across the entire application.
+ */
+@media (max-width: 767px) {
+    /* Remove padding-bottom from dialog content for better mobile layout */
+    .ui-dialog .ui-dialog-content {
+        padding-bottom: 0 !important;
+    }
+    
+    /* Remove padding-bottom from dl elements in dialogs */
+    .ui-dialog dl {
+        padding-bottom: 0 !important;
+    }
+    
+    /* Hide dt elements containing wbr (spacers) - these create unwanted gaps in mobile layout
+     * Note: <wbr /> is used in File Manager templates as markdown definition list trigger */
+    .ui-dialog dt:has(wbr) {
+        display: none;
+    }
+    
+    /* Center dd elements that follow hidden dt spacers (e.g., "copy to ...", "move to ...") */
+    .ui-dialog dt:has(wbr) + dd {
+        text-align: center;
+    }
+    
+    /* File Manager specific: warning text and button layout */
+    .ui-dialog-buttonpane {
+        .dfm-warning {
+            display: block;
+            width: 100%;
+            margin-right: 0;
+            margin-top: 10px;
+            text-align: center;
+        }
+        
+        .ui-dialog-buttonset {
+            width: 100%;
+            text-align: center;
+        }
     }
 }

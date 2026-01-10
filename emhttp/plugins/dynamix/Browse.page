@@ -28,9 +28,11 @@ function validdir($dir) {
   return in_array(explode('/', $path)[1] ?? '', ['mnt','boot']) ? $path : '';
 }
 
-$dir     = validdir(htmlspecialchars_decode($dir));
+$dir     = validdir(rawurldecode($dir));
 [$none,$root,$main,$next,$rest] = my_explode('/', $dir,5);
-$dir     = htmlspecialchars(str_replace('\\','\\\\', $dir));
+// For JavaScript context: json_encode() properly escapes quotes, backslashes, newlines, etc.
+// JSON_UNESCAPED_SLASHES keeps paths readable, JSON_UNESCAPED_UNICODE preserves UTF-8
+$dir_js  = json_encode($dir, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 $lock    = $root == 'mnt' ? ($main ?: '---') : ($root == 'boot' ? _('flash') : '---');
 $isshare = $root == 'mnt' && (!$main || !$next || ($main == 'rootshare' && !$rest));
 $editor  = '/boot/config/editor.cfg';
@@ -44,7 +46,7 @@ if (!file_exists($editor)) file_put_contents($editor, implode("\n",['','txt','js
 <script src="<?autov("/webGui/javascript/jquery.switchbutton.js")?>"></script>
 <script>
 // General variables
-var dir   = "<?=$dir?>";
+var dir   = <?=$dir_js?>;
 var table = null;
 var thead = null;
 
@@ -55,6 +57,50 @@ function autoscale(value) {
   var scale = data<100?100:10;
   if (data == 0) base = 0;
   return ((Math.round(scale*data)/scale)+' '+unit[base]).replace('.','<?=$display['number'][0]?>')+'/s';
+}
+
+// HTML-escape function for displaying literal text in HTML context
+// Converts text to HTML entities (e.g. & -> &amp;) so browsers display the literal characters.
+// For filenames like "foo&amp;bar" (literal), this produces "foo&amp;amp;bar" in HTML,
+// which browsers then decode back to "foo&amp;bar" for display - preserving the literal text.
+function escapeHtml(text) {
+  var div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Add warning to dialog buttonpane based on action type
+function addActionWarning(action, isBulk) {
+  if (typeof action !== 'number' || action < 0) {
+    console.warn('Invalid action parameter:', action);
+    return;
+  }
+  var warningTexts = isBulk ? {
+    0: "<?=_("This creates a folder at the current level")?>",
+    1: "<?=_("This deletes all selected sources")?>",
+    2: "<?=_("This renames the selected source")?>",
+    3: "<?=_("This copies all the selected sources")?>",
+    4: "<?=_("This moves all the selected sources")?>",
+    11: "<?=_("This changes the owner of the source recursively")?>",
+    12: "<?=_("This changes the permission of the source recursively")?>"
+  } : {
+    0: "<?=_("This creates a folder at the current level")?>",
+    1: "<?=_("This deletes the folder and all its content")?>",
+    2: "<?=_("This renames the folder to the new name")?>",
+    3: "<?=_("This copies the folder and all its content to another folder")?>",
+    4: "<?=_("This moves the folder and all its content to another folder")?>",
+    6: "<?=_("This deletes the selected file")?>",
+    7: "<?=_("This renames the selected file")?>",
+    8: "<?=_("This copies the selected file")?>",
+    9: "<?=_("This moves the selected file")?>",
+    11: "<?=_("This changes the owner of the source recursively")?>",
+    12: "<?=_("This changes the permission of the source recursively")?>"
+  };
+  var warningText = warningTexts[action];
+  if (warningText) {
+    var $warning = $('<div class="dfm-warning">').html('<i class="fa fa-warning dfm"></i> ' + warningText);
+    $('.ui-dfm .ui-dialog-buttonset').prepend($warning);
+  }
 }
 
 function preventFileTreeClose() {
@@ -256,7 +302,7 @@ function fileEdit(id) {
   // file editor dialog
   dfm.window.html($("#dfm_templateEditFile").html().replace('{$0}',source).dfm_build());
   dfm.window.dialog({
-    classes: {'ui-dialog': 'ui-dfm'},
+    classes: {'ui-dialog': 'ui-dfm ui-corner-all'},
     autoOpen: true,
     title: fileName(source),
     width: 'auto',
@@ -267,10 +313,12 @@ function fileEdit(id) {
     buttons: {
       "_(Save)_": function(){
         $.post('/webGui/include/Control.php',{mode:'save', file:encodeURIComponent(source), data:encodeURIComponent(editor.session.getValue())});
+        dfm.window.dialog('close');
         dfm.window.dialog('destroy');
         setTimeout(loadList,100);
       },
       "_(Cancel)_": function(){
+        dfm.window.dialog('close');
         dfm.window.dialog('destroy');
       }
     }
@@ -299,7 +347,7 @@ function doJobs(title) {
   dfm.window = $("#dfm_dialogWindow");
   dfm.window.html($('#dfm_templateJobs').html().dfm_build());
   dfm.window.dialog({
-    classes: {'ui-dialog': 'ui-dfm'},
+    classes: {'ui-dialog': 'ui-dfm ui-corner-all'},
     autoOpen: true,
     title: title,
     height: 'auto',
@@ -336,6 +384,7 @@ function doJobs(title) {
         });
       },
       "_(Done)_": function(){
+        dfm.window.dialog('close');
         dfm.window.dialog('destroy');
       }
     }
@@ -350,6 +399,282 @@ filemonitor.on('message', function(state) {
   if (state == 1 && !dfm.running && !timers.filemonitor) timers.filemonitor = setTimeout(function(){if (dfm.running) clearTimeout(timers.filemonitor); else refresh();},1500);
 });
 setTimeout(function(){filemonitor.start();},3000);
+
+// File tree navigation constants
+var FOLDER_EXPAND_DELAY = 300;  // Delay per folder expansion in openFolderRecursive (ms) - allows DOM updates to complete
+var NAVIGATION_BUFFER = 500;    // Additional buffer time for navigation completion (ms) - ensures all async operations finish
+
+// Global cleanup function for dialog close - set by setupTargetNavigation() if navigation is used
+var dfm_cleanupNavigationListeners = null;
+
+function setupTargetNavigation() {
+  var $target = dfm.window.find('#dfm_target');
+  if (!$target.length) return;
+  
+  var navigationTimeout;
+  var inputElement = $target[0];
+  var isNavigatingFromPopular = false;
+  var isProgrammaticNavigation = false;  // Flag for programmatic tree navigation
+  var savedInputValue = '';  // Save input value during programmatic navigation
+  var lastNavigatedPath = '';  // Track last navigated path for backward navigation
+  
+  // Event handlers for capture phase to prevent fileTree from closing
+  var preventClose = function(e) {
+    // Re-open tree if it was closed (must do this BEFORE stopImmediatePropagation)
+    if (e.type === 'click') {
+      var $tree = $target.closest('dd').find('.fileTree');
+      if ($tree.length && !$tree.is(':visible')) {
+        // Only show if tree has content
+        var $content = $tree.find('.jqueryFileTree');
+        if ($content.length && $content.children().length > 0) {
+          try {
+            $tree.show();
+          } catch(err) {
+            console.error('Error showing tree:', err);
+          }
+        }
+      }
+    }
+    
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+  };
+  
+  // Attach to input element in capture phase (runs before jquery.filetree.js handler)
+  if (inputElement) {
+    inputElement.addEventListener('mousedown', preventClose, true);
+    inputElement.addEventListener('focus', preventClose, true);
+    inputElement.addEventListener('click', preventClose, true);
+  }
+  
+  // Handle clicks on ANY tree item to remove popular destinations
+  var treeClickHandler = function(e) {
+    var $link = $(e.target).closest('.jqueryFileTree a');
+    if ($link.length === 0) return;
+    
+    // Remove popular section when clicking on any tree item (except popular items themselves)
+    if (!$link.closest('.popular-destination').length) {
+      var $tree = $('.fileTree .jqueryFileTree');
+      $tree.find('.popular-header, .popular-destination, .popular-separator').remove();
+    }
+  };
+  
+  // Attach tree click handler in capture phase
+  document.addEventListener('click', treeClickHandler, true);
+  
+  // Handle clicks on popular destinations - use capture phase to run before jQueryFileTree handler
+  var popularClickHandler = function(e) {
+    var $link = $(e.target).closest('.popular-destination a');
+    if ($link.length === 0) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    
+    // Get path from data-path attribute
+    var path = $link.attr('data-path');
+    if (!path) return;
+    
+    // Remove trailing slash for input field
+    var cleanPath = path.replace(/\/+$/, '');
+    
+    // Remove popular section immediately (before any navigation)
+    var $tree = $('.fileTree .jqueryFileTree');
+    $tree.find('.popular-header, .popular-destination, .popular-separator').remove();
+    
+    // Set flag to prevent input handler from triggering
+    isNavigatingFromPopular = true;
+    
+    // Set input field value (this triggers 'input' event)
+    $target.val(cleanPath + '/');
+    
+    // Trigger navigation to expand the path in normal tree
+    navigateFileTree(cleanPath + '/');
+    lastNavigatedPath = cleanPath + '/';
+    
+    // Reset flag after a short delay
+    setTimeout(function() {
+      isNavigatingFromPopular = false;
+    }, 100);
+    
+    return false;
+  };
+  
+  // Attach in capture phase to run before jQueryFileTree handlers
+  document.addEventListener('click', popularClickHandler, true);
+  
+  // Hide/show popular destinations based on input field content
+  $target.on('input', function() {
+    // Ignore input events triggered by popular click or programmatic navigation
+    if (isNavigatingFromPopular || isProgrammaticNavigation) {
+      return;
+    }
+    
+    var inputValue = this.value.trim();
+    var $tree = $('.fileTree .jqueryFileTree');
+    
+    if (inputValue) {
+      // Input is not empty - remove popular destinations completely
+      $tree.find('.popular-header, .popular-destination, .popular-separator').remove();
+    } else {
+      // Input is empty - popular destinations will be shown on next tree reload
+    }
+    
+    clearTimeout(navigationTimeout);
+    
+    if (!inputValue) {
+      // Reset tree to initial state when input is cleared
+      resetFileTree($target);
+      lastNavigatedPath = '';
+      return;
+    }
+    if (inputValue[inputValue.length - 1] !== '/') return;
+    
+    // Check if we're navigating backward (path got shorter)
+    if (lastNavigatedPath && inputValue.length < lastNavigatedPath.length && lastNavigatedPath.startsWith(inputValue)) {
+      // Close all folders between the new path and the old path
+      var pathToClose = lastNavigatedPath;
+      while (pathToClose.length > inputValue.length) {
+        closeFolderPath(pathToClose);
+        // Remove the last segment to go up one level
+        pathToClose = pathToClose.replace(/\/+$/, '');  // Remove trailing slashes
+        var lastSlash = pathToClose.lastIndexOf('/');
+        if (lastSlash === -1) break;
+        pathToClose = pathToClose.substring(0, lastSlash + 1);
+      }
+      lastNavigatedPath = inputValue;
+      return;
+    }
+    
+    navigationTimeout = setTimeout(function() {
+      navigateFileTree(inputValue);
+      lastNavigatedPath = inputValue;
+    }, 200);
+  });
+  
+  // Restore input value if changed during programmatic navigation
+  $target.on('change', function() {
+    var isProgrammaticNav = $target.data('isProgrammaticNavigation');
+    var savedValue = $target.data('savedInputValue');
+    if (isProgrammaticNav && savedValue) {
+      this.value = savedValue;
+    }
+  });
+  
+  // Set global cleanup function to remove event listeners on dialog close
+  dfm_cleanupNavigationListeners = function() {
+    document.removeEventListener('click', treeClickHandler, true);
+    document.removeEventListener('click', popularClickHandler, true);
+    if (inputElement) {
+      inputElement.removeEventListener('mousedown', preventClose, true);
+      inputElement.removeEventListener('focus', preventClose, true);
+      inputElement.removeEventListener('click', preventClose, true);
+    }
+    dfm_cleanupNavigationListeners = null; // Clear reference after cleanup
+  };
+  
+  // Also bind to dialogclose event as additional safety
+  dfm.window.on('dialogclose', dfm_cleanupNavigationListeners);
+}
+
+function closeFolderPath(path) {
+  var $tree = $('.jqueryFileTree').first();
+  if ($tree.length === 0) return;
+  
+  // Remove trailing slash for searching
+  var cleanPath = path.replace(/\/+$/, '');
+  
+  // Find the folder link by rel attribute
+  var $folderLink = $tree.find('a[rel="' + cleanPath + '/"]');
+  if ($folderLink.length === 0) return;
+  
+  var $folderLi = $folderLink.closest('li');
+  
+  // Close the folder: change class from expanded to collapsed
+  $folderLi.removeClass('expanded').addClass('collapsed');
+  
+  // Remove all child elements (the nested <ul>)
+  $folderLi.find('ul').remove();
+}
+
+function resetFileTree($target) {
+  // Find the .fileTree container (not the jqueryFileTree inside it)
+  var $treeContainer = $target.siblings('.fileTree');
+  if ($treeContainer.length === 0) {
+    return;
+  }
+  
+  // Hide the tree first
+  $treeContainer.hide();
+  
+  // Empty the container - this will cause fileTreeAttach to reload on next click
+  $treeContainer.empty();
+  
+  // Show the tree again by simulating a click
+  // fileTreeAttach checks if html() is empty and will reload
+  requestAnimationFrame(function() {
+    $target.click();
+  });
+}
+
+function navigateFileTree(path) {
+  var $tree = $('.jqueryFileTree').first();
+  if ($tree.length === 0) {
+    return;
+  }
+  
+  var $target = dfm.window.find('#dfm_target');
+  var pickroot = $target.attr('data-pickroot') || '/mnt';
+  
+  path = path.replace(/\/+$/, '');
+  
+  if (path.indexOf(pickroot) !== 0) {
+    return;
+  }
+  
+  var relativePath = path.substring(pickroot.length).replace(/^\/+/, '');
+  var parts = relativePath.split('/').filter(function(p) { return p.length > 0; });
+  
+  // Use jQuery.data() to store values accessible from anywhere
+  $target.data('savedInputValue', path + '/');
+  $target.data('isProgrammaticNavigation', true);
+  
+  openFolderRecursive($tree, pickroot, parts, 0);
+  
+  // Reset flag after navigation completes (cap at 10 seconds for deep paths)
+  var maxTimeout = 10000;
+  var calculatedTimeout = parts.length * FOLDER_EXPAND_DELAY + NAVIGATION_BUFFER;
+  setTimeout(function() {
+    $target.data('isProgrammaticNavigation', false);
+    $target.data('savedInputValue', '');
+  }, Math.min(calculatedTimeout, maxTimeout));
+}
+
+function openFolderRecursive($tree, pickroot, parts, index, maxDepth) {
+  maxDepth = maxDepth || 100; // Default maximum depth
+  if (index >= parts.length || index >= maxDepth) return;
+  
+  var pathSoFar = pickroot + '/' + parts.slice(0, index + 1).join('/');
+  var $folderLink = $tree.find('a[rel="' + pathSoFar + '/"]');
+  
+  if ($folderLink.length === 0) return;
+  
+  var $folderLi = $folderLink.closest('li');
+  
+  if ($folderLi.hasClass('expanded')) {
+    setTimeout(function() {
+      openFolderRecursive($tree, pickroot, parts, index + 1, maxDepth);
+    }, 100);
+    return;
+  }
+  
+  if ($folderLi.hasClass('collapsed') || $folderLi.hasClass('directory')) {
+    $folderLink.trigger('click');
+    setTimeout(function() {
+      openFolderRecursive($tree, pickroot, parts, index + 1, maxDepth);
+    }, FOLDER_EXPAND_DELAY);
+  }
+}
 
 function doAction(action, title, id) {
   var link   = id.substr(0,1) == '/';
@@ -382,72 +707,66 @@ function doAction(action, title, id) {
   case 0: // create folder
     dfm.window.html($('#dfm_templateCreateFolder').html());
     source = dir;
-    dfm.height = 330;
     break;
   case 1: // delete folder
     dfm.window.html($('#dfm_templateDeleteFolder').html());
     dfm_createSource(source.dfm_strip());
-    dfm.height = 330;
     break;
   case 2: // rename folder
     dfm.window.html($('#dfm_templateRenameFolder').html());
     dfm_createSource(name);
     dfm.window.find('#dfm_target').val(name);
-    dfm.height = 330;
     break;
   case 3: // copy folder
     dfm.window.html($('#dfm_templateCopyFolder').html());
     dfm_createSource(source.dfm_strip());
-    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).fileTreeAttach(null,null,function(path){
+    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       var bits = path.substr(1).split('/');
       var auto = bits.length>3 ? '' : share;
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
-    dfm.height = 630;
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
     break;
   case 4: // move folder
     dfm.window.html($('#dfm_templateMoveFolder').html());
     dfm_createSource(source.dfm_strip());
-    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).fileTreeAttach(null,null,function(path){
+    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       var bits = path.substr(1).split('/');
       var auto = bits.length>3 ? '' : share;
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
-    dfm.height = 630;
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
     break;
   case 6: // delete file
     dfm.window.html($('#dfm_templateDeleteFile').html());
     dfm_createSource(source);
-    dfm.height = 330;
     break;
   case 7: // rename file
     dfm.window.html($('#dfm_templateRenameFile').html());
     dfm_createSource(name);
     dfm.window.find('#dfm_target').val(name);
-    dfm.height = 330;
     break;
   case 8: // copy file
     dfm.window.html($('#dfm_templateCopyFile').html());
     dfm_createSource(source);
-    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).fileTreeAttach(null,null,function(path){
+    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
     });
-    dfm.height = 630;
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
     break;
   case 9: // move file
     dfm.window.html($('#dfm_templateMoveFile').html());
     dfm_createSource(source);
-    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).fileTreeAttach(null,null,function(path){
+    dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
     });
-    dfm.height = 630;
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
     break;
   case 11: // change owner
     dfm.window.html($('#dfm_templateChangeOwner').html());
     var owner = $('#'+id.dfm_bring('owner')).text();
     dfm_createSource(source.dfm_strip());
     dfm.window.find('#dfm_target').val(owner);
-    dfm.height = 330;
     break;
   case 12: // change permission
     dfm.window.html($('#dfm_templateChangePermission').html());
@@ -456,7 +775,6 @@ function doAction(action, title, id) {
     dfm.window.find('#dfm_owner').val('u-'+perm.substr(1,2).dfm_patch());
     dfm.window.find('#dfm_group').val('g-'+perm.substr(4,2).dfm_patch());
     dfm.window.find('#dfm_other').val('o-'+perm.substr(7,2).dfm_patch());
-    dfm.height = 330;
     break;
   case 13: // download file
     downloadFile(source,name);
@@ -478,20 +796,25 @@ function doAction(action, title, id) {
     dfm_createSource(source.dfm_strip());
     dfm.window.find('.dfm_loc').html('&nbsp;').css({'line-height':'normal'});
     dfm.window.find('.dfm_text').html('').css({'line-height':'normal'});
-    dfm.height = 630;
     break;
   }
   dfm.window.dialog({
-    classes: {'ui-dialog': 'ui-dfm'},
+    classes: {'ui-dialog': 'ui-dfm ui-corner-all'},
     autoOpen: true,
     title: title,
-    height: dfm.height,
     width: 'auto',
     resizable: false,
     draggable: false,
     modal: true,
     close: function() {
       $('.ui-dfm').off('mousedown.dfmFileTree');
+      // Cleanup navigation event listeners if navigation was set up
+      if (typeof dfm_cleanupNavigationListeners === 'function') {
+        dfm_cleanupNavigationListeners();
+      }
+    },
+    open: function() {
+      addActionWarning(action, false);
     },
     buttons: {
       "_(Start)_": function(){
@@ -591,6 +914,7 @@ function doAction(action, title, id) {
           if (!target || !valid.test(target)) {errorTarget(); return;}
         } else target = '';
         $.post('/webGui/include/Control.php',{mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs)});
+        dfm.window.dialog('close');
         dfm.window.dialog('destroy');
         $('.dfm_control.jobs').prop('disabled',false);
         $.cookie('dfm_control.jobs','1');
@@ -598,12 +922,19 @@ function doAction(action, title, id) {
       "_(Cancel)_": function(){
         if (dfm.running) $.post('/webGui/include/Control.php',{mode:'file',action:99},function(){setTimeout(loadList,500);});
         dfm_fileManager('stop');
+        dfm.window.dialog('close');
         dfm.window.dialog('destroy');
       }
     }
   });
   dfm_close_button();
   preventFileTreeClose();
+  
+  // Setup file tree navigation for target input in copy/move dialogs (action 3=copy folder, 4=move folder, 8=copy file, 9=move file)
+  if ([3,4,8,9].includes(action) && dfm.window.find('#dfm_target').length) {
+    setupTargetNavigation();
+  }
+  
   if (action == 15) $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',true);
   setTimeout(function(){if (dfm.window.find('#dfm_target').length) dfm.window.find('#dfm_target').focus().click(); else $('.ui-dfm .ui-dialog-buttonset button:eq(0)').focus();});
 }
@@ -674,48 +1005,46 @@ function doActions(action, title) {
   case 0: // create folder
     dfm.window.html($('#dfm_templateCreateFolder').html());
     source[0] = dir;
-    dfm.height = 330;
     break;
   case 1: // delete object
     dfm.window.html($('#dfm_templateDeleteObject').html());
     dfm_createSource(source);
-    dfm.height = 330;
     break;
   case 2: // rename object
     dfm.window.html($('#dfm_templateRenameObject').html());
     dfm_createSource(name);
     dfm.window.find('#dfm_target').val(name);
-    dfm.height = 330;
     break;
   case 3: // copy object
     dfm.window.html($('#dfm_templateCopyObject').html());
     dfm_createSource(source);
     dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match);
-    if (bulk || type[0] == 'd') dfm.window.find('#dfm_target').attr('data-pickfilter','HIDE_FILES_FILTER');
+    if (bulk || type[0] == 'd') dfm.window.find('#dfm_target').attr('data-pickfilter','SHOW_POPULAR,HIDE_FILES_FILTER');
+    else dfm.window.find('#dfm_target').attr('data-pickfilter','SHOW_POPULAR');
     dfm.window.find('#dfm_target').fileTreeAttach(null,null,function(path){
       var bits = path.substr(1).split('/');
       var auto = bulk || bits.length>3 ? '' : (type[0] == 'd' ? share : '');
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
-    dfm.height = 630;
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
     break;
   case 4: // move object
     dfm.window.html($('#dfm_templateMoveObject').html());
     dfm_createSource(source);
     dfm.window.find('#dfm_target').attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match);
-    if (bulk || type[0] == 'd') dfm.window.find('#dfm_target').attr('data-pickfilter','HIDE_FILES_FILTER');
+    if (bulk || type[0] == 'd') dfm.window.find('#dfm_target').attr('data-pickfilter','SHOW_POPULAR,HIDE_FILES_FILTER');
+    else dfm.window.find('#dfm_target').attr('data-pickfilter','SHOW_POPULAR');
     dfm.window.find('#dfm_target').fileTreeAttach(null,null,function(path){
       var bits = path.substr(1).split('/');
       var auto = bulk || bits.length > 3 ? '' : (type[0] == 'd' ? share : '');
       dfm.window.find('#dfm_target').val(path+auto).change();
     });
-    dfm.height = 630;
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
     break;
   case 11: // change owner
     dfm.window.html($('#dfm_templateChangeOwner').html());
     dfm_createSource(source);
     if (!bulk) dfm.window.find('#dfm_target').val(owner[0]);
-    dfm.height = 330;
     break;
   case 12: // change permission
     dfm.window.html($('#dfm_templateChangePermission').html());
@@ -725,7 +1054,6 @@ function doActions(action, title) {
       dfm.window.find('#dfm_group').val('g-'+perm[0].substr(4,2).dfm_patch());
       dfm.window.find('#dfm_other').val('o-'+perm[0].substr(7,2).dfm_patch());
     }
-    dfm.height = 330;
     break;
   case 14: // calculate occupied space
     timers.calc = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
@@ -748,21 +1076,26 @@ function doActions(action, title) {
     dfm_createSource(source);
     dfm.window.find('.dfm_loc').html('&nbsp;').css({'line-height':'normal'});
     dfm.window.find('.dfm_text').html('').css({'line-height':'normal'});
-    dfm.height = 630;
     break;
   }
   dfm.window.find('#dfm_source').attr('size',Math.min(dfm.tsize[action],source.length));
   dfm.window.dialog({
-    classes: {'ui-dialog': 'ui-dfm'},
+    classes: {'ui-dialog': 'ui-dfm ui-corner-all'},
     autoOpen: true,
     title: title,
-    height: dfm.height,
     width: 'auto',
     resizable: false,
     draggable: false,
     modal: true,
     close: function() {
       $('.ui-dfm').off('mousedown.dfmFileTree');
+      // Cleanup navigation event listeners if navigation was set up
+      if (typeof dfm_cleanupNavigationListeners === 'function') {
+        dfm_cleanupNavigationListeners();
+      }
+    },
+    open: function() {
+      addActionWarning(action, true);
     },
     buttons: {
       "_(Start)_": function(){
@@ -772,11 +1105,12 @@ function doActions(action, title) {
           target = target.val();
           switch (action) {
           case 0: // create folder
-            bulk = false;
-          case 2: // rename object
+          case 2: // rename folder
+          case 7: // rename file
             var valid = /^[^\/]*$/; // no slashes allowed
             break;
-          case 4: // move object
+          case 4: // move folder
+          case 9: // move file
             // disallow mixing of disk and user shares
             var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
             break;
@@ -865,6 +1199,7 @@ function doActions(action, title) {
           if (!target || !valid.test(target)) {errorTarget(); return;}
         } else target = '';
         $.post('/webGui/include/Control.php',{mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs.join('\r'))});
+        dfm.window.dialog('close');
         dfm.window.dialog('destroy');
         $('.dfm_control.jobs').prop('disabled',false);
         $.cookie('dfm_control.jobs','1');
@@ -872,12 +1207,19 @@ function doActions(action, title) {
       "_(Cancel)_": function(){
         if (dfm.running) $.post('/webGui/include/Control.php',{mode:'file',action:99},function(){setTimeout(loadList,500);});
         dfm_fileManager('stop');
+        dfm.window.dialog('close');
         dfm.window.dialog('destroy');
       }
     }
   });
   dfm_close_button();
   preventFileTreeClose();
+  
+  // Setup file tree navigation for target input in copy/move dialogs (action 3=copy, 4=move)
+  if ([3,4].includes(action) && dfm.window.find('#dfm_target').length) {
+    setupTargetNavigation();
+  }
+  
   if (action == 15) $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',true);
   setTimeout(function(){if (dfm.window.find('#dfm_target').length) dfm.window.find('#dfm_target').focus().click(); else $('.ui-dfm .ui-dialog-buttonset button:eq(0)').focus();});
 }
@@ -918,7 +1260,7 @@ function uploadFile(files,index,start,time) {
   
   var xhr = new XMLHttpRequest();
   currentXhr = xhr; // Store for abort capability
-  var filePath = dir.replace(/\/+$/, '') + '/' + dfm_htmlspecialchars(file.name);
+  var filePath = dir.replace(/\/+$/, '') + '/' + file.name;
   var url = '/webGui/include/Control.php?mode=upload&file=' + encodeURIComponent(filePath) + '&start=' + start + '&cancel=' + cancel;
   xhr.open('POST', url, true);
   xhr.setRequestHeader('Content-Type', 'application/octet-stream');
@@ -949,11 +1291,11 @@ function uploadFile(files,index,start,time) {
       var elapsedSeconds = (d.getTime() - time) / 1000;
       var speed = autoscale(bytesTransferred / elapsedSeconds);
       var percent = Math.floor(bytesTransferred / total * 100);
-      $('#dfm_uploadStatus').html("_(Uploading)_: <span class='dfm_percent'>"+percent+"%</span><span class='dfm_speed'>Speed: "+speed+"</span><span class='orange-text'> ["+(index+1)+'/'+files.length+']&nbsp;&nbsp;'+file.name+"</span>");
+      $('#dfm_uploadStatus').html("_(Uploading)_: <span class='dfm_percent'>"+percent+"%</span><span class='dfm_speed'>Speed: "+speed+"</span><span class='orange-text'> ["+(index+1)+'/'+files.length+']&nbsp;&nbsp;'+escapeHtml(file.name)+"</span>");
       uploadFile(files,index,next,time);
     } else if (index < files.length-1) {
       // Clean up temp file for completed upload before starting next file
-      $.post('/webGui/include/Control.php',{mode:'stop',file:encodeURIComponent(dfm_htmlspecialchars(file.name))});
+      $.post('/webGui/include/Control.php',{mode:'stop',file:encodeURIComponent(file.name)});
       uploadFile(files,index+1,0,time);
     } else {stopUpload(file.name); return;}
   };
@@ -1031,7 +1373,63 @@ function loadList() {
 }
 
 function xlink(link) {
-  swal({title:'',text:decodeURIComponent(link),html:true,confirmButtonText:"_(Ok)_"});
+  var path = decodeURIComponent(link).trim();
+  var escapedPath = escapeHtml(path);
+  
+  // Always show dialog with selectable textarea (better mobile support)
+  var inputId = 'dfm_path_input_' + Date.now();
+  var inputHtml = '<textarea id="' + inputId + '" class="dfm-path-textarea text-center font-mono" readonly>' + escapedPath + '</textarea>';
+  
+  swal({
+    title: '',
+    text: inputHtml,
+    html: true,
+    showCancelButton: true,
+    confirmButtonText: "_(Ok)_",
+    cancelButtonText: "_(Terminal)_"
+  }, function(isConfirm) {
+    if (isConfirm === false) {
+      // Terminal button was clicked (cancel button)
+      var d = new Date();
+      openTerminal('ttyd', 'File_Manager_' + d.getTime(), path);
+    }
+    // Ok button (isConfirm === true) or dialog dismissed - just close
+  });
+  
+  // Enable input visibility and hide SweetAlert's own fieldset
+  $('.sweet-alert').addClass('show-input');
+  $('.sweet-alert fieldset').hide();
+  
+  // Auto-select text and handle clipboard on click
+  setTimeout(function() {
+    var input = document.getElementById(inputId);
+    if (input) {
+      input.select();
+      input.focus();
+      
+      // Copy to clipboard when user clicks/taps
+      $(input).on('click', function() {
+        this.select();
+        
+        // Try to copy to clipboard
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(path).then(function() {
+            // Show success tooltip
+            var tooltip = $('<span class="clipboard-tooltip"><i class="fa fa-check green-text"></i> _(Copied to clipboard)_</span>');
+            $('.sweet-alert').append(tooltip);
+            
+            setTimeout(function() {
+              tooltip.fadeOut(300, function() { 
+                $(this).remove(); 
+              });
+            }, 1000);
+          }).catch(function() {
+            // Silent fail - user can still manually copy
+          });
+        }
+      });
+    }
+  }, 100);
 }
 
 $(function(){
@@ -1039,7 +1437,8 @@ $(function(){
   if (dirs.length > 1) {
     for (var n=1; n < dirs.length; n++) {
       var subdir = dirs.slice(1,n+1);
-      url.push('<a class="none" href="/<?=$path?>?dir=/'+encodeURIComponent(subdir.join('/'))+'" oncontextmenu="xlink(\'/' + encodeURIComponent(subdir.join('/')) + '\');return false">'+(n == 1 ? '<i class="fa fa-home"></i>' : dirs[n])+'</a>');
+      var displayText = n == 1 ? '<i class="fa fa-home"></i>' : escapeHtml(dirs[n]);
+      url.push('<a class="none" href="/<?=$path?>?dir=/'+encodeURIComponent(subdir.join('/'))+'" oncontextmenu="xlink(\'/' + encodeURIComponent(subdir.join('/')) + '\');return false">'+displayText+'</a>');
     }
   } else {
     url.push('<i class="fa fa-home red-text"></i>');
