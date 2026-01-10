@@ -12,7 +12,7 @@
 ?>
 <?
 
-#VFSETTINGS=0000:04:11.5|8086:1520|0|62:00:04:11:05:01 0000:04:10.5|8086:1520|1|62:00:04:10:05:01
+#VFSETTINGS=0000:04:11.5|8086:1520|0x02|0|62:00:04:11:05:01 0000:04:10.5|8086:1520|0x02|1|62:00:04:10:05:01
 #VFS=0000:04:00.1|8086:1521|3 0000:04:00.0|8086:1521|2
 
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
@@ -57,6 +57,7 @@ if (isset($pciid) && isset($vd)) {
         $newexplode = preg_split('/\s+/', str_replace("VFSETTINGS=","",$old), -1, PREG_SPLIT_NO_EMPTY);
         $mac= _var($_POST,'mac');
         if ($mac == "") $mac = "00:00:00:00:00:00";
+        $class_id = _var($_POST,'class_id');
         $vfio= _var($_POST,'vfio');
         if ($vfio == "true") $vfio = 1; else $vfio = 0;
         $found = false;
@@ -67,12 +68,12 @@ if (isset($pciid) && isset($vd)) {
               unset($newexplode[$key]) ;
               break;
             } else {
-              $newexplode[$key] = $newelement_check.$vfio."|".$mac;
+              $newexplode[$key] = $newelement_check.$class_id."|".$vfio."|".$mac;
               break;
             }
           }
         }
-        if (!$found  && ($vfio != 0 || $mac != "00:00:00:00:00:00")) $newexplode[] = $newelement_check.$vfio."|".$mac;
+        if (!$found  && ($vfio != 0 || $mac != "00:00:00:00:00:00")) $newexplode[] = $newelement_check.$class_id."|".$vfio."|".$mac;
         if ($newexplode) $new = "VFSETTINGS=".implode(" ",$newexplode);else $new = null;
         $file = $sriovvfs; 
         break;

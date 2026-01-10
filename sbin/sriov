@@ -11,8 +11,8 @@
 # Accept string enclosed in quotes or not
 # accepts space-separated list of <Bus:Device.Function> or <Domain:Bus:Device.Function> followed by an optional "|" and <Vendor:Device> | <Number of VFs>
 # example: VFS=0000:04:00.1|8086:1521|3 0000:04:00.0|8086:1521|2
-# accepts space-separated list of <Bus:Device.Function> or <Domain:Bus:Device.Function> followed by an optional "|" and <Vendor:Device> | <MAC Address>
-# example:VFSETTINGS=0000:04:11.5|8086:1520|62:00:04:11:05:01
+# accepts space-separated list of <Bus:Device.Function> or <Domain:Bus:Device.Function> followed by optional "|" <Vendor:Device> | <Class_ID> | <VFIO> | <MAC>
+# example: VFSETTINGS=0000:04:11.5|8086:1520|0x02|1|62:00:04:11:05:01 0000:04:11.6|8086:1520|0x03|0|62:00:04:11:06:01
 
 SRIOV_DISABLED_FILE=/boot/config/sriov_disabled
 if [[ -f $SRIOV_DISABLED_FILE ]] ; then
@@ -65,9 +65,9 @@ fi
 VFSETTINGS_LINE=$(grep "^VFSETTINGS=" "$CFG_VFS" | cut -d= -f2- | tr -d '"')
 
 for PARAM_VFS in $VFSETTINGS_LINE; do
-    IFS='|' read -r arg1 arg2 arg3 arg4 <<< "$PARAM_VFS"
-    echo "Processing $arg1 $arg2 set Mac to $arg4"
-    /usr/local/sbin/sriov-vfsettings.sh "$arg1" "$arg2" "$arg3" "$arg4"
+    IFS='|' read -r arg1 arg2 arg3 arg4 arg5 <<< "$PARAM_VFS"
+    echo "Processing $arg1 $arg2 Class=$arg3 VFIO=$arg4 MAC=$arg5"
+    /usr/local/sbin/sriov-vfsettings.sh "$arg1" "$arg2" "$arg3" "$arg4" "$arg5"
     echo "---"
 done
 

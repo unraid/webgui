@@ -61,15 +61,14 @@ if [[ $# -eq 0 ]]; then
 fi
 
 # Check that 4 parameters are supplied
-if [[ $# -ne 4 ]]; then
-    echo "Error: Expected 4 parameters, but got $#." 1>&2
-    echo "Usage: $0 <param1> <param2> <param3> <parm4>" 1>&2
-    echo "Example: $0 0000:01:00.0 10de:1fb8 1 62:00:01:00:00:99" 1>&2
-    echo "parm3 is binding to VFIO, parm 4 is mac address."
+if [[ $# -lt 4 ]]; then
+    echo "Error: Expected at least 4 parameters, but got $#." 1>&2
+    echo "Usage: $0 <BDF> <VD> <CLASS_ID> <VFIO> [MAC]" 1>&2
+    echo "Example: $0 0000:01:00.0 10de:1fb8 0x02 1 62:00:01:00:00:99" 1>&2
     exit 1
 fi
 
-unset VD BDF VFIO MAC
+unset VD BDF VFIO CLASS_ID MAC
 for arg in "$@"; do
     if [[ $arg =~ $VD_REGEX ]]; then
         VD=$arg
@@ -78,11 +77,14 @@ for arg in "$@"; do
     elif [[ $arg =~ $BDF_REGEX ]]; then
         BDF="0000:${arg}"
         echo "Warning: You did not supply a PCI domain, assuming ${BDF}" 1>&2
-    elif [[ $arg =~ ^[01]$ ]]; then
-        # 3rd argument: VFIO flag (0 or 1)
+    elif [[ -z "$CLASS_ID" ]] && [[ $arg =~ ^0x[0-9a-fA-F]{2}$ ]]; then
+        # 3rd argument: class_id (e.g., 0x02 for network)
+        CLASS_ID=$arg
+    elif [[ -z "$VFIO" ]] && [[ $arg =~ ^[01]$ ]]; then
+        # 4th argument: VFIO flag (0 or 1)
         VFIO=$arg
     elif [[ $arg =~ ^([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}$ ]]; then
-        # 4th argument: MAC address
+        # 5th argument: MAC address
         MAC=$arg
     else
         echo "Error: Unrecognized argument '$arg'" 1>&2
@@ -121,83 +123,88 @@ fi
 
 printf "\nSetting...\n"
 
-# Locate PF device
+# MAC setting and PF lookup only required for network class (0x02)
+if [[ "$CLASS_ID" == "0x02" ]]; then
+    # Locate PF device
 
-VF_PCI=$BDF
-VF_PATH="/sys/bus/pci/devices/$VF_PCI"
-PF_PATH=$(readlink -f "$VF_PATH/physfn" 2>/dev/null)
+    VF_PCI=$BDF
+    VF_PATH="/sys/bus/pci/devices/$VF_PCI"
+    PF_PATH=$(readlink -f "$VF_PATH/physfn" 2>/dev/null)
 
-if [ ! -d "$PF_PATH" ]; then
-    echo "Error: No PF found for VF $VF_PCI"
-    exit 1
-fi
-
-# Determine PF interface name
-PF_IFACE=$(basename "$(readlink -f "$PF_PATH/net"/* 2>/dev/null)")
-if [ -z "$PF_IFACE" ]; then
-    PF_IFACE=$(basename "$(ls -d /sys/class/net/*/device 2>/dev/null | grep "$PF_PATH" | head -n1 | cut -d/ -f5)")
-fi
-
-if [ -z "$PF_IFACE" ]; then
-    echo "Error: Could not determine PF interface for $VF_PCI"
-    exit 1
-fi
-
-
-# Determine VF index
-VF_INDEX=""
-for vfdir in /sys/class/net/$PF_IFACE/device/virtfn*; do
-    [ -e "$vfdir" ] || continue
-    vf_pci=$(basename "$(readlink -f "$vfdir")")
-    if [ "$vf_pci" = "$VF_PCI" ]; then
-        VF_INDEX=${vfdir##*/virtfn}
-        break
+    if [ ! -d "$PF_PATH" ]; then
+        echo "Error: No PF found for VF $VF_PCI"
+        exit 1
     fi
-done
 
-if [ -z "$VF_INDEX" ]; then
-    echo "Error: VF index not found for $VF_PCI under PF $BDF"
-    exit 1
+    # Determine PF interface name
+    PF_IFACE=$(basename "$(readlink -f "$PF_PATH/net"/* 2>/dev/null)")
+    if [ -z "$PF_IFACE" ]; then
+        PF_IFACE=$(basename "$(ls -d /sys/class/net/*/device 2>/dev/null | grep "$PF_PATH" | head -n1 | cut -d/ -f5)")
+    fi
+
+    if [ -z "$PF_IFACE" ]; then
+        echo "Error: Could not determine PF interface for $VF_PCI"
+        exit 1
+    fi
+
+
+    # Determine VF index
+    VF_INDEX=""
+    for vfdir in /sys/class/net/$PF_IFACE/device/virtfn*; do
+        [ -e "$vfdir" ] || continue
+        vf_pci=$(basename "$(readlink -f "$vfdir")")
+        if [ "$vf_pci" = "$VF_PCI" ]; then
+            VF_INDEX=${vfdir##*/virtfn}
+            break
+        fi
+    done
+
+    if [ -z "$VF_INDEX" ]; then
+        echo "Error: VF index not found for $VF_PCI under PF $BDF"
+        exit 1
+    fi
+
+    if [[ -z "$MAC" ]]; then
+        echo "Error: No MAC address provided" 1>&2
+        exit 1
+    fi
+
+    if ! [[ "$MAC" =~ ^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$ ]]; then
+        echo "Error: Invalid MAC address format. Expected XX:XX:XX:XX:XX:XX" 1>&2
+        exit 1
+    fi
+
+    echo "Setting MAC for VF:"
+    echo "  PF: $PF_IFACE"
+    echo "  VF Index: $VF_INDEX"
+    echo "  PCI: $VF_PCI"
+    echo "  MAC: $MAC"
+
+    # Determine current driver for this VF
+    VF_DRIVER=$(basename "$(readlink -f "$VF_PATH/driver" 2>/dev/null)")
+
+    # Unbind VF from driver if loaded
+    if [ -n "$VF_DRIVER" ]; then
+        echo "Unbinding VF from driver $VF_DRIVER..."
+        echo "$VF_PCI" > "/sys/bus/pci/drivers/$VF_DRIVER/unbind"
+    fi
+
+    # Set MAC
+    if ! ip link set "$PF_IFACE" vf "$VF_INDEX" mac "$MAC"; then
+        echo "Error: Failed to set MAC address $MAC on VF $VF_INDEX" >&2
+        exit 1
+    fi
+
+    # Rebind VF to driver if it was bound before
+    if [ -n "$VF_DRIVER" ]; then
+        echo "Rebinding VF to driver $VF_DRIVER..."
+        echo "$VF_PCI" > "/sys/bus/pci/drivers/$VF_DRIVER/bind"
+    fi
+
+    echo "MAC Address set"
+else
+    echo "Skipping MAC setting for non-network class device"
 fi
-
-if [[ -z "$MAC" ]]; then
-    echo "Error: No MAC address provided" 1>&2
-    exit 1
-fi
-
-if ! [[ "$MAC" =~ ^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$ ]]; then
-    echo "Error: Invalid MAC address format. Expected XX:XX:XX:XX:XX:XX" 1>&2
-    exit 1
-fi
-
-echo "Setting MAC for VF:"
-echo "  PF: $PF_IFACE"
-echo "  VF Index: $VF_INDEX"
-echo "  PCI: $VF_PCI"
-echo "  MAC: $MAC"
-
-# Determine current driver for this VF
-VF_DRIVER=$(basename "$(readlink -f "$VF_PATH/driver" 2>/dev/null)")
-
-# Unbind VF from driver if loaded
-if [ -n "$VF_DRIVER" ]; then
-    echo "Unbinding VF from driver $VF_DRIVER..."
-    echo "$VF_PCI" > "/sys/bus/pci/drivers/$VF_DRIVER/unbind"
-fi
-
-# Set MAC
-if ! ip link set "$PF_IFACE" vf "$VF_INDEX" mac "$MAC"; then
-    echo "Error: Failed to set MAC address $MAC on VF $VF_INDEX" >&2
-    exit 1
-fi
-
-# Rebind VF to driver if it was bound before
-if [ -n "$VF_DRIVER" ]; then
-    echo "Rebinding VF to driver $VF_DRIVER..."
-    echo "$VF_PCI" > "/sys/bus/pci/drivers/$VF_DRIVER/bind"
-fi
-
-echo "MAC Address set"
 
 if [[ "$VFIO" == "1" ]]; then
     echo "Binding VF to vfio"

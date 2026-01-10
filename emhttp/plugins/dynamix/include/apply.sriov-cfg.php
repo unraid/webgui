@@ -118,8 +118,12 @@ function action_settings($pciid)
         }
         if (!isset($sriov_devices_settings[$vfpci])) continue;
 
+        $class_id = $sriov_devices_settings[$vfpci]['class_id'];
         $vfio = $sriov_devices_settings[$vfpci]['vfio'];
         $mac  = $sriov_devices_settings[$vfpci]['mac'];
+
+        # Only process MAC for network class devices (0x02)
+        if ($class_id != '0x02') $mac = "";
 
         # Skip if no action needed
         if ($vfio == 0 && $mac == "") continue;
@@ -129,6 +133,7 @@ function action_settings($pciid)
         $cmd = "/usr/local/sbin/sriov-vfsettings.sh " .
                escapeshellarg($vfpci) . " " .
                escapeshellarg($vf['vd']) . " " .
+               escapeshellarg($class_id) . " " .
                escapeshellarg($vfio) . " " .
                escapeshellarg($mac) . " 2>&1"; # capture stderr too
 
