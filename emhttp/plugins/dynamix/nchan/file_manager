@@ -540,12 +540,14 @@ while (true) {
                 }
               }
 
-              // target must not be a subdirectory of any source (backup-dir should be outside source tree)
-              $source_dirname = is_dir($valid_source_path) ? $valid_source_path : dirname($valid_source_path);
-              if (strpos(rtrim($target,'/') . '/', rtrim($source_dirname,'/') . '/') === 0) {
-                $reply['error'] = _('Cannot move directory into its own subdirectory');
-                $use_rsync_rename = false;
-                break 2; // break out of both: foreach and case
+              // target must not be a subdirectory of any source directory (backup-dir should be outside source tree)
+              // This check is only relevant when moving directories, not files
+              if (is_dir($valid_source_path)) {
+                if (strpos(rtrim($target,'/') . '/', rtrim($valid_source_path,'/') . '/') === 0) {
+                  $reply['error'] = _('Cannot move directory into its own subdirectory');
+                  $use_rsync_rename = false;
+                  break 2; // break out of both: foreach and case
+                }
               }
 
             }
@@ -557,9 +559,34 @@ while (true) {
           // - existing files are overwritten in --backup-dir  (like not using --ignore-existing)
           // - missing directories are created in --backup-dir (like using --mkpath)
           // - rsync prefixes the moved files with "deleting " in the output, which we strip with sed, to not confuse the user
+          // - rsync --backup deletes empty directories instead of moving them to --backup-dir (https://github.com/RsyncProject/rsync/issues/842), so we copy empty directories first
           if ($use_rsync_rename) {
             $parent_dir = dirname(validname($source[0]));
-            $cmd = "rsync -r --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --delete --backup --backup-dir=".escapeshellarg($target)." ".quoted_rsync_include($source)." --exclude='*' ".escapeshellarg($empty_dir)." ".escapeshellarg($parent_dir)." > >(stdbuf -o0 tr '\\r' '\\n' | sed 's/^deleting //' >$status) 2>$error & echo \$!";
+            $parent_dir_escaped = escapeshellarg($parent_dir);
+            $target_escaped = escapeshellarg($target);
+            $empty_dir_escaped = escapeshellarg($empty_dir);
+            $rsync_includes = quoted_rsync_include($source);
+            
+            // Build relative paths for find (e.g., ./dir instead of /mnt/disk1/sharename/dir)
+            $source_relative = [];
+            foreach ($source as $s) {
+              $valid = validname($s);
+              if ($valid) {
+                $source_relative[] = escapeshellarg('./' . basename($valid));
+              }
+            }
+            $source_relative_joined = implode(' ', $source_relative);
+            
+            // Execute both rsync commands in a single bash block so they share the same PID and output stream
+            // First: copy only empty directories to target, then: move everything with rsync rename trick
+            $cmd = <<<BASH
+            {
+              cd $parent_dir_escaped && 
+              find $source_relative_joined -type d -empty -print0 | rsync -aX --files-from=- --from0 --out-format=%f --info=flist0,misc0,stats0,name1,progress2 -d . $target_escaped &&
+              rsync -r --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --delete --backup --backup-dir=$target_escaped $rsync_includes --exclude='*' $empty_dir_escaped $parent_dir_escaped
+            } > >(stdbuf -o0 tr '\\r' '\\n' | sed 's/^deleting //' >$status) 2>$error & echo \$!
+            BASH;
+
             exec($cmd, $pid);
 
           // use rsync copy-delete
