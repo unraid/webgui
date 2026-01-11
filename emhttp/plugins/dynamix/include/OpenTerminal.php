@@ -40,14 +40,18 @@ function command($path,$file) {
   global $run,$wait,$rows;
   return (file_exists($file) && substr($file,0,strlen($path))==$path) ? "$run tail -f -n $rows '$file'" : $wait;
 }
-function sed_escape($s, $delimiter = null) {
-  // escape sed BRE meta characters: . * [ ] ^ $ \
+function bre_escape($s, $delimiter = null) {
+  // escape BRE meta characters: . * [ ] ^ $ \
   $escaped = preg_replace('/([.*\[\]^$\\\\])/', '\\\\$1', $s);
   // additionally escape delimiter if provided
   if ($delimiter !== null) {
     $escaped = str_replace($delimiter, '\\' . $delimiter, $escaped);
   }
   return $escaped;
+}
+function sed_escape($s) {
+  // escape sed replacement meta characters: & and \
+  return str_replace(['\\', '&'], ['\\\\', '\\&'], $s);
 }
 switch ($_GET['tag']) {
 case 'ttyd':
@@ -77,7 +81,7 @@ case 'ttyd':
     // Set script variables
     $exec = "/var/tmp/file.manager.terminal.sh";
     $escaped_path = str_replace("'", "'\\''", $real_path);
-    $sed_escaped = sed_escape($escaped_path, '#');
+    $sed_escaped = sed_escape($escaped_path);
     
     // Get user's shell (same as standard terminal)
     $user_shell = posix_getpwuid(0)['shell'];
