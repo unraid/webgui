@@ -191,8 +191,14 @@ function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, f
         }
       }
     } else {
-      if (pcierror) var errtext = _("Start disabled due to PCI Changes");
-      if (srioverror) var errtext = _("Start disabled due to SR-IOV GPU Changes");
+      var errtext;
+      if (pcierror && srioverror) {
+        errtext = _("Start disabled due to PCI Changes and SR-IOV GPU Changes");
+      } else if (pcierror) {
+        errtext = _("Start disabled due to PCI Changes");
+      } else if (srioverror) {
+        errtext = _("Start disabled due to SR-IOV GPU Changes");
+      }
       opts.push({text:errtext, icon:"fa fa-minus-circle orb red-orb", action:function(e) {
         e.preventDefault();
       }});
