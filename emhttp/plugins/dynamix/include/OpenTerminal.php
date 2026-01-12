@@ -40,15 +40,6 @@ function command($path,$file) {
   global $run,$wait,$rows;
   return (file_exists($file) && substr($file,0,strlen($path))==$path) ? "$run tail -f -n $rows '$file'" : $wait;
 }
-function bre_escape($s, $delimiter = null) {
-  // escape BRE meta characters: . * [ ] ^ $ \
-  $escaped = preg_replace('/([.*\[\]^$\\\\])/', '\\\\$1', $s);
-  // additionally escape delimiter if provided
-  if ($delimiter !== null) {
-    $escaped = str_replace($delimiter, '\\' . $delimiter, $escaped);
-  }
-  return $escaped;
-}
 function sed_escape($s) {
   // escape sed replacement meta characters: & and \
   return str_replace(['\\', '&'], ['\\\\', '\\&'], $s);
@@ -79,7 +70,9 @@ case 'ttyd':
     }
     
     // Set script variables
-    $exec = "/var/tmp/file.manager.terminal.sh";
+    $unique_id = getmypid() . '_' . uniqid(); // prevent race condition with multiple terminals
+    $exec = "/var/tmp/file.manager.terminal.$unique_id.sh";
+    $profile = "/tmp/file.manager.terminal.$unique_id.profile";
     $escaped_path = str_replace("'", "'\\''", $real_path);
     $sed_escaped = sed_escape($escaped_path);
     
@@ -92,10 +85,10 @@ case 'ttyd':
     $script_content = <<<BASH
 #!/bin/bash
 # Modify /etc/profile to replace 'cd \$HOME' with our target path
-sed 's#^cd \$HOME#cd '\''$sed_escaped'\''#' /etc/profile > /tmp/file.manager.terminal.profile
-source /tmp/file.manager.terminal.profile
+sed 's#^cd \$HOME#cd '\''$sed_escaped'\''#' /etc/profile > '$profile'
+source '$profile'
 source /root/.bash_profile 2>/dev/null
-rm /tmp/file.manager.terminal.profile
+rm '$profile'
 # Delete this script and exec shell (bash has already loaded this into memory)
 { rm -f '$exec'; exec $user_shell --norc -i; }
 BASH;
