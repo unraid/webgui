@@ -223,7 +223,7 @@ case 't1':
         $line = "R[{$removeddata['device']['vendor_id']}:{$removeddata['device']['device_id']}] "
               . str_replace("0000:","",$removedpci)." "
               . trim($removeddata['device']['description'],"\n");
-        $lsiommu[$removedKey][$bdf] = $line;
+        $lsiommu[$removedKey][$bdf] = ['line' => $line];
       }
     }
     $ackparm = "";

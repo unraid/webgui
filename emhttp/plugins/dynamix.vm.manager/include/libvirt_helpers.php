@@ -170,6 +170,7 @@ class Array2XML {
 	$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 	require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt.php";
 	require_once "$docroot/webGui/include/Custom.php";
+	require_once "$docroot/webGui/include/SriovHelpers.php";
 
 	// Load emhttp variables if needed.
 	if (!isset($var)){
@@ -914,6 +915,20 @@ class Array2XML {
 		$arrValidGPUDevices = array_filter($arrValidPCIDevices, function($arrDev) {
 			return ($arrDev['class'] == 'vga' && !$arrDev['blacklisted']);
 		});
+		
+		// Remove SR-IOV physical functions that have VFs defined
+		$sriov = json_decode(getSriovInfoJson(true), true);
+		foreach($arrValidGPUDevices as $key => $device) {
+			$pcid = $device['id'];
+			// Prepend domain if not present (e.g., 04:00.0 -> 0000:04:00.0)
+			if (!preg_match('/^[0-9a-fA-F]{4}:/', $pcid)) {
+				$pcid = "0000:" . $pcid;
+			}
+			if (isset($sriov[$pcid]) && !empty($sriov[$pcid]['vfs'])) {
+				unset($arrValidGPUDevices[$key]);
+			}
+		}
+		
 		return $arrValidGPUDevices;
 	}
 

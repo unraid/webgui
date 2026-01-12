@@ -83,7 +83,7 @@ function ajaxVMDispatchWebUI(params, spin){
     }
   },'json');
 }
-function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, fstype="QEMU",consolein="web;no",usage=false,webui="",pcierror=false){  
+function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, fstype="QEMU",consolein="web;no",usage=false,webui="",pcierror=false,srioverror=false){  
   var opts = [];
   var path = location.pathname;
   var x = path.indexOf("?");
@@ -172,7 +172,7 @@ function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, f
       ajaxVMDispatch({action:"domain-destroy", uuid:uuid}, "loadlist");
     }});
   } else {
-    if (!pcierror) {
+    if (!pcierror && !srioverror) {
       opts.push({text:_("Start"), icon:"fa-play", action:function(e) {
         e.preventDefault();
         ajaxVMDispatch({action:"domain-start", uuid:uuid}, "loadlist");
@@ -191,7 +191,9 @@ function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, f
         }
       }
     } else {
-      opts.push({text:_("Start disabled due to PCI Changes"), icon:"fa fa-minus-circle orb red-orb", action:function(e) {
+      if (pcierror) var errtext = _("Start disabled due to PCI Changes");
+      if (srioverror) var errtext = _("Start disabled due to SR-IOV GPU Changes");
+      opts.push({text:errtext, icon:"fa fa-minus-circle orb red-orb", action:function(e) {
         e.preventDefault();
       }});
     }
