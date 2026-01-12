@@ -247,6 +247,7 @@ case 't1':
       $iommu = $key;
       $iommushow = true;
       foreach ($group as $pciaddress => $pcidetail) {
+        if (!is_array($pcidetail)) continue;
         $line = $pcidetail['line'];
         if (!$line) continue;
         if (in_array($pciaddress,$sriovvfs) && !empty($group['_has_sriov'])) continue;
@@ -387,7 +388,7 @@ case 't1':
 
         if (array_key_exists($pciaddress,$sriov) && in_array(substr($sriov[$pciaddress]['class_id'],0,4),$allowedPCIClass)) {
           echo "<tr><td></td><td></td><td></td><td></td><td>";
-          echo _("SRIOV Available VFs").":{$sriov[$pciaddress]['total_vfs']}";
+          echo _("SR-IOV Available VFs").":{$sriov[$pciaddress]['total_vfs']}";
           $num_vfs= $sriov[$pciaddress]['num_vfs'];
           
           if (isset($sriov_devices[$pciaddress])) $file_numvfs = $sriov_devices[$pciaddress]['vf_count'];else $file_numvfs = 0;
@@ -462,6 +463,7 @@ case 't1':
             }                  
             echo "<tr><td></td><td></td><td></td><td></td><td>";
             $class_id = substr($vrf['class_id'],0,4);
+            $current_mac = null;
             switch ($class_id) {   
               case "0x02": # Network controller
                 if (isset($sriov_devices_settings[$pciaddress])) {
@@ -485,6 +487,10 @@ case 't1':
                 $saveaction = _("Save Vfio config");
                 break;
               default:
+                $mac = null;
+                $action = _("Apply now VFIO binding");
+                $saveaction = _("Save Vfio config");
+                break;
             }
             echo ' <a class="info" href="#" title="'.$saveaction.'" onclick="saveVFSettingsConfig(\''.htmlentities($pciaddress).'\',\''.htmlentities($vd).'\',\''.htmlentities($class_id).'\'); return false;"><i class="fa fa-save"> </i></a>';
             if (isset($sriov_devices_settings[$pciaddress])) {

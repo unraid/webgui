@@ -202,7 +202,7 @@ function applyCfg() {
 
 function saveVFSettingsConfig(pciId,vd,class_id,interactive=1) {
   var message = "_(System Devices)_: _(A reboot is required to apply changes)_";
-  if (class_id == '0x02') mac = document.getElementById("vfmac" + pciId).value; else mac = null;
+  if (class_id == '0x02') var mac = document.getElementById("vfmac" + pciId).value; else var mac = null;
   var vfio = document.getElementById("vfvfio" + pciId).checked;
 
   $.post( "/plugins/dynamix/include/update.sriov-cfg.php", { type:"sriovsettings", pciid: pciId, vd:vd, vfio:vfio, mac:mac, class_id:class_id } )
@@ -431,7 +431,7 @@ function applyVFsConfig(pciId, vd, vfs) {
 function applyVFSettings(pciId, vd, currentvfio, currentmac,class_id) {
 
   const message = "_(System Devices)_: _(A reboot is required to apply changes)_";
-  if (class_id == '0x02') mac = document.getElementById("vfmac" + pciId).value; else mac = null;
+  if (class_id == '0x02') var mac = document.getElementById("vfmac" + pciId).value; else var mac = null;
   const vfio = document.getElementById("vfvfio" + pciId).checked;
 
   // --- Step 1: Check for active VMs (always returns JSON) ---
