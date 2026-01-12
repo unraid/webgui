@@ -71,7 +71,7 @@ $(function() {
     {cls:'showstorage', cookie:'sysdev_showstorage', on:'_(Show storage)_', off:'_(Don\'t show storage)_' },
     {cls:'showusb', cookie:'sysdev_showusb', on:'_(Show USB)_', off:'_(Don\'t show USB)_' },
     {cls:'showother', cookie:'sysdev_showother', on:'_(Show all other devs)_', off:'_(Don\'t show all others)_' },
-    {cls:'showsriov', cookie:'sysdev_showsriov', on:'_(Show sriov)_', off:'_(Don\'t filter SRIOVs)_' }
+    {cls:'showsriov', cookie:'sysdev_showsriov', on:'_(Show SR-IOV)_', off:'_(Don\'t filter SR-IOVs)_' }
   ];
 
   // --------------------------------------------------
@@ -185,11 +185,11 @@ function applyCfg() {
             break;
           case "2":
             addRebootNotice(message);
-            document.getElementById("warning").innerHTML = "<b>_(ALERT)_: SRIOV VFs _(Changes saved)_. _(Reboot to take effect)_.</b>";
+            document.getElementById("warning").innerHTML = "<b>_(ALERT)_: SR-IOV VFs _(Changes saved)_. _(Reboot to take effect)_.</b>";
             break;
           case "3":
             addRebootNotice(message);
-            document.getElementById("warning").innerHTML = "<b>_(ALERT)_: VFIO _(and)_ SRIOV VFs _(saved)_. _(Reboot to take effect)_.</b>";
+            document.getElementById("warning").innerHTML = "<b>_(ALERT)_: VFIO _(and)_ SR-IOV VFs _(saved)_. _(Reboot to take effect)_.</b>";
             break;
           default:
             removeRebootNotice(message);

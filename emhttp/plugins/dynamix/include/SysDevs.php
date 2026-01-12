@@ -108,8 +108,31 @@ case 't1':
             if (!preg_match('/^[0-9a-fA-F]{4}:/', $bdf)) {
                 $bdf = "0000:" . $bdf;
             }
-            $lsiommu[$current][$bdf] = $line;
+            $lsiommu[$current][$bdf]['line'] = $line;
         }
+    }
+
+    // Flag IOMMU groups that contain SR-IOV devices but first device is not SR-IOV
+    foreach ($lsiommu as $grp => $devices) {
+      $has_sriov = false;
+      $first_is_sriov = false;
+      $first_device = null;
+      
+      foreach ($devices as $pdev => $pdetail) {
+        if (!is_string($pdev)) continue;
+        
+        if ($first_device === null) {
+          $first_device = $pdev;
+          $first_is_sriov = isset($sriov[$pdev]) || in_array($pdev, $sriovvfs, true);
+        }
+        
+        if (isset($sriov[$pdev]) || in_array($pdev, $sriovvfs, true)) {
+          $has_sriov = true;
+        }
+      }
+      
+      // Set flag only if group has SR-IOV devices but first device is NOT SR-IOV
+      $lsiommu[$grp]['_has_sriov'] = ($has_sriov && !$first_is_sriov);
     }
     
     if (is_file("/boot/config/vfio-pci.cfg")) {
@@ -204,19 +227,29 @@ case 't1':
       }
     }
     $ackparm = "";
- 
+
     foreach ($lsiommu as $key => $group) {
       if (empty($group)) {
         continue;
       }
       $pciidcheck = array_key_first($group);
+      // If group has SR-IOV but first entry is not SR-IOV, use second entry for filter check
+      if (!empty($group['_has_sriov']) && !isset($sriov[$pciidcheck]) && !in_array($pciidcheck, $sriovvfs, true)) {
+        $group_keys = array_keys($group);
+        if (isset($group_keys[1]) && $group_keys[1] !== '_has_sriov') {
+          $pciidcheck = $group_keys[1];
+        }
+      }
       if (in_array($pciidcheck,$sriovvfs)) continue;
+
       # Filter devices.
 
       $iommu = $key;
       $iommushow = true;
-      foreach ($group as $pciaddress => $line) {
+      foreach ($group as $pciaddress => $pcidetail) {
+        $line = $pcidetail['line'];
         if (!$line) continue;
+        if (in_array($pciaddress,$sriovvfs) && !empty($group['_has_sriov'])) continue;
         [$class, $class_id, $name] = getPciClassNameAndId($pciaddress);
         $class_prefix = substr(strtolower((string)$class_id), 0, 4);
 
@@ -280,6 +313,13 @@ case 't1':
         echo $speedcol, '</td><td>', $widthcol;
         if (isset($pcispeed['generation'])) echo'(Gen:'.$pcispeed['generation'].')';
         echo '</td></tr>';
+        // Show SR-IOV warning after first device in group
+        if ($append && !empty($group['_has_sriov'])) {
+          echo '<tr><td></td><td></td><td></td><td></td><td>';
+          echo '<i class="fa fa-warning fa-fw orange-text"></i> ';
+          echo '<span class="orange-text">'._('Warning').': '._('IOMMU group contains SR-IOV devices. Enable ACS Override in <a href="/Main/Flash#boot-parameters">Boot Parameters</a> for proper isolation').'.</span>';
+          echo '</td></tr>';
+        }
         if (array_key_exists($pciaddress,$pci_device_diffs)) {
           echo "<tr><td></td><td><td></td><td></td><td>";
           echo "<i class=\"fa fa-warning fa-fw orange-text\" title=\""._('PCI Change')."\n"._('Click to acknowledge').".\" onclick=\"ackPCI('".htmlentities($pciaddress)."','".htmlentities($pci_device_diffs[$pciaddress]['status'])."')\"></i>";
