@@ -203,7 +203,7 @@ if ($_POST['vms']) {
     echo "<br><i class='fa fa-$shape $status $color'></i><span class='state'>"._($status)."</span></span></span>";
     if ($state == "running") {
       #Build VM Usage array.
-      $menuusage = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($vm), addslashes($uuid), addslashes($template), $state, addslashes($vmrcurl), strtoupper($vmrcprotocol), addslashes($log),addslashes($fstype), $vmrcconsole,true,addslashes(str_replace('"',"'",$WebUI)));
+      $menuusage = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($vm), addslashes($uuid), addslashes($template), $state, addslashes($vmrcurl), strtoupper($vmrcprotocol), addslashes($log),addslashes($fstype), $vmrcconsole,true,addslashes(str_replace('"',"'",$WebUI)),$pcierror,$srioverror);
       $vmusagehtml[] = "<span class='outer solid vmsuse $status'><span id='vmusage-$uuid' $menuusage class='hand'>$image</span><span class='inner'>$vm<br><i class='fa fa-$shape $status $color'></i><span class='state'>"._($status)."</span></span>";
       $vmusagehtml[] = "<br><br><span id='vmmetrics-gcpu-".$uuid."'>"._("Loading")."....</span>";
       $vmusagehtml[] = "<br><span id='vmmetrics-hcpu-".$uuid."'>"._("Loading")."....</span>";
