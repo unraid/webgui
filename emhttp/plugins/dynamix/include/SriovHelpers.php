@@ -13,7 +13,7 @@
 ?>
 <?
 
-$allowedPCIClass = ['0x02'];
+$allowedPCIClass = ['0x02','0x03'];
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt.php";
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
@@ -81,7 +81,8 @@ function getSriovInfoJson(bool $includeVfDetails = true): string {
             if (!is_link($vf)) continue;
             $vf_pci = basename(readlink($vf));
             $vf_entry = ['pci' => $vf_pci];
-
+            // Device class + numeric class + name
+            [$vfclass, $vfclass_id, $vfname] = getPciClassNameAndId($vf_pci);
             if ($includeVfDetails) {
                 // Vendor:Device formatted string
                 $vendorFile = "/sys/bus/pci/devices/{$vf_pci}/vendor";
@@ -89,7 +90,8 @@ function getSriovInfoJson(bool $includeVfDetails = true): string {
                 $vendor = is_readable($vendorFile) ? trim(file_get_contents($vendorFile)) : null;
                 $device = is_readable($deviceFile) ? trim(file_get_contents($deviceFile)) : null;
                 $vf_entry['vd'] = ($vendor && $device) ? sprintf('%s:%s', substr($vendor, 2), substr($device, 2)) : null;
-
+                $vf_entry['class'] = $vfclass;
+                $vf_entry['class_id'] = $vfclass_id;
                 // Network interface info
                 $net = glob("/sys/bus/pci/devices/{$vf_pci}/net/*");
                 if ($net && isset($net[0])) {
@@ -307,11 +309,11 @@ function parseVFvalues() {
 }
 
 // ---------------------------------
-// Parse SR-IOV VF settings (VFIO+MAC)
+// Parse SR-IOV VF settings (Class+VFIO+MAC)
 // ---------------------------------
 function parseVFSettings() {
   $sriov_devices_settings = [];
-  $DBDF_SRIOV_SETTINGS_REGEX = '/^[[:xdigit:]]{4}:[[:xdigit:]]{2}:[[:xdigit:]]{2}\.[[:xdigit:]]\|[[:xdigit:]]{4}:[[:xdigit:]]{4}\|[01]\|([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}$/';
+  $DBDF_SRIOV_SETTINGS_REGEX = '/^[[:xdigit:]]{4}:[[:xdigit:]]{2}:[[:xdigit:]]{2}\.[[:xdigit:]]\|[[:xdigit:]]{4}:[[:xdigit:]]{4}\|0x[[:xdigit:]]{2}\|[01]\|([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}$/';
   if (is_file("/boot/config/sriovvfs.cfg")) {
         $file = trim(file_get_contents("/boot/config/sriovvfs.cfg"));
         $file = preg_replace('/^VFSETTINGS=/', '', $file); // Remove prefix
@@ -319,12 +321,13 @@ function parseVFSettings() {
 
         foreach ($entries as $entry) {
             if (preg_match($DBDF_SRIOV_SETTINGS_REGEX, $entry)) {
-                // Format: <DBDF>|<Vendor:Device>|<VFIO_flag>|<MAC>
-                [$dbdf, $ven_dev, $vfio_flag, $mac] = explode('|', $entry);
+                // Format: <DBDF>|<Vendor:Device>|<Class_ID>|<VFIO_flag>|<MAC>
+                [$dbdf, $ven_dev, $class_id, $vfio_flag, $mac] = explode('|', $entry);
                 if ($mac === "00:00:00:00:00:00") $mac = "";
                 $sriov_devices_settings[$dbdf] = [
                     'dbdf'     => $dbdf,
                     'vendor'   => $ven_dev,
+                    'class_id' => $class_id,
                     'vfio'     => (int)$vfio_flag,
                     'mac'      => strtoupper($mac),
                 ];
