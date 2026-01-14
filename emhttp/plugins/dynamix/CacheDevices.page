@@ -228,7 +228,7 @@ _(Name)_:
 
 _(Slots)_:
 : <select name="poolSlots">
-  <?for ($n=1; $n<=2; $n++):?>
+  <?for ($n=1; $n<=_var($var,'MAX_CACHESZ',0); $n++):?>
   <?=mk_option(1,$n,$n)?>
   <?endfor;?>
   </select>
@@ -246,7 +246,7 @@ _(Name)_:
 
 _(Slots)_:
 : <select name="poolSlots">
-  <?for ($n=1; $n<=_var($var,'MAX_CACHESZ',0); $n++):?>
+  <?for ($n=1; $n<=2; $n++):?>
   <?=mk_option(1,$n,$n)?>
   <?endfor;?>
   </select>
