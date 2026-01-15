@@ -874,8 +874,13 @@ function doAction(action, title, id) {
         dfm_fileManager('start');
         $.post('/webGui/include/Control.php',{mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs)},function(){
           $.post('/webGui/include/Control.php',{mode:'read'},function(data){
-            dfm_read = JSON.parse(data);
-            dfm_read.action = parseInt(dfm_read.action);
+            try {
+              dfm_read = data ? JSON.parse(data) : {};
+              dfm_read.action = parseInt(dfm_read.action);
+            } catch(e) {
+              console.error('Failed to parse Control.php response:', e, data);
+              dfm_read = {};
+            }
           });
         });
       },
@@ -1158,8 +1163,13 @@ function doActions(action, title) {
         dfm_fileManager('start');
         $.post('/webGui/include/Control.php',{mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs.join('\r'))},function(){
           $.post('/webGui/include/Control.php',{mode:'read'},function(data){
-            dfm_read = JSON.parse(data);
-            dfm_read.action = parseInt(dfm_read.action);
+            try {
+              dfm_read = data ? JSON.parse(data) : {};
+              dfm_read.action = parseInt(dfm_read.action);
+            } catch(e) {
+              console.error('Failed to parse Control.php response:', e, data);
+              dfm_read = {};
+            }
           });
         });
       },
