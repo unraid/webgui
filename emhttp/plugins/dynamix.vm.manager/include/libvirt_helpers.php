@@ -1934,16 +1934,13 @@ class Array2XML {
 	function purge_deleted_snapshots(array &$snaps){
 		foreach ($snaps as $snapname => $snap) {
 			$broken = false;
-
 			foreach ($snap['disks'] as $disk) {
 				$snapfile = $disk['source']['@attributes']['file'];
-
 				if (!file_exists($snapfile)) {
 					$broken = true;
 					break;
 				}
 			}
-
 			if ($broken) {
 				unset($snaps[$snapname]);
 			}
@@ -1963,11 +1960,8 @@ class Array2XML {
 		}
 
 		foreach($snaps as $vmsnap=>$snap) {
-
-			$vmdisks =$lv->get_disk_stats($vm);
 			$disks = $snap['disks'];
 			foreach($disks as $disk)   {
-				#$file = $disk["file"];
 				$file = $disk["source"]["@attributes"]["file"];
 				$diskid = $disk["@attributes"]["name"];
 				$output = array();
@@ -2120,11 +2114,11 @@ class Array2XML {
 			$arrResponse =  ['error' => substr($output[0],6) ];
 			if ($logging) qemu_log($vm,"Error");
 		} else {
-		$arrResponse = ['success' => true];
-		if ($logging) qemu_log($vm,"Success write snap db");
-		$ret = write_snapshots_database("$vm","$name",$state,$snapshotdescinput,$method);
-		#remove meta data
-		if ($ret != "noxml") $ret = $lv->domain_snapshot_delete($vm, "$name" ,2);
+			$arrResponse = ['success' => true];
+			if ($logging) qemu_log($vm,"Success write snap db");
+			$ret = write_snapshots_database("$vm","$name",$state,$snapshotdescinput,$method);
+			#remove meta data
+			if ($ret != "noxml") $ret = $lv->domain_snapshot_delete($vm, "$name" ,2);
 		}
 		return $arrResponse;
 
@@ -2580,7 +2574,7 @@ OPTIONS
 
 	foreach($disks as $disk)   {
 	$path = $disk['file'];
-	$cmdstr = "virsh blockpull '$vm' --path '$path' --verbose --pivot --delete";
+
 	$cmdstr = "virsh blockpull '$vm' --path '$path' --verbose --wait ";
 	# Process disks and update path.
 	$snapdisks=($snapslist[$snap]['disks']);
