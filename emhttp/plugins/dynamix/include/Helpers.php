@@ -1214,17 +1214,26 @@ function storagePoolsJson(): string
             }
             
             if ($rc === 0) {
+              $hasMissing = false;
+              $hasFailed  = false;
                 foreach ($btrfsShow as $line) {
                     if (preg_match('/^\s+devid\s+(\d+)\s+size\s+(\S+)\s+used\s+(\S+)\s+path\s+(\S+)/', $line, $m)) {
                         $devicePath = $m[4];
-                        $deviceKey = preg_replace('/p?\d+$/', '', str_replace('/dev/', '', $devicePath));
-                        $pool['members'][$deviceKey] = [
-                            'devid' => $m[1],
-                            'device' => $deviceKey,
-                            'size' => $m[2],
-                            'used' => $m[3],
-                            'status' => 'OK', // default
-                        ];
+                  $isMissing = stripos($devicePath, '<missing') === 0;
+                  $isZeroSize = $m[2] === '0' || (float)$m[2] == 0.0;
+                  $deviceKey = $isMissing ? "missing_devid{$m[1]}" : preg_replace('/p?\d+$/', '', str_replace('/dev/', '', $devicePath));
+                  $pool['members'][$deviceKey] = [
+                    'devid' => $m[1],
+                    'device' => $isMissing ? '<missing>' : $deviceKey,
+                    'size' => $m[2],
+                    'used' => $m[3],
+                    'status' => $isMissing ? 'MISSING' : ($isZeroSize ? 'FAILED' : 'OK'),
+                  ];
+                  if ($isMissing) {
+                    $hasMissing = true;
+                  } elseif ($isZeroSize) {
+                    $hasFailed = true;
+                  }
                     }
                 }
 
@@ -1266,7 +1275,7 @@ function storagePoolsJson(): string
 
                 // Overall status
                 $memberStatuses = array_column($pool['members'], 'status');
-                if (in_array('DEGRADED', $memberStatuses, true)) {
+                if ($hasMissing || $hasFailed || in_array('MISSING', $memberStatuses, true) || in_array('FAILED', $memberStatuses, true) || in_array('DEGRADED', $memberStatuses, true)) {
                     $pool['overall_status'] = 'DEGRADED';
                 } elseif (!empty($memberStatuses)) {
                     $pool['overall_status'] = 'HEALTHY';
