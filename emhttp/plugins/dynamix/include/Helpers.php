@@ -1132,4 +1132,319 @@ function getPciLinkInfo($pciAddress)
     }
     return $out;
 }
+
+function storagePoolsJson(): string
+{
+    $result = [
+        'source' => 'unraid',
+        'pools' => [],
+        'generated_at' => gmdate('c'),
+    ];
+
+    $unraidIni = '/usr/local/emhttp/state/disks.ini';
+    if (!is_readable($unraidIni)) {
+        return json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    }
+
+    $lines = file($unraidIni, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    $sections = [];
+    $current = null;
+
+    // Parse disks.ini into sections
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if (preg_match('/^\["(.+)"\]$/', $line, $m)) {
+            $current = $m[1];
+            $sections[$current] = [];
+            continue;
+        }
+        if ($current && preg_match('/^([a-zA-Z0-9_]+)="(.*)"$/', $line, $m)) {
+            $sections[$current][$m[1]] = $m[2];
+        }
+    }
+
+    // Collect all pool names for filtering
+    $allPoolNames = [];
+    foreach ($sections as $name => $data) {
+        if (!preg_match('/^disk/i', $name) && 
+            isset($data['fsType']) && 
+            in_array($data['fsType'], ['btrfs', 'zfs'], true)) {
+            $allPoolNames[] = strtolower($name);
+        }
+    }
+
+    foreach ($sections as $poolName => $s) {
+        // Skip array disks (disk0, disk1, etc.)
+        if (preg_match('/^disk/i', $poolName)) continue;
+
+        if (
+            !isset($s['fsType'], $s['fsMountpoint'], $s['fsStatus']) ||
+            !in_array($s['fsType'], ['btrfs', 'zfs'], true) ||
+            $s['fsStatus'] !== 'Mounted'
+        ) {
+            continue;
+        }
+
+        $pool = [
+            'name' => $poolName,
+            'fstype' => $s['fsType'],
+            'mountpoint' => $s['fsMountpoint'],
+            'uuid' => $s['uuid'] ?? null,
+            'role' => $s['type'] ?? null,
+            'size' => $s['fsSize'] ?? null,
+            'used' => $s['fsUsed'] ?? null,
+            'free' => $s['fsFree'] ?? null,
+            'members' => [],
+            'overall_status' => 'UNKNOWN',
+            'source' => 'disks.ini',
+        ];
+
+        // --- Btrfs ---
+        if ($s['fsType'] === 'btrfs') {
+            $mount = escapeshellarg($s['fsMountpoint']);
+            $uuid = $s['uuid'] ?? '';
+            
+            // Use UUID to query specific filesystem
+            $btrfsShow = [];
+            if ($uuid) {
+                $uuidEsc = escapeshellarg($uuid);
+                exec("btrfs filesystem show $uuidEsc 2>/dev/null", $btrfsShow, $rc);
+            } else {
+                exec("btrfs filesystem show $mount 2>/dev/null", $btrfsShow, $rc);
+            }
+            
+            if ($rc === 0) {
+                foreach ($btrfsShow as $line) {
+                    if (preg_match('/^\s+devid\s+(\d+)\s+size\s+(\S+)\s+used\s+(\S+)\s+path\s+(\S+)/', $line, $m)) {
+                        $devicePath = $m[4];
+                        $deviceKey = preg_replace('/p?\d+$/', '', str_replace('/dev/', '', $devicePath));
+                        $pool['members'][$deviceKey] = [
+                            'devid' => $m[1],
+                            'device' => $deviceKey,
+                            'size' => $m[2],
+                            'used' => $m[3],
+                            'status' => 'OK', // default
+                        ];
+                    }
+                }
+
+                // Check device stats for errors (try both old and new format)
+                $stats = [];
+                exec("btrfs device stats $mount", $stats, $rc2);
+                if ($rc2 === 0) {
+                    foreach ($stats as $line) {
+                        // New format: [/dev/sda1].write_io_errs 0
+                        if (preg_match('/^\[([^\]]+)\]\.(\S+)\s+(\d+)/', $line, $m)) {
+                            $devPath = $m[1];
+                            $statType = $m[2];
+                            $statValue = (int)$m[3];
+                            
+                            if ($statValue > 0 && in_array($statType, ['write_io_errs', 'read_io_errs', 'flush_io_errs', 'corruption_errs', 'generation_errs'])) {
+                                foreach ($pool['members'] as &$member) {
+                                    if ($member['device'] === $devPath) {
+                                        $member['status'] = 'DEGRADED';
+                                        break;
+                                    }
+                                }
+                                unset($member);
+                            }
+                        }
+                        // Old format: /dev/sda1: read 0, write 0, flush 0
+                        elseif (preg_match('/^(\S+):\s+read\s+(\d+),\s+write\s+(\d+),\s+flush\s+(\d+)/', $line, $m)) {
+                            foreach ($pool['members'] as &$member) {
+                                if ($member['device'] === $m[1]) {
+                                    if ((int)$m[2] > 0 || (int)$m[3] > 0 || (int)$m[4] > 0) {
+                                        $member['status'] = 'DEGRADED';
+                                    }
+                                    break;
+                                }
+                            }
+                            unset($member);
+                        }
+                    }
+                }
+
+                // Overall status
+                $memberStatuses = array_column($pool['members'], 'status');
+                if (in_array('DEGRADED', $memberStatuses, true)) {
+                    $pool['overall_status'] = 'DEGRADED';
+                } elseif (!empty($memberStatuses)) {
+                    $pool['overall_status'] = 'HEALTHY';
+                }
+            }
+        }
+
+        // --- ZFS ---
+        if ($s['fsType'] === 'zfs') {
+            $poolNameEsc = escapeshellarg($poolName);
+            $members = [];
+            $poolOverall = 'UNKNOWN';
+            
+            // First check if this is a dataset or an actual pool
+            // Use zfs get to check if this filesystem exists
+            $zfsList = [];
+            exec("zfs list -H -o name $poolNameEsc 2>/dev/null", $zfsList, $zfsRc);
+            
+            // Determine the actual pool name (before first /)
+            $actualPoolName = $poolName;
+            if ($zfsRc === 0 && !empty($zfsList)) {
+                // This is a valid ZFS filesystem
+                $fsName = trim($zfsList[0]);
+                if (strpos($fsName, '/') !== false) {
+                    // This is a dataset, extract the pool name
+                    $actualPoolName = substr($fsName, 0, strpos($fsName, '/'));
+                }
+            }
+            
+            $actualPoolNameEsc = escapeshellarg($actualPoolName);
+            
+            // Try JSON output first (ZFS 2.2+)
+            $zpoolJson = [];
+            exec("zpool status -j $actualPoolNameEsc 2>/dev/null", $zpoolJson, $rc);
+            $jsonParsed = false;
+            
+            if ($rc === 0 && !empty($zpoolJson)) {
+                $jsonData = json_decode(implode('', $zpoolJson), true);
+                
+                if ($jsonData && isset($jsonData['pools'][0])) {
+                    $jsonParsed = true;
+                    $zpoolData = $jsonData['pools'][0];
+                    $poolOverall = strtoupper($zpoolData['state'] ?? 'UNKNOWN');
+                    
+                    // Extract members from vdev tree
+                    if (isset($zpoolData['vdev_tree']['children'])) {
+                        foreach ($zpoolData['vdev_tree']['children'] as $vdev) {
+                            $vdevType = $vdev['type'] ?? null;
+                            
+                            // Determine if this is a special vdev type
+                            $isSpecial = in_array($vdevType, ['spare', 'cache', 'log', 'special', 'dedup'], true);
+                            
+                            // Handle leaf devices (single disk) vs vdevs (mirror/raidz)
+                            if (isset($vdev['children'])) {
+                                // Has children (mirror, raidz, etc.)
+                                foreach ($vdev['children'] as $child) {
+                                    if (isset($child['path'])) {
+                                        $deviceName = preg_replace('/p?\d+$/', '', basename($child['path']));
+                                        // Skip if device name is a pool name or zvol
+                                        if (in_array(strtolower($deviceName), $allPoolNames)) {
+                                            continue;
+                                        }
+                                        $members[$deviceName] = [
+                                            'device' => $deviceName,
+                                            'status' => strtoupper($child['state'] ?? 'UNKNOWN'),
+                                            'vdev' => $vdevType,
+                                            'type' => $isSpecial ? $vdevType : 'data',
+                                        ];
+                                    }
+                                }
+                            } elseif (isset($vdev['path'])) {
+                                // Direct disk (no vdev wrapper)
+                                $deviceName = preg_replace('/p?\d+$/', '', basename($vdev['path']));
+                                // Skip if device name is a pool name or zvol
+                                if (!in_array(strtolower($deviceName), $allPoolNames)) {
+                                    $members[$deviceName] = [
+                                        'device' => $deviceName,
+                                        'status' => strtoupper($vdev['state'] ?? 'UNKNOWN'),
+                                        'vdev' => null,
+                                        'type' => $isSpecial ? $vdevType : 'data',
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Fallback to text parsing if JSON not available or failed
+            if (!$jsonParsed) {
+                $zpoolStatus = [];
+                exec("zpool status $actualPoolNameEsc", $zpoolStatus, $rc);
+                if ($rc === 0) {
+                    $inConfig = false;
+                    $currentVdev = null;
+
+                    foreach ($zpoolStatus as $line) {
+                        $line = rtrim($line);
+
+                        // Capture overall pool state
+                        if (preg_match('/^\s*state:\s+(\S+)/i', $line, $m)) {
+                            $poolOverall = strtoupper($m[1]);
+                            continue;
+                        }
+
+                        // Enter config section
+                        if (preg_match('/^\s*config:/i', $line)) {
+                            $inConfig = true;
+                            continue;
+                        }
+
+                        // Skip header line in config
+                        if ($inConfig && preg_match('/^\s*NAME\s+STATE\s+READ\s+WRITE\s+CKSUM/i', $line)) {
+                            continue;
+                        }
+
+                        // Exit config when we hit 'errors:'
+                        if ($inConfig && preg_match('/^\s*errors:/i', $line)) {
+                            break;
+                        }
+
+                        if (!$inConfig) continue;
+
+                        // Match any line with device name and status in config section
+                        if (preg_match('/^\s+(\S+)\s+(ONLINE|DEGRADED|FAULTED|OFFLINE|REMOVED|UNAVAIL|AVAIL)/i', $line, $m)) {
+                            $device = $m[1];
+                            $status = strtoupper($m[2]);
+                            
+                            // Skip pool names (including this pool and others)
+                            if (in_array(strtolower($device), $allPoolNames)) {
+                                continue;
+                            }
+                            
+                            // Check for special vdev types (cache, log, spare, etc.)
+                            if (preg_match('/^(mirror|raidz[123]?|draid)-/i', $device)) {
+                                // These are redundancy VDEVs, track but don't add
+                                $currentVdev = $device;
+                                continue;
+                            } elseif (preg_match('/^(spare|cache|log|special|dedup)$/i', $device)) {
+                                // This line marks the start of a special device section
+                                $currentVdev = strtolower($device);
+                                continue;
+                            }
+                            
+                            // This is an actual device - add it
+                            $deviceType = 'data';
+                            if ($currentVdev && preg_match('/^(spare|cache|log|special|dedup)$/i', $currentVdev)) {
+                                $deviceType = $currentVdev;
+                            }
+                            
+                            $deviceKey = preg_replace('/p?\d+$/', '', $device);
+                            $members[$deviceKey] = [
+                                'device' => $deviceKey,
+                                'status' => $status,
+                                'vdev' => (preg_match('/^(mirror|raidz|draid)-/i', $currentVdev ?: '') ? $currentVdev : null),
+                                'type' => $deviceType,
+                            ];
+                        }
+                    }
+                }
+            }
+            
+            // Add metadata if this is a dataset
+            if ($actualPoolName !== $poolName) {
+                $pool['zfs_type'] = 'dataset';
+                $pool['parent_pool'] = $actualPoolName;
+            } else {
+                $pool['zfs_type'] = 'pool';
+            }
+            
+            $pool['members'] = $members;
+            $pool['overall_status'] = $poolOverall;
+        }
+
+        $result['pools'][$poolName] = $pool;
+    }
+
+    return json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+}
+
 ?>

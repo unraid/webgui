@@ -261,13 +261,19 @@ function device_usage(&$disk, &$full, &$high) {
 }
 
 function array_group($type, $pool=false) {
-  global $disks,$error,$warning,$red,$orange,$fail,$smart,$full,$high;
+  global $disks,$error,$warning,$red,$orange,$fail,$smart,$full,$high,$poolstatus;
   if ($type != 'Data') {$error = $warning = $red = $orange = $fail = $smart = $full = $high = 0;}
   $echo = [];
   foreach ($disks as $disk) if (_var($disk,'type')==$type && ((_var($disk,'type')=='Parity') ? strpos(_var($disk,'status'),'DISK_NP')===false : strcmp(_var($disk,'status'),'DISK_NP')!=0) && (!$pool||$pool==prefix(_var($disk,'name')))) {
     $echo[] = "<tr class='updated'><td>";
     $echo[] = "<span class='w26'>".device_name($disk)."</span>";
-    $echo[] = "<span class='w18'>".device_status($disk,$error,$warning)."</span>";
+    if ($pool && in_array(_var($disks[$pool],'fsType'),['zfs','btrfs'])) {
+      $echodiskstatus = "<span style='font-size: 1.1rem;' class='w18'>".device_status($disk,$error,$warning)."<br>";
+      $echodiskstatus .= "<span style='font-size: 1.1rem;'>FS:".$poolstatus['pools'][$pool]['members'][$disk['device']]['status']."</span></span>";
+    } else {
+      $echodiskstatus = "<span class='w18'>".device_status($disk,$error,$warning)."</span>";
+    }
+    $echo[] = $echodiskstatus;
     $echo[] = "<span class='w18'>".device_temp($disk,$red,$orange)."</span>";
     $echo[] = "<span class='w18'>".device_smart($disk,$fail,$smart)."</span>";
     $echo[] = "<span class='w18'>".device_usage($disk,$full,$high)."</span>";
@@ -322,6 +328,9 @@ function print_error($error) {
   return sprintf(_('Finding **%s** error'.($error==1?'':'s')),$error?:'0');
 }
 
+$pool_check_counter = 0;
+$poolstatus = [];
+
 while (true) {
   $var   = (array)@parse_ini_file("$varroot/var.ini");
   $devs  = (array)@parse_ini_file("$varroot/devs.ini",true);
@@ -341,10 +350,18 @@ while (true) {
   //array devices
   $echo['disk'] = [array_group('Parity').array_group('Data'), $error+$warning, $red+$orange, $fail+$smart, $full+$high];
 
+  // Update pool status every 60 seconds (30 iterations * 2s sleep)
+  if ($pool_check_counter % 30 == 0) {
+    $poolstatus = json_decode(storagePoolsJson(), true);
+  }
+  $pool_check_counter++;
+
   //pool devices
   foreach (pools_filter($disks) as $pool) {
     if (empty($disks[$pool]['devices'])) continue;
-    $echo['pool'][$p++] = [array_group('Cache',$pool), $error+$warning, $red+$orange, $fail+$smart, $full+$high];
+    #Add Pool check code
+    $poolcurrentstatus = " "._("Status").": ".$poolstatus['pools'][$pool]['overall_status'] ?? _('UNKNOWN');
+    $echo['pool'][$p++] = [array_group('Cache',$pool), $error+$warning, $red+$orange, $fail+$smart, $full+$high,$poolcurrentstatus];
   }
   //unassigned devices
   $echo['open'] = [extra_group(), $error+$warning, $red+$orange, $fail+$smart, $full+$high];

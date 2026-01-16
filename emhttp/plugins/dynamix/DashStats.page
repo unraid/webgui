@@ -1157,7 +1157,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                     <span class='tile-header-left'>
                                         <i class='icon-disk f32'></i>
                                         <div class='section'>
-                                            <h3 class='tile-header-main'><?=_(native($pool),3).($started ? '' : ' ('._('stopped').')')?></h3>
+                                            <h3 class='tile-header-main'><?=_(native($pool),3).($started ? '' : ' ('._('stopped').')')?> <span class='tile-header-main' id="pool_status_<?=$i?>"> Status:</span></h3>
                                             <span>
                                                 <?if ($started):?>
                                                     <?=sprintf(_("%s used of %s (%s %%)"),my_scale($cache_used[$pool]*1024,$unit)." $unit",my_scale($cache_size[$pool]*1024,$unit,-1,-1)." $unit",$cache_rate[$pool])?>
@@ -2620,6 +2620,7 @@ dashboard.on('message',function(msg,meta) {
         $('#pool_list'+i).append(get.pool[i][0]).hideMe();
         $('#pool_info'+i).parent().css({'display':info?'':'none'});
         $('#pool_info'+i).html(info);
+        $('#pool_status_'+i).text(get.pool[i][5] || _("UNKNOWN"));
         smartMenu('#pool_list'+i);
       }
     }
