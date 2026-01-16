@@ -77,6 +77,7 @@ foreach ($disks as $disk) {
     }
     break;
   case 'Cache':
+  case 'Boot':
     $name = _var($disk,'name');
     if (in_array($name,$pools)) {
       $cache_size[$name] = _var($disk,'fsSize',0);
@@ -1147,7 +1148,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
 
                 <?$i=0?>
                 <?foreach ($pools as $pool):
-                    $cache = array_filter(cache_filter($disks),function($disk) use ($pool){return prefix($disk['name'])==$pool;});
+                    $cache = array_filter(array_merge(cache_filter($disks), boot_filter($disks)),function($disk) use ($pool){return prefix($disk['name'])==$pool;});
                     $power = _var($display,'power') && in_array('nvme',array_column($cache,'transport')) ? ' / '._('Power') : '';
                 ?>
                     <tbody id='pool_list<?=$i?>' title="_(<?=ucfirst($pool)?> Information)_">
@@ -1181,7 +1182,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                         <tr class='header'>
                             <td>
                                 <span class='w26'>_(Device)_</span>
-                                <span class='w18'>_(Status)_</span>
+                                <span class='w18'>_(Status)_ /<br>_(Mbr Status)_ </span>
                                 <span class='w18'>_(Temp)_<?=$power?></span>
                                 <span class='w18'>_(SMART)_</span>
                                 <span class='w18'>_(Utilization)_</span>
@@ -2620,7 +2621,7 @@ dashboard.on('message',function(msg,meta) {
         $('#pool_list'+i).append(get.pool[i][0]).hideMe();
         $('#pool_info'+i).parent().css({'display':info?'':'none'});
         $('#pool_info'+i).html(info);
-        $('#pool_status_'+i).text(get.pool[i][5] || _("UNKNOWN"));
+        $('#pool_status_'+i).text(get.pool[i][5] || "");
         smartMenu('#pool_list'+i);
       }
     }

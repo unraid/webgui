@@ -86,6 +86,10 @@ function cache_only($disk) {
   return _var($disk,'type') == 'Cache';
 }
 
+function boot_only($disk) {
+  return _var($disk,'type') == 'Boot';
+}
+
 function luks_only($disk) {
   return _var($disk,'type') == 'Data' || _var($disk,'type') == 'Cache';
 }
@@ -106,12 +110,18 @@ function cache_filter($disks) {
   return array_filter($disks, 'cache_only');
 }
 
+function boot_filter($disks) {
+  return array_filter($disks, 'boot_only');
+}
+
 function luks_filter($disks) {
   return array_filter($disks, 'luks_only');
 }
 
 function pools_filter($disks) {
-  return array_unique(array_map('prefix', array_keys(cache_filter($disks))));
+  $cache_pools = array_keys(cache_filter($disks));
+  $boot_pools = array_keys(boot_filter($disks));
+  return array_unique(array_map('prefix', array_merge($cache_pools, $boot_pools)));
 }
 
 function my_id($id) {

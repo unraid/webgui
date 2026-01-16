@@ -268,8 +268,17 @@ function array_group($type, $pool=false) {
     $echo[] = "<tr class='updated'><td>";
     $echo[] = "<span class='w26'>".device_name($disk)."</span>";
     if ($pool && in_array(_var($disks[$pool],'fsType'),['zfs','btrfs'])) {
+      $memberStatus = $poolstatus['pools'][$pool]['members'][$disk['device']]['status'] ?? 'UNKNOWN';
+      $statusColor = 'grey';
+      if (in_array($memberStatus, ['OK', 'ONLINE', 'HEALTHY'])) {
+        $statusColor = 'green';
+      } elseif (in_array($memberStatus, ['DEGRADED'])) {
+        $statusColor = 'orange';
+      } elseif (in_array($memberStatus, ['FAILED', 'MISSING', 'FAULTED', 'UNAVAIL'])) {
+        $statusColor = 'red';
+      }
       $echodiskstatus = "<span style='font-size: 1.1rem;' class='w18'>".device_status($disk,$error,$warning)."<br>";
-      $echodiskstatus .= "<span style='font-size: 1.1rem;'>FS:".$poolstatus['pools'][$pool]['members'][$disk['device']]['status']."</span></span>";
+      $echodiskstatus .= "<span style='font-size: 1.1rem;'><i class='fa fa-circle orb $statusColor-orb middle'></i>"._($memberStatus)."</span></span>";
     } else {
       $echodiskstatus = "<span class='w18'>".device_status($disk,$error,$warning)."</span>";
     }
@@ -360,8 +369,19 @@ while (true) {
   foreach (pools_filter($disks) as $pool) {
     if (empty($disks[$pool]['devices'])) continue;
     #Add Pool check code
-    $poolcurrentstatus = " "._("Status").": ".$poolstatus['pools'][$pool]['overall_status'] ?? _('UNKNOWN');
-    $echo['pool'][$p++] = [array_group('Cache',$pool), $error+$warning, $red+$orange, $fail+$smart, $full+$high,$poolcurrentstatus];
+    if (in_array(_var($disks[$pool],'fsType'), ['zfs','btrfs']) && !empty($poolstatus['pools'][$pool])) {
+      $status = $poolstatus['pools'][$pool]['overall_status'] ?? 'UNKNOWN';
+      $isHealthy = in_array($status, ['HEALTHY', 'ONLINE']);
+      $statusText = " "._("Status").": ".$status;
+      if (!$isHealthy) {
+        $statusText = "<span class='yellow-text'><i class='fa fa-warning'></i> ".$statusText."</span>";
+      }
+      $poolType = _var($disks[$pool],'type') == 'Boot' ? 'Boot' : 'Cache';
+      $echo['pool'][$p++] = [array_group($poolType,$pool), $error+$warning, $red+$orange, $fail+$smart, $full+$high,$statusText];
+    } else {
+      $poolType = _var($disks[$pool],'type') == 'Boot' ? 'Boot' : 'Cache';
+      $echo['pool'][$p++] = [array_group($poolType,$pool), $error+$warning, $red+$orange, $fail+$smart, $full+$high,""];
+    }
   }
   //unassigned devices
   $echo['open'] = [extra_group(), $error+$warning, $red+$orange, $fail+$smart, $full+$high];
