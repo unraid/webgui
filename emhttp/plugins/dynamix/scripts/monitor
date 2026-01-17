@@ -244,6 +244,39 @@ if ($warn>0) {
   }
 }
 
+// check pool status
+$item = 'pools';
+$poolsJson = json_decode(storagePoolsJson(), true);
+if (isset($poolsJson['pools']) && is_array($poolsJson['pools'])) {
+  foreach ($poolsJson['pools'] as $poolName => $pool) {
+    $attr = $poolName;
+    $lastStatus = $saved[$item][$attr] ?? 'UNKNOWN';
+    $currentStatus = _var($pool, 'overall_status', 'UNKNOWN');
+    $fstype = _var($pool, 'fstype', 'unknown');
+    
+    // Check if status changed
+    if ($currentStatus !== $lastStatus) {
+      $mountpoint = _var($pool, 'mountpoint', 'unknown');
+      $info = "Pool: $poolName ($fstype) - Mountpoint: $mountpoint";
+      
+      if ($currentStatus === 'DEGRADED' || $currentStatus === 'FAULTED') {
+        // Status degraded or faulted - send alert
+        exec("$notify -l '/Main' -e ".escapeshellarg("Unraid pool status")." -s ".escapeshellarg("Alert [$server] - Pool $poolName is $currentStatus")." -d ".escapeshellarg("$info")." -i \"alert\" 2>/dev/null");
+        $saved[$item][$attr] = $currentStatus;
+      } elseif ($currentStatus === 'ONLINE' || $currentStatus === 'HEALTHY') {
+        // Status recovered to good - send notice
+        if ($lastStatus !== 'UNKNOWN') {
+          exec("$notify -l '/Main' -e ".escapeshellarg("Unraid pool status")." -s ".escapeshellarg("Notice [$server] - Pool $poolName recovered to $currentStatus")." -d ".escapeshellarg("$info")." 2>/dev/null");
+        }
+        $saved[$item][$attr] = $currentStatus;
+      } else {
+        // Unknown status - still track it
+        $saved[$item][$attr] = $currentStatus;
+      }
+    }
+  }
+}
+
 /* Process parity check, parity sync, and data-rebuild notifications */
 $name = 'parity';
 $last = $saved[$item][$name] ?? '';

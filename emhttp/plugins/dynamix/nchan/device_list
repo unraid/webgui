@@ -45,8 +45,8 @@ function my_power($power) {
   return _var($display,'power') && $power ? number_format($power,$power<10?2:1,$number[0]).' '._('W').' / ' : '';
 }
 
-function device_info(&$disk,$online) {
-  global $pools, $var, $sec;
+function device_info(&$disk,$online,$poolName='',$poolstatusData=[]) {
+  global $pools, $var, $sec, $disks;
   if (!$online || _var($disk,'fsStatus')!='Mounted' || (in_array(_var($disk,'type'),['Parity','Cache']) && (!in_array(_var($disk,'name'),$pools) || isSubpool(_var($disk,'name'))))) {
     $view = "<a class='view'></a>";
   } else {
@@ -90,7 +90,24 @@ function device_info(&$disk,$online) {
   $warn   = ($name == 'flash') && _var($var,'shareSMBEnabled')=='yes' && $sec['flash']['export']=='e' && $sec['flash']['security']=='public'
           ? "&nbsp;<a class='info'><i class='fa fa-warning fa-fw orange-text'></i><span>"._('Boot device is set as public share')."<br>"._('Please change share SMB security')."<br>"._('Click on **FLASH** above this message')."</span></a>"
           : "";
-  return $view.$status.$link.$warn;
+  
+  // Add pool status for zfs and btrfs pools only (first device only)
+  $poolstatus = "";
+  if ($poolName && !empty($poolstatusData['pools'][$poolName]) && $name == $poolName) {
+    $poolFsType = isset($disks[$poolName]) ? _var($disks[$poolName],'fsType','') : '';
+    if (in_array($poolFsType, ['zfs','btrfs'])) {
+      $status_text = $poolstatusData['pools'][$poolName]['overall_status'] ?? 'UNKNOWN';
+      $isHealthy = in_array($status_text, ['HEALTHY', 'ONLINE']);
+      $deviceUrl = "/Main/Device?name=".urlencode($poolName)."#poolsummary";
+      if (!$isHealthy) {
+        $poolstatus = " <a href='$deviceUrl' title='"._('View pool details')."'>($status_text)</span></a><span><i class='fa fa-warning fa-fw orange-text'></span>";
+      } else {
+        $poolstatus = " <a href='$deviceUrl' title='"._('View pool details')."'>($status_text)</a>";
+      }
+    }
+  }
+  
+  return $view.$status.$link.$poolstatus.$warn;
 }
 
 function device_desc(&$disk) {
@@ -271,7 +288,7 @@ function array_offline(&$disk, $pool='') {
   return implode($echo);
 }
 
-function array_online(&$disk, $fstype='') {
+function array_online(&$disk, $fstype='', $poolName='', $poolstatusData=[]) {
   global $pools, $sum, $diskio;
   $disk['power'] ??= (_var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'power') : 0);
   $echo = [];
@@ -299,21 +316,21 @@ function array_online(&$disk, $fstype='') {
   switch (_var($disk,'status')) {
   case 'DISK_NP':
     if (in_array(_var($disk,'name'),$pools) || $fstype=='zfs') {
-      $echo[] = "<td>".device_info($disk,true)."</td>";
+      $echo[] = "<td>".device_info($disk,true,$poolName,$poolstatusData)."</td>";
       $echo[] = "<td><a class='static'><i class='icon-disk icon'></i><span></span></a><em>".($fstype=='zfs' ? _('Not present') : _('Not installed'))."</em></td>";
       $echo[] = "<td colspan='4'></td>";
       $echo[] = fs_info($disk,true);
     }
     break;
   case 'DISK_NP_DSBL':
-    $echo[] = "<td>".device_info($disk,true)."</td>";
+    $echo[] = "<td>".device_info($disk,true,$poolName,$poolstatusData)."</td>";
     $echo[] = "<td><a class='static'><i class='icon-disk icon'></i><span></span></a><em>"._('Not installed')."</em></td>";
     $echo[] = "<td colspan='4'></td>";
     $echo[] = fs_info($disk,true);
     break;
   case 'DISK_DSBL':
   default:
-    $echo[] = "<td>".device_info($disk,true)."</td>";
+    $echo[] = "<td>".device_info($disk,true,$poolName,$poolstatusData)."</td>";
     $echo[] = "<td class='desc'>".device_desc($disk)."</td>";
     $echo[] = "<td>".my_power($disk['power']).my_temp(_var($disk,'temp','*'))."</td>";
     $echo[] = "<td><span class='diskio'>".my_diskio($data[0])."</span><span class='number'>".my_number(_var($disk,'numReads',0))."</span></td>";
@@ -463,6 +480,14 @@ while (true) {
     if (in_array($disk['type'],['Data','Cache'])) $crypto |= _var($disk,'luksState',0)!=0 || vfs_luks(_var($disk,'fsType'));
   }
   $pools = array_unique(array_map('prefix',array_keys($Cache)));
+  
+  // Fetch pool status for zfs and btrfs pools
+  static $poolstatus = [];
+  static $pool_check_counter = 0;
+  if ($pool_check_counter % 30 == 0) {
+    $poolstatus = json_decode(storagePoolsJson(), true);
+  }
+  $pool_check_counter++;
 
   $a = 'array_devices';
   $echo[$a] = [];
@@ -486,7 +511,11 @@ while (true) {
   $a = 'boot_device';
   $echo[$a] = [];
   foreach ($Flash as $disk) $echo[$a][] = array_online($disk);
-  foreach ($Boot as $disk) $echo[$a][] = array_online($disk);
+  foreach ($Boot as $disk) {
+    $poolName = prefix(_var($disk,'name'));
+    $fstype = str_replace('luks:','',_var($disk,'fsType'));
+    $echo[$a][] = array_online($disk,$fstype,$poolName,$poolstatus);
+  }
   $echo[$a] = implode($echo[$a]);
 
   $sum = initSum(); $i = 0;
@@ -520,7 +549,7 @@ while (true) {
     } else {
       foreach ($Cache as $disk) if (prefix($disk['name'])==$pool) {
         $fstype = str_replace('luks:','',_var($disk,'fsType'));
-        $echo[$a][] = array_online($disk,$fstype);
+        $echo[$a][] = array_online($disk,$fstype,$pool,$poolstatus);
       }
       if (strcmp($root,$pool)!=0) $Cache[$root]['devices'] += $Cache[$pool]['devices'];
       if (strcmp($pool,$print)==0) {
