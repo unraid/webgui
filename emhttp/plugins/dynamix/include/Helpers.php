@@ -120,6 +120,11 @@ function luks_filter($disks) {
 
 function pools_filter($disks) {
   $cache_pools = array_keys(cache_filter($disks));
+  return array_unique(array_map('prefix', $cache_pools));
+}
+
+function pools_and_boot_filter($disks) {
+  $cache_pools = array_keys(cache_filter($disks));
   $boot_pools = array_keys(boot_filter($disks));
   return array_unique(array_map('prefix', array_merge($cache_pools, $boot_pools)));
 }
@@ -1208,6 +1213,18 @@ function storagePoolsJson(): string
             'overall_status' => 'UNKNOWN',
             'source' => 'disks.ini',
         ];
+        
+        // Find all member disks for this pool (e.g., cache, cache2, cache3)
+        $poolPrefix = preg_replace('/\d+$/', '', $poolName); // Remove trailing numbers
+        $expectedMembers = [];
+        foreach ($sections as $diskName => $diskData) {
+            // Check if this disk belongs to our pool
+            if (preg_match('/^disk/i', $diskName)) continue; // Skip array disks
+            $diskPrefix = preg_replace('/\d+$/', '', $diskName);
+            if ($diskPrefix === $poolPrefix) {
+                $expectedMembers[$diskName] = $diskData;
+            }
+        }
 
         // --- Btrfs ---
         if ($s['fsType'] === 'btrfs') {
@@ -1283,9 +1300,36 @@ function storagePoolsJson(): string
                     }
                 }
 
+                // Check for DISK_NP_DSBL members (physically removed devices)
+                foreach ($expectedMembers as $diskName => $diskData) {
+                    $diskKey = preg_replace('/\d+$/', '', $diskName); // Remove number suffix for matching
+                    $deviceKey = $diskKey; // Use disk name as device key
+                    
+                    // Check if this disk is already in members (was found by btrfs)
+                    $foundInMembers = false;
+                    foreach ($pool['members'] as $memberKey => $member) {
+                        if (strpos($memberKey, $diskKey) !== false || strpos($member['device'], $diskName) !== false) {
+                            $foundInMembers = true;
+                            break;
+                        }
+                    }
+                    
+                    // If not found in members and has DISK_NP_DSBL status, add it as REMOVED
+                    if (!$foundInMembers && isset($diskData['status']) && $diskData['status'] === 'DISK_NP_DSBL') {
+                        $pool['members'][$diskName] = [
+                            'devid' => '?',
+                            'device' => $diskName,
+                            'size' => 'N/A',
+                            'used' => 'N/A',
+                            'status' => 'REMOVED',
+                        ];
+                        $hasMissing = true; // Treat as missing for overall status
+                    }
+                }
+
                 // Overall status
                 $memberStatuses = array_column($pool['members'], 'status');
-                if ($hasMissing || $hasFailed || in_array('MISSING', $memberStatuses, true) || in_array('FAILED', $memberStatuses, true) || in_array('DEGRADED', $memberStatuses, true)) {
+                if ($hasMissing || $hasFailed || in_array('MISSING', $memberStatuses, true) || in_array('FAILED', $memberStatuses, true) || in_array('DEGRADED', $memberStatuses, true) || in_array('REMOVED', $memberStatuses, true)) {
                     $pool['overall_status'] = 'DEGRADED';
                 } elseif (!empty($memberStatuses)) {
                     $pool['overall_status'] = 'HEALTHY';
@@ -1444,6 +1488,35 @@ function storagePoolsJson(): string
                                 'type' => $deviceType,
                             ];
                         }
+                    }
+                }
+            }
+            
+            // Check for DISK_NP_DSBL members (physically removed devices)
+            foreach ($expectedMembers as $diskName => $diskData) {
+                $diskKey = preg_replace('/\d+$/', '', $diskName); // Remove number suffix for matching
+                $deviceKey = $diskKey; // Use disk name as device key
+                
+                // Check if this disk is already in members (was found by zpool)
+                $foundInMembers = false;
+                foreach ($members as $memberKey => $member) {
+                    if (strpos($memberKey, $diskKey) !== false || strpos($member['device'], $diskName) !== false) {
+                        $foundInMembers = true;
+                        break;
+                    }
+                }
+                
+                // If not found in members and has DISK_NP_DSBL status, add it as MISSING
+                if (!$foundInMembers && isset($diskData['status']) && $diskData['status'] === 'DISK_NP_DSBL') {
+                    $members[$diskName] = [
+                        'device' => $diskName,
+                        'status' => 'MISSING',
+                        'vdev' => null,
+                        'type' => 'data',
+                    ];
+                    // Update overall status to DEGRADED if we have missing members
+                    if ($poolOverall === 'ONLINE' || $poolOverall === 'UNKNOWN') {
+                        $poolOverall = 'DEGRADED';
                     }
                 }
             }

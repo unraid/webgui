@@ -1012,6 +1012,33 @@ _(Critical disk utilization threshold)_ (%):
 
 <?if (fsType('btrfs')):?>
 <?if (_var($disk,'fsStatus')=="Mounted"):?>
+<div id="poolsummary" class="title nocontrol">
+  <span class="left">
+    <i class="title fa fa-hdd-o"></i> _(Pool Status)_
+  </span>
+</div>
+<form markdown="1">
+<?
+$poolstatus = json_decode(storagePoolsJson(), true);
+$poolName = $tag;
+$status = 'UNKNOWN';
+$statusClass = 'orange-text';
+$statusLink = '';
+if (!empty($poolstatus['pools'][$poolName])) {
+  $status = $poolstatus['pools'][$poolName]['overall_status'] ?? 'UNKNOWN';
+  $isHealthy = in_array($status, ['HEALTHY', 'ONLINE']);
+  $statusClass = $isHealthy ? 'green-text' : 'orange-text';
+  $statusUrl = $poolstatus['pools'][$poolName]['status_url'] ?? '';
+  if ($statusUrl) {
+    $statusLink = " <a href='$statusUrl' target='_blank' title='"._('View detailed status')."'><i class='fa fa-external-link'></i></a>";
+  }
+}
+?>
+_(pool status)_:
+: <span class="<?=$statusClass?>"><?=$status?><?=$statusLink?></span>
+
+</form>
+
 <div class="title nocontrol">
   <span class="left">
     <i class="title fa fa-hdd-o"></i> _(Pool Device Status)_
@@ -1347,6 +1374,35 @@ _(btrfs check status)_:
 <?endif;?>
 <?endif;?>
 <?if (fsType('zfs') && !isSubpool($name)):?>
+<?if (_var($disk,'fsStatus')=="Mounted"):?>
+<div id="poolsummary" class="title nocontrol">
+  <span class="left">
+    <i class="title fa fa-info-circle"></i>_(Pool Status Summary)_
+  </span>
+</div>
+<form markdown="1">
+<?
+$poolstatus = json_decode(storagePoolsJson(), true);
+$poolName = $tag;
+$status = 'UNKNOWN';
+$statusClass = 'orange-text';
+$statusLink = '';
+if (!empty($poolstatus['pools'][$poolName])) {
+  $status = $poolstatus['pools'][$poolName]['overall_status'] ?? 'UNKNOWN';
+  $isHealthy = in_array($status, ['HEALTHY', 'ONLINE']);
+  $statusClass = $isHealthy ? 'green-text' : 'orange-text';
+  $statusUrl = $poolstatus['pools'][$poolName]['status_url'] ?? '';
+  if ($statusUrl) {
+    $statusLink = " <a href='$statusUrl' target='_blank' title='"._('View detailed status')."'><i class='fa fa-external-link'></i></a>";
+  }
+}
+?>
+_(pool status)_:
+: <span class="<?=$statusClass?>"><?=$status?><?=$statusLink?></span>
+
+</form>
+<?endif;?>
+
 <div class="title nocontrol">
   <span class="left">
     <i class="title fa fa-hdd-o"></i>_(Pool Status)_
