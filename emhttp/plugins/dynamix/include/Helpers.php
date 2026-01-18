@@ -1254,6 +1254,13 @@ function storagePoolsJson(): string
                     'size' => $m[2],
                     'used' => $m[3],
                     'status' => $isMissing ? 'MISSING' : ($isZeroSize ? 'FAILED' : 'OK'),
+                    'errors' => [
+                      'write' => 0,
+                      'read' => 0,
+                      'flush' => 0,
+                      'corruption' => 0,
+                      'generation' => 0,
+                    ],
                   ];
                   if ($isMissing) {
                     $hasMissing = true;
@@ -1274,10 +1281,22 @@ function storagePoolsJson(): string
                             $statType = $m[2];
                             $statValue = (int)$m[3];
                             
-                            if ($statValue > 0 && in_array($statType, ['write_io_errs', 'read_io_errs', 'flush_io_errs', 'corruption_errs', 'generation_errs'])) {
+                            // Map stat type to error key
+                            $errorMap = [
+                                'write_io_errs' => 'write',
+                                'read_io_errs' => 'read',
+                                'flush_io_errs' => 'flush',
+                                'corruption_errs' => 'corruption',
+                                'generation_errs' => 'generation',
+                            ];
+                            
+                            if (isset($errorMap[$statType])) {
                                 foreach ($pool['members'] as &$member) {
                                     if ($member['device'] === $devPath) {
-                                        $member['status'] = 'DEGRADED';
+                                        $member['errors'][$errorMap[$statType]] = $statValue;
+                                        if ($statValue > 0) {
+                                            $member['status'] = 'DEGRADED';
+                                        }
                                         break;
                                     }
                                 }
@@ -1288,6 +1307,9 @@ function storagePoolsJson(): string
                         elseif (preg_match('/^(\S+):\s+read\s+(\d+),\s+write\s+(\d+),\s+flush\s+(\d+)/', $line, $m)) {
                             foreach ($pool['members'] as &$member) {
                                 if ($member['device'] === $m[1]) {
+                                    $member['errors']['read'] = (int)$m[2];
+                                    $member['errors']['write'] = (int)$m[3];
+                                    $member['errors']['flush'] = (int)$m[4];
                                     if ((int)$m[2] > 0 || (int)$m[3] > 0 || (int)$m[4] > 0) {
                                         $member['status'] = 'DEGRADED';
                                     }
@@ -1332,6 +1354,22 @@ function storagePoolsJson(): string
                     $pool['overall_status'] = 'DEGRADED';
                 } elseif (!empty($memberStatuses)) {
                     $pool['overall_status'] = 'HEALTHY';
+                }
+                
+                // Calculate total errors across all members
+                $totalErrors = 0;
+                foreach ($pool['members'] as $member) {
+                    if (isset($member['errors'])) {
+                        foreach ($member['errors'] as $errorCount) {
+                            $totalErrors += (int)$errorCount;
+                        }
+                    }
+                }
+                $pool['total_errors'] = $totalErrors;
+                
+                // Append - ERROR if pool is healthy but has errors
+                if ($totalErrors > 0 && $pool['overall_status'] === 'HEALTHY') {
+                    $pool['overall_status'] = 'HEALTHY - ERROR';
                 }
             }
         }
@@ -1396,6 +1434,11 @@ function storagePoolsJson(): string
                                             'status' => strtoupper($child['state'] ?? 'UNKNOWN'),
                                             'vdev' => $vdevType,
                                             'type' => $isSpecial ? $vdevType : 'data',
+                                            'errors' => [
+                                                'read' => (int)($child['vdev_stats']['read_errors'] ?? 0),
+                                                'write' => (int)($child['vdev_stats']['write_errors'] ?? 0),
+                                                'checksum' => (int)($child['vdev_stats']['checksum_errors'] ?? 0),
+                                            ],
                                         ];
                                     }
                                 }
@@ -1409,6 +1452,11 @@ function storagePoolsJson(): string
                                         'status' => strtoupper($vdev['state'] ?? 'UNKNOWN'),
                                         'vdev' => null,
                                         'type' => $isSpecial ? $vdevType : 'data',
+                                        'errors' => [
+                                            'read' => (int)($vdev['vdev_stats']['read_errors'] ?? 0),
+                                            'write' => (int)($vdev['vdev_stats']['write_errors'] ?? 0),
+                                            'checksum' => (int)($vdev['vdev_stats']['checksum_errors'] ?? 0),
+                                        ],
                                     ];
                                 }
                             }
@@ -1453,9 +1501,12 @@ function storagePoolsJson(): string
                         if (!$inConfig) continue;
 
                         // Match any line with device name and status in config section
-                        if (preg_match('/^\s+(\S+)\s+(ONLINE|DEGRADED|FAULTED|OFFLINE|REMOVED|UNAVAIL|AVAIL)/i', $line, $m)) {
+                        if (preg_match('/^\s+(\S+)\s+(ONLINE|DEGRADED|FAULTED|OFFLINE|REMOVED|UNAVAIL|AVAIL)(?:\s+(\d+)\s+(\d+)\s+(\d+))?/i', $line, $m)) {
                             $device = $m[1];
                             $status = strtoupper($m[2]);
+                            $readErrors = isset($m[3]) ? (int)$m[3] : 0;
+                            $writeErrors = isset($m[4]) ? (int)$m[4] : 0;
+                            $cksumErrors = isset($m[5]) ? (int)$m[5] : 0;
                             
                             // Skip pool names (including this pool and others)
                             if (in_array(strtolower($device), $allPoolNames)) {
@@ -1485,6 +1536,11 @@ function storagePoolsJson(): string
                                 'status' => $status,
                                 'vdev' => (preg_match('/^(mirror|raidz|draid)-/i', $currentVdev ?: '') ? $currentVdev : null),
                                 'type' => $deviceType,
+                                'errors' => [
+                                    'read' => $readErrors,
+                                    'write' => $writeErrors,
+                                    'checksum' => $cksumErrors,
+                                ],
                             ];
                         }
                     }
@@ -1526,6 +1582,22 @@ function storagePoolsJson(): string
                 $pool['parent_pool'] = $actualPoolName;
             } else {
                 $pool['zfs_type'] = 'pool';
+            }
+            
+            // Calculate total errors across all members
+            $totalErrors = 0;
+            foreach ($members as $member) {
+                if (isset($member['errors'])) {
+                    foreach ($member['errors'] as $errorCount) {
+                        $totalErrors += (int)$errorCount;
+                    }
+                }
+            }
+            $pool['total_errors'] = $totalErrors;
+            
+            // Append - ERROR if pool is online but has errors
+            if ($totalErrors > 0 && $poolOverall === 'ONLINE') {
+                $poolOverall = 'ONLINE - ERROR';
             }
             
             $pool['members'] = $members;

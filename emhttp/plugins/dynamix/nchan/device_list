@@ -35,6 +35,48 @@ function initSum() {
   return ['count'=>0, 'temp'=>0, 'power'=>0, 'fsSize'=>0, 'fsUsed'=>0, 'fsFree'=>0, 'ioReads'=>0, 'ioWrites'=>0, 'numReads'=>0, 'numWrites'=>0, 'numErrors'=>0];
 }
 
+function get_fs_errors($poolName) {
+  global $poolstatus;
+  if (isset($poolstatus['pools'][$poolName]['total_errors'])) {
+    return $poolstatus['pools'][$poolName]['total_errors'];
+  }
+  return 0;
+}
+
+function get_fs_error_tooltip($diskName, $diskDevice, $deviceErrors) {
+  global $poolstatus;
+  $poolName = prefix($diskName);
+  $errorLines = [];
+  
+  // Find the specific member in the pool that matches this disk's device
+  if (isset($poolstatus['pools'][$poolName]['members'])) {
+    foreach ($poolstatus['pools'][$poolName]['members'] as $member) {
+      // Match by device name (e.g., sdx, nvme0n1p1)
+      $memberDevice = basename(_var($member,'device',''));
+      if ($memberDevice && str_contains($diskDevice, $memberDevice)) {
+        if (isset($member['errors'])) {
+          foreach ($member['errors'] as $errorType => $count) {
+            if ($count >= 0) {
+              $errorLines[] = ucfirst($errorType) . ' errors: ' . $count;
+            }
+          }
+        }
+        break;
+      }
+    }
+  }
+  
+  // Add device errors if present
+  if ($deviceErrors > 0) {
+    if (!empty($errorLines)) {
+      $errorLines[] = '';
+    }
+    $errorLines[] = _('Device errors: ') . $deviceErrors;
+  }
+  
+  return !empty($errorLines) ? implode('<br>', $errorLines) : '';
+}
+
 function get_model($id) {
   return substr($id,0,strrpos($id,'_'));
 }
@@ -306,7 +348,9 @@ function array_online(&$disk, $fstype='', $poolName='', $poolstatusData=[]) {
   $sum['power'] += floatval(_var($disk,'power',0));
   $sum['numReads'] += _var($disk,'numReads',0);
   $sum['numWrites'] += _var($disk,'numWrites',0);
-  $sum['numErrors'] += _var($disk,'numErrors',0);
+  $sum['numErrors'] += _var($disk,'numErrors',0); 
+  # Add filesystems errors to totals
+  #$sum['numErrors'] += _var($disk,'fsErrors',0);
   if (isset($disk['fsFree'])) {
     $sum['fsSize'] += _var($disk,'fsSize',0);
     $sum['fsUsed'] += _var($disk,'fsUsed',0);
@@ -335,6 +379,25 @@ function array_online(&$disk, $fstype='', $poolName='', $poolstatusData=[]) {
     $echo[] = "<td>".my_power($disk['power']).my_temp(_var($disk,'temp','*'))."</td>";
     $echo[] = "<td><span class='diskio'>".my_diskio($data[0])."</span><span class='number'>".my_number(_var($disk,'numReads',0))."</span></td>";
     $echo[] = "<td><span class='diskio'>".my_diskio($data[1])."</span><span class='number'>".my_number(_var($disk,'numWrites',0))."</span></td>";
+    # Add filesystems errors to device errors and include tooltip of errors
+    $fsErrors = get_fs_errors(prefix(_var($disk,'name')));
+    $numErrors = _var($disk,'numErrors',0) + $fsErrors;
+    #$fsErrors = 1; $numErrors = 2;
+    if ($numErrors > 0) {
+      $error_help = get_fs_error_tooltip(_var($disk,'name'), _var($disk,'device',''), $numErrors);
+      if (empty($error_help)) {
+        // Fallback if no detailed errors available
+        if ($fsErrors > 0) {
+          $error_help = _('Filesystem errors: ') . $fsErrors;
+        }
+        if ($numErrors > 0) {
+          $error_help .= ($error_help ? '<br>' : '') . _('Device errors: ') . _var($disk,'numErrors',0);
+        }
+      }
+      $echo[] = "<td><a class='info'><i class='fa fa-exclamation-triangle yellow-text'></i><span>$error_help</span></a>&nbsp;".my_number($numErrors)."</td>";
+    } else {
+      $echo[] = "<td>".my_number($numErrors)."</td>";
+    }
     $echo[] = "<td>".my_number(_var($disk,'numErrors',0))."</td>";
     $echo[] = fs_info($disk,true);
     break;
