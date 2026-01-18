@@ -123,10 +123,9 @@ function pools_filter($disks) {
   return array_unique(array_map('prefix', $cache_pools));
 }
 
-function pools_and_boot_filter($disks) {
-  $cache_pools = array_keys(cache_filter($disks));
+function flash_filter($disks) {
   $boot_pools = array_keys(boot_filter($disks));
-  return array_unique(array_map('prefix', array_merge($cache_pools, $boot_pools)));
+  return array_unique(array_map('prefix', $boot_pools));
 }
 
 function my_id($id) {

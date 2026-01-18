@@ -276,7 +276,7 @@ function array_group($type, $pool=false) {
         $statusColor = 'green';
       } elseif (in_array($memberStatus, ['DEGRADED'])) {
         $statusColor = 'orange';
-      } elseif (in_array($memberStatus, ['FAILED', 'MISSING', 'FAULTED', 'UNAVAIL'])) {
+      } elseif (in_array($memberStatus, ['FAILED', 'MISSING', 'FAULTED', 'UNAVAIL', 'REMOVED'])) {
         $statusColor = 'red';
       }
       $echodiskstatus = "<span style='font-size: 1.1rem;' class='w18'>".device_status($disk,$error,$warning)."<br>";
@@ -368,14 +368,16 @@ while (true) {
   $pool_check_counter++;
 
   //pool devices
-  foreach (pools_and_boot_filter($disks) as $pool) {
+
+
+  foreach (array_merge(pools_filter($disks),flash_filter($disks)) as $pool) {
     if (empty($disks[$pool]['devices'])) continue;
     if (in_array(_var($disks[$pool],'fsType'), ['zfs','btrfs']) && !empty($poolstatus['pools'][$pool])) {
       $status = $poolstatus['pools'][$pool]['overall_status'] ?? 'UNKNOWN';
       $isHealthy = in_array($status, ['HEALTHY', 'ONLINE']);
       $statusText = " "._("Status").": ".$status;
       if (!$isHealthy) {
-        $statusText = "<span><i class='fa fa-warning fa-fw orange-text'></i> ".$statusText.$pool."</span>";
+        $statusText = "<span><i class='fa fa-warning fa-fw orange-text'></i> ".$statusText."</span>";
       }
       $poolType = _var($disks[$pool],'type') == 'Boot' ? 'Boot' : 'Cache';
       $echo['pool'][$p++] = [array_group($poolType,$pool), $error+$warning, $red+$orange, $fail+$smart, $full+$high,$statusText];

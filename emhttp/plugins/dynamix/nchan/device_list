@@ -100,7 +100,7 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[]) {
       $isHealthy = in_array($status_text, ['HEALTHY', 'ONLINE']);
       $deviceUrl = "/Main/Device?name=".urlencode($poolName)."#poolsummary";
       if (!$isHealthy) {
-        $poolstatus = " <a href='$deviceUrl' title='"._('View pool details')."'>($status_text)</span></a><span><i class='fa fa-warning fa-fw orange-text'></span>";
+        $poolstatus = " <a href='$deviceUrl' title='"._('View pool details')."'>($status_text)</a><span><i class='fa fa-warning fa-fw orange-text'></span>";
       } else {
         $poolstatus = " <a href='$deviceUrl' title='"._('View pool details')."'>($status_text)</a>";
       }
