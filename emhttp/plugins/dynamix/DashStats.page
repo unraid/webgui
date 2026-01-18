@@ -87,6 +87,7 @@ foreach ($disks as $disk) {
       $cache_rate[$name] = number_format(100*$cache_used[$name]/($cache_size[$name] ?: 1),1,$dot,'');
       if (empty($disks[$name]['devices'])) unset($pools[array_search($name,$pools)]);
     }
+    break;
   case 'Boot':
     $name = _var($disk,'name');
     if (in_array($name,flash_filter($disks))) {
