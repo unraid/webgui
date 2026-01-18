@@ -349,8 +349,6 @@ function array_online(&$disk, $fstype='', $poolName='', $poolstatusData=[]) {
   $sum['numReads'] += _var($disk,'numReads',0);
   $sum['numWrites'] += _var($disk,'numWrites',0);
   $sum['numErrors'] += _var($disk,'numErrors',0); 
-  # Add filesystems errors to totals
-  #$sum['numErrors'] += _var($disk,'fsErrors',0);
   if (isset($disk['fsFree'])) {
     $sum['fsSize'] += _var($disk,'fsSize',0);
     $sum['fsUsed'] += _var($disk,'fsUsed',0);
@@ -382,7 +380,7 @@ function array_online(&$disk, $fstype='', $poolName='', $poolstatusData=[]) {
     # Add filesystems errors to device errors and include tooltip of errors
     $fsErrors = get_fs_errors(prefix(_var($disk,'name')));
     $numErrors = _var($disk,'numErrors',0) + $fsErrors;
-    #$fsErrors = 1; $numErrors = 2;
+    if ($fsErrors > 0) $sum['numErrors'] += _var($disk,'numErrors',0); 
     if ($numErrors > 0) {
       $error_help = get_fs_error_tooltip(_var($disk,'name'), _var($disk,'device',''), $numErrors);
       if (empty($error_help)) {
@@ -398,7 +396,6 @@ function array_online(&$disk, $fstype='', $poolName='', $poolstatusData=[]) {
     } else {
       $echo[] = "<td>".my_number($numErrors)."</td>";
     }
-    $echo[] = "<td>".my_number(_var($disk,'numErrors',0))."</td>";
     $echo[] = fs_info($disk,true);
     break;
   }
