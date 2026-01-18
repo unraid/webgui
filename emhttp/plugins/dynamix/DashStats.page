@@ -79,7 +79,6 @@ foreach ($disks as $disk) {
     }
     break;
   case 'Cache':
-  case 'Boot':
     $name = _var($disk,'name');
     if (in_array($name,$pools)) {
       $cache_size[$name] = _var($disk,'fsSize',0);
@@ -1176,7 +1175,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                             <span>
                                                 <?if ($started):?>
                                                     <?
-                                                    if ($pool = "flash") echo sprintf(_("%s used of %s (%s %%)"),my_scale($boot_used[$pool]*1024,$unit)." $unit",my_scale($boot_size[$pool]*1024,$unit,-1,-1)." $unit",$boot_rate[$pool]);
+                                                    if ($pool == "flash") echo sprintf(_("%s used of %s (%s %%)"),my_scale($boot_used[$pool]*1024,$unit)." $unit",my_scale($boot_size[$pool]*1024,$unit,-1,-1)." $unit",$boot_rate[$pool]);
                                                     else echo sprintf(_("%s used of %s (%s %%)"),my_scale($cache_used[$pool]*1024,$unit)." $unit",my_scale($cache_size[$pool]*1024,$unit,-1,-1)." $unit",$cache_rate[$pool])
                                                       ?>
                                                 <?endif;?>
@@ -1207,7 +1206,6 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                         </tr>
                     </tbody>
                 <?endforeach;?>
-
 
                 <?if ($devs):?>
                     <?$power = _var($display,'power') && in_array('nvme',array_column($devs,'transport')) ? ' / '._('Power') : '';?>
