@@ -380,7 +380,7 @@ while (true) {
       $hasErrors = str_contains($status, '- ERRORS');
       $isOnline = str_starts_with($status, 'ONLINE');
       $displayText = $hasErrors ? 'ONLINE' : $status;
-      $statusText = " "._("Status").": ".$displayText;
+      $statusText = " "._("Status").": "._($displayText);
       if (!$isOnline) {
         $statusText = "<span><i class='fa fa-warning fa-fw orange-text'></i> ".$statusText."</span>";
       } elseif ($hasErrors) {

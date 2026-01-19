@@ -1147,6 +1147,64 @@ function getPciLinkInfo($pciAddress)
     return $out;
 }
 
+/**
+ * Check if a ZFS error count value is greater than zero
+ * Handles values with SI suffixes (K, M, G, etc.)
+ * Examples: "0" -> false, "3.33K" -> true, "1.5M" -> true
+ */
+function has_zfs_errors($value): bool
+{
+    if (is_int($value)) return $value > 0;
+    if (!is_string($value)) return false;
+    
+    $value = trim($value);
+    if ($value === '' || $value === '0') return false;
+    
+    // Parse number with optional SI suffix
+    if (preg_match('/^(\d+(?:\.\d+)?)\s*([KMGTPEZY])?$/i', $value, $m)) {
+        return (float)$m[1] > 0;
+    }
+    
+    return (int)$value > 0;
+}
+
+/**
+ * Parse SI-formatted number to integer
+ * Handles values with SI suffixes (K=1000, M=1000000, G=1000000000, etc.)
+ * Examples: "3.33K" -> 3330, "1.5M" -> 1500000, "42" -> 42
+ */
+function parse_si_number($value): int
+{
+    if (is_int($value)) return $value;
+    if (!is_string($value)) return 0;
+    
+    $value = trim($value);
+    if ($value === '' || $value === '0') return 0;
+    
+    // Parse number with optional SI suffix
+    if (preg_match('/^(\d+(?:\.\d+)?)\s*([KMGTPEZY])?$/i', $value, $m)) {
+        $num = (float)$m[1];
+        $suffix = strtoupper($m[2] ?? '');
+        
+        $multipliers = [
+            'K' => 1000,
+            'M' => 1000000,
+            'G' => 1000000000,
+            'T' => 1000000000000,
+            'P' => 1000000000000000,
+            'E' => 1000000000000000000,
+        ];
+        
+        if (isset($multipliers[$suffix])) {
+            $num *= $multipliers[$suffix];
+        }
+        
+        return (int)$num;
+    }
+    
+    return (int)$value;
+}
+
 function storagePoolsJson(): string
 {
     $result = [
@@ -1432,10 +1490,10 @@ function storagePoolsJson(): string
                                         if (in_array(strtolower($deviceName), $allPoolNames)) {
                                             continue;
                                         }
-                                        $readErrs = (int)($child['read_errors'] ?? 0);
-                                        $writeErrs = (int)($child['write_errors'] ?? 0);
-                                        $checksumErrs = (int)($child['checksum_errors'] ?? 0);
-                                        $hasErrors = ($readErrs > 0 || $writeErrs > 0 || $checksumErrs > 0);
+                                        $readErrs = $child['read_errors'] ?? 0;
+                                        $writeErrs = $child['write_errors'] ?? 0;
+                                        $checksumErrs = $child['checksum_errors'] ?? 0;
+                                        $hasErrors = (has_zfs_errors($readErrs) || has_zfs_errors($writeErrs) || has_zfs_errors($checksumErrs));
                                         
                                         $members[$deviceName] = [
                                             'device' => $deviceName,
@@ -1455,10 +1513,10 @@ function storagePoolsJson(): string
                                 $deviceName = preg_replace('/-part\d+$|p?\d+$/', '', basename($vdev['path']));
                                 // Skip if device name is a pool name or zvol
                                 if (!in_array(strtolower($deviceName), $allPoolNames)) {
-                                    $readErrs = (int)($vdev['read_errors'] ?? 0);
-                                    $writeErrs = (int)($vdev['write_errors'] ?? 0);
-                                    $checksumErrs = (int)($vdev['checksum_errors'] ?? 0);
-                                    $hasErrors = ($readErrs > 0 || $writeErrs > 0 || $checksumErrs > 0);
+                                    $readErrs = $vdev['read_errors'] ?? 0;
+                                    $writeErrs = $vdev['write_errors'] ?? 0;
+                                    $checksumErrs = $vdev['checksum_errors'] ?? 0;
+                                    $hasErrors = (has_zfs_errors($readErrs) || has_zfs_errors($writeErrs) || has_zfs_errors($checksumErrs));
                                     
                                     $members[$deviceName] = [
                                         'device' => $deviceName,

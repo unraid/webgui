@@ -44,7 +44,7 @@ function get_fs_errors($poolName, $diskDevice) {
         if (isset($member['errors'])) {
           $totalErrors = 0;
           foreach ($member['errors'] as $count) {
-            $totalErrors += (int)$count;
+            $totalErrors += parse_si_number($count);
           }
           return $totalErrors;
         }
@@ -69,14 +69,14 @@ function get_fs_error_tooltip($diskName, $diskDevice, $deviceErrors) {
       if (($memberKey === $diskDevice) || ($memberDevice === $diskDevice)) {
         if (isset($member['errors'])) {
           foreach ($member['errors'] as $errorType => $count) {
-            if ($count > 0) {
-              $errorLines[] = ucfirst($errorType) . ' errors: ' . $count;
+            if (has_zfs_errors($count)) {
+              $errorLines[] = sprintf(_('%s errors: %s'), ucfirst($errorType), $count);
             }
           }
         }
         // Also show member status if not online
         if (isset($member['status']) && $member['status'] !== 'ONLINE') {
-          $errorLines[] = 'Status: ' . $member['status'];
+          $errorLines[] = _("Status").": "._($member['status']);
         }
         break;
       }
@@ -88,7 +88,7 @@ function get_fs_error_tooltip($diskName, $diskDevice, $deviceErrors) {
     if (!empty($errorLines)) {
       $errorLines[] = '';
     }
-    $errorLines[] = _('Device errors: ') . $deviceErrors;
+    $errorLines[] = _('Device errors: ') . my_number($deviceErrors);
   }
   
   return !empty($errorLines) ? implode('<br>', $errorLines) : '';
@@ -158,11 +158,11 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[]) {
       $status_text = $poolstatusData['pools'][$poolName]['overall_status'] ?? 'UNKNOWN';
       $hasErrors = str_contains($status_text, '- ERRORS');
       $isOnline = str_starts_with($status_text, 'ONLINE');
-      $displayText = $hasErrors ? 'ONLINE' : $status_text;
+      $displayText = $hasErrors ? _('ONLINE') : _($status_text);
       $deviceUrl = "/Main/Device?name=".urlencode($poolName)."#poolsummary";
       
       if (!$isOnline) {
-        $poolstatusHTML = " <a href='$deviceUrl' title='"._('View pool details')."'>($status_text)</a><span><i class='fa fa-warning fa-fw orange-text'></i></span>";
+        $poolstatusHTML = " <a href='$deviceUrl' title='"._('View pool details')."'>("._($status_text).")</a><span><i class='fa fa-warning fa-fw orange-text'></i></span>";
       } elseif ($hasErrors) {
         $poolstatusHTML = " <a href='$deviceUrl' title='"._('View pool details')."'>($displayText)</a><span><i class='fa fa-warning fa-fw orange-text'></i></span>";
       } else {
@@ -408,10 +408,10 @@ function array_online(&$disk, $fstype='', $poolName='', $poolstatusData=[]) {
       if (empty($error_help)) {
         // Fallback if no detailed errors available
         if ($fsErrors > 0) {
-          $error_help = _('Filesystem errors: ') . $fsErrors;
+          $error_help = _('Filesystem errors: ') . my_number($fsErrors);
         }
         if (_var($disk,'numErrors',0) > 0) {
-          $error_help .= ($error_help ? '<br>' : '') . _('Device errors: ') . _var($disk,'numErrors',0);
+          $error_help .= ($error_help ? '<br>' : '') . _('Device errors: ') . my_number(_var($disk,'numErrors',0));
         }
       }
       $echo[] = "<td><a class='info'><i class='fa fa-exclamation-triangle orange-text'></i><span>$error_help</span></a>&nbsp;".my_number($numErrors)."</td>";
