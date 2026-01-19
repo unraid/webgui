@@ -274,8 +274,8 @@ function array_group($type, $pool=false) {
       $statusColor = 'grey';
       if (in_array($memberStatus, ['OK', 'ONLINE', 'HEALTHY'])) {
         $statusColor = 'green';
-      } elseif (in_array($memberStatus, ['DEGRADED'])) {
-        $statusColor = 'orange';
+      } elseif (in_array($memberStatus, ['DEGRADED', "ERRORS"])) {
+        $statusColor = 'yellow';
       } elseif (in_array($memberStatus, ['FAILED', 'MISSING', 'FAULTED', 'UNAVAIL', 'REMOVED'])) {
         $statusColor = 'red';
       }

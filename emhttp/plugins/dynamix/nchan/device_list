@@ -35,10 +35,22 @@ function initSum() {
   return ['count'=>0, 'temp'=>0, 'power'=>0, 'fsSize'=>0, 'fsUsed'=>0, 'fsFree'=>0, 'ioReads'=>0, 'ioWrites'=>0, 'numReads'=>0, 'numWrites'=>0, 'numErrors'=>0];
 }
 
-function get_fs_errors($poolName) {
+function get_fs_errors($poolName, $diskDevice) {
   global $poolstatus;
-  if (isset($poolstatus['pools'][$poolName]['total_errors'])) {
-    return $poolstatus['pools'][$poolName]['total_errors'];
+  if (isset($poolstatus['pools'][$poolName]['members'])) {
+    foreach ($poolstatus['pools'][$poolName]['members'] as $memberKey => $member) {
+      // Match by member key or device name
+      if (($memberKey === $diskDevice) || (_var($member,'device','') === $diskDevice)) {
+        if (isset($member['errors'])) {
+          $totalErrors = 0;
+          foreach ($member['errors'] as $count) {
+            $totalErrors += (int)$count;
+          }
+          return $totalErrors;
+        }
+        return 0;
+      }
+    }
   }
   return 0;
 }
@@ -50,16 +62,21 @@ function get_fs_error_tooltip($diskName, $diskDevice, $deviceErrors) {
   
   // Find the specific member in the pool that matches this disk's device
   if (isset($poolstatus['pools'][$poolName]['members'])) {
-    foreach ($poolstatus['pools'][$poolName]['members'] as $member) {
-      // Match by device name (e.g., sdx, nvme0n1p1)
-      $memberDevice = basename(_var($member,'device',''));
-      if ($memberDevice && str_contains($diskDevice, $memberDevice)) {
+    foreach ($poolstatus['pools'][$poolName]['members'] as $memberKey => $member) {
+      // Match by device name (e.g., sda, nvme0n1)
+      $memberDevice = _var($member,'device','');
+      // Match either by member key or device name
+      if (($memberKey === $diskDevice) || ($memberDevice === $diskDevice)) {
         if (isset($member['errors'])) {
           foreach ($member['errors'] as $errorType => $count) {
-            if ($count >= 0) {
+            if ($count > 0) {
               $errorLines[] = ucfirst($errorType) . ' errors: ' . $count;
             }
           }
+        }
+        // Also show member status if degraded/failed
+        if (isset($member['status']) && !in_array($member['status'], ['OK', 'ONLINE'], true)) {
+          $errorLines[] = 'Status: ' . $member['status'];
         }
         break;
       }
@@ -378,21 +395,21 @@ function array_online(&$disk, $fstype='', $poolName='', $poolstatusData=[]) {
     $echo[] = "<td><span class='diskio'>".my_diskio($data[0])."</span><span class='number'>".my_number(_var($disk,'numReads',0))."</span></td>";
     $echo[] = "<td><span class='diskio'>".my_diskio($data[1])."</span><span class='number'>".my_number(_var($disk,'numWrites',0))."</span></td>";
     # Add filesystems errors to device errors and include tooltip of errors
-    $fsErrors = get_fs_errors(prefix(_var($disk,'name')));
+    $fsErrors = get_fs_errors(prefix(_var($disk,'name')), _var($disk,'device',''));
     $numErrors = _var($disk,'numErrors',0) + $fsErrors;
-    if ($fsErrors > 0) $sum['numErrors'] += _var($disk,'numErrors',0); 
+    if ($fsErrors > 0) $sum['numErrors'] += $fsErrors; // add fs errors to total
     if ($numErrors > 0) {
-      $error_help = get_fs_error_tooltip(_var($disk,'name'), _var($disk,'device',''), $numErrors);
+      $error_help = get_fs_error_tooltip(_var($disk,'name'), _var($disk,'device',''),  _var($disk,'numErrors',0));
       if (empty($error_help)) {
         // Fallback if no detailed errors available
         if ($fsErrors > 0) {
           $error_help = _('Filesystem errors: ') . $fsErrors;
         }
-        if ($numErrors > 0) {
+        if (_var($disk,'numErrors',0) > 0) {
           $error_help .= ($error_help ? '<br>' : '') . _('Device errors: ') . _var($disk,'numErrors',0);
         }
       }
-      $echo[] = "<td><a class='info'><i class='fa fa-exclamation-triangle yellow-text'></i><span>$error_help</span></a>&nbsp;".my_number($numErrors)."</td>";
+      $echo[] = "<td><a class='info'><i class='fa fa-exclamation-triangle orange-text'></i><span>$error_help</span></a>&nbsp;".my_number($numErrors)."</td>";
     } else {
       $echo[] = "<td>".my_number($numErrors)."</td>";
     }
