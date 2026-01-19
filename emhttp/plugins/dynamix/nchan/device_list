@@ -151,7 +151,7 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[]) {
           : "";
   
   // Add pool status for zfs and btrfs pools only (first device only)
-  $poolstatus = "";
+  $poolstatusHTML = "";
   if ($poolName && !empty($poolstatusData['pools'][$poolName]) && $name == $poolName) {
     $poolFsType = isset($disks[$poolName]) ? _var($disks[$poolName],'fsType','') : '';
     if (in_array($poolFsType, ['zfs','btrfs'])) {
@@ -159,14 +159,14 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[]) {
       $isHealthy = in_array($status_text, ['HEALTHY', 'ONLINE']);
       $deviceUrl = "/Main/Device?name=".urlencode($poolName)."#poolsummary";
       if (!$isHealthy) {
-        $poolstatus = " <a href='$deviceUrl' title='"._('View pool details')."'>($status_text)</a><span><i class='fa fa-warning fa-fw orange-text'></span>";
+        $poolstatusHTML = " <a href='$deviceUrl' title='"._('View pool details')."'>($status_text)</a><span><i class='fa fa-warning fa-fw orange-text'></span>";
       } else {
-        $poolstatus = " <a href='$deviceUrl' title='"._('View pool details')."'>($status_text)</a>";
+        $poolstatusHTML = " <a href='$deviceUrl' title='"._('View pool details')."'>($status_text)</a>";
       }
     }
   }
   
-  return $view.$status.$link.$poolstatus.$warn;
+  return $view.$status.$link.$poolstatusHTML.$warn;
 }
 
 function device_desc(&$disk) {
