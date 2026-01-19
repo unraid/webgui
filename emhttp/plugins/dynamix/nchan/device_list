@@ -562,7 +562,10 @@ while (true) {
   static $poolstatus = [];
   static $pool_check_counter = 0;
   if ($pool_check_counter % 30 == 0) {
-    $poolstatus = json_decode(storagePoolsJson(), true);
+    $decoded = json_decode(storagePoolsJson(), true);
+    if (is_array($decoded)) {
+      $poolstatus = $decoded;
+    }
   }
   $pool_check_counter++;
 
