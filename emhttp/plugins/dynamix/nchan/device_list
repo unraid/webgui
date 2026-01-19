@@ -197,6 +197,7 @@ function device_desc(&$disk, $poolName='', $poolstatusData=[]) {
           $memberDevice = _var($member,'device','');
           if (($memberKey === _var($disk,'device','')) || ($memberDevice === _var($disk,'device',''))) {
             $memberStatus = _var($member,'status','ONLINE');
+            // Show warning for non-ONLINE status (DEGRADED, FAULTED, UNAVAIL, etc.) - these are more important than just errors
             if ($memberStatus !== 'ONLINE') {
               $poolWarning = "<span title='".sprintf(_('Device has an error status: %s'), _($memberStatus))."'><i class='fa fa-warning fa-fw red-text'></i></span>";
             }

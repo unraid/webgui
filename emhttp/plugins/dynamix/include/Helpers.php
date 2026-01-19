@@ -1355,7 +1355,8 @@ function storagePoolsJson(): string
                                 foreach ($pool['members'] as $memberKey => &$member) {
                                     if ($memberKey === $deviceName || $member['device'] === $deviceName) {
                                         $member['errors'][$errorMap[$statType]] = $statValue;
-                                        if ($statValue > 0) {
+                                        // Only set status to ERRORS if status is currently ONLINE
+                                        if ($statValue > 0 && (!isset($member['status']) || $member['status'] === 'ONLINE')) {
                                             $member['status'] = 'ERRORS';
                                         }
                                         break;
