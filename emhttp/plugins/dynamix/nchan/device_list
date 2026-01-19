@@ -162,9 +162,9 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[]) {
       $deviceUrl = "/Main/Device?name=".urlencode($poolName)."#poolsummary";
       
       if (!$isOnline) {
-        $poolstatusHTML = " <a href='$deviceUrl' title='"._('View pool details')."'>("._($status_text).")</a><span><i class='fa fa-warning fa-fw orange-text'></i></span>";
+        $poolstatusHTML = " <a href='$deviceUrl' title='"._('View pool details')."'>("._($status_text).")</a><span title='"._('Check pool status')."'><i class='fa fa-warning fa-fw orange-text'></i></span>";
       } elseif ($hasErrors) {
-        $poolstatusHTML = " <a href='$deviceUrl' title='"._('View pool details')."'>($displayText)</a><span><i class='fa fa-warning fa-fw orange-text'></i></span>";
+        $poolstatusHTML = " <a href='$deviceUrl' title='"._('View pool details')."'>($displayText)</a><span title='"._('Check pool status')."'><i class='fa fa-warning fa-fw orange-text'></i></span>";
       } else {
         $poolstatusHTML = " <a href='$deviceUrl' title='"._('View pool details')."'>($displayText)</a>";
       }
@@ -174,7 +174,7 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[]) {
   return $view.$status.$link.$poolstatusHTML.$warn;
 }
 
-function device_desc(&$disk) {
+function device_desc(&$disk, $poolName='', $poolstatusData=[]) {
   global $var;
   $size = my_scale(_var($disk,'sectors',0)*_var($disk,'sector_size',0),$unit,-1);
   if (_var($var,'fsState')=='Started') {
@@ -187,7 +187,26 @@ function device_desc(&$disk) {
       default:       $type = 'disk'; break;
     }
     $log = "<a class='info hand' onclick=\"openTerminal('disklog','"._var($disk,'device')."','')\"><i class='icon-$type icon'></i><span>"._('Disk Log Information')."</span></a>";
-    return $log."<span style='font-family:bitstream'>".my_id(_var($disk,'id'))."</span> - $size $unit ("._var($disk,'device').")";
+    
+    // Add red warning triangle if pool has errors
+    $poolWarning = '';
+    if ($poolName && !empty($poolstatusData['pools'][$poolName])) {
+      // Find member status for this specific device
+      if (isset($poolstatusData['pools'][$poolName]['members'])) {
+        foreach ($poolstatusData['pools'][$poolName]['members'] as $memberKey => $member) {
+          $memberDevice = _var($member,'device','');
+          if (($memberKey === _var($disk,'device','')) || ($memberDevice === _var($disk,'device',''))) {
+            $memberStatus = _var($member,'status','ONLINE');
+            if ($memberStatus !== 'ONLINE') {
+              $poolWarning = "<span title='".sprintf(_('Device has an error status: %s'), _($memberStatus))."'><i class='fa fa-warning fa-fw red-text'></i></span>";
+            }
+            break;
+          }
+        }
+      }
+    }
+    
+    return $log.$poolWarning."<span style='font-family:bitstream'>".my_id(_var($disk,'id'))."</span> - $size $unit ("._var($disk,'device').")";
   } else {
     return my_id(_var($disk,'id'))." - $size $unit ("._var($disk,'device').")";
   }
@@ -395,7 +414,7 @@ function array_online(&$disk, $fstype='', $poolName='', $poolstatusData=[]) {
   case 'DISK_DSBL':
   default:
     $echo[] = "<td>".device_info($disk,true,$poolName,$poolstatusData)."</td>";
-    $echo[] = "<td class='desc'>".device_desc($disk)."</td>";
+    $echo[] = "<td class='desc'>".device_desc($disk,$poolName,$poolstatusData)."</td>";
     $echo[] = "<td>".my_power($disk['power']).my_temp(_var($disk,'temp','*'))."</td>";
     $echo[] = "<td><span class='diskio'>".my_diskio($data[0])."</span><span class='number'>".my_number(_var($disk,'numReads',0))."</span></td>";
     $echo[] = "<td><span class='diskio'>".my_diskio($data[1])."</span><span class='number'>".my_number(_var($disk,'numWrites',0))."</span></td>";

@@ -382,9 +382,9 @@ while (true) {
       $displayText = $hasErrors ? 'ONLINE' : $status;
       $statusText = " "._("Status").": "._($displayText);
       if (!$isOnline) {
-        $statusText = "<span><i class='fa fa-warning fa-fw orange-text'></i> ".$statusText."</span>";
+        $statusText = "<span title='"._('Check pool status')."'><i class='fa fa-warning fa-fw orange-text'></i> ".$statusText."</span>";
       } elseif ($hasErrors) {
-        $statusText = "<span><i class='fa fa-warning fa-fw orange-text'></i> ".$statusText."</span>";
+        $statusText = "<span title='"._('Check pool status')."'><i class='fa fa-warning fa-fw orange-text'></i> ".$statusText."</span>";
       }
       $poolType = _var($disks[$pool],'type') == 'Boot' ? 'Boot' : 'Cache';
       $echo['pool'][$p++] = [array_group($poolType,$pool), $error+$warning, $red+$orange, $fail+$smart, $full+$high,$statusText];
