@@ -363,7 +363,10 @@ while (true) {
 
   // Update pool status every 60 seconds (30 iterations * 2s sleep)
   if ($pool_check_counter % 30 == 0) {
-    $poolstatus = json_decode(storagePoolsJson(), true);
+    $decoded = json_decode(storagePoolsJson(), true);
+   if (is_array($decoded)) {
+      $poolstatus = $decoded;
+    }
   }
   $pool_check_counter++;
 
