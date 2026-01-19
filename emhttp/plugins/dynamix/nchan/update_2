@@ -272,7 +272,7 @@ function array_group($type, $pool=false) {
     if ($pool && in_array(_var($disks[$pool],'fsType'),['zfs','btrfs'])) {
       $memberStatus = $poolstatus['pools'][$pool]['members'][$disk['device']]['status'] ?? 'UNKNOWN';
       $statusColor = 'grey';
-      if (in_array($memberStatus, ['OK', 'ONLINE', 'HEALTHY'])) {
+      if (in_array($memberStatus, ['ONLINE'])) {
         $statusColor = 'green';
       } elseif (in_array($memberStatus, ['DEGRADED', "ERRORS"])) {
         $statusColor = 'yellow';
@@ -374,9 +374,13 @@ while (true) {
     if (empty($disks[$pool]['devices'])) continue;
     if (in_array(_var($disks[$pool],'fsType'), ['zfs','btrfs']) && !empty($poolstatus['pools'][$pool])) {
       $status = $poolstatus['pools'][$pool]['overall_status'] ?? 'UNKNOWN';
-      $isHealthy = in_array($status, ['HEALTHY', 'ONLINE']);
-      $statusText = " "._("Status").": ".$status;
-      if (!$isHealthy) {
+      $hasErrors = str_contains($status, '- ERRORS');
+      $isOnline = str_starts_with($status, 'ONLINE');
+      $displayText = $hasErrors ? 'ONLINE' : $status;
+      $statusText = " "._("Status").": ".$displayText;
+      if (!$isOnline) {
+        $statusText = "<span><i class='fa fa-warning fa-fw orange-text'></i> ".$statusText."</span>";
+      } elseif ($hasErrors) {
         $statusText = "<span><i class='fa fa-warning fa-fw orange-text'></i> ".$statusText."</span>";
       }
       $poolType = _var($disks[$pool],'type') == 'Boot' ? 'Boot' : 'Cache';

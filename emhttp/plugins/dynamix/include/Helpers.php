@@ -1253,7 +1253,7 @@ function storagePoolsJson(): string
                     'device' => $isMissing ? '<missing>' : $deviceKey,
                     'size' => $m[2],
                     'used' => $m[3],
-                    'status' => $isMissing ? 'MISSING' : ($isZeroSize ? 'FAILED' : 'OK'),
+                    'status' => $isMissing ? 'MISSING' : ($isZeroSize ? 'FAILED' : 'ONLINE'),
                     'errors' => [
                       'write' => 0,
                       'read' => 0,
@@ -1356,7 +1356,7 @@ function storagePoolsJson(): string
                 if ($hasMissing || $hasFailed || in_array('MISSING', $memberStatuses, true) || in_array('FAILED', $memberStatuses, true) || in_array('DEGRADED', $memberStatuses, true) || in_array('REMOVED', $memberStatuses, true)) {
                     $pool['overall_status'] = 'DEGRADED';
                 } elseif (!empty($memberStatuses)) {
-                    $pool['overall_status'] = 'HEALTHY';
+                    $pool['overall_status'] = 'ONLINE';
                 }
                 
                 // Calculate total errors across all members
@@ -1370,8 +1370,8 @@ function storagePoolsJson(): string
                 }
                 $pool['total_errors'] = $totalErrors;
                 
-                // Append - ERROR if pool is healthy but has errors
-                if ($totalErrors > 0 && in_array($pool['overall_status'], ['HEALTHY', 'ONLINE'], true)) {
+                // Append - ERRORS if pool is online but has errors
+                if ($totalErrors > 0 && $pool['overall_status'] === 'ONLINE') {
                     $pool['overall_status'] .= ' - ERRORS';
                 }
             }
@@ -1405,60 +1405,70 @@ function storagePoolsJson(): string
             $zpoolJson = [];
             exec("zpool status -j $actualPoolNameEsc 2>/dev/null", $zpoolJson, $rc);
             $jsonParsed = false;
-            
+
             if ($rc === 0 && !empty($zpoolJson)) {
                 $jsonData = json_decode(implode('', $zpoolJson), true);
                 
-                if ($jsonData && isset($jsonData['pools'][0])) {
+                if ($jsonData && isset($jsonData['pools'][$actualPoolName])) {
                     $jsonParsed = true;
-                    $zpoolData = $jsonData['pools'][0];
+                    $zpoolData = $jsonData['pools'][$actualPoolName];
                     $poolOverall = strtoupper($zpoolData['state'] ?? 'UNKNOWN');
                     
                     // Extract members from vdev tree
-                    if (isset($zpoolData['vdev_tree']['children'])) {
-                        foreach ($zpoolData['vdev_tree']['children'] as $vdev) {
-                            $vdevType = $vdev['type'] ?? null;
+                    if (isset($zpoolData['vdevs'][$actualPoolName]['vdevs'])) {
+                        foreach ($zpoolData['vdevs'][$actualPoolName]['vdevs'] as $vdev) {
+                            $vdevType = $vdev['vdev_type'] ?? $vdev['name'] ?? null;
                             
                             // Determine if this is a special vdev type
                             $isSpecial = in_array($vdevType, ['spare', 'cache', 'log', 'special', 'dedup'], true);
                             
                             // Handle leaf devices (single disk) vs vdevs (mirror/raidz)
-                            if (isset($vdev['children'])) {
+                            if (isset($vdev['vdevs'])) {
                                 // Has children (mirror, raidz, etc.)
-                                foreach ($vdev['children'] as $child) {
+                                foreach ($vdev['vdevs'] as $child) {
                                     if (isset($child['path'])) {
-                                        $deviceName = preg_replace('/p?\d+$/', '', basename($child['path']));
+                                        $deviceName = preg_replace('/-part\d+$|p?\d+$/', '', basename($child['path']));
                                         // Skip if device name is a pool name or zvol
                                         if (in_array(strtolower($deviceName), $allPoolNames)) {
                                             continue;
                                         }
+                                        $readErrs = (int)($child['read_errors'] ?? 0);
+                                        $writeErrs = (int)($child['write_errors'] ?? 0);
+                                        $checksumErrs = (int)($child['checksum_errors'] ?? 0);
+                                        $hasErrors = ($readErrs > 0 || $writeErrs > 0 || $checksumErrs > 0);
+                                        
                                         $members[$deviceName] = [
                                             'device' => $deviceName,
-                                            'status' => strtoupper($child['state'] ?? 'UNKNOWN'),
-                                            'vdev' => $vdevType,
+                                            'status' => $hasErrors ? 'ERRORS' : strtoupper($child['state'] ?? 'UNKNOWN'),
+                                            'vdev' => $vdev['name'] ?? $vdevType,
                                             'type' => $isSpecial ? $vdevType : 'data',
                                             'errors' => [
-                                                'read' => (int)($child['vdev_stats']['read_errors'] ?? 0),
-                                                'write' => (int)($child['vdev_stats']['write_errors'] ?? 0),
-                                                'checksum' => (int)($child['vdev_stats']['checksum_errors'] ?? 0),
+                                                'read' => $readErrs,
+                                                'write' => $writeErrs,
+                                                'checksum' => $checksumErrs,
                                             ],
                                         ];
                                     }
                                 }
                             } elseif (isset($vdev['path'])) {
                                 // Direct disk (no vdev wrapper)
-                                $deviceName = preg_replace('/p?\d+$/', '', basename($vdev['path']));
+                                $deviceName = preg_replace('/-part\d+$|p?\d+$/', '', basename($vdev['path']));
                                 // Skip if device name is a pool name or zvol
                                 if (!in_array(strtolower($deviceName), $allPoolNames)) {
+                                    $readErrs = (int)($vdev['read_errors'] ?? 0);
+                                    $writeErrs = (int)($vdev['write_errors'] ?? 0);
+                                    $checksumErrs = (int)($vdev['checksum_errors'] ?? 0);
+                                    $hasErrors = ($readErrs > 0 || $writeErrs > 0 || $checksumErrs > 0);
+                                    
                                     $members[$deviceName] = [
                                         'device' => $deviceName,
-                                        'status' => strtoupper($vdev['state'] ?? 'UNKNOWN'),
+                                        'status' => $hasErrors ? 'ERRORS' : strtoupper($vdev['state'] ?? 'UNKNOWN'),
                                         'vdev' => null,
                                         'type' => $isSpecial ? $vdevType : 'data',
                                         'errors' => [
-                                            'read' => (int)($vdev['vdev_stats']['read_errors'] ?? 0),
-                                            'write' => (int)($vdev['vdev_stats']['write_errors'] ?? 0),
-                                            'checksum' => (int)($vdev['vdev_stats']['checksum_errors'] ?? 0),
+                                            'read' => $readErrs,
+                                            'write' => $writeErrs,
+                                            'checksum' => $checksumErrs,
                                         ],
                                     ];
                                 }
@@ -1533,7 +1543,7 @@ function storagePoolsJson(): string
                                 $deviceType = $currentVdev;
                             }
                             
-                            $deviceKey = preg_replace('/p?\d+$/', '', $device);
+                            $deviceKey = preg_replace('/-part\d+$|p?\d+$/', '', $device);
                             $members[$deviceKey] = [
                                 'device' => $deviceKey,
                                 'status' => $status,
@@ -1598,8 +1608,8 @@ function storagePoolsJson(): string
             }
             $pool['total_errors'] = $totalErrors;
             
-            // Append - ERROR if pool is healthy but has errors
-            if ($totalErrors > 0 && in_array($poolOverall, ['ONLINE', 'HEALTHY'], true)) {
+            // Append - ERRORS if pool is online but has errors
+            if ($totalErrors > 0 && $poolOverall === 'ONLINE') {
                 $poolOverall .= ' - ERRORS';
             }
             
