@@ -1170,7 +1170,7 @@ function has_zfs_errors($value): bool
 
 /**
  * Parse SI-formatted number to integer
- * Handles values with SI suffixes (K=1000, M=1000000, G=1000000000, etc.)
+ * Handles values with SI suffixes (K=1000, M=1000000, G=1000000000, T, P, E)
  * Examples: "3.33K" -> 3330, "1.5M" -> 1500000, "42" -> 42
  */
 function parse_si_number($value): int
@@ -1367,8 +1367,9 @@ function storagePoolsJson(): string
                         }
                         // Old format: /dev/sda1: read 0, write 0, flush 0
                         elseif (preg_match('/^(\S+):\s+read\s+(\d+),\s+write\s+(\d+),\s+flush\s+(\d+)/', $line, $m)) {
+                            $deviceName = preg_replace('/p?\d+$/', '', str_replace('/dev/', '', $m[1]));
                             foreach ($pool['members'] as &$member) {
-                                if ($member['device'] === $m[1]) {
+                                if ($memberKey === $deviceName || $member['device'] === $deviceName) {
                                     $member['errors']['read'] = (int)$m[2];
                                     $member['errors']['write'] = (int)$m[3];
                                     $member['errors']['flush'] = (int)$m[4];
