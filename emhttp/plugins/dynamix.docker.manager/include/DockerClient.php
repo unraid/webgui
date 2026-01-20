@@ -1029,7 +1029,9 @@ class DockerClient {
 				$nat = ($driver[$c['NetworkMode']]=='bridge');
 				if (array_key_exists($PrivatePort, $c['Ports']) && $Type != $c['Ports'][$PrivatePort]['Type'])
 					$Type = $c['Ports'][$PrivatePort]['Type'] . '/' . $Type;
-				$c['Ports'][$PrivatePort] = ['IP' => $ip, 'PrivatePort' => $PrivatePort, 'PublicPort' => $PublicPort, 'NAT' => $nat, 'Type' => $Type, 'Driver' => $driver[$c['NetworkMode']]];
+				if (isset($value[0]['HostIp'])) $hostip = $value[0]['HostIp'] ?? null;
+				else $hostip = '';
+				$c['Ports'][$PrivatePort] = ['IP' => $ip, 'HostIp' => $hostip, 'PrivatePort' => $PrivatePort, 'PublicPort' => $PublicPort, 'NAT' => $nat, 'Type' => $Type, 'Driver' => $driver[$c['NetworkMode']]];
 			}
 			ksort($c['Ports']);
 			$this::$containersCache[] = $c;
