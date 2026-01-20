@@ -1474,66 +1474,66 @@ function storagePoolsJson(): string
                     $zpoolData = $jsonData['pools'][$actualPoolName];
                     $poolOverall = strtoupper($zpoolData['state'] ?? 'UNKNOWN');
                     
-                    // Extract members from vdev tree
-                    if (isset($zpoolData['vdevs'][$actualPoolName]['vdevs'])) {
-                        foreach ($zpoolData['vdevs'][$actualPoolName]['vdevs'] as $vdev) {
-                            $vdevType = $vdev['vdev_type'] ?? $vdev['name'] ?? null;
-                            
-                            // Determine if this is a special vdev type
-                            $isSpecial = in_array($vdevType, ['spare', 'cache', 'log', 'special', 'dedup'], true);
-                            
-                            // Handle leaf devices (single disk) vs vdevs (mirror/raidz)
-                            if (isset($vdev['vdevs'])) {
-                                // Has children (mirror, raidz, etc.)
-                                foreach ($vdev['vdevs'] as $child) {
-                                    if (isset($child['path'])) {
-                                        $deviceName = preg_replace('/-part\d+$|p?\d+$/', '', basename($child['path']));
-                                        // Skip if device name is a pool name or zvol
-                                        if (in_array(strtolower($deviceName), $allPoolNames)) {
-                                            continue;
-                                        }
-                                        $readErrs = $child['read_errors'] ?? 0;
-                                        $writeErrs = $child['write_errors'] ?? 0;
-                                        $checksumErrs = $child['checksum_errors'] ?? 0;
-                                        $hasErrors = (has_zfs_errors($readErrs) || has_zfs_errors($writeErrs) || has_zfs_errors($checksumErrs));
-                                        
-                                        $members[$deviceName] = [
-                                            'device' => $deviceName,
-                                            'status' => $hasErrors ? 'ERRORS' : strtoupper($child['state'] ?? 'UNKNOWN'),
-                                            'vdev' => $vdev['name'] ?? $vdevType,
-                                            'type' => $isSpecial ? $vdevType : 'data',
-                                            'errors' => [
-                                                'read' => $readErrs,
-                                                'write' => $writeErrs,
-                                                'checksum' => $checksumErrs,
-                                            ],
-                                        ];
-                                    }
-                                }
-                            } elseif (isset($vdev['path'])) {
-                                // Direct disk (no vdev wrapper)
-                                $deviceName = preg_replace('/-part\d+$|p?\d+$/', '', basename($vdev['path']));
-                                // Skip if device name is a pool name or zvol
-                                if (!in_array(strtolower($deviceName), $allPoolNames)) {
-                                    $readErrs = $vdev['read_errors'] ?? 0;
-                                    $writeErrs = $vdev['write_errors'] ?? 0;
-                                    $checksumErrs = $vdev['checksum_errors'] ?? 0;
-                                    $hasErrors = (has_zfs_errors($readErrs) || has_zfs_errors($writeErrs) || has_zfs_errors($checksumErrs));
-                                    
-                                    $members[$deviceName] = [
-                                        'device' => $deviceName,
-                                        'status' => $hasErrors ? 'ERRORS' : strtoupper($vdev['state'] ?? 'UNKNOWN'),
-                                        'vdev' => null,
-                                        'type' => $isSpecial ? $vdevType : 'data',
-                                        'errors' => [
-                                            'read' => $readErrs,
-                                            'write' => $writeErrs,
-                                            'checksum' => $checksumErrs,
-                                        ],
-                                    ];
-                                }
+                    // Helper function to recursively extract members from vdev tree
+                    $extractMembers = function($vdevTree, $parentType = 'data') use (&$extractMembers, &$members, $allPoolNames) {
+                        if (!is_array($vdevTree)) {
+                            return;
+                        }
+                        
+                        $vdevType = $vdevTree['type'] ?? $vdevTree['vdev_type'] ?? $vdevTree['name'] ?? null;
+                        
+                        // Determine if this is a special vdev type
+                        $isSpecial = in_array($vdevType, ['spare', 'cache', 'log', 'special', 'dedup'], true);
+                        $currentType = $isSpecial ? $vdevType : $parentType;
+                        
+                        // Process children if they exist (in 'children', 'vdevs', or 'vdev_tree')
+                        $children = $vdevTree['children'] ?? $vdevTree['vdevs'] ?? [];
+                        if (!empty($children) && is_array($children)) {
+                            foreach ($children as $child) {
+                                $extractMembers($child, $currentType);
                             }
                         }
+                        
+                        // Process this device if it has a path (leaf device)
+                        if (isset($vdevTree['path'])) {
+                            $deviceName = preg_replace('/-part\d+$|p?\d+$/', '', basename($vdevTree['path']));
+                            // Skip if device name is a pool name or zvol
+                            if (!in_array(strtolower($deviceName), $allPoolNames)) {
+                                $readErrs = $vdevTree['read_errors'] ?? 0;
+                                $writeErrs = $vdevTree['write_errors'] ?? 0;
+                                $checksumErrs = $vdevTree['checksum_errors'] ?? 0;
+                                $hasErrors = (has_zfs_errors($readErrs) || has_zfs_errors($writeErrs) || has_zfs_errors($checksumErrs));
+                                
+                                $members[$deviceName] = [
+                                    'device' => $deviceName,
+                                    'status' => $hasErrors ? 'ERRORS' : strtoupper($vdevTree['state'] ?? 'UNKNOWN'),
+                                    'vdev' => $vdevTree['name'] ?? $vdevType,
+                                    'type' => $currentType,
+                                    'errors' => [
+                                        'read' => $readErrs,
+                                        'write' => $writeErrs,
+                                        'checksum' => $checksumErrs,
+                                    ],
+                                ];
+                            }
+                        }
+                    };
+                    
+                    // Extract members from the config/vdev_tree structure
+                    if (isset($zpoolData['config'])) {
+                        $extractMembers($zpoolData['config']);
+                    } elseif (isset($zpoolData['vdev_tree'])) {
+                        $extractMembers($zpoolData['vdev_tree']);
+                    } elseif (isset($zpoolData['vdevs'])) {
+                        // Fallback for other potential structures
+                        foreach ($zpoolData['vdevs'] as $vdev) {
+                            $extractMembers($vdev);
+                        }
+                    }
+                    
+                    // Safety guard: if JSON was parsed but no members extracted, fall back to text parsing
+                    if (empty($members)) {
+                        $jsonParsed = false;
                     }
                 }
             }
