@@ -584,9 +584,9 @@ const PCIchanges = <?= json_encode($PCIchanges) ?>;
 				$extra1 = ($arrConfig['domain']['vcpu'] && in_array($cpu1, $arrConfig['domain']['vcpu'])) ? ($arrConfig['domain']['vcpus'] > 1 ? 'checked' : 'checked disabled') : '';
 				$core_type = ($is_intel_cpu && isset($core_types[$cpu1]) && !empty($core_types[$cpu1])) ? $core_types[$cpu1] : "";
 				$core_indicator = "";
-				if ($core_type == 'P-core') {
+				if ($core_type == _('P-Core')) {
 					$core_indicator = " <span class='cpu-core-indicator-p'>●</span>";
-				} elseif ($core_type == 'E-core') {
+				} elseif ($core_type == _('E-Core')) {
 					$core_indicator = " <span class='cpu-core-indicator-e'>●</span>";
 				}
 				
