@@ -574,7 +574,7 @@ const PCIchanges = <?= json_encode($PCIchanges) ?>;
 	<tr>
 		<td>_(Pinned Cores)_:</td>
 		<td>
-			<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;max-width:900px;">
+			<div class="cpu-grid">
 			<?
 			$is_intel_cpu = is_intel_cpu();
 			$core_types = $is_intel_cpu ? get_intel_core_types() : [];
@@ -585,28 +585,28 @@ const PCIchanges = <?= json_encode($PCIchanges) ?>;
 				$core_type = ($is_intel_cpu && isset($core_types[$cpu1]) && !empty($core_types[$cpu1])) ? $core_types[$cpu1] : "";
 				$core_indicator = "";
 				if ($core_type == 'P-core') {
-					$core_indicator = " <span style='color:#ff8c2f;font-size:10px;vertical-align:text-top;'>●</span>";
+					$core_indicator = " <span class='cpu-core-indicator-p'>●</span>";
 				} elseif ($core_type == 'E-core') {
-					$core_indicator = " <span style='color:#888;font-size:10px;vertical-align:text-top;'>●</span>";
+					$core_indicator = " <span class='cpu-core-indicator-e'>●</span>";
 				}
 				
 				if (!$cpu2) {
 					// Single CPU core - half height box
-					echo "<div style='border:1px solid #444;border-radius:4px;padding:8px;background:#1c1c1c;min-height:30px;display:flex;align-items:center;'>";
-					echo "<div style='display:flex;align-items:center;justify-content:space-between;width:100%;'>";
-					echo "<span title='$core_type' style='font-size:12px;line-height:1;'>cpu $cpu1{$core_indicator}</span>";
-					echo "<label for='vcpu$cpu1' class='checkbox' style='margin:0;position:relative;'><input type='checkbox' name='domain[vcpu][]' class='domain_vcpu' id='vcpu$cpu1' value='$cpu1' $extra1 style='position:absolute;opacity:0;'><span class='checkmark' style='position:relative;display:inline-block;'></span></label>";
+					echo "<div class='cpu-box'>";
+					echo "<div class='cpu-row'>";
+					echo "<span title='$core_type' class='cpu-label'>cpu $cpu1{$core_indicator}</span>";
+					echo "<label for='vcpu$cpu1' class='checkbox cpu-checkbox'><input type='checkbox' name='domain[vcpu][]' class='domain_vcpu' id='vcpu$cpu1' value='$cpu1' $extra1><span class='checkmark'></span></label>";
 					echo "</div>";
 					echo "</div>";
 				} else {
 					// CPU pair - box with label at top and two checkboxes stacked vertically on right
 					$extra2 = ($arrConfig['domain']['vcpu'] && in_array($cpu2, $arrConfig['domain']['vcpu'])) ? ($arrConfig['domain']['vcpus'] > 1 ? 'checked' : 'checked disabled') : '';
-					echo "<div style='border:1px solid #444;border-radius:4px;padding:8px;background:#1c1c1c;min-height:60px;'>";
-					echo "<div style='display:flex;justify-content:space-between;align-items:flex-start;'>";
-					echo "<div style='display:flex;flex-direction:column;line-height:20px;'><span title='$core_type' style='font-size:12px;'>cpu $cpu1{$core_indicator}</span><span style='font-size:12px;'>cpu $cpu2</span></div>";
-					echo "<div style='display:flex;flex-direction:column;gap:2px;'>";
-					echo "<label for='vcpu$cpu1' class='cpu1 checkbox' title='Thread 1' style='margin:0;position:relative;height:20px;display:block;'><input type='checkbox' name='domain[vcpu][]' class='domain_vcpu' id='vcpu$cpu1' value='$cpu1' $extra1 style='position:absolute;opacity:0;'><span class='checkmark' style='position:relative;display:inline-block;'></span></label>";
-					echo "<label for='vcpu$cpu2' class='cpu2 checkbox' title='Thread 2' style='margin:0;position:relative;height:20px;display:block;'><input type='checkbox' name='domain[vcpu][]' class='domain_vcpu' id='vcpu$cpu2' value='$cpu2' $extra2 style='position:absolute;opacity:0;'><span class='checkmark' style='position:relative;display:inline-block;'></span></label>";
+					echo "<div class='cpu-box-pair'>";
+					echo "<div class='cpu-dual-container'>";
+					echo "<div class='cpu-dual-labels'><span title='$core_type' class='cpu-label-dual'>cpu $cpu1{$core_indicator}</span><span class='cpu-label-dual'>cpu $cpu2</span></div>";
+					echo "<div class='cpu-dual-checkboxes'>";
+					echo "<label for='vcpu$cpu1' class='cpu1 checkbox cpu-checkbox-dual' title='Thread 1'><input type='checkbox' name='domain[vcpu][]' class='domain_vcpu' id='vcpu$cpu1' value='$cpu1' $extra1><span class='checkmark'></span></label>";
+					echo "<label for='vcpu$cpu2' class='cpu2 checkbox cpu-checkbox-dual' title='Thread 2'><input type='checkbox' name='domain[vcpu][]' class='domain_vcpu' id='vcpu$cpu2' value='$cpu2' $extra2><span class='checkmark'></span></label>";
 					echo "</div>";
 					echo "</div>";
 					echo "</div>";
