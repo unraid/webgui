@@ -50,6 +50,18 @@ LINK="${LINK:-}"
 HOSTNAME="${HOSTNAME:-$(hostname)}"
 TIMESTAMP="${TIMESTAMP:-$(date +%s)}"
 
+# Convert literal \n sequences into real line breaks for reports.
+if [[ -n "${DESCRIPTION}" ]]; then
+  DESCRIPTION=${DESCRIPTION//\\r\\n/$'\n'}
+  DESCRIPTION=${DESCRIPTION//\\n/$'\n'}
+  DESCRIPTION=${DESCRIPTION//\\r/$'\n'}
+fi
+if [[ -n "${CONTENT}" ]]; then
+  CONTENT=${CONTENT//\\r\\n/$'\n'}
+  CONTENT=${CONTENT//\\n/$'\n'}
+  CONTENT=${CONTENT//\\r/$'\n'}
+fi
+
 # ensure link has a host
 if [[ -n "${LINK}" ]] && [[ ${LINK} != http* ]]; then
   if [[ -r /usr/local/emhttp/state/nginx.ini ]]; then
