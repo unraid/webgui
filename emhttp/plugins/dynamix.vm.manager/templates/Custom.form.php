@@ -574,7 +574,12 @@ const PCIchanges = <?= json_encode($PCIchanges) ?>;
 	<tr>
 		<td>_(Pinned Cores)_:</td>
 		<td>
-			<div class="cpu-grid">
+			<?
+			// Calculate optimal column count for symmetrical grid
+			$total_cpus = count($cpus);
+			$cols = ($total_cpus <= 4) ? $total_cpus : (int)ceil(sqrt($total_cpus));
+			?>
+			<div class="cpu-grid" style="grid-template-columns: repeat(<?=$cols?>, minmax(150px, 1fr));">
 			<?
 			$is_intel_cpu = is_intel_cpu();
 			$core_types = $is_intel_cpu ? get_intel_core_types() : [];
