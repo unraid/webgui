@@ -90,7 +90,7 @@ function migrate_nvram_file($valid_nvram, $vm_path, $vm_uuid, $vm_name, $dry_run
     
     // Read old XML
     if (!file_exists($xml_old_path)) {
-        @unlink($dest_file); // Rollback
+        if ($copied) @unlink($dest_file); // Rollback only if we copied
         return [
             'success' => false,
             'error' => "XML file not found: $xml_old_path"
