@@ -1689,8 +1689,10 @@ class Libvirt {
 			@copy($xml_file, $backup_file);
 		}
 
-		// Write XML to file
-		return file_put_contents($xml_file, $xml) !== false;
+		// Copy XML saved by libvirt
+		$libvirt_xml_file = '/etc/libvirt/qemu/' . $domain . '.xml';
+		if (!is_file($libvirt_xml_file)) return false;
+		return @copy($libvirt_xml_file, $xml_file);
 	}
 
 	function domain_define($xml, $autostart=false) {
