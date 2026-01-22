@@ -1473,9 +1473,9 @@ class Libvirt {
 		if (!libvirt_domain_undefine($dom)) {
 			return $this->_set_last_error();
 		}
-		if (!$this->domain_define($this->conn, $xml)) { ## Update to use new function
+		if (!$this->domain_define($xml)) { ## Update to use new function
 			$this->last_error = libvirt_get_last_error();
-			$this->domain_define($this->conn, $old_xml);
+			$this->domain_define($old_xml);
 			return false;
 		}
 		return true;
@@ -1633,7 +1633,7 @@ class Libvirt {
 			$this->last_error = libvirt_get_last_error();
 			return $ret;
 		}
-		$ret = libvirt_domain_create_xml($this->conn, $dom); ## Update to use new function
+		$ret = libvirt_domain_create_xml($this->conn, $dom);
 		$this->last_error = libvirt_get_last_error();
 		return $ret;
 	}
@@ -1824,7 +1824,6 @@ class Libvirt {
 		if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
 			unlink('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd');
 		}
-		# PR1722 Remove XML from VM directory using storage metadata
 		$xml = libvirt_domain_get_xml_desc($dom, 0);
 		if ($xml) {
 			$this->manage_domain_xml($domain, $xml, false);
