@@ -1473,9 +1473,9 @@ class Libvirt {
 		if (!libvirt_domain_undefine($dom)) {
 			return $this->_set_last_error();
 		}
-		if (!manage_domain_xml(null, $xml,true)) { ## Update to use new function
+		if (!$this->domain_define($this->conn, $xml)) { ## Update to use new function
 			$this->last_error = libvirt_get_last_error();
-			manage_domain_xml(null, $old_xml,true);
+			$this->domain_define($this->conn, $old_xml);
 			return false;
 		}
 		return true;
