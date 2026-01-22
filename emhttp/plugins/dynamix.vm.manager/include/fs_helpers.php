@@ -86,13 +86,14 @@ function dir_copy($src, $dst) {
 function dir_remove($dir) {
     if (!is_dir($dir)) return false;
     $items = scandir($dir);
+    if ($items === false) return false;
     foreach ($items as $item) {
         if ($item === '.' || $item === '..') continue;
         $path = $dir . DIRECTORY_SEPARATOR . $item;
         if (is_dir($path)) {
-            dir_remove($path);
+            if (!dir_remove($path)) return false;
         } else {
-            @unlink($path);
+            if (!@unlink($path)) return false;
         }
     }
     return @rmdir($dir);
