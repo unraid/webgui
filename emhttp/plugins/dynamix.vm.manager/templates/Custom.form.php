@@ -608,11 +608,8 @@ const PCIchanges = <?= json_encode($PCIchanges) ?>;
 					$extra2 = ($arrConfig['domain']['vcpu'] && in_array($cpu2, $arrConfig['domain']['vcpu'])) ? ($arrConfig['domain']['vcpus'] > 1 ? 'checked' : 'checked disabled') : '';
 					echo "<div class='cpu-box-pair'>";
 					echo "<div class='cpu-dual-container'>";
-					echo "<div class='cpu-dual-labels'><span title='".htmlspecialchars($core_type, ENT_QUOTES)."' class='cpu-label-dual'>cpu $cpu1{$core_indicator}</span><span class='cpu-label-dual'>cpu $cpu2</span></div>";
-					echo "<div class='cpu-dual-checkboxes'>";
-					echo "<label for='vcpu$cpu1' class='cpu1 checkbox cpu-checkbox-dual' title='Thread 1'><input type='checkbox' name='domain[vcpu][]' class='domain_vcpu' id='vcpu$cpu1' value='$cpu1' $extra1><span class='checkmark'></span></label>";
-					echo "<label for='vcpu$cpu2' class='cpu2 checkbox cpu-checkbox-dual' title='Thread 2'><input type='checkbox' name='domain[vcpu][]' class='domain_vcpu' id='vcpu$cpu2' value='$cpu2' $extra2><span class='checkmark'></span></label>";
-					echo "</div>";
+					echo "<div class='cpu-dual-row'><span title='".htmlspecialchars($core_type, ENT_QUOTES)."' class='cpu-label-dual'>cpu $cpu1{$core_indicator}</span><label for='vcpu$cpu1' class='cpu1 checkbox cpu-checkbox-dual' title='Thread 1'><input type='checkbox' name='domain[vcpu][]' class='domain_vcpu' id='vcpu$cpu1' value='$cpu1' $extra1><span class='checkmark'></span></label></div>";
+					echo "<div class='cpu-dual-row'><span class='cpu-label-dual'>cpu $cpu2</span><label for='vcpu$cpu2' class='cpu2 checkbox cpu-checkbox-dual' title='Thread 2'><input type='checkbox' name='domain[vcpu][]' class='domain_vcpu' id='vcpu$cpu2' value='$cpu2' $extra2><span class='checkmark'></span></label></div>";
 					echo "</div>";
 					echo "</div>";
 				}
