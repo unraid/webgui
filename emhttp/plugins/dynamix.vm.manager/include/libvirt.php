@@ -1043,7 +1043,8 @@ class Libvirt {
 		}
 		// Define the VM to persist
 		if ($config['domain']['persistent']) {
-			$tmp = libvirt_domain_define_xml($this->conn, $strXML);
+			#$tmp = libvirt_domain_define_xml($this->conn, $strXML); ## Update to use new function
+			$tmp = $this->domain_define($strXML);
 			if (!$tmp) return $this->_set_last_error();
 			$this->domain_set_autostart($tmp, $config['domain']['autostart'] == 1);
 			return $tmp;
@@ -1472,9 +1473,9 @@ class Libvirt {
 		if (!libvirt_domain_undefine($dom)) {
 			return $this->_set_last_error();
 		}
-		if (!libvirt_domain_define_xml($this->conn, $xml)) {
+		if (!manage_domain_xml(null, $xml,true)) { ## Update to use new function
 			$this->last_error = libvirt_get_last_error();
-			libvirt_domain_define_xml($this->conn, $old_xml);
+			manage_domain_xml(null, $old_xml,true);
 			return false;
 		}
 		return true;
@@ -1632,9 +1633,64 @@ class Libvirt {
 			$this->last_error = libvirt_get_last_error();
 			return $ret;
 		}
-		$ret = libvirt_domain_create_xml($this->conn, $dom);
+		$ret = libvirt_domain_create_xml($this->conn, $dom); ## Update to use new function
 		$this->last_error = libvirt_get_last_error();
 		return $ret;
+	}
+
+	function manage_domain_xml($domain, $xml = null, $save = true) {
+		// Save or delete XML in VM directory based on $save flag
+		// $domain is the domain name (already validated by caller)
+		$xml_dir = null;
+		$storage = "default";
+		
+				// Extract storage location from VM metadata if available
+				if ($xml && preg_match('/<vmtemplate[^>]*storage="([^"]*)"/', $xml, $matches)) {
+					$storage = $matches[1];
+				}
+		
+				// Determine storage path
+				if ($storage === "default") {
+					// Read default storage location from domains.cfg
+					$domain_cfg = parse_ini_file('/boot/config/domain.cfg', true);
+					if (isset($domain_cfg['DOMAINDIR'])) {
+						$storage_path = rtrim($domain_cfg['DOMAINDIR'], '/');
+					} else {
+						// Fallback to standard location
+						$storage_path = "/mnt/user/domains";
+					}
+				} else {
+					// Storage is a pool name - construct pool path
+					$storage_path = "/mnt/$storage";
+				}
+		
+				// Build full VM directory path
+				$xml_dir = "$storage_path/$domain";
+		
+				// Verify directory exists
+				if (!is_dir($xml_dir)) {
+					return false;
+				}
+		
+		$xml_file = $xml_dir . '/' . $domain . '.xml';
+		
+		if ($save === false) {
+			if (is_file($xml_file)) {
+				$backup_file = $xml_file . '.prev';
+				@copy($xml_file, $backup_file);
+				return unlink($xml_file);
+			}
+			return true;
+		}
+
+		// Backup existing XML before writing new content
+		if (is_file($xml_file)) {
+			$backup_file = $xml_file . '.prev';
+			@copy($xml_file, $backup_file);
+		}
+
+		// Write XML to file
+		return file_put_contents($xml_file, $xml) !== false;
 	}
 
 	function domain_define($xml, $autostart=false) {
@@ -1645,11 +1701,18 @@ class Libvirt {
 					$tmp[$i] = "<domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>";
 			$xml = join("\n", $tmp);
 		}
+		# PR1722 Save XML to VM directory
 		if ($autostart) {
-			$tmp = libvirt_domain_create_xml($this->conn, $xml);
+			$tmp = libvirt_domain_create_xml($this->conn, $xml); 
 			if (!$tmp) return $this->_set_last_error();
 		}
-		$tmp = libvirt_domain_define_xml($this->conn, $xml);
+		$tmp = libvirt_domain_define_xml($this->conn, $xml); 
+		if ($tmp) {
+			// Extract domain name from XML to save it
+			if (preg_match('/<name>(.*?)<\/name>/s', $xml, $matches)) {
+				$this->manage_domain_xml($matches[1], $xml, true);
+			}
+		}
 		return $tmp ?: $this->_set_last_error();
 	}
 
@@ -1758,6 +1821,11 @@ class Libvirt {
 		}
 		if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
 			unlink('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd');
+		}
+		# PR1722 Remove XML from VM directory using storage metadata
+		$xml = libvirt_domain_get_xml_desc($dom, 0);
+		if ($xml) {
+			$this->manage_domain_xml($domain, $xml, false);
 		}
 		$tmp = libvirt_domain_undefine($dom);
 		return $tmp ?: $this->_set_last_error();
@@ -2584,7 +2652,7 @@ class Libvirt {
 		$tmp = libvirt_domain_update_device($domain, "<disk type='file' device='cdrom'><driver name='qemu' type='raw'/><source file=".escapeshellarg($iso)."/><target dev='$dev' bus='$bus'/><readonly/></disk>", VIR_DOMAIN_DEVICE_MODIFY_CONFIG);
 		if ($this->domain_is_active($domain)) {
 			libvirt_domain_update_device($domain, "<disk type='file' device='cdrom'><driver name='qemu' type='raw'/><source file=".escapeshellarg($iso)."/><target dev='$dev' bus='$bus'/><readonly/></disk>", VIR_DOMAIN_DEVICE_MODIFY_LIVE);
-		}
+		} ## Use new function?
 		return $tmp ?: $this->_set_last_error();
 	}
 
