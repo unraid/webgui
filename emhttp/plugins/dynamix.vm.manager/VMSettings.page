@@ -302,7 +302,7 @@ _(VFIO allow unsafe interrupts)_:
 
 <?endif;?>
 
-<?if ($libvirt_up && trim(shell_exec('stat -c %T -f /etc/libvirt'))=='btrfs' && strpos($domain_cfg['IMAGE_FILE'],".img")) :?>
+<?if ($libvirt_up && trim(shell_exec('stat -c %T -f /etc/libvirt'))=='btrfs' && substr($domain_cfg['IMAGE_FILE'], -4) === '.img') :?>
 <div class="advanced" markdown="1">
 <div class="title"><span class="left"><i class="title fa fa-list"></i>_(Libvirt volume info)_</span></div>
 _(btrfs filesystem show)_:
