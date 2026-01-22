@@ -141,7 +141,16 @@ foreach ($domains as $dom) {
  * --------------------------------------------------------- */
 #print_r($vms);
 ksort($vms,SORT_NATURAL);
-file_put_contents("/boot/config/plugins/dynamix.vm.manager/vms.json",json_encode($vms,JSON_PRETTY_PRINT));
+$json_path = "/boot/config/plugins/dynamix.vm.manager/vms.json";
+$json_dir = dirname($json_path);
+if (!is_dir($json_dir)) {
+    if (!@mkdir($json_dir, 0755, true)) {
+        die("Failed to create directory: $json_dir\n");
+    }
+}
+if (file_put_contents($json_path, json_encode($vms, JSON_PRETTY_PRINT)) === false) {
+    die("Failed to write vms.json\n");
+}
 
 file_put_contents("/tmp/Stopcopy","");
 foreach ($vms as $vm => $vmdetail) {
