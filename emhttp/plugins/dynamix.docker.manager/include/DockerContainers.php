@@ -161,7 +161,8 @@ foreach ($containers as $ct) {
     } elseif (!isset($ct['Ports']['vlan']) || strpos($ct['NetworkMode'],'container:')!==false) {
       foreach ($ct['Ports'] as $port) {
         if (_var($port,'PublicPort') && _var($port,'Driver') == 'bridge') {
-          $ports_external[] = sprintf('%s:%s', $host, strtoupper(_var($port,'PublicPort')));
+          if (_var($port, "HostIp") != "") $hostip = _var($port, "HostIp"); else $hostip = $host; 
+          $ports_external[] = sprintf('%s:%s', $hostip, strtoupper(_var($port,'PublicPort')));
         }
         if ((!isset($ct['Networks']['host'])) || (!isset($ct['Networks']['vlan']))) {
           $ports_internal[] = sprintf('%s:%s', _var($port,'PrivatePort'), strtoupper(_var($port,'Type')));
