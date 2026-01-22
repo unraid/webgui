@@ -53,6 +53,8 @@ $array_size = $array_used = 0;
 $extra_size = $extra_used = 0;
 $cache_size = $cache_used = [];
 $cache_type = $cache_rate = [];
+$boot_size  = $boot_used = [];
+$boot_type  = $boot_rate = [];
 $parity     = _var($var,'mdResync');
 $mover      = file_exists('/var/run/mover.pid');
 $btrfs      = exec('pgrep --ns $$ -cf /sbin/btrfs');
@@ -84,6 +86,16 @@ foreach ($disks as $disk) {
       $cache_type[$name] = _var($disk,'rotational') ? (_var($disk,'luksState') ? 'disk-encrypted' : 'disk') : 'nvme';
       $cache_rate[$name] = number_format(100*$cache_used[$name]/($cache_size[$name] ?: 1),1,$dot,'');
       if (empty($disks[$name]['devices'])) unset($pools[array_search($name,$pools)]);
+    }
+    break;
+  case 'Boot':
+    $name = _var($disk,'name');
+    if (in_array($name,flash_filter($disks))) {
+      $boot_size[$name] = _var($disk,'fsSize',0);
+      $boot_used[$name] = _var($disk,'fsSize',0)-_var($disk,'fsFree',0);
+      $boot_type[$name] = _var($disk,'rotational') ? (_var($disk,'luksState') ? 'disk-encrypted' : 'disk') : 'nvme';
+      $boot_rate[$name] = number_format(100*$boot_used[$name]/($boot_size[$name] ?: 1),1,$dot,'');
+      if (empty($disks[$name]['devices'])) unset($pools[array_search($name,flash_filter($disks))]);
     }
     break;
   }
@@ -1146,8 +1158,11 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                 <?endif;?>
 
                 <?$i=0?>
-                <?foreach ($pools as $pool):
-                    $cache = array_filter(cache_filter($disks),function($disk) use ($pool){return prefix($disk['name'])==$pool;});
+                <?
+                    $poolsandboot = array_merge($pools, $bootpools );
+                    foreach ($poolsandboot as $pool):
+                    $cache = array_filter(array_merge(cache_filter($disks)),function($disk) use ($pool){return prefix($disk['name'])==$pool;});
+                    $boot= array_filter(array_merge(boot_filter($disks)),function($disk) use ($pool){return prefix($disk['name'])==$pool;});
                     $power = _var($display,'power') && in_array('nvme',array_column($cache,'transport')) ? ' / '._('Power') : '';
                 ?>
                     <tbody id='pool_list<?=$i?>' title="_(<?=ucfirst($pool)?> Information)_">
@@ -1157,10 +1172,13 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                     <span class='tile-header-left'>
                                         <i class='icon-disk f32'></i>
                                         <div class='section'>
-                                            <h3 class='tile-header-main'><?=_(native($pool),3).($started ? '' : ' ('._('stopped').')')?></h3>
+                                            <h3 class='tile-header-main'><?=_(native($pool),3).($started ? '' : ' ('._('stopped').')')?> <span class='tile-header-main' id="pool_status_<?=$i?>"> <?=_('Status')." :"?></span></h3>
                                             <span>
                                                 <?if ($started):?>
-                                                    <?=sprintf(_("%s used of %s (%s %%)"),my_scale($cache_used[$pool]*1024,$unit)." $unit",my_scale($cache_size[$pool]*1024,$unit,-1,-1)." $unit",$cache_rate[$pool])?>
+                                                    <?
+                                                    if ($pool == "flash") echo sprintf(_("%s used of %s (%s %%)"),my_scale($boot_used[$pool]*1024,$unit)." $unit",my_scale($boot_size[$pool]*1024,$unit,-1,-1)." $unit",$boot_rate[$pool]);
+                                                    else echo sprintf(_("%s used of %s (%s %%)"),my_scale($cache_used[$pool]*1024,$unit)." $unit",my_scale($cache_size[$pool]*1024,$unit,-1,-1)." $unit",$cache_rate[$pool])
+                                                      ?>
                                                 <?endif;?>
                                           </span><br>
                                         </div>
@@ -1181,7 +1199,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                         <tr class='header'>
                             <td>
                                 <span class='w26'>_(Device)_</span>
-                                <span class='w18'>_(Status)_</span>
+                                <span class='w18'>_(Status)_ /<br>_(Mbr Status)_ </span>
                                 <span class='w18'>_(Temp)_<?=$power?></span>
                                 <span class='w18'>_(SMART)_</span>
                                 <span class='w18'>_(Utilization)_</span>
@@ -2620,6 +2638,7 @@ dashboard.on('message',function(msg,meta) {
         $('#pool_list'+i).append(get.pool[i][0]).hideMe();
         $('#pool_info'+i).parent().css({'display':info?'':'none'});
         $('#pool_info'+i).html(info);
+        $('#pool_status_'+i).html(get.pool[i][5] || "");
         smartMenu('#pool_list'+i);
       }
     }
