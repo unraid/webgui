@@ -574,21 +574,44 @@ const PCIchanges = <?= json_encode($PCIchanges) ?>;
 	<tr>
 		<td>_(Pinned Cores)_:</td>
 		<td>
-			<div class="textarea four">
+			<?
+			// Calculate optimal column count for symmetrical grid
+			$total_cpus = count($cpus);
+			$cols = ($total_cpus <= 4) ? $total_cpus : (int)ceil(sqrt($total_cpus));
+			?>
+			<div class="cpu-grid" style="grid-template-columns: repeat(<?=$cols?>, minmax(150px, 1fr));">
 			<?
 			$is_intel_cpu = is_intel_cpu();
 			$core_types = $is_intel_cpu ? get_intel_core_types() : [];
 			foreach ($cpus as $pair) {
 				unset($cpu1,$cpu2);
 				[$cpu1, $cpu2] = my_preg_split('/[,-]/',$pair);
-				$extra = ($arrConfig['domain']['vcpu'] && in_array($cpu1, $arrConfig['domain']['vcpu'])) ? ($arrConfig['domain']['vcpus'] > 1 ? 'checked' : 'checked disabled') : '';
-				if ($is_intel_cpu && count($core_types) > 0) $core_type = "{$core_types[$cpu1]}"; else $core_type = "";
+				$extra1 = ($arrConfig['domain']['vcpu'] && in_array($cpu1, $arrConfig['domain']['vcpu'])) ? ($arrConfig['domain']['vcpus'] > 1 ? 'checked' : 'checked disabled') : '';
+				$core_type = ($is_intel_cpu && isset($core_types[$cpu1]) && !empty($core_types[$cpu1])) ? $core_types[$cpu1] : "";
+				$core_indicator = "";
+				if ($core_type == _('P-Core')) {
+					$core_indicator = " <span class='cpu-core-indicator-p'>●</span>";
+				} elseif ($core_type == _('E-Core')) {
+					$core_indicator = " <span class='cpu-core-indicator-e'>●</span>";
+				}
+				
 				if (!$cpu2) {
-					echo "<label for='vcpu$cpu1' title='$core_type' class='checkbox'>cpu $cpu1<input type='checkbox' name='domain[vcpu][]' class='domain_vcpu' id='vcpu$cpu1' value='$cpu1' $extra><span class='checkmark'></span></label>";
+					// Single CPU core - half height box
+					echo "<div class='cpu-box'>";
+					echo "<div class='cpu-row'>";
+					echo "<span title='".htmlspecialchars($core_type, ENT_QUOTES)."' class='cpu-label'>cpu $cpu1{$core_indicator}</span>";
+					echo "<label for='vcpu$cpu1' class='checkbox cpu-checkbox'><input type='checkbox' name='domain[vcpu][]' class='domain_vcpu' id='vcpu$cpu1' value='$cpu1' $extra1><span class='checkmark'></span></label>";
+					echo "</div>";
+					echo "</div>";
 				} else {
-					echo "<label for='vcpu$cpu1' title='$core_type'  class='cpu1 checkbox'>cpu $cpu1 / $cpu2<input type='checkbox' name='domain[vcpu][]' class='domain_vcpu' id='vcpu$cpu1' value='$cpu1' $extra><span class='checkmark'></span></label>";
-					$extra = ($arrConfig['domain']['vcpu'] && in_array($cpu2, $arrConfig['domain']['vcpu'])) ? ($arrConfig['domain']['vcpus'] > 1 ? 'checked' : 'checked disabled') : '';
-					echo "<label for='vcpu$cpu2' title='$core_type' class='cpu2 checkbox'><input type='checkbox' name='domain[vcpu][]' class='domain_vcpu' id='vcpu$cpu2' value='$cpu2' $extra><span class='checkmark'></span></label>";
+					// CPU pair - box with label at top and two checkboxes stacked vertically on right
+					$extra2 = ($arrConfig['domain']['vcpu'] && in_array($cpu2, $arrConfig['domain']['vcpu'])) ? ($arrConfig['domain']['vcpus'] > 1 ? 'checked' : 'checked disabled') : '';
+					echo "<div class='cpu-box-pair'>";
+					echo "<div class='cpu-dual-container'>";
+					echo "<div class='cpu-dual-row'><span title='".htmlspecialchars($core_type, ENT_QUOTES)."' class='cpu-label-dual'>cpu $cpu1{$core_indicator}</span><label for='vcpu$cpu1' class='cpu1 checkbox cpu-checkbox-dual' title='Thread 1'><input type='checkbox' name='domain[vcpu][]' class='domain_vcpu' id='vcpu$cpu1' value='$cpu1' $extra1><span class='checkmark'></span></label></div>";
+					echo "<div class='cpu-dual-row'><span class='cpu-label-dual'>cpu $cpu2</span><label for='vcpu$cpu2' class='cpu2 checkbox cpu-checkbox-dual' title='Thread 2'><input type='checkbox' name='domain[vcpu][]' class='domain_vcpu' id='vcpu$cpu2' value='$cpu2' $extra2><span class='checkmark'></span></label></div>";
+					echo "</div>";
+					echo "</div>";
 				}
 			}
 			?>
