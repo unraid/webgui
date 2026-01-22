@@ -9,8 +9,9 @@
 # Sync domain data if IMAGE_FILE and OLD_IMAGE_FILE differ
 DOMAIN_CFG=/boot/config/domain.cfg
 
-# Read values from domain.cfg
-eval $(grep -E '^(IMAGE_FILE|OLD_IMAGE_FILE)=' "$DOMAIN_CFG")
+# Read values from domain.cfg safely (no eval)
+IMAGE_FILE=$(grep -E '^IMAGE_FILE=' "$DOMAIN_CFG" | head -1 | cut -d= -f2-)
+OLD_IMAGE_FILE=$(grep -E '^OLD_IMAGE_FILE=' "$DOMAIN_CFG" | head -1 | cut -d= -f2-)
 
 # Remove quotes
 IMAGE_FILE="${IMAGE_FILE%\"}"
@@ -38,10 +39,17 @@ if [ -n "$IMAGE_FILE" ] && [ -n "$OLD_IMAGE_FILE" ] && [ "$IMAGE_FILE" != "$OLD_
 
       log "Mounting $OLD_IMAGE_FILE to $TMP_MNT"
       mkdir -p "$TMP_MNT"
-      mount "$OLD_IMAGE_FILE" "$TMP_MNT"
+      if ! mount "$OLD_IMAGE_FILE" "$TMP_MNT"; then
+        log "ERROR: Failed to mount $OLD_IMAGE_FILE"
+        rm -rf "$TMP_MNT"
+        exit 1
+      fi
       log "Copying full contents from image to directory $IMAGE_FILE"
-      rsync -a --exclude="$OLD_IMG_FILE_NAME" "$TMP_MNT/" "$IMAGE_FILE/"
-      umount "$TMP_MNT"
+      if ! rsync -a --exclude="$OLD_IMG_FILE_NAME" "$TMP_MNT/" "$IMAGE_FILE/"; then
+        log "WARNING: rsync encountered errors"
+      fi
+      umount "$TMP_MNT" || log "WARNING: Failed to unmount $TMP_MNT"
+      rmdir "$TMP_MNT" 2>/dev/null
     elif [[ "$IMAGE_FILE" == *.img ]]; then
       log "Mounting $IMAGE_FILE to $TMP_MNT"
       mkdir -p "$TMP_MNT"
