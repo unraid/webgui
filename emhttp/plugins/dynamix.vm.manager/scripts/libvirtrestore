@@ -16,8 +16,21 @@ $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/plugins/dynamix.vm.manager/include/fs_helpers.php";
 
-$vmsjson = file_get_contents("/boot/config/plugins/dynamix.vm.manager/vms.json");
-$vms = json_decode($vmsjson,true);
+$json_path = "/boot/config/plugins/dynamix.vm.manager/vms.json";
+
+if (!file_exists($json_path)) {
+    die("Configuration file not found: $json_path\n");
+}
+
+$vmsjson = file_get_contents($json_path);
+if ($vmsjson === false) {
+    die("Failed to read configuration file: $json_path\n");
+}
+
+$vms = json_decode($vmsjson, true);
+if ($vms === null && json_last_error() !== JSON_ERROR_NONE) {
+    die("Invalid JSON in configuration file: " . json_last_error_msg() . "\n");
+}
 
 file_put_contents("/tmp/libvirtrestore","");
 foreach ($vms as $vm => $vmdetail) {
