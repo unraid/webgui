@@ -9,8 +9,9 @@
 # Sync domain data if IMAGE_FILE and OLD_IMAGE_FILE differ
 DOMAIN_CFG=/boot/config/domain.cfg
 
-# Read values from domain.cfg
-eval $(grep -E '^(IMAGE_FILE|OLD_IMAGE_FILE)=' "$DOMAIN_CFG")
+# Read values from domain.cfg safely (no eval)
+IMAGE_FILE=$(grep -E '^IMAGE_FILE=' "$DOMAIN_CFG" | head -1 | cut -d= -f2-)
+OLD_IMAGE_FILE=$(grep -E '^OLD_IMAGE_FILE=' "$DOMAIN_CFG" | head -1 | cut -d= -f2-)
 
 # Remove quotes
 IMAGE_FILE="${IMAGE_FILE%\"}"
