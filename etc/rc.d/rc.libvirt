@@ -248,8 +248,13 @@ libvirtd_start(){
 
 libvirtd_stop(){
   # Save VM locations
-  /usr/local/emhttp/plugins/dynamix.vm.manager/scripts/libvirtcopy
-  #
+  LIBVIRTCOPY="/usr/local/emhttp/plugins/dynamix.vm.manager/scripts/libvirtcopy"
+  if [[ -x "$LIBVIRTCOPY" ]]; then
+    "$LIBVIRTCOPY" || log "Warning: Failed to save VM locations"
+  else
+    log "Warning: libvirtcopy script not found or not executable"
+  fi
+  
   log "Stopping $DAEMON..."
   if [[ ! -f $LIBVIRTD_PIDFILE ]]; then
     log "$DAEMON...  Already stopped."
