@@ -111,7 +111,10 @@ foreach ($domains as $dom) {
         $storage_name = 'default';
     } else {
         /* Explicit Unraid pool */
-        $path_root    = str_replace("/mnt/user/","/mnt/$metadata_storage/",$default_domain_dir);
+        $path_root    = preg_replace('#^/mnt/[^/]+/#', "/mnt/$metadata_storage/", $default_domain_dir, 1, $replaced);
+        if ($replaced === 0) {
+            $path_root = $default_domain_dir;
+        }
         $storage_name = $metadata_storage;
     }
 

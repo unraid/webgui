@@ -101,7 +101,7 @@ function migrate_nvram_file($valid_nvram, $vm_path, $vm_uuid, $vm_name, $dry_run
     $xml = @simplexml_load_string($xml_content);
     
     if ($xml === false) {
-        if (!$dry_run) @unlink($dest_file); // Rollback
+         if ($copied) `@unlink`($dest_file); // Rollback only if we copied
         return [
             'success' => false,
             'error' => "Failed to parse XML: $xml_old_path"
