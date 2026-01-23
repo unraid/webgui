@@ -86,7 +86,7 @@ if [ -f "$MANIFEST" ]; then
     while IFS='|' read -r system_file backup_file; do
         if [ "$backup_file" == "NEW" ]; then
             # This was a new file from previous version, remove it
-            if [ -f "$system_file" ]; then
+            if [ -e "$system_file" ] || [ -L "$system_file" ]; then
                 echo "Removing PR file: $system_file"
                 rm -f "$system_file"
             fi
@@ -95,6 +95,8 @@ if [ -f "$MANIFEST" ]; then
             if [ -f "$backup_file" ]; then
                 echo "Restoring original: $system_file"
                 cp -fp "$backup_file" "$system_file"
+            else
+                echo "⚠️  Missing backup for: $system_file"
             fi
         fi
     done < "$MANIFEST"
@@ -171,6 +173,76 @@ echo ""
 
 # Get file list
 tar -tzf "$TARBALL" > /tmp/plugin_files.txt
+
+# Abort if any files are already managed by another PR plugin
+OTHER_MANIFESTS="/tmp/pr_plugin_existing_files.txt"
+> "$OTHER_MANIFESTS"
+for plugin_dir in /boot/config/plugins/webgui-pr-*; do
+    if [ ! -d "$plugin_dir" ]; then
+        continue
+    fi
+    if [ "$plugin_dir" == "/boot/config/plugins/webgui-pr-PR_PLACEHOLDER" ]; then
+        continue
+    fi
+    manifest="$plugin_dir/installed_files.txt"
+    if [ -f "$manifest" ]; then
+        plugin_name=$(basename "$plugin_dir")
+        while IFS='|' read -r other_file _; do
+            if [ -n "$other_file" ]; then
+                echo "${other_file}|${plugin_name}" >> "$OTHER_MANIFESTS"
+            fi
+        done < "$manifest"
+    fi
+done
+
+if [ -s "$OTHER_MANIFESTS" ]; then
+    declare -A existing_files
+    while IFS='|' read -r existing_file existing_plugin; do
+        if [ -z "$existing_file" ] || [ -z "$existing_plugin" ]; then
+            continue
+        fi
+        if [ -n "${existing_files[$existing_file]:-}" ]; then
+            if [[ ",${existing_files[$existing_file]}," != *",${existing_plugin},"* ]]; then
+                existing_files[$existing_file]="${existing_files[$existing_file]},${existing_plugin}"
+            fi
+        else
+            existing_files[$existing_file]="$existing_plugin"
+        fi
+    done < "$OTHER_MANIFESTS"
+
+    conflict_found=0
+    declare -A conflict_plugins
+    while IFS= read -r file; do
+        # Skip directories
+        if [[ "$file" == */ ]]; then
+            continue
+        fi
+
+        system_file="/${file}"
+        if [ -n "${existing_files[$system_file]:-}" ]; then
+            conflict_found=1
+            echo "Conflict: $system_file is already managed by ${existing_files[$system_file]}"
+            IFS=',' read -r -a plugin_list <<< "${existing_files[$system_file]}"
+            for plugin in "${plugin_list[@]}"; do
+                conflict_plugins[$plugin]=1
+            done
+        fi
+    done < /tmp/plugin_files.txt
+
+    if [ "$conflict_found" -eq 1 ]; then
+        echo ""
+        echo "❌ Install aborted."
+        echo "One or more files are already managed by another PR plugin."
+        echo "Please uninstall the conflicting plugin(s) and try again:"
+        for plugin in "${!conflict_plugins[@]}"; do
+            echo "  plugin remove ${plugin}.plg"
+        done
+        rm -f "$OTHER_MANIFESTS" /tmp/plugin_files.txt
+        exit 1
+    fi
+fi
+
+rm -f "$OTHER_MANIFESTS"
 
 # Backup original files BEFORE extraction
 while IFS= read -r file; do
@@ -327,7 +399,7 @@ if [ -f "$MANIFEST" ]; then
     while IFS='|' read -r system_file backup_file; do
         if [ "$backup_file" == "NEW" ]; then
             # This was a new file, remove it
-            if [ -f "$system_file" ]; then
+            if [ -e "$system_file" ] || [ -L "$system_file" ]; then
                 echo "Removing new file: $system_file"
                 rm -f "$system_file"
             fi
@@ -335,7 +407,9 @@ if [ -f "$MANIFEST" ]; then
             # Restore from backup
             if [ -f "$backup_file" ]; then
                 echo "Restoring: $system_file"
-                mv -f "$backup_file" "$system_file"
+                cp -fp "$backup_file" "$system_file"
+            else
+                echo "⚠️  Missing backup for: $system_file"
             fi
         fi
     done < "$MANIFEST"
