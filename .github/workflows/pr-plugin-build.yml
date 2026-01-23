@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - 'emhttp/**'
+      - 'etc/**'
+      - 'sbin/**'
+      - 'share/**'
       - '.github/workflows/pr-plugin-build.yml'
       - '.github/scripts/**'
 
@@ -36,7 +39,7 @@ jobs:
           
           # Check if we have any changes
           if [ ! -s "changed_files.txt" ]; then
-            echo "No emhttp files changed"
+            echo "No files changed"
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
@@ -115,8 +118,8 @@ jobs:
           # Create tarball - consistent filename for updates
           cd build
           echo "Creating tarball with contents:"
-          find usr/ -type f
-          tar -czf ../${{ steps.version.outputs.local_txz }} usr/
+          find . -type f
+          tar -czf ../${{ steps.version.outputs.local_txz }} .
           cd ..
           
           # Generate file list for plugin
