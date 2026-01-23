@@ -115,8 +115,8 @@ jobs:
           # Create tarball - consistent filename for updates
           cd build
           echo "Creating tarball with contents:"
-          find usr/ -type f
-          tar -czf ../${{ steps.version.outputs.local_txz }} usr/
+          find . -type f
+          tar -czf ../${{ steps.version.outputs.local_txz }} .
           cd ..
           
           # Generate file list for plugin
