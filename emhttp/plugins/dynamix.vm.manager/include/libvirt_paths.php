@@ -5,7 +5,7 @@
  */
 ?>
 <?
-$libvirt_paths = @parse_ini_file('/etc/libvirt/paths.conf', false, INI_SCANNER_RAW);
+$libvirt_paths = @parse_ini_file('/etc/rc.d/rc.libvirt.conf', false, INI_SCANNER_RAW);
 if (!is_array($libvirt_paths)) {
 	$libvirt_paths = [];
 }
