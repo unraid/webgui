@@ -91,29 +91,70 @@ abort() {
 }
 
 # find which device/partition has the UNRAIDBOOT label
+TIMEOUT=30
+DEVICE=""
+FSTYPE=""
+UUID=""
+
 find_device() {
-  local i
-  for i in {1..30}; do
-    DEVICE=$(/sbin/blkid -L $UNRAIDBOOT)
-    [[ -z $DEVICE ]] && /bin/sleep 1 || return 0
+  for (( ; TIMEOUT>0; TIMEOUT-- )); do
+    DEVICE=$(/sbin/blkid -L "$UNRAIDBOOT")
+
+    if [[ -n "$DEVICE" ]]; then
+      FSTYPE=$(/sbin/blkid -s TYPE -o value "$DEVICE")
+
+      if [[ "$FSTYPE" == "btrfs" ]]; then
+        UUID=$(/sbin/blkid -s UUID -o value "$DEVICE")
+        
+        # Build the device list string: device=/dev/sda3,device=/dev/sdb3
+        ALL_DEVS=$(/sbin/blkid -t LABEL="$UNRAIDBOOT" -o device)
+        DEVICE=""
+        for dev in $ALL_DEVS; do
+          if [[ -z "$DEVICE" ]]; then
+            DEVICE="device=$dev"
+          else
+            DEVICE="$DEVICE,device=$dev"
+          fi
+        done
+
+        # Attempt readonly mount to verify pool is whole (mount will fail if device is 'missing')
+        if /sbin/mount -t btrfs -o ro -o "$DEVICE" "UUID=$UUID" /boot >/dev/null 2>&1; then
+          /sbin/umount /boot
+          return 0
+        fi
+      
+      else
+        return 0
+      fi
+    fi
+
+    /bin/sleep 1
   done
+
+  # Timeout reached
+  if [[ "$FSTYPE" == "btrfs" && -n "$UUID" ]]; then
+    DEVICE="degraded"
+    echo "WARNING: BTRFS timeout. Proceeding with degraded mount."
+    return 0
+  fi
+
   return 1
 }
 
 # LimeTech - poll for device with $UNRAIDBOOT present, with 30-sec timeout
 # this serves to synchronize this script with kernel device discovery
-/bin/echo -n "waiting up to 30 sec for device with BOOT $UNRAIDBOOT to come online ... "
-find_device && /bin/echo "found $DEVICE" || abort "not found"
+/bin/echo "waiting up to 30 sec for device with label '$UNRAIDBOOT' to come online ... "
+find_device || abort "not found"
 
-# detect filesystem from boot device
-if /sbin/blkid -s TYPE $DEVICE | /bin/grep -q "btrfs" ; then
-  NONVFAT=btrfs
-  /sbin/mount -v -t btrfs -o auto,rw,noatime,nodiratime,degraded,discard=sync $DEVICE /boot || abort "cannot mount $DEVICE"
-elif /sbin/blkid -s TYPE $DEVICE | /bin/grep -q "xfs" ; then
-  NONVFAT=xfs
+# mount detected device on /boot
+if [[ "$FSTYPE" = "btrfs" ]]; then
+  /sbin/mount -v -t btrfs -o auto,rw,noatime,nodiratime,discard=async -o $DEVICE "UUID=$UUID" /boot || abort "cannot mount $DEVICE"
+
+elif [[ "$FSTYPE" = "xfs" ]]; then
   /sbin/mount -v -t xfs -o auto,rw,noatime,nodiratime,discard $DEVICE /boot || abort "cannot mount $DEVICE"
-else
-  /bin/echo "Checking $DEVICE ..."
+
+elif [[ "$FSTYPE" = "vfat" ]]; then
+  echo "Checking $DEVICE ..."
   FSCK=$(/sbin/fsck.fat -a -w $DEVICE 2>/dev/null)
   if [[ "$FSCK" == *"differences between boot sector and its backup"* ]] ; then
     /sbin/fsck.fat -w $DEVICE 2>/dev/null <<< "1"
@@ -121,16 +162,19 @@ else
     echo "$FSCK"
   fi
   /sbin/mount -v -t vfat -o auto,rw,flush,noatime,nodiratime,dmask=77,fmask=177,shortname=mixed $DEVICE /boot || abort "cannot mount $DEVICE"
+
+else
+  abort "unsupported file system $FSTYPE on $DEVICE"
 fi
 
 # check initial files used to boot
 bzcheck(){
   local BZFILE=$1
   if [[ -f /boot/config/skipbzcheck ]]; then
-    /bin/echo "Skipping $BZFILE checksum verification"
+    echo "Skipping $BZFILE checksum verification"
     return
   fi
-  /bin/echo "Verifying $BZFILE checksum ..."
+  echo "Verifying $BZFILE checksum ..."
   [[ -f "/boot/$BZFILE" ]] || abort "$BZFILE not present"
   local BZFILECHK="$BZFILE.sha256"
   [[ -f "/boot/$BZFILECHK" ]] || abort "$BZFILECHK not present"
@@ -173,12 +217,12 @@ if [[ $ROOT == "" ]]; then
   /sbin/mount -t tmpfs -o size=128m,mode=0755 tmpfs /var/log
   /bin/mv -f /var/empty/* /var/log
 else
-  /bin/echo "Checking root filesystem"
+  echo "Checking root filesystem"
   /sbin/fsck -C -a $ROOT
   RETVAL=$?
   [[ $RETVAL -ge 2 ]] && abort "fsck failed with return value $RETVAL"
   # Remount the root filesystem in read-write mode
-  /bin/echo "Remounting $ROOT with read-write enabled."
+  echo "Remounting $ROOT with read-write enabled."
   /sbin/mount -w -v -n -o remount /
   RETVAL=$?
   [[ $RETVAL -gt 0 ]] && abort "failed to remount $ROOT r/w with return value $RETVAL"
@@ -186,7 +230,7 @@ else
 fi
 
 # set permissions for non vfat boot on /boot
-if [[ $NONVFAT == btrfs || $NONVFAT == xfs ]]; then
+if [[ $FSTYPE == btrfs || $FSTYPE == xfs ]]; then
   /usr/bin/chown -R root:root /boot
   /usr/bin/chmod -R 644 /boot
 fi

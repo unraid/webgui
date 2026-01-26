@@ -21,6 +21,11 @@ $empty_dir = '/var/tmp/file.manager.empty_dir/'; // trailing slash is required f
 $null    = '/dev/null';
 $timer   = time();
 
+// Rsync progress calculation constants
+define('RSYNC_MIN_PROGRESS_PERCENT', 3);   // Minimum progress percentage before calculating total size
+define('RSYNC_TOTAL_SIZE_SAMPLES', 5);     // Number of measurements to average for total size calculation
+
+require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/Wrappers.php";
 require_once "$docroot/webGui/include/publish.php";
 extract(parse_plugin_cfg('dynamix', true));
@@ -37,15 +42,11 @@ function pool_only(&$disks) {
   return array_filter($disks, function($disk){return $disk['type'] == 'Cache' && !empty($disk['uuid']);});
 }
 
-function pools_filter(&$disks) {
+function fm_pools_filter(&$disks) {
   return array_keys(pool_only($disks));
 }
 
-function delete_file(...$file) {
-  array_map('unlink', array_filter($file, 'file_exists'));
-}
-
-function pgrep($pid) {
+function pid_exists($pid) {
   $pid = is_array($pid) ? $pid[0] : $pid;
   return $pid && file_exists("/proc/$pid") ? $pid : false;
 }
@@ -77,26 +78,50 @@ function seconds_to_time($seconds) {
   return sprintf("%d:%02d:%02d", $hours, $minutes, $secs);
 }
 
-function calculate_eta($transferred, $percent, $speed, $last_rsync_eta_seconds = null) {
-  // Convert transferred size to bytes
+/**
+ * Convert human-readable size string to bytes.
+ *
+ * @param string $size Size string (e.g., "1.5G", "250M", "1024K")
+ * @return float Size in bytes
+ */
+function size_to_bytes($size) {
   $multipliers = ['K' => 1024, 'M' => 1024*1024, 'G' => 1024*1024*1024, 'T' => 1024*1024*1024*1024];
-  $transferred_bytes = floatval($transferred);
+  $bytes = floatval($size);
   foreach ($multipliers as $unit => $mult) {
-    if (stripos($transferred, $unit) !== false) {
-      $transferred_bytes *= $mult;
+    if (stripos($size, $unit) !== false) {
+      $bytes *= $mult;
       break;
     }
   }
+  return $bytes;
+}
 
-  // Convert speed to bytes/sec
-  $speed_bytes = floatval($speed);
-  if (stripos($speed, 'kB/s') !== false) {
-    $speed_bytes *= 1024;
-  } elseif (stripos($speed, 'MB/s') !== false) {
-    $speed_bytes *= 1024 * 1024;
-  } elseif (stripos($speed, 'GB/s') !== false) {
-    $speed_bytes *= 1024 * 1024 * 1024;
+/**
+ * Format bytes to human-readable size string.
+ *
+ * @param float $bytes Size in bytes
+ * @return string Formatted size (e.g., "1.50GB", "250.00MB")
+ */
+function bytes_to_size($bytes) {
+  $display = $bytes;
+  $unit = 'B';
+  $units = ['KB' => 1024, 'MB' => 1024*1024, 'GB' => 1024*1024*1024, 'TB' => 1024*1024*1024*1024];
+  foreach (array_reverse($units, true) as $u => $divisor) {
+    if ($bytes >= $divisor) {
+      $display = $bytes / $divisor;
+      $unit = $u;
+      break;
+    }
   }
+  return my_number($display, 2) . $unit;
+}
+
+function calculate_eta($transferred, $percent, $speed, $last_rsync_eta_seconds = null) {
+  // Convert transferred size to bytes
+  $transferred_bytes = size_to_bytes($transferred);
+
+  // Convert speed to bytes/sec (speed format: "50.00MB/s")
+  $speed_bytes = size_to_bytes(str_replace('/s', '', $speed));
 
   // Calculate total size from percent
   $percent_val = intval(str_replace('%', '', $percent));
@@ -129,8 +154,31 @@ function calculate_eta($transferred, $percent, $speed, $last_rsync_eta_seconds =
   return "N/A";
 }
 
-function parse_rsync_progress($status, $action_label) {
+/**
+ * Parse rsync progress output and track transfer statistics.
+ *
+ * Uses static variables to maintain state across multiple calls during a single operation.
+ * Call with $reset=true before starting a new copy/move operation to clear previous state.
+ *
+ * @param string $status Raw rsync output line to parse
+ * @param string $action_label Label to display for the current action (e.g. "Copying", "Moving")
+ * @param bool $reset If true, resets static state variables (call before new operation)
+ * @return array Associative array with progress information: 'text', 'percent', 'eta', 'speed', etc.
+ */
+function parse_rsync_progress($status, $action_label, $reset = false) {
   static $last_rsync_eta_seconds = null;
+  static $total_size = null;
+  static $total_calculations = [];  // Store multiple calculations for averaging
+  static $last_calc_percent = null; // Track last percent we calculated from
+
+  // Reset static variables when starting a new transfer
+  if ($reset) {
+    $last_rsync_eta_seconds = null;
+    $total_size = null;
+    $total_calculations = [];
+    $last_calc_percent = null;
+    return [];
+  }
 
   // initialize text array with action label
   $text[0] = $action_label . "... ";
@@ -152,6 +200,33 @@ function parse_rsync_progress($status, $action_label) {
       $speed = $parts[2];
       $time = $parts[3];
 
+      // Calculate total size by averaging multiple measurements
+      // rsync truncates percent (not rounds), so 47.9% shows as 47%
+      // This causes ~2% error per percent point. We average multiple measurements at different percents.
+      if ($total_size === null || count($total_calculations) < RSYNC_TOTAL_SIZE_SAMPLES) {
+        $percent_val = intval(str_replace('%', '', $percent));
+        
+        // Track if this is a "running transfer" line (no xfr# info)
+        $is_running_line = !isset($parts[4]);
+        
+        // Calculate total when we have minimum progress on a running transfer line
+        // and the percent changed since last calculation
+        if ($is_running_line && $percent_val >= RSYNC_MIN_PROGRESS_PERCENT && $last_calc_percent !== $percent_val) {
+          // Convert transferred size to bytes
+          $transferred_bytes = size_to_bytes($transferred);
+          
+          // Calculate total from transferred and percent (rsync truncates, so add 0.5% for better accuracy)
+          $calculated_total = $transferred_bytes * 100 / ($percent_val + 0.5);
+          $total_calculations[] = $calculated_total;
+          $last_calc_percent = $percent_val;
+          
+          // Once we have enough measurements, average them and lock the value
+          if (count($total_calculations) >= RSYNC_TOTAL_SIZE_SAMPLES) {
+            $total_size = array_sum($total_calculations) / count($total_calculations);
+          }
+        }
+      }
+
       // Check if this is an ETA line or elapsed time line
       // ETA lines have only 4 parts, elapsed time lines have additional (xfr#...) info
       if (isset($parts[4])) {
@@ -162,7 +237,20 @@ function parse_rsync_progress($status, $action_label) {
         $last_rsync_eta_seconds = time_to_seconds($time);
       }
 
-      $text[1] = _('Completed') . ": " . $percent . ",  " . _('Speed') . ": " . $speed . ",  " . _('ETA') . ": " . $time;
+      // Build progress text with total size
+      $progress_parts = [];
+      $progress_parts[] = _('Completed') . ": " . $percent;
+      $progress_parts[] = _('Speed') . ": " . $speed;
+      $progress_parts[] = _('ETA') . ": " . $time;
+      
+      // Always show Total (either calculated or N/A)
+      if ($total_size !== null) {
+        $progress_parts[] = _('Total') . ": ~" . bytes_to_size($total_size);
+      } else {
+        $progress_parts[] = _('Total') . ": N/A";
+      }
+      
+      $text[1] = implode(",  ", $progress_parts);
     }
   }
 
@@ -171,7 +259,7 @@ function parse_rsync_progress($status, $action_label) {
   // note: -v is used to obtain the opposite of the progress line regex and to filter out empty lines
   $file_line = exec("tac $status | grep -m1 -v -E '(^\$|^ .*[0-9]+%.*[0-9]+:[0-9]+:[0-9]+)' | tr -s ' ' || echo ''");
   if ($file_line) {
-    $text[0] .= htmlspecialchars(mb_strimhalf($file_line, 70, '...'), ENT_QUOTES, 'UTF-8');
+    $text[0] .= mb_strimhalf($file_line, 70, '...');
   }
 
   return $text;
@@ -209,7 +297,8 @@ function update_translation($locale) {
 
 function cat($file) {
   global $null;
-  $cat = $set = [];
+  $results = [];
+  $set = [];
   $rows = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
   if (count($rows) > 0) {
     natcasesort($rows);
@@ -220,17 +309,25 @@ function cat($file) {
         $set[] = exec("getfattr --no-dereference --absolute-names --only-values -n system.LOCATIONS ".quoted($name)." 2>$null");
       }
       $disks = parse_ini_file('state/disks.ini', true);
-      $tag = implode('|',array_merge(['disk'],pools_filter($disks)));
+      $tag = implode('|',array_merge(['disk'],fm_pools_filter($disks)));
       $set = explode(';',str_replace(',;',',',preg_replace("/($tag)/", ';$1', implode($set))));
     }
     foreach (array_diff($rows, $user) as $row) {
       [$none, $root, $main] = explode('/',$row,4);
-      $cat[] = ($root == 'mnt' ? $main : ($root == 'boot' ? 'flash' : '---'))."\0".$row;
+      $results[] = [
+        'location' => ($root == 'mnt' ? $main : ($root == 'boot' ? 'flash' : '---')),
+        'path' => $row
+      ];
     }
     $i = 0;
-    foreach ($user as $row) $cat[] = $set[++$i]."\0".$row;
+    foreach ($user as $row) {
+      $results[] = [
+        'location' => $set[++$i] ?? '---',
+        'path' => $row
+      ];
+    }
   }
-  return "#cat#\n".implode("\n",$cat)."\n";
+  return $results;
 }
 
 function escape($name) {return escapeshellarg(validname($name));}
@@ -265,14 +362,24 @@ if (!file_exists($empty_dir)) {
 
 // initialize $delete_empty_dirs state: null = not a move operation (yet), true = rsync copy-delete phase, false = cleanup phase (done)
 $delete_empty_dirs = null;
+$pid = false;
 
 // infinite loop to monitor and execute file operations
 // Note: exec() uses /bin/sh which is symlinked to bash in unraid and a requirement for process substitution syntax >(...)
 while (true) {
   unset($action, $source, $target, $H, $sparse, $exist, $zfs);
 
-  // read job parameters from ini file: $action, $title, $source, $target, $H, $sparse, $exist, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
-  if (file_exists($active)) extract(parse_ini_file($active));
+  // read job parameters from JSON file: $action, $title, $source, $target, $H, $sparse, $exist, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
+  if (file_exists($active)) {
+    $json = file_get_contents($active);
+    $data = json_decode($json, true);
+    if (is_array($data)) {
+      extract($data);
+    } elseif ($json !== false && trim($json) !== '') {
+      // Log JSON parse failure for debugging (non-empty file that failed to parse)
+      exec('logger -t file_manager "Warning: Failed to parse active job JSON: ' . escapeshellarg(substr($json, 0, 100)) . '"');
+    }
+  }
 
   // read PID from file (file_manager may have been restarted)
   if (!$pid && file_exists($pid_file)) {
@@ -290,8 +397,15 @@ while (true) {
     $source = explode("\r", $source);
     switch ($action) {
     case 0: // create folder
+
+      // return status of running action
       if (!empty($pid)) {
-        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Creating').'...';
+        $reply['status'] = json_encode([
+          'action' => $action,
+          'text' => [_('Creating').'...']
+        ]);
+
+      // start action
       } else {
         $dir = $source[0].'/'.$target;
         exec("mkdir -pm0777 ".quoted($dir)." 1>$null 2>$error & echo $!", $pid);
@@ -305,7 +419,7 @@ while (true) {
       if (!empty($pid)) {
         $reply['status'] = json_encode([
           'action' => $action,
-          'text' => [htmlspecialchars(mb_strimhalf(exec("tail -1 $status"), 70, '...'), ENT_QUOTES, 'UTF-8')]
+          'text' => [mb_strimhalf(exec("tail -1 $status"), 70, '...')]
         ]);
 
       // start action
@@ -315,8 +429,15 @@ while (true) {
       break;
     case 2: // rename folder
     case 7: // rename file
+
+      // return status of running action
       if (!empty($pid)) {
-        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Renaming').'...';
+        $reply['status'] = json_encode([
+          'action' => $action,
+          'text' => [_('Renaming').'...']
+        ]);
+
+      // start action
       } else {
         $path = dirname($source[0]);
         exec("mv -f ".quoted($source)." ".quoted("$path/$target")." 1>$null 2>$error & echo \$!", $pid);
@@ -334,6 +455,7 @@ while (true) {
 
       // start action
       } else {
+        parse_rsync_progress(null, null, true); // Reset static variables
         $target = validname($target, false);
         if ($target) {
           $mkpath = isdir($target) ? '--mkpath' : '';
@@ -343,7 +465,7 @@ while (true) {
           //       breaks access for all unraid users through /mnt/user/sharename. We avoid this behavior by using "--no-inc-recursive".
           exec($cmd, $pid);
         } else {
-          $reply['error'] = 'Invalid target name';
+          $reply['error'] = _('Invalid target name');
         }
       }
       break;
@@ -364,7 +486,7 @@ while (true) {
         if ($delete_empty_dirs === false) {
           $reply['status'] = json_encode([
             'action' => $action,
-            'text' => [htmlspecialchars(mb_strimhalf(exec("tail -1 $status"), 70, '...'), ENT_QUOTES, 'UTF-8')]
+            'text' => [mb_strimhalf(exec("tail -1 $status"), 70, '...')]
           ]);
 
         // moving: progress
@@ -377,6 +499,7 @@ while (true) {
 
       // start action
       } else {
+        parse_rsync_progress(null, null, true); // Reset static variables
         $target = validname($target, false);
         if ($target) {
           $mkpath = isdir($target) ? '--mkpath' : '';
@@ -440,12 +563,14 @@ while (true) {
                 }
               }
 
-              // target must not be a subdirectory of any source (backup-dir should be outside source tree)
-              $source_dirname = is_dir($valid_source_path) ? $valid_source_path : dirname($valid_source_path);
-              if (strpos(rtrim($target,'/') . '/', rtrim($source_dirname,'/') . '/') === 0) {
-                $reply['error'] = 'Cannot move directory into its own subdirectory';
-                $use_rsync_rename = false;
-                break 2; // break out of both: foreach and case
+              // target must not be a subdirectory of any source directory (backup-dir should be outside source tree)
+              // This check is only relevant when moving directories, not files
+              if (is_dir($valid_source_path)) {
+                if (strpos(rtrim($target,'/') . '/', rtrim($valid_source_path,'/') . '/') === 0) {
+                  $reply['error'] = _('Cannot move directory into its own subdirectory');
+                  $use_rsync_rename = false;
+                  break 2; // break out of both: foreach and case
+                }
               }
 
             }
@@ -457,9 +582,34 @@ while (true) {
           // - existing files are overwritten in --backup-dir  (like not using --ignore-existing)
           // - missing directories are created in --backup-dir (like using --mkpath)
           // - rsync prefixes the moved files with "deleting " in the output, which we strip with sed, to not confuse the user
+          // - rsync --backup deletes empty directories instead of moving them to --backup-dir (https://github.com/RsyncProject/rsync/issues/842), so we copy empty directories first
           if ($use_rsync_rename) {
             $parent_dir = dirname(validname($source[0]));
-            $cmd = "rsync -r --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --delete --backup --backup-dir=".escapeshellarg($target)." ".quoted_rsync_include($source)." --exclude='*' ".escapeshellarg($empty_dir)." ".escapeshellarg($parent_dir)." > >(stdbuf -o0 tr '\\r' '\\n' | sed 's/^deleting //' >$status) 2>$error & echo \$!";
+            $parent_dir_escaped = escapeshellarg($parent_dir);
+            $target_escaped = escapeshellarg($target);
+            $empty_dir_escaped = escapeshellarg($empty_dir);
+            $rsync_includes = quoted_rsync_include($source);
+            
+            // Build relative paths for find (e.g., ./dir instead of /mnt/disk1/sharename/dir)
+            $source_relative = [];
+            foreach ($source as $s) {
+              $valid = validname($s);
+              if ($valid) {
+                $source_relative[] = escapeshellarg('./' . basename($valid));
+              }
+            }
+            $source_relative_joined = implode(' ', $source_relative);
+            
+            // Execute both rsync commands in a single bash block so they share the same PID and output stream
+            // First: copy only empty directories to target, then: move everything with rsync rename trick
+            $cmd = <<<BASH
+            {
+              cd $parent_dir_escaped && 
+              find $source_relative_joined -type d -empty -print0 | rsync -aX --files-from=- --from0 --out-format=%f --info=flist0,misc0,stats0,name1,progress2 -d . $target_escaped &&
+              rsync -r --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --delete --backup --backup-dir=$target_escaped $rsync_includes --exclude='*' $empty_dir_escaped $parent_dir_escaped
+            } > >(stdbuf -o0 tr '\\r' '\\n' | sed 's/^deleting //' >$status) 2>$error & echo \$!
+            BASH;
+
             exec($cmd, $pid);
 
           // use rsync copy-delete
@@ -473,27 +623,51 @@ while (true) {
           }
 
         } else {
-          $reply['error'] = 'Invalid target name';
+          $reply['error'] = _('Invalid target name');
         }
       }
       break;
     case 11: // change owner
+
+      // return status of running action
       if (!empty($pid)) {
-        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Updating').'... '.exec("tail -2 $status | grep -Pom1 \"^.+ of '\\K[^']+\"");
+        $file_line = exec("tail -2 $status | grep -Pom1 \"^.+ of '\\K[^']+\"");
+        $reply['status'] = json_encode([
+          'action' => $action,
+          'text' => [_('Updating').'... '.mb_strimhalf($file_line, 70, '...')]
+        ]);
+
+      // start action
       } else {
         exec("chown -Rfv $target ".quoted($source)." 1>$status 2>$error & echo \$!", $pid);
       }
       break;
     case 12: // change permission
+
+      // return status of running action
       if (!empty($pid)) {
-        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Updating').'... '.exec("tail -2 $status | grep -Pom1 \"^.+ of '\\K[^']+\"");
+        $file_line = exec("tail -2 $status | grep -Pom1 \"^.+ of '\\K[^']+\"");
+        $reply['status'] = json_encode([
+          'action' => $action,
+          'text' => [_('Updating').'... '.mb_strimhalf($file_line, 70, '...')]
+        ]);
+
+      // start action
       } else {
         exec("chmod -Rfv $target ".quoted($source)." 1>$status 2>$error & echo \$!", $pid);
       }
       break;
     case 15: // search
+
+      // return status of running action
       if (!empty($pid)) {
-        $reply['status'] = '<i class="fa fa-circle-o-notch fa-spin dfm"></i>'._('Searching').'... '.exec("wc -l $status | grep -Pom1 '^[0-9]+'");
+        $count = exec("wc -l $status | grep -Pom1 '^[0-9]+'");
+        $reply['status'] = json_encode([
+          'action' => $action,
+          'text' => [_('Searching').'... '.$count]
+        ]);
+
+      // start action
       } else {
         exec("find ".source($source)." -iname ".escapeshellarg($target)." 1>$status 2>$null & echo \$!", $pid);
       }
@@ -507,7 +681,7 @@ while (true) {
     default:
       continue 2;
     }
-    $pid = pgrep($pid??0);
+    $pid = pid_exists($pid??0);
 
     // Store PID to survive file_manager restarts
     if ($pid !== false) {
@@ -518,13 +692,19 @@ while (true) {
       if (!empty($delete_empty_dirs)) {
         exec("find ".quoted($source)." -type d -empty -print -delete 1>$status 2>$null & echo \$!", $pid);
         $delete_empty_dirs = false;
-        $pid = pgrep($pid);
+        $pid = pid_exists($pid);
       } else {
         if ($action != 15) {
-          $reply['status'] = _('Done');
+          $reply['status'] = json_encode([
+            'action' => $action,
+            'text' => [_('Done')]
+          ]);
           $reply['done'] = 1;
         } else {
-          $reply['status'] = cat($status);
+          $reply['status'] = json_encode([
+            'action' => $action,
+            'results' => cat($status)
+          ]);
           $reply['done'] = 2;
         }
         if ($zfs) {
@@ -535,7 +715,7 @@ while (true) {
             foreach ($datasets as $dataset) if (exec("ls --indicator-style=none /mnt/$dataset|wc -l")==0) exec("zfs destroy $dataset 2>/dev/null");
           }
         }
-        if (file_exists($error)) $reply['error'] = str_replace("\n","<br>", trim(file_get_contents($error)));
+        if (file_exists($error)) $reply['error'] = trim(file_get_contents($error));
         delete_file($active, $pid_file, $status, $error);
         unset($pid);
         $delete_empty_dirs = null;

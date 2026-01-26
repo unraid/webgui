@@ -27,8 +27,8 @@ jobs:
         run: |
           set -euo pipefail
           
-          # Get list of changed files in emhttp directory using PR SHAs
-          git diff --name-only "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}" | grep '^emhttp/' > changed_files.txt || true
+          # Get list of changed files in emhttp, etc, sbin, share using PR SHAs
+          git diff --name-only "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}" | grep -E '^(emhttp|etc|sbin|share)/' > changed_files.txt || true
           
           # Output for debugging
           echo "Changed files:"
@@ -85,10 +85,29 @@ jobs:
           # Copy changed files preserving directory structure
           while IFS= read -r file; do
             if [ -f "$file" ]; then
-              # Create directory structure in build
-              dir=$(dirname "$file")
-              mkdir -p "build/usr/local/$dir"
-              cp "$file" "build/usr/local/$dir/"
+              # Create directory structure in build with target mappings
+              case "$file" in
+                etc/*)
+                  target_dir="build/${file%/*}"
+                  ;;
+                sbin/*)
+                  target_dir="build/usr/local/sbin/${file#sbin/}"
+                  target_dir="${target_dir%/*}"
+                  ;;
+                share/*)
+                  target_dir="build/usr/local/share/${file#share/}"
+                  target_dir="${target_dir%/*}"
+                  ;;
+                emhttp/*)
+                  target_dir="build/usr/local/${file%/*}"
+                  ;;
+                *)
+                  echo "Skipping unsupported path: $file"
+                  continue
+                  ;;
+              esac
+              mkdir -p "$target_dir"
+              cp "$file" "$target_dir/"
               echo "Added: $file"
             fi
           done < changed_files.txt
@@ -101,7 +120,7 @@ jobs:
           cd ..
           
           # Generate file list for plugin
-          find build/usr/local/emhttp -type f | sed 's|^build||' > file_list.txt
+          find build/etc build/usr/local/emhttp build/usr/local/sbin build/usr/local/share -type f | sed 's|^build||' > file_list.txt
           echo "File list for plugin:"
           cat file_list.txt
           

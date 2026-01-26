@@ -118,8 +118,12 @@ function action_settings($pciid)
         }
         if (!isset($sriov_devices_settings[$vfpci])) continue;
 
+        $class_id = $sriov_devices_settings[$vfpci]['class_id'];
         $vfio = $sriov_devices_settings[$vfpci]['vfio'];
         $mac  = $sriov_devices_settings[$vfpci]['mac'];
+
+        # Only process MAC for network class devices (0x02)
+        if ($class_id != '0x02') $mac = "";
 
         # Skip if no action needed
         if ($vfio == 0 && $mac == "") continue;
@@ -129,6 +133,7 @@ function action_settings($pciid)
         $cmd = "/usr/local/sbin/sriov-vfsettings.sh " .
                escapeshellarg($vfpci) . " " .
                escapeshellarg($vf['vd']) . " " .
+               escapeshellarg($class_id) . " " .
                escapeshellarg($vfio) . " " .
                escapeshellarg($mac) . " 2>&1"; # capture stderr too
 
@@ -222,6 +227,7 @@ switch ($type) {
     case "sriovsettings":
 
         $mac         = _var($_POST, 'mac');
+        $class_id    = _var($_POST, 'class_id');
         $vfio        = _var($_POST, 'vfio');
         $currentvfio = _var($_POST, 'currentvfio');
         $currentmac  = _var($_POST, 'currentmac');
@@ -237,7 +243,7 @@ switch ($type) {
 
         try {
             # MAC changed AND currently bound to VFIO
-            if ($currentmac !== $mac) {
+            if ($currentmac !== $mac && $class_id == '0x02') {
                 #Check if driver is required to change before actioning the MAC change.
                 $driver = ($vfio == 1) ? "vfio-pci" : "original";
                 $rtn = setVfMacAddress($pciid, $sriov, $mac, $driver);
@@ -249,7 +255,8 @@ switch ($type) {
             }
 
             # VFIO binding changed but MAC unchanged
-            if ($currentvfio !== $vfio && $currentmac === $mac) {
+            // Only require MAC to be unchanged for network-class VFs (class_id == '0x02')
+            if ($currentvfio !== $vfio && ( $class_id !== '0x02' || $currentmac === $mac )) {
                 $driver = ($vfio == 1) ? "vfio-pci" : "original";
                 $rtn = rebindVfDriver($pciid, $sriov, $driver);
                 json_response(

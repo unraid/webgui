@@ -264,23 +264,10 @@ _(VM Usage refresh timer)_ (_(seconds)_):
 
 :vms_usage_timer_help:
 
-_(PCIe ACS override)_:
-: <select id="pcie_acs_override"<?=$safemode ? ' disabled' : ''?>>
-  <?= mk_option($pcie_acs_override, '', _('Disabled'))?>
-  <?= mk_option($pcie_acs_override, 'downstream', _('Downstream'))?>
-  <?= mk_option($pcie_acs_override, 'multifunction', _('Multi-function'))?>
-  <?= mk_option($pcie_acs_override, 'downstream,multifunction', _('Both'))?>
-  </select><?if($safemode):?><span>*_(Setting disabled in **safe mode**)_*</span><?endif;?>
-
-:vms_acs_override_help:
-
-_(VFIO allow unsafe interrupts)_:
-: <select id="vfio_allow_unsafe"<?=$safemode ? ' disabled' : ''?>>
-  <?= mk_option($vfio_allow_unsafe, '', _('No'))?>
-  <?= mk_option($vfio_allow_unsafe, '1', _('Yes'))?>
-  </select><?if($safemode):?><span>*_(Setting disabled in **safe mode**)_*</span><?endif;?>
-
-:vms_vfio_interupts_help:
+_(Boot Parameter Settings)_:
+: <div style="max-width: 400px; padding: 12px 16px; border-radius: 5px; background-color: rgba(240, 173, 78, 0.08); border: 1px solid rgba(240, 173, 78, 0.3); border-left: 4px solid #f0ad4e; font-size: 13px; line-height: 1.5; box-sizing: border-box;">
+  _(PCIe ACS Override, VFIO interrupts & GPU framebuffer settings are managed in)_ <a href="/Main/Flash#boot-parameters" style="color: #2196F3; font-weight: bold; text-decoration: underline;">_(Boot Parameters)_</a>.
+  </div>
 
 </div>
 <?if ($libvirt_log):?>
@@ -449,7 +436,7 @@ $(function(){
 <?if ($safemode):?>
     if (run) $("#settingsForm").submit();
 <?else:?>
-    if (run) $.post("/plugins/dynamix.vm.manager/include/VMajax.php", {action:'cmdlineoverride',pcie:$('#pcie_acs_override').val(),vfio:$('#vfio_allow_unsafe').val()}, function(data){
+    if (run) $.post("/plugins/dynamix.vm.manager/include/VMajax.php", {action:'cmdlineoverride'}, function(data){
       $("#settingsForm").submit();
     });
 <?endif;?>

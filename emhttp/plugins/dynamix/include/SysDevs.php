@@ -108,8 +108,31 @@ case 't1':
             if (!preg_match('/^[0-9a-fA-F]{4}:/', $bdf)) {
                 $bdf = "0000:" . $bdf;
             }
-            $lsiommu[$current][$bdf] = $line;
+            $lsiommu[$current][$bdf]['line'] = $line;
         }
+    }
+
+    // Flag IOMMU groups that contain SR-IOV devices but first device is not SR-IOV
+    foreach ($lsiommu as $grp => $devices) {
+      $has_sriov = false;
+      $first_is_sriov = false;
+      $first_device = null;
+      
+      foreach ($devices as $pdev => $pdetail) {
+        if (!is_string($pdev)) continue;
+        
+        if ($first_device === null) {
+          $first_device = $pdev;
+          $first_is_sriov = isset($sriov[$pdev]) || in_array($pdev, $sriovvfs, true);
+        }
+        
+        if (isset($sriov[$pdev]) || in_array($pdev, $sriovvfs, true)) {
+          $has_sriov = true;
+        }
+      }
+      
+      // Set flag only if group has SR-IOV devices but first device is NOT SR-IOV
+      $lsiommu[$grp]['_has_sriov'] = ($has_sriov && !$first_is_sriov);
     }
     
     if (is_file("/boot/config/vfio-pci.cfg")) {
@@ -200,23 +223,34 @@ case 't1':
         $line = "R[{$removeddata['device']['vendor_id']}:{$removeddata['device']['device_id']}] "
               . str_replace("0000:","",$removedpci)." "
               . trim($removeddata['device']['description'],"\n");
-        $lsiommu[$removedKey][$bdf] = $line;
+        $lsiommu[$removedKey][$bdf] = ['line' => $line];
       }
     }
     $ackparm = "";
- 
+
     foreach ($lsiommu as $key => $group) {
       if (empty($group)) {
         continue;
       }
       $pciidcheck = array_key_first($group);
+      // If group has SR-IOV but first entry is not SR-IOV, use second entry for filter check
+      if (!empty($group['_has_sriov']) && !isset($sriov[$pciidcheck]) && !in_array($pciidcheck, $sriovvfs, true)) {
+        $group_keys = array_keys($group);
+        if (isset($group_keys[1]) && $group_keys[1] !== '_has_sriov') {
+          $pciidcheck = $group_keys[1];
+        }
+      }
       if (in_array($pciidcheck,$sriovvfs)) continue;
+
       # Filter devices.
 
       $iommu = $key;
       $iommushow = true;
-      foreach ($group as $pciaddress => $line) {
+      foreach ($group as $pciaddress => $pcidetail) {
+        if (!is_array($pcidetail)) continue;
+        $line = $pcidetail['line'];
         if (!$line) continue;
+        if (in_array($pciaddress,$sriovvfs) && !empty($group['_has_sriov'])) continue;
         [$class, $class_id, $name] = getPciClassNameAndId($pciaddress);
         $class_prefix = substr(strtolower((string)$class_id), 0, 4);
 
@@ -280,6 +314,13 @@ case 't1':
         echo $speedcol, '</td><td>', $widthcol;
         if (isset($pcispeed['generation'])) echo'(Gen:'.$pcispeed['generation'].')';
         echo '</td></tr>';
+        // Show SR-IOV warning after first device in group
+        if ($append && !empty($group['_has_sriov'])) {
+          echo '<tr><td></td><td></td><td></td><td></td><td>';
+          echo '<i class="fa fa-warning fa-fw orange-text"></i> ';
+          echo '<span class="orange-text">'._('Warning').': '._('IOMMU group contains SR-IOV devices. Enable ACS Override in <a href="/Main/Flash#boot-parameters">Boot Parameters</a> for proper isolation').'.</span>';
+          echo '</td></tr>';
+        }
         if (array_key_exists($pciaddress,$pci_device_diffs)) {
           echo "<tr><td></td><td><td></td><td></td><td>";
           echo "<i class=\"fa fa-warning fa-fw orange-text\" title=\""._('PCI Change')."\n"._('Click to acknowledge').".\" onclick=\"ackPCI('".htmlentities($pciaddress)."','".htmlentities($pci_device_diffs[$pciaddress]['status'])."')\"></i>";
@@ -347,7 +388,7 @@ case 't1':
 
         if (array_key_exists($pciaddress,$sriov) && in_array(substr($sriov[$pciaddress]['class_id'],0,4),$allowedPCIClass)) {
           echo "<tr><td></td><td></td><td></td><td></td><td>";
-          echo _("SRIOV Available VFs").":{$sriov[$pciaddress]['total_vfs']}";
+          echo _("SR-IOV Available VFs").":{$sriov[$pciaddress]['total_vfs']}";
           $num_vfs= $sriov[$pciaddress]['num_vfs'];
           
           if (isset($sriov_devices[$pciaddress])) $file_numvfs = $sriov_devices[$pciaddress]['vf_count'];else $file_numvfs = 0;
@@ -419,27 +460,48 @@ case 't1':
                 }
                 echo "</td></tr>";
               }
-            }         
-            if (isset($sriov_devices_settings[$pciaddress])) {
-                $mac = $sriov_devices_settings[$pciaddress]['mac'];
-            } else {
-                $mac = null;
-            }
-            $placeholder = empty($mac) ? _('Dynamic allocation') : '';
-            $saved_mac  = empty($mac) ? '' : htmlspecialchars($mac, ENT_QUOTES);
-            $current_mac  = empty($vrf['mac']) ? '' : htmlspecialchars(strtoupper($vrf['mac']), ENT_QUOTES);
+            }                  
             echo "<tr><td></td><td></td><td></td><td></td><td>";
-            echo '<label for="mac_address">'._("MAC Address").':</label>';
-            echo "<input class='narrow' type=\"text\" name=\"vfmac$pciaddress\" id=\"vfmac$pciaddress\" value=\"$saved_mac\" placeholder=\"$placeholder\">";
-            echo ' <a class="info" href="#" title="'._("Generate MAC").'" onclick="generateMAC(\''.htmlentities($pciaddress).'\'); return false;"><i class="fa fa-refresh mac_generate"> </i></a>';
-            echo ' <a class="info" href="#" title="'._("Save MAC config").'" onclick="saveVFSettingsConfig(\''.htmlentities($pciaddress).'\',\''.htmlentities($vd).'\'); return false;"><i class="fa fa-save"> </i></a>';
+            $class_id = substr($vrf['class_id'],0,4);
+            $current_mac = null;
+            switch ($class_id) {   
+              case "0x02": # Network controller
+                if (isset($sriov_devices_settings[$pciaddress])) {
+                    $mac = $sriov_devices_settings[$pciaddress]['mac'];
+                } else {
+                    $mac = null;
+                }
+                $placeholder = empty($mac) ? _('Dynamic allocation') : '';
+                $saved_mac  = empty($mac) ? '' : htmlspecialchars($mac, ENT_QUOTES);
+                $current_mac  = empty($vrf['mac']) ? '' : htmlspecialchars(strtoupper($vrf['mac']), ENT_QUOTES);
+                echo '<label for="mac_address">'._("MAC Address").':</label>';
+                echo "<input class='narrow' type=\"text\" name=\"vfmac$pciaddress\" id=\"vfmac$pciaddress\" value=\"$saved_mac\" placeholder=\"$placeholder\">";
+                echo ' <a class="info" href="#" title="'._("Generate MAC").'" onclick="generateMAC(\''.htmlentities($pciaddress).'\'); return false;"><i class="fa fa-refresh mac_generate"> </i></a>';
+                $action = _("Apply now VFIO and MAC Address");
+                $saveaction = _("Save MAC and vfio config");
+                break;
+              case "0x03": # Display controller
+                echo '<span>'._($vrf['class']).'</span>';
+                $mac = null;
+                $action = _("Apply now VFIO binding");
+                $saveaction = _("Save Vfio config");
+                break;
+              default:
+                $mac = null;
+                $action = _("Apply now VFIO binding");
+                $saveaction = _("Save Vfio config");
+                break;
+            }
+            echo ' <a class="info" href="#" title="'.$saveaction.'" onclick="saveVFSettingsConfig(\''.htmlentities($pciaddress).'\',\''.htmlentities($vd).'\',\''.htmlentities($class_id).'\'); return false;"><i class="fa fa-save"> </i></a>';
             if (isset($sriov_devices_settings[$pciaddress])) {
               $filevfio = $sriov_devices_settings[$pciaddress]['vfio'] == 1 ? true : false;
             } else $filevfio = false;
             $vfiocheck = $vrf['driver'] == "vfio-pci" ? true:false;
-            echo ' <a class="info" href="#" title="'._("Action VFs update").'" onclick="applyVFSettings(\''.htmlentities($pciaddress).'\',\''.htmlentities($vd).'\',\''.htmlentities($vfiocheck).'\',\''.$current_mac.'\'); return false;"><i title="Apply now VFIO and MAC Address" class="fa fa-play"></i></a> ';
-            if ($vrf['driver'] != "vfio-pci") echo _("Current").": ";
-            echo $vrf['driver'] == "vfio-pci" ? _("Bound to VFIO") : strtoupper($vrf['mac']);
+            echo ' <a class="info" href="#" title="'._("Action VFs update").'" onclick="applyVFSettings(\''.htmlentities($pciaddress).'\',\''.htmlentities($vd).'\',\''.htmlentities($vfiocheck).'\',\''.$current_mac.'\',\''.$class_id.'\'); return false;"><i title="'.$action.'" class="fa fa-play"></i></a> ';
+            if ($class_id == "0x02") {
+              if ($vrf['driver'] != "vfio-pci" ) echo _("Current").": ";
+              echo $vrf['driver'] == "vfio-pci" ? _("Bound to VFIO") : strtoupper($vrf['mac']);
+            }
             $vfstatus ="";
             if ($filevfio != $vfiocheck || (strtoupper($vrf['mac']) != $mac && $mac != null && $vrf['mac']!=null )) $vfstatus = "<i class=\"fa fa-warning fa-fw orange-text\"></i> ".sprintf(_("Pending action or reboot"));
             echo " <span id=vfstatus$pciaddress>$vfstatus</span>";

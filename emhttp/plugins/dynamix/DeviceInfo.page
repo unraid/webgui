@@ -1,4 +1,4 @@
-Menu="Device:1"
+Menu="Device:1 Boot:1"
 Title="$name _(Settings)_"
 Tag="hdd-o"
 Cond="array_key_exists($name, $disks) || array_key_exists($name, $devs)"
@@ -38,7 +38,10 @@ function hasSubpools($name)
     }
     return false;
 }
-if (!isSubpool($name)) {
+if (_var($disk,'type')== "Boot") {
+    $fsTypeImmutable = true;
+    $fsProfileImmutable = true;
+} elseif (!isSubpool($name)) {
     $fsTypeImmutable = !(_var($var, 'fsState') == 'Stopped' && !hasSubpools($name) && (empty(_var($disk, 'uuid')) || _var($disk, 'slots', 1) == 1));
     $fsProfileImmutable = $fsTypeImmutable;
 } else {
@@ -835,12 +838,19 @@ _(Identification)_:
 
 <?endif;?>
 <?if (!$unassigned):?>
-<?if (diskType('Data') || (diskType('Cache') && isPool($name) && !isSubpool($name))):?>
+<?if (isset($disk['fsType'])):?>
+<?if (diskType('Boot')):?>
+_(Comments)_:
+
+: <?=htmlspecialchars(_var($disk, 'comment'))?>
+
+<?else:?>
 _(Comments)_:
 : <input type="text" name="diskComment.<?=_var($disk, 'idx', 0)?>" maxlength="256" value="<?=htmlspecialchars(_var($disk, 'comment'))?>">
 
 :info_comments_help:
 
+<?endif;?>
 <?endif;?>
 _(Partition size)_:
 : <?=my_number(_var($disk, 'size', 0))?> KB (K=1024)
@@ -874,7 +884,7 @@ _(Spin down delay)_:
   </select><span id="smart_selftest" class='orange-text'></span>
 
 <?endif;?>
-<?if (diskType('Data') || (isPool($tag) && !isSubpool($tag))):?>
+<?if (isset($disk['fsType'])):?>
 _(File system status)_:
 : <?=_(_var($disk, 'fsStatus'))?><?=(_var($disk,'fsStatus')==="Mounted")? (_var($disk,'fsEmpty')==="yes"? ", empty" : ", not empty"):""?>&nbsp;
 
@@ -941,6 +951,17 @@ _(Autotrim)_:
 :info_autotrim_help:
 </div>
 <?endif;?>
+<?if (diskType('Boot') && isset($disk['fsType'])):?>
+_(Allocation profile)_:
+: <?=_(_var($disk, 'fsProfile'))?>&nbsp;
+
+_(Compression)_:
+: <?=_(_var($disk, 'compression'))?>&nbsp;
+
+_(Autotrim)_:
+: <?=_(_var($disk, 'autotrim'))?>&nbsp;
+
+<?endif;?>
 <?if (isPool($tag) && !isSubpool($tag)):?>
 _(Enable user share assignment)_:
 : <select id="shareEnabled" name="diskShareEnabled.<?=_var($disk, 'idx', 0)?>" onchange="freeSpace(this.value)" <?=disabled_if(_var($var, 'fsState') != "Stopped")?>>
@@ -957,7 +978,7 @@ _(Minimum free space)_:
 :info_free_space_help:
 
 <?endif;?>
-<?if (diskType('Data') || (isPool($tag) && !isSubpool($tag))):?>
+<?if (isset($disk['fsType'])):?>
 _(Warning disk utilization threshold)_ (%):
 : <input type="number" min="0" max="100" name="diskWarning.<?=_var($disk, 'idx', 0)?>" autocomplete="off" spellcheck="false" value="<?=_var($disk, 'warning')?>" placeholder="<?=_var($display, 'warning')?>">
 
@@ -991,6 +1012,33 @@ _(Critical disk utilization threshold)_ (%):
 
 <?if (fsType('btrfs')):?>
 <?if (_var($disk,'fsStatus')=="Mounted"):?>
+<div id="poolsummary" class="title nocontrol">
+  <span class="left">
+    <i class="title fa fa-hdd-o"></i> _(Pool Status)_
+  </span>
+</div>
+<form markdown="1">
+<?
+$poolstatus = json_decode(storagePoolsJson(), true);
+$poolName = $tag;
+$status = 'UNKNOWN';
+$statusClass = 'orange-text';
+$statusLink = '';
+if (!empty($poolstatus['pools'][$poolName])) {
+  $status = $poolstatus['pools'][$poolName]['overall_status'] ?? 'UNKNOWN';
+  $isHealthy = in_array($status, ['HEALTHY', 'ONLINE']);
+  $statusClass = $isHealthy ? 'green-text' : 'orange-text';
+  $statusUrl = $poolstatus['pools'][$poolName]['status_url'] ?? '';
+  if ($statusUrl) {
+    $statusLink = " <a href='$statusUrl' target='_blank' title='"._('View detailed status')."'><i class='fa fa-external-link'></i></a>";
+  }
+}
+?>
+_(pool status)_:
+: <span class="<?=$statusClass?>"><?=$status?><?=$statusLink?></span>
+
+</form>
+
 <div class="title nocontrol">
   <span class="left">
     <i class="title fa fa-hdd-o"></i> _(Pool Device Status)_
@@ -999,11 +1047,11 @@ _(Critical disk utilization threshold)_ (%):
 <form markdown="1" method="POST" action="/update.php" target="progressFrame">
 
 _(pool device stats)_:
-: <pre><?= htmlspecialchars(shell_exec("/sbin/btrfs dev stats -T ".escapeshellarg("/mnt/$tag")) ?? '', ENT_QUOTES, 'UTF-8') ?></pre>
+: <pre><?= htmlspecialchars(shell_exec("/sbin/btrfs dev stats -T ".escapeshellarg(_var($disk,'fsMountpoint'))) ?? '', ENT_QUOTES, 'UTF-8') ?></pre>
 
 <input type="hidden" name="#command" value="/webGui/scripts/btrfs_check">
 <input type="hidden" name="#arg[1]" value="reset">
-<input type="hidden" name="#arg[2]" value="/mnt/<?=$tag?>">
+<input type="hidden" name="#arg[2]" value="<?=_var($disk,'fsMountpoint')?>">
 
 &nbsp;
 : <span class="buttons-spaced">
@@ -1017,13 +1065,13 @@ _(pool device stats)_:
     <i class="title fa fa-balance-scale"></i>_(Balance Status)_
   </span>
 </div>
-<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareFS(this,'btrfs-balance-<?=$tag?>','/mnt/<?=$tag?>')">
+<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareFS(this,'btrfs-balance-<?=$tag?>','<?=_var($disk,'fsMountpoint')?>')">
 <?if (_var($disk,'fsStatus')=="Mounted"):?>
-<?exec("$docroot/webGui/scripts/btrfs_balance status ".escapeshellarg("/mnt/$tag"), $balance_status, $retval)?>
-<?$usage = exec("/sbin/btrfs fi usage ".escapeshellarg("/mnt/$tag")." | grep -Pom1 '^Data,.+ \\(\\K[^%]+'");?>
+<?exec("$docroot/webGui/scripts/btrfs_balance status ".escapeshellarg(_var($disk,'fsMountpoint')), $balance_status, $retval)?>
+<?$usage = exec("/sbin/btrfs fi usage ".escapeshellarg(_var($disk,'fsMountpoint'))." | grep -Pom1 '^Data,.+ \\(\\K[^%]+'");?>
 
 _(btrfs filesystem usage)_:
-: <pre><?= htmlspecialchars(shell_exec("/sbin/btrfs fi usage -T ".escapeshellarg("/mnt/$tag")) ?? '', ENT_QUOTES, 'UTF-8') ?></pre>
+: <pre><?= htmlspecialchars(shell_exec("/sbin/btrfs fi usage -T ".escapeshellarg(_var($disk,'fsMountpoint'))) ?? '', ENT_QUOTES, 'UTF-8') ?></pre>
 
 <div>
   <dl>
@@ -1034,7 +1082,7 @@ _(btrfs filesystem usage)_:
 <?if ($retval != 0):?>
 <input type="hidden" name="#command" value="/webGui/scripts/btrfs_balance">
 <input type="hidden" name="#arg[1]" value="start">
-<input type="hidden" name="#arg[2]" value="/mnt/<?=$tag?>">
+<input type="hidden" name="#arg[2]" value="<?=_var($disk,'fsMountpoint')?>">
 <input type="hidden" name="#arg[3]" value="">
 
 &nbsp;
@@ -1069,7 +1117,7 @@ _(btrfs filesystem usage)_:
 <?else:?>
 <input type="hidden" name="#command" value="/webGui/scripts/btrfs_balance">
 <input type="hidden" name="#arg[1]" value="cancel">
-<input type="hidden" name="#arg[2]" value="/mnt/<?=$tag?>">
+<input type="hidden" name="#arg[2]" value="<?=_var($disk,'fsMountpoint')?>">
 
 &nbsp;
 : <span>
@@ -1096,7 +1144,7 @@ _(btrfs filesystem usage)_:
 <input type="hidden" name="#file" value="dynamix/dynamix.cfg">
 <input type="hidden" name="#section" value="<?=$balance?>">
 <input type="hidden" name="#include" value="/webGui/include/update.btrfs.php">
-<input type="hidden" name="#job" value="balance_<?=$tag?>;<?=$docroot?>/plugins/dynamix/scripts/btrfs_balance start /mnt/<?=$tag?> -dusage=50">
+<input type="hidden" name="#job" value="balance_<?=$tag?>;<?=$docroot?>/plugins/dynamix/scripts/btrfs_balance start <?=_var($disk,'fsMountpoint')?> -dusage=50">
 <input type="hidden" name="hour" value="">
 
 _(Balance schedule)_:
@@ -1162,9 +1210,9 @@ _(Block group usage)_ (%):
     <i class="title fa fa-paint-brush"></i>_(Scrub Status)_
   </span>
 </div>
-<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareFS(this,'btrfs-scrub-<?=$tag?>','/mnt/<?=$tag?>')">
+<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareFS(this,'btrfs-scrub-<?=$tag?>','<?=_var($disk,'fsMountpoint')?>')">
 <?if (_var($disk,'fsStatus')=="Mounted"):?>
-<?exec("$docroot/webGui/scripts/btrfs_scrub status ".escapeshellarg("/mnt/$tag"), $scrub_status, $retval)?>
+<?exec("$docroot/webGui/scripts/btrfs_scrub status ".escapeshellarg(_var($disk,'fsMountpoint')), $scrub_status, $retval)?>
 
 _(btrfs scrub status)_:
 : <pre id='btrfs-scrub'><?=implode("\n", $scrub_status)?></pre>
@@ -1172,7 +1220,7 @@ _(btrfs scrub status)_:
 <?if ($retval != 0):?>
 <input type="hidden" name="#command" value="/webGui/scripts/btrfs_scrub">
 <input type="hidden" name="#arg[1]" value="start">
-<input type="hidden" name="#arg[2]" value="/mnt/<?=$tag?>">
+<input type="hidden" name="#arg[2]" value="<?=_var($disk,'fsMountpoint')?>">
 <input type="hidden" name="#arg[3]" value="">
 
 &nbsp;
@@ -1185,7 +1233,7 @@ _(btrfs scrub status)_:
 <?else:?>
 <input type="hidden" name="#command" value="/webGui/scripts/btrfs_scrub">
 <input type="hidden" name="#arg[1]" value="cancel">
-<input type="hidden" name="#arg[2]" value="/mnt/<?=$tag?>">
+<input type="hidden" name="#arg[2]" value="<?=_var($disk,'fsMountpoint')?>">
 
 &nbsp;
 : <span class="buttons-spaced">
@@ -1212,7 +1260,7 @@ _(btrfs scrub status)_:
 <input type="hidden" name="#file" value="dynamix/dynamix.cfg">
 <input type="hidden" name="#section" value="<?=$scrub?>">
 <input type="hidden" name="#include" value="/webGui/include/update.btrfs.php">
-<input type="hidden" name="#job" value="scrub_<?=$tag?>;<?=$docroot?>/plugins/dynamix/scripts/btrfs_scrub start /mnt/<?=$tag?> -r">
+<input type="hidden" name="#job" value="scrub_<?=$tag?>;<?=$docroot?>/plugins/dynamix/scripts/btrfs_scrub start <?=_var($disk,'fsMountpoint')?> -r">
 <input type="hidden" name="hour" value="">
 
 _(Scrub schedule)_:
@@ -1270,6 +1318,7 @@ _(Time of the day)_:
   </span>
 </form>
 
+<?if (diskType('Data','Cache')):?>
 <div class="title nocontrol">
   <span class="left">
     <i class="title fa fa-shield"></i>_(Check Filesystem Status)_
@@ -1323,7 +1372,37 @@ _(btrfs check status)_:
 <?endif;?>
 </form>
 <?endif;?>
+<?endif;?>
 <?if (fsType('zfs') && !isSubpool($name)):?>
+<?if (_var($disk,'fsStatus')=="Mounted"):?>
+<div id="poolsummary" class="title nocontrol">
+  <span class="left">
+    <i class="title fa fa-info-circle"></i>_(Pool Status Summary)_
+  </span>
+</div>
+<form markdown="1">
+<?
+$poolstatus = json_decode(storagePoolsJson(), true);
+$poolName = $tag;
+$status = 'UNKNOWN';
+$statusClass = 'orange-text';
+$statusLink = '';
+if (!empty($poolstatus['pools'][$poolName])) {
+  $status = $poolstatus['pools'][$poolName]['overall_status'] ?? 'UNKNOWN';
+  $isHealthy = in_array($status, ['HEALTHY', 'ONLINE']);
+  $statusClass = $isHealthy ? 'green-text' : 'orange-text';
+  $statusUrl = $poolstatus['pools'][$poolName]['status_url'] ?? '';
+  if ($statusUrl) {
+    $statusLink = " <a href='$statusUrl' target='_blank' title='"._('View detailed status')."'><i class='fa fa-external-link'></i></a>";
+  }
+}
+?>
+_(pool status)_:
+: <span class="<?=$statusClass?>"><?=$status?><?=$statusLink?></span>
+
+</form>
+<?endif;?>
+
 <div class="title nocontrol">
   <span class="left">
     <i class="title fa fa-hdd-o"></i>_(Pool Status)_
@@ -1797,7 +1876,7 @@ _(check status)_:
 </form>
 <?endif;?>
 
-<?if (!diskStatus('_NP')):?>
+<?if (!diskType('Boot') && !diskStatus('_NP')):?>
 <div class="title"><span class="left"><i class="title fa fa-plus-square"></i>_(SMART Settings)_</span></div>
 
 <form markdown="1" name="smart_settings" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareDeviceInfo(this)">
@@ -1966,15 +2045,15 @@ $(function() {
       for (var i=0,busy; busy=action[i]; i++) {
         switch (busy) {
         case 'btrfs-balance':
-          $.cookie('btrfs-balance-<?=$tag?>','/mnt/<?=$tag?>');
+          $.cookie('btrfs-balance-<?=$tag?>','<?=_var($disk,'fsMountpoint')?>');
           btrfsBalance($.cookie('btrfs-balance-<?=$tag?>'));
           break;
         case 'btrfs-scrub':
-          $.cookie('btrfs-scrub-<?=$tag?>','/mnt/<?=$tag?>');
+          $.cookie('btrfs-scrub-<?=$tag?>','<?=_var($disk,'fsMountpoint')?>');
           btrfsScrub($.cookie('btrfs-scrub-<?=$tag?>'));
           break;
         case 'btrfs-check':
-          $.cookie('btrfs-check-<?=$tag?>','/mnt/<?=$tag?>');
+          $.cookie('btrfs-check-<?=$tag?>','<?=_var($disk,'fsMountpoint')?>');
           btrfsCheck($.cookie('btrfs-check-<?=$tag?>'));
           break;
         case 'zfs-scrub':
