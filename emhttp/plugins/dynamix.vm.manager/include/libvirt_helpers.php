@@ -12,6 +12,7 @@
  */
 ?>
 <?
+require_once __DIR__ . '/libvirt_paths.php';
 /**
  * Array2XML: A class to convert array in PHP to XML
  * It also takes into account attributes names unlike SimpleXML in PHP
@@ -1857,7 +1858,7 @@ class Array2XML {
 
 	function getvmsnapshots($vm) {
 		$snaps=array();
-		$dbpath = "/etc/libvirt/qemu/snapshotdb/$vm";
+		$dbpath = libvirt_get_snapshotdb_dir(null, $vm) . "/$vm";
 		$snaps_json = file_get_contents($dbpath."/snapshots.db");
 		$snaps = json_decode($snaps_json,true);
 		if (is_array($snaps)) uasort($snaps,'compare_creationtime');
@@ -1866,7 +1867,7 @@ class Array2XML {
 
 	function write_snapshots_database($vm,$name,$state,$desc,$method="QEMU") {
 		global $lv;
-		$dbpath = "/etc/libvirt/qemu/snapshotdb/$vm";
+		$dbpath = libvirt_get_snapshotdb_dir(null, $vm) . "/$vm";
 		if (!is_dir($dbpath)) mkdir($dbpath);
 		$noxml = "";
 		$snaps_json = file_get_contents($dbpath."/snapshots.db");
@@ -1934,7 +1935,7 @@ class Array2XML {
 
 	function refresh_snapshots_database($vm) {
 		global $lv;
-		$dbpath = "/etc/libvirt/qemu/snapshotdb/$vm";
+		$dbpath = libvirt_get_snapshotdb_dir(null, $vm) . "/$vm";
 		if (!is_dir($dbpath)) mkdir($dbpath);
 		$snaps_json = file_get_contents($dbpath."/snapshots.db");
 		$snaps = json_decode($snaps_json,true);
@@ -1969,13 +1970,13 @@ class Array2XML {
 			# Get uuid
 			$vmuuid = $lv->domain_get_uuid($vm);
 			#Get list of files
-			$filepath = "/etc/libvirt/qemu/nvram/$vmuuid*"; #$snapshotname"
+			$filepath = libvirt_get_nvram_dir(null, $vm) . "/$vmuuid*"; #$snapshotname"
 			$nvram_files=glob($filepath);
 			foreach($nvram_files as $key => $nvram_file)  {
-				if ($nvram_file == "/etc/libvirt/qemu/nvram/$vmuuid"."_VARS-pure-efi.fd" || $nvram_file == "/etc/libvirt/qemu/nvram/$vmuuid"."_VARS-pure-efi-tpm.fd" ) unset($nvram_files[$key]);
+				if ($nvram_file == libvirt_get_nvram_dir(null, $vm) . "/$vmuuid"."_VARS-pure-efi.fd" || $nvram_file == libvirt_get_nvram_dir(null, $vm) . "/$vmuuid"."_VARS-pure-efi-tpm.fd" ) unset($nvram_files[$key]);
 				foreach ($snaps as $snapshotname => $snap) {
-					$tpmfilename = "/etc/libvirt/qemu/nvram/".$vmuuid.$snapshotname."_VARS-pure-efi-tpm.fd";
-					$nontpmfilename = "/etc/libvirt/qemu/nvram/".$vmuuid.$snapshotname."_VARS-pure-efi.fd";
+					$tpmfilename = libvirt_get_nvram_dir(null, $vm) . "/".$vmuuid.$snapshotname."_VARS-pure-efi-tpm.fd";
+					$nontpmfilename = libvirt_get_nvram_dir(null, $vm) . "/".$vmuuid.$snapshotname."_VARS-pure-efi.fd";
 					if ($nvram_file == $tpmfilename || $nvram_file == $nontpmfilename ) {
 						unset($nvram_files[$key]);}
 				}
@@ -1987,7 +1988,7 @@ class Array2XML {
 
 	function delete_snapshots_database($vm,$name) {
 		global $lv;
-		$dbpath = "/etc/libvirt/qemu/snapshotdb/$vm";
+		$dbpath = libvirt_get_snapshotdb_dir(null, $vm) . "/$vm";
 		$snaps_json = file_get_contents($dbpath."/snapshots.db");
 		$snaps = json_decode($snaps_json,true);
 		unset($snaps[$name]);

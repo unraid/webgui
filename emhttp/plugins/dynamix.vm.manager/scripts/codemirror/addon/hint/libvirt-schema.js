@@ -2,6 +2,10 @@ function getLibvirtSchema() {
 
 	var root = {};
 
+	var LIBVIRT_NVRAM_DIR = (typeof window !== "undefined" && window.LIBVIRT_NVRAM_DIR)
+		? window.LIBVIRT_NVRAM_DIR
+		: "/etc/libvirt/qemu/nvram";
+
 	root.domain = {
 		"!attrs": {
 			type: ["kvm"],
@@ -167,7 +171,7 @@ function getLibvirtSchema() {
 		"!value": "/usr/share/qemu/ovmf-x64/OVMF_CODE-pure-efi.fd"
 	};
 	root.domain.os.nvram = {
-		"!value": "/etc/libvirt/qemu/nvram/{{UUID}}_VARS-pure-efi.fd"
+		"!value": LIBVIRT_NVRAM_DIR + "/{{UUID}}_VARS-pure-efi.fd"
 	};
 
 	root.domain.features = {};

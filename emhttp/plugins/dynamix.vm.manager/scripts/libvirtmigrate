@@ -16,7 +16,10 @@ $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 require_once "$docroot/plugins/dynamix.vm.manager/include/fs_helpers.php";
-$libvirt_location ="/etc/libvirtold";
+$libvirt_location ="/etc/libvirt";
+
+$log_file = "/tmp/libvirtmigrate";
+file_put_contents($log_file, "");
 
 /* ---------------------------------------------------------
  * Load vms.json created by libvirtcopy
@@ -38,6 +41,7 @@ function load_vms_json() {
  * --------------------------------------------------------- */
 function migrate_nvram_file($valid_nvram, $vm_path, $vm_uuid, $vm_name, $dry_run = false) {
     global $libvirt_location;
+    $deleted = false;
     // Create nvram subdirectory
     $nvram_dest_dir = $vm_path . '/nvram';
     if (!is_dir($nvram_dest_dir)) {
@@ -101,7 +105,7 @@ function migrate_nvram_file($valid_nvram, $vm_path, $vm_uuid, $vm_name, $dry_run
     $xml = @simplexml_load_string($xml_content);
     
     if ($xml === false) {
-         if ($copied) `@unlink`($dest_file); // Rollback only if we copied
+         if ($copied) @unlink($dest_file); // Rollback only if we copied
         return [
             'success' => false,
             'error' => "Failed to parse XML: $xml_old_path"
@@ -122,6 +126,11 @@ function migrate_nvram_file($valid_nvram, $vm_path, $vm_uuid, $vm_name, $dry_run
             'error' => "Failed to write updated XML to: $xml_new_path"
         ];
     }
+
+    // Remove source NVRAM after successful copy and XML update
+    if (!$dry_run && $copied && file_exists($src_file)) {
+        $deleted = @unlink($src_file);
+    }
     
     return [
         'success' => true,
@@ -131,7 +140,8 @@ function migrate_nvram_file($valid_nvram, $vm_path, $vm_uuid, $vm_name, $dry_run
         'xml_new_path' => $xml_new_path,
         'dry_run' => $dry_run,
         'would_copy' => $would_copy,
-        'copied' => $copied
+        'copied' => $copied,
+        'deleted' => $deleted
     ];
 }
 
@@ -184,6 +194,10 @@ function perform_migration($valid_nvrams, $dry_run = false) {
             ];
             continue;
         }
+
+        if ($dry_run) {
+            file_put_contents("/tmp/libvirtmigrate", "DRY RUN: migrate NVRAM for $vm_name at $vm_path\n", FILE_APPEND);
+        }
         
         // Ensure snapshotdb for this VM is moved once
         if (!isset($moved_snapshotdb[$vm_name])) {
@@ -207,6 +221,7 @@ function perform_migration($valid_nvrams, $dry_run = false) {
                         'would_move' => true,
                         'dry_run' => true
                     ];
+                    file_put_contents("/tmp/libvirtmigrate", "DRY RUN: would move snapshotdb for $vm_name from $old_snap_dir to $new_snap_dir\n", FILE_APPEND);
                 } else {
                     // If destination exists, merge; otherwise attempt rename then fallback to copy
                     if (is_dir($new_snap_dir)) {
@@ -313,6 +328,8 @@ function load_snapshot_db($vm_name) {
  * --------------------------------------------------------- */
 function validate_nvram_uuids() {
     global $libvirt_location;
+    $log_file = "/tmp/libvirtmigrate";
+    file_put_contents($log_file, "validate_nvram_uuids: start\n", FILE_APPEND);
     // Connect to libvirt
     $lv = libvirt_connect('qemu:///system', false);
     if (!$lv) {
@@ -327,6 +344,7 @@ function validate_nvram_uuids() {
 
     $valid_uuids = [];
     $snapshot_dbs = [];
+    file_put_contents($log_file, "validate_nvram_uuids: domains=" . count($domains) . "\n", FILE_APPEND);
     
     foreach ($domains as $dom) {
         $domget = libvirt_domain_lookup_by_name($lv, $dom);
@@ -344,16 +362,20 @@ function validate_nvram_uuids() {
     // Scan NVRAM directory
     $nvram_dir = $libvirt_location . "/qemu/nvram";
     if (!is_dir($nvram_dir)) {
+        file_put_contents($log_file, "validate_nvram_uuids: nvram dir missing: $nvram_dir\n", FILE_APPEND);
         return ['valid' => [], 'orphaned' => []];
     }
 
     $nvram_files = glob("$nvram_dir/*");
     if ($nvram_files === false || count($nvram_files) === 0) {
+        file_put_contents($log_file, "validate_nvram_uuids: no nvram files found\n", FILE_APPEND);
         return ['valid' => [], 'orphaned' => []];
     }
 
     $valid = [];
     $orphaned = [];
+    $valid_count = 0;
+    $orphaned_count = 0;
 
     foreach ($nvram_files as $file) {
         $basename = basename($file);
@@ -386,6 +408,7 @@ function validate_nvram_uuids() {
                         'is_snapshot' => $is_snapshot,
                         'size' => filesize($file)
                     ];
+                    $valid_count++;
                 } else {
                     $orphaned[] = [
                         'file' => $file,
@@ -397,6 +420,7 @@ function validate_nvram_uuids() {
                         'size' => filesize($file),
                         'reason' => 'snapshot not found in snapshots.db'
                     ];
+                    $orphaned_count++;
                 }
             } else {
                 $orphaned[] = [
@@ -408,9 +432,12 @@ function validate_nvram_uuids() {
                     'size' => filesize($file),
                     'reason' => 'VM not found'
                 ];
+                $orphaned_count++;
             }
         }
     }
+
+    file_put_contents($log_file, "validate_nvram_uuids: valid=$valid_count orphaned=$orphaned_count\n", FILE_APPEND);
 
     return ['valid' => $valid, 'orphaned' => $orphaned];
 }
@@ -432,6 +459,7 @@ function delete_orphaned_files($orphaned_files, $dry_run = false) {
             if ($dry_run) {
                 // In dry-run mode, just count as would-be deleted
                 $deleted++;
+                file_put_contents("/tmp/libvirtmigrate", "DRY RUN: would delete orphaned NVRAM {$item['file']}\n", FILE_APPEND);
             } elseif (@unlink($item['file'])) {
                 $deleted++;
             } else {
@@ -475,7 +503,6 @@ if ($valid_only) {
         'orphaned' => $result['orphaned']
     ];
 }
-
 // Delete orphaned files if flag is set
 if ($delete_flag && !empty($result['orphaned'])) {
     $output['deletion_result'] = delete_orphaned_files($result['orphaned'], $dry_run);

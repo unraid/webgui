@@ -12,6 +12,7 @@
  */
 ?>
 <?
+require_once __DIR__ . '/libvirt_paths.php';
 class Libvirt {
 	private $conn;
 	private $last_error;
@@ -274,31 +275,31 @@ class Libvirt {
 		$osbootdev = '';
 		if (!empty($domain['ovmf'])) {
 			if ($domain['ovmf'] == 1) {
-				if (!is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd')) {
+				if (!is_file(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi.fd')) {
 					// Create a new copy of OVMF VARS for this VM
-					mkdir('/etc/libvirt/qemu/nvram/', 0777, true);
-					copy('/usr/share/qemu/ovmf-x64/OVMF_VARS-pure-efi.fd', '/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd');
+					mkdir(libvirt_get_nvram_dir().'/', 0777, true);
+					copy('/usr/share/qemu/ovmf-x64/OVMF_VARS-pure-efi.fd', libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi.fd');
 				}
-				if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
+				if (is_file(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
 					// Delete OVMF-TPM VARS for this VM if found
-					unlink('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd');
+					unlink(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi-tpm.fd');
 				}
 				$loader = "<loader readonly='yes' type='pflash'>/usr/share/qemu/ovmf-x64/OVMF_CODE-pure-efi.fd</loader>
-					<nvram>/etc/libvirt/qemu/nvram/".$uuid."_VARS-pure-efi.fd</nvram>";
+					<nvram>".libvirt_get_nvram_dir()."/".$uuid."_VARS-pure-efi.fd</nvram>";
 				if ($domain['usbboot'] == 'Yes') $osbootdev = "<boot dev='fd'/>";
 			}
 			if ($domain['ovmf'] == 2) {
-				if (!is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
+				if (!is_file(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
 					// Create a new copy of OVMF VARS for this VM
-					mkdir('/etc/libvirt/qemu/nvram/', 0777, true);
-					copy('/usr/share/qemu/ovmf-x64/OVMF_VARS-pure-efi-tpm.fd', '/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd');
+					mkdir(libvirt_get_nvram_dir().'/', 0777, true);
+					copy('/usr/share/qemu/ovmf-x64/OVMF_VARS-pure-efi-tpm.fd', libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi-tpm.fd');
 				}
-				if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd')) {
+				if (is_file(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi.fd')) {
 					// Delete OVMF VARS for this VM if found
-					unlink('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd');
+					unlink(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi.fd');
 				}
 				$loader = "<loader readonly='yes' type='pflash'>/usr/share/qemu/ovmf-x64/OVMF_CODE-pure-efi-tpm.fd</loader>
-					<nvram>/etc/libvirt/qemu/nvram/".$uuid."_VARS-pure-efi-tpm.fd</nvram>";
+					<nvram>".libvirt_get_nvram_dir()."/".$uuid."_VARS-pure-efi-tpm.fd</nvram>";
 				$swtpm = "<tpm model='tpm-tis'>
 					<backend type='emulator' version='2.0' persistent_state='yes'/>
 					</tpm>";
@@ -1818,11 +1819,11 @@ class Libvirt {
 		if (!$dom) return false;
 		$uuid = $this->domain_get_uuid($dom);
 		// remove OVMF VARS if this domain had them
-		if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd')) {
-			unlink('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd');
+		if (is_file(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi.fd')) {
+			unlink(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi.fd');
 		}
-		if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
-			unlink('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd');
+		if (is_file(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
+			unlink(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi-tpm.fd');
 		}
 		$xml = libvirt_domain_get_xml_desc($dom, 0);
 		if ($xml) {
@@ -1871,12 +1872,12 @@ class Libvirt {
 
 	function nvram_backup($uuid) {
 		// move OVMF VARS to a backup file if this domain has them
-		if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd')) {
-			rename('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd', '/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd_backup');
+		if (is_file(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi.fd')) {
+			rename(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi.fd', libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi.fd_backup');
 			return true;
 		}
-		if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
-			rename('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd', '/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd_backup');
+		if (is_file(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
+			rename(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi-tpm.fd', libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi-tpm.fd_backup');
 			return true;
 		}
 		return false;
@@ -1884,12 +1885,12 @@ class Libvirt {
 
 	function nvram_restore($uuid) {
 		// restore backup OVMF VARS if this domain had them
-		if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd_backup')) {
-			rename('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd_backup', '/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd');
+		if (is_file(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi.fd_backup')) {
+			rename(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi.fd_backup', libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi.fd');
 			return true;
 		}
-		if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd_backup')) {
-			rename('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd_backup', '/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd');
+		if (is_file(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi-tpm.fd_backup')) {
+			rename(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi-tpm.fd_backup', libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi-tpm.fd');
 			return true;
 		}
 		return false;
@@ -1897,12 +1898,12 @@ class Libvirt {
 
 	function nvram_rename($uuid, $newuuid) {
 		// rename backup OVMF VARS if this domain had them
-		if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd')) {
-			rename('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd_backup', '/etc/libvirt/qemu/nvram/'.$newuuid.'_VARS-pure-efi.fd');
+		if (is_file(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi.fd')) {
+			rename(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi.fd_backup', libvirt_get_nvram_dir().'/'.$newuuid.'_VARS-pure-efi.fd');
 			return true;
 		}
-		if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
-			rename('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd_backup', '/etc/libvirt/qemu/nvram/'.$newuuid.'_VARS-pure-efi-tpm.fd');
+		if (is_file(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
+			rename(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi-tpm.fd_backup', libvirt_get_nvram_dir().'/'.$newuuid.'_VARS-pure-efi-tpm.fd');
 			return true;
 		}
 		return false;
@@ -1910,12 +1911,12 @@ class Libvirt {
 
 	function nvram_create_snapshot($uuid, $snapshotname) {
 		// snapshot backup OVMF VARS if this domain had them
-		if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd')) {
-			copy('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd', '/etc/libvirt/qemu/nvram/'.$uuid.$snapshotname.'_VARS-pure-efi.fd');
+		if (is_file(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi.fd')) {
+			copy(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi.fd', libvirt_get_nvram_dir().'/'.$uuid.$snapshotname.'_VARS-pure-efi.fd');
 			return true;
 		}
-		if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
-			copy('/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd', '/etc/libvirt/qemu/nvram/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd');
+		if (is_file(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
+			copy(libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi-tpm.fd', libvirt_get_nvram_dir().'/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd');
 			return true;
 		}
 		return false;
@@ -1923,14 +1924,14 @@ class Libvirt {
 
 	function nvram_revert_snapshot($uuid, $snapshotname) {
 		// snapshot backup OVMF VARS if this domain had them
-		if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.$snapshotname.'_VARS-pure-efi.fd')) {
-			copy('/etc/libvirt/qemu/nvram/'.$uuid.$snapshotname.'_VARS-pure-efi.fd', '/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi.fd');
-			unlink('/etc/libvirt/qemu/nvram/'.$uuid.$snapshotname.'_VARS-pure-efi.fd');
+		if (is_file(libvirt_get_nvram_dir().'/'.$uuid.$snapshotname.'_VARS-pure-efi.fd')) {
+			copy(libvirt_get_nvram_dir().'/'.$uuid.$snapshotname.'_VARS-pure-efi.fd', libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi.fd');
+			unlink(libvirt_get_nvram_dir().'/'.$uuid.$snapshotname.'_VARS-pure-efi.fd');
 			return true;
 		}
-		if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd')) {
-			copy('/etc/libvirt/qemu/nvram/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd', '/etc/libvirt/qemu/nvram/'.$uuid.'_VARS-pure-efi-tpm.fd');
-			unlink('/etc/libvirt/qemu/nvram/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd');
+		if (is_file(libvirt_get_nvram_dir().'/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd')) {
+			copy(libvirt_get_nvram_dir().'/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd', libvirt_get_nvram_dir().'/'.$uuid.'_VARS-pure-efi-tpm.fd');
+			unlink(libvirt_get_nvram_dir().'/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd');
 			return true;
 		}
 		return false;
@@ -1938,12 +1939,12 @@ class Libvirt {
 
 	function nvram_delete_snapshot($uuid, $snapshotname) {
 		// snapshot backup OVMF VARS if this domain had them
-		if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.$snapshotname.'_VARS-pure-efi.fd')) {
-			unlink('/etc/libvirt/qemu/nvram/'.$uuid.$snapshotname.'_VARS-pure-efi.fd');
+		if (is_file(libvirt_get_nvram_dir().'/'.$uuid.$snapshotname.'_VARS-pure-efi.fd')) {
+			unlink(libvirt_get_nvram_dir().'/'.$uuid.$snapshotname.'_VARS-pure-efi.fd');
 			return true;
 		}
-		if (is_file('/etc/libvirt/qemu/nvram/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd')) {
-			unlink('/etc/libvirt/qemu/nvram/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd');
+		if (is_file(libvirt_get_nvram_dir().'/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd')) {
+			unlink(libvirt_get_nvram_dir().'/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd');
 			return true;
 		}
 		return false;
