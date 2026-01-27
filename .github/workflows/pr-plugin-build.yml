@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - 'emhttp/**'
+      - 'etc/**'
+      - 'sbin/**'
+      - 'share/**'
       - '.github/workflows/pr-plugin-build.yml'
       - '.github/scripts/**'
 
@@ -87,6 +90,9 @@ jobs:
             if [ -f "$file" ]; then
               # Create directory structure in build with target mappings
               case "$file" in
+                etc/rc.d/*)
+                  target_dir="build/usr/local/etc/rc.d"
+                  ;;
                 etc/*)
                   target_dir="build/${file%/*}"
                   ;;
@@ -112,17 +118,17 @@ jobs:
             fi
           done < changed_files.txt
           
+          # Generate file list for plugin/tar (relative paths)
+          find build -type f | sed 's|^build/||' > file_list.txt
+          echo "File list for plugin:"
+          cat file_list.txt
+          
           # Create tarball - consistent filename for updates
           cd build
           echo "Creating tarball with contents:"
-          find usr/ -type f
-          tar -czf ../${{ steps.version.outputs.local_txz }} usr/
+          cat ../file_list.txt
+          tar -czf ../${{ steps.version.outputs.local_txz }} -T ../file_list.txt
           cd ..
-          
-          # Generate file list for plugin
-          find build/etc build/usr/local/emhttp build/usr/local/sbin build/usr/local/share -type f | sed 's|^build||' > file_list.txt
-          echo "File list for plugin:"
-          cat file_list.txt
           
           # Verify tarball contents
           echo "Tarball contents:"
