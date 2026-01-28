@@ -10,6 +10,68 @@
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  */
+
+function create_cloud_init_iso($strPath, $strUserData, $strNetworkConfig) {
+	$strPath = rtrim($strPath, '/');
+	if (!is_dir($strPath)) {
+		return false;
+	}
+
+	$strImgPath = $strPath . '/cloud-init.img';
+	$strMountPoint = $strPath . '/cloud-init-mount';
+	
+	// Create blank 4MB image
+	exec("dd if=/dev/zero of=" . escapeshellarg($strImgPath) . " bs=1M count=4 2>&1", $output, $return_var);
+	if ($return_var !== 0) {
+		error_log("Cloud-Init image creation failed (dd): " . implode("\n", $output));
+		return false;
+	}
+
+	// Format as VFAT with label 'cidata' (try mkfs.vfat first, then mkdosfs)
+	$output = [];
+	exec("which mkfs.vfat mkdosfs 2>/dev/null | head -n1", $mkfsTool);
+	$mkfsCmd = !empty($mkfsTool[0]) ? $mkfsTool[0] : '/sbin/mkdosfs';
+	
+	exec($mkfsCmd . " -n cidata " . escapeshellarg($strImgPath) . " 2>&1", $output, $return_var);
+	if ($return_var !== 0) {
+		error_log("Cloud-Init image formatting failed (vfat): " . implode("\n", $output));
+		return false;
+	}
+
+	// Create mount point
+	if (!is_dir($strMountPoint)) {
+		mkdir($strMountPoint, 0777, true);
+	}
+
+	// Mount image
+	exec("mount -o loop " . escapeshellarg($strImgPath) . " " . escapeshellarg($strMountPoint) . " 2>&1", $output, $return_var);
+	if ($return_var !== 0) {
+		error_log("Cloud-Init image mount failed: " . implode("\n", $output));
+		return false;
+	}
+
+	// Write files
+	file_put_contents($strMountPoint . '/user-data', $strUserData);
+	if (!empty($strNetworkConfig)) {
+		file_put_contents($strMountPoint . '/network-config', $strNetworkConfig);
+	}
+	file_put_contents($strMountPoint . '/meta-data', "instance-id: " . uniqid() . "\nlocal-hostname: localhost\n");
+
+	// Sync and Unmount
+	exec("sync");
+	exec("umount " . escapeshellarg($strMountPoint) . " 2>&1", $output, $return_var);
+	
+	// Clean up mount point
+	rmdir($strMountPoint);
+
+	if ($return_var !== 0) {
+		error_log("Cloud-Init image unmount failed: " . implode("\n", $output));
+		return false;
+	}
+
+	return $strImgPath;
+}
+
 ?>
 <?
 /**

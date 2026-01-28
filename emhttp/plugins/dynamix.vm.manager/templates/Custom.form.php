@@ -131,6 +131,21 @@ $arrConfigDefaults = [
 			'target' => '',
 			'mode' => ''
 		]
+	],
+	'cloudinit' => [
+		'enabled' => 0,
+		'mode' => 'basic',
+		'user' => 'ubuntu',
+		'password' => '',
+		'ssh_keys' => '',
+		'hostname' => '',
+		'timezone' => '',
+		'root_login' => 0,
+		'update_pkg' => 1,
+		'packages' => '',
+		'runcmd' => '',
+		'userdata' => "#cloud-config\n",
+		'networkconfig' => "version: 2\n"
 	]
 ];
 $hdrXML = "<?xml version='1.0' encoding='UTF-8'?>\n"; // XML encoding declaration
@@ -152,8 +167,132 @@ if (isset($_POST['createvm'])) {
 			$reply = ['error' => $lv->get_last_error()];
 		}
 	} else {
+
 		// form view
 		#file_put_contents("/tmp/createpost",json_encode($_POST));
+		
+		// Cloud-Init Processing
+		if (isset($_POST['cloudinit']['enabled']) && $_POST['cloudinit']['enabled'] == 1) {
+			$strVMPath = $domain_cfg['DOMAINDIR'] . $_POST['domain']['name'];
+			
+			if (!empty($strVMPath)) {
+				if (!is_dir($strVMPath)) {
+					mkdir($strVMPath, 0777, true);
+				}
+
+				$cloudInitMode = $_POST['cloudinit']['mode'] ?? 'basic';
+				$strUserData = '';
+				$strNetworkConfig = $_POST['cloudinit']['networkconfig'] ?? '';
+
+				// Save Config
+				$arrCloudInitConfig = [
+					'enabled' => 1,
+					'mode' => $cloudInitMode,
+					'hostname' => $_POST['cloudinit']['hostname'] ?? '',
+					'timezone' => $_POST['cloudinit']['timezone'] ?? '',
+					'user' => $_POST['cloudinit']['user'] ?? '',
+					'password' => $_POST['cloudinit']['password'] ?? '',
+					'ssh_keys' => $_POST['cloudinit']['ssh_keys'] ?? '',
+					'root_login' => $_POST['cloudinit']['root_login'] ?? 0,
+					'update_pkg' => $_POST['cloudinit']['update_pkg'] ?? 0,
+					'packages' => $_POST['cloudinit']['packages'] ?? '',
+					'runcmd' => $_POST['cloudinit']['runcmd'] ?? '',
+					'userdata' => $_POST['cloudinit']['userdata'] ?? '',
+					'networkconfig' => $_POST['cloudinit']['networkconfig'] ?? ''
+				];
+				file_put_contents($strVMPath . '/cloud-init.json', json_encode($arrCloudInitConfig, JSON_PRETTY_PRINT));
+
+				if ($cloudInitMode == 'basic') {
+					// Generate User Data from Basic Fields
+					$hostname = $_POST['cloudinit']['hostname'] ?? '';
+					$timezone = $_POST['cloudinit']['timezone'] ?? '';
+					$user = $_POST['cloudinit']['user'] ?? 'root';
+					$pass = $_POST['cloudinit']['password'] ?? '';
+					$keys = $_POST['cloudinit']['ssh_keys'] ?? '';
+					$root_login = $_POST['cloudinit']['root_login'] ?? 0;
+					$update_pkg = $_POST['cloudinit']['update_pkg'] ?? 0;
+					$packages = $_POST['cloudinit']['packages'] ?? '';
+					$runcmd = $_POST['cloudinit']['runcmd'] ?? '';
+
+					$strUserData = "#cloud-config\n";
+					
+					// Hostname & Timezone
+					if (!empty($hostname)) {
+						$strUserData .= "hostname: " . $hostname . "\n";
+						$strUserData .= "fqdn: " . $hostname . "\n";
+					}
+					if (!empty($timezone)) $strUserData .= "timezone: " . $timezone . "\n";
+					
+					// Packages
+					if ($update_pkg) {
+						$strUserData .= "package_update: true\n";
+						$strUserData .= "package_upgrade: true\n";
+					}
+					if (!empty($packages)) {
+						$strUserData .= "packages:\n";
+						$arrPkg = explode("\n", $packages);
+						foreach ($arrPkg as $p) {
+							if (trim($p)) $strUserData .= "  - " . trim($p) . "\n";
+						}
+					}
+
+					// Users
+					$strUserData .= "users:\n";
+					$strUserData .= "  - name: " . $user . "\n";
+					if (!empty($keys)) {
+						$strUserData .= "    ssh-authorized-keys:\n";
+						$arrKeys = explode("\n", $keys);
+						foreach ($arrKeys as $k) {
+							if (trim($k)) $strUserData .= "      - " . trim($k) . "\n";
+						}
+					}
+					if (!empty($pass)) {
+						$strUserData .= "    plain_text_passwd: " . $pass . "\n";
+						$strUserData .= "    lock_passwd: false\n";
+					}
+					if ($user != 'root') {
+						$strUserData .= "    sudo: ALL=(ALL) NOPASSWD:ALL\n";
+						$strUserData .= "    shell: /bin/bash\n";
+					}
+
+					// General SSH/Auth
+					$strUserData .= "chpasswd: { expire: False }\n";
+					$strUserData .= "ssh_pwauth: True\n";
+					if ($root_login) {
+						$strUserData .= "disable_root: false\n";
+					}
+
+					// RunCMD
+					if (!empty($runcmd)) {
+						$strUserData .= "runcmd:\n";
+						$arrCmd = explode("\n", $runcmd);
+						foreach ($arrCmd as $c) {
+							if (trim($c)) $strUserData .= "  - " . trim($c) . "\n";
+						}
+					}
+				} else {
+					$strUserData = $_POST['cloudinit']['userdata'] ?? '';
+				}
+
+				// Save source files (generated or raw)
+				file_put_contents($strVMPath . '/cloud-init.user-data', $strUserData);
+				file_put_contents($strVMPath . '/cloud-init.network-config', $strNetworkConfig);
+
+				$isoPath = create_cloud_init_iso($strVMPath, $strUserData, $strNetworkConfig);
+				
+				if ($isoPath) {
+					// Add Cloud-Init as disk
+					$newDiskIndex = count($_POST['disk'] ?? []);
+					$_POST['disk'][$newDiskIndex] = [
+						'device' => 'disk',
+						'driver' => 'raw',
+						'image' => $isoPath,
+						'bus' => 'virtio'
+					];
+				}
+			}
+		}
+
 		if ($lv->domain_new($_POST)) {
 			// Fire off the vnc/spice popup if available
 			$dom = $lv->get_domain_by_name($_POST['domain']['name']);
@@ -246,6 +385,119 @@ if (isset($_POST['updatevm'])) {
 	}
 	$newuuid = $uuid;
 	$olduuid = $uuid;
+
+	// Cloud-Init Processing - runs for both XML view and form view
+	if (isset($_POST['cloudinit']['enabled']) && $_POST['cloudinit']['enabled'] == 1) {
+		$strVMPath = $domain_cfg['DOMAINDIR'] . $_POST['domain']['name'];
+		
+		if (!empty($strVMPath)) {
+			if (!is_dir($strVMPath)) {
+				mkdir($strVMPath, 0777, true);
+			}
+
+			$cloudInitMode = $_POST['cloudinit']['mode'] ?? 'basic';
+			$strUserData = '';
+			$strNetworkConfig = $_POST['cloudinit']['networkconfig'] ?? '';
+
+			// Save Config
+			$arrCloudInitConfig = [
+				'enabled' => 1,
+				'mode' => $cloudInitMode,
+				'hostname' => $_POST['cloudinit']['hostname'] ?? '',
+				'timezone' => $_POST['cloudinit']['timezone'] ?? '',
+				'user' => $_POST['cloudinit']['user'] ?? '',
+				'password' => $_POST['cloudinit']['password'] ?? '',
+				'ssh_keys' => $_POST['cloudinit']['ssh_keys'] ?? '',
+				'root_login' => $_POST['cloudinit']['root_login'] ?? 0,
+				'update_pkg' => $_POST['cloudinit']['update_pkg'] ?? 0,
+				'packages' => $_POST['cloudinit']['packages'] ?? '',
+				'runcmd' => $_POST['cloudinit']['runcmd'] ?? '',
+				'userdata' => $_POST['cloudinit']['userdata'] ?? '',
+				'networkconfig' => $_POST['cloudinit']['networkconfig'] ?? ''
+			];
+			file_put_contents($strVMPath . '/cloud-init.json', json_encode($arrCloudInitConfig, JSON_PRETTY_PRINT));
+
+			if ($cloudInitMode == 'basic') {
+				// Generate User Data from Basic Fields
+				$hostname = $_POST['cloudinit']['hostname'] ?? '';
+				$timezone = $_POST['cloudinit']['timezone'] ?? '';
+				$user = $_POST['cloudinit']['user'] ?? 'root';
+				$pass = $_POST['cloudinit']['password'] ?? '';
+				$keys = $_POST['cloudinit']['ssh_keys'] ?? '';
+				$root_login = $_POST['cloudinit']['root_login'] ?? 0;
+				$update_pkg = $_POST['cloudinit']['update_pkg'] ?? 0;
+				$packages = $_POST['cloudinit']['packages'] ?? '';
+				$runcmd = $_POST['cloudinit']['runcmd'] ?? '';
+				
+				$strUserData = "#cloud-config\n";
+				
+				// Hostname & Timezone
+				if (!empty($hostname)) {
+					$strUserData .= "hostname: " . $hostname . "\n";
+					$strUserData .= "fqdn: " . $hostname . "\n";
+				}
+				if (!empty($timezone)) $strUserData .= "timezone: " . $timezone . "\n";
+				
+				// Packages
+				if ($update_pkg) {
+					$strUserData .= "package_update: true\n";
+					$strUserData .= "package_upgrade: true\n";
+				}
+				if (!empty($packages)) {
+					$strUserData .= "packages:\n";
+					$arrPkg = explode("\n", $packages);
+					foreach ($arrPkg as $p) {
+						if (trim($p)) $strUserData .= "  - " . trim($p) . "\n";
+					}
+				}
+
+				// Users
+				$strUserData .= "users:\n";
+				$strUserData .= "  - name: " . $user . "\n";
+				if (!empty($keys)) {
+					$strUserData .= "    ssh-authorized-keys:\n";
+					$arrKeys = explode("\n", $keys);
+					foreach ($arrKeys as $k) {
+						if (trim($k)) $strUserData .= "      - " . trim($k) . "\n";
+					}
+				}
+				if (!empty($pass)) {
+					$strUserData .= "    plain_text_passwd: " . $pass . "\n";
+					$strUserData .= "    lock_passwd: false\n";
+				}
+				if ($user != 'root') {
+					$strUserData .= "    sudo: ALL=(ALL) NOPASSWD:ALL\n";
+					$strUserData .= "    shell: /bin/bash\n";
+				}
+
+				// General SSH/Auth
+				$strUserData .= "chpasswd: { expire: False }\n";
+				$strUserData .= "ssh_pwauth: True\n";
+				if ($root_login) {
+					$strUserData .= "disable_root: false\n";
+				}
+				
+				// RunCMD
+				if (!empty($runcmd)) {
+					$strUserData .= "runcmd:\n";
+					$arrCmd = explode("\n", $runcmd);
+					foreach ($arrCmd as $c) {
+						if (trim($c)) $strUserData .= "  - " . trim($c) . "\n";
+					}
+				}
+			} else {
+				$strUserData = $_POST['cloudinit']['userdata'] ?? '';
+			}
+
+			// Save source files (generated or raw)
+			file_put_contents($strVMPath . '/cloud-init.user-data', $strUserData);
+			file_put_contents($strVMPath . '/cloud-init.network-config', $strNetworkConfig);
+
+			// Generate Cloud-Init disk image
+			create_cloud_init_iso($strVMPath, $strUserData, $strNetworkConfig);
+		}
+	}
+
 	// construct updated config
 	if (isset($_POST['xmldesc'])) {
 		// XML view
@@ -301,6 +553,38 @@ if (isset($_GET['uuid'])) {
 	$strXML = $lv->domain_get_xml($dom);
 	$boolNew = false;
 	$arrConfig = array_replace_recursive($arrConfigDefaults, domain_to_config($uuid));
+	
+	// Load Cloud-Init Config if exists
+	$strVMName = $arrConfig['domain']['name'];
+	if (!empty($strVMName)) {
+		if (empty($domain_cfg)) $domain_cfg = parse_ini_file("/boot/config/domain.cfg");
+		$strVMPath = $domain_cfg['DOMAINDIR'] . $strVMName;
+		
+		// Debug logging to specific file
+		// file_put_contents("/var/log/cloudinit_debug.log", "Loading config for $strVMName from $strVMPath\n", FILE_APPEND);
+
+		// Load JSON config first for UI fields
+		if (file_exists($strVMPath . '/cloud-init.json')) {
+			$json_content = file_get_contents($strVMPath . '/cloud-init.json');
+			$arrCloudInitConfig = json_decode($json_content, true);
+			if ($arrCloudInitConfig) {
+				$arrConfig['cloudinit'] = array_merge($arrConfig['cloudinit'], $arrCloudInitConfig);
+				// file_put_contents("/var/log/cloudinit_debug.log", "Loaded JSON: " . print_r($arrCloudInitConfig, true) . "\n", FILE_APPEND);
+			} else {
+				// file_put_contents("/var/log/cloudinit_debug.log", "Failed to decode JSON: $json_content\n", FILE_APPEND);
+			}
+		} elseif (file_exists($strVMPath . '/cloud-init.user-data')) {
+			// Fallback for legacy manually implemented or raw edits
+			$arrConfig['cloudinit']['enabled'] = 1;
+			$arrConfig['cloudinit']['mode'] = 'advanced';
+			$arrConfig['cloudinit']['userdata'] = file_get_contents($strVMPath . '/cloud-init.user-data');
+		}
+
+		if (file_exists($strVMPath . '/cloud-init.network-config')) {
+			$arrConfig['cloudinit']['networkconfig'] = file_get_contents($strVMPath . '/cloud-init.network-config');
+		}
+	}
+
 	$arrVMUSBs = getVMUSBs($strXML);
 } else {
 	// edit new VM
@@ -886,6 +1170,138 @@ if (!isset($arrValidMachineTypes[$arrConfig['domain']['machine']])) {
 		</blockquote>
 	</div>
 </div>
+
+<div class="advanced">
+	<table>
+		<tr>
+			<td>_(Cloud-Init)_:</td>
+			<td>
+				<span class="width"><select name="cloudinit[enabled]" id="cloudinit_enabled" onchange="toggleCloudInit(this)">
+				<?mk_dropdown_options([0 => _('No'), 1 => _('Yes')], $arrConfig['cloudinit']['enabled']);?>
+				</select></span>
+			</td>
+		</tr>
+	</table>
+	<div id="cloudinit_settings" style="display:<?=($arrConfig['cloudinit']['enabled']) ? 'block' : 'none'?>">
+		<table>
+			<tr>
+				<td>_(Configuration Mode)_:</td>
+				<td>
+					<span class="width"><select name="cloudinit[mode]" id="cloudinit_mode" onchange="toggleCloudInitMode(this.value)">
+						<option value="basic" <?=($arrConfig['cloudinit']['mode'] == 'basic') ? 'selected' : ''?>>Basic</option>
+						<option value="advanced" <?=($arrConfig['cloudinit']['mode'] == 'advanced') ? 'selected' : ''?>>Advanced (Raw)</option>
+					</select></span>
+				</td>
+			</tr>
+		</table>
+
+		<div id="cloudinit_basic" style="display:<?=($arrConfig['cloudinit']['mode'] == 'basic') ? 'block' : 'none'?>">
+			<table>
+				<tr>
+					<td>_(Hostname)_:</td>
+					<td>
+						<span class="width"><input type="text" name="cloudinit[hostname]" value="<?=htmlspecialchars($arrConfig['cloudinit']['hostname'])?>" placeholder="_(e.g.)_ myvm"></span>
+					</td>
+				</tr>
+				<tr>
+					<td>_(Timezone)_:</td>
+					<td>
+						<span class="width"><input type="text" name="cloudinit[timezone]" value="<?=htmlspecialchars($arrConfig['cloudinit']['timezone'])?>" placeholder="_(e.g.)_ Europe/London"></span>
+					</td>
+				</tr>
+				<tr>
+					<td>_(Default User)_:</td>
+					<td>
+						<span class="width"><input type="text" name="cloudinit[user]" value="<?=htmlspecialchars($arrConfig['cloudinit']['user'])?>" placeholder="ubuntu"></span>
+					</td>
+				</tr>
+				<tr>
+					<td>_(Password)_:</td>
+					<td>
+						<span class="width"><input type="password" name="cloudinit[password]" value="<?=htmlspecialchars($arrConfig['cloudinit']['password'])?>" placeholder=""></span>
+					</td>
+				</tr>
+				<tr>
+					<td>_(SSH Authorized Keys)_:</td>
+					<td>
+						<textarea name="cloudinit[ssh_keys]" class="textTemplate" rows="5" placeholder="ssh-rsa ..."><?=htmlspecialchars($arrConfig['cloudinit']['ssh_keys'])?></textarea>
+					</td>
+				</tr>
+				<tr>
+					<td>_(Allow Root Login)_:</td>
+					<td>
+						<span class="width"><select name="cloudinit[root_login]">
+							<?mk_dropdown_options([0 => _('No'), 1 => _('Yes')], $arrConfig['cloudinit']['root_login']);?>
+						</select></span>
+					</td>
+				</tr>
+				<tr>
+					<td>_(Update Packages)_:</td>
+					<td>
+						<span class="width"><select name="cloudinit[update_pkg]">
+							<?mk_dropdown_options([0 => _('No'), 1 => _('Yes')], $arrConfig['cloudinit']['update_pkg']);?>
+						</select></span>
+					</td>
+				</tr>
+				<tr>
+					<td>_(Install Packages)_:</td>
+					<td>
+						<textarea name="cloudinit[packages]" class="textTemplate" rows="3" placeholder="_(one package per line)_"><?=htmlspecialchars($arrConfig['cloudinit']['packages'])?></textarea>
+					</td>
+				</tr>
+				<tr>
+					<td>_(Run Commands)_:</td>
+					<td>
+						<textarea name="cloudinit[runcmd]" class="textTemplate" rows="5" placeholder="_(one command per line)_"><?=htmlspecialchars($arrConfig['cloudinit']['runcmd'])?></textarea>
+					</td>
+				</tr>
+			</table>
+		</div>
+
+		<div id="cloudinit_advanced" style="display:<?=($arrConfig['cloudinit']['mode'] == 'advanced') ? 'block' : 'none'?>">
+			<table>
+				<tr>
+					<td>_(User Data)_:</td>
+					<td>
+						<textarea name="cloudinit[userdata]" class="textTemplate" rows="10" placeholder="#cloud-config"><?=htmlspecialchars($arrConfig['cloudinit']['userdata'])?></textarea>
+					</td>
+				</tr>
+			</table>
+		</div>
+
+		<table>
+			<tr>
+				<td>_(Network Config)_:</td>
+				<td>
+					<textarea name="cloudinit[networkconfig]" class="textTemplate" rows="10" placeholder="version: 2"><?=htmlspecialchars($arrConfig['cloudinit']['networkconfig'])?></textarea>
+				</td>
+			</tr>
+		</table>
+		<blockquote class="inline_help">
+			<p>Configure Cloud-Init for the VM. Basic mode creates a default user with password and keys. Advanced mode allows full control over user-data YAML.</p>
+		</blockquote>
+	</div>
+</div>
+
+<script>
+function toggleCloudInit(el) {
+	if (el.value == 1) {
+		$('#cloudinit_settings').slideDown();
+	} else {
+		$('#cloudinit_settings').slideUp();
+	}
+}
+
+function toggleCloudInitMode(mode) {
+	if (mode == 'basic') {
+		$('#cloudinit_basic').slideDown();
+		$('#cloudinit_advanced').slideUp();
+	} else {
+		$('#cloudinit_basic').slideUp();
+		$('#cloudinit_advanced').slideDown();
+	}
+}
+</script>
 
 <?foreach ($arrConfig['disk'] as $i => $arrDisk) {
 	$strLabel = ($i > 0) ? appendOrdinalSuffix($i + 1) : _('Primary');
@@ -2984,7 +3400,7 @@ $(function() {
 			if (audio && !sound.includes(audio)) form.append('<input type="hidden" name="pci[]" value="'+audio+'#remove">');
 		});
 		<?endif?>
-		var postdata = form.find('input,select,textarea[name="qemucmdline"]').serialize().replace(/'/g,"%27");
+		var postdata = form.find('input,select,textarea').serialize().replace(/'/g,"%27");
 		<?if (!$boolNew):?>
 		// keep checkbox visually unchecked
 		form.find('input[name="usb[]"],input[name="usbopt[]"],input[name="pci[]"]').each(function(){
@@ -3053,7 +3469,7 @@ $(function() {
 			if (audio && !sound.includes(audio)) form.append('<input type="hidden" name="pci[]" value="'+audio+'#remove">');
 		});
 		<?endif?>
-		var postdata = form.find('input,select,textarea[name="qemucmdline"]').serialize().replace(/'/g,"%27");
+		var postdata = form.find('input,select,textarea').serialize().replace(/'/g,"%27");
 		<?if (!$boolNew):?>
 		// keep checkbox visually unchecked
 		form.find('input[name="usb[]"],input[name="usbopt[]"],input[name="pci[]"]').each(function(){
