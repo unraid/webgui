@@ -300,6 +300,13 @@ function array_offline(&$disk, $pool='') {
   $echo = []; $warning = '';
   $status = ['DISK_INVALID','DISK_DSBL_NEW','DISK_WRONG'];
   $text = "<span class='red-text'><em>"._('All existing data on this device will be OVERWRITTEN when array is Started')."</em></span>";
+  $fsStatus = _var($disk,'fsStatus','');
+  $isUnformatted = str_starts_with($fsStatus,'Unmountable');
+  $isSsd = !_var($disk,'rotational',1) || _var($disk,'transport')=='nvme';
+  $ssdWarning = '';
+  if ($isUnformatted && $isSsd && _var($disk,'type')!='Cache') {
+    $ssdWarning = "<span class='orange-text'><em>"._('The array does not support parity with SSDs due to TRIM. For maximum speed, assign SSDs to a pool instead.')."</em></span>";
+  }
   if (_var($disk,'type')=='Cache') {
     if (!str_contains(_var($disks[$pool],'state'),'ERROR:')) {
       $_pool = (strpos($pool, '~') !== false) ? substr($pool, 0, strpos($pool, '~')) : $pool;
@@ -317,6 +324,9 @@ function array_offline(&$disk, $pool='') {
         $warning = $text;
       }
     }
+  }
+  if ($ssdWarning) {
+    $warning = $warning ? $warning."<br>$ssdWarning" : $ssdWarning;
   }
   $echo[] = "<tr class='offline'>";
   switch (_var($disk,'status')) {
