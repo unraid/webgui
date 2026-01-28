@@ -34,6 +34,14 @@ VIRTLOGD_OPTS=${VIRTLOGD_OPTS:-" -f /etc/libvirt/virtlogd.conf -p $VIRTLOGD_PIDF
 VIRTLOCKD_PIDFILE="/var/run/libvirt/virtlockd.pid"
 VIRTLOCKD_OPTS=${VIRTLOCKD_OPTS:-" -f /etc/libvirt/virtlockd.conf -p $VIRTLOCKD_PIDFILE "}
 
+# libvirt path configuration
+LIBVIRT_QEMU_DIR="/etc/libvirt/qemu"
+LIBVIRT_SNAPSHOTDB_DIR="$LIBVIRT_QEMU_DIR/snapshotdb"
+if [[ -r /etc/rc.d/rc.libvirt.conf ]]; then
+  # shellcheck disable=SC1091
+  . /etc/rc.d/rc.libvirt.conf
+fi
+
 BOOT_DOMAIN="/boot/config/domain.cfg"
 SYSTEM="/sys/class/net"
 VIRTLOG="virtlog daemon"
@@ -233,7 +241,9 @@ libvirtd_start(){
   mkdir -p /etc/libvirt/qemu/swtpm/tpm-states
   # setup snapshot persistance.
   mkdir -p /etc/libvirt/qemu/snapshot
-  mkdir -p /etc/libvirt/qemu/snapshotdb
+  if [[ ! -f /boot/config/plugins/dynamix.vm.manager/vm_newmodel ]]; then
+    mkdir -p "$LIBVIRT_SNAPSHOTDB_DIR"
+  fi
   rm -rf /var/lib/libvirt/qemu/snapshot
   ln -sf /etc/libvirt/qemu/snapshot /var/lib/libvirt/qemu/snapshot
   # create directory for pid file
