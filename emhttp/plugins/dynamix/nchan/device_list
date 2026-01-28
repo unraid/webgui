@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?PHP
+<?php
 /* Copyright 2005-2025, Lime Technology
  * Copyright 2012-2025, Bergware International.
  *
@@ -59,7 +59,7 @@ function get_fs_error_tooltip($diskName, $diskDevice, $deviceErrors) {
   global $poolstatus;
   $poolName = prefix($diskName);
   $errorLines = [];
-  
+
   // Find the specific member in the pool that matches this disk's device
   if (isset($poolstatus['pools'][$poolName]['members'])) {
     foreach ($poolstatus['pools'][$poolName]['members'] as $memberKey => $member) {
@@ -82,7 +82,7 @@ function get_fs_error_tooltip($diskName, $diskDevice, $deviceErrors) {
       }
     }
   }
-  
+
   // Add device errors if present
   if ($deviceErrors > 0) {
     if (!empty($errorLines)) {
@@ -90,7 +90,7 @@ function get_fs_error_tooltip($diskName, $diskDevice, $deviceErrors) {
     }
     $errorLines[] = _('Device errors: ') . my_number($deviceErrors);
   }
-  
+
   return !empty($errorLines) ? implode('<br>', $errorLines) : '';
 }
 
@@ -102,6 +102,17 @@ function my_power($power) {
   global $display;
   $number = _var($display,'number','.,');
   return _var($display,'power') && $power ? number_format($power,$power<10?2:1,$number[0]).' '._('W').' / ' : '';
+}
+
+function parity_ssd_warning_text() {
+  return _('The array does not support parity with SSDs due to TRIM. For maximum speed, assign SSDs to a pool instead.');
+}
+
+function needs_parity_ssd_warning($disk) {
+  $type = _var($disk,'type');
+  if (!in_array($type, ['Parity','Data'])) return false;
+  if (!_var($disk,'device')) return false;
+  return !_var($disk,'rotational',1) || _var($disk,'transport')=='nvme';
 }
 
 function device_info(&$disk,$online,$poolName='',$poolstatusData=[]) {
@@ -149,7 +160,6 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[]) {
   $warn   = ($name == 'flash') && _var($var,'shareSMBEnabled')=='yes' && $sec['flash']['export']=='e' && $sec['flash']['security']=='public'
           ? "&nbsp;<a class='info'><i class='fa fa-warning fa-fw orange-text'></i><span>"._('Boot device is set as public share')."<br>"._('Please change share SMB security')."<br>"._('Click on **FLASH** above this message')."</span></a>"
           : "";
-  
   // Add pool status for zfs and btrfs pools only (first device only)
   $poolstatusHTML = "";
   if ($poolName && !empty($poolstatusData['pools'][$poolName]) && $name == $poolName) {
@@ -160,7 +170,7 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[]) {
       $isOnline = str_starts_with($status_text, 'ONLINE');
       $displayText = $hasErrors ? _('ONLINE') : _($status_text);
       $deviceUrl = "/Main/Device?name=".urlencode($poolName)."#poolsummary";
-      
+
       if (!$isOnline) {
         $poolstatusHTML = " <a href='$deviceUrl' title='"._('View pool details')."'>("._($status_text).")</a><span title='"._('Check pool status')."'><i class='fa fa-warning fa-fw orange-text'></i></span>";
       } elseif ($hasErrors) {
@@ -170,7 +180,7 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[]) {
       }
     }
   }
-  
+
   return $view.$status.$link.$poolstatusHTML.$warn;
 }
 
@@ -187,7 +197,7 @@ function device_desc(&$disk, $poolName='', $poolstatusData=[]) {
       default:       $type = 'disk'; break;
     }
     $log = "<a class='info hand' onclick=\"openTerminal('disklog','"._var($disk,'device')."','')\"><i class='icon-$type icon'></i><span>"._('Disk Log Information')."</span></a>";
-    
+
     // Add red warning triangle if pool has errors
     $poolWarning = '';
     if ($poolName && !empty($poolstatusData['pools'][$poolName])) {
@@ -206,7 +216,7 @@ function device_desc(&$disk, $poolName='', $poolstatusData=[]) {
         }
       }
     }
-    
+
     return $log.$poolWarning."<span style='font-family:bitstream'>".my_id(_var($disk,'id'))."</span> - $size $unit ("._var($disk,'device').")";
   } else {
     return my_id(_var($disk,'id'))." - $size $unit ("._var($disk,'device').")";
@@ -300,12 +310,9 @@ function array_offline(&$disk, $pool='') {
   $echo = []; $warning = '';
   $status = ['DISK_INVALID','DISK_DSBL_NEW','DISK_WRONG'];
   $text = "<span class='red-text'><em>"._('All existing data on this device will be OVERWRITTEN when array is Started')."</em></span>";
-  $fsStatus = _var($disk,'fsStatus','');
-  $isUnformatted = str_starts_with($fsStatus,'Unmountable');
-  $isSsd = !_var($disk,'rotational',1) || _var($disk,'transport')=='nvme';
   $ssdWarning = '';
-  if ($isUnformatted && $isSsd && _var($disk,'type')!='Cache') {
-    $ssdWarning = "<span class='orange-text'><em>"._('The array does not support parity with SSDs due to TRIM. For maximum speed, assign SSDs to a pool instead.')."</em></span>";
+  if (needs_parity_ssd_warning($disk)) {
+    $ssdWarning = "<span class='orange-text'><em>".parity_ssd_warning_text()."</em></span>";
   }
   if (_var($disk,'type')=='Cache') {
     if (!str_contains(_var($disks[$pool],'state'),'ERROR:')) {
@@ -400,7 +407,7 @@ function array_online(&$disk, $fstype='', $poolName='', $poolstatusData=[]) {
   $sum['power'] += floatval(_var($disk,'power',0));
   $sum['numReads'] += _var($disk,'numReads',0);
   $sum['numWrites'] += _var($disk,'numWrites',0);
-  $sum['numErrors'] += _var($disk,'numErrors',0); 
+  $sum['numErrors'] += _var($disk,'numErrors',0);
   if (isset($disk['fsFree'])) {
     $sum['fsSize'] += _var($disk,'fsSize',0);
     $sum['fsUsed'] += _var($disk,'fsUsed',0);
@@ -592,7 +599,7 @@ while (true) {
     if (in_array($disk['type'],['Data','Cache'])) $crypto |= _var($disk,'luksState',0)!=0 || vfs_luks(_var($disk,'fsType'));
   }
   $pools = array_unique(array_map('prefix',array_keys($Cache)));
-  
+
   // Fetch pool status for zfs and btrfs pools
   static $poolstatus = [];
   static $pool_check_counter = 0;
@@ -713,3 +720,4 @@ while (true) {
   sleep(1);
 }
 ?>
+ ?>
