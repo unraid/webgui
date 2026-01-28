@@ -1021,6 +1021,9 @@ class Libvirt {
 		if (!file_exists('/boot/config/plugins/dynamix.vm.manager/vm_newmodel')) {
 			return $config;
 		}
+		if (empty($config['domain']['uuid'])) {
+			$config['domain']['uuid'] = $this->domain_generate_uuid();
+		}
 		$vm_name = $config['domain']['name'] ?? null;
 		$storage = $config['template']['storage'] ?? 'default';
 		$uuid = $config['domain']['uuid'] ?? null;

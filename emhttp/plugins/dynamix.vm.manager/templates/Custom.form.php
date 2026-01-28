@@ -258,10 +258,11 @@ if (isset($_POST['updatevm'])) {
 		// form view
 		if (($error = create_vdisk($_POST)) === false) {
 			$arrExistingConfig = custom::createArray('domain',$strXML);
-			$arrUpdatedConfig = custom::createArray('domain',$lv->config_to_xml($_POST));
+			$postConfig = $lv->build_vm_paths($_POST);
+			$arrUpdatedConfig = custom::createArray('domain',$lv->config_to_xml($postConfig));
 			if ($debug) {
 				file_put_contents("/tmp/vmdebug_exist",$strXML);
-				file_put_contents("/tmp/vmdebug_new",$lv->config_to_xml($_POST));
+				file_put_contents("/tmp/vmdebug_new",$lv->config_to_xml($postConfig));
 				file_put_contents("/tmp/vmdebug_arrayN",json_encode($arrUpdatedConfig,JSON_PRETTY_PRINT));
 				file_put_contents("/tmp/vmdebug_arrayE",json_encode($arrExistingConfig,JSON_PRETTY_PRINT));
 			}

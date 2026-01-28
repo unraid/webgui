@@ -1846,6 +1846,7 @@ class Array2XML {
 			}
 		}
 
+		$config = $lv->build_vm_paths($config);
 		$xml = $lv->config_to_xml($config, true);
 		$rtn = $lv->domain_define($xml);
 
