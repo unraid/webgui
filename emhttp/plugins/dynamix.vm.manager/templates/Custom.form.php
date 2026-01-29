@@ -217,7 +217,7 @@ if (isset($_POST['createvm'])) {
 				$customISOPath = $_POST['cloudinit']['iso_path'] ?? null;
 				if ($customISOPath) {
 					// Security: Enforce path to be under /mnt/
-					if (strpos($customISOPath, '/mnt/') !== 0) {
+					if (strpos($customISOPath, '/mnt/') !== 0 || preg_match('~(^|/)\.\.(?:/|$)~', $customISOPath)) {
 						echo json_encode(['error' => _('Cloud-Init ISO path must be within /mnt/')]);
 						exit;
 					}
@@ -385,7 +385,7 @@ if (isset($_POST['updatevm'])) {
 			$customISOPath = $_POST['cloudinit']['iso_path'] ?? null;
 			if ($customISOPath) {
 				// Security: Enforce path to be under /mnt/
-				if (strpos($customISOPath, '/mnt/') !== 0) {
+				if (strpos($customISOPath, '/mnt/') !== 0 || preg_match('~(^|/)\.\.(?:/|$)~', $customISOPath)) {
 					echo json_encode(['error' => _('Cloud-Init ISO path must be within /mnt/')]);
 					exit;
 				}
