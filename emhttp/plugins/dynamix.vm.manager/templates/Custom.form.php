@@ -154,7 +154,8 @@ if (isset($_POST['createvm'])) {
 	} else {
 		// form view
 		#file_put_contents("/tmp/createpost",json_encode($_POST));
-		if ($lv->domain_new($_POST)) {
+		$postConfig = $lv->build_vm_paths($_POST);
+		if ($lv->domain_new($postConfig)) {
 			// Fire off the vnc/spice popup if available
 			$dom = $lv->get_domain_by_name($_POST['domain']['name']);
 			$vmrcport = $lv->domain_get_vnc_port($dom);
@@ -310,6 +311,8 @@ if (isset($_GET['uuid'])) {
 	$boolNew = true;
 	$arrConfig = $arrConfigDefaults;
 	$arrVMUSBs = getVMUSBs($strXML);
+	$arrConfig = $lv->build_vm_paths($arrConfig);
+	$arrConfig['domain']['defer_write'] = true;
 	$strXML = $lv->config_to_xml($arrConfig);
 	$domXML = new DOMDocument();
 	$domXML->preserveWhiteSpace = false;
