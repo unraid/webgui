@@ -616,7 +616,7 @@ class Libvirt {
 					if ($strDevType == 'file' || $strDevType == 'block') {
 						$strSourceType = ($strDevType == 'file' ? 'file' : 'dev');
 						if (isset($disk['discard'])) $strDevUnmap = " discard=\"{$disk['discard']}\" "; else $strDevUnmap = " discard=\"ignore\" ";
-						$strDevice = $disk['deviceType'] ?? 'disk';
+						$strDevice = (isset($disk['deviceType']) && in_array($disk['deviceType'], ['disk', 'lun'])) ? $disk['deviceType'] : 'disk';
 						$diskstr .= "<disk type='".$strDevType."' device='".$strDevice."'>
 							<driver name='qemu' type='".$disk['driver']."' cache='writeback'".$strDevUnmap."/>
 							<source ".$strSourceType."='".htmlspecialchars($disk['image'], ENT_QUOTES | ENT_XML1)."'/>
