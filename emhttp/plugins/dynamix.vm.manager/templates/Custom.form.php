@@ -427,9 +427,6 @@ if (isset($_GET['uuid'])) {
 	if (!empty($strVMName)) {
 		if (empty($domain_cfg)) $domain_cfg = parse_ini_file("/boot/config/domain.cfg");
 		$strVMPath = $domain_cfg['DOMAINDIR'] . $strVMName;
-		
-		// Debug logging to specific file
-		// file_put_contents("/var/log/cloudinit_debug.log", "Loading config for $strVMName from $strVMPath\n", FILE_APPEND);
 
 		// Load JSON config first for UI fields
 		if (file_exists($strVMPath . '/cloud-init.json')) {
@@ -437,9 +434,6 @@ if (isset($_GET['uuid'])) {
 			$arrCloudInitConfig = json_decode($json_content, true);
 			if ($arrCloudInitConfig) {
 				$arrConfig['cloudinit'] = array_merge($arrConfig['cloudinit'], $arrCloudInitConfig);
-				// file_put_contents("/var/log/cloudinit_debug.log", "Loaded JSON: " . print_r($arrCloudInitConfig, true) . "\n", FILE_APPEND);
-			} else {
-				// file_put_contents("/var/log/cloudinit_debug.log", "Failed to decode JSON: $json_content\n", FILE_APPEND);
 			}
 		} elseif (file_exists($strVMPath . '/cloud-init.user-data')) {
 			// Fallback for legacy manually implemented or raw edits
