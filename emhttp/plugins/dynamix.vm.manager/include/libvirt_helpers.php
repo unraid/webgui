@@ -127,6 +127,7 @@ function create_cloud_init_iso($strPath, $strUserData, $strNetworkConfig) {
 	$strMountPoint = $strPath . '/cloud-init-mount';
 	
 	// Create blank 4MB image
+	$output = [];
 	exec("dd if=/dev/zero of=" . escapeshellarg($strImgPath) . " bs=1M count=4 2>&1", $output, $return_var);
 	if ($return_var !== 0) {
 		error_log("Cloud-Init image creation failed (dd): " . implode("\n", $output));
@@ -150,6 +151,7 @@ function create_cloud_init_iso($strPath, $strUserData, $strNetworkConfig) {
 	}
 
 	// Mount image
+	$output = [];
 	exec("mount -o loop " . escapeshellarg($strImgPath) . " " . escapeshellarg($strMountPoint) . " 2>&1", $output, $return_var);
 	if ($return_var !== 0) {
 		error_log("Cloud-Init image mount failed: " . implode("\n", $output));
@@ -182,6 +184,7 @@ function create_cloud_init_iso($strPath, $strUserData, $strNetworkConfig) {
 
 	// Sync and Unmount
 	exec("sync");
+	$output = [];
 	exec("umount " . escapeshellarg($strMountPoint) . " 2>&1", $output, $return_var);
 	
 	if ($return_var !== 0) {
