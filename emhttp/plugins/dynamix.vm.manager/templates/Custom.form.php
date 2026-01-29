@@ -203,73 +203,7 @@ if (isset($_POST['createvm'])) {
 				file_put_contents($strVMPath . '/cloud-init.json', json_encode($arrCloudInitConfig, JSON_PRETTY_PRINT));
 
 				if ($cloudInitMode == 'basic') {
-					// Generate User Data from Basic Fields
-					$hostname = $_POST['cloudinit']['hostname'] ?? '';
-					$timezone = $_POST['cloudinit']['timezone'] ?? '';
-					$user = $_POST['cloudinit']['user'] ?? 'root';
-					$pass = $_POST['cloudinit']['password'] ?? '';
-					$keys = $_POST['cloudinit']['ssh_keys'] ?? '';
-					$root_login = $_POST['cloudinit']['root_login'] ?? 0;
-					$update_pkg = $_POST['cloudinit']['update_pkg'] ?? 0;
-					$packages = $_POST['cloudinit']['packages'] ?? '';
-					$runcmd = $_POST['cloudinit']['runcmd'] ?? '';
-
-					$strUserData = "#cloud-config\n";
-					
-					// Hostname & Timezone
-					if (!empty($hostname)) {
-						$strUserData .= "hostname: " . $hostname . "\n";
-						$strUserData .= "fqdn: " . $hostname . "\n";
-					}
-					if (!empty($timezone)) $strUserData .= "timezone: " . $timezone . "\n";
-					
-					// Packages
-					if ($update_pkg) {
-						$strUserData .= "package_update: true\n";
-						$strUserData .= "package_upgrade: true\n";
-					}
-					if (!empty($packages)) {
-						$strUserData .= "packages:\n";
-						$arrPkg = explode("\n", $packages);
-						foreach ($arrPkg as $p) {
-							if (trim($p)) $strUserData .= "  - " . trim($p) . "\n";
-						}
-					}
-
-					// Users
-					$strUserData .= "users:\n";
-					$strUserData .= "  - name: " . $user . "\n";
-					if (!empty($keys)) {
-						$strUserData .= "    ssh-authorized-keys:\n";
-						$arrKeys = explode("\n", $keys);
-						foreach ($arrKeys as $k) {
-							if (trim($k)) $strUserData .= "      - " . trim($k) . "\n";
-						}
-					}
-					if (!empty($pass)) {
-						$strUserData .= "    plain_text_passwd: " . $pass . "\n";
-						$strUserData .= "    lock_passwd: false\n";
-					}
-					if ($user != 'root') {
-						$strUserData .= "    sudo: ALL=(ALL) NOPASSWD:ALL\n";
-						$strUserData .= "    shell: /bin/bash\n";
-					}
-
-					// General SSH/Auth
-					$strUserData .= "chpasswd: { expire: False }\n";
-					$strUserData .= "ssh_pwauth: True\n";
-					if ($root_login) {
-						$strUserData .= "disable_root: false\n";
-					}
-
-					// RunCMD
-					if (!empty($runcmd)) {
-						$strUserData .= "runcmd:\n";
-						$arrCmd = explode("\n", $runcmd);
-						foreach ($arrCmd as $c) {
-							if (trim($c)) $strUserData .= "  - " . trim($c) . "\n";
-						}
-					}
+					$strUserData = generate_cloud_init_userdata($_POST['cloudinit']);
 				} else {
 					$strUserData = $_POST['cloudinit']['userdata'] ?? '';
 				}
@@ -418,73 +352,7 @@ if (isset($_POST['updatevm'])) {
 			file_put_contents($strVMPath . '/cloud-init.json', json_encode($arrCloudInitConfig, JSON_PRETTY_PRINT));
 
 			if ($cloudInitMode == 'basic') {
-				// Generate User Data from Basic Fields
-				$hostname = $_POST['cloudinit']['hostname'] ?? '';
-				$timezone = $_POST['cloudinit']['timezone'] ?? '';
-				$user = $_POST['cloudinit']['user'] ?? 'root';
-				$pass = $_POST['cloudinit']['password'] ?? '';
-				$keys = $_POST['cloudinit']['ssh_keys'] ?? '';
-				$root_login = $_POST['cloudinit']['root_login'] ?? 0;
-				$update_pkg = $_POST['cloudinit']['update_pkg'] ?? 0;
-				$packages = $_POST['cloudinit']['packages'] ?? '';
-				$runcmd = $_POST['cloudinit']['runcmd'] ?? '';
-				
-				$strUserData = "#cloud-config\n";
-				
-				// Hostname & Timezone
-				if (!empty($hostname)) {
-					$strUserData .= "hostname: " . $hostname . "\n";
-					$strUserData .= "fqdn: " . $hostname . "\n";
-				}
-				if (!empty($timezone)) $strUserData .= "timezone: " . $timezone . "\n";
-				
-				// Packages
-				if ($update_pkg) {
-					$strUserData .= "package_update: true\n";
-					$strUserData .= "package_upgrade: true\n";
-				}
-				if (!empty($packages)) {
-					$strUserData .= "packages:\n";
-					$arrPkg = explode("\n", $packages);
-					foreach ($arrPkg as $p) {
-						if (trim($p)) $strUserData .= "  - " . trim($p) . "\n";
-					}
-				}
-
-				// Users
-				$strUserData .= "users:\n";
-				$strUserData .= "  - name: " . $user . "\n";
-				if (!empty($keys)) {
-					$strUserData .= "    ssh-authorized-keys:\n";
-					$arrKeys = explode("\n", $keys);
-					foreach ($arrKeys as $k) {
-						if (trim($k)) $strUserData .= "      - " . trim($k) . "\n";
-					}
-				}
-				if (!empty($pass)) {
-					$strUserData .= "    plain_text_passwd: " . $pass . "\n";
-					$strUserData .= "    lock_passwd: false\n";
-				}
-				if ($user != 'root') {
-					$strUserData .= "    sudo: ALL=(ALL) NOPASSWD:ALL\n";
-					$strUserData .= "    shell: /bin/bash\n";
-				}
-
-				// General SSH/Auth
-				$strUserData .= "chpasswd: { expire: False }\n";
-				$strUserData .= "ssh_pwauth: True\n";
-				if ($root_login) {
-					$strUserData .= "disable_root: false\n";
-				}
-				
-				// RunCMD
-				if (!empty($runcmd)) {
-					$strUserData .= "runcmd:\n";
-					$arrCmd = explode("\n", $runcmd);
-					foreach ($arrCmd as $c) {
-						if (trim($c)) $strUserData .= "  - " . trim($c) . "\n";
-					}
-				}
+				$strUserData = generate_cloud_init_userdata($_POST['cloudinit']);
 			} else {
 				$strUserData = $_POST['cloudinit']['userdata'] ?? '';
 			}

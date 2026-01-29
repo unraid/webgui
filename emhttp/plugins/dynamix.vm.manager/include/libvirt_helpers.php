@@ -11,6 +11,81 @@
  * all copies or substantial portions of the Software.
  */
 
+function generate_cloud_init_userdata($cloudInitData) {
+	if (empty($cloudInitData) || ($cloudInitData['mode'] ?? 'basic') !== 'basic') {
+		return $cloudInitData['userdata'] ?? '';
+	}
+
+	$hostname = $cloudInitData['hostname'] ?? '';
+	$timezone = $cloudInitData['timezone'] ?? '';
+	$user = $cloudInitData['user'] ?? 'root';
+	$pass = $cloudInitData['password'] ?? '';
+	$keys = $cloudInitData['ssh_keys'] ?? '';
+	$root_login = $cloudInitData['root_login'] ?? 0;
+	$update_pkg = $cloudInitData['update_pkg'] ?? 0;
+	$packages = $cloudInitData['packages'] ?? '';
+	$runcmd = $cloudInitData['runcmd'] ?? '';
+
+	$strUserData = "#cloud-config\n";
+
+	// Hostname & Timezone
+	if (!empty($hostname)) {
+		$strUserData .= "hostname: " . $hostname . "\n";
+		$strUserData .= "fqdn: " . $hostname . "\n";
+	}
+	if (!empty($timezone)) $strUserData .= "timezone: " . $timezone . "\n";
+
+	// Packages
+	if ($update_pkg) {
+		$strUserData .= "package_update: true\n";
+		$strUserData .= "package_upgrade: true\n";
+	}
+	if (!empty($packages)) {
+		$strUserData .= "packages:\n";
+		$arrPkg = explode("\n", $packages);
+		foreach ($arrPkg as $p) {
+			if (trim($p)) $strUserData .= "  - " . trim($p) . "\n";
+		}
+	}
+
+	// Users
+	$strUserData .= "users:\n";
+	$strUserData .= "  - name: " . $user . "\n";
+	if (!empty($keys)) {
+		$strUserData .= "    ssh-authorized-keys:\n";
+		$arrKeys = explode("\n", $keys);
+		foreach ($arrKeys as $k) {
+			if (trim($k)) $strUserData .= "      - " . trim($k) . "\n";
+		}
+	}
+	if (!empty($pass)) {
+		$strUserData .= "    plain_text_passwd: " . $pass . "\n";
+		$strUserData .= "    lock_passwd: false\n";
+	}
+	if ($user != 'root') {
+		$strUserData .= "    sudo: ALL=(ALL) NOPASSWD:ALL\n";
+		$strUserData .= "    shell: /bin/bash\n";
+	}
+
+	// General SSH/Auth
+	$strUserData .= "chpasswd: { expire: False }\n";
+	$strUserData .= "ssh_pwauth: True\n";
+	if ($root_login) {
+		$strUserData .= "disable_root: false\n";
+	}
+
+	// RunCMD
+	if (!empty($runcmd)) {
+		$strUserData .= "runcmd:\n";
+		$arrCmd = explode("\n", $runcmd);
+		foreach ($arrCmd as $c) {
+			if (trim($c)) $strUserData .= "  - " . trim($c) . "\n";
+		}
+	}
+
+	return $strUserData;
+}
+
 function create_cloud_init_iso($strPath, $strUserData, $strNetworkConfig) {
 	$strPath = rtrim($strPath, '/');
 	if (!is_dir($strPath)) {
