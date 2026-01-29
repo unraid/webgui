@@ -616,7 +616,7 @@ class Libvirt {
 					if ($strDevType == 'file' || $strDevType == 'block') {
 						$strSourceType = ($strDevType == 'file' ? 'file' : 'dev');
 						if (isset($disk['discard'])) $strDevUnmap = " discard=\"{$disk['discard']}\" "; else $strDevUnmap = " discard=\"ignore\" ";
-						$strDevice = $disk['device'] ?? 'disk';
+						$strDevice = $disk['deviceType'] ?? 'disk';
 						$diskstr .= "<disk type='".$strDevType."' device='".$strDevice."'>
 							<driver name='qemu' type='".$disk['driver']."' cache='writeback'".$strDevUnmap."/>
 							<source ".$strSourceType."='".htmlspecialchars($disk['image'], ENT_QUOTES | ENT_XML1)."'/>
@@ -1230,7 +1230,9 @@ class Libvirt {
 		$arrDomain = $arrDomain->devices->disk;
 		$ret = [];
 		foreach ($arrDomain as $disk) {
-			if ($disk->attributes()->device != "disk") continue;
+			$diskDeviceType = $disk->attributes()->device->__toString();
+			// Only process disk-type devices (disk, lun), skip cdrom and floppy
+			if (!in_array($diskDeviceType, ['disk', 'lun'])) continue;
 			$tmp = libvirt_domain_get_block_info($dom, $disk->target->attributes()->dev);
 			if ($tmp) {
 				$tmp['bus'] = $disk->target->attributes()->bus->__toString();
@@ -1238,6 +1240,7 @@ class Libvirt {
 				$tmp["discard"] = $disk->driver->attributes()->discard ?? "ignore";
 				$tmp["rotation"] = $disk->target->attributes()->rotation_rate ?? "0";
 				$tmp['serial'] = $disk->serial;
+				$tmp['deviceType'] = $diskDeviceType;
 
 				// Libvirt reports 0 bytes for raw disk images that haven't been
 				// written to yet so we just report the raw disk size for now
@@ -1263,7 +1266,8 @@ class Libvirt {
 					'boot order' => $disk->boot->attributes()->order ,
 					'rotation' => $disk->target->attributes()->rotation_rate ?? "0",
 					'serial' => $disk->serial,
-					'discard' => $disk->driver->attributes()->discard ?? "ignore"
+					'discard' => $disk->driver->attributes()->discard ?? "ignore",
+					'deviceType' => $diskDeviceType
 				];
 			}
 		}

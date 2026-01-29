@@ -284,7 +284,7 @@ if (isset($_POST['createvm'])) {
 					// Add Cloud-Init as disk
 					$newDiskIndex = count($_POST['disk'] ?? []);
 					$_POST['disk'][$newDiskIndex] = [
-						'device' => 'disk',
+						'deviceType' => 'disk',
 						'driver' => 'raw',
 						'image' => $isoPath,
 						'bus' => 'virtio'
@@ -1380,6 +1380,7 @@ function toggleCloudInitMode(mode) {
 		</td>
 	</tr>
 	<input type="hidden" name="disk[<?=$i?>][storage]" id="disk[<?=$i?>][storage]" value="<?=htmlspecialchars($arrConfig['template']['storage'])?>">
+	<input type="hidden" name="disk[<?=$i?>][deviceType]" value="<?=htmlspecialchars($arrDisk['deviceType'] ?? 'disk')?>">
 	<tr class="disk_file_options">
 		<td>_(vDisk Size)_:</td>
 		<td>
@@ -3400,7 +3401,7 @@ $(function() {
 			if (audio && !sound.includes(audio)) form.append('<input type="hidden" name="pci[]" value="'+audio+'#remove">');
 		});
 		<?endif?>
-		var postdata = form.find('input,select,textarea').serialize().replace(/'/g,"%27");
+		var postdata = form.find('input,select,textarea').not('[name="xmldesc"]').serialize().replace(/'/g,"%27");
 		<?if (!$boolNew):?>
 		// keep checkbox visually unchecked
 		form.find('input[name="usb[]"],input[name="usbopt[]"],input[name="pci[]"]').each(function(){
@@ -3469,7 +3470,7 @@ $(function() {
 			if (audio && !sound.includes(audio)) form.append('<input type="hidden" name="pci[]" value="'+audio+'#remove">');
 		});
 		<?endif?>
-		var postdata = form.find('input,select,textarea').serialize().replace(/'/g,"%27");
+		var postdata = form.find('input,select,textarea').not('[name="xmldesc"]').serialize().replace(/'/g,"%27");
 		<?if (!$boolNew):?>
 		// keep checkbox visually unchecked
 		form.find('input[name="usb[]"],input[name="usbopt[]"],input[name="pci[]"]').each(function(){

@@ -1432,7 +1432,8 @@ class Array2XML {
 				'boot' => $disk['boot order'],
 				'rotation' => $disk['rotation'],
 				'serial' => $disk['serial'],
-				'select' => $default_option
+				'select' => $default_option,
+				'deviceType' => $disk['deviceType'] ?? 'disk'
 			];
 		}
 		if (empty($arrDisks)) {
