@@ -11,6 +11,40 @@
  * all copies or substantial portions of the Software.
  */
 
+function my_yaml_encode($data, $indent = 0) {
+	if (!is_array($data)) {
+		return json_encode($data);
+	}
+	
+	$out = "";
+	$prefix = str_repeat("  ", $indent);
+	$indexed = array_keys($data) === range(0, count($data) - 1);
+	
+	foreach ($data as $key => $val) {
+		if ($indexed) {
+			$out .= $prefix . "- ";
+			if (is_array($val)) {
+				$sub = my_yaml_encode($val, $indent + 1);
+				$out .= ltrim($sub) . "\n";
+			} else {
+				$out .= my_yaml_encode($val) . "\n";
+			}
+		} else {
+			$out .= $prefix . $key . ": ";
+			if (is_array($val)) {
+				if (empty($val)) {
+					$out .= "[]\n";
+				} else {
+					$out .= "\n" . my_yaml_encode($val, $indent + 1) . "\n";
+				}
+			} else {
+				$out .= my_yaml_encode($val) . "\n";
+			}
+		}
+	}
+	return rtrim($out);
+}
+
 function generate_cloud_init_userdata($cloudInitData) {
 	if (empty($cloudInitData) || ($cloudInitData['mode'] ?? 'basic') !== 'basic') {
 		return $cloudInitData['userdata'] ?? '';
@@ -26,64 +60,61 @@ function generate_cloud_init_userdata($cloudInitData) {
 	$packages = $cloudInitData['packages'] ?? '';
 	$runcmd = $cloudInitData['runcmd'] ?? '';
 
-	$strUserData = "#cloud-config\n";
+	$config = [];
 
 	// Hostname & Timezone
 	if (!empty($hostname)) {
-		$strUserData .= "hostname: " . $hostname . "\n";
-		$strUserData .= "fqdn: " . $hostname . "\n";
+		$config['hostname'] = $hostname;
+		$config['fqdn'] = $hostname;
 	}
-	if (!empty($timezone)) $strUserData .= "timezone: " . $timezone . "\n";
+	if (!empty($timezone)) $config['timezone'] = $timezone;
 
 	// Packages
 	if ($update_pkg) {
-		$strUserData .= "package_update: true\n";
-		$strUserData .= "package_upgrade: true\n";
+		$config['package_update'] = true;
+		$config['package_upgrade'] = true;
 	}
 	if (!empty($packages)) {
-		$strUserData .= "packages:\n";
-		$arrPkg = explode("\n", $packages);
-		foreach ($arrPkg as $p) {
-			if (trim($p)) $strUserData .= "  - " . trim($p) . "\n";
+		$arrPkg = array_filter(array_map('trim', explode("\n", $packages)));
+		if (!empty($arrPkg)) {
+			$config['packages'] = array_values($arrPkg);
 		}
 	}
 
 	// Users
-	$strUserData .= "users:\n";
-	$strUserData .= "  - name: " . $user . "\n";
+	$userConfig = ['name' => $user];
 	if (!empty($keys)) {
-		$strUserData .= "    ssh-authorized-keys:\n";
-		$arrKeys = explode("\n", $keys);
-		foreach ($arrKeys as $k) {
-			if (trim($k)) $strUserData .= "      - " . trim($k) . "\n";
+		$arrKeys = array_filter(array_map('trim', explode("\n", $keys)));
+		if (!empty($arrKeys)) {
+			$userConfig['ssh-authorized-keys'] = array_values($arrKeys);
 		}
 	}
 	if (!empty($pass)) {
-		$strUserData .= "    plain_text_passwd: " . $pass . "\n";
-		$strUserData .= "    lock_passwd: false\n";
+		$userConfig['plain_text_passwd'] = $pass;
+		$userConfig['lock_passwd'] = false;
 	}
 	if ($user != 'root') {
-		$strUserData .= "    sudo: ALL=(ALL) NOPASSWD:ALL\n";
-		$strUserData .= "    shell: /bin/bash\n";
+		$userConfig['sudo'] = 'ALL=(ALL) NOPASSWD:ALL';
+		$userConfig['shell'] = '/bin/bash';
 	}
+	$config['users'] = [$userConfig];
 
 	// General SSH/Auth
-	$strUserData .= "chpasswd: { expire: False }\n";
-	$strUserData .= "ssh_pwauth: True\n";
+	$config['chpasswd'] = ['expire' => false];
+	$config['ssh_pwauth'] = true;
 	if ($root_login) {
-		$strUserData .= "disable_root: false\n";
+		$config['disable_root'] = false;
 	}
 
 	// RunCMD
 	if (!empty($runcmd)) {
-		$strUserData .= "runcmd:\n";
-		$arrCmd = explode("\n", $runcmd);
-		foreach ($arrCmd as $c) {
-			if (trim($c)) $strUserData .= "  - " . trim($c) . "\n";
+		$arrCmd = array_filter(array_map('trim', explode("\n", $runcmd)));
+		if (!empty($arrCmd)) {
+			$config['runcmd'] = array_values($arrCmd);
 		}
 	}
 
-	return $strUserData;
+	return "#cloud-config\n" . my_yaml_encode($config);
 }
 
 function create_cloud_init_iso($strPath, $strUserData, $strNetworkConfig) {
