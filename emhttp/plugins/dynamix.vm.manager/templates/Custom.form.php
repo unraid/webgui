@@ -177,7 +177,7 @@ if (isset($_POST['createvm'])) {
 			
 			if (!empty($strVMPath)) {
 				if (!is_dir($strVMPath)) {
-					mkdir($strVMPath, 0777, true);
+					mkdir($strVMPath, 0755, true);
 				}
 
 				$cloudInitMode = $_POST['cloudinit']['mode'] ?? 'basic';

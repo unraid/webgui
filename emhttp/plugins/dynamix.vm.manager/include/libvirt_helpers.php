@@ -157,23 +157,40 @@ function create_cloud_init_iso($strPath, $strUserData, $strNetworkConfig) {
 	}
 
 	// Write files
-	file_put_contents($strMountPoint . '/user-data', $strUserData);
-	if (!empty($strNetworkConfig)) {
-		file_put_contents($strMountPoint . '/network-config', $strNetworkConfig);
+	if (file_put_contents($strMountPoint . '/user-data', $strUserData) === false) {
+		error_log("Cloud-Init write failed: " . $strMountPoint . '/user-data');
+		exec("umount " . escapeshellarg($strMountPoint));
+		rmdir($strMountPoint);
+		return false;
 	}
-	file_put_contents($strMountPoint . '/meta-data', "instance-id: " . uniqid() . "\nlocal-hostname: localhost\n");
+	
+	if (!empty($strNetworkConfig)) {
+		if (file_put_contents($strMountPoint . '/network-config', $strNetworkConfig) === false) {
+			error_log("Cloud-Init write failed: " . $strMountPoint . '/network-config');
+			exec("umount " . escapeshellarg($strMountPoint));
+			rmdir($strMountPoint);
+			return false;
+		}
+	}
+	
+	if (file_put_contents($strMountPoint . '/meta-data', "instance-id: " . uniqid() . "\nlocal-hostname: localhost\n") === false) {
+		error_log("Cloud-Init write failed: " . $strMountPoint . '/meta-data');
+		exec("umount " . escapeshellarg($strMountPoint));
+		rmdir($strMountPoint);
+		return false;
+	}
 
 	// Sync and Unmount
 	exec("sync");
 	exec("umount " . escapeshellarg($strMountPoint) . " 2>&1", $output, $return_var);
 	
-	// Clean up mount point
-	rmdir($strMountPoint);
-
 	if ($return_var !== 0) {
 		error_log("Cloud-Init image unmount failed: " . implode("\n", $output));
 		return false;
 	}
+
+	// Clean up mount point
+	rmdir($strMountPoint);
 
 	return $strImgPath;
 }

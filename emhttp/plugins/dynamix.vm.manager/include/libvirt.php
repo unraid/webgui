@@ -1775,12 +1775,24 @@ class Libvirt {
 		$tmp = $this->domain_undefine($dom);
 		if (!$tmp) return $this->_set_last_error();
 		// remove the first disk only
-		if (array_key_exists('file', $disks[0])) {
+		$dir = '';
+		if (!empty($disks) && array_key_exists('file', $disks[0])) {
 			$disk = $disks[0]['file'];
 			$pathinfo = pathinfo($disk);
 			$dir = $pathinfo['dirname'];
+		} elseif (is_dir("/mnt/user/domains/$domain")) {
+			$dir = "/mnt/user/domains/$domain";
+		} elseif (is_dir("/mnt/cache/domains/$domain")) {
+			$dir = "/mnt/cache/domains/$domain";
+		}
+
+		if ($dir) {
 			// remove the vm config
 			$cfg_vm = $dir.'/'.$domain.'.cfg';
+			if (is_file($dir.'/cloud-init.img')) unlink($dir.'/cloud-init.img');
+			if (is_file($dir.'/cloud-init.json')) unlink($dir.'/cloud-init.json');
+			if (is_file($dir.'/cloud-init.user-data')) unlink($dir.'/cloud-init.user-data');
+			if (is_file($dir.'/cloud-init.network-config')) unlink($dir.'/cloud-init.network-config');
 			if (is_file($cfg_vm)) unlink($cfg_vm);
 			$cfg = $dir.'/'.$pathinfo['filename'].'.cfg';
 			$xml = $dir.'/'.$pathinfo['filename'].'.xml';
