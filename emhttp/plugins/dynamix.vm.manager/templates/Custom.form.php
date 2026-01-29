@@ -214,16 +214,19 @@ if (isset($_POST['createvm'])) {
 
 				$isoPath = create_cloud_init_iso($strVMPath, $strUserData, $strNetworkConfig);
 				
-				if ($isoPath) {
-					// Add Cloud-Init as disk
-					$newDiskIndex = count($_POST['disk'] ?? []);
-					$_POST['disk'][$newDiskIndex] = [
-						'deviceType' => 'disk',
-						'driver' => 'raw',
-						'image' => $isoPath,
-						'bus' => 'virtio'
-					];
+				if (!$isoPath) {
+					echo json_encode(['error' => _('Failed to create Cloud-Init ISO')]);
+					exit;
 				}
+
+				// Add Cloud-Init as disk
+				$newDiskIndex = count($_POST['disk'] ?? []);
+				$_POST['disk'][$newDiskIndex] = [
+					'deviceType' => 'disk',
+					'driver' => 'raw',
+					'image' => $isoPath,
+					'bus' => 'virtio'
+				];
 			}
 		}
 
@@ -362,7 +365,16 @@ if (isset($_POST['updatevm'])) {
 			file_put_contents($strVMPath . '/cloud-init.network-config', $strNetworkConfig);
 
 			// Generate Cloud-Init disk image
-			create_cloud_init_iso($strVMPath, $strUserData, $strNetworkConfig);
+			$isoPath = create_cloud_init_iso($strVMPath, $strUserData, $strNetworkConfig);
+
+			if ($isoPath) {
+				$newDiskIndex = count($_POST['disk'] ?? []);
+				$_POST['disk'][$newDiskIndex] = [
+					'source' => $isoPath,
+					'bus' => 'sata',
+					'type' => 'cdrom'
+				];
+			}
 		}
 	}
 
