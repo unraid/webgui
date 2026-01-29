@@ -367,6 +367,11 @@ if (isset($_POST['updatevm'])) {
 			// Generate Cloud-Init disk image
 			$isoPath = create_cloud_init_iso($strVMPath, $strUserData, $strNetworkConfig);
 
+			if (!$isoPath) {
+				echo json_encode(['error' => _('Failed to create Cloud-Init ISO')]);
+				exit;
+			}
+
 			if ($isoPath) {
 				$newDiskIndex = count($_POST['disk'] ?? []);
 				$_POST['disk'][$newDiskIndex] = [
