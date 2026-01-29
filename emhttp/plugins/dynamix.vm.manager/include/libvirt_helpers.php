@@ -117,13 +117,28 @@ function generate_cloud_init_userdata($cloudInitData) {
 	return "#cloud-config\n" . my_yaml_encode($config);
 }
 
-function create_cloud_init_iso($strPath, $strUserData, $strNetworkConfig) {
+function create_cloud_init_iso($strPath, $strUserData, $strNetworkConfig, $customISOPath = null) {
 	$strPath = rtrim($strPath, '/');
 	if (!is_dir($strPath)) {
 		return false;
 	}
 
-	$strImgPath = $strPath . '/cloud-init.img';
+	if (!empty($customISOPath)) {
+		$strImgPath = $customISOPath;
+		// If custom path is a directory (ends in / or is existing dir), append filename
+		if (substr($strImgPath, -1) === '/' || is_dir($strImgPath)) {
+			$strImgPath = rtrim($strImgPath, '/') . '/cloud-init.img';
+		}
+	} else {
+		$strImgPath = $strPath . '/cloud-init.img';
+	}
+	
+	// Create directory for custom path if needed
+	$dir = dirname($strImgPath);
+	if (!is_dir($dir)) {
+		mkdir($dir, 0777, true);
+	}
+
 	$strMountPoint = $strPath . '/cloud-init-mount';
 	
 	// Create blank 4MB image

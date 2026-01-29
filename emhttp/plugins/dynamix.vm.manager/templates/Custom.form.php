@@ -198,7 +198,9 @@ if (isset($_POST['createvm'])) {
 					'packages' => $_POST['cloudinit']['packages'] ?? '',
 					'runcmd' => $_POST['cloudinit']['runcmd'] ?? '',
 					'userdata' => $_POST['cloudinit']['userdata'] ?? '',
-					'networkconfig' => $_POST['cloudinit']['networkconfig'] ?? ''
+					'userdata' => $_POST['cloudinit']['userdata'] ?? '',
+					'networkconfig' => $_POST['cloudinit']['networkconfig'] ?? '',
+					'iso_path' => $_POST['cloudinit']['iso_path'] ?? ''
 				];
 				file_put_contents($strVMPath . '/cloud-init.json', json_encode($arrCloudInitConfig, JSON_PRETTY_PRINT));
 
@@ -212,7 +214,20 @@ if (isset($_POST['createvm'])) {
 				file_put_contents($strVMPath . '/cloud-init.user-data', $strUserData);
 				file_put_contents($strVMPath . '/cloud-init.network-config', $strNetworkConfig);
 
-				$isoPath = create_cloud_init_iso($strVMPath, $strUserData, $strNetworkConfig);
+				$customISOPath = $_POST['cloudinit']['iso_path'] ?? null;
+				if ($customISOPath) {
+					// Security: Enforce path to be under /mnt/
+					if (strpos($customISOPath, '/mnt/') !== 0) {
+						echo json_encode(['error' => _('Cloud-Init ISO path must be within /mnt/')]);
+						exit;
+					}
+					// Security: Basic injection check (though escapeshellarg is used later)
+					if (preg_match('/[;&|`$]/', $customISOPath)) {
+						echo json_encode(['error' => _('Invalid characters in Cloud-Init ISO path')]);
+						exit;
+					}
+				}
+				$isoPath = create_cloud_init_iso($strVMPath, $strUserData, $strNetworkConfig, $customISOPath);
 				
 				if (!$isoPath) {
 					echo json_encode(['error' => _('Failed to create Cloud-Init ISO')]);
@@ -350,7 +365,9 @@ if (isset($_POST['updatevm'])) {
 				'packages' => $_POST['cloudinit']['packages'] ?? '',
 				'runcmd' => $_POST['cloudinit']['runcmd'] ?? '',
 				'userdata' => $_POST['cloudinit']['userdata'] ?? '',
-				'networkconfig' => $_POST['cloudinit']['networkconfig'] ?? ''
+				'userdata' => $_POST['cloudinit']['userdata'] ?? '',
+				'networkconfig' => $_POST['cloudinit']['networkconfig'] ?? '',
+				'iso_path' => $_POST['cloudinit']['iso_path'] ?? ''
 			];
 			file_put_contents($strVMPath . '/cloud-init.json', json_encode($arrCloudInitConfig, JSON_PRETTY_PRINT));
 
@@ -365,7 +382,20 @@ if (isset($_POST['updatevm'])) {
 			file_put_contents($strVMPath . '/cloud-init.network-config', $strNetworkConfig);
 
 			// Generate Cloud-Init disk image
-			$isoPath = create_cloud_init_iso($strVMPath, $strUserData, $strNetworkConfig);
+			$customISOPath = $_POST['cloudinit']['iso_path'] ?? null;
+			if ($customISOPath) {
+				// Security: Enforce path to be under /mnt/
+				if (strpos($customISOPath, '/mnt/') !== 0) {
+					echo json_encode(['error' => _('Cloud-Init ISO path must be within /mnt/')]);
+					exit;
+				}
+				// Security: Basic injection check (though escapeshellarg is used later)
+				if (preg_match('/[;&|`$]/', $customISOPath)) {
+					echo json_encode(['error' => _('Invalid characters in Cloud-Init ISO path')]);
+					exit;
+				}
+			}
+			$isoPath = create_cloud_init_iso($strVMPath, $strUserData, $strNetworkConfig, $customISOPath);
 
 			if (!$isoPath) {
 				echo json_encode(['error' => _('Failed to create Cloud-Init ISO')]);
@@ -373,13 +403,30 @@ if (isset($_POST['updatevm'])) {
 			}
 
 			if ($isoPath) {
-				$newDiskIndex = count($_POST['disk'] ?? []);
-				$_POST['disk'][$newDiskIndex] = [
-					'deviceType' => 'disk',
-					'driver' => 'raw',
-					'image' => $isoPath,
-					'bus' => 'virtio'
-				];
+				$found = false;
+				if (isset($_POST['disk']) && is_array($_POST['disk'])) {
+					foreach ($_POST['disk'] as $key => &$disk) {
+						if (isset($disk['image'])) {
+							// Check for exact match OR if it looks like a cloud-init disk (to replace old path)
+							$basename = basename($disk['image']);
+							if ($disk['image'] === $isoPath || $basename === 'cloud-init.img' || $basename === 'cloud-init.iso') {
+								$disk['image'] = $isoPath; // Update logic: replace with new path
+								$found = true;
+								break;
+							}
+						}
+					}
+				}
+
+				if (!$found) {
+					$newDiskIndex = count($_POST['disk'] ?? []);
+					$_POST['disk'][$newDiskIndex] = [
+						'deviceType' => 'disk',
+						'driver' => 'raw',
+						'image' => $isoPath,
+						'bus' => 'virtio'
+					];
+				}
 			}
 		}
 	}
@@ -1154,6 +1201,14 @@ if (!isset($arrValidMachineTypes[$arrConfig['domain']['machine']])) {
 				<td>_(Network Config)_:</td>
 				<td>
 					<textarea name="cloudinit[networkconfig]" class="textTemplate" rows="10" placeholder="version: 2"><?=htmlspecialchars($arrConfig['cloudinit']['networkconfig'])?></textarea>
+				</td>
+			</tr>
+		</table>
+		<table>
+			<tr>
+				<td>_(ISO Path)_:</td>
+				<td>
+					<span class="width"><input type="text" name="cloudinit[iso_path]" value="<?=htmlspecialchars($arrConfig['cloudinit']['iso_path'] ?? '')?>" placeholder="_(e.g.)_ /mnt/user/isos/cloud-init.img (_(optional)_)" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="img,iso" data-pickmatch="^[^.].*" data-pickroot="/mnt/user/"></span>
 				</td>
 			</tr>
 		</table>
