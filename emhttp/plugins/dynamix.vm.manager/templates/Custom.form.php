@@ -370,9 +370,10 @@ if (isset($_POST['updatevm'])) {
 			if ($isoPath) {
 				$newDiskIndex = count($_POST['disk'] ?? []);
 				$_POST['disk'][$newDiskIndex] = [
-					'source' => $isoPath,
-					'bus' => 'sata',
-					'type' => 'cdrom'
+					'deviceType' => 'disk',
+					'driver' => 'raw',
+					'image' => $isoPath,
+					'bus' => 'virtio'
 				];
 			}
 		}
