@@ -484,7 +484,8 @@ case 'vm-removal':
 	$list = glob($pathinfo['dirname']."/*");
 	$uuid = $lv->domain_get_uuid($domName);
 
-	$list2 = glob("/etc/libvirt/qemu/nvram/*$uuid*");
+	$vm_path = libvirt_get_vm_path($domName);
+	$list2 = glob(libvirt_get_nvram_dir($vm_path, $domName)."/*$uuid*");
 	$listnew = array();
 	$list=array_merge($list,$list2);
 	foreach($list as $key => $listent)
