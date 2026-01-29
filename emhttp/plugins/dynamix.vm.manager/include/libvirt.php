@@ -280,6 +280,7 @@ class Libvirt {
 				if (!is_file($nvram_dir.'/'.$uuid.'_VARS-pure-efi.fd')) {
 					// Create a new copy of OVMF VARS for this VM
 					mkdir($nvram_dir.'/', 0777, true);
+					@file_put_contents('/tmp/nvram_create.log', date('c')." DEBUG ONLY - remove before production - create nvram: {$nvram_dir}/{$uuid}_VARS-pure-efi.fd\n", FILE_APPEND);
 					copy('/usr/share/qemu/ovmf-x64/OVMF_VARS-pure-efi.fd', $nvram_dir.'/'.$uuid.'_VARS-pure-efi.fd');
 				}
 				if (is_file($nvram_dir.'/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
@@ -294,6 +295,7 @@ class Libvirt {
 				if (!is_file($nvram_dir.'/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
 					// Create a new copy of OVMF VARS for this VM
 					mkdir($nvram_dir.'/', 0777, true);
+					@file_put_contents('/tmp/nvram_create.log', date('c')." DEBUG ONLY - remove before production - create nvram: {$nvram_dir}/{$uuid}_VARS-pure-efi-tpm.fd\n", FILE_APPEND);
 					copy('/usr/share/qemu/ovmf-x64/OVMF_VARS-pure-efi-tpm.fd', $nvram_dir.'/'.$uuid.'_VARS-pure-efi-tpm.fd');
 				}
 				if (is_file($nvram_dir.'/'.$uuid.'_VARS-pure-efi.fd')) {
@@ -1869,7 +1871,7 @@ class Libvirt {
 		$dom = $this->get_domain_object($domain);
 		if (!$dom) return false;
 		$disks = $this->get_disk_stats($dom);
-		$tmp = $this->domain_undefine($dom);
+		$tmp = $this->domain_undefine($domain);
 		if (!$tmp) return $this->_set_last_error();
 		libvirt_remove_vms_json_entry($domain);
 		// remove the first disk only
