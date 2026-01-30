@@ -1,0 +1,74 @@
+Menu="Boot:1"
+Title="Boot Device Settings"
+Tag="usb"
+---
+<?PHP
+/* Copyright 2005-2024, Lime Technology
+ * Copyright 2012-2024, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<script>
+function cleanUp(zip) {
+  if (document.hasFocus()) {
+    $('input[value="_(Creating Flash backup)_..."]').val("_(Flash backup)_").prop('disabled',false);
+    $('div.spinner').hide('slow');
+    $('#pleaseWait').hide('slow');
+    $.post('/webGui/include/Download.php',{cmd:'unlink',file:zip});
+  } else {
+    setTimeout(function(){cleanUp(zip);},2000);
+  }
+}
+function backup() {
+  $('input[value="_(Flash backup)_"]').val('_(Creating Flash backup)_...').prop('disabled',true);
+  $('div.spinner').show('slow');
+  $('#pleaseWait').show('slow');
+  $.post('/webGui/include/Download.php',{cmd:'backup'},function(zip) {
+    if (zip) {
+      location = '/'+zip;
+      setTimeout(function(){cleanUp(zip);},6000);
+    } else {
+      $('input[value="_(Creating Flash backup)_..."]').val("_(Flash backup)_");
+      $('div.spinner').hide('slow');
+      $('#pleaseWait').hide('slow');
+      swal({title:"_(Creation error)_",text:"_(Insufficient free disk space available)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    }
+  });
+}
+</script>
+<div id="pleaseWait" style="display:none;text-align:center;margin-bottom:24px"><span class="red-text strong">_(Please wait)_... _(creating Flash backup zip file (this may take several minutes))_</span></div>
+
+_(Flash Vendor)_:
+: <?=$var['flashVendor'];?>
+
+_(Flash Product)_:
+: <?=$var['flashProduct'];?>&nbsp;
+
+_(Flash GUID)_:
+: <?=$var['flashGUID'];?>&nbsp;
+
+<?if (strstr($var['regTy'], "blacklisted")):?>
+
+&nbsp;
+: **_(Blacklisted)_** - <a href="https://unraid.net/contact" target="_blank">_(Contact Support)_</a>
+
+<?else:?>
+
+&nbsp;
+: [_(Registration Key Manager)_](/Tools/Registration)
+
+<?endif;?>
+
+:flash_backup_help:
+
+&nbsp;
+: <span class="inline-block">
+    <input type="button" value="_(Flash backup)_" onclick="backup()">
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
