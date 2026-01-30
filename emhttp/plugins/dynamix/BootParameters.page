@@ -1,7 +1,7 @@
 Menu="Flash:4 Boot:3 OtherSettings"
 Title="Boot Parameters"
 Tag="edit"
-Cond="file_exists('/boot/syslinux/syslinux.cfg')"
+
 ---
 <?PHP
 $docroot = $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
@@ -442,6 +442,9 @@ var isInitializing = true;
 
 // Store current append line from syslinux.cfg for comparison
 var currentAppendLine = '';
+
+// Active bootloader type (syslinux or grub)
+var bootloaderType = 'syslinux';
 
 // Theme detection function (matches Unraid's approach)
 function getModalColors() {
@@ -976,10 +979,15 @@ function buildProposedParams() {
 // Returns true if they match (no changes needed), false if different (Apply should be enabled)
 function compareConfigToForm() {
     const proposed = buildProposedParams();
-    // Build proposed line without trailing space when params array is empty
-    const proposedLine = proposed.length > 0
-        ? 'initrd=/bzroot ' + proposed.join(' ')
-        : 'initrd=/bzroot';
+    let proposedLine = '';
+    if (bootloaderType === 'grub') {
+        proposedLine = proposed.join(' ');
+    } else {
+        // Build proposed line without trailing space when params array is empty
+        proposedLine = proposed.length > 0
+            ? 'initrd=/bzroot ' + proposed.join(' ')
+            : 'initrd=/bzroot';
+    }
 
     // Normalize whitespace for comparison (multiple spaces → single space)
     const currentNormalized = currentAppendLine.trim().replace(/\s+/g, ' ');
@@ -994,7 +1002,12 @@ function updatePreview() {
     var proposedParams = buildProposedParams();
 
     // Build the preview HTML
-    var html = '<span style="color: var(--text-color, #333);">append initrd=/bzroot</span> ';
+    var html = '';
+    if (bootloaderType === 'grub') {
+        html = '<span style="color: var(--text-color, #333);">linux /bzimage</span> ';
+    } else {
+        html = '<span style="color: var(--text-color, #333);">append initrd=/bzroot</span> ';
+    }
 
     // Add all proposed parameters in bright green with bold weight for visibility
     if (proposedParams.length > 0) {
@@ -1059,15 +1072,102 @@ function parseSyslinuxConfig(raw_config) {
 }
 
 /**
+ * Parse GRUB config into structured format
+ */
+function parseGrubConfig(raw_config) {
+    const lines = raw_config.split('\n');
+    const parsed = {
+        global: [],
+        entries: []
+    };
+
+    let currentEntry = null;
+    let inEntry = false;
+    let braceDepth = 0;
+    let defaultValue = null;
+
+    lines.forEach((line) => {
+        const trimmed = line.trim();
+
+        if (trimmed.startsWith('set default=')) {
+            const val = trimmed.split('=')[1]?.trim() || '';
+            defaultValue = val.replace(/^"|"$/g, '');
+        }
+
+        if (trimmed.startsWith('menuentry ')) {
+            inEntry = true;
+            braceDepth = 0;
+
+            const match = trimmed.match(/menuentry\s+"([^"]+)"/);
+            const label = match ? match[1] : trimmed.substring('menuentry '.length).trim();
+
+            if (currentEntry) {
+                parsed.entries.push(currentEntry);
+            }
+
+            currentEntry = {
+                label,
+                lines: [line],
+                isDefault: false
+            };
+        } else if (inEntry && currentEntry) {
+            currentEntry.lines.push(line);
+        } else {
+            parsed.global.push(line);
+        }
+
+        if (inEntry) {
+            const openCount = (line.match(/{/g) || []).length;
+            const closeCount = (line.match(/}/g) || []).length;
+            braceDepth += openCount - closeCount;
+            if (braceDepth <= 0 && trimmed === '}') {
+                inEntry = false;
+            }
+        }
+    });
+
+    if (currentEntry) {
+        parsed.entries.push(currentEntry);
+    }
+
+    if (defaultValue !== null && defaultValue !== '') {
+        const defaultIndex = /^[0-9]+$/.test(defaultValue) ? parseInt(defaultValue, 10) : null;
+        parsed.entries.forEach((entry, index) => {
+            if ((defaultIndex !== null && index === defaultIndex) || entry.label === defaultValue) {
+                entry.isDefault = true;
+            }
+        });
+    }
+
+    return parsed;
+}
+
+/**
+ * Parse bootloader config based on detected type
+ */
+function parseBootloaderConfig(raw_config) {
+    if (bootloaderType === 'grub') {
+        return parseGrubConfig(raw_config);
+    }
+    return parseSyslinuxConfig(raw_config);
+}
+
+/**
  * Helper function to create boot entry content with optional diff display
  */
 function createEntryContent(entry, showApply) {
     const content = $('<pre>').addClass('boot-entry-content');
 
-    // Find the append line index
+    // Find the line index to update (append for syslinux, linux for GRUB)
     let appendLineIndex = -1;
     for (let i = 0; i < entry.lines.length; i++) {
-        if (entry.lines[i].trim().startsWith('append ')) {
+        const trimmed = entry.lines[i].trim();
+        if (bootloaderType === 'grub') {
+            if (trimmed.startsWith('linux ') || trimmed.startsWith('linuxefi ')) {
+                appendLineIndex = i;
+                break;
+            }
+        } else if (trimmed.startsWith('append ')) {
             appendLineIndex = i;
             break;
         }
@@ -1079,9 +1179,18 @@ function createEntryContent(entry, showApply) {
         if (idx === appendLineIndex && showApply) {
             // Show diff: removed line (original) and added line (with parameters)
             const originalAppend = line;
-            // Build the new append line with all proposed parameters
             const proposedParams = buildProposedParams();
-            const newAppend = '  append initrd=/bzroot' + (proposedParams.length > 0 ? ' ' + proposedParams.join(' ') : '');
+            let newAppend = '';
+            if (bootloaderType === 'grub') {
+                const match = line.match(/^(\s*)(linux|linuxefi)\s+(\S+)(.*)$/);
+                const indent = match ? match[1] : '  ';
+                const cmd = match ? match[2] : 'linux';
+                const kernel = match ? match[3] : '/bzimage';
+                const args = proposedParams.length > 0 ? ' ' + proposedParams.join(' ') : '';
+                newAppend = indent + cmd + ' ' + kernel + args;
+            } else {
+                newAppend = '  append initrd=/bzroot' + (proposedParams.length > 0 ? ' ' + proposedParams.join(' ') : '');
+            }
             contentHtml += '<span class="diff-line-removed">' + originalAppend + '</span>\n';
             contentHtml += '<span class="diff-line-added">' + newAppend + '</span>\n';
         } else if (idx !== appendLineIndex || !showApply) {
@@ -1132,7 +1241,52 @@ function renderMenuView(parsed) {
         const trimmed = line.trim();
 
         // Replace timeout line with dropdown
-        if (trimmed.startsWith('timeout ')) {
+        if (bootloaderType === 'grub' && trimmed.startsWith('set timeout=')) {
+            const parsedTimeout = parseInt(trimmed.split('=')[1], 10);
+            const timeoutDeci = Number.isFinite(parsedTimeout) ? (parsedTimeout * 10) : 50; // deciseconds
+            const timeoutOptions = [0, 10, 20, 30, 50, 100, 150, 200, 300, 450, 600]; // deciseconds
+            const formatSeconds = (deci) => (deci % 10 === 0 ? (deci / 10).toString() : (deci / 10).toFixed(1));
+
+            const timeoutDiv = $('<div>').css('margin', '2px 0');
+            timeoutDiv.append('set timeout=');
+
+            const dropdown = $('<select>')
+                .attr('id', 'timeout-dropdown')
+                .css({
+                    'width': 'auto',
+                    'margin': '0 4px'
+                })
+                .on('change', function() {
+                    markFormModified();
+                });
+
+            let matchedPreset = false;
+
+            timeoutOptions.forEach(function(deci) {
+                const secLabel = formatSeconds(deci);
+                const option = $('<option>')
+                    .val(deci)
+                    .text(deci === 0 ? '0 seconds (boot immediately)' : secLabel + ' second' + (secLabel === '1' ? '' : 's'));
+
+                if (deci === timeoutDeci) {
+                    matchedPreset = true;
+                    option.prop('selected', true);
+                }
+                dropdown.append(option);
+            });
+
+            if (!matchedPreset) {
+                const customLabel = formatSeconds(timeoutDeci);
+                const customOption = $('<option>')
+                    .val(timeoutDeci)
+                    .text(customLabel + ' seconds (custom)')
+                    .prop('selected', true);
+                dropdown.append(customOption);
+            }
+
+            timeoutDiv.append(dropdown);
+            globalContent.append(timeoutDiv);
+        } else if (trimmed.startsWith('timeout ')) {
             const parsedTimeout = parseInt(trimmed.split(' ')[1], 10);
             const timeoutDeci = Number.isFinite(parsedTimeout) ? parsedTimeout : 50; // deciseconds
             const timeoutOptions = [0, 10, 20, 30, 50, 100, 150, 200, 300, 450, 600]; // deciseconds
@@ -1760,12 +1914,15 @@ function loadCurrentConfig() {
                 currentAppendLine = config.current_append_line.trim();
             }
 
+            // Set bootloader type for rendering and validation
+            bootloaderType = config.bootloader_type || 'syslinux';
+
             // Display current configuration (full syslinux.cfg file)
             if (config.full_config) {
                 document.getElementById('config-content').textContent = config.full_config;
 
                 // Parse config and render menu view
-                const parsed = parseSyslinuxConfig(config.full_config);
+                const parsed = parseBootloaderConfig(config.full_config);
                 renderMenuView(parsed);
             }
 
@@ -2096,7 +2253,7 @@ function actuallyApplyBootParams(btn) {
                 document.getElementById('config-content').textContent = response.config;
 
                 // Parse and update menu view
-                const parsed = parseSyslinuxConfig(response.config);
+                const parsed = parseBootloaderConfig(response.config);
                 renderMenuView(parsed);
 
                 // Update preview with new parameters
@@ -2564,7 +2721,34 @@ function validateCustomParam_Syslinux(param) {
  * and detect deprecated "append" syntax for clarity
  */
 function validateCustomParam_GRUB(param) {
-    // Placeholder - allow all parameters for now
+    const lowerParam = param.toLowerCase();
+
+    // Character whitelist (same as syslinux)
+    if (!param.match(/^[a-zA-Z0-9_.,=:/@-]+$/)) {
+        swal({
+            title: "Invalid Custom Parameter",
+            text: "Custom parameters can only contain letters, numbers, and these symbols:\n\n" +
+                  "_ - . , = : / @\n\n" +
+                  "Quotes, spaces, and special shell characters are not allowed.",
+            type: "error"
+        });
+        return false;
+    }
+
+    // Disallow GRUB directives
+    const reserved = ['linux', 'linuxefi', 'initrd', 'menuentry', 'set'];
+    for (const directive of reserved) {
+        if (lowerParam.startsWith(directive)) {
+            swal({
+                title: "Invalid Custom Parameter",
+                text: "'" + directive + "' is a reserved GRUB configuration directive.\n\n" +
+                      "Reserved directives: linux, linuxefi, initrd, menuentry, set",
+                type: "error"
+            });
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -2573,10 +2757,6 @@ function validateCustomParam_GRUB(param) {
  * Returns true if valid, false if invalid (with error modal shown)
  */
 function validateCustomParam(param) {
-    // Bootloader detection: Currently hardcoded to syslinux (USB boot)
-    // Future: Server-side detection will support GRUB when available
-    const bootloaderType = 'syslinux';
-
     if (bootloaderType === 'grub') {
         return validateCustomParam_GRUB(param);
     } else {

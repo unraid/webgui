@@ -86,10 +86,11 @@ switch ($operation) {
                 $config['custom_params_comments'] = new stdClass();
             }
 
-            // Read the full syslinux.cfg file to display
-            $syslinux_file = '/boot/syslinux/syslinux.cfg';
-            if (file_exists($syslinux_file)) {
-                $config['full_config'] = file_get_contents($syslinux_file);
+            // Read the full bootloader config file to display
+            $bootloader_type = $config['bootloader_type'] ?? 'syslinux';
+            $config_file = ($bootloader_type === 'grub') ? '/boot/grub/grub.cfg' : '/boot/syslinux/syslinux.cfg';
+            if (file_exists($config_file)) {
+                $config['full_config'] = file_get_contents($config_file);
             } else {
                 $config['full_config'] = '';
             }
@@ -184,8 +185,8 @@ switch ($operation) {
 
         // Sanitize filename
         $backup_filename = basename($backup_filename);
-        // Format: syslinux.cfg.bak.YYYY-MMM-DD_HH-MM-SS
-        if (!preg_match('/^syslinux\.cfg\.bak\.[0-9]{4}-[A-Za-z]{3}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}$/i', $backup_filename)) {
+        // Format: syslinux.cfg.bak.YYYY-MMM-DD_HH-MM-SS or grub.cfg.bak.YYYY-MMM-DD_HH-MM-SS
+        if (!preg_match('/^(syslinux|grub)\.cfg\.bak\.[0-9]{4}-[A-Za-z]{3}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}$/i', $backup_filename)) {
             echo json_encode(['error' => 'Invalid backup filename format']);
             exit;
         }
