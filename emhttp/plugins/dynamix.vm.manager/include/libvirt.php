@@ -1879,40 +1879,69 @@ class Libvirt {
 		return $tmp ?: $this->_set_last_error();
 	}
 
-	function domain_delete($domain) {
+	function domain_delete($domain,$firstdiskonly=true) {
 		$dom = $this->get_domain_object($domain);
 		if (!$dom) return false;
 		$disks = $this->get_disk_stats($dom);
 		$tmp = $this->domain_undefine($domain);
 		if (!$tmp) return $this->_set_last_error();
 		libvirt_remove_vms_json_entry($domain);
-		// remove the first disk only
-		if (array_key_exists('file', $disks[0])) {
-			$disk = $disks[0]['file'];
-			$pathinfo = pathinfo($disk);
-			$dir = $pathinfo['dirname'];
-			// remove the vm config
-			$cfg_vm = $dir.'/'.$domain.'.cfg';
-			if (is_file($cfg_vm)) unlink($cfg_vm);
-			$cfg = $dir.'/'.$pathinfo['filename'].'.cfg';
-			$xml = $dir.'/'.$pathinfo['filename'].'.xml';
-			if (is_file($disk)) unlink($disk);
-			if (is_file($cfg)) unlink($cfg);
-			if (is_file($xml)) unlink($xml);
-			if (is_dir($dir) && $this->is_dir_empty($dir)) {
-				$result= my_rmdir($dir);
-				if ($result['type'] == "zfs") {
-					qemu_log("$domain","delete empty zfs $dir {$result['rtncode']}");
-					if (isset($result['dataset'])) qemu_log("$domain","dataset {$result['dataset']} ");
-					if (isset($result['cmd'])) qemu_log("$domain","Command {$result['cmd']} ");
-					if (isset($result['output'])) {
-						$outputlogs = implode(" ",$result['output']);
-						qemu_log("$domain","Output $outputlogs end");
+
+
+		# Directorys to consider removing
+		# NVRAM
+		# Snapshotdb
+		# /etc/libvirt/qemu/nvram/<domain>/
+		# /etc/libvirt/qemu/snapshotdb/<domain>/
+		# 
+
+
+		if ($firstdiskonly) {
+			if (array_key_exists('file', $disks[0])) {
+				$disk = $disks[0]['file'];
+				$pathinfo = pathinfo($disk);
+				$dir = $pathinfo['dirname'];
+				// remove the vm config
+				$cfg_vm = $dir.'/'.$domain.'.cfg';
+				if (is_file($cfg_vm)) unlink($cfg_vm);
+				$cfg = $dir.'/'.$pathinfo['filename'].'.cfg';
+				$xml = $dir.'/'.$pathinfo['filename'].'.xml';
+				if (is_file($disk)) unlink($disk);
+				if (is_file($cfg)) unlink($cfg);
+				if (is_file($xml)) unlink($xml);
+				# Remove NVRAM Dir/Snapshots DB
+				if (is_dir($dir) && $this->is_dir_empty($dir)) {
+					$result= my_rmdir($dir);
+					if ($result['type'] == "zfs") {
+						qemu_log("$domain","delete empty zfs $dir {$result['rtncode']}");
+						if (isset($result['dataset'])) qemu_log("$domain","dataset {$result['dataset']} ");
+						if (isset($result['cmd'])) qemu_log("$domain","Command {$result['cmd']} ");
+						if (isset($result['output'])) {
+							$outputlogs = implode(" ",$result['output']);
+							qemu_log("$domain","Output $outputlogs end");
+						}
+					} else {
+						qemu_log("$domain","delete empty $dir {$result['rtncode']}");
 					}
-				} else {
-					qemu_log("$domain","delete empty $dir {$result['rtncode']}");
 				}
 			}
+		} else {
+			#REMOVE whole VM directory
+			$vm_path = libvirt_get_vm_path($domain);
+			if (is_dir($vm_path)) {
+					$result= my_rmdir($vm_path);
+					if ($result['type'] == "zfs") {
+						qemu_log("$domain","delete empty zfs $vm_path {$result['rtncode']}");
+						if (isset($result['dataset'])) qemu_log("$domain","dataset {$result['dataset']} ");
+						if (isset($result['cmd'])) qemu_log("$domain","Command {$result['cmd']} ");
+						if (isset($result['output'])) {
+							$outputlogs = implode(" ",$result['output']);
+							qemu_log("$domain","Output $outputlogs end");
+						}
+					} else {
+						qemu_log("$domain","delete empty $vm_path {$result['rtncode']}");
+					}
+				}
 		}
 		return true;
 	}
@@ -1973,16 +2002,13 @@ class Libvirt {
 		$nvram_dir = libvirt_get_nvram_dir($vm_path, $vm_name);
 		// snapshot backup OVMF VARS if this domain had them
 		if (is_file($nvram_dir.'/'.$uuid.'_VARS-pure-efi.fd')) {
-			@file_put_contents('/tmp/nvram_snapshot.log', date('c')." nvram_create_snapshot: {$uuid} {$snapshotname} (nvram_dir={$nvram_dir}, vm_name={$vm_name}) source={$nvram_dir}/{$uuid}_VARS-pure-efi.fd target={$nvram_dir}/{$uuid}{$snapshotname}_VARS-pure-efi.fd\n", FILE_APPEND);
 			copy($nvram_dir.'/'.$uuid.'_VARS-pure-efi.fd', $nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi.fd');
 			return true;
 		}
 		if (is_file($nvram_dir.'/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
-			@file_put_contents('/tmp/nvram_snapshot.log', date('c')." nvram_create_snapshot: {$uuid} {$snapshotname} (nvram_dir={$nvram_dir}, vm_name={$vm_name}) source={$nvram_dir}/{$uuid}_VARS-pure-efi-tpm.fd target={$nvram_dir}/{$uuid}{$snapshotname}_VARS-pure-efi-tpm.fd\n", FILE_APPEND);
 			copy($nvram_dir.'/'.$uuid.'_VARS-pure-efi-tpm.fd', $nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd');
 			return true;
 		}
-		@file_put_contents('/tmp/nvram_snapshot.log', date('c')." nvram_create_snapshot: {$uuid} {$snapshotname} (nvram_dir={$nvram_dir}, vm_name={$vm_name}) no nvram vars found\n", FILE_APPEND);
 		return false;
 	}
 
@@ -1991,18 +2017,15 @@ class Libvirt {
 		$nvram_dir = libvirt_get_nvram_dir($vm_path, $vm_name);
 		// snapshot backup OVMF VARS if this domain had them
 		if (is_file($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi.fd')) {
-			@file_put_contents('/tmp/nvram_snapshot.log', date('c')." nvram_revert_snapshot: {$uuid} {$snapshotname} (nvram_dir={$nvram_dir}, vm_name={$vm_name}) source={$nvram_dir}/{$uuid}{$snapshotname}_VARS-pure-efi.fd target={$nvram_dir}/{$uuid}_VARS-pure-efi.fd\n", FILE_APPEND);
 			copy($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi.fd', $nvram_dir.'/'.$uuid.'_VARS-pure-efi.fd');
 			unlink($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi.fd');
 			return true;
 		}
 		if (is_file($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd')) {
-			@file_put_contents('/tmp/nvram_snapshot.log', date('c')." nvram_revert_snapshot: {$uuid} {$snapshotname} (nvram_dir={$nvram_dir}, vm_name={$vm_name}) source={$nvram_dir}/{$uuid}{$snapshotname}_VARS-pure-efi-tpm.fd target={$nvram_dir}/{$uuid}_VARS-pure-efi-tpm.fd\n", FILE_APPEND);
 			copy($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd', $nvram_dir.'/'.$uuid.'_VARS-pure-efi-tpm.fd');
 			unlink($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd');
 			return true;
 		}
-		@file_put_contents('/tmp/nvram_snapshot.log', date('c')." nvram_revert_snapshot: {$uuid} {$snapshotname} (nvram_dir={$nvram_dir}, vm_name={$vm_name}) no nvram snapshot vars found\n", FILE_APPEND);
 		return false;
 	}
 
@@ -2011,16 +2034,13 @@ class Libvirt {
 		$nvram_dir = libvirt_get_nvram_dir($vm_path, $vm_name);
 		// snapshot backup OVMF VARS if this domain had them
 		if (is_file($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi.fd')) {
-			@file_put_contents('/tmp/nvram_snapshot.log', date('c')." nvram_delete_snapshot: {$uuid} {$snapshotname} (nvram_dir={$nvram_dir}, vm_name={$vm_name}) delete={$nvram_dir}/{$uuid}{$snapshotname}_VARS-pure-efi.fd\n", FILE_APPEND);
 			unlink($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi.fd');
 			return true;
 		}
 		if (is_file($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd')) {
-			@file_put_contents('/tmp/nvram_snapshot.log', date('c')." nvram_delete_snapshot: {$uuid} {$snapshotname} (nvram_dir={$nvram_dir}, vm_name={$vm_name}) delete={$nvram_dir}/{$uuid}{$snapshotname}_VARS-pure-efi-tpm.fd\n", FILE_APPEND);
 			unlink($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd');
 			return true;
 		}
-		@file_put_contents('/tmp/nvram_snapshot.log', date('c')." nvram_delete_snapshot: {$uuid} {$snapshotname} (nvram_dir={$nvram_dir}, vm_name={$vm_name}) no nvram snapshot vars found\n", FILE_APPEND);
 		return false;
 	}
 
