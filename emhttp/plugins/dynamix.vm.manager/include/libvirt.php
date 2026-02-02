@@ -1905,15 +1905,6 @@ class Libvirt {
 			my_rmdir($etc_snapshotdb_dir);
 		}
 
-
-		# Directories to consider removing
-		# NVRAM
-		# Snapshotdb
-		# /etc/libvirt/qemu/nvram/<domain>/
-		# /etc/libvirt/qemu/snapshotdb/<domain>/
-		# 
-
-
 		if ($firstdiskonly) {
 			if (array_key_exists('file', $disks[0])) {
 				$disk = $disks[0]['file'];
@@ -1948,10 +1939,12 @@ class Libvirt {
 			foreach ($disks as $disk) {
 				if (array_key_exists('file', $disk)) {
 					$disk_path = $disk['file'];
-					if (strpos($disk_path, $vm_path) === false) {
-						if (is_file($disk_path)) {
-							unlink($disk_path);
-							qemu_log("$domain","deleted disk $disk_path outside of VM directory");
+					if (is_file($disk_path)) {
+						unlink($disk_path);
+						qemu_log("$domain","deleted disk $disk_path outside of VM directory");
+						$disk_dir = dirname($disk_path);
+						if (is_dir($disk_dir) && count(scandir($disk_dir)) === 2) {
+							my_rmdir($disk_dir);
 						}
 					}
 				}
