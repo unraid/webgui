@@ -289,7 +289,6 @@ class Libvirt {
 				if (!$defer_write && !is_file($nvram_dir.'/'.$uuid.'_VARS-pure-efi.fd')) {
 					// Create a new copy of OVMF VARS for this VM
 					mkdir($nvram_dir.'/', 0777, true);
-					@file_put_contents('/tmp/nvram_create.log', date('c')." create nvram: {$nvram_dir}/{$uuid}_VARS-pure-efi.fd (nvram_dir={$nvram_dir}) vms.json_entry={$vms_entry_json}\n", FILE_APPEND); #Debug only - remove before production
 					copy('/usr/share/qemu/ovmf-x64/OVMF_VARS-pure-efi.fd', $nvram_dir.'/'.$uuid.'_VARS-pure-efi.fd');
 				}
 				if (is_file($nvram_dir.'/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
@@ -304,7 +303,6 @@ class Libvirt {
 				if (!$defer_write && !is_file($nvram_dir.'/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
 					// Create a new copy of OVMF VARS for this VM
 					mkdir($nvram_dir.'/', 0777, true);
-					@file_put_contents('/tmp/nvram_create.log', date('c')." create nvram: {$nvram_dir}/{$uuid}_VARS-pure-efi-tpm.fd (nvram_dir={$nvram_dir}) vms.json_entry={$vms_entry_json}\n", FILE_APPEND); #Debug only - remove before production
 					copy('/usr/share/qemu/ovmf-x64/OVMF_VARS-pure-efi-tpm.fd', $nvram_dir.'/'.$uuid.'_VARS-pure-efi-tpm.fd');
 				}
 				if (is_file($nvram_dir.'/'.$uuid.'_VARS-pure-efi.fd')) {
