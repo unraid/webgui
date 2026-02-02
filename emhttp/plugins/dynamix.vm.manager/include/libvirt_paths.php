@@ -1,3 +1,4 @@
+
 <?PHP
 /* Copyright 2005-2026, Lime Technology
  *
@@ -44,20 +45,20 @@ function libvirt_get_vm_path($vm_name) {
 }
 
 function libvirt_get_nvram_dir($vm_path = null, $vm_name = null) {
-	if (empty($vm_path) && !empty($vm_name) && file_exists('/boot/config/plugins/dynamix.vm.manager/vm_newmodel')) {
+	if (empty($vm_path) && !empty($vm_name) && is_vm_newmodel()) {
 		$vm_path = libvirt_get_vm_path($vm_name);
 	}
-	if (!empty($vm_path) && file_exists('/boot/config/plugins/dynamix.vm.manager/vm_newmodel')) {
+	if (!empty($vm_path) && is_vm_newmodel()) {
 		return rtrim($vm_path, '/') . '/nvram';
 	}
 	return LIBVIRT_NVRAM_DIR;
 }
 
 function libvirt_get_snapshotdb_dir($vm_path = null, $vm_name = null) {
-	if (empty($vm_path) && !empty($vm_name) && file_exists('/boot/config/plugins/dynamix.vm.manager/vm_newmodel')) {
+	if (empty($vm_path) && !empty($vm_name) && is_vm_newmodel()) {
 		$vm_path = libvirt_get_vm_path($vm_name);
 	}
-	if (!empty($vm_path) && file_exists('/boot/config/plugins/dynamix.vm.manager/vm_newmodel')) {
+	if (!empty($vm_path) && is_vm_newmodel()) {
 		return rtrim($vm_path, '/') . '/snapshotdb';
 	}
 	return LIBVIRT_SNAPSHOTDB_DIR;
@@ -148,5 +149,11 @@ function libvirt_remove_vms_json_entry($vm_name) {
 	ksort($json, SORT_NATURAL);
 	@file_put_contents($cfg, json_encode($json, JSON_PRETTY_PRINT));
 	return true;
+}
+/**
+ * Returns true if the new VM model is in use.
+ */
+function is_vm_newmodel() {
+	return file_exists('/boot/config/plugins/dynamix.vm.manager/vm_newmodel');
 }
 ?>

@@ -275,7 +275,7 @@ class Libvirt {
 		$osbootdev = '';
 		$defer_write = $domain['defer_write'] ?? false;
 		$vm_path = $domain['path'] ?? null;
-		if (empty($vm_path) && file_exists('/boot/config/plugins/dynamix.vm.manager/vm_newmodel')) {
+		if (empty($vm_path) && is_vm_newmodel()) {
 			$storage = $template['storage'] ?? 'default';
 			$entry = libvirt_build_vm_entry($name, $storage, null, $uuid);
 			$vm_path = $entry['path'] ?? null;
@@ -1027,7 +1027,7 @@ class Libvirt {
 	}
 
 	function build_vm_paths($config) {
-		if (!file_exists('/boot/config/plugins/dynamix.vm.manager/vm_newmodel')) {
+		if (!is_vm_newmodel()) {
 			return $config;
 		}
 		if (empty($config['domain']['uuid'])) {

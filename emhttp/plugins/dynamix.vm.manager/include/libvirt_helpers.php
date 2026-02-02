@@ -1875,7 +1875,7 @@ class Array2XML {
 	function getvmsnapshots($vm) {
 		$snaps=array();
 		$dbpath = libvirt_get_snapshotdb_dir(null, $vm);
-		if (!file_exists('/boot/config/plugins/dynamix.vm.manager/vm_newmodel')) {
+		if (!is_vm_newmodel()) {
 			$dbpath .= "/$vm";
 		}
 		$snaps_json = file_get_contents($dbpath."/snapshots.db");
@@ -1887,7 +1887,7 @@ class Array2XML {
 	function write_snapshots_database($vm,$name,$state,$desc,$method="QEMU") {
 		global $lv;
 		$dbpath = libvirt_get_snapshotdb_dir(null, $vm);
-		if (!file_exists('/boot/config/plugins/dynamix.vm.manager/vm_newmodel')) {
+		if (!is_vm_newmodel()) {
 			$dbpath .= "/$vm";
 		}
 		if (!is_dir($dbpath)) {
@@ -1998,7 +1998,7 @@ class Array2XML {
 	function refresh_snapshots_database($vm,$delete_used=false) {
 		global $lv;
 		$dbpath = libvirt_get_snapshotdb_dir(null, $vm);
-		if (!file_exists('/boot/config/plugins/dynamix.vm.manager/vm_newmodel')) {
+		if (!is_vm_newmodel()) {
 			$dbpath .= "/$vm";
 		}
 		if (!is_dir($dbpath)) {
@@ -2082,7 +2082,7 @@ class Array2XML {
 	function delete_snapshots_database($vm,$name) {
 		global $lv;
 		$dbpath = libvirt_get_snapshotdb_dir(null, $vm);
-		if (!file_exists('/boot/config/plugins/dynamix.vm.manager/vm_newmodel')) {
+		if (!is_vm_newmodel()) {
 			$dbpath .= "/$vm";
 		}
 		$snaps_json = file_get_contents($dbpath."/snapshots.db");
