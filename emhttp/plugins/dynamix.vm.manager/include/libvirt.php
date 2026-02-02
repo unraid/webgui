@@ -1887,6 +1887,24 @@ class Libvirt {
 		$vm_path = libvirt_get_vm_path($domain); // or your data collection logic here
 		libvirt_remove_vms_json_entry($domain);
 
+		// Remove NVRAM, snapshotdb, and related directories if empty
+		$nvram_dir = $vm_path . '/nvram';
+		if (is_dir($nvram_dir) && count(scandir($nvram_dir)) === 2) {
+			my_rmdir($nvram_dir);
+		}
+		$snapshotdb_dir = $vm_path . '/snapshotdb';
+		if (is_dir($snapshotdb_dir) && count(scandir($snapshotdb_dir)) === 2) {
+			my_rmdir($snapshotdb_dir);
+		}
+		$etc_nvram_dir = "/etc/libvirt/qemu/nvram/$domain";
+		if (is_dir($etc_nvram_dir) && count(scandir($etc_nvram_dir)) === 2) {
+			my_rmdir($etc_nvram_dir);
+		}
+		$etc_snapshotdb_dir = "/etc/libvirt/qemu/snapshotdb/$domain";
+		if (is_dir($etc_snapshotdb_dir) && count(scandir($etc_snapshotdb_dir)) === 2) {
+			my_rmdir($etc_snapshotdb_dir);
+		}
+
 
 		# Directories to consider removing
 		# NVRAM

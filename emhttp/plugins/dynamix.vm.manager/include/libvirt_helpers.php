@@ -1935,31 +1935,31 @@ class Array2XML {
 		}
 
 		$disks =$lv->get_disk_stats($vm);
-			foreach($disks as $disk)   {
-				$file = $disk["file"];
-				if ($disk['device'] == "hdc" ) $primarypath = dirname(transpose_user_path($file));
-				$output = array();
-				exec("qemu-img info --backing-chain -U '$file'  | grep image:",$output); #PHPS
-				foreach($output as $key => $line) {
-					$line=str_replace("image: ","",$line);
-					$output[$key] = $line;
-				}
-
-				$snaps[$vmsnap]['backing'][$disk["device"]] = $output;
-				$rev = "r".$disk["device"];
-				$reversed = array_reverse($output);
-				$snaps[$vmsnap]['backing'][$rev] = $reversed;
+		foreach($disks as $disk)   {
+			$file = $disk["file"];
+			if ($disk['device'] == "hdc" ) $primarypath = dirname(transpose_user_path($file));
+			$output = array();
+			exec("qemu-img info --backing-chain -U '$file'  | grep image:",$output); #PHPS
+			foreach($output as $key => $line) {
+				$line=str_replace("image: ","",$line);
+				$output[$key] = $line;
 			}
-			$snaps[$vmsnap]["primarypath"]= $primarypath;
-			$parentfind = $snaps[$vmsnap]['backing'][$disk["device"]];
-			$parendfileinfo = pathinfo($parentfind[1]);
-			$snaps[$vmsnap]["parent"]= $parendfileinfo["extension"];
-			$snaps[$vmsnap]["parent"] = str_replace("qcow2",'',$snaps[$vmsnap]["parent"]);
-			if (isset($parentfind[1]) && !isset($parentfind[2])) $snaps[$vmsnap]["parent"]="Base";
 
-			if (isset($b)) if (array_key_exists(0 , $b["disks"]["disk"])) $snaps[$vmsnap]["disks"]= $b["disks"]["disk"]; else $snaps[$vmsnap]["disks"][0]= $b["disks"]["disk"];
+			$snaps[$vmsnap]['backing'][$disk["device"]] = $output;
+			$rev = "r".$disk["device"];
+			$reversed = array_reverse($output);
+			$snaps[$vmsnap]['backing'][$rev] = $reversed;
+		}
+		$snaps[$vmsnap]["primarypath"]= $primarypath;
+		$parentfind = $snaps[$vmsnap]['backing'][$disk["device"]];
+		$parendfileinfo = pathinfo($parentfind[1]);
+		$snaps[$vmsnap]["parent"]= $parendfileinfo["extension"];
+		$snaps[$vmsnap]["parent"] = str_replace("qcow2",'',$snaps[$vmsnap]["parent"]);
+		if (isset($parentfind[1]) && !isset($parentfind[2])) $snaps[$vmsnap]["parent"]="Base";
 
-			$value = json_encode($snaps,JSON_PRETTY_PRINT);
+		if (isset($b)) if (array_key_exists(0 , $b["disks"]["disk"])) $snaps[$vmsnap]["disks"]= $b["disks"]["disk"]; else $snaps[$vmsnap]["disks"][0]= $b["disks"]["disk"];
+
+		$value = json_encode($snaps,JSON_PRETTY_PRINT);
 		if (!remove_empty_snapshots_db($dbpath, $snaps)) {
 			file_put_contents($dbpath . "/snapshots.db", $value);
 		}
@@ -2574,13 +2574,13 @@ OPTIONS
 
 		}
 		# Delete NVRAM
-		#if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_delete_snapshot($lv->domain_get_uuid($vm),$snap);
+		if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_delete_snapshot($lv->domain_get_uuid($vm),$snap,$vm);
 		if ($state == "shutoff") {
 		$lv->domain_destroy($res);
 		}
 
 		refresh_snapshots_database($vm, $action=="yes" ? true : false);
-		$ret = $ret = delete_snapshots_database("$vm","$snap");;
+		$ret = delete_snapshots_database("$vm","$snap");;
 		if($ret)
 			$data = ["error" => "Unable to remove snap metadata $snap"];
 		else
@@ -2641,7 +2641,6 @@ OPTIONS
 	$snaps_json=json_encode($snaps,JSON_PRETTY_PRINT);
 	$pathinfo =  pathinfo($file);
 	$dirpath = $pathinfo["dirname"];
-	#file_put_contents("$dirpath/image.tracker",$snaps_json);
 
 	foreach($disks as $disk)   {
 	$path = $disk['file'];
