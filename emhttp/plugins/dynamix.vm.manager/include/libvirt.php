@@ -1672,12 +1672,13 @@ class Libvirt {
 		return $ret;
 	}
 
-	function manage_domain_xml($domain, $xml = null, $save = true) {
+	function manage_domain_xml($domain, $xml = null, $save = true, $vm_path = null) {
 		// Save or delete XML in VM directory based on $save flag
 		// $domain is the domain name (already validated by caller)
 		$xml_dir = null;
 		$storage = "default";
 		
+		if ($save) {
 				// Extract storage location from VM metadata if available
 				if ($xml && preg_match('/<vmtemplate[^>]*storage="([^"]*)"/', $xml, $matches)) {
 					$storage = $matches[1];
@@ -1707,11 +1708,13 @@ class Libvirt {
 				}
 		
 		$xml_file = $xml_dir . '/' . $domain . '.xml';
-		
+		}
+
 		if ($save === false) {
+			$xml_file = $vm_path . '/' . $domain . '.xml';
 			if (is_file($xml_file)) {
-				$backup_file = $xml_file . '.prev';
-				@copy($xml_file, $backup_file);
+				#$backup_file = $xml_file . '.prev';
+				#@copy($xml_file, $backup_file);
 				return unlink($xml_file);
 			}
 			return true;
@@ -1746,7 +1749,7 @@ class Libvirt {
 		if ($tmp) {
 			// Extract domain name from XML to save it
 			if (preg_match('/<name>(.*?)<\/name>/s', $xml, $matches)) {
-				$this->manage_domain_xml($matches[1], $xml, true);
+				$this->manage_domain_xml($matches[1], $xml, true, null);
 			}
 		}
 		return $tmp ?: $this->_set_last_error();
@@ -1870,7 +1873,7 @@ class Libvirt {
 			unlink($nvram_dir.'/'.$uuid.'_VARS-pure-efi-tpm.fd');
 		}
 		if ($xml) {
-			$this->manage_domain_xml($domain, $xml, false);
+			$this->manage_domain_xml($domain, $xml, false, $vm_path);
 		}
 		$tmp = libvirt_domain_undefine($dom);
 		return $tmp ?: $this->_set_last_error();
@@ -1970,13 +1973,16 @@ class Libvirt {
 		$nvram_dir = libvirt_get_nvram_dir($vm_path, $vm_name);
 		// snapshot backup OVMF VARS if this domain had them
 		if (is_file($nvram_dir.'/'.$uuid.'_VARS-pure-efi.fd')) {
+			@file_put_contents('/tmp/nvram_snapshot.log', date('c')." nvram_create_snapshot: {$uuid} {$snapshotname} (nvram_dir={$nvram_dir}, vm_name={$vm_name}) source={$nvram_dir}/{$uuid}_VARS-pure-efi.fd target={$nvram_dir}/{$uuid}{$snapshotname}_VARS-pure-efi.fd\n", FILE_APPEND);
 			copy($nvram_dir.'/'.$uuid.'_VARS-pure-efi.fd', $nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi.fd');
 			return true;
 		}
 		if (is_file($nvram_dir.'/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
+			@file_put_contents('/tmp/nvram_snapshot.log', date('c')." nvram_create_snapshot: {$uuid} {$snapshotname} (nvram_dir={$nvram_dir}, vm_name={$vm_name}) source={$nvram_dir}/{$uuid}_VARS-pure-efi-tpm.fd target={$nvram_dir}/{$uuid}{$snapshotname}_VARS-pure-efi-tpm.fd\n", FILE_APPEND);
 			copy($nvram_dir.'/'.$uuid.'_VARS-pure-efi-tpm.fd', $nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd');
 			return true;
 		}
+		@file_put_contents('/tmp/nvram_snapshot.log', date('c')." nvram_create_snapshot: {$uuid} {$snapshotname} (nvram_dir={$nvram_dir}, vm_name={$vm_name}) no nvram vars found\n", FILE_APPEND);
 		return false;
 	}
 
@@ -1985,15 +1991,18 @@ class Libvirt {
 		$nvram_dir = libvirt_get_nvram_dir($vm_path, $vm_name);
 		// snapshot backup OVMF VARS if this domain had them
 		if (is_file($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi.fd')) {
+			@file_put_contents('/tmp/nvram_snapshot.log', date('c')." nvram_revert_snapshot: {$uuid} {$snapshotname} (nvram_dir={$nvram_dir}, vm_name={$vm_name}) source={$nvram_dir}/{$uuid}{$snapshotname}_VARS-pure-efi.fd target={$nvram_dir}/{$uuid}_VARS-pure-efi.fd\n", FILE_APPEND);
 			copy($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi.fd', $nvram_dir.'/'.$uuid.'_VARS-pure-efi.fd');
 			unlink($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi.fd');
 			return true;
 		}
 		if (is_file($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd')) {
+			@file_put_contents('/tmp/nvram_snapshot.log', date('c')." nvram_revert_snapshot: {$uuid} {$snapshotname} (nvram_dir={$nvram_dir}, vm_name={$vm_name}) source={$nvram_dir}/{$uuid}{$snapshotname}_VARS-pure-efi-tpm.fd target={$nvram_dir}/{$uuid}_VARS-pure-efi-tpm.fd\n", FILE_APPEND);
 			copy($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd', $nvram_dir.'/'.$uuid.'_VARS-pure-efi-tpm.fd');
 			unlink($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd');
 			return true;
 		}
+		@file_put_contents('/tmp/nvram_snapshot.log', date('c')." nvram_revert_snapshot: {$uuid} {$snapshotname} (nvram_dir={$nvram_dir}, vm_name={$vm_name}) no nvram snapshot vars found\n", FILE_APPEND);
 		return false;
 	}
 
@@ -2002,13 +2011,16 @@ class Libvirt {
 		$nvram_dir = libvirt_get_nvram_dir($vm_path, $vm_name);
 		// snapshot backup OVMF VARS if this domain had them
 		if (is_file($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi.fd')) {
+			@file_put_contents('/tmp/nvram_snapshot.log', date('c')." nvram_delete_snapshot: {$uuid} {$snapshotname} (nvram_dir={$nvram_dir}, vm_name={$vm_name}) delete={$nvram_dir}/{$uuid}{$snapshotname}_VARS-pure-efi.fd\n", FILE_APPEND);
 			unlink($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi.fd');
 			return true;
 		}
 		if (is_file($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd')) {
+			@file_put_contents('/tmp/nvram_snapshot.log', date('c')." nvram_delete_snapshot: {$uuid} {$snapshotname} (nvram_dir={$nvram_dir}, vm_name={$vm_name}) delete={$nvram_dir}/{$uuid}{$snapshotname}_VARS-pure-efi-tpm.fd\n", FILE_APPEND);
 			unlink($nvram_dir.'/'.$uuid.$snapshotname.'_VARS-pure-efi-tpm.fd');
 			return true;
 		}
+		@file_put_contents('/tmp/nvram_snapshot.log', date('c')." nvram_delete_snapshot: {$uuid} {$snapshotname} (nvram_dir={$nvram_dir}, vm_name={$vm_name}) no nvram snapshot vars found\n", FILE_APPEND);
 		return false;
 	}
 

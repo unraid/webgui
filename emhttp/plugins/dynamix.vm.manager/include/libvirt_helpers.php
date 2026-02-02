@@ -2114,7 +2114,7 @@ class Array2XML {
 
 		#Copy nvram
 		if ($logging) qemu_log($vm,"Copy NVRAM");
-		if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_create_snapshot($lv->domain_get_uuid($vm), $name);
+		if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_create_snapshot($lv->domain_get_uuid($vm), $name, $vm);
 
 		$xmlfile = $dirpath."/".$name.".running";
 		if ($logging) qemu_log($vm,"Save XML if state is running current $state");
@@ -2269,7 +2269,7 @@ class Array2XML {
 			if (is_file($xmlfile) && $action == "yes") if (!$dryrun) unlink($xmlfile); else echo ("$xmlfile \n");
 			if ($logging) qemu_log($vm,"mem $memoryfile xml $xmlfile");
 			# Delete NVRAM
-			if (!empty($lv->domain_get_ovmf($res)) && $action == "yes")  if (!$dryrun) if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_revert_snapshot($lv->domain_get_uuid($vm), $name); else echo "Remove old NV\n";
+			if (!empty($lv->domain_get_ovmf($res)) && $action == "yes")  if (!$dryrun) if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_revert_snapshot($lv->domain_get_uuid($vm), $name,$vm); else echo "Remove old NV\n";
 			if ($actionmeta == "yes") {
 				if (!$dryrun)  $ret = delete_snapshots_database("$vm","$name"); else echo "Old Delete snapshot meta\n";
 				if ($logging) qemu_log($vm,"Old Delete snapshot meta");
@@ -2324,7 +2324,7 @@ class Array2XML {
 			if ($logging) qemu_log($vm,"Delete Snapshot DB entry");
 		}
 
-		if (!$dryrun) if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_revert_snapshot($lv->domain_get_uuid($vm), $snap); else echo "Delete NV $vm,$snap\n";
+		if (!$dryrun) if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_revert_snapshot($lv->domain_get_uuid($vm), $snap, $vm); else echo "Delete NV $vm,$snap\n";
 
 		$arrResponse  = ['success' => true];
 		if ($dryrun) var_dump($arrResponse);
@@ -2442,7 +2442,7 @@ class Array2XML {
 		}
 
 		# Delete NVRAM
-		if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_delete_snapshot($lv->domain_get_uuid($vm), $snap);
+		if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_delete_snapshot($lv->domain_get_uuid($vm), $snap, $vm);
 
 		$ret = delete_snapshots_database("$vm","$snap") ;
 
