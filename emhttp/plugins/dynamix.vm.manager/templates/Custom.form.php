@@ -311,7 +311,6 @@ if (isset($_GET['uuid'])) {
 	$boolNew = true;
 	$arrConfig = $arrConfigDefaults;
 	$arrVMUSBs = getVMUSBs($strXML);
-	$arrConfig = $lv->build_vm_paths($arrConfig);
 	$arrConfig['domain']['defer_write'] = true;
 	$strXML = $lv->config_to_xml($arrConfig);
 	$domXML = new DOMDocument();

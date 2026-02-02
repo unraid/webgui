@@ -60,6 +60,7 @@ function migrate_nvram_file($valid_nvram, $vm_path, $vm_uuid, $vm_name, $dry_run
     // Copy NVRAM file (compare first)
     $would_copy = false;
     $copied = false;
+    $is_snapshot = !empty($valid_nvram['is_snapshot']);
     if (file_exists($dest_file)) {
         $same = false;
         if (filesize($src_file) === filesize($dest_file)) {
@@ -67,6 +68,7 @@ function migrate_nvram_file($valid_nvram, $vm_path, $vm_uuid, $vm_name, $dry_run
             $hd = @md5_file($dest_file);
             if ($hs !== false && $hd !== false && $hs === $hd) {
                 $same = true;
+                $copied = true; // treat as handled for downstream cleanup
             }
         }
         if (!$same) $would_copy = true;
@@ -87,8 +89,23 @@ function migrate_nvram_file($valid_nvram, $vm_path, $vm_uuid, $vm_name, $dry_run
             $copied = true;
         }
     }
+
+    // For snapshot NVRAMs, only perform the file move/copy and cleanup, skip XML/define
+    if ($is_snapshot) {
+        if (!$dry_run && $copied && file_exists($src_file)) {
+            $deleted = @unlink($src_file);
+        }
+        return [
+            'success' => true,
+            'nvram_src' => $src_file,
+            'nvram_dest' => $dest_file,
+            'is_snapshot' => true,
+            'copied' => $copied,
+            'deleted' => isset($deleted) ? $deleted : false
+        ];
+    }
     
-    // Update XML file
+    // Update XML file (base NVRAM only)
     $xml_old_path = $libvirt_location . "/qemu/$vm_name.xml";
     $xml_new_path = "$vm_path/$vm_name.xml";
     
