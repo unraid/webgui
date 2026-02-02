@@ -1738,7 +1738,6 @@ class Libvirt {
 					$tmp[$i] = "<domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>";
 			$xml = join("\n", $tmp);
 		}
-		# PR1722 Save XML to VM directory
 		if ($autostart) {
 			$tmp = libvirt_domain_create_xml($this->conn, $xml); 
 			if (!$tmp) return $this->_set_last_error();
@@ -1853,16 +1852,17 @@ class Libvirt {
 		if (!$dom) return false;
 		$uuid = $this->domain_get_uuid($dom);
 		$xml = libvirt_domain_get_xml_desc($dom, 0);
-		$vm_path = libvirt_get_vm_path($domain);
+		$domain_name = is_resource($dom) ? $this->domain_get_name($dom) : $domain;
+		$vm_path = libvirt_get_vm_path($domain_name);
 		if (empty($vm_path) && $xml) {
 			$storage = 'default';
 			if (preg_match('/<vmtemplate[^>]*storage="([^"]*)"/', $xml, $matches)) {
 				$storage = $matches[1] ?: 'default';
 			}
-			$entry = libvirt_build_vm_entry($domain, $storage, null, $uuid);
+			$entry = libvirt_build_vm_entry($domain_name, $storage, null, $uuid);
 			$vm_path = $entry['path'] ?? null;
 		}
-		$nvram_dir = libvirt_get_nvram_dir($vm_path, $domain);
+		$nvram_dir = libvirt_get_nvram_dir($vm_path, $domain_name);
 		// remove OVMF VARS if this domain had them
 		if (is_file($nvram_dir.'/'.$uuid.'_VARS-pure-efi.fd')) {
 			unlink($nvram_dir.'/'.$uuid.'_VARS-pure-efi.fd');
@@ -1871,7 +1871,7 @@ class Libvirt {
 			unlink($nvram_dir.'/'.$uuid.'_VARS-pure-efi-tpm.fd');
 		}
 		if ($xml) {
-			$this->manage_domain_xml($domain, $xml, false, $vm_path);
+			$this->manage_domain_xml($domain_name, $xml, false, $vm_path);
 		}
 		$tmp = libvirt_domain_undefine($dom);
 		return $tmp ?: $this->_set_last_error();
@@ -1985,11 +1985,11 @@ class Libvirt {
 		$nvram_dir = libvirt_get_nvram_dir($vm_path, $vm_name);
 		// rename backup OVMF VARS if this domain had them
 		if (is_file($nvram_dir.'/'.$uuid.'_VARS-pure-efi.fd')) {
-			rename($nvram_dir.'/'.$uuid.'_VARS-pure-efi.fd_backup', $nvram_dir.'/'.$newuuid.'_VARS-pure-efi.fd');
+			rename($nvram_dir.'/'.$uuid.'_VARS-pure-efi.fd', $nvram_dir.'/'.$newuuid.'_VARS-pure-efi.fd');
 			return true;
 		}
 		if (is_file($nvram_dir.'/'.$uuid.'_VARS-pure-efi-tpm.fd')) {
-			rename($nvram_dir.'/'.$uuid.'_VARS-pure-efi-tpm.fd_backup', $nvram_dir.'/'.$newuuid.'_VARS-pure-efi-tpm.fd');
+			rename($nvram_dir.'/'.$uuid.'_VARS-pure-efi-tpm.fd', $nvram_dir.'/'.$newuuid.'_VARS-pure-efi-tpm.fd');
 			return true;
 		}
 		return false;

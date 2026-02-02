@@ -240,7 +240,7 @@ function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, f
       e.preventDefault();
       swal({
         title:_("Are you sure?"),
-        text:_("Completely REMOVE")+" "+name+" "+_("disk image and definition"),
+        text:_("Completely REMOVE")+" "+name+" "+_("1st disk image and definition"),
         type:"warning",
         showCancelButton:true,
         confirmButtonText:_('Proceed'),
@@ -254,7 +254,7 @@ function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, f
       e.preventDefault();
       swal({
         title:_("Are you sure?"),
-        text:_("Completely REMOVE")+" "+name+" "+_("disk image and definition"),
+        text:_("Completely REMOVE")+" "+name+" "+_("All disk images and definition"),
         type:"warning",
         showCancelButton:true,
         confirmButtonText:_('Proceed'),

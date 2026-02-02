@@ -282,8 +282,14 @@ case 'domain-destroy':
 
 case 'domain-delete':
 	requireLibvirt();
-	$firstdisk = unscript(_var($_REQUEST,'firstdisk'));
-	$arrResponse = $lv->domain_delete($domName, $firstdisk);
+	if (array_key_exists('firstdisk', $_REQUEST)) {
+		$val = $_REQUEST['firstdisk'];
+		$falsey = [false, 0, '0', 'false', 'FALSE', 'False'];
+		$firstdisk = in_array($val, $falsey, true) ? false : true;
+	} else {
+		$firstdisk = true;
+	}
+	$arrResponse = $lv->domain_delete($domName, $firstdisk)
 	? ['success' => true]
 	: ['error' => $lv->get_last_error()];
 	break;

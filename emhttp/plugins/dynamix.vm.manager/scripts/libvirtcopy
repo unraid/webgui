@@ -65,10 +65,21 @@ foreach ($domains as $dom) {
     $metadata_storage = null;
 
     if (isset($sx->metadata)) {
-        foreach ($sx->metadata->children() as $child) {
+        // Try to get children in the 'http://unraid' namespace
+        $metaChildren = $sx->metadata->children('http://unraid');
+        foreach ($metaChildren as $child) {
             if ($child->getName() === 'vmtemplate') {
                 $metadata_storage = trim((string)$child['storage']);
                 break;
+            }
+        }
+        // Fallback: also check for vmtemplate in default namespace if not found
+        if ($metadata_storage === null) {
+            foreach ($sx->metadata->children() as $child) {
+                if ($child->getName() === 'vmtemplate') {
+                    $metadata_storage = trim((string)$child['storage']);
+                    break;
+                }
             }
         }
     }

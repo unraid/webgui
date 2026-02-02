@@ -105,7 +105,7 @@ function migrate_nvram_file($valid_nvram, $vm_path, $vm_uuid, $vm_name, $dry_run
     $xml = @simplexml_load_string($xml_content);
     
     if ($xml === false) {
-         if ($copied) @unlink($dest_file); // Rollback only if we copied
+        if ($copied) @unlink($dest_file); // Rollback only if we copied
         return [
             'success' => false,
             'error' => "Failed to parse XML: $xml_old_path"
@@ -120,15 +120,37 @@ function migrate_nvram_file($valid_nvram, $vm_path, $vm_uuid, $vm_name, $dry_run
     // Write updated XML to new location
     $xml_formatted = $xml->asXML();
     if (!$dry_run && !@file_put_contents($xml_new_path, $xml_formatted)) {
-        @unlink($dest_file); // Rollback
+        if ($copied) @unlink($dest_file); // Rollback only if we copied
         return [
             'success' => false,
             'error' => "Failed to write updated XML to: $xml_new_path"
         ];
     }
 
-    // Remove source NVRAM after successful copy and XML update
-    if (!$dry_run && $copied && file_exists($src_file)) {
+    // Redefine the domain with the new XML so libvirt uses the new NVRAM path
+    $domain_defined = true;
+    if (!$dry_run) {
+        $domain_defined = false;
+        if ($xml_formatted) {
+            $output = null;
+            $retval = null;
+            exec("virsh define " . escapeshellarg($xml_new_path), $output, $retval);
+            if ($retval === 0) {
+                $domain_defined = true;
+            } else {
+                // Rollback: restore files if needed
+                if ($copied && file_exists($dest_file)) @unlink($dest_file);
+                // Optionally restore src_file if needed (not deleted yet)
+                return [
+                    'success' => false,
+                    'error' => "Failed to redefine domain with new XML using virsh: " . implode("\n", $output)
+                ];
+            }
+        }
+    }
+
+    // Remove source NVRAM after successful copy, XML update, and domain redefine
+    if (!$dry_run && $copied && $domain_defined && file_exists($src_file)) {
         $deleted = @unlink($src_file);
     }
     
@@ -383,7 +405,7 @@ function validate_nvram_uuids() {
         // Extract UUID and optional snapshot name from filename
         // Regular: {UUID}_VARS-pure-efi.fd
         // Snapshot: {UUID}S{snapshot_name}_VARS-pure-efi.fd
-        if (preg_match('/^([a-f0-9\-]+)(?:S([^_]+))?_VARS/', $basename, $matches)) {
+        if (preg_match('/^([a-f0-9\-]+)(?:S(.+?))?_VARS/', $basename, $matches)) {
             $uuid = $matches[1];
             $snapshot_name = isset($matches[2]) ? $matches[2] : null;
             

@@ -1890,7 +1890,13 @@ class Array2XML {
 		if (!file_exists('/boot/config/plugins/dynamix.vm.manager/vm_newmodel')) {
 			$dbpath .= "/$vm";
 		}
-		if (!is_dir($dbpath)) mkdir($dbpath);
+		if (!is_dir($dbpath)) {
+			if (!mkdir($dbpath, 0755, true) && !is_dir($dbpath)) {
+				// Log error and abort
+				error_log("Failed to create snapshotdb directory: $dbpath");
+				return false;
+			}
+		}
 		$noxml = "";
 		$snaps_json = file_get_contents($dbpath."/snapshots.db");
 		$snaps = json_decode($snaps_json,true);
@@ -1979,7 +1985,13 @@ class Array2XML {
 		if (!file_exists('/boot/config/plugins/dynamix.vm.manager/vm_newmodel')) {
 			$dbpath .= "/$vm";
 		}
-		if (!is_dir($dbpath)) mkdir($dbpath);
+		if (!is_dir($dbpath)) {
+			if (!mkdir($dbpath, 0755, true) && !is_dir($dbpath)) {
+				// Log error and abort
+				error_log("Failed to create snapshotdb directory: $dbpath");
+				return false;
+			}
+		}
 		$snaps_json = file_get_contents($dbpath."/snapshots.db");
 		$snaps = json_decode($snaps_json,true);
 
