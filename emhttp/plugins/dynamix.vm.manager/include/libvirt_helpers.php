@@ -1965,7 +1965,12 @@ class Array2XML {
 		}
 		return $noxml;
 	}
-	function purge_deleted_snapshots(array &$snaps){
+	function purge_deleted_snapshots(array &$snaps, $vm = null) {
+		global $lv;
+		if ($vm === null) return; // Need VM name for NVRAM cleanup
+		$vmuuid = $lv->domain_get_uuid($vm);
+		$vm_path = libvirt_get_vm_path($vm);
+		$nvram_dir = libvirt_get_nvram_dir($vm_path, $vm);
 		foreach ($snaps as $snapname => $snap) {
 			$broken = false;
 			foreach ($snap['disks'] as $disk) {
@@ -1976,6 +1981,15 @@ class Array2XML {
 				}
 			}
 			if ($broken) {
+				// Remove NVRAM snapshot files for this snapshot using correct path
+				$tpmfilename = rtrim($nvram_dir, '/') . '/' . $vmuuid . $snapname . "_VARS-pure-efi-tpm.fd";
+				$nontpmfilename = rtrim($nvram_dir, '/') . '/' . $vmuuid . $snapname . "_VARS-pure-efi.fd";
+				if (file_exists($tpmfilename)) {
+					unlink($tpmfilename);
+				}
+				if (file_exists($nontpmfilename)) {
+					unlink($nontpmfilename);
+				}
 				unset($snaps[$snapname]);
 			}
 		}
@@ -1999,7 +2013,7 @@ class Array2XML {
 
 		// Only destructive operations may invalidate snapshots
 		if ($delete_used) {
-			purge_deleted_snapshots($snaps);
+			purge_deleted_snapshots($snaps, $vm);
 		}
 
 		foreach($snaps as $vmsnap=>$snap) {
@@ -2027,7 +2041,7 @@ class Array2XML {
 		}
 		$value = json_encode($snaps,JSON_PRETTY_PRINT);
 		$res = $lv->get_domain_by_name($vm);
-		#if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_create_snapshot($lv->domain_get_uuid($vm),$name);
+		#if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_create_snapshot($lv->domain_get_uuid($vm),$snap,$vm);
 
 		#Remove any NVRAMs that are no longer valid.
 		# Get uuid
