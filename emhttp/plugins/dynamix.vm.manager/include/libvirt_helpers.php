@@ -1960,7 +1960,9 @@ class Array2XML {
 			if (isset($b)) if (array_key_exists(0 , $b["disks"]["disk"])) $snaps[$vmsnap]["disks"]= $b["disks"]["disk"]; else $snaps[$vmsnap]["disks"][0]= $b["disks"]["disk"];
 
 			$value = json_encode($snaps,JSON_PRETTY_PRINT);
-		file_put_contents($dbpath."/snapshots.db",$value);
+		if (!remove_empty_snapshots_db($dbpath, $snaps)) {
+			file_put_contents($dbpath . "/snapshots.db", $value);
+		}
 		return $noxml;
 	}
 	function purge_deleted_snapshots(array &$snaps){
@@ -2044,7 +2046,23 @@ class Array2XML {
 		}
 		foreach ($nvram_files  as $nvram_file) unlink($nvram_file);
 
-		file_put_contents($dbpath."/snapshots.db",$value);
+		// Write or remove snapshots.db and directory if empty
+		if (!remove_empty_snapshots_db($dbpath, $snaps)) {
+			file_put_contents($dbpath . "/snapshots.db", $value);
+		}
+	}
+
+	/**
+	 * Remove snapshots.db and its directory if the database is empty.
+	 */
+	function remove_empty_snapshots_db($dbpath, $snaps) {
+		$dbfile = $dbpath . "/snapshots.db";
+		if (empty($snaps)) {
+			if (file_exists($dbfile)) unlink($dbfile);
+			if (is_dir($dbpath) && count(scandir($dbpath)) === 2) rmdir($dbpath);
+			return true;
+		}
+		return false;
 	}
 
 	function delete_snapshots_database($vm,$name) {
@@ -2057,7 +2075,9 @@ class Array2XML {
 		$snaps = json_decode($snaps_json,true);
 		unset($snaps[$name]);
 		$value = json_encode($snaps,JSON_PRETTY_PRINT);
-		file_put_contents($dbpath."/snapshots.db",$value);
+		if (!remove_empty_snapshots_db($dbpath, $snaps)) {
+			file_put_contents($dbpath . "/snapshots.db", $value);
+		}
 		return true;
 	}
 
@@ -2164,6 +2184,11 @@ class Array2XML {
 			#remove meta data
 			if ($ret != "noxml") {
 				exec("virsh snapshot-delete ".escapeshellarg($vm)." ".escapeshellarg($name)." --metadata 2>&1", $snapDelOut, $snapDelRtn);
+				// Remove snapshot dir if empty
+				$snapdir = "/etc/libvirt/qemu/snapshot/{$vm}";
+				if (is_dir($snapdir) && count(scandir($snapdir)) === 2) { // only . and ..
+					rmdir($snapdir);
+				}
 			}
 		}
 		return $arrResponse;

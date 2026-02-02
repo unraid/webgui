@@ -1,5 +1,5 @@
-#!/usr/bin/php
-<?PHP
+#!/usr/bin/php -q 
+<?php
 /* Copyright 2015-2026, Lime Technology
  *
  * This program is free software; you can redistribute it and/or
@@ -9,10 +9,9 @@
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  */
-?>
-<?
 
-$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+
+$docroot ??= (($_SERVER['DOCUMENT_ROOT'] ?? '') ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 require_once "$docroot/plugins/dynamix.vm.manager/include/fs_helpers.php";

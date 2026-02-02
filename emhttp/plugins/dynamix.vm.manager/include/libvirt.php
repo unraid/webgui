@@ -1883,10 +1883,12 @@ class Libvirt {
 		$disks = $this->get_disk_stats($dom);
 		$tmp = $this->domain_undefine($domain);
 		if (!$tmp) return $this->_set_last_error();
+		// Collect VM entry data before removal
+		$vm_path = libvirt_get_vm_path($domain); // or your data collection logic here
 		libvirt_remove_vms_json_entry($domain);
 
 
-		# Directorys to consider removing
+		# Directories to consider removing
 		# NVRAM
 		# Snapshotdb
 		# /etc/libvirt/qemu/nvram/<domain>/
@@ -1924,9 +1926,22 @@ class Libvirt {
 				}
 			}
 		} else {
+			#Check for files outside of the main VM directory
+			foreach ($disks as $disk) {
+				if (array_key_exists('file', $disk)) {
+					$disk_path = $disk['file'];
+					if (strpos($disk_path, $vm_path) === false) {
+						if (is_file($disk_path)) {
+							unlink($disk_path);
+							qemu_log("$domain","deleted disk $disk_path outside of VM directory");
+						}
+					}
+				}
+			}
 			#REMOVE whole VM directory
-			$vm_path = libvirt_get_vm_path($domain);
 			if (is_dir($vm_path)) {
+				$files_deleted = delete_dir_contents($vm_path);
+				if ($files_deleted) {
 					$result= my_rmdir($vm_path);
 					if ($result['type'] == "zfs") {
 						qemu_log("$domain","delete empty zfs $vm_path {$result['rtncode']}");
@@ -1939,7 +1954,10 @@ class Libvirt {
 					} else {
 						qemu_log("$domain","delete empty $vm_path {$result['rtncode']}");
 					}
+				} else {
+					qemu_log("$domain","not deleting $vm_path not empty");
 				}
+			}
 		}
 		return true;
 	}
