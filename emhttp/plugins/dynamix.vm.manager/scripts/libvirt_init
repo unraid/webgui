@@ -114,13 +114,13 @@ if [ ! -f /boot/config/plugins/dynamix.vm.manager/vm_newmodel ]; then
   else
     log "Skipping IMAGE_FILE backup (not an .img file): $IMAGE_FILE"
   fi
-  log "Copying VM data to VM directories"
-  /usr/local/emhttp/plugins/dynamix.vm.manager/scripts/libvirtcopy
-  log "Migrating VM configs to new model"
-  /usr/local/emhttp/plugins/dynamix.vm.manager/scripts/libvirtmigrate --migrate --confirm > /var/log/libvirt-migrate 2>&1
-  touch /boot/config/plugins/dynamix.vm.manager/vm_newmodel
+  log "Disable libvirt autostart during migration"
+  mkdir -p /run/libvirt/qemu
 fi
 
-# Copy XML from VM Directories to QEMU directory/
-/usr/local/emhttp/plugins/dynamix.vm.manager/scripts/libvirtrestore
+# Copy XML from VM Directories to QEMU directory if new model is set.
+if [ -f /boot/config/plugins/dynamix.vm.manager/vm_newmodel ]; then
+  log "Restoring VM configs to QEMU directory"
+  /usr/local/emhttp/plugins/dynamix.vm.manager/scripts/libvirtrestore
+fi
 #
