@@ -1884,8 +1884,9 @@ class Libvirt {
 		$tmp = $this->domain_undefine($domain);
 		if (!$tmp) return $this->_set_last_error();
 		// Collect VM entry data before removal
-		$vm_path = libvirt_get_vm_path($domain); // or your data collection logic here
-		libvirt_remove_vms_json_entry($domain);
+        $domain_name = is_resource($domain) ? $this->domain_get_name($domain) : $domain;
+		$vm_path = libvirt_get_vm_path($domain_name);
+        libvirt_remove_vms_json_entry($domain_name);
 
 		// Remove NVRAM, snapshotdb, and related directories if empty
 		$nvram_dir = $vm_path . '/nvram';
