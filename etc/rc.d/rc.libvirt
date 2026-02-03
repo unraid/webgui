@@ -255,7 +255,7 @@ libvirtd_start(){
   libvirtd -d -l $LIBVIRTD_OPTS
   log "$DAEMON...  Started."
 
-  if [ -f /boot/config/plugins/dynamix.vm.manager/vm_newmodel ]; then
+  if [ ! -f /boot/config/plugins/dynamix.vm.manager/vm_newmodel ]; then
     libvirt_migrate
   fi
 }
