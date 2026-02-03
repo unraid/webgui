@@ -103,6 +103,19 @@ if [ -s /var/log/vfio-pci-errors ]; then
   /usr/local/emhttp/webGui/scripts/notify -e "VM Autostart disabled" -s "vfio-pci-errors " -d "VM Autostart disabled due to vfio-bind error" -m "Please review /var/log/vfio-pci-errors" -i "alert" -l "/VMs"
 fi
 
+# Migrate configs to VM directories from QEMU directory
+if [ ! -f /boot/config/plugins/dynamix.vm.manager/vm_newmodel ]; then
+  # Backup Image files before migration
+  BACKUP_PATH="${IMAGE_FILE%.img}.bak-${TIMESTAMP}.img"
+  log "Creating backup of IMAGE_FILE: $BACKUP_PATH"
+  cp -p "$IMAGE_FILE" "$BACKUP_PATH"
+  log "Copying VM data to VM directories"
+  /usr/local/emhttp/plugins/dynamix.vm.manager/scripts/libvirtcopy
+  log "Migrating VM configs to new model"
+  /usr/local/emhttp/plugins/dynamix.vm.manager/scripts/libvirtmigrate --migrate --confirm > /var/log/libvirt-migrate 2>&1
+  touch /boot/config/plugins/dynamix.vm.manager/vm_newmodel
+fi
+
 # Copy XML from VM Directories to QEMU directory/
 /usr/local/emhttp/plugins/dynamix.vm.manager/scripts/libvirtrestore
 #
