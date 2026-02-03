@@ -1709,10 +1709,11 @@ class Libvirt {
 		}
 
 		if ($save === false) {
-			$xml_file = $vm_path . '/' . $domain . '.xml';
+			if (empty($vm_path)) {
+				return false;
+			}
+			$xml_file = rtrim($vm_path, '/') . '/' . $domain . '.xml';
 			if (is_file($xml_file)) {
-				#$backup_file = $xml_file . '.prev';
-				#@copy($xml_file, $backup_file);
 				return unlink($xml_file);
 			}
 			return true;
