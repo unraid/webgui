@@ -12,6 +12,7 @@
  */
 ?>
 <?
+require_once __DIR__ . '/libvirt_paths.php';
 /**
  * Array2XML: A class to convert array in PHP to XML
  * It also takes into account attributes names unlike SimpleXML in PHP
@@ -1845,6 +1846,7 @@ class Array2XML {
 			}
 		}
 
+		$config = $lv->build_vm_paths($config);
 		$xml = $lv->config_to_xml($config, true);
 		$rtn = $lv->domain_define($xml);
 
@@ -1872,7 +1874,10 @@ class Array2XML {
 
 	function getvmsnapshots($vm) {
 		$snaps=array();
-		$dbpath = "/etc/libvirt/qemu/snapshotdb/$vm";
+		$dbpath = libvirt_get_snapshotdb_dir(null, $vm);
+		if (!is_vm_newmodel()) {
+			$dbpath .= "/$vm";
+		}
 		$snaps_json = file_get_contents($dbpath."/snapshots.db");
 		$snaps = json_decode($snaps_json,true);
 		if (is_array($snaps)) uasort($snaps,'compare_creationtime');
@@ -1881,12 +1886,25 @@ class Array2XML {
 
 	function write_snapshots_database($vm,$name,$state,$desc,$method="QEMU") {
 		global $lv;
-		$dbpath = "/etc/libvirt/qemu/snapshotdb/$vm";
-		if (!is_dir($dbpath)) mkdir($dbpath);
+		$dbpath = libvirt_get_snapshotdb_dir(null, $vm);
+		if (!is_vm_newmodel()) {
+			$dbpath .= "/$vm";
+		}
+		if (!is_dir($dbpath)) {
+			if (!mkdir($dbpath, 0755, true) && !is_dir($dbpath)) {
+				// Log error and abort
+				error_log("Failed to create snapshotdb directory: $dbpath");
+				return false;
+			}
+		}
 		$noxml = "";
 		$snaps_json = file_get_contents($dbpath."/snapshots.db");
 		$snaps = json_decode($snaps_json,true);
-		$snapshot_res=$lv->domain_snapshot_lookup_by_name($vm,$name);
+		$snapshot_xml = @file_get_contents("/etc/libvirt/qemu/snapshot/{$vm}/{$name}.xml");
+		if (empty($snapshot_xml)) {
+			$snapshot_xml = trim(shell_exec("virsh snapshot-dumpxml ".escapeshellarg($vm)." ".escapeshellarg($name)." 2>/dev/null"));
+		}
+		$snapshot_res = !empty($snapshot_xml);
 		if (!$snapshot_res) {
 			 # Manual Snap no XML
 		if ($state == "shutoff" && ($method == "ZFS" || $method == "BTRFS")) {
@@ -1903,7 +1921,6 @@ class Array2XML {
 			$noxml = "noxml";
 		}
 		} else {
-		$snapshot_xml=$lv->domain_snapshot_get_xml($snapshot_res);
 		$a = simplexml_load_string($snapshot_xml);
 		$a = json_encode($a);
 		$b = json_decode($a, TRUE);
@@ -1918,35 +1935,42 @@ class Array2XML {
 		}
 
 		$disks =$lv->get_disk_stats($vm);
-			foreach($disks as $disk)   {
-				$file = $disk["file"];
-				if ($disk['device'] == "hdc" ) $primarypath = dirname(transpose_user_path($file));
-				$output = array();
-				exec("qemu-img info --backing-chain -U '$file'  | grep image:",$output); #PHPS
-				foreach($output as $key => $line) {
-					$line=str_replace("image: ","",$line);
-					$output[$key] = $line;
-				}
-
-				$snaps[$vmsnap]['backing'][$disk["device"]] = $output;
-				$rev = "r".$disk["device"];
-				$reversed = array_reverse($output);
-				$snaps[$vmsnap]['backing'][$rev] = $reversed;
+		foreach($disks as $disk)   {
+			$file = $disk["file"];
+			if ($disk['device'] == "hdc" ) $primarypath = dirname(transpose_user_path($file));
+			$output = array();
+			exec("qemu-img info --backing-chain -U '$file'  | grep image:",$output); #PHPS
+			foreach($output as $key => $line) {
+				$line=str_replace("image: ","",$line);
+				$output[$key] = $line;
 			}
-			$snaps[$vmsnap]["primarypath"]= $primarypath;
-			$parentfind = $snaps[$vmsnap]['backing'][$disk["device"]];
-			$parendfileinfo = pathinfo($parentfind[1]);
-			$snaps[$vmsnap]["parent"]= $parendfileinfo["extension"];
-			$snaps[$vmsnap]["parent"] = str_replace("qcow2",'',$snaps[$vmsnap]["parent"]);
-			if (isset($parentfind[1]) && !isset($parentfind[2])) $snaps[$vmsnap]["parent"]="Base";
 
-			if (isset($b)) if (array_key_exists(0 , $b["disks"]["disk"])) $snaps[$vmsnap]["disks"]= $b["disks"]["disk"]; else $snaps[$vmsnap]["disks"][0]= $b["disks"]["disk"];
+			$snaps[$vmsnap]['backing'][$disk["device"]] = $output;
+			$rev = "r".$disk["device"];
+			$reversed = array_reverse($output);
+			$snaps[$vmsnap]['backing'][$rev] = $reversed;
+		}
+		$snaps[$vmsnap]["primarypath"]= $primarypath;
+		$parentfind = $snaps[$vmsnap]['backing'][$disk["device"]];
+		$parendfileinfo = pathinfo($parentfind[1]);
+		$snaps[$vmsnap]["parent"]= $parendfileinfo["extension"];
+		$snaps[$vmsnap]["parent"] = str_replace("qcow2",'',$snaps[$vmsnap]["parent"]);
+		if (isset($parentfind[1]) && !isset($parentfind[2])) $snaps[$vmsnap]["parent"]="Base";
 
-			$value = json_encode($snaps,JSON_PRETTY_PRINT);
-		file_put_contents($dbpath."/snapshots.db",$value);
+		if (isset($b)) if (array_key_exists(0 , $b["disks"]["disk"])) $snaps[$vmsnap]["disks"]= $b["disks"]["disk"]; else $snaps[$vmsnap]["disks"][0]= $b["disks"]["disk"];
+
+		$value = json_encode($snaps,JSON_PRETTY_PRINT);
+		if (!remove_empty_snapshots_db($dbpath, $snaps)) {
+			file_put_contents($dbpath . "/snapshots.db", $value);
+		}
 		return $noxml;
 	}
-	function purge_deleted_snapshots(array &$snaps){
+	function purge_deleted_snapshots(array &$snaps, $vm = null) {
+		global $lv;
+		if ($vm === null) return; // Need VM name for NVRAM cleanup
+		$vmuuid = $lv->domain_get_uuid($vm);
+		$vm_path = libvirt_get_vm_path($vm);
+		$nvram_dir = libvirt_get_nvram_dir($vm_path, $vm);
 		foreach ($snaps as $snapname => $snap) {
 			$broken = false;
 			foreach ($snap['disks'] as $disk) {
@@ -1957,6 +1981,15 @@ class Array2XML {
 				}
 			}
 			if ($broken) {
+				// Remove NVRAM snapshot files for this snapshot using correct path
+				$tpmfilename = rtrim($nvram_dir, '/') . '/' . $vmuuid . $snapname . "_VARS-pure-efi-tpm.fd";
+				$nontpmfilename = rtrim($nvram_dir, '/') . '/' . $vmuuid . $snapname . "_VARS-pure-efi.fd";
+				if (file_exists($tpmfilename)) {
+					unlink($tpmfilename);
+				}
+				if (file_exists($nontpmfilename)) {
+					unlink($nontpmfilename);
+				}
 				unset($snaps[$snapname]);
 			}
 		}
@@ -1964,14 +1997,23 @@ class Array2XML {
 
 	function refresh_snapshots_database($vm,$delete_used=false) {
 		global $lv;
-		$dbpath = "/etc/libvirt/qemu/snapshotdb/$vm";
-		if (!is_dir($dbpath)) mkdir($dbpath);
+		$dbpath = libvirt_get_snapshotdb_dir(null, $vm);
+		if (!is_vm_newmodel()) {
+			$dbpath .= "/$vm";
+		}
+		if (!is_dir($dbpath)) {
+			if (!mkdir($dbpath, 0755, true) && !is_dir($dbpath)) {
+				// Log error and abort
+				error_log("Failed to create snapshotdb directory: $dbpath");
+				return false;
+			}
+		}
 		$snaps_json = file_get_contents($dbpath."/snapshots.db");
 		$snaps = json_decode($snaps_json,true);
 
 		// Only destructive operations may invalidate snapshots
 		if ($delete_used) {
-			purge_deleted_snapshots($snaps);
+			purge_deleted_snapshots($snaps, $vm);
 		}
 
 		foreach($snaps as $vmsnap=>$snap) {
@@ -1999,7 +2041,7 @@ class Array2XML {
 		}
 		$value = json_encode($snaps,JSON_PRETTY_PRINT);
 		$res = $lv->get_domain_by_name($vm);
-		#if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_create_snapshot($lv->domain_get_uuid($vm),$name);
+		#if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_create_snapshot($lv->domain_get_uuid($vm),$snap,$vm);
 
 		#Remove any NVRAMs that are no longer valid.
 		# Get uuid
@@ -2018,17 +2060,38 @@ class Array2XML {
 		}
 		foreach ($nvram_files  as $nvram_file) unlink($nvram_file);
 
-		file_put_contents($dbpath."/snapshots.db",$value);
+		// Write or remove snapshots.db and directory if empty
+		if (!remove_empty_snapshots_db($dbpath, $snaps)) {
+			file_put_contents($dbpath . "/snapshots.db", $value);
+		}
+	}
+
+	/**
+	 * Remove snapshots.db and its directory if the database is empty.
+	 */
+	function remove_empty_snapshots_db($dbpath, $snaps) {
+		$dbfile = $dbpath . "/snapshots.db";
+		if (empty($snaps)) {
+			if (file_exists($dbfile)) unlink($dbfile);
+			if (is_dir($dbpath) && count(scandir($dbpath)) === 2) rmdir($dbpath);
+			return true;
+		}
+		return false;
 	}
 
 	function delete_snapshots_database($vm,$name) {
 		global $lv;
-		$dbpath = "/etc/libvirt/qemu/snapshotdb/$vm";
+		$dbpath = libvirt_get_snapshotdb_dir(null, $vm);
+		if (!is_vm_newmodel()) {
+			$dbpath .= "/$vm";
+		}
 		$snaps_json = file_get_contents($dbpath."/snapshots.db");
 		$snaps = json_decode($snaps_json,true);
 		unset($snaps[$name]);
 		$value = json_encode($snaps,JSON_PRETTY_PRINT);
-		file_put_contents($dbpath."/snapshots.db",$value);
+		if (!remove_empty_snapshots_db($dbpath, $snaps)) {
+			file_put_contents($dbpath . "/snapshots.db", $value);
+		}
 		return true;
 	}
 
@@ -2097,7 +2160,7 @@ class Array2XML {
 
 		#Copy nvram
 		if ($logging) qemu_log($vm,"Copy NVRAM");
-		if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_create_snapshot($lv->domain_get_uuid($vm),$name);
+		if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_create_snapshot($lv->domain_get_uuid($vm), $name, $vm);
 
 		$xmlfile = $dirpath."/".$name.".running";
 		if ($logging) qemu_log($vm,"Save XML if state is running current $state");
@@ -2133,7 +2196,14 @@ class Array2XML {
 			if ($logging) qemu_log($vm,"Success write snap db");
 			$ret = write_snapshots_database("$vm","$name",$state,$snapshotdescinput,$method);
 			#remove meta data
-			if ($ret != "noxml") $ret = $lv->domain_snapshot_delete($vm, "$name" ,2);
+			if ($ret != "noxml") {
+				exec("virsh snapshot-delete ".escapeshellarg($vm)." ".escapeshellarg($name)." --metadata 2>&1", $snapDelOut, $snapDelRtn);
+				// Remove snapshot dir if empty
+				$snapdir = "/etc/libvirt/qemu/snapshot/{$vm}";
+				if (is_dir($snapdir) && count(scandir($snapdir)) === 2) { // only . and ..
+					rmdir($snapdir);
+				}
+			}
 		}
 		return $arrResponse;
 
@@ -2250,7 +2320,7 @@ class Array2XML {
 			if (is_file($xmlfile) && $action == "yes") if (!$dryrun) unlink($xmlfile); else echo ("$xmlfile \n");
 			if ($logging) qemu_log($vm,"mem $memoryfile xml $xmlfile");
 			# Delete NVRAM
-			if (!empty($lv->domain_get_ovmf($res)) && $action == "yes")  if (!$dryrun) if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_revert_snapshot($lv->domain_get_uuid($vm),$name); else echo "Remove old NV\n";
+			if (!empty($lv->domain_get_ovmf($res)) && $action == "yes")  if (!$dryrun) if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_revert_snapshot($lv->domain_get_uuid($vm), $name,$vm); else echo "Remove old NV\n";
 			if ($actionmeta == "yes") {
 				if (!$dryrun)  $ret = delete_snapshots_database("$vm","$name"); else echo "Old Delete snapshot meta\n";
 				if ($logging) qemu_log($vm,"Old Delete snapshot meta");
@@ -2305,7 +2375,7 @@ class Array2XML {
 			if ($logging) qemu_log($vm,"Delete Snapshot DB entry");
 		}
 
-		if (!$dryrun) if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_revert_snapshot($lv->domain_get_uuid($vm),$snap); else echo "Delete NV $vm,$snap\n";
+		if (!$dryrun) if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_revert_snapshot($lv->domain_get_uuid($vm), $snap, $vm); else echo "Delete NV $vm,$snap\n";
 
 		$arrResponse  = ['success' => true];
 		if ($dryrun) var_dump($arrResponse);
@@ -2423,7 +2493,7 @@ class Array2XML {
 		}
 
 		# Delete NVRAM
-		if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_delete_snapshot($lv->domain_get_uuid($vm),$snap);
+		if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_delete_snapshot($lv->domain_get_uuid($vm), $snap, $vm);
 
 		$ret = delete_snapshots_database("$vm","$snap") ;
 
@@ -2518,13 +2588,13 @@ OPTIONS
 
 		}
 		# Delete NVRAM
-		#if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_delete_snapshot($lv->domain_get_uuid($vm),$snap);
+		if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_delete_snapshot($lv->domain_get_uuid($vm),$snap,$vm);
 		if ($state == "shutoff") {
 		$lv->domain_destroy($res);
 		}
 
 		refresh_snapshots_database($vm, $action=="yes" ? true : false);
-		$ret = $ret = delete_snapshots_database("$vm","$snap");;
+		$ret = delete_snapshots_database("$vm","$snap");;
 		if($ret)
 			$data = ["error" => "Unable to remove snap metadata $snap"];
 		else
@@ -2585,7 +2655,6 @@ OPTIONS
 	$snaps_json=json_encode($snaps,JSON_PRETTY_PRINT);
 	$pathinfo =  pathinfo($file);
 	$dirpath = $pathinfo["dirname"];
-	#file_put_contents("$dirpath/image.tracker",$snaps_json);
 
 	foreach($disks as $disk)   {
 	$path = $disk['file'];

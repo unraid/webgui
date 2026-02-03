@@ -1,0 +1,568 @@
+#!/usr/bin/php -q 
+<?php
+/* Copyright 2015-2026, Lime Technology
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+
+
+$docroot ??= (($_SERVER['DOCUMENT_ROOT'] ?? '') ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/Helpers.php";
+require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
+require_once "$docroot/plugins/dynamix.vm.manager/include/fs_helpers.php";
+$libvirt_location ="/etc/libvirt";
+
+$log_file = "/tmp/libvirtmigrate";
+file_put_contents($log_file, "");
+
+/* ---------------------------------------------------------
+ * Load vms.json created by libvirtcopy
+ * --------------------------------------------------------- */
+function load_vms_json() {
+    $vms_json_path = '/boot/config/plugins/dynamix.vm.manager/vms.json';
+    if (!file_exists($vms_json_path)) {
+        return [];
+    }
+    
+    $json = @json_decode(file_get_contents($vms_json_path), true);
+    return is_array($json) ? $json : [];
+}
+
+/* filesystem helpers moved to include/fs_helpers.php */
+
+/* ---------------------------------------------------------
+ * Migrate NVRAM file to VM folder and update XML
+ * --------------------------------------------------------- */
+function migrate_nvram_file($valid_nvram, $vm_path, $vm_uuid, $vm_name, $dry_run = false) {
+    global $libvirt_location;
+    $deleted = false;
+    // Create nvram subdirectory
+    $nvram_dest_dir = $vm_path . '/nvram';
+    if (!is_dir($nvram_dest_dir)) {
+        if (!$dry_run && !@mkdir($nvram_dest_dir, 0755, true)) {
+            return [
+                'success' => false,
+                'error' => 'Failed to create nvram directory: ' . $nvram_dest_dir
+            ];
+        }
+    }
+    
+    // Determine destination filename (preserve original)
+    $src_file = $valid_nvram['file'];
+    $dest_file = $nvram_dest_dir . '/' . basename($src_file);
+    
+    // Copy NVRAM file (compare first)
+    $would_copy = false;
+    $copied = false;
+    $is_snapshot = !empty($valid_nvram['is_snapshot']);
+    if (file_exists($dest_file)) {
+        $same = false;
+        if (filesize($src_file) === filesize($dest_file)) {
+            $hs = @md5_file($src_file);
+            $hd = @md5_file($dest_file);
+            if ($hs !== false && $hd !== false && $hs === $hd) {
+                $same = true;
+                $copied = true; // treat as handled for downstream cleanup
+            }
+        }
+        if (!$same) $would_copy = true;
+    } else {
+        $would_copy = true;
+    }
+
+    if ($would_copy) {
+        if ($dry_run) {
+            // indicate would-copy in result, don't actually copy
+        } else {
+            if (!@copy($src_file, $dest_file)) {
+                return [
+                    'success' => false,
+                    'error' => "Failed to copy NVRAM file from $src_file to $dest_file"
+                ];
+            }
+            $copied = true;
+        }
+    }
+
+    // For snapshot NVRAMs, only perform the file move/copy and cleanup, skip XML/define
+    if ($is_snapshot) {
+        if (!$dry_run && $copied && file_exists($src_file)) {
+            $deleted = @unlink($src_file);
+        }
+        return [
+            'success' => true,
+            'nvram_src' => $src_file,
+            'nvram_dest' => $dest_file,
+            'is_snapshot' => true,
+            'copied' => $copied,
+            'deleted' => isset($deleted) ? $deleted : false
+        ];
+    }
+    
+    // Update XML file (base NVRAM only)
+    $xml_old_path = $libvirt_location . "/qemu/$vm_name.xml";
+    $xml_new_path = "$vm_path/$vm_name.xml";
+    
+    // Read old XML
+    if (!file_exists($xml_old_path)) {
+        if ($copied) @unlink($dest_file); // Rollback only if we copied
+        return [
+            'success' => false,
+            'error' => "XML file not found: $xml_old_path"
+        ];
+    }
+    
+    $xml_content = file_get_contents($xml_old_path);
+    $xml = @simplexml_load_string($xml_content);
+    
+    if ($xml === false) {
+        if ($copied) @unlink($dest_file); // Rollback only if we copied
+        return [
+            'success' => false,
+            'error' => "Failed to parse XML: $xml_old_path"
+        ];
+    }
+    
+    // Update nvram path in XML
+    if (isset($xml->os->nvram)) {
+        $xml->os->nvram = $dest_file;
+    }
+    
+    // Write updated XML to new location
+    $xml_formatted = $xml->asXML();
+    if (!$dry_run && !@file_put_contents($xml_new_path, $xml_formatted)) {
+        if ($copied) @unlink($dest_file); // Rollback only if we copied
+        return [
+            'success' => false,
+            'error' => "Failed to write updated XML to: $xml_new_path"
+        ];
+    }
+
+    // Redefine the domain with the new XML so libvirt uses the new NVRAM path
+    $domain_defined = true;
+    if (!$dry_run) {
+        $domain_defined = false;
+        if ($xml_formatted) {
+            $output = null;
+            $retval = null;
+            exec("virsh define " . escapeshellarg($xml_new_path), $output, $retval);
+            if ($retval === 0) {
+                $domain_defined = true;
+            } else {
+                // Rollback: restore files if needed
+                if ($copied && file_exists($dest_file)) @unlink($dest_file);
+                // Optionally restore src_file if needed (not deleted yet)
+                return [
+                    'success' => false,
+                    'error' => "Failed to redefine domain with new XML using virsh: " . implode("\n", $output)
+                ];
+            }
+        }
+    }
+
+    // Remove source NVRAM after successful copy, XML update, and domain redefine
+    if (!$dry_run && $copied && $domain_defined && file_exists($src_file)) {
+        $deleted = @unlink($src_file);
+    }
+    
+    return [
+        'success' => true,
+        'nvram_src' => $src_file,
+        'nvram_dest' => $dest_file,
+        'xml_old_path' => $xml_old_path,
+        'xml_new_path' => $xml_new_path,
+        'dry_run' => $dry_run,
+        'would_copy' => $would_copy,
+        'copied' => $copied,
+        'deleted' => $deleted
+    ];
+}
+
+/* ---------------------------------------------------------
+ * Perform NVRAM migration for valid files
+ * --------------------------------------------------------- */
+function perform_migration($valid_nvrams, $dry_run = false) {
+    if (empty($valid_nvrams)) {
+        return ['migrated' => 0, 'failed' => 0, 'errors' => []];
+    }
+    
+    $vms_json = load_vms_json();
+    if (empty($vms_json)) {
+        return [
+            'migrated' => 0,
+            'failed' => count($valid_nvrams),
+            'errors' => [['error' => 'vms.json not found or empty']]
+        ];
+    }
+    
+    $migrated = 0;
+    $failed = 0;
+    $results = [];
+    global $libvirt_location;
+    $snapshot_moves = [];
+    $moved_snapshotdb = [];
+    
+    foreach ($valid_nvrams as $nvram_item) {
+        $vm_name = $nvram_item['vm_name'];
+        $vm_uuid = $nvram_item['uuid'];
+        
+        // Find VM in vms.json
+        if (!isset($vms_json[$vm_name])) {
+            $failed++;
+            $results[] = [
+                'vm_name' => $vm_name,
+                'success' => false,
+                'error' => "VM not found in vms.json"
+            ];
+            continue;
+        }
+        
+        $vm_path = $vms_json[$vm_name]['path'];
+        if (empty($vm_path)) {
+            $failed++;
+            $results[] = [
+                'vm_name' => $vm_name,
+                'success' => false,
+                'error' => "VM path not found in vms.json"
+            ];
+            continue;
+        }
+
+        if ($dry_run) {
+            file_put_contents("/tmp/libvirtmigrate", "DRY RUN: migrate NVRAM for $vm_name at $vm_path\n", FILE_APPEND);
+        }
+        
+        // Ensure snapshotdb for this VM is moved once
+        if (!isset($moved_snapshotdb[$vm_name])) {
+            $moved_snapshotdb[$vm_name] = true;
+            $old_snap_dir = $libvirt_location . "/qemu/snapshotdb/" . $vm_name;
+            $new_snap_dir = rtrim($vm_path, '/') . "/snapshotdb";
+
+            // Only move snapshotdb if snapshots.db exists and is non-empty
+            $snap_db_file = $old_snap_dir . '/snapshots.db';
+            $snap_contents = [];
+            if (file_exists($snap_db_file) && filesize($snap_db_file) > 0) {
+                $snap_contents = load_snapshot_db($vm_name);
+            }
+
+            if (!empty($snap_contents)) {
+                if ($dry_run) {
+                    $snapshot_moves[] = [
+                        'vm_name' => $vm_name,
+                        'src' => $old_snap_dir,
+                        'dest' => $new_snap_dir,
+                        'would_move' => true,
+                        'dry_run' => true
+                    ];
+                    file_put_contents("/tmp/libvirtmigrate", "DRY RUN: would move snapshotdb for $vm_name from $old_snap_dir to $new_snap_dir\n", FILE_APPEND);
+                } else {
+                    // If destination exists, merge; otherwise attempt rename then fallback to copy
+                    if (is_dir($new_snap_dir)) {
+                        $ok = dir_copy($old_snap_dir, $new_snap_dir);
+                        if ($ok) {
+                            $removed = dir_remove($old_snap_dir);
+                            $snapshot_moves[] = [
+                                'vm_name' => $vm_name,
+                                'src' => $old_snap_dir,
+                                'dest' => $new_snap_dir,
+                                'success' => $ok && $removed,
+                                'action' => 'merge'
+                            ];
+                        } else {
+                            $snapshot_moves[] = [
+                                'vm_name' => $vm_name,
+                                'src' => $old_snap_dir,
+                                'dest' => $new_snap_dir,
+                                'success' => false,
+                                'error' => 'Failed to merge snapshotdb into existing destination'
+                            ];
+                        }
+                    } else {
+                        if (@rename($old_snap_dir, $new_snap_dir)) {
+                            $snapshot_moves[] = [
+                                'vm_name' => $vm_name,
+                                'src' => $old_snap_dir,
+                                'dest' => $new_snap_dir,
+                                'success' => true,
+                                'action' => 'rename'
+                            ];
+                        } else {
+                            // Fallback to copy
+                            $ok = dir_copy($old_snap_dir, $new_snap_dir);
+                            if ($ok) {
+                                $removed = dir_remove($old_snap_dir);
+                                $snapshot_moves[] = [
+                                    'vm_name' => $vm_name,
+                                    'src' => $old_snap_dir,
+                                    'dest' => $new_snap_dir,
+                                    'success' => $ok && $removed,
+                                    'action' => 'copy'
+                                ];
+                            } else {
+                                $snapshot_moves[] = [
+                                    'vm_name' => $vm_name,
+                                    'src' => $old_snap_dir,
+                                    'dest' => $new_snap_dir,
+                                    'success' => false,
+                                    'error' => 'Failed to move or copy snapshotdb'
+                                ];
+                            }
+                        }
+                    }
+                }
+            } else {
+                // No snapshots present; skip moving/creating snapshotdb
+                $snapshot_moves[] = [
+                    'vm_name' => $vm_name,
+                    'found' => false,
+                    'reason' => 'snapshots.db missing or empty'
+                ];
+            }
+        }
+
+        // Perform migration
+        $migration_result = migrate_nvram_file($nvram_item, $vm_path, $vm_uuid, $vm_name, $dry_run);
+        $migration_result['vm_name'] = $vm_name;
+        
+        if ($migration_result['success']) {
+            $migrated++;
+        } else {
+            $failed++;
+        }
+        
+        $results[] = $migration_result;
+    }
+    
+    return [
+        'migrated' => $migrated,
+        'failed' => $failed,
+        'results' => $results,
+        'snapshotdb_moves' => $snapshot_moves
+    ];
+}
+
+/* ---------------------------------------------------------
+ * Load snapshot database for a VM
+ * --------------------------------------------------------- */
+function load_snapshot_db($vm_name) {
+    global $libvirt_location;
+    $snap_db = $libvirt_location . "/qemu/snapshotdb/" . $vm_name . "/snapshots.db";
+    if (!file_exists($snap_db)) {
+        return [];
+    }
+    
+    $json = @json_decode(file_get_contents($snap_db), true);
+    return is_array($json) ? $json : [];
+}
+
+/* ---------------------------------------------------------
+ * Validate NVRAM files against libvirt VM UUIDs and snapshots
+ * Returns array with 'valid' and 'orphaned' keys
+ * --------------------------------------------------------- */
+function validate_nvram_uuids() {
+    global $libvirt_location;
+    $log_file = "/tmp/libvirtmigrate";
+    file_put_contents($log_file, "validate_nvram_uuids: start\n", FILE_APPEND);
+    // Connect to libvirt
+    $lv = libvirt_connect('qemu:///system', false);
+    if (!$lv) {
+        die("ERROR: Failed to connect to libvirt\n");
+    }
+
+    // Get all valid VM UUIDs
+    $domains = libvirt_list_domains($lv);
+    if ($domains === false) {
+        die("ERROR: Failed to list domains\n");
+    }
+
+    $valid_uuids = [];
+    $snapshot_dbs = [];
+    file_put_contents($log_file, "validate_nvram_uuids: domains=" . count($domains) . "\n", FILE_APPEND);
+    
+    foreach ($domains as $dom) {
+        $domget = libvirt_domain_lookup_by_name($lv, $dom);
+        if ($domget === false) continue;
+        
+        // Use the libvirt function to get UUID string directly
+        $uuid = @libvirt_domain_get_uuid_string($domget);
+        if ($uuid) {
+            $valid_uuids[$uuid] = $dom;
+            // Preload snapshot database for this VM
+            $snapshot_dbs[$dom] = load_snapshot_db($dom);
+        }
+    }
+
+    // Scan NVRAM directory
+    $nvram_dir = $libvirt_location . "/qemu/nvram";
+    if (!is_dir($nvram_dir)) {
+        file_put_contents($log_file, "validate_nvram_uuids: nvram dir missing: $nvram_dir\n", FILE_APPEND);
+        return ['valid' => [], 'orphaned' => []];
+    }
+
+    $nvram_files = glob("$nvram_dir/*");
+    if ($nvram_files === false || count($nvram_files) === 0) {
+        file_put_contents($log_file, "validate_nvram_uuids: no nvram files found\n", FILE_APPEND);
+        return ['valid' => [], 'orphaned' => []];
+    }
+
+    $valid = [];
+    $orphaned = [];
+    $valid_count = 0;
+    $orphaned_count = 0;
+
+    foreach ($nvram_files as $file) {
+        $basename = basename($file);
+        
+        // Extract UUID and optional snapshot name from filename
+        // Regular: {UUID}_VARS-pure-efi.fd
+        // Snapshot: {UUID}S{snapshot_name}_VARS-pure-efi.fd (snapshot name includes leading 'S')
+        if (preg_match('/^([a-f0-9\-]+)(S.+?)?_VARS/', $basename, $matches)) {
+            $uuid = $matches[1];
+            $snapshot_name = isset($matches[2]) ? $matches[2] : null;
+            
+            if (isset($valid_uuids[$uuid])) {
+                $vm_name = $valid_uuids[$uuid];
+                $is_snapshot = $snapshot_name !== null;
+                $snapshot_valid = true;
+                
+                // If it's a snapshot, validate against snapshots.db
+                if ($is_snapshot) {
+                    $snapshots = $snapshot_dbs[$vm_name] ?? [];
+                    $snapshot_valid = isset($snapshots[$snapshot_name]);
+                    file_put_contents(
+                        $log_file,
+                        "validate_nvram_uuids: snapshot lookup vm=$vm_name name=$snapshot_name valid=" . ($snapshot_valid ? 'yes' : 'no') . "\n",
+                        FILE_APPEND
+                    );
+                }
+                
+                if ($snapshot_valid) {
+                    $valid[] = [
+                        'file' => $file,
+                        'basename' => $basename,
+                        'uuid' => $uuid,
+                        'vm_name' => $vm_name,
+                        'snapshot_name' => $snapshot_name,
+                        'is_snapshot' => $is_snapshot,
+                        'size' => filesize($file)
+                    ];
+                    $valid_count++;
+                } else {
+                    $orphaned[] = [
+                        'file' => $file,
+                        'basename' => $basename,
+                        'uuid' => $uuid,
+                        'vm_name' => $vm_name,
+                        'snapshot_name' => $snapshot_name,
+                        'is_snapshot' => true,
+                        'size' => filesize($file),
+                        'reason' => 'snapshot not found in snapshots.db'
+                    ];
+                    $orphaned_count++;
+                }
+            } else {
+                $orphaned[] = [
+                    'file' => $file,
+                    'basename' => $basename,
+                    'uuid' => $uuid,
+                    'snapshot_name' => $snapshot_name,
+                    'is_snapshot' => $snapshot_name !== null,
+                    'size' => filesize($file),
+                    'reason' => 'VM not found'
+                ];
+                $orphaned_count++;
+            }
+        }
+    }
+
+    file_put_contents($log_file, "validate_nvram_uuids: valid=$valid_count orphaned=$orphaned_count\n", FILE_APPEND);
+
+    return ['valid' => $valid, 'orphaned' => $orphaned];
+}
+
+/* ---------------------------------------------------------
+ * Delete orphaned NVRAM files
+ * --------------------------------------------------------- */
+function delete_orphaned_files($orphaned_files, $dry_run = false) {
+    if (empty($orphaned_files)) {
+        return ['deleted' => 0, 'failed' => 0, 'errors' => []];
+    }
+    
+    $deleted = 0;
+    $failed = 0;
+    $errors = [];
+    
+    foreach ($orphaned_files as $item) {
+        if (file_exists($item['file'])) {
+            if ($dry_run) {
+                // In dry-run mode, just count as would-be deleted
+                $deleted++;
+                file_put_contents("/tmp/libvirtmigrate", "DRY RUN: would delete orphaned NVRAM {$item['file']}\n", FILE_APPEND);
+            } elseif (@unlink($item['file'])) {
+                $deleted++;
+            } else {
+                $failed++;
+                $errors[] = [
+                    'file' => $item['file'],
+                    'error' => 'Failed to delete'
+                ];
+            }
+        } else {
+            $failed++;
+            $errors[] = [
+                'file' => $item['file'],
+                'error' => 'File not found'
+            ];
+        }
+    }
+    
+    return ['deleted' => $deleted, 'failed' => $failed, 'errors' => $errors, 'dry_run' => $dry_run];
+}
+
+// Parse command line arguments
+$delete_flag = in_array('--delete', $argv) || in_array('-d', $argv);
+$migrate_flag = in_array('--migrate', $argv) || in_array('-m', $argv);
+$valid_only = in_array('--valid-only', $argv) || in_array('-v', $argv);
+$orphaned_only = in_array('--orphaned-only', $argv) || in_array('-o', $argv);
+$confirm = in_array('--confirm', $argv) || in_array('-y', $argv);
+$dry_run = !$confirm;  // Default to dry-run unless --confirm is set
+
+// Run validation and output results
+$result = validate_nvram_uuids();
+
+// Build output based on filters
+if ($valid_only) {
+    $output = ['valid' => $result['valid']];
+} elseif ($orphaned_only) {
+    $output = ['orphaned' => $result['orphaned']];
+} else {
+    $output = [
+        'valid' => $result['valid'],
+        'orphaned' => $result['orphaned']
+    ];
+}
+// Delete orphaned files if flag is set
+if ($delete_flag && !empty($result['orphaned'])) {
+    $output['deletion_result'] = delete_orphaned_files($result['orphaned'], $dry_run);
+}
+
+// Migrate valid NVRAM files if flag is set
+if ($migrate_flag && !empty($result['valid'])) {
+    $output['migration_result'] = perform_migration($result['valid'], $dry_run);
+}
+
+// Add dry-run flag to output if set
+if ($dry_run) {
+    $output['dry_run'] = true;
+}
+
+echo json_encode($output, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+exit(count($result['orphaned']) === 0 ? 0 : 1);
+
+?>

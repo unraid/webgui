@@ -236,18 +236,32 @@ function addVMContext(name, uuid, template, state, vmrcurl, vmrcprotocol, log, f
         ajaxVMDispatch({action:"domain-undefine",uuid:uuid}, "loadlist");
       });
     }});
-    opts.push({text:_("Remove VM")+" & "+_("Disks"), icon:"fa-trash", action:function(e) {
+    opts.push({text:_("Remove VM")+" & "+_("1st Disk only"), icon:"fa-trash", action:function(e) {
       e.preventDefault();
       swal({
         title:_("Are you sure?"),
-        text:_("Completely REMOVE")+" "+name+" "+_("disk image and definition"),
+        text:_("Completely REMOVE")+" "+name+" "+_("1st disk image and definition"),
         type:"warning",
         showCancelButton:true,
         confirmButtonText:_('Proceed'),
         cancelButtonText:_('Cancel')
       },function(){
         $('#vm-'+uuid).find('i').removeClass('fa-play fa-square fa-pause').addClass('fa-refresh fa-spin');
-        ajaxVMDispatch({action:"domain-delete",uuid:uuid}, "loadlist");
+        ajaxVMDispatch({action:"domain-delete",uuid:uuid,firstdisk:true}, "loadlist");
+      });
+    }});
+    opts.push({text:_("Remove VM")+" & "+_("All disks"), icon:"fa-trash", action:function(e) {
+      e.preventDefault();
+      swal({
+        title:_("Are you sure?"),
+        text:_("Completely REMOVE")+" "+name+" "+_("All disk images and definition"),
+        type:"warning",
+        showCancelButton:true,
+        confirmButtonText:_('Proceed'),
+        cancelButtonText:_('Cancel')
+      },function(){
+        $('#vm-'+uuid).find('i').removeClass('fa-play fa-square fa-pause').addClass('fa-refresh fa-spin');
+        ajaxVMDispatch({action:"domain-delete",uuid:uuid,firstdisk:false}, "loadlist");
       });
     }});
   }

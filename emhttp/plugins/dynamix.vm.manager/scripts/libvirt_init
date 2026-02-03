@@ -5,6 +5,72 @@
 # run & log functions
 . /etc/rc.d/rc.runlog
 
+
+# Sync domain data if IMAGE_FILE and OLD_IMAGE_FILE differ
+DOMAIN_CFG=/boot/config/domain.cfg
+
+# Read values from domain.cfg safely (no eval)
+IMAGE_FILE=$(grep -E '^IMAGE_FILE=' "$DOMAIN_CFG" | head -1 | cut -d= -f2-)
+OLD_IMAGE_FILE=$(grep -E '^OLD_IMAGE_FILE=' "$DOMAIN_CFG" | head -1 | cut -d= -f2-)
+
+# Remove quotes
+IMAGE_FILE="${IMAGE_FILE%\"}"
+IMAGE_FILE="${IMAGE_FILE#\"}"
+OLD_IMAGE_FILE="${OLD_IMAGE_FILE%\"}"
+OLD_IMAGE_FILE="${OLD_IMAGE_FILE#\"}"
+
+# Proceed only if both variables are set and OLD_IMAGE_FILE exists
+if [ -n "$IMAGE_FILE" ] && [ -n "$OLD_IMAGE_FILE" ] && [ "$IMAGE_FILE" != "$OLD_IMAGE_FILE" ]; then
+  if [ ! -e "$OLD_IMAGE_FILE" ]; then
+    log "OLD_IMAGE_FILE not found: $OLD_IMAGE_FILE — skipping sync"
+  else
+    log "IMAGE_FILE and OLD_IMAGE_FILE differ, syncing..."
+
+    TMP_MNT=/etc/libvirt-sync
+    IMG_FILE_NAME=$(basename "$IMAGE_FILE")
+    OLD_IMG_FILE_NAME=$(basename "$OLD_IMAGE_FILE")
+    TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+
+    if [[ "$OLD_IMAGE_FILE" == *.img ]]; then
+      # Backup image before mounting
+      BACKUP_PATH="${OLD_IMAGE_FILE%.img}.bak-${TIMESTAMP}.img"
+      log "Creating backup of OLD_IMAGE_FILE: $BACKUP_PATH"
+      cp -p "$OLD_IMAGE_FILE" "$BACKUP_PATH"
+
+      log "Mounting $OLD_IMAGE_FILE to $TMP_MNT"
+      mkdir -p "$TMP_MNT"
+      if ! mount "$OLD_IMAGE_FILE" "$TMP_MNT"; then
+        log "ERROR: Failed to mount $OLD_IMAGE_FILE"
+        rm -rf "$TMP_MNT"
+        exit 1
+      fi
+      log "Copying full contents from image to directory $IMAGE_FILE"
+      if ! rsync -a --exclude="$OLD_IMG_FILE_NAME" "$TMP_MNT/" "$IMAGE_FILE/"; then
+        log "WARNING: rsync encountered errors"
+      fi
+      umount "$TMP_MNT" || log "WARNING: Failed to unmount $TMP_MNT"
+      rmdir "$TMP_MNT" 2>/dev/null
+    elif [[ "$IMAGE_FILE" == *.img ]]; then
+      log "Mounting $IMAGE_FILE to $TMP_MNT"
+      mkdir -p "$TMP_MNT"
+      mount "$IMAGE_FILE" "$TMP_MNT"
+      log "Copying full contents from directory $OLD_IMAGE_FILE to image"
+      rsync -a --exclude="$IMG_FILE_NAME" --exclude='*.bak-*.img' "$OLD_IMAGE_FILE/" "$TMP_MNT/"
+      umount "$TMP_MNT"
+    else
+      log "Both IMAGE_FILE and OLD_IMAGE_FILE are directories, copying full contents"
+      rsync -a --exclude="$IMG_FILE_NAME" "$OLD_IMAGE_FILE/" "$IMAGE_FILE/"
+    fi
+
+    # Update OLD_IMAGE_FILE in domain.cfg
+    log "Updating OLD_IMAGE_FILE in $DOMAIN_CFG"
+    sed -i "s|^OLD_IMAGE_FILE=.*|OLD_IMAGE_FILE=\"$IMAGE_FILE\"|" "$DOMAIN_CFG"
+  fi
+else
+  log "IMAGE_FILE and OLD_IMAGE_FILE match, or one is unset — skipping sync"
+fi
+
+
 # missing qemu directory would indicate new libvirt image file created
 if [ ! -d /etc/libvirt/qemu ]; then
   log "initializing /etc/libvirt"
@@ -36,3 +102,25 @@ if [ -s /var/log/vfio-pci-errors ]; then
   echo "vfio-pci bind error" > /run/libvirt/qemu/autostarted
   /usr/local/emhttp/webGui/scripts/notify -e "VM Autostart disabled" -s "vfio-pci-errors " -d "VM Autostart disabled due to vfio-bind error" -m "Please review /var/log/vfio-pci-errors" -i "alert" -l "/VMs"
 fi
+
+# Migrate configs to VM directories from QEMU directory
+if [ ! -f /boot/config/plugins/dynamix.vm.manager/vm_newmodel ]; then
+  TIMESTAMP="${TIMESTAMP:-$(date +%Y%m%d-%H%M%S)}"
+  # Backup Image files before migration
+  if [[ "$IMAGE_FILE" == *.img ]] && [ -f "$IMAGE_FILE" ]; then
+    BACKUP_PATH="${IMAGE_FILE%.img}.bak-${TIMESTAMP}.img"
+    log "Creating backup of IMAGE_FILE: $BACKUP_PATH"
+    cp -p "$IMAGE_FILE" "$BACKUP_PATH"
+  else
+    log "Skipping IMAGE_FILE backup (not an .img file): $IMAGE_FILE"
+  fi
+  log "Disable libvirt autostart during migration"
+  mkdir -p /run/libvirt/qemu
+fi
+
+# Copy XML from VM Directories to QEMU directory if new model is set.
+if [ -f /boot/config/plugins/dynamix.vm.manager/vm_newmodel ]; then
+  log "Restoring VM configs to QEMU directory"
+  /usr/local/emhttp/plugins/dynamix.vm.manager/scripts/libvirtrestore
+fi
+#

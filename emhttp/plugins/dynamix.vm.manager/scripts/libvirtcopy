@@ -1,0 +1,133 @@
+#!/usr/bin/php 
+<?PHP
+/* Copyright 2015-2026, Lime Technology
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+
+/* ---------------------------------------------------------
+ * Standard includes
+ * --------------------------------------------------------- */
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/Helpers.php";
+require_once "$docroot/plugins/dynamix.vm.manager/include/fs_helpers.php";
+require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_paths.php";
+
+
+/* ---------------------------------------------------------
+ * Connect to libvirt
+ * --------------------------------------------------------- */
+$lv = libvirt_connect('qemu:///system', false);
+if (!$lv) {
+    die("Failed to connect to libvirt\n");
+}
+
+/* Running VMs (or all, if you prefer libvirt_list_all_domains) */
+$domains = libvirt_list_domains($lv);
+if ($domains === false) {
+    die("Failed to list domains\n");
+}
+
+$default_domain_dir = libvirt_get_default_domain_dir();
+
+$vms = [];
+
+/* ---------------------------------------------------------
+ * Enumerate VMs
+ * --------------------------------------------------------- */
+foreach ($domains as $dom) {
+
+    $domget = libvirt_domain_lookup_by_name($lv, $dom);
+    if ($domget === false) {
+        continue;
+    }
+
+    $xml = libvirt_domain_get_xml_desc($domget, 0);
+    if ($xml === false) {
+        continue;
+    }
+
+    $sx = new SimpleXMLElement($xml);
+
+    $vm_name = (string)$sx->name;
+    $uuid    = (string)$sx->uuid;
+
+    /* -----------------------------------------------------
+     * Read storage metadata (Unraid vmtemplate)
+     * ----------------------------------------------------- */
+    $metadata_storage = null;
+
+    if (isset($sx->metadata)) {
+        // Try to get children in the 'http://unraid' namespace
+        $metaChildren = $sx->metadata->children('http://unraid');
+        foreach ($metaChildren as $child) {
+            if ($child->getName() === 'vmtemplate') {
+                $metadata_storage = trim((string)$child['storage']);
+                break;
+            }
+        }
+        // Fallback: also check for vmtemplate in default namespace if not found
+        if ($metadata_storage === null) {
+            foreach ($sx->metadata->children() as $child) {
+                if ($child->getName() === 'vmtemplate') {
+                    $metadata_storage = trim((string)$child['storage']);
+                    break;
+                }
+            }
+        }
+    }
+
+    /* -----------------------------------------------------
+     * Store result
+     * ----------------------------------------------------- */
+    $entry = libvirt_build_vm_entry($vm_name, $metadata_storage, $default_domain_dir, $uuid);
+    if ($entry !== null) {
+        $vms[$vm_name] = $entry;
+    }
+}
+
+/* ---------------------------------------------------------
+ * Output
+ * --------------------------------------------------------- */
+#print_r($vms);
+ksort($vms,SORT_NATURAL);
+$json_path = "/boot/config/plugins/dynamix.vm.manager/vms.json";
+$json_dir = dirname($json_path);
+if (!is_dir($json_dir)) {
+    if (!@mkdir($json_dir, 0755, true)) {
+        die("Failed to create directory: $json_dir\n");
+    }
+}
+if (file_put_contents($json_path, json_encode($vms, JSON_PRETTY_PRINT)) === false) {
+    die("Failed to write vms.json\n");
+}
+
+file_put_contents("/tmp/Stopcopy","");
+foreach ($vms as $vm => $vmdetail) {
+
+  $from_file = "/etc/libvirt/qemu/$vm.xml";
+  $to_file = $vmdetail['path']."/$vm.xml";
+  #echo " from:$from_file     to:$to_file\n";
+  if ($vmdetail['exists']) {
+    $res = copy_if_different($from_file, $to_file, false);
+    $msg = "$vm from:$from_file to:$to_file";
+    if (!empty($res['error'])) {
+        $msg .= " ERROR:" . $res['error'];
+    } elseif (!empty($res['copied'])) {
+        $msg .= " COPIED";
+    } elseif (!empty($res['would_copy'])) {
+        $msg .= " WOULD_COPY";
+    } else {
+        $msg .= " SKIPPED_IDENTICAL";
+    }
+    file_put_contents("/tmp/Stopcopy", $msg . "\n", FILE_APPEND);
+  } else       file_put_contents("/tmp/Stopcopy","Nocpy $vm from:$from_file     to:$to_file\n",FILE_APPEND);    #echo " from:$from_file     to:$to_file";
+}
+?>

@@ -506,6 +506,29 @@ function my_rmdir($dirname) {
   return($return);
 }
 
+/**
+ * Recursively delete all contents of a directory, but not the directory itself.
+ * Returns true on success, false on failure.
+ */
+function delete_dir_contents($dir) {
+  if (!is_dir($dir)) return false;
+  $success = true;
+  $items = scandir($dir);
+  if ($items === false) return false;
+  foreach ($items as $item) {
+    if ($item === '.' || $item === '..') continue;
+    $path = "$dir/$item";
+    if (is_link($path)) {
+      $success = unlink($path) && $success;
+    } elseif (is_dir($path)) {
+      $success = delete_dir_contents($path) && rmdir($path) && $success;
+    } else {
+      $success = unlink($path) && $success;
+    }
+  }
+  return $success;
+}
+
 function get_realvolume($path) {
   if (strpos($path,"/mnt/user/",0) === 0)
     $reallocation = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($path)." 2>/dev/null"));
