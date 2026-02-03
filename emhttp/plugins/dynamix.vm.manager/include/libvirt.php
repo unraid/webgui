@@ -2012,6 +2012,9 @@ class Libvirt {
 	}
 
 	function nvram_rename($uuid, $newuuid, $vm_name = null) {
+		if (empty($vm_name) && !empty($uuid)) {
+			$vm_name = $this->domain_get_name_by_uuid($uuid) ?: null;
+		}
 		$vm_path = $vm_name ? libvirt_get_vm_path($vm_name) : null;
 		$nvram_dir = libvirt_get_nvram_dir($vm_path, $vm_name);
 		// rename backup OVMF VARS if this domain had them
@@ -2027,6 +2030,9 @@ class Libvirt {
 	}
 
 	function nvram_create_snapshot($uuid, $snapshotname, $vm_name = null) {
+		if (empty($vm_name) && !empty($uuid)) {
+			$vm_name = $this->domain_get_name_by_uuid($uuid) ?: null;
+		}
 		$vm_path = $vm_name ? libvirt_get_vm_path($vm_name) : null;
 		$nvram_dir = libvirt_get_nvram_dir($vm_path, $vm_name);
 		// snapshot backup OVMF VARS if this domain had them
@@ -2042,6 +2048,9 @@ class Libvirt {
 	}
 
 	function nvram_revert_snapshot($uuid, $snapshotname, $vm_name = null) {
+		if (empty($vm_name) && !empty($uuid)) {
+			$vm_name = $this->domain_get_name_by_uuid($uuid) ?: null;
+		}
 		$vm_path = $vm_name ? libvirt_get_vm_path($vm_name) : null;
 		$nvram_dir = libvirt_get_nvram_dir($vm_path, $vm_name);
 		// snapshot backup OVMF VARS if this domain had them
@@ -2059,6 +2068,9 @@ class Libvirt {
 	}
 
 	function nvram_delete_snapshot($uuid, $snapshotname, $vm_name = null) {
+		if (empty($vm_name) && !empty($uuid)) {
+			$vm_name = $this->domain_get_name_by_uuid($uuid) ?: null;
+		}
 		$vm_path = $vm_name ? libvirt_get_vm_path($vm_name) : null;
 		$nvram_dir = libvirt_get_nvram_dir($vm_path, $vm_name);
 		// snapshot backup OVMF VARS if this domain had them
