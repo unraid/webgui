@@ -420,8 +420,8 @@ function validate_nvram_uuids() {
         
         // Extract UUID and optional snapshot name from filename
         // Regular: {UUID}_VARS-pure-efi.fd
-        // Snapshot: {UUID}S{snapshot_name}_VARS-pure-efi.fd
-        if (preg_match('/^([a-f0-9\-]+)(?:S(.+?))?_VARS/', $basename, $matches)) {
+        // Snapshot: {UUID}S{snapshot_name}_VARS-pure-efi.fd (snapshot name includes leading 'S')
+        if (preg_match('/^([a-f0-9\-]+)(S.+?)?_VARS/', $basename, $matches)) {
             $uuid = $matches[1];
             $snapshot_name = isset($matches[2]) ? $matches[2] : null;
             
@@ -434,6 +434,11 @@ function validate_nvram_uuids() {
                 if ($is_snapshot) {
                     $snapshots = $snapshot_dbs[$vm_name] ?? [];
                     $snapshot_valid = isset($snapshots[$snapshot_name]);
+                    file_put_contents(
+                        $log_file,
+                        "validate_nvram_uuids: snapshot lookup vm=$vm_name name=$snapshot_name valid=" . ($snapshot_valid ? 'yes' : 'no') . "\n",
+                        FILE_APPEND
+                    );
                 }
                 
                 if ($snapshot_valid) {
