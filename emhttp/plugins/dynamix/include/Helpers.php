@@ -514,10 +514,13 @@ function delete_dir_contents($dir) {
   if (!is_dir($dir)) return false;
   $success = true;
   $items = scandir($dir);
+  if ($items === false) return false;
   foreach ($items as $item) {
     if ($item === '.' || $item === '..') continue;
     $path = "$dir/$item";
-    if (is_dir($path)) {
+    if (is_link($path)) {
+      $success = unlink($path) && $success;
+    } elseif (is_dir($path)) {
       $success = delete_dir_contents($path) && rmdir($path) && $success;
     } else {
       $success = unlink($path) && $success;
