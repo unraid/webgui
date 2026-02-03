@@ -105,10 +105,15 @@ fi
 
 # Migrate configs to VM directories from QEMU directory
 if [ ! -f /boot/config/plugins/dynamix.vm.manager/vm_newmodel ]; then
+  TIMESTAMP="${TIMESTAMP:-$(date +%Y%m%d-%H%M%S)}"
   # Backup Image files before migration
-  BACKUP_PATH="${IMAGE_FILE%.img}.bak-${TIMESTAMP}.img"
-  log "Creating backup of IMAGE_FILE: $BACKUP_PATH"
-  cp -p "$IMAGE_FILE" "$BACKUP_PATH"
+  if [[ "$IMAGE_FILE" == *.img ]] && [ -f "$IMAGE_FILE" ]; then
+    BACKUP_PATH="${IMAGE_FILE%.img}.bak-${TIMESTAMP}.img"
+    log "Creating backup of IMAGE_FILE: $BACKUP_PATH"
+    cp -p "$IMAGE_FILE" "$BACKUP_PATH"
+  else
+    log "Skipping IMAGE_FILE backup (not an .img file): $IMAGE_FILE"
+  fi
   log "Copying VM data to VM directories"
   /usr/local/emhttp/plugins/dynamix.vm.manager/scripts/libvirtcopy
   log "Migrating VM configs to new model"
