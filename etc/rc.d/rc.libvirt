@@ -349,7 +349,7 @@ libvirt_migrate(){
   log "Migrating VM configs to new model"
   /usr/local/emhttp/plugins/dynamix.vm.manager/scripts/libvirtmigrate --migrate --confirm > /var/log/libvirt-migrate 2>&1
   touch /boot/config/plugins/dynamix.vm.manager/vm_newmodel
-  rmdir /run/libvirt/qemu
+  rm -r /run/libvirt/qemu
   libvirtd_stop
   libvirtd_start
 }
