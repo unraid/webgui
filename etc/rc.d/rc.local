@@ -284,3 +284,7 @@ else
   log "Starting emhttp"
   /usr/local/sbin/emhttp
 fi
+if [[ -f /boot/unraidguimode ]] || grep -wq unraidguimode /proc/cmdline; then
+  log "Starting GUI mode"
+  /usr/bin/slim
+fi

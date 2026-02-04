@@ -237,7 +237,7 @@ fi
 # limetech - but not /, /lib, /usr or /boot (yet)
 log "Unmounting local file systems:"
 EXCLUDE_TYPES=("proc" "sysfs" "tmpfs" "devtmpfs" "devpts" "nfsd")
-EXCLUDE_PATHS=("/" "/lib" "/usr" "/boot" "/tmp/boot")
+EXCLUDE_PATHS=("/" "/lib" "/usr" "/boot" "/boot-transfer")
 while IFS= read -r LINE; do
   MOUNT_TYPE=$(/bin/echo "$LINE" | awk '{print $3}')
   MOUNT_PATH=$(/bin/echo "$LINE" | awk '{print $2}')
@@ -263,11 +263,8 @@ fi
 # This never hurts:
 /bin/sync
 
-log "Remounting /boot read-only:"
-run /bin/mount -v -o remount,ro /boot
-
 # Check for boot transfer
-if /bin/mountpoint /tmp/boot ; then
+if /bin/mountpoint -q /boot-transfer ; then
   log "Transfering boot configuration"
   /usr/bin/rsync -av \
     --exclude='/EFI*' \
@@ -278,15 +275,20 @@ if /bin/mountpoint /tmp/boot ; then
     --exclude='/ldlinux*' \
     --exclude='/make_bootable*' \
     --exclude='/syslinux' \
-    /boot/ /tmp/boot
+    /boot/ /boot-transfer 
   log "sync"
   /bin/sync
-  /bin/umount /tmp/boot
-  /bin/rmdir /tmp/boot
+  if /bin/mountpoint -q /boot-transfer/efi ; then
+    /bin/umount /boot-transfer/efi
+  fi
+  /bin/umount /boot-transfer
 fi
 
-log "Remounting /lib read-only:"
-run /bin/mount -v -o remount,ro /lib
+log "Remounting /boot read-only:"
+run /bin/mount -v -o remount,ro /boot
+
+log "Remounting /lib/firmware read-only:"
+run /bin/mount -v -o remount,ro /lib/firmware
 
 log "Remounting /usr read-only:"
 run /bin/mount -v -o remount,ro /usr

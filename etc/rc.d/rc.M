@@ -31,20 +31,6 @@ if [[ -x /etc/rc.d/rc.setterm ]]; then
   /etc/rc.d/rc.setterm
 fi
 
-# Set the permissions on /var/log/dmesg according to whether the kernel
-# permits non-root users to access kernel dmesg information:
-if [[ -r /proc/sys/kernel/dmesg_restrict ]]; then
-  if [[ $(cat /proc/sys/kernel/dmesg_restrict) == 1 ]]; then
-    touch /var/log/dmesg
-    chmod 640 /var/log/dmesg
-  fi
-else
-  touch /var/log/dmesg
-  chmod 644 /var/log/dmesg
-fi
-# Save the contents of 'dmesg':
-dmesg -s 65536 > /var/log/dmesg
-
 # Start the system logger.
 if [[ -x /etc/rc.d/rc.rsyslogd ]]; then
   [[ -f /boot/logs/syslog-previous ]] && rm /boot/logs/syslog-previous
