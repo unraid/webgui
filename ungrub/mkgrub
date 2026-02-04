@@ -1,0 +1,56 @@
+BOOTUUID=$1
+
+cat <<EOF
+# Generated
+
+set default=0
+set timeout=5
+set timeout_style=menu
+
+insmod part_gpt
+insmod zfs
+insmod all_video
+insmod gfxterm
+insmod font
+insmod png
+
+# Load font first
+if loadfont /boot@/grub/themes/unraid/terminus-14.pf2 ; then
+  set gfxmode=auto
+  terminal_output gfxterm
+    
+  # Set the theme variable GLOBALLY
+  set theme="/boot@/grub/themes/unraid/theme.txt"
+  export theme
+else
+  terminal_output console
+fi
+
+menuentry "Unraid OS" {
+  echo "Loading..."
+  linux  /boot@/bzimage unraiduuid=$BOOTUUID
+  initrd /boot@/bzroot
+}
+
+menuentry "Unraid OS GUI Mode" {
+  echo "Loading..."
+  linux  /boot@/bzimage unraidguimode unraiduuid=$BOOTUUID
+  initrd /boot@/bzroot
+}
+
+menuentry "Unraid OS Safe Mode (no plugins, no GUI)" {
+  echo "Loading..."
+  linux  /boot@/bzimage unraidsafemode unraiduuid=$BOOTUUID
+  initrd /boot@/bzroot
+}
+
+menuentry "Unraid OS GUI Safe Mode (no plugins)" {
+  echo "Loading..."
+  linux  /boot@/bzimage unraidguimode unraidsafemode unraiduuid=$BOOTUUID
+  initrd /boot@/bzroot
+}
+
+menuentry "Memtest86+" {
+  linux  /boot@/memtest
+}
+EOF
