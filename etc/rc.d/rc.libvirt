@@ -347,7 +347,7 @@ libvirt_migrate(){
   log "Copying VM data to VM directories"
   /usr/local/emhttp/plugins/dynamix.vm.manager/scripts/libvirtcopy
   log "Migrating VM configs to new model"
-  /usr/local/emhttp/plugins/dynamix.vm.manager/scripts/libvirtmigrate --migrate --confirm > /var/log/libvirt-migrate 2>&1
+  /usr/local/emhttp/plugins/dynamix.vm.manager/scripts/libvirtmigrate --migrate --confirm > /boot/config/plugins/dynamix.vm.manager/libvirtmigrate.log 2>&1
   touch /boot/config/plugins/dynamix.vm.manager/vm_newmodel
   rm -r /run/libvirt/qemu
   libvirtd_stop
