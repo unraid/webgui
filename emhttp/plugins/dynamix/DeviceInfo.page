@@ -2021,10 +2021,12 @@ $(function() {
 <?endif;?>
 <?if (!diskStatus('_NP')):?>
   var form = document.smart_settings;
+  if (form) {
 <?if (!isset($disk['smType'])):?>
-  form.smType.selectedIndex = 0;
+    form.smType.selectedIndex = 0;
 <?endif;?>
-  setGlue(form,false);
+    setGlue(form,false);
+  }
 <?endif;?>
   var status = true;
   if ($.cookie('autosize-<?=$tag?>')) $('#autosize').show();
