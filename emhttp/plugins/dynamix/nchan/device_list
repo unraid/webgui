@@ -802,6 +802,7 @@ while (true) {
     if (in_array($disk['type'],['Data','Cache'])) $crypto |= _var($disk,'luksState',0)!=0 || vfs_luks(_var($disk,'fsType'));
   }
   $pools = array_unique(array_map('prefix',array_keys($Cache)));
+  $visiblePools = array_values(array_filter($pools, function($pool) { return !isSubpool($pool); }));
   $devicePools = mapDevicesToPools();
   
   // Fetch pool status for zfs and btrfs pools
@@ -888,8 +889,12 @@ while (true) {
     $a = 'pool_device'.$i++;
     $echo[$a] = [];
     $root  = explode($_tilde_,$pool)[0];
-    $print = array_filter(array_column($Cache,'name'),function($name) use ($pools,$root,$_tilde_) {$name_root=explode($_tilde_,$name)[0]; return in_array($name,$pools) && strcmp($root,$name_root)==0;});
+    $print = array_filter(array_column($Cache,'name'),function($name) use ($visiblePools,$root,$_tilde_) {$name_root=explode($_tilde_,$name)[0]; return in_array($name,$visiblePools) && strcmp($root,$name_root)==0;});
     $print = end($print);
+    if (isSubpool($pool)) {
+      $echo[$a] = '';
+      continue;
+    }
     if (_var($var,'fsState')=='Stopped') {
       $log = @parse_ini_file($pool_log) ?: []; // used to detect slot changes
       $off = false;
@@ -976,25 +981,33 @@ while (true) {
         empty($bootDisk) ? false : true
       );
       if ($dataRow !== '') $echo[$a][] = $dataRow;
-      $memberIndex = 1;
-      foreach ($Cache as $disk) if (prefix($disk['name'])==$pool) {
-        $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
-        $fstype = str_replace('luks:','',_var($disk,'fsType'));
-        $echo[$a][] = array_online(
-          $disk,
-          $fstype,
-          '',
-          $poolstatus,
-          [
-            'displayName' => sprintf(_('Device %d'), $memberIndex++),
-            'showLink' => true,
-            'linkHref' => $poolDeviceUrl,
-            'showPoolStatus' => false,
-            'showView' => false,
-            'indent' => 16,
-            'showFsInfo' => false,
-          ]
-        );
+      if ($pool === $root) {
+        $memberIndex = 1;
+        foreach ($Cache as $disk) {
+          if (pool_name(_var($disk,'name')) !== $root) continue;
+          $memberPool = prefix(_var($disk,'name'));
+          $poolDeviceUrl = "/Main/Device?name=".urlencode($memberPool);
+          $subpool = isSubpool(_var($disk,'name'));
+          $memberLabel = sprintf(_('Device %d'), $memberIndex++);
+          if ($subpool) $memberLabel .= " » "._($subpool,3);
+          $fstype = str_replace('luks:','',_var($disk,'fsType'));
+          $echo[$a][] = array_online(
+            $disk,
+            $fstype,
+            '',
+            $poolstatus,
+            [
+              'displayName' => $memberLabel,
+              'rawDisplayName' => true,
+              'showLink' => true,
+              'linkHref' => $poolDeviceUrl,
+              'showPoolStatus' => false,
+              'showView' => false,
+              'indent' => 16,
+              'showFsInfo' => false,
+            ]
+          );
+        }
       }
       if (strcmp($root,$pool)!=0) $Cache[$root]['devices'] += $Cache[$pool]['devices'];
       if (strcmp($pool,$print)==0) {
