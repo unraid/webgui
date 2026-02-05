@@ -389,7 +389,7 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[], $options=[]
     $duplicate  = isset($duplicate_devices[$fullDevName]['other_devices']) ? implode("<br>", $duplicate_devices[$fullDevName]['other_devices'])."<br>" : "";
     #$duplicate = json_encode($duplicate_devices[$fullDevName]);
     $isduplicate = isset($duplicate_devices[$fullDevName]) ? "true" : "false";
-    $warndup .= "<a class='info'><i class='fa fa-clone fa-fw orange-text'></i><span>".$duplicate._('Duplicate device identifier detected (WWID or Serial)')."&nbsp;</span></a>";
+    $warndup .= "<a class='info'><i class='fa fa-clone fa-fw orange-text'></i><span>"._('Duplicate device identifier detected (WWID or Serial)')."<br>$duplicate</span></a>";
   }
 
   // Add pool status for zfs and btrfs pools only (first device only)
