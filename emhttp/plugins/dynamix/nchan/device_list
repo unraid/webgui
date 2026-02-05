@@ -101,17 +101,44 @@ function get_pool_first_member(string $poolName, array $cacheDisks, array $devic
 
 function find_boot_disk_for_pool(string $poolName, array $bootDisks, array $cacheDisks): ?array
 {
-  $poolDisk = $cacheDisks[$poolName] ?? null;
-  if (empty($poolDisk)) return null;
+  $poolDevices = [];
 
-  $poolDevice = _var($poolDisk,'device','');
-  if ($poolDevice === '') return null;
+  if (!empty($cacheDisks[$poolName])) {
+    $device = _var($cacheDisks[$poolName],'device','');
+    if ($device !== '') $poolDevices[$device] = true;
+  }
+
+  foreach ($cacheDisks as $disk) {
+    if (prefix(_var($disk,'name')) !== $poolName) continue;
+    $device = _var($disk,'device','');
+    if ($device !== '') $poolDevices[$device] = true;
+  }
+
+  if (empty($poolDevices)) return null;
 
   foreach ($bootDisks as $disk) {
-    if (_var($disk,'device','') === $poolDevice) return $disk;
+    if (isset($poolDevices[_var($disk,'device','')])) return $disk;
   }
 
   return null;
+}
+
+function select_boot_disk(array $bootDisks): ?array
+{
+  if (empty($bootDisks)) return null;
+
+  foreach ($bootDisks as $disk) {
+    $status = _var($disk,'status','');
+    if ($status === 'DISK_NP_DSBL' || $status === 'DISK_NP') continue;
+    if (_var($disk,'device','') === '') continue;
+    return $disk;
+  }
+
+  foreach ($bootDisks as $disk) {
+    if (_var($disk,'fsStatus','') === 'Mounted') return $disk;
+  }
+
+  return reset($bootDisks) ?: null;
 }
 
 function get_pool_boot_metrics(?array $bootDisk): array
@@ -281,10 +308,11 @@ function flash_smb_warning_html($diskName) {
 }
 
 function device_info(&$disk,$online,$poolName='',$poolstatusData=[], $options=[]) {
-  global $pools, $var, $sec, $disks;
+  global $pools, $var, $sec, $disks, $duplicate_devices;
   $displayName = _var($options,'displayName',null);
   $rawDisplayName = _var($options,'rawDisplayName',false);
   $showLink = _var($options,'showLink',true);
+  $linkHref = _var($options,'linkHref','');
   $showPoolStatus = _var($options,'showPoolStatus',true);
   $showView = _var($options,'showView',true);
   $showViewPlaceholder = _var($options,'showViewPlaceholder',true);
@@ -333,7 +361,9 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[], $options=[]
   $status = "<a class='info'><i ".($ctrl?"id='dev-$named' ":"")."class='fa fa-$orb orb $color-orb'$ctrl></i><span>$help</span></a>";
   if (!$showStatus) $status = "";
 
-  if (!$showLink || $displayName !== null) {
+  if ($showLink && $linkHref !== '') {
+    $link = "<a href=\"".htmlspecialchars($linkHref, ENT_QUOTES)."\">$fancy</a>";
+  } elseif (!$showLink || $displayName !== null) {
     $link = $fancy;
   } else {
     $link = ($parity && $disk_status!='DISK_NP_DSBL') || (($flash || $boot || $data || $pool) && $disk_status!='DISK_NP') || in_array($name,$pools) || $type=='New'
@@ -341,13 +371,23 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[], $options=[]
             : $fancy;
   }
   $warn   = flash_smb_warning_html($name);
-  
+
+  $warndup = '';
+  $devName = _var($disk,'device','');
+  $fullDevName = "/dev/" . _var($disk,'device', '');
+  if (!$online && isset($duplicate_devices[$fullDevName])) {
+    $duplicate  = isset($duplicate_devices[$fullDevName]['other_devices']) ? implode("<br>", $duplicate_devices[$fullDevName]['other_devices'])."<br>" : "";
+    #$duplicate = json_encode($duplicate_devices[$fullDevName]);
+    $isduplicate = isset($duplicate_devices[$fullDevName]) ? "true" : "false";
+    $warndup .= "<a class='info'><i class='fa fa-clone fa-fw orange-text'></i><span>".$duplicate._('Duplicate device identifier detected (WWID or Serial)')."&nbsp;</span></a>";
+  }
+
   // Add pool status for zfs and btrfs pools only (first device only)
   $poolstatusHTML = ($showPoolStatus && $poolName && $name == $poolName)
     ? pool_status_html($poolName, $poolstatusData, $disks)
     : "";
   
-  return $view.$status.$link.$poolstatusHTML.$warn;
+  return $view.$status.$warndup.$link.$poolstatusHTML.$warn;
 }
 
 function device_desc(&$disk, $poolName='', $poolstatusData=[]) {
@@ -767,6 +807,10 @@ while (true) {
   // Fetch pool status for zfs and btrfs pools
   static $poolstatus = [];
   static $pool_check_counter = 0;
+  static $last_fs_state = null;
+  if ($last_fs_state !== _var($var,'fsState')) {
+    $pool_check_counter = 0;
+  }
   if ($pool_check_counter % 30 == 0) {
     $decoded = json_decode(storagePoolsJson(), true);
     if (is_array($decoded)) {
@@ -775,6 +819,21 @@ while (true) {
   }
   $pool_check_counter++;
 
+  static $duplicate_devices = [];
+  static $duplicate_check_counter = 0;
+  if ($last_fs_state !== _var($var,'fsState')) {
+    $duplicate_check_counter = 0;
+  }
+  if (_var($var,'fsState')=='Stopped' && $duplicate_check_counter % 30 == 0) {
+      $duplicate_devices = json_decode(find_duplicate_disks_json(), true);
+  }
+  
+  if (_var($var,'fsState')!='Stopped') {
+    $duplicate_devices = [];
+  }
+
+  $duplicate_check_counter++;
+  $last_fs_state = _var($var,'fsState');
   $a = 'array_devices';
   $echo[$a] = [];
   $poolsOnly = (_var($var,'SYS_ARRAY_SLOTS') == 0) ? true : false;
@@ -797,7 +856,7 @@ while (true) {
   $a = 'boot_device';
   $echo[$a] = [];
   foreach ($Flash as $disk) $echo[$a][] = array_online($disk);
-  $bootDisk = reset($Boot);
+  $bootDisk = select_boot_disk($Boot);
   if (!empty($bootDisk)) {
     $poolName = prefix(_var($bootDisk,'name'));
     $poolLabel = $poolName !== '' ? ucfirst($poolName) : '';
@@ -919,6 +978,7 @@ while (true) {
       if ($dataRow !== '') $echo[$a][] = $dataRow;
       $memberIndex = 1;
       foreach ($Cache as $disk) if (prefix($disk['name'])==$pool) {
+        $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
         $fstype = str_replace('luks:','',_var($disk,'fsType'));
         $echo[$a][] = array_online(
           $disk,
@@ -927,7 +987,8 @@ while (true) {
           $poolstatus,
           [
             'displayName' => sprintf(_('Device %d'), $memberIndex++),
-            'showLink' => false,
+            'showLink' => true,
+            'linkHref' => $poolDeviceUrl,
             'showPoolStatus' => false,
             'showView' => false,
             'indent' => 16,
