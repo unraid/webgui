@@ -141,6 +141,16 @@ function select_boot_disk(array $bootDisks): ?array
   return reset($bootDisks) ?: null;
 }
 
+function find_pool_name_for_device(string $device, array $cacheDisks): string
+{
+  if ($device === '') return '';
+  foreach ($cacheDisks as $disk) {
+    if (_var($disk,'device','') !== $device) continue;
+    return pool_name(_var($disk,'name',''));
+  }
+  return '';
+}
+
 function get_pool_boot_metrics(?array $bootDisk): array
 {
   if (empty($bootDisk)) return [];
@@ -859,7 +869,8 @@ while (true) {
   foreach ($Flash as $disk) $echo[$a][] = array_online($disk);
   $bootDisk = select_boot_disk($Boot);
   if (!empty($bootDisk)) {
-    $poolName = prefix(_var($bootDisk,'name'));
+    $poolName = find_pool_name_for_device(_var($bootDisk,'device',''), $Cache);
+    if ($poolName === '') $poolName = pool_name(_var($bootDisk,'name',''));
     $poolLabel = $poolName !== '' ? ucfirst($poolName) : '';
     $poolAnchor = $poolName !== '' ? "/Main#pool_".$poolName : '';
     $poolLink = $poolAnchor !== ''
