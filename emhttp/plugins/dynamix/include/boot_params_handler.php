@@ -286,15 +286,31 @@ switch ($operation) {
             exit;
         }
 
-        // Basic structure validation - must contain required labels
-        if (strpos($raw_config, 'label Unraid OS') === false) {
-            echo json_encode(['error' => 'Invalid configuration: Missing required label "Unraid OS"']);
-            exit;
-        }
+        // Basic structure validation - detect bootloader type and validate accordingly
+        $is_grub = (stripos($raw_config, 'menuentry ') !== false) || (stripos($raw_config, 'linuxefi ') !== false) || (stripos($raw_config, 'grub') !== false);
 
-        if (strpos($raw_config, 'initrd=') === false) {
-            echo json_encode(['error' => 'Invalid configuration: Missing required "initrd=" parameter']);
-            exit;
+        if ($is_grub) {
+            if (!preg_match('/menuentry\s+"?Unraid OS"?/i', $raw_config)) {
+                echo json_encode(['error' => 'Invalid configuration: Missing required menuentry "Unraid OS"']);
+                exit;
+            }
+            if (!preg_match('/\n\s*linux(efi)?\s+\S+/i', $raw_config)) {
+                echo json_encode(['error' => 'Invalid configuration: Missing required "linux" or "linuxefi" line']);
+                exit;
+            }
+            if (!preg_match('/\n\s*initrd\s+\S+/i', $raw_config)) {
+                echo json_encode(['error' => 'Invalid configuration: Missing required "initrd" line']);
+                exit;
+            }
+        } else {
+            if (strpos($raw_config, 'label Unraid OS') === false) {
+                echo json_encode(['error' => 'Invalid configuration: Missing required label "Unraid OS"']);
+                exit;
+            }
+            if (strpos($raw_config, 'initrd=') === false) {
+                echo json_encode(['error' => 'Invalid configuration: Missing required "initrd=" parameter']);
+                exit;
+            }
         }
 
         // Pass to shell script

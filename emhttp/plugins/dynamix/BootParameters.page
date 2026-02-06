@@ -972,6 +972,17 @@ function buildProposedParams() {
         }
     }
 
+    // === 6. SYSTEM-GENERATED PARAMETERS (NOT USER-EDITABLE) ===
+    // Preserve system-generated parameters from the current append line (GRUB only)
+    if (bootloaderType === 'grub' && typeof currentAppendLine === 'string' && currentAppendLine.trim() !== '') {
+        const sysMatches = currentAppendLine.match(/\bunraiduuid=\d+\b/gi) || [];
+        for (var k = 0; k < sysMatches.length; k++) {
+            if (params.indexOf(sysMatches[k]) === -1) {
+                params.push(sysMatches[k]);
+            }
+        }
+    }
+
     return params;
 }
 
@@ -1000,6 +1011,9 @@ function compareConfigToForm() {
 function updatePreview() {
     // Build the parameters that will be in effect after changes
     var proposedParams = buildProposedParams();
+    var displayParams = proposedParams.filter(function(p) {
+        return !/^unraiduuid=\d+$/i.test(p);
+    });
 
     // Build the preview HTML
     var html = '';
@@ -1010,8 +1024,8 @@ function updatePreview() {
     }
 
     // Add all proposed parameters in bright green with bold weight for visibility
-    if (proposedParams.length > 0) {
-        html += '<span style="color: #5FD275; font-weight: bold;">' + proposedParams.join(' ') + '</span>';
+    if (displayParams.length > 0) {
+        html += '<span style="color: #5FD275; font-weight: bold;">' + displayParams.join(' ') + '</span>';
     }
 
     // Update preview content
@@ -1153,6 +1167,19 @@ function parseBootloaderConfig(raw_config) {
 }
 
 /**
+ * Strip system-generated parameters from display-only boot lines
+ */
+function stripSystemParams(line) {
+    if (!line) return line;
+    const match = line.match(/^(\s*)(.*)$/);
+    const indent = match ? match[1] : '';
+    let rest = match ? match[2] : line;
+    rest = rest.replace(/\bunraiduuid=\d+\b/gi, '');
+    rest = rest.replace(/\s+/g, ' ').trim();
+    return indent + rest;
+}
+
+/**
  * Helper function to create boot entry content with optional diff display
  */
 function createEntryContent(entry, showApply) {
@@ -1178,7 +1205,7 @@ function createEntryContent(entry, showApply) {
     entry.lines.forEach((line, idx) => {
         if (idx === appendLineIndex && showApply) {
             // Show diff: removed line (original) and added line (with parameters)
-            const originalAppend = line;
+            const originalAppend = stripSystemParams(line);
             const proposedParams = buildProposedParams();
             let newAppend = '';
             if (bootloaderType === 'grub') {
@@ -1191,11 +1218,16 @@ function createEntryContent(entry, showApply) {
             } else {
                 newAppend = '  append initrd=/bzroot' + (proposedParams.length > 0 ? ' ' + proposedParams.join(' ') : '');
             }
-            contentHtml += '<span class="diff-line-removed">' + originalAppend + '</span>\n';
-            contentHtml += '<span class="diff-line-added">' + newAppend + '</span>\n';
+            const newAppendDisplay = stripSystemParams(newAppend);
+            if (originalAppend === newAppendDisplay) {
+                contentHtml += originalAppend + '\n';
+            } else {
+                contentHtml += '<span class="diff-line-removed">' + originalAppend + '</span>\n';
+                contentHtml += '<span class="diff-line-added">' + newAppendDisplay + '</span>\n';
+            }
         } else if (idx !== appendLineIndex || !showApply) {
             // Regular line or SKIP mode - just show as-is
-            contentHtml += line + '\n';
+            contentHtml += stripSystemParams(line) + '\n';
         }
     });
 
@@ -1888,6 +1920,9 @@ function loadCurrentConfig() {
 
                 params.forEach(param => {
                     if (param) {
+                        if (/^unraiduuid=\d+$/i.test(param)) {
+                            return;
+                        }
                         customParams.push(param);
                     }
                 });

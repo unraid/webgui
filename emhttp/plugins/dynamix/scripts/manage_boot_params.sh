@@ -553,6 +553,16 @@ validate_custom_param() {
 # 3. Hardware Compatibility (acpi_enforce_resources, ghes.disable, pci= merged)
 # 4. Power Management (usbcore.autosuspend, nvme_core, pcie_aspm, pcie_port_pm)
 # 5. Custom Parameters (in array order, excluding pci=)
+get_unraiduuid_param() {
+    local append_line=""
+    if [[ "$BOOTLOADER_TYPE" != "grub" ]]; then
+        echo ""
+        return 0
+    fi
+    append_line=$(parse_grub_linux_args "Unraid OS")
+    echo "$append_line" | grep -oE 'unraiduuid=[0-9]+' | head -n 1 || true
+}
+
 build_append_line() {
     local params="initrd=/bzroot"
 
@@ -622,6 +632,12 @@ build_append_line() {
         fi
     fi
 
+    # 6. System-generated parameters (preserve from current config)
+    local unraiduuid_param=$(get_unraiduuid_param)
+    if [[ -n "$unraiduuid_param" ]] && ! echo "$params" | grep -qw "$unraiduuid_param"; then
+        params="$params $unraiduuid_param"
+    fi
+
     echo "$params"
 }
 
@@ -689,6 +705,12 @@ build_append_line_gui_safe() {
             done
             params="$params $filtered_custom"
         fi
+    fi
+
+    # 6. System-generated parameters (preserve from current config)
+    local unraiduuid_param=$(get_unraiduuid_param)
+    if [[ -n "$unraiduuid_param" ]] && ! echo "$params" | grep -qw "$unraiduuid_param"; then
+        params="$params $unraiduuid_param"
     fi
 
     echo "$params"
