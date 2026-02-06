@@ -36,23 +36,35 @@ function initSum() {
 }
 
 function get_fs_errors($poolName, $diskDevice) {
-  global $poolstatus;
-  if (isset($poolstatus['pools'][$poolName]['members'])) {
-    foreach ($poolstatus['pools'][$poolName]['members'] as $memberKey => $member) {
+  global $poolstatus, $devicePools;
+  if ($diskDevice === '') return 0;
+
+  $poolsToCheck = [];
+  if (isset($devicePools[$diskDevice]) && is_array($devicePools[$diskDevice])) {
+    $poolsToCheck = $devicePools[$diskDevice];
+  } elseif ($poolName !== '') {
+    $poolsToCheck = [$poolName];
+  }
+
+  if (empty($poolsToCheck)) return 0;
+
+  $totalErrors = 0;
+  foreach (array_unique($poolsToCheck) as $pool) {
+    if (empty($poolstatus['pools'][$pool]['members'])) continue;
+    foreach ($poolstatus['pools'][$pool]['members'] as $memberKey => $member) {
       // Match by member key or device name
       if (($memberKey === $diskDevice) || (_var($member,'device','') === $diskDevice)) {
         if (isset($member['errors'])) {
-          $totalErrors = 0;
           foreach ($member['errors'] as $count) {
             $totalErrors += parse_si_number($count);
           }
-          return $totalErrors;
         }
-        return 0;
+        break;
       }
     }
   }
-  return 0;
+
+  return $totalErrors;
 }
 
 function mapDevicesToPools(): array
@@ -298,41 +310,49 @@ function pool_function_row(string $label, ?array $poolDisk, ?array $firstMember,
 }
 
 function get_fs_error_tooltip($diskName, $diskDevice, $deviceErrors) {
-  global $poolstatus;
-  $poolName = prefix($diskName);
+  global $poolstatus, $devicePools;
   $errorLines = [];
-  
-  // Find the specific member in the pool that matches this disk's device
-  if (isset($poolstatus['pools'][$poolName]['members'])) {
-    foreach ($poolstatus['pools'][$poolName]['members'] as $memberKey => $member) {
-      // Match by device name (e.g., sda, nvme0n1)
+  $poolName = prefix($diskName);
+  $poolsToCheck = [];
+
+  if ($diskDevice !== '' && isset($devicePools[$diskDevice]) && is_array($devicePools[$diskDevice])) {
+    $poolsToCheck = $devicePools[$diskDevice];
+  } elseif ($poolName !== '') {
+    $poolsToCheck = [$poolName];
+  }
+
+  foreach (array_unique($poolsToCheck) as $pool) {
+    if (empty($poolstatus['pools'][$pool]['members'])) continue;
+    foreach ($poolstatus['pools'][$pool]['members'] as $memberKey => $member) {
       $memberDevice = _var($member,'device','');
-      // Match either by member key or device name
-      if (($memberKey === $diskDevice) || ($memberDevice === $diskDevice)) {
-        if (isset($member['errors'])) {
-          foreach ($member['errors'] as $errorType => $count) {
-            if (has_zfs_errors($count)) {
-              $errorLines[] = sprintf(_('%s errors: %s'), ucfirst($errorType), $count);
-            }
+      if (($memberKey !== $diskDevice) && ($memberDevice !== $diskDevice)) continue;
+
+      $poolLabel = ucfirst($pool);
+      $poolLines = [];
+      if (isset($member['errors'])) {
+        foreach ($member['errors'] as $errorType => $count) {
+          if (has_zfs_errors($count)) {
+            $poolLines[] = sprintf(_('%s errors: %s'), ucfirst($errorType), $count);
           }
         }
-        // Also show member status if not online
-        if (isset($member['status']) && $member['status'] !== 'ONLINE') {
-          $errorLines[] = _("Status").": "._($member['status']);
-        }
-        break;
       }
+      if (isset($member['status']) && $member['status'] !== 'ONLINE') {
+        $poolLines[] = _( "Status" ).": "._($member['status']);
+      }
+
+      if (!empty($poolLines)) {
+        $errorLines[] = _("Pool name").":".$poolLabel;
+        foreach ($poolLines as $line) $errorLines[] = $line;
+      }
+      break;
     }
   }
-  
-  // Add device errors if present
+
   if ($deviceErrors > 0) {
-    if (!empty($errorLines)) {
-      $errorLines[] = '';
-    }
+    if (!empty($errorLines)) $errorLines[] = '';
     $errorLines[] = _('Device errors: ') . my_number($deviceErrors);
   }
-  
+
   return !empty($errorLines) ? implode('<br>', $errorLines) : '';
 }
 
