@@ -316,9 +316,10 @@ case 't1':
         echo '</td></tr>';
         // Show SR-IOV warning after first device in group
         if ($append && !empty($group['_has_sriov'])) {
+          $bootParamsUrl = '/Settings/BootParameters#boot-parameters';
           echo '<tr><td></td><td></td><td></td><td></td><td>';
           echo '<i class="fa fa-warning fa-fw orange-text"></i> ';
-          echo '<span class="orange-text">'._('Warning').': '._('IOMMU group contains SR-IOV devices. Enable ACS Override in <a href="/Main/Flash#boot-parameters">Boot Parameters</a> for proper isolation').'.</span>';
+          echo '<span class="orange-text">'._('Warning').': '._('IOMMU group contains SR-IOV devices. Enable ACS Override in <a href="'.$bootParamsUrl.'">Boot Parameters</a> for proper isolation').'.</span>';
           echo '</td></tr>';
         }
         if (array_key_exists($pciaddress,$pci_device_diffs)) {
