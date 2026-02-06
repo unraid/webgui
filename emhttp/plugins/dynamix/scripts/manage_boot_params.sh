@@ -286,7 +286,7 @@ parse_grub_linux_args() {
 
     awk -v label="$label" '
         $0 ~ /^menuentry / {
-            in_section = (index($0, "\"" label "\"") > 0)
+            in_section = (index($0, "\"" label "\"") > 0 || index($0, "'" label "'") > 0)
         }
         in_section && match($0, /^[ \t]*(linux|linuxefi)[ \t]+([^ \t]+)[ \t]*(.*)$/, m) {
             kernel = m[2]
@@ -987,7 +987,7 @@ update_grub_entry() {
 
     awk -v label="$label" -v new_args="$new_args" '
         $0 ~ /^menuentry / {
-            in_section = (index($0, "\"" label "\"") > 0)
+            in_section = (index($0, "\"" label "\"") > 0 || index($0, "'" label "'") > 0)
         }
         {
             if (in_section && match($0, /^[ \t]*(linux|linuxefi)[ \t]+([^ \t]+)[ \t]*(.*)$/, m)) {
@@ -1017,7 +1017,7 @@ update_grub_default() {
 
     local index=$(awk -v label="$label" '
         $0 ~ /^menuentry / {
-            if (index($0, "\"" label "\"") > 0) {
+            if (index($0, "\"" label "\"") > 0 || index($0, "'" label "'") > 0) {
                 print idx
                 exit
             }
