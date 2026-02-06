@@ -141,6 +141,50 @@ function bootPoolInit(popup) {
   popup.find('select[name="poolSlots"]').on('change', function(){
     bootPoolRenderSlots(popup);
   });
+  bootPoolSizeInit(popup);
+}
+
+function bootPoolSizeInit(popup) {
+  var $select = popup.find('select[name="poolBootSizePreset"]');
+  var $input = popup.find('input[name="poolBootSizeCustomGb"]');
+  var $hidden = popup.find('input[name="poolBootSize"]');
+  var $inputWrap = popup.find('.bootpool-size-custom');
+  if (!$select.length || !$input.length || !$hidden.length) return;
+
+  function syncBootSize() {
+    var val = $select.val();
+    if (val === 'custom') {
+      $input.prop('readonly', false);
+      $inputWrap.removeClass('hidden');
+      if ($input.val() === '' || $input.val() === null) $input.val('');
+    } else {
+      $input.val('');
+      $input.prop('readonly', true);
+      $inputWrap.addClass('hidden');
+    }
+  }
+
+  var currentMiB = $.trim($hidden.val());
+  if (currentMiB && $select.find('option[value="' + currentMiB.replace(/"/g, '\\"') + '"]').length) {
+    $select.val(currentMiB);
+  } else {
+    $select.val('custom');
+    if (currentMiB) {
+      $input.val(Math.round(parseInt(currentMiB, 10) / 1024));
+    }
+  }
+
+  $input.on('input change', function(){
+    var gb = parseInt($input.val(), 10);
+    if (!isNaN(gb) && gb >= 0) {
+      $hidden.val(gb * 1024);
+    } else {
+      $hidden.val('');
+    }
+  });
+
+  $select.on('change', syncBootSize);
+  syncBootSize();
 }
 
 function bootPoolRenderSlots(popup) {
@@ -380,7 +424,18 @@ _(Slots)_:
 </dl>
 
 _(Boot reserved size)_ (_(MiB)_):
-: <input type="number" name="poolBootSize" maxlength="10" value="<?=_var($var,'bootSizeDefault')?>" class="narrow">
+: <span><select name="poolBootSizePreset" class="wide bootpool-size-preset" style="max-width: 180px;">
+  <option value="8192">8 GB</option>
+  <option value="16384">16 GB</option>
+  <option value="32768">32 GB</option>
+  <option value="65536">64 GB</option>
+  <option value="131072">128 GB</option>
+  <option value="custom">_(User defined)_</option>
+  </select>
+  <span class="bootpool-size-custom">
+    <input type="number" name="poolBootSizeCustomGb" maxlength="10" class="narrow"> GB
+  </span><span></span>
+  <input type="hidden" name="poolBootSize" value="<?=_var($var,'bootSizeDefault')?>">
 
 </form>
 </div>
@@ -425,7 +480,18 @@ _(Slots)_:
   </select>
 
 _(Boot reserved size)_ (_(MiB)_):
-: <input type="number" name="poolBootSize" maxlength="10" value="<?=_var($var,'bootSizeDefault')?>" class="narrow">
+: <select name="poolBootSizePreset" class="wide bootpool-size-preset" style="min-width: 180px;">
+  <option value="8192">8 GB</option>
+  <option value="16384">16 GB</option>
+  <option value="32768">32 GB</option>
+  <option value="65536">64 GB</option>
+  <option value="131072">128 GB</option>
+  <option value="custom">_(User defined)_</option>
+  </select>
+  <span class="bootpool-size-custom">
+    <input type="number" name="poolBootSizeCustomGb" maxlength="10" class="narrow"> GB
+  </span>
+  <input type="hidden" name="poolBootSize" value="<?=_var($var,'bootSizeDefault')?>">
 
 </form>
 </div>
