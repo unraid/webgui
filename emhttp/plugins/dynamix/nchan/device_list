@@ -490,13 +490,15 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[], $options=[]
   $warn   = flash_smb_warning_html($name);
 
   $warndup = '';
-  $devName = _var($disk,'device','');
   $fullDevName = "/dev/" . _var($disk,'device', '');
   if (!$online && isset($duplicate_devices[$fullDevName])) {
+    $dupType = _var($duplicate_devices[$fullDevName],'duplicate','');
+    $dupValue = _var($duplicate_devices[$fullDevName],'duplicate_value','');
+    $dupLabel = $dupType ? strtoupper($dupType) : _('Identifier');
+    $dupLine = $dupValue !== '' ? $dupLabel.': '.htmlspecialchars($dupValue, ENT_QUOTES) : '';
     $duplicate  = isset($duplicate_devices[$fullDevName]['other_devices']) ? implode("<br>", $duplicate_devices[$fullDevName]['other_devices'])."<br>" : "";
-    #$duplicate = json_encode($duplicate_devices[$fullDevName]);
-    $isduplicate = isset($duplicate_devices[$fullDevName]) ? "true" : "false";
-    $warndup .= "<a class='info'><i class='fa fa-clone fa-fw orange-text'></i><span>"._('Duplicate device identifier detected (WWID or Serial)')."<br>$duplicate</span></a>";
+    $details = $dupLine ? $dupLine."<br>" : "";
+    $warndup .= "<a class='info'><i class='fa fa-clone fa-fw orange-text'></i><span>"._('Duplicate device identifier detected (WWID or Serial)')."<br>$details$duplicate</span></a>";
   }
 
   // Add pool status for zfs and btrfs pools only (first device only)
