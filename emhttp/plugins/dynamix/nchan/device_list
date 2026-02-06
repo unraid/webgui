@@ -35,16 +35,49 @@ function initSum() {
   return ['count'=>0, 'temp'=>0, 'power'=>0, 'fsSize'=>0, 'fsUsed'=>0, 'fsFree'=>0, 'ioReads'=>0, 'ioWrites'=>0, 'numReads'=>0, 'numWrites'=>0, 'numErrors'=>0];
 }
 
+function normalize_device_name($device) {
+  if ($device === null) return '';
+  $device = trim((string)$device);
+  if ($device === '') return '';
+  $device = str_replace('/dev/', '', $device);
+  return preg_replace('/p?\d+$/', '', $device);
+}
+
+function find_pools_for_device_in_status($deviceKey, $poolstatus) {
+  if ($deviceKey === '' || empty($poolstatus['pools'])) return [];
+  $pools = [];
+  foreach ($poolstatus['pools'] as $pool => $poolData) {
+    if (empty($poolData['members'])) continue;
+    foreach ($poolData['members'] as $memberKey => $member) {
+      $memberDevice = _var($member,'device','');
+      $memberKeyNorm = normalize_device_name($memberKey);
+      $memberDevNorm = normalize_device_name($memberDevice);
+      if ($memberKeyNorm === $deviceKey || $memberDevNorm === $deviceKey) {
+        $pools[] = $pool;
+        break;
+      }
+    }
+  }
+  return $pools;
+}
+
 function get_fs_errors($poolName, $diskDevice) {
   global $poolstatus, $devicePools;
   if ($diskDevice === '') return 0;
 
+  $deviceKey = normalize_device_name($diskDevice);
+
   $poolsToCheck = [];
-  if (isset($devicePools[$diskDevice]) && is_array($devicePools[$diskDevice])) {
+  if ($deviceKey !== '' && isset($devicePools[$deviceKey]) && is_array($devicePools[$deviceKey])) {
+    $poolsToCheck = $devicePools[$deviceKey];
+  } elseif (isset($devicePools[$diskDevice]) && is_array($devicePools[$diskDevice])) {
     $poolsToCheck = $devicePools[$diskDevice];
   } elseif ($poolName !== '') {
     $poolsToCheck = [$poolName];
   }
+
+  $poolsToCheck = array_merge($poolsToCheck, find_pools_for_device_in_status($deviceKey, $poolstatus));
+  $poolsToCheck = array_values(array_unique(array_filter($poolsToCheck)));
 
   if (empty($poolsToCheck)) return 0;
 
@@ -53,7 +86,10 @@ function get_fs_errors($poolName, $diskDevice) {
     if (empty($poolstatus['pools'][$pool]['members'])) continue;
     foreach ($poolstatus['pools'][$pool]['members'] as $memberKey => $member) {
       // Match by member key or device name
-      if (($memberKey === $diskDevice) || (_var($member,'device','') === $diskDevice)) {
+      $memberDevice = _var($member,'device','');
+      $memberKeyNorm = normalize_device_name($memberKey);
+      $memberDevNorm = normalize_device_name($memberDevice);
+      if (($deviceKey !== '' && ($memberKeyNorm === $deviceKey || $memberDevNorm === $deviceKey)) || ($memberKey === $diskDevice) || ($memberDevice === $diskDevice)) {
         if (isset($member['errors'])) {
           foreach ($member['errors'] as $count) {
             $totalErrors += parse_si_number($count);
@@ -83,12 +119,14 @@ function mapDevicesToPools(): array
         }
 
         $device = $poolData['device'];
+        $deviceNorm = normalize_device_name($device);
 
-        if (!isset($result[$device])) {
-            $result[$device] = [];
-        }
-
+        if (!isset($result[$device])) $result[$device] = [];
         $result[$device][] = $poolName;
+        if ($deviceNorm !== '' && $deviceNorm !== $device) {
+          if (!isset($result[$deviceNorm])) $result[$deviceNorm] = [];
+          $result[$deviceNorm][] = $poolName;
+        }
     }
 
     return $result;
@@ -315,17 +353,30 @@ function get_fs_error_tooltip($diskName, $diskDevice, $deviceErrors) {
   $poolName = prefix($diskName);
   $poolsToCheck = [];
 
-  if ($diskDevice !== '' && isset($devicePools[$diskDevice]) && is_array($devicePools[$diskDevice])) {
+  $deviceKey = normalize_device_name($diskDevice);
+
+  if ($deviceKey !== '' && isset($devicePools[$deviceKey]) && is_array($devicePools[$deviceKey])) {
+    $poolsToCheck = $devicePools[$deviceKey];
+  } elseif ($diskDevice !== '' && isset($devicePools[$diskDevice]) && is_array($devicePools[$diskDevice])) {
     $poolsToCheck = $devicePools[$diskDevice];
   } elseif ($poolName !== '') {
     $poolsToCheck = [$poolName];
   }
 
+  $poolsToCheck = array_merge($poolsToCheck, find_pools_for_device_in_status($deviceKey, $poolstatus));
+  $poolsToCheck = array_values(array_unique(array_filter($poolsToCheck)));
+
   foreach (array_unique($poolsToCheck) as $pool) {
     if (empty($poolstatus['pools'][$pool]['members'])) continue;
     foreach ($poolstatus['pools'][$pool]['members'] as $memberKey => $member) {
       $memberDevice = _var($member,'device','');
-      if (($memberKey !== $diskDevice) && ($memberDevice !== $diskDevice)) continue;
+      $memberKeyNorm = normalize_device_name($memberKey);
+      $memberDevNorm = normalize_device_name($memberDevice);
+      if (($deviceKey !== '' && ($memberKeyNorm === $deviceKey || $memberDevNorm === $deviceKey)) || ($memberKey === $diskDevice) || ($memberDevice === $diskDevice)) {
+        // matched
+      } else {
+        continue;
+      }
 
       $poolLabel = ucfirst($pool);
       $poolLines = [];
