@@ -40,6 +40,9 @@ function normalize_device_name($device) {
   $device = trim((string)$device);
   if ($device === '') return '';
   $device = str_replace('/dev/', '', $device);
+  if (preg_match('/^nvme\d+n\d+/', $device)) {
+    return preg_replace('/p\d+$/', '', $device);
+  }
   return preg_replace('/p?\d+$/', '', $device);
 }
 

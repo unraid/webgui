@@ -1112,8 +1112,8 @@ function parseGrubConfig(raw_config) {
             inEntry = true;
             braceDepth = 0;
 
-            const match = trimmed.match(/menuentry\s+"([^"]+)"/);
-            const label = match ? match[1] : trimmed.substring('menuentry '.length).trim();
+            const match = trimmed.match(/menuentry\s+["']([^"']+)["']/);
+            const label = match ? match[1] : trimmed.substring('menuentry '.length).trim().replace(/^["']|["']$/g, '');
 
             if (currentEntry) {
                 parsed.entries.push(currentEntry);
@@ -1275,7 +1275,7 @@ function renderMenuView(parsed) {
         // Replace timeout line with dropdown
         if (bootloaderType === 'grub' && trimmed.startsWith('set timeout=')) {
             const parsedTimeout = parseInt(trimmed.split('=')[1], 10);
-            const timeoutDeci = Number.isFinite(parsedTimeout) ? (parsedTimeout * 10) : 50; // deciseconds
+            const timeoutSeconds = Number.isFinite(parsedTimeout) ? parsedTimeout : 5;
             const timeoutOptions = [0, 10, 20, 30, 50, 100, 150, 200, 300, 450, 600]; // deciseconds
             const formatSeconds = (deci) => (deci % 10 === 0 ? (deci / 10).toString() : (deci / 10).toFixed(1));
 
@@ -1295,12 +1295,13 @@ function renderMenuView(parsed) {
             let matchedPreset = false;
 
             timeoutOptions.forEach(function(deci) {
+                const secValue = Math.round(deci / 10);
                 const secLabel = formatSeconds(deci);
                 const option = $('<option>')
-                    .val(deci)
+                    .val(secValue)
                     .text(deci === 0 ? '0 seconds (boot immediately)' : secLabel + ' second' + (secLabel === '1' ? '' : 's'));
 
-                if (deci === timeoutDeci) {
+                if (secValue === timeoutSeconds) {
                     matchedPreset = true;
                     option.prop('selected', true);
                 }
@@ -1308,9 +1309,9 @@ function renderMenuView(parsed) {
             });
 
             if (!matchedPreset) {
-                const customLabel = formatSeconds(timeoutDeci);
+                const customLabel = formatSeconds(timeoutSeconds * 10);
                 const customOption = $('<option>')
-                    .val(timeoutDeci)
+                    .val(timeoutSeconds)
                     .text(customLabel + ' seconds (custom)')
                     .prop('selected', true);
                 dropdown.append(customOption);
@@ -1321,6 +1322,7 @@ function renderMenuView(parsed) {
         } else if (trimmed.startsWith('timeout ')) {
             const parsedTimeout = parseInt(trimmed.split(' ')[1], 10);
             const timeoutDeci = Number.isFinite(parsedTimeout) ? parsedTimeout : 50; // deciseconds
+            const timeoutSeconds = timeoutDeci / 10;
             const timeoutOptions = [0, 10, 20, 30, 50, 100, 150, 200, 300, 450, 600]; // deciseconds
             const formatSeconds = (deci) => (deci % 10 === 0 ? (deci / 10).toString() : (deci / 10).toFixed(1));
 
@@ -1341,12 +1343,13 @@ function renderMenuView(parsed) {
 
             // Add timeout options (0-60 seconds)
             timeoutOptions.forEach(function(deci) {
+                const secValue = Math.round(deci / 10);
                 const secLabel = formatSeconds(deci);
                 const option = $('<option>')
-                    .val(deci)
+                    .val(secValue)
                     .text(deci === 0 ? '0 seconds (boot immediately)' : secLabel + ' second' + (secLabel === '1' ? '' : 's'));
 
-                if (deci === timeoutDeci) {
+                if (secValue === timeoutSeconds) {
                     matchedPreset = true;
                     option.prop('selected', true);
                 }
@@ -1355,9 +1358,9 @@ function renderMenuView(parsed) {
 
             // Inject custom option if current value is not a preset
             if (!matchedPreset) {
-                const customLabel = formatSeconds(timeoutDeci);
+                const customLabel = formatSeconds(timeoutSeconds * 10);
                 const customOption = $('<option>')
-                    .val(timeoutDeci)
+                    .val(timeoutSeconds)
                     .text(customLabel + ' seconds (custom)')
                     .prop('selected', true);
                 dropdown.append(customOption);
@@ -1950,7 +1953,7 @@ function loadCurrentConfig() {
             }
 
             // Set bootloader type for rendering and validation
-            bootloaderType = config.bootloader_type || 'syslinux';
+            bootloaderType = (config.bootloader_type || 'syslinux').toLowerCase();
 
             // Display current configuration (full syslinux.cfg file)
             if (config.full_config) {

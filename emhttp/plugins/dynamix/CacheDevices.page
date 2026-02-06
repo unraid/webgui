@@ -359,10 +359,16 @@ _(Slots)_:
     <?
       $devId = _var($dev,'id','');
       $devName = _var($dev,'device','');
-      $devLabel = trim($devId) !== '' ? $devId : $devName;
-      if ($devName !== '') $devLabel .= " ($devName)";
+      if (trim($devId) !== '') {
+        $devValue = $devId;
+        $devLabel = $devId;
+        if ($devName !== '') $devLabel .= " ($devName)";
+      } else {
+        $devValue = $devName;
+        $devLabel = $devName;
+      }
     ?>
-    <option value="<?=htmlspecialchars($devId, ENT_QUOTES)?>"><?=htmlspecialchars($devLabel, ENT_QUOTES)?></option>
+    <option value="<?=htmlspecialchars($devValue, ENT_QUOTES, 'UTF-8')?>"><?=htmlspecialchars($devLabel, ENT_QUOTES, 'UTF-8')?></option>
     <?endforeach;?>
   </select>
   <?endif;?>
