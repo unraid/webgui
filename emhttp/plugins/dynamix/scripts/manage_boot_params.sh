@@ -1107,6 +1107,13 @@ write_config_grub() {
         fi
     fi
 
+    # Basic validation: ensure the config is non-empty and has at least one menuentry
+    if [[ ! -s "$temp_file" ]] || ! grep -q '^menuentry ' "$temp_file"; then
+        rm -f "$temp_file"
+        cp "$GRUB_BACKUP_DIR/grub.cfg.bak.$timestamp" "$GRUB_CFG"
+        error_exit "GRUB configuration validation failed, restored from backup"
+    fi
+
     mv "$temp_file" "$GRUB_CFG"
 
     echo "SUCCESS"
