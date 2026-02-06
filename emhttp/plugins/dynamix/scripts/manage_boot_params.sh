@@ -286,7 +286,7 @@ parse_grub_linux_args() {
 
     awk -v label="$label" '
         $0 ~ /^menuentry / {
-            in_section = (index($0, "\"" label "\"") > 0 || index($0, "'" label "'") > 0)
+            in_section = (index($0, "\"" label "\"") > 0 || index($0, "\x27" label "\x27") > 0)
         }
         in_section && match($0, /^[ \t]*(linux|linuxefi)[ \t]+([^ \t]+)[ \t]*(.*)$/, m) {
             kernel = m[2]
