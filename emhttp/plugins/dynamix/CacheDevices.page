@@ -80,6 +80,7 @@ function addBootPoolPopup() {
   var popup = $('#dialogWindow');
   // Load popup with the template info
   popup.html($("#templatePopupBootPool").html());
+  bootPoolInit(popup);
   // Start Dialog section
   popup.dialog({
     title: "_(Add Bootable Pool)_",
@@ -100,6 +101,103 @@ function addBootPoolPopup() {
     }
   });
   dialogStyle();
+}
+
+function addBootPoolPopupNew() {
+  var popup = $('#dialogWindow');
+  // Load popup with the template info
+  popup.html($("#templatePopupBootPoolNew").html());
+  bootPoolInit(popup);
+  // Start Dialog section
+  popup.dialog({
+    title: "_(Add Bootable Pool)_",
+    height: 'auto',
+    width: 600,
+    resizable: false,
+    modal: true,
+    buttons: {
+    "_(Activate)_": function() {
+        if (validate($(this).find('input[name="poolName"]').val())) {
+          $(this).find('form').submit();
+          $(this).dialog('close');
+        }
+      },
+    "_(Activate and Reboot)_": function() {
+        if (validate($(this).find('input[name="poolName"]').val())) {
+          $(this).find('form').submit();
+          $(this).dialog('close');
+        }
+      },
+    "_(Cancel)_": function() {
+        $(this).dialog('close');
+      }
+    }
+  });
+  dialogStyle();
+}
+
+function bootPoolInit(popup) {
+  bootPoolRenderSlots(popup);
+  popup.find('select[name="poolSlots"]').on('change', function(){
+    bootPoolRenderSlots(popup);
+  });
+}
+
+function bootPoolRenderSlots(popup) {
+  var slotCount = parseInt(popup.find('select[name="poolSlots"]').val(), 10) || 0;
+  var $container = popup.find('#bootPoolDeviceSlots');
+  var $source = popup.find('#bootPoolDevicesSource select');
+  var existing = {};
+  $container.find('select[name="poolDevice[]"]').each(function(){
+    var slot = parseInt($(this).attr('data-slot'), 10);
+    existing[slot] = $(this).val();
+  });
+  $container.find('.bootpool-device-row').remove();
+
+  for (var i = 1; i <= slotCount; i++) {
+    var $label = $('<dt class="bootpool-device-row"></dt>').text("_(Device)_" + ' ' + i + ':');
+    var $dd = $('<dd class="bootpool-device-row"></dd>');
+    var $select = $('<select></select>').attr('name','poolDevice[]').attr('data-slot', i);
+    $select.append($('<option></option>').attr('value','').text("_(Select device)_"));
+    if ($source.length) {
+      $source.find('option').each(function(){
+        $select.append($(this).clone());
+      });
+    }
+    if (existing[i]) {
+      var val = existing[i];
+      if ($select.find('option[value="' + val.replace(/"/g, '\\"') + '"]').length) {
+        $select.val(val);
+      }
+    }
+    $dd.append($select);
+    $container.append($label).append($dd);
+  }
+
+  bootPoolSyncDeviceOptions(popup);
+  $container.find('select[name="poolDevice[]"]').on('change', function(){
+    bootPoolSyncDeviceOptions(popup);
+  });
+}
+
+function bootPoolSyncDeviceOptions(popup) {
+  var selected = {};
+  popup.find('select[name="poolDevice[]"]').each(function(){
+    var val = $(this).val();
+    if (val) selected[val] = true;
+  });
+  popup.find('select[name="poolDevice[]"]').each(function(){
+    var current = $(this).val();
+    $(this).find('option').each(function(){
+      var val = $(this).attr('value');
+      if (!val) return;
+      if (val === current) {
+        $(this).prop('disabled', false);
+      } else {
+        $(this).prop('disabled', !!selected[val]);
+      }
+    });
+  });
 }
 function removeOption(inputString,value) {
   // Define a regular expression to match <option>...</option> substrings
@@ -218,6 +316,9 @@ $root  = explode($_tilde_,$pool)[0];
 <?if (_var($var,'bootEligible')=="yes"):?>
 <input type="button" value="_(Add Bootable Pool)_" style="margin:0" onclick="addBootPoolPopup()">
 <?endif;?>
+<input type="button" value="_(Add Bootable Pool)_" style="margin:0" onclick="addBootPoolPopup()">
+<input type="button" value="_(Add Bootable Pool New)_" style="margin:0" onclick="addBootPoolPopupNew()">
+
 
 <div id="templatePopupPool" class="template">
 <form markdown="1" method="POST" action="/update.htm" target="progressFrame" onsubmit="return validate(this.poolName.value)">
@@ -225,6 +326,72 @@ $root  = explode($_tilde_,$pool)[0];
 
 _(Name)_:
 : <input type="text" name="poolName" maxlength="40" value="<?=count($pools)==0?'cache':''?>">
+
+_(Slots)_:
+: <select name="poolSlots">
+  <?for ($n=1; $n<=_var($var,'MAX_CACHESZ',0); $n++):?>
+  <?=mk_option(1,$n,$n)?>
+  <?endfor;?>
+  </select>
+
+</form>
+</div>
+
+<div id="templatePopupBootPoolNew" class="template">
+<form markdown="1" method="POST" action="/update.htm" target="progressFrame" onsubmit="return validate(this.poolName.value)">
+<input type="hidden" name="poolBootable" value="yes">
+<input type="hidden" name="changeSlots" value="apply">
+
+_(Name)_:
+: <input type="text" name="poolName" maxlength="40" value="<?=count($pools)==0?'cache':''?>">
+
+_(Slots)_:
+: <select name="poolSlots">
+  <?for ($n=1; $n<=2; $n++):?>
+  <?=mk_option(1,$n,$n)?>
+  <?endfor;?>
+  </select>
+
+<div id="bootPoolDevicesSource" class="hidden">
+  <?if (!empty($devs)):?>
+  <select>
+    <?foreach ($devs as $dev):?>
+    <?
+      $devId = _var($dev,'id','');
+      $devName = _var($dev,'device','');
+      $devLabel = trim($devId) !== '' ? $devId : $devName;
+      if ($devName !== '') $devLabel .= " ($devName)";
+    ?>
+    <option value="<?=htmlspecialchars($devId, ENT_QUOTES)?>"><?=htmlspecialchars($devLabel, ENT_QUOTES)?></option>
+    <?endforeach;?>
+  </select>
+  <?endif;?>
+</div>
+
+<dl id="bootPoolDeviceSlots">
+<dt>_(Select devices)_:</dt>
+<dd></dd>
+</dl>
+
+_(Boot reserved size)_ (_(MiB)_):
+: <input type="number" name="poolBootSize" maxlength="10" value="<?=_var($var,'bootSizeDefault')?>" class="narrow">
+
+</form>
+</div>
+
+<div id="templatePopupSubpool" class="template">
+<form markdown="1" method="POST" action="/update.htm" target="progressFrame">
+<input type="hidden" name="changeSlots" value="apply">
+<input type="hidden" name="poolName" value="">
+
+_(Name)_:
+: <select name="subpool">
+  <?=mk_option("","special",_("special - Metadata storage"))?>
+  <?=mk_option("","logs",_("logs - Separate Intent Log (SLOG)"))?>
+  <?=mk_option("","dedup",_("dedup - Deduplication Tables"))?>
+  <?=mk_option("","cache",_("cache - L2ARC"))?>
+  <?=mk_option("","spares",_("spares - Hot Spares"),'disabled')?>
+  </select>
 
 _(Slots)_:
 : <select name="poolSlots">
