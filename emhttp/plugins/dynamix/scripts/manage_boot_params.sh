@@ -529,11 +529,11 @@ validate_custom_param() {
     # Check 3: Reserved directives (case-insensitive)
     local lower_param=$(echo "$param" | tr '[:upper:]' '[:lower:]')
     if [[ "$BOOTLOADER_TYPE" == "grub" ]]; then
-        if [[ "$lower_param" =~ ^(linux|linuxefi|initrd|menuentry|set) ]]; then
+        if [[ "$lower_param" =~ ^(linux|linuxefi|initrd|menuentry|set)($|=) ]]; then
             error_exit "Invalid custom parameter: '$param' is a reserved GRUB directive"
         fi
     else
-        if [[ "$lower_param" =~ ^(append|initrd|label|kernel|menu|default|timeout|unraidsafemode) ]]; then
+        if [[ "$lower_param" =~ ^(append|initrd|label|kernel|menu|default|timeout|unraidsafemode)($|=) ]]; then
             error_exit "Invalid custom parameter: '$param' is a reserved syslinux directive"
         fi
     fi
@@ -1099,7 +1099,7 @@ write_config_grub() {
     fi
 
     if [[ -n "${TIMEOUT}" ]]; then
-        local timeout_seconds=$((TIMEOUT / 10))
+        local timeout_seconds=$(((TIMEOUT + 5) / 10))
         if grep -q '^set timeout=' "$temp_file"; then
             sed -i -E "s/^set timeout=.*/set timeout=${timeout_seconds}/" "$temp_file"
         else
