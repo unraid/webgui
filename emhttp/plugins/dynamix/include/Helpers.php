@@ -1683,4 +1683,109 @@ function storagePoolsJson(): string
     return json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 }
 
+function get_block_devices(): array
+{
+    $out = [];
+    exec('lsblk -ndo NAME 2>/dev/null', $out);
+
+    $devs = [];
+    foreach ($out as $l) {
+        if (preg_match('/^sd[a-z]+$/', trim($l))) {
+            $devs[] = trim($l);
+        }
+    }
+
+    sort($devs);
+    return $devs;
+}
+
+function sysfs_read(string $path): ?string
+{
+    return is_readable($path)
+        ? (($v = trim(file_get_contents($path))) !== '' ? $v : null)
+        : null;
+}
+
+function udev_property(string $device, string $key): ?string
+{
+    $out = [];
+    exec(
+        sprintf(
+            'udevadm info --query=property --name=%s 2>/dev/null',
+            escapeshellarg($device)
+        ),
+        $out
+    );
+
+    foreach ($out as $line) {
+        if (strpos($line, $key . '=') === 0) {
+            return substr($line, strlen($key) + 1);
+        }
+    }
+    return null;
+}
+
+function get_disk_identity(string $sd): array
+{
+    $dev  = "/dev/$sd";
+    $base = "/sys/block/$sd/device";
+
+    return [
+        'device' => $dev,
+        'wwid'   => sysfs_read("$base/wwid"),
+        'serial' => udev_property($dev, 'ID_SERIAL'),
+    ];
+}
+
+/**
+ * Emit JSON describing ONLY duplicate identifiers and return the JSON string.
+ */
+function find_duplicate_disks_json(): string
+{
+    $devices = get_block_devices();
+
+    $all      = [];
+    $byWwid   = [];
+    $bySerial = [];
+
+    foreach ($devices as $sd) {
+        $d = get_disk_identity($sd);
+        $all[$d['device']] = $d;
+
+        if ($d['wwid']) {
+            $byWwid[$d['wwid']][] = $d['device'];
+        }
+        if ($d['serial']) {
+            $bySerial[$d['serial']][] = $d['device'];
+        }
+    }
+
+    $result = [];
+
+    foreach ($all as $dev => $info) {
+        $duplicate = null;
+        $value     = null;
+        $others    = [];
+
+        if ($info['wwid'] && count($byWwid[$info['wwid']]) > 1) {
+            $duplicate = 'wwid';
+            $value     = $info['wwid'];
+            $others    = array_values(array_diff($byWwid[$info['wwid']], [$dev]));
+        } elseif ($info['serial'] && count($bySerial[$info['serial']]) > 1) {
+            $duplicate = 'serial';
+            $value     = $info['serial'];
+            $others    = array_values(array_diff($bySerial[$info['serial']], [$dev]));
+        }
+
+        if ($duplicate) {
+            $result[$dev] = [
+                'duplicate'       => $duplicate,
+                'duplicate_value' => $value,
+                'other_devices'   => $others,
+            ];
+        }
+    }
+
+    return json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+}
 ?>
