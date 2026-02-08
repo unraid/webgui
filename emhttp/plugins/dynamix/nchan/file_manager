@@ -695,30 +695,43 @@ while (true) {
         $archive_path = rtrim($target, '/').'/'.$archive_name;
         
         // Debug logging
-        exec('logger -t file_manager "Compress action started: format=' . escapeshellarg($format) . ', archive_name=' . escapeshellarg($archive_name) . ', source=' . escapeshellarg($source[0]) . ', target=' . escapeshellarg($target) . '"');
+        exec('logger -t file_manager "Compress action started: format=' . escapeshellarg($format) . ', archive_name=' . escapeshellarg($archive_name) . ', sources=' . escapeshellarg(implode(', ', $source)) . ', target=' . escapeshellarg($target) . '"');
         
-        // Get source basename and parent directory
-        $source_path = rtrim($source[0], '/');
-        $source_parent = dirname($source_path);
-        $source_basename = basename($source_path);
+        // For multiple sources, find common parent directory
+        // For single source, use its parent directory
+        if (count($source) > 1) {
+          // Use target directory as working directory for bulk operations
+          $source_parent = rtrim($target, '/');
+          // Get basenames of all sources (they should all be in target dir)
+          $source_basenames = array_map(function($s) {
+            return basename(rtrim($s, '/'));
+          }, $source);
+        } else {
+          // Single source - use its parent directory
+          $source_path = rtrim($source[0], '/');
+          $source_parent = dirname($source_path);
+          $source_basenames = [basename($source_path)];
+        }
         
         // Build compression command based on format
+        // Note: Using escapeshellarg() directly for basenames since quoted() expects full paths
+        $escaped_basenames = implode(' ', array_map('escapeshellarg', $source_basenames));
         $cmd = "cd ".quoted($source_parent)." && ";
         switch ($format) {
         case 'zip':
-          $cmd .= "zip -r ".quoted($archive_path)." ".quoted($source_basename)." 2>&1 | tee $status";
+          $cmd .= "zip -r ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
           break;
         case 'tar':
-          $cmd .= "tar -cvf ".quoted($archive_path)." ".quoted($source_basename)." 2>&1 | tee $status";
+          $cmd .= "tar -cvf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
           break;
         case 'tar.gz':
-          $cmd .= "tar -czvf ".quoted($archive_path)." ".quoted($source_basename)." 2>&1 | tee $status";
+          $cmd .= "tar -czvf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
           break;
         case 'tar.zst':
-          $cmd .= "tar -I zstd -cvf ".quoted($archive_path)." ".quoted($source_basename)." 2>&1 | tee $status";
+          $cmd .= "tar -I zstd -cvf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
           break;
         default:
-          $cmd .= "zip -r ".quoted($archive_path)." ".quoted($source_basename)." 2>&1 | tee $status";
+          $cmd .= "zip -r ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
         }
         $cmd .= " & echo \$!";
         
