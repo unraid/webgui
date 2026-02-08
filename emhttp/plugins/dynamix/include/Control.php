@@ -244,6 +244,11 @@ case 'file':
     'exist' => empty($_POST['exist']) ? '--ignore-existing' : '',
     'zfs' => rawurldecode($_POST['zfs'] ?? '')
   ];
+  // Add compress-specific parameters
+  if ($data['action'] === 16) {
+    $data['format'] = rawurldecode($_POST['format'] ?? 'zip');
+    $data['archive_name'] = rawurldecode($_POST['archive_name'] ?? '');
+  }
   if (isset($_POST['task'])) {
     // add task to queue
     $data['task'] = rawurldecode($_POST['task']);

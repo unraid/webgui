@@ -672,6 +672,93 @@ while (true) {
         exec("find ".source($source)." -iname ".escapeshellarg($target)." 1>$status 2>$null & echo \$!", $pid);
       }
       break;
+    case 16: // compress
+
+      // return status of running action
+      if (!empty($pid)) {
+        $file_line = exec("tail -1 $status");
+        $reply['status'] = json_encode([
+          'action' => $action,
+          'text' => [_('Compressing').'... '.mb_strimhalf($file_line, 70, '...')]
+        ]);
+
+      // start action
+      } else {
+        $format = $format ?? 'zip';
+        $archive_name = $archive_name ?? 'archive.zip';
+        $archive_path = rtrim($target, '/').'/'.$archive_name;
+        
+        // Get source basename and parent directory
+        $source_path = rtrim($source[0], '/');
+        $source_parent = dirname($source_path);
+        $source_basename = basename($source_path);
+        
+        // Build compression command based on format
+        $cmd = "cd ".quoted($source_parent)." && ";
+        switch ($format) {
+        case 'zip':
+          $cmd .= "zip -r ".quoted($archive_path)." ".quoted($source_basename)." 2>&1 | tee $status";
+          break;
+        case 'tar':
+          $cmd .= "tar -cvf ".quoted($archive_path)." ".quoted($source_basename)." 2>&1 | tee $status";
+          break;
+        case 'tar.gz':
+          $cmd .= "tar -czvf ".quoted($archive_path)." ".quoted($source_basename)." 2>&1 | tee $status";
+          break;
+        case 'tar.zst':
+          $cmd .= "tar -I zstd -cvf ".quoted($archive_path)." ".quoted($source_basename)." 2>&1 | tee $status";
+          break;
+        default:
+          $cmd .= "zip -r ".quoted($archive_path)." ".quoted($source_basename)." 2>&1 | tee $status";
+        }
+        $cmd .= " & echo \$!";
+        exec($cmd, $pid);
+      }
+      break;
+    case 17: // extract
+
+      // return status of running action
+      if (!empty($pid)) {
+        $file_line = exec("tail -1 $status");
+        $reply['status'] = json_encode([
+          'action' => $action,
+          'text' => [_('Extracting').'... '.mb_strimhalf($file_line, 70, '...')]
+        ]);
+
+      // start action
+      } else {
+        $archive = $source[0];
+        $dest = rtrim($target, '/');
+        
+        // Create destination directory if it doesn't exist
+        exec("mkdir -p ".quoted($dest));
+        
+        // Detect archive type and extract accordingly
+        $cmd = "cd ".quoted($dest)." && ";
+        if (preg_match('/\.(tar\.gz|tgz)$/i', $archive)) {
+          $cmd .= "tar -xzvf ".quoted($archive)." 2>&1 | tee $status";
+        } elseif (preg_match('/\.(tar\.bz2|tbz2)$/i', $archive)) {
+          $cmd .= "tar -xjvf ".quoted($archive)." 2>&1 | tee $status";
+        } elseif (preg_match('/\.(tar\.xz|txz)$/i', $archive)) {
+          $cmd .= "tar -xJvf ".quoted($archive)." 2>&1 | tee $status";
+        } elseif (preg_match('/\.(tar\.zst)$/i', $archive)) {
+          $cmd .= "tar -I zstd -xvf ".quoted($archive)." 2>&1 | tee $status";
+        } elseif (preg_match('/\.tar$/i', $archive)) {
+          $cmd .= "tar -xvf ".quoted($archive)." 2>&1 | tee $status";
+        } elseif (preg_match('/\.zip$/i', $archive)) {
+          $cmd .= "unzip ".quoted($archive)." 2>&1 | tee $status";
+        } elseif (preg_match('/\.7z$/i', $archive)) {
+          $cmd .= "7z x ".quoted($archive)." 2>&1 | tee $status";
+        } elseif (preg_match('/\.rar$/i', $archive)) {
+          $cmd .= "unrar x ".quoted($archive)." 2>&1 | tee $status";
+        } else {
+          // Try to detect by file command as fallback
+          $cmd .= "unzip ".quoted($archive)." 2>&1 | tee $status";
+        }
+        $cmd .= " & echo \$!";
+        exec($cmd, $pid);
+      }
+      break;
     case 99: // kill running background process
       if (!empty($pid)) exec("kill $pid");
       delete_file($active, $pid_file, $status, $error);
