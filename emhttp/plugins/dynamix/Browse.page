@@ -825,15 +825,18 @@ function doAction(action, title, id) {
     dfm_createSource(source.dfm_strip());
     // Detect if source is in appdata/system path for default format selection
     var isAppdata = source.match(/\/mnt\/[^\/]+\/(appdata|system)\//);
-    $('#dfm_format').val(isAppdata ? 'tar.zst' : 'zip');
+    dfm.window.find('#dfm_format').val(isAppdata ? 'tar.zst' : 'zip');
     // Set default archive name based on source name
-    var archiveName = name + '.' + $('#dfm_format').val();
-    $('#dfm_archive_name').val(archiveName);
+    var archiveName = name + '.' + dfm.window.find('#dfm_format').val();
+    dfm.window.find('#dfm_archive_name').val(archiveName);
+    // Bind format change to update archive name
+    dfm.window.find('#dfm_format').on('change', updateArchiveName);
     // Set target to current directory
     dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
     });
     dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
+    console.log('Compress dialog opened', {source: source, dir: dir, archiveName: archiveName});
     break;
   case 17: // extract
     dfm.window.html($('#dfm_templateExtract').html());
@@ -914,7 +917,10 @@ function doAction(action, title, id) {
         // For compress: collect additional parameters
         var format = action == 16 ? dfm.window.find('#dfm_format').val() : '';
         var archive_name = action == 16 ? dfm.window.find('#dfm_archive_name').val() : '';
-        if (action == 16 && !archive_name) {errorTarget(); return;}
+        if (action == 16) {
+          console.log('Compress parameters:', {action: action, source: source, target: target, format: format, archive_name: archive_name});
+          if (!archive_name) {errorTarget(); return;}
+        }
         dfm.window.find('.dfm_text').removeClass('orange-text').html("_(Running)_...");
         dfm.window.find('#dfm_target').prop('disabled',true);
         dfm.window.find('#dfm_sparse').prop('disabled',true);
@@ -932,6 +938,7 @@ function doAction(action, title, id) {
         if (action == 16) {
           postData.format = encodeURIComponent(format);
           postData.archive_name = encodeURIComponent(archive_name);
+          console.log('Sending compress request to Control.php:', postData);
         }
         $.post('/webGui/include/Control.php',postData,function(){
           $.post('/webGui/include/Control.php',{mode:'read'},function(data){
@@ -1143,6 +1150,25 @@ function doActions(action, title) {
     dfm.window.find('.dfm_loc').html('&nbsp;').css({'line-height':'normal'});
     dfm.window.find('.dfm_text').html('').css({'line-height':'normal'});
     break;
+  case 16: // compress object(s)
+    dfm.window.html($('#dfm_templateCompress').html());
+    dfm_createSource(source);
+    // Use first source name for archive name suggestion
+    var firstSource = bulk ? source[0] : source[0];
+    var firstPath = firstSource.substr(1).split('/');
+    var firstName = firstPath.pop() || firstPath.pop();
+    // Detect if source is in appdata/system path
+    var isAppdata = firstSource.match(/\/mnt\/[^\/]+(appdata|system)\//);
+    dfm.window.find('#dfm_format').val(isAppdata ? 'tar.zst' : 'zip');
+    var archiveName = (bulk ? 'archive' : firstName) + '.' + dfm.window.find('#dfm_format').val();
+    dfm.window.find('#dfm_archive_name').val(archiveName);
+    dfm.window.find('#dfm_format').on('change', updateArchiveName);
+    dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
+      dfm.window.find('#dfm_target').val(path).change();
+    });
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
+    console.log('Bulk compress dialog opened', {sources: source, bulk: bulk, archiveName: archiveName});
+    break;
   }
   dfm.window.find('#dfm_source').attr('size',Math.min(dfm.tsize[action],source.length));
   dfm.window.dialog({
@@ -1201,6 +1227,13 @@ function doActions(action, title) {
             dfm.window.find('.dfm_loc').html('&nbsp;');
             dfm.window.find('#dfm_files').html('');
             break;
+          case 16: // compress
+            var valid = /.+/;
+            var format = dfm.window.find('#dfm_format').val();
+            var archive_name = dfm.window.find('#dfm_archive_name').val();
+            console.log('Bulk compress Start clicked:', {target: target, format: format, archive_name: archive_name, bulk: bulk});
+            if (!archive_name) {errorTarget(); return;}
+            break;
           default:
             // disallow mixing of disk and user shares
             var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
@@ -1222,7 +1255,13 @@ function doActions(action, title) {
         dfm.window.find('.dfm_text').removeClass('orange-text').html("_(Running)_...");
         dfm_footer('hide');
         dfm_fileManager('start');
-        $.post('/webGui/include/Control.php',{mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs.join('\r'))},function(){
+        var postData = {mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs.join('\r'))};
+        if (action == 16) {
+          postData.format = encodeURIComponent(format);
+          postData.archive_name = encodeURIComponent(archive_name);
+          console.log('Sending bulk compress request:', postData);
+        }
+        $.post('/webGui/include/Control.php',postData,function(){
           $.post('/webGui/include/Control.php',{mode:'read'},function(data){
             try {
               dfm_read = data ? JSON.parse(data) : {};
@@ -1262,6 +1301,12 @@ function doActions(action, title) {
             target = target.join(',')+',ugo+X';
             bulk = false;
             break;
+          case 16: // compress
+            var valid = /.+/;
+            var format_queue = dfm.window.find('#dfm_format').val();
+            var archive_name_queue = dfm.window.find('#dfm_archive_name').val();
+            if (!archive_name_queue) {errorTarget(); return;}
+            break;
           default:
             // disallow mixing of disk and user shares
             var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
@@ -1269,7 +1314,12 @@ function doActions(action, title) {
           }
           if (!target || !valid.test(target)) {errorTarget(); return;}
         } else target = '';
-        $.post('/webGui/include/Control.php',{mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs.join('\r'))});
+        var postDataQueue = {mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs.join('\r'))};
+        if (action == 16) {
+          postDataQueue.format = encodeURIComponent(format_queue);
+          postDataQueue.archive_name = encodeURIComponent(archive_name_queue);
+        }
+        $.post('/webGui/include/Control.php',postDataQueue);
         dfm.window.dialog('close');
         dfm.window.dialog('destroy');
         $('.dfm_control.jobs').prop('disabled',false);
@@ -1568,6 +1618,7 @@ $(window).bind('resize',function(){
 <input type="button" value="_(Owner)_" class="dfm_control extra" onclick="doActions(11,this.value)" disabled>
 <input type="button" value="_(Permission)_" class="dfm_control extra" onclick="doActions(12,this.value)" disabled>
 <input type="button" value="_(Calculate)_" class="dfm_control extra" onclick="doActions(14,this.value)" disabled>
+<input type="button" value="_(Compress)_" class="dfm_control extra" onclick="doActions(16,this.value)" disabled>
 <input type="button" value="_(Create)_" class="dfm_control common" onclick="doActions(0,this.value)"<?if(!$dir||$isshare){?> disabled<?}?>>
 <input type="button" value="_(Upload)_" class="dfm_control common" id="dfm_uploadButton" onclick="$('#dfm_upload').click()"<?if(!$dir||$isshare){?> disabled<?}?>><span id="dfm_uploadStatus"></span>
 </div>
