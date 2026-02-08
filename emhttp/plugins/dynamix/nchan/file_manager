@@ -366,8 +366,8 @@ $delete_empty_dirs = null;
 // infinite loop to monitor and execute file operations
 // Note: exec() uses /bin/sh which is symlinked to bash in unraid and a requirement for process substitution syntax >(...)
 while (true) {
-  unset($action, $source, $target, $H, $sparse, $exist, $zfs);
-  if  (!isset($pid)) $pid = false;
+  unset($action, $source, $target, $H, $sparse, $exist, $zfs, $format, $archive_name);
+  if (!isset($pid)) $pid = false;
 
   // read job parameters from JSON file: $action, $title, $source, $target, $H, $sparse, $exist, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
   if (file_exists($active)) {
@@ -375,6 +375,9 @@ while (true) {
     $data = json_decode($json, true);
     if (is_array($data)) {
       extract($data);
+      // Preserve compress-specific parameters before plugin config extract
+      $compress_format = $format ?? null;
+      $compress_archive_name = $archive_name ?? null;
     } elseif ($json !== false && trim($json) !== '') {
       // Log JSON parse failure for debugging (non-empty file that failed to parse)
       exec('logger -t file_manager "Warning: Failed to parse active job JSON: ' . escapeshellarg(substr($json, 0, 100)) . '"');
@@ -390,6 +393,9 @@ while (true) {
   if (isset($action)) {
     // check for language changes
     extract(parse_plugin_cfg('dynamix', true));
+    // Restore compress parameters after plugin config extract
+    if (isset($compress_format)) $format = $compress_format;
+    if (isset($compress_archive_name)) $archive_name = $compress_archive_name;
     if ($display['locale'] != $locale_init) {
       $locale_init = $display['locale'];
       update_translation($locale_init);
@@ -688,6 +694,9 @@ while (true) {
         $archive_name = $archive_name ?? 'archive.zip';
         $archive_path = rtrim($target, '/').'/'.$archive_name;
         
+        // Debug logging
+        exec('logger -t file_manager "Compress action started: format=' . escapeshellarg($format) . ', archive_name=' . escapeshellarg($archive_name) . ', source=' . escapeshellarg($source[0]) . ', target=' . escapeshellarg($target) . '"');
+        
         // Get source basename and parent directory
         $source_path = rtrim($source[0], '/');
         $source_parent = dirname($source_path);
@@ -712,6 +721,10 @@ while (true) {
           $cmd .= "zip -r ".quoted($archive_path)." ".quoted($source_basename)." 2>&1 | tee $status";
         }
         $cmd .= " & echo \$!";
+        
+        // Debug: log the command before execution
+        exec('logger -t file_manager "Executing compress command: ' . escapeshellarg($cmd) . '"');
+        
         exec($cmd, $pid);
       }
       break;
