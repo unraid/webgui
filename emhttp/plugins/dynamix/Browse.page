@@ -124,6 +124,7 @@ function folderContextMenu(id, button) {
 <?if (!$isshare):?>
     opts.push({text:"_(Rename)_", icon:"fa-edit", action:function(e){e.preventDefault();doAction(2,"_(Rename)_",id.dfm_proxy());}});
 <?endif?>
+    opts.push({text:"_(Compress)_", icon:"fa-file-archive-o", action:function(e){e.preventDefault();doAction(16,"_(Compress)_",id.dfm_proxy());}});
     opts.push({divider:true});
     opts.push({text:"_(Owner)_", icon:"fa-user-o", action:function(e){e.preventDefault();doAction(11,"_(Change Owner)_",id.dfm_proxy());}});
     opts.push({text:"_(Permission)_", icon:"fa-address-book-o", action:function(e){e.preventDefault();doAction(12,"_(Change Permission)_",id.dfm_proxy());}});
@@ -151,6 +152,14 @@ function fileContextMenu(id, button) {
     opts.push({text:"_(Copy)_", icon:"fa-copy", action:function(e){e.preventDefault();doAction(8,"_(Copy)_",id.dfm_proxy());}});
     opts.push({text:"_(Move)_", icon:"fa-paste", action:function(e){e.preventDefault();doAction(9,"_(Move)_",id.dfm_proxy());}});
     opts.push({text:"_(Rename)_", icon:"fa-edit", action:function(e){e.preventDefault();doAction(7,"_(Rename)_",id.dfm_proxy());}});
+    opts.push({text:"_(Compress)_", icon:"fa-file-archive-o", action:function(e){e.preventDefault();doAction(16,"_(Compress)_",id.dfm_proxy());}});
+    // Check if file is an archive
+    var fileName = $('#'+id).attr('data');
+    var archiveExts = ['zip', 'tar', 'gz', 'bz2', 'xz', '7z', 'rar', 'tgz', 'tbz2', 'txz', 'zst'];
+    var ext = fileExtension(fileName).toLowerCase();
+    if (archiveExts.includes(ext) || fileName.match(/\.(tar\.(gz|bz2|xz|zst))$/i)) {
+      opts.push({text:"_(Extract)_", icon:"fa-archive", action:function(e){e.preventDefault();doAction(17,"_(Extract)_",id.dfm_proxy());}});
+    }
     opts.push({divider:true});
     opts.push({text:"_(Owner)_", icon:"fa-user-o", action:function(e){e.preventDefault();doAction(11,"_(Change Owner)_",id.dfm_proxy());}});
     opts.push({text:"_(Permission)_", icon:"fa-address-book-o", action:function(e){e.preventDefault();doAction(12,"_(Change Permission)_",id.dfm_proxy());}});
@@ -282,6 +291,18 @@ function fileName(file) {
 function fileExtension(file) {
   file = fileName(file);
   return file.indexOf('.')>=0 ? file.split('.').pop() : '';
+}
+
+function updateArchiveName() {
+  var sourceName = $('#dfm_source').text().trim();
+  // Remove trailing slash if present (for folders)
+  sourceName = sourceName.replace(/\/$/, '');
+  // Get just the filename/foldername without path
+  var baseName = fileName(sourceName);
+  // Remove existing extension from base name
+  baseName = baseName.replace(/\.(zip|tar|tar\.gz|tar\.bz2|tar\.xz|tar\.zst|tgz|tbz2|txz)$/i, '');
+  var format = $('#dfm_format').val();
+  $('#dfm_archive_name').val(baseName + '.' + format);
 }
 
 function fileEdit(id) {
@@ -797,6 +818,30 @@ function doAction(action, title, id) {
     dfm.window.find('.dfm_loc').html('&nbsp;').css({'line-height':'normal'});
     dfm.window.find('.dfm_text').html('').css({'line-height':'normal'});
     break;
+  case 16: // compress
+    dfm.window.html($('#dfm_templateCompress').html());
+    dfm_createSource(source.dfm_strip());
+    // Detect if source is in appdata/system path for default format selection
+    var isAppdata = source.match(/\/mnt\/[^\/]+\/(appdata|system)\//);
+    $('#dfm_format').val(isAppdata ? 'tar.zst' : 'zip');
+    // Set default archive name based on source name
+    var archiveName = name + '.' + $('#dfm_format').val();
+    $('#dfm_archive_name').val(archiveName);
+    // Set target to current directory
+    dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
+      dfm.window.find('#dfm_target').val(path).change();
+    });
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
+    break;
+  case 17: // extract
+    dfm.window.html($('#dfm_templateExtract').html());
+    dfm_createSource(source);
+    // Set target to current directory
+    dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
+      dfm.window.find('#dfm_target').val(path).change();
+    });
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
+    break;
   }
   dfm.window.dialog({
     classes: {'ui-dialog': 'ui-dfm ui-corner-all'},
@@ -852,6 +897,11 @@ function doAction(action, title, id) {
             dfm.window.find('.dfm_loc').html('&nbsp;');
             dfm.window.find('#dfm_files').html('');
             break;
+          case 16: // compress
+          case 17: // extract
+            // validate target directory exists and is valid
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
+            break;
           default:
             // disallow mixing of disk and user shares
             var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
@@ -859,6 +909,10 @@ function doAction(action, title, id) {
           }
           if (!target || !valid.test(target)) {errorTarget(); return;}
         } else target = '';
+        // For compress: collect additional parameters
+        var format = action == 16 ? dfm.window.find('#dfm_format').val() : '';
+        var archive_name = action == 16 ? dfm.window.find('#dfm_archive_name').val() : '';
+        if (action == 16 && !archive_name) {errorTarget(); return;}
         dfm.window.find('.dfm_text').removeClass('orange-text').html("_(Running)_...");
         dfm.window.find('#dfm_target').prop('disabled',true);
         dfm.window.find('#dfm_sparse').prop('disabled',true);
@@ -872,7 +926,12 @@ function doAction(action, title, id) {
         }
         dfm_footer('hide');
         dfm_fileManager('start');
-        $.post('/webGui/include/Control.php',{mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs)},function(){
+        var postData = {mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs)};
+        if (action == 16) {
+          postData.format = encodeURIComponent(format);
+          postData.archive_name = encodeURIComponent(archive_name);
+        }
+        $.post('/webGui/include/Control.php',postData,function(){
           $.post('/webGui/include/Control.php',{mode:'read'},function(data){
             try {
               dfm_read = data ? JSON.parse(data) : {};

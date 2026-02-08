@@ -363,4 +363,43 @@ $.post('/webGui/include/Control.php',{mode:'jobs'},function(jobs){
 </script>
 !-->
 </div>
+
+<div markdown="1" id="dfm_templateCompress">
+_(Source)_:
+: <span id="dfm_source"></span>
+
+_(Archive format)_:
+: <select id="dfm_format" onchange="updateArchiveName()">
+  <option value="zip">ZIP (_.zip_)</option>
+  <option value="tar">TAR (_.tar_)</option>
+  <option value="tar.gz">TAR.GZ (_.tar.gz_)</option>
+  <option value="tar.zst">TAR.ZST (_.tar.zst - recommended for appdata_)</option>
+</select>
+
+_(Archive name)_:
+: <input type="text" id="dfm_archive_name" autocomplete="off" spellcheck="false" value="">
+
+<wbr />
+: <span class="dfm_text"></span>
+
+<wbr />
+: _(save to)_ ...
+
+_(Target folder)_:
+: <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickmatch="" data-pickroot="" data-picktop="">
+</div>
+
+<div markdown="1" id="dfm_templateExtract">
+_(Archive)_:
+: <span id="dfm_source"></span>
+
+<wbr />
+: <span class="dfm_text"></span>
+
+<wbr />
+: _(extract to)_ ...
+
+_(Target folder)_:
+: <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickmatch="" data-pickroot="" data-picktop="">
+</div>
 </div>
