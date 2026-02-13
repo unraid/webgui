@@ -11,7 +11,7 @@
 # mkbootable reconfigure
 
 #set -euo pipefail
-set -x
+#set -x
 source /etc/rc.d/rc.runlog
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -56,7 +56,7 @@ configure_grub() {
 #
 create_partitions() {
   log "writing GPT on device ($DEV), with boot area size $SIZE MiB"
-  sgdisk -Z "/dev/$DEV"
+  wipefs -af --lock "/dev/$DEV"
   sgdisk "/dev/$DEV" \
     --new=1:1MiB:+1MiB          --typecode=1:ef02 --change-name=1:'BIOS Boot Partition' \
     --new=2:0:+510MiB	        --typecode=2:ef00 --change-name=2:'EFI System Partition' \

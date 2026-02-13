@@ -114,8 +114,6 @@ DEVICE=""
 FSTYPE=""
 
 find_device() {
-  # we're going to need this
-  /sbin/modprobe zfs
   # wait for at least one device to come online
   for (( ; TIMEOUT > 0; TIMEOUT-- )); do
     if [[ -n "$UNRAIDBOOT" ]]; then
@@ -127,15 +125,28 @@ find_device() {
     fi
     if [[ -n $DEVICE ]]; then
       FSTYPE=$(/sbin/blkid -s TYPE -o value "$DEVICE")
-      log "found $DEVICE with file system $FSTYPE"
       if [[ "$FSTYPE" == "zfs_member" ]]; then
-        if zpool import -d $DEVICE -N "$UUID" ; then
-          POOL=$(zpool list -H -o name)
+        # Build the device list string eg: "-d /dev/sda3 -d /dev/sdb3"
+        ALL_DEVS=$(/sbin/blkid -t UUID="$UUID" -o device)
+        DEVICE=""
+        for DEV in $ALL_DEVS; do
+          log "found $FSTYPE $DEV with uuid $UUID"
+          if [[ -z $DEVICE ]]; then
+            DEVICE="-d $DEV"
+          else
+            DEVICE="$DEVICE -d $DEV"
+          fi
+        done
+        # import the pool, if all devices are present pool will be 'healthy'
+        if /sbin/zpool import $DEVICE -N "$UUID" ; then
+          POOL=$(/sbin/zpool list -H -o name)
           for (( ; TIMEOUT > 0; TIMEOUT-- )); do
-            if zpool status -x "$POOL" ; then
+            if /sbin/zpool status -x "$POOL" ; then
               log "pool is healthy"
               return 0
             fi
+            # maybe a device is missing, wait for it to come online
+            /sbin/zpool export "$POOL"
             echo "Timeout in $TIMEOUT"
             /bin/sleep 1
           done
@@ -155,6 +166,9 @@ find_device() {
   # timeout - no device found
   return 1
 }  
+
+# we're going to need this
+/sbin/modprobe zfs
 
 # LimeTech - poll for boot device(s)
 # this serves to synchronize this script with kernel device discovery
@@ -222,7 +236,7 @@ if [[ $ROOT == "" ]]; then
 
   # mount squashfs file systems
   if [[ -f /boot/config/fastusr ]]; then
-    /bin/cp /$BRANCH/bzroot-gui /usr
+    /bin/cp /$BRANCH/bzmodules /usr
     bzmount "usr" "bzmodules" "usr"
   else
     bzmount "$BRANCH" "bzmodules" "usr"
