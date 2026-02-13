@@ -10,6 +10,209 @@
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  */
+
+function my_yaml_encode($data, $indent = 0) {
+	if (!is_array($data)) {
+		return json_encode($data);
+	}
+	
+	$out = "";
+	$prefix = str_repeat("  ", $indent);
+	$indexed = array_keys($data) === range(0, count($data) - 1);
+	
+	foreach ($data as $key => $val) {
+		if ($indexed) {
+			$out .= $prefix . "- ";
+			if (is_array($val)) {
+				$sub = my_yaml_encode($val, $indent + 1);
+				$out .= ltrim($sub) . "\n";
+			} else {
+				$out .= my_yaml_encode($val) . "\n";
+			}
+		} else {
+			$out .= $prefix . $key . ": ";
+			if (is_array($val)) {
+				if (empty($val)) {
+					$out .= "[]\n";
+				} else {
+					$out .= "\n" . my_yaml_encode($val, $indent + 1) . "\n";
+				}
+			} else {
+				$out .= my_yaml_encode($val) . "\n";
+			}
+		}
+	}
+	return rtrim($out);
+}
+
+function generate_cloud_init_userdata($cloudInitData) {
+	if (empty($cloudInitData) || ($cloudInitData['mode'] ?? 'basic') !== 'basic') {
+		return $cloudInitData['userdata'] ?? '';
+	}
+
+	$hostname = $cloudInitData['hostname'] ?? '';
+	$timezone = $cloudInitData['timezone'] ?? '';
+	$user = $cloudInitData['user'] ?? 'root';
+	$pass = $cloudInitData['password'] ?? '';
+	$keys = $cloudInitData['ssh_keys'] ?? '';
+	$root_login = $cloudInitData['root_login'] ?? 0;
+	$update_pkg = $cloudInitData['update_pkg'] ?? 0;
+	$packages = $cloudInitData['packages'] ?? '';
+	$runcmd = $cloudInitData['runcmd'] ?? '';
+
+	$config = [];
+
+	// Hostname & Timezone
+	if (!empty($hostname)) {
+		$config['hostname'] = $hostname;
+		$config['fqdn'] = $hostname;
+	}
+	if (!empty($timezone)) $config['timezone'] = $timezone;
+
+	// Packages
+	if ($update_pkg) {
+		$config['package_update'] = true;
+		$config['package_upgrade'] = true;
+	}
+	if (!empty($packages)) {
+		$arrPkg = array_filter(array_map('trim', explode("\n", $packages)));
+		if (!empty($arrPkg)) {
+			$config['packages'] = array_values($arrPkg);
+		}
+	}
+
+	// Users
+	$userConfig = ['name' => $user];
+	if (!empty($keys)) {
+		$arrKeys = array_filter(array_map('trim', explode("\n", $keys)));
+		if (!empty($arrKeys)) {
+			$userConfig['ssh-authorized-keys'] = array_values($arrKeys);
+		}
+	}
+	if (!empty($pass)) {
+		$userConfig['plain_text_passwd'] = $pass;
+		$userConfig['lock_passwd'] = false;
+	}
+	if ($user != 'root') {
+		$userConfig['sudo'] = 'ALL=(ALL) NOPASSWD:ALL';
+		$userConfig['shell'] = '/bin/bash';
+	}
+	$config['users'] = [$userConfig];
+
+	// General SSH/Auth
+	$config['chpasswd'] = ['expire' => false];
+	$config['ssh_pwauth'] = true;
+	if ($root_login) {
+		$config['disable_root'] = false;
+	}
+
+	// RunCMD
+	if (!empty($runcmd)) {
+		$arrCmd = array_filter(array_map('trim', explode("\n", $runcmd)));
+		if (!empty($arrCmd)) {
+			$config['runcmd'] = array_values($arrCmd);
+		}
+	}
+
+	return "#cloud-config\n" . my_yaml_encode($config);
+}
+
+function create_cloud_init_iso($strPath, $strUserData, $strNetworkConfig, $customISOPath = null) {
+	$strPath = rtrim($strPath, '/');
+	if (!is_dir($strPath)) {
+		return false;
+	}
+
+	if (!empty($customISOPath)) {
+		$strImgPath = $customISOPath;
+		// If custom path is a directory (ends in / or is existing dir), append filename
+		if (substr($strImgPath, -1) === '/' || is_dir($strImgPath)) {
+			$strImgPath = rtrim($strImgPath, '/') . '/cloud-init.img';
+		}
+	} else {
+		$strImgPath = $strPath . '/cloud-init.img';
+	}
+	
+	// Create directory for custom path if needed
+	$dir = dirname($strImgPath);
+	if (!is_dir($dir)) {
+		mkdir($dir, 0777, true);
+	}
+
+	$strMountPoint = $strPath . '/cloud-init-mount';
+	
+	// Create blank 4MB image
+	$output = [];
+	exec("dd if=/dev/zero of=" . escapeshellarg($strImgPath) . " bs=1M count=4 2>&1", $output, $return_var);
+	if ($return_var !== 0) {
+		error_log("Cloud-Init image creation failed (dd): " . implode("\n", $output));
+		return false;
+	}
+
+	// Format as VFAT with label 'cidata' (try mkfs.vfat first, then mkdosfs)
+	$output = [];
+	exec("which mkfs.vfat mkdosfs 2>/dev/null | head -n1", $mkfsTool);
+	$mkfsCmd = !empty($mkfsTool[0]) ? $mkfsTool[0] : '/sbin/mkdosfs';
+	
+	exec($mkfsCmd . " -n cidata " . escapeshellarg($strImgPath) . " 2>&1", $output, $return_var);
+	if ($return_var !== 0) {
+		error_log("Cloud-Init image formatting failed (vfat): " . implode("\n", $output));
+		return false;
+	}
+
+	// Create mount point
+	if (!is_dir($strMountPoint)) {
+		mkdir($strMountPoint, 0777, true);
+	}
+
+	// Mount image
+	$output = [];
+	exec("mount -o loop " . escapeshellarg($strImgPath) . " " . escapeshellarg($strMountPoint) . " 2>&1", $output, $return_var);
+	if ($return_var !== 0) {
+		error_log("Cloud-Init image mount failed: " . implode("\n", $output));
+		return false;
+	}
+
+	// Write files
+	if (file_put_contents($strMountPoint . '/user-data', $strUserData) === false) {
+		error_log("Cloud-Init write failed: " . $strMountPoint . '/user-data');
+		exec("umount " . escapeshellarg($strMountPoint));
+		rmdir($strMountPoint);
+		return false;
+	}
+	
+	if (!empty($strNetworkConfig)) {
+		if (file_put_contents($strMountPoint . '/network-config', $strNetworkConfig) === false) {
+			error_log("Cloud-Init write failed: " . $strMountPoint . '/network-config');
+			exec("umount " . escapeshellarg($strMountPoint));
+			rmdir($strMountPoint);
+			return false;
+		}
+	}
+	
+	if (file_put_contents($strMountPoint . '/meta-data', "instance-id: " . uniqid() . "\nlocal-hostname: localhost\n") === false) {
+		error_log("Cloud-Init write failed: " . $strMountPoint . '/meta-data');
+		exec("umount " . escapeshellarg($strMountPoint));
+		rmdir($strMountPoint);
+		return false;
+	}
+
+	// Sync and Unmount
+	exec("sync");
+	$output = [];
+	exec("umount " . escapeshellarg($strMountPoint) . " 2>&1", $output, $return_var);
+	
+	if ($return_var !== 0) {
+		error_log("Cloud-Init image unmount failed: " . implode("\n", $output));
+		return false;
+	}
+
+	// Clean up mount point
+	rmdir($strMountPoint);
+
+	return $strImgPath;
+}
+
 ?>
 <?
 /**
@@ -1370,7 +1573,8 @@ class Array2XML {
 				'boot' => $disk['boot order'],
 				'rotation' => $disk['rotation'],
 				'serial' => $disk['serial'],
-				'select' => $default_option
+				'select' => $default_option,
+				'deviceType' => $disk['deviceType'] ?? 'disk'
 			];
 		}
 		if (empty($arrDisks)) {
