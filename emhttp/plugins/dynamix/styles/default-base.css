@@ -2274,9 +2274,9 @@ div#title.ud {
     input[type="button"],
     input[type="reset"],
     input[type="submit"],
-    button,
-    button[type="button"],
-    a.button {
+    button:where(:not(.unapi *)),
+    button[type="button"]:where(:not(.unapi *)),
+    a.button:where(:not(.unapi *)) {
         font-family: clear-sans;
         font-size: 1.2rem;
         font-weight: normal;
@@ -2346,7 +2346,7 @@ div#title.ud {
         color: var(--blue-700);
     }
 
-    select {
+    select:where(:not(.unapi *)) {
         min-width: 188px;
         max-width: 314px;
         padding: 6px 14px 6px 6px;
