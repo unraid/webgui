@@ -1000,7 +1000,15 @@ while (true) {
     $poolName = find_pool_name_for_device(_var($bootDisk,'device',''), $Cache);
     if ($poolName === '') $poolName = pool_name(_var($bootDisk,'name',''));
     $poolLabel = $poolName !== '' ? ucfirst($poolName) : '';
-    $poolAnchor = $poolName !== '' ? "/Main#pool_".$poolName : '';
+    $poolIndex = $poolName !== '' ? array_search($poolName, $pools, true) : false;
+    if ($poolIndex === false && $poolName !== '') {
+      $poolIndex = array_search(prefix($poolName), $pools, true);
+    }
+    if ($poolIndex !== false) {
+      $poolAnchor = "/Main#pool_device".$poolIndex;
+    } else {
+      $poolAnchor = $poolName !== '' ? "/Main#pool_".$poolName : '';
+    }
     $poolLink = $poolAnchor !== ''
       ? "<a href=\"".htmlspecialchars($poolAnchor, ENT_QUOTES)."\">"._($poolLabel,3)."</a>"
       : '';
@@ -1040,11 +1048,15 @@ while (true) {
       $bootMetrics = get_boot_pool_metrics($Boot, $bootPoolName, $bootDisk);
       $dataMetrics = get_pool_data_metrics($poolDisk, $bootMetrics);
       $poolLabel = ucfirst($pool);
-      $summaryName = $poolLabel;
+      $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
+      $poolLink = "<a href=\"$poolDeviceUrl\">"._($poolLabel,3)."</a>";
+      $summaryName = $poolLink;
       if (!empty($bootDisk)) {
         $bootPoolName = prefix(_var($bootDisk,'name',''));
         $bootLabel = ucfirst($bootPoolName);
-        $summaryName = $poolLabel." / ".$bootLabel;
+        $bootDeviceUrl = "/Main/Boot?name=".urlencode($bootPoolName);
+        $bootLink = "<a href=\"$bootDeviceUrl\">"._($bootLabel,3)."</a>";
+        $summaryName = $poolLink." / ".$bootLink;
         $bootFsInfo = get_boot_pool_fs_info($Boot, $bootPoolName);
         $bootFsType = _var($bootDisk,'fsType','') ?: _var($bootFsInfo,'fsType','');
         $bootFsStatus = _var($bootDisk,'fsStatus','') ?: _var($bootFsInfo,'fsStatus','');
