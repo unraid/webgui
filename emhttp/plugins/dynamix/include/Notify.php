@@ -36,6 +36,10 @@ case 'add':
     case 'm':
       $notify .= " -{$option} ".escapeshellarg($value);
       break;
+    case 'u':
+      $notify .= " -{$option} ".escapeshellarg($value);
+      break;
+    
     case 'x':
     case 't':
       $notify .= " -{$option}";
