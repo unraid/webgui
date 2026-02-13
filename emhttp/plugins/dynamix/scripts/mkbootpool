@@ -1,0 +1,124 @@
+#!/bin/bash
+
+# Creating a bootable pool
+
+# usage:
+# mkbootpool pool-name boot-size device-id1 device-id2 device-id3 device-id4
+
+# pool-nmae is the name of the new boot pool, must not already exist of course
+# boot-size is the boot area size in MiB units, 0 => assign entire pool
+# device-idN - is the id string of device to asssign to the pool. You can include up to 4.
+
+# example: mkbootpool boot 4096 QEMU_HARDDISK_vdisk5 QEMU_HARDDISK_vdisk6
+
+set -euo pipefail
+
+usage() {
+  echo "Usage: mkbootpool <pool> <sizeMiB> <disk1> <disk2> [disk3] [disk4] [update] [dryrun]" >&2
+  exit 2
+}
+
+fail() {
+  echo "mkbootpool: $1" >&2
+  exit 1
+}
+
+if [ $# -lt 3 ]; then
+  usage
+fi
+
+poolName="$1"
+shift
+poolBootSize="$1"
+shift
+
+# Optional flags from webGui
+calledFromWebGui=false
+rebootRequested=false
+dryRun=false
+filtered=()
+for arg in "$@"; do
+  case "$arg" in
+    update)
+      calledFromWebGui=true
+      ;;
+    reboot)
+      rebootRequested=true
+      ;;
+    dryrun)
+      dryRun=true
+      ;;
+    *)
+      filtered+=("$arg")
+      ;;
+  esac
+done
+set -- "${filtered[@]}"
+
+numSlots=$#
+
+if [ $numSlots -lt 1 ] || [ $numSlots -gt 4 ]; then
+  fail "number of devices must be between 1 and 4"
+fi
+
+if ! [[ "$poolName" =~ ^[a-z]([a-z0-9~._-]*[a-z_-])*$ ]]; then
+  fail "invalid pool name"
+fi
+
+if ! [[ "$poolBootSize" =~ ^[0-9]+$ ]]; then
+  fail "boot size must be a non-negative integer in MiB"
+fi
+
+declare -A seen
+for diskId in "$@"; do
+  [ -n "$diskId" ] || fail "device id cannot be empty"
+  if [[ -n "${seen[$diskId]:-}" ]]; then
+    fail "duplicate device id: $diskId"
+  fi
+  seen[$diskId]=1
+done
+
+run_emcmd() {
+  local cmd="$1"
+  if [ "$dryRun" = true ]; then
+    echo "DRY RUN: emcmd $cmd" >&2
+    return 0
+  fi
+  if [ "$calledFromWebGui" = false ]; then
+    echo "Running: $cmd" >&2
+  fi
+  if ! output=$(emcmd "$cmd" 2>&1); then
+    echo "$output" >&2
+    fail "command failed"
+  fi
+}
+
+# enable debug output for testing purposes
+run_emcmd "debug=cmdCreatePool,cmdAssignDisk,cmdMakeBootable"
+
+# 1. create the pool
+run_emcmd "cmdCreatePool=apply&poolName=$poolName&poolSlots=$numSlots"
+
+# 2. assign disks by id to each of up to 4 slots
+slot=1
+for diskId in "$@"; do
+  if [ $slot -eq 1 ]; then
+    diskName="$poolName"
+  else
+    diskName="$poolName$slot"
+  fi
+  run_emcmd "cmdAssignDisk=apply&diskName=$diskName&diskId=$diskId"
+  slot=$((slot + 1))
+done
+
+# 3. make the pool bootable
+run_emcmd "cmdMakeBootable=apply&poolName=$poolName&poolBootSize=$poolBootSize"
+
+if [ "$calledFromWebGui" = false ] && [ "$dryRun" = false ]; then
+  echo "Bootable pool '$poolName' created with $numSlots device(s)." >&2
+fi
+
+if [ "$dryRun" = false ] && [ "$rebootRequested" = true ]; then
+  #reboot
+  echo "Rebooting system to activate new boot pool..."
+fi
