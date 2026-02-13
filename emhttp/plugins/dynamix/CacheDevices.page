@@ -22,6 +22,7 @@ function makeList($list) {
 function sharename($share) {
   return basename($share,'.cfg');
 }
+$bootPoolMaxSlots = 2;
 ?>
 <script>
 function validate(poolname) {
@@ -76,6 +77,7 @@ function addPoolPopup() {
   });
   dialogStyle();
 }
+
 function addBootPoolPopup() {
   var popup = $('#dialogWindow');
   // Load popup with the template info
@@ -89,44 +91,11 @@ function addBootPoolPopup() {
     resizable: false,
     modal: true,
     buttons: {
-    "_(Add)_": function() {
-        if (validate($(this).find('input[name="poolName"]').val())) {
-          $(this).find('form').submit();
-          $(this).dialog('close');
-        }
-      },
-    "_(Cancel)_": function() {
-        $(this).dialog('close');
-      }
-    }
-  });
-  dialogStyle();
-}
-
-function addBootPoolPopupNew() {
-  var popup = $('#dialogWindow');
-  // Load popup with the template info
-  popup.html($("#templatePopupBootPoolNew").html());
-  bootPoolInit(popup);
-  // Start Dialog section
-  popup.dialog({
-    title: "_(Add Bootable Pool)_",
-    height: 'auto',
-    width: 600,
-    resizable: false,
-    modal: true,
-    buttons: {
     "_(Activate)_": function() {
-        if (validate($(this).find('input[name="poolName"]').val())) {
-          $(this).find('form').submit();
-          $(this).dialog('close');
-        }
+        bootPoolConfirmActivate(popup, false);
       },
     "_(Activate and Reboot)_": function() {
-        if (validate($(this).find('input[name="poolName"]').val())) {
-          $(this).find('form').submit();
-          $(this).dialog('close');
-        }
+        bootPoolConfirmActivate(popup, true);
       },
     "_(Cancel)_": function() {
         $(this).dialog('close');
@@ -137,6 +106,10 @@ function addBootPoolPopupNew() {
 }
 
 function bootPoolInit(popup) {
+  popup.find('form').on('submit', function(e){
+    e.preventDefault();
+    return false;
+  });
   bootPoolRenderSlots(popup);
   popup.find('select[name="poolSlots"]').on('change', function(){
     bootPoolRenderSlots(popup);
@@ -241,6 +214,150 @@ function bootPoolSyncDeviceOptions(popup) {
         $(this).prop('disabled', !!selected[val]);
       }
     });
+  });
+}
+
+function bootPoolCollectDevices(popup) {
+  var devices = [];
+  popup.find('select[name="poolDevice[]"]').each(function(){
+    var slot = parseInt($(this).attr('data-slot'), 10);
+    if (!slot || slot < 1) slot = devices.length + 1;
+    devices[slot - 1] = $(this).val() || '';
+  });
+  return devices;
+}
+
+function bootPoolValidateSelection(popup) {
+  var poolName = $.trim(popup.find('input[name="poolName"]').val());
+  if (!validate(poolName)) return null;
+
+  var slotCount = parseInt(popup.find('select[name="poolSlots"]').val(), 10) || 0;
+  var devices = bootPoolCollectDevices(popup);
+  if (slotCount < 1) {
+    swal({title:"_(Invalid selection)_",text:"_(Select at least one device)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    return null;
+  }
+  if (devices.length < slotCount) {
+    swal({title:"_(Invalid selection)_",text:"_(Select all devices)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    return null;
+  }
+  var seen = {};
+  for (var i = 0; i < slotCount; i++) {
+    var val = devices[i];
+    if (!val) {
+      swal({title:"_(Invalid selection)_",text:"_(Select all devices)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+      return null;
+    }
+    if (seen[val]) {
+      swal({title:"_(Invalid selection)_",text:"_(Each device must be unique)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+      return null;
+    }
+    seen[val] = true;
+  }
+
+  var bootSize = $.trim(popup.find('input[name="poolBootSize"]').val());
+  if (bootSize === '' || isNaN(parseInt(bootSize, 10))) {
+    swal({title:"_(Invalid size)_",text:"_(Select a boot reserved size)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    return null;
+  }
+
+  return {
+    poolName: poolName,
+    slotCount: slotCount,
+    devices: devices.slice(0, slotCount),
+    bootSize: bootSize
+  };
+}
+
+function bootPoolConfirmActivate(popup, reboot) {
+  var selection = bootPoolValidateSelection(popup);
+  if (!selection) return;
+
+  var deviceList = '<div style="margin:8px 0 0 0;">';
+  for (var i = 0; i < selection.devices.length; i++) {
+    deviceList += '<div>' + selection.devices[i] + '</div>';
+  }
+  deviceList += '</div>';
+
+  var cmdArgs = [selection.poolName, selection.bootSize].concat(selection.devices);
+  if (reboot) cmdArgs.push('reboot');
+  cmdArgs.push('update');
+  var cmdPreview = "/plugins/dynamix/scripts/mkbootpool " + cmdArgs.join(' ');
+
+  var title = reboot ? "_(Activate bootable pool and reboot)_?" : "_(Activate bootable pool)_?";
+  var text = "_(This will create a bootable pool with the selected devices)_" +
+    "<br><br><b>_(Pool)_:</b> " + selection.poolName +
+    "<br><b>_(Boot reserved size)_:</b> " + selection.bootSize + " _(MiB)_" +
+    "<br><b>_(Devices)_:</b>" + deviceList ;
+
+  swal({
+    title: title,
+    text: text,
+    type: 'warning',
+    html: true,
+    showCancelButton: true,
+    confirmButtonText: reboot ? "_(Activate and Reboot)_" : "_(Activate)_",
+    cancelButtonText: "_(Cancel)_",
+    closeOnConfirm: false,
+    showLoaderOnConfirm: true,
+    allowOutsideClick: false,
+    allowEscapeKey: false
+  }, function(confirm){
+    if (confirm) {
+      bootPoolSubmitMkbootpool(popup, selection, reboot);
+    }
+  });
+}
+
+function bootPoolEscapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function bootPoolRebootNow() {
+  var $form = $('#bootPoolRebootForm');
+  if (!$form.length) {
+    $form = $('<form id="bootPoolRebootForm" method="POST" action="/webGui/include/Boot.php" class="hidden"></form>');
+    $('body').append($form);
+  }
+  $form.find('input[name="cmd"]').remove();
+  $form.append('<input type="hidden" name="cmd" value="reboot">');
+  $form.submit();
+}
+
+function bootPoolSubmitMkbootpool(popup, selection, reboot) {
+  var args = [selection.poolName, selection.bootSize].concat(selection.devices);
+  if (reboot) args.push('reboot');
+  args.push('update');
+  popup.dialog('close');
+  swal({title:"_(Processing)_...",text:"_(Executing command)_",type:'info',html:true,showConfirmButton:false,allowOutsideClick:false,allowEscapeKey:false});
+  $.ajax({
+    url: '/plugins/dynamix/include/mkbootpool.php',
+    method: 'POST',
+    data: {args: args},
+    dataType: 'text'
+  }).done(function(raw){
+    var resp = null;
+    try { resp = JSON.parse(raw); } catch (e) { resp = null; }
+    var ok = resp && resp.ok;
+    var output = resp && resp.output ? resp.output : (raw || "_(No output)_");
+    if (ok) {
+      swal.close();
+      if (reboot) {
+        bootPoolRebootNow();
+      } else {
+        window.location.reload();
+      }
+      return;
+    }
+    swal({title:"_(Error)_",text:'<pre style="text-align:left;white-space:pre-wrap;">'+bootPoolEscapeHtml(output)+'</pre>',type:'error',html:true,confirmButtonText:"_(Ok)_",allowOutsideClick:false,allowEscapeKey:false,showCancelButton:false});
+  }).fail(function(xhr){
+    var text = (xhr && xhr.responseText) ? xhr.responseText : "_(Request failed)_";
+    swal({title:"_(Error)_",text:'<pre style="text-align:left;white-space:pre-wrap;">'+bootPoolEscapeHtml(text)+'</pre>',type:'error',html:true,confirmButtonText:"_(Ok)_",allowOutsideClick:false,allowEscapeKey:false,showCancelButton:false});
   });
 }
 function removeOption(inputString,value) {
@@ -354,15 +471,13 @@ $root  = explode($_tilde_,$pool)[0];
 <?endif;?>
 
 <div id="dialogWindow" class="template"></div>
+<form id="bootPoolRebootForm" method="POST" action="/webGui/include/Boot.php" class="hidden"></form>
 
 <?if (_var($var,'fsState')=="Stopped"):?>
 <input type="button" value="_(Add Pool)_" style="margin:0" onclick="addPoolPopup()">
 <?if (_var($var,'bootEligible')=="yes"):?>
 <input type="button" value="_(Add Bootable Pool)_" style="margin:0" onclick="addBootPoolPopup()">
 <?endif;?>
-<input type="button" value="_(Add Bootable Pool)_" style="margin:0" onclick="addBootPoolPopup()">
-<input type="button" value="_(Add Bootable Pool New)_" style="margin:0" onclick="addBootPoolPopupNew()">
-
 
 <div id="templatePopupPool" class="template">
 <form markdown="1" method="POST" action="/update.htm" target="progressFrame" onsubmit="return validate(this.poolName.value)">
@@ -381,17 +496,15 @@ _(Slots)_:
 </form>
 </div>
 
-<div id="templatePopupBootPoolNew" class="template">
-<form markdown="1" method="POST" action="/update.htm" target="progressFrame" onsubmit="return validate(this.poolName.value)">
-<input type="hidden" name="poolBootable" value="yes">
-<input type="hidden" name="changeSlots" value="apply">
+<div id="templatePopupBootPool" class="template">
+<form markdown="1" target="progressFrame" >
 
 _(Name)_:
 : <input type="text" name="poolName" maxlength="40" value="<?=count($pools)==0?'cache':''?>">
 
 _(Slots)_:
 : <select name="poolSlots">
-  <?for ($n=1; $n<=2; $n++):?>
+  <?for ($n=1; $n<=$bootPoolMaxSlots; $n++):?>
   <?=mk_option(1,$n,$n)?>
   <?endfor;?>
   </select>
@@ -464,35 +577,4 @@ _(Slots)_:
 </form>
 </div>
 
-<div id="templatePopupBootPool" class="template">
-<form markdown="1" method="POST" action="/update.htm" target="progressFrame" onsubmit="return validate(this.poolName.value)">
-<input type="hidden" name="poolBootable" value="yes">
-<input type="hidden" name="changeSlots" value="apply">
-
-_(Name)_:
-: <input type="text" name="poolName" maxlength="40" value="<?=count($pools)==0?'cache':''?>">
-
-_(Slots)_:
-: <select name="poolSlots">
-  <?for ($n=1; $n<=2; $n++):?>
-  <?=mk_option(1,$n,$n)?>
-  <?endfor;?>
-  </select>
-
-_(Boot reserved size)_ (_(MiB)_):
-: <select name="poolBootSizePreset" class="wide bootpool-size-preset" style="min-width: 180px;">
-  <option value="8192">8 GB</option>
-  <option value="16384">16 GB</option>
-  <option value="32768">32 GB</option>
-  <option value="65536">64 GB</option>
-  <option value="131072">128 GB</option>
-  <option value="custom">_(User defined)_</option>
-  </select>
-  <span class="bootpool-size-custom">
-    <input type="number" name="poolBootSizeCustomGb" maxlength="10" class="narrow"> GB
-  </span>
-  <input type="hidden" name="poolBootSize" value="<?=_var($var,'bootSizeDefault')?>">
-
-</form>
-</div>
 <?endif;?>

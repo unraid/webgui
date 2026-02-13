@@ -13,13 +13,35 @@
 
 set -euo pipefail
 
+log_dir="/tmp"
+log_prefix="mkbootpool"
+log_main="${log_dir}/${log_prefix}.log"
+
+log_line() {
+  echo "[$(date +%H:%M:%S)] $*" >> "$log_main"
+}
+
+log_action() {
+  local action="$1"
+  local msg="$2"
+  log_line "$action :: $msg"
+}
+
 usage() {
   echo "Usage: mkbootpool <pool> <sizeMiB> <disk1> <disk2> [disk3] [disk4] [update] [dryrun]" >&2
   exit 2
 }
 
+err_out() {
+  if [ "${calledFromWebGui:-false}" = true ]; then
+    printf "%s\n" "$1"
+  else
+    printf "%s\n" "$1" >&2
+  fi
+}
+
 fail() {
-  echo "mkbootpool: $1" >&2
+  err_out "mkbootpool: $1"
   exit 1
 }
 
@@ -55,6 +77,8 @@ for arg in "$@"; do
 done
 set -- "${filtered[@]}"
 
+log_line "args: $*"
+
 numSlots=$#
 
 if [ $numSlots -lt 1 ] || [ $numSlots -gt 4 ]; then
@@ -80,23 +104,31 @@ done
 
 run_emcmd() {
   local cmd="$1"
+  log_line "emcmd $cmd"
   if [ "$dryRun" = true ]; then
-    echo "DRY RUN: emcmd $cmd" >&2
+    log_action "dryrun" "emcmd $cmd"
+    err_out "DRY RUN: emcmd $cmd"
     return 0
   fi
   if [ "$calledFromWebGui" = false ]; then
     echo "Running: $cmd" >&2
   fi
-  if ! output=$(emcmd "$cmd" 2>&1); then
-    echo "$output" >&2
-    fail "command failed"
+  log_action "start" "emcmd $cmd"
+  if ! output=$(timeout 30s emcmd "$cmd" 2>&1); then
+    log_action "error" "emcmd $cmd :: $output"
+    err_out "$output"
+    fail "command failed or timed out"
   fi
+  [ -n "$output" ] && log_action "output" "emcmd $cmd :: $output"
+  log_action "done" "emcmd $cmd"
 }
 
 # enable debug output for testing purposes
+log_action "debug" "debug=cmdCreatePool,cmdAssignDisk,cmdMakeBootable"
 run_emcmd "debug=cmdCreatePool,cmdAssignDisk,cmdMakeBootable"
 
 # 1. create the pool
+log_action "create_pool" "poolName=$poolName poolSlots=$numSlots"
 run_emcmd "cmdCreatePool=apply&poolName=$poolName&poolSlots=$numSlots"
 
 # 2. assign disks by id to each of up to 4 slots
@@ -107,11 +139,13 @@ for diskId in "$@"; do
   else
     diskName="$poolName$slot"
   fi
+  log_action "assign_disk" "diskName=$diskName diskId=$diskId"
   run_emcmd "cmdAssignDisk=apply&diskName=$diskName&diskId=$diskId"
   slot=$((slot + 1))
 done
 
 # 3. make the pool bootable
+log_action "make_bootable" "poolName=$poolName poolBootSize=$poolBootSize"
 run_emcmd "cmdMakeBootable=apply&poolName=$poolName&poolBootSize=$poolBootSize"
 
 if [ "$calledFromWebGui" = false ] && [ "$dryRun" = false ]; then
@@ -120,5 +154,5 @@ fi
 
 if [ "$dryRun" = false ] && [ "$rebootRequested" = true ]; then
   #reboot
-  echo "Rebooting system to activate new boot pool..."
+  echo "Rebooting system to apply new boot pool..." >&2
 fi
