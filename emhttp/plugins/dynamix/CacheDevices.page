@@ -130,10 +130,17 @@ function bootPoolSizeInit(popup) {
       $input.prop('readonly', false);
       $inputWrap.removeClass('hidden');
       if ($input.val() === '' || $input.val() === null) $input.val('');
+      var gb = parseInt($input.val(), 10);
+      if (!isNaN(gb) && gb >= 0) {
+        $hidden.val(gb * 1024);
+      } else {
+        $hidden.val('');
+      }
     } else {
       $input.val('');
       $input.prop('readonly', true);
       $inputWrap.addClass('hidden');
+      $hidden.val(val);
     }
   }
 
@@ -158,6 +165,12 @@ function bootPoolSizeInit(popup) {
 
   $select.on('change', syncBootSize);
   syncBootSize();
+}
+
+function bootPoolFormatBootSizeGb(bootSizeMiB) {
+  var mib = parseInt(bootSizeMiB, 10);
+  if (isNaN(mib) || mib < 0) return "_(Unknown)_";
+  return Math.round(mib / 1024) + " GB";
 }
 
 function bootPoolRenderSlots(popup) {
@@ -287,7 +300,7 @@ function bootPoolConfirmActivate(popup, reboot) {
   var title = reboot ? "_(Activate bootable pool and reboot)_?" : "_(Activate bootable pool)_?";
   var text = "_(This will create a bootable pool with the selected devices)_" +
     "<br><br><b>_(Pool)_:</b> " + selection.poolName +
-    "<br><b>_(Boot reserved size)_:</b> " + selection.bootSize + " _(MiB)_" +
+    "<br><b>_(Boot reserved size)_:</b> " + bootPoolFormatBootSizeGb(selection.bootSize) +
     "<br><b>_(Devices)_:</b>" + deviceList ;
 
   swal({
