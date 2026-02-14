@@ -7,7 +7,9 @@ set -e
 
 # Configuration (can be overridden via environment for testing)
 SYSLINUX_CFG="${SYSLINUX_CFG:-/boot/syslinux/syslinux.cfg}"
+GRUB_CFG="${GRUB_CFG:-/boot/grub/grub.cfg}"
 BACKUP_DIR="${BACKUP_DIR:-/boot/syslinux/backups}"
+GRUB_BACKUP_DIR="${GRUB_BACKUP_DIR:-/boot/grub/backups}"
 COMMENTS_FILE="${COMMENTS_FILE:-/boot/config/custom_params_comments.json}"
 MAX_BACKUPS=10
 
@@ -21,6 +23,20 @@ error_exit() {
 if [[ -z "$OPERATION" ]]; then
     error_exit "No operation specified"
 fi
+
+detect_bootloader() {
+    if [[ -f "$GRUB_CFG" ]]; then
+        echo "grub"
+        return 0
+    fi
+    if [[ -f "$SYSLINUX_CFG" ]]; then
+        echo "syslinux"
+        return 0
+    fi
+    error_exit "No supported bootloader config found"
+}
+
+BOOTLOADER_TYPE="${BOOTLOADER_TYPE:-$(detect_bootloader)}"
 
 #############################################
 # JSON Escaping Function
@@ -262,6 +278,31 @@ parse_append_line() {
 }
 
 #############################################
+# Parse GRUB linux args from a specific menuentry
+#############################################
+parse_grub_linux_args() {
+    local label="$1"
+    local cfg_file="${2:-$GRUB_CFG}"
+
+    awk -v label="$label" '
+        $0 ~ /^menuentry / {
+            in_section = (index($0, "\"" label "\"") > 0 || index($0, "\x27" label "\x27") > 0)
+        }
+        in_section && match($0, /^[ \t]*(linux|linuxefi)[ \t]+([^ \t]+)[ \t]*(.*)$/, m) {
+            kernel = m[2]
+            args = m[3]
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", args)
+            if (args != "") {
+                print args
+            } else {
+                print ""
+            }
+            exit
+        }
+    ' "$cfg_file"
+}
+
+#############################################
 # Extract individual parameters from append line
 #############################################
 extract_param_value() {
@@ -298,16 +339,45 @@ extract_timeout() {
 }
 
 #############################################
+# Extract GRUB timeout (seconds)
+#############################################
+extract_grub_timeout() {
+    local cfg_file="${1:-$GRUB_CFG}"
+
+    if [[ -f "$cfg_file" ]]; then
+        grep "^set timeout=" "$cfg_file" | awk -F'=' '{print $2}' | head -n 1
+    else
+        echo ""
+    fi
+}
+
+#############################################
 # Read current configuration and output as JSON
 #############################################
 read_config() {
 
-    if [[ ! -f "$SYSLINUX_CFG" ]]; then
-        error_exit "Syslinux config file not found: $SYSLINUX_CFG"
-    fi
+    local append_line=""
+    local timeout=""
 
-    # Parse append line from "Unraid OS" label
-    local append_line=$(parse_append_line "Unraid OS")
+    if [[ "$BOOTLOADER_TYPE" == "grub" ]]; then
+        if [[ ! -f "$GRUB_CFG" ]]; then
+            error_exit "GRUB config file not found: $GRUB_CFG"
+        fi
+        # Parse linux args from "Unraid OS" menuentry
+        append_line=$(parse_grub_linux_args "Unraid OS")
+        timeout=$(extract_grub_timeout)
+        [[ -z "$timeout" ]] && timeout="5"
+        # Convert seconds to deciseconds for UI compatibility
+        timeout=$((timeout * 10))
+    else
+        if [[ ! -f "$SYSLINUX_CFG" ]]; then
+            error_exit "Syslinux config file not found: $SYSLINUX_CFG"
+        fi
+        # Parse append line from "Unraid OS" label
+        append_line=$(parse_append_line "Unraid OS")
+        timeout=$(extract_timeout)
+        [[ -z "$timeout" ]] && timeout="50"
+    fi
 
 
     # Extract managed parameters
@@ -409,13 +479,10 @@ read_config() {
     # Load all comments
     local all_comments=$(load_comments)
 
-    # Extract global configuration settings
-    local timeout=$(extract_timeout)
-    [[ -z "$timeout" ]] && timeout="50"  # Default to 50 deciseconds if not found
-
     # Output as JSON
     cat <<EOF
 {
+    "bootloader_type": "$BOOTLOADER_TYPE",
   "nvme_disable": "$([[ "$nvme_latency" == "0" ]] && echo "1" || echo "0")",
   "acs_override": "$acs_override",
   "vfio_unsafe": "$([[ "$vfio_unsafe" == "1" ]] && echo "1" || echo "0")",
@@ -434,7 +501,7 @@ read_config() {
   "custom_params_comments": $all_comments,
   "current_config": "$(escape_json_string "$append_line")",
   "current_append_line": "$(escape_json_string "$append_line")",
-  "timeout": "$timeout"
+    "timeout": "$timeout"
 }
 EOF
 }
@@ -459,10 +526,16 @@ validate_custom_param() {
         error_exit "Invalid custom parameter: contains spaces. Only one parameter per entry allowed."
     fi
 
-    # Check 3: Reserved syslinux directives (case-insensitive)
+    # Check 3: Reserved directives (case-insensitive)
     local lower_param=$(echo "$param" | tr '[:upper:]' '[:lower:]')
-    if [[ "$lower_param" =~ ^(append|initrd|label|kernel|menu|default|timeout|unraidsafemode) ]]; then
-        error_exit "Invalid custom parameter: '$param' is a reserved syslinux directive"
+    if [[ "$BOOTLOADER_TYPE" == "grub" ]]; then
+        if [[ "$lower_param" =~ ^(linux|linuxefi|initrd|menuentry|set)($|=) ]]; then
+            error_exit "Invalid custom parameter: '$param' is a reserved GRUB directive"
+        fi
+    else
+        if [[ "$lower_param" =~ ^(append|initrd|label|kernel|menu|default|timeout|unraidsafemode)($|=) ]]; then
+            error_exit "Invalid custom parameter: '$param' is a reserved syslinux directive"
+        fi
     fi
 
     return 0
@@ -480,6 +553,16 @@ validate_custom_param() {
 # 3. Hardware Compatibility (acpi_enforce_resources, ghes.disable, pci= merged)
 # 4. Power Management (usbcore.autosuspend, nvme_core, pcie_aspm, pcie_port_pm)
 # 5. Custom Parameters (in array order, excluding pci=)
+get_unraiduuid_param() {
+    local append_line=""
+    if [[ "$BOOTLOADER_TYPE" != "grub" ]]; then
+        echo ""
+        return 0
+    fi
+    append_line=$(parse_grub_linux_args "Unraid OS")
+    echo "$append_line" | grep -oE 'unraiduuid=[0-9]+' | head -n 1 || true
+}
+
 build_append_line() {
     local params="initrd=/bzroot"
 
@@ -547,6 +630,12 @@ build_append_line() {
             done
             params="$params $filtered_custom"
         fi
+    fi
+
+    # 6. System-generated parameters (preserve from current config)
+    local unraiduuid_param=$(get_unraiduuid_param)
+    if [[ -n "$unraiduuid_param" ]] && ! echo "$params" | grep -qw "$unraiduuid_param"; then
+        params="$params $unraiduuid_param"
     fi
 
     echo "$params"
@@ -618,7 +707,24 @@ build_append_line_gui_safe() {
         fi
     fi
 
+    # 6. System-generated parameters (preserve from current config)
+    local unraiduuid_param=$(get_unraiduuid_param)
+    if [[ -n "$unraiduuid_param" ]] && ! echo "$params" | grep -qw "$unraiduuid_param"; then
+        params="$params $unraiduuid_param"
+    fi
+
     echo "$params"
+}
+
+#############################################
+# Build kernel args for GRUB (no initrd=)
+#############################################
+build_kernel_args() {
+    echo "$(build_append_line | sed 's/^initrd=\/bzroot[ ]*//')"
+}
+
+build_kernel_args_gui_safe() {
+    echo "$(build_append_line_gui_safe | sed 's/^initrd=\/bzroot[ ]*//')"
 }
 
 #############################################
@@ -707,6 +813,11 @@ update_default_boot() {
 # Write new configuration to syslinux.cfg
 #############################################
 write_config() {
+
+    if [[ "$BOOTLOADER_TYPE" == "grub" ]]; then
+        write_config_grub
+        return
+    fi
 
     # Save custom parameter comments if provided
     if [[ -n "${CUSTOM_PARAMS_COMMENTS}" ]]; then
@@ -867,6 +978,151 @@ write_config() {
 }
 
 #############################################
+# Update GRUB menuentry linux args
+#############################################
+update_grub_entry() {
+    local label="$1"
+    local new_args="$2"
+    local cfg_file="$3"
+
+    awk -v label="$label" -v new_args="$new_args" '
+        $0 ~ /^menuentry / {
+            in_section = (index($0, "\"" label "\"") > 0 || index($0, "'" label "'") > 0)
+        }
+        {
+            if (in_section && match($0, /^[ \t]*(linux|linuxefi)[ \t]+([^ \t]+)[ \t]*(.*)$/, m)) {
+                match($0, /^[ \t]*/)
+                indent = substr($0, RSTART, RLENGTH)
+                cmd = m[1]
+                kernel = m[2]
+                if (new_args != "") {
+                    print indent cmd " " kernel " " new_args
+                } else {
+                    print indent cmd " " kernel
+                }
+                next
+            }
+            print
+        }
+    ' "$cfg_file" > "${cfg_file}.tmp"
+    mv "${cfg_file}.tmp" "$cfg_file"
+}
+
+#############################################
+# Update GRUB default menuentry
+#############################################
+update_grub_default() {
+    local label="$1"
+    local cfg_file="$2"
+
+    local index=$(awk -v label="$label" '
+        $0 ~ /^menuentry / {
+            if (index($0, "\"" label "\"") > 0 || index($0, "'" label "'") > 0) {
+                print idx
+                exit
+            }
+            idx++
+        }
+        BEGIN { idx=0 }
+    ' "$cfg_file")
+
+    if [[ -z "$index" ]]; then
+        return
+    fi
+
+    if grep -q '^set default=' "$cfg_file"; then
+        sed -i -E "s/^set default=.*/set default=${index}/" "$cfg_file"
+    else
+        # Insert default near top
+        sed -i "1iset default=${index}" "$cfg_file"
+    fi
+}
+
+#############################################
+# Write new configuration to GRUB config
+#############################################
+write_config_grub() {
+
+    # Save custom parameter comments if provided
+    if [[ -n "${CUSTOM_PARAMS_COMMENTS}" ]]; then
+        save_comments "${CUSTOM_PARAMS_COMMENTS}"
+    fi
+
+    # Validate timeout (deciseconds)
+    if [[ -n "${TIMEOUT}" && ! "${TIMEOUT}" =~ ^[0-9]+$ ]]; then
+        error_exit "Invalid timeout value"
+    fi
+
+    EXCLUDE_FRAMEBUFFER_FROM_GUI="${EXCLUDE_FRAMEBUFFER_FROM_GUI:-0}"
+
+    local new_args=$(build_kernel_args)
+    local timestamp=$(date +%Y-%b-%d_%H-%M-%S)
+
+    mkdir -p "$GRUB_BACKUP_DIR"
+
+    cp "$GRUB_CFG" "$GRUB_BACKUP_DIR/grub.cfg.bak.$timestamp"
+
+    local backup_count=$(ls -1 "$GRUB_BACKUP_DIR"/grub.cfg.bak.* 2>/dev/null | wc -l)
+    if [[ $backup_count -gt $MAX_BACKUPS ]]; then
+        ls -t "$GRUB_BACKUP_DIR"/grub.cfg.bak.* | tail -n +$((MAX_BACKUPS + 1)) | xargs rm -f
+    fi
+
+    local temp_file=$(mktemp -p "$(dirname "$GRUB_CFG")")
+    cp "$GRUB_CFG" "$temp_file"
+
+    if [[ "${APPLY_TO_UNRAID_OS}" == "1" ]]; then
+        update_grub_entry "Unraid OS" "$new_args" "$temp_file"
+    fi
+
+    if [[ "${APPLY_TO_GUI_MODE}" == "1" ]]; then
+        local gui_args="$new_args"
+        if [[ "${EXCLUDE_FRAMEBUFFER_FROM_GUI}" == "1" ]]; then
+            gui_args=$(build_kernel_args_gui_safe)
+        fi
+        update_grub_entry "Unraid OS GUI Mode" "$gui_args" "$temp_file"
+    fi
+
+    if [[ "${APPLY_TO_SAFE_MODE}" == "1" ]]; then
+        update_grub_entry "Unraid OS Safe Mode (no plugins, no GUI)" "$new_args" "$temp_file"
+    fi
+
+    if [[ "${APPLY_TO_GUI_SAFE_MODE}" == "1" ]]; then
+        local gui_safe_args="$new_args"
+        if [[ "${EXCLUDE_FRAMEBUFFER_FROM_GUI}" == "1" ]]; then
+            gui_safe_args=$(build_kernel_args_gui_safe)
+        fi
+        update_grub_entry "Unraid OS GUI Safe Mode (no plugins)" "$gui_safe_args" "$temp_file"
+    fi
+
+    if [[ -n "${DEFAULT_BOOT_ENTRY}" ]]; then
+        update_grub_default "${DEFAULT_BOOT_ENTRY}" "$temp_file"
+    fi
+
+    if [[ -n "${TIMEOUT}" ]]; then
+        local timeout_seconds=$(((TIMEOUT + 5) / 10))
+        if grep -q '^set timeout=' "$temp_file"; then
+            sed -i -E "s/^set timeout=.*/set timeout=${timeout_seconds}/" "$temp_file"
+        else
+            sed -i "1iset timeout=${timeout_seconds}" "$temp_file"
+        fi
+    fi
+
+    # Basic validation: ensure the config is non-empty and has at least one menuentry
+    if [[ ! -s "$temp_file" ]] || ! grep -q '^menuentry ' "$temp_file"; then
+        rm -f "$temp_file"
+        cp "$GRUB_BACKUP_DIR/grub.cfg.bak.$timestamp" "$GRUB_CFG"
+        error_exit "GRUB configuration validation failed, restored from backup"
+    fi
+
+    mv "$temp_file" "$GRUB_CFG"
+
+    echo "SUCCESS"
+    echo "---CONFIG-START---"
+    cat "$GRUB_CFG"
+    echo "---CONFIG-END---"
+}
+
+#############################################
 # Write raw configuration directly
 #############################################
 write_raw_config() {
@@ -878,25 +1134,34 @@ write_raw_config() {
 
     local timestamp=$(date +%Y-%b-%d_%H-%M-%S)
 
+    local target_cfg="$SYSLINUX_CFG"
+    local target_backup_dir="$BACKUP_DIR"
+    local backup_prefix="syslinux.cfg"
+    if [[ "$BOOTLOADER_TYPE" == "grub" ]]; then
+        target_cfg="$GRUB_CFG"
+        target_backup_dir="$GRUB_BACKUP_DIR"
+        backup_prefix="grub.cfg"
+    fi
+
     # Create backup directory
-    mkdir -p "$BACKUP_DIR"
+    mkdir -p "$target_backup_dir"
 
     # Create timestamped backup
-    cp "$SYSLINUX_CFG" "$BACKUP_DIR/syslinux.cfg.bak.$timestamp"
+    cp "$target_cfg" "$target_backup_dir/${backup_prefix}.bak.$timestamp"
 
     # Cleanup old backups (keep last $MAX_BACKUPS)
-    ls -t "$BACKUP_DIR"/syslinux.cfg.bak.* 2>/dev/null | tail -n +$((MAX_BACKUPS + 1)) | xargs rm -f 2>/dev/null || true
+    ls -t "$target_backup_dir"/${backup_prefix}.bak.* 2>/dev/null | tail -n +$((MAX_BACKUPS + 1)) | xargs rm -f 2>/dev/null || true
 
     # Create temp file on same filesystem as target to ensure atomic move operation
-    local temp_file=$(mktemp -p "$(dirname "$SYSLINUX_CFG")")
+    local temp_file=$(mktemp -p "$(dirname "$target_cfg")")
 
     # Write raw config to temp file
     echo "$RAW_CONFIG" > "$temp_file"
 
-    # Validate the raw config
-    if validate_config "$temp_file"; then
+    # Validate the raw config (syslinux only)
+    if [[ "$BOOTLOADER_TYPE" == "grub" ]] || validate_config "$temp_file"; then
         # Move temp file to actual config
-        mv "$temp_file" "$SYSLINUX_CFG"
+        mv "$temp_file" "$target_cfg"
 
         # Output success
         echo "SUCCESS"
@@ -904,7 +1169,7 @@ write_raw_config() {
     else
         # Validation failed, restore backup
         rm -f "$temp_file"
-        cp "$BACKUP_DIR/syslinux.cfg.bak.$timestamp" "$SYSLINUX_CFG"
+        cp "$target_backup_dir/${backup_prefix}.bak.$timestamp" "$target_cfg"
         error_exit "Raw configuration validation failed. The configuration must contain 'label Unraid OS' and 'initrd=' entries. Restored from backup."
     fi
 }
@@ -913,7 +1178,14 @@ write_raw_config() {
 # List available backups
 #############################################
 list_backups() {
-    if [[ ! -d "$BACKUP_DIR" ]]; then
+    local target_backup_dir="$BACKUP_DIR"
+    local backup_prefix="syslinux.cfg"
+    if [[ "$BOOTLOADER_TYPE" == "grub" ]]; then
+        target_backup_dir="$GRUB_BACKUP_DIR"
+        backup_prefix="grub.cfg"
+    fi
+
+    if [[ ! -d "$target_backup_dir" ]]; then
         echo "[]"
         return
     fi
@@ -921,14 +1193,14 @@ list_backups() {
     # List backups in JSON format
     echo "["
     local first=1
-    for backup in $(ls -t "$BACKUP_DIR"/syslinux.cfg.bak.* 2>/dev/null); do
+    for backup in $(ls -t "$target_backup_dir"/${backup_prefix}.bak.* 2>/dev/null); do
         if [[ $first -eq 0 ]]; then
             echo ","
         fi
         first=0
 
         local filename=$(basename "$backup")
-        local timestamp=$(echo "$filename" | sed 's/syslinux.cfg.bak.//')
+        local timestamp=$(echo "$filename" | sed "s/${backup_prefix}\.bak\.//")
         local size=$(stat -f%z "$backup" 2>/dev/null || stat -c%s "$backup" 2>/dev/null || echo "0")
 
         cat <<EOF
@@ -946,6 +1218,15 @@ EOF
 # Restore from backup
 #############################################
 restore_backup() {
+    local target_cfg="$SYSLINUX_CFG"
+    local target_backup_dir="$BACKUP_DIR"
+    local backup_prefix="syslinux.cfg"
+    if [[ "$BOOTLOADER_TYPE" == "grub" ]]; then
+        target_cfg="$GRUB_CFG"
+        target_backup_dir="$GRUB_BACKUP_DIR"
+        backup_prefix="grub.cfg"
+    fi
+
     # Validate backup filename format (defense-in-depth - prevents path traversal)
     # Expected format: syslinux.cfg.bak.YYYY-MMM-DD_HH-MM-SS
     # Example: syslinux.cfg.bak.2025-Jan-08_14-30-45
@@ -957,11 +1238,11 @@ restore_backup() {
     #   _[0-9]{2}-[0-9]{2}-[0-9]{2}  - Time (HH-MM-SS)
     #   $                            - End of string (prevents path traversal)
     # This matches the PHP validation pattern exactly (line 188 in boot_params_handler.php)
-    if [[ ! "$BACKUP_FILENAME" =~ ^syslinux\.cfg\.bak\.[0-9]{4}-[A-Za-z]{3}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
+    if [[ ! "$BACKUP_FILENAME" =~ ^${backup_prefix//./\.}\.bak\.[0-9]{4}-[A-Za-z]{3}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
         error_exit "Invalid backup filename format: $BACKUP_FILENAME"
     fi
 
-    local backup_file="$BACKUP_DIR/${BACKUP_FILENAME}"
+    local backup_file="$target_backup_dir/${BACKUP_FILENAME}"
 
     # Verify file exists
     if [[ ! -f "$backup_file" ]]; then
@@ -969,12 +1250,14 @@ restore_backup() {
     fi
 
     # Validate backup before restoring
-    if ! validate_config "$backup_file"; then
-        error_exit "Backup file validation failed"
+    if [[ "$BOOTLOADER_TYPE" != "grub" ]]; then
+        if ! validate_config "$backup_file"; then
+            error_exit "Backup file validation failed"
+        fi
     fi
 
     # Restore from backup
-    cp "$backup_file" "$SYSLINUX_CFG"
+    cp "$backup_file" "$target_cfg"
 
     echo "SUCCESS"
     echo "Restored from backup: ${BACKUP_FILENAME}"
@@ -985,8 +1268,15 @@ restore_backup() {
 #############################################
 delete_all_backups() {
 
+    local target_backup_dir="$BACKUP_DIR"
+    local backup_prefix="syslinux.cfg"
+    if [[ "$BOOTLOADER_TYPE" == "grub" ]]; then
+        target_backup_dir="$GRUB_BACKUP_DIR"
+        backup_prefix="grub.cfg"
+    fi
+
     # Remove all backup files
-    rm -f "${BACKUP_DIR}"/syslinux.cfg.bak.* 2>/dev/null
+    rm -f "${target_backup_dir}"/${backup_prefix}.bak.* 2>/dev/null
 
     echo "SUCCESS: All backups deleted"
 }
