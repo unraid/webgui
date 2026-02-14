@@ -219,6 +219,26 @@ function get_boot_pool_fs_info(array $bootDisks, string $bootPoolName): array
   return ['fsType' => '', 'fsStatus' => ''];
 }
 
+function get_mount_status_from_mountpoint(string $mountPoint): string
+{
+  if ($mountPoint === '') return '';
+  static $mounts = null;
+  if ($mounts === null) {
+    $mounts = [];
+    $lines = @file('/proc/mounts', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (is_array($lines)) {
+      foreach ($lines as $line) {
+        $parts = preg_split('/\s+/', $line);
+        if (!isset($parts[1])) continue;
+        $mp = str_replace('\040', ' ', $parts[1]);
+        $mounts[$mp] = true;
+      }
+    }
+  }
+  if ($mounts === [] && !is_readable('/proc/mounts')) return '';
+  return isset($mounts[$mountPoint]) ? 'Mounted' : 'Unmounted';
+}
+
 function get_pool_boot_metrics(?array $bootDisk): array
 {
   if (empty($bootDisk)) return [];
@@ -499,7 +519,13 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[], $options=[]
     $dupValue = _var($duplicate_devices[$fullDevName],'duplicate_value','');
     $dupLabel = $dupType ? strtoupper($dupType) : _('Identifier');
     $dupLine = $dupValue !== '' ? $dupLabel.': '.htmlspecialchars($dupValue, ENT_QUOTES) : '';
-    $duplicate  = isset($duplicate_devices[$fullDevName]['other_devices']) ? implode("<br>", $duplicate_devices[$fullDevName]['other_devices'])."<br>" : "";
+    $duplicate = '';
+    if (isset($duplicate_devices[$fullDevName]['other_devices'])) {
+      $escapedDevices = array_map(static function($value) {
+        return htmlspecialchars($value, ENT_QUOTES);
+      }, $duplicate_devices[$fullDevName]['other_devices']);
+      $duplicate = implode("<br>", $escapedDevices)."<br>";
+    }
     $details = $dupLine ? $dupLine."<br>" : "";
     $warndup .= "<a class='info'><i class='fa fa-clone fa-fw orange-text'></i><span>"._('Duplicate device identifier detected (WWID or Serial)')."<br>$details$duplicate</span></a>";
   }
@@ -1060,7 +1086,11 @@ while (true) {
         $bootFsInfo = get_boot_pool_fs_info($Boot, $bootPoolName);
         $bootFsType = _var($bootDisk,'fsType','') ?: _var($bootFsInfo,'fsType','');
         $bootFsStatus = _var($bootDisk,'fsStatus','') ?: _var($bootFsInfo,'fsStatus','');
-        if ($bootFsStatus === '' && $bootFsType !== '') $bootFsStatus = 'Mounted';
+        if ($bootFsStatus === '' && $bootFsType !== '') {
+          $mountPoint = _var($bootDisk,'mountPoint','') ?: _var($bootDisk,'fsMountpoint','') ?: _var($bootFsInfo,'mountPoint','') ?: _var($bootFsInfo,'fsMountpoint','');
+          $bootFsStatus = get_mount_status_from_mountpoint($mountPoint);
+          if ($bootFsStatus === '') $bootFsStatus = 'Unknown';
+        }
         $bootRow = pool_function_row(
           '<i class="fa fa-paw title"></i> '._('Boot Partition'),
           $poolDisk,
@@ -1176,7 +1206,11 @@ while (true) {
         $bootFsInfo = get_boot_pool_fs_info($Boot, $bootPoolName);
         $bootFsType = _var($bootDisk,'fsType','') ?: _var($bootFsInfo,'fsType','');
         $bootFsStatus = _var($bootDisk,'fsStatus','') ?: _var($bootFsInfo,'fsStatus','');
-        if ($bootFsStatus === '' && $bootFsType !== '') $bootFsStatus = 'Mounted';
+        if ($bootFsStatus === '' && $bootFsType !== '') {
+          $mountPoint = _var($bootDisk,'mountPoint','') ?: _var($bootDisk,'fsMountpoint','') ?: _var($bootFsInfo,'mountPoint','') ?: _var($bootFsInfo,'fsMountpoint','');
+          $bootFsStatus = get_mount_status_from_mountpoint($mountPoint);
+          if ($bootFsStatus === '') $bootFsStatus = 'Unknown';
+        }
         $bootRow = pool_function_row(
           '<i class="fa fa-paw title"></i> '._('Boot Partition'),
           $poolDisk,

@@ -129,9 +129,8 @@ function bootPoolSizeInit(popup) {
     if (val === 'custom') {
       $input.prop('readonly', false);
       $inputWrap.removeClass('hidden');
-      if ($input.val() === '' || $input.val() === null) $input.val('');
       var gb = parseInt($input.val(), 10);
-      if (!isNaN(gb) && gb >= 0) {
+      if (!isNaN(gb) && gb > 0) {
         $hidden.val(gb * 1024);
       } else {
         $hidden.val('');
@@ -156,7 +155,7 @@ function bootPoolSizeInit(popup) {
 
   $input.on('input change', function(){
     var gb = parseInt($input.val(), 10);
-    if (!isNaN(gb) && gb >= 0) {
+    if (!isNaN(gb) && gb > 0) {
       $hidden.val(gb * 1024);
     } else {
       $hidden.val('');
@@ -367,10 +366,10 @@ function bootPoolSubmitMkbootpool(popup, selection, reboot) {
       }
       return;
     }
-    swal({title:"_(Error)_",text:'<pre style="text-align:left;white-space:pre-wrap;">'+bootPoolEscapeHtml(output)+'</pre>',type:'error',html:true,confirmButtonText:"_(Ok)_",allowOutsideClick:false,allowEscapeKey:false,showCancelButton:false});
+    swal({title:"_(Error)_",text:'<pre style="text-align:left;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:anywhere;font-size:1.0rem;">'+bootPoolEscapeHtml(output)+'</pre>',type:'error',html:true,confirmButtonText:"_(Ok)_",allowOutsideClick:false,allowEscapeKey:false,showCancelButton:false});
   }).fail(function(xhr){
     var text = (xhr && xhr.responseText) ? xhr.responseText : "_(Request failed)_";
-    swal({title:"_(Error)_",text:'<pre style="text-align:left;white-space:pre-wrap;">'+bootPoolEscapeHtml(text)+'</pre>',type:'error',html:true,confirmButtonText:"_(Ok)_",allowOutsideClick:false,allowEscapeKey:false,showCancelButton:false});
+    swal({title:"_(Error)_",text:'<pre style="text-align:left;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:anywhere;font-size:1.0rem;">'+bootPoolEscapeHtml(text)+'</pre>',type:'error',html:true,confirmButtonText:"_(Ok)_",allowOutsideClick:false,allowEscapeKey:false,showCancelButton:false});
   });
 }
 function removeOption(inputString,value) {
@@ -559,7 +558,7 @@ _(Boot reserved size)_ (_(MiB)_):
   <option value="custom">_(User defined)_</option>
   </select>
   <span class="bootpool-size-custom">
-    <input type="number" name="poolBootSizeCustomGb" maxlength="10" class="narrow"> GB
+    <input type="number" name="poolBootSizeCustomGb" min="1" max="1024" class="narrow"> GB
   </span><span></span>
   <input type="hidden" name="poolBootSize" value="<?=_var($var,'bootSizeDefault')?>">
 
