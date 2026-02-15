@@ -155,7 +155,10 @@ if ($rc === 0 && $updateBios) {
     $desiredOrder = array_values(array_unique(array_filter($desiredOrder)));
     if (!empty($desiredOrder)) {
       $orderList = implode(',', $desiredOrder);
-      $orderCmd = 'efibootmgr -o '.$orderList;
+      $nextBoot = $desiredOrder[0] ?? '';
+      $orderCmd = $nextBoot !== ''
+        ? 'efibootmgr -o '.$orderList.' -n '.$nextBoot
+        : 'efibootmgr -o '.$orderList;
       $output[] = 'Running: '.$orderCmd;
       $orderOut = [];
       $orderRc = 0;
