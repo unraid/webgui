@@ -277,7 +277,8 @@ function bootPoolValidateSelection(popup) {
     poolName: poolName,
     slotCount: slotCount,
     devices: devices.slice(0, slotCount),
-    bootSize: bootSize
+    bootSize: bootSize,
+    updateBios: popup.find('input[name="poolUpdateBios"]').is(':checked')
   };
 }
 
@@ -300,7 +301,9 @@ function bootPoolConfirmActivate(popup, reboot) {
   var text = "_(This will create a bootable pool with the selected devices)_" +
     "<br><br><b>_(Pool)_:</b> " + selection.poolName +
     "<br><b>_(Boot reserved size)_:</b> " + bootPoolFormatBootSizeGb(selection.bootSize) +
-    "<br><b>_(Devices)_:</b>" + deviceList ;
+    "<br><b>_(Devices)_:</b>" + deviceList +
+    "<br><b>_(Update BIOS boot order)_:</b> " + (selection.updateBios ? "_(Yes)_" : "_(No)_") +
+    "<br><span style='color:#d00;font-weight:bold;'>_(All selected devices will be formatted)_</span>";
 
   swal({
     title: title,
@@ -343,6 +346,7 @@ function bootPoolRebootNow() {
 
 function bootPoolSubmitMkbootpool(popup, selection, reboot) {
   var args = [selection.poolName, selection.bootSize].concat(selection.devices);
+  if (selection.updateBios) args.push('updatebios');
   if (reboot) args.push('reboot');
   args.push('update');
   popup.dialog('close');
@@ -358,8 +362,8 @@ function bootPoolSubmitMkbootpool(popup, selection, reboot) {
     var ok = resp && resp.ok;
     var output = resp && resp.output ? resp.output : (raw || "_(No output)_");
     if (ok) {
-      swal.close();
       if (reboot) {
+        swal.close();
         bootPoolRebootNow();
       } else {
         window.location.reload();
@@ -561,6 +565,12 @@ _(Boot reserved size)_ (_(MiB)_):
     <input type="number" name="poolBootSizeCustomGb" min="1" max="1024" class="narrow"> GB
   </span><span></span>
   <input type="hidden" name="poolBootSize" value="<?=_var($var,'bootSizeDefault')?>">
+
+_(Update BIOS boot order)_:
+: <span><input type="checkbox" name="poolUpdateBios" value="1" checked></span>
+
+<span> </span>
+: <span style="color:#d00;font-weight:bold;">_(All selected devices will be formatted)_</span>
 
 </form>
 </div>
