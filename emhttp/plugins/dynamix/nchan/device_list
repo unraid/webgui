@@ -278,18 +278,26 @@ function get_boot_pool_metrics(array $bootDisks, string $bootPoolName, ?array $f
   return get_pool_boot_metrics($fallbackDisk);
 }
 
-function get_pool_data_metrics(?array $poolDisk, array $bootMetrics): array
+function get_first_pool_disk_in_disks(string $poolName, array $disks): ?array
 {
-  if (empty($poolDisk)) return [];
-  $size = _var($poolDisk,'fsSize',0);
-  $used = _var($poolDisk,'fsUsed',0);
-  $free = _var($poolDisk,'fsFree',0);
-
-  if (!empty($bootMetrics)) {
-    $size = max(0, $size - _var($bootMetrics,'fsSize',0));
-    $used = max(0, $used - _var($bootMetrics,'fsUsed',0));
-    $free = max(0, $free - _var($bootMetrics,'fsFree',0));
+  if ($poolName === '' || empty($disks)) return null;
+  foreach ($disks as $disk) {
+    if (prefix(_var($disk,'name','')) === $poolName) return $disk;
   }
+  return null;
+}
+
+function get_pool_data_metrics(?array $poolDisk, string $poolName='', array $disks=[]): array
+{
+  $metricsDisk = $poolDisk;
+  if ($poolName !== '' && !empty($disks)) {
+    $firstPoolDisk = get_first_pool_disk_in_disks($poolName, $disks);
+    if (!empty($firstPoolDisk)) $metricsDisk = $firstPoolDisk;
+  }
+  if (empty($metricsDisk)) return [];
+  $size = _var($metricsDisk,'fsSize',0);
+  $used = _var($metricsDisk,'fsUsed',0);
+  $free = _var($metricsDisk,'fsFree',0);
 
   return [
     'fsSize' => $size,
@@ -1072,7 +1080,7 @@ while (true) {
       $bootDisk = find_boot_disk_for_pool($pool, $Boot, $Cache);
       $bootPoolName = prefix(_var($bootDisk,'name',''));
       $bootMetrics = get_boot_pool_metrics($Boot, $bootPoolName, $bootDisk);
-      $dataMetrics = get_pool_data_metrics($poolDisk, $bootMetrics);
+      $dataMetrics = get_pool_data_metrics($poolDisk, $pool, $disks);
       $poolLabel = ucfirst($pool);
       $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
       $poolLink = "<a href=\"$poolDeviceUrl\">"._($poolLabel,3)."</a>";
@@ -1186,7 +1194,7 @@ while (true) {
       $bootDisk = find_boot_disk_for_pool($pool, $Boot, $Cache);
       $bootPoolName = prefix(_var($bootDisk,'name',''));
       $bootMetrics = get_boot_pool_metrics($Boot, $bootPoolName, $bootDisk);
-      $dataMetrics = get_pool_data_metrics($poolDisk, $bootMetrics);
+      $dataMetrics = get_pool_data_metrics($poolDisk, $pool, $disks);
       if (!empty($bootDisk)) {
         $bootPoolName = prefix(_var($bootDisk,'name',''));
         $bootLabel = ucfirst($bootPoolName);
