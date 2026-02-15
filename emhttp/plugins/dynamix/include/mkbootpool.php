@@ -78,24 +78,6 @@ if ($rc === 0 && $updateBios) {
       }
     }
   }
-
-  if ($needsFlashEntry) {
-    foreach ($disks as $disk) {
-      if (($disk['type'] ?? '') !== 'Flash') continue;
-      $device = $disk['device'] ?? '';
-      if ($device === '') continue;
-      $devicePath = '/dev/'.$device;
-      $label = 'Unraid Flash';
-      $efiCmd = 'efibootmgr -c -d '.escapeshellarg($devicePath).' -p 1 -L '.escapeshellarg($label);
-      $output[] = 'Running: '.$efiCmd;
-      $efiOut = [];
-      $efiRc = 0;
-      exec($efiCmd.' 2>&1', $efiOut, $efiRc);
-      if (!empty($efiOut)) $output = array_merge($output, $efiOut);
-      if ($efiRc !== 0) $output[] = 'efibootmgr failed for flash (rc='.$efiRc.')';
-      break;
-    }
-  }
   $bootDevices = [];
   if (count($mkbootpoolArgs) >= 3) {
     $bootDevices = array_slice($mkbootpoolArgs, 2);
@@ -103,7 +85,6 @@ if ($rc === 0 && $updateBios) {
       return !in_array($value, ['reboot','update','dryrun'], true);
     }));
   }
-  $bootDevices = array_reverse($bootDevices);
   foreach ($bootDevices as $bootDevice) {
     $bootId = $bootDevice;
     $device = $bootDevice;
@@ -122,7 +103,70 @@ if ($rc === 0 && $updateBios) {
     if (!empty($efiOut)) $output = array_merge($output, $efiOut);
     if ($efiRc !== 0) $output[] = 'efibootmgr failed for '.escapeshellarg($devicePath).' (rc='.$efiRc.')';
   }
+
+  if ($needsFlashEntry) {
+    foreach ($disks as $disk) {
+      if (($disk['type'] ?? '') !== 'Flash') continue;
+      $device = $disk['device'] ?? '';
+      if ($device === '') continue;
+      $devicePath = '/dev/'.$device;
+      $label = 'Unraid Flash';
+      $efiCmd = 'efibootmgr -c -d '.escapeshellarg($devicePath).' -p 1 -L '.escapeshellarg($label);
+      $output[] = 'Running: '.$efiCmd;
+      $efiOut = [];
+      $efiRc = 0;
+      exec($efiCmd.' 2>&1', $efiOut, $efiRc);
+      if (!empty($efiOut)) $output = array_merge($output, $efiOut);
+      if ($efiRc !== 0) $output[] = 'efibootmgr failed for flash (rc='.$efiRc.')';
+      break;
+    }
+  }
+
+  $bootEntries = [];
+  $bootRc = 0;
+  exec('efibootmgr 2>&1', $bootEntries, $bootRc);
+  if ($bootRc === 0 && !empty($bootEntries)) {
+    $labelMap = [];
+    foreach ($bootEntries as $line) {
+      if (preg_match('/^Boot([0-9A-Fa-f]{4})\*?\s+(.+)$/', $line, $matches)) {
+        $bootNum = strtoupper($matches[1]);
+        $labelText = trim($matches[2]);
+        $labelMap[$labelText] = $bootNum;
+      }
+    }
+
+    $desiredOrder = [];
+    foreach ($bootDevices as $bootId) {
+      $label = 'Unraid Internal Boot - '.$bootId;
+      foreach ($labelMap as $labelText => $bootNum) {
+        if (stripos($labelText, $label) !== false) {
+          $desiredOrder[] = $bootNum;
+          break;
+        }
+      }
+    }
+    foreach ($labelMap as $labelText => $bootNum) {
+      if (stripos($labelText, 'Unraid Flash') !== false) {
+        $desiredOrder[] = $bootNum;
+        break;
+      }
+    }
+
+    $desiredOrder = array_values(array_unique(array_filter($desiredOrder)));
+    if (!empty($desiredOrder)) {
+      $orderList = implode(',', $desiredOrder);
+      $orderCmd = 'efibootmgr -o '.$orderList;
+      $output[] = 'Running: '.$orderCmd;
+      $orderOut = [];
+      $orderRc = 0;
+      exec($orderCmd.' 2>&1', $orderOut, $orderRc);
+      if (!empty($orderOut)) $output = array_merge($output, $orderOut);
+      if ($orderRc !== 0) $output[] = 'efibootmgr failed to set boot order (rc='.$orderRc.')';
+    }
+  }
 }
+
+
 
 $body = implode("\n", $output);
 if ($body === '') $body = 'No output';
