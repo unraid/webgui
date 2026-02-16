@@ -70,8 +70,12 @@ if ($rc === 0 && $updateBios) {
   $bootEntries = [];
   $bootRc = 0;
   exec('efibootmgr 2>&1', $bootEntries, $bootRc);
+  $existingLabels = [];
   if ($bootRc === 0 && !empty($bootEntries)) {
     foreach ($bootEntries as $line) {
+      if (preg_match('/^Boot[0-9A-Fa-f]{4}\*?\s+(.+)$/', $line, $matches)) {
+        $existingLabels[] = trim($matches[1]);
+      }
       if (stripos($line, 'Unraid Flash') !== false) {
         $needsFlashEntry = false;
         break;
@@ -94,6 +98,17 @@ if ($rc === 0 && $updateBios) {
     if ($device === '') continue;
     $devicePath = '/dev/'.$device;
     $label = 'Unraid Internal Boot - '.$bootId;
+    $alreadyExists = false;
+    foreach ($existingLabels as $existingLabel) {
+      if (strcasecmp($existingLabel, $label) === 0 || stripos($existingLabel, $label) !== false) {
+        $alreadyExists = true;
+        break;
+      }
+    }
+    if ($alreadyExists) {
+      $output[] = 'Skipping existing boot entry: '.$label;
+      continue;
+    }
     $efiPath = '\\EFI\\BOOT\\BOOTX64.EFI';
     $efiCmd = 'efibootmgr -c -d '.escapeshellarg($devicePath).' -p 2 -L '.escapeshellarg($label).' -l '.escapeshellarg($efiPath);
     $output[] = 'Running: '.$efiCmd;
