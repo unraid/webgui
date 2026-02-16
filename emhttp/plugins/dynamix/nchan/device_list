@@ -561,6 +561,7 @@ function device_desc(&$disk, $poolName='', $poolstatusData=[]) {
     $log = "<a class='info hand' onclick=\"openTerminal('disklog','"._var($disk,'device')."','')\"><i class='icon-$type icon'></i><span>"._('Disk Log Information')."</span></a>";
     
     // Add red warning triangle if pool has errors
+   # $poolWarning = "<span title='".sprintf(_('Pool %s Device has an error status: %s'), $poolName,(!empty($poolstatusData['pools'][$poolName]) ? "NotEmpty" : "Empty"))."'><i class='fa fa-warning fa-fw red-text'></i></span>";
     $poolWarning = '';
     if ($poolName && !empty($poolstatusData['pools'][$poolName])) {
       // Find member status for this specific device
@@ -1271,7 +1272,7 @@ while (true) {
         $echo[$a][] = array_online(
           $disk,
           $fstype,
-          '',
+          $pool,
           $poolstatus,
           [
             'displayName' => $memberLabel,
