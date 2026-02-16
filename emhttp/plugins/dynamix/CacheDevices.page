@@ -174,7 +174,9 @@ function bootPoolFormatBootSizeGb(bootSizeMiB) {
 function bootPoolRenderSlots(popup) {
   var slotCount = parseInt(popup.find('select[name="poolSlots"]').val(), 10) || 0;
   var $container = popup.find('#bootPoolDeviceSlots');
-  var $source = popup.find('#bootPoolDevicesSource select');
+  var $sourceWrap = popup.find('#bootPoolDevicesSource');
+  if (!$container.length || !$sourceWrap.length) return;
+  var $source = $sourceWrap.find('select');
   var existing = {};
   $container.find('select[name="poolDevice[]"]').each(function(){
     var slot = parseInt($(this).attr('data-slot'), 10);
@@ -558,6 +560,7 @@ _(Boot reserved size)_ (_(MiB)_):
   <option value="32768">32 GB</option>
   <option value="65536">64 GB</option>
   <option value="131072">128 GB</option>
+  <option value="0">_(Whole drive)_</option>
   <option value="custom">_(User defined)_</option>
   </select>
   <span class="bootpool-size-custom">

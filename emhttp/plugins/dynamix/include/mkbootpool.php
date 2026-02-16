@@ -66,21 +66,27 @@ exec($cmd.' 2>&1', $output, $rc);
 if ($rc === 0 && $updateBios) {
   $disksIni = $varroot.'/disks.ini';
   $disks = @parse_ini_file($disksIni, true) ?: [];
-  $needsFlashEntry = true;
   $bootEntries = [];
   $bootRc = 0;
   exec('efibootmgr 2>&1', $bootEntries, $bootRc);
-  $existingLabels = [];
+  $bootLabelMap = [];
   if ($bootRc === 0 && !empty($bootEntries)) {
     foreach ($bootEntries as $line) {
-      if (preg_match('/^Boot[0-9A-Fa-f]{4}\*?\s+(.+)$/', $line, $matches)) {
-        $existingLabels[] = trim($matches[1]);
-      }
-      if (stripos($line, 'Unraid Flash') !== false) {
-        $needsFlashEntry = false;
-        break;
+      if (preg_match('/^Boot([0-9A-Fa-f]{4})\*?\s+(.+)$/', $line, $matches)) {
+        $bootNum = strtoupper($matches[1]);
+        $labelText = trim($matches[2]);
+        $bootLabelMap[$labelText] = $bootNum;
       }
     }
+  }
+  foreach ($bootLabelMap as $labelText => $bootNum) {
+    $deleteCmd = 'efibootmgr -b '.escapeshellarg($bootNum).' -B';
+    $output[] = 'Running: '.$deleteCmd;
+    $deleteOut = [];
+    $deleteRc = 0;
+    exec($deleteCmd.' 2>&1', $deleteOut, $deleteRc);
+    if (!empty($deleteOut)) $output = array_merge($output, $deleteOut);
+    if ($deleteRc !== 0) $output[] = 'efibootmgr failed to delete boot entry '.$bootNum.' (rc='.$deleteRc.')';
   }
   $bootDevices = [];
   if (count($mkbootpoolArgs) >= 3) {
@@ -98,17 +104,6 @@ if ($rc === 0 && $updateBios) {
     if ($device === '') continue;
     $devicePath = '/dev/'.$device;
     $label = 'Unraid Internal Boot - '.$bootId;
-    $alreadyExists = false;
-    foreach ($existingLabels as $existingLabel) {
-      if (strcasecmp($existingLabel, $label) === 0 || stripos($existingLabel, $label) !== false) {
-        $alreadyExists = true;
-        break;
-      }
-    }
-    if ($alreadyExists) {
-      $output[] = 'Skipping existing boot entry: '.$label;
-      continue;
-    }
     $efiPath = '\\EFI\\BOOT\\BOOTX64.EFI';
     $efiCmd = 'efibootmgr -c -d '.escapeshellarg($devicePath).' -p 2 -L '.escapeshellarg($label).' -l '.escapeshellarg($efiPath);
     $output[] = 'Running: '.$efiCmd;
@@ -119,22 +114,20 @@ if ($rc === 0 && $updateBios) {
     if ($efiRc !== 0) $output[] = 'efibootmgr failed for '.escapeshellarg($devicePath).' (rc='.$efiRc.')';
   }
 
-  if ($needsFlashEntry) {
-    foreach ($disks as $disk) {
-      if (($disk['type'] ?? '') !== 'Flash') continue;
-      $device = $disk['device'] ?? '';
-      if ($device === '') continue;
-      $devicePath = '/dev/'.$device;
-      $label = 'Unraid Flash';
-      $efiCmd = 'efibootmgr -c -d '.escapeshellarg($devicePath).' -p 1 -L '.escapeshellarg($label);
-      $output[] = 'Running: '.$efiCmd;
-      $efiOut = [];
-      $efiRc = 0;
-      exec($efiCmd.' 2>&1', $efiOut, $efiRc);
-      if (!empty($efiOut)) $output = array_merge($output, $efiOut);
-      if ($efiRc !== 0) $output[] = 'efibootmgr failed for flash (rc='.$efiRc.')';
-      break;
-    }
+  foreach ($disks as $disk) {
+    if (($disk['type'] ?? '') !== 'Flash') continue;
+    $device = $disk['device'] ?? '';
+    if ($device === '') continue;
+    $devicePath = '/dev/'.$device;
+    $label = 'Unraid Flash';
+    $efiCmd = 'efibootmgr -c -d '.escapeshellarg($devicePath).' -p 1 -L '.escapeshellarg($label);
+    $output[] = 'Running: '.$efiCmd;
+    $efiOut = [];
+    $efiRc = 0;
+    exec($efiCmd.' 2>&1', $efiOut, $efiRc);
+    if (!empty($efiOut)) $output = array_merge($output, $efiOut);
+    if ($efiRc !== 0) $output[] = 'efibootmgr failed for flash (rc='.$efiRc.')';
+    break;
   }
 
   $bootEntries = [];
