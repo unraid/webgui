@@ -219,11 +219,11 @@ function get_boot_pool_fs_info(array $bootDisks, string $bootPoolName): array
   return ['fsType' => '', 'fsStatus' => ''];
 }
 
-function get_mount_status_from_mountpoint(string $mountPoint): string
+function get_mount_status_from_mountpoint(string $mountPoint, bool $refresh = false): string
 {
   if ($mountPoint === '') return '';
   static $mounts = null;
-  if ($mounts === null) {
+  if ($mounts === null || $refresh) {
     $mounts = [];
     $lines = @file('/proc/mounts', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     if (is_array($lines)) {
@@ -333,6 +333,7 @@ function pool_function_row(string $label, ?array $poolDisk, ?array $firstMember,
   global $disks;
   $disk = $poolDisk ?: ($firstMember ?? []);
   if (empty($disk)) return '';
+  $disk = array_merge([], $disk);
 
   if ($showSummary && $poolName !== '') {
     $disk['name']   = $poolName;
@@ -1097,7 +1098,7 @@ while (true) {
         $bootFsStatus = _var($bootDisk,'fsStatus','') ?: _var($bootFsInfo,'fsStatus','');
         if ($bootFsStatus === '' && $bootFsType !== '') {
           $mountPoint = _var($bootDisk,'mountPoint','') ?: _var($bootDisk,'fsMountpoint','') ?: _var($bootFsInfo,'mountPoint','') ?: _var($bootFsInfo,'fsMountpoint','');
-          $bootFsStatus = get_mount_status_from_mountpoint($mountPoint);
+          $bootFsStatus = get_mount_status_from_mountpoint($mountPoint, true);
           if ($bootFsStatus === '') $bootFsStatus = 'Unknown';
         }
         $bootRow = pool_function_row(
@@ -1217,7 +1218,7 @@ while (true) {
         $bootFsStatus = _var($bootDisk,'fsStatus','') ?: _var($bootFsInfo,'fsStatus','');
         if ($bootFsStatus === '' && $bootFsType !== '') {
           $mountPoint = _var($bootDisk,'mountPoint','') ?: _var($bootDisk,'fsMountpoint','') ?: _var($bootFsInfo,'mountPoint','') ?: _var($bootFsInfo,'fsMountpoint','');
-          $bootFsStatus = get_mount_status_from_mountpoint($mountPoint);
+          $bootFsStatus = get_mount_status_from_mountpoint($mountPoint, true);
           if ($bootFsStatus === '') $bootFsStatus = 'Unknown';
         }
         $bootRow = pool_function_row(

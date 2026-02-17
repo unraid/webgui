@@ -365,9 +365,10 @@ function bootPoolConfirmActivate(popup, reboot) {
   var selection = bootPoolValidateSelection(popup);
   if (!selection) return;
 
+  var safePoolName = bootPoolEscapeHtml(selection.poolName);
   var deviceList = '<div style="margin:8px 0 0 0;">';
   for (var i = 0; i < selection.devices.length; i++) {
-    deviceList += '<div>' + selection.devices[i] + '</div>';
+    deviceList += '<div>' + bootPoolEscapeHtml(selection.devices[i]) + '</div>';
   }
   deviceList += '</div>';
 
@@ -381,7 +382,7 @@ function bootPoolConfirmActivate(popup, reboot) {
     ? "<br><span style='color:#d00;font-weight:bold;'>_(Some systems may need manual intervention to change boot order in the BIOS)_</span>"
     : "";
   var text = "_(This will create a bootable pool with the selected devices)_" +
-    "<br><br><b>_(Pool)_:</b> " + selection.poolName +
+    "<br><br><b>_(Pool)_:</b> " + safePoolName +
     "<br><b>_(Boot reserved size)_:</b> " + bootPoolFormatBootSizeGb(selection.bootSize) +
     "<br><b>_(Devices)_:</b>" + deviceList +
     "<br><b>_(Update BIOS boot order)_:</b> " + (selection.updateBios ? "_(Yes)_" : "_(No)_") +

@@ -54,7 +54,7 @@ if (!is_file($script)) {
   exit;
 }
 
-$cmd = escapeshellcmd($script);
+$cmd = escapeshellarg($script);
 if (!empty($args)) {
   $cmd .= ' '.implode(' ', array_map('escapeshellarg', $args));
 }
@@ -164,9 +164,11 @@ if ($rc === 0 && $updateBios) {
     if (!empty($desiredOrder)) {
       $orderList = implode(',', $desiredOrder);
       $nextBoot = $desiredOrder[0] ?? '';
+      $orderListArg = escapeshellarg($orderList);
+      $nextBootArg = $nextBoot !== '' ? escapeshellarg($nextBoot) : '';
       $orderCmd = $nextBoot !== ''
-        ? 'efibootmgr -o '.$orderList.' -n '.$nextBoot
-        : 'efibootmgr -o '.$orderList;
+        ? 'efibootmgr -o '.$orderListArg.' -n '.$nextBootArg
+        : 'efibootmgr -o '.$orderListArg;
       $output[] = 'Running: '.$orderCmd;
       $orderOut = [];
       $orderRc = 0;
