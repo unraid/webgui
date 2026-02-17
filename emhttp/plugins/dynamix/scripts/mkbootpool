@@ -152,7 +152,7 @@ if [ "$calledFromWebGui" = false ] && [ "$dryRun" = false ]; then
   echo "Bootable pool '$poolName' created with $numSlots device(s)." >&2
 fi
 
-if [ "$dryRun" = false ] && [ "$rebootRequested" = true ]; then
-  #reboot
+if [ "$calledFromWebGui" = false ] && [ "$dryRun" = false ] && [ "$rebootRequested" = true ]; then
   echo "Rebooting system to apply new boot pool..." >&2
+  reboot
 fi
