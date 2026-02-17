@@ -132,7 +132,7 @@ function bootPoolSizeInit(popup) {
       $inputWrap.removeClass('hidden');
       var gb = parseInt($input.val(), 10);
       var maxGb = parseInt($input.attr('max'), 10);
-      if (!isNaN(gb) && gb > 0) {
+      if (!isNaN(gb) && gb >= 4) {
         if (!isNaN(maxGb) && maxGb > 0 && gb > maxGb) {
           gb = maxGb;
           $input.val(maxGb);
@@ -161,7 +161,7 @@ function bootPoolSizeInit(popup) {
   $input.on('input change', function(){
     var gb = parseInt($input.val(), 10);
     var maxGb = parseInt($input.attr('max'), 10);
-    if (!isNaN(gb) && gb > 0) {
+    if (!isNaN(gb) && gb >= 4) {
       if (!isNaN(maxGb) && maxGb > 0 && gb > maxGb) {
         gb = maxGb;
         $input.val(maxGb);
@@ -271,7 +271,10 @@ function bootPoolUpdateSizeLimits(popup) {
   var selectedVal = $select.val();
   if (selectedVal && selectedVal !== 'custom' && selectedVal !== '0') {
     var selectedMiB = parseInt(selectedVal, 10);
-    if (maxMiB !== null && !isNaN(selectedMiB) && selectedMiB > maxMiB) {
+    if (minMiB !== null && !isNaN(selectedMiB) && selectedMiB >= minMiB) {
+      $select.val('0');
+      $select.trigger('change');
+    } else if (maxMiB !== null && !isNaN(selectedMiB) && selectedMiB > maxMiB) {
       $select.val('custom');
       $select.trigger('change');
     }
@@ -345,7 +348,7 @@ function bootPoolValidateSelection(popup) {
 
   var bootSize = $.trim(popup.find('input[name="poolBootSize"]').val());
   if (bootSize === '' || isNaN(parseInt(bootSize, 10))) {
-    swal({title:"_(Invalid size)_",text:"_(Select a boot reserved size)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    swal({title:"_(Invalid size)_",text:"_(Select a boot reserved size (minimum 4 GB))_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
     return null;
   }
 
@@ -648,7 +651,7 @@ _(Boot reserved size)_ (_(MiB)_):
   <option value="custom">_(User defined)_</option>
   </select>
   <span class="bootpool-size-custom">
-    <input type="number" name="poolBootSizeCustomGb" min="1" max="1024" class="narrow" title="_(Maximum is 50% of the smallest selected drive)_"> GB
+    <input type="number" name="poolBootSizeCustomGb" min="4" max="1024" class="narrow" title="_(Minimum is 4 GB; maximum is 50% of the smallest selected drive)_"> GB
   </span><span></span>
   <input type="hidden" name="poolBootSize" value="16384">
 
