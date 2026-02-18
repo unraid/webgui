@@ -38,9 +38,11 @@ function hasSubpools($name)
     }
     return false;
 }
+$fsTypeDisabled = (_var($disk, 'fsType') == 0);
 if (_var($disk,'type')== "Boot") {
     $fsTypeImmutable = true;
     $fsProfileImmutable = true;
+    $fsTypeDisabled = true;
 } elseif (!isSubpool($name)) {
     $fsTypeImmutable = !(_var($var, 'fsState') == 'Stopped' && !hasSubpools($name) && (empty(_var($disk, 'uuid')) || _var($disk, 'slots', 1) == 1));
     $fsProfileImmutable = $fsTypeImmutable;
@@ -75,6 +77,15 @@ $prev = $i > 0 ? $sheets[$i - 1] : $sheets[$end];
 $next = $i < $end ? $sheets[$i + 1] : $sheets[0];
 $textErase = isPool($name) ? _('This will ERASE content of ALL devices in the pool') : _('This will ERASE ALL device content');
 $textDelete = _('This will unassign all devices from the pool but will NOT modify any device contents');
+$poolBootSizeLocked = false;
+if (isPool($name) && !isSubpool($name)) {
+  $poolConfigPath = "/boot/config/pools/$name.cfg";
+  if (is_file($poolConfigPath)) {
+    $poolConfig = parse_ini_file($poolConfigPath, false, INI_SCANNER_RAW) ?: [];
+    $poolBootSize = _var($poolConfig, 'diskBootSize', '0');
+    $poolBootSizeLocked = ((string)$poolBootSize !== '0' && $poolBootSize !== '');
+  }
+}
 
 function disabled_if($condition)
 {
@@ -893,7 +904,7 @@ _(File system type)_:
 : <?=_(_var($disk, 'fsType'))?>&nbsp;
 <?else:?>
 _(File system type)_:
-: <select id="diskFsType" name="diskFsType.<?=_var($disk, 'idx')?>" onchange="selectDiskFsProfile(false)">
+: <select id="diskFsType" name="diskFsType.<?=_var($disk, 'idx')?>" onchange="selectDiskFsProfile(false)" <?=disabled_if($fsTypeDisabled)?>>
   <?echo "<optgroup label='Standard'>"?>
   <?=mk_option(_var($disk, 'fsType'), "auto", _('Auto'))?>
   <?if (_var($disk,'slots',1) == 1) echo mk_option(_var($disk,'fsType'), "xfs", _('xfs'))?>
@@ -1004,7 +1015,7 @@ _(Critical disk utilization threshold)_ (%):
   <?if (isPool($name) && isSubpool($name)===false):?>
     <?if (_var($var,'fsState')=="Stopped" || (_var($var,'fsState')=="Started" && _var($var,'startMode')!="Normal")): $erasable=true; endif;?>
     <input type="button" id="eraseButton" value="_(Erase Pool)_" onclick="eraseDisk()"<?=$erasable ? '' : ' disabled'?>>
-    <?if (_var($var,'fsState')=="Stopped"): $removeable=true; endif;?>
+    <?if (_var($var,'fsState')=="Stopped" && !$poolBootSizeLocked): $removeable=true; endif;?>
     <input type="button" id="removeButton" value="_(Remove Pool)_" onclick="removePool()"<?=$removeable ? '' : ' disabled'?>>
   <?endif;?>
   </span>
