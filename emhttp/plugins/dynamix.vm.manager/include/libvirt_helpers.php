@@ -2090,7 +2090,11 @@ class Array2XML {
 		$noxml = "";
 		$snaps_json = file_get_contents($dbpath."/snapshots.db");
 		$snaps = json_decode($snaps_json,true);
-		$snapshot_res=$lv->domain_snapshot_lookup_by_name($vm,$name);
+		$snapshot_xml = @file_get_contents("/etc/libvirt/qemu/snapshot/{$vm}/{$name}.xml");
+		if (empty($snapshot_xml)) {
+			$snapshot_xml = trim(shell_exec("virsh snapshot-dumpxml ".escapeshellarg($vm)." ".escapeshellarg($name)." 2>/dev/null"));
+		}
+		$snapshot_res = !empty($snapshot_xml);
 		if (!$snapshot_res) {
 			 # Manual Snap no XML
 		if ($state == "shutoff" && ($method == "ZFS" || $method == "BTRFS")) {
@@ -2107,7 +2111,7 @@ class Array2XML {
 			$noxml = "noxml";
 		}
 		} else {
-		$snapshot_xml=$lv->domain_snapshot_get_xml($snapshot_res);
+
 		$a = simplexml_load_string($snapshot_xml);
 		$a = json_encode($a);
 		$b = json_decode($a, TRUE);
@@ -2337,7 +2341,9 @@ class Array2XML {
 			if ($logging) qemu_log($vm,"Success write snap db");
 			$ret = write_snapshots_database("$vm","$name",$state,$snapshotdescinput,$method);
 			#remove meta data
-			if ($ret != "noxml") $ret = $lv->domain_snapshot_delete($vm, "$name" ,2);
+			if ($ret != "noxml") {
+				exec("virsh snapshot-delete ".escapeshellarg($vm)." ".escapeshellarg($name)." --metadata 2>&1", $snapDelOut, $snapDelRtn);
+			}
 		}
 		return $arrResponse;
 

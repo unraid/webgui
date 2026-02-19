@@ -1,0 +1,159 @@
+#!/bin/bash
+# Copyright 2026 Lime Technology, Inc. All rights reserved.
+
+# Add a device
+# mkbootable add <device> <size>
+
+# Remove a missing device
+# mkbootable remove missing|<devoce>
+
+# Reconfigure grub.cfg and theme.txt after UUID change
+# mkbootable reconfigure
+
+#set -euo pipefail
+#set -x
+source /etc/rc.d/rc.runlog
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+OPER="$1"	# operation
+DEV="$2"	# device, eg, "sdb" or "missing"
+SIZE="$3"	# boot area size in MiB units, eg, "8192" (8GiB)
+[[ $DEV == *[0-9] ]] && P="p" || P=""  # partition separator
+
+EFI_PART="/dev/${DEV}${P}2"
+BOOT_PART="/dev/${DEV}${P}3"
+
+POOL="flash"     # name of the zfs boot pool
+
+# Establish which mountpoint we are operating on.
+# The directory "/boot-transfer" is created when a pool is created if that pool is designated to
+# be a boot pool.  Hence if it exists, we are creating a new boot pool, if not, then we are
+# adding/removing/replacing a device in an existing boot pool.
+BOOT="/boot-transfer"
+if [[ ! -d "$BOOT" ]]; then
+  BOOT="/boot"
+fi
+log "Using $BOOT"
+
+configure_grub() {
+  mkdir -p "$BOOT/grub"
+  cp -rp "$SCRIPT_DIR/themes" "$BOOT/grub/"
+  boot_uuid=$(zpool get -H -o value guid "$POOL")
+  $SCRIPT_DIR/mkgrub "$boot_uuid" > "$BOOT/grub/grub.cfg"
+  $SCRIPT_DIR/mktheme "$boot_uuid" > "$BOOT/grub/themes/unraid/theme.txt"
+  sync -f "$BOOT"
+}
+
+# create GPT partition layout for a boot pool device
+#  1 = BIOS Boot Partition (1 MiB, starting at 1 MiB offset from start of device)
+#  2 = EFI System Partition (510 MiB, immediately following partition 1)
+#  3 = Unraid Boot Partition (boot_size-512 MiB, immediately following partition 2)
+#  4 = Data Partition (rest of disk, immediately following partiton 3) at offset boot_size from start of device
+#
+# the storage from beginning of disk to start of th Data partition is collectively called
+# the "boot area" with size "boot_size"
+#
+create_partitions() {
+  log "writing GPT on device ($DEV), with boot area size $SIZE MiB"
+  wipefs -af --lock "/dev/$DEV"
+  sgdisk "/dev/$DEV" \
+    --new=1:1MiB:+1MiB          --typecode=1:ef02 --change-name=1:'BIOS Boot Partition' \
+    --new=2:0:+510MiB	        --typecode=2:ef00 --change-name=2:'EFI System Partition' \
+    --new=3:0:+$((SIZE-512))MiB --typecode=3:8300 --change-name=3:'Unraid Boot Partition' \
+    --new=4:0:0                 --typecode=4:8300
+  partprobe "/dev/$DEV"
+  udevadm settle
+}
+
+install_grub() {
+  # format the EFI System Partition (partition 2) with FAT32 and mount
+  mkfs.fat -F32 -n EFI "$EFI_PART"
+  mkdir -p "$BOOT/efi"
+  mount "$EFI_PART" "$BOOT/efi"
+
+  # UEFI install
+  grub-install \
+    --target=x86_64-efi \
+    --boot-directory="$BOOT" \
+    --efi-directory="$BOOT/efi" \
+    --modules="part_gpt zfs zfsinfo search search_fs_uuid configfile normal" \
+    --removable
+
+  # BIOS install
+  # grub-install --target=i386-pc "/dev/$DEV"
+
+  # we don't need this mounted anymore
+  umount "$BOOT/efi"
+}
+
+add_device() {
+  # create gpt partition layout
+  create_partitions
+
+  # check if first or subsequent device
+  if ! mountpoint $BOOT >/dev/null 2>&1; then
+    # create the boot zpool
+    log "creating zpool $POOL in partition $BOOT_PART"
+    zpool create -f \
+      -m none \
+      -o compatibility=grub2 \
+      -o ashift=12 \
+      -o autotrim=on \
+      "$POOL" "$BOOT_PART"
+
+    # create the BOOT dataset
+    log "creating dataset $POOL/boot and mounting on $BOOT"
+    zfs create \
+      -o mountpoint="/boot-transfer" \
+      -o canmount=noauto \
+      -o compression=lz4 \
+      -o atime=off \
+      -o xattr=sa \
+      "$POOL/boot"
+
+    # Mount boot pool onto /boot-transfer
+    zfs mount "$POOL/boot"
+
+    # install grub
+    install_grub
+
+    # configure grub.cfg
+    configure_grub
+  else
+    # attach to first existing device already in the pool
+    EXISTING=$(zpool list -v -H -P "$POOL" | awk '/\/dev\// {print $1; exit}')
+    zpool attach -f "$POOL" "$EXISTING" "$BOOT_PART"
+
+    # install grub
+    install_grub
+
+    # wait for resilver to finish
+    zpool wait -t resilver "$POOL"
+  fi
+}
+
+remove_device() {
+  if [[ "$DEV" = "missing" ]]; then
+    TARGET=$(zpool status -P "$POOL" | awk '/was \/dev/ {print $1; exit}')
+    zpool detach "$POOL" "$TARGET"
+  else
+    zpool detach "$POOL" "$BOOT_PART"
+  fi
+}
+
+case "$OPER" in
+'add')
+  add_device
+  ;;
+'remove')
+  remove_device
+  ;;
+'configure')
+  configure_grub
+  ;;
+*)
+  log "error 2" # shouldn't happen
+  exit 2
+esac
+exit 0

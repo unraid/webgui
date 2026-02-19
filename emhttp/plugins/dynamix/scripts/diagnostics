@@ -395,6 +395,54 @@ function anonymize_domain(&$text) {
   }
 }
 
+// anonymize share names consistently (used for share files and df output)
+$shareAnonMap = [];
+$shareAnonUsed = [];
+function anonymize_share_name($share) {
+  global $all, $showshares, $shareAnonMap, $shareAnonUsed;
+
+  if ($all || in_array($share, $showshares, true)) return $share;
+  if (isset($shareAnonMap[$share])) return $shareAnonMap[$share];
+
+  $len = strlen($share);
+  if ($len > 2) {
+    $name = substr($share, 0, 1) . str_repeat('-', $len - 2) . substr($share, -1);
+  } else {
+    $name = $share;
+  }
+
+  $base = $name;
+  $i = 1;
+  while (in_array($name, $shareAnonUsed, true)) {
+    $name = $base . " ($i)";
+    $i++;
+  }
+
+  $shareAnonMap[$share] = $name;
+  $shareAnonUsed[] = $name;
+  return $name;
+}
+
+function anonymize_share_names_in_file($file, $shareMap, $pools) {
+  if (!$shareMap || !file_exists($file)) return;
+
+  $poolPattern = implode('|', array_map(function($p) {
+    return preg_quote($p, '/');
+  }, $pools));
+  $mountPattern = $poolPattern ? "user|user0|$poolPattern" : "user|user0";
+
+  $text = @file_get_contents($file);
+  if ($text === false) return;
+
+  foreach ($shareMap as $orig => $anon) {
+    if ($orig === $anon) continue;
+    $origEsc = preg_quote($orig, '/');
+    $text = preg_replace("/(\\/mnt\\/(?:$mountPattern)\\/)" . $origEsc . "(\\b)/", "\\1$anon\\2", $text);
+  }
+
+  file_put_contents($file, $text);
+}
+
 // diagnostics start
 run("mkdir -p /boot/logs");
 
@@ -588,7 +636,8 @@ $shareDisk = [];
 foreach ($files as $file) {
   $dest = "/$diag/shares/".basename($file);
   $share = basename($file,'.cfg');
-  if (!in_array($share,$showshares)) $dest = anonymize($dest,2);
+  $anonShare = anonymize_share_name($share);
+  $dest = "/$diag/shares/$anonShare.cfg";
   @copy($file, $dest);
   if (!$all) run("sed -ri 's/^(share(Comment|ReadList|WriteList)=\")[^\"]+/\\1.../' ".escapeshellarg($dest));
   $home = shareDisks($share);
@@ -605,11 +654,15 @@ foreach ($shares as $share) {
   if ($name && !in_array("/boot/config/shares/$name.cfg",$files)) {
     $home = shareDisks($name);
     $home = $home ? "# Share exists on $home\r\n" : "# Share does not exist\r\n";
-    $file = anonymize("/$diag/shares/$name.cfg",2);
+    $anonShare = anonymize_share_name($name);
+    $file = "/$diag/shares/$anonShare.cfg";
     file_put_contents($file,"# This share has default settings.\r\n".$home);
     file_put_contents("/$diag/shares/shareDisks.txt",str_pad(basename($file,'.cfg'),34).str_pad('shareUseCache="no"',24).$home,FILE_APPEND);
   }
 }
+
+// anonymize share names in df output
+if (!$all) anonymize_share_names_in_file("/$diag/system/df.txt", $shareAnonMap, $pools);
 
 // copy pools information (anonymize)
 $files = glob("/boot/config/pools/*.cfg");
