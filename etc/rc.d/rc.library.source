@@ -57,7 +57,7 @@ good(){
 show(){
   case $# in
     1) ip -br addr show scope global primary -deprecated to $1 2>/dev/null | awk '{gsub("@.+","",$1);print $1;exit}' ;;
-    2) ip -br addr show scope global primary -deprecated $1 $2 2>/dev/null | awk '{$1=$2="";print;exit}' | sed -r 's/ metric [0-9]+//g;s/ peer [0-9]+.[0-9]+.[0-9]+.[0-9]+\/[0-9]+//g;s/^ +//g' ;;
+    2) ip -br addr show scope global primary -deprecated $1 $2 2>/dev/null | awk '{$1=$2="";print;exit}' | sed -r 's/ metric [0-9]+//g;s/ peer [0-9a-fA-F:.]+\/[0-9]+//g;s/^ +//g' ;;
   esac
 }
 
