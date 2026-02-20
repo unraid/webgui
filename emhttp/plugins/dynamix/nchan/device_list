@@ -35,62 +35,407 @@ function initSum() {
   return ['count'=>0, 'temp'=>0, 'power'=>0, 'fsSize'=>0, 'fsUsed'=>0, 'fsFree'=>0, 'ioReads'=>0, 'ioWrites'=>0, 'numReads'=>0, 'numWrites'=>0, 'numErrors'=>0];
 }
 
-function get_fs_errors($poolName, $diskDevice) {
-  global $poolstatus;
-  if (isset($poolstatus['pools'][$poolName]['members'])) {
-    foreach ($poolstatus['pools'][$poolName]['members'] as $memberKey => $member) {
-      // Match by member key or device name
-      if (($memberKey === $diskDevice) || (_var($member,'device','') === $diskDevice)) {
-        if (isset($member['errors'])) {
-          $totalErrors = 0;
-          foreach ($member['errors'] as $count) {
-            $totalErrors += parse_si_number($count);
-          }
-          return $totalErrors;
-        }
-        return 0;
+function normalize_device_name($device) {
+  if ($device === null) return '';
+  $device = trim((string)$device);
+  if ($device === '') return '';
+  $device = str_replace('/dev/', '', $device);
+  if (preg_match('/^nvme\d+n\d+/', $device)) {
+    return preg_replace('/p\d+$/', '', $device);
+  }
+  return preg_replace('/p?\d+$/', '', $device);
+}
+
+function find_pools_for_device_in_status($deviceKey, $poolstatus) {
+  if ($deviceKey === '' || empty($poolstatus['pools'])) return [];
+  $pools = [];
+  foreach ($poolstatus['pools'] as $pool => $poolData) {
+    if (empty($poolData['members'])) continue;
+    foreach ($poolData['members'] as $memberKey => $member) {
+      $memberDevice = _var($member,'device','');
+      $memberKeyNorm = normalize_device_name($memberKey);
+      $memberDevNorm = normalize_device_name($memberDevice);
+      if ($memberKeyNorm === $deviceKey || $memberDevNorm === $deviceKey) {
+        $pools[] = $pool;
+        break;
       }
     }
   }
-  return 0;
+  return $pools;
 }
 
-function get_fs_error_tooltip($diskName, $diskDevice, $deviceErrors) {
-  global $poolstatus;
-  $poolName = prefix($diskName);
-  $errorLines = [];
-  
-  // Find the specific member in the pool that matches this disk's device
-  if (isset($poolstatus['pools'][$poolName]['members'])) {
-    foreach ($poolstatus['pools'][$poolName]['members'] as $memberKey => $member) {
-      // Match by device name (e.g., sda, nvme0n1)
+function get_fs_errors($poolName, $diskDevice) {
+  global $poolstatus, $devicePools;
+  if ($diskDevice === '') return 0;
+
+  $deviceKey = normalize_device_name($diskDevice);
+
+  $poolsToCheck = [];
+  if ($deviceKey !== '' && isset($devicePools[$deviceKey]) && is_array($devicePools[$deviceKey])) {
+    $poolsToCheck = $devicePools[$deviceKey];
+  } elseif (isset($devicePools[$diskDevice]) && is_array($devicePools[$diskDevice])) {
+    $poolsToCheck = $devicePools[$diskDevice];
+  } elseif ($poolName !== '') {
+    $poolsToCheck = [$poolName];
+  }
+
+  $poolsToCheck = array_merge($poolsToCheck, find_pools_for_device_in_status($deviceKey, $poolstatus));
+  $poolsToCheck = array_values(array_unique(array_filter($poolsToCheck)));
+
+  if (empty($poolsToCheck)) return 0;
+
+  $totalErrors = 0;
+  foreach (array_unique($poolsToCheck) as $pool) {
+    if (empty($poolstatus['pools'][$pool]['members'])) continue;
+    foreach ($poolstatus['pools'][$pool]['members'] as $memberKey => $member) {
+      // Match by member key or device name
       $memberDevice = _var($member,'device','');
-      // Match either by member key or device name
-      if (($memberKey === $diskDevice) || ($memberDevice === $diskDevice)) {
+      $memberKeyNorm = normalize_device_name($memberKey);
+      $memberDevNorm = normalize_device_name($memberDevice);
+      if (($deviceKey !== '' && ($memberKeyNorm === $deviceKey || $memberDevNorm === $deviceKey)) || ($memberKey === $diskDevice) || ($memberDevice === $diskDevice)) {
         if (isset($member['errors'])) {
-          foreach ($member['errors'] as $errorType => $count) {
-            if (has_zfs_errors($count)) {
-              $errorLines[] = sprintf(_('%s errors: %s'), ucfirst($errorType), $count);
-            }
+          foreach ($member['errors'] as $count) {
+            $totalErrors += parse_si_number($count);
           }
-        }
-        // Also show member status if not online
-        if (isset($member['status']) && $member['status'] !== 'ONLINE') {
-          $errorLines[] = _("Status").": "._($member['status']);
         }
         break;
       }
     }
   }
-  
-  // Add device errors if present
-  if ($deviceErrors > 0) {
-    if (!empty($errorLines)) {
-      $errorLines[] = '';
+
+  return $totalErrors;
+}
+
+function mapDevicesToPools(): array
+{
+    // Parse the INI into a multidimensional array
+    global $disks;
+
+    $result = [];
+
+    foreach ($disks as $poolName => $poolData) {
+        if (
+            empty($poolData['device']) ||
+            $poolData['device'] === ''
+        ) {
+            continue;
+        }
+
+        $device = $poolData['device'];
+        $deviceNorm = normalize_device_name($device);
+
+        if (!isset($result[$device])) $result[$device] = [];
+        $result[$device][] = $poolName;
+        if ($deviceNorm !== '' && $deviceNorm !== $device) {
+          if (!isset($result[$deviceNorm])) $result[$deviceNorm] = [];
+          $result[$deviceNorm][] = $poolName;
+        }
     }
+
+    return $result;
+}
+
+function get_pool_first_member(string $poolName, array $cacheDisks, array $devicePools): ?array
+{
+  foreach ($cacheDisks as $disk) {
+    $device = _var($disk,'device','');
+    if ($device === '') continue;
+    if (isset($devicePools[$device]) && in_array($poolName, $devicePools[$device], true)) {
+      return $disk;
+    }
+  }
+
+  foreach ($cacheDisks as $disk) {
+    if (prefix(_var($disk,'name')) == $poolName) return $disk;
+  }
+
+  return null;
+}
+
+function find_boot_disk_for_pool(string $poolName, array $bootDisks, array $cacheDisks): ?array
+{
+  $poolDevices = [];
+
+  if (!empty($cacheDisks[$poolName])) {
+    $device = _var($cacheDisks[$poolName],'device','');
+    if ($device !== '') $poolDevices[$device] = true;
+  }
+
+  foreach ($cacheDisks as $disk) {
+    if (prefix(_var($disk,'name')) !== $poolName) continue;
+    $device = _var($disk,'device','');
+    if ($device !== '') $poolDevices[$device] = true;
+  }
+
+  if (empty($poolDevices)) return null;
+
+  foreach ($bootDisks as $disk) {
+    if (isset($poolDevices[_var($disk,'device','')])) return $disk;
+  }
+
+  return null;
+}
+
+function select_boot_disk(array $bootDisks): ?array
+{
+  if (empty($bootDisks)) return null;
+
+  foreach ($bootDisks as $disk) {
+    $status = _var($disk,'status','');
+    if ($status === 'DISK_NP_DSBL' || $status === 'DISK_NP') continue;
+    if (_var($disk,'device','') === '') continue;
+    return $disk;
+  }
+
+  foreach ($bootDisks as $disk) {
+    if (_var($disk,'fsStatus','') === 'Mounted') return $disk;
+  }
+
+  return reset($bootDisks) ?: null;
+}
+
+function find_pool_name_for_device(string $device, array $cacheDisks): string
+{
+  if ($device === '') return '';
+  foreach ($cacheDisks as $disk) {
+    if (_var($disk,'device','') !== $device) continue;
+    return pool_name(_var($disk,'name',''));
+  }
+  return '';
+}
+
+function get_boot_pool_fs_info(array $bootDisks, string $bootPoolName): array
+{
+  if ($bootPoolName === '') return ['fsType' => '', 'fsStatus' => ''];
+  foreach ($bootDisks as $disk) {
+    if (prefix(_var($disk,'name','')) !== $bootPoolName) continue;
+    $fsType = _var($disk,'fsType','');
+    if ($fsType === '') continue;
+    return [
+      'fsType' => $fsType,
+      'fsStatus' => _var($disk,'fsStatus',''),
+    ];
+  }
+  return ['fsType' => '', 'fsStatus' => ''];
+}
+
+function get_mount_status_from_mountpoint(string $mountPoint, bool $refresh = false): string
+{
+  if ($mountPoint === '') return '';
+  static $mounts = null;
+  if ($mounts === null || $refresh) {
+    $mounts = [];
+    $lines = @file('/proc/mounts', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (is_array($lines)) {
+      foreach ($lines as $line) {
+        $parts = preg_split('/\s+/', $line);
+        if (!isset($parts[1])) continue;
+        $mp = str_replace('\040', ' ', $parts[1]);
+        $mounts[$mp] = true;
+      }
+    }
+  }
+  if ($mounts === [] && !is_readable('/proc/mounts')) return '';
+  return isset($mounts[$mountPoint]) ? 'Mounted' : 'Unmounted';
+}
+
+function get_pool_boot_metrics(?array $bootDisk): array
+{
+  if (empty($bootDisk)) return [];
+  $size = _var($bootDisk,'fsSize',null);
+  $used = _var($bootDisk,'fsUsed',null);
+  $free = _var($bootDisk,'fsFree',null);
+
+  if ($size !== null || $used !== null || $free !== null) {
+    return [
+      'fsSize' => $size ?? 0,
+      'fsUsed' => $used ?? 0,
+      'fsFree' => $free ?? 0,
+    ];
+  }
+
+  return [];
+}
+
+function get_boot_pool_metrics(array $bootDisks, string $bootPoolName, ?array $fallbackDisk): array
+{
+  if ($bootPoolName !== '') {
+    foreach ($bootDisks as $disk) {
+      if (prefix(_var($disk,'name','')) !== $bootPoolName) continue;
+      $size = _var($disk,'fsSize',null);
+      $used = _var($disk,'fsUsed',null);
+      $free = _var($disk,'fsFree',null);
+      if ($size !== null || $used !== null || $free !== null) {
+        return [
+          'fsSize' => $size ?? 0,
+          'fsUsed' => $used ?? 0,
+          'fsFree' => $free ?? 0,
+        ];
+      }
+    }
+  }
+
+  return get_pool_boot_metrics($fallbackDisk);
+}
+
+function get_first_pool_disk_in_disks(string $poolName, array $disks): ?array
+{
+  if ($poolName === '' || empty($disks)) return null;
+  foreach ($disks as $disk) {
+    if (prefix(_var($disk,'name','')) === $poolName) return $disk;
+  }
+  return null;
+}
+
+function get_pool_data_metrics(?array $poolDisk, string $poolName='', array $disks=[]): array
+{
+  $metricsDisk = $poolDisk;
+  if ($poolName !== '' && !empty($disks)) {
+    $firstPoolDisk = get_first_pool_disk_in_disks($poolName, $disks);
+    if (!empty($firstPoolDisk)) $metricsDisk = $firstPoolDisk;
+  }
+  if (empty($metricsDisk)) return [];
+  $size = _var($metricsDisk,'fsSize',0);
+  $used = _var($metricsDisk,'fsUsed',0);
+  $free = _var($metricsDisk,'fsFree',0);
+
+  return [
+    'fsSize' => $size,
+    'fsUsed' => $used,
+    'fsFree' => $free,
+  ];
+}
+
+function pool_status_html(string $poolName, array $poolstatusData, array $disks): string
+{
+  if (!$poolName || empty($poolstatusData['pools'][$poolName])) return '';
+  $poolFsType = isset($disks[$poolName]) ? _var($disks[$poolName],'fsType','') : '';
+  if (!in_array($poolFsType, ['zfs','btrfs'])) return '';
+
+  $status_text = $poolstatusData['pools'][$poolName]['overall_status'] ?? 'UNKNOWN';
+  $hasErrors = str_contains($status_text, '- ERRORS');
+  $isOnline = str_starts_with($status_text, 'ONLINE');
+  $displayText = $hasErrors ? _('ONLINE') : _($status_text);
+  $deviceUrl = "/Main/Device?name=".urlencode($poolName)."#poolsummary";
+
+  if (!$isOnline) {
+    return " <a href='$deviceUrl' title='"._('View pool details')."'>("._($status_text).")</a><span title='"._('Check pool status')."'><i class='fa fa-warning fa-fw orange-text'></i></span>";
+  }
+  if ($hasErrors) {
+    return " <a href='$deviceUrl' title='"._('View pool details')."'>($displayText)</a><span title='"._('Check pool status')."'><i class='fa fa-warning fa-fw orange-text'></i></span>";
+  }
+
+  return " <a href='$deviceUrl' title='"._('View pool details')."'>($displayText)</a>";
+}
+
+function pool_function_row(string $label, ?array $poolDisk, ?array $firstMember, array $metrics, string $poolName='', array $poolstatusData=[], bool $showSummary=false, array $fsOverride=[], bool $showPoolStatusInTitle=true, string $statusPoolName='', string $summaryDisplayName='', bool $summaryShowView=true): string
+{
+  global $disks;
+  $disk = $poolDisk ?: ($firstMember ?? []);
+  if (empty($disk)) return '';
+  $disk = array_merge([], $disk);
+
+  if ($showSummary && $poolName !== '') {
+    $disk['name']   = $poolName;
+    $disk['type']   = 'Cache';
+    $disk['status'] = _var($poolDisk,'status',_var($firstMember,'status',''));
+    $disk['color']  = _var($poolDisk,'color',_var($firstMember,'color',''));
+    $disk['device'] = _var($firstMember,'device',_var($poolDisk,'device',''));
+    $disk['id']     = _var($firstMember,'id',_var($poolDisk,'id',''));
+  }
+
+  $disk['fsStatus'] = _var($fsOverride,'fsStatus',_var($poolDisk,'fsStatus',_var($firstMember,'fsStatus','')));
+  $disk['fsType']   = _var($fsOverride,'fsType',_var($poolDisk,'fsType',_var($firstMember,'fsType','')));
+  $disk['fsSize']   = _var($metrics,'fsSize',_var($poolDisk,'fsSize',_var($firstMember,'fsSize','')));
+  $disk['fsUsed']   = _var($metrics,'fsUsed',_var($poolDisk,'fsUsed',_var($firstMember,'fsUsed','')));
+  $disk['fsFree']   = _var($metrics,'fsFree',_var($poolDisk,'fsFree',_var($firstMember,'fsFree','')));
+
+  $title = _($label);
+  $statusPool = $statusPoolName ?: $poolName;
+  if ($showPoolStatusInTitle && $statusPool) {
+    $title .= pool_status_html($statusPool, $poolstatusData, $disks);
+  }
+  $echo = [];
+  $rowId = ($showSummary && $poolName !== '') ? " id='pool_".htmlspecialchars($poolName, ENT_QUOTES)."'" : '';
+  $echo[] = "<tr class='pool_header'{$rowId}>";
+  if ($showSummary && $poolName !== '') {
+    $echo[] = "<td>".device_info($disk,true,$poolName,$poolstatusData,[
+      'showView' => $summaryShowView,
+      'showViewPlaceholder' => $summaryShowView,
+      'showStatus' => false,
+      'showPoolStatus' => false,
+      'showLink' => false,
+      'displayName' => $summaryDisplayName ?: $poolName,
+      'rawDisplayName' => true,
+      'forceView' => true,
+    ])."</td>";
+  } else {
+    $echo[] = "<td></td>";
+  }
+  $echo[] = "<td class='desc'>$title</td>";
+  $echo[] = "<td colspan='4'></td>";
+  $echo[] = fs_info($disk,true);
+  $echo[] = "</tr>";
+  return implode($echo);
+}
+
+function get_fs_error_tooltip($diskName, $diskDevice, $deviceErrors) {
+  global $poolstatus, $devicePools;
+  $errorLines = [];
+  $poolName = prefix($diskName);
+  $poolsToCheck = [];
+
+  $deviceKey = normalize_device_name($diskDevice);
+
+  if ($deviceKey !== '' && isset($devicePools[$deviceKey]) && is_array($devicePools[$deviceKey])) {
+    $poolsToCheck = $devicePools[$deviceKey];
+  } elseif ($diskDevice !== '' && isset($devicePools[$diskDevice]) && is_array($devicePools[$diskDevice])) {
+    $poolsToCheck = $devicePools[$diskDevice];
+  } elseif ($poolName !== '') {
+    $poolsToCheck = [$poolName];
+  }
+
+  $poolsToCheck = array_merge($poolsToCheck, find_pools_for_device_in_status($deviceKey, $poolstatus));
+  $poolsToCheck = array_values(array_unique(array_filter($poolsToCheck)));
+
+  foreach (array_unique($poolsToCheck) as $pool) {
+    if (empty($poolstatus['pools'][$pool]['members'])) continue;
+    foreach ($poolstatus['pools'][$pool]['members'] as $memberKey => $member) {
+      $memberDevice = _var($member,'device','');
+      $memberKeyNorm = normalize_device_name($memberKey);
+      $memberDevNorm = normalize_device_name($memberDevice);
+      if (($deviceKey !== '' && ($memberKeyNorm === $deviceKey || $memberDevNorm === $deviceKey)) || ($memberKey === $diskDevice) || ($memberDevice === $diskDevice)) {
+        // matched
+      } else {
+        continue;
+      }
+
+      $poolLabel = ucfirst($pool);
+      $poolLines = [];
+      if (isset($member['errors'])) {
+        foreach ($member['errors'] as $errorType => $count) {
+          if (has_zfs_errors($count)) {
+            $poolLines[] = sprintf(_('%s errors: %s'), ucfirst($errorType), $count);
+          }
+        }
+      }
+      if (isset($member['status']) && $member['status'] !== 'ONLINE') {
+        $poolLines[] = _( "Status" ).": "._($member['status']);
+      }
+
+      if (!empty($poolLines)) {
+        $errorLines[] = _("Pool name").":".$poolLabel;
+        foreach ($poolLines as $line) $errorLines[] = $line;
+      }
+      break;
+    }
+  }
+
+  if ($deviceErrors > 0) {
+    if (!empty($errorLines)) $errorLines[] = '';
     $errorLines[] = _('Device errors: ') . my_number($deviceErrors);
   }
-  
+
   return !empty($errorLines) ? implode('<br>', $errorLines) : '';
 }
 
@@ -104,17 +449,38 @@ function my_power($power) {
   return _var($display,'power') && $power ? number_format($power,$power<10?2:1,$number[0]).' '._('W').' / ' : '';
 }
 
-function device_info(&$disk,$online,$poolName='',$poolstatusData=[]) {
-  global $pools, $var, $sec, $disks;
+function flash_smb_warning_html($diskName) {
+  global $var, $sec;
+  return ($diskName == 'flash') && _var($var,'shareSMBEnabled')=='yes' && _var($sec['flash'],'export')=='e' && _var($sec['flash'],'security')=='public'
+    ? "&nbsp;<a class='info'><i class='fa fa-warning fa-fw orange-text'></i><span>"._('Boot device is set as public share')."<br>"._('Please change share SMB security')."<br>"._('Click on **FLASH** above this message')."</span></a>"
+    : "";
+}
+
+function device_info(&$disk,$online,$poolName='',$poolstatusData=[], $options=[]) {
+  global $pools, $var, $sec, $disks, $duplicate_devices;
+  $displayName = _var($options,'displayName',null);
+  $rawDisplayName = _var($options,'rawDisplayName',false);
+  $showLink = _var($options,'showLink',true);
+  $linkHref = _var($options,'linkHref','');
+  $showPoolStatus = _var($options,'showPoolStatus',true);
+  $showView = _var($options,'showView',true);
+  $showViewPlaceholder = _var($options,'showViewPlaceholder',true);
+  $indent = _var($options,'indent',0);
+  $showStatus = _var($options,'showStatus',true);
+  $dir = _var($disk,'fsMountpoint','');
   if (!$online || _var($disk,'fsStatus')!='Mounted' || (in_array(_var($disk,'type'),['Parity','Cache']) && (!in_array(_var($disk,'name'),$pools) || isSubpool(_var($disk,'name'))))) {
     $view = "<a class='view'></a>";
   } else {
-    $dir = _var($disk,'fsMountpoint');
     $view = "<a class='view' href=\"/Main/Browse?dir=".htmlspecialchars($dir)."\"><i class=\"icon-u-tab\" title=\""._('Browse')." $dir\"></i></a>";
   }
-  $name   = _var($disk,'name');
+  if (!$showView) $view = $showViewPlaceholder ? "<a class='view'></a>" : "";
+  if ($showView && _var($options,'forceView',false) && $dir !== '') {
+    $view = "<a class='view' href=\"/Main/Browse?dir=".htmlspecialchars($dir)."\"><i class=\"icon-u-tab\" title=\""._('Browse')." $dir\"></i></a>";
+  }
+  if ($indent) $view = "<span style='padding-left:{$indent}px'></span>".$view;
+  $name   = $displayName ?? _var($disk,'name');
   $named  = no_tilde($name);
-  $fancy  = _(my_disk(native($name,1)),3);
+  $fancy  = $displayName !== null ? ($rawDisplayName ? $name : _($name,3)) : _(my_disk(native($name,1)),3);
   $type   = _var($disk,'type');
   $flash  = $type=='Flash';
   $boot   = $type=='Boot';
@@ -142,36 +508,43 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[]) {
     $help .= "<br>"._("Click to spin $action device");
   }
   $status = "<a class='info'><i ".($ctrl?"id='dev-$named' ":"")."class='fa fa-$orb orb $color-orb'$ctrl></i><span>$help</span></a>";
+  if (!$showStatus) $status = "";
 
-  $link   = ($parity && $disk_status!='DISK_NP_DSBL') || (($flash || $boot || $data || $pool) && $disk_status!='DISK_NP') || in_array($name,$pools) || $type=='New'
-          ? "<a href=\"".htmlspecialchars("/Main/$source?name=$name")."\">$fancy</a>"
-          : $fancy;
-  $warn   = ($name == 'flash') && _var($var,'shareSMBEnabled')=='yes' && $sec['flash']['export']=='e' && $sec['flash']['security']=='public'
-          ? "&nbsp;<a class='info'><i class='fa fa-warning fa-fw orange-text'></i><span>"._('Boot device is set as public share')."<br>"._('Please change share SMB security')."<br>"._('Click on **FLASH** above this message')."</span></a>"
-          : "";
-  
-  // Add pool status for zfs and btrfs pools only (first device only)
-  $poolstatusHTML = "";
-  if ($poolName && !empty($poolstatusData['pools'][$poolName]) && $name == $poolName) {
-    $poolFsType = isset($disks[$poolName]) ? _var($disks[$poolName],'fsType','') : '';
-    if (in_array($poolFsType, ['zfs','btrfs'])) {
-      $status_text = $poolstatusData['pools'][$poolName]['overall_status'] ?? 'UNKNOWN';
-      $hasErrors = str_contains($status_text, '- ERRORS');
-      $isOnline = str_starts_with($status_text, 'ONLINE');
-      $displayText = $hasErrors ? _('ONLINE') : _($status_text);
-      $deviceUrl = "/Main/Device?name=".urlencode($poolName)."#poolsummary";
-      
-      if (!$isOnline) {
-        $poolstatusHTML = " <a href='$deviceUrl' title='"._('View pool details')."'>("._($status_text).")</a><span title='"._('Check pool status')."'><i class='fa fa-warning fa-fw orange-text'></i></span>";
-      } elseif ($hasErrors) {
-        $poolstatusHTML = " <a href='$deviceUrl' title='"._('View pool details')."'>($displayText)</a><span title='"._('Check pool status')."'><i class='fa fa-warning fa-fw orange-text'></i></span>";
-      } else {
-        $poolstatusHTML = " <a href='$deviceUrl' title='"._('View pool details')."'>($displayText)</a>";
-      }
-    }
+  if ($showLink && $linkHref !== '') {
+    $link = "<a href=\"".htmlspecialchars($linkHref, ENT_QUOTES)."\">$fancy</a>";
+  } elseif (!$showLink || $displayName !== null) {
+    $link = $fancy;
+  } else {
+    $link = ($parity && $disk_status!='DISK_NP_DSBL') || (($flash || $boot || $data || $pool) && $disk_status!='DISK_NP') || in_array($name,$pools) || $type=='New'
+            ? "<a href=\"".htmlspecialchars("/Main/$source?name=$name")."\">$fancy</a>"
+            : $fancy;
   }
+  $warn   = flash_smb_warning_html($name);
+
+  $warndup = '';
+  $fullDevName = "/dev/" . _var($disk,'device', '');
+  if (!$online && isset($duplicate_devices[$fullDevName])) {
+    $dupType = _var($duplicate_devices[$fullDevName],'duplicate','');
+    $dupValue = _var($duplicate_devices[$fullDevName],'duplicate_value','');
+    $dupLabel = $dupType ? strtoupper($dupType) : _('Identifier');
+    $dupLine = $dupValue !== '' ? $dupLabel.': '.htmlspecialchars($dupValue, ENT_QUOTES) : '';
+    $duplicate = '';
+    if (isset($duplicate_devices[$fullDevName]['other_devices'])) {
+      $escapedDevices = array_map(static function($value) {
+        return htmlspecialchars($value, ENT_QUOTES);
+      }, $duplicate_devices[$fullDevName]['other_devices']);
+      $duplicate = implode("<br>", $escapedDevices)."<br>";
+    }
+    $details = $dupLine ? $dupLine."<br>" : "";
+    $warndup .= "<a class='info'><i class='fa fa-clone fa-fw orange-text'></i><span>"._('Duplicate device identifier detected (WWID or Serial)')."<br>$details$duplicate</span></a>";
+  }
+
+  // Add pool status for zfs and btrfs pools only (first device only)
+  $poolstatusHTML = ($showPoolStatus && $poolName && $name == $poolName)
+    ? pool_status_html($poolName, $poolstatusData, $disks)
+    : "";
   
-  return $view.$status.$link.$poolstatusHTML.$warn;
+  return $view.$status.$warndup.$link.$poolstatusHTML.$warn;
 }
 
 function device_desc(&$disk, $poolName='', $poolstatusData=[]) {
@@ -189,6 +562,7 @@ function device_desc(&$disk, $poolName='', $poolstatusData=[]) {
     $log = "<a class='info hand' onclick=\"openTerminal('disklog','"._var($disk,'device')."','')\"><i class='icon-$type icon'></i><span>"._('Disk Log Information')."</span></a>";
     
     // Add red warning triangle if pool has errors
+   # $poolWarning = "<span title='".sprintf(_('Pool %s Device has an error status: %s'), $poolName,(!empty($poolstatusData['pools'][$poolName]) ? "NotEmpty" : "Empty"))."'><i class='fa fa-warning fa-fw red-text'></i></span>";
     $poolWarning = '';
     if ($poolName && !empty($poolstatusData['pools'][$poolName])) {
       // Find member status for this specific device
@@ -294,8 +668,9 @@ function my_diskio($data) {
   return my_scale($data,$unit,1)." $unit/s";
 }
 
-function array_offline(&$disk, $pool='') {
+function array_offline(&$disk, $pool='', $options=[]) {
   global $var, $disks, $display;
+  $showFs = _var($options,'showFs',true);
   $disk['power'] ??= (_var($display,'power') && _var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'power') : 0);
   $echo = []; $warning = '';
   $status = ['DISK_INVALID','DISK_DSBL_NEW','DISK_WRONG'];
@@ -321,50 +696,66 @@ function array_offline(&$disk, $pool='') {
   $echo[] = "<tr class='offline'>";
   switch (_var($disk,'status')) {
   case 'DISK_NP':
-    $echo[] = "<td>".device_info($disk,false)."</td>";
+    $echo[] = "<td>".device_info($disk,false,'',[], $options)."</td>";
     $echo[] = "<td>".assignment($disk)."</td>";
     $echo[] = "<td colspan='8'></td>";
     break;
   case 'DISK_NP_MISSING':
-    $echo[] = "<td>".device_info($disk,false)."<br><span class='diskinfo'><em>"._('Missing')."</em></span></td>";
+    $echo[] = "<td>".device_info($disk,false,'',[], $options)."<br><span class='diskinfo'><em>"._('Missing')."</em></span></td>";
     $echo[] = "<td>".assignment($disk)."<em>{$disk['idSb']}</em></td>";
     $echo[] = "<td colspan='4'></td>";
-    $echo[] = "<td>".vfs_type($disk,false)."</td>";
-    $echo[] = "<td colspan='3'></td>";
+    if ($showFs) {
+      $echo[] = "<td>".vfs_type($disk,false)."</td>";
+      $echo[] = "<td colspan='3'></td>";
+    } else {
+      $echo[] = "<td colspan='4'></td>";
+    }
     break;
   case 'DISK_NP_DSBL':
-    $echo[] = "<td>".device_info($disk,false)."</td>";
+    $echo[] = "<td>".device_info($disk,false,'',[], $options)."</td>";
     $echo[] = "<td>".assignment($disk)."</td>";
     $echo[] = "<td colspan='4'></td>";
-    $echo[] = "<td>".vfs_type($disk,false)."</td>";
-    $echo[] = "<td colspan='3'></td>";
+    if ($showFs) {
+      $echo[] = "<td>".vfs_type($disk,false)."</td>";
+      $echo[] = "<td colspan='3'></td>";
+    } else {
+      $echo[] = "<td colspan='4'></td>";
+    }
     break;
   case 'DISK_OK':
   case 'DISK_DSBL':
   case 'DISK_INVALID':
   case 'DISK_DSBL_NEW':
   case 'DISK_NEW':
-    $echo[] = "<td>".device_info($disk,false)."</td>";
+    $echo[] = "<td>".device_info($disk,false,'',[], $options)."</td>";
     $echo[] = "<td>".assignment($disk)."</td>";
     $echo[] = "<td>".my_power($disk['power']).my_temp(_var($disk,'temp','*'))."</td>";
     if ($warning) {
       $echo[] = "<td colspan='7'>$warning</td>";
     } else {
-      $echo[] = "<td colspan='3'></td>";
-      $echo[] = "<td>".vfs_type($disk,false)."</td>";
-      $echo[] = "<td colspan='3'></td>";
+      if ($showFs) {
+        $echo[] = "<td colspan='3'></td>";
+        $echo[] = "<td>".vfs_type($disk,false)."</td>";
+        $echo[] = "<td colspan='3'></td>";
+      } else {
+        $echo[] = "<td colspan='7'></td>";
+      }
     }
     break;
   case 'DISK_WRONG':
-    $echo[] = "<td>".device_info($disk,false)."<br><span class='diskinfo'><em>"._('Wrong')."</em></span></td>";
+    $echo[] = "<td>".device_info($disk,false,'',[], $options)."<br><span class='diskinfo'><em>"._('Wrong')."</em></span></td>";
     $echo[] = "<td>".assignment($disk)."<em>{$disk['idSb']}</em></td>";
     $echo[] = "<td>".my_temp(_var($disk,'temp','*'))."</td>";
     if ($warning) {
       $echo[] = "<td colspan='7'>$warning</td>";
     } else {
-      $echo[] = "<td colspan='3'></td>";
-      $echo[] = "<td>".vfs_type($disk,false)."</td>";
-      $echo[] = "<td colspan='3'></td>";
+      if ($showFs) {
+        $echo[] = "<td colspan='3'></td>";
+        $echo[] = "<td>".vfs_type($disk,false)."</td>";
+        $echo[] = "<td colspan='3'></td>";
+      } else {
+        $echo[] = "<td colspan='7'></td>";
+      }
     }
     break;
   }
@@ -372,8 +763,9 @@ function array_offline(&$disk, $pool='') {
   return implode($echo);
 }
 
-function array_online(&$disk, $fstype='', $poolName='', $poolstatusData=[]) {
+function array_online(&$disk, $fstype='', $poolName='', $poolstatusData=[], $options=[]) {
   global $pools, $sum, $diskio;
+  $showFsInfo = _var($options,'showFsInfo',true);
   $disk['power'] ??= (_var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'power') : 0);
   $echo = [];
   $data = [0,0];
@@ -400,21 +792,24 @@ function array_online(&$disk, $fstype='', $poolName='', $poolstatusData=[]) {
   switch (_var($disk,'status')) {
   case 'DISK_NP':
     if (in_array(_var($disk,'name'),$pools) || $fstype=='zfs') {
-      $echo[] = "<td>".device_info($disk,true,$poolName,$poolstatusData)."</td>";
+      $echo[] = "<td>".device_info($disk,true,$poolName,$poolstatusData,$options)."</td>";
+        $echo[] = "<td>".device_info($disk,true,$poolName,$poolstatusData,$options)."</td>";
+        $echo[] = "<td>".device_info($disk,true,$poolName,$poolstatusData,$options)."</td>";
+        $echo[] = "<td>".device_info($disk,true,$poolName,$poolstatusData,$options)."</td>";
       $echo[] = "<td><a class='static'><i class='icon-disk icon'></i><span></span></a><em>".($fstype=='zfs' ? _('Not present') : _('Not installed'))."</em></td>";
       $echo[] = "<td colspan='4'></td>";
-      $echo[] = fs_info($disk,true);
+      $echo[] = $showFsInfo ? fs_info($disk,true) : "<td colspan='4'></td>";
     }
     break;
   case 'DISK_NP_DSBL':
-    $echo[] = "<td>".device_info($disk,true,$poolName,$poolstatusData)."</td>";
+    $echo[] = "<td>".device_info($disk,true,$poolName,$poolstatusData,$options)."</td>";
     $echo[] = "<td><a class='static'><i class='icon-disk icon'></i><span></span></a><em>"._('Not installed')."</em></td>";
     $echo[] = "<td colspan='4'></td>";
-    $echo[] = fs_info($disk,true);
+    $echo[] = $showFsInfo ? fs_info($disk,true) : "<td colspan='4'></td>";
     break;
   case 'DISK_DSBL':
   default:
-    $echo[] = "<td>".device_info($disk,true,$poolName,$poolstatusData)."</td>";
+    $echo[] = "<td>".device_info($disk,true,$poolName,$poolstatusData,$options)."</td>";
     $echo[] = "<td class='desc'>".device_desc($disk,$poolName,$poolstatusData)."</td>";
     $echo[] = "<td>".my_power($disk['power']).my_temp(_var($disk,'temp','*'))."</td>";
     $echo[] = "<td><span class='diskio'>".my_diskio($data[0])."</span><span class='number'>".my_number(_var($disk,'numReads',0))."</span></td>";
@@ -438,7 +833,7 @@ function array_online(&$disk, $fstype='', $poolName='', $poolstatusData=[]) {
     } else {
       $echo[] = "<td>".my_number($numErrors)."</td>";
     }
-    $echo[] = fs_info($disk,true);
+    $echo[] = $showFsInfo ? fs_info($disk,true) : "<td colspan='4'></td>";
     break;
   }
   $echo[] = "</tr>";
@@ -582,10 +977,15 @@ while (true) {
     if (in_array($disk['type'],['Data','Cache'])) $crypto |= _var($disk,'luksState',0)!=0 || vfs_luks(_var($disk,'fsType'));
   }
   $pools = array_unique(array_map('prefix',array_keys($Cache)));
+  $devicePools = mapDevicesToPools();
   
   // Fetch pool status for zfs and btrfs pools
   static $poolstatus = [];
   static $pool_check_counter = 0;
+  static $last_fs_state = null;
+  if ($last_fs_state !== _var($var,'fsState')) {
+    $pool_check_counter = 0;
+  }
   if ($pool_check_counter % 30 == 0) {
     $decoded = json_decode(storagePoolsJson(), true);
     if (is_array($decoded)) {
@@ -594,6 +994,21 @@ while (true) {
   }
   $pool_check_counter++;
 
+  static $duplicate_devices = [];
+  static $duplicate_check_counter = 0;
+  if ($last_fs_state !== _var($var,'fsState')) {
+    $duplicate_check_counter = 0;
+  }
+  if (_var($var,'fsState')=='Stopped' && $duplicate_check_counter % 30 == 0) {
+      $duplicate_devices = json_decode(find_duplicate_disks_json(), true);
+  }
+  
+  if (_var($var,'fsState')!='Stopped') {
+    $duplicate_devices = [];
+  }
+
+  $duplicate_check_counter++;
+  $last_fs_state = _var($var,'fsState');
   $a = 'array_devices';
   $echo[$a] = [];
   $poolsOnly = (_var($var,'SYS_ARRAY_SLOTS') == 0) ? true : false;
@@ -616,10 +1031,39 @@ while (true) {
   $a = 'boot_device';
   $echo[$a] = [];
   foreach ($Flash as $disk) $echo[$a][] = array_online($disk);
-  foreach ($Boot as $disk) {
-    $poolName = prefix(_var($disk,'name'));
-    $fstype = str_replace('luks:','',_var($disk,'fsType'));
-    $echo[$a][] = array_online($disk,$fstype,$poolName,$poolstatus);
+  $bootDisk = select_boot_disk($Boot);
+  if (!empty($bootDisk)) {
+    $poolName = find_pool_name_for_device(_var($bootDisk,'device',''), $Cache);
+    if ($poolName === '') $poolName = pool_name(_var($bootDisk,'name',''));
+    $poolLabel = $poolName !== '' ? ucfirst($poolName) : '';
+    $poolIndex = $poolName !== '' ? array_search($poolName, $pools, true) : false;
+    if ($poolIndex === false && $poolName !== '') {
+      $poolIndex = array_search(prefix($poolName), $pools, true);
+    }
+    if ($poolIndex !== false) {
+      $poolAnchor = "/Main#pool_device".$poolIndex;
+    } else {
+      $poolAnchor = $poolName !== '' ? "/Main#pool_".$poolName : '';
+    }
+    $poolLink = $poolAnchor !== ''
+      ? "<a href=\"".htmlspecialchars($poolAnchor, ENT_QUOTES)."\">"._($poolLabel,3)."</a>"
+      : '';
+    $desc = $poolLink !== ''
+      ? sprintf(_('%s -> %s'), _('Boot device'), $poolLink)
+      : _('Boot device');
+    $echo[$a][] = "<tr>";
+    $echo[$a][] = "<td>".device_info($bootDisk,true,$poolName,$poolstatus,[
+      'displayName' => _('Boot'),
+      'rawDisplayName' => true,
+      'showLink' => false,
+      'showStatus' => false,
+      'showPoolStatus' => false,
+      'showView' => true,
+      'forceView' => true,
+    ])."</td>";
+    $echo[$a][] = "<td class='desc'>$desc</td>";
+    $echo[$a][] = "<td colspan='8'></td>";
+    $echo[$a][] = "</tr>";
   }
   $echo[$a] = implode($echo[$a]);
 
@@ -633,8 +1077,76 @@ while (true) {
     if (_var($var,'fsState')=='Stopped') {
       $log = @parse_ini_file($pool_log) ?: []; // used to detect slot changes
       $off = false;
+      $poolDisk = $Cache[$pool] ?? null;
+      $firstMember = get_pool_first_member($pool, $Cache, $devicePools);
+      $bootDisk = find_boot_disk_for_pool($pool, $Boot, $Cache);
+      $bootPoolName = prefix(_var($bootDisk,'name',''));
+      $bootMetrics = get_boot_pool_metrics($Boot, $bootPoolName, $bootDisk);
+      $dataMetrics = get_pool_data_metrics($poolDisk, $pool, $disks);
+      $poolLabel = ucfirst($pool);
+      $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
+      $poolLink = "<a href=\"$poolDeviceUrl\">"._($poolLabel,3)."</a>";
+      $summaryName = $poolLink;
+      if (!empty($bootDisk)) {
+        $bootPoolName = prefix(_var($bootDisk,'name',''));
+        $bootLabel = ucfirst($bootPoolName);
+        $bootDeviceUrl = "/Main/Boot?name=".urlencode($bootPoolName);
+        $bootLink = "<a href=\"$bootDeviceUrl\">"._($bootLabel,3)."</a>";
+        $summaryName = $poolLink." / ".$bootLink;
+        $bootFsInfo = get_boot_pool_fs_info($Boot, $bootPoolName);
+        $bootFsType = _var($bootDisk,'fsType','') ?: _var($bootFsInfo,'fsType','');
+        $bootFsStatus = _var($bootDisk,'fsStatus','') ?: _var($bootFsInfo,'fsStatus','');
+        if ($bootFsStatus === '' && $bootFsType !== '') {
+          $mountPoint = _var($bootDisk,'mountPoint','') ?: _var($bootDisk,'fsMountpoint','') ?: _var($bootFsInfo,'mountPoint','') ?: _var($bootFsInfo,'fsMountpoint','');
+          $bootFsStatus = get_mount_status_from_mountpoint($mountPoint, true);
+          if ($bootFsStatus === '') $bootFsStatus = 'Unknown';
+        }
+        $bootRow = pool_function_row(
+          '<i class="fa fa-paw title"></i> '._('Boot Partition'),
+          $poolDisk,
+          $firstMember,
+          $bootMetrics,
+          $pool,
+          $poolstatus,
+          true,
+          [
+            'fsType' => $bootFsType,
+            'fsStatus' => $bootFsStatus,
+          ],
+          true,
+          $bootPoolName,
+          $summaryName,
+          false
+        );
+        if ($bootRow !== '') $echo[$a][] = $bootRow;
+      }
+      $dataLabel = isSubpool($pool) ? _('ZFS subpool') : _('Data Partition');
+      $dataRow = pool_function_row(
+        '<i class="fa fa-bullseye title"></i> '.$dataLabel,
+        $poolDisk,
+        $firstMember,
+        $dataMetrics,
+        $pool,
+        $poolstatus,
+        empty($bootDisk),
+        [],
+        true,
+        '',
+        empty($bootDisk) ? $summaryName : '',
+        empty($bootDisk) ? false : true
+      );
+      if ($dataRow !== '') $echo[$a][] = $dataRow;
+      $memberIndex = 1;
       foreach ($Cache as $disk) if (prefix(_var($disk,'name'))==$pool) {
-        $echo[$a][] = array_offline($disk,$pool);
+        $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
+        $memberLabel = sprintf(_('Device %d'), $memberIndex++);
+        $echo[$a][] = array_offline($disk,$pool,[
+          'displayName' => $memberLabel,
+          'rawDisplayName' => true,
+          'showLink' => true,
+          'linkHref' => $poolDeviceUrl,
+          'showFs' => false,
+        ]);
         $name = _var($disk,'name');
         // tilde is not allowed in array key - replace it
         $named = no_tilde($name);
@@ -652,9 +1164,128 @@ while (true) {
       }
       $echo[$a][] = "</span></td><td></td></tr>";
     } else {
-      foreach ($Cache as $disk) if (prefix($disk['name'])==$pool) {
+      if (isSubpool($pool)) {
+        $memberIndex = 1;
+        $subpoolType = isSubpool($pool);
+        foreach ($Cache as $disk) if (prefix(_var($disk,'name'))==$pool) {
+          $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
+          $memberLabel = "» ".ucfirst(_($subpoolType,3))." ".sprintf(_('Device %d'), $memberIndex++);
+          $fstype = str_replace('luks:','',_var($disk,'fsType'));
+          $echo[$a][] = array_online(
+            $disk,
+            $fstype,
+            '',
+            $poolstatus,
+            [
+              'displayName' => $memberLabel,
+              'rawDisplayName' => true,
+              'showLink' => true,
+              'linkHref' => $poolDeviceUrl,
+              'showPoolStatus' => false,
+              'showView' => false,
+              'indent' => 16,
+              'showFsInfo' => false,
+            ]
+          );
+        }
+        $echo[$a] = implode($echo[$a]);
+        continue;
+      }
+      $poolDisk = $Cache[$pool] ?? null;
+      $firstMember = get_pool_first_member($pool, $Cache, $devicePools);
+      $bootDisk = find_boot_disk_for_pool($pool, $Boot, $Cache);
+      $bootPoolName = prefix(_var($bootDisk,'name',''));
+      $bootMetrics = get_boot_pool_metrics($Boot, $bootPoolName, $bootDisk);
+      $dataMetrics = get_pool_data_metrics($poolDisk, $pool, $disks);
+      if (!empty($bootDisk)) {
+        $bootPoolName = prefix(_var($bootDisk,'name',''));
+        $bootLabel = ucfirst($bootPoolName);
+        $bootDeviceUrl = "/Main/Boot?name=".urlencode($bootPoolName);
+        $bootDir = _var($bootDisk,'fsMountpoint','/boot');
+        $bootBrowseUrl = $bootDir !== '' ? "/Main/Browse?dir=".htmlspecialchars($bootDir) : $bootDeviceUrl;
+        $bootIcon = "<a class='view' href=\"$bootBrowseUrl\"><i class=\"icon-u-tab\" title=\""._('Browse')." $bootDir\"></i></a>";
+        $bootLink = "<a href=\"$bootDeviceUrl\">"._($bootLabel,3)."</a>";
+        $poolLabel = ucfirst($pool);
+        $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
+        $poolDir = _var($poolDisk,'fsMountpoint','');
+        $poolBrowseUrl = $poolDir !== '' ? "/Main/Browse?dir=".htmlspecialchars($poolDir) : $poolDeviceUrl;
+        $poolIcon = "<a class='view' href=\"$poolBrowseUrl\"><i class=\"icon-u-tab\" title=\""._('Browse')." $poolDir\"></i></a>";
+        $poolLink = "<a href=\"$poolDeviceUrl\">"._($poolLabel,3)."</a>";
+        $flashWarn = flash_smb_warning_html(_var($bootDisk,'name',''));
+        $summaryName = $poolIcon.$poolLink." / ".$bootIcon.$bootLink.$flashWarn;
+        $bootFsInfo = get_boot_pool_fs_info($Boot, $bootPoolName);
+        $bootFsType = _var($bootDisk,'fsType','') ?: _var($bootFsInfo,'fsType','');
+        $bootFsStatus = _var($bootDisk,'fsStatus','') ?: _var($bootFsInfo,'fsStatus','');
+        if ($bootFsStatus === '' && $bootFsType !== '') {
+          $mountPoint = _var($bootDisk,'mountPoint','') ?: _var($bootDisk,'fsMountpoint','') ?: _var($bootFsInfo,'mountPoint','') ?: _var($bootFsInfo,'fsMountpoint','');
+          $bootFsStatus = get_mount_status_from_mountpoint($mountPoint, true);
+          if ($bootFsStatus === '') $bootFsStatus = 'Unknown';
+        }
+        $bootRow = pool_function_row(
+          '<i class="fa fa-paw title"></i> '._('Boot Partition'),
+          $poolDisk,
+          $firstMember,
+          $bootMetrics,
+          $pool,
+          $poolstatus,
+          true,
+          [
+            'fsType' => $bootFsType,
+            'fsStatus' => $bootFsStatus,
+          ],
+          true,
+          $bootPoolName,
+          $summaryName,
+          false
+        );
+        if ($bootRow !== '') $echo[$a][] = $bootRow;
+      }
+      if (empty($bootDisk)) {
+        $poolLabel = ucfirst($pool);
+        $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
+        $poolDir = _var($poolDisk,'fsMountpoint','');
+        $poolBrowseUrl = $poolDir !== '' ? "/Main/Browse?dir=".htmlspecialchars($poolDir) : $poolDeviceUrl;
+        $poolIcon = "<a class='view' href=\"$poolBrowseUrl\"><i class=\"icon-u-tab\" title=\""._('Browse')." $poolDir\"></i></a>";
+        $poolLink = "<a href=\"$poolDeviceUrl\">"._($poolLabel,3)."</a>";
+        $summaryName = $poolIcon.$poolLink;
+      }
+      $dataLabel = isSubpool($pool) ? _('ZFS subpool') : _('Data Partition');
+      $dataRow = pool_function_row(
+        '<i class="fa fa-bullseye title"></i> '.$dataLabel,
+        $poolDisk,
+        $firstMember,
+        $dataMetrics,
+        $pool,
+        $poolstatus,
+        empty($bootDisk),
+        [],
+        true,
+        '',
+        empty($bootDisk) ? $summaryName : '',
+        empty($bootDisk) ? false : true
+      );
+      if ($dataRow !== '') $echo[$a][] = $dataRow;
+      $memberIndex = 1;
+      foreach ($Cache as $disk) if (prefix(_var($disk,'name'))==$pool) {
+        $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
+        $memberLabel = sprintf(_('Device %d'), $memberIndex++);
         $fstype = str_replace('luks:','',_var($disk,'fsType'));
-        $echo[$a][] = array_online($disk,$fstype,$pool,$poolstatus);
+        $echo[$a][] = array_online(
+          $disk,
+          $fstype,
+          $pool,
+          $poolstatus,
+          [
+            'displayName' => $memberLabel,
+            'rawDisplayName' => true,
+            'showLink' => true,
+            'linkHref' => $poolDeviceUrl,
+            'showPoolStatus' => false,
+            'showView' => false,
+            'indent' => 16,
+            'showFsInfo' => false,
+          ]
+        );
       }
       if (strcmp($root,$pool)!=0) $Cache[$root]['devices'] += $Cache[$pool]['devices'];
       if (strcmp($pool,$print)==0) {
