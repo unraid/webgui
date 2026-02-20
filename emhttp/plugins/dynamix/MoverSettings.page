@@ -18,13 +18,15 @@ Tag="calendar-check-o"
 $mode = ['Disabled','Hourly','Daily','Weekly','Monthly'];
 $days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 $setup = true;
+$buttontext = _('Move now');
 if (!$pool_devices) {
-  echo "<p class='notice'>"._('No Cache device present')."!</p>";
-  $setup = false;
+  echo "<p class='notice'>"._('No Cache device present only empty function will run')."!</p>";
+  $setup = true;
+  $buttontext = _('Empty now');
 } elseif ($var['shareUser']=='-') {
   echo "<p class='notice'>"._('User shares not enabled')."!</p>";
   $setup = false;
-}
+} 
 if (empty($var['shareMoverSchedule'])) {
   $cron = explode(' ', "* * * * *");
   $move = 0;
@@ -32,7 +34,7 @@ if (empty($var['shareMoverSchedule'])) {
   $cron = explode(' ', $var['shareMoverSchedule']);
   $move = $cron[2]!='*' ? 4 : ($cron[4]!='*' ? 3 : (substr($cron[1],0,1)!='*' ? 2 : 1));
 }
-$showMoverButton = $setup && $pool_devices;
+$showMoverButton = $setup;
 $moverRunning = file_exists('/var/run/mover.pid');
 ?>
 <script>
@@ -138,7 +140,7 @@ _(Mover logging)_:
     <input type="submit" name="changeMover" value="_(Apply)_" disabled>
     <input type="button" value="_(Done)_" onclick="done()">
     <?if ($showMoverButton):?>
-      <input type="submit" name="cmdStartMover" value="_(Move now)_"<?if ($moverRunning):?> disabled<?endif;?>>
+      <input type="submit" name="cmdStartMover" value="<?=$buttontext?>"<?if ($moverRunning):?> disabled<?endif;?>>
       <?if ($moverRunning):?><span>_(Mover is running)_</span><?endif;?>
     <?endif;?>
   </span>
