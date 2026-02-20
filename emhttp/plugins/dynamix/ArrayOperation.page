@@ -427,7 +427,7 @@ mymonitor.on('message', function(state) {
     $('#mover-button').prop('disabled',false);
     $('#mover-text').html("<b>_(Move)_</b> _(will immediately invoke the Mover)_.&nbsp;<a href=\"/Main/Settings/Scheduler\"<?if($tabbed):?> onclick=\"$.cookie('one','tab2')\"<?endif;?>>(_(Schedule)_)</a>");
 <?endif;?>
-<?if (_var($var,'shareUser') == 'e' && !$pool_devices):?>
+<?if (!$pool_devices):?>
     $('#mover-button').prop('disabled',false);
     $('#mover-text').html("<b>_(Empty)_</b> _(will immediately invoke the Mover to Empty a disk)_.&nbsp;<a href=\"/Main/Settings/Scheduler\"<?if($tabbed):?> onclick=\"$.cookie('one','tab2')\"<?endif;?>>(_(Schedule)_)</a>");
 <?endif;?>
@@ -443,7 +443,7 @@ mymonitor.on('message', function(state) {
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ -- _(Parity operation is running)_");
 <?endif;?>
-<?if (_var($var,'shareUser') == 'e' && !$pool_devices):?>
+<?if (!$pool_devices):?>
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ -- _(Parity operation is running)_");
 <?endif;?>
@@ -455,7 +455,7 @@ mymonitor.on('message', function(state) {
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ - _(Mover is running)_.");
 <?endif;?>
-<?if (_var($var,'shareUser') == 'e' && !$pool_devices):?>
+<?if (!$pool_devices):?>
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ - _(Mover/Empty is running)_.");
 <?endif;?>
@@ -467,7 +467,7 @@ mymonitor.on('message', function(state) {
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ -- _(BTRFS operation is running)_");
 <?endif;?>
-<?if (_var($var,'shareUser') == 'e' && !$pool_devices):?>
+<?if (!$pool_devices):?>
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ -- _(BTRFS operation is running)_");
 <?endif;?>
