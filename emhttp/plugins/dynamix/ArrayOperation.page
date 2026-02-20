@@ -445,7 +445,7 @@ mymonitor.on('message', function(state) {
 <?endif;?>
 <?if (_var($var,'shareUser') == 'e' && !$pool_devices):?>
     $('#mover-button').prop('disabled',true);
-    $('#mover-text').html("<b>_(Empty)_</b> _(will immediately invoke the Mover to Empty a disk)_.&nbsp;<a href=\"/Main/Settings/Scheduler\"<?if($tabbed):?> onclick=\"$.cookie('one','tab2')\"<?endif;?>>(_(Schedule)_)</a>");
+    $('#mover-text').html("_(Disabled)_ -- _(Parity operation is running)_");
 <?endif;?>
     break;
   case '2': // mover running
@@ -457,7 +457,7 @@ mymonitor.on('message', function(state) {
 <?endif;?>
 <?if (_var($var,'shareUser') == 'e' && !$pool_devices):?>
     $('#mover-button').prop('disabled',true);
-    $('#mover-text').html("<b>_(Empty)_</b> _(will immediately invoke the Mover to Empty a disk)_.&nbsp;<a href=\"/Main/Settings/Scheduler\"<?if($tabbed):?> onclick=\"$.cookie('one','tab2')\"<?endif;?>>(_(Schedule)_)</a>");
+    $('#mover-text').html("_(Disabled)_ - _(Mover/Empty is running)_.");
 <?endif;?>
     break;
   case '3': // btrfs running
@@ -469,7 +469,7 @@ mymonitor.on('message', function(state) {
 <?endif;?>
 <?if (_var($var,'shareUser') == 'e' && !$pool_devices):?>
     $('#mover-button').prop('disabled',true);
-    $('#mover-text').html("<b>_(Empty)_</b> _(will immediately invoke the Mover to Empty a disk)_.&nbsp;<a href=\"/Main/Settings/Scheduler\"<?if($tabbed):?> onclick=\"$.cookie('one','tab2')\"<?endif;?>>(_(Schedule)_)</a>");
+    $('#mover-text').html("_(Disabled)_ -- _(BTRFS operation is running)_");
 <?endif;?>
     break;
   }
