@@ -58,12 +58,17 @@ function proxy_online($proxyUrl) {
 	$rc	= true;
 
 	if ($proxyUrl) {
+		/*Define the check URL */
+		$checkurl = "http://www.msftncsi.com/ncsi.txt";
 		/* Initialize cURL session. */
-		$ch = curl_init("http://www.msftncsi.com/ncsi.txt");
-
+		$ch = curl_init($checkurl);
+		
+		/* Determine if tunneling is needed (HTTPS only). */
+		$isHttps = (parse_url($checkurl, PHP_URL_SCHEME) === 'https');
+		
 		/* Set cURL options. */
 		curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);	/* Timeout in seconds. */
-		curl_setopt($ch, CURLOPT_HTTPPROXYTUNNEL, true);
+		curl_setopt($ch, CURLOPT_HTTPPROXYTUNNEL, $isHttps); /* Enable HTTP tunneling only for HTTPS to prevent CONNECT method on port 80. */
 		curl_setopt($ch, CURLOPT_PROXY, $proxyUrl);		/* Url is a proxy. */
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); /* Return transfer as a string. */
 
