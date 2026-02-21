@@ -40,7 +40,7 @@ ensure_paths() {
 backup_rclone_config() {
   local src="$1"
   local backup
-  backup="$RCLONE_BACKUP_DIR/$(basename "$src").$(date +%Y%m%d-%H%M%S)"
+  backup="$RCLONE_BACKUP_DIR/$(basename "$src").$(date +%Y%m%d-%H%M%S)-$$-$RANDOM"
   if cp -a -- "$src" "$backup"; then
     return 0
   fi
@@ -70,9 +70,7 @@ link_rclone_config() {
     link_target=$(readlink -f "$link_path" 2>/dev/null || readlink "$link_path" 2>/dev/null || true)
     if [[ "$link_target" != "$RCLONE_BOOT_CONFIG" ]]; then
       if [[ -f "$link_target" && ! -e "$RCLONE_BOOT_CONFIG" ]]; then
-        if cp -a -- "$link_target" "$RCLONE_BOOT_CONFIG"; then
-          :
-        else
+        if ! cp -a -- "$link_target" "$RCLONE_BOOT_CONFIG"; then
           log_issue "ERROR: failed to migrate $link_label from $link_target to $RCLONE_BOOT_CONFIG"
           return
         fi
@@ -137,9 +135,7 @@ ensure_default_boot_config_in_non_plugin_mode() {
       log_issue "ERROR: failed to seed rclone default config from $RCLONE_ROOT_CONFIG"
     fi
 
-    if ( : > "$RCLONE_DEFAULT_BOOT_CONFIG" ) 2>/dev/null; then
-      :
-    else
+    if ! touch "$RCLONE_DEFAULT_BOOT_CONFIG" 2>/dev/null; then
       log_issue "ERROR: failed to initialize rclone default config at $RCLONE_DEFAULT_BOOT_CONFIG"
     fi
   fi
