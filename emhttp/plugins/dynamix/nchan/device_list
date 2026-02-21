@@ -332,6 +332,9 @@ function pool_function_row(string $label, ?array $poolDisk, ?array $firstMember,
 {
   global $disks;
   $disk = $poolDisk ?: ($firstMember ?? []);
+  if (empty($disk) && $showSummary && $poolName !== '' && isset($disks[$poolName])) {
+    $disk = $disks[$poolName];
+  }
   if (empty($disk)) return '';
   $disk = array_merge([], $disk);
 
@@ -1072,7 +1075,10 @@ while (true) {
     $a = 'pool_device'.$i++;
     $echo[$a] = [];
     $root  = explode($_tilde_,$pool)[0];
-    $print = array_filter(array_column($Cache,'name'),function($name) use ($pools,$root,$_tilde_) {$name_root=explode($_tilde_,$name)[0]; return in_array($name,$pools) && strcmp($root,$name_root)==0;});
+    $print = array_filter(array_column($Cache,'name'),function($name) use ($pools,$root,$_tilde_) {
+      $name_root = explode($_tilde_,$name)[0];
+      return in_array($name,$pools) && strcmp($root,$name_root)==0;
+    });
     $print = end($print);
     if (_var($var,'fsState')=='Stopped') {
       $log = @parse_ini_file($pool_log) ?: []; // used to detect slot changes
@@ -1128,12 +1134,12 @@ while (true) {
         $dataMetrics,
         $pool,
         $poolstatus,
-        empty($bootDisk),
+        false,
         [],
         true,
         '',
-        empty($bootDisk) ? $summaryName : '',
-        empty($bootDisk) ? false : true
+        '',
+        true
       );
       if ($dataRow !== '') $echo[$a][] = $dataRow;
       $memberIndex = 1;
@@ -1187,6 +1193,16 @@ while (true) {
               'showFsInfo' => false,
             ]
           );
+        }
+        if (strcmp($root,$pool)!=0) {
+          $Cache[$root]['devices'] += _var($Cache[$pool],'devices',0);
+        }
+        if (strcmp($pool,$print)==0) {
+          delete_file($pool_log);
+          if (_var($display,'total') && _var($Cache[$root],'devices',0)>1) {
+            $echo[$a][] = show_totals(sprintf(_('Pool of %s devices'),my_word($Cache[$root]['devices'])),false,"$root*");
+          }
+          $sum = initSum();
         }
         $echo[$a] = implode($echo[$a]);
         continue;
@@ -1257,12 +1273,12 @@ while (true) {
         $dataMetrics,
         $pool,
         $poolstatus,
-        empty($bootDisk),
+        false,
         [],
         true,
         '',
-        empty($bootDisk) ? $summaryName : '',
-        empty($bootDisk) ? false : true
+        '',
+        true
       );
       if ($dataRow !== '') $echo[$a][] = $dataRow;
       $memberIndex = 1;
