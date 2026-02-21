@@ -60,6 +60,7 @@ mkdir -p $CONFIG/plugins/dockerMan
 mkdir -p $CONFIG/plugins/dynamix/users
 mkdir -p $CONFIG/plugins-error/
 mkdir -p $CONFIG/pools
+mkdir -p $CONFIG/rclone
 mkdir -p $CONFIG/shares
 mkdir -p $CONFIG/ssh/root
 mkdir -p $CONFIG/ssl/certs
@@ -229,6 +230,11 @@ else
     /usr/local/sbin/plugin install "$PLUGIN" | log
   done
   shopt -u nullglob
+fi
+
+# Re-run rclone config setup after plugin install phase (plugins-nextboot may have added rclone).
+if [[ -x /usr/local/sbin/rclone_config_init ]]; then
+  /usr/local/sbin/rclone_config_init "$CONFIG"
 fi
 
 # Install languages
