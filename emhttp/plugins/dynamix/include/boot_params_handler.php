@@ -303,11 +303,11 @@ switch ($operation) {
                 exit;
             }
         } else {
-            if (strpos($raw_config, 'label Unraid OS') === false) {
+            if (!preg_match('/^label\s+unraid\s+os$/im', $raw_config)) {
                 echo json_encode(['error' => 'Invalid configuration: Missing required label "Unraid OS"']);
                 exit;
             }
-            if (strpos($raw_config, 'initrd=') === false) {
+            if (!preg_match('/\binitrd=/', $raw_config)) {
                 echo json_encode(['error' => 'Invalid configuration: Missing required "initrd=" parameter']);
                 exit;
             }

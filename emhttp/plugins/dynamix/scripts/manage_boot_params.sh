@@ -11,6 +11,7 @@ GRUB_CFG="${GRUB_CFG:-/boot/grub/grub.cfg}"
 BACKUP_DIR="${BACKUP_DIR:-/boot/syslinux/backups}"
 GRUB_BACKUP_DIR="${GRUB_BACKUP_DIR:-/boot/grub/backups}"
 COMMENTS_FILE="${COMMENTS_FILE:-/boot/config/custom_params_comments.json}"
+HW_INIT_FLAG="/boot/config/plugins/dynamix/boot_params_hw_initialized"
 MAX_BACKUPS=10
 
 # Error handling
@@ -212,10 +213,11 @@ check_hardware_change() {
     local current_hw=$(get_hardware_ids)
     local stored_hw=$(load_hardware_tracking)
 
-
-    # First run: no stored hardware
-    if [[ "$stored_hw" == "{}" ]]; then
+    # First run: no stored hardware or no init flag
+    if [[ "$stored_hw" == "{}" || ! -f "$HW_INIT_FLAG" ]]; then
         save_hardware_tracking "$current_hw"
+        mkdir -p "$(dirname "$HW_INIT_FLAG")" 2>/dev/null || true
+        : > "$HW_INIT_FLAG"
         echo '{"changed":false,"first_run":true}'
         return 0
     fi
@@ -262,8 +264,10 @@ parse_append_line() {
     # Extract append line for specific label
     # Matches from "label $label" to the next "label" or end of file
     awk -v label="$label" '
+        BEGIN { label=tolower(label) }
         /^label / {
-            if ($0 ~ "^label " label "$") {
+            line=tolower($0)
+            if (line ~ "^label " label "$") {
                 in_section=1
             } else {
                 in_section=0
@@ -332,7 +336,7 @@ extract_timeout() {
     local cfg_file="${1:-$SYSLINUX_CFG}"
 
     if [[ -f "$cfg_file" ]]; then
-        grep "^timeout " "$cfg_file" | awk '{print $2}' | head -n 1
+        grep "^timeout " "$cfg_file" | awk '{print $2}' | tr -d '\r' | head -n 1
     else
         echo ""
     fi
@@ -345,7 +349,7 @@ extract_grub_timeout() {
     local cfg_file="${1:-$GRUB_CFG}"
 
     if [[ -f "$cfg_file" ]]; then
-        grep "^set timeout=" "$cfg_file" | awk -F'=' '{print $2}' | head -n 1
+        grep "^set timeout=" "$cfg_file" | awk -F'=' '{print $2}' | tr -d '\r' | head -n 1
     else
         echo ""
     fi
@@ -366,6 +370,7 @@ read_config() {
         # Parse linux args from "Unraid OS" menuentry
         append_line=$(parse_grub_linux_args "Unraid OS")
         timeout=$(extract_grub_timeout)
+        timeout=$(echo "$timeout" | tr -cd '0-9')
         [[ -z "$timeout" ]] && timeout="5"
         # Convert seconds to deciseconds for UI compatibility
         timeout=$((timeout * 10))
@@ -376,8 +381,12 @@ read_config() {
         # Parse append line from "Unraid OS" label
         append_line=$(parse_append_line "Unraid OS")
         timeout=$(extract_timeout)
+        timeout=$(echo "$timeout" | tr -cd '0-9')
         [[ -z "$timeout" ]] && timeout="50"
     fi
+
+    # Ensure timeout is safe for JSON output
+    timeout=${timeout//$'\r'/}
 
 
     # Extract managed parameters
@@ -740,15 +749,15 @@ validate_config() {
     fi
 
     # Check required labels exist
-    if ! grep -q "^label Unraid OS$" "$cfg_file"; then
+    if ! grep -qi "^label unraid OS$" "$cfg_file"; then
         return 1
     fi
 
-    if ! grep -q "^label Unraid OS GUI Mode$" "$cfg_file"; then
+    if ! grep -qi "^label unraid OS GUI Mode$" "$cfg_file"; then
         return 1
     fi
 
-    if ! grep -q "^label Unraid OS Safe Mode" "$cfg_file"; then
+    if ! grep -qi "^label unraid OS Safe Mode" "$cfg_file"; then
         return 1
     fi
 
