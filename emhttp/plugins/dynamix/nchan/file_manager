@@ -682,10 +682,30 @@ while (true) {
 
       // return status of running action
       if (!empty($pid)) {
-        $file_line = exec("tail -1 $status");
+        // Get last line from status file (current file being processed)
+        $file_line = trim(exec("tail -1 $status 2>$null"));
+        
+        // Get current archive size to show progress
+        $archive_path = rtrim($target, '/').'/'.$archive_name;
+        $archive_size = '';
+        if (file_exists($archive_path)) {
+          $size_bytes = filesize($archive_path);
+          $archive_size = ' ['.bytes_to_size($size_bytes).']';
+        }
+        
+        // Show either the file being compressed or just "Compressing..." with archive size
+        if (!empty($file_line) && strlen($file_line) > 2) {
+          // Clean up compression tool output (remove prefixes like "adding:", "a ", etc.)
+          $clean_line = preg_replace('/^(adding:|deflated|stored|a\s+)/i', '', $file_line);
+          $clean_line = trim($clean_line);
+          $text = _('Compressing').': '.mb_strimhalf($clean_line, 50, '...').$archive_size;
+        } else {
+          $text = _('Compressing').'...'.$archive_size;
+        }
+        
         $reply['status'] = json_encode([
           'action' => $action,
-          'text' => [_('Compressing').'... '.mb_strimhalf($file_line, 70, '...')]
+          'text' => [$text]
         ]);
 
       // start action
@@ -719,6 +739,7 @@ while (true) {
         $cmd = "cd ".quoted($source_parent)." && ";
         switch ($format) {
         case 'zip':
+          // zip outputs progress by default when creating archives
           $cmd .= "zip -r ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
           break;
         case 'tar':
@@ -728,7 +749,14 @@ while (true) {
           $cmd .= "tar -czvf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
           break;
         case 'tar.zst':
-          $cmd .= "tar -I zstd -cvf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
+          // Use zstd with tar, -v for verbose output to show filenames
+          $cmd .= "tar --use-compress-program=zstd -cvf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
+          break;
+        case 'tar.bz2':
+          $cmd .= "tar -cvjf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
+          break;
+        case 'tar.xz':
+          $cmd .= "tar -cvJf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
           break;
         default:
           $cmd .= "zip -r ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
