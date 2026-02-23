@@ -2249,7 +2249,13 @@ function actuallyApplyBootParams(btn) {
 
     // Get timeout value from dropdown (if exists)
     const timeoutDropdown = document.getElementById('timeout-dropdown');
-    const timeoutValue = timeoutDropdown ? timeoutDropdown.value : '50';
+    let timeoutValue = timeoutDropdown ? timeoutDropdown.value : '50';
+    if (timeoutDropdown && bootloaderType === 'grub') {
+        const timeoutSeconds = parseInt(timeoutValue, 10);
+        if (Number.isFinite(timeoutSeconds)) {
+            timeoutValue = String(timeoutSeconds * 10);
+        }
+    }
 
     const postData = {
         operation: 'write_config',
