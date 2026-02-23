@@ -2250,7 +2250,7 @@ function actuallyApplyBootParams(btn) {
     // Get timeout value from dropdown (if exists)
     const timeoutDropdown = document.getElementById('timeout-dropdown');
     let timeoutValue = timeoutDropdown ? timeoutDropdown.value : '50';
-    if (timeoutDropdown && bootloaderType === 'grub') {
+    if (timeoutDropdown && bootloaderType === 'syslinux') {
         const timeoutSeconds = parseInt(timeoutValue, 10);
         if (Number.isFinite(timeoutSeconds)) {
             timeoutValue = String(timeoutSeconds * 10);
