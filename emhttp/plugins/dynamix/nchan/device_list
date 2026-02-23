@@ -1144,13 +1144,13 @@ while (true) {
       if ($dataRow !== '') $echo[$a][] = $dataRow;
       $memberIndex = 1;
       foreach ($Cache as $disk) if (prefix(_var($disk,'name'))==$pool) {
-        $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
+        $memberDeviceUrl = "/Main/Device?name=".urlencode(_var($disk,'name',$pool));
         $memberLabel = sprintf(_('Device %d'), $memberIndex++);
         $echo[$a][] = array_offline($disk,$pool,[
           'displayName' => $memberLabel,
           'rawDisplayName' => true,
           'showLink' => true,
-          'linkHref' => $poolDeviceUrl,
+          'linkHref' => $memberDeviceUrl,
           'showFs' => false,
         ]);
         $name = _var($disk,'name');
@@ -1174,7 +1174,7 @@ while (true) {
         $memberIndex = 1;
         $subpoolType = isSubpool($pool);
         foreach ($Cache as $disk) if (prefix(_var($disk,'name'))==$pool) {
-          $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
+          $memberDeviceUrl = "/Main/Device?name=".urlencode(_var($disk,'name',$pool));
           $memberLabel = "» ".ucfirst(_($subpoolType,3))." ".sprintf(_('Device %d'), $memberIndex++);
           $fstype = str_replace('luks:','',_var($disk,'fsType'));
           $echo[$a][] = array_online(
@@ -1186,7 +1186,7 @@ while (true) {
               'displayName' => $memberLabel,
               'rawDisplayName' => true,
               'showLink' => true,
-              'linkHref' => $poolDeviceUrl,
+              'linkHref' => $memberDeviceUrl,
               'showPoolStatus' => false,
               'showView' => false,
               'indent' => 16,
@@ -1285,7 +1285,7 @@ while (true) {
       if ($dataRow !== '') $echo[$a][] = $dataRow;
       $memberIndex = 1;
       foreach ($Cache as $disk) if (prefix(_var($disk,'name'))==$pool) {
-        $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
+        $memberDeviceUrl = "/Main/Device?name=".urlencode(_var($disk,'name',$pool));
         $memberLabel = sprintf(_('Device %d'), $memberIndex++);
         $fstype = str_replace('luks:','',_var($disk,'fsType'));
         $echo[$a][] = array_online(
@@ -1297,7 +1297,7 @@ while (true) {
             'displayName' => $memberLabel,
             'rawDisplayName' => true,
             'showLink' => true,
-            'linkHref' => $poolDeviceUrl,
+            'linkHref' => $memberDeviceUrl,
             'showPoolStatus' => false,
             'showView' => false,
             'indent' => 16,
