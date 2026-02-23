@@ -126,6 +126,9 @@ sshd_update(){
   if sshd_running && check && [[ "$(this ListenAddress)" != "${BIND[@]}" ]]; then
     log "Updating $DAEMON..."
     sshd_reload
+  elif ! sshd_running && [[ $USE_SSH == yes ]]; then
+    log "Recovering $DAEMON..."
+    sshd_start
   fi
 }
 
