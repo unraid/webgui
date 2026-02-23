@@ -1134,11 +1134,11 @@ while (true) {
         $dataMetrics,
         $pool,
         $poolstatus,
-        false,
+        empty($bootDisk),
         [],
         true,
         '',
-        '',
+        empty($bootDisk) ? $summaryName : '',
         true
       );
       if ($dataRow !== '') $echo[$a][] = $dataRow;
@@ -1220,13 +1220,17 @@ while (true) {
         $bootDeviceUrl = "/Main/Boot?name=".urlencode($bootPoolName);
         $bootDir = _var($bootDisk,'fsMountpoint','/boot');
         $bootBrowseUrl = $bootDir !== '' ? "/Main/Browse?dir=".htmlspecialchars($bootDir) : $bootDeviceUrl;
-        $bootIcon = "<a class='view' href=\"$bootBrowseUrl\"><i class=\"icon-u-tab\" title=\""._('Browse')." $bootDir\"></i></a>";
+        $bootIcon = $bootBrowseUrl === $bootDeviceUrl
+          ? "<a class='view'></a>"
+          : "<a class='view' href=\"$bootBrowseUrl\"><i class=\"icon-u-tab\" title=\""._('Browse')." $bootDir\"></i></a>";
         $bootLink = "<a href=\"$bootDeviceUrl\">"._($bootLabel,3)."</a>";
         $poolLabel = ucfirst($pool);
         $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
         $poolDir = _var($poolDisk,'fsMountpoint','');
         $poolBrowseUrl = $poolDir !== '' ? "/Main/Browse?dir=".htmlspecialchars($poolDir) : $poolDeviceUrl;
-        $poolIcon = "<a class='view' href=\"$poolBrowseUrl\"><i class=\"icon-u-tab\" title=\""._('Browse')." $poolDir\"></i></a>";
+        $poolIcon = $poolBrowseUrl === $poolDeviceUrl
+          ? "<a class='view'></a>"
+          : "<a class='view' href=\"$poolBrowseUrl\"><i class=\"icon-u-tab\" title=\""._('Browse')." $poolDir\"></i></a>";
         $poolLink = "<a href=\"$poolDeviceUrl\">"._($poolLabel,3)."</a>";
         $flashWarn = flash_smb_warning_html(_var($bootDisk,'name',''));
         $summaryName = $poolIcon.$poolLink." / ".$bootIcon.$bootLink.$flashWarn;
@@ -1260,11 +1264,8 @@ while (true) {
       if (empty($bootDisk)) {
         $poolLabel = ucfirst($pool);
         $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
-        $poolDir = _var($poolDisk,'fsMountpoint','');
-        $poolBrowseUrl = $poolDir !== '' ? "/Main/Browse?dir=".htmlspecialchars($poolDir) : $poolDeviceUrl;
-        $poolIcon = "<a class='view' href=\"$poolBrowseUrl\"><i class=\"icon-u-tab\" title=\""._('Browse')." $poolDir\"></i></a>";
         $poolLink = "<a href=\"$poolDeviceUrl\">"._($poolLabel,3)."</a>";
-        $summaryName = $poolIcon.$poolLink;
+        $summaryName = $poolLink;
       }
       $dataLabel = isSubpool($pool) ? _('ZFS subpool') : _('Data Partition');
       $dataRow = pool_function_row(
@@ -1274,11 +1275,11 @@ while (true) {
         $dataMetrics,
         $pool,
         $poolstatus,
-        false,
+        empty($bootDisk),
         [],
         true,
         '',
-        '',
+        empty($bootDisk) ? $summaryName : '',
         true
       );
       if ($dataRow !== '') $echo[$a][] = $dataRow;
