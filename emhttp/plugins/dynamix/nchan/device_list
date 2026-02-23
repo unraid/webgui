@@ -1195,6 +1195,7 @@ while (true) {
           );
         }
         if (strcmp($root,$pool)!=0) {
+          if (!isset($Cache[$root]['devices'])) $Cache[$root]['devices'] = 0;
           $Cache[$root]['devices'] += _var($Cache[$pool],'devices',0);
         }
         if (strcmp($pool,$print)==0) {
@@ -1303,7 +1304,10 @@ while (true) {
           ]
         );
       }
-      if (strcmp($root,$pool)!=0) $Cache[$root]['devices'] += $Cache[$pool]['devices'];
+      if (strcmp($root,$pool)!=0) {
+        if (!isset($Cache[$root]['devices'])) $Cache[$root]['devices'] = 0;
+        $Cache[$root]['devices'] += _var($Cache[$pool],'devices',0);
+      }
       if (strcmp($pool,$print)==0) {
         delete_file($pool_log);
         if (_var($display,'total') && _var($Cache[$root],'devices',0)>1) $echo[$a][] = show_totals(sprintf(_('Pool of %s devices'),my_word($Cache[$root]['devices'])),false,"$root*");
