@@ -1108,7 +1108,7 @@ write_config_grub() {
     fi
 
     if [[ -n "${TIMEOUT}" ]]; then
-        local timeout_seconds=$(((TIMEOUT + 5) / 10))
+        local timeout_seconds="${TIMEOUT}"
         if grep -q '^set timeout=' "$temp_file"; then
             sed -i -E "s/^set timeout=.*/set timeout=${timeout_seconds}/" "$temp_file"
         else
