@@ -26,6 +26,7 @@ $bootPoolMaxSlots = 2;
 
 if (!function_exists('get_model')) {
   function get_model($id) {
+    $id = (string)$id;
     $pos = strrpos($id, '_');
     return $pos === false ? $id : substr($id, 0, $pos);
   }
