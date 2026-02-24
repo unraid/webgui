@@ -557,6 +557,47 @@ function addSubpoolPopup(poolname,currentsubpools) {
   dialogStyle();
 }
 
+function openBootPoolFromUrl() {
+  function hasCreateBootPoolFlag(searchText) {
+    if (!searchText) return false;
+    var text = searchText.charAt(0) === '?' ? searchText.substring(1) : searchText;
+    if (!text) return false;
+    var parts = text.split('&');
+    for (var i = 0; i < parts.length; i++) {
+      if (!parts[i]) continue;
+      var key = parts[i].split('=')[0] || '';
+      try {
+        key = decodeURIComponent(key.replace(/\+/g, ' ')).toLowerCase();
+      } catch (e) {
+        key = key.toLowerCase();
+      }
+      if (key === 'createbootpool') return true;
+    }
+    return false;
+  }
+
+  var shouldOpen = hasCreateBootPoolFlag(window.location.search || '');
+  if (!shouldOpen) {
+    try {
+      if (window.top && window.top.location) {
+        shouldOpen = hasCreateBootPoolFlag(window.top.location.search || '');
+      }
+    } catch (e) {
+    }
+  }
+
+  if (!shouldOpen) return;
+  if ($('#templatePopupBootPool').length === 0) return;
+  addBootPoolPopup();
+}
+
+<?if (_var($var,'fsState')=="Stopped" && _var($var,'bootEligible')=="yes"):?>
+$(function() {
+  openBootPoolFromUrl();
+  setTimeout(openBootPoolFromUrl, 250);
+});
+<?endif;?>
+
 <?if (_var($var,'fsState')=="Started"):?>
 $('#tab2').bind({click:function() {$('i.toggle').show('slow');}});
 <?endif;?>
