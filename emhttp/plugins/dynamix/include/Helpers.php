@@ -1745,16 +1745,12 @@ function find_duplicate_disks_json(): string
     $devices = get_block_devices();
 
     $all      = [];
-    $byWwid   = [];
     $bySerial = [];
 
     foreach ($devices as $sd) {
         $d = get_disk_identity($sd);
         $all[$d['device']] = $d;
 
-        if ($d['wwid']) {
-            $byWwid[$d['wwid']][] = $d['device'];
-        }
         if ($d['serial']) {
             $bySerial[$d['serial']][] = $d['device'];
         }
@@ -1767,11 +1763,7 @@ function find_duplicate_disks_json(): string
         $value     = null;
         $others    = [];
 
-        if ($info['wwid'] && count($byWwid[$info['wwid']]) > 1) {
-            $duplicate = 'wwid';
-            $value     = $info['wwid'];
-            $others    = array_values(array_diff($byWwid[$info['wwid']], [$dev]));
-        } elseif ($info['serial'] && count($bySerial[$info['serial']]) > 1) {
+        if ($info['serial'] && count($bySerial[$info['serial']]) > 1) {
             $duplicate = 'serial';
             $value     = $info['serial'];
             $others    = array_values(array_diff($bySerial[$info['serial']], [$dev]));

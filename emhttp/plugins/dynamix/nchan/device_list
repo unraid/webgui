@@ -332,6 +332,9 @@ function pool_function_row(string $label, ?array $poolDisk, ?array $firstMember,
 {
   global $disks;
   $disk = $poolDisk ?: ($firstMember ?? []);
+  if (empty($disk) && $showSummary && $poolName !== '' && isset($disks[$poolName])) {
+    $disk = $disks[$poolName];
+  }
   if (empty($disk)) return '';
   $disk = array_merge([], $disk);
 
@@ -536,7 +539,7 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[], $options=[]
       $duplicate = implode("<br>", $escapedDevices)."<br>";
     }
     $details = $dupLine ? $dupLine."<br>" : "";
-    $warndup .= "<a class='info'><i class='fa fa-clone fa-fw orange-text'></i><span>"._('Duplicate device identifier detected (WWID or Serial)')."<br>$details$duplicate</span></a>";
+    $warndup .= "<a class='info'><i class='fa fa-clone fa-fw orange-text'></i><span>"._('Duplicate device identifier detected (Serial)')."<br>$details$duplicate</span></a>";
   }
 
   // Add pool status for zfs and btrfs pools only (first device only)
@@ -1072,7 +1075,10 @@ while (true) {
     $a = 'pool_device'.$i++;
     $echo[$a] = [];
     $root  = explode($_tilde_,$pool)[0];
-    $print = array_filter(array_column($Cache,'name'),function($name) use ($pools,$root,$_tilde_) {$name_root=explode($_tilde_,$name)[0]; return in_array($name,$pools) && strcmp($root,$name_root)==0;});
+    $print = array_filter(array_column($Cache,'name'),function($name) use ($pools,$root,$_tilde_) {
+      $name_root = explode($_tilde_,$name)[0];
+      return in_array($name,$pools) && strcmp($root,$name_root)==0;
+    });
     $print = end($print);
     if (_var($var,'fsState')=='Stopped') {
       $log = @parse_ini_file($pool_log) ?: []; // used to detect slot changes
@@ -1133,18 +1139,18 @@ while (true) {
         true,
         '',
         empty($bootDisk) ? $summaryName : '',
-        empty($bootDisk) ? false : true
+        true
       );
       if ($dataRow !== '') $echo[$a][] = $dataRow;
       $memberIndex = 1;
       foreach ($Cache as $disk) if (prefix(_var($disk,'name'))==$pool) {
-        $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
+        $memberDeviceUrl = "/Main/Device?name=".urlencode(_var($disk,'name',$pool));
         $memberLabel = sprintf(_('Device %d'), $memberIndex++);
         $echo[$a][] = array_offline($disk,$pool,[
           'displayName' => $memberLabel,
           'rawDisplayName' => true,
           'showLink' => true,
-          'linkHref' => $poolDeviceUrl,
+          'linkHref' => $memberDeviceUrl,
           'showFs' => false,
         ]);
         $name = _var($disk,'name');
@@ -1168,7 +1174,7 @@ while (true) {
         $memberIndex = 1;
         $subpoolType = isSubpool($pool);
         foreach ($Cache as $disk) if (prefix(_var($disk,'name'))==$pool) {
-          $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
+          $memberDeviceUrl = "/Main/Device?name=".urlencode(_var($disk,'name',$pool));
           $memberLabel = "» ".ucfirst(_($subpoolType,3))." ".sprintf(_('Device %d'), $memberIndex++);
           $fstype = str_replace('luks:','',_var($disk,'fsType'));
           $echo[$a][] = array_online(
@@ -1180,13 +1186,24 @@ while (true) {
               'displayName' => $memberLabel,
               'rawDisplayName' => true,
               'showLink' => true,
-              'linkHref' => $poolDeviceUrl,
+              'linkHref' => $memberDeviceUrl,
               'showPoolStatus' => false,
               'showView' => false,
               'indent' => 16,
               'showFsInfo' => false,
             ]
           );
+        }
+        if (strcmp($root,$pool)!=0) {
+          if (!isset($Cache[$root]['devices'])) $Cache[$root]['devices'] = 0;
+          $Cache[$root]['devices'] += _var($Cache[$pool],'devices',0);
+        }
+        if (strcmp($pool,$print)==0) {
+          delete_file($pool_log);
+          if (_var($display,'total') && _var($Cache[$root],'devices',0)>1) {
+            $echo[$a][] = show_totals(sprintf(_('Pool of %s devices'),my_word($Cache[$root]['devices'])),false,"$root*");
+          }
+          $sum = initSum();
         }
         $echo[$a] = implode($echo[$a]);
         continue;
@@ -1203,13 +1220,17 @@ while (true) {
         $bootDeviceUrl = "/Main/Boot?name=".urlencode($bootPoolName);
         $bootDir = _var($bootDisk,'fsMountpoint','/boot');
         $bootBrowseUrl = $bootDir !== '' ? "/Main/Browse?dir=".htmlspecialchars($bootDir) : $bootDeviceUrl;
-        $bootIcon = "<a class='view' href=\"$bootBrowseUrl\"><i class=\"icon-u-tab\" title=\""._('Browse')." $bootDir\"></i></a>";
+        $bootIcon = $bootBrowseUrl === $bootDeviceUrl
+          ? "<a class='view'></a>"
+          : "<a class='view' href=\"$bootBrowseUrl\"><i class=\"icon-u-tab\" title=\""._('Browse')." $bootDir\"></i></a>";
         $bootLink = "<a href=\"$bootDeviceUrl\">"._($bootLabel,3)."</a>";
         $poolLabel = ucfirst($pool);
         $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
         $poolDir = _var($poolDisk,'fsMountpoint','');
         $poolBrowseUrl = $poolDir !== '' ? "/Main/Browse?dir=".htmlspecialchars($poolDir) : $poolDeviceUrl;
-        $poolIcon = "<a class='view' href=\"$poolBrowseUrl\"><i class=\"icon-u-tab\" title=\""._('Browse')." $poolDir\"></i></a>";
+        $poolIcon = $poolBrowseUrl === $poolDeviceUrl
+          ? "<a class='view'></a>"
+          : "<a class='view' href=\"$poolBrowseUrl\"><i class=\"icon-u-tab\" title=\""._('Browse')." $poolDir\"></i></a>";
         $poolLink = "<a href=\"$poolDeviceUrl\">"._($poolLabel,3)."</a>";
         $flashWarn = flash_smb_warning_html(_var($bootDisk,'name',''));
         $summaryName = $poolIcon.$poolLink." / ".$bootIcon.$bootLink.$flashWarn;
@@ -1243,11 +1264,8 @@ while (true) {
       if (empty($bootDisk)) {
         $poolLabel = ucfirst($pool);
         $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
-        $poolDir = _var($poolDisk,'fsMountpoint','');
-        $poolBrowseUrl = $poolDir !== '' ? "/Main/Browse?dir=".htmlspecialchars($poolDir) : $poolDeviceUrl;
-        $poolIcon = "<a class='view' href=\"$poolBrowseUrl\"><i class=\"icon-u-tab\" title=\""._('Browse')." $poolDir\"></i></a>";
         $poolLink = "<a href=\"$poolDeviceUrl\">"._($poolLabel,3)."</a>";
-        $summaryName = $poolIcon.$poolLink;
+        $summaryName = $poolLink;
       }
       $dataLabel = isSubpool($pool) ? _('ZFS subpool') : _('Data Partition');
       $dataRow = pool_function_row(
@@ -1262,12 +1280,12 @@ while (true) {
         true,
         '',
         empty($bootDisk) ? $summaryName : '',
-        empty($bootDisk) ? false : true
+        true
       );
       if ($dataRow !== '') $echo[$a][] = $dataRow;
       $memberIndex = 1;
       foreach ($Cache as $disk) if (prefix(_var($disk,'name'))==$pool) {
-        $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
+        $memberDeviceUrl = "/Main/Device?name=".urlencode(_var($disk,'name',$pool));
         $memberLabel = sprintf(_('Device %d'), $memberIndex++);
         $fstype = str_replace('luks:','',_var($disk,'fsType'));
         $echo[$a][] = array_online(
@@ -1279,7 +1297,7 @@ while (true) {
             'displayName' => $memberLabel,
             'rawDisplayName' => true,
             'showLink' => true,
-            'linkHref' => $poolDeviceUrl,
+            'linkHref' => $memberDeviceUrl,
             'showPoolStatus' => false,
             'showView' => false,
             'indent' => 16,
@@ -1287,7 +1305,10 @@ while (true) {
           ]
         );
       }
-      if (strcmp($root,$pool)!=0) $Cache[$root]['devices'] += $Cache[$pool]['devices'];
+      if (strcmp($root,$pool)!=0) {
+        if (!isset($Cache[$root]['devices'])) $Cache[$root]['devices'] = 0;
+        $Cache[$root]['devices'] += _var($Cache[$pool],'devices',0);
+      }
       if (strcmp($pool,$print)==0) {
         delete_file($pool_log);
         if (_var($display,'total') && _var($Cache[$root],'devices',0)>1) $echo[$a][] = show_totals(sprintf(_('Pool of %s devices'),my_word($Cache[$root]['devices'])),false,"$root*");

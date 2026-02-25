@@ -23,6 +23,58 @@ function sharename($share) {
   return basename($share,'.cfg');
 }
 $bootPoolMaxSlots = 2;
+
+if (!function_exists('get_model')) {
+  function get_model($id) {
+    $id = (string)$id;
+    $pos = strrpos($id, '_');
+    return $pos === false ? $id : substr($id, 0, $pos);
+  }
+}
+
+function boot_pool_device_desc($dev) {
+  $devId = _var($dev,'id','');
+  $devName = _var($dev,'device','');
+  $devSectors = _var($dev,'sectors',0);
+  $devSectorSize = _var($dev,'sector_size',0);
+  $sizeValue = $devSectors > 0 && $devSectorSize > 0 ? ($devSectors * $devSectorSize) : 0;
+  $unit = '';
+  $sizeText = '';
+
+  if ($sizeValue > 0) {
+    if (function_exists('my_scale')) {
+      $sizeText = my_scale($sizeValue, $unit, -1);
+    } else {
+      $sizeText = (string)round($sizeValue / 1024 / 1024);
+      $unit = 'MB';
+    }
+  }
+
+  $label = $devId !== ''
+    ? (function_exists('my_id') ? my_id($devId) : $devId)
+    : $devName;
+
+  if ($sizeText !== '' && $unit !== '') {
+    $label .= " - {$sizeText} {$unit}";
+  }
+  if ($devName !== '') {
+    $label .= " ({$devName})";
+  }
+
+  return $label;
+}
+
+if (count($devs) > 1) {
+  $devSectors = array_column($devs, 'sectors');
+  $devModels = array_map('get_model', array_column($devs, 'id'));
+  $devDevices = array_column($devs, 'device');
+  array_multisort(
+    $devSectors, SORT_DESC,
+    $devModels, SORT_NATURAL | SORT_FLAG_CASE,
+    $devDevices,
+    $devs
+  );
+}
 ?>
 <script>
 function validate(poolname) {
@@ -505,6 +557,47 @@ function addSubpoolPopup(poolname,currentsubpools) {
   dialogStyle();
 }
 
+function openBootPoolFromUrl() {
+  function hasCreateBootPoolFlag(searchText) {
+    if (!searchText) return false;
+    var text = searchText.charAt(0) === '?' ? searchText.substring(1) : searchText;
+    if (!text) return false;
+    var parts = text.split('&');
+    for (var i = 0; i < parts.length; i++) {
+      if (!parts[i]) continue;
+      var key = parts[i].split('=')[0] || '';
+      try {
+        key = decodeURIComponent(key.replace(/\+/g, ' ')).toLowerCase();
+      } catch (e) {
+        key = key.toLowerCase();
+      }
+      if (key === 'createbootpool') return true;
+    }
+    return false;
+  }
+
+  var shouldOpen = hasCreateBootPoolFlag(window.location.search || '');
+  if (!shouldOpen) {
+    try {
+      if (window.top && window.top.location) {
+        shouldOpen = hasCreateBootPoolFlag(window.top.location.search || '');
+      }
+    } catch (e) {
+    }
+  }
+
+  if (!shouldOpen) return;
+  if ($('#templatePopupBootPool').length === 0) return;
+  addBootPoolPopup();
+}
+
+<?if (_var($var,'fsState')=="Stopped" && _var($var,'bootEligible')=="yes"):?>
+$(function() {
+  openBootPoolFromUrl();
+  setTimeout(openBootPoolFromUrl, 250);
+});
+<?endif;?>
+
 <?if (_var($var,'fsState')=="Started"):?>
 $('#tab2').bind({click:function() {$('i.toggle').show('slow');}});
 <?endif;?>
@@ -621,12 +714,10 @@ _(Slots)_:
       }
       if (trim($devId) !== '') {
         $devValue = $devId;
-        $devLabel = $devId;
-        if ($devName !== '') $devLabel .= " ($devName)";
       } else {
         $devValue = $devName;
-        $devLabel = $devName;
       }
+      $devLabel = boot_pool_device_desc($dev);
     ?>
     <option value="<?=htmlspecialchars($devValue, ENT_QUOTES, 'UTF-8')?>" data-size-mib="<?=$devSizeMiB?>"><?=htmlspecialchars($devLabel, ENT_QUOTES, 'UTF-8')?></option>
     <?endforeach;?>

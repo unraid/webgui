@@ -1,6 +1,7 @@
 Menu="Flash:4 Boot:3 OtherSettings"
 Title="Boot Parameters"
 Tag="edit"
+Focus="bootParamsTabFocus"
 
 ---
 <?PHP
@@ -638,6 +639,29 @@ function autoResizeTextarea(textarea) {
 
     // Set height to scrollHeight plus a small buffer for padding
     textarea.style.height = (textarea.scrollHeight + 2) + 'px';
+}
+
+function scheduleRawEditorResize() {
+    const rawEditor = document.getElementById('raw-config-editor');
+    if (!rawEditor) return;
+
+    const resize = function() {
+        autoResizeTextarea(rawEditor);
+    };
+
+    requestAnimationFrame(function() {
+        requestAnimationFrame(resize);
+    });
+
+    setTimeout(resize, 0);
+    setTimeout(resize, 100);
+}
+
+function bootParamsTabFocus() {
+    const rawView = document.getElementById('syslinux-raw-view');
+    if (rawView && rawView.offsetParent !== null) {
+        scheduleRawEditorResize();
+    }
 }
 
 // Update configuration preview
@@ -1542,8 +1566,8 @@ $(function() {
             rawConfigModified = false;
             updateRawConfigButton();
 
-            // Auto-resize textarea to fit content
-            autoResizeTextarea(rawEditor);
+            // Auto-resize after layout so scrollHeight is correct on initial load
+            scheduleRawEditorResize();
         } else {
             // Show menu view, hide raw view
             $('#syslinux-raw-view').hide();
@@ -1984,6 +2008,11 @@ function loadCurrentConfig() {
                     // Set toggle state and switch to Raw View
                     $('#syslinux-view-toggle').prop('checked', true).trigger('change');
                 }, 100);
+
+                // Ensure resize runs after the raw view is actually shown
+                setTimeout(function() {
+                    scheduleRawEditorResize();
+                }, 200);
             }
         },
         error: function(xhr, status, error) {
@@ -2220,7 +2249,13 @@ function actuallyApplyBootParams(btn) {
 
     // Get timeout value from dropdown (if exists)
     const timeoutDropdown = document.getElementById('timeout-dropdown');
-    const timeoutValue = timeoutDropdown ? timeoutDropdown.value : '50';
+    let timeoutValue = timeoutDropdown ? timeoutDropdown.value : '50';
+    if (timeoutDropdown && bootloaderType === 'syslinux') {
+        const timeoutSeconds = parseInt(timeoutValue, 10);
+        if (Number.isFinite(timeoutSeconds)) {
+            timeoutValue = String(timeoutSeconds * 10);
+        }
+    }
 
     const postData = {
         operation: 'write_config',
