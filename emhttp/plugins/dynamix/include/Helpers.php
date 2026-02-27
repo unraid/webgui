@@ -319,7 +319,7 @@ function check_deprecated_filesystem($disk) {
     $warnings[] = [
       'type' => 'reiserfs',
       'severity' => 'critical',
-      'message' => _('ReiserFS is deprecated and is no longer supported in Unraid. You will need to downgrade to Unraid 7.2 to action')
+      'message' => _('ReiserFS is deprecated and is no longer supported in Unraid. You will need to downgrade to Unraid 7.2 to take action')
     ];
   }
   
