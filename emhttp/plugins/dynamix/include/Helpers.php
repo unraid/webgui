@@ -682,7 +682,7 @@ function check_disk_for_deprecated_fs($disk) {
       'name' => _var($disk, 'name'),
       'fsType' => 'ReiserFS',
       'severity' => 'critical',
-      'message' => 'ReiserFS is deprecated and is no longer supported in Unraid. You will need to downgrade to Unraid 7.2 to action'
+      'message' => 'ReiserFS is deprecated and is no longer supported in Unraid. You will need to downgrade to Unraid 7.2 to take action'
     ];
   }
   
@@ -819,7 +819,7 @@ HTML;
       'The following array devices are using older filesystem versions:' : 
       'The following pool devices are using older filesystem versions:');
 
-    $deadline = new DateTime('2030-09-30');
+    $deadline = new DateTime('2030-10-01');
     $now = new DateTime('now');
     if ($now < $deadline) {
       $interval = $now->diff($deadline);
