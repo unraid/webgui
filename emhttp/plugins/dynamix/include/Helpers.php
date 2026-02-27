@@ -334,7 +334,7 @@ function check_deprecated_filesystem($disk) {
         $warnings[] = [
           'type' => 'xfs_v4',
           'severity' => 'critical',
-          'message' => _('XFS v4 is deprecated and will not be supported in future Unraid releases. Please migrate to XFS immediately.')
+          'message' => _('XFS v4 is deprecated and will not be supported in future Unraid releases. Please migrate to XFS v5 immediately.')
         ];
       }
     }
@@ -702,7 +702,7 @@ function check_disk_for_deprecated_fs($disk) {
             'name' => $name,
             'fsType' => 'XFS v4',
             'severity' => 'notice',
-            'message' => 'XFS v4 is deprecated and will not be supported in future Unraid releases. You have until 2030 to migrate to XFS.'
+            'message' => 'XFS v4 is deprecated and will not be supported in future Unraid releases. You have until 2030 to migrate to XFS v5.'
           ];
         }
       }
@@ -867,7 +867,7 @@ if (!sessionStorage.getItem('xfs-{$id}-dismissed')) {
                     {$diskList}
                 </ul>
                 <div style="margin-top: 10px;">
-                      <strong>Recommendation:</strong> Plan to migrate to XFS, BTRFS, or ZFS {$timeline}. 
+                      <strong>Recommendation:</strong> Plan to migrate to XFS v5, BTRFS, or ZFS {$timeline}. 
                     <a href="https://docs.unraid.net/go/convert-reiser-and-xfs" 
                        target="_blank" style="color: #0066cc;">View migration guide →</a>
                 </div>
