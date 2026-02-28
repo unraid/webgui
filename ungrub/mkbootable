@@ -37,7 +37,7 @@ fi
 log "Using $BOOT"
 
 configure_grub() {
-  mkdir -p "$BOOT/grub"
+  mkdir -p -m 0700 "$BOOT/grub"
   cp -rp "$SCRIPT_DIR/themes" "$BOOT/grub/"
   boot_uuid=$(zpool get -H -o value guid "$POOL")
   $SCRIPT_DIR/mkgrub "$boot_uuid" > "$BOOT/grub/grub.cfg"
@@ -69,7 +69,7 @@ create_partitions() {
 install_grub() {
   # format the EFI System Partition (partition 2) with FAT32 and mount
   mkfs.fat -F32 -n EFI "$EFI_PART"
-  mkdir -p "$BOOT/efi"
+  mkdir -p -m 0700 "$BOOT/efi"
   mount "$EFI_PART" "$BOOT/efi"
 
   # UEFI install
@@ -81,7 +81,7 @@ install_grub() {
     --removable
 
   # BIOS install
-  # grub-install --target=i386-pc "/dev/$DEV"
+  grub-install --target=i386-pc "/dev/$DEV"
 
   # we don't need this mounted anymore
   umount "$BOOT/efi"
