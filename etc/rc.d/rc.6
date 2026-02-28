@@ -267,6 +267,7 @@ fi
 if /bin/mountpoint -q /boot-transfer ; then
   log "Transfering boot configuration"
   /usr/bin/rsync -av \
+    --exclude='/.*' \
     --exclude='/EFI*' \
     --exclude='/FOUND*' \
     --exclude='/FSCK*' \
