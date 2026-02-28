@@ -265,12 +265,6 @@ else
   [[ ! -f /etc/rc.d/rc.S.cont ]] && abort "unable to continue - you must remove 'root=$ROOT' from syslinux.cfg"
 fi
 
-# set permissions for non vfat boot on /boot
-if [[ $FSTYPE != vfat ]]; then
-  /usr/bin/chown -R root:root /boot
-  /usr/bin/chmod -R 644 /boot
-fi
-
 . /etc/unraid-version
 # log all PHP warnings (for beta|rc releases)
 if [[ -f /etc/php.d/errors-php.ini && $version =~ -(beta|rc) ]]; then
