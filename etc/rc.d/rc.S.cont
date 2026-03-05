@@ -238,7 +238,7 @@ else
   /bin/ln -sf /usr/share/zoneinfo/$timeZone /etc/localtime
 fi
 
-# LimeTech - restore password files stored on flash
+# LimeTech - restore password files stored on the boot device
 if [[ -r /boot/config/passwd ]]; then
   while IFS=: read -r USERNAME PASSWORD USERID GROUPID COMMENT HOMEDIR CMDSHELL; do
     if [[ $USERNAME == root ]]; then
@@ -261,7 +261,7 @@ if [[ -r /boot/config/secrets.tdb ]]; then
   /bin/cp -f /boot/config/secrets.tdb /var/lib/samba/private
 fi
 
-# LimeTech - restore custom rsyslog.conf config file from flash if present
+# LimeTech - restore custom rsyslog.conf config file from the boot device if present
 if [[ -r /boot/config/rsyslog.conf ]]; then
   /usr/bin/fromdos </boot/config/rsyslog.conf >/etc/rsyslog.conf
 fi
