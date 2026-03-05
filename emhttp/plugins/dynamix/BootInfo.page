@@ -34,7 +34,8 @@ function backup() {
       location = '/'+zip;
       setTimeout(function(){cleanUp(zip);},6000);
     } else {
-      $('input[value="_(Creating boot device backup)_..."]').val("_(Boot device backup)_");
+      var $btn = $('input[value="_(Creating boot device backup)_..."]');
+      $btn.val("_(Boot device backup)_").prop('disabled',false);
       $('div.spinner').hide('slow');
       $('#pleaseWait').hide('slow');
       swal({title:"_(Creation error)_",text:"_(Insufficient free disk space available)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});

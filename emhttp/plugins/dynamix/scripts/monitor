@@ -291,7 +291,7 @@ if ($var['mdResyncPos']) {
 // check read-write status of Boot drive
 $name = 'flash';
 $last = $saved[$item][$name] ?? '';
-$warn = exec("awk '$2==\"/boot\" && $4 ~ /^rw/ {print \"rw\"}' /proc/mounts");
+$warn = exec("awk '$2==\"/boot\" && $4 ~ /(^|,)rw(,|$)/ {print \"rw\"}' /proc/mounts");
 $info = "{$disks['flash']['id']} ({$disks['flash']['device']})";
 if ($warn!="rw") {
   if ($warn!=$last) {
