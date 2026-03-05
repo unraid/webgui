@@ -486,7 +486,7 @@ var devices = new NchanSubscriber('/sub/devices<?=$spot?",parity":""?>',{subscri
 devices.on('message', function(msg, meta) {
   switch (<?if($spot):?>meta.id.channel()<?else:?>0<?endif;?>) {
   case 0:
-    // array + pool + ua + flash devices
+    // array + pool + ua + boot devices
     var get = JSON.parse(msg);
     for (var name in get) $('#'+name).html(get[name]);
     if (recall !== null) recall.html('&nbsp;');

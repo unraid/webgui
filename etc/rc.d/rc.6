@@ -208,9 +208,9 @@ fi
 /usr/sbin/seedrng
 /bin/cp -f /var/lib/seedrng/seed.credit /boot/config/random-seed 2>/dev/null
 
-# If "Mirror syslog to flash" is disabled and "Copy" is enabled (default) then copy current syslog to flash
+# If "Mirror syslog to boot drive" is disabled and "Copy" is enabled (default) then copy current syslog to boot drive
 # The copied file will become /boot/logs/syslog-previous after next boot (see rc.M)
-# Safety feature: copy only when enough space is available on the flash device
+# Safety feature: copy only when enough space is available on the boot device
 CFG=/boot/config/rsyslog.cfg
 [[ -r $CFG ]] && MIRROR=$(/bin/grep -Pom1 '^syslog_flash="\K[^"]+' $CFG)
 [[ -r $CFG ]] && COPY=$(/bin/grep -Pom1 '^syslog_shutdown="\K[^"]+' $CFG)
@@ -218,7 +218,7 @@ if [[ ! -f /boot/logs/syslog && -z $MIRROR && -z $COPY ]]; then
   AVAIL=$(/bin/df --output=avail /boot | /bin/awk '(NR>1){print $1*1024;exit}')
   SIZE=$(($(/bin/stat -c%s /var/log/syslog)*2))
   if [[ $AVAIL -ge $SIZE ]]; then
-    log "Saving syslog to flash"
+    log "Saving syslog to boot drive"
     /bin/cp -f /var/log/syslog /boot/logs/syslog
   fi
 fi

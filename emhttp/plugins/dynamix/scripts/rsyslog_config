@@ -48,7 +48,7 @@ else
   sed -ri 's/^#?(\*\.\* @@?.*:[0-9]+)$/#\1/' $ETC
 fi
 
-# mirror syslog to flash
+# mirror syslog to boot drive
 if [[ -n $syslog_flash ]]; then
   if ! grep -q '^\$template flash,' $ETC; then
     sed -ri '/^#\$UDPServerRun [0-9]+.*$/a$template flash,"/boot/logs/syslog"' $ETC
@@ -58,7 +58,7 @@ else
   sed -ri '/^\$template flash,"\/boot\/logs\/syslog"$/d;/^\*\.debug \?flash/d' $ETC
 fi
 
-# copy conf to flash (read settings on reboot)
+# copy conf to boot drive (read settings on reboot)
 todos <$ETC >$CFG
 
 # keep local logging disabled at startup
@@ -82,7 +82,7 @@ $server_folder/*.log {
 }
 EOF
     chmod 644 $LOG
-    # keep copy on flash
+    # keep copy on boot drive
     cp -f $LOG $USB
   else
     # clean up

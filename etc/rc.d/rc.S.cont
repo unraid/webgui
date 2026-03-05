@@ -211,14 +211,14 @@ if [[ -x /etc/rc.d/rc.serial ]]; then
   /etc/rc.d/rc.serial start
 fi
 
-# LimeTech - let's keep this on the USB flash
+# LimeTech - let's keep this on the boot device
 ## Carry an entropy pool between reboots to improve randomness.
 /bin/mkdir -p /var/lib/seedrng
 /bin/chmod 600 /var/lib/seedrng
 /bin/cp /boot/config/random-seed /var/lib/seedrng/seed.no-credit 2>/dev/null
 /usr/sbin/seedrng
 
-# LimeTech - restore hostname from ident.cfg file on flash and ensure hostname is
+# LimeTech - restore hostname from ident.cfg file on the boot device and ensure hostname is
 # defined as localhost alias in /etc/hosts (this lets wins name resolution work)
 NAME="Tower"
 timeZone="America/Los_Angeles"
