@@ -481,8 +481,9 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[], $options=[]
     $view = "<a class='view' href=\"/Main/Browse?dir=".htmlspecialchars($dir)."\"><i class=\"icon-u-tab\" title=\""._('Browse')." $dir\"></i></a>";
   }
   if ($indent) $view = "<span style='padding-left:{$indent}px'></span>".$view;
-  $name   = $displayName ?? _var($disk,'name');
-  $named  = no_tilde($name);
+  $realName = _var($disk,'name');
+  $name   = $displayName ?? $realName;
+  $named  = no_tilde($realName);
   $type   = _var($disk,'type');
   $flash  = $type=='Flash';
   $boot   = $type=='Boot';
@@ -508,8 +509,8 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[], $options=[]
   }
   $ctrl = '';
   $disk_status = _var($disk,'status');
-  if (_var($var,'fsState')=='Started' && $source!='Flash' && !str_contains($disk_status,'_NP')) {
-    $ctrl = " style='cursor:pointer' onclick=\"toggle_state('$source','$name','$action')\"";
+  if (_var($var,'fsState')=='Started' && !$flash && !$boot && !str_contains($disk_status,'_NP')) {
+    $ctrl = " style='cursor:pointer' onclick=\"toggle_state('$source','$realName','$action')\"";
     $help .= "<br>"._("Click to spin $action device");
   }
   $status = "<a class='info'><i ".($ctrl?"id='dev-$named' ":"")."class='fa fa-$orb orb $color-orb'$ctrl></i><span>$help</span></a>";
@@ -520,11 +521,11 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[], $options=[]
   } elseif (!$showLink || $displayName !== null) {
     $link = $fancy;
   } else {
-    $link = ($parity && $disk_status!='DISK_NP_DSBL') || (($flash || $boot || $data || $pool) && $disk_status!='DISK_NP') || in_array($name,$pools) || $type=='New'
-            ? "<a href=\"".htmlspecialchars("/Main/$source?name=$name")."\">$fancy</a>"
+        $link = ($parity && $disk_status!='DISK_NP_DSBL') || (($flash || $boot || $data || $pool) && $disk_status!='DISK_NP') || in_array($realName,$pools) || $type=='New'
+          ? "<a href=\"".htmlspecialchars("/Main/$source?name=$realName")."\">$fancy</a>"
             : $fancy;
   }
-  $warn   = flash_smb_warning_html($name);
+      $warn   = flash_smb_warning_html($realName);
 
   $warndup = '';
   $fullDevName = "/dev/" . _var($disk,'device', '');
@@ -1098,7 +1099,6 @@ while (true) {
       $summaryName = $poolLink;
       if (!empty($bootDisk)) {
         $bootPoolName = prefix(_var($bootDisk,'name',''));
-        $bootLabel = ucfirst($bootPoolName);
         $bootLabel = _("Internal Boot");
         $bootDeviceUrl = "/Main/Boot?name=".urlencode($bootPoolName);
         $bootLink = "<a href=\"$bootDeviceUrl\">"._($bootLabel,3)."</a>";
@@ -1220,7 +1220,6 @@ while (true) {
       $dataMetrics = get_pool_data_metrics($poolDisk, $pool, $disks);
       if (!empty($bootDisk)) {
         $bootPoolName = prefix(_var($bootDisk,'name',''));
-        $bootLabel = ucfirst($bootPoolName);
         $bootLabel = _("Internal Boot");
         $bootDeviceUrl = "/Main/Boot?name=".urlencode($bootPoolName);
         $bootDir = _var($bootDisk,'fsMountpoint','/boot');
