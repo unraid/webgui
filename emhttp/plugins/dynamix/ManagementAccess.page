@@ -83,7 +83,7 @@ $cert1Issuer = '&nbsp;';
 
 if ($cert1Present) {
     $cert1URL = _var($var, 'NAME', 'tower').(_var($var, 'LOCAL_TLD') ? '.'._var($var, 'LOCAL_TLD') : '');
-    // if user replaced cert without reloading nginx, the cert on the flash could be invalid
+    // if user replaced cert without reloading nginx, the cert on the boot device could be invalid
     $cert1URLvalid = acceptableCert($cert1File, _var($var, 'NAME', 'tower'), $cert1URL);
     $cert1Subject = exec("/usr/bin/openssl x509 -in $cert1File -noout -text | sed -n 's/^.*Subject: //p'");
     $cert1Issuer  = exec("/usr/bin/openssl x509 -in $cert1File -noout -text | sed -n -e 's/^.*Issuer: //p'");

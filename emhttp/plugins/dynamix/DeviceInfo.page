@@ -836,7 +836,7 @@ _(Name)_:
 
 <?else:?>
 _(Name)_:
-: <?=_(my_disk(native(htmlspecialchars($name))), 3)?>
+: <?=$name=='flash' ? _('Boot Device') : _(my_disk(native(htmlspecialchars($name))), 3)?>
 
 <?endif;?>
 <?if (diskStatus('_NP')):?>

@@ -98,7 +98,7 @@ function anonymize($text, $select) {
     $text = str_replace(end($guid),"...",$text);
     $rows = explode("\n", $text);
     $pool = implode('|',$pools) ?: 'cache';
-    $regex = "/\b((disk|$pool|parity|cpu|eth|dev)[0-9]+)|(smart|flash|flashbackup|$pool|parity|cpu{$customShares})\b/";
+    $regex = "/\b((disk|$pool|parity|cpu|eth|dev)[0-9]+)|(smart|flash|flashbackup|bootbackup|$pool|parity|cpu{$customShares})\b/";
     foreach ($rows as &$row) {
       if (!preg_match($regex, $row)) {
         $row = preg_replace("/^(\s*\[\S).*(\S\])( => Array)$/","$1..$2$3",$row);
@@ -313,7 +313,7 @@ function geturls() {
     }
     $urls .= "\nOnce DNS has been restored, navigate to Settings -> Management Access and set 'Use SSL' back to '$use_ssl'\n";
   }
-  // get a list of the certificate files on the flash drive
+  // get a list of the certificate files on the boot drive
   $dirlisting[0] = "{$cert_path}";
   if (file_exists($cert_path)) {
     exec("ls -l ".escapeshellarg($cert_path), $dirlisting);
@@ -497,7 +497,7 @@ file_put_contents("/$diag/unraid-".$unraid['version'].".txt",$unraid['version'].
 // add bz*.sha256 values
 run("tail /boot/bz*.sha256 >> ".escapeshellarg("/$diag/unraid-".$unraid['version'].".txt"));
 
-// Get the previous version of Unraid from the previous directory on flash
+// Get the previous version of Unraid from the previous directory on the boot drive
 $changes = '/boot/previous/changes.txt';
 
 if (file_exists($changes)) {

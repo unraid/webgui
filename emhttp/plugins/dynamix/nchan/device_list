@@ -455,7 +455,7 @@ function my_power($power) {
 function flash_smb_warning_html($diskName) {
   global $var, $sec;
   return ($diskName == 'flash') && _var($var,'shareSMBEnabled')=='yes' && _var($sec['flash'],'export')=='e' && _var($sec['flash'],'security')=='public'
-    ? "&nbsp;<a class='info'><i class='fa fa-warning fa-fw orange-text'></i><span>"._('Boot device is set as public share')."<br>"._('Please change share SMB security')."<br>"._('Click on **FLASH** above this message')."</span></a>"
+    ? "&nbsp;<a class='info'><i class='fa fa-warning fa-fw orange-text'></i><span>"._('Boot device is set as public share')."<br>"._('Please change share SMB security')."<br>"._('Click on **Boot** above this message')."</span></a>"
     : "";
 }
 
@@ -481,16 +481,19 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[], $options=[]
     $view = "<a class='view' href=\"/Main/Browse?dir=".htmlspecialchars($dir)."\"><i class=\"icon-u-tab\" title=\""._('Browse')." $dir\"></i></a>";
   }
   if ($indent) $view = "<span style='padding-left:{$indent}px'></span>".$view;
-  $name   = $displayName ?? _var($disk,'name');
-  $named  = no_tilde($name);
-  $fancy  = $displayName !== null ? ($rawDisplayName ? $name : _($name,3)) : _(my_disk(native($name,1)),3);
+  $realName = _var($disk,'name');
+  $name   = $displayName ?? $realName;
+  $named  = no_tilde($realName);
   $type   = _var($disk,'type');
   $flash  = $type=='Flash';
   $boot   = $type=='Boot';
+  $fancy  = $displayName !== null
+          ? ($rawDisplayName ? $name : _($name,3))
+          : ($flash ? _('Boot(Flash)') : _(my_disk(native($name,1)),3));
   $parity = $type=='Parity';
   $data   = $type=='Data';
   $pool   = $type=='Cache';
-  $source = ($flash || $boot) ? $type : 'Device';
+  $source = ($flash || $boot) ? 'Boot' : 'Device';
   $action = str_contains(_var($disk,'color'),'blink') ? 'up' : 'down';
   switch (_var($disk,'color')) {
     case 'green-on':     $orb = 'circle';  $color = 'green';  $help = _('Normal operation, device is active'); break;
@@ -506,8 +509,8 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[], $options=[]
   }
   $ctrl = '';
   $disk_status = _var($disk,'status');
-  if (_var($var,'fsState')=='Started' && $source!='Flash' && !str_contains($disk_status,'_NP')) {
-    $ctrl = " style='cursor:pointer' onclick=\"toggle_state('$source','$name','$action')\"";
+  if (_var($var,'fsState')=='Started' && !$flash && !$boot && !str_contains($disk_status,'_NP')) {
+    $ctrl = " style='cursor:pointer' onclick=\"toggle_state('$source','$realName','$action')\"";
     $help .= "<br>"._("Click to spin $action device");
   }
   $status = "<a class='info'><i ".($ctrl?"id='dev-$named' ":"")."class='fa fa-$orb orb $color-orb'$ctrl></i><span>$help</span></a>";
@@ -518,11 +521,11 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[], $options=[]
   } elseif (!$showLink || $displayName !== null) {
     $link = $fancy;
   } else {
-    $link = ($parity && $disk_status!='DISK_NP_DSBL') || (($flash || $boot || $data || $pool) && $disk_status!='DISK_NP') || in_array($name,$pools) || $type=='New'
-            ? "<a href=\"".htmlspecialchars("/Main/$source?name=$name")."\">$fancy</a>"
+        $link = ($parity && $disk_status!='DISK_NP_DSBL') || (($flash || $boot || $data || $pool) && $disk_status!='DISK_NP') || in_array($realName,$pools) || $type=='New'
+          ? "<a href=\"".htmlspecialchars("/Main/$source?name=$realName")."\">$fancy</a>"
             : $fancy;
   }
-  $warn   = flash_smb_warning_html($name);
+      $warn   = flash_smb_warning_html($realName);
 
   $warndup = '';
   $fullDevName = "/dev/" . _var($disk,'device', '');
@@ -899,11 +902,15 @@ function array_slots() {
   return implode($echo);
 }
 
-function cache_slots($off,$pool,$min,$slots) {
+function cache_slots($off,$pool,$min,$slots,$isBootPool=false) {
   global $var, $disks;
   $off  = $off && $min ? ' disabled' : '';
   $fsType = _var($disks[$pool],'fsType','auto');
   $max  = ($fsType=='auto' || str_contains($fsType,'btrfs') || str_contains($fsType,'zfs')) ? _var($var,'MAX_CACHESZ') : 1;
+  if ($isBootPool) {
+    $max = min($max,2);
+    $min = min($min,$max);
+  }
   $echo = [];
   $echo[] = "<form method='POST' action='/update.htm' target='progressFrame'>";
   $echo[] = "<input type='hidden' name='csrf_token' value='"._var($var,'csrf_token')."'>";
@@ -1056,9 +1063,10 @@ while (true) {
       : _('Boot device');
     $echo[$a][] = "<tr>";
     $echo[$a][] = "<td>".device_info($bootDisk,true,$poolName,$poolstatus,[
-      'displayName' => _('Boot'),
+      'displayName' => _('Boot(Internal Boot)'),
       'rawDisplayName' => true,
-      'showLink' => false,
+      'showLink' => true,
+      'linkHref' => '/Main/Boot?name=flash',
       'showStatus' => false,
       'showPoolStatus' => false,
       'showView' => true,
@@ -1095,7 +1103,7 @@ while (true) {
       $summaryName = $poolLink;
       if (!empty($bootDisk)) {
         $bootPoolName = prefix(_var($bootDisk,'name',''));
-        $bootLabel = ucfirst($bootPoolName);
+        $bootLabel = _("Internal Boot");
         $bootDeviceUrl = "/Main/Boot?name=".urlencode($bootPoolName);
         $bootLink = "<a href=\"$bootDeviceUrl\">"._($bootLabel,3)."</a>";
         $summaryName = $poolLink." / ".$bootLink;
@@ -1161,7 +1169,7 @@ while (true) {
       $data = []; foreach ($log as $key => $value) $data[] = "$key=\"$value\"";
       $off &= !empty(_var($Cache[$root],'uuid'));
       file_put_contents($pool_log,implode("\n",$data));
-      $echo[$a][] = "<tr class='tr_last'><td>"._('Slots').":</td><td colspan='8'><span class='slots'><span class='slots-left'>".cache_slots($off,$pool,_var($Cache[$pool],'devicesSb'),_var($Cache[$pool],'slots',0))."</span>";
+      $echo[$a][] = "<tr class='tr_last'><td>"._('Slots').":</td><td colspan='8'><span class='slots'><span class='slots-left'>".cache_slots($off,$pool,_var($Cache[$pool],'devicesSb'),_var($Cache[$pool],'slots',0),!empty($bootDisk))."</span>";
       $zfsPool = strstr(_var($Cache[$pool],'fsType'),'zfs') && !isSubpool($pool);
       if ($zfsPool) {
         $current_subpools = array_filter($pools, function($element) use ($pool,$_tilde_) {return str_contains($element,"{$pool}{$_tilde_}");});
@@ -1216,7 +1224,7 @@ while (true) {
       $dataMetrics = get_pool_data_metrics($poolDisk, $pool, $disks);
       if (!empty($bootDisk)) {
         $bootPoolName = prefix(_var($bootDisk,'name',''));
-        $bootLabel = ucfirst($bootPoolName);
+        $bootLabel = _("Internal Boot");
         $bootDeviceUrl = "/Main/Boot?name=".urlencode($bootPoolName);
         $bootDir = _var($bootDisk,'fsMountpoint','/boot');
         $bootBrowseUrl = $bootDir !== '' ? "/Main/Browse?dir=".htmlspecialchars($bootDir) : $bootDeviceUrl;

@@ -513,7 +513,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                       <div class='pie' id='sys0'><span class='sys0'></span><span class='var0'></span></div>
                                   </span>
                                   <span>
-                                      <a class='info hand none'>_(Flash device)_<span>_(Percent usage of flash usb device)_ (<?=$flashsize?>)</span></a>
+                                      <a class='info hand none'>_(Boot device)_<span>_(Percent usage of boot device)_ (<?=$flashsize?>)</span></a>
                                       <div class='pie' id='sys1'><span class='sys1'></span><span class='var1'></span></div>
                                   </span>
                                   <span>
@@ -1183,7 +1183,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                     <span class='tile-header-left'>
                                         <i class='icon-disk f32'></i>
                                         <div class='section'>
-                                            <h3 class='tile-header-main'><?=_(native($pool),3).($started ? '' : ' ('._('stopped').')')?> <span class='tile-header-main' id="pool_status_<?=$i?>"> <?=_('Status')." :"?></span></h3>
+                                            <h3 class='tile-header-main'><?=($pool=='flash' ? _('Internal boot') : _(native($pool),3)).($started ? '' : ' ('._('stopped').')')?> <span class='tile-header-main' id="pool_status_<?=$i?>"> <?=_('Status')." :"?></span></h3>
                                             <span>
                                                 <?if ($started):?>
                                                     <?
@@ -2613,7 +2613,7 @@ dashboard.on('message',function(msg,meta) {
     for (var i=0,name; name=get.name[i]; i++) if (i!=1) html.push("<i class='ups fa fa-circle' style='color:"+(colors[i]||blue)+"'></i>"+name+": "+(i==0?get.ram[5]:get.ram[i*2+3]));
     html.push("<i class='ups fa fa-circle' style='color:"+colors[1]+"'></i>"+get.name[1]+": "+get.ram[3]);
     $('#dynamic').html(html.join('<br>'));
-    // flash, Log & Docker graphs
+    // boot device, Log & Docker graphs
     for (var k=1,sys; sys=get.sys[k-1]; k++) {
       var load = sys[0].slice(0,-1);
       $('.sys'+k).text(sys[0]).css({'color':fontColor(load,<?=$display['critical']?>,<?=$display['warning']?>)});

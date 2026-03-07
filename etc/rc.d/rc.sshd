@@ -65,12 +65,12 @@ sshd_start(){
   elif [[ $USE_SSH != yes ]]; then
     REPLY="Disabled"
   else
-    # make sure ssh dir exists on flash
+    # make sure ssh dir exists on the boot device
     mkdir -p $SSH_BOOT
     # restore saved keys, config file, etc. (but not subdirs)
     cp -f $SSH_BOOT/* $SSH_ETC 2>/dev/null
     chmod 600 $SSH_ETC/* 2>/dev/null
-    # create host keys if needed and copy any newly generated key(s) back to flash
+    # create host keys if needed and copy any newly generated key(s) back to the boot device
     ssh-keygen -A
     cp -n $SSH_ETC/ssh_host*_key* $SSH_BOOT/ 2>/dev/null
     # build configuration

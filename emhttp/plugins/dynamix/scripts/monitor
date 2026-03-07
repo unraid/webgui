@@ -288,19 +288,19 @@ if ($var['mdResyncPos']) {
 	}
 }
 
-// check read-write status of USB flash drive
+// check read-write status of Boot drive
 $name = 'flash';
 $last = $saved[$item][$name] ?? '';
-$warn = exec("grep -Pom1 '/boot \S+ \K\S{2}' /proc/mounts");
+$warn = exec("awk '$2==\"/boot\" && $4 ~ /(^|,)rw(,|$)/ {print \"rw\"}' /proc/mounts");
 $info = "{$disks['flash']['id']} ({$disks['flash']['device']})";
 if ($warn!="rw") {
   if ($warn!=$last) {
-    exec("$notify -l '/Main' -e \"USB flash drive failure\" -s ".escapeshellarg("Alert [$server] - USB drive is not read-write")." -d ".escapeshellarg("$info")." -i \"alert\" 2>/dev/null");
+    exec("$notify -l '/Main' -e \"Boot drive failure\" -s ".escapeshellarg("Alert [$server] - Boot drive is not read-write")." -d ".escapeshellarg("$info")." -i \"alert\" 2>/dev/null");
     $saved[$item][$name] = $warn;
   }
 } else {
   if ($last) {
-    exec("$notify -l '/Main' -e \"USB flash drive operation\" -s ".escapeshellarg("Notice [$server] - USB drive returned to normal operation")." -d ".escapeshellarg("$info")." 2>/dev/null");
+    exec("$notify -l '/Main' -e \"Boot drive operation\" -s ".escapeshellarg("Notice [$server] - Boot drive returned to normal operation")." -d ".escapeshellarg("$info")." 2>/dev/null");
     unset($saved[$item][$name]);
   }
 }

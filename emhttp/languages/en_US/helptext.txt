@@ -103,9 +103,9 @@ periodically to move user share files off the Cache and onto the Array.
 :end
 
 :boot_device_help:
-Vital array configuration is maintained on the USB Flash device; for this reason, it must remain
-plugged in to your server.  Click on [Flash](/Main/Flash?name=flash) to see the GUID and registration
-information, and to configure export settings.  Since the USB Flash device is formatted using FAT file system,
+Vital array configuration is maintained on the boot device; for this reason, it must remain
+plugged in to your server.  Click on [Boot Device](/Main/Boot?name=flash) to see the GUID and registration
+information, and to configure export settings.  Since the boot device is formatted using FAT file system,
 it may only be exported using SMB protocol.
 :end
 
@@ -442,7 +442,7 @@ array or the cache disk/pool.
 :end
 
 :flash_backup_help:
-Use *Flash backup* to create a single zip file of the current contents of the flash device and store it locally on your computer.
+Use *Boot device backup* to create a single zip file of the current contents of the boot device and store it locally on your computer.
 :end
 
 :syslinux_cfg_help:
@@ -1238,7 +1238,7 @@ Enter the TELNET port, default port is 23.
 
 :mgmt_use_ssh_help:
 SSH is enabled by default and offers a secure way of CLI access. Upon system startup SSH keys are automatically generated
-if not yet existing, and stored on the flash device in the folder */config/ssh*.
+if not yet existing, and stored on the boot device in the folder */config/ssh*.
 :end
 
 :mgmt_ssh_port_help:
@@ -1374,7 +1374,7 @@ provisioned and downloaded to your server.
 
 **nginx certificate handling details**
 
-nginx makes use of two certificate files stored on the USB flash boot device:<br>
+nginx makes use of two certificate files stored on the boot device:<br>
 
 - a self-signed certificate: `config/ssl/certs/<server-name>_unraid_bundle.pem`
 
@@ -1618,7 +1618,7 @@ This will send a copy of the syslog messages to the designated server.
 This setting is NO by default and must be used with care to avoid unnecessary wear and tear of the USB device.
 
 Change this setting to YES when troubleshooting is required and it is not possible to get the regular diagnostics information.
-A mirror of the syslog file is stored in the **logs** folder of the flash device.
+A mirror of the syslog file is stored in the **logs** folder of the boot device.
 :end
 
 :syslog_shutdown_flash_help:
@@ -1984,8 +1984,8 @@ The interface assignment rules can be changed here and might be necessary to set
 **eth0** is the main interface used to manage the Unraid system. The other interfaces are optional and may be used as desired.
 Every interface must be uniquely identified by its MAC (hardware) address.
 
-The interface assignment is stored on the flash device under */config/network-rules.cfg*. This file can be viewed with any editor, but it is recommended to make changes via the webGUI only.<br>
-Deleting the file *network-rules.cfg* from the flash device will restore automatic interface assignment after a system reboot.
+The interface assignment is stored on the boot device under */config/network-rules.cfg*. This file can be viewed with any editor, but it is recommended to make changes via the webGUI only.<br>
+Deleting the file *network-rules.cfg* from the boot device will restore automatic interface assignment after a system reboot.
 :end
 
 :eth_routing_table_help:
@@ -2174,7 +2174,7 @@ Select the desired time format which is used in the notifications archive. Recom
 
 :notifications_store_flash_help:
 By default notifications are stored on RAM disk, which will get lost upon system reboot.
-Notifications may be stored permanently on the flash drive under folder '/boot/config/plugins/dynamix' instead.
+Notifications may be stored permanently on the boot drive under folder '/boot/config/plugins/dynamix' instead.
 :end
 
 :notifications_system_help:
@@ -2293,7 +2293,7 @@ Select a default template when it is the first time you are configuring this app
 
 **User-defined templates**<br>
 Once you've added an application to your system through a Default template,
-the settings you specified are saved to your USB flash device to make it easy to rebuild your applications in the event an upgrade were to fail or if another issue occurred.
+the settings you specified are saved to your boot device to make it easy to rebuild your applications in the event an upgrade were to fail or if another issue occurred.
 To rebuild, simply select the previously loaded application from the User-defined list and all the settings for the container will appear populated from your previous setup.
 Clicking create will redownload the necessary files for the application and should restore you to a working state.
 To delete a User-defined template, select it from the list above and click the red X to the right of it.
@@ -2555,7 +2555,7 @@ Unraid server SSL port for secure web traffic.
 :end
 
 :unraidnet_inactivespanel_help:
-Click Activate to set up a local git repo for your local USB Flash boot device and connect to a dedicated remote on unraid.net tied to this server.
+Click Activate to set up a local git repo for your local boot device and connect to a dedicated remote on unraid.net tied to this server.
 :end
 
 :unraidnet_changespanel_help:
@@ -2720,7 +2720,7 @@ This page displays all the drivers available on this system. Filter the list acc
 
 Any 3rd party driver installed by a plugin will have a support symbol next to it, click this to get support for the plugin.
 
-Click the edit button to add/modify/delete any modprobe.d config file in the config/modprobe.d directory on the flash drive.
+Click the edit button to add/modify/delete any modprobe.d config file in the config/modprobe.d directory on the boot drive.
 :end
 
 :console_keyboard_help:

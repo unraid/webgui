@@ -493,7 +493,7 @@ function digits(number) {
 
 function flashReport() {
   $.post('/webGui/include/Report.php',{cmd:'config'},function(check){
-    if (check>0) addBannerWarning("<?=_('Your flash drive is corrupted or offline').'. '._('Post your diagnostics in the forum for help').'.'?> <a target='_blank' href='https://docs.unraid.net/go/changing-the-flash-device/'><?=_('See also here')?></a>");
+    if (check>0) addBannerWarning("<?=_('Your boot drive is corrupted or offline').'. '._('Post your diagnostics in the forum for help').'.'?> <a target='_blank' href='https://docs.unraid.net/go/changing-the-flash-device/'><?=_('See also here')?></a>");
   });
 }
 
@@ -527,7 +527,7 @@ $(function() {
     notices = notices.split('\n');
     for (var i=0,notice; notice=notices[i]; i++) addBannerWarning("<i class='fa fa-warning' style='float:initial;'></i> "+notice,false,true);
   });
-// check for flash offline / corrupted (delayed).
+// check for boot device offline / corrupted (delayed).
   timers.flashReport = setTimeout(flashReport,6000);
 });
 

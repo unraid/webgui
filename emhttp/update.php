@@ -12,7 +12,7 @@
 ?>
 <?
 /* UPDATE.PHP is used to update selected name=value variables in a configuration file.
- * Note that calling this function will write the configuration file on the flash.
+ * Note that calling this function will write the configuration file on the boot device.
  * The $_POST variable contains a list of key/value parameters to be updated in the file.
  * There are a number of special parameters prefixed with a hash '#' character:
  *
@@ -60,7 +60,7 @@ require_once "$docroot/plugins/dynamix/include/Wrappers.php";
 if (isset($_POST['#file'])) {
   $file = $_POST['#file'];
   $raw_file = isset($_POST['#raw_file']) ? ($_POST['#raw_file'] === 'true') : false;
-  // prepend with boot (flash) if path is relative
+  // prepend with boot (boot device) if path is relative
   if ($file && $file[0]!='/') $file = "/boot/config/plugins/$file";
   $section = $_POST['#section'] ?? false;
   $cleanup = isset($_POST['#cleanup']);

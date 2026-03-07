@@ -211,14 +211,14 @@ if [[ -x /etc/rc.d/rc.serial ]]; then
   /etc/rc.d/rc.serial start
 fi
 
-# LimeTech - let's keep this on the USB flash
+# LimeTech - let's keep this on the boot device
 ## Carry an entropy pool between reboots to improve randomness.
 /bin/mkdir -p /var/lib/seedrng
 /bin/chmod 600 /var/lib/seedrng
 /bin/cp /boot/config/random-seed /var/lib/seedrng/seed.no-credit 2>/dev/null
 /usr/sbin/seedrng
 
-# LimeTech - restore hostname from ident.cfg file on flash and ensure hostname is
+# LimeTech - restore hostname from ident.cfg file on the boot device and ensure hostname is
 # defined as localhost alias in /etc/hosts (this lets wins name resolution work)
 NAME="Tower"
 timeZone="America/Los_Angeles"
@@ -238,7 +238,7 @@ else
   /bin/ln -sf /usr/share/zoneinfo/$timeZone /etc/localtime
 fi
 
-# LimeTech - restore password files stored on flash
+# LimeTech - restore password files stored on the boot device
 if [[ -r /boot/config/passwd ]]; then
   while IFS=: read -r USERNAME PASSWORD USERID GROUPID COMMENT HOMEDIR CMDSHELL; do
     if [[ $USERNAME == root ]]; then
@@ -261,7 +261,7 @@ if [[ -r /boot/config/secrets.tdb ]]; then
   /bin/cp -f /boot/config/secrets.tdb /var/lib/samba/private
 fi
 
-# LimeTech - restore custom rsyslog.conf config file from flash if present
+# LimeTech - restore custom rsyslog.conf config file from the boot device if present
 if [[ -r /boot/config/rsyslog.conf ]]; then
   /usr/bin/fromdos </boot/config/rsyslog.conf >/etc/rsyslog.conf
 fi
