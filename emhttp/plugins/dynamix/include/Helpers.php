@@ -319,7 +319,7 @@ function check_deprecated_filesystem($disk) {
     $warnings[] = [
       'type' => 'reiserfs',
       'severity' => 'critical',
-      'message' => _('ReiserFS is deprecated and will not be supported in future Unraid releases')
+      'message' => _('ReiserFS is deprecated and is no longer supported in Unraid. You will need to downgrade to Unraid 7.2 to take action.')
     ];
   }
   
@@ -334,7 +334,7 @@ function check_deprecated_filesystem($disk) {
         $warnings[] = [
           'type' => 'xfs_v4',
           'severity' => 'critical',
-          'message' => _('XFS v4 is deprecated and will not be supported in future Unraid releases. Please migrate to XFS v5 immediately')
+          'message' => _('XFS v4 is deprecated and will not be supported in future Unraid releases. Please migrate to XFS v5 immediately.')
         ];
       }
     }
@@ -682,7 +682,7 @@ function check_disk_for_deprecated_fs($disk) {
       'name' => _var($disk, 'name'),
       'fsType' => 'ReiserFS',
       'severity' => 'critical',
-      'message' => 'ReiserFS is deprecated and will not be supported in future Unraid releases'
+      'message' => 'ReiserFS is deprecated and is no longer supported in Unraid. You will need to downgrade to Unraid 7.2 to take action'
     ];
   }
   
@@ -818,6 +818,21 @@ HTML;
     $description = htmlspecialchars($type === 'array' ? 
       'The following array devices are using older filesystem versions:' : 
       'The following pool devices are using older filesystem versions:');
+
+    $deadline = new DateTime('2030-10-01');
+    $now = new DateTime('now');
+    if ($now < $deadline) {
+      $interval = $now->diff($deadline);
+      $years = (int)$interval->y;
+      $months = (int)$interval->m;
+      $parts = [];
+      if ($years > 0) $parts[] = $years.' year'.($years === 1 ? '' : 's');
+      if ($months > 0) $parts[] = $months.' month'.($months === 1 ? '' : 's');
+      if (empty($parts)) $parts[] = 'less than 1 month';
+      $timeline = 'before the end of September 2030 ('.implode(' and ', $parts).')';
+    } else {
+      $timeline = 'as soon as possible';
+    }
     
     $diskList = '';
     foreach ($notice_disks as $disk) {
@@ -852,7 +867,7 @@ if (!sessionStorage.getItem('xfs-{$id}-dismissed')) {
                     {$diskList}
                 </ul>
                 <div style="margin-top: 10px;">
-                    <strong>Recommendation:</strong> Plan to migrate to XFS v5, BTRFS, or ZFS within the next 5 years. 
+                      <strong>Recommendation:</strong> Plan to migrate to XFS v5, BTRFS, or ZFS {$timeline}. 
                     <a href="https://docs.unraid.net/go/convert-reiser-and-xfs" 
                        target="_blank" style="color: #0066cc;">View migration guide →</a>
                 </div>
