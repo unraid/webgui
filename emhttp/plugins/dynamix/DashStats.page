@@ -163,34 +163,45 @@ $total = exec("awk '/^MemTotal/{print $2*1024}' /proc/meminfo");
 unset($ports); exec("ls --indicator-style=none /sys/class/net|grep -Po '^(bond|eth|wlan)\d+$'",$ports);
 $ports[] = 'lo';
 
-$sizes = ['MB','GB','TB'];
+$memory_units = [
+  // dmidecode reports memory capacities using binary math; treat both SI and IEC labels as base-1024.
+  // This keeps parsing consistent across dmidecode versions that may print GB/TB or GiB/TiB.
+  'kb' => 1/1024, 'kib' => 1/1024,
+  'mb' => 1,      'mib' => 1,
+  'gb' => 1024,   'gib' => 1024,
+  'tb' => 1048576,'tib' => 1048576,
+  'pb' => 1073741824, 'pib' => 1073741824
+];
+$parse_memory_to_mib = function($value) use ($memory_units) {
+  if (!preg_match('/([0-9.]+)\s*([A-Za-z]+)/',$value ?? '',$match)) return 0;
+  $size = (float)$match[1];
+  $unit = strtolower($match[2]);
+  return isset($memory_units[$unit]) ? (int)round($size*$memory_units[$unit]) : 0;
+};
 $memory_type = $ecc = '';
 $memory_installed = $memory_maximum = 0;
 $memory_devices = dmidecode('Memory Device','17');
 foreach ($memory_devices as $device) {
-  if (!is_numeric($device['Size'][0])) continue;
-  [$size, $unit] = my_explode(' ',$device['Size']??'');
-  $base = array_search($unit,$sizes);
-  if ($base!==false) $memory_installed += $size*pow(1024,$base);
+  $memory_installed += $parse_memory_to_mib($device['Size'] ?? '');
   if (!$memory_type && isset($device['Type']) && $device['Type']!='Unknown') $memory_type = $device['Type'];
 }
 $memory_array = dmidecode('Physical Memory Array','16');
 foreach ($memory_array as $device) {
-  [$size, $unit] = my_explode(' ',$device['Maximum Capacity']??'');
-  $base = array_search($unit,$sizes);
-  if ($base>=1) $memory_maximum += $size*pow(1024,$base);
+  $memory_maximum += $parse_memory_to_mib($device['Maximum Capacity'] ?? '');
   if (!$ecc && isset($device['Error Correction Type']) && $device['Error Correction Type']!='None') $ecc = "{$device['Error Correction Type']} ";
 }
 if ($memory_installed >= 1048576) {
   $memory_installed = round($memory_installed/1048576);
   $memory_maximum = round($memory_maximum/1048576);
-  $unit = 'TiB';
+  $memory_unit = 'TiB';
 } else { 
 if ($memory_installed >= 1024) {
   $memory_installed = round($memory_installed/1024);
   $memory_maximum = round($memory_maximum/1024);
-  $unit = 'GiB';}
-else $unit = 'MiB'; }
+  $memory_unit = 'GiB';}
+else $memory_unit = 'MiB'; }
+
+$unit = $memory_unit;
 
 // get system resources size
 exec("df --output=size /boot /var/log /var/lib/docker 2>/dev/null|awk '(NR>1){print $1*1024}'",$df);
@@ -458,7 +469,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                         <span class='flex flex-row flex-wrap items-center gap-4'>
                                             <span class="head_info">
                                                 <span>
-                                                    <i class='ups fa fa-line-chart'></i>_(Memory)_: <?="$memory_installed $unit $memory_type $ecc"?>
+                                                    <i class='ups fa fa-line-chart'></i>_(Memory)_: <?="$memory_installed $memory_unit $memory_type $ecc"?>
                                                 </span>
                                             </span>
                                             <span class="switch">
@@ -489,7 +500,7 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                 <div class="tile-system-memory-labels">
                                     <div>
                                         <i class='ups fa fa-compress'></i>_(Usable size)_: <?=$ramsize?><br>
-                                        <i class='ups fa fa-expand'></i>_(Maximum size)_: <?="$memory_maximum $unit"?><?=$low?'*':''?>
+                                        <i class='ups fa fa-expand'></i>_(Maximum size)_: <?="$memory_maximum $memory_unit"?><?=$low?'*':''?>
                                     </div>
                                     <div>
                                         <legend>_(Legend)_</legend>
