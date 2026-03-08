@@ -939,9 +939,10 @@ while (true) {
               # Check for newline or EOF to process complete line
               if [[ \$char == \$'\\n' || ! \$char ]]; then
                 if [[ ! \$dot_mode ]]; then
-                  # Check if line matches "adding:" or "updating:" with filename and size at end
-                  # Pattern: "  adding: filename (size) " (leading spaces, trailing space before $)
-                  if [[ \$line_buffer =~ (adding|updating):[[:space:]]+(.*)[[:space:]]+\\(([0-9.]+[KMGT]?)\\)[[:space:]]+\$ ]]; then
+                  # Check if line matches "adding:" or "updating:" with filename and size
+                  # Pattern from ziptest.sh: "adding: filename (size) " (trailing space after size)
+                  # Match when we see (size) followed by space, don't wait for line end
+                  if [[ \$line_buffer =~ (adding|updating):[[:space:]]+(.*)[[:space:]]+\\(([0-9.]+[KMGT]?)\\)[[:space:]]+ ]]; then
                     src_file="\${BASH_REMATCH[2]}"
                     src_size="\${BASH_REMATCH[3]}"
                     printf 'FILE|%s|%s\\n' "\$src_size" "\$src_file" >>$status
