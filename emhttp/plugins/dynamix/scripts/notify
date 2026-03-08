@@ -286,17 +286,21 @@ case 'get':
   $i = 0;
   foreach ($files as $file) {
     $fields = file($file,FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES);
-    $time = true;
     $output[$i]['file'] = basename($file);
     $output[$i]['show'] = (fileperms($file) & 0x0FFF)==0400 ? 0 : 1;
     foreach ($fields as $field) {
       if (!$field) continue;
       # limit the explode('=', …) used during reads to two pieces so values containing = remain intact
       [$key,$val] = array_pad(explode('=', $field, 2),2,'');
-      if ($time) {$val = date($notify['date'].' '.$notify['time'], $val); $time = false;}
+      $key = trim($key);
+      if ($key === '') continue;
       # unescape the value before emitting JSON, so the browser UI
       # and any scripts calling `notify get` still see plain strings
-      $output[$i][trim($key)] = ini_decode_value($val);
+      $output[$i][$key] = ini_decode_value($val);
+    }
+    $timestamp = _var($output[$i], 'timestamp');
+    if (is_numeric($timestamp)) {
+      $output[$i]['timestamp'] = date($notify['date'].' '.$notify['time'], (int)$timestamp);
     }
     $i++;
   }
