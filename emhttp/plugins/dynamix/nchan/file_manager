@@ -921,13 +921,16 @@ while (true) {
         switch ($format) {
         case 'zip':
           // Inline zip wrapper with structured progress output
+          // CRITICAL: The '>$status' redirect at the end keeps the shell group process alive.
+          // Without it, the shell group exits immediately after backgrounding, making the PID invalid.
+          // The redirect forces the shell to wait for the entire pipeline to complete.
           $cmd = <<<BASH
           {
             cd {$source_parent} || exit 1
             
             # Calculate total size of source files
             total_bytes=\$(du -sb {$escaped_basenames} 2>/dev/null | awk '{sum+=\$1} END {print sum}')
-            printf 'TOTAL|%s\\n' "\$total_bytes" > $status
+            printf 'TOTAL|%s\\n' "\$total_bytes"
             
             zip --recurse-paths --display-usize --display-dots --dot-size 100m {$archive_path} -- {$escaped_basenames} 2>&1 | while IFS= read -r -n1 char || [[ -n \$char ]]; do
               if [[ ! \$dot_mode ]]; then
@@ -936,23 +939,23 @@ while (true) {
                 if [[ \$line_buffer =~ adding:\\ (.*)\\ \\(([0-9.]+[KMGT]?)\\)\\ $ ]]; then
                   src_file="\${BASH_REMATCH[1]}"
                   src_size="\${BASH_REMATCH[2]}"
-                  printf 'FILE|%s|%s\\n' "\$src_size" "\$src_file" >> $status
+                  printf 'FILE|%s|%s\\n' "\$src_size" "\$src_file"
                   line_buffer=""
                   dot_mode=1
                 elif [[ ! \$char ]]; then
-                  [[ -n \$line_buffer ]] && printf 'INFO|%s\\n' "\$line_buffer" >> $status
+                  [[ -n \$line_buffer ]] && printf 'INFO|%s\\n' "\$line_buffer"
                   line_buffer=""
                 fi
               elif [[ \$dot_mode ]]; then
                 if [[ \$char == '.' ]]; then
-                  printf 'DOT|%s\\n' "\$(date +%s)" >> $status
+                  printf 'DOT|%s\\n' "\$(date +%s)"
                 else
                   line_buffer="\$char"
                   dot_mode=
                 fi
               fi
             done
-          } 2>$error & echo \$!
+          } >$status 2>$error & echo \$!
           BASH;
           break;
         case 'tar':
