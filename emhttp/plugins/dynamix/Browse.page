@@ -1198,7 +1198,7 @@ function doActions(action, title) {
     // Store first source name for updateArchiveName function
     dfm.window.find('#dfm_source').data('firstName', firstName);
     // Detect if source is in appdata/system path
-    var isAppdata = firstSource.match(/\/mnt\/[^\/]+(appdata|system)\/);
+    var isAppdata = firstSource.match(/\/mnt\/[^/]+(appdata|system)\//);
     dfm.window.find('#dfm_format').val(isAppdata ? 'tar.zst' : 'zip');
     dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
