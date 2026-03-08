@@ -931,6 +931,7 @@ while (true) {
         exec('logger -t file_manager "Executing compress command: ' . escapeshellarg($cmd) . '"');
         
         exec($cmd, $pid);
+        exec('logger -t file_manager "After exec: pid=' . escapeshellarg(json_encode($pid)) . '"');
       }
       break;
     case 17: // extract
@@ -987,6 +988,7 @@ while (true) {
       continue 2;
     }
     $pid = pid_exists($pid??0);
+    exec('logger -t file_manager "After pid_exists: action=' . escapeshellarg($action) . ', pid=' . escapeshellarg($pid ?: 'false') . ', pid_file_will_be_created=' . ($pid !== false ? 'yes' : 'no') . '"');
 
     // Store PID to survive file_manager restarts
     if ($pid !== false) {
@@ -994,6 +996,7 @@ while (true) {
     }
 
     if ($pid === false) {
+      exec('logger -t file_manager "PID is false - entering cleanup: delete_empty_dirs=' . escapeshellarg($delete_empty_dirs ?? 'null') . ', action=' . escapeshellarg($action) . '"');
       if (!empty($delete_empty_dirs)) {
         exec("find ".quoted($source)." -type d -empty -print -delete 1>$status 2>$null & echo \$!", $pid);
         $delete_empty_dirs = false;
@@ -1021,6 +1024,7 @@ while (true) {
           }
         }
         if (file_exists($error)) $reply['error'] = trim(file_get_contents($error));
+        exec('logger -t file_manager "Job complete - deleting active file for action=' . escapeshellarg($action) . '"');
         delete_file($active, $pid_file, $status, $error);
         unset($pid);
         $delete_empty_dirs = null;
