@@ -47,8 +47,11 @@ function fm_pools_filter(&$disks) {
 }
 
 function pid_exists($pid) {
+  $original_pid = $pid;
   $pid = is_array($pid) ? $pid[0] : $pid;
-  return $pid && file_exists("/proc/$pid") ? $pid : false;
+  $exists = file_exists("/proc/$pid");
+  exec('logger -t file_manager "pid_exists: original=' . escapeshellarg(json_encode($original_pid)) . ', extracted=' . escapeshellarg($pid) . ', /proc exists=' . escapeshellarg($exists ? 'YES' : 'NO') . '"');
+  return $pid && $exists ? $pid : false;
 }
 
 function isdir($name) {
@@ -1029,7 +1032,9 @@ while (true) {
     default:
       continue 2;
     }
+    exec('logger -t file_manager "After switch: action=' . $action . ', pid before pid_exists=' . escapeshellarg(json_encode($pid??null)) . '"');
     $pid = pid_exists($pid??0);
+    exec('logger -t file_manager "After pid_exists: pid=' . escapeshellarg(json_encode($pid)) . '"');
 
     // Store PID to survive file_manager restarts
     if ($pid !== false) {
