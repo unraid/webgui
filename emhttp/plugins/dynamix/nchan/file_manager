@@ -933,26 +933,36 @@ while (true) {
             printf 'TOTAL|%s\\n' "\$total_bytes"
             
             zip --recurse-paths --display-usize --display-dots --dot-size 100m {$archive_path} -- {$escaped_basenames} 2>&1 | while IFS= read -r -n1 char || [[ -n \$char ]]; do
-              if [[ ! \$dot_mode ]]; then
-                line_buffer+="\$char"
-                
-                if [[ \$line_buffer =~ adding:\\ (.*)\\ \\(([0-9.]+[KMGT]?)\\)\\ $ ]]; then
-                  src_file="\${BASH_REMATCH[1]}"
-                  src_size="\${BASH_REMATCH[2]}"
-                  printf 'FILE|%s|%s\\n' "\$src_size" "\$src_file"
+              # Check for newline or EOF to process complete line
+              if [[ \$char == \$'\\n' || ! \$char ]]; then
+                if [[ ! \$dot_mode ]]; then
+                  # Check if line matches "adding: filename (size)" pattern
+                  if [[ \$line_buffer =~ adding:\\ (.*)\\ \\(([0-9.]+[KMGT]?)\\) ]]; then
+                    src_file="\${BASH_REMATCH[1]}"
+                    src_size="\${BASH_REMATCH[2]}"
+                    printf 'FILE|%s|%s\\n' "\$src_size" "\$src_file"
+                    dot_mode=1
+                  elif [[ -n \$line_buffer ]]; then
+                    printf 'INFO|%s\\n' "\$line_buffer"
+                  fi
                   line_buffer=""
-                  dot_mode=1
-                elif [[ ! \$char ]]; then
-                  [[ -n \$line_buffer ]] && printf 'INFO|%s\\n' "\$line_buffer"
+                else
+                  # In dot mode, newline resets to line mode
+                  dot_mode=
                   line_buffer=""
                 fi
               elif [[ \$dot_mode ]]; then
+                # In dot mode, capture dots
                 if [[ \$char == '.' ]]; then
                   printf 'DOT|%s\\n' "\$(date +%s)"
                 else
+                  # Not a dot, switch back to line mode and start new buffer
                   line_buffer="\$char"
                   dot_mode=
                 fi
+              else
+                # Accumulate characters into line buffer
+                line_buffer+="\$char"
               fi
             done
           } >$status 2>$error & echo \$!
@@ -1072,6 +1082,14 @@ while (true) {
           }
         }
         if (file_exists($error)) $reply['error'] = trim(file_get_contents($error));
+        
+        // Debug: Copy status file before deletion for action 16 (compress)
+        if ($action == 16 && file_exists($status)) {
+          $debug_copy = '/tmp/status-debug-' . time() . '.txt';
+          copy($status, $debug_copy);
+          exec('logger -t file_manager "Status file copied to ' . $debug_copy . ' before deletion"');
+        }
+        
         delete_file($active, $pid_file, $status, $error);
         unset($pid);
         $delete_empty_dirs = null;
