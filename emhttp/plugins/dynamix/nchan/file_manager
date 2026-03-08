@@ -186,14 +186,18 @@ function parse_zip_progress($status, $action_label, $archive_path, $dot_size_mb 
 
   // Check if status file exists
   if (!file_exists($status)) {
+    exec('logger -t file_manager "parse_zip_progress: status file does not exist: ' . escapeshellarg($status) . '"');
     return $text;
   }
 
   // Read structured log (FILE|size|filename, DOT|timestamp, INFO|message, DONE)
   $lines = file($status, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
   if (empty($lines)) {
+    exec('logger -t file_manager "parse_zip_progress: status file is empty"');
     return $text;
   }
+
+  exec('logger -t file_manager "parse_zip_progress: read ' . count($lines) . ' lines from status file"');
 
   $current_file = '';
   $dot_timestamps = [];
@@ -227,6 +231,8 @@ function parse_zip_progress($status, $action_label, $archive_path, $dot_size_mb 
   if ($current_file) {
     $text[0] .= mb_strimhalf($current_file, 70, '...');
   }
+
+  exec('logger -t file_manager "parse_zip_progress: current_file=' . escapeshellarg($current_file) . ', dot_count=' . count($dot_timestamps) . '"');
 
   // Calculate progress if we have dots
   $dot_count = count($dot_timestamps);
@@ -825,10 +831,15 @@ while (true) {
         $archive_name = $archive_name ?? 'archive.zip';
         $archive_path = rtrim($target, '/').'/'.$archive_name;
         
+        // Debug logging
+        exec('logger -t file_manager "Status check: format=' . escapeshellarg($format) . ', archive_name=' . escapeshellarg($archive_name) . ', target=' . escapeshellarg($target) . '"');
+        
         // For zip format, use structured progress parser
         if ($format === 'zip') {
           $zip_status = '/var/tmp/zip.progress';
+          exec('logger -t file_manager "Calling parse_zip_progress: status_file=' . escapeshellarg($zip_status) . ', exists=' . (file_exists($zip_status) ? 'yes' : 'no') . '"');
           $text = parse_zip_progress($zip_status, _('Compressing'), $archive_path, 100);
+          exec('logger -t file_manager "parse_zip_progress returned: ' . escapeshellarg(json_encode($text)) . '"');
         } else {
           // For tar formats, use simple status display for now
           $file_line = trim(exec("tail -1 $status 2>$null"));
