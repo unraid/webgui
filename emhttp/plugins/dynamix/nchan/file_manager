@@ -930,7 +930,16 @@ while (true) {
         exec('logger -t file_manager "Executing compress command: ' . escapeshellarg($cmd) . '"');
         
         exec($cmd, $pid);
-        exec('logger -t file_manager "After exec: pid=' . escapeshellarg(json_encode($pid)) . '"');
+        exec('logger -t file_manager "After exec: pid=' . escapeshellarg(json_encode($pid)) . ', raw_pid_array=' . escapeshellarg(print_r($pid, true)) . '"');
+        
+        // Check immediately if PID exists
+        if (!empty($pid) && is_array($pid)) {
+          $pid_to_check = $pid[0];
+          exec('logger -t file_manager "Checking if PID ' . escapeshellarg($pid_to_check) . ' exists: ' . (file_exists("/proc/$pid_to_check") ? 'yes' : 'no') . '"');
+          if (file_exists("/proc/$pid_to_check")) {
+            exec('logger -t file_manager "Process ' . escapeshellarg($pid_to_check) . ' cmdline: ' . escapeshellarg(file_get_contents("/proc/$pid_to_check/cmdline")) . '"');
+          }
+        }
       }
       break;
     case 17: // extract

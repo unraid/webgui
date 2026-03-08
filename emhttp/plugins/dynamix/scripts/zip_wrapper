@@ -9,6 +9,10 @@ source_files=("$@")
 status_file="/var/tmp/zip.progress"
 : > "$status_file"
 
+# Debug: log wrapper PID and process tree
+logger -t zip_wrapper "Started with PID=$$, PPID=$PPID, archive=$archive"
+logger -t zip_wrapper "Process tree: $(pstree -pals $$ 2>&1 || echo 'pstree failed')"
+
 # Run zip with dot progress and parse output character-by-character
 zip --recurse-paths --display-usize --display-dots --dot-size 100m "$archive" -- "${source_files[@]}" 2>&1 | while IFS= read -r -n1 char || [[ -n $char ]]; do
 
@@ -47,3 +51,6 @@ done
 
 # Write completion marker
 printf 'DONE\n' >> "$status_file"
+
+# Debug: log wrapper completion
+logger -t zip_wrapper "Completed, PID=$$"
