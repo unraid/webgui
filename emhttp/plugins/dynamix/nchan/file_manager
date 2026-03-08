@@ -226,7 +226,7 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
     $new_lines = [];
     exec("tail -n +" . escapeshellarg($start_line) . " " . escapeshellarg($status) . " 2>/dev/null", $new_lines);
     exec('logger -t file_manager "parse_zip_progress: read ' . count($new_lines) . ' new lines from line ' . $start_line . '"');
-    
+
     // Process new lines
     foreach ($new_lines as $line) {
       $parts = explode('|', $line, 4);
@@ -238,41 +238,41 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
           // First line: total size of all source files
           $total_bytes = floatval($parts[1]);
           break;
-        
+
         case 'FILE':
           // New file started - previous file is complete
           if ($current_file_size > 0) {
             // Add completed file to processed bytes
             $processed_bytes += $current_file_size;
           }
-          
+
           // Parse FILE|timestamp|size|filename
           $timestamp = intval($parts[1]);
           $current_file_size = size_to_bytes($parts[2]);
           $current_file_name = $parts[3] ?? '';
           $current_file_dots = 0;
           $file_count++;
-          
+
           // Track FILE timestamp for current file progress estimation
           if ($first_file_time === null) {
             $first_file_time = $timestamp;
           }
           $last_file_time = $timestamp;
-          
+
           // Record progress event: new file starts, no progress on this file yet
           $progress_events[] = [$timestamp, $processed_bytes];
           break;
-        
+
         case 'DOT':
           // Progress dot for current file
           $timestamp = intval($parts[1]);
           $current_file_dots++;
-          
+
           // Record progress event: processed_bytes (completed files) + current file progress
           $current_file_progress = $current_file_dots * $dot_size_mb * 1024 * 1024;
           $progress_events[] = [$timestamp, $processed_bytes + $current_file_progress];
           break;
-        
+
         case 'INFO':
           // Collect info messages (keep last 3)
           $info_messages[] = $parts[1];
@@ -282,7 +282,7 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
           break;
       }
     }
-    
+
     $last_line_number = $total_lines;
   }
 
@@ -305,61 +305,61 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
     // Current progress = completed files + progress of current file
     $dots_bytes = $current_file_dots * $dot_size_mb * 1024 * 1024;
     $current_file_progress_bytes = $dots_bytes; // Start with DOTs if available
-    
+
     // For small files without DOTs, estimate progress based on elapsed time
     if ($dots_bytes == 0 && $current_file_size > 0 && $last_file_time !== null && $file_count > 1) {
       // Calculate average time per file from completed files
       $completed_files = $file_count - 1; // Exclude current file
       $avg_time_per_file = ($last_file_time - $first_file_time) / $completed_files;
-      
+
       // Time elapsed since current file started
       $current_time = time();
       $time_elapsed = $current_time - $last_file_time;
-      
+
       // Estimate progress of current file (cap at 100%)
       if ($avg_time_per_file > 0) {
         $progress_ratio = min(1.0, $time_elapsed / $avg_time_per_file);
         $current_file_progress_bytes = $current_file_size * $progress_ratio;
       }
     }
-    
+
     $current_progress_bytes = $processed_bytes + $current_file_progress_bytes;
-    
+
     // Calculate percentage
     $percent = min(100, intval(($current_progress_bytes / $total_bytes) * 100));
-    
+
     // Calculate speed and ETA using unified progress events
     $speed = '';
     $eta = 'N/A';
-    
+
     if (count($progress_events) >= 2) {
       $first_event = $progress_events[0];
       $last_event = $progress_events[count($progress_events) - 1];
-      
+
       $time_span = $last_event[0] - $first_event[0];
       $bytes_span = $last_event[1] - $first_event[1];
-      
+
       if ($time_span > 0 && $bytes_span > 0) {
         // Calculate speed from progress events
         $speed_bytes = $bytes_span / $time_span;
         $speed = bytes_to_size($speed_bytes) . '/s';
-        
+
         // Calculate ETA
         $remaining_bytes = $total_bytes - $current_progress_bytes;
         if ($speed_bytes > 0) {
           $eta_seconds = $remaining_bytes / $speed_bytes;
-          
+
           // Apply hysteresis to prevent ETA from jumping
           if ($last_eta_seconds !== null) {
             $eta_seconds = ($last_eta_seconds * 0.7) + ($eta_seconds * 0.3);
           }
           $last_eta_seconds = $eta_seconds;
-          
+
           $eta = seconds_to_time(intval($eta_seconds));
         }
       }
     }
-    
+
     // Build progress text
     $progress_parts = [];
     $progress_parts[] = _('Completed') . ": " . $percent . '%';
@@ -368,7 +368,7 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
       $progress_parts[] = _('Speed') . ": " . $speed;
     }
     $progress_parts[] = _('ETA') . ": " . $eta;
-    
+
     $text[1] = implode(",  ", $progress_parts);
   }
 
@@ -426,21 +426,21 @@ function parse_rsync_progress($status, $action_label, $reset = false) {
       // This causes ~2% error per percent point. We average multiple measurements at different percents.
       if ($total_size === null || count($total_calculations) < RSYNC_TOTAL_SIZE_SAMPLES) {
         $percent_val = intval(str_replace('%', '', $percent));
-        
+
         // Track if this is a "running transfer" line (no xfr# info)
         $is_running_line = !isset($parts[4]);
-        
+
         // Calculate total when we have minimum progress on a running transfer line
         // and the percent changed since last calculation
         if ($is_running_line && $percent_val >= RSYNC_MIN_PROGRESS_PERCENT && $last_calc_percent !== $percent_val) {
           // Convert transferred size to bytes
           $transferred_bytes = size_to_bytes($transferred);
-          
+
           // Calculate total from transferred and percent (rsync truncates, so add 0.5% for better accuracy)
           $calculated_total = $transferred_bytes * 100 / ($percent_val + 0.5);
           $total_calculations[] = $calculated_total;
           $last_calc_percent = $percent_val;
-          
+
           // Once we have enough measurements, average them and lock the value
           if (count($total_calculations) >= RSYNC_TOTAL_SIZE_SAMPLES) {
             $total_size = array_sum($total_calculations) / count($total_calculations);
@@ -463,14 +463,14 @@ function parse_rsync_progress($status, $action_label, $reset = false) {
       $progress_parts[] = _('Completed') . ": " . $percent;
       $progress_parts[] = _('Speed') . ": " . $speed;
       $progress_parts[] = _('ETA') . ": " . $time;
-      
+
       // Always show Total (either calculated or N/A)
       if ($total_size !== null) {
         $progress_parts[] = _('Total') . ": ~" . bytes_to_size($total_size);
       } else {
         $progress_parts[] = _('Total') . ": N/A";
       }
-      
+
       $text[1] = implode(",  ", $progress_parts);
     }
   }
@@ -667,7 +667,14 @@ while (true) {
       // start action
       } else {
         $path = dirname($source[0]);
-        exec("mv -f ".quoted($source)." ".quoted("$path/$target")." 1>$null 2>$error & echo \$!", $pid);
+        $target_path = "$path/$target";
+
+        // Check if target already exists
+        if (file_exists($target_path)) {
+          $reply['error'] = _('Target already exists');
+        } else {
+          exec("mv ".quoted($source)." ".quoted($target_path)." 1>$null 2>$error & echo \$!", $pid);
+        }
       }
       break;
     case 3:  // copy folder
@@ -907,9 +914,10 @@ while (true) {
         $format = $format ?? 'zip';
         $archive_name = $archive_name ?? 'archive.zip';
         $archive_path = rtrim($target, '/').'/'.$archive_name;
-        
+        $archive_tmp = $archive_path.'.tmp';
+
         exec('logger -t file_manager "Status check: format=' . escapeshellarg($format) . ', status_file=' . escapeshellarg($status) . ', exists=' . (file_exists($status) ? 'yes' : 'no') . '"');
-        
+
         // For zip format, use structured progress parser
         if ($format === 'zip') {
           $text = parse_zip_progress($status, _('Compressing'), 100);
@@ -917,13 +925,15 @@ while (true) {
         } else {
           // For tar formats, use simple status display for now
           $file_line = trim(exec("tail -1 $status 2>$null"));
-          
+
           $archive_size = '';
-          if (file_exists($archive_path)) {
-            $size_bytes = filesize($archive_path);
+          // Check tmp file during compression
+          $size_path = file_exists($archive_tmp) ? $archive_tmp : $archive_path;
+          if (file_exists($size_path)) {
+            $size_bytes = filesize($size_path);
             $archive_size = ' ['.bytes_to_size($size_bytes).']';
           }
-          
+
           if (!empty($file_line) && strlen($file_line) > 2) {
             $clean_line = preg_replace('/^(adding:|deflated|stored|a\s+)/i', '', $file_line);
             $clean_line = trim($clean_line);
@@ -932,7 +942,7 @@ while (true) {
             $text = [_('Compressing').'...'.$archive_size];
           }
         }
-        
+
         $reply['status'] = json_encode([
           'action' => $action,
           'text' => $text
@@ -946,9 +956,19 @@ while (true) {
         $format = $format ?? 'zip';
         $archive_name = $archive_name ?? 'archive.zip';
         $archive_path = rtrim($target, '/').'/'.$archive_name;
+        $archive_tmp = $archive_path.'.tmp';
         
+        // Clean up any leftover tmp file from previous failed run
+        @unlink($archive_tmp);
+
         exec('logger -t file_manager "Start compress: format=' . escapeshellarg($format) . ', archive=' . escapeshellarg($archive_path) . '"');
-        
+
+        // Check if target archive already exists
+        if (file_exists($archive_path)) {
+          $reply['error'] = _('Archive already exists');
+          break;
+        }
+
         // For multiple sources, find common parent directory
         // For single source, use its parent directory
         if (count($source) > 1) {
@@ -964,32 +984,29 @@ while (true) {
           $source_parent = dirname($source_path);
           $source_basenames = [basename($source_path)];
         }
-        
+
         // Build compression command based on format
         $escaped_basenames = implode(' ', array_map('escapeshellarg', $source_basenames));
-        
+
         switch ($format) {
         case 'zip':
-          // Inline zip wrapper with structured progress output
-          // CRITICAL: The '>$status' redirect at the end keeps the shell group process alive.
-          // Without it, the shell group exits immediately after backgrounding, making the PID invalid.
-          // The redirect forces the shell to wait for the entire pipeline to complete.
-          // CRITICAL FIX: Pattern must be checked after EVERY character, not just at newline.
-          // This prevents dots from being buffered into line_buffer before dot_mode activates.
+          // Inline zip wrapper: parse zip output and produce structured log (TOTAL|bytes, FILE|ts|size|name, DOT|ts)
           $cmd = <<<BASH
           {
-            cd {$source_parent} || exit 1
-            
+            cd "$source_parent" || exit 1
+
             # Calculate total size of source files
-            total_bytes=\$(du -sb {$escaped_basenames} 2>/dev/null | awk '{sum+=\$1} END {print sum}')
+            total_bytes=\$(du -sb $escaped_basenames 2>/dev/null | awk '{sum+=\$1} END {print sum}')
             printf 'TOTAL|%s\\n' "\$total_bytes"
-            
-            zip --recurse-paths --display-usize --display-dots --dot-size 100m {$archive_path} -- {$escaped_basenames} 2>&1 | while IFS= read -r -n1 char || [[ -n \$char ]]; do
-              
+
+            # Write to .tmp first for atomic creation
+            # Read char-by-char (-n1) to check regex after each character - prevents dots from being buffered before pattern match
+            zip --recurse-paths --display-usize --display-dots --dot-size 100m "$archive_tmp" -- $escaped_basenames 2>&1 | while IFS= read -r -n1 char || [[ -n \$char ]]; do
+
               # Line mode: accumulate characters and check for pattern match after each char
               if [[ ! \$dot_mode ]]; then
                 line_buffer+="\$char"
-                
+
                 # Check after every char if we have the pattern (size) followed by space
                 # This ensures we switch to dot_mode BEFORE dots arrive
                 if [[ \$line_buffer =~ (adding|updating):\\ (.*)\\ \\(([0-9.]+[KMGT]?)\\)\  ]]; then
@@ -998,7 +1015,7 @@ while (true) {
                   printf 'FILE|%(%s)T|%s|%s\\n' -1 "\$src_size" "\$src_file"
                   dot_mode=1
                 fi
-                
+
                 # On newline, output non-matching lines as INFO
                 if [[ \$char == \$'\\n' ]]; then
                   if [[ ! \$dot_mode && -n \$line_buffer ]]; then
@@ -1006,7 +1023,7 @@ while (true) {
                   fi
                   line_buffer=""
                 fi
-                
+
               # Dot mode: capture dots individually
               elif [[ \$dot_mode ]]; then
                 if [[ \$char == '.' ]]; then
@@ -1022,6 +1039,22 @@ while (true) {
                 fi
               fi
             done
+
+            # Capture zip exit code and write any errors
+            zip_exit=\${PIPESTATUS[0]}
+
+            # On success: atomic rename, on failure: cleanup tmp
+            if [[ \$zip_exit -eq 0 ]]; then
+              mv "$archive_tmp" "$archive_path"
+            else
+              rm -f "$archive_tmp"
+            fi
+
+            # CRITICAL: The '>$status 2>$error' redirect MUST be outside the braces at the group level.
+            # Without it, the shell group process exits immediately after backgrounding (&), making the
+            # returned PID invalid - pid_exists() then finds no /proc/$pid and returns empty $pid.
+            # This redirect forces bash to keep the group process alive until the entire pipeline completes.
+            # Alternative forms like 'printf ... >$status' inside the group do NOT prevent early exit.
           } >$status 2>$error & echo \$!
           BASH;
           break;
@@ -1043,7 +1076,7 @@ while (true) {
         default:
           $cmd = "cd ".quoted($source_parent)." && zip -r ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status & echo \$!";
         }
-        
+
         exec('logger -t file_manager "Executing command (first 200 chars): ' . escapeshellarg(substr($cmd, 0, 200)) . '"');
         exec($cmd, $pid);
         exec('logger -t file_manager "After exec: pid=' . escapeshellarg(json_encode($pid)) . '"');
@@ -1061,12 +1094,16 @@ while (true) {
 
       // start action
       } else {
+        // TODO: Add "Overwrite existing files" option for extract
+        // Check tar/unzip/7z/unrar options: tar has --skip-existing, unzip has -n (never overwrite), etc.
+        // Let user decide whether to overwrite or skip existing files
+        
         $archive = $source[0];
         $dest = rtrim($target, '/');
-        
+
         // Create destination directory if it doesn't exist
         exec("mkdir -p ".quoted($dest));
-        
+
         // Detect archive type and extract accordingly
         $cmd = "cd ".quoted($dest)." && ";
         if (preg_match('/\.(tar\.gz|tgz)$/i', $archive)) {
@@ -1138,15 +1175,21 @@ while (true) {
             foreach ($datasets as $dataset) if (exec("ls --indicator-style=none /mnt/$dataset|wc -l")==0) exec("zfs destroy $dataset 2>/dev/null");
           }
         }
+
+        // For compress action: clean up tmp file if still exists (shouldn't, but safety)
+        if ($action == 16 && isset($archive_tmp)) {
+          @unlink($archive_tmp);
+        }
+
         if (file_exists($error)) $reply['error'] = trim(file_get_contents($error));
-        
+
         // Debug: Copy status file before deletion for action 16 (compress)
         if ($action == 16 && file_exists($status)) {
           $debug_copy = '/tmp/status-debug-compress.txt';
           copy($status, $debug_copy);
           exec('logger -t file_manager "Status file copied to ' . $debug_copy . ' before deletion"');
         }
-        
+
         delete_file($active, $pid_file, $status, $error);
         unset($pid);
         $delete_empty_dirs = null;
