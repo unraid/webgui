@@ -306,55 +306,31 @@ function updateArchiveName() {
   var format = $('#dfm_format').val();
   var proposedName = baseName + '.' + format;
   
-  // Check if file exists and find unique name
-  var targetDir = dfm.window.find('#dfm_target').val() || $('#dfm_prefix').text();
-  findUniqueArchiveName(targetDir, baseName, format, function(uniqueName) {
-    $('#dfm_archive_name').val(uniqueName);
-  });
-}
-
-function findUniqueArchiveName(dir, baseName, format, callback) {
-  var testName = baseName + '.' + format;
-  var fullPath = dir.replace(/\/$/, '') + '/' + testName;
+  // Try to find unique name by checking current directory listing
+  var targetDir = dfm.window.find('#dfm_target').val();
+  if (!targetDir) targetDir = $('#dfm_prefix').text();
   
-  // Check if file exists via fileTree data
-  $.post('/plugins/dynamix/include/FileTree.php', {path: dir, root: $('#dfm_prefix').text()}, function(data) {
-    var exists = false;
-    if (data && data.length) {
-      exists = data.some(function(item) {
-        return item.data === fullPath;
-      });
+  // Get current files from displayed file tree if available
+  var existingFiles = [];
+  $('#dfm_filelist tbody tr').each(function() {
+    var fileData = $(this).find('td:first').attr('data');
+    if (fileData) {
+      var fileName = fileData.split('/').pop();
+      existingFiles.push(fileName);
     }
-    
-    if (!exists) {
-      callback(testName);
-      return;
-    }
-    
-    // File exists, find next available number
-    var counter = 2;
-    var findNext = function() {
-      var numberedName = baseName + '-' + counter + '.' + format;
-      var numberedPath = dir.replace(/\/$/, '') + '/' + numberedName;
-      
-      var numberExists = data.some(function(item) {
-        return item.data === numberedPath;
-      });
-      
-      if (!numberExists) {
-        callback(numberedName);
-      } else {
-        counter++;
-        if (counter > 100) {
-          // Safety limit
-          callback(baseName + '-' + Date.now() + '.' + format);
-        } else {
-          findNext();
-        }
-      }
-    };
-    findNext();
   });
+  
+  // Check if proposed name exists and find alternative
+  var finalName = proposedName;
+  if (existingFiles.indexOf(proposedName) !== -1) {
+    var counter = 2;
+    while (existingFiles.indexOf(baseName + '-' + counter + '.' + format) !== -1 && counter < 100) {
+      counter++;
+    }
+    finalName = baseName + '-' + counter + '.' + format;
+  }
+  
+  $('#dfm_archive_name').val(finalName);
 }
 
 function fileEdit(id) {
