@@ -304,7 +304,57 @@ function updateArchiveName() {
   // Remove existing extension from base name
   baseName = baseName.replace(/\.(zip|tar|tar\.gz|tar\.bz2|tar\.xz|tar\.zst|tgz|tbz2|txz)$/i, '');
   var format = $('#dfm_format').val();
-  $('#dfm_archive_name').val(baseName + '.' + format);
+  var proposedName = baseName + '.' + format;
+  
+  // Check if file exists and find unique name
+  var targetDir = dfm.window.find('#dfm_target').val() || $('#dfm_prefix').text();
+  findUniqueArchiveName(targetDir, baseName, format, function(uniqueName) {
+    $('#dfm_archive_name').val(uniqueName);
+  });
+}
+
+function findUniqueArchiveName(dir, baseName, format, callback) {
+  var testName = baseName + '.' + format;
+  var fullPath = dir.replace(/\/$/, '') + '/' + testName;
+  
+  // Check if file exists via fileTree data
+  $.post('/plugins/dynamix/include/FileTree.php', {path: dir, root: $('#dfm_prefix').text()}, function(data) {
+    var exists = false;
+    if (data && data.length) {
+      exists = data.some(function(item) {
+        return item.data === fullPath;
+      });
+    }
+    
+    if (!exists) {
+      callback(testName);
+      return;
+    }
+    
+    // File exists, find next available number
+    var counter = 2;
+    var findNext = function() {
+      var numberedName = baseName + '-' + counter + '.' + format;
+      var numberedPath = dir.replace(/\/$/, '') + '/' + numberedName;
+      
+      var numberExists = data.some(function(item) {
+        return item.data === numberedPath;
+      });
+      
+      if (!numberExists) {
+        callback(numberedName);
+      } else {
+        counter++;
+        if (counter > 100) {
+          // Safety limit
+          callback(baseName + '-' + Date.now() + '.' + format);
+        } else {
+          findNext();
+        }
+      }
+    };
+    findNext();
+  });
 }
 
 function fileEdit(id) {
@@ -826,17 +876,18 @@ function doAction(action, title, id) {
     // Detect if source is in appdata/system path for default format selection
     var isAppdata = source.match(/\/mnt\/[^\/]+\/(appdata|system)\//);
     dfm.window.find('#dfm_format').val(isAppdata ? 'tar.zst' : 'zip');
-    // Set default archive name based on source name
-    var archiveName = name + '.' + dfm.window.find('#dfm_format').val();
-    dfm.window.find('#dfm_archive_name').val(archiveName);
-    // Bind format change to update archive name
-    dfm.window.find('#dfm_format').on('change', updateArchiveName);
     // Set target to current directory
     dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
+      // Update archive name when target changes
+      updateArchiveName();
     });
     dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
-    console.log('Compress dialog opened', {source: source, dir: dir, archiveName: archiveName});
+    // Bind format change to update archive name
+    dfm.window.find('#dfm_format').on('change', updateArchiveName);
+    // Set initial archive name with uniqueness check
+    updateArchiveName();
+    console.log('Compress dialog opened', {source: source, dir: dir});
     break;
   case 17: // extract
     dfm.window.html($('#dfm_templateExtract').html());
@@ -1160,14 +1211,16 @@ function doActions(action, title) {
     // Detect if source is in appdata/system path
     var isAppdata = firstSource.match(/\/mnt\/[^\/]+(appdata|system)\//);
     dfm.window.find('#dfm_format').val(isAppdata ? 'tar.zst' : 'zip');
-    var archiveName = (bulk ? 'archive' : firstName) + '.' + dfm.window.find('#dfm_format').val();
-    dfm.window.find('#dfm_archive_name').val(archiveName);
-    dfm.window.find('#dfm_format').on('change', updateArchiveName);
     dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
+      // Update archive name when target changes
+      updateArchiveName();
     });
     dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
-    console.log('Bulk compress dialog opened', {sources: source, bulk: bulk, archiveName: archiveName});
+    dfm.window.find('#dfm_format').on('change', updateArchiveName);
+    // Set initial archive name with uniqueness check
+    updateArchiveName();
+    console.log('Bulk compress dialog opened', {sources: source, bulk: bulk});
     break;
   }
   dfm.window.find('#dfm_source').attr('size',Math.min(dfm.tsize[action],source.length));
