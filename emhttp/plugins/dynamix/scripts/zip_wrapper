@@ -1,18 +1,16 @@
 #!/bin/bash
 # Wrapper for zip to parse progress dots into structured log format
-# Usage: zip_wrapper <archive> <format> <dot_size_mb> <source_files...>
+# Usage: zip_wrapper <archive> <source_files...>
 
 archive="$1"
-format="$2"
-dot_size_mb="${3:-100}"
-shift 3
+shift
 source_files=("$@")
 
 status_file="/var/tmp/zip.progress"
-> "$status_file"
+: > "$status_file"
 
 # Run zip with dot progress and parse output character-by-character
-zip --recurse-paths --display-usize --display-dots --dot-size "${dot_size_mb}m" "$archive" -- "${source_files[@]}" 2>&1 | while IFS= read -r -n1 char || [[ -n $char ]]; do
+zip --recurse-paths --display-usize --display-dots --dot-size 100m "$archive" -- "${source_files[@]}" 2>&1 | while IFS= read -r -n1 char || [[ -n $char ]]; do
 
   # Line mode - accumulate characters until we detect dot mode or line end
   if [[ ! $dot_mode ]]; then
@@ -23,7 +21,8 @@ zip --recurse-paths --display-usize --display-dots --dot-size "${dot_size_mb}m" 
     if [[ $line_buffer =~ adding:\ (.*)\ \(([0-9.]+[KMGT]?)\)\ $ ]]; then
       src_file="${BASH_REMATCH[1]}"
       src_size="${BASH_REMATCH[2]}"
-      printf 'FILE|%s|%s\n' "$src_file" "$src_size" >> "$status_file"
+      # Format: FILE|size|filename (filename at end to handle pipes in filenames)
+      printf 'FILE|%s|%s\n' "$src_size" "$src_file" >> "$status_file"
       line_buffer=""
       dot_mode=1
 

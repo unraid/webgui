@@ -155,15 +155,18 @@ function calculate_eta($transferred, $percent, $speed, $last_rsync_eta_seconds =
 }
 
 /**
- * Parse rsync progress output and track transfer statistics.
+ * Parse zip progress output from structured log format.
  *
- * Uses static variables to maintain state across multiple calls during a single operation.
- * Call with $reset=true before starting a new copy/move operation to clear previous state.
+ * Reads structured log file created by zip_wrapper script with format:
+ * FILE|size|filename, DOT|timestamp, INFO|message, DONE
+ * Filename is at the end to handle pipe characters in filenames.
  *
- * @param string $status Raw rsync output line to parse
- * @param string $action_label Label to display for the current action (e.g. "Copying", "Moving")
- * @param bool $reset If true, resets static state variables (call before new operation)
- * @return array Associative array with progress information: 'text', 'percent', 'eta', 'speed', etc.
+ * @param string $status Path to structured log file
+ * @param string $action_label Label to display for the action (e.g. "Compressing")
+ * @param string $archive_path Path to archive file for size calculation
+ * @param int $dot_size_mb Size of each progress dot in MB (default 100)
+ * @param bool $reset If true, resets static state variables
+ * @return array Text array with progress information
  */
 function parse_zip_progress($status, $action_label, $archive_path, $dot_size_mb = 100, $reset = false) {
   static $total_dots_estimate = null;
@@ -186,7 +189,7 @@ function parse_zip_progress($status, $action_label, $archive_path, $dot_size_mb 
     return $text;
   }
 
-  // Read structured log (FILE|path|size, DOT|timestamp, INFO|message, DONE)
+  // Read structured log (FILE|size|filename, DOT|timestamp, INFO|message, DONE)
   $lines = file($status, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
   if (empty($lines)) {
     return $text;
@@ -204,8 +207,8 @@ function parse_zip_progress($status, $action_label, $archive_path, $dot_size_mb 
     $type = $parts[0];
     switch ($type) {
       case 'FILE':
-        // FILE|filename|size
-        $current_file = $parts[1] ?? '';
+        // FILE|size|filename (filename at end to handle pipes in filename)
+        $current_file = $parts[2] ?? '';
         break;
       case 'DOT':
         // DOT|timestamp
@@ -290,6 +293,17 @@ function parse_zip_progress($status, $action_label, $archive_path, $dot_size_mb 
   return $text;
 }
 
+/**
+ * Parse rsync progress output and track transfer statistics.
+ *
+ * Uses static variables to maintain state across multiple calls during a single operation.
+ * Call with $reset=true before starting a new copy/move operation to clear previous state.
+ *
+ * @param string $status Raw rsync output line to parse
+ * @param string $action_label Label to display for the current action (e.g. "Copying", "Moving")
+ * @param bool $reset If true, resets static state variables (call before new operation)
+ * @return array Associative array with progress information: 'text', 'percent', 'eta', 'speed', etc.
+ */
 function parse_rsync_progress($status, $action_label, $reset = false) {
   static $last_rsync_eta_seconds = null;
   static $total_size = null;
