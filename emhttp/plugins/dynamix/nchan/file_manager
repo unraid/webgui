@@ -181,7 +181,11 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
   static $current_file_dots = 0;
   static $first_dot_time = null;
   static $last_dot_time = null;
+  static $first_file_time = null;
+  static $last_file_time = null;
+  static $file_count = 0;
   static $last_eta_seconds = null;
+  static $info_messages = [];
 
   // Reset static variables when starting a new archive
   if ($reset) {
@@ -193,7 +197,11 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
     $current_file_dots = 0;
     $first_dot_time = null;
     $last_dot_time = null;
+    $first_file_time = null;
+    $last_file_time = null;
+    $file_count = 0;
     $last_eta_seconds = null;
+    $info_messages = [];
     return [];
   }
 
@@ -223,7 +231,7 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
     
     // Process new lines
     foreach ($new_lines as $line) {
-      $parts = explode('|', $line, 3);
+      $parts = explode('|', $line, 4);
       if (count($parts) < 2) continue;
 
       $type = $parts[0];
@@ -240,10 +248,18 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
             $processed_bytes += $current_file_size;
           }
           
-          // Start tracking new file
-          $current_file_size = size_to_bytes($parts[1]);
-          $current_file_name = $parts[2] ?? '';
+          // Parse FILE|timestamp|size|filename
+          $timestamp = intval($parts[1]);
+          $current_file_size = size_to_bytes($parts[2]);
+          $current_file_name = $parts[3] ?? '';
           $current_file_dots = 0;
+          $file_count++;
+          
+          // Track FILE timestamps for speed calculation (used when no DOTs available)
+          if ($first_file_time === null) {
+            $first_file_time = $timestamp;
+          }
+          $last_file_time = $timestamp;
           break;
         
         case 'DOT':
@@ -258,7 +274,11 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
           break;
         
         case 'INFO':
-          // Info message (currently unused)
+          // Collect info messages (keep last 3)
+          $info_messages[] = $parts[1];
+          if (count($info_messages) > 3) {
+            array_shift($info_messages);
+          }
           break;
       }
     }
@@ -271,24 +291,51 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
     $text[0] .= mb_strimhalf($current_file_name, 70, '...');
   }
 
-  exec('logger -t file_manager "parse_zip_progress: total_bytes=' . $total_bytes . ', processed_bytes=' . $processed_bytes . ', current_file_dots=' . $current_file_dots . '"');
+  // Add info messages if any
+  if (!empty($info_messages)) {
+    foreach ($info_messages as $msg) {
+      $text[0] .= "\n" . mb_strimhalf($msg, 70, '...');
+    }
+  }
+
+  exec('logger -t file_manager "parse_zip_progress: total_bytes=' . $total_bytes . ', processed_bytes=' . $processed_bytes . ', current_file_dots=' . $current_file_dots . ', file_count=' . $file_count . '"');
 
   // Calculate progress if we have total size
   if ($total_bytes && $total_bytes > 0) {
-    // Current progress = completed files + dots of current file
+    // Current progress = completed files + progress of current file
     $dots_bytes = $current_file_dots * $dot_size_mb * 1024 * 1024;
-    $current_progress_bytes = $processed_bytes + $dots_bytes;
+    $current_file_progress_bytes = $dots_bytes; // Start with DOTs if available
+    
+    // For small files without DOTs, estimate progress based on elapsed time
+    if ($dots_bytes == 0 && $current_file_size > 0 && $last_file_time !== null && $file_count > 1) {
+      // Calculate average time per file from completed files
+      $completed_files = $file_count - 1; // Exclude current file
+      $avg_time_per_file = ($last_file_time - $first_file_time) / $completed_files;
+      
+      // Time elapsed since current file started
+      $current_time = time();
+      $time_elapsed = $current_time - $last_file_time;
+      
+      // Estimate progress of current file (cap at 100%)
+      if ($avg_time_per_file > 0) {
+        $progress_ratio = min(1.0, $time_elapsed / $avg_time_per_file);
+        $current_file_progress_bytes = $current_file_size * $progress_ratio;
+      }
+    }
+    
+    $current_progress_bytes = $processed_bytes + $current_file_progress_bytes;
     
     // Calculate percentage
     $percent = min(100, intval(($current_progress_bytes / $total_bytes) * 100));
     
-    // Calculate speed and ETA from dot timestamps
+    // Calculate speed and ETA
     $speed = '';
     $eta = 'N/A';
     
+    // Prefer DOT timestamps for speed (more accurate for large files)
     if ($first_dot_time !== null && $last_dot_time !== null && $last_dot_time > $first_dot_time) {
       $time_span = $last_dot_time - $first_dot_time;
-      $dots_processed = $current_file_dots; // approximate total dots across all files
+      $dots_processed = $current_file_dots;
       
       if ($time_span > 0 && $dots_processed > 1) {
         // Calculate speed: dots * dot_size / time
@@ -301,6 +348,32 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
           $eta_seconds = $remaining_bytes / $speed_bytes;
           
           // Apply hysteresis to prevent ETA from jumping
+          if ($last_eta_seconds !== null) {
+            $eta_seconds = ($last_eta_seconds * 0.7) + ($eta_seconds * 0.3);
+          }
+          $last_eta_seconds = $eta_seconds;
+          
+          $eta = seconds_to_time(intval($eta_seconds));
+        }
+      }
+    }
+    // Fallback: use FILE timestamps for small files without DOTs
+    // FILE timestamp = start of file processing, so difference between FILEs = duration of previous file
+    elseif ($first_file_time !== null && $last_file_time !== null && $last_file_time > $first_file_time && $file_count > 1) {
+      $time_span = $last_file_time - $first_file_time;
+      
+      if ($time_span > 0) {
+        // Calculate speed: processed bytes / time
+        // processed_bytes = all completed files (current file not included until next FILE arrives)
+        $speed_bytes = $processed_bytes / $time_span;
+        $speed = bytes_to_size($speed_bytes) . '/s';
+        
+        // Calculate ETA
+        $remaining_bytes = $total_bytes - $current_progress_bytes;
+        if ($speed_bytes > 0) {
+          $eta_seconds = $remaining_bytes / $speed_bytes;
+          
+          // Apply hysteresis
           if ($last_eta_seconds !== null) {
             $eta_seconds = ($last_eta_seconds * 0.7) + ($eta_seconds * 0.3);
           }
@@ -946,7 +1019,7 @@ while (true) {
                 if [[ \$line_buffer =~ (adding|updating):\\ (.*)\\ \\(([0-9.]+[KMGT]?)\\)\  ]]; then
                   src_file="\${BASH_REMATCH[2]}"
                   src_size="\${BASH_REMATCH[3]}"
-                  printf 'FILE|%s|%s\\n' "\$src_size" "\$src_file"
+                  printf 'FILE|%(%s)T|%s|%s\\n' -1 "\$src_size" "\$src_file"
                   dot_mode=1
                 fi
                 
