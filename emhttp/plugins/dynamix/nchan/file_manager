@@ -158,21 +158,21 @@ function calculate_eta($transferred, $percent, $speed, $last_rsync_eta_seconds =
 }
 
 /**
- * Parse zip progress output from structured log format.
+ * Parse compress progress output from structured log format (zip and tar formats).
  *
  * Reads structured log file incrementally with format:
  * TOTAL|bytes (first line with total source size)
  * FILE|timestamp|size|filename (filename at end to handle pipes in filename)
- * DOT|timestamp (each 100MB of source file already compressed)
+ * DOT|timestamp (each dot = dot_size_mb of source data; null = auto: total_bytes/50)
  * INFO|message (optional)
  *
  * @param string $status Path to structured log file
  * @param string $action_label Label to display for the action (e.g. "Compressing")
- * @param int $dot_size_mb Size of each progress dot in MB (default 100)
+ * @param int|null $dot_size_mb Size of each progress dot in MB; null = auto (total_bytes/50)
  * @param bool $reset If true, resets static state variables
  * @return array Text array with progress information
  */
-function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset = false) {
+function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $reset = false) {
   static $last_line_number = 0;
   static $total_bytes = null;
   static $processed_bytes = 0;
@@ -197,6 +197,8 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
     return [];
   }
 
+  $auto_dot_size = ($dot_size_mb === null);
+
   // Initialize text array with action label
   $text[0] = $action_label . "... ";
 
@@ -204,7 +206,7 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
   $start_line = $last_line_number + 1;
   $new_lines = [];
   exec("tail -n +" . escapeshellarg($start_line) . " " . escapeshellarg($status) . " 2>/dev/null", $new_lines);
-  exec('logger -t file_manager "parse_zip_progress: read ' . count($new_lines) . ' new lines from line ' . $start_line . '"');
+  exec('logger -t file_manager "parse_compress_progress: read ' . count($new_lines) . ' new lines from line ' . $start_line . '"');
 
   if (empty($new_lines)) {
     return [];
@@ -255,7 +257,8 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
         $current_file_dots++;
 
         // Record progress event: processed_bytes (completed files) + current file progress
-        $current_file_progress = $current_file_dots * $dot_size_mb * 1024 * 1024;
+        $effective_dot_mb = $auto_dot_size ? ($total_bytes > 0 ? $total_bytes / 50.0 / (1024 * 1024) : 100) : $dot_size_mb;
+        $current_file_progress = $current_file_dots * $effective_dot_mb * 1024 * 1024;
         $progress_events[] = [$timestamp, $processed_bytes + $current_file_progress];
         break;
 
@@ -283,7 +286,7 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
     }
   }
 
-  exec('logger -t file_manager "parse_zip_progress: total_bytes=' . $total_bytes . ', processed_bytes=' . $processed_bytes . ', current_file_dots=' . $current_file_dots . '"');
+  exec('logger -t file_manager "parse_compress_progress: total_bytes=' . $total_bytes . ', processed_bytes=' . $processed_bytes . ', current_file_dots=' . $current_file_dots . '"');
 
   // Calculate progress if we have total size
   if ($total_bytes && $total_bytes > 0) {
@@ -300,14 +303,15 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
     }
 
     // Current progress = completed files + progress of current file via DOTs
-    $dots_bytes = $current_file_dots * $dot_size_mb * 1024 * 1024;
+    $effective_dot_mb = $auto_dot_size ? ($total_bytes / 50.0 / (1024 * 1024)) : $dot_size_mb;
+    $dots_bytes = $current_file_dots * $effective_dot_mb * 1024 * 1024;
     $current_file_progress_bytes = $dots_bytes;
 
     $current_progress_bytes = $processed_bytes + $current_file_progress_bytes;
 
     // Log when dot count exceeds du-reported size (helps diagnose "ETA: 0:00:-N" if it recurs)
     if ($current_progress_bytes > $total_bytes) {
-      exec('logger -t file_manager "parse_zip_progress: overcounting: total=' . $total_bytes . ', current_progress=' . intval($current_progress_bytes) . ', processed_bytes=' . $processed_bytes . ', file_dots=' . $current_file_dots . ', file_size=' . intval($current_file_size) . '"');
+      exec('logger -t file_manager "parse_compress_progress: overcounting: total=' . $total_bytes . ', current_progress=' . intval($current_progress_bytes) . ', processed_bytes=' . $processed_bytes . ', file_dots=' . $current_file_dots . ', file_size=' . intval($current_file_size) . '"');
     }
 
     $percent = min(100, intval(($current_progress_bytes / $total_bytes) * 100));
@@ -890,27 +894,10 @@ while (true) {
 
         // For zip format, use structured progress parser
         if ($format === 'zip') {
-          $text = parse_zip_progress($status, _('Compressing'), 100);
-          exec('logger -t file_manager "parse_zip_progress returned: ' . escapeshellarg(json_encode($text)) . '"');
+          $text = parse_compress_progress($status, _('Compressing'), 100);
+          exec('logger -t file_manager "parse_compress_progress returned: ' . escapeshellarg(json_encode($text)) . '"');
         } else {
-          // For tar formats, use simple status display for now
-          $file_line = trim(exec("tail -1 $status 2>$null"));
-
-          $archive_size = '';
-          // Check tmp file during compression
-          $size_path = file_exists($archive_tmp) ? $archive_tmp : $archive_path;
-          if (file_exists($size_path)) {
-            $size_bytes = filesize($size_path);
-            $archive_size = ' ['.bytes_to_size($size_bytes).']';
-          }
-
-          if (!empty($file_line) && strlen($file_line) > 2) {
-            $clean_line = preg_replace('/^(adding:|deflated|stored|a\s+)/i', '', $file_line);
-            $clean_line = trim($clean_line);
-            $text = [_('Compressing').': '.mb_strimhalf($clean_line, 50, '...').$archive_size];
-          } else {
-            $text = [_('Compressing').'...'.$archive_size];
-          }
+          $text = parse_compress_progress($status, _('Compressing'), null);
         }
 
         if (!empty($text)) {
@@ -924,7 +911,7 @@ while (true) {
       } else {
         exec('logger -t file_manager "Case 16 start: pid is empty, starting new job"');
         @unlink('/tmp/status-debug-compress.txt'); // Clear old debug file
-        parse_zip_progress(null, null, 100, true); // Reset static variables
+        parse_compress_progress(null, null, 100, true); // Reset static variables
         $format = $format ?? 'zip';
         $archive_name = $archive_name ?? 'archive.zip';
         $archive_path = rtrim($target, '/').'/'.$archive_name;
@@ -1031,22 +1018,38 @@ while (true) {
           BASH;
           break;
         case 'tar':
-          $cmd = "cd ".quoted($source_parent)." && tar -cvf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status & echo \$!";
+          $tar_flags = '-cvf';
           break;
         case 'tar.gz':
-          $cmd = "cd ".quoted($source_parent)." && tar -czvf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status & echo \$!";
+          $tar_flags = '-czvf';
           break;
         case 'tar.zst':
-          $cmd = "cd ".quoted($source_parent)." && tar --use-compress-program=zstd -cvf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status & echo \$!";
+          $tar_flags = '--use-compress-program=zstd -cvf';
           break;
         case 'tar.bz2':
-          $cmd = "cd ".quoted($source_parent)." && tar -cvjf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status & echo \$!";
+          $tar_flags = '-cvjf';
           break;
         case 'tar.xz':
-          $cmd = "cd ".quoted($source_parent)." && tar -cvJf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status & echo \$!";
+          $tar_flags = '-cvJf';
           break;
         default:
           $cmd = "cd ".quoted($source_parent)." && zip -r ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status & echo \$!";
+        }
+
+        if (isset($tar_flags)) {
+          $cmd = <<<BASH
+          {
+            cd "$source_parent" || exit 1
+            total_bytes=\$(du -sb $escaped_basenames 2>/dev/null | awk '{sum+=\$1} END {print sum}')
+            echo "TOTAL|\$total_bytes"
+            record_size=10240
+            checkpoint=\$((total_bytes / record_size / 50))
+            [[ \$checkpoint -lt 1 ]] && checkpoint=1
+            tar $tar_flags "$archive_tmp" --record-size=\$record_size --checkpoint=\$checkpoint "--checkpoint-action=exec=printf 'DOT|%s\\n' \\\$(date +%s) >> $status" -- $escaped_basenames | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}'
+            tar_exit=\${PIPESTATUS[0]}
+            [[ \$tar_exit -eq 0 ]] && mv "$archive_tmp" "$archive_path" || rm -f "$archive_tmp"
+          } >$status 2>$error & echo \$!
+          BASH;
         }
 
         exec('logger -t file_manager "Executing command (first 200 chars): ' . escapeshellarg(substr($cmd, 0, 200)) . '"');
