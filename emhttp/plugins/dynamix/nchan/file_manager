@@ -892,6 +892,7 @@ while (true) {
       // start action
       } else {
         exec('logger -t file_manager "Case 16 start: pid is empty, starting new job"');
+        @unlink('/tmp/status-debug-compress.txt'); // Clear old debug file
         parse_zip_progress(null, null, 100, true); // Reset static variables
         $format = $format ?? 'zip';
         $archive_name = $archive_name ?? 'archive.zip';
@@ -1086,7 +1087,7 @@ while (true) {
         
         // Debug: Copy status file before deletion for action 16 (compress)
         if ($action == 16 && file_exists($status)) {
-          $debug_copy = '/tmp/status-debug-' . time() . '.txt';
+          $debug_copy = '/tmp/status-debug-compress.txt';
           copy($status, $debug_copy);
           exec('logger -t file_manager "Status file copied to ' . $debug_copy . ' before deletion"');
         }
