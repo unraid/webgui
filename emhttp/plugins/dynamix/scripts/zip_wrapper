@@ -1,0 +1,50 @@
+#!/bin/bash
+# Wrapper for zip to parse progress dots into structured log format
+# Usage: zip_wrapper <archive> <format> <dot_size_mb> <source_files...>
+
+archive="$1"
+format="$2"
+dot_size_mb="${3:-100}"
+shift 3
+source_files=("$@")
+
+status_file="/var/tmp/zip.progress"
+> "$status_file"
+
+# Run zip with dot progress and parse output character-by-character
+zip --recurse-paths --display-usize --display-dots --dot-size "${dot_size_mb}m" "$archive" -- "${source_files[@]}" 2>&1 | while IFS= read -r -n1 char || [[ -n $char ]]; do
+
+  # Line mode - accumulate characters until we detect dot mode or line end
+  if [[ ! $dot_mode ]]; then
+    line_buffer+="$char"
+
+    # Detect start of dot progress: "adding: path/file (SIZE) "
+    # Pattern matches when line ends with file size like "(1.2G) " or "(200M) "
+    if [[ $line_buffer =~ adding:\ (.*)\ \(([0-9.]+[KMGT]?)\)\ $ ]]; then
+      src_file="${BASH_REMATCH[1]}"
+      src_size="${BASH_REMATCH[2]}"
+      printf 'FILE|%s|%s\n' "$src_file" "$src_size" >> "$status_file"
+      line_buffer=""
+      dot_mode=1
+
+    # Line completed without entering dot mode - write as info line
+    elif [[ ! $char ]]; then
+      [[ -n $line_buffer ]] && printf 'INFO|%s\n' "$line_buffer" >> "$status_file"
+      line_buffer=""
+    fi
+
+  # Dot mode - log each dot with timestamp, exit on non-dot character  
+  elif [[ $dot_mode ]]; then
+    if [[ $char == '.' ]]; then
+      printf 'DOT|%s\n' "$(date +%s)" >> "$status_file"
+    else
+      # Back to line mode
+      line_buffer="$char"
+      dot_mode=
+    fi
+  fi
+
+done
+
+# Write completion marker
+printf 'DONE\n' >> "$status_file"

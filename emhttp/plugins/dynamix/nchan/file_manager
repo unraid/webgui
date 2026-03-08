@@ -165,6 +165,131 @@ function calculate_eta($transferred, $percent, $speed, $last_rsync_eta_seconds =
  * @param bool $reset If true, resets static state variables (call before new operation)
  * @return array Associative array with progress information: 'text', 'percent', 'eta', 'speed', etc.
  */
+function parse_zip_progress($status, $action_label, $archive_path, $dot_size_mb = 100, $reset = false) {
+  static $total_dots_estimate = null;
+  static $first_dot_time = null;
+  static $last_eta_seconds = null;
+
+  // Reset static variables when starting a new archive
+  if ($reset) {
+    $total_dots_estimate = null;
+    $first_dot_time = null;
+    $last_eta_seconds = null;
+    return [];
+  }
+
+  // Initialize text array with action label
+  $text[0] = $action_label . "... ";
+
+  // Check if status file exists
+  if (!file_exists($status)) {
+    return $text;
+  }
+
+  // Read structured log (FILE|path|size, DOT|timestamp, INFO|message, DONE)
+  $lines = file($status, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+  if (empty($lines)) {
+    return $text;
+  }
+
+  $current_file = '';
+  $dot_timestamps = [];
+  $done = false;
+
+  // Parse log lines
+  foreach ($lines as $line) {
+    $parts = explode('|', $line, 3);
+    if (count($parts) < 2) continue;
+
+    $type = $parts[0];
+    switch ($type) {
+      case 'FILE':
+        // FILE|filename|size
+        $current_file = $parts[1] ?? '';
+        break;
+      case 'DOT':
+        // DOT|timestamp
+        $dot_timestamps[] = intval($parts[1]);
+        break;
+      case 'INFO':
+        // INFO|message (for future use)
+        break;
+      case 'DONE':
+        $done = true;
+        break;
+    }
+  }
+
+  // Display current filename
+  if ($current_file) {
+    $text[0] .= mb_strimhalf($current_file, 70, '...');
+  }
+
+  // Calculate progress if we have dots
+  $dot_count = count($dot_timestamps);
+  if ($dot_count > 0) {
+    // Get archive size for progress indication
+    $archive_size_bytes = file_exists($archive_path) ? filesize($archive_path) : 0;
+    $archive_size = bytes_to_size($archive_size_bytes);
+
+    // Calculate speed from dot timestamps
+    $speed = '';
+    $eta = 'N/A';
+    $percent = 'N/A';
+
+    if ($dot_count >= 2) {
+      // Calculate speed from first to last dot
+      $time_span = $dot_timestamps[$dot_count - 1] - $dot_timestamps[0];
+      if ($time_span > 0) {
+        // dots/second * dot_size_mb = MB/s
+        $dots_per_second = ($dot_count - 1) / $time_span;
+        $speed_mb = $dots_per_second * $dot_size_mb;
+        $speed = bytes_to_size($speed_mb * 1024 * 1024) . '/s';
+
+        // Estimate total dots if we have archive size
+        // (this is rough - actual compression ratio unknown until done)
+        if ($archive_size_bytes > 0 && $total_dots_estimate === null) {
+          // Estimate based on current progress vs archive size
+          // Since we don't know final size, assume current compression ratio
+          $bytes_per_dot = $archive_size_bytes / $dot_count;
+          if ($bytes_per_dot > 0) {
+            $estimated_final_size = $archive_size_bytes * 1.5; // rough estimate
+            $total_dots_estimate = max($dot_count + 5, intval($estimated_final_size / $bytes_per_dot));
+          }
+        }
+
+        // Calculate ETA if we have estimate
+        if ($total_dots_estimate && $total_dots_estimate > $dot_count) {
+          $remaining_dots = $total_dots_estimate - $dot_count;
+          $eta_seconds = $remaining_dots / $dots_per_second;
+
+          // Apply hysteresis to prevent ETA from jumping
+          if ($last_eta_seconds !== null) {
+            $eta_seconds = ($last_eta_seconds * 0.7) + ($eta_seconds * 0.3);
+          }
+          $last_eta_seconds = $eta_seconds;
+
+          $eta = seconds_to_time(intval($eta_seconds));
+          $percent = intval(($dot_count / $total_dots_estimate) * 100) . '%';
+        }
+      }
+    }
+
+    // Build progress text
+    $progress_parts = [];
+    $progress_parts[] = _('Completed') . ": " . $percent;
+    $progress_parts[] = _('Archive') . ": " . $archive_size;
+    if ($speed) {
+      $progress_parts[] = _('Speed') . ": " . $speed;
+    }
+    $progress_parts[] = _('ETA') . ": " . $eta;
+
+    $text[1] = implode(",  ", $progress_parts);
+  }
+
+  return $text;
+}
+
 function parse_rsync_progress($status, $action_label, $reset = false) {
   static $last_rsync_eta_seconds = null;
   static $total_size = null;
@@ -682,30 +807,36 @@ while (true) {
 
       // return status of running action
       if (!empty($pid)) {
-        // Get last line from status file (current file being processed)
-        $file_line = trim(exec("tail -1 $status 2>$null"));
-        
-        // Get current archive size to show progress
+        $format = $format ?? 'zip';
+        $archive_name = $archive_name ?? 'archive.zip';
         $archive_path = rtrim($target, '/').'/'.$archive_name;
-        $archive_size = '';
-        if (file_exists($archive_path)) {
-          $size_bytes = filesize($archive_path);
-          $archive_size = ' ['.bytes_to_size($size_bytes).']';
-        }
         
-        // Show either the file being compressed or just "Compressing..." with archive size
-        if (!empty($file_line) && strlen($file_line) > 2) {
-          // Clean up compression tool output (remove prefixes like "adding:", "a ", etc.)
-          $clean_line = preg_replace('/^(adding:|deflated|stored|a\s+)/i', '', $file_line);
-          $clean_line = trim($clean_line);
-          $text = _('Compressing').': '.mb_strimhalf($clean_line, 50, '...').$archive_size;
+        // For zip format, use structured progress parser
+        if ($format === 'zip') {
+          $zip_status = '/var/tmp/zip.progress';
+          $text = parse_zip_progress($zip_status, _('Compressing'), $archive_path, 100);
         } else {
-          $text = _('Compressing').'...'.$archive_size;
+          // For tar formats, use simple status display for now
+          $file_line = trim(exec("tail -1 $status 2>$null"));
+          
+          $archive_size = '';
+          if (file_exists($archive_path)) {
+            $size_bytes = filesize($archive_path);
+            $archive_size = ' ['.bytes_to_size($size_bytes).']';
+          }
+          
+          if (!empty($file_line) && strlen($file_line) > 2) {
+            $clean_line = preg_replace('/^(adding:|deflated|stored|a\s+)/i', '', $file_line);
+            $clean_line = trim($clean_line);
+            $text = [_('Compressing').': '.mb_strimhalf($clean_line, 50, '...').$archive_size];
+          } else {
+            $text = [_('Compressing').'...'.$archive_size];
+          }
         }
         
         $reply['status'] = json_encode([
           'action' => $action,
-          'text' => [$text]
+          'text' => $text
         ]);
 
       // start action
@@ -739,8 +870,9 @@ while (true) {
         $cmd = "cd ".quoted($source_parent)." && ";
         switch ($format) {
         case 'zip':
-          // zip outputs progress by default when creating archives
-          $cmd .= "zip -r ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
+          // Use zip_wrapper for structured progress output
+          $zip_wrapper = '/usr/local/emhttp/plugins/dynamix/scripts/zip_wrapper';
+          $cmd .= "$zip_wrapper ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
           break;
         case 'tar':
           $cmd .= "tar -cvf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
