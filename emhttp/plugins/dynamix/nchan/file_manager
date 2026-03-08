@@ -536,11 +536,15 @@ while (true) {
 
   $reply = [];
   if (isset($action)) {
+    exec('logger -t file_manager "Loop iteration: action=' . escapeshellarg($action) . ', pid=' . escapeshellarg($pid ?: 'empty') . ', active_exists=' . (file_exists($active) ? 'yes' : 'no') . '"');
+    
     // check for language changes
     extract(parse_plugin_cfg('dynamix', true));
     // Restore compress parameters after plugin config extract
     if (isset($compress_format)) $format = $compress_format;
     if (isset($compress_archive_name)) $archive_name = $compress_archive_name;
+    
+    exec('logger -t file_manager "After restore: action=' . escapeshellarg($action) . ', format=' . escapeshellarg($format ?? 'unset') . ', archive_name=' . escapeshellarg($archive_name ?? 'unset') . '"');
     if ($display['locale'] != $locale_init) {
       $locale_init = $display['locale'];
       update_translation($locale_init);
@@ -824,9 +828,11 @@ while (true) {
       }
       break;
     case 16: // compress
+      exec('logger -t file_manager "Case 16: pid=' . escapeshellarg($pid ?: 'empty') . ', format=' . escapeshellarg($format ?? 'unset') . ', archive_name=' . escapeshellarg($archive_name ?? 'unset') . '"');
 
       // return status of running action
       if (!empty($pid)) {
+        exec('logger -t file_manager "Inside status check block: pid=' . escapeshellarg($pid) . '"');
         $format = $format ?? 'zip';
         $archive_name = $archive_name ?? 'archive.zip';
         $archive_path = rtrim($target, '/').'/'.$archive_name;
@@ -866,6 +872,7 @@ while (true) {
 
       // start action
       } else {
+        exec('logger -t file_manager "Start compress: pid is empty, starting new job"');
         $format = $format ?? 'zip';
         $archive_name = $archive_name ?? 'archive.zip';
         $archive_path = rtrim($target, '/').'/'.$archive_name;
