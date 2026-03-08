@@ -925,13 +925,14 @@ while (true) {
           // CRITICAL: The '>$status' redirect at the end keeps the shell group process alive.
           // Without it, the shell group exits immediately after backgrounding, making the PID invalid.
           // The redirect forces the shell to wait for the entire pipeline to complete.
+          // TODO: Currently testing direct writes with >>$status to avoid buffering.
           $cmd = <<<BASH
           {
             cd {$source_parent} || exit 1
             
             # Calculate total size of source files
             total_bytes=\$(du -sb {$escaped_basenames} 2>/dev/null | awk '{sum+=\$1} END {print sum}')
-            printf 'TOTAL|%s\\n' "\$total_bytes"
+            printf 'TOTAL|%s\\n' "\$total_bytes" >>$status
             
             # Use stdbuf to disable output buffering so dots appear character-by-character
             stdbuf -o0 zip --recurse-paths --display-usize --display-dots --dot-size 100m {$archive_path} -- {$escaped_basenames} 2>&1 | while IFS= read -r -n1 char || [[ -n \$char ]]; do
@@ -943,10 +944,10 @@ while (true) {
                   if [[ \$line_buffer =~ (adding|updating):\\ (.*)\\ \\(([0-9.]+[KMGT]?)\\)\$ ]]; then
                     src_file="\${BASH_REMATCH[2]}"
                     src_size="\${BASH_REMATCH[3]}"
-                    printf 'FILE|%s|%s\\n' "\$src_size" "\$src_file"
+                    printf 'FILE|%s|%s\\n' "\$src_size" "\$src_file" >>$status
                     dot_mode=1
                   elif [[ -n \$line_buffer ]]; then
-                    printf 'INFO|%s\\n' "\$line_buffer"
+                    printf 'INFO|%s\\n' "\$line_buffer" >>$status
                   fi
                   line_buffer=""
                 else
@@ -957,7 +958,7 @@ while (true) {
               elif [[ \$dot_mode ]]; then
                 # In dot mode, capture dots with individual timestamps for speed calculation
                 if [[ \$char == '.' ]]; then
-                  printf 'DOT|%s\\n' "\$(date +%s)"
+                  printf 'DOT|%(%s)T\\n' -1 >>$status
                 else
                   # Not a dot, switch back to line mode and start new buffer
                   line_buffer="\$char"
@@ -968,7 +969,7 @@ while (true) {
                 line_buffer+="\$char"
               fi
             done
-          } >$status 2>$error & echo \$!
+          } 2>$error & echo \$!
           BASH;
           break;
         case 'tar':

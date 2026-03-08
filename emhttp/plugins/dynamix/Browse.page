@@ -296,18 +296,17 @@ function fileExtension(file) {
 }
 
 function updateArchiveName() {
-  var sourceText = $('#dfm_source').text().trim();
-  console.log('updateArchiveName: sourceText from #dfm_source =', sourceText);
+  // Get first source name from data attribute (set when dialog opened)
+  var baseName = $('#dfm_source').data('firstName') || '';
+  console.log('updateArchiveName: baseName from data =', baseName);
   
-  // Get first source only (sources are separated by \r, same as backend)
-  var sourceName = sourceText.split('\r')[0];
-  console.log('updateArchiveName: first source =', sourceName);
-  
-  // Remove trailing slash if present (for folders)
-  sourceName = sourceName.replace(/\/$/, '');
-  // Get just the filename/foldername without path
-  var baseName = fileName(sourceName);
-  console.log('updateArchiveName: baseName after fileName() =', baseName);
+  if (!baseName) {
+    console.log('updateArchiveName: no firstName data, using fallback');
+    var sourceText = $('#dfm_source').text().trim();
+    var sourceName = sourceText.split('\r')[0] || sourceText;
+    sourceName = sourceName.replace(/\/$/, '');
+    baseName = fileName(sourceName);
+  }
   
   // Remove existing extension from base name
   baseName = baseName.replace(/\.(zip|tar|tar\.gz|tar\.bz2|tar\.xz|tar\.zst|tgz|tbz2|txz)$/i, '');
@@ -1193,11 +1192,13 @@ function doActions(action, title) {
     dfm.window.html($('#dfm_templateCompress').html());
     dfm_createSource(source);
     // Use first source name for archive name suggestion
-    var firstSource = bulk ? source[0] : source[0];
+    var firstSource = source[0];
     var firstPath = firstSource.substr(1).split('/');
     var firstName = firstPath.pop() || firstPath.pop();
+    // Store first source name for updateArchiveName function
+    dfm.window.find('#dfm_source').data('firstName', firstName);
     // Detect if source is in appdata/system path
-    var isAppdata = firstSource.match(/\/mnt\/[^\/]+(appdata|system)\//);
+    var isAppdata = firstSource.match(/\/mnt\/[^\/]+(appdata|system)\/);
     dfm.window.find('#dfm_format').val(isAppdata ? 'tar.zst' : 'zip');
     dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
