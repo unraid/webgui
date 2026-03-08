@@ -940,8 +940,8 @@ while (true) {
               if [[ \$char == \$'\\n' || ! \$char ]]; then
                 if [[ ! \$dot_mode ]]; then
                   # Check if line matches "adding:" or "updating:" with filename and size at end
-                  # The \$ at the end is critical - it ensures we only match when the line ends with size
-                  if [[ \$line_buffer =~ (adding|updating):\\ (.*)\\ \\(([0-9.]+[KMGT]?)\\)\$ ]]; then
+                  # Pattern: "  adding: filename (size) " (leading spaces, trailing space before $)
+                  if [[ \$line_buffer =~ (adding|updating):[[:space:]]+(.*)[[:space:]]+\\(([0-9.]+[KMGT]?)\\)[[:space:]]+\$ ]]; then
                     src_file="\${BASH_REMATCH[2]}"
                     src_size="\${BASH_REMATCH[3]}"
                     printf 'FILE|%s|%s\\n' "\$src_size" "\$src_file" >>$status

@@ -314,34 +314,11 @@ function updateArchiveName() {
   var proposedName = baseName + '.' + format;
   console.log('updateArchiveName: proposedName =', proposedName);
   
-  // Try to find unique name by checking current directory listing
-  var targetDir = dfm.window.find('#dfm_target').val();
-  if (!targetDir) targetDir = $('#dfm_prefix').text();
+  // TODO: Auto-increment (-2, -3) if file exists
+  // Currently not implemented because fileTree only shows directories, not files
+  // Would require AJAX call to check target directory contents
   
-  // Get current files from displayed file tree if available
-  var existingFiles = [];
-  $('#dfm_filelist tbody tr').each(function() {
-    var fileData = $(this).find('td:first').attr('data');
-    if (fileData) {
-      var fileName = fileData.split('/').pop();
-      existingFiles.push(fileName);
-    }
-  });
-  console.log('updateArchiveName: existingFiles =', existingFiles);
-  
-  // Check if proposed name exists and find alternative
-  var finalName = proposedName;
-  if (existingFiles.indexOf(proposedName) !== -1) {
-    console.log('updateArchiveName: file exists, finding alternative');
-    var counter = 2;
-    while (existingFiles.indexOf(baseName + '-' + counter + '.' + format) !== -1 && counter < 100) {
-      counter++;
-    }
-    finalName = baseName + '-' + counter + '.' + format;
-  }
-  console.log('updateArchiveName: finalName =', finalName);
-  
-  $('#dfm_archive_name').val(finalName);
+  $('#dfm_archive_name').val(proposedName);
 }
 
 function fileEdit(id) {
