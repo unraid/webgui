@@ -25,6 +25,9 @@ $timer   = time();
 define('RSYNC_MIN_PROGRESS_PERCENT', 3);   // Minimum progress percentage before calculating total size
 define('RSYNC_TOTAL_SIZE_SAMPLES', 5);     // Number of measurements to average for total size calculation
 
+// Compress progress dot size: 1 dot = this many MB of source data (zip: --dot-size, tar: checkpoint interval)
+define('COMPRESS_DOT_SIZE_MB', 100);
+
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/Wrappers.php";
 require_once "$docroot/webGui/include/publish.php";
@@ -163,12 +166,12 @@ function calculate_eta($transferred, $percent, $speed, $last_rsync_eta_seconds =
  * Reads structured log file incrementally with format:
  * TOTAL|bytes (first line with total source size)
  * FILE|timestamp|size|filename (filename at end to handle pipes in filename)
- * DOT|timestamp (each dot = dot_size_mb of source data; null = auto: total_bytes/50)
+ * DOT|timestamp (each dot = dot_size_mb MB of source data processed)
  * INFO|message (optional)
  *
  * @param string $status Path to structured log file
  * @param string $action_label Label to display for the action (e.g. "Compressing")
- * @param int|null $dot_size_mb Size of each progress dot in MB; null = auto (total_bytes/50)
+ * @param int $dot_size_mb Size of each progress dot in MB (e.g. 100 = same as zip --dot-size 100m)
  * @param bool $reset If true, resets static state variables
  * @return array Text array with progress information
  */
@@ -196,8 +199,6 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
     $info_messages = [];
     return [];
   }
-
-  $auto_dot_size = ($dot_size_mb === null);
 
   // Initialize text array with action label
   $text[0] = $action_label . "... ";
@@ -241,8 +242,7 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
           $processed_bytes += $current_file_size;
         } elseif ($current_file_dots > 0) {
           // tar: no file size (size=0), carry over DOT-estimated progress to prevent reset
-          $effective_dot_mb = $auto_dot_size ? ($total_bytes > 0 ? $total_bytes / 50.0 / (1024 * 1024) : 100) : $dot_size_mb;
-          $processed_bytes += $current_file_dots * $effective_dot_mb * 1024 * 1024;
+          $processed_bytes += $current_file_dots * $dot_size_mb * 1024 * 1024;
         }
 
         // Parse FILE|timestamp|size|filename
@@ -261,8 +261,7 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
         $current_file_dots++;
 
         // Record progress event: processed_bytes (completed files) + current file progress
-        $effective_dot_mb = $auto_dot_size ? ($total_bytes > 0 ? $total_bytes / 50.0 / (1024 * 1024) : 100) : $dot_size_mb;
-        $current_file_progress = $current_file_dots * $effective_dot_mb * 1024 * 1024;
+        $current_file_progress = $current_file_dots * $dot_size_mb * 1024 * 1024;
         $progress_events[] = [$timestamp, $processed_bytes + $current_file_progress];
         break;
 
@@ -307,8 +306,7 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
     }
 
     // Current progress = completed files + progress of current file via DOTs
-    $effective_dot_mb = $auto_dot_size ? ($total_bytes / 50.0 / (1024 * 1024)) : $dot_size_mb;
-    $dots_bytes = $current_file_dots * $effective_dot_mb * 1024 * 1024;
+    $dots_bytes = $current_file_dots * $dot_size_mb * 1024 * 1024;
     $current_file_progress_bytes = $dots_bytes;
 
     $current_progress_bytes = $processed_bytes + $current_file_progress_bytes;
@@ -896,13 +894,7 @@ while (true) {
 
         exec('logger -t file_manager "Status check: format=' . escapeshellarg($format) . ', status_file=' . escapeshellarg($status) . ', exists=' . (file_exists($status) ? 'yes' : 'no') . '"');
 
-        // For zip format, use structured progress parser
-        if ($format === 'zip') {
-          $text = parse_compress_progress($status, _('Compressing'), 100);
-          exec('logger -t file_manager "parse_compress_progress returned: ' . escapeshellarg(json_encode($text)) . '"');
-        } else {
-          $text = parse_compress_progress($status, _('Compressing'), null);
-        }
+        $text = parse_compress_progress($status, _('Compressing'), COMPRESS_DOT_SIZE_MB);
 
         if (!empty($text)) {
           $reply['status'] = json_encode([
@@ -915,14 +907,13 @@ while (true) {
       } else {
         exec('logger -t file_manager "Case 16 start: pid is empty, starting new job"');
         @unlink('/tmp/status-debug-compress.txt'); // Clear old debug file
-        parse_compress_progress(null, null, 100, true); // Reset static variables
+        parse_compress_progress(null, null, COMPRESS_DOT_SIZE_MB, true); // Reset static variables
+        $dot_mb = COMPRESS_DOT_SIZE_MB;
         $format = $format ?? 'zip';
         $archive_name = $archive_name ?? 'archive.zip';
         $archive_path = rtrim($target, '/').'/'.$archive_name;
-        $archive_tmp = $archive_path.'.tmp';
-        
-        // Clean up any leftover tmp file from previous failed run
-        @unlink($archive_tmp);
+        // unique tmp path in same dir (required for atomic rename across same filesystem)
+        $archive_tmp = rtrim($target, '/').'/.'.$archive_name.'_'.uniqid('', true).'.tmp';
 
         exec('logger -t file_manager "Start compress: format=' . escapeshellarg($format) . ', archive=' . escapeshellarg($archive_path) . '"');
 
@@ -964,7 +955,7 @@ while (true) {
 
             # Write to .tmp first for atomic creation
             # Read char-by-char (-n1) to check regex after each character - prevents dots from being buffered before pattern match
-            zip --recurse-paths --display-usize --display-dots --dot-size 100m "$archive_tmp" -- $escaped_basenames 2>&1 | while IFS= read -r -n1 char || [[ -n \$char ]]; do
+            zip --recurse-paths --display-usize --display-dots --dot-size {$dot_mb}m "$archive_tmp" -- $escaped_basenames 2>&1 | while IFS= read -r -n1 char || [[ \$char ]]; do
 
               # Line mode: accumulate characters and check for pattern match after each char
               if [[ ! \$dot_mode ]]; then
@@ -981,7 +972,7 @@ while (true) {
 
                 # On newline, output non-matching lines as INFO
                 if [[ \$char == \$'\\n' ]]; then
-                  if [[ ! \$dot_mode && -n \$line_buffer ]]; then
+                  if [[ ! \$dot_mode && \$line_buffer ]]; then
                     printf 'INFO|%s\\n' "\$line_buffer"
                   fi
                   line_buffer=""
@@ -1047,9 +1038,17 @@ while (true) {
             total_bytes=\$(du -sb $escaped_basenames 2>/dev/null | awk '{sum+=\$1} END {print sum}')
             echo "TOTAL|\$total_bytes"
             record_size=10240
-            checkpoint=\$((total_bytes / record_size / 50))
-            [[ \$checkpoint -lt 1 ]] && checkpoint=1
-            tar $tar_flags "$archive_tmp" --record-size=\$record_size --checkpoint=\$checkpoint "--checkpoint-action=exec=printf 'DOT|%s\\n' \\\$(date +%s) >> $status" -- $escaped_basenames | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}'
+            dot_size=\$(($dot_mb * 1024 * 1024))  # COMPRESS_DOT_SIZE_MB MB per dot
+            checkpoint=\$((dot_size / record_size))
+            tar_args=(
+              $tar_flags
+              "$archive_tmp"
+              --record-size=\$record_size
+              --checkpoint=\$checkpoint
+              "--checkpoint-action=exec=printf 'DOT|%s\\n' \\\$(date +%s) >> $status"
+              -- $escaped_basenames
+            )
+            tar "\${tar_args[@]}" | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}'
             tar_exit=\${PIPESTATUS[0]}
             [[ \$tar_exit -eq 0 ]] && mv "$archive_tmp" "$archive_path" || rm -f "$archive_tmp"
           } >$status 2>$error & echo \$!
