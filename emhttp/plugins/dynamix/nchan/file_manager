@@ -157,26 +157,39 @@ function calculate_eta($transferred, $percent, $speed, $last_rsync_eta_seconds =
 /**
  * Parse zip progress output from structured log format.
  *
- * Reads structured log file created by zip_wrapper script with format:
- * FILE|size|filename, DOT|timestamp, INFO|message, DONE
- * Filename is at the end to handle pipe characters in filenames.
+ * Reads structured log file incrementally with format:
+ * TOTAL|bytes (first line with total source size)
+ * FILE|size|filename (filename at end to handle pipes in filename)
+ * DOT|timestamp (each 100MB compressed)
+ * INFO|message (optional)
  *
  * @param string $status Path to structured log file
  * @param string $action_label Label to display for the action (e.g. "Compressing")
- * @param string $archive_path Path to archive file for size calculation
  * @param int $dot_size_mb Size of each progress dot in MB (default 100)
  * @param bool $reset If true, resets static state variables
  * @return array Text array with progress information
  */
-function parse_zip_progress($status, $action_label, $archive_path, $dot_size_mb = 100, $reset = false) {
-  static $total_dots_estimate = null;
+function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset = false) {
+  static $last_line_number = 0;
+  static $total_bytes = null;
+  static $processed_bytes = 0;
+  static $current_file_name = '';
+  static $current_file_size = 0;
+  static $current_file_dots = 0;
   static $first_dot_time = null;
+  static $last_dot_time = null;
   static $last_eta_seconds = null;
 
   // Reset static variables when starting a new archive
   if ($reset) {
-    $total_dots_estimate = null;
+    $last_line_number = 0;
+    $total_bytes = null;
+    $processed_bytes = 0;
+    $current_file_name = '';
+    $current_file_size = 0;
+    $current_file_dots = 0;
     $first_dot_time = null;
+    $last_dot_time = null;
     $last_eta_seconds = null;
     return [];
   }
@@ -186,113 +199,118 @@ function parse_zip_progress($status, $action_label, $archive_path, $dot_size_mb 
 
   // Check if status file exists
   if (!file_exists($status)) {
-    exec('logger -t file_manager "parse_zip_progress: status file does not exist: ' . escapeshellarg($status) . '"');
     return $text;
   }
 
-  // Read structured log (FILE|size|filename, DOT|timestamp, INFO|message, DONE)
-  $lines = file($status, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-  if (empty($lines)) {
-    exec('logger -t file_manager "parse_zip_progress: status file is empty"');
+  // Get total line count to know if there are new lines
+  $total_lines = intval(exec("wc -l < " . escapeshellarg($status) . " 2>/dev/null || echo 0"));
+  if ($total_lines == 0) {
     return $text;
   }
 
-  exec('logger -t file_manager "parse_zip_progress: read ' . count($lines) . ' lines from status file"');
+  // Read only new lines since last call (incremental)
+  if ($last_line_number < $total_lines) {
+    $start_line = $last_line_number + 1;
+    $new_lines = [];
+    exec("tail -n +" . escapeshellarg($start_line) . " " . escapeshellarg($status) . " 2>/dev/null", $new_lines);
+    
+    // Process new lines
+    foreach ($new_lines as $line) {
+      $parts = explode('|', $line, 3);
+      if (count($parts) < 2) continue;
 
-  $current_file = '';
-  $dot_timestamps = [];
-  $done = false;
-
-  // Parse log lines
-  foreach ($lines as $line) {
-    $parts = explode('|', $line, 3);
-    if (count($parts) < 2) continue;
-
-    $type = $parts[0];
-    switch ($type) {
-      case 'FILE':
-        // FILE|size|filename (filename at end to handle pipes in filename)
-        $current_file = $parts[2] ?? '';
-        break;
-      case 'DOT':
-        // DOT|timestamp
-        $dot_timestamps[] = intval($parts[1]);
-        break;
-      case 'INFO':
-        // INFO|message (for future use)
-        break;
-      case 'DONE':
-        $done = true;
-        break;
+      $type = $parts[0];
+      switch ($type) {
+        case 'TOTAL':
+          // First line: total size of all source files
+          $total_bytes = floatval($parts[1]);
+          break;
+        
+        case 'FILE':
+          // New file started - previous file is complete
+          if ($current_file_size > 0) {
+            // Add completed file to processed bytes
+            $processed_bytes += $current_file_size;
+          }
+          
+          // Start tracking new file
+          $current_file_size = size_to_bytes($parts[1]);
+          $current_file_name = $parts[2] ?? '';
+          $current_file_dots = 0;
+          break;
+        
+        case 'DOT':
+          // Progress dot for current file
+          $timestamp = intval($parts[1]);
+          $current_file_dots++;
+          
+          if ($first_dot_time === null) {
+            $first_dot_time = $timestamp;
+          }
+          $last_dot_time = $timestamp;
+          break;
+        
+        case 'INFO':
+          // Info message (currently unused)
+          break;
+      }
     }
+    
+    $last_line_number = $total_lines;
   }
 
   // Display current filename
-  if ($current_file) {
-    $text[0] .= mb_strimhalf($current_file, 70, '...');
+  if ($current_file_name) {
+    $text[0] .= mb_strimhalf($current_file_name, 70, '...');
   }
 
-  exec('logger -t file_manager "parse_zip_progress: current_file=' . escapeshellarg($current_file) . ', dot_count=' . count($dot_timestamps) . '"');
-
-  // Calculate progress if we have dots
-  $dot_count = count($dot_timestamps);
-  if ($dot_count > 0) {
-    // Get archive size for progress indication
-    $archive_size_bytes = file_exists($archive_path) ? filesize($archive_path) : 0;
-    $archive_size = bytes_to_size($archive_size_bytes);
-
-    // Calculate speed from dot timestamps
+  // Calculate progress if we have total size
+  if ($total_bytes && $total_bytes > 0) {
+    // Current progress = completed files + dots of current file
+    $dots_bytes = $current_file_dots * $dot_size_mb * 1024 * 1024;
+    $current_progress_bytes = $processed_bytes + $dots_bytes;
+    
+    // Calculate percentage
+    $percent = min(100, intval(($current_progress_bytes / $total_bytes) * 100));
+    
+    // Calculate speed and ETA from dot timestamps
     $speed = '';
     $eta = 'N/A';
-    $percent = 'N/A';
-
-    if ($dot_count >= 2) {
-      // Calculate speed from first to last dot
-      $time_span = $dot_timestamps[$dot_count - 1] - $dot_timestamps[0];
-      if ($time_span > 0) {
-        // dots/second * dot_size_mb = MB/s
-        $dots_per_second = ($dot_count - 1) / $time_span;
-        $speed_mb = $dots_per_second * $dot_size_mb;
-        $speed = bytes_to_size($speed_mb * 1024 * 1024) . '/s';
-
-        // Estimate total dots if we have archive size
-        // (this is rough - actual compression ratio unknown until done)
-        if ($archive_size_bytes > 0 && $total_dots_estimate === null) {
-          // Estimate based on current progress vs archive size
-          // Since we don't know final size, assume current compression ratio
-          $bytes_per_dot = $archive_size_bytes / $dot_count;
-          if ($bytes_per_dot > 0) {
-            $estimated_final_size = $archive_size_bytes * 1.5; // rough estimate
-            $total_dots_estimate = max($dot_count + 5, intval($estimated_final_size / $bytes_per_dot));
-          }
-        }
-
-        // Calculate ETA if we have estimate
-        if ($total_dots_estimate && $total_dots_estimate > $dot_count) {
-          $remaining_dots = $total_dots_estimate - $dot_count;
-          $eta_seconds = $remaining_dots / $dots_per_second;
-
+    
+    if ($first_dot_time !== null && $last_dot_time !== null && $last_dot_time > $first_dot_time) {
+      $time_span = $last_dot_time - $first_dot_time;
+      $dots_processed = $current_file_dots; // approximate total dots across all files
+      
+      if ($time_span > 0 && $dots_processed > 1) {
+        // Calculate speed: dots * dot_size / time
+        $speed_bytes = ($dots_processed * $dot_size_mb * 1024 * 1024) / $time_span;
+        $speed = bytes_to_size($speed_bytes) . '/s';
+        
+        // Calculate ETA
+        $remaining_bytes = $total_bytes - $current_progress_bytes;
+        if ($speed_bytes > 0) {
+          $eta_seconds = $remaining_bytes / $speed_bytes;
+          
           // Apply hysteresis to prevent ETA from jumping
           if ($last_eta_seconds !== null) {
             $eta_seconds = ($last_eta_seconds * 0.7) + ($eta_seconds * 0.3);
           }
           $last_eta_seconds = $eta_seconds;
-
+          
           $eta = seconds_to_time(intval($eta_seconds));
-          $percent = intval(($dot_count / $total_dots_estimate) * 100) . '%';
         }
       }
     }
-
+    
     // Build progress text
     $progress_parts = [];
-    $progress_parts[] = _('Completed') . ": " . $percent;
-    $progress_parts[] = _('Archive') . ": " . $archive_size;
+    $progress_parts[] = _('Completed') . ": " . $percent . '%';
+    $progress_parts[] = _('Total') . ": " . bytes_to_size($total_bytes);
     if ($speed) {
       $progress_parts[] = _('Speed') . ": " . $speed;
     }
     $progress_parts[] = _('ETA') . ": " . $eta;
-
+    
     $text[1] = implode(",  ", $progress_parts);
   }
 
@@ -536,15 +554,11 @@ while (true) {
 
   $reply = [];
   if (isset($action)) {
-    exec('logger -t file_manager "Loop iteration: action=' . escapeshellarg($action) . ', pid=' . escapeshellarg($pid ?: 'empty') . ', active_exists=' . (file_exists($active) ? 'yes' : 'no') . '"');
-    
     // check for language changes
     extract(parse_plugin_cfg('dynamix', true));
     // Restore compress parameters after plugin config extract
     if (isset($compress_format)) $format = $compress_format;
     if (isset($compress_archive_name)) $archive_name = $compress_archive_name;
-    
-    exec('logger -t file_manager "After restore: action=' . escapeshellarg($action) . ', format=' . escapeshellarg($format ?? 'unset') . ', archive_name=' . escapeshellarg($archive_name ?? 'unset') . '"');
     if ($display['locale'] != $locale_init) {
       $locale_init = $display['locale'];
       update_translation($locale_init);
@@ -828,24 +842,16 @@ while (true) {
       }
       break;
     case 16: // compress
-      exec('logger -t file_manager "Case 16: pid=' . escapeshellarg($pid ?: 'empty') . ', format=' . escapeshellarg($format ?? 'unset') . ', archive_name=' . escapeshellarg($archive_name ?? 'unset') . '"');
 
       // return status of running action
       if (!empty($pid)) {
-        exec('logger -t file_manager "Inside status check block: pid=' . escapeshellarg($pid) . '"');
         $format = $format ?? 'zip';
         $archive_name = $archive_name ?? 'archive.zip';
         $archive_path = rtrim($target, '/').'/'.$archive_name;
         
-        // Debug logging
-        exec('logger -t file_manager "Status check: format=' . escapeshellarg($format) . ', archive_name=' . escapeshellarg($archive_name) . ', target=' . escapeshellarg($target) . '"');
-        
         // For zip format, use structured progress parser
         if ($format === 'zip') {
-          $zip_status = '/var/tmp/zip.progress';
-          exec('logger -t file_manager "Calling parse_zip_progress: status_file=' . escapeshellarg($zip_status) . ', exists=' . (file_exists($zip_status) ? 'yes' : 'no') . '"');
-          $text = parse_zip_progress($zip_status, _('Compressing'), $archive_path, 100);
-          exec('logger -t file_manager "parse_zip_progress returned: ' . escapeshellarg(json_encode($text)) . '"');
+          $text = parse_zip_progress($status, _('Compressing'), 100);
         } else {
           // For tar formats, use simple status display for now
           $file_line = trim(exec("tail -1 $status 2>$null"));
@@ -872,13 +878,10 @@ while (true) {
 
       // start action
       } else {
-        exec('logger -t file_manager "Start compress: pid is empty, starting new job"');
+        parse_zip_progress(null, null, 100, true); // Reset static variables
         $format = $format ?? 'zip';
         $archive_name = $archive_name ?? 'archive.zip';
         $archive_path = rtrim($target, '/').'/'.$archive_name;
-        
-        // Debug logging
-        exec('logger -t file_manager "Compress action started: format=' . escapeshellarg($format) . ', archive_name=' . escapeshellarg($archive_name) . ', sources=' . escapeshellarg(implode(', ', $source)) . ', target=' . escapeshellarg($target) . '"');
         
         // For multiple sources, find common parent directory
         // For single source, use its parent directory
@@ -897,49 +900,65 @@ while (true) {
         }
         
         // Build compression command based on format
-        // Note: Using escapeshellarg() directly for basenames since quoted() expects full paths
         $escaped_basenames = implode(' ', array_map('escapeshellarg', $source_basenames));
-        $cmd = "cd ".quoted($source_parent)." && ";
+        
         switch ($format) {
         case 'zip':
-          $zip_wrapper = '/usr/local/emhttp/plugins/dynamix/scripts/zip_wrapper';
-          $cmd .= "$zip_wrapper ".quoted($archive_path)." ".$escaped_basenames." >$null 2>&1";
+          // Inline zip wrapper with structured progress output
+          $cmd = <<<BASH
+          {
+            cd {$source_parent} || exit 1
+            
+            # Calculate total size of source files
+            total_bytes=\$(du -sb {$escaped_basenames} 2>/dev/null | awk '{sum+=\$1} END {print sum}')
+            printf 'TOTAL|%s\\n' "\$total_bytes" > $status
+            
+            zip --recurse-paths --display-usize --display-dots --dot-size 100m {$archive_path} -- {$escaped_basenames} 2>&1 | while IFS= read -r -n1 char || [[ -n \$char ]]; do
+              if [[ ! \$dot_mode ]]; then
+                line_buffer+="\$char"
+                
+                if [[ \$line_buffer =~ adding:\\ (.*)\\ \\(([0-9.]+[KMGT]?)\\)\\ $ ]]; then
+                  src_file="\${BASH_REMATCH[1]}"
+                  src_size="\${BASH_REMATCH[2]}"
+                  printf 'FILE|%s|%s\\n' "\$src_size" "\$src_file" >> $status
+                  line_buffer=""
+                  dot_mode=1
+                elif [[ ! \$char ]]; then
+                  [[ -n \$line_buffer ]] && printf 'INFO|%s\\n' "\$line_buffer" >> $status
+                  line_buffer=""
+                fi
+              elif [[ \$dot_mode ]]; then
+                if [[ \$char == '.' ]]; then
+                  printf 'DOT|%s\\n' "\$(date +%s)" >> $status
+                else
+                  line_buffer="\$char"
+                  dot_mode=
+                fi
+              fi
+            done
+          } 2>$error & echo \$!
+          BASH;
           break;
         case 'tar':
-          $cmd .= "tar -cvf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
+          $cmd = "cd ".quoted($source_parent)." && tar -cvf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status & echo \$!";
           break;
         case 'tar.gz':
-          $cmd .= "tar -czvf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
+          $cmd = "cd ".quoted($source_parent)." && tar -czvf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status & echo \$!";
           break;
         case 'tar.zst':
-          // Use zstd with tar, -v for verbose output to show filenames
-          $cmd .= "tar --use-compress-program=zstd -cvf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
+          $cmd = "cd ".quoted($source_parent)." && tar --use-compress-program=zstd -cvf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status & echo \$!";
           break;
         case 'tar.bz2':
-          $cmd .= "tar -cvjf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
+          $cmd = "cd ".quoted($source_parent)." && tar -cvjf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status & echo \$!";
           break;
         case 'tar.xz':
-          $cmd .= "tar -cvJf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
+          $cmd = "cd ".quoted($source_parent)." && tar -cvJf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status & echo \$!";
           break;
         default:
-          $cmd .= "zip -r ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
+          $cmd = "cd ".quoted($source_parent)." && zip -r ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status & echo \$!";
         }
-        $cmd .= " & echo \$!";
-        
-        // Debug: log the command before execution
-        exec('logger -t file_manager "Executing compress command: ' . escapeshellarg($cmd) . '"');
         
         exec($cmd, $pid);
-        exec('logger -t file_manager "After exec: pid=' . escapeshellarg(json_encode($pid)) . ', raw_pid_array=' . escapeshellarg(print_r($pid, true)) . '"');
-        
-        // Check immediately if PID exists
-        if (!empty($pid) && is_array($pid)) {
-          $pid_to_check = $pid[0];
-          exec('logger -t file_manager "Checking if PID ' . escapeshellarg($pid_to_check) . ' exists: ' . (file_exists("/proc/$pid_to_check") ? 'yes' : 'no') . '"');
-          if (file_exists("/proc/$pid_to_check")) {
-            exec('logger -t file_manager "Process ' . escapeshellarg($pid_to_check) . ' cmdline: ' . escapeshellarg(file_get_contents("/proc/$pid_to_check/cmdline")) . '"');
-          }
-        }
       }
       break;
     case 17: // extract
@@ -996,7 +1015,6 @@ while (true) {
       continue 2;
     }
     $pid = pid_exists($pid??0);
-    exec('logger -t file_manager "After pid_exists: action=' . escapeshellarg($action) . ', pid=' . escapeshellarg($pid ?: 'false') . ', pid_file_will_be_created=' . ($pid !== false ? 'yes' : 'no') . '"');
 
     // Store PID to survive file_manager restarts
     if ($pid !== false) {
@@ -1004,7 +1022,6 @@ while (true) {
     }
 
     if ($pid === false) {
-      exec('logger -t file_manager "PID is false - entering cleanup: delete_empty_dirs=' . escapeshellarg($delete_empty_dirs ?? 'null') . ', action=' . escapeshellarg($action) . '"');
       if (!empty($delete_empty_dirs)) {
         exec("find ".quoted($source)." -type d -empty -print -delete 1>$status 2>$null & echo \$!", $pid);
         $delete_empty_dirs = false;
@@ -1032,7 +1049,6 @@ while (true) {
           }
         }
         if (file_exists($error)) $reply['error'] = trim(file_get_contents($error));
-        exec('logger -t file_manager "Job complete - deleting active file for action=' . escapeshellarg($action) . '"');
         delete_file($active, $pid_file, $status, $error);
         unset($pid);
         $delete_empty_dirs = null;
