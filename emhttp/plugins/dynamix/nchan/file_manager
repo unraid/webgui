@@ -902,9 +902,8 @@ while (true) {
         $cmd = "cd ".quoted($source_parent)." && ";
         switch ($format) {
         case 'zip':
-          // Use zip_wrapper for structured progress output
           $zip_wrapper = '/usr/local/emhttp/plugins/dynamix/scripts/zip_wrapper';
-          $cmd .= "$zip_wrapper ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
+          $cmd .= "$zip_wrapper ".quoted($archive_path)." ".$escaped_basenames." >$null 2>&1";
           break;
         case 'tar':
           $cmd .= "tar -cvf ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status";
