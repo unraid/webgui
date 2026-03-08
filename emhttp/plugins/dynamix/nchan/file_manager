@@ -932,37 +932,24 @@ while (true) {
             total_bytes=\$(du -sb {$escaped_basenames} 2>/dev/null | awk '{sum+=\$1} END {print sum}')
             printf 'TOTAL|%s\\n' "\$total_bytes"
             
-            zip --recurse-paths --display-usize --display-dots --dot-size 100m {$archive_path} -- {$escaped_basenames} 2>&1 | while IFS= read -r -n1 char || [[ -n \$char ]]; do
-              # Check for newline or EOF to process complete line
-              if [[ \$char == \$'\\n' || ! \$char ]]; then
-                if [[ ! \$dot_mode ]]; then
-                  # Check if line matches "adding: filename (size)" pattern
-                  if [[ \$line_buffer =~ adding:\\ (.*)\\ \\(([0-9.]+[KMGT]?)\\) ]]; then
-                    src_file="\${BASH_REMATCH[1]}"
-                    src_size="\${BASH_REMATCH[2]}"
-                    printf 'FILE|%s|%s\\n' "\$src_size" "\$src_file"
-                    dot_mode=1
-                  elif [[ -n \$line_buffer ]]; then
-                    printf 'INFO|%s\\n' "\$line_buffer"
-                  fi
-                  line_buffer=""
-                else
-                  # In dot mode, newline resets to line mode
-                  dot_mode=
-                  line_buffer=""
-                fi
-              elif [[ \$dot_mode ]]; then
-                # In dot mode, capture dots
-                if [[ \$char == '.' ]]; then
-                  printf 'DOT|%s\\n' "\$(date +%s)"
-                else
-                  # Not a dot, switch back to line mode and start new buffer
-                  line_buffer="\$char"
-                  dot_mode=
+            zip --recurse-paths --display-usize --display-dots --dot-size 100m {$archive_path} -- {$escaped_basenames} 2>&1 | while IFS= read -r line; do
+              # Check if line matches "adding:" or "updating:" pattern with size
+              if [[ \$line =~ (adding|updating):\\ (.*)\\ \\(([0-9.]+[KMGT]?)\\) ]]; then
+                src_file="\${BASH_REMATCH[2]}"
+                src_size="\${BASH_REMATCH[3]}"
+                printf 'FILE|%s|%s\\n' "\$src_size" "\$src_file"
+                
+                # Count dots in the line and emit DOT markers
+                dot_count=\$(echo "\$line" | tr -cd '.' | wc -c)
+                if [[ \$dot_count -gt 0 ]]; then
+                  timestamp=\$(date +%s)
+                  for ((i=0; i<dot_count; i++)); do
+                    printf 'DOT|%s\\n' "\$timestamp"
+                  done
                 fi
               else
-                # Accumulate characters into line buffer
-                line_buffer+="\$char"
+                # Other lines as INFO
+                [[ -n \$line ]] && printf 'INFO|%s\\n' "\$line"
               fi
             done
           } >$status 2>$error & echo \$!

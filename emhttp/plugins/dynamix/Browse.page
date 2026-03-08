@@ -297,14 +297,19 @@ function fileExtension(file) {
 
 function updateArchiveName() {
   var sourceName = $('#dfm_source').text().trim();
+  console.log('updateArchiveName: sourceName from #dfm_source =', sourceName);
+  
   // Remove trailing slash if present (for folders)
   sourceName = sourceName.replace(/\/$/, '');
   // Get just the filename/foldername without path
   var baseName = fileName(sourceName);
+  console.log('updateArchiveName: baseName after fileName() =', baseName);
+  
   // Remove existing extension from base name
   baseName = baseName.replace(/\.(zip|tar|tar\.gz|tar\.bz2|tar\.xz|tar\.zst|tgz|tbz2|txz)$/i, '');
   var format = $('#dfm_format').val();
   var proposedName = baseName + '.' + format;
+  console.log('updateArchiveName: proposedName =', proposedName);
   
   // Try to find unique name by checking current directory listing
   var targetDir = dfm.window.find('#dfm_target').val();
@@ -319,16 +324,19 @@ function updateArchiveName() {
       existingFiles.push(fileName);
     }
   });
+  console.log('updateArchiveName: existingFiles =', existingFiles);
   
   // Check if proposed name exists and find alternative
   var finalName = proposedName;
   if (existingFiles.indexOf(proposedName) !== -1) {
+    console.log('updateArchiveName: file exists, finding alternative');
     var counter = 2;
     while (existingFiles.indexOf(baseName + '-' + counter + '.' + format) !== -1 && counter < 100) {
       counter++;
     }
     finalName = baseName + '-' + counter + '.' + format;
   }
+  console.log('updateArchiveName: finalName =', finalName);
   
   $('#dfm_archive_name').val(finalName);
 }
