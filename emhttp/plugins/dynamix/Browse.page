@@ -296,8 +296,12 @@ function fileExtension(file) {
 }
 
 function updateArchiveName() {
-  var sourceName = $('#dfm_source').text().trim();
-  console.log('updateArchiveName: sourceName from #dfm_source =', sourceName);
+  var sourceText = $('#dfm_source').text().trim();
+  console.log('updateArchiveName: sourceText from #dfm_source =', sourceText);
+  
+  // Get first source only (sources are on separate lines)
+  var sourceName = sourceText.split(/[\r\n]+/)[0];
+  console.log('updateArchiveName: first source =', sourceName);
   
   // Remove trailing slash if present (for folders)
   sourceName = sourceName.replace(/\/$/, '');
