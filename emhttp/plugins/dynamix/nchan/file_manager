@@ -180,7 +180,6 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
   static $current_file_size = 0;
   static $current_file_dots = 0;
   static $progress_events = []; // Array of [timestamp, bytes_processed] for speed calculation
-  static $current_file_start_time = null; // Unix timestamp when current file started (for small-file interpolation)
   static $last_eta_seconds = null;
   static $info_messages = [];
 
@@ -193,7 +192,6 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
     $current_file_size = 0;
     $current_file_dots = 0;
     $progress_events = [];
-    $current_file_start_time = null;
     $last_eta_seconds = null;
     $info_messages = [];
     return [];
@@ -202,79 +200,76 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
   // Initialize text array with action label
   $text[0] = $action_label . "... ";
 
-  // Check if status file exists
-  if (!file_exists($status)) {
-    exec('logger -t file_manager "parse_zip_progress: status file does not exist: ' . escapeshellarg($status) . '"');
-    return $text;
-  }
-
-  // Get total line count to know if there are new lines
-  $total_lines = intval(exec("wc -l < " . escapeshellarg($status) . " 2>/dev/null || echo 0"));
-  exec('logger -t file_manager "parse_zip_progress: total_lines=' . $total_lines . ', last_line_number=' . $last_line_number . '"');
-  if ($total_lines == 0) {
-    exec('logger -t file_manager "parse_zip_progress: status file is empty"');
-    return $text;
-  }
-
   // Read only new lines since last call (incremental)
-  if ($last_line_number < $total_lines) {
-    $start_line = $last_line_number + 1;
-    $new_lines = [];
-    exec("tail -n +" . escapeshellarg($start_line) . " " . escapeshellarg($status) . " 2>/dev/null", $new_lines);
-    exec('logger -t file_manager "parse_zip_progress: read ' . count($new_lines) . ' new lines from line ' . $start_line . '"');
+  $start_line = $last_line_number + 1;
+  $new_lines = [];
+  exec("tail -n +" . escapeshellarg($start_line) . " " . escapeshellarg($status) . " 2>/dev/null", $new_lines);
+  exec('logger -t file_manager "parse_zip_progress: read ' . count($new_lines) . ' new lines from line ' . $start_line . '"');
 
-    // Process new lines
-    foreach ($new_lines as $line) {
-      $parts = explode('|', $line, 4);
-      if (count($parts) < 2) continue;
-
-      $type = $parts[0];
-      switch ($type) {
-        case 'TOTAL':
-          // First line: total size of all source files
-          $total_bytes = floatval($parts[1]);
-          break;
-
-        case 'FILE':
-          // New file started - previous file is complete
-          if ($current_file_size > 0) {
-            // Add completed file to processed bytes
-            $processed_bytes += $current_file_size;
-          }
-
-          // Parse FILE|timestamp|size|filename
-          $timestamp = intval($parts[1]);
-          $current_file_size = size_to_bytes($parts[2]);
-          $current_file_name = $parts[3] ?? '';
-          $current_file_dots = 0;
-          $current_file_start_time = $timestamp;
-
-          // Record progress event: new file starts, no progress on this file yet
-          $progress_events[] = [$timestamp, $processed_bytes];
-          break;
-
-        case 'DOT':
-          // Progress dot for current file
-          $timestamp = intval($parts[1]);
-          $current_file_dots++;
-
-          // Record progress event: processed_bytes (completed files) + current file progress
-          $current_file_progress = $current_file_dots * $dot_size_mb * 1024 * 1024;
-          $progress_events[] = [$timestamp, $processed_bytes + $current_file_progress];
-          break;
-
-        case 'INFO':
-          // Collect info messages (keep last 3)
-          $info_messages[] = $parts[1];
-          if (count($info_messages) > 3) {
-            array_shift($info_messages);
-          }
-          break;
-      }
-    }
-
-    $last_line_number = $total_lines;
+  if (empty($new_lines)) {
+    return [];
   }
+
+  // Process new lines
+  // Example lines:
+  // TOTAL|7178980548
+  // FILE|1772990889|0|small_files_test/
+  // FILE|1772990889|50M|small_files_test/file_1.bin
+  // FILE|1772990890|50M|small_files_test/file_2.bin
+  // FILE|1772990912|0|special_test/
+  // FILE|1772990912|200M|special_test/normal.bin
+  // DOT|1772990914
+  // DOT|1772990916
+  // FILE|1772990916|250M|special_test/with spaces.bin
+  foreach ($new_lines as $line) {
+    $parts = explode('|', $line, 4);
+    if (count($parts) < 2) continue;
+
+    $type = $parts[0];
+    switch ($type) {
+      case 'TOTAL':
+        // First line: total size of all source files
+        $total_bytes = floatval($parts[1]);
+        break;
+
+      case 'FILE':
+        // New file started - previous file is complete
+        if ($current_file_size > 0) {
+          // Add completed file to processed bytes
+          $processed_bytes += $current_file_size;
+        }
+
+        // Parse FILE|timestamp|size|filename
+        $timestamp = intval($parts[1]);
+        $current_file_size = size_to_bytes($parts[2]);
+        $current_file_name = $parts[3] ?? '';
+        $current_file_dots = 0;
+
+        // Record progress event: new file starts, no progress on this file yet
+        $progress_events[] = [$timestamp, $processed_bytes];
+        break;
+
+      case 'DOT':
+        // Progress dot for current file
+        $timestamp = intval($parts[1]);
+        $current_file_dots++;
+
+        // Record progress event: processed_bytes (completed files) + current file progress
+        $current_file_progress = $current_file_dots * $dot_size_mb * 1024 * 1024;
+        $progress_events[] = [$timestamp, $processed_bytes + $current_file_progress];
+        break;
+
+      case 'INFO':
+        // Collect info messages (keep last 3)
+        $info_messages[] = $parts[1];
+        if (count($info_messages) > 3) {
+          array_shift($info_messages);
+        }
+        break;
+    }
+  }
+
+  $last_line_number += count($new_lines);
 
   // Display current filename
   if ($current_file_name) {
@@ -307,12 +302,6 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
     // Current progress = completed files + progress of current file via DOTs
     $dots_bytes = $current_file_dots * $dot_size_mb * 1024 * 1024;
     $current_file_progress_bytes = $dots_bytes;
-
-    // No DOTs yet: interpolate using current speed and elapsed time since file started
-    if ($dots_bytes == 0 && $current_file_size > 0 && $current_file_start_time !== null && $speed_bytes > 0) {
-      $time_elapsed = time() - $current_file_start_time;
-      $current_file_progress_bytes = min($current_file_size, $speed_bytes * $time_elapsed);
-    }
 
     $current_progress_bytes = $processed_bytes + $current_file_progress_bytes;
 
@@ -563,6 +552,7 @@ if (!file_exists($empty_dir)) {
 
 // initialize $delete_empty_dirs state: null = not a move operation (yet), true = rsync copy-delete phase, false = cleanup phase (done)
 $delete_empty_dirs = null;
+$last_published_status = null;
 
 // infinite loop to monitor and execute file operations
 // Note: exec() uses /bin/sh which is symlinked to bash in unraid and a requirement for process substitution syntax >(...)
@@ -923,10 +913,12 @@ while (true) {
           }
         }
 
-        $reply['status'] = json_encode([
-          'action' => $action,
-          'text' => $text
-        ]);
+        if (!empty($text)) {
+          $reply['status'] = json_encode([
+            'action' => $action,
+            'text' => $text
+          ]);
+        }
 
       // start action
       } else {
@@ -1180,6 +1172,12 @@ while (true) {
     // update every second
     publish('filemonitor', file_exists($active) ? 1 : 0);
     $timer = time();
+  }
+  // Don't publish identical status (avoids redundant nchan traffic for rsync/zip)
+  if (isset($reply['status']) && !isset($reply['done']) && $reply['status'] === $last_published_status) {
+    unset($reply['status']);
+  } else {
+    $last_published_status = $reply['status'] ?? null;
   }
   publish('filemanager', json_encode($reply));
   usleep(250000);
