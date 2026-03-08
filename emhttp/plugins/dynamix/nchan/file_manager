@@ -925,52 +925,55 @@ while (true) {
           // CRITICAL: The '>$status' redirect at the end keeps the shell group process alive.
           // Without it, the shell group exits immediately after backgrounding, making the PID invalid.
           // The redirect forces the shell to wait for the entire pipeline to complete.
-          // TODO: Currently testing direct writes with >>$status to avoid buffering.
+          // CRITICAL FIX: Pattern must be checked after EVERY character, not just at newline.
+          // This prevents dots from being buffered into line_buffer before dot_mode activates.
           $cmd = <<<BASH
           {
             cd {$source_parent} || exit 1
             
             # Calculate total size of source files
             total_bytes=\$(du -sb {$escaped_basenames} 2>/dev/null | awk '{sum+=\$1} END {print sum}')
-            printf 'TOTAL|%s\\n' "\$total_bytes" >>$status
+            printf 'TOTAL|%s\\n' "\$total_bytes"
             
-            # Use stdbuf to disable output buffering so dots appear character-by-character
-            stdbuf -o0 zip --recurse-paths --display-usize --display-dots --dot-size 100m {$archive_path} -- {$escaped_basenames} 2>&1 | while IFS= read -r -n1 char || [[ -n \$char ]]; do
-              # Check for newline or EOF to process complete line
-              if [[ \$char == \$'\\n' || ! \$char ]]; then
-                if [[ ! \$dot_mode ]]; then
-                  # Check if line matches "adding:" or "updating:" with filename and size
-                  # Pattern from ziptest.sh: "adding: filename (size) " (trailing space after size)
-                  # Match when we see (size) followed by space, don't wait for line end
-                  if [[ \$line_buffer =~ (adding|updating):[[:space:]]+(.*)[[:space:]]+\\(([0-9.]+[KMGT]?)\\)[[:space:]]+ ]]; then
-                    src_file="\${BASH_REMATCH[2]}"
-                    src_size="\${BASH_REMATCH[3]}"
-                    printf 'FILE|%s|%s\\n' "\$src_size" "\$src_file" >>$status
-                    dot_mode=1
-                  elif [[ -n \$line_buffer ]]; then
-                    printf 'INFO|%s\\n' "\$line_buffer" >>$status
+            zip --recurse-paths --display-usize --display-dots --dot-size 100m {$archive_path} -- {$escaped_basenames} 2>&1 | while IFS= read -r -n1 char || [[ -n \$char ]]; do
+              
+              # Line mode: accumulate characters and check for pattern match after each char
+              if [[ ! \$dot_mode ]]; then
+                line_buffer+="\$char"
+                
+                # Check after every char if we have the pattern (size) followed by space
+                # This ensures we switch to dot_mode BEFORE dots arrive
+                if [[ \$line_buffer =~ (adding|updating):\\ (.*)\\ \\(([0-9.]+[KMGT]?)\\)\  ]]; then
+                  src_file="\${BASH_REMATCH[2]}"
+                  src_size="\${BASH_REMATCH[3]}"
+                  printf 'FILE|%s|%s\\n' "\$src_size" "\$src_file"
+                  dot_mode=1
+                fi
+                
+                # On newline, output non-matching lines as INFO
+                if [[ \$char == \$'\\n' ]]; then
+                  if [[ ! \$dot_mode && -n \$line_buffer ]]; then
+                    printf 'INFO|%s\\n' "\$line_buffer"
                   fi
                   line_buffer=""
-                else
-                  # In dot mode, newline resets to line mode
+                fi
+                
+              # Dot mode: capture dots individually
+              elif [[ \$dot_mode ]]; then
+                if [[ \$char == '.' ]]; then
+                  printf 'DOT|%(%s)T\\n' -1
+                elif [[ \$char == \$'\\n' ]]; then
+                  # Newline ends dot mode
                   dot_mode=
                   line_buffer=""
-                fi
-              elif [[ \$dot_mode ]]; then
-                # In dot mode, capture dots with individual timestamps for speed calculation
-                if [[ \$char == '.' ]]; then
-                  printf 'DOT|%(%s)T\\n' -1 >>$status
                 else
-                  # Not a dot, switch back to line mode and start new buffer
+                  # Non-dot, non-newline: back to line mode
                   line_buffer="\$char"
                   dot_mode=
                 fi
-              else
-                # Accumulate characters into line buffer
-                line_buffer+="\$char"
               fi
             done
-          } 2>$error & echo \$!
+          } >$status 2>$error & echo \$!
           BASH;
           break;
         case 'tar':
