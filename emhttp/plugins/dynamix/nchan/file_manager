@@ -162,8 +162,8 @@ function calculate_eta($transferred, $percent, $speed, $last_rsync_eta_seconds =
  *
  * Reads structured log file incrementally with format:
  * TOTAL|bytes (first line with total source size)
- * FILE|size|filename (filename at end to handle pipes in filename)
- * DOT|timestamp (each 100MB compressed)
+ * FILE|timestamp|size|filename (filename at end to handle pipes in filename)
+ * DOT|timestamp (each 100MB of source file already compressed)
  * INFO|message (optional)
  *
  * @param string $status Path to structured log file
@@ -179,10 +179,8 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
   static $current_file_name = '';
   static $current_file_size = 0;
   static $current_file_dots = 0;
-  static $progress_events = []; // Array of [timestamp, bytes_processed] for unified speed calculation
-  static $first_file_time = null; // Keep for current file progress estimation
-  static $last_file_time = null;  // Keep for current file progress estimation
-  static $file_count = 0;
+  static $progress_events = []; // Array of [timestamp, bytes_processed] for speed calculation
+  static $current_file_start_time = null; // Unix timestamp when current file started (for small-file interpolation)
   static $last_eta_seconds = null;
   static $info_messages = [];
 
@@ -195,9 +193,7 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
     $current_file_size = 0;
     $current_file_dots = 0;
     $progress_events = [];
-    $first_file_time = null;
-    $last_file_time = null;
-    $file_count = 0;
+    $current_file_start_time = null;
     $last_eta_seconds = null;
     $info_messages = [];
     return [];
@@ -251,13 +247,7 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
           $current_file_size = size_to_bytes($parts[2]);
           $current_file_name = $parts[3] ?? '';
           $current_file_dots = 0;
-          $file_count++;
-
-          // Track FILE timestamp for current file progress estimation
-          if ($first_file_time === null) {
-            $first_file_time = $timestamp;
-          }
-          $last_file_time = $timestamp;
+          $current_file_start_time = $timestamp;
 
           // Record progress event: new file starts, no progress on this file yet
           $progress_events[] = [$timestamp, $processed_bytes];
@@ -298,29 +288,30 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
     }
   }
 
-  exec('logger -t file_manager "parse_zip_progress: total_bytes=' . $total_bytes . ', processed_bytes=' . $processed_bytes . ', current_file_dots=' . $current_file_dots . ', file_count=' . $file_count . '"');
+  exec('logger -t file_manager "parse_zip_progress: total_bytes=' . $total_bytes . ', processed_bytes=' . $processed_bytes . ', current_file_dots=' . $current_file_dots . '"');
 
   // Calculate progress if we have total size
   if ($total_bytes && $total_bytes > 0) {
-    // Current progress = completed files + progress of current file
-    $dots_bytes = $current_file_dots * $dot_size_mb * 1024 * 1024;
-    $current_file_progress_bytes = $dots_bytes; // Start with DOTs if available
-
-    // For small files without DOTs, estimate progress based on elapsed time
-    if ($dots_bytes == 0 && $current_file_size > 0 && $last_file_time !== null && $file_count > 1) {
-      // Calculate average time per file from completed files
-      $completed_files = $file_count - 1; // Exclude current file
-      $avg_time_per_file = ($last_file_time - $first_file_time) / $completed_files;
-
-      // Time elapsed since current file started
-      $current_time = time();
-      $time_elapsed = $current_time - $last_file_time;
-
-      // Estimate progress of current file (cap at 100%)
-      if ($avg_time_per_file > 0) {
-        $progress_ratio = min(1.0, $time_elapsed / $avg_time_per_file);
-        $current_file_progress_bytes = $current_file_size * $progress_ratio;
+    // Calculate speed from progress events (reused for interpolation and display)
+    $speed_bytes = 0;
+    if (count($progress_events) >= 2) {
+      $first_event = $progress_events[0];
+      $last_event = $progress_events[count($progress_events) - 1];
+      $time_span = $last_event[0] - $first_event[0];
+      $bytes_span = $last_event[1] - $first_event[1];
+      if ($time_span > 0 && $bytes_span > 0) {
+        $speed_bytes = $bytes_span / $time_span;
       }
+    }
+
+    // Current progress = completed files + progress of current file via DOTs
+    $dots_bytes = $current_file_dots * $dot_size_mb * 1024 * 1024;
+    $current_file_progress_bytes = $dots_bytes;
+
+    // No DOTs yet: interpolate using current speed and elapsed time since file started
+    if ($dots_bytes == 0 && $current_file_size > 0 && $current_file_start_time !== null && $speed_bytes > 0) {
+      $time_elapsed = time() - $current_file_start_time;
+      $current_file_progress_bytes = min($current_file_size, $speed_bytes * $time_elapsed);
     }
 
     $current_progress_bytes = $processed_bytes + $current_file_progress_bytes;
@@ -330,39 +321,23 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
       exec('logger -t file_manager "parse_zip_progress: overcounting: total=' . $total_bytes . ', current_progress=' . intval($current_progress_bytes) . ', processed_bytes=' . $processed_bytes . ', file_dots=' . $current_file_dots . ', file_size=' . intval($current_file_size) . '"');
     }
 
-    // Calculate percentage
     $percent = min(100, intval(($current_progress_bytes / $total_bytes) * 100));
 
-    // Calculate speed and ETA using unified progress events
     $speed = '';
     $eta = 'N/A';
+    if ($speed_bytes > 0) {
+      $speed = bytes_to_size($speed_bytes) . '/s';
 
-    if (count($progress_events) >= 2) {
-      $first_event = $progress_events[0];
-      $last_event = $progress_events[count($progress_events) - 1];
+      $remaining_bytes = $total_bytes - $current_progress_bytes;
+      $eta_seconds = $remaining_bytes / $speed_bytes;
 
-      $time_span = $last_event[0] - $first_event[0];
-      $bytes_span = $last_event[1] - $first_event[1];
-
-      if ($time_span > 0 && $bytes_span > 0) {
-        // Calculate speed from progress events
-        $speed_bytes = $bytes_span / $time_span;
-        $speed = bytes_to_size($speed_bytes) . '/s';
-
-        // Calculate ETA
-        $remaining_bytes = $total_bytes - $current_progress_bytes;
-        if ($speed_bytes > 0) {
-          $eta_seconds = $remaining_bytes / $speed_bytes;
-
-          // Apply hysteresis to prevent ETA from jumping
-          if ($last_eta_seconds !== null) {
-            $eta_seconds = ($last_eta_seconds * 0.7) + ($eta_seconds * 0.3);
-          }
-          $last_eta_seconds = max(0.0, $eta_seconds); // Don't accumulate negative values into hysteresis
-
-          $eta = seconds_to_time(max(0, intval($eta_seconds)));
-        }
+      // Apply hysteresis to prevent ETA from jumping
+      if ($last_eta_seconds !== null) {
+        $eta_seconds = ($last_eta_seconds * 0.7) + ($eta_seconds * 0.3);
       }
+      $last_eta_seconds = max(0.0, $eta_seconds); // Don't accumulate negative values into hysteresis
+
+      $eta = seconds_to_time(max(0, intval($eta_seconds)));
     }
 
     // Build progress text
