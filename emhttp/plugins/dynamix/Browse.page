@@ -299,8 +299,8 @@ function updateArchiveName() {
   var sourceText = $('#dfm_source').text().trim();
   console.log('updateArchiveName: sourceText from #dfm_source =', sourceText);
   
-  // Get first source only (sources are on separate lines)
-  var sourceName = sourceText.split(/[\r\n]+/)[0];
+  // Get first source only (sources are separated by \r, same as backend)
+  var sourceName = sourceText.split('\r')[0];
   console.log('updateArchiveName: first source =', sourceName);
   
   // Remove trailing slash if present (for folders)
