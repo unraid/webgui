@@ -199,12 +199,15 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
 
   // Check if status file exists
   if (!file_exists($status)) {
+    exec('logger -t file_manager "parse_zip_progress: status file does not exist: ' . escapeshellarg($status) . '"');
     return $text;
   }
 
   // Get total line count to know if there are new lines
   $total_lines = intval(exec("wc -l < " . escapeshellarg($status) . " 2>/dev/null || echo 0"));
+  exec('logger -t file_manager "parse_zip_progress: total_lines=' . $total_lines . ', last_line_number=' . $last_line_number . '"');
   if ($total_lines == 0) {
+    exec('logger -t file_manager "parse_zip_progress: status file is empty"');
     return $text;
   }
 
@@ -213,6 +216,7 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
     $start_line = $last_line_number + 1;
     $new_lines = [];
     exec("tail -n +" . escapeshellarg($start_line) . " " . escapeshellarg($status) . " 2>/dev/null", $new_lines);
+    exec('logger -t file_manager "parse_zip_progress: read ' . count($new_lines) . ' new lines from line ' . $start_line . '"');
     
     // Process new lines
     foreach ($new_lines as $line) {
@@ -263,6 +267,8 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
   if ($current_file_name) {
     $text[0] .= mb_strimhalf($current_file_name, 70, '...');
   }
+
+  exec('logger -t file_manager "parse_zip_progress: total_bytes=' . $total_bytes . ', processed_bytes=' . $processed_bytes . ', current_file_dots=' . $current_file_dots . '"');
 
   // Calculate progress if we have total size
   if ($total_bytes && $total_bytes > 0) {
@@ -845,13 +851,17 @@ while (true) {
 
       // return status of running action
       if (!empty($pid)) {
+        exec('logger -t file_manager "Case 16 status check: pid=' . escapeshellarg($pid) . '"');
         $format = $format ?? 'zip';
         $archive_name = $archive_name ?? 'archive.zip';
         $archive_path = rtrim($target, '/').'/'.$archive_name;
         
+        exec('logger -t file_manager "Status check: format=' . escapeshellarg($format) . ', status_file=' . escapeshellarg($status) . ', exists=' . (file_exists($status) ? 'yes' : 'no') . '"');
+        
         // For zip format, use structured progress parser
         if ($format === 'zip') {
           $text = parse_zip_progress($status, _('Compressing'), 100);
+          exec('logger -t file_manager "parse_zip_progress returned: ' . escapeshellarg(json_encode($text)) . '"');
         } else {
           // For tar formats, use simple status display for now
           $file_line = trim(exec("tail -1 $status 2>$null"));
@@ -878,10 +888,13 @@ while (true) {
 
       // start action
       } else {
+        exec('logger -t file_manager "Case 16 start: pid is empty, starting new job"');
         parse_zip_progress(null, null, 100, true); // Reset static variables
         $format = $format ?? 'zip';
         $archive_name = $archive_name ?? 'archive.zip';
         $archive_path = rtrim($target, '/').'/'.$archive_name;
+        
+        exec('logger -t file_manager "Start compress: format=' . escapeshellarg($format) . ', archive=' . escapeshellarg($archive_path) . '"');
         
         // For multiple sources, find common parent directory
         // For single source, use its parent directory
@@ -958,7 +971,9 @@ while (true) {
           $cmd = "cd ".quoted($source_parent)." && zip -r ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status & echo \$!";
         }
         
+        exec('logger -t file_manager "Executing command (first 200 chars): ' . escapeshellarg(substr($cmd, 0, 200)) . '"');
         exec($cmd, $pid);
+        exec('logger -t file_manager "After exec: pid=' . escapeshellarg(json_encode($pid)) . '"');
       }
       break;
     case 17: // extract
