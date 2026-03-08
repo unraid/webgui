@@ -933,7 +933,8 @@ while (true) {
             total_bytes=\$(du -sb {$escaped_basenames} 2>/dev/null | awk '{sum+=\$1} END {print sum}')
             printf 'TOTAL|%s\\n' "\$total_bytes"
             
-            zip --recurse-paths --display-usize --display-dots --dot-size 100m {$archive_path} -- {$escaped_basenames} 2>&1 | while IFS= read -r -n1 char || [[ -n \$char ]]; do
+            # Use stdbuf to disable output buffering so dots appear character-by-character
+            stdbuf -o0 zip --recurse-paths --display-usize --display-dots --dot-size 100m {$archive_path} -- {$escaped_basenames} 2>&1 | while IFS= read -r -n1 char || [[ -n \$char ]]; do
               # Check for newline or EOF to process complete line
               if [[ \$char == \$'\\n' || ! \$char ]]; then
                 if [[ ! \$dot_mode ]]; then
