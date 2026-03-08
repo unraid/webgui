@@ -237,8 +237,12 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
       case 'FILE':
         // New file started - previous file is complete
         if ($current_file_size > 0) {
-          // Add completed file to processed bytes
+          // zip: exact size known, add to processed bytes
           $processed_bytes += $current_file_size;
+        } elseif ($current_file_dots > 0) {
+          // tar: no file size (size=0), carry over DOT-estimated progress to prevent reset
+          $effective_dot_mb = $auto_dot_size ? ($total_bytes > 0 ? $total_bytes / 50.0 / (1024 * 1024) : 100) : $dot_size_mb;
+          $processed_bytes += $current_file_dots * $effective_dot_mb * 1024 * 1024;
         }
 
         // Parse FILE|timestamp|size|filename

@@ -296,29 +296,23 @@ function fileExtension(file) {
 }
 
 function updateArchiveName() {
+  var $dialog = dfm.window;
   // Get first source name from data attribute (set when dialog opened)
-  var baseName = $('#dfm_source').data('firstName') || '';
-  console.log('updateArchiveName: baseName from data =', baseName);
-  
+  var baseName = $dialog.find('#dfm_source').data('firstName') || '';
+
   if (!baseName) {
-    console.log('updateArchiveName: no firstName data, using fallback');
-    var sourceText = $('#dfm_source').text().trim();
+    var sourceText = $dialog.find('#dfm_source').text().trim();
     var sourceName = sourceText.split('\r')[0] || sourceText;
     sourceName = sourceName.replace(/\/$/, '');
     baseName = fileName(sourceName);
   }
-  
+
   // Remove existing extension from base name
   baseName = baseName.replace(/\.(zip|tar|tar\.gz|tar\.bz2|tar\.xz|tar\.zst|tgz|tbz2|txz)$/i, '');
-  var format = $('#dfm_format').val();
+  var format = $dialog.find('#dfm_format').val();
   var proposedName = baseName + '.' + format;
-  console.log('updateArchiveName: proposedName =', proposedName);
-  
-  // TODO: Auto-increment (-2, -3) if file exists
-  // Currently not implemented because fileTree only shows directories, not files
-  // Would require AJAX call to check target directory contents
-  
-  $('#dfm_archive_name').val(proposedName);
+
+  $dialog.find('#dfm_archive_name').val(proposedName);
 }
 
 function fileEdit(id) {
