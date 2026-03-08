@@ -325,6 +325,11 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
 
     $current_progress_bytes = $processed_bytes + $current_file_progress_bytes;
 
+    // Log when dot count exceeds du-reported size (helps diagnose "ETA: 0:00:-N" if it recurs)
+    if ($current_progress_bytes > $total_bytes) {
+      exec('logger -t file_manager "parse_zip_progress: overcounting: total=' . $total_bytes . ', current_progress=' . intval($current_progress_bytes) . ', processed_bytes=' . $processed_bytes . ', file_dots=' . $current_file_dots . ', file_size=' . intval($current_file_size) . '"');
+    }
+
     // Calculate percentage
     $percent = min(100, intval(($current_progress_bytes / $total_bytes) * 100));
 
@@ -353,9 +358,9 @@ function parse_zip_progress($status, $action_label, $dot_size_mb = 100, $reset =
           if ($last_eta_seconds !== null) {
             $eta_seconds = ($last_eta_seconds * 0.7) + ($eta_seconds * 0.3);
           }
-          $last_eta_seconds = $eta_seconds;
+          $last_eta_seconds = max(0.0, $eta_seconds); // Don't accumulate negative values into hysteresis
 
-          $eta = seconds_to_time(intval($eta_seconds));
+          $eta = seconds_to_time(max(0, intval($eta_seconds)));
         }
       }
     }
