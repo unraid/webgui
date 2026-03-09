@@ -15,20 +15,49 @@
 #/sbin/modprobe tun   # Universal TUN/TAP device driver
 #/sbin/modprobe sg    # Generic SCSI support for SATA DVD-RW
 
+# run & log functions
+. /etc/rc.d/rc.runlog
+
 # LimeTech - set default zfs arc size to 1/8 total memory
 # Bergware - modified for Unraid OS, October 2023
 
 # MemTotal is reported in units of 1024, SIZE needs to be bytes
 SIZE="$(awk '/MemTotal/{print $(NF-1)*128}' /proc/meminfo)"
 CONF="/etc/modprobe.d/zfs.conf"
+USERCONF="/boot/config/modprobe.d/zfs.conf"
 
-echo "# LimeTech - Default ARC size is MemTotal/8 (in bytes)" >$CONF
-echo "options zfs zfs_arc_max=$SIZE" >>$CONF
+if ! grep -Eq '^[[:space:]]*options[[:space:]]+zfs([[:space:]]|$).*\bzfs_arc_max[[:space:]]*=' "$USERCONF" 2>/dev/null; then
+  echo "options zfs zfs_arc_max=$SIZE" >>$USERCONF
+fi
 
 # LimeTech - grab any user defined module conf files
 MODPROBE="/boot/config/modprobe.d"
 if [[ -d $MODPROBE ]]; then
   find $MODPROBE -type f -exec install -p -m 0644 "{}" /etc/modprobe.d \;
+fi
+
+# zfs module is loaded before rc.modules.local, so apply zfs.conf parameters at runtime too.
+SYSFS="/sys/module/zfs/parameters"
+if [[ -d $SYSFS ]]; then
+  grep -E '^[[:space:]]*options[[:space:]]+zfs([[:space:]]|$)' "$CONF" | while read -r line; do
+    # Parse tokens from: options zfs key=value ...
+    set -- $line
+    [[ $1 == options && $2 == zfs ]] || continue
+    shift 2
+    for kv in "$@"; do
+      [[ $kv == \#* ]] && break
+      [[ $kv == *=* ]] || continue
+      key="${kv%%=*}"
+      value="${kv#*=}"
+      param_path="$SYSFS/$key"
+      [[ -f $param_path && -w $param_path ]] || continue
+      current="$(tr -d '\n' <"$param_path" 2>/dev/null)"
+      [[ "$current" == "$value" ]] && continue
+      if echo "$value" >"$param_path" 2>/dev/null; then
+        log "Applied runtime ZFS parameter: $key ($current -> $value)"
+      fi
+    done
+  done
 fi
 
 # LimeTech - grab any user downloaded module firmware files

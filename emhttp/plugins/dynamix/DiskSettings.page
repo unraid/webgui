@@ -21,6 +21,84 @@ $events = explode('|',$var['smEvents'] ?? $numbers);
 
 $default = parse_ini_file("$docroot/webGui/default.cfg",true);
 $reply   = '/var/tmp/luks.reply';
+$zfs_conf = '/boot/config/modprobe.d/zfs.conf';
+$zfs_arc_max = '';
+if (is_file($zfs_conf) && preg_match('/^[[:space:]]*options[[:space:]]+zfs(?:[[:space:]]+[^\r\n#]*)?\bzfs_arc_max\s*=\s*([0-9]+)/mi', file_get_contents($zfs_conf), $match)) {
+  $zfs_arc_max = $match[1];
+}
+
+$mem_total_bytes = 0;
+// Prefer physical memory from DMI so ARC fractions align to installed RAM size.
+$dmi_memory = dmidecode('Memory Device', 17);
+if (is_array($dmi_memory) && count($dmi_memory)) {
+  $sum = 0;
+  foreach ($dmi_memory as $device) {
+    $size = trim((string)($device['Size'] ?? ''));
+    if (!preg_match('/^(\d+)\s*(MB|GB|TB)$/i', $size, $m)) continue;
+    $value = (int)$m[1];
+    $unit = strtoupper($m[2]);
+    if ($unit === 'MB') $sum += $value * 1024 * 1024;
+    elseif ($unit === 'GB') $sum += $value * 1024 * 1024 * 1024;
+    elseif ($unit === 'TB') $sum += $value * 1024 * 1024 * 1024 * 1024;
+  }
+  if ($sum > 0) $mem_total_bytes = $sum;
+}
+if ($mem_total_bytes <= 0 && is_file('/proc/meminfo') && preg_match('/^MemTotal:\s+(\d+)\s+kB$/m', file_get_contents('/proc/meminfo'), $match)) {
+  $mem_total_bytes = (int)$match[1] * 1024;
+}
+
+$zfs_arc_mode = 'eighth_1';
+$zfs_arc_custom = '';
+if ($zfs_arc_max === '0') {
+  $zfs_arc_mode = 'dynamic';
+} elseif (preg_match('/^[0-9]+$/', $zfs_arc_max)) {
+  $matched_arc_option = false;
+  if ($mem_total_bytes > 0) {
+    for ($i = 1; $i <= 8; $i++) {
+      if ((string)intdiv($mem_total_bytes * $i, 8) === $zfs_arc_max) {
+        $zfs_arc_mode = "eighth_$i";
+        $matched_arc_option = true;
+        break;
+      }
+    }
+  }
+  if (!$matched_arc_option) {
+    $zfs_arc_mode = 'custom';
+    $zfs_arc_custom = $zfs_arc_max;
+  }
+}
+
+$zfs_arc_options = [];
+for ($i = 1; $i <= 8; $i++) {
+  $zfs_arc_options[$i] = $mem_total_bytes > 0 ? (string)intdiv($mem_total_bytes * $i, 8) : '';
+}
+
+$bytes_per_gb = 1024 * 1024 * 1024;
+$zfs_arc_custom_limit_gb = '';
+if ($mem_total_bytes > 0) {
+  $zfs_arc_custom_limit_gb = (string)ceil(((float)$mem_total_bytes) / $bytes_per_gb);
+  if ($zfs_arc_custom_limit_gb === '') $zfs_arc_custom_limit_gb = '0';
+}
+$zfs_arc_custom_gb = '';
+if ($zfs_arc_custom !== '' && ctype_digit($zfs_arc_custom)) {
+  $zfs_arc_custom_gb = rtrim(rtrim(number_format(((float)$zfs_arc_custom) / $bytes_per_gb, 3, '.', ''), '0'), '.');
+  if ($zfs_arc_custom_gb === '') $zfs_arc_custom_gb = '0';
+}
+
+$zfs_arc_options_gb = [];
+for ($i = 1; $i <= 8; $i++) {
+  if ($zfs_arc_options[$i] !== '') {
+    $zfs_arc_options_gb[$i] = (string)round(((float)$zfs_arc_options[$i]) / $bytes_per_gb);
+  } else {
+    $zfs_arc_options_gb[$i] = '';
+  }
+}
+
+$zfs_arc_mode_value = $zfs_arc_mode;
+if (preg_match('/^eighth_([1-8])$/', $zfs_arc_mode, $match)) {
+  $idx = (int)$match[1];
+  $zfs_arc_mode_value = $zfs_arc_options[$idx] ?: $zfs_arc_max;
+}
 $keyfile = is_file($var['luksKeyfile']);
 $encrypt = false;
 foreach ($disks as $disk) if (isset($disk['fsType']) && strncmp($disk['fsType'],'luks:',5)===0) $encrypt = true;
@@ -34,6 +112,8 @@ function base64(str) {
 
 function doDispatch(form) {
   var fields = {};
+  var arcValue = '';
+  var maxCustomGb = <?=($zfs_arc_custom_limit_gb !== '' ? json_encode((float)$zfs_arc_custom_limit_gb) : 'null')?>;
 <?if ($display['unit']=='F'):?>
   form.display_hot.value = form.display_hot.value.celsius();
   form.display_max.value = form.display_max.value.celsius();
@@ -45,6 +125,51 @@ function doDispatch(form) {
   $(form).find('input[name^="display_"]').each(function(){fields[$(this).attr('name')] = $(this).val(); $(this).prop('disabled',true);});
   $(form).find('select[name^="display_"]').each(function(){fields[$(this).attr('name')] = $(this).val(); $(this).prop('disabled',true);});
   $.post('/webGui/include/Dispatcher.php',fields);
+
+  switch (form.zfs_arc_mode.value) {
+    case 'dynamic':
+      arcValue = '0';
+      break;
+    case 'custom':
+      var customGb = parseFloat((form.zfs_arc_max_custom.value || '').trim());
+      if (maxCustomGb !== null && Number.isFinite(customGb) && customGb > maxCustomGb) {
+        swal({
+          title:"_(Invalid value)_",
+          text:"_(Custom ARC size cannot exceed available system memory)_",
+          type:'error',
+          confirmButtonText:"_(Ok)_"
+        });
+        form.zfs_arc_max_custom.focus();
+        return false;
+      }
+      arcValue = Number.isFinite(customGb) && customGb >= 0 ? Math.round(customGb * 1073741824).toString() : '';
+      break;
+    default:
+      arcValue = (form.zfs_arc_mode.value || '').trim();
+      break;
+  }
+
+  // Keep zfs_arc_max in modprobe.d so it persists across boots.
+  $.post('/update.php',{
+    '#file':'/boot/config/modprobe.d/zfs.conf',
+    '#include':'/webGui/include/update.zfs_arc_max.php',
+    'zfs_arc_max':arcValue
+  });
+
+  return true;
+}
+
+function updateZfsArcInput(form) {
+  var custom = $(form).find('input[name="zfs_arc_max_custom"]');
+  var customWrap = $(form).find('#zfs-arc-custom');
+  var showCustom = form.zfs_arc_mode.value === 'custom';
+  if (showCustom) {
+    custom.prop('disabled', false);
+    customWrap.show('slow');
+  } else {
+    custom.prop('disabled', true);
+    customWrap.hide('slow');
+  }
 }
 
 function prepareDiskSettings(form) {
@@ -136,6 +261,9 @@ function checkInput(form) {
 <?if (is_file($reply)):?>
 <?[$text,$type] = explode("\0",file_get_contents($reply)); unlink($reply);?>
 $(function() {
+  var diskForm = $('form[action="/update.htm"]')[0];
+  if (diskForm && diskForm.zfs_arc_mode) updateZfsArcInput(diskForm);
+
   swal({
     title:"_(Encryption Key Update)_",
     text:"<?=$text?>",
@@ -232,6 +360,26 @@ _(Tunable (scheduler))_:
   </select>
 
 :disk_tunable_scheduler_help:
+
+_(Tunable (zfs_arc_max))_:
+: <select name="zfs_arc_mode" onchange="updateZfsArcInput(this.form)">
+  <?=mk_option($zfs_arc_mode_value, "dynamic", _('Unlimited (Dynamic)'))?>
+  <?=mk_option($zfs_arc_mode_value, $zfs_arc_options[1], '&frac18; '._('of the memory').($zfs_arc_options_gb[1] !== '' ? ' ('.$zfs_arc_options_gb[1].' GB)' : ''))?>
+  <?=mk_option($zfs_arc_mode_value, $zfs_arc_options[2], '&frac14; '._('of the memory').($zfs_arc_options_gb[2] !== '' ? ' ('.$zfs_arc_options_gb[2].' GB)' : ''))?>
+  <?=mk_option($zfs_arc_mode_value, $zfs_arc_options[3], '&frac38; '._('of the memory').($zfs_arc_options_gb[3] !== '' ? ' ('.$zfs_arc_options_gb[3].' GB)' : ''))?>
+  <?=mk_option($zfs_arc_mode_value, $zfs_arc_options[4], '&frac12; '._('of the memory').($zfs_arc_options_gb[4] !== '' ? ' ('.$zfs_arc_options_gb[4].' GB)' : ''))?>
+  <?=mk_option($zfs_arc_mode_value, $zfs_arc_options[5], '&frac58; '._('of the memory').($zfs_arc_options_gb[5] !== '' ? ' ('.$zfs_arc_options_gb[5].' GB)' : ''))?>
+  <?=mk_option($zfs_arc_mode_value, $zfs_arc_options[6], '&frac34; '._('of the memory').($zfs_arc_options_gb[6] !== '' ? ' ('.$zfs_arc_options_gb[6].' GB)' : ''))?>
+  <?=mk_option($zfs_arc_mode_value, $zfs_arc_options[7], '&frac78; '._('of the memory').($zfs_arc_options_gb[7] !== '' ? ' ('.$zfs_arc_options_gb[7].' GB)' : ''))?>
+  <?=mk_option($zfs_arc_mode_value, "custom", _('Custom value (GB)'))?>
+  </select>
+<div markdown="1" id="zfs-arc-custom" class="extra" style="display:<?=$zfs_arc_mode=='custom'?'block':'none'?>">
+_(Custom value)_ (_(GB)_):
+: <input type="number" min="0"<?=($zfs_arc_custom_limit_gb !== '' ? ' max="'.$zfs_arc_custom_limit_gb.'"' : '')?> step="0.01" name="zfs_arc_max_custom" value="<?=$zfs_arc_custom_gb?>" placeholder="_(Enter GB)_" <?=$zfs_arc_mode=='custom'?'':'disabled'?>>
+<?=($zfs_arc_custom_limit_gb !== '' ? "  <span class='input-instructions'>"._('Maximum').": ".$zfs_arc_custom_limit_gb." GB</span>" : '')?>
+</div>
+
+:disk_tunable_zfs_arc_max_help:
 
 _(Tunable (md_num_stripes))_:
 : <input type="number" name="md_num_stripes" maxlength="10" value="<?=$var['md_num_stripes']?>" placeholder="<?=$var['md_num_stripes_default']?>">
