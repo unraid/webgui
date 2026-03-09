@@ -414,6 +414,7 @@ function get_fs_error_tooltip($diskName, $diskDevice, $deviceErrors) {
       }
 
       $poolLabel = ucfirst($pool);
+      if ($poolLabel == "Flash") $poolLabel = _('Internal Boot');
       $poolLines = [];
       if (isset($member['errors'])) {
         foreach ($member['errors'] as $errorType => $count) {
@@ -1098,6 +1099,11 @@ while (true) {
       $bootMetrics = get_boot_pool_metrics($Boot, $bootPoolName, $bootDisk);
       $dataMetrics = get_pool_data_metrics($poolDisk, $pool, $disks);
       $poolLabel = ucfirst($pool);
+      if (str_contains($pool,'~')) {
+        $poolLabel = '» '.ucfirst(substr($pool, strpos($pool,'~') + 1));
+      } else {
+        $poolLabel = ucfirst($pool);
+      }
       $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
       $poolLink = "<a href=\"$poolDeviceUrl\">"._($poolLabel,3)."</a>";
       $summaryName = $poolLink;
@@ -1147,7 +1153,7 @@ while (true) {
         true,
         '',
         empty($bootDisk) ? $summaryName : '',
-        true
+        false
       );
       if ($dataRow !== '') $echo[$a][] = $dataRow;
       $memberIndex = 1;
