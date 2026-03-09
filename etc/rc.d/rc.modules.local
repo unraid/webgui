@@ -25,9 +25,10 @@
 SIZE="$(awk '/MemTotal/{print $(NF-1)*128}' /proc/meminfo)"
 CONF="/etc/modprobe.d/zfs.conf"
 USERCONF="/boot/config/modprobe.d/zfs.conf"
+mkdir -p "$(dirname "$USERCONF")"
 
 if ! grep -Eq '^[[:space:]]*options[[:space:]]+zfs([[:space:]]|$).*\bzfs_arc_max[[:space:]]*=' "$USERCONF" 2>/dev/null; then
-  echo "options zfs zfs_arc_max=$SIZE" >>$USERCONF
+  echo "options zfs zfs_arc_max=$SIZE" >> $USERCONF
 fi
 
 # LimeTech - grab any user defined module conf files

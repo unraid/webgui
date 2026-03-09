@@ -54,11 +54,17 @@ if ($zfs_arc_max === '0') {
 } elseif (preg_match('/^[0-9]+$/', $zfs_arc_max)) {
   $matched_arc_option = false;
   if ($mem_total_bytes > 0) {
-    for ($i = 1; $i <= 8; $i++) {
-      if ((string)intdiv($mem_total_bytes * $i, 8) === $zfs_arc_max) {
-        $zfs_arc_mode = "eighth_$i";
-        $matched_arc_option = true;
-        break;
+    if ((string)$mem_total_bytes === $zfs_arc_max) {
+      // Full-memory ARC is treated as unlimited in the UI.
+      $zfs_arc_mode = 'dynamic';
+      $matched_arc_option = true;
+    } else {
+      for ($i = 1; $i <= 7; $i++) {
+        if ((string)intdiv($mem_total_bytes * $i, 8) === $zfs_arc_max) {
+          $zfs_arc_mode = "eighth_$i";
+          $matched_arc_option = true;
+          break;
+        }
       }
     }
   }
@@ -69,14 +75,17 @@ if ($zfs_arc_max === '0') {
 }
 
 $zfs_arc_options = [];
-for ($i = 1; $i <= 8; $i++) {
+for ($i = 1; $i <= 7; $i++) {
   $zfs_arc_options[$i] = $mem_total_bytes > 0 ? (string)intdiv($mem_total_bytes * $i, 8) : '';
 }
 
 $bytes_per_gb = 1024 * 1024 * 1024;
+$zfs_arc_custom_limit_bytes = '';
 $zfs_arc_custom_limit_gb = '';
 if ($mem_total_bytes > 0) {
-  $zfs_arc_custom_limit_gb = (string)ceil(((float)$mem_total_bytes) / $bytes_per_gb);
+  $zfs_arc_custom_limit = intdiv($mem_total_bytes * 7, 8);
+  $zfs_arc_custom_limit_bytes = (string)$zfs_arc_custom_limit;
+  $zfs_arc_custom_limit_gb = rtrim(rtrim(number_format(((float)$zfs_arc_custom_limit) / $bytes_per_gb, 3, '.', ''), '0'), '.');
   if ($zfs_arc_custom_limit_gb === '') $zfs_arc_custom_limit_gb = '0';
 }
 $zfs_arc_custom_gb = '';
@@ -86,7 +95,7 @@ if ($zfs_arc_custom !== '' && ctype_digit($zfs_arc_custom)) {
 }
 
 $zfs_arc_options_gb = [];
-for ($i = 1; $i <= 8; $i++) {
+for ($i = 1; $i <= 7; $i++) {
   if ($zfs_arc_options[$i] !== '') {
     $zfs_arc_options_gb[$i] = (string)round(((float)$zfs_arc_options[$i]) / $bytes_per_gb);
   } else {
@@ -95,7 +104,7 @@ for ($i = 1; $i <= 8; $i++) {
 }
 
 $zfs_arc_mode_value = $zfs_arc_mode;
-if (preg_match('/^eighth_([1-8])$/', $zfs_arc_mode, $match)) {
+if (preg_match('/^eighth_([1-7])$/', $zfs_arc_mode, $match)) {
   $idx = (int)$match[1];
   $zfs_arc_mode_value = $zfs_arc_options[$idx] ?: $zfs_arc_max;
 }
@@ -113,7 +122,7 @@ function base64(str) {
 function doDispatch(form) {
   var fields = {};
   var arcValue = '';
-  var maxCustomGb = <?=($zfs_arc_custom_limit_gb !== '' ? json_encode((float)$zfs_arc_custom_limit_gb) : 'null')?>;
+  var maxCustomBytes = <?=($zfs_arc_custom_limit_bytes !== '' ? json_encode((int)$zfs_arc_custom_limit_bytes) : 'null')?>;
 <?if ($display['unit']=='F'):?>
   form.display_hot.value = form.display_hot.value.celsius();
   form.display_max.value = form.display_max.value.celsius();
@@ -132,7 +141,8 @@ function doDispatch(form) {
       break;
     case 'custom':
       var customGb = parseFloat((form.zfs_arc_max_custom.value || '').trim());
-      if (maxCustomGb !== null && Number.isFinite(customGb) && customGb > maxCustomGb) {
+      var customBytes = Number.isFinite(customGb) && customGb >= 0 ? Math.round(customGb * 1073741824) : NaN;
+      if (maxCustomBytes !== null && Number.isFinite(customBytes) && customBytes > maxCustomBytes) {
         swal({
           title:"_(Invalid value)_",
           text:"_(Custom ARC size cannot exceed available system memory)_",
@@ -142,7 +152,7 @@ function doDispatch(form) {
         form.zfs_arc_max_custom.focus();
         return false;
       }
-      arcValue = Number.isFinite(customGb) && customGb >= 0 ? Math.round(customGb * 1073741824).toString() : '';
+      arcValue = Number.isFinite(customBytes) ? customBytes.toString() : '';
       break;
     default:
       arcValue = (form.zfs_arc_mode.value || '').trim();

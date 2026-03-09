@@ -1099,8 +1099,9 @@ while (true) {
       $bootMetrics = get_boot_pool_metrics($Boot, $bootPoolName, $bootDisk);
       $dataMetrics = get_pool_data_metrics($poolDisk, $pool, $disks);
       $poolLabel = ucfirst($pool);
-      if (str_contains($pool,'~')) {
-        $poolLabel = '» '.ucfirst(substr($pool, strpos($pool,'~') + 1));
+      $subpoolType = isSubpool($pool);
+      if ($subpoolType) {
+        $poolLabel = '» '.ucfirst(_($subpoolType,3));
       } else {
         $poolLabel = ucfirst($pool);
       }
