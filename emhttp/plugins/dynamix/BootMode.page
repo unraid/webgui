@@ -14,10 +14,22 @@ Tag="edit"
  * all copies or substantial portions of the Software.
  */
 ?>
+<?
+$disks_cfg = @parse_ini_file('state/disks.ini', true) ?: [];
+$flash_cfg = $disks_cfg['flash'] ?? ((isset($disks['flash']) && is_array($disks['flash'])) ? $disks['flash'] : []);
+$flash_type = _var($flash_cfg, 'type', '');
+$has_flash_type = ($flash_type === 'Flash');
+$has_boot_type = ($flash_type === 'Boot');
+$hidden = $has_boot_type ? 'hidden' : '';
+?>
 
 <script>
 function prepareBootMode(form) {
-  form['#arg[1]'].value = form.boot.checked ? 1 : 0;
+  if (form.boot) {
+    form['#arg[1]'].value = form.boot.checked ? 1 : 0;
+  } else {
+    form['#arg[1]'].value = '';
+  }
 }
 </script>
 <form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="prepareBootMode(this)">
@@ -28,16 +40,21 @@ function prepareBootMode(form) {
 _(Server boot mode)_:
 : <?=is_dir('/sys/firmware/efi') ? 'UEFI' : 'Legacy'?>
 
+<?if ($has_boot_type):?>
+_(Boot mode change)_:
+: _(To switch between UEFI and Legacy boot, change the setting in your system BIOS.)_
+<?elseif ($has_flash_type):?>
 _(Boot system in UEFI mode)_:
 : <label>
     <input type="checkbox" name="boot" <?=is_dir('/boot/EFI')?'checked':''?>>
     _(Permit UEFI boot mode)_
   </label>
   *_(Please check your system settings to support UEFI boot mode)_.*
+<?endif;?>
 
 &nbsp;
 : <span class="inline-block">
-    <input type="submit" value="_(Apply)_">
+    <input type="submit" value="_(Apply)_" <?=$hidden?>>
     <input type="button" value="_(Done)_" onclick="done()">
   </span>
 
