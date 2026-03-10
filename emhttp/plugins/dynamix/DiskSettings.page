@@ -47,7 +47,8 @@ if ($mem_total_bytes <= 0 && is_file('/proc/meminfo') && preg_match('/^MemTotal:
   $mem_total_bytes = (int)$match[1] * 1024;
 }
 
-$zfs_arc_mode = 'eighth_1';
+$zfs_arc_mode = 'percent_20';
+$zfs_arc_percent_steps = range(10, 90, 10);
 $zfs_arc_custom = '';
 if ($zfs_arc_max === '0') {
   $zfs_arc_mode = 'dynamic';
@@ -59,9 +60,9 @@ if ($zfs_arc_max === '0') {
       $zfs_arc_mode = 'dynamic';
       $matched_arc_option = true;
     } else {
-      for ($i = 1; $i <= 7; $i++) {
-        if ((string)intdiv($mem_total_bytes * $i, 8) === $zfs_arc_max) {
-          $zfs_arc_mode = "eighth_$i";
+      foreach ($zfs_arc_percent_steps as $pct) {
+        if ((string)intdiv($mem_total_bytes * $pct, 100) === $zfs_arc_max) {
+          $zfs_arc_mode = "percent_$pct";
           $matched_arc_option = true;
           break;
         }
@@ -75,17 +76,17 @@ if ($zfs_arc_max === '0') {
 }
 
 $zfs_arc_options = [];
-for ($i = 1; $i <= 7; $i++) {
-  $zfs_arc_options[$i] = $mem_total_bytes > 0 ? (string)intdiv($mem_total_bytes * $i, 8) : '';
+foreach ($zfs_arc_percent_steps as $pct) {
+  $zfs_arc_options[$pct] = $mem_total_bytes > 0 ? (string)intdiv($mem_total_bytes * $pct, 100) : '';
 }
 
 $bytes_per_gb = 1024 * 1024 * 1024;
 $zfs_arc_custom_limit_bytes = '';
 $zfs_arc_custom_limit_gb = '';
 if ($mem_total_bytes > 0) {
-  $zfs_arc_custom_limit = intdiv($mem_total_bytes * 7, 8);
-  $zfs_arc_custom_limit_bytes = (string)$zfs_arc_custom_limit;
-  $zfs_arc_custom_limit_gb = rtrim(rtrim(number_format(((float)$zfs_arc_custom_limit) / $bytes_per_gb, 3, '.', ''), '0'), '.');
+  $zfs_arc_custom_limit = intdiv($mem_total_bytes * 9, 10);
+  $zfs_arc_custom_limit_gb = (string)ceil(((float)$zfs_arc_custom_limit) / $bytes_per_gb);
+  $zfs_arc_custom_limit_bytes = (string)((int)$zfs_arc_custom_limit_gb * $bytes_per_gb);
   if ($zfs_arc_custom_limit_gb === '') $zfs_arc_custom_limit_gb = '0';
 }
 $zfs_arc_custom_gb = '';
@@ -95,18 +96,20 @@ if ($zfs_arc_custom !== '' && ctype_digit($zfs_arc_custom)) {
 }
 
 $zfs_arc_options_gb = [];
-for ($i = 1; $i <= 7; $i++) {
-  if ($zfs_arc_options[$i] !== '') {
-    $zfs_arc_options_gb[$i] = (string)round(((float)$zfs_arc_options[$i]) / $bytes_per_gb);
+foreach ($zfs_arc_percent_steps as $pct) {
+  if ($zfs_arc_options[$pct] !== '') {
+    $zfs_arc_options_gb[$pct] = (string)round(((float)$zfs_arc_options[$pct]) / $bytes_per_gb);
   } else {
-    $zfs_arc_options_gb[$i] = '';
+    $zfs_arc_options_gb[$pct] = '';
   }
 }
 
 $zfs_arc_mode_value = $zfs_arc_mode;
-if (preg_match('/^eighth_([1-7])$/', $zfs_arc_mode, $match)) {
-  $idx = (int)$match[1];
-  $zfs_arc_mode_value = $zfs_arc_options[$idx] ?: $zfs_arc_max;
+if (preg_match('/^percent_(\d+)$/', $zfs_arc_mode, $match)) {
+  $pct = (int)$match[1];
+  if (in_array($pct, $zfs_arc_percent_steps, true)) {
+    $zfs_arc_mode_value = $zfs_arc_options[$pct] ?: $zfs_arc_max;
+  }
 }
 $keyfile = is_file($var['luksKeyfile']);
 $encrypt = false;
@@ -374,13 +377,9 @@ _(Tunable (scheduler))_:
 _(Tunable (zfs_arc_max))_:
 : <select name="zfs_arc_mode" onchange="updateZfsArcInput(this.form)">
   <?=mk_option($zfs_arc_mode_value, "dynamic", _('Unlimited (Dynamic)'))?>
-  <?=mk_option($zfs_arc_mode_value, $zfs_arc_options[1], '&frac18; '._('of the memory').($zfs_arc_options_gb[1] !== '' ? ' ('.$zfs_arc_options_gb[1].' GB)' : ''))?>
-  <?=mk_option($zfs_arc_mode_value, $zfs_arc_options[2], '&frac14; '._('of the memory').($zfs_arc_options_gb[2] !== '' ? ' ('.$zfs_arc_options_gb[2].' GB)' : ''))?>
-  <?=mk_option($zfs_arc_mode_value, $zfs_arc_options[3], '&frac38; '._('of the memory').($zfs_arc_options_gb[3] !== '' ? ' ('.$zfs_arc_options_gb[3].' GB)' : ''))?>
-  <?=mk_option($zfs_arc_mode_value, $zfs_arc_options[4], '&frac12; '._('of the memory').($zfs_arc_options_gb[4] !== '' ? ' ('.$zfs_arc_options_gb[4].' GB)' : ''))?>
-  <?=mk_option($zfs_arc_mode_value, $zfs_arc_options[5], '&frac58; '._('of the memory').($zfs_arc_options_gb[5] !== '' ? ' ('.$zfs_arc_options_gb[5].' GB)' : ''))?>
-  <?=mk_option($zfs_arc_mode_value, $zfs_arc_options[6], '&frac34; '._('of the memory').($zfs_arc_options_gb[6] !== '' ? ' ('.$zfs_arc_options_gb[6].' GB)' : ''))?>
-  <?=mk_option($zfs_arc_mode_value, $zfs_arc_options[7], '&frac78; '._('of the memory').($zfs_arc_options_gb[7] !== '' ? ' ('.$zfs_arc_options_gb[7].' GB)' : ''))?>
+  <?foreach ($zfs_arc_percent_steps as $pct):?>
+  <?=mk_option($zfs_arc_mode_value, $zfs_arc_options[$pct], $pct.'% '._('of the memory').($zfs_arc_options_gb[$pct] !== '' ? ' ('.$zfs_arc_options_gb[$pct].' GB)' : ''))?>
+  <?endforeach;?>
   <?=mk_option($zfs_arc_mode_value, "custom", _('Custom value (GB)'))?>
   </select>
 <div markdown="1" id="zfs-arc-custom" class="extra" style="display:<?=$zfs_arc_mode=='custom'?'block':'none'?>">

@@ -944,9 +944,9 @@ Note: You must reboot after selecting Auto for setting to take effect.
 Sets the ZFS ARC maximum size.
 
 Available modes:
-- **Unlimited (Dynamic)**: sets `zfs_arc_max=0`.
-- **1/8..7/8 of memory**: uses a preset fraction of installed system memory.
-- **Custom value (GB)**: enter an explicit value in GB (limited to available system memory).
+- **Unlimited (Dynamic)**: sets `zfs_arc_max=0`, allowing ARC to use as much memory as needed and release memory when the system requires it.
+- **10%..90% of memory**: uses a preset percentage of installed system memory.
+- **Custom value (GB)**: enter an explicit value in GB (limited to 90% of memory, rounded up to the next GB).
 
 When applied, the GB value is converted to bytes and written as `options zfs zfs_arc_max=...` in `/boot/config/modprobe.d/zfs.conf`.
 The running value is also applied to `/sys/module/zfs/parameters/zfs_arc_max` when available.

@@ -18,11 +18,11 @@
 # run & log functions
 . /etc/rc.d/rc.runlog
 
-# LimeTech - set default zfs arc size to 1/8 total memory
+# LimeTech - set default zfs arc size to 20% total memory
 # Bergware - modified for Unraid OS, October 2023
 
 # MemTotal is reported in units of 1024, SIZE needs to be bytes
-SIZE="$(awk '/MemTotal/{print $(NF-1)*128}' /proc/meminfo)"
+SIZE="$(awk '/MemTotal/{print int($(NF-1)*1024*20/100)}' /proc/meminfo)"
 CONF="/etc/modprobe.d/zfs.conf"
 USERCONF="/boot/config/modprobe.d/zfs.conf"
 mkdir -p "$(dirname "$USERCONF")"
