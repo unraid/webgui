@@ -145,6 +145,16 @@ function doDispatch(form) {
     case 'custom':
       var customGb = parseFloat((form.zfs_arc_max_custom.value || '').trim());
       var customBytes = Number.isFinite(customGb) && customGb >= 0 ? Math.round(customGb * 1073741824) : NaN;
+      if (!(Number.isFinite(customBytes) && customBytes >= 0)) {
+        swal({
+          title:"_(Invalid value)_",
+          text:"_(Custom ARC size cannot exceed available system memory)_",
+          type:'error',
+          confirmButtonText:"_(Ok)_"
+        });
+        form.zfs_arc_max_custom.focus();
+        return false;
+      }
       if (maxCustomBytes !== null && Number.isFinite(customBytes) && customBytes > maxCustomBytes) {
         swal({
           title:"_(Invalid value)_",
@@ -155,7 +165,7 @@ function doDispatch(form) {
         form.zfs_arc_max_custom.focus();
         return false;
       }
-      arcValue = Number.isFinite(customBytes) ? customBytes.toString() : '';
+      arcValue = customBytes.toString();
       break;
     default:
       arcValue = (form.zfs_arc_mode.value || '').trim();
