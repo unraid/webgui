@@ -21,8 +21,23 @@
 # LimeTech - set default zfs arc size to 20% total memory
 # Bergware - modified for Unraid OS, October 2023
 
-# MemTotal is reported in units of 1024, SIZE needs to be bytes
-SIZE="$(awk '/MemTotal/{print int($(NF-1)*1024*20/100)}' /proc/meminfo)"
+# Use installed RAM from DMI (same source model as UI), fallback to MemTotal.
+SIZE="$({
+  dmidecode -qt17 2>/dev/null | awk '
+    BEGIN { total=0 }
+    /^[[:space:]]*Size:[[:space:]]*[0-9]+[[:space:]]*(MiB|GiB|TiB|MB|GB|TB)$/ {
+      val = $2 + 0
+      unit = toupper($3)
+      if (unit == "MB" || unit == "MIB") total += val * 1024 * 1024
+      else if (unit == "GB" || unit == "GIB") total += val * 1024 * 1024 * 1024
+      else if (unit == "TB" || unit == "TIB") total += val * 1024 * 1024 * 1024 * 1024
+    }
+    END {
+      if (total > 0) print int(total * 20 / 100)
+    }
+  '
+} | head -n1)"
+[[ -n "$SIZE" ]] || SIZE="$(awk '/MemTotal/{print int($(NF-1)*1024*20/100)}' /proc/meminfo)"
 CONF="/etc/modprobe.d/zfs.conf"
 USERCONF="/boot/config/modprobe.d/zfs.conf"
 mkdir -p "$(dirname "$USERCONF")"

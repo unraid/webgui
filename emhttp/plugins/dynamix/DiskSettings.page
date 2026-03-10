@@ -34,12 +34,12 @@ if (is_array($dmi_memory) && count($dmi_memory)) {
   $sum = 0;
   foreach ($dmi_memory as $device) {
     $size = trim((string)($device['Size'] ?? ''));
-    if (!preg_match('/^(\d+)\s*(MB|GB|TB)$/i', $size, $m)) continue;
+    if (!preg_match('/^(\d+)\s*(MIB|GIB|TIB|MB|GB|TB)$/i', $size, $m)) continue;
     $value = (int)$m[1];
     $unit = strtoupper($m[2]);
-    if ($unit === 'MB') $sum += $value * 1024 * 1024;
-    elseif ($unit === 'GB') $sum += $value * 1024 * 1024 * 1024;
-    elseif ($unit === 'TB') $sum += $value * 1024 * 1024 * 1024 * 1024;
+    if ($unit === 'MB' || $unit === 'MIB') $sum += $value * 1024 * 1024;
+    elseif ($unit === 'GB' || $unit === 'GIB') $sum += $value * 1024 * 1024 * 1024;
+    elseif ($unit === 'TB' || $unit === 'TIB') $sum += $value * 1024 * 1024 * 1024 * 1024;
   }
   if ($sum > 0) $mem_total_bytes = $sum;
 }
