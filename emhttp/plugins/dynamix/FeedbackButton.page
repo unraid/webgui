@@ -15,9 +15,110 @@ Code="e93e"
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  */
+$unraid = @parse_ini_file('/etc/unraid-version') ?: [];
+$unraidVersion = (string)($unraid['version'] ?? '');
+$isPrerelease = preg_match('/-(?:beta|rc)\b/i', $unraidVersion) === 1;
 ?>
 <script>
+var featureOsFeedbackWidgetScriptPromise;
+var featureOsFeedbackWidgetInitPromise;
+var featureOsFeedbackWidgetInstance;
+var featureOsFeedbackIsPrerelease = <?=json_encode($isPrerelease)?>;
+
+function featureOsFeedbackSetLoading(isLoading) {
+  if (window.jQuery) $('div.spinner.fixed')[isLoading ? 'show' : 'hide']();
+}
+
+function featureOsFeedbackLoadScript() {
+  if (window.HellonextWidget) return Promise.resolve();
+  if (featureOsFeedbackWidgetScriptPromise) return featureOsFeedbackWidgetScriptPromise;
+
+  featureOsFeedbackWidgetScriptPromise = new Promise(function(resolve, reject) {
+    var existingScript = document.querySelector('script[data-featureos-feedback-widget]');
+    if (existingScript) {
+      existingScript.addEventListener('load', resolve, {once: true});
+      existingScript.addEventListener('error', reject, {once: true});
+      return;
+    }
+
+    var script = document.createElement('script');
+    script.src = 'https://widgets-v3.featureos.app/widget.js';
+    script.async = true;
+    script.dataset.featureosFeedbackWidget = 'true';
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  }).catch(function(error) {
+    featureOsFeedbackWidgetScriptPromise = null;
+    throw error;
+  });
+
+  return featureOsFeedbackWidgetScriptPromise;
+}
+
+function featureOsFeedbackWidgetOptions() {
+  var submissionBucketId = featureOsFeedbackIsPrerelease ? 17960 : 17434;
+  var options = {
+    type: 'popover',
+    openFrom: 'right',
+    theme: 'dark',
+    accent: '#FF6A22',
+    modules: ['feature_requests'],
+    token: 'lNUvFaw09CjxDMprePYzPg',
+    showOnlySubmission: true,
+    submissionBucketIds: [submissionBucketId],
+    suggestSimilarPost: true,
+    hideBucketSelection: true,
+    noDefaultTrigger: true,
+    customizations: {
+      widgetWidth: '400px'
+    },
+    postFilters: {
+      status: ['under_review', 'planned', 'in_progress', 'completed', 'closed']
+    },
+    neverExpand: false
+  };
+  var ssoToken = window.featureOsSsoToken || window.featureOsWidgetSsoToken || window.unraidFeatureOsSsoToken;
+
+  if (typeof ssoToken === 'string' && ssoToken.length > 0) options.ssoToken = ssoToken;
+
+  return options;
+}
+
+function featureOsFeedbackWidget() {
+  if (featureOsFeedbackWidgetInstance) return Promise.resolve(featureOsFeedbackWidgetInstance);
+  if (featureOsFeedbackWidgetInitPromise) return featureOsFeedbackWidgetInitPromise;
+
+  featureOsFeedbackSetLoading(true);
+  featureOsFeedbackWidgetInitPromise = featureOsFeedbackLoadScript()
+    .then(function() {
+      featureOsFeedbackWidgetInstance = new window.HellonextWidget(featureOsFeedbackWidgetOptions());
+      featureOsFeedbackWidgetInstance.init();
+      return featureOsFeedbackWidgetInstance;
+    })
+    .catch(function(error) {
+      featureOsFeedbackWidgetInitPromise = null;
+      featureOsFeedbackWidgetInstance = null;
+      throw error;
+    })
+    .finally(function() {
+      featureOsFeedbackSetLoading(false);
+    });
+
+  return featureOsFeedbackWidgetInitPromise;
+}
+
 function FeedbackButton() {
-  openChanges("feedback", "_(Feedback)_", "feedback");
+  featureOsFeedbackWidget()
+    .then(function(widget) {
+      widget.open();
+    })
+    .catch(function(error) {
+      console.error('Unable to load FeatureOS feedback widget.', error);
+      featureOsFeedbackSetLoading(false);
+      if (typeof swal === 'function') {
+        swal('<?=addslashes(_('Feedback'))?>', '<?=addslashes(_('Unable to load feedback widget.'))?>', 'error');
+      }
+    });
 }
 </script>
