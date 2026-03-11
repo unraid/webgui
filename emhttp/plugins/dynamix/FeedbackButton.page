@@ -24,9 +24,18 @@ var featureOsFeedbackWidgetScriptPromise;
 var featureOsFeedbackWidgetInitPromise;
 var featureOsFeedbackWidgetInstance;
 var featureOsFeedbackIsPrerelease = <?=json_encode($isPrerelease)?>;
+var featureOsFeedbackButtonLoading = false;
 
 function featureOsFeedbackSetLoading(isLoading) {
+  var button = window.jQuery ? $('div.nav-item.FeedbackButton a') : null;
+
+  featureOsFeedbackButtonLoading = isLoading;
   if (window.jQuery) $('div.spinner.fixed')[isLoading ? 'show' : 'hide']();
+  if (!button || !button.length) return;
+
+  button.toggleClass('disabled', isLoading).attr('aria-busy', isLoading ? 'true' : 'false');
+  button.css('pointer-events', isLoading ? 'none' : '');
+  button.find('span').text(isLoading ? '<?=addslashes(_('Loading Feedback...'))?>' : '<?=addslashes(_('Feedback'))?>');
 }
 
 function featureOsFeedbackLoadScript() {
@@ -109,6 +118,8 @@ function featureOsFeedbackWidget() {
 }
 
 function FeedbackButton() {
+  if (featureOsFeedbackButtonLoading) return;
+
   featureOsFeedbackWidget()
     .then(function(widget) {
       widget.open();
