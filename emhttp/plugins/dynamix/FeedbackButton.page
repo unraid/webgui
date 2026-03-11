@@ -25,6 +25,7 @@ var featureOsFeedbackWidgetInitPromise;
 var featureOsFeedbackWidgetInstance;
 var featureOsFeedbackIsPrerelease = <?=json_encode($isPrerelease)?>;
 var featureOsFeedbackButtonLoading = false;
+var featureOsFeedbackOpenRequested = false;
 
 function featureOsFeedbackSetLoading(isLoading) {
   var button = window.jQuery ? $('div.nav-item.FeedbackButton a') : null;
@@ -85,6 +86,11 @@ function featureOsFeedbackWidgetOptions() {
     postFilters: {
       status: ['under_review', 'planned', 'in_progress', 'completed', 'closed']
     },
+    onInitialized: function() {
+      if (featureOsFeedbackOpenRequested && featureOsFeedbackWidgetInstance) {
+        featureOsFeedbackWidgetInstance.open();
+      }
+    },
     neverExpand: false
   };
   var ssoToken = window.featureOsSsoToken || window.featureOsWidgetSsoToken || window.unraidFeatureOsSsoToken;
@@ -118,6 +124,7 @@ function featureOsFeedbackWidget() {
 }
 
 function FeedbackButton() {
+  featureOsFeedbackOpenRequested = true;
   if (featureOsFeedbackButtonLoading) return;
 
   featureOsFeedbackWidget()
