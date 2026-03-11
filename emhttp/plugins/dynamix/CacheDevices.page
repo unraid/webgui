@@ -23,6 +23,7 @@ function sharename($share) {
   return basename($share,'.cfg');
 }
 $bootPoolMaxSlots = 2;
+$show_internal_boot = is_file('/tmp/showinternalboot');
 
 if (!function_exists('get_model')) {
   function get_model($id) {
@@ -591,7 +592,7 @@ function openBootPoolFromUrl() {
   addBootPoolPopup();
 }
 
-<?if (_var($var,'fsState')=="Stopped" && _var($var,'bootEligible')=="yes"):?>
+<?if (_var($var,'fsState')=="Stopped" && _var($var,'bootEligible')=="yes" && $show_internal_boot):?>
 $(function() {
   openBootPoolFromUrl();
   setTimeout(openBootPoolFromUrl, 250);
@@ -665,7 +666,7 @@ $root  = explode($_tilde_,$pool)[0];
 
 <?if (_var($var,'fsState')=="Stopped"):?>
 <input type="button" value="_(Add Pool)_" style="margin:0" onclick="addPoolPopup()">
-<?if (_var($var,'bootEligible')=="yes"):?>
+<?if (_var($var,'bootEligible')=="yes" && $show_internal_boot):?>
 <input type="button" value="_(Add Bootable Pool)_" style="margin:0" onclick="addBootPoolPopup()">
 <?endif;?>
 
@@ -704,6 +705,8 @@ _(Slots)_:
   <select>
     <?foreach ($devs as $dev):?>
     <?
+      $devTransport = strtolower((string)_var($dev,'transport',''));
+      if ($devTransport === 'usb') continue;
       $devId = _var($dev,'id','');
       $devName = _var($dev,'device','');
       $devSizeMiB = 0;

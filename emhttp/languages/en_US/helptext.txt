@@ -940,6 +940,18 @@ Selects which kernel I/O scheduler to use for all array devices.
 Note: You must reboot after selecting Auto for setting to take effect.
 :end
 
+:disk_tunable_zfs_arc_max_help:
+Sets the ZFS ARC maximum size.
+
+Available modes:
+- **Unlimited (Dynamic)**: sets `zfs_arc_max=0`, allowing ARC to use as much memory as needed and release memory when the system requires it.
+- **10%..90% of memory**: uses a preset percentage of installed system memory.
+- **Custom value (GB)**: enter an explicit value in GB (limited to 90% of memory, rounded up to the next GB).
+
+When applied, the GB value is converted to bytes and written as `options zfs zfs_arc_max=...` in `/boot/config/modprobe.d/zfs.conf`.
+The running value is also applied to `/sys/module/zfs/parameters/zfs_arc_max` when available.
+:end
+
 :disk_tunable_md_num_stripes_help:
 This is the size of the *stripe pool* in number of *stripes*.  A *stripe* refers to a data structure that facilitates parallel 4K read/write
 operations necessary for a parity-protected array.
