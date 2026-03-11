@@ -32,6 +32,7 @@ TARGET_HOST="$1"
 echo "ℹ️  Deploying to: $TARGET_HOST"
 
 TARGET_EMHTTP="/usr/local/emhttp"
+TARGET_BACKUP_ROOT="${TARGET_BACKUP_ROOT:-/var/backups/unraid-webgui}"
 
 echo "🚀 Deploying git-modified files to unRAID..."
 
@@ -71,7 +72,7 @@ echo "$FILES" | sed 's/^/   - /'
 echo ""
 
 # Create backup directory on target
-BACKUP_DIR="$TARGET_EMHTTP/backups/$(date +%Y%m%d_%H%M%S)"
+BACKUP_DIR="$TARGET_BACKUP_ROOT/backups/$(date +%Y%m%d_%H%M%S)"
 echo "📦 Creating backup directory on target..."
 ssh -n "$TARGET_HOST" "mkdir -p '$BACKUP_DIR'"
 
@@ -105,7 +106,15 @@ while IFS= read -r FILE || [ -n "$FILE" ]; do
     # Backup existing file if it exists
     BACKUP_PATH="$BACKUP_DIR/$REL_PATH.bak"
     BACKUP_PARENT=$(dirname "$BACKUP_PATH")
-    ssh -n "$TARGET_HOST" "mkdir -p '$BACKUP_PARENT'; [ -f '$TARGET_PATH' ] && cp '$TARGET_PATH' '$BACKUP_PATH'"
+    if ! ssh -n "$TARGET_HOST" sh -c '
+        mkdir -p "$1" || exit 1
+        if [ -f "$2" ]; then
+            cp "$2" "$3" || exit 1
+        fi
+    ' sh "$BACKUP_PARENT" "$TARGET_PATH" "$BACKUP_PATH"; then
+        echo "❌ Failed to back up $REL_PATH"
+        exit 1
+    fi
 
     # Copy the updated file
     if scp "$FILE" "$TARGET_HOST:$TARGET_PATH" < /dev/null; then

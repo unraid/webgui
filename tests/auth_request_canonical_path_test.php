@@ -66,14 +66,12 @@ function loadAuthRequestHelpers(string $authRequestFile): void {
   }
 }
 
-$repoRoot = dirname(__DIR__);
-$authRequestFile = $repoRoot . '/emhttp/auth-request.php';
-loadAuthRequestHelpers($authRequestFile);
-
 $tmpRoot = sys_get_temp_dir() . '/auth-request-test-' . getmypid() . '-' . bin2hex(random_bytes(4));
 $docroot = $tmpRoot . '/docroot';
 $publicFile = $docroot . '/plugins/dynamix.my.servers/unraid-components/standalone/test.js';
 $outsideFile = $tmpRoot . '/secret.txt';
+$externalCaseModelTarget = $tmpRoot . '/external/case-model.png';
+$externalCaseModelLink = $docroot . '/webGui/images/case-model.png';
 
 if (!mkdir(dirname($publicFile), 0777, true) && !is_dir(dirname($publicFile))) {
   fail('Could not create test docroot structure');
@@ -84,6 +82,28 @@ if (file_put_contents($publicFile, 'console.log("ok");') === false) {
 if (file_put_contents($outsideFile, 'secret') === false) {
   fail('Could not create test outside file');
 }
+if (!mkdir(dirname($externalCaseModelTarget), 0777, true) && !is_dir(dirname($externalCaseModelTarget))) {
+  fail('Could not create external case model target directory');
+}
+if (file_put_contents($externalCaseModelTarget, 'case-model') === false) {
+  fail('Could not create external case model target');
+}
+$canonicalExternalCaseModelTarget = realpath($externalCaseModelTarget);
+if (!is_string($canonicalExternalCaseModelTarget)) {
+  fail('Could not canonicalize external case model target');
+}
+if (!mkdir(dirname($externalCaseModelLink), 0777, true) && !is_dir(dirname($externalCaseModelLink))) {
+  fail('Could not create case model link directory');
+}
+if (!symlink($externalCaseModelTarget, $externalCaseModelLink)) {
+  fail('Could not create case model symlink');
+}
+
+define('AUTH_REQUEST_CASE_MODEL_TARGET', $canonicalExternalCaseModelTarget);
+
+$repoRoot = dirname(__DIR__);
+$authRequestFile = $repoRoot . '/emhttp/auth-request.php';
+loadAuthRequestHelpers($authRequestFile);
 $canonicalDocroot = realpath($docroot);
 if (!is_string($canonicalDocroot)) {
   fail('Could not canonicalize test docroot');
@@ -115,6 +135,23 @@ assertSame(
   '/',
   getCanonicalRequestUri($canonicalDocroot),
   'returns root URI for docroot path'
+);
+
+$_SERVER['REQUEST_URI'] = '/webGui/images/case-model.png';
+assertSame(
+  '',
+  getCanonicalRequestUri($canonicalDocroot),
+  'rejects canonicalization for an externally mapped public asset'
+);
+assertSame(
+  true,
+  isAllowedPublicAssetRequest('/webGui/images/case-model.png', $canonicalDocroot, ['/webGui/images/case-model.png']),
+  'allows the mapped external case-model asset when explicitly whitelisted'
+);
+assertSame(
+  false,
+  isAllowedPublicAssetRequest('/webGui/images/case-model.png', $canonicalDocroot, []),
+  'rejects the mapped external case-model asset when it is not whitelisted'
 );
 
 rrmdir($tmpRoot);

@@ -59,6 +59,9 @@ function featureOsFeedbackLoadScript() {
     script.onerror = reject;
     document.head.appendChild(script);
   }).catch(function(error) {
+    var staleScript = document.querySelector('script[data-featureos-feedback-widget]');
+
+    if (staleScript && !window.HellonextWidget) staleScript.remove();
     featureOsFeedbackWidgetScriptPromise = null;
     throw error;
   });
@@ -133,7 +136,6 @@ function FeedbackButton() {
     })
     .catch(function(error) {
       console.error('Unable to load FeatureOS feedback widget.', error);
-      featureOsFeedbackSetLoading(false);
       if (typeof swal === 'function') {
         swal('<?=addslashes(_('Feedback'))?>', '<?=addslashes(_('Unable to load feedback widget.'))?>', 'error');
       }

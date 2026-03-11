@@ -41,8 +41,12 @@ function getRequestUriPath(): string {
 }
 
 function getAllowedExternalPublicAssetTargets(): array {
+  $caseModelTarget = defined('AUTH_REQUEST_CASE_MODEL_TARGET')
+    ? AUTH_REQUEST_CASE_MODEL_TARGET
+    : '/boot/config/plugins/dynamix/case-model.png';
+
   return [
-    '/webGui/images/case-model.png' => '/boot/config/plugins/dynamix/case-model.png',
+    '/webGui/images/case-model.png' => $caseModelTarget,
   ];
 }
 
