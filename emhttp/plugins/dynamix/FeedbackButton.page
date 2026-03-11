@@ -78,16 +78,17 @@ function featureOsFeedbackWidgetOptions() {
     accent: '#FF6A22',
     modules: ['feature_requests'],
     token: 'lNUvFaw09CjxDMprePYzPg',
-    showOnlySubmission: true,
+    showOnlySubmission: false,
     submissionBucketIds: [submissionBucketId],
     suggestSimilarPost: true,
-    hideBucketSelection: true,
+    hideBucketSelection: false,
     noDefaultTrigger: true,
     customizations: {
       widgetWidth: '400px'
     },
     postFilters: {
-      status: ['under_review', 'planned', 'in_progress', 'completed', 'closed']
+      status: ['under_review', 'planned', 'in_progress', 'completed', 'closed'],
+      bucket_id: [submissionBucketId]
     },
     onInitialized: function() {
       if (featureOsFeedbackOpenRequested && featureOsFeedbackWidgetInstance) {
