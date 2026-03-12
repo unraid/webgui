@@ -23,6 +23,7 @@ $isPrerelease = preg_match('/-(?:beta|rc)\b/i', $unraidVersion) === 1;
 var featureOsFeedbackWidgetScriptPromise;
 var featureOsFeedbackWidgetInitPromise;
 var featureOsFeedbackWidgetInstance;
+var featureOsFeedbackWidgetReady = false;
 var featureOsFeedbackIsPrerelease = <?=json_encode($isPrerelease)?>;
 var featureOsFeedbackButtonLoading = false;
 var featureOsFeedbackOpenRequested = false;
@@ -45,6 +46,19 @@ function featureOsFeedbackLoadScript() {
 
   featureOsFeedbackWidgetScriptPromise = new Promise(function(resolve, reject) {
     var existingScript = document.querySelector('script[data-featureos-feedback-widget]');
+    if (existingScript && window.HellonextWidget) {
+      existingScript.dataset.featureosFeedbackWidgetState = 'loaded';
+      resolve();
+      return;
+    }
+    if (existingScript && existingScript.dataset.featureosFeedbackWidgetState === 'loaded') {
+      resolve();
+      return;
+    }
+    if (existingScript && existingScript.dataset.featureosFeedbackWidgetState === 'error') {
+      existingScript.remove();
+      existingScript = null;
+    }
     if (existingScript) {
       existingScript.addEventListener('load', resolve, {once: true});
       existingScript.addEventListener('error', reject, {once: true});
@@ -55,8 +69,15 @@ function featureOsFeedbackLoadScript() {
     script.src = 'https://widgets-v3.featureos.app/widget.js';
     script.async = true;
     script.dataset.featureosFeedbackWidget = 'true';
-    script.onload = resolve;
-    script.onerror = reject;
+    script.dataset.featureosFeedbackWidgetState = 'pending';
+    script.onload = function() {
+      script.dataset.featureosFeedbackWidgetState = 'loaded';
+      resolve();
+    };
+    script.onerror = function(event) {
+      script.dataset.featureosFeedbackWidgetState = 'error';
+      reject(event);
+    };
     document.head.appendChild(script);
   }).catch(function(error) {
     var staleScript = document.querySelector('script[data-featureos-feedback-widget]');
@@ -91,7 +112,9 @@ function featureOsFeedbackWidgetOptions() {
       bucket_id: [submissionBucketId]
     },
     onInitialized: function() {
+      featureOsFeedbackWidgetReady = true;
       if (featureOsFeedbackOpenRequested && featureOsFeedbackWidgetInstance) {
+        featureOsFeedbackOpenRequested = false;
         featureOsFeedbackWidgetInstance.open();
       }
     },
@@ -108,6 +131,7 @@ function featureOsFeedbackWidget() {
   if (featureOsFeedbackWidgetInstance) return Promise.resolve(featureOsFeedbackWidgetInstance);
   if (featureOsFeedbackWidgetInitPromise) return featureOsFeedbackWidgetInitPromise;
 
+  featureOsFeedbackWidgetReady = false;
   featureOsFeedbackSetLoading(true);
   featureOsFeedbackWidgetInitPromise = featureOsFeedbackLoadScript()
     .then(function() {
@@ -118,6 +142,7 @@ function featureOsFeedbackWidget() {
     .catch(function(error) {
       featureOsFeedbackWidgetInitPromise = null;
       featureOsFeedbackWidgetInstance = null;
+      featureOsFeedbackWidgetReady = false;
       throw error;
     })
     .finally(function() {
@@ -133,7 +158,10 @@ function FeedbackButton() {
 
   featureOsFeedbackWidget()
     .then(function(widget) {
-      widget.open();
+      if (featureOsFeedbackWidgetReady && featureOsFeedbackOpenRequested) {
+        featureOsFeedbackOpenRequested = false;
+        widget.open();
+      }
     })
     .catch(function(error) {
       console.error('Unable to load FeatureOS feedback widget.', error);
