@@ -91,7 +91,7 @@ function featureOsFeedbackLoadScript() {
 }
 
 function featureOsFeedbackWidgetOptions() {
-  var submissionBucketId = featureOsFeedbackIsPrerelease ? 17960 : 17434;
+  var submissionBucketId = 17960;
   var options = {
     type: 'modal',
     openFrom: 'right',
@@ -153,6 +153,11 @@ function featureOsFeedbackWidget() {
 }
 
 function FeedbackButton() {
+  if (!featureOsFeedbackIsPrerelease) {
+    openChanges("feedback", "_(Feedback)_", "feedback");
+    return;
+  }
+
   featureOsFeedbackOpenRequested = true;
   if (featureOsFeedbackButtonLoading) return;
 
