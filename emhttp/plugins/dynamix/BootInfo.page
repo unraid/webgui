@@ -14,7 +14,7 @@ Tag="usb"
  * all copies or substantial portions of the Software.
  */
 ?>
-<?$tpmEnabled = !empty($var['flashGUID']) && strpos($var['flashGUID'], '03-') !== 0 && !empty($var['tpmGUID']) ? true : false;?>
+<?$tpmEnabled = !empty($var['flashGUID']) && strpos($var['flashGUID'], '01-') !== 0 && !empty($var['tpmGUID']) ? true : false;?>
 <script>
 function cleanUp(zip) {
   if (document.hasFocus()) {
@@ -55,7 +55,7 @@ _(Active GUID)_:
 
 <?if (!empty($var['flashGUID'])):?>
 _(GUID Type)_:
-: <?=(strpos($var['flashGUID'], '03-') === 0) ? _('TPM') : _('Flash');?>
+: <?=(strpos($var['flashGUID'], '01-') === 0) ? _('TPM') : _('Flash');?>
 <?endif;?>
 
 <?if ($tpmEnabled):?>
