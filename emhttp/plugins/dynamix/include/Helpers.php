@@ -1717,7 +1717,7 @@ function get_block_devices(): array
 function sysfs_read(string $path): ?string
 {
     return is_readable($path)
-        ? (($v = trim(file_get_contents($path))) !== '' ? $v : null)
+        ? (($v = trim(@file_get_contents($path))) !== '' ? $v : null)
         : null;
 }
 
