@@ -1239,7 +1239,19 @@ function parse_si_number($value): int
       return preg_replace('/-part\d+$|p\d+$/', '', $devicePath);
     }
 
-    return preg_replace('/-part\d+$|p?\d+$/', '', $devicePath);
+    if (preg_match('/-part\d+$/', $devicePath)) {
+      return preg_replace('/-part\d+$/', '', $devicePath);
+    }
+
+    if (preg_match('/^mmcblk\d+p\d+$/', $devicePath)) {
+      return preg_replace('/p\d+$/', '', $devicePath);
+    }
+
+    if (preg_match('/^(sd[a-z]+|hd[a-z]+|vd[a-z]+|xvd[a-z]+|ubd[a-z]+)\d+$/', $devicePath)) {
+      return preg_replace('/\d+$/', '', $devicePath);
+    }
+
+    return $devicePath;
   }
 
 function storagePoolsJson(): string
@@ -1277,7 +1289,7 @@ function storagePoolsJson(): string
     foreach ($sections as $name => $data) {
         if (!preg_match('/^disk/i', $name) && 
             isset($data['fsType']) && 
-            in_array($data['fsType'], ['btrfs', 'zfs'], true)) {
+        in_array($data['fsType'], ['btrfs', 'zfs', 'luks:btrfs', 'luks:zfs'], true)) {
             $allPoolNames[] = strtolower($name);
         }
     }
