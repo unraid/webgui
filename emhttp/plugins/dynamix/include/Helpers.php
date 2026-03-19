@@ -1220,6 +1220,40 @@ function parse_si_number($value): int
     return (int)$value;
 }
 
+  function normalize_pool_member_device(string $devicePath): string
+  {
+    $devicePath = trim($devicePath);
+    if ($devicePath === '') {
+      return '';
+    }
+
+    if (strpos($devicePath, '/dev/') === 0) {
+      $devicePath = basename($devicePath);
+    }
+
+    if (preg_match('/^nvme\d+n\d+$/', $devicePath)) {
+      return $devicePath;
+    }
+
+    if (preg_match('/^nvme\d+n\d+(?:p\d+|-part\d+)$/', $devicePath)) {
+      return preg_replace('/-part\d+$|p\d+$/', '', $devicePath);
+    }
+
+    if (preg_match('/-part\d+$/', $devicePath)) {
+      return preg_replace('/-part\d+$/', '', $devicePath);
+    }
+
+    if (preg_match('/^mmcblk\d+p\d+$/', $devicePath)) {
+      return preg_replace('/p\d+$/', '', $devicePath);
+    }
+
+    if (preg_match('/^(sd[a-z]+|hd[a-z]+|vd[a-z]+|xvd[a-z]+|ubd[a-z]+)\d+$/', $devicePath)) {
+      return preg_replace('/\d+$/', '', $devicePath);
+    }
+
+    return $devicePath;
+  }
+
 function storagePoolsJson(): string
 {
     $result = [
@@ -1255,7 +1289,7 @@ function storagePoolsJson(): string
     foreach ($sections as $name => $data) {
         if (!preg_match('/^disk/i', $name) && 
             isset($data['fsType']) && 
-            in_array($data['fsType'], ['btrfs', 'zfs'], true)) {
+        in_array($data['fsType'], ['btrfs', 'zfs', 'luks:btrfs', 'luks:zfs'], true)) {
             $allPoolNames[] = strtolower($name);
         }
     }
@@ -1266,7 +1300,7 @@ function storagePoolsJson(): string
 
         if (
             !isset($s['fsType'], $s['fsMountpoint'], $s['fsStatus']) ||
-            !in_array($s['fsType'], ['btrfs', 'zfs'], true) ||
+            !in_array($s['fsType'], ['btrfs', 'zfs','luks:btrfs','luks:zfs'], true) ||
             $s['fsStatus'] !== 'Mounted'
         ) {
             continue;
@@ -1299,7 +1333,7 @@ function storagePoolsJson(): string
         }
 
         // --- Btrfs ---
-        if ($s['fsType'] === 'btrfs') {
+        if ($s['fsType'] === 'btrfs' || $s['fsType'] === 'luks:btrfs') {
             $mount = escapeshellarg($s['fsMountpoint']);
             $uuid = $s['uuid'] ?? '';
             
@@ -1320,7 +1354,7 @@ function storagePoolsJson(): string
                         $devicePath = $m[4];
                   $isMissing = stripos($devicePath, '<missing') === 0;
                   $isZeroSize = $m[2] === '0' || (float)$m[2] == 0.0;
-                  $deviceKey = $isMissing ? "missing_devid{$m[1]}" : preg_replace('/p?\d+$/', '', str_replace('/dev/', '', $devicePath));
+                  $deviceKey = $isMissing ? "missing_devid{$m[1]}" : normalize_pool_member_device($devicePath);
                   $pool['members'][$deviceKey] = [
                     'devid' => $m[1],
                     'device' => $isMissing ? '<missing>' : $deviceKey,
@@ -1354,8 +1388,8 @@ function storagePoolsJson(): string
                             $statType = $m[2];
                             $statValue = (int)$m[3];
                             
-                            // Strip /dev/ prefix and partition numbers (e.g., sda1 -> sda, nvme0n1p1 -> nvme0n1)
-                            $deviceName = preg_replace('/p?\d+$/', '', str_replace('/dev/', '', $devPath));
+                          // Normalize encrypted and plain device paths to a stable member key.
+                          $deviceName = normalize_pool_member_device($devPath);
                             
                             // Map stat type to error key
                             $errorMap = [
@@ -1382,8 +1416,8 @@ function storagePoolsJson(): string
                         }
                         // Old format: /dev/sda1: read 0, write 0, flush 0
                         elseif (preg_match('/^(\S+):\s+read\s+(\d+),\s+write\s+(\d+),\s+flush\s+(\d+)/', $line, $m)) {
-                            $deviceName = preg_replace('/p?\d+$/', '', str_replace('/dev/', '', $m[1]));
-                            foreach ($pool['members'] as &$member) {
+                          $deviceName = normalize_pool_member_device($m[1]);
+                          foreach ($pool['members'] as $memberKey => &$member) {
                                 if ($memberKey === $deviceName || $member['device'] === $deviceName) {
                                     $member['errors']['read'] = (int)$m[2];
                                     $member['errors']['write'] = (int)$m[3];
@@ -1407,7 +1441,7 @@ function storagePoolsJson(): string
                     // Check if this disk is already in members (was found by btrfs)
                     $foundInMembers = false;
                     foreach ($pool['members'] as $memberKey => $member) {
-                        if (strpos($memberKey, $diskKey) !== false || strpos($member['device'], $diskName) !== false) {
+                      if ($memberKey === $diskKey || strpos($memberKey, $diskKey) === 0 || strpos($member['device'], $diskName) !== false) {
                             $foundInMembers = true;
                             break;
                         }
@@ -1453,7 +1487,7 @@ function storagePoolsJson(): string
         }
 
         // --- ZFS ---
-        if ($s['fsType'] === 'zfs') {
+        if ($s['fsType'] === 'zfs' || $s['fsType'] === 'luks:zfs') {
             $poolNameEsc = escapeshellarg($poolName);
             $members = [];
             $poolOverall = 'UNKNOWN';
@@ -1511,7 +1545,7 @@ function storagePoolsJson(): string
                         
                         // Process this device if it has a path (leaf device)
                         if (isset($vdevTree['path'])) {
-                            $deviceName = preg_replace('/-part\d+$|p?\d+$/', '', basename($vdevTree['path']));
+                          $deviceName = normalize_pool_member_device($vdevTree['path']);
                             // Skip if device name is a pool name or zvol
                             if (!in_array(strtolower($deviceName), $allPoolNames)) {
                                 $readErrs = $vdevTree['read_errors'] ?? 0;
@@ -1618,7 +1652,7 @@ function storagePoolsJson(): string
                                 $deviceType = $currentVdev;
                             }
                             
-                            $deviceKey = preg_replace('/-part\d+$|p?\d+$/', '', $device);
+                            $deviceKey = normalize_pool_member_device($device);
                             $members[$deviceKey] = [
                                 'device' => $deviceKey,
                                 'status' => $status,
@@ -1643,7 +1677,7 @@ function storagePoolsJson(): string
                 // Check if this disk is already in members (was found by zpool)
                 $foundInMembers = false;
                 foreach ($members as $memberKey => $member) {
-                    if (strpos($memberKey, $diskKey) !== false || strpos($member['device'], $diskName) !== false) {
+                  if ($memberKey === $diskKey || strpos($memberKey, $diskKey) === 0 || strpos($member['device'], $diskName) !== false) {
                         $foundInMembers = true;
                         break;
                     }

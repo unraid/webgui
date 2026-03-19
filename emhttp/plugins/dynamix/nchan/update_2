@@ -269,7 +269,7 @@ function array_group($type, $pool=false) {
   foreach ($disks as $disk) if (_var($disk,'type')==$type && ((_var($disk,'type')=='Parity') ? strpos(_var($disk,'status'),'DISK_NP')===false : strcmp(_var($disk,'status'),'DISK_NP')!=0) && (!$pool||$pool==prefix(_var($disk,'name')))) {
     $echo[] = "<tr class='updated'><td>";
     $echo[] = "<span class='w26'>".device_name($disk)."</span>";
-    if ($pool && in_array(_var($disks[$pool],'fsType'),['zfs','btrfs'])) {
+    if ($pool && in_array(_var($disks[$pool],'fsType'),['zfs','btrfs','luks:zfs','luks:btrfs'])) {
       $memberStatus = $poolstatus['pools'][$pool]['members'][$disk['device']]['status'] ?? 'UNKNOWN';
       $statusColor = 'grey';
       if (in_array($memberStatus, ['ONLINE'])) {
@@ -375,7 +375,7 @@ while (true) {
 
   foreach (array_merge(pools_filter($disks),flash_filter($disks)) as $pool) {
     if (empty($disks[$pool]['devices'])) continue;
-    if (in_array(_var($disks[$pool],'fsType'), ['zfs','btrfs']) && !empty($poolstatus['pools'][$pool])) {
+    if (in_array(_var($disks[$pool],'fsType'), ['zfs','btrfs','luks:zfs','luks:btrfs']) && !empty($poolstatus['pools'][$pool])) {
       $status = $poolstatus['pools'][$pool]['overall_status'] ?? 'UNKNOWN';
       $hasErrors = str_contains($status, '- ERRORS');
       $isOnline = str_starts_with($status, 'ONLINE');

@@ -310,7 +310,7 @@ function pool_status_html(string $poolName, array $poolstatusData, array $disks)
 {
   if (!$poolName || empty($poolstatusData['pools'][$poolName])) return '';
   $poolFsType = isset($disks[$poolName]) ? _var($disks[$poolName],'fsType','') : '';
-  if (!in_array($poolFsType, ['zfs','btrfs'])) return '';
+  if (!in_array($poolFsType, ['zfs','btrfs','luks:zfs','luks:btrfs'])) return '';
 
   $status_text = $poolstatusData['pools'][$poolName]['overall_status'] ?? 'UNKNOWN';
   $hasErrors = str_contains($status_text, '- ERRORS');
