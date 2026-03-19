@@ -1231,6 +1231,14 @@ function parse_si_number($value): int
       $devicePath = basename($devicePath);
     }
 
+    if (preg_match('/^nvme\d+n\d+$/', $devicePath)) {
+      return $devicePath;
+    }
+
+    if (preg_match('/^nvme\d+n\d+(?:p\d+|-part\d+)$/', $devicePath)) {
+      return preg_replace('/-part\d+$|p\d+$/', '', $devicePath);
+    }
+
     return preg_replace('/-part\d+$|p?\d+$/', '', $devicePath);
   }
 
