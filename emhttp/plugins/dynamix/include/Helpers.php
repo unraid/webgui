@@ -1441,7 +1441,7 @@ function storagePoolsJson(): string
                     // Check if this disk is already in members (was found by btrfs)
                     $foundInMembers = false;
                     foreach ($pool['members'] as $memberKey => $member) {
-                        if (strpos($memberKey, $diskKey) !== false || strpos($member['device'], $diskName) !== false) {
+                      if ($memberKey === $diskKey || strpos($memberKey, $diskKey) === 0 || strpos($member['device'], $diskName) !== false) {
                             $foundInMembers = true;
                             break;
                         }
@@ -1677,7 +1677,7 @@ function storagePoolsJson(): string
                 // Check if this disk is already in members (was found by zpool)
                 $foundInMembers = false;
                 foreach ($members as $memberKey => $member) {
-                    if (strpos($memberKey, $diskKey) !== false || strpos($member['device'], $diskName) !== false) {
+                  if ($memberKey === $diskKey || strpos($memberKey, $diskKey) === 0 || strpos($member['device'], $diskName) !== false) {
                         $foundInMembers = true;
                         break;
                     }
