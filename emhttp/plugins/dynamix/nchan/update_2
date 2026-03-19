@@ -375,7 +375,7 @@ while (true) {
 
   foreach (array_merge(pools_filter($disks),flash_filter($disks)) as $pool) {
     if (empty($disks[$pool]['devices'])) continue;
-    if (in_array(_var($disks[$pool],'fsType'), ['zfs','btrfs']) && !empty($poolstatus['pools'][$pool])) {
+    if (in_array(_var($disks[$pool],'fsType'), ['zfs','btrfs','luks:zfs','luks:btrfs']) && !empty($poolstatus['pools'][$pool])) {
       $status = $poolstatus['pools'][$pool]['overall_status'] ?? 'UNKNOWN';
       $hasErrors = str_contains($status, '- ERRORS');
       $isOnline = str_starts_with($status, 'ONLINE');
