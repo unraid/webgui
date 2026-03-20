@@ -613,11 +613,12 @@ class DockerUpdate{
 		$DockerClient = new DockerClient();
 		$inspect      = $DockerClient->getDockerJSON('/images/'.$image.'/json');
 		if (empty($inspect['RepoDigests'])) return null;
-
-		$shaPos = strpos($inspect['RepoDigests'][0], '@sha256:');
+		
+		$repoDigest = $inspect['RepoDigests'][array_key_last($inspect['RepoDigests'])];
+		$shaPos = strpos($repoDigest, '@sha256:');
 		if ($shaPos === false) return null;
 
-		return substr($inspect['RepoDigests'][0], $shaPos + 1);
+		return substr($repoDigest, $shaPos + 1);
 	}
 
 	public function setUpdateStatus($image, $version) {
