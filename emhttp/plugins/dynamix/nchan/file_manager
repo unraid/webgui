@@ -1107,7 +1107,7 @@ while (true) {
             printf 'TOTAL|%s\\n' "\$total_bytes"
 
             while IFS= read -r line; do
-              if [[ \$line =~ ^[[:space:]]*(inflating|extracting|creating|linking|replacing):[[:space:]]+(.+)\$ ]]; then
+              if [[ \$line =~ ^[[:space:]]*(inflating|extracting|creating):[[:space:]]+(.+)\$ ]]; then
                 filename="\${BASH_REMATCH[2]}"
                 filename="\${filename%"\${filename##*[! ]}"}"
                 size="\${file_sizes[\$filename]:-0}"
