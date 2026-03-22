@@ -86,6 +86,11 @@ seed_boot_config() {
 }
 
 link_root_config_file() {
+  if [[ ! -r "$RCLONE_BOOT_CONFIG" ]]; then
+    log_issue "ERROR: refusing to replace rclone runtime config because $RCLONE_BOOT_CONFIG is missing or unreadable"
+    return 1
+  fi
+
   if [[ -L "$RCLONE_ROOT_CONFIG" ]]; then
     local link_target
     link_target=$(readlink -f "$RCLONE_ROOT_CONFIG" 2>/dev/null || readlink "$RCLONE_ROOT_CONFIG" 2>/dev/null || true)
