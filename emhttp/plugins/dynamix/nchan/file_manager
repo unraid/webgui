@@ -1064,53 +1064,103 @@ while (true) {
 
       // return status of running action
       if (!empty($pid)) {
-        $file_line = exec("tail -1 $status");
-        $reply['status'] = json_encode([
-          'action' => $action,
-          'text' => [_('Extracting').'... '.mb_strimhalf($file_line, 70, '...')]
-        ]);
+        $text = parse_compress_progress($status, _('Extracting'), COMPRESS_DOT_SIZE_MB);
+        if (!empty($text)) {
+          $reply['status'] = json_encode([
+            'action' => $action,
+            'text' => $text
+          ]);
+        }
 
       // start action
       } else {
         // TODO: Add "Overwrite existing files" option for extract
-        // Check tar/unzip/7z/unrar options: tar has --skip-existing, unzip has -n (never overwrite), etc.
-        // Let user decide whether to overwrite or skip existing files
 
         $archive = $source[0];
         $dest = rtrim($target, '/');
+        $dot_mb = COMPRESS_DOT_SIZE_MB;
 
         exec('logger -t file_manager "extract start: archive=' . escapeshellarg($archive) . ', dest=' . escapeshellarg($dest) . '"');
         exec('logger -t file_manager "extract start: quoted_archive=' . escapeshellarg(quoted($archive)) . ', quoted_dest=' . escapeshellarg(quoted($dest)) . '"');
 
-        // Create destination directory if it doesn't exist
         exec("mkdir -p ".quoted($dest));
 
-        // Detect archive type and extract accordingly
-        // note: redirect stdout to $status, stderr to $error so PHP exec() only captures echo $! (the PID)
-        // and so errors are surfaced by the end-of-job handler which reads $error
-        $cmd = "cd ".quoted($dest)." && ";
-        if (preg_match('/\.(tar\.gz|tgz)$/i', $archive)) {
-          $cmd .= "tar -xzvf ".quoted($archive)." >$status 2>$error";
-        } elseif (preg_match('/\.(tar\.bz2|tbz2)$/i', $archive)) {
-          $cmd .= "tar -xjvf ".quoted($archive)." >$status 2>$error";
-        } elseif (preg_match('/\.(tar\.xz|txz)$/i', $archive)) {
-          $cmd .= "tar -xJvf ".quoted($archive)." >$status 2>$error";
-        } elseif (preg_match('/\.(tar\.zst)$/i', $archive)) {
-          $cmd .= "tar -I zstd -xvf ".quoted($archive)." >$status 2>$error";
-        } elseif (preg_match('/\.tar$/i', $archive)) {
-          $cmd .= "tar -xvf ".quoted($archive)." >$status 2>$error";
-        } elseif (preg_match('/\.zip$/i', $archive)) {
-          $cmd .= "unzip ".quoted($archive)." >$status 2>$error";
-        } elseif (preg_match('/\.7z$/i', $archive)) {
-          $cmd .= "7z x ".quoted($archive)." >$status 2>$error";
-        } elseif (preg_match('/\.rar$/i', $archive)) {
-          $cmd .= "unrar x ".quoted($archive)." >$status 2>$error";
+        // Reset progress parser state for new extract operation (shares static vars with compress)
+        parse_compress_progress(null, null, COMPRESS_DOT_SIZE_MB, true);
+
+        if (preg_match('/\.zip$/i', $archive)) {
+          // ZIP: parse manifest for file sizes + total, then extract with structured FILE lines.
+          // Uses process substitution (< <(...)) so file_sizes associative array is visible in the while loop.
+          // Stderr of unzip -l suppressed to avoid duplicate error messages; extract errors go to $error.
+          $cmd = <<<BASH
+          {
+            cd "$dest" || exit 1
+
+            declare -A file_sizes
+            total_bytes=0
+            while IFS= read -r line; do
+              if [[ \$line =~ ^[[:space:]]+([0-9]+)[[:space:]]+[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[0-9]{2}:[0-9]{2}[[:space:]]+(.+)\$ ]]; then
+                file_sizes["\${BASH_REMATCH[2]}"]=\"\${BASH_REMATCH[1]}\"
+                total_bytes=\$(( total_bytes + BASH_REMATCH[1] ))
+              fi
+            done < <(unzip -l "$archive" 2>/dev/null)
+            printf 'TOTAL|%s\\n' "\$total_bytes"
+
+            while IFS= read -r line; do
+              if [[ \$line =~ ^[[:space:]]*(inflating|extracting|creating|linking):[[:space:]]+(.+)\$ ]]; then
+                filename="\${BASH_REMATCH[2]}"
+                filename="\${filename%"\${filename##*[! ]}"}"
+                size="\${file_sizes[\$filename]:-0}"
+                printf 'FILE|%(%s)T|%s|%s\\n' -1 "\$size" "\$filename"
+              fi
+            done < <(unzip "$archive")
+          } >$status 2>$error & echo \$!
+          BASH;
+
         } else {
-          // Try to detect by file command as fallback
-          $cmd .= "unzip ".quoted($archive)." >$status 2>$error";
+          // TAR variants: checkpoint-based DOT lines + awk-based FILE lines (no TOTAL: would require
+          // full decompression pass to sum uncompressed sizes, which doubles the work)
+          if (preg_match('/\.(tar\.gz|tgz)$/i', $archive)) {
+            $extract_tar_flags = '-xzvf';
+          } elseif (preg_match('/\.(tar\.bz2|tbz2)$/i', $archive)) {
+            $extract_tar_flags = '-xjvf';
+          } elseif (preg_match('/\.(tar\.xz|txz)$/i', $archive)) {
+            $extract_tar_flags = '-xJvf';
+          } elseif (preg_match('/\.(tar\.zst)$/i', $archive)) {
+            $extract_tar_flags = '--use-compress-program=zstd -xvf';
+          } elseif (preg_match('/\.tar$/i', $archive)) {
+            $extract_tar_flags = '-xvf';
+          }
+
+          if (isset($extract_tar_flags)) {
+            $cmd = <<<BASH
+            {
+              cd "$dest" || exit 1
+              record_size=10240
+              dot_size=\$(($dot_mb * 1024 * 1024))
+              checkpoint=\$((dot_size / record_size))
+              tar_args=(
+                $extract_tar_flags
+                "$archive"
+                --record-size=\$record_size
+                --checkpoint=\$checkpoint
+                "--checkpoint-action=exec=printf 'DOT|%s\\n' \\\$(date +%s) >> $status"
+              )
+              tar "\${tar_args[@]}" | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}'
+              tar_exit=\${PIPESTATUS[0]}
+              exit \$tar_exit
+            } >$status 2>$error & echo \$!
+            BASH;
+          } elseif (preg_match('/\.7z$/i', $archive)) {
+            $cmd = "cd ".quoted($dest)." && 7z x ".quoted($archive)." >$status 2>$error & echo \$!";
+          } elseif (preg_match('/\.rar$/i', $archive)) {
+            $cmd = "cd ".quoted($dest)." && unrar x ".quoted($archive)." >$status 2>$error & echo \$!";
+          } else {
+            $cmd = "cd ".quoted($dest)." && unzip ".quoted($archive)." >$status 2>$error & echo \$!";
+          }
         }
-        $cmd .= " & echo \$!";
-        exec('logger -t file_manager "extract cmd=' . escapeshellarg($cmd) . '"');
+
+        exec('logger -t file_manager "extract cmd=' . escapeshellarg(substr($cmd, 0, 200)) . '"');
         exec($cmd, $pid);
         exec('logger -t file_manager "extract pid=' . escapeshellarg(json_encode($pid)) . '"');
       }
