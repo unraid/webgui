@@ -1113,7 +1113,7 @@ while (true) {
                 size="\${file_sizes[\$filename]:-0}"
                 printf 'FILE|%(%s)T|%s|%s\\n' -1 "\$size" "\$filename"
               fi
-            done < <(unzip "$archive")
+            done < <(unzip -n "$archive")
           } >$status 2>$error & echo \$!
           BASH;
 
@@ -1136,6 +1136,8 @@ while (true) {
             $cmd = <<<BASH
             {
               cd "$dest" || exit 1
+              total_bytes=\$(tar --list --verbose --file="$archive" 2>/dev/null | awk 'NF>=5 {sum+=\$3} END {print sum+0}')
+              printf 'TOTAL|%s\\n' "\$total_bytes"
               record_size=10240
               dot_size=\$(($dot_mb * 1024 * 1024))
               checkpoint=\$((dot_size / record_size))
@@ -1218,9 +1220,9 @@ while (true) {
 
         if (file_exists($error)) $reply['error'] = trim(file_get_contents($error));
 
-        // Debug: Copy status file before deletion for action 16 (compress)
-        if ($action == 16 && file_exists($status)) {
-          $debug_copy = '/tmp/status-debug-compress.txt';
+        // Debug: Copy status file before deletion (compress and extract)
+        if (($action == 16 || $action == 17) && file_exists($status)) {
+          $debug_copy = $action == 16 ? '/tmp/status-debug-compress.txt' : '/tmp/status-debug-extract.txt';
           copy($status, $debug_copy);
           exec('logger -t file_manager "Status file copied to ' . $debug_copy . ' before deletion"');
         }
