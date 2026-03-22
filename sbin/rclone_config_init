@@ -2,25 +2,26 @@
 #
 # script: rclone_config_init
 #
-# Keep rclone config on persistent storage while preserving default lookup paths.
+# Keep the rclone config on persistent storage using the default runtime path.
 # This helper must never break boot flow; keep execution non-fatal.
 set +e
 set +u
 set +o pipefail
 
 CONFIG="${1:-/boot/config}"
-RCLONE_DEFAULT_BOOT_CONFIG="$CONFIG/rclone/rclone.conf"
+RCLONE_BOOT_DIR="$CONFIG/rclone/root"
+RCLONE_BOOT_CONFIG="$RCLONE_BOOT_DIR/rclone.conf"
+RCLONE_LEGACY_BOOT_CONFIG="$CONFIG/rclone/rclone.conf"
 RCLONE_PLUGIN_BOOT_CONFIG="$CONFIG/plugins/rclone/.rclone.conf"
-RCLONE_ROOT_CONFIG="${2:-/root/.config/rclone/rclone.conf}"
-RCLONE_BACKUP_DIR="$CONFIG/rclone/backups"
-RCLONE_USE_PLUGIN_CONFIG=false
+RCLONE_ROOT_PATH="${2:-/root/.config/rclone}"
 
-if [[ -e "$CONFIG/plugins/rclone.plg" || -e "$RCLONE_PLUGIN_BOOT_CONFIG" ]]; then
-  RCLONE_BOOT_CONFIG="$RCLONE_PLUGIN_BOOT_CONFIG"
-  RCLONE_USE_PLUGIN_CONFIG=true
+if [[ "$RCLONE_ROOT_PATH" == *.conf ]]; then
+  RCLONE_ROOT_DIR="$(dirname "$RCLONE_ROOT_PATH")"
 else
-  RCLONE_BOOT_CONFIG="$RCLONE_DEFAULT_BOOT_CONFIG"
+  RCLONE_ROOT_DIR="$RCLONE_ROOT_PATH"
 fi
+
+RCLONE_ROOT_CONFIG="$RCLONE_ROOT_DIR/rclone.conf"
 
 log_issue() {
   if declare -F log >/dev/null 2>&1; then
@@ -31,126 +32,110 @@ log_issue() {
 }
 
 ensure_paths() {
-  if ! mkdir -p "$(dirname "$RCLONE_ROOT_CONFIG")" "$RCLONE_BACKUP_DIR" "$(dirname "$RCLONE_BOOT_CONFIG")" 2>/dev/null; then
-    log_issue "ERROR: failed to ensure rclone config directories exist"
+  if ! mkdir -p "$(dirname "$RCLONE_BOOT_DIR")" "$(dirname "$RCLONE_ROOT_DIR")" 2>/dev/null; then
+    log_issue "ERROR: failed to ensure rclone config parent directories exist"
     return 1
   fi
 }
 
-backup_rclone_config() {
-  local src="$1"
-  local backup
-  backup="$RCLONE_BACKUP_DIR/$(basename "$src").$(date +%Y%m%d-%H%M%S)-$$-$RANDOM"
-  if cp -a -- "$src" "$backup"; then
-    return 0
+promote_existing_root_dir() {
+  if [[ -d "$RCLONE_ROOT_DIR" && ! -L "$RCLONE_ROOT_DIR" && ! -e "$RCLONE_BOOT_DIR" ]]; then
+    if mv "$RCLONE_ROOT_DIR" "$RCLONE_BOOT_DIR" 2>/dev/null; then
+      return 0
+    fi
+    log_issue "ERROR: failed to move rclone runtime dir to $RCLONE_BOOT_DIR"
   fi
-  log_issue "ERROR: failed to backup rclone config from $src"
-  return 1
 }
 
-link_to_boot_config() {
-  local link_path="$1"
-  local link_label="$2"
-  local error_action="$3"
+seed_boot_config() {
+  [[ -e "$RCLONE_BOOT_CONFIG" ]] && return 0
 
-  if ln -s "$RCLONE_BOOT_CONFIG" "$link_path"; then
-    return 0
+  if ! mkdir -p "$RCLONE_BOOT_DIR" 2>/dev/null; then
+    log_issue "ERROR: failed to create $RCLONE_BOOT_DIR"
+    return 1
   fi
 
-  log_issue "ERROR: failed to $error_action $link_label symlink to $RCLONE_BOOT_CONFIG"
-  return 1
+  if [[ -f "$RCLONE_ROOT_CONFIG" && ! -L "$RCLONE_ROOT_CONFIG" && "$RCLONE_ROOT_CONFIG" != "$RCLONE_BOOT_CONFIG" ]]; then
+    if mv "$RCLONE_ROOT_CONFIG" "$RCLONE_BOOT_CONFIG" 2>/dev/null; then
+      return 0
+    fi
+    log_issue "ERROR: failed to move rclone runtime config to $RCLONE_BOOT_CONFIG"
+    return 1
+  fi
+
+  if [[ -f "$RCLONE_LEGACY_BOOT_CONFIG" ]]; then
+    if mv "$RCLONE_LEGACY_BOOT_CONFIG" "$RCLONE_BOOT_CONFIG" 2>/dev/null; then
+      return 0
+    fi
+    log_issue "ERROR: failed to move legacy rclone config to $RCLONE_BOOT_CONFIG"
+    return 1
+  fi
+
+  if [[ -f "$RCLONE_PLUGIN_BOOT_CONFIG" ]]; then
+    if cp -a -- "$RCLONE_PLUGIN_BOOT_CONFIG" "$RCLONE_BOOT_CONFIG" 2>/dev/null; then
+      return 0
+    fi
+    log_issue "ERROR: failed to copy plugin rclone config to $RCLONE_BOOT_CONFIG"
+    return 1
+  fi
+
+  if ! touch "$RCLONE_BOOT_CONFIG" 2>/dev/null; then
+    log_issue "ERROR: failed to initialize rclone config at $RCLONE_BOOT_CONFIG"
+    return 1
+  fi
 }
 
-link_rclone_config() {
-  local link_path="$1"
-  local link_label="$2"
-
-  if [[ -L "$link_path" ]]; then
+link_root_config_file() {
+  if [[ -L "$RCLONE_ROOT_CONFIG" ]]; then
     local link_target
-    link_target=$(readlink -f "$link_path" 2>/dev/null || readlink "$link_path" 2>/dev/null || true)
-    if [[ "$link_target" != "$RCLONE_BOOT_CONFIG" ]]; then
-      if [[ -f "$link_target" && ! -e "$RCLONE_BOOT_CONFIG" ]]; then
-        if ! cp -a -- "$link_target" "$RCLONE_BOOT_CONFIG"; then
-          log_issue "ERROR: failed to migrate $link_label from $link_target to $RCLONE_BOOT_CONFIG"
-          return
-        fi
-      elif [[ -f "$link_target" ]]; then
-        backup_rclone_config "$link_target" || log_issue "WARNING: continuing $link_label symlink migration without backup"
-      fi
+    link_target=$(readlink -f "$RCLONE_ROOT_CONFIG" 2>/dev/null || readlink "$RCLONE_ROOT_CONFIG" 2>/dev/null || true)
+    [[ "$link_target" == "$RCLONE_BOOT_CONFIG" ]] && return 0
+    rm -f "$RCLONE_ROOT_CONFIG" 2>/dev/null || true
+  elif [[ -e "$RCLONE_ROOT_CONFIG" ]]; then
+    rm -f "$RCLONE_ROOT_CONFIG" 2>/dev/null || true
+  fi
 
-      if rm -f "$link_path"; then
-        link_to_boot_config "$link_path" "$link_label" "update"
-      else
-        log_issue "ERROR: failed to update $link_label symlink to $RCLONE_BOOT_CONFIG"
-      fi
-    fi
-  elif [[ -f "$link_path" ]]; then
-    if [[ ! -e "$RCLONE_BOOT_CONFIG" ]]; then
-      if cp -a -- "$link_path" "$RCLONE_BOOT_CONFIG"; then
-        rm -f "$link_path"
-      else
-        log_issue "ERROR: failed to migrate $link_label to $RCLONE_BOOT_CONFIG"
-        return
-      fi
-    else
-      if backup_rclone_config "$link_path"; then
-        rm -f "$link_path"
-      else
-        log_issue "ERROR: leaving $link_label in place due to backup failure"
-        return
-      fi
-    fi
-
-    link_to_boot_config "$link_path" "$link_label" "create"
-  elif [[ ! -e "$link_path" ]]; then
-    link_to_boot_config "$link_path" "$link_label" "create"
+  if ! ln -s "$RCLONE_BOOT_CONFIG" "$RCLONE_ROOT_CONFIG" 2>/dev/null; then
+    log_issue "ERROR: failed to link rclone runtime config to $RCLONE_BOOT_CONFIG"
+    return 1
   fi
 }
 
-ensure_default_boot_config_in_non_plugin_mode() {
-  [[ "$RCLONE_USE_PLUGIN_CONFIG" == "true" ]] && return
+link_root_dir() {
+  local link_target
 
-  if [[ -L "$RCLONE_DEFAULT_BOOT_CONFIG" ]]; then
-    local link_target
-    link_target=$(readlink -f "$RCLONE_DEFAULT_BOOT_CONFIG" 2>/dev/null || readlink "$RCLONE_DEFAULT_BOOT_CONFIG" 2>/dev/null || true)
+  if [[ -L "$RCLONE_ROOT_DIR" ]]; then
+    link_target=$(readlink -f "$RCLONE_ROOT_DIR" 2>/dev/null || readlink "$RCLONE_ROOT_DIR" 2>/dev/null || true)
+    if [[ "$link_target" == "$RCLONE_BOOT_DIR" ]]; then
+      return 0
+    fi
+    rm -f "$RCLONE_ROOT_DIR" 2>/dev/null || true
+  fi
 
-    if rm -f "$RCLONE_DEFAULT_BOOT_CONFIG"; then
-      if [[ -f "$link_target" && "$link_target" != "$RCLONE_DEFAULT_BOOT_CONFIG" ]]; then
-        if cp -a -- "$link_target" "$RCLONE_DEFAULT_BOOT_CONFIG"; then
-          return
-        fi
-        log_issue "ERROR: failed to restore rclone default config from $link_target"
-      fi
-    else
-      log_issue "ERROR: failed to remove stale rclone default config symlink at $RCLONE_DEFAULT_BOOT_CONFIG"
-      return
+  if [[ ! -e "$RCLONE_ROOT_DIR" ]]; then
+    if ln -s "$RCLONE_BOOT_DIR" "$RCLONE_ROOT_DIR" 2>/dev/null; then
+      return 0
+    fi
+    log_issue "ERROR: failed to link rclone runtime dir to $RCLONE_BOOT_DIR"
+    return 1
+  fi
+
+  # If the runtime directory already contains extra files, preserve it and link the config file.
+  if [[ -z "$(find "$RCLONE_ROOT_DIR" -mindepth 1 -maxdepth 1 ! -name 'rclone.conf' -print -quit 2>/dev/null)" ]]; then
+    rm -f "$RCLONE_ROOT_CONFIG" 2>/dev/null || true
+    if rmdir "$RCLONE_ROOT_DIR" 2>/dev/null && ln -s "$RCLONE_BOOT_DIR" "$RCLONE_ROOT_DIR" 2>/dev/null; then
+      return 0
     fi
   fi
 
-  if [[ ! -e "$RCLONE_DEFAULT_BOOT_CONFIG" ]]; then
-    if [[ -f "$RCLONE_ROOT_CONFIG" && ! -L "$RCLONE_ROOT_CONFIG" ]]; then
-      if cp -a -- "$RCLONE_ROOT_CONFIG" "$RCLONE_DEFAULT_BOOT_CONFIG"; then
-        return
-      fi
-      log_issue "ERROR: failed to seed rclone default config from $RCLONE_ROOT_CONFIG"
-    fi
-
-    if ! touch "$RCLONE_DEFAULT_BOOT_CONFIG" 2>/dev/null; then
-      log_issue "ERROR: failed to initialize rclone default config at $RCLONE_DEFAULT_BOOT_CONFIG"
-    fi
-  fi
+  link_root_config_file
 }
 
 run_rclone_config_init() {
   ensure_paths || true
-
-  # Keep both persistent locations and root default path aligned.
-  if [[ "$RCLONE_USE_PLUGIN_CONFIG" == "true" ]]; then
-    link_rclone_config "$RCLONE_DEFAULT_BOOT_CONFIG" "rclone default config"
-  else
-    ensure_default_boot_config_in_non_plugin_mode
-  fi
-  link_rclone_config "$RCLONE_ROOT_CONFIG" "rclone root config"
+  promote_existing_root_dir || true
+  seed_boot_config || true
+  link_root_dir || true
 }
 
 run_rclone_config_init || log_issue "WARNING: rclone_config_init completed with non-fatal errors"
