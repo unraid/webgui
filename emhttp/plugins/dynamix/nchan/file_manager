@@ -1075,9 +1075,12 @@ while (true) {
         // TODO: Add "Overwrite existing files" option for extract
         // Check tar/unzip/7z/unrar options: tar has --skip-existing, unzip has -n (never overwrite), etc.
         // Let user decide whether to overwrite or skip existing files
-        
+
         $archive = $source[0];
         $dest = rtrim($target, '/');
+
+        exec('logger -t file_manager "extract start: archive=' . escapeshellarg($archive) . ', dest=' . escapeshellarg($dest) . '"');
+        exec('logger -t file_manager "extract start: quoted_archive=' . escapeshellarg(quoted($archive)) . ', quoted_dest=' . escapeshellarg(quoted($dest)) . '"');
 
         // Create destination directory if it doesn't exist
         exec("mkdir -p ".quoted($dest));
@@ -1105,7 +1108,9 @@ while (true) {
           $cmd .= "unzip ".quoted($archive)." 2>&1 | tee $status";
         }
         $cmd .= " & echo \$!";
+        exec('logger -t file_manager "extract cmd=' . escapeshellarg($cmd) . '"');
         exec($cmd, $pid);
+        exec('logger -t file_manager "extract pid=' . escapeshellarg(json_encode($pid)) . '"');
       }
       break;
     case 99: // kill running background process
