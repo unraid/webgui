@@ -1086,26 +1086,28 @@ while (true) {
         exec("mkdir -p ".quoted($dest));
 
         // Detect archive type and extract accordingly
+        // note: redirect to >$status 2>&1 (not tee) so PHP exec() only captures echo $! (the PID)
+        // using tee would pipe output back to PHP which blocks exec() until the process finishes
         $cmd = "cd ".quoted($dest)." && ";
         if (preg_match('/\.(tar\.gz|tgz)$/i', $archive)) {
-          $cmd .= "tar -xzvf ".quoted($archive)." 2>&1 | tee $status";
+          $cmd .= "tar -xzvf ".quoted($archive)." >$status 2>&1";
         } elseif (preg_match('/\.(tar\.bz2|tbz2)$/i', $archive)) {
-          $cmd .= "tar -xjvf ".quoted($archive)." 2>&1 | tee $status";
+          $cmd .= "tar -xjvf ".quoted($archive)." >$status 2>&1";
         } elseif (preg_match('/\.(tar\.xz|txz)$/i', $archive)) {
-          $cmd .= "tar -xJvf ".quoted($archive)." 2>&1 | tee $status";
+          $cmd .= "tar -xJvf ".quoted($archive)." >$status 2>&1";
         } elseif (preg_match('/\.(tar\.zst)$/i', $archive)) {
-          $cmd .= "tar -I zstd -xvf ".quoted($archive)." 2>&1 | tee $status";
+          $cmd .= "tar -I zstd -xvf ".quoted($archive)." >$status 2>&1";
         } elseif (preg_match('/\.tar$/i', $archive)) {
-          $cmd .= "tar -xvf ".quoted($archive)." 2>&1 | tee $status";
+          $cmd .= "tar -xvf ".quoted($archive)." >$status 2>&1";
         } elseif (preg_match('/\.zip$/i', $archive)) {
-          $cmd .= "unzip ".quoted($archive)." 2>&1 | tee $status";
+          $cmd .= "unzip ".quoted($archive)." >$status 2>&1";
         } elseif (preg_match('/\.7z$/i', $archive)) {
-          $cmd .= "7z x ".quoted($archive)." 2>&1 | tee $status";
+          $cmd .= "7z x ".quoted($archive)." >$status 2>&1";
         } elseif (preg_match('/\.rar$/i', $archive)) {
-          $cmd .= "unrar x ".quoted($archive)." 2>&1 | tee $status";
+          $cmd .= "unrar x ".quoted($archive)." >$status 2>&1";
         } else {
           // Try to detect by file command as fallback
-          $cmd .= "unzip ".quoted($archive)." 2>&1 | tee $status";
+          $cmd .= "unzip ".quoted($archive)." >$status 2>&1";
         }
         $cmd .= " & echo \$!";
         exec('logger -t file_manager "extract cmd=' . escapeshellarg($cmd) . '"');
