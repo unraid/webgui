@@ -22,22 +22,17 @@ function openOnboardingWizard() {
 </script>
 
 <form markdown="1" name="onboarding_wizard_settings">
-<div class="wizard-panel">
-  <div class="wizard-panel__body">
-    <div class="wizard-panel__copy">
-      <div class="wizard-panel__kicker">_(Setup Wizard)_</div>
-      <p class="wizard-panel__summary">_(Launch onboarding to customize your server and set up an internal boot drive)_.</p>
-      <?if (_var($var,'fsState')=="Started"):?>
-      <div class="wizard-panel__status warning"><i class="fa fa-warning"></i> _(Array must be stopped to open onboarding)_.</div>
-      <?else:?>
-      <div class="wizard-panel__status blue-text"><i class="fa fa-info-circle"></i> _(Available while the array is stopped)_.</div>
-      <?endif;?>
-    </div>
-
-    <div class="wizard-panel__actions">
-      <input type="button" value="_(Open Wizard)_" onclick="openOnboardingWizard()" <?if (_var($var,'fsState')=="Started"):?>disabled<?endif;?>>
-    </div>
-  </div>
+<div style="margin-top:1rem;max-width:64rem;padding:1.25rem 2rem;">
+  <p><strong>_(Setup Wizard)_</strong></p>
+  <p>_(Launch onboarding to customize your server and set up an internal boot drive)_.</p>
+  <?if (_var($var,'fsState')=="Started"):?>
+  <p class="warning"><i class="fa fa-warning"></i> _(Array must be stopped to open onboarding)_.</p>
+  <?else:?>
+  <p class="blue-text"><i class="fa fa-info-circle"></i> _(Available while the array is stopped)_.</p>
+  <?endif;?>
+  <p style="margin-top:1rem;margin-bottom:0;">
+    <input type="button" value="_(Open Wizard)_" onclick="openOnboardingWizard()" <?if (_var($var,'fsState')=="Started"):?>disabled<?endif;?>>
+  </p>
 </div>
 
 </form>
