@@ -400,7 +400,7 @@ docker_network_start(){
     SKIP_NETWORK=
     for CANDIDATE in $SUBNET; do
       if [[ -n ${USED_SUBNETS4[$CANDIDATE]} ]]; then
-        log "skipping network $NETWORK: IPv4 subnet $CANDIDATE overlaps with ${USED_SUBNETS4[$CANDIDATE]}"
+        log "skipping network $NETWORK: IPv4 subnet $CANDIDATE is already used by ${USED_SUBNETS4[$CANDIDATE]}"
         SKIP_NETWORK=1
         break
       fi
@@ -408,7 +408,7 @@ docker_network_start(){
     if [[ -z $SKIP_NETWORK ]]; then
       for CANDIDATE in $SUBNET6; do
         if [[ -n ${USED_SUBNETS6[$CANDIDATE]} ]]; then
-          log "skipping network $NETWORK: IPv6 subnet $CANDIDATE overlaps with ${USED_SUBNETS6[$CANDIDATE]}"
+          log "skipping network $NETWORK: IPv6 subnet $CANDIDATE is already used by ${USED_SUBNETS6[$CANDIDATE]}"
           SKIP_NETWORK=1
           break
         fi
