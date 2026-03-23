@@ -239,6 +239,45 @@ netrestore_add(){
   NETRESTORE[$NETWORK]+=$ENTRY
 }
 
+netrestore_connect(){
+  local NETWORK=$1
+  local CONTAINER=$2
+  local MY_TT=$3
+  local MY_MAC=$4
+  local MY_IP=
+  local MY_OPTS=
+  local IP=
+  local ENDPOINT_ID=
+
+  container_exist "$CONTAINER" || return 0
+  docker network inspect "$NETWORK" >/dev/null 2>&1 || return 0
+
+  if [[ -n ${REBUILD_CONTAINERS[$CONTAINER]} && ${PRIMARY_NETWORK[$CONTAINER]} == $NETWORK ]]; then
+    log "rebuild container $CONTAINER"
+    /usr/local/emhttp/plugins/dynamix.docker.manager/scripts/rebuild_container $CONTAINER
+    unset REBUILD_CONTAINERS[$CONTAINER]
+    return 0
+  fi
+
+  ENDPOINT_ID=$(docker inspect --format="{{with index .NetworkSettings.Networks \"$NETWORK\"}}{{.EndpointID}}{{end}}" "$CONTAINER" 2>/dev/null)
+  [[ -n $ENDPOINT_ID ]] && return 0
+
+  for IP in ${MY_TT//;/ }; do
+    [[ -n $IP ]] || continue
+    if [[ $IP =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+      MY_IP="$MY_IP --ip $IP"
+    elif [[ $IP =~ : ]]; then
+      MY_IP="$MY_IP --ip6 $IP"
+    else
+      log "skipping invalid stored IP for $CONTAINER on network $NETWORK: $IP"
+    fi
+  done
+
+  [[ -n $MY_MAC ]] && MY_OPTS="--driver-opt=com.docker.network.endpoint.macaddress=$MY_MAC"
+  log "connecting $CONTAINER to network $NETWORK"
+  docker network connect $MY_OPTS $MY_IP $NETWORK $CONTAINER >/dev/null
+}
+
 container_add_route(){
   local CT=($(docker inspect --format='{{.State.Pid}} {{.NetworkSettings.Networks}}' $1))
   local PID=${CT[0]}
@@ -279,7 +318,7 @@ docker_network_start(){
   done <<< $(ls --indicator-style=none $SYSTEM | grep -P '^(bond|eth|wlan)[0-9]+')
   if ! docker_running; then return 1; fi
   # get container settings for custom networks to reconnect later
-  declare -A NETRESTORE PRIMARY_NETWORK REBUILD_CONTAINERS USED_SUBNETS4 USED_SUBNETS6
+  declare -A NETRESTORE PRIMARY_NETWORK REBUILD_CONTAINERS USED_SUBNETS4 USED_SUBNETS6 RESTORED_NETWORKS
   for CONTAINER in $(docker container ls -a --format='{{.Names}}'); do
     # the file case (due to fat32) might be different so use find to match
     XMLFILE=$(find /boot/config/plugins/dockerMan/templates-user -maxdepth 1 -iname my-${CONTAINER}.xml)
@@ -455,27 +494,9 @@ docker_network_start(){
       # connect containers to this new network
       while IFS='|' read -r CONTAINER MY_TT MY_MAC; do
         [[ -n $CONTAINER ]] || continue
-        MY_IP=
-        MY_OPTS=
-        for IP in ${MY_TT//;/ }; do
-          [[ -n $IP ]] || continue
-          if [[ $IP =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-            MY_IP="$MY_IP --ip $IP"
-          elif [[ $IP =~ : ]]; then
-            MY_IP="$MY_IP --ip6 $IP"
-          else
-            log "skipping invalid stored IP for $CONTAINER on network $NETWORK: $IP"
-          fi
-        done
-        [[ -n $MY_MAC ]] && MY_OPTS="--driver-opt=com.docker.network.endpoint.macaddress=$MY_MAC"
-        log "connecting $CONTAINER to network $NETWORK"
-        docker network connect $MY_OPTS $MY_IP $NETWORK $CONTAINER >/dev/null
-        if [[ -n ${REBUILD_CONTAINERS[$CONTAINER]} && ${PRIMARY_NETWORK[$CONTAINER]} == $NETWORK ]]; then
-          log "rebuild container $CONTAINER"
-          /usr/local/emhttp/plugins/dynamix.docker.manager/scripts/rebuild_container $CONTAINER
-          unset REBUILD_CONTAINERS[$CONTAINER]
-        fi
+        netrestore_connect "$NETWORK" "$CONTAINER" "$MY_TT" "$MY_MAC"
       done <<< "${NETRESTORE[$NETWORK]}"
+      RESTORED_NETWORKS[$NETWORK]=1
       # hack to let containers talk to host
       if [[ $TYPE == br ]]; then
         SHIM=shim-$NETWORK
@@ -528,6 +549,13 @@ docker_network_start(){
         fi
       fi
     fi
+  done
+  for NETWORK in "${!NETRESTORE[@]}"; do
+    [[ -n ${RESTORED_NETWORKS[$NETWORK]} ]] && continue
+    while IFS='|' read -r CONTAINER MY_TT MY_MAC; do
+      [[ -n $CONTAINER ]] || continue
+      netrestore_connect "$NETWORK" "$CONTAINER" "$MY_TT" "$MY_MAC"
+    done <<< "${NETRESTORE[$NETWORK]}"
   done
 #  # create IPv6 forward accept rule
 #  if [[ $IPV6_FORWARD == accept ]]; then
