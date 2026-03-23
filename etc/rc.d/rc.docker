@@ -248,15 +248,19 @@ netrestore_connect(){
   local MY_OPTS=
   local IP=
   local ENDPOINT_ID=
+  local OUT=
 
   container_exist "$CONTAINER" || return 0
   docker network inspect "$NETWORK" >/dev/null 2>&1 || return 0
 
   if [[ -n ${REBUILD_CONTAINERS[$CONTAINER]} && ${PRIMARY_NETWORK[$CONTAINER]} == $NETWORK ]]; then
     log "rebuild container $CONTAINER"
-    /usr/local/emhttp/plugins/dynamix.docker.manager/scripts/rebuild_container $CONTAINER
-    unset REBUILD_CONTAINERS[$CONTAINER]
-    return 0
+    if OUT=$(/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/rebuild_container "$CONTAINER" 2>&1); then
+      unset REBUILD_CONTAINERS[$CONTAINER]
+      return 0
+    fi
+    log "failed to rebuild container $CONTAINER: $OUT"
+    return 1
   fi
 
   ENDPOINT_ID=$(docker inspect --format="{{with index .NetworkSettings.Networks \"$NETWORK\"}}{{.EndpointID}}{{end}}" "$CONTAINER" 2>/dev/null)
@@ -275,7 +279,10 @@ netrestore_connect(){
 
   [[ -n $MY_MAC ]] && MY_OPTS="--driver-opt=com.docker.network.endpoint.macaddress=$MY_MAC"
   log "connecting $CONTAINER to network $NETWORK"
-  docker network connect $MY_OPTS $MY_IP $NETWORK $CONTAINER >/dev/null
+  if ! OUT=$(docker network connect $MY_OPTS $MY_IP $NETWORK $CONTAINER 2>&1); then
+    log "failed to connect $CONTAINER to network $NETWORK: $OUT"
+    return 1
+  fi
 }
 
 container_add_route(){
@@ -340,18 +347,19 @@ docker_network_start(){
           REBUILD=1
         fi
       done
-      MY_NETWORK= MY_IP= MY_MAC=
+      MY_NETWORK= MY_IP= MY_MAC= TEMPLATE_MAC=
       while read_dom; do
         [[ $ENTITY == Network ]] && MY_NETWORK=$CONTENT
         [[ $ENTITY == MyIP ]] && MY_IP=${CONTENT// /,} && MY_IP=$(echo "$MY_IP" | tr -s "," ";")
       done <$XMLFILE
       # only restore valid networks
       if [[ -n $MY_NETWORK ]]; then
+        TEMPLATE_MAC=$(sed -nE 's@.*<ExtraParams>.*--mac-address(=|[[:space:]]+)([^ <]+).*@\2@p' "$XMLFILE" | head -n1)
         MY_MAC=$(docker inspect --format="{{with index .NetworkSettings.Networks \"$MY_NETWORK\"}}{{.MacAddress}}{{end}}" $CONTAINER 2>/dev/null)
-        [[ -n $MY_MAC ]] || MY_MAC=$(sed -nE 's@.*<ExtraParams>.*--mac-address(=|[[:space:]]+)([^ <]+).*@\2@p' "$XMLFILE" | head -n1)
+        [[ -n $MY_MAC ]] || MY_MAC=$TEMPLATE_MAC
         netrestore_add "$MY_NETWORK" "$CONTAINER" "$MY_IP" "$MY_MAC"
         PRIMARY_NETWORK[$CONTAINER]=$MY_NETWORK
-        [[ -n $REBUILD ]] && REBUILD_CONTAINERS[$CONTAINER]=1
+        [[ -n $REBUILD || -n $TEMPLATE_MAC ]] && REBUILD_CONTAINERS[$CONTAINER]=1
       fi
     fi
     # restore user defined networks
