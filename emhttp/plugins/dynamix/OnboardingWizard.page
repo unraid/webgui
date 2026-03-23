@@ -1,8 +1,7 @@
-Menu="Tools:30"
-Type="xmenu"
-Title="Onboarding Wizard"
+Menu="Wizards:1"
+Title="Onboarding"
 Icon="magic"
-Tag="map-signs"
+Tag="magic"
 ---
 <?php
 /* Copyright 2005-2025, Lime Technology
@@ -23,16 +22,22 @@ function openOnboardingWizard() {
 </script>
 
 <form markdown="1" name="onboarding_wizard_settings">
-_(Onboarding Wizard)_:
-: <span class="inline-block">
-  <input type="button" value="_(Show Onboarding Wizard)_" onclick="openOnboardingWizard()" <?if (_var($var,'fsState')=="Started"):?>disabled<?endif;?>>
-  <input type="button" value="_(Done)_" onclick="done()">
-  </span>
+<div class="wizard-panel">
+  <div class="wizard-panel__body">
+    <div class="wizard-panel__copy">
+      <div class="wizard-panel__kicker">_(Setup Wizard)_</div>
+      <p class="wizard-panel__summary">_(Launch onboarding to customize your server and set up an internal boot drive)_.</p>
+      <?if (_var($var,'fsState')=="Started"):?>
+      <div class="wizard-panel__status warning"><i class="fa fa-warning"></i> _(Array must be stopped to open onboarding)_.</div>
+      <?else:?>
+      <div class="wizard-panel__status blue-text"><i class="fa fa-info-circle"></i> _(Available while the array is stopped)_.</div>
+      <?endif;?>
+    </div>
 
-: _(Launch the onboarding wizard to customize your server and set up an internal boot drive)_.
-
-<?if (_var($var,'fsState')=="Started"):?>
-: <small>_(Array must be stopped to open the onboarding wizard)_.</small>
-<?endif;?>
+    <div class="wizard-panel__actions">
+      <input type="button" value="_(Open Wizard)_" onclick="openOnboardingWizard()" <?if (_var($var,'fsState')=="Started"):?>disabled<?endif;?>>
+    </div>
+  </div>
+</div>
 
 </form>
