@@ -267,12 +267,11 @@ docker_network_start(){
   done <<< $(ls --indicator-style=none $SYSTEM | grep -P '^(bond|eth|wlan)[0-9]+')
   if ! docker_running; then return 1; fi
   # get container settings for custom networks to reconnect later
-  declare -A NETRESTORE CTRESTORE
+  declare -A NETRESTORE
   for CONTAINER in $(docker container ls -a --format='{{.Names}}'); do
     # the file case (due to fat32) might be different so use find to match
     XMLFILE=$(find /boot/config/plugins/dockerMan/templates-user -maxdepth 1 -iname my-${CONTAINER}.xml)
     if [[ -n $XMLFILE ]]; then
-      REBUILD=
       MAIN=
       # update custom network reference (if changed)
       for NIC in $NICS; do
@@ -284,28 +283,24 @@ docker_network_start(){
         [[ $NIC == wlan0 && -n $MAIN ]] && continue
         if [[ -n $REF && $REF != $NIC ]]; then
           sed -ri "s/<Network>(br|bond|eth|wlan)$X(\.[0-9]+)?<\/Network>/<Network>$NIC\2<\/Network>/" $XMLFILE
-          # flag container for later rebuild
-          REBUILD=1
         fi
       done
-      MY_NETWORK= MY_IP=
+      MY_NETWORK= MY_IP= MY_MAC=
       while read_dom; do
         [[ $ENTITY == Network ]] && MY_NETWORK=$CONTENT
         [[ $ENTITY == MyIP ]] && MY_IP=${CONTENT// /,} && MY_IP=$(echo "$MY_IP" | tr -s "," ";")
       done <$XMLFILE
       # only restore valid networks
       if [[ -n $MY_NETWORK ]]; then
-        NETRESTORE[$MY_NETWORK]="$CONTAINER,$MY_IP ${NETRESTORE[$MY_NETWORK]}"
-        # save container name for later rebuild
-        CTRESTORE[$MY_NETWORK]=$REBUILD
+        MY_MAC=$(docker inspect --format="{{with index .NetworkSettings.Networks \"$MY_NETWORK\"}}{{.MacAddress}}{{end}}" $CONTAINER 2>/dev/null)
+        [[ -n $MY_MAC ]] || MY_MAC=$(sed -nE 's@.*<ExtraParams>.*--mac-address(=|[[:space:]]+)([^ <]+).*@\2@p' "$XMLFILE" | head -n1)
+        NETRESTORE[$MY_NETWORK]="$CONTAINER,$MY_IP,$MY_MAC ${NETRESTORE[$MY_NETWORK]}"
       fi
     fi
     # restore user defined networks
-    USER_NETWORKS=$(docker inspect --format='{{range $key,$value:=.NetworkSettings.Networks}}{{$key}};{{if $value.IPAMConfig}}{{if $value.IPAMConfig.IPv4Address}}{{$value.IPAMConfig.IPv4Address}}{{end}}{{if $value.IPAMConfig.IPv6Address}},{{$value.IPAMConfig.IPv6Address}}{{end}}{{end}} {{end}}' $CONTAINER)
-    for ROW in $USER_NETWORKS; do
-      ROW=(${ROW/;/ })
-      USER_NETWORK=${ROW[0]}
-      USER_IP=${ROW[1]/,/;}
+    USER_NETWORKS=$(docker inspect --format='{{range $key,$value:=.NetworkSettings.Networks}}{{printf "%s;%s;" $key $value.MacAddress}}{{if $value.IPAMConfig}}{{if $value.IPAMConfig.IPv4Address}}{{$value.IPAMConfig.IPv4Address}}{{end}}{{if $value.IPAMConfig.IPv6Address}},{{$value.IPAMConfig.IPv6Address}}{{end}}{{end}}{{println}}{{end}}' $CONTAINER)
+    while IFS=';' read -r USER_NETWORK USER_MAC USER_IP; do
+      USER_IP=${USER_IP//,/;}
       if [[ -n $USER_NETWORK && $USER_NETWORK != $MY_NETWORK ]]; then
         LABEL=${USER_NETWORK//[0-9.]/}
         IF_NO_PARTS=${USER_NETWORK#"$LABEL"}
@@ -316,9 +311,9 @@ docker_network_start(){
           USER_NETWORK=${USER_NETWORK/$LABEL/${PORT:0:-1}}
         fi
         log "container $CONTAINER has an additional network that will be restored: $USER_NETWORK"
-        NETRESTORE[$USER_NETWORK]="$CONTAINER,$USER_IP ${NETRESTORE[$USER_NETWORK]}"
+        NETRESTORE[$USER_NETWORK]="$CONTAINER,$USER_IP,$USER_MAC ${NETRESTORE[$USER_NETWORK]}"
       fi
-    done
+    done <<< "$USER_NETWORKS"
   done
   # detach custom networks
   for NIC in $NICS; do
@@ -417,19 +412,18 @@ docker_network_start(){
       docker network create -d $ATTACH $SUBNET $GATEWAY $SERVER $RANGE $SUBNET6 $GATEWAY6 -o parent=$VHOST $NETWORK | xargs docker network inspect -f "created network $ATTACH {{.Name}} with subnets: {{range .IPAM.Config}}{{.Subnet}}; {{end}}" 2>/dev/null | log
       # connect containers to this new network
       for CONNECT in ${NETRESTORE[$NETWORK]}; do
-        CONTAINER=${CONNECT%,*}
+        CONTAINER=${CONNECT%%,*}
         MY_TT=${CONNECT#*,}
+        MY_MAC=${MY_TT##*,}
+        MY_TT=${MY_TT%,*}
         MY_IP=
+        MY_OPTS=
         for IP in ${MY_TT//;/ }; do
           [[ $IP =~ ':' ]] && MY_IP="$MY_IP --ip6 $IP" || MY_IP="$MY_IP --ip $IP"
         done
+        [[ -n $MY_MAC ]] && MY_OPTS="--driver-opt=com.docker.network.endpoint.macaddress=$MY_MAC"
         log "connecting $CONTAINER to network $NETWORK"
-        docker network connect $MY_IP $NETWORK $CONTAINER >/dev/null
-        if [[ -n ${CTRESTORE[$NETWORK]} ]]; then
-          # rebuild the container to use changed network
-          log "rebuild container $CONTAINER"
-          /usr/local/emhttp/plugins/dynamix.docker.manager/scripts/rebuild_container $CONTAINER
-        fi
+        docker network connect $MY_OPTS $MY_IP $NETWORK $CONTAINER >/dev/null
       done
       # hack to let containers talk to host
       if [[ $TYPE == br ]]; then
