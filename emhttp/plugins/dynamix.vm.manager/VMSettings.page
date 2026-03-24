@@ -105,8 +105,6 @@ if (is_file('/boot/syslinux/syslinux.cfg')) {
     $bootenv           = 'grub';
 }
 $arrValidNetworks  = getValidNetworks();
-$pcie_acs_override = detect($bootcfg, $bootenv, 'pcie_acs_override');
-$vfio_allow_unsafe = detect($bootcfg, $bootenv, 'allow_unsafe_interrupts');
 $bgcolor           = $themeHelper->isLightTheme() ? '#f2f2f2' : '#1c1c1c'; // $themeHelper set in DefaultPageLayout.php
 $started           = $var['fsState'] == 'Started';
 $libvirt_up        = $libvirt_running == 'yes';
@@ -430,13 +428,7 @@ $(function(){
         if (!pattern.test($(this).val())) {$(this).css('color','red'); run = false;}
       }
     });
-<?if ($safemode):?>
     if (run) $("#settingsForm").submit();
-<?else:?>
-    if (run) $.post("/plugins/dynamix.vm.manager/include/VMajax.php", {action:'cmdlineoverride'}, function(data){
-      $("#settingsForm").submit();
-    });
-<?endif;?>
   });
 
   $("#mediadir").on("input change", function(){
@@ -575,7 +567,6 @@ $(function(){
       $("#winvirtio").prop("disabled", checked);
       $("#network").prop("disabled", checked);
       $("#hostshutdown").prop("disabled", checked);
-      $("#pcie_acs_override").prop("disabled", checked);
       $("#vm_shutdown_timeout").prop("disabled", checked);
       $("#applyBtn").val(checked ? "_(Delete)_" : "_(Apply)_").removeAttr('disabled');
     });
