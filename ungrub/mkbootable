@@ -78,10 +78,14 @@ install_grub() {
     --boot-directory="$BOOT" \
     --efi-directory="$BOOT/efi" \
     --modules="part_gpt zfs zfsinfo search search_fs_uuid configfile normal" \
-    --removable
+    --removable --no-nvram
 
   # BIOS install
-  grub-install --target=i386-pc "/dev/$DEV"
+  grub-install \
+    --target=i386-pc "/dev/$DEV" \
+    --boot-directory="$BOOT" \
+    --modules="part_gpt zfs zfsinfo search search_fs_uuid configfile normal" \
+    --no-floppy --no-rs-codes
 
   # we don't need this mounted anymore
   umount "$BOOT/efi"
