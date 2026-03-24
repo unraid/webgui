@@ -171,7 +171,7 @@ case 'is':
     if (isset($menu_entries[$bootentry])) {
       $menuentry = explode("\n", $menu_entries[$bootentry]);
       // find the current isolcpus setting
-      if (scan($menu_entries[$bootentry],'linux ')) {
+      if (scan($menu_entries[$bootentry],'linux ') || scan($menu_entries[$bootentry],'linuxefi ')) {
         foreach ($menuentry as $cmd) {
           if (preg_match('/\bisolcpus=([^ \t]+)/', $cmd, $match)) {
             $isol = $match[1];
