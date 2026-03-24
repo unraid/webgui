@@ -998,14 +998,34 @@ update_grub_entry() {
         $0 ~ /^menuentry / {
             in_section = (index($0, "\"" label "\"") > 0 || index($0, "'" label "'") > 0)
         }
+        function has_token(tokens, token, arr, i, n) {
+            n = split(tokens, arr, /[[:space:]]+/)
+            for (i = 1; i <= n; i++) {
+                if (arr[i] == token) {
+                    return 1
+                }
+            }
+            return 0
+        }
         {
             if (in_section && match($0, /^[ \t]*(linux|linuxefi)[ \t]+([^ \t]+)[ \t]*(.*)$/, m)) {
                 match($0, /^[ \t]*/)
                 indent = substr($0, RSTART, RLENGTH)
                 cmd = m[1]
                 kernel = m[2]
-                if (new_args != "") {
-                    print indent cmd " " kernel " " new_args
+                existing_args = m[3]
+                final_args = new_args
+
+                # Preserve entry selector flags so mode identity remains unchanged.
+                if (has_token(existing_args, "unraidguimode") && !has_token(final_args, "unraidguimode")) {
+                    final_args = "unraidguimode" ((final_args != "") ? " " final_args : "")
+                }
+                if (has_token(existing_args, "unraidsafemode") && !has_token(final_args, "unraidsafemode")) {
+                    final_args = "unraidsafemode" ((final_args != "") ? " " final_args : "")
+                }
+
+                if (final_args != "") {
+                    print indent cmd " " kernel " " final_args
                 } else {
                     print indent cmd " " kernel
                 }
