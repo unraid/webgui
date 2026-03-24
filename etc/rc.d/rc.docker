@@ -227,6 +227,64 @@ read_dom(){
   read -d \< ENTITY CONTENT
 }
 
+netrestore_add(){
+  local NETWORK=$1
+  local CONTAINER=$2
+  local IPS=$3
+  local MAC=$4
+  local ENTRY="${CONTAINER}|${IPS}|${MAC}"
+  if [[ -n ${NETRESTORE[$NETWORK]} ]]; then
+    NETRESTORE[$NETWORK]+=$'\n'
+  fi
+  NETRESTORE[$NETWORK]+=$ENTRY
+}
+
+netrestore_connect(){
+  local NETWORK=$1
+  local CONTAINER=$2
+  local MY_TT=$3
+  local MY_MAC=$4
+  local MY_IP=
+  local MY_OPTS=
+  local IP=
+  local ENDPOINT_ID=
+  local OUT=
+
+  container_exist "$CONTAINER" || return 0
+  docker network inspect "$NETWORK" >/dev/null 2>&1 || return 0
+
+  if [[ -n ${REBUILD_CONTAINERS[$CONTAINER]} && ${PRIMARY_NETWORK[$CONTAINER]} == $NETWORK ]]; then
+    log "rebuild container $CONTAINER"
+    if OUT=$(/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/rebuild_container "$CONTAINER" 2>&1); then
+      unset REBUILD_CONTAINERS[$CONTAINER]
+      return 0
+    fi
+    log "failed to rebuild container $CONTAINER: $OUT"
+    return 1
+  fi
+
+  ENDPOINT_ID=$(docker inspect --format="{{with index .NetworkSettings.Networks \"$NETWORK\"}}{{.EndpointID}}{{end}}" "$CONTAINER" 2>/dev/null)
+  [[ -n $ENDPOINT_ID ]] && return 0
+
+  for IP in ${MY_TT//;/ }; do
+    [[ -n $IP ]] || continue
+    if [[ $IP =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+      MY_IP="$MY_IP --ip $IP"
+    elif [[ $IP =~ : ]]; then
+      MY_IP="$MY_IP --ip6 $IP"
+    else
+      log "skipping invalid stored IP for $CONTAINER on network $NETWORK: $IP"
+    fi
+  done
+
+  [[ -n $MY_MAC ]] && MY_OPTS="--driver-opt=com.docker.network.endpoint.macaddress=$MY_MAC"
+  log "connecting $CONTAINER to network $NETWORK"
+  if ! OUT=$(docker network connect $MY_OPTS $MY_IP $NETWORK $CONTAINER 2>&1); then
+    log "failed to connect $CONTAINER to network $NETWORK: $OUT"
+    return 1
+  fi
+}
+
 container_add_route(){
   local CT=($(docker inspect --format='{{.State.Pid}} {{.NetworkSettings.Networks}}' $1))
   local PID=${CT[0]}
@@ -267,7 +325,7 @@ docker_network_start(){
   done <<< $(ls --indicator-style=none $SYSTEM | grep -P '^(bond|eth|wlan)[0-9]+')
   if ! docker_running; then return 1; fi
   # get container settings for custom networks to reconnect later
-  declare -A NETRESTORE CTRESTORE
+  declare -A NETRESTORE PRIMARY_NETWORK REBUILD_CONTAINERS USED_SUBNETS4 USED_SUBNETS6 RESTORED_NETWORKS
   for CONTAINER in $(docker container ls -a --format='{{.Names}}'); do
     # the file case (due to fat32) might be different so use find to match
     XMLFILE=$(find /boot/config/plugins/dockerMan/templates-user -maxdepth 1 -iname my-${CONTAINER}.xml)
@@ -279,33 +337,36 @@ docker_network_start(){
         [[ ${NIC:0:3} == eth ]] && NIC=$(active $NIC)
         X=${NIC//[^0-9]/}
         REF=$(grep -Pom1 "<Network>\K(br|bond|eth|wlan)$X" $XMLFILE)
-        [[ $X == 0 && ! $(carrier $NIC 1) ]] && continue
+        if [[ $X == 0 ]] && ! carrier $NIC 1; then
+          continue
+        fi
         [[ $X == 0 && $NIC != wlan0 ]] && MAIN=$NIC
         [[ $NIC == wlan0 && -n $MAIN ]] && continue
         if [[ -n $REF && $REF != $NIC ]]; then
           sed -ri "s/<Network>(br|bond|eth|wlan)$X(\.[0-9]+)?<\/Network>/<Network>$NIC\2<\/Network>/" $XMLFILE
-          # flag container for later rebuild
           REBUILD=1
         fi
       done
-      MY_NETWORK= MY_IP=
+      MY_NETWORK= MY_IP= MY_MAC= TEMPLATE_MAC= CUSTOM_PRIMARY=
       while read_dom; do
         [[ $ENTITY == Network ]] && MY_NETWORK=$CONTENT
         [[ $ENTITY == MyIP ]] && MY_IP=${CONTENT// /,} && MY_IP=$(echo "$MY_IP" | tr -s "," ";")
       done <$XMLFILE
       # only restore valid networks
       if [[ -n $MY_NETWORK ]]; then
-        NETRESTORE[$MY_NETWORK]="$CONTAINER,$MY_IP ${NETRESTORE[$MY_NETWORK]}"
-        # save container name for later rebuild
-        CTRESTORE[$MY_NETWORK]=$REBUILD
+        [[ $MY_NETWORK =~ ^(br|bond|eth|wlan)[0-9]+(\.[0-9]+)?$ ]] && CUSTOM_PRIMARY=1
+        TEMPLATE_MAC=$(sed -nE 's@.*<ExtraParams>.*--mac-address(=|[[:space:]]+)([^ <]+).*@\2@p' "$XMLFILE" | head -n1)
+        MY_MAC=$(docker inspect --format="{{with index .NetworkSettings.Networks \"$MY_NETWORK\"}}{{.MacAddress}}{{end}}" $CONTAINER 2>/dev/null)
+        [[ -n $MY_MAC ]] || MY_MAC=$TEMPLATE_MAC
+        netrestore_add "$MY_NETWORK" "$CONTAINER" "$MY_IP" "$MY_MAC"
+        PRIMARY_NETWORK[$CONTAINER]=$MY_NETWORK
+        [[ -n $REBUILD || (-n $TEMPLATE_MAC && -n $CUSTOM_PRIMARY) ]] && REBUILD_CONTAINERS[$CONTAINER]=1
       fi
     fi
     # restore user defined networks
-    USER_NETWORKS=$(docker inspect --format='{{range $key,$value:=.NetworkSettings.Networks}}{{$key}};{{if $value.IPAMConfig}}{{if $value.IPAMConfig.IPv4Address}}{{$value.IPAMConfig.IPv4Address}}{{end}}{{if $value.IPAMConfig.IPv6Address}},{{$value.IPAMConfig.IPv6Address}}{{end}}{{end}} {{end}}' $CONTAINER)
-    for ROW in $USER_NETWORKS; do
-      ROW=(${ROW/;/ })
-      USER_NETWORK=${ROW[0]}
-      USER_IP=${ROW[1]/,/;}
+    USER_NETWORKS=$(docker inspect --format='{{range $key,$value:=.NetworkSettings.Networks}}{{printf "%s;%s;" $key $value.MacAddress}}{{if $value.IPAMConfig}}{{if $value.IPAMConfig.IPv4Address}}{{$value.IPAMConfig.IPv4Address}}{{end}}{{if $value.IPAMConfig.IPv6Address}},{{$value.IPAMConfig.IPv6Address}}{{end}}{{end}}{{println}}{{end}}' $CONTAINER)
+    while IFS=';' read -r USER_NETWORK USER_MAC USER_IP; do
+      USER_IP=${USER_IP//,/;}
       if [[ -n $USER_NETWORK && $USER_NETWORK != $MY_NETWORK ]]; then
         LABEL=${USER_NETWORK//[0-9.]/}
         IF_NO_PARTS=${USER_NETWORK#"$LABEL"}
@@ -316,9 +377,9 @@ docker_network_start(){
           USER_NETWORK=${USER_NETWORK/$LABEL/${PORT:0:-1}}
         fi
         log "container $CONTAINER has an additional network that will be restored: $USER_NETWORK"
-        NETRESTORE[$USER_NETWORK]="$CONTAINER,$USER_IP ${NETRESTORE[$USER_NETWORK]}"
+        netrestore_add "$USER_NETWORK" "$CONTAINER" "$USER_IP" "$USER_MAC"
       fi
-    done
+    done <<< "$USER_NETWORKS"
   done
   # detach custom networks
   for NIC in $NICS; do
@@ -384,6 +445,24 @@ docker_network_start(){
       GATEWAY6=DOCKER_GATEWAY6_$DEVICE
       GATEWAY6=${!GATEWAY6}
     fi
+    SKIP_NETWORK=
+    for CANDIDATE in $SUBNET; do
+      if [[ -n ${USED_SUBNETS4[$CANDIDATE]} ]]; then
+        log "skipping network $NETWORK: IPv4 subnet $CANDIDATE is already used by ${USED_SUBNETS4[$CANDIDATE]}"
+        SKIP_NETWORK=1
+        break
+      fi
+    done
+    if [[ -z $SKIP_NETWORK ]]; then
+      for CANDIDATE in $SUBNET6; do
+        if [[ -n ${USED_SUBNETS6[$CANDIDATE]} ]]; then
+          log "skipping network $NETWORK: IPv6 subnet $CANDIDATE is already used by ${USED_SUBNETS6[$CANDIDATE]}"
+          SKIP_NETWORK=1
+          break
+        fi
+      done
+    fi
+    [[ -n $SKIP_NETWORK ]] && continue
     # set parameters for custom network creation
     [[ -n $SUBNET ]] && SET4=1 || SET4=0
     [[ -n $SUBNET6 ]] && SET6=1 || SET6=0
@@ -415,22 +494,18 @@ docker_network_start(){
       log "Processing... $NETWORK"
       docker network rm $NETWORK &>/dev/null
       docker network create -d $ATTACH $SUBNET $GATEWAY $SERVER $RANGE $SUBNET6 $GATEWAY6 -o parent=$VHOST $NETWORK | xargs docker network inspect -f "created network $ATTACH {{.Name}} with subnets: {{range .IPAM.Config}}{{.Subnet}}; {{end}}" 2>/dev/null | log
-      # connect containers to this new network
-      for CONNECT in ${NETRESTORE[$NETWORK]}; do
-        CONTAINER=${CONNECT%,*}
-        MY_TT=${CONNECT#*,}
-        MY_IP=
-        for IP in ${MY_TT//;/ }; do
-          [[ $IP =~ ':' ]] && MY_IP="$MY_IP --ip6 $IP" || MY_IP="$MY_IP --ip $IP"
-        done
-        log "connecting $CONTAINER to network $NETWORK"
-        docker network connect $MY_IP $NETWORK $CONTAINER >/dev/null
-        if [[ -n ${CTRESTORE[$NETWORK]} ]]; then
-          # rebuild the container to use changed network
-          log "rebuild container $CONTAINER"
-          /usr/local/emhttp/plugins/dynamix.docker.manager/scripts/rebuild_container $CONTAINER
-        fi
+      for CANDIDATE in ${SUBNET//--subnet=/ }; do
+        [[ -n $CANDIDATE ]] && USED_SUBNETS4[$CANDIDATE]=$NETWORK
       done
+      for CANDIDATE in ${SUBNET6//--ipv6 / }; do
+        [[ $CANDIDATE == --subnet=* ]] && USED_SUBNETS6[${CANDIDATE#--subnet=}]=$NETWORK
+      done
+      # connect containers to this new network
+      while IFS='|' read -r CONTAINER MY_TT MY_MAC; do
+        [[ -n $CONTAINER ]] || continue
+        netrestore_connect "$NETWORK" "$CONTAINER" "$MY_TT" "$MY_MAC"
+      done <<< "${NETRESTORE[$NETWORK]}"
+      RESTORED_NETWORKS[$NETWORK]=1
       # hack to let containers talk to host
       if [[ $TYPE == br ]]; then
         SHIM=shim-$NETWORK
@@ -483,6 +558,13 @@ docker_network_start(){
         fi
       fi
     fi
+  done
+  for NETWORK in "${!NETRESTORE[@]}"; do
+    [[ -n ${RESTORED_NETWORKS[$NETWORK]} ]] && continue
+    while IFS='|' read -r CONTAINER MY_TT MY_MAC; do
+      [[ -n $CONTAINER ]] || continue
+      netrestore_connect "$NETWORK" "$CONTAINER" "$MY_TT" "$MY_MAC"
+    done <<< "${NETRESTORE[$NETWORK]}"
   done
 #  # create IPv6 forward accept rule
 #  if [[ $IPV6_FORWARD == accept ]]; then
