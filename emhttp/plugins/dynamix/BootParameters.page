@@ -1237,7 +1237,24 @@ function createEntryContent(entry, showApply) {
                 const indent = match ? match[1] : '  ';
                 const cmd = match ? match[2] : 'linux';
                 const kernel = match ? match[3] : '/bzimage';
-                const args = proposedParams.length > 0 ? ' ' + proposedParams.join(' ') : '';
+                const existingArgs = match ? match[4] : '';
+                const modeFlags = [];
+                if (/\bunraidguimode\b/i.test(existingArgs)) {
+                    modeFlags.push('unraidguimode');
+                }
+                if (/\bunraidsafemode\b/i.test(existingArgs)) {
+                    modeFlags.push('unraidsafemode');
+                }
+                const mergedArgs = [];
+                const seenArgs = {};
+                modeFlags.concat(proposedParams).forEach(function(arg) {
+                    const key = (arg || '').toLowerCase();
+                    if (!seenArgs[key]) {
+                        seenArgs[key] = true;
+                        mergedArgs.push(arg);
+                    }
+                });
+                const args = mergedArgs.length > 0 ? ' ' + mergedArgs.join(' ') : '';
                 newAppend = indent + cmd + ' ' + kernel + args;
             } else {
                 newAppend = '  append initrd=/bzroot' + (proposedParams.length > 0 ? ' ' + proposedParams.join(' ') : '');
