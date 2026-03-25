@@ -92,25 +92,19 @@ docker_read_options(){
     . $DOCKER_CFG
   fi
 
-  # set the image storage backend based on the configured docker backingfs option
-  case $(awk -F'"' '/^DOCKER_BACKINGFS=/{print $2}' $DOCKER_CFG 2>/dev/null) in
-    overlay2)
+  # set storage driver to overlay2 if config value is found, otherwise fall back to native FS driver
+  if [[ $(awk -F'"' '/^DOCKER_BACKINGFS=/{print $2}' $DOCKER_CFG 2>/dev/null) == overlay2 ]]; then
+    DOCKER_OPTS="$DOCKER_OPTS --storage-driver=overlay2"
+  else
+    BACKINGFS=$(findmnt --output FSTYPE --noheadings $DOCKER_ROOT)
+    if [[ $BACKINGFS == btrfs ]]; then
+      DOCKER_OPTS="$DOCKER_OPTS --storage-driver=btrfs"
+    elif [[ $BACKINGFS == xfs ]]; then
       DOCKER_OPTS="$DOCKER_OPTS --storage-driver=overlay2"
-      ;;
-    containerd)
-      DOCKER_OPTS="$DOCKER_OPTS --feature containerd-snapshotter=true"
-      ;;
-    *)
-      BACKINGFS=$(findmnt --output FSTYPE --noheadings $DOCKER_ROOT)
-      if [[ $BACKINGFS == btrfs ]]; then
-        DOCKER_OPTS="$DOCKER_OPTS --storage-driver=btrfs"
-      elif [[ $BACKINGFS == xfs ]]; then
-        DOCKER_OPTS="$DOCKER_OPTS --storage-driver=overlay2"
-      elif [[ $BACKINGFS == zfs ]]; then
-        DOCKER_OPTS="$DOCKER_OPTS --storage-driver=zfs"
-      fi
-      ;;
-  esac
+    elif [[ $BACKINGFS == zfs ]]; then
+      DOCKER_OPTS="$DOCKER_OPTS --storage-driver=zfs"
+    fi
+  fi
 
   # Less verbose logging by default
   DOCKER_OPTS="--log-level=fatal $DOCKER_OPTS"
