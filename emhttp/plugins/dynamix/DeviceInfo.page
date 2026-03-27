@@ -399,6 +399,9 @@ function selectDiskFsProfileZFS(slots,init,subpool) {
     selectDiskFsWidthZFS(slots,false);
   });
 }
+var isDedicatedBootPool = <?= $isDedicatedBootPool ? 'true' : 'false' ?>;
+var fsTypeDisabledByServer = <?= $fsTypeDisabled ? 'true' : 'false' ?>;
+var fsProfileDisabledByServer = <?= $fsProfileImmutable ? 'true' : 'false' ?>;
 /* called upon page load (init==true) and when user changes file system type (init==false) */
 function selectDiskFsProfile(init) {
   var t = init ? null : 'slow';
@@ -416,6 +419,10 @@ function selectDiskFsProfile(init) {
   } else {
     fsType = 'zfs';
   }
+
+  $('#diskFsType').prop('disabled', fsTypeDisabledByServer || isDedicatedBootPool);
+  $('#diskFsProfile').prop('disabled', fsProfileDisabledByServer || isDedicatedBootPool);
+  $('#diskFsWidth').prop('disabled', fsProfileDisabledByServer || isDedicatedBootPool);
 
   if (slots == 1 || fsType == 'auto') {
     $('#profile').hide(t);
@@ -450,24 +457,27 @@ function selectDiskFsProfile(init) {
     selectDiskFsProfileEXFAT();
   }
 
-  if (subpool != '' || fsType == 'auto' || fsType.indexOf('xfs') != -1 || fsType.indexOf('ext') != -1 || fsType.indexOf('ntfs') != -1 || fsType.indexOf('exfat') != -1) {
+  var compressionDisabled = (subpool != '' || fsType == 'auto' || fsType.indexOf('xfs') != -1 || fsType.indexOf('ext') != -1 || fsType.indexOf('ntfs') != -1 || fsType.indexOf('exfat') != -1);
+  if (compressionDisabled) {
     $('#compression').hide(t);
-    $('#diskCompression').prop('disabled',true);
+    $('#diskCompression').prop('disabled', compressionDisabled || isDedicatedBootPool);
   } else {
     $('#compression').show(t);
-    $('#diskCompression').prop('disabled',(fsStatus == 'Mounted'));
+    $('#diskCompression').prop('disabled', (fsStatus == 'Mounted') || isDedicatedBootPool);
   }
 
 <?if (diskType('Data') || isSubpool($name)):?>
   $('#autotrim').hide(t);
-  $('#diskAutotrim').prop('disabled',true);
+  var autotrimDisabled = true;
+  $('#diskAutotrim').prop('disabled', autotrimDisabled || isDedicatedBootPool);
 <?else:?>
   if (fsType == 'auto') {
     $('#autotrim').hide(t);
-    $('#diskAutotrim').prop('disabled',true);
+    var autotrimDisabled = true;
+    $('#diskAutotrim').prop('disabled', autotrimDisabled || isDedicatedBootPool);
   } else {
     $('#autotrim').show(t);
-    $('#diskAutotrim').prop('disabled',(fsStatus == 'Mounted'));
+    $('#diskAutotrim').prop('disabled', (fsStatus == 'Mounted') || isDedicatedBootPool);
   }
 <?endif;?>
 }
