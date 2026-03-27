@@ -40,6 +40,8 @@ function hasSubpools($name)
     return false;
 }
 $fsTypeDisabled = (_var($disk, 'fsType') == 0);
+$diskCompressionDisabled = false;
+$diskAutotrimDisabled = false;
 if (_var($disk,'type')== "Boot") {
     $fsTypeImmutable = true;
     $fsProfileImmutable = true;
@@ -53,6 +55,8 @@ if (_var($disk,'type')== "Boot") {
 }
   if ($isDedicatedBootPool) {
     $fsTypeDisabled = true;
+    $diskCompressionDisabled = true;
+    $diskAutotrimDisabled = true;
   }
 
 foreach ($disks as $sheet) {
@@ -949,7 +953,7 @@ _(Allocation profile)_:
 </div>
 <div markdown="1" id="compression">
 _(Compression)_:
-: <select id="diskCompression" name="diskCompression.<?=_var($disk, 'idx', 0)?>">
+: <select id="diskCompression" name="diskCompression.<?=_var($disk, 'idx', 0)?>" <?=disabled_if($diskCompressionDisabled)?>>
   <?=mk_option(_var($disk, 'compression'), "off", _('Off'))?>
   <?=mk_option(_var($disk, 'compression'), "on", _('On'))?>
   </select>
@@ -958,7 +962,7 @@ _(Compression)_:
 </div>
 <div markdown="1" id="autotrim">
 _(Autotrim)_:
-: <select id="diskAutotrim" name="diskAutotrim.<?=_var($disk, 'idx', 0)?>">
+: <select id="diskAutotrim" name="diskAutotrim.<?=_var($disk, 'idx', 0)?>" <?=disabled_if($diskAutotrimDisabled)?>>
   <?=mk_option(_var($disk, 'autotrim'), "on", _('On'))?>
   <?=mk_option(_var($disk, 'autotrim'), "off", _('Off'))?>
   </select>
