@@ -25,6 +25,7 @@ $events     = explode('|', $disk['smEvents'] ?? $var['smEvents'] ?? $numbers);
 $mode       = ['Disabled','Hourly','Daily','Weekly','Monthly'];
 $days       = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 $sheets     = [];
+$isDedicatedBootPool = (_var($disk,'type') === 'Cache' && strtolower((string)_var($disk,'bootPool','no')) === 'dedicated');
 $i = $n     = 0;
 
 function hasSubpools($name)
@@ -50,6 +51,9 @@ if (_var($disk,'type')== "Boot") {
     $fsTypeImmutable = true;
     $fsProfileImmutable = !(_var($var, 'fsState') == 'Stopped' && empty(_var($disk, 'fsGroups', '1')));
 }
+  if ($isDedicatedBootPool) {
+    $fsTypeDisabled = true;
+  }
 
 foreach ($disks as $sheet) {
     if (_var($sheet, 'type') == "Flash" || _var($sheet, 'color') == "grey-off" || empty($sheet['name'])) {
@@ -1011,7 +1015,7 @@ _(Critical disk utilization threshold)_ (%):
   <?endif;?>
   <?if (isPool($name) && isSubpool($name)===false):?>
     <?if (_var($var,'fsState')=="Stopped" || (_var($var,'fsState')=="Started" && _var($var,'startMode')!="Normal")): $erasable=true; endif;?>
-    <input type="button" id="eraseButton" value="_(Erase Pool)_" onclick="eraseDisk()"<?=$erasable ? '' : ' disabled'?>>
+    <input type="button" id="eraseButton" value="_(Erase Pool)_" onclick="eraseDisk()"<?=($erasable && !$isDedicatedBootPool) ? '' : ' disabled'?>>
     <?if (_var($var,'fsState')=="Stopped" && !$poolBootSizeLocked): $removeable=true; endif;?>
     <input type="button" id="removeButton" value="_(Remove Pool)_" onclick="removePool()"<?=$removeable ? '' : ' disabled'?>>
   <?endif;?>
