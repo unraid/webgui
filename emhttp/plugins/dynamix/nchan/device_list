@@ -1268,7 +1268,7 @@ while (true) {
         $poolLink = "<a href=\"$poolDeviceUrl\">"._($poolLabel,3)."</a>";
         $flashWarn = flash_smb_warning_html(_var($bootDisk,'name',''));
         $bootSummaryName = $bootIcon.$bootLink.$flashWarn;
-        $dataSummaryName = $poolIcon.$poolLink;
+        $dataSummaryName = $poolLink;
         $bootFsInfo = get_boot_pool_fs_info($Boot, $bootPoolName);
         $bootFsType = _var($bootDisk,'fsType','') ?: _var($bootFsInfo,'fsType','');
         $bootFsStatus = _var($bootDisk,'fsStatus','') ?: _var($bootFsInfo,'fsStatus','');
@@ -1312,7 +1312,7 @@ while (true) {
           $dataMetrics,
           $pool,
           $poolstatus,
-          empty($bootDisk),
+          true,
           [],
           true,
           '',
