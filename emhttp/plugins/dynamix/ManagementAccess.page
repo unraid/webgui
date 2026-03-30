@@ -142,11 +142,6 @@ if ($cert3Present) {
     $cert3Expires = exec("/usr/bin/openssl x509 -in $cert3File -noout -text | sed -n -e 's/^.*Not After : //p'");
 }
 
-// Note: this disables FQDN6 urls since they are not supported by myunraid.net DNS currently
-if (!empty($nginx['NGINX_LANFQDN6'])) {
-    unset($nginx['NGINX_LANFQDN6']);
-}
-
 $http_port       = _var($var, 'PORT', '80') != '80' ? ":{$var['PORT']}" : '';
 $https_port      = _var($var, 'PORTSSL', '443') != '443' ? ":{$var['PORTSSL']}" : '';
 $http_ip_url     = 'http://'._var($nginx, 'NGINX_LANIP').$http_port.'/';
@@ -224,9 +219,8 @@ foreach ($nginx as $key => $host) {
     if (strpos($key, 'FQDN') === false) {
         continue;
     }
-    // Extract the interface from the key, e.g., 'NGINX_LANFQDN' -> 'LAN', 'NGINX_WANFQDN' -> 'WAN', NGINX_WG0FQDN -> WG, NGINX_TAILSCALE1FQDN -> TAILSCALE
-    // Note: this specifically excludes FQDN6 urls since they are not supported by myunraid.net DNS currently
-    if (preg_match('/^NGINX_([A-Z]+)(\d*)FQDN$/', $key, $matches)) {
+    // Extract the interface from the key, e.g., 'NGINX_LANFQDN' -> 'LAN', 'NGINX_WANFQDN' -> 'WAN', NGINX_WG0FQDN -> WG, NGINX_TAILSCALE1FQDN6 -> TAILSCALE
+    if (preg_match('/^NGINX_([A-Z]+)(\d*)FQDN6?$/', $key, $matches)) {
         $interface = $matches[1]; // Interface type (LAN, WAN, WG, TAILSCALE, etc.)
         // ignore the WAN interface because we don't have access to the WANPORT here
         if ($interface == "WAN") {
