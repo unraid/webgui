@@ -277,6 +277,12 @@ if /bin/mountpoint -q /boot-transfer ; then
     --exclude='/make_bootable*' \
     --exclude='/syslinux' \
     /boot/ /boot-transfer 
+  
+  #Copy historical syslinux.cfg
+  if [[ -r /boot/syslinux/syslinux.cfg ]]; then
+    /bin/cp -f /boot/syslinux/syslinux.cfg /boot-transfer/config/pre-internal-syslinux.old
+  fi
+
   log "sync"
   /bin/sync
   if /bin/mountpoint -q /boot-transfer/efi ; then
