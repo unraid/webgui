@@ -1172,6 +1172,10 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                 <?
                     $poolsandboot = array_merge($pools, $bootpools );
                     foreach ($poolsandboot as $pool):
+                  $poolDisk = $disks[$pool] ?? [];
+                  $poolType = strtolower((string)_var($poolDisk,'type',''));
+                  $bootPoolMode = strtolower((string)_var($poolDisk,'bootPool','no'));
+                  if ($poolType === 'cache' && $bootPoolMode === 'dedicated') continue;
                     $cache = array_filter(array_merge(cache_filter($disks)),function($disk) use ($pool){return prefix($disk['name'])==$pool;});
                     $boot= array_filter(array_merge(boot_filter($disks)),function($disk) use ($pool){return prefix($disk['name'])==$pool;});
                     $power = _var($display,'power') && in_array('nvme',array_column($cache,'transport')) ? ' / '._('Power') : '';

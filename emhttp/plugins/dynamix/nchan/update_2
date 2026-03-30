@@ -374,6 +374,9 @@ while (true) {
 
 
   foreach (array_merge(pools_filter($disks),flash_filter($disks)) as $pool) {
+    $poolTypeRaw = strtolower((string)_var($disks[$pool],'type',''));
+    $bootPoolMode = strtolower((string)_var($disks[$pool],'bootPool','no'));
+    if ($poolTypeRaw === 'cache' && $bootPoolMode === 'dedicated') continue;
     if (empty($disks[$pool]['devices'])) continue;
     if (in_array(_var($disks[$pool],'fsType'), ['zfs','btrfs','luks:zfs','luks:btrfs']) && !empty($poolstatus['pools'][$pool])) {
       $status = $poolstatus['pools'][$pool]['overall_status'] ?? 'UNKNOWN';
