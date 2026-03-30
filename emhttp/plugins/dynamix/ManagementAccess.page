@@ -67,7 +67,6 @@ function acceptableCert($certFile, $hostname, $expectedURL)
 $tasks       = find_tasks();
 $nginx       = (array)@parse_ini_file('/var/local/emhttp/nginx.ini');
 $addr        = _var($nginx, 'NGINX_LANIP') ?: _var($nginx, 'NGINX_LANIP6');
-$warnipv6    = !empty(_var($nginx, 'NGINX_LANIP6')) || !empty(_var($nginx, 'NGINX_WANIP6')) || (strpos(_var($nginx, 'NGINX_BIND'), ':') !== false);
 $keyfile     = empty(_var($var, 'regFILE')) ? false : @file_get_contents(_var($var, 'regFILE'));
 $cert2Issuer = '';
 $isWildcardCert = false;
@@ -527,7 +526,7 @@ _(Unraid Let's Encrypt certificate)_:
 : <?=$cert2File?>
 
 _(Certificate URL)_:
-: <?="<a class='localURL' href='https://$subject2URL$https_port'>$cert2Subject</a>"?><?php if ($warnipv6): ?> _((does not support IPv6 addresses))_<?php endif; ?>
+: <?="<a class='localURL' href='https://$subject2URL$https_port'>$cert2Subject</a>"?>
 
 _(Certificate issuer)_:
 : <?=$cert2Issuer?>
