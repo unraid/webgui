@@ -83,7 +83,7 @@ function data_only($disk) {
 }
 
 function cache_only($disk) {
-  return _var($disk,'type') == 'Cache';
+  return _var($disk,'type') == 'Cache' && _var($disk, 'bootPool') != 'dedicated';
 }
 
 function boot_only($disk) {
