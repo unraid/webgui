@@ -660,7 +660,7 @@ build_ssl(){
   # define the default URL used to access the server
   if [[ $USE_SSL == auto ]]; then
     [[ -n $LANIP && $(ipv $LANIP) == 4 ]] && DEFAULTURL="https://$LANFQDN$PORTSSL_URL"
-    [[ -n $LANIP6 ]] && DEFAULTURL="https://$LANFQDN6$PORTSSL_URL"
+    [[ -n $LANIP6 && -n $LANFQDN6 && $(ipv $LANIP6) == 6 ]] && DEFAULTURL="https://$LANFQDN6$PORTSSL_URL"
   elif [[ $USE_SSL == yes ]]; then
     DEFAULTURL="https://$LANMDNS$PORTSSL_URL"
   else
