@@ -613,11 +613,12 @@ class DockerUpdate{
 		$DockerClient = new DockerClient();
 		$inspect      = $DockerClient->getDockerJSON('/images/'.$image.'/json');
 		if (empty($inspect['RepoDigests'])) return null;
-
-		$shaPos = strpos($inspect['RepoDigests'][0], '@sha256:');
+		
+		$repoDigest = $inspect['RepoDigests'][array_key_last($inspect['RepoDigests'])];
+		$shaPos = strpos($repoDigest, '@sha256:');
 		if ($shaPos === false) return null;
 
-		return substr($inspect['RepoDigests'][0], $shaPos + 1);
+		return substr($repoDigest, $shaPos + 1);
 	}
 
 	public function setUpdateStatus($image, $version) {
@@ -965,11 +966,22 @@ class DockerClient {
 		if (is_array($this::$containersCache)) return $this::$containersCache;
 		$this::$containersCache = [];
 		foreach ($this->getDockerJSON("/containers/json?all=1") as $ct) {
+			if (!is_array($ct) || empty($ct['Id'])) {
+				continue;
+			}
+			// Docker can leave stale "dead" entries after shutdown races; filter them from the UI list.
+			if (($ct['State'] ?? '') === 'dead' || stripos($ct['Status'] ?? '', 'dead') === 0) {
+				continue;
+			}
 			$info = $this->getContainerDetails($ct['Id']);
+			// If inspect fails for a stale entry, skip it from the UI list.
+			if (empty($info) || !is_array($info) || !empty($info['message']) || empty($info['Config']) || empty($info['State'])) {
+				continue;
+			}
 			$c = [];
 			$c['Image']       = DockerUtil::ensureImageTag($info['Config']['Image']);
 			$c['ImageId']     = $this->extractID($ct['ImageID']);
-			$c['Name']        = substr($info['Name'], 1);
+			$c['Name']        = ltrim(($info['Name'] ?? $ct['Names'][0] ?? ''), '/');
 			$c['Status']      = $ct['Status'] ?: 'None';
 			$c['Running']     = $info['State']['Running'];
 			$c['Paused']      = $info['State']['Paused'];

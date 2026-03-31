@@ -2224,7 +2224,7 @@ div#title.ud {
  * @see https://caniuse.com/?search=nesting
  */
 .Theme--sidebar {
-    p {
+    p:where(:not(.unapi *))  {
         text-align: left;
     }
 
@@ -2258,13 +2258,13 @@ div#title.ud {
         text-transform: uppercase;
     }
 
-    input[type="text"],
-    input[type="password"],
-    input[type="number"],
-    input[type="url"],
-    input[type="email"],
-    input[type="date"],
-    input[type="file"],
+    input[type="text"]:where(:not(.unapi *)) ,
+    input[type="password"]:where(:not(.unapi *)) ,
+    input[type="number"]:where(:not(.unapi *)) ,
+    input[type="url"]:where(:not(.unapi *)) ,
+    input[type="email"]:where(:not(.unapi *)) ,
+    input[type="date"]:where(:not(.unapi *)) ,
+    input[type="file"]:where(:not(.unapi *)) ,
     textarea,
     .textarea {
         padding: 5px 6px;
@@ -2300,11 +2300,11 @@ div#title.ud {
         border-color: var(--focus-input-border-color);
     }
 
-    input:hover[type="button"],
-    input:hover[type="reset"],
-    input:hover[type="submit"],
-    button:hover,
-    button:hover[type="button"],
+    input:hover[type="button"]:where(:not(.unapi *)) ,
+    input:hover[type="reset"]:where(:not(.unapi *)) ,
+    input:hover[type="submit"]:where(:not(.unapi *)) ,
+    button:hover:where(:not(.unapi *)) ,
+    button:hover[type="button"]:where(:not(.unapi *)) ,
     a.button:hover {
         border-color: var(--hover-button-border);
         color: var(--hover-button-text-color);
@@ -2322,19 +2322,19 @@ div#title.ud {
         box-shadow: none;
     }
 
-    input[disabled],
-    button[disabled],
-    input:hover[type="button"][disabled],
-    input:hover[type="reset"][disabled],
-    input:hover[type="submit"][disabled],
-    button:hover[disabled],
-    button:hover[type="button"][disabled],
-    input:active[type="button"][disabled],
-    input:active[type="reset"][disabled],
-    input:active[type="submit"][disabled],
-    button:active[disabled],
-    button:active[type="button"][disabled],
-    textarea[disabled] {
+    input[disabled]:where(:not(.unapi *)) ,
+    button[disabled]:where(:not(.unapi *)) ,
+    input:hover[type="button"][disabled]:where(:not(.unapi *)) ,
+    input:hover[type="reset"][disabled]:where(:not(.unapi *)) ,
+    input:hover[type="submit"][disabled]:where(:not(.unapi *)) ,
+    button:hover[disabled]:where(:not(.unapi *)) ,
+    button:hover[type="button"][disabled]:where(:not(.unapi *)) ,
+    input:active[type="button"][disabled]:where(:not(.unapi *)) ,
+    input:active[type="reset"][disabled]:where(:not(.unapi *)) ,
+    input:active[type="submit"][disabled]:where(:not(.unapi *)) ,
+    button:active[disabled]:where(:not(.unapi *)) ,
+    button:active[type="button"][disabled]:where(:not(.unapi *)) ,
+    textarea[disabled]:where(:not(.unapi *)) {
         color: var(--disabled-text-color) !important;
         border-color: var(--disabled-input-border-color) !important;
         background: none !important;

@@ -83,7 +83,7 @@ function data_only($disk) {
 }
 
 function cache_only($disk) {
-  return _var($disk,'type') == 'Cache';
+  return _var($disk,'type') == 'Cache' && _var($disk, 'bootPool') != 'dedicated';
 }
 
 function boot_only($disk) {
@@ -1247,8 +1247,12 @@ function parse_si_number($value): int
       return preg_replace('/p\d+$/', '', $devicePath);
     }
 
-    if (preg_match('/^(sd[a-z]+|hd[a-z]+|vd[a-z]+|xvd[a-z]+|ubd[a-z]+)\d+$/', $devicePath)) {
-      return preg_replace('/\d+$/', '', $devicePath);
+    if (preg_match('/^(sd[a-z]+|hd[a-z]+|vd[a-z]+|xvd[a-z]+|ubd[a-z]+)p\d+$/', $devicePath, $m)) {
+      return $m[1];
+    }
+
+    if (preg_match('/^(sd[a-z]+|hd[a-z]+|vd[a-z]+|xvd[a-z]+|ubd[a-z]+)\d+$/', $devicePath, $m)) {
+      return $m[1];
     }
 
     return $devicePath;
@@ -1751,7 +1755,7 @@ function get_block_devices(): array
 function sysfs_read(string $path): ?string
 {
     return is_readable($path)
-        ? (($v = trim(file_get_contents($path))) !== '' ? $v : null)
+        ? (($v = trim(@file_get_contents($path))) !== '' ? $v : null)
         : null;
 }
 
