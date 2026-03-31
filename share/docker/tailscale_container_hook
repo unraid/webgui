@@ -298,6 +298,13 @@ while true; do
   sleep 2
 done
 
+# Clear persisted Serve/Funnel state before applying the current template mode.
+# Without this, switching the template from Funnel/Serve to No leaves the old
+# config active in the existing Tailscale state directory after restart.
+echo "Resetting Tailscale Serve/Funnel configuration"
+tailscale funnel reset >/dev/null 2>&1 || true
+tailscale serve reset >/dev/null 2>&1 || true
+
 if [ ! -z "${TAILSCALE_SERVE_PORT}" ] && [ "$(tailscale status --json | jq -r '.CurrentTailnet.MagicDNSEnabled')" != "false" ] && [ -z "$(tailscale status --json | jq -r '.Self.Capabilities[] | select(. == "https")')" ]; then
   echo "ERROR: Enable MagicDNS and HTTPS on your Tailscale account to use Tailscale Serve/Funnel."
   echo "See: https://tailscale.com/kb/1153/enabling-https"
