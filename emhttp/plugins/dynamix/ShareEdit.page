@@ -435,7 +435,7 @@ _(Primary storage (for new files and folders))_:
 : <select id="primary" name="shareCachePool" onchange="form.shareFloor.value='';updateScreen(z(4),'slow')">
   <?=mk_option(primary(), '', _('Array'),  $poolsOnly ? 'disabled' : '')?>
   <?foreach ($pools as $pool):?>
-  <?if ($disks[$pool]['devices']) echo mk_option(primary(),$pool,my_disk($pool),$disks[$pool]['shareEnabled']=='yes'?"":"disabled")?>
+  <?if ($disks[$pool]['devices'] && _var($disks[$pool], 'bootPool') != 'dedicated') echo mk_option(primary(),$pool,my_disk($pool),$disks[$pool]['shareEnabled']=='yes'?"":"disabled")?>
   <?endforeach;?>
   <?if ($share['cachePool']):?>
   <option id="cachePoolOption" value="<?= $share['cachePool'] ?>" disabled><?= $cachePoolCapitalized ?></option>
@@ -505,7 +505,7 @@ _(Secondary storage)_:
   <?=mk_option(secondary(),'0',_('None'))?>
   <?=mk_option(secondary(),'1',_('Array'),  $poolsOnly ? 'disabled' : '')?>
   <?foreach ($pools as $pool):?>
-  <?if ($disks[$pool]['devices']) echo mk_option(secondary(),$pool,my_disk($pool),$disks[$pool]['shareEnabled']=='yes'?"":"disabled")?>
+  <?if ($disks[$pool]['devices'] && _var($disks[$pool], 'bootPool') != 'dedicated') echo mk_option(secondary(),$pool,my_disk($pool),$disks[$pool]['shareEnabled']=='yes'?"":"disabled")?>
   <?endforeach;?>
   <?if ($share['cachePool2']):?>
   <option id="cachePoolOption2" value="<?= $share['cachePool2'] ?>" disabled><?= $cachePoolCapitalized2 ?></option>
@@ -693,6 +693,46 @@ function z(i) {
 	}
 }
 
+function rememberInitialDisabledState(dropdown) {
+	for (const option of dropdown.options) {
+		option.dataset.initialDisabled = option.disabled ? 'true' : 'false';
+	}
+}
+
+function isInitiallyDisabled(option) {
+	return option.dataset.initialDisabled === 'true';
+}
+
+function selectEnabledOption(dropdown, preferredValues = []) {
+	const values = Array.isArray(preferredValues) ? preferredValues : [preferredValues];
+
+	for (const value of values) {
+		if (value === undefined || value === null) continue;
+		const match = Array.from(dropdown.options).find(option => option.value == value);
+		if (match && !match.disabled) {
+			dropdown.value = match.value;
+			return true;
+		}
+	}
+
+	for (let i = 0; i < dropdown.options.length; i++) {
+		if (!dropdown.options[i].disabled) {
+			dropdown.selectedIndex = i;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+function syncSecondaryOptionAvailability(secondaryDropdown, primaryValue, poolsOnly) {
+	for (const option of secondaryDropdown.options) {
+		const matchesPrimary = option.value === primaryValue;
+		const arrayUnavailable = option.value === "1" && poolsOnly;
+		option.disabled = isInitiallyDisabled(option) || matchesPrimary || arrayUnavailable;
+	}
+}
+
 function updateScreen(cache, slow) {
 	const secondaryDropdown = document.getElementById('secondary');
 	const primaryDropdown = document.getElementById('primary');
@@ -733,21 +773,9 @@ function updateScreen(cache, slow) {
 			break;
 		case 'yes':
 			$('#primary option:eq(' + z(0) + ')').prop('selected', true);
-			$('#secondary option:eq(' + z(1) + ')').prop('selected', true);
-
-			for (let i = 0; i < secondaryDropdown.options.length; i++) {
-				if (secondaryDropdown.options[i].value === primaryValue || (i === 1 && poolsOnly) || secondaryDropdown.options[i].id === 'cachePoolOption2') {
-					secondaryDropdown.options[i].disabled = true;
-				} else {
-					secondaryDropdown.options[i].disabled = false;
-				}
-			}
-
-			/* If the primary value equals the current secondary value, change secondary selection to index 0 or 1 based on poolsOnly */
-			if (secondaryValue === primaryValue) {
-				secondaryDropdown.selectedIndex = poolsOnly ? 0 : 1;
-				secondaryValue = poolsOnly ? "0" : "1";
-			}
+			syncSecondaryOptionAvailability(secondaryDropdown, primaryValue, poolsOnly);
+			selectEnabledOption(secondaryDropdown, [secondaryValue, poolsOnly ? "0" : "1", "0", "1"]);
+			secondaryValue = secondaryDropdown.value;
 
 			if ((secondaryValue !== "0") && (secondaryValue !== primaryValue)) {
 				$('#moverDirection1 option:eq(0)').text($('#primary option:eq(' + z(0) + ')').text() + ' ⮕ ' + $('#secondary option:eq(' + z(1) + ')').text());
@@ -770,15 +798,9 @@ function updateScreen(cache, slow) {
 		case 'only':
 			$('#primary option:eq(' + z(0) + ')').prop('selected', true);
 			$('#primary option:eq(0)').prop('disabled', poolsOnly);
-			$('#secondary option:eq(' + z(1) + ')').prop('selected', true);
-
-			for (let i = 0; i < secondaryDropdown.options.length; i++) {
-				if (secondaryDropdown.options[i].value === primaryValue || (i === 1 && poolsOnly) || secondaryDropdown.options[i].id === 'cachePoolOption2') {
-					secondaryDropdown.options[i].disabled = true;
-				} else {
-					secondaryDropdown.options[i].disabled = false;
-				}
-			}
+			syncSecondaryOptionAvailability(secondaryDropdown, primaryValue, poolsOnly);
+			selectEnabledOption(secondaryDropdown, [secondaryValue, "0", "1"]);
+			secondaryValue = secondaryDropdown.value;
 
 			$('#moverDirection1').hide();
 			$('#moverDirection2').show();
@@ -793,24 +815,12 @@ function updateScreen(cache, slow) {
 			break;
 		case 'prefer':
 			$('#primary option:eq(' + z(0) + ')').prop('selected', true);
-			$('#secondary option:eq(' + z(1) + ')').prop('selected', true);
 			$('#secondary option:eq(1)').prop('disabled', poolsOnly);
 			$('#moverDirection1 option:eq(0)').text($('#primary option:eq(' + z(0) + ')').text() + ' ⮕ ' + $('#secondary option:eq(' + z(1) + ')').text());
 			$('#moverDirection1 option:eq(1)').text($('#secondary option:eq(' + z(1) + ')').text() + ' ⮕ ' + $('#primary option:eq(' + z(0) + ')').text());
-
-			for (let i = 0; i < secondaryDropdown.options.length; i++) {
-				if (secondaryDropdown.options[i].value === primaryValue || (i === 1 && poolsOnly) || secondaryDropdown.options[i].id === 'cachePoolOption2') {
-					secondaryDropdown.options[i].disabled = true;
-				} else {
-					secondaryDropdown.options[i].disabled = false;
-				}
-			}
-
-			/* If the primary value equals the current secondary value, change secondary selection to index 0 or 1 based on poolsOnly */
-			if (secondaryValue === primaryValue) {
-				secondaryDropdown.selectedIndex = poolsOnly ? 0 : 1;
-				secondaryValue = poolsOnly ? "0" : "1";
-			}
+			syncSecondaryOptionAvailability(secondaryDropdown, primaryValue, poolsOnly);
+			selectEnabledOption(secondaryDropdown, [secondaryValue, poolsOnly ? "0" : "1", "0", "1"]);
+			secondaryValue = secondaryDropdown.value;
 
 			if ((secondaryValue !== "0") && (secondaryValue !== primaryValue)) {
 				$('#moverDirection1 option:eq(0)').text($('#primary option:eq(' + z(0) + ')').text() + ' ⮕ ' + $('#secondary option:eq(' + z(1) + ')').text());
@@ -1253,6 +1263,9 @@ document.addEventListener('DOMContentLoaded', function() {
 	/* Flag to differentiate between user-initiated and programmatic changes */
 	let programmaticChange = false;
 
+	rememberInitialDisabledState(primaryDropdown);
+	rememberInitialDisabledState(secondaryDropdown);
+
 	/* Add event listener to detect changes in the primary dropdown */
 	primaryDropdown.addEventListener('change', function() {
 		/* Check if the change was made programmatically */
@@ -1291,28 +1304,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			cachePoolOption.parentNode.removeChild(cachePoolOption);
 		}
 
-		/* Set the default to the first selection - Array or first pool */
-		if (poolsOnly) {
-			primaryDropdown.selectedIndex = 1;
-		} else {
-			primaryDropdown.selectedIndex = 0;
-		}
-
-		/* Loop through the options and set the selected value */
-		if (primaryDefaultValue !== "") {
-			for (let i = 0; i < primaryDropdown.options.length; i++) {
-				if (primaryDropdown.options[i].value == primaryDefaultValue) {
-					primaryDropdown.selectedIndex = i;
-					break;
-				}
-			}
-		} else if (poolsOnly) {
-			/* Select the first pool option. */
-			primaryDropdown.selectedIndex = 1;
-		} else {
-			/* Select the array option. */
-			primaryDropdown.selectedIndex = 0;
-		}
+		selectEnabledOption(primaryDropdown, primaryDefaultValue !== "" ? [primaryDefaultValue] : (!poolsOnly ? [''] : []));
 	}
 
 	/* Add event listener to detect changes in the secondary dropdown */
@@ -1354,20 +1346,12 @@ document.addEventListener('DOMContentLoaded', function() {
 			cachePoolOption2.parentNode.removeChild(cachePoolOption2);
 		}
 
-		/* Loop through the options and set the selected value */
 		if (secondaryDefaultValue !== "") {
-			for (let i = 0; i < secondaryDropdown.options.length; i++) {
-				if (secondaryDropdown.options[i].value == secondaryDefaultValue) {
-					secondaryDropdown.selectedIndex = i;
-					break;
-				}
-			}
+			selectEnabledOption(secondaryDropdown, [secondaryDefaultValue, poolsOnly ? "0" : "1", "0", "1"]);
 		} else if (useCache !== "only") {
-			/* Select the array option. */
-			secondaryDropdown.selectedIndex = 1;
+			selectEnabledOption(secondaryDropdown, ["1", "0"]);
 		} else {
-			/* Select the none option. */
-			secondaryDropdown.selectedIndex = 0;
+			selectEnabledOption(secondaryDropdown, ["0", "1"]);
 		}
 	}
 
