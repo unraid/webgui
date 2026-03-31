@@ -3,10 +3,10 @@
 
 set -euo pipefail
 
-# Merge syslinux kernel append settings into an existing grub.cfg and print content to stdout.
+# Merge syslinux kernel append settings into an existing grub.cfg and update the grub file in place.
 # Only updates existing menuentry linux lines; does not add menuentries or initrds.
 # Also writes a log file with all applied changes.
-# Usage: update_grub_from_syslinux [syslinux.cfg] [base-grub.cfg] [change-log-file] [bootuuid-fallback]
+# Usage: update_grub_from_syslinux [syslinux.cfg] [grub.cfg] [change-log-file] [bootuuid-fallback]
 
 SYSLINUX_CFG="${1:-/boot/syslinux/syslinux.cfg}"
 BASE_GRUB_CFG="${2:-/boot/grub/grub.cfg}"
@@ -46,6 +46,16 @@ contains_word() {
     [[ "$t" == "$needle" ]] && return 0
   done
   return 1
+}
+
+append_word() {
+  local list="$1"
+  local word="$2"
+  if [[ -z "$list" ]]; then
+    printf '%s' "$word"
+  else
+    printf '%s %s' "$list" "$word"
+  fi
 }
 
 normalize_token() {
@@ -109,10 +119,10 @@ declare -A s_linux_args
 declare -A s_seen
 declare -a s_order
 
-default_index=0
 timeout_decisec=50
 entry_index=-1
 current_label=""
+default_label_title=""
 
 while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
   line="${raw_line%%#*}"
@@ -140,7 +150,10 @@ while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
   [[ -z "$current_label" ]] && continue
 
   if [[ "$line" =~ ^[[:space:]]*[Mm][Ee][Nn][Uu][[:space:]]+[Dd][Ee][Ff][Aa][Uu][Ll][Tt]$ ]]; then
-    default_index="$entry_index"
+    mapped_default_title="$(map_to_grub_title "$current_label")"
+    if [[ "$mapped_default_title" != "__skip__" ]]; then
+      default_label_title="$mapped_default_title"
+    fi
     continue
   fi
 
@@ -214,8 +227,11 @@ for s_title in "${s_order[@]}"; do
   m_linux_args["$mapped_title"]="$acc"
 done
 
-timeout_sec=$((timeout_decisec / 10))
-(( timeout_sec < 0 )) && timeout_sec=0
+if (( timeout_decisec < 0 )); then
+  timeout_sec=0
+else
+  timeout_sec=$(((timeout_decisec + 9) / 10))
+fi
 
 if [[ -f "$BASE_GRUB_CFG" ]]; then
   mapfile -t base_lines < "$BASE_GRUB_CFG"
@@ -225,64 +241,12 @@ else
   fi
   [[ -z "$BOOTUUID_FALLBACK" ]] && BOOTUUID_FALLBACK="0"
 
-  if [[ -x "$SCRIPT_DIR/mkgrub" ]]; then
-    mapfile -t base_lines < <("$SCRIPT_DIR/mkgrub" "$BOOTUUID_FALLBACK")
-  else
-    mapfile -t base_lines <<EOF
-# Generated
-
-set default=0
-set timeout=5
-set timeout_style=menu
-
-insmod part_gpt
-insmod zfs
-insmod all_video
-insmod gfxterm
-insmod font
-insmod png
-
-# Load font first
-if loadfont /boot@/grub/themes/unraid/terminus-14.pf2 ; then
-  set gfxmode=auto
-  terminal_output gfxterm
-
-  # Set the theme variable GLOBALLY
-  set theme="/boot@/grub/themes/unraid/theme.txt"
-  export theme
-else
-  terminal_output console
-fi
-
-menuentry "Unraid OS" {
-  echo "Loading..."
-  linux  /boot@/bzimage unraiduuid=$BOOTUUID_FALLBACK
-  initrd /boot@/bzroot
-}
-
-menuentry "Unraid OS GUI Mode" {
-  echo "Loading..."
-  linux  /boot@/bzimage unraidguimode unraiduuid=$BOOTUUID_FALLBACK
-  initrd /boot@/bzroot
-}
-
-menuentry "Unraid OS Safe Mode (no plugins, no GUI)" {
-  echo "Loading..."
-  linux  /boot@/bzimage unraidsafemode unraiduuid=$BOOTUUID_FALLBACK
-  initrd /boot@/bzroot
-}
-
-menuentry "Unraid OS GUI Safe Mode (no plugins)" {
-  echo "Loading..."
-  linux  /boot@/bzimage unraidguimode unraidsafemode unraiduuid=$BOOTUUID_FALLBACK
-  initrd /boot@/bzroot
-}
-
-menuentry "Memtest86+" {
-  linux  /boot@/memtest
-}
-EOF
+  if [[ ! -x "$SCRIPT_DIR/mkgrub" ]]; then
+    echo "error: base grub config missing and mkgrub fallback unavailable: $SCRIPT_DIR/mkgrub" >&2
+    exit 1
   fi
+
+  mapfile -t base_lines < <("$SCRIPT_DIR/mkgrub" "$BOOTUUID_FALLBACK")
 fi
 
 if ((${#base_lines[@]} == 0)); then
@@ -320,14 +284,46 @@ process_block() {
 
       if [[ -n "$sys_args" ]]; then
         local token
+        local key
+        local existing
+        local new_args
+        local found_key
+        local replaced_once
         local changed=0
         for token in $sys_args; do
-          if ! contains_word "$args" "$token"; then
-            if [[ -z "$args" ]]; then
-              args="$token"
-            else
-              args="$args $token"
+          if [[ "$token" == *=* ]]; then
+            key="${token%%=*}"
+            new_args=""
+            found_key=0
+            replaced_once=0
+
+            for existing in $args; do
+              if [[ "$existing" == "$key="* ]]; then
+                found_key=1
+                if (( replaced_once == 0 )); then
+                  new_args="$(append_word "$new_args" "$token")"
+                  replaced_once=1
+                  if [[ "$existing" != "$token" ]]; then
+                    changed=1
+                    log "menuentry '$title': replace kernel arg $existing with $token"
+                  fi
+                else
+                  changed=1
+                fi
+              else
+                new_args="$(append_word "$new_args" "$existing")"
+              fi
+            done
+
+            if (( found_key == 0 )); then
+              new_args="$(append_word "$new_args" "$token")"
+              changed=1
+              log "menuentry '$title': add kernel arg $token"
             fi
+
+            args="$new_args"
+          elif ! contains_word "$args" "$token"; then
+            args="$(append_word "$args" "$token")"
             changed=1
             log "menuentry '$title': add kernel arg $token"
           fi
@@ -345,15 +341,18 @@ process_block() {
 in_menu=0
 menu_title=""
 declare -a block_lines
+declare -a grub_order
+default_line_idx=-1
+base_default_index=0
 
 for line in "${base_lines[@]}"; do
   if (( in_menu == 0 )); then
     if [[ "$line" =~ ^set[[:space:]]+default= ]]; then
-      new_line="set default=$default_index"
-      if [[ "$line" != "$new_line" ]]; then
-        log "global: set default from '$line' to '$new_line'"
+      default_line_idx=${#out_lines[@]}
+      if [[ "$line" =~ ^set[[:space:]]+default=([0-9]+)$ ]]; then
+        base_default_index="${BASH_REMATCH[1]}"
       fi
-      out_lines+=("$new_line")
+      out_lines+=("$line")
       continue
     fi
 
@@ -369,6 +368,7 @@ for line in "${base_lines[@]}"; do
     if [[ "$line" =~ ^menuentry[[:space:]]+\"([^\"]+)\"[[:space:]]*\{ ]]; then
       in_menu=1
       menu_title="${BASH_REMATCH[1]}"
+      grub_order+=("$menu_title")
       block_lines=()
       out_lines+=("$line")
       continue
@@ -394,15 +394,48 @@ for line in "${base_lines[@]}"; do
   block_lines+=("$line")
 done
 
+resolved_default_index="$base_default_index"
+if [[ -n "$default_label_title" ]]; then
+  found_default=0
+  for ((i=0; i<${#grub_order[@]}; i++)); do
+    if [[ "${grub_order[i]}" == "$default_label_title" ]]; then
+      resolved_default_index=$i
+      found_default=1
+      break
+    fi
+  done
+
+  if (( found_default == 0 )); then
+    log "global: default label '$default_label_title' not found in final grub menu order; keeping default index $resolved_default_index"
+  fi
+fi
+
+if (( default_line_idx >= 0 )); then
+  new_line="set default=$resolved_default_index"
+  if [[ "${out_lines[default_line_idx]}" != "$new_line" ]]; then
+    log "global: set default from '${out_lines[default_line_idx]}' to '$new_line'"
+  fi
+  out_lines[default_line_idx]="$new_line"
+fi
+
 for title in "${m_order[@]}"; do
   if [[ -z "${g_seen[$title]-}" && -n "${m_linux_args[$title]-}" ]]; then
     log "menuentry '$title': skipped (not present in base grub.cfg; source labels: ${m_sources[$title]})"
   fi
 done
 
-for l in "${out_lines[@]}"; do
-  printf '%s\n' "$l"
-done
+backup_file=""
+if [[ -f "$BASE_GRUB_CFG" ]]; then
+  backup_file="${BASE_GRUB_CFG}.bak"
+  cp -f "$BASE_GRUB_CFG" "$backup_file"
+  log "global: backup created at $backup_file"
+fi
+
+mkdir -p "$(dirname "$BASE_GRUB_CFG")"
+tmp_merged="$(mktemp)"
+printf '%s\n' "${out_lines[@]}" > "$tmp_merged"
+mv -f "$tmp_merged" "$BASE_GRUB_CFG"
+log "global: updated grub config at $BASE_GRUB_CFG"
 
 diff_output=""
 if command -v diff >/dev/null 2>&1; then
@@ -421,7 +454,10 @@ mkdir -p "$log_dir"
 {
   printf 'update_grub_from_syslinux change log\n'
   printf 'syslinux=%s\n' "$SYSLINUX_CFG"
-  printf 'base_grub=%s\n' "$BASE_GRUB_CFG"
+  printf 'target_grub=%s\n' "$BASE_GRUB_CFG"
+  if [[ -n "$backup_file" ]]; then
+    printf 'backup_grub=%s\n' "$backup_file"
+  fi
   printf 'generated=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   if ((${#log_lines[@]} == 0)); then
     printf 'changes=none\n'
@@ -438,4 +474,7 @@ mkdir -p "$log_dir"
   else
     printf '(no textual differences)\n'
   fi
+  printf '\n'
+  printf 'source_syslinux_cfg:\n'
+  cat "$SYSLINUX_CFG"
 } > "$LOG_FILE"
