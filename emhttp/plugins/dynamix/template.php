@@ -59,6 +59,9 @@ $_SESSION['locale'] = _var($display,'locale');
 $_SESSION['buildDate'] = date('Ymd',_var($var,'regBuildTime'));
 require_once "$docroot/webGui/include/Translations.php";
 
+// Dynamic Boot page title based on internal boot pool presence
+$boot_device_title = $bootpool_devices ? _('Boot Pool') : _('Boot Device');
+
 // Build webGui pages first, then plugins pages
 require_once "$docroot/webGui/include/PageBuilder.php";
 $site = [];
