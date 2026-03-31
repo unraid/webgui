@@ -1143,7 +1143,7 @@ while (true) {
       $bootMemberCount = 0;
       foreach ($Cache as $disk) if (prefix(_var($disk,'name'))==$pool) {
         $memberDeviceUrl = "/Main/Device?name=".urlencode(_var($disk,'name',$pool));
-        $memberLabel = $poolLabel." ".sprintf(_('Device %d'), $memberIndex++);
+        $memberLabel = sprintf(_('Device %d'), $memberIndex++);
         if (_var($var,'fsState')=='Stopped') {
           $echo[$a][] = array_offline($disk,$pool,[
             'displayName' => $memberLabel,
