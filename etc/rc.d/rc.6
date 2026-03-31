@@ -279,6 +279,12 @@ if /bin/mountpoint -q /boot-transfer ; then
     /boot/ /boot-transfer 
   log "sync"
   /bin/sync
+
+  # Update grub with kernel options from syslinux.cfg
+  if [[ -r /boot/syslinux/syslinux.cfg ]]; then
+    /usr/local/ungrub/update_grub_from_syslinux /boot/syslinux/syslinux.cfg /boot-transfer/grub/grub.cfg /boot-transfer/grub/update_grub.log
+  fi
+
   if /bin/mountpoint -q /boot-transfer/efi ; then
     /bin/umount /boot-transfer/efi
   fi
