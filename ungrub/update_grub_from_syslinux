@@ -41,8 +41,11 @@ to_boot_path() {
 contains_word() {
   local haystack="$1"
   local needle="$2"
+  local -a words
   local t
-  for t in $haystack; do
+
+  IFS=' ' read -r -a words <<< "$haystack"
+  for t in "${words[@]}"; do
     [[ "$t" == "$needle" ]] && return 0
   done
   return 1
