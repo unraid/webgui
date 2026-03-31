@@ -1,0 +1,441 @@
+#!/bin/bash
+# Copyright 2026 Lime Technology, Inc. All rights reserved.
+
+set -euo pipefail
+
+# Merge syslinux kernel append settings into an existing grub.cfg and print content to stdout.
+# Only updates existing menuentry linux lines; does not add menuentries or initrds.
+# Also writes a log file with all applied changes.
+# Usage: update_grub_from_syslinux [syslinux.cfg] [base-grub.cfg] [change-log-file] [bootuuid-fallback]
+
+SYSLINUX_CFG="${1:-/boot/syslinux/syslinux.cfg}"
+BASE_GRUB_CFG="${2:-/boot/grub/grub.cfg}"
+LOG_FILE="${3:-/tmp/update_grub_from_syslinux.log}"
+BOOTUUID_FALLBACK="${4:-}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ ! -f "$SYSLINUX_CFG" ]]; then
+  echo "error: syslinux config not found: $SYSLINUX_CFG" >&2
+  exit 1
+fi
+
+trim() {
+  local s="$1"
+  s="${s#${s%%[![:space:]]*}}"
+  s="${s%${s##*[![:space:]]}}"
+  printf '%s' "$s"
+}
+
+to_boot_path() {
+  local p="$1"
+  [[ -z "$p" ]] && return
+  if [[ "$p" == /boot@/* ]]; then
+    printf '%s' "$p"
+  elif [[ "$p" == /* ]]; then
+    printf '/boot@%s' "$p"
+  else
+    printf '/boot@/%s' "$p"
+  fi
+}
+
+contains_word() {
+  local haystack="$1"
+  local needle="$2"
+  local t
+  for t in $haystack; do
+    [[ "$t" == "$needle" ]] && return 0
+  done
+  return 1
+}
+
+normalize_token() {
+  local t="$1"
+  t="$(trim "$t")"
+  t="${t#,}"
+  t="${t%,}"
+  printf '%s' "$t"
+}
+
+map_to_grub_title() {
+  local title="$1"
+  local lower
+  lower="${title,,}"
+
+  case "$lower" in
+    "unraid os")
+      printf '%s' "Unraid OS"
+      return
+      ;;
+    "unraid os gui mode")
+      printf '%s' "Unraid OS GUI Mode"
+      return
+      ;;
+    "unraid os safe mode (no plugins, no gui)")
+      printf '%s' "Unraid OS Safe Mode (no plugins, no GUI)"
+      return
+      ;;
+    "unraid os gui safe mode (no plugins)")
+      printf '%s' "Unraid OS GUI Safe Mode (no plugins)"
+      return
+      ;;
+  esac
+
+  if [[ "$lower" == "unraid os normal" ]]; then
+    printf '%s' "Unraid OS"
+    return
+  fi
+
+  # Legacy Xen chain entry from old syslinux configs is intentionally not migrated.
+  if [[ "$lower" == "xen/unraid os" ]]; then
+    printf '%s' "__skip__"
+    return
+  fi
+
+  # Normalize memtest label variants to the single GRUB entry title.
+  if [[ "$lower" =~ ^memtest86\+([[:space:]]*\(.*\))*$ ]]; then
+    printf '%s' "Memtest86+"
+    return
+  fi
+
+  printf '%s' "$title"
+}
+
+log_lines=()
+log() {
+  log_lines+=("$1")
+}
+
+declare -A s_linux_args
+declare -A s_seen
+declare -a s_order
+
+default_index=0
+timeout_decisec=50
+entry_index=-1
+current_label=""
+
+while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
+  line="${raw_line%%#*}"
+  line="$(trim "$line")"
+  [[ -z "$line" ]] && continue
+
+  lower="${line,,}"
+
+  if [[ "$lower" =~ ^timeout[[:space:]]+([0-9]+)$ ]]; then
+    timeout_decisec="${BASH_REMATCH[1]}"
+    continue
+  fi
+
+  if [[ "$line" =~ ^[[:space:]]*[Ll][Aa][Bb][Ee][Ll][[:space:]]+(.+)$ ]]; then
+    current_label="$(trim "${BASH_REMATCH[1]}")"
+    entry_index=$((entry_index + 1))
+    if [[ -z "${s_seen[$current_label]+x}" ]]; then
+      s_order+=("$current_label")
+      s_seen["$current_label"]=1
+      s_linux_args["$current_label"]=""
+    fi
+    continue
+  fi
+
+  [[ -z "$current_label" ]] && continue
+
+  if [[ "$line" =~ ^[[:space:]]*[Mm][Ee][Nn][Uu][[:space:]]+[Dd][Ee][Ff][Aa][Uu][Ll][Tt]$ ]]; then
+    default_index="$entry_index"
+    continue
+  fi
+
+  if [[ "$line" =~ ^[[:space:]]*[Kk][Ee][Rr][Nn][Ee][Ll][[:space:]]+(.+)$ ]]; then
+    # Intentionally ignored: kernel path is not merged.
+    continue
+  fi
+
+  if [[ "$line" =~ ^[[:space:]]*[Aa][Pp][Pp][Ee][Nn][Dd][[:space:]]+(.+)$ ]]; then
+    append_line="$(trim "${BASH_REMATCH[1]}")"
+    args="${s_linux_args[$current_label]}"
+
+    for token in $append_line; do
+      token="$(normalize_token "$token")"
+      [[ -z "$token" ]] && continue
+
+      if [[ "$token" == initrd=* ]]; then
+        # Intentionally ignored: only kernel append args are merged.
+        continue
+      else
+        if ! contains_word "$args" "$token"; then
+          if [[ -z "$args" ]]; then
+            args="$token"
+          else
+            args="$args $token"
+          fi
+        fi
+      fi
+    done
+
+    s_linux_args["$current_label"]="$args"
+  fi
+done < "$SYSLINUX_CFG"
+
+if ((${#s_order[@]} == 0)); then
+  echo "error: no labels found in $SYSLINUX_CFG" >&2
+  exit 1
+fi
+
+declare -A m_linux_args
+declare -A m_sources
+declare -a m_order
+
+for s_title in "${s_order[@]}"; do
+  mapped_title="$(map_to_grub_title "$s_title")"
+  if [[ "$mapped_title" == "__skip__" ]]; then
+    log "menuentry '$s_title': skipped (legacy syslinux entry not applicable to grub)"
+    continue
+  fi
+  s_args="${s_linux_args[$s_title]-}"
+
+  if [[ -z "${m_sources[$mapped_title]-}" ]]; then
+    m_order+=("$mapped_title")
+    m_sources["$mapped_title"]="$s_title"
+  else
+    m_sources["$mapped_title"]+=";$s_title"
+  fi
+
+  [[ -z "$s_args" ]] && continue
+
+  acc="${m_linux_args[$mapped_title]-}"
+  for token in $s_args; do
+    if ! contains_word "$acc" "$token"; then
+      if [[ -z "$acc" ]]; then
+        acc="$token"
+      else
+        acc="$acc $token"
+      fi
+    fi
+  done
+  m_linux_args["$mapped_title"]="$acc"
+done
+
+timeout_sec=$((timeout_decisec / 10))
+(( timeout_sec < 0 )) && timeout_sec=0
+
+if [[ -f "$BASE_GRUB_CFG" ]]; then
+  mapfile -t base_lines < "$BASE_GRUB_CFG"
+else
+  if [[ -z "$BOOTUUID_FALLBACK" ]] && command -v zpool >/dev/null 2>&1; then
+    BOOTUUID_FALLBACK="$(zpool get -H -o value guid flash 2>/dev/null || true)"
+  fi
+  [[ -z "$BOOTUUID_FALLBACK" ]] && BOOTUUID_FALLBACK="0"
+
+  if [[ -x "$SCRIPT_DIR/mkgrub" ]]; then
+    mapfile -t base_lines < <("$SCRIPT_DIR/mkgrub" "$BOOTUUID_FALLBACK")
+  else
+    mapfile -t base_lines <<EOF
+# Generated
+
+set default=0
+set timeout=5
+set timeout_style=menu
+
+insmod part_gpt
+insmod zfs
+insmod all_video
+insmod gfxterm
+insmod font
+insmod png
+
+# Load font first
+if loadfont /boot@/grub/themes/unraid/terminus-14.pf2 ; then
+  set gfxmode=auto
+  terminal_output gfxterm
+
+  # Set the theme variable GLOBALLY
+  set theme="/boot@/grub/themes/unraid/theme.txt"
+  export theme
+else
+  terminal_output console
+fi
+
+menuentry "Unraid OS" {
+  echo "Loading..."
+  linux  /boot@/bzimage unraiduuid=$BOOTUUID_FALLBACK
+  initrd /boot@/bzroot
+}
+
+menuentry "Unraid OS GUI Mode" {
+  echo "Loading..."
+  linux  /boot@/bzimage unraidguimode unraiduuid=$BOOTUUID_FALLBACK
+  initrd /boot@/bzroot
+}
+
+menuentry "Unraid OS Safe Mode (no plugins, no GUI)" {
+  echo "Loading..."
+  linux  /boot@/bzimage unraidsafemode unraiduuid=$BOOTUUID_FALLBACK
+  initrd /boot@/bzroot
+}
+
+menuentry "Unraid OS GUI Safe Mode (no plugins)" {
+  echo "Loading..."
+  linux  /boot@/bzimage unraidguimode unraidsafemode unraiduuid=$BOOTUUID_FALLBACK
+  initrd /boot@/bzroot
+}
+
+menuentry "Memtest86+" {
+  linux  /boot@/memtest
+}
+EOF
+  fi
+fi
+
+if ((${#base_lines[@]} == 0)); then
+  echo "error: empty base grub config (file missing and mkgrub fallback failed)" >&2
+  exit 1
+fi
+
+declare -A g_seen
+declare -a out_lines
+
+if [[ ! -f "$BASE_GRUB_CFG" ]]; then
+  log "global: base grub config missing, used mkgrub fallback with bootuuid=$BOOTUUID_FALLBACK"
+fi
+
+process_block() {
+  local title="$1"
+  local -n _block=$2
+
+  g_seen["$title"]=1
+
+  local sys_args="${m_linux_args[$title]-}"
+
+  if [[ -z "$sys_args" ]]; then
+    return
+  fi
+
+  local idx
+  for ((idx=0; idx<${#_block[@]}; idx++)); do
+    local line="${_block[idx]}"
+    if [[ "$line" =~ ^([[:space:]]*linux[[:space:]]+)([^[:space:]]+)(.*)$ ]]; then
+      local prefix="${BASH_REMATCH[1]}"
+      local kernel_path="${BASH_REMATCH[2]}"
+      local args
+      args="$(trim "${BASH_REMATCH[3]}")"
+
+      if [[ -n "$sys_args" ]]; then
+        local token
+        local changed=0
+        for token in $sys_args; do
+          if ! contains_word "$args" "$token"; then
+            if [[ -z "$args" ]]; then
+              args="$token"
+            else
+              args="$args $token"
+            fi
+            changed=1
+            log "menuentry '$title': add kernel arg $token"
+          fi
+        done
+        if (( changed == 1 )); then
+          _block[idx]="$prefix$kernel_path $args"
+        fi
+      fi
+
+      return
+    fi
+  done
+}
+
+in_menu=0
+menu_title=""
+declare -a block_lines
+
+for line in "${base_lines[@]}"; do
+  if (( in_menu == 0 )); then
+    if [[ "$line" =~ ^set[[:space:]]+default= ]]; then
+      new_line="set default=$default_index"
+      if [[ "$line" != "$new_line" ]]; then
+        log "global: set default from '$line' to '$new_line'"
+      fi
+      out_lines+=("$new_line")
+      continue
+    fi
+
+    if [[ "$line" =~ ^set[[:space:]]+timeout= ]]; then
+      new_line="set timeout=$timeout_sec"
+      if [[ "$line" != "$new_line" ]]; then
+        log "global: set timeout from '$line' to '$new_line'"
+      fi
+      out_lines+=("$new_line")
+      continue
+    fi
+
+    if [[ "$line" =~ ^menuentry[[:space:]]+\"([^\"]+)\"[[:space:]]*\{ ]]; then
+      in_menu=1
+      menu_title="${BASH_REMATCH[1]}"
+      block_lines=()
+      out_lines+=("$line")
+      continue
+    fi
+
+    out_lines+=("$line")
+    continue
+  fi
+
+  if [[ "$line" == "}" ]]; then
+    process_block "$menu_title" block_lines
+    for b in "${block_lines[@]}"; do
+      out_lines+=("$b")
+    done
+    out_lines+=("}")
+
+    in_menu=0
+    menu_title=""
+    block_lines=()
+    continue
+  fi
+
+  block_lines+=("$line")
+done
+
+for title in "${m_order[@]}"; do
+  if [[ -z "${g_seen[$title]-}" && -n "${m_linux_args[$title]-}" ]]; then
+    log "menuentry '$title': skipped (not present in base grub.cfg; source labels: ${m_sources[$title]})"
+  fi
+done
+
+for l in "${out_lines[@]}"; do
+  printf '%s\n' "$l"
+done
+
+diff_output=""
+if command -v diff >/dev/null 2>&1; then
+  tmp_before="$(mktemp)"
+  tmp_after="$(mktemp)"
+  printf '%s\n' "${base_lines[@]}" > "$tmp_before"
+  printf '%s\n' "${out_lines[@]}" > "$tmp_after"
+  diff_output="$(diff -u "$tmp_before" "$tmp_after" || true)"
+  rm -f "$tmp_before" "$tmp_after"
+else
+  diff_output="diff command not available; before/after diff was not generated"
+fi
+
+log_dir="$(dirname "$LOG_FILE")"
+mkdir -p "$log_dir"
+{
+  printf 'update_grub_from_syslinux change log\n'
+  printf 'syslinux=%s\n' "$SYSLINUX_CFG"
+  printf 'base_grub=%s\n' "$BASE_GRUB_CFG"
+  printf 'generated=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  if ((${#log_lines[@]} == 0)); then
+    printf 'changes=none\n'
+  else
+    printf 'changes=%d\n' "${#log_lines[@]}"
+    for l in "${log_lines[@]}"; do
+      printf -- '- %s\n' "$l"
+    done
+  fi
+  printf '\n'
+  printf 'before_after_diff:\n'
+  if [[ -n "$diff_output" ]]; then
+    printf '%s\n' "$diff_output"
+  else
+    printf '(no textual differences)\n'
+  fi
+} > "$LOG_FILE"
