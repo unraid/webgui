@@ -89,12 +89,7 @@ $textErase = isPool($name) ? _('This will ERASE content of ALL devices in the po
 $textDelete = _('This will unassign all devices from the pool but will NOT modify any device contents');
 $poolBootSizeLocked = false;
 if (isPool($name) && !isSubpool($name)) {
-  $poolConfigPath = "/boot/config/pools/$name.cfg";
-  if (is_file($poolConfigPath)) {
-    $poolConfig = parse_ini_file($poolConfigPath, false, INI_SCANNER_RAW) ?: [];
-    $poolBootSize = _var($poolConfig, 'diskBootSize', '0');
-    $poolBootSizeLocked = ((string)$poolBootSize !== '0' && $poolBootSize !== '');
-  }
+  $poolBootSizeLocked = _var($disk, 'bootPool', 'no') != 'no';
 }
 
 function disabled_if($condition)
