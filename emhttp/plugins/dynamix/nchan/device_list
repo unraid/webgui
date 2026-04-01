@@ -359,6 +359,7 @@ function pool_function_row(string $label, ?array $poolDisk, ?array $firstMember,
 
   $disk['fsStatus'] = _var($fsOverride,'fsStatus',_var($poolDisk,'fsStatus',_var($firstMember,'fsStatus','')));
   $disk['fsType']   = _var($fsOverride,'fsType',_var($poolDisk,'fsType',_var($firstMember,'fsType','')));
+  $disk['fsMountpoint'] = _var($fsOverride,'fsMountpoint',_var($poolDisk,'fsMountpoint',_var($firstMember,'fsMountpoint','')));
   $disk['fsSize']   = _var($metrics,'fsSize',_var($poolDisk,'fsSize',_var($firstMember,'fsSize','')));
   $disk['fsUsed']   = _var($metrics,'fsUsed',_var($poolDisk,'fsUsed',_var($firstMember,'fsUsed','')));
   $disk['fsFree']   = _var($metrics,'fsFree',_var($poolDisk,'fsFree',_var($firstMember,'fsFree','')));
@@ -1098,6 +1099,7 @@ while (true) {
         $bootFsStatus = get_mount_status_from_mountpoint($mountPoint, true);
         if ($bootFsStatus === '') $bootFsStatus = 'Unknown';
       }
+      $bootMountPoint = _var($poolBootDisk,'mountPoint','') ?: _var($poolBootDisk,'fsMountpoint','') ?: _var($bootFsInfo,'mountPoint','') ?: _var($bootFsInfo,'fsMountpoint','') ?: '/boot';
 
       $bootRow = pool_function_row(
         '<i class="fa fa-paw title"></i> '._('Boot Partition'),
@@ -1110,6 +1112,7 @@ while (true) {
         [
           'fsType' => $bootFsType,
           'fsStatus' => $bootFsStatus,
+          'fsMountpoint' => $bootMountPoint,
         ],
         true,
         $bootPoolName,
@@ -1242,6 +1245,7 @@ while (true) {
           $bootFsStatus = get_mount_status_from_mountpoint($mountPoint, true);
           if ($bootFsStatus === '') $bootFsStatus = 'Unknown';
         }
+        $bootMountPoint = _var($bootDisk,'mountPoint','') ?: _var($bootDisk,'fsMountpoint','') ?: _var($bootFsInfo,'mountPoint','') ?: _var($bootFsInfo,'fsMountpoint','') ?: '/boot';
         $bootRow = pool_function_row(
           '<i class="fa fa-paw title"></i> '._('Boot Partition'),
           $poolDisk,
@@ -1253,6 +1257,7 @@ while (true) {
           [
             'fsType' => $bootFsType,
             'fsStatus' => $bootFsStatus,
+            'fsMountpoint' => $bootMountPoint,
           ],
           true,
           $bootPoolName,
@@ -1381,6 +1386,7 @@ while (true) {
           $bootFsStatus = get_mount_status_from_mountpoint($mountPoint, true);
           if ($bootFsStatus === '') $bootFsStatus = 'Unknown';
         }
+        $bootMountPoint = _var($bootDisk,'mountPoint','') ?: _var($bootDisk,'fsMountpoint','') ?: _var($bootFsInfo,'mountPoint','') ?: _var($bootFsInfo,'fsMountpoint','') ?: '/boot';
         $bootRow = pool_function_row(
           '<i class="fa fa-paw title"></i> '._('Boot Partition'),
           $poolDisk,
@@ -1392,6 +1398,7 @@ while (true) {
           [
             'fsType' => $bootFsType,
             'fsStatus' => $bootFsStatus,
+            'fsMountpoint' => $bootMountPoint,
           ],
           true,
           $bootPoolName,
