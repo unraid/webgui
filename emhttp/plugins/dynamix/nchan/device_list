@@ -489,7 +489,7 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[], $options=[]
     $view = "<a class='view' href=\"/Main/Browse?dir=".htmlspecialchars($dir)."\"><i class=\"icon-u-tab\" title=\""._('Browse')." $dir\"></i></a>";
   }
   if (!$showView) $view = $showViewPlaceholder ? "<a class='view'></a>" : "";
-  if ($showView && _var($options,'forceView',false) && $dir !== '') {
+  if ($showView && _var($options,'forceView',false) && _var($disk,'fsStatus')=='Mounted' && $dir !== '') {
     $view = "<a class='view' href=\"/Main/Browse?dir=".htmlspecialchars($dir)."\"><i class=\"icon-u-tab\" title=\""._('Browse')." $dir\"></i></a>";
   }
   if ($indent) $view = "<span style='padding-left:{$indent}px'></span>".$view;
@@ -1121,6 +1121,7 @@ while (true) {
 
       if ($bootPoolMode !== 'dedicated') {
         $dataLabel = isSubpool($pool) ? _('ZFS subpool') : _('Data Partition');
+        $showDataSummaryView = _var($var,'fsState') != 'Stopped';
         $dataRow = pool_function_row(
           '<i class="fa fa-bullseye title"></i> '.$dataLabel,
           $poolDisk,
@@ -1133,7 +1134,7 @@ while (true) {
           true,
           '',
           $dataSummaryName,
-          true
+          $showDataSummaryView
         );
         if ($dataRow !== '') $echo[$a][] = $dataRow;
       }
