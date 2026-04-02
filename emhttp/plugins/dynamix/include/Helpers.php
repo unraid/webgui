@@ -1247,12 +1247,8 @@ function parse_si_number($value): int
       return preg_replace('/p\d+$/', '', $devicePath);
     }
 
-    if (preg_match('/^(sd[a-z]+|hd[a-z]+|vd[a-z]+|xvd[a-z]+|ubd[a-z]+)p\d+$/', $devicePath, $m)) {
-      return $m[1];
-    }
-
-    if (preg_match('/^(sd[a-z]+|hd[a-z]+|vd[a-z]+|xvd[a-z]+|ubd[a-z]+)\d+$/', $devicePath, $m)) {
-      return $m[1];
+    if (preg_match('/^(sd|hd|vd|xvd|ubd)([a-z]+)(\d+)$/', $devicePath, $m)) {
+      return $m[1].$m[2];
     }
 
     return $devicePath;
