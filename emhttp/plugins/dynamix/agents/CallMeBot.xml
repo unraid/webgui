@@ -26,7 +26,7 @@
     TITLE=$(echo -e "$TITLE")
     MESSAGE=$(echo -e "$MESSAGE" | sed -e 's:<br[ /]*>:\\n:gI' -e 's/<[^>]*>//g')
 
-    curl -s -k -G \
+    curl -s -G \
     --data-urlencode "text=$(hostname): $TITLE\n$MESSAGE" \
     "https://api.callmebot.com/whatsapp.php?phone=$PHONE&apikey=$API_KEY" 2>&1
     ]]>
