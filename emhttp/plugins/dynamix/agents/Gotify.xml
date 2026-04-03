@@ -3,6 +3,7 @@
     <Name>Gotify</Name>
     <Variables>
       <Variable Help="The full server base URL including protocol and port. eg: https://example.com:8888/" Desc="Full Server Base URL" Default="">SERVER_URL</Variable>
+      <Variable Help="Enable TLS certificate verification for the server URL. Disable only if your server uses a self-signed certificate." Desc="Verify TLS certificate" Default="yes">VERIFY_TLS</Variable>
       <Variable Help="The App Token to use." Desc="App Token" Default="">APP_TOKEN</Variable>
       <Variable Help="Specify the fields which are included in the title of the notification." Desc="Notification Title" Default="$SUBJECT">TITLE</Variable>
       <Variable Help="Specify the fields which are included in the message body of the notification." Desc="Notification Message" Default="$DESCRIPTION">MESSAGE</Variable>
@@ -29,7 +30,8 @@
       # Remove any trailing slash
       SERVER_URL=${SERVER_URL%/}
 
-      curl -s -k -X POST \
+      [[ "$VERIFY_TLS" == "no" ]] && K_FLAG="-k" || K_FLAG=""
+      curl -s $K_FLAG -X POST \
       -F "title=$TITLE" \
       -F "message=$MESSAGE" \
       -F "priority=$PRIORITY" \
