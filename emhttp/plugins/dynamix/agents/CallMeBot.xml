@@ -26,9 +26,11 @@
     TITLE=$(echo -e "$TITLE")
     MESSAGE=$(echo -e "$MESSAGE" | sed -e 's:<br[ /]*>:\\n:gI' -e 's/<[^>]*>//g')
 
-    curl -s -G \
-    --data-urlencode "text=$(hostname): $TITLE\n$MESSAGE" \
-    "https://api.callmebot.com/whatsapp.php?phone=$PHONE&apikey=$API_KEY" 2>&1
+    TEXT="$(printf '%s: %s\n%s' "$(hostname)" "$TITLE" "$MESSAGE")"
+    curl -s -G "https://api.callmebot.com/whatsapp.php" \
+    --data-urlencode "phone=$PHONE" \
+    --data-urlencode "apikey=$API_KEY" \
+    --data-urlencode "text=$TEXT" 2>&1
     ]]>
   </Script>
 </Agent>
