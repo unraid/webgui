@@ -71,12 +71,11 @@ function cpu_pinning() {
 if (isset($_POST['contName'])) {
   $postXML = postToXML($_POST, true);
   $dry_run = isset($_POST['dryRun']) && $_POST['dryRun']=='true';
+  $save_only = isset($_POST['saveOnly']) && $_POST['saveOnly']=='true';
   $existing = _var($_POST,'existingContainer',false);
-  $create_paths = $dry_run ? false : true;
+  $create_paths = ($dry_run || $save_only) ? false : true;
   // Get the command line
   [$cmd, $Name, $Repository] = xmlToCommand($postXML, $create_paths);
-  readfile("$docroot/plugins/dynamix.docker.manager/log.htm");
-  @flush();
   // Saving the generated configuration file.
   $userTmplDir = $dockerManPaths['templates-user'];
   if (!is_dir($userTmplDir)) mkdir($userTmplDir, 0777, true);
@@ -93,6 +92,13 @@ if (isset($_POST['contName'])) {
     }
     file_put_contents($filename, $postXML);
   }
+  // Save only - template written, navigate back without log output
+  if ($save_only) {
+    echo "<script>done();</script>";
+    goto END;
+  }
+  readfile("$docroot/plugins/dynamix.docker.manager/log.htm");
+  @flush();
   // Run dry
   if ($dry_run) {
     echo "<h2>XML</h2>";
@@ -1444,7 +1450,8 @@ _(Privileged)_:
 : <span class="inline-block">
     <input type="submit" value="<?=$xmlType=='edit' ? "_(Apply)_" : " _(Apply)_ "?>">
     <input type="button" value="_(Done)_" onclick="done()">
-    <?if ($authoringMode):?><button type="submit" name="dryRun" value="true" onclick="$('*[required]').prop('required', null);">_(Save)_</button><?endif;?>
+    <button type="submit" name="saveOnly" value="true" onclick="$('*[required]').prop('required', null);">_(Save)_</button>
+    <?if ($authoringMode):?><button type="submit" name="dryRun" value="true" onclick="$('*[required]').prop('required', null);">_(Dry Run)_</button><?endif;?>
   </span>
 
 </form>
