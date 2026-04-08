@@ -157,12 +157,12 @@ wait_daemon(){
 
 # All existing containers
 all_containers(){
-  docker ps -a --format='{{.Names}}' 2>/dev/null
+  docker container ls -a --format='{{.Names}} {{.Labels}}' 2>/dev/null | grep 'net.unraid.docker.managed=dockerman' | awk '{print $1}'
 }
 
 # Running containers
 running_containers(){
-  docker ps --format='{{.Names}} {{.Labels}}' 2>/dev/null | grep 'net.unraid.docker.managed=' | awk '{print $1}'
+  docker container ls --format='{{.Names}} {{.Labels}}' 2>/dev/null | grep 'net.unraid.docker.managed=dockerman' | awk '{print $1}'
 }
 
 # Network driver
