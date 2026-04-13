@@ -37,7 +37,7 @@ $arrWhitelist = [
   '/webGui/styles/clear-sans.svg',
   '/webGui/styles/default-cases.css',
   '/webGui/styles/font-cases.eot',
-  '/webGui/styles/font-cases.woff',
+  '/webGui/styles/font-cases-20260413.woff',
   '/webGui/styles/font-cases.ttf',
   '/webGui/styles/font-cases.svg',
   '/webGui/images/case-model.png',
