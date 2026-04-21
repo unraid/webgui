@@ -1151,6 +1151,9 @@ _(Fixed IP address)_ (_(optional)_):
 
 :docker_fixed_ip_help:
 
+</div>
+
+<div markdown="1" class="myMAC noshow">
 _(Fixed MAC address)_ (_(optional)_):
 : <input type="text" name="contMyMAC" pattern="([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}|[0-9A-Fa-f]{12}">
 
@@ -1607,10 +1610,17 @@ subnet['<?=$network?>'] = '<?=$value?>';
 <?endforeach;?>
 
 function showSubnet(bridge) {
-  if (bridge.match(/^(bridge|host|none)$/i) !== null) {
+  if (bridge.match(/^(host|none)$/i) !== null) {
     $('.myIP').hide();
     $('input[name="contMyIP"]').val('');
+    $('.myMAC').hide();
     $('input[name="contMyMAC"]').val('');
+    $('.netCONT').hide();
+    $('#netCONT').val('');
+  } else if (bridge.match(/^(bridge)$/i) !== null) {
+    $('.myIP').hide();
+    $('input[name="contMyIP"]').val('');
+    $('.myMAC').show();
     $('.netCONT').hide();
     $('#netCONT').val('');
   } else if (bridge.match(/^(container)$/i) !== null) {
@@ -1618,10 +1628,12 @@ function showSubnet(bridge) {
     $('#netCONT').val('<?php echo (isset($xml) && isset($xml['Network'][1])) ? $xml['Network'][1] : ''; ?>');
     $('.myIP').hide();
     $('input[name="contMyIP"]').val('');
+    $('.myMAC').hide();
     $('input[name="contMyMAC"]').val('');
   } else {
     $('.myIP').show();
     $('#myIP').html('<?=_('Subnet')?>: '+subnet[bridge]);
+    $('.myMAC').show();
     $('.netCONT').hide();
     $('#netCONT').val('');
   }
