@@ -57,6 +57,13 @@ function cpu_pinning() {
   }
 }
 
+function dockerFormError($message) {
+  global $docroot;
+  readfile("$docroot/plugins/dynamix.docker.manager/log.htm");
+  echo '<p><span class="error"><b>',_('Error'),':</b> ',$message,'</span></p>';
+  echo '<div style="text-align:center"><button type="button" onclick="history.back()">',_('Back'),'</button></div><br>';
+}
+
 #    ██████╗ ██████╗ ██████╗ ███████╗
 #   ██╔════╝██╔═══██╗██╔══██╗██╔════╝
 #   ██║     ██║   ██║██║  ██║█████╗
@@ -71,16 +78,12 @@ function cpu_pinning() {
 if (isset($_POST['contName'])) {
   $extraNetwork = hasNetworkParam($_POST['contExtraParams'] ?? '');
   if ($extraNetwork && trim($_POST['contMyMAC'] ?? '') !== '') {
-    readfile("$docroot/plugins/dynamix.docker.manager/log.htm");
-    echo '<p><span class="error"><b>',_('Error'),':</b> ',_('Fixed MAC address cannot be used when Extra Parameters specify --network or --net. Add mac-address to the Extra Parameters network option instead.'),'</span></p>';
-    echo '<div style="text-align:center"><button type="button" onclick="history.back()">',_('Back'),'</button></div><br>';
+    dockerFormError(_('Fixed MAC address cannot be used when Extra Parameters specify --network or --net. Add mac-address to the Extra Parameters network option instead.'));
     goto END;
   }
   $submittedMAC = trim($_POST['contMyMAC'] ?? '') ?: extractMacAddressParam($_POST['contExtraParams'] ?? '');
   if ($submittedMAC !== '' && !isValidUnicastMacAddress($submittedMAC)) {
-    readfile("$docroot/plugins/dynamix.docker.manager/log.htm");
-    echo '<p><span class="error"><b>',_('Error'),':</b> ',_('Fixed MAC address must be a valid unicast MAC address. The first octet must be even, for example 02:42:9a:0d:7e:c0.'),'</span></p>';
-    echo '<div style="text-align:center"><button type="button" onclick="history.back()">',_('Back'),'</button></div><br>';
+    dockerFormError(_('Fixed MAC address must be a valid unicast MAC address. The first octet must be even, for example 02:42:9a:0d:7e:c0.'));
     goto END;
   }
   $postXML = postToXML($_POST, true);
