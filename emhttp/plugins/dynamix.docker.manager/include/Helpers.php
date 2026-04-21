@@ -403,7 +403,7 @@ function xmlToCommand($xml, $create_paths=false) {
       $xml['ExtraParams'] = removeMacAddressParam($xml['ExtraParams']);
       $networkEndpoint = ['name='.$networkName];
       foreach (explode(' ',str_replace(',',' ',$xml['MyIP'])) as $myIP) {
-        if ($myIP) $networkEndpoint[] = (strpos($myIP,':')?'ip6=':'ip=').$myIP;
+        if ($myIP) $networkEndpoint[] = (strpos($myIP,':') !== false ? 'ip6=' : 'ip=').$myIP;
       }
       $networkEndpoint[] = 'mac-address='.$xml['MyMAC'];
       $cmdNetwork = '--network='.escapeshellarg(implode(',', $networkEndpoint));
@@ -412,7 +412,7 @@ function xmlToCommand($xml, $create_paths=false) {
     }
   }
   if (!strlen($xml['MyMAC']) || preg_match('/^container:(.*)/', $xml['Network']) || $extraNetwork) {
-    foreach (explode(' ',str_replace(',',' ',$xml['MyIP'])) as $myIP) if ($myIP) $cmdMyIP .= (strpos($myIP,':')?'--ip6=':'--ip=').escapeshellarg($myIP).' ';
+    foreach (explode(' ',str_replace(',',' ',$xml['MyIP'])) as $myIP) if ($myIP) $cmdMyIP .= (strpos($myIP,':') !== false ? '--ip6=' : '--ip=').escapeshellarg($myIP).' ';
   }
   $cmdCPUset     = strlen($xml['CPUset']) ? '--cpuset-cpus='.escapeshellarg($xml['CPUset']) : '';
   $Volumes       = [''];
