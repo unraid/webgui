@@ -137,8 +137,9 @@ if (isset($_POST['contName'])) {
     // force kill container if still running after 10 seconds
     removeContainer($existing,1);
     // remove old template
-    if (strtolower($filename) != strtolower("$userTmplDir/my-$existing.xml")) {
-      @unlink("$userTmplDir/my-$existing.xml");
+    $oldFilename = $DockerTemplates->getUserTemplatePath($existing);
+    if (strtolower($filename) != strtolower($oldFilename)) {
+      @unlink($oldFilename);
     }
   }
   // Extract real Entrypoint and Cmd from container for Tailscale
