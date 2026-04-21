@@ -32,25 +32,116 @@ function xml_decode($string) {
   return strval(html_entity_decode($string, ENT_XML1, 'UTF-8'));
 }
 
-function extractMacAddressParam($extraParams) {
-  if (!is_string($extraParams) || !preg_match('/(?:^|\s)--mac-address(?:=|\s+)(?:"([^"]+)"|\'([^\']+)\'|([^\s]+))/', $extraParams, $match)) {
-    return '';
+function extraParamsTokens($extraParams) {
+  if (!is_string($extraParams) || $extraParams === '') {
+    return [];
   }
-  foreach (array_slice($match, 1) as $value) {
-    if (strlen($value ?? '')) return trim($value);
+  $tokens = [];
+  $leading = '';
+  $raw = '';
+  $value = '';
+  $quote = '';
+  $escaped = false;
+  $inToken = false;
+  $length = strlen($extraParams);
+
+  for ($i = 0; $i < $length; $i++) {
+    $char = $extraParams[$i];
+    if (!$inToken && ctype_space($char)) {
+      $leading .= $char;
+      continue;
+    }
+    if (!$inToken) {
+      $inToken = true;
+      $raw = '';
+      $value = '';
+    }
+    $raw .= $char;
+    if ($escaped) {
+      $value .= $char;
+      $escaped = false;
+      continue;
+    }
+    if ($quote) {
+      if ($char === $quote) {
+        $quote = '';
+      } elseif ($quote === '"' && $char === '\\') {
+        $escaped = true;
+      } else {
+        $value .= $char;
+      }
+      continue;
+    }
+    if ($char === '\\') {
+      $escaped = true;
+      continue;
+    }
+    if ($char === '"' || $char === "'") {
+      $quote = $char;
+      continue;
+    }
+    if (ctype_space($char)) {
+      $tokens[] = ['leading' => $leading, 'raw' => substr($raw, 0, -1), 'value' => $value];
+      $leading = $char;
+      $raw = '';
+      $value = '';
+      $inToken = false;
+      continue;
+    }
+    $value .= $char;
+  }
+  if ($inToken) {
+    $tokens[] = ['leading' => $leading, 'raw' => $raw, 'value' => $value];
+  }
+  return $tokens;
+}
+
+function extractMacAddressParam($extraParams) {
+  $tokens = extraParamsTokens($extraParams);
+  for ($i = 0, $count = count($tokens); $i < $count; $i++) {
+    $value = $tokens[$i]['value'];
+    if ($value === '--mac-address') {
+      return trim($tokens[$i + 1]['value'] ?? '');
+    }
+    if (strpos($value, '--mac-address=') === 0) {
+      return trim(substr($value, strlen('--mac-address=')));
+    }
   }
   return '';
 }
 
 function removeMacAddressParam($extraParams) {
-  if (!is_string($extraParams) || $extraParams === '') {
+  $tokens = extraParamsTokens($extraParams);
+  if (!$tokens) {
     return '';
   }
-  return trim(preg_replace('/(^|\s)--mac-address(?:=|\s+)(?:"[^"]+"|\'[^\']+\'|[^\s]+)/', '$1', $extraParams));
+  $out = '';
+  $skipNext = false;
+  foreach ($tokens as $token) {
+    if ($skipNext) {
+      $skipNext = false;
+      continue;
+    }
+    if ($token['value'] === '--mac-address') {
+      $skipNext = true;
+      continue;
+    }
+    if (strpos($token['value'], '--mac-address=') === 0) {
+      continue;
+    }
+    $out .= $token['leading'].$token['raw'];
+  }
+  return trim($out);
 }
 
 function hasNetworkParam($extraParams) {
-  return is_string($extraParams) && preg_match('/(?:^|\s)--net(?:work)?(?:=|\s+)/', $extraParams);
+  foreach (extraParamsTokens($extraParams) as $token) {
+    $value = $token['value'];
+    if ($value === '--net' || $value === '--network' || strpos($value, '--net=') === 0 || strpos($value, '--network=') === 0) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function normalizeMacAddress($mac) {
