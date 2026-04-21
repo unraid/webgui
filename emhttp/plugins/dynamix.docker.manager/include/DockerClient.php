@@ -1022,15 +1022,23 @@ class DockerClient {
 				$ports = &$info['Config']['ExposedPorts'];
 			}
 			foreach($ct['NetworkSettings']['Networks'] as $netName => $netVals) {
+				$networkDetails = $info['NetworkSettings']['Networks'][$netName] ?? $netVals;
 				$i = $c['NetworkMode']=='host' ? $host : $netVals['IPAddress'];
-				$c['Networks'][$netName] = [ 'IPAddress' => $i ];
+				$c['Networks'][$netName] = [
+					'IPAddress' => $i,
+					'MacAddress' => $networkDetails['MacAddress'] ?? ''
+				];
 				if ( isset($driver[$netName]) && ($driver[$netName]=='ipvlan' || $driver[$netName]=='macvlan') ) {
 					if (!isset($c['Ports']['vlan'])) $c['Ports']['vlan'] = [];
 					$c['Ports']['vlan']["$i"] = $i;
 				}
 			}
+			$networkDetails = $info['NetworkSettings']['Networks'][$c['NetworkMode']] ?? $ct['NetworkSettings']['Networks'][$c['NetworkMode']] ?? [];
 			$ip = $c['NetworkMode']=='host' ? $host : $ct['NetworkSettings']['Networks'][$c['NetworkMode']]['IPAddress'] ?? null;
-			$c['Networks'][$c['NetworkMode']] = [ 'IPAddress' => $ip ];
+			$c['Networks'][$c['NetworkMode']] = [
+				'IPAddress' => $ip,
+				'MacAddress' => $networkDetails['MacAddress'] ?? ''
+			];
 			$ports = (isset($ports) && is_array($ports)) ? $ports : [];
 			foreach ($ports as $port => $value) {
 				if (!isset($info['HostConfig']['PortBindings'][$port])) {

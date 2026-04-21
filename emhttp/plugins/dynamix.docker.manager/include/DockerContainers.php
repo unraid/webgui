@@ -28,7 +28,7 @@ $user_prefs      = $dockerManPaths['user-prefs'];
 $autostart_file  = $dockerManPaths['autostart-file'];
 
 if (!$containers && !$images) {
-  echo "<tr><td colspan='7' style='text-align:center;padding-top:12px'>"._('No Docker containers installed')."</td></tr>";
+  echo "<tr><td colspan='11' style='text-align:center;padding-top:12px'>"._('No Docker containers installed')."</td></tr>";
   return;
 }
 
@@ -144,6 +144,7 @@ foreach ($containers as $ct) {
   $wait = var_split($autostart[array_search($name,$names)]??'',1);
   $networks = [];
   $network_ips = [];
+  $network_macs = [];
   $ports_internal = [];
   $ports_external = [];
   if (isset($ct['Ports']['vlan'])) {
@@ -155,6 +156,7 @@ foreach ($containers as $ct) {
   foreach($ct['Networks'] as $netName => $netVals) {
     $networks[] = $netName;
     $network_ips[] = $running ? $netVals['IPAddress'] : null;
+    $network_macs[] = htmlspecialchars((string)($netVals['MacAddress'] ?? ''));
     if (isset($ct['Networks']['host'])) {
       $ports_external[] = sprintf('%s', $netVals['IPAddress']);
       $ports_internal[0] = sprintf('%s', 'all');
@@ -323,6 +325,7 @@ foreach ($containers as $ct) {
   echo "<div class='advanced'><i class='fa fa-info-circle fa-fw'></i> ".compress(_($version),12,0)."</div></td>";
   echo "<td style='white-space:nowrap'><span class='docker_readmore'> ".implode('<br>',$networks).$TS_status."</span></td>";
   echo "<td style='white-space:nowrap'><span class='docker_readmore'> ".implode('<br>',$network_ips)."</span></td>";
+  echo "<td class='advanced' style='white-space:nowrap'><span class='docker_readmore'> ".implode('<br>',$network_macs)."</span></td>";
   echo "<td style='white-space:nowrap'><span class='docker_readmore'>".implode('<br>',$ports_internal)."</span></td>";
   echo "<td style='white-space:nowrap'><span class='docker_readmore'>".implode('<br>',$ports_external)."</span></td>";
   echo "<td style='word-break:break-all'><span class='docker_readmore'>".implode('<br>',$paths)."</span></td>";
@@ -346,7 +349,7 @@ foreach ($images as $image) {
   $menu = sprintf("onclick=\"addDockerImageContext('%s','%s')\"", $id, implode(',',$image['Tags']));
   echo "<tr class='advanced'><td style='width:220px;padding:8px'>";
   echo "<span class='outer apps'><span id='$id' $menu class='hand'><img src='/webGui/images/disk.png' class='img'></span><span class='inner'>("._('orphan image').")<br><i class='fa fa-square stopped grey-text'></i><span class='state'>"._('stopped')."</span></span></span>";
-  echo "</td><td colspan='6'>"._('Image ID').": $id<br>";
+  echo "</td><td colspan='7'>"._('Image ID').": $id<br>";
   echo implode(', ',$image['Tags']);
   echo "</td><td>"._('Created')." ".htmlspecialchars(_($image['Created'],0))."</td></tr>";
 }
