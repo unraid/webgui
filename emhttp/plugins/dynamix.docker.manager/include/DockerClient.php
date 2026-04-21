@@ -139,6 +139,21 @@ class DockerTemplates {
 		return $tmpls;
 	}
 
+	public function getUserTemplatePath($Container) {
+		global $dockerManPaths;
+		$dir = $dockerManPaths['templates-user'];
+		if (!is_dir($dir)) @mkdir($dir, 0755, true);
+		$target = "my-$Container.xml";
+		$targetLower = strtolower($target);
+		$match = false;
+		foreach (glob("$dir/my-*.xml") ?: [] as $template) {
+			$name = basename($template);
+			if ($name == $target) return $template;
+			if (!$match && strtolower($name) == $targetLower) $match = $template;
+		}
+		return $match ?: "$dir/$target";
+	}
+
 	public function downloadTemplates($Dest=null, $Urls=null) {	
 		/* Don't download any templates.  Leave code in place for future reference. */
 		/* remove existing limetech templates that are all not valid */

@@ -4,19 +4,33 @@
 $autostart = @file("/var/lib/docker/unraid-autostart",FILE_IGNORE_NEW_LINES);
 if ( ! $autostart ) exit();
 
+function user_template($container) {
+  $dir = "/boot/config/plugins/dockerMan/templates-user";
+  $target = "my-$container.xml";
+  $targetLower = strtolower($target);
+  $match = false;
+  foreach (glob("$dir/my-*.xml") ?: [] as $template) {
+    $name = basename($template);
+    if ($name == $target) return $template;
+    if (!$match && strtolower($name) == $targetLower) $match = $template;
+  }
+  return $match;
+}
+
 $flag = false;
 $newAuto = [];
 foreach ($autostart as $container) {
   if (! trim($container) ) continue;
 
   $cont = explode(" ",$container);
-  if ( ! is_file("/boot/config/plugins/dockerMan/templates-user/my-{$cont[0]}.xml")) {
+  $template = user_template($cont[0]);
+  if (!$template) {
     $newAuto[] = $container;
     continue;
   }
     
   $doc = new DOMDocument();
-  if (!$doc->load("/boot/config/plugins/dockerMan/templates-user/my-{$cont[0]}.xml")) {
+  if (!$doc->load($template)) {
     $newAuto[] = $container;
     continue;
   }

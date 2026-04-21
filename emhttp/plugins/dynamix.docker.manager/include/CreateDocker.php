@@ -81,7 +81,7 @@ if (isset($_POST['contName'])) {
   $userTmplDir = $dockerManPaths['templates-user'];
   if (!is_dir($userTmplDir)) mkdir($userTmplDir, 0777, true);
   if ($Name) {
-    $filename = sprintf('%s/my-%s.xml', $userTmplDir, $Name);
+    $filename = $DockerTemplates->getUserTemplatePath($Name);
     if (is_file($filename)) {
       $oldXML = simplexml_load_file($filename);
       if ($oldXML->Icon != $_POST['contIcon']) {
