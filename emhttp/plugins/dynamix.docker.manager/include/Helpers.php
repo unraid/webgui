@@ -66,15 +66,6 @@ function normalizeMacAddress($mac) {
   return preg_match('/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/', $mac) ? $mac : '';
 }
 
-function isValidUnicastMacAddress($mac) {
-  $mac = normalizeMacAddress($mac);
-  if ($mac === '') {
-    return false;
-  }
-  $firstOctet = hexdec(substr($mac, 0, 2));
-  return ($firstOctet & 1) === 0;
-}
-
 function generateTSwebui($url, $serve, $webUI) {
   if (!isset($webUI)) {
     return '';
