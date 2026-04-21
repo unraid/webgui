@@ -32,116 +32,51 @@ function xml_decode($string) {
   return strval(html_entity_decode($string, ENT_XML1, 'UTF-8'));
 }
 
-function extraParamsTokens($extraParams) {
-  if (!is_string($extraParams) || $extraParams === '') {
-    return [];
-  }
-  $tokens = [];
-  $leading = '';
-  $raw = '';
-  $value = '';
-  $quote = '';
-  $escaped = false;
-  $inToken = false;
-  $length = strlen($extraParams);
+function extraParamsWithQuotedValuesMasked($extraParams) {
+  return preg_replace('/"[^"\\\\]*(?:\\\\.[^"\\\\]*)*"|\'[^\']*\'/', '""', $extraParams);
+}
 
-  for ($i = 0; $i < $length; $i++) {
-    $char = $extraParams[$i];
-    if (!$inToken && ctype_space($char)) {
-      $leading .= $char;
-      continue;
-    }
-    if (!$inToken) {
-      $inToken = true;
-      $raw = '';
-      $value = '';
-    }
-    $raw .= $char;
-    if ($escaped) {
-      $value .= $char;
-      $escaped = false;
-      continue;
-    }
-    if ($quote) {
-      if ($char === $quote) {
-        $quote = '';
-      } elseif ($quote === '"' && $char === '\\') {
-        $escaped = true;
-      } else {
-        $value .= $char;
-      }
-      continue;
-    }
-    if ($char === '\\') {
-      $escaped = true;
-      continue;
-    }
-    if ($char === '"' || $char === "'") {
-      $quote = $char;
-      continue;
-    }
-    if (ctype_space($char)) {
-      $tokens[] = ['leading' => $leading, 'raw' => substr($raw, 0, -1), 'value' => $value];
-      $leading = $char;
-      $raw = '';
-      $value = '';
-      $inToken = false;
-      continue;
-    }
-    $value .= $char;
+function replaceUnquotedExtraParams($extraParams, $callback) {
+  $parts = preg_split('/("[^"\\\\]*(?:\\\\.[^"\\\\]*)*"|\'[^\']*\')/', $extraParams, -1, PREG_SPLIT_DELIM_CAPTURE);
+  if ($parts === false) {
+    return $extraParams;
   }
-  if ($inToken) {
-    $tokens[] = ['leading' => $leading, 'raw' => $raw, 'value' => $value];
+  foreach ($parts as $i => $part) {
+    if ($part === '' || $part[0] === '"' || $part[0] === "'") {
+      continue;
+    }
+    $parts[$i] = $callback($part);
   }
-  return $tokens;
+  return implode('', $parts);
 }
 
 function extractMacAddressParam($extraParams) {
-  $tokens = extraParamsTokens($extraParams);
-  for ($i = 0, $count = count($tokens); $i < $count; $i++) {
-    $value = $tokens[$i]['value'];
-    if ($value === '--mac-address') {
-      return trim($tokens[$i + 1]['value'] ?? '');
-    }
-    if (strpos($value, '--mac-address=') === 0) {
-      return trim(substr($value, strlen('--mac-address=')));
-    }
+  if (!is_string($extraParams)) {
+    return '';
+  }
+  $extraParams = extraParamsWithQuotedValuesMasked($extraParams);
+  if (preg_match('/(?:^|\s)--mac-address=([^\s\'"]+)/', $extraParams, $match)) {
+    return trim($match[1]);
+  }
+  if (preg_match('/(?:^|\s)--mac-address\s+([^\s\'"]+)/', $extraParams, $match)) {
+    return trim($match[1]);
   }
   return '';
 }
 
 function removeMacAddressParam($extraParams) {
-  $tokens = extraParamsTokens($extraParams);
-  if (!$tokens) {
+  if (!is_string($extraParams) || $extraParams === '') {
     return '';
   }
-  $out = '';
-  $skipNext = false;
-  foreach ($tokens as $token) {
-    if ($skipNext) {
-      $skipNext = false;
-      continue;
-    }
-    if ($token['value'] === '--mac-address') {
-      $skipNext = true;
-      continue;
-    }
-    if (strpos($token['value'], '--mac-address=') === 0) {
-      continue;
-    }
-    $out .= $token['leading'].$token['raw'];
-  }
-  return trim($out);
+  $extraParams = replaceUnquotedExtraParams($extraParams, function($part) {
+    $part = preg_replace('/(^|\s)--mac-address=[^\s\'"]+/', '$1', $part);
+    return preg_replace('/(^|\s)--mac-address\s+[^\s\'"]+/', '$1', $part);
+  });
+  return trim($extraParams);
 }
 
 function hasNetworkParam($extraParams) {
-  foreach (extraParamsTokens($extraParams) as $token) {
-    $value = $token['value'];
-    if ($value === '--net' || $value === '--network' || strpos($value, '--net=') === 0 || strpos($value, '--network=') === 0) {
-      return true;
-    }
-  }
-  return false;
+  return is_string($extraParams) && preg_match('/(?:^|\s)--net(?:work)?(?:=|\s+)[^\s\'"]+/', extraParamsWithQuotedValuesMasked($extraParams));
 }
 
 function normalizeMacAddress($mac) {
