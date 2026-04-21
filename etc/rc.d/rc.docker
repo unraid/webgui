@@ -248,6 +248,7 @@ netrestore_connect(){
   local MY_OPTS=
   local IP=
   local ENDPOINT_ID=
+  local ENDPOINT_MAC=
   local OUT=
 
   container_exist "$CONTAINER" || return 0
@@ -263,9 +264,6 @@ netrestore_connect(){
     return 1
   fi
 
-  ENDPOINT_ID=$(docker inspect --format="{{with index .NetworkSettings.Networks \"$NETWORK\"}}{{.EndpointID}}{{end}}" "$CONTAINER" 2>/dev/null)
-  [[ -n $ENDPOINT_ID ]] && return 0
-
   for IP in ${MY_TT//;/ }; do
     [[ -n $IP ]] || continue
     if [[ $IP =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
@@ -278,6 +276,18 @@ netrestore_connect(){
   done
 
   [[ -n $MY_MAC ]] && MY_OPTS="--driver-opt=com.docker.network.endpoint.macaddress=$MY_MAC"
+  ENDPOINT_ID=$(docker inspect --format="{{with index .NetworkSettings.Networks \"$NETWORK\"}}{{.EndpointID}}{{end}}" "$CONTAINER" 2>/dev/null)
+  if [[ -n $ENDPOINT_ID ]]; then
+    [[ -n $MY_MAC ]] || return 0
+    ENDPOINT_MAC=$(docker inspect --format="{{with index .NetworkSettings.Networks \"$NETWORK\"}}{{.MacAddress}}{{end}}" "$CONTAINER" 2>/dev/null)
+    [[ ${ENDPOINT_MAC,,} == ${MY_MAC,,} ]] && return 0
+    log "reconnecting $CONTAINER to network $NETWORK to restore MAC $MY_MAC"
+    if ! OUT=$(docker network disconnect -f "$NETWORK" "$CONTAINER" 2>&1); then
+      log "failed to disconnect $CONTAINER from network $NETWORK: $OUT"
+      return 1
+    fi
+  fi
+
   log "connecting $CONTAINER to network $NETWORK"
   if ! OUT=$(docker network connect $MY_OPTS $MY_IP $NETWORK $CONTAINER 2>&1); then
     log "failed to connect $CONTAINER to network $NETWORK: $OUT"
