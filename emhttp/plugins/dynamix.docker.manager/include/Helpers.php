@@ -49,6 +49,10 @@ function removeMacAddressParam($extraParams) {
   return trim(preg_replace('/(^|\s)--mac-address(?:=|\s+)(?:"[^"]+"|\'[^\']+\'|[^\s]+)/', '$1', $extraParams));
 }
 
+function hasNetworkParam($extraParams) {
+  return is_string($extraParams) && preg_match('/(?:^|\s)--net(?:work)?(?:=|\s+)/', $extraParams);
+}
+
 function normalizeMacAddress($mac) {
   $mac = strtolower(trim($mac ?? ''));
   if ($mac === '') {
@@ -114,7 +118,7 @@ function postToXML($post, $setOwnership=false) {
     $xml->Network                  = xml_encode($post['contNetwork']);
   }
   $xml->MyIP                       = xml_encode($post['contMyIP']);
-  $extraNetwork                    = preg_match('/\-\-net(work)?=/', $post['contExtraParams'] ?? '');
+  $extraNetwork                    = hasNetworkParam($post['contExtraParams'] ?? '');
   $myMAC                           = $extraNetwork ? '' : normalizeMacAddress(trim($post['contMyMAC'] ?? '') ?: extractMacAddressParam($post['contExtraParams'] ?? ''));
   $xml->MyMAC                      = xml_encode($myMAC);
   $xml->Shell                      = xml_encode($post['contShell']);
@@ -192,7 +196,7 @@ function xmlToVar($xml) {
   $out['Network']                      = xml_decode($xml->Network);
   $out['MyIP']                         = xml_decode($xml->MyIP ?? '');
   $extraParams                         = xml_decode($xml->ExtraParams ?? '');
-  $extraNetwork                        = preg_match('/\-\-net(work)?=/', $extraParams);
+  $extraNetwork                        = hasNetworkParam($extraParams);
   $out['MyMAC']                        = $extraNetwork ? '' : normalizeMacAddress(xml_decode($xml->MyMAC ?? '') ?: extractMacAddressParam($extraParams));
   $out['Shell']                        = xml_decode($xml->Shell ?? 'sh');
   $out['Privileged']                   = xml_decode($xml->Privileged);
@@ -370,7 +374,7 @@ function xmlToCommand($xml, $create_paths=false) {
   $xml           = xmlToVar($xml);
   $cmdName       = strlen($xml['Name']) ? '--name='.escapeshellarg($xml['Name']) : '';
   $cmdPrivileged = strtolower($xml['Privileged'])=='true' ? '--privileged=true' : '';
-  $extraNetwork  = preg_match('/\-\-net(work)?=/',$xml['ExtraParams']);
+  $extraNetwork  = hasNetworkParam($xml['ExtraParams']);
   $cmdMyIP       = '';
   if (preg_match('/^container:(.*)/', $xml['Network'])) {
     $cmdNetwork  = $extraNetwork ? "" : '--net='.escapeshellarg($xml['Network']);

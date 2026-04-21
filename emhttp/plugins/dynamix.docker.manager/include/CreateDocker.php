@@ -69,7 +69,7 @@ function cpu_pinning() {
 ##########################
 
 if (isset($_POST['contName'])) {
-  $extraNetwork = preg_match('/\-\-net(work)?=/', $_POST['contExtraParams'] ?? '');
+  $extraNetwork = hasNetworkParam($_POST['contExtraParams'] ?? '');
   if ($extraNetwork && trim($_POST['contMyMAC'] ?? '') !== '') {
     readfile("$docroot/plugins/dynamix.docker.manager/log.htm");
     echo '<p><span class="error"><b>',_('Error'),':</b> ',_('Fixed MAC address cannot be used when Extra Parameters specify --network or --net. Add mac-address to the Extra Parameters network option instead.'),'</span></p>';
@@ -216,10 +216,9 @@ if (isset($_GET['updateContainer'])){
     if (preg_match('/^container:(.*)/', $Network)) {
       $Net_Container = str_replace("container:", "", $Network);
     } else {
-      preg_match("/--(net|network)=container:[^\s]+/", $ExtraParams, $NetworkParam);
-      if (!empty($NetworkParam[0])) {
-        $Net_Container = explode(':', $NetworkParam[0])[1];
-        $Net_Container = str_replace(['"', "'"], '', $Net_Container);
+      preg_match("/--(?:net|network)(?:=|\s+)(['\"]?)container:([^'\"\s]+)\\1/", $ExtraParams, $NetworkParam);
+      if (!empty($NetworkParam[2])) {
+        $Net_Container = $NetworkParam[2];
       }
     }
     // check if the container still exists from which the network should be used, if it doesn't exist any more recreate container with network none and don't start it
@@ -227,7 +226,7 @@ if (isset($_GET['updateContainer'])){
       $Net_Container_ID = $DockerClient->getContainerID($Net_Container);
       if (empty($Net_Container_ID)) {
         $cmd = str_replace('/docker run -d ', '/docker create ', $cmd);
-        $cmd = preg_replace("/--(net|network)=(['\"]?)container:[^'\"]+\\2/", "--network=none ", $cmd);
+        $cmd = preg_replace("/--(?:net|network)(?:=|\s+)(['\"]?)container:[^'\"\s]+\\1/", "--network=none ", $cmd);
       }
     }
     // force kill container if still running after time-out
@@ -751,6 +750,11 @@ function removeConfig(num) {
 function prepareConfig(form) {
   var types = [], values = [], targets = [], vcpu = [];
   var myMAC = $(form).find('input[name="contMyMAC"]').val().trim().replaceAll('-', ':').toLowerCase();
+  var extraParams = $(form).find('input[name="contExtraParams"]').val();
+  if (myMAC && hasNetworkParam(extraParams)) {
+    swal({title:"_(Invalid network settings)_",text:"_(Fixed MAC address cannot be used when Extra Parameters specify --network or --net. Add mac-address to the Extra Parameters network option instead.)_",type:"error",html:true});
+    return false;
+  }
   if (myMAC && !isValidUnicastMacAddress(myMAC)) {
     swal({title:"_(Invalid MAC address)_",text:"_(Fixed MAC address must be a valid unicast MAC address. The first octet must be even, for example 02:42:9a:0d:7e:c0.)_",type:"error",html:true});
     return false;
@@ -775,6 +779,10 @@ function isValidUnicastMacAddress(mac) {
     return false;
   }
   return (parseInt(mac.substring(0, 2), 16) & 1) === 0;
+}
+
+function hasNetworkParam(extraParams) {
+  return /(^|\s)--net(work)?(=|\s+)/.test(extraParams || '');
 }
 
 function makeName(type) {
