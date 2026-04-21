@@ -347,20 +347,25 @@ docker_network_start(){
           REBUILD=1
         fi
       done
-      MY_NETWORK= MY_IP= MY_MAC= TEMPLATE_MAC= CUSTOM_PRIMARY=
+      MY_NETWORK= MY_IP= MY_MAC= XML_MAC= TEMPLATE_MAC= CUSTOM_PRIMARY=
       while read_dom; do
         [[ $ENTITY == Network ]] && MY_NETWORK=$CONTENT
         [[ $ENTITY == MyIP ]] && MY_IP=${CONTENT// /,} && MY_IP=$(echo "$MY_IP" | tr -s "," ";")
+        [[ $ENTITY == MyMAC ]] && XML_MAC=${CONTENT// /}
       done <$XMLFILE
       # only restore valid networks
       if [[ -n $MY_NETWORK ]]; then
         [[ $MY_NETWORK =~ ^(br|bond|eth|wlan)[0-9]+(\.[0-9]+)?$ ]] && CUSTOM_PRIMARY=1
         TEMPLATE_MAC=$(sed -nE 's@.*<ExtraParams>.*--mac-address(=|[[:space:]]+)([^ <]+).*@\2@p' "$XMLFILE" | head -n1)
-        MY_MAC=$(docker inspect --format="{{with index .NetworkSettings.Networks \"$MY_NETWORK\"}}{{.MacAddress}}{{end}}" $CONTAINER 2>/dev/null)
-        [[ -n $MY_MAC ]] || MY_MAC=$TEMPLATE_MAC
+        if [[ -n $XML_MAC ]]; then
+          MY_MAC=$XML_MAC
+        else
+          MY_MAC=$(docker inspect --format="{{with index .NetworkSettings.Networks \"$MY_NETWORK\"}}{{.MacAddress}}{{end}}" $CONTAINER 2>/dev/null)
+          [[ -n $MY_MAC ]] || MY_MAC=$TEMPLATE_MAC
+        fi
         netrestore_add "$MY_NETWORK" "$CONTAINER" "$MY_IP" "$MY_MAC"
         PRIMARY_NETWORK[$CONTAINER]=$MY_NETWORK
-        [[ -n $REBUILD || (-n $TEMPLATE_MAC && -n $CUSTOM_PRIMARY) ]] && REBUILD_CONTAINERS[$CONTAINER]=1
+        [[ -n $REBUILD || (-z $XML_MAC && -n $TEMPLATE_MAC && -n $CUSTOM_PRIMARY) ]] && REBUILD_CONTAINERS[$CONTAINER]=1
       fi
     fi
     # restore user defined networks

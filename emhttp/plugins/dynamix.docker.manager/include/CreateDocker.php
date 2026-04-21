@@ -1109,6 +1109,11 @@ _(Fixed IP address)_ (_(optional)_):
 
 :docker_fixed_ip_help:
 
+_(Fixed MAC address)_ (_(optional)_):
+: <input type="text" name="contMyMAC">
+
+:docker_fixed_mac_help:
+
 </div>
 
 <div markdown="1" class="netCONT noshow">
@@ -1563,6 +1568,7 @@ function showSubnet(bridge) {
   if (bridge.match(/^(bridge|host|none)$/i) !== null) {
     $('.myIP').hide();
     $('input[name="contMyIP"]').val('');
+    $('input[name="contMyMAC"]').val('');
     $('.netCONT').hide();
     $('#netCONT').val('');
   } else if (bridge.match(/^(container)$/i) !== null) {
@@ -1570,6 +1576,7 @@ function showSubnet(bridge) {
     $('#netCONT').val('<?php echo (isset($xml) && isset($xml['Network'][1])) ? $xml['Network'][1] : ''; ?>');
     $('.myIP').hide();
     $('input[name="contMyIP"]').val('');
+    $('input[name="contMyMAC"]').val('');
   } else {
     $('.myIP').show();
     $('#myIP').html('<?=_('Subnet')?>: '+subnet[bridge]);
@@ -1932,4 +1939,3 @@ if (window.location.href.indexOf("/Apps/") > 0  && <? if (is_file($xmlTemplate))
 }
 </script>
 <?END:?>
-
