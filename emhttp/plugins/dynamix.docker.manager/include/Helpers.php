@@ -49,6 +49,28 @@ function removeMacAddressParam($extraParams) {
   return trim(preg_replace('/(^|\s)--mac-address(?:=|\s+)(?:"[^"]+"|\'[^\']+\'|[^\s]+)/', '$1', $extraParams));
 }
 
+function normalizeMacAddress($mac) {
+  $mac = strtolower(trim($mac ?? ''));
+  if ($mac === '') {
+    return '';
+  }
+  if (preg_match('/^[0-9a-f]{12}$/', $mac)) {
+    $mac = implode(':', str_split($mac, 2));
+  } else {
+    $mac = str_replace('-', ':', $mac);
+  }
+  return preg_match('/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/', $mac) ? $mac : '';
+}
+
+function isValidUnicastMacAddress($mac) {
+  $mac = normalizeMacAddress($mac);
+  if ($mac === '') {
+    return false;
+  }
+  $firstOctet = hexdec(substr($mac, 0, 2));
+  return ($firstOctet & 1) === 0;
+}
+
 function generateTSwebui($url, $serve, $webUI) {
   if (!isset($webUI)) {
     return '';
@@ -93,7 +115,7 @@ function postToXML($post, $setOwnership=false) {
   }
   $xml->MyIP                       = xml_encode($post['contMyIP']);
   $extraNetwork                    = preg_match('/\-\-net(work)?=/', $post['contExtraParams'] ?? '');
-  $myMAC                           = trim($post['contMyMAC'] ?? '') ?: ($extraNetwork ? '' : extractMacAddressParam($post['contExtraParams'] ?? ''));
+  $myMAC                           = $extraNetwork ? '' : normalizeMacAddress(trim($post['contMyMAC'] ?? '') ?: extractMacAddressParam($post['contExtraParams'] ?? ''));
   $xml->MyMAC                      = xml_encode($myMAC);
   $xml->Shell                      = xml_encode($post['contShell']);
   $xml->Privileged                 = strtolower($post['contPrivileged']??'')=='on' ? 'true' : 'false';
@@ -169,7 +191,9 @@ function xmlToVar($xml) {
   $out['Registry']                     = xml_decode($xml->Registry);
   $out['Network']                      = xml_decode($xml->Network);
   $out['MyIP']                         = xml_decode($xml->MyIP ?? '');
-  $out['MyMAC']                        = xml_decode($xml->MyMAC ?? '') ?: extractMacAddressParam(xml_decode($xml->ExtraParams ?? ''));
+  $extraParams                         = xml_decode($xml->ExtraParams ?? '');
+  $extraNetwork                        = preg_match('/\-\-net(work)?=/', $extraParams);
+  $out['MyMAC']                        = $extraNetwork ? '' : normalizeMacAddress(xml_decode($xml->MyMAC ?? '') ?: extractMacAddressParam($extraParams));
   $out['Shell']                        = xml_decode($xml->Shell ?? 'sh');
   $out['Privileged']                   = xml_decode($xml->Privileged);
   $out['Support']                      = xml_decode($xml->Support);
@@ -180,7 +204,7 @@ function xmlToVar($xml) {
   $out['WebUI']                        = xml_decode($xml->WebUI);
   $out['TemplateURL']                  = xml_decode($xml->TemplateURL);
   $out['Icon']                         = xml_decode($xml->Icon);
-  $out['ExtraParams']                  = xml_decode($xml->ExtraParams);
+  $out['ExtraParams']                  = $extraParams;
   $out['PostArgs']                     = xml_decode($xml->PostArgs);
   $out['CPUset']                       = xml_decode($xml->CPUset);
   $out['DonateText']                   = xml_decode($xml->DonateText);

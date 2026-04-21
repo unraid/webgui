@@ -69,6 +69,20 @@ function cpu_pinning() {
 ##########################
 
 if (isset($_POST['contName'])) {
+  $extraNetwork = preg_match('/\-\-net(work)?=/', $_POST['contExtraParams'] ?? '');
+  if ($extraNetwork && trim($_POST['contMyMAC'] ?? '') !== '') {
+    readfile("$docroot/plugins/dynamix.docker.manager/log.htm");
+    echo '<p><span class="error"><b>',_('Error'),':</b> ',_('Fixed MAC address cannot be used when Extra Parameters specify --network or --net. Add mac-address to the Extra Parameters network option instead.'),'</span></p>';
+    echo '<div style="text-align:center"><button type="button" onclick="history.back()">',_('Back'),'</button></div><br>';
+    goto END;
+  }
+  $submittedMAC = trim($_POST['contMyMAC'] ?? '') ?: extractMacAddressParam($_POST['contExtraParams'] ?? '');
+  if ($submittedMAC !== '' && !isValidUnicastMacAddress($submittedMAC)) {
+    readfile("$docroot/plugins/dynamix.docker.manager/log.htm");
+    echo '<p><span class="error"><b>',_('Error'),':</b> ',_('Fixed MAC address must be a valid unicast MAC address. The first octet must be even, for example 02:42:9a:0d:7e:c0.'),'</span></p>';
+    echo '<div style="text-align:center"><button type="button" onclick="history.back()">',_('Back'),'</button></div><br>';
+    goto END;
+  }
   $postXML = postToXML($_POST, true);
   $dry_run = isset($_POST['dryRun']) && $_POST['dryRun']=='true';
   $existing = _var($_POST,'existingContainer',false);
@@ -736,6 +750,12 @@ function removeConfig(num) {
 
 function prepareConfig(form) {
   var types = [], values = [], targets = [], vcpu = [];
+  var myMAC = $(form).find('input[name="contMyMAC"]').val().trim().replaceAll('-', ':').toLowerCase();
+  if (myMAC && !isValidUnicastMacAddress(myMAC)) {
+    swal({title:"_(Invalid MAC address)_",text:"_(Fixed MAC address must be a valid unicast MAC address. The first octet must be even, for example 02:42:9a:0d:7e:c0.)_",type:"error",html:true});
+    return false;
+  }
+  $(form).find('input[name="contMyMAC"]').val(myMAC);
   if ($('select[name="contNetwork"]').val()=='host') {
     $(form).find('input[name="confType[]"]').each(function(){types.push($(this).val());});
     $(form).find('input[name="confValue[]"]').each(function(){values.push($(this));});
@@ -744,6 +764,17 @@ function prepareConfig(form) {
   }
   $(form).find('input[id^="box"]').each(function(){if ($(this).prop('checked')) vcpu.push($('#'+$(this).prop('id').replace('box','cpu')).text());});
   form.contCPUset.value = vcpu.join(',');
+  return true;
+}
+
+function isValidUnicastMacAddress(mac) {
+  if (mac.match(/^[0-9a-f]{12}$/i)) {
+    mac = mac.match(/.{1,2}/g).join(':');
+  }
+  if (!mac.match(/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i)) {
+    return false;
+  }
+  return (parseInt(mac.substring(0, 2), 16) & 1) === 0;
 }
 
 function makeName(type) {
@@ -893,7 +924,7 @@ if (isset($xml["Config"])) {
 ?>
 
 <div id="canvas">
-<form markdown="1" method="POST" autocomplete="off" onsubmit="prepareConfig(this)">
+<form markdown="1" method="POST" autocomplete="off" onsubmit="return prepareConfig(this)">
 <input type="hidden" name="csrf_token" value="<?=$var['csrf_token']?>">
 <input type="hidden" name="contCPUset" value="">
 <?if ($xmlType=='edit'):?>
@@ -1110,7 +1141,7 @@ _(Fixed IP address)_ (_(optional)_):
 :docker_fixed_ip_help:
 
 _(Fixed MAC address)_ (_(optional)_):
-: <input type="text" name="contMyMAC">
+: <input type="text" name="contMyMAC" pattern="([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}|[0-9A-Fa-f]{12}">
 
 :docker_fixed_mac_help:
 
