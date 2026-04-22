@@ -1000,6 +1000,10 @@ while (true) {
     if (in_array($disk['type'],['Data','Cache'])) $crypto |= _var($disk,'luksState',0)!=0 || vfs_luks(_var($disk,'fsType'));
   }
   $allPools = array_unique(array_map('prefix',array_keys($Cache)));
+  foreach ($Boot as $disk) {
+    $bootPool = prefix(_var($disk,'name',''));
+    if ($bootPool !== '' && !in_array($bootPool, $allPools, true)) $allPools[] = $bootPool;
+  }
   $pools = pools_filter($disks);
   $devicePools = mapDevicesToPools();
   
@@ -1070,11 +1074,12 @@ while (true) {
       if ($bootPoolMode === 'no') continue;
 
       $poolBootDisk = find_boot_disk_for_pool($pool, $Boot, $Cache);
-      if (empty($poolBootDisk)) continue;
+      $poolBootDisk = $poolBootDisk ?: [];
 
       $poolDisk = $Cache[$pool] ?? null;
       $firstMember = get_pool_first_member($pool, $Cache, $devicePools);
-      $bootPoolName = prefix(_var($poolBootDisk,'name',''));
+      if (empty($poolBootDisk) && empty($poolDisk) && empty($firstMember) && !isset($disks[$pool])) continue;
+      $bootPoolName = prefix(_var($poolBootDisk,'name','')) ?: $pool;
       $bootMetrics = get_boot_pool_metrics($Boot, $bootPoolName, $poolBootDisk);
       $dataMetrics = get_pool_data_metrics($poolDisk, $pool, $disks);
       $slotOff = false;
