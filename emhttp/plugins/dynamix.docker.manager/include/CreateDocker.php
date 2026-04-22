@@ -82,7 +82,11 @@ if (isset($_POST['contName'])) {
   if (!is_dir($userTmplDir)) mkdir($userTmplDir, 0777, true);
   $sourceTemplate = _var($_POST,'sourceTemplate',false);
   if ($sourceTemplate) $sourceTemplate = unscript(urldecode($sourceTemplate));
-  $sourceUserTemplate = $sourceTemplate && is_file($sourceTemplate) && dirname($sourceTemplate)==$userTmplDir && preg_match('/^my-.*\.xml$/', basename($sourceTemplate));
+  $sourceUserTemplate = $sourceTemplate && basename($sourceTemplate)==$sourceTemplate && preg_match('/^my-[^\/\\\\]+\.xml$/', $sourceTemplate);
+  if ($sourceUserTemplate) {
+    $sourceTemplate = "$userTmplDir/$sourceTemplate";
+    $sourceUserTemplate = is_file($sourceTemplate);
+  }
   if ($Name) {
     $filename = ($sourceUserTemplate && $existing === $Name) ? $sourceTemplate : $DockerTemplates->getUserTemplatePath($Name);
     if (is_file($filename)) {
@@ -903,7 +907,7 @@ if (isset($xml["Config"])) {
 <input type="hidden" name="csrf_token" value="<?=$var['csrf_token']?>">
 <input type="hidden" name="contCPUset" value="">
 <?if ($xmlType=='edit' && is_file($xmlTemplate) && dirname($xmlTemplate)==$dockerManPaths['templates-user']):?>
-<input type="hidden" name="sourceTemplate" value="<?=htmlspecialchars($xmlTemplate)?>">
+<input type="hidden" name="sourceTemplate" value="<?=htmlspecialchars(basename($xmlTemplate))?>">
 <?endif;?>
 <?if ($xmlType=='edit'):?>
 <?if ($DockerClient->doesContainerExist($templateName)):?>
