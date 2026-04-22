@@ -155,7 +155,7 @@ foreach ($containers as $ct) {
   foreach($ct['Networks'] as $netName => $netVals) {
     $networks[] = $netName;
     $network_ip = $running ? htmlspecialchars((string)$netVals['IPAddress']) : '';
-    $network_mac = htmlspecialchars((string)($netVals['MacAddress'] ?? ''));
+    $network_mac = $running ? htmlspecialchars((string)($netVals['MacAddress'] ?? '')) : '';
     $network_ips[] = $network_mac ? "$network_ip<span class='advanced'><br>$network_mac</span>" : $network_ip;
     if (isset($ct['Networks']['host'])) {
       $ports_external[] = sprintf('%s', $netVals['IPAddress']);
