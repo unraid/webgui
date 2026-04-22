@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Agent>
+  <Name>CallMeBot WhatsApp</Name>
+  <Variables>
+    <Variable Help="[a href='https://www.callmebot.com/blog/free-api-whatsapp-messages/' target='_blank'][u]CallMeBot[/u][/a] provides a free personal WhatsApp notification API.[br][br]
+		1. Add phone number [b]+34 684 728 023[/b] to your WhatsApp contacts[br]
+		2. Send the message [i]I allow callmebot to send me messages[/i] to that contact[br]
+		3. You will receive your personal API key via WhatsApp[br]
+		4. Paste the API key into this field[br][br]
+		[b]Note:[/b] The free API is for personal use only." Desc="API Key" Default="">API_KEY</Variable>
+    <Variable Help="Enter your phone number in international format.[br][br]
+		Examples:[br]
+		[b]+12025550123[/b] (US)[br]
+		[b]+447911123456[/b] (UK)[br]
+		[b]+4915112345678[/b] (Germany)[br][br]
+		The number must match the WhatsApp account you used to request the API key." Desc="Phone Number (e.g. +12025550123)" Default="">PHONE</Variable>
+    <Variable Help="Specify the fields which are included in the title of the notification." Desc="Notification Title" Default="$SUBJECT">TITLE</Variable>
+    <Variable Help="Specify the fields which are included in the message body of the notification." Desc="Notification Message" Default="$DESCRIPTION">MESSAGE</Variable>
+  </Variables>
+  <Script>
+    <![CDATA[
+    #!/bin/bash
+    ############
+    {0}
+    ############
+    TITLE=$(echo -e "$TITLE")
+    MESSAGE=$(echo -e "$MESSAGE" | sed -e 's:<br[ /]*>:\\n:gI' -e 's/<[^>]*>//g')
+
+    TEXT="$(printf '%s: %s\n%s' "$(hostname)" "$TITLE" "$MESSAGE")"
+    curl -s -G "https://api.callmebot.com/whatsapp.php" \
+    --data-urlencode "phone=$PHONE" \
+    --data-urlencode "apikey=$API_KEY" \
+    --data-urlencode "text=$TEXT" 2>&1
+    ]]>
+  </Script>
+</Agent>
