@@ -266,8 +266,23 @@ class DockerTemplates {
 		return $output;
 	}
 
+	private function getXmlName($path) {
+		if (!is_file($path)) return false;
+		$doc = new DOMDocument('1.0', 'utf-8');
+		if (!$doc->load($path)) return false;
+		return $doc->getElementsByTagName('Name')->item(0)->nodeValue??'';
+	}
+
 	public function getTemplateValue($Repository, $field, $scope='all',$name='') {
-		foreach ($this->getTemplates($scope) as $file) {
+		$templates = $this->getTemplates($scope);
+		if ($name && ($scope=='all' || $scope=='user') && ($userTemplate = $this->getUserTemplate($name))) {
+			$ordered = [['path' => $userTemplate, 'prefix' => basename(dirname($userTemplate)), 'name' => basename($userTemplate, '.xml')]];
+			foreach ($templates as $template) {
+				if ($template['path'] != $userTemplate) $ordered[] = $template;
+			}
+			$templates = $ordered;
+		}
+		foreach ($templates as $file) {
 			$doc = new DOMDocument();
 			$doc->load($file['path']);
 			if ($name) {
@@ -283,11 +298,11 @@ class DockerTemplates {
 	}
 
 	public function getUserTemplate($Container) {
+		$userTemplate = $this->getUserTemplatePath($Container);
+		if ($this->getXmlName($userTemplate)===$Container) return $userTemplate;
 		foreach ($this->getTemplates('user') as $file) {
-			$doc = new DOMDocument('1.0', 'utf-8');
-			$doc->load($file['path']);
-			$Name = $doc->getElementsByTagName('Name')->item(0)->nodeValue??'';
-			if ($Name==$Container) return $file['path'];
+			if ($file['path']==$userTemplate) continue;
+			if ($this->getXmlName($file['path'])===$Container) return $file['path'];
 		}
 		return false;
 	}

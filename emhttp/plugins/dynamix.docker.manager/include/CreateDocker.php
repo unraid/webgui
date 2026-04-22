@@ -80,8 +80,11 @@ if (isset($_POST['contName'])) {
   // Saving the generated configuration file.
   $userTmplDir = $dockerManPaths['templates-user'];
   if (!is_dir($userTmplDir)) mkdir($userTmplDir, 0777, true);
+  $sourceTemplate = _var($_POST,'sourceTemplate',false);
+  if ($sourceTemplate) $sourceTemplate = unscript(urldecode($sourceTemplate));
+  $sourceUserTemplate = $sourceTemplate && is_file($sourceTemplate) && dirname($sourceTemplate)==$userTmplDir && preg_match('/^my-.*\.xml$/', basename($sourceTemplate));
   if ($Name) {
-    $filename = $DockerTemplates->getUserTemplatePath($Name);
+    $filename = ($sourceUserTemplate && $existing === $Name) ? $sourceTemplate : $DockerTemplates->getUserTemplatePath($Name);
     if (is_file($filename)) {
       $oldXML = simplexml_load_file($filename);
       if ($oldXML->Icon != $_POST['contIcon']) {
@@ -137,7 +140,7 @@ if (isset($_POST['contName'])) {
     // force kill container if still running after 10 seconds
     removeContainer($existing,1);
     // remove old template
-    $oldFilename = $DockerTemplates->getUserTemplatePath($existing);
+    $oldFilename = $sourceUserTemplate ? $sourceTemplate : $DockerTemplates->getUserTemplatePath($existing);
     if (strtolower($filename) != strtolower($oldFilename)) {
       @unlink($oldFilename);
     }
@@ -899,6 +902,9 @@ if (isset($xml["Config"])) {
 <form markdown="1" method="POST" autocomplete="off" onsubmit="return prepareConfig(this)">
 <input type="hidden" name="csrf_token" value="<?=$var['csrf_token']?>">
 <input type="hidden" name="contCPUset" value="">
+<?if ($xmlType=='edit' && is_file($xmlTemplate) && dirname($xmlTemplate)==$dockerManPaths['templates-user']):?>
+<input type="hidden" name="sourceTemplate" value="<?=htmlspecialchars($xmlTemplate)?>">
+<?endif;?>
 <?if ($xmlType=='edit'):?>
 <?if ($DockerClient->doesContainerExist($templateName)):?>
 <input type="hidden" name="existingContainer" value="<?=$templateName?>">
