@@ -753,7 +753,7 @@ window.onunload = function(){
       switch (_var($var,'mdState')):
       case "STARTED":
 ?>      <tr><td><?status_indicator()?>**_(Stopped)_**. _(Configuration valid)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-        <td>**_(Start)_** _(will bring the array online)_.</td></tr>
+        <td>**_(Start)_** _(will bring the array on-line)_.</td></tr>
 <?      maintenance_mode();
         check_encryption();
         break;
@@ -762,24 +762,24 @@ window.onunload = function(){
         if ($action[0] == "recon"):
           $resync = resync($action[1]);
 ?>        <tr><td><?status_indicator()?>**_(Stopped)_**. _(Configuration valid)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-          <td>**<?=_('Start')?>** <?=_("will bring the array online and start **$resync**")?>.</td></tr>
+          <td>**<?=_('Start')?>** <?=_("will bring the array on-line and start **$resync**")?>.</td></tr>
 <?      elseif ($action[0] == "clear"):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(New data disk(s) detected)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-          <td>**_(Start)_** _(will bring the array online and start **Disk-Clear** of new data disk(s))_.</td></tr>
+          <td>**_(Start)_** _(will bring the array on-line and start **Disk-Clear** of new data disk(s))_.</td></tr>
 <?      elseif (_var($var,'sbClean') != "yes" && $action[0] == "check" && count($action) > 1):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Unclean shutdown detected)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-          <td>**_(Start)_** _(will bring the array online and start **Parity-Check**)_.
+          <td>**_(Start)_** _(will bring the array on-line and start **Parity-Check**)_.
           <br><input type="checkbox" name="optionCorrect" value="correct" checked><small>_(Write corrections to parity)_</small></td></tr>
 <?      elseif (_var($var,'sbClean') != "yes" && $action[0] == "check"):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Unclean shutdown detected)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-          <td>**_(Start)_** _(will bring the array online)_.</td></tr>
+          <td>**_(Start)_** _(will bring the array on-line)_.</td></tr>
 <?      elseif (missing_cache()):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Missing pool disk)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)" disabled></td>
-          <td>**_(Start)_** _(will remove the missing pool disk and then bring the array online)_.
+          <td>**_(Start)_** _(will remove the missing pool disk and then bring the array on-line)_.
           <br><input type="checkbox" name="confirmStart" value="OFF" onclick="$('#cmdStart').prop('disabled',!arrayOps.confirmStart.checked)"><small>_(Yes, I want to do this)_</small></td></tr>
 <?      else:?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Configuration valid)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-          <td>**_(Start)_** _(will bring the array online)_.</td></tr>
+          <td>**_(Start)_** _(will bring the array on-line)_.</td></tr>
 <?      endif;
         maintenance_mode();
         check_encryption();
@@ -787,11 +787,11 @@ window.onunload = function(){
       case "NEW_ARRAY":
         if (strpos(_var($disks['parity'],'status'),"DISK_NP") === 0 && strpos(_var($disks['parity2'],'status'),"DISK_NP") === 0):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Configuration valid)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-          <td>**_(Start)_** _(will record all disk information and bring the array online)_.
+          <td>**_(Start)_** _(will record all disk information and bring the array on-line)_.
           <br>_(The array will be immediately available, but **unprotected** since *parity* has not been assigned)_.</td></tr>
 <?      else:?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Configuration valid)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this,true)"></td>
-          <td>**_(Start)_** _(will record all disk information, bring the array online, and start Parity-Sync)_.
+          <td>**_(Start)_** _(will record all disk information, bring the array on-line, and start Parity-Sync)_.
           <br>_(The array will be immediately available, but **unprotected** until Parity-Sync completes)_.
           <br><input type="checkbox" name="md_invalidslot" value="99">_(Parity is already valid)_.</td></tr>
 <?      endif;
@@ -800,7 +800,7 @@ window.onunload = function(){
         break;
       case "DISABLE_DISK":?>
         <tr><td><?status_indicator()?>**_(Stopped)_**. _(Missing disk)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)" disabled></td>
-        <td>**_(Start)_** _(will disable the missing disk and then bring the array online. Install a replacement disk as soon as possible)_.
+        <td>**_(Start)_** _(will disable the missing disk and then bring the array on-line. Install a replacement disk as soon as possible)_.
         <br><input type="checkbox" name="confirmStart" value="OFF" onclick="$('#cmdStart').prop('disabled',!arrayOps.confirmStart.checked)"><small>_(Yes, I want to do this)_</small></td></tr>
 <?      maintenance_mode();
         check_encryption();
@@ -814,7 +814,7 @@ window.onunload = function(){
       case "SWAP_DSBL":
         if (_var($var,'fsCopyPrcnt') == "100"):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Upgrading disk/swapping parity)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-          <td>**_(Start)_** _(will expand the file system of the data disk (if possible); then bring the array online and start Data-Rebuild)_.</td></tr>
+          <td>**_(Start)_** _(will expand the file system of the data disk (if possible); then bring the array on-line and start Data-Rebuild)_.</td></tr>
 <?        maintenance_mode();
           check_encryption();
         else:?>
