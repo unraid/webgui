@@ -202,10 +202,9 @@ if (isset($_GET['updateContainer'])){
     if (preg_match('/^container:(.*)/', $Network)) {
       $Net_Container = str_replace("container:", "", $Network);
     } else {
-      preg_match("/--(net|network)=container:[^\s]+/", $ExtraParams, $NetworkParam);
-      if (!empty($NetworkParam[0])) {
-        $Net_Container = explode(':', $NetworkParam[0])[1];
-        $Net_Container = str_replace(['"', "'"], '', $Net_Container);
+      preg_match("/--(?:net|network)(?:=|\s+)(['\"]?)container:([^'\"\s]+)\\1/", $ExtraParams, $NetworkParam);
+      if (!empty($NetworkParam[2])) {
+        $Net_Container = $NetworkParam[2];
       }
     }
     // check if the container still exists from which the network should be used, if it doesn't exist any more recreate container with network none and don't start it
@@ -213,7 +212,7 @@ if (isset($_GET['updateContainer'])){
       $Net_Container_ID = $DockerClient->getContainerID($Net_Container);
       if (empty($Net_Container_ID)) {
         $cmd = str_replace('/docker run -d ', '/docker create ', $cmd);
-        $cmd = preg_replace("/--(net|network)=(['\"]?)container:[^'\"]+\\2/", "--network=none ", $cmd);
+        $cmd = preg_replace("/--(?:net|network)(?:=|\s+)(['\"]?)container:[^'\"\s]+\\1/", "--network=none ", $cmd);
       }
     }
     // force kill container if still running after time-out
@@ -736,6 +735,8 @@ function removeConfig(num) {
 
 function prepareConfig(form) {
   var types = [], values = [], targets = [], vcpu = [];
+  var myMAC = $(form).find('input[name="contMyMAC"]').val().trim().replaceAll('-', ':').toLowerCase();
+  $(form).find('input[name="contMyMAC"]').val(myMAC);
   if ($('select[name="contNetwork"]').val()=='host') {
     $(form).find('input[name="confType[]"]').each(function(){types.push($(this).val());});
     $(form).find('input[name="confValue[]"]').each(function(){values.push($(this));});
@@ -744,6 +745,7 @@ function prepareConfig(form) {
   }
   $(form).find('input[id^="box"]').each(function(){if ($(this).prop('checked')) vcpu.push($('#'+$(this).prop('id').replace('box','cpu')).text());});
   form.contCPUset.value = vcpu.join(',');
+  return true;
 }
 
 function makeName(type) {
@@ -893,7 +895,7 @@ if (isset($xml["Config"])) {
 ?>
 
 <div id="canvas">
-<form markdown="1" method="POST" autocomplete="off" onsubmit="prepareConfig(this)">
+<form markdown="1" method="POST" autocomplete="off" onsubmit="return prepareConfig(this)">
 <input type="hidden" name="csrf_token" value="<?=$var['csrf_token']?>">
 <input type="hidden" name="contCPUset" value="">
 <?if ($xmlType=='edit'):?>
@@ -1108,6 +1110,14 @@ _(Fixed IP address)_ (_(optional)_):
 : <input type="text" name="contMyIP"><span id="myIP"></span>
 
 :docker_fixed_ip_help:
+
+</div>
+
+<div markdown="1" class="myMAC noshow">
+_(Fixed MAC address)_ (_(optional)_):
+: <input type="text" name="contMyMAC" pattern="([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}|[0-9A-Fa-f]{12}">
+
+:docker_fixed_mac_help:
 
 </div>
 
@@ -1560,9 +1570,17 @@ subnet['<?=$network?>'] = '<?=$value?>';
 <?endforeach;?>
 
 function showSubnet(bridge) {
-  if (bridge.match(/^(bridge|host|none)$/i) !== null) {
+  if (bridge.match(/^(host|none)$/i) !== null) {
     $('.myIP').hide();
     $('input[name="contMyIP"]').val('');
+    $('.myMAC').hide();
+    $('input[name="contMyMAC"]').val('');
+    $('.netCONT').hide();
+    $('#netCONT').val('');
+  } else if (bridge.match(/^(bridge)$/i) !== null) {
+    $('.myIP').hide();
+    $('input[name="contMyIP"]').val('');
+    $('.myMAC').show();
     $('.netCONT').hide();
     $('#netCONT').val('');
   } else if (bridge.match(/^(container)$/i) !== null) {
@@ -1570,9 +1588,12 @@ function showSubnet(bridge) {
     $('#netCONT').val('<?php echo (isset($xml) && isset($xml['Network'][1])) ? $xml['Network'][1] : ''; ?>');
     $('.myIP').hide();
     $('input[name="contMyIP"]').val('');
+    $('.myMAC').hide();
+    $('input[name="contMyMAC"]').val('');
   } else {
     $('.myIP').show();
     $('#myIP').html('<?=_('Subnet')?>: '+subnet[bridge]);
+    $('.myMAC').show();
     $('.netCONT').hide();
     $('#netCONT').val('');
   }
@@ -1932,4 +1953,3 @@ if (window.location.href.indexOf("/Apps/") > 0  && <? if (is_file($xmlTemplate))
 }
 </script>
 <?END:?>
-
