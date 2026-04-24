@@ -186,7 +186,7 @@ update_legacy_machine_types(){
     MAJOR=${BASH_REMATCH[4]}
     if (( MAJOR < 8 )); then
       local ESC_PREFIX=${PREFIX//./\\.}
-      sed -ri "s/machine=([\"'])${ESC_PREFIX}-[0-9]+\.[0-9]+\1/machine=\1${ESC_PREFIX}-8.0\1/g" "$XML"
+      sed -ri "s/machine=([\"'])${ESC_PREFIX}-[0-7]\.[0-9]+\1/machine=\1${ESC_PREFIX}-8.0\1/g" "$XML"
     fi
   done < <(grep -oP "machine=[\"']pc-(?:i440fx|q35)-[0-9]+\.[0-9]+[\"']" "$XML" | grep -oP "pc-(?:i440fx|q35)-[0-9]+\.[0-9]+" | sort -u)
 }
