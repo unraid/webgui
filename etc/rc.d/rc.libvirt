@@ -174,6 +174,22 @@ version(){
   echo $1 | awk -F. '{printf("%03d%03d",$1,$2);}'
 }
 
+update_legacy_machine_types(){
+  local XML=$1
+  local MACHINE=
+  local PREFIX=
+  local MAJOR=
+
+  while IFS= read -r MACHINE; do
+    [[ $MACHINE =~ ^((pc-(i440fx|q35)))-([0-9]+)\.([0-9]+)$ ]] || continue
+    PREFIX=${BASH_REMATCH[1]}
+    MAJOR=${BASH_REMATCH[4]}
+    if (( MAJOR < 8 )); then
+      sed -ri "s/machine='$MACHINE'/machine='${PREFIX}-8.0'/g" "$XML"
+    fi
+  done < <(grep -oP "machine='pc-(?:i440fx|q35)-[0-9]+\.[0-9]+'" "$XML" | grep -oP "pc-(?:i440fx|q35)-[0-9]+\.[0-9]+" | sort -u)
+}
+
 libvirtd_start(){
   log "Starting $DAEMON..."
   if ! mountpoint /etc/libvirt &>/dev/null; then
@@ -188,6 +204,7 @@ libvirtd_start(){
   # update interface section((s) of VM configuration files
   for XML in /etc/libvirt/qemu/*.xml; do
     [[ -f "$XML" ]] || continue
+    update_legacy_machine_types "$XML"
     if grep -qm1 "<vendor_id='none'/>" "$XML"; then
       # convert libvirt 1.3.1 w/ eric's hyperv vendor id patch to how libvirt does it in libvirt 1.3.3+
       sed -ri "s/<vendor id='none'\/>/<vendor_id state='on' value='none'\/>/g" "$XML"
