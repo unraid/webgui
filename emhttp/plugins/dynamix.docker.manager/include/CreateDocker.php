@@ -68,6 +68,79 @@ function cpu_pinning() {
 ##   CREATE CONTAINER   ##
 ##########################
 
+// Simple UI blocker used by create/update operations so the user can't keep clicking around mid-install.
+function dockerUIBlockerScript($enable, $text = null) {
+  if ($text === null) $text = _('Working… please wait');
+  $textJS = addslashes($text);
+  if ($enable) {
+    echo <<<HTML
+<script>
+(function () {
+  try {
+    var d = (window.parent && window.parent.document) ? window.parent.document : document;
+    if (!d || !d.body) return;
+
+    // Define helpers once.
+    if (!window.parent) window.parent = window;
+    if (!window.parent.dockerUIBlock) {
+      window.parent.dockerUIBlock = function (on, label) {
+        try {
+          var doc = (window.parent && window.parent.document) ? window.parent.document : document;
+          if (!doc || !doc.body) return;
+
+          var styleId = 'dockerInstallBlockerStyle';
+          var blockerId = 'dockerInstallBlocker';
+
+          if (!on) {
+            var o = doc.getElementById(blockerId);
+            if (o) o.remove();
+            var s = doc.getElementById(styleId);
+            if (s) s.remove();
+            return;
+          }
+
+          if (!doc.getElementById(styleId)) {
+            var s2 = doc.createElement('style');
+            s2.id = styleId;
+            s2.textContent =
+              '#' + blockerId + '{position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.05);cursor:wait}' +
+              '#' + blockerId + ' .dibox{position:absolute;top:16px;right:16px;background:#fff;border:1px solid #ccc;border-radius:6px;' +
+              'padding:10px 12px;box-shadow:0 2px 12px rgba(0,0,0,.15);font:13px/1.3 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111}';
+            doc.head && doc.head.appendChild(s2);
+          }
+
+          var o2 = doc.getElementById(blockerId);
+          if (!o2) {
+            o2 = doc.createElement('div');
+            o2.id = blockerId;
+            o2.innerHTML = '<div class="dibox"></div>';
+            doc.body.appendChild(o2);
+          }
+          var box = o2.querySelector('.dibox');
+          if (box) box.textContent = (label || '');
+        } catch (e) {}
+      };
+    }
+
+    window.parent.dockerUIBlock(true, '{$textJS}');
+  } catch (e) {}
+})();
+</script>
+HTML;
+  } else {
+    echo <<<HTML
+<script>
+(function () {
+  try {
+    var w = window.parent || window;
+    if (w && w.dockerUIBlock) w.dockerUIBlock(false);
+  } catch (e) {}
+})();
+</script>
+HTML;
+  }
+}
+
 if (isset($_POST['contName'])) {
   $postXML = postToXML($_POST, true);
   $dry_run = isset($_POST['dryRun']) && $_POST['dryRun']=='true';
@@ -76,6 +149,7 @@ if (isset($_POST['contName'])) {
   // Get the command line
   [$cmd, $Name, $Repository] = xmlToCommand($postXML, $create_paths);
   readfile("$docroot/plugins/dynamix.docker.manager/log.htm");
+  if (!$dry_run) dockerUIBlockerScript(true);
   @flush();
   // Saving the generated configuration file.
   $userTmplDir = $dockerManPaths['templates-user'];
@@ -114,6 +188,7 @@ if (isset($_POST['contName'])) {
   if (!$DockerClient->doesImageExist($Repository)) {
     // Pull image
     if (!pullImage($Name, $Repository)) {
+      dockerUIBlockerScript(false);
       echo '<div style="text-align:center"><button type="button" onclick="done()">'._('Done').'</button></div><br>';
       goto END;
     }
@@ -166,6 +241,7 @@ if (isset($_POST['contName'])) {
   execCommand($cmd);
   if ($startContainer) addRoute($Name); // add route for remote WireGuard access
 
+  dockerUIBlockerScript(false);
   echo '<div style="text-align:center"><button type="button" onclick="openTerminal(\'docker\',\''.addslashes($Name).'\',\'.log\')">'._('View Container Log').'</button> <button type="button" onclick="done()">'._('Done').'</button></div><br>';
   goto END;
 }
@@ -178,6 +254,7 @@ if (isset($_GET['updateContainer'])){
   $echo = empty($_GET['mute']);
   if ($echo) {
     readfile("$docroot/plugins/dynamix.docker.manager/log.htm");
+    dockerUIBlockerScript(true);
     @flush();
   }
   foreach ($_GET['ct'] as $value) {
@@ -244,6 +321,9 @@ if (isset($_GET['updateContainer'])){
     $newImageID = $DockerClient->getImageID($Repository);
     // remove old orphan image since it's no longer used by this container
     if ($oldImageID && $oldImageID != $newImageID) removeImage($oldImageID, $echo);
+  }
+  if ($echo) {
+    dockerUIBlockerScript(false);
   }
   echo '<div style="text-align:center"><button type="button" onclick="window.parent.jQuery(\'#iframe-popup\').dialog(\'close\')">'._('Done').'</button></div><br>';
   goto END;
