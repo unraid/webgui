@@ -68,6 +68,63 @@ function cpu_pinning() {
 ##   CREATE CONTAINER   ##
 ##########################
 
+// Simple UI blocker used by create/update operations so the user can't keep clicking around mid-install.
+function dockerUIBlockerScript($enable) {
+  if ($enable) {
+    echo <<<HTML
+<script>
+(function () {
+  try {
+    var d = (window.parent && window.parent.document) ? window.parent.document : document;
+    if (!d || !d.body) return;
+
+    // Define helpers once.
+    if (!window.parent) window.parent = window;
+    if (!window.parent.dockerUIBlock) {
+      window.parent.dockerUIBlock = function (on) {
+        try {
+          var doc = (window.parent && window.parent.document) ? window.parent.document : document;
+          if (!doc || !doc.body) return;
+
+          var blockerId = 'dockerInstallBlocker';
+          var blockerClass = 'docker-install-blocker';
+
+          if (!on) {
+            var o = doc.getElementById(blockerId);
+            if (o) o.remove();
+            return;
+          }
+
+          var o2 = doc.getElementById(blockerId);
+          if (!o2) {
+            o2 = doc.createElement('div');
+            o2.id = blockerId;
+            o2.className = blockerClass;
+            doc.body.appendChild(o2);
+          }
+        } catch (e) {}
+      };
+    }
+
+    window.parent.dockerUIBlock(true);
+  } catch (e) {}
+})();
+</script>
+HTML;
+  } else {
+    echo <<<HTML
+<script>
+(function () {
+  try {
+    var w = window.parent || window;
+    if (w && w.dockerUIBlock) w.dockerUIBlock(false);
+  } catch (e) {}
+})();
+</script>
+HTML;
+  }
+}
+
 if (isset($_POST['contName'])) {
   $postXML = postToXML($_POST, true);
   $dry_run = isset($_POST['dryRun']) && $_POST['dryRun']=='true';
@@ -76,6 +133,8 @@ if (isset($_POST['contName'])) {
   // Get the command line
   [$cmd, $Name, $Repository] = xmlToCommand($postXML, $create_paths);
   readfile("$docroot/plugins/dynamix.docker.manager/log.htm");
+  echo '<link type="text/css" rel="stylesheet" href="'.autov("/plugins/dynamix.docker.manager/sheets/AddContainer.css",true).'">';
+  if (!$dry_run) dockerUIBlockerScript(true);
   @flush();
   // Saving the generated configuration file.
   $userTmplDir = $dockerManPaths['templates-user'];
@@ -114,6 +173,7 @@ if (isset($_POST['contName'])) {
   if (!$DockerClient->doesImageExist($Repository)) {
     // Pull image
     if (!pullImage($Name, $Repository)) {
+      dockerUIBlockerScript(false);
       echo '<div style="text-align:center"><button type="button" onclick="done()">'._('Done').'</button></div><br>';
       goto END;
     }
@@ -166,6 +226,7 @@ if (isset($_POST['contName'])) {
   execCommand($cmd);
   if ($startContainer) addRoute($Name); // add route for remote WireGuard access
 
+  dockerUIBlockerScript(false);
   echo '<div style="text-align:center"><button type="button" onclick="openTerminal(\'docker\',\''.addslashes($Name).'\',\'.log\')">'._('View Container Log').'</button> <button type="button" onclick="done()">'._('Done').'</button></div><br>';
   goto END;
 }
@@ -178,6 +239,8 @@ if (isset($_GET['updateContainer'])){
   $echo = empty($_GET['mute']);
   if ($echo) {
     readfile("$docroot/plugins/dynamix.docker.manager/log.htm");
+    echo '<link type="text/css" rel="stylesheet" href="'.autov("/plugins/dynamix.docker.manager/sheets/AddContainer.css",true).'">';
+    dockerUIBlockerScript(true);
     @flush();
   }
   foreach ($_GET['ct'] as $value) {
@@ -244,6 +307,9 @@ if (isset($_GET['updateContainer'])){
     $newImageID = $DockerClient->getImageID($Repository);
     // remove old orphan image since it's no longer used by this container
     if ($oldImageID && $oldImageID != $newImageID) removeImage($oldImageID, $echo);
+  }
+  if ($echo) {
+    dockerUIBlockerScript(false);
   }
   echo '<div style="text-align:center"><button type="button" onclick="window.parent.jQuery(\'#iframe-popup\').dialog(\'close\')">'._('Done').'</button></div><br>';
   goto END;
