@@ -69,9 +69,7 @@ function cpu_pinning() {
 ##########################
 
 // Simple UI blocker used by create/update operations so the user can't keep clicking around mid-install.
-function dockerUIBlockerScript($enable, $text = null) {
-  if ($text === null) $text = _('Working… please wait');
-  $textJS = addslashes($text);
+function dockerUIBlockerScript($enable) {
   if ($enable) {
     echo <<<HTML
 <script>
@@ -83,46 +81,32 @@ function dockerUIBlockerScript($enable, $text = null) {
     // Define helpers once.
     if (!window.parent) window.parent = window;
     if (!window.parent.dockerUIBlock) {
-      window.parent.dockerUIBlock = function (on, label) {
+      window.parent.dockerUIBlock = function (on) {
         try {
           var doc = (window.parent && window.parent.document) ? window.parent.document : document;
           if (!doc || !doc.body) return;
 
-          var styleId = 'dockerInstallBlockerStyle';
           var blockerId = 'dockerInstallBlocker';
+          var blockerClass = 'docker-install-blocker';
 
           if (!on) {
             var o = doc.getElementById(blockerId);
             if (o) o.remove();
-            var s = doc.getElementById(styleId);
-            if (s) s.remove();
             return;
-          }
-
-          if (!doc.getElementById(styleId)) {
-            var s2 = doc.createElement('style');
-            s2.id = styleId;
-            s2.textContent =
-              '#' + blockerId + '{position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.05);cursor:wait}' +
-              '#' + blockerId + ' .dibox{position:absolute;top:16px;right:16px;background:#fff;border:1px solid #ccc;border-radius:6px;' +
-              'padding:10px 12px;box-shadow:0 2px 12px rgba(0,0,0,.15);font:13px/1.3 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111}';
-            doc.head && doc.head.appendChild(s2);
           }
 
           var o2 = doc.getElementById(blockerId);
           if (!o2) {
             o2 = doc.createElement('div');
             o2.id = blockerId;
-            o2.innerHTML = '<div class="dibox"></div>';
+            o2.className = blockerClass;
             doc.body.appendChild(o2);
           }
-          var box = o2.querySelector('.dibox');
-          if (box) box.textContent = (label || '');
         } catch (e) {}
       };
     }
 
-    window.parent.dockerUIBlock(true, '{$textJS}');
+    window.parent.dockerUIBlock(true);
   } catch (e) {}
 })();
 </script>
@@ -149,6 +133,7 @@ if (isset($_POST['contName'])) {
   // Get the command line
   [$cmd, $Name, $Repository] = xmlToCommand($postXML, $create_paths);
   readfile("$docroot/plugins/dynamix.docker.manager/log.htm");
+  echo '<link type="text/css" rel="stylesheet" href="'.autov("/plugins/dynamix.docker.manager/sheets/AddContainer.css",true).'">';
   if (!$dry_run) dockerUIBlockerScript(true);
   @flush();
   // Saving the generated configuration file.
@@ -254,6 +239,7 @@ if (isset($_GET['updateContainer'])){
   $echo = empty($_GET['mute']);
   if ($echo) {
     readfile("$docroot/plugins/dynamix.docker.manager/log.htm");
+    echo '<link type="text/css" rel="stylesheet" href="'.autov("/plugins/dynamix.docker.manager/sheets/AddContainer.css",true).'">';
     dockerUIBlockerScript(true);
     @flush();
   }
