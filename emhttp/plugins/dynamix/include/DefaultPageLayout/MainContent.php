@@ -23,9 +23,18 @@ $defaultIcon = "<i class=\"icon-app PanelIcon\"></i>";
 function processTitle($rawTitle) {
     // Safely replace any variables in the title without eval
     $title = htmlspecialchars((string)$rawTitle);
+    $isDeviceInfoSettingsTitle = ((string)$rawTitle) === '$name _(Settings)_';
     return preg_replace_callback(
         '/\$([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)/',
-        function($matches) {
+        function($matches) use ($isDeviceInfoSettingsTitle) {
+            if (
+                $isDeviceInfoSettingsTitle &&
+                $matches[1] === 'name' &&
+                isset($GLOBALS['name']) &&
+                (string)$GLOBALS['name'] === 'flash'
+            ) {
+                return _('Boot Device');
+            }
             return isset($GLOBALS[$matches[1]]) ? 
                     htmlspecialchars((string)$GLOBALS[$matches[1]]) : 
                     '$'.$matches[1];

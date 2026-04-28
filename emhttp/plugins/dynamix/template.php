@@ -46,6 +46,11 @@ $pool_devices = false;
 $pools = pools_filter($disks);
 foreach ($pools as $pool) $pool_devices |= _var($disks[$pool],'devices')!='';
 
+// Pool devices
+$bootpool_devices = false;
+$bootpools = flash_filter($disks);
+foreach ($bootpools as $bootpool) $bootpool_devices |= _var($disks[$bootpool],'devices')!='';
+
 // Read network settings
 extract(parse_ini_file('state/network.ini',true));
 
@@ -53,6 +58,9 @@ extract(parse_ini_file('state/network.ini',true));
 $_SESSION['locale'] = _var($display,'locale');
 $_SESSION['buildDate'] = date('Ymd',_var($var,'regBuildTime'));
 require_once "$docroot/webGui/include/Translations.php";
+
+// Dynamic Boot page title based on internal boot pool presence
+$boot_device_title = $bootpool_devices ? _('Boot Pool') : _('Boot Device');
 
 // Build webGui pages first, then plugins pages
 require_once "$docroot/webGui/include/PageBuilder.php";

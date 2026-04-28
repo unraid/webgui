@@ -31,7 +31,7 @@ CALLER="avahi"
 AVAHI="/usr/sbin/avahi-daemon"
 CONF="/etc/avahi/avahi-daemon.conf"
 HOSTS="/etc/hosts"
-NAME=$(</etc/HOSTNAME)
+NAME=$(hostname -s)
 
 # run & log functions
 . /etc/rc.d/rc.runlog
@@ -51,19 +51,19 @@ disable(){
   sed -ri "s/^#?(use-$1)=.*/\1=no/" $CONF
 }
 
-# when starting avahidaemon, add name.local to the hosts file
+# add name.local to the hosts file
 add_local_to_hosts(){
   local OLD="^127\.0\.0\.1.*"
-  local NEW="127.0.0.1      $NAME $NAME.local localhost"
-  sed -i "s/$OLD/$NEW/gm;t" $HOSTS
+  local NEW="127.0.0.1 $NAME $NAME.local localhost"
+  sed -i "s/$OLD/$NEW/" $HOSTS
   return 0
 }
 
-# when stopping avahidaemon, remove name.local from the hosts file
+# remove name.local from the hosts file
 remove_local_from_hosts(){
   local OLD="^127\.0\.0\.1.*"
-  local NEW="127.0.0.1      $NAME localhost"
-  sed -i "s/$OLD/$NEW/gm;t" $HOSTS
+  local NEW="127.0.0.1 $NAME localhost"
+  sed -i "s/$OLD/$NEW/" $HOSTS
   return 0
 }
 
@@ -113,7 +113,10 @@ avahid_restart(){
 }
 
 avahid_reload(){
-  $AVAHI --reload 2>/dev/null
+  if avahid_running; then
+    add_local_to_hosts
+    $AVAHI --reload 2>/dev/null
+  fi
 }
 
 avahid_update(){

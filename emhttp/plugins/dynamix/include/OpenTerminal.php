@@ -40,6 +40,10 @@ function command($path,$file) {
   global $run,$wait,$rows;
   return (file_exists($file) && substr($file,0,strlen($path))==$path) ? "$run tail -f -n $rows '$file'" : $wait;
 }
+function sed_escape($s) {
+  // escape sed replacement meta characters: & and \
+  return str_replace(['\\', '&'], ['\\\\', '\\&'], $s);
+}
 switch ($_GET['tag']) {
 case 'ttyd':
   // check if ttyd already running
@@ -51,7 +55,52 @@ case 'ttyd':
     // no child processes, restart ttyd to pick up possible font size change
     if ($retval != 0) exec("kill ".$ttyd_pid[0]);
   }
-  if ($retval != 0) exec("ttyd-exec -i '$sock' '" . posix_getpwuid(0)['shell'] . "' --login");
+  
+  $more = $_GET['more'] ?? '';
+  if (!empty($more) && substr($more, 0, 1) === '/') {
+    // Terminal at specific path - use 'more' parameter to pass path
+    // Note: openTerminal(tag, name, more) in JS only has 3 params, so we reuse 'more'
+    // Note: Used by File Manager to open terminal at specific folder
+    
+    // Validate path
+    $real_path = realpath($more);
+    if ($real_path === false) {
+      // Path doesn't exist - fall back to home directory
+      $real_path = '/root';
+    }
+    
+    // Set script variables
+    $unique_id = getmypid() . '_' . uniqid(); // prevent race condition with multiple terminals
+    $exec = "/var/tmp/file.manager.terminal.$unique_id.sh";
+    $profile = "/tmp/file.manager.terminal.$unique_id.profile";
+    $escaped_path = str_replace("'", "'\\''", $real_path);
+    $sed_escaped = sed_escape($escaped_path);
+    
+    // Get user's shell (same as standard terminal)
+    $user_shell = posix_getpwuid(0)['shell'];
+    
+    // Create startup script similar to ~/.bashrc
+    // Note: We can not use ~/.bashrc as it loads /etc/profile which does 'cd $HOME'
+    // Note: Script deletes itself before exec (bash has already loaded the script into memory)
+    $script_content = <<<BASH
+#!/bin/bash
+# Modify /etc/profile to replace 'cd \$HOME' with our target path
+sed 's#^cd \$HOME#cd '\''$sed_escaped'\''#' /etc/profile > '$profile'
+source '$profile'
+source /root/.bash_profile 2>/dev/null
+rm '$profile'
+# Delete this script and exec shell (bash has already loaded this into memory)
+{ rm -f '$exec'; exec $user_shell --norc -i; }
+BASH;
+    
+    file_put_contents($exec, $script_content);
+    chmod($exec, 0755);
+    exec("ttyd-exec -i '$sock' $exec");
+
+  // Standard login shell
+  } else {
+    if ($retval != 0) exec("ttyd-exec -i '$sock' '" . posix_getpwuid(0)['shell'] . "' --login");
+  }
   break;
 case 'syslog':
   // read syslog file

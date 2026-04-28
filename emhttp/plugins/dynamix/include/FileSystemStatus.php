@@ -33,7 +33,7 @@ case 'btrfs-scrub':
 case 'zfs-scrub':
 case 'zfs-resilver':
 case 'zfs-expansion':
-  echo shell_exec("/usr/sbin/zpool status -P $path");
+  echo shell_exec("/usr/sbin/zpool status -Pv $path");
   break;
 default:
   switch ($cmd) {

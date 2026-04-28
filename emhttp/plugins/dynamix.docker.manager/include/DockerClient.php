@@ -139,7 +139,28 @@ class DockerTemplates {
 		return $tmpls;
 	}
 
-	public function downloadTemplates($Dest=null, $Urls=null) {
+	public function getUserTemplatePath($Container) {
+		global $dockerManPaths;
+		$dir = $dockerManPaths['templates-user'];
+		if (!is_dir($dir)) @mkdir($dir, 0755, true);
+		$Container = str_replace(['/', '\\'], '', $Container);
+		$target = "my-$Container.xml";
+		$targetLower = strtolower($target);
+		$match = false;
+		foreach (glob("$dir/my-*.xml") ?: [] as $template) {
+			$name = basename($template);
+			if ($name == $target) return $template;
+			if (!$match && strtolower($name) == $targetLower) $match = $template;
+		}
+		return $match ?: "$dir/$target";
+	}
+
+	public function downloadTemplates($Dest=null, $Urls=null) {	
+		/* Don't download any templates.  Leave code in place for future reference. */
+		/* remove existing limetech templates that are all not valid */
+		exec("rm -rf /boot/config/plugins/dockerMan/templates/limetech");
+		return [];
+
 		global $dockerManPaths;
 		$Dest = $Dest ?: $dockerManPaths['templates-usb'];
 		$Urls = $Urls ?: $dockerManPaths['template-repos'];
@@ -608,11 +629,12 @@ class DockerUpdate{
 		$DockerClient = new DockerClient();
 		$inspect      = $DockerClient->getDockerJSON('/images/'.$image.'/json');
 		if (empty($inspect['RepoDigests'])) return null;
-
-		$shaPos = strpos($inspect['RepoDigests'][0], '@sha256:');
+		
+		$repoDigest = $inspect['RepoDigests'][array_key_last($inspect['RepoDigests'])];
+		$shaPos = strpos($repoDigest, '@sha256:');
 		if ($shaPos === false) return null;
 
-		return substr($inspect['RepoDigests'][0], $shaPos + 1);
+		return substr($repoDigest, $shaPos + 1);
 	}
 
 	public function setUpdateStatus($image, $version) {
@@ -1043,7 +1065,9 @@ class DockerClient {
 				$nat = ($driver[$c['NetworkMode']]=='bridge');
 				if (array_key_exists($PrivatePort, $c['Ports']) && $Type != $c['Ports'][$PrivatePort]['Type'])
 					$Type = $c['Ports'][$PrivatePort]['Type'] . '/' . $Type;
-				$c['Ports'][$PrivatePort] = ['IP' => $ip, 'PrivatePort' => $PrivatePort, 'PublicPort' => $PublicPort, 'NAT' => $nat, 'Type' => $Type, 'Driver' => $driver[$c['NetworkMode']]];
+				if (isset($value[0]['HostIp'])) $hostip = $value[0]['HostIp'] ?? null;
+				else $hostip = '';
+				$c['Ports'][$PrivatePort] = ['IP' => $ip, 'HostIp' => $hostip, 'PrivatePort' => $PrivatePort, 'PublicPort' => $PublicPort, 'NAT' => $nat, 'Type' => $Type, 'Driver' => $driver[$c['NetworkMode']]];
 			}
 			ksort($c['Ports']);
 			$this::$containersCache[] = $c;

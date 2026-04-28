@@ -10,7 +10,7 @@ if [ ! -d /etc/libvirt/qemu ]; then
   log "initializing /etc/libvirt"
   # initialize with default settings
   cp -rp /etc/libvirt-/* /etc/libvirt
-  # check if libvirt image file exists on USB flash
+  # check if libvirt image file exists on boot device
   OLD_IMAGE=/boot/config/plugins/dynamix.kvm.manager/domain.img
   if [ ! -f $OLD_IMAGE ]; then
     OLD_IMAGE=/boot/config/plugins/virtMan/virtMan.img

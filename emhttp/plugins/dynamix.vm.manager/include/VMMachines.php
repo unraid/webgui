@@ -15,6 +15,7 @@
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
+require_once "$docroot/webGui/include/SriovHelpers.php";
 
 // add translations
 $_SERVER['REQUEST_URI'] = 'vms';
@@ -40,6 +41,7 @@ $kvm = ['var kvm=[];'];
 $show = explode(',',unscript(_var($_GET,'show')));
 $path = _var($domain_cfg,'MEDIADIR');
 $pci_device_changes = comparePCIData();
+$sriov = json_decode(getSriovInfoJson(true), true);
 
 foreach ($vms as $vm) {
   $res = $lv->get_domain_by_name($vm);
@@ -55,8 +57,17 @@ foreach ($vms as $vm) {
   $snapshots = getvmsnapshots($vm) ;
   $vmpciids = $lv->domain_get_vm_pciids($vm);
   $pcierror = false;
+  $srioverror = false;
   foreach($vmpciids as $pciid => $pcidetail) {
     if (isset($pci_device_changes["0000:".$pciid])) $pcierror = true;
+    // Check if device is an SR-IOV PF with VFs defined
+    $check_id = $pciid;
+    if (!preg_match('/^[0-9a-fA-F]{4}:/', $check_id)) {
+        $check_id = "0000:" . $check_id;
+    }
+    if (isset($sriov[$check_id]) && !empty($sriov[$check_id]['vfs'])) {
+        $srioverror = true;
+    }
   }
   $cdroms = $lv->get_cdrom_stats($res,true,true) ;
   if ($state == 'running') {
@@ -95,7 +106,7 @@ foreach ($vms as $vm) {
     if ($vmrcprotocol == "vnc") $vmrcscale = "&resize=scale"; else $vmrcscale = "";
     $vmrcurl = autov('/plugins/dynamix.vm.manager/'.$vmrcprotocol.'.html',true).$vmrcscale.'&autoconnect=true&host='._var($_SERVER,'HTTP_HOST');
     if ($vmrcprotocol == "spice") $vmrcurl .= '&vmname='. urlencode($vm) .'&port=/wsproxy/'.$vmrcport.'/'; else $vmrcurl .= '&port=&path=/wsproxy/'.$wsport.'/';
-    $graphics = strtoupper($vmrcprotocol).':'._($auto)."$vrtdriver\n";
+    $graphics = strtoupper($vmrcprotocol).':'.$vmrcport."$vrtdriver\n";
     $virtual = true ;
   } elseif ($vmrcport == -1 || $autoport) {
     $vmrcprotocol = $lv->domain_get_vmrc_protocol($res);
@@ -124,7 +135,7 @@ foreach ($vms as $vm) {
   unset($dom);
   if (!isset($domain_cfg["CONSOLE"])) $vmrcconsole = "web" ; else $vmrcconsole = $domain_cfg["CONSOLE"] ;
   if (!isset($domain_cfg["RDPOPT"])) $vmrcconsole .= ";no" ; else $vmrcconsole .= ";".$domain_cfg["RDPOPT"] ;
-  $menu = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s', '%s', %s)\"", addslashes($vm),addslashes($uuid),addslashes($template),$state,addslashes($vmrcurl),strtoupper($vmrcprotocol),addslashes($log),addslashes($fstype), $vmrcconsole,false,addslashes(str_replace('"',"'",$WebUI)),$pcierror);
+  $menu = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s', '%s', %s)\"", addslashes($vm),addslashes($uuid),addslashes($template),$state,addslashes($vmrcurl),strtoupper($vmrcprotocol),addslashes($log),addslashes($fstype), $vmrcconsole,false,addslashes(str_replace('"',"'",$WebUI)),$pcierror,$srioverror);
   $kvm[] = "kvm.push({id:'$uuid',state:'$state'});";
   switch ($state) {
   case 'running':
@@ -206,6 +217,7 @@ foreach ($vms as $vm) {
   echo "<span class='outer'><span id='vm-$uuid' $menu class='hand'>$image</span>";
   echo "<span class='inner'><a href='#' onclick='return toggle_id(\"name-$i\")' title='click for more VM info'>$vm</a>";
   if ($pcierror) echo "<i class=\"fa fa-warning fa-fw orange-text\" title=\""._('PCI Changed')."\n"._('Start disabled')."\"></i>";
+  if ($srioverror) echo "<i class=\"fa fa-warning fa-fw orange-text\" title=\""._('SR-IOV root device found')."\n"._('Start disabled')."\"></i>";
   echo "<br><i class='fa fa-$shape $status $color'></i><span class='state'>"._($status)." </span></span></span></td>";
   echo "<td>$desc</td>";
   echo "<td><a class='vcpu-$uuid' style='cursor:pointer'>$vcpu</a></td>";

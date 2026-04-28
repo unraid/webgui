@@ -47,6 +47,24 @@ active(){
   fi
 }
 
+# return the user template for a container, preserving legacy case-insensitive
+# matching without returning multiple files on case-sensitive boot devices
+docker_user_template(){
+  local dir=/boot/config/plugins/dockerMan/templates-user
+  local target="my-$1.xml"
+  local target_lc=${target,,}
+  local match=
+  local file
+  local name
+  for file in "$dir"/my-*.xml; do
+    [[ -e $file ]] || continue
+    name=${file##*/}
+    [[ $name == "$target" ]] && echo "$file" && return
+    [[ -z $match && ${name,,} == "$target_lc" ]] && match=$file
+  done
+  [[ -n $match ]] && echo "$match"
+}
+
 # wait for interface to go up
 carrier(){
   local n e
@@ -360,23 +378,22 @@ docker_network_start(){
   # get container settings for custom networks to reconnect later
   declare -A NETRESTORE PRIMARY_NETWORK REBUILD_CONTAINERS USED_SUBNETS4 USED_SUBNETS6 RESTORED_NETWORKS
   for CONTAINER in $(docker container ls -a --format='{{.Names}}'); do
-    # the file case (due to fat32) might be different so use find to match
-    XMLFILE=$(find /boot/config/plugins/dockerMan/templates-user -maxdepth 1 -iname my-${CONTAINER}.xml)
-    if [[ -n $XMLFILE ]]; then
+    XMLFILE=$(docker_user_template "$CONTAINER")
+    if [[ -f $XMLFILE ]]; then
       REBUILD=
       MAIN=
       # update custom network reference (if changed)
       for NIC in $NICS; do
         [[ ${NIC:0:3} == eth ]] && NIC=$(active $NIC)
         X=${NIC//[^0-9]/}
-        REF=$(grep -Pom1 "<Network>\K(br|bond|eth|wlan)$X" $XMLFILE)
+        REF=$(grep -Pom1 "<Network>\K(br|bond|eth|wlan)$X" "$XMLFILE")
         if [[ $X == 0 ]] && ! carrier $NIC 1; then
           continue
         fi
         [[ $X == 0 && $NIC != wlan0 ]] && MAIN=$NIC
         [[ $NIC == wlan0 && -n $MAIN ]] && continue
         if [[ -n $REF && $REF != $NIC ]]; then
-          sed -ri "s/<Network>(br|bond|eth|wlan)$X(\.[0-9]+)?<\/Network>/<Network>$NIC\2<\/Network>/" $XMLFILE
+          sed -ri "s/<Network>(br|bond|eth|wlan)$X(\.[0-9]+)?<\/Network>/<Network>$NIC\2<\/Network>/" "$XMLFILE"
           REBUILD=1
         fi
       done
@@ -385,7 +402,7 @@ docker_network_start(){
         [[ $ENTITY == Network ]] && MY_NETWORK=$CONTENT
         [[ $ENTITY == MyIP ]] && MY_IP=${CONTENT// /,} && MY_IP=$(echo "$MY_IP" | tr -s "," ";")
         [[ $ENTITY == MyMAC ]] && XML_MAC=${CONTENT// /}
-      done <$XMLFILE
+      done <"$XMLFILE"
       # only restore valid networks
       if [[ -n $MY_NETWORK ]]; then
         [[ $MY_NETWORK =~ ^(br|bond|eth|wlan)[0-9]+(\.[0-9]+)?$ ]] && CUSTOM_PRIMARY=1

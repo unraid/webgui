@@ -1,5 +1,5 @@
 #!/bin/bash
-#Copyright 2005-2016, Lime Technology
+#Copyright 2005-2026, Lime Technology
 #License: GPLv2 only
 
 # emhttp_event script (a work in process).
@@ -10,8 +10,12 @@
 
 # The first argument to the script is a string indicating the event:
 
+# startup
+#   Occurs one time only in early emhttpd initialization.
+#   No status information is valid yet.
+
 # driver_loaded
-#   Occurs early in emhttp initialization.
+#   Occurs early in emhttpd initialization.
 #   Can also occur as a result of init-config and device slot change.
 #   Status information is valid.
 
@@ -71,8 +75,8 @@
 #   The array has been stopped.
 
 # poll_attributes
-#   Occurs after each time emhttp polls disk SMART data.
-#   Note that if array is not Started, emhttp will not spin down any disk, but emhttp will
+#   Occurs after each time emhttpd polls disk SMART data.
+#   Note that if array is not Started, emhttpd will not spin down any disk, but emhttpd will
 #   still poll SMART data (for spun-up devices) and generate this event.
 
 # Invoke all 'any_event' scripts that might exist

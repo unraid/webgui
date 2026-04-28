@@ -10,9 +10,13 @@
 #
 # LimeTech - modified for Unraid OS
 # Bergware - modified for Unraid OS, October 2023
+# Simon Fairweather - modified for Unraid OS, November 2025(SRIOV)
 
 # run & log functions
 . /etc/rc.d/rc.runlog
+
+# LimeTech/SF - setup selected devices for sriov
+/usr/local/sbin/sriov 1>/var/log/sriov 2>/var/log/sriov-errors
 
 # import CA proxy
 UNPROXY=/boot/config/plugins/dynamix/outgoingproxy.cfg
@@ -56,6 +60,7 @@ mkdir -p $CONFIG/plugins/dockerMan
 mkdir -p $CONFIG/plugins/dynamix/users
 mkdir -p $CONFIG/plugins-error/
 mkdir -p $CONFIG/pools
+mkdir -p $CONFIG/rclone
 mkdir -p $CONFIG/shares
 mkdir -p $CONFIG/ssh/root
 mkdir -p $CONFIG/ssl/certs
@@ -186,6 +191,26 @@ else
     log "Installing /boot/extra packages"
     ( export -f log; find /boot/extra -maxdepth 1 -type f -exec sh -c 'upgradepkg --terse --install-new "$1" | log' -- "{}" \; )
   fi
+  # Move any downloaded plugins in $CONFIG/plugins-nextboot to $CONFIG/plugins so they can be installed
+  if [[ -d "$CONFIG/plugins-nextboot" ]]; then
+    shopt -s nullglob
+    for ITEM in "$CONFIG/plugins-nextboot"/*; do
+      if [[ -f "$ITEM" && "$ITEM" == *.plg ]]; then
+        # Move .plg files
+        mv "$ITEM" "$CONFIG/plugins/" && log "Moved $(basename "$ITEM") from plugins-nextboot to plugins"
+      elif [[ -d "$ITEM" ]]; then
+        # Merge plugin directories
+        PLUGIN_NAME=$(basename "$ITEM")
+        DEST_DIR="$CONFIG/plugins/$PLUGIN_NAME"
+        mkdir -p "$DEST_DIR"
+        cp -r "$ITEM"/* "$DEST_DIR/" 2>/dev/null
+        rm -rf "$ITEM"
+        log "Moved plugin directory $PLUGIN_NAME and contents from plugins-nextboot to plugins"
+      fi
+    done
+    shopt -u nullglob
+    rmdir "$CONFIG/plugins-nextboot" 2>/dev/null;
+  fi
   PRIORITY_PLUGINS=("dynamix.unraid.net.plg")
   # Install priority plugins first
   for PRIORITY_PLUGIN in "${PRIORITY_PLUGINS[@]}"; do
@@ -205,6 +230,11 @@ else
     /usr/local/sbin/plugin install "$PLUGIN" | log
   done
   shopt -u nullglob
+fi
+
+# Re-run rclone config setup after plugin install phase (plugins-nextboot may have added rclone).
+if [[ -x /usr/local/sbin/rclone_config_init ]]; then
+  /usr/local/sbin/rclone_config_init "$CONFIG"
 fi
 
 # Install languages
@@ -259,4 +289,8 @@ if [[ -f $CONFIG/$GO ]]; then
 else
   log "Starting emhttp"
   /usr/local/sbin/emhttp
+fi
+if [[ -f /boot/unraidguimode ]] || grep -wq unraidguimode /proc/cmdline; then
+  log "Starting GUI mode"
+  /usr/bin/slim
 fi

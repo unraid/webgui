@@ -153,13 +153,13 @@ case "$1" in
       modprobe -a $DRIVERS
       # Bergware - check for changes and save them
       if [[ $NEW != $(grep -Po $MAC $ROM | sort) ]]; then
-        # Bergware - copy to flash only when more than one interface is present
+        # Bergware - copy to boot device only when more than one interface is present
         [[ $(echo "$NEW" | wc -l) -gt 1 ]] && /usr/bin/todos <$RAM >$ROM || rm -f $ROM
       fi
     else
       # Bergware - remove leading remarks in file
       sed -i '/^# This/,/^$/d' $RAM
-      # Bergware - copy to flash only when more than one interface is present
+      # Bergware - copy to boot device only when more than one interface is present
       [[ $(grep -Pc 'NAME="eth\d+"' $RAM) -gt 1 ]] && /usr/bin/todos <$RAM >$ROM || rm -f $ROM
     fi
     # Bergware - end of code

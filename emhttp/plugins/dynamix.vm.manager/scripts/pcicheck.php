@@ -17,7 +17,6 @@
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Helpers.php";
 
-
 $pci_device_changes = comparePCIData();
 $pcierror = false;
 $pci_addresses = [];
@@ -26,7 +25,6 @@ if (preg_match('/"host"\s*:\s*"([^"]+)"/', $arg, $matches)) {
     $pci_addresses[] = $matches[1];
     }
 }
-
 foreach($pci_addresses as $pciid) {
 if (isset($pci_device_changes[$pciid])) {
     $pcierror = true;

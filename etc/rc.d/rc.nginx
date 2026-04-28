@@ -33,8 +33,7 @@ API_UTILS="/usr/local/share/dynamix.unraid.net/scripts/api_utils.sh"
 DEFAULTS="/etc/default/nginx"
 SYSTEM="/sys/class/net"
 SYSLOG="/var/log/syslog"
-# Disable IPv6 myunraid.net certs for now
-IPV6MYUNRAIDNET=0
+IPV6MYUNRAIDNET=1
 # Load defaults
 # Defines NGINX_CUSTOMFA for custom Content-Security-Policy frame-ancestors url
 [[ -r $DEFAULTS ]] && . $DEFAULTS
@@ -164,6 +163,13 @@ build_servers(){
 	#
 	server {
 	    listen unix:/var/run/nginx.socket default_server;
+      # filemanager should not display outdated messages
+	    location = /pub/filemanager {
+	        nchan_publisher;
+	        nchan_channel_id "filemanager";
+	        nchan_message_buffer_length $arg_buffer_length;
+	        nchan_message_timeout 30s;
+	    }
 	    location ~ /pub/(.*)$ {
 	        nchan_publisher;
 	        nchan_channel_id "$1";
@@ -405,7 +411,7 @@ build_locations(){
 	#
 	# nchan subscriber endpoint
 	#
-	location ~ /sub/(.*)$ {
+	location ~ ^/sub/(.*)$ {
 	    nchan_subscriber;
 	    nchan_subscriber_timeout 0;
 	    # nchan_authorize_request <url here>
@@ -654,7 +660,7 @@ build_ssl(){
   # define the default URL used to access the server
   if [[ $USE_SSL == auto ]]; then
     [[ -n $LANIP && $(ipv $LANIP) == 4 ]] && DEFAULTURL="https://$LANFQDN$PORTSSL_URL"
-    [[ -n $LANIP && $(ipv $LANIP) == 6 ]] && DEFAULTURL="https://[$LANFQDN6]$PORTSSL_URL"
+    [[ -n $LANIP6 && -n $LANFQDN6 && $(ipv $LANIP6) == 6 ]] && DEFAULTURL="https://$LANFQDN6$PORTSSL_URL"
   elif [[ $USE_SSL == yes ]]; then
     DEFAULTURL="https://$LANMDNS$PORTSSL_URL"
   else

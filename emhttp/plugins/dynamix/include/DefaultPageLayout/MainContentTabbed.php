@@ -93,7 +93,7 @@
 const tabs = document.querySelectorAll('.tabs [role="tab"]');
 const panels = document.querySelectorAll('[role="tabpanel"]');
 
-// Hide all panels by default (avoid flash)
+// Hide all panels by default (avoid boot device(flash))
 panels.forEach(panel => panel.style.display = 'none');
 
 // Figure out which cookie to use (matches settab logic)

@@ -19,6 +19,7 @@ require_once "$docroot/webGui/include/Translations.php";
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
+require_once "$docroot/webGui/include/SriovHelpers.php";
 
 if (isset($_POST['ntp'])) {
   if (exec("pgrep --ns $$ -cf /usr/sbin/ptp4l")) {
@@ -116,6 +117,7 @@ if ($_POST['vms']) {
   echo "<tr title='' class='updated'><td>";
   $running = 0;
   $pci_device_changes = comparePCIData();
+  $sriov = json_decode(getSriovInfoJson(true), true);
   foreach ($vms as $vm) {
     $res = $lv->get_domain_by_name($vm);
     $uuid = libvirt_domain_get_uuid_string($res);
@@ -159,12 +161,21 @@ if ($_POST['vms']) {
     $WebUI = html_entity_decode($arrConfig["template"]["webui"]??"");
     $vmpciids = $lv->domain_get_vm_pciids($vm);
     $pcierror = false;
+    $srioverror = false;
     foreach($vmpciids as $pciid => $pcidetail) {
       if (isset($pci_device_changes["0000:".$pciid])) {
         $pcierror = true;
       }
+      // Check if device is an SR-IOV PF with VFs defined
+      $check_id = $pciid;
+      if (!preg_match('/^[0-9a-fA-F]{4}:/', $check_id)) {
+          $check_id = "0000:" . $check_id;
+      }
+      if (isset($sriov[$check_id]) && !empty($sriov[$check_id]['vfs'])) {
+          $srioverror = true;
+      }
     }
-    $menu = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($vm), addslashes($uuid), addslashes($template), $state, addslashes($vmrcurl), strtoupper($vmrcprotocol), addslashes($log),addslashes($fstype), $vmrcconsole,false,addslashes(str_replace('"',"'",$WebUI)),$pcierror);
+    $menu = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($vm), addslashes($uuid), addslashes($template), $state, addslashes($vmrcurl), strtoupper($vmrcprotocol), addslashes($log),addslashes($fstype), $vmrcconsole,false,addslashes(str_replace('"',"'",$WebUI)),$pcierror,$srioverror);
     $icon = $lv->domain_get_icon_url($res);
     switch ($state) {
     case 'running':
@@ -188,10 +199,11 @@ if ($_POST['vms']) {
     $image = substr($icon,-4)=='.png' ? "<img src='$icon' class='img'>" : (substr($icon,0,5)=='icon-' ? "<i class='$icon img'></i>" : "<i class='fa fa-$icon img'></i>");
     echo "<span class='outer solid vms $status'><span id='vm-$uuid' $menu class='hand'>$image</span><span class='inner'>$vm";
     if ($pcierror) echo "<i class=\"fa fa-warning fa-fw orange-text\" title=\""._('PCI Changed')."\n"._('Start disabled')."\"></i>";
+    if ($srioverror) echo "<i class=\"fa fa-warning fa-fw orange-text\" title=\""._('SR-IOV root device found')."\n"._('Start disabled')."\"></i>";
     echo "<br><i class='fa fa-$shape $status $color'></i><span class='state'>"._($status)."</span></span></span>";
     if ($state == "running") {
       #Build VM Usage array.
-      $menuusage = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($vm), addslashes($uuid), addslashes($template), $state, addslashes($vmrcurl), strtoupper($vmrcprotocol), addslashes($log),addslashes($fstype), $vmrcconsole,true,addslashes(str_replace('"',"'",$WebUI)));
+      $menuusage = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($vm), addslashes($uuid), addslashes($template), $state, addslashes($vmrcurl), strtoupper($vmrcprotocol), addslashes($log),addslashes($fstype), $vmrcconsole,true,addslashes(str_replace('"',"'",$WebUI)),$pcierror,$srioverror);
       $vmusagehtml[] = "<span class='outer solid vmsuse $status'><span id='vmusage-$uuid' $menuusage class='hand'>$image</span><span class='inner'>$vm<br><i class='fa fa-$shape $status $color'></i><span class='state'>"._($status)."</span></span>";
       $vmusagehtml[] = "<br><br><span id='vmmetrics-gcpu-".$uuid."'>"._("Loading")."....</span>";
       $vmusagehtml[] = "<br><span id='vmmetrics-hcpu-".$uuid."'>"._("Loading")."....</span>";

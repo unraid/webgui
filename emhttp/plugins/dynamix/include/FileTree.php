@@ -32,8 +32,8 @@ function path($dir) {
 }
 
 function is_top($dir) {
-  global $root;
-  return mb_strlen($dir) > mb_strlen($root);
+  global $fileTreeRoot;
+  return mb_strlen($dir) > mb_strlen($fileTreeRoot);
 }
 
 function no_dots($name) {
@@ -45,11 +45,14 @@ function my_dir($name) {
   return ($rootdir === $userdir && in_array($name, $UDincluded)) ? $topdir : $rootdir;
 }
 
-$root = path(realpath($_POST['root']));
-if (!$root) exit("ERROR: Root filesystem directory not set in jqueryFileTree.php");
+$fileTreeRoot = path(realpath($_POST['root']));
+if (!$fileTreeRoot) exit("ERROR: Root filesystem directory not set in jqueryFileTree.php");
 
 $docroot = '/usr/local/emhttp';
 require_once "$docroot/webGui/include/Secure.php";
+$_SERVER['REQUEST_URI'] = '';
+require_once "$docroot/webGui/include/Translations.php";
+require_once "$docroot/plugins/dynamix/include/PopularDestinations.php";
 
 $mntdir   = '/mnt/';
 $userdir  = '/mnt/user/';
@@ -64,13 +67,51 @@ $UDexcluded = ['RecycleBin', 'addons', 'rootshare'];
 // Included UD shares to show under '/mnt/user'
 $UDincluded = ['disks','remotes'];
 
+$showPopular = in_array('SHOW_POPULAR', $filters);
+
 echo "<ul class='jqueryFileTree'>";
-if ($_POST['show_parent'] == 'true' && is_top($rootdir)) {
-  echo "<li class='directory collapsed'>$checkbox<a href='#' rel=\"".htmlspecialchars(dirname($rootdir))."\">..</a></li>";
+
+// Show popular destinations at the top (only at root level when SHOW_POPULAR filter is set)
+if ($rootdir === $fileTreeRoot && $showPopular) {
+  $popularPaths = getPopularDestinations(5);
+  
+  // Filter popular paths to prevent FUSE conflicts between /mnt/user and /mnt/diskX
+  if (!empty($popularPaths)) {
+    $isUserContext = (strpos($fileTreeRoot, '/mnt/user') === 0 || strpos($fileTreeRoot, '/mnt/rootshare') === 0);
+    
+    if ($isUserContext) {
+      // In /mnt/user context: only show /mnt/user paths OR non-/mnt paths (external mounts)
+      $popularPaths = array_values(array_filter($popularPaths, function($path) {
+        return (strpos($path, '/mnt/user') === 0 || strpos($path, '/mnt/rootshare') === 0 || strpos($path, '/mnt/') !== 0);
+      }));
+    } else if (strpos($fileTreeRoot, '/mnt/') === 0) {
+      // In /mnt/diskX or /mnt/cache context: exclude /mnt/user and /mnt/rootshare paths
+      $popularPaths = array_values(array_filter($popularPaths, function($path) {
+        return (strpos($path, '/mnt/user') !== 0 && strpos($path, '/mnt/rootshare') !== 0);
+      }));
+    }
+    // If root is not under /mnt/, no filtering needed
+  }
+  
+  if (!empty($popularPaths)) {
+    echo "<li class='popular-header small-caps-label' style='list-style:none;padding:5px 0 5px 20px;'>"._('Popular')."</li>";
+    
+    foreach ($popularPaths as $path) {
+      $htmlPath = htmlspecialchars($path, ENT_QUOTES);
+      $displayPath = htmlspecialchars($path, ENT_QUOTES);  // Show full path instead of basename
+      // Use data-path instead of rel to prevent jQueryFileTree from handling these links
+      // Use 'directory' class so jQueryFileTree CSS handles the icon
+      echo "<li class='directory popular-destination' style='list-style:none;'>$checkbox<a href='#' data-path='$htmlPath'>$displayPath</a></li>";
+    }
+    
+    // Separator line
+    echo "<li class='popular-separator' style='list-style:none;border-top:1px solid var(--inverse-border-color);margin:5px 0 5px 20px;'></li>";
+  }
 }
 
+// Read directory contents
+$dirs = $files = [];
 if (is_dir($rootdir)) {
-  $dirs  = $files = [];
   $names = array_filter(scandir($rootdir, SCANDIR_SORT_NONE), 'no_dots');
   // add UD shares under /mnt/user
   foreach ($UDincluded as $name) {
@@ -89,25 +130,33 @@ if (is_dir($rootdir)) {
       $files[] = $name;
     }
   }
-  foreach ($dirs as $name) {
-    // Exclude '.Recycle.Bin' from all shares and UD folders from '/mnt'
-    if ($name === '.Recycle.Bin' || ($rootdir === $mntdir && in_array($name, $UDexcluded))) continue;
-    $htmlRel  = htmlspecialchars(my_dir($name).$name);
-    $htmlName = htmlspecialchars(mb_strlen($name) <= 33 ? $name : mb_substr($name, 0, 30).'...');
-    if (empty($match) || preg_match("/$match/", $rootdir.$name.'/')) {
-      echo "<li class='directory collapsed'>$checkbox<a href='#' rel=\"$htmlRel/\">$htmlName</a></li>";
-    }
+}
+
+// Normal mode: show directory tree
+if ($_POST['show_parent'] == 'true' && is_top($rootdir)) {
+  echo "<li class='directory collapsed'>$checkbox<a href='#' rel=\"".htmlspecialchars(dirname($rootdir), ENT_QUOTES)."\">..</a></li>";
+}
+
+// Display directories and files (arrays already populated above)
+foreach ($dirs as $name) {
+  // Exclude '.Recycle.Bin' from all shares and UD folders from '/mnt'
+  if ($name === '.Recycle.Bin' || ($rootdir === $mntdir && in_array($name, $UDexcluded))) continue;
+  $htmlRel  = htmlspecialchars(my_dir($name).$name, ENT_QUOTES);
+  $htmlName = htmlspecialchars(mb_strlen($name) <= 33 ? $name : mb_substr($name, 0, 30).'...', ENT_QUOTES);
+  if (empty($match) || preg_match("/$match/", $rootdir.$name.'/')) {
+    echo "<li class='directory collapsed'>$checkbox<a href='#' rel=\"$htmlRel/\">$htmlName</a></li>";
   }
-  foreach ($files as $name) {
-    $htmlRel  = htmlspecialchars(my_dir($name).$name);
-    $htmlName = htmlspecialchars($name);
-    $ext      = mb_strtolower(pathinfo($name, PATHINFO_EXTENSION));
-    foreach ($filters as $filter) if (empty($filter) || $ext === $filter) {
-      if (empty($match) || preg_match("/$match/", $name)) {
-        echo "<li class='file ext_$ext'>$checkbox<a href='#' rel=\"$htmlRel\">$htmlName</a></li>";
-      }
+}
+foreach ($files as $name) {
+  $htmlRel  = htmlspecialchars(my_dir($name).$name, ENT_QUOTES);
+  $htmlName = htmlspecialchars($name, ENT_QUOTES);
+  $ext      = mb_strtolower(pathinfo($name, PATHINFO_EXTENSION));
+  foreach ($filters as $filter) if (empty($filter) || $ext === $filter) {
+    if (empty($match) || preg_match("/$match/", $name)) {
+      echo "<li class='file ext_$ext'>$checkbox<a href='#' rel=\"$htmlRel\">$htmlName</a></li>";
     }
   }
 }
+
 echo "</ul>";
 ?>

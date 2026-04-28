@@ -1,0 +1,67 @@
+BOOTUUID=$1
+MACHINE=$(hostname -s)
+
+cat <<EOF
+# Generated
+
+# Main options
+title-text: ""
+desktop-image: "background.png"
+desktop-color: "#000000"
+terminal-font: "Terminus Regular 14"
+terminal-box: "terminal_box_*.png"
+terminal-left: "0"
+terminal-top: "0"
+terminal-width: "100%"
+terminal-height: "100%"
+terminal-border: "0"
+
++ label {
+  top = 28%
+  left = 15%
+  align = "center"
+  id = "header"
+  text = "Machine Name:       $MACHINE"
+  color = "#cccccc"
+  font = "Nudista SemiBold Regular 24"
+}
++ label {
+  top = 31%
+  left = 15%
+  align = "center"
+  id = "header"
+  text = "Boot Pool UUID:     $BOOTUUID"
+  color = "#cccccc"
+  font = "Nudista SemiBold Regular 24"
+}
+
+# Countdown label
+# You can change the name of default starting OS here
++ label {
+  top = 35%
+  left = 15%
+  align = "center"
+  id = "__timeout__"
+  text = "Selected option will start in %d seconds"
+  color = "#cccccc"
+  font = "Nudista SemiBold Regular 24"
+}
+
+# Boot menu
++ boot_menu {
+  top = 40%
+  left = 15%
+  width = 55%
+  height = 65%
+  item_font = "Nudista SemiBold Regular 24"
+  item_color = "#cccccc"
+  selected_item_color = "#ffffff"
+  icon_width = 36
+  icon_height = 36
+  item_icon_space = 20
+  item_height = 40
+  item_padding = 2
+  item_spacing = 10
+  selected_item_pixmap_style = "select_*.png"
+}
+EOF

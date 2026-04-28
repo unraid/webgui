@@ -1,0 +1,47 @@
+Menu="Wizards:2"
+Title="Internal Boot"
+Icon="hdd-o"
+Tag="list"
+---
+<?php
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<script>
+function openInternalBootWizard() {
+  const url = new URL(window.location.href);
+  url.searchParams.set('internalBoot', 'open');
+  window.location.href = `${url.pathname}${url.search}${url.hash}`;
+}
+</script>
+
+<?$internalBootWizardOpen = ($_GET['internalBoot'] ?? '') === 'open';?>
+
+<form markdown="1" name="internal_boot_wizard_settings">
+<div style="margin-top:1rem;max-width:64rem;padding:1.25rem 2rem;">
+  <p><strong>_(Internal Boot)_</strong></p>
+  <p>_(Configure an internal boot device without opening the full onboarding wizard)_.</p>
+  <?if (_var($var,'fsState')=="Started"):?>
+  <p class="warning"><i class="fa fa-warning"></i> _(Array must be stopped to configure internal boot)_.</p>
+  <?else:?>
+  <p class="blue-text"><i class="fa fa-info-circle"></i> _(Available while the array is stopped)_.</p>
+  <?endif;?>
+  <p style="margin-top:1rem;margin-bottom:0;">
+    <input type="button" value="_(Open Wizard)_" onclick="openInternalBootWizard()" <?if (_var($var,'fsState')=="Started"):?>disabled<?endif;?>>
+  </p>
+</div>
+</form>
+
+<?if (_var($var,'fsState')!="Started" && $internalBootWizardOpen):?>
+<div class="unapi" style="margin:1rem 0 2rem;max-width:80rem;">
+  <unraid-onboarding-internal-boot></unraid-onboarding-internal-boot>
+</div>
+<?endif;?>

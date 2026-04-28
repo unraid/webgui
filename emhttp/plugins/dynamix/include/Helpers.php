@@ -86,6 +86,10 @@ function cache_only($disk) {
   return _var($disk,'type') == 'Cache';
 }
 
+function boot_only($disk) {
+  return _var($disk,'type') == 'Boot';
+}
+
 function luks_only($disk) {
   return _var($disk,'type') == 'Data' || _var($disk,'type') == 'Cache';
 }
@@ -106,12 +110,22 @@ function cache_filter($disks) {
   return array_filter($disks, 'cache_only');
 }
 
+function boot_filter($disks) {
+  return array_filter($disks, 'boot_only');
+}
+
 function luks_filter($disks) {
   return array_filter($disks, 'luks_only');
 }
 
 function pools_filter($disks) {
-  return array_unique(array_map('prefix', array_keys(cache_filter($disks))));
+  $cache_pools = array_keys(cache_filter($disks));
+  return array_unique(array_map('prefix', $cache_pools));
+}
+
+function flash_filter($disks) {
+  $boot_pools = array_keys(boot_filter($disks));
+  return array_unique(array_map('prefix', $boot_pools));
 }
 
 function my_id($id) {
@@ -305,7 +319,7 @@ function check_deprecated_filesystem($disk) {
     $warnings[] = [
       'type' => 'reiserfs',
       'severity' => 'critical',
-      'message' => _('ReiserFS is deprecated and will not be supported in future Unraid releases')
+      'message' => _('ReiserFS is deprecated and is no longer supported in Unraid. You will need to downgrade to Unraid 7.2 to take action.')
     ];
   }
   
@@ -320,7 +334,7 @@ function check_deprecated_filesystem($disk) {
         $warnings[] = [
           'type' => 'xfs_v4',
           'severity' => 'critical',
-          'message' => _('XFS v4 is deprecated and will not be supported in future Unraid releases. Please migrate to XFS v5 immediately')
+          'message' => _('XFS v4 is deprecated and will not be supported in future Unraid releases. Please migrate to XFS v5 immediately.')
         ];
       }
     }
@@ -668,7 +682,7 @@ function check_disk_for_deprecated_fs($disk) {
       'name' => _var($disk, 'name'),
       'fsType' => 'ReiserFS',
       'severity' => 'critical',
-      'message' => 'ReiserFS is deprecated and will not be supported in future Unraid releases'
+      'message' => 'ReiserFS is deprecated and is no longer supported in Unraid. You will need to downgrade to Unraid 7.2 to take action'
     ];
   }
   
@@ -804,6 +818,21 @@ HTML;
     $description = htmlspecialchars($type === 'array' ? 
       'The following array devices are using older filesystem versions:' : 
       'The following pool devices are using older filesystem versions:');
+
+    $deadline = new DateTime('2030-10-01');
+    $now = new DateTime('now');
+    if ($now < $deadline) {
+      $interval = $now->diff($deadline);
+      $years = (int)$interval->y;
+      $months = (int)$interval->m;
+      $parts = [];
+      if ($years > 0) $parts[] = $years.' year'.($years === 1 ? '' : 's');
+      if ($months > 0) $parts[] = $months.' month'.($months === 1 ? '' : 's');
+      if (empty($parts)) $parts[] = 'less than 1 month';
+      $timeline = 'before the end of September 2030 ('.implode(' and ', $parts).')';
+    } else {
+      $timeline = 'as soon as possible';
+    }
     
     $diskList = '';
     foreach ($notice_disks as $disk) {
@@ -838,7 +867,7 @@ if (!sessionStorage.getItem('xfs-{$id}-dismissed')) {
                     {$diskList}
                 </ul>
                 <div style="margin-top: 10px;">
-                    <strong>Recommendation:</strong> Plan to migrate to XFS v5, BTRFS, or ZFS within the next 5 years. 
+                      <strong>Recommendation:</strong> Plan to migrate to XFS v5, BTRFS, or ZFS {$timeline}. 
                     <a href="https://docs.unraid.net/go/convert-reiser-and-xfs" 
                        target="_blank" style="color: #0066cc;">View migration guide →</a>
                 </div>
@@ -853,5 +882,951 @@ HTML;
   }
   
   return $html;
+}
+
+function get_cpu_packages(string $separator = ','): array {
+    $packages = [];
+    foreach (glob("/sys/devices/system/cpu/cpu[0-9]*/topology/thread_siblings_list") as $path) {
+        $pkg_id   = (int)file_get_contents(dirname($path) . "/physical_package_id");
+        $siblings = str_replace(",", $separator, trim(file_get_contents($path)));
+        if (!in_array($siblings, $packages[$pkg_id] ?? [])) {
+            $packages[$pkg_id][] = $siblings;
+        }
+    }
+    foreach ($packages as &$list) {
+        $keys = array_map(fn($s) => (int)explode($separator, $s)[0], $list);
+        array_multisort($keys, SORT_ASC, SORT_NUMERIC, $list);
+    }
+    unset($list);
+    return $packages;
+}
+
+
+function getIpAddressesByPci(string $pciAddress): array
+{
+    $base = "/sys/bus/pci/devices/$pciAddress/net";
+
+    if (!is_dir($base)) {
+        return [];
+    }
+
+    $interfaces = scandir($base);
+    $result = [];
+
+    foreach ($interfaces as $iface) {
+        if ($iface === '.' || $iface === '..') continue;
+
+        //
+        // Walk upward (eth0 → bond0 → br0 → ...)
+        //
+        $chain = [];
+        $curr = $iface;
+
+        while (true) {
+            $chain[] = $curr;
+
+            $masterLink = "/sys/class/net/$curr/master";
+            if (!is_link($masterLink)) {
+                break;
+            }
+
+            $curr = basename(readlink($masterLink));
+        }
+
+        //
+        // Now $chain contains all relevant interfaces
+        // Example: [eth0, bond0, br0]
+        //
+
+        foreach ($chain as $dev) {
+            $cmd = sprintf('ip -o addr show dev %s 2>/dev/null', escapeshellarg($dev));
+            $output = shell_exec($cmd);
+
+            if (!$output) continue;
+
+            foreach (explode("\n", trim($output)) as $line) {
+
+                // IPv4
+                if (preg_match('/inet\s+(\d+\.\d+\.\d+\.\d+\/\d+)/', $line, $m)) {
+                    $result[$dev][] = $m[1];
+                }
+
+                // IPv6
+                if (preg_match('/inet6\s+([0-9a-fA-F:]+\/\d+)/', $line, $m)) {
+                    $result[$dev][] = $m[1];
+                }
+            }
+        }
+    }
+
+    //
+    // Remove duplicates while preserving interface keys
+    //
+    foreach ($result as $iface => $ips) {
+        $result[$iface] = array_values(array_unique($ips));
+    }
+
+    return $result;
+}
+
+function getSystemNumaNodeCount() {
+    $nodes = glob("/sys/devices/system/node/node*") ?: [];
+    $count = count($nodes);
+    // Treat “no NUMA directory” as a single-node system
+    return $count > 0 ? $count : 1;
+}
+
+function normalizeNumaNode($node, $numNodes) {
+    // If system has only 1 node, interpret -1 as node 0
+    if ($numNodes === 1 && $node === -1) {
+        return 0;
+    }
+    return $node;
+}
+
+function getCpuNumaInfo($numNodes) {
+    $cpus = [];
+
+    foreach (glob("/sys/devices/system/cpu/cpu[0-9]*") as $cpuPath) {
+        $cpu = basename($cpuPath);
+
+        $nodes = glob("$cpuPath/node*");
+        $node = -1;
+
+        if (!empty($nodes)) {
+            $node = intval(str_replace("node", "", basename($nodes[0])));
+        }
+
+        $node = normalizeNumaNode($node, $numNodes);
+
+        $cpus[$cpu] = [
+            "cpu_id" => intval(str_replace("cpu", "", $cpu)),
+            "numa_node" => $node
+        ];
+    }
+
+    return $cpus;
+}
+
+function getPciNumaInfo($numNodes) {
+    $pci = [];
+
+    foreach (glob("/sys/bus/pci/devices/*") as $devPath) {
+        $dev = basename($devPath);
+
+        $numaNodeFile = "$devPath/numa_node";
+        $node = file_exists($numaNodeFile) ? intval(trim(file_get_contents($numaNodeFile))) : -1;
+
+        $node = normalizeNumaNode($node, $numNodes);
+
+        $desc = trim(shell_exec("lspci -mm -s $dev 2>/dev/null"));
+
+        $pci[$dev] = [
+            "pci_address" => $dev,
+            "numa_node" => $node,
+            "description" => $desc
+        ];
+    }
+
+    return $pci;
+}
+
+function getNumaInfo() {
+    $numNodes = getSystemNumaNodeCount();
+
+    $result = [
+        "system" => [
+            "numa_nodes" => $numNodes,
+        ],
+        "cpus" => getCpuNumaInfo($numNodes),
+        "pci_devices" => getPciNumaInfo($numNodes),
+    ];
+
+    if (is_file("/tmp/numain")) {
+        $numain  = file_get_contents("/tmp/numain");
+        $override = json_decode($numain, true);
+        if (is_array($override)) {
+            $result = $override;
+        }
+    }
+
+    return $result;
+}
+/**
+ * Get PCIe link data from sysfs with generation + clean GT/s rate.
+ * Suppresses sentinel max‑width value 255 (unreported/invalid); preserves 0 when reported.
+ * Downgrade flags are set only for non‑bridge/root‑port devices (PCI class != 0x06).
+ *
+ * @param string $pciAddress
+ * @return array
+ */
+function getPciLinkInfo($pciAddress)
+{
+    $base = "/sys/bus/pci/devices/$pciAddress";
+
+    $files = [
+        "current_speed" => "$base/current_link_speed",
+        "max_speed"     => "$base/max_link_speed",
+        "current_width" => "$base/current_link_width",
+        "max_width"     => "$base/max_link_width",
+    ];
+
+    $out = [
+        "current_speed"    => null,
+        "max_speed"        => null,
+        "current_width"    => null,
+        "max_width"        => null,
+        "speed_downgraded" => false,
+        "width_downgraded" => false,
+        "rate"             => "GT/s",
+        "generation"       => null,
+    ];
+
+    // If the device path doesn't exist, just return empty defaults
+    if (!is_dir($base)) {
+        return $out;
+    }
+
+    // Read speeds
+    foreach ($files as $key => $file) {
+        if (!file_exists($file)) continue;
+        $value = trim(file_get_contents($file));
+        // Handle speeds
+        if (strpos($key, 'speed') !== false) {
+            if (preg_match('/([0-9.]+)/', $value, $m)) {
+                $out[$key] = floatval($m[1]);
+            }
+        }
+
+        // Handle widths (do not apply suppression yet)
+        if ($key === 'max_width') {
+            $out['max_width_raw'] = intval(str_replace('x', '', $value));
+        }
+        if ($key === 'current_width') {
+            $out['current_width_raw'] = intval(str_replace('x', '', $value));
+        }
+    }
+
+    // Apply width rules
+    $max = $out['max_width_raw'] ?? null;
+    $cur = $out['current_width_raw'] ?? null;
+
+    if ($max === 255) {
+        // Invalid / not reported
+        $out["max_width"] = null;
+        $out["current_width"] = null;
+    } else {
+        // Valid max width → keep 0 as 0
+        $out["max_width"] = $max;
+
+        if ($cur === 0) {
+            // 0 is valid when max != 255
+            $out["current_width"] = 0;
+        } else {
+            $out["current_width"] = $cur;
+        }
+    }
+    unset($out["max_width_raw"], $out["current_width_raw"]);  // Cleanup
+    // Downgrade flags
+    if (file_exists("$base/class")) {
+        $class_raw   = trim(file_get_contents("$base/class"));
+        $class_check = strpos($class_raw, "0x06", 0);
+    } else {
+        $class_check = false;
+    }
+    if ($out["current_speed"] && $out["max_speed"] && $class_check === false) {
+        $out["speed_downgraded"] = ($out["current_speed"] < $out["max_speed"]);
+    }
+    if ($out["current_width"] !== null && $out["max_width"]     !== null && $out["current_width"] < $out["max_width"] && $class_check === false) {
+        $out["width_downgraded"] = true;
+    }
+    // PCIe Generation Table
+    $genTable = [
+        1 => 2.5,
+        2 => 5.0,
+        3 => 8.0,
+        4 => 16.0,
+        5 => 32.0,
+        6 => 64.0,
+    ];
+    // Determine generation from max_speed
+    if (!empty($out["max_speed"])) {
+        $speed = $out["max_speed"];
+        foreach ($genTable as $gen => $gt) {
+            if (abs($speed - $gt) < 0.5) {
+                $out["generation"] = $gen;
+                break;
+            }
+        }
+    }
+    return $out;
+}
+
+/**
+ * Check if a ZFS error count value is greater than zero
+ * Handles values with SI suffixes (K, M, G, etc.)
+ * Examples: "0" -> false, "3.33K" -> true, "1.5M" -> true
+ */
+function has_zfs_errors($value): bool
+{
+    if (is_int($value)) return $value > 0;
+    if (!is_string($value)) return false;
+    
+    $value = trim($value);
+    if ($value === '' || $value === '0') return false;
+    
+    // Parse number with optional SI suffix
+    if (preg_match('/^(\d+(?:\.\d+)?)\s*([KMGTPEZY])?$/i', $value, $m)) {
+        return (float)$m[1] > 0;
+    }
+    
+    return (int)$value > 0;
+}
+
+/**
+ * Parse SI-formatted number to integer
+ * Handles values with SI suffixes (K=1000, M=1000000, G=1000000000, T, P, E)
+ * Examples: "3.33K" -> 3330, "1.5M" -> 1500000, "42" -> 42
+ */
+function parse_si_number($value): int
+{
+    if (is_int($value)) return $value;
+    if (!is_string($value)) return 0;
+    
+    $value = trim($value);
+    if ($value === '' || $value === '0') return 0;
+    
+    // Parse number with optional SI suffix
+    if (preg_match('/^(\d+(?:\.\d+)?)\s*([KMGTPEZY])?$/i', $value, $m)) {
+        $num = (float)$m[1];
+        $suffix = strtoupper($m[2] ?? '');
+        
+        $multipliers = [
+            'K' => 1000,
+            'M' => 1000000,
+            'G' => 1000000000,
+            'T' => 1000000000000,
+            'P' => 1000000000000000,
+            'E' => 1000000000000000000,
+        ];
+        
+        if (isset($multipliers[$suffix])) {
+            $num *= $multipliers[$suffix];
+        }
+        
+        return (int)$num;
+    }
+    
+    return (int)$value;
+}
+
+  function normalize_pool_member_device(string $devicePath): string
+  {
+    $devicePath = trim($devicePath);
+    if ($devicePath === '') {
+      return '';
+    }
+
+    if (strpos($devicePath, '/dev/') === 0) {
+      $devicePath = basename($devicePath);
+    }
+
+    if (preg_match('/^nvme\d+n\d+$/', $devicePath)) {
+      return $devicePath;
+    }
+
+    if (preg_match('/^nvme\d+n\d+(?:p\d+|-part\d+)$/', $devicePath)) {
+      return preg_replace('/-part\d+$|p\d+$/', '', $devicePath);
+    }
+
+    if (preg_match('/-part\d+$/', $devicePath)) {
+      return preg_replace('/-part\d+$/', '', $devicePath);
+    }
+
+    if (preg_match('/^mmcblk\d+p\d+$/', $devicePath)) {
+      return preg_replace('/p\d+$/', '', $devicePath);
+    }
+
+    if (preg_match('/^(sd|hd|vd|xvd|ubd)([a-z]+)(\d+)$/', $devicePath, $m)) {
+      return $m[1].$m[2];
+    }
+
+    return $devicePath;
+  }
+
+function storagePoolsJson(): string
+{
+    $result = [
+        'source' => 'unraid',
+        'pools' => [],
+        'generated_at' => gmdate('c'),
+    ];
+
+    $unraidIni = '/usr/local/emhttp/state/disks.ini';
+    if (!is_readable($unraidIni)) {
+        return json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    }
+
+    $lines = file($unraidIni, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    $sections = [];
+    $current = null;
+
+    // Parse disks.ini into sections
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if (preg_match('/^\["(.+)"\]$/', $line, $m)) {
+            $current = $m[1];
+            $sections[$current] = [];
+            continue;
+        }
+        if ($current && preg_match('/^([a-zA-Z0-9_]+)="(.*)"$/', $line, $m)) {
+            $sections[$current][$m[1]] = $m[2];
+        }
+    }
+
+    // Collect all pool names for filtering
+    $allPoolNames = [];
+    foreach ($sections as $name => $data) {
+        if (!preg_match('/^disk/i', $name) && 
+            isset($data['fsType']) && 
+        in_array($data['fsType'], ['btrfs', 'zfs', 'luks:btrfs', 'luks:zfs'], true)) {
+            $allPoolNames[] = strtolower($name);
+        }
+    }
+
+    foreach ($sections as $poolName => $s) {
+        // Skip array disks (disk0, disk1, etc.)
+        if (preg_match('/^disk/i', $poolName)) continue;
+
+        if (
+            !isset($s['fsType'], $s['fsMountpoint'], $s['fsStatus']) ||
+            !in_array($s['fsType'], ['btrfs', 'zfs','luks:btrfs','luks:zfs'], true) ||
+            $s['fsStatus'] !== 'Mounted'
+        ) {
+            continue;
+        }
+
+        $pool = [
+            'name' => $poolName,
+            'fstype' => $s['fsType'],
+            'mountpoint' => $s['fsMountpoint'],
+            'uuid' => $s['uuid'] ?? null,
+            'role' => $s['type'] ?? null,
+            'size' => $s['fsSize'] ?? null,
+            'used' => $s['fsUsed'] ?? null,
+            'free' => $s['fsFree'] ?? null,
+            'members' => [],
+            'overall_status' => 'UNKNOWN',
+            'source' => 'disks.ini',
+        ];
+        
+        // Find all member disks for this pool (e.g., cache, cache2, cache3)
+        $poolPrefix = preg_replace('/\d+$/', '', $poolName); // Remove trailing numbers
+        $expectedMembers = [];
+        foreach ($sections as $diskName => $diskData) {
+            // Check if this disk belongs to our pool
+            if (preg_match('/^disk/i', $diskName)) continue; // Skip array disks
+            $diskPrefix = preg_replace('/\d+$/', '', $diskName);
+            if ($diskPrefix === $poolPrefix) {
+                $expectedMembers[$diskName] = $diskData;
+            }
+        }
+
+        // --- Btrfs ---
+        if ($s['fsType'] === 'btrfs' || $s['fsType'] === 'luks:btrfs') {
+            $mount = escapeshellarg($s['fsMountpoint']);
+            $uuid = $s['uuid'] ?? '';
+            
+            // Use UUID to query specific filesystem
+            $btrfsShow = [];
+            if ($uuid) {
+                $uuidEsc = escapeshellarg($uuid);
+                exec("btrfs filesystem show $uuidEsc 2>/dev/null", $btrfsShow, $rc);
+            } else {
+                exec("btrfs filesystem show $mount 2>/dev/null", $btrfsShow, $rc);
+            }
+            
+            if ($rc === 0) {
+              $hasMissing = false;
+              $hasFailed  = false;
+                foreach ($btrfsShow as $line) {
+                    if (preg_match('/^\s+devid\s+(\d+)\s+size\s+(\S+)\s+used\s+(\S+)\s+path\s+(\S+)/', $line, $m)) {
+                        $devicePath = $m[4];
+                  $isMissing = stripos($devicePath, '<missing') === 0;
+                  $isZeroSize = $m[2] === '0' || (float)$m[2] == 0.0;
+                  $deviceKey = $isMissing ? "missing_devid{$m[1]}" : normalize_pool_member_device($devicePath);
+                  $pool['members'][$deviceKey] = [
+                    'devid' => $m[1],
+                    'device' => $isMissing ? '<missing>' : $deviceKey,
+                    'size' => $m[2],
+                    'used' => $m[3],
+                    'status' => $isMissing ? 'MISSING' : ($isZeroSize ? 'FAILED' : 'ONLINE'),
+                    'errors' => [
+                      'write' => 0,
+                      'read' => 0,
+                      'flush' => 0,
+                      'corruption' => 0,
+                      'generation' => 0,
+                    ],
+                  ];
+                  if ($isMissing) {
+                    $hasMissing = true;
+                  } elseif ($isZeroSize) {
+                    $hasFailed = true;
+                  }
+                    }
+                }
+
+                // Check device stats for errors (try both old and new format)
+                $stats = [];
+                exec("btrfs device stats $mount", $stats, $rc2);
+                if ($rc2 === 0) {
+                    foreach ($stats as $line) {
+                        // New format: [/dev/sda1].write_io_errs 0
+                        if (preg_match('/^\[([^\]]+)\]\.(\S+)\s+(\d+)/', $line, $m)) {
+                            $devPath = $m[1];
+                            $statType = $m[2];
+                            $statValue = (int)$m[3];
+                            
+                          // Normalize encrypted and plain device paths to a stable member key.
+                          $deviceName = normalize_pool_member_device($devPath);
+                            
+                            // Map stat type to error key
+                            $errorMap = [
+                                'write_io_errs' => 'write',
+                                'read_io_errs' => 'read',
+                                'flush_io_errs' => 'flush',
+                                'corruption_errs' => 'corruption',
+                                'generation_errs' => 'generation',
+                            ];
+                            
+                            if (isset($errorMap[$statType])) {
+                                foreach ($pool['members'] as $memberKey => &$member) {
+                                    if ($memberKey === $deviceName || $member['device'] === $deviceName) {
+                                        $member['errors'][$errorMap[$statType]] = $statValue;
+                                        // Only set status to ERRORS if status is currently ONLINE
+                                        if ($statValue > 0 && (!isset($member['status']) || $member['status'] === 'ONLINE')) {
+                                            $member['status'] = 'ERRORS';
+                                        }
+                                        break;
+                                    }
+                                }
+                                unset($member);
+                            }
+                        }
+                        // Old format: /dev/sda1: read 0, write 0, flush 0
+                        elseif (preg_match('/^(\S+):\s+read\s+(\d+),\s+write\s+(\d+),\s+flush\s+(\d+)/', $line, $m)) {
+                          $deviceName = normalize_pool_member_device($m[1]);
+                          foreach ($pool['members'] as $memberKey => &$member) {
+                                if ($memberKey === $deviceName || $member['device'] === $deviceName) {
+                                    $member['errors']['read'] = (int)$m[2];
+                                    $member['errors']['write'] = (int)$m[3];
+                                    $member['errors']['flush'] = (int)$m[4];
+                                    if ((int)$m[2] > 0 || (int)$m[3] > 0 || (int)$m[4] > 0) {
+                                        $member['status'] = 'ERRORS';
+                                    }
+                                    break;
+                                }
+                            }
+                            unset($member);
+                        }
+                    }
+                }
+
+                // Check for DISK_NP_DSBL members (physically removed devices)
+                foreach ($expectedMembers as $diskName => $diskData) {
+                    $diskKey = preg_replace('/\d+$/', '', $diskName); // Remove number suffix for matching
+                    $deviceKey = $diskKey; // Use disk name as device key
+                    
+                    // Check if this disk is already in members (was found by btrfs)
+                    $foundInMembers = false;
+                    foreach ($pool['members'] as $memberKey => $member) {
+                      if ($memberKey === $diskKey || strpos($memberKey, $diskKey) === 0 || strpos($member['device'], $diskName) !== false) {
+                            $foundInMembers = true;
+                            break;
+                        }
+                    }
+                    
+                    // If not found in members and has DISK_NP_DSBL status, add it as REMOVED
+                    if (!$foundInMembers && isset($diskData['status']) && $diskData['status'] === 'DISK_NP_DSBL') {
+                        $pool['members'][$diskName] = [
+                            'devid' => '?',
+                            'device' => $diskName,
+                            'size' => 'N/A',
+                            'used' => 'N/A',
+                            'status' => 'REMOVED',
+                        ];
+                        $hasMissing = true; // Treat as missing for overall status
+                    }
+                }
+
+                // Overall status
+                $memberStatuses = array_column($pool['members'], 'status');
+                if ($hasMissing || $hasFailed || in_array('MISSING', $memberStatuses, true) || in_array('FAILED', $memberStatuses, true) || in_array('DEGRADED', $memberStatuses, true) || in_array('REMOVED', $memberStatuses, true)) {
+                    $pool['overall_status'] = 'DEGRADED';
+                } elseif (!empty($memberStatuses)) {
+                    $pool['overall_status'] = 'ONLINE';
+                }
+                
+                // Calculate total errors across all members
+                $totalErrors = 0;
+                foreach ($pool['members'] as $member) {
+                    if (isset($member['errors'])) {
+                        foreach ($member['errors'] as $errorCount) {
+                            $totalErrors += (int)$errorCount;
+                        }
+                    }
+                }
+                $pool['total_errors'] = $totalErrors;
+                
+                // Append - ERRORS if pool is online but has errors
+                if ($totalErrors > 0 && $pool['overall_status'] === 'ONLINE') {
+                    $pool['overall_status'] .= ' - ERRORS';
+                }
+            }
+        }
+
+        // --- ZFS ---
+        if ($s['fsType'] === 'zfs' || $s['fsType'] === 'luks:zfs') {
+            $poolNameEsc = escapeshellarg($poolName);
+            $members = [];
+            $poolOverall = 'UNKNOWN';
+            
+            // First check if this is a dataset or an actual pool
+            // Use zfs get to check if this filesystem exists
+            $zfsList = [];
+            exec("zfs list -H -o name $poolNameEsc 2>/dev/null", $zfsList, $zfsRc);
+            
+            // Determine the actual pool name (before first /)
+            $actualPoolName = $poolName;
+            if ($zfsRc === 0 && !empty($zfsList)) {
+                // This is a valid ZFS filesystem
+                $fsName = trim($zfsList[0]);
+                if (strpos($fsName, '/') !== false) {
+                    // This is a dataset, extract the pool name
+                    $actualPoolName = substr($fsName, 0, strpos($fsName, '/'));
+                }
+            }
+            
+            $actualPoolNameEsc = escapeshellarg($actualPoolName);
+            
+            // Try JSON output first (ZFS 2.2+)
+            $zpoolJson = [];
+            exec("zpool status -j $actualPoolNameEsc 2>/dev/null", $zpoolJson, $rc);
+            $jsonParsed = false;
+
+            if ($rc === 0 && !empty($zpoolJson)) {
+                $jsonData = json_decode(implode('', $zpoolJson), true);
+                
+                if ($jsonData && isset($jsonData['pools'][$actualPoolName])) {
+                    $jsonParsed = true;
+                    $zpoolData = $jsonData['pools'][$actualPoolName];
+                    $poolOverall = strtoupper($zpoolData['state'] ?? 'UNKNOWN');
+                    
+                    // Helper function to recursively extract members from vdev tree
+                    $extractMembers = function($vdevTree, $parentType = 'data') use (&$extractMembers, &$members, $allPoolNames) {
+                        if (!is_array($vdevTree)) {
+                            return;
+                        }
+                        
+                        $vdevType = $vdevTree['type'] ?? $vdevTree['vdev_type'] ?? $vdevTree['name'] ?? null;
+                        
+                        // Determine if this is a special vdev type
+                        $isSpecial = in_array($vdevType, ['spare', 'cache', 'log', 'special', 'dedup'], true);
+                        $currentType = $isSpecial ? $vdevType : $parentType;
+                        
+                        // Process children if they exist (in 'children', 'vdevs', or 'vdev_tree')
+                        $children = $vdevTree['children'] ?? $vdevTree['vdevs'] ?? [];
+                        if (!empty($children) && is_array($children)) {
+                            foreach ($children as $child) {
+                                $extractMembers($child, $currentType);
+                            }
+                        }
+                        
+                        // Process this device if it has a path (leaf device)
+                        if (isset($vdevTree['path'])) {
+                          $deviceName = normalize_pool_member_device($vdevTree['path']);
+                            // Skip if device name is a pool name or zvol
+                            if (!in_array(strtolower($deviceName), $allPoolNames)) {
+                                $readErrs = $vdevTree['read_errors'] ?? 0;
+                                $writeErrs = $vdevTree['write_errors'] ?? 0;
+                                $checksumErrs = $vdevTree['checksum_errors'] ?? 0;
+                                $hasErrors = (has_zfs_errors($readErrs) || has_zfs_errors($writeErrs) || has_zfs_errors($checksumErrs));
+                                
+                                $members[$deviceName] = [
+                                    'device' => $deviceName,
+                                    'status' => $hasErrors ? 'ERRORS' : strtoupper($vdevTree['state'] ?? 'UNKNOWN'),
+                                    'vdev' => $vdevTree['name'] ?? $vdevType,
+                                    'type' => $currentType,
+                                    'errors' => [
+                                        'read' => $readErrs,
+                                        'write' => $writeErrs,
+                                        'checksum' => $checksumErrs,
+                                    ],
+                                ];
+                            }
+                        }
+                    };
+                    
+                    // Extract members from the config/vdev_tree structure
+                    if (isset($zpoolData['config'])) {
+                        $extractMembers($zpoolData['config']);
+                    } elseif (isset($zpoolData['vdev_tree'])) {
+                        $extractMembers($zpoolData['vdev_tree']);
+                    } elseif (isset($zpoolData['vdevs'])) {
+                        // Fallback for other potential structures
+                        foreach ($zpoolData['vdevs'] as $vdev) {
+                            $extractMembers($vdev);
+                        }
+                    }
+                    
+                    // Safety guard: if JSON was parsed but no members extracted, fall back to text parsing
+                    if (empty($members)) {
+                        $jsonParsed = false;
+                    }
+                }
+            }
+            
+            // Fallback to text parsing if JSON not available or failed
+            if (!$jsonParsed) {
+                $zpoolStatus = [];
+                exec("zpool status $actualPoolNameEsc", $zpoolStatus, $rc);
+                if ($rc === 0) {
+                    $inConfig = false;
+                    $currentVdev = null;
+
+                    foreach ($zpoolStatus as $line) {
+                        $line = rtrim($line);
+
+                        // Capture overall pool state
+                        if (preg_match('/^\s*state:\s+(\S+)/i', $line, $m)) {
+                            $poolOverall = strtoupper($m[1]);
+                            continue;
+                        }
+
+                        // Enter config section
+                        if (preg_match('/^\s*config:/i', $line)) {
+                            $inConfig = true;
+                            continue;
+                        }
+
+                        // Skip header line in config
+                        if ($inConfig && preg_match('/^\s*NAME\s+STATE\s+READ\s+WRITE\s+CKSUM/i', $line)) {
+                            continue;
+                        }
+
+                        // Exit config when we hit 'errors:'
+                        if ($inConfig && preg_match('/^\s*errors:/i', $line)) {
+                            break;
+                        }
+
+                        if (!$inConfig) continue;
+
+                        // Match any line with device name and status in config section
+                        if (preg_match('/^\s+(\S+)\s+(ONLINE|DEGRADED|FAULTED|OFFLINE|REMOVED|UNAVAIL|AVAIL)(?:\s+(\d+)\s+(\d+)\s+(\d+))?/i', $line, $m)) {
+                            $device = $m[1];
+                            $status = strtoupper($m[2]);
+                            $readErrors = isset($m[3]) ? (int)$m[3] : 0;
+                            $writeErrors = isset($m[4]) ? (int)$m[4] : 0;
+                            $cksumErrors = isset($m[5]) ? (int)$m[5] : 0;
+                            
+                            // Skip pool names (including this pool and others)
+                            if (in_array(strtolower($device), $allPoolNames)) {
+                                continue;
+                            }
+                            
+                            // Check for special vdev types (cache, log, spare, etc.)
+                            if (preg_match('/^(mirror|raidz[123]?|draid)-/i', $device)) {
+                                // These are redundancy VDEVs, track but don't add
+                                $currentVdev = $device;
+                                continue;
+                            } elseif (preg_match('/^(spare|cache|log|special|dedup)$/i', $device)) {
+                                // This line marks the start of a special device section
+                                $currentVdev = strtolower($device);
+                                continue;
+                            }
+                            
+                            // This is an actual device - add it
+                            $deviceType = 'data';
+                            if ($currentVdev && preg_match('/^(spare|cache|log|special|dedup)$/i', $currentVdev)) {
+                                $deviceType = $currentVdev;
+                            }
+                            
+                            $deviceKey = normalize_pool_member_device($device);
+                            $members[$deviceKey] = [
+                                'device' => $deviceKey,
+                                'status' => $status,
+                                'vdev' => (preg_match('/^(mirror|raidz|draid)-/i', $currentVdev ?: '') ? $currentVdev : null),
+                                'type' => $deviceType,
+                                'errors' => [
+                                    'read' => $readErrors,
+                                    'write' => $writeErrors,
+                                    'checksum' => $cksumErrors,
+                                ],
+                            ];
+                        }
+                    }
+                }
+            }
+            
+            // Check for DISK_NP_DSBL members (physically removed devices)
+            foreach ($expectedMembers as $diskName => $diskData) {
+                $diskKey = preg_replace('/\d+$/', '', $diskName); // Remove number suffix for matching
+                $deviceKey = $diskKey; // Use disk name as device key
+                
+                // Check if this disk is already in members (was found by zpool)
+                $foundInMembers = false;
+                foreach ($members as $memberKey => $member) {
+                  if ($memberKey === $diskKey || strpos($memberKey, $diskKey) === 0 || strpos($member['device'], $diskName) !== false) {
+                        $foundInMembers = true;
+                        break;
+                    }
+                }
+                
+                // If not found in members and has DISK_NP_DSBL status, add it as MISSING
+                if (!$foundInMembers && isset($diskData['status']) && $diskData['status'] === 'DISK_NP_DSBL') {
+                    $members[$diskName] = [
+                        'device' => $diskName,
+                        'status' => 'MISSING',
+                        'vdev' => null,
+                        'type' => 'data',
+                    ];
+                    // Update overall status to DEGRADED if we have missing members
+                    if ($poolOverall === 'ONLINE' || $poolOverall === 'UNKNOWN') {
+                        $poolOverall = 'ERRORS';
+                    }
+                }
+            }
+            
+            // Add metadata if this is a dataset
+            if ($actualPoolName !== $poolName) {
+                $pool['zfs_type'] = 'dataset';
+                $pool['parent_pool'] = $actualPoolName;
+            } else {
+                $pool['zfs_type'] = 'pool';
+            }
+            
+            // Calculate total errors across all members
+            $totalErrors = 0;
+            foreach ($members as $member) {
+                if (isset($member['errors'])) {
+                    foreach ($member['errors'] as $errorCount) {
+                        $totalErrors += (int)$errorCount;
+                    }
+                }
+            }
+            $pool['total_errors'] = $totalErrors;
+            
+            // Append - ERRORS if pool is online but has errors
+            if ($totalErrors > 0 && $poolOverall === 'ONLINE') {
+                $poolOverall .= ' - ERRORS';
+            }
+            
+            $pool['members'] = $members;
+            $pool['overall_status'] = $poolOverall;
+        }
+
+        $result['pools'][$poolName] = $pool;
+    }
+
+    return json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+}
+
+function get_block_devices(): array
+{
+    $out = [];
+    exec('lsblk -ndo NAME 2>/dev/null', $out);
+
+    $devs = [];
+    foreach ($out as $l) {
+        if (preg_match('/^sd[a-z]+$/', trim($l))) {
+            $devs[] = trim($l);
+        }
+    }
+
+    sort($devs);
+    return $devs;
+}
+
+function sysfs_read(string $path): ?string
+{
+    return is_readable($path)
+        ? (($v = trim(@file_get_contents($path))) !== '' ? $v : null)
+        : null;
+}
+
+function udev_property(string $device, string $key): ?string
+{
+    $out = [];
+    exec(
+        sprintf(
+            'udevadm info --query=property --name=%s 2>/dev/null',
+            escapeshellarg($device)
+        ),
+        $out
+    );
+
+    foreach ($out as $line) {
+        if (strpos($line, $key . '=') === 0) {
+            return substr($line, strlen($key) + 1);
+        }
+    }
+    return null;
+}
+
+function get_disk_identity(string $sd): array
+{
+    $dev  = "/dev/$sd";
+    $base = "/sys/block/$sd/device";
+
+    return [
+        'device' => $dev,
+        'wwid'   => sysfs_read("$base/wwid"),
+        'serial' => udev_property($dev, 'ID_SERIAL'),
+    ];
+}
+
+/**
+ * Emit JSON describing ONLY duplicate identifiers and return the JSON string.
+ */
+function find_duplicate_disks_json(): string
+{
+    $devices = get_block_devices();
+
+    $all      = [];
+    $bySerial = [];
+
+    foreach ($devices as $sd) {
+        $d = get_disk_identity($sd);
+        $all[$d['device']] = $d;
+
+        if ($d['serial']) {
+            $bySerial[$d['serial']][] = $d['device'];
+        }
+    }
+
+    $result = [];
+
+    foreach ($all as $dev => $info) {
+        $duplicate = null;
+        $value     = null;
+        $others    = [];
+
+        if ($info['serial'] && count($bySerial[$info['serial']]) > 1) {
+            $duplicate = 'serial';
+            $value     = $info['serial'];
+            $others    = array_values(array_diff($bySerial[$info['serial']], [$dev]));
+        }
+
+        if ($duplicate) {
+            $result[$dev] = [
+                'duplicate'       => $duplicate,
+                'duplicate_value' => $value,
+                'other_devices'   => $others,
+            ];
+        }
+    }
+
+    return json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
 }
 ?>
