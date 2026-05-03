@@ -1114,47 +1114,57 @@ while (true) {
           {
             cd "$dest" || exit 1
 
-            declare -A file_sizes
-            declare -a file_order
+            # Parallel arrays: file_names[i] and file_sizes[i] hold name and uncompressed size
+            # for each entry in manifest order (same order unzip writes files to disk).
+            declare -a file_names
+            declare -a file_sizes
             total_bytes=0
+
+            # Parse unzip -l manifest: columns are "size  date  time  name"
+            # Date format is MM-DD-YYYY (American), so regex is [0-9]{2}-[0-9]{2}-[0-9]{4}.
+            # Large files fill the size column without leading spaces, so [[:space:]]* not +.
             while IFS= read -r line; do
               if [[ \$line =~ ^[[:space:]]*([0-9]+)[[:space:]]+[0-9]{2}-[0-9]{2}-[0-9]{4}[[:space:]]+[0-9]{2}:[0-9]{2}[[:space:]]+(.+)\$ ]]; then
-                name="\${BASH_REMATCH[2]}"
-                size="\${BASH_REMATCH[1]}"
-                file_sizes["\$name"]="\$size"
-                file_order+=("\$name")
-                total_bytes=\$(( total_bytes + size ))
+                file_sizes+=("\${BASH_REMATCH[1]}")
+                # unzip -l replaces literal newlines in filenames with ^J; unzip drops them on extract
+                fname="\${BASH_REMATCH[2]//^J/}"
+                file_names+=("\$fname")
+                total_bytes=\$(( total_bytes + BASH_REMATCH[1] ))
               fi
             done < <(unzip -l "$archive" 2>/dev/null)
             printf 'TOTAL|%s\\n' "\$total_bytes"
 
-            # Parallel poller: emit FILE + BYTES_DONE ahead of unzip output based on manifest order
+            # Parallel poller subshell: unzip only emits "inflating: file" AFTER each file is
+            # fully written, so we cannot rely on its output for progress. Instead, we watch the
+            # destination directory in manifest order: once a file appears, emit FILE| and then
+            # poll its size with stat every 0.5s to emit BYTES_DONE| while it is growing.
             (
               idx=0
-              total_files=\${#file_order[@]}
+              total_files=\${#file_names[@]}
               while [[ \$idx -lt \$total_files ]]; do
-                fname="\${file_order[\$idx]}"
-                fsize="\${file_sizes[\$fname]:-0}"
+                fname="\${file_names[\$idx]}"
+                fsize="\${file_sizes[\$idx]:-0}"
                 fpath="$dest/\$fname"
 
                 # Wait until file appears (unzip started writing it)
                 while [[ ! -e "\$fpath" ]]; do
                   sleep 0.2
-                  # Abort if status file has been deleted (operation cancelled)
+                  # Abort if status file gone (operation cancelled via case 99)
                   [[ ! -e "$status" ]] && exit 0
                 done
 
-                # Emit FILE line once file appears
+                # Emit FILE line so the progress parser knows which file is active
                 printf 'FILE|%(%s)T|%s|%s\\n' -1 "\$fsize" "\$fname"
 
-                # Poll size for files larger than 10MB
+                # For large files (>10MB): poll growing size to show % + Speed + ETA.
+                # Small files finish too fast for polling to be useful.
                 if [[ \$fsize -gt 10485760 ]]; then
                   prev_size=0
                   while true; do
                     sleep 0.5
                     [[ ! -e "$status" ]] && exit 0
                     cur_size=\$(stat -c%s "\$fpath" 2>/dev/null || echo 0)
-                    # Stop polling when file stopped growing (complete)
+                    # File stopped growing: unzip finished writing it
                     [[ \$cur_size -le \$prev_size ]] && break
                     printf 'BYTES_DONE|%(%s)T|%s\\n' -1 "\$cur_size"
                     prev_size=\$cur_size
@@ -1166,6 +1176,7 @@ while (true) {
             ) &
             poller_pid=\$!
 
+            # Run unzip; suppress stdout (progress comes from poller), errors go to $error
             unzip -o "$archive" >/dev/null
             unzip_exit=\$?
             wait \$poller_pid 2>/dev/null
