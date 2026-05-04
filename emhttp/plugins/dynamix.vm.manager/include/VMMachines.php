@@ -96,6 +96,8 @@ foreach ($vms as $vm) {
   $vmrcurl = '';
   $graphics = '';
   $virtual = false ;
+  $arrValidGPUDevices = !empty($arrConfig['gpu']) ? getValidGPUDevices() : [];
+  $vrtmodel = '';
   if (isset($arrConfig['gpu'][0]['model'])) {$vrtdriver=" "._("Driver").strtoupper(":{$arrConfig['gpu'][0]['model']} "); $vrtmodel =$arrConfig['gpu'][0]['model'];} else $vrtdriver = "";
   if (isset($arrConfig['gpu'][0]['render']) && $vrtmodel == "virtio3d") {
     if (isset($arrConfig['gpu'][0]['render']) && $arrConfig['gpu'][0]['render'] == "auto") $vrtdriver .= "<br>"._("RenderGPU").":"._("Auto"); else $vrtdriver .= "<br>"._("RenderGPU").":{$arrValidGPUDevices[$arrConfig['gpu'][0]['render']]['name']}";
@@ -115,7 +117,6 @@ foreach ($vms as $vm) {
     $virtual = true ;
   }
   if (!empty($arrConfig['gpu'])) {
-    $arrValidGPUDevices = getValidGPUDevices();
     foreach ($arrConfig['gpu'] as $arrGPU) {
       if ($arrGPU['id'] == "nogpu") {$graphics .= "No GPU"."\n";continue;}
       foreach ($arrValidGPUDevices as $arrDev) {
