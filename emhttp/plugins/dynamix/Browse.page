@@ -1102,6 +1102,16 @@ function doActions(action, title) {
     }
     if (u && d) {errorSource(); return;} // disallow mixing of disk and user shares
   }
+  // For actions >= 15 with source: calculate root/match for fileTreeAttach
+  if (action >= 15 && source.length > 0) {
+    var path   = source[0].substr(1).split('/');
+    var user   = /^(user0?|rootshare)$/.test(path[1]);
+    var root   = '/'+path[0]+(user ? '/'+path[1] : '');
+    var ud     = ['disks','remotes'].includes(path[1]);
+    var match  = ud || user ? '' : '^(?!\\/mnt\\/(user0?|rootshare)\\/).*$';
+    var bulk   = source.length > 1;
+    var hdlink = "<?=$var['fuse_directio'] == 1 ? '1' : ''?>";
+  }
   dfm.window = $("#dfm_dialogWindow");
   switch (action) {
   case 0: // create folder
