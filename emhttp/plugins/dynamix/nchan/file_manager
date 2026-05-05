@@ -926,6 +926,26 @@ while (true) {
         $format = $format ?? 'zip';
         $archive_name = $archive_name ?? 'archive.zip';
         $archive_path = rtrim($target, '/').'/'.$archive_name;
+        // Set archive permissions: docker paths get root:root 600,
+        // all other paths (shares) get nobody:users 666 (matches Unraid share standard)
+        $docker_cfg = @parse_ini_file('/boot/config/docker.cfg') ?: [];
+        $docker_paths = [];
+        foreach (['DOCKER_APP_CONFIG_PATH', 'DOCKER_IMAGE_FILE'] as $key) {
+          $val = rtrim(trim($docker_cfg[$key] ?? ''), '/');
+          if ($val) $docker_paths[] = $val;
+        }
+        if (empty($docker_paths)) {
+          $docker_paths = ['/mnt/user/appdata', '/mnt/user/docker'];
+        }
+        $is_docker_path = false;
+        foreach ($docker_paths as $dp) {
+          if (str_starts_with($archive_path, rtrim($dp, '/').'/') || $archive_path === $dp) {
+            $is_docker_path = true;
+            break;
+          }
+        }
+        $archive_chown = $is_docker_path ? 'root:root' : 'nobody:users';
+        $archive_chmod = $is_docker_path ? '600' : '666';
         // unique tmp path in same dir; loop to avoid collision with existing files
         do {
           $target_tmp = rtrim($target, '/').'/.'.$archive_name.'_'.uniqid('', true).'.tmp';
@@ -1014,6 +1034,8 @@ while (true) {
             # On success: atomic rename, on failure: cleanup tmp
             if [[ \$zip_exit -eq 0 ]]; then
               mv "$target_tmp" "$archive_path"
+              chown $archive_chown "$archive_path"
+              chmod $archive_chmod "$archive_path"
             else
               rm -f "$target_tmp"
             fi
@@ -1071,7 +1093,13 @@ while (true) {
             # $status, so they interleave correctly without overwriting each other
             tar "\${tar_args[@]}" 2>/dev/null | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}' >> "$status"
             tar_exit=\${PIPESTATUS[0]}
-            [[ \$tar_exit -eq 0 ]] && mv "$target_tmp" "$archive_path" || rm -f "$target_tmp"
+            if [[ \$tar_exit -eq 0 ]]; then
+              mv "$target_tmp" "$archive_path"
+              chown $archive_chown "$archive_path"
+              chmod $archive_chmod "$archive_path"
+            else
+              rm -f "$target_tmp"
+            fi
           } >/dev/null 2>$error & echo \$!
           BASH;
         }
