@@ -378,6 +378,7 @@ _(Archive format)_:
   -->
   <option value="tar.xz">TAR.XZ (_.tar.xz_)</option>
   <option value="tar.zst">TAR.ZST (_.tar.zst - recommended for appdata_)</option>
+  <option value="tar.lz4">TAR.LZ4 (_.tar.lz4_)</option>
 </select>
 
 _(Archive name)_:

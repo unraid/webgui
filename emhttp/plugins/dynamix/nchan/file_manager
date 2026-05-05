@@ -1036,6 +1036,9 @@ while (true) {
         case 'tar.zst':
           $tar_flags = '--use-compress-program=zstd -cvf';
           break;
+        case 'tar.lz4':
+          $tar_flags = '--use-compress-program=lz4 -cvf';
+          break;
         case 'tar.bz2':
           $tar_flags = '-cvjf';
           break;
@@ -1198,6 +1201,8 @@ while (true) {
             $extract_tar_flags = '-xJvf';
           } elseif (preg_match('/\.(tar\.zst)$/i', $archive)) {
             $extract_tar_flags = '--use-compress-program=zstd -xvf';
+          } elseif (preg_match('/\.(tar\.lz4)$/i', $archive)) {
+            $extract_tar_flags = '--use-compress-program=lz4 -xvf';
           } elseif (preg_match('/\.tar$/i', $archive)) {
             $extract_tar_flags = '-xvf';
           }
