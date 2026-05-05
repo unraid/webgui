@@ -1069,8 +1069,7 @@ while (true) {
             )
             # Both awk (FILE lines) and exec (DOT lines) use >> (O_APPEND) to write to
             # $status, so they interleave correctly without overwriting each other
-            tar "\${tar_args[@]}" 2>/dev/null \
-              | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}' >> "$status"
+            tar "\${tar_args[@]}" 2>/dev/null | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}' >> "$status"
             tar_exit=\${PIPESTATUS[0]}
             [[ \$tar_exit -eq 0 ]] && mv "$target_tmp" "$archive_path" || rm -f "$target_tmp"
           } >/dev/null 2>$error & echo \$!
@@ -1212,12 +1211,16 @@ while (true) {
           }
 
           if (isset($extract_tar_flags)) {
+            // Build list flags: same as extract but with -t (list) instead of -x (extract)
+            $list_tar_flags = str_replace('-x', '-t', $extract_tar_flags);
             $keep_existing_files = $no_overwrite ? '--skip-old-files --warning=no-existing-file' : '';
             $cmd = <<<BASH
             {
               cd "$dest" || exit 1
-              total_bytes=\$(tar --list --verbose --file="$archive" 2>/dev/null | awk 'NF>=5 {sum+=\$3} END {print sum+0}')
-              printf 'TOTAL|%s\\n' "\$total_bytes"
+              # Use same compression flags for listing so lz4/zstd archives yield correct total
+              > "$status"
+              total_bytes=\$(tar $list_tar_flags "$archive" 2>/dev/null | awk 'NF>=5 {sum+=\$3} END {print sum+0}')
+              printf 'TOTAL|%s\\n' "\$total_bytes" >> "$status"
               record_size=10240
               dot_size=\$(($dot_mb * 1024 * 1024))
               checkpoint=\$((dot_size / record_size))
@@ -1229,10 +1232,12 @@ while (true) {
                 $keep_existing_files
                 "--checkpoint-action=exec=printf 'DOT|%s\\n' \\\$(date +%s) >> $status"
               )
-              tar "\${tar_args[@]}" | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}'
+              # Both awk (FILE lines) and exec (DOT lines) use >> (O_APPEND) to write to
+              # $status, so they interleave correctly without overwriting each other
+              tar "\${tar_args[@]}" | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}' >> "$status"
               tar_exit=\${PIPESTATUS[0]}
               exit \$tar_exit
-            } >$status 2>$error & echo \$!
+            } >/dev/null 2>$error & echo \$!
             BASH;
           } else {
             $cmd = "cd ".quoted($dest)." && unzip ".($no_overwrite ? '-n ' : '-o ').quoted($archive)." >$status 2>$error & echo \$!";
