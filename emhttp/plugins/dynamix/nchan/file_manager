@@ -1046,7 +1046,9 @@ while (true) {
           {
             cd "$source_parent" || exit 1
             total_bytes=\$(du -sb $escaped_basenames 2>/dev/null | awk '{sum+=\$1} END {print sum}')
-            echo "TOTAL|\$total_bytes"
+            # Truncate status file and write TOTAL as first line
+            > "$status"
+            echo "TOTAL|\$total_bytes" >> "$status"
             record_size=10240
             dot_size=\$(($dot_mb * 1024 * 1024))  # COMPRESS_DOT_SIZE_MB MB per dot
             checkpoint=\$((dot_size / record_size))
@@ -1058,13 +1060,13 @@ while (true) {
               "--checkpoint-action=exec=printf 'DOT|%s\\n' \\\$(date +%s) >> $status"
               -- $escaped_basenames
             )
-            # stdbuf -oL ensures line-buffered awk output so FILE lines are written
-            # to $status immediately, interleaved correctly with DOT lines from exec
+            # Both awk (FILE lines) and exec (DOT lines) use >> (O_APPEND) to write to
+            # $status, so they interleave correctly without overwriting each other
             tar "\${tar_args[@]}" 2>/dev/null \
-              | stdbuf -oL awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}'
+              | stdbuf -oL awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}' >> "$status"
             tar_exit=\${PIPESTATUS[0]}
             [[ \$tar_exit -eq 0 ]] && mv "$archive_tmp" "$archive_path" || rm -f "$archive_tmp"
-          } >$status 2>$error & echo \$!
+          } 2>$error & echo \$!
           BASH;
         }
 
