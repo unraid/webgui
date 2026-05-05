@@ -1066,7 +1066,7 @@ while (true) {
               | stdbuf -oL awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}' >> "$status"
             tar_exit=\${PIPESTATUS[0]}
             [[ \$tar_exit -eq 0 ]] && mv "$archive_tmp" "$archive_path" || rm -f "$archive_tmp"
-          } 2>$error & echo \$!
+          } >/dev/null 2>$error & echo \$!
           BASH;
         }
 
