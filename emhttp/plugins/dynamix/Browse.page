@@ -157,7 +157,7 @@ function fileContextMenu(id, button) {
     opts.push({text:"_(Compress)_", icon:"fa-file-archive-o", action:function(e){e.preventDefault();doAction(16,"_(Compress)_",id.dfm_proxy());}});
     // Check if file is an archive
     var fileName = $('#'+id).attr('data');
-    var archiveExts = ['zip', 'tar', 'gz', 'bz2', 'xz', '7z', 'rar', 'tgz', 'tbz2', 'txz', 'zst'];
+    var archiveExts = ['zip', 'tar', 'gz', 'bz2', 'xz', 'rar', 'tgz', 'tbz2', 'txz', 'zst'];
     var ext = fileExtension(fileName).toLowerCase();
     if (archiveExts.includes(ext) || fileName.match(/\.(tar\.(gz|bz2|xz|zst))$/i)) {
       opts.push({text:"_(Extract)_", icon:"fa-archive", action:function(e){e.preventDefault();doAction(17,"_(Extract)_",id.dfm_proxy());}});
@@ -310,7 +310,7 @@ function fileExtension(file) {
 }
 
 function isArchive(name) {
-  var archiveExts = ['zip', 'tar', 'gz', 'bz2', 'xz', '7z', 'rar', 'tgz', 'tbz2', 'txz', 'zst'];
+var archiveExts = ['zip', 'tar', 'gz', 'bz2', 'xz', 'rar', 'tgz', 'tbz2', 'txz', 'zst'];
   var ext = fileExtension(name).toLowerCase();
   return archiveExts.includes(ext) || /\.(tar\.(gz|bz2|xz|zst))$/i.test(name);
 }

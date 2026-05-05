@@ -1225,8 +1225,6 @@ while (true) {
               exit \$tar_exit
             } >$status 2>$error & echo \$!
             BASH;
-          } elseif (preg_match('/\.7z$/i', $archive)) {
-            $cmd = "cd ".quoted($dest)." && 7z x ".($no_overwrite ? '-aos ' : '').quoted($archive)." >$status 2>$error & echo \$!";
           } elseif (preg_match('/\.rar$/i', $archive)) {
             $cmd = "cd ".quoted($dest)." && unrar x ".($no_overwrite ? '-o- ' : '').quoted($archive)." >$status 2>$error & echo \$!";
           } else {
