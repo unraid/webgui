@@ -1058,7 +1058,10 @@ while (true) {
               "--checkpoint-action=exec=printf 'DOT|%s\\n' \\\$(date +%s) >> $status"
               -- $escaped_basenames
             )
-            tar "\${tar_args[@]}" | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}'
+            # stdbuf -oL ensures line-buffered awk output so FILE lines are written
+            # to $status immediately, interleaved correctly with DOT lines from exec
+            tar "\${tar_args[@]}" 2>/dev/null \
+              | stdbuf -oL awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}'
             tar_exit=\${PIPESTATUS[0]}
             [[ \$tar_exit -eq 0 ]] && mv "$archive_tmp" "$archive_path" || rm -f "$archive_tmp"
           } >$status 2>$error & echo \$!
