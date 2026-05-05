@@ -1203,7 +1203,7 @@ while (true) {
           }
 
           if (isset($extract_tar_flags)) {
-            $keep_old_files = $no_overwrite ? '--skip-old-files' : '';
+            $keep_existing_files = $no_overwrite ? '--skip-old-files --warning=no-existing-file' : '';
             $cmd = <<<BASH
             {
               cd "$dest" || exit 1
@@ -1217,7 +1217,7 @@ while (true) {
                 "$archive"
                 --record-size=\$record_size
                 --checkpoint=\$checkpoint
-                $keep_old_files
+                $keep_existing_files
                 "--checkpoint-action=exec=printf 'DOT|%s\\n' \\\$(date +%s) >> $status"
               )
               tar "\${tar_args[@]}" | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}'
