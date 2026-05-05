@@ -255,6 +255,14 @@ case 'file':
     file_put_contents($jobs, json_encode($data)."\n", FILE_APPEND);
   } else {
     // start operation
+    // For cancel (action=99), preserve target_tmp from existing active JSON so
+    // the worker can clean up the partial compress tmp file
+    if ($data['action'] === 99 && file_exists($active)) {
+      $existing = json_decode(file_get_contents($active), true);
+      if (!empty($existing['target_tmp'])) {
+        $data['target_tmp'] = $existing['target_tmp'];
+      }
+    }
     file_put_contents($active, json_encode($data));
     // Update popular destinations only when an operation actually starts
     // Action types: 3=copy folder, 4=move folder, 8=copy file, 9=move file

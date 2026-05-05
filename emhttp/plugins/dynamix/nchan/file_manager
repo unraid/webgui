@@ -579,7 +579,7 @@ $last_published_status = null;
 // infinite loop to monitor and execute file operations
 // Note: exec() uses /bin/sh which is symlinked to bash in unraid and a requirement for process substitution syntax >(...)
 while (true) {
-  unset($action, $source, $target, $H, $sparse, $exist, $zfs, $format, $archive_name, $archive_tmp);
+  unset($action, $source, $target, $H, $sparse, $exist, $zfs, $format, $archive_name, $target_tmp);
 
   // read job parameters from JSON file: $action, $title, $source, $target, $H, $sparse, $exist, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
   if (file_exists($active)) {
@@ -926,12 +926,14 @@ while (true) {
         $format = $format ?? 'zip';
         $archive_name = $archive_name ?? 'archive.zip';
         $archive_path = rtrim($target, '/').'/'.$archive_name;
-        // unique tmp path in same dir (required for atomic rename across same filesystem)
-        $archive_tmp = rtrim($target, '/').'/.'.$archive_name.'_'.uniqid('', true).'.tmp';
-        // persist archive_tmp in active JSON so case 99 (cancel) can clean it up
+        // unique tmp path in same dir; loop to avoid collision with existing files
+        do {
+          $target_tmp = rtrim($target, '/').'/.'.$archive_name.'_'.uniqid('', true).'.tmp';
+        } while (file_exists($target_tmp));
+        // persist target_tmp in active JSON so case 99 (cancel) can clean it up
         if (file_exists($active)) {
           $active_data = json_decode(file_get_contents($active), true) ?: [];
-          $active_data['archive_tmp'] = $archive_tmp;
+          $active_data['target_tmp'] = $target_tmp;
           file_put_contents($active, json_encode($active_data));
         }
 
@@ -967,7 +969,7 @@ while (true) {
 
             # Write to .tmp first for atomic creation
             # Read char-by-char (-n1) to check regex after each character - prevents dots from being buffered before pattern match
-            zip --recurse-paths --display-usize --display-dots --dot-size {$dot_mb}m "$archive_tmp" -- $escaped_basenames 2>&1 | while IFS= read -r -n1 char || [[ \$char ]]; do
+            zip --recurse-paths --display-usize --display-dots --dot-size {$dot_mb}m "$target_tmp" -- $escaped_basenames 2>&1 | while IFS= read -r -n1 char || [[ \$char ]]; do
 
               # Line mode: accumulate characters and check for pattern match after each char
               if [[ ! \$dot_mode ]]; then
@@ -1011,9 +1013,9 @@ while (true) {
 
             # On success: atomic rename, on failure: cleanup tmp
             if [[ \$zip_exit -eq 0 ]]; then
-              mv "$archive_tmp" "$archive_path"
+              mv "$target_tmp" "$archive_path"
             else
-              rm -f "$archive_tmp"
+              rm -f "$target_tmp"
             fi
 
             # CRITICAL: The '>$status 2>$error' redirect MUST be outside the braces at the group level.
@@ -1059,7 +1061,7 @@ while (true) {
             checkpoint=\$((dot_size / record_size))
             tar_args=(
               $tar_flags
-              "$archive_tmp"
+              "$target_tmp"
               --record-size=\$record_size
               --checkpoint=\$checkpoint
               "--checkpoint-action=exec=printf 'DOT|%s\\n' \\\$(date +%s) >> $status"
@@ -1070,7 +1072,7 @@ while (true) {
             tar "\${tar_args[@]}" 2>/dev/null \
               | stdbuf -oL awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}' >> "$status"
             tar_exit=\${PIPESTATUS[0]}
-            [[ \$tar_exit -eq 0 ]] && mv "$archive_tmp" "$archive_path" || rm -f "$archive_tmp"
+            [[ \$tar_exit -eq 0 ]] && mv "$target_tmp" "$archive_path" || rm -f "$target_tmp"
           } >/dev/null 2>$error & echo \$!
           BASH;
         }
@@ -1244,8 +1246,8 @@ while (true) {
       break;
     case 99: // kill running background process
       if (!empty($pid)) exec("kill $pid");
-      // clean up compress tmp file if present
-      if (!empty($archive_tmp)) @unlink($archive_tmp);
+      // clean up compress tmp file if present (loaded from active JSON via extract)
+      if (!empty($target_tmp)) @unlink($target_tmp);
       delete_file($active, $pid_file, $status, $error);
       unset($pid);
       $delete_empty_dirs = null;
@@ -1291,8 +1293,8 @@ while (true) {
         }
 
         // For compress action: clean up tmp file if still exists (shouldn't, but safety)
-        if ($action == 16 && isset($archive_tmp)) {
-          @unlink($archive_tmp);
+        if ($action == 16 && isset($target_tmp)) {
+          @unlink($target_tmp);
         }
 
         if (file_exists($error)) $reply['error'] = trim(file_get_contents($error));
