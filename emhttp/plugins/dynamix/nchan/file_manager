@@ -1070,7 +1070,7 @@ while (true) {
             # Both awk (FILE lines) and exec (DOT lines) use >> (O_APPEND) to write to
             # $status, so they interleave correctly without overwriting each other
             tar "\${tar_args[@]}" 2>/dev/null \
-              | stdbuf -oL awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}' >> "$status"
+              | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}' >> "$status"
             tar_exit=\${PIPESTATUS[0]}
             [[ \$tar_exit -eq 0 ]] && mv "$target_tmp" "$archive_path" || rm -f "$target_tmp"
           } >/dev/null 2>$error & echo \$!
