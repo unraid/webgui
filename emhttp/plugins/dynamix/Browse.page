@@ -236,12 +236,14 @@ function selectAll() {
 <?if (!$isshare):?>
     $('input.rename').prop('disabled',false);
 <?endif;?>
+    $('input.extract').prop('disabled',true); // multiple selected: no archive detection possible
   } else {
     $('i[id^="check_"]:visible').removeClass('fa-check-square-o').addClass('fa-square-o');
     $('input.extra').prop('disabled',true);
 <?if (!$isshare):?>
     $('input.rename').prop('disabled',true);
 <?endif;?>
+    $('input.extract').prop('disabled',true);
   }
 }
 
@@ -263,6 +265,18 @@ function selectOne(id, check=true) {
 <?if (!$isshare):?>
     $('input.rename').prop('disabled',checked != 1);
 <?endif;?>
+    // Extract: enabled only for exactly one selected archive file
+    var extractEnabled = false;
+    if (checked == 1) {
+      $('i[id^="check_"]').each(function(){
+        if ($(this).prop('id')!='check_0' && $(this).hasClass('fa-check-square-o')) {
+          var rowId = $(this).prop('id').dfm_fetch('row');
+          var name = $('#'+rowId).attr('data') || '';
+          if (isArchive(name)) extractEnabled = true;
+        }
+      });
+    }
+    $('input.extract').prop('disabled',!extractEnabled);
   } else {
     $('i[id^="queue_"]').each(function(){if ($(this).hasClass('fa-check-square-o')) checked++;});
     $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',checked == 0);
@@ -293,6 +307,12 @@ function fileName(file) {
 function fileExtension(file) {
   file = fileName(file);
   return file.indexOf('.')>=0 ? file.split('.').pop() : '';
+}
+
+function isArchive(name) {
+  var archiveExts = ['zip', 'tar', 'gz', 'bz2', 'xz', '7z', 'rar', 'tgz', 'tbz2', 'txz', 'zst'];
+  var ext = fileExtension(name).toLowerCase();
+  return archiveExts.includes(ext) || /\.(tar\.(gz|bz2|xz|zst))$/i.test(name);
 }
 
 function updateArchiveName() {
@@ -1182,6 +1202,14 @@ function doActions(action, title) {
     updateArchiveName();
     console.log('Bulk compress dialog opened', {sources: source, bulk: bulk});
     break;
+  case 17: // extract (toolbar: exactly one archive file selected)
+    dfm.window.html($('#dfm_templateExtract').html());
+    dfm_createSource(source);
+    dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
+      dfm.window.find('#dfm_target').val(path).change();
+    });
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
+    break;
   }
   dfm.window.find('#dfm_source').attr('size',Math.min(dfm.tsize[action],source.length));
   dfm.window.dialog({
@@ -1632,6 +1660,7 @@ $(window).bind('resize',function(){
 <input type="button" value="_(Permission)_" class="dfm_control extra" onclick="doActions(12,this.value)" disabled>
 <input type="button" value="_(Calculate)_" class="dfm_control extra" onclick="doActions(14,this.value)" disabled>
 <input type="button" value="_(Compress)_" class="dfm_control extra" onclick="doActions(16,this.value)" disabled>
+<input type="button" value="_(Extract)_" class="dfm_control extract" onclick="doActions(17,this.value)" disabled>
 <input type="button" value="_(Create)_" class="dfm_control common" onclick="doActions(0,this.value)"<?if(!$dir||$isshare){?> disabled<?}?>>
 <input type="button" value="_(Upload)_" class="dfm_control common" id="dfm_uploadButton" onclick="$('#dfm_upload').click()"<?if(!$dir||$isshare){?> disabled<?}?>><span id="dfm_uploadStatus"></span>
 </div>
