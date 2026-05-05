@@ -579,7 +579,7 @@ $last_published_status = null;
 // infinite loop to monitor and execute file operations
 // Note: exec() uses /bin/sh which is symlinked to bash in unraid and a requirement for process substitution syntax >(...)
 while (true) {
-  unset($action, $source, $target, $H, $sparse, $exist, $zfs, $format, $archive_name);
+  unset($action, $source, $target, $H, $sparse, $exist, $zfs, $format, $archive_name, $archive_tmp);
 
   // read job parameters from JSON file: $action, $title, $source, $target, $H, $sparse, $exist, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
   if (file_exists($active)) {
@@ -905,7 +905,6 @@ while (true) {
         $format = $format ?? 'zip';
         $archive_name = $archive_name ?? 'archive.zip';
         $archive_path = rtrim($target, '/').'/'.$archive_name;
-        $archive_tmp = $archive_path.'.tmp';
 
         exec('logger -t file_manager "Status check: format=' . escapeshellarg($format) . ', status_file=' . escapeshellarg($status) . ', exists=' . (file_exists($status) ? 'yes' : 'no') . '"');
 
@@ -929,6 +928,12 @@ while (true) {
         $archive_path = rtrim($target, '/').'/'.$archive_name;
         // unique tmp path in same dir (required for atomic rename across same filesystem)
         $archive_tmp = rtrim($target, '/').'/.'.$archive_name.'_'.uniqid('', true).'.tmp';
+        // persist archive_tmp in active JSON so case 99 (cancel) can clean it up
+        if (file_exists($active)) {
+          $active_data = json_decode(file_get_contents($active), true) ?: [];
+          $active_data['archive_tmp'] = $archive_tmp;
+          file_put_contents($active, json_encode($active_data));
+        }
 
         exec('logger -t file_manager "Start compress: format=' . escapeshellarg($format) . ', archive=' . escapeshellarg($archive_path) . '"');
 
@@ -1239,6 +1244,8 @@ while (true) {
       break;
     case 99: // kill running background process
       if (!empty($pid)) exec("kill $pid");
+      // clean up compress tmp file if present
+      if (!empty($archive_tmp)) @unlink($archive_tmp);
       delete_file($active, $pid_file, $status, $error);
       unset($pid);
       $delete_empty_dirs = null;
