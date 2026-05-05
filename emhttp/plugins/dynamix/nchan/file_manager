@@ -1089,7 +1089,8 @@ while (true) {
 
       // start action
       } else {
-        // TODO: Add "Overwrite existing files" option for extract
+        // $exist is '--ignore-existing' when overwrite checkbox is unchecked (default), '' when checked
+        $no_overwrite = !empty($exist);
 
         $archive = $source[0];
         $dest = rtrim($target, '/');
@@ -1177,7 +1178,8 @@ while (true) {
             poller_pid=\$!
 
             # Run unzip; suppress stdout (progress comes from poller), errors go to $error
-            unzip -o "$archive" >/dev/null
+            # -o = overwrite, -n = never overwrite (keep existing)
+            unzip <?= $no_overwrite ? '-n' : '-o' ?> "$archive" >/dev/null
             unzip_exit=\$?
             wait \$poller_pid 2>/dev/null
             exit \$unzip_exit
@@ -1200,6 +1202,7 @@ while (true) {
           }
 
           if (isset($extract_tar_flags)) {
+            $keep_old_files = $no_overwrite ? '--keep-old-files' : '';
             $cmd = <<<BASH
             {
               cd "$dest" || exit 1
@@ -1213,6 +1216,7 @@ while (true) {
                 "$archive"
                 --record-size=\$record_size
                 --checkpoint=\$checkpoint
+                $keep_old_files
                 "--checkpoint-action=exec=printf 'DOT|%s\\n' \\\$(date +%s) >> $status"
               )
               tar "\${tar_args[@]}" | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}'
@@ -1221,11 +1225,11 @@ while (true) {
             } >$status 2>$error & echo \$!
             BASH;
           } elseif (preg_match('/\.7z$/i', $archive)) {
-            $cmd = "cd ".quoted($dest)." && 7z x ".quoted($archive)." >$status 2>$error & echo \$!";
+            $cmd = "cd ".quoted($dest)." && 7z x ".($no_overwrite ? '-aos ' : '').quoted($archive)." >$status 2>$error & echo \$!";
           } elseif (preg_match('/\.rar$/i', $archive)) {
-            $cmd = "cd ".quoted($dest)." && unrar x ".quoted($archive)." >$status 2>$error & echo \$!";
+            $cmd = "cd ".quoted($dest)." && unrar x ".($no_overwrite ? '-o- ' : '').quoted($archive)." >$status 2>$error & echo \$!";
           } else {
-            $cmd = "cd ".quoted($dest)." && unzip ".quoted($archive)." >$status 2>$error & echo \$!";
+            $cmd = "cd ".quoted($dest)." && unzip ".($no_overwrite ? '-n ' : '-o ').quoted($archive)." >$status 2>$error & echo \$!";
           }
         }
 
