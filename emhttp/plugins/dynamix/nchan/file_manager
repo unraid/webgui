@@ -1105,6 +1105,7 @@ while (true) {
         parse_compress_progress(null, null, COMPRESS_DOT_SIZE_MB, true);
 
         if (preg_match('/\.zip$/i', $archive)) {
+          $unzip_overwrite_flag = $no_overwrite ? '-n' : '-o';
           // ZIP: parse manifest for file sizes + total, then extract with structured FILE lines.
           // Uses process substitution (< <(...)) so file_sizes associative array is visible in the while loop.
           // Stderr of unzip -l suppressed to avoid duplicate error messages; extract errors go to $error.
@@ -1179,7 +1180,7 @@ while (true) {
 
             # Run unzip; suppress stdout (progress comes from poller), errors go to $error
             # -o = overwrite, -n = never overwrite (keep existing)
-            unzip <?= $no_overwrite ? '-n' : '-o' ?> "$archive" >/dev/null
+            unzip $unzip_overwrite_flag "$archive" >/dev/null
             unzip_exit=\$?
             wait \$poller_pid 2>/dev/null
             exit \$unzip_exit
