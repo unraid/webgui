@@ -38,6 +38,22 @@ $isshare = $root == 'mnt' && (!$main || !$next || ($main == 'rootshare' && !$res
 $editor  = '/boot/config/editor.cfg';
 
 if (!file_exists($editor)) file_put_contents($editor, implode("\n",['','txt','js','php','page','plg','xml','old','bak','log','css']));
+
+// Read configured docker paths for compress format auto-detection.
+// Strip the /mnt/<disk>/ prefix so the subpath can match on any disk.
+$docker_cfg = @parse_ini_file('/boot/config/docker.cfg') ?: [];
+$dfm_docker_subpaths = [];
+foreach (['DOCKER_APP_CONFIG_PATH', 'DOCKER_IMAGE_FILE'] as $key) {
+  $val = rtrim(trim($docker_cfg[$key] ?? ''), '/');
+  if ($val && preg_match('#^/mnt/[^/]+/(.+)$#', $val, $m)) {
+    $dfm_docker_subpaths[] = $m[1];
+  }
+}
+// Fallback to defaults when docker is not configured
+if (empty($dfm_docker_subpaths)) {
+  $dfm_docker_subpaths = ['appdata', 'docker'];
+}
+$dfm_docker_subpaths_js = json_encode($dfm_docker_subpaths);
 ?>
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.filetree.css")?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.switchbutton.css")?>">
@@ -47,6 +63,8 @@ if (!file_exists($editor)) file_put_contents($editor, implode("\n",['','txt','js
 <script>
 // General variables
 var dir   = <?=$dir_js?>;
+// Subpaths (after /mnt/<disk>/) that indicate docker/appdata storage
+var dfm_docker_subpaths = <?=$dfm_docker_subpaths_js?>;
 var table = null;
 var thead = null;
 
@@ -851,8 +869,9 @@ function doAction(action, title, id) {
   case 16: // compress
     dfm.window.html($('#dfm_templateCompress').html());
     dfm_createSource(source.dfm_strip());
-    // Detect if source is in appdata/system path for default format selection
-    var isAppdata = source.match(/\/mnt\/[^\/]+\/(appdata|system)\//);
+    // Detect if source is under a configured docker/appdata path for default format selection
+    var srcSubpath = source.replace(/^\/mnt\/[^\/]+\//, '');
+    var isAppdata = dfm_docker_subpaths.some(function(p) { return srcSubpath === p || srcSubpath.indexOf(p + '/') === 0; });
     dfm.window.find('#dfm_format').val(isAppdata ? 'tar.zst' : 'zip');
     // Set target to current directory
     dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
@@ -1198,8 +1217,9 @@ function doActions(action, title) {
     var firstName = firstPath.pop() || firstPath.pop();
     // Store first source name for updateArchiveName function
     dfm.window.find('#dfm_source').data('firstName', firstName);
-    // Detect if source is in appdata/system path
-    var isAppdata = firstSource.match(/\/mnt\/[^/]+(appdata|system)\//);
+    // Detect if source is under a configured docker/appdata path for default format selection
+    var srcSubpath = firstSource.replace(/^\/mnt\/[^\/]+\//, '');
+    var isAppdata = dfm_docker_subpaths.some(function(p) { return srcSubpath === p || srcSubpath.indexOf(p + '/') === 0; });
     dfm.window.find('#dfm_format').val(isAppdata ? 'tar.zst' : 'zip');
     dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
