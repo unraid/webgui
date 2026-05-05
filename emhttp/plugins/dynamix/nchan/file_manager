@@ -938,21 +938,13 @@ while (true) {
           break;
         }
 
-        // For multiple sources, find common parent directory
-        // For single source, use its parent directory
-        if (count($source) > 1) {
-          // Use target directory as working directory for bulk operations
-          $source_parent = rtrim($target, '/');
-          // Get basenames of all sources (they should all be in target dir)
-          $source_basenames = array_map(function($s) {
-            return basename(rtrim($s, '/'));
-          }, $source);
-        } else {
-          // Single source - use its parent directory
-          $source_path = rtrim($source[0], '/');
-          $source_parent = dirname($source_path);
-          $source_basenames = [basename($source_path)];
-        }
+        // Use parent directory of first source as working directory.
+        // All selected files are always from the same directory in the file manager view.
+        $source_path = rtrim($source[0], '/');
+        $source_parent = dirname($source_path);
+        $source_basenames = array_map(function($s) {
+          return basename(rtrim($s, '/'));
+        }, $source);
 
         // Build compression command based on format
         $escaped_basenames = implode(' ', array_map('escapeshellarg', $source_basenames));
