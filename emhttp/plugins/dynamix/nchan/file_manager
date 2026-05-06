@@ -929,19 +929,25 @@ while (true) {
         // Set archive permissions: docker paths get root:root 600,
         // all other paths (shares) get nobody:users 666 (matches Unraid share standard)
         $docker_cfg = @parse_ini_file('/boot/config/docker.cfg') ?: [];
-        $docker_paths = [];
+        $docker_subpaths = [];
         foreach (['DOCKER_APP_CONFIG_PATH', 'DOCKER_IMAGE_FILE'] as $key) {
           $val = rtrim(trim($docker_cfg[$key] ?? ''), '/');
-          if ($val) $docker_paths[] = $val;
+          // Strip /mnt/<disk>/ prefix so the subpath matches on any disk/pool
+          if ($val && preg_match('#^/mnt/[^/]+/(.+)$#', $val, $m)) {
+            $docker_subpaths[] = $m[1];
+          }
         }
-        if (empty($docker_paths)) {
-          $docker_paths = ['/mnt/user/appdata', '/mnt/user/docker'];
+        if (empty($docker_subpaths)) {
+          $docker_subpaths = ['appdata', 'docker'];
         }
         $is_docker_path = false;
-        foreach ($docker_paths as $dp) {
-          if (str_starts_with($archive_path, rtrim($dp, '/').'/') || $archive_path === $dp) {
-            $is_docker_path = true;
-            break;
+        if (preg_match('#^/mnt/[^/]+/(.+)$#', $archive_path, $m)) {
+          $archive_subpath = $m[1];
+          foreach ($docker_subpaths as $dp) {
+            if ($archive_subpath === $dp || str_starts_with($archive_subpath, $dp.'/')) {
+              $is_docker_path = true;
+              break;
+            }
           }
         }
         $archive_chown = $is_docker_path ? 'root:root' : 'nobody:users';
