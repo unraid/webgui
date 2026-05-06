@@ -1152,9 +1152,16 @@ while (true) {
           BASH;
         }
 
-        exec('logger -t file_manager "Executing command (first 200 chars): ' . escapeshellarg(substr($cmd, 0, 200)) . '"');
-        exec($cmd, $pid);
-        exec('logger -t file_manager "After exec: pid=' . escapeshellarg(json_encode($pid)) . '"');
+        exec('logger -t file_manager ' . escapeshellarg('Executing command (first 300 chars): ' . substr($cmd ?? '', 0, 300)));
+        file_put_contents('/tmp/cmd-debug-compress.txt', $cmd ?? '(null)');
+        $ret_code = null;
+        exec($cmd, $pid, $ret_code);
+        exec('logger -t file_manager ' . escapeshellarg('After exec: pid=' . json_encode($pid) . ', ret_code=' . $ret_code));
+        if (!empty($pid[0])) {
+          $ps_out = [];
+          exec('ps -p ' . (int)$pid[0] . ' -o pid,cmd --no-headers 2>/dev/null', $ps_out);
+          exec('logger -t file_manager ' . escapeshellarg('Process cmd: ' . implode(' ', $ps_out)));
+        }
       }
       break;
     case 17: // extract
