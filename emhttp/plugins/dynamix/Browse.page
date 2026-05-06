@@ -1027,7 +1027,7 @@ function doAction(action, title, id) {
             target = target.join(',')+',ugo+X';
             break;
           case 16: // compress
-            var valid = /.+/;
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
             var format_queue = dfm.window.find('#dfm_format').val();
             var archive_name_queue = dfm.window.find('#dfm_archive_name').val();
             if (!archive_name_queue) {errorTarget(); return;}
@@ -1309,7 +1309,7 @@ function doActions(action, title) {
             dfm.window.find('#dfm_files').html('');
             break;
           case 16: // compress
-            var valid = /.+/;
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
             var format = dfm.window.find('#dfm_format').val();
             var archive_name = dfm.window.find('#dfm_archive_name').val();
             console.log('Bulk compress Start clicked:', {target: target, format: format, archive_name: archive_name, bulk: bulk});
@@ -1383,7 +1383,7 @@ function doActions(action, title) {
             bulk = false;
             break;
           case 16: // compress
-            var valid = /.+/;
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
             var format_queue = dfm.window.find('#dfm_format').val();
             var archive_name_queue = dfm.window.find('#dfm_archive_name').val();
             if (!archive_name_queue) {errorTarget(); return;}
