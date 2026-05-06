@@ -660,7 +660,7 @@ build_append_line() {
 # 4. Power Management (usbcore.autosuspend, nvme_core, pcie_aspm, pcie_port_pm)
 # 5. Custom Parameters (in array order, excluding pci=)
 build_append_line_gui_safe() {
-    local params="initrd=/bzroot"
+    local params="initrd=/bzroot,/bzroot-gui"
 
     # 1. VM Passthrough (safe for GUI mode)
     [[ -n "${ACS_OVERRIDE}" ]] && params="$params pcie_acs_override=${ACS_OVERRIDE}"
@@ -733,7 +733,7 @@ build_kernel_args() {
 }
 
 build_kernel_args_gui_safe() {
-    echo "$(build_append_line_gui_safe | sed 's/^initrd=\/bzroot[ ]*//')"
+    echo "$(build_append_line_gui_safe | sed 's/^initrd=\/bzroot,\/bzroot-gui[ ]*//')"
 }
 
 #############################################
@@ -866,13 +866,17 @@ write_config() {
         awk -v new_append="  append $new_append" '
             /^label Unraid OS$/ {
                 in_section=1
+                replaced=0
             }
             /^label / && !/^label Unraid OS$/ {
                 in_section=0
             }
             {
                 if (in_section && /^  append/) {
-                    print new_append
+                    if (!replaced) {
+                        print new_append
+                        replaced=1
+                    }
                 } else {
                     print
                 }
@@ -888,19 +892,23 @@ write_config() {
         if [[ "${EXCLUDE_FRAMEBUFFER_FROM_GUI}" == "1" ]]; then
             local gui_append="  append $(build_append_line_gui_safe)"
         else
-            local gui_append="  append $new_append"
+            local gui_append="  append $(echo "$new_append" | sed 's/^initrd=\/bzroot\([ ]\|$\)/initrd=\/bzroot,\/bzroot-gui\1/')"
         fi
 
         awk -v new_append="$gui_append" '
             /^label Unraid OS GUI Mode$/ {
                 in_section=1
+                replaced=0
             }
             /^label / && !/^label Unraid OS GUI Mode$/ {
                 in_section=0
             }
             {
                 if (in_section && /^  append/) {
-                    print new_append
+                    if (!replaced) {
+                        print new_append
+                        replaced=1
+                    }
                 } else {
                     print
                 }
@@ -914,13 +922,17 @@ write_config() {
         awk -v new_append="  append $new_append" '
             /^label Unraid OS Safe Mode/ {
                 in_section=1
+                replaced=0
             }
             /^label / && !/^label Unraid OS Safe Mode/ {
                 in_section=0
             }
             {
                 if (in_section && /^  append/) {
-                    print new_append
+                    if (!replaced) {
+                        print new_append
+                        replaced=1
+                    }
                 } else {
                     print
                 }
@@ -942,13 +954,17 @@ write_config() {
         awk -v new_append="$gui_safe_append" '
             /^label Unraid OS GUI Safe Mode/ {
                 in_section=1
+                replaced=0
             }
             /^label / && !/^label Unraid OS GUI Safe Mode/ {
                 in_section=0
             }
             {
                 if (in_section && /^  append/) {
-                    print new_append
+                    if (!replaced) {
+                        print new_append
+                        replaced=1
+                    }
                 } else {
                     print
                 }

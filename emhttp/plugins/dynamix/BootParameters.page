@@ -1044,7 +1044,7 @@ function updatePreview() {
     if (bootloaderType === 'grub') {
         html = '<span style="color: var(--text-color, #333);">linux /bzimage</span> ';
     } else {
-        html = '<span style="color: var(--text-color, #333);">append initrd=/bzroot</span> ';
+        html = '<span style="color: var(--text-color, #333);">append ' + getPreviewSyslinuxInitrd() + '</span> ';
     }
 
     // Add all proposed parameters in bright green with bold weight for visibility
@@ -1203,6 +1203,25 @@ function stripSystemParams(line) {
     return indent + rest;
 }
 
+function getSyslinuxInitrdForEntryLabel(label) {
+    return /GUI Mode|GUI Safe Mode/i.test(label || '') ? 'initrd=/bzroot,/bzroot-gui' : 'initrd=/bzroot';
+}
+
+function getPreviewSyslinuxInitrd() {
+    const appliedLabels = [];
+    $('.boot-entry-apply-toggle:checked').each(function() {
+        appliedLabels.push($(this).attr('data-label') || '');
+    });
+
+    if (appliedLabels.length > 0 && appliedLabels.every(function(label) {
+        return /GUI Mode|GUI Safe Mode/i.test(label);
+    })) {
+        return 'initrd=/bzroot,/bzroot-gui';
+    }
+
+    return 'initrd=/bzroot';
+}
+
 /**
  * Helper function to create boot entry content with optional diff display
  */
@@ -1257,7 +1276,7 @@ function createEntryContent(entry, showApply) {
                 const args = mergedArgs.length > 0 ? ' ' + mergedArgs.join(' ') : '';
                 newAppend = indent + cmd + ' ' + kernel + args;
             } else {
-                newAppend = '  append initrd=/bzroot' + (proposedParams.length > 0 ? ' ' + proposedParams.join(' ') : '');
+                newAppend = '  append ' + getSyslinuxInitrdForEntryLabel(entry.label) + (proposedParams.length > 0 ? ' ' + proposedParams.join(' ') : '');
             }
             const newAppendDisplay = stripSystemParams(newAppend);
             if (originalAppend === newAppendDisplay) {
