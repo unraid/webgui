@@ -1156,7 +1156,7 @@ while (true) {
             $keep_existing_files = $no_overwrite ? '--skip-old-files --warning=no-existing-file' : '';
             if ($is_compressed_tar) {
               // Compressed tar: listing pass would cost same as extraction (full decompression).
-              // Use checkpoint-based CHUNK events for live progress instead.
+              // Use checkpoint-based CHUNK events + -v for filenames for live progress instead.
               $dot_mb = COMPRESS_DOT_SIZE_MB;
               $cmd = <<<BASH
               {
@@ -1166,6 +1166,7 @@ while (true) {
                 checkpoint=\$((dot_size / record_size))
                 tar_args=(
                   $extract_tar_flags
+                  -v
                   $esc_archive
                   --no-unquote
                   --record-size=\$record_size
