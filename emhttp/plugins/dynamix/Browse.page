@@ -343,8 +343,9 @@ function updateArchiveName() {
     baseName = fileName(sourceName);
   }
 
-  // Remove existing extension from base name
-  baseName = baseName.replace(/\.(zip|tar|tar\.gz|tar\.bz2|tar\.xz|tar\.zst|tgz|tbz2|txz)$/i, '');
+  // Remove existing archive extension from base name (must mirror isArchive())
+  baseName = baseName.replace(/\.(tar\.(gz|bz2|xz|zst|lz4))$/i, '')
+                     .replace(/\.(zip|tar|tgz|tbz2|txz|gz|bz2|xz|zst|lz4)$/i, '');
   var format = $dialog.find('#dfm_format').val();
   var proposedName = baseName + '.' + format;
 
