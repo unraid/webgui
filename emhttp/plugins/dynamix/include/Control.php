@@ -185,7 +185,7 @@ case 'start':
       }
       
       // Update popular destinations when dequeuing a job
-      if (in_array((int)($data['action'] ?? 0), [3, 4, 8, 9]) && !empty($data['target'] ?? '')) {
+      if (in_array((int)($data['action'] ?? 0), [3, 4, 8, 9, 16, 17]) && !empty($data['target'] ?? '')) {
         updatePopularDestinations($data['target']);
       }
       
@@ -265,8 +265,8 @@ case 'file':
     }
     file_put_contents($active, json_encode($data));
     // Update popular destinations only when an operation actually starts
-    // Action types: 3=copy folder, 4=move folder, 8=copy file, 9=move file
-    if (in_array((int)$data['action'], [3, 4, 8, 9]) && !empty($data['target'])) {
+    // Action types: 3=copy folder, 4=move folder, 8=copy file, 9=move file, 16=compress, 17=extract
+    if (in_array((int)$data['action'], [3, 4, 8, 9, 16, 17]) && !empty($data['target'])) {
       updatePopularDestinations($data['target']);
     }
   }
