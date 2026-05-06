@@ -903,7 +903,7 @@ while (true) {
       if (!empty($pid)) {
         exec('logger -t file_manager "Case 16 status check: pid=' . escapeshellarg($pid) . '"');
         $format = $format ?? 'zip';
-        $archive_name = $archive_name ?? 'archive.zip';
+        $archive_name = basename($archive_name ?? 'archive.zip');
         $archive_path = rtrim($target, '/').'/'.$archive_name;
 
         exec('logger -t file_manager "Status check: format=' . escapeshellarg($format) . ', status_file=' . escapeshellarg($status) . ', exists=' . (file_exists($status) ? 'yes' : 'no') . '"');
@@ -924,7 +924,11 @@ while (true) {
         parse_compress_progress(null, null, COMPRESS_DOT_SIZE_MB, true); // Reset static variables
         $dot_mb = COMPRESS_DOT_SIZE_MB;
         $format = $format ?? 'zip';
-        $archive_name = $archive_name ?? 'archive.zip';
+        $archive_name = basename($archive_name ?? 'archive.zip');
+        if ($archive_name === '' || $archive_name === '.' || $archive_name === '..') {
+          $reply['error'] = _('Invalid archive name');
+          break;
+        }
         $archive_path = rtrim($target, '/').'/'.$archive_name;
         // Set archive permissions: docker paths get root:root 600,
         // all other paths (shares) get nobody:users 666 (matches Unraid share standard)
