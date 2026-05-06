@@ -1135,7 +1135,8 @@ while (true) {
           BASH;
 
         } else {
-          // TAR variants: stat-poller via progress script (handles TOTAL listing pass internally)
+          // TAR variants: compressed by default; only plain .tar sets $is_compressed_tar=false
+          $is_compressed_tar = true;
           if (preg_match('/\.(tar\.gz|tgz)$/i', $archive)) {
             $extract_tar_flags = '-xzf';
           } elseif (preg_match('/\.(tar\.bz2|tbz2)$/i', $archive)) {
@@ -1148,24 +1149,52 @@ while (true) {
             $extract_tar_flags = '--use-compress-program=lz4 -xf';
           } elseif (preg_match('/\.tar$/i', $archive)) {
             $extract_tar_flags = '-xf';
+            $is_compressed_tar = false;
           }
 
           if (isset($extract_tar_flags)) {
             $keep_existing_files = $no_overwrite ? '--skip-old-files --warning=no-existing-file' : '';
-            $cmd = <<<BASH
-            {
-              cd $esc_dest || exit 1
-              tar_args=(
-                $extract_tar_flags
-                $esc_archive
-                --no-unquote
-                $keep_existing_files
-              )
-              tar "\${tar_args[@]}" | /usr/local/emhttp/plugins/dynamix/scripts/progress
-              tar_exit=\${PIPESTATUS[0]}
-              exit \$tar_exit
-            } >$status 2>$error & echo \$!
-            BASH;
+            if ($is_compressed_tar) {
+              // Compressed tar: listing pass would cost same as extraction (full decompression).
+              // Use checkpoint-based CHUNK events for live progress instead.
+              $dot_mb = COMPRESS_DOT_SIZE_MB;
+              $cmd = <<<BASH
+              {
+                cd $esc_dest || exit 1
+                record_size=10240
+                dot_size=$(($dot_mb * 1024 * 1024))
+                checkpoint=\$((dot_size / record_size))
+                tar_args=(
+                  $extract_tar_flags
+                  $esc_archive
+                  --no-unquote
+                  --record-size=\$record_size
+                  --checkpoint=\$checkpoint
+                  "--checkpoint-action=exec=printf 'CHUNK\\n'"
+                  $keep_existing_files
+                )
+                tar "\${tar_args[@]}" | /usr/local/emhttp/plugins/dynamix/scripts/progress
+                tar_exit=\${PIPESTATUS[0]}
+                exit \$tar_exit
+              } >$status 2>$error & echo \$!
+              BASH;
+            } else {
+              // Plain .tar: progress script does synchronous listing pass + stat-poller.
+              $cmd = <<<BASH
+              {
+                cd $esc_dest || exit 1
+                tar_args=(
+                  $extract_tar_flags
+                  $esc_archive
+                  --no-unquote
+                  $keep_existing_files
+                )
+                tar "\${tar_args[@]}" | /usr/local/emhttp/plugins/dynamix/scripts/progress
+                tar_exit=\${PIPESTATUS[0]}
+                exit \$tar_exit
+              } >$status 2>$error & echo \$!
+              BASH;
+            }
           } else {
             $cmd = "cd ".quoted($dest)." && unzip ".($no_overwrite ? '-n ' : '-o ').quoted($archive)." >$status 2>$error & echo \$!";
           }

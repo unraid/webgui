@@ -45,20 +45,17 @@
 
 debug=
 progress_nl=
-wait_total=
-while [[ ${1-} == '-v' || ${1-} == '--verbose' || ${1-} == '--progress-newline' || ${1-} == '--wait-total' ]]; do
+while [[ ${1-} == '-v' || ${1-} == '--verbose' || ${1-} == '--progress-newline' ]]; do
   [[ ${1-} == '-v' || ${1-} == '--verbose' ]] && debug=1
   [[ ${1-} == '--progress-newline' ]] && progress_nl=1
-  [[ ${1-} == '--wait-total' ]] && wait_total=1
   shift
 done
 dbg() { [[ $debug ]] && echo "[DEBUG] $*" >&2; return 0; }
-dbg "debug=$debug progress_nl=$progress_nl wait_total=$wait_total"
+dbg "debug=$debug progress_nl=$progress_nl"
 
 # Human-readable progress on stderr when stdout is not a TTY.
-# Covers: | progress.sh >/dev/null  and  | progress.sh | tee file >/dev/null#
-# Optional flags:
-#  --wait-total  wait for listing pass before starting poller (always shows % from start)show_progress=
+# Covers: | progress.sh >/dev/null  and  | progress.sh | tee file >/dev/null
+show_progress=
 [[ ! -t 1 && -t 2 ]] && show_progress=1
 dbg "show_progress=$show_progress"
 
@@ -369,38 +366,34 @@ else
     done
     dbg "tar extract archive=$tar_archive dest=$tar_dest"
     if [[ $tar_archive ]]; then
-      # Build list flags from archive extension (same logic as file_manager)
-      # tar -tv output: "perms owner size date time name" - column 3 is size
       case "$tar_archive" in
-        *.tar.gz|*.tgz)   list_flags=(-tzvf) ;;
-        *.tar.bz2|*.tbz2) list_flags=(-tjvf) ;;
-        *.tar.xz|*.txz)   list_flags=(-tJvf) ;;
-        *.tar.zst)        list_flags=(--use-compress-program=zstd -tvf) ;;
-        *.tar.lz4)        list_flags=(--use-compress-program=lz4 -tvf) ;;
-        *)                list_flags=(-tvf) ;;
+        *.tar.gz|*.tgz|*.tar.bz2|*.tbz2|*.tar.xz|*.txz|*.tar.zst|*.tar.lz4)
+          # Compressed archive: listing pass requires full decompression (same cost as extraction).
+          # Skip listing pass; file_manager adds --checkpoint flags so CHUNK events arrive via stdin.
+          dbg "compressed tar: skipping listing pass, CHUNK mode"
+          tar_archive=""
+          ;;
+        *)
+          # Uncompressed tar: listing pass is fast (no decompression), do it synchronously.
+          # tar -tv: "-rwxr-xr-x root/root 124674920 2024-01-01 00:00 node"
+          declare -A tar_sizes=()
+          tar_names=()
+          total_bytes=0
+          while IFS= read -r line; do
+            if [[ $line =~ ^[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+([0-9]+)[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+(.*) ]]; then
+              local_fsize="${BASH_REMATCH[1]}"
+              # Unescape tar-escaped chars (e.g. \n -> newline) for real filesystem path.
+              local_fname=$(printf '%b' "${BASH_REMATCH[2]//\%/%%}")
+              tar_sizes["$local_fname"]="$local_fsize"
+              tar_names+=("$local_fname")
+              total_bytes=$((total_bytes + local_fsize))
+            fi
+          done < <(tar ${tar_no_unquote:+--no-unquote} -tvf "$tar_archive" 2>/dev/null)
+          dbg "total_bytes=$total_bytes files=${#tar_names[@]}"
+          printf 'TOTAL %s\n' "$total_bytes"
+          _prog_total_line "$total_bytes"
+          ;;
       esac
-      # tar -tv: "-rwxr-xr-x root/root 124674920 2024-01-01 00:00 node"
-      # Run listing pass in background (or foreground with --wait-total).
-      # Manifest format (tab-separated): "size\tfilename" per entry, then "TOTAL\ttotal_bytes".
-      tar_manifest=$(mktemp /tmp/progress.manifest.XXXXXX)
-      dbg "tar_manifest=$tar_manifest wait_total=$wait_total"
-      listing_body() {
-        local _total=0
-        while IFS= read -r line; do
-          if [[ $line =~ ^[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+([0-9]+)[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+(.*) ]]; then
-            local _fsize="${BASH_REMATCH[1]}"
-            # Keep filename in tar-escaped form (e.g. \n stays as two chars \+n).
-            # Unescaping here would turn \n into a real newline which breaks the manifest.
-            local _fname_esc="${BASH_REMATCH[2]}"
-            _total=$((_total + _fsize))
-            printf '%s\t%s\n' "$_fsize" "$_fname_esc"
-          fi
-        done < <(tar ${tar_no_unquote:+--no-unquote} "${list_flags[@]}" "$tar_archive" 2>/dev/null)
-        printf '%s\n' "$_total" >"${tar_manifest}.total"
-      }
-      listing_body >"$tar_manifest" &
-      listing_pid=$!
-      dbg "listing_pid=$listing_pid"
     fi
   fi
 fi
@@ -456,58 +449,15 @@ if [[ $compress_tool == unzip ]]; then
   dbg "unzip stat-poller done: file_count=$file_count"
 
 elif [[ $compress_tool == tar && $tar_archive ]]; then
-  # tar extract: listing always runs in background; TOTAL applied as soon as .total file appears.
-  # --wait-total: wait for listing to finish before starting poller (% shown from first file).
+  # Uncompressed tar extract: listing pass done synchronously above, use stat-poller.
+  tar_sizes_indexed=()
+  for name in "${tar_names[@]}"; do
+    tar_sizes_indexed+=("${tar_sizes[$name]:-0}")
+  done
   cat >/dev/null &
   drain_pid=$!
-  dbg "tar stat-poller start: dest=$tar_dest wait_total=$wait_total"
-  [[ $wait_total ]] && wait "$listing_pid" 2>/dev/null
-  # Called before loop and after each file/chunk: apply TOTAL as soon as listing is done
-  _apply_total_if_ready() {
-    [[ $_prog_total -gt 0 ]] && return
-    [[ ! -f ${tar_manifest}.total ]] && return
-    local _t
-    _t=$(cat "${tar_manifest}.total" 2>/dev/null)
-    [[ ! $_t ]] && return
-    printf 'TOTAL %s\n' "$_t"
-    _prog_total_line "$_t"
-    dbg "_apply_total_if_ready: total=$_t"
-  }
-  _apply_total_if_ready
-  while IFS=$'\t' read -r mf_size mf_name_esc; do
-    [[ $mf_size =~ ^[0-9]+$ ]] || continue
-    # Unescape tar-escaped chars (e.g. \n -> newline) to get the real filesystem path.
-    mf_name=$(printf '%b' "${mf_name_esc//\%/%%}")
-    mf_path="$tar_dest/$mf_name"
-    while [[ ! -e $mf_path ]]; do
-      _apply_total_if_ready
-      sleep 0.2
-    done
-    _apply_total_if_ready
-    printf 'FILE %(%s)T %s %s\n' -1 "$mf_size" "$mf_name"
-    _prog_file_line "$mf_size" "$mf_name"
-    file_count=$((file_count + 1))
-    if [[ $mf_size -gt 10485760 ]]; then
-      prev_size=0
-      while true; do
-        sleep 0.5
-        cur_size=$(stat -c%s "$mf_path" 2>/dev/null || echo 0)
-        [[ $cur_size -le $prev_size ]] && break
-        _apply_total_if_ready
-        printf 'CHUNK %(%s)T %s\n' -1 "$((cur_size - prev_size))"
-        _prog_chunk_line "$((cur_size - prev_size))"
-        prev_size=$cur_size
-      done
-    fi
-  done < <(
-    if [[ $wait_total ]]; then
-      cat "$tar_manifest"
-    else
-      tail -f --pid="$listing_pid" "$tar_manifest" 2>/dev/null
-    fi
-  )
-  _apply_total_if_ready
-  rm -f "$tar_manifest" "${tar_manifest}.total"
+  dbg "tar stat-poller start: dest=$tar_dest files=${#tar_names[@]}"
+  run_stat_poller "$tar_dest" tar_names tar_sizes_indexed
   wait "$drain_pid" 2>/dev/null
   dbg "tar stat-poller done: file_count=$file_count"
 
