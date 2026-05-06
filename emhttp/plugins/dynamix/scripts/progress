@@ -378,6 +378,9 @@ else
         if [[ $line =~ ^[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+([0-9]+)[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+(.*) ]]; then
           fsize="${BASH_REMATCH[1]}"
           fname="${BASH_REMATCH[2]}"
+          # tar -tv escapes non-printable chars in filenames (e.g. newline -> \n, tab -> \t).
+          # Unescape to get the actual filesystem path. %% escapes literal % for printf.
+          fname=$(printf '%b' "${fname//\%/%%}")
           tar_sizes["$fname"]="$fsize"
           tar_names+=("$fname")
           total_bytes=$((total_bytes + fsize))
