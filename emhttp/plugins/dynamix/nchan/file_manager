@@ -256,6 +256,7 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
 
         // Record progress event: new file starts, no progress on this file yet
         $progress_events[] = [$timestamp, $processed_bytes];
+        if (count($progress_events) > 10) array_shift($progress_events);
         break;
 
       case 'BYTES_DONE':
@@ -264,6 +265,7 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
         $file_bytes = min(floatval($parts[2]), $current_file_size > 0 ? $current_file_size : PHP_FLOAT_MAX);
         $current_file_exact_bytes = $file_bytes;
         $progress_events[] = [$timestamp, $processed_bytes + $file_bytes];
+        if (count($progress_events) > 10) array_shift($progress_events);
         break;
 
       case 'DOT':
@@ -274,6 +276,7 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
         // Record progress event: processed_bytes (completed files) + current file progress
         $current_file_progress = $current_file_dots * $dot_size_mb * 1024 * 1024;
         $progress_events[] = [$timestamp, $processed_bytes + $current_file_progress];
+        if (count($progress_events) > 10) array_shift($progress_events);
         break;
 
       case 'INFO':
