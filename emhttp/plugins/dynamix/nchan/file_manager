@@ -254,9 +254,13 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
         $current_file_dots = 0;
         $current_file_exact_bytes = null;
 
-        // Record progress event: new file starts, no progress on this file yet
-        $progress_events[] = [$timestamp, $processed_bytes];
-        if (count($progress_events) > 10) array_shift($progress_events);
+        // Only record progress event for ZIP (size > 0); tar FILE events have size=0 and
+        // carry no byte info - adding them fills the window with duplicate byte values
+        // which causes speed=0 and ETA=N/A between checkpoints.
+        if ($current_file_size > 0) {
+          $progress_events[] = [$timestamp, $processed_bytes];
+          if (count($progress_events) > 20) array_shift($progress_events);
+        }
         break;
 
       case 'BYTES_DONE':
@@ -265,7 +269,7 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
         $file_bytes = min(floatval($parts[2]), $current_file_size > 0 ? $current_file_size : PHP_FLOAT_MAX);
         $current_file_exact_bytes = $file_bytes;
         $progress_events[] = [$timestamp, $processed_bytes + $file_bytes];
-        if (count($progress_events) > 10) array_shift($progress_events);
+        if (count($progress_events) > 20) array_shift($progress_events);
         break;
 
       case 'DOT':
@@ -276,7 +280,7 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
         // Record progress event: processed_bytes (completed files) + current file progress
         $current_file_progress = $current_file_dots * $dot_size_mb * 1024 * 1024;
         $progress_events[] = [$timestamp, $processed_bytes + $current_file_progress];
-        if (count($progress_events) > 10) array_shift($progress_events);
+        if (count($progress_events) > 20) array_shift($progress_events);
         break;
 
       case 'INFO':
@@ -924,6 +928,9 @@ while (true) {
       } else {
         exec('logger -t file_manager "Case 16 start: pid is empty, starting new job"');
         @unlink('/tmp/status-debug-compress.txt'); // Clear old debug file
+        // Debug: copy active file so we can inspect what was received
+        if (file_exists($active)) copy($active, '/tmp/active-debug-compress.txt');
+        exec('logger -t file_manager "Case 16 start: archive_name=' . escapeshellarg($archive_name ?? 'NULL') . ', format=' . escapeshellarg($format ?? 'NULL') . ', target=' . escapeshellarg($target ?? 'NULL') . '"');
         parse_compress_progress(null, null, COMPRESS_DOT_SIZE_MB, true); // Reset static variables
         $dot_mb = COMPRESS_DOT_SIZE_MB;
         $format = $format ?? 'zip';
@@ -1127,8 +1134,9 @@ while (true) {
             )
             # Both awk (FILE lines) and exec (DOT lines) use >> (O_APPEND) to write to
             # $status, so they interleave correctly without overwriting each other
-            tar "\${tar_args[@]}" 2>/dev/null | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}' >> "$status"
+            tar "\${tar_args[@]}" | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}' >> "$status"
             tar_exit=\${PIPESTATUS[0]}
+            logger -t file_manager "compress tar_exit=\${tar_exit}, archive=$esc_archive_path"
             if [[ \$tar_exit -eq 0 ]]; then
               mv $esc_target_tmp $esc_archive_path
               chown $archive_chown $esc_archive_path
@@ -1136,6 +1144,7 @@ while (true) {
             else
               rm -f $esc_target_tmp
             fi
+            exit \$tar_exit
           } >/dev/null 2>$error & echo \$!
           BASH;
         }
