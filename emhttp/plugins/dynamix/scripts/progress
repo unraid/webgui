@@ -389,10 +389,11 @@ else
         while IFS= read -r line; do
           if [[ $line =~ ^[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+([0-9]+)[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+(.*) ]]; then
             local _fsize="${BASH_REMATCH[1]}"
-            local _fname
-            _fname=$(printf '%b' "${BASH_REMATCH[2]//\%/%%}")
+            # Keep filename in tar-escaped form (e.g. \n stays as two chars \+n).
+            # Unescaping here would turn \n into a real newline which breaks the manifest.
+            local _fname_esc="${BASH_REMATCH[2]}"
             _total=$((_total + _fsize))
-            printf '%s\t%s\n' "$_fsize" "$_fname"
+            printf '%s\t%s\n' "$_fsize" "$_fname_esc"
           fi
         done < <(tar ${tar_no_unquote:+--no-unquote} "${list_flags[@]}" "$tar_archive" 2>/dev/null)
         printf '%s\n' "$_total" >"${tar_manifest}.total"
@@ -473,7 +474,10 @@ elif [[ $compress_tool == tar && $tar_archive ]]; then
     dbg "_apply_total_if_ready: total=$_t"
   }
   _apply_total_if_ready
-  while IFS=$'\t' read -r mf_size mf_name; do
+  while IFS=$'\t' read -r mf_size mf_name_esc; do
+    [[ $mf_size =~ ^[0-9]+$ ]] || continue
+    # Unescape tar-escaped chars (e.g. \n -> newline) to get the real filesystem path.
+    mf_name=$(printf '%b' "${mf_name_esc//\%/%%}")
     mf_path="$tar_dest/$mf_name"
     while [[ ! -e $mf_path ]]; do
       _apply_total_if_ready
