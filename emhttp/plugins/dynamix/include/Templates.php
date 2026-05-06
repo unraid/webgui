@@ -373,9 +373,7 @@ _(Archive format)_:
   <option value="zip">ZIP (_.zip_)</option>
   <option value="tar">TAR (_.tar_)</option>
   <option value="tar.gz">TAR.GZ (_.tar.gz_)</option>
-  <!-- tar.bz2 hidden: too rare for default UI; could be exposed via File Manager settings page later
   <option value="tar.bz2">TAR.BZ2 (_.tar.bz2_)</option>
-  -->
   <option value="tar.xz">TAR.XZ (_.tar.xz_)</option>
   <option value="tar.zst">TAR.ZST (_.tar.zst - recommended for appdata_)</option>
   <option value="tar.lz4">TAR.LZ4 (_.tar.lz4_)</option>

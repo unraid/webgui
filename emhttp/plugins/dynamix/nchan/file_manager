@@ -952,6 +952,18 @@ while (true) {
         }
         $archive_chown = $is_docker_path ? 'root:root' : 'nobody:users';
         $archive_chmod = $is_docker_path ? '600' : '666';
+        // Create target directory with proper permissions if user typed a new path
+        $target_trimmed = rtrim($target, '/');
+        if (!is_dir($target_trimmed)) {
+          $new_root = $target_trimmed;
+          $check = $target_trimmed;
+          while ($check !== '/' && !is_dir($check)) {
+            $new_root = $check;
+            $check = dirname($check);
+          }
+          exec("mkdir -pm0".($is_docker_path ? '755' : '777')." ".quoted($target_trimmed));
+          if (!$is_docker_path) exec("chown -R nobody:users ".quoted($new_root));
+        }
         // unique tmp path in same dir; loop to avoid collision with existing files
         do {
           $target_tmp = rtrim($target, '/').'/.'.$archive_name.'_'.uniqid('', true).'.tmp';
@@ -1139,7 +1151,36 @@ while (true) {
         exec('logger -t file_manager "extract start: archive=' . escapeshellarg($archive) . ', dest=' . escapeshellarg($dest) . '"');
         exec('logger -t file_manager "extract start: quoted_archive=' . escapeshellarg(quoted($archive)) . ', quoted_dest=' . escapeshellarg(quoted($dest)) . '"');
 
-        exec("mkdir -p ".quoted($dest));
+        // Create dest with proper permissions if it doesn't exist.
+        // Docker paths get root:root 755, all other shares get nobody:users 777.
+        if (!is_dir($dest)) {
+          $docker_cfg = @parse_ini_file('/boot/config/docker.cfg') ?: [];
+          $docker_subpaths = [];
+          foreach (['DOCKER_APP_CONFIG_PATH', 'DOCKER_IMAGE_FILE'] as $key) {
+            $val = rtrim(trim($docker_cfg[$key] ?? ''), '/');
+            if ($val && preg_match('#^/mnt/[^/]+/(.+)$#', $val, $m)) {
+              $docker_subpaths[] = $m[1];
+            }
+          }
+          if (empty($docker_subpaths)) $docker_subpaths = ['appdata', 'docker'];
+          $is_docker_dest = false;
+          if (preg_match('#^/mnt/[^/]+/(.+)$#', $dest, $m)) {
+            foreach ($docker_subpaths as $dp) {
+              if ($m[1] === $dp || str_starts_with($m[1], $dp.'/')) {
+                $is_docker_dest = true;
+                break;
+              }
+            }
+          }
+          $new_root = $dest;
+          $check = $dest;
+          while ($check !== '/' && !is_dir($check)) {
+            $new_root = $check;
+            $check = dirname($check);
+          }
+          exec("mkdir -pm0".($is_docker_dest ? '755' : '777')." ".quoted($dest));
+          if (!$is_docker_dest) exec("chown -R nobody:users ".quoted($new_root));
+        }
 
         // Reset progress parser state for new extract operation (shares static vars with compress)
         parse_compress_progress(null, null, COMPRESS_DOT_SIZE_MB, true);
