@@ -1138,15 +1138,15 @@ while (true) {
           // TAR variants: compressed by default; only plain .tar sets $is_compressed_tar=false
           $is_compressed_tar = true;
           if (preg_match('/\.(tar\.gz|tgz)$/i', $archive)) {
-            $extract_tar_flags = '-xzf';
+            $extract_tar_flags = '-xzvf';
           } elseif (preg_match('/\.(tar\.bz2|tbz2)$/i', $archive)) {
-            $extract_tar_flags = '-xjf';
+            $extract_tar_flags = '-xjvf';
           } elseif (preg_match('/\.(tar\.xz|txz)$/i', $archive)) {
-            $extract_tar_flags = '-xJf';
+            $extract_tar_flags = '-xJvf';
           } elseif (preg_match('/\.(tar\.zst)$/i', $archive)) {
-            $extract_tar_flags = '--use-compress-program=zstd -xf';
+            $extract_tar_flags = '--use-compress-program=zstd -xvf';
           } elseif (preg_match('/\.(tar\.lz4)$/i', $archive)) {
-            $extract_tar_flags = '--use-compress-program=lz4 -xf';
+            $extract_tar_flags = '--use-compress-program=lz4 -xvf';
           } elseif (preg_match('/\.tar$/i', $archive)) {
             $extract_tar_flags = '-xf';
             $is_compressed_tar = false;
@@ -1156,7 +1156,7 @@ while (true) {
             $keep_existing_files = $no_overwrite ? '--skip-old-files --warning=no-existing-file' : '';
             if ($is_compressed_tar) {
               // Compressed tar: listing pass would cost same as extraction (full decompression).
-              // Use checkpoint-based CHUNK events + -v for filenames for live progress instead.
+              // Use checkpoint-based CHUNK events + -v (in flags) for filenames for live progress.
               $dot_mb = COMPRESS_DOT_SIZE_MB;
               $cmd = <<<BASH
               {
@@ -1166,7 +1166,6 @@ while (true) {
                 checkpoint=\$((dot_size / record_size))
                 tar_args=(
                   $extract_tar_flags
-                  -v
                   $esc_archive
                   --no-unquote
                   --record-size=\$record_size
