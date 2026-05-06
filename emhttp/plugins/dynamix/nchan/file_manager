@@ -993,13 +993,18 @@ while (true) {
 
         // Build compression command based on format
         $escaped_basenames = implode(' ', array_map('escapeshellarg', $source_basenames));
+        // Pre-escape all user-controlled paths used in heredocs so shell metacharacters
+        // in filenames (quotes, $, backticks) cannot escape the shell string context.
+        $esc_source_parent = escapeshellarg($source_parent);
+        $esc_target_tmp    = escapeshellarg($target_tmp);
+        $esc_archive_path  = escapeshellarg($archive_path);
 
         switch ($format) {
         case 'zip':
           // Inline zip wrapper: parse zip output and produce structured log (TOTAL|bytes, FILE|ts|size|name, DOT|ts)
           $cmd = <<<BASH
           {
-            cd "$source_parent" || exit 1
+            cd $esc_source_parent || exit 1
 
             # Calculate total size of source files
             total_bytes=\$(du -sb $escaped_basenames 2>/dev/null | awk '{sum+=\$1} END {print sum}')
@@ -1007,7 +1012,7 @@ while (true) {
 
             # Write to .tmp first for atomic creation
             # Read char-by-char (-n1) to check regex after each character - prevents dots from being buffered before pattern match
-            zip --recurse-paths --display-usize --display-dots --dot-size {$dot_mb}m "$target_tmp" -- $escaped_basenames 2>&1 | while IFS= read -r -n1 char || [[ \$char ]]; do
+            zip --recurse-paths --display-usize --display-dots --dot-size {$dot_mb}m $esc_target_tmp -- $escaped_basenames 2>&1 | while IFS= read -r -n1 char || [[ \$char ]]; do
 
               # Line mode: accumulate characters and check for pattern match after each char
               if [[ ! \$dot_mode ]]; then
@@ -1051,11 +1056,11 @@ while (true) {
 
             # On success: atomic rename, on failure: cleanup tmp
             if [[ \$zip_exit -eq 0 ]]; then
-              mv "$target_tmp" "$archive_path"
-              chown $archive_chown "$archive_path"
-              chmod $archive_chmod "$archive_path"
+              mv $esc_target_tmp $esc_archive_path
+              chown $archive_chown $esc_archive_path
+              chmod $archive_chmod $esc_archive_path
             else
-              rm -f "$target_tmp"
+              rm -f $esc_target_tmp
             fi
 
             # CRITICAL: The '>$status 2>$error' redirect MUST be outside the braces at the group level.
@@ -1091,7 +1096,7 @@ while (true) {
         if (isset($tar_flags)) {
           $cmd = <<<BASH
           {
-            cd "$source_parent" || exit 1
+            cd $esc_source_parent || exit 1
             total_bytes=\$(du -sb $escaped_basenames 2>/dev/null | awk '{sum+=\$1} END {print sum}')
             # Truncate status file and write TOTAL as first line
             > "$status"
@@ -1101,7 +1106,7 @@ while (true) {
             checkpoint=\$((dot_size / record_size))
             tar_args=(
               $tar_flags
-              "$target_tmp"
+              $esc_target_tmp
               --record-size=\$record_size
               --checkpoint=\$checkpoint
               "--checkpoint-action=exec=printf 'DOT|%s\\n' \\\$(date +%s) >> $status"
@@ -1112,11 +1117,11 @@ while (true) {
             tar "\${tar_args[@]}" 2>/dev/null | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}' >> "$status"
             tar_exit=\${PIPESTATUS[0]}
             if [[ \$tar_exit -eq 0 ]]; then
-              mv "$target_tmp" "$archive_path"
-              chown $archive_chown "$archive_path"
-              chmod $archive_chmod "$archive_path"
+              mv $esc_target_tmp $esc_archive_path
+              chown $archive_chown $esc_archive_path
+              chmod $archive_chmod $esc_archive_path
             else
-              rm -f "$target_tmp"
+              rm -f $esc_target_tmp
             fi
           } >/dev/null 2>$error & echo \$!
           BASH;
@@ -1147,6 +1152,9 @@ while (true) {
         $archive = $source[0];
         $dest = rtrim($target, '/');
         $dot_mb = COMPRESS_DOT_SIZE_MB;
+        // Pre-escape user-controlled paths for safe heredoc interpolation
+        $esc_archive = escapeshellarg($archive);
+        $esc_dest    = escapeshellarg($dest);
 
         exec('logger -t file_manager "extract start: archive=' . escapeshellarg($archive) . ', dest=' . escapeshellarg($dest) . '"');
         exec('logger -t file_manager "extract start: quoted_archive=' . escapeshellarg(quoted($archive)) . ', quoted_dest=' . escapeshellarg(quoted($dest)) . '"');
@@ -1195,7 +1203,7 @@ while (true) {
           // polls the growing output file with stat every 0.5s to emit BYTES_DONE progress lines.
           $cmd = <<<BASH
           {
-            cd "$dest" || exit 1
+            cd $esc_dest || exit 1
 
             # Parallel arrays: file_names[i] and file_sizes[i] hold name and uncompressed size
             # for each entry in manifest order (same order unzip writes files to disk).
@@ -1214,7 +1222,7 @@ while (true) {
                 file_names+=("\$fname")
                 total_bytes=\$(( total_bytes + BASH_REMATCH[1] ))
               fi
-            done < <(unzip -l "$archive" 2>/dev/null)
+            done < <(unzip -l $esc_archive 2>/dev/null)
             printf 'TOTAL|%s\\n' "\$total_bytes"
 
             # Parallel poller subshell: unzip only emits "inflating: file" AFTER each file is
@@ -1227,7 +1235,7 @@ while (true) {
               while [[ \$idx -lt \$total_files ]]; do
                 fname="\${file_names[\$idx]}"
                 fsize="\${file_sizes[\$idx]:-0}"
-                fpath="$dest/\$fname"
+                fpath=$esc_dest/"\$fname"
 
                 # Wait until file appears (unzip started writing it)
                 while [[ ! -e "\$fpath" ]]; do
@@ -1261,7 +1269,7 @@ while (true) {
 
             # Run unzip; suppress stdout (progress comes from poller), errors go to $error
             # -o = overwrite, -n = never overwrite (keep existing)
-            unzip $unzip_overwrite_flag "$archive" >/dev/null
+            unzip $unzip_overwrite_flag $esc_archive >/dev/null
             unzip_exit=\$?
             wait \$poller_pid 2>/dev/null
             exit \$unzip_exit
@@ -1291,17 +1299,17 @@ while (true) {
             $keep_existing_files = $no_overwrite ? '--skip-old-files --warning=no-existing-file' : '';
             $cmd = <<<BASH
             {
-              cd "$dest" || exit 1
+              cd $esc_dest || exit 1
               # Use same compression flags for listing so lz4/zstd archives yield correct total
               > "$status"
-              total_bytes=\$(tar $list_tar_flags "$archive" 2>/dev/null | awk 'NF>=5 {sum+=\$3} END {print sum+0}')
+              total_bytes=\$(tar $list_tar_flags $esc_archive 2>/dev/null | awk 'NF>=5 {sum+=\$3} END {print sum+0}')
               printf 'TOTAL|%s\\n' "\$total_bytes" >> "$status"
               record_size=10240
               dot_size=\$(($dot_mb * 1024 * 1024))
               checkpoint=\$((dot_size / record_size))
               tar_args=(
                 $extract_tar_flags
-                "$archive"
+                $esc_archive
                 --record-size=\$record_size
                 --checkpoint=\$checkpoint
                 $keep_existing_files
