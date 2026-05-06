@@ -597,6 +597,7 @@ while (true) {
       // Preserve compress-specific parameters before plugin config extract
       $compress_format = $format ?? null;
       $compress_archive_name = $archive_name ?? null;
+      if (($action ?? 0) == 16) exec('logger -t file_manager "DEBUG after extract(data): archive_name=' . escapeshellarg($archive_name ?? 'NULL') . ', compress_archive_name=' . escapeshellarg($compress_archive_name ?? 'NULL') . '"');
     } elseif ($json !== false && trim($json) !== '') {
       // Log JSON parse failure for debugging (non-empty file that failed to parse)
       exec('logger -t file_manager "Warning: Failed to parse active job JSON: ' . escapeshellarg(substr($json, 0, 100)) . '"');
@@ -615,6 +616,7 @@ while (true) {
     // Restore compress parameters after plugin config extract
     if (isset($compress_format)) $format = $compress_format;
     if (isset($compress_archive_name)) $archive_name = $compress_archive_name;
+    if (($action ?? 0) == 16) exec('logger -t file_manager "DEBUG after plugin_cfg+restore: archive_name=' . escapeshellarg($archive_name ?? 'NULL') . ', compress_archive_name=' . escapeshellarg($compress_archive_name ?? 'NULL') . '"');
     if ($display['locale'] != $locale_init) {
       $locale_init = $display['locale'];
       update_translation($locale_init);
@@ -930,7 +932,7 @@ while (true) {
         @unlink('/tmp/status-debug-compress.txt'); // Clear old debug file
         // Debug: copy active file so we can inspect what was received
         if (file_exists($active)) copy($active, '/tmp/active-debug-compress.txt');
-        exec('logger -t file_manager "Case 16 start: archive_name=' . escapeshellarg($archive_name ?? 'NULL') . ', format=' . escapeshellarg($format ?? 'NULL') . ', target=' . escapeshellarg($target ?? 'NULL') . '"');
+        exec('logger -t file_manager "Case 16 start: archive_name=' . escapeshellarg($archive_name ?? 'NULL') . ', compress_archive_name=' . escapeshellarg($compress_archive_name ?? 'NULL') . ', format=' . escapeshellarg($format ?? 'NULL') . ', target=' . escapeshellarg($target ?? 'NULL') . '"');
         parse_compress_progress(null, null, COMPRESS_DOT_SIZE_MB, true); // Reset static variables
         $dot_mb = COMPRESS_DOT_SIZE_MB;
         $format = $format ?? 'zip';
