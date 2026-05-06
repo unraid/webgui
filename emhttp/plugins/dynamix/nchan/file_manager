@@ -53,7 +53,7 @@ function pid_exists($pid) {
   $original_pid = $pid;
   $pid = is_array($pid) ? $pid[0] : $pid;
   $exists = file_exists("/proc/$pid");
-  exec('logger -t file_manager "pid_exists: original=' . escapeshellarg(json_encode($original_pid)) . ', extracted=' . escapeshellarg($pid) . ', /proc exists=' . escapeshellarg($exists ? 'YES' : 'NO') . '"');
+  exec('logger -t file_manager ' . escapeshellarg('pid_exists: original=' . json_encode($original_pid) . ', extracted=' . $pid . ', /proc exists=' . ($exists ? 'YES' : 'NO')));
   return $pid && $exists ? $pid : false;
 }
 
@@ -597,7 +597,7 @@ while (true) {
       // Preserve compress-specific parameters before plugin config extract
       $compress_format = $format ?? null;
       $compress_archive_name = $archive_name ?? null;
-      if (($action ?? 0) == 16) exec('logger -t file_manager "DEBUG after extract(data): archive_name=' . escapeshellarg($archive_name ?? 'NULL') . ', compress_archive_name=' . escapeshellarg($compress_archive_name ?? 'NULL') . '"');
+      if (($action ?? 0) == 16) exec('logger -t file_manager ' . escapeshellarg('DEBUG after extract(data): archive_name=' . ($archive_name ?? 'NULL') . ', compress_archive_name=' . ($compress_archive_name ?? 'NULL')));
     } elseif ($json !== false && trim($json) !== '') {
       // Log JSON parse failure for debugging (non-empty file that failed to parse)
       exec('logger -t file_manager "Warning: Failed to parse active job JSON: ' . escapeshellarg(substr($json, 0, 100)) . '"');
@@ -616,7 +616,7 @@ while (true) {
     // Restore compress parameters after plugin config extract
     if (isset($compress_format)) $format = $compress_format;
     if (isset($compress_archive_name)) $archive_name = $compress_archive_name;
-    if (($action ?? 0) == 16) exec('logger -t file_manager "DEBUG after plugin_cfg+restore: archive_name=' . escapeshellarg($archive_name ?? 'NULL') . ', compress_archive_name=' . escapeshellarg($compress_archive_name ?? 'NULL') . '"');
+    if (($action ?? 0) == 16) exec('logger -t file_manager ' . escapeshellarg('DEBUG after plugin_cfg+restore: archive_name=' . ($archive_name ?? 'NULL') . ', compress_archive_name=' . ($compress_archive_name ?? 'NULL')));
     if ($display['locale'] != $locale_init) {
       $locale_init = $display['locale'];
       update_translation($locale_init);
@@ -932,7 +932,7 @@ while (true) {
         @unlink('/tmp/status-debug-compress.txt'); // Clear old debug file
         // Debug: copy active file so we can inspect what was received
         if (file_exists($active)) copy($active, '/tmp/active-debug-compress.txt');
-        exec('logger -t file_manager "Case 16 start: archive_name=' . escapeshellarg($archive_name ?? 'NULL') . ', compress_archive_name=' . escapeshellarg($compress_archive_name ?? 'NULL') . ', format=' . escapeshellarg($format ?? 'NULL') . ', target=' . escapeshellarg($target ?? 'NULL') . '"');
+        exec('logger -t file_manager ' . escapeshellarg('Case 16 start: archive_name=' . ($archive_name ?? 'NULL') . ', compress_archive_name=' . ($compress_archive_name ?? 'NULL') . ', format=' . ($format ?? 'NULL') . ', target=' . ($target ?? 'NULL')));
         parse_compress_progress(null, null, COMPRESS_DOT_SIZE_MB, true); // Reset static variables
         $dot_mb = COMPRESS_DOT_SIZE_MB;
         $format = $format ?? 'zip';
@@ -996,7 +996,7 @@ while (true) {
           file_put_contents($active, json_encode($active_data));
         }
 
-        exec('logger -t file_manager "Start compress: format=' . escapeshellarg($format) . ', archive=' . escapeshellarg($archive_path) . '"');
+        exec('logger -t file_manager ' . escapeshellarg('Start compress: format=' . $format . ', archive=' . $archive_path));
 
         // Check if target archive already exists
         if (file_exists($archive_path)) {
@@ -1129,6 +1129,7 @@ while (true) {
             tar_args=(
               $tar_flags
               $esc_target_tmp
+              --no-unquote
               --record-size=\$record_size
               --checkpoint=\$checkpoint
               "--checkpoint-action=exec=printf 'DOT|%s\\n' \\\$(date +%s) >> $status"
@@ -1138,7 +1139,7 @@ while (true) {
             # $status, so they interleave correctly without overwriting each other
             tar "\${tar_args[@]}" | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}' >> "$status"
             tar_exit=\${PIPESTATUS[0]}
-            logger -t file_manager "compress tar_exit=\${tar_exit}, archive=$esc_archive_path"
+            logger -t file_manager "compress tar_exit=\${tar_exit}"
             if [[ \$tar_exit -eq 0 ]]; then
               mv $esc_target_tmp $esc_archive_path
               chown $archive_chown $esc_archive_path
@@ -1185,8 +1186,8 @@ while (true) {
         $esc_archive = escapeshellarg($archive);
         $esc_dest    = escapeshellarg($dest);
 
-        exec('logger -t file_manager "extract start: archive=' . escapeshellarg($archive) . ', dest=' . escapeshellarg($dest) . '"');
-        exec('logger -t file_manager "extract start: quoted_archive=' . escapeshellarg(quoted($archive)) . ', quoted_dest=' . escapeshellarg(quoted($dest)) . '"');
+        exec('logger -t file_manager ' . escapeshellarg('extract start: archive=' . $archive . ', dest=' . $dest));
+        exec('logger -t file_manager ' . escapeshellarg('extract start: quoted_archive=' . quoted($archive) . ', quoted_dest=' . quoted($dest)));
 
         // Create dest with proper permissions if it doesn't exist.
         // Docker paths get root:root 755, all other shares get nobody:users 777.
@@ -1339,6 +1340,7 @@ while (true) {
               tar_args=(
                 $extract_tar_flags
                 $esc_archive
+                --no-unquote
                 --record-size=\$record_size
                 --checkpoint=\$checkpoint
                 $keep_existing_files
@@ -1372,7 +1374,7 @@ while (true) {
     default:
       continue 2;
     }
-    exec('logger -t file_manager "After switch: action=' . $action . ', pid before pid_exists=' . escapeshellarg(json_encode($pid??null)) . '"');
+    exec('logger -t file_manager ' . escapeshellarg('After switch: action=' . $action . ', pid before pid_exists=' . json_encode($pid ?? null)));
     $pid = pid_exists($pid??0);
     exec('logger -t file_manager "After pid_exists: pid=' . escapeshellarg(json_encode($pid)) . '"');
 
