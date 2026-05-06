@@ -270,29 +270,26 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
 
   exec('logger -t file_manager "parse_compress_progress: total_bytes=' . $total_bytes . ', processed_bytes=' . $processed_bytes . '"');
 
-  // Calculate progress if we have total size
-  if ($total_bytes && $total_bytes > 0) {
-    // Calculate speed from progress events (reused for interpolation and display)
-    $speed_bytes = 0;
-    if (count($progress_events) >= 2) {
-      $first_event = $progress_events[0];
-      $last_event = $progress_events[count($progress_events) - 1];
-      $time_span = $last_event[0] - $first_event[0];
-      $bytes_span = $last_event[1] - $first_event[1];
-      if ($time_span > 0 && $bytes_span > 0) {
-        $speed_bytes = $bytes_span / $time_span;
-      }
+  // Calculate speed from progress events (used regardless of whether TOTAL is known)
+  $speed_bytes = 0;
+  if (count($progress_events) >= 2) {
+    $first_event = $progress_events[0];
+    $last_event = $progress_events[count($progress_events) - 1];
+    $time_span = $last_event[0] - $first_event[0];
+    $bytes_span = $last_event[1] - $first_event[1];
+    if ($time_span > 0 && $bytes_span > 0) {
+      $speed_bytes = $bytes_span / $time_span;
     }
+  }
 
+  $speed = $speed_bytes > 0 ? bytes_to_size($speed_bytes) . '/s' : '';
+
+  if ($total_bytes && $total_bytes > 0) {
     $current_progress_bytes = $processed_bytes;
-
     $percent = min(100, intval(($current_progress_bytes / $total_bytes) * 100));
 
-    $speed = '';
     $eta = 'N/A';
     if ($speed_bytes > 0) {
-      $speed = bytes_to_size($speed_bytes) . '/s';
-
       $remaining_bytes = $total_bytes - $current_progress_bytes;
       $eta_seconds = $remaining_bytes / $speed_bytes;
 
@@ -300,12 +297,11 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
       if ($last_eta_seconds !== null) {
         $eta_seconds = ($last_eta_seconds * 0.7) + ($eta_seconds * 0.3);
       }
-      $last_eta_seconds = max(0.0, $eta_seconds); // Don't accumulate negative values into hysteresis
+      $last_eta_seconds = max(0.0, $eta_seconds);
 
       $eta = seconds_to_time(max(0, intval($eta_seconds)));
     }
 
-    // Build progress text
     $progress_parts = [];
     $progress_parts[] = _('Completed') . ": " . $percent . '%';
     $progress_parts[] = _('Total') . ": " . bytes_to_size($total_bytes);
@@ -313,7 +309,15 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
       $progress_parts[] = _('Speed') . ": " . $speed;
     }
     $progress_parts[] = _('ETA') . ": " . $eta;
+    $text[1] = implode(",  ", $progress_parts);
 
+  } elseif ($processed_bytes > 0) {
+    // TOTAL not yet known: show transferred + speed without % or ETA
+    $progress_parts = [];
+    $progress_parts[] = bytes_to_size($processed_bytes) . ' ' . _('transferred');
+    if ($speed) {
+      $progress_parts[] = _('Speed') . ": " . $speed;
+    }
     $text[1] = implode(",  ", $progress_parts);
   }
 
