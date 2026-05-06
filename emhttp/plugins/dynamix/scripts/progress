@@ -1,7 +1,6 @@
 #!/bin/bash
 # ##################################################################### #
-#
-# progress.sh - parse zip, tar or unzip stdout and emit structured progress lines
+# progress.sh - parse zip, tar or unzip stdout and emit progress
 #
 # Copyright 2026 Marc Gutt, Gutt.IT
 #
@@ -383,7 +382,7 @@ else
           tar_names+=("$fname")
           total_bytes=$((total_bytes + fsize))
         fi
-      done < <(tar "${list_flags[@]}" ${tar_no_unquote:+--no-unquote} "$tar_archive" 2>/dev/null)
+      done < <(tar ${tar_no_unquote:+--no-unquote} "${list_flags[@]}" "$tar_archive" 2>/dev/null)
       dbg "total_bytes=$total_bytes files=${#tar_names[@]}"
       printf 'TOTAL %s\n' "$total_bytes"
       _prog_total_line "$total_bytes"
