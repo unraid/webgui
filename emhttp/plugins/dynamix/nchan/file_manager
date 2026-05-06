@@ -1094,7 +1094,8 @@ while (true) {
           $tar_flags = '-cvJf';
           break;
         default:
-          $cmd = "cd ".quoted($source_parent)." && zip -r ".quoted($archive_path)." ".$escaped_basenames." 2>&1 | tee $status & echo \$!";
+          $reply['error'] = sprintf(_('Unsupported archive format: %s'), $format);
+          break 2; // break out of switch($format) and switch($action)
         }
 
         if (isset($tar_flags)) {
