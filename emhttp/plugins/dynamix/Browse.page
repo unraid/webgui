@@ -1027,6 +1027,12 @@ function doAction(action, title, id) {
             target.push(dfm.window.find('#dfm_other').val());
             target = target.join(',')+',ugo+X';
             break;
+          case 16: // compress
+            var valid = /.+/;
+            var format_queue = dfm.window.find('#dfm_format').val();
+            var archive_name_queue = dfm.window.find('#dfm_archive_name').val();
+            if (!archive_name_queue) {errorTarget(); return;}
+            break;
           default:
             // disallow mixing of disk and user shares
             var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
@@ -1034,7 +1040,12 @@ function doAction(action, title, id) {
           }
           if (!target || !valid.test(target)) {errorTarget(); return;}
         } else target = '';
-        $.post('/webGui/include/Control.php',{mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs)});
+        var postDataSingleQueue = {mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs)};
+        if (action == 16) {
+          postDataSingleQueue.format = encodeURIComponent(format_queue);
+          postDataSingleQueue.archive_name = encodeURIComponent(archive_name_queue);
+        }
+        $.post('/webGui/include/Control.php',postDataSingleQueue);
         dfm.window.dialog('close');
         dfm.window.dialog('destroy');
         $('.dfm_control.jobs').prop('disabled',false);
