@@ -932,6 +932,11 @@ while (true) {
           $reply['error'] = _('Invalid archive name');
           break;
         }
+        $target = validname($target, false);
+        if (!$target) {
+          $reply['error'] = _('Invalid target path');
+          break;
+        }
         $archive_path = rtrim($target, '/').'/'.$archive_name;
         // Set archive permissions: docker paths get root:root 600,
         // all other paths (shares) get nobody:users 666 (matches Unraid share standard)
@@ -1159,6 +1164,11 @@ while (true) {
 
         $archive = $source[0];
         $dest = rtrim($target, '/');
+        $dest = validname($dest, false);
+        if (!$dest) {
+          $reply['error'] = _('Invalid target path');
+          break;
+        }
         $dot_mb = COMPRESS_DOT_SIZE_MB;
         // Pre-escape user-controlled paths for safe heredoc interpolation
         $esc_archive = escapeshellarg($archive);
