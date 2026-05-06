@@ -45,17 +45,20 @@
 
 debug=
 progress_nl=
-while [[ ${1-} == '-v' || ${1-} == '--verbose' || ${1-} == '--progress-newline' ]]; do
+wait_total=
+while [[ ${1-} == '-v' || ${1-} == '--verbose' || ${1-} == '--progress-newline' || ${1-} == '--wait-total' ]]; do
   [[ ${1-} == '-v' || ${1-} == '--verbose' ]] && debug=1
   [[ ${1-} == '--progress-newline' ]] && progress_nl=1
+  [[ ${1-} == '--wait-total' ]] && wait_total=1
   shift
 done
 dbg() { [[ $debug ]] && echo "[DEBUG] $*" >&2; return 0; }
-dbg "debug=$debug progress_nl=$progress_nl"
+dbg "debug=$debug progress_nl=$progress_nl wait_total=$wait_total"
 
 # Human-readable progress on stderr when stdout is not a TTY.
-# Covers: | progress.sh >/dev/null  and  | progress.sh | tee file >/dev/null
-show_progress=
+# Covers: | progress.sh >/dev/null  and  | progress.sh | tee file >/dev/null#
+# Optional flags:
+#  --wait-total  wait for listing pass before starting poller (always shows % from start)show_progress=
 [[ ! -t 1 && -t 2 ]] && show_progress=1
 dbg "show_progress=$show_progress"
 
@@ -86,7 +89,7 @@ _prog_fmt_bytes() {
 }
 
 _prog_render() {
-  [[ ! $show_progress || ! $_prog_total -gt 0 ]] && return
+  [[ ! $show_progress ]] && return
   local now=$EPOCHREALTIME
   # Use sub-second timestamps (EPOCHREALTIME) for accurate speed on fast transfers.
   # 0.05s threshold avoids division by near-zero on first call; keep last known speed otherwise.
@@ -101,32 +104,40 @@ _prog_render() {
     [[ $new_speed -ge 0 ]] && _prog_last_speed=$new_speed
   fi
   local speed=$_prog_last_speed
-  local pct=$(( _prog_done * 100 / _prog_total ))
-  local eta=0 speed_str eta_str
+  local speed_str eta_str done_str pct right_side
+  done_str=$(_prog_fmt_bytes "$_prog_done")
   if [[ $speed -gt 0 ]]; then
-    eta=$(awk -v rem="$(( _prog_total - _prog_done ))" -v s="$speed" 'BEGIN{print int(rem/s)}')
     speed_str=$(_prog_fmt_bytes "$speed")/s
-    if [[ $eta -ge 3600 ]]; then
-      eta_str=$(( eta / 3600 ))h$(( (eta % 3600) / 60 ))m
-    elif [[ $eta -ge 60 ]]; then
-      eta_str=$(( eta / 60 ))m$(( eta % 60 ))s
-    else
-      eta_str="${eta}s"
-    fi
   else
     speed_str='--'
-    eta_str='--'
   fi
-  local done_str
-  done_str=$(_prog_fmt_bytes "$_prog_done")
-  local right_side
-  local right_args=(
-    "$pct"
-    "${#_prog_total_str}" "$done_str" "$_prog_total_str"
-    "$_prog_speed_w" "$speed_str"
-    "$_prog_eta_w" "$eta_str"
-  )
-  right_side=$(printf '%3d%%  %-*s / %s  %-*s  ETA %-*s' "${right_args[@]}")
+  if [[ $_prog_total -gt 0 ]]; then
+    pct=$(( _prog_done * 100 / _prog_total ))
+    local eta=0
+    if [[ $speed -gt 0 ]]; then
+      eta=$(awk -v rem="$(( _prog_total - _prog_done ))" -v s="$speed" 'BEGIN{print int(rem/s)}')
+      if [[ $eta -ge 3600 ]]; then
+        eta_str=$(( eta / 3600 ))h$(( (eta % 3600) / 60 ))m
+      elif [[ $eta -ge 60 ]]; then
+        eta_str=$(( eta / 60 ))m$(( eta % 60 ))s
+      else
+        eta_str="${eta}s"
+      fi
+    else
+      eta_str='--'
+    fi
+    local right_args=(
+      "$pct"
+      "${#_prog_total_str}" "$done_str" "$_prog_total_str"
+      "$_prog_speed_w" "$speed_str"
+      "$_prog_eta_w" "$eta_str"
+    )
+    right_side=$(printf '%3d%%  %-*s / %s  %-*s  ETA %-*s' "${right_args[@]}")
+  else
+    # TOTAL not yet known: show done + speed only, no percent/ETA
+    right_side=$(printf '  ?%%  %s  %s' "$done_str" "$speed_str")
+    pct=0
+  fi
   local cols=${COLUMNS:-80}
   # Filename: truncate to full terminal width
   local fname="$_prog_fname"
@@ -200,7 +211,6 @@ _prog_done_line() {
 compress_pid=
 compress_cwd=
 compress_tool=
-declare -A tar_sizes=()
 
 # Find zip, tar or unzip sibling process; set compress_pid, compress_cwd, compress_tool.
 ppid=$(awk '/^PPid:/{print $2}' /proc/self/status)
@@ -370,25 +380,26 @@ else
         *)                list_flags=(-tvf) ;;
       esac
       # tar -tv: "-rwxr-xr-x root/root 124674920 2024-01-01 00:00 node"
-      # Build tar_sizes[name]=size and tar_names[] ordered list in one pass
-      tar_names=()
-      total_bytes=0
-      while IFS= read -r line; do
-        # NF>=5: skip empty/header lines
-        if [[ $line =~ ^[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+([0-9]+)[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+(.*) ]]; then
-          fsize="${BASH_REMATCH[1]}"
-          fname="${BASH_REMATCH[2]}"
-          # tar -tv escapes non-printable chars in filenames (e.g. newline -> \n, tab -> \t).
-          # Unescape to get the actual filesystem path. %% escapes literal % for printf.
-          fname=$(printf '%b' "${fname//\%/%%}")
-          tar_sizes["$fname"]="$fsize"
-          tar_names+=("$fname")
-          total_bytes=$((total_bytes + fsize))
-        fi
-      done < <(tar ${tar_no_unquote:+--no-unquote} "${list_flags[@]}" "$tar_archive" 2>/dev/null)
-      dbg "total_bytes=$total_bytes files=${#tar_names[@]}"
-      printf 'TOTAL %s\n' "$total_bytes"
-      _prog_total_line "$total_bytes"
+      # Run listing pass in background (or foreground with --wait-total).
+      # Manifest format (tab-separated): "size\tfilename" per entry, then "TOTAL\ttotal_bytes".
+      tar_manifest=$(mktemp /tmp/progress.manifest.XXXXXX)
+      dbg "tar_manifest=$tar_manifest wait_total=$wait_total"
+      listing_body() {
+        local _total=0
+        while IFS= read -r line; do
+          if [[ $line =~ ^[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+([0-9]+)[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+(.*) ]]; then
+            local _fsize="${BASH_REMATCH[1]}"
+            local _fname
+            _fname=$(printf '%b' "${BASH_REMATCH[2]//\%/%%}")
+            _total=$((_total + _fsize))
+            printf '%s\t%s\n' "$_fsize" "$_fname"
+          fi
+        done < <(tar ${tar_no_unquote:+--no-unquote} "${list_flags[@]}" "$tar_archive" 2>/dev/null)
+        printf '%s\n' "$_total" >"${tar_manifest}.total"
+      }
+      listing_body >"$tar_manifest" &
+      listing_pid=$!
+      dbg "listing_pid=$listing_pid"
     fi
   fi
 fi
@@ -443,15 +454,56 @@ if [[ $compress_tool == unzip ]]; then
   wait "$drain_pid" 2>/dev/null
   dbg "unzip stat-poller done: file_count=$file_count"
 
-elif [[ $compress_tool == tar && ${#tar_names[@]} -gt 0 ]]; then
-  # tar extract with manifest: use stat-poller so output is real-time (not buffered from pipe).
-  # Convert tar_sizes assoc array to indexed array in tar_names order for run_stat_poller.
-  tar_sizes_indexed=()
-  for name in "${tar_names[@]}"; do
-    tar_sizes_indexed+=("${tar_sizes[$name]:-0}")
-  done
-  dbg "tar stat-poller start: dest=$tar_dest files=${#tar_names[@]}"
-  run_stat_poller "$tar_dest" tar_names tar_sizes_indexed
+elif [[ $compress_tool == tar && $tar_archive ]]; then
+  # tar extract: listing always runs in background; TOTAL applied as soon as .total file appears.
+  # --wait-total: wait for listing to finish before starting poller (% shown from first file).
+  cat >/dev/null &
+  drain_pid=$!
+  dbg "tar stat-poller start: dest=$tar_dest wait_total=$wait_total"
+  [[ $wait_total ]] && wait "$listing_pid" 2>/dev/null
+  # Called before loop and after each file/chunk: apply TOTAL as soon as listing is done
+  _apply_total_if_ready() {
+    [[ $_prog_total -gt 0 ]] && return
+    [[ ! -f ${tar_manifest}.total ]] && return
+    local _t
+    _t=$(cat "${tar_manifest}.total" 2>/dev/null)
+    [[ ! $_t ]] && return
+    printf 'TOTAL %s\n' "$_t"
+    _prog_total_line "$_t"
+    dbg "_apply_total_if_ready: total=$_t"
+  }
+  _apply_total_if_ready
+  while IFS=$'\t' read -r mf_size mf_name; do
+    mf_path="$tar_dest/$mf_name"
+    while [[ ! -e $mf_path ]]; do
+      _apply_total_if_ready
+      sleep 0.2
+    done
+    _apply_total_if_ready
+    printf 'FILE %(%s)T %s %s\n' -1 "$mf_size" "$mf_name"
+    _prog_file_line "$mf_size" "$mf_name"
+    file_count=$((file_count + 1))
+    if [[ $mf_size -gt 10485760 ]]; then
+      prev_size=0
+      while true; do
+        sleep 0.5
+        cur_size=$(stat -c%s "$mf_path" 2>/dev/null || echo 0)
+        [[ $cur_size -le $prev_size ]] && break
+        _apply_total_if_ready
+        printf 'CHUNK %(%s)T %s\n' -1 "$((cur_size - prev_size))"
+        _prog_chunk_line "$((cur_size - prev_size))"
+        prev_size=$cur_size
+      done
+    fi
+  done < <(
+    if [[ $wait_total ]]; then
+      cat "$tar_manifest"
+    else
+      tail -f --pid="$listing_pid" "$tar_manifest" 2>/dev/null
+    fi
+  )
+  _apply_total_if_ready
+  rm -f "$tar_manifest" "${tar_manifest}.total"
   wait "$drain_pid" 2>/dev/null
   dbg "tar stat-poller done: file_count=$file_count"
 
