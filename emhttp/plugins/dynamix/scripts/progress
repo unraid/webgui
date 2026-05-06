@@ -1,0 +1,523 @@
+#!/bin/bash
+# ##################################################################### #
+#
+# progress.sh - parse zip, tar or unzip stdout and emit structured progress lines
+#
+# Copyright 2026 Marc Gutt, Gutt.IT
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; version 2.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, see <https://www.gnu.org/licenses/>.
+# ##################################################################### #
+#
+# Usage (piped process auto-detected):
+#  zip -r -du -ds Xm archive.zip -- files... | progress.sh
+#  unzip -o archive.zip -d /dest/dir         | progress.sh
+#  tar -cv --checkpoint=N --checkpoint-action=exec="printf 'CHUNK\n'" -f archive.tar -- files... | progress.sh  # compress: -v required
+#  tar -xf archive.tar -C /dest/dir                                                               | progress.sh  # extract:  -v not needed
+#
+# Verbose/debug output (stderr):
+#  ... | progress.sh -v
+#  ... | progress.sh --verbose
+#
+# Human-readable progress (stderr) when stdout is not a TTY:
+#  tar ... | progress.sh >/dev/null
+#  tar ... | progress.sh | tee file >/dev/null
+#
+# Required zip options: -du  -ds Xm
+# Required tar compress options: -v  --checkpoint=N  --checkpoint-action=exec="printf 'CHUNK\n'"
+# Required tar extract options:  (none; progress script does its own listing pass + stat-poller)
+#
+# Output (stdout), fields separated by space:
+#   TOTAL bytes
+#   FILE timestamp size filename
+#   CHUNK timestamp bytes
+#   INFO message
+#
+# Exit code: 1 if no parent compress process (zip/tar/unzip) was found
+
+debug=
+progress_nl=
+while [[ ${1-} == '-v' || ${1-} == '--verbose' || ${1-} == '--progress-newline' ]]; do
+  [[ ${1-} == '-v' || ${1-} == '--verbose' ]] && debug=1
+  [[ ${1-} == '--progress-newline' ]] && progress_nl=1
+  shift
+done
+dbg() { [[ $debug ]] && echo "[DEBUG] $*" >&2; return 0; }
+dbg "debug=$debug progress_nl=$progress_nl"
+
+# Human-readable progress on stderr when stdout is not a TTY.
+# Covers: | progress.sh >/dev/null  and  | progress.sh | tee file >/dev/null
+show_progress=
+[[ ! -t 1 && -t 2 ]] && show_progress=1
+dbg "show_progress=$show_progress"
+
+# Progress state
+_prog_total=0
+_prog_done=0
+_prog_fname=
+_prog_chunk_t=
+_prog_chunk_done=0
+_prog_bar_total=10
+_prog_total_str=
+_prog_last_speed=0
+_prog_never_rendered=1
+_prog_speed_w=10
+_prog_eta_w=6
+
+_prog_fmt_bytes() {
+  local b=$1
+  if [[ $b -ge 1073741824 ]]; then
+    awk -v b="$b" 'BEGIN{printf "%.1f GB", b/1073741824}'
+  elif [[ $b -ge 1048576 ]]; then
+    awk -v b="$b" 'BEGIN{printf "%.1f MB", b/1048576}'
+  elif [[ $b -ge 1024 ]]; then
+    awk -v b="$b" 'BEGIN{printf "%.1f KB", b/1024}'
+  else
+    echo "${b} B"
+  fi
+}
+
+_prog_render() {
+  [[ ! $show_progress || ! $_prog_total -gt 0 ]] && return
+  local now=$EPOCHREALTIME
+  # Use sub-second timestamps (EPOCHREALTIME) for accurate speed on fast transfers.
+  # 0.05s threshold avoids division by near-zero on first call; keep last known speed otherwise.
+  if [[ $_prog_chunk_t ]]; then
+    local new_speed
+    local awk_args=(
+      -v "done=$(( _prog_done - _prog_chunk_done ))"
+      -v "dt=$(awk -v a="$now" -v b="$_prog_chunk_t" 'BEGIN{print a-b}')"
+      'BEGIN{ if (dt > 0.05) print int(done/dt); else print -1 }'
+    )
+    new_speed=$(awk "${awk_args[@]}")
+    [[ $new_speed -ge 0 ]] && _prog_last_speed=$new_speed
+  fi
+  local speed=$_prog_last_speed
+  local pct=$(( _prog_done * 100 / _prog_total ))
+  local eta=0 speed_str eta_str
+  if [[ $speed -gt 0 ]]; then
+    eta=$(awk -v rem="$(( _prog_total - _prog_done ))" -v s="$speed" 'BEGIN{print int(rem/s)}')
+    speed_str=$(_prog_fmt_bytes "$speed")/s
+    if [[ $eta -ge 3600 ]]; then
+      eta_str=$(( eta / 3600 ))h$(( (eta % 3600) / 60 ))m
+    elif [[ $eta -ge 60 ]]; then
+      eta_str=$(( eta / 60 ))m$(( eta % 60 ))s
+    else
+      eta_str="${eta}s"
+    fi
+  else
+    speed_str='--'
+    eta_str='--'
+  fi
+  local done_str
+  done_str=$(_prog_fmt_bytes "$_prog_done")
+  local right_side
+  local right_args=(
+    "$pct"
+    "${#_prog_total_str}" "$done_str" "$_prog_total_str"
+    "$_prog_speed_w" "$speed_str"
+    "$_prog_eta_w" "$eta_str"
+  )
+  right_side=$(printf '%3d%%  %-*s / %s  %-*s  ETA %-*s' "${right_args[@]}")
+  local cols=${COLUMNS:-80}
+  # Filename: truncate to full terminal width
+  local fname="$_prog_fname"
+  if [[ ${#fname} -gt $cols ]]; then
+    fname="...${fname: -$((cols - 3))}"
+  fi
+  local filled=$(( pct * _prog_bar_total / 100 ))
+  local empty=$(( _prog_bar_total - filled ))
+  local bar_fill bar_empty
+  printf -v bar_fill '%*s' $filled ''; bar_fill=${bar_fill// /█}
+  printf -v bar_empty '%*s' $empty ''; bar_empty=${bar_empty// /░}
+  if [[ $progress_nl ]]; then
+    printf '%s\n[%s%s] %s\n' "$fname" "$bar_fill" "$bar_empty" "$right_side" >&2
+  else
+    if [[ ! $_prog_never_rendered ]]; then
+      # Cursor is at end of bar line; go up to fname line and redraw both
+      printf '\033[1A' >&2
+    fi
+    printf '\r\033[K%s\n\r\033[K[%s%s] %s' "$fname" "$bar_fill" "$bar_empty" "$right_side" >&2
+    _prog_never_rendered=
+  fi
+}
+
+_prog_total_line() {
+  [[ ! $show_progress ]] && return
+  _prog_total=$1
+  _prog_chunk_t=$EPOCHREALTIME
+  _prog_chunk_done=0
+  _prog_last_speed=0
+  _prog_never_rendered=1
+  # _prog_bar_total is fixed at TOTAL time so the bar width never changes mid-transfer.
+  # _prog_speed_w/_prog_eta_w pad speed/eta to constant widths for the same reason.
+  _prog_total_str=$(_prog_fmt_bytes "$_prog_total")
+  # Max speed: "999.9 MB/s" = 10 chars; max eta: "99h99m" = 6 chars
+  local max_right
+  local max_right_args=(
+    100
+    "${#_prog_total_str}" "" "$_prog_total_str"
+    "$_prog_speed_w" "" "$_prog_eta_w" ""
+  )
+  max_right=$(printf '%3d%%  %-*s / %s  %-*s  ETA %-*s' "${max_right_args[@]}")
+  local cols=${COLUMNS:-80}
+  # [bar] right_side: 1('[') + bar + 2('] ') + len(right_side) = cols
+  _prog_bar_total=$(( cols - 3 - ${#max_right} ))
+  [[ $_prog_bar_total -lt 4 ]] && _prog_bar_total=4
+  dbg "_prog_total_line: total=$_prog_total total_str=$_prog_total_str bar_total=$_prog_bar_total cols=$cols"
+}
+
+_prog_file_line() {
+  [[ ! $show_progress ]] && return
+  # $1=size $2=filename (full path ok; basename shown in bar)
+  _prog_fname=$(basename "$2")
+  dbg "_prog_file_line: fname=$_prog_fname size=$1"
+}
+
+_prog_chunk_line() {
+  [[ ! $show_progress ]] && return
+  _prog_done=$(( _prog_done + $1 ))
+  local now; printf -v now '%(%s)T' -1
+  dbg "_prog_chunk_line: chunk=$1 done=$_prog_done total=$_prog_total"
+  _prog_render
+  _prog_chunk_t=$EPOCHREALTIME
+  _prog_chunk_done=$_prog_done
+}
+
+_prog_done_line() {
+  [[ ! $show_progress ]] && return
+  printf '\n' >&2
+}
+
+compress_pid=
+compress_cwd=
+compress_tool=
+declare -A tar_sizes=()
+
+# Find zip, tar or unzip sibling process; set compress_pid, compress_cwd, compress_tool.
+ppid=$(awk '/^PPid:/{print $2}' /proc/self/status)
+grandppid=$(awk '/^PPid:/{print $2}' /proc/"$ppid"/status 2>/dev/null)
+for tool in zip tar unzip; do
+  compress_pid=$(pgrep -P "$ppid" -x "$tool" 2>/dev/null | head -1)
+  # Fallback: tool may be a sibling of the parent shell (grandparent of self)
+  [[ ! $compress_pid ]] && compress_pid=$(pgrep -P "$grandppid" -x "$tool" 2>/dev/null | head -1)
+  if [[ $compress_pid ]]; then
+    compress_cwd=$(readlink /proc/"$compress_pid"/cwd 2>/dev/null)
+    compress_tool=$tool
+    break
+  fi
+done
+
+if [[ ! $compress_tool ]]; then
+  echo "error: no compress process found" >&2
+  exit 1
+fi
+
+# Emit TOTAL line
+dbg "found process: pid=$compress_pid cwd=$compress_cwd tool=$compress_tool"
+# Read cmdline of the compress process via /proc (null-delimited args).
+mapfile -d '' cmdline_args < /proc/"$compress_pid"/cmdline
+if [[ $compress_tool == unzip ]]; then
+  # Find archive path: first non-option argument after binary name
+  archive=""
+  for arg in "${cmdline_args[@]:1}"; do
+    [[ $arg == -* ]] && continue
+    archive="$arg"
+    break
+  done
+  dbg "unzip archive=$archive"
+  # Find dest dir: -d option, else compress_cwd
+  unzip_dest="$compress_cwd"
+  next_is_dest=
+  for arg in "${cmdline_args[@]:1}"; do
+    if [[ $next_is_dest ]]; then
+      unzip_dest="$arg"
+      next_is_dest=
+    elif [[ $arg == '-d' ]]; then
+      next_is_dest=1
+    fi
+  done
+  dbg "unzip dest=$unzip_dest"
+  # Parse manifest into arrays for TOTAL + poller
+  # unzip -l: "124674920  2026-03-04 19:03   node"
+  # unzip -l: "        0  2026-05-03 12:25   out/vs/workbench/"
+  file_names=()
+  file_sizes=()
+  total_bytes=0
+  while IFS= read -r line; do
+    if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]+[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[0-9]{2}:[0-9]{2}[[:space:]]+(.+)$ ]]; then
+      fsize="${BASH_REMATCH[1]}"
+      fname="${BASH_REMATCH[2]}"
+      file_sizes+=("$fsize")
+      file_names+=("$fname")
+      total_bytes=$((total_bytes + fsize))
+    fi
+  done < <(unzip -l "$archive" 2>/dev/null)
+  dbg "total_bytes=$total_bytes files=${#file_names[@]}"
+  printf 'TOTAL %s\n' "$total_bytes"
+  _prog_total_line "$total_bytes"
+else
+  # zip/tar: sum sizes of source files (args after '--'); also extract chunk size for CHUNK lines
+  sources=()
+  in_files=0
+  chunk_bytes=0
+  dot_size_str=
+  # dot_record_size and dot_checkpoint: tar emits one DOT per (record_size * checkpoint) bytes.
+  # zip emits one dot per --dot-size bytes. Both are parsed from the parent cmdline.
+  dot_record_size=512
+  dot_checkpoint=10
+  next_is_dot_size=
+  next_is_record_size=
+  next_is_checkpoint=
+  for arg in "${cmdline_args[@]:1}"; do   # skip binary name itself
+    if [[ $in_files -eq 1 ]]; then
+      sources+=("$arg")
+    elif [[ $arg == '--' ]]; then
+      in_files=1
+    elif [[ $next_is_dot_size ]]; then
+      dot_size_str=$arg
+      next_is_dot_size=
+    elif [[ $arg == '--dot-size' ]]; then
+      next_is_dot_size=1
+    elif [[ $arg =~ ^--dot-size=(.+)$ ]]; then
+      dot_size_str=${BASH_REMATCH[1]}
+    elif [[ $next_is_record_size ]]; then
+      dot_record_size=$arg
+      next_is_record_size=
+    elif [[ $arg == '--record-size' ]]; then
+      next_is_record_size=1
+    elif [[ $arg =~ ^--record-size=([0-9]+)$ ]]; then
+      dot_record_size=${BASH_REMATCH[1]}
+    elif [[ $next_is_checkpoint ]]; then
+      dot_checkpoint=$arg
+      next_is_checkpoint=
+    elif [[ $arg == '--checkpoint' ]]; then
+      next_is_checkpoint=1
+    elif [[ $arg =~ ^--checkpoint=([0-9]+)$ ]]; then
+      dot_checkpoint=${BASH_REMATCH[1]}
+    fi
+  done
+  if [[ $dot_size_str ]]; then
+    dot_val=${dot_size_str%[kKmMgG]}
+    dot_unit=${dot_size_str##*[0-9]}
+    case "${dot_unit,,}" in
+      k) chunk_bytes=$((dot_val * 1024)) ;;
+      m) chunk_bytes=$((dot_val * 1024 * 1024)) ;;
+      g) chunk_bytes=$((dot_val * 1024 * 1024 * 1024)) ;;
+      *) chunk_bytes=$dot_val ;;
+    esac
+  elif [[ $compress_tool == tar ]]; then
+    chunk_bytes=$((dot_record_size * dot_checkpoint))
+  fi
+  dbg "sources: ${sources[*]} chunk_bytes=$chunk_bytes dot_size_str=$dot_size_str dot_record_size=$dot_record_size dot_checkpoint=$dot_checkpoint"
+  if [[ ${#sources[@]} -gt 0 ]]; then
+    if [[ $compress_cwd ]]; then
+      total_bytes=$(cd "$compress_cwd" && du -sb "${sources[@]}" 2>/dev/null | awk '{sum+=$1} END {print sum}')
+    else
+      total_bytes=$(du -sb "${sources[@]}" 2>/dev/null | awk '{sum+=$1} END {print sum}')
+    fi
+    dbg "total_bytes=$total_bytes"
+    printf 'TOTAL %s\n' "$total_bytes"
+    _prog_total_line "$total_bytes"
+  elif [[ $compress_tool == tar ]]; then
+    # tar extract: no source files in cmdline; compute TOTAL via listing pass (same as file_manager)
+    # Find archive path (-f arg) and dest dir (-C arg), detect compression from extension
+    tar_archive=""
+    tar_dest="$compress_cwd"
+    next_is_archive=
+    next_is_dest=
+    tar_no_unquote=
+    for arg in "${cmdline_args[@]:1}"; do
+      if [[ $next_is_archive ]]; then
+        tar_archive="$arg"
+        next_is_archive=
+      elif [[ $next_is_dest ]]; then
+        tar_dest="$arg"
+        next_is_dest=
+      elif [[ $arg == '-f' ]]; then
+        next_is_archive=1
+      elif [[ $arg =~ ^--file=(.+)$ ]]; then
+        tar_archive="${BASH_REMATCH[1]}"
+      elif [[ $arg =~ ^-[^-].*f ]]; then
+        # bundled short flags containing f (e.g. -xzvf, -czf)
+        next_is_archive=1
+      elif [[ $arg == '-C' ]]; then
+        next_is_dest=1
+      elif [[ $arg =~ ^--directory=(.+)$ ]]; then
+        tar_dest="${BASH_REMATCH[1]}"
+      elif [[ $arg == '--no-unquote' ]]; then
+        tar_no_unquote=1
+      fi
+    done
+    dbg "tar extract archive=$tar_archive dest=$tar_dest"
+    if [[ $tar_archive ]]; then
+      # Build list flags from archive extension (same logic as file_manager)
+      # tar -tv output: "perms owner size date time name" - column 3 is size
+      case "$tar_archive" in
+        *.tar.gz|*.tgz)   list_flags=(-tzvf) ;;
+        *.tar.bz2|*.tbz2) list_flags=(-tjvf) ;;
+        *.tar.xz|*.txz)   list_flags=(-tJvf) ;;
+        *.tar.zst)        list_flags=(--use-compress-program=zstd -tvf) ;;
+        *.tar.lz4)        list_flags=(--use-compress-program=lz4 -tvf) ;;
+        *)                list_flags=(-tvf) ;;
+      esac
+      # tar -tv: "-rwxr-xr-x root/root 124674920 2024-01-01 00:00 node"
+      # Build tar_sizes[name]=size and tar_names[] ordered list in one pass
+      tar_names=()
+      total_bytes=0
+      while IFS= read -r line; do
+        # NF>=5: skip empty/header lines
+        if [[ $line =~ ^[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+([0-9]+)[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+(.*) ]]; then
+          fsize="${BASH_REMATCH[1]}"
+          fname="${BASH_REMATCH[2]}"
+          tar_sizes["$fname"]="$fsize"
+          tar_names+=("$fname")
+          total_bytes=$((total_bytes + fsize))
+        fi
+      done < <(tar "${list_flags[@]}" ${tar_no_unquote:+--no-unquote} "$tar_archive" 2>/dev/null)
+      dbg "total_bytes=$total_bytes files=${#tar_names[@]}"
+      printf 'TOTAL %s\n' "$total_bytes"
+      _prog_total_line "$total_bytes"
+    fi
+  fi
+fi
+
+dbg "entering main progress loop..."
+file_count=0
+
+# stat-poller: used for both unzip and tar extract (both build a manifest before extracting)
+run_stat_poller() {
+  local dest="$1"
+  local -n _names="$2"
+  local -n _sizes="$3"
+  local idx=0
+  local total_files=${#_names[@]}
+  while [[ $idx -lt $total_files ]]; do
+    local fname="${_names[$idx]}"
+    local fsize="${_sizes[$idx]:-0}"
+    local fpath="$dest/$fname"
+    # Wait until file appears on disk
+    while [[ ! -e "$fpath" ]]; do
+      sleep 0.2
+    done
+    printf 'FILE %(%s)T %s %s\n' -1 "$fsize" "$fname"
+    _prog_file_line "$fsize" "$fname"
+    file_count=$((file_count + 1))
+    # For large files (>10MB): poll growing size with stat and emit DOT lines
+    if [[ $fsize -gt 10485760 ]]; then
+      local prev_size=0
+      while true; do
+        sleep 0.5
+        local cur_size
+        cur_size=$(stat -c%s "$fpath" 2>/dev/null || echo 0)
+        # File stopped growing: tool finished writing it
+        [[ $cur_size -le $prev_size ]] && break
+        printf 'CHUNK %(%s)T %s\n' -1 "$((cur_size - prev_size))"
+        _prog_chunk_line "$((cur_size - prev_size))"
+        prev_size=$cur_size
+      done
+    fi
+    idx=$((idx + 1))
+  done
+}
+
+if [[ $compress_tool == unzip ]]; then
+  # run_stat_poller: polls file sizes with stat every 0.5s for large files (>10MB).
+  # Emits FILE when file appears, CHUNK for each poll delta until size stops growing.
+  # stdin is drained in background (cat >/dev/null) so the tool doesn't block on the pipe.
+  cat >/dev/null &
+  drain_pid=$!
+  dbg "unzip stat-poller start: dest=$unzip_dest files=${#file_names[@]}"
+  run_stat_poller "$unzip_dest" file_names file_sizes
+  wait "$drain_pid" 2>/dev/null
+  dbg "unzip stat-poller done: file_count=$file_count"
+
+elif [[ $compress_tool == tar && ${#tar_names[@]} -gt 0 ]]; then
+  # tar extract with manifest: use stat-poller so output is real-time (not buffered from pipe).
+  # Convert tar_sizes assoc array to indexed array in tar_names order for run_stat_poller.
+  tar_sizes_indexed=()
+  for name in "${tar_names[@]}"; do
+    tar_sizes_indexed+=("${tar_sizes[$name]:-0}")
+  done
+  dbg "tar stat-poller start: dest=$tar_dest files=${#tar_names[@]}"
+  run_stat_poller "$tar_dest" tar_names tar_sizes_indexed
+  wait "$drain_pid" 2>/dev/null
+  dbg "tar stat-poller done: file_count=$file_count"
+
+else
+  # Char-by-char parser for zip and tar compress (stdin is live, not pre-buffered).
+  char_count=0
+  first_char_received=
+  dot_mode=
+  line_buffer=
+  while IFS= read -r -n1 char || [[ $char ]]; do
+  char_count=$((char_count + 1))
+  if [[ ! $first_char_received ]]; then
+    dbg "first char received from stdin"
+    first_char_received=1
+  fi
+  if [[ $((char_count % 500)) -eq 0 ]]; then
+    dbg "char_count=$char_count file_count=$file_count dot_mode=$dot_mode"
+  fi
+  if [[ ! $dot_mode ]]; then
+    line_buffer+="$char"
+
+    # zip: "  adding: out/vs/workbench/api/node/extensionHostProcess.js (2.0M)  (deflated 72%)"
+    # zip: "  adding: out/vs/workbench/ (stored 0%)"
+    if [[ $line_buffer =~ (adding|updating):\ (.*)\ \(([0-9.]+[KMGT]?)\)\  ]]; then
+      src_size="${BASH_REMATCH[3]}"
+      fsize=$(awk -v s="$src_size" 'BEGIN{
+        n=s+0
+        if (s~/K/) print int(n*1024)
+        else if (s~/M/) print int(n*1048576)
+        else if (s~/G/) print int(n*1073741824)
+        else if (s~/T/) print int(n*1099511627776)
+        else print int(n)
+      }')
+      printf 'FILE %(%s)T %s %s\n' -1 "$fsize" "${BASH_REMATCH[2]}"
+      _prog_file_line "$fsize" "${BASH_REMATCH[2]}"
+      dot_mode=1
+      file_count=$((file_count + 1))
+    elif [[ ! $char ]]; then
+      if [[ $line_buffer == 'CHUNK' ]]; then
+        # tar: checkpoint sentinel written by --checkpoint-action=exec="printf 'CHUNK\n'"
+        printf 'CHUNK %(%s)T %s\n' -1 "$chunk_bytes"
+        _prog_chunk_line "$chunk_bytes"
+      elif [[ $line_buffer ]]; then
+        # tar: each line should be a filename; validate with stat to skip error messages.
+        fsize=$(cd "$compress_cwd" && stat -c%s "$line_buffer" 2>/dev/null)
+        if [[ $fsize ]]; then
+          printf 'FILE %(%s)T %s %s\n' -1 "$fsize" "$line_buffer"
+          _prog_file_line "$fsize" "$line_buffer"
+          file_count=$((file_count + 1))
+        fi
+      fi
+      line_buffer=""
+    fi
+
+  else
+    if [[ $char == '.' ]]; then
+      # zip: dots on same line after file match, e.g. "....\n" (one dot per -ds Xm)
+      printf 'CHUNK %(%s)T %s\n' -1 "$chunk_bytes"
+      _prog_chunk_line "$chunk_bytes"
+    elif [[ ! $char ]]; then
+      # zip: newline ends dot/skip sequence; " (deflated X%)" or " (stored X%)" was discarded
+      dot_mode=
+      line_buffer=""
+    fi
+    # all other chars (spaces, compression info suffix) are silently discarded in dot_mode
+  fi
+  done
+  dbg "while loop exited: char_count=$char_count file_count=$file_count last_char=$(printf '%q' "$char")"
+
+fi
+_prog_done_line

@@ -2,6 +2,7 @@
 <?PHP
 /* Copyright 2005-2025, Lime Technology
  * Copyright 2012-2025, Bergware International.
+ * Copyright 2026, Marc Gutt, Gutt.IT
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -163,11 +164,11 @@ function calculate_eta($transferred, $percent, $speed, $last_rsync_eta_seconds =
 /**
  * Parse compress progress output from structured log format (zip and tar formats).
  *
- * Reads structured log file incrementally with format:
- * TOTAL|bytes (first line with total source size)
- * FILE|timestamp|size|filename (filename at end to handle pipes in filename)
- * DOT|timestamp (each dot = dot_size_mb MB of source data processed)
- * INFO|message (optional)
+ * Reads structured log file (written by progress script) incrementally with format:
+ * TOTAL bytes (total source size)
+ * FILE timestamp bytes filename
+ * CHUNK timestamp bytes (incremental bytes: dot/checkpoint for compress, stat-poll delta for extract)
+ * INFO message (optional)
  *
  * @param string $status Path to structured log file
  * @param string $action_label Label to display for the action (e.g. "Compressing")
@@ -181,8 +182,6 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
   static $processed_bytes = 0;
   static $current_file_name = '';
   static $current_file_size = 0;
-  static $current_file_dots = 0;
-  static $current_file_exact_bytes = null; // set by BYTES_DONE (ZIP extract polling)
   static $progress_events = []; // Array of [timestamp, bytes_processed] for speed calculation
   static $last_eta_seconds = null;
   static $info_messages = [];
@@ -194,8 +193,6 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
     $processed_bytes = 0;
     $current_file_name = '';
     $current_file_size = 0;
-    $current_file_dots = 0;
-    $current_file_exact_bytes = null;
     $progress_events = [];
     $last_eta_seconds = null;
     $info_messages = [];
@@ -217,17 +214,13 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
 
   // Process new lines
   // Example lines:
-  // TOTAL|7178980548
-  // FILE|1772990889|0|small_files_test/
-  // FILE|1772990889|50M|small_files_test/file_1.bin
-  // FILE|1772990890|50M|small_files_test/file_2.bin
-  // FILE|1772990912|0|special_test/
-  // FILE|1772990912|200M|special_test/normal.bin
-  // DOT|1772990914
-  // DOT|1772990916
-  // FILE|1772990916|250M|special_test/with spaces.bin
+  // TOTAL 7178980548
+  // FILE 1772990889 0 small_files_test/
+  // FILE 1772990889 52428800 small_files_test/file_1.bin
+  // CHUNK 1772990914 104857600
+  // FILE 1772990916 262144000 special_test/with spaces.bin
   foreach ($new_lines as $line) {
-    $parts = explode('|', $line, 4);
+    $parts = explode(' ', $line, 4);
     if (count($parts) < 2) continue;
 
     $type = $parts[0];
@@ -238,48 +231,16 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
         break;
 
       case 'FILE':
-        // New file started - previous file is complete
-        if ($current_file_size > 0) {
-          // zip: exact size known, add to processed bytes
-          $processed_bytes += $current_file_size;
-        } elseif ($current_file_dots > 0) {
-          // tar: no file size (size=0), carry over DOT-estimated progress to prevent reset
-          $processed_bytes += $current_file_dots * $dot_size_mb * 1024 * 1024;
-        }
-
-        // Parse FILE|timestamp|size|filename
-        $timestamp = intval($parts[1]);
-        $current_file_size = size_to_bytes($parts[2]);
+        // New file started: update current file metadata for display
+        $current_file_size = floatval($parts[2]);
         $current_file_name = $parts[3] ?? '';
-        $current_file_dots = 0;
-        $current_file_exact_bytes = null;
-
-        // Only record progress event for ZIP (size > 0); tar FILE events have size=0 and
-        // carry no byte info - adding them fills the window with duplicate byte values
-        // which causes speed=0 and ETA=N/A between checkpoints.
-        if ($current_file_size > 0) {
-          $progress_events[] = [$timestamp, $processed_bytes];
-          if (count($progress_events) > 20) array_shift($progress_events);
-        }
         break;
 
-      case 'BYTES_DONE':
-        // Polled byte count for current file (ZIP extract: stat on growing output file)
+      case 'CHUNK':
+        // Incremental bytes processed (dot/checkpoint for compress, stat-poll delta for extract)
         $timestamp = intval($parts[1]);
-        $file_bytes = min(floatval($parts[2]), $current_file_size > 0 ? $current_file_size : PHP_FLOAT_MAX);
-        $current_file_exact_bytes = $file_bytes;
-        $progress_events[] = [$timestamp, $processed_bytes + $file_bytes];
-        if (count($progress_events) > 20) array_shift($progress_events);
-        break;
-
-      case 'DOT':
-        // Progress dot for current file
-        $timestamp = intval($parts[1]);
-        $current_file_dots++;
-
-        // Record progress event: processed_bytes (completed files) + current file progress
-        $current_file_progress = $current_file_dots * $dot_size_mb * 1024 * 1024;
-        $progress_events[] = [$timestamp, $processed_bytes + $current_file_progress];
+        $processed_bytes += floatval($parts[2]);
+        $progress_events[] = [$timestamp, $processed_bytes];
         if (count($progress_events) > 20) array_shift($progress_events);
         break;
 
@@ -307,7 +268,7 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
     }
   }
 
-  exec('logger -t file_manager "parse_compress_progress: total_bytes=' . $total_bytes . ', processed_bytes=' . $processed_bytes . ', current_file_dots=' . $current_file_dots . '"');
+  exec('logger -t file_manager "parse_compress_progress: total_bytes=' . $total_bytes . ', processed_bytes=' . $processed_bytes . '"');
 
   // Calculate progress if we have total size
   if ($total_bytes && $total_bytes > 0) {
@@ -323,20 +284,7 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
       }
     }
 
-    // Current progress = completed files + progress of current file
-    // BYTES_DONE (ZIP extract polling) takes priority over DOT-based estimation
-    if ($current_file_exact_bytes !== null) {
-      $current_file_progress_bytes = $current_file_exact_bytes;
-    } else {
-      $current_file_progress_bytes = $current_file_dots * $dot_size_mb * 1024 * 1024;
-    }
-
-    $current_progress_bytes = $processed_bytes + $current_file_progress_bytes;
-
-    // Log when dot count exceeds du-reported size (helps diagnose "ETA: 0:00:-N" if it recurs)
-    if ($current_progress_bytes > $total_bytes) {
-      exec('logger -t file_manager "parse_compress_progress: overcounting: total=' . $total_bytes . ', current_progress=' . intval($current_progress_bytes) . ', processed_bytes=' . $processed_bytes . ', file_dots=' . $current_file_dots . ', file_size=' . intval($current_file_size) . '"');
-    }
+    $current_progress_bytes = $processed_bytes;
 
     $percent = min(100, intval(($current_progress_bytes / $total_bytes) * 100));
 
@@ -1024,60 +972,11 @@ while (true) {
 
         switch ($format) {
         case 'zip':
-          // Inline zip wrapper: parse zip output and produce structured log (TOTAL|bytes, FILE|ts|size|name, DOT|ts)
           $cmd = <<<BASH
           {
             cd $esc_source_parent || exit 1
-
-            # Calculate total size of source files
-            total_bytes=\$(du -sb $escaped_basenames 2>/dev/null | awk '{sum+=\$1} END {print sum}')
-            printf 'TOTAL|%s\\n' "\$total_bytes"
-
-            # Write to .tmp first for atomic creation
-            # Read char-by-char (-n1) to check regex after each character - prevents dots from being buffered before pattern match
-            zip --recurse-paths --display-usize --display-dots --dot-size {$dot_mb}m $esc_target_tmp -- $escaped_basenames 2>&1 | while IFS= read -r -n1 char || [[ \$char ]]; do
-
-              # Line mode: accumulate characters and check for pattern match after each char
-              if [[ ! \$dot_mode ]]; then
-                line_buffer+="\$char"
-
-                # Check after every char if we have the pattern (size) followed by space
-                # This ensures we switch to dot_mode BEFORE dots arrive
-                if [[ \$line_buffer =~ (adding|updating):\\ (.*)\\ \\(([0-9.]+[KMGT]?)\\)\  ]]; then
-                  src_file="\${BASH_REMATCH[2]}"
-                  src_size="\${BASH_REMATCH[3]}"
-                  printf 'FILE|%(%s)T|%s|%s\\n' -1 "\$src_size" "\$src_file"
-                  dot_mode=1
-                fi
-
-                # On newline, output non-matching lines as INFO
-                if [[ \$char == \$'\\n' ]]; then
-                  if [[ ! \$dot_mode && \$line_buffer ]]; then
-                    printf 'INFO|%s\\n' "\$line_buffer"
-                  fi
-                  line_buffer=""
-                fi
-
-              # Dot mode: capture dots individually
-              elif [[ \$dot_mode ]]; then
-                if [[ \$char == '.' ]]; then
-                  printf 'DOT|%(%s)T\\n' -1
-                elif [[ \$char == \$'\\n' ]]; then
-                  # Newline ends dot mode
-                  dot_mode=
-                  line_buffer=""
-                else
-                  # Non-dot, non-newline: back to line mode
-                  line_buffer="\$char"
-                  dot_mode=
-                fi
-              fi
-            done
-
-            # Capture zip exit code and write any errors
+            zip --recurse-paths --display-usize --display-dots --dot-size {$dot_mb}m $esc_target_tmp -- $escaped_basenames 2>&1 | /usr/local/emhttp/plugins/dynamix/scripts/progress
             zip_exit=\${PIPESTATUS[0]}
-
-            # On success: atomic rename, on failure: cleanup tmp
             if [[ \$zip_exit -eq 0 ]]; then
               mv $esc_target_tmp $esc_archive_path
               chown $archive_chown $esc_archive_path
@@ -1085,12 +984,6 @@ while (true) {
             else
               rm -f $esc_target_tmp
             fi
-
-            # CRITICAL: The '>$status 2>$error' redirect MUST be outside the braces at the group level.
-            # Without it, the shell group process exits immediately after backgrounding (&), making the
-            # returned PID invalid - pid_exists() then finds no /proc/$pid and returns empty $pid.
-            # This redirect forces bash to keep the group process alive until the entire pipeline completes.
-            # Alternative forms like 'printf ... >$status' inside the group do NOT prevent early exit.
           } >$status 2>$error & echo \$!
           BASH;
           break;
@@ -1121,12 +1014,8 @@ while (true) {
           $cmd = <<<BASH
           {
             cd $esc_source_parent || exit 1
-            total_bytes=\$(du -sb $escaped_basenames 2>/dev/null | awk '{sum+=\$1} END {print sum}')
-            # Truncate status file and write TOTAL as first line
-            > "$status"
-            echo "TOTAL|\$total_bytes" >> "$status"
             record_size=10240
-            dot_size=\$(($dot_mb * 1024 * 1024))  # COMPRESS_DOT_SIZE_MB MB per dot
+            dot_size=\$(($dot_mb * 1024 * 1024))
             checkpoint=\$((dot_size / record_size))
             tar_args=(
               $tar_flags
@@ -1134,12 +1023,10 @@ while (true) {
               --no-unquote
               --record-size=\$record_size
               --checkpoint=\$checkpoint
-              "--checkpoint-action=exec=printf 'DOT|%s\\n' \\\$(date +%s) >> $status"
+              "--checkpoint-action=exec=printf 'CHUNK\\n'"
               -- $escaped_basenames
             )
-            # Both awk (FILE lines) and exec (DOT lines) use >> (O_APPEND) to write to
-            # $status, so they interleave correctly without overwriting each other
-            tar "\${tar_args[@]}" | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}' >> "$status"
+            tar "\${tar_args[@]}" | /usr/local/emhttp/plugins/dynamix/scripts/progress
             tar_exit=\${PIPESTATUS[0]}
             logger -t file_manager "compress tar_exit=\${tar_exit}"
             if [[ \$tar_exit -eq 0 ]]; then
@@ -1150,7 +1037,7 @@ while (true) {
               rm -f $esc_target_tmp
             fi
             exit \$tar_exit
-          } >/dev/null 2>$error & echo \$!
+          } >$status 2>$error & echo \$!
           BASH;
         }
 
@@ -1234,133 +1121,46 @@ while (true) {
 
         if (preg_match('/\.zip$/i', $archive)) {
           $unzip_overwrite_flag = $no_overwrite ? '-n' : '-o';
-          // ZIP: parse manifest for file sizes + total, then extract with structured FILE lines.
-          // Uses process substitution (< <(...)) so file_sizes associative array is visible in the while loop.
-          // Stderr of unzip -l suppressed to avoid duplicate error messages; extract errors go to $error.
-          // Progress strategy: unzip has no --dot-size equivalent; it only prints "inflating: file" AFTER
-          // the file is fully written. So we use a parallel poller that watches the manifest order and
-          // polls the growing output file with stat every 0.5s to emit BYTES_DONE progress lines.
           $cmd = <<<BASH
           {
             cd $esc_dest || exit 1
-
-            # Parallel arrays: file_names[i] and file_sizes[i] hold name and uncompressed size
-            # for each entry in manifest order (same order unzip writes files to disk).
-            declare -a file_names
-            declare -a file_sizes
-            total_bytes=0
-
-            # Parse unzip -l manifest: columns are "size  date  time  name"
-            # Date format is MM-DD-YYYY (American), so regex is [0-9]{2}-[0-9]{2}-[0-9]{4}.
-            # Large files fill the size column without leading spaces, so [[:space:]]* not +.
-            while IFS= read -r line; do
-              if [[ \$line =~ ^[[:space:]]*([0-9]+)[[:space:]]+[0-9]{2}-[0-9]{2}-[0-9]{4}[[:space:]]+[0-9]{2}:[0-9]{2}[[:space:]]+(.+)\$ ]]; then
-                file_sizes+=("\${BASH_REMATCH[1]}")
-                # unzip -l replaces literal newlines in filenames with ^J; unzip drops them on extract
-                fname="\${BASH_REMATCH[2]//^J/}"
-                file_names+=("\$fname")
-                total_bytes=\$(( total_bytes + BASH_REMATCH[1] ))
-              fi
-            done < <(unzip -l $esc_archive 2>/dev/null)
-            printf 'TOTAL|%s\\n' "\$total_bytes"
-
-            # Parallel poller subshell: unzip only emits "inflating: file" AFTER each file is
-            # fully written, so we cannot rely on its output for progress. Instead, we watch the
-            # destination directory in manifest order: once a file appears, emit FILE| and then
-            # poll its size with stat every 0.5s to emit BYTES_DONE| while it is growing.
-            (
-              idx=0
-              total_files=\${#file_names[@]}
-              while [[ \$idx -lt \$total_files ]]; do
-                fname="\${file_names[\$idx]}"
-                fsize="\${file_sizes[\$idx]:-0}"
-                fpath=$esc_dest/"\$fname"
-
-                # Wait until file appears (unzip started writing it)
-                while [[ ! -e "\$fpath" ]]; do
-                  sleep 0.2
-                  # Abort if status file gone (operation cancelled via case 99)
-                  [[ ! -e "$status" ]] && exit 0
-                done
-
-                # Emit FILE line so the progress parser knows which file is active
-                printf 'FILE|%(%s)T|%s|%s\\n' -1 "\$fsize" "\$fname"
-
-                # For large files (>10MB): poll growing size to show % + Speed + ETA.
-                # Small files finish too fast for polling to be useful.
-                if [[ \$fsize -gt 10485760 ]]; then
-                  prev_size=0
-                  while true; do
-                    sleep 0.5
-                    [[ ! -e "$status" ]] && exit 0
-                    cur_size=\$(stat -c%s "\$fpath" 2>/dev/null || echo 0)
-                    # File stopped growing: unzip finished writing it
-                    [[ \$cur_size -le \$prev_size ]] && break
-                    printf 'BYTES_DONE|%(%s)T|%s\\n' -1 "\$cur_size"
-                    prev_size=\$cur_size
-                  done
-                fi
-
-                idx=\$(( idx + 1 ))
-              done
-            ) &
-            poller_pid=\$!
-
-            # Run unzip; suppress stdout (progress comes from poller), errors go to $error
-            # -o = overwrite, -n = never overwrite (keep existing)
-            unzip $unzip_overwrite_flag $esc_archive >/dev/null
-            unzip_exit=\$?
-            wait \$poller_pid 2>/dev/null
+            unzip $unzip_overwrite_flag $esc_archive | /usr/local/emhttp/plugins/dynamix/scripts/progress
+            unzip_exit=\${PIPESTATUS[0]}
             exit \$unzip_exit
           } >$status 2>$error & echo \$!
           BASH;
 
         } else {
-          // TAR variants: checkpoint-based DOT lines + awk-based FILE lines (no TOTAL: would require
-          // full decompression pass to sum uncompressed sizes, which doubles the work)
+          // TAR variants: stat-poller via progress script (handles TOTAL listing pass internally)
           if (preg_match('/\.(tar\.gz|tgz)$/i', $archive)) {
-            $extract_tar_flags = '-xzvf';
+            $extract_tar_flags = '-xzf';
           } elseif (preg_match('/\.(tar\.bz2|tbz2)$/i', $archive)) {
-            $extract_tar_flags = '-xjvf';
+            $extract_tar_flags = '-xjf';
           } elseif (preg_match('/\.(tar\.xz|txz)$/i', $archive)) {
-            $extract_tar_flags = '-xJvf';
+            $extract_tar_flags = '-xJf';
           } elseif (preg_match('/\.(tar\.zst)$/i', $archive)) {
-            $extract_tar_flags = '--use-compress-program=zstd -xvf';
+            $extract_tar_flags = '--use-compress-program=zstd -xf';
           } elseif (preg_match('/\.(tar\.lz4)$/i', $archive)) {
-            $extract_tar_flags = '--use-compress-program=lz4 -xvf';
+            $extract_tar_flags = '--use-compress-program=lz4 -xf';
           } elseif (preg_match('/\.tar$/i', $archive)) {
-            $extract_tar_flags = '-xvf';
+            $extract_tar_flags = '-xf';
           }
 
           if (isset($extract_tar_flags)) {
-            // Build list flags: same as extract but with -t (list) instead of -x (extract)
-            $list_tar_flags = str_replace('-x', '-t', $extract_tar_flags);
             $keep_existing_files = $no_overwrite ? '--skip-old-files --warning=no-existing-file' : '';
             $cmd = <<<BASH
             {
               cd $esc_dest || exit 1
-              # Use same compression flags for listing so lz4/zstd archives yield correct total
-              > "$status"
-              total_bytes=\$(tar $list_tar_flags $esc_archive 2>/dev/null | awk 'NF>=5 {sum+=\$3} END {print sum+0}')
-              printf 'TOTAL|%s\\n' "\$total_bytes" >> "$status"
-              record_size=10240
-              dot_size=\$(($dot_mb * 1024 * 1024))
-              checkpoint=\$((dot_size / record_size))
               tar_args=(
                 $extract_tar_flags
                 $esc_archive
                 --no-unquote
-                --record-size=\$record_size
-                --checkpoint=\$checkpoint
                 $keep_existing_files
-                "--checkpoint-action=exec=printf 'DOT|%s\\n' \\\$(date +%s) >> $status"
               )
-              # Both awk (FILE lines) and exec (DOT lines) use >> (O_APPEND) to write to
-              # $status, so they interleave correctly without overwriting each other
-              tar "\${tar_args[@]}" | awk '{printf "FILE|%d|0|%s\\n", systime(), \$0; fflush()}' >> "$status"
+              tar "\${tar_args[@]}" | /usr/local/emhttp/plugins/dynamix/scripts/progress
               tar_exit=\${PIPESTATUS[0]}
               exit \$tar_exit
-            } >/dev/null 2>$error & echo \$!
+            } >$status 2>$error & echo \$!
             BASH;
           } else {
             $cmd = "cd ".quoted($dest)." && unzip ".($no_overwrite ? '-n ' : '-o ').quoted($archive)." >$status 2>$error & echo \$!";
