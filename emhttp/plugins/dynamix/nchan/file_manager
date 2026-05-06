@@ -586,7 +586,9 @@ $last_published_status = null;
 // infinite loop to monitor and execute file operations
 // Note: exec() uses /bin/sh which is symlinked to bash in unraid and a requirement for process substitution syntax >(...)
 while (true) {
-  unset($action, $source, $target, $H, $sparse, $exist, $zfs, $format, $archive_name, $target_tmp);
+  // Reset all per-iteration variables. $tar_flags/$cmd must be here to prevent stale
+  // values from a previous tar iteration overriding the zip code path.
+  unset($action, $source, $target, $H, $sparse, $exist, $zfs, $format, $archive_name, $target_tmp, $tar_flags, $cmd);
 
   // read job parameters from JSON file: $action, $title, $source, $target, $H, $sparse, $exist, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
   if (file_exists($active)) {
