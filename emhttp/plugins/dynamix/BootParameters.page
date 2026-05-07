@@ -1203,6 +1203,11 @@ function stripSystemParams(line) {
     return indent + rest;
 }
 
+function normalizeDisplayLineForComparison(line) {
+    if (!line) return '';
+    return stripSystemParams(line).trim().replace(/\s+/g, ' ');
+}
+
 function getSyslinuxInitrdForEntryLabel(label) {
     return /GUI Mode|GUI Safe Mode/i.test(label || '') ? 'initrd=/bzroot,/bzroot-gui' : 'initrd=/bzroot';
 }
@@ -1307,10 +1312,12 @@ function createEntryContent(entry, showApply) {
                 const args = mergedArgs.length > 0 ? ' ' + mergedArgs.join(' ') : '';
                 newAppend = indent + cmd + ' ' + kernel + args;
             } else {
-                newAppend = '  append ' + getSyslinuxInitrdForEntryLabel(entry.label) + (proposedParams.length > 0 ? ' ' + proposedParams.join(' ') : '');
+                const indentMatch = line.match(/^(\s*)append\b/);
+                const indent = indentMatch ? indentMatch[1] : '  ';
+                newAppend = indent + 'append ' + getSyslinuxInitrdForEntryLabel(entry.label) + (proposedParams.length > 0 ? ' ' + proposedParams.join(' ') : '');
             }
             const newAppendDisplay = stripSystemParams(newAppend);
-            if (originalAppend === newAppendDisplay) {
+            if (normalizeDisplayLineForComparison(originalAppend) === normalizeDisplayLineForComparison(newAppendDisplay)) {
                 contentHtml += originalAppend + '\n';
             } else {
                 contentHtml += '<span class="diff-line-removed">' + originalAppend + '</span>\n';
