@@ -356,8 +356,8 @@ function fileEdit(id) {
   const known = ["","cfg","conf",<?=dfm_array(file($editor,FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES))?>];
   var source = $('#'+id.dfm_proxy()).attr('data').dfm_quote();
   var ext = fileExtension(source);
-  if (ext == 'zip') {
-    // download zip files
+  if (isArchive(source)) {
+    // download archive files directly instead of opening viewer
     downloadFile(source);
     return;
   }
