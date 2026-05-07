@@ -20,8 +20,8 @@
 # Usage (piped process auto-detected):
 #  zip -r -du -ds Xm archive.zip -- files... | progress.sh
 #  unzip -o archive.zip -d /dest/dir         | progress.sh
+#  tar -xvf archive.tar -C /dest/dir         | progress.sh
 #  tar -cv --checkpoint=N --checkpoint-action=exec="printf 'CHUNK\n'" -f archive.tar -- files... | progress.sh
-#  tar -xvf archive.tar -C /dest/dir                                                              | progress.sh
 #
 # Verbose/debug output (stderr):
 #  ... | progress.sh -v
@@ -36,7 +36,7 @@
 # Required tar extract options:  -v
 #
 # Output (stdout), fields separated by space:
-#   TOTAL bytes
+#   TOTAL bytes         (not guaranteed; omitted if size cannot be determined in time)
 #   FILE timestamp size filename
 #   CHUNK timestamp bytes
 #   INFO message
