@@ -20,8 +20,8 @@
 # Usage (piped process auto-detected):
 #  zip -r -du -ds Xm archive.zip -- files... | progress.sh
 #  unzip -o archive.zip -d /dest/dir         | progress.sh
-#  tar -cv --checkpoint=N --checkpoint-action=exec="printf 'CHUNK\n'" -f archive.tar -- files... | progress.sh  # compress: -v required
-#  tar -xf archive.tar -C /dest/dir                                                               | progress.sh  # extract:  -v not needed
+#  tar -cv --checkpoint=N --checkpoint-action=exec="printf 'CHUNK\n'" -f archive.tar -- files... | progress.sh
+#  tar -xvf archive.tar -C /dest/dir                                                              | progress.sh
 #
 # Verbose/debug output (stderr):
 #  ... | progress.sh -v
@@ -33,7 +33,7 @@
 #
 # Required zip options: -du  -ds Xm
 # Required tar compress options: -v  --checkpoint=N  --checkpoint-action=exec="printf 'CHUNK\n'"
-# Required tar extract options:  (none; progress script does its own listing pass + stat-poller)
+# Required tar extract options:  -v
 #
 # Output (stdout), fields separated by space:
 #   TOTAL bytes
@@ -205,11 +205,10 @@ _prog_done_line() {
   printf '\n' >&2
 }
 
+# Find zip, tar or unzip sibling process; set compress_pid, compress_cwd, compress_tool.
 compress_pid=
 compress_cwd=
 compress_tool=
-
-# Find zip, tar or unzip sibling process; set compress_pid, compress_cwd, compress_tool.
 ppid=$(awk '/^PPid:/{print $2}' /proc/self/status)
 grandppid=$(awk '/^PPid:/{print $2}' /proc/"$ppid"/status 2>/dev/null)
 for tool in zip tar unzip; do
@@ -222,7 +221,6 @@ for tool in zip tar unzip; do
     break
   fi
 done
-
 if [[ ! $compress_tool ]]; then
   echo "error: no compress process found" >&2
   exit 1
@@ -254,8 +252,8 @@ if [[ $compress_tool == unzip ]]; then
   done
   dbg "unzip dest=$unzip_dest"
   # Parse manifest into arrays for TOTAL + poller
-  # unzip -l: "124674920  2026-03-04 19:03   node"
-  # unzip -l: "        0  2026-05-03 12:25   out/vs/workbench/"
+  # unzip -l: "  1234567  2000-01-01 12:00   path/to/file.txt"
+  # unzip -l: "        0  2000-01-01 12:00   some/sub/dir/"
   file_names=()
   file_sizes=()
   total_bytes=0
@@ -271,8 +269,9 @@ if [[ $compress_tool == unzip ]]; then
   dbg "total_bytes=$total_bytes files=${#file_names[@]}"
   printf 'TOTAL %s\n' "$total_bytes"
   _prog_total_line "$total_bytes"
+
+# zip/tar: sum sizes of source files (args after '--'); also extract chunk size for CHUNK lines
 else
-  # zip/tar: sum sizes of source files (args after '--'); also extract chunk size for CHUNK lines
   sources=()
   in_files=0
   chunk_bytes=0
@@ -284,6 +283,12 @@ else
   next_is_dot_size=
   next_is_record_size=
   next_is_checkpoint=
+  next_is_blocking_factor=
+  is_tar_extract=
+  tar_archive=
+  tar_compress_prog=
+  next_is_file=
+  next_is_compress_prog=
   for arg in "${cmdline_args[@]:1}"; do   # skip binary name itself
     if [[ $in_files -eq 1 ]]; then
       sources+=("$arg")
@@ -292,7 +297,7 @@ else
     elif [[ $next_is_dot_size ]]; then
       dot_size_str=$arg
       next_is_dot_size=
-    elif [[ $arg == '--dot-size' ]]; then
+    elif [[ $arg == '--dot-size' || $arg == '-ds' ]]; then
       next_is_dot_size=1
     elif [[ $arg =~ ^--dot-size=(.+)$ ]]; then
       dot_size_str=${BASH_REMATCH[1]}
@@ -303,6 +308,15 @@ else
       next_is_record_size=1
     elif [[ $arg =~ ^--record-size=([0-9]+)$ ]]; then
       dot_record_size=${BASH_REMATCH[1]}
+    elif [[ $next_is_blocking_factor ]]; then
+      dot_record_size=$((arg * 512))
+      next_is_blocking_factor=
+    elif [[ $arg == '--blocking-factor' || $arg == '-b' ]]; then
+      next_is_blocking_factor=1
+    elif [[ $arg =~ ^--blocking-factor=([0-9]+)$ ]]; then
+      dot_record_size=$((BASH_REMATCH[1] * 512))
+    elif [[ $arg =~ ^-b([0-9]+)$ ]]; then
+      dot_record_size=$((BASH_REMATCH[1] * 512))
     elif [[ $next_is_checkpoint ]]; then
       dot_checkpoint=$arg
       next_is_checkpoint=
@@ -310,6 +324,26 @@ else
       next_is_checkpoint=1
     elif [[ $arg =~ ^--checkpoint=([0-9]+)$ ]]; then
       dot_checkpoint=${BASH_REMATCH[1]}
+    elif [[ $next_is_file ]]; then
+      tar_archive=$arg
+      next_is_file=
+    elif [[ $arg == '--file' ]]; then
+      next_is_file=1
+    elif [[ $arg =~ ^--file=(.+)$ ]]; then
+      tar_archive=${BASH_REMATCH[1]}
+    elif [[ $next_is_compress_prog ]]; then
+      tar_compress_prog=$arg
+      next_is_compress_prog=
+    elif [[ $arg == '--use-compress-program' || $arg == '-I' ]]; then
+      next_is_compress_prog=1
+    elif [[ $arg =~ ^--use-compress-program=(.+)$ ]]; then
+      tar_compress_prog=${BASH_REMATCH[1]}
+    elif [[ $arg == '--extract' || $arg == '--get' ]]; then
+      is_tar_extract=1
+    elif [[ $arg =~ ^-[a-zA-Z] ]]; then
+      # combined short flags: detect -x (extract) and -f (archive = next arg)
+      [[ $arg =~ x ]] && is_tar_extract=1
+      [[ $arg =~ f ]] && next_is_file=1
     fi
   done
   if [[ $dot_size_str ]]; then
@@ -325,6 +359,7 @@ else
     chunk_bytes=$((dot_record_size * dot_checkpoint))
   fi
   dbg "sources: ${sources[*]} chunk_bytes=$chunk_bytes dot_size_str=$dot_size_str dot_record_size=$dot_record_size dot_checkpoint=$dot_checkpoint"
+  dbg "is_tar_extract=$is_tar_extract tar_archive=$tar_archive tar_compress_prog=$tar_compress_prog"
   if [[ ${#sources[@]} -gt 0 ]]; then
     if [[ $compress_cwd ]]; then
       total_bytes=$(cd "$compress_cwd" && du -sb "${sources[@]}" 2>/dev/null | awk '{sum+=$1} END {print sum}')
@@ -334,66 +369,21 @@ else
     dbg "total_bytes=$total_bytes"
     printf 'TOTAL %s\n' "$total_bytes"
     _prog_total_line "$total_bytes"
-  elif [[ $compress_tool == tar ]]; then
-    # tar extract: no source files in cmdline; compute TOTAL via listing pass (same as file_manager)
-    # Find archive path (-f arg) and dest dir (-C arg), detect compression from extension
-    tar_archive=""
-    tar_dest="$compress_cwd"
-    next_is_archive=
-    next_is_dest=
-    tar_no_unquote=
-    for arg in "${cmdline_args[@]:1}"; do
-      if [[ $next_is_archive ]]; then
-        tar_archive="$arg"
-        next_is_archive=
-      elif [[ $next_is_dest ]]; then
-        tar_dest="$arg"
-        next_is_dest=
-      elif [[ $arg == '-f' ]]; then
-        next_is_archive=1
-      elif [[ $arg =~ ^--file=(.+)$ ]]; then
-        tar_archive="${BASH_REMATCH[1]}"
-      elif [[ $arg =~ ^-[^-].*f ]]; then
-        # bundled short flags containing f (e.g. -xzvf, -czf)
-        next_is_archive=1
-      elif [[ $arg == '-C' ]]; then
-        next_is_dest=1
-      elif [[ $arg =~ ^--directory=(.+)$ ]]; then
-        tar_dest="${BASH_REMATCH[1]}"
-      elif [[ $arg == '--no-unquote' ]]; then
-        tar_no_unquote=1
-      fi
-    done
-    dbg "tar extract archive=$tar_archive dest=$tar_dest"
-    if [[ $tar_archive ]]; then
-      case "$tar_archive" in
-        *.tar.gz|*.tgz|*.tar.bz2|*.tbz2|*.tar.xz|*.txz|*.tar.zst|*.tar.lz4)
-          # Compressed archive: listing pass requires full decompression (same cost as extraction).
-          # Skip listing pass; file_manager adds --checkpoint flags so CHUNK events arrive via stdin.
-          dbg "compressed tar: skipping listing pass, CHUNK mode"
-          tar_archive=""
-          ;;
-        *)
-          # Uncompressed tar: listing pass is fast (no decompression), do it synchronously.
-          # tar -tv: "-rwxr-xr-x root/root 124674920 2024-01-01 00:00 node"
-          declare -A tar_sizes=()
-          tar_names=()
-          total_bytes=0
-          while IFS= read -r line; do
-            if [[ $line =~ ^[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+([0-9]+)[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+(.*) ]]; then
-              local_fsize="${BASH_REMATCH[1]}"
-              # Unescape tar-escaped chars (e.g. \n -> newline) for real filesystem path.
-              local_fname=$(printf '%b' "${BASH_REMATCH[2]//\%/%%}")
-              tar_sizes["$local_fname"]="$local_fsize"
-              tar_names+=("$local_fname")
-              total_bytes=$((total_bytes + local_fsize))
-            fi
-          done < <(tar ${tar_no_unquote:+--no-unquote} -tvf "$tar_archive" 2>/dev/null)
-          dbg "total_bytes=$total_bytes files=${#tar_names[@]}"
-          printf 'TOTAL %s\n' "$total_bytes"
-          _prog_total_line "$total_bytes"
-          ;;
-      esac
+  elif [[ $is_tar_extract && $tar_archive ]]; then
+    # For tar extract: run tar -tvf with 5s timeout to get file sizes for TOTAL.
+    # Plain tar listing is nearly instant; compressed formats are slower but usually finish
+    # within the timeout for typical archive sizes. If the timeout is hit, TOTAL is skipped.
+    listing_cmd=(tar)
+    [[ $tar_compress_prog ]] && listing_cmd+=(--use-compress-program="$tar_compress_prog")
+    listing_cmd+=(-tvf "$tar_archive")
+    dbg "tar extract listing: ${listing_cmd[*]}"
+    total_bytes=$(timeout 5 "${listing_cmd[@]}" 2>/dev/null | awk '{sum+=$3} END {print sum+0}')
+    if [[ $total_bytes -gt 0 ]]; then
+      dbg "tar extract total_bytes=$total_bytes (from listing)"
+      printf 'TOTAL %s\n' "$total_bytes"
+      _prog_total_line "$total_bytes"
+    else
+      dbg "tar extract: listing timed out or failed, no TOTAL"
     fi
   fi
 fi
@@ -401,7 +391,7 @@ fi
 dbg "entering main progress loop..."
 file_count=0
 
-# stat-poller: used for both unzip and tar extract (both build a manifest before extracting)
+# stat-poller: used for unzip (reads manifest built from unzip -l before extracting)
 run_stat_poller() {
   local dest="$1"
   local -n _names="$2"
@@ -448,19 +438,6 @@ if [[ $compress_tool == unzip ]]; then
   wait "$drain_pid" 2>/dev/null
   dbg "unzip stat-poller done: file_count=$file_count"
 
-elif [[ $compress_tool == tar && $tar_archive ]]; then
-  # Uncompressed tar extract: listing pass done synchronously above, use stat-poller.
-  tar_sizes_indexed=()
-  for name in "${tar_names[@]}"; do
-    tar_sizes_indexed+=("${tar_sizes[$name]:-0}")
-  done
-  cat >/dev/null &
-  drain_pid=$!
-  dbg "tar stat-poller start: dest=$tar_dest files=${#tar_names[@]}"
-  run_stat_poller "$tar_dest" tar_names tar_sizes_indexed
-  wait "$drain_pid" 2>/dev/null
-  dbg "tar stat-poller done: file_count=$file_count"
-
 else
   # Char-by-char parser for zip and tar compress (stdin is live, not pre-buffered).
   char_count=0
@@ -479,8 +456,8 @@ else
   if [[ ! $dot_mode ]]; then
     line_buffer+="$char"
 
-    # zip: "  adding: out/vs/workbench/api/node/extensionHostProcess.js (2.0M)  (deflated 72%)"
-    # zip: "  adding: out/vs/workbench/ (stored 0%)"
+    # zip: "  adding: path/to/file.js (2.0M)  (deflated 72%)"
+    # zip: "  adding: path/to/dir/ (stored 0%)"
     if [[ $line_buffer =~ (adding|updating):\ (.*)\ \(([0-9.]+[KMGT]?)\)\  ]]; then
       src_size="${BASH_REMATCH[3]}"
       fsize=$(awk -v s="$src_size" 'BEGIN{
