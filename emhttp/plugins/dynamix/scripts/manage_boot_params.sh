@@ -39,6 +39,14 @@ detect_bootloader() {
 
 BOOTLOADER_TYPE="${BOOTLOADER_TYPE:-$(detect_bootloader)}"
 
+normalize_file_to_crlf() {
+    local file_path="$1"
+    local normalized_file="${file_path}.crlf"
+
+    awk '{ sub(/\r$/, ""); printf "%s\r\n", $0 }' "$file_path" > "$normalized_file"
+    mv "$normalized_file" "$file_path"
+}
+
 #############################################
 # JSON Escaping Function
 #############################################
@@ -265,16 +273,20 @@ parse_append_line() {
     # Matches from "label $label" to the next "label" or end of file
     awk -v label="$label" '
         BEGIN { label=tolower(label) }
-        /^label / {
+        {
+            sub(/\r$/, "")
+        }
+        /^label[[:space:]]+/ {
             line=tolower($0)
-            if (line ~ "^label " label "$") {
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+            if (line == "label " label) {
                 in_section=1
             } else {
                 in_section=0
             }
         }
-        in_section && /^  append/ {
-            sub(/^  append /, "")
+        in_section && /^[[:space:]]+append[[:space:]]+/ {
+            sub(/^[[:space:]]+append[[:space:]]+/, "")
             print
             exit
         }
@@ -748,16 +760,23 @@ validate_config() {
         return 1
     fi
 
-    # Check required labels exist
-    if ! grep -qi "^label unraid OS$" "$cfg_file"; then
-        return 1
-    fi
+    # Check required labels exist, tolerating line endings and spacing variations.
+    local required_labels_ok
+    required_labels_ok=$(awk '
+        {
+            sub(/\r$/, "")
+            line=tolower($0)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+            if (line == "label unraid os") found_unraid=1
+            if (line == "label unraid os gui mode") found_gui=1
+            if (index(line, "label unraid os safe mode") == 1) found_safe=1
+        }
+        END {
+            if (found_unraid && found_gui && found_safe) print "1"; else print "0"
+        }
+    ' "$cfg_file")
 
-    if ! grep -qi "^label unraid OS GUI Mode$" "$cfg_file"; then
-        return 1
-    fi
-
-    if ! grep -qi "^label unraid OS Safe Mode" "$cfg_file"; then
+    if [[ "$required_labels_ok" != "1" ]]; then
         return 1
     fi
 
@@ -792,27 +811,19 @@ update_default_boot() {
     awk '!/^  menu default$/' "$temp_file" > "${temp_file}.default"
     mv "${temp_file}.default" "$temp_file"
 
-    # Now add "menu default" to the target label
+    # Now add "menu default" immediately after the target label
     awk -v label="$target_label" '
         /^label / {
             current_label = $0
             sub(/^label /, "", current_label)
-            in_target = (current_label == label)
+            print
+            if (current_label == label) {
+                print "  menu default"
+            }
+            next
         }
         {
             print
-            # After printing the label line, check if we need to add menu default
-            if (in_target && /^label /) {
-                # Check if next line exists and is not menu default
-                getline next_line
-                if (next_line !~ /^  menu default$/) {
-                    print "  menu default"
-                    print next_line
-                } else {
-                    print next_line
-                }
-                in_target = 0
-            }
         }
     ' "$temp_file" > "${temp_file}.default"
     mv "${temp_file}.default" "$temp_file"
@@ -860,6 +871,10 @@ write_config() {
     # Create temp file on same filesystem as target to ensure atomic move operation (prevents corruption on power loss)
     local temp_file=$(mktemp -p "$(dirname "$SYSLINUX_CFG")")
     cp "$SYSLINUX_CFG" "$temp_file"
+
+    # Strip CR from CRLF so awk/grep/sed-based syslinux updates match Unix line endings.
+    local temp_lf="${temp_file}.lf"
+    tr -d '\r' < "$temp_file" > "$temp_lf" && mv "$temp_lf" "$temp_file"
 
     # Update "Unraid OS" label if enabled in UI
     if [[ "${APPLY_TO_UNRAID_OS}" == "1" ]]; then
@@ -983,6 +998,8 @@ write_config() {
         sed -i.timeout "s/^timeout .*/timeout ${TIMEOUT}/" "$temp_file"
         rm -f "${temp_file}.timeout"
     fi
+
+    normalize_file_to_crlf "$temp_file"
 
     # Validate the modified config
     if validate_config "$temp_file"; then
@@ -1152,6 +1169,8 @@ write_config_grub() {
         fi
     fi
 
+    normalize_file_to_crlf "$temp_file"
+
     # Basic validation: ensure the config is non-empty and has at least one menuentry
     if [[ ! -s "$temp_file" ]] || ! grep -q '^menuentry ' "$temp_file"; then
         rm -f "$temp_file"
@@ -1202,6 +1221,8 @@ write_raw_config() {
 
     # Write raw config to temp file
     echo "$RAW_CONFIG" > "$temp_file"
+
+    normalize_file_to_crlf "$temp_file"
 
     # Validate the raw config (syslinux only)
     if [[ "$BOOTLOADER_TYPE" == "grub" ]] || validate_config "$temp_file"; then

@@ -1222,11 +1222,23 @@ function getPreviewSyslinuxInitrd() {
     return 'initrd=/bzroot';
 }
 
+function getSelectedDefaultEntryLabel() {
+    const selected = $('input[name="default-boot"]:checked').attr('data-label');
+    return selected || '';
+}
+
 /**
  * Helper function to create boot entry content with optional diff display
  */
 function createEntryContent(entry, showApply) {
     const content = $('<pre>').addClass('boot-entry-content');
+    const selectedDefaultLabel = getSelectedDefaultEntryLabel();
+    const shouldShowMenuDefault = bootloaderType === 'syslinux'
+        ? (selectedDefaultLabel ? entry.label === selectedDefaultLabel : entry.isDefault)
+        : entry.isDefault;
+    const originalHasMenuDefault = bootloaderType === 'syslinux' && entry.lines.some(function(entryLine) {
+        return entryLine.trim() === 'menu default';
+    });
 
     // Find the line index to update (append for syslinux, linux for GRUB)
     let appendLineIndex = -1;
@@ -1246,6 +1258,25 @@ function createEntryContent(entry, showApply) {
     // Build the content
     let contentHtml = '';
     entry.lines.forEach((line, idx) => {
+        const trimmed = line.trim();
+
+        if (bootloaderType === 'syslinux' && trimmed.startsWith('label ')) {
+            contentHtml += stripSystemParams(line) + '\n';
+            if (shouldShowMenuDefault && !originalHasMenuDefault) {
+                contentHtml += '<span class="diff-line-added">  menu default</span>\n';
+            }
+            return;
+        }
+
+        if (bootloaderType === 'syslinux' && trimmed === 'menu default') {
+            if (shouldShowMenuDefault) {
+                contentHtml += stripSystemParams(line) + '\n';
+            } else {
+                contentHtml += '<span class="diff-line-removed">' + stripSystemParams(line) + '</span>\n';
+            }
+            return;
+        }
+
         if (idx === appendLineIndex && showApply) {
             // Show diff: removed line (original) and added line (with parameters)
             const originalAppend = stripSystemParams(line);
@@ -1319,6 +1350,28 @@ function updateAllAppliedEntryDiffs() {
             updateEntryDiff(entryDiv, entry, true);
         }
     });
+}
+
+function updateDefaultEntryDisplay() {
+    const selectedDefaultLabel = getSelectedDefaultEntryLabel();
+
+    $('.boot-entry').each(function() {
+        const entryDiv = $(this);
+        const entry = entryDiv.data('entry');
+        if (!entry) return;
+
+        const toggle = entryDiv.find('.boot-entry-apply-toggle');
+        if (toggle.length > 0 && selectedDefaultLabel && entry.label === selectedDefaultLabel && !toggle.prop('checked')) {
+            toggle.switchButton('option', 'checked', true);
+        }
+
+        entryDiv.toggleClass('default', !!selectedDefaultLabel && entry.label === selectedDefaultLabel);
+
+        const showApply = toggle.length > 0 && toggle.prop('checked');
+        updateEntryDiff(entryDiv, entry, showApply);
+    });
+
+    updatePreview();
 }
 
 /**
@@ -1462,6 +1515,7 @@ function renderMenuView(parsed) {
                 .prop('checked', entry.isDefault)
                 .on('change', function() {
                     markFormModified();
+                    updateDefaultEntryDisplay();
                 });
             header.append(radio);
         }
