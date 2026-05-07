@@ -65,7 +65,7 @@ $csrf_token = $var['csrf_token'] ?? '';
         <dl>
             <dt class="help-label">_(PCIe ACS Override)_ _(details)_:</dt>
             <dd>
-                <select id="acs-dropdown" onchange="updateConfig()" style="width: auto;">
+                <select id="acs-dropdown" onchange="updateConfig('acs-dropdown')" style="width: auto;">
                     <option value="">_(Disabled)_</option>
                     <option value="downstream">_(Downstream)_</option>
                     <option value="multifunction">_(Multi-function)_</option>
@@ -86,7 +86,7 @@ $csrf_token = $var['csrf_token'] ?? '';
         <dl>
             <dt class="help-label">_(VFIO Allow Unsafe Interrupts)_ _(details)_:</dt>
             <dd>
-                <input type="checkbox" id="vfio-toggle" class="switch narrow" onchange="updateConfig()">
+                <input type="checkbox" id="vfio-toggle" class="switch narrow" onchange="updateConfig('vfio-toggle')">
                 <br>
                 <span class="parameter-code">vfio_iommu_type1.allow_unsafe_interrupts=1</span>
                 <blockquote class="inline_help">
@@ -665,9 +665,28 @@ function bootParamsTabFocus() {
 }
 
 // Update configuration preview
-function updateConfig() {
+function ensureApplyTogglesEnabled(labels) {
+    if (!Array.isArray(labels) || labels.length === 0) {
+        return;
+    }
+
+    $('.boot-entry-apply-toggle').each(function() {
+        const toggle = $(this);
+        const label = toggle.attr('data-label');
+
+        if (labels.indexOf(label) !== -1 && !toggle.prop('checked')) {
+            toggle.switchButton('option', 'checked', true);
+        }
+    });
+}
+
+function updateConfig(changedFieldId) {
     // Handle mutual exclusivity for sysfb_blacklist toggle
     handleFramebufferMutualExclusivity();
+
+    if (changedFieldId === 'acs-dropdown' || changedFieldId === 'vfio-toggle') {
+        ensureApplyTogglesEnabled(['Unraid OS', 'Unraid OS GUI Mode']);
+    }
 
     markFormModified();
     updatePreview();
