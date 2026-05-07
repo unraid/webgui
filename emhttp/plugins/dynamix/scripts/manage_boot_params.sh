@@ -271,7 +271,8 @@ parse_append_line() {
 
     # Extract append line for specific label
     # Matches from "label $label" to the next "label" or end of file
-    awk -v label="$label" '
+    # Normalize CRLF to LF for parsing (DOS-edited syslinux.cfg)
+    tr -d '\r' < "$cfg_file" | awk -v label="$label" '
         BEGIN { label=tolower(label) }
         {
             sub(/\r$/, "")
@@ -290,7 +291,7 @@ parse_append_line() {
             print
             exit
         }
-    ' "$cfg_file"
+    '
 }
 
 #############################################
@@ -300,7 +301,8 @@ parse_grub_linux_args() {
     local label="$1"
     local cfg_file="${2:-$GRUB_CFG}"
 
-    awk -v label="$label" '
+    # Normalize CRLF to LF for parsing (DOS-edited grub.cfg)
+    tr -d '\r' < "$cfg_file" | awk -v label="$label" '
         $0 ~ /^menuentry / {
             in_section = (index($0, "\"" label "\"") > 0 || index($0, "\x27" label "\x27") > 0)
         }
@@ -315,7 +317,7 @@ parse_grub_linux_args() {
             }
             exit
         }
-    ' "$cfg_file"
+    '
 }
 
 #############################################
@@ -361,7 +363,7 @@ extract_grub_timeout() {
     local cfg_file="${1:-$GRUB_CFG}"
 
     if [[ -f "$cfg_file" ]]; then
-        grep "^set timeout=" "$cfg_file" | awk -F'=' '{print $2}' | tr -d '\r' | head -n 1
+        tr -d '\r' < "$cfg_file" | grep "^set timeout=" | awk -F'=' '{print $2}' | head -n 1
     else
         echo ""
     fi
@@ -760,23 +762,16 @@ validate_config() {
         return 1
     fi
 
-    # Check required labels exist, tolerating line endings and spacing variations.
-    local required_labels_ok
-    required_labels_ok=$(awk '
-        {
-            sub(/\r$/, "")
-            line=tolower($0)
-            gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
-            if (line == "label unraid os") found_unraid=1
-            if (line == "label unraid os gui mode") found_gui=1
-            if (index(line, "label unraid os safe mode") == 1) found_safe=1
-        }
-        END {
-            if (found_unraid && found_gui && found_safe) print "1"; else print "0"
-        }
-    ' "$cfg_file")
+    # Check required labels exist (strip CR so ^/$ match CRLF files)
+    if ! tr -d '\r' < "$cfg_file" | grep -qi "^label unraid OS$"; then
+        return 1
+    fi
 
-    if [[ "$required_labels_ok" != "1" ]]; then
+    if ! tr -d '\r' < "$cfg_file" | grep -qi "^label unraid OS GUI Mode$"; then
+        return 1
+    fi
+
+    if ! tr -d '\r' < "$cfg_file" | grep -qi "^label unraid OS Safe Mode"; then
         return 1
     fi
 
@@ -1131,6 +1126,9 @@ write_config_grub() {
 
     local temp_file=$(mktemp -p "$(dirname "$GRUB_CFG")")
     cp "$GRUB_CFG" "$temp_file"
+    # Strip CR from CRLF so awk/grep/sed in update_grub_* match Unix line endings
+    local temp_lf="${temp_file}.lf"
+    tr -d '\r' < "$temp_file" > "$temp_lf" && mv "$temp_lf" "$temp_file"
 
     if [[ "${APPLY_TO_UNRAID_OS}" == "1" ]]; then
         update_grub_entry "Unraid OS" "$new_args" "$temp_file"

@@ -32,6 +32,66 @@ function xml_decode($string) {
   return strval(html_entity_decode($string, ENT_XML1, 'UTF-8'));
 }
 
+function extraParamsWithQuotedValuesMasked($extraParams) {
+  return preg_replace('/"[^"\\\\]*(?:\\\\.[^"\\\\]*)*"|\'[^\']*\'/', '""', $extraParams);
+}
+
+function replaceUnquotedExtraParams($extraParams, $callback) {
+  $parts = preg_split('/("[^"\\\\]*(?:\\\\.[^"\\\\]*)*"|\'[^\']*\')/', $extraParams, -1, PREG_SPLIT_DELIM_CAPTURE);
+  if ($parts === false) {
+    return $extraParams;
+  }
+  foreach ($parts as $i => $part) {
+    if ($part === '' || $part[0] === '"' || $part[0] === "'") {
+      continue;
+    }
+    $parts[$i] = $callback($part);
+  }
+  return implode('', $parts);
+}
+
+function extractMacAddressParam($extraParams) {
+  if (!is_string($extraParams)) {
+    return '';
+  }
+  $extraParams = extraParamsWithQuotedValuesMasked($extraParams);
+  if (preg_match('/(?:^|\s)--mac-address=([^\s\'"]+)/', $extraParams, $match)) {
+    return trim($match[1]);
+  }
+  if (preg_match('/(?:^|\s)--mac-address\s+([^\s\'"]+)/', $extraParams, $match)) {
+    return trim($match[1]);
+  }
+  return '';
+}
+
+function removeMacAddressParam($extraParams) {
+  if (!is_string($extraParams) || $extraParams === '') {
+    return '';
+  }
+  $extraParams = replaceUnquotedExtraParams($extraParams, function($part) {
+    $part = preg_replace('/(^|\s)--mac-address=[^\s\'"]+/', '$1', $part);
+    return preg_replace('/(^|\s)--mac-address\s+[^\s\'"]+/', '$1', $part);
+  });
+  return trim($extraParams);
+}
+
+function hasNetworkParam($extraParams) {
+  return is_string($extraParams) && preg_match('/(?:^|\s)--net(?:work)?(?:=|\s+)[^\s\'"]+/', extraParamsWithQuotedValuesMasked($extraParams));
+}
+
+function normalizeMacAddress($mac) {
+  $mac = strtolower(trim($mac ?? ''));
+  if ($mac === '') {
+    return '';
+  }
+  if (preg_match('/^[0-9a-f]{12}$/', $mac)) {
+    $mac = implode(':', str_split($mac, 2));
+  } else {
+    $mac = str_replace('-', ':', $mac);
+  }
+  return preg_match('/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/', $mac) ? $mac : '';
+}
+
 function generateTSwebui($url, $serve, $webUI) {
   if (!isset($webUI)) {
     return '';
@@ -75,6 +135,9 @@ function postToXML($post, $setOwnership=false) {
     $xml->Network                  = xml_encode($post['contNetwork']);
   }
   $xml->MyIP                       = xml_encode($post['contMyIP']);
+  $extraNetwork                    = hasNetworkParam($post['contExtraParams'] ?? '');
+  $myMAC                           = $extraNetwork ? '' : normalizeMacAddress(trim($post['contMyMAC'] ?? '') ?: extractMacAddressParam($post['contExtraParams'] ?? ''));
+  $xml->MyMAC                      = xml_encode($myMAC);
   $xml->Shell                      = xml_encode($post['contShell']);
   $xml->Privileged                 = strtolower($post['contPrivileged']??'')=='on' ? 'true' : 'false';
   $xml->Support                    = xml_encode($post['contSupport']);
@@ -85,7 +148,7 @@ function postToXML($post, $setOwnership=false) {
   $xml->WebUI                      = xml_encode(trim($post['contWebUI']));
   $xml->TemplateURL                = xml_encode($post['contTemplateURL']);
   $xml->Icon                       = xml_encode(trim($post['contIcon']));
-  $xml->ExtraParams                = xml_encode($post['contExtraParams']);
+  $xml->ExtraParams                = xml_encode($myMAC && !$extraNetwork ? removeMacAddressParam($post['contExtraParams']) : $post['contExtraParams']);
   $xml->PostArgs                   = xml_encode($post['contPostArgs']);
   $xml->CPUset                     = xml_encode($post['contCPUset']);
   $xml->DateInstalled              = xml_encode(time());
@@ -149,6 +212,9 @@ function xmlToVar($xml) {
   $out['Registry']                     = xml_decode($xml->Registry);
   $out['Network']                      = xml_decode($xml->Network);
   $out['MyIP']                         = xml_decode($xml->MyIP ?? '');
+  $extraParams                         = xml_decode($xml->ExtraParams ?? '');
+  $extraNetwork                        = hasNetworkParam($extraParams);
+  $out['MyMAC']                        = $extraNetwork ? '' : normalizeMacAddress(xml_decode($xml->MyMAC ?? '') ?: extractMacAddressParam($extraParams));
   $out['Shell']                        = xml_decode($xml->Shell ?? 'sh');
   $out['Privileged']                   = xml_decode($xml->Privileged);
   $out['Support']                      = xml_decode($xml->Support);
@@ -159,7 +225,7 @@ function xmlToVar($xml) {
   $out['WebUI']                        = xml_decode($xml->WebUI);
   $out['TemplateURL']                  = xml_decode($xml->TemplateURL);
   $out['Icon']                         = xml_decode($xml->Icon);
-  $out['ExtraParams']                  = xml_decode($xml->ExtraParams);
+  $out['ExtraParams']                  = $extraParams;
   $out['PostArgs']                     = xml_decode($xml->PostArgs);
   $out['CPUset']                       = xml_decode($xml->CPUset);
   $out['DonateText']                   = xml_decode($xml->DonateText);
@@ -325,13 +391,29 @@ function xmlToCommand($xml, $create_paths=false) {
   $xml           = xmlToVar($xml);
   $cmdName       = strlen($xml['Name']) ? '--name='.escapeshellarg($xml['Name']) : '';
   $cmdPrivileged = strtolower($xml['Privileged'])=='true' ? '--privileged=true' : '';
-  if (preg_match('/^container:(.*)/', $xml['Network'])) {
-    $cmdNetwork  = preg_match('/\-\-net(work)?=/',$xml['ExtraParams']) ? "" : '--net='.escapeshellarg($xml['Network']);
-  } else {
-    $cmdNetwork  = preg_match('/\-\-net(work)?=/',$xml['ExtraParams']) ? "" : '--net='.escapeshellarg(strtolower($xml['Network']));
-  }
+  $extraNetwork  = hasNetworkParam($xml['ExtraParams']);
   $cmdMyIP       = '';
-  foreach (explode(' ',str_replace(',',' ',$xml['MyIP'])) as $myIP) if ($myIP) $cmdMyIP .= (strpos($myIP,':')?'--ip6=':'--ip=').escapeshellarg($myIP).' ';
+  if (preg_match('/^container:(.*)/', $xml['Network'])) {
+    $cmdNetwork  = $extraNetwork ? "" : '--net='.escapeshellarg($xml['Network']);
+  } else {
+    $networkName = strtolower($xml['Network']);
+    if ($extraNetwork) {
+      $cmdNetwork = "";
+    } elseif (strlen($xml['MyMAC']) && !in_array($networkName, ['host','none'])) {
+      $xml['ExtraParams'] = removeMacAddressParam($xml['ExtraParams']);
+      $networkEndpoint = ['name='.$networkName];
+      foreach (explode(' ',str_replace(',',' ',$xml['MyIP'])) as $myIP) {
+        if ($myIP) $networkEndpoint[] = (strpos($myIP,':') !== false ? 'ip6=' : 'ip=').$myIP;
+      }
+      $networkEndpoint[] = 'mac-address='.$xml['MyMAC'];
+      $cmdNetwork = '--network='.escapeshellarg(implode(',', $networkEndpoint));
+    } else {
+      $cmdNetwork  = '--net='.escapeshellarg($networkName);
+    }
+  }
+  if (!strlen($xml['MyMAC']) || preg_match('/^container:(.*)/', $xml['Network']) || $extraNetwork) {
+    foreach (explode(' ',str_replace(',',' ',$xml['MyIP'])) as $myIP) if ($myIP) $cmdMyIP .= (strpos($myIP,':') !== false ? '--ip6=' : '--ip=').escapeshellarg($myIP).' ';
+  }
   $cmdCPUset     = strlen($xml['CPUset']) ? '--cpuset-cpus='.escapeshellarg($xml['CPUset']) : '';
   $Volumes       = [''];
   $Ports         = [''];

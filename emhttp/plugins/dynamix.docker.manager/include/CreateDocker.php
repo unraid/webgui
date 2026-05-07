@@ -68,6 +68,63 @@ function cpu_pinning() {
 ##   CREATE CONTAINER   ##
 ##########################
 
+// Simple UI blocker used by create/update operations so the user can't keep clicking around mid-install.
+function dockerUIBlockerScript($enable) {
+  if ($enable) {
+    echo <<<HTML
+<script>
+(function () {
+  try {
+    var d = (window.parent && window.parent.document) ? window.parent.document : document;
+    if (!d || !d.body) return;
+
+    // Define helpers once.
+    if (!window.parent) window.parent = window;
+    if (!window.parent.dockerUIBlock) {
+      window.parent.dockerUIBlock = function (on) {
+        try {
+          var doc = (window.parent && window.parent.document) ? window.parent.document : document;
+          if (!doc || !doc.body) return;
+
+          var blockerId = 'dockerInstallBlocker';
+          var blockerClass = 'docker-install-blocker';
+
+          if (!on) {
+            var o = doc.getElementById(blockerId);
+            if (o) o.remove();
+            return;
+          }
+
+          var o2 = doc.getElementById(blockerId);
+          if (!o2) {
+            o2 = doc.createElement('div');
+            o2.id = blockerId;
+            o2.className = blockerClass;
+            doc.body.appendChild(o2);
+          }
+        } catch (e) {}
+      };
+    }
+
+    window.parent.dockerUIBlock(true);
+  } catch (e) {}
+})();
+</script>
+HTML;
+  } else {
+    echo <<<HTML
+<script>
+(function () {
+  try {
+    var w = window.parent || window;
+    if (w && w.dockerUIBlock) w.dockerUIBlock(false);
+  } catch (e) {}
+})();
+</script>
+HTML;
+  }
+}
+
 if (isset($_POST['contName'])) {
   $postXML = postToXML($_POST, true);
   $dry_run = isset($_POST['dryRun']) && $_POST['dryRun']=='true';
@@ -76,12 +133,21 @@ if (isset($_POST['contName'])) {
   // Get the command line
   [$cmd, $Name, $Repository] = xmlToCommand($postXML, $create_paths);
   readfile("$docroot/plugins/dynamix.docker.manager/log.htm");
+  echo '<link type="text/css" rel="stylesheet" href="'.autov("/plugins/dynamix.docker.manager/sheets/AddContainer.css",true).'">';
+  if (!$dry_run) dockerUIBlockerScript(true);
   @flush();
   // Saving the generated configuration file.
   $userTmplDir = $dockerManPaths['templates-user'];
   if (!is_dir($userTmplDir)) mkdir($userTmplDir, 0777, true);
+  $sourceTemplate = _var($_POST,'sourceTemplate',false);
+  if ($sourceTemplate) $sourceTemplate = unscript(urldecode($sourceTemplate));
+  $sourceUserTemplate = $sourceTemplate && basename($sourceTemplate)==$sourceTemplate && preg_match('/^my-[^\/\\\\]+\.xml$/', $sourceTemplate);
+  if ($sourceUserTemplate) {
+    $sourceTemplate = "$userTmplDir/$sourceTemplate";
+    $sourceUserTemplate = is_file($sourceTemplate);
+  }
   if ($Name) {
-    $filename = sprintf('%s/my-%s.xml', $userTmplDir, $Name);
+    $filename = ($sourceUserTemplate && $existing === $Name) ? $sourceTemplate : $DockerTemplates->getUserTemplatePath($Name);
     if (is_file($filename)) {
       $oldXML = simplexml_load_file($filename);
       if ($oldXML->Icon != $_POST['contIcon']) {
@@ -107,6 +173,7 @@ if (isset($_POST['contName'])) {
   if (!$DockerClient->doesImageExist($Repository)) {
     // Pull image
     if (!pullImage($Name, $Repository)) {
+      dockerUIBlockerScript(false);
       echo '<div style="text-align:center"><button type="button" onclick="done()">'._('Done').'</button></div><br>';
       goto END;
     }
@@ -137,8 +204,9 @@ if (isset($_POST['contName'])) {
     // force kill container if still running after 10 seconds
     removeContainer($existing,1);
     // remove old template
-    if (strtolower($filename) != strtolower("$userTmplDir/my-$existing.xml")) {
-      @unlink("$userTmplDir/my-$existing.xml");
+    $oldFilename = $sourceUserTemplate ? $sourceTemplate : $DockerTemplates->getUserTemplatePath($existing);
+    if (strtolower($filename) != strtolower($oldFilename)) {
+      @unlink($oldFilename);
     }
   }
   // Extract real Entrypoint and Cmd from container for Tailscale
@@ -158,6 +226,7 @@ if (isset($_POST['contName'])) {
   execCommand($cmd);
   if ($startContainer) addRoute($Name); // add route for remote WireGuard access
 
+  dockerUIBlockerScript(false);
   echo '<div style="text-align:center"><button type="button" onclick="openTerminal(\'docker\',\''.addslashes($Name).'\',\'.log\')">'._('View Container Log').'</button> <button type="button" onclick="done()">'._('Done').'</button></div><br>';
   goto END;
 }
@@ -170,6 +239,8 @@ if (isset($_GET['updateContainer'])){
   $echo = empty($_GET['mute']);
   if ($echo) {
     readfile("$docroot/plugins/dynamix.docker.manager/log.htm");
+    echo '<link type="text/css" rel="stylesheet" href="'.autov("/plugins/dynamix.docker.manager/sheets/AddContainer.css",true).'">';
+    dockerUIBlockerScript(true);
     @flush();
   }
   foreach ($_GET['ct'] as $value) {
@@ -202,10 +273,9 @@ if (isset($_GET['updateContainer'])){
     if (preg_match('/^container:(.*)/', $Network)) {
       $Net_Container = str_replace("container:", "", $Network);
     } else {
-      preg_match("/--(net|network)=container:[^\s]+/", $ExtraParams, $NetworkParam);
-      if (!empty($NetworkParam[0])) {
-        $Net_Container = explode(':', $NetworkParam[0])[1];
-        $Net_Container = str_replace(['"', "'"], '', $Net_Container);
+      preg_match("/--(?:net|network)(?:=|\s+)(['\"]?)container:([^'\"\s]+)\\1/", $ExtraParams, $NetworkParam);
+      if (!empty($NetworkParam[2])) {
+        $Net_Container = $NetworkParam[2];
       }
     }
     // check if the container still exists from which the network should be used, if it doesn't exist any more recreate container with network none and don't start it
@@ -213,7 +283,7 @@ if (isset($_GET['updateContainer'])){
       $Net_Container_ID = $DockerClient->getContainerID($Net_Container);
       if (empty($Net_Container_ID)) {
         $cmd = str_replace('/docker run -d ', '/docker create ', $cmd);
-        $cmd = preg_replace("/--(net|network)=(['\"]?)container:[^'\"]+\\2/", "--network=none ", $cmd);
+        $cmd = preg_replace("/--(?:net|network)(?:=|\s+)(['\"]?)container:[^'\"\s]+\\1/", "--network=none ", $cmd);
       }
     }
     // force kill container if still running after time-out
@@ -237,6 +307,9 @@ if (isset($_GET['updateContainer'])){
     $newImageID = $DockerClient->getImageID($Repository);
     // remove old orphan image since it's no longer used by this container
     if ($oldImageID && $oldImageID != $newImageID) removeImage($oldImageID, $echo);
+  }
+  if ($echo) {
+    dockerUIBlockerScript(false);
   }
   echo '<div style="text-align:center"><button type="button" onclick="window.parent.jQuery(\'#iframe-popup\').dialog(\'close\')">'._('Done').'</button></div><br>';
   goto END;
@@ -736,6 +809,8 @@ function removeConfig(num) {
 
 function prepareConfig(form) {
   var types = [], values = [], targets = [], vcpu = [];
+  var myMAC = $(form).find('input[name="contMyMAC"]').val().trim().replaceAll('-', ':').toLowerCase();
+  $(form).find('input[name="contMyMAC"]').val(myMAC);
   if ($('select[name="contNetwork"]').val()=='host') {
     $(form).find('input[name="confType[]"]').each(function(){types.push($(this).val());});
     $(form).find('input[name="confValue[]"]').each(function(){values.push($(this));});
@@ -744,6 +819,7 @@ function prepareConfig(form) {
   }
   $(form).find('input[id^="box"]').each(function(){if ($(this).prop('checked')) vcpu.push($('#'+$(this).prop('id').replace('box','cpu')).text());});
   form.contCPUset.value = vcpu.join(',');
+  return true;
 }
 
 function makeName(type) {
@@ -893,9 +969,12 @@ if (isset($xml["Config"])) {
 ?>
 
 <div id="canvas">
-<form markdown="1" method="POST" autocomplete="off" onsubmit="prepareConfig(this)">
+<form markdown="1" method="POST" autocomplete="off" onsubmit="return prepareConfig(this)">
 <input type="hidden" name="csrf_token" value="<?=$var['csrf_token']?>">
 <input type="hidden" name="contCPUset" value="">
+<?if ($xmlType=='edit' && is_file($xmlTemplate) && dirname($xmlTemplate)==$dockerManPaths['templates-user']):?>
+<input type="hidden" name="sourceTemplate" value="<?=htmlspecialchars(basename($xmlTemplate))?>">
+<?endif;?>
 <?if ($xmlType=='edit'):?>
 <?if ($DockerClient->doesContainerExist($templateName)):?>
 <input type="hidden" name="existingContainer" value="<?=$templateName?>">
@@ -1108,6 +1187,14 @@ _(Fixed IP address)_ (_(optional)_):
 : <input type="text" name="contMyIP"><span id="myIP"></span>
 
 :docker_fixed_ip_help:
+
+</div>
+
+<div markdown="1" class="myMAC noshow">
+_(Fixed MAC address)_ (_(optional)_):
+: <input type="text" name="contMyMAC" pattern="([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}|[0-9A-Fa-f]{12}">
+
+:docker_fixed_mac_help:
 
 </div>
 
@@ -1560,9 +1647,17 @@ subnet['<?=$network?>'] = '<?=$value?>';
 <?endforeach;?>
 
 function showSubnet(bridge) {
-  if (bridge.match(/^(bridge|host|none)$/i) !== null) {
+  if (bridge.match(/^(host|none)$/i) !== null) {
     $('.myIP').hide();
     $('input[name="contMyIP"]').val('');
+    $('.myMAC').hide();
+    $('input[name="contMyMAC"]').val('');
+    $('.netCONT').hide();
+    $('#netCONT').val('');
+  } else if (bridge.match(/^(bridge)$/i) !== null) {
+    $('.myIP').hide();
+    $('input[name="contMyIP"]').val('');
+    $('.myMAC').show();
     $('.netCONT').hide();
     $('#netCONT').val('');
   } else if (bridge.match(/^(container)$/i) !== null) {
@@ -1570,9 +1665,12 @@ function showSubnet(bridge) {
     $('#netCONT').val('<?php echo (isset($xml) && isset($xml['Network'][1])) ? $xml['Network'][1] : ''; ?>');
     $('.myIP').hide();
     $('input[name="contMyIP"]').val('');
+    $('.myMAC').hide();
+    $('input[name="contMyMAC"]').val('');
   } else {
     $('.myIP').show();
     $('#myIP').html('<?=_('Subnet')?>: '+subnet[bridge]);
+    $('.myMAC').show();
     $('.netCONT').hide();
     $('#netCONT').val('');
   }
@@ -1932,4 +2030,3 @@ if (window.location.href.indexOf("/Apps/") > 0  && <? if (is_file($xmlTemplate))
 }
 </script>
 <?END:?>
-

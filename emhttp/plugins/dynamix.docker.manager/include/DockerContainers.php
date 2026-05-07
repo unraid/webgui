@@ -28,7 +28,7 @@ $user_prefs      = $dockerManPaths['user-prefs'];
 $autostart_file  = $dockerManPaths['autostart-file'];
 
 if (!$containers && !$images) {
-  echo "<tr><td colspan='7' style='text-align:center;padding-top:12px'>"._('No Docker containers installed')."</td></tr>";
+  echo "<tr><td colspan='10' style='text-align:center;padding-top:12px'>"._('No Docker containers installed')."</td></tr>";
   return;
 }
 
@@ -154,7 +154,9 @@ foreach ($containers as $ct) {
   }
   foreach($ct['Networks'] as $netName => $netVals) {
     $networks[] = $netName;
-    $network_ips[] = $running ? $netVals['IPAddress'] : null;
+    $network_ip = $running ? htmlspecialchars((string)$netVals['IPAddress']) : '';
+    $network_mac = $running ? htmlspecialchars((string)($netVals['MacAddress'] ?? '')) : '';
+    $network_ips[] = $network_mac ? "$network_ip<span class='advanced'><br>$network_mac</span>" : $network_ip;
     if (isset($ct['Networks']['host'])) {
       $ports_external[] = sprintf('%s', $netVals['IPAddress']);
       $ports_internal[0] = sprintf('%s', 'all');

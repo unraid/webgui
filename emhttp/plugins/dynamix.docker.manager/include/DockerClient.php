@@ -139,6 +139,22 @@ class DockerTemplates {
 		return $tmpls;
 	}
 
+	public function getUserTemplatePath($Container) {
+		global $dockerManPaths;
+		$dir = $dockerManPaths['templates-user'];
+		if (!is_dir($dir)) @mkdir($dir, 0755, true);
+		$Container = str_replace(['/', '\\'], '', $Container);
+		$target = "my-$Container.xml";
+		$targetLower = strtolower($target);
+		$match = false;
+		foreach (glob("$dir/my-*.xml") ?: [] as $template) {
+			$name = basename($template);
+			if ($name == $target) return $template;
+			if (!$match && strtolower($name) == $targetLower) $match = $template;
+		}
+		return $match ?: "$dir/$target";
+	}
+
 	public function downloadTemplates($Dest=null, $Urls=null) {	
 		/* Don't download any templates.  Leave code in place for future reference. */
 		/* remove existing limetech templates that are all not valid */
@@ -1022,15 +1038,23 @@ class DockerClient {
 				$ports = &$info['Config']['ExposedPorts'];
 			}
 			foreach($ct['NetworkSettings']['Networks'] as $netName => $netVals) {
+				$networkDetails = $info['NetworkSettings']['Networks'][$netName] ?? $netVals;
 				$i = $c['NetworkMode']=='host' ? $host : $netVals['IPAddress'];
-				$c['Networks'][$netName] = [ 'IPAddress' => $i ];
+				$c['Networks'][$netName] = [
+					'IPAddress' => $i,
+					'MacAddress' => $networkDetails['MacAddress'] ?? ''
+				];
 				if ( isset($driver[$netName]) && ($driver[$netName]=='ipvlan' || $driver[$netName]=='macvlan') ) {
 					if (!isset($c['Ports']['vlan'])) $c['Ports']['vlan'] = [];
 					$c['Ports']['vlan']["$i"] = $i;
 				}
 			}
+			$networkDetails = $info['NetworkSettings']['Networks'][$c['NetworkMode']] ?? $ct['NetworkSettings']['Networks'][$c['NetworkMode']] ?? [];
 			$ip = $c['NetworkMode']=='host' ? $host : $ct['NetworkSettings']['Networks'][$c['NetworkMode']]['IPAddress'] ?? null;
-			$c['Networks'][$c['NetworkMode']] = [ 'IPAddress' => $ip ];
+			$c['Networks'][$c['NetworkMode']] = [
+				'IPAddress' => $ip,
+				'MacAddress' => $networkDetails['MacAddress'] ?? ''
+			];
 			$ports = (isset($ports) && is_array($ports)) ? $ports : [];
 			foreach ($ports as $port => $value) {
 				if (!isset($info['HostConfig']['PortBindings'][$port])) {

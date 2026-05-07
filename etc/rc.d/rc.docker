@@ -47,6 +47,24 @@ active(){
   fi
 }
 
+# return the user template for a container, preserving legacy case-insensitive
+# matching without returning multiple files on case-sensitive boot devices
+docker_user_template(){
+  local dir=/boot/config/plugins/dockerMan/templates-user
+  local target="my-$1.xml"
+  local target_lc=${target,,}
+  local match=
+  local file
+  local name
+  for file in "$dir"/my-*.xml; do
+    [[ -e $file ]] || continue
+    name=${file##*/}
+    [[ $name == "$target" ]] && echo "$file" && return
+    [[ -z $match && ${name,,} == "$target_lc" ]] && match=$file
+  done
+  [[ -n $match ]] && echo "$match"
+}
+
 # wait for interface to go up
 carrier(){
   local n e
@@ -245,9 +263,16 @@ netrestore_connect(){
   local MY_TT=$3
   local MY_MAC=$4
   local MY_IP=
-  local MY_OPTS=
+  local MY_IPV4=
+  local MY_IPV6=
   local IP=
+  local IPAM_JSON=
+  local ENDPOINT_JSON=
+  local CONNECT_JSON=
+  local CODE=
+  local BODY=
   local ENDPOINT_ID=
+  local ENDPOINT_MAC=
   local OUT=
 
   container_exist "$CONTAINER" || return 0
@@ -263,23 +288,49 @@ netrestore_connect(){
     return 1
   fi
 
-  ENDPOINT_ID=$(docker inspect --format="{{with index .NetworkSettings.Networks \"$NETWORK\"}}{{.EndpointID}}{{end}}" "$CONTAINER" 2>/dev/null)
-  [[ -n $ENDPOINT_ID ]] && return 0
-
   for IP in ${MY_TT//;/ }; do
     [[ -n $IP ]] || continue
     if [[ $IP =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+      MY_IPV4=$IP
       MY_IP="$MY_IP --ip $IP"
     elif [[ $IP =~ : ]]; then
+      MY_IPV6=$IP
       MY_IP="$MY_IP --ip6 $IP"
     else
       log "skipping invalid stored IP for $CONTAINER on network $NETWORK: $IP"
     fi
   done
 
-  [[ -n $MY_MAC ]] && MY_OPTS="--driver-opt=com.docker.network.endpoint.macaddress=$MY_MAC"
+  ENDPOINT_ID=$(docker inspect --format="{{with index .NetworkSettings.Networks \"$NETWORK\"}}{{.EndpointID}}{{end}}" "$CONTAINER" 2>/dev/null)
+  if [[ -n $ENDPOINT_ID ]]; then
+    [[ -n $MY_MAC ]] || return 0
+    ENDPOINT_MAC=$(docker inspect --format="{{with index .NetworkSettings.Networks \"$NETWORK\"}}{{.MacAddress}}{{end}}" "$CONTAINER" 2>/dev/null)
+    [[ ${ENDPOINT_MAC,,} == ${MY_MAC,,} ]] && return 0
+    log "reconnecting $CONTAINER to network $NETWORK to restore MAC $MY_MAC"
+    if ! OUT=$(docker network disconnect -f "$NETWORK" "$CONTAINER" 2>&1); then
+      log "failed to disconnect $CONTAINER from network $NETWORK: $OUT"
+      return 1
+    fi
+  fi
+
+  if [[ -n $MY_MAC ]]; then
+    [[ -n $MY_IPV4 ]] && IPAM_JSON="\"IPv4Address\":\"$MY_IPV4\""
+    [[ -n $MY_IPV6 ]] && IPAM_JSON="${IPAM_JSON:+$IPAM_JSON,}\"IPv6Address\":\"$MY_IPV6\""
+    ENDPOINT_JSON="\"MacAddress\":\"$MY_MAC\""
+    [[ -n $IPAM_JSON ]] && ENDPOINT_JSON="\"IPAMConfig\":{$IPAM_JSON},$ENDPOINT_JSON"
+    CONNECT_JSON="{\"Container\":\"$CONTAINER\",\"EndpointConfig\":{$ENDPOINT_JSON}}"
+    OUT=$(curl --unix-socket /var/run/docker.sock -sS -w $'\n%{http_code}' -X POST -H "Content-Type: application/json" --data "$CONNECT_JSON" "http://localhost/networks/$NETWORK/connect" 2>&1)
+    CODE=${OUT##*$'\n'}
+    BODY=${OUT%$'\n'$CODE}
+    if [[ $CODE != 2* ]]; then
+      log "failed to connect $CONTAINER to network $NETWORK: $BODY"
+      return 1
+    fi
+    return 0
+  fi
+
   log "connecting $CONTAINER to network $NETWORK"
-  if ! OUT=$(docker network connect $MY_OPTS $MY_IP $NETWORK $CONTAINER 2>&1); then
+  if ! OUT=$(docker network connect $MY_IP $NETWORK $CONTAINER 2>&1); then
     log "failed to connect $CONTAINER to network $NETWORK: $OUT"
     return 1
   fi
@@ -327,40 +378,44 @@ docker_network_start(){
   # get container settings for custom networks to reconnect later
   declare -A NETRESTORE PRIMARY_NETWORK REBUILD_CONTAINERS USED_SUBNETS4 USED_SUBNETS6 RESTORED_NETWORKS
   for CONTAINER in $(docker container ls -a --format='{{.Names}}'); do
-    # the file case (due to fat32) might be different so use find to match
-    XMLFILE=$(find /boot/config/plugins/dockerMan/templates-user -maxdepth 1 -iname my-${CONTAINER}.xml)
-    if [[ -n $XMLFILE ]]; then
+    XMLFILE=$(docker_user_template "$CONTAINER")
+    if [[ -f $XMLFILE ]]; then
       REBUILD=
       MAIN=
       # update custom network reference (if changed)
       for NIC in $NICS; do
         [[ ${NIC:0:3} == eth ]] && NIC=$(active $NIC)
         X=${NIC//[^0-9]/}
-        REF=$(grep -Pom1 "<Network>\K(br|bond|eth|wlan)$X" $XMLFILE)
+        REF=$(grep -Pom1 "<Network>\K(br|bond|eth|wlan)$X" "$XMLFILE")
         if [[ $X == 0 ]] && ! carrier $NIC 1; then
           continue
         fi
         [[ $X == 0 && $NIC != wlan0 ]] && MAIN=$NIC
         [[ $NIC == wlan0 && -n $MAIN ]] && continue
         if [[ -n $REF && $REF != $NIC ]]; then
-          sed -ri "s/<Network>(br|bond|eth|wlan)$X(\.[0-9]+)?<\/Network>/<Network>$NIC\2<\/Network>/" $XMLFILE
+          sed -ri "s/<Network>(br|bond|eth|wlan)$X(\.[0-9]+)?<\/Network>/<Network>$NIC\2<\/Network>/" "$XMLFILE"
           REBUILD=1
         fi
       done
-      MY_NETWORK= MY_IP= MY_MAC= TEMPLATE_MAC= CUSTOM_PRIMARY=
+      MY_NETWORK= MY_IP= MY_MAC= XML_MAC= TEMPLATE_MAC= CUSTOM_PRIMARY=
       while read_dom; do
         [[ $ENTITY == Network ]] && MY_NETWORK=$CONTENT
         [[ $ENTITY == MyIP ]] && MY_IP=${CONTENT// /,} && MY_IP=$(echo "$MY_IP" | tr -s "," ";")
-      done <$XMLFILE
+        [[ $ENTITY == MyMAC ]] && XML_MAC=${CONTENT// /}
+      done <"$XMLFILE"
       # only restore valid networks
       if [[ -n $MY_NETWORK ]]; then
         [[ $MY_NETWORK =~ ^(br|bond|eth|wlan)[0-9]+(\.[0-9]+)?$ ]] && CUSTOM_PRIMARY=1
         TEMPLATE_MAC=$(sed -nE 's@.*<ExtraParams>.*--mac-address(=|[[:space:]]+)([^ <]+).*@\2@p' "$XMLFILE" | head -n1)
-        MY_MAC=$(docker inspect --format="{{with index .NetworkSettings.Networks \"$MY_NETWORK\"}}{{.MacAddress}}{{end}}" $CONTAINER 2>/dev/null)
-        [[ -n $MY_MAC ]] || MY_MAC=$TEMPLATE_MAC
+        if [[ -n $XML_MAC ]]; then
+          MY_MAC=$XML_MAC
+        else
+          MY_MAC=$(docker inspect --format="{{with index .NetworkSettings.Networks \"$MY_NETWORK\"}}{{.MacAddress}}{{end}}" $CONTAINER 2>/dev/null)
+          [[ -n $MY_MAC ]] || MY_MAC=$TEMPLATE_MAC
+        fi
         netrestore_add "$MY_NETWORK" "$CONTAINER" "$MY_IP" "$MY_MAC"
         PRIMARY_NETWORK[$CONTAINER]=$MY_NETWORK
-        [[ -n $REBUILD || (-n $TEMPLATE_MAC && -n $CUSTOM_PRIMARY) ]] && REBUILD_CONTAINERS[$CONTAINER]=1
+        [[ -n $REBUILD || (-z $XML_MAC && -n $TEMPLATE_MAC && -n $CUSTOM_PRIMARY) ]] && REBUILD_CONTAINERS[$CONTAINER]=1
       fi
     fi
     # restore user defined networks
