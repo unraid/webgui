@@ -1107,7 +1107,9 @@ while (true) {
         // Set shell command for zip
         if (preg_match('/\.zip$/i', $archive)) {
           $unzip_overwrite_flag = $no_overwrite ? '-n' : '-o';
-          $cmd = "{ cd $esc_dest || exit 1; unzip $unzip_overwrite_flag $esc_archive | " . PROGRESS_SCRIPT . "; } >$status 2>$error & echo \$!";
+          // -^ preserves special characters (e.g. newlines)
+          // note: stat-poller in the progress script requires this, too
+          $cmd = "{ cd $esc_dest || exit 1; unzip -^ $unzip_overwrite_flag $esc_archive | " . PROGRESS_SCRIPT . "; } >$status 2>$error & echo \$!";
 
         // Set shell command for tar
         } else {
