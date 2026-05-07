@@ -28,6 +28,9 @@ define('RSYNC_TOTAL_SIZE_SAMPLES', 5);     // Number of measurements to average 
 
 // Compress progress dot size: 1 dot = this many MB of source data (zip: --dot-size, tar: checkpoint interval)
 define('COMPRESS_DOT_SIZE_MB', 100);
+define('PROGRESS_SCRIPT', '/usr/local/emhttp/plugins/dynamix/scripts/progress');
+define('TAR_RECORD_SIZE', 10240);
+define('TAR_CHECKPOINT', intval(COMPRESS_DOT_SIZE_MB * 1024 * 1024 / TAR_RECORD_SIZE));
 
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/Wrappers.php";
@@ -943,10 +946,13 @@ while (true) {
         do {
           $target_tmp = rtrim($target, '/').'/.'.$archive_name.'_'.uniqid('', true).'.tmp';
         } while (file_exists($target_tmp));
-        // persist target_tmp in active JSON so case 99 (cancel) can clean it up
+        // persist fields in active JSON so case 99 (cancel) and completion block can use them
         if (file_exists($active)) {
           $active_data = json_decode(file_get_contents($active), true) ?: [];
-          $active_data['target_tmp'] = $target_tmp;
+          $active_data['target_tmp']    = $target_tmp;
+          $active_data['archive_path']  = $archive_path;
+          $active_data['archive_chown'] = $archive_chown;
+          $active_data['archive_chmod'] = $archive_chmod;
           file_put_contents($active, json_encode($active_data));
         }
 
@@ -972,24 +978,19 @@ while (true) {
         // in filenames (quotes, $, backticks) cannot escape the shell string context.
         $esc_source_parent = escapeshellarg($source_parent);
         $esc_target_tmp    = escapeshellarg($target_tmp);
-        $esc_archive_path  = escapeshellarg($archive_path);
 
         switch ($format) {
         case 'zip':
-          $cmd = <<<BASH
-          {
-            cd $esc_source_parent || exit 1
-            zip --recurse-paths --display-usize --display-dots --dot-size {$dot_mb}m $esc_target_tmp -- $escaped_basenames 2>&1 | /usr/local/emhttp/plugins/dynamix/scripts/progress
-            zip_exit=\${PIPESTATUS[0]}
-            if [[ \$zip_exit -eq 0 ]]; then
-              mv $esc_target_tmp $esc_archive_path
-              chown $archive_chown $esc_archive_path
-              chmod $archive_chmod $esc_archive_path
-            else
-              rm -f $esc_target_tmp
-            fi
-          } >$status 2>$error & echo \$!
-          BASH;
+          $zip_args = [
+            '-r',       // recursion into directories
+            '-du',      // displays file sizes
+            '-dd',      // display dot per dot size
+            '-ds', $dot_mb . 'm', // chunk size per dot
+            $esc_target_tmp,
+            '--',
+            $escaped_basenames,
+          ];
+          $cmd = "{ cd $esc_source_parent || exit 1; zip " . implode(' ', $zip_args) . " | " . PROGRESS_SCRIPT . "; } >$status 2>$error & echo \$!";
           break;
         case 'tar':
           $tar_flags = '-cvf';
@@ -1015,41 +1016,21 @@ while (true) {
         }
 
         if (isset($tar_flags)) {
-          $cmd = <<<BASH
-          {
-            cd $esc_source_parent || exit 1
-            record_size=10240
-            dot_size=\$(($dot_mb * 1024 * 1024))
-            checkpoint=\$((dot_size / record_size))
-            tar_args=(
-              $tar_flags
-              $esc_target_tmp
-              --no-unquote
-              --record-size=\$record_size
-              --checkpoint=\$checkpoint
-              "--checkpoint-action=exec=printf 'CHUNK\\n'"
-              -- $escaped_basenames
-            )
-            tar "\${tar_args[@]}" | /usr/local/emhttp/plugins/dynamix/scripts/progress
-            tar_exit=\${PIPESTATUS[0]}
-            logger -t file_manager "compress tar_exit=\${tar_exit}"
-            if [[ \$tar_exit -eq 0 ]]; then
-              mv $esc_target_tmp $esc_archive_path
-              chown $archive_chown $esc_archive_path
-              chmod $archive_chmod $esc_archive_path
-            else
-              rm -f $esc_target_tmp
-            fi
-            exit \$tar_exit
-          } >$status 2>$error & echo \$!
-          BASH;
+          $tar_args = [
+            $tar_flags,
+            $esc_target_tmp,
+            '--no-unquote',
+            '--record-size=' . TAR_RECORD_SIZE,
+            '--checkpoint=' . TAR_CHECKPOINT,
+            "\"--checkpoint-action=exec=printf 'CHUNK\\n'\"",
+            "-- $escaped_basenames",
+          ];
+          $cmd = "{ cd $esc_source_parent || exit 1; tar " . implode(' ', $tar_args) . " | " . PROGRESS_SCRIPT . "; } >$status 2>$error & echo \$!";
         }
 
         exec('logger -t file_manager ' . escapeshellarg('Executing command (first 300 chars): ' . substr($cmd ?? '', 0, 300)));
         file_put_contents('/tmp/cmd-debug-compress.txt', $cmd ?? '(null)');
-        $ret_code = null;
-        exec($cmd, $pid, $ret_code);
-        exec('logger -t file_manager ' . escapeshellarg('After exec: pid=' . json_encode($pid) . ', ret_code=' . $ret_code));
+        exec($cmd, $pid);
         if (!empty($pid[0])) {
           $ps_out = [];
           exec('ps -p ' . (int)$pid[0] . ' -o pid,cmd --no-headers 2>/dev/null', $ps_out);
@@ -1081,8 +1062,7 @@ while (true) {
           $reply['error'] = _('Invalid target path');
           break;
         }
-        $dot_mb = COMPRESS_DOT_SIZE_MB;
-        // Pre-escape user-controlled paths for safe heredoc interpolation
+        // Pre-escape user-controlled paths for safe interpolation
         $esc_archive = escapeshellarg($archive);
         $esc_dest    = escapeshellarg($dest);
 
@@ -1123,20 +1103,15 @@ while (true) {
         // Reset progress parser state for new extract operation (shares static vars with compress)
         parse_compress_progress(null, null, COMPRESS_DOT_SIZE_MB, true);
 
+        // Set shell command for zip
         if (preg_match('/\.zip$/i', $archive)) {
           $unzip_overwrite_flag = $no_overwrite ? '-n' : '-o';
-          $cmd = <<<BASH
-          {
-            cd $esc_dest || exit 1
-            unzip $unzip_overwrite_flag $esc_archive | /usr/local/emhttp/plugins/dynamix/scripts/progress
-            unzip_exit=\${PIPESTATUS[0]}
-            exit \$unzip_exit
-          } >$status 2>$error & echo \$!
-          BASH;
+          $cmd = "{ cd $esc_dest || exit 1; unzip $unzip_overwrite_flag $esc_archive | " . PROGRESS_SCRIPT . "; } >$status 2>$error & echo \$!";
 
+        // Set shell command for tar
         } else {
-          // TAR variants: compressed by default; only plain .tar sets $is_compressed_tar=false
-          $is_compressed_tar = true;
+
+          // Set tar options depending on compression type
           if (preg_match('/\.(tar\.gz|tgz)$/i', $archive)) {
             $extract_tar_flags = '-xzvf';
           } elseif (preg_match('/\.(tar\.bz2|tbz2)$/i', $archive)) {
@@ -1147,57 +1122,21 @@ while (true) {
             $extract_tar_flags = '--use-compress-program=zstd -xvf';
           } elseif (preg_match('/\.(tar\.lz4)$/i', $archive)) {
             $extract_tar_flags = '--use-compress-program=lz4 -xvf';
-          } elseif (preg_match('/\.tar$/i', $archive)) {
-            $extract_tar_flags = '-xf';
-            $is_compressed_tar = false;
+          } else {
+            $extract_tar_flags = '-xvf';
           }
 
-          if (isset($extract_tar_flags)) {
-            $keep_existing_files = $no_overwrite ? '--skip-old-files --warning=no-existing-file' : '';
-            if ($is_compressed_tar) {
-              // Compressed tar: listing pass would cost same as extraction (full decompression).
-              // Use checkpoint-based CHUNK events + -v (in flags) for filenames for live progress.
-              $dot_mb = COMPRESS_DOT_SIZE_MB;
-              $cmd = <<<BASH
-              {
-                cd $esc_dest || exit 1
-                record_size=10240
-                dot_size=$(($dot_mb * 1024 * 1024))
-                checkpoint=\$((dot_size / record_size))
-                tar_args=(
-                  $extract_tar_flags
-                  $esc_archive
-                  --no-unquote
-                  --record-size=\$record_size
-                  --checkpoint=\$checkpoint
-                  "--checkpoint-action=exec=printf 'CHUNK\\n'"
-                  $keep_existing_files
-                )
-                tar "\${tar_args[@]}" | /usr/local/emhttp/plugins/dynamix/scripts/progress
-                tar_exit=\${PIPESTATUS[0]}
-                exit \$tar_exit
-              } >$status 2>$error & echo \$!
-              BASH;
-            } else {
-              // Plain .tar: progress script does synchronous listing pass + stat-poller.
-              $cmd = <<<BASH
-              {
-                cd $esc_dest || exit 1
-                tar_args=(
-                  $extract_tar_flags
-                  $esc_archive
-                  --no-unquote
-                  $keep_existing_files
-                )
-                tar "\${tar_args[@]}" | /usr/local/emhttp/plugins/dynamix/scripts/progress
-                tar_exit=\${PIPESTATUS[0]}
-                exit \$tar_exit
-              } >$status 2>$error & echo \$!
-              BASH;
-            }
-          } else {
-            $cmd = "cd ".quoted($dest)." && unzip ".($no_overwrite ? '-n ' : '-o ').quoted($archive)." >$status 2>$error & echo \$!";
-          }
+          $keep_existing_files = $no_overwrite ? '--skip-old-files --warning=no-existing-file' : '';
+          $tar_args = array_filter([
+            $extract_tar_flags,
+            $esc_archive,
+            '--no-unquote',
+            '--record-size=' . TAR_RECORD_SIZE,
+            '--checkpoint=' . TAR_CHECKPOINT,
+            "\"--checkpoint-action=exec=printf 'CHUNK\\n'\"",
+            $keep_existing_files,
+          ]);
+          $cmd = "{ cd $esc_dest || exit 1; tar " . implode(' ', $tar_args) . " | " . PROGRESS_SCRIPT . "; } >$status 2>$error & echo \$!";
         }
 
         exec('logger -t file_manager "extract cmd=' . escapeshellarg(substr($cmd, 0, 200)) . '"');
@@ -1205,10 +1144,12 @@ while (true) {
         exec('logger -t file_manager "extract pid=' . escapeshellarg(json_encode($pid)) . '"');
       }
       break;
-    case 99: // kill running background process
+    case 99: // cancel
       if (!empty($pid)) exec("kill $pid");
       // clean up compress tmp file if present (loaded from active JSON via extract)
-      if (!empty($target_tmp)) @unlink($target_tmp);
+      if (!empty($target_tmp)) {
+        @unlink($target_tmp);
+      }
       delete_file($active, $pid_file, $status, $error);
       unset($pid);
       $delete_empty_dirs = null;
@@ -1253,9 +1194,15 @@ while (true) {
           }
         }
 
-        // For compress action: clean up tmp file if still exists (shouldn't, but safety)
+        // For compress action: move tmp to final archive + set permissions, or clean up on failure
         if ($action == 16 && isset($target_tmp)) {
-          @unlink($target_tmp);
+          if ((!file_exists($error) || filesize($error) === 0) && isset($archive_path, $archive_chown, $archive_chmod)) {
+            rename($target_tmp, $archive_path);
+            exec('chown ' . escapeshellarg($archive_chown) . ' ' . escapeshellarg($archive_path));
+            exec('chmod ' . escapeshellarg($archive_chmod) . ' ' . escapeshellarg($archive_path));
+          } else {
+            @unlink($target_tmp);
+          }
         }
 
         if (file_exists($error)) $reply['error'] = trim(file_get_contents($error));
