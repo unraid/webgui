@@ -377,13 +377,19 @@ else
     [[ $tar_compress_prog ]] && listing_cmd+=(--use-compress-program="$tar_compress_prog")
     listing_cmd+=(-tvf "$tar_archive")
     dbg "tar extract listing: ${listing_cmd[*]}"
-    total_bytes=$(timeout 5 "${listing_cmd[@]}" 2>/dev/null | awk '{sum+=$3} END {print sum+0}')
-    if [[ $total_bytes -gt 0 ]]; then
-      dbg "tar extract total_bytes=$total_bytes (from listing)"
-      printf 'TOTAL %s\n' "$total_bytes"
-      _prog_total_line "$total_bytes"
+    # Capture output first, then check exit code: a pipeline would lose timeout's exit code (124),
+    # causing awk to sum partial output and emit an incorrect TOTAL lower than the actual size.
+    listing_out=$(timeout 5 "${listing_cmd[@]}" 2>/dev/null)
+    listing_rc=$?
+    if [[ $listing_rc -eq 0 ]]; then
+      total_bytes=$(awk '{sum+=$3} END {print sum+0}' <<< "$listing_out")
+      if [[ $total_bytes -gt 0 ]]; then
+        dbg "tar extract total_bytes=$total_bytes (from listing)"
+        printf 'TOTAL %s\n' "$total_bytes"
+        _prog_total_line "$total_bytes"
+      fi
     else
-      dbg "tar extract: listing timed out or failed, no TOTAL"
+      dbg "tar extract: listing timed out or failed (status=$listing_rc), no TOTAL"
     fi
   fi
 fi
