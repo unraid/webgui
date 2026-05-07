@@ -269,8 +269,6 @@ if [[ $compress_tool == unzip ]]; then
     if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]+([0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{2}-[0-9]{2}-[0-9]{4})[[:space:]]+[0-9]{2}:[0-9]{2}[[:space:]]+(.+)$ ]]; then
       fsize="${BASH_REMATCH[1]}"
       fname="${BASH_REMATCH[3]}"
-      # Skip directory entries (trailing /): size 0, no contribution to progress.
-      [[ $fname == */ ]] && continue
       fname_to_size[$fname]=$fsize
       total_bytes=$(( total_bytes + fsize ))
     fi
@@ -410,73 +408,98 @@ if [[ $compress_tool == unzip ]]; then
   # Read unzip stdout char-by-char with a 100ms read timeout.
   # Timing confirmed via strace:
   #   openat(O_CREAT|O_TRUNC)              ← T+0   file created empty
-  #   write(1, " inflating: PATH  ", N)    ← T+64µs, NO trailing \n yet
+  #   write(1, " inflating: PATH  ", N)    ← T+64µs, one atomic write(2), NO \n
   #   <file data written>
   #   write(1, "\n", 1)                    ← after write completes
   #
   # Dual-trigger strategy:
-  # 1. Timeout (100ms silence, rc > 128): unzip has written the filename line but
-  #    not yet \n. The file is being written right now. Emit FILE + poll growth.
-  # 2. \n arrival (rc == 0, char empty): file write complete. If not already
-  #    handled by the timeout path (e.g. small/fast files), emit FILE + one CHUNK.
-  # The timeout approach solves the space-in-filename prefix-match problem:
-  # unzip writes the entire filename line in one atomic write syscall, so the
-  # timeout always fires after the full line is buffered — never mid-filename.
-  # Note: filenames with real control chars use caret notation in both unzip -l
-  # and stdout (FnFilter1). The -f check fails for such files on disk → FILE
-  # appears with manifest size, no CHUNK emitted.
+  # 1. Timeout (rc > 128): no \n for 100ms. Because unzip writes the filename line
+  #    in one atomic write(2) syscall, the buffer now holds the complete line —
+  #    the full filename is available regardless of embedded spaces. File is being
+  #    written right now → emit FILE, poll growth.
+  # 2. \n arrival (rc == 0, char empty): file write complete. Handles small/fast
+  #    files that finish before the 100ms timeout fires → emit FILE, no CHUNK.
+  # already_handled: set by the timeout path; prevents the \n path from re-processing
+  # the same line (defensive — the drain loop usually consumes the \n first).
+  # Reset by whichever path handles the line.
+  # Note: filenames with real control chars use caret notation in both unzip -l and
+  # stdout (FnFilter1). The manifest lookup still works (same notation), but the
+  # on-disk filename differs → CHUNK poll path uses a wrong fpath; FILE still appears.
   dbg "unzip stdout reader start: dest=$unzip_dest files=${#fname_to_size[@]}"
   char_buf=""
-  declare -A processed_files
+  already_handled=
+  stall_buf=__unset__
   while true; do
     IFS= read -r -n 1 -t 0.1 char
     rc=$?
     if [[ $rc -eq 0 ]]; then
+      # rc=0: read consumed exactly one byte.
+      # Empty $char: the byte was the \n line delimiter — bash consumed it but does
+      # not store it in the variable. Non-empty $char: regular byte, accumulate it.
       if [[ ! $char ]]; then
-        # \n received: file write is complete. Handle files not yet caught by
-        # the timeout path (small/fast files finished before 100ms elapsed).
-        if [[ $char_buf =~ ^[[:space:]]+(inflating|extracting):[[:space:]]+(.+)$ ]]; then
-          candidate="${BASH_REMATCH[2]}"
-          candidate="${candidate%"${candidate##*[! ]}"}"
-          if [[ $candidate ]]; then
-            [[ $candidate != /* ]] && fpath="$compress_cwd/$candidate" || fpath="$candidate"
+        # \n received: file write is complete.
+        if [[ ! $already_handled ]]; then
+          if [[ $char_buf =~ ^[[:space:]]+(inflating|extracting|creating):[[:space:]]+(.+) ]]; then
+            candidate="${BASH_REMATCH[2]}"
+            # Strip unzip's trailing padding spaces. Format: "%-22s  %s%s" pads
+            # the filename field to at least 22 chars, then adds 2 separator spaces.
+            # Example input:  "  inflating: tmp/file.txt           "
+            # After strip:    "tmp/file.txt"
+            candidate="${candidate%"${candidate##*[! ]}"}"
             fname="${candidate#"$unzip_dest"/}"
-            if [[ ${fname_to_size[$fname]+x} && ! ${processed_files[$fname]+x} && -f $fpath ]]; then
-              processed_files[$fname]=1
-              fsize="${fname_to_size[$fname]:-0}"
-              printf 'FILE %(%s)T %s %s\n' -1 "$fsize" "$fname"
-              _prog_file_line "$fsize" "$fname"
-              file_count=$(( file_count + 1 ))
-              if [[ $fsize -gt 0 ]]; then
-                printf 'CHUNK %(%s)T %s\n' -1 "$fsize"
-                _prog_chunk_line "$fsize"
-              fi
+            # \n arrived → file write is complete. Emit FILE directly from manifest.
+            if [[ ${fname_to_size[$fname]+x} ]]; then
+              fsize="${fname_to_size[$fname]}"
+            else
+              printf 'Error: unzip manifest miss (\n path): %s\n' "$fname" >&2
+              fsize=0
             fi
+            printf 'FILE %(%s)T %s %s\n' -1 "$fsize" "$fname"
+            _prog_file_line "$fsize" "$fname"
+            file_count=$(( file_count + 1 ))
           fi
         fi
         char_buf=""
+        already_handled=
         continue
       fi
       char_buf+="$char"
       continue
     fi
-    # rc != 0: EOF (rc <= 128) or timeout (rc > 128).
+    # rc != 0: read returned an error code.
+    # rc in 1..128: EOF — unzip finished and closed the pipe. Exit the loop.
     [[ $rc -le 128 ]] && break
-    # Timeout: no stdout from unzip for 100ms. Buffer holds the complete filename
-    # line. The file is being written now — start growth monitoring.
-    [[ ! $char_buf ]] && continue
-    [[ $char_buf =~ ^[[:space:]]+(inflating|extracting):[[:space:]]+(.+)$ ]] || continue
+    # rc > 128: read -t timed out. Bash sets rc to 128 + signal number; on Linux
+    # typically 142 (128 + SIGALRM=14). Portable check: rc > 128.
+    # No \n arrived for 100ms → the atomic write(2) of the filename line is done;
+    # the file is being written right now → emit FILE, start growth monitoring.
+    if ! [[ $char_buf =~ ^[[:space:]]+(inflating|extracting|creating):[[:space:]]+(.+) ]]; then
+      # Regex did not match. If char_buf has not grown since the last failed check,
+      # unzip output is stuck/unexpected — bail out to avoid spinning forever.
+      if [[ $char_buf == "$stall_buf" ]]; then
+        printf 'Error: unzip stdout stalled (unexpected output): %q\n' "$char_buf" >&2
+        break
+      fi
+      stall_buf=$char_buf
+      continue
+    fi
+    stall_buf=__unset__
     candidate="${BASH_REMATCH[2]}"
-    # Strip trailing spaces (padding + separator spaces from unzip format).
+    # Strip trailing padding spaces. Unzip format: "%-22s  %s%s" pads the filename
+    # field to >=22 chars then adds 2 separator spaces before the trailing state.
+    # Example: "  inflating: tmp/file.txt           " → "tmp/file.txt"
     candidate="${candidate%"${candidate##*[! ]}"}"
-    [[ ! $candidate ]] && continue
+    # With -d /dest/dir unzip shows the full path: "inflating: /dest/dir/file.txt" → absolute.
+    # Without -d it shows a path relative to its CWD: "inflating: file.txt" → prepend CWD.
     [[ $candidate != /* ]] && fpath="$compress_cwd/$candidate" || fpath="$candidate"
     fname="${candidate#"$unzip_dest"/}"
-    [[ ! ${fname_to_size[$fname]+x} ]] && continue
-    [[ ${processed_files[$fname]+x} ]] && continue
-    [[ ! -f $fpath ]] && continue
-    processed_files[$fname]=1
-    fsize="${fname_to_size[$fname]:-0}"
+    already_handled=1
+    if [[ ${fname_to_size[$fname]+x} ]]; then
+      fsize="${fname_to_size[$fname]}"
+    else
+      printf 'Error: unzip manifest miss (timeout path): %s\n' "$fname" >&2
+      fsize=0
+    fi
     printf 'FILE %(%s)T %s %s\n' -1 "$fsize" "$fname"
     _prog_file_line "$fsize" "$fname"
     file_count=$(( file_count + 1 ))
@@ -496,6 +519,7 @@ if [[ $compress_tool == unzip ]]; then
       done
     fi
     char_buf=""
+    already_handled=
     # Drain rest of line (\n arrives after file write completes).
     while IFS= read -r -n 1 c; do [[ ! $c ]] && break; done
   done
@@ -542,10 +566,13 @@ else
         _prog_chunk_line "$chunk_bytes"
       elif [[ $line_buffer ]]; then
         # tar: each line should be a filename; validate with stat to skip error messages.
-        fsize=$(cd "$compress_cwd" && stat -c%s "$line_buffer" 2>/dev/null)
+        # GNU tar uses escape quoting style by default: \n → actual newline, \\ → backslash.
+        # printf '%b' interprets these sequences to reconstruct the on-disk filename.
+        fname=$(printf '%b' "$line_buffer")
+        fsize=$(cd "$compress_cwd" && stat -c%s "$fname" 2>/dev/null)
         if [[ $fsize ]]; then
-          printf 'FILE %(%s)T %s %s\n' -1 "$fsize" "$line_buffer"
-          _prog_file_line "$fsize" "$line_buffer"
+          printf 'FILE %(%s)T %s %s\n' -1 "$fsize" "$fname"
+          _prog_file_line "$fsize" "$fname"
           file_count=$((file_count + 1))
         fi
       fi
