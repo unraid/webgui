@@ -537,6 +537,7 @@ if (!file_exists($empty_dir)) {
 $delete_empty_dirs = null;
 $pid = false;
 $last_published_status = null;
+$last_published_time = 0;
 
 // infinite loop to monitor and execute file operations
 // Note: exec() uses /bin/sh which is symlinked to bash in unraid and a requirement for process substitution syntax >(...)
@@ -1225,11 +1226,20 @@ while (true) {
     publish('filemonitor', file_exists($active) ? 1 : 0);
     $timer = time();
   }
-  // Don't publish identical status (avoids redundant nchan traffic for rsync/zip)
-  if (isset($reply['status']) && !isset($reply['done']) && $reply['status'] === $last_published_status) {
-    unset($reply['status']);
-  } else {
-    $last_published_status = $reply['status'] ?? null;
+  $now = time();
+  // Don't publish identical status (avoids redundant nchan traffic for rsync/zip).
+  // But republish every 20s to keep nchan buffer alive (nchan_message_timeout in /etc/rc.d/rc.nginx is 30s).
+  if (isset($reply['status']) && !isset($reply['done'])) {
+    if ($reply['status'] === $last_published_status && ($now - $last_published_time) < 20) {
+      unset($reply['status']);
+    } else {
+      $last_published_status = $reply['status'];
+      $last_published_time = $now;
+    }
+  } elseif (!isset($reply['status']) && !isset($reply['done']) && isset($action) && $last_published_status !== null && ($now - $last_published_time) >= 20) {
+    // No new status but process still running: republish last to keep nchan buffer alive
+    $reply['status'] = $last_published_status;
+    $last_published_time = $now;
   }
   publish('filemanager', json_encode($reply));
   usleep(250000);
