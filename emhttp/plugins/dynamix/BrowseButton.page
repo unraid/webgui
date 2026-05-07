@@ -48,7 +48,7 @@ const dfm = {
   draggable:  false,
   previous: '',
   height: 0,
-  tsize: {0: 0, 1: 6, 2: 3, 3: 3, 4: 3, 11: 2, 12: 2, 14: 0, 15: 3},
+  tsize: {0: 0, 1: 6, 2: 3, 3: 3, 4: 3, 11: 2, 12: 2, 14: 0, 15: 3, 16: 6, 17: 1},
 };
 var dfm_read = {};
 
@@ -352,6 +352,18 @@ function dfm_makeDialog(open) {
     dfm.window.find('#dfm_target').val(dfm_read.target).prop('disabled',true);
     dfm.window.find('.dfm_loc').html('&nbsp;').css({'line-height':'normal'});
     dfm.window.find('.dfm_text').html('').css({'line-height':'normal'});
+    dfm.height = 630;
+    break;
+  case 16: // compress
+    dfm.window.html($('#dfm_templateCompress').html());
+    dfm.window.find('#dfm_target').val(dfm_read.target).prop('disabled',true);
+    dfm.window.find('#dfm_format').prop('disabled',true);
+    dfm.window.find('#dfm_archive_name').prop('disabled',true);
+    dfm.height = 630;
+    break;
+  case 17: // extract
+    dfm.window.html($('#dfm_templateExtract').html());
+    dfm.window.find('#dfm_target').val(dfm_read.target).prop('disabled',true);
     dfm.height = 630;
     break;
   }
