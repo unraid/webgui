@@ -418,10 +418,16 @@ if [[ $compress_tool == unzip ]]; then
   #   <file data written>
   #   write(1, "\n", 1)                    ← after write completes
   #
-  # read -r line blocks on \n → we'd get the filename only AFTER the write.
-  # Solution: read char-by-char (like the zip/tar branch). Check with -e after
-  # each char: the file exists from open_outfile() before write(1), so -e fires
-  # as soon as we've accumulated enough path characters. No timing involved.
+  # Strategy: read char-by-char. Trigger only when $char is a space — unzip's
+  # format string is "%-22s  ..." so spaces follow the filename before \n arrives.
+  # Waiting for the first space prevents matching a filename prefix: "file" cannot
+  # fire while reading "filename" because there is no space inside "filename".
+  # After space-trigger, require exact manifest match (fname_to_size key exists)
+  # as a second guard for filenames that contain internal spaces.
+  # Note: unzip -l and stdout both use FnFilter1 (caret notation for control
+  # chars, e.g. ^J). The -f check uses the caret-notation path which does NOT
+  # match the actual on-disk name for control-char filenames → no CHUNK emitted
+  # for those, but FILE lines still appear.
   dbg "unzip stdout reader start: dest=$unzip_dest files=${#fname_to_size[@]}"
   char_buf=""
   while IFS= read -r -n 1 char || [[ $char ]]; do
@@ -430,17 +436,21 @@ if [[ $compress_tool == unzip ]]; then
       continue
     fi
     char_buf+="$char"
-    # Match "  inflating: PATH" or " extracting: PATH" as it builds up.
+    # Only evaluate on space: ensures the filename field is complete.
+    [[ $char != ' ' ]] && continue
     [[ $char_buf =~ ^[[:space:]]+(inflating|extracting):[[:space:]]+(.+)$ ]] || continue
     candidate="${BASH_REMATCH[2]}"
-    # Strip trailing spaces (unzip pads the filename field).
+    # Strip trailing spaces (padding + separator spaces from unzip format).
     candidate="${candidate%"${candidate##*[! ]}"}"
     [[ ! $candidate ]] && continue
     [[ $candidate != /* ]] && fpath="$compress_cwd/$candidate" || fpath="$candidate"
-    # -f (regular file) fires when open_outfile() creates the file — intermediate
-    # path components are dirs (-f false), so we don't trigger on partial paths.
-    [[ ! -f $fpath ]] && continue
     fname="${candidate#"$unzip_dest"/}"
+    # Exact manifest match: all non-dir files are in fname_to_size (size may be
+    # 0 for empty files). This guards against a shorter already-extracted sibling
+    # matching when its name is a space-delimited prefix of the current filename.
+    [[ ! ${fname_to_size[$fname]+x} ]] && continue
+    # -f (regular file): fires when open_outfile() creates the file.
+    [[ ! -f $fpath ]] && continue
     fsize="${fname_to_size[$fname]:-0}"
     printf 'FILE %(%s)T %s %s\n' -1 "$fsize" "$fname"
     _prog_file_line "$fsize" "$fname"
@@ -461,7 +471,7 @@ if [[ $compress_tool == unzip ]]; then
         "$_sleep_cmd" 0.2
       done
     fi
-    # Drain rest of line (trailing padding spaces + \n that unzip sends after write).
+    # Drain rest of line (\n arrives after file write completes).
     while IFS= read -r -n 1 c; do [[ ! $c ]] && break; done
     char_buf=""
   done
