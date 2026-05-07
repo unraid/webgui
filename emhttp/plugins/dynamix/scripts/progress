@@ -407,37 +407,64 @@ dbg "entering main progress loop..."
 file_count=0
 
 if [[ $compress_tool == unzip ]]; then
-  # Read unzip stdout line by line. Unzip prints "  inflating: path" right after
-  # open_outfile() but BEFORE writing any data (confirmed via strace: openat at
-  # T+0, write(1,"extracting:") at T+64us, file fully written at T+1.26s).
-  # So on receiving the line, the file exists but is still being written.
-  # Emit FILE immediately, then poll growth until the file stops growing.
-  # Key timing (confirmed via strace):
+  # Read unzip stdout char-by-char with a 100ms read timeout.
+  # Timing confirmed via strace:
   #   openat(O_CREAT|O_TRUNC)              ← T+0   file created empty
   #   write(1, " inflating: PATH  ", N)    ← T+64µs, NO trailing \n yet
   #   <file data written>
   #   write(1, "\n", 1)                    ← after write completes
   #
-  # Strategy: read char-by-char. Trigger only when $char is a space — unzip's
-  # format string is "%-22s  ..." so spaces follow the filename before \n arrives.
-  # Waiting for the first space prevents matching a filename prefix: "file" cannot
-  # fire while reading "filename" because there is no space inside "filename".
-  # After space-trigger, require exact manifest match (fname_to_size key exists)
-  # as a second guard for filenames that contain internal spaces.
-  # Note: unzip -l and stdout both use FnFilter1 (caret notation for control
-  # chars, e.g. ^J). The -f check uses the caret-notation path which does NOT
-  # match the actual on-disk name for control-char filenames → no CHUNK emitted
-  # for those, but FILE lines still appear.
+  # Dual-trigger strategy:
+  # 1. Timeout (100ms silence, rc > 128): unzip has written the filename line but
+  #    not yet \n. The file is being written right now. Emit FILE + poll growth.
+  # 2. \n arrival (rc == 0, char empty): file write complete. If not already
+  #    handled by the timeout path (e.g. small/fast files), emit FILE + one CHUNK.
+  # The timeout approach solves the space-in-filename prefix-match problem:
+  # unzip writes the entire filename line in one atomic write syscall, so the
+  # timeout always fires after the full line is buffered — never mid-filename.
+  # Note: filenames with real control chars use caret notation in both unzip -l
+  # and stdout (FnFilter1). The -f check fails for such files on disk → FILE
+  # appears with manifest size, no CHUNK emitted.
   dbg "unzip stdout reader start: dest=$unzip_dest files=${#fname_to_size[@]}"
   char_buf=""
-  while IFS= read -r -n 1 char || [[ $char ]]; do
-    if [[ ! $char ]]; then
-      char_buf=""
+  declare -A processed_files
+  while true; do
+    IFS= read -r -n 1 -t 0.1 char
+    rc=$?
+    if [[ $rc -eq 0 ]]; then
+      if [[ ! $char ]]; then
+        # \n received: file write is complete. Handle files not yet caught by
+        # the timeout path (small/fast files finished before 100ms elapsed).
+        if [[ $char_buf =~ ^[[:space:]]+(inflating|extracting):[[:space:]]+(.+)$ ]]; then
+          candidate="${BASH_REMATCH[2]}"
+          candidate="${candidate%"${candidate##*[! ]}"}"
+          if [[ $candidate ]]; then
+            [[ $candidate != /* ]] && fpath="$compress_cwd/$candidate" || fpath="$candidate"
+            fname="${candidate#"$unzip_dest"/}"
+            if [[ ${fname_to_size[$fname]+x} && ! ${processed_files[$fname]+x} && -f $fpath ]]; then
+              processed_files[$fname]=1
+              fsize="${fname_to_size[$fname]:-0}"
+              printf 'FILE %(%s)T %s %s\n' -1 "$fsize" "$fname"
+              _prog_file_line "$fsize" "$fname"
+              file_count=$(( file_count + 1 ))
+              if [[ $fsize -gt 0 ]]; then
+                printf 'CHUNK %(%s)T %s\n' -1 "$fsize"
+                _prog_chunk_line "$fsize"
+              fi
+            fi
+          fi
+        fi
+        char_buf=""
+        continue
+      fi
+      char_buf+="$char"
       continue
     fi
-    char_buf+="$char"
-    # Only evaluate on space: ensures the filename field is complete.
-    [[ $char != ' ' ]] && continue
+    # rc != 0: EOF (rc <= 128) or timeout (rc > 128).
+    [[ $rc -le 128 ]] && break
+    # Timeout: no stdout from unzip for 100ms. Buffer holds the complete filename
+    # line. The file is being written now — start growth monitoring.
+    [[ ! $char_buf ]] && continue
     [[ $char_buf =~ ^[[:space:]]+(inflating|extracting):[[:space:]]+(.+)$ ]] || continue
     candidate="${BASH_REMATCH[2]}"
     # Strip trailing spaces (padding + separator spaces from unzip format).
@@ -445,18 +472,15 @@ if [[ $compress_tool == unzip ]]; then
     [[ ! $candidate ]] && continue
     [[ $candidate != /* ]] && fpath="$compress_cwd/$candidate" || fpath="$candidate"
     fname="${candidate#"$unzip_dest"/}"
-    # Exact manifest match: all non-dir files are in fname_to_size (size may be
-    # 0 for empty files). This guards against a shorter already-extracted sibling
-    # matching when its name is a space-delimited prefix of the current filename.
     [[ ! ${fname_to_size[$fname]+x} ]] && continue
-    # -f (regular file): fires when open_outfile() creates the file.
+    [[ ${processed_files[$fname]+x} ]] && continue
     [[ ! -f $fpath ]] && continue
+    processed_files[$fname]=1
     fsize="${fname_to_size[$fname]:-0}"
     printf 'FILE %(%s)T %s %s\n' -1 "$fsize" "$fname"
     _prog_file_line "$fsize" "$fname"
     file_count=$(( file_count + 1 ))
     if [[ $fsize -gt 0 ]]; then
-      # Poll growth until file reaches expected size or stops growing.
       prev_size=0
       while true; do
         cur_size=$(stat -c%s "$fpath" 2>/dev/null || echo 0)
@@ -471,9 +495,9 @@ if [[ $compress_tool == unzip ]]; then
         "$_sleep_cmd" 0.2
       done
     fi
+    char_buf=""
     # Drain rest of line (\n arrives after file write completes).
     while IFS= read -r -n 1 c; do [[ ! $c ]] && break; done
-    char_buf=""
   done
   dbg "unzip done: file_count=$file_count"
 
