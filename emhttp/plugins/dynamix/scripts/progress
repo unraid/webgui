@@ -61,6 +61,10 @@ show_progress=
 [[ ! -t 1 && -t 2 ]] && show_progress=1
 dbg "show_progress=$show_progress"
 
+# Resolve sleep path once; avoids bash probing ./sleep when CWD is inside the
+# extraction destination (unzip sets its CWD there before exec).
+_sleep_cmd=$(command -v sleep)
+
 # Progress state
 _prog_total=0
 _prog_done=0
@@ -253,22 +257,25 @@ if [[ $compress_tool == unzip ]]; then
     fi
   done
   dbg "unzip dest=$unzip_dest"
-  # Parse manifest into arrays for TOTAL + poller
+  # Build fname→size lookup from manifest. Used by the stdout reader below.
   # unzip -l: "  1234567  2000-01-01 12:00   path/to/file.txt"  (Debian/ISO)
   # unzip -l: "  1234567  03-22-2026 20:43   path/to/file.txt"  (Info-ZIP/US)
-  file_names=()
-  file_sizes=()
+  # Note: unzip -l escapes control chars as caret notation (^J etc.); filenames
+  # with real control chars may not match the unzip stdout output, so their size
+  # defaults to 0 (no CHUNK lines emitted, but FILE lines still appear).
+  declare -A fname_to_size
   total_bytes=0
   while IFS= read -r line; do
     if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]+([0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{2}-[0-9]{2}-[0-9]{4})[[:space:]]+[0-9]{2}:[0-9]{2}[[:space:]]+(.+)$ ]]; then
       fsize="${BASH_REMATCH[1]}"
       fname="${BASH_REMATCH[3]}"
-      file_sizes+=("$fsize")
-      file_names+=("$fname")
-      total_bytes=$((total_bytes + fsize))
+      # Skip directory entries (trailing /): size 0, no contribution to progress.
+      [[ $fname == */ ]] && continue
+      fname_to_size[$fname]=$fsize
+      total_bytes=$(( total_bytes + fsize ))
     fi
   done < <(unzip -l "$archive" 2>/dev/null)
-  dbg "total_bytes=$total_bytes files=${#file_names[@]}"
+  dbg "total_bytes=$total_bytes files=${#fname_to_size[@]}"
   printf 'TOTAL %s\n' "$total_bytes"
   _prog_total_line "$total_bytes"
 
@@ -399,62 +406,66 @@ fi
 dbg "entering main progress loop..."
 file_count=0
 
-# stat-poller: used for unzip (reads manifest built from unzip -l before extracting)
-run_stat_poller() {
-  local dest="$1"
-  local -n _names="$2"
-  local -n _sizes="$3"
-  local idx=0
-  local total_files=${#_names[@]}
-  while [[ $idx -lt $total_files ]]; do
-    local fname="${_names[$idx]}"
-    local fsize="${_sizes[$idx]:-0}"
-    local fpath="$dest/$fname"
-    # Wait until file appears on disk.
-    # Limit wait to 15s: filenames with embedded newlines or other control chars
-    # are stored in the manifest but extracted under a different name (e.g. newline
-    # stripped), so they never appear at the expected path.
-    local wait_iters=0
-    while [[ ! -e "$fpath" ]]; do
-      sleep 0.2
-      wait_iters=$(( wait_iters + 1 ))
-      if [[ $wait_iters -ge 75 ]]; then
-        dbg "stat-poller: timeout (15s) waiting for: $fname"
-        idx=$(( idx + 1 ))
-        continue 2
-      fi
-    done
+if [[ $compress_tool == unzip ]]; then
+  # Read unzip stdout line by line. Unzip prints "  inflating: path" right after
+  # open_outfile() but BEFORE writing any data (confirmed via strace: openat at
+  # T+0, write(1,"extracting:") at T+64us, file fully written at T+1.26s).
+  # So on receiving the line, the file exists but is still being written.
+  # Emit FILE immediately, then poll growth until the file stops growing.
+  # Key timing (confirmed via strace):
+  #   openat(O_CREAT|O_TRUNC)              ← T+0   file created empty
+  #   write(1, " inflating: PATH  ", N)    ← T+64µs, NO trailing \n yet
+  #   <file data written>
+  #   write(1, "\n", 1)                    ← after write completes
+  #
+  # read -r line blocks on \n → we'd get the filename only AFTER the write.
+  # Solution: read char-by-char (like the zip/tar branch). Check with -e after
+  # each char: the file exists from open_outfile() before write(1), so -e fires
+  # as soon as we've accumulated enough path characters. No timing involved.
+  dbg "unzip stdout reader start: dest=$unzip_dest files=${#fname_to_size[@]}"
+  char_buf=""
+  while IFS= read -r -n 1 char || [[ $char ]]; do
+    if [[ ! $char ]]; then
+      char_buf=""
+      continue
+    fi
+    char_buf+="$char"
+    # Match "  inflating: PATH" or " extracting: PATH" as it builds up.
+    [[ $char_buf =~ ^[[:space:]]+(inflating|extracting):[[:space:]]+(.+)$ ]] || continue
+    candidate="${BASH_REMATCH[2]}"
+    # Strip trailing spaces (unzip pads the filename field).
+    candidate="${candidate%"${candidate##*[! ]}"}"
+    [[ ! $candidate ]] && continue
+    [[ $candidate != /* ]] && fpath="$compress_cwd/$candidate" || fpath="$candidate"
+    # -f (regular file) fires when open_outfile() creates the file — intermediate
+    # path components are dirs (-f false), so we don't trigger on partial paths.
+    [[ ! -f $fpath ]] && continue
+    fname="${candidate#"$unzip_dest"/}"
+    fsize="${fname_to_size[$fname]:-0}"
     printf 'FILE %(%s)T %s %s\n' -1 "$fsize" "$fname"
     _prog_file_line "$fsize" "$fname"
-    file_count=$((file_count + 1))
-    # For large files (>10MB): poll growing size with stat and emit DOT lines
-    if [[ $fsize -gt 10485760 ]]; then
-      local prev_size=0
+    file_count=$(( file_count + 1 ))
+    if [[ $fsize -gt 0 ]]; then
+      # Poll growth until file reaches expected size or stops growing.
+      prev_size=0
       while true; do
-        sleep 0.5
-        local cur_size
         cur_size=$(stat -c%s "$fpath" 2>/dev/null || echo 0)
-        # File stopped growing: tool finished writing it
-        [[ $cur_size -le $prev_size ]] && break
-        printf 'CHUNK %(%s)T %s\n' -1 "$((cur_size - prev_size))"
-        _prog_chunk_line "$((cur_size - prev_size))"
-        prev_size=$cur_size
+        if [[ $cur_size -gt $prev_size ]]; then
+          printf 'CHUNK %(%s)T %s\n' -1 "$((cur_size - prev_size))"
+          _prog_chunk_line "$((cur_size - prev_size))"
+          prev_size=$cur_size
+          [[ $cur_size -ge $fsize ]] && break
+        else
+          break
+        fi
+        "$_sleep_cmd" 0.2
       done
     fi
-    idx=$((idx + 1))
+    # Drain rest of line (trailing padding spaces + \n that unzip sends after write).
+    while IFS= read -r -n 1 c; do [[ ! $c ]] && break; done
+    char_buf=""
   done
-}
-
-if [[ $compress_tool == unzip ]]; then
-  # run_stat_poller: polls file sizes with stat every 0.5s for large files (>10MB).
-  # Emits FILE when file appears, CHUNK for each poll delta until size stops growing.
-  # stdin is drained in background (cat >/dev/null) so the tool doesn't block on the pipe.
-  cat >/dev/null &
-  drain_pid=$!
-  dbg "unzip stat-poller start: dest=$unzip_dest files=${#file_names[@]}"
-  run_stat_poller "$unzip_dest" file_names file_sizes
-  wait "$drain_pid" 2>/dev/null
-  dbg "unzip stat-poller done: file_count=$file_count"
+  dbg "unzip done: file_count=$file_count"
 
 else
   # Char-by-char parser for zip and tar compress (stdin is live, not pre-buffered).
