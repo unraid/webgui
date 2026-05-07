@@ -19,7 +19,7 @@
 #
 # Usage (piped process auto-detected):
 #  zip -r -du -ds Xm archive.zip -- files... | progress.sh
-#  unzip -o archive.zip -d /dest/dir         | progress.sh
+#  unzip -^ -o archive.zip -d /dest/dir      | progress.sh
 #  tar -xvf archive.tar -C /dest/dir         | progress.sh
 #  tar -cv --checkpoint=N --checkpoint-action=exec="printf 'CHUNK\n'" -f archive.tar -- files... | progress.sh
 #
@@ -31,7 +31,9 @@
 #  tar ... | progress.sh >/dev/null
 #  tar ... | progress.sh | tee file >/dev/null
 #
-# Required zip options: -du  -ds Xm
+# Required zip options:       -du  -ds Xm
+# Required unzip options:     -^ (restore control chars in filenames; without it, unzip strips
+#                                 them on extraction so progress cannot find the file on disk)
 # Required tar compress options: -v  --checkpoint=N  --checkpoint-action=exec="printf 'CHUNK\n'"
 # Required tar extract options:  -v
 #
@@ -408,9 +410,19 @@ run_stat_poller() {
     local fname="${_names[$idx]}"
     local fsize="${_sizes[$idx]:-0}"
     local fpath="$dest/$fname"
-    # Wait until file appears on disk
+    # Wait until file appears on disk.
+    # Limit wait to 15s: filenames with embedded newlines or other control chars
+    # are stored in the manifest but extracted under a different name (e.g. newline
+    # stripped), so they never appear at the expected path.
+    local wait_iters=0
     while [[ ! -e "$fpath" ]]; do
       sleep 0.2
+      wait_iters=$(( wait_iters + 1 ))
+      if [[ $wait_iters -ge 75 ]]; then
+        dbg "stat-poller: timeout (15s) waiting for: $fname"
+        idx=$(( idx + 1 ))
+        continue 2
+      fi
     done
     printf 'FILE %(%s)T %s %s\n' -1 "$fsize" "$fname"
     _prog_file_line "$fsize" "$fname"
