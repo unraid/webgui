@@ -273,21 +273,26 @@ parse_append_line() {
     # Matches from "label $label" to the next "label" or end of file
     # Normalize CRLF to LF for parsing (DOS-edited syslinux.cfg)
     tr -d '\r' < "$cfg_file" | awk -v label="$label" '
-        BEGIN { label=tolower(label) }
+        BEGIN {
+            label=tolower(label)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", label)
+            gsub(/[[:space:]]+/, " ", label)
+        }
         {
             sub(/\r$/, "")
         }
         /^label[[:space:]]+/ {
             line=tolower($0)
             gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
-            if (line == "label " label) {
+            gsub(/[[:space:]]+/, " ", line)
+            if (line ~ "^label[[:space:]]+" label "$") {
                 in_section=1
             } else {
                 in_section=0
             }
         }
-        in_section && /^[[:space:]]+append[[:space:]]+/ {
-            sub(/^[[:space:]]+append[[:space:]]+/, "")
+        in_section && /^[[:space:]]*append([[:space:]]|$)/ {
+            sub(/^[[:space:]]*append[[:space:]]+/, "")
             print
             exit
         }
@@ -830,14 +835,21 @@ update_syslinux_label_append() {
     local cfg_file="$3"
 
     awk -v label="$target_label" -v append_args="$append_args" '
-        /^[[:space:]]*label / {
+        BEGIN {
+            normalized_label = label
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", normalized_label)
+            gsub(/[[:space:]]+/, " ", normalized_label)
+        }
+        /^[[:space:]]*label[[:space:]]+/ {
             if (in_section && !replaced) {
                 print section_indent "append " append_args
             }
 
             current_label = $0
             sub(/^[[:space:]]*label[[:space:]]+/, "", current_label)
-            in_section = (current_label == label)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", current_label)
+            gsub(/[[:space:]]+/, " ", current_label)
+            in_section = (current_label == normalized_label)
             replaced = 0
             section_indent = "  "
         }
