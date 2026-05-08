@@ -868,6 +868,12 @@ function doAction(action, title, id) {
   case 16: // compress
     dfm.window.html($('#dfm_templateCompress').html());
     dfm_createSource(source.dfm_strip());
+    // Remove single-file-only format options unless exactly one file (not folder) is selected
+    var sources = source.split('\r').filter(Boolean);
+    var isSingleFile = sources.length === 1 && !sources[0].endsWith('/');
+    if (!isSingleFile) {
+      dfm.window.find('.dfm_single_format').remove();
+    }
     // Detect if source is under a configured docker/appdata path for default format selection
     var srcSubpath = source.replace(/^\/mnt\/[^\/]+\//, '');
     var isAppdata = dfm_docker_subpaths.some(function(p) { return srcSubpath === p || srcSubpath.indexOf(p + '/') === 0; });

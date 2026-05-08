@@ -377,6 +377,11 @@ _(Archive format)_:
   <option value="tar.xz">TAR.XZ (_.tar.xz_)</option>
   <option value="tar.zst">TAR.ZST (_.tar.zst - recommended for appdata_)</option>
   <option value="tar.lz4">TAR.LZ4 (_.tar.lz4_)</option>
+  <option value="gz" class="dfm_single_format">GZ (_.gz_)</option>
+  <option value="xz" class="dfm_single_format">XZ (_.xz_)</option>
+  <option value="bz2" class="dfm_single_format">BZ2 (_.bz2_)</option>
+  <option value="zst" class="dfm_single_format">ZST (_.zst_)</option>
+  <option value="lz4" class="dfm_single_format">LZ4 (_.lz4_)</option>
 </select>
 
 _(Archive name)_:

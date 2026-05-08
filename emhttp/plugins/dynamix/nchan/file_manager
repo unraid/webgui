@@ -544,7 +544,7 @@ $last_published_time = 0;
 while (true) {
   // Reset all per-iteration variables. $tar_flags/$cmd must be here to prevent stale
   // values from a previous tar iteration overriding the zip code path.
-  unset($action, $source, $target, $H, $sparse, $exist, $zfs, $format, $archive_name, $target_tmp, $tar_flags, $cmd);
+  unset($action, $source, $target, $H, $sparse, $exist, $zfs, $format, $archive_name, $target_tmp, $tar_flags, $single_compressor, $cmd);
 
   // read job parameters from JSON file: $action, $title, $source, $target, $H, $sparse, $exist, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
   if (file_exists($active)) {
@@ -1028,9 +1028,29 @@ while (true) {
         case 'tar.xz':
           $tar_flags = '-cvJf';
           break;
+        case 'gz':
+          $single_compressor = 'gzip -c --';
+          break;
+        case 'xz':
+          $single_compressor = 'xz -c --';
+          break;
+        case 'bz2':
+          $single_compressor = 'bzip2 -c --';
+          break;
+        case 'zst':
+          $single_compressor = 'zstd -c --';
+          break;
+        case 'lz4':
+          $single_compressor = 'lz4 -c --';
+          break;
         default:
           $reply['error'] = sprintf(_('Unsupported archive format: %s'), $format);
           break 2; // break out of switch($format) and switch($action)
+        }
+
+        if (isset($single_compressor)) {
+          $esc_basename = escapeshellarg($source_basenames[0]);
+          $cmd = "{ cd $esc_source_parent || exit 1; $single_compressor $esc_basename > $esc_target_tmp; } >$status 2>$error & echo \$!";
         }
 
         if (isset($tar_flags)) {
