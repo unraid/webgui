@@ -580,6 +580,16 @@ while (true) {
       update_translation($locale_init);
     }
     $source = explode("\r", $source);
+
+    // When no process is running yet, clear any stale nchan state from the previous operation.
+    // nchan buffers the last message for 30s; without this a new client would briefly see
+    // the previous operation's final status.
+    if (!$pid) {
+      $last_published_status = null;
+      $last_published_time = 0;
+      publish('filemanager', json_encode(['action' => $action, 'text' => []]));
+    }
+
     switch ($action) {
     case 0: // create folder
 
