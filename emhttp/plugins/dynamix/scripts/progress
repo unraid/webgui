@@ -225,7 +225,7 @@ for tool in zip tar unzip; do
   fi
 done
 if [[ ! $compress_tool ]]; then
-  echo "error: no compress process found" >&2
+  echo "Error: no compress process found" >&2
   exit 1
 fi
 
@@ -253,6 +253,9 @@ if [[ $compress_tool == unzip ]]; then
       next_is_dest=1
     fi
   done
+  # Normalize unzip_dest: strip trailing slash (except lone root "/") so
+  # "${candidate#\"$unzip_dest\"/}" strips correctly even if user passed -d /tmp/.
+  [[ $unzip_dest != '/' ]] && unzip_dest=${unzip_dest%/}
   dbg "unzip dest=$unzip_dest"
   # Build fname→size lookup from manifest. Used by the stdout reader below.
   # unzip -l: "  1234567  2000-01-01 12:00   path/to/file.txt"  (Debian/ISO)
@@ -271,8 +274,10 @@ if [[ $compress_tool == unzip ]]; then
     fi
   done < <(LANG=en_US.UTF-8 unzip -l "$archive" 2>/dev/null)
   dbg "total_bytes=$total_bytes files=${#fname_to_size[@]}"
-  printf 'TOTAL %s\n' "$total_bytes"
-  _prog_total_line "$total_bytes"
+  if [[ $total_bytes -gt 0 ]]; then
+    printf 'TOTAL %s\n' "$total_bytes"
+    _prog_total_line "$total_bytes"
+  fi
 
 # zip/tar: sum sizes of source files (args after '--'); also extract chunk size for CHUNK lines
 else
@@ -371,8 +376,10 @@ else
       total_bytes=$(du -sb "${sources[@]}" 2>/dev/null | awk '{sum+=$1} END {print sum}')
     fi
     dbg "total_bytes=$total_bytes"
-    printf 'TOTAL %s\n' "$total_bytes"
-    _prog_total_line "$total_bytes"
+    if [[ $total_bytes -gt 0 ]]; then
+      printf 'TOTAL %s\n' "$total_bytes"
+      _prog_total_line "$total_bytes"
+    fi
   elif [[ $is_tar_extract && $tar_archive ]]; then
     # For tar extract: run tar -tvf with 5s timeout to get file sizes for TOTAL.
     # Plain tar listing is nearly instant; compressed formats are slower but usually finish
@@ -448,7 +455,7 @@ if [[ $compress_tool == unzip ]]; then
             if [[ ${fname_to_size[$fname]+x} ]]; then
               fsize="${fname_to_size[$fname]}"
             else
-              printf 'Error: unzip manifest miss (\n path): %s\n' "$fname" >&2
+              printf 'Error: unzip manifest miss (\\n path): %s\n' "$fname" >&2
               [[ $fname == *'^'* || $fname == *'#U'* ]] && printf 'Error: filename contains escape sequences; make sure unzip is called with LANG=en_US.UTF-8\n' >&2
               fsize=0
             fi
@@ -505,7 +512,7 @@ if [[ $compress_tool == unzip ]]; then
     if [[ $fsize -gt 0 ]]; then
       prev_size=0
       while true; do
-        cur_size=$(stat -c%s "$fpath" 2>/dev/null || echo 0)
+        cur_size=$(stat -c%s -- "$fpath" 2>/dev/null || echo 0)
         if [[ $cur_size -gt $prev_size ]]; then
           printf 'CHUNK %s %s\n' "$EPOCHREALTIME" "$((cur_size - prev_size))"
           _prog_chunk_line "$((cur_size - prev_size))"
@@ -568,7 +575,7 @@ else
         # GNU tar uses escape quoting style by default: \n → actual newline, \\ → backslash.
         # printf '%b' interprets these sequences to reconstruct the on-disk filename.
         fname=$(printf '%b' "$line_buffer")
-        fsize=$(cd "$compress_cwd" && stat -c%s "$fname" 2>/dev/null)
+        fsize=$(cd "$compress_cwd" && stat -c%s -- "$fname" 2>/dev/null)
         if [[ $fsize ]]; then
           printf 'FILE %(%s)T %s %s\n' -1 "$fsize" "$fname"
           _prog_file_line "$fsize" "$fname"
