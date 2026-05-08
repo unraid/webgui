@@ -173,8 +173,8 @@ function fileContextMenu(id, button) {
     opts.push({text:"_(Move)_", icon:"fa-paste", action:function(e){e.preventDefault();doAction(9,"_(Move)_",id.dfm_proxy());}});
     opts.push({text:"_(Rename)_", icon:"fa-edit", action:function(e){e.preventDefault();doAction(7,"_(Rename)_",id.dfm_proxy());}});
     opts.push({text:"_(Compress)_", icon:"fa-file-archive-o", action:function(e){e.preventDefault();doAction(16,"_(Compress)_",id.dfm_proxy());}});
-    // Check if file is an archive
-    var fileName = $('#'+id).attr('data');
+    // Check if file is an archive (data attribute is on row_X, not name_X)
+    var fileName = $('#'+id.dfm_proxy()).attr('data');
     if (isArchive(fileName)) {
       opts.push({text:"_(Extract)_", icon:"fa-archive", action:function(e){e.preventDefault();doAction(17,"_(Extract)_",id.dfm_proxy());}});
     }
