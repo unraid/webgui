@@ -973,8 +973,8 @@ while (true) {
 
         exec('logger -t file_manager ' . escapeshellarg('Start compress: format=' . $format . ', archive=' . $archive_path));
 
-        // Check if target archive already exists
-        if (file_exists($archive_path)) {
+        // Check if target archive already exists (skip check when overwrite is allowed)
+        if (!empty($exist) && file_exists($archive_path)) {
           $reply['error'] = _('Archive already exists');
           break;
         }

@@ -288,7 +288,9 @@ function dfm_makeDialog(open) {
   }
   dfm.window = $('#dfm_dialogWindow');
   if (dfm.window.dialog('instance') !==  undefined) dfm.dialog = dfm.window.dialog('isOpen');
-  var dfm_source = dfm_read.source.split('\r').slice(0,9);
+  // Guard against dfm_read.source being undefined (e.g. mode:'read' returned empty data
+  // due to a timing race). filter(Boolean) removes empty strings from split results.
+  var dfm_source = (dfm_read.source || '').split('\r').filter(Boolean).slice(0,9);
   switch (dfm_read.action) {
   case 0: // create folder/object
     dfm.window.html($('#dfm_templateCreateFolder').html());
