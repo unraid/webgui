@@ -47,18 +47,23 @@
 
 debug=
 progress_nl=
-while [[ ${1-} == '-v' || ${1-} == '--verbose' || ${1-} == '--progress-newline' ]]; do
-  [[ ${1-} == '-v' || ${1-} == '--verbose' ]] && debug=1
-  [[ ${1-} == '--progress-newline' ]] && progress_nl=1
+force_progress=
+while [[ ${1-} == -* ]]; do
+  case ${1-} in
+    -v|--verbose)           debug=1 ;;
+    --progress-newline)     progress_nl=1 ;;
+    --progress)             force_progress=1 ;;
+  esac
   shift
 done
 dbg() { [[ $debug ]] && echo "[DEBUG] $*" >&2; return 0; }
-dbg "debug=$debug progress_nl=$progress_nl"
+dbg "debug=$debug progress_nl=$progress_nl force_progress=$force_progress"
 
 # Human-readable progress on stderr when stdout is not a TTY.
 # Covers: | progress.sh >/dev/null  and  | progress.sh | tee file >/dev/null
+# --progress forces the bar even without a TTY (e.g. redirected stderr).
 show_progress=
-[[ ! -t 1 && -t 2 ]] && show_progress=1
+[[ $force_progress || ( ! -t 1 && -t 2 ) ]] && show_progress=1
 dbg "show_progress=$show_progress"
 
 # Resolve sleep path once; avoids bash probing ./sleep when CWD is inside the
@@ -78,32 +83,27 @@ _prog_never_rendered=1
 _prog_speed_w=10
 _prog_eta_w=6
 
+# Format bytes with one decimal (truncated, not rounded)
 _prog_fmt_bytes() {
-  local b=$1
-  if [[ $b -ge 1073741824 ]]; then
-    awk -v b="$b" 'BEGIN{printf "%.1f GB", b/1073741824}'
-  elif [[ $b -ge 1048576 ]]; then
-    awk -v b="$b" 'BEGIN{printf "%.1f MB", b/1048576}'
-  elif [[ $b -ge 1024 ]]; then
-    awk -v b="$b" 'BEGIN{printf "%.1f KB", b/1024}'
-  else
-    echo "${b} B"
+  local b=$1 v unit
+  if   [[ $b -ge 1073741824 ]]; then v=$(( b * 10 / 1073741824 )); unit=GB
+  elif [[ $b -ge 1048576    ]]; then v=$(( b * 10 / 1048576 ));    unit=MB
+  elif [[ $b -ge 1024       ]]; then v=$(( b * 10 / 1024 ));       unit=KB
+  else echo "$b B"; return
   fi
+  printf '%d.%d %s\n' $((v/10)) $((v%10)) "$unit"
 }
 
 _prog_render() {
   [[ ! $show_progress ]] && return
-  local now=$EPOCHREALTIME
   # Use sub-second timestamps (EPOCHREALTIME) for accurate speed on fast transfers.
-  # 0.05s threshold avoids division by near-zero on first call; keep last known speed otherwise.
+  local now=$EPOCHREALTIME  
   if [[ $_prog_chunk_t ]]; then
     local new_speed
-    local awk_args=(
-      -v "done=$(( _prog_done - _prog_chunk_done ))"
-      -v "dt=$(awk -v a="$now" -v b="$_prog_chunk_t" 'BEGIN{print a-b}')"
-      'BEGIN{ if (dt > 0.05) print int(done/dt); else print -1 }'
-    )
-    new_speed=$(awk "${awk_args[@]}")
+    # 0.05s threshold avoids division by near-zero on first call; keep last known speed otherwise.
+    new_speed=$(awk \
+      -v now="$now" -v t="$_prog_chunk_t" -v done="$(( _prog_done - _prog_chunk_done ))" \
+      'BEGIN{ dt=now-t; if (dt > 0.05) print int(done/dt); else print -1 }')
     [[ $new_speed -ge 0 ]] && _prog_last_speed=$new_speed
   fi
   local speed=$_prog_last_speed
@@ -116,9 +116,8 @@ _prog_render() {
   fi
   if [[ $_prog_total -gt 0 ]]; then
     pct=$(( _prog_done * 100 / _prog_total ))
-    local eta=0
     if [[ $speed -gt 0 ]]; then
-      eta=$(awk -v rem="$(( _prog_total - _prog_done ))" -v s="$speed" 'BEGIN{print int(rem/s)}')
+      local eta=$(( (_prog_total - _prog_done) / speed ))
       if [[ $eta -ge 3600 ]]; then
         eta_str=$(( eta / 3600 ))h$(( (eta % 3600) / 60 ))m
       elif [[ $eta -ge 60 ]]; then
@@ -129,13 +128,11 @@ _prog_render() {
     else
       eta_str='--'
     fi
-    local right_args=(
-      "$pct"
-      "${#_prog_total_str}" "$done_str" "$_prog_total_str"
-      "$_prog_speed_w" "$speed_str"
-      "$_prog_eta_w" "$eta_str"
-    )
-    right_side=$(printf '%3d%%  %-*s / %s  %-*s  ETA %-*s' "${right_args[@]}")
+    right_side=$(printf '%3d%%  %-*s / %s  %-*s  ETA %-*s' \
+      "$pct" \
+      "${#_prog_total_str}" "$done_str" "$_prog_total_str" \
+      "$_prog_speed_w" "$speed_str" \
+      "$_prog_eta_w" "$eta_str")
   else
     # TOTAL not yet known: show done + speed only, no percent/ETA
     right_side=$(printf '  ?%%  %s  %s' "$done_str" "$speed_str")
@@ -174,17 +171,16 @@ _prog_total_line() {
   # _prog_bar_total is fixed at TOTAL time so the bar width never changes mid-transfer.
   # _prog_speed_w/_prog_eta_w pad speed/eta to constant widths for the same reason.
   _prog_total_str=$(_prog_fmt_bytes "$_prog_total")
-  # Max speed: "999.9 MB/s" = 10 chars; max eta: "99h99m" = 6 chars
-  local max_right
-  local max_right_args=(
-    100
-    "${#_prog_total_str}" "" "$_prog_total_str"
-    "$_prog_speed_w" "" "$_prog_eta_w" ""
-  )
-  max_right=$(printf '%3d%%  %-*s / %s  %-*s  ETA %-*s' "${max_right_args[@]}")
+  # Max speed width: "999.9 MB/s" = 10 chars; max eta width: "99h99m" = 6 chars.
+  # Right-side format: '%3d%%  %-*s / %s  %-*s  ETA %-*s' →
+  #   3 + 1(%) + 2(spaces)            = 6
+  # + len(total_str) + 3(' / ') + len(total_str) + 2(spaces)
+  # + speed_w + 2(spaces)
+  # + 4('ETA ') + eta_w
+  local right_w=$(( 17 + 2 * ${#_prog_total_str} + _prog_speed_w + _prog_eta_w ))
   local cols=${COLUMNS:-80}
-  # [bar] right_side: 1('[') + bar + 2('] ') + len(right_side) = cols
-  _prog_bar_total=$(( cols - 3 - ${#max_right} ))
+  # [bar] right_side: 1('[') + bar + 2('] ') + right_w = cols
+  _prog_bar_total=$(( cols - 3 - right_w ))
   [[ $_prog_bar_total -lt 4 ]] && _prog_bar_total=4
   dbg "_prog_total_line: total=$_prog_total total_str=$_prog_total_str bar_total=$_prog_bar_total cols=$cols"
 }
@@ -199,15 +195,16 @@ _prog_file_line() {
 _prog_chunk_line() {
   [[ ! $show_progress ]] && return
   _prog_done=$(( _prog_done + $1 ))
-  local now; printf -v now '%(%s)T' -1
   dbg "_prog_chunk_line: chunk=$1 done=$_prog_done total=$_prog_total"
   _prog_render
-  _prog_chunk_t=$EPOCHREALTIME
-  _prog_chunk_done=$_prog_done
 }
 
 _prog_done_line() {
   [[ ! $show_progress ]] && return
+  # Force 100% on completion: tar/zip don't always emit a checkpoint for the
+  # final partial block, leaving the bar short of 100%.
+  [[ $_prog_total -gt 0 ]] && _prog_done=$_prog_total
+  _prog_render
   printf '\n' >&2
 }
 
