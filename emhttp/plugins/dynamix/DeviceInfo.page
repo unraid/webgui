@@ -240,7 +240,7 @@ function setFloor() {
   }
   $('#shareFloor').val(isNaN(number) ? '' : number);
 }
-<?if (fsType('btrfs') && isPool($name) && !isSubpool($name)):?>
+<?if (fsType('btrfs')):?>
 function presetBTRFS(form,hour) {
   var mode = form.mode.value;
   form.min.disabled = mode==0;
@@ -1055,6 +1055,7 @@ _(Critical disk utilization threshold)_ (%):
 
 <?if (fsType('btrfs')):?>
 <?if (_var($disk,'fsStatus')=="Mounted"):?>
+<?if (isPool($name)):?>
 <div id="poolsummary" class="title nocontrol">
   <span class="left">
     <i class="title fa fa-hdd-o"></i> _(Pool Status)_
@@ -1079,6 +1080,7 @@ if (!empty($poolstatus['pools'][$poolName])) {
 ?>
 _(pool status)_:
 : <span class="<?=$statusClass?>"><?=$status?><?=$statusLink?></span>
+<?endif;?>
 
 </form>
 
@@ -1416,8 +1418,9 @@ _(btrfs check status)_:
 </form>
 <?endif;?>
 <?endif;?>
-<?if (fsType('zfs') && isPool($name) && !isSubpool($name)):?>
+<?if (fsType('zfs') && !isSubpool($name)):?>
 <?if (_var($disk,'fsStatus')=="Mounted"):?>
+<?if (isPool($name)):?>
 <div id="poolsummary" class="title nocontrol">
   <span class="left">
     <i class="title fa fa-info-circle"></i>_(Pool Status Summary)_
@@ -1442,6 +1445,7 @@ if (!empty($poolstatus['pools'][$poolName])) {
 ?>
 _(pool status)_:
 : <span class="<?=$statusClass?>"><?=$status?><?=$statusLink?></span>
+<?endif;?>
 
 </form>
 <?endif;?>
