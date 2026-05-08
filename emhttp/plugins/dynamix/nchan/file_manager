@@ -328,15 +328,17 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
 }
 
 /**
- * Parse pv -n -t -b progress output for tar.zst compress/extract.
+ * Parse pv --numeric --timer --bytes progress output.
  *
- * pv writes one "elapsed bytes" line per second to $status.
+ * pv writes one "elapsed bytes" line per interval to $status.
  * Reads incrementally, computes speed from a rolling window of up to 10 samples.
- * Reads current filename from $fname_file (last non-empty line written by tar -v).
+ * Optionally reads current filename from $fname_file (tar --verbose output).
+ *
+ * Used for: all tar variants (compress/extract), single-file compress/extract.
  *
  * @param string|null $status       Path to pv status file
  * @param int         $total_bytes  Total bytes expected (for %, ETA)
- * @param string|null $fname_file   Path to file with tar -v filenames
+ * @param string|null $fname_file   Path to file with tar --verbose filenames (null for single-file)
  * @param string|null $action_label Label for the action
  * @param bool        $reset        Reset static state
  * @return array Text array with progress info
@@ -368,7 +370,6 @@ function parse_pv_progress($status, $total_bytes, $fname_file, $action_label, $r
   $start_line = $last_line_number + 1;
   $new_lines = [];
   exec("tail -n +" . escapeshellarg($start_line) . " " . escapeshellarg($status) . " 2>/dev/null", $new_lines);
-  exec('logger -t file_manager "parse_pv_progress: read ' . count($new_lines) . ' new lines from line ' . $start_line . ', fname_file=' . ($fname_file ?? 'null') . ', first_line=' . escapeshellarg($new_lines[0] ?? '(none)') . '"');
   foreach ($new_lines as $line) {
     $line = trim($line);
     $parts = explode(' ', $line, 2);
@@ -641,7 +642,7 @@ $last_published_time = 0;
 while (true) {
   // Reset all per-iteration variables. $tar_flags/$cmd must be here to prevent stale
   // values from a previous tar iteration overriding the zip code path.
-  unset($action, $source, $target, $H, $sparse, $overwrite, $zfs, $format, $archive_name, $target_tmp, $tar_flags, $single_compressor, $use_pv_compress, $cmd);
+  unset($action, $source, $target, $H, $sparse, $overwrite, $zfs, $format, $archive_name, $target_tmp, $tar_flags, $single_compressor, $use_pv_compress, $pv_compressor, $pv_single_compress, $cmd);
 
   // read job parameters from JSON file: $action, $title, $source, $target, $H, $sparse, $overwrite, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
   if (file_exists($active)) {
@@ -984,7 +985,7 @@ while (true) {
 
         exec('logger -t file_manager "Status check: format=' . escapeshellarg($format) . ', status_file=' . escapeshellarg($status) . ', exists=' . (file_exists($status) ? 'yes' : 'no') . '"');
 
-        if ($format === 'tar.zst') {
+        if ($format !== 'zip') {
           $text = parse_pv_progress($status, (int)($pv_total_bytes ?? 0), $fname_file ?? null, _('Compressing'));
         } else {
           $text = parse_compress_progress($status, _('Compressing'), COMPRESS_DOT_SIZE_MB);
@@ -1130,37 +1131,43 @@ while (true) {
           $cmd = "{ cd $esc_source_parent || exit 1; LANG=en_US.UTF-8 zip " . implode(' ', $zip_args) . " | " . PROGRESS_SCRIPT . "; } >$status 2>$error & echo \$!";
           break;
         case 'tar':
-          $tar_flags = '-cvf';
+          $use_pv_compress = true;
+          $pv_compressor = 'cat';  // no compression, pipe through as-is
           break;
         case 'tar.gz':
-          $tar_flags = '-czvf';
+          $use_pv_compress = true;
+          $pv_compressor = 'gzip';
+          break;
+        case 'tar.bz2':
+          $use_pv_compress = true;
+          $pv_compressor = 'bzip2';
+          break;
+        case 'tar.xz':
+          $use_pv_compress = true;
+          $pv_compressor = 'xz';
           break;
         case 'tar.zst':
           $use_pv_compress = true;
+          $pv_compressor = 'zstd';
           break;
         case 'tar.lz4':
-          $tar_flags = '--use-compress-program=lz4 -cvf';
-          break;
-        case 'tar.bz2':
-          $tar_flags = '-cvjf';
-          break;
-        case 'tar.xz':
-          $tar_flags = '-cvJf';
+          $use_pv_compress = true;
+          $pv_compressor = 'lz4';
           break;
         case 'gz':
-          $single_compressor = 'gzip -c --';
+          $pv_single_compress = 'gzip';
           break;
         case 'xz':
-          $single_compressor = 'xz -c --';
+          $pv_single_compress = 'xz';
           break;
         case 'bz2':
-          $single_compressor = 'bzip2 -c --';
+          $pv_single_compress = 'bzip2';
           break;
         case 'zst':
-          $single_compressor = 'zstd -c --';
+          $pv_single_compress = 'zstd';
           break;
         case 'lz4':
-          $single_compressor = 'lz4 -c --';
+          $pv_single_compress = 'lz4';
           break;
         default:
           $reply['error'] = sprintf(_('Unsupported archive format: %s'), $format);
@@ -1186,6 +1193,7 @@ while (true) {
             }
           }
           $pv_args = [
+            '--interval 1',       // report progress every 1 second
             '--numeric',          // output machine-readable lines (elapsed bytes)
             '--timer',            // include elapsed time in numeric output
             '--bytes',            // include byte count in numeric output
@@ -1202,29 +1210,28 @@ while (true) {
             '--verbose',          // write filenames to stderr (captured to fname_file)
             "-- $escaped_basenames",
           ];
-          $cmd = "{ cd $esc_source_parent || exit 1; tar " . implode(' ', $tar_args) . " 2>$esc_fname_file | pv " . implode(' ', $pv_args) . " 2>$status | zstd > $esc_target_tmp; } >/dev/null 2>$error & echo \$!";
+          $cmd = "{ cd $esc_source_parent || exit 1; tar " . implode(' ', $tar_args) . " 2>$esc_fname_file | pv " . implode(' ', $pv_args) . " 2>$status | $pv_compressor > $esc_target_tmp; } >/dev/null 2>$error & echo \$!";
         }
 
-        if (isset($single_compressor)) {
+        if (isset($pv_single_compress)) {
           $esc_basename = escapeshellarg($source_basenames[0]);
-          $cmd = "{ cd $esc_source_parent || exit 1; $single_compressor $esc_basename > $esc_target_tmp; } >$status 2>$error & echo \$!";
-        }
-
-        if (isset($tar_flags)) {
-          $tar_args = [
-            $tar_flags,
-            $esc_target_tmp,
-            '--no-unquote',
-            '--xattrs',                  // preserve extended attributes
-            "--xattrs-include='*.*'",    // include all namespaces: user.*, security.*, trusted.*, etc.
-            '--acls',                    // preserve POSIX ACLs
-            '--sparse',                  // handle sparse files efficiently (VM images, databases)
-            '--record-size=' . TAR_RECORD_SIZE,
-            '--checkpoint=' . TAR_CHECKPOINT,
-            "\"--checkpoint-action=exec=printf 'CHUNK\\n'\"",
-            "-- $escaped_basenames",
+          $source_fsize = (int)(filesize($source_path) ?: 0);
+          $pv_args = [
+            '--interval 1',         // report progress every 1 second
+            '--numeric',            // output machine-readable lines (elapsed bytes)
+            '--timer',              // include elapsed time in numeric output
+            '--bytes',              // include byte count in numeric output
+            "--size $source_fsize", // expected total for %/ETA
           ];
-          $cmd = "{ cd $esc_source_parent || exit 1; tar " . implode(' ', $tar_args) . " | " . PROGRESS_SCRIPT . "; } >$status 2>$error & echo \$!";
+          $pv_total_bytes = $source_fsize;
+          if (file_exists($active)) {
+            $active_data = json_decode(file_get_contents($active), true);
+            if (is_array($active_data)) {
+              $active_data['pv_total_bytes'] = $pv_total_bytes;
+              file_put_contents($active, json_encode($active_data));
+            }
+          }
+          $cmd = "{ cd $esc_source_parent || exit 1; pv " . implode(' ', $pv_args) . " -- $esc_basename 2>$status | $pv_single_compress > $esc_target_tmp; } >/dev/null 2>$error & echo \$!";
         }
 
         exec('logger -t file_manager ' . escapeshellarg('Executing command (first 300 chars): ' . substr($cmd ?? '', 0, 300)));
@@ -1241,7 +1248,7 @@ while (true) {
 
       // return status of running action
       if (!empty($pid)) {
-        if (preg_match('/\.tar\.zst$/i', $source[0] ?? '')) {
+        if (!preg_match('/\.zip$/i', $source[0] ?? '')) {
           $text = parse_pv_progress($status, (int)($pv_total_bytes ?? 0), $fname_file ?? null, _('Extracting'));
         } else {
           $text = parse_compress_progress($status, _('Extracting'), COMPRESS_DOT_SIZE_MB);
@@ -1341,6 +1348,7 @@ while (true) {
           $archive_path   = $out_path;
           $archive_chown  = $is_docker_dest ? 'root:root' : 'nobody:users';
           $archive_chmod  = $is_docker_dest ? '600' : '666';
+          $pv_total_bytes = filesize($archive) ?: 0;
           if (file_exists($active)) {
             $active_data = json_decode(file_get_contents($active), true);
             if (is_array($active_data)) {
@@ -1348,83 +1356,75 @@ while (true) {
               $active_data['archive_path']  = $archive_path;
               $active_data['archive_chown'] = $archive_chown;
               $active_data['archive_chmod'] = $archive_chmod;
+              $active_data['pv_total_bytes'] = $pv_total_bytes;
               file_put_contents($active, json_encode($active_data));
             }
           }
-          $cmd = "{ cd $esc_dest || exit 1; $decompressor $esc_archive > $esc_target_tmp; } >$status 2>$error & echo \$!";
+          $pv_args = [
+            '--interval 1',           // report progress every 1 second
+            '--numeric',              // output machine-readable lines (elapsed bytes)
+            '--timer',                // include elapsed time in numeric output
+            '--bytes',                // include byte count in numeric output
+            "--size $pv_total_bytes", // expected total for %/ETA
+            '--',                     // end of options
+            $esc_archive,
+          ];
+          $cmd = "{ cd $esc_dest || exit 1; pv " . implode(' ', $pv_args) . " 2>$status | $decompressor > $esc_target_tmp; } >/dev/null 2>$error & echo \$!";
 
         // Set shell command for tar
         } else {
 
-          if (preg_match('/\.(tar\.zst)$/i', $archive)) {
-            // tar.zst uses pv pipeline for byte-accurate progress
-            $fname_file = '/tmp/.fm-tar-fname-' . uniqid('', true);
-            $esc_fname_file = escapeshellarg($fname_file);
-            $pv_total_bytes = filesize($archive) ?: 0;
-            exec('logger -t file_manager ' . escapeshellarg('pv extract tar.zst: pv_total_bytes=' . $pv_total_bytes . ', fname_file=' . $fname_file));
-            if (file_exists($active)) {
-              $active_data = json_decode(file_get_contents($active), true);
-              if (is_array($active_data)) {
-                $active_data['fname_file']     = $fname_file;
-                $active_data['pv_total_bytes'] = $pv_total_bytes;
-                file_put_contents($active, json_encode($active_data));
-              }
-            }
-            $keep_existing_files = $overwrite ? '' : '--skip-old-files --warning=no-existing-file';
-            $pv_args = [
-              '--numeric',          // output machine-readable lines (elapsed bytes)
-              '--timer',            // include elapsed time in numeric output
-              '--bytes',            // include byte count in numeric output
-              "--size $pv_total_bytes", // expected total for ETA
-              '--',                 // end of options
-              $esc_archive,
-            ];
-            $tar_args = array_filter([
-              '--extract',                  // extract files from archive
-              '--use-compress-program=zstd', // decompress with zstd
-              '--file=-',                   // read from stdin
-              '--no-unquote',               // do not unquote filenames read from -T
-              '--xattrs',                   // restore extended attributes
-              "--xattrs-include='*.*'",     // include all namespaces: user.*, security.*, trusted.*, etc.
-              '--acls',                     // restore POSIX ACLs
-              '--sparse',                   // restore sparse files (VM images, databases)
-              '--numeric-owner',            // restore exact uid/gid numbers, not name-based lookup
-              '--verbose',                  // write filenames to stdout (captured to fname_file)
-              $keep_existing_files,
-            ]);
-            $cmd = "{ cd $esc_dest || exit 1; pv " . implode(' ', $pv_args) . " 2>$status | tar " . implode(' ', $tar_args) . " >$esc_fname_file; } >/dev/null 2>$error & echo \$!";
-
+          // Detect decompressor from archive extension
+          if (preg_match('/\.(tar\.gz|tgz)$/i', $archive)) {
+            $tar_decompress = '--use-compress-program=gzip';
+          } elseif (preg_match('/\.(tar\.bz2|tbz2)$/i', $archive)) {
+            $tar_decompress = '--use-compress-program=bzip2';
+          } elseif (preg_match('/\.(tar\.xz|txz)$/i', $archive)) {
+            $tar_decompress = '--use-compress-program=xz';
+          } elseif (preg_match('/\.(tar\.zst)$/i', $archive)) {
+            $tar_decompress = '--use-compress-program=zstd';
+          } elseif (preg_match('/\.(tar\.lz4)$/i', $archive)) {
+            $tar_decompress = '--use-compress-program=lz4';
           } else {
-            // Set tar options depending on compression type
-            if (preg_match('/\.(tar\.gz|tgz)$/i', $archive)) {
-              $extract_tar_flags = '-xzvf';
-            } elseif (preg_match('/\.(tar\.bz2|tbz2)$/i', $archive)) {
-              $extract_tar_flags = '-xjvf';
-            } elseif (preg_match('/\.(tar\.xz|txz)$/i', $archive)) {
-              $extract_tar_flags = '-xJvf';
-            } elseif (preg_match('/\.(tar\.lz4)$/i', $archive)) {
-              $extract_tar_flags = '--use-compress-program=lz4 -xvf';
-            } else {
-              $extract_tar_flags = '-xvf';
-            }
-
-            $keep_existing_files = $overwrite ? '' : '--skip-old-files --warning=no-existing-file';
-            $tar_args = array_filter([
-              $extract_tar_flags,
-              $esc_archive,
-              '--no-unquote',
-              '--xattrs',                  // restore extended attributes
-              "--xattrs-include='*.*'",    // include all namespaces: user.*, security.*, trusted.*, etc.
-              '--acls',                    // restore POSIX ACLs
-              '--sparse',                  // restore sparse files (VM images, databases)
-              '--numeric-owner',           // restore exact uid/gid numbers, not name-based lookup
-              '--record-size=' . TAR_RECORD_SIZE,
-              '--checkpoint=' . TAR_CHECKPOINT,
-              "\"--checkpoint-action=exec=printf 'CHUNK\\n'\"",
-              $keep_existing_files,
-            ]);
-            $cmd = "{ cd $esc_dest || exit 1; tar " . implode(' ', $tar_args) . " | " . PROGRESS_SCRIPT . "; } >$status 2>$error & echo \$!";
+            $tar_decompress = '';  // plain tar, no decompressor
           }
+
+          $fname_file = '/tmp/.fm-tar-fname-' . uniqid('', true);
+          $esc_fname_file = escapeshellarg($fname_file);
+          $pv_total_bytes = filesize($archive) ?: 0;
+          exec('logger -t file_manager ' . escapeshellarg('pv extract tar: pv_total_bytes=' . $pv_total_bytes . ', fname_file=' . $fname_file . ', decompress=' . ($tar_decompress ?: 'none')));
+          if (file_exists($active)) {
+            $active_data = json_decode(file_get_contents($active), true);
+            if (is_array($active_data)) {
+              $active_data['fname_file']     = $fname_file;
+              $active_data['pv_total_bytes'] = $pv_total_bytes;
+              file_put_contents($active, json_encode($active_data));
+            }
+          }
+          $keep_existing_files = $overwrite ? '' : '--skip-old-files --warning=no-existing-file';
+          $pv_args = [
+            '--interval 1',           // report progress every 1 second
+            '--numeric',              // output machine-readable lines (elapsed bytes)
+            '--timer',                // include elapsed time in numeric output
+            '--bytes',                // include byte count in numeric output
+            "--size $pv_total_bytes", // expected total for ETA
+            '--',                     // end of options
+            $esc_archive,
+          ];
+          $tar_args = array_filter([
+            '--extract',              // extract files from archive
+            $tar_decompress,          // decompressor (empty string for plain tar)
+            '--file=-',               // read from stdin (pv output)
+            '--no-unquote',           // do not unquote filenames read from -T
+            '--xattrs',               // restore extended attributes
+            "--xattrs-include='*.*'", // include all namespaces: user.*, security.*, trusted.*, etc.
+            '--acls',                 // restore POSIX ACLs
+            '--sparse',               // restore sparse files (VM images, databases)
+            '--numeric-owner',        // restore exact uid/gid numbers, not name-based lookup
+            '--verbose',              // write filenames to stdout (captured to fname_file)
+            $keep_existing_files,
+          ]);
+          $cmd = "{ cd $esc_dest || exit 1; pv " . implode(' ', $pv_args) . " 2>$status | tar " . implode(' ', $tar_args) . " >$esc_fname_file; } >/dev/null 2>$error & echo \$!";
         }
 
         exec('logger -t file_manager "extract cmd=' . escapeshellarg(substr($cmd, 0, 200)) . '"');
