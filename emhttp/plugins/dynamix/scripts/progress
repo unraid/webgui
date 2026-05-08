@@ -269,7 +269,7 @@ if [[ $compress_tool == unzip ]]; then
       fname_to_size[$fname]=$fsize
       total_bytes=$(( total_bytes + fsize ))
     fi
-  done < <(unzip -l "$archive" 2>/dev/null)
+  done < <(LANG=en_US.UTF-8 unzip -l "$archive" 2>/dev/null)
   dbg "total_bytes=$total_bytes files=${#fname_to_size[@]}"
   printf 'TOTAL %s\n' "$total_bytes"
   _prog_total_line "$total_bytes"
@@ -449,6 +449,7 @@ if [[ $compress_tool == unzip ]]; then
               fsize="${fname_to_size[$fname]}"
             else
               printf 'Error: unzip manifest miss (\n path): %s\n' "$fname" >&2
+              [[ $fname == *'^'* || $fname == *'#U'* ]] && printf 'Error: filename contains escape sequences; make sure unzip is called with LANG=en_US.UTF-8\n' >&2
               fsize=0
             fi
             printf 'FILE %(%s)T %s %s\n' -1 "$fsize" "$fname"
@@ -495,6 +496,7 @@ if [[ $compress_tool == unzip ]]; then
       fsize="${fname_to_size[$fname]}"
     else
       printf 'Error: unzip manifest miss (timeout path): %s\n' "$fname" >&2
+      [[ $fname == *'^'* || $fname == *'#U'* ]] && printf 'Error: filename contains escape sequences; make sure unzip is called with LANG=en_US.UTF-8\n' >&2
       fsize=0
     fi
     printf 'FILE %(%s)T %s %s\n' -1 "$fsize" "$fname"

@@ -959,12 +959,16 @@ while (true) {
         } while (file_exists($target_tmp));
         // persist fields in active JSON so case 99 (cancel) and completion block can use them
         if (file_exists($active)) {
-          $active_data = json_decode(file_get_contents($active), true) ?: [];
-          $active_data['target_tmp']    = $target_tmp;
-          $active_data['archive_path']  = $archive_path;
-          $active_data['archive_chown'] = $archive_chown;
-          $active_data['archive_chmod'] = $archive_chmod;
-          file_put_contents($active, json_encode($active_data));
+          $active_data = json_decode(file_get_contents($active), true);
+          // Only update if decoding succeeded; a failed decode would produce an array without
+          // 'source', causing mode:'read' to return JSON that makes the JS dialog lose its sources.
+          if (is_array($active_data)) {
+            $active_data['target_tmp']    = $target_tmp;
+            $active_data['archive_path']  = $archive_path;
+            $active_data['archive_chown'] = $archive_chown;
+            $active_data['archive_chmod'] = $archive_chmod;
+            file_put_contents($active, json_encode($active_data));
+          }
         }
 
         exec('logger -t file_manager ' . escapeshellarg('Start compress: format=' . $format . ', archive=' . $archive_path));
@@ -994,7 +998,7 @@ while (true) {
         case 'zip':
           $zip_args = [
             '-r',       // recursion into directories
-            '-y',       // store symlinks as symlinks (not followed)
+            '-y',       // store symlinks as symlinks
             '-du',      // displays file sizes
             '-dd',      // display dot per dot size
             '-ds', $dot_mb . 'm', // chunk size per dot
@@ -1034,6 +1038,10 @@ while (true) {
             $tar_flags,
             $esc_target_tmp,
             '--no-unquote',
+            '--xattrs',                  // preserve extended attributes
+            "--xattrs-include='*.*'",    // include all namespaces: user.*, security.*, trusted.*, etc.
+            '--acls',                    // preserve POSIX ACLs
+            '--sparse',                  // handle sparse files efficiently (VM images, databases)
             '--record-size=' . TAR_RECORD_SIZE,
             '--checkpoint=' . TAR_CHECKPOINT,
             "\"--checkpoint-action=exec=printf 'CHUNK\\n'\"",
@@ -1124,6 +1132,7 @@ while (true) {
           // note: stat-poller in the progress script requires this, too
           // LANG=en_US.UTF-8 required: Unraid has POSIX locale by default, causing unzip
           // to mangle non-ASCII filenames as #Uxxxx escape sequences on extraction.
+          // Also set in the progress script's 'unzip -l' call, so both sides use the same locale.
           $cmd = "{ cd $esc_dest || exit 1; LANG=en_US.UTF-8 unzip -^ $unzip_overwrite_flag $esc_archive | " . PROGRESS_SCRIPT . "; } >$status 2>$error & echo \$!";
 
         // Set shell command for tar
@@ -1149,6 +1158,11 @@ while (true) {
             $extract_tar_flags,
             $esc_archive,
             '--no-unquote',
+            '--xattrs',                  // restore extended attributes
+            "--xattrs-include='*.*'",    // include all namespaces: user.*, security.*, trusted.*, etc.
+            '--acls',                    // restore POSIX ACLs
+            '--sparse',                  // restore sparse files (VM images, databases)
+            '--numeric-owner',           // restore exact uid/gid numbers, not name-based lookup
             '--record-size=' . TAR_RECORD_SIZE,
             '--checkpoint=' . TAR_CHECKPOINT,
             "\"--checkpoint-action=exec=printf 'CHUNK\\n'\"",
