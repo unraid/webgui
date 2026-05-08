@@ -505,7 +505,7 @@ if [[ $compress_tool == unzip ]]; then
       while true; do
         cur_size=$(stat -c%s "$fpath" 2>/dev/null || echo 0)
         if [[ $cur_size -gt $prev_size ]]; then
-          printf 'CHUNK %(%s)T %s\n' -1 "$((cur_size - prev_size))"
+          printf 'CHUNK %s %s\n' "$EPOCHREALTIME" "$((cur_size - prev_size))"
           _prog_chunk_line "$((cur_size - prev_size))"
           prev_size=$cur_size
           [[ $cur_size -ge $fsize ]] && break
@@ -559,7 +559,7 @@ else
     elif [[ ! $char ]]; then
       if [[ $line_buffer == 'CHUNK' ]]; then
         # tar: checkpoint sentinel written by --checkpoint-action=exec="printf 'CHUNK\n'"
-        printf 'CHUNK %(%s)T %s\n' -1 "$chunk_bytes"
+        printf 'CHUNK %s %s\n' "$EPOCHREALTIME" "$chunk_bytes"
         _prog_chunk_line "$chunk_bytes"
       elif [[ $line_buffer ]]; then
         # tar: each line should be a filename; validate with stat to skip error messages.
@@ -579,7 +579,7 @@ else
   else
     if [[ $char == '.' ]]; then
       # zip: dots on same line after file match, e.g. "....\n" (one dot per -ds Xm)
-      printf 'CHUNK %(%s)T %s\n' -1 "$chunk_bytes"
+      printf 'CHUNK %s %s\n' "$EPOCHREALTIME" "$chunk_bytes"
       _prog_chunk_line "$chunk_bytes"
     elif [[ ! $char ]]; then
       # zip: newline ends dot/skip sequence; " (deflated X%)" or " (stored X%)" was discarded

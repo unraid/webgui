@@ -241,7 +241,7 @@ function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $re
 
       case 'CHUNK':
         // Incremental bytes processed (dot/checkpoint for compress, stat-poll delta for extract)
-        $timestamp = intval($parts[1]);
+        $timestamp = floatval($parts[1]);
         $processed_bytes += floatval($parts[2]);
         $progress_events[] = [$timestamp, $processed_bytes];
         if (count($progress_events) > 20) array_shift($progress_events);
