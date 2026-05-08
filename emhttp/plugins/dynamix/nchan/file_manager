@@ -642,7 +642,7 @@ $last_published_time = 0;
 while (true) {
   // Reset all per-iteration variables. $tar_flags/$cmd must be here to prevent stale
   // values from a previous tar iteration overriding the zip code path.
-  unset($action, $source, $target, $H, $sparse, $overwrite, $zfs, $format, $archive_name, $target_tmp, $tar_flags, $single_compressor, $use_pv_compress, $pv_compressor, $pv_single_compress, $cmd);
+  unset($action, $source, $target, $H, $sparse, $overwrite, $zfs, $format, $archive_name, $target_tmp, $tar_flags, $single_compressor, $pv_compressor, $pv_single_compress, $cmd);
 
   // read job parameters from JSON file: $action, $title, $source, $target, $H, $sparse, $overwrite, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
   if (file_exists($active)) {
@@ -1131,27 +1131,21 @@ while (true) {
           $cmd = "{ cd $esc_source_parent || exit 1; LANG=en_US.UTF-8 zip " . implode(' ', $zip_args) . " | " . PROGRESS_SCRIPT . "; } >$status 2>$error & echo \$!";
           break;
         case 'tar':
-          $use_pv_compress = true;
           $pv_compressor = 'cat';  // no compression, pipe through as-is
           break;
         case 'tar.gz':
-          $use_pv_compress = true;
           $pv_compressor = 'gzip';
           break;
         case 'tar.bz2':
-          $use_pv_compress = true;
           $pv_compressor = 'bzip2';
           break;
         case 'tar.xz':
-          $use_pv_compress = true;
           $pv_compressor = 'xz';
           break;
         case 'tar.zst':
-          $use_pv_compress = true;
           $pv_compressor = 'zstd';
           break;
         case 'tar.lz4':
-          $use_pv_compress = true;
           $pv_compressor = 'lz4';
           break;
         case 'gz':
@@ -1174,7 +1168,7 @@ while (true) {
           break 2; // break out of switch($format) and switch($action)
         }
 
-        if (isset($use_pv_compress)) {
+        if (isset($pv_compressor)) {
           $fname_file = '/tmp/.fm-tar-fname-' . uniqid('', true);
           $esc_fname_file = escapeshellarg($fname_file);
           $du_sources = implode(' ', array_map(function($bn) use ($source_parent) {
