@@ -1330,7 +1330,12 @@ while (true) {
           // LANG=en_US.UTF-8 required: Unraid has POSIX locale by default, causing unzip
           // to mangle non-ASCII filenames as #Uxxxx escape sequences on extraction.
           // Also set in the progress script's 'unzip -l' call, so both sides use the same locale.
-          $pv_total_bytes = (int)(filesize($archive) ?: 0);
+          // Total uncompressed size for progress: reflects actual bytes written to disk.
+          // filesize($archive) would cause ETA explosion for highly compressible files
+          // (e.g. all-zeros: 4GB -> 600KB -> speed ~0, ETA -> hours).
+          $unzip_total_out = [];
+          exec("LANG=en_US.UTF-8 unzip -lv " . $esc_archive . " 2>/dev/null | awk 'NF>=8 && /^[[:space:]]*[0-9]/{s+=\$1}END{print s+0}'", $unzip_total_out);
+          $pv_total_bytes = (int)($unzip_total_out[0] ?? 0) ?: (int)(filesize($archive) ?: 0);
           if (file_exists($active)) {
             $active_data = json_decode(file_get_contents($active), true);
             if (is_array($active_data)) {
