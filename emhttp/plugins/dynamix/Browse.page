@@ -1227,6 +1227,10 @@ function doActions(action, title) {
   case 16: // compress object(s)
     dfm.window.html($('#dfm_templateCompress').html());
     dfm_createSource(source);
+    // Remove single-file-only format options unless exactly one file (not folder) is selected
+    if (!(source.length === 1 && type[0] !== 'd')) {
+      dfm.window.find('.dfm_single_format').remove();
+    }
     // Use first source name for archive name suggestion
     var firstSource = source[0];
     var firstPath = firstSource.substr(1).split('/');
