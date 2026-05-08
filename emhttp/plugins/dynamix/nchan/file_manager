@@ -29,6 +29,8 @@ define('RSYNC_TOTAL_SIZE_SAMPLES', 5);     // Number of measurements to average 
 // Compress progress dot size: 1 dot = this many MB of source data (zip: --dot-size, tar: checkpoint interval)
 define('COMPRESS_DOT_SIZE_MB', 100);
 define('PROGRESS_SCRIPT', '/usr/local/emhttp/plugins/dynamix/scripts/progress');
+define('PV_ZIP_SCRIPT',   '/usr/local/emhttp/plugins/dynamix/scripts/pv-zip');
+define('FM_FNAME_FILE',   '/var/tmp/file.manager.fname');
 define('TAR_RECORD_SIZE', 10240);
 define('TAR_CHECKPOINT', intval(COMPRESS_DOT_SIZE_MB * 1024 * 1024 / TAR_RECORD_SIZE));
 
@@ -985,11 +987,7 @@ while (true) {
 
         exec('logger -t file_manager "Status check: format=' . escapeshellarg($format) . ', status_file=' . escapeshellarg($status) . ', exists=' . (file_exists($status) ? 'yes' : 'no') . '"');
 
-        if ($format !== 'zip') {
-          $text = parse_pv_progress($status, (int)($pv_total_bytes ?? 0), $fname_file ?? null, _('Compressing'));
-        } else {
-          $text = parse_compress_progress($status, _('Compressing'), COMPRESS_DOT_SIZE_MB);
-        }
+        $text = parse_pv_progress($status, (int)($pv_total_bytes ?? 0), $fname_file ?? null, _('Compressing'));
 
         if (!empty($text)) {
           $reply['status'] = json_encode([
@@ -1116,6 +1114,20 @@ while (true) {
 
         switch ($format) {
         case 'zip':
+          $du_sources = implode(' ', array_map(function($bn) use ($source_parent) {
+            return escapeshellarg($source_parent . '/' . $bn);
+          }, $source_basenames));
+          $du_out = [];
+          exec("du -sb $du_sources 2>/dev/null | awk '{s+=\$1}END{print s+0}'", $du_out);
+          $pv_total_bytes = (int)($du_out[0] ?? 0);
+          if (file_exists($active)) {
+            $active_data = json_decode(file_get_contents($active), true);
+            if (is_array($active_data)) {
+              $active_data['fname_file']     = FM_FNAME_FILE;
+              $active_data['pv_total_bytes'] = $pv_total_bytes;
+              file_put_contents($active, json_encode($active_data));
+            }
+          }
           $zip_args = [
             '-r',       // recursion into directories
             '-y',       // store symlinks as symlinks
@@ -1126,9 +1138,16 @@ while (true) {
             '--',
             $escaped_basenames,
           ];
+          $pv_zip_args = [
+            'zip',
+            FM_FNAME_FILE,
+            $pv_total_bytes,
+            $dot_mb,
+          ];
+          // pv-zip reads zip stdout, writes FM_FNAME_FILE + emits pv-compatible elapsed/bytes to stderr
           // LANG=en_US.UTF-8 required: Unraid has POSIX locale by default, causing zip
           // to mangle non-ASCII filenames as #Uxxxx escape sequences in the archive.
-          $cmd = "{ cd $esc_source_parent || exit 1; LANG=en_US.UTF-8 zip " . implode(' ', $zip_args) . " | " . PROGRESS_SCRIPT . "; } >$status 2>$error & echo \$!";
+          $cmd = "{ cd $esc_source_parent || exit 1; LANG=en_US.UTF-8 zip " . implode(' ', $zip_args) . " | " . PV_ZIP_SCRIPT . " " . implode(' ', $pv_zip_args) . " 2>$status; } >/dev/null 2>$error & echo \$!";
           break;
         case 'tar':
           $pv_compressor = 'cat';  // no compression, pipe through as-is
@@ -1169,19 +1188,17 @@ while (true) {
         }
 
         if (isset($pv_compressor)) {
-          $fname_file = '/tmp/.fm-tar-fname-' . uniqid('', true);
-          $esc_fname_file = escapeshellarg($fname_file);
           $du_sources = implode(' ', array_map(function($bn) use ($source_parent) {
             return escapeshellarg($source_parent . '/' . $bn);
           }, $source_basenames));
           $du_out = [];
           exec("du -sb $du_sources 2>/dev/null | awk '{s+=\$1}END{print s+0}'", $du_out);
           $pv_total_bytes = (int)($du_out[0] ?? 0);
-          exec('logger -t file_manager ' . escapeshellarg('pv compress tar.zst: pv_total_bytes=' . $pv_total_bytes . ', fname_file=' . $fname_file));
+          exec('logger -t file_manager ' . escapeshellarg('pv compress tar.zst: pv_total_bytes=' . $pv_total_bytes));
           if (file_exists($active)) {
             $active_data = json_decode(file_get_contents($active), true);
             if (is_array($active_data)) {
-              $active_data['fname_file']     = $fname_file;
+              $active_data['fname_file']     = FM_FNAME_FILE;
               $active_data['pv_total_bytes'] = $pv_total_bytes;
               file_put_contents($active, json_encode($active_data));
             }
@@ -1204,7 +1221,7 @@ while (true) {
             '--verbose',          // write filenames to stderr (captured to fname_file)
             "-- $escaped_basenames",
           ];
-          $cmd = "{ cd $esc_source_parent || exit 1; tar " . implode(' ', $tar_args) . " 2>$esc_fname_file | pv " . implode(' ', $pv_args) . " 2>$status | $pv_compressor > $esc_target_tmp; } >/dev/null 2>$error & echo \$!";
+          $cmd = "{ cd $esc_source_parent || exit 1; tar " . implode(' ', $tar_args) . " 2>" . FM_FNAME_FILE . " | pv " . implode(' ', $pv_args) . " 2>$status | $pv_compressor > $esc_target_tmp; } >/dev/null 2>$error & echo \$!";
         }
 
         if (isset($pv_single_compress)) {
@@ -1242,11 +1259,7 @@ while (true) {
 
       // return status of running action
       if (!empty($pid)) {
-        if (!preg_match('/\.zip$/i', $source[0] ?? '')) {
-          $text = parse_pv_progress($status, (int)($pv_total_bytes ?? 0), $fname_file ?? null, _('Extracting'));
-        } else {
-          $text = parse_compress_progress($status, _('Extracting'), COMPRESS_DOT_SIZE_MB);
-        }
+        $text = parse_pv_progress($status, (int)($pv_total_bytes ?? 0), $fname_file ?? null, _('Extracting'));
         if (!empty($text)) {
           $reply['status'] = json_encode([
             'action' => $action,
@@ -1317,7 +1330,22 @@ while (true) {
           // LANG=en_US.UTF-8 required: Unraid has POSIX locale by default, causing unzip
           // to mangle non-ASCII filenames as #Uxxxx escape sequences on extraction.
           // Also set in the progress script's 'unzip -l' call, so both sides use the same locale.
-          $cmd = "{ cd $esc_dest || exit 1; LANG=en_US.UTF-8 unzip -^ $unzip_overwrite_flag $esc_archive | " . PROGRESS_SCRIPT . "; } >$status 2>$error & echo \$!";
+          $pv_total_bytes = (int)(filesize($archive) ?: 0);
+          if (file_exists($active)) {
+            $active_data = json_decode(file_get_contents($active), true);
+            if (is_array($active_data)) {
+              $active_data['fname_file']     = FM_FNAME_FILE;
+              $active_data['pv_total_bytes'] = $pv_total_bytes;
+              file_put_contents($active, json_encode($active_data));
+            }
+          }
+          $pv_zip_args = [
+            'unzip',
+            FM_FNAME_FILE,
+            $pv_total_bytes,
+            $esc_archive,
+          ];
+          $cmd = "{ cd $esc_dest || exit 1; LANG=en_US.UTF-8 unzip -^ $unzip_overwrite_flag $esc_archive | " . PV_ZIP_SCRIPT . " " . implode(' ', $pv_zip_args) . " 2>$status; } >/dev/null 2>$error & echo \$!";
 
         // Single-file decompressors: output filename = archive name without last extension
         } elseif (preg_match('/\.(gz|bz2|xz|zst|lz4)$/i', $archive, $m) && !preg_match('/\.tar\.[^.]+$/i', $archive)) {
@@ -1383,14 +1411,12 @@ while (true) {
             $tar_decompress = '';  // plain tar, no decompressor
           }
 
-          $fname_file = '/tmp/.fm-tar-fname-' . uniqid('', true);
-          $esc_fname_file = escapeshellarg($fname_file);
           $pv_total_bytes = filesize($archive) ?: 0;
-          exec('logger -t file_manager ' . escapeshellarg('pv extract tar: pv_total_bytes=' . $pv_total_bytes . ', fname_file=' . $fname_file . ', decompress=' . ($tar_decompress ?: 'none')));
+          exec('logger -t file_manager ' . escapeshellarg('pv extract tar: pv_total_bytes=' . $pv_total_bytes . ', decompress=' . ($tar_decompress ?: 'none')));
           if (file_exists($active)) {
             $active_data = json_decode(file_get_contents($active), true);
             if (is_array($active_data)) {
-              $active_data['fname_file']     = $fname_file;
+              $active_data['fname_file']     = FM_FNAME_FILE;
               $active_data['pv_total_bytes'] = $pv_total_bytes;
               file_put_contents($active, json_encode($active_data));
             }
@@ -1418,7 +1444,7 @@ while (true) {
             '--verbose',              // write filenames to stdout (captured to fname_file)
             $keep_existing_files,
           ]);
-          $cmd = "{ cd $esc_dest || exit 1; pv " . implode(' ', $pv_args) . " 2>$status | tar " . implode(' ', $tar_args) . " >$esc_fname_file; } >/dev/null 2>$error & echo \$!";
+          $cmd = "{ cd $esc_dest || exit 1; pv " . implode(' ', $pv_args) . " 2>$status | tar " . implode(' ', $tar_args) . " >" . FM_FNAME_FILE . "; } >/dev/null 2>$error & echo \$!";
         }
 
         exec('logger -t file_manager "extract cmd=' . escapeshellarg(substr($cmd, 0, 200)) . '"');

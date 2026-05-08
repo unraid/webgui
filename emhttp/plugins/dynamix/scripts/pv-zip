@@ -1,0 +1,191 @@
+#!/bin/bash
+# pv-zip - zip/unzip wrapper that emits pv-compatible progress to stderr
+#
+# Usage (compress): pv-zip zip   <fname_file> <total_bytes> <dot_mb>
+# Usage (extract):  pv-zip unzip <fname_file> <total_bytes> <archive_path>
+#
+# Reads zip/unzip stdout from stdin, writes current filename to fname_file,
+# emits "elapsed bytes\n" lines to stderr every ~1 second (same format as pv).
+# The PHP parse_pv_progress() function reads these lines from the $status file.
+#
+# zip compress:   total_bytes = du -sb of source files; dot_mb = bytes per dot
+#                 (from zip -ds arg). bytes_done = committed file sizes + dot count
+#                 for the file currently being compressed.
+# unzip extract:  total_bytes = archive file size; bytes_done = accumulated
+#                 compressed sizes from unzip -lv manifest.
+
+mode=$1
+fname_file=$2
+total_bytes=$3
+# zip: dot_mb (MB per dot); unzip: path to archive
+arg4=$4
+
+if [[ ! $mode || ! $fname_file || ! $total_bytes || ! $arg4 ]]; then
+  printf 'Usage: pv-zip zip <fname_file> <total_bytes> <dot_mb>\n' >&2
+  printf '       pv-zip unzip <fname_file> <total_bytes> <archive_path>\n' >&2
+  exit 1
+fi
+
+start_time=$EPOCHREALTIME
+bytes_done=0
+last_emit=0
+
+emit_progress() {
+  local now=$EPOCHREALTIME
+  local elapsed
+  elapsed=$(awk -v now="$now" -v start="$start_time" 'BEGIN{printf "%.4f", now - start}')
+  printf '%s %s\n' "$elapsed" "$bytes_done" >&2
+  last_emit=$now
+}
+
+maybe_emit() {
+  # integer-second comparison: strip fractional part, no awk needed
+  local now_s=${EPOCHREALTIME%.*}
+  local last_s=${last_emit%.*}
+  (( now_s > last_s )) && emit_progress
+}
+
+if [[ $mode == zip ]]; then
+  # zip stdout (with -du -dd -ds Xm):
+  #   "  adding: path/to/file (1.2G)  ..........  (deflated 45%)\n"
+  # The \n only arrives when the file is fully compressed. Read char-by-char:
+  # - line mode: accumulate until filename+size match, then enter dot_mode
+  # - dot_mode: each '.' = dot_mb MB of source data; '\n' = file done
+  #
+  # bytes_done = committed (sum of fsizes of completed files) + dot progress of current file.
+  dot_bytes=$(( arg4 * 1024 * 1024 ))
+  committed=0
+  dot_progress=0
+  char_buf=""
+  dot_mode=
+  while IFS= read -r -n1 char || [[ $char ]]; do
+    if [[ ! $dot_mode ]]; then
+      char_buf+="$char"
+      if [[ $char_buf =~ (adding|updating):[[:space:]]+(.+)[[:space:]]+\(([0-9.]+[KkMmGgTt]?)\)[[:space:]] ]]; then
+        fname="${BASH_REMATCH[2]}"
+        fname="${fname%"${fname##*[! ]}"}"
+        src_size="${BASH_REMATCH[3]}"
+        fsize=$(awk -v s="$src_size" 'BEGIN{
+          n=s+0; u=substr(s,length(s))
+          if (u~/[Kk]/) print int(n*1024)
+          else if (u~/[Mm]/) print int(n*1048576)
+          else if (u~/[Gg]/) print int(n*1073741824)
+          else if (u~/[Tt]/) print int(n*1099511627776)
+          else print int(n)
+        }')
+        dot_progress=0
+        printf '%s' "$fname" > "$fname_file"
+        dot_mode=1
+      elif [[ ! $char ]]; then
+        char_buf=""
+      fi
+    else
+      if [[ $char == '.' ]]; then
+        dot_progress=$(( dot_progress + dot_bytes ))
+        bytes_done=$(( committed + dot_progress ))
+        maybe_emit
+      elif [[ ! $char ]]; then
+        # file done: commit its actual size, not the dot approximation
+        committed=$(( committed + fsize ))
+        bytes_done=$committed
+        dot_progress=0
+        dot_mode=
+        char_buf=""
+      fi
+    fi
+  done
+  bytes_done=$total_bytes
+  emit_progress
+
+elif [[ $mode == unzip ]]; then
+  archive_path=$arg4
+
+  # Build manifest from unzip -lv: fname -> compressed size + uncompressed size.
+  # unzip -lv columns: Length Method Size Cmpr Date Time CRC-32 Name
+  # bytes_done uses compressed sizes so it maps to total_bytes = archive file size.
+  # Intra-file progress scales stat(output_file) * compressed / uncompressed.
+  declare -A fname_to_compressed fname_to_uncompressed
+  while IFS= read -r line; do
+    [[ $line =~ ^(-+|Archive:) ]] && continue
+    read -r fsize_unc _ fsize_comp _ _ _ _ fname <<< "$line"
+    if [[ $fname && $fsize_comp =~ ^[0-9]+$ && $fsize_unc =~ ^[0-9]+$ ]]; then
+      fname_to_compressed["$fname"]="$fsize_comp"
+      fname_to_uncompressed["$fname"]="$fsize_unc"
+    fi
+  done < <(LANG=en_US.UTF-8 unzip -lv "$archive_path" 2>/dev/null)
+
+  committed=0
+  polling_fpath=""
+  polling_compressed=0
+  polling_uncompressed=0
+
+  char_buf=""
+  already_handled=
+  stall_buf=__unset__
+  while true; do
+    IFS= read -r -n 1 -t 0.1 char
+    rc=$?
+    if [[ $rc -eq 0 ]]; then
+      if [[ ! $char ]]; then
+        # \n: file write complete
+        if [[ $already_handled ]]; then
+          # commit compressed size of the just-finished file
+          committed=$(( committed + polling_compressed ))
+          bytes_done=$committed
+        elif [[ $char_buf =~ ^[[:space:]]+(inflating|extracting|creating):[[:space:]]+(.+) ]]; then
+          # fast file: \n arrived before the 100ms timeout (file written almost instantly)
+          candidate="${BASH_REMATCH[2]}"
+          candidate="${candidate%"${candidate##*[! ]}"}"
+          fcomp="${fname_to_compressed[$candidate]:-0}"
+          committed=$(( committed + fcomp ))
+          bytes_done=$committed
+          printf '%s' "$candidate" > "$fname_file"
+        fi
+        maybe_emit
+        char_buf=""
+        already_handled=
+        polling_fpath=""
+        polling_compressed=0
+        polling_uncompressed=0
+        continue
+      fi
+      char_buf+="$char"
+      continue
+    fi
+    # rc 1..128: EOF
+    [[ $rc -le 128 ]] && break
+    # rc > 128: 100ms timeout
+    if [[ $already_handled && $polling_fpath ]]; then
+      # stat-poll the output file to track intra-file progress
+      cur_size=$(stat -c%s -- "$polling_fpath" 2>/dev/null || echo 0)
+      if [[ $polling_uncompressed -gt 0 && $cur_size -gt 0 ]]; then
+        intra=$(awk -v c="$cur_size" -v comp="$polling_compressed" -v unc="$polling_uncompressed" 'BEGIN{printf "%d", c * comp / unc}')
+        bytes_done=$(( committed + intra ))
+      fi
+      maybe_emit
+      continue
+    fi
+    if ! [[ $char_buf =~ ^[[:space:]]+(inflating|extracting|creating):[[:space:]]+(.+) ]]; then
+      [[ $char_buf == "$stall_buf" ]] && break
+      stall_buf=$char_buf
+      continue
+    fi
+    stall_buf=__unset__
+    candidate="${BASH_REMATCH[2]}"
+    candidate="${candidate%"${candidate##*[! ]}"}"
+    polling_fpath="$candidate"
+    polling_compressed="${fname_to_compressed[$candidate]:-0}"
+    polling_uncompressed="${fname_to_uncompressed[$candidate]:-0}"
+    printf '%s' "$candidate" > "$fname_file"
+    already_handled=1
+    # first stat poll immediately
+    cur_size=$(stat -c%s -- "$polling_fpath" 2>/dev/null || echo 0)
+    if [[ $polling_uncompressed -gt 0 && $cur_size -gt 0 ]]; then
+      intra=$(awk -v c="$cur_size" -v comp="$polling_compressed" -v unc="$polling_uncompressed" 'BEGIN{printf "%d", c * comp / unc}')
+      bytes_done=$(( committed + intra ))
+    fi
+    maybe_emit
+  done
+  bytes_done=$total_bytes
+  emit_progress
+fi
