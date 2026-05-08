@@ -240,7 +240,7 @@ function setFloor() {
   }
   $('#shareFloor').val(isNaN(number) ? '' : number);
 }
-<?if (fsType('btrfs')):?>
+<?if (fsType('btrfs') && isPool($name) && !isSubpool($name)):?>
 function presetBTRFS(form,hour) {
   var mode = form.mode.value;
   form.min.disabled = mode==0;
@@ -1416,7 +1416,7 @@ _(btrfs check status)_:
 </form>
 <?endif;?>
 <?endif;?>
-<?if (fsType('zfs') && !isSubpool($name)):?>
+<?if (fsType('zfs') && isPool($name) && !isSubpool($name)):?>
 <?if (_var($disk,'fsStatus')=="Mounted"):?>
 <div id="poolsummary" class="title nocontrol">
   <span class="left">
