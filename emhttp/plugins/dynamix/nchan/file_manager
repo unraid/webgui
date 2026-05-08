@@ -1154,6 +1154,41 @@ while (true) {
           // Also set in the progress script's 'unzip -l' call, so both sides use the same locale.
           $cmd = "{ cd $esc_dest || exit 1; LANG=en_US.UTF-8 unzip -^ $unzip_overwrite_flag $esc_archive | " . PROGRESS_SCRIPT . "; } >$status 2>$error & echo \$!";
 
+        // Single-file decompressors: output filename = archive name without last extension
+        } elseif (preg_match('/\.(gz|bz2|xz|zst|lz4)$/i', $archive, $m) && !preg_match('/\.tar\.[^.]+$/i', $archive)) {
+          $ext = strtolower($m[1]);
+          $decompressor = [
+            'gz'  => 'gunzip -c',
+            'bz2' => 'bunzip2 -c',
+            'xz'  => 'unxz -c',
+            'zst' => 'unzstd -c',
+            'lz4' => 'unlz4 -c',
+          ][$ext];
+          $out_base = basename($archive, '.' . $ext);
+          $out_path = rtrim($dest, '/') . '/' . $out_base;
+          // overwrite check: if dest file exists and overwrite not set, abort
+          if (!$overwrite && file_exists($out_path)) {
+            $reply['error'] = _('File already exists');
+            break;
+          }
+          // write to hidden tmp file first; rename to final name on success
+          $target_tmp = rtrim($dest, '/') . '/.' . $out_base . '_' . uniqid('', true) . '.tmp';
+          $esc_target_tmp = escapeshellarg($target_tmp);
+          $archive_path   = $out_path;
+          $archive_chown  = $is_docker_dest ? 'root:root' : 'nobody:users';
+          $archive_chmod  = $is_docker_dest ? '600' : '666';
+          if (file_exists($active)) {
+            $active_data = json_decode(file_get_contents($active), true);
+            if (is_array($active_data)) {
+              $active_data['target_tmp']    = $target_tmp;
+              $active_data['archive_path']  = $archive_path;
+              $active_data['archive_chown'] = $archive_chown;
+              $active_data['archive_chmod'] = $archive_chmod;
+              file_put_contents($active, json_encode($active_data));
+            }
+          }
+          $cmd = "{ cd $esc_dest || exit 1; $decompressor $esc_archive > $esc_target_tmp; } >$status 2>$error & echo \$!";
+
         // Set shell command for tar
         } else {
 
@@ -1245,8 +1280,8 @@ while (true) {
           }
         }
 
-        // For compress action: move tmp to final archive + set permissions, or clean up on failure
-        if ($action == 16 && isset($target_tmp)) {
+        // For compress/extract-single-file: move tmp to final name + set permissions, or clean up on failure
+        if (in_array($action, [16, 17]) && isset($target_tmp)) {
           if ((!file_exists($error) || filesize($error) === 0) && isset($archive_path, $archive_chown, $archive_chmod)) {
             rename($target_tmp, $archive_path);
             exec('chown ' . escapeshellarg($archive_chown) . ' ' . escapeshellarg($archive_path));
