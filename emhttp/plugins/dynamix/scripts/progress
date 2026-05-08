@@ -31,6 +31,10 @@
 #  tar ... | progress.sh >/dev/null
 #  tar ... | progress.sh | tee file >/dev/null
 #
+# Required invocation:        CWD should be the source dir (zip/tar compress) or destination dir
+#                             (unzip/tar extract) when the pipeline runs, e.g.:
+#                               cd /dest && tar -xvf archive.tar | progress
+#                             progress inherits that CWD and uses it to locate files via stat.
 # Required zip options:       -du  -ds Xm
 # Required unzip options:     -^ (restore control chars in filenames; without it, unzip strips
 #                                 them on extraction so progress cannot find the file on disk)
@@ -225,8 +229,63 @@ for tool in zip tar unzip; do
   fi
 done
 if [[ ! $compress_tool ]]; then
-  echo "Error: no compress process found" >&2
-  exit 1
+  # Process finished before pgrep could detect it (small/fast archive).
+  # Buffer all stdin, detect tool from output format, emit TOTAL+FILE via stat.
+  compress_cwd=$PWD
+  mapfile -t stdin_lines
+  compress_tool=tar
+  if [[ ${stdin_lines[0]-} == 'Archive:'* ]]; then
+    compress_tool=unzip
+    unzip_dest=$PWD
+    [[ $unzip_dest != '/' ]] && unzip_dest=${unzip_dest%/}
+  elif [[ ${stdin_lines[0]-} =~ ^[[:space:]]+(adding|updating): ]]; then
+    compress_tool=zip
+  fi
+  dbg "fallback: tool=$compress_tool cwd=$compress_cwd lines=${#stdin_lines[@]}"
+  fallback_fnames=()
+  fallback_fsizes=()
+  total_bytes=0
+  for line in "${stdin_lines[@]}"; do
+    case $compress_tool in
+      unzip)
+        # unzip stdout: " inflating: /dest/path/file.txt  " or " creating: dir/"
+        [[ $line =~ ^[[:space:]]+(inflating|extracting|creating):[[:space:]]+(.+) ]] || continue
+        candidate="${BASH_REMATCH[2]}"
+        # Strip unzip's trailing padding spaces (format: "%-22s  %s%s")
+        candidate="${candidate%"${candidate##*[! ]}"}"
+        # Strip dest prefix so FILE output is dest-relative (e.g. "subdir/file.txt").
+        # In the fallback compress_cwd=$PWD=unzip_dest, so fname is also stat-able
+        # from CWD — no separate fpath needed, unlike the live reader path.
+        fname="${candidate#"$unzip_dest"/}"
+        ;;
+      zip)
+        # zip stdout: "  adding: path/to/file.js (2.0M)  (deflated 72%)"
+        [[ $line =~ (adding|updating):\ (.*)\ \(([0-9.]+[KMGT]?)\)\  ]] || continue
+        fname="${BASH_REMATCH[2]}"
+        ;;
+      tar)
+        # tar stdout: one filename per line; "CHUNK" sentinels are skipped.
+        # GNU tar escapes special chars (\n → literal \n); printf '%b' reverses that.
+        [[ $line == 'CHUNK' || ! $line ]] && continue
+        fname=$(printf '%b' "$line")
+        ;;
+    esac
+    # All tools: fname is relative to CWD (= compress_cwd = PWD in fallback).
+    fsize=$(stat -c%s -- "$fname" 2>/dev/null || echo 0)
+    fallback_fnames+=("$fname")
+    fallback_fsizes+=("$fsize")
+    total_bytes=$(( total_bytes + fsize ))
+  done
+  if [[ $total_bytes -gt 0 ]]; then
+    printf 'TOTAL %s\n' "$total_bytes"
+    _prog_total_line "$total_bytes"
+  fi
+  for i in "${!fallback_fnames[@]}"; do
+    printf 'FILE %(%s)T %s %s\n' -1 "${fallback_fsizes[$i]}" "${fallback_fnames[$i]}"
+    _prog_file_line "${fallback_fsizes[$i]}" "${fallback_fnames[$i]}"
+  done
+  _prog_done_line
+  exit 0
 fi
 
 # Emit TOTAL line
