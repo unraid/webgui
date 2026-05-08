@@ -983,11 +983,26 @@ while (true) {
 
         // Use parent directory of first source as working directory.
         // All selected files are always from the same directory in the file manager view.
-        $source_path = rtrim($source[0], '/');
+        $source_path = validname(rtrim($source[0], '/'));
+        if (!$source_path) {
+          $reply['error'] = _('Invalid source path');
+          break;
+        }
         $source_parent = dirname($source_path);
-        $source_basenames = array_map(function($s) {
-          return basename(rtrim($s, '/'));
-        }, $source);
+        $source_basenames = [];
+        $source_valid = true;
+        foreach ($source as $s) {
+          $valid = validname(rtrim($s, '/'));
+          if (!$valid || dirname($valid) !== $source_parent) {
+            $source_valid = false;
+            break;
+          }
+          $source_basenames[] = basename($valid);
+        }
+        if (!$source_valid) {
+          $reply['error'] = _('Invalid source path');
+          break;
+        }
 
         // Build compression command based on format
         $escaped_basenames = implode(' ', array_map('escapeshellarg', $source_basenames));
@@ -1096,7 +1111,11 @@ while (true) {
 
       // start action
       } else {
-        $archive = $source[0];
+        $archive = validname($source[0]);
+        if (!$archive) {
+          $reply['error'] = _('Invalid source path');
+          break;
+        }
         $dest = rtrim($target, '/');
         $dest = validname($dest, false);
         if (!$dest) {
