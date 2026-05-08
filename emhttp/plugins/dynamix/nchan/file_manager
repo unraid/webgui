@@ -31,6 +31,7 @@ define('COMPRESS_DOT_SIZE_MB', 100);
 define('PROGRESS_SCRIPT', '/usr/local/emhttp/plugins/dynamix/scripts/progress');
 define('PV_ZIP_SCRIPT',   '/usr/local/emhttp/plugins/dynamix/scripts/pv-zip');
 define('FM_FNAME_FILE',   '/var/tmp/file.manager.fname');
+define('FM_EXITCODE_FILE', '/var/tmp/file.manager.exitcode');
 define('TAR_RECORD_SIZE', 10240);
 define('TAR_CHECKPOINT', intval(COMPRESS_DOT_SIZE_MB * 1024 * 1024 / TAR_RECORD_SIZE));
 
@@ -1147,7 +1148,7 @@ while (true) {
           // pv-zip reads zip stdout, writes FM_FNAME_FILE + emits pv-compatible elapsed/bytes to stderr
           // LANG=en_US.UTF-8 required: Unraid has POSIX locale by default, causing zip
           // to mangle non-ASCII filenames as #Uxxxx escape sequences in the archive.
-          $cmd = "{ cd $esc_source_parent || exit 1; LANG=en_US.UTF-8 zip " . implode(' ', $zip_args) . " | " . PV_ZIP_SCRIPT . " " . implode(' ', $pv_zip_args) . " 2>$status; } >/dev/null 2>$error & echo \$!";
+          $cmd = "{ cd $esc_source_parent || exit 1; LANG=en_US.UTF-8 zip " . implode(' ', $zip_args) . " | " . PV_ZIP_SCRIPT . " " . implode(' ', $pv_zip_args) . " 2>$status; echo \$?>" . FM_EXITCODE_FILE . "; } >/dev/null 2>$error & echo \$!";
           break;
         case 'tar':
           $pv_compressor = 'cat';  // no compression, pipe through as-is
@@ -1221,7 +1222,7 @@ while (true) {
             '--verbose',          // write filenames to stderr (captured to fname_file)
             "-- $escaped_basenames",
           ];
-          $cmd = "{ cd $esc_source_parent || exit 1; tar " . implode(' ', $tar_args) . " 2>" . FM_FNAME_FILE . " | pv " . implode(' ', $pv_args) . " 2>$status | $pv_compressor > $esc_target_tmp; } >/dev/null 2>$error & echo \$!";
+          $cmd = "{ cd $esc_source_parent || exit 1; tar " . implode(' ', $tar_args) . " 2>" . FM_FNAME_FILE . " | pv " . implode(' ', $pv_args) . " 2>$status | $pv_compressor > $esc_target_tmp; echo \$?>" . FM_EXITCODE_FILE . "; } >/dev/null 2>$error & echo \$!";
         }
 
         if (isset($pv_single_compress)) {
@@ -1242,7 +1243,7 @@ while (true) {
               file_put_contents($active, json_encode($active_data));
             }
           }
-          $cmd = "{ cd $esc_source_parent || exit 1; pv " . implode(' ', $pv_args) . " -- $esc_basename 2>$status | $pv_single_compress > $esc_target_tmp; } >/dev/null 2>$error & echo \$!";
+          $cmd = "{ cd $esc_source_parent || exit 1; pv " . implode(' ', $pv_args) . " -- $esc_basename 2>$status | $pv_single_compress > $esc_target_tmp; echo \$?>" . FM_EXITCODE_FILE . "; } >/dev/null 2>$error & echo \$!";
         }
 
         exec('logger -t file_manager ' . escapeshellarg('Executing command (first 300 chars): ' . substr($cmd ?? '', 0, 300)));
@@ -1396,7 +1397,7 @@ while (true) {
             '--',                     // end of options
             $esc_archive,
           ];
-          $cmd = "{ cd $esc_dest || exit 1; pv " . implode(' ', $pv_args) . " 2>$status | $decompressor > $esc_target_tmp; } >/dev/null 2>$error & echo \$!";
+          $cmd = "{ cd $esc_dest || exit 1; pv " . implode(' ', $pv_args) . " 2>$status | $decompressor > $esc_target_tmp; echo \$?>" . FM_EXITCODE_FILE . "; } >/dev/null 2>$error & echo \$!";
 
         // Set shell command for tar
         } else {
@@ -1464,11 +1465,7 @@ while (true) {
         @unlink($target_tmp);
       }
       if (isset($fname_file)) @unlink($fname_file);
-      delete_file($active, $pid_file, $status, $error);
-      unset($pid);
-      $delete_empty_dirs = null;
-      break;
-    default:
+      delete_file($active, $pid_file, $status, $error, FM_EXITCODE_FILE);
       continue 2;
     }
     exec('logger -t file_manager ' . escapeshellarg('After switch: action=' . $action . ', pid before pid_exists=' . json_encode($pid ?? null)));
@@ -1510,7 +1507,8 @@ while (true) {
 
         // For compress/extract-single-file: move tmp to final name + set permissions, or clean up on failure
         if (in_array($action, [16, 17]) && isset($target_tmp)) {
-          if ((!file_exists($error) || filesize($error) === 0) && isset($archive_path, $archive_chown, $archive_chmod)) {
+          $exitcode = file_exists(FM_EXITCODE_FILE) ? (int)trim(file_get_contents(FM_EXITCODE_FILE)) : -1;
+          if ($exitcode === 0 && isset($archive_path, $archive_chown, $archive_chmod)) {
             rename($target_tmp, $archive_path);
             exec('chown ' . escapeshellarg($archive_chown) . ' ' . escapeshellarg($archive_path));
             exec('chmod ' . escapeshellarg($archive_chmod) . ' ' . escapeshellarg($archive_path));
@@ -1530,7 +1528,7 @@ while (true) {
           exec('logger -t file_manager "Status file copied to ' . $debug_copy . ' before deletion"');
         }
 
-        delete_file($active, $pid_file, $status, $error);
+        delete_file($active, $pid_file, $status, $error, FM_EXITCODE_FILE);
         unset($pid);
         $delete_empty_dirs = null;
       }
