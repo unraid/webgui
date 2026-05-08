@@ -241,7 +241,7 @@ case 'file':
     'target' => rawurldecode($_POST['target'] ?? ''),
     'H' => empty($_POST['hdlink']) ? '' : 'H',
     'sparse' => empty($_POST['sparse']) ? '' : '--sparse',
-    'exist' => empty($_POST['exist']) ? '--ignore-existing' : '',
+    'overwrite' => empty($_POST['overwrite']) ? 0 : 1,
     'zfs' => rawurldecode($_POST['zfs'] ?? '')
   ];
   // Add compress-specific parameters

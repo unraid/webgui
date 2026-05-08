@@ -977,9 +977,9 @@ function doAction(action, title, id) {
         dfm.window.find('.dfm_text').removeClass('orange-text').html("_(Running)_...");
         dfm.window.find('#dfm_target').prop('disabled',true);
         dfm.window.find('#dfm_sparse').prop('disabled',true);
-        dfm.window.find('#dfm_exist').prop('disabled',true);
+        dfm.window.find('#dfm_overwrite').prop('disabled',true);
         dfm.window.find('.dfm_sparse').css({'opacity':'0.5'});
-        dfm.window.find('.dfm_exist').css({'opacity':'0.5'});
+        dfm.window.find('.dfm_overwrite').css({'opacity':'0.5'});
         if (action == 11) {
           dfm.window.find('#dfm_owner').prop('disabled',true);
           dfm.window.find('#dfm_group').prop('disabled',true);
@@ -987,7 +987,7 @@ function doAction(action, title, id) {
         }
         dfm_footer('hide');
         dfm_fileManager('start');
-        var postData = {mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs)};
+        var postData = {mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),overwrite:dfm.window.find('#dfm_overwrite').val(),zfs:encodeURIComponent(zfs)};
         if (action == 16) {
           postData.format = encodeURIComponent(format);
           postData.archive_name = encodeURIComponent(archive_name);
@@ -1045,7 +1045,7 @@ function doAction(action, title, id) {
           }
           if (!target || !valid.test(target)) {errorTarget(); return;}
         } else target = '';
-        var postDataSingleQueue = {mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs)};
+        var postDataSingleQueue = {mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),overwrite:dfm.window.find('#dfm_overwrite').val(),zfs:encodeURIComponent(zfs)};
         if (action == 16) {
           postDataSingleQueue.format = encodeURIComponent(format_queue);
           postDataSingleQueue.archive_name = encodeURIComponent(archive_name_queue);
@@ -1335,9 +1335,9 @@ function doActions(action, title) {
         if (bulk && target.length>0 && target.substr(-1)!='/') target += '/';
         dfm.window.find('#dfm_target').prop('disabled',true);
         dfm.window.find('#dfm_sparse').prop('disabled',true);
-        dfm.window.find('#dfm_exist').prop('disabled',true);
+        dfm.window.find('#dfm_overwrite').prop('disabled',true);
         dfm.window.find('.dfm_sparse').css({'opacity':'0.5'});
-        dfm.window.find('.dfm_exist').css({'opacity':'0.5'});
+        dfm.window.find('.dfm_overwrite').css({'opacity':'0.5'});
         if (action == 12) {
           dfm.window.find('#dfm_owner').prop('disabled',true);
           dfm.window.find('#dfm_group').prop('disabled',true);
@@ -1346,7 +1346,7 @@ function doActions(action, title) {
         dfm.window.find('.dfm_text').removeClass('orange-text').html("_(Running)_...");
         dfm_footer('hide');
         dfm_fileManager('start');
-        var postData = {mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs.join('\r'))};
+        var postData = {mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),overwrite:dfm.window.find('#dfm_overwrite').val(),zfs:encodeURIComponent(zfs.join('\r'))};
         if (action == 16) {
           postData.format = encodeURIComponent(format);
           postData.archive_name = encodeURIComponent(archive_name);
@@ -1405,7 +1405,7 @@ function doActions(action, title) {
           }
           if (!target || !valid.test(target)) {errorTarget(); return;}
         } else target = '';
-        var postDataQueue = {mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs.join('\r'))};
+        var postDataQueue = {mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),overwrite:dfm.window.find('#dfm_overwrite').val(),zfs:encodeURIComponent(zfs.join('\r'))};
         if (action == 16) {
           postDataQueue.format = encodeURIComponent(format_queue);
           postDataQueue.archive_name = encodeURIComponent(archive_name_queue);

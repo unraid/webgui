@@ -309,14 +309,14 @@ function dfm_makeDialog(open) {
     dfm.window.html($('#dfm_templateCopyFolder').html());
     dfm.window.find('#dfm_target').val(dfm_read.target).prop('disabled',true);
     dfm.window.find('#dfm_sparse').prop('checked',dfm_read.sparse ? true : false);
-    dfm.window.find('#dfm_exist').prop('checked',dfm_read.exist ? false : true);
+    dfm.window.find('#dfm_overwrite').prop('checked',dfm_read.exist ? false : true);
     dfm.height = 630;
     break;
   case 4: // move folder/object
     dfm.window.html($('#dfm_templateMoveFolder').html());
     dfm.window.find('#dfm_target').val(dfm_read.target).prop('disabled',true);
     dfm.window.find('#dfm_sparse').prop('checked',dfm_read.sparse ? true : false);
-    dfm.window.find('#dfm_exist').prop('checked',dfm_read.exist ? false : true);
+    dfm.window.find('#dfm_overwrite').prop('checked',dfm_read.exist ? false : true);
     dfm.height = 630;
     break;
   case 6: // delete file
@@ -327,14 +327,14 @@ function dfm_makeDialog(open) {
     dfm.window.html($('#dfm_templateCopyFile').html());
     dfm.window.find('#dfm_target').val(dfm_read.target).prop('disabled',true);
     dfm.window.find('#dfm_sparse').prop('checked',dfm_read.sparse ? true : false);
-    dfm.window.find('#dfm_exist').prop('checked',dfm_read.exist ? false : true);
+    dfm.window.find('#dfm_overwrite').prop('checked',dfm_read.exist ? false : true);
     dfm.height = 630;
     break;
   case 9: // move file
     dfm.window.html($('#dfm_templateMoveFile').html());
     dfm.window.find('#dfm_target').val(dfm_read.target).prop('disabled',true);
     dfm.window.find('#dfm_sparse').prop('checked',dfm_read.sparse ? true :false);
-    dfm.window.find('#dfm_exist').prop('checked',dfm_read.exist ? false : true);
+    dfm.window.find('#dfm_overwrite').prop('checked',dfm_read.exist ? false : true);
     dfm.height = 630;
     break;
   case 11: // change owner
@@ -372,9 +372,9 @@ function dfm_makeDialog(open) {
   dfm.window.find('#dfm_source').attr('size',Math.min(dfm.tsize[dfm_read.action],dfm_source.length));
   dfm_createSource(dfm_source);
   dfm.window.find('#dfm_sparse').prop('disabled',true);
-  dfm.window.find('#dfm_exist').prop('disabled',true);
+  dfm.window.find('#dfm_overwrite').prop('disabled',true);
   dfm.window.find('.dfm_sparse').css({'opacity':'0.5'});
-  dfm.window.find('.dfm_exist').css({'opacity':'0.5'});
+  dfm.window.find('.dfm_overwrite').css({'opacity':'0.5'});
   dfm.window.dialog({
     classes: {'ui-dialog': 'ui-dfm'},
     autoOpen: open || dfm.dialog,
@@ -392,7 +392,7 @@ function dfm_makeDialog(open) {
           dfm.window.find('.dfm_text').html("_(Running)_...");
           dfm_footer('hide');
           dfm_fileManager('start');
-          $.post('/webGui/include/Control.php',{mode:'file',action:15,title:encodeURIComponent(dfm_read.title),source:encodeURIComponent(dfm_read.source),target:encodeURIComponent(dfm_target),hdlink:'',sparse:'',exist:'',zfs:''});
+          $.post('/webGui/include/Control.php',{mode:'file',action:15,title:encodeURIComponent(dfm_read.title),source:encodeURIComponent(dfm_read.source),target:encodeURIComponent(dfm_target),hdlink:'',sparse:'',overwrite:0,zfs:''});
         } else {
           return;
         }
@@ -431,7 +431,7 @@ nchan_filemanager.on('message', function(msg) {
     dfm.window.find('.dfm_text').addClass('orange-text').css('white-space', 'pre-line').text(data.error);
     dfm.window.find('#dfm_target').prop('disabled',false);
     dfm.window.find('#dfm_sparse').prop('disabled',false);
-    dfm.window.find('#dfm_exist').prop('disabled',false);
+    dfm.window.find('#dfm_overwrite').prop('disabled',false);
     dfm.window.find('#dfm_owner').prop('disabled',false);
     dfm.window.find('#dfm_group').prop('disabled',false);
     dfm.window.find('#dfm_other').prop('disabled',false);

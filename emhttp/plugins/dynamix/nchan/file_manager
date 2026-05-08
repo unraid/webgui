@@ -544,9 +544,9 @@ $last_published_time = 0;
 while (true) {
   // Reset all per-iteration variables. $tar_flags/$cmd must be here to prevent stale
   // values from a previous tar iteration overriding the zip code path.
-  unset($action, $source, $target, $H, $sparse, $exist, $zfs, $format, $archive_name, $target_tmp, $tar_flags, $single_compressor, $cmd);
+  unset($action, $source, $target, $H, $sparse, $overwrite, $zfs, $format, $archive_name, $target_tmp, $tar_flags, $single_compressor, $cmd);
 
-  // read job parameters from JSON file: $action, $title, $source, $target, $H, $sparse, $exist, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
+  // read job parameters from JSON file: $action, $title, $source, $target, $H, $sparse, $overwrite, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
   if (file_exists($active)) {
     $json = file_get_contents($active);
     $data = json_decode($json, true);
@@ -661,7 +661,8 @@ while (true) {
         $target = validname($target, false);
         if ($target) {
           $mkpath = isdir($target) ? '--mkpath' : '';
-          $cmd = "rsync -ahPIX$H $sparse $exist $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
+          $ignore_existing = $overwrite ? '' : '--ignore-existing';
+          $cmd = "rsync -ahPIX$H $sparse $ignore_existing $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
           // note: rsync defaults to "inc_recurse mode" which causes creating the whole directory structure at target before transfering files.
           //       This is a problem because those target directories get temporary permissions of "root:root" and "chmod 0700", which
           //       breaks access for all unraid users through /mnt/user/sharename. We avoid this behavior by using "--no-inc-recursive".
@@ -757,7 +758,7 @@ while (true) {
               }
 
               // selected source files and directories must not exist on target when "Overwrite existing files" is not set
-              if (!empty($exist)) { // would add "--ignore-existing" to rsync
+              if (!$overwrite) { // skip overwrite check when overwrite is enabled
                 $target_item = rtrim($target, '/') . '/' . basename($valid_source_path);
                 if (file_exists($target_item)) {
                   $use_rsync_rename = false;
@@ -817,7 +818,8 @@ while (true) {
           // use rsync copy-delete
           } else {
             $delete_empty_dirs = true; // cleanup needed: rsync --remove-source-files leaves empty directories
-            $cmd = "rsync -ahPIX$H $sparse $exist $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
+            $ignore_existing = $overwrite ? '' : '--ignore-existing';
+            $cmd = "rsync -ahPIX$H $sparse $ignore_existing $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
             // note: rsync defaults to "inc_recurse mode" which causes creating the whole directory structure at target before transfering files.
             //       This is a problem because those target directories get temporary permissions of "root:root" and "chmod 0700", which
             //       breaks access for all unraid users through /mnt/user/sharename. We avoid this behavior by using "--no-inc-recursive".
@@ -974,7 +976,7 @@ while (true) {
         exec('logger -t file_manager ' . escapeshellarg('Start compress: format=' . $format . ', archive=' . $archive_path));
 
         // Check if target archive already exists (skip check when overwrite is allowed)
-        if (!empty($exist) && file_exists($archive_path)) {
+        if (!$overwrite && file_exists($archive_path)) {
           $reply['error'] = _('Archive already exists');
           break;
         }
@@ -1094,9 +1096,6 @@ while (true) {
 
       // start action
       } else {
-        // $exist is '--ignore-existing' when overwrite checkbox is unchecked (default), '' when checked
-        $no_overwrite = !empty($exist);
-
         $archive = $source[0];
         $dest = rtrim($target, '/');
         $dest = validname($dest, false);
@@ -1147,7 +1146,7 @@ while (true) {
 
         // Set shell command for zip
         if (preg_match('/\.zip$/i', $archive)) {
-          $unzip_overwrite_flag = $no_overwrite ? '-n' : '-o';
+          $unzip_overwrite_flag = $overwrite ? '-o' : '-n';
           // -^ preserves special characters (e.g. newlines)
           // note: stat-poller in the progress script requires this, too
           // LANG=en_US.UTF-8 required: Unraid has POSIX locale by default, causing unzip
@@ -1173,7 +1172,7 @@ while (true) {
             $extract_tar_flags = '-xvf';
           }
 
-          $keep_existing_files = $no_overwrite ? '--skip-old-files --warning=no-existing-file' : '';
+          $keep_existing_files = $overwrite ? '' : '--skip-old-files --warning=no-existing-file';
           $tar_args = array_filter([
             $extract_tar_flags,
             $esc_archive,
