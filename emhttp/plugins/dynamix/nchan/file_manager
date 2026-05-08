@@ -994,6 +994,7 @@ while (true) {
         case 'zip':
           $zip_args = [
             '-r',       // recursion into directories
+            '-y',       // store symlinks as symlinks (not followed)
             '-du',      // displays file sizes
             '-dd',      // display dot per dot size
             '-ds', $dot_mb . 'm', // chunk size per dot
@@ -1001,7 +1002,9 @@ while (true) {
             '--',
             $escaped_basenames,
           ];
-          $cmd = "{ cd $esc_source_parent || exit 1; zip " . implode(' ', $zip_args) . " | " . PROGRESS_SCRIPT . "; } >$status 2>$error & echo \$!";
+          // LANG=en_US.UTF-8 required: Unraid has POSIX locale by default, causing zip
+          // to mangle non-ASCII filenames as #Uxxxx escape sequences in the archive.
+          $cmd = "{ cd $esc_source_parent || exit 1; LANG=en_US.UTF-8 zip " . implode(' ', $zip_args) . " | " . PROGRESS_SCRIPT . "; } >$status 2>$error & echo \$!";
           break;
         case 'tar':
           $tar_flags = '-cvf';
@@ -1119,7 +1122,9 @@ while (true) {
           $unzip_overwrite_flag = $no_overwrite ? '-n' : '-o';
           // -^ preserves special characters (e.g. newlines)
           // note: stat-poller in the progress script requires this, too
-          $cmd = "{ cd $esc_dest || exit 1; unzip -^ $unzip_overwrite_flag $esc_archive | " . PROGRESS_SCRIPT . "; } >$status 2>$error & echo \$!";
+          // LANG=en_US.UTF-8 required: Unraid has POSIX locale by default, causing unzip
+          // to mangle non-ASCII filenames as #Uxxxx escape sequences on extraction.
+          $cmd = "{ cd $esc_dest || exit 1; LANG=en_US.UTF-8 unzip -^ $unzip_overwrite_flag $esc_archive | " . PROGRESS_SCRIPT . "; } >$status 2>$error & echo \$!";
 
         // Set shell command for tar
         } else {
