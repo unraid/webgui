@@ -368,6 +368,7 @@ function parse_pv_progress($status, $total_bytes, $fname_file, $action_label, $r
   $start_line = $last_line_number + 1;
   $new_lines = [];
   exec("tail -n +" . escapeshellarg($start_line) . " " . escapeshellarg($status) . " 2>/dev/null", $new_lines);
+  exec('logger -t file_manager "parse_pv_progress: read ' . count($new_lines) . ' new lines from line ' . $start_line . ', fname_file=' . ($fname_file ?? 'null') . ', first_line=' . escapeshellarg($new_lines[0] ?? '(none)') . '"');
   foreach ($new_lines as $line) {
     $line = trim($line);
     $parts = explode(' ', $line, 2);
@@ -1175,6 +1176,7 @@ while (true) {
           $du_out = [];
           exec("du -sb $du_sources 2>/dev/null | awk '{s+=\$1}END{print s+0}'", $du_out);
           $pv_total_bytes = (int)($du_out[0] ?? 0);
+          exec('logger -t file_manager ' . escapeshellarg('pv compress tar.zst: pv_total_bytes=' . $pv_total_bytes . ', fname_file=' . $fname_file));
           if (file_exists($active)) {
             $active_data = json_decode(file_get_contents($active), true);
             if (is_array($active_data)) {
@@ -1359,6 +1361,7 @@ while (true) {
             $fname_file = '/tmp/.fm-tar-fname-' . uniqid('', true);
             $esc_fname_file = escapeshellarg($fname_file);
             $pv_total_bytes = filesize($archive) ?: 0;
+            exec('logger -t file_manager ' . escapeshellarg('pv extract tar.zst: pv_total_bytes=' . $pv_total_bytes . ', fname_file=' . $fname_file));
             if (file_exists($active)) {
               $active_data = json_decode(file_get_contents($active), true);
               if (is_array($active_data)) {
