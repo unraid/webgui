@@ -1202,7 +1202,7 @@ while (true) {
             '--verbose',          // write filenames to stderr (captured to fname_file)
             "-- $escaped_basenames",
           ];
-          $cmd = "{ cd $esc_source_parent || exit 1; tar " . implode(' ', $tar_args) . " 2>$esc_fname_file | pv " . implode(' ', $pv_args) . " 2>$status | zstd > $esc_target_tmp; } 2>$error & echo \$!";
+          $cmd = "{ cd $esc_source_parent || exit 1; tar " . implode(' ', $tar_args) . " 2>$esc_fname_file | pv " . implode(' ', $pv_args) . " 2>$status | zstd > $esc_target_tmp; } >/dev/null 2>$error & echo \$!";
         }
 
         if (isset($single_compressor)) {
@@ -1392,7 +1392,7 @@ while (true) {
               '--verbose',                  // write filenames to stdout (captured to fname_file)
               $keep_existing_files,
             ]);
-            $cmd = "{ cd $esc_dest || exit 1; pv " . implode(' ', $pv_args) . " 2>$status | tar " . implode(' ', $tar_args) . " >$esc_fname_file; } 2>$error & echo \$!";
+            $cmd = "{ cd $esc_dest || exit 1; pv " . implode(' ', $pv_args) . " 2>$status | tar " . implode(' ', $tar_args) . " >$esc_fname_file; } >/dev/null 2>$error & echo \$!";
 
           } else {
             // Set tar options depending on compression type
