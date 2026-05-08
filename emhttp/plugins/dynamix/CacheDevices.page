@@ -80,6 +80,7 @@ if (count($devs) > 1) {
 <script>
 function isReservedPoolName(poolname, reserved) {
   var name = (poolname || '').trim().toLowerCase();
+  var reservedPrefixes = ['mirror', 'raidz', 'raidz1', 'raidz2', 'raidz3', 'spare'];
 
   if (!name) return false;
 
@@ -89,7 +90,10 @@ function isReservedPoolName(poolname, reserved) {
     if (reservedName.endsWith('*')) {
       return name.startsWith(reservedName.slice(0, -1));
     }
-    return name === reservedName || name.startsWith(reservedName);
+    if (reservedPrefixes.includes(reservedName)) {
+      return name === reservedName || name.startsWith(reservedName);
+    }
+    return name === reservedName;
   });
 }
 
