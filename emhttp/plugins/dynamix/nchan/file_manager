@@ -1552,6 +1552,8 @@ while (true) {
     $last_published_time = $now;
   }
   publish('filemanager', json_encode($reply));
-  usleep(250000);
+  // Slow down polling while any background process is running: sub-second updates
+  // are pointless since the user can't react faster and pv/rsync write once per second anyway.
+  usleep(isset($pid) ? 1000000 : 250000);
 }
 ?>
