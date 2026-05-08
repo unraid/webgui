@@ -1140,9 +1140,9 @@ while (true) {
           ];
           $pv_zip_args = [
             'zip',
-            FM_FNAME_FILE,
             $pv_total_bytes,
             $dot_mb,
+            FM_FNAME_FILE,
           ];
           // pv-zip reads zip stdout, writes FM_FNAME_FILE + emits pv-compatible elapsed/bytes to stderr
           // LANG=en_US.UTF-8 required: Unraid has POSIX locale by default, causing zip
@@ -1341,9 +1341,9 @@ while (true) {
           }
           $pv_zip_args = [
             'unzip',
-            FM_FNAME_FILE,
             $pv_total_bytes,
             $esc_archive,
+            FM_FNAME_FILE,
           ];
           $cmd = "{ cd $esc_dest || exit 1; LANG=en_US.UTF-8 unzip -^ $unzip_overwrite_flag $esc_archive | " . PV_ZIP_SCRIPT . " " . implode(' ', $pv_zip_args) . " 2>$status; } >/dev/null 2>$error & echo \$!";
 

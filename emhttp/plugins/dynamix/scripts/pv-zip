@@ -13,8 +13,8 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
-# Usage (compress): pv-zip zip   <fname_file> <total_bytes> <dot_mb>
-# Usage (extract):  pv-zip unzip <fname_file> <total_bytes> <archive_path>
+# Usage (compress): pv-zip zip   <total_bytes> <dot_mb> [fname_file]
+# Usage (extract):  pv-zip unzip <total_bytes> <archive_path> [fname_file]
 #
 # Reads zip/unzip stdout from stdin, writes current filename to fname_file,
 # emits "elapsed bytes\n" lines to stderr every ~1 second (same format as pv).
@@ -27,14 +27,15 @@
 #                 compressed sizes from unzip -lv manifest.
 
 mode=$1
-fname_file=$2
-total_bytes=$3
+total_bytes=$2
 # zip: dot_mb (MB per dot); unzip: path to archive
-arg4=$4
+arg3=$3
+# optional: path to file where current filename is written
+fname_file=${4:-}
 
-if [[ ! $mode || ! $fname_file || ! $total_bytes || ! $arg4 ]]; then
-  printf 'Usage: pv-zip zip <fname_file> <total_bytes> <dot_mb>\n' >&2
-  printf '       pv-zip unzip <fname_file> <total_bytes> <archive_path>\n' >&2
+if [[ ! $mode || ! $total_bytes || ! $arg3 ]]; then
+  printf 'Usage: pv-zip zip   <total_bytes> <dot_mb> [fname_file]\n' >&2
+  printf '       pv-zip unzip <total_bytes> <archive_path> [fname_file]\n' >&2
   exit 1
 fi
 
@@ -65,7 +66,7 @@ if [[ $mode == zip ]]; then
   # - dot_mode: each '.' = dot_mb MB of source data; '\n' = file done
   #
   # bytes_done = committed (sum of fsizes of completed files) + dot progress of current file.
-  dot_bytes=$(( arg4 * 1024 * 1024 ))
+  dot_bytes=$(( arg3 * 1024 * 1024 ))
   committed=0
   dot_progress=0
   char_buf=""
@@ -86,7 +87,7 @@ if [[ $mode == zip ]]; then
           else print int(n)
         }')
         dot_progress=0
-        printf '%s' "$fname" > "$fname_file"
+        [[ $fname_file ]] && printf '%s' "$fname" > "$fname_file"
         dot_mode=1
       elif [[ ! $char ]]; then
         char_buf=""
@@ -110,7 +111,7 @@ if [[ $mode == zip ]]; then
   emit_progress
 
 elif [[ $mode == unzip ]]; then
-  archive_path=$arg4
+  archive_path=$arg3
 
   # Build manifest from unzip -lv: fname -> compressed size + uncompressed size.
   # unzip -lv columns: Length Method Size Cmpr Date Time CRC-32 Name
@@ -151,7 +152,7 @@ elif [[ $mode == unzip ]]; then
           fcomp="${fname_to_compressed[$candidate]:-0}"
           committed=$(( committed + fcomp ))
           bytes_done=$committed
-          printf '%s' "$candidate" > "$fname_file"
+          [[ $fname_file ]] && printf '%s' "$candidate" > "$fname_file"
         fi
         maybe_emit
         char_buf=""
@@ -188,7 +189,7 @@ elif [[ $mode == unzip ]]; then
     polling_fpath="$candidate"
     polling_compressed="${fname_to_compressed[$candidate]:-0}"
     polling_uncompressed="${fname_to_uncompressed[$candidate]:-0}"
-    printf '%s' "$candidate" > "$fname_file"
+    [[ $fname_file ]] && printf '%s' "$candidate" > "$fname_file"
     already_handled=1
     # first stat poll immediately
     cur_size=$(stat -c%s -- "$polling_fpath" 2>/dev/null || echo 0)
