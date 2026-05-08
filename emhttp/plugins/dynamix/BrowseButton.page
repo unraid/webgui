@@ -290,7 +290,7 @@ function dfm_makeDialog(open) {
   if (dfm.window.dialog('instance') !==  undefined) dfm.dialog = dfm.window.dialog('isOpen');
   // Guard against dfm_read.source being undefined (e.g. mode:'read' returned empty data
   // due to a timing race). filter(Boolean) removes empty strings from split results.
-  var dfm_source = (dfm_read.source || '').split('\r').filter(Boolean).slice(0,9);
+  var dfm_source = (dfm_read.source || '').split('\r').filter(Boolean);
   switch (dfm_read.action) {
   case 0: // create folder/object
     dfm.window.html($('#dfm_templateCreateFolder').html());
@@ -359,8 +359,8 @@ function dfm_makeDialog(open) {
   case 16: // compress
     dfm.window.html($('#dfm_templateCompress').html());
     dfm.window.find('#dfm_target').val(dfm_read.target).prop('disabled',true);
-    dfm.window.find('#dfm_format').prop('disabled',true);
-    dfm.window.find('#dfm_archive_name').prop('disabled',true);
+    dfm.window.find('#dfm_format').val(dfm_read.format || 'zip').prop('disabled',true);
+    dfm.window.find('#dfm_archive_name').val(dfm_read.archive_name || '').prop('disabled',true);
     dfm.height = 630;
     break;
   case 17: // extract
