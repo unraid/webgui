@@ -78,13 +78,33 @@ if (count($devs) > 1) {
 }
 ?>
 <script>
+function isReservedPoolName(poolname, reserved) {
+  var name = (poolname || '').trim().toLowerCase();
+  var reservedPrefixes = ['mirror', 'raidz', 'draid', 'spare'];
+
+  if (!name) return false;
+
+  return reserved.some(function(entry) {
+    var reservedName = (entry || '').toLowerCase();
+    if (!reservedName) return false;
+    if (reservedName.endsWith('*')) {
+      return name.startsWith(reservedName.slice(0, -1));
+    }
+    if (reservedPrefixes.includes(reservedName)) {
+      return name === reservedName || name.startsWith(reservedName);
+    }
+    return name === reservedName;
+  });
+}
+
 function validate(poolname) {
   var valid = /^[a-z]([a-z0-9~._-]*[a-z_-])*$/;
   var reserved = [<?=makeList(explode(',',_var($var,'reservedNames')))?>];
   var shares = [<?=makeList(array_map('sharename',glob('boot/config/shares/*.cfg',GLOB_NOSORT)))?>];
   var pools = [<?=makeList($pools)?>];
+  poolname = (poolname || '').trim();
   if (!poolname.trim()) return false;
-  if (reserved.includes(poolname)) {
+  if (isReservedPoolName(poolname, reserved)) {
     swal({title:"_(Invalid pool name)_",text:"_(Do not use reserved names)_",html:true,type:'error',confirmButtonText:"_(Ok)_"});
     return false;
   } else if (shares.includes(poolname)) {

@@ -195,6 +195,25 @@ function is_upgraded_ZFS_pool($pool_name)
 
 String.prototype.celsius = function(){return Math.round((parseInt(this)-32)*5/9).toString();}
 
+function isReservedPoolName(poolname, reserved) {
+  var name = (poolname || '').trim().toLowerCase();
+  var reservedPrefixes = ['mirror', 'raidz', 'draid', 'spare'];
+
+  if (!name) return false;
+
+  return reserved.some(function(entry) {
+    var reservedName = (entry || '').toLowerCase();
+    if (!reservedName) return false;
+    if (reservedName.endsWith('*')) {
+      return name.startsWith(reservedName.slice(0, -1));
+    }
+    if (reservedPrefixes.includes(reservedName)) {
+      return name === reservedName || name.startsWith(reservedName);
+    }
+    return name === reservedName;
+  });
+}
+
 function setFloor() {
   if ($('#shareFloor').length==0) return;
   const fsSize = {<?=fsSize()?>};
@@ -711,8 +730,9 @@ function validate(poolname) {
   var reserved = [<?=makeList(explode(',', _var($var, 'reservedNames')))?>];
   var shares = [<?=makeList(array_map('sharename', glob('boot/config/shares/*.cfg', GLOB_NOSORT)))?>];
   var pools = [<?=makeList($pools)?>];
+  poolname = (poolname || '').trim();
   if (!poolname.trim()) return false;
-  if (reserved.includes(poolname)) {
+  if (isReservedPoolName(poolname, reserved)) {
     swal({title:"_(Invalid pool name)_",text:"_(Do not use reserved names)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
     return false;
   } else if (shares.includes(poolname)) {
@@ -1035,6 +1055,7 @@ _(Critical disk utilization threshold)_ (%):
 
 <?if (fsType('btrfs')):?>
 <?if (_var($disk,'fsStatus')=="Mounted"):?>
+<?if (isPool($name)):?>
 <div id="poolsummary" class="title nocontrol">
   <span class="left">
     <i class="title fa fa-hdd-o"></i> _(Pool Status)_
@@ -1059,6 +1080,7 @@ if (!empty($poolstatus['pools'][$poolName])) {
 ?>
 _(pool status)_:
 : <span class="<?=$statusClass?>"><?=$status?><?=$statusLink?></span>
+<?endif;?>
 
 </form>
 
@@ -1398,6 +1420,7 @@ _(btrfs check status)_:
 <?endif;?>
 <?if (fsType('zfs') && !isSubpool($name)):?>
 <?if (_var($disk,'fsStatus')=="Mounted"):?>
+<?if (isPool($name)):?>
 <div id="poolsummary" class="title nocontrol">
   <span class="left">
     <i class="title fa fa-info-circle"></i>_(Pool Status Summary)_
@@ -1422,6 +1445,7 @@ if (!empty($poolstatus['pools'][$poolName])) {
 ?>
 _(pool status)_:
 : <span class="<?=$statusClass?>"><?=$status?><?=$statusLink?></span>
+<?endif;?>
 
 </form>
 <?endif;?>
