@@ -65,7 +65,7 @@ $csrf_token = $var['csrf_token'] ?? '';
         <dl>
             <dt class="help-label">_(PCIe ACS Override)_ _(details)_:</dt>
             <dd>
-                <select id="acs-dropdown" onchange="updateConfig()" style="width: auto;">
+                <select id="acs-dropdown" onchange="updateConfig('acs-dropdown')" style="width: auto;">
                     <option value="">_(Disabled)_</option>
                     <option value="downstream">_(Downstream)_</option>
                     <option value="multifunction">_(Multi-function)_</option>
@@ -86,7 +86,7 @@ $csrf_token = $var['csrf_token'] ?? '';
         <dl>
             <dt class="help-label">_(VFIO Allow Unsafe Interrupts)_ _(details)_:</dt>
             <dd>
-                <input type="checkbox" id="vfio-toggle" class="switch narrow" onchange="updateConfig()">
+                <input type="checkbox" id="vfio-toggle" class="switch narrow" onchange="updateConfig('vfio-toggle')">
                 <br>
                 <span class="parameter-code">vfio_iommu_type1.allow_unsafe_interrupts=1</span>
                 <blockquote class="inline_help">
@@ -665,9 +665,28 @@ function bootParamsTabFocus() {
 }
 
 // Update configuration preview
-function updateConfig() {
+function ensureApplyTogglesEnabled(labels) {
+    if (!Array.isArray(labels) || labels.length === 0) {
+        return;
+    }
+
+    $('.boot-entry-apply-toggle').each(function() {
+        const toggle = $(this);
+        const label = toggle.attr('data-label');
+
+        if (labels.indexOf(label) !== -1 && !toggle.prop('checked')) {
+            toggle.switchButton('option', 'checked', true);
+        }
+    });
+}
+
+function updateConfig(changedFieldId) {
     // Handle mutual exclusivity for sysfb_blacklist toggle
     handleFramebufferMutualExclusivity();
+
+    if (changedFieldId === 'acs-dropdown' || changedFieldId === 'vfio-toggle') {
+        ensureApplyTogglesEnabled(['Unraid OS', 'Unraid OS GUI Mode']);
+    }
 
     markFormModified();
     updatePreview();
@@ -1044,7 +1063,7 @@ function updatePreview() {
     if (bootloaderType === 'grub') {
         html = '<span style="color: var(--text-color, #333);">linux /bzimage</span> ';
     } else {
-        html = '<span style="color: var(--text-color, #333);">append initrd=/bzroot</span> ';
+        html = '<span style="color: var(--text-color, #333);">append ' + getPreviewSyslinuxInitrd() + '</span> ';
     }
 
     // Add all proposed parameters in bright green with bold weight for visibility
@@ -1203,11 +1222,47 @@ function stripSystemParams(line) {
     return indent + rest;
 }
 
+function normalizeDisplayLineForComparison(line) {
+    if (!line) return '';
+    return stripSystemParams(line).trim().replace(/\s+/g, ' ');
+}
+
+function getSyslinuxInitrdForEntryLabel(label) {
+    return /GUI Mode|GUI Safe Mode/i.test(label || '') ? 'initrd=/bzroot,/bzroot-gui' : 'initrd=/bzroot';
+}
+
+function getPreviewSyslinuxInitrd() {
+    const appliedLabels = [];
+    $('.boot-entry-apply-toggle:checked').each(function() {
+        appliedLabels.push($(this).attr('data-label') || '');
+    });
+
+    if (appliedLabels.length > 0 && appliedLabels.every(function(label) {
+        return /GUI Mode|GUI Safe Mode/i.test(label);
+    })) {
+        return 'initrd=/bzroot,/bzroot-gui';
+    }
+
+    return 'initrd=/bzroot';
+}
+
+function getSelectedDefaultEntryLabel() {
+    const selected = $('input[name="default-boot"]:checked').attr('data-label');
+    return selected || '';
+}
+
 /**
  * Helper function to create boot entry content with optional diff display
  */
 function createEntryContent(entry, showApply) {
     const content = $('<pre>').addClass('boot-entry-content');
+    const selectedDefaultLabel = getSelectedDefaultEntryLabel();
+    const shouldShowMenuDefault = bootloaderType === 'syslinux'
+        ? (selectedDefaultLabel ? entry.label === selectedDefaultLabel : entry.isDefault)
+        : entry.isDefault;
+    const originalHasMenuDefault = bootloaderType === 'syslinux' && entry.lines.some(function(entryLine) {
+        return entryLine.trim() === 'menu default';
+    });
 
     // Find the line index to update (append for syslinux, linux for GRUB)
     let appendLineIndex = -1;
@@ -1227,6 +1282,25 @@ function createEntryContent(entry, showApply) {
     // Build the content
     let contentHtml = '';
     entry.lines.forEach((line, idx) => {
+        const trimmed = line.trim();
+
+        if (bootloaderType === 'syslinux' && trimmed.startsWith('label ')) {
+            contentHtml += stripSystemParams(line) + '\n';
+            if (shouldShowMenuDefault && !originalHasMenuDefault) {
+                contentHtml += '<span class="diff-line-added">  menu default</span>\n';
+            }
+            return;
+        }
+
+        if (bootloaderType === 'syslinux' && trimmed === 'menu default') {
+            if (shouldShowMenuDefault) {
+                contentHtml += stripSystemParams(line) + '\n';
+            } else {
+                contentHtml += '<span class="diff-line-removed">' + stripSystemParams(line) + '</span>\n';
+            }
+            return;
+        }
+
         if (idx === appendLineIndex && showApply) {
             // Show diff: removed line (original) and added line (with parameters)
             const originalAppend = stripSystemParams(line);
@@ -1257,10 +1331,12 @@ function createEntryContent(entry, showApply) {
                 const args = mergedArgs.length > 0 ? ' ' + mergedArgs.join(' ') : '';
                 newAppend = indent + cmd + ' ' + kernel + args;
             } else {
-                newAppend = '  append initrd=/bzroot' + (proposedParams.length > 0 ? ' ' + proposedParams.join(' ') : '');
+                const indentMatch = line.match(/^(\s*)append\b/);
+                const indent = indentMatch ? indentMatch[1] : '  ';
+                newAppend = indent + 'append ' + getSyslinuxInitrdForEntryLabel(entry.label) + (proposedParams.length > 0 ? ' ' + proposedParams.join(' ') : '');
             }
             const newAppendDisplay = stripSystemParams(newAppend);
-            if (originalAppend === newAppendDisplay) {
+            if (normalizeDisplayLineForComparison(originalAppend) === normalizeDisplayLineForComparison(newAppendDisplay)) {
                 contentHtml += originalAppend + '\n';
             } else {
                 contentHtml += '<span class="diff-line-removed">' + originalAppend + '</span>\n';
@@ -1300,6 +1376,28 @@ function updateAllAppliedEntryDiffs() {
             updateEntryDiff(entryDiv, entry, true);
         }
     });
+}
+
+function updateDefaultEntryDisplay() {
+    const selectedDefaultLabel = getSelectedDefaultEntryLabel();
+
+    $('.boot-entry').each(function() {
+        const entryDiv = $(this);
+        const entry = entryDiv.data('entry');
+        if (!entry) return;
+
+        const toggle = entryDiv.find('.boot-entry-apply-toggle');
+        if (toggle.length > 0 && selectedDefaultLabel && entry.label === selectedDefaultLabel && !toggle.prop('checked')) {
+            toggle.switchButton('option', 'checked', true);
+        }
+
+        entryDiv.toggleClass('default', !!selectedDefaultLabel && entry.label === selectedDefaultLabel);
+
+        const showApply = toggle.length > 0 && toggle.prop('checked');
+        updateEntryDiff(entryDiv, entry, showApply);
+    });
+
+    updatePreview();
 }
 
 /**
@@ -1443,6 +1541,7 @@ function renderMenuView(parsed) {
                 .prop('checked', entry.isDefault)
                 .on('change', function() {
                     markFormModified();
+                    updateDefaultEntryDisplay();
                 });
             header.append(radio);
         }
