@@ -192,6 +192,51 @@ network(){
   docker network ls --filter driver="$1" --format='{{.Name}}' 2>/dev/null | grep -P "^[a-z]+$2(\$|\.)" | tr '\n' ' '
 }
 
+configured_gateway(){
+  local NETWORK=$1
+  local KEY=$2
+  local CFG=${NETWORK_CFG:-/boot/config/network.cfg}
+  [[ -s $CFG ]] || return
+
+  (
+    declare -A VLANID USE_DHCP IPADDR NETMASK GATEWAY METRIC USE_DHCP6 IPADDR6 NETMASK6 GATEWAY6 METRIC6 PRIVACY6 DESCRIPTION PROTOCOL
+    local BASE=${NETWORK%%.*}
+    local VLAN=
+    local IFACE ETH VALUE
+    local CANDIDATE
+    local -a CANDIDATES
+    local i j
+
+    [[ $NETWORK == *.* ]] && VLAN=${NETWORK#*.}
+    . <(fromdos <"$CFG")
+
+    for ((i=0; i<${SYSNICS:-1}; i++)); do
+      IFACE=${IFNAME[$i]:-eth$i}
+      ETH=${IFACE/#br/eth}
+      ETH=${ETH/#bond/eth}
+      CANDIDATES=("$IFACE" "$ETH" "${BRNAME[$i]}" "${BONDNAME[$i]}")
+      if [[ $i -eq 0 ]]; then
+        [[ ${BRIDGING:-} == yes ]] && CANDIDATES+=("br0")
+        [[ ${BONDING:-} == yes ]] && CANDIDATES+=("bond0")
+      fi
+      for CANDIDATE in "${CANDIDATES[@]}"; do
+        [[ -n $CANDIDATE && $CANDIDATE == "$BASE" ]] || continue
+        if [[ -z $VLAN ]]; then
+          [[ $KEY == GATEWAY6 ]] && VALUE=${GATEWAY6[$i]} || VALUE=${GATEWAY[$i]}
+          [[ -n $VALUE ]] && printf '%s\n' "$VALUE"
+          exit
+        fi
+        for ((j=1; j<${VLANS[$i]:-0}; j++)); do
+          [[ ${VLANID[$i,$j]} == "$VLAN" ]] || continue
+          [[ $KEY == GATEWAY6 ]] && VALUE=${GATEWAY6[$i,$j]} || VALUE=${GATEWAY[$i,$j]}
+          [[ -n $VALUE ]] && printf '%s\n' "$VALUE"
+          exit
+        done
+      done
+    done
+  )
+}
+
 # Is container running?
 container_running(){
   local CONTAINER
@@ -453,6 +498,7 @@ docker_network_start(){
       if [[ -n $IPV4 ]]; then
         SUBNET=$(ip -4 route show dev $NETWORK | sort | awk -v ORS=" " '$1 !~ /^default/ {print $1}' | sed 's/ $//')
         GATEWAY=$(ip -4 route show to default dev $NETWORK | awk '{print $3;exit}')
+        [[ -n $GATEWAY ]] || GATEWAY=$(configured_gateway "$NETWORK" GATEWAY)
         SERVER=${IPV4%/*}
         DHCP=${NETWORK/./_}
         DHCP=DOCKER_DHCP_${DHCP^^}
@@ -464,6 +510,7 @@ docker_network_start(){
       if [[ -n $IPV6 ]]; then
         SUBNET6=$(ip -6 route show dev $NETWORK | sort | awk -v ORS=" " '$1 !~ /^(default|fe80)/ {print $1}' | sed 's/ $//')
         GATEWAY6=$(ip -6 route show to default dev $NETWORK | awk '{print $3;exit}')
+        [[ -n $GATEWAY6 ]] || GATEWAY6=$(configured_gateway "$NETWORK" GATEWAY6)
       fi
     else
       # add user defined networks
