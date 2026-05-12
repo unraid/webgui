@@ -7,6 +7,9 @@
 # Remove a missing device
 # mkbootable remove missing|<devoce>
 
+# Resize the device boot partition
+# mkbootable resize <device> <size>
+
 # Reconfigure grub.cfg and theme.txt after UUID change
 # mkbootable reconfigure
 
@@ -62,6 +65,19 @@ create_partitions() {
     --new=2:0:+510MiB	        --typecode=2:ef00 --change-name=2:'EFI System Partition' \
     --new=3:0:+$((SIZE-512))MiB --typecode=3:8300 --change-name=3:'Unraid Boot Partition' \
     --new=4:0:0                 --typecode=4:8300
+  partprobe "/dev/$DEV"
+  udevadm settle
+}
+
+# resize the boot partition
+# note: this actually just shrinks partition 4 to make room for a SIZE boot area. Partition 3 is
+# expanded in rc.S just before the zpool is imported.
+#
+resize_partitions() {
+  log "expanding device ($DEV) boot area size to $SIZE MiB"
+  sgdisk "/dev/$DEV" \
+    --delete=4 \
+    --new=4:${SIZE}MiB:0        --typecode=4:8300
   partprobe "/dev/$DEV"
   udevadm settle
 }
@@ -153,7 +169,10 @@ case "$OPER" in
 'remove')
   remove_device
   ;;
-'configure')
+'resize')
+  resize_partitions
+  ;;
+'reconfigure')
   configure_grub
   ;;
 *)

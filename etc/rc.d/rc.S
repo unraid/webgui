@@ -117,48 +117,51 @@ find_device() {
   # wait for at least one device to come online
   for (( ; TIMEOUT > 0; TIMEOUT-- )); do
     if [[ -n "$UNRAIDBOOT" ]]; then
-      DEVICE=$(/sbin/blkid -L "$UNRAIDBOOT")
+      DEVICE=$(/sbin/blkid -c /dev/null -L "$UNRAIDBOOT")
     elif [[ -n "$UUID" ]]; then
-      DEVICE=$(/sbin/blkid -U "$UUID")
+      DEVICE=$(/sbin/blkid -c /dev/null -U "$UUID")
     else
-      DEVICE=$(/sbin/blkid -L "$LABEL")
+      DEVICE=$(/sbin/blkid -c /dev/null -L "$LABEL")
     fi
     if [[ -n $DEVICE ]]; then
-      FSTYPE=$(/sbin/blkid -s TYPE -o value "$DEVICE")
+      FSTYPE=$(/sbin/blkid -c /dev/null -s TYPE -o value "$DEVICE")
       if [[ "$FSTYPE" == "zfs_member" ]]; then
-        # Build the device list string eg: "-d /dev/sda3 -d /dev/sdb3"
-        ALL_DEVS=$(/sbin/blkid -t UUID="$UUID" -o device)
+        # create list of all zfs members of this pool UUID
+        ALL_DEVS=$(/sbin/blkid -c /dev/null -t UUID="$UUID" -o device)
         DEVICE=""
         for DEV in $ALL_DEVS; do
           log "found $FSTYPE $DEV with uuid $UUID"
           if [[ -z $DEVICE ]]; then
-            DEVICE="-d $DEV"
+            DEVICE="$DEV"
           else
-            DEVICE="$DEVICE -d $DEV"
+            DEVICE="$DEVICE $DEV"
           fi
         done
+	# check for resizing boot partitions
+	/sbin/resize_boot $DEVICE
         # import the pool, if all devices are present pool will be 'healthy'
-        if /sbin/zpool import $DEVICE -N "$UUID" ; then
-          POOL=$(/sbin/zpool list -H -o name)
-          for (( ; TIMEOUT > 0; TIMEOUT-- )); do
-            if /sbin/zpool status -x "$POOL" ; then
-              log "pool is healthy"
-              return 0
-            fi
-            # maybe a device is missing, wait for it to come online
-            /sbin/zpool export "$POOL"
-            echo "Timeout in $TIMEOUT"
-            /bin/sleep 1
-          done
-          log "pool is degraded"
-          return 0
-        else
+        if ! /sbin/zpool import -d ${DEVICE// / -d } -N "$UUID" ; then
           log "zpool import failed"
           return 1
         fi
+        POOL=$(/sbin/zpool list -H -o name)
+        if /sbin/zpool status -x "$POOL" ; then
+          log "pool is healthy"
+          # check for resizing the pool
+          /sbin/zpool online -e "$POOL" $DEVICE
+          return 0
+        fi
+        # maybe a device is missing, wait for it to come online
+        if (( TIMEOUT == 1 )); then
+          log "pool is degraded"
+          return 0
+        fi
+        /sbin/zpool export "$POOL"
+      else
+        # non-ZFS case
+        log "found $DEVICE"
+        return 0
       fi
-      log "found $DEVICE"
-      return 0
     fi
     echo "Timeout in $TIMEOUT"
     /bin/sleep 1
@@ -178,7 +181,7 @@ find_device || abort "not found"
 # mount detected device(s) on /boot
 if [[ "$FSTYPE" = "zfs_member" ]]; then
   run /sbin/zfs set -u mountpoint=/boot "$POOL/boot"
-  run /sbin/zfs mount -o atime=off "$POOL/boot" || abort "mount failure"
+  run /sbin/zfs mount "$POOL/boot" || abort "mount failure"
 
 elif [[ "$FSTYPE" = "vfat" ]]; then
   log "Checking $DEVICE ..."
