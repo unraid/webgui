@@ -14,8 +14,52 @@ if (isset($_COOKIE[session_name()])) {
   session_write_close();
 }
 
-// Include JS caching functions
-require_once '/usr/local/emhttp/webGui/include/JSCache.php';
+function isPathInDocroot(string $realPath, string $docroot): bool {
+  return $realPath === $docroot || str_starts_with($realPath, $docroot . '/');
+}
+
+function getCanonicalRequestUri(string $docroot): string {
+  $requestUri = getRequestUriPath();
+
+  $realRequestPath = realpath($docroot . '/' . ltrim($requestUri, '/'));
+  if (!is_string($realRequestPath) || !isPathInDocroot($realRequestPath, $docroot)) {
+    return '';
+  }
+
+  $canonicalRequestUri = substr($realRequestPath, strlen($docroot));
+  return $canonicalRequestUri === '' ? '/' : $canonicalRequestUri;
+}
+
+function isWebComponentsRequest(string $requestUri): bool {
+  $webComponentsDirectory = '/plugins/dynamix.my.servers/unraid-components';
+  return $requestUri === $webComponentsDirectory || str_starts_with($requestUri, $webComponentsDirectory . '/');
+}
+
+function getRequestUriPath(): string {
+  $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+  return is_string($requestUri) ? $requestUri : '/';
+}
+
+function getAllowedExternalPublicAssetTargets(): array {
+  return [
+    '/webGui/images/case-model.png' => '/boot/config/plugins/dynamix/case-model.png',
+  ];
+}
+
+function isAllowedPublicAssetRequest(string $requestUri, string $docroot, array $arrWhitelist): bool {
+  if (!in_array($requestUri, $arrWhitelist, true)) {
+    return false;
+  }
+
+  $realRequestPath = realpath($docroot . '/' . ltrim($requestUri, '/'));
+  if (is_string($realRequestPath) && isPathInDocroot($realRequestPath, $docroot)) {
+    return true;
+  }
+
+  $allowedExternalTargets = getAllowedExternalPublicAssetTargets();
+  return isset($allowedExternalTargets[$requestUri]) &&
+    $realRequestPath === $allowedExternalTargets[$requestUri];
+}
 
 // Base whitelist of files
 $arrWhitelist = [
@@ -54,12 +98,22 @@ $arrWhitelist = [
   '/manifest.json'
 ];
 
-// Whitelist ALL files from the unraid-components directory
-$webComponentsDirectory = '/plugins/dynamix.my.servers/unraid-components/';
-$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '/';
+// Use canonical filesystem path checks against the trusted docroot.
+$docroot = '/usr/local/emhttp';
+$requestUri = getRequestUriPath();
+$canonicalRequestUri = getCanonicalRequestUri($docroot);
 
-// Check if the request is for any file in the unraid-components directory
-if (str_starts_with($requestUri, $webComponentsDirectory) || in_array($requestUri, $arrWhitelist)) {
+// Allow explicit public assets with strict target checks.
+if (isAllowedPublicAssetRequest($requestUri, $docroot, $arrWhitelist)) {
+  http_response_code(200);
+  exit;
+}
+
+// Allow canonical requests under unraid-components.
+if (
+  $canonicalRequestUri !== '' &&
+  isWebComponentsRequest($canonicalRequestUri)
+) {
   // authorized
   http_response_code(200);
 } else {
