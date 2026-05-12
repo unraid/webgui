@@ -496,7 +496,12 @@ function loadlist() {
 $(function() {
 <?if ($msg):?>
   <?$color = strpos($msg, "rror:")!==false ? 'red-text':'green-text'?>
-  $('#countdown').html("<span class='<?=$color?>'><?=_($msg)?></span>");
+  $('#countdown').empty().append(
+    $('<span/>', {
+      class: '<?=$color?>',
+      text: <?=json_encode(_($msg), JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)?>
+    })
+  );
 <?endif;?>
   $('#btnAddVM').click(function AddVMEvent(){$('.tab>input#tab2').click();});
   $.removeCookie('lockbutton');
