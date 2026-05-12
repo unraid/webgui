@@ -337,7 +337,7 @@ $csrf_token = $var['csrf_token'] ?? '';
     <!-- Config Preview -->
     <div id="config-preview">
         <div class="config-header">
-            <strong>_(Current Syslinux Configuration)_:</strong>
+            <strong id="current-config-label">_(Current Bootloader Configuration)_:</strong>
             <div class="view-toggle-wrapper">
                 <input type="checkbox" id="syslinux-view-toggle" class="switch narrow">
             </div>
@@ -1995,6 +1995,14 @@ function loadCurrentConfig() {
 
             // Set bootloader type for rendering and validation
             bootloaderType = (config.bootloader_type || 'syslinux').toLowerCase();
+
+            // Update config header label to match active bootloader
+            const configLabel = document.getElementById('current-config-label');
+            if (configLabel) {
+                configLabel.textContent = (bootloaderType === 'grub')
+                    ? 'Current GRUB Configuration:'
+                    : 'Current Syslinux Configuration:';
+            }
 
             // Display current configuration (full syslinux.cfg file)
             if (config.full_config) {
