@@ -2750,17 +2750,38 @@ function get_vm_usage_stats($collectcpustats = true,$collectdiskstats = true,$co
 		$state = $data["state.state"];
 		# CPU Metrics
 		$cpuTime = 0;
+		$guestCpuTime = 0;
 		$cpuHostPercent = 0;
 		$cpuGuestPercent = 0;
 		$cpuTimeAbs = $data["cpu.time"];
 		if ($state == 1 && $collectcpustats == true) {
-			$guestcpus = $data["vcpu.current"];
-			$cpuTime = $cpuTimeAbs - $vmusagestats[$vm]["cpuTimeAbs"];
-			$pcentbase = ((($cpuTime) * 100.0) / ((($timestamp) - $vmusagestats[$vm]["timestamp"] ) * 1000.0 * 1000.0 * 1000.0));
-			$cpuHostPercent = round($pcentbase / $hostcpus['cpus'],1);
-			$cpuGuestPercent = round($pcentbase / $guestcpus, 1);
+			$guestcpus = max(1, (int)$data["vcpu.current"]);
+			$prevCpuAbs = isset($vmusagestats[$vm]["cpuTimeAbs"]) ? $vmusagestats[$vm]["cpuTimeAbs"] : $cpuTimeAbs;
+			$prevGuestCpuAbs = isset($vmusagestats[$vm]["guestCpuTimeAbs"]) ? $vmusagestats[$vm]["guestCpuTimeAbs"] : $cpuTimeAbs;
+			$prevTimestamp = isset($vmusagestats[$vm]["timestamp"]) ? $vmusagestats[$vm]["timestamp"] : $timestamp;
+			$sampleSeconds = max(1, ($timestamp - $prevTimestamp));
+
+			$guestCpuTimeAbs = 0;
+			$foundVcpuTime = false;
+			for ($i = 0; $i < $guestcpus; $i++) {
+				$key = "vcpu.$i.time";
+				if (isset($data[$key])) {
+					$guestCpuTimeAbs += $data[$key];
+					$foundVcpuTime = true;
+				}
+			}
+			if (!$foundVcpuTime) $guestCpuTimeAbs = $cpuTimeAbs;
+
+			$cpuTime = max(0, $cpuTimeAbs - $prevCpuAbs);
+			$guestCpuTime = max(0, $guestCpuTimeAbs - $prevGuestCpuAbs);
+			$pcenthostbase = ((($cpuTime) * 100.0) / (($sampleSeconds) * 1000.0 * 1000.0 * 1000.0));
+			$pcentguestbase = ((($guestCpuTime) * 100.0) / (($sampleSeconds) * 1000.0 * 1000.0 * 1000.0));
+			$cpuHostPercent = round($pcenthostbase / max(1, (int)$hostcpus['cpus']),1);
+			$cpuGuestPercent = round($pcentguestbase / $guestcpus, 1);
 			$cpuHostPercent = max(0.0, min(100.0, $cpuHostPercent));
 			$cpuGuestPercent = max(0.0, min(100.0, $cpuGuestPercent));
+		} else {
+			$guestCpuTimeAbs = $cpuTimeAbs;
 		}
 
 		# Memory Metrics
@@ -2798,7 +2819,9 @@ function get_vm_usage_stats($collectcpustats = true,$collectdiskstats = true,$co
 		}
 		$vmusagestats[$vm] = [
 			"cpuTime" => $cpuTime,
+			"guestCpuTime" => $guestCpuTime,
 			"cpuTimeAbs" => $cpuTimeAbs,
+			"guestCpuTimeAbs" => $guestCpuTimeAbs,
 			"cpuhost" => $cpuHostPercent,
 			"cpuguest" => $cpuGuestPercent,
 			"timestamp" => $timestamp,
