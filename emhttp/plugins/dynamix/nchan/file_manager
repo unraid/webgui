@@ -38,6 +38,7 @@ define('TAR_CHECKPOINT', intval(COMPRESS_DOT_SIZE_MB * 1024 * 1024 / TAR_RECORD_
 // Debug mode
 define('FM_DEBUG_MODE', file_exists('/var/tmp/file.manager.debug'));
 define('FM_DEBUG_NCHAN_FILE', '/var/tmp/file.manager.nchan.debug');
+define('FM_DEBUG_FORCE_COPY_DELETE', FM_DEBUG_MODE && file_exists('/var/tmp/file.manager.force-copy-delete.debug'));
 
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/Wrappers.php";
@@ -61,13 +62,12 @@ function fm_pools_filter(&$disks) {
 }
 
 function fm_delete_file(...$files) {
-  if (FM_DEBUG_MODE) {
-    foreach ($files as $f) {
-      if (!$f || !file_exists($f)) continue;
-      rename($f, $f . '.debug');
-    }
-  } else {
-    delete_file(...$files);
+  if (!FM_DEBUG_MODE) {
+    return delete_file(...$files);
+  }
+  foreach ($files as $f) {
+    if (!$f || !file_exists($f)) continue;
+    rename($f, $f . '.debug');
   }
 }
 
@@ -905,6 +905,7 @@ while (true) {
           // - missing directories are created in --backup-dir (like using --mkpath)
           // - rsync prefixes the moved files with "deleting " in the output, which we strip with sed, to not confuse the user
           // - rsync --backup deletes empty directories instead of moving them to --backup-dir (https://github.com/RsyncProject/rsync/issues/842), so we copy empty directories first
+          if (FM_DEBUG_FORCE_COPY_DELETE) $use_rsync_rename = false;
           if ($use_rsync_rename) {
             $parent_dir = dirname(validname($source[0]));
             $parent_dir_escaped = escapeshellarg($parent_dir);

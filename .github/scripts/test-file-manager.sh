@@ -678,6 +678,173 @@ test_chmod() {
   rc=1 && [[ $actual_mode == "${mode#0}" || $actual_mode == "$mode" ]] && rc=0
   check "chmod $label: mode must be $mode (got $actual_mode)" $rc
 }
+
+# compute a fingerprint of a file or directory for integrity checks
+# for dirs: relative paths, type, perms, size, symlink target - sorted for deterministic output
+# optional second arg: pass 1 to include link count (%n) for hardlink verification
+dir_fingerprint() {
+  local fmt='%y %#m %T@ %s %P\t%l\n'
+  [[ ${2:-} ]] && fmt='%y %#m %T@ %s %n %P\t%l\n'
+  find "$1" -printf "$fmt" | sort | md5sum | cut -d' ' -f1
+}
+
+# returns 0 if both paths have identical fingerprints, 1 otherwise
+# args: path1 path2 [hardlinks]
+fingerprint_match() {
+  [[ "$(dir_fingerprint "$1" "${3:-}")" == "$(dir_fingerprint "$2" "${3:-}" 2>/dev/null)" ]]
+}
+
+# test copy action (3=copy folder, 8=copy file)
+# args: label source dest_dir action
+test_copy() {
+  local label=$1 source=$2 dest_dir=$3 action=$4
+  local rc dest_item
+
+  should_run cp || return 0
+
+  echo -e "\n=== copy $label (action $action) ==="
+
+  if [[ ! -e "$source" ]]; then
+    echo "Error: source does not exist: $source" 1>&2
+    fail=$((fail + 1))
+    return 1
+  fi
+
+  dest_item="$dest_dir/$(basename -- "$source")"
+
+  # cleanup leftover from previous run
+  if [[ -e "$dest_item" ]]; then
+    rm -rf "${dest_item:?}" || { echo "Error: failed to remove $dest_item" 1>&2; exit 1; }
+    echo "  removed leftover $dest_item"
+  fi
+
+  run_action "$action" "$source" "$dest_dir" 0; rc=$?
+
+  # check nchan output: text[0] must be "Copying..." or "Done"
+  local empty_text_count=0 text0 text_len
+  while IFS= read -r line; do
+    [[ $line ]] || continue
+    check_nchan_line "$line" || continue
+    text0=$(echo "$line" | jq -r '.status.text[0] // empty')
+    if [[ ! $text0 ]]; then
+      text_len=$(echo "$line" | jq -r '.status.text | length')
+      if [[ $text_len -gt 0 ]]; then
+        echo "  [FAIL] nchan copy $label: non-empty text array but text[0] missing"
+        fail=$((fail + 1))
+      else
+        empty_text_count=$((empty_text_count + 1))
+      fi
+      continue
+    fi
+    if [[ $text0 != "Copying"* && $text0 != "Done" ]]; then
+      echo "  [FAIL] nchan copy $label: unexpected text[0]: '$text0'"
+      fail=$((fail + 1))
+    fi
+  done <"$fm_debug_nchan_file"
+  check "nchan copy $label: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
+  check "copy $label: action run must succeed" $rc
+
+  rc=1 && [[ -e "$source" ]] && rc=0
+  check "copy $label: source must still exist" $rc
+
+  rc=1 && [[ -e "$dest_item" ]] && rc=0
+  check "copy $label: destination must exist" $rc
+
+  fingerprint_match "$source" "$dest_item" && rc=0 || rc=1
+  check "copy $label: fingerprint must match" $rc
+}
+
+test_copy_file()   { test_copy "$1" "$2" "$3" 8; }
+test_copy_folder() { test_copy "$1" "$2" "$3" 3; }
+
+# test move action (4=move folder, 9=move file)
+# args: label source dest_dir action [force_copy_delete]
+test_move() {
+  local label=$1 source=$2 dest_dir=$3 action=$4
+  local force_copy_delete=${5:-}
+  local rc dest_item pre_fp
+  local force_file=/var/tmp/file.manager.force-copy-delete.debug
+
+  should_run mv || return 0
+
+  if [[ $action != 4 && $action != 9 ]]; then
+    echo "Error: test_move: invalid action $action (must be 4 or 9)" 1>&2
+    fail=$((fail + 1))
+    return 1
+  fi
+
+  local path_label=$label
+  [[ $force_copy_delete ]] && path_label="$label (copy-delete)"
+
+  echo -e "\n=== move $path_label (action $action) ==="
+
+  if [[ ! -e "$source" ]]; then
+    echo "Error: source does not exist: $source" 1>&2
+    fail=$((fail + 1))
+    return 1
+  fi
+
+  dest_item="$dest_dir/$(basename -- "$source")"
+
+  # cleanup leftover from previous run
+  if [[ -e "$dest_item" ]]; then
+    rm -rf "${dest_item:?}" || { echo "Error: failed to remove $dest_item" 1>&2; exit 1; }
+    echo "  removed leftover $dest_item"
+  fi
+
+  # ensure destination directory exists (rsync-rename requires target to be an existing dir)
+  [[ ! -d "$dest_dir" ]] && mkdir -p "$dest_dir"
+
+  # fingerprint source before move to verify integrity at destination
+  # include link count (%n) only for rsync-rename folder moves (inodes preserved)
+  local hl_check=
+  [[ $action -eq 4 && ! $force_copy_delete ]] && hl_check=1
+  pre_fp=$(dir_fingerprint "$source" "$hl_check")
+
+  # force rsync copy-delete path if requested (requires FM_DEBUG_MODE active)
+  [[ $force_copy_delete ]] && touch "$force_file"
+
+  run_action "$action" "$source" "$dest_dir" 0; rc=$?
+
+  [[ $force_copy_delete ]] && rm -f "$force_file"
+
+  # check nchan output: text[0] must be "Moving..." or "Done"
+  local empty_text_count=0 text0 text_len
+  while IFS= read -r line; do
+    [[ $line ]] || continue
+    check_nchan_line "$line" || continue
+    text0=$(echo "$line" | jq -r '.status.text[0] // empty')
+    if [[ ! $text0 ]]; then
+      text_len=$(echo "$line" | jq -r '.status.text | length')
+      if [[ $text_len -gt 0 ]]; then
+        echo "  [FAIL] nchan move $label: non-empty text array but text[0] missing"
+        fail=$((fail + 1))
+      else
+        empty_text_count=$((empty_text_count + 1))
+      fi
+      continue
+    fi
+    if [[ $text0 != "Moving"* && $text0 != "Done" ]]; then
+      echo "  [FAIL] nchan move $label: unexpected text[0]: '$text0'"
+      fail=$((fail + 1))
+    fi
+  done <"$fm_debug_nchan_file"
+  check "nchan move $path_label: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
+  check "move $path_label: action run must succeed" $rc
+
+  rc=1 && [[ ! -e "$source" ]] && rc=0
+  check "move $path_label: source must no longer exist" $rc
+
+  rc=1 && [[ -e "$dest_item" ]] && rc=0
+  check "move $path_label: destination must exist" $rc
+
+  [[ $pre_fp == "$(dir_fingerprint "$dest_item" "$hl_check" 2>/dev/null)" ]] && rc=0 || rc=1
+  check "move $path_label: fingerprint must match after move" $rc
+}
+
+test_move_file()   { test_move "$1" "$2" "$3" 9 "${4:-}"; }
+test_move_folder() { test_move "$1" "$2" "$3" 4 "${4:-}"; }
+
 echo -e "\n=== Start file manager integration test ==="
 
 # verify file_manager has no active job before starting test
@@ -758,6 +925,13 @@ done
 # create file for chmod test
 [[ ! -f "$src_path/$special_chars_name-chmod.txt" ]] && echo "file for chmod test" >"$src_path/$special_chars_name-chmod.txt"
 
+# create files and directories for copy test
+[[ ! -f "$src_path/$special_chars_name-copy.txt" ]] && echo "file for copy test" >"$src_path/$special_chars_name-copy.txt"
+
+# create files for move tests (small dedicated files for file-move tests; folder-move tests use $src_path directly)
+[[ ! -f "$src_path/$special_chars_name-move-rr.txt" ]] && echo "file for move test (rsync-rename)" >"$src_path/$special_chars_name-move-rr.txt"
+[[ ! -f "$src_path/$special_chars_name-move-cd.txt" ]] && echo "file for move test (copy-delete)" >"$src_path/$special_chars_name-move-cd.txt"
+
 # create hidden files
 [[ ! -f "$src_path/.hiddenfile" ]] && echo "hidden file" >"$src_path/.hiddenfile"
 [[ ! -d "$src_path/.hiddendir" ]] && mkdir "$src_path/.hiddendir"
@@ -786,9 +960,8 @@ echo "  test files have been created in $src_path"
 # compress tests
 # ===========================
 archive_multi_formats=(tar.bz2 tar.lz4 tar.gz tar.xz tar.zst zip)
-#archive_multi_formats=(tar.zst zip) # TODO: debug
 archive_single_formats=(bz2 gz lz4 xz zst)
-#archive_single_formats=(zst zip) # TODO: debug
+
 for fmt in "${archive_multi_formats[@]}"; do
   test_compress "$fmt" "$dst_path/archive.$fmt" "$src_path"
 done
@@ -834,6 +1007,20 @@ test_rename_folder "special name" "$src_path/$special_chars_name-rename-dir" "$s
 # ===========================
 test_chmod "special name to 0755" "$src_path/$special_chars_name-chmod.txt" "0755"
 test_chmod "special name to 0644" "$src_path/$special_chars_name-chmod.txt" "0644"
+
+# ===========================
+# copy tests
+# ===========================
+test_copy_file   "special name" "$src_path/$special_chars_name-copy.txt" "$dst_path"
+test_copy_folder "special name" "$src_path" "$dst_path"
+
+# ===========================
+# move tests
+# ===========================
+test_move_file   "special name rsync-rename" "$src_path/$special_chars_name-move-rr.txt" "$dst_path"
+test_move_file   "special name copy-delete"  "$src_path/$special_chars_name-move-cd.txt" "$dst_path" 1
+test_move_folder "special name rsync-rename" "$src_path" "$dst_path"
+test_move_folder "special name copy-delete"  "$dst_path/src" "$test_path" 1
 
 # ===========================
 # summary
