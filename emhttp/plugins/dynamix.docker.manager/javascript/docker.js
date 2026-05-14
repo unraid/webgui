@@ -52,7 +52,7 @@ function addDockerContainerContext(container, image, template, started, paused, 
   context.destroy('#'+id);
   context.attach('#'+id, opts);
   $('#dropdown-'+id).css('z-index', 10001)
-    .append('<li style="position:absolute;top:100%;left:0;width:1px;height:60px;pointer-events:none;list-style:none"></li>');
+    .append('<li class="docker-dropdown-spacer" aria-hidden="true" style="position:absolute;top:100%;left:0;width:1px;height:60px;pointer-events:none;list-style:none"></li>');
 }
 function addDockerImageContext(image, imageTag) {
   var opts = [];
