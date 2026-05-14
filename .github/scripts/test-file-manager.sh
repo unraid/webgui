@@ -871,6 +871,9 @@ test_move() {
     cat -v "$fm_debug_cmd" | sed 's/^/    /'
     rm -f "$fm_debug_cmd"
   fi
+  echo "  [DBG] syslog (move/start|move/cmd):"
+  grep -E "file_manager.*(move/start|move/cmd)" /var/log/syslog 2>/dev/null | sed 's/^/    /' || \
+    grep -E "file_manager.*(move/start|move/cmd)" /var/log/messages 2>/dev/null | sed 's/^/    /'
 }
 
 test_move_file()   { test_move "$1" "$2" "$3" 9 "${4:-}"; }

@@ -822,7 +822,9 @@ while (true) {
       // start action
       } else {
         parse_rsync_progress(null, null, true); // Reset static variables
+        exec('logger -t file_manager ' . escapeshellarg('move/start: action=' . $action . ' target_raw=' . addcslashes($target ?? 'NULL', "\0..\37\\")));
         $target = validname($target, false);
+        exec('logger -t file_manager ' . escapeshellarg('move/start: target_valid=' . addcslashes($target ?: 'EMPTY', "\0..\37\\")));
         if ($target) {
           $mkpath = isdir($target) ? '--mkpath' : '';
 
@@ -906,6 +908,7 @@ while (true) {
           // - rsync prefixes the moved files with "deleting " in the output, which we strip with sed, to not confuse the user
           // - rsync --backup deletes empty directories instead of moving them to --backup-dir (https://github.com/RsyncProject/rsync/issues/842), so we copy empty directories first
           if (FM_DEBUG_FORCE_COPY_DELETE) $use_rsync_rename = false;
+          exec('logger -t file_manager ' . escapeshellarg('move/start: use_rsync_rename=' . ($use_rsync_rename ? 'true' : 'false')));
           if ($use_rsync_rename) {
             $parent_dir = dirname(validname($source[0]));
             $parent_dir_escaped = escapeshellarg($parent_dir);
@@ -934,6 +937,7 @@ while (true) {
             BASH;
 
             if (FM_DEBUG_MODE) @file_put_contents('/var/tmp/fm_debug_cmd.txt', 'rsync-rename: ' . addcslashes($cmd, "\0..\37\\") . "\n---\n", FILE_APPEND);
+            exec('logger -t file_manager ' . escapeshellarg('move/cmd(rr): ' . substr(addcslashes($cmd, "\0..\37\\"), 0, 300)));
             exec($cmd, $pid);
 
           // use rsync copy-delete
@@ -945,6 +949,7 @@ while (true) {
             //       This is a problem because those target directories get temporary permissions of "root:root" and "chmod 0700", which
             //       breaks access for all unraid users through /mnt/user/sharename. We avoid this behavior by using "--no-inc-recursive".
             if (FM_DEBUG_MODE) @file_put_contents('/var/tmp/fm_debug_cmd.txt', 'copy-delete: ' . addcslashes($cmd, "\0..\37\\") . "\n---\n", FILE_APPEND);
+            exec('logger -t file_manager ' . escapeshellarg('move/cmd(cd): ' . substr(addcslashes($cmd, "\0..\37\\"), 0, 300)));
             exec($cmd, $pid);
           }
 
