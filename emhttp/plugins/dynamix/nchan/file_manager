@@ -29,11 +29,13 @@ define('RSYNC_TOTAL_SIZE_SAMPLES', 5);     // Number of measurements to average 
 // Compress progress dot size: 1 dot = this many MB of source data (zip: --dot-size, tar: checkpoint interval)
 define('COMPRESS_DOT_SIZE_MB', 100);
 define('PROGRESS_SCRIPT', '/usr/local/emhttp/plugins/dynamix/scripts/progress');
-define('PV_ZIP_SCRIPT',   '/usr/local/emhttp/plugins/dynamix/scripts/pv-zip');
-define('FM_FNAME_FILE',   '/var/tmp/file.manager.fname');
+define('PV_ZIP_SCRIPT', '/usr/local/emhttp/plugins/dynamix/scripts/pvzip');
+define('FM_FNAME_FILE', '/var/tmp/file.manager.fname');
 define('FM_EXITCODE_FILE', '/var/tmp/file.manager.exitcode');
 define('TAR_RECORD_SIZE', 10240);
 define('TAR_CHECKPOINT', intval(COMPRESS_DOT_SIZE_MB * 1024 * 1024 / TAR_RECORD_SIZE));
+define('FM_DEBUG_MODE', file_exists('/var/tmp/file.manager.debug'));
+define('FM_DEBUG_NCHAN_FILE', '/var/tmp/file.manager.nchan.debug');
 
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/Wrappers.php";
@@ -54,6 +56,17 @@ function pool_only(&$disks) {
 
 function fm_pools_filter(&$disks) {
   return array_keys(pool_only($disks));
+}
+
+function fm_delete_file(...$files) {
+  if (FM_DEBUG_MODE) {
+    foreach ($files as $f) {
+      if (!$f || !file_exists($f)) continue;
+      rename($f, $f . '.debug');
+    }
+  } else {
+    delete_file(...$files);
+  }
 }
 
 function pid_exists($pid) {
@@ -691,6 +704,7 @@ while (true) {
       // Clears stale progress from the nchan buffer. Uses the same {status:{...}} envelope
       // as normal replies so the JS handler processes it uniformly (empty text = no output).
       publish('filemanager', json_encode(['status' => ['action' => $action, 'text' => []]]));
+      if (FM_DEBUG_MODE) file_put_contents(FM_DEBUG_NCHAN_FILE, json_encode(['status' => ['action' => $action, 'text' => []]]) . "\n", FILE_APPEND);
     }
 
     switch ($action) {
@@ -1467,7 +1481,7 @@ while (true) {
         @unlink($target_tmp);
       }
       if (isset($fname_file)) @unlink($fname_file);
-      delete_file($active, $pid_file, $status, $error, FM_EXITCODE_FILE);
+      fm_delete_file($active, $pid_file, $status, $error, FM_EXITCODE_FILE);
       continue 2;
     }
     exec('logger -t file_manager ' . escapeshellarg('After switch: action=' . $action . ', pid before pid_exists=' . json_encode($pid ?? null)));
@@ -1530,7 +1544,7 @@ while (true) {
           exec('logger -t file_manager "Status file copied to ' . $debug_copy . ' before deletion"');
         }
 
-        delete_file($active, $pid_file, $status, $error, FM_EXITCODE_FILE);
+        fm_delete_file($active, $pid_file, $status, $error, FM_EXITCODE_FILE);
         unset($pid);
         $delete_empty_dirs = null;
       }
@@ -1558,7 +1572,10 @@ while (true) {
     $reply['status'] = $last_published_status;
     $last_published_time = $now;
   }
+  // publish new status or error, or if action just completed (done=1 or 2)
+  //if (!empty($reply)) publish('filemanager', json_encode($reply));
   publish('filemanager', json_encode($reply));
+  if (FM_DEBUG_MODE) file_put_contents(FM_DEBUG_NCHAN_FILE, json_encode($reply) . "\n", FILE_APPEND);
   // Slow down polling while any background process is running: sub-second updates
   // are pointless since the user can't react faster and pv/rsync write once per second anyway.
   usleep(isset($pid) ? 1000000 : 250000);
