@@ -938,6 +938,8 @@ while (true) {
 
             if (FM_DEBUG_MODE) @file_put_contents('/var/tmp/fm_debug_cmd.txt', 'rsync-rename: ' . addcslashes($cmd, "\0..\37\\") . "\n---\n", FILE_APPEND);
             exec('logger -t file_manager ' . escapeshellarg('move/cmd(rr): ' . substr(addcslashes($cmd, "\0..\37\\"), 0, 300)));
+            exec('logger -t file_manager ' . escapeshellarg('move/cmd(rr)2: ' . substr(addcslashes($cmd, "\0..\37\\"), 300, 300)));
+            exec('logger -t file_manager ' . escapeshellarg('move/includes: ' . addcslashes($rsync_includes, "\0..\37\\")));
             exec($cmd, $pid);
 
           // use rsync copy-delete
