@@ -564,9 +564,120 @@ test_delete() {
 test_delete_file()   { test_delete "$1" "$2" 6; }
 test_delete_folder() { test_delete "$1" "$2" 1; }
 
-# ===========================
-# main
-# ===========================
+# test rename action - internal implementation
+# args: label path new_name action (2=rename folder, 7=rename file)
+test_rename() {
+  local label=$1 path=$2 new_name=$3 action=$4
+  local rc new_path
+
+  should_run mv || return 0
+
+  if [[ $action != 2 && $action != 7 ]]; then
+    echo "Error: test_rename: invalid action $action (must be 2 or 7)" 1>&2
+    fail=$((fail + 1))
+    return 1
+  fi
+
+  echo -e "\n=== rename $label (action $action) ==="
+
+  if [[ ! -e "$path" ]]; then
+    echo "Error: path to rename does not exist: $path" 1>&2
+    fail=$((fail + 1))
+    return 1
+  fi
+
+  new_path=$(dirname -- "$path")/$new_name
+
+  # cleanup any leftover renamed target from previous runs
+  if [[ -e "$new_path" ]]; then
+    rm -rf "${new_path:?}" || { echo "Error: failed to remove $new_path" 1>&2; exit 1; }
+    echo "  removed leftover $new_path"
+  fi
+
+  run_action "$action" "$path" "$new_name" 0; rc=$?
+
+  # check nchan output: text[0] must be "Renaming..." or "Done"
+  local empty_text_count=0 text0 text_len
+  while IFS= read -r line; do
+    [[ $line ]] || continue
+    check_nchan_line "$line" || continue
+    text0=$(echo "$line" | jq -r '.status.text[0] // empty')
+    if [[ ! $text0 ]]; then
+      text_len=$(echo "$line" | jq -r '.status.text | length')
+      if [[ $text_len -gt 0 ]]; then
+        echo "  [FAIL] nchan rename $label: non-empty text array but text[0] missing"
+        fail=$((fail + 1))
+      else
+        empty_text_count=$((empty_text_count + 1))
+      fi
+      continue
+    fi
+    if [[ $text0 != "Renaming"* && $text0 != "Done" ]]; then
+      echo "  [FAIL] nchan rename $label: unexpected text[0]: '$text0'"
+      fail=$((fail + 1))
+    fi
+  done <"$fm_debug_nchan_file"
+  check "nchan rename $label: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
+  check "rename $label: action run must succeed" $rc
+
+  rc=1 && [[ ! -e "$path" ]] && rc=0
+  check "rename $label: source path must no longer exist" $rc
+
+  rc=1 && [[ -e "$new_path" ]] && rc=0
+  check "rename $label: target path must exist" $rc
+}
+
+# wrappers with fixed action IDs
+test_rename_file()   { test_rename "$1" "$2" "$3" 7; }
+test_rename_folder() { test_rename "$1" "$2" "$3" 2; }
+
+# test chmod action (action 12)
+# args: label path mode
+test_chmod() {
+  local label=$1 path=$2 mode=$3
+  local rc
+
+  should_run chmod || return 0
+
+  echo -e "\n=== chmod $label ==="
+
+  if [[ ! -e "$path" ]]; then
+    echo "Error: path to chmod does not exist: $path" 1>&2
+    fail=$((fail + 1))
+    return 1
+  fi
+
+  run_action 12 "$path" "$mode" 0; rc=$?
+
+  # check nchan output: text[0] must be "Updating..." or "Done"
+  local empty_text_count=0 text0 text_len
+  while IFS= read -r line; do
+    [[ $line ]] || continue
+    check_nchan_line "$line" || continue
+    text0=$(echo "$line" | jq -r '.status.text[0] // empty')
+    if [[ ! $text0 ]]; then
+      text_len=$(echo "$line" | jq -r '.status.text | length')
+      if [[ $text_len -gt 0 ]]; then
+        echo "  [FAIL] nchan chmod $label: non-empty text array but text[0] missing"
+        fail=$((fail + 1))
+      else
+        empty_text_count=$((empty_text_count + 1))
+      fi
+      continue
+    fi
+    if [[ $text0 != "Updating"* && $text0 != "Done" ]]; then
+      echo "  [FAIL] nchan chmod $label: unexpected text[0]: '$text0'"
+      fail=$((fail + 1))
+    fi
+  done <"$fm_debug_nchan_file"
+  check "nchan chmod $label: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
+  check "chmod $label: action run must succeed" $rc
+
+  local actual_mode
+  actual_mode=$(stat -c '%a' "$path")
+  rc=1 && [[ $actual_mode == "${mode#0}" || $actual_mode == "$mode" ]] && rc=0
+  check "chmod $label: mode must be $mode (got $actual_mode)" $rc
+}
 echo -e "\n=== Start file manager integration test ==="
 
 # verify file_manager has no active job before starting test
@@ -640,6 +751,13 @@ done
 [[ ! -f "$src_path/delete_dir/file.txt" ]] && echo "file in dir" >"$src_path/delete_dir/file.txt"
 [[ ! -f "$src_path/delete_dir/subdir/file.txt" ]] && echo "file in subdir" >"$src_path/delete_dir/subdir/file.txt"
 
+# create file and directory for rename test (renamed targets are left in place; re-created by guards on next run)
+[[ ! -f "$src_path/$special_chars_name-rename.txt" ]] && echo "file for rename test" >"$src_path/$special_chars_name-rename.txt"
+[[ ! -d "$src_path/$special_chars_name-rename-dir" ]] && mkdir "$src_path/$special_chars_name-rename-dir"
+[[ ! -f "$src_path/$special_chars_name-rename-dir/content.txt" ]] && echo "content in rename dir" >"$src_path/$special_chars_name-rename-dir/content.txt"
+# create file for chmod test
+[[ ! -f "$src_path/$special_chars_name-chmod.txt" ]] && echo "file for chmod test" >"$src_path/$special_chars_name-chmod.txt"
+
 # create hidden files
 [[ ! -f "$src_path/.hiddenfile" ]] && echo "hidden file" >"$src_path/.hiddenfile"
 [[ ! -d "$src_path/.hiddendir" ]] && mkdir "$src_path/.hiddendir"
@@ -697,13 +815,25 @@ done
 # ===========================
 # create folder tests
 # ===========================
-test_create_folder "special name" "$dst_path" "dir-$special_chars_name"
+test_create_folder "special name" "$dst_path" "$special_chars_name-dir"
 
 # ===========================
 # delete tests
 # ===========================
 test_delete_file "special name" "$src_path/$special_chars_name.txt"
 test_delete_folder "with content" "$src_path/delete_dir"
+
+# ===========================
+# rename tests
+# ===========================
+test_rename_file "special name" "$src_path/$special_chars_name-rename.txt" "$special_chars_name-renamed.txt"
+test_rename_folder "special name" "$src_path/$special_chars_name-rename-dir" "$special_chars_name-renamed-dir"
+
+# ===========================
+# chmod tests
+# ===========================
+test_chmod "special name to 0755" "$src_path/$special_chars_name-chmod.txt" "0755"
+test_chmod "special name to 0644" "$src_path/$special_chars_name-chmod.txt" "0644"
 
 # ===========================
 # summary
