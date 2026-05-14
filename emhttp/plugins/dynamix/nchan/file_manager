@@ -688,7 +688,9 @@ while (true) {
     if (!$pid) {
       $last_published_status = null;
       $last_published_time = 0;
-      publish('filemanager', json_encode(['action' => $action, 'text' => []]));
+      // Clears stale progress from the nchan buffer. Uses the same {status:{...}} envelope
+      // as normal replies so the JS handler processes it uniformly (empty text = no output).
+      publish('filemanager', json_encode(['status' => ['action' => $action, 'text' => []]]));
     }
 
     switch ($action) {
@@ -696,10 +698,10 @@ while (true) {
 
       // return status of running action
       if (!empty($pid)) {
-        $reply['status'] = json_encode([
+        $reply['status'] = [
           'action' => $action,
           'text' => [_('Creating').'...']
-        ]);
+        ];
 
       // start action
       } else {
@@ -713,10 +715,10 @@ while (true) {
 
       // return status of running action
       if (!empty($pid)) {
-        $reply['status'] = json_encode([
+        $reply['status'] = [
           'action' => $action,
           'text' => [mb_strimhalf(exec("tail -1 $status"), 70, '...')]
-        ]);
+        ];
 
       // start action
       } else {
@@ -728,10 +730,10 @@ while (true) {
 
       // return status of running action
       if (!empty($pid)) {
-        $reply['status'] = json_encode([
+        $reply['status'] = [
           'action' => $action,
           'text' => [_('Renaming').'...']
-        ]);
+        ];
 
       // start action
       } else {
@@ -751,10 +753,10 @@ while (true) {
 
       // return status of running action
       if (!empty($pid)) {
-        $reply['status'] = json_encode([
+        $reply['status'] = [
           'action' => $action,
           'text' => parse_rsync_progress($status, _('Copying'))
-        ]);
+        ];
 
       // start action
       } else {
@@ -788,17 +790,17 @@ while (true) {
 
         // cleanup empty directories: simple status
         if ($delete_empty_dirs === false) {
-          $reply['status'] = json_encode([
+          $reply['status'] = [
             'action' => $action,
             'text' => [mb_strimhalf(exec("tail -1 $status"), 70, '...')]
-          ]);
+          ];
 
         // moving: progress
         } else {
-          $reply['status'] = json_encode([
+          $reply['status'] = [
             'action' => $action,
             'text' => parse_rsync_progress($status, _('Moving'))
-          ]);
+          ];
         }
 
       // start action
@@ -937,10 +939,10 @@ while (true) {
       // return status of running action
       if (!empty($pid)) {
         $file_line = exec("tail -2 $status | grep -Pom1 \"^.+ of '\\K[^']+\"");
-        $reply['status'] = json_encode([
+        $reply['status'] = [
           'action' => $action,
           'text' => [_('Updating').'... '.mb_strimhalf($file_line, 70, '...')]
-        ]);
+        ];
 
       // start action
       } else {
@@ -952,10 +954,10 @@ while (true) {
       // return status of running action
       if (!empty($pid)) {
         $file_line = exec("tail -2 $status | grep -Pom1 \"^.+ of '\\K[^']+\"");
-        $reply['status'] = json_encode([
+        $reply['status'] = [
           'action' => $action,
           'text' => [_('Updating').'... '.mb_strimhalf($file_line, 70, '...')]
-        ]);
+        ];
 
       // start action
       } else {
@@ -967,10 +969,10 @@ while (true) {
       // return status of running action
       if (!empty($pid)) {
         $count = exec("wc -l $status | grep -Pom1 '^[0-9]+'");
-        $reply['status'] = json_encode([
+        $reply['status'] = [
           'action' => $action,
           'text' => [_('Searching').'... '.$count]
-        ]);
+        ];
 
       // start action
       } else {
@@ -991,10 +993,10 @@ while (true) {
         $text = parse_pv_progress($status, (int)($pv_total_bytes ?? 0), $fname_file ?? null, _('Compressing'));
 
         if (!empty($text)) {
-          $reply['status'] = json_encode([
+          $reply['status'] = [
             'action' => $action,
             'text' => $text
-          ]);
+          ];
         }
 
       // start action
@@ -1262,10 +1264,10 @@ while (true) {
       if (!empty($pid)) {
         $text = parse_pv_progress($status, (int)($pv_total_bytes ?? 0), $fname_file ?? null, _('Extracting'));
         if (!empty($text)) {
-          $reply['status'] = json_encode([
+          $reply['status'] = [
             'action' => $action,
             'text' => $text
-          ]);
+          ];
         }
 
       // start action
@@ -1328,8 +1330,8 @@ while (true) {
           $unzip_overwrite_flag = $overwrite ? '-o' : '-n';
           // -^ preserves special characters (e.g. newlines)
           // note: stat-poller in the progress script requires this, too
-          // LANG=en_US.UTF-8 required: Unraid has POSIX locale by default, causing unzip
-          // to mangle non-ASCII filenames as #Uxxxx escape sequences on extraction.
+          // LANG=en_US.UTF-8 required: With POSIX locale, unzip mangles
+          // non-ASCII filenames as #Uxxxx escape sequences on extraction.
           // Also set in the progress script's 'unzip -l' call, so both sides use the same locale.
           // Total uncompressed size for progress: reflects actual bytes written to disk.
           // filesize($archive) would cause ETA explosion for highly compressible files
@@ -1484,16 +1486,16 @@ while (true) {
         $pid = pid_exists($pid);
       } else {
         if ($action != 15) {
-          $reply['status'] = json_encode([
+          $reply['status'] = [
             'action' => $action,
             'text' => [_('Done')]
-          ]);
+          ];
           $reply['done'] = 1;
         } else {
-          $reply['status'] = json_encode([
+          $reply['status'] = [
             'action' => $action,
             'results' => cat($status)
-          ]);
+          ];
           $reply['done'] = 2;
         }
         if ($zfs) {
@@ -1535,7 +1537,9 @@ while (true) {
     }
   }
   if (time() - $timer) {
-    // update every second
+    // time() has 1-second resolution: fires once per second regardless of usleep() interval.
+    // Signals Browse.page whether an operation is active (1) or finished (0) so it can
+    // trigger a directory refresh after completion.
     publish('filemonitor', file_exists($active) ? 1 : 0);
     $timer = time();
   }

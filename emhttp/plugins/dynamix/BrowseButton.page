@@ -148,9 +148,8 @@ function dfm_createSource(source) {
 function dfm_showProgress(data) {
   if (!data) return 0;
 
-  // Try to parse as JSON first
   try {
-    let parsed = JSON.parse(data);
+    let parsed = data;
 
     // Handle search results (action 15 with results array)
     if (parsed.action === 15 && Array.isArray(parsed.results)) {
@@ -250,8 +249,7 @@ function dfm_showProgress(data) {
 
     }
   } catch(e) {
-    // Not JSON, log error
-    console.error('Failed to parse status as JSON:', e, data);
+    console.error('dfm_showProgress: unexpected data format', e, data);
     return 0;
   }
 }
