@@ -30,19 +30,20 @@ fm_stdout_file=/var/tmp/file.manager.status
 fm_error_file=/var/tmp/file.manager.error
 fm_file="/usr/local/emhttp/webGui/nchan/file_manager"
 fm_debug_nchan_file="/var/tmp/file.manager.nchan.debug"
-fm_debug_nchan_collected="/var/tmp/file.manager.nchan.collected.debug"
 ssh_user=root
 ssh_host=$1
 test_path=/mnt/disk1/fm_test
 src_path="$test_path/src"
 dst_path="$test_path/dst"
-single_filename=$'utf8_файл\nspecial&chars\$file.txt'
+special_chars_name=$'utf8_файл\nspecial&chars\$file'
 job_timeout=${JOB_TIMEOUT:-200}
+script_args=("$@")
 
 # deploy this script to and run on remote host
-if [[ $ssh_host ]]; then
+if [[ $ssh_host && $0 != "/tmp/test-file-manager.sh" ]]; then
   scp "$0" "$ssh_user@$ssh_host:/tmp/test-file-manager.sh" || { echo "Error: Failed to copy to remote host" 1>&2; exit 1; }
-  ssh -t "$ssh_user@$ssh_host" "bash /tmp/test-file-manager.sh" || { echo "Error: Failed to run test on remote host" 1>&2; exit 1; }
+  # shellcheck disable=SC2086
+  ssh -t "$ssh_user@$ssh_host" "bash /tmp/test-file-manager.sh ${script_args[*]}" || { echo "Error: Failed to run test on remote host" 1>&2; exit 1; }
   exit
 fi
 
@@ -72,10 +73,10 @@ check() {
   local cond=$2
   if [[ $cond -eq 0 ]]; then
     echo "[PASS] $label"
-    (( pass++ ))
+    pass=$((pass + 1))
   else
-    echo "[FAIL] $label"
-    (( fail++ ))
+    echo "[FAIL] $label (did not happen)"
+    fail=$((fail + 1))
   fi
 }
 
@@ -99,6 +100,7 @@ remove_job_files() {
 }
 
 stop_file_manager() {
+  echo "  stop file_manager if running..."
   if pgrep -f "php.*$fm_file" >/dev/null; then
     pkill -f "php.*$fm_file"
     echo "  stopped file_manager"
@@ -115,6 +117,7 @@ stop_file_manager() {
 
 # start file_manager in background
 run_file_manager() {
+  echo "  ensure file_manager is running..."
   if ! pgrep -f "php.*$fm_file" >/dev/null; then
     echo "  starting file_manager..."
     if [[ ! -f "$fm_file" ]]; then
@@ -206,8 +209,6 @@ run_action() {
   echo "  run action"
 
   printf "" >"$fm_debug_nchan_file"
-  local collected=$fm_debug_nchan_collected
-  printf "" >"$collected"
 
   # write JSON to job file to trigger file_manager action
   echo "$json" >"$fm_job_json_file"
@@ -216,7 +217,6 @@ run_action() {
   # timeout acts as safety net in case file_manager hangs
   local start=$SECONDS
   timeout "$job_timeout" tail -n +1 -f "$fm_debug_nchan_file" | while IFS= read -r line; do
-    printf '%s\n' "$line" >>"$collected"
     echo "  nchan: $line"
     [[ $line == *'"done":1'* ]] && break
   done
@@ -228,33 +228,6 @@ run_action() {
     return 2
   fi
 
-  # parse collected nchan output for assertions
-  # outer JSON: {"status":"{\"action\":N,\"text\":[\"...\"]}", "error":"..."}
-  # status is a JSON-encoded string, so needs fromjson
-  while IFS= read -r line; do
-    [[ $line ]] || continue
-    # fail on empty publishes - file_manager should suppress them
-    if [[ $line == '[]' || $line == '{}' ]]; then
-      echo "  [FAIL] nchan: received empty publish '$line' - should be suppressed"
-      fail=$((fail + 1))
-      continue
-    fi
-    local action status_text progress_details err_msg
-    action=$(echo "$line" | jq -r '.status | fromjson | .action // empty' 2>/dev/null)
-    status_text=$(echo "$line" | jq -r '.status | fromjson | .text[0] // empty' 2>/dev/null)
-    progress_details=$(echo "$line" | jq -r '.status | fromjson | .text[1] // empty' 2>/dev/null)
-    err_msg=$(echo "$line" | jq -r '.error // empty' 2>/dev/null)
-    [[ $action ]] && echo "  nchan action: $action"
-    if [[ $action && ! $status_text ]]; then
-      echo "  [FAIL] nchan: action=$action but text[0] is missing (mandatory)"
-      fail=$((fail + 1))
-    fi
-    [[ $status_text ]] && echo "  nchan text[0]: $status_text"
-    [[ $progress_details ]] && echo "  nchan text[1]: $progress_details"
-    [[ $err_msg ]] && echo "  nchan error: $err_msg"
-    # TODO: assert against expected patterns
-  done <"$collected"
-
   # rc -1 = FM_EXITCODE_FILE not written for this op type (multi-file extract) => N/A, not failure
   # rc  0 = explicit success
   # rc >0 = explicit failure
@@ -264,21 +237,52 @@ run_action() {
   elif [[ -f $fm_exitcode_file.debug ]]; then
     rc=$(cat "$fm_exitcode_file.debug")
   fi
+  # treat non-empty stderr as failure
   local stderr
   stderr=$(cat "$fm_error_file" 2>/dev/null)
   [[ ! $stderr ]] && stderr=$(cat "$fm_error_file.debug" 2>/dev/null)
-  echo "  exit code: $rc, waited: $((SECONDS - start))s, stderr: $stderr"
+  if [[ $stderr ]]; then
+    echo "  stderr: $stderr"
+    rc=99
+  fi
+  # treat any nchan publish with a non-empty .error as failure
+  local nchan_err
+  nchan_err=$(jq -r 'select((.error // "") != "") | .error' "$fm_debug_nchan_file" | head -1)
+  if [[ $nchan_err ]]; then
+    echo "  nchan error: $nchan_err"
+    rc=99
+  fi
+  echo "  exit code: $rc, waited: $((SECONDS - start))s"
   [[ $rc -eq 0 || $rc -eq -1 ]]
 }
 
+# returns 0 if test section should run: no filter set, or filter contains keyword
+should_run() { [[ ${#script_args[@]} -le 1 || "${script_args[*]:1}" == *"$1"* ]]; }
+
+# Generic per-line nchan assertion: empty array publishes must be suppressed by file_manager
+# args: line
+# returns 1 if line should be skipped (empty publish), 0 if line should be processed
+check_nchan_line() {
+  local line=$1
+  if [[ $line == '[]' || $line == '{}' ]]; then
+    echo "  [FAIL] nchan: received empty publish '$line' - should be suppressed"
+    fail=$((fail + 1))
+    return 1
+  fi
+  return 0
+}
+
 # test compress action and overwrite behavior
-# args: format output_file input_file
+# args: format output_file input_file [overwrite_test]
 test_compress() {
   local format=$1 output_file=$2 input_file=$3
+  local overwrite_test=${4:-}
   local rc sz cond
   local archive_name target
 
-  echo -e "\n=== compress $format ==="
+  should_run arc || return 0
+
+  echo -e "\n=== compress $input_file in $output_file ${overwrite_test:+with overwrite test} ==="
 
   archive_name=$(basename -- "$output_file")
   target=$(dirname -- "$output_file")
@@ -291,35 +295,82 @@ test_compress() {
 
   run_action 16 "$input_file" "$target" 1 "$format" "$archive_name"
   rc=$?
-  check "compress $format: action run" $rc
+  # check nchan output: no empty publishes, empty text at most once, % non-decreasing, text[0] = "Compressing..."
+  local empty_text_count=0 last_pct=-1 text0 text1 err_msg pct text_len speed_unit
+  while IFS= read -r line; do
+    [[ $line ]] || continue
+    check_nchan_line "$line" || continue
+    text0=$(echo "$line" | jq -r '.status.text[0] // empty')
+    text1=$(echo "$line" | jq -r '.status.text[1] // empty')
+    err_msg=$(echo "$line" | jq -r '.error // empty')
+    [[ $err_msg ]] && echo "  nchan error: $err_msg"
+    if [[ ! $text0 ]]; then
+      text_len=$(echo "$line" | jq -r '.status.text | length')
+      if [[ $text_len -gt 0 ]]; then
+        echo "  [FAIL] nchan compress $format: non-empty text array but text[0] missing"
+        fail=$((fail + 1))
+      else
+        empty_text_count=$(( empty_text_count + 1 ))
+      fi
+      continue
+    fi
+    [[ $text0 == "Done" ]] && continue
+    if [[ $text1 =~ Completed:\ ([0-9]+)% ]]; then
+      pct=${BASH_REMATCH[1]}
+      if [[ $pct -lt $last_pct ]]; then
+        echo "  [FAIL] nchan compress $format: % decreased (${last_pct}% -> ${pct}%)"
+        fail=$((fail + 1))
+      fi
+      last_pct=$pct
+      if [[ $text0 != "Compressing"* ]]; then
+        echo "  [FAIL] nchan compress $format: text[0] does not start with 'Compressing': '$text0'"
+        fail=$((fail + 1))
+      fi
+    fi
+    if [[ $text1 =~ Speed:\ ([0-9.]+)(B|KB|MB|GB|TB)/s ]]; then
+      speed_unit=${BASH_REMATCH[2]}
+      if [[ $speed_unit == B || $speed_unit == KB ]]; then
+        echo "  [FAIL] nchan compress $format: speed below 1 MB/s: ${BASH_REMATCH[1]}${speed_unit}/s"
+        fail=$((fail + 1))
+      fi
+    fi
+  done <"$fm_debug_nchan_file"
+  cond=1; [[ $empty_text_count -le 1 ]] && cond=0
+  check "nchan compress $format: empty status must appear at most once ($empty_text_count)" $cond
+  check "compress $format: action run must succeed" $rc
 
   rc=1 && [[ -f $output_file ]] && rc=0
-  check "compress $format: archive creation" $rc
+  check "compress $format: archive creation must succeed" $rc
 
   # verify no .tmp files are left in the destination directory (cleanup logic should remove them)
   rc=0
   for f in "$output_file"*.tmp; do
     [[ -e $f ]] && { rc=1; break; }
   done
-  check "compress $format: .tmp cleanup" $rc
+  check "compress $format: .tmp cleanup must succeed" $rc
 
   sz=$(stat -c%s "$output_file" 2>/dev/null || echo 0)
   rc=1 && [[ $sz -gt 0 ]] && rc=0
-  check "compress $format: archive size (${sz}B)" $rc
+  check "compress $format: archive size (${sz}B) must be greater than 0" $rc
 
   # overwrite sub-test: existing archive must be refused when overwrite=0
-  run_action 16 "$input_file" "$target" 0 "$format" "$archive_name"
-  cond=1; [[ $(stat -c%s "$output_file" 2>/dev/null || echo 0) -eq $sz ]] && cond=0
-  check "compress $format overwrite=0: archive unchanged" $cond
+  [[ ! $overwrite_test ]] && return 0
+  ! run_action 16 "$input_file" "$target" 0 "$format" "$archive_name" && rc=0 || rc=1
+  check "compress $format overwrite=0: action run must fail" $rc
+  rc=1 && [[ $(stat -c%s "$output_file" 2>/dev/null || echo 0) -eq $sz ]] && rc=0
+  check "compress $format overwrite=0: archive must be unchanged" $rc
 }
 
 # test extract action and overwrite behavior
-# args: format archive dest
+# args: format archive dest [overwrite_test] [source_dir]
 test_extract() {
   local format=$1 archive=$2 dest=$3
-  local rc
+  local overwrite_test=${4:-}
+  local source_dir=${5:-$src_path}
 
-  echo -e "\n=== extract $archive ==="
+  should_run arc || return 0
+
+  echo -e "\n=== extract $archive in $dest ${overwrite_test:+with overwrite test} ==="
 
   if [[ ! -f $archive ]]; then
     echo "Error: source archive $archive does not exist!" 1>&2
@@ -333,40 +384,185 @@ test_extract() {
   fi
   mkdir "$dest" || { echo "Error: failed to create destination directory $dest" 1>&2; exit 1; }
 
-  run_action 17 "$archive" "$dest" 0
-  rc=$?
-  check "$format: action run" $rc
+  run_action 17 "$archive" "$dest" 0; rc=$?
+
+  # check nchan output: no empty publishes, empty text at most once, % non-decreasing, text[0] = "Extracting..."
+  local empty_text_count=0 last_pct=-1 text0 text1 err_msg pct text_len speed_unit
+  while IFS= read -r line; do
+    [[ $line ]] || continue
+    check_nchan_line "$line" || continue
+    text0=$(echo "$line" | jq -r '.status.text[0] // empty')
+    text1=$(echo "$line" | jq -r '.status.text[1] // empty')
+    err_msg=$(echo "$line" | jq -r '.error // empty')
+    [[ $err_msg ]] && echo "  nchan error: $err_msg"
+    if [[ ! $text0 ]]; then
+      text_len=$(echo "$line" | jq -r '.status.text | length')
+      if [[ $text_len -gt 0 ]]; then
+        echo "  [FAIL] nchan extract $format: non-empty text array but text[0] missing"
+        fail=$((fail + 1))
+      else
+        empty_text_count=$((empty_text_count + 1))
+      fi
+      continue
+    fi
+    [[ $text0 == "Done" ]] && continue
+    if [[ $text1 =~ Completed:\ ([0-9]+)% ]]; then
+      pct=${BASH_REMATCH[1]}
+      if [[ $pct -lt $last_pct ]]; then
+        echo "  [FAIL] nchan extract $format: % decreased (${last_pct}% -> ${pct}%)"
+        fail=$((fail + 1))
+      fi
+      last_pct=$pct
+      if [[ $text0 != "Extracting"* ]]; then
+        echo "  [FAIL] nchan extract $format: text[0] does not start with 'Extracting': '$text0'"
+        fail=$((fail + 1))
+      fi
+    fi
+    if [[ $text1 =~ Speed:\ ([0-9.]+)(B|KB|MB|GB|TB)/s ]]; then
+      speed_unit=${BASH_REMATCH[2]}
+      if [[ $speed_unit == B || $speed_unit == KB ]]; then
+        echo "  [FAIL] nchan extract $format: speed below 1 MB/s: ${BASH_REMATCH[1]}${speed_unit}/s"
+        fail=$((fail + 1))
+      fi
+    fi
+  done <"$fm_debug_nchan_file"
+  check "nchan extract $format: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
+  check "extract $format: action run must succeed" $rc
 
   local extracted_file_count extracted_file
   extracted_file_count=$(find "$dest" -type f -printf '.' | wc -c)
   if [[ $extracted_file_count -eq 1 ]]; then
     extracted_file=$(find "$dest" -type f)
-    rc=1 && diff "$src_path/$(basename -- "$extracted_file")" "$extracted_file" && rc=0
+    rc=1 && diff "$source_dir/$(basename -- "$extracted_file")" "$extracted_file" && rc=0
   else
     # --no-dereference to avoid following symlinks (source contains broken symlink)
-    rc=1 && diff --no-dereference -r "$src_path" "$dest/src" && rc=0
+    extracted_subdir=$(find "$dest" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' -quit)
+    rc=1 && diff --no-dereference -r "$source_dir" "$dest/$extracted_subdir" && rc=0
   fi
-  check "$format: archive extract diff" $rc
+  check "extract $format: archive diff must succeed" $rc
 
-  # overwrite sub-test: reuse already-extracted dest as baseline
-  local sentinel_file cond
-  sentinel_file=$(find "$dest" -type f -print -quit)
-  echo "MODIFIED" >"$sentinel_file"
+  # overwrite sub-test: reuse already-extracted destination as baseline
+  [[ ! $overwrite_test ]] && return 0
+  local dst_file cond
+  dst_file=$(find "$dest" -type f -name "*.txt" -print -quit)
+  echo "MODIFIED" >"$dst_file"
 
-  run_action 17 "$archive" "$dest" 0
-  rc=$?
-  check "$format overwrite=0: action run" $rc
-  cond=1; [[ $(cat "$sentinel_file") == "MODIFIED" ]] && cond=0
-  check "$format overwrite=0: sentinel unchanged" $cond
+  # single file extractions fail with overwrite=0, except of zip
+  if [[ $extracted_file_count -eq 1 && $format != "zip" ]]; then
+    ! run_action 17 "$archive" "$dest" 0 && rc=0 || rc=1
+    check "extract $format overwrite=0: action must fail" $rc
+  # multi-file extractions succeed with overwrite=0 (existing files are skipped silently)
+  else
+    run_action 17 "$archive" "$dest" 0 && rc=0 || rc=1
+    check "extract $format overwrite=0: action must succeed" $rc
+  fi
 
-  run_action 17 "$archive" "$dest" 1
-  rc=$?
-  check "$format overwrite=1: action run" $rc
-  cond=1; [[ $(cat "$sentinel_file") != "MODIFIED" ]] && cond=0
-  check "$format overwrite=1: sentinel overwritten" $cond
+  # existing file must be unchanged in any case
+  rc=1 && [[ $(cat "$dst_file") == "MODIFIED" ]] && rc=0
+  check "extract $format overwrite=0: file must be unchanged" $rc
+
+  run_action 17 "$archive" "$dest" 1; rc=$?
+  check "extract $format overwrite=1: action run must succeed" $rc
+  rc=1 && [[ $(cat "$dst_file") != "MODIFIED" ]] && rc=0
+  check "extract $format overwrite=1: file must be overwritten" $rc
 }
 
+# test create folder action (action 0)
+# args: label parent_dir folder_name
+test_create_folder() {
+  local label=$1 parent=$2 name=$3
+  local rc
 
+  should_run mk || return 0
+
+  echo -e "\n=== create folder: $label ==="
+
+  # cleanup any leftovers
+  if [[ -d "$parent/$name" ]]; then
+    rm -rf "${parent:?}/$name" || { echo "Error: failed to remove $parent/$name" 1>&2; exit 1; }
+    echo "  removed leftover $parent/$name"
+  fi
+
+  run_action 0 "$parent" "$name" 0; rc=$?
+
+  # check nchan output: no empty publishes, text[0] must be "Creating..." or "Done"
+  local empty_text_count=0 text0 text_len
+  while IFS= read -r line; do
+    [[ $line ]] || continue
+    check_nchan_line "$line" || continue
+    text0=$(echo "$line" | jq -r '.status.text[0] // empty')
+    if [[ ! $text0 ]]; then
+      text_len=$(echo "$line" | jq -r '.status.text | length')
+      if [[ $text_len -gt 0 ]]; then
+        echo "  [FAIL] nchan create folder $label: non-empty text array but text[0] missing"
+        fail=$((fail + 1))
+      else
+        empty_text_count=$((empty_text_count + 1))
+      fi
+      continue
+    fi
+    if [[ $text0 != "Creating"* && $text0 != "Done" ]]; then
+      echo "  [FAIL] nchan create folder $label: unexpected text[0]: '$text0'"
+      fail=$((fail + 1))
+    fi
+  done <"$fm_debug_nchan_file"
+  check "nchan create folder $label: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
+  check "create folder $label: action run must succeed" $rc
+
+  rc=1 && [[ -d "$parent/$name" ]] && rc=0
+  check "create folder $label: folder must exist" $rc
+}
+
+# test delete action - internal implementation
+# args: label path action (1=delete folder, 6=delete file)
+test_delete() {
+  local label=$1 path=$2 action=$3
+  local rc
+
+  should_run del || return 0
+
+  if [[ $action != 1 && $action != 6 ]]; then
+    echo "Error: test_delete: invalid action $action (must be 1 or 6)" 1>&2
+    fail=$((fail + 1))
+    return 1
+  fi
+
+  echo -e "\n=== delete $label (action $action) ==="
+
+  if [[ ! -e "$path" ]]; then
+    echo "Error: path to delete does not exist: $path" 1>&2
+    fail=$((fail + 1))
+    return 1
+  fi
+
+  run_action "$action" "$path" "" 0; rc=$?
+
+  # check nchan output: no empty publishes, at most 1 empty text (initial stale-clear)
+  local empty_text_count=0 text0 text_len
+  while IFS= read -r line; do
+    [[ $line ]] || continue
+    check_nchan_line "$line" || continue
+    text0=$(echo "$line" | jq -r '.status.text[0] // empty')
+    if [[ ! $text0 ]]; then
+      text_len=$(echo "$line" | jq -r '.status.text | length')
+      if [[ $text_len -gt 0 ]]; then
+        echo "  [FAIL] nchan delete $label: non-empty text array but text[0] missing"
+        fail=$((fail + 1))
+      else
+        empty_text_count=$((empty_text_count + 1))
+      fi
+    fi
+  done <"$fm_debug_nchan_file"
+  check "nchan delete $label: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
+  check "delete $label: action run must succeed" $rc
+
+  rc=1 && [[ ! -e "$path" ]] && rc=0
+  check "delete $label: path must no longer exist" $rc
+}
+
+# wrappers with fixed action IDs
+test_delete_file()   { test_delete "$1" "$2" 6; }
+test_delete_folder() { test_delete "$1" "$2" 1; }
 
 # ===========================
 # main
@@ -386,20 +582,21 @@ stop_file_manager
 # ===========================
 # create source files once
 # ===========================
-echo -e "\n=== Create test files ==="
+echo " create test files..."
 
-# create source and destination directories
+# create directories
 [[ ! -d "$test_path" ]] && ! mkdir -m 777 "$test_path" && { echo "Error: failed to create $test_path" 1>&2; exit 1; }
 [[ ! -d "$src_path" ]] && ! mkdir -m 777 "$src_path" && { echo "Error: failed to create $src_path" 1>&2; exit 1; }
 [[ ! -d "$dst_path" ]] && ! mkdir -m 777 "$dst_path" && { echo "Error: failed to create $dst_path" 1>&2; exit 1; }
+[[ ! -d "$src_path/small_files" ]] && ! mkdir -m 777 "$src_path/small_files" && { echo "Error: failed to create $src_path/small_files" 1>&2; exit 1; }
 
 # random data (compressible only slightly)
-[[ ! -f "$src_path/urandom10MB.bin" ]] && dd if=/dev/urandom bs=1M count=10 of="$src_path/urandom10MB.bin"
+[[ ! -f "$src_path/small_files/urandom10MB.bin" ]] && dd if=/dev/urandom bs=1M count=10 of="$src_path/small_files/urandom10MB.bin"
 [[ ! -f "$src_path/urandom100MB.bin" ]] && dd if=/dev/urandom bs=1M count=100 of="$src_path/urandom100MB.bin"
 [[ ! -f "$src_path/urandom1000MB.bin" ]] && dd if=/dev/urandom bs=1M count=1000 of="$src_path/urandom1000MB.bin"
 
 # zeros (highly compressible)
-[[ ! -f "$src_path/zero10MB.bin" ]] && dd if=/dev/zero  bs=1M count=10 of="$src_path/zero10MB.bin"
+[[ ! -f "$src_path/small_files/zero10MB.bin" ]] && dd if=/dev/zero  bs=1M count=10 of="$src_path/small_files/zero10MB.bin"
 [[ ! -f "$src_path/zero100MB.bin" ]] && dd if=/dev/zero  bs=1M count=100 of="$src_path/zero100MB.bin"
 [[ ! -f "$src_path/zero1000MB.bin" ]] && dd if=/dev/zero  bs=1M count=1000 of="$src_path/zero1000MB.bin"
 
@@ -419,12 +616,11 @@ done
 # empty text file
 [[ ! -f "$src_path/empty.txt" ]] && touch "$src_path/empty.txt"
 
-# tiny text files
+# tiny text file
 [[ ! -f "$src_path/hello.txt" ]] && echo "hello world" >"$src_path/hello.txt"
 
-# create subdirectory with a file
-[[ ! -d "$src_path/subdir" ]] && ! mkdir "$src_path/subdir" && { echo "Error: failed to create $src_path/subdir" 1>&2; exit 1; }
-[[ ! -f "$src_path/subdir/nested.txt" ]] && echo "nested" >"$src_path/subdir/nested.txt"
+# tiny text file in subdirectory
+[[ ! -f "$src_path/small_files/subfile.txt" ]] && echo "hello subfile" >"$src_path/small_files/subfile.txt"
 
 # create file with utf-8 chars in name
 [[ ! -f "$src_path/utf8_файл.txt" ]] && echo "utf-8 filename" >"$src_path/utf8_файл.txt"
@@ -436,7 +632,13 @@ done
 [[ ! -f "$src_path/shell.\${specific}.special&chars\$file|name.txt" ]] && echo "special chars in filename" >"$src_path/shell.\${specific}.special&chars\$file|name.txt"
 
 # create file with utf-8, newline and special chars in name
-[[ ! -f "$src_path/$single_filename" ]] && echo "utf-8, newline and special chars in filename" >"$src_path/$single_filename"
+[[ ! -f "$src_path/$special_chars_name.txt" ]] && echo "utf-8, newline and special chars in filename" >"$src_path/$special_chars_name.txt"
+
+# create directory with content for delete test
+[[ ! -d "$src_path/delete_dir" ]] && mkdir "$src_path/delete_dir"
+[[ ! -d "$src_path/delete_dir/subdir" ]] && mkdir "$src_path/delete_dir/subdir"
+[[ ! -f "$src_path/delete_dir/file.txt" ]] && echo "file in dir" >"$src_path/delete_dir/file.txt"
+[[ ! -f "$src_path/delete_dir/subdir/file.txt" ]] && echo "file in subdir" >"$src_path/delete_dir/subdir/file.txt"
 
 # create hidden files
 [[ ! -f "$src_path/.hiddenfile" ]] && echo "hidden file" >"$src_path/.hiddenfile"
@@ -460,29 +662,48 @@ done
 # create broken symlink
 [[ ! -L "$src_path/broken_symlink" ]] && ln -s "nonexistent_target.bin" "$src_path/broken_symlink"
 
-echo "  created test files in $src_path"
+echo "  test files have been created in $src_path"
 
 # ===========================
-# tests
+# compress tests
 # ===========================
 archive_multi_formats=(tar.bz2 tar.lz4 tar.gz tar.xz tar.zst zip)
-archive_multi_formats=(tar.zst zip) # TODO: debug
+#archive_multi_formats=(tar.zst zip) # TODO: debug
 archive_single_formats=(bz2 gz lz4 xz zst)
-archive_single_formats=(zst zip) # TODO: debug
+#archive_single_formats=(zst zip) # TODO: debug
 for fmt in "${archive_multi_formats[@]}"; do
   test_compress "$fmt" "$dst_path/archive.$fmt" "$src_path"
 done
+for fmt in "${archive_multi_formats[@]}"; do
+  test_compress "$fmt" "$dst_path/archive.overwrite.$fmt" "$src_path/small_files" 1
+done
 for fmt in "${archive_single_formats[@]}"; do
-  test_compress "$fmt" "$dst_path/$single_filename.$fmt" "$src_path/$single_filename"
+  test_compress "$fmt" "$dst_path/$special_chars_name.txt.$fmt" "$src_path/$special_chars_name.txt" 1
 done
 
-# extract tests (use archives of compress tests; include overwrite sub-test)
+# ===========================
+# extract tests
+# ===========================
 for fmt in "${archive_multi_formats[@]}"; do
   test_extract "$fmt" "$dst_path/archive.$fmt" "$dst_path/extract_$fmt/"
 done
-for fmt in "${archive_single_formats[@]}"; do
-  test_extract "$fmt" "$dst_path/$single_filename.$fmt" "$dst_path/extract_$fmt/"
+for fmt in "${archive_multi_formats[@]}"; do
+  test_extract "$fmt" "$dst_path/archive.overwrite.$fmt" "$dst_path/extract_overwrite_$fmt/" 1 "$src_path/small_files"
 done
+for fmt in "${archive_single_formats[@]}"; do
+  test_extract "$fmt" "$dst_path/$special_chars_name.txt.$fmt" "$dst_path/extract_$fmt/" 1
+done
+
+# ===========================
+# create folder tests
+# ===========================
+test_create_folder "special name" "$dst_path" "dir-$special_chars_name"
+
+# ===========================
+# delete tests
+# ===========================
+test_delete_file "special name" "$src_path/$special_chars_name.txt"
+test_delete_folder "with content" "$src_path/delete_dir"
 
 # ===========================
 # summary
