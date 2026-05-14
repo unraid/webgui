@@ -34,6 +34,8 @@ define('FM_FNAME_FILE', '/var/tmp/file.manager.fname');
 define('FM_EXITCODE_FILE', '/var/tmp/file.manager.exitcode');
 define('TAR_RECORD_SIZE', 10240);
 define('TAR_CHECKPOINT', intval(COMPRESS_DOT_SIZE_MB * 1024 * 1024 / TAR_RECORD_SIZE));
+
+// Debug mode
 define('FM_DEBUG_MODE', file_exists('/var/tmp/file.manager.debug'));
 define('FM_DEBUG_NCHAN_FILE', '/var/tmp/file.manager.nchan.debug');
 
@@ -1573,9 +1575,10 @@ while (true) {
     $last_published_time = $now;
   }
   // publish new status or error, or if action just completed (done=1 or 2)
-  //if (!empty($reply)) publish('filemanager', json_encode($reply));
-  publish('filemanager', json_encode($reply));
-  if (FM_DEBUG_MODE) file_put_contents(FM_DEBUG_NCHAN_FILE, json_encode($reply) . "\n", FILE_APPEND);
+  if (!empty($reply)) {
+    publish('filemanager', json_encode($reply));
+    if (FM_DEBUG_MODE) file_put_contents(FM_DEBUG_NCHAN_FILE, json_encode($reply) . "\n", FILE_APPEND);
+  }
   // Slow down polling while any background process is running: sub-second updates
   // are pointless since the user can't react faster and pv/rsync write once per second anyway.
   usleep(isset($pid) ? 1000000 : 250000);
