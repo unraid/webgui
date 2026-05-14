@@ -933,6 +933,7 @@ while (true) {
             } > >(stdbuf -o0 tr '\\r' '\\n' | sed 's/^deleting //' >$status) 2>$error & echo \$!
             BASH;
 
+            if (FM_DEBUG_MODE) @file_put_contents('/var/tmp/fm_debug_cmd.txt', 'rsync-rename: ' . addcslashes($cmd, "\0..\37\\") . "\n---\n", FILE_APPEND);
             exec($cmd, $pid);
 
           // use rsync copy-delete
@@ -943,6 +944,7 @@ while (true) {
             // note: rsync defaults to "inc_recurse mode" which causes creating the whole directory structure at target before transfering files.
             //       This is a problem because those target directories get temporary permissions of "root:root" and "chmod 0700", which
             //       breaks access for all unraid users through /mnt/user/sharename. We avoid this behavior by using "--no-inc-recursive".
+            if (FM_DEBUG_MODE) @file_put_contents('/var/tmp/fm_debug_cmd.txt', 'copy-delete: ' . addcslashes($cmd, "\0..\37\\") . "\n---\n", FILE_APPEND);
             exec($cmd, $pid);
           }
 
