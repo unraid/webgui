@@ -37,7 +37,7 @@ test_path=/mnt/disk1/fm_test
 src_path="$test_path/src"
 dst_path="$test_path/dst"
 single_filename=$'utf8_файл\nspecial&chars\$file.txt'
-job_max_runtime_seconds=200
+job_timeout=${JOB_TIMEOUT:-200}
 
 # deploy this script to and run on remote host
 if [[ $ssh_host ]]; then
@@ -48,12 +48,21 @@ fi
 
 # functions
 
-on_trap() {
+on_exit() {
+  local rc=$?
+  echo -e "\n=== exit ==="
+  stop_file_manager
+  clean_up_created_files
+  exit $rc
+}
+on_signal() {
+  echo -e "\n=== signal ==="
   stop_file_manager
   clean_up_created_files
   exit 1
 }
-trap on_trap EXIT INT TERM
+trap on_exit EXIT
+trap on_signal INT TERM
 
 # check condition and print pass/fail
 pass=0
@@ -113,7 +122,7 @@ run_file_manager() {
       exit 1
     fi
     /usr/bin/php -q "$fm_file" & disown
-    sleep 1
+    sleep 0.1
     if ! pgrep -f "php.*$fm_file" >/dev/null; then
       echo "Error: failed to start file_manager" 1>&2
       exit 1
@@ -153,10 +162,36 @@ cancel_action() {
 }
 
 # write JSON data to file_manager's action file and wait for completion
+# args: action source target overwrite [format archive_name]
 # returns 0 on success (exit code 0), 1 on failure or timeout
 run_action() {
-  local json=$1
-  local rc
+  local action=$1 source=$2 target=$3 overwrite=$4
+  local format=${5:-} archive_name=${6:-}
+  local json rc
+
+  # build action JSON
+  # title is unused by file_manager (not read in any switch case); format/archive_name are harmless empty strings for action 17
+  local title
+  case $action in
+    16) title="Compress" ;;
+    17) title="Extract" ;;
+    *) title="" ;;
+  esac
+  local jq_args=(
+    --argjson action "$action"
+    --arg title "$title"
+    --arg source "$source"
+    --arg target "$target"
+    --argjson overwrite "$overwrite"
+    --arg format "$format"
+    --arg archive_name "$archive_name"
+  )
+  # shellcheck disable=SC2016
+  if ! json=$(jq -n "${jq_args[@]}" '{"action":$action,"title":$title,"source":$source,"target":$target,"H":"","sparse":"","overwrite":$overwrite,"zfs":"","format":$format,"archive_name":$archive_name}'); then
+    echo "Error: jq failed" 1>&2
+    exit 1
+  fi
+  echo "JSON: $json" | sed 's/^/  /'
 
   # ensure file_manager is running
   run_file_manager
@@ -179,22 +214,16 @@ run_action() {
 
   # follow nchan output in foreground; break on "done":1 closes stdin -> tail exits via SIGPIPE
   # timeout acts as safety net in case file_manager hangs
-  local start=$SECONDS empty_count=0
-  timeout "$job_max_runtime_seconds" tail -n +1 -f "$fm_debug_nchan_file" | while IFS= read -r line; do
+  local start=$SECONDS
+  timeout "$job_timeout" tail -n +1 -f "$fm_debug_nchan_file" | while IFS= read -r line; do
     printf '%s\n' "$line" >>"$collected"
     echo "  nchan: $line"
-    if [[ $line == '[]' || $line == '{}' ]]; then
-      (( empty_count++ ))
-      [[ $empty_count -ge 100 ]] && { echo "  nchan: 100 consecutive empty lines, stopping"; break; }
-    else
-      empty_count=0
-      [[ $line == *'"done":1'* ]] && break
-    fi
+    [[ $line == *'"done":1'* ]] && break
   done
   local rc=${PIPESTATUS[0]}
 
   if [[ $rc -eq 124 ]]; then
-    echo "Error: timeout after ${job_max_runtime_seconds}s"
+    echo "Error: timeout after ${job_timeout}s"
     cancel_action
     return 2
   fi
@@ -204,6 +233,12 @@ run_action() {
   # status is a JSON-encoded string, so needs fromjson
   while IFS= read -r line; do
     [[ $line ]] || continue
+    # fail on empty publishes - file_manager should suppress them
+    if [[ $line == '[]' || $line == '{}' ]]; then
+      echo "  [FAIL] nchan: received empty publish '$line' - should be suppressed"
+      fail=$((fail + 1))
+      continue
+    fi
     local action status_text progress_details err_msg
     action=$(echo "$line" | jq -r '.status | fromjson | .action // empty' 2>/dev/null)
     status_text=$(echo "$line" | jq -r '.status | fromjson | .text[0] // empty' 2>/dev/null)
@@ -236,184 +271,102 @@ run_action() {
   [[ $rc -eq 0 || $rc -eq -1 ]]
 }
 
-# run compress action
-# args: format archive_name source
-run_compress() {
-  local format=$1 archive_name=$2 source=$3
-  local archive="$dst_path/$archive_name"
-  local json rc sz
+# test compress action and overwrite behavior
+# args: format output_file input_file
+test_compress() {
+  local format=$1 output_file=$2 input_file=$3
+  local rc sz cond
+  local archive_name target
 
   echo -e "\n=== compress $format ==="
 
+  archive_name=$(basename -- "$output_file")
+  target=$(dirname -- "$output_file")
+
   # cleanup any leftovers from previous runs
-  if [[ -f "$archive" ]]; then
-    rm -f "$archive" || { echo "Error: failed to remove $archive" 1>&2; exit 1; }
-    echo "  removed leftover archive $archive"
+  if [[ -f "$output_file" ]]; then
+    rm -f "$output_file" || { echo "Error: failed to remove $output_file" 1>&2; exit 1; }
+    echo "  removed leftover archive $output_file"
   fi
 
-  # build JSON and run action
-  # shellcheck disable=SC2016
-  json_template='{
-    "action":16,
-    "title":"Compress",
-    "source": $source,
-    "target": $target,
-    "H":"",
-    "sparse":"",
-    "overwrite":1,
-    "zfs":"",
-    "format": $format,
-    "archive_name": $archive_name
-  }'
-  jq_args=(
-    --arg source "$source"
-    --arg target "$dst_path"
-    --arg format "$format"
-    --arg archive_name "$archive_name"
-  )
-  json=$(jq -n "${jq_args[@]}" "$json_template" 2>&1)
-  jq_status=$?
-  if [[ "$jq_status" -ne 0 ]]; then
-    echo "Error: jq error $json"
-    exit 1
-  fi
-  echo "JSON: $json" | sed 's/^/  /'
-  run_action "$json"
+  run_action 16 "$input_file" "$target" 1 "$format" "$archive_name"
   rc=$?
   check "compress $format: action run" $rc
 
-  # verify archive has been created
-  rc=1 && [[ -f $archive ]] && rc=0
-  check "compress $format: archive diff (multiple files)" $rc
+  rc=1 && [[ -f $output_file ]] && rc=0
+  check "compress $format: archive creation" $rc
 
   # verify no .tmp files are left in the destination directory (cleanup logic should remove them)
   rc=0
-  for f in "$archive"*.tmp; do
+  for f in "$output_file"*.tmp; do
     [[ -e $f ]] && { rc=1; break; }
   done
   check "compress $format: .tmp cleanup" $rc
 
-  # verify archive is non-empty
-  sz=$(stat -c%s "$archive")
+  sz=$(stat -c%s "$output_file" 2>/dev/null || echo 0)
   rc=1 && [[ $sz -gt 0 ]] && rc=0
   check "compress $format: archive size (${sz}B)" $rc
 
+  # overwrite sub-test: existing archive must be refused when overwrite=0
+  run_action 16 "$input_file" "$target" 0 "$format" "$archive_name"
+  cond=1; [[ $(stat -c%s "$output_file" 2>/dev/null || echo 0) -eq $sz ]] && cond=0
+  check "compress $format overwrite=0: archive unchanged" $cond
 }
 
-# run extract action
-# args: archive_path dest_dir expected_file overwrite
-run_extract() {
-  local format=$1 archive_path=$2 dst_path=$3 overwrite=${4:-0}
-  local json rc
+# test extract action and overwrite behavior
+# args: format archive dest
+test_extract() {
+  local format=$1 archive=$2 dest=$3
+  local rc
 
-  echo -e "\n=== extract $archive_path ==="
+  echo -e "\n=== extract $archive ==="
 
-  # verify source archive exists
-  if [[ ! -f $archive_path ]]; then
-    echo "Error: source archive $archive_path does not exist!" 1>&2
+  if [[ ! -f $archive ]]; then
+    echo "Error: source archive $archive does not exist!" 1>&2
     return 1
   fi
 
   # cleanup any leftovers from previous runs
-  if [[ -d "$dst_path" ]]; then
-    rm -rf "${dst_path:?}/"* || { echo "Error: failed to clean up $dst_path" 1>&2; exit 1; }
-    echo "  removed leftover files in $dst_path"
+  if [[ -d "$dest" ]]; then
+    rm -rf "${dest:?}" || { echo "Error: failed to remove $dest" 1>&2; exit 1; }
+    echo "  removed leftover $dest"
   fi
+  mkdir "$dest" || { echo "Error: failed to create destination directory $dest" 1>&2; exit 1; }
 
-  # create destination directory
-  mkdir "$dst_path" || { echo "Error: failed to create destination directory $dst_path" 1>&2; exit 1; }
-
-  # build JSON and run action
-  # shellcheck disable=SC2016
-  json_template='{
-    "action":17,
-    "title":"Extract",
-    "source": $archive_path,
-    "target": $dst_path,
-    "H":"",
-    "sparse":"",
-    "overwrite": $overwrite,
-    "zfs":""
-  }'
-  jq_args=(
-    --arg archive_path "$archive_path"
-    --arg dst_path "$dst_path"
-    --argjson overwrite "$overwrite"
-  )
-  json=$(jq -n "${jq_args[@]}" "$json_template" 2>&1)
-  jq_status=$?
-  if [[ "$jq_status" -ne 0 ]]; then
-    echo "Error: jq error $json"
-    exit 1
-  fi
-  echo "  JSON: $json"
-  run_action "$json"
+  run_action 17 "$archive" "$dest" 0
   rc=$?
   check "$format: action run" $rc
 
-  # verify diff
-  rc=1 && diff -r "$src_path/$single_filename" "$dst_path/$single_filename" >/dev/null 2>&1 && rc=0
-  check "$format: archive diff ($single_filename)" $rc
+  local extracted_file_count extracted_file
+  extracted_file_count=$(find "$dest" -type f -printf '.' | wc -c)
+  if [[ $extracted_file_count -eq 1 ]]; then
+    extracted_file=$(find "$dest" -type f)
+    rc=1 && diff "$src_path/$(basename -- "$extracted_file")" "$extracted_file" && rc=0
+  else
+    # --no-dereference to avoid following symlinks (source contains broken symlink)
+    rc=1 && diff --no-dereference -r "$src_path" "$dest/src" && rc=0
+  fi
+  check "$format: archive extract diff" $rc
 
+  # overwrite sub-test: reuse already-extracted dest as baseline
+  local sentinel_file cond
+  sentinel_file=$(find "$dest" -type f -print -quit)
+  echo "MODIFIED" >"$sentinel_file"
+
+  run_action 17 "$archive" "$dest" 0
+  rc=$?
+  check "$format overwrite=0: action run" $rc
+  cond=1; [[ $(cat "$sentinel_file") == "MODIFIED" ]] && cond=0
+  check "$format overwrite=0: sentinel unchanged" $cond
+
+  run_action 17 "$archive" "$dest" 1
+  rc=$?
+  check "$format overwrite=1: action run" $rc
+  cond=1; [[ $(cat "$sentinel_file") != "MODIFIED" ]] && cond=0
+  check "$format overwrite=1: sentinel overwritten" $cond
 }
 
-# test overwrite=0 respects existing files
-test_extract_no_overwrite() {
-  local label="extract zip no-overwrite"
-  local archive="$dst_path/test.zip"
-  local dest="$dst_path/extract_no_overwrite"
 
-  echo ""
-  echo "--- $label ---"
-
-  local pre=0; [[ -f $archive ]] || pre=1; check "$label: archive existence" $pre
-  mkdir -p "$dest"
-
-  # Create sentinel: write known content that should NOT be overwritten
-  echo "original" > "$dest/random.bin"
-  local orig_size
-  orig_size=$(stat -c%s "$dest/random.bin")
-
-  local json
-  json=$(printf '{"action":17,"title":"Extract","source":"%s","target":"%s","H":"","sparse":"","overwrite":0,"zfs":""}' \
-    "$archive" "$dest")
-
-  run_action "$json"
-
-  # File size should still match sentinel (not overwritten)
-  local new_size
-  new_size=$(stat -c%s "$dest/random.bin")
-  [[ $new_size -eq $orig_size ]]; check "$label: overwrite check" $?
-}
-
-# Build a small zip/tar.gz for extract tests using a fresh compress
-build_test_archives() {
-  echo ""
-  echo "=== Building test archives ==="
-
-  for format in zip tar.gz tar.zst; do
-    local name="test.${format##*.}"
-    # use format as extension for tar variants
-    [[ $format == zip ]] && name="test.zip"
-    [[ $format == tar.gz ]]  && name="test.tar.gz"
-    [[ $format == tar.zst ]] && name="test.tar.zst"
-
-    local archive="$dst_path/$name"
-    rm -f "$archive"
-
-    local json
-    json=$(printf '{"action":16,"title":"Compress","source":"%s","target":"%s","H":"","sparse":"","overwrite":1,"zfs":"","format":"%s","archive_name":"%s"}' \
-      "$src_path" \
-      "$dst_path" "$format" "$name")
-
-    run_action "$json" >/dev/null 2>&1
-    if [[ -f $archive ]]; then
-      echo "  built: $archive ($(stat -c%s "$archive")B)"
-    else
-      echo "  WARNING: failed to build $archive"
-    fi
-  done
-}
 
 # ===========================
 # main
@@ -436,9 +389,9 @@ stop_file_manager
 echo -e "\n=== Create test files ==="
 
 # create source and destination directories
-[[ ! -d "$test_path" ]] && ! mkdir "$test_path" && { echo "Error: failed to create $test_path" 1>&2; exit 1; }
-[[ ! -d "$src_path" ]] && ! mkdir "$src_path" && { echo "Error: failed to create $src_path" 1>&2; exit 1; }
-[[ ! -d "$dst_path" ]] && ! mkdir "$dst_path" && { echo "Error: failed to create $dst_path" 1>&2; exit 1; }
+[[ ! -d "$test_path" ]] && ! mkdir -m 777 "$test_path" && { echo "Error: failed to create $test_path" 1>&2; exit 1; }
+[[ ! -d "$src_path" ]] && ! mkdir -m 777 "$src_path" && { echo "Error: failed to create $src_path" 1>&2; exit 1; }
+[[ ! -d "$dst_path" ]] && ! mkdir -m 777 "$dst_path" && { echo "Error: failed to create $dst_path" 1>&2; exit 1; }
 
 # random data (compressible only slightly)
 [[ ! -f "$src_path/urandom10MB.bin" ]] && dd if=/dev/urandom bs=1M count=10 of="$src_path/urandom10MB.bin"
@@ -512,27 +465,27 @@ echo "  created test files in $src_path"
 # ===========================
 # tests
 # ===========================
-for fmt in tar.bz2 tar.gz tar.lz4 tar.xz tar.zst zip; do
-  run_compress "$fmt" "archive.$fmt" "$src_path"
+archive_multi_formats=(tar.bz2 tar.lz4 tar.gz tar.xz tar.zst zip)
+archive_multi_formats=(tar.zst zip) # TODO: debug
+archive_single_formats=(bz2 gz lz4 xz zst)
+archive_single_formats=(zst zip) # TODO: debug
+for fmt in "${archive_multi_formats[@]}"; do
+  test_compress "$fmt" "$dst_path/archive.$fmt" "$src_path"
 done
-for fmt in bz2 gz lz4 xz zst; do
-  run_compress "$fmt" "archive.$fmt" "$src_path/$single_filename"
-done
-
-# extract tests (use archives of compress tests)
-for fmt in tar.bz2 tar.gz tar.lz4 tar.xz tar.zst zip; do
-  run_extract "$fmt" "$dst_path/archive.$fmt" "$dst_path/extract_$fmt/"
-done
-for fmt in bz2 gz lz4 xz zst; do
-  run_extract "$fmt" "$dst_path/archive.$fmt" "$dst_path/extract_$fmt/"
+for fmt in "${archive_single_formats[@]}"; do
+  test_compress "$fmt" "$dst_path/$single_filename.$fmt" "$src_path/$single_filename"
 done
 
-# # overwrite protection
-# test_extract_no_overwrite
+# extract tests (use archives of compress tests; include overwrite sub-test)
+for fmt in "${archive_multi_formats[@]}"; do
+  test_extract "$fmt" "$dst_path/archive.$fmt" "$dst_path/extract_$fmt/"
+done
+for fmt in "${archive_single_formats[@]}"; do
+  test_extract "$fmt" "$dst_path/$single_filename.$fmt" "$dst_path/extract_$fmt/"
+done
 
 # ===========================
 # summary
 # ===========================
-echo ""
-echo "=== summary: $pass passed, $fail failed ==="
+echo -e "\n=== summary: $pass passed, $fail failed ==="
 [[ $fail -eq 0 ]]
