@@ -2742,86 +2742,123 @@ function get_vm_usage_stats($collectcpustats = true,$collectdiskstats = true,$co
 	global $lv, $vmusagestats;
 
 	$hostcpus = $lv->host_get_node_info();
-	$timestamp = time();
+	$timestamp = microtime(true);
 	$allstats=$lv->domain_get_all_domain_stats();
+	if ($allstats === false || !is_array($allstats)) return;
 
 	foreach ($allstats as $vm => $data) {
 		$rd=$wr=$tx=$rx=null;
-		$state = $data["state.state"];
+		$state = (int)($data["state.state"] ?? 0);
+		$hasPrev = isset($vmusagestats[$vm]);
+		$prevTimestamp = isset($vmusagestats[$vm]["timestamp"]) ? (float)$vmusagestats[$vm]["timestamp"] : $timestamp;
+		$sampleSeconds = max(0.25, ($timestamp - $prevTimestamp));
 		# CPU Metrics
 		$cpuTime = 0;
 		$guestCpuTime = 0;
 		$cpuHostPercent = 0;
 		$cpuGuestPercent = 0;
-		$cpuTimeAbs = $data["cpu.time"];
+		$cpuTimeAbs = (int)($data["cpu.time"] ?? 0);
+		$guestCpuTimeAbs = $cpuTimeAbs;
+		$guestCpuSource = 'none';
 		if ($state == 1 && $collectcpustats == true) {
-			$guestcpus = max(1, (int)$data["vcpu.current"]);
-			$prevCpuAbs = isset($vmusagestats[$vm]["cpuTimeAbs"]) ? $vmusagestats[$vm]["cpuTimeAbs"] : $cpuTimeAbs;
-			$prevGuestCpuAbs = isset($vmusagestats[$vm]["guestCpuTimeAbs"]) ? $vmusagestats[$vm]["guestCpuTimeAbs"] : $cpuTimeAbs;
-			$prevTimestamp = isset($vmusagestats[$vm]["timestamp"]) ? $vmusagestats[$vm]["timestamp"] : $timestamp;
-			$sampleSeconds = max(1, ($timestamp - $prevTimestamp));
+			$configuredGuestCpus = (int)($data["vcpu.current"] ?? ($data["vcpu.maximum"] ?? 0));
+			$guestcpus = max(1, $configuredGuestCpus);
+			$prevCpuAbs = isset($vmusagestats[$vm]["cpuTimeAbs"]) ? (int)$vmusagestats[$vm]["cpuTimeAbs"] : $cpuTimeAbs;
+			$prevGuestCpuAbs = isset($vmusagestats[$vm]["guestCpuTimeAbs"]) ? (int)$vmusagestats[$vm]["guestCpuTimeAbs"] : 0;
+			$prevGuestCpuSource = $vmusagestats[$vm]["guestCpuSource"] ?? 'none';
 
 			$guestCpuTimeAbs = 0;
-			$foundVcpuTime = false;
-			for ($i = 0; $i < $guestcpus; $i++) {
+			$foundVcpuTime = 0;
+			for ($i = 0; $i < max($guestcpus, 64); $i++) {
 				$key = "vcpu.$i.time";
 				if (isset($data[$key])) {
-					$guestCpuTimeAbs += $data[$key];
-					$foundVcpuTime = true;
+					$guestCpuTimeAbs += (int)$data[$key];
+					$foundVcpuTime++;
+				} elseif ($i >= $guestcpus) {
+					break;
 				}
 			}
-			if (!$foundVcpuTime) $guestCpuTimeAbs = $cpuTimeAbs;
+			if ($foundVcpuTime > 0) {
+				$guestcpus = $foundVcpuTime;
+				$guestCpuSource = 'vcpu';
+			} else {
+				$guestCpuTimeAbs = 0;
+			}
 
-			$cpuTime = max(0, $cpuTimeAbs - $prevCpuAbs);
-			$guestCpuTime = max(0, $guestCpuTimeAbs - $prevGuestCpuAbs);
-			$pcenthostbase = ((($cpuTime) * 100.0) / (($sampleSeconds) * 1000.0 * 1000.0 * 1000.0));
-			$pcentguestbase = ((($guestCpuTime) * 100.0) / (($sampleSeconds) * 1000.0 * 1000.0 * 1000.0));
-			$cpuHostPercent = round($pcenthostbase / max(1, (int)$hostcpus['cpus']),1);
-			$cpuGuestPercent = round($pcentguestbase / $guestcpus, 1);
+			if ($hasPrev) {
+				$cpuTime = max(0, $cpuTimeAbs - $prevCpuAbs);
+				$pcenthostbase = (($cpuTime * 100.0) / ($sampleSeconds * 1000.0 * 1000.0 * 1000.0));
+				$cpuHostPercent = round($pcenthostbase / max(1, (int)($hostcpus['cpus'] ?? 1)),1);
+				if ($guestCpuSource == 'vcpu' && $prevGuestCpuSource == 'vcpu') {
+					$guestCpuTime = max(0, $guestCpuTimeAbs - $prevGuestCpuAbs);
+					$pcentguestbase = (($guestCpuTime * 100.0) / ($sampleSeconds * 1000.0 * 1000.0 * 1000.0));
+					$cpuGuestPercent = round($pcentguestbase / $guestcpus, 1);
+				}
+			}
 			$cpuHostPercent = max(0.0, min(100.0, $cpuHostPercent));
 			$cpuGuestPercent = max(0.0, min(100.0, $cpuGuestPercent));
-		} else {
-			$guestCpuTimeAbs = $cpuTimeAbs;
 		}
 
 		# Memory Metrics
 		if ($state == 1 && $collectmemstats) {
-		$currentmem = $data["balloon.current"];
-		$maximummem = $data["balloon.maximum"];
-		$meminuse = min($data["balloon.rss"],$data["balloon.current"]);
+		$currentmem = (int)($data["balloon.current"] ?? 0);
+		$maximummem = (int)($data["balloon.maximum"] ?? 0);
+		$meminuse = min((int)($data["balloon.rss"] ?? 0), $currentmem);
 		} else $maximummem = $currentmem = $meminuse = 0;
 
 		# Disk
 		if ($state == 1 && $collectdiskstats) {
-			$disknum = $data["block.count"];
+			$disknum = (int)($data["block.count"] ?? 0);
 			$rd=$wr=$i=0;
 			for ($i = 0; $i < $disknum; $i++) {
-				if ($data["block.$i.name"] == "hda" || $data["block.$i.name"] == "hdb") continue;
-				$rd +=  $data["block.$i.rd.bytes"];
-				$wr +=  $data["block.$i.wr.bytes"];
+				if (($data["block.$i.name"] ?? '') == "hda" || ($data["block.$i.name"] ?? '') == "hdb") continue;
+				$rd +=  (int)($data["block.$i.rd.bytes"] ?? 0);
+				$wr +=  (int)($data["block.$i.wr.bytes"] ?? 0);
 			}
-			$rdrate = ($rd - $vmusagestats[$vm]['rdp']);
-			$wrrate = ($wr - $vmusagestats[$vm]['wrp']);
+			$prevRd = isset($vmusagestats[$vm]['rdp']) ? (int)$vmusagestats[$vm]['rdp'] : $rd;
+			$prevWr = isset($vmusagestats[$vm]['wrp']) ? (int)$vmusagestats[$vm]['wrp'] : $wr;
+			$rdrate = $hasPrev ? (int)round(max(0, ($rd - $prevRd)) / $sampleSeconds, 0) : 0;
+			$wrrate = $hasPrev ? (int)round(max(0, ($wr - $prevWr)) / $sampleSeconds, 0) : 0;
 		} else $rdrate=$wrrate=0;
 
 		# Net
 		if ($state == 1 && $collectnicstats) {
-			$nicnum = $data["net.count"];
-			$rx=$tx=$i=0;
+			$nicnum = (int)($data["net.count"] ?? 0);
+			$rx=$tx=$rxPkts=$rxDrop=$i=0;
 			for ($i = 0; $i < $nicnum; $i++) {
-				$rx +=  $data["net.$i.rx.bytes"];
-				$tx +=  $data["net.$i.tx.bytes"];
+				$rx +=  (int)($data["net.$i.rx.bytes"] ?? 0);
+				$tx +=  (int)($data["net.$i.tx.bytes"] ?? 0);
+				$rxPkts += (int)($data["net.$i.rx.pkts"] ?? 0);
+				$rxDrop += (int)($data["net.$i.rx.drop"] ?? 0);
 			}
-			$rxrate = round(($rx - $vmusagestats[$vm]['rxp']),0);
-			$txrate = round(($tx - $vmusagestats[$vm]['txp']),0);
+			$prevRx = isset($vmusagestats[$vm]['rxp']) ? (int)$vmusagestats[$vm]['rxp'] : $rx;
+			$prevTx = isset($vmusagestats[$vm]['txp']) ? (int)$vmusagestats[$vm]['txp'] : $tx;
+			$prevRxPkts = isset($vmusagestats[$vm]['rxpktsp']) ? (int)$vmusagestats[$vm]['rxpktsp'] : $rxPkts;
+			$prevRxDrop = isset($vmusagestats[$vm]['rxdropp']) ? (int)$vmusagestats[$vm]['rxdropp'] : $rxDrop;
+			if ($hasPrev) {
+				$rxBytesDelta = max(0, ($rx - $prevRx));
+				$rxrate = (int)round($rxBytesDelta / $sampleSeconds, 0);
+				$rxPktsDelta = max(0, ($rxPkts - $prevRxPkts));
+				$rxDropDelta = max(0, ($rxDrop - $prevRxDrop));
+				$acceptedPkts = max(0, ($rxPktsDelta - $rxDropDelta));
+				// Estimate accepted RX bytes by scaling bytes with accepted-packet ratio.
+				$acceptedRatio = $rxPktsDelta > 0 ? min(1, ($acceptedPkts / $rxPktsDelta)) : 1;
+				$rxrateAdj = (int)round(($rxBytesDelta * $acceptedRatio) / $sampleSeconds, 0);
+			} else {
+				$rxrate = 0;
+				$rxrateAdj = 0;
+			}
+			$txrate = $hasPrev ? (int)round(max(0, ($tx - $prevTx)) / $sampleSeconds, 0) : 0;
 		} else {
-			$rxrate=$txrate=0;
+			$rxPkts=$rxDrop=0;
+			$rxrate=$rxrateAdj=$txrate=0;
 		}
 		$vmusagestats[$vm] = [
 			"cpuTime" => $cpuTime,
 			"guestCpuTime" => $guestCpuTime,
 			"cpuTimeAbs" => $cpuTimeAbs,
 			"guestCpuTimeAbs" => $guestCpuTimeAbs,
+			"guestCpuSource" => $guestCpuSource,
 			"cpuhost" => $cpuHostPercent,
 			"cpuguest" => $cpuGuestPercent,
 			"timestamp" => $timestamp,
@@ -2829,6 +2866,9 @@ function get_vm_usage_stats($collectcpustats = true,$collectdiskstats = true,$co
 			"curmem" => $currentmem,
 			"maxmem" => $maximummem,
 			"rxrate" => $rxrate,
+			"rxrateadj" => $rxrateAdj,
+			"rxpktsp" => $rxPkts,
+			"rxdropp" => $rxDrop,
 			"rxp" => $rx,
 			"txrate" => $txrate,
 			"txp" => $tx,
