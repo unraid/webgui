@@ -1622,7 +1622,7 @@ class Libvirt {
 
 	function domain_get_all_domain_stats() {
 		$tmp = libvirt_connect_get_all_domain_stats($this->conn);
-		return $tmp ?: $this->_set_last_error();
+		return $tmp === false ? $this->_set_last_error() : $tmp;
 	}
 
 	function domain_start($dom) {
