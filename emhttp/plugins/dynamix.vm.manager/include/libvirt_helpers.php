@@ -2801,9 +2801,10 @@ function get_vm_usage_stats($collectcpustats = true,$collectdiskstats = true,$co
 
 		# Memory Metrics
 		if ($state == 1 && $collectmemstats) {
-		$currentmem = (int)($data["balloon.current"] ?? 0);
+		$currentmem = (int)($data["balloon.current"] ?? $data["balloon.maximum"] ?? 0);
 		$maximummem = (int)($data["balloon.maximum"] ?? 0);
-		$meminuse = min((int)($data["balloon.rss"] ?? 0), $currentmem);
+		$rss = (int)($data["balloon.rss"] ?? 0);
+		$meminuse = $currentmem > 0 ? min($rss, $currentmem) : $rss;
 		} else $maximummem = $currentmem = $meminuse = 0;
 
 		# Disk
