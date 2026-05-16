@@ -155,7 +155,7 @@ class DockerTemplates {
 		return $match ?: "$dir/$target";
 	}
 
-	public function downloadTemplates($Dest=null, $Urls=null) {	
+	public function downloadTemplates($Dest=null, $Urls=null) {
 		/* Don't download any templates.  Leave code in place for future reference. */
 		/* remove existing limetech templates that are all not valid */
 		exec("rm -rf /boot/config/plugins/dockerMan/templates/limetech");
@@ -309,17 +309,11 @@ class DockerTemplates {
 	}
 
 	private function getTailscaleJson($name) {
-		$TS_raw = [];
-		exec("docker exec -i ".$name." /bin/sh -c \"tailscale status --peers=false --json\" 2>/dev/null", $TS_raw);
-		if (!empty($TS_raw)) {
-			$TS_raw = implode("\n", $TS_raw);
-			return json_decode($TS_raw, true);
-		}
-		return '';
+		return DockerUtil::tailscaleStatus($name) ?: '';
 	}
 
 	public function getAllInfo($reload=false,$com=true,$communityApplications=false) {
-		global $driver, $dockerManPaths;
+		global $driver, $dockerManPaths, $docroot;
 		$DockerClient = new DockerClient();
 		$DockerUpdate = new DockerUpdate();
 		$host = DockerUtil::host();
@@ -335,11 +329,22 @@ class DockerTemplates {
 			$tmp['autostart'] = in_array($name,$autoStart);
 			$tmp['cpuset'] = $ct['CPUset'];
 			$tmp['url'] = $ct['Url'] ?? $tmp['url'] ?? '';
-			// read docker label for WebUI & Icon
-			if (isset($ct['Icon'])) $tmp['icon'] = $ct['Icon'];
+			// Docker label for Shell.
 			if (isset($ct['Shell'])) $tmp['shell'] = $ct['Shell'];
+			// Pass the label URL as a download fallback only when there's no
+			// usable cached file. Otherwise, we'll check if the URL is a file,
+			// obviously fail, and search through every template in /boot
+			// looking for a match. Bad.
+			$labelIconUrl = $ct['Icon'] ?? null;
 			if (!$communityApplications) {
-				if (!is_file($tmp['icon']) || $reload) $tmp['icon'] = $this->getIcon($image,$name,$tmp['icon']);
+				$iconExists = !empty($tmp['icon'])
+					&& (is_file($tmp['icon']) || is_file($docroot . $tmp['icon']));
+				if (!$iconExists || $reload) {
+					$tmp['icon'] = $this->getIcon($image, $name, $labelIconUrl ?: ($tmp['icon'] ?? ''));
+					// Explicitly return the fallback asset, so that subsequent polls see
+					// the local file instead of rerunning the expensive template scan
+					if (empty($tmp['icon'])) $tmp['icon'] = '/plugins/dynamix.docker.manager/images/question.png';
+				}
 			}
 			if ($ct['Running']) {
 				$port = &$ct['Ports'][0];
@@ -629,7 +634,7 @@ class DockerUpdate{
 		$DockerClient = new DockerClient();
 		$inspect      = $DockerClient->getDockerJSON('/images/'.$image.'/json');
 		if (empty($inspect['RepoDigests'])) return null;
-		
+
 		$repoDigest = $inspect['RepoDigests'][array_key_last($inspect['RepoDigests'])];
 		$shaPos = strpos($repoDigest, '@sha256:');
 		if ($shaPos === false) return null;
@@ -1186,9 +1191,11 @@ class DockerUtil {
 	}
 
 	public static function driver() {
+		static $cached;
+		if ($cached !== null) return $cached;
 		$list = [];
 		foreach (static::docker("network ls --format='{{.Name}}={{.Driver}}'",true) as $network) {[$net,$driver] = array_pad(explode('=',$network),2,''); $list[$net] = $driver;}
-		return $list;
+		return $cached = $list;
 	}
 
 	public static function custom() {
@@ -1211,18 +1218,45 @@ class DockerUtil {
 	}
 
 	public static function port() {
-		if (lan_port('br0')) return 'br0';
-		if (lan_port('bond0')) return 'bond0';
-		if (lan_port('eth0')) return 'eth0';
-		if (lan_port('wlan0')) return 'wlan0';
-		return '';
+		static $cached;
+		if ($cached !== null) return $cached;
+		if (lan_port('br0'))   return $cached = 'br0';
+		if (lan_port('bond0')) return $cached = 'bond0';
+		if (lan_port('eth0'))  return $cached = 'eth0';
+		if (lan_port('wlan0')) return $cached = 'wlan0';
+		return $cached = '';
 	}
 
 	public static function host() {
+		static $cached;
+		if ($cached !== null) return $cached;
 		$port = static::port();
-		if (!$port) return '';
+		if (!$port) return $cached = '';
 		$port = lan_port($port,true)!=1 && lan_port('wlan0') ? 'wlan0' : $port;
-		return exec("ip -br -4 addr show $port scope global | sed -r 's/\/[0-9]+//g' | awk '{print $3;exit}'");
+		return $cached = exec("ip -br -4 addr show $port scope global | sed -r 's/\/[0-9]+//g' | awk '{print $3;exit}'");
+	}
+
+  const TAILSCALE_CACHE_FILE = '/var/lib/docker/unraid-tailscale-status.json';
+
+	public static function tailscaleCache(): array {
+		static $cached;
+		if (is_array($cached)) return $cached;
+		if (!is_file(self::TAILSCALE_CACHE_FILE)) return $cached = [];
+		$data = @json_decode(@file_get_contents(self::TAILSCALE_CACHE_FILE), true);
+		return $cached = (is_array($data) ? $data : []);
+	}
+
+	public static function tailscaleStatus(string $name) {
+		return static::tailscaleCache()['containers'][$name]['data'] ?? null;
+	}
+
+	public static function tailscaleDerpMap() {
+		return static::tailscaleCache()['derp'] ?? null;
+	}
+
+	public static function tailscaleLatestVersion(): ?string {
+		$v = static::tailscaleCache()['version'] ?? null;
+		return is_array($v) ? ($v['TarballsVersion'] ?? null) : null;
 	}
 }
 ?>
