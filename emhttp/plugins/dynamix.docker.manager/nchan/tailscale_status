@@ -1,0 +1,123 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * A JSON cache of Tailscale status for each running container, plus some
+ * container agnostic metadata pulled from the network.
+ */
+?>
+<?
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/publish.php";
+
+const TS_CACHE_FILE          = '/var/lib/docker/unraid-tailscale-status.json';
+const TS_DERP_URL            = 'https://login.tailscale.com/derpmap/default';
+const TS_VERSION_URL         = 'https://pkgs.tailscale.com/stable/?mode=json';
+const TS_METADATA_REFRESH_S  = 6 * 60 * 60;
+const TS_POLL_INTERVAL_S     = 10;
+const TS_IDLE_INTERVAL_S     = 60;
+const TS_EXEC_TIMEOUT_S      = 1;
+
+function ts_fetch_json(string $url, int $timeout = 5) {
+  $ch = curl_init($url);
+  curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_CONNECTTIMEOUT => $timeout,
+    CURLOPT_TIMEOUT        => $timeout,
+    CURLOPT_FOLLOWLOCATION => true,
+    CURLOPT_FAILONERROR    => true,
+  ]);
+  $out = curl_exec($ch);
+  curl_close($ch);
+  if (!$out) return null;
+  $data = json_decode($out, true);
+  return is_array($data) ? $data : null;
+}
+
+// Gather containers with the label "tailscale.hostname" or "tailscale.webui", since
+// these are what trigger a request for status upstream
+function ts_list_containers(): array {
+  $names = [];
+  foreach (['hostname', 'webui'] as $kind) {
+    $raw = shell_exec('docker ps --filter "label=net.unraid.docker.tailscale.' . $kind . '" --format "{{.Names}}" 2>/dev/null') ?? '';
+    foreach (preg_split('/\R/', $raw, -1, PREG_SPLIT_NO_EMPTY) as $name) {
+      $names[trim($name)] = true;
+    }
+  }
+  return array_keys($names);
+}
+
+function ts_container_status(string $name) {
+  $out = [];
+  $rc  = 0;
+  $cmd = sprintf(
+    'timeout %ds docker exec -i %s /bin/sh -c %s 2>/dev/null',
+    TS_EXEC_TIMEOUT_S,
+    escapeshellarg($name),
+    escapeshellarg('tailscale status --peers=false --json')
+  );
+  exec($cmd, $out, $rc);
+  if ($rc !== 0 || empty($out)) return null;
+  $data = json_decode(implode("\n", $out), true);
+  return is_array($data) ? $data : null;
+}
+
+function ts_load_state(): array {
+  $state = ['derp' => null, 'derp_ts' => 0, 'version' => null, 'version_ts' => 0, 'containers' => [], 'ts' => 0];
+  if (is_file(TS_CACHE_FILE)) {
+    $existing = @json_decode(@file_get_contents(TS_CACHE_FILE), true);
+    if (is_array($existing)) $state = array_replace($state, array_intersect_key($existing, $state));
+  }
+  return $state;
+}
+
+function ts_save_state(array $state): void {
+  $tmp = TS_CACHE_FILE . '.tmp';
+  if (@file_put_contents($tmp, json_encode($state, JSON_UNESCAPED_SLASHES)) !== false) {
+    @rename($tmp, TS_CACHE_FILE);
+  }
+}
+
+$state = ts_load_state();
+
+while (true) {
+  $now = time();
+
+  // Tailscale metadata
+  if ($now - ($state['derp_ts'] ?? 0) > TS_METADATA_REFRESH_S) {
+    $derp = ts_fetch_json(TS_DERP_URL);
+    if ($derp) { $state['derp'] = $derp; $state['derp_ts'] = $now; }
+  }
+  if ($now - ($state['version_ts'] ?? 0) > TS_METADATA_REFRESH_S) {
+    $version = ts_fetch_json(TS_VERSION_URL);
+    if ($version) { $state['version'] = $version; $state['version_ts'] = $now; }
+  }
+
+  // Per-container status
+  $containers = ts_list_containers();
+  $fresh = [];
+  foreach ($containers as $name) {
+    $status = ts_container_status($name);
+    if ($status !== null) {
+      $fresh[$name] = ['data' => $status, 'ts' => $now];
+    } elseif (isset($state['containers'][$name]) && ($now - $state['containers'][$name]['ts']) < 60) {
+      $fresh[$name] = $state['containers'][$name];
+    }
+  }
+  $state['containers'] = $fresh;
+  $state['ts']         = $now;
+
+  ts_save_state($state);
+
+  // Notify any watchers that the cache moved. We could push actual data here
+  // to get live tooltip updates, but that's overkill. A notification is all
+  // that we really want.
+  publish('tailscalestatus', json_encode(['ts' => $now]), 1, true);
+
+  sleep(empty($containers) ? TS_IDLE_INTERVAL_S : TS_POLL_INTERVAL_S);
+}
