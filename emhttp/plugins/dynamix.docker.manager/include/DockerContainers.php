@@ -51,54 +51,11 @@ $null = '0.0.0.0';
 $autostart = (array)@file($autostart_file,FILE_IGNORE_NEW_LINES);
 $names = array_map('var_split',$autostart);
 
-// Grab Tailscale json from container
 function tailscale_stats($name) {
-  exec("docker exec -i ".$name." /bin/sh -c \"tailscale status --json | jq '{Self: .Self, ExitNodeStatus: .ExitNodeStatus, Version: .Version}'\" 2>/dev/null", $TS_stats);
-  if (!empty($TS_stats)) {
-    $TS_stats = implode("\n", $TS_stats);
-    return json_decode($TS_stats, true);
-  }
-  return '';
+  return DockerUtil::tailscaleStatus($name) ?: '';
 }
-
-// Download Tailscal JSON and return Array, refresh file if older than 24 hours
-function tailscale_json_dl($file, $url) {
-  $dl_status = 0;
-  if (!is_dir('/tmp/tailscale')) {
-    mkdir('/tmp/tailscale', 0777, true);
-  }
-  if (!file_exists($file)) {
-    exec("wget -T 3 -q -O ".$file." ".$url, $output, $dl_status);
-  } else {
-    $fileage =  time() - filemtime($file);
-    if ($fileage > 86400) {
-      unlink($file);
-      exec("wget -T 3 -q -O ".$file." ".$url, $output, $dl_status);
-    }
-  }
-  if ($dl_status === 0) {
-    return json_decode(@file_get_contents($file), true);
-  } elseif ($dl_status === 0 && is_file($file)) {
-    return json_decode(@file_get_contents($file), true);
-  } else {
-    unlink($file);
-    return '';
-  }
-}
-
-// Grab Tailscale DERP map JSON
-$TS_derp_url = 'https://login.tailscale.com/derpmap/default';
-$TS_derp_file = '/tmp/tailscale/tailscale-derpmap.json';
-$TS_derp_list = tailscale_json_dl($TS_derp_file, $TS_derp_url);
-
-// Grab Tailscale version JSON
-$TS_version_url = 'https://pkgs.tailscale.com/stable/?mode=json';
-$TS_version_file = '/tmp/tailscale/tailscale-latest-version.json';
-// Extract tarbal version string
-$TS_latest_version = tailscale_json_dl($TS_version_file, $TS_version_url);
-if (!empty($TS_latest_version)) {
-  $TS_latest_version = $TS_latest_version["TarballsVersion"];
-}
+$TS_derp_list      = DockerUtil::tailscaleDerpMap() ?: '';
+$TS_latest_version = DockerUtil::tailscaleLatestVersion() ?: '';
 
 function my_lang_time($text) {
   [$number, $text] = my_explode(' ',$text,2);
@@ -163,7 +120,7 @@ foreach ($containers as $ct) {
     } elseif (!isset($ct['Ports']['vlan']) || strpos($ct['NetworkMode'],'container:')!==false) {
       foreach ($ct['Ports'] as $port) {
         if (_var($port,'PublicPort') && _var($port,'Driver') == 'bridge') {
-          if (_var($port, "HostIp") != "") $hostip = _var($port, "HostIp"); else $hostip = $host; 
+          if (_var($port, "HostIp") != "") $hostip = _var($port, "HostIp"); else $hostip = $host;
           $ports_external[] = sprintf('%s:%s', $hostip, strtoupper(_var($port,'PublicPort')));
         }
         if ((!isset($ct['Networks']['host'])) || (!isset($ct['Networks']['vlan']))) {
