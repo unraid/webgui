@@ -624,7 +624,12 @@ function quoted($name) {return is_array($name) ? implode(' ',array_map('escape',
 function source($name) {return is_array($name) ? implode(' ',array_map('escapeshellarg', $name)) : escapeshellarg($name);}
 
 function rsync_escape_component($s) {
-  // escape: *, ?, [, ], \
+  // escape rsync pattern special chars: *, ?, [, ], and also \
+  // note: \ must be escaped too - a literal filename like "foo\*bar.txt" needs 
+  //       pattern \\\* (escaped-\ + escaped-*), so rsync matches it as a literal 
+  //       backslash followed by a literal asterisk.
+  //       without escaping \, the pattern \* would be treated as an escaped wildcard (literal *)
+  //       but the original backslash would be silently consumed
   return preg_replace('/([*?\[\]\\\\])/', '\\\\$1', $s);
 }
 
