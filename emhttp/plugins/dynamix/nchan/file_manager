@@ -28,12 +28,9 @@ define('RSYNC_TOTAL_SIZE_SAMPLES', 5);     // Number of measurements to average 
 
 // Compress progress dot size: 1 dot = this many MB of source data (zip: --dot-size, tar: checkpoint interval)
 define('COMPRESS_DOT_SIZE_MB', 100);
-define('PROGRESS_SCRIPT', '/usr/local/emhttp/plugins/dynamix/scripts/progress');
 define('PV_ZIP_SCRIPT', '/usr/local/emhttp/plugins/dynamix/scripts/pvzip');
 define('FM_FNAME_FILE', '/var/tmp/file.manager.fname');
 define('FM_EXITCODE_FILE', '/var/tmp/file.manager.exitcode');
-define('TAR_RECORD_SIZE', 10240);
-define('TAR_CHECKPOINT', intval(COMPRESS_DOT_SIZE_MB * 1024 * 1024 / TAR_RECORD_SIZE));
 
 // Debug mode
 define('FM_DEBUG_MODE', file_exists('/var/tmp/file.manager.debug'));
@@ -184,169 +181,6 @@ function calculate_eta($transferred, $percent, $speed, $last_rsync_eta_seconds =
   }
 
   return "N/A";
-}
-
-/**
- * Parse compress progress output from structured log format (zip and tar formats).
- *
- * Reads structured log file (written by progress script) incrementally with format:
- * TOTAL bytes (total source size)
- * FILE timestamp bytes filename
- * CHUNK timestamp bytes (incremental bytes: dot/checkpoint for compress, stat-poll delta for extract)
- * INFO message (optional)
- *
- * @param string $status Path to structured log file
- * @param string $action_label Label to display for the action (e.g. "Compressing")
- * @param int $dot_size_mb Size of each progress dot in MB (e.g. 100 = same as zip --dot-size 100m)
- * @param bool $reset If true, resets static state variables
- * @return array Text array with progress information
- */
-function parse_compress_progress($status, $action_label, $dot_size_mb = 100, $reset = false) {
-  static $last_line_number = 0;
-  static $total_bytes = null;
-  static $processed_bytes = 0;
-  static $current_file_name = '';
-  static $current_file_size = 0;
-  static $progress_events = []; // Array of [timestamp, bytes_processed] for speed calculation
-  static $last_eta_seconds = null;
-  static $info_messages = [];
-
-  // Reset static variables when starting a new archive
-  if ($reset) {
-    $last_line_number = 0;
-    $total_bytes = null;
-    $processed_bytes = 0;
-    $current_file_name = '';
-    $current_file_size = 0;
-    $progress_events = [];
-    $last_eta_seconds = null;
-    $info_messages = [];
-    return [];
-  }
-
-  // Initialize text array with action label
-  $text[0] = $action_label . "... ";
-
-  // Read only new lines since last call (incremental)
-  $start_line = $last_line_number + 1;
-  $new_lines = [];
-  exec("tail -n +" . escapeshellarg($start_line) . " " . escapeshellarg($status) . " 2>/dev/null", $new_lines);
-  fm_debug_log('parse_compress_progress: read ' . count($new_lines) . ' new lines from line ' . $start_line);
-
-  if (empty($new_lines)) {
-    return [];
-  }
-
-  // Process new lines
-  // Example lines:
-  // TOTAL 7178980548
-  // FILE 1772990889 0 small_files_test/
-  // FILE 1772990889 52428800 small_files_test/file_1.bin
-  // CHUNK 1772990914 104857600
-  // FILE 1772990916 262144000 special_test/with spaces.bin
-  foreach ($new_lines as $line) {
-    $parts = explode(' ', $line, 4);
-    if (count($parts) < 2) continue;
-
-    $type = $parts[0];
-    switch ($type) {
-      case 'TOTAL':
-        // First line: total size of all source files
-        $total_bytes = floatval($parts[1]);
-        break;
-
-      case 'FILE':
-        // New file started: update current file metadata for display
-        $current_file_size = floatval($parts[2]);
-        $current_file_name = $parts[3] ?? '';
-        break;
-
-      case 'CHUNK':
-        // Incremental bytes processed (dot/checkpoint for compress, stat-poll delta for extract)
-        $timestamp = floatval($parts[1]);
-        $processed_bytes += floatval($parts[2]);
-        $progress_events[] = [$timestamp, $processed_bytes];
-        if (count($progress_events) > 20) array_shift($progress_events);
-        break;
-
-      case 'INFO':
-        // Collect info messages (keep last 3)
-        $info_messages[] = $parts[1];
-        if (count($info_messages) > 3) {
-          array_shift($info_messages);
-        }
-        break;
-    }
-  }
-
-  $last_line_number += count($new_lines);
-
-  // Display current filename
-  if ($current_file_name) {
-    $text[0] .= mb_strimhalf($current_file_name, 70, '...');
-  }
-
-  // Add info messages if any
-  if (!empty($info_messages)) {
-    foreach ($info_messages as $msg) {
-      $text[0] .= "\n" . mb_strimhalf($msg, 70, '...');
-    }
-  }
-
-  fm_debug_log('parse_compress_progress: total_bytes=' . $total_bytes . ', processed_bytes=' . $processed_bytes);
-
-  // Calculate speed from progress events (used regardless of whether TOTAL is known)
-  $speed_bytes = 0;
-  if (count($progress_events) >= 2) {
-    $first_event = $progress_events[0];
-    $last_event = $progress_events[count($progress_events) - 1];
-    $time_span = $last_event[0] - $first_event[0];
-    $bytes_span = $last_event[1] - $first_event[1];
-    if ($time_span > 0 && $bytes_span > 0) {
-      $speed_bytes = $bytes_span / $time_span;
-    }
-  }
-
-  $speed = $speed_bytes > 0 ? bytes_to_size($speed_bytes) . '/s' : '';
-
-  if ($total_bytes && $total_bytes > 0) {
-    $current_progress_bytes = $processed_bytes;
-    $percent = min(100, intval(($current_progress_bytes / $total_bytes) * 100));
-
-    $eta = 'N/A';
-    if ($speed_bytes > 0) {
-      $remaining_bytes = $total_bytes - $current_progress_bytes;
-      $eta_seconds = $remaining_bytes / $speed_bytes;
-
-      // Apply hysteresis to prevent ETA from jumping
-      if ($last_eta_seconds !== null) {
-        $eta_seconds = ($last_eta_seconds * 0.7) + ($eta_seconds * 0.3);
-      }
-      $last_eta_seconds = max(0.0, $eta_seconds);
-
-      $eta = seconds_to_time(max(0, intval($eta_seconds)));
-    }
-
-    $progress_parts = [];
-    $progress_parts[] = _('Completed') . ": " . $percent . '%';
-    $progress_parts[] = _('Total') . ": " . bytes_to_size($total_bytes);
-    if ($speed) {
-      $progress_parts[] = _('Speed') . ": " . $speed;
-    }
-    $progress_parts[] = _('ETA') . ": " . $eta;
-    $text[1] = implode(",  ", $progress_parts);
-
-  } elseif ($processed_bytes > 0) {
-    // TOTAL not yet known: show transferred + speed without % or ETA
-    $progress_parts = [];
-    $progress_parts[] = bytes_to_size($processed_bytes) . ' ' . _('transferred');
-    if ($speed) {
-      $progress_parts[] = _('Speed') . ": " . $speed;
-    }
-    $text[1] = implode(",  ", $progress_parts);
-  }
-
-  return $text;
 }
 
 /**
@@ -1056,7 +890,6 @@ while (true) {
           if (file_exists($active)) copy($active, '/tmp/active-debug-compress.txt');
           fm_debug_log('Case 16 start: archive_name=' . ($archive_name ?? 'NULL') . ', compress_archive_name=' . ($compress_archive_name ?? 'NULL') . ', format=' . ($format ?? 'NULL') . ', target=' . ($target ?? 'NULL'));
         }
-        parse_compress_progress(null, null, COMPRESS_DOT_SIZE_MB, true); // Reset static variables
         parse_pv_progress(null, 0, null, null, true);
         $dot_mb = COMPRESS_DOT_SIZE_MB;
         $format = $format ?? 'zip';
@@ -1374,7 +1207,6 @@ while (true) {
         }
 
         // Reset progress parser state for new extract operation (shares static vars with compress)
-        parse_compress_progress(null, null, COMPRESS_DOT_SIZE_MB, true);
         parse_pv_progress(null, 0, null, null, true);
 
         // Set shell command for zip
