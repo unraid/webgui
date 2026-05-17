@@ -297,14 +297,13 @@ run_action() {
 # numeric keywords use word-boundary matching to avoid partial matches (e.g. 1 != 16)
 should_run() {
   [[ ${#script_args[@]} -le 1 ]] && return 0
-  local filter="${script_args[*]:1}"
+  # normalize filter: replace any non-keyword chars (not alphanumeric, dot, dash) with spaces
+  # allows both space- and comma-separated filters e.g. "arc,search,mv" or "arc search mv"
+  local filter
+  filter=$(printf '%s ' "${script_args[@]:1}" | tr -cs '[:alnum:].-' ' ')
   local keyword
   for keyword in "$@"; do
-    if [[ $keyword =~ ^[0-9]+$ ]]; then
-      [[ $filter =~ (^|[[:space:]])$keyword([[:space:]]|$) ]] && return 0
-    else
-      [[ $filter == *"$keyword"* ]] && return 0
-    fi
+    [[ $filter =~ (^|[[:space:]])$keyword([[:space:]]|$) ]] && return 0
   done
   return 1
 }
