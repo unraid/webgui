@@ -982,7 +982,12 @@ test_move() {
   pre=$(find_metadata "$source")
 
   # force rsync copy-delete path if requested (requires FM_DEBUG_MODE active)
-  [[ $force_copy_delete ]] && touch "$force_file"
+  # FM_DEBUG_FORCE_COPY_DELETE is a PHP define() evaluated at process start, so file_manager
+  # must be restarted after creating the force file to pick up the new value
+  if [[ $force_copy_delete ]]; then
+    touch "$force_file"
+    stop_file_manager
+  fi
 
   run_action "$action" "$source" "$dest_dir" 0; rc=$?
 
@@ -1232,10 +1237,10 @@ test_move_file   "special name rsync-rename" "$src_path/$special_chars_name-move
 test_move_file   "special name copy-delete"  "$src_path/$special_chars_name-move-cd.txt" "$dst_path" 1
 test_move_folder "special name rsync-rename" "$src_path" "$dst_path"
 [[ ! -d "$src_path" && -d "$dst_path/src" ]] && mv "$dst_path/src" "$test_path/" 2>/dev/null
-create_source_files >/dev/null
+create_source_files >/dev/null # repair source if broken
 test_move_folder "special name copy-delete"  "$src_path" "$dst_path" 1
 [[ ! -d "$src_path" && -d "$dst_path/src" ]] && mv "$dst_path/src" "$test_path/" 2>/dev/null
-create_source_files >/dev/null
+create_source_files >/dev/null # repair source if broken
 
 # ===========================
 # summary
