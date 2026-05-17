@@ -47,8 +47,8 @@ if [[ ! $ssh_host || $ssh_host == "-h" || $ssh_host == "--help" ]]; then
   echo "Filters (any combination, space-separated):"
   echo "  compress, extract,    compress and extract tests (actions 16, 17)"
   echo "  arc, cmp, 16, 17"    
-  echo "  move, mv, rename,     rename and move tests (actions 2, 4, 7, 9)"
-  echo "  2, 4, 7, 9"
+  echo "  rename, rn, 2, 7       rename tests (actions 2, 7)"
+  echo "  move, mv, 4, 9         move tests (actions 4, 9)"
   echo "  copy, cp, 3, 8        copy tests (actions 3, 8)"
   echo "  chmod, 12             chmod tests (action 12)"
   echo "  chown, 11             chown tests (action 11)"
@@ -636,7 +636,7 @@ test_rename() {
   local label=$1 path=$2 new_name=$3 action=$4
   local rc new_path pre
 
-  should_run move rename mv 2 7 || return 0
+  should_run rename rn 2 7 || return 0
 
   if [[ $action != 2 && $action != 7 ]]; then
     echo "Error: test_rename: invalid action $action (must be 2 or 7)" 1>&2
@@ -948,7 +948,7 @@ test_move() {
   local rc dest_item pre
   local force_file=/var/tmp/file.manager.force-copy-delete.debug
 
-  should_run move rename mv 4 9 || return 0
+  should_run move mv 4 9 || return 0
 
   if [[ $action != 4 && $action != 9 ]]; then
     echo "Error: test_move: invalid action $action (must be 4 or 9)" 1>&2
