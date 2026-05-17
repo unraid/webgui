@@ -90,13 +90,17 @@ on_exit() {
   local rc=$?
   echo -e "\n=== exit ==="
   stop_file_manager
-  #clean_up_created_files
+  if [[ $rc -eq 0 ]]; then
+    clean_up_created_files
+  else
+    echo "  skipping cleanup (tests failed - files left for inspection in $dst_path)"
+  fi
   exit $rc
 }
 on_signal() {
   echo -e "\n=== signal ==="
   stop_file_manager
-  #clean_up_created_files
+  echo "  skipping cleanup (interrupted - files left for inspection in $dst_path)"
   exit 1
 }
 trap on_exit EXIT
