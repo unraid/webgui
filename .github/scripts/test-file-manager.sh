@@ -861,11 +861,14 @@ test_search() {
     check "search $label: result count must be $expected_count (got $actual_count)" "$rc"
 
     # check all paths are under search_dir (split filenames appear without directory prefix)
-    local bad_paths
-    bad_paths=$(echo "$done_line" | jq -r '.status.results[].path // empty' | grep -vF "$search_dir/")
-    rc=1 && [[ ! $bad_paths ]] && rc=0
+    # use jq for the check to avoid false failures on paths that legitimately contain newlines
+    local all_valid
+    all_valid=$(echo "$done_line" | jq --arg dir "$search_dir/" '[.status.results[].path | startswith($dir)] | all')
+    rc=1 && [[ $all_valid == "true" ]] && rc=0
     check "search $label: all result paths must be under $search_dir" "$rc"
-    [[ $bad_paths ]] && printf '    %s\n' "$bad_paths"
+    if [[ $rc -ne 0 ]]; then
+      echo "$done_line" | jq -r --arg dir "$search_dir/" '.status.results[] | select(.path | startswith($dir) | not) | .path | @json'
+    fi
   fi
 }
 
