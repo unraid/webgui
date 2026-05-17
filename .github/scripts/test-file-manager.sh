@@ -35,7 +35,7 @@ ssh_host=$1
 test_path=/mnt/disk1/fm_test
 src_path="$test_path/src"
 dst_path="$test_path/dst"
-special_chars_name=$'utf8_файл\nspecial&chars\$file'
+special_chars_name=$'utf8_файл\nspecial&chars\*file\$'
 job_timeout=${JOB_TIMEOUT:-200}
 script_args=("$@")
 

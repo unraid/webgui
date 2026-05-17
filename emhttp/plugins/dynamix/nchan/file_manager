@@ -907,6 +907,8 @@ while (true) {
           // - missing directories are created in --backup-dir (like using --mkpath)
           // - rsync prefixes the moved files with "deleting " in the output, which we strip with sed, to not confuse the user
           // - rsync --backup deletes empty directories instead of moving them to --backup-dir (https://github.com/RsyncProject/rsync/issues/842), so we copy empty directories first
+          // - we can not use "mv" here as it cannot move files/dirs into a target directory that already
+          //   contains files with the same name
           if (FM_DEBUG_FORCE_COPY_DELETE) $use_rsync_rename = false;
           exec('logger -t file_manager ' . escapeshellarg('move/start: use_rsync_rename=' . ($use_rsync_rename ? 'true' : 'false')));
           if ($use_rsync_rename) {
@@ -925,14 +927,23 @@ while (true) {
               }
             }
             $source_relative_joined = implode(' ', $source_relative);
-            
-            // Execute both rsync commands in a single bash block so they share the same PID and output stream
-            // First: copy only empty directories to target, then: move everything with rsync rename trick
+
+            // Execute all steps in a single bash block so they share the same PID and output stream:
+            // (0) record dir mtimes, (1) copy empty dirs, (2) rsync rename trick, (3) restore dir mtimes
+            // note: rsync --backup-dir creates directories with mkdir (new mtime) instead of preserving the original,
+            //       so we record dir mtimes before the move and restore them afterwards
             $cmd = <<<BASH
             {
-              cd $parent_dir_escaped && 
+              cd $parent_dir_escaped &&
+              declare -A _dm &&
+              while IFS= read -r -d $'\\0' _ts && IFS= read -r -d $'\\0' _p; do
+                _dm["\$_p"]="\$_ts"
+              done < <(find $source_relative_joined -type d -printf '%T@\\0%p\\0') &&
               find $source_relative_joined -type d -empty -print0 | rsync -aX --files-from=- --from0 --out-format=%f --info=flist0,misc0,stats0,name1,progress2 -d . $target_escaped &&
-              rsync -r --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --delete --backup --backup-dir=$target_escaped $rsync_includes --exclude='*' $empty_dir_escaped $parent_dir_escaped
+              rsync -r --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --delete --backup --backup-dir=$target_escaped $rsync_includes --exclude='*' $empty_dir_escaped $parent_dir_escaped &&
+              for _p in "\${!_dm[@]}"; do
+                touch -d "@\${_dm[\$_p]}" -- $target_escaped/"\${_p#./}" 2>/dev/null
+              done
             } > >(stdbuf -o0 tr '\\r' '\\n' | sed 's/^deleting //' >$status) 2>$error & echo \$!
             BASH;
 
