@@ -592,7 +592,8 @@ function cat($file) {
   global $null;
   $results = [];
   $set = [];
-  $rows = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+  // use null-separated read to handle filenames with newlines
+  $rows = array_filter(explode("\0", file_get_contents($file) ?: ''), fn($s) => $s !== '');
   if (count($rows) > 0) {
     natcasesort($rows);
     $user = array_filter($rows, function($path){return preg_match('/^\/mnt\/user0?\//', $path);});
@@ -1014,7 +1015,8 @@ while (true) {
 
       // return status of running action
       if (!empty($pid)) {
-        $count = exec("wc -l $status | grep -Pom1 '^[0-9]+'");
+        // count null terminators to handle filenames with newlines correctly
+        $count = substr_count(file_get_contents($status) ?: '', "\0");
         $reply['status'] = [
           'action' => $action,
           'text' => [_('Searching').'... '.$count]
@@ -1022,7 +1024,8 @@ while (true) {
 
       // start action
       } else {
-        exec("find ".source($source)." -iname ".escapeshellarg($target)." 1>$status 2>$null & echo \$!", $pid);
+        // use -print0 so filenames with newlines are not split across lines
+        exec("find ".source($source)." -iname ".escapeshellarg($target)." -print0 1>$status 2>$null & echo \$!", $pid);
       }
       break;
     case 16: // compress
