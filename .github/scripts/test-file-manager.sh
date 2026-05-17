@@ -213,12 +213,12 @@ run_action() {
   # write JSON to job file to trigger file_manager action
   echo "$json" >"$fm_job_json_file"
 
-  # follow nchan output in foreground; break on "done":1 closes stdin -> tail exits via SIGPIPE
+  # follow nchan output in foreground; break on "done":1 or "done":2 closes stdin -> tail exits via SIGPIPE
   # timeout acts as safety net in case file_manager hangs
   local start=$SECONDS
   timeout "$job_timeout" tail -n +1 -f "$fm_debug_nchan_file" | while IFS= read -r line; do
     echo "  nchan: $line"
-    [[ $line == *'"done":1'* ]] && break
+    [[ $line == *'"done":1'* || $line == *'"done":2'* ]] && break
   done
   local rc=${PIPESTATUS[0]}
 
@@ -337,28 +337,28 @@ test_compress() {
   done <"$fm_debug_nchan_file"
   cond=1; [[ $empty_text_count -le 1 ]] && cond=0
   check "nchan compress $format: empty status must appear at most once ($empty_text_count)" $cond
-  check "compress $format: action run must succeed" $rc
+  check "compress $format: action run must succeed" "$rc"
 
   rc=1 && [[ -f $output_file ]] && rc=0
-  check "compress $format: archive creation must succeed" $rc
+  check "compress $format: archive creation must succeed" "$rc"
 
   # verify no .tmp files are left in the destination directory (cleanup logic should remove them)
   rc=0
   for f in "$output_file"*.tmp; do
     [[ -e $f ]] && { rc=1; break; }
   done
-  check "compress $format: .tmp cleanup must succeed" $rc
+  check "compress $format: .tmp cleanup must succeed" "$rc"
 
   sz=$(stat -c%s "$output_file" 2>/dev/null || echo 0)
   rc=1 && [[ $sz -gt 0 ]] && rc=0
-  check "compress $format: archive size (${sz}B) must be greater than 0" $rc
+  check "compress $format: archive size (${sz}B) must be greater than 0" "$rc"
 
   # overwrite sub-test: existing archive must be refused when overwrite=0
   [[ ! $overwrite_test ]] && return 0
   ! run_action 16 "$input_file" "$target" 0 "$format" "$archive_name" && rc=0 || rc=1
-  check "compress $format overwrite=0: action run must fail" $rc
+  check "compress $format overwrite=0: action run must fail" "$rc"
   rc=1 && [[ $(stat -c%s "$output_file" 2>/dev/null || echo 0) -eq $sz ]] && rc=0
-  check "compress $format overwrite=0: archive must be unchanged" $rc
+  check "compress $format overwrite=0: archive must be unchanged" "$rc"
 }
 
 # test extract action and overwrite behavior
@@ -427,19 +427,22 @@ test_extract() {
     fi
   done <"$fm_debug_nchan_file"
   check "nchan extract $format: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
-  check "extract $format: action run must succeed" $rc
+  check "extract $format: action run must succeed" "$rc"
 
   local extracted_file_count extracted_file
   extracted_file_count=$(find "$dest" -type f -printf '.' | wc -c)
   if [[ $extracted_file_count -eq 1 ]]; then
     extracted_file=$(find "$dest" -type f)
-    rc=1 && diff "$source_dir/$(basename -- "$extracted_file")" "$extracted_file" && rc=0
+    diff <(find_metadata "$source_dir/$(basename -- "$extracted_file")") <(find_metadata "$extracted_file") | head -20 | sed 's/^/  /'
+    rc=${PIPESTATUS[0]}
   else
-    # --no-dereference to avoid following symlinks (source contains broken symlink)
     extracted_subdir=$(find "$dest" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' -quit)
-    rc=1 && diff --no-dereference -r "$source_dir" "$dest/$extracted_subdir" && rc=0
+    local meta_fmt='%y %#m %T@ %s %n %P\t%l\n'
+    [[ $format == zip ]] && meta_fmt='%y %#m %T@ %s %P\t%l\n'
+    diff <(find_metadata "$source_dir" "$meta_fmt") <(find_metadata "$dest/$extracted_subdir" "$meta_fmt") | head -20 | sed 's/^/  /'
+    rc=${PIPESTATUS[0]}
   fi
-  check "extract $format: archive diff must succeed" $rc
+  check "extract $format: metadata must match" "$rc"
 
   # overwrite sub-test: reuse already-extracted destination as baseline
   [[ ! $overwrite_test ]] && return 0
@@ -450,21 +453,21 @@ test_extract() {
   # single file extractions fail with overwrite=0, except of zip
   if [[ $extracted_file_count -eq 1 && $format != "zip" ]]; then
     ! run_action 17 "$archive" "$dest" 0 && rc=0 || rc=1
-    check "extract $format overwrite=0: action must fail" $rc
+    check "extract $format overwrite=0: action must fail" "$rc"
   # multi-file extractions succeed with overwrite=0 (existing files are skipped silently)
   else
     run_action 17 "$archive" "$dest" 0 && rc=0 || rc=1
-    check "extract $format overwrite=0: action must succeed" $rc
+    check "extract $format overwrite=0: action must succeed" "$rc"
   fi
 
   # existing file must be unchanged in any case
   rc=1 && [[ $(cat "$dst_file") == "MODIFIED" ]] && rc=0
-  check "extract $format overwrite=0: file must be unchanged" $rc
+  check "extract $format overwrite=0: file must be unchanged" "$rc"
 
   run_action 17 "$archive" "$dest" 1; rc=$?
-  check "extract $format overwrite=1: action run must succeed" $rc
+  check "extract $format overwrite=1: action run must succeed" "$rc"
   rc=1 && [[ $(cat "$dst_file") != "MODIFIED" ]] && rc=0
-  check "extract $format overwrite=1: file must be overwritten" $rc
+  check "extract $format overwrite=1: file must be overwritten" "$rc"
 }
 
 # test create folder action (action 0)
@@ -507,10 +510,10 @@ test_create_folder() {
     fi
   done <"$fm_debug_nchan_file"
   check "nchan create folder $label: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
-  check "create folder $label: action run must succeed" $rc
+  check "create folder $label: action run must succeed" "$rc"
 
   rc=1 && [[ -d "$parent/$name" ]] && rc=0
-  check "create folder $label: folder must exist" $rc
+  check "create folder $label: folder must exist" "$rc"
 }
 
 # test delete action - internal implementation
@@ -554,10 +557,10 @@ test_delete() {
     fi
   done <"$fm_debug_nchan_file"
   check "nchan delete $label: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
-  check "delete $label: action run must succeed" $rc
+  check "delete $label: action run must succeed" "$rc"
 
   rc=1 && [[ ! -e "$path" ]] && rc=0
-  check "delete $label: path must no longer exist" $rc
+  check "delete $label: path must no longer exist" "$rc"
 }
 
 # wrappers with fixed action IDs
@@ -568,7 +571,7 @@ test_delete_folder() { test_delete "$1" "$2" 1; }
 # args: label path new_name action (2=rename folder, 7=rename file)
 test_rename() {
   local label=$1 path=$2 new_name=$3 action=$4
-  local rc new_path
+  local rc new_path pre
 
   should_run mv || return 0
 
@@ -594,6 +597,9 @@ test_rename() {
     echo "  removed leftover $new_path"
   fi
 
+  # fingerprint before rename to verify integrity at destination (source won't exist after)
+  pre=$(find_metadata "$path")
+
   run_action "$action" "$path" "$new_name" 0; rc=$?
 
   # check nchan output: text[0] must be "Renaming..." or "Done"
@@ -618,13 +624,17 @@ test_rename() {
     fi
   done <"$fm_debug_nchan_file"
   check "nchan rename $label: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
-  check "rename $label: action run must succeed" $rc
+  check "rename $label: action run must succeed" "$rc"
 
   rc=1 && [[ ! -e "$path" ]] && rc=0
-  check "rename $label: source path must no longer exist" $rc
+  check "rename $label: source path must no longer exist" "$rc"
 
   rc=1 && [[ -e "$new_path" ]] && rc=0
-  check "rename $label: target path must exist" $rc
+  check "rename $label: target path must exist" "$rc"
+
+  diff <(echo "$pre") <(find_metadata "$new_path") | head -20 | sed 's/^/  /'
+  rc=${PIPESTATUS[0]}
+  check "rename $label: fingerprint must match" "$rc"
 }
 
 # wrappers with fixed action IDs
@@ -671,27 +681,20 @@ test_chmod() {
     fi
   done <"$fm_debug_nchan_file"
   check "nchan chmod $label: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
-  check "chmod $label: action run must succeed" $rc
+  check "chmod $label: action run must succeed" "$rc"
 
   local actual_mode
   actual_mode=$(stat -c '%a' "$path")
   rc=1 && [[ $actual_mode == "${mode#0}" || $actual_mode == "$mode" ]] && rc=0
-  check "chmod $label: mode must be $mode (got $actual_mode)" $rc
+  check "chmod $label: mode must be $mode (got $actual_mode)" "$rc"
 }
 
-# compute a fingerprint of a file or directory for integrity checks
-# for dirs: relative paths, type, perms, size, symlink target - sorted for deterministic output
-# optional second arg: pass 1 to include link count (%n) for hardlink verification
-dir_fingerprint() {
-  local fmt='%y %#m %T@ %s %P\t%l\n'
-  [[ ${2:-} ]] && fmt='%y %#m %T@ %s %n %P\t%l\n'
-  find "$1" -printf "$fmt" | sort | md5sum | cut -d' ' -f1
-}
-
-# returns 0 if both paths have identical fingerprints, 1 otherwise
-# args: path1 path2 [hardlinks]
-fingerprint_match() {
-  [[ "$(dir_fingerprint "$1" "${3:-}")" == "$(dir_fingerprint "$2" "${3:-}" 2>/dev/null)" ]]
+# outputs sorted find metadata for a file or directory - used for diff-based integrity checks
+# fields: type, perms, mtime, size, [link count,] relative path, symlink target
+# pass custom fmt as second arg to override fields (e.g. omit %n when hardlinks are not preserved by zip)
+find_metadata() {
+  local fmt=${2:-%y %#m %T@ %s %n %P\t%l\n}
+  find "$1" -printf "$fmt" | sort
 }
 
 # test copy action (3=copy folder, 8=copy file)
@@ -742,16 +745,17 @@ test_copy() {
     fi
   done <"$fm_debug_nchan_file"
   check "nchan copy $label: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
-  check "copy $label: action run must succeed" $rc
+  check "copy $label: action run must succeed" "$rc"
 
   rc=1 && [[ -e "$source" ]] && rc=0
-  check "copy $label: source must still exist" $rc
+  check "copy $label: source must still exist" "$rc"
 
   rc=1 && [[ -e "$dest_item" ]] && rc=0
-  check "copy $label: destination must exist" $rc
+  check "copy $label: destination must exist" "$rc"
 
-  fingerprint_match "$source" "$dest_item" && rc=0 || rc=1
-  check "copy $label: fingerprint must match" $rc
+  diff <(find_metadata "$source") <(find_metadata "$dest_item") | head -20 | sed 's/^/  /'
+  rc=${PIPESTATUS[0]}
+  check "copy $label: fingerprint must match" "$rc"
 }
 
 test_copy_file()   { test_copy "$1" "$2" "$3" 8; }
@@ -762,7 +766,7 @@ test_copy_folder() { test_copy "$1" "$2" "$3" 3; }
 test_move() {
   local label=$1 source=$2 dest_dir=$3 action=$4
   local force_copy_delete=${5:-}
-  local rc dest_item pre_fp
+  local rc dest_item pre
   local force_file=/var/tmp/file.manager.force-copy-delete.debug
 
   should_run mv || return 0
@@ -796,11 +800,7 @@ test_move() {
   [[ ! -d "$dest_dir" ]] && mkdir -p "$dest_dir"
 
   # fingerprint source before move to verify integrity at destination
-  # include link count (%n) for all folder moves to detect hardlink preservation failures
-  local fmt='%y %#m %T@ %s %P\t%l\n'
-  [[ $action -eq 4 ]] && fmt='%y %#m %T@ %s %n %P\t%l\n'
-  find "$source" -printf "$fmt" | sort > /tmp/fm-find-pre.txt
-  pre_fp=$(md5sum < /tmp/fm-find-pre.txt | cut -d' ' -f1)
+  pre=$(find_metadata "$source")
 
   # force rsync copy-delete path if requested (requires FM_DEBUG_MODE active)
   [[ $force_copy_delete ]] && touch "$force_file"
@@ -831,31 +831,19 @@ test_move() {
     fi
   done <"$fm_debug_nchan_file"
   check "nchan move $path_label: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
-  check "move $path_label: action run must succeed" $rc
+  check "move $path_label: action run must succeed" "$rc"
 
   rc=1 && [[ ! -e "$source" ]] && rc=0
-  [[ $rc -ne 0 ]] && echo "  [DBG] source still exists: $(ls -b -- "$source" 2>&1)"
-  check "move $path_label: source must no longer exist" $rc
+  [[ $rc -ne 0 ]] && echo "  source still exists: $(ls -b -- "$source" 2>&1)"
+  check "move $path_label: source must no longer exist" "$rc"
 
   rc=1 && [[ -e "$dest_item" ]] && rc=0
-  [[ $rc -ne 0 ]] && echo "  [DBG] dest missing: $dest_item ; dest_dir contents: $(ls -la -- "$dest_dir" 2>&1)"
-  check "move $path_label: destination must exist" $rc
+  [[ $rc -ne 0 ]] && echo "  dest missing: $dest_item ; dest_dir contents: $(ls -la -- "$dest_dir" 2>&1)"
+  check "move $path_label: destination must exist" "$rc"
 
-  local post_fp
-  if [[ -e "$dest_item" ]]; then
-    find "$dest_item" -printf "$fmt" | sort > /tmp/fm-find-post.txt
-  else
-    : > /tmp/fm-find-post.txt
-  fi
-  post_fp=$(md5sum < /tmp/fm-find-post.txt | cut -d' ' -f1)
-  if [[ $pre_fp != "$post_fp" ]]; then
-    echo "  [DBG] fingerprint diff (pre vs post):"
-    diff /tmp/fm-find-pre.txt /tmp/fm-find-post.txt | head -40 | sed 's/^/    /'
-    rc=1
-  else
-    rc=0
-  fi
-  check "move $path_label: fingerprint must match after move" $rc
+  diff <(echo "$pre") <(find_metadata "$dest_item") | head -20 | sed 's/^/  /'
+  rc=${PIPESTATUS[0]}
+  check "move $path_label: fingerprint must match after move" "$rc"
 
   # clean up debug cmd file if present
   rm -f /var/tmp/fm_debug_cmd.txt
