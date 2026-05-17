@@ -1588,7 +1588,7 @@ while (true) {
                   if (!$name) continue;
                   $dir_real = realpath(dirname($base . '/' . $name));
                   if ($dir_real === false || !str_starts_with($dir_real . '/', $base . '/')) continue;
-                  exec('touch -h -d @' . (int)$zstat['mtime'] . ' ' . escapeshellarg($dir_real . '/' . basename($name)));
+                  exec('touch -h -m -d @' . (int)$zstat['mtime'] . ' ' . escapeshellarg($dir_real . '/' . basename($name)));
                 }
               }
               $za->close();
