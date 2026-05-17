@@ -796,11 +796,9 @@ test_move() {
   [[ ! -d "$dest_dir" ]] && mkdir -p "$dest_dir"
 
   # fingerprint source before move to verify integrity at destination
-  # include link count (%n) only for rsync-rename folder moves (inodes preserved)
-  local hl_check=
-  [[ $action -eq 4 && ! $force_copy_delete ]] && hl_check=1
+  # include link count (%n) for all folder moves to detect hardlink preservation failures
   local fmt='%y %#m %T@ %s %P\t%l\n'
-  [[ $hl_check ]] && fmt='%y %#m %T@ %s %n %P\t%l\n'
+  [[ $action -eq 4 ]] && fmt='%y %#m %T@ %s %n %P\t%l\n'
   find "$source" -printf "$fmt" | sort > /tmp/fm-find-pre.txt
   pre_fp=$(md5sum < /tmp/fm-find-pre.txt | cut -d' ' -f1)
 
@@ -835,11 +833,6 @@ test_move() {
   check "nchan move $path_label: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
   check "move $path_label: action run must succeed" $rc
 
-  local rsync_status rsync_err
-  rsync_status=$(cat "$fm_stdout_file" 2>/dev/null); [[ ! $rsync_status ]] && rsync_status=$(cat "$fm_stdout_file.debug" 2>/dev/null)
-  rsync_err=$(cat "$fm_error_file" 2>/dev/null);    [[ ! $rsync_err ]]    && rsync_err=$(cat "$fm_error_file.debug" 2>/dev/null)
-  echo "  [DBG] rsync status: ${rsync_status:-<empty>}"
-  echo "  [DBG] rsync error:  ${rsync_err:-<empty>}"
   rc=1 && [[ ! -e "$source" ]] && rc=0
   [[ $rc -ne 0 ]] && echo "  [DBG] source still exists: $(ls -b -- "$source" 2>&1)"
   check "move $path_label: source must no longer exist" $rc
@@ -864,16 +857,8 @@ test_move() {
   fi
   check "move $path_label: fingerprint must match after move" $rc
 
-  # show generated rsync command (written by PHP debug hook)
-  local fm_debug_cmd=/var/tmp/fm_debug_cmd.txt
-  if [[ -f $fm_debug_cmd ]]; then
-    echo "  [DBG] fm cmd (cat -v):"
-    cat -v "$fm_debug_cmd" | sed 's/^/    /'
-    rm -f "$fm_debug_cmd"
-  fi
-  echo "  [DBG] syslog (move/start|move/cmd):"
-  grep -E "file_manager.*(move/start|move/cmd)" /var/log/syslog 2>/dev/null | sed 's/^/    /' || \
-    grep -E "file_manager.*(move/start|move/cmd)" /var/log/messages 2>/dev/null | sed 's/^/    /'
+  # clean up debug cmd file if present
+  rm -f /var/tmp/fm_debug_cmd.txt
 }
 
 test_move_file()   { test_move "$1" "$2" "$3" 9 "${4:-}"; }
