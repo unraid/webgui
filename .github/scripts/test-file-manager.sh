@@ -51,6 +51,8 @@ if [[ ! $ssh_host || $ssh_host == "-h" || $ssh_host == "--help" ]]; then
   echo "  2, 4, 7, 9"
   echo "  copy, cp, 3, 8        copy tests (actions 3, 8)"
   echo "  chmod, 12             chmod tests (action 12)"
+  echo "  chown, 11             chown tests (action 11)"
+  echo "  search, find, 15      search tests (action 15)"
   echo "  create, mk, 0         create folder tests (action 0)"
   echo "  delete, del, 1, 6     delete tests (actions 1, 6)"
   echo ""
@@ -757,6 +759,104 @@ find_metadata() {
   find "$1" "${@:3}" -printf "$fmt" | sort
 }
 
+# test chown action (action 11)
+# args: label path owner
+test_chown() {
+  local label=$1 path=$2 owner=$3
+  local rc
+
+  should_run chown 11 || return 0
+
+  echo -e "\n=== chown $label ==="
+
+  if [[ ! -e "$path" ]]; then
+    echo "Error: path to chown does not exist: $path" 1>&2
+    fail=$((fail + 1))
+    return 1
+  fi
+
+  run_action 11 "$path" "$owner" 0; rc=$?
+
+  local empty_text_count=0 text0 text_len
+  while IFS= read -r line; do
+    [[ $line ]] || continue
+    check_nchan_line "$line" || continue
+    text0=$(echo "$line" | jq -r '.status.text[0] // empty')
+    if [[ ! $text0 ]]; then
+      text_len=$(echo "$line" | jq -r '.status.text | length')
+      if [[ $text_len -gt 0 ]]; then
+        echo "  [FAIL] nchan chown $label: non-empty text array but text[0] missing"
+        fail=$((fail + 1))
+      else
+        empty_text_count=$((empty_text_count + 1))
+      fi
+      continue
+    fi
+    if [[ $text0 != "Updating"* && $text0 != "Done" ]]; then
+      echo "  [FAIL] nchan chown $label: unexpected text[0]: '$text0'"
+      fail=$((fail + 1))
+    fi
+  done <"$fm_debug_nchan_file"
+  check "nchan chown $label: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
+  check "chown $label: action run must succeed" "$rc"
+
+  local actual_owner
+  actual_owner=$(stat -c '%U:%G' "$path")
+  rc=1 && [[ $actual_owner == "$owner" ]] && rc=0
+  check "chown $label: owner must be $owner (got $actual_owner)" "$rc"
+}
+
+# test search action (action 15)
+# args: label search_dir pattern expected_match
+test_search() {
+  local label=$1 search_dir=$2 pattern=$3 expected_match=${4:-}
+  local rc
+
+  should_run search find 15 || return 0
+
+  echo -e "\n=== search $label ==="
+
+  if [[ ! -d "$search_dir" ]]; then
+    echo "Error: search dir does not exist: $search_dir" 1>&2
+    fail=$((fail + 1))
+    return 1
+  fi
+
+  run_action 15 "$search_dir" "$pattern" 0; rc=$?
+
+  local empty_text_count=0 text0 results_found=0 expected_match_found=0
+  while IFS= read -r line; do
+    [[ $line ]] || continue
+    check_nchan_line "$line" || continue
+    # during search: text[0] = "Searching... N"
+    text0=$(echo "$line" | jq -r '.status.text[0] // empty')
+    if [[ $text0 ]]; then
+      if [[ $text0 != "Searching"* ]]; then
+        echo "  [FAIL] nchan search $label: unexpected text[0]: '$text0'"
+        fail=$((fail + 1))
+      fi
+      continue
+    fi
+    # on done: status has results field (array of {location, path} objects)
+    if echo "$line" | jq -e '.status.results != null' >/dev/null 2>&1; then
+      results_found=1
+      if [[ $expected_match ]]; then
+        if echo "$line" | jq -r '.status.results[]?.path // empty' | grep -qF "$expected_match"; then
+          expected_match_found=1
+        fi
+      fi
+      continue
+    fi
+    empty_text_count=$((empty_text_count + 1))
+  done <"$fm_debug_nchan_file"
+  check "nchan search $label: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
+  check "search $label: action run must succeed" "$rc"
+  check "search $label: results must be present in nchan output" $(( results_found ? 0 : 1 ))
+  if [[ $expected_match ]]; then
+    check "search $label: results must contain '$expected_match'" $(( expected_match_found ? 0 : 1 ))
+  fi
+}
+
 # test copy action (3=copy folder, 8=copy file)
 # args: label source dest_dir action
 test_copy() {
@@ -991,6 +1091,8 @@ done
 [[ ! -f "$src_path/$special_chars_name-rename-dir/content.txt" ]] && echo "content in rename dir" >"$src_path/$special_chars_name-rename-dir/content.txt"
 # create file for chmod test
 [[ ! -f "$src_path/$special_chars_name-chmod.txt" ]] && echo "file for chmod test" >"$src_path/$special_chars_name-chmod.txt"
+# create file for chown test
+[[ ! -f "$src_path/$special_chars_name-chown.txt" ]] && echo "file for chown test" >"$src_path/$special_chars_name-chown.txt"
 
 # create files and directories for copy test
 [[ ! -f "$src_path/$special_chars_name-copy.txt" ]] && echo "file for copy test" >"$src_path/$special_chars_name-copy.txt"
@@ -1071,6 +1173,19 @@ test_rename_folder "special name" "$src_path/$special_chars_name-rename-dir" "$s
 # ===========================
 test_chmod "special name to 0755" "$src_path/$special_chars_name-chmod.txt" "0755"
 test_chmod "special name to 0644" "$src_path/$special_chars_name-chmod.txt" "0644"
+
+# ===========================
+# chown tests
+# ===========================
+test_chown "special name to nobody:users" "$src_path/$special_chars_name-chown.txt" "nobody:users"
+test_chown "special name to root:root"    "$src_path/$special_chars_name-chown.txt" "root:root"
+
+# ===========================
+# search tests
+# ===========================
+test_search "hello.txt in src"   "$src_path" "hello.txt"  "$src_path/hello.txt"
+test_search "*.txt wildcard"     "$src_path" "*.txt"       "$src_path/hello.txt"
+test_search "no match pattern"   "$src_path" "no_such_file_xyz.bin"
 
 # ===========================
 # copy tests
