@@ -34,6 +34,8 @@ ssh_user=root
 ssh_host=$1
 test_path=/mnt/disk1/fm_test
 src_path="$test_path/src"
+arc_path="$src_path/archives"
+files_path="$src_path/files"
 dst_path="$test_path/dst"
 special_chars_name=$'utf8_файл\nspecial&chars\*file\$'
 job_timeout=${TIMEOUT:-200}
@@ -45,8 +47,9 @@ if [[ ! $ssh_host || $ssh_host == "-h" || $ssh_host == "--help" ]]; then
   echo "Usage: $(basename -- "$0") host [filter...]"
   echo ""
   echo "Filters (any combination, space-separated):"
-  echo "  compress, extract,    compress and extract tests (actions 16, 17)"
-  echo "  arc, cmp, 16, 17"    
+  echo "  compress, cmp, 16     compress tests (action 16)"
+  echo "  extract, 17           extract tests (action 17)"
+  echo "  arc                   compress and extract tests (actions 16, 17)"
   echo "  rename, rn, 2, 7       rename tests (actions 2, 7)"
   echo "  move, mv, 4, 9         move tests (actions 4, 9)"
   echo "  copy, cp, 3, 8        copy tests (actions 3, 8)"
@@ -333,7 +336,7 @@ test_compress() {
   local rc sz cond
   local archive_name target
 
-  should_run compress extract arc cmp 16 17 || return 0
+  should_run compress arc cmp 16 || return 0
 
   echo -e "\n=== compress $input_file in $output_file ${overwrite_test:+with overwrite test} ==="
 
@@ -421,7 +424,7 @@ test_extract() {
   local overwrite_test=${4:-}
   local source_dir=${5:-$src_path}
 
-  should_run compress extract arc cmp 16 17 || return 0
+  should_run extract arc 17 || return 0
 
   echo -e "\n=== extract $archive in $dest ${overwrite_test:+with overwrite test} ==="
 
@@ -1042,104 +1045,115 @@ create_source_files() {
   [[ ! -d "$test_path" ]] && ! mkdir -m 777 "$test_path" && { echo "Error: failed to create $test_path" 1>&2; exit 1; }
   [[ ! -d "$src_path" ]] && ! mkdir -m 777 "$src_path" && { echo "Error: failed to create $src_path" 1>&2; exit 1; }
   [[ ! -d "$dst_path" ]] && ! mkdir -m 777 "$dst_path" && { echo "Error: failed to create $dst_path" 1>&2; exit 1; }
-  [[ ! -d "$src_path/small_files" ]] && ! mkdir -m 777 "$src_path/small_files" && { echo "Error: failed to create $src_path/small_files" 1>&2; exit 1; }
+  [[ ! -d "$files_path" ]] && ! mkdir -m 777 "$files_path" && { echo "Error: failed to create $files_path" 1>&2; exit 1; }
+  [[ ! -d "$arc_path" ]] && ! mkdir -m 777 "$arc_path" && { echo "Error: failed to create $arc_path" 1>&2; exit 1; }
+  [[ ! -d "$files_path/small_files" ]] && ! mkdir -m 777 "$files_path/small_files" && { echo "Error: failed to create $files_path/small_files" 1>&2; exit 1; }
 
   # random data (compressible only slightly)
-  [[ ! -f "$src_path/small_files/urandom10MB.bin" ]] && dd if=/dev/urandom bs=1M count=10 of="$src_path/small_files/urandom10MB.bin"
-  [[ ! -f "$src_path/urandom100MB.bin" ]] && dd if=/dev/urandom bs=1M count=100 of="$src_path/urandom100MB.bin"
-  [[ ! -f "$src_path/urandom1000MB.bin" ]] && dd if=/dev/urandom bs=1M count=1000 of="$src_path/urandom1000MB.bin"
+  [[ ! -f "$files_path/small_files/urandom10MB.bin" ]] && dd if=/dev/urandom bs=1M count=10 of="$files_path/small_files/urandom10MB.bin"
+  [[ ! -f "$files_path/urandom100MB.bin" ]] && dd if=/dev/urandom bs=1M count=100 of="$files_path/urandom100MB.bin"
+  [[ ! -f "$files_path/urandom1000MB.bin" ]] && dd if=/dev/urandom bs=1M count=1000 of="$files_path/urandom1000MB.bin"
 
   # zeros (highly compressible)
-  [[ ! -f "$src_path/small_files/zero10MB.bin" ]] && dd if=/dev/zero  bs=1M count=10 of="$src_path/small_files/zero10MB.bin"
-  [[ ! -f "$src_path/zero100MB.bin" ]] && dd if=/dev/zero  bs=1M count=100 of="$src_path/zero100MB.bin"
-  [[ ! -f "$src_path/zero1000MB.bin" ]] && dd if=/dev/zero  bs=1M count=1000 of="$src_path/zero1000MB.bin"
+  [[ ! -f "$files_path/small_files/zero10MB.bin" ]] && dd if=/dev/zero  bs=1M count=10 of="$files_path/small_files/zero10MB.bin"
+  [[ ! -f "$files_path/zero100MB.bin" ]] && dd if=/dev/zero  bs=1M count=100 of="$files_path/zero100MB.bin"
+  [[ ! -f "$files_path/zero1000MB.bin" ]] && dd if=/dev/zero  bs=1M count=1000 of="$files_path/zero1000MB.bin"
 
   # create partially compressible file: random data with zero blocks interspersed
-  if [[ ! -f "$src_path/mix1000MB.bin" ]]; then
+  if [[ ! -f "$files_path/mix1000MB.bin" ]]; then
     for _ in {1..50}; do
-      cat "$src_path/urandom10MB.bin" "$src_path/zero10MB.bin"
-    done >"$src_path/mix1000MB.bin"
+      cat "$files_path/small_files/urandom10MB.bin" "$files_path/small_files/zero10MB.bin"
+    done >"$files_path/mix1000MB.bin"
   fi
 
   # create huge amount of empty directories
-  [[ ! -d "$src_path/empty_dirs" ]] && ! mkdir "$src_path/empty_dirs" && { echo "Error: failed to create $src_path/empty_dirs" 1>&2; exit 1; }
+  [[ ! -d "$files_path/empty_dirs" ]] && ! mkdir "$files_path/empty_dirs" && { echo "Error: failed to create $files_path/empty_dirs" 1>&2; exit 1; }
   for i in {1..1000}; do
-    [[ ! -d "$src_path/empty_dirs/$i" ]] && ! mkdir "$src_path/empty_dirs/$i" && { echo "Error: failed to create $src_path/empty_dirs/$i" 1>&2; exit 1; }
+    [[ ! -d "$files_path/empty_dirs/$i" ]] && ! mkdir "$files_path/empty_dirs/$i" && { echo "Error: failed to create $files_path/empty_dirs/$i" 1>&2; exit 1; }
   done
 
   # empty text file
-  [[ ! -f "$src_path/empty.txt" ]] && touch "$src_path/empty.txt"
+  [[ ! -f "$files_path/empty.txt" ]] && touch "$files_path/empty.txt"
 
   # tiny text file
-  [[ ! -f "$src_path/hello.txt" ]] && echo "hello world" >"$src_path/hello.txt"
+  [[ ! -f "$files_path/hello.txt" ]] && echo "hello world" >"$files_path/hello.txt"
 
   # tiny text file in subdirectory
-  [[ ! -f "$src_path/small_files/subfile.txt" ]] && echo "hello subfile" >"$src_path/small_files/subfile.txt"
+  [[ ! -f "$files_path/small_files/subfile.txt" ]] && echo "hello subfile" >"$files_path/small_files/subfile.txt"
 
   # create file with utf-8 chars in name
-  [[ ! -f "$src_path/utf8_файл.txt" ]] && echo "utf-8 filename" >"$src_path/utf8_файл.txt"
+  [[ ! -f "$files_path/utf8_файл.txt" ]] && echo "utf-8 filename" >"$files_path/utf8_файл.txt"
 
   # create file with newline and tabulator in name
-  [[ ! -f "$src_path/$'newline\ntab\tfile.txt'" ]] && echo "newline in filename" >"$src_path/$'newline\ntab\tfile.txt'"
+  [[ ! -f "$files_path/$'newline\ntab\tfile.txt'" ]] && echo "newline in filename" >"$files_path/$'newline\ntab\tfile.txt'"
 
   # create file with shell-related special chars in name
-  [[ ! -f "$src_path/shell.\${specific}.special&chars\$file|name.txt" ]] && echo "special chars in filename" >"$src_path/shell.\${specific}.special&chars\$file|name.txt"
+  [[ ! -f "$files_path/shell.\${specific}.special&chars\$file|name.txt" ]] && echo "special chars in filename" >"$files_path/shell.\${specific}.special&chars\$file|name.txt"
 
   # create file with utf-8, newline and special chars in name
-  [[ ! -f "$src_path/$special_chars_name.txt" ]] && echo "utf-8, newline and special chars in filename" >"$src_path/$special_chars_name.txt"
+  [[ ! -f "$files_path/$special_chars_name.txt" ]] && echo "utf-8, newline and special chars in filename" >"$files_path/$special_chars_name.txt"
 
   # create directory with content for delete test
-  [[ ! -d "$src_path/delete_dir" ]] && mkdir "$src_path/delete_dir"
-  [[ ! -d "$src_path/delete_dir/subdir" ]] && mkdir "$src_path/delete_dir/subdir"
-  [[ ! -f "$src_path/delete_dir/file.txt" ]] && echo "file in dir" >"$src_path/delete_dir/file.txt"
-  [[ ! -f "$src_path/delete_dir/subdir/file.txt" ]] && echo "file in subdir" >"$src_path/delete_dir/subdir/file.txt"
+  [[ ! -d "$files_path/delete_dir" ]] && mkdir "$files_path/delete_dir"
+  [[ ! -d "$files_path/delete_dir/subdir" ]] && mkdir "$files_path/delete_dir/subdir"
+  [[ ! -f "$files_path/delete_dir/file.txt" ]] && echo "file in dir" >"$files_path/delete_dir/file.txt"
+  [[ ! -f "$files_path/delete_dir/subdir/file.txt" ]] && echo "file in subdir" >"$files_path/delete_dir/subdir/file.txt"
 
   # create file and directory for rename test (renamed targets are left in place; re-created by guards on next run)
-  [[ ! -f "$src_path/$special_chars_name-rename.txt" ]] && echo "file for rename test" >"$src_path/$special_chars_name-rename.txt"
-  [[ ! -d "$src_path/$special_chars_name-rename-dir" ]] && mkdir "$src_path/$special_chars_name-rename-dir"
-  [[ ! -f "$src_path/$special_chars_name-rename-dir/content.txt" ]] && echo "content in rename dir" >"$src_path/$special_chars_name-rename-dir/content.txt"
+  [[ ! -f "$files_path/$special_chars_name-rename.txt" ]] && echo "file for rename test" >"$files_path/$special_chars_name-rename.txt"
+  [[ ! -d "$files_path/$special_chars_name-rename-dir" ]] && mkdir "$files_path/$special_chars_name-rename-dir"
+  [[ ! -f "$files_path/$special_chars_name-rename-dir/content.txt" ]] && echo "content in rename dir" >"$files_path/$special_chars_name-rename-dir/content.txt"
   # create file for chmod test
-  [[ ! -f "$src_path/$special_chars_name-chmod.txt" ]] && echo "file for chmod test" >"$src_path/$special_chars_name-chmod.txt"
+  [[ ! -f "$files_path/$special_chars_name-chmod.txt" ]] && echo "file for chmod test" >"$files_path/$special_chars_name-chmod.txt"
   # create file for chown test
-  [[ ! -f "$src_path/$special_chars_name-chown.txt" ]] && echo "file for chown test" >"$src_path/$special_chars_name-chown.txt"
+  [[ ! -f "$files_path/$special_chars_name-chown.txt" ]] && echo "file for chown test" >"$files_path/$special_chars_name-chown.txt"
 
   # create files and directories for copy test
-  [[ ! -f "$src_path/$special_chars_name-copy.txt" ]] && echo "file for copy test" >"$src_path/$special_chars_name-copy.txt"
+  [[ ! -f "$files_path/$special_chars_name-copy.txt" ]] && echo "file for copy test" >"$files_path/$special_chars_name-copy.txt"
 
-  # create files for move tests (small dedicated files for file-move tests; folder-move tests use $src_path directly)
-  [[ ! -f "$src_path/$special_chars_name-move-rr.txt" ]] && echo "file for move test (rsync-rename)" >"$src_path/$special_chars_name-move-rr.txt"
-  [[ ! -f "$src_path/$special_chars_name-move-cd.txt" ]] && echo "file for move test (copy-delete)" >"$src_path/$special_chars_name-move-cd.txt"
+  # create files for move tests (small dedicated files for file-move tests; folder-move tests use $files_path directly)
+  [[ ! -f "$files_path/$special_chars_name-move-rr.txt" ]] && echo "file for move test (rsync-rename)" >"$files_path/$special_chars_name-move-rr.txt"
+  [[ ! -f "$files_path/$special_chars_name-move-cd.txt" ]] && echo "file for move test (copy-delete)" >"$files_path/$special_chars_name-move-cd.txt"
 
   # create hidden files
-  [[ ! -f "$src_path/.hiddenfile" ]] && echo "hidden file" >"$src_path/.hiddenfile"
-  [[ ! -d "$src_path/.hiddendir" ]] && mkdir "$src_path/.hiddendir"
-  [[ ! -f "$src_path/.hiddendir/.hiddenfile" ]] && echo "hidden file in hidden directory" >"$src_path/.hiddendir/.hiddenfile"
+  [[ ! -f "$files_path/.hiddenfile" ]] && echo "hidden file" >"$files_path/.hiddenfile"
+  [[ ! -d "$files_path/.hiddendir" ]] && mkdir "$files_path/.hiddendir"
+  [[ ! -f "$files_path/.hiddendir/.hiddenfile" ]] && echo "hidden file in hidden directory" >"$files_path/.hiddendir/.hiddenfile"
 
   # create file with .tmp extension to test that it doesn't interfere with a cleanup logic
-  [[ ! -f "$src_path/not_fm_related_temp_file.tmp" ]] && echo "this temporary file should not be deleted by file manager" >"$src_path/not_fm_related_temp_file.tmp"
+  [[ ! -f "$files_path/not_fm_related_temp_file.tmp" ]] && echo "this temporary file should not be deleted by file manager" >"$files_path/not_fm_related_temp_file.tmp"
 
   # create hidden file to test that it doesn't interfere with a cleanup logic
-  [[ ! -f "$src_path/.not_fm_related_hidden_temp_file.tmp" ]] && echo "this hidden file should not be deleted by file manager" >"$src_path/.not_fm_related_hidden_temp_file.tmp"
+  [[ ! -f "$files_path/.not_fm_related_hidden_temp_file.tmp" ]] && echo "this hidden file should not be deleted by file manager" >"$files_path/.not_fm_related_hidden_temp_file.tmp"
 
   # create file and hardlink it; verify both share the same inode (rsync breaks hardlinks - re-link if needed)
-  [[ ! -f "$src_path/hardlink1.bin" ]] && dd if=/dev/urandom bs=1M count=5 of="$src_path/hardlink1.bin"
-  if [[ -f "$src_path/hardlink2.bin" ]]; then
-    inode1=$(stat -c '%i' "$src_path/hardlink1.bin")
-    inode2=$(stat -c '%i' "$src_path/hardlink2.bin")
+  [[ ! -f "$files_path/hardlink1.bin" ]] && dd if=/dev/urandom bs=1M count=5 of="$files_path/hardlink1.bin"
+  if [[ -f "$files_path/hardlink2.bin" ]]; then
+    inode1=$(stat -c '%i' "$files_path/hardlink1.bin")
+    inode2=$(stat -c '%i' "$files_path/hardlink2.bin")
     if [[ $inode1 != $inode2 ]]; then
-      rm "$src_path/hardlink2.bin"
-      ln "$src_path/hardlink1.bin" "$src_path/hardlink2.bin"
+      rm "$files_path/hardlink2.bin"
+      ln "$files_path/hardlink1.bin" "$files_path/hardlink2.bin"
     fi
   else
-    ln "$src_path/hardlink1.bin" "$src_path/hardlink2.bin"
+    ln "$files_path/hardlink1.bin" "$files_path/hardlink2.bin"
   fi
 
   # create file and symlink targeting it
-  [[ ! -f "$src_path/symlink1.bin" ]] && dd if=/dev/urandom bs=1M count=5 of="$src_path/symlink1.bin"
-  [[ ! -L "$src_path/symlink2.bin" ]] && ln -s "symlink1.bin" "$src_path/symlink2.bin"
+  [[ ! -f "$files_path/symlink1.bin" ]] && dd if=/dev/urandom bs=1M count=5 of="$files_path/symlink1.bin"
+  [[ ! -L "$files_path/symlink2.bin" ]] && ln -s "symlink1.bin" "$files_path/symlink2.bin"
 
   # create broken symlink
-  [[ ! -L "$src_path/broken_symlink" ]] && ln -s "nonexistent_target.bin" "$src_path/broken_symlink"
+  [[ ! -L "$files_path/broken_symlink" ]] && ln -s "nonexistent_target.bin" "$files_path/broken_symlink"
+
+  # pre-build archives for extract tests (avoids dependency on compress tests)
+  for fmt in "${archive_multi_formats[@]}"; do
+    [[ ! -f "$arc_path/archive.$fmt" ]] && run_action 16 "$files_path" "$arc_path" 1 "$fmt" "archive.$fmt" >/dev/null
+    [[ ! -f "$arc_path/archive.overwrite.$fmt" ]] && run_action 16 "$files_path/small_files" "$arc_path" 1 "$fmt" "archive.overwrite.$fmt" >/dev/null
+  done
+  for fmt in "${archive_single_formats[@]}"; do
+    [[ ! -f "$arc_path/$special_chars_name.txt.$fmt" ]] && run_action 16 "$files_path/$special_chars_name.txt" "$arc_path" 1 "$fmt" "$special_chars_name.txt.$fmt" >/dev/null
+  done
 
   echo "  test files have been created in $src_path"
 }
@@ -1166,26 +1180,26 @@ create_source_files
 # compress tests
 # ===========================
 for fmt in "${archive_multi_formats[@]}"; do
-  test_compress "$fmt" "$dst_path/archive.$fmt" "$src_path"
+  test_compress "$fmt" "$dst_path/archive.$fmt" "$files_path"
 done
 for fmt in "${archive_multi_formats[@]}"; do
-  test_compress "$fmt" "$dst_path/archive.overwrite.$fmt" "$src_path/small_files" 1
+  test_compress "$fmt" "$dst_path/archive.overwrite.$fmt" "$files_path/small_files" 1
 done
 for fmt in "${archive_single_formats[@]}"; do
-  test_compress "$fmt" "$dst_path/$special_chars_name.txt.$fmt" "$src_path/$special_chars_name.txt" 1
+  test_compress "$fmt" "$dst_path/$special_chars_name.txt.$fmt" "$files_path/$special_chars_name.txt" 1
 done
 
 # ===========================
 # extract tests
 # ===========================
 for fmt in "${archive_multi_formats[@]}"; do
-  test_extract "$fmt" "$dst_path/archive.$fmt" "$dst_path/extract_$fmt/"
+  test_extract "$fmt" "$arc_path/archive.$fmt" "$dst_path/extract_$fmt/"
 done
 for fmt in "${archive_multi_formats[@]}"; do
-  test_extract "$fmt" "$dst_path/archive.overwrite.$fmt" "$dst_path/extract_overwrite_$fmt/" 1 "$src_path/small_files"
+  test_extract "$fmt" "$arc_path/archive.overwrite.$fmt" "$dst_path/extract_overwrite_$fmt/" 1 "$files_path/small_files"
 done
 for fmt in "${archive_single_formats[@]}"; do
-  test_extract "$fmt" "$dst_path/$special_chars_name.txt.$fmt" "$dst_path/extract_$fmt/" 1
+  test_extract "$fmt" "$arc_path/$special_chars_name.txt.$fmt" "$dst_path/extract_$fmt/" 1
 done
 
 # ===========================
@@ -1196,50 +1210,50 @@ test_create_folder "special name" "$dst_path" "$special_chars_name-dir"
 # ===========================
 # delete tests
 # ===========================
-test_delete_file "special name" "$src_path/$special_chars_name.txt"
-test_delete_folder "with content" "$src_path/delete_dir"
+test_delete_file "special name" "$files_path/$special_chars_name.txt"
+test_delete_folder "with content" "$files_path/delete_dir"
 
 # ===========================
 # rename tests
 # ===========================
-test_rename_file "special name" "$src_path/$special_chars_name-rename.txt" "$special_chars_name-renamed.txt"
-test_rename_folder "special name" "$src_path/$special_chars_name-rename-dir" "$special_chars_name-renamed-dir"
+test_rename_file "special name" "$files_path/$special_chars_name-rename.txt" "$special_chars_name-renamed.txt"
+test_rename_folder "special name" "$files_path/$special_chars_name-rename-dir" "$special_chars_name-renamed-dir"
 
 # ===========================
 # chmod tests
 # ===========================
-test_chmod "special name to 0755" "$src_path/$special_chars_name-chmod.txt" "0755"
-test_chmod "special name to 0644" "$src_path/$special_chars_name-chmod.txt" "0644"
+test_chmod "special name to 0755" "$files_path/$special_chars_name-chmod.txt" "0755"
+test_chmod "special name to 0644" "$files_path/$special_chars_name-chmod.txt" "0644"
 
 # ===========================
 # chown tests
 # ===========================
-test_chown "special name to nobody:users" "$src_path/$special_chars_name-chown.txt" "nobody:users"
-test_chown "special name to root:root"    "$src_path/$special_chars_name-chown.txt" "root:root"
+test_chown "special name to nobody:users" "$files_path/$special_chars_name-chown.txt" "nobody:users"
+test_chown "special name to root:root"    "$files_path/$special_chars_name-chown.txt" "root:root"
 
 # ===========================
 # search tests
 # ===========================
-test_search "hello.txt in src" "$src_path" "hello.txt"
-test_search "*.txt wildcard"   "$src_path" "*.txt"
-test_search "no match pattern" "$src_path" "no_such_file_xyz.bin"
+test_search "hello.txt in src" "$files_path" "hello.txt"
+test_search "*.txt wildcard"   "$files_path" "*.txt"
+test_search "no match pattern" "$files_path" "no_such_file_xyz.bin"
 
 # ===========================
 # copy tests
 # ===========================
-test_copy_file   "special name" "$src_path/$special_chars_name-copy.txt" "$dst_path"
-test_copy_folder "special name" "$src_path" "$dst_path"
+test_copy_file   "special name" "$files_path/$special_chars_name-copy.txt" "$dst_path"
+test_copy_folder "special name" "$files_path" "$dst_path"
 
 # ===========================
 # move tests
 # ===========================
-test_move_file   "special name rsync-rename" "$src_path/$special_chars_name-move-rr.txt" "$dst_path"
-test_move_file   "special name copy-delete"  "$src_path/$special_chars_name-move-cd.txt" "$dst_path" 1
-test_move_folder "special name rsync-rename" "$src_path" "$dst_path"
-[[ ! -d "$src_path" && -d "$dst_path/src" ]] && mv "$dst_path/src" "$test_path/" 2>/dev/null
+test_move_file   "special name rsync-rename" "$files_path/$special_chars_name-move-rr.txt" "$dst_path"
+test_move_file   "special name copy-delete"  "$files_path/$special_chars_name-move-cd.txt" "$dst_path" 1
+test_move_folder "special name rsync-rename" "$files_path" "$dst_path"
+[[ ! -d "$files_path" && -d "$dst_path/files" ]] && mv "$dst_path/files" "$src_path/" 2>/dev/null
 create_source_files >/dev/null # repair source if broken
-test_move_folder "special name copy-delete"  "$src_path" "$dst_path" 1
-[[ ! -d "$src_path" && -d "$dst_path/src" ]] && mv "$dst_path/src" "$test_path/" 2>/dev/null
+test_move_folder "special name copy-delete"  "$files_path" "$dst_path" 1
+[[ ! -d "$files_path" && -d "$dst_path/files" ]] && mv "$dst_path/files" "$src_path/" 2>/dev/null
 create_source_files >/dev/null # repair source if broken
 
 # ===========================
