@@ -38,6 +38,22 @@ $isshare = $root == 'mnt' && (!$main || !$next || ($main == 'rootshare' && !$res
 $editor  = '/boot/config/editor.cfg';
 
 if (!file_exists($editor)) file_put_contents($editor, implode("\n",['','txt','js','php','page','plg','xml','old','bak','log','css']));
+
+// Read configured docker paths for compress format auto-detection.
+// Strip the /mnt/<disk>/ prefix so the subpath can match on any disk.
+$docker_cfg = @parse_ini_file('/boot/config/docker.cfg') ?: [];
+$dfm_docker_subpaths = [];
+foreach (['DOCKER_APP_CONFIG_PATH', 'DOCKER_IMAGE_FILE'] as $key) {
+  $val = rtrim(trim($docker_cfg[$key] ?? ''), '/');
+  if ($val && preg_match('#^/mnt/[^/]+/(.+)$#', $val, $m)) {
+    $dfm_docker_subpaths[] = $m[1];
+  }
+}
+// Fallback to defaults when docker is not configured
+if (empty($dfm_docker_subpaths)) {
+  $dfm_docker_subpaths = ['appdata', 'docker'];
+}
+$dfm_docker_subpaths_js = json_encode($dfm_docker_subpaths);
 ?>
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.filetree.css")?>">
 <link type="text/css" rel="stylesheet" href="<?autov("/webGui/styles/jquery.switchbutton.css")?>">
@@ -47,6 +63,8 @@ if (!file_exists($editor)) file_put_contents($editor, implode("\n",['','txt','js
 <script>
 // General variables
 var dir   = <?=$dir_js?>;
+// Subpaths (after /mnt/<disk>/) that indicate docker/appdata storage
+var dfm_docker_subpaths = <?=$dfm_docker_subpaths_js?>;
 var table = null;
 var thead = null;
 
@@ -94,7 +112,9 @@ function addActionWarning(action, isBulk) {
     8: "<?=_("This copies the selected file")?>",
     9: "<?=_("This moves the selected file")?>",
     11: "<?=_("This changes the owner of the source recursively")?>",
-    12: "<?=_("This changes the permission of the source recursively")?>"
+    12: "<?=_("This changes the permission of the source recursively")?>",
+    16: "<?=_("This compresses the source to an archive file")?>",
+    17: "<?=_("This extracts the archive to the target folder")?>"
   };
   var warningText = warningTexts[action];
   if (warningText) {
@@ -124,6 +144,7 @@ function folderContextMenu(id, button) {
 <?if (!$isshare):?>
     opts.push({text:"_(Rename)_", icon:"fa-edit", action:function(e){e.preventDefault();doAction(2,"_(Rename)_",id.dfm_proxy());}});
 <?endif?>
+    opts.push({text:"_(Compress)_", icon:"fa-file-archive-o", action:function(e){e.preventDefault();doAction(16,"_(Compress)_",id.dfm_proxy());}});
     opts.push({divider:true});
     opts.push({text:"_(Owner)_", icon:"fa-user-o", action:function(e){e.preventDefault();doAction(11,"_(Change Owner)_",id.dfm_proxy());}});
     opts.push({text:"_(Permission)_", icon:"fa-address-book-o", action:function(e){e.preventDefault();doAction(12,"_(Change Permission)_",id.dfm_proxy());}});
@@ -151,6 +172,12 @@ function fileContextMenu(id, button) {
     opts.push({text:"_(Copy)_", icon:"fa-copy", action:function(e){e.preventDefault();doAction(8,"_(Copy)_",id.dfm_proxy());}});
     opts.push({text:"_(Move)_", icon:"fa-paste", action:function(e){e.preventDefault();doAction(9,"_(Move)_",id.dfm_proxy());}});
     opts.push({text:"_(Rename)_", icon:"fa-edit", action:function(e){e.preventDefault();doAction(7,"_(Rename)_",id.dfm_proxy());}});
+    opts.push({text:"_(Compress)_", icon:"fa-file-archive-o", action:function(e){e.preventDefault();doAction(16,"_(Compress)_",id.dfm_proxy());}});
+    // Check if file is an archive (data attribute is on row_X, not name_X)
+    var fileName = $('#'+id.dfm_proxy()).attr('data');
+    if (isArchive(fileName)) {
+      opts.push({text:"_(Extract)_", icon:"fa-archive", action:function(e){e.preventDefault();doAction(17,"_(Extract)_",id.dfm_proxy());}});
+    }
     opts.push({divider:true});
     opts.push({text:"_(Owner)_", icon:"fa-user-o", action:function(e){e.preventDefault();doAction(11,"_(Change Owner)_",id.dfm_proxy());}});
     opts.push({text:"_(Permission)_", icon:"fa-address-book-o", action:function(e){e.preventDefault();doAction(12,"_(Change Permission)_",id.dfm_proxy());}});
@@ -225,12 +252,14 @@ function selectAll() {
 <?if (!$isshare):?>
     $('input.rename').prop('disabled',false);
 <?endif;?>
+    $('input.extract').prop('disabled',true); // multiple selected: no archive detection possible
   } else {
     $('i[id^="check_"]:visible').removeClass('fa-check-square-o').addClass('fa-square-o');
     $('input.extra').prop('disabled',true);
 <?if (!$isshare):?>
     $('input.rename').prop('disabled',true);
 <?endif;?>
+    $('input.extract').prop('disabled',true);
   }
 }
 
@@ -252,6 +281,18 @@ function selectOne(id, check=true) {
 <?if (!$isshare):?>
     $('input.rename').prop('disabled',checked != 1);
 <?endif;?>
+    // Extract: enabled only for exactly one selected archive file
+    var extractEnabled = false;
+    if (checked == 1) {
+      $('i[id^="check_"]').each(function(){
+        if ($(this).prop('id')!='check_0' && $(this).hasClass('fa-check-square-o')) {
+          var rowId = $(this).prop('id').dfm_fetch('row');
+          var name = $('#'+rowId).attr('data') || '';
+          if (isArchive(name)) extractEnabled = true;
+        }
+      });
+    }
+    $('input.extract').prop('disabled',!extractEnabled);
   } else {
     $('i[id^="queue_"]').each(function(){if ($(this).hasClass('fa-check-square-o')) checked++;});
     $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',checked == 0);
@@ -284,12 +325,38 @@ function fileExtension(file) {
   return file.indexOf('.')>=0 ? file.split('.').pop() : '';
 }
 
+function isArchive(name) {
+  // Only formats the backend actually supports for extraction.
+  return /\.(zip|tar|tgz|tbz2|txz|tar\.gz|tar\.bz2|tar\.xz|tar\.zst|tar\.lz4|gz|bz2|xz|zst|lz4)$/i.test(name);
+}
+
+function updateArchiveName() {
+  var $dialog = dfm.window;
+  // Get first source name from data attribute (set when dialog opened)
+  var baseName = $dialog.find('#dfm_source').data('firstName') || '';
+
+  if (!baseName) {
+    var sourceText = $dialog.find('#dfm_source').text().trim();
+    var sourceName = sourceText.split('\r')[0] || sourceText;
+    sourceName = sourceName.replace(/\/$/, '');
+    baseName = fileName(sourceName);
+  }
+
+  // Remove existing archive extension from base name (must mirror isArchive())
+  baseName = baseName.replace(/\.(tar\.(gz|bz2|xz|zst|lz4))$/i, '')
+                     .replace(/\.(zip|tar|tgz|tbz2|txz|gz|bz2|xz|zst|lz4)$/i, '');
+  var format = $dialog.find('#dfm_format').val();
+  var proposedName = baseName + '.' + format;
+
+  $dialog.find('#dfm_archive_name').val(proposedName);
+}
+
 function fileEdit(id) {
   const known = ["","cfg","conf",<?=dfm_array(file($editor,FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES))?>];
   var source = $('#'+id.dfm_proxy()).attr('data').dfm_quote();
   var ext = fileExtension(source);
-  if (ext == 'zip') {
-    // download zip files
+  if (isArchive(source)) {
+    // download archive files directly instead of opening viewer
     downloadFile(source);
     return;
   }
@@ -797,6 +864,41 @@ function doAction(action, title, id) {
     dfm.window.find('.dfm_loc').html('&nbsp;').css({'line-height':'normal'});
     dfm.window.find('.dfm_text').html('').css({'line-height':'normal'});
     break;
+  case 16: // compress
+    dfm.window.html($('#dfm_templateCompress').html());
+    dfm_createSource(source.dfm_strip());
+    // Remove single-file-only format options unless exactly one file (not folder) is selected
+    var sources = source.split('\r').filter(Boolean);
+    var isSingleFile = sources.length === 1 && !sources[0].endsWith('/');
+    if (!isSingleFile) {
+      dfm.window.find('.dfm_single_format').remove();
+    }
+    // Detect if source is under a configured docker/appdata path for default format selection
+    var srcSubpath = source.replace(/^\/mnt\/[^\/]+\//, '');
+    var isAppdata = dfm_docker_subpaths.some(function(p) { return srcSubpath === p || srcSubpath.indexOf(p + '/') === 0; });
+    dfm.window.find('#dfm_format').val(isAppdata ? 'tar.zst' : 'zip');
+    // Set target to current directory
+    dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
+      dfm.window.find('#dfm_target').val(path).change();
+      // Update archive name when target changes
+      updateArchiveName();
+    });
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
+    // Bind format change to update archive name
+    dfm.window.find('#dfm_format').on('change', updateArchiveName);
+    // Set initial archive name with uniqueness check
+    updateArchiveName();
+    console.log('Compress dialog opened', {source: source, dir: dir});
+    break;
+  case 17: // extract
+    dfm.window.html($('#dfm_templateExtract').html());
+    dfm_createSource(source);
+    // Set target to current directory
+    dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
+      dfm.window.find('#dfm_target').val(path).change();
+    });
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
+    break;
   }
   dfm.window.dialog({
     classes: {'ui-dialog': 'ui-dfm ui-corner-all'},
@@ -852,6 +954,11 @@ function doAction(action, title, id) {
             dfm.window.find('.dfm_loc').html('&nbsp;');
             dfm.window.find('#dfm_files').html('');
             break;
+          case 16: // compress
+          case 17: // extract
+            // validate target directory exists and is valid
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
+            break;
           default:
             // disallow mixing of disk and user shares
             var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
@@ -859,12 +966,19 @@ function doAction(action, title, id) {
           }
           if (!target || !valid.test(target)) {errorTarget(); return;}
         } else target = '';
+        // For compress: collect additional parameters
+        var format = action == 16 ? dfm.window.find('#dfm_format').val() : '';
+        var archive_name = action == 16 ? dfm.window.find('#dfm_archive_name').val() : '';
+        if (action == 16) {
+          console.log('Compress parameters:', {action: action, source: source, target: target, format: format, archive_name: archive_name});
+          if (!archive_name) {errorTarget(); return;}
+        }
         dfm.window.find('.dfm_text').removeClass('orange-text').html("_(Running)_...");
         dfm.window.find('#dfm_target').prop('disabled',true);
         dfm.window.find('#dfm_sparse').prop('disabled',true);
-        dfm.window.find('#dfm_exist').prop('disabled',true);
+        dfm.window.find('#dfm_overwrite').prop('disabled',true);
         dfm.window.find('.dfm_sparse').css({'opacity':'0.5'});
-        dfm.window.find('.dfm_exist').css({'opacity':'0.5'});
+        dfm.window.find('.dfm_overwrite').css({'opacity':'0.5'});
         if (action == 11) {
           dfm.window.find('#dfm_owner').prop('disabled',true);
           dfm.window.find('#dfm_group').prop('disabled',true);
@@ -872,7 +986,13 @@ function doAction(action, title, id) {
         }
         dfm_footer('hide');
         dfm_fileManager('start');
-        $.post('/webGui/include/Control.php',{mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs)},function(){
+        var postData = {mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),overwrite:dfm.window.find('#dfm_overwrite').val(),zfs:encodeURIComponent(zfs)};
+        if (action == 16) {
+          postData.format = encodeURIComponent(format);
+          postData.archive_name = encodeURIComponent(archive_name);
+          console.log('Sending compress request to Control.php:', postData);
+        }
+        $.post('/webGui/include/Control.php',postData,function(){
           $.post('/webGui/include/Control.php',{mode:'read'},function(data){
             try {
               dfm_read = data ? JSON.parse(data) : {};
@@ -911,6 +1031,12 @@ function doAction(action, title, id) {
             target.push(dfm.window.find('#dfm_other').val());
             target = target.join(',')+',ugo+X';
             break;
+          case 16: // compress
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
+            var format_queue = dfm.window.find('#dfm_format').val();
+            var archive_name_queue = dfm.window.find('#dfm_archive_name').val();
+            if (!archive_name_queue) {errorTarget(); return;}
+            break;
           default:
             // disallow mixing of disk and user shares
             var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
@@ -918,7 +1044,12 @@ function doAction(action, title, id) {
           }
           if (!target || !valid.test(target)) {errorTarget(); return;}
         } else target = '';
-        $.post('/webGui/include/Control.php',{mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs)});
+        var postDataSingleQueue = {mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),overwrite:dfm.window.find('#dfm_overwrite').val(),zfs:encodeURIComponent(zfs)};
+        if (action == 16) {
+          postDataSingleQueue.format = encodeURIComponent(format_queue);
+          postDataSingleQueue.archive_name = encodeURIComponent(archive_name_queue);
+        }
+        $.post('/webGui/include/Control.php',postDataSingleQueue);
         dfm.window.dialog('close');
         dfm.window.dialog('destroy');
         $('.dfm_control.jobs').prop('disabled',false);
@@ -936,7 +1067,7 @@ function doAction(action, title, id) {
   preventFileTreeClose();
   
   // Setup file tree navigation for target input in copy/move dialogs (action 3=copy folder, 4=move folder, 8=copy file, 9=move file)
-  if ([3,4,8,9].includes(action) && dfm.window.find('#dfm_target').length) {
+  if ([3,4,8,9,16,17].includes(action) && dfm.window.find('#dfm_target').length) {
     setupTargetNavigation();
   }
   
@@ -1004,6 +1135,16 @@ function doActions(action, title) {
       }
     }
     if (u && d) {errorSource(); return;} // disallow mixing of disk and user shares
+  }
+  // For actions >= 15 with source: calculate root/match for fileTreeAttach
+  if (action >= 15 && source.length > 0) {
+    var path   = source[0].substr(1).split('/');
+    var user   = /^(user0?|rootshare)$/.test(path[1]);
+    var root   = '/'+path[0]+(user ? '/'+path[1] : '');
+    var ud     = ['disks','remotes'].includes(path[1]);
+    var match  = ud || user ? '' : '^(?!\\/mnt\\/(user0?|rootshare)\\/).*$';
+    var bulk   = source.length > 1;
+    var hdlink = "<?=$var['fuse_directio'] == 1 ? '1' : ''?>";
   }
   dfm.window = $("#dfm_dialogWindow");
   switch (action) {
@@ -1082,6 +1223,42 @@ function doActions(action, title) {
     dfm.window.find('.dfm_loc').html('&nbsp;').css({'line-height':'normal'});
     dfm.window.find('.dfm_text').html('').css({'line-height':'normal'});
     break;
+  case 16: // compress object(s)
+    dfm.window.html($('#dfm_templateCompress').html());
+    dfm_createSource(source);
+    // Remove single-file-only format options unless exactly one file (not folder) is selected
+    if (!(source.length === 1 && type[0] !== 'd')) {
+      dfm.window.find('.dfm_single_format').remove();
+    }
+    // Use first source name for archive name suggestion
+    var firstSource = source[0];
+    var firstPath = firstSource.substr(1).split('/');
+    var firstName = firstPath.pop() || firstPath.pop();
+    // Store first source name for updateArchiveName function
+    dfm.window.find('#dfm_source').data('firstName', firstName);
+    // Detect if source is under a configured docker/appdata path for default format selection
+    var srcSubpath = firstSource.replace(/^\/mnt\/[^\/]+\//, '');
+    var isAppdata = dfm_docker_subpaths.some(function(p) { return srcSubpath === p || srcSubpath.indexOf(p + '/') === 0; });
+    dfm.window.find('#dfm_format').val(isAppdata ? 'tar.zst' : 'zip');
+    dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
+      dfm.window.find('#dfm_target').val(path).change();
+      // Update archive name when target changes
+      updateArchiveName();
+    });
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
+    dfm.window.find('#dfm_format').on('change', updateArchiveName);
+    // Set initial archive name with uniqueness check
+    updateArchiveName();
+    console.log('Bulk compress dialog opened', {sources: source, bulk: bulk});
+    break;
+  case 17: // extract (toolbar: exactly one archive file selected)
+    dfm.window.html($('#dfm_templateExtract').html());
+    dfm_createSource(source);
+    dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
+      dfm.window.find('#dfm_target').val(path).change();
+    });
+    dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
+    break;
   }
   dfm.window.find('#dfm_source').attr('size',Math.min(dfm.tsize[action],source.length));
   dfm.window.dialog({
@@ -1140,6 +1317,13 @@ function doActions(action, title) {
             dfm.window.find('.dfm_loc').html('&nbsp;');
             dfm.window.find('#dfm_files').html('');
             break;
+          case 16: // compress
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
+            var format = dfm.window.find('#dfm_format').val();
+            var archive_name = dfm.window.find('#dfm_archive_name').val();
+            console.log('Bulk compress Start clicked:', {target: target, format: format, archive_name: archive_name, bulk: bulk});
+            if (!archive_name) {errorTarget(); return;}
+            break;
           default:
             // disallow mixing of disk and user shares
             var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
@@ -1150,9 +1334,9 @@ function doActions(action, title) {
         if (bulk && target.length>0 && target.substr(-1)!='/') target += '/';
         dfm.window.find('#dfm_target').prop('disabled',true);
         dfm.window.find('#dfm_sparse').prop('disabled',true);
-        dfm.window.find('#dfm_exist').prop('disabled',true);
+        dfm.window.find('#dfm_overwrite').prop('disabled',true);
         dfm.window.find('.dfm_sparse').css({'opacity':'0.5'});
-        dfm.window.find('.dfm_exist').css({'opacity':'0.5'});
+        dfm.window.find('.dfm_overwrite').css({'opacity':'0.5'});
         if (action == 12) {
           dfm.window.find('#dfm_owner').prop('disabled',true);
           dfm.window.find('#dfm_group').prop('disabled',true);
@@ -1161,7 +1345,13 @@ function doActions(action, title) {
         dfm.window.find('.dfm_text').removeClass('orange-text').html("_(Running)_...");
         dfm_footer('hide');
         dfm_fileManager('start');
-        $.post('/webGui/include/Control.php',{mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs.join('\r'))},function(){
+        var postData = {mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),overwrite:dfm.window.find('#dfm_overwrite').val(),zfs:encodeURIComponent(zfs.join('\r'))};
+        if (action == 16) {
+          postData.format = encodeURIComponent(format);
+          postData.archive_name = encodeURIComponent(archive_name);
+          console.log('Sending bulk compress request:', postData);
+        }
+        $.post('/webGui/include/Control.php',postData,function(){
           $.post('/webGui/include/Control.php',{mode:'read'},function(data){
             try {
               dfm_read = data ? JSON.parse(data) : {};
@@ -1201,6 +1391,12 @@ function doActions(action, title) {
             target = target.join(',')+',ugo+X';
             bulk = false;
             break;
+          case 16: // compress
+            var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
+            var format_queue = dfm.window.find('#dfm_format').val();
+            var archive_name_queue = dfm.window.find('#dfm_archive_name').val();
+            if (!archive_name_queue) {errorTarget(); return;}
+            break;
           default:
             // disallow mixing of disk and user shares
             var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
@@ -1208,7 +1404,12 @@ function doActions(action, title) {
           }
           if (!target || !valid.test(target)) {errorTarget(); return;}
         } else target = '';
-        $.post('/webGui/include/Control.php',{mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),exist:dfm.window.find('#dfm_exist').val(),zfs:encodeURIComponent(zfs.join('\r'))});
+        var postDataQueue = {mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),overwrite:dfm.window.find('#dfm_overwrite').val(),zfs:encodeURIComponent(zfs.join('\r'))};
+        if (action == 16) {
+          postDataQueue.format = encodeURIComponent(format_queue);
+          postDataQueue.archive_name = encodeURIComponent(archive_name_queue);
+        }
+        $.post('/webGui/include/Control.php',postDataQueue);
         dfm.window.dialog('close');
         dfm.window.dialog('destroy');
         $('.dfm_control.jobs').prop('disabled',false);
@@ -1226,7 +1427,7 @@ function doActions(action, title) {
   preventFileTreeClose();
   
   // Setup file tree navigation for target input in copy/move dialogs (action 3=copy, 4=move)
-  if ([3,4].includes(action) && dfm.window.find('#dfm_target').length) {
+  if ([3,4,16,17].includes(action) && dfm.window.find('#dfm_target').length) {
     setupTargetNavigation();
   }
   
@@ -1507,6 +1708,8 @@ $(window).bind('resize',function(){
 <input type="button" value="_(Owner)_" class="dfm_control extra" onclick="doActions(11,this.value)" disabled>
 <input type="button" value="_(Permission)_" class="dfm_control extra" onclick="doActions(12,this.value)" disabled>
 <input type="button" value="_(Calculate)_" class="dfm_control extra" onclick="doActions(14,this.value)" disabled>
+<input type="button" value="_(Compress)_" class="dfm_control extra" onclick="doActions(16,this.value)" disabled>
+<input type="button" value="_(Extract)_" class="dfm_control extract" onclick="doActions(17,this.value)" disabled>
 <input type="button" value="_(Create)_" class="dfm_control common" onclick="doActions(0,this.value)"<?if(!$dir||$isshare){?> disabled<?}?>>
 <input type="button" value="_(Upload)_" class="dfm_control common" id="dfm_uploadButton" onclick="$('#dfm_upload').click()"<?if(!$dir||$isshare){?> disabled<?}?>><span id="dfm_uploadStatus"></span>
 </div>

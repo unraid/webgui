@@ -48,7 +48,7 @@ const dfm = {
   draggable:  false,
   previous: '',
   height: 0,
-  tsize: {0: 0, 1: 6, 2: 3, 3: 3, 4: 3, 11: 2, 12: 2, 14: 0, 15: 3},
+  tsize: {0: 0, 1: 6, 2: 3, 3: 3, 4: 3, 11: 2, 12: 2, 14: 0, 15: 3, 16: 6, 17: 1},
 };
 var dfm_read = {};
 
@@ -136,7 +136,7 @@ function dfm_createSource(source) {
       if (i < 10) {
         $('<option></option>').text(object).prop('selected', i==0).appendTo(select);
       } else {
-        select.append('<option>&lt;_(more)_&gt; ...</option>');
+        select.append('<option>(+' + (source.length - 9) + ' _(more)_)</option>');
         break;
       }
     }
@@ -148,9 +148,8 @@ function dfm_createSource(source) {
 function dfm_showProgress(data) {
   if (!data) return 0;
 
-  // Try to parse as JSON first
   try {
-    let parsed = JSON.parse(data);
+    let parsed = data;
 
     // Handle search results (action 15 with results array)
     if (parsed.action === 15 && Array.isArray(parsed.results)) {
@@ -237,9 +236,9 @@ function dfm_showProgress(data) {
       }
 
       // Build footer text (progress info only)
-      // Show footer for actions with actual progress: delete (1,6), copy (3,8), move (4,9), search (15)
+      // Show footer for actions with actual progress: delete (1,6), copy (3,8), move (4,9), search (15), compress (16), extract (17)
       // No footer for quick operations: create (0), rename (2,7), chown (11), chmod (12)
-      let showFooter = [1, 3, 4, 6, 8, 9, 15].includes(parsed.action);
+      let showFooter = [1, 3, 4, 6, 8, 9, 15, 16, 17].includes(parsed.action);
       if (showFooter) {
         let footerText = parsed.text[1] || parsed.text[0] || '';
         dfm_footer('write', footerText, $icon);
@@ -250,8 +249,7 @@ function dfm_showProgress(data) {
 
     }
   } catch(e) {
-    // Not JSON, log error
-    console.error('Failed to parse status as JSON:', e, data);
+    console.error('dfm_showProgress: unexpected data format', e, data);
     return 0;
   }
 }
@@ -288,7 +286,9 @@ function dfm_makeDialog(open) {
   }
   dfm.window = $('#dfm_dialogWindow');
   if (dfm.window.dialog('instance') !==  undefined) dfm.dialog = dfm.window.dialog('isOpen');
-  var dfm_source = dfm_read.source.split('\r').slice(0,9);
+  // Guard against dfm_read.source being undefined (e.g. mode:'read' returned empty data
+  // due to a timing race). filter(Boolean) removes empty strings from split results.
+  var dfm_source = (dfm_read.source || '').split('\r').filter(Boolean);
   switch (dfm_read.action) {
   case 0: // create folder/object
     dfm.window.html($('#dfm_templateCreateFolder').html());
@@ -307,14 +307,14 @@ function dfm_makeDialog(open) {
     dfm.window.html($('#dfm_templateCopyFolder').html());
     dfm.window.find('#dfm_target').val(dfm_read.target).prop('disabled',true);
     dfm.window.find('#dfm_sparse').prop('checked',dfm_read.sparse ? true : false);
-    dfm.window.find('#dfm_exist').prop('checked',dfm_read.exist ? false : true);
+    dfm.window.find('#dfm_overwrite').prop('checked',dfm_read.exist ? false : true);
     dfm.height = 630;
     break;
   case 4: // move folder/object
     dfm.window.html($('#dfm_templateMoveFolder').html());
     dfm.window.find('#dfm_target').val(dfm_read.target).prop('disabled',true);
     dfm.window.find('#dfm_sparse').prop('checked',dfm_read.sparse ? true : false);
-    dfm.window.find('#dfm_exist').prop('checked',dfm_read.exist ? false : true);
+    dfm.window.find('#dfm_overwrite').prop('checked',dfm_read.exist ? false : true);
     dfm.height = 630;
     break;
   case 6: // delete file
@@ -325,14 +325,14 @@ function dfm_makeDialog(open) {
     dfm.window.html($('#dfm_templateCopyFile').html());
     dfm.window.find('#dfm_target').val(dfm_read.target).prop('disabled',true);
     dfm.window.find('#dfm_sparse').prop('checked',dfm_read.sparse ? true : false);
-    dfm.window.find('#dfm_exist').prop('checked',dfm_read.exist ? false : true);
+    dfm.window.find('#dfm_overwrite').prop('checked',dfm_read.exist ? false : true);
     dfm.height = 630;
     break;
   case 9: // move file
     dfm.window.html($('#dfm_templateMoveFile').html());
     dfm.window.find('#dfm_target').val(dfm_read.target).prop('disabled',true);
     dfm.window.find('#dfm_sparse').prop('checked',dfm_read.sparse ? true :false);
-    dfm.window.find('#dfm_exist').prop('checked',dfm_read.exist ? false : true);
+    dfm.window.find('#dfm_overwrite').prop('checked',dfm_read.exist ? false : true);
     dfm.height = 630;
     break;
   case 11: // change owner
@@ -354,13 +354,25 @@ function dfm_makeDialog(open) {
     dfm.window.find('.dfm_text').html('').css({'line-height':'normal'});
     dfm.height = 630;
     break;
+  case 16: // compress
+    dfm.window.html($('#dfm_templateCompress').html());
+    dfm.window.find('#dfm_target').val(dfm_read.target).prop('disabled',true);
+    dfm.window.find('#dfm_format').val(dfm_read.format || 'zip').prop('disabled',true);
+    dfm.window.find('#dfm_archive_name').val(dfm_read.archive_name || '').prop('disabled',true);
+    dfm.height = 630;
+    break;
+  case 17: // extract
+    dfm.window.html($('#dfm_templateExtract').html());
+    dfm.window.find('#dfm_target').val(dfm_read.target).prop('disabled',true);
+    dfm.height = 630;
+    break;
   }
   dfm.window.find('#dfm_source').attr('size',Math.min(dfm.tsize[dfm_read.action],dfm_source.length));
   dfm_createSource(dfm_source);
   dfm.window.find('#dfm_sparse').prop('disabled',true);
-  dfm.window.find('#dfm_exist').prop('disabled',true);
+  dfm.window.find('#dfm_overwrite').prop('disabled',true);
   dfm.window.find('.dfm_sparse').css({'opacity':'0.5'});
-  dfm.window.find('.dfm_exist').css({'opacity':'0.5'});
+  dfm.window.find('.dfm_overwrite').css({'opacity':'0.5'});
   dfm.window.dialog({
     classes: {'ui-dialog': 'ui-dfm'},
     autoOpen: open || dfm.dialog,
@@ -378,7 +390,7 @@ function dfm_makeDialog(open) {
           dfm.window.find('.dfm_text').html("_(Running)_...");
           dfm_footer('hide');
           dfm_fileManager('start');
-          $.post('/webGui/include/Control.php',{mode:'file',action:15,title:encodeURIComponent(dfm_read.title),source:encodeURIComponent(dfm_read.source),target:encodeURIComponent(dfm_target),hdlink:'',sparse:'',exist:'',zfs:''});
+          $.post('/webGui/include/Control.php',{mode:'file',action:15,title:encodeURIComponent(dfm_read.title),source:encodeURIComponent(dfm_read.source),target:encodeURIComponent(dfm_target),hdlink:'',sparse:'',overwrite:0,zfs:''});
         } else {
           return;
         }
@@ -416,8 +428,10 @@ nchan_filemanager.on('message', function(msg) {
     dfm_fileManager('stop');
     dfm.window.find('.dfm_text').addClass('orange-text').css('white-space', 'pre-line').text(data.error);
     dfm.window.find('#dfm_target').prop('disabled',false);
+    dfm.window.find('#dfm_format').prop('disabled',false);
+    dfm.window.find('#dfm_archive_name').prop('disabled',false);
     dfm.window.find('#dfm_sparse').prop('disabled',false);
-    dfm.window.find('#dfm_exist').prop('disabled',false);
+    dfm.window.find('#dfm_overwrite').prop('disabled',false);
     dfm.window.find('#dfm_owner').prop('disabled',false);
     dfm.window.find('#dfm_group').prop('disabled',false);
     dfm.window.find('#dfm_other').prop('disabled',false);
