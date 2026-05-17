@@ -422,7 +422,7 @@ test_compress() {
 test_extract() {
   local format=$1 archive=$2 dest=$3
   local overwrite_test=${4:-}
-  local source_dir=${5:-$src_path}
+  local source_dir=${5:-$files_path}
 
   should_run extract arc 17 || return 0
 
@@ -753,6 +753,36 @@ test_chmod() {
   actual_mode=$(stat -c '%a' "$path")
   rc=1 && [[ $actual_mode == "${mode#0}" || $actual_mode == "$mode" ]] && rc=0
   check "chmod $label: mode must be $mode (got $actual_mode)" "$rc"
+}
+
+# build an archive from source; writes to .tmp first, then renames atomically
+# args: format source dest_dir archive_name
+build_archive() {
+  local fmt=$1 source=$2 dest_dir=$3 archive_name=$4
+  local output="$dest_dir/$archive_name"
+  local tmp="$output.tmp"
+  local src_dir src_base rc
+  src_dir=$(dirname -- "$source")
+  src_base=$(basename -- "$source")
+  echo "  building $output ..."
+  local tar_opts=(--sparse --xattrs "--xattrs-include=*.*" --acls)
+  case $fmt in
+    tar.gz)  tar -czvf "$tmp" "${tar_opts[@]}" -C "$src_dir" "$src_base" ;;
+    tar.bz2) tar -cjvf "$tmp" "${tar_opts[@]}" -C "$src_dir" "$src_base" ;;
+    tar.xz)  tar -cJvf "$tmp" "${tar_opts[@]}" -C "$src_dir" "$src_base" ;;
+    tar.zst) tar -cvf - "${tar_opts[@]}" -C "$src_dir" "$src_base" | zstd > "$tmp" ;;
+    tar.lz4) tar -cvf - "${tar_opts[@]}" -C "$src_dir" "$src_base" | lz4  > "$tmp" ;;
+    zip)     (cd "$src_dir" && LANG=en_US.UTF-8 zip -ry "$tmp" "$src_base") ;;
+    gz)      gzip  -vc "$source" > "$tmp" ;;
+    bz2)     bzip2 -vc "$source" > "$tmp" ;;
+    xz)      xz    -vc "$source" > "$tmp" ;;
+    zst)     zstd  -f  "$source" -o "$tmp" ;;
+    lz4)     lz4   -f  "$source" "$tmp" ;;
+    *)       echo "Error: build_archive: unknown format: $fmt" 1>&2; exit 1 ;;
+  esac
+  rc=$?
+  [[ $rc -ne 0 ]] && { echo "Error: failed to create archive $output" 1>&2; exit 1; }
+  mv "$tmp" "$output" || { echo "Error: failed to move $tmp to $output" 1>&2; exit 1; }
 }
 
 # outputs sorted find metadata for a file or directory - used for diff-based integrity checks
@@ -1131,13 +1161,11 @@ create_source_files() {
   if [[ -f "$files_path/hardlink2.bin" ]]; then
     inode1=$(stat -c '%i' "$files_path/hardlink1.bin")
     inode2=$(stat -c '%i' "$files_path/hardlink2.bin")
-    if [[ $inode1 != $inode2 ]]; then
+    if [[ $inode1 != "$inode2" ]]; then
       rm "$files_path/hardlink2.bin"
-      ln "$files_path/hardlink1.bin" "$files_path/hardlink2.bin"
     fi
-  else
-    ln "$files_path/hardlink1.bin" "$files_path/hardlink2.bin"
   fi
+  [[ ! -f "$files_path/hardlink2.bin" ]] && ln "$files_path/hardlink1.bin" "$files_path/hardlink2.bin"
 
   # create file and symlink targeting it
   [[ ! -f "$files_path/symlink1.bin" ]] && dd if=/dev/urandom bs=1M count=5 of="$files_path/symlink1.bin"
@@ -1146,14 +1174,18 @@ create_source_files() {
   # create broken symlink
   [[ ! -L "$files_path/broken_symlink" ]] && ln -s "nonexistent_target.bin" "$files_path/broken_symlink"
 
-  # pre-build archives for extract tests (avoids dependency on compress tests)
+  # normalize all mtimes to a fixed value so extract diffs are reproducible across runs
+  find "$files_path" -exec touch -h -t 202001010000 {} +
+
+  # build archives for extract tests
   for fmt in "${archive_multi_formats[@]}"; do
-    [[ ! -f "$arc_path/archive.$fmt" ]] && run_action 16 "$files_path" "$arc_path" 1 "$fmt" "archive.$fmt" >/dev/null
-    [[ ! -f "$arc_path/archive.overwrite.$fmt" ]] && run_action 16 "$files_path/small_files" "$arc_path" 1 "$fmt" "archive.overwrite.$fmt" >/dev/null
+    [[ ! -f "$arc_path/archive.$fmt" ]] && build_archive "$fmt" "$files_path" "$arc_path" "archive.$fmt"
+    [[ ! -f "$arc_path/archive.overwrite.$fmt" ]] && build_archive "$fmt" "$files_path/small_files" "$arc_path" "archive.overwrite.$fmt"
   done
   for fmt in "${archive_single_formats[@]}"; do
-    [[ ! -f "$arc_path/$special_chars_name.txt.$fmt" ]] && run_action 16 "$files_path/$special_chars_name.txt" "$arc_path" 1 "$fmt" "$special_chars_name.txt.$fmt" >/dev/null
+    [[ ! -f "$arc_path/$special_chars_name.txt.$fmt" ]] && build_archive "$fmt" "$files_path/$special_chars_name.txt" "$arc_path" "$special_chars_name.txt.$fmt"
   done
+  find "$arc_path" -exec touch -h -t 202001010000 {} +
 
   echo "  test files have been created in $src_path"
 }
@@ -1205,31 +1237,33 @@ done
 # ===========================
 # create folder tests
 # ===========================
-test_create_folder "special name" "$dst_path" "$special_chars_name-dir"
+test_create_folder "special chars" "$dst_path" "$special_chars_name-dir"
 
 # ===========================
 # delete tests
 # ===========================
-test_delete_file "special name" "$files_path/$special_chars_name.txt"
+test_delete_file "special chars" "$files_path/$special_chars_name.txt"
 test_delete_folder "with content" "$files_path/delete_dir"
+create_source_files >/dev/null
 
 # ===========================
 # rename tests
 # ===========================
-test_rename_file "special name" "$files_path/$special_chars_name-rename.txt" "$special_chars_name-renamed.txt"
-test_rename_folder "special name" "$files_path/$special_chars_name-rename-dir" "$special_chars_name-renamed-dir"
+test_rename_file "special chars" "$files_path/$special_chars_name-rename.txt" "$special_chars_name-renamed.txt"
+test_rename_folder "special chars dir" "$files_path/$special_chars_name-rename-dir" "$special_chars_name-renamed-dir"
+create_source_files >/dev/null
 
 # ===========================
 # chmod tests
 # ===========================
-test_chmod "special name to 0755" "$files_path/$special_chars_name-chmod.txt" "0755"
-test_chmod "special name to 0644" "$files_path/$special_chars_name-chmod.txt" "0644"
+test_chmod "special chars to 0755" "$files_path/$special_chars_name-chmod.txt" "0755"
+test_chmod "special chars to 0644" "$files_path/$special_chars_name-chmod.txt" "0644"
 
 # ===========================
 # chown tests
 # ===========================
-test_chown "special name to nobody:users" "$files_path/$special_chars_name-chown.txt" "nobody:users"
-test_chown "special name to root:root"    "$files_path/$special_chars_name-chown.txt" "root:root"
+test_chown "special chars to nobody:users" "$files_path/$special_chars_name-chown.txt" "nobody:users"
+test_chown "special chars to root:root"    "$files_path/$special_chars_name-chown.txt" "root:root"
 
 # ===========================
 # search tests
@@ -1241,18 +1275,18 @@ test_search "no match pattern" "$files_path" "no_such_file_xyz.bin"
 # ===========================
 # copy tests
 # ===========================
-test_copy_file   "special name" "$files_path/$special_chars_name-copy.txt" "$dst_path"
-test_copy_folder "special name" "$files_path" "$dst_path"
+test_copy_file   "special chars" "$files_path/$special_chars_name-copy.txt" "$dst_path"
+test_copy_folder "files dir" "$files_path" "$dst_path"
 
 # ===========================
 # move tests
 # ===========================
-test_move_file   "special name rsync-rename" "$files_path/$special_chars_name-move-rr.txt" "$dst_path"
-test_move_file   "special name copy-delete"  "$files_path/$special_chars_name-move-cd.txt" "$dst_path" 1
-test_move_folder "special name rsync-rename" "$files_path" "$dst_path"
+test_move_file   "special chars rsync-rename" "$files_path/$special_chars_name-move-rr.txt" "$dst_path"
+test_move_file   "special chars copy-delete"  "$files_path/$special_chars_name-move-cd.txt" "$dst_path" 1
+test_move_folder "files dir rsync-rename" "$files_path" "$dst_path"
 [[ ! -d "$files_path" && -d "$dst_path/files" ]] && mv "$dst_path/files" "$src_path/" 2>/dev/null
 create_source_files >/dev/null # repair source if broken
-test_move_folder "special name copy-delete"  "$files_path" "$dst_path" 1
+test_move_folder "files dir copy-delete"  "$files_path" "$dst_path" 1
 [[ ! -d "$files_path" && -d "$dst_path/files" ]] && mv "$dst_path/files" "$src_path/" 2>/dev/null
 create_source_files >/dev/null # repair source if broken
 
