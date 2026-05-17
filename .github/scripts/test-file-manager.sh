@@ -806,9 +806,9 @@ test_chown() {
 }
 
 # test search action (action 15)
-# args: label search_dir pattern expected_match
+# args: label search_dir pattern
 test_search() {
-  local label=$1 search_dir=$2 pattern=$3 expected_match=${4:-}
+  local label=$1 search_dir=$2 pattern=$3
   local rc
 
   should_run search find 15 || return 0
@@ -821,9 +821,13 @@ test_search() {
     return 1
   fi
 
+  # count expected results using -print0 so filenames with newlines are counted correctly
+  local expected_count
+  expected_count=$(find "$search_dir" -iname "$pattern" -print0 | tr -cd '\0' | wc -c)
+
   run_action 15 "$search_dir" "$pattern" 0; rc=$?
 
-  local empty_text_count=0 text0 results_found=0 expected_match_found=0
+  local empty_text_count=0 text0 done_line=""
   while IFS= read -r line; do
     [[ $line ]] || continue
     check_nchan_line "$line" || continue
@@ -838,21 +842,30 @@ test_search() {
     fi
     # on done: status has results field (array of {location, path} objects)
     if echo "$line" | jq -e '.status.results != null' >/dev/null 2>&1; then
-      results_found=1
-      if [[ $expected_match ]]; then
-        if echo "$line" | jq -r '.status.results[]?.path // empty' | grep -qF "$expected_match"; then
-          expected_match_found=1
-        fi
-      fi
+      done_line=$line
       continue
     fi
     empty_text_count=$((empty_text_count + 1))
   done <"$fm_debug_nchan_file"
+
   check "nchan search $label: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
   check "search $label: action run must succeed" "$rc"
-  check "search $label: results must be present in nchan output" $(( results_found ? 0 : 1 ))
-  if [[ $expected_match ]]; then
-    check "search $label: results must contain '$expected_match'" $(( expected_match_found ? 0 : 1 ))
+  rc=1 && [[ $done_line ]] && rc=0
+  check "search $label: results must be present in nchan output" "$rc"
+
+  if [[ $done_line ]]; then
+    # check result count against local find (detects split filenames caused by newlines in names)
+    local actual_count
+    actual_count=$(echo "$done_line" | jq '.status.results | length')
+    rc=1 && [[ $actual_count -eq $expected_count ]] && rc=0
+    check "search $label: result count must be $expected_count (got $actual_count)" "$rc"
+
+    # check all paths are under search_dir (split filenames appear without directory prefix)
+    local bad_paths
+    bad_paths=$(echo "$done_line" | jq -r '.status.results[].path // empty' | grep -vF "$search_dir/")
+    rc=1 && [[ ! $bad_paths ]] && rc=0
+    check "search $label: all result paths must be under $search_dir" "$rc"
+    [[ $bad_paths ]] && printf '    %s\n' "$bad_paths"
   fi
 }
 
@@ -1182,9 +1195,9 @@ test_chown "special name to root:root"    "$src_path/$special_chars_name-chown.t
 # ===========================
 # search tests
 # ===========================
-test_search "hello.txt in src"   "$src_path" "hello.txt"  "$src_path/hello.txt"
-test_search "*.txt wildcard"     "$src_path" "*.txt"       "$src_path/hello.txt"
-test_search "no match pattern"   "$src_path" "no_such_file_xyz.bin"
+test_search "hello.txt in src" "$src_path" "hello.txt"
+test_search "*.txt wildcard"   "$src_path" "*.txt"
+test_search "no match pattern" "$src_path" "no_such_file_xyz.bin"
 
 # ===========================
 # copy tests
