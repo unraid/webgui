@@ -36,14 +36,49 @@ test_path=/mnt/disk1/fm_test
 src_path="$test_path/src"
 dst_path="$test_path/dst"
 special_chars_name=$'utf8_файл\nspecial&chars\*file\$'
-job_timeout=${JOB_TIMEOUT:-200}
+job_timeout=${TIMEOUT:-200}
+IFS=' ' read -ra archive_multi_formats <<< "${MULTI:-tar.bz2 tar.lz4 tar.gz tar.xz tar.zst zip}"
+IFS=' ' read -ra archive_single_formats <<< "${SINGLE:-bz2 gz lz4 xz zst}"
 script_args=("$@")
+
+if [[ ! $ssh_host || $ssh_host == "-h" || $ssh_host == "--help" ]]; then
+  echo "Usage: $(basename -- "$0") host [filter...]"
+  echo ""
+  echo "Filters (any combination, space-separated):"
+  echo "  compress, extract,    compress and extract tests (actions 16, 17)"
+  echo "  arc, cmp, 16, 17"    
+  echo "  move, mv, rename,     rename and move tests (actions 2, 4, 7, 9)"
+  echo "  2, 4, 7, 9"
+  echo "  copy, cp, 3, 8        copy tests (actions 3, 8)"
+  echo "  chmod, 12             chmod tests (action 12)"
+  echo "  create, mk, 0         create folder tests (action 0)"
+  echo "  delete, del, 1, 6     delete tests (actions 1, 6)"
+  echo ""
+  echo "ENV overrides:"
+  echo "  TIMEOUT=N        seconds to wait for a job to complete (default: 200)"
+  echo "  MULTI='...'      space-separated multi-file archive formats"
+  echo "                   default: tar.bz2 tar.lz4 tar.gz tar.xz tar.zst zip"
+  echo "  SINGLE='...'     space-separated single-file archive formats"
+  echo "                   default: bz2 gz lz4 xz zst"
+  echo ""
+  echo "Examples:"
+  echo "  $(basename -- "$0") Tower              # run all tests"
+  echo "  $(basename -- "$0") myserver arc mv    # compress/extract and rename/move"
+  echo "  $(basename -- "$0") myserver 16        # compress and extract by action ID"
+  echo "  MULTI='zip tar.gz' $(basename -- "$0") myserver arc"
+  exit 0
+fi
 
 # deploy this script to and run on remote host
 if [[ $ssh_host && $0 != "/tmp/test-file-manager.sh" ]]; then
   scp "$0" "$ssh_user@$ssh_host:/tmp/test-file-manager.sh" || { echo "Error: Failed to copy to remote host" 1>&2; exit 1; }
+  # prepend ENV overrides so they are available on the remote host
+  local_env=""
+  [[ ${TIMEOUT:-} ]] && local_env+="TIMEOUT=$(printf '%q' "$TIMEOUT") "
+  [[ ${MULTI:-}   ]] && local_env+="MULTI=$(printf '%q' "$MULTI") "
+  [[ ${SINGLE:-}  ]] && local_env+="SINGLE=$(printf '%q' "$SINGLE") "
   # shellcheck disable=SC2086
-  ssh -t "$ssh_user@$ssh_host" "bash /tmp/test-file-manager.sh ${script_args[*]}" || { echo "Error: Failed to run test on remote host" 1>&2; exit 1; }
+  ssh -t "$ssh_user@$ssh_host" "${local_env}bash /tmp/test-file-manager.sh ${script_args[*]}" || { echo "Error: Failed to run test on remote host" 1>&2; exit 1; }
   exit
 fi
 
@@ -256,8 +291,21 @@ run_action() {
   [[ $rc -eq 0 || $rc -eq -1 ]]
 }
 
-# returns 0 if test section should run: no filter set, or filter contains keyword
-should_run() { [[ ${#script_args[@]} -le 1 || "${script_args[*]:1}" == *"$1"* ]]; }
+# returns 0 if test section should run: no filter set, or any keyword matches a filter arg
+# numeric keywords use word-boundary matching to avoid partial matches (e.g. 1 != 16)
+should_run() {
+  [[ ${#script_args[@]} -le 1 ]] && return 0
+  local filter="${script_args[*]:1}"
+  local keyword
+  for keyword in "$@"; do
+    if [[ $keyword =~ ^[0-9]+$ ]]; then
+      [[ $filter =~ (^|[[:space:]])$keyword([[:space:]]|$) ]] && return 0
+    else
+      [[ $filter == *"$keyword"* ]] && return 0
+    fi
+  done
+  return 1
+}
 
 # Generic per-line nchan assertion: empty array publishes must be suppressed by file_manager
 # args: line
@@ -280,7 +328,7 @@ test_compress() {
   local rc sz cond
   local archive_name target
 
-  should_run arc || return 0
+  should_run compress extract arc cmp 16 17 || return 0
 
   echo -e "\n=== compress $input_file in $output_file ${overwrite_test:+with overwrite test} ==="
 
@@ -368,7 +416,7 @@ test_extract() {
   local overwrite_test=${4:-}
   local source_dir=${5:-$src_path}
 
-  should_run arc || return 0
+  should_run compress extract arc cmp 16 17 || return 0
 
   echo -e "\n=== extract $archive in $dest ${overwrite_test:+with overwrite test} ==="
 
@@ -433,14 +481,24 @@ test_extract() {
   extracted_file_count=$(find "$dest" -type f -printf '.' | wc -c)
   if [[ $extracted_file_count -eq 1 ]]; then
     extracted_file=$(find "$dest" -type f)
-    diff <(find_metadata "$source_dir/$(basename -- "$extracted_file")") <(find_metadata "$extracted_file") | head -20 | sed 's/^/  /'
+    # single-file formats: file_manager does not restore mtime - compare type and size only
+    local single_fmt='%P %y %s\n'
+    diff <(find_metadata "$source_dir/$(basename -- "$extracted_file")" "$single_fmt") <(find_metadata "$extracted_file" "$single_fmt") | sed 's/^/  /'
     rc=${PIPESTATUS[0]}
   else
     extracted_subdir=$(find "$dest" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' -quit)
-    local meta_fmt='%y %#m %T@ %s %n %P\t%l\n'
-    [[ $format == zip ]] && meta_fmt='%y %#m %T@ %s %P\t%l\n'
-    diff <(find_metadata "$source_dir" "$meta_fmt") <(find_metadata "$dest/$extracted_subdir" "$meta_fmt") | head -20 | sed 's/^/  /'
-    rc=${PIPESTATUS[0]}
+    if [[ $format == zip ]]; then
+      # zip: DOS time (2s resolution), no hardlinks
+      # %P first so sort is by filename - timestamps differ before sed zeroing, sort must be stable
+      # zero last 2 digits of epoch before decimal (100s bucket >> 2s DOS error)
+      local zip_fmt='%P %y %#m %T@ %s %l\n'
+      local zip_sed='s/[0-9][0-9]\.[0-9]+/00/'
+      diff <(find_metadata "$source_dir" "$zip_fmt" | sed -E "$zip_sed") <(find_metadata "$dest/$extracted_subdir" "$zip_fmt" | sed -E "$zip_sed") | sed 's/^/  /'
+      rc=${PIPESTATUS[0]}
+    else
+      diff <(find_metadata "$source_dir") <(find_metadata "$dest/$extracted_subdir") | sed 's/^/  /'
+      rc=${PIPESTATUS[0]}
+    fi
   fi
   check "extract $format: metadata must match" "$rc"
 
@@ -476,7 +534,7 @@ test_create_folder() {
   local label=$1 parent=$2 name=$3
   local rc
 
-  should_run mk || return 0
+  should_run create mk 0 || return 0
 
   echo -e "\n=== create folder: $label ==="
 
@@ -522,7 +580,7 @@ test_delete() {
   local label=$1 path=$2 action=$3
   local rc
 
-  should_run del || return 0
+  should_run delete del 1 6 || return 0
 
   if [[ $action != 1 && $action != 6 ]]; then
     echo "Error: test_delete: invalid action $action (must be 1 or 6)" 1>&2
@@ -573,7 +631,7 @@ test_rename() {
   local label=$1 path=$2 new_name=$3 action=$4
   local rc new_path pre
 
-  should_run mv || return 0
+  should_run move rename mv 2 7 || return 0
 
   if [[ $action != 2 && $action != 7 ]]; then
     echo "Error: test_rename: invalid action $action (must be 2 or 7)" 1>&2
@@ -632,7 +690,7 @@ test_rename() {
   rc=1 && [[ -e "$new_path" ]] && rc=0
   check "rename $label: target path must exist" "$rc"
 
-  diff <(echo "$pre") <(find_metadata "$new_path") | head -20 | sed 's/^/  /'
+  diff <(echo "$pre") <(find_metadata "$new_path") | sed 's/^/  /'
   rc=${PIPESTATUS[0]}
   check "rename $label: fingerprint must match" "$rc"
 }
@@ -647,7 +705,7 @@ test_chmod() {
   local label=$1 path=$2 mode=$3
   local rc
 
-  should_run chmod || return 0
+  should_run chmod 12 || return 0
 
   echo -e "\n=== chmod $label ==="
 
@@ -690,11 +748,13 @@ test_chmod() {
 }
 
 # outputs sorted find metadata for a file or directory - used for diff-based integrity checks
-# fields: type, perms, mtime, size, [link count,] relative path, symlink target
+# fields: relative path, type, perms, mtime, size, link count, symlink target
+# %P is first so sort is stable by filename regardless of timestamp differences
 # pass custom fmt as second arg to override fields (e.g. omit %n when hardlinks are not preserved by zip)
+# additional args from $3 onward are passed to find as extra predicates (e.g. -not "(" -type d -empty ")")
 find_metadata() {
-  local fmt=${2:-%y %#m %T@ %s %n %P\t%l\n}
-  find "$1" -printf "$fmt" | sort
+  local fmt=${2:-'%P %y %#m %T@ %s %n %l\n'}
+  find "$1" "${@:3}" -printf "$fmt" | sort
 }
 
 # test copy action (3=copy folder, 8=copy file)
@@ -703,7 +763,7 @@ test_copy() {
   local label=$1 source=$2 dest_dir=$3 action=$4
   local rc dest_item
 
-  should_run cp || return 0
+  should_run copy cp 3 8 || return 0
 
   echo -e "\n=== copy $label (action $action) ==="
 
@@ -753,7 +813,7 @@ test_copy() {
   rc=1 && [[ -e "$dest_item" ]] && rc=0
   check "copy $label: destination must exist" "$rc"
 
-  diff <(find_metadata "$source") <(find_metadata "$dest_item") | head -20 | sed 's/^/  /'
+  diff <(find_metadata "$source") <(find_metadata "$dest_item") | sed 's/^/  /'
   rc=${PIPESTATUS[0]}
   check "copy $label: fingerprint must match" "$rc"
 }
@@ -769,7 +829,7 @@ test_move() {
   local rc dest_item pre
   local force_file=/var/tmp/file.manager.force-copy-delete.debug
 
-  should_run mv || return 0
+  should_run move rename mv 4 9 || return 0
 
   if [[ $action != 4 && $action != 9 ]]; then
     echo "Error: test_move: invalid action $action (must be 4 or 9)" 1>&2
@@ -841,7 +901,7 @@ test_move() {
   [[ $rc -ne 0 ]] && echo "  dest missing: $dest_item ; dest_dir contents: $(ls -la -- "$dest_dir" 2>&1)"
   check "move $path_label: destination must exist" "$rc"
 
-  diff <(echo "$pre") <(find_metadata "$dest_item") | head -20 | sed 's/^/  /'
+  diff <(echo "$pre") <(find_metadata "$dest_item") | sed 's/^/  /'
   rc=${PIPESTATUS[0]}
   check "move $path_label: fingerprint must match after move" "$rc"
 
@@ -966,9 +1026,6 @@ echo "  test files have been created in $src_path"
 # ===========================
 # compress tests
 # ===========================
-archive_multi_formats=(tar.bz2 tar.lz4 tar.gz tar.xz tar.zst zip)
-archive_single_formats=(bz2 gz lz4 xz zst)
-
 for fmt in "${archive_multi_formats[@]}"; do
   test_compress "$fmt" "$dst_path/archive.$fmt" "$src_path"
 done
