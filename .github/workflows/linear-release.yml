@@ -126,6 +126,7 @@ jobs:
           PUBLIC_RELEASE_URL: ${{ steps.linear-release-public.outputs.release-url }}
           PUBLIC_RELEASE_NAME: ${{ steps.linear-release-public.outputs.release-name }}
           PUBLIC_RELEASE_VERSION: ${{ steps.linear-release-public.outputs.release-version }}
+          JOB_STATUS: ${{ job.status }}
           RELEASE_CHANNEL: ${{ steps.tag.outputs.release_channel }}
           TAG_NAME: ${{ steps.tag.outputs.tag_name }}
         run: |
@@ -155,7 +156,9 @@ jobs:
             echo "- Tag: \`${TAG_NAME}\`"
             echo "- Channel: \`${RELEASE_CHANNEL}\`"
 
-            if [ -n "$RELEASE_URL" ]; then
+            if [ "$JOB_STATUS" != "success" ]; then
+              echo "- Release: sync did not complete for \`${TAG_NAME}\` (job status: \`${JOB_STATUS}\`)"
+            elif [ -n "$RELEASE_URL" ]; then
               echo "- Release: synced [${RELEASE_NAME:-$RELEASE_VERSION}](${RELEASE_URL})"
               echo "- Version: \`${RELEASE_VERSION}\`"
             else
