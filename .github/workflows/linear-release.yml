@@ -1,0 +1,167 @@
+name: Linear Release
+
+run-name: Linear release for ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+
+on:
+  push:
+    tags:
+      - "**"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Existing tag to sync to Linear"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linear-release-${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  linear-release:
+    if: github.repository == 'unraid/webgui'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG_NAME="${{ inputs.tag_name }}"
+          else
+            TAG_NAME="${GITHUB_REF_NAME}"
+          fi
+
+          if [ -z "$TAG_NAME" ]; then
+            echo "Tag name is required" >&2
+            exit 1
+          fi
+
+          if ! git rev-parse -q --verify "refs/tags/${TAG_NAME}" >/dev/null; then
+            echo "Tag '${TAG_NAME}' does not exist in this repository" >&2
+            exit 1
+          fi
+
+          if [[ "$TAG_NAME" == *"-"* ]]; then
+            RELEASE_CHANNEL="internal"
+          elif [[ "$TAG_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            RELEASE_CHANNEL="public"
+          else
+            echo "Unsupported release tag format: ${TAG_NAME}" >&2
+            exit 1
+          fi
+
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "release_name=Unraid OS ${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "release_channel=${RELEASE_CHANNEL}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate Linear access key
+        env:
+          RELEASE_CHANNEL: ${{ steps.tag.outputs.release_channel }}
+          LINEAR_INTERNAL_ACCESS_KEY: ${{ secrets.LINEAR_INTERNAL_ACCESS_KEY }}
+          LINEAR_PUBLIC_ACCESS_KEY: ${{ secrets.LINEAR_PUBLIC_ACCESS_KEY }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+
+          case "$RELEASE_CHANNEL" in
+            internal)
+              SECRET_NAME="LINEAR_INTERNAL_ACCESS_KEY"
+              SECRET_VALUE="$LINEAR_INTERNAL_ACCESS_KEY"
+              ;;
+            public)
+              SECRET_NAME="LINEAR_PUBLIC_ACCESS_KEY"
+              SECRET_VALUE="$LINEAR_PUBLIC_ACCESS_KEY"
+              ;;
+            *)
+              echo "Unknown release channel: $RELEASE_CHANNEL" >&2
+              exit 1
+              ;;
+          esac
+
+          if [ -z "$SECRET_VALUE" ]; then
+            echo "Missing GitHub Actions secret: $SECRET_NAME" >&2
+            exit 1
+          fi
+
+      - name: Sync internal Linear release
+        if: steps.tag.outputs.release_channel == 'internal'
+        id: linear-release-internal
+        uses: linear/linear-release-action@v0
+        with:
+          access_key: ${{ secrets.LINEAR_INTERNAL_ACCESS_KEY }}
+          name: ${{ steps.tag.outputs.release_name }}
+          version: ${{ steps.tag.outputs.tag_name }}
+
+      - name: Sync public Linear release
+        if: steps.tag.outputs.release_channel == 'public'
+        id: linear-release-public
+        uses: linear/linear-release-action@v0
+        with:
+          access_key: ${{ secrets.LINEAR_PUBLIC_ACCESS_KEY }}
+          name: ${{ steps.tag.outputs.release_name }}
+          version: ${{ steps.tag.outputs.tag_name }}
+
+      - name: Summarize Linear release
+        if: always()
+        env:
+          INTERNAL_RELEASE_URL: ${{ steps.linear-release-internal.outputs.release-url }}
+          INTERNAL_RELEASE_NAME: ${{ steps.linear-release-internal.outputs.release-name }}
+          INTERNAL_RELEASE_VERSION: ${{ steps.linear-release-internal.outputs.release-version }}
+          PUBLIC_RELEASE_URL: ${{ steps.linear-release-public.outputs.release-url }}
+          PUBLIC_RELEASE_NAME: ${{ steps.linear-release-public.outputs.release-name }}
+          PUBLIC_RELEASE_VERSION: ${{ steps.linear-release-public.outputs.release-version }}
+          JOB_STATUS: ${{ job.status }}
+          RELEASE_CHANNEL: ${{ steps.tag.outputs.release_channel }}
+          TAG_NAME: ${{ steps.tag.outputs.tag_name }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+
+          RELEASE_URL=""
+          RELEASE_NAME=""
+          RELEASE_VERSION=""
+
+          case "$RELEASE_CHANNEL" in
+            internal)
+              RELEASE_URL="$INTERNAL_RELEASE_URL"
+              RELEASE_NAME="$INTERNAL_RELEASE_NAME"
+              RELEASE_VERSION="$INTERNAL_RELEASE_VERSION"
+              ;;
+            public)
+              RELEASE_URL="$PUBLIC_RELEASE_URL"
+              RELEASE_NAME="$PUBLIC_RELEASE_NAME"
+              RELEASE_VERSION="$PUBLIC_RELEASE_VERSION"
+              ;;
+          esac
+
+          {
+            echo "## Linear release"
+            echo
+            echo "- Tag: \`${TAG_NAME}\`"
+            echo "- Channel: \`${RELEASE_CHANNEL}\`"
+
+            if [ "$JOB_STATUS" != "success" ]; then
+              echo "- Release: sync did not complete for \`${TAG_NAME}\` (job status: \`${JOB_STATUS}\`)"
+            elif [ -n "$RELEASE_URL" ]; then
+              echo "- Release: synced [${RELEASE_NAME:-$RELEASE_VERSION}](${RELEASE_URL})"
+              echo "- Version: \`${RELEASE_VERSION}\`"
+            else
+              echo "- Release: no Linear release was created or updated"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
