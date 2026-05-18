@@ -394,10 +394,10 @@ case 't1':
         }
         $isI915SriovPci = (substr($pciaddress, -7) === '00:02.0');
         $showI915SriovOptions = $i915SriovPluginInstalled && $isI915SriovPci;
+        $isAllowedSriovDevice = array_key_exists($pciaddress,$sriov)
+          && in_array(substr($sriov[$pciaddress]['class_id'],0,4),$allowedPCIClass);
 
-        if ($showI915SriovOptions
-          && array_key_exists($pciaddress,$sriov)
-          && in_array(substr($sriov[$pciaddress]['class_id'],0,4),$allowedPCIClass)) {
+        if ($isAllowedSriovDevice && (!$isI915SriovPci || $showI915SriovOptions)) {
           echo "<tr><td></td><td></td><td></td><td></td><td>";
           echo _("SR-IOV Available VFs").":{$sriov[$pciaddress]['total_vfs']}";
           $num_vfs= $sriov[$pciaddress]['num_vfs'];
