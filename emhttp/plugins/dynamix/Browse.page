@@ -1262,12 +1262,16 @@ function downloadFile(source) {
   document.body.removeChild(a);
 }
 
-function uploadFile(files,index,start,time) {
+function uploadFile(files,index,start,time,prefetchedBuffer) {
   var file = files[index];
   var slice = 20971520; // 20MB chunks - no Base64 overhead, raw binary
   var next = start + slice;
   var blob = file.slice(start, next);
-  
+
+  // Start prefetching next chunk from disk immediately, in parallel with sending current chunk
+  var nextBlob = (next < file.size) ? file.slice(next, next + slice) : null;
+  var nextBufferPromise = nextBlob ? nextBlob.arrayBuffer() : null;
+
   var xhr = new XMLHttpRequest();
   currentXhr = xhr; // Store for abort capability
   var filePath = dir.replace(/\/+$/, '') + '/' + file.name;
@@ -1276,7 +1280,7 @@ function uploadFile(files,index,start,time) {
   xhr.setRequestHeader('Content-Type', 'application/octet-stream');
   xhr.setRequestHeader('X-CSRF-Token', '<?=$var['csrf_token']?>');
   xhr.timeout = Math.max(600000, slice / 1024 * 60); // ~1 minute per MB, minimum 10 minutes
-  
+
   xhr.onload = function() {
     if (xhr.status < 200 || xhr.status >= 300) {
       stopUpload(file.name, true, 'http:' + xhr.status);
@@ -1286,7 +1290,7 @@ function uploadFile(files,index,start,time) {
     if (reply == 'stop') {stopUpload(file.name); return;}
     if (reply.indexOf('error') === 0) {
       console.error('Upload error:', reply);
-      stopUpload(file.name,true); 
+      stopUpload(file.name,true);
       return;
     }
     if (next < file.size) {
@@ -1302,14 +1306,18 @@ function uploadFile(files,index,start,time) {
       var speed = autoscale(bytesTransferred / elapsedSeconds);
       var percent = Math.floor(bytesTransferred / total * 100);
       $('#dfm_uploadStatus').html("_(Uploading)_: <span class='dfm_percent'>"+percent+"%</span><span class='dfm_speed'>Speed: "+speed+"</span><span class='orange-text'> ["+(index+1)+'/'+files.length+']&nbsp;&nbsp;'+escapeHtml(file.name)+"</span>");
-      uploadFile(files,index,next,time);
+      if (cancel === 1) return;
+      nextBufferPromise.then(function(nextBuffer) {
+        if (cancel === 1) return;
+        uploadFile(files,index,next,time,nextBuffer);
+      }).catch(function() { stopUpload(file.name, true, 'read'); });
     } else if (index < files.length-1) {
       // Clean up temp file for completed upload before starting next file
       $.post('/webGui/include/Control.php',{mode:'stop',file:encodeURIComponent(file.name)});
       uploadFile(files,index+1,0,time);
     } else {stopUpload(file.name); return;}
   };
-  
+
   xhr.onabort = function() {
     // User cancelled upload - trigger deletion via cancel=1 parameter
     $.post('/webGui/include/Control.php', {
@@ -1322,18 +1330,27 @@ function uploadFile(files,index,start,time) {
       stopUpload(file.name, false);
     });
   };
-  
+
   xhr.onerror = function() {
     // Don't show error if it was a user cancel
     if (cancel === 1) return;
     stopUpload(file.name, true, 'network');
   };
-  
+
   xhr.ontimeout = function() {
     stopUpload(file.name, true, 'timeout');
   };
-  
-  xhr.send(blob);
+
+  // On Safari iOS, XHR with a file-backed Blob as request body sends successfully but never reaches
+  // readyState 4 (DONE), so onload never fires and the upload loop stalls after the first chunk.
+  // Converting to ArrayBuffer first uses a different WebKit code path that behaves correctly.
+  // To minimize the disk-read overhead, the next chunk is prefetched in parallel while this one sends.
+  (prefetchedBuffer ? Promise.resolve(prefetchedBuffer) : blob.arrayBuffer()).then(function(buffer) {
+    if (cancel === 1) return;
+    xhr.send(buffer);
+  }).catch(function() {
+    stopUpload(file.name, true, 'read');
+  });
 }
 
 var cancel = 0;
