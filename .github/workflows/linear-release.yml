@@ -122,7 +122,7 @@ jobs:
           git log --format='%B%n' "$RANGE_SPEC" > "$LOG_PATH"
 
           PR_NUMBERS="$(
-            grep -Eo 'Merge pull request #[0-9]+|\(#[0-9]+\)' "$LOG_PATH" \
+            grep -Eo 'Merge pull request #[0-9]+' "$LOG_PATH" \
               | grep -Eo '[0-9]+' \
               | sort -u || true
           )"
