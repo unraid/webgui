@@ -7,10 +7,12 @@ const RELEASE_PIPELINE_BY_CHANNEL = {
   internal: "OS Prereleases",
   public: "OS Stable Releases",
 };
+const STABLE_RELEASE_PIPELINE = "OS Stable Releases";
 const TARGET_STAGE_BY_CHANNEL = {
   internal: "In Progress",
   public: "Released",
 };
+const PLANNED_RELEASE_STAGE = "Planned";
 
 const env = process.env;
 
@@ -21,6 +23,7 @@ const tagName = requiredEnv("TAG_NAME");
 const tagSha = requiredEnv("TAG_SHA");
 const issueIdsPath = requiredEnv("ISSUE_IDS_PATH");
 const featureOsUrlsPath = env.FEATUREOS_URLS_PATH;
+const githubPrUrlsPath = env.GITHUB_PR_URLS_PATH;
 
 const pipelineName = RELEASE_PIPELINE_BY_CHANNEL[releaseChannel];
 if (!pipelineName) {
@@ -30,11 +33,13 @@ if (!pipelineName) {
 const targetStageName = TARGET_STAGE_BY_CHANNEL[releaseChannel];
 const issueIdentifiers = readIssueIdentifiers(issueIdsPath);
 const featureOsUrls = featureOsUrlsPath ? readLines(featureOsUrlsPath) : [];
+const githubPrUrls = githubPrUrlsPath ? readLines(githubPrUrlsPath) : [];
 
 const pipeline = await findReleasePipeline(pipelineName);
 const targetStage = findStage(pipeline, targetStageName);
 const release = await upsertRelease({ pipeline, targetStage });
-const syncResult = await syncIssuesToRelease(release, { issueIdentifiers, featureOsUrls });
+const relatedReleases = await resolveRelatedReleases(pipeline);
+const syncResult = await syncIssuesToRelease(release, relatedReleases, { issueIdentifiers, featureOsUrls, githubPrUrls });
 
 setOutput("release_id", release.id);
 setOutput("release_url", release.url || "");
@@ -47,13 +52,63 @@ console.log(`Synced Linear release ${release.name} (${release.version || tagName
 console.log(`Attached issues: ${syncResult.synced.length > 0 ? syncResult.synced.join(", ") : "none"}`);
 console.log(`Skipped issues: ${syncResult.skipped.length > 0 ? syncResult.skipped.join(", ") : "none"}`);
 
-async function upsertRelease({ pipeline, targetStage }) {
-  const existing = await findRelease(pipeline.id, tagName, releaseName);
-  const description = [
+async function resolveRelatedReleases(primaryPipeline) {
+  if (releaseChannel !== "internal") {
+    return {};
+  }
+
+  const stableVersion = stableVersionForPrerelease(tagName);
+  const stablePipeline = await findReleasePipeline(STABLE_RELEASE_PIPELINE);
+  const stableRelease = await upsertRelease({
+    pipeline: stablePipeline,
+    targetStage: findStage(stablePipeline, PLANNED_RELEASE_STAGE),
+    name: `Unraid OS ${stableVersion} Stable`,
+    version: stableVersion,
+    description: [
+      "Synced from unraid/webgui prerelease tag automation.",
+      "",
+      `Prerelease tag: ${tagName}`,
+      `Prerelease commit: ${tagSha}`,
+      "Stable companion release tracks work accumulated through the prerelease series.",
+    ].join("\n"),
+    commitSha: undefined,
+  });
+
+  const nextPrereleaseVersion = nextPrereleaseVersionFor(tagName);
+  const nextPrereleaseRelease = nextPrereleaseVersion
+    ? await upsertRelease({
+      pipeline: primaryPipeline,
+      targetStage: findStage(primaryPipeline, PLANNED_RELEASE_STAGE),
+      name: nextPrereleaseVersion,
+      version: nextPrereleaseVersion,
+      description: [
+        "Planned next prerelease opened by unraid/webgui tag automation.",
+        "",
+        `Created from tag: ${tagName}`,
+        `Source commit: ${tagSha}`,
+      ].join("\n"),
+      commitSha: undefined,
+    })
+    : undefined;
+
+  return { stableRelease, nextPrereleaseRelease };
+}
+
+async function upsertRelease(options) {
+  const {
+    pipeline,
+    targetStage,
+    name = releaseName,
+    version = tagName,
+    description,
+  } = options;
+  const commitSha = Object.prototype.hasOwnProperty.call(options, "commitSha") ? options.commitSha : tagSha;
+  const existing = await findRelease(pipeline.id, version, name);
+  const releaseDescription = description || [
     "Synced from unraid/webgui tag automation.",
     "",
-    `Tag: ${tagName}`,
-    `Commit: ${tagSha}`,
+    `Tag: ${version}`,
+    commitSha ? `Commit: ${commitSha}` : undefined,
     env.PREVIOUS_TAG ? `Previous tag: ${env.PREVIOUS_TAG}` : undefined,
     env.RANGE_SPEC ? `Commit range: ${env.RANGE_SPEC}` : undefined,
   ].filter(Boolean).join("\n");
@@ -61,18 +116,18 @@ async function upsertRelease({ pipeline, targetStage }) {
   if (!existing) {
     return createRelease({
       pipelineId: pipeline.id,
-      name: releaseName,
-      version: tagName,
-      description,
-      commitSha: tagSha,
+      name,
+      version,
+      description: releaseDescription,
+      commitSha,
       stageId: targetStage.id,
     });
   }
 
   const input = {
-    name: existing.name === releaseName ? undefined : releaseName,
-    description,
-    commitSha: existing.commitSha === tagSha ? undefined : tagSha,
+    name: existing.name === name ? undefined : name,
+    description: releaseDescription,
+    commitSha: commitSha && existing.commitSha !== commitSha ? commitSha : undefined,
   };
 
   if (!isTerminalReleaseStage(existing.stage) && existing.stage?.id !== targetStage.id) {
@@ -86,7 +141,7 @@ async function upsertRelease({ pipeline, targetStage }) {
   return existing;
 }
 
-async function syncIssuesToRelease(release, { issueIdentifiers, featureOsUrls }) {
+async function syncIssuesToRelease(release, relatedReleases, { issueIdentifiers, featureOsUrls, githubPrUrls }) {
   const synced = [];
   const skipped = [];
   const seenIssueIds = new Set();
@@ -98,11 +153,11 @@ async function syncIssuesToRelease(release, { issueIdentifiers, featureOsUrls })
       continue;
     }
 
-    await syncIssueToRelease(issue, release, synced, seenIssueIds);
+    await syncIssueToReleases(issue, release, relatedReleases, synced, seenIssueIds);
   }
 
   for (const url of featureOsUrls) {
-    const issues = await findIssuesForFeatureOsUrl(url);
+    const issues = await findIssuesForAttachmentUrl(url);
     if (issues.length === 0) {
       skipped.push(`${url} (no linked Linear issue)`);
       continue;
@@ -114,22 +169,68 @@ async function syncIssuesToRelease(release, { issueIdentifiers, featureOsUrls })
         continue;
       }
 
-      await syncIssueToRelease(issue, release, synced, seenIssueIds);
+      await syncIssueToReleases(issue, release, relatedReleases, synced, seenIssueIds);
     }
+  }
+
+  for (const url of githubPrUrls) {
+    const issues = await findIssuesForAttachmentUrl(url);
+    if (issues.length === 0) {
+      continue;
+    }
+
+    for (const issue of issues) {
+      if (issue.archivedAt) {
+        skipped.push(`${issue.identifier} (archived)`);
+        continue;
+      }
+
+      await syncIssueToReleases(issue, release, relatedReleases, synced, seenIssueIds);
+    }
+  }
+
+  for (const issue of await findIssuesForRelease(release.id)) {
+    if (issue.archivedAt) {
+      continue;
+    }
+    await syncIssueToReleases(issue, release, relatedReleases, synced, seenIssueIds);
   }
 
   return { synced, skipped };
 }
 
-async function syncIssueToRelease(issue, release, synced, seenIssueIds) {
+async function syncIssueToReleases(issue, release, relatedReleases, synced, seenIssueIds) {
   if (seenIssueIds.has(issue.id)) {
     return;
   }
   seenIssueIds.add(issue.id);
 
   const releaseIds = new Set((issue.releases?.nodes || []).map((item) => item.id));
-  if (!releaseIds.has(release.id)) {
-    await updateIssue(issue.id, { addedReleaseIds: [release.id] });
+  const addedReleaseIds = [];
+  const removedReleaseIds = [];
+
+  for (const targetRelease of [release, relatedReleases.stableRelease]) {
+    if (targetRelease && !releaseIds.has(targetRelease.id)) {
+      addedReleaseIds.push(targetRelease.id);
+    }
+  }
+
+  if (relatedReleases.nextPrereleaseRelease) {
+    const nextReleaseId = relatedReleases.nextPrereleaseRelease.id;
+    if (shouldCarryIssueToNextPrerelease(issue)) {
+      if (!releaseIds.has(nextReleaseId)) {
+        addedReleaseIds.push(nextReleaseId);
+      }
+    } else if (releaseIds.has(nextReleaseId)) {
+      removedReleaseIds.push(nextReleaseId);
+    }
+  }
+
+  if (addedReleaseIds.length > 0 || removedReleaseIds.length > 0) {
+    await updateIssue(issue.id, dropUndefined({
+      addedReleaseIds: addedReleaseIds.length > 0 ? addedReleaseIds : undefined,
+      removedReleaseIds: removedReleaseIds.length > 0 ? removedReleaseIds : undefined,
+    }));
   }
 
   synced.push(issue.identifier);
@@ -278,6 +379,10 @@ async function findIssue(identifier) {
         id
         identifier
         archivedAt
+        state {
+          name
+          type
+        }
         releases(first: 50) {
           nodes {
             id
@@ -290,8 +395,35 @@ async function findIssue(identifier) {
   return data.issue || null;
 }
 
-async function findIssuesForFeatureOsUrl(url) {
-  const urls = candidateFeatureOsUrls(url);
+async function findIssuesForRelease(releaseId) {
+  const data = await graphql(`
+    query FindIssuesForRelease($id: String!) {
+      release(id: $id) {
+        issues(first: 100) {
+          nodes {
+            id
+            identifier
+            archivedAt
+            state {
+              name
+              type
+            }
+            releases(first: 50) {
+              nodes {
+                id
+              }
+            }
+          }
+        }
+      }
+    }
+  `, { id: releaseId });
+
+  return data.release?.issues?.nodes || [];
+}
+
+async function findIssuesForAttachmentUrl(url) {
+  const urls = candidateAttachmentUrls(url);
   const issuesById = new Map();
 
   for (const candidate of urls) {
@@ -305,6 +437,10 @@ async function findIssuesForFeatureOsUrl(url) {
               id
               identifier
               archivedAt
+              state {
+                name
+                type
+              }
               releases(first: 50) {
                 nodes {
                   id
@@ -369,6 +505,36 @@ function isTerminalReleaseStage(stage) {
   return type === "completed" || type === "canceled" || name === "released" || name === "canceled";
 }
 
+function shouldCarryIssueToNextPrerelease(issue) {
+  const stateName = (issue.state?.name || "").trim().toLowerCase();
+  if (new Set([
+    "internal release",
+    "internal validated",
+    "public release",
+    "released",
+    "canceled",
+    "cancelled",
+    "duplicate",
+  ]).has(stateName)) {
+    return false;
+  }
+
+  const stateType = (issue.state?.type || "").trim().toLowerCase();
+  return stateType !== "completed" && stateType !== "canceled";
+}
+
+function stableVersionForPrerelease(version) {
+  return version.split("-")[0];
+}
+
+function nextPrereleaseVersionFor(version) {
+  const match = version.match(/^(.+-)(\d+)$/);
+  if (!match) {
+    return undefined;
+  }
+  return `${match[1]}${Number(match[2]) + 1}`;
+}
+
 function readIssueIdentifiers(path) {
   return readLines(path)
     .filter((value) => /^[A-Z][A-Z0-9]+-[0-9]+$/.test(value));
@@ -382,7 +548,7 @@ function readLines(path) {
     .filter((value, index, values) => values.indexOf(value) === index);
 }
 
-function candidateFeatureOsUrls(url) {
+function candidateAttachmentUrls(url) {
   const candidates = new Set([url]);
   try {
     const parsed = new URL(url);
