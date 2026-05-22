@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: linear-release-${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
@@ -30,7 +31,7 @@ jobs:
 
     steps:
       - name: Checkout tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
           fetch-depth: 0
@@ -40,6 +41,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
+
+          git fetch --force --tags origin
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG_NAME="${{ inputs.tag_name }}"
@@ -59,101 +62,142 @@ jobs:
 
           if [[ "$TAG_NAME" == *"-"* ]]; then
             RELEASE_CHANNEL="internal"
+            RELEASE_NAME="$TAG_NAME"
           elif [[ "$TAG_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             RELEASE_CHANNEL="public"
+            RELEASE_NAME="Unraid OS ${TAG_NAME} Stable"
           else
             echo "Unsupported release tag format: ${TAG_NAME}" >&2
             exit 1
           fi
 
-          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
-          echo "release_name=Unraid OS ${TAG_NAME}" >> "$GITHUB_OUTPUT"
-          echo "release_channel=${RELEASE_CHANNEL}" >> "$GITHUB_OUTPUT"
+          TAG_SHA="$(git rev-list -n 1 "$TAG_NAME")"
+          SEMVER_TAGS="$(
+            git tag --list '[0-9]*' \
+              | grep -E '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$' \
+              | sort -V
+          )"
+          PREVIOUS_TAG="$(
+            printf '%s\n' "$SEMVER_TAGS" \
+              | awk -v tag="$TAG_NAME" '$0 == tag { print previous; exit } { previous = $0 }'
+          )"
 
-      - name: Validate Linear access key
+          if [ -n "$PREVIOUS_TAG" ]; then
+            RANGE_SPEC="${PREVIOUS_TAG}..${TAG_NAME}"
+          else
+            RANGE_SPEC="$TAG_NAME"
+          fi
+
+          {
+            echo "tag_name=${TAG_NAME}"
+            echo "tag_sha=${TAG_SHA}"
+            echo "previous_tag=${PREVIOUS_TAG}"
+            echo "range_spec=${RANGE_SPEC}"
+            echo "release_name=${RELEASE_NAME}"
+            echo "release_channel=${RELEASE_CHANNEL}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Collect Linear issue IDs from release commits
+        id: issues
         env:
-          RELEASE_CHANNEL: ${{ steps.tag.outputs.release_channel }}
-          LINEAR_INTERNAL_ACCESS_KEY: ${{ secrets.LINEAR_INTERNAL_ACCESS_KEY }}
-          LINEAR_PUBLIC_ACCESS_KEY: ${{ secrets.LINEAR_PUBLIC_ACCESS_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          RANGE_SPEC: ${{ steps.tag.outputs.range_spec }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
 
-          case "$RELEASE_CHANNEL" in
-            internal)
-              SECRET_NAME="LINEAR_INTERNAL_ACCESS_KEY"
-              SECRET_VALUE="$LINEAR_INTERNAL_ACCESS_KEY"
-              ;;
-            public)
-              SECRET_NAME="LINEAR_PUBLIC_ACCESS_KEY"
-              SECRET_VALUE="$LINEAR_PUBLIC_ACCESS_KEY"
-              ;;
-            *)
-              echo "Unknown release channel: $RELEASE_CHANNEL" >&2
-              exit 1
-              ;;
-          esac
+          LOG_PATH="${RUNNER_TEMP}/linear-release-commit-text.txt"
+          PR_TEXT_PATH="${RUNNER_TEMP}/linear-release-pr-text.txt"
+          ISSUE_IDS_PATH="${RUNNER_TEMP}/linear-release-issue-ids.txt"
+          FEATUREOS_URLS_PATH="${RUNNER_TEMP}/linear-release-featureos-urls.txt"
+          : > "$LOG_PATH"
+          : > "$PR_TEXT_PATH"
+          : > "$ISSUE_IDS_PATH"
+          : > "$FEATUREOS_URLS_PATH"
 
-          if [ -z "$SECRET_VALUE" ]; then
-            echo "Missing GitHub Actions secret: $SECRET_NAME" >&2
+          git log --format='%B%n' "$RANGE_SPEC" > "$LOG_PATH"
+
+          PR_NUMBERS="$(
+            grep -Eo 'Merge pull request #[0-9]+' "$LOG_PATH" \
+              | grep -Eo '[0-9]+' \
+              | sort -u || true
+          )"
+
+          for PR_NUMBER in $PR_NUMBERS; do
+            curl -fsSL \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${GITHUB_API_URL:-https://api.github.com}/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
+              | jq -r '[.title, .body, .head.ref, .base.ref] | map(select(. != null and . != "")) | .[]' \
+              >> "$PR_TEXT_PATH"
+          done
+
+          {
+            grep -Eoh '\b[A-Z][A-Z0-9]+-[0-9]+\b' "$LOG_PATH" "$PR_TEXT_PATH" || true
+          } | sort -u > "$ISSUE_IDS_PATH"
+
+          {
+            grep -Eoh 'https://product\.unraid\.net/p/[^[:space:]<>)"]+' "$LOG_PATH" "$PR_TEXT_PATH" || true
+          } | sed 's/[.,;:]*$//' | sort -u > "$FEATUREOS_URLS_PATH"
+
+          {
+            echo "issue_ids_path=${ISSUE_IDS_PATH}"
+            echo "featureos_urls_path=${FEATUREOS_URLS_PATH}"
+            echo "issue_count=$(wc -l < "$ISSUE_IDS_PATH" | tr -d ' ')"
+            echo "featureos_url_count=$(wc -l < "$FEATUREOS_URLS_PATH" | tr -d ' ')"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Validate Linear API key
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+
+          if [ -z "$LINEAR_API_KEY" ]; then
+            echo "Missing GitHub Actions secret: LINEAR_API_KEY" >&2
+            echo "This workflow now uses the Linear GraphQL API directly so it can sync release issue membership." >&2
             exit 1
           fi
 
-      - name: Sync internal Linear release
-        if: steps.tag.outputs.release_channel == 'internal'
-        id: linear-release-internal
-        uses: linear/linear-release-action@v0
-        with:
-          access_key: ${{ secrets.LINEAR_INTERNAL_ACCESS_KEY }}
-          name: ${{ steps.tag.outputs.release_name }}
-          version: ${{ steps.tag.outputs.tag_name }}
-
-      - name: Sync public Linear release
-        if: steps.tag.outputs.release_channel == 'public'
-        id: linear-release-public
-        uses: linear/linear-release-action@v0
-        with:
-          access_key: ${{ secrets.LINEAR_PUBLIC_ACCESS_KEY }}
-          name: ${{ steps.tag.outputs.release_name }}
-          version: ${{ steps.tag.outputs.tag_name }}
+      - name: Sync Linear release and issue membership
+        id: sync
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          RELEASE_CHANNEL: ${{ steps.tag.outputs.release_channel }}
+          RELEASE_NAME: ${{ steps.tag.outputs.release_name }}
+          TAG_NAME: ${{ steps.tag.outputs.tag_name }}
+          TAG_SHA: ${{ steps.tag.outputs.tag_sha }}
+          PREVIOUS_TAG: ${{ steps.tag.outputs.previous_tag }}
+          RANGE_SPEC: ${{ steps.tag.outputs.range_spec }}
+          ISSUE_IDS_PATH: ${{ steps.issues.outputs.issue_ids_path }}
+          FEATUREOS_URLS_PATH: ${{ steps.issues.outputs.featureos_urls_path }}
+        run: node .github/scripts/sync-linear-release.mjs
 
       - name: Summarize Linear release
         if: always()
         env:
-          INTERNAL_RELEASE_URL: ${{ steps.linear-release-internal.outputs.release-url }}
-          INTERNAL_RELEASE_NAME: ${{ steps.linear-release-internal.outputs.release-name }}
-          INTERNAL_RELEASE_VERSION: ${{ steps.linear-release-internal.outputs.release-version }}
-          PUBLIC_RELEASE_URL: ${{ steps.linear-release-public.outputs.release-url }}
-          PUBLIC_RELEASE_NAME: ${{ steps.linear-release-public.outputs.release-name }}
-          PUBLIC_RELEASE_VERSION: ${{ steps.linear-release-public.outputs.release-version }}
           JOB_STATUS: ${{ job.status }}
           RELEASE_CHANNEL: ${{ steps.tag.outputs.release_channel }}
           TAG_NAME: ${{ steps.tag.outputs.tag_name }}
+          PREVIOUS_TAG: ${{ steps.tag.outputs.previous_tag }}
+          RELEASE_URL: ${{ steps.sync.outputs.release_url }}
+          RELEASE_NAME: ${{ steps.sync.outputs.release_name }}
+          RELEASE_VERSION: ${{ steps.sync.outputs.release_version }}
+          SYNCED_ISSUES: ${{ steps.sync.outputs.synced_issue_identifiers }}
+          SKIPPED_ISSUES: ${{ steps.sync.outputs.skipped_issue_identifiers }}
+          ISSUE_COUNT: ${{ steps.issues.outputs.issue_count }}
+          FEATUREOS_URL_COUNT: ${{ steps.issues.outputs.featureos_url_count }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-
-          RELEASE_URL=""
-          RELEASE_NAME=""
-          RELEASE_VERSION=""
-
-          case "$RELEASE_CHANNEL" in
-            internal)
-              RELEASE_URL="$INTERNAL_RELEASE_URL"
-              RELEASE_NAME="$INTERNAL_RELEASE_NAME"
-              RELEASE_VERSION="$INTERNAL_RELEASE_VERSION"
-              ;;
-            public)
-              RELEASE_URL="$PUBLIC_RELEASE_URL"
-              RELEASE_NAME="$PUBLIC_RELEASE_NAME"
-              RELEASE_VERSION="$PUBLIC_RELEASE_VERSION"
-              ;;
-          esac
 
           {
             echo "## Linear release"
             echo
             echo "- Tag: \`${TAG_NAME}\`"
+            echo "- Previous tag: \`${PREVIOUS_TAG:-none}\`"
             echo "- Channel: \`${RELEASE_CHANNEL}\`"
 
             if [ "$JOB_STATUS" != "success" ]; then
@@ -164,4 +208,9 @@ jobs:
             else
               echo "- Release: no Linear release was created or updated"
             fi
+
+            echo "- Linear issue IDs found: \`${ISSUE_COUNT:-0}\`"
+            echo "- FeatureOS links found: \`${FEATUREOS_URL_COUNT:-0}\`"
+            echo "- Issues attached: ${SYNCED_ISSUES:-none}"
+            echo "- Issues skipped: ${SKIPPED_ISSUES:-none}"
           } >> "$GITHUB_STEP_SUMMARY"
