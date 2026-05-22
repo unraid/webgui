@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Checkout tag
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
           fetch-depth: 0
@@ -84,6 +84,8 @@ jobs:
 
           if [ -n "$PREVIOUS_TAG" ]; then
             RANGE_SPEC="${PREVIOUS_TAG}..${TAG_NAME}"
+          elif git rev-parse -q --verify "${TAG_NAME}^" >/dev/null; then
+            RANGE_SPEC="${TAG_NAME}^..${TAG_NAME}"
           else
             RANGE_SPEC="$TAG_NAME"
           fi
@@ -118,7 +120,7 @@ jobs:
           git log --format='%B%n' "$RANGE_SPEC" > "$LOG_PATH"
 
           PR_NUMBERS="$(
-            grep -Eo 'Merge pull request #[0-9]+' "$LOG_PATH" \
+            grep -Eo 'Merge pull request #[0-9]+|\(#[0-9]+\)' "$LOG_PATH" \
               | grep -Eo '[0-9]+' \
               | sort -u || true
           )"
