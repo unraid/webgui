@@ -184,6 +184,24 @@ carrier(){
   return 1
 }
 
+# check for a non-IPv4LL address
+dhcp4_addr(){
+  ip -4 -o addr show dev $1 | awk '$4 !~ /^169[.]254[.]/ {found=1} END{exit !found}'
+}
+
+# wait for DHCP; return 2 when dhcpcd is running but only IPv4LL was assigned
+dhcp_wait(){
+  local n start=$SECONDS
+  run timeout 60 dhcpcd -w $DHCP_OPTIONS $1 || return 1
+  [[ $IP == ipv6 ]] && return 0
+  dhcp4_addr $1 && return 0
+  for ((n=SECONDS-start;n<60;n=SECONDS-start)); do
+    sleep 1
+    dhcp4_addr $1 && return 0
+  done
+  return 2
+}
+
 # create bond interface
 bond_up(){
   [[ -d /proc/net/bonding ]] || modprobe bonding mode=${BONDING_MODE[$i]} miimon=${BONDING_MIIMON[$i]}
@@ -385,13 +403,20 @@ ipaddr_up(){
     if carrier $IFACE; then
       # interface is UP
       log "interface $IFACE is UP, polling up to 60 sec for DHCP $IP server"
-      if ! run timeout 60 dhcpcd -w $DHCP_OPTIONS $IFACE; then
-        log "can't obtain IP address, continue polling in background on interface $IFACE"
+      dhcp_wait $IFACE
+      case $? in
+      0) ;;
+      2)
+        log "can't obtain non-link-local IP address, existing dhcpcd continues polling in background on interface $IFACE"
+        ;;
+      *)
+        log "can't obtain IP address, starting dhcpcd to continue polling in background on interface $IFACE"
         run dhcpcd -b $DHCP_OPTIONS $IFACE
-      fi
+        ;;
+      esac
     else
       # interface is DOWN
-      log "interface $IFACE is DOWN, polling DHCP $IP server in background"
+      log "interface $IFACE is DOWN, starting dhcpcd to poll DHCP $IP server in background"
       run dhcpcd -b $DHCP_OPTIONS $IFACE
     fi
   elif [[ $DHCP == no ]]; then
