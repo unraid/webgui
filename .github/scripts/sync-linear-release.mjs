@@ -21,6 +21,7 @@ const tagName = requiredEnv("TAG_NAME");
 const tagSha = requiredEnv("TAG_SHA");
 const issueIdsPath = requiredEnv("ISSUE_IDS_PATH");
 const featureOsUrlsPath = env.FEATUREOS_URLS_PATH;
+const githubPrUrlsPath = env.GITHUB_PR_URLS_PATH;
 
 const pipelineName = RELEASE_PIPELINE_BY_CHANNEL[releaseChannel];
 if (!pipelineName) {
@@ -30,11 +31,12 @@ if (!pipelineName) {
 const targetStageName = TARGET_STAGE_BY_CHANNEL[releaseChannel];
 const issueIdentifiers = readIssueIdentifiers(issueIdsPath);
 const featureOsUrls = featureOsUrlsPath ? readLines(featureOsUrlsPath) : [];
+const githubPrUrls = githubPrUrlsPath ? readLines(githubPrUrlsPath) : [];
 
 const pipeline = await findReleasePipeline(pipelineName);
 const targetStage = findStage(pipeline, targetStageName);
 const release = await upsertRelease({ pipeline, targetStage });
-const syncResult = await syncIssuesToRelease(release, { issueIdentifiers, featureOsUrls });
+const syncResult = await syncIssuesToRelease(release, { issueIdentifiers, featureOsUrls, githubPrUrls });
 
 setOutput("release_id", release.id);
 setOutput("release_url", release.url || "");
@@ -86,7 +88,7 @@ async function upsertRelease({ pipeline, targetStage }) {
   return existing;
 }
 
-async function syncIssuesToRelease(release, { issueIdentifiers, featureOsUrls }) {
+async function syncIssuesToRelease(release, { issueIdentifiers, featureOsUrls, githubPrUrls }) {
   const synced = [];
   const skipped = [];
   const seenIssueIds = new Set();
@@ -102,9 +104,25 @@ async function syncIssuesToRelease(release, { issueIdentifiers, featureOsUrls })
   }
 
   for (const url of featureOsUrls) {
-    const issues = await findIssuesForFeatureOsUrl(url);
+    const issues = await findIssuesForAttachmentUrl(url);
     if (issues.length === 0) {
       skipped.push(`${url} (no linked Linear issue)`);
+      continue;
+    }
+
+    for (const issue of issues) {
+      if (issue.archivedAt) {
+        skipped.push(`${issue.identifier} (archived)`);
+        continue;
+      }
+
+      await syncIssueToRelease(issue, release, synced, seenIssueIds);
+    }
+  }
+
+  for (const url of githubPrUrls) {
+    const issues = await findIssuesForAttachmentUrl(url);
+    if (issues.length === 0) {
       continue;
     }
 
@@ -290,8 +308,8 @@ async function findIssue(identifier) {
   return data.issue || null;
 }
 
-async function findIssuesForFeatureOsUrl(url) {
-  const urls = candidateFeatureOsUrls(url);
+async function findIssuesForAttachmentUrl(url) {
+  const urls = candidateAttachmentUrls(url);
   const issuesById = new Map();
 
   for (const candidate of urls) {
@@ -382,7 +400,7 @@ function readLines(path) {
     .filter((value, index, values) => values.indexOf(value) === index);
 }
 
-function candidateFeatureOsUrls(url) {
+function candidateAttachmentUrls(url) {
   const candidates = new Set([url]);
   try {
     const parsed = new URL(url);

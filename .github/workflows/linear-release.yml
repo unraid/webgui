@@ -112,10 +112,12 @@ jobs:
           PR_TEXT_PATH="${RUNNER_TEMP}/linear-release-pr-text.txt"
           ISSUE_IDS_PATH="${RUNNER_TEMP}/linear-release-issue-ids.txt"
           FEATUREOS_URLS_PATH="${RUNNER_TEMP}/linear-release-featureos-urls.txt"
+          GITHUB_PR_URLS_PATH="${RUNNER_TEMP}/linear-release-github-pr-urls.txt"
           : > "$LOG_PATH"
           : > "$PR_TEXT_PATH"
           : > "$ISSUE_IDS_PATH"
           : > "$FEATUREOS_URLS_PATH"
+          : > "$GITHUB_PR_URLS_PATH"
 
           git log --format='%B%n' "$RANGE_SPEC" > "$LOG_PATH"
 
@@ -126,6 +128,7 @@ jobs:
           )"
 
           for PR_NUMBER in $PR_NUMBERS; do
+            echo "${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY}/pull/${PR_NUMBER}" >> "$GITHUB_PR_URLS_PATH"
             curl -fsSL \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer ${GH_TOKEN}" \
@@ -146,8 +149,10 @@ jobs:
           {
             echo "issue_ids_path=${ISSUE_IDS_PATH}"
             echo "featureos_urls_path=${FEATUREOS_URLS_PATH}"
+            echo "github_pr_urls_path=${GITHUB_PR_URLS_PATH}"
             echo "issue_count=$(wc -l < "$ISSUE_IDS_PATH" | tr -d ' ')"
             echo "featureos_url_count=$(wc -l < "$FEATUREOS_URLS_PATH" | tr -d ' ')"
+            echo "github_pr_url_count=$(wc -l < "$GITHUB_PR_URLS_PATH" | tr -d ' ')"
           } >> "$GITHUB_OUTPUT"
 
       - name: Validate Linear API key
@@ -175,6 +180,7 @@ jobs:
           RANGE_SPEC: ${{ steps.tag.outputs.range_spec }}
           ISSUE_IDS_PATH: ${{ steps.issues.outputs.issue_ids_path }}
           FEATUREOS_URLS_PATH: ${{ steps.issues.outputs.featureos_urls_path }}
+          GITHUB_PR_URLS_PATH: ${{ steps.issues.outputs.github_pr_urls_path }}
         run: node .github/scripts/sync-linear-release.mjs
 
       - name: Summarize Linear release
@@ -191,6 +197,7 @@ jobs:
           SKIPPED_ISSUES: ${{ steps.sync.outputs.skipped_issue_identifiers }}
           ISSUE_COUNT: ${{ steps.issues.outputs.issue_count }}
           FEATUREOS_URL_COUNT: ${{ steps.issues.outputs.featureos_url_count }}
+          GITHUB_PR_URL_COUNT: ${{ steps.issues.outputs.github_pr_url_count }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -213,6 +220,7 @@ jobs:
 
             echo "- Linear issue IDs found: \`${ISSUE_COUNT:-0}\`"
             echo "- FeatureOS links found: \`${FEATUREOS_URL_COUNT:-0}\`"
+            echo "- GitHub PR links checked in Linear: \`${GITHUB_PR_URL_COUNT:-0}\`"
             echo "- Issues attached: ${SYNCED_ISSUES:-none}"
             echo "- Issues skipped: ${SKIPPED_ISSUES:-none}"
           } >> "$GITHUB_STEP_SUMMARY"
