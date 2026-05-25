@@ -372,7 +372,7 @@ ipaddr_up(){
   if [[ $DHCP == yes ]]; then
     # bring up interface using DHCP/SLAAC
     [[ -z $RENEW ]] && ipv6_addr 1
-    DHCP_OPTIONS="-q -n -p -t ${DHCP_TIMEOUT[$i]:-10}"
+    DHCP_OPTIONS="-q -n -p"
     [[ -n $DHCP_HOSTNAME ]] && DHCP_OPTIONS="$DHCP_OPTIONS -h $DHCP_HOSTNAME"
     [[ $DHCP_KEEP_RESOLV == yes ]] && DHCP_OPTIONS="$DHCP_OPTIONS -C resolv.conf"
     [[ $DHCP_DEBUG == yes ]] && DHCP_OPTIONS="$DHCP_OPTIONS -d"
@@ -384,15 +384,12 @@ ipaddr_up(){
     [[ $IP != ipv4 && -n $PRIV6 && -d $CONF6/$IFACE ]] && echo $PRIV6 >$CONF6/$IFACE/use_tempaddr
     if carrier $IFACE; then
       # interface is UP
-      log "interface $IFACE is UP, polling up to 60 sec for DHCP $IP server"
-      if ! run timeout 60 dhcpcd -w $DHCP_OPTIONS $IFACE; then
-        log "can't obtain IP address, continue polling in background on interface $IFACE"
-        run dhcpcd -b $DHCP_OPTIONS $IFACE
-      fi
+      log "interface $IFACE is UP, polling up to ${DHCP_TIMEOUT[$i]:-60} sec for DHCP $IP server"
+      run dhcpcd -w -t "${DHCP_TIMEOUT[$i]:-60}" $DHCP_OPTIONS $IFACE
     else
       # interface is DOWN
       log "interface $IFACE is DOWN, polling DHCP $IP server in background"
-      run dhcpcd -b $DHCP_OPTIONS $IFACE
+      run dhcpcd -b -t "${DHCP_TIMEOUT[$i]:-60}" $DHCP_OPTIONS $IFACE
     fi
   elif [[ $DHCP == no ]]; then
     # bring up interface using static IP address
