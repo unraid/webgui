@@ -195,9 +195,13 @@ dhcp_wait(){
   run timeout 60 dhcpcd -w $DHCP_OPTIONS $1 || return 1
   [[ $IP == ipv6 ]] && return 0
   dhcp4_addr $1 && return 0
+  log "DHCP returned with IPv4LL only on interface $1; waiting for non-link-local IPv4 address"
   for ((n=SECONDS-start;n<60;n=SECONDS-start)); do
     sleep 1
-    dhcp4_addr $1 && return 0
+    if dhcp4_addr $1; then
+      log "non-link-local IPv4 address ready on interface $1 after $((SECONDS-start))s"
+      return 0
+    fi
   done
   return 2
 }
