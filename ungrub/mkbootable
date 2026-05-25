@@ -155,7 +155,7 @@ add_device() {
 
 remove_device() {
   if [[ "$DEV" = "missing" ]]; then
-    TARGET="$(zpool status -P "$pool" | awk '/^\t    / && ($2 == "OFFLINE" || $2 == "REMOVED" || $2 == "UNAVAIL") { print $1; exit }')"
+    TARGET="$(zpool status -P "$POOL" | awk '/^\t    / && ($2 == "OFFLINE" || $2 == "REMOVED" || $2 == "UNAVAIL") { print $1; exit }')"
     zpool detach "$POOL" "$TARGET"
   else
     zpool detach "$POOL" "$BOOT_PART"
