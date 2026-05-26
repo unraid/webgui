@@ -385,11 +385,14 @@ ipaddr_up(){
     if carrier $IFACE; then
       # interface is UP
       log "interface $IFACE is UP, polling up to ${DHCP_TIMEOUT[$i]:-60} sec for DHCP $IP server"
-      run dhcpcd -w -t "${DHCP_TIMEOUT[$i]:-60}" $DHCP_OPTIONS $IFACE
+      if ! run dhcpcd -L -t "${DHCP_TIMEOUT[$i]:-60}" $DHCP_OPTIONS $IFACE ; then
+ 	log "can't obtain IP address, continue polling in background on interface $IFACE"
+	run dhcpcd -b $DHCP_OPTIONS $IFACE
+      fi
     else
       # interface is DOWN
       log "interface $IFACE is DOWN, polling DHCP $IP server in background"
-      run dhcpcd -b -t "${DHCP_TIMEOUT[$i]:-60}" $DHCP_OPTIONS $IFACE
+      run dhcpcd -b $DHCP_OPTIONS $IFACE
     fi
   elif [[ $DHCP == no ]]; then
     # bring up interface using static IP address
