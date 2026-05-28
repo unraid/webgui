@@ -42,6 +42,184 @@ $pools  = pools_filter($disks);
 $errors = [];
 $top    = 120;
 
+function panelcontrol_monitor_has_show_flag() {
+    return true;
+}
+
+function panelcontrol_monitor_state_rank($state) {
+  switch ((string)$state) {
+    case 'alert': return 5;
+    case 'warning': return 4;
+    case 'normal-blink': return 3;
+    case 'normal': return 2;
+    case 'off': return 1;
+    default: return 0;
+  }
+}
+
+function panelcontrol_monitor_push_event(&$events, $event, $scope, $target, $state, $reason, $details=[]) {
+  $events[] = [
+    'event' => (string)$event,
+    'scope' => (string)$scope,
+    'target' => (string)$target,
+    'state' => (string)$state,
+    'reason' => (string)$reason,
+    'details' => is_array($details) ? $details : [],
+  ];
+}
+
+function panelcontrol_monitor_build_payload($var, $disks, $devs, $saved, $display, $server, $high1, $high2, $top) {
+  $events = [];
+
+  foreach ((array)$disks as $disk) {
+    $name = _var($disk,'name');
+    if ($name === 'flash' || substr(_var($disk,'status'),-3) === '_NP') {
+      continue;
+    }
+
+    $diskName = no_tilde((string)$name);
+    $diskDevice = strtolower(trim((string)_var($disk,'device','')));
+    $diskId = trim((string)_var($disk,'id',''));
+    $temp = _var($disk,'temp','*');
+    $spundownRaw = _var($disk,'spundown','');
+    $spundownValue = strtolower(trim((string)$spundownRaw));
+    $status = strtolower((string)_var($disk,'status',''));
+    $isNoDeviceStatus = strpos($status, 'np') !== false;
+    $isDisabledStatus = strpos($status, 'dsbl') !== false || strpos($status, 'disabled') !== false;
+    if (($diskDevice === '' && $diskId === '') || $isNoDeviceStatus || $isDisabledStatus) {
+      continue;
+    }
+    $target = $diskDevice !== '' ? $diskDevice : $diskId;
+    $color = strtolower((string)strtok(_var($disk,'color'),'-'));
+    $eventsBeforeDisk = count($events);
+    $isSpunDown = in_array($spundownValue, ['1', 'true', 'yes', 'on'], true)
+      || strpos($status, 'sby') !== false
+      || strpos($status, 'standby') !== false;
+    $identity = [
+      'disk_name' => $diskName,
+      'disk_device' => $diskDevice,
+      'disk_id' => $diskId,
+      'disk_temp' => is_numeric($temp) ? (int)$temp : null,
+      'disk_spundown' => $spundownRaw,
+    ];
+
+    if ($color === 'red') {
+      panelcontrol_monitor_push_event($events, 'monitor.storage.offline', 'disk', $target, 'alert', 'disk-error-state', [
+        'status' => $status,
+      ] + $identity);
+    } elseif ($color === 'yellow') {
+      panelcontrol_monitor_push_event($events, 'monitor.storage.activity', 'disk', $target, 'normal-blink', 'disk-rebuild-or-sync', [
+        'status' => $status,
+      ] + $identity);
+    }
+
+    if ($isSpunDown) {
+      panelcontrol_monitor_push_event($events, 'monitor.storage.spindown', 'disk', $target, 'normal', 'disk-standby', [
+        'status' => $status,
+      ] + $identity);
+    }
+
+    if (!$isSpunDown) {
+      if (is_numeric($temp)) {
+        panelcontrol_monitor_push_event($events, 'monitor.system.temperature', 'disk', $target, 'normal', 'temperature-sample', [
+          'temp' => (int)$temp,
+        ] + $identity);
+      }
+
+      [$hotNVME,$maxNVME] = _var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'temp') : [-1,-1];
+      $hot = _var($disk,'hotTemp',-1)>=0 ? $disk['hotTemp'] : ($hotNVME>=0 ? $hotNVME : (_var($disk,'rotational',1)==0 && $display['hotssd']>=0 ? $display['hotssd'] : $display['hot']));
+      $max = _var($disk,'maxTemp',-1)>=0 ? $disk['maxTemp'] : ($maxNVME>=0 ? $maxNVME : (_var($disk,'rotational',1)==0 && $display['maxssd']>=0 ? $display['maxssd'] : $display['max']));
+      $tempState = exceed($temp,$max,$top) ? 'alert' : (exceed($temp,$hot,$top) ? 'warning' : '');
+      if ($tempState !== '') {
+        panelcontrol_monitor_push_event($events, 'monitor.system.temperature', 'disk', $target, $tempState, 'temperature-threshold', [
+          'temp' => (int)$temp,
+          'warning' => (int)$hot,
+          'critical' => (int)$max,
+        ] + $identity);
+      }
+    }
+
+    $numErrors = (int)_var($disk,'numErrors',0);
+    if ($numErrors > 0) {
+      panelcontrol_monitor_push_event($events, 'monitor.storage.health', 'disk', $target, 'alert', 'read-errors', [
+        'errors' => $numErrors,
+      ] + $identity);
+    }
+
+    if (count($events) === $eventsBeforeDisk) {
+      panelcontrol_monitor_push_event($events, 'monitor.storage.health', 'disk', $target, 'normal', 'disk-present', [
+        'status' => $status,
+      ] + $identity);
+    }
+  }
+
+  foreach ((array)$devs as $dev) {
+    $name = _var($dev,'name','no-name');
+    $target = 'device:' . no_tilde((string)$name);
+    $temp = _var($dev,'temp','*');
+    if (!is_numeric($temp)) {
+      continue;
+    }
+
+    $tempInt = (int)$temp;
+    $hot = (int)_var($display,'hot',0);
+    $max = (int)_var($display,'max',0);
+    $tempState = exceed($tempInt,$max,$top) ? 'alert' : (exceed($tempInt,$hot,$top) ? 'warning' : '');
+    if ($tempState !== '') {
+      panelcontrol_monitor_push_event($events, 'monitor.system.temperature', 'device', $target, $tempState, 'temperature-threshold', [
+        'temp' => $tempInt,
+        'warning' => $hot,
+        'critical' => $max,
+      ]);
+    }
+  }
+
+  $targets = [];
+  $counts = ['off' => 0, 'normal' => 0, 'normal-blink' => 0, 'warning' => 0, 'alert' => 0];
+  foreach ($events as $event) {
+    $target = (string)$event['target'];
+    $state = (string)$event['state'];
+    if ($target === '' || $state === '') {
+      continue;
+    }
+    if (!isset($targets[$target]) || panelcontrol_monitor_state_rank($state) > panelcontrol_monitor_state_rank($targets[$target])) {
+      $targets[$target] = $state;
+    }
+  }
+
+  foreach ($targets as $state) {
+    if (isset($counts[$state])) {
+      $counts[$state]++;
+    }
+  }
+
+  $payloadSavedState = is_array($saved) ? $saved : [];
+  if (isset($payloadSavedState['used'])) {
+    unset($payloadSavedState['used']);
+  }
+
+  return [
+    'schema' => 'panelcontrol.monitor-payload.v1',
+    'source' => 'unraid.monitor.copy',
+    'generatedAt' => gmdate(DATE_RFC3339),
+    'server' => (string)$server,
+    'thresholds' => [
+      'docker_critical' => (int)$high1,
+      'docker_warning' => (int)$high2,
+    ],
+    'saved_state' => $payloadSavedState,
+    'events' => $events,
+    'targets' => $targets,
+    'summary' => [
+      'event_count' => count($events),
+      'targets_count' => count($targets),
+      'state_counts' => $counts,
+    ],
+  ];
+}
+
+$panelcontrolShow = panelcontrol_monitor_has_show_flag();
+
 function check_temp(&$disk,$text,$info) {
   global $notify,$saved,$server,$display,$top;
   $name  = _var($disk,'name');
@@ -349,5 +527,29 @@ if ($saved) {
     delete_file($ram,$rom);
   }
 }
+
+if ($panelcontrolShow) {
+  $payload = panelcontrol_monitor_build_payload($var, $disks, $devs, $saved, $display, $server, $high1, $high2, $top);
+  $payloadPath = '/usr/local/emhttp/state/panelcontrol-monitor-payload.json';
+  $payloadJson = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+  if ($payloadJson === false) {
+    my_logger('Failed to encode panelcontrol monitor payload: '.json_last_error_msg(), 'webgui');
+  } else {
+    $payloadJson .= "\n";
+    $existingPayloadJson = @file_get_contents($payloadPath);
+    if ($existingPayloadJson !== $payloadJson) {
+      $tmpPath = $payloadPath . '.tmp';
+      if (@file_put_contents($tmpPath, $payloadJson, LOCK_EX) !== false) {
+        if (!@rename($tmpPath, $payloadPath)) {
+          @file_put_contents($payloadPath, $payloadJson, LOCK_EX);
+          @unlink($tmpPath);
+        }
+      } else {
+        @file_put_contents($payloadPath, $payloadJson, LOCK_EX);
+      }
+    }
+  }
+}
+
 exit(0);
 ?>
