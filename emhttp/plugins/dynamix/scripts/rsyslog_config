@@ -50,6 +50,7 @@ fi
 
 # mirror syslog to boot drive
 if [[ -n $syslog_flash ]]; then
+  mkdir -p /boot/logs
   if ! grep -q '^\$template flash,' $ETC; then
     sed -ri '/^#\$UDPServerRun [0-9]+.*$/a$template flash,"/boot/logs/syslog"' $ETC
   fi
