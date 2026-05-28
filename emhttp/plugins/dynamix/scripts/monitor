@@ -569,14 +569,22 @@ if ($saved) {
 if ($panelcontrolShow) {
   $payload = panelcontrol_monitor_build_payload($var, $disks, $devs, $saved, $display, $server, $high1, $high2, $top);
   $payloadPath = '/usr/local/emhttp/state/panelcontrol-monitor-payload.json';
-  $payloadJson = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
-  $existingPayloadJson = @file_get_contents($payloadPath);
-  if ($existingPayloadJson !== $payloadJson) {
-    $tmpPath = $payloadPath . '.tmp';
-    if (@file_put_contents($tmpPath, $payloadJson, LOCK_EX) !== false) {
-      @rename($tmpPath, $payloadPath);
-    } else {
-      @file_put_contents($payloadPath, $payloadJson, LOCK_EX);
+  $payloadJson = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+  if ($payloadJson === false) {
+    my_logger('Failed to encode panelcontrol monitor payload: '.json_last_error_msg(), 'webgui');
+  } else {
+    $payloadJson .= "\n";
+    $existingPayloadJson = @file_get_contents($payloadPath);
+    if ($existingPayloadJson !== $payloadJson) {
+      $tmpPath = $payloadPath . '.tmp';
+      if (@file_put_contents($tmpPath, $payloadJson, LOCK_EX) !== false) {
+        if (!@rename($tmpPath, $payloadPath)) {
+          @file_put_contents($payloadPath, $payloadJson, LOCK_EX);
+          @unlink($tmpPath);
+        }
+      } else {
+        @file_put_contents($payloadPath, $payloadJson, LOCK_EX);
+      }
     }
   }
 }
