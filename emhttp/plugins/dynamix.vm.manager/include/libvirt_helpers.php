@@ -1229,8 +1229,9 @@ class Array2XML {
 		$arrValidNetworks['bridges'] = array_diff($arrBridges, $remove);
 
 		// This breaks VMSettings.page if libvirt is not running
-			if ($libvirt_running == "yes") {
+		if ($libvirt_running == "yes") {
 			$arrVirtual = $lv->libvirt_get_net_list($lv->get_connection());
+			sort($arrVirtual, SORT_NATURAL | SORT_FLAG_CASE);
 
 			if (($key = array_search('default', $arrVirtual)) !== false) {
 				unset($arrVirtual[$key]);
