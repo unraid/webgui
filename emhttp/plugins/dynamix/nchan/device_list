@@ -245,9 +245,13 @@ function get_pool_boot_metrics(?array $bootDisk): array
   $size = _var($bootDisk,'fsSize',null);
   $used = _var($bootDisk,'fsUsed',null);
   $free = _var($bootDisk,'fsFree',null);
-  $fsType = str_replace('luks:','',_var($bootDisk,'fsType',''));
-
-  if ($fsType=='btrfs' && is_numeric($used) && is_numeric($free)) $size = $used+$free;
+  $fsDisk = [
+    'fsSize' => $size ?? 0,
+    'fsUsed' => $used ?? 0,
+    'fsFree' => $free ?? 0,
+    'fsType' => _var($bootDisk,'fsType',''),
+  ];
+  $size = effective_fs_size($fsDisk);
 
   if ($size !== null || $used !== null || $free !== null) {
     return [
@@ -268,8 +272,13 @@ function get_boot_pool_metrics(array $bootDisks, string $bootPoolName, ?array $f
       $size = _var($disk,'fsSize',null);
       $used = _var($disk,'fsUsed',null);
       $free = _var($disk,'fsFree',null);
-      $fsType = str_replace('luks:','',_var($disk,'fsType',''));
-      if ($fsType=='btrfs' && is_numeric($used) && is_numeric($free)) $size = $used+$free;
+      $fsDisk = [
+        'fsSize' => $size ?? 0,
+        'fsUsed' => $used ?? 0,
+        'fsFree' => $free ?? 0,
+        'fsType' => _var($disk,'fsType',''),
+      ];
+      $size = effective_fs_size($fsDisk);
       if ($size !== null || $used !== null || $free !== null) {
         return [
           'fsSize' => $size ?? 0,
@@ -300,12 +309,9 @@ function get_pool_data_metrics(?array $poolDisk, string $poolName='', array $dis
     if (!empty($firstPoolDisk)) $metricsDisk = $firstPoolDisk;
   }
   if (empty($metricsDisk)) return [];
-  $size = _var($metricsDisk,'fsSize',0);
+  $size = effective_fs_size($metricsDisk);
   $used = _var($metricsDisk,'fsUsed',0);
   $free = _var($metricsDisk,'fsFree',0);
-  $fsType = str_replace('luks:','',_var($metricsDisk,'fsType',''));
-
-  if ($fsType=='btrfs' && is_numeric($used) && is_numeric($free)) $size = $used+$free;
 
   return [
     'fsSize' => $size,
