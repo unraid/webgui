@@ -81,7 +81,10 @@ foreach ($disks as $disk) {
   case 'Cache':
     $name = _var($disk,'name');
     if (in_array($name,$pools)) {
-      $cache_size[$name] = _var($disk,'fsSize',0);
+      $cache_fstype = str_replace('luks:','',_var($disk,'fsType',''));
+      $cache_size[$name] = ($cache_fstype=='btrfs' && is_numeric(_var($disk,'fsFree',null)) && is_numeric(_var($disk,'fsUsed',null)))
+                        ? _var($disk,'fsFree',0)+_var($disk,'fsUsed',0)
+                        : _var($disk,'fsSize',0);
       $cache_used[$name] = _var($disk,'fsUsed',_var($disk,'fsSize',0)-_var($disk,'fsFree',0));
       $cache_type[$name] = _var($disk,'rotational') ? (_var($disk,'luksState') ? 'disk-encrypted' : 'disk') : 'nvme';
       $cache_rate[$name] = number_format(100*$cache_used[$name]/($cache_size[$name] ?: 1),1,$dot,'');

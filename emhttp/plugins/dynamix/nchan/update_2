@@ -249,6 +249,7 @@ function device_usage(&$disk, &$full, &$high) {
   $size = _var($disk,'fsSize',0);
   $free = _var($disk,'fsFree',null);
   $used_kib = null;
+  $fs_type = '';
 
   if ($type=='Cache') {
     $name = _var($disk,'name');
@@ -260,6 +261,8 @@ function device_usage(&$disk, &$full, &$high) {
       $size = _var($root,'fsSize',$size);
       $free = _var($root,'fsFree',$free);
       $used_kib = _var($root,'fsUsed',null);
+      $fs_type = str_replace('luks:','',_var($root,'fsType',''));
+      if ($fs_type=='btrfs' && is_numeric($free) && is_numeric($used_kib)) $size = $free+$used_kib;
     }
   }
 
@@ -374,6 +377,8 @@ function pool_usage($pool) {
   $size = _var($disk,'fsSize',0);
   $free = _var($disk,'fsFree',0);
   $used = _var($disk,'fsUsed',$size-$free);
+  $fs_type = str_replace('luks:','',_var($disk,'fsType',''));
+  if ($fs_type=='btrfs' && is_numeric($free) && is_numeric($used)) $size = $free+$used;
   $dot  = _var($display,'number','.,')[0];
   $rate = number_format(100*$used/($size ?: 1),1,$dot,'');
   return sprintf(_('Used: %s of %s (%s %%)'),my_scale($used*1024,$unit)." $unit",my_scale($size*1024,$unit,-1,-1)." $unit",$rate);

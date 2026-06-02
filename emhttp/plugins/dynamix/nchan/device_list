@@ -245,6 +245,9 @@ function get_pool_boot_metrics(?array $bootDisk): array
   $size = _var($bootDisk,'fsSize',null);
   $used = _var($bootDisk,'fsUsed',null);
   $free = _var($bootDisk,'fsFree',null);
+  $fsType = str_replace('luks:','',_var($bootDisk,'fsType',''));
+
+  if ($fsType=='btrfs' && is_numeric($used) && is_numeric($free)) $size = $used+$free;
 
   if ($size !== null || $used !== null || $free !== null) {
     return [
@@ -265,6 +268,8 @@ function get_boot_pool_metrics(array $bootDisks, string $bootPoolName, ?array $f
       $size = _var($disk,'fsSize',null);
       $used = _var($disk,'fsUsed',null);
       $free = _var($disk,'fsFree',null);
+      $fsType = str_replace('luks:','',_var($disk,'fsType',''));
+      if ($fsType=='btrfs' && is_numeric($used) && is_numeric($free)) $size = $used+$free;
       if ($size !== null || $used !== null || $free !== null) {
         return [
           'fsSize' => $size ?? 0,
@@ -298,6 +303,9 @@ function get_pool_data_metrics(?array $poolDisk, string $poolName='', array $dis
   $size = _var($metricsDisk,'fsSize',0);
   $used = _var($metricsDisk,'fsUsed',0);
   $free = _var($metricsDisk,'fsFree',0);
+  $fsType = str_replace('luks:','',_var($metricsDisk,'fsType',''));
+
+  if ($fsType=='btrfs' && is_numeric($used) && is_numeric($free)) $size = $used+$free;
 
   return [
     'fsSize' => $size,
@@ -657,24 +665,33 @@ function vfs_type(&$disk,$online = false) {
   return $luks.str_replace('luks:','',$fsType);
 }
 
+function effective_fs_size(&$disk) {
+  $size = _var($disk,'fsSize',0);
+  $used = _var($disk,'fsUsed',null);
+  $free = _var($disk,'fsFree',null);
+  $fsType = str_replace('luks:','',_var($disk,'fsType',''));
+  return ($fsType=='btrfs' && is_numeric($used) && is_numeric($free)) ? $used+$free : $size;
+}
+
 function fs_info(&$disk,$online = false) {
   global $display;
   $echo = [];
   if (empty(_var($disk,'fsStatus','')))
     return "<td colspan='4'></td>";
   if (_var($disk,'fsStatus')=='Mounted') {
+    $fsSize = effective_fs_size($disk);
     $echo[] = "<td>".vfs_type($disk,$online)."</td>";
-    $echo[] = "<td>".my_scale(_var($disk,'fsSize',0)*1024,$unit,-1)." $unit</td>";
+    $echo[] = "<td>".my_scale($fsSize*1024,$unit,-1)." $unit</td>";
     if ($display['text']%10==0) {
       $echo[] = "<td>".my_scale(_var($disk,'fsUsed',0)*1024,$unit)." $unit</td>";
     } else {
-      $used = _var($disk,'fsSize',0)>0 ? 100-round(100*_var($disk,'fsFree',0)/$disk['fsSize']) : 0;
+      $used = $fsSize>0 ? max(0,min(100,100*(1-_var($disk,'fsFree',0)/$fsSize))) : 0;
       $echo[] = "<td><div class='usage-disk'><span style='width:$used%' class='".usage_color($disk,$used,false)."'></span><span>".my_scale(_var($disk,'fsUsed',0)*1024,$unit)." $unit</span></div></td>";
     }
     if (_var($display,'text',0)<10 ? _var($display,'text',0)%10==0 : _var($display,'text',0)%10!=0) {
       $echo[] = "<td>".my_scale(_var($disk,'fsFree',0)*1024,$unit)." $unit</td>";
     } else {
-      $free = _var($disk,'fsSize',0)>0 ? round(100*_var($disk,'fsFree',0)/$disk['fsSize']) : 0;
+      $free = $fsSize>0 ? max(0,min(100,100*_var($disk,'fsFree',0)/$fsSize)) : 0;
       $echo[] = "<td><div class='usage-disk'><span style='width:$free%' class='".usage_color($disk,$free,true)."'></span><span>".my_scale(_var($disk,'fsFree',0)*1024,$unit)." $unit</span></div></td>";
     }
   } else {
@@ -803,7 +820,7 @@ function array_online(&$disk, $fstype='', $poolName='', $poolstatusData=[], $opt
   $sum['numWrites'] += _var($disk,'numWrites',0);
   $sum['numErrors'] += _var($disk,'numErrors',0); 
   if (isset($disk['fsFree'])) {
-    $sum['fsSize'] += _var($disk,'fsSize',0);
+    $sum['fsSize'] += effective_fs_size($disk);
     $sum['fsUsed'] += _var($disk,'fsUsed',0);
     $sum['fsFree'] += _var($disk,'fsFree',0);
   }
@@ -812,9 +829,6 @@ function array_online(&$disk, $fstype='', $poolName='', $poolstatusData=[], $opt
   case 'DISK_NP':
     if (in_array(_var($disk,'name'),$pools) || $fstype=='zfs') {
       $echo[] = "<td>".device_info($disk,true,$poolName,$poolstatusData,$options)."</td>";
-        $echo[] = "<td>".device_info($disk,true,$poolName,$poolstatusData,$options)."</td>";
-        $echo[] = "<td>".device_info($disk,true,$poolName,$poolstatusData,$options)."</td>";
-        $echo[] = "<td>".device_info($disk,true,$poolName,$poolstatusData,$options)."</td>";
       $echo[] = "<td><a class='static'><i class='icon-disk icon'></i><span></span></a><em>".($fstype=='zfs' ? _('Not present') : _('Not installed'))."</em></td>";
       $echo[] = "<td colspan='4'></td>";
       $echo[] = $showFsInfo ? fs_info($disk,true) : "<td colspan='4'></td>";
@@ -880,13 +894,13 @@ function show_totals($text,$array,$name) {
     if ($display['text']%10==0) {
       $echo[] = "<td>".my_scale($sum['fsUsed']*1024,$unit)." $unit</td>";
     } else {
-      $used = $sum['fsSize'] ? 100-round(100*$sum['fsFree']/$sum['fsSize']) : 0;
+      $used = $sum['fsSize'] ? max(0,min(100,100*(1-$sum['fsFree']/$sum['fsSize']))) : 0;
       $echo[] = "<td><div class='usage-disk'><span style='width:$used%' class='".usage_color($display,$used,false)."'></span><span>".my_scale($sum['fsUsed']*1024,$unit)." $unit</span></div></td>";
     }
     if ($display['text']<10 ? $display['text']%10==0 : $display['text']%10!=0) {
       $echo[] = "<td>".my_scale($sum['fsFree']*1024,$unit)." $unit</td>";
     } else {
-      $free = $sum['fsSize'] ? round(100*$sum['fsFree']/$sum['fsSize']) : 0;
+      $free = $sum['fsSize'] ? max(0,min(100,100*$sum['fsFree']/$sum['fsSize'])) : 0;
       $echo[] = "<td><div class='usage-disk'><span style='width:$free%' class='".usage_color($display,$free,true)."'></span><span>".my_scale($sum['fsFree']*1024,$unit)." $unit</span></div></td>";
     }
   } else {
