@@ -242,9 +242,37 @@ function device_smart(&$disk, &$fail, &$smart) {
 }
 
 function device_usage(&$disk, &$full, &$high) {
-  global $display;
+  global $display,$disks;
   $text = $display['text'];
-  $used = (_var($disk,'type')!='Parity' && _var($disk,'type')!='Extra' && _var($disk,'fsStatus')=='Mounted') ? (_var($disk,'fsSize',0)>0 ? round((1-_var($disk,'fsFree',0)/$disk['fsSize'])*100) : 0).'%' : false;
+  $type = _var($disk,'type');
+  $status = _var($disk,'fsStatus');
+  $size = _var($disk,'fsSize',0);
+  $free = _var($disk,'fsFree',null);
+  $used_kib = null;
+
+  if ($type=='Cache') {
+    $name = _var($disk,'name');
+    $pool = prefix($name);
+    if ($name!=$pool) return $text%10==0 ? "-" : "<span class='load'>-</span><div class='usage-disk sys none'><span></span></div>";
+    $root = _var($disks,$pool,[]);
+    if (!empty($root)) {
+      $status = _var($root,'fsStatus',$status);
+      $size = _var($root,'fsSize',$size);
+      $free = _var($root,'fsFree',$free);
+      $used_kib = _var($root,'fsUsed',null);
+    }
+  }
+
+  if ($type!='Parity' && $type!='Extra' && $status=='Mounted') {
+    if ($type=='Cache' && is_numeric($used_kib) && $size>0) {
+      $pct = round(100*$used_kib/$size);
+    } else {
+      $pct = $size>0 && is_numeric($free) ? round((1-$free/$size)*100) : 0;
+    }
+    $used = $pct.'%';
+  } else {
+    $used = false;
+  }
   if ($used) {
     if ($text==2 || $text==21) {
       $load = substr($used,0,-1);
@@ -339,6 +367,18 @@ function print_error($error) {
   return sprintf(_('Finding **%s** error'.($error==1?'':'s')),$error?:'0');
 }
 
+function pool_usage($pool) {
+  global $disks,$display;
+  $disk = _var($disks,$pool,[]);
+  if (_var($disk,'fsStatus')!='Mounted') return '';
+  $size = _var($disk,'fsSize',0);
+  $free = _var($disk,'fsFree',0);
+  $used = _var($disk,'fsUsed',$size-$free);
+  $dot  = _var($display,'number','.,')[0];
+  $rate = number_format(100*$used/($size ?: 1),1,$dot,'');
+  return sprintf(_('Used: %s of %s (%s %%)'),my_scale($used*1024,$unit)." $unit",my_scale($size*1024,$unit,-1,-1)." $unit",$rate);
+}
+
 $pool_check_counter = 0;
 $poolstatus = [];
 
@@ -390,10 +430,10 @@ while (true) {
         $statusText = "<span title='"._('Check pool status')."'><i class='fa fa-warning fa-fw orange-text'></i> ".$statusText."</span>";
       }
       $poolType = _var($disks[$pool],'type') == 'Boot' ? 'Boot' : 'Cache';
-      $echo['pool'][$p++] = [array_group($poolType,$pool), $error+$warning, $red+$orange, $fail+$smart, $full+$high,$statusText];
+      $echo['pool'][$p++] = [array_group($poolType,$pool), $error+$warning, $red+$orange, $fail+$smart, $full+$high,$statusText,pool_usage($pool)];
     } else {
       $poolType = _var($disks[$pool],'type') == 'Boot' ? 'Boot' : 'Cache';
-      $echo['pool'][$p++] = [array_group($poolType,$pool), $error+$warning, $red+$orange, $fail+$smart, $full+$high,""];
+      $echo['pool'][$p++] = [array_group($poolType,$pool), $error+$warning, $red+$orange, $fail+$smart, $full+$high,"",pool_usage($pool)];
     }
   }
   //unassigned devices
