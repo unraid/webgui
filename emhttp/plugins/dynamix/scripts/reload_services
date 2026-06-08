@@ -17,6 +17,10 @@ else
 fi
 
 for cmd in $SERVICES; do
-  /etc/rc.d/rc.$cmd update &>/dev/null
+  if [[ $cmd == avahidaemon && $1 == force ]]; then
+    /etc/rc.d/rc.$cmd update force &>/dev/null
+  else
+    /etc/rc.d/rc.$cmd update &>/dev/null
+  fi
 done
 exit 0

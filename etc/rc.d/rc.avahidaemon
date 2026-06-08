@@ -119,8 +119,28 @@ avahid_reload(){
   fi
 }
 
+bind_changed(){
+  local CURRENT=",$1," NEXT=",$2," IFACE
+  # A new active bind target needs a restart so avahi-daemon reads it.
+  for IFACE in ${2//,/ }; do
+    [[ $CURRENT == *",$IFACE,"* ]] || return 0
+  done
+  # Missing inactive targets are usually transient carrier/DHCP loss; keep
+  # Avahi running so it can notice the interface when it returns.
+  for IFACE in ${1//,/ }; do
+    [[ $NEXT == *",$IFACE,"* || -z $(show dev "$IFACE") ]] || return 0
+  done
+  # Shell convention: 1 means "no meaningful bind change" for this predicate.
+  return 1
+}
+
 avahid_update(){
-  if avahid_running && check && [[ "$(this allow-interfaces)" != "$BIND" ]]; then
+  local CURRENT
+  if avahid_running && check; then
+    CURRENT="$(this allow-interfaces)"
+    [[ "$CURRENT" != "$BIND" ]] || return 0
+    # Network hooks are often transient; explicit config applies pass "force".
+    [[ $1 == force ]] || bind_changed "$CURRENT" "$BIND" || return 0
     log "Updating $DAEMON..."
     avahid_restart # note we need restart here, not reload in order to update interfaces
   fi
@@ -149,7 +169,7 @@ case "$1" in
   avahid_reload
   ;;
 'update')
-  avahid_update
+  avahid_update "$2"
   ;;
 'status')
   avahid_status
