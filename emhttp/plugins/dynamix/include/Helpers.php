@@ -1052,6 +1052,99 @@ function getNumaInfo() {
 
     return $result;
 }
+
+/**
+ * Parse numeric GT/s value from sysfs/lspci-style speed text.
+ */
+function parsePciSpeedValue($value)
+{
+  if (!is_string($value) || $value === '') return null;
+  if (preg_match('/([0-9]+(?:\.[0-9]+)?)/', $value, $m)) {
+    return floatval($m[1]);
+  }
+  return null;
+}
+
+/**
+ * Parse numeric lane width from strings like "x16".
+ */
+function parsePciWidthValue($value)
+{
+  if (!is_string($value) || $value === '') return null;
+  return intval(str_replace('x', '', trim($value)));
+}
+
+/**
+ * Read PCIe link values from a sysfs PCI device directory.
+ */
+function readPciLinkValuesFromPath($path)
+{
+  $values = [
+    'current_speed' => null,
+    'max_speed' => null,
+    'current_width' => null,
+    'max_width' => null,
+  ];
+
+  $speedMap = [
+    'current_speed' => "$path/current_link_speed",
+    'max_speed' => "$path/max_link_speed",
+  ];
+  foreach ($speedMap as $key => $file) {
+    if (!file_exists($file)) continue;
+    $parsed = parsePciSpeedValue(trim(file_get_contents($file)));
+    if ($parsed !== null) $values[$key] = $parsed;
+  }
+
+  $widthMap = [
+    'current_width' => "$path/current_link_width",
+    'max_width' => "$path/max_link_width",
+  ];
+  foreach ($widthMap as $key => $file) {
+    if (!file_exists($file)) continue;
+    $values[$key] = parsePciWidthValue(trim(file_get_contents($file)));
+  }
+
+  return $values;
+}
+
+/**
+ * Walk PCI ancestors and return the best pcieport link values.
+ */
+function getBestPciePortAncestorLink($devicePath)
+{
+  $best = null;
+  $bestScore = -1.0;
+  $current = realpath($devicePath) ?: $devicePath;
+  $iterations = 0;
+  $maxIterations = 20;
+
+  while ($iterations < $maxIterations) {
+    $parent = dirname($current);
+    if ($parent === '/sys/devices' || $parent === '/sys' || $parent === $current) {
+      break;
+    }
+
+    $driverPath = "$parent/driver";
+    if (is_link($driverPath)) {
+      $driver = basename((string)readlink($driverPath));
+      if ($driver === 'pcieport') {
+        $vals = readPciLinkValuesFromPath($parent);
+        $score = (($vals['current_speed'] ?? 0.0) * 100.0) + (($vals['current_width'] ?? 0.0));
+        if ($score > $bestScore) {
+          $bestScore = $score;
+          $best = $vals;
+        }
+      }
+    }
+
+    $current = $parent;
+    $iterations++;
+  }
+
+  return $best;
+}
+
 /**
  * Get PCIe link data from sysfs with generation + clean GT/s rate.
  * Suppresses sentinel max‑width value 255 (unreported/invalid); preserves 0 when reported.
@@ -1087,7 +1180,7 @@ function getPciLinkInfo($pciAddress)
         return $out;
     }
 
-    // Read speeds
+    // Read endpoint values first
     foreach ($files as $key => $file) {
         if (!file_exists($file)) continue;
         $value = trim(file_get_contents($file));
@@ -1106,6 +1199,35 @@ function getPciLinkInfo($pciAddress)
             $out['current_width_raw'] = intval(str_replace('x', '', $value));
         }
     }
+
+      // For Intel GPUs and classic misreports (Gen1 x1), prefer better upstream pcieport data.
+      $isIntelGpu = false;
+      $vendorFile = "$base/vendor";
+      $classFile = "$base/class";
+      if (file_exists($vendorFile) && file_exists($classFile)) {
+        $vendorRaw = strtolower(trim(file_get_contents($vendorFile)));
+        $classRaw = strtolower(trim(file_get_contents($classFile)));
+        $isIntelGpu = ($vendorRaw === '0x8086' && strpos($classRaw, '0x03') === 0);
+      }
+
+      $maxSpeedRaw = $out['max_speed'] ?? null;
+      $maxWidthRaw = $out['max_width_raw'] ?? null;
+      $looksMisreported = ($maxSpeedRaw !== null && $maxWidthRaw !== null && $maxSpeedRaw <= 2.5 && $maxWidthRaw <= 1);
+
+      if ($isIntelGpu || $looksMisreported) {
+        $ancestor = getBestPciePortAncestorLink($base);
+        if (is_array($ancestor)) {
+          $endpointScore = (($out['current_speed'] ?? 0.0) * 100.0) + (($out['current_width_raw'] ?? 0.0));
+          $ancestorScore = (($ancestor['current_speed'] ?? 0.0) * 100.0) + (($ancestor['current_width'] ?? 0.0));
+
+          if ($looksMisreported || $ancestorScore > $endpointScore) {
+            if (($ancestor['current_speed'] ?? null) !== null) $out['current_speed'] = $ancestor['current_speed'];
+            if (($ancestor['max_speed'] ?? null) !== null) $out['max_speed'] = $ancestor['max_speed'];
+            if (($ancestor['current_width'] ?? null) !== null) $out['current_width_raw'] = $ancestor['current_width'];
+            if (($ancestor['max_width'] ?? null) !== null) $out['max_width_raw'] = $ancestor['max_width'];
+          }
+        }
+      }
 
     // Apply width rules
     $max = $out['max_width_raw'] ?? null;

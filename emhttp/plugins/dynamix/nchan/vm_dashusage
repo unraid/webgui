@@ -104,8 +104,8 @@ while (true) {
       $echo[$vmencode ]['mem'] = "<span>Mem: ".my_scale($vmdata['mem']*1024,$unit,null,null,1024)."$unit / ".my_scale($vmdata['curmem']*1024,$unit,null,null,1024)."$unit";
       if ($vmdata['maxmem'] == $vmdata['curmem']) $echo[$vmencode ]['mem'] .="&nbsp&nbsp</span>";
       else $echo[$vmencode ]['mem'] .= " / ".my_scale($vmdata['maxmem']*1024,$unit,null,null,1024)."$unit&nbsp&nbsp</span>";
-      $echo[$vmencode ]['disk'] = "<span>Disk: "._("Rd").": ".my_scale($vmdata['rdrate']/$timer,$unit,null,null,1024)."$unit/s "._("Wr").": ".my_scale($vmdata['wrrate']/$timer,$unit,null,null,1024)."$unit/s&nbsp&nbsp</span>";
-      $echo[$vmencode ]['net'] =  "<span>Net: "._("RX").": ".my_scale($vmdata['rxrate']/$timer,$unit,null,null,1024)."$unit/s "._("TX").": ".my_scale($vmdata['txrate']/$timer,$unit,null,null,1024)."$unit/s&nbsp&nbsp</span>";
+      $echo[$vmencode ]['disk'] = "<span>Disk: "._("Rd").": ".my_scale($vmdata['rdrate'],$unit,null,null,1024)."$unit/s "._("Wr").": ".my_scale($vmdata['wrrate'],$unit,null,null,1024)."$unit/s&nbsp&nbsp</span>";
+      $echo[$vmencode ]['net'] =  "<span>Net: "._("RX").": ".my_scale($vmdata['rxrate'],$unit,null,null,1024)."$unit/s "._("TX").": ".my_scale($vmdata['txrate'],$unit,null,null,1024)."$unit/s&nbsp&nbsp</span>";
     }
   }
 
