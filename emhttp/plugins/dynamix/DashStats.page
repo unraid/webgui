@@ -804,10 +804,14 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                     <?
                     $label = $value = [];
                     $i = 0;
+                    // optional custom fan names, indexed in the same order as `sensors -uA`
+                    $fan_names_file = '/boot/config/plugins/dynamix/fan_names.json';
+                    $fan_names = file_exists($fan_names_file) ? (json_decode(file_get_contents($fan_names_file), true) ?: []) : [];
                     for ($fan=0; $fan<$fans; $fan++) {
                         if ($fan > 0 && $fan % 3 == 0) $i++;
                         $class = $fan % 3 == 2 ? "" : " class='fan'";
-                        $label[$i][] = "<span{$class}>"._('FAN')." ".($fan+1)."</span>";
+                        $fan_label = ($fan_names[$fan] ?? '') !== '' ? htmlspecialchars($fan_names[$fan]) : _('FAN')." ".($fan+1);
+                        $label[$i][] = "<span{$class}>$fan_label</span>";
                     }
                     $i = 0;
                     for ($fan=0; $fan<$fans; $fan++) {
