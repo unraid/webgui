@@ -58,10 +58,10 @@ function getSriovInfoJson(bool $includeVfDetails = true): string {
     foreach ($paths as $totalvfFile) {
         $devdir = dirname($totalvfFile);
         $pci = basename($devdir);
+        $numVfsFile = "$devdir/sriov_numvfs";
 
         $total_vfs = (int) @file_get_contents($totalvfFile);
-        $num_vfs   = (int) @file_get_contents("$devdir/sriov_numvfs");
-
+        $num_vfs   = (int) @file_get_contents($numVfsFile);
         // Driver/module detection
         $driver = $module = $vf_param = null;
         $driver_link = "$devdir/driver";
@@ -141,6 +141,7 @@ function getSriovInfoJson(bool $includeVfDetails = true): string {
     return json_encode($results, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 }
 
+// Rebind VF to original or vfio-pci driver.
 function rebindVfDriver($vf, $sriov, $target = 'original')
 {
     $res = ['pci'=>$vf,'success'=>false,'error'=>null,'details'=>[]];
