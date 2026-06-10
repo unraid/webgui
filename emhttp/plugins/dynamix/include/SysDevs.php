@@ -368,7 +368,9 @@ case 't1':
               exec('ls -al /sys/block/sd* /sys/block/hd* /sys/block/sr* /sys/block/nvme* 2>/dev/null | grep -i "'.$pciaddress.'"',$getsata);
               foreach($getsata as $satadevice) {
                 $satadevice = substr($satadevice, strrpos($satadevice, '/', -1)+1);
-                $search = preg_grep('/'.$satadevice.'.*/', $lsscsi);
+                // Match the exact block device token to avoid false matches (e.g. sda matching sdaa).
+                $devicePattern = '/\\/dev\\/'.preg_quote($satadevice, '/').'\\b/';
+                $search = preg_grep($devicePattern, $lsscsi);
                 foreach ($search as $deviceline) {
                   echo '<tr><td></td><td></td><td></td><td></td><td>',$deviceline,'</td></tr>';
                 }
