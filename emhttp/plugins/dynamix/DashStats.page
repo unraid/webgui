@@ -81,8 +81,11 @@ foreach ($disks as $disk) {
   case 'Cache':
     $name = _var($disk,'name');
     if (in_array($name,$pools)) {
-      $cache_size[$name] = _var($disk,'fsSize',0);
-      $cache_used[$name] = _var($disk,'fsSize',0)-_var($disk,'fsFree',0);
+      $cache_fstype = str_replace('luks:','',_var($disk,'fsType',''));
+      $cache_size[$name] = ($cache_fstype=='btrfs' && is_numeric(_var($disk,'fsFree',null)) && is_numeric(_var($disk,'fsUsed',null)))
+                        ? _var($disk,'fsFree',0)+_var($disk,'fsUsed',0)
+                        : _var($disk,'fsSize',0);
+      $cache_used[$name] = _var($disk,'fsUsed',_var($disk,'fsSize',0)-_var($disk,'fsFree',0));
       $cache_type[$name] = _var($disk,'rotational') ? (_var($disk,'luksState') ? 'disk-encrypted' : 'disk') : 'nvme';
       $cache_rate[$name] = number_format(100*$cache_used[$name]/($cache_size[$name] ?: 1),1,$dot,'');
       if (empty($disks[$name]['devices'])) unset($pools[array_search($name,$pools)]);
@@ -1188,11 +1191,11 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                         <i class='icon-disk f32'></i>
                                         <div class='section'>
                                             <h3 class='tile-header-main'><?=($pool=='flash' ? _('Internal boot') : _(native($pool),3)).($started ? '' : ' ('._('stopped').')')?> <span class='tile-header-main' id="pool_status_<?=$i?>"> <?=_('Status')." :"?></span></h3>
-                                            <span>
+                                            <span id='pool_usage<?=$i?>'>
                                                 <?if ($started):?>
                                                     <?
-                                                    if ($pool == "flash") echo sprintf(_("%s used of %s (%s %%)"),my_scale($boot_used[$pool]*1024,$unit)." $unit",my_scale($boot_size[$pool]*1024,$unit,-1,-1)." $unit",$boot_rate[$pool]);
-                                                    else echo sprintf(_("%s used of %s (%s %%)"),my_scale($cache_used[$pool]*1024,$unit)." $unit",my_scale($cache_size[$pool]*1024,$unit,-1,-1)." $unit",$cache_rate[$pool])
+                                                    if ($pool == "flash") echo sprintf(_("Used: %s of %s (%s %%)"),my_scale($boot_used[$pool]*1024,$unit)." $unit",my_scale($boot_size[$pool]*1024,$unit,-1,-1)." $unit",$boot_rate[$pool]);
+                                                    else echo sprintf(_("Used: %s of %s (%s %%)"),my_scale($cache_used[$pool]*1024,$unit)." $unit",my_scale($cache_size[$pool]*1024,$unit,-1,-1)." $unit",$cache_rate[$pool])
                                                       ?>
                                                 <?endif;?>
                                           </span><br>
@@ -2654,6 +2657,7 @@ dashboard.on('message',function(msg,meta) {
         $('#pool_info'+i).parent().css({'display':info?'':'none'});
         $('#pool_info'+i).html(info);
         $('#pool_status_'+i).html(get.pool[i][5] || "");
+        if (get.pool[i][6] !== undefined) $('#pool_usage'+i).html(get.pool[i][6]);
         smartMenu('#pool_list'+i);
       }
     }
