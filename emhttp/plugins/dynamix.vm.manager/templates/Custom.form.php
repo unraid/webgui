@@ -1576,7 +1576,7 @@ foreach ($arrConfig['nic'] as $i => $arrNic) {
 	<tr class="advanced">
 		<td>_(Network Source)_:</td>
 		<td>
-			<span class="width"><select name="nic[<?=$i?>][network]" class="narrow" onchange="updateMAC(<?=$i?>,this.value)">
+			<span class="width"><select name="nic[<?=$i?>][network]" class="network_source narrow" onchange="updateMAC(<?=$i?>,this.value)">
 			<?
 			foreach (array_keys($arrValidNetworks) as $key) {
 				echo mk_option("", $key, "- "._($key)." -", "disabled");
@@ -1649,7 +1649,7 @@ foreach ($arrConfig['nic'] as $i => $arrNic) {
 	<tr class="advanced">
 		<td>_(Network Source)_:</td>
 		<td>
-			<span class="width"><select name="nic[{{INDEX}}][network]" class="narrow" onchange="updateMAC(INDEX,this.value)">
+			<span class="width"><select name="nic[{{INDEX}}][network]" class="network_source narrow" onchange="updateMAC(INDEX,this.value)">
 			<?
 			foreach (array_keys($arrValidNetworks) as $key) {
 				echo mk_option("", $key, "- "._($key)." -", "disabled");
