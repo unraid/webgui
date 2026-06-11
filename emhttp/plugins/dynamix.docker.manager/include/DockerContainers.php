@@ -140,7 +140,11 @@ foreach ($containers as $ct) {
   $color = $status=='started' ? 'green-text' : ($status=='paused' ? 'orange-text' : 'red-text');
   $update = $updateStatus==1 && !empty($compose) ? 'blue-text' : '';
   $icon = $info['icon'] ?: '/plugins/dynamix.docker.manager/images/question.png';
-  $image = substr($icon,-4)=='.png' ? "<img src='$icon?".filemtime("$docroot{$info['icon']}")."' class='img' onerror=this.src='/plugins/dynamix.docker.manager/images/question.png';>" : (substr($icon,0,5)=='icon-' ? "<i class='$icon img'></i>" : "<i class='fa fa-$icon img'></i>");
+  $image = in_array(strtolower(pathinfo($icon, PATHINFO_EXTENSION)), ['png', 'svg'])
+    ? "<img src='$icon?".filemtime("$docroot{$info['icon']}")."' class='img' onerror=this.src='/plugins/dynamix.docker.manager/images/question.png';>"
+    : (substr($icon,0,5)=='icon-'
+      ? "<i class='$icon img'></i>"
+      : "<i class='fa fa-$icon img'></i>");
   $wait = var_split($autostart[array_search($name,$names)]??'',1);
   $networks = [];
   $network_ips = [];
@@ -163,7 +167,7 @@ foreach ($containers as $ct) {
     } elseif (!isset($ct['Ports']['vlan']) || strpos($ct['NetworkMode'],'container:')!==false) {
       foreach ($ct['Ports'] as $port) {
         if (_var($port,'PublicPort') && _var($port,'Driver') == 'bridge') {
-          if (_var($port, "HostIp") != "") $hostip = _var($port, "HostIp"); else $hostip = $host; 
+          if (_var($port, "HostIp") != "") $hostip = _var($port, "HostIp"); else $hostip = $host;
           $ports_external[] = sprintf('%s:%s', $hostip, strtoupper(_var($port,'PublicPort')));
         }
         if ((!isset($ct['Networks']['host'])) || (!isset($ct['Networks']['vlan']))) {
