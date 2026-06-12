@@ -616,7 +616,8 @@ class Libvirt {
 					if ($strDevType == 'file' || $strDevType == 'block') {
 						$strSourceType = ($strDevType == 'file' ? 'file' : 'dev');
 						if (isset($disk['discard'])) $strDevUnmap = " discard=\"{$disk['discard']}\" "; else $strDevUnmap = " discard=\"ignore\" ";
-						$diskstr .= "<disk type='".$strDevType."' device='disk'>
+						$strDevice = (isset($disk['deviceType']) && in_array($disk['deviceType'], ['disk', 'lun'])) ? $disk['deviceType'] : 'disk';
+						$diskstr .= "<disk type='".$strDevType."' device='".$strDevice."'>
 							<driver name='qemu' type='".$disk['driver']."' cache='writeback'".$strDevUnmap."/>
 							<source ".$strSourceType."='".htmlspecialchars($disk['image'], ENT_QUOTES | ENT_XML1)."'/>
 							<target bus='".$disk['bus']."' dev='".$disk['dev']."' $rotation_rate />
@@ -1229,7 +1230,9 @@ class Libvirt {
 		$arrDomain = $arrDomain->devices->disk;
 		$ret = [];
 		foreach ($arrDomain as $disk) {
-			if ($disk->attributes()->device != "disk") continue;
+			$diskDeviceType = $disk->attributes()->device->__toString();
+			// Only process disk-type devices (disk, lun), skip cdrom and floppy
+			if (!in_array($diskDeviceType, ['disk', 'lun'])) continue;
 			$tmp = libvirt_domain_get_block_info($dom, $disk->target->attributes()->dev);
 			if ($tmp) {
 				$tmp['bus'] = $disk->target->attributes()->bus->__toString();
@@ -1237,6 +1240,7 @@ class Libvirt {
 				$tmp["discard"] = $disk->driver->attributes()->discard ?? "ignore";
 				$tmp["rotation"] = $disk->target->attributes()->rotation_rate ?? "0";
 				$tmp['serial'] = $disk->serial;
+				$tmp['deviceType'] = $diskDeviceType;
 
 				// Libvirt reports 0 bytes for raw disk images that haven't been
 				// written to yet so we just report the raw disk size for now
@@ -1262,7 +1266,8 @@ class Libvirt {
 					'boot order' => $disk->boot->attributes()->order ,
 					'rotation' => $disk->target->attributes()->rotation_rate ?? "0",
 					'serial' => $disk->serial,
-					'discard' => $disk->driver->attributes()->discard ?? "ignore"
+					'discard' => $disk->driver->attributes()->discard ?? "ignore",
+					'deviceType' => $diskDeviceType
 				];
 			}
 		}
@@ -1770,12 +1775,24 @@ class Libvirt {
 		$tmp = $this->domain_undefine($dom);
 		if (!$tmp) return $this->_set_last_error();
 		// remove the first disk only
-		if (array_key_exists('file', $disks[0])) {
+		$dir = '';
+		if (!empty($disks) && array_key_exists('file', $disks[0])) {
 			$disk = $disks[0]['file'];
 			$pathinfo = pathinfo($disk);
 			$dir = $pathinfo['dirname'];
+		} elseif (is_dir("/mnt/user/domains/$domain")) {
+			$dir = "/mnt/user/domains/$domain";
+		} elseif (is_dir("/mnt/cache/domains/$domain")) {
+			$dir = "/mnt/cache/domains/$domain";
+		}
+
+		if ($dir) {
 			// remove the vm config
 			$cfg_vm = $dir.'/'.$domain.'.cfg';
+			if (is_file($dir.'/cloud-init.img')) unlink($dir.'/cloud-init.img');
+			if (is_file($dir.'/cloud-init.json')) unlink($dir.'/cloud-init.json');
+			if (is_file($dir.'/cloud-init.user-data')) unlink($dir.'/cloud-init.user-data');
+			if (is_file($dir.'/cloud-init.network-config')) unlink($dir.'/cloud-init.network-config');
 			if (is_file($cfg_vm)) unlink($cfg_vm);
 			$cfg = $dir.'/'.$pathinfo['filename'].'.cfg';
 			$xml = $dir.'/'.$pathinfo['filename'].'.xml';
