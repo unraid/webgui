@@ -219,7 +219,7 @@ if [[ ! -f /boot/logs/syslog && -z $MIRROR && -z $COPY ]]; then
   SIZE=$(($(/bin/stat -c%s /var/log/syslog)*2))
   if [[ $AVAIL -ge $SIZE ]]; then
     log "Saving syslog to boot drive"
-    /bin/cp -f /var/log/syslog /boot/logs/syslog
+    /bin/mkdir -p /boot/logs && /bin/cp -f /var/log/syslog /boot/logs/syslog
   fi
 fi
 
