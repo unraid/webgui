@@ -185,7 +185,7 @@ case 'start':
       }
       
       // Update popular destinations when dequeuing a job
-      if (in_array((int)($data['action'] ?? 0), [3, 4, 8, 9]) && !empty($data['target'] ?? '')) {
+      if (in_array((int)($data['action'] ?? 0), [3, 4, 8, 9, 16, 17]) && !empty($data['target'] ?? '')) {
         updatePopularDestinations($data['target']);
       }
       
@@ -241,19 +241,32 @@ case 'file':
     'target' => rawurldecode($_POST['target'] ?? ''),
     'H' => empty($_POST['hdlink']) ? '' : 'H',
     'sparse' => empty($_POST['sparse']) ? '' : '--sparse',
-    'exist' => empty($_POST['exist']) ? '--ignore-existing' : '',
+    'overwrite' => empty($_POST['overwrite']) ? 0 : 1,
     'zfs' => rawurldecode($_POST['zfs'] ?? '')
   ];
+  // Add compress-specific parameters
+  if ($data['action'] === 16) {
+    $data['format'] = rawurldecode($_POST['format'] ?? 'zip');
+    $data['archive_name'] = rawurldecode($_POST['archive_name'] ?? '');
+  }
   if (isset($_POST['task'])) {
     // add task to queue
     $data['task'] = rawurldecode($_POST['task']);
     file_put_contents($jobs, json_encode($data)."\n", FILE_APPEND);
   } else {
     // start operation
+    // For cancel (action=99), preserve target_tmp from existing active JSON so
+    // the worker can clean up the partial compress tmp file
+    if ($data['action'] === 99 && file_exists($active)) {
+      $existing = json_decode(file_get_contents($active), true);
+      if (!empty($existing['target_tmp'])) {
+        $data['target_tmp'] = $existing['target_tmp'];
+      }
+    }
     file_put_contents($active, json_encode($data));
     // Update popular destinations only when an operation actually starts
-    // Action types: 3=copy folder, 4=move folder, 8=copy file, 9=move file
-    if (in_array((int)$data['action'], [3, 4, 8, 9]) && !empty($data['target'])) {
+    // Action types: 3=copy folder, 4=move folder, 8=copy file, 9=move file, 16=compress, 17=extract
+    if (in_array((int)$data['action'], [3, 4, 8, 9, 16, 17]) && !empty($data['target'])) {
       updatePopularDestinations($data['target']);
     }
   }
