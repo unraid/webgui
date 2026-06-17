@@ -1885,6 +1885,54 @@ label.checkbox input:disabled ~ .checkmark {
     font-size: 2.5rem;
     z-index: 999;
 }
+/* Background operation task tray (see BodyInlineJS trayRender) */
+.op-tray {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    width: 320px;
+    max-width: 90vw;
+    max-height: 60vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    z-index: 999;
+}
+.op-tray .op-task {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem .75rem;
+    font-size: 1.3rem;
+    color: var(--text-color);
+    background-color: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--brand-orange);
+    border-radius: .5rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,.25);
+}
+.op-tray .op-task.op-done  { border-left-color: var(--green-800); }
+.op-tray .op-task.op-error { border-left-color: var(--red-600); }
+.op-tray .op-task.op-queued { border-left-color: var(--gray-500); }
+.op-tray .op-icon { flex: 0 0 auto; }
+.op-tray .op-title {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.op-tray .op-actions {
+    flex: 0 0 auto;
+    display: flex;
+    gap: .5rem;
+}
+.op-tray .op-act {
+    cursor: pointer;
+    color: var(--text-color);
+    text-decoration: none;
+}
+.op-tray .op-act:hover { color: var(--brand-orange); }
 .back_to_top {
     right: 40px;
 }

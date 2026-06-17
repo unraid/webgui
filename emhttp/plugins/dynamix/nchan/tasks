@@ -1,0 +1,73 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+/**
+ * Task scheduler daemon (see TaskQueue.php).
+ *
+ * Watches running tasks for completion (process exit), marks them done/error,
+ * auto-starts the next queued task of that type, and broadcasts the updated
+ * list. Exits once nothing is running or queued; it is (re)started on demand by
+ * task_create() and by the page-load nchan sweep in DefaultPageLayout.php.
+ */
+
+$docroot = '/usr/local/emhttp';
+require_once "$docroot/plugins/dynamix/include/TaskQueue.php";
+
+// a task's stored pid is alive while /proc/<pid> exists
+function task_pid_alive($pid) {
+  return $pid && file_exists("/proc/$pid");
+}
+
+// the operation reported a failure if its captured output contains the _ERROR_ marker
+function task_log_has_error($id) {
+  $log = task_log($id);
+  if (!is_file($log)) return false;
+  return strpos((string)@exec('tail -c 65536 '.escapeshellarg($log)), '_ERROR_') !== false;
+}
+
+// tidy up stale finished tasks, then publish the current state for any client
+task_prune();
+task_publish();
+
+while (true) {
+  $changed = false;
+  $freed   = [];
+
+  foreach (task_list() as $t) {
+    if ($t['status']==='running' && !task_pid_alive($t['pid'])) {
+      $t['status']   = task_log_has_error($t['id']) ? 'error' : 'done';
+      $t['finished'] = time();
+      task_write($t);
+      $freed[$t['type']] = true;
+      $changed = true;
+    }
+  }
+
+  // start the next queued op for every type that just freed up
+  foreach (array_keys($freed) as $type) task_advance($type);
+
+  if ($changed) task_publish();
+
+  // exit when there is no more work; the daemon is restarted on demand
+  $active = false;
+  foreach (task_list() as $t) {
+    if ($t['status']==='running' || $t['status']==='queued') { $active = true; break; }
+  }
+  if (!$active) break;
+
+  usleep(250000); // 250ms, same cadence as the file_manager worker
+}
+
+removeNChanScript();
+?>
