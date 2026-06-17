@@ -28,12 +28,6 @@ timers.bannerWarning = null;
 // tty window
 var tty_window = null;
 
-const addAlert = {};
-addAlert.text = $.cookie('addAlert-text');
-addAlert.cmd = $.cookie('addAlert-cmd');
-addAlert.plg = $.cookie('addAlert-plg');
-addAlert.func = $.cookie('addAlert-func');
-
 // current csrf_token
 var csrf_token = "<?=_var($var,'csrf_token')?>";
 
@@ -170,126 +164,40 @@ function openTerminal(tag,name,more) {
   $.get('/webGui/include/OpenTerminal.php',{tag:tag,name:name,more:more},function(){setTimeout(function(){tty_window.location=socket; tty_window.focus();},200);});
 }
 
-function bannerAlert(text,cmd,plg,func,start) {
-  $.post('/webGui/include/StartCommand.php',{cmd:cmd,pid:1},function(pid) {
-    if (pid == 0) {
-      if ($(".upgrade_notice").hasClass('done') || timers.bannerAlert == null) {
-        forcedBanner = false;
-        if ($.cookie('addAlert') != null) {
-          removeBannerWarning($.cookie('addAlert'));
-          $.removeCookie('addAlert');
-        }
-        $(".upgrade_notice").removeClass('alert done');
-        timers.callback = null;
-        if (plg != null) {
-          if ($.cookie('addAlert-page') == null || $.cookie('addAlert-page') == '<?=$task?>') {
-            setTimeout((func||'loadlist')+'("'+plg+'")',250);
-          } else if ('Plugins' == '<?=$task?>') {
-            setTimeout(refresh);
-          }
-        }
-        $.removeCookie('addAlert-page');
-      } else {
-        $(".upgrade_notice").removeClass('alert').addClass('done');
-        timers.bannerAlert = null;
-        setTimeout(function(){bannerAlert(text,cmd,plg,func,start);},1000);
-      }
-    } else {
-      $.cookie('addAlert',addBannerWarning(text,true,true,true));
-      $.cookie('addAlert-text',text);
-      $.cookie('addAlert-cmd',cmd);
-      $.cookie('addAlert-plg',plg);
-      $.cookie('addAlert-func',func);
-      if ($.cookie('addAlert-page') == null) $.cookie('addAlert-page','<?=$task?>');
-      timers.bannerAlert = setTimeout(function(){bannerAlert(text,cmd,plg,func,start);},1000);
-      if (start==1 && timers.callback==null && plg!=null) timers.callback = setTimeout((func||'loadlist')+'("'+plg+'")',250);
-    }
-  });
+// Retired: backgrounded operations are now tracked by the shared task tray
+// (see the /sub/tasks subscriber and trayRender in BodyInlineJS). Kept as a
+// no-op stub in case any external plugin still references it.
+function bannerAlert() {}
+
+// openPlugin/openDocker/openVMAction keep their original signatures for all
+// external callers, but now enqueue a backend-tracked task (TaskQueue.php) and
+// bring it to the foreground. The backend serializes one running op per type
+// and the task tray lets any client re-open or background it.
+//   start  = 0 : run command only when not already running (default)
+//   start  = 1 : run command unconditionally
+//   button : show/hide the CLOSE button (per-type meaning preserved downstream)
+function openPlugin(cmd,title,plg,func,start=0,button=0)   { createTask('plugins', cmd,title,plg,func,start,button); }
+function openDocker(cmd,title,plg,func,start=0,button=0)   { createTask('docker',  cmd,title,plg,func,start,button); }
+function openVMAction(cmd,title,plg,func,start=0,button=0) { createTask('vmaction',cmd,title,plg,func,start,button); }
+
+function createTask(type,cmd,title,plg,func,start,button) {
+  $.post('/plugins/dynamix/include/TaskCommand.php',{
+    action:'create', type:type,
+    cmd:encodeURIComponent(cmd), title:encodeURIComponent(title),
+    plg:plg||'', func:func||'', start:start||0, button:button||0
+  },function(res) {
+    $('div.spinner.fixed').hide();
+    if (res && res.id) foregroundTask(res.id);
+  },'json');
 }
 
-function openPlugin(cmd,title,plg,func,start=0,button=0) {
-  // start  = 0 : run command only when not already running (default)
-  // start  = 1 : run command unconditionally
-  // button = 0 : show CLOSE button (default)
-  // button = 1 : hide CLOSE button
-  nchan_plugins.start();
-  $.post('/webGui/include/StartCommand.php',{cmd:cmd+' nchan',start:start},function(pid) {
-    if (pid==0) {
-      nchan_plugins.stop();
-      $('div.spinner.fixed').hide();
-      $(".upgrade_notice").addClass('alert');
-      return;
-    }
-    swal({title:title + ' - <span id="pluginProgressTitle"><?=_('In Progress');?> <i class="fa fa-refresh fa-spin"></i></span>',text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:button==0,confirmButtonText:"<?=_('Close')?>"},function(close){
-      nchan_plugins.stop();
-      $('div.spinner.fixed').hide();
-      $('.sweet-alert').hide('fast').removeClass('nchan');
-      setTimeout(function(){bannerAlert("<?=_('Attention - operation continues in background')?> ["+pid.toString().padStart(8,'0')+"]<i class='fa fa-bomb fa-fw abortOps' title=\"<?=_('Abort background process')?>\" onclick='abortOperation("+pid+")'></i>",cmd,plg,func,start);});
-    });
-    $('.sweet-alert').addClass('nchan');
-    $('button.confirm').prop('disabled',button!=0);
-  });
-}
-
-function openDocker(cmd,title,plg,func,start=0,button=0) {
-  // start  = 0 : run command only when not already running (default)
-  // start  = 1 : run command unconditionally
-  // button = 0 : hide CLOSE button (default)
-  // button = 1 : show CLOSE button
-  nchan_docker.start();
-  $.post('/webGui/include/StartCommand.php',{cmd:cmd,start:start},function(pid) {
-    if (pid==0) {
-      nchan_docker.stop();
-      $('div.spinner.fixed').hide();
-      $(".upgrade_notice").addClass('alert');
-      return;
-    }
-    swal({title:title + ' - <span id="pluginProgressTitle"><?=_('In Progress');?> <i class="fa fa-refresh fa-spin"></i></span>',text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:button!=0,confirmButtonText:"<?=_('Close')?>"},function(close){
-      nchan_docker.stop();
-      $('div.spinner.fixed').hide();
-      $('.sweet-alert').hide('fast').removeClass('nchan');
-      setTimeout(function(){bannerAlert("<?=_('Attention - operation continues in background')?> ["+pid.toString().padStart(8,'0')+"]<i class='fa fa-bomb fa-fw abortOps' title=\"<?=_('Abort background process')?>\" onclick='abortOperation("+pid+")'></i>",cmd,plg,func,start);});
-    });
-    $('.sweet-alert').addClass('nchan');
-    $('button.confirm').prop('disabled',button==0);
-  });
-}
-
-function openVMAction(cmd,title,plg,func,start=0,button=0) {
-  // start  = 0 : run command only when not already running (default)
-  // start  = 1 : run command unconditionally
-  // button = 0 : hide CLOSE button (default)
-  // button = 1 : show CLOSE button
-  nchan_vmaction.start();
-  $.post('/webGui/include/StartCommand.php',{cmd:cmd,start:start},function(pid) {
-    if (pid==0) {
-      nchan_vmaction.stop();
-      $('div.spinner.fixed').hide();
-      $(".upgrade_notice").addClass('alert');
-      return;
-    }
-    swal({title:title + ' - <span id="pluginProgressTitle"><?=_('In Progress');?> <i class="fa fa-refresh fa-spin"></i></span>',text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:button!=0,confirmButtonText:"<?=_('Close')?>"},function(close){
-      nchan_vmaction.stop();
-      $('div.spinner.fixed').hide();
-      $('.sweet-alert').hide('fast').removeClass('nchan');
-      setTimeout(function(){bannerAlert("<?=_('Attention - operation continues in background')?> ["+pid.toString().padStart(8,'0')+"]<i class='fa fa-bomb fa-fw abortOps' title=\"<?=_('Abort background process')?>\" onclick='abortOperation("+pid+")'></i>",cmd,plg,func,start);});
-    });
-    $('.sweet-alert').addClass('nchan');
-    $('button.confirm').prop('disabled',button==0);
-  });
-}
-
+// abortOperation(pid) retained for backward compatibility: map the pid to its
+// task and abort it through the queue (falls back to a direct kill if unknown).
 function abortOperation(pid) {
+  var t = (typeof taskByPid==='function') ? taskByPid(pid) : null;
+  if (t) { confirmAbortTask(t.id); return; }
   swal({title:"<?=_('Abort background operation')?>",text:"<?=_('This may leave an unknown state')?>",html:true,animation:'none',type:'warning',showCancelButton:true,confirmButtonText:"<?=_('Proceed')?>",cancelButtonText:"<?=_('Cancel')?>"},function(){
-    $.post('/webGui/include/StartCommand.php',{kill:pid},function() {
-      clearTimeout(timers.bannerAlert);
-      timers.bannerAlert = null;
-      timers.callback = null;
-      forcedBanner = false;
-      removeBannerWarning($.cookie('addAlert'));
-      $.removeCookie('addAlert');
-      $(".upgrade_notice").removeClass('alert done').hide();
-    });
+    $.post('/webGui/include/StartCommand.php',{kill:pid});
   });
 }
 

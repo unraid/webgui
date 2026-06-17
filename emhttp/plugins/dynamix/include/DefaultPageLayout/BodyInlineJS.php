@@ -90,94 +90,69 @@ nchan_wlan0.on('message', function(msg) {
 nchan_wlan0.start();
 <?endif;?>
 
-var nchan_plugins = new NchanSubscriber('/sub/plugins',{subscriber:'websocket', reconnectTimeout:5000});
-nchan_plugins.on('message', function(data) {
-  if (!data || openDone(data)) return;
-  var box = $('pre#swaltext');
-  const text = box.html().split('<br>');
-  if (data.slice(-1) == '\r') {
-    text[text.length-1] = data.slice(0,-1);
-  } else {
-    text.push(data.slice(0,-1));
-  }
-  box.html(text.join('<br>')).scrollTop(box[0].scrollHeight);
-});
-
-var nchan_docker = new NchanSubscriber('/sub/docker',{subscriber:'websocket', reconnectTimeout:5000});
-nchan_docker.on('message', function(data) {
-  if (!data || openDone(data)) return;
-  var box = $('pre#swaltext');
-  data = data.split('\0');
-  switch (data[0]) {
-  case 'addLog':
-    var rows = document.getElementsByClassName('logLine');
-    if (rows.length) {
-      var row = rows[rows.length-1];
-      row.innerHTML += data[1]+'<br>';
-    }
-    break;
-  case 'progress':
-    var rows = document.getElementsByClassName('progress-'+data[1]);
-    if (rows.length) {
-      rows[rows.length-1].textContent = data[2];
-    }
-    break;
-  case 'addToID':
-    var rows = document.getElementById(data[1]);
-    if (rows === null) {
-      rows = document.getElementsByClassName('logLine');
-      if (rows.length) {
-        var row = rows[rows.length-1];
-        row.innerHTML += '<span id="'+data[1]+'">IMAGE ID ['+data[1]+']: <span class="content">'+data[2]+'</span><span class="progress-'+data[1]+'"></span>.</span><br>';
-      }
-    } else {
-      var rows_content = rows.getElementsByClassName('content');
-      if (!rows_content.length || rows_content[rows_content.length-1].textContent != data[2]) {
-        rows.innerHTML += '<span class="content">'+data[2]+'</span><span class="progress-'+data[1]+'"></span>.';
-      }
-    }
-    break;
-  case 'show_Wait':
-    progress_span[data[1]] = document.getElementById('wait-'+data[1]);
-    progress_dots[data[1]] = setInterval(function(){if (((progress_span[data[1]].innerHTML += '.').match(/\./g)||[]).length > 9) progress_span[data[1]].innerHTML = progress_span[data[1]].innerHTML.replace(/\.+$/,'');},500);
-    break;
-  case 'stop_Wait':
-    clearInterval(progress_dots[data[1]]);
-    progress_span[data[1]].innerHTML = '';
-    break;
-  default:
-    box.html(box.html()+data[0]);
-    break;
-  }
-  box.scrollTop(box[0].scrollHeight);
-});
-
+// ===========================================================================
+//  Multi-task background operation system (shared across clients/subsystems)
+// ---------------------------------------------------------------------------
+//  The backend (TaskQueue.php + the `tasks` daemon) owns the queue: at most one
+//  RUNNING op per type, so the live /sub/<type> channels never interleave. The
+//  full task list is broadcast on /sub/tasks; per-task output is captured to a
+//  server-side log and replayed when a task is brought to the foreground.
+// ===========================================================================
+var nchan_plugins  = new NchanSubscriber('/sub/plugins',{subscriber:'websocket', reconnectTimeout:5000});
+var nchan_docker   = new NchanSubscriber('/sub/docker',{subscriber:'websocket', reconnectTimeout:5000});
 var nchan_vmaction = new NchanSubscriber('/sub/vmaction',{subscriber:'websocket', reconnectTimeout:5000});
-nchan_vmaction.on('message', function(data) {
-  if (!data || openDone(data) || openError(data)) return;
+const nchanByType  = {plugins:nchan_plugins, docker:nchan_docker, vmaction:nchan_vmaction};
+
+const TASK_ENDPOINT = '/plugins/dynamix/include/TaskCommand.php';
+var taskList = [];
+const taskPrev = {};
+var foregroundTaskId = null;
+var foregroundType = null;
+
+function taskById(id)  { for (var i=0;i<taskList.length;i++) if (taskList[i].id==id)  return taskList[i]; return null; }
+function taskByPid(pid){ for (var i=0;i<taskList.length;i++) if (taskList[i].pid==pid) return taskList[i]; return null; }
+function escapeTaskHtml(s){ return $('<div>').text(s==null?'':String(s)).html(); }
+
+function stopAllTypeChannels(){ nchan_plugins.stop(); nchan_docker.stop(); nchan_vmaction.stop(); }
+
+// progress_dots / progress_span (declared in HeadInlineJS) are global wait-spinner
+// timers keyed by element id. Clear them when (re)opening or closing a modal so a
+// re-foregrounded docker/vm op doesn't spawn duplicate tickers or tick a dead node.
+function clearProgressDots(){
+  for (var k in progress_dots) if (progress_dots[k]) clearInterval(progress_dots[k]);
+  progress_dots = []; progress_span = [];
+}
+
+// render one raw nchan message into the open modal (#swaltext)
+function renderMessage(type, data) {
   var box = $('pre#swaltext');
+  if (!box.length) return;
+  if (type=='plugins') {
+    const text = box.html().split('<br>');
+    if (data.slice(-1) == '\r') text[text.length-1] = data.slice(0,-1);
+    else text.push(data.slice(0,-1));
+    box.html(text.join('<br>')).scrollTop(box[0].scrollHeight);
+    return;
+  }
+  // docker + vmaction share the \0-delimited protocol (differ only in addToID label)
   data = data.split('\0');
   switch (data[0]) {
   case 'addLog':
     var rows = document.getElementsByClassName('logLine');
-    if (rows.length) {
-      var row = rows[rows.length-1];
-      row.innerHTML += data[1]+'<br>';
-    }
+    if (rows.length) rows[rows.length-1].innerHTML += data[1]+'<br>';
     break;
   case 'progress':
     var rows = document.getElementsByClassName('progress-'+data[1]);
-    if (rows.length) {
-      rows[rows.length-1].textContent = data[2];
-    }
+    if (rows.length) rows[rows.length-1].textContent = data[2];
     break;
   case 'addToID':
+    var label = type=='docker' ? 'IMAGE ID ['+data[1]+']' : data[1];
     var rows = document.getElementById(data[1]);
     if (rows === null) {
       rows = document.getElementsByClassName('logLine');
       if (rows.length) {
         var row = rows[rows.length-1];
-        row.innerHTML += '<span id="'+data[1]+'">'+data[1]+': <span class="content">'+data[2]+'</span><span class="progress-'+data[1]+'"></span>.</span><br>';
+        row.innerHTML += '<span id="'+data[1]+'">'+label+': <span class="content">'+data[2]+'</span><span class="progress-'+data[1]+'"></span>.</span><br>';
       }
     } else {
       var rows_content = rows.getElementsByClassName('content');
@@ -192,14 +167,141 @@ nchan_vmaction.on('message', function(data) {
     break;
   case 'stop_Wait':
     clearInterval(progress_dots[data[1]]);
-    progress_span[data[1]].innerHTML = '';
+    if (progress_span[data[1]]) progress_span[data[1]].innerHTML = '';
     break;
   default:
     box.html(box.html()+data[0]);
     break;
   }
   box.scrollTop(box[0].scrollHeight);
+}
+
+// live channel messages render only into the foregrounded task's modal
+function routeMessage(type, data) {
+  if (!data) return;
+  if (data=='_DONE_' || data=='_ERROR_') {
+    if (foregroundTaskId && foregroundType==type) { if (data=='_ERROR_') openError(data); else openDone(data); }
+    return;
+  }
+  if (foregroundTaskId && foregroundType==type) renderMessage(type, data);
+}
+nchan_plugins.on('message',  function(data){ routeMessage('plugins',  data); });
+nchan_docker.on('message',   function(data){ routeMessage('docker',   data); });
+nchan_vmaction.on('message', function(data){ routeMessage('vmaction', data); });
+
+// legacy per-op reload callback ( (func||'loadlist')(plg) ), suppressed for ':return'
+function fireTaskCallback(t) {
+  if (t && t.plg && t.plg != ':return') {
+    var fn = window[t.func || 'loadlist'];
+    if (typeof fn === 'function') setTimeout(function(){ fn(t.plg); },250);
+  }
+}
+
+// bring a task to the foreground: open the modal, replay its server-side log,
+// then stream live if it is still running
+function foregroundTask(id) {
+  var task = taskById(id);
+  if (!task) return;
+  foregroundTaskId = id;
+  foregroundType = task.type;
+  stopAllTypeChannels();
+  clearProgressDots();
+  var showConfirm = task.type=='plugins' ? task.button==0 : task.button!=0;
+  var disable     = task.type=='plugins' ? task.button!=0 : task.button==0;
+  var titleState  = task.status=='done'  ? "<?=_('Finished')?>"
+                  : task.status=='error' ? "<?=_('Error')?>"
+                  : "<?=_('In Progress')?> <i class='fa fa-refresh fa-spin'></i>";
+  swal({title:task.title + ' - <span id="pluginProgressTitle">'+titleState+'</span>',text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:showConfirm,confirmButtonText:"<?=_('Close')?>"},function(close){
+    if (foregroundTaskId===id) { foregroundTaskId=null; foregroundType=null; }
+    stopAllTypeChannels();
+    clearProgressDots();
+    $('.sweet-alert').hide('fast').removeClass('nchan');
+    var fresh = taskById(id);
+    if (fresh && (fresh.status=='done'||fresh.status=='error')) fireTaskCallback(fresh);
+    trayRender();
+  });
+  $('.sweet-alert').addClass('nchan');
+  $('button.confirm').prop('disabled',disable);
+  $('pre#swaltext').html('');
+  $.get(TASK_ENDPOINT,{action:'log',id:id},function(logdata){
+    if (foregroundTaskId!==id) return; // user moved on while loading
+    var msgs = (logdata||'').split('\x1e');
+    for (var i=0;i<msgs.length;i++) {
+      var m = msgs[i];
+      if (m==='' || m==='_DONE_' || m==='_ERROR_') continue;
+      renderMessage(task.type, m);
+    }
+    var fresh = taskById(id);
+    if (fresh && fresh.status=='running')    nchanByType[task.type].start();
+    else if (fresh && fresh.status=='done')  openDone('_DONE_');
+    else if (fresh && fresh.status=='error') openError('_ERROR_');
+  },'text');
+}
+
+// react to the shared task list pushed on /sub/tasks
+function onTaskListUpdate() {
+  for (var i=0;i<taskList.length;i++) {
+    var t = taskList[i], prev = taskPrev[t.id];
+    if (prev !== t.status) {
+      if (t.status=='done' || t.status=='error') {
+        if (foregroundTaskId==t.id) {
+          stopAllTypeChannels();
+          if (t.status=='error') openError('_ERROR_'); else openDone('_DONE_');
+          // callback fired when the user closes the modal
+        } else {
+          fireTaskCallback(t);
+        }
+      } else if (t.status=='running' && foregroundTaskId==t.id) {
+        $('#pluginProgressTitle').html("<?=_('In Progress')?> <i class='fa fa-refresh fa-spin'></i>");
+        nchanByType[t.type].start();
+      }
+    }
+    taskPrev[t.id] = t.status;
+  }
+  for (var id in taskPrev) if (!taskById(id)) delete taskPrev[id];
+  trayRender();
+}
+
+var taskChannel = new NchanSubscriber('/sub/tasks',{subscriber:'websocket', reconnectTimeout:5000});
+taskChannel.on('message', function(msg){
+  try { taskList = JSON.parse(msg) || []; } catch(e) { taskList = []; }
+  onTaskListUpdate();
 });
+
+// render the task tray
+function trayRender() {
+  var $tray = $('#opTray');
+  if (!$tray.length) return;
+  if (!taskList.length) { $tray.hide().empty(); return; }
+  var rows = '';
+  for (var i=0;i<taskList.length;i++) {
+    var t = taskList[i], icon, actions='';
+    var show = "<a class='op-act' onclick='foregroundTask(\""+t.id+"\")' title=\"<?=_('Show')?>\"><i class='fa fa-window-maximize fa-fw'></i></a>";
+    if (t.status=='running') {
+      icon = "<i class='fa fa-refresh fa-spin fa-fw'></i>";
+      actions = show + "<a class='op-act' onclick='confirmAbortTask(\""+t.id+"\")' title=\"<?=_('Abort')?>\"><i class='fa fa-bomb fa-fw'></i></a>";
+    } else if (t.status=='queued') {
+      icon = "<i class='fa fa-clock-o fa-fw'></i>";
+      actions = "<a class='op-act' onclick='cancelTask(\""+t.id+"\")' title=\"<?=_('Cancel')?>\"><i class='fa fa-times fa-fw'></i></a>";
+    } else if (t.status=='done') {
+      icon = "<i class='fa fa-check fa-fw green-text'></i>";
+      actions = show + "<a class='op-act' onclick='dismissTask(\""+t.id+"\")' title=\"<?=_('Dismiss')?>\"><i class='fa fa-times fa-fw'></i></a>";
+    } else {
+      icon = "<i class='fa fa-warning fa-fw orange-text'></i>";
+      actions = show + "<a class='op-act' onclick='dismissTask(\""+t.id+"\")' title=\"<?=_('Dismiss')?>\"><i class='fa fa-times fa-fw'></i></a>";
+    }
+    rows += "<div class='op-task op-"+t.status+"'><span class='op-icon'>"+icon+"</span><span class='op-title'>"+escapeTaskHtml(t.title)+"</span><span class='op-actions'>"+actions+"</span></div>";
+  }
+  $tray.html(rows).show();
+}
+
+function cancelTask(id) { $.post(TASK_ENDPOINT,{action:'abort',id:id}); }
+function dismissTask(id){ $.post(TASK_ENDPOINT,{action:'dismiss',id:id}); }
+function confirmAbortTask(id) {
+  swal({title:"<?=_('Abort background operation')?>",text:"<?=_('This may leave an unknown state')?>",html:true,animation:'none',type:'warning',showCancelButton:true,confirmButtonText:"<?=_('Proceed')?>",cancelButtonText:"<?=_('Cancel')?>"},function(){
+    $.post(TASK_ENDPOINT,{action:'abort',id:id});
+  });
+}
 
 const scrollDuration = 500;
 $(window).scroll(function() {
@@ -259,7 +361,8 @@ $(function() {
     $('html, body').scrollTop(top);
   }
   $.removeCookie('top');
-  if ($.cookie('addAlert') != null) bannerAlert(addAlert.text,addAlert.cmd,addAlert.plg,addAlert.func);
+  // subscribe to the shared task list; the tray renders from server state
+  taskChannel.start();
 <?if ($safemode):?>
   showNotice("<?=_('System running in')?> <b><?=('safe mode')?></b>");
 <?else:?>
