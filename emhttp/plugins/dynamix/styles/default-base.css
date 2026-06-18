@@ -1936,27 +1936,6 @@ label.checkbox input:disabled ~ .checkmark {
 .op-tray .op-task.op-done  { border-left-color: var(--green-800); }
 .op-tray .op-task.op-error { border-left-color: var(--red-600); }
 .op-tray .op-task.op-queued { border-left-color: var(--gray-500); }
-/* Indeterminate progress bar sweeping along the bottom of a running task so it
-   clearly reads as still active (these ops don't report a real percentage). */
-.op-tray .op-task.op-running { position: relative; overflow: hidden; }
-.op-tray .op-task.op-running::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    bottom: 0;
-    height: 2px;
-    width: 35%;
-    background-color: var(--brand-orange);
-    border-radius: 2px;
-    animation: op-running-bar 1.3s ease-in-out infinite;
-}
-@keyframes op-running-bar {
-    0%   { transform: translateX(-110%); }
-    100% { transform: translateX(390%); }
-}
-@media (prefers-reduced-motion: reduce) {
-    .op-tray .op-task.op-running::after { animation: none; left: 0; width: 100%; opacity: .35; }
-}
 .op-tray .op-icon { flex: 0 0 auto; }
 .op-tray .op-title {
     flex: 1 1 auto;
