@@ -35,7 +35,7 @@ case 'create':
 case 'abort':
   $task = task_read($id);
   if ($task) {
-    if ($task['status']==='running' && $task['pid'] > 1) {
+    if ($task['status']==='running' && ctype_digit((string)$task['pid']) && (int)$task['pid'] > 1) {
       exec('kill '.escapeshellarg($task['pid']));
       foreach (glob('/tmp/plugins/pluginPending/*') ?: [] as $file) @unlink($file);
       $task['status']   = 'error';
