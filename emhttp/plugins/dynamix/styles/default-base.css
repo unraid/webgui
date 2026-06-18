@@ -1899,6 +1899,14 @@ label.checkbox input:disabled ~ .checkmark {
     gap: .25rem;
     z-index: 999;
 }
+/* Lift the tray above the fixed footer so it isn't clipped behind it.
+   Mirrors the media queries that make #footer position:fixed. */
+@media (min-width: 768px) {
+    .op-tray { bottom: calc(40px + 1rem); }
+}
+@media (min-height: 500px) and (orientation: landscape) {
+    .op-tray { bottom: calc(30px + 1rem); }
+}
 .op-tray .op-task {
     display: flex;
     align-items: center;
