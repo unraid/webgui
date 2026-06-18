@@ -187,7 +187,20 @@ function createTask(type,cmd,title,plg,func,start,button) {
     plg:plg||'', func:func||'', start:start||0, button:button||0
   },function(res) {
     $('div.spinner.fixed').hide();
-    if (res && res.id) foregroundTask(res.id);
+    if (!res || !res.id) return;
+    // The authoritative task list is broadcast asynchronously on /sub/tasks and
+    // can land *after* this AJAX response. Without the entry in taskList,
+    // foregroundTask() can't find the task and bails, so the modal never opens
+    // even though the command runs (and logs) in the background. Seed an
+    // optimistic entry from what we already know; onTaskListUpdate() reconciles
+    // it when the real broadcast arrives.
+    if (typeof taskById==='function' && !taskById(res.id)) {
+      taskList.push({id:res.id,type:type,title:title,cmd:cmd,plg:plg||'',func:func||'',
+                     start:start||0,button:button||0,pid:'',status:res.status||'running',
+                     created:0,started:0,finished:0});
+      if (typeof trayRender==='function') trayRender();
+    }
+    foregroundTask(res.id);
   },'json');
 }
 
