@@ -196,9 +196,11 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
         $info   = json_decode(file_get_contents($invalid),true) ?: [];
         $newver = (string)($info['version'] ?? '');
         if ($newver !== '' && strcmp($newver,$version) > 0) {
-          $reason  = trim((string)($info['reason'] ?? ''));
+          $summary = trim((string)($info['summary'] ?? $info['reason'] ?? ''));
+          $message = trim((string)($info['message'] ?? $summary));
           $version .= "<br><span class='red-text'>$newver</span>";
-          $status  = "<span class='warning'".($reason ? " title='".htmlspecialchars($reason,ENT_QUOTES)."'" : "")."><i class='fa fa-exclamation-triangle' aria-hidden='true'></i> "._('Update validation failed')."</span>";
+          $status  = "<span class='warning'".($message ? " title='".htmlspecialchars($message,ENT_QUOTES)."'" : "")."><i class='fa fa-exclamation-triangle' aria-hidden='true'></i> "._('update validation failed')."</span>";
+          if ($summary !== '') $status .= "<br><span class='orange-text' style='font-size:smaller'>".htmlspecialchars($summary,ENT_QUOTES)."</span>";
         } else {
           @unlink($invalid);
         }
@@ -206,7 +208,7 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
     }
     if (strpos($status,'update')!==false) $rank = '0';
     elseif (strpos($status,'install')!==false) $rank = '1';
-    elseif (strpos($status,'Update validation failed')!==false) $rank = '0';
+    elseif (strpos($status,'update validation failed')!==false) $rank = '0';
     elseif ($status=='need check') $rank = '2';
     elseif ($status=='up-to-date') $rank = '3';
     else $rank = '4';
