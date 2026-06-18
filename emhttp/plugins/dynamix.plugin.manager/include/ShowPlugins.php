@@ -186,8 +186,27 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
         }
       }
     }
+    // an available update that failed validation: surface it instead of the
+    // silent "up-to-date" the revert would otherwise produce (marker written by
+    // the pre_plugin_checks hook). Common cause: the root filesystem is full so
+    // the update files can't be downloaded for the integrity check.
+    if (!$os && $checked) {
+      $invalid = "/tmp/plugins/".basename($plugin_file).".invalid";
+      if (is_file($invalid)) {
+        $info   = json_decode(file_get_contents($invalid),true) ?: [];
+        $newver = (string)($info['version'] ?? '');
+        if ($newver !== '' && strcmp($newver,$version) > 0) {
+          $reason  = trim((string)($info['reason'] ?? ''));
+          $version .= "<br><span class='red-text'>$newver</span>";
+          $status  = "<span class='warning'".($reason ? " title='".htmlspecialchars($reason,ENT_QUOTES)."'" : "")."><i class='fa fa-exclamation-triangle' aria-hidden='true'></i> "._('Update validation failed')."</span>";
+        } else {
+          @unlink($invalid);
+        }
+      }
+    }
     if (strpos($status,'update')!==false) $rank = '0';
     elseif (strpos($status,'install')!==false) $rank = '1';
+    elseif (strpos($status,'Update validation failed')!==false) $rank = '0';
     elseif ($status=='need check') $rank = '2';
     elseif ($status=='up-to-date') $rank = '3';
     else $rank = '4';

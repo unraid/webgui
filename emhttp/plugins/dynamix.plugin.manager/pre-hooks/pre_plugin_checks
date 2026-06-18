@@ -39,13 +39,31 @@ case 'plugin':
     // validate plugin update (not applicable to OS updates)
     if (in_array($name, $unraid)) break;
     $new_plugin = "/tmp/plugins/$name";
+    $invalid    = "/tmp/plugins/$name.invalid";
     if (plugin('version', $new_plugin) > plugin('version', $plugin)) {
       echo "Validating $name update\n";
-      if (($status = plugin('validate', $new_plugin)) != 'valid') {
-        echo "$status\n";
+      $new_version = plugin('version', $new_plugin);
+      // scripts/plugin exits non-zero and prints "plugin: <reason>" on failure
+      // (bad hash, or the update files failing to download for the hash check)
+      $output = [];
+      exec("$docroot/plugins/dynamix.plugin.manager/scripts/plugin validate ".escapeshellarg($new_plugin)." 2>&1", $output, $retval);
+      if ($retval != 0) {
+        $reason = trim(preg_replace('/^plugin:\s*/m', '', implode("\n", $output)));
+        echo ($reason ?: 'validation failed')."\n";
+        // An update is available but failed validation. Record why so the webGUI
+        // can surface it, instead of silently reverting to "up-to-date". The most
+        // common cause is the update files not downloading because the root
+        // filesystem is full.
+        file_put_contents($invalid, json_encode(['version'=>$new_version, 'reason'=>$reason]));
         // restore original plugin and undo update
         copy($plugin, $new_plugin);
+      } else {
+        // validation passed - clear any stale failure marker
+        @unlink($invalid);
       }
+    } else {
+      // no newer version available - clear any stale failure marker
+      @unlink($invalid);
     }
     break;
   }
