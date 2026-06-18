@@ -58,6 +58,12 @@ case 'dismiss':
   }
   die();
 
+case 'clear':
+  // remove every finished (done/error) task at once
+  task_clear_finished();
+  task_publish();
+  die();
+
 case 'log':
   // output captured so far, for foreground replay
   header('Content-Type: text/plain');

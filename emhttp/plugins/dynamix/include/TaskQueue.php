@@ -33,7 +33,8 @@ require_once "$docroot/webGui/include/Secure.php";
 
 define('TASK_DIR', '/var/local/emhttp/tasks');
 define('TASK_DAEMON', 'plugins/dynamix/nchan/tasks');
-define('TASK_DONE_TTL', 86400); // prune done/error tasks after 1 day
+define('TASK_DONE_TTL', 30);    // auto-expire successful tasks 30s after they finish
+define('TASK_ERROR_TTL', 86400); // keep failures ~1 day so errors aren't missed (also cleared via the tray)
 define('TASK_TYPES', ['plugins','docker','vmaction']);
 
 // task ids are produced by uniqid() => lowercase hex; validate anything used in a path
@@ -176,12 +177,32 @@ function task_create($type,$cmd,$title,$plg,$func,$start,$button) {
   return task_read($task['id']) ?: $task;
 }
 
-// remove finished tasks older than the TTL (called by the daemon on startup)
+// remove finished tasks past their TTL: successes expire quickly (TASK_DONE_TTL)
+// so the tray self-cleans, failures linger (TASK_ERROR_TTL) so they aren't
+// missed. Returns the number of tasks pruned so the daemon can decide whether to
+// re-broadcast. Called on daemon startup and each scheduling tick.
 function task_prune() {
   $now = time();
+  $pruned = 0;
   foreach (task_list() as $t) {
-    if (in_array($t['status'],['done','error']) && ($now - ($t['finished'] ?: $t['created'])) > TASK_DONE_TTL)
-      task_delete($t['id']);
+    if (!in_array($t['status'],['done','error'])) continue;
+    $ttl = $t['status']==='error' ? TASK_ERROR_TTL : TASK_DONE_TTL;
+    if (($now - ($t['finished'] ?: $t['created'])) > $ttl) { task_delete($t['id']); $pruned++; }
   }
+  return $pruned;
+}
+
+// a successful task still inside its short auto-expire window keeps the daemon
+// alive so it can prune + re-broadcast it (errors do not, to avoid a day-long
+// idle daemon)
+function task_pending_expiry() {
+  foreach (task_list() as $t) if ($t['status']==='done') return true;
+  return false;
+}
+
+// remove every finished task now (the tray's "Clear finished" action)
+function task_clear_finished() {
+  foreach (task_list() as $t)
+    if (in_array($t['status'],['done','error'])) task_delete($t['id']);
 }
 ?>

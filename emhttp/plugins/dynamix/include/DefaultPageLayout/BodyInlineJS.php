@@ -278,9 +278,10 @@ function trayRender() {
   var $tray = $('#opTray');
   if (!$tray.length) return;
   if (!taskList.length) { $tray.hide().empty(); return; }
-  var rows = '';
+  var rows = '', finished = 0;
   for (var i=0;i<taskList.length;i++) {
     var t = taskList[i], icon, actions='';
+    if (t.status=='done' || t.status=='error') finished++;
     var show = "<a class='op-act' onclick='foregroundTask(\""+t.id+"\")' title=\"<?=_('Show')?>\"><i class='fa fa-window-maximize fa-fw'></i></a>";
     if (t.status=='running') {
       icon = "<i class='fa fa-refresh fa-spin fa-fw'></i>";
@@ -297,11 +298,18 @@ function trayRender() {
     }
     rows += "<div class='op-task op-"+t.status+"'><span class='op-icon'>"+icon+"</span><span class='op-title'>"+escapeTaskHtml(t.title)+"</span><span class='op-actions'>"+actions+"</span></div>";
   }
-  $tray.html(rows).show();
+  // header with a bulk "Clear finished" action, shown only when there is more
+  // than one finished task to clear (a lone one is easy to dismiss directly)
+  var header = '';
+  if (finished > 1) {
+    header = "<div class='op-tray-head'><a class='op-act' onclick='clearFinishedTasks()' title=\"<?=_('Clear finished tasks')?>\"><i class='fa fa-check-circle-o fa-fw'></i> <?=_('Clear finished')?></a></div>";
+  }
+  $tray.html(header + rows).show();
 }
 
 function cancelTask(id) { $.post(TASK_ENDPOINT,{action:'abort',id:id}); }
 function dismissTask(id){ $.post(TASK_ENDPOINT,{action:'dismiss',id:id}); }
+function clearFinishedTasks(){ $.post(TASK_ENDPOINT,{action:'clear'}); }
 function confirmAbortTask(id) {
   swal({title:"<?=_('Abort background operation')?>",text:"<?=_('This may leave an unknown state')?>",html:true,animation:'none',type:'warning',showCancelButton:true,confirmButtonText:"<?=_('Proceed')?>",cancelButtonText:"<?=_('Cancel')?>"},function(){
     $.post(TASK_ENDPOINT,{action:'abort',id:id});
