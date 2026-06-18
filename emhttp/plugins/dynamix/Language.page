@@ -75,7 +75,10 @@ function getZIPfile(event,form) {
 }
 function installXML(name) {
   var file = name.trim();
-  if (file) openPlugin('language install '+file, "_(Install Language)_");
+  // show which language pack in the progress heading; sanitize to a safe display
+  // slug (the heading is rendered as HTML), derived from the file basename
+  var disp = (file.split('/').pop()||'').replace(/\.[a-z0-9]+$/i,'').replace(/[^\w.\- ]+/g,' ').trim();
+  if (file) openPlugin('language install '+file, "_(Install Language)_"+(disp?': '+disp:''));
 }
 $(function() {
   $('input.view').switchButton({labels_placement:'left', off_label:"_(User)_", on_label:"_(Developer)_"});
