@@ -248,7 +248,10 @@ function openAlert(cmd,title,func) {
 function openDone(data) {
   if (data == '_DONE_') {
     $('div.spinner.fixed').hide();
-    $('button.confirm').text("<?=_('Done')?>").prop('disabled',false).show();
+    // task finished: the running-phase minimize control gives way to a primary
+    // Dismiss button (clears the task from the tray on confirm)
+    $('.sweet-alert .nchan-close').remove();
+    $('button.confirm').text("<?=_('Dismiss')?>").prop('disabled',false).show();
     if (typeof ca_done_override !== 'undefined') {
       if (ca_done_override == true) {
         $("button.confirm").trigger("click");
@@ -264,7 +267,8 @@ function openDone(data) {
 function openError(data) {
   if (data == '_ERROR_') {
     $('div.spinner.fixed').hide();
-    $('button.confirm').text("<?=_('Error')?>").prop('disabled',false).show();
+    $('.sweet-alert .nchan-close').remove();
+    $('button.confirm').text("<?=_('Dismiss')?>").prop('disabled',false).show();
     $('#pluginProgressTitle').text("<?=_('Error');?>");
     return true;
   }

@@ -211,22 +211,32 @@ function foregroundTask(id) {
   foregroundType = task.type;
   stopAllTypeChannels();
   clearProgressDots();
-  var showConfirm = task.type=='plugins' ? task.button==0 : task.button!=0;
-  var disable     = task.type=='plugins' ? task.button!=0 : task.button==0;
+  // Drive the modal by task status, not the per-type `button` flag (which made
+  // docker ops hide the Close button while running and disabled the confirm
+  // button, surfacing SweetAlert's la-ball-fall "bouncing dots" loader):
+  //   running  -> a top-corner minimize (below) backgrounds it; no disabled
+  //               button, so the bouncing-dots loader never shows. The spinning
+  //               title icon is the in-progress indicator.
+  //   finished -> a primary Dismiss button clears the task from the tray.
+  var finished    = task.status=='done' || task.status=='error';
   var titleState  = task.status=='done'  ? "<?=_('Finished')?>"
                   : task.status=='error' ? "<?=_('Error')?>"
                   : "<?=_('In Progress')?> <i class='fa fa-refresh fa-spin'></i>";
-  swal({title:escapeTaskHtml(task.title) + ' - <span id="pluginProgressTitle">'+titleState+'</span>',text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:showConfirm,confirmButtonText:"<?=_('Close')?>"},function(close){
+  swal({title:escapeTaskHtml(task.title) + ' - <span id="pluginProgressTitle">'+titleState+'</span>',text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:finished,confirmButtonText:"<?=_('Dismiss')?>"},function(close){
+    // confirm/Dismiss (or Esc): background while running, clear once finished
     if (foregroundTaskId===id) { foregroundTaskId=null; foregroundType=null; }
     stopAllTypeChannels();
     clearProgressDots();
     $('.sweet-alert').hide('fast').removeClass('nchan');
     var fresh = taskById(id);
-    if (fresh && (fresh.status=='done'||fresh.status=='error')) fireTaskCallback(fresh);
+    if (fresh && (fresh.status=='done'||fresh.status=='error')) { fireTaskCallback(fresh); dismissTask(id); }
     trayRender();
   });
   $('.sweet-alert').addClass('nchan');
-  $('button.confirm').prop('disabled',disable);
+  // a top-corner minimize for the running phase: backgrounds the task (it keeps
+  // running in the tray) without aborting; openDone/openError swap it for Dismiss
+  $('.sweet-alert .nchan-close').remove();
+  if (!finished) $('.sweet-alert').append("<a class='nchan-close' title=\"<?=_('Minimize - keeps running in the background')?>\" onclick='minimizeForegroundTask()'><i class='fa fa-window-minimize fa-fw'></i></a>");
   $('pre#swaltext').html('');
   $.get(TASK_ENDPOINT,{action:'log',id:id},function(logdata){
     if (foregroundTaskId!==id) return; // user moved on while loading
@@ -305,6 +315,17 @@ function trayRender() {
     header = "<div class='op-tray-head'><a class='op-act' onclick='clearFinishedTasks()' title=\"<?=_('Clear finished tasks')?>\"><i class='fa fa-check-circle-o fa-fw'></i> <?=_('Clear finished')?></a></div>";
   }
   $tray.html(header + rows).show();
+}
+
+// minimize the foreground modal: drop the live view but leave the task running
+// in the backend (the tray keeps tracking it). Backgrounding, not aborting.
+function minimizeForegroundTask() {
+  if (foregroundTaskId) { foregroundTaskId=null; foregroundType=null; }
+  stopAllTypeChannels();
+  clearProgressDots();
+  $('.sweet-alert').removeClass('nchan');
+  if (typeof swal!=='undefined' && swal.close) swal.close();
+  trayRender();
 }
 
 function cancelTask(id) { $.post(TASK_ENDPOINT,{action:'abort',id:id}); }
