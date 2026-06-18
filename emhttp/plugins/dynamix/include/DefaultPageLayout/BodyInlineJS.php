@@ -216,7 +216,7 @@ function foregroundTask(id) {
   var titleState  = task.status=='done'  ? "<?=_('Finished')?>"
                   : task.status=='error' ? "<?=_('Error')?>"
                   : "<?=_('In Progress')?> <i class='fa fa-refresh fa-spin'></i>";
-  swal({title:task.title + ' - <span id="pluginProgressTitle">'+titleState+'</span>',text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:showConfirm,confirmButtonText:"<?=_('Close')?>"},function(close){
+  swal({title:escapeTaskHtml(task.title) + ' - <span id="pluginProgressTitle">'+titleState+'</span>',text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:showConfirm,confirmButtonText:"<?=_('Close')?>"},function(close){
     if (foregroundTaskId===id) { foregroundTaskId=null; foregroundType=null; }
     stopAllTypeChannels();
     clearProgressDots();
@@ -280,21 +280,21 @@ function trayRender() {
   if (!taskList.length) { $tray.hide().empty(); return; }
   var rows = '', finished = 0;
   for (var i=0;i<taskList.length;i++) {
-    var t = taskList[i], icon, actions='';
+    var t = taskList[i], icon, actions='', safeId = escapeTaskHtml(t.id);
     if (t.status=='done' || t.status=='error') finished++;
-    var show = "<a class='op-act' onclick='foregroundTask(\""+t.id+"\")' title=\"<?=_('Show')?>\"><i class='fa fa-window-maximize fa-fw'></i></a>";
+    var show = "<a class='op-act' onclick='foregroundTask(\""+safeId+"\")' title=\"<?=_('Show')?>\"><i class='fa fa-window-maximize fa-fw'></i></a>";
     if (t.status=='running') {
       icon = "<i class='fa fa-circle-o-notch fa-spin fa-fw'></i>";
-      actions = show + "<a class='op-act' onclick='confirmAbortTask(\""+t.id+"\")' title=\"<?=_('Abort')?>\"><i class='fa fa-stop-circle fa-fw'></i></a>";
+      actions = show + "<a class='op-act' onclick='confirmAbortTask(\""+safeId+"\")' title=\"<?=_('Abort')?>\"><i class='fa fa-stop-circle fa-fw'></i></a>";
     } else if (t.status=='queued') {
       icon = "<i class='fa fa-clock-o fa-fw'></i>";
-      actions = "<a class='op-act' onclick='cancelTask(\""+t.id+"\")' title=\"<?=_('Cancel')?>\"><i class='fa fa-times fa-fw'></i></a>";
+      actions = "<a class='op-act' onclick='cancelTask(\""+safeId+"\")' title=\"<?=_('Cancel')?>\"><i class='fa fa-times fa-fw'></i></a>";
     } else if (t.status=='done') {
       icon = "<i class='fa fa-check fa-fw green-text'></i>";
-      actions = show + "<a class='op-act' onclick='dismissTask(\""+t.id+"\")' title=\"<?=_('Dismiss')?>\"><i class='fa fa-times fa-fw'></i></a>";
+      actions = show + "<a class='op-act' onclick='dismissTask(\""+safeId+"\")' title=\"<?=_('Dismiss')?>\"><i class='fa fa-times fa-fw'></i></a>";
     } else {
       icon = "<i class='fa fa-warning fa-fw orange-text'></i>";
-      actions = show + "<a class='op-act' onclick='dismissTask(\""+t.id+"\")' title=\"<?=_('Dismiss')?>\"><i class='fa fa-times fa-fw'></i></a>";
+      actions = show + "<a class='op-act' onclick='dismissTask(\""+safeId+"\")' title=\"<?=_('Dismiss')?>\"><i class='fa fa-times fa-fw'></i></a>";
     }
     rows += "<div class='op-task op-"+t.status+"'><span class='op-icon'>"+icon+"</span><span class='op-title'>"+escapeTaskHtml(t.title)+"</span><span class='op-actions'>"+actions+"</span></div>";
   }
