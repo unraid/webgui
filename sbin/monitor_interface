@@ -1,0 +1,96 @@
+#!/bin/bash
+#
+# script: monitor_interface
+#
+# Monitors a given list of interfaces and add or remove static IP addresses to these interfaces.
+# The list of interfaces is provided in the file '/var/local/emhttp/statics.ini'
+# This file is maintained by the script 'create_network_ini' which keep track of all IP assignments.
+#
+# By removing static IP addresses from inactive interfaces, these interfaces do not longer interfere with wireless.
+# In other words the wired connection can be pulled without consequences.
+#
+# Bergware - modified for Unraid OS, June 2025
+
+FILE=/var/local/emhttp/statics.ini
+SYSTEM=/sys/class/net
+
+md5(){
+  [[ -r $FILE ]] && md5sum $FILE | awk '{print $1;exit}'
+}
+
+port(){
+  [[ -e $SYSTEM/$1 ]]
+}
+
+carrier(){
+  cat $SYSTEM/$1/carrier 2>/dev/null
+}
+
+state(){
+  local n NEW OLD HOLD
+  OLD=$(carrier $1)
+  HOLD=4
+  # new state should hold for at least 4 seconds
+  for n in {1..4}; do
+    sleep 1
+    NEW=$(carrier $1)
+    [[ $NEW != $OLD ]] && ((HOLD--))
+  done
+  [[ $HOLD -eq 0 ]] && echo $NEW || echo $OLD
+}
+
+init(){
+  TASK=()
+  if [[ -r $FILE ]]; then
+    # initialize values from file, maintained by 'create_network_ini'
+    while IFS=$'\n' read -r ROW; do
+      TASK+=("$ROW")
+    done <$FILE
+  fi
+  MD5=$(md5)
+}
+
+while :; do
+  if port wlan0; then
+    # monitor file content changes
+    [[ $MD5 != $(md5) ]] && init
+    LAST=
+    for i in ${!TASK[@]}; do
+      ADDR=(${TASK[$i]})
+      PORT=${ADDR[0]}
+      if port $PORT; then
+        [[ $LAST != ${PORT%.*} ]] && STATE=$(state ${PORT%.*})
+        case ${ADDR[1]} in
+        GW4)
+          if [[ $STATE == 1 ]]; then
+            # no existing default and new default is defined?
+            IPV4=$(ip -4 -br addr show scope global primary dev $PORT | awk '{print $3;exit}')
+            [[ -n $IPV4 && "${TASK[$i]}" =~ "default"  && -z $(ip -4 route show to default dev $PORT) ]] && ip -4 route add dev ${TASK[$i]/GW4/}
+          fi
+          ;;
+        GW6)
+          if [[ $STATE == 1 ]]; then
+            # no existing default and new default is defined?
+            IPV6=$(ip -6 -br addr show scope global primary -deprecated dev $PORT | awk '{print $3;exit}')
+            [[ -n $IPV6 && "${TASK[$i]}" =~ "default" && -z $(ip -6 route show to default dev $PORT) ]] && ip -6 route add dev ${TASK[$i]/GW6/}
+          fi
+          ;;
+        *)
+          case $STATE in
+          0) # down
+            # IP address present, remove it
+            [[ -n $(ip -br addr show to ${ADDR[1]%/*} dev $PORT) ]] && ip addr del dev ${TASK[$i]}
+            ;;
+          1) # up
+            # IP address not present? create it
+            [[ ! -f /var/tmp/$PORT.down && -z $(ip -br addr show to ${ADDR[1]%/*} dev $PORT) ]] && ip addr add dev ${TASK[$i]}
+          esac
+        esac
+        LAST=${PORT%.*}
+      fi
+    done
+  fi
+  # check every 3 seconds
+  sleep 3
+done &
+

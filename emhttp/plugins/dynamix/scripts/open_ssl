@@ -1,0 +1,35 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$ssl_input = '/etc/rc.d/rc.ssl.input';
+if (is_readable($ssl_input)) extract(parse_ini_file($ssl_input));
+
+switch ($argv[1]) {
+case 'reload':
+  if (file_exists($ssl_input)) break;
+case 'load':
+  $key = exec("dmidecode -qt1 | grep -Pom1 'Manufacturer: \K.+' | sed -r 's/[^0-9a-zA-Z._-]/_/g'")."ABCDEFGH";
+  $iv  = "12".exec("cat /sys/class/net/wlan0/address | sed 's/://g'")."34";
+  file_put_contents($ssl_input, "cipher=aes-256-cbc\nkey=".substr($key,0,63)."\niv=$iv\n");
+  break;
+case 'encrypt':
+  if (!empty($argv[2]) && isset($cipher,$key,$iv)) $encrypt = openssl_encrypt($argv[2],$cipher,$key,0,$iv);
+  if (!empty($encrypt)) echo "$encrypt";
+  break;
+case 'decrypt':
+  if (!empty($argv[2]) && isset($cipher,$key,$iv)) $decrypt = openssl_decrypt($argv[2],$cipher,$key,0,$iv);
+  if (!empty($decrypt)) echo "$decrypt";
+  break;
+}
+?>

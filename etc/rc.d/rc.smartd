@@ -25,7 +25,7 @@ smart_stop() {
   if [ -r /run/smartd.pid ]; then
     kill $(cat /run/smartd.pid)
   else
-    killall smartd
+    killall --ns $$ smartd
   fi
 }
 

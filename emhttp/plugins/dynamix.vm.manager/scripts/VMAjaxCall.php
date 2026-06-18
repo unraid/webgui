@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2024, Lime Technology
+ * Copyright 2012-2024, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -21,21 +21,14 @@ require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
 $_SERVER['REQUEST_URI'] = '';
 $login_locale = _var($display,'locale');
 require_once "$docroot/webGui/include/Translations.php";
+require_once "$docroot/webGui/include/publish.php";
 
-function write(...$messages){
-  $com = curl_init();
-  curl_setopt_array($com,[
-    CURLOPT_URL => 'http://localhost/pub/vmaction?buffer_length=1',
-    CURLOPT_UNIX_SOCKET_PATH => '/var/run/nginx.socket',
-    CURLOPT_POST => 1,
-    CURLOPT_RETURNTRANSFER => true
-  ]);
+function write(...$messages) {
   foreach ($messages as $message) {
-    curl_setopt($com, CURLOPT_POSTFIELDS, $message);
-    curl_exec($com);
+    publish('vmaction', $message);
   }
-  curl_close($com);
-  }
+}
+
 function execCommand_nchan($command,$idx) {
   $waitID = mt_rand();
   [$cmd,$args] = explode(' ',$command,2);

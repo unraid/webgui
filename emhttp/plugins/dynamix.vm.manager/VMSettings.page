@@ -3,9 +3,9 @@ Title="VM Manager"
 Icon="icon-virtualization"
 Tag="columns"
 ---
-<?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+<?php
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  * Copyright 2015-2021, Derek Macias, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
@@ -16,71 +16,122 @@ Tag="columns"
  * all copies or substantial portions of the Software.
  */
 ?>
-<?
+<?php
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 
 // Check for Intel VT-x (vmx) or AMD-V (svm) cpu virtualization support
 // If either kvm_intel or kvm_amd are loaded then Intel VT-x (vmx) or AMD-V (svm) cpu virtualization support was found
 $hardware = !empty(shell_exec("/etc/rc.d/rc.libvirt test"));
 if (!$hardware) {
-  echo "<p class='notice'>"._('Your hardware does not have Intel VT-x or AMD-V capability').". "._('This is required to create VMs in KVM').". "._('Please disable the VM function').". ";
-  echo "<a href='https://docs.unraid.net/unraid-os/manual/vm-management#determining-hvmiommu-hardware-support' target='_blank'> "._('Click here to see the Unraid Wiki for more information')."</a></p>";
+    echo "<p class='notice'>"._('Your hardware does not have Intel VT-x or AMD-V capability').". "._('This is required to create VMs in KVM').". "._('Please disable the VM function').". ";
+    echo "<a href='https://docs.unraid.net/go/determining-hvmiommu-hardware-support/' target='_blank'> "._('View the Docs for more information')."</a></p>";
 }
 
-function scan($area, $text) {
-  return strpos($area,$text)!==false;
+function scan($area, $text)
+{
+    return strpos($area, $text) !== false;
 }
-function detect(&$syslinux, $key) {
-  $size = count($syslinux);
-  $menu = $i = 0;
-  $value = '';
-  // find the default section
-  while ($i < $size) {
-    if (scan($syslinux[$i],'label ')) {
-      $n = $i + 1;
-      // find the current requested setting
-      while (!scan($syslinux[$n],'label ') && $n < $size) {
-        if (scan($syslinux[$n],'menu default')) $menu = 1;
-        if (scan($syslinux[$n],'append')) foreach (explode(' ',$syslinux[$n]) as $cmd) if (scan($cmd,$key)) {$value = explode('=',$cmd)[1]; break;}
-        $n++;
-      }
-      if ($menu) break; else $i = $n - 1;
+function detect(&$bootcfg, $bootenv, $key)
+{
+    if ($bootenv === 'syslinux') {
+        $size = count($bootcfg);
+        $menu = $i = 0;
+        $value = '';
+        // find the default section
+        while ($i < $size) {
+            if (scan($bootcfg[$i], 'label ')) {
+                $n = $i + 1;
+                // find the current requested setting
+                while (!scan($bootcfg[$n], 'label ') && $n < $size) {
+                    if (scan($bootcfg[$n], 'menu default')) {
+                        $menu = 1;
+                    }
+                    if (scan($bootcfg[$n], 'append')) {
+                        foreach (explode(' ', $bootcfg[$n]) as $cmd) {
+                            if (scan($cmd, $key)) {
+                                $value = explode('=', $cmd)[1];
+                                break;
+                            }
+                        }
+                    }
+                    $n++;
+                }
+                if ($menu) {
+                    break;
+                } else {
+                    $i = $n - 1;
+                }
+            }
+            $i++;
+        }
+    } elseif ($bootenv === 'grub') {
+        $menu_entries = [];
+        // find the current boot entry
+        foreach ($bootcfg as $line) {
+            if (preg_match('/set default=(\d+)/', $line, $match)) {
+                $bootentry = (int)$match[1];
+                break;
+            }
+        }
+        // split boot entries
+        foreach ($bootcfg as $line) {
+            if (strpos($line, 'menuentry ') === 0) {
+                $in_menuentry = true;
+                $current_entry = $line . "\n";
+            } elseif ($in_menuentry) {
+                $current_entry .= $line . "\n";
+                if (trim($line) === "}") {
+                    $menu_entries[] = $current_entry;
+                    $in_menuentry = false;
+                }
+            }
+        }
+        // search in selected menuentry
+        $menuentry = explode("\n", $menu_entries[$bootentry]);
+        foreach (explode(' ', $menu_entries[$bootentry]) as $cmd) {
+            if (scan($cmd, $key)) {
+                $value = explode('=', $cmd)[1];
+                break;
+            }
+        }
     }
-    $i++;
-  }
-  return $value;
+    return trim($value);
 }
-$syslinux          = file('/boot/syslinux/syslinux.cfg',FILE_IGNORE_NEW_LINES+FILE_SKIP_EMPTY_LINES);
+if (is_file('/boot/syslinux/syslinux.cfg')) {
+    $bootcfg           = file('/boot/syslinux/syslinux.cfg', FILE_IGNORE_NEW_LINES + FILE_SKIP_EMPTY_LINES);
+    $bootenv           = 'syslinux';
+} elseif (is_file('/boot/grub/grub.cfg')) {
+    $bootcfg           = file('/boot/grub/grub.cfg', FILE_IGNORE_NEW_LINES + FILE_SKIP_EMPTY_LINES);
+    $bootenv           = 'grub';
+}
 $arrValidNetworks  = getValidNetworks();
-$pcie_acs_override = detect($syslinux, 'pcie_acs_override');
-$vfio_allow_unsafe = detect($syslinux, 'allow_unsafe_interrupts');
-$bgcolor           = strstr('white,azure',$display['theme']) ? '#f2f2f2' : '#1c1c1c';
-$started           = $var['fsState']=='Started';
-$libvirt_up        = $libvirt_running=='yes';
+$bgcolor           = $themeHelper->isLightTheme() ? '#f2f2f2' : '#1c1c1c'; // $themeHelper set in DefaultPageLayout.php
+$started           = $var['fsState'] == 'Started';
+$libvirt_up        = $libvirt_running == 'yes';
 $libvirt_log       = file_exists("/var/log/libvirt/libvirtd.log");
 ?>
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.filetree.css')?>">
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
 
 <?if ($hardware):?>
-<span class="status vhshift"><input type="checkbox" class="advancedview"></span>
+&nbsp;
+: <span><input type="checkbox" class="advancedview"></span>
 <?endif;?>
-<form markdown="1" id="settingsForm" method="POST" action="/update.php" target="progressFrame">
+<form markdown="1" id="settingsForm" method="POST" action="/update.php" target="progressFrame" onsubmit="return validateFormOnSubmit();">
 <input type="hidden" name="#file" value="<?=htmlspecialchars($domain_cfgfile)?>">
 <input type="hidden" name="#command" value="/plugins/dynamix/scripts/emcmd">
 <input type="hidden" name="#arg[1]" value="cmdStatus=Apply">
+
 _(Enable VMs)_:
 : <select id="SERVICE" name="SERVICE">
   <?= mk_option($libvirt_service, 'disable', _('No'))?>
   <?= mk_option($libvirt_service, 'enable', _('Yes'))?>
   </select>
-  <?if ($hardware):?>
-  <?if (!$started):?>
-  <span id="arraystopped"><i class="fa fa-warning icon warning"></i> <?=($libvirt_service=='enable')?'_(VMs will be available after Array is Started)_':'_(Apply to activate VMs after Array is Started)_'?></span>
-  <?elseif (!is_dir(dirname($domain_cfg['IMAGE_FILE'])) || !is_dir($domain_cfg['DOMAINDIR']) || !is_dir($domain_cfg['MEDIADIR'])):?>
-  <span class="basic" style="display:inline"><i class="fa fa-warning icon warning"></i> _(One or more paths do not exist)_ (<a href="#" onclick="$('.advancedview').switchButton('option','checked',true); return false">_(view)_</a>)</span>
-  <?endif;?>
-  <?endif;?>
+<?if ($hardware):?>
+<?if (!$started):?>
+  <span id="arraystopped"><i class="fa fa-warning icon warning"></i> <?=($libvirt_service == 'enable') ? '_(VMs will be available after Array is Started)_' : '_(Apply to activate VMs after Array is Started)_'?></span>
+<?endif;?>
+<?endif;?>
 
 :vms_enable_help:
 
@@ -109,38 +160,42 @@ _(Libvirt storage location)_:
 :vms_libvirt_volume_help:
 
 <?else: /* Libvirt is stopped */ ?>
-_(Libvirt vdisk size)_:
-: <input type="number" id="IMAGE_SIZE" name="IMAGE_SIZE" min="1" value="<?=htmlspecialchars($domain_cfg['IMAGE_SIZE']);?>" style="width:50px;" required="required" />_(GB)_ <span id="SIZE_ERROR" class="errortext"></span>
+_(Libvirt vdisk size)_ (_(GB)_):
+: <input type="number" id="IMAGE_SIZE" name="IMAGE_SIZE" min="1" value="<?=htmlspecialchars($domain_cfg['IMAGE_SIZE']);?>" required="required" /><span id="SIZE_ERROR" class="errortext"></span>
 
 :vms_libvirt_vdisk_size_help:
 
 _(Libvirt storage location)_:
 : <input type="text" id="IMAGE_FILE" name="IMAGE_FILE" autocomplete="off" spellcheck="false" value="<?=htmlspecialchars($domain_cfg['IMAGE_FILE']);?>" placeholder="e.g. /mnt/user/system/libvirt/libvirt.img" data-pickcloseonfile="true" data-pickfilter="img" data-pickroot="/mnt" data-pickfolders="true" required pattern="^[^\\]*libvirt\.img$">
- <?if (file_exists($domain_cfg['IMAGE_FILE'])):?><span id="deletePanel"><label><input type="checkbox" id="deleteCheckbox" /> _(Delete Image File)_</label></span><?endif;?>
- <?if (!$started):?><span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
- <?elseif (!is_dir(dirname($domain_cfg['IMAGE_FILE']))):?><span><i class="fa fa-warning icon warning"></i> _(Path does not exist)_</span>
- <?endif;?><span id="IMAGE_ERROR" class="errortext"></span>
+<?if (file_exists($domain_cfg['IMAGE_FILE'])):?>
+  <span id="deletePanel"><label><input type="checkbox" id="deleteCheckbox" /> _(Delete Image File)_</label></span><?endif;?>
+<?if (!$started):?>
+  <span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
+<?endif;?>
+  <span id="IMAGE_ERROR" class="errortext"></span>
 
 :vms_libvirt_location_help:
 
 <?endif;?>
 _(Default VM storage path)_:
-: <input type="text" id="domaindir" name="DOMAINDIR" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="<?=is_dir('/mnt/user')?'/mnt/user':'/mnt'?>" value="<?=htmlspecialchars($domain_cfg['DOMAINDIR'])?>" placeholder="_(Click to Select)_" pattern="^[^\\]*/$">
-  <?if (!$started):?><span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
-  <?elseif (!is_dir($domain_cfg['DOMAINDIR'])):?><span><i class="fa fa-warning icon warning"></i> _(Path does not exist)_</span><?endif;?>
+: <input type="text" id="domaindir" name="DOMAINDIR" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="/mnt" value="<?=htmlspecialchars($domain_cfg['DOMAINDIR'])?>" placeholder="_(Click to Select)_" pattern="^[^\\]*/$" onchange="validatePath(this)">
+<?if (!$started):?>
+  <span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
+<?endif;?>
 
 :vms_libvirt_storage_help:
 
 _(Default ISO storage path)_:
-: <input type="text" id="mediadir" name="MEDIADIR" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="<?=is_dir('/mnt/user')?'/mnt/user':'/mnt'?>" value="<?=htmlspecialchars($domain_cfg['MEDIADIR'])?>" placeholder="_(Click to Select)_" pattern="^[^\\]*/$">
-  <?if (!$started):?><span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
-  <?elseif (!is_dir($domain_cfg['MEDIADIR'])):?><span><i class="fa fa-warning icon warning"></i> _(Path does not exist)_</span><?endif;?>
+: <input type="text" id="mediadir" name="MEDIADIR" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="<?=is_dir('/mnt/user') ? '/mnt/user' : '/mnt'?>" value="<?=htmlspecialchars($domain_cfg['MEDIADIR'])?>" placeholder="_(Click to Select)_" pattern="^[^'\\]*/$">
+<?if (!$started):?>
+  <span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
+<?endif;?>
 
 :vms_libvirt_iso_storage_help:
 
 </div>
 _(Default Windows VirtIO driver ISO)_ (_(optional)_):
-: <select id="winvirtio_select" class="lock" disabled></select><input type="text" id="winvirtio" name="VIRTIOISO" data-pickfilter="iso" data-pickcloseonfile="true" data-pickroot="<?=is_dir('/mnt/user')?'/mnt/user':'/mnt'?>" value="<?=htmlspecialchars($domain_cfg['VIRTIOISO'])?>"<?if ($started):?> placeholder="_(Click to Select)_" pattern="^[^\\]*\.(iso|ISO)$"<?endif;?>>
+: <select id="winvirtio_select" class="lock" disabled></select><input type="text" id="winvirtio" name="VIRTIOISO" data-pickfilter="iso" data-pickcloseonfile="true" data-pickroot="<?=is_dir('/mnt/user') ? '/mnt/user' : '/mnt'?>" value="<?=htmlspecialchars($domain_cfg['VIRTIOISO'])?>"<?if ($started):?> placeholder="_(Click to Select)_" pattern="^[^\\]*\.(iso|ISO)$"<?endif;?>>
 <?if ($started):?>
   <i class="fa fa-trash fa-fw" id="remove_button" title="_(Remove Windows VirtIO driver ISO)_"><span>&nbsp;_(Remove)_</span></i><i class="fa fa-download fa-fw" id="download_button" title="_(Download Windows VirtIO driver ISO)_"><span>&nbsp;_(Download)_</span></i><span id="download_status"></span>
 <?endif;?>
@@ -151,12 +206,8 @@ _(Default Windows VirtIO driver ISO)_ (_(optional)_):
 _(Default network source)_:
 : <select id="network" name="BRNAME">
   <?foreach (array_keys($arrValidNetworks) as $key) {
-
     echo mk_option("", $key, "- "._($key)." -", "disabled");
-
-    foreach ($arrValidNetworks[$key] as $strNetwork) {
-        echo mk_option($domain_cfg['BRNAME'], $strNetwork, $strNetwork);
-    }
+    foreach ($arrValidNetworks[$key] as $strNetwork) echo mk_option($domain_cfg['BRNAME'], $strNetwork, $strNetwork);
   }?>
   </select>
 
@@ -171,7 +222,7 @@ _(Upon host shutdown)_:
 :vms_host_shutdown_help:
 
 _(VM shutdown time-out)_:
-: <input type="number" id="vm_shutdown_timeout" name="TIMEOUT" value="<?=htmlspecialchars($domain_cfg['TIMEOUT'])?>" class="narrow">
+: <input type="number" id="vm_shutdown_timeout" name="TIMEOUT" value="<?=htmlspecialchars($domain_cfg['TIMEOUT'])?>">
   <?if (!empty($var['shutdownTimeout']) && !empty($domain_cfg['TIMEOUT']) && (int)$domain_cfg['TIMEOUT'] > (int)$var['shutdownTimeout']):?>
   <span id="arraystopped"><i class="fa fa-warning icon warning"></i> _(exceeds Disk Shutdown)_ <?=htmlspecialchars($var['shutdownTimeout'])?>s _(time-out)_ (<a href="/Settings/DiskSettings">_(edit)_</a>)</span>
   <?endif;?>
@@ -187,23 +238,31 @@ _(Console Options)_:
 
 :vms_console_help:
 
-_(PCIe ACS override)_:
-: <select id="pcie_acs_override"<?=$safemode?' disabled':''?>>
-  <?= mk_option($pcie_acs_override, '', _('Disabled'))?>
-  <?= mk_option($pcie_acs_override, 'downstream', _('Downstream'))?>
-  <?= mk_option($pcie_acs_override, 'multifunction', _('Multi-function'))?>
-  <?= mk_option($pcie_acs_override, 'downstream,multifunction', _('Both'))?>
-  </select><?if($safemode):?><span>*_(Setting disabled in **safe mode**)_*</span><?endif;?>
+_(Show RDP menu option)_:
+: <select id="vmsrdpopt" name="RDPOPT">
+  <?=mk_option($domain_cfg['RDPOPT'], 'no', _('Dont show RDP option'))?>
+  <?=mk_option($domain_cfg['RDPOPT'], 'yes', _('Show RDP option'))?>
+  </select>
 
-:vms_acs_override_help:
+:vms_rdpopt_help:
 
-_(VFIO allow unsafe interrupts)_:
-: <select id="vfio_allow_unsafe"<?=$safemode?' disabled':''?>>
-  <?= mk_option($vfio_allow_unsafe, '', _('No'))?>
-  <?= mk_option($vfio_allow_unsafe, '1', _('Yes'))?>
-  </select><?if($safemode):?><span>*_(Setting disabled in **safe mode**)_*</span><?endif;?>
+_(Show VM Usage)_:
+: <select id="vmusage" name="USAGE">
+  <?=mk_option($domain_cfg['USAGE'], 'N', _('Disabled'))?>
+  <?=mk_option($domain_cfg['USAGE'], 'Y', _('Enabled'))?>
+  </select>
 
-:vms_vfio_interupts_help:
+:vms_usage_help:
+
+_(VM Usage refresh timer)_ (_(seconds)_):
+: <input type="number" id="vm_usage_timer" name="USAGETIMER" value="<?=htmlspecialchars($domain_cfg['USAGETIMER'] ?? 3) ?>">
+
+:vms_usage_timer_help:
+
+_(Boot Parameter Settings)_:
+: <div style="max-width: 400px; padding: 12px 16px; border-radius: 5px; background-color: rgba(240, 173, 78, 0.08); border: 1px solid rgba(240, 173, 78, 0.3); border-left: 4px solid #f0ad4e; font-size: 13px; line-height: 1.5; box-sizing: border-box;">
+  _(PCIe ACS Override, VFIO interrupts & GPU framebuffer settings are managed in)_ <a href="/BootParameters#vm-parameters" style="color: #2196F3; font-weight: bold; text-decoration: underline;">_(Boot Parameters)_</a>.
+  </div>
 
 </div>
 <?if ($libvirt_log):?>
@@ -211,8 +270,13 @@ _(VFIO allow unsafe interrupts)_:
 <?else:?>
 &nbsp;
 <?endif;?>
+<?else:?>
+&nbsp;
 <?endif;?>
-: <input type="button" id="applyBtn" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+: <span class="inline-block">
+    <input type="button" id="applyBtn" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
 </form>
 <?if ($libvirt_log):?>
 
@@ -236,8 +300,12 @@ _(btrfs scrub status)_:
 <input type="hidden" name="#arg[1]" value="start">
 <input type="hidden" name="#arg[2]" value="/etc/libvirt">
 <input type="hidden" name="#arg[3]" value="-r">
+
 &nbsp;
-: <input type="submit" value="_(Scrub)_"><label><input type="checkbox" name="#arg[3]" value="">_(Correct file system errors)_</label>
+: <span class="inline-block">
+    <input type="submit" value="_(Scrub)_">
+    <label><input type="checkbox" name="#arg[3]" value="">_(Correct file system errors)_</label>
+  </span>
 
 :vms_scrub_help:
 
@@ -245,8 +313,11 @@ _(btrfs scrub status)_:
 <input type="hidden" name="#command" value="/webGui/scripts/btrfs_scrub">
 <input type="hidden" name="#arg[1]" value="cancel">
 <input type="hidden" name="#arg[2]" value="/etc/libvirt">
+
 &nbsp;
-: <input type="submit" value="_(Cancel)_">
+: <span class="inline-block">
+    <input type="submit" value="_(Cancel)_">
+  </span>
 
 :vms_cancel_help:
 
@@ -278,6 +349,64 @@ function btrfsScrub(path) {
     }
   });
 }
+
+function validatePath(input) {
+  if (input.value.includes("'")) {
+    input.setCustomValidity(_("Single quote ' is not allowed in the path.")_);
+  } else {
+    input.setCustomValidity("");
+  }
+  input.reportValidity();
+}
+
+// Validate both domaindir and mediadir on submit
+function validateFormOnSubmit() {
+  const domaindir = document.getElementById('domaindir');
+  const mediadir = document.getElementById('mediadir');
+
+  // Run validation
+  validatePath(domaindir);
+  validatePath(mediadir);
+
+  // Check validity in order, and focus the first invalid field
+  if (!domaindir.checkValidity()) {
+    domaindir.reportValidity();
+    domaindir.focus();
+    return false;
+  }
+
+  if (!mediadir.checkValidity()) {
+    mediadir.reportValidity();
+    mediadir.focus();
+    return false;
+  }
+
+  // Both valid
+  return true;
+}
+
+document.getElementById('settingsForm').addEventListener('submit', function(e) {
+  if (!validateFormOnSubmit()) {
+    e.preventDefault();
+  }
+});
+
+// Attach validation on input events
+['domaindir', 'mediadir'].forEach(id => {
+  const input = document.getElementById(id);
+  input.addEventListener('input', () => validatePath(input));
+});
+
+// Hook into Unraid fileTreeAttach for both fields
+$('.filepicker').each(function() {
+  const input = this;
+  $(input).fileTreeAttach(null, null, function(folder) {
+    $(input).val(folder);
+    validatePath(input);
+    $(document).trigger('close.fileTree');
+  });
+});
+
 $(function(){
   $.post("/plugins/dynamix.vm.manager/include/Fedora-virtio-isos.php",{},function(isos) {
     $('#winvirtio_select').html(isos).prop('disabled',false).change().each(function(){$(this).on('change',function() {
@@ -299,13 +428,7 @@ $(function(){
         if (!pattern.test($(this).val())) {$(this).css('color','red'); run = false;}
       }
     });
-<?if ($safemode):?>
     if (run) $("#settingsForm").submit();
-<?else:?>
-    if (run) $.post("/plugins/dynamix.vm.manager/include/VMajax.php", {action:'syslinux',pcie:$('#pcie_acs_override').val(),vfio:$('#vfio_allow_unsafe').val()}, function(data){
-      $("#settingsForm").submit();
-    });
-<?endif;?>
   });
 
   $("#mediadir").on("input change", function(){
@@ -423,7 +546,7 @@ $(function(){
     $("#IMAGE_FILE").on("input change", function(){
       $("#IMAGE_ERROR").fadeOut();
       $("#applyBtn").prop("disabled", false);
-      <? if (file_exists($domain_cfg['IMAGE_FILE'])) { ?>
+      <?php if (file_exists($domain_cfg['IMAGE_FILE'])) { ?>
       if ($(this).val() != "<?=$domain_cfg['IMAGE_FILE']?>") {
         $("#deleteCheckbox").prop("disabled", true).attr("checked", false);
         $("#deletePanel").fadeOut();
@@ -431,7 +554,7 @@ $(function(){
         $("#deleteCheckbox").attr("checked", false).prop("disabled", false);
         $("#deletePanel").fadeIn();
       }
-      <? } ?>
+      <?php } ?>
     });
     $("#deleteCheckbox").change(function(){
       var checked = $(this).is(":checked");
@@ -444,15 +567,10 @@ $(function(){
       $("#winvirtio").prop("disabled", checked);
       $("#network").prop("disabled", checked);
       $("#hostshutdown").prop("disabled", checked);
-      $("#pcie_acs_override").prop("disabled", checked);
       $("#vm_shutdown_timeout").prop("disabled", checked);
       $("#applyBtn").val(checked ? "_(Delete)_" : "_(Apply)_").removeAttr('disabled');
     });
   }
-  $.post("/plugins/dynamix.vm.manager/include/VMajax.php", {action:'reboot'}, function(data){
-    var rebootMessage = "_(VM Settings: A reboot is required to apply changes)_";
-    if (data.modified) addRebootNotice(rebootMessage); else removeRebootNotice(rebootMessage);
-  });
   if ($.cookie('btrfs-scrub-vm')) btrfsScrub($.cookie('btrfs-scrub-vm'));
 });
 </script>

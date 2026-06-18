@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+  <Agent>
+    <Name>Pushplus</Name>
+    <Variables>
+      <Variable Help="Get your token from [a href='https://www.pushplus.plus/push1.html' target='_blank'][u]here[/u][/a]." Desc="Push Token" Default="FILL WITH YOUR OWN">TOKEN</Variable>
+      <Variable Help="Optional. Specify the group code or the 'topic' mentioned in the [a href='https://www.pushplus.plus/doc/guide/api.html' target='_blank'][u]API docs[/u][/a] used for this push. It's used to [a href='https://www.pushplus.plus/push2.html' target='_blank'][u]push to multiple people[/u][/a] instead of pushing to the owner. [b]To disable this feature, specify 'none'.[/b]" Desc="Specific Group Code" Default="none">TOPIC</Variable>
+      <Variable Help="Optional. Specify the message channel used for this push. [b]The default value is 'wechat'.[/b]" Desc="Specific Channel" Default="wechat">CHANNEL</Variable>
+      <Variable Help="Optional. Specify the webhook used for this push when the push channel is 'webhook' or 'cp'. [b]To disable this feature, specify 'none'.[/b]" Desc="Webhook" Default="none">WEBHOOK</Variable>
+      <Variable Help="Optional. Specify the callback url used for this push and the pushplus server will send a post request to it after each push completed. [b]To disable this feature, specify 'none'.[/b]" Desc="Callback Url" Default="none">CALLBACKURL</Variable>
+      <Variable Help="Specify the fields which are included in the title of the notification." Desc="Notification Title" Default="$SUBJECT">TITLE</Variable>
+      <Variable Help="Specify the fields which are included in the message body of the notification." Desc="Notification Message" Default="$DESCRIPTION">MESSAGE</Variable>
+    </Variables>
+    <Script>
+      <![CDATA[
+      #!/bin/bash
+      ############
+      {0}
+      ############
+      #Pushplus don't allow \n in title and the length limit is 100 for free accounts
+      TITLE=$(echo -e "$TITLE" | tr "\n" " ")
+      TITLE=$(echo "${TITLE:0:95}")
+      MESSAGE=$(echo -e "$MESSAGE")
+      [[ -n "${TOPIC}" && "${TOPIC}" == "none" ]] && TOPIC=""
+      [[ -n "${CHANNEL}" && "${CHANNEL}" == "none" ]] && CHANNEL="wechat"
+      [[ -n "${WEBHOOK}" && "${WEBHOOK}" == "none" ]] && WEBHOOK=""
+      [[ -n "${CALLBACKURL}" && "${CALLBACKURL}" == "none" ]] && CALLBACKURL=""
+
+      curl -s -k -X POST \
+      -F "token=$TOKEN" \
+      -F "title=$TITLE" \
+      -F "content=$MESSAGE" \
+      -F "topic=$TOPIC" \
+      -F "template=txt" \
+      -F "channel=$CHANNEL" \
+      -F "webhook=$WEBHOOK" \
+      -F "callbackUrl=$CALLBACKURL" \
+      "https://www.pushplus.plus/send" 2>&1
+      ]]>
+    </Script>
+  </Agent>

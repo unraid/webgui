@@ -1,6 +1,6 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2015-2023, Lime Technology
+/* Copyright 2015-2025, Lime Technology
  * Copyright 2015-2016, Guilherme Jardim, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
@@ -34,6 +34,7 @@ if (file_exists($cfgfile)) {
   }
 }
 if (isset($cfg_new)) {
+  $tmp = "";
   foreach ($cfg_new as $key => $value) $tmp .= "$key=\"$value\"\n";
   file_put_contents($cfgfile, $tmp);
 }

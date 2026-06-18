@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+  <Agent>
+    <Name>Bark</Name>
+    <Variables>
+      <Variable Help="Get your push url from Bark APP. [a href='https://bark.day.app/#/tutorial' target='_blank'][u]tutorial[/u][/a]." Desc="PushUrl" Default="https://api.day.app/your_key">PUSHURL</Variable>
+      <Variable Help="Optional. Specify the message group used for this push. [b]To disable this feature, specify 'none'.[/b]" Desc="Group" Default="Unraid">GROUP</Variable>
+      <Variable Help="Optional. Specify the message sound, copy the sound name from Bark APP. [b]To disable this feature, specify 'none'.[/b]" Desc="Sound" Default="none">SOUND</Variable>
+      <Variable Help="Specify the fields which are included in the title of the notification." Desc="Notification Title" Default="$SUBJECT">TITLE</Variable>
+      <Variable Help="Specify the fields which are included in the message body of the notification." Desc="Notification Message" Default="$DESCRIPTION">MESSAGE</Variable>
+    </Variables>
+    <Script>
+      <![CDATA[
+      #!/bin/bash
+      ############
+      {0}
+      ############
+      # Markdown newline style for message content
+      TITLE=$(echo -e "$TITLE")
+      MESSAGE=$(echo -e "$MESSAGE")
+      [[ -n "${GROUP}" && "${GROUP}" == "none" ]] && GROUP=""
+      [[ -n "${SOUND}" && "${SOUND}" == "none" ]] && SOUND=""
+
+      curl -X "POST" "$PUSHURL" \
+      -H 'Content-Type: application/json; charset=utf-8' \
+      -d "{\"body\": \"$MESSAGE\", \"title\": \"$TITLE\", \"sound\": \"$SOUND\", \"group\": \"$GROUP\"}" 2>&1
+      ]]>
+    </Script>
+  </Agent>
+

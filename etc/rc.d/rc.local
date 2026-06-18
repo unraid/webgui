@@ -10,9 +10,33 @@
 #
 # LimeTech - modified for Unraid OS
 # Bergware - modified for Unraid OS, October 2023
+# Simon Fairweather - modified for Unraid OS, November 2025(SRIOV)
 
 # run & log functions
 . /etc/rc.d/rc.runlog
+
+# LimeTech/SF - setup selected devices for sriov
+/usr/local/sbin/sriov 1>/var/log/sriov 2>/var/log/sriov-errors
+
+# import CA proxy
+UNPROXY=/boot/config/plugins/dynamix/outgoingproxy.cfg
+CAPROXY=/boot/config/plugins/community.applications/proxy.cfg
+if [[ -f $CAPROXY && ! -f $UNPROXY ]]; then
+  . $CAPROXY
+  # proxy and port were set by the previous command
+  if [[ -n $proxy && -n $port ]]; then
+cat << EOF > $UNPROXY
+proxy_active="1"
+proxy_url_1="$proxy:$port"
+proxy_name_1="Imported from CA"
+EOF
+  fi
+  mv "$CAPROXY" "$CAPROXY~"
+fi
+
+# load proxy environment vars so it is used for plugin updates and the go script
+/usr/local/emhttp/plugins/dynamix/scripts/set_proxy
+[[ -x /etc/profile.d/proxy.sh ]] && . /etc/profile.d/proxy.sh
 
 # irqbalance daemon distributes interrupts over processors and cores
 # if [[ -x /usr/sbin/irqbalance ]]; then
@@ -30,18 +54,25 @@ rm -rf /kernel
 # Ensure required config directories exist
 # these will all have permissions 0700
 CONFIG="/boot/config"
+mkdir -p $CONFIG/default
 mkdir -p $CONFIG/modprobe.d
 mkdir -p $CONFIG/plugins/dockerMan
 mkdir -p $CONFIG/plugins/dynamix/users
 mkdir -p $CONFIG/plugins-error/
 mkdir -p $CONFIG/pools
+mkdir -p $CONFIG/rclone
 mkdir -p $CONFIG/shares
 mkdir -p $CONFIG/ssh/root
 mkdir -p $CONFIG/ssl/certs
 
+# Set default Docker backingfs type to native for existing installations
+if [[ -f "/boot/config/docker.cfg" ]]; then
+  grep -q "DOCKER_BACKINGFS=" /boot/config/docker.cfg || echo "DOCKER_BACKINGFS=\"native\"" >> /boot/config/docker.cfg
+fi
+
 # upgrade network configuration (if needed) and (re)generates our welcome text
 if [[ -x /usr/local/sbin/create_network_ini ]]; then
-  /usr/local/sbin/create_network_ini init &>/dev/null &
+  /usr/local/sbin/create_network_ini init &
 fi
 
 # Needed by dynamix
@@ -54,9 +85,14 @@ fi
 /usr/local/emhttp/webGui/scripts/notify smtp-init
 /usr/local/emhttp/webGui/scripts/notify cron-init
 
+# start interface state monitoring
+if [[ -x /usr/local/sbin/monitor_interface ]]; then
+  /usr/local/sbin/monitor_interface &>/dev/null
+fi
+
 # start nchan monitoring -> stop all running nchan processes when no subscribers are connected
 if [[ -x /usr/local/sbin/monitor_nchan ]]; then
-  /usr/local/sbin/monitor_nchan
+  /usr/local/sbin/monitor_nchan &>/dev/null
 fi
 
 # First boot following Unraid Server OS update: delete plugin file
@@ -64,22 +100,38 @@ rm -f /boot/plugins/unRAIDServer.plg
 rm -f $CONFIG/plugins/unRAIDServer.plg
 
 # These plugins are now integrated in the OS or obsolete and may interfere
-OBSOLETE="vfio.pci dynamix.wireguard dynamix.ssd.trim dynamix.file.manager gui.search unlimited-width"
+OBSOLETE="flash.remount vfio.pci dynamix.wireguard dynamix.ssd.trim dynamix.file.manager gui.search unlimited-width proxy.editor unraid.patch AAA-UnraidPatch-BootLoader-DO_NOT_DELETE theme.engine dark.theme"
+QUIET="unraid.patch AAA-UnraidPatch-BootLoader-DO_NOT_DELETE"
+
 for PLUGIN in $OBSOLETE; do
-  if [[ -e $CONFIG/plugins/$PLUGIN.plg ]]; then
-    log "moving obsolete plugin $PLUGIN.plg to $CONFIG/plugins-error"
+  if [[ -e "$CONFIG/plugins/$PLUGIN.plg" ]]; then
     # preserve ssd-trim config
     if [[ $PLUGIN == dynamix.ssd.trim ]]; then
-      if [[ -e $CONFIG/plugins/$PLUGIN/$PLUGIN.cfg ]]; then
-        echo "[ssd]" >> $CONFIG/plugins/dynamix/dynamix.cfg
-        cat $CONFIG/plugins/$PLUGIN/$PLUGIN.cfg >> $CONFIG/plugins/dynamix/dynamix.cfg
+      if [[ -e "$CONFIG/plugins/$PLUGIN/$PLUGIN.cfg" ]]; then
+        echo "[ssd]" >> "$CONFIG/plugins/dynamix/dynamix.cfg"
+        cat "$CONFIG/plugins/$PLUGIN/$PLUGIN.cfg" >> "$CONFIG/plugins/dynamix/dynamix.cfg"
       fi
-      if [[ -e $CONFIG/plugins/$PLUGIN/ssd-trim.cron ]]; then
-        mv $CONFIG/plugins/$PLUGIN/ssd-trim.cron $CONFIG/plugins/dynamix/ssd-trim.cron
+      if [[ -e "$CONFIG/plugins/$PLUGIN/ssd-trim.cron" ]]; then
+        mv "$CONFIG/plugins/$PLUGIN/ssd-trim.cron" "$CONFIG/plugins/dynamix/ssd-trim.cron"
       fi
     fi
-    mv $CONFIG/plugins/$PLUGIN.plg $CONFIG/plugins-error/
-    rm -rf $CONFIG/plugins/$PLUGIN
+
+    if [[ " $QUIET " == *" $PLUGIN "* ]]; then
+      rm "$CONFIG/plugins/$PLUGIN.plg"
+    else
+      log "moving obsolete plugin $PLUGIN.plg to $CONFIG/plugins-error"
+      mv "$CONFIG/plugins/$PLUGIN.plg" "$CONFIG/plugins-error/"
+    fi
+
+    # also remove $PLUGIN configuration directory
+    rm -rf "$CONFIG/plugins/$PLUGIN"
+  fi
+done
+
+# Clean up any quiet plugin plg files from previous runs
+for PLUGIN in $QUIET; do
+  if [[ -e "$CONFIG/plugins-error/$PLUGIN.plg" ]]; then
+    rm "$CONFIG/plugins-error/$PLUGIN.plg"
   fi
 done
 
@@ -123,6 +175,12 @@ obsolete "NerdPack" "2021.08.11"
 obsolete "upnp-monitor" "2020.01.04c"
 # ZFS-Companion Monitor by campusantu, breaks the dashboard
 obsolete "ZFS-companion" "2021.08.24"
+# Folder View - Latest versions are only compatible with 7.x  Older versions have issues
+obsolete "folder.view" "2024.10.02"
+# Unraid Connect - requires version "2025.07.15.1837" or higher
+obsolete "dynamix.unraid.net" "2025.07.15.1836"
+# Dynamix Date & Time - Removes options from Settings - Date Time settings block everything older than 2025.08.01 (current 2023.10.28)
+obsolete "dynamix.date.time" "2025.08.01"
 
 # If "unraidsafemode" indicated, skip installing extra packages and plugins
 if [[ -f /boot/unraidsafemode ]] || grep -wq unraidsafemode /proc/cmdline; then
@@ -133,13 +191,50 @@ else
     log "Installing /boot/extra packages"
     ( export -f log; find /boot/extra -maxdepth 1 -type f -exec sh -c 'upgradepkg --terse --install-new "$1" | log' -- "{}" \; )
   fi
-  # Install plugins
-  log "Installing plugins"
+  # Move any downloaded plugins in $CONFIG/plugins-nextboot to $CONFIG/plugins so they can be installed
+  if [[ -d "$CONFIG/plugins-nextboot" ]]; then
+    shopt -s nullglob
+    for ITEM in "$CONFIG/plugins-nextboot"/*; do
+      if [[ -f "$ITEM" && "$ITEM" == *.plg ]]; then
+        # Move .plg files
+        mv "$ITEM" "$CONFIG/plugins/" && log "Moved $(basename "$ITEM") from plugins-nextboot to plugins"
+      elif [[ -d "$ITEM" ]]; then
+        # Merge plugin directories
+        PLUGIN_NAME=$(basename "$ITEM")
+        DEST_DIR="$CONFIG/plugins/$PLUGIN_NAME"
+        mkdir -p "$DEST_DIR"
+        cp -r "$ITEM"/* "$DEST_DIR/" 2>/dev/null
+        rm -rf "$ITEM"
+        log "Moved plugin directory $PLUGIN_NAME and contents from plugins-nextboot to plugins"
+      fi
+    done
+    shopt -u nullglob
+    rmdir "$CONFIG/plugins-nextboot" 2>/dev/null;
+  fi
+  PRIORITY_PLUGINS=("dynamix.unraid.net.plg")
+  # Install priority plugins first
+  for PRIORITY_PLUGIN in "${PRIORITY_PLUGINS[@]}"; do
+    PRIORITY_PLUGIN_PATH="$CONFIG/plugins/$PRIORITY_PLUGIN"
+    if [[ -f "$PRIORITY_PLUGIN_PATH" ]]; then
+      /usr/local/sbin/plugin install "$PRIORITY_PLUGIN_PATH" | log
+    fi
+  done
+  # Install remaining plugins
   shopt -s nullglob
   for PLUGIN in $CONFIG/plugins/*.plg; do
-    /usr/local/sbin/plugin install $PLUGIN | log
+    PLUGIN_NAME=$(basename "$PLUGIN")
+    # Skip already installed priority plugins
+    if [[ " ${PRIORITY_PLUGINS[*]} " == *" $PLUGIN_NAME "* ]]; then
+      continue
+    fi
+    /usr/local/sbin/plugin install "$PLUGIN" | log
   done
   shopt -u nullglob
+fi
+
+# Re-run rclone config setup after plugin install phase (plugins-nextboot may have added rclone).
+if [[ -x /usr/local/sbin/rclone_config_init ]]; then
+  /usr/local/sbin/rclone_config_init "$CONFIG"
 fi
 
 # Install languages
@@ -149,6 +244,11 @@ for LANGUAGE in $CONFIG/plugins/lang-*.xml; do
   /usr/local/sbin/language install $LANGUAGE | log
 done
 shopt -u nullglob
+
+# restore favorites
+if [[ -x /usr/local/emhttp/webGui/scripts/restore_favorites ]]; then
+  /usr/local/emhttp/webGui/scripts/restore_favorites
+fi
 
 # Enable persistent bash history
 PERSISTENT_BASH_HISTORY=$(grep "persist_bash_history" /boot/config/plugins/dynamix/dynamix.cfg 2>/dev/null | cut -d'=' -f2 | sed 's/"//g')
@@ -161,10 +261,36 @@ if [[ $PERSISTENT_BASH_HISTORY == 1 ]]; then
   ln -s /boot/config/history/bash_history /root/.bash_history
 fi
 
+# cleanup the 'go' script
+# delete non-commented line with emhttp and trailing & (could also have leading env vars)
+# add new line with call to emhttp (preserve any params to emhttp and CRLF line endings)
+GOTEST1='^[^#]*/usr/local/sbin/emhttp(.*)&(.*)$'
+if grep -q -E "$GOTEST1" $CONFIG/go; then
+  cp $CONFIG/go $CONFIG/go~
+  sed -i -E "s@$GOTEST1@/usr/local/sbin/emhttp\1\2@g" $CONFIG/go
+fi
+# delete lines added by ProxyEditor
+GOTEST2='# Added by ProxyEditor'
+if grep -q "$GOTEST2" $CONFIG/go; then
+  [[ ! -f $CONFIG/go~ ]] && cp $CONFIG/go $CONFIG/go~
+  sed -i "/$GOTEST2/d" $CONFIG/go
+fi
+
 # Invoke the 'go' script
-if [[ -f $CONFIG/go ]]; then
-  log "Starting go script"
-  fromdos <$CONFIG/go >/var/tmp/go
-  chmod +x /var/tmp/go
-  /var/tmp/go
+GO=go
+if [[ -f /boot/unraidsafemode ]] || grep -wq unraidsafemode /proc/cmdline; then
+  GO=go.safemode
+fi
+if [[ -f $CONFIG/$GO ]]; then
+  log "Starting $GO script"
+  fromdos <$CONFIG/$GO >/var/tmp/$GO
+  chmod +x /var/tmp/$GO
+  /var/tmp/$GO
+else
+  log "Starting emhttp"
+  /usr/local/sbin/emhttp
+fi
+if [[ -f /boot/unraidguimode ]] || grep -wq unraidguimode /proc/cmdline; then
+  log "Starting GUI mode"
+  /usr/bin/slim
 fi

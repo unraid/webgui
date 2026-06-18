@@ -1,0 +1,70 @@
+:root {
+    --gui-search-search-box-text-color: var(--white);
+    --gui-search-search-box-background-color: var(--gray-500);
+}
+
+#guiSearchBoxSpan {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 1rem;
+    text-align: left;
+    height: auto;
+    line-height: normal;
+    font-size: 1.3rem;
+}
+
+#guiSearchBox {
+    width: 40rem;
+    border: none;
+    border-radius: 20px;
+    color: var(--gui-search-search-box-text-color);
+    background-color: var(--gui-search-search-box-background-color);
+    padding-left: 2.4rem;
+}
+
+.Theme--black,
+.Theme--white {
+    #guiSearchBoxSpan {
+        width: 100%;
+
+        .awesomplete,
+        #guiSearchBox {
+            width: 100%;
+        }
+    }
+
+    @media (min-width: 768px) {
+        #guiSearchBoxSpan {
+            min-width: 40rem;
+        }
+    }
+
+    #guiSearchBoxSpan:after {
+        font-family: unraid;
+        content: "\e956";
+        position: absolute;
+        top: 50%;
+        left: 1.5rem;
+        transform: translateY(-50%);
+        font-size: 1.3rem;
+    }
+}
+
+.Theme--sidebar {
+    --gui-search-search-box-text-color: var(--black);
+    --gui-search-search-box-background-color: var(--yellow-200);
+
+    #guiSearchBoxSpan {
+        margin: 0;
+        padding: 0;
+        height: 18px !important;
+    }
+    #guiSearchBox {
+        position: relative;
+        top: 0;
+        left: 0;
+        margin: 0;
+        padding: 5px 12px;
+    }
+}

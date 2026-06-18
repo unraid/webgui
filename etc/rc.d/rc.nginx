@@ -6,7 +6,7 @@
 # Written for Slackware Linux by Cherife Li <cherife-#-dotimes.com>.
 
 # LimeTech - modified for Unraid OS
-# Bergware - modified for Unraid OS, October 2023
+# Bergware - modified for Unraid OS, May 2025
 
 # reference:
 # LANNAME                     'tower'
@@ -18,6 +18,7 @@
 DAEMON="Nginx server daemon"
 CALLER="nginx"
 NGINX="/usr/sbin/nginx"
+TS="/usr/local/sbin/tailscale"
 PID="/var/run/nginx.pid"
 SSL="/boot/config/ssl"
 CONF="/etc/nginx/nginx.conf"
@@ -26,7 +27,16 @@ SERVERS="/etc/nginx/conf.d/servers.conf"
 LOCATIONS="/etc/nginx/conf.d/locations.conf"
 INI="/var/local/emhttp/nginx.ini.new"
 CERTPATH="$SSL/certs/certificate_bundle.pem"
-MYSERVERS="/boot/config/plugins/dynamix.my.servers/myservers.cfg"
+TSCERTPATH="$SSL/certs/ts_bundle.pem"
+CONNECT_CONFIG="/boot/config/plugins/dynamix.my.servers/configs/connect.json"
+API_UTILS="/usr/local/share/dynamix.unraid.net/scripts/api_utils.sh"
+DEFAULTS="/etc/default/nginx"
+SYSTEM="/sys/class/net"
+SYSLOG="/var/log/syslog"
+IPV6MYUNRAIDNET=1
+# Load defaults
+# Defines NGINX_CUSTOMFA for custom Content-Security-Policy frame-ancestors url
+[[ -r $DEFAULTS ]] && . $DEFAULTS
 
 # hold server names
 SERVER_NAMES=()
@@ -64,6 +74,23 @@ fi
 
 fqdn(){
   echo ${CERTNAME/'*'/${1//[.:]/-}}
+}
+
+# check if remote access should be enabled
+check_remote_access(){
+  # Check if connect plugin is enabled using api_utils.sh
+  if [[ -f $API_UTILS ]] && $API_UTILS is_api_plugin_enabled "unraid-api-plugin-connect"; then
+    # Plugin is enabled, check connect.json configuration
+    if [[ -f $CONNECT_CONFIG ]] && command -v jq >/dev/null 2>&1; then
+      local wanaccess=$(jq -r '.wanaccess' "$CONNECT_CONFIG" 2>/dev/null)
+      local username=$(jq -r '.username' "$CONNECT_CONFIG" 2>/dev/null)
+      # Enable remote access if wanaccess is true and username is not empty
+      if [[ $wanaccess == "true" && -n $username && $username != "null" ]]; then
+        return 0
+      fi
+    fi
+  fi
+  return 1
 }
 
 # create listening ports
@@ -105,6 +132,7 @@ redirect(){
         [[ $(ipv $ADDR) == 6 ]] && HOST="[$ADDR]"
         [[ -n $HOST ]] && echo "${T}listen $HOST:$*; # $(show $ADDR)"
       done
+      echo "${T}add_header Content-Security-Policy \"frame-ancestors 'self' $NGINX_CUSTOMFA\";"
       echo "${T}return 302 https://\$host:$PORTSSL\$request_uri;"
       echo "}"
       ;;
@@ -116,6 +144,7 @@ redirect(){
         if [[ -n $HOST ]]; then
           echo "server {"
           echo "${T}listen $HOST:$*; # $(show $ADDR)"
+          echo "${T}add_header Content-Security-Policy \"frame-ancestors 'self' $NGINX_CUSTOMFA\";"
           echo "${T}return 302 https://$(fqdn $ADDR)$PORTSSL_URL\$request_uri;"
           echo "}"
         fi
@@ -134,10 +163,18 @@ build_servers(){
 	#
 	server {
 	    listen unix:/var/run/nginx.socket default_server;
+      # filemanager should not display outdated messages
+	    location = /pub/filemanager {
+	        nchan_publisher;
+	        nchan_channel_id "filemanager";
+	        nchan_message_buffer_length $arg_buffer_length;
+	        nchan_message_timeout 30s;
+	    }
 	    location ~ /pub/(.*)$ {
 	        nchan_publisher;
 	        nchan_channel_id "$1";
 	        nchan_message_buffer_length $arg_buffer_length;
+	        nchan_message_timeout 0;
 	    }
 	    location ~ /nchan_stub_status$ {
 	        nchan_stub_status;
@@ -154,6 +191,7 @@ build_servers(){
 	server {
 	$(listen lo)
 	    #
+	    add_header Content-Security-Policy "frame-ancestors 'self' $NGINX_CUSTOMFA";
 	    include /etc/nginx/conf.d/locations.conf;
 	}
 	EOF
@@ -169,6 +207,7 @@ build_servers(){
 	server {
 	$(listen $PORT default_server)
 	    #
+	    add_header Content-Security-Policy "frame-ancestors 'self' $NGINX_CUSTOMFA";
 	    location ~ /wsproxy/$PORT/ { return 403; }
 	    include /etc/nginx/conf.d/locations.conf;
 	}
@@ -182,6 +221,7 @@ build_servers(){
 	server {
 	$(listen $PORTSSL ssl default_server)
 	    http2 on;
+	    add_header Content-Security-Policy "frame-ancestors 'self' $SELFCERTFA $NGINX_CUSTOMFA";
 	    # Ok to use concatenated pem files; nginx will do the right thing.
 	    ssl_certificate         $SELFCERTPATH;
 	    ssl_certificate_key     $SELFCERTPATH;
@@ -227,6 +267,7 @@ build_servers(){
 	server {
 	$(listen $PORTSSL ssl default_server)
 	    http2 on;
+	    add_header Content-Security-Policy "frame-ancestors 'self' $SELFCERTFA $NGINX_CUSTOMFA";
 	    # Ok to use concatenated pem files; nginx will do the right thing.
 	    ssl_certificate         $SELFCERTPATH;
 	    ssl_certificate_key     $SELFCERTPATH;
@@ -248,6 +289,7 @@ build_servers(){
 	server {
 	$(listen $PORTSSL ssl default_server)
 	    http2 on;
+	    add_header Content-Security-Policy "frame-ancestors 'self' $SELFCERTFA $NGINX_CUSTOMFA";
 	    # Ok to use concatenated pem files; nginx will do the right thing.
 	    ssl_certificate         $SELFCERTPATH;
 	    ssl_certificate_key     $SELFCERTPATH;
@@ -270,6 +312,7 @@ build_servers(){
 	$(listen $PORTSSL ssl)
 	    http2 on;
 	    server_name ${SERVER_NAMES[@]};
+	    add_header Content-Security-Policy "frame-ancestors 'self' $CERTFA $NGINX_CUSTOMFA";
 	    # Ok to use concatenated pem files; nginx will do the right thing.
 	    ssl_certificate         $CERTPATH;
 	    ssl_certificate_key     $CERTPATH;
@@ -284,6 +327,39 @@ build_servers(){
 	}
 	EOF
     fi
+  fi
+  if [[ -n $TSFQDN ]]; then
+    cat <<- EOF >>$SERVERS
+	#
+	# Redirect Tailscale http requests to https
+	# ex: http://tower.magicDNS.ts.net -> https://tower.magicDNS.ts.net
+	#
+	server {
+	$(listen $PORT)
+	    server_name $TSFQDN;
+	    return 302 https://$TSFQDN$PORTSSL_URL$request_uri;
+	}
+	#
+	# Port settings for https using Tailscale cert
+	# ex: https://tower.magicDNS.ts.net
+	#
+	server {
+	$(listen $PORTSSL ssl http2)
+	    server_name $TSFQDN;
+	    add_header Content-Security-Policy "frame-ancestors 'self' $TSFA $NGINX_CUSTOMFA";
+	    # Ok to use concatenated pem files; nginx will do the right thing.
+	    ssl_certificate         $TSCERTPATH;
+	    ssl_certificate_key     $TSCERTPATH;
+	    ssl_trusted_certificate $TSCERTPATH;
+	    #
+	    # OCSP stapling
+	    ssl_stapling on;
+	    ssl_stapling_verify on;
+	    #
+	    location ~ /wsproxy/$PORTSSL/ { return 403; }
+	    include /etc/nginx/conf.d/locations.conf;
+	}
+	EOF
   fi
 }
 
@@ -335,8 +411,9 @@ build_locations(){
 	#
 	# nchan subscriber endpoint
 	#
-	location ~ /sub/(.*)$ {
+	location ~ ^/sub/(.*)$ {
 	    nchan_subscriber;
+	    nchan_subscriber_timeout 0;
 	    # nchan_authorize_request <url here>
 	    nchan_channel_id "$1";
 	    nchan_channel_id_split_delimiter ",";
@@ -386,7 +463,9 @@ build_locations(){
 	#
 	# pass PHP scripts to FastCGI server listening on unix:/var/run/php-fpm.sock
 	#
-	location ~ \.php$ {
+	location ~ ^(.+\.php)(.*)$ {
+	    fastcgi_split_path_info  ^(.+\.php)(.*)$;
+	    fastcgi_param PATH_INFO  $fastcgi_path_info;
 	    include fastcgi_params;
 	}
 	#
@@ -406,6 +485,13 @@ build_locations(){
 	#
 	location = /robots.txt {
 	    add_header Access-Control-Allow-Origin *; #robots.txt any origin
+	    allow all;
+	}
+	#
+	# redirect.htm available without authentication
+	#
+	location = /redirect {
+	    rewrite ^ /redirect.htm break;
 	    allow all;
 	}
 	#
@@ -474,10 +560,14 @@ build_ssl(){
   LANMDNS=${LANNAME}${LOCAL_TLD:+.$LOCAL_TLD}
 
   # fetch LAN IP address (read management interface eth0)
-  sed -n '/^\[eth0\]$/,/^TYPE/p' $NETWORK_INI >$NETWORK_INI.eth0
-  LANIP=$(scan IPADDR:0 $NETWORK_INI.eth0);
-  LANIP6=$(scan IPADDR6:0 $NETWORK_INI.eth0);
-  rm -f $NETWORK_INI.eth0
+  [[ -e $SYSTEM/bond0 ]] && DEV=bond0 || DEV=eth0
+  [[ -e $SYSTEM/br0 ]] && DEV=br0
+  LANIP=$(ip -4 -br addr show scope global primary dev $DEV | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
+  LANIP6=$(ip -6 -br addr show scope global primary -deprecated dev $DEV | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
+
+  # try wireless connection if no IP address on interface eth0
+  [[ -z $LANIP && -e $SYSTEM/wlan0 ]] && LANIP=$(ip -4 -br addr show scope global primary dev wlan0 | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
+  [[ -z $LANIP6 && -e $SYSTEM/wlan0 ]] && LANIP6=$(ip -6 -br addr show scope global primary -deprecated dev wlan0 | awk '{print $3;exit}' | sed -r 's/\/[0-9]+//')
 
   # regenerate self-signed cert if local TLD changes */
   SELFCERTPATH=$SSL/certs/${LANNAME}_unraid_bundle.pem
@@ -493,25 +583,31 @@ build_ssl(){
   fi
   # determine if OCSP stapling should be enabled for this cert
   [[ -n $(openssl x509 -noout -ocsp_uri -in "$SELFCERTPATH") ]] && SELFCERTSTAPLE=on || SELFCERTSTAPLE=off
+  # define CSP frame-ancestors for the self-signed cert
+  [[ -n $LOCAL_TLD ]] && [[ "$LOCAL_TLD" != "local" ]] && SELFCERTFA="https://*.$LOCAL_TLD/"
 
   # handle Certificate Authority signed cert if present
   if [[ -f $CERTPATH ]]; then
     # extract common name from cert
     CERTNAME=$(openssl x509 -noout -subject -nameopt multiline -in $CERTPATH | sed -n 's/ *commonName *= //p')
+    # define CSP frame-ancestors for cert
+    CERTFA="https://*.${CERTNAME#*.}/"
     # check if Remote Access is enabled and fetch WANIP
-    if [[ -L /usr/local/sbin/unraid-api ]] && grep -qs 'wanaccess="yes"' $MYSERVERS && ! grep -qs 'username=""' $MYSERVERS; then
+    if [[ -L /usr/local/sbin/unraid-api ]] && check_remote_access; then
       WANACCESS=yes
       WANIP=$(curl https://wanip4.unraid.net/ 2>/dev/null)
-      WANIP6=$(curl https://wanip6.unraid.net/ 2>/dev/null)
+      [[ $IPV6MYUNRAIDNET == 1 ]] && WANIP6=$(curl https://wanip6.unraid.net/ 2>/dev/null)
     fi
     if [[ $CERTNAME == *\.myunraid\.net ]]; then
       # wildcard LE certificate
+      # add Unraid Connect to CSP frame-ancestors for a myunraid.net cert
+      CERTFA+=" https://connect.myunraid.net/"
       [[ -n $LANIP ]] && LANFQDN=$(fqdn $LANIP) SERVER_NAMES+=($LANFQDN)
-      [[ -n $LANIP6 ]] && LANFQDN6=$(fqdn $LANIP6) SERVER_NAMES+=($LANFQDN6)
+      [[ $IPV6MYUNRAIDNET == 1 && -n $LANIP6 ]] && LANFQDN6=$(fqdn $LANIP6) SERVER_NAMES+=($LANFQDN6)
       # check if remote access enabled
       if [[ -n $WANACCESS ]]; then
         [[ -n $WANIP ]] && WANFQDN=$(fqdn $WANIP) SERVER_NAMES+=($WANFQDN)
-        [[ -n $WANIP6 ]] && WANFQDN6=$(fqdn $WANIP6) SERVER_NAMES+=($WANFQDN6)
+        [[ $IPV6MYUNRAIDNET == 1 && -n $WANIP6 ]] && WANFQDN6=$(fqdn $WANIP6) SERVER_NAMES+=($WANFQDN6)
       fi
       if check; then
         # add included interfaces
@@ -521,17 +617,39 @@ build_ssl(){
           NET=$(show $ADDR)
           # skip invalid interface, LAN interface and WG VPN tunneled interfaces
           [[ -z $NET || $(show $LANIP) == $NET || (${NET:0:2} == wg && $(scan TYPE:1 $WIREGUARD/$NET.cfg) -ge 7) ]] && continue
-          [[ $(ipv $ADDR) == 4 ]] && NET_FQDN[$NET]=$(fqdn $ADDR) || NET_FQDN6[$NET]=$(fqdn $ADDR)
-          SERVER_NAMES+=($(fqdn $ADDR))
+          if [[ $(ipv $ADDR) == 4 ]]; then
+            NET_FQDN[$NET]=$(fqdn $ADDR)
+            SERVER_NAMES+=($(fqdn $ADDR))
+          elif [[ $IPV6MYUNRAIDNET == 1 ]]; then
+            NET_FQDN6[$NET]=$(fqdn $ADDR)
+            SERVER_NAMES+=($(fqdn $ADDR))
+          fi
         done
       fi
     else
-      # custom certificate
+      # custom certificate, this would be better as SELFCERTPATH
       LANFQDN=${CERTNAME/\*/$LANNAME} # support wildcard custom certs
       SERVER_NAMES+=($LANFQDN)
     fi
     # determine if OCSP stapling should be enabled for this cert
     [[ -n $(openssl x509 -noout -ocsp_uri -in "$CERTPATH") ]] && CERTSTAPLE=on || CERTSTAPLE=off
+  fi
+
+  # handle TS cert if present
+  if [[ -f "$TSCERTPATH" ]]; then
+    # confirm TS is intalled and running
+    if [[ -x $TS ]] && $TS status &>/dev/null; then
+      # extract common name from cert
+      TSFQDN1=$(openssl x509 -noout -subject -nameopt multiline -in "$TSCERTPATH" | sed -n 's/ *commonName *= //p')
+      # get tailscale domain
+      TSFQDN2=$($TS status -json | jq ' .Self.DNSName' | tr -d '"' | sed 's/.$//')
+      if [[ -n "$TSFQDN1" ]] && [[ "$TSFQDN1" == "$TSFQDN2" ]]; then
+        # common name and tailscale domain are equal and not empty, the cert is valid, use it
+        TSFQDN=$TSFQDN1
+        # define CSP frame-ancestors for TS cert
+        TSFA="https://*.${TSFQDN#*.}/"
+      fi
+    fi
   fi
 
   # build servers configuration file
@@ -542,7 +660,7 @@ build_ssl(){
   # define the default URL used to access the server
   if [[ $USE_SSL == auto ]]; then
     [[ -n $LANIP && $(ipv $LANIP) == 4 ]] && DEFAULTURL="https://$LANFQDN$PORTSSL_URL"
-    [[ -n $LANIP && $(ipv $LANIP) == 6 ]] && DEFAULTURL="https://[$LANFQDN6]$PORTSSL_URL"
+    [[ -n $LANIP6 && -n $LANFQDN6 && $(ipv $LANIP6) == 6 ]] && DEFAULTURL="https://$LANFQDN6$PORTSSL_URL"
   elif [[ $USE_SSL == yes ]]; then
     DEFAULTURL="https://$LANMDNS$PORTSSL_URL"
   else
@@ -555,6 +673,7 @@ build_ssl(){
   echo "NGINX_LANIP6=\"$LANIP6\"" >>$INI
   echo "NGINX_LANNAME=\"$LANNAME\"" >>$INI
   echo "NGINX_LANMDNS=\"$LANMDNS\"" >>$INI
+  echo "NGINX_BIND=\"$BIND\"" >>$INI
   echo "NGINX_CERTPATH=\"$CERTPATH\"" >>$INI
   echo "NGINX_USESSL=\"$USE_SSL\"" >>$INI
   echo "NGINX_PORT=\"$PORT\"" >>$INI
@@ -570,13 +689,17 @@ build_ssl(){
   echo "NGINX_WANIP6=\"$WANIP6\"" >>$INI
   echo "NGINX_WANFQDN=\"$WANFQDN\"" >>$INI
   echo "NGINX_WANFQDN6=\"$WANFQDN6\"" >>$INI
+  # defined if ts_bundle.pem present:
+  echo "NGINX_TAILSCALEFQDN=\"$TSFQDN\"" >>$INI
   # add included interfaces
-  for NET in ${!NET_FQDN[@]}; do
+  for NET in "${!NET_FQDN[@]}"; do
     echo "NGINX_${NET^^}FQDN=\"${NET_FQDN[$NET]}\"" >>$INI
   done
-  for NET in ${!NET_FQDN6[@]}; do
-    echo "NGINX_${NET^^}FQDN6=\"${NET_FQDN6[$NET]}\"" >>$INI
-  done
+  if [[ $IPV6MYUNRAIDNET == 1 ]]; then
+    for NET in "${!NET_FQDN6[@]}"; do
+      echo "NGINX_${NET^^}FQDN6=\"${NET_FQDN6[$NET]}\"" >>$INI
+    done
+  fi
   # atomically update file
   mv $INI ${INI%.*}
 }
@@ -598,6 +721,7 @@ nginx_waitfor_shutdown(){
     if ! nginx_running; then break; fi
     sleep 1
   done
+  return 0
 }
 
 nginx_check(){
@@ -623,6 +747,10 @@ nginx_start(){
     [[ -x $NGINX ]] && $NGINX -c $CONF 2>/dev/null
     # side-load unraid-api
     unraid_api_control start
+    # resume nchan publishers
+    /usr/local/sbin/monitor_nchan start
+    rm -f /tmp/publishPaused
+
     if nginx_running; then REPLY="Started"; else REPLY="Failed"; fi
   fi
   log "$DAEMON...  $REPLY."
@@ -635,15 +763,14 @@ nginx_stop(){
     REPLY="Already stopped"
   else
     unraid_api_control stop
+    # pause nchan publishers
+    /usr/local/sbin/monitor_nchan stop
     kill -QUIT $(cat $PID)
     nginx_waitfor_shutdown
-    if ! nginx_running; then
-      REPLY="Stopped"
-    else
-      pkill -f $NGINX
-      nginx_waitfor_shutdown
-      if ! nginx_running; then REPLY="Killed"; else REPLY="Failed"; fi
-    fi
+    # safety hammer
+    pkill --ns $$ -f $NGINX
+    nginx_waitfor_shutdown
+    if ! nginx_running; then REPLY="Stopped"; else REPLY="Failed"; fi
   fi
   log "$DAEMON...  $REPLY."
 }
@@ -655,6 +782,8 @@ nginx_stop_forced(){
     REPLY="Already stopped"
   else
     unraid_api_control stop
+    # stop nchan publishers
+    /usr/local/sbin/monitor_nchan kill
     kill -TERM $(cat $PID)
     nginx_waitfor_shutdown
     if ! nginx_running; then REPLY="Stopped"; else REPLY="Failed"; fi
@@ -685,10 +814,19 @@ nginx_reload(){
     build_ssl
     if nginx_check; then
       log "Reloading $DAEMON configuration..."
+      # pause nchan publishers
+      /usr/local/sbin/monitor_nchan stop
       kill -HUP $(cat $PID)
-      # update DNS
-      php -f /usr/local/emhttp/webGui/include/UpdateDNS.php
-      sleep 3
+      sleep 1
+      if  tail -10 $SYSLOG | grep -qm1 'Address already in use'; then
+        # unconditional restart when binding fails
+        sleep 2
+        log "Restarting $DAEMON..."
+        nginx_renew
+      fi
+      # resume nchan publishers
+      /usr/local/sbin/monitor_nchan start
+      rm -f /tmp/publishPaused
     else
       log "Invalid configuration, $DAEMON not reloaded"
       return 1
@@ -700,19 +838,18 @@ nginx_reload(){
 
 nginx_renew(){
   # stop unconditionally
-  pkill -f $NGINX
+  pkill --ns $$ -f $NGINX
   # rebuild configuration
   build_ssl
   # start unconditionally
   $NGINX -c $CONF 2>/dev/null
-  # update DNS
-  php -f /usr/local/emhttp/webGui/include/UpdateDNS.php
 }
 
 nginx_update(){
-  # 0 = update needed, 1 = no action
-  if ! nginx_running; then exit 1; fi
-  if check && [[ "$(this)" == "$BIND" ]]; then exit 1; else exit 0; fi
+  if nginx_running && check && [[ "$(this)" != "$BIND" ]]; then
+    log "Updating $DAEMON..."
+    nginx_reload
+  fi
 }
 
 nginx_upgrade(){

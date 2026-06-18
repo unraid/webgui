@@ -14,10 +14,15 @@ Tag="battery-3"
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  */
+$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
+require_once "$docroot/webGui/include/Wrappers.php";
 ?>
 <script>
 function getUPSstatus() {
-  $.post('/plugins/dynamix.apcupsd/include/UPSstatus.php',{level:<?=$cfg['BATTERYLEVEL']?>,runtime:<?=$cfg['MINUTES']?>},function(data) {
+  var batteryLevel = "<?= _var($cfg,'BATTERYLEVEL',0) ?>";
+  var batteryRuntime = "<?= _var($cfg,'MINUTES',0) ?>";
+
+  $.post('/plugins/dynamix.apcupsd/include/UPSstatus.php',{level:batteryLevel,runtime:batteryRuntime},function(data) {
     data = data.split('\n');
     $('#ups_summary').html(data[0]);
     $('#ups_status').html(data[1]);
@@ -27,7 +32,20 @@ function getUPSstatus() {
 $(getUPSstatus);
 </script>
 
-<table class="tablesorter shift">
-<thead><tr><th style="width:15%">_(Key)_</th><th style="width:35%">_(Value)_</th><th style="width:15%">_(Key)_</th><th style="width:35%">_(Value)_</th></tr></thead>
-<tbody id="ups_status"><tr><td colspan="4"><div class="spinner"></div></td></tr></tbody>
-</table>
+<div class="TableContainer">
+  <table class="tablesorter shift">
+    <thead>
+      <tr>
+        <th style="width:15%">_(Key)_</th>
+        <th style="width:35%">_(Value)_</th>
+        <th style="width:15%">_(Key)_</th>
+        <th style="width:35%">_(Value)_</th>
+      </tr>
+    </thead>
+    <tbody id="ups_status">
+      <tr>
+        <td colspan="4"><div class="spinner"></div></td>
+      </tr>
+    </tbody>
+  </table>
+</div>

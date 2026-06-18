@@ -14,8 +14,9 @@
 <?
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
+require_once "$docroot/webGui/include/Wrappers.php";
 
-$ncsi = exec("wget --spider --no-check-certificate -nv -T10 -t1 https://www.msftncsi.com/ncsi.txt 2>&1|grep -o 'OK'")=='OK';
+$ncsi = check_network_connectivity();
 $DockerTemplates = new DockerTemplates();
 if ($ncsi) $DockerTemplates->downloadTemplates();
 $DockerTemplates->getAllInfo($ncsi,$ncsi);

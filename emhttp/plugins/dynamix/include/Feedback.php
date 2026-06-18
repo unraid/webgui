@@ -14,7 +14,7 @@ $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 
 if (array_key_exists('getdiagnostics', $_GET)) {
   $anonymize = empty($_GET['anonymize']) ? '-a' : '';
-  $diag_file = '/tmp/feedback_diagnostics_'.time().'.zip';
+  $diag_file = '/tmp/feedback-diagnostics-'.date('Ymd-Hi').'.zip';
   exec("$docroot/webGui/scripts/diagnostics $anonymize $diag_file");
   echo base64_encode(@file_get_contents($diag_file));
   @unlink($diag_file);

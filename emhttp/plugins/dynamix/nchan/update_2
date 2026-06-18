@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -30,6 +30,16 @@ require_once "$docroot/webGui/include/Translations.php";
 // remember current language
 $locale_init = $locale;
 
+function my_power($device) {
+  global $display;
+  if (!_var($display,'power')) return '';
+  $number = _var($display,'number','.,');
+  [$power,$state] = my_explode('W ', get_nvme_info($device,'state'));
+  $power = $power ?: 0;
+  $state = $state ? strtr($state, ['non-operational' => 'green', 'operational' => 'orange']) : '';
+  return " / <span class='$state'>".number_format($power, $power < 10 ? 2 : 1, $number[0]).' '._('W')."</span>";
+}
+
 function my_clock($time) {
   if (!$time) return _('less than a minute');
   $days = floor($time/1440);
@@ -37,12 +47,14 @@ function my_clock($time) {
   $mins = $time%60;
   return plus($days,'day',($hour|$mins)==0).plus($hour,'hour',$mins==0).plus($mins,'minute',true);
 }
+
 function find_day($D) {
   global $days;
   if ($days[0] == '*') return $D;
   foreach ($days as $d) if ($d >= $D) return $d;
   return $days[0];
 }
+
 function find_month($M) {
   global $months, $Y;
   if ($M > 12) {$M = 1; $Y++;}
@@ -50,6 +62,7 @@ function find_month($M) {
   foreach ($months as $m) if ($m >= $M) return $m;
   return $months[0];
 }
+
 function today($D) {
   global $days, $M, $Y;
   if ($days[0]=='*') return date('w',mktime(0,0,0,$M,$D,$Y));
@@ -58,18 +71,22 @@ function today($D) {
     if (in_array($day,$days)) return $day;
   }
 }
+
 function next_day($D) {
   return find_day(($D+1)%7);
 }
+
 function last_day() {
   global $M, $Y;
   return date('t',mktime(0,0,0,$M,1,$Y));
 }
+
 function mkdate($D, $s) {
   global $M, $Y;
   if ($s > last_day()) {$s = 1; $M = find_month($M+1);}
   for ($d = $s; $d < $s+7; $d++) if ($D == date('w',mktime(0,0,0,$M,$d,$Y))) return $d;
 }
+
 function stage($i) {
   global $h, $m, $D, $M, $Y, $time, $now;
   if ($i < 0) {
@@ -115,39 +132,54 @@ function stage($i) {
   }
   return $t;
 }
+
 function normalize($type,$count) {
   $words = explode('_',$type);
   foreach ($words as &$word) $word = $word==strtoupper($word) ? $word : preg_replace(['/^(ct|cnt)$/','/^blk$/'],['count','block'],strtolower($word));
   return ucfirst(implode(' ',$words)).": ".str_replace('_',' ',strtolower($count))."\n";
 }
-function my_unit($value,$unit) {
-  return ($unit=='F' ? round(9/5*$value+32) : $value)." $unit";
-}
+
 function active_disks($disk) {
   return substr(_var($disk,'status'),0,7)!='DISK_NP' && in_array(_var($disk,'type'),['Parity','Data']);
 }
+
 function device_name(&$disk) {
   switch (_var($disk,'type')) {
     case 'Extra' :
     case 'Parity': $type = _var($disk,'rotational') ? 'disk' : 'nvme'; break;
     case 'Data'  :
     case 'Cache' : $type = _var($disk,'rotational') ? (_var($disk,'luksState') ? 'disk-encrypted' : 'disk') : 'nvme'; break;
+    case 'Boot'  : $type = _var($disk,'rotational') ? 'disk' : 'nvme'; break;
+    default      : $type = 'disk'; break;
   }
   $name = _var($disk,'name');
-  $fancy = compress(_(my_disk(native($name,1)),3),16,5);
+  $fancy = _(my_disk(native($name,1)),3);
   return "<i class='icon-$type f14'></i> <a href=\"".htmlspecialchars("/Dashboard/Main/Settings/Device?name=$name")."\" title=\"$fancy settings\">$fancy</a>";
 }
+
+function yellow_text($disk) {
+  global $var;
+  if (_var($disk, 'type')=='Parity') {
+    $text = _var($var,'mdResync')==0 ? 'invalid' : 'syncing';
+  } elseif (_var($disk, 'type')=='Data') {
+    $text = _var($var,'mdResync')==0 ? 'emulated' : 'rebuilding';
+  } else {
+    $text = 'invalid';
+  }
+  return $text;
+}
+
 function device_status(&$disk, &$error, &$warning) {
   global $var;
   if (_var($disk,'type')!='Extra' && _var($var,'fsState')=='Stopped') {
-    $color = 'green'; $text = 'off-line';
+    $color = 'green'; $text = 'offline';
   } else switch (_var($disk,'color')) {
     case 'green-on'    : $color = 'green';  $text = 'active';     break;
     case 'green-blink' : $color = 'grey';   $text = 'standby';    break;
     case 'blue-on'     : $color = 'blue';   $text = 'unassigned'; break;
     case 'blue-blink'  : $color = 'grey';   $text = 'unassigned'; break;
-    case 'yellow-on'   : $color = 'yellow'; $text =  _var($disk,'type')=='Parity' ? 'invalid' : 'emulated';   $warning++; break;
-    case 'yellow-blink': $color = 'grey';   $text =  _var($disk,'type')=='Parity' ? 'invalid' : 'emulated';   $warning++; break;
+    case 'yellow-on'   : $color = 'yellow'; $text =  yellow_text($disk); $warning++; break;
+    case 'yellow-blink': $color = 'grey';   $text =  yellow_text($disk); $warning++; break;
     case 'red-on'      : $color = 'red';    $text = 'disabled';   $error++; break;
     case 'red-blink'   : $color = 'grey';   $text = 'disabled';   $error++; break;
     case 'red-off'     : $color = 'red';    $text = 'faulty';     $error++; break;
@@ -155,22 +187,26 @@ function device_status(&$disk, &$error, &$warning) {
   }
   return "<i class='fa fa-circle orb $color-orb middle'></i>"._($text);
 }
+
 function device_temp(&$disk, &$red, &$orange) {
   global $display;
   $spin = strpos(_var($disk,'color'),'blink')===false;
-  $temp = _var($disk,'temp','*');
-  [$hotNVME,$maxNVME] = _var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'temp') : [-1,-1];
-  $hot  = _var($disk,'hotTemp',-1)>=0 ? $disk['hotTemp'] : ($hotNVME>=0 ? $hotNVME : (_var($display,'hot',-1)>=0 ? $display['hot'] : 0));
-  $max  = _var($disk,'maxTemp',-1)>=0 ? $disk['maxTemp'] : ($maxNVME>=0 ? $maxNVME : (_var($display,'max',-1)>=0 ? $display['max'] : 0));
+  $temp = _var($disk,'temp');
+  $dev  = _var($disk,'device');
+  $nvme = _var($disk,'transport')=='nvme';
+  [$hotNVME,$maxNVME] = $nvme ? get_nvme_info($dev,'temp') : [-1,-1];
+  $hot  = _var($disk,'hotTemp',-1)>=0 ? $disk['hotTemp'] : ($hotNVME>=0 ? $hotNVME : (_var($disk,'rotational',1)==0 && $display['hotssd']>=0 ? $display['hotssd'] : $display['hot']));
+  $max  = _var($disk,'maxTemp',-1)>=0 ? $disk['maxTemp'] : ($maxNVME>=0 ? $maxNVME : (_var($disk,'rotational',1)==0 && $display['maxssd']>=0 ? $display['maxssd'] : $display['max']));
   $top  = $display['top'] ?? 120;
-  $heat = false; $color = 'green';
-  if (exceed($temp,$max,$top)) {
-    $heat = 'fire'; $color = 'red'; $red++;
+  $color= 'green';
+  if (exceed($temp,$max,$top) || (is_numeric($temp) && $temp<0)) {
+    $color = 'red'; $red++;
   } elseif (exceed($temp,$hot,$top)) {
-    $heat = 'fire'; $color = 'orange'; $orange++;
+    $color = 'orange'; $orange++;
   }
-  return ($spin && $temp>0) ? "<span class='$color-text'>".my_unit($temp,_var($display,'unit','C'))."</span>".($heat ? "<i class='fa fa-$heat $color-text heat'></i>" : "") : "*";
+  return ($spin ? "<span class='$color-text'>".my_temp($temp)."</span>" : "*").($nvme ? my_power($dev) : "");
 }
+
 function device_smart(&$disk, &$fail, &$smart) {
   global $numbers,$saved;
   if (!_var($disk,'device') || strpos(_var($disk,'color'),'blink')!==false) return "-";
@@ -185,7 +221,8 @@ function device_smart(&$disk, &$fail, &$smart) {
   $text   = _('healthy');
   $color  = 'green';
   $file   = "state/smart/$name";
-  if (file_exists("$file") && exec("grep -Pom1 '^SMART.*: \K[A-Z]+' ".escapeshellarg($file)." |tr -d '\n' 2>/dev/null", $ssa) && in_array("$ssa",$failed)) {
+  $ssa    = file_exists($file) ? exec("grep -Pom1 '^SMART.+: \K[A-Z]+' ".escapeshellarg($file)) : "";
+  if (in_array($ssa,$failed)) {
     $title = _('SMART health-check failed')."\n"; $thumb = 'thumbs-o-down'; $color = 'red'; $text = 'fail'; $fail++;
   } else {
     if (empty($saved["smart"]["$named.ack"])) {
@@ -203,10 +240,42 @@ function device_smart(&$disk, &$fail, &$smart) {
   $title .= _('Click for context menu');
   return "<span id='smart-$named' name=Device class='fa fa-$thumb $color-text' style='margin-right:8px' onmouseover='this.style.cursor=\"pointer\"' title='$title'></span><span id='text-$named'>$text</span>";
 }
+
 function device_usage(&$disk, &$full, &$high) {
-  global $display;
+  global $display,$disks;
   $text = $display['text'];
-  $used = (_var($disk,'type')!='Parity' && _var($disk,'type')!='Extra' && _var($disk,'fsStatus')=='Mounted') ? (_var($disk,'fsSize',0)>0 ? round((1-_var($disk,'fsFree',0)/$disk['fsSize'])*100) : 0).'%' : false;
+  $type = _var($disk,'type');
+  $status = _var($disk,'fsStatus');
+  $size = _var($disk,'fsSize',0);
+  $free = _var($disk,'fsFree',null);
+  $used_kib = null;
+  $fs_type = '';
+
+  if ($type=='Cache') {
+    $name = _var($disk,'name');
+    $pool = prefix($name);
+    if ($name!=$pool) return $text%10==0 ? "-" : "<span class='load'>-</span><div class='usage-disk sys none'><span></span></div>";
+    $root = _var($disks,$pool,[]);
+    if (!empty($root)) {
+      $status = _var($root,'fsStatus',$status);
+      $size = _var($root,'fsSize',$size);
+      $free = _var($root,'fsFree',$free);
+      $used_kib = _var($root,'fsUsed',null);
+      $fs_type = str_replace('luks:','',_var($root,'fsType',''));
+      if ($fs_type=='btrfs' && is_numeric($free) && is_numeric($used_kib)) $size = $free+$used_kib;
+    }
+  }
+
+  if ($type!='Parity' && $type!='Extra' && $status=='Mounted') {
+    if ($type=='Cache' && is_numeric($used_kib) && $size>0) {
+      $pct = round(100*$used_kib/$size);
+    } else {
+      $pct = $size>0 && is_numeric($free) ? round((1-$free/$size)*100) : 0;
+    }
+    $used = $pct.'%';
+  } else {
+    $used = false;
+  }
   if ($used) {
     if ($text==2 || $text==21) {
       $load = substr($used,0,-1);
@@ -215,30 +284,49 @@ function device_usage(&$disk, &$full, &$high) {
       if ($critical>0 && $load>=$critical) {$class = 'redbar'; $full++;}
       elseif ($warning>0 && $load>=$warning) {$class = 'orangebar'; $high++;}
       else $class = 'greenbar';
-    }
-    else
+    } else {
       $class = false;
+    }
     return $text%10==0 ? $used : "<span class='load'>$used</span><div class='usage-disk sys'><span style='width:$used'".($class?" class='$class'":"")."></span><span></span></div>";
-  }
-  else
+  } else {
     return $text%10==0 ? "-" : "<span class='load'>-</span><div class='usage-disk sys none'><span></span></div>";
+  }
 }
-function array_group($type,$pool=false) {
-  global $disks,$error,$warning,$red,$orange,$fail,$smart,$full,$high;
+
+function array_group($type, $pool=false) {
+  global $disks,$error,$warning,$red,$orange,$fail,$smart,$full,$high,$poolstatus;
+  if ($type != 'Data') {$error = $warning = $red = $orange = $fail = $smart = $full = $high = 0;}
   $echo = [];
-  foreach ($disks as $disk) if (_var($disk,'type')==$type && strpos(_var($disk,'status'),'DISK_NP')===false && (!$pool||$pool==prefix(_var($disk,'name')))) {
+  foreach ($disks as $disk) if (_var($disk,'type')==$type && ((_var($disk,'type')=='Parity') ? strpos(_var($disk,'status'),'DISK_NP')===false : strcmp(_var($disk,'status'),'DISK_NP')!=0) && (!$pool||$pool==prefix(_var($disk,'name')))) {
     $echo[] = "<tr class='updated'><td>";
     $echo[] = "<span class='w26'>".device_name($disk)."</span>";
-    $echo[] = "<span class='w18'>".device_status($disk,$error,$warning)."</span>";
+    if ($pool && in_array(_var($disks[$pool],'fsType'),['zfs','btrfs','luks:zfs','luks:btrfs'])) {
+      $memberStatus = $poolstatus['pools'][$pool]['members'][$disk['device']]['status'] ?? 'UNKNOWN';
+      $statusColor = 'grey';
+      if (in_array($memberStatus, ['ONLINE'])) {
+        $statusColor = 'green';
+      } elseif (in_array($memberStatus, ['DEGRADED', "ERRORS"])) {
+        $statusColor = 'yellow';
+      } elseif (in_array($memberStatus, ['FAILED', 'MISSING', 'FAULTED', 'UNAVAIL', 'REMOVED'])) {
+        $statusColor = 'red';
+      }
+      $echodiskstatus = "<span style='font-size: 1.1rem;' class='w18'>".device_status($disk,$error,$warning)."<br>";
+      $echodiskstatus .= "<span style='font-size: 1.1rem;'><i class='fa fa-circle orb $statusColor-orb middle'></i>"._($memberStatus)."</span></span>";
+    } else {
+      $echodiskstatus = "<span class='w18'>".device_status($disk,$error,$warning)."</span>";
+    }
+    $echo[] = $echodiskstatus;
     $echo[] = "<span class='w18'>".device_temp($disk,$red,$orange)."</span>";
     $echo[] = "<span class='w18'>".device_smart($disk,$fail,$smart)."</span>";
     $echo[] = "<span class='w18'>".device_usage($disk,$full,$high)."</span>";
     $echo[] = "</td></tr>";
   }
-  return implode('',$echo);
+  return implode($echo);
 }
+
 function extra_group() {
   global $devs,$error,$warning,$red,$orange,$fail,$smart,$full,$high;
+  $error = $warning = $red = $orange = $fail = $smart = $full = $high = 0;
   $echo = [];
   foreach ($devs as $disk) {
     $name = _var($disk,'name');
@@ -252,8 +340,9 @@ function extra_group() {
     $echo[] = "<span class='w18'>".device_usage($disk,$full,$high)."</span>";
     $echo[] = "</td></tr>";
   }
-  return implode('',$echo);
+  return implode($echo);
 }
+
 function update_translation($locale) {
   global $docroot,$language;
   $language = [];
@@ -272,21 +361,40 @@ function update_translation($locale) {
     }
   }
 }
+
 function create_sync($file) {
   return file_exists($file) ? explode(',',file_get_contents($file)) : [];
 }
+
 function print_error($error) {
   return sprintf(_('Finding **%s** error'.($error==1?'':'s')),$error?:'0');
 }
+
+function pool_usage($pool) {
+  global $disks,$display;
+  $disk = _var($disks,$pool,[]);
+  if (_var($disk,'fsStatus')!='Mounted') return '';
+  $size = _var($disk,'fsSize',0);
+  $free = _var($disk,'fsFree',0);
+  $used = _var($disk,'fsUsed',$size-$free);
+  $fs_type = str_replace('luks:','',_var($disk,'fsType',''));
+  if ($fs_type=='btrfs' && is_numeric($free) && is_numeric($used)) $size = $free+$used;
+  $dot  = _var($display,'number','.,')[0];
+  $rate = number_format(100*$used/($size ?: 1),1,$dot,'');
+  return sprintf(_('Used: %s of %s (%s %%)'),my_scale($used*1024,$unit)." $unit",my_scale($size*1024,$unit,-1,-1)." $unit",$rate);
+}
+
+$pool_check_counter = 0;
+$poolstatus = [];
 
 while (true) {
   $var   = (array)@parse_ini_file("$varroot/var.ini");
   $devs  = (array)@parse_ini_file("$varroot/devs.ini",true);
   $disks = (array)@parse_ini_file("$varroot/disks.ini",true);
   $saved = (array)@parse_ini_file("$varroot/monitor.ini",true);
-  $echo  = [];
-  $size  = _var($var,'mdResyncSize');
-  $spot  = _var($var,'mdResyncPos');
+  $echo  = []; $p = 0;
+  $size  = _var($var,'mdResyncSize',0);
+  $spot  = _var($var,'mdResyncPos',0);
   require "$docroot/webGui/include/CustomMerge.php";
   require "$docroot/webGui/include/Preselect.php";
   // check for language changes
@@ -296,25 +404,48 @@ while (true) {
     update_translation($locale_init);
   }
   //array devices
-  $error = $warning = $red = $orange = $fail = $smart = $full = $high = 0;
-  $echo[0]  = array_group('Parity');
-  $echo[0] .= array_group('Data');
-  $echo[0] .= "\0".($error+$warning)."\0".($red+$orange)."\0".($fail+$smart)."\0".($full+$high);
+  $echo['disk'] = [array_group('Parity').array_group('Data'), $error+$warning, $red+$orange, $fail+$smart, $full+$high];
+
+  // Update pool status every 60 seconds (30 iterations * 2s sleep)
+  if ($pool_check_counter % 30 == 0) {
+    $decoded = json_decode(storagePoolsJson(), true);
+   if (is_array($decoded)) {
+      $poolstatus = $decoded;
+    }
+  }
+  $pool_check_counter++;
+
   //pool devices
-  $echo[1] = '';
-  foreach (pools_filter($disks) as $pool) {
+
+
+  foreach (array_merge(pools_filter($disks),flash_filter($disks)) as $pool) {
+    $poolTypeRaw = strtolower((string)_var($disks[$pool],'type',''));
+    $bootPoolMode = strtolower((string)_var($disks[$pool],'bootPool','no'));
+    if ($poolTypeRaw === 'cache' && $bootPoolMode === 'dedicated') continue;
     if (empty($disks[$pool]['devices'])) continue;
-    $error = $warning = $red = $orange = $fail = $smart = $full = $high = 0;
-    $echo[1] .= array_group('Cache',$pool);
-    $echo[1] .= "\0".($error+$warning)."\0".($red+$orange)."\0".($fail+$smart)."\0".($full+$high)."\r";
+    if (in_array(_var($disks[$pool],'fsType'), ['zfs','btrfs','luks:zfs','luks:btrfs']) && !empty($poolstatus['pools'][$pool])) {
+      $status = $poolstatus['pools'][$pool]['overall_status'] ?? 'UNKNOWN';
+      $hasErrors = str_contains($status, '- ERRORS');
+      $isOnline = str_starts_with($status, 'ONLINE');
+      $displayText = $hasErrors ? 'ONLINE' : $status;
+      $statusText = " "._("Status").": "._($displayText);
+      if (!$isOnline) {
+        $statusText = "<span title='"._('Check pool status')."'><i class='fa fa-warning fa-fw orange-text'></i> ".$statusText."</span>";
+      } elseif ($hasErrors) {
+        $statusText = "<span title='"._('Check pool status')."'><i class='fa fa-warning fa-fw orange-text'></i> ".$statusText."</span>";
+      }
+      $poolType = _var($disks[$pool],'type') == 'Boot' ? 'Boot' : 'Cache';
+      $echo['pool'][$p++] = [array_group($poolType,$pool), $error+$warning, $red+$orange, $fail+$smart, $full+$high,$statusText,pool_usage($pool)];
+    } else {
+      $poolType = _var($disks[$pool],'type') == 'Boot' ? 'Boot' : 'Cache';
+      $echo['pool'][$p++] = [array_group($poolType,$pool), $error+$warning, $red+$orange, $fail+$smart, $full+$high,"",pool_usage($pool)];
+    }
   }
   //unassigned devices
-  $error = $warning = $red = $orange = $fail = $smart = $full = $high = 0;
-  $echo[2]  = extra_group();
-  $echo[2] .= "\0".($error+$warning)."\0".($red+$orange)."\0".($fail+$smart)."\0".($full+$high);
+  $echo['open'] = [extra_group(), $error+$warning, $red+$orange, $fail+$smart, $full+$high];
 
   // parity status
-  $echo[3] = '';
+  $a = 'parity';
   $disks = parity_filter($disks);
   $parity_slots = count($disks);
   $parity_disabled = $parity_invalid = 0;
@@ -331,70 +462,68 @@ while (true) {
       case "clear": $mode = 'Disk-Clear'; break;
       default     : $mode = ''; break;
     }
-    $echo[3] .= "<span class='orange'>"._($mode).' '._('in progress').'... '._('Completed').': '.number_format($spot/($size/100+1),1,$number[0],$number[1])." %.</span>";
+    $echo[$a] = "<span class='orange'>"._($mode).' '._('in progress').'... '._('Completed').': '.number_format($spot/($size/100+1),1,$number[0],$number[1])." %.</span>";
   } else {
     if ($parity_slots==$parity_disabled) {
-      $echo[3] .= "<span class='red'>"._('Parity disk'.($parity_slots==1?'':'s')." not present")."</span>";
+      $echo[$a] = "<span class='red'>"._('Parity disk'.($parity_slots==1?'':'s')." not present")."</span>";
     } elseif ($parity_slots > $parity_invalid) {
       if ($parity_invalid==0) {
-        $echo[3] .= "<span class='green'>"._('Parity is valid')."</span>";
+        $echo[$a] = "<span class='green'>"._('Parity is valid')."</span>";
       } else {
-        $echo[3] .= "<span class='orange'>"._('Parity is degraded').": $parity_invalid "._('invalid device'.($parity_invalid==1?'':'s'))."</span>";
+        $echo[$a] = "<span class='orange'>"._('Parity is degraded').": $parity_invalid "._('invalid device'.($parity_invalid==1?'':'s'))."</span>";
       }
     } else {
       if (empty($var['mdInvalidDisk'])) {
-        $echo[3] .= "<span class='red strong'>"._('Parity is invalid')."</span>";
+        $echo[$a] = "<span class='red strong'>"._('Parity is invalid')."</span>";
       } else {
-        $echo[3] .= "<span class='red strong'>"._('Data is invalid')."</span>";
+        $echo[$a] = "<span class='red strong'>"._('Data is invalid')."</span>";
       }
     }
   }
 
   // parity schedule
+  $a = 'schedule';
   [$delta,$bytes] = [_var($var,'mdResyncDt',0),_var($var,'mdResyncDb',0)];
   $synced = create_sync($stamps);
   $sbSynced = array_shift($synced) ?: _var($var,'sbSynced');
   $sbUpdate = $delta ? $sbSynced : _var($var,'sbUpdated');
   if ($spot) {
-    $echo[4] = sprintf(_('Current operation %s on **%s**'),($delta?_('started'):_('paused')),_(my_time($sbUpdate).day_count($sbUpdate),0));
-    $echo[4].= "<br><i class='fa fa-fw fa-clock-o'></i> "._('Elapsed time').": "._(my_clock(floor((time()-$sbSynced)/60)),2);
-    $echo[4].= "<br><i class='fa fa-fw fa-flag-checkered'></i> "._('Estimated finish').': '.($bytes ? _(my_clock(round(((($delta*(($size-$spot)/($bytes/100+1)))/100)/60),0)),2) : _('Unknown'));
-    $echo[4].= "<br><i class='fa fa-fw fa-search'></i> ".print_error(_var($var,'sbSyncErrs',0));
-    $echo[4] .= "\0";
+    $echo[$a][] = sprintf(_('Current operation %s on **%s**'),($delta?_('started'):_('paused')),_(my_time($sbUpdate).day_count($sbUpdate),0));
+    $echo[$a][] = "<i class='fa fa-fw fa-clock-o'></i> "._('Elapsed time').": "._(my_clock(floor((time()-$sbSynced)/60)),2)."<br><i class='fa fa-fw fa-flag-checkered'></i> "._('Estimated finish').': '.($bytes ? _(my_clock(round(((($delta*(($size-$spot)/($bytes/100+1)))/100)/60),0)),2) : _('Unknown'))."<br><i class='fa fa-fw fa-search'></i> ".print_error(_var($var,'sbSyncErrs',0));
   } else {
     [$date,$duration,$speed,$status,$error,$action,$size] = last_parity_log();
     if (_var($var,'sbSyncExit',0)!=0) {
-      $echo[4] = sprintf(_('Last check incomplete on **%s**'),_(my_time(_var($var,'sbSynced2',0)).day_count(_var($var,'sbSynced2',0)),0));
-      $echo[4].= "<br><i class='fa fa-fw fa-dot-circle-o'></i> "._('Error code').": ".my_error(_var($var,'sbSyncExit'));
-      $echo[4].= "<br><i class='fa fa-fw fa-search'></i> ".print_error(_var($var,'sbSyncErrs',0));
+      $echo[$a][] = sprintf(_('Last check incomplete on **%s**'),_(my_time(_var($var,'sbSynced2',0)).day_count(_var($var,'sbSynced2',0)),0));
+      $echo[$a][] = "<br><i class='fa fa-fw fa-dot-circle-o'></i> "._('Error code').": ".my_error(_var($var,'sbSyncExit'));
+      $echo[$a][] = "<br><i class='fa fa-fw fa-search'></i> ".print_error(_var($var,'sbSyncErrs',0));
     } elseif (_var($var,'sbSynced',0)==0) {
       if (!$date) {
-        $echo[4] = _('Parity has not been checked yet');
+        $echo[$a][] = _('Parity has not been checked yet');
       } elseif ($status==0) {
-        $echo[4] = sprintf(_('Last checked on **%s**'),_(my_time($date).day_count($date),0));
-        $echo[4].= "<br><i class='fa fa-fw fa-clock-o'></i> "._('Duration').": ".my_check($duration,$speed);
-        $echo[4].= "<br><i class='fa fa-fw fa-search'></i> ".print_error($error);
+        $echo[$a][] = sprintf(_('Last checked on **%s**'),_(my_time($date).day_count($date),0));
+        $echo[$a][] = "<br><i class='fa fa-fw fa-clock-o'></i> "._('Duration').": ".my_check($duration,$speed);
+        $echo[$a][] = "<br><i class='fa fa-fw fa-search'></i> ".print_error($error);
       } else {
-        $echo[4] = sprintf(_('Last check incomplete on **%s**'),_(my_time($date).day_count($date),0));
-        $echo[4].= "<br><i class='fa fa-fw fa-dot-circle-o'></i> "._('Error code').": ".my_error($status);
-        $echo[4].= "<br><i class='fa fa-fw fa-search'></i> ".print_error($error);
+        $echo[$a][] = sprintf(_('Last check incomplete on **%s**'),_(my_time($date).day_count($date),0));
+        $echo[$a][] = "<br><i class='fa fa-fw fa-dot-circle-o'></i> "._('Error code').": ".my_error($status);
+        $echo[$a][] = "<br><i class='fa fa-fw fa-search'></i> ".print_error($error);
       }
     } elseif (_var($var,'sbSynced2',0)==0) {
       if ($status==0) {
-        $echo[4] = sprintf(_('Last checked on **%s**'),_(my_time(_var($var,'sbSynced',0)).day_count(_var($var,'sbSynced',0)),0));
-        $echo[4].= "<br><i class='fa fa-fw fa-clock-o'></i> "._('Duration').": ".my_check($duration,$speed);
-        $echo[4].= "<br><i class='fa fa-fw fa-search'></i> ".print_error($error);
+        $echo[$a][] = sprintf(_('Last checked on **%s**'),_(my_time(_var($var,'sbSynced',0)).day_count(_var($var,'sbSynced',0)),0));
+        $echo[$a][] = "<br><i class='fa fa-fw fa-clock-o'></i> "._('Duration').": ".my_check($duration,$speed);
+        $echo[$a][]= "<br><i class='fa fa-fw fa-search'></i> ".print_error($error);
       } else {
-        $echo[4] = sprintf(_('Last check incomplete on **%s**'),_(my_time(_var($var,'sbSynced',0)).day_count(_var($var,'sbSynced',0)),0));
-        $echo[4].= "<br><i class='fa fa-fw fa-dot-circle-o'></i> "._('Error code').": ".my_error($status);
-        $echo[4].= "<br><i class='fa fa-fw fa-search'></i> ".print_error($error);
+        $echo[$a][] = sprintf(_('Last check incomplete on **%s**'),_(my_time(_var($var,'sbSynced',0)).day_count(_var($var,'sbSynced',0)),0));
+        $echo[$a][] = "<br><i class='fa fa-fw fa-dot-circle-o'></i> "._('Error code').": ".my_error($status);
+        $echo[$a][] = "<br><i class='fa fa-fw fa-search'></i> ".print_error($error);
       }
     } else {
-      $echo[4] = sprintf(_('Last check completed on **%s**'),_(my_time(_var($var,'sbSynced2',0)).day_count(_var($var,'sbSynced2',0)),0));
-      $echo[4].= "<br><i class='fa fa-fw fa-clock-o'></i> "._('Duration').': '.my_check($duration,$speed);
-      $echo[4].= "<br><i class='fa fa-fw fa-search'></i> ".print_error(_var($var,'sbSyncErrs',0));
+      $echo[$a][] = sprintf(_('Last check completed on **%s**'),_(my_time(_var($var,'sbSynced2',0)).day_count(_var($var,'sbSynced2',0)),0));
+      $echo[$a][] = "<br><i class='fa fa-fw fa-clock-o'></i> "._('Duration').': '.my_check($duration,$speed);
+      $echo[$a][] = "<br><i class='fa fa-fw fa-search'></i> ".print_error(_var($var,'sbSyncErrs',0));
     }
-    [$m,$h] = explode(' ', $parity['hour']);
+    [$m,$h] = explode(' ',$parity['hour']);
     $time = time();
     $check = true;
     switch ($parity['mode']) {
@@ -456,21 +585,17 @@ while (true) {
       case 'WL': $t = stage(0); break;}
       break;
     }
-    $echo[4] .= "\0";
     if ($check) {
       $frmt = _var($display,'date').(_var($display,'date')!='%c' ? ", "._var($display,'time') : "");
-      $echo[4] .= sprintf(_('Next check scheduled on **%s**'),_(my_date($frmt,$time+$t),0));
-      $echo[4] .= "<br><i class='fa fa-fw fa-clock-o'></i> "._('Due in').": "._(my_clock(floor($t/60)),2);
+      $extra = sprintf(_('Next check scheduled on **%s**'),_(my_date($frmt,$time+$t),0))."<br><i class='fa fa-fw fa-clock-o'></i> "._('Due in').": "._(my_clock(floor($t/60)),2);
     } else {
-      $echo[4] .= _('Scheduled parity check is disabled');
+      $extra = _('Scheduled parity check is disabled');
     }
+    $echo[$a] = [implode($echo[$a]), $extra];
   }
-  $echo = implode("\1",$echo);
-  $md5_new = md5($echo,true);
-  if ($md5_new !== $md5_old) {
-    publish('update2', $echo);
-    $md5_old = $md5_new;
-  }
-  sleep(5);
+
+  publish_noDupe('update2',json_encode($echo));
+  ping('dashboardPing');
+  sleep(2);
 }
 ?>

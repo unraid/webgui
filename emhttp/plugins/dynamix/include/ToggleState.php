@@ -19,7 +19,7 @@ $name   = $_POST['name']??'';
 $action = $_POST['action']??'';
 
 function emcmd($cmd) {
-  exec("emcmd '$cmd'");
+  exec("emcmd ".escapeshellarg($cmd));
 }
 switch ($device) {
 case 'New':

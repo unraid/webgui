@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+  <Agent>
+    <Name>Boxcar</Name>
+    <Variables>
+      <Variable Help="Get your access token as explained [a href='http://help.boxcar.io/knowledgebase/articles/314474-how-to-get-my-boxcar-access-token' target='_blank'][u]here[/u].[/a]" Desc="Access Token" Default="">ACCESS_TOKEN</Variable>
+      <Variable Help="Specify the fields which are included in the title of the notification." Desc="Notification Title" Default="$SUBJECT">TITLE</Variable>
+      <Variable Help="Specify the fields which are included in the message body of the notification." Desc="Notification Message" Default="$DESCRIPTION">MESSAGE</Variable>
+    </Variables>
+    <Script>
+      <![CDATA[
+      #!/bin/bash
+      ############
+      {0}
+      ############
+      MESSAGE=$(echo -e "$MESSAGE")
+
+      curl -s -k \
+      -d "user_credentials=$ACCESS_TOKEN" \
+      -d "notification[title]=$TITLE" \
+      -d "notification[long_message]=$MESSAGE" \
+      -d "notification[source_name]=Unraid" \
+      -d "notification[sound]=bird-1" \
+      -d "notification[icon_url]=http://i.imgur.com/u63iSL1.png" \
+      https://new.boxcar.io/api/notifications 2>&1
+      ]]>
+    </Script>
+  </Agent>

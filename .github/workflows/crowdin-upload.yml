@@ -1,0 +1,77 @@
+name: Extract Translations and Upload to Crowdin
+
+on:
+    push:
+        branches:
+            - master
+            - main
+    workflow_dispatch: # Allow manual triggering
+
+jobs:
+    extract-and-upload:
+        runs-on: ubuntu-latest
+        if: github.repository == 'unraid/webgui'
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.x"
+
+            - name: Extract JavaScript translations from page files
+              run: |
+                  cd .github/translations
+                  python extract_js_translations_from_page.py
+
+            - name: Extract all translations
+              run: |
+                  cd .github/translations
+                  python extract_translations.py ../../
+
+            - name: List generated files
+              run: |
+                  echo "Files generated:"
+                  ls -la .github/translations/*.po || echo "No .po files found"
+
+            - name: Debug file structure for Crowdin
+              run: |
+                  echo "=== Current working directory ==="
+                  pwd
+                  echo "=== Full directory structure ==="
+                  find . -name "*.po" -o -name "*.txt" | head -20
+                  echo "=== Specific paths Crowdin will look for ==="
+                  echo "Looking for: .github/translations/*.po"
+                  ls -la .github/translations/*.po 2>/dev/null || echo "Pattern .github/translations/*.po not found"
+                  echo "Looking for: emhttp/languages/en_US/*.txt"
+                  ls -la emhttp/languages/en_US/*.txt 2>/dev/null || echo "Pattern emhttp/languages/en_US/*.txt not found"
+                  echo "=== Crowdin config file ==="
+                  cat .github/crowdin.yml
+
+            - name: Upload to Crowdin
+              # Only upload to Crowdin on pushes to main/master branches
+              uses: crowdin/github-action@v2
+              with:
+                  upload_sources: true
+                  upload_translations: false
+                  download_translations: false
+                  create_pull_request: false
+                  # Configuration file location
+                  config: .github/crowdin.yml
+                  
+                  # For Crowdin Enterprise, use: base_url: 'https://{organization-name}.api.crowdin.com'
+                  # For standard Crowdin, this can be omitted or use: base_url: 'https://api.crowdin.com'
+                  base_url: 'https://unraid.api.crowdin.com'
+              env:
+                  CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+                  CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
+
+            - name: Upload artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: translation-files
+                  path: |
+                      .github/translations/*.po
+                      .github/translations/*.txt

@@ -12,22 +12,36 @@
 ?>
 <?
 /* UPDATE.PHP is used to update selected name=value variables in a configuration file.
- * Note that calling this function will write the configuration file on the flash.
+ * Note that calling this function will write the configuration file on the boot device.
  * The $_POST variable contains a list of key/value parameters to be updated in the file.
  * There are a number of special parameters prefixed with a hash '#' character:
  *
- * #file    : the pathname of the file to be updated. It does not need to previously exist.
- *            If pathname is relative (no leading '/'), the configuration file will placed
- *            placed under '/boot/config/plugins'.
- *            This parameter may be omitted to perform a command execution only (see #command).
- * #section : if present, then the ini file consists of a set of named sections, and all of the
- *            configuration parameters apply to this one particular section.
- *            if omitted, then it's just a flat ini file without sections.
- * #default : if present, then the default values will be restored instead.
- * #include : specifies name of an include file to read and execute in before saving the file contents
- * #cleanup : if present then parameters with empty strings are omitted from being written to the file
- * #command : a shell command to execute after updating the configuration file
- * #arg     : an array of arguments for the shell command
+ * #file          : The pathname of the file to be updated. It does not need to previously exist.
+ *                  If pathname is relative (no leading '/'), the configuration file will placed
+ *                  placed under '/boot/config/plugins/'.
+ *                  This parameter may be omitted to perform a command execution only (see #command).
+ * 
+ * #section       : If present, then the ini file consists of a set of named sections, and all of the
+ *                  configuration parameters apply to this one particular section.
+ *                  If omitted, then it's just a flat ini file without sections.
+ * 
+ * #default       : If present, then the default values will be restored instead (from 'default.cfg').
+ * 
+ * #defaultfile   : If present in combination with #default, a custom defaults file will be restored
+ *                  instead of the regular 'default.cfg' file. If pathname is relative (no leading '/'),
+ *                  the given configuration file will be searched for under '/usr/local/emhttp/plugins/'.
+ * 
+ * #defaults      : If present in combination with #default, no defaults file but an associative array
+ *                  passed through POST in format of '#defaults[key]=value' will be restored instead.
+ *                  e.g. <input type="hidden" name="#defaults[SERVICE]" value="enable">
+ *                  e.g. <input type="hidden" name="#defaults[INTERVAL]" value="25">
+ *                  Beware: Browsers generally do not send empty values, if your default values include
+ *                  any empty strings, you should preferably use a default configuration file instead.
+ * 
+ * #include       : Specifies name of an include file to read and execute in before saving the file contents.
+ * #cleanup       : If present then parameters with empty strings are omitted from being written to the file.
+ * #command       : A shell command to execute after updating the configuration file.
+ * #arg           : An array of arguments for the shell command.
  */
 function write_log($string) {
   if (empty($string)) return;
@@ -40,16 +54,33 @@ function write_log($string) {
 readfile('update.htm');
 flush();
 
-$docroot = $_SERVER['DOCUMENT_ROOT'];
+$docroot = $_SERVER['DOCUMENT_ROOT'] ?: "/usr/local/emhttp";
+require_once "$docroot/plugins/dynamix/include/Wrappers.php";
+
 if (isset($_POST['#file'])) {
   $file = $_POST['#file'];
-  // prepend with boot (flash) if path is relative
+  $raw_file = isset($_POST['#raw_file']) ? ($_POST['#raw_file'] === 'true') : false;
+  // prepend with boot (boot device) if path is relative
   if ($file && $file[0]!='/') $file = "/boot/config/plugins/$file";
   $section = $_POST['#section'] ?? false;
   $cleanup = isset($_POST['#cleanup']);
-  $default = ($file && isset($_POST['#default'])) ? @parse_ini_file("$docroot/plugins/".basename(dirname($file))."/default.cfg", $section) : [];
 
-  $keys = is_file($file) ? (parse_ini_file($file, $section) ?: []) : [];
+  $default = [];
+  if($file && isset($_POST['#default'])) {
+    if(isset($_POST['#defaultfile'])) {
+      $defaultfile = $_POST['#defaultfile'];
+      if ($defaultfile && $defaultfile[0]!='/') $defaultfile = "$docroot/plugins/$defaultfile";
+      $default = parse_ini_file($defaultfile, $section) ?: [];
+    } elseif(isset($_POST['#defaults'])) {
+      $default = is_array($_POST['#defaults']) ? ($_POST['#defaults'] ?: []) : [];
+    } else {
+      $default = parse_ini_file("$docroot/plugins/".basename(dirname($file))."/default.cfg", $section) ?: [];
+    }
+  }
+
+  // if the file is not a raw file, it can be parsed 
+  $keys = (is_file($file) && !$raw_file) ? (parse_ini_file($file, $section) ?: []) : [];
+
   // the 'save' switch can be reset by the include file to disallow settings saving
   $save = true;
   if (isset($_POST['#include'])) {
@@ -72,7 +103,7 @@ if (isset($_POST['#file'])) {
       foreach ($keys as $key => $value) if (strlen($value) || !$cleanup) $text .= "$key=\"$value\"\n";
     }
     @mkdir(dirname($file));
-    file_put_contents($file, $text);
+    file_put_contents_atomic($file,$text);
   }
 }
 if (isset($_POST['#command'])) {
@@ -97,6 +128,7 @@ if (isset($_POST['#command'])) {
     while (!feof($proc)) {
       write_log(fgets($proc));
     }
+    @pclose($proc);
   }
 }
 ?>

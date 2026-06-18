@@ -57,9 +57,15 @@ apcupsd_stop(){
 
 apcupsd_restart(){
   log "Restarting $DAEMON..."
-  apcupsd_stop
-  sleep 1
-  apcupsd_start
+  local REPLY
+  if apcupsd_running; then
+    apcupsd_stop
+    sleep 1
+    apcupsd_start
+  else 
+    REPLY="Not running"
+    log "$DAEMON...  $REPLY."
+  fi
 }
 
 apcupsd_status(){

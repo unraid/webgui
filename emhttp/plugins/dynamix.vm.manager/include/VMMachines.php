@@ -15,13 +15,13 @@
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
+require_once "$docroot/webGui/include/SriovHelpers.php";
 
 // add translations
 $_SERVER['REQUEST_URI'] = 'vms';
 require_once "$docroot/webGui/include/Translations.php";
 
 $user_prefs = '/boot/config/plugins/dynamix.vm.manager/userprefs.cfg';
-if (file_exists('/boot/config/plugins/dynamix.vm.manager/vmpreview')) $vmpreview = true ; else $vmpreview =  false ;
 $vms = $lv->get_domains();
 if (empty($vms)) {
   echo '<tr><td colspan="8" style="text-align:center;padding-top:12px">'._('No Virtual Machines installed').'</td></tr>';
@@ -40,6 +40,8 @@ $i = 0;
 $kvm = ['var kvm=[];'];
 $show = explode(',',unscript(_var($_GET,'show')));
 $path = _var($domain_cfg,'MEDIADIR');
+$pci_device_changes = comparePCIData();
+$sriov = json_decode(getSriovInfoJson(true), true);
 
 foreach ($vms as $vm) {
   $res = $lv->get_domain_by_name($vm);
@@ -53,45 +55,70 @@ foreach ($vms as $vm) {
   $image = substr($icon,-4)=='.png' ? "<img src='$icon' class='img'>" : (substr($icon,0,5)=='icon-' ? "<i class='$icon img'></i>" : "<i class='fa fa-$icon img'></i>");
   $arrConfig = domain_to_config($uuid);
   $snapshots = getvmsnapshots($vm) ;
-  $cdroms = $lv->get_cdrom_stats($res) ;
+  $vmpciids = $lv->domain_get_vm_pciids($vm);
+  $pcierror = false;
+  $srioverror = false;
+  foreach($vmpciids as $pciid => $pcidetail) {
+    if (isset($pci_device_changes["0000:".$pciid])) $pcierror = true;
+    // Check if device is an SR-IOV PF with VFs defined
+    $check_id = $pciid;
+    if (!preg_match('/^[0-9a-fA-F]{4}:/', $check_id)) {
+        $check_id = "0000:" . $check_id;
+    }
+    if (isset($sriov[$check_id]) && !empty($sriov[$check_id]['vfs'])) {
+        $srioverror = true;
+    }
+  }
+  $cdroms = $lv->get_cdrom_stats($res,true,true) ;
   if ($state == 'running') {
     $mem = $dom['memory']/1024;
   } else {
     $mem = $lv->domain_get_memory($res)/1024;
   }
-  $mem = round($mem).'M';
+  $memRounded = round($mem);
+  $mem = ($memRounded >= 1024) ? ($memRounded / 1024) . 'G' : $memRounded . 'M';
   $vcpu = $dom['nrVirtCpu'];
   $template = $lv->_get_single_xpath_result($res, '//domain/metadata/*[local-name()=\'vmtemplate\']/@name');
   if (empty($template)) $template = 'Custom';
   $log = (is_file("/var/log/libvirt/qemu/$vm.log") ? "libvirt/qemu/$vm.log" : '');
   $disks = '-';
   $diskdesc = '';
+  $fstype ="QEMU";
   if (($diskcnt = $lv->get_disk_count($res)) > 0) {
     $disks = $diskcnt.' / '.$lv->get_disk_capacity($res);
-    $diskdesc = 'Current physical size: '.$lv->get_disk_capacity($res, true);
+    $fstype = $lv->get_disk_fstype($res);
+    $diskdesc = 'Current physical size: '.$lv->get_disk_capacity($res, true)."\nDefault snapshot type: $fstype";
   }
   $arrValidDiskBuses = getValidDiskBuses();
+  $WebUI = html_entity_decode($arrConfig['template']['webui']);
   $vmrcport = $lv->domain_get_vnc_port($res);
   $autoport = $lv->domain_get_vmrc_autoport($res);
   $vmrcurl = '';
   $graphics = '';
   $virtual = false ;
+  $arrValidGPUDevices = !empty($arrConfig['gpu']) ? getValidGPUDevices() : [];
+  $vrtmodel = '';
+  if (isset($arrConfig['gpu'][0]['model'])) {$vrtdriver=" "._("Driver").strtoupper(":{$arrConfig['gpu'][0]['model']} "); $vrtmodel =$arrConfig['gpu'][0]['model'];} else $vrtdriver = "";
+  if (isset($arrConfig['gpu'][0]['render']) && $vrtmodel == "virtio3d") {
+    if (isset($arrConfig['gpu'][0]['render']) && $arrConfig['gpu'][0]['render'] == "auto") $vrtdriver .= "<br>"._("RenderGPU").":"._("Auto"); else $vrtdriver .= "<br>"._("RenderGPU").":{$arrValidGPUDevices[$arrConfig['gpu'][0]['render']]['name']}";
+  }
   if ($vmrcport > 0) {
     $wsport = $lv->domain_get_ws_port($res);
     $vmrcprotocol = $lv->domain_get_vmrc_protocol($res);
-    $vmrcurl = autov('/plugins/dynamix.vm.manager/'.$vmrcprotocol.'.html',true).'&autoconnect=true&host='._var($_SERVER,'HTTP_HOST');
+    if ($vmrcprotocol == "vnc") $vmrcscale = "&resize=scale"; else $vmrcscale = "";
+    $vmrcurl = autov('/plugins/dynamix.vm.manager/'.$vmrcprotocol.'.html',true).$vmrcscale.'&autoconnect=true&host='._var($_SERVER,'HTTP_HOST');
     if ($vmrcprotocol == "spice") $vmrcurl .= '&vmname='. urlencode($vm) .'&port=/wsproxy/'.$vmrcport.'/'; else $vmrcurl .= '&port=&path=/wsproxy/'.$wsport.'/';
-    $graphics = strtoupper($vmrcprotocol).":".$vmrcport."\n";
+    $graphics = strtoupper($vmrcprotocol).':'.$vmrcport."$vrtdriver\n";
     $virtual = true ;
   } elseif ($vmrcport == -1 || $autoport) {
     $vmrcprotocol = $lv->domain_get_vmrc_protocol($res);
     if ($autoport == "yes") $auto = "auto"; else $auto="manual";
-    $graphics = strtoupper($vmrcprotocol).':'._($auto)."\n";
+    $graphics = strtoupper($vmrcprotocol).':'._($auto)."$vrtdriver\n";
     $virtual = true ;
   }
   if (!empty($arrConfig['gpu'])) {
-    $arrValidGPUDevices = getValidGPUDevices();
     foreach ($arrConfig['gpu'] as $arrGPU) {
+      if ($arrGPU['id'] == "nogpu") {$graphics .= "No GPU"."\n";continue;}
       foreach ($arrValidGPUDevices as $arrDev) {
         if ($arrGPU['id'] == $arrDev['id']) {
           if (count(array_filter($arrValidGPUDevices, function($v) use ($arrDev) { return $v['name'] == $arrDev['name']; })) > 1) {
@@ -108,7 +135,8 @@ foreach ($vms as $vm) {
   }
   unset($dom);
   if (!isset($domain_cfg["CONSOLE"])) $vmrcconsole = "web" ; else $vmrcconsole = $domain_cfg["CONSOLE"] ;
-  $menu = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($vm),addslashes($uuid),addslashes($template),$state,addslashes($vmrcurl),strtoupper($vmrcprotocol),addslashes($log), $vmrcconsole,$vmpreview);
+  if (!isset($domain_cfg["RDPOPT"])) $vmrcconsole .= ";no" ; else $vmrcconsole .= ";".$domain_cfg["RDPOPT"] ;
+  $menu = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s', '%s', %s)\"", addslashes($vm),addslashes($uuid),addslashes($template),$state,addslashes($vmrcurl),strtoupper($vmrcprotocol),addslashes($log),addslashes($fstype), $vmrcconsole,false,addslashes(str_replace('"',"'",$WebUI)),$pcierror,$srioverror);
   $kvm[] = "kvm.push({id:'$uuid',state:'$state'});";
   switch ($state) {
   case 'running':
@@ -130,7 +158,7 @@ foreach ($vms as $vm) {
   }
 
   /* VM information */
-  if ($snapshots != null)  $snapshotstr = _("(Snapshots :").count($snapshots).')'; else $snapshotstr = _("(Snapshots :None)");
+  if ($snapshots != null)  $snapshotstr = '('._('Snapshots').': '.count($snapshots).")"; else $snapshotstr = '('._('Snapshots').': '._('None').")";
   $cdbus = $cdbus2 = $cdfile = $cdfile2 = "";
   $cdromcount = 0;
     foreach ($cdroms as $arrCD) {
@@ -187,7 +215,11 @@ foreach ($vms as $vm) {
   $title = _('Select ISO image');
   $cdstr = $cdromcount." / 2<a class='hand' title='$title' href='#' onclick='$changemedia'><i class='fa fa-dot-circle-o'></i></a>";
   echo "<tr parent-id='$i' class='sortable'><td class='vm-name' style='width:220px;padding:8px'><i class='fa fa-arrows-v mover orange-text'></i>";
-  echo "<span class='outer'><span id='vm-$uuid' $menu class='hand'>$image</span><span class='inner'><a href='#' onclick='return toggle_id(\"name-$i\")' title='click for more VM info'>$vm</a><br><i class='fa fa-$shape $status $color'></i><span class='state'>"._($status)." $snapshotstcount</span></span></span></td>";
+  echo "<span class='outer'><span id='vm-$uuid' $menu class='hand'>$image</span>";
+  echo "<span class='inner'><a href='#' onclick='return toggle_id(\"name-$i\")' title='click for more VM info'>$vm</a>";
+  if ($pcierror) echo "<i class=\"fa fa-warning fa-fw orange-text\" title=\""._('PCI Changed')."\n"._('Start disabled')."\"></i>";
+  if ($srioverror) echo "<i class=\"fa fa-warning fa-fw orange-text\" title=\""._('SR-IOV root device found')."\n"._('Start disabled')."\"></i>";
+  echo "<br><i class='fa fa-$shape $status $color'></i><span class='state'>"._($status)." </span></span></span></td>";
   echo "<td>$desc</td>";
   echo "<td><a class='vcpu-$uuid' style='cursor:pointer'>$vcpu</a></td>";
   echo "<td>$mem</td>";
@@ -213,7 +245,7 @@ foreach ($vms as $vm) {
     $boot= $arrDisk["boot order"];
     $serial = $arrDisk["serial"];
     if ($boot < 1) $boot = _('Not set');
-    $reallocation = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($disk)." 2>/dev/null"));
+    $reallocation = trim(get_realvolume($disk));
     if (!empty($reallocation)) $reallocationstr = "($reallocation)"; else $reallocationstr = "";
     echo "<tr><td>$disk $reallocationstr</td><td>$serial</td><td>$bus</td>";
     if ($state == 'shutoff') {
@@ -235,8 +267,10 @@ foreach ($vms as $vm) {
 
   /* Display VM cdroms */
   foreach ($cdroms as $arrCD) {
+    $tooltip = "";
     $capacity = $lv->format_size($arrCD['capacity'], 0);
     $allocation = $lv->format_size($arrCD['allocation'], 0);
+    if ($arrCD['spundown']) {$capacity = $allocation = "*"; $tooltip = "Drive spun down ISO volume is ".$arrCD['reallocation'];} else $tooltip = "ISO volume is ".$arrCD['reallocation'];
     $disk = $arrCD['file'] ?? $arrCD['partition'] ?? "" ;
     $dev  = $arrCD['device'];
     $bus  = $arrValidDiskBuses[$arrCD['bus']] ?? 'VirtIO';
@@ -245,7 +279,7 @@ foreach ($vms as $vm) {
     if ($disk != "" ) {
       $title = _('Eject CD Drive');
       $changemedia = "changemedia(\"{$uuid}\",\"{$dev}\",\"{$bus}\", \"--eject\")";
-      echo "<tr><td>$disk <a title='$title' href='#' onclick='$changemedia'> <i class='fa fa-eject'></i></a></td><td></td><td>$bus</td><td>$capacity</td><td>$allocation</td><td>$boot</td></tr>";
+      echo "<tr><td>$disk <a title='$title' href='#' onclick='$changemedia'> <i class='fa fa-eject'></i></a></td><td></td><td>$bus</td><td><span title='$tooltip' data-toggle='tooltip'>$capacity</span></td><td>$allocation</td><td>$boot</td></tr>";
     } else {
       $title = _('Insert CD');
       $changemedia = "changemedia(\"{$uuid}\",\"{$dev}\",\"{$bus}\",\"--select\")";
@@ -267,7 +301,7 @@ foreach ($vms as $vm) {
       if ($snap['parent'] == "" || $snap['parent'] == "Base") $j++;
       $steps[$j] .= $snap['name'].';';
     }
-    echo "<thead class='child' child-id='$i'><tr><th><i class='fa fa-clone'></i> <b>",_('Snapshots'),"</b></th><th></th><th>",_('Date/Time'),"</th><th>",_('Type'),"</th><th>",_('Parent'),"</th><th>",_('Memory'),"</th></tr></thead>";
+    echo "<thead class='child' child-id='$i'><tr><th><i class='fa fa-clone'></i> <b>",_('Snapshots'),"</b></th><th></th><th>",_('Date/Time'),"</th><th>",_('Type (Method)'),"</th><th>",_('Parent'),"</th><th>",_('Memory'),"</th></tr></thead>";
     echo "<tbody class='child'child-id='$i'>";
     foreach ($steps as $stepsline) {
       $snapshotlist = explode(";",$stepsline);
@@ -275,12 +309,12 @@ foreach ($vms as $vm) {
       foreach ($snapshotlist as  $snapshotitem) {
         if ($snapshotitem == "") continue;
         $snapshot = $snapshots[$snapshotitem] ;
-        $snapshotstate = _(ucfirst($snapshot["state"]));
+        $snapshotstate = _(ucfirst($snapshot["state"]))." ({$snapshot["method"]})";
         $snapshotdesc = $snapshot["desc"];
         $snapshotmemory = _(ucfirst($snapshot["memory"]["@attributes"]["snapshot"]));
         $snapshotparent = $snapshot["parent"] ? $snapshot["parent"]  : "None";
         $snapshotdatetime = my_time($snapshot["creationtime"],"Y-m-d" )."<br>".my_time($snapshot["creationtime"],"H:i:s");
-        $snapmenu = sprintf("onclick=\"addVMSnapContext('%s','%s','%s','%s','%s','%s')\"", addslashes($vm),addslashes($uuid),addslashes($template),$state,$snapshot["name"],$vmpreview);
+        $snapmenu = sprintf("onclick=\"addVMSnapContext('%s','%s','%s','%s','%s','%s')\"", addslashes($vm),addslashes($uuid),addslashes($template),$state,$snapshot["name"],$snapshot["method"]);
         echo "<tr><td><span id='vmsnap-$uuid' $snapmenu class='hand'>$tab|__&nbsp;&nbsp;<i class='fa fa-clone'></i></span>&nbsp;",$snapshot["name"],"</td><td>$snapshotdesc</td><td><span class='inner' style='font-size:1.1rem;'>$snapshotdatetime</span></td><td>$snapshotstate</td><td>$snapshotparent</td><td>$snapshotmemory</td></tr>";
         $tab .="&nbsp;&nbsp;&nbsp;&nbsp;";
       }

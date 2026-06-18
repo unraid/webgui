@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  * Copyright 2014-2021, Guilherme Jardim, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
@@ -13,8 +13,8 @@
 ?>
 <?
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
-require_once "$docroot/plugins/dynamix.docker.manager/include/Helpers.php";
 require_once "$docroot/webGui/include/Wrappers.php";
+require_once "$docroot/plugins/dynamix.docker.manager/include/Helpers.php";
 
 // add translations
 if (_var($_SERVER,'REQUEST_URI')!='docker' && substr(_var($_SERVER,'REQUEST_URI'),0,7)!='/Docker') {
@@ -35,25 +35,24 @@ $dockerManPaths = [
 	'webui-info'     => "$docroot/state/plugins/dynamix.docker.manager/docker.json"
 ];
 
-// load network variables if needed.
-$ethX = 'eth0';
-if (!isset($$ethX)) extract(parse_ini_file("$docroot/state/network.ini",true));
-$host = ipaddr($ethX);
-
 // get network drivers
 $driver = DockerUtil::driver();
 
-// determine active port name
-$port = file_exists('/sys/class/net/br0') ? 'BR0' : (file_exists('/sys/class/net/bond0') ? 'BOND0' : 'ETH0');
-
 // Docker configuration file - guaranteed to exist
 $docker_cfgfile = '/boot/config/docker.cfg';
-if (file_exists($docker_cfgfile) && exec("grep -Pom1 '_{$port}(_[0-9]+)?=' $docker_cfgfile")=='') {
-  # interface has changed, update configuration
-  exec("sed -ri 's/_(BR0|BOND0|ETH0)(_[0-9]+)?=/_{$port}\\2=/' $docker_cfgfile");
+$mgmt_port = ['br0','bond0','eth0'];
+
+if (file_exists($docker_cfgfile)) {
+	$port = DockerUtil::port();
+	$port = strtoupper((in_array($port,$mgmt_port) && lan_port($port,true)==0) ? 'wlan0' : $port);
+	exec("grep -Pom2 '_SUBNET_|_{$port}(_[0-9]+)?=' $docker_cfgfile",$cfg);
+	if (isset($cfg[0]) && $cfg[0]=='_SUBNET_' && empty($cfg[1])) {
+		# interface has changed, update configuration
+		exec("sed -ri 's/_(BR0|BOND0|ETH0)(_[0-9]+)?=/_{$port}\\2=/' $docker_cfgfile");
+	}
 }
 
-$defaults = (array)@parse_ini_file("$docroot/plugins/dynamix.docker.manager/default.cfg");
+$defaults  = (array)@parse_ini_file("$docroot/plugins/dynamix.docker.manager/default.cfg");
 $dockercfg = array_replace_recursive($defaults, (array)@parse_ini_file($docker_cfgfile));
 
 function var_split($item, $i=0) {
@@ -140,7 +139,28 @@ class DockerTemplates {
 		return $tmpls;
 	}
 
+	public function getUserTemplatePath($Container) {
+		global $dockerManPaths;
+		$dir = $dockerManPaths['templates-user'];
+		if (!is_dir($dir)) @mkdir($dir, 0755, true);
+		$Container = str_replace(['/', '\\'], '', $Container);
+		$target = "my-$Container.xml";
+		$targetLower = strtolower($target);
+		$match = false;
+		foreach (glob("$dir/my-*.xml") ?: [] as $template) {
+			$name = basename($template);
+			if ($name == $target) return $template;
+			if (!$match && strtolower($name) == $targetLower) $match = $template;
+		}
+		return $match ?: "$dir/$target";
+	}
+
 	public function downloadTemplates($Dest=null, $Urls=null) {
+		/* Don't download any templates.  Leave code in place for future reference. */
+		/* remove existing limetech templates that are all not valid */
+		exec("rm -rf /boot/config/plugins/dockerMan/templates/limetech");
+		return [];
+
 		global $dockerManPaths;
 		$Dest = $Dest ?: $dockerManPaths['templates-usb'];
 		$Urls = $Urls ?: $dockerManPaths['template-repos'];
@@ -173,7 +193,7 @@ class DockerTemplates {
 			}
 			// if after above we don't have a valid url, check for GitLab
 			if (empty($github_api['url'])) {
-				$source = file_get_contents($url);
+				$source = $this->download_url($url);
 				// the following should always exist for GitLab Community Edition or GitLab Enterprise Edition
 				if (preg_match("/<meta content='GitLab (Community|Enterprise) Edition' name='description'>/", $source) > 0) {
 					$parse = parse_url($url);
@@ -252,7 +272,7 @@ class DockerTemplates {
 			$doc = new DOMDocument();
 			$doc->load($file['path']);
 			if ($name) {
-				if ($doc->getElementsByTagName('Name')->item(0)->nodeValue !== $name) continue;
+				if (@$doc->getElementsByTagName('Name')->item(0)->nodeValue !== $name) continue;
 			}
 			$TemplateRepository = DockerUtil::ensureImageTag($doc->getElementsByTagName('Repository')->item(0)->nodeValue??'');
 			if ($TemplateRepository && $TemplateRepository==$Repository) {
@@ -274,9 +294,8 @@ class DockerTemplates {
 	}
 
 	private function getControlURL(&$ct, $myIP, $WebUI) {
-		global $host;
 		$port = &$ct['Ports'][0];
-		$myIP = $myIP ?: $this->getTemplateValue($ct['Image'],'MyIP') ?: (_var($ct,'NetworkMode')=='host'||_var($port,'NAT') ? $host : (_var($port,'IP') ?: DockerUtil::myIP($ct['Name'])));
+		$myIP = $myIP ?: $this->getTemplateValue($ct['Image'],'MyIP') ?: (_var($ct,'NetworkMode')=='host'||_var($port,'NAT') ? DockerUtil::host() : (_var($port,'IP') ?: DockerUtil::myIP($ct['Name'])));
 		// Get the WebUI address from the templates as a fallback
 		$WebUI = preg_replace("%\[IP\]%", $myIP, $WebUI ?? $this->getTemplateValue($ct['Image'], 'WebUI'));
 		if (preg_match("%\[PORT:(\d+)\]%", $WebUI, $matches)) {
@@ -289,10 +308,15 @@ class DockerTemplates {
 		return $WebUI;
 	}
 
+	private function getTailscaleJson($name) {
+		return DockerUtil::tailscaleStatus($name) ?: '';
+	}
+
 	public function getAllInfo($reload=false,$com=true,$communityApplications=false) {
-		global $dockerManPaths, $host;
+		global $driver, $dockerManPaths, $docroot;
 		$DockerClient = new DockerClient();
 		$DockerUpdate = new DockerUpdate();
+		$host = DockerUtil::host();
 		//$DockerUpdate->verbose = $this->verbose;
 		$info = DockerUtil::loadJSON($dockerManPaths['webui-info']);
 		$autoStart = array_map('var_split', @file($dockerManPaths['autostart-file'],FILE_IGNORE_NEW_LINES) ?: []);
@@ -304,13 +328,23 @@ class DockerTemplates {
 			$tmp['paused'] = $ct['Paused'];
 			$tmp['autostart'] = in_array($name,$autoStart);
 			$tmp['cpuset'] = $ct['CPUset'];
-			$tmp['url'] = $tmp['url'] ?? '';
-			// read docker label for WebUI & Icon
-			if (isset($ct['Url']) && !$tmp['url']) $tmp['url'] = $ct['Url'];
-			if (isset($ct['Icon'])) $tmp['icon'] = $ct['Icon'];
+			$tmp['url'] = $ct['Url'] ?? $tmp['url'] ?? '';
+			// Docker label for Shell.
 			if (isset($ct['Shell'])) $tmp['shell'] = $ct['Shell'];
+			// Pass the label URL as a download fallback only when there's no
+			// usable cached file. Otherwise, we'll check if the URL is a file,
+			// obviously fail, and search through every template in /boot
+			// looking for a match. Bad.
+			$labelIconUrl = $ct['Icon'] ?? null;
 			if (!$communityApplications) {
-				if (!is_file($tmp['icon']) || $reload) $tmp['icon'] = $this->getIcon($image,$name,$tmp['icon']);
+				$iconExists = !empty($tmp['icon'])
+					&& (is_file($tmp['icon']) || is_file($docroot . $tmp['icon']));
+				if (!$iconExists || $reload) {
+					$tmp['icon'] = $this->getIcon($image, $name, $labelIconUrl ?: ($tmp['icon'] ?? ''));
+					// Explicitly return the fallback asset, so that subsequent polls see
+					// the local file instead of rerunning the expensive template scan
+					if (empty($tmp['icon'])) $tmp['icon'] = '/plugins/dynamix.docker.manager/images/question.png';
+				}
 			}
 			if ($ct['Running']) {
 				$port = &$ct['Ports'][0];
@@ -319,8 +353,55 @@ class DockerTemplates {
 					// non-templated webui, user specified
 					$tmp['url'] = $webui;
 				} else {
-					$ip = ($ct['NetworkMode']=='host'||_var($port,'NAT')) ? $host : _var($port,'IP');
+					if ($ct['NetworkMode']=='host') {
+						$ip = $host;
+					} elseif (isset($driver[$ct['NetworkMode']]) && ($driver[$ct['NetworkMode']] == 'ipvlan' || $driver[$ct['NetworkMode']] == 'macvlan')) {
+						$ip = reset($ct['Networks'])['IPAddress'];
+					} elseif (!is_null(_var($port,'PublicPort'))) {
+						$ip = $host;
+					} else {
+						$ip = _var($port,'IP');
+					}
 					$tmp['url'] = $ip ? (strpos($tmp['url'],$ip)!==false ? $tmp['url'] : $this->getControlURL($ct, $ip, $tmp['url'])) : $tmp['url'];
+					if (strpos($ct['NetworkMode'], 'container:') === 0)
+					  $tmp['url'] = '';
+				}
+				// Check if webui & ct TSurl is set, if set construct WebUI URL on Docker page
+				$tmp['TSurl'] = '';
+				if (!empty($webui) && !empty($ct['TSUrl'])) {
+					$TS_no_peers = $this->getTailscaleJson($name);
+					if (!empty($TS_no_peers['CurrentTailnet']) && !empty($TS_no_peers['CurrentTailnet']['MagicDNSEnabled'])) {
+						$TS_container = $TS_no_peers['Self'];
+						$TS_DNSName = _var($TS_container,'DNSName','');
+						$TS_HostNameActual = substr($TS_DNSName, 0, strpos($TS_DNSName, '.'));
+						// Check if serve or funnel are enabled by checking for [hostname] and replace string with TS_DNSName
+						if (strpos($ct['TSUrl'], '[hostname]') !== false && isset($TS_DNSName)) {
+							$tmp['TSurl'] = str_replace("[hostname][magicdns]", rtrim($TS_DNSName, '.'), $ct['TSUrl']);
+							$tmp['TSurl'] = preg_replace('/\[IP\]/', rtrim($TS_DNSName, '.'), $tmp['TSurl']);
+							$tmp['TSurl'] = preg_replace('/\[PORT:(\d{1,5})\]/', '443', $tmp['TSurl']);
+						// Check if serve is disabled, construct url with port, path and query if present and replace [noserve] with url
+						} elseif (strpos($ct['TSUrl'], '[noserve]') !== false && isset($TS_container['TailscaleIPs'])) {
+							$ipv4 = '';
+							foreach ($TS_container['TailscaleIPs'] as $ip) {
+								if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+									$ipv4 = $ip;
+									break;
+								}
+							}
+							if (!empty($ipv4)) {
+								$webui_url = isset($webui) ? parse_url($webui) : '';
+								$webui_port = (preg_match('/\[PORT:(\d+)\]/', $webui, $matches)) ? ':' . $matches[1] : '';
+								$webui_path = $webui_url['path'] ?? '';
+								$webui_query = isset($webui_url['query']) ? '?' . $webui_url['query'] : '';
+								$webui_query = preg_replace('/\[IP\]/', $ipv4, $webui_query);
+								$webui_query = preg_replace('/\[PORT:(\d{1,5})\]/', ltrim($webui_port, ':'), $webui_query);
+								$tmp['TSurl'] = 'http://' . $ipv4 . $webui_port . $webui_path . $webui_query;
+							}
+						// Check if TailscaleWebUI in the xml is custom and display instead
+						} elseif (strpos($ct['TSUrl'], '[hostname]') === false && strpos($ct['TSUrl'], '[noserve]') === false) {
+							$tmp['TSurl'] = $ct['TSUrl'];
+						}
+					}
 				}
 				if ( ($tmp['shell'] ?? false) == false )
 					$tmp['shell'] = $this->getTemplateValue($image, 'Shell');
@@ -330,13 +411,18 @@ class DockerTemplates {
 			$tmp['Project'] = $tmp['Project'] ?? $this->getTemplateValue($image, 'Project');
 			$tmp['DonateLink'] = $tmp['DonateLink'] ?? $this->getTemplateValue($image, 'DonateLink');
 			$tmp['ReadMe'] = $tmp['ReadMe'] ?? $this->getTemplateValue($image, 'ReadMe');
-			if (empty($tmp['updated']) || $reload) {
-				if ($reload) $DockerUpdate->reloadUpdateStatus($image);
-				$tmp['updated'] = var_export($DockerUpdate->getUpdateStatus($image),true);
-			}
 			if (!$com) $tmp['updated'] = 'undef';
-			if (empty($tmp['template']) || $reload) $tmp['template'] = $this->getUserTemplate($name);
-			if ($reload) $DockerUpdate->updateUserTemplate($name);
+			if ($ct['Manager'] !== 'dockerman') {
+				$tmp['template'] = null;
+				$tmp['updated'] = null;
+			} else if (empty($tmp['template']) || $reload) {
+				$tmp['template'] = $this->getUserTemplate($name);
+				if ($reload) $DockerUpdate->updateUserTemplate($name);
+  				if (empty($tmp['updated']) || $reload) {
+					if ($reload) $DockerUpdate->reloadUpdateStatus($image);
+					$tmp['updated'] = var_export($DockerUpdate->getUpdateStatus($image),true);
+				}
+			}
 			//$this->debug("\n$name");
 			//foreach ($tmp as $c => $d) $this->debug(sprintf('   %-10s: %s', $c, $d));
 		}
@@ -364,7 +450,7 @@ class DockerTemplates {
 			@copy($iconRAM,$icon);
 		}
 		if (!is_file($iconRAM)) {
-			exec("logger -t webGUI -- \"$contName: Could not download icon $imgUrl\"");
+			my_logger("$contName: Could not download icon $imgUrl");
 		}
 
 		return (is_file($iconRAM)) ? str_replace($docroot, '', $iconRAM) : '';
@@ -425,7 +511,7 @@ class DockerUpdate{
 
 	// DEPRECATED: Only used for Docker Index V1 type update checks
 	public function getRemoteVersion($image) {
-		[$strRepo, $strTag] = array_pad(explode(':', DockerUtil::ensureImageTag($image)),2,'');
+		extract(DockerUtil::parseImageTag($image));
 		$apiUrl = sprintf('http://index.docker.io/v1/repositories/%s/tags/%s', $strRepo, $strTag);
 		//$this->debug("API URL: $apiUrl");
 		$apiContent = $this->download_url($apiUrl);
@@ -433,7 +519,7 @@ class DockerUpdate{
 	}
 
 	public function getRemoteVersionV2($image) {
-		[$strRepo, $strTag] = array_pad(explode(':', DockerUtil::ensureImageTag($image)),2,'');
+		extract(DockerUtil::parseImageTag($image));
 		/*
 		 * Step 1: Check whether or not the image is in a private registry, get corresponding auth data and generate manifest url
 		 */
@@ -549,10 +635,11 @@ class DockerUpdate{
 		$inspect      = $DockerClient->getDockerJSON('/images/'.$image.'/json');
 		if (empty($inspect['RepoDigests'])) return null;
 
-		$shaPos = strpos($inspect['RepoDigests'][0], '@sha256:');
+		$repoDigest = $inspect['RepoDigests'][array_key_last($inspect['RepoDigests'])];
+		$shaPos = strpos($repoDigest, '@sha256:');
 		if ($shaPos === false) return null;
 
-		return substr($inspect['RepoDigests'][0], $shaPos + 1);
+		return substr($repoDigest, $shaPos + 1);
 	}
 
 	public function setUpdateStatus($image, $version) {
@@ -718,7 +805,7 @@ class DockerClient {
 		$fp = stream_socket_client('unix:///var/run/docker.sock', $errno, $errstr);
 		if ($fp === false) {
 			echo "Couldn't create socket: [$errno] $errstr";
-			return null;
+			return [];
 		}
 		$protocol = $unchunk ? 'HTTP/1.0' : 'HTTP/1.1';
 		$out = "$method {$api}{$url} $protocol\r\nHost:127.0.0.1\r\nConnection:Close\r\n";
@@ -895,15 +982,27 @@ class DockerClient {
 
 	public function getDockerContainers() {
 		global $driver;
+		$host = DockerUtil::host();
 		// Return cached values
 		if (is_array($this::$containersCache)) return $this::$containersCache;
 		$this::$containersCache = [];
 		foreach ($this->getDockerJSON("/containers/json?all=1") as $ct) {
+			if (!is_array($ct) || empty($ct['Id'])) {
+				continue;
+			}
+			// Docker can leave stale "dead" entries after shutdown races; filter them from the UI list.
+			if (($ct['State'] ?? '') === 'dead' || stripos($ct['Status'] ?? '', 'dead') === 0) {
+				continue;
+			}
 			$info = $this->getContainerDetails($ct['Id']);
+			// If inspect fails for a stale entry, skip it from the UI list.
+			if (empty($info) || !is_array($info) || !empty($info['message']) || empty($info['Config']) || empty($info['State'])) {
+				continue;
+			}
 			$c = [];
 			$c['Image']       = DockerUtil::ensureImageTag($info['Config']['Image']);
 			$c['ImageId']     = $this->extractID($ct['ImageID']);
-			$c['Name']        = substr($info['Name'], 1);
+			$c['Name']        = ltrim(($info['Name'] ?? $ct['Names'][0] ?? ''), '/');
 			$c['Status']      = $ct['Status'] ?: 'None';
 			$c['Running']     = $info['State']['Running'];
 			$c['Paused']      = $info['State']['Paused'];
@@ -912,29 +1011,70 @@ class DockerClient {
 			$c['Volumes']     = $info['HostConfig']['Binds'];
 			$c['Created']     = $this->humanTiming($ct['Created']);
 			$c['NetworkMode'] = $ct['HostConfig']['NetworkMode'];
+			$c['Manager'] 	  = $info['Config']['Labels']['net.unraid.docker.managed'] ?? false;
+			if ($c['Manager'] == 'composeman') {
+				$c['ComposeProject'] = $info['Config']['Labels']['com.docker.compose.project'];
+			}
 			[$net, $id]       = array_pad(explode(':',$c['NetworkMode']),2,'');
 			$c['CPUset']      = $info['HostConfig']['CpusetCpus'];
 			$c['BaseImage']   = $ct['Labels']['BASEIMAGE'] ?? false;
 			$c['Icon']        = $info['Config']['Labels']['net.unraid.docker.icon'] ?? false;
 			$c['Url']         = $info['Config']['Labels']['net.unraid.docker.webui'] ?? false;
-			$c['Shell']         = $info['Config']['Labels']['net.unraid.docker.shell'] ?? false;
+			$c['TSUrl']       = $info['Config']['Labels']['net.unraid.docker.tailscale.webui'] ?? false;
+			$c['TSHostname']  = $info['Config']['Labels']['net.unraid.docker.tailscale.hostname'] ?? false;
+			$c['Shell']       = $info['Config']['Labels']['net.unraid.docker.shell'] ?? false;
+			$c['Manager']     = $info['Config']['Labels']['net.unraid.docker.managed'] ?? false;
 			$c['Ports']       = [];
+			$c['Networks']	  = [];
 			if ($id) $c['NetworkMode'] = $net.str_replace('/',':',DockerUtil::ctMap($id)?:'/???');
 			if (isset($driver[$c['NetworkMode']])) {
 				if ($driver[$c['NetworkMode']]=='bridge') {
 					$ports = &$info['HostConfig']['PortBindings'];
-					$nat = true;
+				} elseif ($driver[$c['NetworkMode']]=='host') {
+					$c['Ports']['host'] = ['host' => ''];
+				} elseif ($driver[$c['NetworkMode']]=='ipvlan' || $driver[$c['NetworkMode']]=='macvlan') {
+					$i = $ct['NetworkSettings']['Networks'][$c['NetworkMode']]['IPAddress'];
+					$c['Ports']['vlan'] = ["$i" => $i];
 				} else {
 					$ports = &$info['Config']['ExposedPorts'];
-					$nat = false;
 				}
-				$ip = $ct['NetworkSettings']['Networks'][$c['NetworkMode']]['IPAddress'];
+			} else if (!$id) {
+				$c['NetworkMode'] = DockerUtil::ctMap($c['NetworkMode']);
+				$ports = &$info['Config']['ExposedPorts'];
 			}
+			foreach($ct['NetworkSettings']['Networks'] as $netName => $netVals) {
+				$networkDetails = $info['NetworkSettings']['Networks'][$netName] ?? $netVals;
+				$i = $c['NetworkMode']=='host' ? $host : $netVals['IPAddress'];
+				$c['Networks'][$netName] = [
+					'IPAddress' => $i,
+					'MacAddress' => $networkDetails['MacAddress'] ?? ''
+				];
+				if ( isset($driver[$netName]) && ($driver[$netName]=='ipvlan' || $driver[$netName]=='macvlan') ) {
+					if (!isset($c['Ports']['vlan'])) $c['Ports']['vlan'] = [];
+					$c['Ports']['vlan']["$i"] = $i;
+				}
+			}
+			$networkDetails = $info['NetworkSettings']['Networks'][$c['NetworkMode']] ?? $ct['NetworkSettings']['Networks'][$c['NetworkMode']] ?? [];
+			$ip = $c['NetworkMode']=='host' ? $host : $ct['NetworkSettings']['Networks'][$c['NetworkMode']]['IPAddress'] ?? null;
+			$c['Networks'][$c['NetworkMode']] = [
+				'IPAddress' => $ip,
+				'MacAddress' => $networkDetails['MacAddress'] ?? ''
+			];
 			$ports = (isset($ports) && is_array($ports)) ? $ports : [];
 			foreach ($ports as $port => $value) {
+				if (!isset($info['HostConfig']['PortBindings'][$port])) {
+					continue;
+				}
 				[$PrivatePort, $Type] = array_pad(explode('/', $port),2,'');
-				$c['Ports'][] = ['IP' => $ip, 'PrivatePort' => $PrivatePort, 'PublicPort' => $nat ? $value[0]['HostPort'] : $PrivatePort, 'NAT' => $nat, 'Type' => $Type];
+				$PublicPort = $info['HostConfig']['PortBindings']["$port"][0]['HostPort'] ?: null;
+				$nat = ($driver[$c['NetworkMode']]=='bridge');
+				if (array_key_exists($PrivatePort, $c['Ports']) && $Type != $c['Ports'][$PrivatePort]['Type'])
+					$Type = $c['Ports'][$PrivatePort]['Type'] . '/' . $Type;
+				if (isset($value[0]['HostIp'])) $hostip = $value[0]['HostIp'] ?? null;
+				else $hostip = '';
+				$c['Ports'][$PrivatePort] = ['IP' => $ip, 'HostIp' => $hostip, 'PrivatePort' => $PrivatePort, 'PublicPort' => $PublicPort, 'NAT' => $nat, 'Type' => $Type, 'Driver' => $driver[$c['NetworkMode']]];
 			}
+			ksort($c['Ports']);
 			$this::$containersCache[] = $c;
 		}
 		array_multisort(array_column($this::$containersCache,'Name'), SORT_NATURAL|SORT_FLAG_CASE, $this::$containersCache);
@@ -975,9 +1115,9 @@ class DockerClient {
 			$c['Id']          = $this->extractID($ct['Id']);
 			$c['ParentId']    = $this->extractID($ct['ParentId']);
 			$c['Size']        = $this->formatBytes($ct['Size']);
-			$c['VirtualSize'] = $this->formatBytes($ct['VirtualSize']);
+			$c['VirtualSize'] = $this->formatBytes($ct['VirtualSize'] ?? null);
 			$c['Tags']        = array_map('htmlspecialchars', $ct['RepoTags'] ?? []);
-			$c['Repository']  = vsprintf('%1$s/%2$s', preg_split("#[:\/]#", DockerUtil::ensureImageTag($ct['RepoTags'][0]??'')));
+			$c['Repository']  = DockerUtil::parseImageTag($ct['RepoTags'][0]??'')['strRepo'];
 			$c['usedBy']      = $this->usedBy($c['Id']);
 			$this::$imagesCache[$c['Id']] = $c;
 		}
@@ -990,18 +1130,43 @@ class DockerClient {
 ##################################
 
 class DockerUtil {
-	public static function ensureImageTag($image) {
-		[$strRepo, $strTag] = array_map('trim', array_pad(explode(':', $image.':'),2,''));
-		if (strpos($strRepo, 'sha256:') === 0) {
+	public static function ensureImageTag($image): string {
+		extract(static::parseImageTag($image));
+		return "$strRepo:$strTag";
+	}
+
+	public static function parseImageTag($image): array {
+		if (strpos($image, 'sha256:') === 0) {
 			// sha256 was provided instead of actual repo name so truncate it for display:
-			$strRepo = substr($strRepo, 7, 12);
-		} elseif (strpos($strRepo, '/') === false) {
-			// Prefix library/ if there's no author (maybe a Docker offical image?)
-			$strRepo = "library/$strRepo";
+			$strRepo = substr($image, 7, 12);
+		} elseif (strpos($image, '/') === false) {
+			return static::parseImageTag('library/' . $image);
+		} else {
+			$parsedImage = static::splitImage($image);
+			if (!empty($parsedImage)) {
+				$strRepo = $parsedImage['strRepo'];
+				$strTag = $parsedImage['strTag'];
+			} else {
+				// Unprocessable input
+				$strRepo = $image;
+			}
 		}
 		// Add :latest tag to image if it's absent
 		if (empty($strTag)) $strTag = 'latest';
-		return "$strRepo:$strTag";
+		return array_map('trim', ['strRepo' => $strRepo, 'strTag' => $strTag]);
+	}
+
+	private static function splitImage($image): ?array {
+		if (false === preg_match('@^(.+/)*([^/:]+)(:[^:/]*)*$@', $image, $newSections) || count($newSections) < 3) {
+			return null;
+		} else {
+			[, $strRepo, $image, $strTag] = array_merge($newSections, ['']);
+			$strTag = str_replace(':','',$strTag??'');
+			return [
+				'strRepo' => $strRepo . $image,
+				'strTag' => $strTag,
+			];
+		}
 	}
 
 	public static function loadJSON($path) {
@@ -1026,13 +1191,15 @@ class DockerUtil {
 	}
 
 	public static function driver() {
+		static $cached;
+		if ($cached !== null) return $cached;
 		$list = [];
 		foreach (static::docker("network ls --format='{{.Name}}={{.Driver}}'",true) as $network) {[$net,$driver] = array_pad(explode('=',$network),2,''); $list[$net] = $driver;}
-		return $list;
+		return $cached = $list;
 	}
 
 	public static function custom() {
-		return static::docker("network ls --filter driver='bridge' --filter driver='macvlan' --filter driver='ipvlan' --format='{{.Name}}' 2>/dev/null|grep -v '^bridge$'",true);
+		return static::docker("network ls --filter driver='bridge' --filter driver='macvlan' --filter driver='ipvlan' --format='{{.Name}}' 2>/dev/null | grep -v '^bridge$'",true);
 	}
 
 	public static function network($custom) {
@@ -1042,11 +1209,54 @@ class DockerUtil {
 	}
 
 	public static function cpus() {
-		exec('cat /sys/devices/system/cpu/*/topology/thread_siblings_list|sort -nu', $cpus);
+		exec('cat /sys/devices/system/cpu/*/topology/thread_siblings_list | sort -nu', $cpus);
 		return $cpus;
 	}
+
 	public static function ctMap($ct, $type='Name') {
 		return static::docker("inspect --format='{{.$type}}' $ct");
+	}
+
+	public static function port() {
+		static $cached;
+		if ($cached !== null) return $cached;
+		if (lan_port('br0'))   return $cached = 'br0';
+		if (lan_port('bond0')) return $cached = 'bond0';
+		if (lan_port('eth0'))  return $cached = 'eth0';
+		if (lan_port('wlan0')) return $cached = 'wlan0';
+		return $cached = '';
+	}
+
+	public static function host() {
+		static $cached;
+		if ($cached !== null) return $cached;
+		$port = static::port();
+		if (!$port) return $cached = '';
+		$port = lan_port($port,true)!=1 && lan_port('wlan0') ? 'wlan0' : $port;
+		return $cached = exec("ip -br -4 addr show $port scope global | sed -r 's/\/[0-9]+//g' | awk '{print $3;exit}'");
+	}
+
+  const TAILSCALE_CACHE_FILE = '/var/lib/docker/unraid-tailscale-status.json';
+
+	public static function tailscaleCache(): array {
+		static $cached;
+		if (is_array($cached)) return $cached;
+		if (!is_file(self::TAILSCALE_CACHE_FILE)) return $cached = [];
+		$data = @json_decode(@file_get_contents(self::TAILSCALE_CACHE_FILE), true);
+		return $cached = (is_array($data) ? $data : []);
+	}
+
+	public static function tailscaleStatus(string $name) {
+		return static::tailscaleCache()['containers'][$name]['data'] ?? null;
+	}
+
+	public static function tailscaleDerpMap() {
+		return static::tailscaleCache()['derp'] ?? null;
+	}
+
+	public static function tailscaleLatestVersion(): ?string {
+		$v = static::tailscaleCache()['version'] ?? null;
+		return is_array($v) ? ($v['TarballsVersion'] ?? null) : null;
 	}
 }
 ?>

@@ -1,0 +1,36 @@
+#!/usr/bin/php
+<?php
+    $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+    require_once "$docroot/webGui/include/Helpers.php";
+
+
+    $pci_device_changes = comparePCIData();
+
+    if (count($pci_device_changes) > 0) {
+        my_logger("PCI Changes not acknowledged skip save","savepcidata.");
+        return;
+    }
+
+    $output = shell_exec('lspci -Dmn');
+    $devices = [];
+
+    foreach (explode("\n", trim($output)) as $line) {
+        $parts = explode(" ", $line);
+
+        if (count($parts) < 6) continue; // Skip malformed lines
+
+        $description_str = shell_exec(("lspci -s ".$parts[0]));
+        $description = preg_replace('/^\S+\s+/', '', $description_str);
+
+        $device = [
+            'class'       => trim($parts[1], '"'),
+            'vendor_id'   => trim($parts[2], '"'),
+            'device_id'   => trim($parts[3], '"'),
+            'description' => trim($description,'"'),
+        ];
+
+        $devices[$parts[0]] = $device;
+    }
+
+    file_put_contents("/boot/config/savedpcidata.json",json_encode($devices,JSON_PRETTY_PRINT));
+?>

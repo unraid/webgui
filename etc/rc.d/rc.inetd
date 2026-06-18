@@ -35,7 +35,7 @@ inetd_stop() {
   if ! inetd_running; then
     REPLY="Already stopped"
   else
-    run killall inetd
+    run killall --ns $$ inetd
     if ! inetd_running; then REPLY="Stopped"; else REPLY="Failed"; fi
   fi
   log "$DAEMON...  $REPLY."

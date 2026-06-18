@@ -1,0 +1,23 @@
+#!/usr/bin/php -q
+<?PHP
+$cfg = '/boot/config/favorites.cfg';
+if (!file_exists($cfg)) exit(0);
+
+$file = fopen($cfg,'r');
+while (($page = fgets($file))!==false) {
+  // update each favorite
+  $page = rtrim($page);
+  if ( ! is_file($page) ) continue;
+  $line = fopen($page,'r');
+  if ($line === false) continue;
+  // get current Menu settings
+  extract(parse_ini_string(fgets($line)));
+  fclose($line);
+  // remove and re-add label and escape single quotes for sed command
+  $Menu = str_replace([' MyFavorites',"'"],['',"'\''"],$Menu).' MyFavorites';
+  // update Menu settings
+  exec("sed -ri '0,/^Menu=\".+\"$/s//Menu=\"$Menu\"/' $page 2>/dev/null");
+}
+fclose($file);
+exit(0);
+?>

@@ -13,9 +13,9 @@ case "$1" in
 ;;
 'status')
   # first output whatever the status is to stdout
-  /usr/sbin/zpool status -P $2
+  /usr/sbin/zpool status -Pv $2
   # establish retval of this script: 0 running, 1 not running
-  /usr/sbin/zpool status -P $2 | grep -q 'scrub in progress'
+  /usr/sbin/zpool status -Pv $2 | grep -q 'scrub in progress'
 ;;
 'cancel')
   /usr/sbin/zpool scrub -s $2 2>/dev/null

@@ -1,0 +1,2 @@
+#!/bin/bash
+virsh domstats --list-active --balloon 2>/dev/null | awk -F= '/^ *balloon.rss=/{t+=$2}END{print t*1024}'

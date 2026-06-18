@@ -73,6 +73,7 @@ function settings(form, data) {
 <input type="hidden" name="#include" value="/webGui/include/update.ssmtp.php">
 <input type="hidden" name="#command" value="/webGui/scripts/notify">
 <input type="hidden" name="#arg[1]" value="smtp-init">
+
 _(Preset service)_:
 : <select name="service" size="1" onchange="settings(this.form,this.value)">
 <?=mk_option(_var($ssmtp,'service'), "smtp.gmail.com:465:YES:NO:login", "Gmail")?>
@@ -134,7 +135,7 @@ _(Mail server)_:
 :smtp_mail_server_help:
 
 _(Mail server port)_:
-: <input type="text" name="port" class="narrow"  maxlength="5" value="<?=htmlspecialchars(_var($ssmtp,'port'))?>">
+: <input type="text" name="port" maxlength="5" value="<?=htmlspecialchars(_var($ssmtp,'port'))?>">
 
 :smtp_mail_server_port_help:
 
@@ -185,6 +186,9 @@ _(Password)_:
 :smtp_username_password_help:
 
 &nbsp;
-: <input type="submit" name="#apply" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
-  <span id="testresult"><input type="button" id="testbutton" value="_(Test)_"<?if ($incomplete):?> disabled<?endif;?>></span>
+: <span class="inline-block">
+    <input type="submit" name="#apply" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+    <span id="testresult"><input type="button" id="testbutton" value="_(Test)_"<?if ($incomplete):?> disabled<?endif;?>></span>
+  </span>
 </form>

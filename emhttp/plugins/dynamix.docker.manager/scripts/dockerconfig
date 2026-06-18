@@ -13,27 +13,46 @@
  */
 ?>
 <?
+/* Define the path to the docker configuration file */
 $cfgfile = "/boot/config/docker.cfg";
+
+/* Define the default configuration values */
 $cfg_defaults = [
-  "DOCKER_ENABLED" => "no",
-  "DOCKER_IMAGE_FILE" => "/mnt/user/system/docker/docker.img",
-  "DOCKER_IMAGE_SIZE" => "20",
-  "DOCKER_APP_CONFIG_PATH" => "/mnt/user/appdata/",
-  "DOCKER_APP_UNRAID_PATH" => "",
-  "DOCKER_READMORE" => "yes"
+	"DOCKER_ENABLED" => "no",
+	"DOCKER_IMAGE_FILE" => "/mnt/user/system/docker/docker.img",
+	"DOCKER_IMAGE_SIZE" => "20",
+	"DOCKER_APP_CONFIG_PATH" => "/mnt/user/appdata/",
+	"DOCKER_APP_UNRAID_PATH" => "",
+	"DOCKER_READMORE" => "yes",
+	"DOCKER_PID_LIMIT" => ""
 ];
 
+/* Initialize the new configuration with the default values */
 $cfg_new = $cfg_defaults;
+
+/* Check if the configuration file exists */
 if (file_exists($cfgfile)) {
-  $cfg_old = parse_ini_file($cfgfile);
-  if (!empty($cfg_old)) {
-    $cfg_new = array_merge($cfg_defaults, $cfg_old);
-    if (empty(array_diff($cfg_new, $cfg_old))) unset($cfg_new);
-  }
+	/* Parse the existing configuration file */
+	$cfg_old = parse_ini_file($cfgfile);
+
+	/* If the existing configuration is not empty, merge it with the defaults */
+	if (!empty($cfg_old)) {
+		/* Merge only missing keys from defaults */
+		$cfg_new = array_merge($cfg_defaults, $cfg_old);
+
+		/* If there are no changes between the new and old configurations, unset the new configuration */
+		if (empty(array_diff_assoc($cfg_new, $cfg_old))) {
+			$cfg_new = null;
+		}
+	}
 }
+
+/* If the new configuration is set, write it to the configuration file */
 if (isset($cfg_new)) {
-  $tmp = '';
-  foreach ($cfg_new as $key => $value) $tmp .= "$key=\"$value\"\n";
-  file_put_contents($cfgfile, $tmp);
+	$tmp = '';
+	foreach ($cfg_new as $key => $value) {
+		$tmp .= "$key=\"$value\"\n";
+	}
+	file_put_contents($cfgfile, $tmp);
 }
 ?>

@@ -2,14 +2,12 @@
 nets=()
 while IFS='\n' read -r net; do
   net=${net%/*}
-  net4=$(ip -br -4 addr show to $net 2>/dev/null|awk '$1 !~ "^shim" {print $1}'|tr '\n' ','|sed 's/,$//')
+  net4=$(ip -br -4 addr show scope global to $net 2>/dev/null | awk '$1 !~ "^shim" {print $1}'|tr '\n' ',' | sed 's/,$//')
   [[ -n $net4 ]] && nets+=("$net4 = $net;")
-done <<< $(ip -br -4 addr|awk '/^(br|bond|eth|wg)[0-9]+(\.[0-9]+)?/ {print $3}'|uniq -d)
+done <<< $(ip -br -4 addr show scope global | awk '/^(br|bond|eth|wlan|wg)[0-9]+(\.[0-9]+)?/ {print $3}' | uniq -d)
 
 while IFS=$'\n' read -r net; do
   net=${net%/*}
-  net6=$(ip -br -6 addr show to $net 2>/dev/null|awk '$1 !~ "^shim" {print $1}'|tr '\n' ','|sed 's/,$//')
+  net6=$(ip -br -6 addr show scope global -temporary -deprecated to $net 2>/dev/null | awk '$1 !~ "^shim" {print $1}'|tr '\n' ',' | sed 's/,$//')
   [[ -n $net6 ]] && nets+=("$net6 = $net;")
-done <<< $(ip -br -6 addr|awk '/^(br|bond|eth|wg)[0-9]+(\.[0-9]+)?/ && $3 !~ "^fe80" {print $3}'|uniq -d)
-
-[[ -n $nets ]] && echo "<i class='fa fa-warning' style='margin-right:8px'></i>${nets[@]}"|sed 's/;$//'
+done <<< $(ip -br -6 addr show scope global -temporary -deprecated | awk '/^(br|bond|eth|wlan|wg)[0-9]+(\.[0-9]+)?/ {print $3}' | uniq -d)

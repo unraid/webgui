@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  * Copyright 2015-2021, Derek Macias, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
@@ -22,12 +22,20 @@ if (substr($_SERVER['REQUEST_URI'],0,4) != '/VMs') {
 	require_once "$docroot/webGui/include/Translations.php";
 }
 
-switch ($display['theme']) {
+switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout.php
 	case 'gray' : $bgcolor = '#121510'; $border = '#606e7f'; $top = -44; break;
 	case 'azure': $bgcolor = '#edeaef'; $border = '#606e7f'; $top = -44; break;
-	case 'black': $bgcolor = '#212121'; $border = '#2b2b2b'; $top = -58; break;
-	default     : $bgcolor = '#ededed'; $border = '#e3e3e3'; $top = -58; break;
+	case 'black': $bgcolor = '#212121'; $border = '#2b2b2b'; $top = -64; break;
+	default     : $bgcolor = '#ededed'; $border = '#e3e3e3'; $top = -64; break;
 }
+
+$templateslocation = "/boot/config/plugins/dynamix.vm.manager/savedtemplates.json";
+if (is_file($templateslocation)){
+	$arrAllTemplates["User-templates"] = "";
+	$ut = json_decode(file_get_contents($templateslocation),true) ;
+	$arrAllTemplates = array_merge($arrAllTemplates, $ut);
+}
+
 
 $strSelectedTemplate = array_keys($arrAllTemplates)[1];
 if (isset($_GET['template']) && isset($arrAllTemplates[unscript($_GET['template'])])) {
@@ -64,11 +72,7 @@ if (isset($_GET['uuid'])) {
 	if (empty($_GET['template'])) {
 		// read vm-template attribute
 		$strTemplateOS = $lv->_get_single_xpath_result($res, '//domain/metadata/*[local-name()=\'vmtemplate\']/@os');
-		$strLibreELEC = $lv->_get_single_xpath_result($res, '//domain/metadata/*[local-name()=\'vmtemplate\']/@libreelec');
-		$strOpenELEC = $lv->_get_single_xpath_result($res, '//domain/metadata/*[local-name()=\'vmtemplate\']/@openelec');
-		if ($strLibreELEC) $strSelectedTemplate = 'LibreELEC';
-		elseif ($strOpenELEC) $strSelectedTemplate = 'OpenELEC';
-		elseif ($strTemplateOS) {
+		if ($strTemplateOS) {
 			$strSelectedTemplate = $lv->_get_single_xpath_result($res, '//domain/metadata/*[local-name()=\'vmtemplate\']/@name');
 		} else {
 			// legacy VM support for <6.2 but need it going forward too
@@ -85,54 +89,76 @@ if (isset($_GET['uuid'])) {
 	}
 	$arrLoad['form'] = $arrAllTemplates[$strSelectedTemplate]['form'];
 }
+$usertemplate = 0;
+$strSelectedTemplateUT = $strSelectedTemplate;
+if (strpos($strSelectedTemplate,"User-") !== false) { 
+	$strSelectedTemplateUT = str_replace("User-","",$strSelectedTemplateUT); 
+	$usertemplate = 1;
+}
 ?>
-<link type="text/css" rel="stylesheet" href="<?autov('/plugins/dynamix.vm.manager/styles/dynamix.vm.manager.css')?>">
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.filetree.css')?>">
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
+<link type="text/css" rel="stylesheet" href="<?autov('/plugins/dynamix.vm.manager/styles/dynamix.vm.manager.css')?>">
+<link type="text/css" rel="stylesheet" href="<?autov('/plugins/dynamix.vm.manager/styles/edit.css')?>">
 
-<span class="status advancedview_panel" style="margin-top:<?=$top?>px"><input type="checkbox" class="advancedview"></span>
 <div class="domain">
 	<form id="vmform" method="POST">
 	<input type="hidden" name="domain[type]" value="kvm" />
-	<input type="hidden" name="template[name]" value="<?=htmlspecialchars($strSelectedTemplate)?>" />
+	<input type="hidden" name="template[name]" value="<?=htmlspecialchars($strSelectedTemplateUT)?>" />
+	<input type="hidden" name="template[iconold]" value="<?=htmlspecialchars($arrLoad['icon'])?>" />
+
+	<table>
+		<tbody>
+			<tr>
+				<td>&nbsp;</td>
+				<td>
+					<span class="status advancedview_panel">
+						<input type="checkbox" class="inlineview">
+						<input type="checkbox" class="advancedview">
+					</span>
+				</td>
+			</tr>
+		</tbody>
+	</table>
 
 	<table>
 		<tr>
 			<td>_(Icon)_:</td>
-			<td>
+			<td class="template_img_parent">
 				<input type="hidden" name="template[icon]" id="template_icon" value="<?=htmlspecialchars($arrLoad['icon'])?>" />
 				<img id="template_img" src="<?=htmlspecialchars($strIconURL)?>" width="48" height="48" title="_(Change Icon)_..."/>
 				<div id="template_img_chooser_outer">
 					<div id="template_img_chooser">
 					<?
-						$arrImagePaths = [
-							"$docroot/plugins/dynamix.vm.manager/templates/images/*.png" => '/plugins/dynamix.vm.manager/templates/images/',
-							"$docroot/boot/config/plugins/dynamix.vm.manager/templates/images/*.png" => '/boot/config/plugins/dynamix.vm.manager/templates/images/'
-						];
-						foreach ($arrImagePaths as $strGlob => $strIconURLBase) {
-							foreach (glob($strGlob) as $png_file) {
-								echo '<div class="template_img_chooser_inner"><img src="'.$strIconURLBase.basename($png_file).'" basename="'.basename($png_file).'"><p>'.basename($png_file,'.png').'</p></div>';
-							}
+					$arrImagePaths = [
+						"$docroot/plugins/dynamix.vm.manager/templates/images/*.png" => '/plugins/dynamix.vm.manager/templates/images/',
+						"$docroot/boot/config/plugins/dynamix.vm.manager/templates/images/*.png" => '/boot/config/plugins/dynamix.vm.manager/templates/images/'
+					];
+					foreach ($arrImagePaths as $strGlob => $strIconURLBase) {
+						foreach (glob($strGlob) as $png_file) {
+							echo '<div class="template_img_chooser_inner"><img src="'.$strIconURLBase.basename($png_file).'" basename="'.basename($png_file).'"><p>'.basename($png_file,'.png').'</p></div>';
 						}
+					}
 					?>
 					</div>
 				</div>
 			</td>
+			<td></td>
+		</tr>
+		<tr>
+			<td>_(Autostart)_:</td>
+			<td>
+				<span class="width"><input type="checkbox" id="domain_autostart" name="domain[autostart]" style="display:none" class="autostart" value="1" <?if ($arrLoad['autostart']) echo 'checked'?>></span>
+			</td>
+			<td></td>
 		</tr>
 	</table>
 
-	<table>
-		<tr style="line-height: 16px; vertical-align: middle;">
-			<td>_(Autostart)_:</td>
-			<td><div style="margin-left:-10px;padding-top:6px"><input type="checkbox" id="domain_autostart" name="domain[autostart]" style="display:none" class="autostart" value="1" <?if ($arrLoad['autostart']) echo 'checked'?>></div></td>
-		</tr>
-	</table>
 	<blockquote class="inline_help">
 		<p>If you want this VM to start with the array, set this to yes.</p>
 	</blockquote>
 
 	<div id="form_content"><?eval('?>'.parse_file("$docroot/plugins/dynamix.vm.manager/templates/{$arrLoad['form']}",false))?></div>
-
 	</form>
 </div>
 
@@ -149,7 +175,21 @@ function isVMXMLMode() {
 	return ($.cookie('vmmanager_listview_mode') == 'xml');
 }
 
-$(function() {
+function isinlineXMLMode() {
+	return ($.cookie('vmmanager_inline_mode') == 'show');
+}
+
+function hidexml(checked) {
+	var form = document.getElementById("vmform"); // Replace "yourFormId" with the actual ID of your form
+	var xmlElements = form.getElementsByClassName("xml");
+	if (checked == 0) xmldisplay = "none"; else xmldisplay = "";
+	// Unhide each element
+	for (var i = 0; i < xmlElements.length; i++) {
+		xmlElements[i].style.display = xmldisplay; // Setting to empty string will revert to default style
+	}
+}
+
+$(function(){
 	$('.autostart').switchButton({
 		on_label: "_(Yes)_",
 		off_label: "_(No)_",
@@ -160,14 +200,24 @@ $(function() {
 	});
 
 	$('.advancedview').switchButton({
-		labels_placement: "left",
+		labels_placement: "right",
 		on_label: "_(XML View)_",
 		off_label: "_(Form View)_",
 		checked: isVMXMLMode()
 	});
+	$('.inlineview').switchButton({
+		labels_placement: "right",
+		off_label: "_(Hide inline xml)_",
+		on_label: "_(Show Inline XML)_",
+		checked: isinlineXMLMode()
+	});
 	$('.advancedview').change(function () {
 		toggleRows('xmlview', $(this).is(':checked'), 'formview');
 		$.cookie('vmmanager_listview_mode', $(this).is(':checked') ? 'xml' : 'form', { expires: 3650 });
+	});
+	$('.inlineview').change(function () {
+		hidexml($(this).is(':checked'));
+		$.cookie('vmmanager_inline_mode', $(this).is(':checked') ? 'show' : 'hide', { expires: 3650 });
 	});
 
 	$('#template_img').click(function (){
@@ -215,6 +265,7 @@ $(function() {
 	} else {
 		$('.advancedview_panel').fadeOut('fast');
 	}
+	hidexml(isinlineXMLMode());
 
 	$("#vmform #btnCancel").click(function (){
 		done();

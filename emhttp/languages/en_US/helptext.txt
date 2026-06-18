@@ -103,9 +103,9 @@ periodically to move user share files off the Cache and onto the Array.
 :end
 
 :boot_device_help:
-Vital array configuration is maintained on the USB Flash device; for this reason, it must remain
-plugged in to your server.  Click on [Flash](/Main/Flash?name=flash) to see the GUID and registration
-information, and to configure export settings.  Since the USB Flash device is formatted using FAT file system,
+Vital array configuration is maintained on the boot device; for this reason, it must remain
+plugged in to your server.  Click on [Boot Device](/Main/Boot?name=flash) to see the GUID and registration
+information, and to configure export settings.  Since the boot device is formatted using FAT file system,
 it may only be exported using SMB protocol.
 :end
 
@@ -256,7 +256,7 @@ Unraid OS uses these default options when creating a multiple-device pool:
 
 `-dconvert=raid1 -mconvert=raid1`
 
-For more complete documentation, please refer to the btrfs-balance [Manpage](https://btrfs.wiki.kernel.org/index.php/Manpage/btrfs-balance)
+For more complete documentation, please refer to the btrfs-balance [Manpage](https://man7.org/linux/man-pages/man8/btrfs-balance.8.html)
 
 *Note: raid5 and raid6 are generally still considered **experimental** by the Linux community*
 :end
@@ -269,7 +269,14 @@ For more complete documentation, please refer to the btrfs-balance [Manpage](htt
 **Scrub** runs the *btrfs scrub* program which will read all data and metadata blocks from all
 devices and verify checksums.
 
-If *Repair corrupted blocks* is checked, *btrfs scrub* will repair corrupted blocks if there’s a correct copy available.
+*btrfs scrub* will repair corrupted blocks if there is a correct copy available.
+:end
+
+:info_zfs_scrub_help:
+**Scrub** runs the *zfs scrub* program which will read all data and metadata blocks from all
+devices and verify checksums.
+
+Click the **Upgrade Pool** button to upgrade the ZFS pool to enable the latest ZFS features.
 :end
 
 :info_scrub_cancel_help:
@@ -281,6 +288,10 @@ If *Repair corrupted blocks* is checked, *btrfs scrub* will repair corrupted blo
 
 The *Options* field is initialized with *--readonly* which specifies check-only.  If repair is needed, you should run
 a second Check pass, setting the *Options* to *--repair*; this will permit *btrfs check* to fix the file system.
+
+WARNING: **Do not use** *--repair* unless you are advised to do so by a developer or an experienced user,
+and then only after having accepted that no fsck successfully repair all types of filesystem corruption.
+E.g. some other software or hardware bugs can fatally damage a volume.
 
 After starting a Check, you should Refresh to monitor progress and status.  Depending on
 how large the file system is, and what errors might be present, the operation can take **a long time** to finish (hours).
@@ -305,10 +316,6 @@ Not much info is printed in the window, but you can verify the operation is runn
 increasing for the device on the Main page.
 :end
 
-:info_reiserfs_cancel_help:
-**Cancel** will cancel the Check operation in progress.
-:end
-
 :info_xfs_check_help:
 **Check** will run the *xfs_repair* program to check file system integrity on the device.
 
@@ -321,8 +328,35 @@ Not much info is printed in the window, but you can verify the operation is runn
 increasing for the device on the Main page.
 :end
 
-:info_xfs_cancel_help:
-**Cancel** will cancel the Check operation in progress.
+:info_ext_check_help:
+**Check** will run the *e2fsck* program to check file system integrity on the device. Despite its name, *e2fsck* is used
+to check the whole family of ext2/ext3/ext4 file systems.
+
+For **Fix** the *Options* field is initialized with *-p* option to automatically fix any file system problems that can be safely fixed
+without intervention.  If a problem is discovered which may require additional corrective action, e2fsck will print a
+description of the problem and then exit.
+
+After starting a Check, you should monitor progress and status. Depending on how large the file system is, and what errors
+might be present, the operation can take a **long time** to finish (hours).
+Not much info is printed in the window, but you can verify the operation is running by observing the read/write counters
+increasing for the device on the Main page.
+:end
+
+:info_ntfs_check_help:
+**Check** will run the *ntfsfix* program to check file system integrity on the device. This utility fixes some common NTFS
+problems; however, it is NOT a Linux version of *chkdsk*. It only repairs some fundamental NTFS inconsistencies and resets
+the NTFS journal file. If you suspect file system corruption, we recommend using the Windows *chkdsk* utility.
+
+Note: *ntfsfix* will immediately exit if a hibernation file is detected (to prevent corruption).
+
+The *Options* field is initialized with *-d* to clear the volume dirty flag if the volume can be fixed and mounted.
+:end
+
+:info_exfat_check_help:
+**Check** will run the *fsck.exfat* program to check file system integrity on the device.
+
+For **Fix** the *Options* field is initialized with *-p* to repair the filesystem without user interaction if it can
+be done safely.
 :end
 
 :info_smart_notifications_help:
@@ -408,7 +442,7 @@ array or the cache disk/pool.
 :end
 
 :flash_backup_help:
-Use *Flash backup* to create a single zip file of the current contents of the flash device and store it locally on your computer.
+Use *Boot device backup* to create a single zip file of the current contents of the boot device and store it locally on your computer.
 :end
 
 :syslinux_cfg_help:
@@ -506,10 +540,9 @@ Select the desired destinations and press **Write** to copy the settings to the 
 :share_edit_name_help:
 The share name can be up to 40 characters, and is case-sensitive with these restrictions:
 
-* cannot contain a double-quote character (") or the following characters: / \ * < > |
-* cannot be one of the reserved share names: flash, cache, cache2, .., disk1, disk2, ..
-
-We highly recommend to make your life easier and avoid special characters.
+* must start with a letter
+* subsequent characters can be a letter, digit, period, underscore, or dash, except the last character may not be a period
+* cannot be one of the reserved names: homes, global, printers, flash, boot, user, user0, dev, remotes, RecycleBin, rootshare, addons, mirror, raidz*, draid, spare, log, disk*, parity*
 :end
 
 :share_edit_comments_help:
@@ -664,6 +697,8 @@ will *hide* the share from *browsing* but is still accessible if you know the sh
 :smb_time_machine_volume_help:
 This limits the reported volume size, preventing Time Machine from using the entire real disk space
 for backup.  For example, setting this value to "1024" would limit the reported disk space to 1GB.
+Note that Ventura 13.6 and later require a value to be present.  No entry will prevent Time Machine
+from working correctly.
 :end
 
 :smb_case_sensitive_names_help:
@@ -693,6 +728,12 @@ Summary of security modes:
 **Secure** All users including guests have read access, you select which of your users have write access.
 
 **Private** No guest access at all, you select which of your users have read/write, read-only access or no access.
+
+Windows Server Signing:
+
+If you are unable to browse SMB shares with Windows 11 version 24H2 or newer, you need to make some changes to accomodate a new feature called Server Signing.  Server Signing is enabled in Unraid and you need to make changes to access Public shares.
+You can <u><a href='https://techcommunity.microsoft.com/t5/storage-at-microsoft/accessing-a-third-party-nas-with-smb-in-windows-11-24h2-may-fail/ba-p/4154300' target='_blank'>disable it in Windows</a></u>, or to work with Unraid with Server Signing enabled, the easiest way is to create a user (with a password set) in Unraid with the same name as the Windows account you are using, Windows should then ask you for the credentials.
+If you are using a Microsoft account, it may be better to just create a user in Unraid with a simple username and set a password, then in Windows go to Control Panel -> Credential Manager -> Windows credentials -> Add a Windows Credential and add the correct Unraid server name and credentials.
 :end
 
 :smb_secure_access_help:
@@ -723,6 +764,15 @@ Select the desired share name and press **Read** to copy the NFS security settin
 *Write settings to* is used to copy the NFS security settings of the current selected share to one or more other existing shares.
 
 Select the desired destinations and press **Write** to copy the NFS security settings to the selected shares.
+:end
+
+:nfs_security_rules_help:
+Put the rule for each IP address on a separate line and terminate the Rule with a new line.
+You cannot enter a Rule in the format IP1,IP2(...).  Unraid does not format the exports file in that format.
+
+The default rules for every NFS Rule are - async and no_subtree_check.
+
+**Note:** The Public Rule used is '*(rw,sec=sys,insecure,anongid=100,anonuid=99,no_root_squash)'.
 :end
 
 :user_add_username_help:
@@ -890,6 +940,18 @@ Selects which kernel I/O scheduler to use for all array devices.
 Note: You must reboot after selecting Auto for setting to take effect.
 :end
 
+:disk_tunable_zfs_arc_max_help:
+Sets the ZFS ARC maximum size.
+
+Available modes:
+- **Unlimited (Dynamic)**: sets `zfs_arc_max=0`, allowing ARC to use as much memory as needed and release memory when the system requires it.
+- **10%..90% of memory**: uses a preset percentage of installed system memory.
+- **Custom value (GB)**: enter an explicit value in GB (limited to 90% of memory, rounded up to the next GB).
+
+When applied, the GB value is converted to bytes and written as `options zfs zfs_arc_max=...` in `/boot/config/modprobe.d/zfs.conf`.
+The running value is also applied to `/sys/module/zfs/parameters/zfs_arc_max` when available.
+:end
+
 :disk_tunable_md_num_stripes_help:
 This is the size of the *stripe pool* in number of *stripes*.  A *stripe* refers to a data structure that facilitates parallel 4K read/write
 operations necessary for a parity-protected array.
@@ -937,6 +999,18 @@ A value of zero will disable the warning threshold (including notifications).
 
 :disk_default_critical_temperature_help:
 *Critical disk temperature* sets the default critical threshold for all hard disks temperature. Exceeding this threshold will result in an alert notification.
+
+A value of zero will disable the critical threshold (including notifications).
+:end
+
+:ssd_default_warning_temperature_help:
+*Warning SSD temperature* sets the default warning threshold for all SSD devices temperature. Exceeding this threshold will result in a warning notification.
+
+A value of zero will disable the warning threshold (including notifications).
+:end
+
+:ssd_default_critical_temperature_help:
+*Critical disk temperature* sets the default critical threshold for all SSD devices temperature. Exceeding this threshold will result in an alert notification.
 
 A value of zero will disable the critical threshold (including notifications).
 :end
@@ -994,6 +1068,10 @@ Instead of chevrons indicating more data for Port and Volume mapping, all data i
 The time in seconds to allow a container to gracefully stop before forcing it to stop
 :end
 
+:docker_pid_limit_help:
+Set a PID Limit to limit the number of PIDs that a docker can use. The default is 2048.  Set to zero for unlimited PIDs (not recommended).
+:end
+
 :docker_vdisk_type_help:
 Select where to keep the Docker persistent state.
 
@@ -1018,6 +1096,15 @@ It is recommended to create this image file outside the array, e.g. on the Cache
 You must specify a folder for Docker. The system will automatically create this folder when the Docker service is first started.
 
 It is recommended to create this folder under a share which resides on the Cache pool (setting: cache=Only). For best performance SSD devices are preferred.
+:end
+
+:docker_storage_driver_help:
+overlay2 (default): Will use overlay2 as the storage driver for Docker, regardless of the underlying filesystem.
+
+native: The native storage driver for your underlying filesystem will be used (XFS: overlay2 | ZFS: zfs | BTRFS: btrfs).
+
+ATTENTION: Changing the storage type from an existing Docker installation is not possible, you have to delete your Docker directory first, change the storage type and then reinstall your containers.
+It is recommended to take a screenshot from your Docker containers before changing the storage type. After deleting and changing the storage type, reinstall the containers by clicking Add Container on the Docker page and select one by one from the drop down to reinstall them with your previous settings).
 :end
 
 :docker_appdata_location_help:
@@ -1101,6 +1188,10 @@ This is the active Docker version.
 This is the location of the Docker image.
 :end
 
+:docker_storage_driver_active_help:
+This is the storage driver for Docker.
+:end
+
 :docker_appdata_location_active_help:
 This is the storage location for Docker containers.
 :end
@@ -1159,7 +1250,7 @@ Enter the TELNET port, default port is 23.
 
 :mgmt_use_ssh_help:
 SSH is enabled by default and offers a secure way of CLI access. Upon system startup SSH keys are automatically generated
-if not yet existing, and stored on the flash device in the folder */config/ssh*.
+if not yet existing, and stored on the boot device in the folder */config/ssh*.
 :end
 
 :mgmt_ssh_port_help:
@@ -1189,7 +1280,7 @@ SSL certificate.  Use this URL to access your server:
 Note that use of a self-signed SSL certificate will generate a browser
 warning.
 
-Select **Strict** to enable *exclusive* use of an Unraid.net SSL
+Select **Strict** to enable *exclusive* use of a myunraid.net SSL
 certificate for https access (see **Provision** below).  Note that a DNS
 server must be reachable.
 
@@ -1252,11 +1343,19 @@ The Local Access URLs shown above are based on your current settings.
 To adjust URLs or redirects, see the help text for "Use SSL/TLS".
 :end
 
+:mgmt_wg_access_urls_help:
+These URLs will only work when connected via the appropriate WireGuard tunnel as configured on ***Settings > VPN Manager***
+:end
+
+:mgmt_tailscale_access_urls_help:
+These URLs will only work when connected to the appropriate Tailscale Tailnet.
+:end
+
 :mgmt_certificate_expiration_help:
-**Provision** may be used to install a *free* Unraid.net SSL Certificate from
+**Provision** may be used to install a *free* myunraid.net SSL Certificate from
 [Let's Encrypt](https://letsencrypt.org/).
 
-The Unraid.net SSL certificate can be used in two ways.  First,
+The myunraid.net SSL certificate can be used in two ways.  First,
 having the certificate present enables your server to respond to an
 alternate URL of the form:
 
@@ -1270,32 +1369,28 @@ set to `*.<hash>.myunraid.net` thus validating the https connection.
 You may enable this URL exclusively on your LAN by setting **Use
 SSL/TLS** to **Strict**.
 
-The second use for an Unraid.net certificate is to enable secure
-remote access available through the My Servers plugin feature.  Note
+The second use for a myunraid.net certificate is to enable secure
+remote access available through the Unraid Connect plugin feature.  Note
 that it is possible to use secure remote access in conjunction with
 insecure local access.
 
-After an Unraid.net SSL Certificate has been installed, two
-background services are activated while the server is signed in to unraid.net:
-
-- *updatedns* - This starts 30 seconds after server reboot has completed and contacts the Lime Technology
-DNS service to register the servers local IP address. Thereafter it wakes up every 10 minutes in case
-the local IP address has changed.
+After a myunraid.net SSL Certificate has been installed, a
+background service is activated:
 
 - *renewcert* - This starts 60 seconds after server reboot has completed and contacts the Lime Technology
-certificate renewal service to determine if your Unraid.net SSL certificate needs to be renewed.
+certificate renewal service to determine if your myunraid.net SSL certificate needs to be renewed.
 Thereafter it wakes up every 24 hours. If within 30 days of expiration, a new certificate is automatically
 provisioned and downloaded to your server.
 
-**Delete** may be used to delete the Unraid.net certificate file.
+**Delete** may be used to delete the myunraid.net certificate file.
 
 **nginx certificate handling details**
 
-nginx makes use of two certificate files stored on the USB flash boot device:<br>
+nginx makes use of two certificate files stored on the boot device:<br>
 
 - a self-signed certificate: `config/ssl/certs/<server-name>_unraid_bundle.pem`
 
-- an Unraid.net certificate: `config/ssl/certs/certificate_bundle.pem`
+- a myunraid.net certificate: `config/ssl/certs/certificate_bundle.pem`
 
 The self-signed SSL certificate file is automatically created when nginx
 starts; and re-created if the server hostname or local TLD is changed.
@@ -1309,7 +1404,7 @@ stabling is enabled.
 :end
 
 :ftp_server_help:
-Enable or disable the FTP server daemon. By default the FTP server is enabled.
+Enable or disable the FTP server daemon. By default the FTP server is disabled.
 This setting is not saved, i.e. upon system reboot it will revert to its default setting.
 :end
 
@@ -1418,6 +1513,20 @@ your client.  Be aware that setting a value of -1 will cause the memory footprin
 files/directories you access via NFS this may or may not lead to out-of-memory conditions.
 :end
 
+:nfs_server_max_protocol_help:
+Select the max NFS Protocol version you want your Unraid server to support.
+:end
+
+:nfs_client_max_protocol_help:
+Select the max NFS Protocol version you want to use to mount your remote shares.
+:end
+
+:nfs_threads_help:
+Set the number of threads for NFS.  For light NFS loads, 8 is sufficient. For heaver NFS loads, a higher number of threads might be appropriate.
+
+If there aren't enough threads, NFS will probably crash.
+:end
+
 :shares_enable_disk_help:
 If set to No, disk shares are unconditionally not exported.
 
@@ -1451,7 +1560,6 @@ provided the following conditions are met:
 * The Primary storage for a share is set to a pool.
 * The Secondary storage for a share is set to **none**.
 * The share exists on a single volume.
-* The share is **not** exported over NFS.
 
 The advantage of *exclusive* shares is that transfers bypass the FUSE layer which may significantly
 increase I/O performance.
@@ -1475,16 +1583,28 @@ This will increase write performance but might possibly decrease read performanc
 *Auto* selects No.
 :end
 
+:shares_fuse_file_descriptors_io_help:
+Set the number of fuse file descriptors.  With a lot of file activity on the array, you may need to increase this value.
+:end
+
 :syslog_local_server_help:
 Let the server act as a central syslog server and collect syslog messages from other systems.
 The server can listen on UDP, TCP or both with a selectable port number.
 
-Syslog information is stored per IP address. That is every system gets its own syslog file.
+Syslog information is stored either per IP address or per hostname. That is every system gets its own syslog file.
 :end
 
 :syslog_local_folder_help:
 Select the share folder where the syslogs will be stored.
 It is recommended that you use a share located on the cache drive to prevent array disk spinups.
+:end
+
+:syslog_remote_system_identifier_help:
+Select the identifier for the remote system (used in the logfile name). 
+
+* "IP Address" uses the IP address (IPv4 or IPv6) of the sending system.
+* "Hostname (from syslog message)" uses the hostname included in each syslog message.
+* "Hostname (from DNS reverse lookup)" performs a DNS reverse lookup for the sending IP and uses the result.
 :end
 
 :syslog_local_rotation_help:
@@ -1510,7 +1630,14 @@ This will send a copy of the syslog messages to the designated server.
 This setting is NO by default and must be used with care to avoid unnecessary wear and tear of the USB device.
 
 Change this setting to YES when troubleshooting is required and it is not possible to get the regular diagnostics information.
-A mirror of the syslog file is stored in the **logs** folder of the flash device.
+A mirror of the syslog file is stored in the **logs** folder of the boot device.
+:end
+
+:syslog_shutdown_flash_help:
+This setting is YES by default and enables the system to copy the syslog file to the USB device on shutdown or reboot.
+
+After rebooting, the syslog from this run will be visible on Tools > Syslog > syslog-previous;
+it will also be included in diagnostics as logs/syslog-previous.txt
 :end
 
 :confirm_reboot_help:
@@ -1583,6 +1710,10 @@ Selects the temperature unit for the disk temperature thresholds. Changing the u
 Make sure any newly entered values represent the selected temperature unit.
 :end
 
+:display_favorites_enabled_help:
+Enables favorite support. If set to no, will stop heart icon showing for additions. If existing favorites are saved, favorites tab and pre-saved options will still continue to show and function until all are deleted.
+:end
+
 :vms_enable_help:
 Stopping the VM Manager will first attempt to shutdown all running VMs. After 60 seconds, any remaining VM instances will be terminated.
 :end
@@ -1652,6 +1783,18 @@ NOTE: It's recommended to shut down guest VMs from within the VM.
 :vms_console_help:
 For setting the console options to show on context menus. Web will show only inbuild web clients(VNC and SPICE), 
 Virtual Manager Remote Viewer will only show the Remote Viewer option. Both will show both Web and Remote Viewer.
+:end
+
+:vms_rdpopt_help:
+Adds option to menu to start RDP. RDP file is downloaded. You need to set browser to open when ready.
+:end
+
+:vms_usage_help:
+Show metrics for CPU both guest and host percentage, memory, disk io and network io.
+:end
+
+:vms_usage_timer_help:
+Setting in seconds for metrics refresh time.
 :end
 
 :vms_acs_override_help:
@@ -1853,8 +1996,8 @@ The interface assignment rules can be changed here and might be necessary to set
 **eth0** is the main interface used to manage the Unraid system. The other interfaces are optional and may be used as desired.
 Every interface must be uniquely identified by its MAC (hardware) address.
 
-The interface assignment is stored on the flash device under */config/network-rules.cfg*. This file can be viewed with any editor, but it is recommended to make changes via the webGUI only.<br>
-Deleting the file *network-rules.cfg* from the flash device will restore automatic interface assignment after a system reboot.
+The interface assignment is stored on the boot device under */config/network-rules.cfg*. This file can be viewed with any editor, but it is recommended to make changes via the webGUI only.<br>
+Deleting the file *network-rules.cfg* from the boot device will restore automatic interface assignment after a system reboot.
 :end
 
 :eth_routing_table_help:
@@ -1918,6 +2061,10 @@ Enter the *device* which corresponds to your situation, only applicable when *UP
 + **dumb** - /dev/tty**
 + **pcnet** - ipaddr:username:passphrase:port. ipaddr is the IP address of the UPS management card. username and passphrase are the credentials for which the card has been configured. port is the port number on which to listen for messages from the UPS, normally 3052. If this parameter is empty or missing, the default of 3052 will be used
 + **modbus** - /dev/tty**
+:end
+
+:apc_ups_override_ups_capacity_help:
+If your device doesn't natively report Nominal Power (`NOMPOWER`) from `apcupsd`, but does report the Load Percentage (`LOADPCT`), you can manually define the UPS capacity rating in Watts (W) (this is the 'real power' value in Watts (W), not the 'apparent power' in Volt Amps (VA), and should be detailed on your UPS manual or product listing) and the plugin will dynamically calculate a virtual Nominal Power estimate (`≈`) by comparing the Override UPS Capacity (W) and the current Load Percentage. It is only an estimate, as it doesn't factor in things like the UPS' efficiency.
 :end
 
 :apc_battery_level_help:
@@ -2043,7 +2190,7 @@ Select the desired time format which is used in the notifications archive. Recom
 
 :notifications_store_flash_help:
 By default notifications are stored on RAM disk, which will get lost upon system reboot.
-Notifications may be stored permanently on the flash drive under folder '/boot/config/plugins/dynamix' instead.
+Notifications may be stored permanently on the boot drive under folder '/boot/config/plugins/dynamix' instead.
 :end
 
 :notifications_system_help:
@@ -2162,7 +2309,7 @@ Select a default template when it is the first time you are configuring this app
 
 **User-defined templates**<br>
 Once you've added an application to your system through a Default template,
-the settings you specified are saved to your USB flash device to make it easy to rebuild your applications in the event an upgrade were to fail or if another issue occurred.
+the settings you specified are saved to your boot device to make it easy to rebuild your applications in the event an upgrade were to fail or if another issue occurred.
 To rebuild, simply select the previously loaded application from the User-defined list and all the settings for the container will appear populated from your previous setup.
 Clicking create will redownload the necessary files for the application and should restore you to a working state.
 To delete a User-defined template, select it from the list above and click the red X to the right of it.
@@ -2236,6 +2383,154 @@ Generally speaking, it is recommended to leave this setting to its default value
 IMPORTANT NOTE:  If adjusting port mappings, do not modify the settings for the Container port as only the Host port can be adjusted.
 :end
 
+:docker_fixed_mac_help:
+Assigns the container's MAC address on the selected Docker network endpoint. Use a valid unicast MAC address; the first octet must be even, e.g. 02:42:9a:0d:7e:c0.
+
+This avoids using the legacy container-level --mac-address option in Extra Parameters.
+:end
+
+:docker_container_network_help:
+This allows your container to utilize the network configuration of another container. Select the appropriate container from the list.<br>This setup can be particularly beneficial if you wish to route your container's traffic through a VPN.
+:end
+
+:docker_tailscale_help:
+Enable Tailscale to add this container as a machine on your Tailnet.
+:end
+
+:docker_tailscale_hostname_help:
+Provide the hostname for this container. It does not need to match the container name, but it must be unique on your Tailnet. Note that an HTTPS certificate will be generated for this hostname, which means it will be placed in a public ledger, so use a name that you don't mind being public.
+For more information see <a href="https://tailscale.com/kb/1153/enabling-https" target="_blank">enabling https</a>.
+:end
+
+:docker_tailscale_be_exitnode_help:
+Enable this if other machines on your Tailnet should route their Internet traffic through this container, this is most useful for containers that connect to commercial VPN services. 
+Be sure to authorize this Exit Node in your <a href="https://login.tailscale.com/admin/machines" target="_blank">Tailscale Machines Admin Panel</a>.
+For more details, see the Tailscale documentation on <a href="https://tailscale.com/kb/1103/exit-nodes" target="_blank">Exit Nodes</a>.
+:end
+
+:docker_tailscale_exitnode_ip_help:
+Optionally route this container's outgoing Internet traffic through an Exit Node on your Tailnet. Choose the Exit Node or input its Tailscale IP address.
+For more details, see <a href="https://tailscale.com/kb/1103/exit-nodes" target="_blank">Exit Nodes</a>.
+:end
+
+:docker_tailscale_lanaccess_help:
+Only applies when this container is using an Exit Node. Enable this to allow the container to access the local network.
+
+<b>WARNING:</b>&nbsp;Even with this feature enabled, systems on your LAN may not be able to access the container unless they have Tailscale installed.
+:end
+
+:docker_tailscale_userspace_networking_help:
+When enabled, this container will operate in a restricted environment. Tailscale DNS will not work, and the container will not be able to initiate connections to other Tailscale machines. However, other machines on your Tailnet will still be able to communicate with this container.
+
+When disabled, this container will have full access to your Tailnet. Tailscale DNS will work, and the container can fully communicate with other machines on the Tailnet.
+However, systems on your LAN may not be able to access the container unless they have Tailscale installed.
+:end
+
+:docker_tailscale_ssh_help:
+Tailscale SSH is similar to the Docker "Console" option in the Unraid webgui, except you connect with an SSH client and authenticate via Tailscale.
+For more details, see the <a href="https://tailscale.com/kb/1193/tailscale-ssh" target="_blank">Tailscale SSH</a> documentation.
+:end
+
+:docker_tailscale_serve_mode_help:
+Enabling <b>Serve</b> will automatically reverse proxy the primary web service from this container and make it available on your Tailnet using https with a valid certificate! 
+
+Note that when accessing the <b>Tailscale WebUI</b> url, no additional authentication layer is added beyond restricting it to your Tailnet - the container is still responsible for managing usernames/passwords that are allowed to access it. Depending on your configuration, direct access to the container may still be possible as well.
+
+For more details, see the <a href="https://tailscale.com/kb/1312/serve" target="_blank">Tailscale Serve</a> documentation.
+
+If the documentation recommends additional settings for a more complex use case, enable "Tailscale Show Advanced Settings". Support for these advanced settings is not available beyond confirming the commands are passed to Tailscale correctly.
+
+<b>Funnel</b> is similar to <b>Serve</b>, except that the web service is made available on the open Internet. Use with care as the service will likely be attacked. As with <b>Serve</b>, the container itself is responsible for handling any authentication.
+
+We recommend reading the <a href="https://tailscale.com/kb/1223/funnel" target="_blank">Tailscale Funnel</a> documentation before enabling this feature.
+
+<b>Note:</b>&nbsp;Enabling <b>Serve</b> or <b>Funnel</b> publishes the Tailscale hostname to a public ledger.
+For more details, see the Tailscale Documentation: <a href="https://tailscale.com/kb/1153/enabling-https" target="_blank">Enabling HTTPS</a>.
+:end
+
+:docker_tailscale_serve_port_help:
+This field should specify the port for the primary web service this container offers. Note: it should specify the port in the container, not a port that was remapped on the host.
+
+The system attempted to determine the correct port automatically. If it used the wrong value then there is likely an issue with the "Web UI" field for this container, visible by switching from "Basic View" to "Advanced View" in the upper right corner of this page. 
+
+In most cases this port is all you will need to specify in order to Serve the website in this container, although additional options are available below for more complex containers.
+
+This value is passed to the `<serve_port>` portion of this command which starts serve or funnel:<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+:end
+
+:docker_tailscale_show_advanced_help:
+Here there be dragons!
+:end
+
+:docker_tailscale_serve_target_help:
+When not specified, this value defaults to http://localhost. It is passed to the `<serve_target>` portion of this command which starts serve or funnel:<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.<br>
+Please note that only `localhost` or `127.0.0.1` are supported.
+:end
+
+:docker_tailscale_serve_local_path_help:
+When not specified, this value defaults to an empty string. It is passed to the `<local_path>` portion of this command which starts serve or funnel:<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+:end
+
+:docker_tailscale_serve_protocol_help:
+When not specified, this value defaults to "https". It is passed to the `<protocol>` portion of this command which starts serve or funnel:<br>
+`tailscale [serve|funnel] --bg --<protocol>=<protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+:end
+
+:docker_tailscale_serve_protocol_port_help:
+When not specified, this value defaults to "=443". It is passed to the `<protocol_port>` portion of this command which starts serve or funnel:<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+:end
+
+:docker_tailscale_serve_path_help:
+When not specified, this value defaults to an empty string. It is passed to the `<path>` portion of this command which starts serve or funnel:<br>
+`tailscale [serve|funnel] --bg --<protocol><protocol_port><path> <serve_target>:<serve_port><local_path>`<br>
+For more details see the <a href="https://tailscale.com/kb/1242/tailscale-serve" target="_blank">Tailscale Serve Command Line</a> documentation.
+:end
+
+:docker_tailscale_serve_webui_help:
+If <b>Serve</b> is enabled this will be an https url with a proper domain name that is accessible over your Tailnet, no port needed!
+
+If <b>Funnel</b> is enabled the same url will be available on the Internet.
+
+If they are disabled then the url will be generated from the container's main "Web UI" field, but modified to use the Tailscale IP. If the wrong port is specified here then switch from "Basic View" to "Advanced View" and review the "Web UI" field for this container.
+:end
+
+:docker_tailscale_advertise_routes_help:
+If desired, specify any routes that should be passed to the **`--advertise-routes=`** parameter when running **`tailscale up`**.
+For more details see the <a href="https://tailscale.com/kb/1019/subnets#connect-to-tailscale-as-a-subnet-router" target="_blank">Subnet routers</a> documentation.
+:end
+
+:docker_tailscale_accept_routes_help:
+When enabled, this will accept your subnet routes from other devices, adding the **`--accept-routes`** parameter when running **`tailscale up`**.
+For more details see the <a href="https://tailscale.com/kb/1019/subnets?q=allow+routes#use-your-subnet-routes-from-other-devices" target="_blank">Use your subnet routes from other devices</a> documentation.
+:end
+
+:docker_tailscale_daemon_extra_params_help:
+Specify any extra parameters to pass when starting **`tailscaled`**.
+For more details see the <a href="https://tailscale.com/kb/1278/tailscaled" target="_blank">tailscaled</a> documentation.
+:end
+
+:docker_tailscale_extra_param_help:
+Specify any extra parameters to pass when running **`tailscale up`**.
+For more details see the <a href="https://tailscale.com/kb/1080/cli#up" target="_blank">Tailscale CLI</a> documentation.
+:end
+
+:docker_tailscale_statedir_help:
+If state directory detection fails on startup, you can specify a persistent directory in the container to override automatic detection, i.e. `/container-path/.tailscale_state`
+:end
+
+:docker_tailscale_troubleshooting_packages_help:
+Enable this to install `ping`, `nslookup`, `curl`, and `speedtest-cli` into the container to help troubleshoot networking issues. Once the issues are resolved we recommend disabling this to reduce the size of the container.
+:end
+
 :docker_privileged_help:
 For containers that require the use of host-device access directly or need full exposure to host capabilities, this option will need to be selected.
 For more information, see this link: <a href="https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities" target="_blank">https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities</a>
@@ -2254,6 +2549,11 @@ Devices you select will be bound to the vfio-pci driver at boot, which makes the
 &nbsp;<i class="fa fa-retweet grey-orb middle"></i>&nbsp;&nbsp;&nbsp;This symbol indicates the device supports FLR (Function Level Reset).
 
 <input type="checkbox" value="" disabled>&nbsp;&nbsp;If a checkbox is greyed out it means the device is in use by Unraid OS and can not be passed through.
+
+The right two columns display the current and maximum speeds and widths (or PCIe lanes). Downgraded speeds and widths will appear in orange.
+
+Filters have been added to enable device selection. When "Show all" is active, filters are not applied. Changing any filter will switch to "filtered" mode.
+The SRIOV filter displays all devices that support SR-IOV; enabling it will activate related switches as needed. Reverting to "Show all" will turn these filter switches off.
 :end
 
 :sysdevs_thread_pairings_help:
@@ -2277,7 +2577,7 @@ Unraid server SSL port for secure web traffic.
 :end
 
 :unraidnet_inactivespanel_help:
-Click Activate to set up a local git repo for your local USB Flash boot device and connect to a dedicated remote on unraid.net tied to this server.
+Click Activate to set up a local git repo for your local boot device and connect to a dedicated remote on unraid.net tied to this server.
 :end
 
 :unraidnet_changespanel_help:
@@ -2369,7 +2669,7 @@ Note to Cloudflare users: the Cloudflare proxy is designed for http traffic, it 
 
 :wg_local_server_uses_nat_help:
 When NAT is enabled, the server uses its own LAN address when forwarding traffic from the tunnel to other devices in the LAN network.
-Use this setting when no router modifications are desired, but this approach doesn't work with Docker containers using custom IP addressess.
+Use this setting when no router modifications are desired, but this approach doesn't work with Docker containers using custom IP addresses.
 
 When NAT is disabled, the server uses the WireGuard tunnel address when forwarding traffic.
 In this case it is required that the default gateway (router) has a static route configured to refer tunnel address back to the server.
@@ -2442,7 +2742,7 @@ This page displays all the drivers available on this system. Filter the list acc
 
 Any 3rd party driver installed by a plugin will have a support symbol next to it, click this to get support for the plugin.
 
-Click the edit button to add/modify/delete any modprobe.d config file in the config/modprobe.d directory on the flash drive.
+Click the edit button to add/modify/delete any modprobe.d config file in the config/modprobe.d directory on the boot drive.
 :end
 
 :console_keyboard_help:
@@ -2463,4 +2763,50 @@ If set to 'Yes' the bash history will persist reboots, set to 'No' to disable.
 **ATTENTION:** The bash history will be written to the USB Boot device so this will introduce higher wear and tear!
 
 **Note:** Disabling and Enabling will remove the entire bash history.
+:end
+
+:WOL_intro_help:
+This page allows the setup to start/resume and stop VMs, Containters(Docker and LXC) using WOL magic packets
+
+It does not setup wake up of the Unraid server.
+
+The process will look for the defined mac address defined within the service(VM or container) with the exception of dockers. Dockers do not have a mac address until they are running so you will need to define a user mac address to allow you to start them
+
+If the service is paused a WOL Packet will resume. 
+
+For each service you can set: enable, disable or enable and shutdown
+
+When the enable and shutdown is set if the service is running when the next WOL packet is recieved a shutdown will be performed.
+:end
+
+:WOL_enable_help:
+If set to yes Unraidwold daemon is set to run.
+:end
+
+:WOL_run_docker_help:
+If set to yes when wake on lan packets are received checks are carrried out for dockers otherwise dockers will be ignored.
+:end
+
+:WOL_run_VM_help:
+If set to yes when wake on lan packets are received checks are carrried out for virtual machines otherwise virtual machines will be ignored.
+:end
+
+:WOL_run_LXC_help:
+If set to yes when wake on lan packets are received checks are carrried out for LXC otherwise LXC will be ignored. The LXC plugin needs to be installed for LXC to be processed.
+:end
+
+:WOL_run_shutdown_help:
+If set to yes when wake on lan packets are received checks are carrried out and if enabled for service and that service is running the entity will be shutdown. System has to be set to Enabled and Shutdwon for it to be action.
+:end
+
+:WOL_interface_help:
+Specify the interface to the daemon to bind to. Some interfaces may not be able to recieve etherframe packets. Recommend to bind to a physical interface.
+:end
+
+:WOL_promiscuous_mode_help:
+Enable to set the NIC not to filer packets.
+:end
+
+:WOL_log_file_help:
+Default is to log to syslog but if you want a different log location set the file name.
 :end

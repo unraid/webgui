@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2024, Lime Technology
+ * Copyright 2012-2024, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -24,47 +24,42 @@ require_once "$docroot/webGui/include/Translations.php";
 $file = $argv[1];
 $path = realpath('/etc/wireguard'.($argv[2]??''));
 $root = '/boot/config/wireguard';
+?>
+<style>
+pre h2{text-decoration:underline}
+input#download{margin:0 0 10px 0}
+pre.config{font-family:bitstream;margin:0;border:none}
+img{display:block;margin:20px 0}
+img:hover{transform:scale(1.1)}
+</style>
 
-$style = ["<style>"];
-$style[] = "pre h2{text-decoration:underline}";
-$style[] = "input#download{margin:0 0 10px 0}";
-$style[] = "pre.config{font-family:bitstream;margin:0;border:none}";
-$style[] = "img{display:block;margin:20px 0}";
-$style[] = "img:hover{transform:scale(1.1)}";
-$style[] = "</style>";
+<script>
+function config_cleanUp(id,file) {
+  if (document.hasFocus()) {
+    $('#'+id).val("<?=_('Download')?>").prop('disabled',false);
+    $.post('/webGui/include/Download.php',{cmd:'delete',file:file});
+  } else {
+    setTimeout(function(){config_cleanUp(id,file);},1000);
+  }
+}
+function config_download(id,source,file) {
+  $('#'+id).val("<?=_('Downloading')?>...").prop('disabled',true);
+  $.post('/webGui/include/Download.php',{cmd:'save',source:source+'.conf',file:file,opts:'qj'},function(){
+    $.post('/webGui/include/Download.php',{cmd:'save',source:source+'.png',file:file,opts:'qj'},function(zip){
+      location = zip;
+      setTimeout(function(){config_cleanUp(id,file);},1000);
+    });
+  });
+}
+</script>
 
-$script = ["<script>"];
-$script[] = "function config_cleanUp(id,file) {";
-$script[] = "  if (document.hasFocus()) {";
-$script[] = "    $('#'+id).val(\""._('Download')."\").prop('disabled',false);";
-$script[] = "    $.post('/webGui/include/Download.php',{cmd:'delete',file:file});";
-$script[] = "  } else {";
-$script[] = "    setTimeout(function(){config_cleanUp(id,file);},1000);";
-$script[] = "  }";
-$script[] = "}";
-$script[] = "function config_download(id,source,file) {";
-$script[] = "  $('#'+id).val(\""._('Downloading')."...\").prop('disabled',true);";
-$script[] = "  $.post('/webGui/include/Download.php',{cmd:'save',source:source+'.conf',file:file,opts:'qj'},function(){";
-$script[] = "    $.post('/webGui/include/Download.php',{cmd:'save',source:source+'.png',file:file,opts:'qj'},function(zip){";
-$script[] = "      location = zip;";
-$script[] = "      setTimeout(function(){config_cleanUp(id,file);},1000);";
-$script[] = "    });";
-$script[] = "  });";
-$script[] = "}";
-$script[] = "</script>";
-
-$html = [];
-$html[] = "<h2>".($argv[2] ? _('Remote peer configuration') : _('Local server configuration'))."</h2>";
-$html[] = "<div><input type='button' id='download' value=\""._('Download')."\" onclick=\"config_download(this.id,'$path/$file','$file.zip')\"></div>";
-$html[] = "<pre class='config'>";
-$html[] = @file_get_contents("$path/$file.conf");
-$html[] = "\n";
-$html[] = "</pre>";
+<h2><?=$argv[2] ? _('Remote peer configuration') : _('Local server configuration')?></h2>
+<div><input type='button' id='download' value="<?=_('Download')?>" onclick="config_download(this.id,'<?="$path/$file"?>','<?=$file?>.zip')"></div>
+<pre class='config'><?=@file_get_contents("$path/$file.conf")?></pre>
+<?
 if (is_file("$path/$file.png")) {
   @unlink("$docroot/$file.png");
   symlink("$path/$file.png", "$docroot/$file.png");
-  $html[] = "<img src=\"/$file.png?v=".filemtime("$path/$file.png")."\">";
+  echo "<img src=\"/$file.png?v=",filemtime("$path/$file.png"),"\">";
 }
-
-echo implode($style),implode($script),implode($html);
 ?>

@@ -30,6 +30,8 @@ DAEMON="Avahi mDNS/DNS-SD daemon"
 CALLER="avahi"
 AVAHI="/usr/sbin/avahi-daemon"
 CONF="/etc/avahi/avahi-daemon.conf"
+HOSTS="/etc/hosts"
+NAME=$(hostname -s)
 
 # run & log functions
 . /etc/rc.d/rc.runlog
@@ -47,6 +49,22 @@ enable(){
 
 disable(){
   sed -ri "s/^#?(use-$1)=.*/\1=no/" $CONF
+}
+
+# add name.local to the hosts file
+add_local_to_hosts(){
+  local OLD="^127\.0\.0\.1.*"
+  local NEW="127.0.0.1 $NAME $NAME.local localhost"
+  sed -i "s/$OLD/$NEW/" $HOSTS
+  return 0
+}
+
+# remove name.local from the hosts file
+remove_local_from_hosts(){
+  local OLD="^127\.0\.0\.1.*"
+  local NEW="127.0.0.1 $NAME localhost"
+  sed -i "s/$OLD/$NEW/" $HOSTS
+  return 0
 }
 
 avahid_running(){
@@ -67,7 +85,7 @@ avahid_start(){
       [[ $IPV4 == no ]] && disable ipv4 || enable ipv4
       [[ $IPV6 == no ]] && disable ipv6 || enable ipv6
       run $AVAHI -D
-      if avahid_running; then REPLY="Started"; else REPLY="Failed"; fi
+      if avahid_running; then add_local_to_hosts && REPLY="Started"; else REPLY="Failed"; fi
     else
       REPLY="Bind failed"
     fi
@@ -82,7 +100,7 @@ avahid_stop(){
     REPLY="Already stopped"
   else
     run $AVAHI -k
-    if ! avahid_running; then REPLY="Stopped"; else REPLY="Failed"; fi
+    if ! avahid_running; then remove_local_from_hosts && REPLY="Stopped"; else REPLY="Failed"; fi
   fi
   log "$DAEMON...  $REPLY."
 }
@@ -95,14 +113,26 @@ avahid_restart(){
 }
 
 avahid_reload(){
-  $AVAHI -k 2>/dev/null
-  avahid_start >/dev/null
+  if avahid_running; then
+    add_local_to_hosts
+    $AVAHI --reload 2>/dev/null
+  fi
 }
 
 avahid_update(){
-  # 0 = update needed, 1 = no action
-  if ! avahid_running; then exit 1; fi
-  if check && [[ "$(this allow-interfaces)" == "$BIND" ]]; then exit 1; else exit 0; fi
+  if avahid_running; then
+    # only restart a running daemon when the computed bind list changed
+    if check && [[ "$(this allow-interfaces)" != "$BIND" ]]; then
+      log "Updating $DAEMON..."
+      avahid_restart # note we need restart here, not reload in order to update interfaces
+    fi
+  else
+    # recover daemon when interfaces are back, even if config already matches computed bind list
+    if check && [[ -n $BIND ]]; then
+      log "Recovering $DAEMON..."
+      avahid_start # handle case where avahi-daemon exited because no suitable interfaces
+    fi
+  fi
 }
 
 avahid_status(){

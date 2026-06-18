@@ -1,5 +1,74 @@
 #!/bin/bash
 
+# Useful to delete a docker runtime diretory. In case of btrfs storage driver, handles deletion of btrfs
+# subvolumes used to store image layers. Similarly, in caes of zfs storage driver, handles deletion of
+# zfs datasets used to store image layers. Assumes dockerd is not running.
+
+# Note: If the $target diretory is spit across multiple volumes, this operation is a no-op.
+
+# Caution: in case of 'native' zfs storage driver which uses datasets to store layers, $target is irrelevant
+# because datasets are not listed under directories.  This script will destroy *all* legacy datasets in the
+# volume.  For example, consider two directories on same volume:
+
+#  /mnt/cache/docker
+#  /mnt/cache/docker-backup
+
+# Each directory holds a valid docker tree structure, maybe 'docker' is current and 'docker-backup' is
+# a backup.  User decides he no loner needs 'docker-backup' so he invokes this script.  The result will be
+# that not only will /mnt/cache/docker-backup be deleted, but all datasets belonging to /mnt/cache/docker
+# will also be deleted.  This is because we cannot tell which datasets belong with which docker instance.
+
+# If /mnt/cache/docker and /mnt/cache/docker-backup were themselves datasets, then we would be able to, but
+# this is not implemented here.
+
+dereference() {
+  local DIR=$1
+  # if directory is on user share, attempt to dereference
+  if [[ "$DIR" == /mnt/user/* ]]; then
+    # getfattr would return blank if /mnt/user/<share> is a bind-mount
+    local DISK=$(getfattr -n system.LOCATIONS --absolute-names --only-values "$DIR" 2>/dev/null)
+    if [[ -n "$DISK" ]]; then
+      # whitespace in $DISK would exist if $target is split across multiple volumes
+      [[ ! "$DISK" =~ [[:space:]] ]] && DIR="${DIR/user/$DISK}" || DIR=""
+    fi
+  fi
+  echo "$DIR"
+}
+
+rm_docker() {
+  local target="${1%/}"
+
+  # sanity check that this is a docker folder
+  if [[ ! -d "$target/containerd" ]]; then
+    echo "docker_rm: $target is not a docker folder"
+    exit 1
+  fi
+
+  # dereference folder on user share
+  target=$(dereference "$target")
+  if [[ -z "$target" ]]; then
+    echo "docker_rm: $target is split across multiple volumes"
+    exit 1
+  fi
+
+  if [[ -d "$target/btrfs/subvolumes" ]]; then
+    # delete btrfs subvolumes
+    for subvol in "$target/btrfs/subvolumes/"*; do
+      btrfs subvolume delete -cR "$subvol"
+    done
+  elif [[ -d "$target/zfs" ]]; then
+    # destroy zfs 'legacy' datasets
+    zfs list -rHo name,mountpoint "$target" 2>/dev/null | awk '$2 == "legacy" {print $1}' | while read -r dataset; do
+      echo "docker_rm: zfs destroy -R $dataset"
+      zfs destroy -R "$dataset"
+    done
+  fi
+
+  # delete files and directories
+  echo "docker_rm: rm -rf $target"
+  rm -rf "$target"
+}
+
 # delete the docker image file or folder
 if [[ -f /boot/config/docker.cfg ]]; then
   rm -f /var/local/emhttp/plugins/dynamix.docker.manager/docker.json
@@ -9,6 +78,6 @@ if [[ -f /boot/config/docker.cfg ]]; then
     rm -f "$DOCKER_IMAGE_FILE"
   elif [[ -d $DOCKER_IMAGE_FILE ]]; then
     echo "Deleting $DOCKER_IMAGE_FILE ..."
-    rm -rf "$DOCKER_IMAGE_FILE"
+    rm_docker "$DOCKER_IMAGE_FILE"
   fi
 fi

@@ -10,9 +10,9 @@ BASENAME=$(basename "$0")
 
 run(){
   # log command to syslog
-  /usr/bin/logger -t $BASENAME -- "$*"
+  /usr/bin/logger -t $BASENAME -- "$@"
   # run command - dismiss all output
-  $* &>/dev/null
+  "$@" &>/dev/null
 }
 
 log(){

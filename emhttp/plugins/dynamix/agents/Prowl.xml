@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+  <Agent>
+    <Name>Prowl</Name>
+    <Variables>
+      <Variable Help="Get your api key as explained [a href='https://www.prowlapp.com/api_settings.php' target='_blank'][u]here[/u].[/a]" Desc="Api Key" Default="">API_KEY</Variable>
+      <Variable Help="Application name, e.g., Unraid Server." Desc="Application Name" Default="Unraid Server">APP_NAME</Variable>
+      <Variable Help="Specify the fields which are included in the title of the notification." Desc="Notification Title" Default="$SUBJECT">TITLE</Variable>
+      <Variable Help="Specify the fields which are included in the message body of the notification." Desc="Notification Message" Default="$DESCRIPTION">MESSAGE</Variable>
+    </Variables>
+    <Script>
+      <![CDATA[
+      #!/bin/bash
+      ############
+      {0}
+      ############
+      TITLE=$(echo -e "$TITLE")
+      MESSAGE=$(echo -e "$MESSAGE")
+
+      case "$IMPORTANCE" in
+      'normal' )
+      PRIORITY="0"
+      ;;
+      'warning' )
+      PRIORITY="1"
+      ;;
+      'alert' )
+      PRIORITY="2"
+      ;;
+      esac
+
+      curl -s -k \
+      -F "apikey=$API_KEY" \
+      -F "application=$APP_NAME" \
+      -F "event=$TITLE" \
+      -F "description=$MESSAGE" \
+      -F "priority=$PRIORITY" \
+      https://api.prowlapp.com/publicapi/add 2>&1
+      ]]>
+    </Script>
+  </Agent>

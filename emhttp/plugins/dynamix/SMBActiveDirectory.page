@@ -15,38 +15,43 @@ Cond="($var['shareSMBEnabled']=='ads')"
  * all copies or substantial portions of the Software.
  */
 ?>
+<?php
+$adJoined = $var['joinStatus'] == "Joined";
+?>
 <form markdown="1" name="JoinOps" method="POST" action="/update.htm" target="progressFrame">
 _(AD join status)_:
 : <?=$var['joinStatus'];?>&nbsp;
 
 _(AD domain name)_ (FQDN):
-: <input type="text" name="DOMAIN" maxlength="80" value="<?=htmlspecialchars($var['DOMAIN'])?>">
+: <input type="text" name="DOMAIN" maxlength="80" value="<?=htmlspecialchars(_var($var['DOMAIN']))?>">
 
 _(AD short domain name)_:
-: <input type="text" name="DOMAIN_SHORT" maxlength="40" value="<?=htmlspecialchars($var['DOMAIN_SHORT'])?>">
+: <input type="text" name="DOMAIN_SHORT" maxlength="40" value="<?=htmlspecialchars(_var($var['DOMAIN_SHORT']))?>">
 
 _(AD account login)_:
-: <input type="text" name="DOMAIN_LOGIN" maxlength="40" value="<?=htmlspecialchars($var['DOMAIN_LOGIN'])?>">
+: <input type="text" name="DOMAIN_LOGIN" maxlength="40" value="<?=htmlspecialchars(_var($var['DOMAIN_LOGIN']))?>">
 
 _(AD account password)_:
-: <input type="password" name="DOMAIN_PASSWD" maxlength="40" value="<?=htmlspecialchars($var['DOMAIN_PASSWD'])?>">
+: <input type="password" name="DOMAIN_PASSWD" maxlength="40" value="<?=htmlspecialchars(_var($var['DOMAIN_PASSWD']))?>">
 
 &nbsp;
-: <?if ($var['joinStatus']=="Joined"):?>
-  <input type="submit" name="cmdJoinDomain" value="_(Join)_" disabled><input type="submit" name="cmdLeaveDomain" value="_(Leave)_">
-  <?else:?>
-  <input type="submit" name="cmdJoinDomain" value="_(Join)_"><input type="submit" name="cmdLeaveDomain" value="_(Leave)_" disabled>
-  <?endif;?>
+: <span class="inline-block">
+    <input type="submit" name="cmdJoinDomain" value="_(Join)_" <?=$adJoined ? "disabled" : "";?>>
+    <input type="submit" name="cmdLeaveDomain" value="_(Leave)_" <?=$adJoined ? "" : "disabled";?>>
+  </span>
 </form>
-<br>
+
 
 <form markdown="1" name="shareOwnership" method="POST" action="/update.htm" target="progressFrame">
 _(AD initial owner)_:
-: <input type="text" name="shareInitialOwner" maxlength="40" value="<?=htmlspecialchars($var['shareInitialOwner'])?>">
+: <input type="text" name="shareInitialOwner" maxlength="40" value="<?=htmlspecialchars(_var($var['shareInitialOwner']))?>">
 
 _(AD initial group)_:
-: <input type="text" name="shareInitialGroup" maxlength="40" value="<?=htmlspecialchars($var['shareInitialGroup'])?>">
+: <input type="text" name="shareInitialGroup" maxlength="40" value="<?=htmlspecialchars(_var($var['shareInitialGroup']))?>">
 
 &nbsp;
-: <input type="submit" name="changeShare" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+: <span class="inline-block">
+    <input type="submit" name="changeShare" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
 </form>

@@ -26,7 +26,7 @@
 #			cgroups to classify processes
 ### END INIT INFO
 
-sbindir=${exec_prefix}/sbin
+sbindir=/usr/sbin
 CGRED_BIN=$sbindir/cgrulesengd
 
 # Sanity checks
@@ -35,7 +35,7 @@ CGRED_BIN=$sbindir/cgrulesengd
 #
 # Source LSB routines
 #
-SYSLIBFILE=/etc/rc.d/init.d/functions
+SYSLIBFILE=/lib/lsb/init-functions
 OLDSYSLIBFILE=/etc/init.d/functions
 if [[ -x  $SYSLIBFILE ]] ; then
   # shellcheck disable=SC1090
@@ -53,9 +53,9 @@ else
 fi
 
 # Read in configuration options.
-if [[ -f "/etc/cgred.conf" ]] ; then
+if [[ -f "/etc/sysconfig/cgred.conf" ]] ; then
 	# shellcheck disable=SC1091
-	source /etc/cgred.conf
+	source /etc/sysconfig/cgred.conf
 	OPTIONS="$NODAEMON $LOG"
 	if [[ -n "$LOG_FILE" ]]; then
 		OPTIONS="$OPTIONS --logfile=$LOG_FILE"
@@ -80,13 +80,13 @@ start()
 {
 	echo -n $"Starting CGroup Rules Engine Daemon: "
 	if [[ -f "$lockfile" ]]; then
-		echo "$servicename is already running with PID $(cat ${pidfile})"
+		log_failure_msg "$servicename is already running with PID $(cat ${pidfile})"
 		return 0
 	fi
 	num=$(grep "cgroup" /proc/mounts | awk '$3=="cgroup"' | wc -l)
 	if [[ "$num" -eq 0 ]]; then
 		echo
-		echo $"Cannot find cgroups, is cgconfig service running?"
+		log_failure_msg $"Cannot find cgroups, is cgconfig service running?"
 		return 1
 	fi
 	daemon --check $servicename --pidfile $pidfile $CGRED_BIN $OPTIONS
@@ -106,7 +106,7 @@ stop()
 {
 	echo -n $"Stopping CGroup Rules Engine Daemon..."
 	if [[ ! -f $pidfile ]]; then
-		#log_success_msg
+		log_success_msg
 		return 0
 	fi
 	killproc -p $pidfile -TERM "$processname"
@@ -152,13 +152,13 @@ case "$1" in
 			echo $"Reloading rules configuration..."
 			kill -s 12 "$(cat ${pidfile})"
 			RETVAL=$?
-			#if [[ $RETVAL -eq 0 ]] ; then
-			#	log_success_msg ""
-			#else
-			#	log_failure_msg ""
-			#fi
+			if [[ $RETVAL -eq 0 ]] ; then
+				log_success_msg ""
+			else
+				log_failure_msg ""
+			fi
 		else
-			echo "$servicename is not running."
+			log_failure_msg "$servicename is not running."
 		fi
 		;;
 	*)

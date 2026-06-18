@@ -15,22 +15,28 @@ Tag="code"
  * all copies or substantial portions of the Software.
  */
 ?>
+<?
+$globals = [];
+$names   = ['_SERVER','devs','disks','sec','sec_nfs','shares','users','var'];
+foreach ($names as $name) $globals[$name] = $$name;
+// show outgoing proxy information, is in the environment but not a superglobal
+$globals['environment'] = ['http_proxy' => getenv('http_proxy'), 'no_proxy' => getenv('no_proxy')];
+?>
 <?if (_var($display,'resize')):?>
 <script>
-function resize() {
-  $('pre.up').height(Math.max(window.innerHeight-320,330));
-}
 $(function() {
-  resize();
-  $(window).bind('resize',function(){resize();});
+  fillAvailableHeight({
+    targetElementSelector: '.js-fill-available-height',
+    elementSelectorsForHeight: [
+      '.js-actions',
+    ],
+  });
 });
 </script>
 <?endif;?>
-<?
-$myPage['text'] = $page['text'] = $pages['Vars']['text'] = $language = $text = $notes = $site = $webComponentTranslations = '...';
-$globals = $GLOBALS;
-ksort($globals);
-if (isset($globals['_SERVER']['PHP_AUTH_PW'])) $globals['_SERVER']['PHP_AUTH_PW'] = "***";
-echo "<pre class='up'>",htmlspecialchars(print_r($globals,true)),"</pre>";
-?>
-<input type="button" value="_(Done)_" onclick="done()">
+
+<pre class='js-fill-available-height up'><?= htmlspecialchars(print_r($globals,true));?></pre>
+
+<div class="js-actions">
+  <input type="button" value="_(Done)_" onclick="done()">
+</div>

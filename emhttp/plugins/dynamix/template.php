@@ -30,13 +30,13 @@ require_once "$docroot/webGui/include/Helpers.php";
 extract(parse_plugin_cfg('dynamix',true));
 
 // Read emhttp status
-$var     = (array)@parse_ini_file('state/var.ini');
-$sec     = (array)@parse_ini_file('state/sec.ini',true);
 $devs    = (array)@parse_ini_file('state/devs.ini',true);
 $disks   = (array)@parse_ini_file('state/disks.ini',true);
-$users   = (array)@parse_ini_file('state/users.ini',true);
-$shares  = (array)@parse_ini_file('state/shares.ini',true);
+$sec     = (array)@parse_ini_file('state/sec.ini',true);
 $sec_nfs = (array)@parse_ini_file('state/sec_nfs.ini',true);
+$shares  = (array)@parse_ini_file('state/shares.ini',true);
+$users   = (array)@parse_ini_file('state/users.ini',true);
+$var     = (array)@parse_ini_file('state/var.ini');
 
 // Merge SMART settings
 require_once "$docroot/webGui/include/CustomMerge.php";
@@ -46,6 +46,11 @@ $pool_devices = false;
 $pools = pools_filter($disks);
 foreach ($pools as $pool) $pool_devices |= _var($disks[$pool],'devices')!='';
 
+// Pool devices
+$bootpool_devices = false;
+$bootpools = flash_filter($disks);
+foreach ($bootpools as $bootpool) $bootpool_devices |= _var($disks[$bootpool],'devices')!='';
+
 // Read network settings
 extract(parse_ini_file('state/network.ini',true));
 
@@ -53,6 +58,9 @@ extract(parse_ini_file('state/network.ini',true));
 $_SESSION['locale'] = _var($display,'locale');
 $_SESSION['buildDate'] = date('Ymd',_var($var,'regBuildTime'));
 require_once "$docroot/webGui/include/Translations.php";
+
+// Dynamic Boot page title based on internal boot pool presence
+$boot_device_title = $bootpool_devices ? _('Boot Pool') : _('Boot Device');
 
 // Build webGui pages first, then plugins pages
 require_once "$docroot/webGui/include/PageBuilder.php";
@@ -63,12 +71,24 @@ foreach (glob('plugins/*', GLOB_ONLYDIR) as $plugin) {
 }
 
 // Get general variables
-$name = untangle(_var($_GET,'name'));
+$name = rawurldecode(_var($_GET,'name'));
 $dir  = rawurldecode(_var($_GET,'dir'));
 $path = substr(strtok(_var($_SERVER,'REQUEST_URI'),'?'),1);
 
 // The current "task" is the first element of the path
 $task = strtok($path,'/');
+
+// Add translation for favorites page
+if ($locale && $task=='Favorites') {
+  foreach(['settings','tools'] as $more) {
+    $text = "$docroot/languages/$locale/$more.txt";
+    if (!file_exists($text)) continue;
+    // additional translations
+    $store = "$docroot/languages/$locale/$more.dot";
+    if (!file_exists($store)) file_put_contents($store,serialize(parse_lang_file($text)));
+    $language = array_merge($language,unserialize(file_get_contents($store)));
+  }
+}
 
 // Here's the page we're rendering
 $myPage   = $site[basename($path)];

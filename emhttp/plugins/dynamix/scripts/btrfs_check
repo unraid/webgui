@@ -1,28 +1,12 @@
 #!/bin/bash
-# btrfs_check start <dev> <id> <options> 
+# btrfs_check start <dev> <id> <options>
 # btrfs_check status <dev> <id>
 # btrfs_check cancel <dev> <id>
+# btrfs_check reset <mountpoint>
 
-# by default btrfs-check outputs to /var/lib/btrfs
-mkdir -p /var/lib/btrfs
-case "$1" in
-'start')
-  exec /sbin/btrfs check $4 $2 &> /var/lib/btrfs/check.status.$3 &
-;;
-'status')
-  if [ -f /var/lib/btrfs/check.status.$3 ]; then
-    cat /var/lib/btrfs/check.status.$3
-  else
-    echo "Not available"
-  fi;
-  # establish retval of this script: 0 running, 1 not running
-  pgrep -f "/sbin/btrfs check .*$2" >/dev/null
-;;
-'cancel')
-  pkill -f "/sbin/btrfs_check.*$2"
-  while pgrep -f "/sbin/btrfs check .*$2" >/dev/null ; do
-    sleep 1
-  done
-  echo "Cancelled" >> /var/lib/btrfs/check.status.$3
-;;
-esac
+FSCK="/sbin/btrfs check"
+
+[[ $1 == reset ]] && exec /sbin/btrfs device stats -z "$2"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/check.source"

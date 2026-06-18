@@ -58,23 +58,42 @@ effect of making it ***impossible*** to rebuild an existing failed drive - you h
 :end
 
 <hr>
-<form name="newConfig" method="POST" action="/update.htm" target="progressFrame" onsubmit="prepareNewConfig(this)">
+<form markdown="1" name="newConfig" method="POST" action="/update.htm" target="progressFrame" onsubmit="prepareNewConfig(this)">
 <input type="hidden" name="preserveArray" value="yes" disabled>
 <input type="hidden" name="preserveCache" value="yes" disabled>
 
-<span class="indent">_(Preserve current assignments)_:</span>
-<select id="s1" name="preset" multiple="multiple" style="display:none">
-<option value=''>_(All)_</option>
-<?=mk_option_check(0,'array',_('Array slots'))?>
-<?=mk_option_check(0,'cache',_('Pool slots'))?>
-</select>
-<br>
-<span class="indent"><input type="submit" class="lock" name="cmdInit" value="_(Apply)_" disabled><input type="button" class="lock" value="_(Done)_" onclick="done()"></span>
-<?if ($newarray):?>
-_(Array has been **Reset**)_ (_(please configure)_)
-<?elseif ($disabled):?>
-_(Array must be **Stopped** to change)_
-<?else:?>
-<input type="checkbox" onClick="cmdInit.disabled=!this.checked"><small>_(Yes, I want to do this)_</small>
-<?endif;?>
+<div class="flex flex-col gap-4 items-start">
+  <div class="flex flex-wrap items-center gap-4">
+    <span class="strong">_(Preserve current assignments)_:</span>
+    <div class="inline-block">
+      <select id="s1" name="preset" multiple="multiple" class="hidden">
+        <option value=''>_(All)_</option>
+        <?=mk_option_check(0,'array',_('Array slots'))?>
+        <?=mk_option_check(0,'cache',_('Pool slots'))?>
+      </select>
+    </div>
+  </div>
+
+  <div class="flex flex-wrap items-center gap-4">
+    <?if ($newarray) {?>
+      <span>
+        _(Array has been **Reset**)_ (_(please configure)_)
+      </span>
+    <?} elseif ($disabled) {?>
+      <span>
+        _(Array must be **Stopped** to change)_
+      </span>
+    <?} else {?>
+      <label class="flex flex-row items-center gap-2">
+        <input type="checkbox" onClick="cmdInit.disabled=!this.checked">
+        <span>_(Yes, I want to do this)_</span>
+      </label>
+    <?}?>
+  </div>
+
+  <div class="flex flex-wrap items-center gap-4">
+    <input type="submit" class="lock" name="cmdInit" value="_(Apply)_" disabled>
+    <input type="button" class="lock" value="_(Done)_" onclick="done()">
+  </div>
+</div>
 </form>

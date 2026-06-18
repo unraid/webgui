@@ -21,20 +21,12 @@ require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 $_SERVER['REQUEST_URI'] = '';
 $login_locale = _var($display,'locale');
 require_once "$docroot/webGui/include/Translations.php";
+require_once "$docroot/webGui/include/publish.php";
 
 function write(...$messages) {
-  $com = curl_init();
-  curl_setopt_array($com,[
-    CURLOPT_URL => 'http://localhost/pub/vmaction?buffer_length=1',
-    CURLOPT_UNIX_SOCKET_PATH => '/var/run/nginx.socket',
-    CURLOPT_POST => 1,
-    CURLOPT_RETURNTRANSFER => true
-  ]);
   foreach ($messages as $message) {
-    curl_setopt($com, CURLOPT_POSTFIELDS, $message);
-    curl_exec($com);
+    publish('vmaction', $message);
   }
-  curl_close($com);
 }
 
 function execCommand_nchan_clone($command,$idx,$refcmd=false) {
@@ -62,7 +54,7 @@ function execCommand_nchan_clone($command,$idx,$refcmd=false) {
       $out = preg_replace("%[\t\n\x0B\f\r]+%", '',$out);
       $out = trim($out);
       $values = explode('  ',$out);
-      $string = _("Data copied: ").$values[0].' '._(" Percentage: ").$values[1].' '._(" Transfer Rate: ").$values[2].' '._(" Time remaining: ").$values[4].$values[5];
+      $string = _('Data copied').': '.$values[0].' '._('Percentage').': '.$values[1].' '._('Transfer Rate').': '.$values[2].' '._('Time remaining').': '.$values[4].$values[5];
       write("progress\0$idx\0".htmlspecialchars($string));
       if ($out) $stringsave=$string;
     }
@@ -99,7 +91,7 @@ write("addLog\0".htmlspecialchars("Cloning $name to $clone"));
 
 switch ($action) {
 case "clone":
-  $rtn = vm_clone($name,$clone,$overwrite,$start,$edit,$free,$waitID) ;
+  $rtn = vm_clone($name,$clone,$overwrite,$start,$edit,$free,$waitID,$regenmac) ;
   break ;
 }
 write("stop_Wait\0$waitID") ;

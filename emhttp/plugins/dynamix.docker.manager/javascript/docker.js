@@ -1,10 +1,11 @@
 var eventURL = '/plugins/dynamix.docker.manager/include/Events.php';
 
-function addDockerContainerContext(container, image, template, started, paused, update, autostart, webui, shell, id, Support, Project, Registry, donateLink, ReadMe) {
+function addDockerContainerContext(container, image, template, started, paused, update, autostart, webui, tswebui, shell, id, Support, Project, Registry, donateLink, ReadMe) {
   var opts = [];
   context.settings({right:false,above:false});
   if (started && !paused) {
-    if (webui !== '' && webui != '#') opts.push({text:_('WebUI'), icon:'fa-globe', href:webui, target:'_blank'});
+    if (webui !== '' && webui != '#') opts.push({text:_('WebUI'), icon:'fa-globe', action:function(e){e.preventDefault();window.open(webui,'_blank');}});
+    if (tswebui !== '' && tswebui != '#') opts.push({text:_('Tailscale WebUI'), icon:'fa-globe', action:function(e){e.preventDefault();window.open(tswebui,'_blank');}});
     opts.push({text:_('Console'), icon:'fa-terminal', action:function(e){e.preventDefault(); openTerminal('docker',container,shell);}});
     opts.push({divider:true});
   }
@@ -48,7 +49,10 @@ function addDockerContainerContext(container, image, template, started, paused, 
     opts.push({divider:true});
     opts.push({text:_('Donate'),icon:'fa-external-link', href:donateLink,target:'_blank'});
   }
+  context.destroy('#'+id);
   context.attach('#'+id, opts);
+  $('#dropdown-'+id).css('z-index', 10001)
+    .append('<li class="docker-dropdown-spacer" aria-hidden="true" style="position:absolute;top:100%;left:0;width:1px;height:60px;pointer-events:none;list-style:none"></li>');
 }
 function addDockerImageContext(image, imageTag) {
   var opts = [];
@@ -61,9 +65,9 @@ function popupWithIframe(title, cmd, reload, func) {
   $('#iframe-popup').dialog({
     autoOpen:true,
     title:title,
-    height: 600,
-    width: 900,
-    draggable:true,
+    height: 'auto',
+    width: 'auto',
+    draggable: false,
     resizable:true,
     modal:true,
     open:function(ev, ui){

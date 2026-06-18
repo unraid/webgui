@@ -1,6 +1,6 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2023, Lime Technology
+/* Copyright 2005-2025, Lime Technology
  * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
@@ -18,6 +18,7 @@ $varroot = '/var/local/emhttp';
 require_once "$docroot/webGui/include/publish.php";
 require_once "$docroot/webGui/include/Wrappers.php";
 
+// Not necessary to check for listeners.  This will automatically exit if there are no listeners anywhere
 $csrf_old = '';
 while (true) {
   $csrf_new = @parse_ini_file("$varroot/var.ini")['csrf_token'];

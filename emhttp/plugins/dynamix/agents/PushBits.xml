@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+  <Agent>
+    <Name>PushBits</Name>
+    <Variables>
+      <Variable Help="The full server base URL including protocol and port. eg: https://example.com:8080/" Desc="Full Server Base URL" Default="FULL PUSHBITS URL">SERVER_URL</Variable>
+      <Variable Help="The App Token to use." Desc="App Token" Default="YOUR APP TOKEN">APP_TOKEN</Variable>
+      <Variable Help="Specify the fields which are included in the title of the notification." Desc="Notification Title" Default="$SUBJECT">TITLE</Variable>
+      <Variable Help="Specify the fields which are included in the message body of the notification." Desc="Notification Message" Default="$DESCRIPTION">MESSAGE</Variable>
+    </Variables>
+    <Script>
+      <![CDATA[
+      #!/bin/bash
+      ############
+      {0}
+      ############
+      MESSAGE=$(echo -e "$MESSAGE")
+      case "$IMPORTANCE" in
+      'normal' )
+      PRIORITY="0"
+      ;;
+      'warning' )
+      PRIORITY="5"
+      ;;
+      'alert' )
+      PRIORITY="21"
+      ;;
+      esac
+
+      # Remove any trailing slash
+      SERVER_URL=${SERVER_URL%/}
+
+      curl -s -k -X POST \
+      -F "title=$TITLE" \
+      -F "message=$MESSAGE" \
+      -F "priority=$PRIORITY" \
+      ${SERVER_URL}/message?token=$APP_TOKEN 2>&1
+      ]]>
+    </Script>
+  </Agent>

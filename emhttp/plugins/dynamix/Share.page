@@ -11,12 +11,6 @@ Type="xmenu"
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  */
-?>
-<?
-function clone_list($disk) {
-  global $pools;
-  return strpos($disk['status'],'_NP')===false && ($disk['type']=='Data' || in_array($disk['name'],$pools));
-}
 if ($name) {
   $refs = []; $n = $i = 0;
   // Natural sorting of share names
@@ -53,14 +47,20 @@ function toggleButton(button,id) {
 }
 
 <?if ($name):?>
-var ctrl = '<span class="ctrl1 status <?=$tabbed?'vhshift':'vshift'?>"><a href="/Shares/Share?name=<?=$prev?>" title="_(previous user share)_"><button type="button" style="margin-right:4px"><i class="fa fa-chevron-left fa-fw"></i></button></a><a href="/Shares/Share?name=<?=$next?>" title="_(next user share)_"><button type="button"><i class="fa fa-chevron-right fa-fw"></i></button></a></span>';
+const prevNextButtons = `
+<div class="buttons-spaced flex-shrink-0<?= $tabbed ? ' menuNavButtonsTabbed' : ''?>">
+  <a class="button" href="/Shares/Share?name=<?=$prev?>" title="_(previous user share)_">
+    <i class="fa fa-chevron-left fa-fw"></i>
+  </a>
+  <a class="button" href="/Shares/Share?name=<?=$next?>" title="_(next user share)_">
+    <i class="fa fa-chevron-right fa-fw"></i>
+  </a>
+</div>
+`;
 
 $(function() {
-<?if ($tabbed):?>
-  $('.tabs').append(ctrl);
-<?else:?>
-  $('div[class=title]:first').append(ctrl);
-<?endif;?>
+  const target = <?= $tabbed ? '".tabs-container"' : '".title:first .right"' ?>;
+  $(target).append(prevNextButtons);
 });
 <?endif;?>
 </script>

@@ -42,14 +42,192 @@ $pools  = pools_filter($disks);
 $errors = [];
 $top    = 120;
 
+function panelcontrol_monitor_has_show_flag() {
+    return true;  
+}
+
+function panelcontrol_monitor_state_rank($state) {
+  switch ((string)$state) {
+    case 'alert': return 5;
+    case 'warning': return 4;
+    case 'normal-blink': return 3;
+    case 'normal': return 2;
+    case 'off': return 1;
+    default: return 0;
+  }
+}
+
+function panelcontrol_monitor_push_event(&$events, $event, $scope, $target, $state, $reason, $details=[]) {
+  $events[] = [
+    'event' => (string)$event,
+    'scope' => (string)$scope,
+    'target' => (string)$target,
+    'state' => (string)$state,
+    'reason' => (string)$reason,
+    'details' => is_array($details) ? $details : [],
+  ];
+}
+
+function panelcontrol_monitor_build_payload($var, $disks, $devs, $saved, $display, $server, $high1, $high2, $top) {
+  $events = [];
+
+  foreach ((array)$disks as $disk) {
+    $name = _var($disk,'name');
+    if ($name === 'flash' || substr(_var($disk,'status'),-3) === '_NP') {
+      continue;
+    }
+
+    $diskName = no_tilde((string)$name);
+    $diskDevice = strtolower(trim((string)_var($disk,'device','')));
+    $diskId = trim((string)_var($disk,'id',''));
+    $temp = _var($disk,'temp','*');
+    $spundownRaw = _var($disk,'spundown','');
+    $spundownValue = strtolower(trim((string)$spundownRaw));
+    $status = strtolower((string)_var($disk,'status',''));
+    $isNoDeviceStatus = strpos($status, 'np') !== false;
+    $isDisabledStatus = strpos($status, 'dsbl') !== false || strpos($status, 'disabled') !== false;
+    if (($diskDevice === '' && $diskId === '') || $isNoDeviceStatus || $isDisabledStatus) {
+      continue;
+    }
+    $target = $diskDevice !== '' ? $diskDevice : $diskId;
+    $color = strtolower((string)strtok(_var($disk,'color'),'-'));
+    $eventsBeforeDisk = count($events);
+    $isSpunDown = in_array($spundownValue, ['1', 'true', 'yes', 'on'], true)
+      || strpos($status, 'sby') !== false
+      || strpos($status, 'standby') !== false;
+    $identity = [
+      'disk_name' => $diskName,
+      'disk_device' => $diskDevice,
+      'disk_id' => $diskId,
+      'disk_temp' => is_numeric($temp) ? (int)$temp : null,
+      'disk_spundown' => $spundownRaw,
+    ];
+
+    if ($color === 'red') {
+      panelcontrol_monitor_push_event($events, 'monitor.storage.offline', 'disk', $target, 'alert', 'disk-error-state', [
+        'status' => $status,
+      ] + $identity);
+    } elseif ($color === 'yellow') {
+      panelcontrol_monitor_push_event($events, 'monitor.storage.activity', 'disk', $target, 'normal-blink', 'disk-rebuild-or-sync', [
+        'status' => $status,
+      ] + $identity);
+    }
+
+    if ($isSpunDown) {
+      panelcontrol_monitor_push_event($events, 'monitor.storage.spindown', 'disk', $target, 'normal', 'disk-standby', [
+        'status' => $status,
+      ] + $identity);
+    }
+
+    if (!$isSpunDown) {
+      if (is_numeric($temp)) {
+        panelcontrol_monitor_push_event($events, 'monitor.system.temperature', 'disk', $target, 'normal', 'temperature-sample', [
+          'temp' => (int)$temp,
+        ] + $identity);
+      }
+
+      [$hotNVME,$maxNVME] = _var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'temp') : [-1,-1];
+      $hot = _var($disk,'hotTemp',-1)>=0 ? $disk['hotTemp'] : ($hotNVME>=0 ? $hotNVME : (_var($disk,'rotational',1)==0 && $display['hotssd']>=0 ? $display['hotssd'] : $display['hot']));
+      $max = _var($disk,'maxTemp',-1)>=0 ? $disk['maxTemp'] : ($maxNVME>=0 ? $maxNVME : (_var($disk,'rotational',1)==0 && $display['maxssd']>=0 ? $display['maxssd'] : $display['max']));
+      $tempState = exceed($temp,$max,$top) ? 'alert' : (exceed($temp,$hot,$top) ? 'warning' : '');
+      if ($tempState !== '') {
+        panelcontrol_monitor_push_event($events, 'monitor.system.temperature', 'disk', $target, $tempState, 'temperature-threshold', [
+          'temp' => (int)$temp,
+          'warning' => (int)$hot,
+          'critical' => (int)$max,
+        ] + $identity);
+      }
+    }
+
+    $numErrors = (int)_var($disk,'numErrors',0);
+    if ($numErrors > 0) {
+      panelcontrol_monitor_push_event($events, 'monitor.storage.health', 'disk', $target, 'alert', 'read-errors', [
+        'errors' => $numErrors,
+      ] + $identity);
+    }
+
+    if (count($events) === $eventsBeforeDisk) {
+      panelcontrol_monitor_push_event($events, 'monitor.storage.health', 'disk', $target, 'normal', 'disk-present', [
+        'status' => $status,
+      ] + $identity);
+    }
+  }
+
+  foreach ((array)$devs as $dev) {
+    $name = _var($dev,'name','no-name');
+    $target = 'device:' . no_tilde((string)$name);
+    $temp = _var($dev,'temp','*');
+    if (!is_numeric($temp)) {
+      continue;
+    }
+
+    $tempInt = (int)$temp;
+    $hot = (int)_var($display,'hot',0);
+    $max = (int)_var($display,'max',0);
+    $tempState = exceed($tempInt,$max,$top) ? 'alert' : (exceed($tempInt,$hot,$top) ? 'warning' : '');
+    if ($tempState !== '') {
+      panelcontrol_monitor_push_event($events, 'monitor.system.temperature', 'device', $target, $tempState, 'temperature-threshold', [
+        'temp' => $tempInt,
+        'warning' => $hot,
+        'critical' => $max,
+      ]);
+    }
+  }
+
+  $targets = [];
+  $counts = ['off' => 0, 'normal' => 0, 'normal-blink' => 0, 'warning' => 0, 'alert' => 0];
+  foreach ($events as $event) {
+    $target = (string)$event['target'];
+    $state = (string)$event['state'];
+    if ($target === '' || $state === '') {
+      continue;
+    }
+    if (!isset($targets[$target]) || panelcontrol_monitor_state_rank($state) > panelcontrol_monitor_state_rank($targets[$target])) {
+      $targets[$target] = $state;
+    }
+  }
+
+  foreach ($targets as $state) {
+    if (isset($counts[$state])) {
+      $counts[$state]++;
+    }
+  }
+
+  $payloadSavedState = is_array($saved) ? $saved : [];
+  if (isset($payloadSavedState['used'])) {
+    unset($payloadSavedState['used']);
+  }
+
+  return [
+    'schema' => 'panelcontrol.monitor-payload.v1',
+    'source' => 'unraid.monitor.copy',
+    'generatedAt' => gmdate(DATE_RFC3339),
+    'server' => (string)$server,
+    'thresholds' => [
+      'docker_critical' => (int)$high1,
+      'docker_warning' => (int)$high2,
+    ],
+    'saved_state' => $payloadSavedState,
+    'events' => $events,
+    'targets' => $targets,
+    'summary' => [
+      'event_count' => count($events),
+      'targets_count' => count($targets),
+      'state_counts' => $counts,
+    ],
+  ];
+}
+
+$panelcontrolShow = panelcontrol_monitor_has_show_flag();
+
 function check_temp(&$disk,$text,$info) {
   global $notify,$saved,$server,$display,$top;
   $name  = _var($disk,'name');
   $named = no_tilde($name);
   $temp  = _var($disk,'temp','*');
   [$hotNVME,$maxNVME] = _var($disk,'transport')=='nvme' ? get_nvme_info(_var($disk,'device'),'temp') : [-1,-1];
-  $hot   = _var($disk,'hotTemp',-1)>=0 ? $disk['hotTemp'] : ($hotNVME>=0 ? $hotNVME : (_var($display,'hot',-1)>=0 ? $display['hot'] : 0));
-  $max   = _var($disk,'maxTemp',-1)>=0 ? $disk['maxTemp'] : ($maxNVME>=0 ? $maxNVME : (_var($display,'max',-1)>=0 ? $display['max'] : 0));
+  $hot   = _var($disk,'hotTemp',-1)>=0 ? $disk['hotTemp'] : ($hotNVME>=0 ? $hotNVME : (_var($disk,'rotational',1)==0 && $display['hotssd']>=0 ? $display['hotssd'] : $display['hot']));
+  $max   = _var($disk,'maxTemp',-1)>=0 ? $disk['maxTemp'] : ($maxNVME>=0 ? $maxNVME : (_var($disk,'rotational',1)==0 && $display['maxssd']>=0 ? $display['maxssd'] : $display['max']));
   $warn  = exceed($temp,$max,$top) ? 'alert' : (exceed($temp,$hot,$top) ? 'warning' : false);
   $item  = 'temp';
   $last  = $saved[$item][$named] ?? 0;
@@ -127,8 +305,8 @@ function check_usage(&$disk,$used,$text,$info) {
   if ($used == -1) return;
   $name     = _var($disk,'name');
   $named    = no_tilde($name);
-  $critical = _var($disk,'critical')>=0 ? $disk['critical'] : (_var($display,'critical')>=0 ? $display['critical'] : 0);
-  $warning  = _var($disk,'warning')>=0 ? $disk['warning'] : (_var($display,'warning')>=0 ? $display['warning'] : 0);
+  $critical = _var($disk,'critical',-1)>=0 ? $disk['critical'] : $display['critical'];
+  $warning  = _var($disk,'warning',-1)>=0 ? $disk['warning'] : $display['warning'];
   $warn     = exceed($used,$critical) ? 'alert' : (exceed($used,$warning) ? 'warning' : false);
   $item     = 'used';
   $last     = $saved[$item][$named] ?? 0;
@@ -244,46 +422,101 @@ if ($warn>0) {
   }
 }
 
-// process parity check, parity sync and data-rebuild notifications
+
+/* Process parity check, parity sync, and data-rebuild notifications */
 $name = 'parity';
 $last = $saved[$item][$name] ?? '';
+
 if ($var['mdResyncPos']) {
-  if (!$last) {
-    $action = preg_split('/\s+/',$var['mdResyncAction']);
-    switch ($action[0]) {
-      case 'recon': $last = $action[1]=='P' ? 'Parity-Sync' : 'Data-Rebuild'; break;
-      case 'check': $last = count($action)>1 ? 'Parity-Check' : 'Read-Check'; break;
-      case 'clear': $last = 'Disk-Clear'; break;
-      default     : $last = '';
-    }
-    $info = "Size: ".my_scale($var['mdResyncSize']*1024,$unit)." $unit";
-    exec("$notify -l '/Main' -e ".escapeshellarg("Unraid $last")." -s ".escapeshellarg("Notice [$server] - $last started")." -d ".escapeshellarg("$info")." -i \"warning\" 2>/dev/null");
-    $saved[$item][$name] = $last;
-  }
+	if (!$last) {
+		$action = preg_split('/\s+/', $var['mdResyncAction']);
+		switch ($action[0]) {
+			case 'recon':
+				$last = $action[1] == 'P' ? 'Parity-Sync' : 'Data-Rebuild';
+				break;
+			case 'check':
+				$last = count($action) > 1 ? 'Parity-Check' : 'Read-Check';
+				break;
+			case 'clear':
+				$last = 'Disk-Clear';
+				break;
+			default:
+				$last = '';
+		}
+		$info = "Size: " . my_scale($var['mdResyncSize'] * 1024, $unit) . " $unit";
+		exec("$notify -l '/Main' -e " . escapeshellarg("Unraid $last") . " -s " . escapeshellarg("Notice [$server] - $last started") . " -d " . escapeshellarg("$info") . " -i \"warning\" 2>/dev/null");
+		$saved[$item][$name] = $last;
+	}
 } else {
-  if ($last) {
-    [$date,$duration,$speed,$status,$error,$action,$size] = last_parity_log();
-    $info = $status==0 ? "Duration: ".my_check($duration, $speed) : ($status==-4 ? "Canceled" : "Error code: $status");
-    $level = ($status==0 && $var['sbSyncErrs']==0) ? "normal" : "warning";
-    exec("$notify -l '/Main' -e ".escapeshellarg("Unraid $last")." -s ".escapeshellarg("Notice [$server] - $last finished ($error errors)")." -d ".escapeshellarg("$info")." -i \"$level\" 2>/dev/null");
-    unset($saved[$item][$name]);
-  }
+	if ($last) {
+		/* File for the latest parity check. */
+		$resync	= '/var/tmp/resync.ini';
+
+		if (file_exists($resync)) {
+			list($duration, $speed, $status, $error, $action, $size) = last_parity_check();
+		} else {
+			list($date, $duration, $speed, $status, $error, $action, $size) = last_parity_log();
+		}
+
+		$info = ($status == 0) ? "Duration: " . my_check($duration, $speed) : ($status == -4 ? "Canceled" : "Error code: $status");
+		$level = ($status == 0 && $var['sbSyncErrs'] == 0) ? "normal" : "warning";
+		exec("$notify -l '/Main' -e " . escapeshellarg("Unraid $last") . " -s " . escapeshellarg("Notice [$server] - $last finished ($error errors)") . " -d " . escapeshellarg("$info") . " -i \"$level\" 2>/dev/null");
+
+		unset($saved[$item][$name]);
+	}
 }
 
-// check read-write status of USB flash drive
+// check read-write status of Boot drive
 $name = 'flash';
 $last = $saved[$item][$name] ?? '';
-$warn = exec("grep -Pom1 '/boot \S+ \K\S{2}' /proc/mounts");
+$warn = exec("awk '$2==\"/boot\" && $4 ~ /(^|,)rw(,|$)/ {print \"rw\"}' /proc/mounts");
 $info = "{$disks['flash']['id']} ({$disks['flash']['device']})";
 if ($warn!="rw") {
   if ($warn!=$last) {
-    exec("$notify -l '/Main' -e \"USB flash drive failure\" -s ".escapeshellarg("Alert [$server] - USB drive is not read-write")." -d ".escapeshellarg("$info")." -i \"alert\" 2>/dev/null");
+    exec("$notify -l '/Main' -e \"Boot drive failure\" -s ".escapeshellarg("Alert [$server] - Boot drive is not read-write")." -d ".escapeshellarg("$info")." -i \"alert\" 2>/dev/null");
     $saved[$item][$name] = $warn;
   }
 } else {
   if ($last) {
-    exec("$notify -l '/Main' -e \"USB flash drive operation\" -s ".escapeshellarg("Notice [$server] - USB drive returned to normal operation")." -d ".escapeshellarg("$info")." 2>/dev/null");
+    exec("$notify -l '/Main' -e \"Boot drive operation\" -s ".escapeshellarg("Notice [$server] - Boot drive returned to normal operation")." -d ".escapeshellarg("$info")." 2>/dev/null");
     unset($saved[$item][$name]);
+  }
+}
+
+// check pool status
+$item = 'poolsstatus';
+$poolsJson = json_decode(storagePoolsJson(), true);
+if (isset($poolsJson['pools']) && is_array($poolsJson['pools'])) {
+  foreach ($poolsJson['pools'] as $poolName => $pool) {
+    $attr = $poolName;
+    $lastStatus = $saved[$item][$attr] ?? 'UNKNOWN';
+    $currentStatus = _var($pool, 'overall_status', 'UNKNOWN');
+    $fstype = _var($pool, 'fstype', 'unknown');
+    
+    // Check if status changed
+    if ($currentStatus !== $lastStatus) {
+      $mountpoint = _var($pool, 'mountpoint', 'unknown');
+      $info = "Pool: $poolName ($fstype) - Mountpoint: $mountpoint";
+      
+      if ($currentStatus === 'DEGRADED' || $currentStatus === 'FAULTED') {
+        // Status degraded or faulted - send alert
+        exec("$notify -l '/Main' -e ".escapeshellarg("Unraid pool status")." -s ".escapeshellarg("Alert [$server] - Pool $poolName is $currentStatus")." -d ".escapeshellarg("$info")." -i \"alert\" 2>/dev/null");
+        $saved[$item][$attr] = $currentStatus;
+      } elseif ($currentStatus === 'ONLINE - ERRORS') {
+        // Status online with errors - send warning
+        exec("$notify -l '/Main' -e ".escapeshellarg("Unraid pool status")." -s ".escapeshellarg("Warning [$server] - Pool $poolName has errors")." -d ".escapeshellarg("$info")." -i \"warning\" 2>/dev/null");
+        $saved[$item][$attr] = $currentStatus;
+      } elseif ($currentStatus === 'ONLINE') {
+        // Status recovered to good - send notice
+        if ($lastStatus !== 'UNKNOWN') {
+          exec("$notify -l '/Main' -e ".escapeshellarg("Unraid pool status")." -s ".escapeshellarg("Notice [$server] - Pool $poolName recovered to $currentStatus")." -d ".escapeshellarg("$info")." 2>/dev/null");
+        }
+        $saved[$item][$attr] = $currentStatus;
+      } else {
+        // Unknown status - still track it
+        $saved[$item][$attr] = $currentStatus;
+      }
+    }
   }
 }
 
@@ -332,5 +565,29 @@ if ($saved) {
     delete_file($ram,$rom);
   }
 }
+
+if ($panelcontrolShow) {
+  $payload = panelcontrol_monitor_build_payload($var, $disks, $devs, $saved, $display, $server, $high1, $high2, $top);
+  $payloadPath = '/usr/local/emhttp/state/panelcontrol-monitor-payload.json';
+  $payloadJson = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+  if ($payloadJson === false) {
+    my_logger('Failed to encode panelcontrol monitor payload: '.json_last_error_msg(), 'webgui');
+  } else {
+    $payloadJson .= "\n";
+    $existingPayloadJson = @file_get_contents($payloadPath);
+    if ($existingPayloadJson !== $payloadJson) {
+      $tmpPath = $payloadPath . '.tmp';
+      if (@file_put_contents($tmpPath, $payloadJson, LOCK_EX) !== false) {
+        if (!@rename($tmpPath, $payloadPath)) {
+          @file_put_contents($payloadPath, $payloadJson, LOCK_EX);
+          @unlink($tmpPath);
+        }
+      } else {
+        @file_put_contents($payloadPath, $payloadJson, LOCK_EX);
+      }
+    }
+  }
+}
+
 exit(0);
 ?>

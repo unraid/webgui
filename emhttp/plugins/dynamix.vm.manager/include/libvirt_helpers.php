@@ -1,6 +1,6 @@
 <?PHP
-/* Copyright 2005-2023, Lime Technology
- * Copyright 2012-2023, Bergware International.
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
  * Copyright 2015-2021, Derek Macias, Eric Schultz, Jon Panozzo.
  *
  * This program is free software; you can redistribute it and/or
@@ -46,17 +46,18 @@
 
 class Array2XML {
 	private static $xml = null;
-private static $encoding = 'UTF-8';
+	private static $encoding = 'UTF-8';
 	/**
 	 * Initialize the root XML node [optional]
 	 * @param $version
 	 * @param $encoding
 	 * @param $format_output
 	 */
+
 	public static function init($version = '1.0', $encoding = 'UTF-8', $format_output = true) {
-			self::$xml = new DomDocument($version, $encoding);
-			self::$xml->formatOutput = $format_output;
-	self::$encoding = $encoding;
+		self::$xml = new DomDocument($version, $encoding);
+		self::$xml->formatOutput = $format_output;
+		self::$encoding = $encoding;
 	}
 	/**
 	 * Convert an Array to XML
@@ -64,11 +65,12 @@ private static $encoding = 'UTF-8';
 	 * @param array $arr - aray to be converterd
 	 * @return DomDocument
 	 */
+
 	public static function &createXML($node_name, $arr=array()) {
-			$xml = self::getXMLRoot();
-			$xml->appendChild(self::convert($node_name, $arr));
-			self::$xml = null;    // clear the xml node in the class for 2nd time use.
-			return $xml;
+		$xml = self::getXMLRoot();
+		$xml->appendChild(self::convert($node_name, $arr));
+		self::$xml = null;    // clear the xml node in the class for 2nd time use.
+		return $xml;
 	}
 	/**
 	 * Convert an Array to XML
@@ -76,94 +78,99 @@ private static $encoding = 'UTF-8';
 	 * @param array $arr - aray to be converterd
 	 * @return DOMNode
 	 */
+
 	private static function &convert($node_name, $arr=array()) {
-			//print_arr($node_name);
-			$xml = self::getXMLRoot();
-			$node = $xml->createElement($node_name);
-			if(is_array($arr)){
-					// get the attributes first.;
-					if(isset($arr['@attributes'])) {
-							foreach($arr['@attributes'] as $key => $value) {
-									if(!self::isValidTagName($key)) {
-											throw new Exception('[Array2XML] Illegal character in attribute name. attribute: '.$key.' in node: '.$node_name);
-									}
-									$node->setAttribute($key, self::bool2str($value));
-							}
-							unset($arr['@attributes']); //remove the key from the array once done.
+		//print_arr($node_name);
+		$xml = self::getXMLRoot();
+		$node = $xml->createElement($node_name);
+		if(is_array($arr)){
+			// get the attributes first.;
+			if(isset($arr['@attributes'])) {
+				foreach($arr['@attributes'] as $key => $value) {
+					if(!self::isValidTagName($key)) {
+						throw new Exception('[Array2XML] Illegal character in attribute name. attribute: '.$key.' in node: '.$node_name);
 					}
-					// check if it has a value stored in @value, if yes store the value and return
-					// else check if its directly stored as string
-					if(isset($arr['@value'])) {
-							$node->appendChild($xml->createTextNode(self::bool2str($arr['@value'])));
-							unset($arr['@value']);    //remove the key from the array once done.
-							//return from recursion, as a note with value cannot have child nodes.
-							return $node;
-					} else if(isset($arr['@cdata'])) {
-							$node->appendChild($xml->createCDATASection(self::bool2str($arr['@cdata'])));
-							unset($arr['@cdata']);    //remove the key from the array once done.
-							//return from recursion, as a note with cdata cannot have child nodes.
-							return $node;
+					$node->setAttribute($key, self::bool2str($value));
+				}
+				unset($arr['@attributes']); //remove the key from the array once done.
+			}
+			// check if it has a value stored in @value, if yes store the value and return
+			// else check if its directly stored as string
+			if(isset($arr['@value'])) {
+				$node->appendChild($xml->createTextNode(self::bool2str($arr['@value'])));
+				unset($arr['@value']);    //remove the key from the array once done.
+				//return from recursion, as a note with value cannot have child nodes.
+				return $node;
+			} else if(isset($arr['@cdata'])) {
+				$node->appendChild($xml->createCDATASection(self::bool2str($arr['@cdata'])));
+				unset($arr['@cdata']);    //remove the key from the array once done.
+				//return from recursion, as a note with cdata cannot have child nodes.
+				return $node;
+			}
+		}
+		//create subnodes using recursion
+		if(is_array($arr)){
+			// recurse to get the node for that key
+			foreach($arr as $key=>$value){
+				if(!self::isValidTagName($key)) {
+					throw new Exception('[Array2XML] Illegal character in tag name. tag: '.$key.' in node: '.$node_name);
+				}
+				if(is_array($value) && is_numeric(key($value))) {
+					// MORE THAN ONE NODE OF ITS KIND;
+					// if the new array is numeric index, means it is array of nodes of the same kind
+					// it should follow the parent key name
+					foreach($value as $k=>$v){
+						$node->appendChild(self::convert($key, $v));
 					}
+				} else {
+					// ONLY ONE NODE OF ITS KIND
+					$node->appendChild(self::convert($key, $value));
+				}
+				unset($arr[$key]); //remove the key from the array once done.
 			}
-			//create subnodes using recursion
-			if(is_array($arr)){
-					// recurse to get the node for that key
-					foreach($arr as $key=>$value){
-							if(!self::isValidTagName($key)) {
-									throw new Exception('[Array2XML] Illegal character in tag name. tag: '.$key.' in node: '.$node_name);
-							}
-							if(is_array($value) && is_numeric(key($value))) {
-									// MORE THAN ONE NODE OF ITS KIND;
-									// if the new array is numeric index, means it is array of nodes of the same kind
-									// it should follow the parent key name
-									foreach($value as $k=>$v){
-											$node->appendChild(self::convert($key, $v));
-									}
-							} else {
-									// ONLY ONE NODE OF ITS KIND
-									$node->appendChild(self::convert($key, $value));
-							}
-							unset($arr[$key]); //remove the key from the array once done.
-					}
-			}
-			// after we are done with all the keys in the array (if it is one)
-			// we check if it has any text value, if yes, append it.
-			if(!is_array($arr)) {
-					$node->appendChild($xml->createTextNode(self::bool2str($arr ?? "")));
-			}
-			return $node;
+		}
+		// after we are done with all the keys in the array (if it is one)
+		// we check if it has any text value, if yes, append it.
+		if(!is_array($arr)) {
+			$node->appendChild($xml->createTextNode(self::bool2str($arr ?? "")));
+		}
+		return $node;
 	}
 	/*
 	 * Get the root XML node, if there isn't one, create it.
 	 */
+
 	private static function getXMLRoot(){
-			if(empty(self::$xml)) {
-					self::init();
-			}
-			return self::$xml;
+		if(empty(self::$xml)) {
+			self::init();
+		}
+		return self::$xml;
 	}
 	/*
 	 * Get string representation of boolean value
 	 */
+
 	private static function bool2str($v){
-			//convert boolean to text value.
-			$v = $v === true ? 'true' : $v;
-			$v = $v === false ? 'false' : $v;
-			return $v;
+		//convert boolean to text value.
+		$v = $v === true ? 'true' : $v;
+		$v = $v === false ? 'false' : $v;
+		return $v;
 	}
 	/*
 	 * Check if the tag name or attribute name contains illegal characters
 	 * Ref: http://www.w3.org/TR/xml/#sec-common-syn
 	 */
+
 	private static function isValidTagName($tag){
-			$pattern = '/^[a-z_]+[a-z0-9\:\-\.\_]*[^:]*$/i';
-			return preg_match($pattern, $tag, $matches) && $matches[0] == $tag;
+		$pattern = '/^[a-z_]+[a-z0-9\:\-\.\_]*[^:]*$/i';
+		return preg_match($pattern, $tag, $matches) && $matches[0] == $tag;
 	}
 }
 
 	$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 	require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt.php";
 	require_once "$docroot/webGui/include/Custom.php";
+	require_once "$docroot/webGui/include/SriovHelpers.php";
 
 	// Load emhttp variables if needed.
 	if (!isset($var)){
@@ -190,11 +197,22 @@ private static $encoding = 'UTF-8';
 				'domain' => [
 					'ovmf' => 2,
 					'mem' => 4096 * 1024,
-					'maxmem' => 4096 * 1024
+					'maxmem' => 4096 * 1024,
+					'vcpus' => 2,
+					'vcpu' => [0,1],
 				],
+				'media' => [
+					'cdrombus' => 'sata',
+					'driversbus' => 'sata' ,
+				],			
 				'disk' => [
 					[
 						'size' => '64G'
+					]
+				],
+				'nic'=>[
+					[
+						'model' => 'e1000'
 					]
 				]
 			]
@@ -337,17 +355,6 @@ private static $encoding = 'UTF-8';
 			]
 		],
 
-		' Pre-packaged ' => '', /* Pre-built Header */
-
-		'LibreELEC' => [
-			'form' => 'LibreELEC.form.php',
-			'icon' => 'libreelec.png'
-		],
-
-		'OpenELEC' => [
-			'form' => 'OpenELEC.form.php',
-			'icon' => 'openelec.png'
-		],
 
 		' Linux ' => '', /* Linux Header */
 
@@ -435,51 +442,6 @@ private static $encoding = 'UTF-8';
 		]
 	];
 
-	$arrOpenELECVersions = [
-		'6.0.3_1' => [
-			'name' => '6.0.3',
-			'url' => 'https://s3.amazonaws.com/dnld.lime-technology.com/images/OpenELEC/OpenELEC-unRAID.x86_64-6.0.3_1.tar.xz',
-			'size' => 178909136,
-			'md5' => 'c584312831d7cd93a40e61ac9f186d32',
-			'localpath' => '',
-			'valid' => '0'
-		],
-		'6.0.0_1' => [
-			'name' => '6.0.0',
-			'url' => 'https://s3.amazonaws.com/dnld.lime-technology.com/images/OpenELEC/OpenELEC-unRAID.x86_64-6.0.0_1.tar.xz',
-			'size' => 165658636,
-			'md5' => '66fb6c3f1b6db49c291753fb3ec7c15c',
-			'localpath' => '',
-			'valid' => '0'
-		],
-		'5.95.3_1' => [
-			'name' => '5.95.3 (6.0.0 Beta3)',
-			'url' => 'https://s3.amazonaws.com/dnld.lime-technology.com/images/OpenELEC/OpenELEC-unRAID.x86_64-5.95.3_1.tar.xz',
-			'size' => 153990180,
-			'md5' => '8936cda74c28ddcaa165cc49ff2a477a',
-			'localpath' => '',
-			'valid' => '0'
-		],
-		'5.95.2_1' => [
-			'name' => '5.95.2 (6.0.0 Beta2)',
-			'url' => 'https://s3.amazonaws.com/dnld.lime-technology.com/images/OpenELEC/OpenELEC-unRAID.x86_64-5.95.2_1.tar.xz',
-			'size' => 156250392,
-			'md5' => 'ac70048eecbda4772e386c6f271cb5e9',
-			'localpath' => '',
-			'valid' => '0'
-		]
-	];
-
-	$arrLibreELECVersions = [
-		'7.0.1_1' => [
-			'name' => '7.0.1',
-			'url' => 'https://s3.amazonaws.com/dnld.lime-technology.com/images/LibreELEC/LibreELEC-unRAID.x86_64-7.0.1_1.tar.xz',
-			'size' => 209748564,
-			'md5' => 'c1e8def2ffb26a355e7cc598311697f6',
-			'localpath' => '',
-			'valid' => '0'
-		]
-	];
 
 	$fedora = '/var/tmp/fedora-virtio-isos';
 	// set variable to obtained information
@@ -651,7 +613,7 @@ private static $encoding = 'UTF-8';
 	];}
 
 	$arrDefaultClocks = [
-		"windows" => [ 
+		"windows" => [
 			"hpet" => [
 				"present" => "no",
 				"tickpolicy" => "delay"
@@ -668,8 +630,8 @@ private static $encoding = 'UTF-8';
 				"present" => "yes",
 				"tickpolicy" => "catchup"
 			]
-		], 
-		"hyperv" => [ 
+		],
+		"hyperv" => [
 			"hpet" => [
 				"present" => "no",
 				"tickpolicy" => "delay"
@@ -687,7 +649,7 @@ private static $encoding = 'UTF-8';
 				"tickpolicy" => "catchup"
 			]
 		] ,
-		"other" => [ 
+		"other" => [
 			"hpet" => [
 				"present" => "no",
 				"tickpolicy" => "delay"
@@ -705,14 +667,62 @@ private static $encoding = 'UTF-8';
 				"tickpolicy" => "catchup"
 			]
 		]
-	] ;
+	];
 
+	#<model type='qxl' ram='65536' vram='65536' vgamem='16384' heads='1' primary='yes'/>
+
+	$arrDisplayOptions = [
+		"H1.16M" => [
+			"text" => "1 Display 16Mb Memory",
+			"qxlxml" => "ram='65536' vram='16384' vgamem='16384' heads='1' primary='yes'",
+		],
+		"H1.32M" => [
+			"text" => "1 Display 32Mb Memory",
+			"qxlxml" => "ram='65536' vram='32768' vgamem='32768' heads='1' primary='yes'",
+		],
+		"H1.64M" => [
+			"text" => "1 Display 64Mb Memory",
+			"qxlxml" => "ram='65536' vram='65536' vram64='65535' vgamem='65536' heads='1' primary='yes'",
+		],
+		"H1.128M" => [
+			"text" => "1 Display 128Mb Memory",
+			"qxlxml"=> "ram='65536' vram='131072' vram64='131072' vgamem='65536' heads='1' primary='yes'",
+		],
+		"H1.256M" => [
+			"text" => "1 Display 256Mb Memory",
+			"qxlxml" => "ram='65536' vram='262144' vram64='262144' vgamem='65536' heads='1' primary='yes'",
+		],
+		"H2.64M" => [
+			"text" => "2 Displays 64Mb Memory",
+			"qxlxml" => "ram='65536' vram='65536' vram64='65535' vgamem='65536' heads='2' primary='yes'",
+		],
+		"H2.128M" => [
+			"text" => "2 Displays 128Mb Memory",
+			"qxlxml" => "ram='65536' vram='131072'vram64='131072' vgamem='65536' heads='2' primary='yes'",
+		],
+		"H2.256M" => [
+			"text" => "2 Displays 256Mb Memory",
+			"qxlxml" => "ram='65536' vram='262144'vram64='262144' vgamem='65536' heads='2' primary='yes'",
+		],
+		"H4.64M" => [
+			"text" => "4 Displays 64Mb Memory",
+			"qxlxml" => "ram='65536' vram='65536' vram64='65535' vgamem='65536' heads='4' primary='yes'",
+		],
+		"H4.128M" => [
+			"text" => "4 Displays 128Mb Memory",
+			"qxlxml" => "ram='65536' vram='131072'vram64='131072' vgamem='65536' heads='4' primary='yes'",
+		],
+		"H4.256M" => [
+			"text" => "4 Displays 256Mb Memory",
+			"qxlxml"=> "ram='65536' vram='262144' vram64='262144' vgamem='65536' heads='4' primary='yes'",
+		],
+		];
 
 	// Read configuration file (guaranteed to exist)
 	$domain_cfgfile = "/boot/config/domain.cfg";
 	$domain_cfg = parse_ini_file($domain_cfgfile);
 
-	if ($domain_cfg['DEBUG'] != "yes") {
+	if ( ($domain_cfg['DEBUG'] ?? false) != "yes") {
 		error_reporting(0);
 	}
 
@@ -720,10 +730,10 @@ private static $encoding = 'UTF-8';
 		$domain_cfg['VMSTORAGEMODE'] = "auto";
 	}
 	if (!empty($domain_cfg['DOMAINDIR'])) {
-		$domain_cfg['DOMAINDIR'] = rtrim($domain_cfg['DOMAINDIR'], '/') . '/';
+		$domain_cfg['DOMAINDIR'] = rtrim($domain_cfg['DOMAINDIR'], '/').'/';
 	}
 	if (!empty($domain_cfg['MEDIADIR'])) {
-		$domain_cfg['MEDIADIR'] = rtrim($domain_cfg['MEDIADIR'], '/') . '/';
+		$domain_cfg['MEDIADIR'] = rtrim($domain_cfg['MEDIADIR'], '/').'/';
 	}
 	if (empty($domain_cfg['TIMEOUT'])) {
 		$domain_cfg['TIMEOUT'] = 60;
@@ -750,11 +760,10 @@ private static $encoding = 'UTF-8';
 		$ends = ['th','st','nd','rd','th','th','th','th','th','th'];
 
 		if (($number % 100) >= 11 && ($number % 100) <= 13) {
-			$abbreviation = $number . 'th';
+			$abbreviation = $number.'th';
 		} else {
-			$abbreviation = $number . $ends[$number % 10];
+			$abbreviation = $number.$ends[$number % 10];
 		}
-
 		return $abbreviation;
 	}
 
@@ -779,7 +788,7 @@ private static $encoding = 'UTF-8';
 	}
 
 	function getDiskImageInfo($strImgPath) {
-		$arrJSON = json_decode(shell_exec("qemu-img info --output json " . escapeshellarg($strImgPath) . " 2>/dev/null"), true);
+		$arrJSON = json_decode(shell_exec("qemu-img info --output json ".escapeshellarg($strImgPath)." 2>/dev/null"), true);
 		return $arrJSON;
 	}
 
@@ -819,9 +828,9 @@ private static $encoding = 'UTF-8';
 		# file is csv typeid:productid
 		#
 		if (is_file("/boot/config/VMPCIOverride.cfg")) {
-			$arrWhiteListOverride = str_getcsv(file_get_contents("/boot/config/VMPCIOverride.cfg")) ;
+			$arrWhiteListOverride = str_getcsv(file_get_contents("/boot/config/VMPCIOverride.cfg"));
 		}
-		$arrWhiteListOverride[] = "0880:089a" ;
+		$arrWhiteListOverride[] = "0880:089a";
 
 		$arrValidPCIDevices = [];
 
@@ -837,7 +846,7 @@ private static $encoding = 'UTF-8';
 					$boolBlacklisted = true;
 				}
 
-				$overrideCheck = "{$arrMatch['typeid']}:{$arrMatch['productid']}" ;
+				$overrideCheck = "{$arrMatch['typeid']}:{$arrMatch['productid']}";
 				if (in_array($overrideCheck,$arrWhiteListOverride) ) $boolBlacklisted = false;
 
 				$strClass = 'other';
@@ -852,17 +861,26 @@ private static $encoding = 'UTF-8';
 					$strClass = 'audio';
 				}
 
-				if (!file_exists('/sys/bus/pci/devices/0000:' . $arrMatch['id'] . '/iommu_group/')) {
+				if (!file_exists('/sys/bus/pci/devices/0000:'.$arrMatch['id'].'/iommu_group/')) {
 					// No IOMMU support for device, skip device
 					continue;
 				}
 
 				// Attempt to get the current kernel-bound driver for this pci device
 				$strDriver = '';
-				if (is_link('/sys/bus/pci/devices/0000:' . $arrMatch['id'] . '/driver')) {
-					$strLink = @readlink('/sys/bus/pci/devices/0000:' . $arrMatch['id'] . '/driver');
+				if (is_link('/sys/bus/pci/devices/0000:'.$arrMatch['id'].'/driver')) {
+					$strLink = @readlink('/sys/bus/pci/devices/0000:'.$arrMatch['id'].'/driver');
 					if (!empty($strLink)) {
 						$strDriver = basename($strLink);
+					}
+				}
+
+				// Attempt to get the boot_vga driver for this pci device
+				$strBootVGA = '';
+				if (is_file('/sys/bus/pci/devices/0000:'.$arrMatch['id'].'/boot_vga') && $strClass == 'vga') {
+					$strFileVal = file_get_contents('/sys/bus/pci/devices/0000:'.$arrMatch['id'].'/boot_vga');
+					if (!empty($strFileVal)) {
+						$strBootVGA = trim($strFileVal);
 					}
 				}
 
@@ -870,7 +888,7 @@ private static $encoding = 'UTF-8';
 				$arrMatch['vendorname'] = sanitizeVendor($arrMatch['vendorname']);
 				$arrMatch['productname'] = sanitizeProduct($arrMatch['productname']);
 
-				$arrValidPCIDevices[] = [
+				$arrValidPCIDevices[$arrMatch['id']] = [
 					'id' => $arrMatch['id'],
 					'type' => $arrMatch['type'],
 					'typeid' => $arrMatch['typeid'],
@@ -880,14 +898,14 @@ private static $encoding = 'UTF-8';
 					'productname' => $arrMatch['productname'],
 					'class' => $strClass,
 					'driver' => $strDriver,
-					'name' => $arrMatch['vendorname'] . ' ' . $arrMatch['productname'],
+					'bootvga' => $strBootVGA,
+					'name' => $arrMatch['vendorname'].' '.$arrMatch['productname'],
 					'blacklisted' => $boolBlacklisted
 				];
 			}
 		}
 
 		$cacheValidPCIDevices = $arrValidPCIDevices;
-
 		return $arrValidPCIDevices;
 	}
 
@@ -897,7 +915,20 @@ private static $encoding = 'UTF-8';
 		$arrValidGPUDevices = array_filter($arrValidPCIDevices, function($arrDev) {
 			return ($arrDev['class'] == 'vga' && !$arrDev['blacklisted']);
 		});
-
+		
+		// Remove SR-IOV physical functions that have VFs defined
+		$sriov = json_decode(getSriovInfoJson(true), true);
+		foreach($arrValidGPUDevices as $key => $device) {
+			$pcid = $device['id'];
+			// Prepend domain if not present (e.g., 04:00.0 -> 0000:04:00.0)
+			if (!preg_match('/^[0-9a-fA-F]{4}:/', $pcid)) {
+				$pcid = "0000:" . $pcid;
+			}
+			if (isset($sriov[$pcid]) && !empty($sriov[$pcid]['vfs'])) {
+				unset($arrValidGPUDevices[$key]);
+			}
+		}
+		
 		return $arrValidGPUDevices;
 	}
 
@@ -907,8 +938,22 @@ private static $encoding = 'UTF-8';
 		$arrValidAudioDevices = array_filter($arrValidPCIDevices, function($arrDev) {
 			return ($arrDev['class'] == 'audio' && !$arrDev['blacklisted']);
 		});
-
 		return $arrValidAudioDevices;
+	}
+
+	function getValidSoundCards() {
+		$arrValidSoundCards = [
+			'ich6'		=> ['name' => 'ich6','id' => 'virtual::ich6'],
+			'ich7' 		=> ['name' => 'ich7','id' => 'virtual::ich7'],
+			'ich9' 		=> ['name' => 'ich9','id' => 'virtual::ich9'],
+			'ac97' 		=> ['name' => 'ac97','id' => 'virtual::ac97'],
+			'es1370' 	=> ['name' => 'es1370','id' => 'virtual::es1370'],
+			'pcspk' 	=> ['name' => 'pcspk','id' => 'virtual::pcspk'],
+			'sb16' 		=> ['name' => 'sb16','id' => 'virtual::sb16'],
+			'usb' 		=> ['name' => 'usb','id' => 'virtual::usb'],
+			'virtio' 	=> ['name' => 'virtio','id' => 'virtual::virtio'],
+		];
+		return $arrValidSoundCards;
 	}
 
 	function getValidOtherDevices() {
@@ -917,7 +962,6 @@ private static $encoding = 'UTF-8';
 		$arrValidOtherDevices = array_filter($arrValidPCIDevices, function($arrDev) {
 			return ($arrDev['class'] == 'other' && !$arrDev['blacklisted']);
 		});
-
 		return $arrValidOtherDevices;
 	}
 
@@ -927,8 +971,30 @@ private static $encoding = 'UTF-8';
 		$arrValidOtherStubbedDevices = array_filter($arrValidPCIDevices, function($arrDev) {
 			return ($arrDev['class'] == 'other' && !$arrDev['blacklisted'] && in_array($arrDev['driver'], ['pci-stub', 'vfio-pci']));
 		});
-
 		return $arrValidOtherStubbedDevices;
+	}
+
+	function getValidevDev() {
+		$inputevdev = array_merge(glob("/dev/input/by-id/*event-kbd"),glob("/dev/input/by-id/*event-mouse"));
+		return $inputevdev;
+	}
+
+	function getevDev($res) {
+		global $lv;
+		$xml = $lv->domain_get_xml($res);
+		$xmldoc = new SimpleXMLElement($xml);
+		$xmlpath = $xmldoc->xpath('//devices/input[@type="evdev"] ');
+		$evdevs = [];
+		foreach ($xmlpath as $i => $evDev) {
+		$evdevs[$i] = [
+			'dev' => $evDev->source->attributes()->dev,
+			'grab' => $evDev->source->attributes()->grab,
+			'repeat' => $evDev->source->attributes()->repeat,
+			'grabToggle' => $evDev->source->attributes()->grabToggle
+			];
+		}
+		if (empty($evdevs)) $evdevs[0] = ['dev'=>"",'grab'=>"",'repeat'=>"",'grabToggle'=>""];
+		return $evdevs;
 	}
 
 	$cacheValidUSBDevices = null;
@@ -962,7 +1028,7 @@ private static $encoding = 'UTF-8';
 
 				if (empty($arrMatch['name'])) {
 					// Device name is blank, attempt to lookup usb details
-					exec("lsusb -d ".$arrMatch['id']." -v 2>/dev/null | grep -Po '^\s+(iManufacturer|iProduct)\s+[1-9]+ \K[^\\n]+'", $arrAltName);
+					exec("lsusb -d ".$arrMatch['id']." -v 2>/dev/null | grep -Po '^\s+(iManufacturer|iProduct)\s+[1-9]+ \K[^\\n]+'", $arrAltName); #PHPS
 					$arrMatch['name'] = trim(implode(' ', (array)$arrAltName));
 
 					if (empty($arrMatch['name'])) {
@@ -974,7 +1040,7 @@ private static $encoding = 'UTF-8';
 				// Clean up the name
 				$arrMatch['name'] = sanitizeVendor($arrMatch['name']);
 
-				$arrValidUSBDevices[] = [
+				$arrValidUSBDevices[$arrMatch['id']] = [
 					'id' => $arrMatch['id'],
 					'name' => $arrMatch['name'],
 				];
@@ -986,7 +1052,6 @@ private static $encoding = 'UTF-8';
 		});
 
 		$cacheValidUSBDevices = $arrValidUSBDevices;
-
 		return $arrValidUSBDevices;
 	}
 
@@ -998,12 +1063,12 @@ private static $encoding = 'UTF-8';
 		$arrQEMUInfo = $lv->get_connect_information();
 		$arrMachineTypes = $lv->get_machine_types('x86_64');
 
-		$strQEMUVersion = $arrQEMUInfo['hypervisor_major'] . '.' . $arrQEMUInfo['hypervisor_minor'];
+		$strQEMUVersion = $arrQEMUInfo['hypervisor_major'].'.'.$arrQEMUInfo['hypervisor_minor'];
 
 		foreach ($arrMachineTypes as $arrMachine) {
 			if ($arrMachine['name'] == 'q35') {
 				// Latest Q35
-				$arrValidMachineTypes['pc-q35-' . $strQEMUVersion] = 'Q35-' . $strQEMUVersion;
+				$arrValidMachineTypes['pc-q35-'.$strQEMUVersion] = 'Q35-'.$strQEMUVersion;
 			}
 			if (strpos($arrMachine['name'], 'q35-') !== false) {
 				// Prior releases of Q35
@@ -1011,7 +1076,7 @@ private static $encoding = 'UTF-8';
 			}
 			if ($arrMachine['name'] == 'pc') {
 				// Latest i440fx
-				$arrValidMachineTypes['pc-i440fx-' . $strQEMUVersion] = 'i440fx-' . $strQEMUVersion;
+				$arrValidMachineTypes['pc-i440fx-'.$strQEMUVersion] = 'i440fx-'.$strQEMUVersion;
 			}
 			if (strpos($arrMachine['name'], 'i440fx-') !== false) {
 				// Prior releases of i440fx
@@ -1021,8 +1086,17 @@ private static $encoding = 'UTF-8';
 
 		uksort($arrValidMachineTypes, 'version_compare');
 		$arrValidMachineTypes = array_reverse($arrValidMachineTypes);
-
 		return $arrValidMachineTypes;
+	}
+
+	function ValidateMachineType($machinetype) {
+		$machinetypes=getValidMachineTypes();
+		$type = substr($machinetype,0,strpos($machinetype,'-',3));
+		foreach($machinetypes as $machinetypekey => $machinedetails) {
+			$check_type = substr($machinetypekey,0,strlen($type));
+			if ($check_type == $type) break;
+		}
+		return($machinetypekey);
 	}
 
 	function getLatestMachineType($strType = 'i440fx') {
@@ -1033,7 +1107,6 @@ private static $encoding = 'UTF-8';
 				return $key;
 			}
 		}
-
 		return array_shift(array_keys($arrMachineTypes));
 	}
 
@@ -1042,7 +1115,6 @@ private static $encoding = 'UTF-8';
 			'raw' => 'raw',
 			'qcow2' => 'qcow2'
 		];
-
 		return $arrValidDiskDrivers;
 	}
 
@@ -1054,8 +1126,15 @@ private static $encoding = 'UTF-8';
 			'ide' => 'IDE',
 			'usb' => 'USB'
 		];
-
 		return $arrValidDiskBuses;
+	}
+
+	function getValidDiskDiscard() {
+		$arrValidDiskDiscard = [
+			'ignore' => 'Ignore(No Trim)',
+			'unmap' => 'Unmap(Trim)',
+		];
+		return $arrValidDiskDiscard;
 	}
 
 	function getValidCdromBuses() {
@@ -1065,7 +1144,6 @@ private static $encoding = 'UTF-8';
 			'ide' => 'IDE',
 			'usb' => 'USB'
 		];
-
 		return $arrValidCdromBuses;
 	}
 
@@ -1073,9 +1151,10 @@ private static $encoding = 'UTF-8';
 		$arrValidVNCModels = [
 			'cirrus' => 'Cirrus',
 			'qxl' => 'QXL (best)',
+			'virtio' => 'Virtio(2d)',
+			'virtio3d' => 'Virtio(3d)',
 			'vmvga' => 'vmvga'
 		];
-
 		return $arrValidVNCModels;
 	}
 	function getValidVMRCProtocols() {
@@ -1083,7 +1162,6 @@ private static $encoding = 'UTF-8';
 			'vnc' => 'VNC',
 			'spice' => 'SPICE'
 		];
-
 		return $arrValidProtocols;
 	}
 
@@ -1125,36 +1203,35 @@ private static $encoding = 'UTF-8';
 			'th' => 'Thailand (th)',
 			'tr' => 'Turkish (tr)'
 		];
-
 		return $arrValidKeyMaps;
 	}
 
 	function getHostCPUModel() {
 		$cpu = explode('#', exec("dmidecode -q -t 4|awk -F: '{if(/Version:/) v=$2; else if(/Current Speed:/) s=$2} END{print v\"#\"s}'"));
-		[$strCPUModel] = my_explode('@', str_replace(["Processor","CPU","(C)","(R)","(TM)"], ["","","&#169;","&#174;","&#8482;"], $cpu[0]) . '@', 1);
+		[$strCPUModel] = my_explode('@', str_replace(["Processor","CPU","(C)","(R)","(TM)"], ["","","&#169;","&#174;","&#8482;"], $cpu[0]).'@', 1);
 		return trim($strCPUModel);
 	}
 
 	function getValidNetworks() {
-		global $lv;
+		global $lv,$libvirt_running;
 		$arrValidNetworks = [];
-		exec("ls --indicator-style=none /sys/class/net|grep -Po '^((vir)?br|vhost)[0-9]+(\.[0-9]+)?'",$arrBridges);
-		if (!is_array($arrBridges)) {
-			$arrBridges = [];
+		exec("ls --indicator-style=none /sys/class/net | grep -Po '^virbr[0-9]+'",$arrBridges);
+		exec("ls --indicator-style=none /sys/class/net | grep -Po '^(br|bond|eth|wlan)[0-9]+(\.[0-9]+)?'",$arrBridges);
+		// remove redundant references of bridge and bond interfaces
+		$remove = [];
+		foreach ($arrBridges as $name) {
+			if (substr($name,0,4) == 'bond') {
+				$remove = array_merge($remove, (array)@file("/sys/class/net/$name/bonding/slaves",FILE_IGNORE_NEW_LINES));
+			} elseif (substr($name,0,2) == 'br') {
+				$remove = array_merge($remove, array_map(function($n){return end(explode('/',$n));}, glob("/sys/class/net/$name/brif/*")));
+			}
 		}
-
-		// Make sure the default libvirt bridge is first in the list
-		if (($key = array_search('virbr0', $arrBridges)) !== false) {
-			unset($arrBridges[$key]);
-		}
-		// We always list virbr0 because libvirt might not be started yet (thus the bridge doesn't exists)
-		array_unshift($arrBridges, 'virbr0');
-
-		$arrValidNetworks['bridges'] = array_values($arrBridges);
+		$arrValidNetworks['bridges'] = array_diff($arrBridges, $remove);
 
 		// This breaks VMSettings.page if libvirt is not running
-		/*	if ($libvirt_running == "yes") {
+		if ($libvirt_running == "yes") {
 			$arrVirtual = $lv->libvirt_get_net_list($lv->get_connection());
+			sort($arrVirtual, SORT_NATURAL | SORT_FLAG_CASE);
 
 			if (($key = array_search('default', $arrVirtual)) !== false) {
 				unset($arrVirtual[$key]);
@@ -1163,7 +1240,7 @@ private static $encoding = 'UTF-8';
 			array_unshift($arrVirtual, 'default');
 
 			$arrValidNetworks['libvirt'] = array_values($arrVirtual);
-		}*/
+		}
 
 		return $arrValidNetworks;
 	}
@@ -1185,7 +1262,8 @@ private static $encoding = 'UTF-8';
 		$arrNICs = $lv->get_nic_info($res);
 		$arrHostDevs = $lv->domain_get_host_devices_pci($res);
 		$arrUSBDevs = $lv->domain_get_host_devices_usb($res);
-		$getcopypaste=getcopypaste($res) ;
+		$arrSoundCards = $lv->domain_get_sound_cards($res);
+		$getcopypaste=getcopypaste($res);
 
 		// Metadata Parsing
 		// libvirt xpath parser sucks, use php's xpath parser instead
@@ -1213,7 +1291,7 @@ private static $encoding = 'UTF-8';
 		// check for vnc/spice; add to arrGPUDevices
 		$vmrcport = $lv->domain_get_vnc_port($res);
 		$autoport = $lv->domain_get_vmrc_autoport($res);
-		if (empty($vmrcport) && $autoport == "yes") $vmrcport = -1 ;
+		if (empty($vmrcport) && $autoport == "yes") $vmrcport = -1;
 		if (!empty($vmrcport)) {
 			$arrGPUDevices[] = [
 				'id' => 'virtual',
@@ -1226,6 +1304,8 @@ private static $encoding = 'UTF-8';
 				'autoport' => $autoport,
 				'copypaste' => $getcopypaste,
 				'guest' => ['multi' => 'off' ],
+				'render' => $lv->domain_get_vnc_render($res),
+				'DisplayOptions' => $lv->domain_get_vnc_display_options($res),
 			];
 		}
 
@@ -1244,9 +1324,18 @@ private static $encoding = 'UTF-8';
 
 			$arrFoundOtherDevices = array_filter($arrValidOtherDevices, function($arrDev) use ($arrHostDev) {return ($arrDev['id'] == $arrHostDev['id']);});
 			if (!empty($arrFoundOtherDevices)) {
-				$arrOtherDevices[] = ['id' => $arrHostDev['id'],'boot' => $arrHostDev['boot'], 'guest' => $arrHostDev['guest']];
+				$arrOtherDevices[] = ['id' => $arrHostDev['id'],'boot' => $arrHostDev['boot'], 'guest' => $arrHostDev['guest'], 'found' => true];
 				continue;
-			}
+			} else {$arrOtherDevices[] = ['id' => $arrHostDev['id'],'boot' => $arrHostDev['boot'], 'guest' => $arrHostDev['guest'], 'found'=>false];}
+		}
+		if (empty($arrGPUDevices)) {
+			$arrGPUDevices[] = [
+				'id' => 'nogpu',
+			];
+		}
+
+		if (!empty($arrSoundCards)) {
+			foreach ($arrSoundCards as $sckey => $soundcard) $arrAudioDevices[] = ['id' => "virtual::".$soundcard['model']];
 		}
 
 		// Add claimed USB devices by this VM to the available USB devices
@@ -1268,19 +1357,19 @@ private static $encoding = 'UTF-8';
 				!file_exists($domain_cfg['DOMAINDIR']) ||
 				!is_file($strPath) ||
 				strpos($domain_cfg['DOMAINDIR'], dirname(dirname($strPath))) === false ||
-				basename($strPath) != 'vdisk'.($i+1).'.img') {
-
-				$default_option = 'manual';
+				basename($strPath) != 'vdisk'.($i+1).'.img' || basename($strPath) != 'vdisk'.($i+1).'.qcow2') {
+				if (($disk['type'] == "qcow2" && (basename($strPath) == 'vdisk'.($i+1).'.qcow2')) || ($disk['type'] == "raw" && (basename($strPath) == 'vdisk'.($i+1).'.img'))) $default_option = "auto"; else $default_option = 'manual';
 			}
 
 			$arrDisks[] = [
 				'new' => $strPath,
 				'size' => '',
 				'driver' => $disk['type'],
-				'driver' => 'raw',
 				'dev' => $disk['device'],
 				'bus' => $disk['bus'],
+				'discard' => $disk['discard'],
 				'boot' => $disk['boot order'],
+				'rotation' => $disk['rotation'],
 				'serial' => $disk['serial'],
 				'select' => $default_option
 			];
@@ -1292,7 +1381,9 @@ private static $encoding = 'UTF-8';
 				'driver' => 'raw',
 				'dev' => 'hda',
 				'select' => '',
-				'bus' => 'virtio'
+				'bus' => 'virtio',
+				'discard' => 'ignore',
+				'rotation' => "0"
 			];
 		}
 
@@ -1312,15 +1403,21 @@ private static $encoding = 'UTF-8';
 		$strOVMF = '0';
 		if (!empty($lv->domain_get_ovmf($res))) {
 			$ovmfloader = $lv->domain_get_ovmf($res);
-		  if (strpos($ovmfloader, '_CODE-pure-efi.fd') !== false) {
-			  $strOVMF = '1';
-		  } else if (strpos($ovmfloader, '_CODE-pure-efi-tpm.fd') !== false) {
-			  $strOVMF = '2';
-		  }
-  	}
+			if (strpos($ovmfloader, '_CODE-pure-efi.fd') !== false) {
+				$strOVMF = '1';
+			} else if (strpos($ovmfloader, '_CODE-pure-efi-tpm.fd') !== false) {
+				$strOVMF = '2';
+			}
+		}
 
-		if ($lv->domain_get_boot_devices($res)[0] == "fd") $osbootdev = "Yes" ; else $osbootdev = "No" ;
-
+		if ($lv->domain_get_boot_devices($res)[0] == "fd") $osbootdev = "Yes"; else $osbootdev = "No";
+		$vmname = $lv->domain_get_name($res);
+		$cmdline = null;
+		$QEMUCmdline = getQEMUCmdLine($strDOMXML);
+		$QEMUOverride = getQEMUOverride($strDOMXML);
+		if (isset($QEMUCmdline)) $cmdline = $QEMUCmdline;
+		if (isset($QEMUOverride) && isset($QEMUCmdline)) $cmdline .= "\n".$QEMUOverride;
+		if (isset($QEMUOverride) && !isset($QEMUCmdline)) $cmdline = $QEMUOverride;
 		return [
 			'template' => $arrTemplateValues,
 			'domain' => [
@@ -1335,6 +1432,7 @@ private static $encoding = 'UTF-8';
 				'maxmem' => $lv->domain_get_memory($res),
 				'password' => '', //TODO?
 				'cpumode' => $lv->domain_get_cpu_type($res),
+				'cpupmemlmt' => $lv->domain_get_cpu_pmem_limit($res),
 				'cpumigrate' => $lv->domain_get_cpu_migrate($res),
 				'vcpus' => $dom['nrVirtCpu'],
 				'vcpu' => $lv->domain_get_vcpu_pins($res),
@@ -1360,8 +1458,13 @@ private static $encoding = 'UTF-8';
 			'nic' => $arrNICs,
 			'usb' => $arrUSBDevs,
 			'shares' => $lv->domain_get_mount_filesystems($res),
-			'qemucmdline' => getQEMUCmdLine($strDOMXML),
-			'clocks' => getClocks($strDOMXML)
+			'evdev' => getevDev($res),
+			'qemucmdline' => $cmdline,
+			'clocks' => getClocks($strDOMXML),
+			'xml' => [
+				'machine' => $lv->domain_get_xml($vmname, "//domain/os/*"),
+				'devices' => $lv->get_xpath($vmname, "//domain/os/*"),
+			],
 		];
 	}
 
@@ -1399,22 +1502,30 @@ private static $encoding = 'UTF-8';
 				if ($p2['bus'] && $p2['slot'] && $p2['function'] && $p2['bus']==$pci['bus'] && $p2['slot']==$pci['slot'] && $p2['function']==$function) unset($old['devices']['hostdev'][$k]);
 			}
 		}
-		// remove and rebuild usb controllers
+		// remove and rebuild usb + scsi controllers
 		$devices = $old['devices']['controller'];
 		foreach ($devices as $key => $controller) {
 			if ($controller['@attributes']['type']=='usb') unset($old['devices']['controller'][$key]);
+			if ($controller['@attributes']['type']=='scsi') unset($old['devices']['controller'][$key]);
 		}
 		// preserve existing disk driver settings
 		foreach ($new['devices']['disk'] as $key => $disk) {
 			$source = $disk['source']['@attributes']['file'];
-			foreach ($old['devices']['disk'] as $k => $d) if ($source==$d['source']['@attributes']['file']) $new['devices']['disk'][$key]['driver']['@attributes'] = $d['driver']['@attributes'];
+			if (isset($disk['driver']['@attributes']['discard'])) $discard = $disk['driver']['@attributes']['discard']; else $discard = null;
+			foreach ($old['devices']['disk'] as $k => $d)
+				if ($source==$d['source']['@attributes']['file']) {
+					if (isset($discard)) $d['driver']['@attributes']['discard'] = $discard;
+					$new['devices']['disk'][$key]['driver']['@attributes'] = $d['driver']['@attributes'];
+				}
 		}
 		// settings not in the GUI, but maybe customized
 		unset($old['clock']);
+		unset($old['devices']['input']);
 		// preserve vnc/spice port settings
 		// unset($new['devices']['graphics']['@attributes']['port'],$new['devices']['graphics']['@attributes']['autoport']);
-		if (!$new['devices']['graphics']) unset($old['devices']['graphics']);
-		if (!isset($new['devices']['graphics']['@attributes']['keymap']) && isset($old['devices']['graphics']['@attributes']['keymap'])) unset($old['devices']['graphics']['@attributes']['keymap']) ;
+		unset($old['devices']['sound']);
+		unset($old['devices']['graphics']);
+		if (!isset($new['devices']['graphics']['@attributes']['keymap']) && isset($old['devices']['graphics']['@attributes']['keymap'])) unset($old['devices']['graphics']['@attributes']['keymap']);
 		// update parent arrays
 		if (!$old['devices']['hostdev']) unset($old['devices']['hostdev']);
 		if (!$new['devices']['hostdev']) unset($new['devices']['hostdev']);
@@ -1423,16 +1534,15 @@ private static $encoding = 'UTF-8';
 		// remove existing auto-generated settings
 		unset($old['cputune']['vcpupin'],$old['devices']['video'],$old['devices']['disk'],$old['devices']['interface'],$old['devices']['filesystem'],$old['cpu']['@attributes'],$old['os']['boot'],$old['os']['loader'],$old['os']['nvram']);
 		// Remove old CPU cache and features
-		unset($old['cpu']['cache'], $old['cpu']['feature']) ;
-		unset($old['features']['hyperv'],$old['devices']['channel']) ;
+		unset($old['cpu']['cache'], $old['cpu']['feature'], $old['cpu']['maxphysaddr']);
+		unset($old['features']['hyperv'],$old['devices']['channel']);
 		// set namespace
 		$new['metadata']['vmtemplate']['@attributes']['xmlns'] = 'unraid';
 	}
 
 	function getVMUSBs($strXML){
-		$arrValidUSBDevices = getValidUSBDevices() ;
+		$arrValidUSBDevices = getValidUSBDevices();
 		foreach($arrValidUSBDevices as $key => $data) {
-
 			$array[$key] = [
 					'id' => $data['id'],
 					'name' => $data["name"],
@@ -1443,21 +1553,21 @@ private static $encoding = 'UTF-8';
 		}
 		if ($strXML !="") {
 			$VMxml = new SimpleXMLElement($strXML);
-			$VMUSB=$VMxml->xpath('//devices/hostdev[@type="usb"]') ;
+			$VMUSB=$VMxml->xpath('//devices/hostdev[@type="usb"]');
 			foreach($VMUSB as $USB){
-				$vendor=$USB->source->vendor->attributes()->id ;
-				$product=$USB->source->product->attributes()->id ;
-				$startupPolicy=$USB->source->attributes()->startupPolicy ;
-				$usbboot= $USB->boot->attributes()->order ?? "" ;
-				$id = str_replace('0x', '', $vendor . ':' . $product) ;
-				$found = false ;
+				$vendor=$USB->source->vendor->attributes()->id;
+				$product=$USB->source->product->attributes()->id;
+				$startupPolicy=$USB->source->attributes()->startupPolicy;
+				$usbboot= $USB->boot->attributes()->order ?? "";
+				$id = str_replace('0x', '', $vendor.':'.$product);
+				$found = false;
 				foreach($arrValidUSBDevices as $key => $data) {
 					if ($data['id'] == $id) {
-						$array[$key]['checked'] = "checked" ;
-						$array[$key]['startupPolicy'] = $startupPolicy ;
-						$array[$key]['usbboot'] = $usbboot ;
-						$found = true ;
-						break ;
+						$array[$key]['checked'] = "checked";
+						$array[$key]['startupPolicy'] = $startupPolicy;
+						$array[$key]['usbboot'] = $usbboot;
+						$found = true;
+						break;
 					}
 				}
 				if (!$found) {
@@ -1471,48 +1581,48 @@ private static $encoding = 'UTF-8';
 				}
 			}
 		}
-		return $array ;
+		return $array;
 	}
 
 	function sharesOnly($disk) {
 		return strpos('Data,Cache',$disk['type'])!==false && $disk['exportable']=='yes';
-	  }
+	}
 
 	function getUnraidShares(){
 		$shares  = parse_ini_file('state/shares.ini',true);
 		uksort($shares,'strnatcasecmp');
-		$arrreturn[] = "Manual" ;
+		$arrreturn[] = "Manual";
 		foreach ($shares as $share) {
-			$arrreturn[] = "User:".$share["name"] ;
+			$arrreturn[] = "User:".$share["name"];
 		}
 		$disks   = parse_ini_file('state/disks.ini',true);
 		$disks = array_filter($disks,'sharesOnly');
 
 		foreach ($disks as $name => $disk) {
-			$arrreturn[] = "Disk:".$name ;
+			$arrreturn[] = "Disk:".$name;
 		}
-		return $arrreturn ;
+		return $arrreturn;
 	}
 
 	function getgastate($res) {
-        global $lv ;
-        $xml = new SimpleXMLElement($lv->domain_get_xml($res)) ;
-        $data = $xml->xpath('//channel/target[@name="org.qemu.guest_agent.0"]/@state') ;
-        $data = $data[0]->state ?? null ;
-        return $data ;
+		global $lv;
+		$xml = new SimpleXMLElement($lv->domain_get_xml($res));
+		$data = $xml->xpath('//channel/target[@name="org.qemu.guest_agent.0"]/@state');
+		$data = $data[0]->state ?? null;
+		return $data;
 	}
 
 	function getmemoryBacking($res) {
-		global $lv ;
-		$xml = $lv->domain_get_xml($res) ;
+		global $lv;
+		$xml = $lv->domain_get_xml($res);
 		$memoryBacking = new SimpleXMLElement($xml);
-		$memorybacking = $memoryBacking->memoryBacking ;
-		return json_encode($memorybacking); ;
+		$memorybacking = $memoryBacking->memoryBacking;
+		return json_encode($memorybacking);;
 	}
 
 	function getClocks($xml) {
 		$clocks = new SimpleXMLElement($xml);
-		$clocks = json_decode(json_encode($clocks->clock),true) ;
+		$clocks = json_decode(json_encode($clocks->clock),true);
 		$arrClocks = [
 			"hpet" => [
 				"present" => "no",
@@ -1530,54 +1640,66 @@ private static $encoding = 'UTF-8';
 				"present" => "no",
 				"tickpolicy" => "delay"
 			]
-		] ;
+		];
 		foreach ($clocks['timer'] as $timer) {
-			$name = $timer["@attributes"]["name"] ;
-			$tickpolicy = $timer["@attributes"]["tickpolicy"] ;
-			$present = $timer["@attributes"]["present"] ;
-			if (isset($present)) $arrClocks[$name]['present'] = $present ;
-			if (isset($tickpolicy)) { $arrClocks[$name]['tickpolicy'] = $tickpolicy ; $arrClocks[$name]['present'] = 'yes' ; }
+			$name = $timer["@attributes"]["name"];
+			$tickpolicy = $timer["@attributes"]["tickpolicy"];
+			$present = $timer["@attributes"]["present"];
+			if (isset($present)) $arrClocks[$name]['present'] = $present;
+			if (isset($tickpolicy)) { $arrClocks[$name]['tickpolicy'] = $tickpolicy; $arrClocks[$name]['present'] = 'yes'; }
 		}
-		return json_encode($arrClocks) ;
+		return json_encode($arrClocks);
 	}
 
 	function getQEMUCmdLine($xml) {
-		$x = strpos($xml,"<qemu:commandline>", 0) ;
-		if ($x === false) return null ;
-		$y = strpos($xml,"</qemu:commandline>", 0)  ;
-		$z=$y ;
+		$x = strpos($xml,"<qemu:commandline>", 0);
+		if ($x === false) return null;
+		$y = strpos($xml,"</qemu:commandline>", 0) ;
+		$z=$y;
 		while ($y!=false) {
-			$y = strpos($xml,"<qemu:commandline>", $z +19)  ;
-			if ($y != false) $z =$y  ;
+			$y = strpos($xml,"<qemu:commandline>", $z +19) ;
+			if ($y != false) $z =$y ;
 		}
-		return substr($xml,$x, ($z + 19) -$x) ;
+		return substr($xml,$x, ($z + 19) -$x);
+	}
+
+	function getQEMUOverride($xml) {
+		$x = strpos($xml,"<qemu:override>", 0);
+		if ($x === false) return null;
+		$y = strpos($xml,"</qemu:override>", 0) ;
+		$z=$y;
+		while ($y!=false) {
+			$y = strpos($xml,"<qemu:override>", $z +16) ;
+			if ($y != false) $z =$y ;
+		}
+		return substr($xml,$x, ($z + 16) -$x);
 	}
 
 	function getchannels($res) {
-		global $lv ;
-        $xml = $lv->domain_get_xml($res) ;
-		$x = strpos($xml,"<channel", 0) ;
-		$y = strpos($xml,"</channel>", 0)  ;
-		$z=$y ;
+		global $lv;
+				$xml = $lv->domain_get_xml($res);
+		$x = strpos($xml,"<channel", 0);
+		$y = strpos($xml,"</channel>", 0) ;
+		$z=$y;
 		while ($y!=false) {
-			$y = strpos($xml,"</channel>", $z +10)  ;
-			if ($y != false) $z =$y  ;
+			$y = strpos($xml,"</channel>", $z +10) ;
+			if ($y != false) $z =$y ;
 		}
-		$channels = substr($xml,$x, ($z + 10) -$x) ;
-		return $channels ;
+		$channels = substr($xml,$x, ($z + 10) -$x);
+		return $channels;
 	}
 
 	function getcopypaste($res) {
-		$channels = getchannels($res) ;
-		$spicevmc = $qemuvdaagent = $copypaste = false ;
-		if (strpos($channels,"spicevmc",0)) $spicevmc = true ;
-		if (strpos($channels,"qemu-vdagent",0)) $qemuvdaagent = true ;
-		if ($spicevmc || $qemuvdaagent) $copypaste = true ; else $copypaste = false ;
-		return $copypaste ;
+		$channels = getchannels($res);
+		$spicevmc = $qemuvdaagent = $copypaste = false;
+		if (strpos($channels,"spicevmc",0)) $spicevmc = true;
+		if (strpos($channels,"qemu-vdagent",0)) $qemuvdaagent = true;
+		if ($spicevmc || $qemuvdaagent) $copypaste = true; else $copypaste = false;
+		return $copypaste;
 	}
 
-	function vm_clone($vm, $clone ,$overwrite,$start,$edit, $free, $waitID) {
-		global $lv,$domain_cfg ;
+	function vm_clone($vm, $clone ,$overwrite,$start,$edit, $free, $waitID, $regenmac) {
+		global $lv,$domain_cfg,$arrDisplayOptions;
 		/*
 			Clone.
 
@@ -1585,6 +1707,7 @@ private static $encoding = 'UTF-8';
 
 			Get new VM Name
 			Extract XML for VM to be cloned.
+			Check if snapshots.
 			Check if directory exists.
 			Check for disk space
 
@@ -1602,763 +1725,1360 @@ private static $encoding = 'UTF-8';
 
 			If option to edit, show VMUpdate
 		*/
-		$uuid = $lv->domain_get_uuid($clone) ;
+		$snaps = getvmsnapshots($vm);
+		if (is_array($snaps)) {
+			if (count($snaps) ) {write("addLog\0".htmlspecialchars(_("Clone of VM not currently supported if it has snapshots"))); $arrResponse =  ['error' => _("Clone of VM not currently supported if it has snapshots")]; return false;}
+		}
+		$uuid = $lv->domain_get_uuid($clone);
 		write("addLog\0".htmlspecialchars(_("Checking if clone exists")));
-		if ($uuid) { $arrResponse =  ['error' => _("Clone VM name already inuse")]; return false ;}
+		if ($uuid) { $arrResponse =  ['error' => _("Clone VM name already inuse")]; return false;}
 		#VM must be shutdown.
 		$res = $lv->get_domain_by_name($vm);
 		$dom = $lv->domain_get_info($res);
 		$state = $lv->domain_state_translate($dom['state']);
-		$vmxml = $lv->domain_get_xml($res) ;
-		file_put_contents("/tmp/cloningxml" ,$vmxml) ; ## Remove before stable.
+		$vmxml = $lv->domain_get_xml($res);
 		$storage =  $lv->_get_single_xpath_result($vm, '//domain/metadata/*[local-name()=\'vmtemplate\']/@storage');
-		if (empty($storage)) $storage = "default" ;
+		if (empty($storage)) $storage = "default";
 		# if VM running shutdown. Record was running.
-		if ($state != 'shutoff') {write("addLog\0".htmlspecialchars(_("Shuting down $vm current $state"))); $arrResponse = $lv->domain_destroy($vm) ; }
+		if ($state != 'shutoff') {write("addLog\0".htmlspecialchars(_("Shuting down ").$vm._(" current ")._($state))); $arrResponse = $lv->domain_destroy($vm); }
 		# Wait for shutdown?
 
-		$disks =$lv->get_disk_stats($vm) ;
+		$disks =$lv->get_disk_stats($vm);
 
-		$capacity = 0 ;
+		$capacity = 0;
 
 		foreach($disks as $disk)   {
-			$file = $disk["file"] ;
-			$pathinfo =  pathinfo($file) ;
-			$capacity = $capacity + $disk["capacity"] ;
+			$file = $disk["file"];
+			$pathinfo =  pathinfo($file);
+			$capacity = $capacity + $disk["capacity"];
 		}
 
 		#Check free space.
-		write("addLog\0".htmlspecialchars("Checking for free space"));
-		$dirfree = disk_free_space($pathinfo["dirname"]) ;
+		write("addLog\0".htmlspecialchars(_("Checking for free space")));
+		$dirfree = disk_free_space($pathinfo["dirname"]);
 		$sourcedir = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($pathinfo["dirname"])." 2>/dev/null"));
-		$repdir = str_replace('/mnt/user/', "/mnt/$sourcedir/", $pathinfo["dirname"]);
-		$repdirfree = disk_free_space($repdir) ;
-		$reflink = true ;
-		$capacity *=  1 ;
+		if (!empty($sourcedir)) $repdir = str_replace('/mnt/user/', "/mnt/$sourcedir/", $pathinfo["dirname"]); else $repdir = $pathinfo["dirname"];
+		$repdirfree = disk_free_space($repdir);
+		$reflink = true;
+		$capacity *=  1;
 
-		if ($free == "yes" && $repdirfree < $capacity) { $reflink = false ;}
-		if ($free == "yes" && $dirfree < $capacity) { write("addLog\0".htmlspecialchars(_("Insufficent storage for clone")));  return false ;}
+		if ($free == "yes" && $repdirfree < $capacity) { $reflink = false;}
+		if ($free == "yes" && $dirfree < $capacity) { write("addLog\0".htmlspecialchars(_("Insufficent storage for clone")));  return false;}
 
 		#Clone XML
-		$uuid = $lv->domain_get_uuid($vm) ;
-		$config=domain_to_config($uuid) ;
+		$uuid = $lv->domain_get_uuid($vm);
+		$config=domain_to_config($uuid);
 
-		$config["domain"]["name"] = $clone ;
-		$config["domain"]["uuid"]  = $lv->domain_generate_uuid() ;
-		foreach($config["nic"] as $index => $detail) {
-		$config["nic"][$index]["mac"] = $lv->generate_random_mac_addr() ;
-		}
+		$config["domain"]["name"] = $clone;
+		$config["domain"]["uuid"]  = $lv->domain_generate_uuid();
+		if ($regenmac == "yes") {
+			write("addLog\0".htmlspecialchars(_("Regenerate MACs")));
+			foreach($config["nic"] as $index => $detail) {
+				$config["nic"][$index]["mac"] = $lv->generate_random_mac_addr();
+			}
+		} else write("addLog\0".htmlspecialchars(_("Retain existing MACs")));
 		$config["domain"]["type"] = "kvm";
 
-		$usbs = getVMUSBs($vmxml) ;
+		$usbs = getVMUSBs($vmxml);
 		foreach($usbs as $i => $usb) {
-			if ($usb["checked"] == "checked") continue ;
-			unset($usbs[$i]) ;
+			if ($usb["checked"] == "checked") continue;
+			unset($usbs[$i]);
 		}
-		$config["usb"] = $usbs ;
+		$config["usb"] = $usbs;
 
-		$files_exist = false ;
-		$files_clone = array() ;
+		$file_exists = false;
+		$file_clone = array();
+		if ($config['disk'][0]['new'] != "") {
 		foreach ($config["disk"] as $diskid => $disk) {
-			$file_clone[$diskid]["source"] = $config["disk"][$diskid]["new"] ;
-			$config["disk"][$diskid]["new"] = str_replace($vm,$clone,$config["disk"][$diskid]["new"]) ;
-			$pi = pathinfo($config["disk"][$diskid]["new"]) ;
-			$isdir = is_dir($pi['dirname']) ;
-			if (is_file($config["disk"][$diskid]["new"])) $file_exists = true ;
-			$file_clone[$diskid]["target"] = $config["disk"][$diskid]["new"] ;
+			$file_clone[$diskid]["source"] = $config["disk"][$diskid]["new"];
+			$config["disk"][$diskid]["new"] = str_replace($vm,$clone,$config["disk"][$diskid]["new"]);
+			$pi = pathinfo($config["disk"][$diskid]["new"]);
+			$isdir = is_dir($pi['dirname']);
+			if (is_file($config["disk"][$diskid]["new"])) $file_exists = true;
+			write("addLog\0".htmlspecialchars(_("Checking from file:").$file_clone[$diskid]["source"]));
+			write("addLog\0".htmlspecialchars(_("Checking to file:").$config["disk"][$diskid]["new"]));
+			write("addLog\0".htmlspecialchars(_("File exists value:"). ($file_exists ? "True" : "False")));
+			$file_clone[$diskid]["target"] = $config["disk"][$diskid]["new"];
 			}
 
-		if ($storage == "default") $clonedir = $domain_cfg['DOMAINDIR'].$clone ; else $clonedir = str_replace('/mnt/user/', "/mnt/$storage/", $domain_cfg['DOMAINDIR']).$clone;
+		if ($storage == "default") $clonedir = $domain_cfg['DOMAINDIR'].$clone; else $clonedir = str_replace('/mnt/user/', "/mnt/$storage/", $domain_cfg['DOMAINDIR']).$clone;
 		if (!is_dir($clonedir)) {
-			mkdir($clonedir,0777,true) ;
-			chown($clonedir, 'nobody');
-			chgrp($clonedir, 'users');
+			my_mkdir($clonedir,0777,true);
 		}
-		write("addLog\0".htmlspecialchars("Checking for image files"));
-		if ($file_exists && $overwrite != "yes") { write("addLog\0".htmlspecialchars(_("New image file names exist and Overwrite is not allowed")));  return( false) ; }
+		write("addLog\0".htmlspecialchars(_("Checking for image files")));
+		if ($file_exists && $overwrite != "yes") { write("addLog\0".htmlspecialchars(_("New image file names exist and Overwrite is not allowed")));  return( false); }
 
 		#Create duplicate files.
 		foreach($file_clone as $diskid => $disk)  {
-			$target = $disk['target'] ;
-			$source = $disk['source'] ;
-			if ($target == $source) { write("addLog\0".htmlspecialchars(_("New image file is same as old")));  return( false) ; }
+			$reptgt = $target = $disk['target'];
+			$repsrc = $source = $disk['source'];
+			if ($target == $source) { write("addLog\0".htmlspecialchars(_("New image file is same as old")));  return( false); }
 			if ($storage == "default") $sourcerealdisk = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($source)." 2>/dev/null")); else $sourcerealdisk = $storage;
+			if (!empty($sourcerealdisk)) {
 			$reptgt = str_replace('/mnt/user/', "/mnt/$sourcerealdisk/", $target);
 			$repsrc = str_replace('/mnt/user/', "/mnt/$sourcerealdisk/", $source);
+			}
 
-			$cmdstr = "cp --reflink=always '$repsrc' '$reptgt'" ;
-        	if ($reflink == true) { $refcmd = $cmdstr ; } else {$refcmd = false; }
-			$cmdstr = "rsync -ahPIXS  --out-format=%f --info=flist0,misc0,stats0,name1,progress2 '$repsrc' '$reptgt'" ;
-			$error = execCommand_nchan_clone($cmdstr,$target,$refcmd) ;
-			if (!$error) { write("addLog\0".htmlspecialchars("Image copied failed."));  return( false) ; }
+			$refresult = getFilesystemAndReflinkMode($repsrc);
+			$refcmdaction = $refresult['reflink_mode'];
+			$refcmdfs = $refresult['filesystem'];
+			$cmdstr = "cp --reflink=$refcmdaction '$repsrc' '$reptgt'";
+			write("addLog\0".htmlspecialchars(_("Reflink Action")." ".$refcmdaction." "._("for filesystem")." ".$refcmdfs));
+			if ($reflink == true) { $refcmd = $cmdstr; } else {$refcmd = false; }
+			if ($refresult['filesystem'] == "zfs" && $refresult['reflink_mode'] == "skip") {
+				write("addLog\0".htmlspecialchars(_("Reflink copy not supported on ZFS skipping")));
+				$refcmd = false;
+			}
+
+			$cmdstr = "rsync -ahPIXS  --out-format=%f --info=flist0,misc0,stats0,name1,progress2 '$repsrc' '$reptgt'";
+			$error = execCommand_nchan_clone($cmdstr,$target,$refcmd); #PHPS
+			if (!$error) { write("addLog\0".htmlspecialchars("Image copied failed."));  return( false); }
 		}
-
-		write("<p class='logLine'></p>","addLog\0<fieldset class='docker'><legend>"._("Completing Clone").": </legend><p class='logLine'></p><span id='wait-$waitID'></span></fieldset>");
-		write("addLog\0".htmlspecialchars("Creating new XML $clone"));
-
-		$xml = $lv->config_to_xml($config, true) ;
-		file_put_contents("/tmp/clonexml" ,$xml) ; ## Remove before stable.
-		$rtn = $lv->domain_define($xml) ;
-		return($rtn) ;
-
 	}
 
+		write("<p class='logLine'></p>","addLog\0<fieldset class='docker'><legend>"._("Completing Clone").": </legend><p class='logLine'></p><span id='wait-$waitID'></span></fieldset>");
+		write("addLog\0".htmlspecialchars(_("Creating new XML ").$clone));
+
+		foreach($config['gpu'] as $ID => $arrGPU) {
+			if ($arrGPU['id'] != 'virtual') continue;
+			if ($arrGPU['model'] == 'qxl' && !empty($arrGPU['DisplayOptions'])) {
+			  $config['gpu'][$ID]['DisplayOptions'] = $arrDisplayOptions[$arrGPU['DisplayOptions']]['qxlxml'];
+			}
+		}
+
+		$xml = $lv->config_to_xml($config, true);
+		$rtn = $lv->domain_define($xml);
+
+		if (is_resource($rtn)) {
+			$arrResponse  = ['success' => true];
+			write("addLog\0".htmlspecialchars(_("Creating XML successful")));
+		} else {
+			$lastvmerror = $lv->get_last_error();
+			$arrResponse = ['xml' => $xml,'error' => $lastvmerror];
+			write("addLog\0".htmlspecialchars(_("Creating XML Error:$lastvmerror")));
+			file_put_contents("/tmp/vmclonertn.debug", json_encode($arrResponse,JSON_PRETTY_PRINT));
+		}
+
+		return($rtn);
+
+	}
 
 	function compare_creationtime($a, $b) 	{
 		return strnatcmp($a['creationtime'], $b['creationtime']);
-  }
-
-  function compare_creationtimelt($a, $b) 	{
-	  return $a['creationtime'] < $b['creationtime'];
 	}
 
-  function getvmsnapshots($vm) {
-	  $snaps=array() ;
-	  $dbpath = "/etc/libvirt/qemu/snapshot/$vm" ;
-	  $snaps_json = file_get_contents($dbpath."/snapshots.db") ;
-	  $snaps = json_decode($snaps_json,true) ;
-	  if (is_array($snaps)) uasort($snaps,'compare_creationtime') ;
-	  return $snaps ;
-  }
+	function compare_creationtimelt($a, $b) 	{
+		return $a['creationtime'] < $b['creationtime'];
+	}
 
-  function write_snapshots_database($vm,$name) {
-	  global $lv ;
-	  $dbpath = "/etc/libvirt/qemu/snapshot/$vm" ;
-	  if (!is_dir($dbpath)) mkdir($dbpath) ;
-	  $snaps_json = file_get_contents($dbpath."/snapshots.db") ;
-	  $snaps = json_decode($snaps_json,true) ;
-	  $snapshot_res=$lv->domain_snapshot_lookup_by_name($vm,$name) ;
-	  $snapshot_xml=$lv->domain_snapshot_get_xml($snapshot_res) ;
-	  $a = simplexml_load_string($snapshot_xml) ;
-	  $a = json_encode($a) ;
-	  $b= json_decode($a, TRUE);
-	  $vmsnap = $b["name"] ;
-	  $snaps[$vmsnap]["name"]= $b["name"];
-	  $snaps[$vmsnap]["parent"]= $b["parent"] ;
-	  $snaps[$vmsnap]["state"]= $b["state"];
-	  $snaps[$vmsnap]["desc"]= $b["description"];
-	  $snaps[$vmsnap]["memory"]= $b["memory"];
-	  $snaps[$vmsnap]["creationtime"]= $b["creationTime"];
+	function getvmsnapshots($vm) {
+		$snaps=array();
+		$dbpath = "/etc/libvirt/qemu/snapshotdb/$vm";
+		$snaps_json = file_get_contents($dbpath."/snapshots.db");
+		$snaps = json_decode($snaps_json,true);
+		if (is_array($snaps)) uasort($snaps,'compare_creationtime');
+		return $snaps;
+	}
 
-	  $disks =$lv->get_disk_stats($vm) ;
-		  foreach($disks as $disk)   {
-			  $file = $disk["file"] ;
-			  $output = array() ;
-			  exec("qemu-img info --backing-chain -U '$file'  | grep image:",$output) ;
-			  foreach($output as $key => $line) {
-				  $line=str_replace("image: ","",$line) ;
-				  $output[$key] = $line ;
-			  }
+	function write_snapshots_database($vm,$name,$state,$desc,$method="QEMU") {
+		global $lv;
+		$dbpath = "/etc/libvirt/qemu/snapshotdb/$vm";
+		if (!is_dir($dbpath)) mkdir($dbpath);
+		$noxml = "";
+		$snaps_json = file_get_contents($dbpath."/snapshots.db");
+		$snaps = json_decode($snaps_json,true);
+		$snapshot_xml = @file_get_contents("/etc/libvirt/qemu/snapshot/{$vm}/{$name}.xml");
+		if (empty($snapshot_xml)) {
+			$snapshot_xml = trim(shell_exec("virsh snapshot-dumpxml ".escapeshellarg($vm)." ".escapeshellarg($name)." 2>/dev/null"));
+		}
+		$snapshot_res = !empty($snapshot_xml);
+		if (!$snapshot_res) {
+			 # Manual Snap no XML
+		if ($state == "shutoff" && ($method == "ZFS" || $method == "BTRFS")) {
+			# Create Snapshot info
+			$vmsnap = $name;
+			$snaps[$vmsnap]["name"]= $name;
+			$snaps[$vmsnap]["parent"]= "None";
+			$snaps[$vmsnap]["state"]= "shutoff";
+			$snaps[$vmsnap]["desc"]= $desc;
+			$snaps[$vmsnap]["memory"]= ['@attributes' => ['snapshot' => 'no']];
+			$snaps[$vmsnap]["creationtime"]= date("U");
+			$snaps[$vmsnap]["method"]= $method;
+			$snaps[$vmsnap]['xml'] = $lv->domain_get_xml($vm);
+			$noxml = "noxml";
+		}
+		} else {
 
-			  $snaps[$vmsnap]['backing'][$disk["device"]] = $output ;
-			  $rev = "r".$disk["device"] ;
-			  $reversed = array_reverse($output) ;
-			  $snaps[$vmsnap]['backing'][$rev] = $reversed ;
-		  }
-		  $parentfind = $snaps[$vmsnap]['backing'][$disk["device"]] ;
-		  $parendfileinfo = pathinfo($parentfind[1]) ;
-		  $snaps[$vmsnap]["parent"]= $parendfileinfo["extension"];
-		  $snaps[$vmsnap]["parent"] = str_replace("qcow2",'',$snaps[$vmsnap]["parent"]) ;
-		  if (isset($parentfind[1]) && !isset($parentfind[2])) $snaps[$vmsnap]["parent"]="Base" ;
+		$a = simplexml_load_string($snapshot_xml);
+		$a = json_encode($a);
+		$b = json_decode($a, TRUE);
+		$vmsnap = $b["name"];
+		$snaps[$vmsnap]["name"]= $b["name"];
+		$snaps[$vmsnap]["parent"]= $b["parent"];
+		$snaps[$vmsnap]["state"]= $b["state"];
+		$snaps[$vmsnap]["desc"]= $b["description"];
+		$snaps[$vmsnap]["memory"]= $b["memory"];
+		$snaps[$vmsnap]["creationtime"]= $b["creationTime"];
+		$snaps[$vmsnap]["method"]= $method;
+		}
 
-		  if (array_key_exists(0 , $b["disks"]["disk"])) $snaps[$vmsnap]["disks"]= $b["disks"]["disk"]; else $snaps[$vmsnap]["disks"][0]= $b["disks"]["disk"];
+		$disks =$lv->get_disk_stats($vm);
+			foreach($disks as $disk)   {
+				$file = $disk["file"];
+				if ($disk['device'] == "hdc" ) $primarypath = dirname(transpose_user_path($file));
+				$output = array();
+				exec("qemu-img info --backing-chain -U '$file'  | grep image:",$output); #PHPS
+				foreach($output as $key => $line) {
+					$line=str_replace("image: ","",$line);
+					$output[$key] = $line;
+				}
 
+				$snaps[$vmsnap]['backing'][$disk["device"]] = $output;
+				$rev = "r".$disk["device"];
+				$reversed = array_reverse($output);
+				$snaps[$vmsnap]['backing'][$rev] = $reversed;
+			}
+			$snaps[$vmsnap]["primarypath"]= $primarypath;
+			$parentfind = $snaps[$vmsnap]['backing'][$disk["device"]];
+			$parendfileinfo = pathinfo($parentfind[1]);
+			$snaps[$vmsnap]["parent"]= $parendfileinfo["extension"];
+			$snaps[$vmsnap]["parent"] = str_replace("qcow2",'',$snaps[$vmsnap]["parent"]);
+			if (isset($parentfind[1]) && !isset($parentfind[2])) $snaps[$vmsnap]["parent"]="Base";
 
-		  $value = json_encode($snaps,JSON_PRETTY_PRINT) ;
-	  file_put_contents($dbpath."/snapshots.db",$value) ;
-  }
+			if (isset($b)) if (array_key_exists(0 , $b["disks"]["disk"])) $snaps[$vmsnap]["disks"]= $b["disks"]["disk"]; else $snaps[$vmsnap]["disks"][0]= $b["disks"]["disk"];
 
-  function refresh_snapshots_database($vm) {
-	  global $lv ;
-	  $dbpath = "/etc/libvirt/qemu/snapshot/$vm" ;
-	  if (!is_dir($dbpath)) mkdir($dbpath) ;
-	  $snaps_json = file_get_contents($dbpath."/snapshots.db") ;
-	  $snaps = json_decode($snaps_json,true) ;
-	  foreach($snaps as $vmsnap=>$snap)
+			$value = json_encode($snaps,JSON_PRETTY_PRINT);
+		file_put_contents($dbpath."/snapshots.db",$value);
+		return $noxml;
+	}
+	function purge_deleted_snapshots(array &$snaps){
+		foreach ($snaps as $snapname => $snap) {
+			$broken = false;
+			foreach ($snap['disks'] as $disk) {
+				$snapfile = $disk['source']['@attributes']['file'];
+				if (!file_exists($snapfile)) {
+					$broken = true;
+					break;
+				}
+			}
+			if ($broken) {
+				unset($snaps[$snapname]);
+			}
+		}
+	}
 
-		  $disks =$lv->get_disk_stats($vm) ;
-		  foreach($disks as $disk)   {
-			  $file = $disk["file"] ;
-			  $output = array() ;
-			  exec("qemu-img info --backing-chain -U '$file'  | grep image:",$output) ;
-			  foreach($output as $key => $line) {
-				  $line=str_replace("image: ","",$line) ;
-				  $output[$key] = $line ;
-			  }
+	function refresh_snapshots_database($vm,$delete_used=false) {
+		global $lv;
+		$dbpath = "/etc/libvirt/qemu/snapshotdb/$vm";
+		if (!is_dir($dbpath)) mkdir($dbpath);
+		$snaps_json = file_get_contents($dbpath."/snapshots.db");
+		$snaps = json_decode($snaps_json,true);
 
-			  $snaps[$vmsnap]['backing'][$disk["device"]] = $output ;
-			  $rev = "r".$disk["device"] ;
-			  $reversed = array_reverse($output) ;
-			  $snaps[$vmsnap]['backing'][$rev] = $reversed ;
-		  }
-		  $parentfind = $snaps[$vmsnap]['backing'][$disk["device"]] ;
-		  $parendfileinfo = pathinfo($parentfind[1]) ;
-		  $snaps[$vmsnap]["parent"]= $parendfileinfo["extension"];
-		  $snaps[$vmsnap]["parent"] = str_replace("qcow2",'',$snaps[$vmsnap]["parent"]) ;
-		  if (isset($parentfind[1]) && !isset($parentfind[2])) $snaps[$vmsnap]["parent"]="Base" ;
+		// Only destructive operations may invalidate snapshots
+		if ($delete_used) {
+			purge_deleted_snapshots($snaps);
+		}
 
-		  $value = json_encode($snaps,JSON_PRETTY_PRINT) ;
-		  $res = $lv->get_domain_by_name($vm);
-		  #if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_create_snapshot($lv->domain_get_uuid($vm),$name) ;
+		foreach($snaps as $vmsnap=>$snap) {
+			$disks = $snap['disks'];
+			foreach($disks as $disk)   {
+				$file = $disk["source"]["@attributes"]["file"];
+				$diskid = $disk["@attributes"]["name"];
+				$output = array();
+				exec("qemu-img info --backing-chain -U '$file'  | grep image:",$output);
+				foreach($output as $key => $line) {
+					$line=str_replace("image: ","",$line);
+					$output[$key] = $line;
+				}
 
+				$snaps[$vmsnap]['backing'][$diskid] = $output;
+				$rev = "r".$diskid;
+				$reversed = array_reverse($output);
+				$snaps[$vmsnap]['backing'][$rev] = $reversed;
+			}
+			$parentfind = $snaps[$vmsnap]['backing'][$disk["device"]];
+			$parendfileinfo = pathinfo($parentfind[1]);
+			$snaps[$vmsnap]["parent"]= $parendfileinfo["extension"];
+			$snaps[$vmsnap]["parent"] = str_replace("qcow2",'',$snaps[$vmsnap]["parent"]);
+			if (isset($parentfind[1]) && !isset($parentfind[2])) $snaps[$vmsnap]["parent"]="Base";
+		}
+		$value = json_encode($snaps,JSON_PRETTY_PRINT);
+		$res = $lv->get_domain_by_name($vm);
+		#if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_create_snapshot($lv->domain_get_uuid($vm),$name);
 
-		  #Remove any NVRAMs that are no longer valid.
-		  # Get uuid
-		  $vmuuid = $lv->domain_get_uuid($vm) ;
-		  #Get list of files
-		  #$filepath = "/etc/libvirt/qemu/nvram/'.$uuid*" ; #$snapshotname"
-		  $filepath = "/etc/libvirt/qemu/nvram/$vmuuid*" ; #$snapshotname"
-		  $nvram_files=glob($filepath) ;
-		  foreach($nvram_files as $key => $nvram_file)  {
-			  if ($nvram_file == "/etc/libvirt/qemu/nvram/$vmuuid"."_VARS-pure-efi.fd" || $nvram_file == "/etc/libvirt/qemu/nvram/$vmuuid"."_VARS-pure-efi-tpm.fd" ) unset($nvram_files[$key]) ;
-			  foreach ($snaps as $snapshotname => $snap) {
-				  $tpmfilename = "/etc/libvirt/qemu/nvram/".$vmuuid.$snapshotname."_VARS-pure-efi-tpm.fd" ;
-				  $nontpmfilename = "/etc/libvirt/qemu/nvram/".$vmuuid.$snapshotname."_VARS-pure-efi.fd" ;
-				  if ($nvram_file == $tpmfilename || $nvram_file == $nontpmfilename ) {
-					  unset($nvram_files[$key]) ;}
-			  }
-		  }
-		  foreach ($nvram_files  as $nvram_file) unlink($nvram_file) ;
+		#Remove any NVRAMs that are no longer valid.
+		# Get uuid
+		$vmuuid = $lv->domain_get_uuid($vm);
+		#Get list of files
+		$filepath = "/etc/libvirt/qemu/nvram/$vmuuid*"; #$snapshotname"
+		$nvram_files=glob($filepath);
+		foreach($nvram_files as $key => $nvram_file)  {
+			if ($nvram_file == "/etc/libvirt/qemu/nvram/$vmuuid"."_VARS-pure-efi.fd" || $nvram_file == "/etc/libvirt/qemu/nvram/$vmuuid"."_VARS-pure-efi-tpm.fd" ) unset($nvram_files[$key]);
+			foreach ($snaps as $snapshotname => $snap) {
+				$tpmfilename = "/etc/libvirt/qemu/nvram/".$vmuuid.$snapshotname."_VARS-pure-efi-tpm.fd";
+				$nontpmfilename = "/etc/libvirt/qemu/nvram/".$vmuuid.$snapshotname."_VARS-pure-efi.fd";
+				if ($nvram_file == $tpmfilename || $nvram_file == $nontpmfilename ) {
+					unset($nvram_files[$key]);}
+			}
+		}
+		foreach ($nvram_files  as $nvram_file) unlink($nvram_file);
 
+		file_put_contents($dbpath."/snapshots.db",$value);
+	}
 
-	  file_put_contents($dbpath."/snapshots.db",$value) ;
-  }
+	function delete_snapshots_database($vm,$name) {
+		global $lv;
+		$dbpath = "/etc/libvirt/qemu/snapshotdb/$vm";
+		$snaps_json = file_get_contents($dbpath."/snapshots.db");
+		$snaps = json_decode($snaps_json,true);
+		unset($snaps[$name]);
+		$value = json_encode($snaps,JSON_PRETTY_PRINT);
+		file_put_contents($dbpath."/snapshots.db",$value);
+		return true;
+	}
 
-  function delete_snapshots_database($vm,$name) {
-	  global $lv ;
-	  $dbpath = "/etc/libvirt/qemu/snapshot/$vm" ;
-	  $snaps_json = file_get_contents($dbpath."/snapshots.db") ;
-	  $snaps = json_decode($snaps_json,true) ;
-	  unset($snaps[$name]) ;
-	  $value = json_encode($snaps,JSON_PRETTY_PRINT) ;
-	  file_put_contents($dbpath."/snapshots.db",$value) ;
-	  return true ;
-  }
+	function vm_snapshot($vm,$snapshotname, $snapshotdescinput, $free = "yes", $method = "QEMU",  $memorysnap = "yes") {
+		global $lv;
+		$logging = true;
+		#Get State
+		$res = $lv->get_domain_by_name($vm);
+		$dom = $lv->domain_get_info($res);
+		$state = $lv->domain_state_translate($dom['state']);
+		$storage =  $lv->_get_single_xpath_result($vm, '//domain/metadata/*[local-name()=\'vmtemplate\']/@storage');
+		if (empty($storage)) $storage = "default";
 
+		if ($method == "ZFS" && $state == "running" && $memorysnap == "no") {$arrResponse =  ['error' => _("ZFS snapshot without memory dump not supported at this time.") ];return $arrResponse;}
 
-  function vm_snapshot($vm,$snapshotname, $snapshotdesc, $free = "yes",  $memorysnap = "yes") {
-	  global $lv ;
+		#Get disks for --diskspec
+		$disks =$lv->get_disk_stats($vm);
+		$diskspec = "";
+		$capacity = 0;
+		if ($snapshotname == "--generate") $name= "S".date("YmdHis"); else $name=$snapshotname;
+		if ($snapshotdescinput != "") $snapshotdesc = " --description '$snapshotdescinput'";
 
-	  #Get State
-	  $res = $lv->get_domain_by_name($vm);
-	  $dom = $lv->domain_get_info($res);
-	  $state = $lv->domain_state_translate($dom['state']);
-	  $storage =  $lv->_get_single_xpath_result($vm, '//domain/metadata/*[local-name()=\'vmtemplate\']/@storage');
-	  if (empty($storage)) $storage = "default" ;
-
-	  #Get disks for --diskspec
-	  $disks =$lv->get_disk_stats($vm) ;
-	  $diskspec = "" ;
-	  $capacity = 0 ;
-	  if ($snapshotname == "--generate") $name= "S" . date("YmdHis") ; else $name=$snapshotname ;
-	  if ($snapshotdesc != "") $snapshotdesc = " --description '$snapshotdesc'" ;
-
-	  foreach($disks as $disk)   {
-		  $file = $disk["file"] ;
-		  $pathinfo =  pathinfo($file) ;
-		  $dirpath = $pathinfo["dirname"];
-		  if ($storage == "default") {
+		foreach($disks as $disk)   {
+			$file = $disk["file"];
+			$pathinfo =  pathinfo($file);
+			$dirpath = $pathinfo["dirname"];
+			if ($storage == "default") {
 				$dirpath = $pathinfo["dirname"];
-		  } else {
+			} else {
 				$storagelocation = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($file)." 2>/dev/null"));
 				$dirpath= str_replace('/mnt/user/', "/mnt/$storagelocation/", $dirpath);
-		  } 
-		  $filenew = $dirpath.'/'.$pathinfo["filename"].'.'.$name.'qcow2' ;
-		  $diskspec .= " --diskspec '".$disk["device"]."',snapshot=external,file='".$filenew."'" ;
-		  $capacity = $capacity + $disk["capacity"] ;
-	  }
+			}
+			$filenew = $dirpath.'/'.$pathinfo["filename"].'.'.$name.'qcow2';
+			switch ($method) {
+			case "QEMU" :
+				$diskspec .= " --diskspec '".$disk["device"]."',snapshot=external,file='".$filenew."'";
+				break;
+			case "ZFS":
+			case "BTRFS":
+				$diskspec .= " --diskspec '".$disk["device"]."',snapshot=manual ";
+			}
+			$capacity = $capacity + $disk["capacity"];
+		}
 
-	  #get memory
-	  $mem = $lv->domain_get_memory_stats($vm) ;
-	  $memory = $mem[6] ;
+		#get memory
+		$mem = $lv->domain_get_memory_stats($vm);
+		$memory = $mem[6];
 
-	  if ($memorysnap = "yes") $memspec = ' --memspec "'.$dirpath.'/memory'.$name.'.mem",snapshot=external' ; else $memspec = "" ;
-	  $cmdstr = "virsh snapshot-create-as '$vm' --name '$name' $snapshotdesc  --atomic" ;
+		if ($memorysnap == "yes") $memspec = ' --memspec "'.$dirpath.'/memory'.$name.'.mem",snapshot=external'; else $memspec = "";
+		$cmdstr = "virsh snapshot-create-as '$vm' --name '$name' $snapshotdesc  --atomic";
 
+		if ($state == "running" & $memorysnap == "yes") {
+			$cmdstr .= " --live ".$memspec.$diskspec;
+			$capacity = $capacity + $memory;
 
-	  if ($state == "running") {
-		  $cmdstr .= " --live ".$memspec.$diskspec ;
-		  $capacity = $capacity + $memory ;
+		} else {
+			$cmdstr .= "  --disk-only ".$diskspec;
+		}
 
-	  } else {
-		  $cmdstr .= "  --disk-only ".$diskspec ;
-	  }
+		#Check free space.
+		$dirfree = disk_free_space($dirpath);
 
-	  #Check free space.
-	  $dirfree = disk_free_space($dirpath) ;
+		$capacity *=  1;
 
-	  $capacity *=  1 ;
+		if ($free == "yes" && $dirfree < $capacity) { $arrResponse =  ['error' => _("Insufficent Storage for Snapshot")]; return $arrResponse;}
 
-	  if ($free == "yes" && $dirfree < $capacity) { $arrResponse =  ['error' => _("Insufficent Storage for Snapshot")]; return $arrResponse ;}
+		#Copy nvram
+		if ($logging) qemu_log($vm,"Copy NVRAM");
+		if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_create_snapshot($lv->domain_get_uuid($vm),$name);
 
-	  #Copy nvram
-	  if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_create_snapshot($lv->domain_get_uuid($vm),$name) ;
+		$xmlfile = $dirpath."/".$name.".running";
+		if ($logging) qemu_log($vm,"Save XML if state is running current $state");
+		if ($state == "running") exec("virsh dumpxml '$vm' > ".escapeshellarg($xmlfile),$outxml,$rtnxml);
 
-	  $xmlfile = $dirpath."/".$name.".running" ;
-	  file_put_contents("/tmp/xmltst", "$xmlfile" ) ;## Remove before stable.
-	  if ($state == "running") exec("virsh dumpxml '$vm' > ".escapeshellarg($xmlfile),$outxml,$rtnxml) ;
+		$output= [];
+		if ($logging) qemu_log($vm,"snap method $method");
+		switch ($method) {
+		case "ZFS":
+			# Create ZFS Snapshot
+			if ($state == "running") exec($cmdstr." 2>&1",$output,$return);
+			$zfsdataset = trim(shell_exec("zfs list -H -o name -r $dirpath"));
+			$fssnapcmd = " zfs snapshot $zfsdataset@$name";
+			if ($logging) qemu_log($vm,"zfs snap: $fssnapcmd");
+			shell_exec($fssnapcmd);
+			# if running resume.
+			if ($state == "running") $lv->domain_resume($vm);
+			break;
+		case "BTRFS":
+			# Create BTRFS Snapshot
+			break;
+		default:
+			# No Action
+			if ($logging) qemu_log($vm,"Cmd: $cmdstr");
+			exec($cmdstr." 2>&1",$output,$return);
+		}
 
-	  $output= [] ;
-	  $test = false ;
-	  if ($test)  exec($cmdstr." --print-xml 2>&1",$output,$return) ; else   exec($cmdstr." 2>&1",$output,$return) ;
+		if (strpos(" ".$output[0],"error") ) {
+			$arrResponse =  ['error' => substr($output[0],6) ];
+			if ($logging) qemu_log($vm,"Error");
+		} else {
+			$arrResponse = ['success' => true];
+			if ($logging) qemu_log($vm,"Success write snap db");
+			$ret = write_snapshots_database("$vm","$name",$state,$snapshotdescinput,$method);
+			#remove meta data
+			if ($ret != "noxml") {
+				exec("virsh snapshot-delete ".escapeshellarg($vm)." ".escapeshellarg($name)." --metadata 2>&1", $snapDelOut, $snapDelRtn);
+			}
+		}
+		return $arrResponse;
 
-	  if (strpos(" ".$output[0],"error") ) {
-		  $arrResponse =  ['error' => substr($output[0],6) ] ;
-	  } else {
-		$arrResponse = ['success' => true] ;
-		write_snapshots_database("$vm","$name") ;
-		#remove meta data
-		$ret = $lv->domain_snapshot_delete($vm, "$name" ,2) ;
-	  }
-	  return $arrResponse ;
+	}
 
-  }
+		function vm_revert($vm, $snap="--current",$action="no",$actionmeta = 'yes',$dryrun = false) {
+		global $lv;
+		$logging = true;
+		$snapslist= getvmsnapshots($vm);
+		#$disks =$lv->get_disk_stats($vm);
+		$snapstate = $snapslist[$snap]['state'];
+		$method = $snapslist[$snap]['method'];
 
-  function vm_revert($vm, $snap="--current",$action="no",$actionmeta = 'yes') {
-	  global $lv ;
-	  $snapslist= getvmsnapshots($vm) ;
-	  $disks =$lv->get_disk_stats($vm) ;
+		#VM must be shutdown.
+		$res = $lv->get_domain_by_name($vm);
+		$dom = $lv->domain_get_info($res);
+		$state = $lv->domain_state_translate($dom['state']);
+		# if VM running shutdown. Record was running.
+		if ($state != 'shutdown') $arrResponse = $lv->domain_destroy($vm);
+		# Wait for shutdown?
+		# GetXML
+		$strXML= $lv->domain_get_xml($res);
+		$xmlobj = custom::createArray('domain',$strXML);
 
-	  switch ($snapslist[$snap]['state']) {
-		  case "shutoff":
-		  case "running":
-			  #VM must be shutdown.
-			  $res = $lv->get_domain_by_name($vm);
-			  $dom = $lv->domain_get_info($res);
-			  $state = $lv->domain_state_translate($dom['state']);
-			  # if VM running shutdown. Record was running.
-			  if ($state != 'shutdown') $arrResponse = $lv->domain_destroy($vm) ;
-			  # Wait for shutdown?
-			  # GetXML
-			  $strXML= $lv->domain_get_xml($res) ;
-			  $xmlobj = custom::createArray('domain',$strXML) ;
+		# Process disks and update path for method QEMU.
+		if ($method == "QEMU") {
+			$disks=($snapslist[$snap]['disks']);
+			foreach ($disks as $disk) {
+				$diskname = $disk["@attributes"]["name"];
+				if ($diskname == "hda" || $diskname == "hdb") continue;
+				$path = $disk["source"]["@attributes"]["file"];
+				if ($diskname == "hdc") {
+					$primarypathinfo =  pathinfo($path);
+					$primarypath = $primarypathinfo['dirname'];
+				}
+				if ($snapstate != "running") {
+					$item = array_search($path,$snapslist[$snap]['backing'][$diskname]);
+					$newpath =  $snapslist[$snap]['backing'][$diskname][$item + 1];
+					$json_info = getDiskImageInfo($newpath);
+					foreach($xmlobj['devices']['disk'] as $ddk => $dd){
+						if ($dd['target']["@attributes"]['dev'] == $diskname) {
+							$xmlobj['devices']['disk'][$ddk]['source']["@attributes"]['file'] = "$newpath";
+							$xmlobj['devices']['disk'][$ddk]['driver']["@attributes"]['type'] = $json_info["format"];
+						}
+					}
+				}
+			}
+		}
 
-			  # Process disks and update path.
-			  $disks=($snapslist[$snap]['disks']) ;
-			  foreach ($disks as $disk) {
-				  $diskname = $disk["@attributes"]["name"] ;
-				  if ($diskname == "hda" || $diskname == "hdb") continue ;
-				  $path = $disk["source"]["@attributes"]["file"] ;
-				  if ($diskname == "hdc") {
-					  $primarypathinfo =  pathinfo($path) ;
-					  $primarypath = $primarypathinfo['dirname'] ;
-				  }
-				  $item = array_search($path,$snapslist[$snap]['backing'][$diskname]) ;
-				  $newpath =  $snapslist[$snap]['backing'][$diskname][$item + 1];
-				  $json_info = getDiskImageInfo($newpath) ;
-				  foreach($xmlobj['devices']['disk'] as $ddk => $dd){
-					  if ($dd['target']["@attributes"]['dev'] == $diskname) {
-						  $xmlobj['devices']['disk'][$ddk]['source']["@attributes"]['file'] = "$newpath" ;
-						  $xmlobj['devices']['disk'][$ddk]['driver']["@attributes"]['type'] = $json_info["format"] ;
-						  }
-					  }
-				  }
-			  $xml = custom::createXML('domain',$xmlobj)->saveXML();
-			  if (!strpos($xml,'<vmtemplate xmlns="unraid"')) $xml=str_replace('<vmtemplate','<vmtemplate xmlns="unraid"',$xml);
-			  $new = $lv->domain_define($xml);
-			  file_put_contents("/tmp/xmlrevert", "$xml" ) ;## Remove before stable.
-			  if ($new)
-				  $arrResponse  = ['success' => true] ; else
-				  $arrResponse = ['error' => $lv->get_last_error()] ;
+		# If Snapstate not running create new XML.
+		if ($snapstate != "running") {
+			if ($method == "ZFS") $xml = $snapslist[$snap]['xml']; else $xml = custom::createXML('domain',$xmlobj)->saveXML();
+			if (!strpos($xml,'<vmtemplate xmlns="unraid"') && !strpos($xml,'<vmtemplate xmlns="http://unraid"') ) $xml=str_replace('<vmtemplate','<vmtemplate xmlns="http://unraid"',$xml);
+			if (!$dryrun) $new = $lv->domain_define($xml);
+			if ($new) $arrResponse  = ['success' => true]; else $arrResponse = ['error' => $lv->get_last_error()];
+			if ($logging) qemu_log($vm,"Create XML $new");
+		}
 
-			  # remove snapshot meta data and images for all snpahots.
+		# remove snapshot meta data, images, memory, runxml and NVRAM. for all snapshots.
 
-			  foreach ($disks as $disk) {
-				  $diskname = $disk["@attributes"]["name"] ;
-				  if ($diskname == "hda" || $diskname == "hdb") continue ;
-				  $path = $disk["source"]["@attributes"]["file"] ;
-				  if (is_file($path) && $action == "yes") unlink("$path") ;
-				  $item = array_search($path,$snapslist[$snap]['backing']["r".$diskname]) ;
-				  $item++ ;
-				  while($item > 0)
-				  {
-				  if (!isset($snapslist[$snap]['backing']["r".$diskname][$item])) break ;
-				  $newpath =  $snapslist[$snap]['backing']["r".$diskname][$item] ;
-					  if (is_file($newpath) && $action == "yes") unlink("$newpath") ;
-				  $item++ ;
-				  }
-			  }
+		foreach ($disks as $disk) {
+			$diskname = $disk["@attributes"]["name"];
+			if ($diskname == "hda" || $diskname == "hdb") continue;
+			$path = $disk["source"]["@attributes"]["file"];
+			if (is_file($path) && $action == "yes") if (!$dryrun)  unlink("$path");else echo "unlink $path\n";
+			if ($logging) qemu_log($vm,"unlink $path");
+			$item = array_search($path,$snapslist[$snap]['backing']["r".$diskname]);
+			$item++;
+			while($item > 0)
+			{
+			if (!isset($snapslist[$snap]['backing']["r".$diskname][$item])) break;
+			$newpath =  $snapslist[$snap]['backing']["r".$diskname][$item];
+			if (is_file($newpath) && $action == "yes") if (!$dryrun) unlink("$newpath"); else echo "unlink $newpath\n";
+			if ($logging) qemu_log($vm,"unlink $newpath");
+			$item++;
+			}
+		}
 
-				  uasort($snapslist,'compare_creationtimelt') ;
-				  foreach($snapslist as $s) {
-					  $name = $s['name'] ;
+		# Remove later snapshots
+		if (!is_null($snapslist)) uasort($snapslist,'compare_creationtimelt');
 
-					  $xmlfile = $primarypath."/$name.running" ;
-					  $memoryfile = $primarypath."/memory$name.mem" ;
+		foreach($snapslist as $s) {
+			if ($s['name'] == $snap) break;
+			$name = $s['name'];
+			$oldmethod = $s['method'];
+			if ($dryrun) echo "$name $oldmethod\n";
+			if ($logging) qemu_log($vm,"$name $oldmethod");
+			if (!isset($primarypath)) $primarypath = $s['primarypath'];
+			$xmlfile = $primarypath."/$name.running";
+			$memoryfile = $primarypath."/memory$name.mem";
+			$olddisks = $snapslist[$name]['disks'];
 
-					  if ($snapslist[$snap]['state'] == "running") {
-					  # Set XML to saved XML
-					  $xml = file_get_contents($xmlfile) ;
-					  $xmlobj = custom::createArray('domain',$xml) ;
-					  $xml = custom::createXML('domain',$xmlobj)->saveXML();
-					  if (!strpos($xml,'<vmtemplate xmlns="unraid"')) $xml=str_replace('<vmtemplate','<vmtemplate xmlns="unraid"',$xml);
-					  file_put_contents("/tmp/xmlrevert2", "$xml" ) ;## Remove before stable.
-					  $rtn = $lv->domain_define($xml) ;
+			if ($oldmethod == "QEMU") {
+				foreach ($olddisks as $olddisk) {
+				$olddiskname = $olddisk["@attributes"]["name"];
+				if ($olddiskname == "hda" || $olddiskname == "hdb") continue;
+				$oldpath = $olddisk["source"]["@attributes"]["file"];
+				if (is_file($oldpath) && $action == "yes") if (!$dryrun) unlink("$oldpath"); else echo "$oldpath\n";
+				if ($logging) qemu_log($vm,"unlink $oldpath");
+				}
+			}
+			if ($oldmethod == "ZFS") {
+			# Rollback ZFS Snapshot
+			$zfsdataset = trim(shell_exec("zfs list -H -o name -r ".transpose_user_path($primarypath)));
+			$fssnapcmd = " zfs destroy $zfsdataset@$name";
+			if (!$dryrun) shell_exec($fssnapcmd); else echo "old $fssnapcmd\n";
+			if ($logging) qemu_log($vm,"old $fssnapcmd");
+			}
 
-					  # Restore Memory.
+			#Delete Metadata
+			#if ($actionmeta == "yes") if (!$dryrun) $ret = delete_snapshots_database("$vm","$name");
 
-					  $makerun = true ;
-					  if ($makerun == true) exec("virsh restore ".escapeshellarg($memoryfile)) ;
-					  }
-					  #Delete Metadata only.
-					  if ($actionmeta == "yes") {
-						  $ret = delete_snapshots_database("$vm","$name") ;
-					  }
-					  if (is_file($memoryfile) && $action == "yes") unlink($memoryfile) ;
-					  if (is_file($xmlfile) && $action == "yes") unlink($xmlfile) ;
-					  if ($s['name'] == $snap) break ;
-				  }
-				  #if VM was started restart.
-				  if ($state == 'running' && $snapslist[$snap]['state'] != "running") {
-					  $arrResponse = $lv->domain_start($vm) ;
-				  }
+			if (is_file($memoryfile) && $action == "yes") if (!$dryrun) unlink($memoryfile); else echo ("$memoryfile \n");
+			if (is_file($xmlfile) && $action == "yes") if (!$dryrun) unlink($xmlfile); else echo ("$xmlfile \n");
+			if ($logging) qemu_log($vm,"mem $memoryfile xml $xmlfile");
+			# Delete NVRAM
+			if (!empty($lv->domain_get_ovmf($res)) && $action == "yes")  if (!$dryrun) if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_revert_snapshot($lv->domain_get_uuid($vm),$name); else echo "Remove old NV\n";
+			if ($actionmeta == "yes") {
+				if (!$dryrun)  $ret = delete_snapshots_database("$vm","$name"); else echo "Old Delete snapshot meta\n";
+				if ($logging) qemu_log($vm,"Old Delete snapshot meta");
+			}
+		}
 
-				  if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_revert_snapshot($lv->domain_get_uuid($vm),$name) ;
-				  break ;
+		if ($method == "ZFS") {
+			if (!isset($primarypath)) $primarypath = $snapslist[$snap]['primarypath'];
 
-		  }
-	  $arrResponse  = ['success' => true] ;
-	  return($arrResponse) ;
-	  }
+			$zfsdataset = trim(shell_exec("zfs list -H -o name -r ".transpose_user_path($primarypath)));
+			if ($dryrun) {
+				var_dump(transpose_user_path($primarypath));
+			}
+			$fssnapcmd = " zfs rollback $zfsdataset@$snap";
+			if (!$dryrun) shell_exec($fssnapcmd); else echo "$fssnapcmd\n";
+			if ($logging) qemu_log($vm,"$fssnapcmd");
+			$fssnapcmd = " zfs destroy $zfsdataset@$snap";
+			if (!$dryrun) shell_exec($fssnapcmd); else echo "$fssnapcmd\n";
+			if ($logging) qemu_log($vm,"$fssnapcmd");
+		}
 
-  function vm_snapimages($vm, $snap, $only) {
-	  global $lv ;
-	  $snapslist= getvmsnapshots($vm) ;
-	  $data = "<br><br>Images and metadata to remove if tickbox checked.<br>" ;
-      $capacity = 0 ;
-	  $diskspec = "" ;
-	  $disks =$lv->get_disk_stats($vm) ;
-	  foreach($disks as $disk)   {
-		  $file = $disk["file"] ;
-		  $output = array() ;
-		  exec("qemu-img info --backing-chain -U '$file'  | grep image:",$output) ;
-		  foreach($output as $key => $line) {
-			  $line=str_replace("image: ","",$line) ;
-			  $output[$key] = $line ;
-		  }
-		  $snaps[$vm][$disk["device"]] = $output  ;
-		  $rev = "r".$disk["device"] ;
-		  $reversed = array_reverse($output) ;
-		  $snaps[$vm][$rev] = $reversed ;
-		  $pathinfo =  pathinfo($file) ;
-		  $capacity = $capacity + $disk["capacity"] ;
-	  }
+		if ($snapslist[$snap]['state'] == "running" || $snapslist[$snap]['state'] == "disk-snapshot") {
+			$xmlfile = $primarypath."/$snap.running";
+			$memoryfile = $primarypath."/memory$snap.mem";
+			# Set XML to saved XML
+			$xml = file_get_contents($xmlfile);
+			$xmlobj = custom::createArray('domain',$xml);
+			$xml = custom::createXML('domain',$xmlobj)->saveXML();
+			if (!strpos($xml,'<vmtemplate xmlns="unraid"') && !strpos($xml,'<vmtemplate xmlns="http://unraid"') ) $xml=str_replace('<vmtemplate','<vmtemplate xmlns="http://unraid"',$xml);
+			if (!$dryrun) $rtn = $lv->domain_define($xml);
+			if ($logging) qemu_log($vm,"Define XML");
 
-	  $snapdisks= $snapslist[$snap]['disks'] ;
+			# Restore Memory.
+			if ($snapslist[$snap]['state'] == "running") {
+				if (!$dryrun) $cmdrtn = exec("virsh restore --running ".escapeshellarg($memoryfile));
+				if ($logging) qemu_log($vm,"Restore");
+				if (!$dryrun && !$cmdrtn) unlink($xmlfile);
+				if ($logging) qemu_log($vm,"Unlink XML");
+				if (!$dryrun && !$cmdrtn) unlink($memoryfile);
+				if ($logging) qemu_log($vm,"Unlink memoryfile");
+			}
+			if ($snapslist[$snap]['state'] == "disk-snapshot") if (!$dryrun) unlink($xmlfile);
+		}
 
-	  foreach ($snapdisks as $diskkey => $snapdisk) {
-		  $diskname = $snapdisk["@attributes"]["name"] ;
-		  if ($diskname == "hda" || $diskname == "hdb") continue ;
-		  $path = $snapdisk["source"]["@attributes"]["file"] ;
-		  if (is_file($path)) $data .= "$path<br>" ;
-		  $item = array_search($path,$snaps[$vm]["r".$diskname]) ;
-		  $item++ ;
-		  if ($only == 0) $item = 0 ;
-		  while($item > 0)
-		  {
-		  if (!isset($snaps[$vm]["r".$diskname][$item])) break ;
-		  $newpath =  $snaps[$vm]["r".$diskname][$item] ;
-			  if (is_file($path)) $data .= "$newpath<br>" ;
-		  $item++ ;
+		#if VM was started restart.
+		if ($state == 'running' && $snapslist[$snap]['state'] != "running") {
+			if (!$dryrun) $arrResponse = $lv->domain_start($vm);
+		}
 
-		  }
-	  }
-	  $data .= "<br>Snapshots metadata to remove." ;
-	  if ($only == 0) {
-		  $data .= "<br>$snap";
-	  } else {
-	  uasort($snapslist,'compare_creationtimelt') ;
-	  foreach($snapslist as $s) {
-		  $name = $s['name'] ;
-		  $data .= "<br>$name";
-		  if ($s['name'] == $snap) break ;
-		  }
-	  }
-	  return($data) ;
-  }
+		if ($actionmeta == "yes") {
+			if (!$dryrun)  $ret = delete_snapshots_database("$vm","$snap"); else echo "Delete snapshot meta\n";
+			if ($logging) qemu_log($vm,"Delete Snapshot DB entry");
+		}
 
+		if (!$dryrun) if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_revert_snapshot($lv->domain_get_uuid($vm),$snap); else echo "Delete NV $vm,$snap\n";
 
-  function vm_snapremove($vm, $snap) {
-	  global $lv ;
-	  $snapslist= getvmsnapshots($vm) ;
-	  $res = $lv->get_domain_by_name($vm);
-	  $dom = $lv->domain_get_info($res);
+		$arrResponse  = ['success' => true];
+		if ($dryrun) var_dump($arrResponse);
+		if ($logging) qemu_log($vm, "Success");
+		return($arrResponse);
+		}
 
-	  $disks =$lv->get_disk_stats($vm) ;
-	  foreach($disks as $disk)   {
-		  $file = $disk["file"] ;
-		  $output = array() ;
-		  exec("qemu-img info --backing-chain -U $file  | grep image:",$output) ;
-		  foreach($output as $key => $line) {
-			  $line=str_replace("image: ","",$line) ;
-			  $output[$key] = $line ;
-		  }
+	function vm_snapimages($vm, $snap, $only) {
+		global $lv;
+		$snapslist= getvmsnapshots($vm);
+		$data = "<br><br>Images and metadata to remove if tickbox checked.<br>";
+			$capacity = 0;
+		$diskspec = "";
+		$disks =$lv->get_disk_stats($vm);
+		foreach($disks as $disk)   {
+			$file = $disk["file"];
+			$output = array();
+			exec("qemu-img info --backing-chain -U '$file'  | grep image:",$output);
+			foreach($output as $key => $line) {
+				$line=str_replace("image: ","",$line);
+				$output[$key] = $line;
+			}
+			$snaps[$vm][$disk["device"]] = $output ;
+			$rev = "r".$disk["device"];
+			$reversed = array_reverse($output);
+			$snaps[$vm][$rev] = $reversed;
+			$pathinfo =  pathinfo($file);
+			$capacity = $capacity + $disk["capacity"];
+		}
 
-		  $snaps[$vm][$disk["device"]] = $output ;
-		  $rev = "r".$disk["device"] ;
-		  $reversed = array_reverse($output) ;
-		  $snaps[$vm][$rev] = $reversed ;
-		  $pathinfo =  pathinfo($file) ;
-	  }
+		$snapdisks= $snapslist[$snap]['disks'];
 
-	  # GetXML
-	  $strXML= $lv->domain_get_xml($res) ;
-	  $xmlobj = custom::createArray('domain',$strXML) ;
+		foreach ($snapdisks as $diskkey => $snapdisk) {
+			$diskname = $snapdisk["@attributes"]["name"];
+			if ($diskname == "hda" || $diskname == "hdb") continue;
+			$path = $snapdisk["source"]["@attributes"]["file"];
+			if (is_file($path)) $data .= "$path<br>";
+			$item = array_search($path,$snaps[$vm]["r".$diskname]);
+			$item++;
+			if ($only == 0) $item = 0;
+			while($item > 0)
+			{
+			if (!isset($snaps[$vm]["r".$diskname][$item])) break;
+			$newpath =  $snaps[$vm]["r".$diskname][$item];
+				if (is_file($path)) $data .= "$newpath<br>";
+			$item++;
 
-	  # Process disks.
-	  $disks=($snapslist[$snap]['disks']) ;
-	  foreach ($disks as $disk) {
-		  $diskname = $disk["@attributes"]["name"] ;
-		  if ($diskname == "hda" || $diskname == "hdb") continue ;
-		  $path = $disk["source"]["@attributes"]["file"] ;
-		  $item = array_search($path,$snaps[$vm][$diskname]) ;
-		  if ($item!==false) {
-			  $data = ["error" => "Image currently active for this domain."] ;
-			  return ($data) ;
-			  }
-		  }
+			}
+		}
+		$data .= "<br>Snapshots metadata to remove.";
+		if ($only == 0) {
+			$data .= "<br>$snap";
+		} else {
+		uasort($snapslist,'compare_creationtimelt');
+		foreach($snapslist as $s) {
+			$name = $s['name'];
+			$data .= "<br>$name";
+			if ($s['name'] == $snap) break;
+			}
+		}
+		return($data);
+	}
 
-	  $disks=($snapslist[$snap]['disks']) ;
-	  foreach ($disks as $disk) {
-		  $diskname = $disk["@attributes"]["name"] ;
-		  if ($diskname == "hda" || $diskname == "hdb") continue ;
-		  $path = $disk["source"]["@attributes"]["file"] ;
-		  if (is_file($path)) {
-			  if(!unlink("$path")) {
-				  $data = ["error" => "Unable to remove image file $path"] ;
-				  return ($data) ;
-			  }
-		  }
-	  }
+	function vm_snapremove($vm, $snap) {
+		global $lv;
+		$snapslist= getvmsnapshots($vm);
+		$res = $lv->get_domain_by_name($vm);
+		$dom = $lv->domain_get_info($res);
 
-	  # Delete NVRAM
-	  if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_delete_snapshot($lv->domain_get_uuid($vm),$snap) ;
+		$disks =$lv->get_disk_stats($vm);
+		foreach($disks as $disk)   {
+			$file = $disk["file"];
+			$output = array();
+			exec("qemu-img info --backing-chain -U \"$file\"  | grep image:",$output);
+			foreach($output as $key => $line) {
+				$line=str_replace("image: ","",$line);
+				$output[$key] = $line;
+			}
 
-	  $ret = delete_snapshots_database("$vm","$snap")  ;
+			$snaps[$vm][$disk["device"]] = $output;
+			$rev = "r".$disk["device"];
+			$reversed = array_reverse($output);
+			$snaps[$vm][$rev] = $reversed;
+			$pathinfo =  pathinfo($file);
+		}
 
-	  if(!$ret)
-		  $data = ["error" => "Unable to remove snap metadata $snap"] ;
-	  else
-		  $data = ["success => 'true"] ;
+		# GetXML
+		$strXML= $lv->domain_get_xml($res);
+		$xmlobj = custom::createArray('domain',$strXML);
 
-	  return($data) ;
-  }
+		# Process disks.
+		$disks=($snapslist[$snap]['disks']);
+		foreach ($disks as $disk) {
+			$diskname = $disk["@attributes"]["name"];
+			if ($diskname == "hda" || $diskname == "hdb") continue;
+			$path = $disk["source"]["@attributes"]["file"];
+			$item = array_search($path,$snaps[$vm][$diskname]);
+			if ($item!==false) {
+				$data = ["error" => "Image currently active for this domain."];
+				return ($data);
+				}
+			}
+
+		$disks=($snapslist[$snap]['disks']);
+		foreach ($disks as $disk) {
+			$diskname = $disk["@attributes"]["name"];
+			if ($diskname == "hda" || $diskname == "hdb") continue;
+			$path = $disk["source"]["@attributes"]["file"];
+			if (is_file($path)) {
+				if(!unlink("$path")) {
+					$data = ["error" => "Unable to remove image file $path"];
+					return ($data);
+				}
+			}
+		}
+
+		# Delete NVRAM
+		if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_delete_snapshot($lv->domain_get_uuid($vm),$snap);
+
+		$ret = delete_snapshots_database("$vm","$snap") ;
+
+		if(!$ret)
+			$data = ["error" => "Unable to remove snap metadata $snap"];
+		else
+			$data = ["success => 'true"];
+		return($data);
+	}
 
 function vm_blockcommit($vm, $snap ,$path,$base,$top,$pivot,$action) {
-  global $lv ;
-  /*
+	global $lv;
+	/*
 NAME
-  blockcommit - Start a block commit operation.
+	blockcommit - Start a block commit operation.
 
 SYNOPSIS
-  blockcommit <domain> <path> [--bandwidth <number>] [--base <string>] [--shallow] [--top <string>] [--active] [--delete] [--wait] [--verbose] [--timeout <number>] [--pivot] [--keep-overlay] [--async] [--keep-relative] [--bytes]
+	blockcommit <domain> <path> [--bandwidth <number>] [--base <string>] [--shallow] [--top <string>] [--active] [--delete] [--wait] [--verbose] [--timeout <number>] [--pivot] [--keep-overlay] [--async] [--keep-relative] [--bytes]
 
 DESCRIPTION
-  Commit changes from a snapshot down to its backing image.
+	Commit changes from a snapshot down to its backing image.
 
 OPTIONS
-  [--domain] <string>  domain name, id or uuid
-  [--path] <string>  fully-qualified path of disk
-  --bandwidth <number>  bandwidth limit in MiB/s
-  --base <string>  path of base file to commit into (default bottom of chain)
-  --shallow        use backing file of top as base
-  --top <string>   path of top file to commit from (default top of chain)
-  --active         trigger two-stage active commit of top file
-  --delete         delete files that were successfully committed
-  --wait           wait for job to complete (with --active, wait for job to sync)
-  --verbose        with --wait, display the progress
-  --timeout <number>  implies --wait, abort if copy exceeds timeout (in seconds)
-  --pivot          implies --active --wait, pivot when commit is synced
-  --keep-overlay   implies --active --wait, quit when commit is synced
-  --async          with --wait, don't wait for cancel to finish
-  --keep-relative  keep the backing chain relatively referenced
-  --bytes          the bandwidth limit is in bytes/s rather than MiB/s
+	[--domain] <string>  domain name, id or uuid
+	[--path] <string>  fully-qualified path of disk
+	--bandwidth <number>  bandwidth limit in MiB/s
+	--base <string>  path of base file to commit into (default bottom of chain)
+	--shallow        use backing file of top as base
+	--top <string>   path of top file to commit from (default top of chain)
+	--active         trigger two-stage active commit of top file
+	--delete         delete files that were successfully committed
+	--wait           wait for job to complete (with --active, wait for job to sync)
+	--verbose        with --wait, display the progress
+	--timeout <number>  implies --wait, abort if copy exceeds timeout (in seconds)
+	--pivot          implies --active --wait, pivot when commit is synced
+	--keep-overlay   implies --active --wait, quit when commit is synced
+	--async          with --wait, don't wait for cancel to finish
+	--keep-relative  keep the backing chain relatively referenced
+	--bytes          the bandwidth limit is in bytes/s rather than MiB/s
 
-  blockcommit Debian --path /mnt/user/domains/Debian/vdisk1.S20230513120410qcow2 --verbose --pivot --delete
-  */
-	  # Error if VM Not running.
+	blockcommit Debian --path /mnt/user/domains/Debian/vdisk1.S20230513120410qcow2 --verbose --pivot --delete
+	*/
+	#Get VM State. If shutdown start as paused.
+	$res = $lv->get_domain_by_name($vm);
+	$dom = $lv->domain_get_info($res);
+	$state = $lv->domain_state_translate($dom['state']);
+	if ($state == "shutoff") {
+		$lv->domain_start($res);
+		$lv->domain_suspend($res);
+	}
 
-	  $snapslist= getvmsnapshots($vm) ;
-	  $disks =$lv->get_disk_stats($vm) ;
+		$snapslist= getvmsnapshots($vm);
+		$disks =$lv->get_disk_stats($vm);
 
-	  foreach($disks as $disk)   {
-		  $path = $disk['file'] ;
-		  $cmdstr = "virsh blockcommit '$vm' --path '$path' --verbose " ;
-		  if ($pivot == "yes") $cmdstr .= " --pivot " ;
-		  if ($action == "yes") $cmdstr .= " --delete " ;
-		  # Process disks and update path.
-		  $snapdisks=($snapslist[$snap]['disks']) ;
-		  if ($base != "--base" && $base != "") {
-			  #get file name from  snapshot.
-			  $snapdisks=($snapslist[$base]['disks']) ;
-			  $basepath = "" ;
-			  foreach ($snapdisks as $snapdisk) {
-				  $diskname = $snapdisk["@attributes"]["name"] ;
-				  if ($diskname != $disk['device']) continue ;
-				  $basepath = $snapdisk["source"]["@attributes"]["file"] ;
-				  }
-			  if ($basepath != "") $cmdstr .= " --base '$basepath' ";
-		  }
-		  if ($top != "--top" && $top !="")  {
-			  #get file name from  snapshot.
-			  $snapdisks=($snapslist[$top]['disks']) ;
-			  $toppath = "" ;
-			  foreach ($snapdisks as $snapdisk) {
-				  $diskname = $snapdisk["@attributes"]["name"] ;
-				  if ($diskname != $disk['device']) continue ;
-				  $toppath = $snapdisk["source"]["@attributes"]["file"] ;
-				  }
-			  if ($toppath != "") $cmdstr .= " --top '$toppath' ";
-		  }
+		foreach($disks as $disk)   {
+			$path = $disk['file'];
+			$cmdstr = "virsh blockcommit '$vm' --path '$path' --verbose ";
+			if ($pivot == "yes") $cmdstr .= " --pivot ";
+			if ($action == "yes") $cmdstr .= " --delete ";
+			# Process disks and update path.
+			$snapdisks=($snapslist[$snap]['disks']);
+			if ($base != "--base" && $base != "") {
+				#get file name from  snapshot.
+				$snapdisks=($snapslist[$base]['disks']);
+				$basepath = "";
+				foreach ($snapdisks as $snapdisk) {
+					$diskname = $snapdisk["@attributes"]["name"];
+					if ($diskname != $disk['device']) continue;
+					$basepath = $snapdisk["source"]["@attributes"]["file"];
+					}
+				if ($basepath != "") $cmdstr .= " --base '$basepath' ";
+			}
+			if ($top != "--top" && $top !="")  {
+				#get file name from  snapshot.
+				$snapdisks=($snapslist[$top]['disks']);
+				$toppath = "";
+				foreach ($snapdisks as $snapdisk) {
+					$diskname = $snapdisk["@attributes"]["name"];
+					if ($diskname != $disk['device']) continue;
+					$toppath = $snapdisk["source"]["@attributes"]["file"];
+					}
+				if ($toppath != "") $cmdstr .= " --top '$toppath' ";
+			}
 
-		  $error = execCommand_nchan($cmdstr,$path) ;
-		  if (!$error) {
-			  $arrResponse =  ['error' => "Process Failed"] ;
-			  return($arrResponse) ;
-		  } else {
-			  $arrResponse = ['success' => true] ;
-		  }
+			$error = execCommand_nchan($cmdstr,$path);
+			if (!$error) {
+				$arrResponse =  ['error' => "Process Failed"];
+				return($arrResponse);
+			} else {
+				$arrResponse = ['success' => true];
+			}
 
-	  }
-	  # Delete NVRAM
-	  #if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_delete_snapshot($lv->domain_get_uuid($vm),$snap) ;
+		}
+		# Delete NVRAM
+		#if (!empty($lv->domain_get_ovmf($res))) $nvram = $lv->nvram_delete_snapshot($lv->domain_get_uuid($vm),$snap);
+		if ($state == "shutoff") {
+		$lv->domain_destroy($res);
+		}
 
-	  refresh_snapshots_database($vm) ;
-	  $ret = $ret = delete_snapshots_database("$vm","$snap") ; ;
-	  if($ret)
-		  $data = ["error" => "Unable to remove snap metadata $snap"] ;
-	  else
-		  $data = ["success => 'true"] ;
-	  return $data ;
+		refresh_snapshots_database($vm, $action=="yes" ? true : false);
+		$ret = $ret = delete_snapshots_database("$vm","$snap");;
+		if($ret)
+			$data = ["error" => "Unable to remove snap metadata $snap"];
+		else
+			$data = ["success => 'true"];
+		return $data;
 
 }
 
 function vm_blockpull($vm, $snap ,$path,$base,$top,$pivot,$action) {
-  global $lv ;
-  /*
+	global $lv;
+	/*
 NAME
-  blockpull - Populate a disk from its backing image.
+	blockpull - Populate a disk from its backing image.
 
 SYNOPSIS
-  blockpull <domain> <path> [--bandwidth <number>] [--base <string>] [--wait] [--verbose] [--timeout <number>] [--async] [--keep-relative] [--bytes]
+	blockpull <domain> <path> [--bandwidth <number>] [--base <string>] [--wait] [--verbose] [--timeout <number>] [--async] [--keep-relative] [--bytes]
 
 DESCRIPTION
-  Populate a disk from its backing image.
+	Populate a disk from its backing image.
 
 OPTIONS
-  [--domain] <string>  domain name, id or uuid
-  [--path] <string>  fully-qualified path of disk
-  --bandwidth <number>  bandwidth limit in MiB/s
-  --base <string>  path of backing file in chain for a partial pull
-  --wait           wait for job to finish
-  --verbose        with --wait, display the progress
-  --timeout <number>  with --wait, abort if pull exceeds timeout (in seconds)
-  --async          with --wait, don't wait for cancel to finish
-  --keep-relative  keep the backing chain relatively referenced
-  --bytes          the bandwidth limit is in bytes/s rather than MiB/s
+	[--domain] <string>  domain name, id or uuid
+	[--path] <string>  fully-qualified path of disk
+	--bandwidth <number>  bandwidth limit in MiB/s
+	--base <string>  path of backing file in chain for a partial pull
+	--wait           wait for job to finish
+	--verbose        with --wait, display the progress
+	--timeout <number>  with --wait, abort if pull exceeds timeout (in seconds)
+	--async          with --wait, don't wait for cancel to finish
+	--keep-relative  keep the backing chain relatively referenced
+	--bytes          the bandwidth limit is in bytes/s rather than MiB/s
 
+	*/
+	#Get VM State. If shutdown start as paused.
+	$res = $lv->get_domain_by_name($vm);
+	$dom = $lv->domain_get_info($res);
+	$state = $lv->domain_state_translate($dom['state']);
+	if ($state == "shutoff") {
+	$lv->domain_start($res);
+		$lv->domain_suspend($res);
+	}
 
-  */
-  $snapslist= getvmsnapshots($vm) ;
-  $disks =$lv->get_disk_stats($vm) ;
-  foreach($disks as $disk)   {
-	  $file = $disk["file"] ;
-	  $output = array() ;
-	  exec("qemu-img info --backing-chain -U '$file'  | grep image:",$output) ;
-	  foreach($output as $key => $line) {
-		  $line=str_replace("image: ","",$line) ;
-		  $output[$key] = $line ;
-	  }
-	  $snaps[$vm][$disk["device"]] = $output  ;
-	  $rev = "r".$disk["device"] ;
-	  $reversed = array_reverse($output) ;
-	  $snaps[$vm][$rev] = $reversed ;
-  }
-  $snaps_json=json_encode($snaps,JSON_PRETTY_PRINT) ;
-  $pathinfo =  pathinfo($file) ;
-  $dirpath = $pathinfo["dirname"] ;
-  file_put_contents("$dirpath/image.tracker",$snaps_json) ;
+	$snapslist= getvmsnapshots($vm);
+	$disks =$lv->get_disk_stats($vm);
+	foreach($disks as $disk)   {
+		$file = $disk["file"];
+		$output = array();
+		exec("qemu-img info --backing-chain -U '$file'  | grep image:",$output);
+		foreach($output as $key => $line) {
+			$line=str_replace("image: ","",$line);
+			$output[$key] = $line;
+		}
+		$snaps[$vm][$disk["device"]] = $output ;
+		$rev = "r".$disk["device"];
+		$reversed = array_reverse($output);
+		$snaps[$vm][$rev] = $reversed;
+	}
+	$snaps_json=json_encode($snaps,JSON_PRETTY_PRINT);
+	$pathinfo =  pathinfo($file);
+	$dirpath = $pathinfo["dirname"];
+	#file_put_contents("$dirpath/image.tracker",$snaps_json);
 
-  foreach($disks as $disk)   {
-  $path = $disk['file'] ;
-  $cmdstr = "virsh blockpull '$vm' --path '$path' --verbose --pivot --delete" ;
-  $cmdstr = "virsh blockpull '$vm' --path '$path' --verbose --wait " ;
-  # Process disks and update path.
-  $snapdisks=($snapslist[$snap]['disks']) ;
-  if ($base != "--base" && $base != "") {
-	  #get file name from  snapshot.
-	  $snapdisks=($snapslist[$base]['disks']) ;
-	  $basepath = "" ;
-	  foreach ($snapdisks as $snapdisk) {
-		  $diskname = $snapdisk["@attributes"]["name"] ;
-		  if ($diskname != $disk['device']) continue ;
-		  $basepath = $snapdisk["source"]["@attributes"]["file"] ;
-		  }
-	  if ($basepath != "") $cmdstr .= " --base '$basepath' ";
-  }
+	foreach($disks as $disk)   {
+	$path = $disk['file'];
 
-  if ($action) $cmdstr .= " $action ";
+	$cmdstr = "virsh blockpull '$vm' --path '$path' --verbose --wait ";
+	# Process disks and update path.
+	$snapdisks=($snapslist[$snap]['disks']);
+	if ($base != "--base" && $base != "") {
+		#get file name from  snapshot.
+		$snapdisks=($snapslist[$base]['disks']);
+		$basepath = "";
+		foreach ($snapdisks as $snapdisk) {
+			$diskname = $snapdisk["@attributes"]["name"];
+			if ($diskname != $disk['device']) continue;
+			$basepath = $snapdisk["source"]["@attributes"]["file"];
+			}
+		if ($basepath != "") $cmdstr .= " --base '$basepath' ";
+	}
 
+	if ($action) $cmdstr .= " $action ";
 
-  $error = execCommand_nchan($cmdstr,$path) ;
+	$error = execCommand_nchan($cmdstr,$path);
 
-  if (!$error)  {
-	  $arrResponse =  ['error' => "Process Failed" ] ;
-	  return($arrResponse) ;
-  } else {
-	  # Remove nvram snapshot
-	  $arrResponse = ['success' => true] ;
-  }
+	if (!$error)  {
+		$arrResponse =  ['error' => "Process Failed" ];
+		return($arrResponse);
+	} else {
+		# Remove nvram snapshot
+		$arrResponse = ['success' => true];
+	}
 
-	  }
+}
 
-  refresh_snapshots_database($vm) ;
-  $ret = $ret = delete_snapshots_database("$vm","$snap") ;
-  if($ret)
-	  $data = ["error" => "Unable to remove snap metadata $snap"] ;
-  else
-	  $data = ["success => 'true"] ;
+	if ($state == "shutoff") {
+	$lv->domain_destroy($res);
+	}
 
-  return $data ;
+	refresh_snapshots_database($vm,$action=="yes" ? true : false);
+	$ret = $ret = delete_snapshots_database("$vm","$snap");
+	if($ret)
+		$data = ["error" => "Unable to remove snap metadata $snap"];
+	else
+		$data = ["success => 'true"];
+
+	return $data;
 
 }
 
 function vm_blockcopy($vm,$path,$base,$top,$pivot,$action) {
-  /*
+	/*
 NAME
-  blockcopy - Start a block copy operation.
+	blockcopy - Start a block copy operation.
 
 SYNOPSIS
-  blockcopy <domain> <path> [--dest <string>] [--bandwidth <number>] [--shallow] [--reuse-external] [--blockdev] [--wait] [--verbose] [--timeout <number>] [--pivot] [--finish] [--async] [--xml <string>] [--format <string>] [--granularity <number>] [--buf-size <number>] [--bytes] [--transient-job] [--synchronous-writes] [--print-xml]
+	blockcopy <domain> <path> [--dest <string>] [--bandwidth <number>] [--shallow] [--reuse-external] [--blockdev] [--wait] [--verbose] [--timeout <number>] [--pivot] [--finish] [--async] [--xml <string>] [--format <string>] [--granularity <number>] [--buf-size <number>] [--bytes] [--transient-job] [--synchronous-writes] [--print-xml]
 
 DESCRIPTION
-  Copy a disk backing image chain to dest.
+	Copy a disk backing image chain to dest.
 
 OPTIONS
-  [--domain] <string>  domain name, id or uuid
-  [--path] <string>  fully-qualified path of source disk
-  --dest <string>  path of the copy to create
-  --bandwidth <number>  bandwidth limit in MiB/s
-  --shallow        make the copy share a backing chain
-  --reuse-external  reuse existing destination
-  --blockdev       copy destination is block device instead of regular file
-  --wait           wait for job to reach mirroring phase
-  --verbose        with --wait, display the progress
-  --timeout <number>  implies --wait, abort if copy exceeds timeout (in seconds)
-  --pivot          implies --wait, pivot when mirroring starts
-  --finish         implies --wait, quit when mirroring starts
-  --async          with --wait, don't wait for cancel to finish
-  --xml <string>   filename containing XML description of the copy destination
-  --format <string>  format of the destination file
-  --granularity <number>  power-of-two granularity to use during the copy
-  --buf-size <number>  maximum amount of in-flight data during the copy
-  --bytes          the bandwidth limit is in bytes/s rather than MiB/s
-  --transient-job  the copy job is not persisted if VM is turned off
-  --synchronous-writes  the copy job forces guest writes to be synchronously written to the destination
-  --print-xml      print the XML used to start the copy job instead of starting the job
-  */
+	[--domain] <string>  domain name, id or uuid
+	[--path] <string>  fully-qualified path of source disk
+	--dest <string>  path of the copy to create
+	--bandwidth <number>  bandwidth limit in MiB/s
+	--shallow        make the copy share a backing chain
+	--reuse-external  reuse existing destination
+	--blockdev       copy destination is block device instead of regular file
+	--wait           wait for job to reach mirroring phase
+	--verbose        with --wait, display the progress
+	--timeout <number>  implies --wait, abort if copy exceeds timeout (in seconds)
+	--pivot          implies --wait, pivot when mirroring starts
+	--finish         implies --wait, quit when mirroring starts
+	--async          with --wait, don't wait for cancel to finish
+	--xml <string>   filename containing XML description of the copy destination
+	--format <string>  format of the destination file
+	--granularity <number>  power-of-two granularity to use during the copy
+	--buf-size <number>  maximum amount of in-flight data during the copy
+	--bytes          the bandwidth limit is in bytes/s rather than MiB/s
+	--transient-job  the copy job is not persisted if VM is turned off
+	--synchronous-writes  the copy job forces guest writes to be synchronously written to the destination
+	--print-xml      print the XML used to start the copy job instead of starting the job
+	*/
 }
 
+function addtemplatexml($post) {
+	global $templateslocation,$lv,$config;
+	$savedtemplates = json_decode(file_get_contents($templateslocation),true);
+	if (isset($post['xmldesc'])) {
+		$data = explode("\n",$post['xmldesc']);
+		foreach ($data as $k => $line) {
+			if (strpos($line,"uuid")) unset($data[$k]);
+			if (strpos($line,"<nvram>")) unset($data[$k]);
+			if (strpos($line,"<name>")) $data[$k] = "<name>#template123456</name>";
+		}
 
+		$data = implode("\n",$data);
+		$new = $lv->domain_define($data);
+		$dom = $lv->get_domain_by_name("#template123456");
+		$uuid = $lv->domain_get_uuid("#template123456");
+		$usertemplate = domain_to_config($uuid);
+		$lv->domain_undefine($dom);
+		$usertemplate['templatename'] = $post['templatename'];
+		$usertemplate['template'] = $post['template'];
+		unset($usertemplate['domain']['uuid']);
+		unset($usertemplate['domain']['name']);
+
+	} else {
+		// form view
+
+		$usertemplate = $post;
+					// generate xml for this domain
+		$strXML = $lv->config_to_xml($usertemplate);
+		$qemucmdline = $config['qemucmdline'];
+		$strXML = $lv->appendqemucmdline($strXML,$qemucmdline);
+	}
+
+	foreach($usertemplate['disk'] as $diskid => $diskdata) { unset($usertemplate['disk'][$diskid]['new']);}
+	foreach($usertemplate['gpu'] as $gpuid => $gpudata) { $usertemplate['gpu'][$gpuid]['guest']['multi'] = $usertemplate['gpu'][$gpuid]['multi'];  unset($usertemplate['gpu'][$gpuid]['multi']);}
+	unset($usertemplate['createvmtemplate']);
+	unset($usertemplate['domain']['xmlstart']);
+	unset($usertemplate['pci']);
+	unset($usertemplate['usb']);
+	unset($usertemplate['usbboot']);
+	if (isset($usertemplate['nic'])) {
+		foreach($usertemplate['nic'] as $nickey => $nicdata) {
+			if (isset($usertemplate['nic'][$nickey]['mac'])) unset($usertemplate['nic'][$nickey]['mac']);
+		}
+	}
+	$templatename=$usertemplate['templatename'];
+	if ($templatename == "") $templatename=$usertemplate['template']['os'];
+	unset($usertemplate['templatename']);
+	if (strpos($templatename,"User-") === false) $templatename = "User-".$templatename;
+	if (is_array($usertemplate['clock'])) $usertemplate['clocks'] = json_encode($usertemplate['clock']);
+	unset($usertemplate['clock']);
+	$savedtemplates[$templatename] = [
+		'icon' => $usertemplate['template']['icon'],
+		'form' => 'Custom.form.php',
+		'os' => $usertemplate['template']['os'],
+		'overrides' => $usertemplate
+	];
+	if (!is_dir(dirname($templateslocation))) mkdir(dirname($templateslocation));
+	file_put_contents($templateslocation,json_encode($savedtemplates,JSON_PRETTY_PRINT));
+	$reply = ['success' => true];
+	return $reply;
+}
+
+function get_vm_usage_stats($collectcpustats = true,$collectdiskstats = true,$collectnicstats = true, $collectmemstats = true) {
+	global $lv, $vmusagestats;
+
+	$hostcpus = $lv->host_get_node_info();
+	$timestamp = microtime(true);
+	$allstats=$lv->domain_get_all_domain_stats();
+	if ($allstats === false || !is_array($allstats)) return;
+
+	foreach ($allstats as $vm => $data) {
+		$rd=$wr=$tx=$rx=null;
+		$state = (int)($data["state.state"] ?? 0);
+		$hasPrev = isset($vmusagestats[$vm]);
+		$prevTimestamp = isset($vmusagestats[$vm]["timestamp"]) ? (float)$vmusagestats[$vm]["timestamp"] : $timestamp;
+		$sampleSeconds = max(0.25, ($timestamp - $prevTimestamp));
+		# CPU Metrics
+		$cpuTime = 0;
+		$guestCpuTime = 0;
+		$cpuHostPercent = 0;
+		$cpuGuestPercent = 0;
+		$cpuTimeAbs = (int)($data["cpu.time"] ?? 0);
+		$guestCpuTimeAbs = $cpuTimeAbs;
+		$guestCpuSource = 'none';
+		if ($state == 1 && $collectcpustats == true) {
+			$configuredGuestCpus = (int)($data["vcpu.current"] ?? ($data["vcpu.maximum"] ?? 0));
+			$guestcpus = max(1, $configuredGuestCpus);
+			$prevCpuAbs = isset($vmusagestats[$vm]["cpuTimeAbs"]) ? (int)$vmusagestats[$vm]["cpuTimeAbs"] : $cpuTimeAbs;
+			$prevGuestCpuAbs = isset($vmusagestats[$vm]["guestCpuTimeAbs"]) ? (int)$vmusagestats[$vm]["guestCpuTimeAbs"] : 0;
+			$prevGuestCpuSource = $vmusagestats[$vm]["guestCpuSource"] ?? 'none';
+
+			$guestCpuTimeAbs = 0;
+			$foundVcpuTime = 0;
+			for ($i = 0; $i < max($guestcpus, 64); $i++) {
+				$key = "vcpu.$i.time";
+				if (isset($data[$key])) {
+					$guestCpuTimeAbs += (int)$data[$key];
+					$foundVcpuTime++;
+				} elseif ($i >= $guestcpus) {
+					break;
+				}
+			}
+			if ($foundVcpuTime > 0) {
+				$guestcpus = $foundVcpuTime;
+				$guestCpuSource = 'vcpu';
+			} else {
+				$guestCpuTimeAbs = 0;
+			}
+
+			if ($hasPrev) {
+				$cpuTime = max(0, $cpuTimeAbs - $prevCpuAbs);
+				$pcenthostbase = (($cpuTime * 100.0) / ($sampleSeconds * 1000.0 * 1000.0 * 1000.0));
+				$cpuHostPercent = round($pcenthostbase / max(1, (int)($hostcpus['cpus'] ?? 1)),1);
+				if ($guestCpuSource == 'vcpu' && $prevGuestCpuSource == 'vcpu') {
+					$guestCpuTime = max(0, $guestCpuTimeAbs - $prevGuestCpuAbs);
+					$pcentguestbase = (($guestCpuTime * 100.0) / ($sampleSeconds * 1000.0 * 1000.0 * 1000.0));
+					$cpuGuestPercent = round($pcentguestbase / $guestcpus, 1);
+				}
+			}
+			$cpuHostPercent = max(0.0, min(100.0, $cpuHostPercent));
+			$cpuGuestPercent = max(0.0, min(100.0, $cpuGuestPercent));
+		}
+
+		# Memory Metrics
+		if ($state == 1 && $collectmemstats) {
+		$currentmem = (int)($data["balloon.current"] ?? $data["balloon.maximum"] ?? 0);
+		$maximummem = (int)($data["balloon.maximum"] ?? 0);
+		$rss = (int)($data["balloon.rss"] ?? 0);
+		$meminuse = $currentmem > 0 ? min($rss, $currentmem) : $rss;
+		} else $maximummem = $currentmem = $meminuse = 0;
+
+		# Disk
+		if ($state == 1 && $collectdiskstats) {
+			$disknum = (int)($data["block.count"] ?? 0);
+			$rd=$wr=$i=0;
+			for ($i = 0; $i < $disknum; $i++) {
+				if (($data["block.$i.name"] ?? '') == "hda" || ($data["block.$i.name"] ?? '') == "hdb") continue;
+				$rd +=  (int)($data["block.$i.rd.bytes"] ?? 0);
+				$wr +=  (int)($data["block.$i.wr.bytes"] ?? 0);
+			}
+			$prevRd = isset($vmusagestats[$vm]['rdp']) ? (int)$vmusagestats[$vm]['rdp'] : $rd;
+			$prevWr = isset($vmusagestats[$vm]['wrp']) ? (int)$vmusagestats[$vm]['wrp'] : $wr;
+			$rdrate = $hasPrev ? (int)round(max(0, ($rd - $prevRd)) / $sampleSeconds, 0) : 0;
+			$wrrate = $hasPrev ? (int)round(max(0, ($wr - $prevWr)) / $sampleSeconds, 0) : 0;
+		} else $rdrate=$wrrate=0;
+
+		# Net
+		if ($state == 1 && $collectnicstats) {
+			$nicnum = (int)($data["net.count"] ?? 0);
+			$rx=$tx=$rxPkts=$rxDrop=$i=0;
+			for ($i = 0; $i < $nicnum; $i++) {
+				$rx +=  (int)($data["net.$i.rx.bytes"] ?? 0);
+				$tx +=  (int)($data["net.$i.tx.bytes"] ?? 0);
+				$rxPkts += (int)($data["net.$i.rx.pkts"] ?? 0);
+				$rxDrop += (int)($data["net.$i.rx.drop"] ?? 0);
+			}
+			$prevRx = isset($vmusagestats[$vm]['rxp']) ? (int)$vmusagestats[$vm]['rxp'] : $rx;
+			$prevTx = isset($vmusagestats[$vm]['txp']) ? (int)$vmusagestats[$vm]['txp'] : $tx;
+			$prevRxPkts = isset($vmusagestats[$vm]['rxpktsp']) ? (int)$vmusagestats[$vm]['rxpktsp'] : $rxPkts;
+			$prevRxDrop = isset($vmusagestats[$vm]['rxdropp']) ? (int)$vmusagestats[$vm]['rxdropp'] : $rxDrop;
+			if ($hasPrev) {
+				$rxBytesDelta = max(0, ($rx - $prevRx));
+				$rxrate = (int)round($rxBytesDelta / $sampleSeconds, 0);
+				$rxPktsDelta = max(0, ($rxPkts - $prevRxPkts));
+				$rxDropDelta = max(0, ($rxDrop - $prevRxDrop));
+				$acceptedPkts = max(0, ($rxPktsDelta - $rxDropDelta));
+				// Estimate accepted RX bytes by scaling bytes with accepted-packet ratio.
+				$acceptedRatio = $rxPktsDelta > 0 ? min(1, ($acceptedPkts / $rxPktsDelta)) : 1;
+				$rxrateAdj = (int)round(($rxBytesDelta * $acceptedRatio) / $sampleSeconds, 0);
+			} else {
+				$rxrate = 0;
+				$rxrateAdj = 0;
+			}
+			$txrate = $hasPrev ? (int)round(max(0, ($tx - $prevTx)) / $sampleSeconds, 0) : 0;
+		} else {
+			$rxPkts=$rxDrop=0;
+			$rxrate=$rxrateAdj=$txrate=0;
+		}
+		$vmusagestats[$vm] = [
+			"cpuTime" => $cpuTime,
+			"guestCpuTime" => $guestCpuTime,
+			"cpuTimeAbs" => $cpuTimeAbs,
+			"guestCpuTimeAbs" => $guestCpuTimeAbs,
+			"guestCpuSource" => $guestCpuSource,
+			"cpuhost" => $cpuHostPercent,
+			"cpuguest" => $cpuGuestPercent,
+			"timestamp" => $timestamp,
+			"mem" => $meminuse,
+			"curmem" => $currentmem,
+			"maxmem" => $maximummem,
+			"rxrate" => $rxrate,
+			"rxrateadj" => $rxrateAdj,
+			"rxpktsp" => $rxPkts,
+			"rxdropp" => $rxDrop,
+			"rxp" => $rx,
+			"txrate" => $txrate,
+			"txp" => $tx,
+			"rdp" => $rd,
+			"rdrate" => $rdrate,
+			"wrp" => $wr,
+			"wrrate" => $wrrate,
+			"state" => $state,
+		];
+	}
+}
+
+function build_xml_templates($strXML) {
+	global $arrValidPCIDevices,$arrValidUSBDevices;
+
+	$xmldevsections = $xmlsections = [];
+	$xml = new SimpleXMLElement($strXML);
+	$x = $xml->children();
+	foreach($x as $key=>$y) {
+		$xmlsections[] = $key;
+	}
+
+	$ns= $xml->getNamespaces(true);
+	foreach($ns as $namekey=>$namespace) foreach($xml->children($namespace) as $key=>$y)	$xmlsections[] = "$namekey:$key";
+
+	$v = $xml->devices->children();
+	$keys = [];
+	foreach($v as $key=>$y) $keys[] = $key;
+	foreach(array_count_values($keys) as $key=>$number) $xmldevsections[]= $key;
+
+	$endpos = 0;
+	foreach($xmlsections as $xmlsection) {
+		$strpos = strpos($strXML,"<$xmlsection",$endpos);
+		if ($strpos === false) continue ;
+		$endcheck = "</$xmlsection>";
+		$endpos = strpos($strXML,$endcheck,$strpos);
+		$xml2[$xmlsection] = trim(substr($strXML,$strpos,$endpos-$strpos+strlen($endcheck)),'/0');
+	}
+
+	$xml = $xml2['devices'];
+	$endpos = 0;
+	foreach($xmldevsections as $xmlsection ) {
+		 $strpos = $count = 0;
+		while (true) {
+			$strpos = strpos($xml,"<$xmlsection",$endpos);
+			if ($strpos === false) continue  2;
+			$endcheck = "</$xmlsection>";
+			$endpos = strpos($xml,$endcheck,$strpos);
+			#echo $xmlsection." ".$strpos." ".$endpos."\n";
+			if ($endpos === false) {
+				$endcheck = "/>";
+				$endpos = strpos($xml,$endcheck,$strpos);
+			}
+			# echo substr($xml,$strpos,$endpos-$strpos+strlen($endcheck));
+			if ($xmlsection == "disk") {
+				$disk = substr($xml,$strpos,$endpos-$strpos+strlen($endcheck));
+				$xmldiskdoc = new SimpleXMLElement($disk);
+				$devxml[$xmlsection][$xmldiskdoc->target->attributes()->dev->__toString()] = $disk;
+			} else {
+				$devxml[$xmlsection][$count] = substr($xml,$strpos,$endpos-$strpos+strlen($endcheck));
+			}
+			$count++;
+		}
+	}
+	$xml2["devices"] = $devxml;
+	$xml2["devices"]["allusb"] = "";
+	if(isset($xml2['devices']["hostdev"])) {
+		foreach ($xml2['devices']["hostdev"] as $xmlhostdev) {
+			$xmlhostdevdoc = new SimpleXMLElement($xmlhostdev);
+			switch ($xmlhostdevdoc->attributes()->type) {
+			case 'pci' :
+				$pciaddr = $xmlhostdevdoc->source->address->attributes()->bus.":".$xmlhostdevdoc->source->address->attributes()->slot.".".$xmlhostdevdoc->source->address->attributes()->function;
+				$pciaddr = str_replace("0x","",$pciaddr);
+				$xml2["devices"][$arrValidPCIDevices[$pciaddr]["class"]][$pciaddr] = $xmlhostdev;
+				break;
+			case "usb":
+				$usbaddr = $xmlhostdevdoc->source->vendor->attributes()->id.":".$xmlhostdevdoc->source->product->attributes()->id;
+				$usbaddr = str_replace("0x","",$usbaddr);
+				$xml2["devices"]["usb"][$usbaddr] = $xmlhostdev;
+				$xml2["devices"]["allusb"] .= $xmlhostdev;
+				break;
+			}
+		}
+	}
+	foreach($xml2["devices"]["input"] as $input) $xml2["devices"]["allinput"] .= "$input\n";
+	return $xml2;
+}
+
+function qemu_log($vm,$m) {
+	$m = print_r($m,true);
+	$m = date("YmdHis")." ".$m;
+	$m = str_replace("\n", " ", $m);
+	$m = str_replace('"', "'", $m);
+	file_put_contents("/var/log/libvirt/qemu/$vm.log",$m."\n",FILE_APPEND);
+}
+
+function get_vm_ip($dom) {
+	global $lv;
+	$myIP=null;
+	$gastate = getgastate($dom);
+	if ($gastate == "connected") {
+		$ip  = $lv->domain_interface_addresses($dom, 1);
+		$gastate = getgastate($dom);
+		if ($gastate == "connected") {
+			$ip  = $lv->domain_interface_addresses($dom, 1);
+			if ($ip != false) {
+				foreach ($ip as $arrIP) {
+					$ipname = $arrIP["name"];
+					if (preg_match('/^(lo|Loopback)/',$ipname)) continue; // omit loopback interface
+					$iplist = $arrIP["addrs"];
+						foreach ($iplist as $arraddr) {
+							$myIP= $arraddr["addr"];
+							if (preg_match('/^f[c-f]/',$myIP)) continue; // omit ipv6 private addresses
+						break 2;
+					}
+				}
+			}
+		}
+	}
+	return $myIP;
+}
+
+function check_zfs_name($zfsname, $storage="default") {
+	global $lv,$domain_cfg;
+	if ($storage == "default") $storage = $domain_cfg['DOMAINDIR']; else $storage = "/mnt/$storage/";
+	$storage=transpose_user_path($storage);
+	$fstype = trim(shell_exec(" stat -f -c '%T' $storage"));
+	#Check if ZFS.
+	$allowed_chars = "/^[A-Za-z0-9][A-Za-z0-9\-_.: ]*$/";
+	if ($fstype == "zfs" && !preg_match($allowed_chars, $zfsname)) {
+		return false;
+	} else {
+		return true;
+	}
+}
+
+function get_storage_fstype($storage="default") {
+	global $domain_cfg;
+	if ($storage == "default") $storage = $domain_cfg['DOMAINDIR']; else $storage = "/mnt/$storage/";
+	$storage=transpose_user_path($storage);
+	$fstype = trim(shell_exec(" stat -f -c '%T' $storage"));
+	return $fstype;
+}
+
+function getFilesystemAndReflinkMode(string $filePath): array {
+    // Default return values
+    $result = [
+        'filesystem' => 'unknown',
+        'reflink_mode' => 'always' // safest fallback if unsupported
+    ];
+
+    $realPath = realpath($filePath);
+    if ($realPath === false || !file_exists($realPath)) {
+        return $result;
+    }
+
+    $dirname = dirname($realPath);
+
+    // Handle Unraid-style virtual paths
+    if (strpos($dirname, '/mnt/user/') === 0) {
+        error_log("Getting real disks\n");
+        $realdisk = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION " . escapeshellarg($dirname) . " 2>/dev/null"));
+        if (!empty($realdisk)) {
+            $dirname = str_replace('/mnt/user/', "/mnt/$realdisk/", $dirname);
+        }
+    }
+
+    // Get filesystem type
+    $fstype = trim(shell_exec("stat -f -c '%T' " . escapeshellarg($dirname)));
+    $result['filesystem'] = $fstype;
+
+    // If not ZFS, return early
+    if ($fstype !== 'zfs') {
+       return $result;
+    }
+	
+	$result['reflink_mode'] = 'skip';
+
+    // Get dataset from the file
+    $dataset = trim(shell_exec("zfs list -H -o name " . escapeshellarg($dirname) . " 2>/dev/null"));
+    if (empty($dataset)) {
+      return $result;
+    }
+
+    // Get pool from dataset
+    $parts = explode('/', $dataset);
+    $pool = $parts[0] ?? '';
+    if (empty($pool)) {
+        return $result;
+    }
+
+    // Check ZFS block_cloning feature
+    $output = [];
+    $resultCode = 0;
+    exec("zpool get -H -o value feature@block_cloning " . escapeshellarg($pool) . " 2>/dev/null", $output, $resultCode);
+    if ($resultCode !== 0 || empty($output) || (trim($output[0]) !== 'enabled' && trim($output[0]) !== 'active')) {
+        return $result;
+    }
+
+    // Check if bclone is enabled at runtime
+    $bcloneValue = @file_get_contents("/sys/module/zfs/parameters/zfs_bclone_enabled");
+    if ($bcloneValue === false || trim($bcloneValue) !== '1') {
+        return $result;
+    }
+
+    // If both checks passed, block cloning is supported
+    $result['reflink_mode'] = 'auto';
+    return $result;
+}
 
 ?>

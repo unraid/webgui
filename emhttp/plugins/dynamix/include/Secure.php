@@ -17,7 +17,7 @@ function unscript($text) {
 }
 // remove malicious HTML elements
 function untangle($text) {
-  return preg_replace('#<.+?>(.*?)</.+?>#','',html_entity_decode($text));
+  return strip_tags(html_entity_decode($text));
 }
 // remove malicious code appended after string variable
 function unbundle($text) {

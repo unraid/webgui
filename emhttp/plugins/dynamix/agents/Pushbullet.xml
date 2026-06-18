@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+  <Agent>
+    <Name>Pushbullet</Name>
+    <Variables>
+      <Variable Help="The Access Token can be found [a href='https://www.pushbullet.com/account' target='_blank'] [u]here[/u].[/a]" Desc="Access Token" Default="">TOKEN</Variable>
+      <Variable Help="Specify the fields which are included in the title of the notification." Desc="Notification Title" Default="$SUBJECT">TITLE</Variable>
+      <Variable Help="Specify the fields which are included in the message body of the notification." Desc="Notification Message" Default="$DESCRIPTION">MESSAGE</Variable>
+    </Variables>
+    <Script>
+      <![CDATA[
+      #!/bin/bash
+      ##########
+      {0}
+      ##########
+      MESSAGE=$(echo "$MESSAGE" | sed -e 's:<br[ /]*>:\\n:gI' -e 's/<[^>]*>//g')
+
+      curl -s -k \
+      -X POST --header "Authorization: Bearer $TOKEN" \
+      --header  'Content-Type: application/json' \
+      -d "{\"type\": \"note\", \"title\": \"$TITLE\", \"body\": \"$MESSAGE\"}" \
+      https://api.pushbullet.com/v2/pushes 2>&1
+      ]]>
+    </Script>
+  </Agent>

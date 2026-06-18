@@ -12,13 +12,32 @@
 # run & log functions
 . /etc/rc.d/rc.runlog
 
+# LimeTech - restore machine-id
+SRC="/boot/config/machine-id"
+DEST="/etc/machine-id"
+if [[ ! -f "$SRC" ]] || ! grep -Eq '^[0-9a-f]{32}$' "$SRC" ; then
+  /usr/bin/dbus-uuidgen --ensure="$SRC"
+fi
+/usr/bin/install -m 0644 "$SRC" "$DEST"
+
 # LimeTech - bind selected devices to vfio-pci
 /usr/local/sbin/vfio-pci 1>/var/log/vfio-pci 2>/var/log/vfio-pci-errors
+cp /boot/config/vfio-pci.cfg /boot/config/vfio-pci.boot 2>/dev/null
 
 # Run the kernel module script. This updates the module dependencies and
 # also supports manually loading kernel modules through rc.modules.local.
 if [[ -x /etc/rc.d/rc.modules ]]; then
   /etc/rc.d/rc.modules
+fi
+
+# Copy custom udev rules before starting udevd
+UDEVRULES="/boot/config/udev"
+if [[ -d "${UDEVRULES}" ]]; then
+  log "Installing custom udev rules and scripts..."
+  # Install .rule files with 0644 permissions
+  /usr/bin/find "${UDEVRULES}" -type f -name "*.rules" -exec /usr/bin/install -p -D -m 0644 -- "{}" /etc/udev/rules.d/ \;
+  # Install .sh files with 0755 permissions
+  /usr/bin/find "${UDEVRULES}" -type f -name "*.sh" -exec /usr/bin/install -p -D -m 0755 -- "{}" /etc/udev/scripts/ \;
 fi
 
 # Initialize udev to manage /dev entries and hotplugging.
@@ -67,12 +86,13 @@ if /bin/grep -wq cgroup /proc/filesystems; then
   else
     if [[ -d /sys/fs/cgroup ]]; then
       # See https://docs.kernel.org/admin-guide/cgroup-v2.html (section Mounting)
-      # Mount a tmpfs as the cgroup2 filesystem root
-      /sbin/mount -t tmpfs -o mode=0755,size=8M cgroup_root /sys/fs/cgroup
-      /sbin/mount -t cgroup2 none /sys/fs/cgroup
+      # Mount cgroup2 filesystem
+      /sbin/mount -t cgroup2 -o rw,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot cgroup2 /sys/fs/cgroup
+      # Start cgroup2 cleanup daemon
+      /etc/rc.d/rc.cgroup2unraid start
     else
-      /bin/mkdir -p /dev/cgroup
-      /sbin/mount -t cgroup2 none /dev/cgroup
+      # Display message if /sys/fs/cgroup does not exist
+      echo "/sys/fs/cgroup does not exist. cgroup2 cannot be mounted."
     fi
   fi
 fi
@@ -92,7 +112,7 @@ FREQ=0
 if [[ -r /etc/default/adjtimex ]]; then
   . /etc/default/adjtimex
 fi
-if adjtimex --tick $TICK --frequency $FREQ; then
+if /sbin/adjtimex --tick $TICK --frequency $FREQ; then
   log "Setting the system clock rate: adjtimex --tick $TICK --frequency $FREQ"
 else
   log "Failed to set system clock with adjtimex, possibly invalid parameters? (TICK=$TICK FREQ=$FREQ)"
@@ -191,14 +211,14 @@ if [[ -x /etc/rc.d/rc.serial ]]; then
   /etc/rc.d/rc.serial start
 fi
 
-# LimeTech - let's keep this on the USB flash
+# LimeTech - let's keep this on the boot device
 ## Carry an entropy pool between reboots to improve randomness.
 /bin/mkdir -p /var/lib/seedrng
 /bin/chmod 600 /var/lib/seedrng
 /bin/cp /boot/config/random-seed /var/lib/seedrng/seed.no-credit 2>/dev/null
 /usr/sbin/seedrng
 
-# LimeTech - restore hostname from ident.cfg file on flash and ensure hostname is
+# LimeTech - restore hostname from ident.cfg file on the boot device and ensure hostname is
 # defined as localhost alias in /etc/hosts (this lets wins name resolution work)
 NAME="Tower"
 timeZone="America/Los_Angeles"
@@ -206,10 +226,10 @@ if [[ -r /boot/config/ident.cfg ]]; then
   . <(/usr/bin/fromdos </boot/config/ident.cfg)
   NAME=${NAME//[^a-zA-Z\-\.0-9]/\-}
 fi
-/bin/echo "$NAME" >/etc/HOSTNAME
+/bin/hostname "$NAME"
+/bin/hostname -s >/etc/hostname
 /bin/echo "# Generated" >/etc/hosts
-/bin/echo "127.0.0.1      $NAME localhost" >>/etc/hosts
-/bin/echo "54.149.176.35  keys.lime-technology.com" >>/etc/hosts
+/bin/echo "127.0.0.1 $NAME localhost" >>/etc/hosts
 
 # LimeTech - restore the configured timezone
 if [[ $timeZone == custom ]]; then
@@ -218,13 +238,13 @@ else
   /bin/ln -sf /usr/share/zoneinfo/$timeZone /etc/localtime
 fi
 
-# LimeTech - restore password files stored on flash
+# LimeTech - restore password files stored on the boot device
 if [[ -r /boot/config/passwd ]]; then
   while IFS=: read -r USERNAME PASSWORD USERID GROUPID COMMENT HOMEDIR CMDSHELL; do
     if [[ $USERNAME == root ]]; then
       /bin/sed -i "s|^root:.*|root:x:0:0:$COMMENT:/root:/bin/bash|" /etc/passwd
     fi
-    if (( USERID >= 1000 )); then
+    if (( USERID >= 1000 )) && ! grep -q ":$USERID:" /etc/passwd ; then
       /bin/echo "$USERNAME:x:$USERID:$GROUPID:$COMMENT:/:/bin/false" >> /etc/passwd
     fi
   done </boot/config/passwd
@@ -241,7 +261,7 @@ if [[ -r /boot/config/secrets.tdb ]]; then
   /bin/cp -f /boot/config/secrets.tdb /var/lib/samba/private
 fi
 
-# LimeTech - restore custom rsyslog.conf config file from flash if present
+# LimeTech - restore custom rsyslog.conf config file from the boot device if present
 if [[ -r /boot/config/rsyslog.conf ]]; then
   /usr/bin/fromdos </boot/config/rsyslog.conf >/etc/rsyslog.conf
 fi
