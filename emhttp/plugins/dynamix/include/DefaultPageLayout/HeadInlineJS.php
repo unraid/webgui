@@ -201,7 +201,10 @@ function createTask(type,cmd,title,plg,func,start,button) {
       if (typeof trayRender==='function') trayRender();
     }
     foregroundTask(res.id);
-  },'json');
+  },'json').fail(function() {
+    $('div.spinner.fixed').hide();
+    swal({title:"<?=_('Error')?>",text:"<?=_('Failed to start background operation')?>",type:'error',html:true,animation:'none'});
+  });
 }
 
 // abortOperation(pid) retained for backward compatibility: map the pid to its

@@ -120,7 +120,11 @@ function task_launch(&$task) {
   // plugin scripts publish to nchan only when their last argument is 'nchan'
   $suffix = $task['type']==='plugins' ? ' nchan' : '';
   $env = 'NCHAN_TASK='.escapeshellarg($task['id']).' ';
-  $pid = exec($env."nohup bash -c 'sleep .3 && $name $args$suffix' 1>/dev/null 2>&1 & echo \$!");
+  // escapeshellarg the whole bash -c payload so a single quote (or other shell
+  // metacharacter) in the resolved args cannot break out of the outer shell;
+  // bash still word-splits the args internally, preserving multi-arg commands.
+  $payload = 'sleep .3 && '.$name.' '.$args.$suffix;
+  $pid = exec($env.'nohup bash -c '.escapeshellarg($payload).' 1>/dev/null 2>&1 & echo $!');
   $task['pid']     = $pid;
   $task['status']  = 'running';
   $task['started'] = time();
@@ -147,11 +151,19 @@ function task_daemon_start() {
 // create (and possibly immediately start) a task; returns the task record
 function task_create($type,$cmd,$title,$plg,$func,$start,$button) {
   if (!in_array($type, TASK_TYPES)) return null;
+  // Serialize the dedupe -> create -> launch sequence per type. Without this,
+  // two concurrent requests (e.g. a double click) could both pass the dedupe
+  // and task_running_type() checks and each call task_launch(), violating the
+  // "at most one running task per type" invariant the whole design relies on.
+  $lock = fopen(task_dir()."/.$type.lock", 'c');
+  if ($lock) flock($lock, LOCK_EX);
   // dedupe: unless unconditional (start==1), don't queue an identical pending/running op
   if ((int)$start !== 1) {
     foreach (task_list() as $t) {
-      if ($t['type']===$type && $t['cmd']===$cmd && in_array($t['status'],['queued','running']))
+      if ($t['type']===$type && $t['cmd']===$cmd && in_array($t['status'],['queued','running'])) {
+        if ($lock) { flock($lock, LOCK_UN); fclose($lock); }
         return $t;
+      }
     }
   }
   $task = [
@@ -171,6 +183,7 @@ function task_create($type,$cmd,$title,$plg,$func,$start,$button) {
   ];
   task_write($task);
   if (!task_running_type($type)) task_launch($task);
+  if ($lock) { flock($lock, LOCK_UN); fclose($lock); }
   task_daemon_start();
   task_publish();
   return task_read($task['id']) ?: $task;
