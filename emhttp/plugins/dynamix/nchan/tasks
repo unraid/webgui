@@ -57,16 +57,22 @@ while (true) {
   // start the next queued op for every type that just freed up
   foreach (array_keys($freed) as $type) task_advance($type);
 
+  // auto-expire successful tasks past their short TTL so the tray self-cleans
+  if (task_prune() > 0) $changed = true;
+
   if ($changed) task_publish();
 
-  // exit when there is no more work; the daemon is restarted on demand
+  // keep looping while there is work, or while a successful task is still inside
+  // its auto-expire window (so we can prune + re-broadcast it); the daemon is
+  // restarted on demand once it exits
   $active = false;
   foreach (task_list() as $t) {
     if ($t['status']==='running' || $t['status']==='queued') { $active = true; break; }
   }
-  if (!$active) break;
+  if (!$active && !task_pending_expiry()) break;
 
-  usleep(250000); // 250ms, same cadence as the file_manager worker
+  // 250ms while actively scheduling, 1s when only waiting on auto-expire
+  usleep($active ? 250000 : 1000000);
 }
 
 removeNChanScript();
