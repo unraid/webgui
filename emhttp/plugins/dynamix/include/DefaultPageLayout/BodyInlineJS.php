@@ -113,7 +113,12 @@ function taskById(id)  { for (var i=0;i<taskList.length;i++) if (taskList[i].id=
 function taskByPid(pid){ for (var i=0;i<taskList.length;i++) if (taskList[i].pid==pid) return taskList[i]; return null; }
 function escapeTaskHtml(s){ return $('<div>').text(s==null?'':String(s)).html(); }
 
-function stopAllTypeChannels(){ nchan_plugins.stop(); nchan_docker.stop(); nchan_vmaction.stop(); }
+// NchanSubscriber.start()/stop() throw when called in the wrong run-state
+// ("Can't stop NchanSubscriber, it's not running."). Guard every transition so
+// a no-op start/stop can't raise and abort the surrounding handler.
+function nchanStart(sub){ try { if (sub && !sub.running) sub.start(); } catch(e) {} }
+function nchanStop(sub) { try { if (sub &&  sub.running) sub.stop();  } catch(e) {} }
+function stopAllTypeChannels(){ nchanStop(nchan_plugins); nchanStop(nchan_docker); nchanStop(nchan_vmaction); }
 
 // progress_dots / progress_span (declared in HeadInlineJS) are global wait-spinner
 // timers keyed by element id. Clear them when (re)opening or closing a modal so a
@@ -232,7 +237,7 @@ function foregroundTask(id) {
       renderMessage(task.type, m);
     }
     var fresh = taskById(id);
-    if (fresh && fresh.status=='running')    nchanByType[task.type].start();
+    if (fresh && fresh.status=='running')    nchanStart(nchanByType[task.type]);
     else if (fresh && fresh.status=='done')  openDone('_DONE_');
     else if (fresh && fresh.status=='error') openError('_ERROR_');
   },'text');
@@ -253,7 +258,7 @@ function onTaskListUpdate() {
         }
       } else if (t.status=='running' && foregroundTaskId==t.id) {
         $('#pluginProgressTitle').html("<?=_('In Progress')?> <i class='fa fa-refresh fa-spin'></i>");
-        nchanByType[t.type].start();
+        nchanStart(nchanByType[t.type]);
       }
     }
     taskPrev[t.id] = t.status;
