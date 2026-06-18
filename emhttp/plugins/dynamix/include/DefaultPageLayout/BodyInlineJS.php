@@ -285,7 +285,7 @@ function trayRender() {
     var show = "<a class='op-act' onclick='foregroundTask(\""+t.id+"\")' title=\"<?=_('Show')?>\"><i class='fa fa-window-maximize fa-fw'></i></a>";
     if (t.status=='running') {
       icon = "<i class='fa fa-refresh fa-spin fa-fw'></i>";
-      actions = show + "<a class='op-act' onclick='confirmAbortTask(\""+t.id+"\")' title=\"<?=_('Abort')?>\"><i class='fa fa-bomb fa-fw'></i></a>";
+      actions = show + "<a class='op-act' onclick='confirmAbortTask(\""+t.id+"\")' title=\"<?=_('Abort')?>\"><i class='fa fa-stop-circle fa-fw'></i></a>";
     } else if (t.status=='queued') {
       icon = "<i class='fa fa-clock-o fa-fw'></i>";
       actions = "<a class='op-act' onclick='cancelTask(\""+t.id+"\")' title=\"<?=_('Cancel')?>\"><i class='fa fa-times fa-fw'></i></a>";
