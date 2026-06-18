@@ -284,7 +284,7 @@ function trayRender() {
     if (t.status=='done' || t.status=='error') finished++;
     var show = "<a class='op-act' onclick='foregroundTask(\""+t.id+"\")' title=\"<?=_('Show')?>\"><i class='fa fa-window-maximize fa-fw'></i></a>";
     if (t.status=='running') {
-      icon = "<i class='fa fa-refresh fa-spin fa-fw'></i>";
+      icon = "<i class='fa fa-circle-o-notch fa-spin fa-fw'></i>";
       actions = show + "<a class='op-act' onclick='confirmAbortTask(\""+t.id+"\")' title=\"<?=_('Abort')?>\"><i class='fa fa-stop-circle fa-fw'></i></a>";
     } else if (t.status=='queued') {
       icon = "<i class='fa fa-clock-o fa-fw'></i>";
