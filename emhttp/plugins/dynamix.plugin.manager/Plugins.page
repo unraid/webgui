@@ -108,9 +108,52 @@ function initlist() {
       $('#plugin_table').tablesorter({sortList:[[4,0],[1,0]],sortAppend:[[1,0]],headers:{0:{sorter:false},5:{sorter:false}},textAttribute:'data'});
       $('.desc_readmore').readmore({maxHeight:80,moreLink:"<a href='#'><i class='fa fa-chevron-down'></i></a>",lessLink:"<a href='#'><i class='fa fa-chevron-up'></i></a>"});
       $('div.spinner.fixed').hide('slow');
-      loadlist();
+      checkPlugins();
     }
   });
+}
+// Update check, parallel + non-blocking. Instead of one serial sweep that
+// blocks on the slowest/unreachable plugin, fire one bounded-concurrency
+// request per installed plugin. Each row resolves independently; a slow or
+// failed check only affects its own row (never the page), and times out into a
+// definite "cannot check" state instead of spinning forever.
+var pluginUpdates = 0;
+function checkPlugin(plg) {
+  var name = plg.replace(/\.plg$/,'');
+  return $.ajax({url:'/plugins/dynamix.plugin.manager/include/ShowPlugins.php',data:{one:name},timeout:20000})
+    .done(function(data){
+      data = (data||'').split('\0');
+      updateInfo(data[0]);
+      pluginUpdates += (parseInt(data[1],10) || 0);
+    })
+    .fail(function(){
+      var id = name.replace(/\./g,'-');
+      $('#sid-'+id).attr('data','4').html("<span class='red-text'><i class='fa fa-exclamation-triangle fa-fw'></i>&nbsp;<?=_('cannot check')?></span>");
+    });
+}
+function checkPlugins() {
+  var queue = [];
+  $('input.remove').each(function(){var d=$(this).attr('data'); if (d) queue.push(d);});
+  pluginUpdates = 0;
+  $('#updateall').hide();
+  var total = queue.length, done = 0, idx = 0, active = 0, MAX = 6;
+  if (!total) { $('#checkall').find('input').prop('disabled',false); return; }
+  function pump() {
+    while (active < MAX && idx < total) {
+      active++;
+      checkPlugin(queue[idx++]).always(function(){
+        active--; done++;
+        $('#plugin_table').trigger('update');
+        if (done == total) {
+          if (pluginUpdates > 1) $('#updateall').show(); else $('#updateall').hide();
+          $('#checkall').find('input').prop('disabled',false);
+        } else {
+          pump();
+        }
+      });
+    }
+  }
+  pump();
 }
 function loadlist(id,check) {
   if (id) timers.plugins = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
