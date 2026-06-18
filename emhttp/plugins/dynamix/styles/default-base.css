@@ -1969,6 +1969,44 @@ label.checkbox input:disabled ~ .checkmark {
     z-index: 2;
 }
 .sweet-alert .nchan-close:hover { opacity: 1; color: var(--brand-orange); }
+/* Mobile: the foreground task modal goes fullscreen instead of a centered,
+   rounded card (which looks cramped/"circular" on small screens). Scoped to
+   .nchan so ordinary confirm/warning dialogs keep their dialog look. The title
+   stays pinned at the top, the log fills and scrolls, and the minimize / Dismiss
+   controls stay reachable at the corners/bottom. */
+@media (max-width: 767px) {
+    .sweet-alert.nchan {
+        display: flex !important;
+        flex-direction: column;
+        left: 0;
+        top: 0;
+        width: 100vw;
+        max-width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        max-height: 100vh;
+        max-height: 100dvh;
+        margin: 0;
+        padding: 1.25rem 1rem;
+        border: 0;
+        border-radius: 0;
+        transform: none !important;
+        -webkit-transform: none !important;
+        box-sizing: border-box;
+    }
+    .sweet-alert.nchan > h2 { flex: 0 0 auto; padding-right: 2.5rem; }
+    .sweet-alert.nchan > p  { flex: 1 1 auto; min-height: 0; display: flex; margin: 0; }
+    .sweet-alert.nchan #swaltext {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: none;
+        overflow: auto;
+        margin: 0;
+        text-align: left;
+    }
+    .sweet-alert.nchan .sa-button-container { flex: 0 0 auto; margin-top: 1rem; }
+    .sweet-alert.nchan .nchan-close { top: 1.1rem; right: 1.1rem; font-size: 1.7rem; opacity: .85; }
+}
 .back_to_top {
     right: 40px;
 }
