@@ -233,10 +233,15 @@ function foregroundTask(id) {
     trayRender();
   });
   $('.sweet-alert').addClass('nchan');
-  // a top-corner minimize for the running phase: backgrounds the task (it keeps
-  // running in the tray) without aborting; openDone/openError swap it for Dismiss
+  // a persistent top-corner control that just closes this window, leaving the
+  // task in the tray: while running it reads as "minimize" (the task keeps
+  // running); once finished it reads as "close" (the task stays as a finished
+  // tile). Removal is the separate, primary Dismiss action. openDone/openError
+  // swap the glyph/tooltip to the finished form.
+  var closeIcon = finished ? 'fa-times' : 'fa-window-minimize';
+  var closeTip  = finished ? "<?=_('Close - the task stays in the tray')?>" : "<?=_('Minimize - keeps running in the background')?>";
   $('.sweet-alert .nchan-close').remove();
-  if (!finished) $('.sweet-alert').append("<a class='nchan-close' title=\"<?=_('Minimize - keeps running in the background')?>\" onclick='minimizeForegroundTask()'><i class='fa fa-window-minimize fa-fw'></i></a>");
+  $('.sweet-alert').append("<a class='nchan-close' title=\""+closeTip+"\" onclick='minimizeForegroundTask()'><i class='fa "+closeIcon+" fa-fw'></i></a>");
   $('pre#swaltext').html('');
   $.get(TASK_ENDPOINT,{action:'log',id:id},function(logdata){
     if (foregroundTaskId!==id) return; // user moved on while loading

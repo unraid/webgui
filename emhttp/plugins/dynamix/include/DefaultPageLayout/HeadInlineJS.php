@@ -248,9 +248,9 @@ function openAlert(cmd,title,func) {
 function openDone(data) {
   if (data == '_DONE_') {
     $('div.spinner.fixed').hide();
-    // task finished: the running-phase minimize control gives way to a primary
-    // Dismiss button (clears the task from the tray on confirm)
-    $('.sweet-alert .nchan-close').remove();
+    // task finished: the corner control becomes a plain "close" (the task stays
+    // in the tray); the primary Dismiss button removes it on confirm
+    $('.sweet-alert .nchan-close').attr('title',"<?=_('Close - the task stays in the tray')?>").find('i').attr('class','fa fa-times fa-fw');
     $('button.confirm').text("<?=_('Dismiss')?>").prop('disabled',false).show();
     if (typeof ca_done_override !== 'undefined') {
       if (ca_done_override == true) {
@@ -267,7 +267,7 @@ function openDone(data) {
 function openError(data) {
   if (data == '_ERROR_') {
     $('div.spinner.fixed').hide();
-    $('.sweet-alert .nchan-close').remove();
+    $('.sweet-alert .nchan-close').attr('title',"<?=_('Close - the task stays in the tray')?>").find('i').attr('class','fa fa-times fa-fw');
     $('button.confirm').text("<?=_('Dismiss')?>").prop('disabled',false).show();
     $('#pluginProgressTitle').text("<?=_('Error');?>");
     return true;
