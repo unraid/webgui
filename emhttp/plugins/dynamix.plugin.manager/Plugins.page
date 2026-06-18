@@ -132,8 +132,10 @@ function checkPlugin(plg) {
     });
 }
 function checkPlugins() {
-  var queue = [];
-  $('input.remove').each(function(){var d=$(this).attr('data'); if (d) queue.push(d);});
+  var queue = [], seen = {};
+  // class 'remove' is on both the checkbox and the button for each plugin, so
+  // dedupe by data attribute to avoid checking every plugin twice
+  $('input.remove').each(function(){var d=$(this).attr('data'); if (d && !seen[d]) {seen[d]=1; queue.push(d);}});
   pluginUpdates = 0;
   $('#updateall').hide();
   var total = queue.length, done = 0, idx = 0, active = 0, MAX = 6;
