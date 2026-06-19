@@ -1995,15 +1995,23 @@ label.checkbox input:disabled ~ .checkmark {
     line-height: 1.35;
     font-weight: 600;
     text-align: left;
+}
+/* colored state strip below the title: a distinct status section, not a subline */
+.sweet-alert.nchan .nchan-state {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0.5rem 1.2rem;
+    font-size: 1.15rem;
+    font-weight: 500;
+    border-top: 1px solid var(--border-color);
     border-bottom: 1px solid var(--border-color);
 }
-.sweet-alert.nchan #pluginProgressTitle {
-    display: block;
-    margin-top: 0.3rem;
-    font-size: 1.15rem;
-    font-weight: 400;
-    color: var(--alt-text-color);
-}
+.sweet-alert.nchan .nchan-state.nchan-running { background: var(--blue-100);  color: var(--blue-900); }
+.sweet-alert.nchan .nchan-state.nchan-done    { background: var(--green-100); color: var(--green-900); }
+.sweet-alert.nchan .nchan-state.nchan-error   { background: var(--red-100);   color: var(--red-900); }
 .sweet-alert.nchan > p {
     flex: 0 1 auto;            /* size to the log, don't stretch the modal */
     min-height: 0;

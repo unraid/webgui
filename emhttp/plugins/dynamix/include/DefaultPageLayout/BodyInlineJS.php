@@ -219,10 +219,13 @@ function foregroundTask(id) {
   //               title icon is the in-progress indicator.
   //   finished -> a primary Dismiss button clears the task from the tray.
   var finished    = task.status=='done' || task.status=='error';
-  var titleState  = task.status=='done'  ? "<?=_('Finished')?>"
-                  : task.status=='error' ? "<?=_('Error')?>"
-                  : "<?=_('In Progress')?> <i class='fa fa-refresh fa-spin'></i>";
-  swal({title:escapeTaskHtml(task.title) + '<span id="pluginProgressTitle">'+titleState+'</span>',text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:finished,confirmButtonText:"<?=_('Dismiss')?>"},function(close){
+  // status renders as a colored "state" strip below the title (see .nchan-state)
+  var stateCls    = task.status=='done'  ? 'nchan-done'
+                  : task.status=='error' ? 'nchan-error' : 'nchan-running';
+  var stateHtml   = task.status=='done'  ? "<i class='fa fa-check fa-fw'></i> <?=_('Finished')?>"
+                  : task.status=='error' ? "<i class='fa fa-warning fa-fw'></i> <?=_('Error')?>"
+                  : "<i class='fa fa-refresh fa-spin fa-fw'></i> <?=_('In Progress')?>";
+  swal({title:escapeTaskHtml(task.title),text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:finished,confirmButtonText:"<?=_('Dismiss')?>"},function(close){
     // confirm/Dismiss (or Esc): background while running, clear once finished
     if (foregroundTaskId===id) { foregroundTaskId=null; foregroundType=null; }
     stopAllTypeChannels();
@@ -233,6 +236,9 @@ function foregroundTask(id) {
     trayRender();
   });
   $('.sweet-alert').addClass('nchan').css('pointer-events','');
+  // colored state strip between the title and the log (openDone/openError recolor it)
+  $('.sweet-alert .nchan-state').remove();
+  $('.sweet-alert > h2').after("<div id='pluginProgressTitle' class='nchan-state "+stateCls+"'>"+stateHtml+"</div>");
   // a persistent top-corner control that just closes this window, leaving the
   // task in the tray: while running it reads as "minimize" (the task keeps
   // running); once finished it reads as "close" (the task stays as a finished

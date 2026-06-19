@@ -258,7 +258,7 @@ function openDone(data) {
         ca_done_override = false;
       }
     }
-    $('#pluginProgressTitle').text("<?=_('Finished');?>");
+    $('#pluginProgressTitle').attr('class','nchan-state nchan-done').html("<i class='fa fa-check fa-fw'></i> <?=_('Finished')?>");
     return true;
   }
   return false;
@@ -269,7 +269,7 @@ function openError(data) {
     $('div.spinner.fixed').hide();
     $('.sweet-alert .nchan-close').attr('title',"<?=_('Minimize - keeps it in the tray')?>");
     $('button.confirm').text("<?=_('Dismiss')?>").prop('disabled',false).show();
-    $('#pluginProgressTitle').text("<?=_('Error');?>");
+    $('#pluginProgressTitle').attr('class','nchan-state nchan-error').html("<i class='fa fa-warning fa-fw'></i> <?=_('Error')?>");
     return true;
   }
   return false;
