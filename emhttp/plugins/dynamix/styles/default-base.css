@@ -1955,20 +1955,35 @@ label.checkbox input:disabled ~ .checkmark {
     text-decoration: none;
 }
 .op-tray .op-act:hover { color: var(--brand-orange); }
-/* top-corner minimize on the foreground task modal (backgrounds the task) */
+/* top-corner minimize/close on the foreground task modal. The modal is a dark
+   surface, so the control is a light, bordered circular button (not a faint
+   theme-colored glyph) with a brand-orange hover so it reads clearly as an
+   action. */
 .sweet-alert .nchan-close {
     position: absolute;
-    top: .6rem;
-    right: .9rem;
-    font-size: 1.3rem;
+    top: .8rem;
+    right: .8rem;
+    width: 2.4rem;
+    height: 2.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 1.4rem;
     line-height: 1;
-    color: var(--text-color);
-    opacity: .6;
+    color: rgba(255,255,255,.85);
+    background: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.28);
     cursor: pointer;
     text-decoration: none;
+    transition: background-color .15s, border-color .15s, color .15s;
     z-index: 2;
 }
-.sweet-alert .nchan-close:hover { opacity: 1; color: var(--brand-orange); }
+.sweet-alert .nchan-close:hover {
+    color: #fff;
+    background: var(--brand-orange);
+    border-color: var(--brand-orange);
+}
 /* Mobile: the foreground task modal goes fullscreen instead of a centered,
    rounded card (which looks cramped/"circular" on small screens). Scoped to
    .nchan so ordinary confirm/warning dialogs keep their dialog look. The title
@@ -2005,7 +2020,7 @@ label.checkbox input:disabled ~ .checkmark {
         text-align: left;
     }
     .sweet-alert.nchan .sa-button-container { flex: 0 0 auto; margin-top: 1rem; }
-    .sweet-alert.nchan .nchan-close { top: 1.1rem; right: 1.1rem; font-size: 1.7rem; opacity: .85; }
+    .sweet-alert.nchan .nchan-close { top: 1rem; right: 1rem; width: 2.9rem; height: 2.9rem; font-size: 1.6rem; }
 }
 .back_to_top {
     right: 40px;
