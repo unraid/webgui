@@ -1968,6 +1968,7 @@ label.checkbox input:disabled ~ .checkmark {
     flex-direction: column;
     width: 90vw;
     max-width: 60rem;
+    height: auto;          /* override swal's @media(max-width:1200px){height:95vh} so the modal hugs its content */
     max-height: 85vh;
     margin: 0;
     padding: 0;
@@ -1996,7 +1997,9 @@ label.checkbox input:disabled ~ .checkmark {
     font-weight: 600;
     text-align: left;
 }
-/* colored state strip below the title: a distinct status section, not a subline */
+/* status state strip below the title: a subtle theme-adaptive tint + a colored
+   icon, with normal (theme) text. Tints are translucent so they read over the
+   modal surface in every theme without the dated pale-banner look. */
 .sweet-alert.nchan .nchan-state {
     flex: 0 0 auto;
     display: flex;
@@ -2004,14 +2007,18 @@ label.checkbox input:disabled ~ .checkmark {
     gap: 0.5rem;
     margin: 0;
     padding: 0.5rem 1.2rem;
-    font-size: 1.15rem;
+    font-size: 1.1rem;
     font-weight: 500;
-    border-top: 1px solid var(--border-color);
+    color: var(--text-color);
     border-bottom: 1px solid var(--border-color);
 }
-.sweet-alert.nchan .nchan-state.nchan-running { background: var(--blue-100);  color: var(--blue-900); }
-.sweet-alert.nchan .nchan-state.nchan-done    { background: var(--green-100); color: var(--green-900); }
-.sweet-alert.nchan .nchan-state.nchan-error   { background: var(--red-100);   color: var(--red-900); }
+.sweet-alert.nchan .nchan-state i { font-size: 1.05em; }
+.sweet-alert.nchan .nchan-state.nchan-running { background: rgba(59,130,196,.14); }
+.sweet-alert.nchan .nchan-state.nchan-running i { color: #3b82c4; }
+.sweet-alert.nchan .nchan-state.nchan-done    { background: rgba(58,156,71,.16); }
+.sweet-alert.nchan .nchan-state.nchan-done i  { color: #3a9c47; }
+.sweet-alert.nchan .nchan-state.nchan-error   { background: rgba(226,75,74,.14); }
+.sweet-alert.nchan .nchan-state.nchan-error i { color: #e24b4a; }
 .sweet-alert.nchan > p {
     flex: 0 1 auto;            /* size to the log, don't stretch the modal */
     min-height: 0;
