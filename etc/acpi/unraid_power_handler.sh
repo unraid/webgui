@@ -34,20 +34,6 @@ run_powerbutton(){
     logger -t acpid "Power button: rebooting"
     /sbin/init 6
     ;;
-  sleep)
-    # Let the S3 Sleep plugin (if installed) perform array-aware prep,
-    # otherwise fall back to a generic suspend-to-RAM.
-    if [[ -x $PLUGIN_DIR/sleep ]]; then
-      logger -t acpid "Power button: sleeping (plugin handler)"
-      "$PLUGIN_DIR/sleep"
-    elif grep -qw mem /sys/power/state 2>/dev/null; then
-      logger -t acpid "Power button: suspending to RAM"
-      sync
-      echo -n mem > /sys/power/state
-    else
-      logger -t acpid "Power button: suspend not supported, ignoring"
-    fi
-    ;;
   shutdown)
     logger -t acpid "Power button: initiating clean shutdown"
     /sbin/init 0
