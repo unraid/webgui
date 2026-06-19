@@ -251,6 +251,7 @@ function openDone(data) {
     // task finished: corner stays minimize (keeps the finished tile in the tray);
     // the primary Dismiss button is what removes it
     $('.sweet-alert .nchan-close').attr('title',"<?=_('Minimize - keeps it in the tray')?>");
+    $('.sweet-alert').attr('data-has-confirm-button','true');   // un-hide the footer (CSS keys off this)
     $('button.confirm').text("<?=_('Dismiss')?>").prop('disabled',false).show();
     if (typeof ca_done_override !== 'undefined') {
       if (ca_done_override == true) {
@@ -268,6 +269,7 @@ function openError(data) {
   if (data == '_ERROR_') {
     $('div.spinner.fixed').hide();
     $('.sweet-alert .nchan-close').attr('title',"<?=_('Minimize - keeps it in the tray')?>");
+    $('.sweet-alert').attr('data-has-confirm-button','true');   // un-hide the footer (CSS keys off this)
     $('button.confirm').text("<?=_('Dismiss')?>").prop('disabled',false).show();
     $('#pluginProgressTitle').attr('class','nchan-state nchan-error').html("<i class='fa fa-warning fa-fw'></i> <?=_('Error')?>");
     return true;
