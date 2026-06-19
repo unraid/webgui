@@ -238,8 +238,11 @@ function foregroundTask(id) {
   // running); once finished it reads as "close" (the task stays as a finished
   // tile). Removal is the separate, primary Dismiss action. openDone/openError
   // swap the glyph/tooltip to the finished form.
-  var closeIcon = finished ? 'fa-times' : 'fa-minus';
-  var closeTip  = finished ? "<?=_('Close - the task stays in the tray')?>" : "<?=_('Minimize - keeps running in the background')?>";
+  // the corner control is ALWAYS minimize (it tucks the modal away and keeps the
+  // task in the tray); removal is the separate Dismiss button. Keeping one icon
+  // avoids the confusing minus->x swap where the "x" actually just minimized.
+  var closeIcon = 'fa-minus';
+  var closeTip  = finished ? "<?=_('Minimize - keeps it in the tray')?>" : "<?=_('Minimize - keeps running in the background')?>";
   $('.sweet-alert .nchan-close').remove();
   $('.sweet-alert').append("<a class='nchan-close' title=\""+closeTip+"\" onclick='minimizeForegroundTask()'><i class='fa "+closeIcon+" fa-fw'></i></a>");
   $('pre#swaltext').html('');
