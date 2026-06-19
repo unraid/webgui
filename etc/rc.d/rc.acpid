@@ -17,6 +17,18 @@ acpid_running(){
   ps axc | grep -q ' acpid'
 }
 
+# Install Unraid's ACPI event handler over the stock Slackware acpi_handler.sh.
+# Done at boot so it reliably wins regardless of package install order. The
+# handler reads the configurable power button behavior (Settings > Power
+# Options > Power Button) live from dynamix.cfg, so no reload is needed when
+# the setting changes.
+acpid_configure(){
+  local SRC=/etc/acpi/unraid_power_handler.sh
+  if [[ -f $SRC ]]; then
+    install -m 0755 "$SRC" /etc/acpi/acpi_handler.sh
+  fi
+}
+
 acpid_start(){
   log "Starting $DAEMON..."
   local REPLY
@@ -24,6 +36,7 @@ acpid_start(){
     REPLY="Already started"
   else
     if [[ -d /proc/acpi ]]; then
+      acpid_configure
       run /usr/sbin/acpid
       if acpid_running; then REPLY="Started"; else REPLY="Failed"; fi
     else
