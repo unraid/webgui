@@ -16,8 +16,6 @@ Tag="icon-power"
 ?>
 <?
 $cur = _var($powermode,'powerbutton','shutdown');
-// Only offer suspend when the kernel reports support for suspend-to-RAM.
-$suspend = (bool)preg_match('/\bmem\b/', (string)@file_get_contents('/sys/power/state'));
 ?>
 
 <form markdown="1" name="PowerButton" method="POST" action="/update.php" target="progressFrame">
@@ -28,9 +26,6 @@ _(Physical power button)_:
 : <select name="powerbutton" id="powerbutton" onchange="powerbuttonExtra(this)">
   <?=mk_option($cur, "shutdown", _('Shut down').' ('._('default').')')?>
   <?=mk_option($cur, "reboot", _('Reboot'))?>
-  <?if ($suspend):?>
-  <?=mk_option($cur, "sleep", _('Sleep (suspend)'))?>
-  <?endif;?>
   <?=mk_option($cur, "ignore", _('Do nothing'))?>
   <?php
   // Extension point: plugins add <option> lines for custom actions.
