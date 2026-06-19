@@ -151,6 +151,7 @@ function postToXML($post, $setOwnership=false) {
   $xml->ExtraParams                = xml_encode($myMAC && !$extraNetwork ? removeMacAddressParam($post['contExtraParams']) : $post['contExtraParams']);
   $xml->PostArgs                   = xml_encode($post['contPostArgs']);
   $xml->CPUset                     = xml_encode($post['contCPUset']);
+  $xml->Memory                     = xml_encode(trim($post['contMemory']??''));
   $xml->DateInstalled              = xml_encode(time());
   $xml->DonateText                 = xml_encode($post['contDonateText']);
   $xml->DonateLink                 = xml_encode($post['contDonateLink']);
@@ -415,6 +416,7 @@ function xmlToCommand($xml, $create_paths=false) {
     foreach (explode(' ',str_replace(',',' ',$xml['MyIP'])) as $myIP) if ($myIP) $cmdMyIP .= (strpos($myIP,':') !== false ? '--ip6=' : '--ip=').escapeshellarg($myIP).' ';
   }
   $cmdCPUset     = strlen($xml['CPUset']) ? '--cpuset-cpus='.escapeshellarg($xml['CPUset']) : '';
+  $cmdMemory     = strlen($xml['Memory']??'') ? '--memory='.escapeshellarg($xml['Memory']) : '';
   $Volumes       = [''];
   $Ports         = [''];
   $Variables     = [''];
@@ -562,8 +564,8 @@ function xmlToCommand($xml, $create_paths=false) {
     $pid_limit = "";
   }
 
-  $cmd = sprintf($docroot.'/plugins/dynamix.docker.manager/scripts/docker create %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s',
-         $cmdName, $TS_entrypoint, $cmdNetwork, $cmdMyIP, $cmdCPUset, $pid_limit, $cmdPrivileged, implode(' -e ', $Variables), $TS_hostname, $TS_exitnode, $TS_exitnode_ip, $TS_lan_access, $TS_routes, $TS_accept_routes, $TS_ssh, $TS_userspace_networking, $TS_serve_funnel, $TS_serve_port, $TS_serve_target, $TS_serve_local_path, $TS_serve_protocol, $TS_serve_protocol_port, $TS_serve_path, $TS_daemon_params, $TS_extra_params, $TS_state_dir, $TS_troubleshooting, $TS_postargs, implode(' -l ', $Labels), $TS_web_ui, $TS_hostname_label, implode(' -p ', $Ports), implode(' -v ', $Volumes), $TS_hook, $TS_cap, $TS_tundev, implode(' --device=', $Devices), $xml['ExtraParams'], escapeshellarg($xml['Repository']), $xml['PostArgs']);
+  $cmd = sprintf($docroot.'/plugins/dynamix.docker.manager/scripts/docker create %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s',
+         $cmdName, $TS_entrypoint, $cmdNetwork, $cmdMyIP, $cmdCPUset, $cmdMemory, $pid_limit, $cmdPrivileged, implode(' -e ', $Variables), $TS_hostname, $TS_exitnode, $TS_exitnode_ip, $TS_lan_access, $TS_routes, $TS_accept_routes, $TS_ssh, $TS_userspace_networking, $TS_serve_funnel, $TS_serve_port, $TS_serve_target, $TS_serve_local_path, $TS_serve_protocol, $TS_serve_protocol_port, $TS_serve_path, $TS_daemon_params, $TS_extra_params, $TS_state_dir, $TS_troubleshooting, $TS_postargs, implode(' -l ', $Labels), $TS_web_ui, $TS_hostname_label, implode(' -p ', $Ports), implode(' -v ', $Volumes), $TS_hook, $TS_cap, $TS_tundev, implode(' --device=', $Devices), $xml['ExtraParams'], escapeshellarg($xml['Repository']), $xml['PostArgs']);
   return [preg_replace('/\s\s+/', ' ', $cmd), $xml['Name'], $xml['Repository']];
 }
 function stopContainer($name, $t=false, $echo=true) {
