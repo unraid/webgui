@@ -1955,41 +1955,27 @@ label.checkbox input:disabled ~ .checkmark {
     text-decoration: none;
 }
 .op-tray .op-act:hover { color: var(--brand-orange); }
-/* The foreground task modal is restyled as a right-docked sidebar/sheet to mirror
-   the Unraid notifications sidebar. Every color is a theme token so it adapts to
-   white / azure / black / gray:
-     surface = --dynamix-sweet-alert-icon-bg-color (the modal's own themed bg)
-     text    = --dynamix-sweet-alert-text-color   muted = --alt-text-color
-     card    = --shade-bg-color   lines = --border-color   accent = --brand-orange */
+/* The foreground task modal: a compact, centered card (a transient progress log
+   shouldn't take over the screen, so it is NOT a full-height sidebar). The base
+   swal keeps the centering + rounded corners; here we just shrink it and lay it
+   out as header / scrolling log / footer. All colors are theme tokens so it
+   adapts to white / azure / black / gray:
+     surface = --dynamix-sweet-alert-icon-bg-color   text = --dynamix-sweet-alert-text-color
+     muted = --alt-text-color   card = --shade-bg-color   lines = --border-color
+     accent = --brand-orange. Mobile goes fullscreen (below). */
 .sweet-alert.nchan {
     display: flex !important;
     flex-direction: column;
-    left: auto;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    transform: none;
-    -webkit-transform: none;
-    width: 46rem;
-    max-width: 95vw;
-    height: 100vh;
-    height: 100dvh;
-    min-height: 100vh;
-    min-height: 100dvh;
-    max-height: 100vh;
-    max-height: 100dvh;
+    width: 90vw;
+    max-width: 42rem;
+    max-height: 85vh;
     margin: 0;
     padding: 0;
-    border: 0;
-    border-left: 1px solid var(--border-color);
-    border-radius: 0;
-    box-shadow: -0.5rem 0 1.5rem var(--bg-opacity-30);
     text-align: left;
     overflow: hidden;
     box-sizing: border-box;
-    animation: nchanSlideIn .22s ease-out;
+    box-shadow: 0 0.5rem 2rem var(--bg-opacity-30);
 }
-@keyframes nchanSlideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
 .sweet-alert.nchan > h2 {
     flex: 0 0 auto;
     margin: 0;
@@ -2074,14 +2060,22 @@ label.checkbox input:disabled ~ .checkmark {
     background: var(--brand-orange);
     border-color: var(--brand-orange);
 }
-/* Mobile: full-width sheet (flush, still slides in from the right). */
+/* Mobile: fullscreen (a centered card is cramped on phones). Overrides the base
+   swal centering to fill the viewport. */
 @media (max-width: 767px) {
     .sweet-alert.nchan {
         left: 0;
+        top: 0;
         right: 0;
+        bottom: 0;
+        transform: none;
+        -webkit-transform: none;
         width: 100vw;
         max-width: 100vw;
-        border-left: 0;
+        height: 100dvh;
+        max-height: 100dvh;
+        border: 0;
+        border-radius: 0;
     }
     .sweet-alert.nchan .nchan-close { width: 2.9rem; height: 2.9rem; font-size: 1.6rem; }
 }
