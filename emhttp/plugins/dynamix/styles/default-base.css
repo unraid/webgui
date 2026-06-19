@@ -1976,6 +1976,12 @@ label.checkbox input:disabled ~ .checkmark {
     box-sizing: border-box;
     box-shadow: 0 0.5rem 2rem var(--bg-opacity-30);
 }
+/* SweetAlert adds 40px bottom padding when no buttons show (our running state);
+   the sheet manages its own padding, so cancel it. Matches swal's selector plus
+   .nchan to outspecify it. */
+.sweet-alert.nchan[data-has-confirm-button=false][data-has-cancel-button=false] {
+    padding-bottom: 0;
+}
 .sweet-alert.nchan > h2 {
     flex: 0 0 auto;
     margin: 0;
