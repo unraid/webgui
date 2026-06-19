@@ -1897,7 +1897,7 @@ label.checkbox input:disabled ~ .checkmark {
     display: flex;
     flex-direction: column;
     gap: .25rem;
-    z-index: 999;
+    z-index: 1000;
 }
 /* Lift the tray above the fixed footer so it isn't clipped behind it.
    Mirrors the media queries that make #footer position:fixed. */
@@ -2086,6 +2086,41 @@ label.checkbox input:disabled ~ .checkmark {
 }
 .move_to_end {
     right:12px;
+}
+/* The scroll-to-top/bottom buttons share the bottom-right corner with the task
+   tray. When the tray has tasks (it is an earlier sibling of the buttons, see
+   MiscElementsBottom), move the buttons clear of it: to the bottom-left on
+   desktop. */
+.op-tray:not(:empty) ~ .back_to_top { right: auto; left: 40px; }
+.op-tray:not(:empty) ~ .move_to_end { right: auto; left: 12px; }
+/* Mobile: the tray becomes a full-width, swipeable carousel of task tiles (one
+   at a time) instead of a bottom-right stack, and the scroll buttons lift above
+   it so they never cover a tile. */
+@media (max-width: 767px) {
+    .op-tray {
+        left: 1rem;
+        right: 1rem;
+        width: auto;
+        max-width: none;
+        max-height: none;
+        flex-flow: row nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        gap: .5rem;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        padding-bottom: 2px;
+    }
+    .op-tray::-webkit-scrollbar { display: none; }
+    .op-tray .op-task,
+    .op-tray .op-tray-head {
+        flex: 0 0 100%;
+        scroll-snap-align: center;
+        box-sizing: border-box;
+    }
+    .op-tray:not(:empty) ~ .back_to_top { left: auto; right: 40px; bottom: 6rem; }
+    .op-tray:not(:empty) ~ .move_to_end { left: auto; right: 12px; bottom: 6rem; }
 }
 span.big.blue-text {
     cursor: pointer;
