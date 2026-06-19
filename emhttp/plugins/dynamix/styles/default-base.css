@@ -1909,8 +1909,22 @@ label.checkbox input:disabled ~ .checkmark {
 }
 .op-tray .op-tray-head {
     display: flex;
-    justify-content: flex-end;
-    padding: 0 .25rem .1rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    padding: 0 .35rem .15rem;
+}
+.op-tray .op-tray-count {
+    font-size: 1.05rem;
+    color: var(--text-color);
+    opacity: .6;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}
+.op-tray .op-tray-head-acts {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
 }
 .op-tray .op-tray-head .op-act {
     font-size: 1.1rem;
@@ -1920,6 +1934,10 @@ label.checkbox input:disabled ~ .checkmark {
     text-decoration: none;
 }
 .op-tray .op-tray-head .op-act:hover { opacity: 1; color: var(--brand-orange); }
+/* The collapse chevron and the count badge are part of the mobile stacked-card
+   interaction; desktop always shows the full vertical list, so hide them there. */
+.op-tray .op-tray-head .op-collapse { display: none; }
+.op-tray .op-stack-badge { display: none; }
 .op-tray .op-task {
     display: flex;
     align-items: center;
@@ -2123,35 +2141,19 @@ label.checkbox input:disabled ~ .checkmark {
    desktop. */
 .op-tray:not(:empty) ~ .back_to_top { right: auto; left: 40px; }
 .op-tray:not(:empty) ~ .move_to_end { right: auto; left: 12px; }
-/* Mobile: the tray becomes a full-width, swipeable carousel of task tiles (one
-   at a time) instead of a bottom-right stack, and the scroll buttons lift above
-   it so they never cover a tile. */
+/* Mobile: the tray is a grouped-notification stack (iOS/Android pattern). When
+   there are multiple tasks it collapses to the newest card with the rest peeking
+   behind it; a tap expands the full vertical list so all of them can be viewed
+   and cleared at once. The scroll buttons lift above it so they never overlap. */
 @media (max-width: 767px) {
     .op-tray {
         left: 1rem;
         right: 1rem;
         width: auto;
         max-width: none;
-        max-height: none;
-        flex-flow: row nowrap;
-        overflow-x: auto;
-        overflow-y: hidden;
         gap: .5rem;
-        scroll-snap-type: x mandatory;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        padding-bottom: 2px;
     }
-    .op-tray::-webkit-scrollbar { display: none; }
-    /* each tile is a bit under full width so the neighbour peeks in — a visual
-       cue that the tray is swipeable */
-    .op-tray .op-task,
-    .op-tray .op-tray-head {
-        flex: 0 0 85%;
-        scroll-snap-align: end;
-        box-sizing: border-box;
-    }
-    /* taller tiles + larger action hit areas so they're easy to tap on touch */
+    /* larger tap targets on touch (applies in both collapsed and expanded) */
     .op-tray .op-task { padding: .85rem 1rem; min-height: 3.4rem; font-size: 1.45rem; gap: .75rem; }
     .op-tray .op-actions { gap: .25rem; }
     .op-tray .op-act {
@@ -2162,6 +2164,83 @@ label.checkbox input:disabled ~ .checkmark {
         min-height: 3rem;
         font-size: 1.6rem;
     }
+
+    /* ---- Collapsed: a single tappable card with stacked edges peeking under ---- */
+    .op-tray.op-collapsed {
+        display: block;
+        position: fixed;
+        max-height: none;
+        overflow: visible;
+        /* room under the front card for the two peeking stack edges + the badge */
+        padding-bottom: .9rem;
+        cursor: pointer;
+    }
+    .op-tray.op-collapsed .op-tray-head { display: none; }
+    .op-tray.op-collapsed .op-task { display: none; }
+    .op-tray.op-collapsed .op-task.op-top {
+        display: flex;
+        position: relative;
+        z-index: 2;
+        margin: 0;
+    }
+    /* collapsed = whole card means "expand"; its row actions are reachable once
+       expanded, so suppress them here to keep the tap target unambiguous */
+    .op-tray.op-collapsed .op-task.op-top .op-actions { display: none; }
+    /* two faux card edges fanned out below the front card to signal a stack */
+    .op-tray.op-collapsed.op-multi .op-task.op-top::before,
+    .op-tray.op-collapsed.op-multi .op-task.op-top::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        height: 1rem;
+        border: 1px solid var(--border-color);
+        border-top: 0;
+        border-bottom-left-radius: .5rem;
+        border-bottom-right-radius: .5rem;
+        background-color: var(--background-color);
+        z-index: -1;
+    }
+    .op-tray.op-collapsed.op-multi .op-task.op-top::after {
+        bottom: -.45rem;
+        width: 92%;
+        opacity: .8;
+    }
+    .op-tray.op-collapsed.op-multi .op-task.op-top::before {
+        bottom: -.9rem;
+        width: 84%;
+        opacity: .55;
+    }
+    /* count pill on the front card */
+    .op-tray.op-collapsed .op-stack-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        position: absolute;
+        top: -.7rem;
+        right: -.4rem;
+        z-index: 3;
+        min-width: 1.6rem;
+        height: 1.6rem;
+        padding: 0 .45rem;
+        border-radius: .8rem;
+        background-color: var(--brand-orange);
+        color: #fff;
+        font-size: 1.05rem;
+        font-weight: 700;
+        box-shadow: 0 1px 3px rgba(0,0,0,.35);
+        cursor: pointer;
+    }
+
+    /* ---- Expanded: full vertical list, panned up from the bottom ---- */
+    .op-tray.op-expanded {
+        display: flex;
+        flex-direction: column;
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+    .op-tray.op-expanded .op-tray-head .op-collapse { display: inline-flex; }
+
     .op-tray:not(:empty) ~ .back_to_top { left: auto; right: 40px; bottom: 6rem; }
     .op-tray:not(:empty) ~ .move_to_end { left: auto; right: 12px; bottom: 6rem; }
 }

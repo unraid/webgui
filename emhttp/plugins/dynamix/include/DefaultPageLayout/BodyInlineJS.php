@@ -300,14 +300,27 @@ taskChannel.on('message', function(msg){
   onTaskListUpdate();
 });
 
+// Tray expand/collapse state (mobile only). On desktop the tray is always a
+// full vertical stack; on mobile it collapses to a single tappable card with
+// the rest peeking behind it (the iOS/Android grouped-notification pattern).
+var trayExpanded = false;
+function isMobileTray() {
+  return !!(window.matchMedia && window.matchMedia('(max-width: 767px)').matches);
+}
+function expandTray() { trayExpanded = true; trayRender(); }
+function collapseTray() { trayExpanded = false; trayRender(); }
+
 // render the task tray
 function trayRender() {
   var $tray = $('#opTray');
   if (!$tray.length) return;
-  if (!taskList.length) { $tray.hide().empty(); return; }
-  var rows = '', finished = 0;
-  for (var i=0;i<taskList.length;i++) {
+  if (!taskList.length) { $tray.hide().empty(); trayExpanded = false; return; }
+  var rows = '', finished = 0, count = taskList.length;
+  // newest first: the most recent task sits at the top of the stack and is the
+  // single card shown when the mobile tray is collapsed.
+  for (var i=taskList.length-1;i>=0;i--) {
     var t = taskList[i], icon, actions='', safeId = escapeTaskHtml(t.id);
+    var top = (i==taskList.length-1) ? ' op-top' : '';
     if (t.status=='done' || t.status=='error') finished++;
     var show = "<a class='op-act' onclick='foregroundTask(\""+safeId+"\")' title=\"<?=_('Show')?>\"><i class='fa fa-window-maximize fa-fw'></i></a>";
     if (t.status=='running') {
@@ -323,20 +336,49 @@ function trayRender() {
       icon = "<i class='fa fa-warning fa-fw orange-text'></i>";
       actions = show + "<a class='op-act' onclick='dismissTask(\""+safeId+"\")' title=\"<?=_('Dismiss')?>\"><i class='fa fa-times fa-fw'></i></a>";
     }
-    rows += "<div class='op-task op-"+t.status+"'><span class='op-icon'>"+icon+"</span><span class='op-title'>"+escapeTaskHtml(t.title)+"</span><span class='op-actions'>"+actions+"</span></div>";
+    rows += "<div class='op-task op-"+t.status+top+"'><span class='op-icon'>"+icon+"</span><span class='op-title'>"+escapeTaskHtml(t.title)+"</span><span class='op-actions'>"+actions+"</span></div>";
   }
-  // header with a bulk "Clear finished" action, shown only when there is more
-  // than one finished task to clear (a lone one is easy to dismiss directly)
-  var header = '';
-  if (finished > 1) {
-    header = "<div class='op-tray-head'><a class='op-act' onclick='clearFinishedTasks()' title=\"<?=_('Clear finished tasks')?>\"><i class='fa fa-check-circle-o fa-fw'></i> <?=_('Clear finished')?></a></div>";
+  // Header (only when more than one task): carries the count, a bulk "Clear
+  // finished" action when there is more than one finished task, and — on the
+  // mobile expanded stack — a chevron to collapse back to the single card.
+  var head = '';
+  if (count > 1) {
+    head = "<div class='op-tray-head'>";
+    head += "<span class='op-tray-count'>"+count+" <?=_('operations')?></span>";
+    head += "<span class='op-tray-head-acts'>";
+    if (finished > 1) {
+      head += "<a class='op-act' onclick='clearFinishedTasks()' title=\"<?=_('Clear finished tasks')?>\"><i class='fa fa-check-circle-o fa-fw'></i> <?=_('Clear finished')?></a>";
+    }
+    head += "<a class='op-act op-collapse' onclick='collapseTray()' title=\"<?=_('Collapse')?>\"><i class='fa fa-chevron-down fa-fw'></i></a>";
+    head += "</span></div>";
   }
-  $tray.html(header + rows).show();
-  // On mobile the tray is a horizontal carousel; default it to the newest task
-  // (rightmost) rather than the leftmost "Clear finished" header.
-  if (window.matchMedia && window.matchMedia('(max-width: 767px)').matches) {
-    $tray.scrollLeft($tray[0].scrollWidth);
-  }
+  // Collapsed badge: a count pill on the top card so a stacked group reads as
+  // "N operations" before it's expanded.
+  var badge = (count > 1) ? "<span class='op-stack-badge' onclick='expandTray()'>"+count+"</span>" : "";
+  // State classes drive the CSS: collapsed shows just the top card with the
+  // others peeking; expanded shows the full vertical list with the header.
+  var mobile = isMobileTray();
+  var collapsed = mobile && !trayExpanded && count > 1;
+  $tray.removeClass('op-collapsed op-expanded op-multi');
+  if (count > 1) $tray.addClass('op-multi');
+  $tray.addClass(collapsed ? 'op-collapsed' : 'op-expanded');
+  $tray.html(head + rows + badge).show();
+}
+
+// When the mobile tray is collapsed into a single stacked card, a tap anywhere
+// on it (other than a row action) expands the full list. Delegated so it
+// survives trayRender() re-renders.
+$(document).on('click', '#opTray.op-collapsed', function(e) {
+  if ($(e.target).closest('.op-act').length) return;
+  expandTray();
+});
+// Re-evaluate collapsed/expanded layout when crossing the mobile breakpoint so
+// the tray doesn't get stuck in a mobile-only collapsed state on resize.
+if (window.matchMedia) {
+  var trayMql = window.matchMedia('(max-width: 767px)');
+  var onTrayBreakpoint = function(){ if (!isMobileTray()) trayExpanded = false; trayRender(); };
+  if (trayMql.addEventListener) trayMql.addEventListener('change', onTrayBreakpoint);
+  else if (trayMql.addListener) trayMql.addListener(onTrayBreakpoint);
 }
 
 // minimize the foreground modal: drop the live view but leave the task running
