@@ -2015,19 +2015,24 @@ label.checkbox input:disabled ~ .checkmark {
     border: 1px solid var(--border-color);
     border-radius: 0.4rem;
 }
+/* Slim footer with a full-width Dismiss. A single centered button looked lonely
+   and the default container (margin-top + centered flex + a hidden loader) ate
+   vertical space. */
 .sweet-alert.nchan .sa-button-container {
     flex: 0 0 auto;
     margin: 0;
-    padding: 0.9rem 1.2rem;
+    padding: 0.7rem 1.2rem;
     border-top: 1px solid var(--border-color);
-    text-align: left;
 }
-/* !important overrides SweetAlert's inline `background-color: transparent`
-   (its default confirmButtonColor), which otherwise leaves white-on-white. */
+.sweet-alert.nchan .sa-confirm-button-container { display: block; }
+.sweet-alert.nchan .la-ball-fall { display: none; }
+/* !important overrides SweetAlert's inline background-color:transparent / sizing */
 .sweet-alert.nchan button.confirm {
+    display: block;
+    width: 100%;
     margin: 0;
-    padding: 0.6rem 1.5rem;
-    font-size: 1.3rem;
+    padding: 0.6rem 1rem;
+    font-size: 1.25rem;
     color: var(--white) !important;
     background: var(--brand-orange) !important;
     border: 0 !important;
