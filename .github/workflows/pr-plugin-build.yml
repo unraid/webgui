@@ -107,6 +107,7 @@ jobs:
           }
 
           : > build/binary_files.txt
+          : > build/text_files.txt
           has_text=0
 
           while IFS= read -r file; do
@@ -137,6 +138,7 @@ jobs:
               cp "$file" "new/$sys"
             fi
             has_text=1
+            echo "$sys" >> build/text_files.txt
             echo "Text: $file -> $sys"
           done < changed_files.txt
 
@@ -145,6 +147,11 @@ jobs:
           if [ "$has_text" -eq 1 ]; then
             diff -ruN old new > build/pr.patch || [ $? -eq 1 ]
             echo "pr.patch hunks: $(grep -c '^@@' build/pr.patch || echo 0)"
+            # Ship the base (original) version of each text file so removal can
+            # rebuild deterministically: restore originals + re-apply the other
+            # still-installed PR plugins' patches.
+            mkdir -p build/orig
+            cp -a old/. build/orig/ 2>/dev/null || true
           fi
 
           find build -type f | sed 's|^build/||' > file_list.txt

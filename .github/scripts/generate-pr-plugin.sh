@@ -90,12 +90,29 @@ PAYLOAD="$PLUGIN_DIR/payload"
 
 mkdir -p "$PLUGIN_DIR" "$BACKUP_DIR"
 
-# Reverse a previously applied patch so we start from a clean base
-if [ -f "$PATCH_APPLIED" ]; then
-    echo "Reverting previously applied patch..."
-    patch -R -p1 -d / --batch < "$PATCH_APPLIED" || echo "⚠️  Reverse-apply reported issues (continuing)"
-    rm -f "$PATCH_APPLIED"
+# Roll back THIS plugin's previous text changes by restoring the shipped
+# originals, then re-applying the other still-installed PR plugins so their
+# changes survive. (Deterministic: does not depend on reverse-patch context.)
+if [ -f "$PLUGIN_DIR/text_files.txt" ]; then
+    echo "Rolling back previous text changes..."
+    while IFS= read -r sys; do
+        [ -n "$sys" ] || continue
+        SYS="/$sys"
+        if [ -f "$PLUGIN_DIR/orig/$sys" ]; then
+            mkdir -p "$(dirname "$SYS")"; cp -f "$PLUGIN_DIR/orig/$sys" "$SYS"
+        else
+            rm -f "$SYS"   # file was newly added by this PR
+        fi
+    done < "$PLUGIN_DIR/text_files.txt"
+    for other in /boot/config/plugins/webgui-pr-*; do
+        [ -d "$other" ] || continue
+        [ "$other" == "$PLUGIN_DIR" ] && continue
+        [ -f "$other/applied.patch" ] && patch -p1 -d / --forward < "$other/applied.patch" >/dev/null 2>&1 || true
+    done
 fi
+rm -f "$PATCH_APPLIED"
+rm -rf "$PLUGIN_DIR/orig"
+: > "$PLUGIN_DIR/text_files.txt"
 
 # Restore any previously installed binary files
 if [ -f "$MANIFEST" ]; then
@@ -176,6 +193,10 @@ if [ -s "$PAYLOAD/pr.patch" ]; then
     echo "Applying patch..."
     patch -p1 -d / --forward < "$PAYLOAD/pr.patch"
     cp -f "$PAYLOAD/pr.patch" "$PATCH_APPLIED"
+    # Persist the originals + file list so removal can rebuild deterministically
+    rm -rf "$PLUGIN_DIR/orig"
+    [ -d "$PAYLOAD/orig" ] && cp -a "$PAYLOAD/orig" "$PLUGIN_DIR/orig"
+    [ -f "$PAYLOAD/text_files.txt" ] && cp -f "$PAYLOAD/text_files.txt" "$PLUGIN_DIR/text_files.txt"
     echo "✅ Patch applied"
 fi
 
@@ -278,11 +299,25 @@ PLUGIN_DIR="/boot/config/plugins/webgui-pr-PR_PLACEHOLDER"
 MANIFEST="$PLUGIN_DIR/installed_files.txt"
 PATCH_APPLIED="$PLUGIN_DIR/applied.patch"
 
-# Reverse the applied patch (text changes)
-if [ -f "$PATCH_APPLIED" ]; then
-    echo "Reverting patch..."
-    patch -R -p1 -d / --batch < "$PATCH_APPLIED" || echo "⚠️  Reverse-apply reported issues"
-    echo "✅ Patch reverted"
+# Restore this plugin's text files to their shipped originals, then re-apply the
+# other still-installed PR plugins so their (non-overlapping) changes survive.
+if [ -f "$PLUGIN_DIR/text_files.txt" ]; then
+    echo "Restoring text files..."
+    while IFS= read -r sys; do
+        [ -n "$sys" ] || continue
+        SYS="/$sys"
+        if [ -f "$PLUGIN_DIR/orig/$sys" ]; then
+            mkdir -p "$(dirname "$SYS")"; cp -f "$PLUGIN_DIR/orig/$sys" "$SYS"
+        else
+            rm -f "$SYS"   # file was newly added by this PR
+        fi
+    done < "$PLUGIN_DIR/text_files.txt"
+    for other in /boot/config/plugins/webgui-pr-*; do
+        [ -d "$other" ] || continue
+        [ "$other" == "$PLUGIN_DIR" ] && continue
+        [ -f "$other/applied.patch" ] && patch -p1 -d / --forward < "$other/applied.patch" >/dev/null 2>&1 || true
+    done
+    echo "✅ Text changes restored"
 fi
 
 # Restore binary files
