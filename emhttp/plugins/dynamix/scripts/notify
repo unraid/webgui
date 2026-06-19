@@ -331,10 +331,14 @@ case 'archive':
 
 case 'clear':
   // Resolve a condition-style notification by its stable key:
-  //   notify clear -k <key>   (or)   notify clear <key>
-  $opt = getopt("k:");
-  $key = $opt['k'] ?? ($argv[2] ?? '');
-  if ($key === '' || $key === false) exit(usage());
+  //   notify clear <key>   (or)   notify clear -k <key>
+  // Parse argv directly: getopt() stops at the leading 'clear' sub-command.
+  $key = '';
+  if (isset($argv[2])) {
+    if ($argv[2] === '-k') $key = $argv[3] ?? '';
+    elseif ($argv[2][0] !== '-') $key = $argv[2];
+  }
+  if ($key === '') exit(usage());
   $name = safe_filename("{$key}.notify");
   foreach ([$unread, $archive] as $dir) {
     $target = "$dir/$name";

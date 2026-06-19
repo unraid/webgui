@@ -85,7 +85,7 @@ switch ($_POST['action']) {
 		// Surface "reboot required" as a persistent notification (sticky in the bell,
 		// keyed so repeated notices update rather than stack). It clears on reboot
 		// (RAM-backed /tmp is wiped) or via removeRebootNotice below.
-		exec("/usr/local/emhttp/webGui/scripts/notify add -p -k reboot-required -i alert -e ".escapeshellarg("Reboot required")." -s ".escapeshellarg("Reboot required")." -d ".escapeshellarg($message)." &>/dev/null");
+		exec("/usr/local/emhttp/webGui/scripts/notify -p -k reboot-required -i alert -e ".escapeshellarg("Reboot required")." -s ".escapeshellarg("Reboot required")." -d ".escapeshellarg($message)." &>/dev/null");
 		break;
 
 	case 'removeRebootNotice':
