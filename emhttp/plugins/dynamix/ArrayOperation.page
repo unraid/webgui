@@ -54,8 +54,8 @@ function check_encryption() {
   echo mk_option(1,'text',_('Passphrase'));
   echo mk_option(1,'file',_('Keyfile'));
   echo "</select></td></tr>";
-  echo "<tr id='text'><td></td><td><label for='key-passphrase'>",_('Passphrase'),":</label></td><td><div class='flex flex-row items-center gap-2'><input id='key-passphrase' type='password' name='text' maxlength='512' value='' onkeyup='selectInput(this.form)' placeholder=\""._('use printable characters only')."\"><label class='inline-flex flex-row items-center gap-2 flex-shrink-0'><input name='showPass' type='checkbox' onchange='selectInput(this.form)'>"._('show passphrase')."</label></div></td></tr>";
-  echo "<tr id='copy' class='hidden'><td></td><td><label for='key-retype-passphrase'>",_('Retype passphrase'),":</label></td><td><input id='key-retype-passphrase' type='password' name='copy' maxlength='512' value='' onkeyup='selectInput(this.form)'></td></tr>";
+  echo "<tr id='text'><td></td><td><label for='key-passphrase'>",_('Passphrase'),":</label></td><td><div class='flex flex-row items-center gap-2'><input id='key-passphrase' type='password' name='text' maxlength='512' value='' onkeyup='selectInput(this.form)' onkeydown='submitOnEnter(event)' placeholder=\""._('use printable characters only')."\"><label class='inline-flex flex-row items-center gap-2 flex-shrink-0'><input name='showPass' type='checkbox' onchange='selectInput(this.form)'>"._('show passphrase')."</label></div></td></tr>";
+  echo "<tr id='copy' class='hidden'><td></td><td><label for='key-retype-passphrase'>",_('Retype passphrase'),":</label></td><td><input id='key-retype-passphrase' type='password' name='copy' maxlength='512' value='' onkeyup='selectInput(this.form)' onkeydown='submitOnEnter(event)'></td></tr>";
   echo "<tr id='file' class='hidden'><td></td><td><label for='key-file-upload'>",_('Keyfile'),":</label></td><td><input id='key-file-upload' type='file' name='local' onchange='getFileContent(event,this.form)'></td></tr>";
 }
 
@@ -151,6 +151,24 @@ function toggle_diskio(init) {
 
 function base64(str) {
   return window.btoa(unescape(encodeURIComponent(str)));
+}
+
+function submitOnEnter(event) {
+  if (event.key !== 'Enter') return;
+
+  const field = event.target.name;
+  if (field !== 'text' && field !== 'copy') return;
+
+  const start = $('#cmdStart');
+  if (start.length && !start.prop('disabled')) {
+    // Passphrase validated (and matches the retype field when shown): start.
+    event.preventDefault();
+    start.click();
+  } else if (field === 'text' && $('#copy').is(':visible')) {
+    // Set-new-passphrase flow: confirm in the retype field before starting.
+    event.preventDefault();
+    $('#key-retype-passphrase').focus();
+  }
 }
 
 function selectInput(form) {
