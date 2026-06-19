@@ -19,7 +19,7 @@ require_once "$docroot/webGui/include/Encryption.php";
 
 function usage() {
   echo <<<EOT
-notify [-e "event"] [-s "subject"] [-d "description"] [-i "normal|warning|alert"] [-m "message"] [-x] [-t] [-b] [add]
+notify [-e "event"] [-s "subject"] [-d "description"] [-i "normal|warning|alert"] [-m "message"] [-k "key"] [-p] [-x] [-t] [-b] [add]
   create a notification
   use -e to specify the event
   use -s to specify a subject
@@ -27,11 +27,16 @@ notify [-e "event"] [-s "subject"] [-d "description"] [-i "normal|warning|alert"
   use -i to specify the severity
   use -m to specify a message (long description)
   use -l to specify a link (clicking the notification will take you to that location)
+  use -k to specify a stable key; raising the same key again replaces the notification (idempotent)
+  use -p to make the notification persistent (sticky in the bell, not user-dismissible; clear it with 'notify clear -k key')
   use -x to create a single notification ticket
   use -r to specify recipients and not use default
   use -t to force send email only (for testing)
   use -b to NOT send a browser notification
   all options are optional
+
+notify clear -k "key"
+  Resolve a keyed (typically persistent) notification, removing it from the bell.
 
 notify init
   Initialize the notification subsystem.
@@ -209,8 +214,10 @@ case 'add':
   $mailtest = false;
   $overrule = false;
   $noBrowser = false;
+  $key = '';
+  $persistent = false;
 
-  $options = getopt("l:e:s:d:i:m:r:xtb");
+  $options = getopt("l:e:s:d:i:m:r:k:xtbp");
   foreach ($options as $option => $value) {
     switch ($option) {
      case 'e':
@@ -241,6 +248,12 @@ case 'add':
      case 'b':
       $noBrowser = true;
       break;
+     case 'k':
+      $key = $value;
+      break;
+     case 'p':
+      $persistent = true;
+      break;
      case 'l':
       $nginx = (array)@parse_ini_file('/var/local/emhttp/nginx.ini');
       $link = $value;
@@ -249,8 +262,11 @@ case 'add':
     }
   }
 
-  $unread = "{$unread}/".safe_filename("{$event}-{$ticket}.notify");
-  $archive = "{$archive}/".safe_filename("{$event}-{$ticket}.notify");
+  // Condition-style notifications use a stable key for the filename so raising the
+  // same condition again overwrites it (idempotent) instead of stacking duplicates.
+  $idBase = $key !== '' ? $key : "{$event}-{$ticket}";
+  $unread = "{$unread}/".safe_filename("{$idBase}.notify");
+  $archive = "{$archive}/".safe_filename("{$idBase}.notify");
   if (file_exists($archive)) break;
   $entity = $overrule===false ? $notify[$importance] : $overrule;
   $cleanSubject = clean_subject($subject);
@@ -262,7 +278,9 @@ case 'add':
     'importance' => $importance,
   ];
   if ($message) $archiveData['message'] = str_replace('\n','<br>',$message);
-  if (!$mailtest) file_put_contents($archive, build_ini_string($archiveData));
+  // Persistent (condition-style) notifications are never archived - they clear when
+  // their condition resolves - so skip writing the archive copy for them.
+  if (!$mailtest && !$persistent) file_put_contents($archive, build_ini_string($archiveData));
   if (($entity & 1)==1 && !$mailtest && !$noBrowser) {
     $unreadData = [
       'timestamp' => $timestamp,
@@ -272,6 +290,8 @@ case 'add':
       'importance' => $importance,
       'link' => $link,
     ];
+    if ($key !== '') $unreadData['key'] = $key;
+    if ($persistent) $unreadData['persistent'] = 'true';
     file_put_contents($unread, build_ini_string($unreadData));
   }
   if (($entity & 2)==2 || $mailtest) generate_email($event, $cleanSubject, str_replace('<br>','. ',$description), $importance, $message, $recipients, $fqdnlink);
@@ -307,6 +327,19 @@ case 'archive':
   if ($argc != 3) exit(usage());
   $file = $argv[2];
   if (strpos(realpath("$unread/$file"),$unread.'/')===0) @unlink("$unread/$file");
+  break;
+
+case 'clear':
+  // Resolve a condition-style notification by its stable key:
+  //   notify clear -k <key>   (or)   notify clear <key>
+  $opt = getopt("k:");
+  $key = $opt['k'] ?? ($argv[2] ?? '');
+  if ($key === '' || $key === false) exit(usage());
+  $name = safe_filename("{$key}.notify");
+  foreach ([$unread, $archive] as $dir) {
+    $target = "$dir/$name";
+    if (strpos(realpath($target) ?: '', $dir.'/')===0) @unlink($target);
+  }
   break;
 }
 
