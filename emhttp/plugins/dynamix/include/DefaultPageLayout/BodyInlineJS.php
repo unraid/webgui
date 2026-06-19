@@ -281,7 +281,7 @@ function onTaskListUpdate() {
           fireTaskCallback(t);
         }
       } else if (t.status=='running' && foregroundTaskId==t.id) {
-        $('#pluginProgressTitle').html("<?=_('In Progress')?> <i class='fa fa-refresh fa-spin'></i>");
+        $('#pluginProgressTitle').attr('class','nchan-state nchan-running').html("<i class='fa fa-refresh fa-spin fa-fw'></i> <?=_('In Progress')?>");
         nchanStart(nchanByType[t.type]);
       }
     }
@@ -289,6 +289,9 @@ function onTaskListUpdate() {
   }
   for (var id in taskPrev) if (!taskById(id)) delete taskPrev[id];
   trayRender();
+  // let the current page react to task changes (e.g. Plugins page disables its
+  // update buttons while a plugin task is running). No-op where undefined.
+  if (typeof window.onTaskListChanged === 'function') { try { window.onTaskListChanged(); } catch(e) {} }
 }
 
 var taskChannel = new NchanSubscriber('/sub/tasks',{subscriber:'websocket', reconnectTimeout:5000});

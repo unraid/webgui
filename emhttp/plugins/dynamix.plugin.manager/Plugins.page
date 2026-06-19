@@ -141,8 +141,34 @@ function loadlist(id,check) {
     }
     $('#plugin_table').trigger('update');
     $('#checkall').find('input').prop('disabled',false);
+    syncPluginButtons();
   });
 }
+// Reflect in-flight plugin tasks on the row buttons: while the backend task queue
+// has a running/queued task for a plugin, show its update/install button as
+// "Upgrading" and disabled, so minimizing the progress modal can't leave a stale,
+// clickable button. Driven by the live task list, so it survives modal minimize,
+// list reloads and full page reloads.
+function pluginTaskRunning(arg) {
+  if (typeof taskList === 'undefined' || !arg) return false;
+  for (var i=0;i<taskList.length;i++) {
+    var t = taskList[i];
+    if (t && t.type=='plugins' && (t.status=='running'||t.status=='queued') && t.cmd && t.cmd.indexOf(arg)>=0) return true;
+  }
+  return false;
+}
+function syncPluginButtons() {
+  $('#plugin_table input.update, #plugin_table input.install').each(function(){
+    var $b = $(this), arg = $b.attr('data');
+    if (pluginTaskRunning(arg)) {
+      if ($b.data('busy')===undefined) $b.data('busy', $b.val());
+      $b.prop('disabled', true).val("_(Upgrading)_");
+    } else if ($b.data('busy')!==undefined) {
+      $b.prop('disabled', false).val($b.data('busy')).removeData('busy');
+    }
+  });
+}
+window.onTaskListChanged = syncPluginButtons;
 $(function() {
   initlist();
   $('.tabs-container').append("<span id='checkall' class='status vhshift'><input type='button' value=\"_(Check For Updates)_\" onclick='openPlugin(\"checkall\",\"_(Plugin Update Check)_\",\":return\")' disabled></span>");
