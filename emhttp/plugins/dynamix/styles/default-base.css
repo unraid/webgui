@@ -1982,6 +1982,11 @@ label.checkbox input:disabled ~ .checkmark {
 .sweet-alert.nchan[data-has-confirm-button=false][data-has-cancel-button=false] {
     padding-bottom: 0;
 }
+/* While running there is no Dismiss button, so hide the whole footer bar
+   (otherwise its border-top + padding render as an empty strip). */
+.sweet-alert.nchan[data-has-confirm-button=false] .sa-button-container {
+    display: none;
+}
 .sweet-alert.nchan > h2 {
     flex: 0 0 auto;
     margin: 0;
