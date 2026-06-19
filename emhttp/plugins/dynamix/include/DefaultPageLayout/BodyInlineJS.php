@@ -227,12 +227,12 @@ function foregroundTask(id) {
     if (foregroundTaskId===id) { foregroundTaskId=null; foregroundType=null; }
     stopAllTypeChannels();
     clearProgressDots();
-    $('.sweet-alert').hide('fast').removeClass('nchan');
     var fresh = taskById(id);
     if (fresh && (fresh.status=='done'||fresh.status=='error')) { fireTaskCallback(fresh); dismissTask(id); }
+    nchanCloseModal(false);   // swal closes via closeOnConfirm; this just cleans up
     trayRender();
   });
-  $('.sweet-alert').addClass('nchan');
+  $('.sweet-alert').addClass('nchan').css('pointer-events','');
   // a persistent top-corner control that just closes this window, leaving the
   // task in the tray: while running it reads as "minimize" (the task keeps
   // running); once finished it reads as "close" (the task stays as a finished
@@ -327,12 +327,26 @@ function trayRender() {
 
 // minimize the foreground modal: drop the live view but leave the task running
 // in the backend (the tray keeps tracking it). Backgrounding, not aborting.
+// Fade the modal out with its .nchan styling intact, then strip the class once
+// it's gone. Removing .nchan while the modal is still visible snaps it back to
+// the default swal look for a frame (the "flash"). pointer-events:none keeps the
+// fading (now-invisible but still laid-out) modal from eating clicks; the guard
+// avoids stripping .nchan off a modal that was reopened in the meantime.
+function nchanCloseModal(doClose) {
+  $('.sweet-alert').css('pointer-events','none');
+  if (doClose && typeof swal!=='undefined' && swal.close) swal.close();
+  setTimeout(function(){
+    var $sa = $('.sweet-alert');
+    $sa.css('pointer-events','');
+    if (!foregroundTaskId) $sa.removeClass('nchan');
+  }, 350);
+}
+
 function minimizeForegroundTask() {
   if (foregroundTaskId) { foregroundTaskId=null; foregroundType=null; }
   stopAllTypeChannels();
   clearProgressDots();
-  $('.sweet-alert').removeClass('nchan');
-  if (typeof swal!=='undefined' && swal.close) swal.close();
+  nchanCloseModal(true);
   trayRender();
 }
 
