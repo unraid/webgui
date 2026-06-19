@@ -1968,8 +1968,8 @@ label.checkbox input:disabled ~ .checkmark {
     flex-direction: column;
     width: 90vw;
     max-width: 60rem;
-    height: auto;          /* override swal's @media(max-width:1200px){height:95vh} so the modal hugs its content */
-    max-height: 85vh;
+    height: 34rem;         /* fixed, moderate height (overrides swal's @media 95vh) so the log scrolls in place and the Dismiss button never moves */
+    max-height: 85vh;      /* but don't exceed the viewport on short screens */
     margin: 0;
     padding: 0;
     text-align: left;
@@ -2020,7 +2020,7 @@ label.checkbox input:disabled ~ .checkmark {
 .sweet-alert.nchan .nchan-state.nchan-error   { background: rgba(226,75,74,.14); }
 .sweet-alert.nchan .nchan-state.nchan-error i { color: #e24b4a; }
 .sweet-alert.nchan > p {
-    flex: 0 1 auto;            /* size to the log, don't stretch the modal */
+    flex: 1 1 auto;            /* fill the fixed height so the footer stays pinned to the bottom */
     min-height: 0;
     margin: 0;
     padding: 1rem 1.2rem;
@@ -2029,7 +2029,7 @@ label.checkbox input:disabled ~ .checkmark {
     text-align: left;
 }
 .sweet-alert.nchan #swaltext {
-    flex: 0 1 auto;
+    flex: 1 1 auto;
     min-height: 0;
     max-height: none;
     overflow: auto;
