@@ -81,58 +81,79 @@ jobs:
       
       - name: Create plugin package
         if: steps.changed-files.outputs.has_changes == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          # Create build directory
-          mkdir -p build/usr/local
-          
-          # Copy changed files preserving directory structure
+          set -euo pipefail
+          # Payload layout:
+          #   build/pr.patch          unified diff of all changed TEXT files (system-relative paths)
+          #   build/binary/<path>     whole copies of changed BINARY files (cannot be diffed)
+          #   build/binary_files.txt  list of binary paths (system-relative)
+          # The plugin applies pr.patch with `patch` so multiple PR plugins can
+          # stack on the same file; binaries fall back to whole-file replace.
+          mkdir -p build old new
+
+          # Map a repo path to its system-relative install path (no leading slash),
+          # matching the historical install layout.
+          map_path() {
+            case "$1" in
+              etc/rc.d/*) echo "usr/local/etc/rc.d/${1#etc/rc.d/}" ;;
+              etc/*)      echo "$1" ;;
+              sbin/*)     echo "usr/local/sbin/${1#sbin/}" ;;
+              share/*)    echo "usr/local/share/${1#share/}" ;;
+              emhttp/*)   echo "usr/local/$1" ;;
+              *)          echo "" ;;
+            esac
+          }
+
+          : > build/binary_files.txt
+          has_text=0
+
           while IFS= read -r file; do
-            if [ -f "$file" ]; then
-              # Create directory structure in build with target mappings
-              case "$file" in
-                etc/rc.d/*)
-                  target_dir="build/usr/local/etc/rc.d"
-                  ;;
-                etc/*)
-                  target_dir="build/${file%/*}"
-                  ;;
-                sbin/*)
-                  target_dir="build/usr/local/sbin/${file#sbin/}"
-                  target_dir="${target_dir%/*}"
-                  ;;
-                share/*)
-                  target_dir="build/usr/local/share/${file#share/}"
-                  target_dir="${target_dir%/*}"
-                  ;;
-                emhttp/*)
-                  target_dir="build/usr/local/${file%/*}"
-                  ;;
-                *)
-                  echo "Skipping unsupported path: $file"
-                  continue
-                  ;;
-              esac
-              mkdir -p "$target_dir"
-              cp "$file" "$target_dir/"
-              echo "Added: $file"
+            [ -n "$file" ] || continue
+            sys=$(map_path "$file")
+            if [ -z "$sys" ]; then echo "Skipping unsupported path: $file"; continue; fi
+
+            # numstat reports "-\t-" for binary files (one line per single file)
+            if git diff --numstat "$BASE_SHA" HEAD -- "$file" | grep -qP '^-\t-\t'; then
+              if [ -f "$file" ]; then
+                mkdir -p "build/binary/$(dirname "$sys")"
+                cp "$file" "build/binary/$sys"
+                echo "$sys" >> build/binary_files.txt
+                echo "Binary: $file -> $sys"
+              else
+                echo "Skipping deleted binary (unsupported): $file"
+              fi
+              continue
             fi
+
+            # Text: stage base version under old/, head version under new/
+            if git cat-file -e "$BASE_SHA:$file" 2>/dev/null; then
+              mkdir -p "old/$(dirname "$sys")"
+              git show "$BASE_SHA:$file" > "old/$sys"
+            fi
+            if [ -f "$file" ]; then
+              mkdir -p "new/$(dirname "$sys")"
+              cp "$file" "new/$sys"
+            fi
+            has_text=1
+            echo "Text: $file -> $sys"
           done < changed_files.txt
-          
-          # Generate file list for plugin/tar (relative paths)
+
+          # Unified diff with old/<sys> and new/<sys> headers (apply with patch -p1 at /).
+          # diff exits 1 when differences exist; only 2 is a real error.
+          if [ "$has_text" -eq 1 ]; then
+            diff -ruN old new > build/pr.patch || [ $? -eq 1 ]
+            echo "pr.patch hunks: $(grep -c '^@@' build/pr.patch || echo 0)"
+          fi
+
           find build -type f | sed 's|^build/||' > file_list.txt
-          echo "File list for plugin:"
-          cat file_list.txt
-          
-          # Create tarball - consistent filename for updates
-          cd build
-          echo "Creating tarball with contents:"
-          cat ../file_list.txt
-          tar -czf ../${{ steps.version.outputs.local_txz }} -T ../file_list.txt
-          cd ..
-          
-          # Verify tarball contents
+          echo "Payload contents:"; cat file_list.txt
+
+          # Tarball the payload (extracted to a temp dir by the plugin, not to /)
+          tar -czf "${{ steps.version.outputs.local_txz }}" -C build .
           echo "Tarball contents:"
-          tar -tzf ${{ steps.version.outputs.local_txz }}
+          tar -tzf "${{ steps.version.outputs.local_txz }}"
       
       - name: Generate plugin file
         if: steps.changed-files.outputs.has_changes == 'true'

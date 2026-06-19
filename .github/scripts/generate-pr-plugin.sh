@@ -4,6 +4,15 @@ IFS=$'\n\t'
 
 # Generate PR plugin file for Unraid
 # Usage: ./generate-pr-plugin.sh <version> <pr_number> <commit_sha> <local_tarball> <remote_tarball> <txz_url> [plugin_url]
+#
+# The tarball payload contains:
+#   pr.patch          unified diff of all changed TEXT files (system-relative paths, apply with patch -p1 at /)
+#   binary/<path>     whole copies of changed BINARY files (cannot be diffed)
+#   binary_files.txt  list of binary paths (system-relative)
+#
+# Install applies pr.patch with `patch`, so several PR plugins can stack on the
+# same file as long as their hunks do not overlap. Binaries fall back to a
+# whole-file replace, guarded so two plugins never fight over the same binary.
 
 VERSION=$1
 PR_NUMBER=$2
@@ -45,24 +54,25 @@ cat > "$PLUGIN_NAME" << 'EOF'
   <!ENTITY github "https://github.com/unraid/webgui">
 ]>
 
-<PLUGIN name="&name;-&version;" 
-        author="&author;" 
-        version="&version;" 
-        pluginURL="&pluginURL;" 
-        min="7.1.0" 
+<PLUGIN name="&name;-&version;"
+        author="&author;"
+        version="&version;"
+        pluginURL="&pluginURL;"
+        min="7.1.0"
         icon="wrench"
         support="&github;/pull/&pr;">
 
 <CHANGES>
 ##&version;
 - Test build for PR #&pr; (commit &commit;)
-- This plugin installs modified files from the PR for testing
-- Original files are backed up and restored upon removal
+- Applies the PR's changes as a patch, so multiple PR test plugins can be
+  installed together as long as they do not edit the same lines
+- Changes are reversed when the plugin is removed
 </CHANGES>
 
-<!-- FILE sections run in the listed order - Check if this is an update prior to installing -->
+<!-- FILE sections run in the listed order -->
 
-<!-- If this is an update - restore originals before installing the update -->
+<!-- If this is an update: reverse the previously applied patch / restore binaries first -->
 <FILE Run="/bin/bash" Method="install">
 <INLINE>
 <![CDATA[
@@ -72,54 +82,43 @@ echo "===================================="
 echo "Version: VERSION_PLACEHOLDER"
 echo ""
 
-BACKUP_DIR="/boot/config/plugins/webgui-pr-PR_PLACEHOLDER/backups"
-MANIFEST="/boot/config/plugins/webgui-pr-PR_PLACEHOLDER/installed_files.txt"
+PLUGIN_DIR="/boot/config/plugins/webgui-pr-PR_PLACEHOLDER"
+BACKUP_DIR="$PLUGIN_DIR/backups"
+MANIFEST="$PLUGIN_DIR/installed_files.txt"
+PATCH_APPLIED="$PLUGIN_DIR/applied.patch"
+PAYLOAD="$PLUGIN_DIR/payload"
 
-# Ensure required directories exist even on first-time install/update
-mkdir -p "/boot/config/plugins/webgui-pr-PR_PLACEHOLDER" "$BACKUP_DIR"
+mkdir -p "$PLUGIN_DIR" "$BACKUP_DIR"
 
-# First restore original files to ensure clean state
-if [ -f "$MANIFEST" ]; then
-    echo "Step 1: Restoring original files before update..."
-    echo "------------------------------------------------"
-    
-    while IFS='|' read -r system_file backup_file; do
-        if [ "$backup_file" == "NEW" ]; then
-            # This was a new file from previous version, remove it
-            if [ -e "$system_file" ] || [ -L "$system_file" ]; then
-                echo "Removing PR file: $system_file"
-                rm -f "$system_file"
-            fi
-        else
-            # Restore original from backup
-            if [ -f "$backup_file" ]; then
-                echo "Restoring original: $system_file"
-                cp -fp "$backup_file" "$system_file"
-            else
-                echo "⚠️  Missing backup for: $system_file"
-            fi
-        fi
-    done < "$MANIFEST"
-    
-    echo ""
-    echo "✅ Original files restored"
-    echo ""
-else
-    echo "⚠️  No previous manifest found, proceeding with fresh install"
-    echo ""
+# Reverse a previously applied patch so we start from a clean base
+if [ -f "$PATCH_APPLIED" ]; then
+    echo "Reverting previously applied patch..."
+    patch -R -p1 -d / --batch < "$PATCH_APPLIED" || echo "⚠️  Reverse-apply reported issues (continuing)"
+    rm -f "$PATCH_APPLIED"
 fi
 
-# Clear the old manifest for the new version (dir now guaranteed)
-> "$MANIFEST"
+# Restore any previously installed binary files
+if [ -f "$MANIFEST" ]; then
+    echo "Restoring binary files from previous version..."
+    while IFS='|' read -r system_file backup_file; do
+        [ -n "$system_file" ] || continue
+        if [ "$backup_file" == "NEW" ]; then
+            [ -e "$system_file" ] && { echo "Removing PR file: $system_file"; rm -f "$system_file"; }
+        elif [ -f "$backup_file" ]; then
+            echo "Restoring original: $system_file"
+            cp -fp "$backup_file" "$system_file"
+        fi
+    done < "$MANIFEST"
+fi
 
-echo "Step 2: Update will now proceed with installation of new PR files..."
-echo ""
-
-# The update continues by running the install method which will extract new files
+: > "$MANIFEST"
+rm -rf "$PAYLOAD"
+echo "Ready for fresh install of PR files."
 ]]>
 </INLINE>
 </FILE>
-<!-- Create backup directory -->
+
+<!-- Create plugin directories -->
 <FILE Run="/bin/bash" Method="install">
 <INLINE>
 <![CDATA[
@@ -130,202 +129,89 @@ echo "Version: VERSION_PLACEHOLDER"
 echo "PR: #PR_PLACEHOLDER"
 echo "Commit: COMMIT_PLACEHOLDER"
 echo ""
-
-# Create directories
-mkdir -p /boot/config/plugins/webgui-pr-PR_PLACEHOLDER
 mkdir -p /boot/config/plugins/webgui-pr-PR_PLACEHOLDER/backups
-
 echo "Created plugin directories"
 ]]>
 </INLINE>
 </FILE>
 
-<!-- Download tarball from GitHub -->
+<!-- Download tarball from GitHub/R2 -->
 <FILE Name="/boot/config/plugins/webgui-pr-PR_PLACEHOLDER/REMOTE_TARBALL_PLACEHOLDER">
 <URL>TXZ_URL_PLACEHOLDER</URL>
 <SHA256>&sha256;</SHA256>
 </FILE>
 
-<!-- Backup and install files -->
+<!-- Apply patch + install binaries -->
 <FILE Run="/bin/bash" Method="install">
 <INLINE>
 <![CDATA[
-BACKUP_DIR="/boot/config/plugins/webgui-pr-PR_PLACEHOLDER/backups"
-TARBALL="/boot/config/plugins/webgui-pr-PR_PLACEHOLDER/REMOTE_TARBALL_PLACEHOLDER"
-MANIFEST="/boot/config/plugins/webgui-pr-PR_PLACEHOLDER/installed_files.txt"
+PLUGIN_DIR="/boot/config/plugins/webgui-pr-PR_PLACEHOLDER"
+BACKUP_DIR="$PLUGIN_DIR/backups"
+MANIFEST="$PLUGIN_DIR/installed_files.txt"
+PATCH_APPLIED="$PLUGIN_DIR/applied.patch"
+TARBALL="$PLUGIN_DIR/REMOTE_TARBALL_PLACEHOLDER"
+PAYLOAD="$PLUGIN_DIR/payload"
 
-echo "Starting file deployment..."
-echo "Tarball: $TARBALL"
-echo "Backup directory: $BACKUP_DIR"
+echo "Extracting payload..."
+rm -rf "$PAYLOAD"
+mkdir -p "$PAYLOAD"
+tar -xzf "$TARBALL" -C "$PAYLOAD"
+: > "$MANIFEST"
 
-# Clear manifest
-> "$MANIFEST"
-
-# Get file list first
-echo "Examining tarball contents..."
-tar -tzf "$TARBALL" | head -20
-echo ""
-
-# Count total files
-FILE_COUNT=$(tar -tzf "$TARBALL" | grep -v '/$' | wc -l)
-echo "Total files to process: $FILE_COUNT"
-echo ""
-
-# Get file list
-tar -tzf "$TARBALL" > /tmp/plugin_files.txt
-
-# Abort if any files are already managed by another PR plugin
-OTHER_MANIFESTS="/tmp/pr_plugin_existing_files.txt"
-> "$OTHER_MANIFESTS"
-for plugin_dir in /boot/config/plugins/webgui-pr-*; do
-    if [ ! -d "$plugin_dir" ]; then
-        continue
-    fi
-    if [ "$plugin_dir" == "/boot/config/plugins/webgui-pr-PR_PLACEHOLDER" ]; then
-        continue
-    fi
-    manifest="$plugin_dir/installed_files.txt"
-    if [ -f "$manifest" ]; then
-        plugin_name=$(basename "$plugin_dir")
-        while IFS='|' read -r other_file _; do
-            if [ -n "$other_file" ]; then
-                echo "${other_file}|${plugin_name}" >> "$OTHER_MANIFESTS"
-            fi
-        done < "$manifest"
-    fi
-done
-
-if [ -s "$OTHER_MANIFESTS" ]; then
-    declare -A existing_files
-    while IFS='|' read -r existing_file existing_plugin; do
-        if [ -z "$existing_file" ] || [ -z "$existing_plugin" ]; then
-            continue
-        fi
-        if [ -n "${existing_files[$existing_file]:-}" ]; then
-            if [[ ",${existing_files[$existing_file]}," != *",${existing_plugin},"* ]]; then
-                existing_files[$existing_file]="${existing_files[$existing_file]},${existing_plugin}"
-            fi
-        else
-            existing_files[$existing_file]="$existing_plugin"
-        fi
-    done < "$OTHER_MANIFESTS"
-
-    conflict_found=0
-    declare -A conflict_plugins
-    while IFS= read -r file; do
-        # Skip directories
-        if [[ "$file" == */ ]]; then
-            continue
-        fi
-
-        system_file="/${file}"
-        if [ -n "${existing_files[$system_file]:-}" ]; then
-            conflict_found=1
-            echo "Conflict: $system_file is already managed by ${existing_files[$system_file]}"
-            IFS=',' read -r -a plugin_list <<< "${existing_files[$system_file]}"
-            for plugin in "${plugin_list[@]}"; do
-                conflict_plugins[$plugin]=1
-            done
-        fi
-    done < /tmp/plugin_files.txt
-
-    if [ "$conflict_found" -eq 1 ]; then
+# ---- Text changes: apply unified diff -------------------------------------
+if [ -s "$PAYLOAD/pr.patch" ]; then
+    echo "Checking patch applies cleanly..."
+    if ! patch -p1 -d / --dry-run --forward < "$PAYLOAD/pr.patch" > /tmp/pr_patch_check.txt 2>&1; then
         echo ""
-        echo "❌ Install aborted."
-        echo "One or more files are already managed by another PR plugin."
-        echo "Please uninstall the conflicting plugin(s) and try again:"
-        for plugin in "${!conflict_plugins[@]}"; do
-            echo "  plugin remove ${plugin}.plg"
-        done
-        rm -f "$OTHER_MANIFESTS" /tmp/plugin_files.txt
+        echo "❌ Install aborted: this PR's changes do not apply cleanly."
+        echo "   Another installed PR plugin likely edits the same lines."
+        echo "------------------------------------------------------------"
+        grep -Ei 'FAILED|can.t find file|hunk' /tmp/pr_patch_check.txt || cat /tmp/pr_patch_check.txt
+        echo "------------------------------------------------------------"
+        echo "Remove the conflicting webgui-pr-* plugin and try again."
+        rm -f /tmp/pr_patch_check.txt
         exit 1
     fi
+    rm -f /tmp/pr_patch_check.txt
+    echo "Applying patch..."
+    patch -p1 -d / --forward < "$PAYLOAD/pr.patch"
+    cp -f "$PAYLOAD/pr.patch" "$PATCH_APPLIED"
+    echo "✅ Patch applied"
 fi
 
-rm -f "$OTHER_MANIFESTS"
-
-# Backup original files BEFORE extraction
-while IFS= read -r file; do
-    # Skip directories
-    if [[ "$file" == */ ]]; then
-        continue
-    fi
-    
-    # The tarball contains usr/local/emhttp/... (no leading slash)
-    # When we extract with -C /, it becomes /usr/local/emhttp/...
-    SYSTEM_FILE="/${file}"
-    BACKUP_FILE="$BACKUP_DIR/$(echo "$file" | tr '/' '_')"
-    
-    echo "Processing: $file"
-    
-    # Only backup if we haven't already backed up this file
-    # (preserves original backups across updates)
-    if [ -f "$BACKUP_FILE" ]; then
-        echo "  → Using existing backup: $BACKUP_FILE"
-        echo "$SYSTEM_FILE|$BACKUP_FILE" >> "$MANIFEST"
-    elif [ -f "$SYSTEM_FILE" ]; then
-        echo "  → Creating backup of original: $SYSTEM_FILE"
-        cp -p "$SYSTEM_FILE" "$BACKUP_FILE"
-        echo "$SYSTEM_FILE|$BACKUP_FILE" >> "$MANIFEST"
-    else
-        echo "  → Will create new: $SYSTEM_FILE"
-        echo "$SYSTEM_FILE|NEW" >> "$MANIFEST"
-    fi
-done < /tmp/plugin_files.txt
-
-# Clean up temp file
-rm -f /tmp/plugin_files.txt
-
-# Extract the tarball to root with verbose output
-# Since tarball contains usr/local/emhttp/..., extracting to / makes it /usr/local/emhttp/...
-echo ""
-echo "Extracting files to system (verbose mode)..."
-echo "----------------------------------------"
-tar -xzvf "$TARBALL" -C /
-EXTRACT_STATUS=$?
-echo "----------------------------------------"
-echo "Extraction completed with status: $EXTRACT_STATUS"
-echo ""
-
-# Verify extraction
-echo "Verifying installation..."
-INSTALLED_COUNT=0
-while IFS='|' read -r file backup; do
-    if [ -f "$file" ]; then
-        INSTALLED_COUNT=$((INSTALLED_COUNT + 1))
-    fi
-done < "$MANIFEST"
-
-echo "Successfully installed $INSTALLED_COUNT files"
-
-echo ""
-echo "✅ Installation complete!"
-echo ""
-echo "Summary:"
-echo "--------"
-echo "Files deployed: $INSTALLED_COUNT"
-echo ""
-if [ $INSTALLED_COUNT -gt 0 ]; then
-    echo "Modified files:"
-    while IFS='|' read -r file backup; do
-        if [ -f "$file" ]; then
-            if [ "$backup" == "NEW" ]; then
-                echo "  [NEW] $file"
-            else
-                echo "  [MOD] $file"
+# ---- Binary changes: whole-file replace (cannot be merged) -----------------
+if [ -s "$PAYLOAD/binary_files.txt" ]; then
+    # Guard: a binary may only be managed by one PR plugin at a time
+    while IFS= read -r sys; do
+        [ -n "$sys" ] || continue
+        for other in /boot/config/plugins/webgui-pr-*; do
+            [ -d "$other" ] || continue
+            [ "$other" == "$PLUGIN_DIR" ] && continue
+            if [ -f "$other/installed_files.txt" ] && grep -q "^/$sys|" "$other/installed_files.txt"; then
+                echo "❌ Install aborted: binary /$sys is already managed by $(basename "$other")."
+                echo "   Remove that plugin first: plugin remove $(basename "$other").plg"
+                exit 1
             fi
-        fi
-    done < "$MANIFEST"
-else
-    echo "⚠️  WARNING: No files were installed!"
-    echo "Check that the tarball structure matches the expected format."
+        done
+    done < "$PAYLOAD/binary_files.txt"
+
+    while IFS= read -r sys; do
+        [ -n "$sys" ] || continue
+        SYS="/$sys"
+        SRC="$PAYLOAD/binary/$sys"
+        BK="$BACKUP_DIR/$(echo "$sys" | tr '/' '_')"
+        mkdir -p "$(dirname "$SYS")"
+        if [ -f "$SYS" ] && [ ! -f "$BK" ]; then cp -p "$SYS" "$BK"; fi
+        if [ -f "$BK" ]; then echo "$SYS|$BK" >> "$MANIFEST"; else echo "$SYS|NEW" >> "$MANIFEST"; fi
+        cp -f "$SRC" "$SYS"
+        echo "Installed binary: $SYS"
+    done < "$PAYLOAD/binary_files.txt"
 fi
 
 echo ""
-echo "⚠️  This is a TEST plugin for PR #PR_PLACEHOLDER"
-echo "⚠️  Remove this plugin before applying production updates"
-echo ""
-echo "⚠️  NOTE: Under certain circumstances, it might be necessary to reboot the server for the code changes to take effect"
+echo "✅ Installation complete for PR #PR_PLACEHOLDER"
+echo "⚠️  This is a TEST plugin — remove it before applying production updates"
+echo "⚠️  A reboot may be required for some changes to take effect"
 ]]>
 </INLINE>
 </FILE>
@@ -360,7 +246,7 @@ Link='nav-user'
     window.uninstallPRPlugin = function() {
       swal({
         title: "Uninstall PR Test Plugin?",
-        text: "This will restore all original files and remove the test plugin.",
+        text: "This will reverse all of this PR's changes and remove the test plugin.",
         type: "warning",
         showCancelButton: true,
         confirmButtonText: "Yes, uninstall",
@@ -369,8 +255,6 @@ Link='nav-user'
         showLoaderOnConfirm: true
       }, function(isConfirm) {
         if (isConfirm) {
-          // Execute plugin removal using openPlugin (Unraid's standard method)
-          // The "refresh" parameter will automatically reload the page when uninstall is completed
           openPlugin("plugin remove webgui-pr-PR_PLACEHOLDER.plg", "Removing PR Test Plugin", "", "refresh");
         }
       });
@@ -390,48 +274,40 @@ echo "WebGUI PR Test Plugin Removal"
 echo "===================================="
 echo ""
 
-BACKUP_DIR="/boot/config/plugins/webgui-pr-PR_PLACEHOLDER/backups"
-MANIFEST="/boot/config/plugins/webgui-pr-PR_PLACEHOLDER/installed_files.txt"
+PLUGIN_DIR="/boot/config/plugins/webgui-pr-PR_PLACEHOLDER"
+MANIFEST="$PLUGIN_DIR/installed_files.txt"
+PATCH_APPLIED="$PLUGIN_DIR/applied.patch"
 
-if [ -f "$MANIFEST" ]; then
-    echo "Restoring original files..."
-    
-    while IFS='|' read -r system_file backup_file; do
-        if [ "$backup_file" == "NEW" ]; then
-            # This was a new file, remove it
-            if [ -e "$system_file" ] || [ -L "$system_file" ]; then
-                echo "Removing new file: $system_file"
-                rm -f "$system_file"
-            fi
-        else
-            # Restore from backup
-            if [ -f "$backup_file" ]; then
-                echo "Restoring: $system_file"
-                cp -fp "$backup_file" "$system_file"
-            else
-                echo "⚠️  Missing backup for: $system_file"
-            fi
-        fi
-    done < "$MANIFEST"
-    
-    echo ""
-    echo "✅ Original files restored"
-else
-    echo "⚠️  No manifest found, cannot restore files"
+# Reverse the applied patch (text changes)
+if [ -f "$PATCH_APPLIED" ]; then
+    echo "Reverting patch..."
+    patch -R -p1 -d / --batch < "$PATCH_APPLIED" || echo "⚠️  Reverse-apply reported issues"
+    echo "✅ Patch reverted"
 fi
 
-# Clean up
+# Restore binary files
+if [ -f "$MANIFEST" ]; then
+    echo "Restoring binary files..."
+    while IFS='|' read -r system_file backup_file; do
+        [ -n "$system_file" ] || continue
+        if [ "$backup_file" == "NEW" ]; then
+            [ -e "$system_file" ] && { echo "Removing new file: $system_file"; rm -f "$system_file"; }
+        elif [ -f "$backup_file" ]; then
+            echo "Restoring: $system_file"
+            cp -fp "$backup_file" "$system_file"
+        else
+            echo "⚠️  Missing backup for: $system_file"
+        fi
+    done < "$MANIFEST"
+fi
+
 echo "Cleaning up plugin files..."
-# Remove the banner
 rm -rf "/usr/local/emhttp/plugins/webgui-pr-PR_PLACEHOLDER"
-# Remove the plugin directory (which includes the tarball and backups)
-rm -rf "/boot/config/plugins/webgui-pr-PR_PLACEHOLDER"
-# Note: The .plg file is handled automatically by the plugin system and should not be removed here
+rm -rf "$PLUGIN_DIR"
 
 echo ""
 echo "✅ Plugin removed successfully"
-echo ""
-echo "⚠️  A reboot of the server might be required under certain circumstances to completely remove all traces of this plugin"
+echo "⚠️  A reboot may be required to fully clear all changes"
 ]]>
 </INLINE>
 </FILE>
