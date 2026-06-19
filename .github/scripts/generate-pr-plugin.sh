@@ -107,7 +107,13 @@ if [ -f "$PLUGIN_DIR/text_files.txt" ]; then
     for other in /boot/config/plugins/webgui-pr-*; do
         [ -d "$other" ] || continue
         [ "$other" == "$PLUGIN_DIR" ] && continue
-        [ -f "$other/applied.patch" ] && patch -p1 -d / --forward < "$other/applied.patch" >/dev/null 2>&1 || true
+        [ -f "$other/applied.patch" ] || continue
+        # Non-blocking: all patches passed dry-run at install time, so failure here
+        # is a rare edge case worth surfacing rather than swallowing.
+        if ! patch -p1 -d / --forward --batch < "$other/applied.patch" >/dev/null 2>&1; then
+            echo "⚠️  Warning: could not re-apply $(basename "$other")'s changes; reinstall it or reboot to restore them"
+            logger -t webgui-pr "re-apply of $(basename "$other") patch failed during $(basename "$PLUGIN_DIR") rollback"
+        fi
     done
 fi
 rm -f "$PATCH_APPLIED"
@@ -178,7 +184,7 @@ tar -xzf "$TARBALL" -C "$PAYLOAD"
 # ---- Text changes: apply unified diff -------------------------------------
 if [ -s "$PAYLOAD/pr.patch" ]; then
     echo "Checking patch applies cleanly..."
-    if ! patch -p1 -d / --dry-run --forward < "$PAYLOAD/pr.patch" > /tmp/pr_patch_check.txt 2>&1; then
+    if ! patch -p1 -d / --dry-run --forward --batch < "$PAYLOAD/pr.patch" > /tmp/pr_patch_check.txt 2>&1; then
         echo ""
         echo "❌ Install aborted: this PR's changes do not apply cleanly."
         echo "   Another installed PR plugin likely edits the same lines."
@@ -191,7 +197,7 @@ if [ -s "$PAYLOAD/pr.patch" ]; then
     fi
     rm -f /tmp/pr_patch_check.txt
     echo "Applying patch..."
-    patch -p1 -d / --forward < "$PAYLOAD/pr.patch"
+    patch -p1 -d / --forward --batch < "$PAYLOAD/pr.patch"
     cp -f "$PAYLOAD/pr.patch" "$PATCH_APPLIED"
     # Persist the originals + file list so removal can rebuild deterministically
     rm -rf "$PLUGIN_DIR/orig"
@@ -315,7 +321,13 @@ if [ -f "$PLUGIN_DIR/text_files.txt" ]; then
     for other in /boot/config/plugins/webgui-pr-*; do
         [ -d "$other" ] || continue
         [ "$other" == "$PLUGIN_DIR" ] && continue
-        [ -f "$other/applied.patch" ] && patch -p1 -d / --forward < "$other/applied.patch" >/dev/null 2>&1 || true
+        [ -f "$other/applied.patch" ] || continue
+        # Non-blocking: all patches passed dry-run at install time, so failure here
+        # is a rare edge case worth surfacing rather than swallowing.
+        if ! patch -p1 -d / --forward --batch < "$other/applied.patch" >/dev/null 2>&1; then
+            echo "⚠️  Warning: could not re-apply $(basename "$other")'s changes; reinstall it or reboot to restore them"
+            logger -t webgui-pr "re-apply of $(basename "$other") patch failed during $(basename "$PLUGIN_DIR") rollback"
+        fi
     done
     echo "✅ Text changes restored"
 fi
