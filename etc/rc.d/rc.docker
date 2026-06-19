@@ -516,6 +516,7 @@ docker_network_start(){
         SUBNET=$(ip -4 route show dev $NETWORK | sort | awk -v ORS=" " '$1 !~ /^default/ {print $1}' | sed 's/ $//')
         GATEWAY=$(ip -4 route show to default dev $NETWORK | awk '{print $3;exit}')
         [[ -n $GATEWAY ]] || GATEWAY=$(configured_gateway "$NETWORK" GATEWAY)
+        [[ -n $GATEWAY ]] || { DEVICE=${NETWORK/./_}; DEVICE=${DEVICE^^}; DGW=DOCKER_GATEWAY_$DEVICE; GATEWAY=${!DGW}; }
         SERVER=${IPV4%/*}
         DHCP=${NETWORK/./_}
         DHCP=DOCKER_DHCP_${DHCP^^}
@@ -528,6 +529,7 @@ docker_network_start(){
         SUBNET6=$(ip -6 route show dev $NETWORK | sort | awk -v ORS=" " '$1 !~ /^(default|fe80)/ {print $1}' | sed 's/ $//')
         GATEWAY6=$(ip -6 route show to default dev $NETWORK | awk '{print $3;exit}')
         [[ -n $GATEWAY6 ]] || GATEWAY6=$(configured_gateway "$NETWORK" GATEWAY6)
+        [[ -n $GATEWAY6 ]] || { DEVICE=${NETWORK/./_}; DEVICE=${DEVICE^^}; DGW=DOCKER_GATEWAY6_$DEVICE; GATEWAY6=${!DGW}; }
       fi
     else
       # add user defined networks
