@@ -1,0 +1,35 @@
+Menu="PowerMode:2"
+Title="Power Button"
+Tag="icon-power"
+---
+<?PHP
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+
+<form markdown="1" name="PowerButton" method="POST" action="/update.php" target="progressFrame">
+<input type="hidden" name="#file" value="dynamix/dynamix.cfg">
+<input type="hidden" name="#section" value="powermode">
+
+_(Physical power button)_:
+: <select name="powerbutton">
+  <?=mk_option(_var($powermode,'powerbutton','shutdown'), "shutdown", _('Shut down').' ('._('default').')')?>
+  <?=mk_option(_var($powermode,'powerbutton','shutdown'), "ignore", _('Do nothing'))?>
+  </select>
+
+:powerbutton_behavior_help:
+
+&nbsp;
+: <span class="inline-block">
+    <input type="submit" name="#apply" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
+</form>
