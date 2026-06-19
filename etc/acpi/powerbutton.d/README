@@ -1,0 +1,43 @@
+/etc/acpi/powerbutton.d/ - Unraid power button action handlers (extension point)
+================================================================================
+
+The physical power button behavior is configured in the WebUI at
+Settings > Power Options > Power Button. The selected action is stored as
+  [powermode]
+  powerbutton="<action>"
+in /boot/config/plugins/dynamix/dynamix.cfg and dispatched at press time by
+/etc/acpi/unraid_power_handler.sh.
+
+Built-in actions: shutdown (default), reboot, sleep, ignore.
+
+Plugins can ADD or OVERRIDE actions in two parts:
+
+1) Action handler (required)
+   Ship an executable here, named after the action value:
+     /etc/acpi/powerbutton.d/<action>
+   It runs when the power button is pressed and that action is selected.
+   The built-in "sleep" action also defers to powerbutton.d/sleep if present,
+   so the S3 Sleep plugin can do array-aware prep before suspending.
+
+2) WebUI option (so users can pick it)
+   Add the action to the selector by shipping:
+     /usr/local/emhttp/plugins/<plugin>/include/powerbutton-option.php
+   which echoes one or more options, e.g.:
+     <?=mk_option($cur, "script", _('Run script'))?>
+   ($cur is the currently saved powerbutton value.)
+
+   For extra fields shown only when your action is selected, also ship:
+     /usr/local/emhttp/plugins/<plugin>/include/powerbutton-extra.php
+   which outputs a block tagged with your action value:
+     <div class="powerbutton-extra" data-action="script" markdown="1">
+     _(Script)_:
+     : <select name="powerbuttonscript"> ... </select>
+     </div>
+   Fields are POSTed into dynamix.cfg [powermode] alongside powerbutton, so
+   your handler can read them with the same grep pattern used above.
+
+Example (User Scripts plugin, "Run script" action):
+  - include/powerbutton-option.php : adds the "script" option + script picker
+  - include/powerbutton-extra.php  : script selection dropdown
+  - /etc/acpi/powerbutton.d/script : reads powerbuttonscript= from dynamix.cfg
+                                     and executes the chosen user script

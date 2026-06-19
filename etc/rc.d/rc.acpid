@@ -24,6 +24,8 @@ acpid_running(){
 # the setting changes.
 acpid_configure(){
   local SRC=/etc/acpi/unraid_power_handler.sh
+  # Drop-in dir for plugin-provided power button actions (see README there).
+  mkdir -p /etc/acpi/powerbutton.d
   if [[ -f $SRC ]]; then
     install -m 0755 "$SRC" /etc/acpi/acpi_handler.sh
   fi

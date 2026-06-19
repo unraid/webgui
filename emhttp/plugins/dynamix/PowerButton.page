@@ -14,18 +14,38 @@ Tag="icon-power"
  * all copies or substantial portions of the Software.
  */
 ?>
+<?
+$cur = _var($powermode,'powerbutton','shutdown');
+// Only offer suspend when the kernel reports support for suspend-to-RAM.
+$suspend = (bool)preg_match('/\bmem\b/', (string)@file_get_contents('/sys/power/state'));
+?>
 
 <form markdown="1" name="PowerButton" method="POST" action="/update.php" target="progressFrame">
 <input type="hidden" name="#file" value="dynamix/dynamix.cfg">
 <input type="hidden" name="#section" value="powermode">
 
 _(Physical power button)_:
-: <select name="powerbutton">
-  <?=mk_option(_var($powermode,'powerbutton','shutdown'), "shutdown", _('Shut down').' ('._('default').')')?>
-  <?=mk_option(_var($powermode,'powerbutton','shutdown'), "ignore", _('Do nothing'))?>
+: <select name="powerbutton" id="powerbutton" onchange="powerbuttonExtra(this)">
+  <?=mk_option($cur, "shutdown", _('Shut down').' ('._('default').')')?>
+  <?=mk_option($cur, "reboot", _('Reboot'))?>
+  <?if ($suspend):?>
+  <?=mk_option($cur, "sleep", _('Sleep (suspend)'))?>
+  <?endif;?>
+  <?=mk_option($cur, "ignore", _('Do nothing'))?>
+  <?php
+  // Extension point: plugins add <option> lines for custom actions.
+  // In scope: $cur (current powerbutton value). See /etc/acpi/powerbutton.d/README.
+  foreach (glob('/usr/local/emhttp/plugins/*/include/powerbutton-option.php') ?: [] as $frag) include $frag;
+  ?>
   </select>
 
 :powerbutton_behavior_help:
+
+<?php
+// Extension point: plugins add config rows shown when their action is selected.
+// Each fragment outputs: <div class="powerbutton-extra" data-action="<action>" markdown="1"> ...fields... </div>
+foreach (glob('/usr/local/emhttp/plugins/*/include/powerbutton-extra.php') ?: [] as $frag) include $frag;
+?>
 
 &nbsp;
 : <span class="inline-block">
@@ -33,3 +53,13 @@ _(Physical power button)_:
     <input type="button" value="_(Done)_" onclick="done()">
   </span>
 </form>
+
+<script>
+function powerbuttonExtra(sel) {
+  var v = sel.value;
+  $('.powerbutton-extra').each(function(){
+    $(this).toggle($(this).data('action') === v);
+  });
+}
+$(function(){ powerbuttonExtra(document.getElementById('powerbutton')); });
+</script>
