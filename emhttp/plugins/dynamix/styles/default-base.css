@@ -2143,10 +2143,12 @@ label.checkbox input:disabled ~ .checkmark {
         padding-bottom: 2px;
     }
     .op-tray::-webkit-scrollbar { display: none; }
+    /* each tile is a bit under full width so the neighbour peeks in — a visual
+       cue that the tray is swipeable */
     .op-tray .op-task,
     .op-tray .op-tray-head {
-        flex: 0 0 100%;
-        scroll-snap-align: center;
+        flex: 0 0 85%;
+        scroll-snap-align: end;
         box-sizing: border-box;
     }
     /* taller tiles + larger action hit areas so they're easy to tap on touch */

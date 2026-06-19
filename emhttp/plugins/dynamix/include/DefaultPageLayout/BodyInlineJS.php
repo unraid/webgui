@@ -332,6 +332,11 @@ function trayRender() {
     header = "<div class='op-tray-head'><a class='op-act' onclick='clearFinishedTasks()' title=\"<?=_('Clear finished tasks')?>\"><i class='fa fa-check-circle-o fa-fw'></i> <?=_('Clear finished')?></a></div>";
   }
   $tray.html(header + rows).show();
+  // On mobile the tray is a horizontal carousel; default it to the newest task
+  // (rightmost) rather than the leftmost "Clear finished" header.
+  if (window.matchMedia && window.matchMedia('(max-width: 767px)').matches) {
+    $tray.scrollLeft($tray[0].scrollWidth);
+  }
 }
 
 // minimize the foreground modal: drop the live view but leave the task running
