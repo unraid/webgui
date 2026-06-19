@@ -2022,17 +2022,19 @@ label.checkbox input:disabled ~ .checkmark {
     border-top: 1px solid var(--border-color);
     text-align: left;
 }
+/* !important overrides SweetAlert's inline `background-color: transparent`
+   (its default confirmButtonColor), which otherwise leaves white-on-white. */
 .sweet-alert.nchan button.confirm {
     margin: 0;
     padding: 0.6rem 1.5rem;
     font-size: 1.3rem;
-    color: var(--white);
-    background: var(--brand-orange);
-    border: 0;
+    color: var(--white) !important;
+    background: var(--brand-orange) !important;
+    border: 0 !important;
     border-radius: 0.4rem;
-    box-shadow: none;
+    box-shadow: none !important;
 }
-.sweet-alert.nchan button.confirm:hover { background: var(--orange-800); }
+.sweet-alert.nchan button.confirm:hover { background: var(--orange-800) !important; }
 /* top-corner minimize (running) / close (finished) control — theme-token colors
    so it stays visible on the modal surface in every theme */
 .sweet-alert .nchan-close {
