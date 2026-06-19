@@ -267,7 +267,12 @@ case 'add':
   $idBase = $key !== '' ? $key : "{$event}-{$ticket}";
   $unread = "{$unread}/".safe_filename("{$idBase}.notify");
   $archive = "{$archive}/".safe_filename("{$idBase}.notify");
-  if (file_exists($archive)) break;
+  // Legacy dedup: don't recreate a notification the user already archived.
+  // Keyed (condition-style) notifications are exempt: re-raising a condition should
+  // re-pin it, so clear any stale archived copy and proceed instead of bailing.
+  if (file_exists($archive)) {
+    if ($key !== '') @unlink($archive); else break;
+  }
   $entity = $overrule===false ? $notify[$importance] : $overrule;
   $cleanSubject = clean_subject($subject);
   $archiveData = [
