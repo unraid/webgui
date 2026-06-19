@@ -1955,72 +1955,133 @@ label.checkbox input:disabled ~ .checkmark {
     text-decoration: none;
 }
 .op-tray .op-act:hover { color: var(--brand-orange); }
-/* top-corner minimize/close on the foreground task modal. The modal is a dark
-   surface, so the control is a light, bordered circular button (not a faint
-   theme-colored glyph) with a brand-orange hover so it reads clearly as an
-   action. */
+/* The foreground task modal is restyled as a right-docked sidebar/sheet to mirror
+   the Unraid notifications sidebar. Every color is a theme token so it adapts to
+   white / azure / black / gray:
+     surface = --dynamix-sweet-alert-icon-bg-color (the modal's own themed bg)
+     text    = --dynamix-sweet-alert-text-color   muted = --alt-text-color
+     card    = --shade-bg-color   lines = --border-color   accent = --brand-orange */
+.sweet-alert.nchan {
+    display: flex !important;
+    flex-direction: column;
+    left: auto;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    transform: none;
+    -webkit-transform: none;
+    width: 34rem;
+    max-width: 92vw;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-left: 1px solid var(--border-color);
+    border-radius: 0;
+    box-shadow: -0.5rem 0 1.5rem var(--bg-opacity-30);
+    text-align: left;
+    overflow: hidden;
+    box-sizing: border-box;
+    animation: nchanSlideIn .22s ease-out;
+}
+@keyframes nchanSlideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.sweet-alert.nchan > h2 {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 1.1rem 3.6rem 0.85rem 1.2rem;
+    font-size: 1.6rem;
+    line-height: 1.35;
+    font-weight: 600;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+.sweet-alert.nchan #pluginProgressTitle {
+    display: block;
+    margin-top: 0.3rem;
+    font-size: 1.15rem;
+    font-weight: 400;
+    color: var(--alt-text-color);
+}
+.sweet-alert.nchan > p {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    padding: 1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+}
+.sweet-alert.nchan #swaltext {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow: auto;
+    margin: 0;
+    padding: 0.8rem 0.9rem;
+    text-align: left;
+    font-size: 1.2rem;
+    background: var(--shade-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 0.4rem;
+}
+.sweet-alert.nchan .sa-button-container {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 0.9rem 1.2rem;
+    border-top: 1px solid var(--border-color);
+    text-align: left;
+}
+.sweet-alert.nchan button.confirm {
+    margin: 0;
+    padding: 0.6rem 1.5rem;
+    font-size: 1.3rem;
+    color: var(--white);
+    background: var(--brand-orange);
+    border: 0;
+    border-radius: 0.4rem;
+    box-shadow: none;
+}
+.sweet-alert.nchan button.confirm:hover { background: var(--orange-800); }
+/* top-corner minimize (running) / close (finished) control — theme-token colors
+   so it stays visible on the modal surface in every theme */
 .sweet-alert .nchan-close {
     position: absolute;
-    top: .8rem;
-    right: .8rem;
+    top: 0.85rem;
+    right: 0.9rem;
     width: 2.4rem;
     height: 2.4rem;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    font-size: 1.4rem;
+    font-size: 1.3rem;
     line-height: 1;
-    color: rgba(255,255,255,.85);
-    background: rgba(255,255,255,.1);
-    border: 1px solid rgba(255,255,255,.28);
+    color: var(--dynamix-sweet-alert-text-color);
+    background: transparent;
+    border: 1px solid var(--border-color);
     cursor: pointer;
     text-decoration: none;
     transition: background-color .15s, border-color .15s, color .15s;
     z-index: 2;
 }
 .sweet-alert .nchan-close:hover {
-    color: #fff;
+    color: var(--white);
     background: var(--brand-orange);
     border-color: var(--brand-orange);
 }
-/* Mobile: the foreground task modal goes fullscreen instead of a centered,
-   rounded card (which looks cramped/"circular" on small screens). Scoped to
-   .nchan so ordinary confirm/warning dialogs keep their dialog look. The title
-   stays pinned at the top, the log fills and scrolls, and the minimize / Dismiss
-   controls stay reachable at the corners/bottom. */
+/* Mobile: full-width sheet (flush, still slides in from the right). */
 @media (max-width: 767px) {
     .sweet-alert.nchan {
-        display: flex !important;
-        flex-direction: column;
         left: 0;
-        top: 0;
+        right: 0;
         width: 100vw;
         max-width: 100vw;
-        height: 100vh;
-        height: 100dvh;
-        max-height: 100vh;
-        max-height: 100dvh;
-        margin: 0;
-        padding: 1.25rem 1rem;
-        border: 0;
-        border-radius: 0;
-        transform: none !important;
-        -webkit-transform: none !important;
-        box-sizing: border-box;
+        border-left: 0;
     }
-    .sweet-alert.nchan > h2 { flex: 0 0 auto; padding-right: 2.5rem; }
-    .sweet-alert.nchan > p  { flex: 1 1 auto; min-height: 0; display: flex; margin: 0; }
-    .sweet-alert.nchan #swaltext {
-        flex: 1 1 auto;
-        min-height: 0;
-        max-height: none;
-        overflow: auto;
-        margin: 0;
-        text-align: left;
-    }
-    .sweet-alert.nchan .sa-button-container { flex: 0 0 auto; margin-top: 1rem; }
-    .sweet-alert.nchan .nchan-close { top: 1rem; right: 1rem; width: 2.9rem; height: 2.9rem; font-size: 1.6rem; }
+    .sweet-alert.nchan .nchan-close { width: 2.9rem; height: 2.9rem; font-size: 1.6rem; }
 }
 .back_to_top {
     right: 40px;

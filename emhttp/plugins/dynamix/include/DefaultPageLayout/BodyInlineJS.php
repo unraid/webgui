@@ -222,7 +222,7 @@ function foregroundTask(id) {
   var titleState  = task.status=='done'  ? "<?=_('Finished')?>"
                   : task.status=='error' ? "<?=_('Error')?>"
                   : "<?=_('In Progress')?> <i class='fa fa-refresh fa-spin'></i>";
-  swal({title:escapeTaskHtml(task.title) + ' - <span id="pluginProgressTitle">'+titleState+'</span>',text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:finished,confirmButtonText:"<?=_('Dismiss')?>"},function(close){
+  swal({title:escapeTaskHtml(task.title) + '<span id="pluginProgressTitle">'+titleState+'</span>',text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:finished,confirmButtonText:"<?=_('Dismiss')?>"},function(close){
     // confirm/Dismiss (or Esc): background while running, clear once finished
     if (foregroundTaskId===id) { foregroundTaskId=null; foregroundType=null; }
     stopAllTypeChannels();
