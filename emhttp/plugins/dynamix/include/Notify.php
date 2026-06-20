@@ -34,15 +34,24 @@ case 'add':
     case 'd':
     case 'i':
     case 'm':
+    case 'k':
+    case 'l':
       $notify .= " -{$option} ".escapeshellarg($value);
       break;
     case 'x':
     case 't':
+    case 'p':
       $notify .= " -{$option}";
       break;
     }
   }
   shell_exec("$notify add");
+  break;
+
+case 'clear':
+  // Resolve a keyed (condition-style / persistent) notification.
+  $key = $_POST['k']??'';
+  if ($key !== '') shell_exec("$notify clear -k ".escapeshellarg($key));
   break;
 case 'get':
   echo shell_exec("$notify get");

@@ -379,35 +379,95 @@ var currentBannerWarning = 0;
 var osUpgradeWarning = false;
 var forcedBanner = false;
 
-function addBannerWarning(text, warning=true, noDismiss=false, forced=false) {
-  var cookieText = text.replace(/[^a-z0-9]/gi,'');
-  if ($.cookie(cookieText) == "true") return false;
-  if (warning) text = "<i class='fa fa-warning fa-fw' style='float:initial'></i> "+text;
-  if (bannerWarnings.indexOf(text) < 0) {
-    if (forced) {
-      var arrayEntry = 0; bannerWarnings = []; clearTimeout(timers.bannerWarning); timers.bannerWarning = null; forcedBanner = true;
-    } else {
-      var arrayEntry = bannerWarnings.push("placeholder") - 1;
-    }
-    if (!noDismiss) text += "<a class='bannerDismiss' onclick='dismissBannerWarning("+arrayEntry+",&quot;"+cookieText+"&quot;)'></a>";
-    bannerWarnings[arrayEntry] = text;
-  } else {
-    return bannerWarnings.indexOf(text);
+// The legacy fixed yellow ".upgrade_notice" bar is retired. addBannerWarning now
+// routes by intent:
+//   - Persistent conditions (noDismiss, not a transient "forced" in-progress
+//     banner) -> the notification bell, as a keyed (idempotent, deduped,
+//     header-reserved) notification that survives reloads and clears when
+//     resolved. Re-raising the same condition just updates the one entry.
+//   - Everything else -> a transient toast that auto-dismisses.
+// removeBannerWarning(id) clears the bell notification or dismisses the toast.
+var bannerToastSeq = 0;
+var bannerRegistry = {}; // id -> { persistent: bool, key?: string }
+
+function bannerStableKey(text) {
+  var h = 0;
+  for (var i=0;i<text.length;i++) h = ((h<<5)-h+text.charCodeAt(i))|0;
+  return 'banner-' + (h>>>0).toString(36);
+}
+
+// Split a banner's HTML blob into plain text + a single action link.
+function parseBanner(html) {
+  var tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  var a = tmp.querySelector('a');
+  var link = null;
+  if (a) {
+    link = { href: a.getAttribute('href'), onclick: a.getAttribute('onclick'), label: (a.textContent||'').trim() };
+    a.remove();
   }
-  if (timers.bannerWarning==null) showBannerWarnings();
-  return arrayEntry;
+  return { text: (tmp.textContent||'').replace(/\s+/g,' ').trim(), link: link };
+}
+
+function addBannerWarning(text, warning=true, noDismiss=false, forced=false) {
+  var id = "banner-" + (++bannerToastSeq);
+  var parsed = parseBanner(text);
+  var importance = (warning || noDismiss) ? "warning" : "info";
+
+  if (noDismiss && !forced) {
+    // Persistent condition -> notification bell (keyed for idempotent re-raise).
+    var key = bannerStableKey(parsed.text);
+    bannerRegistry[id] = { persistent: true, key: key };
+    $.post('/webGui/include/Notify.php', {
+      cmd: 'add',
+      i: importance === "warning" ? "warning" : "normal",
+      e: parsed.text,
+      s: '<?=_('System notice')?>',
+      d: '<?=_('This stays in your notifications until the condition is resolved')?>.',
+      l: (parsed.link && parsed.link.href) ? parsed.link.href : '',
+      p: '1',
+      k: key
+    });
+    return id;
+  }
+
+  // Transient (or forced in-progress) -> toast.
+  bannerRegistry[id] = { persistent: false };
+  showBannerToast(parsed, importance, !!noDismiss, id, 0);
+  return id;
+}
+
+function showBannerToast(parsed, importance, persist, id, attempt) {
+  // globalThis.toast is registered when the toaster web component mounts; a
+  // banner may fire before then, so retry briefly.
+  if (!window.toast || !window.toast.warning) {
+    if (attempt < 40) setTimeout(function(){ showBannerToast(parsed, importance, persist, id, attempt+1); }, 150);
+    return;
+  }
+  var opts = { id: id, duration: persist ? Infinity : 8000, closeButton: true };
+  if (parsed.link) {
+    var l = parsed.link;
+    opts.action = { label: l.label || 'Open', onClick: function() {
+      if (l.href) window.location.href = l.href;
+      else if (l.onclick) { try { (new Function(l.onclick)).call(window); } catch(e) {} }
+    }};
+  }
+  var fn = window.toast[importance] || window.toast;
+  fn(parsed.text, opts);
 }
 
 function dismissBannerWarning(entry,cookieText) {
-  $.cookie(cookieText,"true",{expires:30}); // reset after 1 month
   removeBannerWarning(entry);
 }
 
 function removeBannerWarning(entry) {
-  if (forcedBanner) return;
-  bannerWarnings[entry] = false;
-  clearTimeout(timers.bannerWarning);
-  showBannerWarnings();
+  var info = bannerRegistry[entry];
+  if (info && info.persistent && info.key) {
+    $.post('/webGui/include/Notify.php', { cmd: 'clear', k: info.key });
+  } else if (window.toast && window.toast.dismiss) {
+    window.toast.dismiss(entry);
+  }
+  delete bannerRegistry[entry];
 }
 
 function bannerFilterArray(array) {
@@ -432,14 +492,12 @@ function showBannerWarnings() {
 }
 
 function addRebootNotice(message="<?=_('You must reboot for changes to take effect')?>") {
-  addBannerWarning("<i class='fa fa-warning' style='float:initial;'></i> "+message,false,true);
+  // PluginAPI raises a persistent, keyed "reboot-required" bell notification
+  // (and persists it server-side), so no separate client banner is needed.
   $.post("/plugins/dynamix.plugin.manager/scripts/PluginAPI.php",{action:'addRebootNotice',message:message});
 }
 
 function removeRebootNotice(message="<?=_('You must reboot for changes to take effect')?>") {
-  var bannerIndex = bannerWarnings.indexOf("<i class='fa fa-warning' style='float:initial;'></i> "+message);
-  if (bannerIndex < 0) return;
-  removeBannerWarning(bannerIndex);
   $.post("/plugins/dynamix.plugin.manager/scripts/PluginAPI.php",{action:'removeRebootNotice',message:message});
 }
 
@@ -493,7 +551,7 @@ function digits(number) {
 
 function flashReport() {
   $.post('/webGui/include/Report.php',{cmd:'config'},function(check){
-    if (check>0) addBannerWarning("<?=_('Your boot drive is corrupted or offline').'. '._('Post your diagnostics in the forum for help').'.'?> <a target='_blank' href='https://docs.unraid.net/go/changing-the-flash-device/'><?=_('See also here')?></a>");
+    if (check>0) addBannerWarning("<?=_('Your boot drive is corrupted or offline').'. '._('Post your diagnostics in the forum for help').'.'?> <a target='_blank' href='https://docs.unraid.net/go/changing-the-flash-device/'><?=_('See also here')?></a>",true,true);
   });
 }
 
@@ -522,11 +580,8 @@ $(function() {
   updateTime();
 
   Shadowbox.setup('a.sb-enable', {modal:true});
-// add any pre-existing reboot notices
-  $.post('/webGui/include/Report.php',{cmd:'notice'},function(notices){
-    notices = notices.split('\n');
-    for (var i=0,notice; notice=notices[i]; i++) addBannerWarning("<i class='fa fa-warning' style='float:initial;'></i> "+notice,false,true);
-  });
+// Pre-existing reboot notices now live in the notification bell (raised by
+// PluginAPI when the reboot reason was added), so no client-side re-display.
 // check for boot device offline / corrupted (delayed).
   timers.flashReport = setTimeout(flashReport,6000);
 });
