@@ -430,7 +430,7 @@ function addBannerWarning(text, warning=true, noDismiss=false, forced=false) {
       i: importance === "warning" ? "warning" : "normal",
       e: parsed.text,
       s: '<?=_('System notice')?>',
-      d: '<?=_('This stays in your notifications until the condition is resolved')?>.',
+      d: '', // no description: the "Active" badge already conveys persistence
       l: (parsed.link && parsed.link.href) ? parsed.link.href : '',
       p: '1',
       k: key,
