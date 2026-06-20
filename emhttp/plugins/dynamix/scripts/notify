@@ -357,30 +357,6 @@ case 'clear':
     if (strpos(realpath($target) ?: '', $dir.'/')===0) @unlink($target);
   }
   break;
-
-case 'banner-sweep':
-  // Reconcile JS-sourced banner notifications (keys prefixed 'banner-'):
-  //   notify banner-sweep <generation>
-  // Legacy banners (CA, boot checks, ...) have no explicit clear - they signal
-  // "still active" by re-rendering on every page load. addBannerWarning stamps
-  // each re-raise with the current page-load generation; this sweep removes any
-  // banner notification NOT stamped with the current generation, i.e. one whose
-  // producer stopped rendering it. Non-banner keys (PR plugins, reboot, ...) own
-  // their lifecycle and are left untouched.
-  $currentGen = $argv[2] ?? '';
-  if ($currentGen === '') exit(usage());
-  foreach (glob("$unread/*.notify", GLOB_NOSORT) ?: [] as $file) {
-    $k = $g = '';
-    foreach (file($file, FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-      [$field,$val] = array_pad(explode('=', $line, 2), 2, '');
-      $field = trim($field);
-      if ($field === 'key') $k = ini_decode_value($val);
-      elseif ($field === 'gen') $g = ini_decode_value($val);
-    }
-    if (strpos($k, 'banner-') !== 0) continue;
-    if ($g !== $currentGen) @unlink($file);
-  }
-  break;
 }
 
 exit(0);

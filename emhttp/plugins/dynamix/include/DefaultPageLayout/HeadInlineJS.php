@@ -391,10 +391,11 @@ var bannerToastSeq = 0;
 var bannerRegistry = {}; // id -> { persistent: bool, key?: string }
 // Per-page-load generation stamp. Legacy banners (CA, boot checks, ...) have no
 // explicit clear: they re-render every load while active and simply stop when
-// resolved. Each banner -> bell notification is stamped with this generation;
-// after the page settles we sweep any 'banner-' notification not re-raised this
-// load, so resolved banners clear on the next navigation.
-var bannerGen = String(Date.now());
+// resolved. Each banner -> bell notification is stamped with this generation.
+// Exposed on window so the notification drawer can hand it to the API, which
+// authoritatively clears any 'banner-' notification not re-raised this load
+// (see reconcileBannerNotifications).
+var bannerGen = window.bannerGen = String(Date.now());
 
 function bannerStableKey(text) {
   var h = 0;
@@ -466,15 +467,6 @@ function showBannerToast(parsed, importance, persist, id, attempt) {
 function dismissBannerWarning(entry,cookieText) {
   removeBannerWarning(entry);
 }
-
-// Reconcile banner -> bell notifications once the page has settled: clear any
-// 'banner-' notification not stamped with this load's generation (i.e. whose
-// producer stopped rendering it). Deferred past load so banners raised via ajax
-// (e.g. the boot-corrupt check) are re-stamped before the sweep runs.
-function sweepStaleBanners() {
-  $.post('/webGui/include/Notify.php', { cmd: 'banner-sweep', g: bannerGen });
-}
-$(window).on('load', function(){ setTimeout(sweepStaleBanners, 3000); });
 
 function removeBannerWarning(entry) {
   var info = bannerRegistry[entry];

@@ -54,12 +54,6 @@ case 'clear':
   $key = $_POST['k']??'';
   if ($key !== '') shell_exec("$notify clear -k ".escapeshellarg($key));
   break;
-case 'banner-sweep':
-  // Reconcile JS-sourced banner notifications: clear any 'banner-' keyed
-  // notification not re-raised in the current page-load generation.
-  $gen = $_POST['g']??'';
-  if ($gen !== '') shell_exec("$notify banner-sweep ".escapeshellarg($gen));
-  break;
 case 'get':
   echo shell_exec("$notify get");
   break;
