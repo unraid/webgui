@@ -252,40 +252,33 @@ Link='nav-user'
 ---
 <script>
   $(function() {
-    // Check for updates (non-dismissible)
-    caPluginUpdateCheck("webgui-pr-PR_PLACEHOLDER.plg", {noDismiss: true},function(result){
+    // Surface the active PR test build as a persistent, keyed notification in the
+    // bell (not a banner): keyed so it dedupes across reloads, links to the
+    // Plugins page to remove it, and is cleared by the plugin's removal script.
+    function raisePrNotice() {
+      $.post('/webGui/include/Notify.php', {
+        cmd: 'add',
+        i: 'warning',
+        e: 'PR test build installed',
+        s: 'Modified GUI via webgui-pr-PR_PLACEHOLDER',
+        d: 'A pull-request test build is active. Remove it from Plugins before applying production updates.',
+        l: '/Plugins',
+        p: '1',
+        k: 'webgui-pr-PR_PLACEHOLDER'
+      });
+    }
+    // If the PR has been merged/removed upstream, clear the notice; otherwise raise it.
+    caPluginUpdateCheck("webgui-pr-PR_PLACEHOLDER.plg", {noDismiss: true}, function(result){
       try {
         let json = JSON.parse(result);
-        if ( ! json.version ) {
-          addBannerWarning("Note: webgui-pr-PR_PLACEHOLDER has either been merged or removed");
+        if (!json.version) {
+          $.post('/webGui/include/Notify.php', {cmd:'clear', k:'webgui-pr-PR_PLACEHOLDER'});
+          return;
         }
       } catch(e) {}
+      raisePrNotice();
     });
-
-    // Create banner with uninstall link (nondismissible)
-    let bannerMessage = "Modified GUI installed via <b>webgui-pr-PR_PLACEHOLDER</b> plugin. " +
-                       "<a onclick='uninstallPRPlugin()' style='cursor: pointer; text-decoration: underline;'>Click here to uninstall</a>";
-
-    // true = warning style, true = non-dismissible
-    addBannerWarning(bannerMessage, true, true);
-
-    // Define uninstall function
-    window.uninstallPRPlugin = function() {
-      swal({
-        title: "Uninstall PR Test Plugin?",
-        text: "This will reverse all of this PR's changes and remove the test plugin.",
-        type: "warning",
-        showCancelButton: true,
-        confirmButtonText: "Yes, uninstall",
-        cancelButtonText: "Cancel",
-        closeOnConfirm: false,
-        showLoaderOnConfirm: true
-      }, function(isConfirm) {
-        if (isConfirm) {
-          openPlugin("plugin remove webgui-pr-PR_PLACEHOLDER.plg", "Removing PR Test Plugin", "", "refresh");
-        }
-      });
-    };
+    raisePrNotice();
   });
 </script>
 ]]>
@@ -351,6 +344,9 @@ fi
 echo "Cleaning up plugin files..."
 rm -rf "/usr/local/emhttp/plugins/webgui-pr-PR_PLACEHOLDER"
 rm -rf "$PLUGIN_DIR"
+
+# Clear the persistent "PR test build installed" notification raised by the Banner page.
+/usr/local/emhttp/webGui/scripts/notify clear -k "webgui-pr-PR_PLACEHOLDER" 2>/dev/null || true
 
 echo ""
 echo "✅ Plugin removed successfully"
