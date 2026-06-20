@@ -389,6 +389,12 @@ var forcedBanner = false;
 // removeBannerWarning(id) clears the bell notification or dismisses the toast.
 var bannerToastSeq = 0;
 var bannerRegistry = {}; // id -> { persistent: bool, key?: string }
+// Per-page-load generation stamp. Legacy banners (CA, boot checks, ...) have no
+// explicit clear: they re-render every load while active and simply stop when
+// resolved. Each banner -> bell notification is stamped with this generation;
+// after the page settles we sweep any 'banner-' notification not re-raised this
+// load, so resolved banners clear on the next navigation.
+var bannerGen = String(Date.now());
 
 function bannerStableKey(text) {
   var h = 0;
@@ -426,7 +432,8 @@ function addBannerWarning(text, warning=true, noDismiss=false, forced=false) {
       d: '<?=_('This stays in your notifications until the condition is resolved')?>.',
       l: (parsed.link && parsed.link.href) ? parsed.link.href : '',
       p: '1',
-      k: key
+      k: key,
+      g: bannerGen
     });
     return id;
   }
@@ -459,6 +466,15 @@ function showBannerToast(parsed, importance, persist, id, attempt) {
 function dismissBannerWarning(entry,cookieText) {
   removeBannerWarning(entry);
 }
+
+// Reconcile banner -> bell notifications once the page has settled: clear any
+// 'banner-' notification not stamped with this load's generation (i.e. whose
+// producer stopped rendering it). Deferred past load so banners raised via ajax
+// (e.g. the boot-corrupt check) are re-stamped before the sweep runs.
+function sweepStaleBanners() {
+  $.post('/webGui/include/Notify.php', { cmd: 'banner-sweep', g: bannerGen });
+}
+$(window).on('load', function(){ setTimeout(sweepStaleBanners, 3000); });
 
 function removeBannerWarning(entry) {
   var info = bannerRegistry[entry];
