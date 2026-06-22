@@ -16,36 +16,55 @@ Tag="usb"
 ?>
 <?$tpmEnabled = !empty($var['flashGUID']) && strpos($var['flashGUID'], '01-') !== 0 && !empty($var['tpmGUID']) ? true : false;?>
 <script>
-function cleanUp(zip) {
+var backupFile = "";
+var nchan_backup = new NchanSubscriber('/sub/flash_backup',{subscriber:'websocket'});
+
+nchan_backup.on('message', function(data) {
+  if (data == '_DONE_') {
+    nchan_backup.stop();
+    resetBackupButton();
+    if (backupFile) {
+      // archive ready: trigger the browser download then clean up afterwards
+      swal.close();
+      location = '/'+backupFile;
+      setTimeout(cleanUp,6000);
+    }
+  } else if (data.startsWith('_FILE_')) {
+    backupFile = data.substring(6);
+  } else if (data.startsWith('_ERROR_')) {
+    nchan_backup.stop();
+    resetBackupButton();
+    swal({title:"_(Creation error)_",text:data.substring(7),type:'error',html:true,confirmButtonText:"_(Ok)_"});
+  } else if (data) {
+    var box = $('pre#backuptext');
+    box.html(box.html()+'<br>'+data).scrollTop(box[0].scrollHeight);
+  }
+});
+
+function resetBackupButton() {
+  $('input.backup-btn').val("_(Boot device backup)_").prop('disabled',false);
+  $('#backupLevel').prop('disabled',false);
+}
+
+function cleanUp() {
   if (document.hasFocus()) {
-    $('input[value="_(Creating boot device backup)_..."]').val("_(Boot device backup)_").prop('disabled',false);
-    $('div.spinner').hide('slow');
-    $('#pleaseWait').hide('slow');
-    $.post('/webGui/include/Download.php',{cmd:'unlink',file:zip});
+    $.post('/webGui/include/Download.php',{cmd:'unlink',file:backupFile});
+    backupFile = "";
   } else {
-    setTimeout(function(){cleanUp(zip);},2000);
+    setTimeout(cleanUp,2000);
   }
 }
+
 function backup() {
-  $('input[value="_(Boot device backup)_"]').val('_(Creating boot device backup)_...').prop('disabled',true);
-  $('div.spinner').show('slow');
-  $('#pleaseWait').show('slow');
-  $.post('/webGui/include/Download.php',{cmd:'backup'},function(zip) {
-    if (zip) {
-      location = '/'+zip;
-      setTimeout(function(){cleanUp(zip);},6000);
-    } else {
-      var $btn = $('input[value="_(Creating boot device backup)_..."]');
-      $btn.val("_(Boot device backup)_").prop('disabled',false);
-      $('div.spinner').hide('slow');
-      $('#pleaseWait').hide('slow');
-      swal({title:"_(Creation error)_",text:"_(Insufficient free disk space available)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
-    }
-  });
+  backupFile = "";
+  $('input.backup-btn').val('_(Creating boot device backup)_...').prop('disabled',true);
+  $('#backupLevel').prop('disabled',true);
+  var level = $('#backupLevel').val();
+  nchan_backup.start();
+  swal({title:"_(Creating boot device backup)_...",text:"<hr><pre id='backuptext'></pre>",html:true,animation:'none',showConfirmButton:false});
+  $.post('/webGui/include/Download.php',{cmd:'backup',level:level});
 }
 </script>
-<div id="pleaseWait" style="display:none;text-align:center;margin-bottom:24px"><span class="red-text strong">_(Please wait)_... _(creating boot device backup zip file (this may take several minutes))_</span></div>
-
 _(Active GUID)_:
 : <?if (!empty($var['flashGUID'])):?>
     <?=htmlspecialchars($var['flashGUID'], ENT_QUOTES, 'UTF-8');?>
@@ -81,8 +100,16 @@ _(TPM GUID)_:
 
 :flash_backup_help:
 
+_(Compression level)_:
+: <select id="backupLevel">
+    <option value="0">_(None - fastest)_</option>
+    <option value="1">_(Low)_</option>
+    <option value="6" selected>_(Normal)_</option>
+    <option value="9">_(Maximum - smallest)_</option>
+  </select>
+
 &nbsp;
 : <span class="inline-block">
-    <input type="button" value="_(Boot device backup)_" onclick="backup()">
+    <input type="button" class="backup-btn" value="_(Boot device backup)_" onclick="backup()">
     <input type="button" value="_(Done)_" onclick="done()">
   </span>

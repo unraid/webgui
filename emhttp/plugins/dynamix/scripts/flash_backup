@@ -1,6 +1,6 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2023, Lime Technology
+/* Copyright 2005-2025, Lime Technology
  * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
@@ -12,38 +12,96 @@
  */
 ?>
 <?
+/* Create a backup zip of the boot device (USB flash).
+ *
+ * Usage: flash_backup [compression-level]
+ *   compression-level  0 (store, fastest) .. 9 (smallest, slowest), default 6
+ *
+ * Designed to run detached in the background (see Download.php cmd=backup).
+ * Progress is streamed to the 'flash_backup' nchan channel so the GUI can show
+ * live status and trigger the download when finished. The work runs under
+ * nice/ionice and uses the streaming `zip` binary, so it stays gentle on CPU,
+ * disk and RAM even on large flash drives.
+ */
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Wrappers.php";
+require_once "$docroot/webGui/include/publish.php";
+
+$channel = 'flash_backup';
+
+// Stream a progress line to the GUI over nchan.
+function write(...$messages) {
+  global $channel;
+  foreach ($messages as $message) publish($channel, $message, 1, false);
+}
 
 $var = (array)@parse_ini_file('/var/local/emhttp/var.ini');
 $dir = ['system','appdata','isos','domains'];
 $out = ['prev','previous'];
+
+// Clamp the requested compression level to a valid zip range (default 6).
+$level = isset($argv[1]) && is_numeric($argv[1]) ? (int)$argv[1] : 6;
+$level = max(0, min(9, $level));
 
 $server = isset($var['NAME']) ? str_replace(' ','_',strtolower($var['NAME'])) : 'tower';
 $mydate = date('Ymd-Hi');
 $osVersion = _var($var,'version','_unknown');
 $backup = "$server-v$osVersion-boot-backup-$mydate.zip";
 
+write(_('Preparing backup')."...");
+
+// Estimate required space (1.5x current flash usage) and pick a target.
+// Prefer real disk (array/pool shares) over the RAM-backed rootfs so a large
+// backup does not consume system memory; fall back to / only when no share fits.
 $used = exec("df /boot|awk 'END{print $3}'") * 1.5;
-$free = exec("df /|awk 'END{print $4}'");
-if ($free > $used) $zip = "/$backup"; else {
-  foreach ($dir as $share) {
-    if (!is_dir("/mnt/user/$share")) continue;
-    $free = exec("df /mnt/user/$share|awk 'END{print $4}'");
-    if ($free > $used) {$zip = "/mnt/user/$share/$backup"; break;}
-  }
+$zip = null;
+foreach ($dir as $share) {
+  if (!is_dir("/mnt/user/$share")) continue;
+  $free = exec("df /mnt/user/$share|awk 'END{print $4}'");
+  if ($free > $used) {$zip = "/mnt/user/$share/$backup"; break;}
 }
-if (isset($zip)) {
-  chdir("/boot");
-  foreach (glob("*",GLOB_NOSORT+GLOB_ONLYDIR) as $folder) {
-    if (in_array($folder,$out)) continue;
-    exec("zip -qr ".escapeshellarg($zip)." ".escapeshellarg($folder));
-  }
-  foreach (glob("*",GLOB_NOSORT) as $file) {
-    if (is_dir($file)) continue;
-    exec("zip -q ".escapeshellarg($zip)." ".escapeshellarg($file));
-  }
-  symlink($zip,"$docroot/$backup");
-  echo $backup;
+if (!$zip) {
+  $free = exec("df /|awk 'END{print $4}'");
+  if ($free > $used) $zip = "/$backup";
 }
+
+if (!$zip) {
+  write("_ERROR_"._('Insufficient free disk space available'));
+  write('_DONE_');
+  exit(1);
+}
+
+// Collect top-level entries to archive, skipping previous backups.
+chdir('/boot');
+$items = [];
+foreach (glob("*",GLOB_NOSORT) as $entry) {
+  if (in_array($entry,$out)) continue;
+  $items[] = $entry;
+}
+$total = count($items);
+
+// Run zip with low CPU/IO priority so the backup stays responsive under load.
+$prio = 'nice -n 19 ionice -c3';
+$ok = true;
+foreach ($items as $i => $entry) {
+  $pct = $total ? round(($i/$total)*100) : 0;
+  write(sprintf(_('Compressing %s')." (%d/%d - %d%%)", $entry, $i+1, $total, $pct));
+  $flag = is_dir($entry) ? '-r' : '';
+  exec("$prio zip -$level -q $flag ".escapeshellarg($zip)." ".escapeshellarg($entry)." 2>/dev/null", $o, $rc);
+  // zip rc 12 = "nothing to do"; treat any other non-zero result as a failure.
+  if ($rc !== 0 && $rc !== 12) $ok = false;
+}
+
+if (!$ok || !is_file($zip)) {
+  @unlink($zip);
+  write("_ERROR_"._('Backup failed'));
+  write('_DONE_');
+  exit(1);
+}
+
+// Expose the archive to the browser via a symlink in the webGui docroot.
+symlink($zip,"$docroot/$backup");
+write(_('Backup complete')."...");
+write("_FILE_$backup");
+write('_DONE_');
 ?>

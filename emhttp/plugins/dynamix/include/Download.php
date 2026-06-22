@@ -50,7 +50,11 @@ case 'unlink':
   @unlink("$docroot/$file");
   break;
 case 'backup':
-  echo exec("$docroot/webGui/scripts/flash_backup");
+  // Run the flash backup detached; progress is streamed over the
+  // 'flash_backup' nchan channel and the GUI triggers the download on _DONE_.
+  $level = isset($_POST['level']) && is_numeric($_POST['level']) ? (int)$_POST['level'] : 6;
+  $level = max(0, min(9, $level));
+  exec("nohup $docroot/webGui/scripts/flash_backup $level 1>/dev/null 2>&1 &");
   break;
 }
 ?>
