@@ -107,6 +107,7 @@ function task_resolve($cmd) {
 
 // launch a task in the background, capturing its output to <id>.log via NCHAN_TASK
 function task_launch(&$task) {
+  global $docroot;
   // guard: never run two of the same type at once
   if (task_running_type($task['type'])) return false;
   $resolved = task_resolve($task['cmd']);
@@ -120,10 +121,20 @@ function task_launch(&$task) {
   // plugin scripts publish to nchan only when their last argument is 'nchan'
   $suffix = $task['type']==='plugins' ? ' nchan' : '';
   $env = 'NCHAN_TASK='.escapeshellarg($task['id']).' ';
+  // The command records its own terminal state on exit: capture its exit code
+  // and hand it to task_complete, which marks the task done/error, advances the
+  // queue and broadcasts. This makes completion authoritative at the source
+  // instead of relying on the scheduler daemon to observe the PID disappear
+  // (which it can miss on PID reuse or a daemon-restart race). NCHAN_TASK is
+  // cleared for the stamp so its `tasks` broadcast isn't captured into this
+  // task's foreground-replay log. The daemon stays a fallback for the case where
+  // the process is hard-killed before the stamp can run.
+  $complete = "$docroot/plugins/dynamix/include/task_complete";
+  $stamp = '; rc=$?; NCHAN_TASK= '.escapeshellarg($complete).' '.escapeshellarg($task['id']).' "$rc"';
   // escapeshellarg the whole bash -c payload so a single quote (or other shell
   // metacharacter) in the resolved args cannot break out of the outer shell;
   // bash still word-splits the args internally, preserving multi-arg commands.
-  $payload = 'sleep .3 && '.$name.' '.$args.$suffix;
+  $payload = 'sleep .3 && '.$name.' '.$args.$suffix.$stamp;
   $pid = exec($env.'nohup bash -c '.escapeshellarg($payload).' 1>/dev/null 2>&1 & echo $!');
   $task['pid']     = $pid;
   $task['status']  = 'running';
@@ -132,12 +143,61 @@ function task_launch(&$task) {
   return $pid;
 }
 
-// start the next queued task of a type if nothing of that type is running
+// start the next queued task of a type if nothing of that type is running.
+// Takes the per-type lock so the check-and-launch is atomic against task_create
+// and task_complete; without it two advancers (e.g. the daemon and a task's own
+// completion stamp firing at the same instant) could both pass task_running_type
+// and double-launch the next queued task. Callers must NOT already hold the lock.
 function task_advance($type) {
-  if (task_running_type($type)) return;
-  foreach (task_list() as $t) {
-    if ($t['type']===$type && $t['status']==='queued') { task_launch($t); return; }
+  $lock = fopen(task_dir()."/.$type.lock", 'c');
+  if ($lock) flock($lock, LOCK_EX);
+  if (!task_running_type($type)) {
+    foreach (task_list() as $t) {
+      if ($t['type']===$type && $t['status']==='queued') { task_launch($t); break; }
+    }
   }
+  if ($lock) { flock($lock, LOCK_UN); fclose($lock); }
+}
+
+// the operation reported a failure if its captured output contains the _ERROR_
+// control record. The log is RS(\x1e)-delimited and _DONE_/_ERROR_ are discrete
+// records (see publish.php), so match _ERROR_ as a whole record the same way the
+// live channel does (routeMessage) — a log line that merely contains the text
+// must not trip a false failure.
+function task_log_has_error($id) {
+  $log = task_log($id);
+  if (!is_file($log)) return false;
+  $fh = @fopen($log, 'rb');
+  if (!$fh) return false;
+  if (filesize($log) > 65536) fseek($fh, -65536, SEEK_END);
+  $tail = stream_get_contents($fh);
+  fclose($fh);
+  return in_array('_ERROR_', explode("\x1e", (string)$tail), true);
+}
+
+// Record a task's terminal state from its command's own exit (invoked by the
+// wrapper in task_launch via plugins/dynamix/include/task_complete). $rc is the
+// command's exit code; a task is an error when it exited non-zero or published
+// an _ERROR_ record. Marking is done under the per-type lock; the lock is then
+// released before advancing so the (also-locking) task_advance can't deadlock on
+// the same handle. An already-finalized task (e.g. aborted via TaskCommand.php,
+// or marked by the daemon first) is left untouched.
+function task_complete($id, $rc) {
+  $task = task_read($id);
+  if (!$task) return;
+  $type = $task['type'];
+  $lock = fopen(task_dir()."/.$type.lock", 'c');
+  if ($lock) flock($lock, LOCK_EX);
+  $task = task_read($id); // re-read under lock
+  $changed = false;
+  if ($task && $task['status']==='running') {
+    $task['status']   = ((int)$rc !== 0 || task_log_has_error($id)) ? 'error' : 'done';
+    $task['finished'] = time();
+    task_write($task);
+    $changed = true;
+  }
+  if ($lock) { flock($lock, LOCK_UN); fclose($lock); }
+  if ($changed) { task_advance($type); task_publish(); }
 }
 
 // (re)start the scheduling daemon if it isn't already running
