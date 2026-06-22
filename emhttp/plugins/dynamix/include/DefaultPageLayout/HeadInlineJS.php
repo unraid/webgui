@@ -248,14 +248,18 @@ function openAlert(cmd,title,func) {
 function openDone(data) {
   if (data == '_DONE_') {
     $('div.spinner.fixed').hide();
-    $('button.confirm').text("<?=_('Done')?>").prop('disabled',false).show();
+    // task finished: corner stays minimize (keeps the finished tile in the tray);
+    // the primary Dismiss button is what removes it
+    $('.sweet-alert .nchan-close').attr('title',"<?=_('Minimize - keeps it in the tray')?>");
+    $('.sweet-alert').attr('data-has-confirm-button','true');   // un-hide the footer (CSS keys off this)
+    $('button.confirm').text("<?=_('Dismiss')?>").prop('disabled',false).show();
     if (typeof ca_done_override !== 'undefined') {
       if (ca_done_override == true) {
         $("button.confirm").trigger("click");
         ca_done_override = false;
       }
     }
-    $('#pluginProgressTitle').text("<?=_('Finished');?>");
+    $('#pluginProgressTitle').attr('class','nchan-state nchan-done').html("<i class='fa fa-check fa-fw'></i> <?=_('Finished')?>");
     return true;
   }
   return false;
@@ -264,8 +268,10 @@ function openDone(data) {
 function openError(data) {
   if (data == '_ERROR_') {
     $('div.spinner.fixed').hide();
-    $('button.confirm').text("<?=_('Error')?>").prop('disabled',false).show();
-    $('#pluginProgressTitle').text("<?=_('Error');?>");
+    $('.sweet-alert .nchan-close').attr('title',"<?=_('Minimize - keeps it in the tray')?>");
+    $('.sweet-alert').attr('data-has-confirm-button','true');   // un-hide the footer (CSS keys off this)
+    $('button.confirm').text("<?=_('Dismiss')?>").prop('disabled',false).show();
+    $('#pluginProgressTitle').attr('class','nchan-state nchan-error').html("<i class='fa fa-warning fa-fw'></i> <?=_('Error')?>");
     return true;
   }
   return false;
