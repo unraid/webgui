@@ -117,14 +117,13 @@ function base_net($route) {
 
 // Derive the IPv4 gateway rc.docker would use when none is configured:
 // the subnet's first usable host (e.g. 192.168.10.0/24 -> 192.168.10.1).
-// Mirrors derive_gateway() in etc/rc.d/rc.docker. Returns '' if not derivable.
+// Calls the same scripts/derive_gateway helper rc.docker uses, so the logic
+// is not duplicated. Returns '' if not derivable.
 function derive_gw($route) {
-  $cidr = explode(' ',trim((string)$route))[0];
-  [$ip,$mask] = my_explode('/',$cidr);
-  if (!filter_var($ip,FILTER_VALIDATE_IP,FILTER_FLAG_IPV4)) return '';
-  if (!ctype_digit((string)$mask) || $mask<1 || $mask>30) return '';
-  $net = (ip2long($ip) >> (32-$mask)) << (32-$mask);
-  return long2ip(($net+1) & 0xFFFFFFFF);
+  global $docroot;
+  $route = trim((string)$route);
+  if ($route === '') return '';
+  return exec($docroot."/plugins/dynamix.docker.manager/scripts/derive_gateway ".escapeshellarg($route));
 }
 
 $bgcolor = $themeHelper->isLightTheme() ? '#f2f2f2' : '#1c1c1c'; // $themeHelper set in DefaultPageLayout.php

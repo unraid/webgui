@@ -255,24 +255,6 @@ configured_gateway(){
   )
 }
 
-# Derive an IPv4 gateway from a subnet: the first usable host address.
-# Restores the pre-Docker-28 behavior where macvlan/ipvlan networks created
-# without an explicit gateway implicitly used the subnet's first address, so
-# VLAN auto-networks with no route/configured gateway still get a default route.
-# $1 = subnet in CIDR form (e.g. 192.168.10.0/24); prints e.g. 192.168.10.1
-derive_gateway(){
-  local CIDR=$1 IP MASK A B C D IPNUM MASKNUM NET HOST
-  IP=${CIDR%/*}; MASK=${CIDR#*/}
-  [[ $IP == *.*.*.* && $MASK =~ ^[0-9]+$ ]] || return
-  (( MASK >= 1 && MASK <= 30 )) || return
-  IFS=. read -r A B C D <<< "$IP"
-  IPNUM=$(( (A<<24) + (B<<16) + (C<<8) + D ))
-  MASKNUM=$(( (0xFFFFFFFF << (32-MASK)) & 0xFFFFFFFF ))
-  NET=$(( IPNUM & MASKNUM ))
-  HOST=$(( NET + 1 ))
-  printf '%d.%d.%d.%d\n' $(( (HOST>>24)&255 )) $(( (HOST>>16)&255 )) $(( (HOST>>8)&255 )) $(( HOST&255 ))
-}
-
 # Is container running?
 container_running(){
   local CONTAINER
@@ -535,7 +517,7 @@ docker_network_start(){
         GATEWAY=$(ip -4 route show to default dev $NETWORK | awk '{print $3;exit}')
         [[ -n $GATEWAY ]] || GATEWAY=$(configured_gateway "$NETWORK" GATEWAY)
         [[ -n $GATEWAY ]] || { DEVICE=${NETWORK/./_}; DEVICE=${DEVICE^^}; DGW=DOCKER_GATEWAY_$DEVICE; GATEWAY=${!DGW}; }
-        [[ -n $GATEWAY ]] || GATEWAY=$(derive_gateway "${SUBNET%% *}")
+        [[ -n $GATEWAY ]] || GATEWAY=$(/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/derive_gateway "$SUBNET")
         SERVER=${IPV4%/*}
         DHCP=${NETWORK/./_}
         DHCP=DOCKER_DHCP_${DHCP^^}
