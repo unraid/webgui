@@ -19,6 +19,7 @@ $stamps   = '/var/tmp/stamps.ini';
 $resync   = '/var/tmp/resync.ini';
 $md5_old  = $spot_old = $fs_old = $proc_old = $mover_old = -1;
 $remove_resync_files = 0;
+$timer = 3;
 
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/publish.php";
@@ -73,6 +74,19 @@ function mover_percent($value) {
 }
 function mover_html($value) {
   return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+function mover_duration($seconds) {
+  $seconds = (int)$seconds;
+  if ($seconds <= 0) return _('Unknown');
+  $hours = floor($seconds / 3600);
+  $mins = floor(($seconds % 3600) / 60);
+  $secs = $seconds % 60;
+  return ($hours ? $hours.':' : '').sprintf($hours ? '%02d:%02d' : '%d:%02d', $mins, $secs);
+}
+function mover_bar($percent, $text='') {
+  $percent = mover_percent($percent);
+  $text = $text ?: $percent.'%';
+  return "<div class='usage-disk' style='width:50%'><span style='width:$percent%' class='greenbar'></span><span>$text</span></div>";
 }
 
 while (true) {
@@ -161,54 +175,43 @@ while (true) {
     if ( file_exists("$varroot/mover.ini")) {
       $moverstat = @parse_ini_file("$varroot/mover.ini") ?: [];
       $mover = $moverstat;
-      $totalToArray = _var($moverstat, 'TotalToArray', 0);
-      $remainToArray = _var($moverstat, 'RemainToArray', 0);
-      $totalFromArray = _var($moverstat, 'TotalFromArray', 0);
-      $remainFromArray = _var($moverstat, 'RemainFromArray', 0);
+      $totalSize = _var($moverstat, 'TotalSize', _var($moverstat, 'TotalToArray', 0) + _var($moverstat, 'TotalFromArray', 0));
+      $remainSize = _var($moverstat, 'RemainSize', _var($moverstat, 'RemainToArray', 0) + _var($moverstat, 'RemainFromArray', 0));
       $perc = mover_percent(_var($moverstat, 'Filepercent', 0));
-      $value1 =  "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>$perc%</span></div>";
-      if ($totalToArray > 0) {
-        $toperc = ($totalToArray - $remainToArray) / $totalToArray * 100;
-        if ($remainToArray > 0) {
-          $perc = mover_percent($toperc);
-          $value2 = "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>"._("Percentage Complete ").$perc."%</span></div>";
-        } else {
-          $value2 = _("Transfer complete");
-        }
+      $throughput = _var($moverstat, 'Throughput', 0);
+      $eta = mover_duration(_var($moverstat, 'ETA', 0));
+      $rate = $throughput > 0 ? my_scale($throughput, $unit, 1)." $unit/sec" : _('Unknown');
+      $value1 = mover_bar($perc);
+      if ($totalSize > 0) {
+        $totalPerc = mover_percent(($totalSize - $remainSize) / $totalSize * 100);
+        $value2 = $remainSize > 0
+          ? mover_bar($totalPerc)
+          : _("Transfer complete");
       } else {
-        $value2 = _("Nothing to transfer");
+        $value2 = _("Nothing to move");
       }
-      if ($totalFromArray > 0) {
-        $fromperc = ($totalFromArray - $remainFromArray) / $totalFromArray * 100;
-        if ($remainFromArray > 0) {
-          $perc = mover_percent($fromperc);
-          $value3 = "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>"._("Percentage Complete ").$perc."%</span></div>";
-        } else {
-          $value3 = _("Transfer complete");
-        }
-      } else {
-        $value3 = _("Nothing to transfer");
-      }
+      $value3 = _("ETA").": $eta &bullet; "._("Speed").": $rate";
       $moverdata = [
         'Showlines' => (int)_var($moverstat, 'Showlines', 0),
         'Selectlines' => _var($moverstat, 'Selectlines', ''),
-        'movertitle0' => mover_html(_(_var($moverstat, 'movertitle1'))),
-        'movertitle1' => mover_html(_(_var($moverstat, 'movertitle2'))),
-        'movertitle2' => mover_html(_(_var($moverstat, 'movertitle3'))),
-        'movertitle3' => mover_html(_(_var($moverstat, 'movertitle4'))),
-        'movertitle4' => mover_html(_(_var($moverstat, 'movertitle5'))),
+        'movertitle0' => mover_html(_(_var($moverstat, 'movertitle1', 'File being processed:'))),
+        'movertitle1' => mover_html(_(_var($moverstat, 'movertitle2', 'Action:'))),
+        'movertitle2' => mover_html(_(_var($moverstat, 'movertitle3', 'Progress:'))),
+        'movertitle3' => mover_html(_(_var($moverstat, 'movertitle4', 'Overall Progress:'))),
+        'movertitle4' => mover_html(_(_var($moverstat, 'movertitle5', 'Estimated Completion:'))),
         'moverline0' => mover_html(_var($moverstat, 'File')),
         'moverline1' => mover_html(_var($moverstat, 'Action')),
         'moverline2' => $value1,
         'moverline3' => $value2,
         'moverline4' => $value3,
       ];
+      $timer = 1;
     } else {
-      $moverdata['Showlines'] = 0; $mover = -1 ;
+      $moverdata['Showlines'] = 0; $mover = -1 ; $timer = 3 ;
     }
   } else {
     $moverdata = [];
-    $moverdata['Showlines'] = 0; $mover = -1 ;
+    $moverdata['Showlines'] = 0; $mover = -1 ; $timer = 3 ;
   }
 
   // publish but don't republish duplicate messages
@@ -221,6 +224,6 @@ while (true) {
 	// ping the page so we can terminate if nobody is listening
 	ping("mainPingListener");
 
-	sleep(3);
+	sleep($timer);
 }
 ?>
