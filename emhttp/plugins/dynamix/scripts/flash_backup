@@ -14,14 +14,17 @@
 <?
 /* Create a backup zip of the boot device (USB flash).
  *
- * Usage: flash_backup [compression-level]
+ * Usage: flash_backup [compression-level] [nchan]
  *   compression-level  0 (store, fastest) .. 9 (smallest, slowest), default 6
+ *   nchan              trailing marker added by StartCommand.php; ignored here
  *
- * Designed to run detached in the background (see Download.php cmd=backup).
- * Progress is streamed to the 'flash_backup' nchan channel so the GUI can show
- * live status and trigger the download when finished. The work runs under
- * nice/ionice and uses the streaming `zip` binary, so it stays gentle on CPU,
- * disk and RAM even on large flash drives.
+ * Launched as a tracked background job via StartCommand.php (same mechanism as
+ * plugin/docker operations), so it gets a PID, run de-duplication and abort for
+ * free. Progress is streamed to the 'flash_backup' nchan channel using the
+ * standard _DONE_/_ERROR_ sentinels; a _FILE_<name> message tells the GUI which
+ * archive to download. The work runs under nice/ionice and uses the streaming
+ * `zip` binary, so it stays gentle on CPU, disk and RAM even on large flash
+ * drives.
  */
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Wrappers.php";
@@ -66,8 +69,8 @@ if (!$zip) {
 }
 
 if (!$zip) {
-  write("_ERROR_"._('Insufficient free disk space available'));
-  write('_DONE_');
+  write(_('Insufficient free disk space available'));
+  write('_ERROR_');
   exit(1);
 }
 
@@ -94,8 +97,8 @@ foreach ($items as $i => $entry) {
 
 if (!$ok || !is_file($zip)) {
   @unlink($zip);
-  write("_ERROR_"._('Backup failed'));
-  write('_DONE_');
+  write(_('Backup failed'));
+  write('_ERROR_');
   exit(1);
 }
 
