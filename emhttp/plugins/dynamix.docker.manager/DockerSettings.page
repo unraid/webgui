@@ -115,6 +115,18 @@ function base_net($route) {
   return substr(explode('/',$route)[0],0,-2);
 }
 
+// Derive the IPv4 gateway rc.docker would use when none is configured:
+// the subnet's first usable host (e.g. 192.168.10.0/24 -> 192.168.10.1).
+// Mirrors derive_gateway() in etc/rc.d/rc.docker. Returns '' if not derivable.
+function derive_gw($route) {
+  $cidr = explode(' ',trim((string)$route))[0];
+  [$ip,$mask] = my_explode('/',$cidr);
+  if (!filter_var($ip,FILTER_VALIDATE_IP,FILTER_FLAG_IPV4)) return '';
+  if (!ctype_digit((string)$mask) || $mask<1 || $mask>30) return '';
+  $net = (ip2long($ip) >> (32-$mask)) << (32-$mask);
+  return long2ip(($net+1) & 0xFFFFFFFF);
+}
+
 $bgcolor = $themeHelper->isLightTheme() ? '#f2f2f2' : '#1c1c1c'; // $themeHelper set in DefaultPageLayout.php
 
 //Check if docker.cfg does exist
@@ -372,7 +384,7 @@ _(IPv4 custom network on interface)_ <?=$network?> (_(optional)_):
       </span>
       <span class="<?=$gw4class?> flex flex-row items-center gap-2">
         <strong><?=_('Gateway')?>:</strong>
-        <input type="text" id="<?=$docker_dhcp?>_gw" name="<?=$docker_gw?>" class="ip4" value="<?=htmlspecialchars(_var($dockercfg,$docker_gw))?>" placeholder="<?=htmlspecialchars($gateway[$network] ?: '')?>" title="_(IPv4 address A.B.C.D)_"<?=$autoDisabled?>>
+        <input type="text" id="<?=$docker_dhcp?>_gw" name="<?=$docker_gw?>" class="ip4" value="<?=htmlspecialchars(_var($dockercfg,$docker_gw))?>" placeholder="<?=htmlspecialchars($gateway[$network] ?: derive_gw($route))?>" title="_(IPv4 address A.B.C.D)_"<?=$autoDisabled?>>
       </span>
       <span class="flex flex-row items-center gap-2">
         <span class="flex flex-row items-center gap-2">
@@ -597,7 +609,7 @@ $docker_dhcp = "DOCKER_DHCP_$net";
 _(IPv4 custom network on interface)_ <?=$network?>:
 : <span class="flex flex-row flex-wrap items-center gap-4">
     <span class="<?=$gw4class?>">**_(Subnet)_:** <?=str_replace(' ', '<br><b>'._('Subnet').': </b>', $route)?></span>
-    <span class="<?=$gw4class?>">**_(Gateway)_:** <?=$gateway[$network] ?: '---'?></span>
+    <span class="<?=$gw4class?>">**_(Gateway)_:** <?=$gateway[$network] ?: (_var($dockercfg,"DOCKER_GATEWAY_$net") ?: (derive_gw($route) ?: '---'))?></span>
     <span>**_(DHCP pool)_:** <?=_var($dockercfg,$docker_dhcp) ?: "_(not set)_"?><?if (isset($dockercfg[$docker_dhcp])):?>&nbsp;&nbsp;(<?=pow(2,32-my_explode('/',$dockercfg[$docker_dhcp])[1])?> _(hosts)_)<?endif;?></span>
   </span>
 
