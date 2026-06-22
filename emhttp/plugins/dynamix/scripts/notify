@@ -148,6 +148,11 @@ extract(parse_plugin_cfg("dynamix",true));
 $path    = _var($notify,'path','/tmp/notifications');
 $unread  = "$path/unread";
 $archive = "$path/archive";
+// Persistent (condition-style) notifications live in their own directory so they
+// can be retrieved cheaply without scanning the whole unread set, and so bulk
+// archive/delete never touch them. 'notify get' unions this with unread so the
+// legacy nchan poller still surfaces them.
+$active  = "$path/active";
 $agents_dir = "/boot/config/plugins/dynamix/notifications/agents";
 if (is_dir($agents_dir)) {
   $agents = [];
@@ -160,13 +165,14 @@ if (is_dir($agents_dir)) {
 
 switch ($argv[1][0]=='-' ? 'add' : $argv[1]) {
 case 'init':
-  $files = glob("$unread/*.notify", GLOB_NOSORT);
+  $files = array_merge(glob("$unread/*.notify", GLOB_NOSORT) ?: [], glob("$active/*.notify", GLOB_NOSORT) ?: []);
   foreach ($files as $file) if (!is_readable($file)) chmod($file,0666);
   break;
 
 case 'smtp-init':
   @mkdir($unread,0755,true);
   @mkdir($archive,0755,true);
+  @mkdir($active,0755,true);
   $conf   = [];
   $conf[] = "# Generated settings:";
   $conf[] = "Root={$ssmtp['root']}";
@@ -189,6 +195,7 @@ case 'smtp-init':
 case 'cron-init':
   @mkdir($unread,0755,true);
   @mkdir($archive,0755,true);
+  @mkdir($active,0755,true);
   $text = empty($notify['status']) ? "" : "# Generated array status check schedule:\n{$notify['status']} $docroot/plugins/dynamix/scripts/statuscheck &> /dev/null\n\n";
   parse_cron_cfg("dynamix", "status-check", $text);
   $text = empty($notify['unraidos']) ? "" : "# Generated Unraid OS update check schedule:\n{$notify['unraidos']} $docroot/plugins/dynamix.plugin.manager/scripts/unraidcheck &> /dev/null\n\n";
@@ -269,14 +276,20 @@ case 'add':
   // Condition-style notifications use a stable key for the filename so raising the
   // same condition again overwrites it (idempotent) instead of stacking duplicates.
   $idBase = $key !== '' ? $key : "{$event}-{$ticket}";
-  $unread = "{$unread}/".safe_filename("{$idBase}.notify");
-  $archive = "{$archive}/".safe_filename("{$idBase}.notify");
+  $fileName = safe_filename("{$idBase}.notify");
+  // Persistent notifications live in 'active'; transient ones in 'unread'.
+  $targetDir = $persistent ? $active : $unread;
+  $unreadFile = "{$targetDir}/{$fileName}";
+  $archiveFile = "{$archive}/{$fileName}";
   // Legacy dedup: don't recreate a notification the user already archived.
   // Keyed (condition-style) notifications are exempt: re-raising a condition should
   // re-pin it, so clear any stale archived copy and proceed instead of bailing.
-  if (file_exists($archive)) {
-    if ($key !== '') @unlink($archive); else break;
+  if (file_exists($archiveFile)) {
+    if ($key !== '') @unlink($archiveFile); else break;
   }
+  // Clear any stale copy in the other store (e.g. a persistent notification that was
+  // previously written to unread before being relocated to active, or vice versa).
+  @unlink((($persistent ? $unread : $active))."/{$fileName}");
   $entity = $overrule===false ? $notify[$importance] : $overrule;
   $cleanSubject = clean_subject($subject);
   $archiveData = [
@@ -289,7 +302,7 @@ case 'add':
   if ($message) $archiveData['message'] = str_replace('\n','<br>',$message);
   // Persistent (condition-style) notifications are never archived - they clear when
   // their condition resolves - so skip writing the archive copy for them.
-  if (!$mailtest && !$persistent) file_put_contents($archive, build_ini_string($archiveData));
+  if (!$mailtest && !$persistent) file_put_contents($archiveFile, build_ini_string($archiveData));
   if (($entity & 1)==1 && !$mailtest && !$noBrowser) {
     $unreadData = [
       'timestamp' => $timestamp,
@@ -301,10 +314,11 @@ case 'add':
     ];
     if ($key !== '') $unreadData['key'] = $key;
     if ($persistent) $unreadData['persistent'] = 'true';
-    // Generation stamp for JS-sourced banner notifications: lets 'banner-sweep'
-    // reconcile (clear) banners that were not re-raised on the latest page load.
+    // Generation stamp for JS-sourced banner notifications: lets reconciliation
+    // clear banners that were not re-raised on the latest page load.
     if ($gen !== '') $unreadData['gen'] = $gen;
-    file_put_contents($unread, build_ini_string($unreadData));
+    @mkdir($targetDir, 0755, true);
+    file_put_contents($unreadFile, build_ini_string($unreadData));
   }
   if (($entity & 2)==2 || $mailtest) generate_email($event, $cleanSubject, str_replace('<br>','. ',$description), $importance, $message, $recipients, $fqdnlink);
   if (($entity & 4)==4 && !$mailtest) { if (is_array($agents)) {foreach ($agents as $agent) {exec("TIMESTAMP='$timestamp' EVENT=".escapeshellarg($event)." SUBJECT=".escapeshellarg($cleanSubject)." DESCRIPTION=".escapeshellarg($description)." IMPORTANCE=".escapeshellarg($importance)." CONTENT=".escapeshellarg($message)." LINK=".escapeshellarg($fqdnlink)." bash ".$agent);};}};
@@ -313,7 +327,9 @@ case 'add':
 case 'get':
   $output = [];
   $json = [];
-  $files = glob("$unread/*.notify", GLOB_NOSORT);
+  // Union persistent ('active') with transient ('unread') so the legacy nchan
+  // poller and any 'notify get' consumer still see condition-style notifications.
+  $files = array_merge(glob("$unread/*.notify", GLOB_NOSORT) ?: [], glob("$active/*.notify", GLOB_NOSORT) ?: []);
   usort($files, function($a,$b){return filemtime($a)-filemtime($b);});
   $i = 0;
   foreach ($files as $file) {
@@ -352,7 +368,9 @@ case 'clear':
   }
   if ($key === '') exit(usage());
   $name = safe_filename("{$key}.notify");
-  foreach ([$unread, $archive] as $dir) {
+  // Sweep all stores: persistent ('active') is the usual home, but also clear any
+  // stale unread/archive twin left from before the active/ split or a prior raise.
+  foreach ([$active, $unread, $archive] as $dir) {
     $target = "$dir/$name";
     if (strpos(realpath($target) ?: '', $dir.'/')===0) @unlink($target);
   }
