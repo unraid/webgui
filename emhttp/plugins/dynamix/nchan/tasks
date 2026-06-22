@@ -15,10 +15,13 @@
 /**
  * Task scheduler daemon (see TaskQueue.php).
  *
- * Watches running tasks for completion (process exit), marks them done/error,
- * auto-starts the next queued task of that type, and broadcasts the updated
- * list. Exits once nothing is running or queued; it is (re)started on demand by
- * task_create() and by the page-load nchan sweep in DefaultPageLayout.php.
+ * Primary completion is recorded by each task itself on exit (task_complete,
+ * wired up in task_launch). This daemon is the fallback + queue driver: it
+ * catches tasks whose process vanished without stamping a result (e.g. a hard
+ * kill), marks them done/error, auto-starts the next queued task of that type,
+ * and broadcasts the updated list. Exits once nothing is running or queued; it
+ * is (re)started on demand by task_create() and by the page-load nchan sweep in
+ * DefaultPageLayout.php.
  */
 
 $docroot = '/usr/local/emhttp';
@@ -30,21 +33,7 @@ function task_pid_alive($pid) {
   return ctype_digit((string)$pid) && file_exists("/proc/$pid");
 }
 
-// the operation reported a failure if its captured output contains the _ERROR_
-// control record. The log is RS(\x1e)-delimited and _DONE_/_ERROR_ are discrete
-// records (see publish.php), so match _ERROR_ as a whole record the same way the
-// live channel does (routeMessage) — a log line that merely contains the text
-// must not trip a false failure.
-function task_log_has_error($id) {
-  $log = task_log($id);
-  if (!is_file($log)) return false;
-  $fh = @fopen($log, 'rb');
-  if (!$fh) return false;
-  if (filesize($log) > 65536) fseek($fh, -65536, SEEK_END);
-  $tail = stream_get_contents($fh);
-  fclose($fh);
-  return in_array('_ERROR_', explode("\x1e", (string)$tail), true);
-}
+// task_log_has_error() is shared with task_complete and lives in TaskQueue.php.
 
 // tidy up stale finished tasks, then publish the current state for any client
 task_prune();
