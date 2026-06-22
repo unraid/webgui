@@ -37,31 +37,11 @@
 PIDFILE="/var/run/mover.pid"
 CFGPATH="/boot/config/shares"
 DEBUGGING=""
-CFGFILE="/boot/config/share.cfg"
-LOGLEVEL=0
-MOVERSTATUS="/usr/local/emhttp/state/mover.ini"
 
 move() {
   find "$1" -depth 2>/dev/null | /usr/libexec/unraid/move $DEBUGGING
   # second pass to clean up leftover empty directories
   find "$1" -depth -type d 2>/dev/null | /usr/libexec/unraid/move $DEBUGGING
-}
-
-writestatus() {
-  echo "TotalToArray=${TOTALTO}"  > $MOVERSTATUS
-  echo "RemainToArray=${TO}" >> $MOVERSTATUS
-  echo "TotalFromArray=${TOTALFROM}"   >> $MOVERSTATUS
-  echo "RemainFromArray=${FROM}"  >> $MOVERSTATUS
-  echo "File="  >> $MOVERSTATUS
-  echo "Action=Moving share ${SHARE}"  >> $MOVERSTATUS
-  echo "Filepercent="  >> $MOVERSTATUS
-  echo "Showlines=5" >> $MOVERSTATUS
-  echo "Selectlines=2,3,4,5" >> $MOVERSTATUS
-  echo "movertitle1=File being processed:" >> $MOVERSTATUS
-  echo "movertitle2=Action:" >> $MOVERSTATUS
-  echo "movertitle3=Progress:" >> $MOVERSTATUS
-  echo "movertitle4=Transfering To Array:" >> $MOVERSTATUS
-  echo "movertitle5=Transfering From Array:" >> $MOVERSTATUS
 }
 
 start() {
@@ -72,17 +52,8 @@ start() {
     fi
   fi
 
-
-  TOTALFROM=0
-  TOTALTO=0
-  writestatus
-  sleep 5
   echo $$ >/var/run/mover.pid
   echo "mover: started" >&2
-  
-  TOSHARES=0
-  FROMSHARES=0
-  DUARGSI=""
 
   shopt -s nullglob
 
@@ -131,7 +102,6 @@ start() {
     # we can only empty share directories
     for SHAREPATH in /mnt/$DISK/* ; do
       SHARE=$(basename "$SHAREPATH")
-      writestatus
       if [[ -d "$SHAREPATH" && -f "$CFGPATH/$SHARE.cfg" ]]; then
         move "$SHAREPATH"
       fi
@@ -144,13 +114,11 @@ start() {
       find /mnt/$DISK -mindepth 1 -depth -printf 'move: %p Not moved\n' | head -n 100
       if [ "$count" -gt 100 ]; then
         echo "[output truncated to first 100 entries]"
-        writestatus
       fi
     fi
   done
-  sleep 5
+
   rm -f $PIDFILE
-  rm -f $MOVERSTATUS
   echo "mover: finished" >&2
 }
 

@@ -68,6 +68,12 @@ function create_sync($file) {
 function create_file($file,...$data) {
   if (!file_exists($file)) file_put_contents($file,implode(',',$data));
 }
+function mover_percent($value) {
+  return max(0, min(100, is_numeric($value) ? round($value, 2) : 0));
+}
+function mover_html($value) {
+  return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
 
 while (true) {
 	$var = (array)@parse_ini_file("$varroot/var.ini");
@@ -153,56 +159,64 @@ while (true) {
   if ($process == 2) {
     $moverdata = [];
     if ( file_exists("$varroot/mover.ini")) {
-      $moverstat = parse_ini_file("$varroot/mover.ini");
+      $moverstat = @parse_ini_file("$varroot/mover.ini") ?: [];
       $mover = $moverstat;
-      $perc = $moverstat["Filepercent"];
+      $totalToArray = _var($moverstat, 'TotalToArray', 0);
+      $remainToArray = _var($moverstat, 'RemainToArray', 0);
+      $totalFromArray = _var($moverstat, 'TotalFromArray', 0);
+      $remainFromArray = _var($moverstat, 'RemainFromArray', 0);
+      $perc = mover_percent(_var($moverstat, 'Filepercent', 0));
       $value1 =  "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>$perc%</span></div>";
-      if ($moverstat["TotalToArray"]>0) { 
-        $toperc = ($moverstat["TotalToArray"]-$moverstat["RemainToArray"])/$moverstat["TotalToArray"] * 100; 
-        if ($moverstat["RemainToArray"]>0) { 
-          $perc= round($toperc,2) ;
-          $value2 = "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>"._("Percentage Complete ").$perc."%</span></div>"; 
-        } else {$value2 = _("Transfer complete") ;}
-        } else { 
-          $value2 = _("Nothing to transfer") ;}
-      if ($moverstat["TotalFromArray"]>0) { 
-        $fromperc = ($moverstat["TotalFromArray"] - $moverstat["RemainFromArray"])/$moverstat["TotalFromArray"] * 100; 
-        if ($moverstat["RemainFromArray"]>0) { 
-          $perc= round($fromperc,2) ;
-          $value3 = "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>"._("Percentage Complete ").$perc."%</span></div>"; 
-        } else {$value3 = _("Transfer complete") ;}
-        } else { 
-        $value3 = _("Nothing to transfer") ;}  
-        $moverdata = [];
-        $moverdata[] = "Showlines#{$moverstat['Showlines']}";
-        $moverdata[] = "Selectlines#{$moverstat['Selectlines']}";
-        $moverdata[] = "movertitle0#"._($moverstat['movertitle1']);
-        $moverdata[] = "movertitle1#"._($moverstat['movertitle2']);
-        $moverdata[] = "movertitle2#"._($moverstat['movertitle3']);
-        $moverdata[] = "movertitle3#"._($moverstat['movertitle4']);
-        $moverdata[] = "movertitle4#"._($moverstat['movertitle5']);    
-        $moverdata[] = "moverline0#{$moverstat['File']}";
-        $moverdata[] = "moverline1#{$moverstat['Action']}";
-        $moverdata[] = "moverline2#$value1";
-        $moverdata[] = "moverline3#$value2";
-        $moverdata[] = "moverline4#$value3";
-    } else {
-      $moverdata[] = "Showlines#0"; $mover = -1 ;
+      if ($totalToArray > 0) {
+        $toperc = ($totalToArray - $remainToArray) / $totalToArray * 100;
+        if ($remainToArray > 0) {
+          $perc = mover_percent($toperc);
+          $value2 = "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>"._("Percentage Complete ").$perc."%</span></div>";
+        } else {
+          $value2 = _("Transfer complete");
+        }
+      } else {
+        $value2 = _("Nothing to transfer");
       }
+      if ($totalFromArray > 0) {
+        $fromperc = ($totalFromArray - $remainFromArray) / $totalFromArray * 100;
+        if ($remainFromArray > 0) {
+          $perc = mover_percent($fromperc);
+          $value3 = "<div class='usage-disk' style='width:50%'><span style='width:$perc%' class='greenbar'></span><span>"._("Percentage Complete ").$perc."%</span></div>";
+        } else {
+          $value3 = _("Transfer complete");
+        }
+      } else {
+        $value3 = _("Nothing to transfer");
+      }
+      $moverdata = [
+        'Showlines' => (int)_var($moverstat, 'Showlines', 0),
+        'Selectlines' => _var($moverstat, 'Selectlines', ''),
+        'movertitle0' => mover_html(_(_var($moverstat, 'movertitle1'))),
+        'movertitle1' => mover_html(_(_var($moverstat, 'movertitle2'))),
+        'movertitle2' => mover_html(_(_var($moverstat, 'movertitle3'))),
+        'movertitle3' => mover_html(_(_var($moverstat, 'movertitle4'))),
+        'movertitle4' => mover_html(_(_var($moverstat, 'movertitle5'))),
+        'moverline0' => mover_html(_var($moverstat, 'File')),
+        'moverline1' => mover_html(_var($moverstat, 'Action')),
+        'moverline2' => $value1,
+        'moverline3' => $value2,
+        'moverline4' => $value3,
+      ];
+    } else {
+      $moverdata['Showlines'] = 0; $mover = -1 ;
+    }
   } else {
     $moverdata = [];
-    $moverdata[] = "Showlines#0"; $mover = -1 ;
+    $moverdata['Showlines'] = 0; $mover = -1 ;
   }
 
   // publish but don't republish duplicate messages
   publish_noDupe('parity', json_encode($echo));
 	publish_noDupe('paritymonitor', $spot > 0 ? 1 : 0);
-	publish_noDupe('fsState', $fsState);
+  publish_noDupe('fsState', $fsState);
 	publish_noDupe('mymonitor', $process);
-  if ($mover !== $mover_old){
-    publish_noDupe('mover', implode(';',$moverdata));
-    $mover_old = $mover;
-  }
+  publish_noDupe('mover', json_encode($moverdata));
 
 	// ping the page so we can terminate if nobody is listening
 	ping("mainPingListener");

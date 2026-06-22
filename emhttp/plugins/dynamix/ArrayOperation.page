@@ -498,12 +498,21 @@ var moverStatus = new NchanSubscriber('/sub/mover',{subscriber:'websocket'});
 moverStatus.on('message', function(moverdata) {
   var moverlines = 0;
   var selectlines = [] ;
-  $.each(moverdata.split(';'),function(k,v) {
-  var keydata = v.split('#');
-      if(keydata[0]=="Showlines") {moverlines=keydata[1];}
-      if(keydata[0]=="Selectlines") {selectlines=keydata[1].split(',');}
-      $('#'+keydata[0]).html(keydata[1]);    
+  try {
+    moverdata = JSON.parse(moverdata);
+    $.each(moverdata,function(key,value) {
+      if(key=="Showlines") {moverlines=value;}
+      if(key=="Selectlines") {selectlines=String(value).split(',');}
+      $('#'+key).html(value);
     });
+  } catch(e) {
+    $.each(moverdata.split(';'),function(k,v) {
+    var keydata = v.split('#');
+        if(keydata[0]=="Showlines") {moverlines=keydata[1];}
+        if(keydata[0]=="Selectlines") {selectlines=keydata[1].split(',');}
+        $('#'+keydata[0]).html(keydata[1]);
+      });
+  }
 
     if(moverlines > maxmoverlines) moverlines = maxmoverlines;
     if(moverlines == 0) {
