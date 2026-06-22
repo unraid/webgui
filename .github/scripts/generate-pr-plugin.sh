@@ -114,10 +114,18 @@ if [ -f "$PLUGIN_DIR/text_files.txt" ]; then
             echo "⚠️  Warning: could not re-apply $(basename "$other")'s changes; reinstall it or reboot to restore them"
             logger -t webgui-pr "re-apply of $(basename "$other") patch failed during $(basename "$PLUGIN_DIR") rollback"
         fi
+        # Re-applying the patch recreates any new files at 0644; restore modes.
+        if [ -f "$other/modes.txt" ]; then
+            while read -r mode sys; do
+                [ -n "$mode" ] && [ -n "$sys" ] || continue
+                [ -e "/$sys" ] && chmod "$mode" "/$sys"
+            done < "$other/modes.txt"
+        fi
     done
 fi
 rm -f "$PATCH_APPLIED"
 rm -rf "$PLUGIN_DIR/orig"
+rm -f "$PLUGIN_DIR/modes.txt"
 : > "$PLUGIN_DIR/text_files.txt"
 
 # Restore any previously installed binary files
@@ -233,6 +241,19 @@ if [ -s "$PAYLOAD/binary_files.txt" ]; then
         cp -f "$SRC" "$SYS"
         echo "Installed binary: $SYS"
     done < "$PAYLOAD/binary_files.txt"
+fi
+
+# ---- Restore file modes ----------------------------------------------------
+# Unified diffs carry no permission bits, so patched/new text files land 0644
+# and lose any exec bit. Re-apply the modes recorded at build time. Persist
+# modes.txt so rolling back another PR plugin can restore them too.
+if [ -f "$PAYLOAD/modes.txt" ]; then
+    cp -f "$PAYLOAD/modes.txt" "$PLUGIN_DIR/modes.txt"
+    while read -r mode sys; do
+        [ -n "$mode" ] && [ -n "$sys" ] || continue
+        [ -e "/$sys" ] && chmod "$mode" "/$sys"
+    done < "$PAYLOAD/modes.txt"
+    echo "✅ File modes restored"
 fi
 
 echo ""
