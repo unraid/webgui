@@ -145,7 +145,12 @@ function checkPlugins() {
       active++;
       checkPlugin(queue[idx++]).always(function(){
         active--; done++;
-        $('#plugin_table').trigger('update');
+        // Refresh the sort cache in place (do NOT 'update', which re-applies
+        // sortList and re-sorts by Status). Each check changes a row's Status
+        // rank, so 'update' would make rows jump around as results land. Rows
+        // stay in their initial order; a later header click still sorts on the
+        // current data because the cache is kept fresh.
+        $('#plugin_table').trigger('updateCache');
         if (done == total) {
           if (pluginUpdates > 1) $('#updateall').show(); else $('#updateall').hide();
           $('#checkall').find('input').prop('disabled',false);
