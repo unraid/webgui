@@ -517,7 +517,7 @@ docker_network_start(){
         GATEWAY=$(ip -4 route show to default dev $NETWORK | awk '{print $3;exit}')
         [[ -n $GATEWAY ]] || GATEWAY=$(configured_gateway "$NETWORK" GATEWAY)
         [[ -n $GATEWAY ]] || { DEVICE=${NETWORK/./_}; DEVICE=${DEVICE^^}; DGW=DOCKER_GATEWAY_$DEVICE; GATEWAY=${!DGW}; }
-        [[ -n $GATEWAY ]] || GATEWAY=$(/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/derive_gateway "$SUBNET")
+        [[ -n $GATEWAY ]] || GATEWAY=$(bash /usr/local/emhttp/plugins/dynamix.docker.manager/scripts/derive_gateway "$SUBNET")
         SERVER=${IPV4%/*}
         DHCP=${NETWORK/./_}
         DHCP=DOCKER_DHCP_${DHCP^^}
