@@ -39,6 +39,7 @@ CFGPATH="/boot/config/shares"
 DEBUGGING=""
 MOVERSTATUS="/usr/local/emhttp/state/mover.ini"
 GLOBAL_SHARECFG="/boot/config/share.cfg"
+MOVER_PROGRESS="disabled"
 TOTAL=0
 REMAIN=0
 SHARE_TOTAL=0
@@ -48,9 +49,7 @@ CURRENT_SHARE_STARTED=0
 declare -A SHARE_TOTALS SHARE_REMAINS SHARE_START_TIME
 
 mover_progress_enabled() {
-  local progress
-  progress=$(grep '^shareMoverProgress=' "$GLOBAL_SHARECFG" 2>/dev/null | cut -d'"' -f2)
-  [[ ${progress:-disabled} == "enabled" ]]
+  [[ $MOVER_PROGRESS == "enabled" ]]
 }
 
 inivalue() {
@@ -181,21 +180,29 @@ move() {
   local path
   local size
   local action
+  local progress=0
 
-  prepare_share_progress
+  if mover_progress_enabled; then
+    progress=1
+    prepare_share_progress
+  fi
   while IFS= read -r path; do
-    size=$(file_size "$path")
-    action="Moving share ${SHARE}"
-    writestatus "$path" "$action" "$(percent_done "$SHARE_TOTAL" "$SHARE_REMAIN")"
+    if [[ $progress -eq 1 ]]; then
+      size=$(file_size "$path")
+      action="Moving share ${SHARE}"
+      writestatus "$path" "$action" "$(percent_done "$SHARE_TOTAL" "$SHARE_REMAIN")"
+    fi
     printf '%s\n' "$path" | /usr/libexec/unraid/move $DEBUGGING
-    if [[ $size -gt 0 && ! -e "$path" ]]; then
+    if [[ $progress -eq 1 && $size -gt 0 && ! -e "$path" ]]; then
       decrement_progress "$size"
     fi
   done < <(find "$1" -depth 2>/dev/null)
 
   # second pass to clean up leftover empty directories
   while IFS= read -r path; do
-    writestatus "$path" "Cleaning up share ${SHARE}" "$(percent_done "$SHARE_TOTAL" "$SHARE_REMAIN")"
+    if [[ $progress -eq 1 ]]; then
+      writestatus "$path" "Cleaning up share ${SHARE}" "$(percent_done "$SHARE_TOTAL" "$SHARE_REMAIN")"
+    fi
     printf '%s\n' "$path" | /usr/libexec/unraid/move $DEBUGGING
   done < <(find "$1" -depth -type d 2>/dev/null)
 }
@@ -247,14 +254,16 @@ calculate_totals() {
 
   emptying=$(grep '^shareUserEmptying=' /boot/config/share.cfg | cut -d'"' -f2)
   IFS=',' read -ra arr <<< "$emptying"
-  for disk in "${arr[@]}"; do
-    for sharepath in /mnt/$disk/* ; do
-      SHARE=$(basename "$sharepath")
-      if [[ -d "$sharepath" && -f "$CFGPATH/$SHARE.cfg" ]]; then
-        count_path "$sharepath"
-      fi
+  if [[ -n $emptying ]]; then
+    for disk in "${arr[@]}"; do
+      for sharepath in /mnt/$disk/* ; do
+        SHARE=$(basename "$sharepath")
+        if [[ -d "$sharepath" && -f "$CFGPATH/$SHARE.cfg" ]]; then
+          count_path "$sharepath"
+        fi
+      done
     done
-  done
+  fi
 }
 
 start() {
@@ -268,16 +277,20 @@ start() {
 
   echo $$ >/var/run/mover.pid
   echo "mover: started" >&2
+  MOVER_PROGRESS=$(grep '^shareMoverProgress=' "$GLOBAL_SHARECFG" 2>/dev/null | cut -d'"' -f2)
+  MOVER_PROGRESS=${MOVER_PROGRESS:-disabled}
   if ! mover_progress_enabled; then
     rm -f $MOVERSTATUS
   fi
 
   shopt -s nullglob
-  START_TIME=$(date +%s)
-  writestatus "" "Calculating mover totals" 0
-  calculate_totals
-  writestatus "" "Mover totals calculated" 0
-  sleep 3;
+  if mover_progress_enabled; then
+    START_TIME=$(date +%s)
+    writestatus "" "Calculating mover totals" 0
+    calculate_totals
+    writestatus "" "Mover totals calculated" 0
+    sleep 3
+  fi
 
   for SHARECFG in $CFGPATH/*.cfg ; do
     SHARE=$(basename "$SHARECFG" .cfg)
