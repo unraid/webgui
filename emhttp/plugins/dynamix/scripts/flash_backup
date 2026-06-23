@@ -62,27 +62,30 @@ $backup = "$server-v$osVersion-boot-backup-$mydate.zip";
 write(_('Preparing backup')."...");
 
 // Estimate required space (1.5x current flash usage) and pick a target, in
-// order: a cache/SSD pool first (fast, and writing straight to the pool mount
-// bypasses the slower /mnt/user FUSE layer), then the RAM-backed rootfs, then an
-// array-backed user share. This keeps it fast on typical systems while avoiding
-// holding a large archive in RAM unless nothing else fits.
+// order: the RAM-backed rootfs first, then a cache/SSD pool, then an array
+// share. The archive is a throwaway staging file - built here, downloaded by
+// the browser, then deleted - so RAM is the right home: it is always mounted
+// (works even with the array stopped) and fastest. We only spill to disk when
+// the flash is too large to stage in RAM with comfortable headroom. (Keeping
+// the *process* RAM-light is handled separately by streaming via the zip
+// binary rather than buffering the archive in memory.)
 $used = exec("df /boot|awk 'END{print $3}'") * 1.5;
 $zip = null;
-foreach ($pools as $pool) {
+// 1. RAM-backed rootfs (always available, fastest).
+$free = exec("df /|awk 'END{print $4}'");
+if ($free > $used) $zip = "/$backup";
+// 2. Too big for RAM: a cache/SSD pool, written straight to the pool mount to
+//    bypass the slower /mnt/user FUSE layer. Pools require the array started.
+if (!$zip) foreach ($pools as $pool) {
   if (!is_dir("/mnt/$pool")) continue;
   $free = exec("df ".escapeshellarg("/mnt/$pool")."|awk 'END{print $4}'");
   if ($free > $used) {$zip = "/mnt/$pool/$backup"; break;}
 }
-if (!$zip) {
-  $free = exec("df /|awk 'END{print $4}'");
-  if ($free > $used) $zip = "/$backup";
-}
-if (!$zip) {
-  foreach ($dir as $share) {
-    if (!is_dir("/mnt/user/$share")) continue;
-    $free = exec("df ".escapeshellarg("/mnt/user/$share")."|awk 'END{print $4}'");
-    if ($free > $used) {$zip = "/mnt/user/$share/$backup"; break;}
-  }
+// 3. Last resort: an array-backed user share.
+if (!$zip) foreach ($dir as $share) {
+  if (!is_dir("/mnt/user/$share")) continue;
+  $free = exec("df ".escapeshellarg("/mnt/user/$share")."|awk 'END{print $4}'");
+  if ($free > $used) {$zip = "/mnt/user/$share/$backup"; break;}
 }
 
 if (!$zip) {
