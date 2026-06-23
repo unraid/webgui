@@ -1,0 +1,110 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2023, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+/* Save a zip backup of the boot device to a persistent location on the server.
+ *
+ * Usage: flash_backup_save [compression-level]
+ *   compression-level  0 (store, fastest) .. 9 (smallest, slowest), default 6
+ *
+ * This is the "save to server" counterpart of the streaming download
+ * (include/FlashBackup.php). It is launched as a tracked background job via
+ * StartCommand.php and writes the archive to a real disk target - a cache/SSD
+ * pool, then an array share, then the boot device's own pool - and KEEPS it
+ * (no RAM target: a saved backup must survive a reboot). Progress is published
+ * as a percentage to the 'flash_backup' nchan channel; on completion it
+ * publishes _SAVED_<path> then _DONE_, or _ERROR_<message> on failure. The
+ * prior-release dirs (previous/prev) and desktop junk are excluded.
+ */
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/Wrappers.php";
+require_once "$docroot/webGui/include/publish.php";
+require_once "$docroot/webGui/include/Helpers.php"; // pools_filter()
+
+// CLI background job: the GUI translation layer is not loaded, so provide a
+// no-op _() fallback like other CLI scripts. Strings stay in English.
+if (!function_exists('_')) { function _($text) { return $text; } }
+
+$channel = 'flash_backup';
+function pub($message) { global $channel; publish($channel, $message, 1, false); }
+
+$var = (array)@parse_ini_file('/var/local/emhttp/var.ini');
+$disks = (array)@parse_ini_file('/var/local/emhttp/disks.ini', true);
+$pools = pools_filter($disks);
+$dir = ['system','appdata','isos','domains'];
+$out = ['prev','previous','System Volume Information','.Trash-0','.Trashes','.Spotlight-V100','.fseventsd','.TemporaryItems'];
+
+$level = isset($argv[1]) && is_numeric($argv[1]) ? max(0, min(9, (int)$argv[1])) : 6;
+
+$server = isset($var['NAME']) ? str_replace(' ','_',strtolower($var['NAME'])) : 'tower';
+$osVersion = _var($var,'version','_unknown');
+$backup = "$server-v$osVersion-boot-backup-".date('Ymd-Hi').".zip";
+
+// Required space (1.5x flash usage). Persistent disk target only, in order:
+// cache/SSD pool (written straight to the pool mount, bypassing the slower
+// /mnt/user FUSE layer) -> array share -> the boot device's own pool.
+$used = exec("df /boot|awk 'END{print $3}'") * 1.5;
+$zip = null;
+foreach ($pools as $pool) {
+  if (!is_dir("/mnt/$pool")) continue;
+  $free = exec("df ".escapeshellarg("/mnt/$pool")."|awk 'END{print $4}'");
+  if ($free > $used) {$zip = "/mnt/$pool/$backup"; break;}
+}
+if (!$zip) foreach ($dir as $share) {
+  if (!is_dir("/mnt/user/$share")) continue;
+  $free = exec("df ".escapeshellarg("/mnt/user/$share")."|awk 'END{print $4}'");
+  if ($free > $used) {$zip = "/mnt/user/$share/$backup"; break;}
+}
+if (!$zip) {
+  $bootfs = exec("findmnt -no FSTYPE /boot");
+  if (in_array($bootfs, ['zfs','btrfs','xfs'])) {
+    $free = exec("df /boot|awk 'END{print $4}'");
+    if ($free > $used) $zip = "/boot/$backup";
+  }
+}
+if (!$zip) {
+  pub('_ERROR_'._('No destination with enough free space (is the array started?)'));
+  exit(1);
+}
+
+// Collect top-level entries to archive, skipping prior-release/junk dirs and any
+// earlier flash-backup zip left on the flash.
+chdir('/boot');
+$items = [];
+foreach (glob('*',GLOB_NOSORT) as $entry) {
+  if (in_array($entry,$out)) continue;
+  if (preg_match('/-boot-backup-.*\.zip$/',$entry)) continue;
+  $items[] = $entry;
+}
+$total = count($items);
+
+// zip each entry into the archive at low CPU/IO priority, publishing a
+// percentage after each item completes.
+$prio = 'nice -n 19 ionice -c2 -n7';
+$ok = true;
+foreach ($items as $i => $entry) {
+  $flag = is_dir($entry) ? '-r' : '';
+  exec("$prio zip -$level -q $flag ".escapeshellarg($zip)." ".escapeshellarg($entry)." 2>/dev/null", $o, $rc);
+  if ($rc !== 0 && $rc !== 12) $ok = false; // rc 12 = "nothing to do"
+  pub((string)($total ? (int)round((($i+1)/$total)*100) : 100));
+}
+
+if (!$ok || !is_file($zip)) {
+  @unlink($zip);
+  pub('_ERROR_'._('Backup failed'));
+  exit(1);
+}
+
+pub('_SAVED_'.$zip);
+pub('_DONE_');
+?>

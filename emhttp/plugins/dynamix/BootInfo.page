@@ -16,13 +16,32 @@ Tag="usb"
 ?>
 <?$tpmEnabled = !empty($var['flashGUID']) && strpos($var['flashGUID'], '01-') !== 0 && !empty($var['tpmGUID']) ? true : false;?>
 <script>
-// The backup is streamed straight to the browser as it is built - no staging
-// file, no size limit, and it works with the array stopped. The download itself
-// has no known size (it is compressed on the fly), so the server reports
-// progress over the 'flash_backup' nchan channel and we show a real bar.
+// Two backup modes share one progress bar, fed by the 'flash_backup' nchan
+// channel:
+//  - Download: streamed straight to the browser as it is built (no staging file,
+//    no size limit, works with the array stopped). include/FlashBackup.php
+//    publishes a percentage as it streams.
+//  - Save to server: a tracked background job (scripts/flash_backup_save via
+//    StartCommand.php) writes the archive to a pool/array and keeps it, then
+//    reports the saved path. Useful when the download link is slow.
+var backupMode = 'download';
 var nchan_backup = new NchanSubscriber('/sub/flash_backup',{subscriber:'websocket'});
 nchan_backup.on('message', function(data) {
-  if (data == '_DONE_') {
+  if (data.startsWith('_SAVED_')) {        // save mode finished - show the path
+    setBackupProgress(100);
+    nchan_backup.stop();
+    $('#fbMsg').html("_(Saved to)_: <code>"+data.substring(7)+"</code>");
+    $('button.confirm').prop('disabled',false);
+    return;
+  }
+  if (data.startsWith('_ERROR_')) {
+    nchan_backup.stop();
+    $('#fbFrame').remove();
+    swal({title:"_(Creation error)_",text:data.substring(7),type:'error',html:true,confirmButtonText:"_(Ok)_"});
+    return;
+  }
+  if (data == '_DONE_') {                   // download mode finished
+    if (backupMode != 'download') return;   // save mode already handled by _SAVED_
     setBackupProgress(100);
     nchan_backup.stop();
     $('#fbFrame').remove();
@@ -39,14 +58,24 @@ function setBackupProgress(pct) {
 }
 
 function backup() {
+  backupMode = $('#backupMode').val();
   var level = $('#backupLevel').val();
+  var saving = backupMode == 'save';
   nchan_backup.start();
-  swal({title:"_(Boot device backup)_",text:"<div style='background:var(--border-color,#ccc);border-radius:3px;overflow:hidden;height:18px;margin:10px 0'><div id='fbBar' style='height:100%;width:0%;background:#ff8c2f;transition:width .3s'></div></div><div id='fbPct'>0%</div><div style='margin-top:8px'>_(Backing up the boot device)_...</div>",html:true,animation:'none',showConfirmButton:true,confirmButtonText:"_(Close)_"});
-  // Download via a hidden iframe (not window.location) so the page never starts
-  // to navigate: a top-level navigation fires 'beforeunload', which makes the
-  // NchanSubscriber stop itself - killing the progress updates.
-  $('#fbFrame').remove();
-  $('<iframe>',{id:'fbFrame',src:'/webGui/include/FlashBackup.php?level='+level}).hide().appendTo('body');
+  swal({title:"_(Boot device backup)_",text:"<div style='background:var(--border-color,#ccc);border-radius:3px;overflow:hidden;height:18px;margin:10px 0'><div id='fbBar' style='height:100%;width:0%;background:#ff8c2f;transition:width .3s'></div></div><div id='fbPct'>0%</div><div id='fbMsg' style='margin-top:8px'>"+(saving?"_(Saving boot device backup to the server)_...":"_(Backing up the boot device)_...")+"</div>",html:true,animation:'none',showConfirmButton:true,confirmButtonText:"_(Close)_"},function(){
+    nchan_backup.stop();
+    $('#fbFrame').remove();
+  });
+  if (saving) {
+    // Tracked background job; it writes the archive to disk and keeps it.
+    $.post('/webGui/include/StartCommand.php',{cmd:'flash_backup_save '+level,start:0});
+  } else {
+    // Download via a hidden iframe (not window.location): a top-level navigation
+    // fires 'beforeunload', which makes NchanSubscriber stop itself and kills the
+    // progress updates.
+    $('#fbFrame').remove();
+    $('<iframe>',{id:'fbFrame',src:'/webGui/include/FlashBackup.php?level='+level}).hide().appendTo('body');
+  }
 }
 </script>
 _(Active GUID)_:
@@ -83,6 +112,12 @@ _(TPM GUID)_:
 <?endif;?>
 
 :flash_backup_help:
+
+_(Backup mode)_:
+: <select id="backupMode">
+    <option value="download" selected>_(Download to your computer)_</option>
+    <option value="save">_(Save to the server)_</option>
+  </select>
 
 _(Compression level)_:
 : <select id="backupLevel">
