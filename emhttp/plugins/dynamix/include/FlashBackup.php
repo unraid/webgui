@@ -12,16 +12,22 @@
 ?>
 <?
 /* Stream a boot-device (flash) backup straight to the browser as it is built,
- * so nothing is ever staged on disk or in RAM. The heavy lifting is done by
- * webGui/scripts/flash_backup, which writes the zip to stdout; we just set the
- * download headers and pass it through.
+ * so nothing is ever staged on disk or in RAM. The zip is produced by
+ * webGui/scripts/flash_backup (writing to stdout); we pipe it to the client and,
+ * as bytes flow, publish a percentage to the 'flash_backup' nchan channel so the
+ * GUI can show a real progress bar. The percentage is bytes-sent over the total
+ * flash size reported by `flash_backup size` (the boot device is mostly already-
+ * compressed OS files, so output closely tracks input - the bar is accurate in
+ * practice and we cap it at 99% until the stream actually finishes).
  *
  * Query params:
- *   level     zip compression level 0..9 (default 6)
- *   download  opaque token echoed back as a cookie once the stream starts, so
- *             the GUI can tell the download began and clear its status spinner.
+ *   level   zip compression level 0..9 (default 6)
  */
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/publish.php";
+
+$channel = 'flash_backup';
+$script = "$docroot/webGui/scripts/flash_backup";
 
 $var = (array)@parse_ini_file('/var/local/emhttp/var.ini');
 $level = isset($_GET['level']) && is_numeric($_GET['level']) ? max(0, min(9, (int)$_GET['level'])) : 6;
@@ -30,13 +36,10 @@ $server = isset($var['NAME']) ? str_replace(' ', '_', strtolower($var['NAME'])) 
 $osVersion = $var['version'] ?? 'unknown';
 $name = "$server-v$osVersion-boot-backup-".date('Ymd-Hi').".zip";
 
-// Echo the download token back as a (non-HttpOnly) cookie so the page can detect
-// the download has started. Numeric-only to keep it harmless. Must be set before
-// any body output.
-$token = preg_replace('/\D/', '', $_GET['download'] ?? '');
-if ($token !== '') setcookie('flashBackup', $token, ['path' => '/']);
+// Total size of the included set, used as the progress denominator.
+$total = (int)trim(shell_exec(escapeshellarg($script).' size 2>/dev/null'));
 
-// Stream for as long as it takes, and stop zip if the user cancels the download.
+// Stream for as long as it takes, and let zip die if the user cancels.
 set_time_limit(0);
 ignore_user_abort(false);
 
@@ -46,6 +49,23 @@ header('X-Accel-Buffering: no'); // tell nginx to stream, not spool to a temp fi
 header('Cache-Control: no-store');
 while (ob_get_level()) ob_end_clean();
 
-passthru(escapeshellarg("$docroot/webGui/scripts/flash_backup")." ".(int)$level);
+$h = popen(escapeshellarg($script).' '.(int)$level.' 2>/dev/null', 'r');
+if ($h) {
+  $sent = 0; $last = 0;
+  while (!feof($h)) {
+    $buf = fread($h, 1 << 18);
+    if ($buf === '' || $buf === false) break;
+    echo $buf;
+    flush();
+    $sent += strlen($buf);
+    $now = microtime(true);
+    if ($total > 0 && $now - $last > 0.4) {
+      publish($channel, (string)min(99, intdiv($sent * 100, $total)), 1, false);
+      $last = $now;
+    }
+  }
+  pclose($h);
+}
+publish($channel, '_DONE_', 1, false);
 exit;
 ?>

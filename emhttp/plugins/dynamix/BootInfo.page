@@ -17,25 +17,32 @@ Tag="usb"
 <?$tpmEnabled = !empty($var['flashGUID']) && strpos($var['flashGUID'], '01-') !== 0 && !empty($var['tpmGUID']) ? true : false;?>
 <script>
 // The backup is streamed straight to the browser as it is built - no staging
-// file, no size limit, and it works with the array stopped. We show a light
-// status while the archive is being prepared and clear it as soon as the
-// download starts, detected via a cookie the server sets once it begins
-// streaming the response.
+// file, no size limit, and it works with the array stopped. The download itself
+// has no known size (it is compressed on the fly), so the server reports
+// progress over the 'flash_backup' nchan channel and we show a real bar.
+var nchan_backup = new NchanSubscriber('/sub/flash_backup',{subscriber:'websocket'});
+nchan_backup.on('message', function(data) {
+  if (data == '_DONE_') {
+    setBackupProgress(100);
+    nchan_backup.stop();
+    setTimeout(function(){ swal.close(); }, 1200);
+    return;
+  }
+  var pct = parseInt(data, 10);
+  if (!isNaN(pct)) setBackupProgress(pct);
+});
+
+function setBackupProgress(pct) {
+  $('#fbBar').css('width', pct + '%');
+  $('#fbPct').text(pct + '%');
+}
+
 function backup() {
   var level = $('#backupLevel').val();
-  var token = '' + Date.now() + Math.floor(Math.random()*1e6);
-  swal({title:"_(Boot device backup)_",text:"_(Preparing backup - your download will begin shortly)_... <i class='fa fa-refresh fa-spin'></i>",html:true,animation:'none',showConfirmButton:false});
+  nchan_backup.start();
+  swal({title:"_(Boot device backup)_",text:"<div style='background:var(--border-color,#ccc);border-radius:3px;overflow:hidden;height:18px;margin:10px 0'><div id='fbBar' style='height:100%;width:0%;background:#ff8c2f;transition:width .3s'></div></div><div id='fbPct'>0%</div><div style='margin-top:8px'>_(Your download will begin shortly)_</div>",html:true,animation:'none',showConfirmButton:false});
   // Attachment response keeps us on this page while the browser downloads.
-  window.location = '/webGui/include/FlashBackup.php?level='+level+'&download='+token;
-  // Dismiss the status once the stream starts (cookie appears) or after a wait.
-  var tries = 0;
-  var timer = setInterval(function() {
-    if (document.cookie.indexOf('flashBackup='+token) >= 0 || ++tries > 120) {
-      clearInterval(timer);
-      document.cookie = 'flashBackup=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-      swal.close();
-    }
-  }, 500);
+  window.location = '/webGui/include/FlashBackup.php?level='+level;
 }
 </script>
 _(Active GUID)_:
