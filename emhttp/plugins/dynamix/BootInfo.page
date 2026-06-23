@@ -25,6 +25,7 @@ nchan_backup.on('message', function(data) {
   if (data == '_DONE_') {
     setBackupProgress(100);
     nchan_backup.stop();
+    $('#fbFrame').remove();
     setTimeout(function(){ swal.close(); }, 1200);
     return;
   }
@@ -40,9 +41,12 @@ function setBackupProgress(pct) {
 function backup() {
   var level = $('#backupLevel').val();
   nchan_backup.start();
-  swal({title:"_(Boot device backup)_",text:"<div style='background:var(--border-color,#ccc);border-radius:3px;overflow:hidden;height:18px;margin:10px 0'><div id='fbBar' style='height:100%;width:0%;background:#ff8c2f;transition:width .3s'></div></div><div id='fbPct'>0%</div><div style='margin-top:8px'>_(Your download will begin shortly)_</div>",html:true,animation:'none',showConfirmButton:false});
-  // Attachment response keeps us on this page while the browser downloads.
-  window.location = '/webGui/include/FlashBackup.php?level='+level;
+  swal({title:"_(Boot device backup)_",text:"<div style='background:var(--border-color,#ccc);border-radius:3px;overflow:hidden;height:18px;margin:10px 0'><div id='fbBar' style='height:100%;width:0%;background:#ff8c2f;transition:width .3s'></div></div><div id='fbPct'>0%</div><div style='margin-top:8px'>_(Backing up the boot device)_...</div>",html:true,animation:'none',showConfirmButton:true,confirmButtonText:"_(Close)_"});
+  // Download via a hidden iframe (not window.location) so the page never starts
+  // to navigate: a top-level navigation fires 'beforeunload', which makes the
+  // NchanSubscriber stop itself - killing the progress updates.
+  $('#fbFrame').remove();
+  $('<iframe>',{id:'fbFrame',src:'/webGui/include/FlashBackup.php?level='+level}).hide().appendTo('body');
 }
 </script>
 _(Active GUID)_:
