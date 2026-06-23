@@ -24,33 +24,37 @@ Tag="usb"
 //  - Save to server: a tracked background job (scripts/flash_backup_save via
 //    StartCommand.php) writes the archive to a pool/array and keeps it, then
 //    reports the saved path. Useful when the download link is slow.
+//
+// Each run is tagged with a token. nchan retains the last message, so a fresh
+// run would otherwise immediately receive a stale "100"/"_DONE_" from a previous
+// run and jump to 100%. We keep ONE subscriber connected for the page lifetime
+// (no per-click start/stop, which raced) and ignore any message not from the
+// current run.
 var backupMode = 'download';
+var fbRun = '';
 var nchan_backup = new NchanSubscriber('/sub/flash_backup',{subscriber:'websocket'});
 nchan_backup.on('message', function(data) {
-  if (data.startsWith('_SAVED_')) {        // save mode finished - show the path
+  var i = data.indexOf(':');
+  if (i < 0 || data.slice(0,i) !== fbRun) return; // stale or other run
+  var msg = data.slice(i+1);
+  if (msg.startsWith('_SAVED_')) {           // save mode finished - show the path
     setBackupProgress(100);
-    nchan_backup.stop();
-    $('#fbMsg').html("_(Saved to)_: <code>"+data.substring(7)+"</code>");
+    $('#fbMsg').html("_(Saved to)_: <code>"+msg.substring(7)+"</code>");
     $('button.confirm').prop('disabled',false);
-    return;
-  }
-  if (data.startsWith('_ERROR_')) {
-    nchan_backup.stop();
+  } else if (msg.startsWith('_ERROR_')) {
     $('#fbFrame').remove();
-    swal({title:"_(Creation error)_",text:data.substring(7),type:'error',html:true,confirmButtonText:"_(Ok)_"});
-    return;
-  }
-  if (data == '_DONE_') {                   // download mode finished
-    if (backupMode != 'download') return;   // save mode already handled by _SAVED_
+    swal({title:"_(Creation error)_",text:msg.substring(7),type:'error',html:true,confirmButtonText:"_(Ok)_"});
+  } else if (msg === '_DONE_') {             // download mode finished
+    if (backupMode !== 'download') return;   // save mode already handled by _SAVED_
     setBackupProgress(100);
-    nchan_backup.stop();
     $('#fbFrame').remove();
     setTimeout(function(){ swal.close(); }, 1200);
-    return;
+  } else {
+    var pct = parseInt(msg, 10);
+    if (!isNaN(pct)) setBackupProgress(pct);
   }
-  var pct = parseInt(data, 10);
-  if (!isNaN(pct)) setBackupProgress(pct);
 });
+nchan_backup.start();
 
 function setBackupProgress(pct) {
   $('#fbBar').css('width', pct + '%');
@@ -60,21 +64,20 @@ function setBackupProgress(pct) {
 function backup() {
   backupMode = $('#backupMode').val();
   var level = $('#backupLevel').val();
-  var saving = backupMode == 'save';
-  nchan_backup.start();
+  var saving = backupMode === 'save';
+  fbRun = '' + Date.now();
   swal({title:"_(Boot device backup)_",text:"<div style='background:var(--border-color,#ccc);border-radius:3px;overflow:hidden;height:18px;margin:10px 0'><div id='fbBar' style='height:100%;width:0%;background:#ff8c2f;transition:width .3s'></div></div><div id='fbPct'>0%</div><div id='fbMsg' style='margin-top:8px'>"+(saving?"_(Saving boot device backup to the server)_...":"_(Backing up the boot device)_...")+"</div>",html:true,animation:'none',showConfirmButton:true,confirmButtonText:"_(Close)_"},function(){
-    nchan_backup.stop();
-    $('#fbFrame').remove();
+    $('#fbFrame').remove(); // cancel an in-progress download; subscriber stays alive
   });
   if (saving) {
     // Tracked background job; it writes the archive to disk and keeps it.
-    $.post('/webGui/include/StartCommand.php',{cmd:'flash_backup_save '+level,start:0});
+    $.post('/webGui/include/StartCommand.php',{cmd:'flash_backup_save '+level+' '+fbRun,start:0});
   } else {
     // Download via a hidden iframe (not window.location): a top-level navigation
     // fires 'beforeunload', which makes NchanSubscriber stop itself and kills the
     // progress updates.
     $('#fbFrame').remove();
-    $('<iframe>',{id:'fbFrame',src:'/webGui/include/FlashBackup.php?level='+level}).hide().appendTo('body');
+    $('<iframe>',{id:'fbFrame',src:'/webGui/include/FlashBackup.php?level='+level+'&run='+fbRun}).hide().appendTo('body');
   }
 }
 </script>

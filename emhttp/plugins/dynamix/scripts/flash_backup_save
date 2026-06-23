@@ -14,8 +14,10 @@
 <?
 /* Save a zip backup of the boot device to a persistent location on the server.
  *
- * Usage: flash_backup_save [compression-level]
+ * Usage: flash_backup_save [compression-level] [run-token]
  *   compression-level  0 (store, fastest) .. 9 (smallest, slowest), default 6
+ *   run-token          opaque token echoed as a "<token>:" prefix on every
+ *                      published message, so the GUI can ignore stale ones
  *
  * This is the "save to server" counterpart of the streaming download
  * (include/FlashBackup.php). It is launched as a tracked background job via
@@ -36,7 +38,10 @@ require_once "$docroot/webGui/include/Helpers.php"; // pools_filter()
 if (!function_exists('_')) { function _($text) { return $text; } }
 
 $channel = 'flash_backup';
-function pub($message) { global $channel; publish($channel, $message, 1, false); }
+// Per-run token (see usage); prefixed onto every message so the GUI ignores
+// stale messages left in the channel by a previous run.
+$run = isset($argv[2]) ? preg_replace('/\D/', '', $argv[2]) : '';
+function pub($message) { global $channel, $run; publish($channel, "$run:$message", 1, false); }
 
 $var = (array)@parse_ini_file('/var/local/emhttp/var.ini');
 $disks = (array)@parse_ini_file('/var/local/emhttp/disks.ini', true);

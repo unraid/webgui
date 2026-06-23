@@ -22,6 +22,8 @@
  *
  * Query params:
  *   level   zip compression level 0..9 (default 6)
+ *   run     opaque per-run token; progress is published as "<run>:<pct>" so the
+ *           GUI can ignore stale messages left in the channel by a previous run
  */
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/publish.php";
@@ -31,6 +33,7 @@ $script = "$docroot/webGui/scripts/flash_backup";
 
 $var = (array)@parse_ini_file('/var/local/emhttp/var.ini');
 $level = isset($_GET['level']) && is_numeric($_GET['level']) ? max(0, min(9, (int)$_GET['level'])) : 6;
+$run = preg_replace('/\D/', '', $_GET['run'] ?? '');
 
 $server = isset($var['NAME']) ? str_replace(' ', '_', strtolower($var['NAME'])) : 'tower';
 $osVersion = $var['version'] ?? 'unknown';
@@ -60,12 +63,12 @@ if ($h) {
     $sent += strlen($buf);
     $now = microtime(true);
     if ($total > 0 && $now - $last > 0.4) {
-      publish($channel, (string)min(99, intdiv($sent * 100, $total)), 1, false);
+      publish($channel, $run.':'.min(99, intdiv($sent * 100, $total)), 1, false);
       $last = $now;
     }
   }
   pclose($h);
 }
-publish($channel, '_DONE_', 1, false);
+publish($channel, $run.':_DONE_', 1, false);
 exit;
 ?>
