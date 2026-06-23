@@ -40,7 +40,7 @@ nchan_backup.on('message', function(data) {
   if (msg.startsWith('_SAVED_')) {           // save mode finished - show path + download
     setBackupProgress(100);
     var p = msg.substring(7), name = p.substring(p.lastIndexOf('/')+1);
-    $('#fbMsg').html("_(Saved to)_: <code>"+p+"</code><br><a href='/"+encodeURIComponent(name)+"' style='display:inline-block;margin-top:10px'><i class='fa fa-download'></i> _(Download)_</a>");
+    $('#fbMsg').html("_(Saved to)_: <code>"+p+"</code><br><a href='/webGui/include/FlashBackup.php?serve="+encodeURIComponent(name)+"' style='display:inline-block;margin-top:10px'><i class='fa fa-download'></i> _(Download)_</a>");
     $('button.confirm').prop('disabled',false);
   } else if (msg.startsWith('_ERROR_')) {
     $('#fbFrame').remove();

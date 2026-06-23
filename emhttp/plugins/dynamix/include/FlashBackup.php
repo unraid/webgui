@@ -28,6 +28,32 @@
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/publish.php";
 
+// "serve" mode: stream an already-saved backup for download (the save-to-server
+// Download button / notification link). Strictly validated - only a file whose
+// name matches the flash-backup pattern AND that resolves onto a pool/array/boot
+// mount - so it can't be coerced into an arbitrary file read. nginx already
+// requires a logged-in session to reach this endpoint at all; this avoids
+// leaving a persistent symlink to the full-flash backup in the web root.
+if (isset($_GET['serve'])) {
+  $name = basename($_GET['serve']);
+  if (!preg_match('/-boot-backup-[0-9-]+\.zip$/', $name)) { http_response_code(404); exit; }
+  $found = null;
+  foreach (array_merge(glob("/mnt/*/$name"), glob("/mnt/user/*/$name"), ["/boot/$name"]) as $cand) {
+    $rp = realpath($cand);
+    if ($rp && is_file($rp) && basename($rp) === $name &&
+        (strncmp($rp, '/mnt/', 5) === 0 || strncmp($rp, '/boot/', 6) === 0)) { $found = $rp; break; }
+  }
+  if (!$found) { http_response_code(404); exit; }
+  set_time_limit(0);
+  header('Content-Type: application/zip');
+  header('Content-Disposition: attachment; filename="'.$name.'"');
+  header('Content-Length: '.filesize($found));
+  header('X-Accel-Buffering: no');
+  while (ob_get_level()) ob_end_clean();
+  readfile($found);
+  exit;
+}
+
 $channel = 'flash_backup';
 $script = "$docroot/webGui/scripts/flash_backup";
 

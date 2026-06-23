@@ -111,14 +111,15 @@ if ($rc !== 0 || !is_file($zip) || filesize($zip) === 0) {
   exit(1);
 }
 
-// Expose the saved file for download via a symlink in the webGui docroot, and
-// raise an Unraid notification (the tray bell) whose link downloads it.
+// Raise an Unraid notification (the tray bell). The download link points to the
+// authenticated, path-validated serve endpoint - NOT a symlink to the full-flash
+// backup in the web root (it would sit at a predictable, session-reachable path
+// for the whole uptime).
 $name = basename($zip);
-@symlink($zip, "$docroot/$name");
 exec($docroot."/webGui/scripts/notify -e ".escapeshellarg(_('Flash backup'))
   ." -s ".escapeshellarg(_('Boot device backup complete'))
   ." -d ".escapeshellarg(sprintf(_('Saved to %s'), $zip))
-  ." -i normal -l ".escapeshellarg("/$name"));
+  ." -i normal -l ".escapeshellarg("/webGui/include/FlashBackup.php?serve=$name"));
 
 pub('_SAVED_'.$zip);
 pub('_DONE_');
