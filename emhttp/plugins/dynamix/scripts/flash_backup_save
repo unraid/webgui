@@ -20,13 +20,15 @@
  *                      published message, so the GUI can ignore stale ones
  *
  * This is the "save to server" counterpart of the streaming download
- * (include/FlashBackup.php). It is launched as a tracked background job via
- * StartCommand.php and writes the archive to a real disk target - a cache/SSD
- * pool, then an array share, then the boot device's own pool - and KEEPS it
- * (no RAM target: a saved backup must survive a reboot). Progress is published
- * as a percentage to the 'flash_backup' nchan channel; on completion it
- * publishes _SAVED_<path> then _DONE_, or _ERROR_<message> on failure. The
- * prior-release dirs (previous/prev) and desktop junk are excluded.
+ * (include/FlashBackup.php). Launched as a tracked background job via
+ * StartCommand.php, it runs to completion even if the browser navigates away.
+ * It pipes the single-pass streaming archive (scripts/flash_backup) into a file
+ * on a real disk target - a cache/SSD pool, then an array share, then the boot
+ * device's own pool - and KEEPS it (no RAM target: a saved backup must survive a
+ * reboot). Progress is published as a percentage to the 'flash_backup' nchan
+ * channel; on completion it raises an Unraid notification (with a click-to-
+ * download link), exposes the file for download, and publishes _SAVED_<path>
+ * then _DONE_ (or _ERROR_<message> on failure).
  */
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Wrappers.php";
@@ -47,13 +49,13 @@ $var = (array)@parse_ini_file('/var/local/emhttp/var.ini');
 $disks = (array)@parse_ini_file('/var/local/emhttp/disks.ini', true);
 $pools = pools_filter($disks);
 $dir = ['system','appdata','isos','domains'];
-$out = ['prev','previous','System Volume Information','.Trash-0','.Trashes','.Spotlight-V100','.fseventsd','.TemporaryItems'];
 
 $level = isset($argv[1]) && is_numeric($argv[1]) ? max(0, min(9, (int)$argv[1])) : 6;
 
 $server = isset($var['NAME']) ? str_replace(' ','_',strtolower($var['NAME'])) : 'tower';
 $osVersion = _var($var,'version','_unknown');
 $backup = "$server-v$osVersion-boot-backup-".date('Ymd-Hi').".zip";
+$script = "$docroot/webGui/scripts/flash_backup";
 
 // Required space (1.5x flash usage). Persistent disk target only, in order:
 // cache/SSD pool (written straight to the pool mount, bypassing the slower
@@ -82,33 +84,41 @@ if (!$zip) {
   exit(1);
 }
 
-// Collect top-level entries to archive, skipping prior-release/junk dirs and any
-// earlier flash-backup zip left on the flash.
-chdir('/boot');
-$items = [];
-foreach (glob('*',GLOB_NOSORT) as $entry) {
-  if (in_array($entry,$out)) continue;
-  if (preg_match('/-boot-backup-.*\.zip$/',$entry)) continue;
-  $items[] = $entry;
-}
-$total = count($items);
+// Total uncompressed size, used as the progress denominator.
+$total = (int)trim(shell_exec(escapeshellarg($script).' size 2>/dev/null'));
 
-// zip each entry into the archive at low CPU/IO priority, publishing a
-// percentage after each item completes.
-$prio = 'nice -n 19 ionice -c2 -n7';
-$ok = true;
-foreach ($items as $i => $entry) {
-  $flag = is_dir($entry) ? '-r' : '';
-  exec("$prio zip -$level -q $flag ".escapeshellarg($zip)." ".escapeshellarg($entry)." 2>/dev/null", $o, $rc);
-  if ($rc !== 0 && $rc !== 12) $ok = false; // rc 12 = "nothing to do"
-  pub((string)($total ? (int)round((($i+1)/$total)*100) : 100));
+// Pipe the single-pass streaming archive straight into the destination file -
+// one zip invocation is far faster than appending each item to a growing
+// archive - publishing a percentage as the bytes are written.
+$h = popen(escapeshellarg($script).' '.$level.' 2>/dev/null', 'r');
+$f = @fopen($zip, 'w');
+if (!$h || !$f) { if ($h) pclose($h); if ($f) fclose($f); @unlink($zip); pub('_ERROR_'._('Backup failed')); exit(1); }
+$sent = 0; $last = 0;
+while (!feof($h)) {
+  $buf = fread($h, 1 << 18);
+  if ($buf === '' || $buf === false) break;
+  fwrite($f, $buf);
+  $sent += strlen($buf);
+  $now = microtime(true);
+  if ($total > 0 && $now - $last > 0.4) { pub((string)min(99, intdiv($sent * 100, $total))); $last = $now; }
 }
+$rc = pclose($h);
+fclose($f);
 
-if (!$ok || !is_file($zip)) {
+if ($rc !== 0 || !is_file($zip) || filesize($zip) === 0) {
   @unlink($zip);
   pub('_ERROR_'._('Backup failed'));
   exit(1);
 }
+
+// Expose the saved file for download via a symlink in the webGui docroot, and
+// raise an Unraid notification (the tray bell) whose link downloads it.
+$name = basename($zip);
+@symlink($zip, "$docroot/$name");
+exec($docroot."/webGui/scripts/notify -e ".escapeshellarg(_('Flash backup'))
+  ." -s ".escapeshellarg(_('Boot device backup complete'))
+  ." -d ".escapeshellarg(sprintf(_('Saved to %s'), $zip))
+  ." -i normal -l ".escapeshellarg("/$name"));
 
 pub('_SAVED_'.$zip);
 pub('_DONE_');
