@@ -12,150 +12,39 @@
  */
 ?>
 <?
-/* Create a backup zip of the boot device (USB flash).
+/* Stream a zip backup of the boot device (USB flash) to stdout.
  *
- * Usage: flash_backup [compression-level] [nchan]
+ * Usage: flash_backup [compression-level] > backup.zip
  *   compression-level  0 (store, fastest) .. 9 (smallest, slowest), default 6
- *   nchan              trailing marker added by StartCommand.php; ignored here
  *
- * Launched as a tracked background job via StartCommand.php (same mechanism as
- * plugin/docker operations), so it gets a PID, run de-duplication and abort for
- * free. Progress is streamed to the 'flash_backup' nchan channel using the
- * standard _DONE_/_ERROR_ sentinels; a _FILE_<name> message tells the GUI which
- * archive to download. The work runs under nice + best-effort-low ionice and
- * uses the streaming `zip` binary, so it stays gentle on CPU, disk and RAM
- * even on large flash drives. The prior-release dirs (previous/prev) and
- * desktop junk are excluded so the archive stays small. The finished zip is a
- * throwaway staged in RAM (then pool/array, finally the boot device's own pool)
- * and is deleted right after the browser downloads it.
+ * The archive is written straight to stdout so it can be streamed directly to a
+ * browser (see include/FlashBackup.php) without ever staging a file on disk or
+ * in RAM - this avoids any size limit, works with the array stopped, and needs
+ * no cleanup. zip runs under nice + best-effort-low ionice to stay gentle on
+ * CPU and disk. The prior-release dirs (previous/prev) and desktop junk are
+ * excluded so the archive stays small.
  */
-$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
-require_once "$docroot/webGui/include/Wrappers.php";
-require_once "$docroot/webGui/include/publish.php";
-require_once "$docroot/webGui/include/Helpers.php"; // pools_filter()
-
-// This runs as a CLI background job (launched via StartCommand.php), where the
-// GUI translation layer is not loaded. Provide a no-op _() fallback like other
-// CLI scripts (e.g. monitor) so progress strings work; they stay in English.
-if (!function_exists('_')) { function _($text) { return $text; } }
-
-$channel = 'flash_backup';
-
-// Stream a progress line to the GUI over nchan.
-function write(...$messages) {
-  global $channel;
-  foreach ($messages as $message) publish($channel, $message, 1, false);
-}
-
-$var = (array)@parse_ini_file('/var/local/emhttp/var.ini');
-$disks = (array)@parse_ini_file('/var/local/emhttp/disks.ini', true);
-$pools = pools_filter($disks);
-$dir = ['system','appdata','isos','domains'];
-// Top-level entries to exclude from the backup. 'previous'/'prev' hold the
-// entire prior OS release (often >1GB) and must never bloat the archive;
-// the rest is desktop junk created when the flash is mounted on a Mac/PC.
-$out = ['prev','previous','System Volume Information','.Trash-0','.Trashes','.Spotlight-V100','.fseventsd','.TemporaryItems'];
 
 // Clamp the requested compression level to a valid zip range (default 6).
-$level = isset($argv[1]) && is_numeric($argv[1]) ? (int)$argv[1] : 6;
-$level = max(0, min(9, $level));
+$level = isset($argv[1]) && is_numeric($argv[1]) ? max(0, min(9, (int)$argv[1])) : 6;
 
-$server = isset($var['NAME']) ? str_replace(' ','_',strtolower($var['NAME'])) : 'tower';
-$mydate = date('Ymd-Hi');
-$osVersion = _var($var,'version','_unknown');
-$backup = "$server-v$osVersion-boot-backup-$mydate.zip";
+// Top-level entries to exclude. 'previous'/'prev' hold the entire prior OS
+// release (often >1GB); the rest is desktop junk created when the flash is
+// mounted on a Mac/PC.
+$out = ['prev','previous','System Volume Information','.Trash-0','.Trashes','.Spotlight-V100','.fseventsd','.TemporaryItems'];
 
-// Safety net: reap any leftover staging archive from a previous run whose
-// browser-side cleanup never fired (e.g. the tab was closed mid-download), so a
-// stale copy can't linger - especially in RAM. The normal path still deletes
-// the archive right after the download via Download.php cmd=unlink.
-foreach (glob("$docroot/*-boot-backup-*.zip") as $stale) {
-  $target = @readlink($stale);
-  if ($target && is_file($target)) @unlink($target);
-  @unlink($stale);
-}
-
-write(_('Preparing backup')."...");
-
-// Estimate required space (1.5x current flash usage) and pick a target, in
-// order: the RAM-backed rootfs first, then a cache/SSD pool, then an array
-// share. The archive is a throwaway staging file - built here, downloaded by
-// the browser, then deleted - so RAM is the right home: it is always mounted
-// (works even with the array stopped) and fastest. We only spill to disk when
-// the flash is too large to stage in RAM with comfortable headroom. (Keeping
-// the *process* RAM-light is handled separately by streaming via the zip
-// binary rather than buffering the archive in memory.)
-$used = exec("df /boot|awk 'END{print $3}'") * 1.5;
-$zip = null;
-// 1. RAM-backed rootfs (always available, fastest).
-$free = exec("df /|awk 'END{print $4}'");
-if ($free > $used) $zip = "/$backup";
-// 2. Too big for RAM: a cache/SSD pool, written straight to the pool mount to
-//    bypass the slower /mnt/user FUSE layer. Pools require the array started.
-if (!$zip) foreach ($pools as $pool) {
-  if (!is_dir("/mnt/$pool")) continue;
-  $free = exec("df ".escapeshellarg("/mnt/$pool")."|awk 'END{print $4}'");
-  if ($free > $used) {$zip = "/mnt/$pool/$backup"; break;}
-}
-// 3. An array-backed user share.
-if (!$zip) foreach ($dir as $share) {
-  if (!is_dir("/mnt/user/$share")) continue;
-  $free = exec("df ".escapeshellarg("/mnt/user/$share")."|awk 'END{print $4}'");
-  if ($free > $used) {$zip = "/mnt/user/$share/$backup"; break;}
-}
-// 4. Last resort: the boot device's own pool. /boot is always mounted (even with
-//    the array stopped), so this guarantees a target when nothing else is
-//    available. Only used for a real pool filesystem - a FAT/USB flash is not a
-//    pool and could not hold a >4GB archive anyway.
-if (!$zip) {
-  $bootfs = exec("findmnt -no FSTYPE /boot");
-  if (in_array($bootfs, ['zfs','btrfs','xfs'])) {
-    $free = exec("df /boot|awk 'END{print $4}'");
-    if ($free > $used) $zip = "/boot/$backup";
-  }
-}
-
-if (!$zip) {
-  write(_('Insufficient free disk space available'));
-  write('_ERROR_');
-  exit(1);
-}
-
-// Collect top-level entries to archive, skipping the prior-release/junk dirs
-// above and any earlier flash-backup zip a user may have left on the flash.
 chdir('/boot');
 $items = [];
-foreach (glob("*",GLOB_NOSORT) as $entry) {
-  if (in_array($entry,$out)) continue;
-  if (preg_match('/-boot-backup-.*\.zip$/',$entry)) continue;
+foreach (glob('*', GLOB_NOSORT) as $entry) {
+  if (in_array($entry, $out)) continue;
+  if (preg_match('/-boot-backup-.*\.zip$/', $entry)) continue; // stray old backups
   $items[] = $entry;
 }
-$total = count($items);
+if (!$items) exit(1);
 
-// Run zip at low CPU/IO priority so the backup stays gentle without being
-// starved: best-effort IO at the lowest priority (not the idle class, which can
-// throttle throughput to a crawl on busy/ZFS systems).
-$prio = 'nice -n 19 ionice -c2 -n7';
-$ok = true;
-foreach ($items as $i => $entry) {
-  $pct = $total ? round(($i/$total)*100) : 0;
-  write(sprintf(_('Compressing %s')." (%d/%d - %d%%)", $entry, $i+1, $total, $pct));
-  $flag = is_dir($entry) ? '-r' : '';
-  exec("$prio zip -$level -q $flag ".escapeshellarg($zip)." ".escapeshellarg($entry)." 2>/dev/null", $o, $rc);
-  // zip rc 12 = "nothing to do"; treat any other non-zero result as a failure.
-  if ($rc !== 0 && $rc !== 12) $ok = false;
-}
-
-if (!$ok || !is_file($zip)) {
-  @unlink($zip);
-  write(_('Backup failed'));
-  write('_ERROR_');
-  exit(1);
-}
-
-// Expose the archive to the browser via a symlink in the webGui docroot.
-symlink($zip,"$docroot/$backup");
-write(_('Backup complete')."...");
-write("_FILE_$backup");
-write('_DONE_');
+// Stream the archive to stdout. zip writes a valid streamable archive (data
+// descriptors) when its output is not seekable.
+$args = implode(' ', array_map('escapeshellarg', $items));
+passthru("nice -n 19 ionice -c2 -n7 zip -$level -qr - $args 2>/dev/null", $rc);
+exit($rc);
 ?>

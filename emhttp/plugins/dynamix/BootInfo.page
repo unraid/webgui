@@ -16,51 +16,26 @@ Tag="usb"
 ?>
 <?$tpmEnabled = !empty($var['flashGUID']) && strpos($var['flashGUID'], '01-') !== 0 && !empty($var['tpmGUID']) ? true : false;?>
 <script>
-// Run the flash backup as a tracked background job through StartCommand.php
-// (same mechanism as plugin/docker operations) and stream progress into the
-// standard nchan progress window. The script publishes a _FILE_<name> message
-// so we know which archive to download once it reports _DONE_.
-var backupFile = "";
-var nchan_backup = new NchanSubscriber('/sub/flash_backup',{subscriber:'websocket', reconnectTimeout:5000});
-
-nchan_backup.on('message', function(data) {
-  if (!data) return;
-  if (data.startsWith('_FILE_')) { backupFile = data.substring(6); return; }
-  if (openError(data)) { nchan_backup.stop(); return; }
-  if (openDone(data)) {
-    nchan_backup.stop();
-    if (backupFile) {
-      // archive ready: trigger the browser download, then clean it up afterwards
-      location = '/'+backupFile;
-      setTimeout(cleanUpBackup,6000);
-    }
-    return;
-  }
-  var box = $('pre#swaltext');
-  box.html(box.html()+'<br>'+data).scrollTop(box[0].scrollHeight);
-});
-
-function cleanUpBackup() {
-  if (document.hasFocus()) {
-    $.post('/webGui/include/Download.php',{cmd:'unlink',file:backupFile});
-    backupFile = "";
-  } else {
-    setTimeout(cleanUpBackup,2000);
-  }
-}
-
+// The backup is streamed straight to the browser as it is built - no staging
+// file, no size limit, and it works with the array stopped. We show a light
+// status while the archive is being prepared and clear it as soon as the
+// download starts, detected via a cookie the server sets once it begins
+// streaming the response.
 function backup() {
-  backupFile = "";
   var level = $('#backupLevel').val();
-  nchan_backup.start();
-  $.post('/webGui/include/StartCommand.php',{cmd:'flash_backup '+level+' nchan',start:0},function() {
-    swal({title:"_(Boot device backup)_ - <span id='pluginProgressTitle'>_(In Progress)_ <i class='fa fa-refresh fa-spin'></i></span>",text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:true,confirmButtonText:"_(Close)_"},function(){
-      nchan_backup.stop();
-      $('.sweet-alert').hide('fast').removeClass('nchan');
-    });
-    $('.sweet-alert').addClass('nchan');
-    $('button.confirm').prop('disabled',true);
-  });
+  var token = '' + Date.now() + Math.floor(Math.random()*1e6);
+  swal({title:"_(Boot device backup)_",text:"_(Preparing backup - your download will begin shortly)_... <i class='fa fa-refresh fa-spin'></i>",html:true,animation:'none',showConfirmButton:false});
+  // Attachment response keeps us on this page while the browser downloads.
+  window.location = '/webGui/include/FlashBackup.php?level='+level+'&download='+token;
+  // Dismiss the status once the stream starts (cookie appears) or after a wait.
+  var tries = 0;
+  var timer = setInterval(function() {
+    if (document.cookie.indexOf('flashBackup='+token) >= 0 || ++tries > 120) {
+      clearInterval(timer);
+      document.cookie = 'flashBackup=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      swal.close();
+    }
+  }, 500);
 }
 </script>
 _(Active GUID)_:
