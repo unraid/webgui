@@ -22,13 +22,19 @@
  * plugin/docker operations), so it gets a PID, run de-duplication and abort for
  * free. Progress is streamed to the 'flash_backup' nchan channel using the
  * standard _DONE_/_ERROR_ sentinels; a _FILE_<name> message tells the GUI which
- * archive to download. The work runs under nice/ionice and uses the streaming
- * `zip` binary, so it stays gentle on CPU, disk and RAM even on large flash
- * drives.
+ * archive to download. The work runs under nice + best-effort-low ionice and
+ * uses the streaming `zip` binary, so it stays gentle on CPU, disk and RAM
+ * even on large flash drives.
  */
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Wrappers.php";
 require_once "$docroot/webGui/include/publish.php";
+require_once "$docroot/webGui/include/Helpers.php"; // pools_filter()
+
+// This runs as a CLI background job (launched via StartCommand.php), where the
+// GUI translation layer is not loaded. Provide a no-op _() fallback like other
+// CLI scripts (e.g. monitor) so progress strings work; they stay in English.
+if (!function_exists('_')) { function _($text) { return $text; } }
 
 $channel = 'flash_backup';
 
@@ -39,6 +45,8 @@ function write(...$messages) {
 }
 
 $var = (array)@parse_ini_file('/var/local/emhttp/var.ini');
+$disks = (array)@parse_ini_file('/var/local/emhttp/disks.ini', true);
+$pools = pools_filter($disks);
 $dir = ['system','appdata','isos','domains'];
 $out = ['prev','previous'];
 
@@ -53,19 +61,28 @@ $backup = "$server-v$osVersion-boot-backup-$mydate.zip";
 
 write(_('Preparing backup')."...");
 
-// Estimate required space (1.5x current flash usage) and pick a target.
-// Prefer real disk (array/pool shares) over the RAM-backed rootfs so a large
-// backup does not consume system memory; fall back to / only when no share fits.
+// Estimate required space (1.5x current flash usage) and pick a target, in
+// order: a cache/SSD pool first (fast, and writing straight to the pool mount
+// bypasses the slower /mnt/user FUSE layer), then the RAM-backed rootfs, then an
+// array-backed user share. This keeps it fast on typical systems while avoiding
+// holding a large archive in RAM unless nothing else fits.
 $used = exec("df /boot|awk 'END{print $3}'") * 1.5;
 $zip = null;
-foreach ($dir as $share) {
-  if (!is_dir("/mnt/user/$share")) continue;
-  $free = exec("df /mnt/user/$share|awk 'END{print $4}'");
-  if ($free > $used) {$zip = "/mnt/user/$share/$backup"; break;}
+foreach ($pools as $pool) {
+  if (!is_dir("/mnt/$pool")) continue;
+  $free = exec("df ".escapeshellarg("/mnt/$pool")."|awk 'END{print $4}'");
+  if ($free > $used) {$zip = "/mnt/$pool/$backup"; break;}
 }
 if (!$zip) {
   $free = exec("df /|awk 'END{print $4}'");
   if ($free > $used) $zip = "/$backup";
+}
+if (!$zip) {
+  foreach ($dir as $share) {
+    if (!is_dir("/mnt/user/$share")) continue;
+    $free = exec("df ".escapeshellarg("/mnt/user/$share")."|awk 'END{print $4}'");
+    if ($free > $used) {$zip = "/mnt/user/$share/$backup"; break;}
+  }
 }
 
 if (!$zip) {
@@ -83,8 +100,10 @@ foreach (glob("*",GLOB_NOSORT) as $entry) {
 }
 $total = count($items);
 
-// Run zip with low CPU/IO priority so the backup stays responsive under load.
-$prio = 'nice -n 19 ionice -c3';
+// Run zip at low CPU/IO priority so the backup stays gentle without being
+// starved: best-effort IO at the lowest priority (not the idle class, which can
+// throttle throughput to a crawl on busy/ZFS systems).
+$prio = 'nice -n 19 ionice -c2 -n7';
 $ok = true;
 foreach ($items as $i => $entry) {
   $pct = $total ? round(($i/$total)*100) : 0;
