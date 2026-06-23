@@ -344,14 +344,17 @@ function pool_status_html(string $poolName, array $poolstatusData, array $disks)
   $displayText = $hasErrors ? _('ONLINE') : _($status_text);
   $deviceUrl = "/Main/Device?name=".urlencode($poolName)."#poolsummary";
 
+  // The pool-status class + trailing chevron mark this as a "view pool details"
+  // link rather than a stray blue label (the device name beside it is also a link).
+  $chevron = "<i class='fa fa-angle-right pool-status-go'></i>";
   if (!$isOnline) {
-    return " <a href='$deviceUrl' title='"._('View pool details')."'>("._($status_text).")</a><span title='"._('Check pool status')."'><i class='fa fa-warning fa-fw orange-text'></i></span>";
+    return " <a class='pool-status' href='$deviceUrl' title='"._('View pool details')."'>("._($status_text).") $chevron</a><span title='"._('Check pool status')."'><i class='fa fa-warning fa-fw orange-text'></i></span>";
   }
   if ($hasErrors) {
-    return " <a href='$deviceUrl' title='"._('View pool details')."'>($displayText)</a><span title='"._('Check pool status')."'><i class='fa fa-warning fa-fw orange-text'></i></span>";
+    return " <a class='pool-status' href='$deviceUrl' title='"._('View pool details')."'>($displayText) $chevron</a><span title='"._('Check pool status')."'><i class='fa fa-warning fa-fw orange-text'></i></span>";
   }
 
-  return " <a href='$deviceUrl' title='"._('View pool details')."'>($displayText)</a>";
+  return " <a class='pool-status' href='$deviceUrl' title='"._('View pool details')."'>($displayText) $chevron</a>";
 }
 
 function pool_function_row(string $label, ?array $poolDisk, ?array $firstMember, array $metrics, string $poolName='', array $poolstatusData=[], bool $showSummary=false, array $fsOverride=[], bool $showPoolStatusInTitle=true, string $statusPoolName='', string $summaryDisplayName='', bool $summaryShowView=true, string $summaryRowId=''): string
