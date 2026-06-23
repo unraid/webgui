@@ -256,6 +256,22 @@ if [ -f "$PAYLOAD/modes.txt" ]; then
     echo "✅ File modes restored"
 fi
 
+# ---- Restart patched nchan publishers --------------------------------------
+# nchan publishers (scripts under .../nchan/) are long-running loops. The running
+# process keeps executing the OLD script after we patch it on disk - and a browser
+# reload won't fix it, because DefaultPageLayout only (re)launches a publisher that
+# is NOT already running. So a patched publisher would keep streaming stale output
+# until every tab closes and monitor_nchan idle-reaps it. Kill the ones this PR
+# touched; DefaultPageLayout respawns them with the new code on the next page load.
+# Safe: monitor_nchan kills these routinely, and subscribers stay connected and
+# resume from the respawned publisher (matches the ResetTZ.php reload pattern).
+if [ -s "$PAYLOAD/text_files.txt" ]; then
+    grep -aoE '/nchan/[^/]+$' "$PAYLOAD/text_files.txt" 2>/dev/null | sed 's#^/##' | sort -u | while IFS= read -r rel; do
+        [ -n "$rel" ] || continue
+        if pkill -f "$rel" 2>/dev/null; then echo "Restarted nchan publisher: $rel"; fi
+    done
+fi
+
 echo ""
 echo "✅ Installation complete for PR #PR_PLACEHOLDER"
 echo "⚠️  This is a TEST plugin — remove it before applying production updates"
@@ -349,6 +365,13 @@ if [ -f "$PLUGIN_DIR/text_files.txt" ]; then
             echo "⚠️  Warning: could not re-apply $(basename "$other")'s changes; reinstall it or reboot to restore them"
             logger -t webgui-pr "re-apply of $(basename "$other") patch failed during $(basename "$PLUGIN_DIR") rollback"
         fi
+    done
+    # Restart any nchan publishers this PR patched so the live process drops the
+    # patched code and respawns from the restored original on the next page load
+    # (long-running publishers don't pick up the on-disk change until killed).
+    grep -aoE '/nchan/[^/]+$' "$PLUGIN_DIR/text_files.txt" 2>/dev/null | sed 's#^/##' | sort -u | while IFS= read -r rel; do
+        [ -n "$rel" ] || continue
+        if pkill -f "$rel" 2>/dev/null; then echo "Restarted nchan publisher: $rel"; fi
     done
     echo "✅ Text changes restored"
 fi
