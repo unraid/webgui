@@ -16,71 +16,20 @@ Tag="usb"
 ?>
 <?$tpmEnabled = !empty($var['flashGUID']) && strpos($var['flashGUID'], '01-') !== 0 && !empty($var['tpmGUID']) ? true : false;?>
 <script>
-// Two backup modes share one progress bar, fed by the 'flash_backup' nchan
-// channel:
-//  - Download: streamed straight to the browser as it is built (no staging file,
-//    no size limit, works with the array stopped). include/FlashBackup.php
-//    publishes a percentage as it streams.
-//  - Save to server: a tracked background job (scripts/flash_backup_save via
-//    StartCommand.php) writes the archive to a pool/array and keeps it, then
-//    reports the saved path. Useful when the download link is slow.
-//
-// Each run is tagged with a token. nchan retains the last message, so a fresh
-// run would otherwise immediately receive a stale "100"/"_DONE_" from a previous
-// run and jump to 100%. We keep ONE subscriber connected for the page lifetime
-// (no per-click start/stop, which raced) and ignore any message not from the
-// current run.
-var backupMode = 'download';
-var fbRun = '';
-var nchan_backup = new NchanSubscriber('/sub/flash_backup',{subscriber:'websocket'});
-nchan_backup.on('message', function(data) {
-  var i = data.indexOf(':');
-  if (i < 0 || data.slice(0,i) !== fbRun) return; // stale or other run
-  var msg = data.slice(i+1);
-  if (msg.startsWith('_SAVED_')) {           // save mode finished - show path + download
-    setBackupProgress(100);
-    var p = msg.substring(7), name = p.substring(p.lastIndexOf('/')+1), dir = p.substring(0,p.lastIndexOf('/'));
-    $('#fbMsg').html("_(Saved to)_: <code>"+p+"</code><br><span style='display:inline-block;margin-top:10px'>"
-      +"<a href='/webGui/include/FlashBackup.php?serve="+encodeURIComponent(name)+"'><i class='fa fa-download'></i> _(Download)_</a>"
-      +" &nbsp;&middot;&nbsp; <a href='/Main/Browse?dir="+encodeURIComponent(dir)+"'><i class='fa fa-folder-open'></i> _(File Manager)_</a></span>");
-    $('button.confirm').prop('disabled',false);
-  } else if (msg.startsWith('_ERROR_')) {
-    $('#fbFrame').remove();
-    swal({title:"_(Creation error)_",text:msg.substring(7),type:'error',html:true,confirmButtonText:"_(Ok)_"});
-  } else if (msg === '_DONE_') {             // download mode finished
-    if (backupMode !== 'download') return;   // save mode already handled by _SAVED_
-    setBackupProgress(100);
-    $('#fbFrame').remove();
-    setTimeout(function(){ swal.close(); }, 1200);
-  } else {
-    var pct = parseInt(msg, 10);
-    if (!isNaN(pct)) setBackupProgress(pct);
-  }
-});
-nchan_backup.start();
-
-function setBackupProgress(pct) {
-  $('#fbBar').css('width', pct + '%');
-  $('#fbPct').text(pct + '%');
-}
-
 function backup() {
-  backupMode = $('#backupMode').val();
   var level = $('#backupLevel').val();
-  var saving = backupMode === 'save';
-  fbRun = '' + Date.now();
-  swal({title:"_(Boot device backup)_",text:"<div style='background:var(--gray-300);border-radius:3px;overflow:hidden;height:18px;margin:10px 0'><div id='fbBar' style='height:100%;width:0%;background:var(--orange-500);transition:width .3s'></div></div><div id='fbPct'>0%</div><div id='fbMsg' style='margin-top:8px'>"+(saving?"_(Saving boot device backup to the server)_...":"_(Backing up the boot device)_...")+"</div>",html:true,animation:'none',showConfirmButton:true,confirmButtonText:"_(Close)_"},function(){
-    $('#fbFrame').remove(); // cancel an in-progress download; subscriber stays alive
-  });
-  if (saving) {
-    // Tracked background job; it writes the archive to disk and keeps it.
-    $.post('/webGui/include/StartCommand.php',{cmd:'flash_backup_save '+level+' '+fbRun,start:0});
+  if ($('#backupMode').val() === 'save') {
+    // Background job tracked by the shared task tray (openPlugin -> TaskQueue):
+    // it shows in the tray, opens the standard progress modal, and keeps running
+    // when the modal is closed. flash_backup_save publishes progress on the
+    // standard 'plugins' task channel and exits 0/non-zero for done/error.
+    openPlugin('flash_backup_save '+level, "_(Boot device backup)_", '', '', 1);
   } else {
-    // Download via a hidden iframe (not window.location): a top-level navigation
-    // fires 'beforeunload', which makes NchanSubscriber stop itself and kills the
-    // progress updates.
+    // Stream straight to the browser; the browser's own download indicator shows
+    // progress. A hidden iframe (not window.location) keeps us on this page.
     $('#fbFrame').remove();
-    $('<iframe>',{id:'fbFrame',src:'/webGui/include/FlashBackup.php?level='+level+'&run='+fbRun}).hide().appendTo('body');
+    $('<iframe>',{id:'fbFrame',src:'/webGui/include/FlashBackup.php?level='+level}).hide().appendTo('body');
+    swal({title:"_(Boot device backup)_",text:"_(Your download will begin shortly)_",type:'info',html:true,animation:'none',timer:4000,showConfirmButton:false});
   }
 }
 </script>
