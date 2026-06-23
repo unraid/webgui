@@ -24,7 +24,10 @@
  * standard _DONE_/_ERROR_ sentinels; a _FILE_<name> message tells the GUI which
  * archive to download. The work runs under nice + best-effort-low ionice and
  * uses the streaming `zip` binary, so it stays gentle on CPU, disk and RAM
- * even on large flash drives.
+ * even on large flash drives. The prior-release dirs (previous/prev) and
+ * desktop junk are excluded so the archive stays small. The finished zip is a
+ * throwaway staged in RAM (then pool/array, finally the boot device's own pool)
+ * and is deleted right after the browser downloads it.
  */
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Wrappers.php";
@@ -48,7 +51,10 @@ $var = (array)@parse_ini_file('/var/local/emhttp/var.ini');
 $disks = (array)@parse_ini_file('/var/local/emhttp/disks.ini', true);
 $pools = pools_filter($disks);
 $dir = ['system','appdata','isos','domains'];
-$out = ['prev','previous'];
+// Top-level entries to exclude from the backup. 'previous'/'prev' hold the
+// entire prior OS release (often >1GB) and must never bloat the archive;
+// the rest is desktop junk created when the flash is mounted on a Mac/PC.
+$out = ['prev','previous','System Volume Information','.Trash-0','.Trashes','.Spotlight-V100','.fseventsd','.TemporaryItems'];
 
 // Clamp the requested compression level to a valid zip range (default 6).
 $level = isset($argv[1]) && is_numeric($argv[1]) ? (int)$argv[1] : 6;
@@ -58,6 +64,16 @@ $server = isset($var['NAME']) ? str_replace(' ','_',strtolower($var['NAME'])) : 
 $mydate = date('Ymd-Hi');
 $osVersion = _var($var,'version','_unknown');
 $backup = "$server-v$osVersion-boot-backup-$mydate.zip";
+
+// Safety net: reap any leftover staging archive from a previous run whose
+// browser-side cleanup never fired (e.g. the tab was closed mid-download), so a
+// stale copy can't linger - especially in RAM. The normal path still deletes
+// the archive right after the download via Download.php cmd=unlink.
+foreach (glob("$docroot/*-boot-backup-*.zip") as $stale) {
+  $target = @readlink($stale);
+  if ($target && is_file($target)) @unlink($target);
+  @unlink($stale);
+}
 
 write(_('Preparing backup')."...");
 
@@ -81,11 +97,22 @@ if (!$zip) foreach ($pools as $pool) {
   $free = exec("df ".escapeshellarg("/mnt/$pool")."|awk 'END{print $4}'");
   if ($free > $used) {$zip = "/mnt/$pool/$backup"; break;}
 }
-// 3. Last resort: an array-backed user share.
+// 3. An array-backed user share.
 if (!$zip) foreach ($dir as $share) {
   if (!is_dir("/mnt/user/$share")) continue;
   $free = exec("df ".escapeshellarg("/mnt/user/$share")."|awk 'END{print $4}'");
   if ($free > $used) {$zip = "/mnt/user/$share/$backup"; break;}
+}
+// 4. Last resort: the boot device's own pool. /boot is always mounted (even with
+//    the array stopped), so this guarantees a target when nothing else is
+//    available. Only used for a real pool filesystem - a FAT/USB flash is not a
+//    pool and could not hold a >4GB archive anyway.
+if (!$zip) {
+  $bootfs = exec("findmnt -no FSTYPE /boot");
+  if (in_array($bootfs, ['zfs','btrfs','xfs'])) {
+    $free = exec("df /boot|awk 'END{print $4}'");
+    if ($free > $used) $zip = "/boot/$backup";
+  }
 }
 
 if (!$zip) {
@@ -94,11 +121,13 @@ if (!$zip) {
   exit(1);
 }
 
-// Collect top-level entries to archive, skipping previous backups.
+// Collect top-level entries to archive, skipping the prior-release/junk dirs
+// above and any earlier flash-backup zip a user may have left on the flash.
 chdir('/boot');
 $items = [];
 foreach (glob("*",GLOB_NOSORT) as $entry) {
   if (in_array($entry,$out)) continue;
+  if (preg_match('/-boot-backup-.*\.zip$/',$entry)) continue;
   $items[] = $entry;
 }
 $total = count($items);
