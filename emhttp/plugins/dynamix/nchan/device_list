@@ -503,11 +503,11 @@ function device_info(&$disk,$online,$poolName='',$poolstatusData=[], $options=[]
   if (!$online || _var($disk,'fsStatus')!='Mounted' || (in_array(_var($disk,'type'),['Parity','Cache']) && (!in_array(_var($disk,'name'),$pools) || isSubpool(_var($disk,'name'))))) {
     $view = "<a class='view'></a>";
   } else {
-    $view = "<a class='view' href=\"/Main/Browse?dir=".htmlspecialchars($dir)."\"><i class=\"icon-u-tab\" title=\""._('Browse')." $dir\"></i></a>";
+    $view = "<a class='view' href=\"/Main/Browse?dir=".htmlspecialchars($dir)."\"><i class=\"fa fa-folder-open\" title=\""._('Browse')." $dir\"></i></a>";
   }
   if (!$showView) $view = $showViewPlaceholder ? "<a class='view'></a>" : "";
   if ($showView && _var($options,'forceView',false) && _var($disk,'fsStatus')=='Mounted' && $dir !== '') {
-    $view = "<a class='view' href=\"/Main/Browse?dir=".htmlspecialchars($dir)."\"><i class=\"icon-u-tab\" title=\""._('Browse')." $dir\"></i></a>";
+    $view = "<a class='view' href=\"/Main/Browse?dir=".htmlspecialchars($dir)."\"><i class=\"fa fa-folder-open\" title=\""._('Browse')." $dir\"></i></a>";
   }
   if ($indent) $view = "<span style='padding-left:{$indent}px'></span>".$view;
   $realName = _var($disk,'name');
@@ -1392,7 +1392,7 @@ while (true) {
         $bootBrowseUrl = $bootDir !== '' ? "/Main/Browse?dir=".htmlspecialchars($bootDir) : $bootDeviceUrl;
         $bootIcon = $bootBrowseUrl === $bootDeviceUrl
           ? "<a class='view'></a>"
-          : "<a class='view' href=\"$bootBrowseUrl\"><i class=\"icon-u-tab\" title=\""._('Browse')." $bootDir\"></i></a>";
+          : "<a class='view' href=\"$bootBrowseUrl\"><i class=\"fa fa-folder-open\" title=\""._('Browse')." $bootDir\"></i></a>";
         $bootLink = "<a href=\"$bootDeviceUrl\">"._($bootLabel,3)."</a>";
         $poolLabel = ucfirst($pool);
         $poolDeviceUrl = "/Main/Device?name=".urlencode($pool);
@@ -1400,7 +1400,7 @@ while (true) {
         $poolBrowseUrl = $poolDir !== '' ? "/Main/Browse?dir=".htmlspecialchars($poolDir) : $poolDeviceUrl;
         $poolIcon = $poolBrowseUrl === $poolDeviceUrl
           ? "<a class='view'></a>"
-          : "<a class='view' href=\"$poolBrowseUrl\"><i class=\"icon-u-tab\" title=\""._('Browse')." $poolDir\"></i></a>";
+          : "<a class='view' href=\"$poolBrowseUrl\"><i class=\"fa fa-folder-open\" title=\""._('Browse')." $poolDir\"></i></a>";
         $poolLink = "<a href=\"$poolDeviceUrl\">"._($poolLabel,3)."</a>";
         $flashWarn = flash_smb_warning_html(_var($bootDisk,'name',''));
         $bootSummaryName = $bootIcon.$bootLink.$flashWarn;
