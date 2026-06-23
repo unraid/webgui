@@ -148,11 +148,18 @@ extract(parse_plugin_cfg("dynamix",true));
 $path    = _var($notify,'path','/tmp/notifications');
 $unread  = "$path/unread";
 $archive = "$path/archive";
-// Persistent (condition-style) notifications live in their own directory so they
-// can be retrieved cheaply without scanning the whole unread set, and so bulk
-// archive/delete never touch them. 'notify get' unions this with unread so the
-// legacy nchan poller still surfaces them.
-$active  = "$path/active";
+// Condition-style notifications (e.g. "Modified GUI installed") are derived state:
+// true only while their condition holds, and re-raised on every page load. They live
+// in their own directory so they can be retrieved cheaply without scanning the whole
+// unread set, and so bulk archive/delete never touch them. 'notify get' unions this
+// with unread so the legacy nchan poller still surfaces them.
+//
+// This directory is ALWAYS tmpfs, never the user-configurable $path (which may point
+// at the flash boot device when "Store notifications to boot drive" is set). Persisting
+// a derived condition across reboots is what strands it forever when the condition is
+// gone (e.g. the plugin was removed); keeping it off-disk makes a reboot free GC — the
+// next page load re-raises only conditions that are still true.
+$active  = "/tmp/notifications/active";
 $agents_dir = "/boot/config/plugins/dynamix/notifications/agents";
 if (is_dir($agents_dir)) {
   $agents = [];
