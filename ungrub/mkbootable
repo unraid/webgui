@@ -13,6 +13,9 @@
 # Reconfigure grub.cfg and theme.txt after UUID change
 # mkbootable reconfigure
 
+# Copy the EFI core from a known-good member to every other member's ESP
+# mkbootable sync <good-device>
+
 #set -euo pipefail
 #set -x
 source /etc/rc.d/rc.runlog
@@ -82,6 +85,72 @@ resize_partitions() {
   udevadm settle
 }
 
+# resolve a boot-pool member partition to that disk's EFI System Partition,
+# eg /dev/nvme1n1p3 -> /dev/nvme1n1p2, /dev/sdb3 -> /dev/sdb2
+member_esp() {
+  local part="$1" disk sep
+  disk="$(lsblk -no pkname "$part" 2>/dev/null | head -1)"
+  [[ -n "$disk" ]] || return 1
+  [[ $disk == *[0-9] ]] && sep="p" || sep=""
+  printf '/dev/%s%s2\n' "$disk" "$sep"
+}
+
+# write the EFI core ($2) onto a single ESP ($1), via a real mount + atomic
+# rename. Staged as BOOTX64.EFI.new then renamed over the live file -- mv on the
+# same filesystem is rename(2), an atomic replace, so an interrupted write can
+# never leave a torn or missing core.
+# If the ESP is already mounted we reuse that mount (never stack a second mount
+# on one FAT -- two rw mounts corrupt each other); otherwise we mount it on a
+# temp dir and unmount when done.
+install_efi_core() {
+  local esp="$1" src="$2" mnt dir owned=0 rc=0
+  mnt="$(findmnt -nro TARGET -S "$esp" 2>/dev/null | head -1)"
+  if [[ -z "$mnt" ]]; then
+    mnt="$(mktemp -d)" || return 1
+    if ! mount "$esp" "$mnt"; then
+      log "install_efi_core: cannot mount $esp"
+      rmdir "$mnt"
+      return 1
+    fi
+    owned=1
+  fi
+
+  dir="$mnt/EFI/BOOT"
+  if mkdir -p "$dir" \
+     && cp -f "$src" "$dir/BOOTX64.EFI.new" \
+     && mv -f "$dir/BOOTX64.EFI.new" "$dir/BOOTX64.EFI"; then
+    sync -f "$mnt"
+  else
+    rc=1
+  fi
+
+  if (( owned )); then
+    umount "$mnt"
+    rmdir "$mnt"
+  fi
+  return $rc
+}
+
+# Copy a known-good EFI core to the ESP of every boot pool member except the one
+# it came from. grub-install rebuilds the shared modules under $BOOT/grub but
+# writes the core to only one ESP; a member left with a stale core no longer
+# matches those modules and fails to boot with "symbol 'grub_memcpy' not found",
+# silently breaking the mirror's boot redundancy. The core uses a dynamic
+# ($root) prefix, so the same image is valid on every member.
+#   $1 = path to the known-good BOOTX64.EFI to distribute (on a mounted ESP)
+replicate_grub() {
+  local src="$1" part esp
+  for part in $(zpool list -v -H -P "$POOL" | awk '/\/dev\// {print $1}'); do
+    esp="$(member_esp "$part")" || { log "replicate_grub: cannot resolve ESP for $part, skipping"; continue; }
+    [[ "$esp" == "$EFI_PART" || ! -b "$esp" ]] && continue
+    if install_efi_core "$esp" "$src"; then
+      log "replicate_grub: synced EFI core to $esp"
+    else
+      log "replicate_grub: failed to sync EFI core to $esp"
+    fi
+  done
+}
+
 install_grub() {
   # format the EFI System Partition (partition 2) with FAT32 and mount
   mkfs.fat -F32 -n EFI "$EFI_PART"
@@ -102,6 +171,11 @@ install_grub() {
     --boot-directory="$BOOT" \
     --modules="part_gpt zfs zfsinfo search search_fs_uuid configfile normal" \
     --no-floppy --no-rs-codes
+
+  # replicate the core we just built to every other member's ESP so all mirror
+  # members stay in lockstep with the shared modules rebuilt above (no-op while
+  # this is the only member)
+  replicate_grub "$BOOT/efi/EFI/BOOT/BOOTX64.EFI"
 
   # we don't need this mounted anymore
   umount "$BOOT/efi"
@@ -162,6 +236,19 @@ remove_device() {
   fi
 }
 
+# Re-distribute the EFI core from a known-good member to all other members.
+# Use this to repair members whose ESP holds a stale core (eg a device added
+# with a bare "zpool attach", or a member missed by an earlier grub refresh).
+sync_device() {
+  mkdir -p -m 0700 "$BOOT/efi"
+  if ! mount -o ro "$EFI_PART" "$BOOT/efi" 2>/dev/null; then
+    log "sync: cannot mount source ESP $EFI_PART"
+    exit 1
+  fi
+  replicate_grub "$BOOT/efi/EFI/BOOT/BOOTX64.EFI"
+  umount "$BOOT/efi"
+}
+
 case "$OPER" in
 'add')
   add_device
@@ -174,6 +261,9 @@ case "$OPER" in
   ;;
 'reconfigure')
   configure_grub
+  ;;
+'sync')
+  sync_device
   ;;
 *)
   log "error 2" # shouldn't happen
