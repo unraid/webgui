@@ -13,8 +13,8 @@
 # Reconfigure grub.cfg and theme.txt after UUID change
 # mkbootable reconfigure
 
-# Copy the EFI core from a known-good member to every other member's ESP
-# mkbootable sync <good-device>
+# Reinstall GRUB on every boot-pool member (repairs drifted/stale cores)
+# mkbootable sync
 
 #set -euo pipefail
 #set -x
@@ -95,35 +95,46 @@ member_esp() {
   printf '/dev/%s%s2\n' "$disk" "$sep"
 }
 
-# write the EFI core ($2) onto a single ESP ($1), via a real mount + atomic
-# rename. Staged as BOOTX64.EFI.new then renamed over the live file -- mv on the
-# same filesystem is rename(2), an atomic replace, so an interrupted write can
-# never leave a torn or missing core.
-# If the ESP is already mounted we reuse that mount (never stack a second mount
-# on one FAT -- two rw mounts corrupt each other); otherwise we mount it on a
-# temp dir and unmount when done.
-install_efi_core() {
-  local esp="$1" src="$2" mnt dir owned=0 rc=0
+# Install both GRUB cores onto ONE pool member: the UEFI core to its ESP
+# (removable path /EFI/BOOT/BOOTX64.EFI) and the BIOS core to its MBR (boot.img)
+# plus BIOS Boot Partition (core.img). grub-install regenerates each core fresh
+# from the shared modules under $BOOT/grub, so the member is always self
+# consistent. The ESP must already hold a FAT filesystem (a freshly-added disk
+# is formatted by install_grub before this runs). If the ESP is already mounted
+# we reuse that mount (never stack a second rw mount on one FAT -- two corrupt
+# each other); otherwise we mount it on a temp dir and unmount when done.
+#   $1 = disk (eg "nvme0n1" or "sdb")   $2 = that disk's ESP (eg /dev/nvme0n1p2)
+install_member_grub() {
+  local disk="$1" esp="$2" mnt owned=0 rc=0
   mnt="$(findmnt -nro TARGET -S "$esp" 2>/dev/null | head -1)"
   if [[ -z "$mnt" ]]; then
     mnt="$(mktemp -d)" || return 1
     if ! mount "$esp" "$mnt"; then
-      log "install_efi_core: cannot mount $esp"
+      log "install_member_grub: cannot mount $esp"
       rmdir "$mnt"
       return 1
     fi
     owned=1
   fi
 
-  dir="$mnt/EFI/BOOT"
-  if mkdir -p "$dir" \
-     && cp -f "$src" "$dir/BOOTX64.EFI.new" \
-     && mv -f "$dir/BOOTX64.EFI.new" "$dir/BOOTX64.EFI"; then
-    sync -f "$mnt"
-  else
-    rc=1
-  fi
+  # UEFI core -> this member's ESP
+  grub-install \
+    --target=x86_64-efi \
+    --boot-directory="$BOOT" \
+    --efi-directory="$mnt" \
+    --modules="part_gpt zfs zfsinfo search search_fs_uuid configfile normal" \
+    --removable --no-nvram || rc=1
 
+  # BIOS core -> this member's MBR (boot.img) + BIOS Boot Partition (core.img).
+  # grub-install rewrites only the boot code in the MBR, preserving the disk's
+  # partition table.
+  grub-install \
+    --target=i386-pc "/dev/$disk" \
+    --boot-directory="$BOOT" \
+    --modules="part_gpt zfs zfsinfo search search_fs_uuid configfile normal" \
+    --no-floppy --no-rs-codes || rc=1
+
+  sync -f "$mnt"
   if (( owned )); then
     umount "$mnt"
     rmdir "$mnt"
@@ -131,54 +142,39 @@ install_efi_core() {
   return $rc
 }
 
-# Copy a known-good EFI core to the ESP of every boot pool member except the one
-# it came from. grub-install rebuilds the shared modules under $BOOT/grub but
-# writes the core to only one ESP; a member left with a stale core no longer
-# matches those modules and fails to boot with "symbol 'grub_memcpy' not found",
-# silently breaking the mirror's boot redundancy. The core uses a dynamic
-# ($root) prefix, so the same image is valid on every member.
-#   $1 = path to the known-good BOOTX64.EFI to distribute (on a mounted ESP)
-replicate_grub() {
-  local src="$1" part esp
+# (Re)install GRUB on EVERY member of the boot pool. grub-install rebuilds the
+# shared modules under $BOOT/grub and writes a fresh, matching core to each
+# member -- UEFI (ESP) and BIOS (MBR + BIOS Boot Partition) alike. This is what
+# keeps every member in lockstep with the rebuilt modules: a member left with a
+# stale core no longer matches them and fails to boot with "symbol 'grub_memcpy'
+# not found", silently breaking the mirror's boot redundancy. Reinstalling per
+# member is slower than copying one core, but it is the canonical, correct
+# operation (cf. the OpenZFS "repeat grub-install for each disk" guidance) and
+# covers BIOS, which a bare file copy cannot. Idempotent; runs only on
+# add/replace/sync.
+install_grub_all_members() {
+  local part disk esp
   for part in $(zpool list -v -H -P "$POOL" | awk '/\/dev\// {print $1}'); do
-    esp="$(member_esp "$part")" || { log "replicate_grub: cannot resolve ESP for $part, skipping"; continue; }
-    [[ "$esp" == "$EFI_PART" || ! -b "$esp" ]] && continue
-    if install_efi_core "$esp" "$src"; then
-      log "replicate_grub: synced EFI core to $esp"
+    disk="$(lsblk -no pkname "$part" 2>/dev/null | head -1)"
+    esp="$(member_esp "$part")" || { log "install_grub_all_members: cannot resolve ESP for $part, skipping"; continue; }
+    [[ -n "$disk" && -b "$esp" ]] || { log "install_grub_all_members: no ESP for $part, skipping"; continue; }
+    if install_member_grub "$disk" "$esp"; then
+      log "install_grub_all_members: installed GRUB on $disk ($esp)"
     else
-      log "replicate_grub: failed to sync EFI core to $esp"
+      log "install_grub_all_members: FAILED to install GRUB on $disk ($esp)"
     fi
   done
 }
 
 install_grub() {
-  # format the EFI System Partition (partition 2) with FAT32 and mount
+  # format the freshly-added disk's EFI System Partition (partition 2) with FAT32
+  # (existing members keep their ESP -- install_grub_all_members never reformats)
   mkfs.fat -F32 -n EFI "$EFI_PART"
-  mkdir -p -m 0700 "$BOOT/efi"
-  mount "$EFI_PART" "$BOOT/efi"
 
-  # UEFI install
-  grub-install \
-    --target=x86_64-efi \
-    --boot-directory="$BOOT" \
-    --efi-directory="$BOOT/efi" \
-    --modules="part_gpt zfs zfsinfo search search_fs_uuid configfile normal" \
-    --removable --no-nvram
-
-  # BIOS install
-  grub-install \
-    --target=i386-pc "/dev/$DEV" \
-    --boot-directory="$BOOT" \
-    --modules="part_gpt zfs zfsinfo search search_fs_uuid configfile normal" \
-    --no-floppy --no-rs-codes
-
-  # replicate the core we just built to every other member's ESP so all mirror
-  # members stay in lockstep with the shared modules rebuilt above (no-op while
-  # this is the only member)
-  replicate_grub "$BOOT/efi/EFI/BOOT/BOOTX64.EFI"
-
-  # we don't need this mounted anymore
-  umount "$BOOT/efi"
+  # install UEFI + BIOS GRUB on every pool member -- the new disk plus any
+  # pre-existing members -- so every core stays in lockstep with the shared
+  # modules rebuilt here (a single-member pool just does the one disk)
+  install_grub_all_members
 }
 
 add_device() {
@@ -236,17 +232,12 @@ remove_device() {
   fi
 }
 
-# Re-distribute the EFI core from a known-good member to all other members.
-# Use this to repair members whose ESP holds a stale core (eg a device added
-# with a bare "zpool attach", or a member missed by an earlier grub refresh).
+# Reinstall GRUB on every boot-pool member from the current shared modules.
+# Use this to repair members whose on-disk core has drifted from the modules
+# (eg a device added with a bare "zpool attach", or a member missed by an
+# earlier grub refresh). Restores UEFI and BIOS cores on all members in lockstep.
 sync_device() {
-  mkdir -p -m 0700 "$BOOT/efi"
-  if ! mount -o ro "$EFI_PART" "$BOOT/efi" 2>/dev/null; then
-    log "sync: cannot mount source ESP $EFI_PART"
-    exit 1
-  fi
-  replicate_grub "$BOOT/efi/EFI/BOOT/BOOTX64.EFI"
-  umount "$BOOT/efi"
+  install_grub_all_members
 }
 
 case "$OPER" in
