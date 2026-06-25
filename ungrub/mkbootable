@@ -153,31 +153,52 @@ install_member_grub() {
 # covers BIOS, which a bare file copy cannot. Idempotent; runs only on
 # add/replace/sync.
 install_grub_all_members() {
-  local part disk esp
+  local part disk esp count=0 fail=0
   for part in $(zpool list -v -H -P "$POOL" | awk '/\/dev\// {print $1}'); do
+    count=$((count + 1))
     disk="$(lsblk -no pkname "$part" 2>/dev/null | head -1)"
-    esp="$(member_esp "$part")" || { log "install_grub_all_members: cannot resolve ESP for $part, skipping"; continue; }
-    [[ -n "$disk" && -b "$esp" ]] || { log "install_grub_all_members: no ESP for $part, skipping"; continue; }
+    esp="$(member_esp "$part")" || { log "install_grub_all_members: cannot resolve ESP for $part"; fail=$((fail + 1)); continue; }
+    [[ -n "$disk" && -b "$esp" ]] || { log "install_grub_all_members: no ESP block device for $part ($esp)"; fail=$((fail + 1)); continue; }
     if install_member_grub "$disk" "$esp"; then
       log "install_grub_all_members: installed GRUB on $disk ($esp)"
     else
       log "install_grub_all_members: FAILED to install GRUB on $disk ($esp)"
+      fail=$((fail + 1))
     fi
   done
+  # A member we skipped or failed to update is one left with a stale core -- the
+  # exact drift this fix exists to prevent -- so surface it as a non-zero exit
+  # instead of letting add/sync report success.
+  if (( count == 0 )); then
+    log "install_grub_all_members: no members found in pool $POOL"
+    return 1
+  fi
+  if (( fail > 0 )); then
+    log "install_grub_all_members: $fail of $count member(s) failed -- boot redundancy degraded"
+    return 1
+  fi
+  log "install_grub_all_members: all $count member(s) updated"
+  return 0
 }
 
 install_grub() {
+  local rc=0
+
   # format the freshly-added disk's EFI System Partition (partition 2) with FAT32
   # (existing members keep their ESP -- install_grub_all_members never reformats)
-  mkfs.fat -F32 -n EFI "$EFI_PART"
+  mkfs.fat -F32 -n EFI "$EFI_PART" || { log "install_grub: mkfs.fat failed on $EFI_PART"; rc=1; }
 
   # install UEFI + BIOS GRUB on every pool member -- the new disk plus any
   # pre-existing members -- so every core stays in lockstep with the shared
   # modules rebuilt here (a single-member pool just does the one disk)
-  install_grub_all_members
+  install_grub_all_members || rc=1
+
+  return $rc
 }
 
 add_device() {
+  local rc=0
+
   # create gpt partition layout
   create_partitions
 
@@ -206,21 +227,23 @@ add_device() {
     zfs mount "$POOL/boot"
 
     # install grub
-    install_grub
+    install_grub || rc=1
 
     # configure grub.cfg
-    configure_grub
+    configure_grub || rc=1
   else
     # attach to first existing device already in the pool
     EXISTING=$(zpool list -v -H -P "$POOL" | awk '/\/dev\// {print $1; exit}')
     zpool attach -f "$POOL" "$EXISTING" "$BOOT_PART"
 
     # install grub
-    install_grub
+    install_grub || rc=1
 
     # wait for resilver to finish
     zpool wait -t resilver "$POOL"
   fi
+
+  return $rc
 }
 
 remove_device() {
@@ -260,4 +283,6 @@ case "$OPER" in
   log "error 2" # shouldn't happen
   exit 2
 esac
-exit 0
+# propagate the operation's exit status so a partial/failed grub install (a
+# member left with a stale core) is never reported as success
+exit $?
