@@ -79,6 +79,16 @@
 #   Note that if array is not Started, emhttpd will not spin down any disk, but emhttpd will
 #   still poll SMART data (for spun-up devices) and generate this event.
 
+# os_update
+#   Occurs during an Unraid OS update, after the new release files (including
+#   /boot/changes.txt) have been written to the flash but BEFORE the user reboots.
+#   Fired by the unRAIDServer plugin, not by emhttpd. Lets kernel-dependent
+#   plugins (e.g. out-of-tree driver plugins) stage a build matching the INCOMING
+#   kernel before reboot, so a reboot never lands on a kernel without a driver.
+#   Extra arguments: $2 = incoming Unraid version, $3 = incoming kernel release
+#   (uname -r form, e.g. 6.18.33-Unraid; empty if it could not be determined).
+#   Hooks run synchronously - keep them quick and use network timeouts.
+
 # Invoke all 'any_event' scripts that might exist
 for Dir in /usr/local/emhttp/plugins/* ; do
   if [ -d $Dir/event/any_event ]; then
