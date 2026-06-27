@@ -378,7 +378,9 @@ fi
 new_kernel=$(awk '/[Ll]inux kernel/{f=3} f>0{if(match($0,/[0-9]+(\.[0-9]+)+/)){print substr($0,RSTART,RLENGTH);exit}f--}' /boot/changes.txt 2>/dev/null | head -1)
 if [ -n "$new_kernel" ]; then new_kernel="${new_kernel}-Unraid"; fi
 if [ -x /usr/local/sbin/emhttp_event ]; then
-  /usr/local/sbin/emhttp_event os_update "&version;" "$new_kernel"
+  # Bound the whole dispatch so a wedged hook cannot stall the update forever;
+  # a hook that needs longer should background itself and notify (see emhttp_event).
+  timeout 300 /usr/local/sbin/emhttp_event os_update "&version;" "$new_kernel"
 fi
 # ensure writes to USB flash boot device have completed
 sync -f /boot

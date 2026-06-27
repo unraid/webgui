@@ -90,7 +90,10 @@
 #   Extra arguments, passed as context (ignore if not needed): $2 = incoming
 #   Unraid version, $3 = incoming kernel release (uname -r form, e.g.
 #   6.18.33-Unraid; empty if it could not be determined).
-#   Hooks run synchronously - keep them quick and use network timeouts.
+#   Hooks run synchronously and the whole dispatch is bounded by a timeout, so
+#   keep them quick and use network timeouts. A hook that genuinely needs long
+#   or async work should fork itself, return promptly, and surface its own result
+#   via notify - rather than blocking the OS update.
 
 # Invoke all 'any_event' scripts that might exist
 for Dir in /usr/local/emhttp/plugins/* ; do
