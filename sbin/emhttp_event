@@ -82,11 +82,14 @@
 # os_update
 #   Occurs during an Unraid OS update, after the new release files (including
 #   /boot/changes.txt) have been written to the flash but BEFORE the user reboots.
-#   Fired by the unRAIDServer plugin, not by emhttpd. Lets kernel-dependent
-#   plugins (e.g. out-of-tree driver plugins) stage a build matching the INCOMING
-#   kernel before reboot, so a reboot never lands on a kernel without a driver.
-#   Extra arguments: $2 = incoming Unraid version, $3 = incoming kernel release
-#   (uname -r form, e.g. 6.18.33-Unraid; empty if it could not be determined).
+#   Fired by the unRAIDServer plugin, not by emhttpd. A general pre-reboot hook
+#   for an OS update: any plugin can run work that must happen before rebooting
+#   into the new release - e.g. migrate/convert config, back something up, warn
+#   about an incompatibility, or (for out-of-tree driver plugins) stage a build
+#   matching the incoming kernel so the reboot never lands on a kernel without it.
+#   Extra arguments, passed as context (ignore if not needed): $2 = incoming
+#   Unraid version, $3 = incoming kernel release (uname -r form, e.g.
+#   6.18.33-Unraid; empty if it could not be determined).
 #   Hooks run synchronously - keep them quick and use network timeouts.
 
 # Invoke all 'any_event' scripts that might exist
