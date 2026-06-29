@@ -114,7 +114,7 @@ if (isset($_POST['#command'])) {
   if (strpos($command, $docroot) !== 0)
     $command = "$docroot/$command";
   $command = realpath($command);
-  if ($command === false)
+  if ($command === false || strpos($command, rtrim(realpath($docroot), '/') . '/') !== 0)
     syslog(LOG_INFO, "Invalid #command: {$_POST['#command']}");
   else {
     $command = escapeshellcmd($command);
