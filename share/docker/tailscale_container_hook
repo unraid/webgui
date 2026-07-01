@@ -53,6 +53,16 @@ elif [ ! -f /usr/bin/tailscale ] || [ ! -f /usr/bin/tailscaled ]; then
     INSTALL_IPTABLES="iptables "
   fi
 
+  HOST_ARCH="$(uname -m)"
+  case "${HOST_ARCH}" in
+    x86_64)        TS_ARCH="amd64";   JQ_ARCH="amd64"   ;;
+    aarch64)       TS_ARCH="arm64";   JQ_ARCH="arm64"   ;;
+    armv7l|armv6l) TS_ARCH="arm";     JQ_ARCH="armhf"   ;;
+    i686|i386)     TS_ARCH="386";     JQ_ARCH="i386"    ;;
+    riscv64)       TS_ARCH="riscv64"; JQ_ARCH="riscv64" ;;
+    *)             TS_ARCH="${HOST_ARCH}"; JQ_ARCH="${HOST_ARCH}" ;;
+  esac
+
   echo "Detecting Package Manager..."
   if which apt-get >/dev/null 2>&1; then
     echo "Detected Advanced Package Tool!"
@@ -65,9 +75,12 @@ elif [ ! -f /usr/bin/tailscale ] || [ ! -f /usr/bin/tailscaled ]; then
   elif which pacman >/dev/null 2>&1; then
     echo "Detected pacman Package Manager!"
     PACKAGES_INSTALL="pacman -Syu --noconfirm"
+  elif which xbps-install >/dev/null 2>&1; then
+    echo "Detected X Binary Package System!"
+    PACKAGES_INSTALL="xbps-install -Sy"
   else
-    echo "ERROR: Detection from Package Manager failed!"
-    error_handler
+    echo "No supported package manager detected, using static binary fallback!"
+    STATIC_FALLBACK="true"
   fi
 
   if [ "${TAILSCALE_TROUBLESHOOTING}" = "true" ]; then
@@ -77,18 +90,41 @@ elif [ ! -f /usr/bin/tailscale ] || [ ! -f /usr/bin/tailscaled ]; then
       PACKAGES_TROUBLESHOOTING="curl bind-tools iputils-ping speedtest-cli "
     elif which pacman >/dev/null 2>&1; then
       PACKAGES_TROUBLESHOOTING="curl dnsutils iputils speedtest-cli "
+    elif which xbps-install >/dev/null 2>&1; then
+      PACKAGES_TROUBLESHOOTING="curl bind-utils iputils "
     fi
-    echo "Tailscale Troubleshooting enabled!"
-    echo "Installing additional packages: $(echo "${PACKAGES_TROUBLESHOOTING}" | sed 's/[[:blank:]]*$//' | sed 's/ /, /g')"
+    if [ "${STATIC_FALLBACK}" = "true" ]; then
+      echo "Tailscale Troubleshooting requested but no package manager available, skipping extras."
+    else
+      echo "Tailscale Troubleshooting enabled!"
+      echo "Installing additional packages: $(echo "${PACKAGES_TROUBLESHOOTING}" | sed 's/[[:blank:]]*$//' | sed 's/ /, /g')"
+    fi
   fi
 
   echo "Installing packages..."
   echo "Please wait..."
-  if [ ! -z "${PACKAGES_UPDATE}" ]; then
-    UPDATE_LOG=$(${PACKAGES_UPDATE} 2>&1)
+  if [ "${STATIC_FALLBACK}" = "true" ]; then
+    if [ "${INSTALL_IPTABLES}" = "iptables " ]; then
+      echo "ERROR: Exit Node mode requires iptables but no package manager is available to install it!"
+      error_handler
+    fi
+    if ! which jq >/dev/null 2>&1; then
+      JQ_URL="https://github.com/jqlang/jq/releases/latest/download/jq-linux-${JQ_ARCH}"
+      if wget -qO /usr/bin/jq "${JQ_URL}" && chmod +x /usr/bin/jq && /usr/bin/jq --version >/dev/null 2>&1; then
+        echo "Installed static jq from ${JQ_URL}"
+      else
+        echo "ERROR: Failed to fetch static jq from ${JQ_URL}"
+        error_handler
+      fi
+    fi
+    INSTALL_RESULT=0
+  else
+    if [ ! -z "${PACKAGES_UPDATE}" ]; then
+      UPDATE_LOG=$(${PACKAGES_UPDATE} 2>&1)
+    fi
+    INSTALL_LOG=$(${PACKAGES_INSTALL} jq wget ca-certificates ${INSTALL_IPTABLES}${PACKAGES_TROUBLESHOOTING} 2>&1)
+    INSTALL_RESULT=$?
   fi
-  INSTALL_LOG=$(${PACKAGES_INSTALL} jq wget ca-certificates ${INSTALL_IPTABLES}${PACKAGES_TROUBLESHOOTING} 2>&1)
-  INSTALL_RESULT=$?
 
   if [ "${INSTALL_RESULT}" -eq 0 ]; then
     echo "Packages installed!"
@@ -122,17 +158,17 @@ elif [ ! -f /usr/bin/tailscale ] || [ ! -f /usr/bin/tailscaled ]; then
     mkdir -p /tmp/tailscale
   fi
 
-  if wget -q -nc --show-progress --progress=bar:force:noscroll -O /tmp/tailscale/tailscale.tgz "https://pkgs.tailscale.com/stable/tailscale_${TAILSCALE_VERSION}_amd64.tgz" ; then
-    echo "Download from Tailscale version ${TAILSCALE_VERSION} successful!"
+  if wget -q -nc --show-progress --progress=bar:force:noscroll -O /tmp/tailscale/tailscale.tgz "https://pkgs.tailscale.com/stable/tailscale_${TAILSCALE_VERSION}_${TS_ARCH}.tgz" ; then
+    echo "Download from Tailscale version ${TAILSCALE_VERSION} (${TS_ARCH}) successful!"
   else
-    echo "ERROR: Download from Tailscale version ${TAILSCALE_VERSION} failed!"
+    echo "ERROR: Download from Tailscale version ${TAILSCALE_VERSION} (${TS_ARCH}) failed!"
     rm -rf /tmp/tailscale
     error_handler
   fi
 
   tar -C /tmp/tailscale -xf /tmp/tailscale/tailscale.tgz
-  cp /tmp/tailscale/tailscale_${TAILSCALE_VERSION}_amd64/tailscale /usr/bin/tailscale
-  cp /tmp/tailscale/tailscale_${TAILSCALE_VERSION}_amd64/tailscaled /usr/bin/tailscaled
+  cp /tmp/tailscale/tailscale_${TAILSCALE_VERSION}_${TS_ARCH}/tailscale /usr/bin/tailscale
+  cp /tmp/tailscale/tailscale_${TAILSCALE_VERSION}_${TS_ARCH}/tailscaled /usr/bin/tailscaled
   rm -rf /tmp/tailscale
 
   echo "Installation Done!"
@@ -217,6 +253,7 @@ fi
 
 if [ "${OFFICIAL_TS_SIDECAR}" != "true" ]; then
   if [ "${TAILSCALE_LOG}" != "false" ]; then
+    mkdir -p /var/log
     TSD_PARAMS="${TSD_PARAMS} >>/var/log/tailscaled 2>&1 "
     TSD_MSG=" with log file location: /var/log/tailscaled"
   else
