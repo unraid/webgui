@@ -49,8 +49,5 @@ case 'unlink':
   if ($backup = readlink("$docroot/$file")) unlink($backup);
   @unlink("$docroot/$file");
   break;
-case 'backup':
-  echo exec("$docroot/webGui/scripts/flash_backup");
-  break;
 }
 ?>

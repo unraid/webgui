@@ -1,6 +1,6 @@
 #!/usr/bin/php -q
 <?PHP
-/* Copyright 2005-2023, Lime Technology
+/* Copyright 2005-2025, Lime Technology
  * Copyright 2012-2023, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
@@ -12,38 +12,50 @@
  */
 ?>
 <?
-$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
-require_once "$docroot/webGui/include/Wrappers.php";
+/* Stream a zip backup of the boot device (USB flash) to stdout.
+ *
+ * Usage: flash_backup [compression-level] > backup.zip   (stream the archive)
+ *        flash_backup size                                (print total bytes)
+ *   compression-level  0 (store, fastest) .. 9 (smallest, slowest), default 6
+ *
+ * The archive is written straight to stdout so it can be streamed directly to a
+ * browser (see include/FlashBackup.php) without ever staging a file on disk or
+ * in RAM - this avoids any size limit, works with the array stopped, and needs
+ * no cleanup. zip runs under nice + best-effort-low ionice to stay gentle on
+ * CPU and disk. The prior-release dirs (previous/prev) and desktop junk are
+ * excluded so the archive stays small.
+ *
+ * The 'size' mode prints the total byte size of the same included set; the
+ * endpoint uses it as the denominator for a download progress bar.
+ */
 
-$var = (array)@parse_ini_file('/var/local/emhttp/var.ini');
-$dir = ['system','appdata','isos','domains'];
-$out = ['prev','previous'];
+$sizeOnly = isset($argv[1]) && $argv[1] === 'size';
+// Clamp the requested compression level to a valid zip range (default 6).
+$level = isset($argv[1]) && is_numeric($argv[1]) ? max(0, min(9, (int)$argv[1])) : 6;
 
-$server = isset($var['NAME']) ? str_replace(' ','_',strtolower($var['NAME'])) : 'tower';
-$mydate = date('Ymd-Hi');
-$osVersion = _var($var,'version','_unknown');
-$backup = "$server-v$osVersion-boot-backup-$mydate.zip";
+// Top-level entries to exclude. 'previous'/'prev' hold the entire prior OS
+// release (often >1GB); the rest is desktop junk created when the flash is
+// mounted on a Mac/PC.
+$out = ['prev','previous','System Volume Information','.Trash-0','.Trashes','.Spotlight-V100','.fseventsd','.TemporaryItems'];
 
-$used = exec("df /boot|awk 'END{print $3}'") * 1.5;
-$free = exec("df /|awk 'END{print $4}'");
-if ($free > $used) $zip = "/$backup"; else {
-  foreach ($dir as $share) {
-    if (!is_dir("/mnt/user/$share")) continue;
-    $free = exec("df /mnt/user/$share|awk 'END{print $4}'");
-    if ($free > $used) {$zip = "/mnt/user/$share/$backup"; break;}
-  }
+chdir('/boot');
+$items = [];
+foreach (glob('*', GLOB_NOSORT) as $entry) {
+  if (in_array($entry, $out)) continue;
+  if (preg_match('/-boot-backup-.*\.zip$/', $entry)) continue; // stray old backups
+  $items[] = $entry;
 }
-if (isset($zip)) {
-  chdir("/boot");
-  foreach (glob("*",GLOB_NOSORT+GLOB_ONLYDIR) as $folder) {
-    if (in_array($folder,$out)) continue;
-    exec("zip -qr ".escapeshellarg($zip)." ".escapeshellarg($folder));
-  }
-  foreach (glob("*",GLOB_NOSORT) as $file) {
-    if (is_dir($file)) continue;
-    exec("zip -q ".escapeshellarg($zip)." ".escapeshellarg($file));
-  }
-  symlink($zip,"$docroot/$backup");
-  echo $backup;
+if (!$items) exit(1);
+$args = implode(' ', array_map('escapeshellarg', $items));
+
+// 'size' mode: print the total apparent byte size of the included set and exit.
+if ($sizeOnly) {
+  echo (int)trim(exec("du -sbc $args 2>/dev/null | awk 'END{print $1}'"));
+  exit(0);
 }
+
+// Stream the archive to stdout. zip writes a valid streamable archive (data
+// descriptors) when its output is not seekable.
+passthru("nice -n 19 ionice -c2 -n7 zip -$level -qr - $args 2>/dev/null", $rc);
+exit($rc);
 ?>
