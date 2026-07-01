@@ -24,8 +24,23 @@ function write(&$rows) {
 }
 
 function validdir($dir) {
-  $path = realpath($dir);
-  return in_array(explode('/', $path)[1] ?? '', ['mnt','boot']) ? $path : '';
+  $real = realpath($dir);
+  // Validate against the real (symlink-resolved) path: it must live under /mnt or /boot.
+  if ($real === false || !in_array(explode('/', $real)[1] ?? '', ['mnt','boot'])) return '';
+  // An exclusive share is exposed as a symlink /mnt/user/<share> -> /mnt/<pool|disk>/<share>,
+  // so realpath() would kick the File Manager out of user-share space and rewrite the whole
+  // listing (every row's path and LOCATION) to the raw /mnt/<disk> path. Keep the user-share
+  // path the caller asked for - FUSE is bypassed for exclusive shares, so it is the same data
+  // at native speed. Canonicalize lexically (no filesystem) so '..' can never escape /mnt/user.
+  $parts = [];
+  foreach (explode('/', $dir) as $p) {
+    if ($p === '' || $p === '.') continue;
+    if ($p === '..') { array_pop($parts); continue; }
+    $parts[] = $p;
+  }
+  $canon = '/'.implode('/', $parts);
+  if (preg_match('#^/mnt/(user0?|rootshare)(/|$)#', $canon) && is_dir($canon)) return $canon;
+  return $real;
 }
 
 function escapeQuote($data) {

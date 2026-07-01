@@ -131,6 +131,33 @@ a.static {
 a.view {
     display: inline-block;
     width: 20px;
+    /* Gap so the browse icon doesn't visually merge with the device/share link beside it */
+    margin-right: 8px;
+}
+/* Mute the browse icon so it reads as a separate action, not part of the blue link
+   next to it; brighten to the link color on hover to signal it is clickable. */
+a.view i {
+    color: var(--alt-text-color);
+}
+a.view:hover i {
+    color: var(--blue-800);
+}
+/* Closed folder at rest, opening on hover, to signal "click to browse here" */
+a.view:hover i.fa-folder-o:before {
+    content: "\f115"; /* fa-folder-open-o */
+}
+/* Pool health is plain status text, not a link. The separate info icon beside it
+   is the only clickable bit; it's muted and brightens on hover, with the standard
+   a.info tooltip explaining where it goes. */
+span.pool-state {
+    color: var(--alt-text-color);
+}
+a.pool-info {
+    color: var(--alt-text-color);
+    margin-left: 4px;
+}
+a.pool-info:hover {
+    color: var(--blue-800);
 }
 i.spacing {
     margin-left: -6px;
