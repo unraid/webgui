@@ -1,0 +1,60 @@
+Menu="PowerMode:2"
+Title="Power Button"
+Tag="icon-power"
+---
+<?PHP
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$cur = _var($powermode,'powerbutton','shutdown');
+?>
+
+<form markdown="1" name="PowerButton" method="POST" action="/update.php" target="progressFrame">
+<input type="hidden" name="#file" value="dynamix/dynamix.cfg">
+<input type="hidden" name="#section" value="powermode">
+
+_(Physical power button)_:
+: <select name="powerbutton" id="powerbutton" onchange="powerbuttonExtra(this)">
+  <?=mk_option($cur, "shutdown", _('Shut down').' ('._('default').')')?>
+  <?=mk_option($cur, "reboot", _('Reboot'))?>
+  <?=mk_option($cur, "ignore", _('Do nothing'))?>
+  <?php
+  // Extension point: plugins add <option> lines for custom actions.
+  // In scope: $cur (current powerbutton value). See /etc/acpi/powerbutton.d/README.
+  foreach (glob('/usr/local/emhttp/plugins/*/include/powerbutton-option.php') ?: [] as $frag) include $frag;
+  ?>
+  </select>
+
+:powerbutton_behavior_help:
+
+<?php
+// Extension point: plugins add config rows shown when their action is selected.
+// Each fragment outputs: <div class="powerbutton-extra" data-action="<action>" markdown="1"> ...fields... </div>
+foreach (glob('/usr/local/emhttp/plugins/*/include/powerbutton-extra.php') ?: [] as $frag) include $frag;
+?>
+
+&nbsp;
+: <span class="inline-block">
+    <input type="submit" name="#apply" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
+</form>
+
+<script>
+function powerbuttonExtra(sel) {
+  var v = sel.value;
+  $('.powerbutton-extra').each(function(){
+    $(this).toggle($(this).data('action') === v);
+  });
+}
+$(function(){ powerbuttonExtra(document.getElementById('powerbutton')); });
+</script>
