@@ -33,6 +33,15 @@ function curl_socket($socket, $url, $message='') {
 function publish($endpoint, $message, $len=1, $abort=false, $abortTime=30) {
   static $abortStart = [], $com = [], $lens = [];
 
+  // When launched by the task queue (TaskQueue.php), capture every published
+  // message to the task's log so it can be replayed when the task is brought
+  // back to the foreground. Messages are delimited by RS (\x1e) to preserve
+  // boundaries even when a message itself contains newlines.
+  $taskId = getenv('NCHAN_TASK');
+  if ($taskId !== false && $taskId !== '' && ctype_xdigit($taskId)) {
+    @file_put_contents("/var/local/emhttp/tasks/$taskId.log", $message."\x1e", FILE_APPEND);
+  }
+
   if ( is_file("/tmp/publishPaused") )
     return false;
 

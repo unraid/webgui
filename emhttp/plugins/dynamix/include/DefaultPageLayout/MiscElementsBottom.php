@@ -14,6 +14,8 @@
 
 <div class="upgrade_notice" style="display:none"></div>
 
+<div id="opTray" class="op-tray" style="display:none"></div>
+
 <a href="#" class="move_to_end" title="<?=_('Move To End')?>"><i class="fa fa-arrow-circle-down"></i></a>
 <a href="#" class="back_to_top" title="<?=_('Back To Top')?>"><i class="fa fa-arrow-circle-up"></i></a>
 

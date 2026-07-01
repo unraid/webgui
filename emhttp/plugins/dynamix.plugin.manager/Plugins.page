@@ -4,6 +4,7 @@ Title="Installed Plugins"
 Tag="icon-plugins"
 Tabs="true"
 Code="e944"
+Markdown="false"
 ---
 <?PHP
 /* Copyright 2005-2023, Lime Technology
@@ -143,6 +144,23 @@ function loadlist(id,check) {
     $('#checkall').find('input').prop('disabled',false);
   });
 }
+// Row buttons are rendered server-side (make_link) from the task queue: a plugin
+// with a running/queued task shows "Upgrading" (disabled). Refresh the rows when
+// the set of active plugin tasks changes, so that state appears/clears live —
+// loadlist(null,1) re-renders just the status cells (no network re-check, no
+// flickery full reload). The task queue is the single source of truth.
+var _plgTaskSig = '';
+function onPluginTasksChanged() {
+  var sig = '';
+  if (typeof taskList !== 'undefined') {
+    for (var i=0;i<taskList.length;i++) {
+      var t = taskList[i];
+      if (t && t.type=='plugins' && (t.status=='running'||t.status=='queued')) sig += t.id+';';
+    }
+  }
+  if (sig !== _plgTaskSig) { _plgTaskSig = sig; loadlist(null,1); }
+}
+window.onTaskListChanged = onPluginTasksChanged;
 $(function() {
   initlist();
   $('.tabs-container').append("<span id='checkall' class='status vhshift'><input type='button' value=\"_(Check For Updates)_\" onclick='openPlugin(\"checkall\",\"_(Plugin Update Check)_\",\":return\")' disabled></span>");

@@ -1,0 +1,83 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+/**
+ * Task scheduler daemon (see TaskQueue.php).
+ *
+ * Primary completion is recorded by each task itself on exit (task_complete,
+ * wired up in task_launch). This daemon is the fallback + queue driver: it
+ * catches tasks whose process vanished without stamping a result (e.g. a hard
+ * kill), marks them done/error, auto-starts the next queued task of that type,
+ * and broadcasts the updated list. Exits once nothing is running or queued; it
+ * is (re)started on demand by task_create() and by the page-load nchan sweep in
+ * DefaultPageLayout.php.
+ */
+
+$docroot = '/usr/local/emhttp';
+require_once "$docroot/plugins/dynamix/include/TaskQueue.php";
+
+// a task's stored pid is alive while /proc/<pid> exists; require a numeric pid so
+// an empty/garbage value can't match the /proc directory itself and wedge a task
+function task_pid_alive($pid) {
+  return ctype_digit((string)$pid) && file_exists("/proc/$pid");
+}
+
+// task_log_has_error() is shared with task_complete and lives in TaskQueue.php.
+
+// tidy up stale finished tasks, then publish the current state for any client
+task_prune();
+task_publish();
+
+while (true) {
+  $changed = false;
+  $freed   = [];
+
+  foreach (task_list() as $t) {
+    if ($t['status']==='running' && !task_pid_alive($t['pid'])) {
+      $t['status']   = task_log_has_error($t['id']) ? 'error' : 'done';
+      $t['finished'] = time();
+      task_write($t);
+      $freed[$t['type']] = true;
+      $changed = true;
+    }
+  }
+
+  // also launch any queued type that has nothing running. Covers a daemon
+  // (re)started by the page-load nchan sweep with queued-but-not-running
+  // records: without this it would treat those as "active" below and sleep
+  // forever without ever advancing the queue.
+  foreach (task_list() as $t) {
+    if ($t['status']==='queued' && !task_running_type($t['type'])) {
+      $freed[$t['type']] = true;
+      $changed = true;
+    }
+  }
+
+  // start the next queued op for every type that just freed up
+  foreach (array_keys($freed) as $type) task_advance($type);
+
+  if ($changed) task_publish();
+
+  // exit when there is no more work; the daemon is restarted on demand
+  $active = false;
+  foreach (task_list() as $t) {
+    if ($t['status']==='running' || $t['status']==='queued') { $active = true; break; }
+  }
+  if (!$active) break;
+
+  usleep(250000); // 250ms, same cadence as the file_manager worker
+}
+
+removeNChanScript();
+?>

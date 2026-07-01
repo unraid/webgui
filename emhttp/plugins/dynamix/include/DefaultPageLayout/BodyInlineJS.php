@@ -90,94 +90,74 @@ nchan_wlan0.on('message', function(msg) {
 nchan_wlan0.start();
 <?endif;?>
 
-var nchan_plugins = new NchanSubscriber('/sub/plugins',{subscriber:'websocket', reconnectTimeout:5000});
-nchan_plugins.on('message', function(data) {
-  if (!data || openDone(data)) return;
-  var box = $('pre#swaltext');
-  const text = box.html().split('<br>');
-  if (data.slice(-1) == '\r') {
-    text[text.length-1] = data.slice(0,-1);
-  } else {
-    text.push(data.slice(0,-1));
-  }
-  box.html(text.join('<br>')).scrollTop(box[0].scrollHeight);
-});
-
-var nchan_docker = new NchanSubscriber('/sub/docker',{subscriber:'websocket', reconnectTimeout:5000});
-nchan_docker.on('message', function(data) {
-  if (!data || openDone(data)) return;
-  var box = $('pre#swaltext');
-  data = data.split('\0');
-  switch (data[0]) {
-  case 'addLog':
-    var rows = document.getElementsByClassName('logLine');
-    if (rows.length) {
-      var row = rows[rows.length-1];
-      row.innerHTML += data[1]+'<br>';
-    }
-    break;
-  case 'progress':
-    var rows = document.getElementsByClassName('progress-'+data[1]);
-    if (rows.length) {
-      rows[rows.length-1].textContent = data[2];
-    }
-    break;
-  case 'addToID':
-    var rows = document.getElementById(data[1]);
-    if (rows === null) {
-      rows = document.getElementsByClassName('logLine');
-      if (rows.length) {
-        var row = rows[rows.length-1];
-        row.innerHTML += '<span id="'+data[1]+'">IMAGE ID ['+data[1]+']: <span class="content">'+data[2]+'</span><span class="progress-'+data[1]+'"></span>.</span><br>';
-      }
-    } else {
-      var rows_content = rows.getElementsByClassName('content');
-      if (!rows_content.length || rows_content[rows_content.length-1].textContent != data[2]) {
-        rows.innerHTML += '<span class="content">'+data[2]+'</span><span class="progress-'+data[1]+'"></span>.';
-      }
-    }
-    break;
-  case 'show_Wait':
-    progress_span[data[1]] = document.getElementById('wait-'+data[1]);
-    progress_dots[data[1]] = setInterval(function(){if (((progress_span[data[1]].innerHTML += '.').match(/\./g)||[]).length > 9) progress_span[data[1]].innerHTML = progress_span[data[1]].innerHTML.replace(/\.+$/,'');},500);
-    break;
-  case 'stop_Wait':
-    clearInterval(progress_dots[data[1]]);
-    progress_span[data[1]].innerHTML = '';
-    break;
-  default:
-    box.html(box.html()+data[0]);
-    break;
-  }
-  box.scrollTop(box[0].scrollHeight);
-});
-
+// ===========================================================================
+//  Multi-task background operation system (shared across clients/subsystems)
+// ---------------------------------------------------------------------------
+//  The backend (TaskQueue.php + the `tasks` daemon) owns the queue: at most one
+//  RUNNING op per type, so the live /sub/<type> channels never interleave. The
+//  full task list is broadcast on /sub/tasks; per-task output is captured to a
+//  server-side log and replayed when a task is brought to the foreground.
+// ===========================================================================
+var nchan_plugins  = new NchanSubscriber('/sub/plugins',{subscriber:'websocket', reconnectTimeout:5000});
+var nchan_docker   = new NchanSubscriber('/sub/docker',{subscriber:'websocket', reconnectTimeout:5000});
 var nchan_vmaction = new NchanSubscriber('/sub/vmaction',{subscriber:'websocket', reconnectTimeout:5000});
-nchan_vmaction.on('message', function(data) {
-  if (!data || openDone(data) || openError(data)) return;
+const nchanByType  = {plugins:nchan_plugins, docker:nchan_docker, vmaction:nchan_vmaction};
+
+const TASK_ENDPOINT = '/plugins/dynamix/include/TaskCommand.php';
+var taskList = [];
+const taskPrev = {};
+var foregroundTaskId = null;
+var foregroundType = null;
+
+function taskById(id)  { for (var i=0;i<taskList.length;i++) if (taskList[i].id==id)  return taskList[i]; return null; }
+function taskByPid(pid){ for (var i=0;i<taskList.length;i++) if (taskList[i].pid==pid) return taskList[i]; return null; }
+function escapeTaskHtml(s){ return $('<div>').text(s==null?'':String(s)).html(); }
+
+// NchanSubscriber.start()/stop() throw when called in the wrong run-state
+// ("Can't stop NchanSubscriber, it's not running."). Guard every transition so
+// a no-op start/stop can't raise and abort the surrounding handler.
+function nchanStart(sub){ try { if (sub && !sub.running) sub.start(); } catch(e) {} }
+function nchanStop(sub) { try { if (sub &&  sub.running) sub.stop();  } catch(e) {} }
+function stopAllTypeChannels(){ nchanStop(nchan_plugins); nchanStop(nchan_docker); nchanStop(nchan_vmaction); }
+
+// progress_dots / progress_span (declared in HeadInlineJS) are global wait-spinner
+// timers keyed by element id. Clear them when (re)opening or closing a modal so a
+// re-foregrounded docker/vm op doesn't spawn duplicate tickers or tick a dead node.
+function clearProgressDots(){
+  for (var k in progress_dots) if (progress_dots[k]) clearInterval(progress_dots[k]);
+  progress_dots = []; progress_span = [];
+}
+
+// render one raw nchan message into the open modal (#swaltext)
+function renderMessage(type, data) {
   var box = $('pre#swaltext');
+  if (!box.length) return;
+  if (type=='plugins') {
+    const text = box.html().split('<br>');
+    if (data.slice(-1) == '\r') text[text.length-1] = data.slice(0,-1);
+    else text.push(data.slice(0,-1));
+    box.html(text.join('<br>')).scrollTop(box[0].scrollHeight);
+    return;
+  }
+  // docker + vmaction share the \0-delimited protocol (differ only in addToID label)
   data = data.split('\0');
   switch (data[0]) {
   case 'addLog':
     var rows = document.getElementsByClassName('logLine');
-    if (rows.length) {
-      var row = rows[rows.length-1];
-      row.innerHTML += data[1]+'<br>';
-    }
+    if (rows.length) rows[rows.length-1].innerHTML += data[1]+'<br>';
     break;
   case 'progress':
     var rows = document.getElementsByClassName('progress-'+data[1]);
-    if (rows.length) {
-      rows[rows.length-1].textContent = data[2];
-    }
+    if (rows.length) rows[rows.length-1].textContent = data[2];
     break;
   case 'addToID':
+    var label = type=='docker' ? 'IMAGE ID ['+data[1]+']' : data[1];
     var rows = document.getElementById(data[1]);
     if (rows === null) {
       rows = document.getElementsByClassName('logLine');
       if (rows.length) {
         var row = rows[rows.length-1];
-        row.innerHTML += '<span id="'+data[1]+'">'+data[1]+': <span class="content">'+data[2]+'</span><span class="progress-'+data[1]+'"></span>.</span><br>';
+        row.innerHTML += '<span id="'+data[1]+'">'+label+': <span class="content">'+data[2]+'</span><span class="progress-'+data[1]+'"></span>.</span><br>';
       }
     } else {
       var rows_content = rows.getElementsByClassName('content');
@@ -192,14 +172,248 @@ nchan_vmaction.on('message', function(data) {
     break;
   case 'stop_Wait':
     clearInterval(progress_dots[data[1]]);
-    progress_span[data[1]].innerHTML = '';
+    if (progress_span[data[1]]) progress_span[data[1]].innerHTML = '';
     break;
   default:
     box.html(box.html()+data[0]);
     break;
   }
   box.scrollTop(box[0].scrollHeight);
+}
+
+// live channel messages render only into the foregrounded task's modal
+function routeMessage(type, data) {
+  if (!data) return;
+  if (data=='_DONE_' || data=='_ERROR_') {
+    if (foregroundTaskId && foregroundType==type) { if (data=='_ERROR_') openError(data); else openDone(data); }
+    return;
+  }
+  if (foregroundTaskId && foregroundType==type) renderMessage(type, data);
+}
+nchan_plugins.on('message',  function(data){ routeMessage('plugins',  data); });
+nchan_docker.on('message',   function(data){ routeMessage('docker',   data); });
+nchan_vmaction.on('message', function(data){ routeMessage('vmaction', data); });
+
+// legacy per-op reload callback ( (func||'loadlist')(plg) ), suppressed for ':return'
+function fireTaskCallback(t) {
+  if (t && t.plg && t.plg != ':return') {
+    var fn = window[t.func || 'loadlist'];
+    if (typeof fn === 'function') setTimeout(function(){ fn(t.plg); },250);
+  }
+}
+
+// bring a task to the foreground: open the modal, replay its server-side log,
+// then stream live if it is still running
+function foregroundTask(id) {
+  var task = taskById(id);
+  if (!task) return;
+  foregroundTaskId = id;
+  foregroundType = task.type;
+  stopAllTypeChannels();
+  clearProgressDots();
+  // Drive the modal by task status, not the per-type `button` flag (which made
+  // docker ops hide the Close button while running and disabled the confirm
+  // button, surfacing SweetAlert's la-ball-fall "bouncing dots" loader):
+  //   running  -> a top-corner minimize (below) backgrounds it; no disabled
+  //               button, so the bouncing-dots loader never shows. The spinning
+  //               title icon is the in-progress indicator.
+  //   finished -> a primary Dismiss button clears the task from the tray.
+  var finished    = task.status=='done' || task.status=='error';
+  // status renders as a colored "state" strip below the title (see .nchan-state)
+  var stateCls    = task.status=='done'  ? 'nchan-done'
+                  : task.status=='error' ? 'nchan-error' : 'nchan-running';
+  var stateHtml   = task.status=='done'  ? "<i class='fa fa-check fa-fw'></i> <?=_('Finished')?>"
+                  : task.status=='error' ? "<i class='fa fa-warning fa-fw'></i> <?=_('Error')?>"
+                  : "<i class='fa fa-refresh fa-spin fa-fw'></i> <?=_('In Progress')?>";
+  swal({title:escapeTaskHtml(task.title),text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:finished,confirmButtonText:"<?=_('Dismiss')?>"},function(close){
+    // confirm/Dismiss (or Esc): background while running, clear once finished
+    if (foregroundTaskId===id) { foregroundTaskId=null; foregroundType=null; }
+    stopAllTypeChannels();
+    clearProgressDots();
+    var fresh = taskById(id);
+    if (fresh && (fresh.status=='done'||fresh.status=='error')) { fireTaskCallback(fresh); dismissTask(id); }
+    nchanCloseModal(false);   // swal closes via closeOnConfirm; this just cleans up
+    trayRender();
+  });
+  $('.sweet-alert').addClass('nchan').css('pointer-events','');
+  // colored state strip between the title and the log (openDone/openError recolor it)
+  $('.sweet-alert .nchan-state').remove();
+  $('.sweet-alert > h2').after("<div id='pluginProgressTitle' class='nchan-state "+stateCls+"'>"+stateHtml+"</div>");
+  // a persistent top-corner control that just closes this window, leaving the
+  // task in the tray: while running it reads as "minimize" (the task keeps
+  // running); once finished it reads as "close" (the task stays as a finished
+  // tile). Removal is the separate, primary Dismiss action. openDone/openError
+  // swap the glyph/tooltip to the finished form.
+  // the corner control is ALWAYS minimize (it tucks the modal away and keeps the
+  // task in the tray); removal is the separate Dismiss button. Keeping one icon
+  // avoids the confusing minus->x swap where the "x" actually just minimized.
+  var closeIcon = 'fa-minus';
+  var closeTip  = finished ? "<?=_('Minimize - keeps it in the tray')?>" : "<?=_('Minimize - keeps running in the background')?>";
+  $('.sweet-alert .nchan-close').remove();
+  $('.sweet-alert').append("<a class='nchan-close' title=\""+closeTip+"\" onclick='minimizeForegroundTask()'><i class='fa "+closeIcon+" fa-fw'></i></a>");
+  $('pre#swaltext').html('');
+  $.get(TASK_ENDPOINT,{action:'log',id:id},function(logdata){
+    if (foregroundTaskId!==id) return; // user moved on while loading
+    var msgs = (logdata||'').split('\x1e');
+    for (var i=0;i<msgs.length;i++) {
+      var m = msgs[i];
+      if (m==='' || m==='_DONE_' || m==='_ERROR_') continue;
+      renderMessage(task.type, m);
+    }
+    var fresh = taskById(id);
+    if (fresh && fresh.status=='running')    nchanStart(nchanByType[task.type]);
+    else if (fresh && fresh.status=='done')  openDone('_DONE_');
+    else if (fresh && fresh.status=='error') openError('_ERROR_');
+  },'text');
+}
+
+// react to the shared task list pushed on /sub/tasks
+function onTaskListUpdate() {
+  for (var i=0;i<taskList.length;i++) {
+    var t = taskList[i], prev = taskPrev[t.id];
+    if (prev !== t.status) {
+      if (t.status=='done' || t.status=='error') {
+        if (foregroundTaskId==t.id) {
+          stopAllTypeChannels();
+          if (t.status=='error') openError('_ERROR_'); else openDone('_DONE_');
+          // callback fired when the user closes the modal
+        } else {
+          fireTaskCallback(t);
+        }
+      } else if (t.status=='running' && foregroundTaskId==t.id) {
+        $('#pluginProgressTitle').attr('class','nchan-state nchan-running').html("<i class='fa fa-refresh fa-spin fa-fw'></i> <?=_('In Progress')?>");
+        nchanStart(nchanByType[t.type]);
+      }
+    }
+    taskPrev[t.id] = t.status;
+  }
+  for (var id in taskPrev) if (!taskById(id)) delete taskPrev[id];
+  trayRender();
+  // let the current page react to task changes (e.g. Plugins page disables its
+  // update buttons while a plugin task is running). No-op where undefined.
+  if (typeof window.onTaskListChanged === 'function') { try { window.onTaskListChanged(); } catch(e) {} }
+}
+
+var taskChannel = new NchanSubscriber('/sub/tasks',{subscriber:'websocket', reconnectTimeout:5000});
+taskChannel.on('message', function(msg){
+  try { taskList = JSON.parse(msg) || []; } catch(e) { taskList = []; }
+  onTaskListUpdate();
 });
+
+// Tray expand/collapse state (mobile only). On desktop the tray is always a
+// full vertical stack; on mobile it collapses to a single tappable card with
+// the rest peeking behind it (the iOS/Android grouped-notification pattern).
+var trayExpanded = false;
+function isMobileTray() {
+  return !!(window.matchMedia && window.matchMedia('(max-width: 767px)').matches);
+}
+function expandTray() { trayExpanded = true; trayRender(); }
+function collapseTray() { trayExpanded = false; trayRender(); }
+
+// render the task tray
+function trayRender() {
+  var $tray = $('#opTray');
+  if (!$tray.length) return;
+  if (!taskList.length) { $tray.hide().empty(); trayExpanded = false; return; }
+  var rows = '', finished = 0, count = taskList.length;
+  // newest first: the most recent task sits at the top of the stack and is the
+  // single card shown when the mobile tray is collapsed.
+  for (var i=taskList.length-1;i>=0;i--) {
+    var t = taskList[i], icon, actions='', safeId = escapeTaskHtml(t.id);
+    var top = (i==taskList.length-1) ? ' op-top' : '';
+    if (t.status=='done' || t.status=='error') finished++;
+    var show = "<a class='op-act' onclick='foregroundTask(\""+safeId+"\")' title=\"<?=_('Show')?>\"><i class='fa fa-window-maximize fa-fw'></i></a>";
+    if (t.status=='running') {
+      icon = "<i class='fa fa-circle-o-notch fa-spin fa-fw'></i>";
+      actions = show + "<a class='op-act' onclick='confirmAbortTask(\""+safeId+"\")' title=\"<?=_('Abort')?>\"><i class='fa fa-stop-circle fa-fw'></i></a>";
+    } else if (t.status=='queued') {
+      icon = "<i class='fa fa-clock-o fa-fw'></i>";
+      actions = "<a class='op-act' onclick='cancelTask(\""+safeId+"\")' title=\"<?=_('Cancel')?>\"><i class='fa fa-times fa-fw'></i></a>";
+    } else if (t.status=='done') {
+      icon = "<i class='fa fa-check fa-fw green-text'></i>";
+      actions = show + "<a class='op-act' onclick='dismissTask(\""+safeId+"\")' title=\"<?=_('Dismiss')?>\"><i class='fa fa-times fa-fw'></i></a>";
+    } else {
+      icon = "<i class='fa fa-warning fa-fw orange-text'></i>";
+      actions = show + "<a class='op-act' onclick='dismissTask(\""+safeId+"\")' title=\"<?=_('Dismiss')?>\"><i class='fa fa-times fa-fw'></i></a>";
+    }
+    rows += "<div class='op-task op-"+t.status+top+"'><span class='op-icon'>"+icon+"</span><span class='op-title'>"+escapeTaskHtml(t.title)+"</span><span class='op-actions'>"+actions+"</span></div>";
+  }
+  // Header (only when more than one task): carries the count, a bulk "Clear
+  // finished" action when there is more than one finished task, and — on the
+  // mobile expanded stack — a chevron to collapse back to the single card.
+  var head = '';
+  if (count > 1) {
+    head = "<div class='op-tray-head'>";
+    head += "<span class='op-tray-count'>"+count+" <?=_('operations')?></span>";
+    head += "<span class='op-tray-head-acts'>";
+    if (finished > 1) {
+      head += "<a class='op-act' onclick='clearFinishedTasks()' title=\"<?=_('Clear finished tasks')?>\"><i class='fa fa-check-circle-o fa-fw'></i> <?=_('Clear finished')?></a>";
+    }
+    head += "<a class='op-act op-collapse' onclick='collapseTray()' title=\"<?=_('Collapse')?>\"><i class='fa fa-chevron-down fa-fw'></i></a>";
+    head += "</span></div>";
+  }
+  // Collapsed badge: a count pill on the top card so a stacked group reads as
+  // "N operations" before it's expanded.
+  var badge = (count > 1) ? "<span class='op-stack-badge' onclick='expandTray()'>"+count+"</span>" : "";
+  // State classes drive the CSS: collapsed shows just the top card with the
+  // others peeking; expanded shows the full vertical list with the header.
+  var mobile = isMobileTray();
+  var collapsed = mobile && !trayExpanded && count > 1;
+  $tray.removeClass('op-collapsed op-expanded op-multi');
+  if (count > 1) $tray.addClass('op-multi');
+  $tray.addClass(collapsed ? 'op-collapsed' : 'op-expanded');
+  $tray.html(head + rows + badge).show();
+}
+
+// When the mobile tray is collapsed into a single stacked card, a tap anywhere
+// on it (other than a row action) expands the full list. Delegated so it
+// survives trayRender() re-renders.
+$(document).on('click', '#opTray.op-collapsed', function(e) {
+  if ($(e.target).closest('.op-act').length) return;
+  expandTray();
+});
+// Re-evaluate collapsed/expanded layout when crossing the mobile breakpoint so
+// the tray doesn't get stuck in a mobile-only collapsed state on resize.
+if (window.matchMedia) {
+  var trayMql = window.matchMedia('(max-width: 767px)');
+  var onTrayBreakpoint = function(){ if (!isMobileTray()) trayExpanded = false; trayRender(); };
+  if (trayMql.addEventListener) trayMql.addEventListener('change', onTrayBreakpoint);
+  else if (trayMql.addListener) trayMql.addListener(onTrayBreakpoint);
+}
+
+// minimize the foreground modal: drop the live view but leave the task running
+// in the backend (the tray keeps tracking it). Backgrounding, not aborting.
+// Fade the modal out with its .nchan styling intact, then strip the class once
+// it's gone. Removing .nchan while the modal is still visible snaps it back to
+// the default swal look for a frame (the "flash"). pointer-events:none keeps the
+// fading (now-invisible but still laid-out) modal from eating clicks; the guard
+// avoids stripping .nchan off a modal that was reopened in the meantime.
+function nchanCloseModal(doClose) {
+  $('.sweet-alert').css('pointer-events','none');
+  if (doClose && typeof swal!=='undefined' && swal.close) swal.close();
+  setTimeout(function(){
+    var $sa = $('.sweet-alert');
+    $sa.css('pointer-events','');
+    if (!foregroundTaskId) $sa.removeClass('nchan');
+  }, 350);
+}
+
+function minimizeForegroundTask() {
+  if (foregroundTaskId) { foregroundTaskId=null; foregroundType=null; }
+  stopAllTypeChannels();
+  clearProgressDots();
+  nchanCloseModal(true);
+  trayRender();
+}
+
+function cancelTask(id) { $.post(TASK_ENDPOINT,{action:'abort',id:id}); }
+function dismissTask(id){ $.post(TASK_ENDPOINT,{action:'dismiss',id:id}); }
+function clearFinishedTasks(){ $.post(TASK_ENDPOINT,{action:'clear'}); }
+function confirmAbortTask(id) {
+  swal({title:"<?=_('Abort background operation')?>",text:"<?=_('This may leave an unknown state')?>",html:true,animation:'none',type:'warning',showCancelButton:true,confirmButtonText:"<?=_('Proceed')?>",cancelButtonText:"<?=_('Cancel')?>"},function(){
+    $.post(TASK_ENDPOINT,{action:'abort',id:id});
+  });
+}
 
 const scrollDuration = 500;
 $(window).scroll(function() {
@@ -259,7 +473,8 @@ $(function() {
     $('html, body').scrollTop(top);
   }
   $.removeCookie('top');
-  if ($.cookie('addAlert') != null) bannerAlert(addAlert.text,addAlert.cmd,addAlert.plg,addAlert.func);
+  // subscribe to the shared task list; the tray renders from server state
+  taskChannel.start();
 <?if ($safemode):?>
   showNotice("<?=_('System running in')?> <b><?=('safe mode')?></b>");
 <?else:?>

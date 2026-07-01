@@ -1885,11 +1885,366 @@ label.checkbox input:disabled ~ .checkmark {
     font-size: 2.5rem;
     z-index: 999;
 }
+/* Background operation task tray (see BodyInlineJS trayRender) */
+.op-tray {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    width: 320px;
+    max-width: 90vw;
+    max-height: 60vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    z-index: 1000;
+}
+/* Lift the tray above the fixed footer so it isn't clipped behind it.
+   Mirrors the media queries that make #footer position:fixed. */
+@media (min-width: 768px) {
+    .op-tray { bottom: calc(40px + 1rem); }
+}
+@media (min-height: 500px) and (orientation: landscape) {
+    .op-tray { bottom: calc(30px + 1rem); }
+}
+.op-tray .op-tray-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    padding: 0 .35rem .15rem;
+}
+.op-tray .op-tray-count {
+    font-size: 1.05rem;
+    color: var(--text-color);
+    opacity: .6;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}
+.op-tray .op-tray-head-acts {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+}
+.op-tray .op-tray-head .op-act {
+    font-size: 1.1rem;
+    color: var(--text-color);
+    opacity: .75;
+    cursor: pointer;
+    text-decoration: none;
+}
+.op-tray .op-tray-head .op-act:hover { opacity: 1; color: var(--brand-orange); }
+/* The collapse chevron and the count badge are part of the mobile stacked-card
+   interaction; desktop always shows the full vertical list, so hide them there. */
+.op-tray .op-tray-head .op-collapse { display: none; }
+.op-tray .op-stack-badge { display: none; }
+.op-tray .op-task {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem .75rem;
+    font-size: 1.3rem;
+    color: var(--text-color);
+    background-color: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--brand-orange);
+    border-radius: .5rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,.25);
+}
+.op-tray .op-task.op-done  { border-left-color: var(--green-800); }
+.op-tray .op-task.op-error { border-left-color: var(--red-600); }
+.op-tray .op-task.op-queued { border-left-color: var(--gray-500); }
+.op-tray .op-icon { flex: 0 0 auto; }
+.op-tray .op-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.op-tray .op-actions {
+    flex: 0 0 auto;
+    display: flex;
+    gap: .5rem;
+}
+.op-tray .op-act {
+    cursor: pointer;
+    color: var(--text-color);
+    text-decoration: none;
+}
+.op-tray .op-act:hover { color: var(--brand-orange); }
+/* The foreground task modal: a compact, centered card (a transient progress log
+   shouldn't take over the screen, so it is NOT a full-height sidebar). The base
+   swal keeps the centering + rounded corners; here we just shrink it and lay it
+   out as header / scrolling log / footer. All colors are theme tokens so it
+   adapts to white / azure / black / gray:
+     surface = --dynamix-sweet-alert-icon-bg-color   text = --dynamix-sweet-alert-text-color
+     muted = --alt-text-color   card = --shade-bg-color   lines = --border-color
+     accent = --brand-orange. Mobile goes fullscreen (below). */
+.sweet-alert.nchan {
+    display: flex !important;
+    flex-direction: column;
+    width: 90vw;
+    max-width: 60rem;
+    height: 75vh;          /* fixed (overrides swal's @media 95vh) so the log scrolls in place and the Dismiss button never moves; scales with the viewport */
+    max-height: 85vh;
+    margin: 0;
+    padding: 0;
+    text-align: left;
+    overflow: hidden;
+    box-sizing: border-box;
+    box-shadow: 0 0.5rem 2rem var(--bg-opacity-30);
+}
+/* SweetAlert adds 40px bottom padding when no buttons show (our running state);
+   the sheet manages its own padding, so cancel it. Matches swal's selector plus
+   .nchan to outspecify it. */
+.sweet-alert.nchan[data-has-confirm-button=false][data-has-cancel-button=false] {
+    padding-bottom: 0;
+}
+/* While running there is no Dismiss button, so hide the whole footer bar
+   (otherwise its border-top + padding render as an empty strip). */
+.sweet-alert.nchan[data-has-confirm-button=false] .sa-button-container {
+    display: none;
+}
+.sweet-alert.nchan > h2 {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 1.1rem 3.6rem 0.85rem 1.2rem;
+    font-size: 1.6rem;
+    line-height: 1.35;
+    font-weight: 600;
+    text-align: left;
+}
+/* status state strip below the title: a subtle theme-adaptive tint + a colored
+   icon, with normal (theme) text. Tints are translucent so they read over the
+   modal surface in every theme without the dated pale-banner look. */
+.sweet-alert.nchan .nchan-state {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0.5rem 1.2rem;
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--text-color);
+    border-bottom: 1px solid var(--border-color);
+}
+.sweet-alert.nchan .nchan-state i { font-size: 1.05em; }
+.sweet-alert.nchan .nchan-state.nchan-running { background: rgba(59,130,196,.14); }
+.sweet-alert.nchan .nchan-state.nchan-running i { color: #3b82c4; }
+.sweet-alert.nchan .nchan-state.nchan-done    { background: rgba(58,156,71,.16); }
+.sweet-alert.nchan .nchan-state.nchan-done i  { color: #3a9c47; }
+.sweet-alert.nchan .nchan-state.nchan-error   { background: rgba(226,75,74,.14); }
+.sweet-alert.nchan .nchan-state.nchan-error i { color: #e24b4a; }
+.sweet-alert.nchan > p {
+    flex: 1 1 auto;            /* fill the fixed height so the footer stays pinned to the bottom */
+    min-height: 0;
+    margin: 0;
+    padding: 1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+}
+.sweet-alert.nchan #swaltext {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow: auto;
+    margin: 0;
+    padding: 0;
+    text-align: left;
+    font-size: 1.2rem;
+}
+/* Slim footer with a full-width Dismiss. A single centered button looked lonely
+   and the default container (margin-top + centered flex + a hidden loader) ate
+   vertical space. */
+.sweet-alert.nchan .sa-button-container {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: flex-end;
+    margin: 0;
+    padding: 0.7rem 1.2rem;
+    border-top: 1px solid var(--border-color);
+}
+.sweet-alert.nchan .sa-confirm-button-container { display: flex; justify-content: flex-end; }
+.sweet-alert.nchan .la-ball-fall { display: none; }
+/* !important overrides SweetAlert's inline background-color:transparent / sizing */
+.sweet-alert.nchan button.confirm {
+    display: inline-block;
+    width: auto;
+    margin: 0;
+    padding: 0.5rem 1.4rem;
+    font-size: 1.25rem;
+    color: var(--white) !important;
+    background: var(--brand-orange) !important;
+    border: 0 !important;
+    border-radius: 0.4rem;
+    box-shadow: none !important;
+}
+.sweet-alert.nchan button.confirm:hover { background: var(--orange-800) !important; }
+/* top-corner minimize (running) / close (finished) control — theme-token colors
+   so it stays visible on the modal surface in every theme */
+.sweet-alert .nchan-close {
+    position: absolute;
+    top: 0.85rem;
+    right: 0.9rem;
+    width: 2.4rem;
+    height: 2.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 1.3rem;
+    line-height: 1;
+    color: var(--dynamix-sweet-alert-text-color);
+    background: transparent;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color .15s, border-color .15s, color .15s;
+    z-index: 2;
+}
+.sweet-alert .nchan-close:hover {
+    color: var(--white);
+    background: var(--brand-orange);
+    border-color: var(--brand-orange);
+}
+/* Mobile: fullscreen (a centered card is cramped on phones). Overrides the base
+   swal centering to fill the viewport. */
+@media (max-width: 767px) {
+    .sweet-alert.nchan {
+        left: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        transform: none;
+        -webkit-transform: none;
+        width: 100vw;
+        max-width: 100vw;
+        height: 100dvh;
+        max-height: 100dvh;
+        border: 0;
+        border-radius: 0;
+    }
+    .sweet-alert.nchan .nchan-close { width: 2.9rem; height: 2.9rem; font-size: 1.6rem; }
+}
 .back_to_top {
     right: 40px;
 }
 .move_to_end {
     right:12px;
+}
+/* The scroll-to-top/bottom buttons share the bottom-right corner with the task
+   tray. When the tray has tasks (it is an earlier sibling of the buttons, see
+   MiscElementsBottom), move the buttons clear of it: to the bottom-left on
+   desktop. */
+.op-tray:not(:empty) ~ .back_to_top { right: auto; left: 40px; }
+.op-tray:not(:empty) ~ .move_to_end { right: auto; left: 12px; }
+/* Mobile: the tray is a grouped-notification stack (iOS/Android pattern). When
+   there are multiple tasks it collapses to the newest card with the rest peeking
+   behind it; a tap expands the full vertical list so all of them can be viewed
+   and cleared at once. The scroll buttons lift above it so they never overlap. */
+@media (max-width: 767px) {
+    .op-tray {
+        left: 1rem;
+        right: 1rem;
+        width: auto;
+        max-width: none;
+        gap: .5rem;
+    }
+    /* larger tap targets on touch (applies in both collapsed and expanded) */
+    .op-tray .op-task { padding: .85rem 1rem; min-height: 3.4rem; font-size: 1.45rem; gap: .75rem; }
+    .op-tray .op-actions { gap: .25rem; }
+    .op-tray .op-act {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 3rem;
+        min-height: 3rem;
+        font-size: 1.6rem;
+    }
+
+    /* ---- Collapsed: a single tappable card with stacked edges peeking under ---- */
+    .op-tray.op-collapsed {
+        display: block;
+        position: fixed;
+        max-height: none;
+        overflow: visible;
+        /* room under the front card for the two peeking stack edges + the badge */
+        padding-bottom: .9rem;
+        cursor: pointer;
+    }
+    .op-tray.op-collapsed .op-tray-head { display: none; }
+    .op-tray.op-collapsed .op-task { display: none; }
+    .op-tray.op-collapsed .op-task.op-top {
+        display: flex;
+        position: relative;
+        z-index: 2;
+        margin: 0;
+    }
+    /* collapsed = whole card means "expand"; its row actions are reachable once
+       expanded, so suppress them here to keep the tap target unambiguous */
+    .op-tray.op-collapsed .op-task.op-top .op-actions { display: none; }
+    /* two faux card edges fanned out below the front card to signal a stack */
+    .op-tray.op-collapsed.op-multi .op-task.op-top::before,
+    .op-tray.op-collapsed.op-multi .op-task.op-top::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        height: 1rem;
+        border: 1px solid var(--border-color);
+        border-top: 0;
+        border-bottom-left-radius: .5rem;
+        border-bottom-right-radius: .5rem;
+        background-color: var(--background-color);
+        z-index: -1;
+    }
+    .op-tray.op-collapsed.op-multi .op-task.op-top::after {
+        bottom: -.45rem;
+        width: 92%;
+        opacity: .8;
+    }
+    .op-tray.op-collapsed.op-multi .op-task.op-top::before {
+        bottom: -.9rem;
+        width: 84%;
+        opacity: .55;
+    }
+    /* count pill on the front card */
+    .op-tray.op-collapsed .op-stack-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        position: absolute;
+        top: -.7rem;
+        right: -.4rem;
+        z-index: 3;
+        min-width: 1.6rem;
+        height: 1.6rem;
+        padding: 0 .45rem;
+        border-radius: .8rem;
+        background-color: var(--brand-orange);
+        color: #fff;
+        font-size: 1.05rem;
+        font-weight: 700;
+        box-shadow: 0 1px 3px rgba(0,0,0,.35);
+        cursor: pointer;
+    }
+
+    /* ---- Expanded: full vertical list, panned up from the bottom ---- */
+    .op-tray.op-expanded {
+        display: flex;
+        flex-direction: column;
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+    .op-tray.op-expanded .op-tray-head .op-collapse { display: inline-flex; }
+
+    /* lift the scroll buttons clear of the taller mobile tray (front card +
+       peeking stack edges + count badge sit ~5.5rem up from the bottom) */
+    .op-tray:not(:empty) ~ .back_to_top { left: auto; right: 40px; bottom: 7.5rem; }
+    .op-tray:not(:empty) ~ .move_to_end { left: auto; right: 12px; bottom: 7.5rem; }
 }
 span.big.blue-text {
     cursor: pointer;

@@ -13,6 +13,18 @@
 <?
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Wrappers.php";
+require_once "$docroot/plugins/dynamix/include/TaskQueue.php";
+
+// true when the backend task queue has a running/queued task targeting this .plg
+// (the task queue is the source of truth for an in-flight install/update)
+function plugin_task_busy($arg) {
+  if (!$arg) return false;
+  foreach (task_list() as $t) {
+    if ($t['type']==='plugins' && in_array($t['status'],['running','queued'],true)
+        && in_array($arg, preg_split('/\s+/', trim($t['cmd'])), true)) return true;
+  }
+  return false;
+}
 
 // Invoke the plugin command with indicated method
 function plugin($method, $arg = '', $dontCache = false) {
@@ -71,7 +83,10 @@ function make_link($method, $arg, $extra='') {
     $cmd  = "plugin $method $arg".($extra?" $extra":"");
     $func = "loadlist";
   }
-  if (is_file("/tmp/plugins/pluginPending/$arg") && !$check) {
+  if (in_array($method,['update','install']) && plugin_task_busy($arg)) {
+    $label = $method=='install' ? _('Installing') : _('Upgrading');
+    return "<span class='orange-text'><i class='fa fa-hourglass-o fa-fw'></i>&nbsp;$label</span>";
+  } elseif (is_file("/tmp/plugins/pluginPending/$arg") && !$check) {
     return "<span class='orange-text'><i class='fa fa-hourglass-o fa-fw'></i>&nbsp;"._('pending')."</span>";
   } else {
     return "$check<input type='button' id='$id' data='$arg' class='$method' value=\""._(ucfirst($method))."\" onclick='openInstall(\"$cmd\",\""._(ucwords($method)." Plugin")."\",\"$plg\",\"$func\");'$disabled>";
