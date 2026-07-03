@@ -64,18 +64,6 @@ async function prepareShare(form) {
   item.value = exclude;
   item.selected = true;
 
-  var emptying = '';
-  for (var i=0,item; item=form.shareUserEmptying.options[i]; i++) {
-    if (item.selected) {
-      if (emptying.length) emptying += ',';
-      emptying += item.value;
-      item.selected = false;
-    }
-  }
-  item = form.shareUserEmptying.options[0];
-  item.value = emptying;
-  item.selected = true;
-
   /* Validate file count input against fileMax */
   try {
     const fileCountInput = form.querySelector('#file_count');
@@ -99,6 +87,22 @@ async function prepareShare(form) {
   return true;
 }
 
+/* Collapse the Emptying disk(s) multi-select into a single value before submit. */
+function prepareEmptying(form) {
+  var emptying = '';
+  for (var i=0,item; item=form.shareUserEmptying.options[i]; i++) {
+    if (item.selected) {
+      if (emptying.length) emptying += ',';
+      emptying += item.value;
+      item.selected = false;
+    }
+  }
+  item = form.shareUserEmptying.options[0];
+  item.value = emptying;
+  item.selected = true;
+  return true;
+}
+
 function presetShare(form,shares) {
   var disabled = shares==null ? <?=$disabled ? 'true':'false'?> : shares=='-';
   var onOff = disabled ? 'disable':'enable';
@@ -106,10 +110,10 @@ function presetShare(form,shares) {
   form.shareUserExclude.disabled = disabled;
   $('#s1').dropdownchecklist(onOff);
   $('#s2').dropdownchecklist(onOff);
-  /* Emptying disk(s) can be changed while the array is Started - emhttpd accepts it.
-     Only disable it when user shares are turned off. */
+  /* Emptying disk(s) lives in its own form so it can be changed while the array is
+     Started - emhttpd accepts it. Only disable it when user shares are turned off. */
   var emptyingDisabled = shares==null ? <?=$emptyingDisabled ? 'true':'false'?> : shares=='-';
-  form.shareUserEmptying.disabled = emptyingDisabled;
+  document.share_emptying.shareUserEmptying.disabled = emptyingDisabled;
   $('#s3').dropdownchecklist(emptyingDisabled ? 'disable':'enable');
 }
 </script>
@@ -150,15 +154,6 @@ _(Excluded disk(s))_:
 
 :shares_excluded_disks_help:
 
-_(Emptying disk(s))_:
-: <select id="s3" name="shareUserEmptying" multiple="multiple" style="display:none">
-  <?foreach ($disks as $disk):?>
-  <?=mk_option_luks(_var($disk,'name'),_var($var,'shareUserEmptying'),strstr(_var($disk,'fsType'),':',true))?>
-  <?endforeach;?>
-  </select>
-
-:shares_emptying_disks_help:
-
 _(Permit exclusive shares)_:
 : <select name="shareUserExclusive" <?=$disabled?>>
   <?=mk_option($var['shareUserExclusive'], "no", _('No'))?>
@@ -195,5 +190,23 @@ _(Number of fuse File Descriptors)_:
     <input type="submit" name="changeShare" value="_(Apply)_" disabled>
     <input type="button" value="_(Done)_" onclick="done()">
   </span>
-<?if ($disabled):?>*_(Array must be **Stopped** to change these settings, except **Emptying disk(s)**)_*<?endif;?>
+<?if ($disabled):?>*_(Array must be **Stopped** to change)_*<?endif;?>
+</form>
+
+<form markdown="1" name="share_emptying" method="POST" action="/update.htm" target="progressFrame" onsubmit="return prepareEmptying(this)">
+
+_(Emptying disk(s))_:
+: <select id="s3" name="shareUserEmptying" multiple="multiple" style="display:none">
+  <?foreach ($disks as $disk):?>
+  <?=mk_option_luks(_var($disk,'name'),_var($var,'shareUserEmptying'),strstr(_var($disk,'fsType'),':',true))?>
+  <?endforeach;?>
+  </select>
+
+:shares_emptying_disks_help:
+
+&nbsp;
+: <span class="inline-block">
+    <input type="submit" name="changeShare" value="_(Apply)_" disabled>
+    <input type="button" value="_(Done)_" onclick="done()">
+  </span>
 </form>
