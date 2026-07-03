@@ -18,6 +18,9 @@ Tag="share-alt"
 ?>
 <?
 $disabled = _var($var,'fsState')!='Stopped' ? 'disabled' : '';
+/* The "Emptying disk(s)" setting is accepted by emhttpd while the array is Started,
+   so it is not gated on array state - only on user shares being enabled. */
+$emptyingDisabled = _var($var,'shareUser')=='-' ? 'disabled' : '';
 $disks    = array_filter($disks,'my_disks');
 $width    = [166,300];
 
@@ -101,10 +104,13 @@ function presetShare(form,shares) {
   var onOff = disabled ? 'disable':'enable';
   form.shareUserInclude.disabled = disabled;
   form.shareUserExclude.disabled = disabled;
-  form.shareUserEmptying.disabled = disabled;
   $('#s1').dropdownchecklist(onOff);
   $('#s2').dropdownchecklist(onOff);
-  $('#s3').dropdownchecklist(onOff);
+  /* Emptying disk(s) can be changed while the array is Started - emhttpd accepts it.
+     Only disable it when user shares are turned off. */
+  var emptyingDisabled = shares==null ? <?=$emptyingDisabled ? 'true':'false'?> : shares=='-';
+  form.shareUserEmptying.disabled = emptyingDisabled;
+  $('#s3').dropdownchecklist(emptyingDisabled ? 'disable':'enable');
 }
 </script>
 <form markdown="1" name="share_settings" method="POST" action="/update.htm" target="progressFrame" onsubmit="return prepareShare(this)">
@@ -189,5 +195,5 @@ _(Number of fuse File Descriptors)_:
     <input type="submit" name="changeShare" value="_(Apply)_" disabled>
     <input type="button" value="_(Done)_" onclick="done()">
   </span>
-<?if ($disabled):?>*_(Array must be **Stopped** to change)_*<?endif;?>
+<?if ($disabled):?>*_(Array must be **Stopped** to change these settings, except **Emptying disk(s)**)_*<?endif;?>
 </form>
