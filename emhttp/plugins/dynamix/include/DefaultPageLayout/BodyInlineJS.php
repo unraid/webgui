@@ -277,7 +277,19 @@ function onTaskListUpdate() {
           stopAllTypeChannels();
           if (t.status=='error') openError('_ERROR_'); else openDone('_DONE_');
           // callback fired when the user closes the modal
-        } else {
+        } else if (prev !== undefined) {
+          // Only fire the one-shot completion callback when we actually watched
+          // this task run and *then* finish during this page's lifetime. A task
+          // that is already terminal on first sight (prev === undefined) is
+          // stale -- its callback belonged to whoever was watching when it
+          // finished, and its effect is already applied server-side. Re-firing
+          // it on load is harmful for reload-style callbacks (func:'refresh'):
+          // /sub/tasks is an nchan channel that redelivers its retained message
+          // to every new subscriber, and taskPrev starts empty on each load, so
+          // the page reloads -> re-subscribes -> sees the same done task as
+          // "new" -> reloads again, forever (e.g. an OS-update task stuck as
+          // done with func:'refresh' == infinite reload / flashing UI). The
+          // finished task still shows in the tray for the user to dismiss.
           fireTaskCallback(t);
         }
       } else if (t.status=='running' && foregroundTaskId==t.id) {
