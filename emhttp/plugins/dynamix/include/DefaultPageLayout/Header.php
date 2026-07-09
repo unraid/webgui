@@ -4,8 +4,9 @@
 // legacy multi-component header (logo/version + user profile) as a fallback.
 $headerOsVersion = @parse_ini_file('/etc/unraid-version')['version'] ?? '0';
 $headerUseConsolidated = version_compare($headerOsVersion, '7.3', '>=');
+$headerClass = trim($display['banner'] . ($headerUseConsolidated ? ' unraid-consolidated-header' : ''));
 ?>
-<div id="header" class="<?=$display['banner']?>">
+<div id="header" class="<?=$headerClass?>">
 <?php if ($headerUseConsolidated): ?>
     <?php
         require_once "$docroot/plugins/dynamix.my.servers/include/state.php";
