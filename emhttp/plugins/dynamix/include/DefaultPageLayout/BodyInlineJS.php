@@ -202,6 +202,57 @@ function fireTaskCallback(t) {
   }
 }
 
+// The foreground task sheet is horizontally resizable: drag the right-edge grip
+// to widen it, and the choice is remembered per browser. Width is applied via the
+// --task-modal-width CSS var (scoped to .sweet-alert.nchan in CSS) instead of an
+// inline style, so it never leaks onto the shared .sweet-alert node that other
+// dialogs (confirmations, etc.) reuse. Restored on open, saved on drag release.
+var TASK_MODAL_WIDTH_KEY = 'unraid.taskModal.width';
+function taskModalWidthBounds() {
+  var cap = Math.round(window.innerWidth * 0.9);
+  return { min: Math.min(600, cap), max: Math.max(Math.min(600, cap), cap) }; // 600px == the 60rem default
+}
+function applyTaskModalWidth() {
+  var w = parseInt(localStorage.getItem(TASK_MODAL_WIDTH_KEY), 10);
+  if (!w) return;                                   // no preference -> CSS default (60rem)
+  var b = taskModalWidthBounds();
+  w = Math.max(b.min, Math.min(w, b.max));
+  document.documentElement.style.setProperty('--task-modal-width', w + 'px');
+}
+function ensureTaskModalResizer() {
+  var el = document.querySelector('.sweet-alert.nchan');
+  if (!el || el.querySelector('.nchan-resize')) return;   // singleton swal node: attach once
+  var handle = document.createElement('div');
+  handle.className = 'nchan-resize';
+  handle.title = "<?=_('Drag to resize (remembered)')?>";
+  el.appendChild(handle);
+  var dragging = false;
+  handle.addEventListener('pointerdown', function(e){
+    dragging = true;
+    try { handle.setPointerCapture(e.pointerId); } catch(_){}
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  handle.addEventListener('pointermove', function(e){
+    if (!dragging) return;
+    var b = taskModalWidthBounds();
+    // .nchan is centered (left:50% + translateX(-50%)); its right edge tracks the
+    // pointer when width == 2 * (pointerX - viewportCenterX).
+    var w = Math.max(b.min, Math.min(Math.round(2 * (e.clientX - window.innerWidth / 2)), b.max));
+    document.documentElement.style.setProperty('--task-modal-width', w + 'px');
+  });
+  function endDrag(e){
+    if (!dragging) return;
+    dragging = false;
+    try { handle.releasePointerCapture(e.pointerId); } catch(_){}
+    document.body.style.userSelect = '';
+    var w = parseInt(getComputedStyle(el).width, 10);   // final rendered width
+    if (w) localStorage.setItem(TASK_MODAL_WIDTH_KEY, String(w));  // persist on release
+  }
+  handle.addEventListener('pointerup', endDrag);
+  handle.addEventListener('pointercancel', endDrag);
+}
+
 // bring a task to the foreground: open the modal, replay its server-side log,
 // then stream live if it is still running
 function foregroundTask(id) {
@@ -236,6 +287,8 @@ function foregroundTask(id) {
     trayRender();
   });
   $('.sweet-alert').addClass('nchan').css('pointer-events','');
+  applyTaskModalWidth();
+  ensureTaskModalResizer();
   // colored state strip between the title and the log (openDone/openError recolor it)
   $('.sweet-alert .nchan-state').remove();
   $('.sweet-alert > h2').after("<div id='pluginProgressTitle' class='nchan-state "+stateCls+"'>"+stateHtml+"</div>");

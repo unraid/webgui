@@ -2011,8 +2011,11 @@ label.checkbox input:disabled ~ .checkmark {
 .sweet-alert.nchan {
     display: flex !important;
     flex-direction: column;
-    width: 90vw;
-    max-width: 60rem;
+    /* user-resizable width: drag the right-edge grip to widen. The chosen width
+       is stored per browser in localStorage and re-applied via --task-modal-width
+       (see applyTaskModalWidth / ensureTaskModalResizer in BodyInlineJS). Defaults
+       to the 60rem sheet width, always capped to the viewport. */
+    width: min(var(--task-modal-width, 60rem), 90vw);
     height: 75vh;          /* fixed (overrides swal's @media 95vh) so the log scrolls in place and the Dismiss button never moves; scales with the viewport */
     max-height: 85vh;
     margin: 0;
@@ -2137,6 +2140,34 @@ label.checkbox input:disabled ~ .checkmark {
     background: var(--brand-orange);
     border-color: var(--brand-orange);
 }
+/* Right-edge grip to widen the task sheet; the width it sets is remembered per
+   browser (ensureTaskModalResizer in BodyInlineJS). Only shown on the .nchan
+   task sheet, never on other reused .sweet-alert dialogs. */
+.sweet-alert .nchan-resize { display: none; }
+.sweet-alert.nchan .nchan-resize {
+    display: block;
+    position: absolute;
+    top: 3.4rem;            /* clear the minimize button in the top-right corner */
+    right: 0;
+    bottom: 0;
+    width: 10px;
+    cursor: ew-resize;
+    z-index: 1;             /* below .nchan-close (z-index:2) */
+    touch-action: none;     /* pointer events drive the drag, not scroll */
+}
+.sweet-alert.nchan .nchan-resize::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: 3px;
+    width: 3px;
+    height: 3.6rem;
+    margin-top: -1.8rem;
+    border-radius: 2px;
+    background: var(--border-color);
+    transition: background-color .15s;
+}
+.sweet-alert.nchan .nchan-resize:hover::before { background: var(--brand-orange); }
 /* Mobile: fullscreen (a centered card is cramped on phones). Overrides the base
    swal centering to fill the viewport. */
 @media (max-width: 767px) {
@@ -2155,6 +2186,7 @@ label.checkbox input:disabled ~ .checkmark {
         border-radius: 0;
     }
     .sweet-alert.nchan .nchan-close { width: 2.9rem; height: 2.9rem; font-size: 1.6rem; }
+    .sweet-alert.nchan .nchan-resize { display: none; }   /* fullscreen: nothing to resize */
 }
 .back_to_top {
     right: 40px;
