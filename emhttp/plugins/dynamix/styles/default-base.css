@@ -2012,10 +2012,10 @@ label.checkbox input:disabled ~ .checkmark {
     display: flex !important;
     flex-direction: column;
     /* user-resizable width: drag the right-edge grip to widen. The chosen width
-       is stored per browser in localStorage and re-applied via --task-modal-width
-       (see applyTaskModalWidth / ensureTaskModalResizer in BodyInlineJS). Defaults
-       to the 60rem sheet width, always capped to the viewport. */
-    width: min(var(--task-modal-width, 60rem), 90vw);
+       is stored per browser in localStorage and re-applied via --nchan-sheet-width
+       (see applyNchanSheetWidth / ensureNchanResizer in BodyInlineJS), shared by
+       every .nchan sheet. Defaults to the 60rem width, always capped to viewport. */
+    width: min(var(--nchan-sheet-width, 60rem), 90vw);
     height: 75vh;          /* fixed (overrides swal's @media 95vh) so the log scrolls in place and the Dismiss button never moves; scales with the viewport */
     max-height: 85vh;
     margin: 0;
@@ -2113,8 +2113,11 @@ label.checkbox input:disabled ~ .checkmark {
     box-shadow: none !important;
 }
 .sweet-alert.nchan button.confirm:hover { background: var(--orange-800) !important; }
-/* top-corner minimize (running) / close (finished) control — theme-token colors
-   so it stays visible on the modal surface in every theme */
+/* top-corner minimize (task sheets) / close (changelog, alert sheets) control —
+   theme-token colors so it stays visible on the modal surface in every theme.
+   Scoped to .nchan so a control left on the shared swal node never shows on an
+   ordinary dialog. */
+.sweet-alert:not(.nchan) .nchan-close { display: none; }
 .sweet-alert .nchan-close {
     position: absolute;
     top: 0.85rem;

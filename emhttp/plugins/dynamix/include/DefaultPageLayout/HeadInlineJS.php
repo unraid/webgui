@@ -229,6 +229,7 @@ function openChanges(cmd,title,nchan,button=0) {
       if ($('#submit_button').length > 0) $('#submit_button').remove();
     });
     $('.sweet-alert').addClass('nchan');
+    if (typeof decorateNchanSheet === 'function') decorateNchanSheet(); // shared close (x) + resize grip
     $('pre#swalbody').html(data);
     $('button.confirm').text("<?=_('Done')?>").prop('disabled',false).show();
   });
@@ -241,6 +242,7 @@ function openAlert(cmd,title,func) {
       if (proceed) setTimeout(func+'()');
     });
     $('.sweet-alert').addClass('nchan');
+    if (typeof decorateNchanSheet === 'function') decorateNchanSheet(); // shared close (x) + resize grip
     $('pre#swalbody').html(data);
   });
 }

@@ -202,24 +202,28 @@ function fireTaskCallback(t) {
   }
 }
 
-// The foreground task sheet is horizontally resizable: drag the right-edge grip
-// to widen it, and the choice is remembered per browser. Width is applied via the
-// --task-modal-width CSS var (scoped to .sweet-alert.nchan in CSS) instead of an
-// inline style, so it never leaks onto the shared .sweet-alert node that other
-// dialogs (confirmations, etc.) reuse. Restored on open, saved on drag release.
-var TASK_MODAL_WIDTH_KEY = 'unraid.taskModal.width';
-function taskModalWidthBounds() {
+// Shared chrome for every .nchan "sheet" dialog -- the foreground task modal, the
+// changelog / Release Notes viewer (openChanges), and alert prompts (openAlert).
+// Each sheet gets a resizable, width-remembering right edge and a corner close
+// control, so they look and behave the same and none can end up un-closable.
+//
+// Width is applied via the --nchan-sheet-width CSS var (scoped to
+// .sweet-alert.nchan in CSS) rather than an inline style, so it never leaks onto
+// the shared .sweet-alert node that ordinary dialogs reuse. One width preference
+// is shared across all sheets: resize any sheet and they all remember it.
+var NCHAN_SHEET_WIDTH_KEY = 'unraid.nchanSheet.width';
+function nchanSheetWidthBounds() {
   var cap = Math.round(window.innerWidth * 0.9);
   return { min: Math.min(600, cap), max: Math.max(Math.min(600, cap), cap) }; // 600px == the 60rem default
 }
-function applyTaskModalWidth() {
-  var w = parseInt(localStorage.getItem(TASK_MODAL_WIDTH_KEY), 10);
+function applyNchanSheetWidth() {
+  var w = parseInt(localStorage.getItem(NCHAN_SHEET_WIDTH_KEY), 10);
   if (!w) return;                                   // no preference -> CSS default (60rem)
-  var b = taskModalWidthBounds();
+  var b = nchanSheetWidthBounds();
   w = Math.max(b.min, Math.min(w, b.max));
-  document.documentElement.style.setProperty('--task-modal-width', w + 'px');
+  document.documentElement.style.setProperty('--nchan-sheet-width', w + 'px');
 }
-function ensureTaskModalResizer() {
+function ensureNchanResizer() {
   var el = document.querySelector('.sweet-alert.nchan');
   if (!el || el.querySelector('.nchan-resize')) return;   // singleton swal node: attach once
   var handle = document.createElement('div');
@@ -235,11 +239,11 @@ function ensureTaskModalResizer() {
   });
   handle.addEventListener('pointermove', function(e){
     if (!dragging) return;
-    var b = taskModalWidthBounds();
+    var b = nchanSheetWidthBounds();
     // .nchan is centered (left:50% + translateX(-50%)); its right edge tracks the
     // pointer when width == 2 * (pointerX - viewportCenterX).
     var w = Math.max(b.min, Math.min(Math.round(2 * (e.clientX - window.innerWidth / 2)), b.max));
-    document.documentElement.style.setProperty('--task-modal-width', w + 'px');
+    document.documentElement.style.setProperty('--nchan-sheet-width', w + 'px');
   });
   function endDrag(e){
     if (!dragging) return;
@@ -247,10 +251,28 @@ function ensureTaskModalResizer() {
     try { handle.releasePointerCapture(e.pointerId); } catch(_){}
     document.body.style.userSelect = '';
     var w = parseInt(getComputedStyle(el).width, 10);   // final rendered width
-    if (w) localStorage.setItem(TASK_MODAL_WIDTH_KEY, String(w));  // persist on release
+    if (w) localStorage.setItem(NCHAN_SHEET_WIDTH_KEY, String(w));  // persist on release
   }
   handle.addEventListener('pointerup', endDrag);
   handle.addEventListener('pointercancel', endDrag);
+}
+// Give the current .nchan sheet its shared chrome (resize grip + close control).
+// opts.close:
+//   'minimize' -> corner control tucks the sheet away but keeps the task in the
+//                 tray, so a running op is never killed (foreground task sheets)
+//   'dismiss'  -> (default) corner control just closes the dialog
+// opts.tip overrides the control's tooltip.
+function decorateNchanSheet(opts) {
+  opts = opts || {};
+  if (!document.querySelector('.sweet-alert.nchan')) return;
+  applyNchanSheetWidth();
+  ensureNchanResizer();
+  var minimize = opts.close === 'minimize';
+  var onclick  = minimize ? 'minimizeForegroundTask()' : 'nchanCloseModal(true)';
+  var icon     = minimize ? 'fa-minus' : 'fa-times';
+  var tip      = opts.tip || (minimize ? "<?=_('Minimize - keeps it in the tray')?>" : "<?=_('Close')?>");
+  $('.sweet-alert .nchan-close').remove();
+  $('.sweet-alert').append("<a class='nchan-close' title=\""+tip+"\" onclick='"+onclick+"'><i class='fa "+icon+" fa-fw'></i></a>");
 }
 
 // bring a task to the foreground: open the modal, replay its server-side log,
@@ -287,23 +309,15 @@ function foregroundTask(id) {
     trayRender();
   });
   $('.sweet-alert').addClass('nchan').css('pointer-events','');
-  applyTaskModalWidth();
-  ensureTaskModalResizer();
   // colored state strip between the title and the log (openDone/openError recolor it)
   $('.sweet-alert .nchan-state').remove();
   $('.sweet-alert > h2').after("<div id='pluginProgressTitle' class='nchan-state "+stateCls+"'>"+stateHtml+"</div>");
-  // a persistent top-corner control that just closes this window, leaving the
-  // task in the tray: while running it reads as "minimize" (the task keeps
-  // running); once finished it reads as "close" (the task stays as a finished
-  // tile). Removal is the separate, primary Dismiss action. openDone/openError
-  // swap the glyph/tooltip to the finished form.
-  // the corner control is ALWAYS minimize (it tucks the modal away and keeps the
-  // task in the tray); removal is the separate Dismiss button. Keeping one icon
-  // avoids the confusing minus->x swap where the "x" actually just minimized.
-  var closeIcon = 'fa-minus';
-  var closeTip  = finished ? "<?=_('Minimize - keeps it in the tray')?>" : "<?=_('Minimize - keeps running in the background')?>";
-  $('.sweet-alert .nchan-close').remove();
-  $('.sweet-alert').append("<a class='nchan-close' title=\""+closeTip+"\" onclick='minimizeForegroundTask()'><i class='fa "+closeIcon+" fa-fw'></i></a>");
+  // The corner control is ALWAYS minimize: it tucks the sheet away but keeps the
+  // task running in the tray; removal is the separate Dismiss button. openDone/
+  // openError swap the tooltip to the finished form. decorateNchanSheet adds this
+  // control plus the shared resize grip and restores the remembered width.
+  var closeTip = finished ? "<?=_('Minimize - keeps it in the tray')?>" : "<?=_('Minimize - keeps running in the background')?>";
+  decorateNchanSheet({ close:'minimize', tip: closeTip });
   $('pre#swaltext').html('');
   $.get(TASK_ENDPOINT,{action:'log',id:id},function(logdata){
     if (foregroundTaskId!==id) return; // user moved on while loading
