@@ -262,7 +262,9 @@ function download($url, $name, &$error, $write=true) {
       if (($perror = pclose($file)) != 0) {
         $error = "$plg download failure: ".error_desc($perror);
         return false;
-      } elseif (filesize($name) == 0) {
+      }
+      clearstatcache(true, $name);
+      if (filesize($name) == 0) {
         $error = "$plg download failure: zero-length file";
         if ($write) write("plugin: download failure: zero-length file\r","\n");
         return false;

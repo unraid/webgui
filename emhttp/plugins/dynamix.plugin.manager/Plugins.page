@@ -131,13 +131,24 @@ function checkPlugin(plg) {
       $('#sid-'+id).attr('data','4').html("<span class='red-text'><i class='fa fa-exclamation-triangle fa-fw'></i>&nbsp;<?=_('cannot check')?></span>");
     });
 }
-function checkPlugins() {
+function checkPlugins(reset) {
   var queue = [], seen = {};
   // class 'remove' is on both the checkbox and the button for each plugin, so
   // dedupe by data attribute to avoid checking every plugin twice
-  $('input.remove').each(function(){var d=$(this).attr('data'); if (d && !seen[d]) {seen[d]=1; queue.push(d);}});
+  $('input.remove').each(function(){
+    var d=$(this).attr('data');
+    if (d && !seen[d]) {
+      seen[d]=1;
+      queue.push(d);
+      if (reset) {
+        var id = d.replace(/\.plg$/,'').replace(/\./g,'-');
+        $('#sid-'+id).attr('data','0').html("<span style='color:#267CA8'><i class='fa fa-refresh fa-spin fa-fw'></i>&nbsp;<?=_('checking')?>...</span>");
+      }
+    }
+  });
   pluginUpdates = 0;
   $('#updateall').hide();
+  $('#checkall').find('input').prop('disabled',true);
   var total = queue.length, done = 0, idx = 0, active = 0, MAX = 6;
   if (!total) { $('#checkall').find('input').prop('disabled',false); return; }
   function pump() {
@@ -195,7 +206,7 @@ function loadlist(id,check) {
 }
 $(function() {
   initlist();
-  $('.tabs-container').append("<span id='checkall' class='status vhshift'><input type='button' value=\"_(Check For Updates)_\" onclick='openPlugin(\"checkall\",\"_(Plugin Update Check)_\",\":return\")' disabled></span>");
+  $('.tabs-container').append("<span id='checkall' class='status vhshift'><input type='button' value=\"_(Check For Updates)_\" onclick='checkPlugins(true)' disabled></span>");
   $('.tabs-container').append("<span id='updateall' class='status vhshift' style='display:none;margin-left:12px'><input type='button' value=\"_(Update All Plugins)_\" onclick='updateList()'></span>");
   $('.tabs-container').append("<span id='removeall' class='status vhshift' style='display:none;margin-left:12px'><input type='button' value=\"_(Remove Selected Plugins)_\" onclick='removeList()'></span>");
 });
