@@ -19,10 +19,12 @@ $headerClass = trim($display['banner'] . ($headerUseConsolidated ? ' unraid-cons
         // The consolidated header owns the array-usage bar for sidebar themes,
         // where the legacy #array-usage-sidenav widget used to be injected.
         $headerShowArrayUsage = ($display['usage'] && $themeHelper->isSidebarTheme()) ? 'true' : 'false';
+        $headerLogoStyle = (($display['headerLogo'] ?? '') === 'theme') ? 'theme' : '';
     ?>
     <unraid-header
         server="<?= $headerServerState->getServerStateJsonForHtmlAttr() ?>"
         show-array-usage="<?= $headerShowArrayUsage ?>"
+        header-logo-style="<?= $headerLogoStyle ?>"
     ></unraid-header>
 <?php else: ?>
     <unraid-header-os-version></unraid-header-os-version>
