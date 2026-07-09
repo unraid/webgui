@@ -263,6 +263,7 @@ function download($url, $name, &$error, $write=true) {
         $error = "$plg download failure: ".error_desc($perror);
         return false;
       } elseif (filesize($name) == 0) {
+        $error = "$plg download failure: zero-length file";
         if ($write) write("plugin: download failure: zero-length file\r","\n");
         return false;
       } else {
@@ -330,7 +331,11 @@ function plugin($method, $plugin_file, &$error) {
 
   // validate plugin download without installation
   if ($method  == 'validate') {
-    $name = '/tmp/validate-plugin.tmp';
+    $name = tempnam('/tmp', 'validate-plugin-');
+    if ($name === false) {
+      $error = "unable to create validation temporary file";
+      return false;
+    }
     foreach ($xml->FILE as $file) if ($file->URL) {
       if (!$file->SHA256 and !$file->MD5) continue;
       if ( (download($file->URL, $name, $error, false) === false) && (download(filter_url($file->URL), $name, $error, false) === false) ) {
