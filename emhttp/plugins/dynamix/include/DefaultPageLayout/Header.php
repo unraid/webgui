@@ -14,10 +14,15 @@ $headerUseConsolidated = version_compare($headerOsVersion, '7.3', '>=');
     <script>
     window.LOCALE = <?= json_encode($_SESSION['locale'] ?? 'en_US', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
     </script>
-    <unraid-header server="<?= $headerServerState->getServerStateJsonForHtmlAttr() ?>"></unraid-header>
-    <? if ($display['usage'] && $themeHelper->isSidebarTheme()): ?>
-        <span id='array-usage-sidenav'></span>
-    <? endif; ?>
+    <?php
+        // The consolidated header owns the array-usage bar for sidebar themes,
+        // where the legacy #array-usage-sidenav widget used to be injected.
+        $headerShowArrayUsage = ($display['usage'] && $themeHelper->isSidebarTheme()) ? 'true' : 'false';
+    ?>
+    <unraid-header
+        server="<?= $headerServerState->getServerStateJsonForHtmlAttr() ?>"
+        show-array-usage="<?= $headerShowArrayUsage ?>"
+    ></unraid-header>
 <?php else: ?>
     <unraid-header-os-version></unraid-header-os-version>
     <? if ($display['usage'] && $themeHelper->isSidebarTheme()): ?>
