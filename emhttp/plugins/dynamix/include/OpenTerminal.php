@@ -50,7 +50,7 @@ case 'ttyd':
   $sock = "/var/run/ttyd.sock";
   exec('pgrep --ns $$ -f '."'$sock'", $ttyd_pid, $retval);
   if ($retval == 0) {
-    // check if there are any child processes, ie, curently open tty windows
+    // check if there are any child processes, ie, currently open tty windows
     exec('pgrep --ns $$ -P '.$ttyd_pid[0], $output, $retval);
     // no child processes, restart ttyd to pick up possible font size change
     if ($retval != 0) exec("kill ".$ttyd_pid[0]);

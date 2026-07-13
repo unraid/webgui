@@ -7,7 +7,7 @@
 # LimeTech - modified for Unraid OS
 # Bergware - modified for Unraid OS, October 2023
 
-# Read Unraid config file and set timout or fall back to default
+# Read Unraid config file and set timeout or fall back to default
 SCREEN_BLANK=$(grep "screen_blank" /boot/config/plugins/dynamix/dynamix.cfg 2>/dev/null | cut -d'=' -f2 | sed 's/"//g')
 if [[ $SCREEN_BLANK =~ ^[0-9]+$ ]]; then
   setterm --blank $SCREEN_BLANK --powersave off

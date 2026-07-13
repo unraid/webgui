@@ -124,7 +124,7 @@ if (cookieVal) {
     const idx = Array.from(tabs).findIndex(tab => tab.id === cookieVal);
     if (idx !== -1) activeIdx = idx;
 } else {
-    // If no cookie exists, clear both cookies to match the origial initab function behavior
+    // If no cookie exists, clear both cookies to match the original initTab function behavior
     $.removeCookie('one');
     $.removeCookie('tab');
 }

@@ -40,7 +40,7 @@ var csrf_token = "<?=_var($var,'csrf_token')?>";
 // form has unsaved changes indicator
 var formHasUnsavedChanges = false;
 
-// docker progess indicators
+// docker progress indicators
 var progress_dots = [], progress_span = [];
 function pauseEvents(id) {
   $.each(timers, function(i,timer){

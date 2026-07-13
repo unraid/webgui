@@ -138,7 +138,7 @@ case 't1':
     if (is_file("/boot/config/vfio-pci.cfg")) {
       // accepts space-separated list of <Bus:Device.Function> or <Domain:Bus:Device.Function> followed by an optional "|" and <Vendor:Device>
       // example: BIND=03:00.0 0000:03:00.0 03:00.0|8086:1533 0000:03:00.0|8086:1533
-      // this front-end does not accept <Vendor:Device> by itself, altough the underlying vfio-pci script does
+      // this front-end does not accept <Vendor:Device> by itself, although the underlying vfio-pci script does
       $file = file_get_contents("/boot/config/vfio-pci.cfg");
       $file = trim(str_replace("BIND=", "", $file));
       $file_contents = explode(" ", $file);

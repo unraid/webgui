@@ -235,7 +235,7 @@ if [[ $ROOT == "" ]]; then
   bzcheck "$BRANCH" "bzroot"		# rootfs, sans /lib/modules, /lib/firmware, and /usr
   bzcheck "$BRANCH" "bzfirmware"	# /lib/firmware
   bzcheck "$BRANCH" "bzmodules"		# /usr
-  bzcheck "$BRANCH" "bzroot-gui"	# /etc/inittab overrride
+  bzcheck "$BRANCH" "bzroot-gui"	# /etc/inittab override
 
   # mount squashfs file systems
   if [[ -f /boot/config/fastusr ]]; then

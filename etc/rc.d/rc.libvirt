@@ -103,7 +103,7 @@ stop_running_machines(){
   # graceful shutdown of suspended VMs
   i=0; UUID=($(vmlist all))
   while IFS='\n' read -r STATE; do
-    # check explicitely for suspended VMs
+    # check explicitly for suspended VMs
     if [[ $STATE == pmsuspended ]]; then
       log "Stopping suspended VM: ${NAMES[${UUID[$i]}]}"
       virsh destroy ${UUID[$i]} --graceful &>/dev/null

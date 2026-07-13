@@ -1000,7 +1000,7 @@ class Markdown implements MarkdownInterface {
 			);
 
 		foreach ($markers_relist as $marker_re => $other_marker_re) {
-			// Re-usable pattern to match any entirel ul or ol list:
+			// Re-usable pattern to match any entire ul or ol list:
 			$whole_list_re = '
 				(								# $1 = whole list
 				  (								# $2
@@ -1294,7 +1294,7 @@ class Markdown implements MarkdownInterface {
 	 */
 	protected function doItalicsAndBold($text) {
 		if ($this->in_emphasis_processing) {
-			return $text; // avoid reentrency
+			return $text; // avoid reentrancy
 		}
 		$this->in_emphasis_processing = true;
 
@@ -1305,7 +1305,7 @@ class Markdown implements MarkdownInterface {
 		$tree_char_em = false;
 
 		while (1) {
-			// Get prepared regular expression for seraching emphasis tokens
+			// Get prepared regular expression for searching emphasis tokens
 			// in current context.
 			$token_re = $this->em_strong_prepared_relist["$em$strong"];
 
@@ -1749,8 +1749,8 @@ class Markdown implements MarkdownInterface {
 				}xs';
 
 		while (1) {
-			// Each loop iteration seach for either the next tag, the next
-			// openning code span marker, or the next escaped character.
+			// Each loop iteration search for either the next tag, the next
+			// opening code span marker, or the next escaped character.
 			// Each token is then passed to handleSpanToken.
 			$parts = preg_split($span_re, $str, 2, PREG_SPLIT_DELIM_CAPTURE);
 

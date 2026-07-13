@@ -43,7 +43,7 @@ function base64_decrypt($pw) {
     if ($t[$i]==$b[$j]) $s .= $a[$j];
   }
   $s = base64_decode($s);
-  // return decrypted or plain password (backward compability)
+  // return decrypted or plain password (backward compatibility)
   return substr($s,0,16)==substr(md5($key),0,16) ? substr($s,16) : $pw;
 }
 

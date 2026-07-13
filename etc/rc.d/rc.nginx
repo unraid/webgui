@@ -637,7 +637,7 @@ build_ssl(){
 
   # handle TS cert if present
   if [[ -f "$TSCERTPATH" ]]; then
-    # confirm TS is intalled and running
+    # confirm TS is installed and running
     if [[ -x $TS ]] && $TS status &>/dev/null; then
       # extract common name from cert
       TSFQDN1=$(openssl x509 -noout -subject -nameopt multiline -in "$TSCERTPATH" | sed -n 's/ *commonName *= //p')

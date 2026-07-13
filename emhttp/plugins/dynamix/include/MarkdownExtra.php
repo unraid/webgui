@@ -411,7 +411,7 @@ class MarkdownExtra extends \Michelf\Markdown {
 
 		if ($text === '') return array('', '');
 
-		// Regex to check for the presense of newlines around a block tag.
+		// Regex to check for the presence of newlines around a block tag.
 		$newline_before_re = '/(?:^\n?|\n\n)*$/';
 		$newline_after_re =
 			'{
@@ -663,7 +663,7 @@ class MarkdownExtra extends \Michelf\Markdown {
 				)
 			}xs';
 
-		$original_text = $text;		// Save original text in case of faliure.
+		$original_text = $text;		// Save original text in case of failure.
 
 		$depth		= 0;	// Current depth inside the tag tree.
 		$block_text	= "";	// Temporary text holder for current text.
@@ -684,7 +684,7 @@ class MarkdownExtra extends \Michelf\Markdown {
 			$parts = preg_split($tag_re, $text, 2, PREG_SPLIT_DELIM_CAPTURE);
 
 			if ($parts === false || count($parts) < 3) {
-				// End of $text reached with unbalenced tag(s).
+				// End of $text reached with unbalanced tag(s).
 				// In that case, we return original text unchanged and pass the
 				// first character as filtered to prevent an infinite loop in the
 				// parent function.
@@ -1233,7 +1233,7 @@ class MarkdownExtra extends \Michelf\Markdown {
 		$underline	= preg_replace('/[|] *$/m', '', $underline);
 		$content	= preg_replace('/[|] *$/m', '', $content);
 
-		// Reading alignement from header underline.
+		// Reading alignment from header underline.
 		$separators	= preg_split('/ *[|] */', $underline);
 		foreach ($separators as $n => $s) {
 			if (preg_match('/^ *-+: *$/', $s))
