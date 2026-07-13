@@ -471,7 +471,7 @@ function xmlToCommand($xml, $create_paths=false) {
     $TS_extra_params = !empty($xml['TailscaleParams']) ? '-e TAILSCALE_PARAMS=' . escapeshellarg($xml['TailscaleParams']) : '';
     $TS_state_dir = !empty($xml['TailscaleStateDir']) ? '-e TAILSCALE_STATE_DIR=' . escapeshellarg($xml['TailscaleStateDir']) : '';
     $TS_userspace_networking = !empty($xml['TailscaleUserspaceNetworking']) ? '-e TAILSCALE_USERSPACE_NETWORKING=' . escapeshellarg($xml['TailscaleUserspaceNetworking']) : '';
-    // Only add tun, cap and specific vairables to containers which are defined as Exit Nodes and Userspace Networking disabled
+    // Only add tun, cap and specific variables to containers which are defined as Exit Nodes and Userspace Networking disabled
     if (_var($xml,'TailscaleIsExitNode') == 'true') {
       $TS_tundev = preg_match('/--d(evice)?[= ](\'?\/dev\/net\/tun\'?)/', $xml['ExtraParams']) ? "" : "--device='/dev/net/tun'";
       $TS_cap = preg_match('/--cap\-add=NET_ADMIN/', $xml['ExtraParams']) ? "" : "--cap-add=NET_ADMIN";

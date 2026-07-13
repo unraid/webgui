@@ -696,7 +696,7 @@ class DockerUpdate{
 					//$this->debug("Updating $name from [$value] to [$rvalue]");
 					$changed = true;
 				}
-			// Compare atributes on Config if they are in the validAttributes list
+			// Compare attributes on Config if they are in the validAttributes list
 			} elseif ($name == 'Config') {
 				$type   = $this->xml_decode($remote_element['Type']);
 				$target = $this->xml_decode($remote_element['Target']);
@@ -706,7 +706,7 @@ class DockerUpdate{
 				} else {
 					$local_element = $template->xpath("//Config[@Type='$type'][@Target='$target']")[0];
 				}
-				// If the local template already have the pertinent Config element, loop through it's attributes and update those on validAttributes
+				// If the local template already has the pertinent Config element, loop through its attributes and update those on validAttributes
 				if (!empty($local_element)) {
 					foreach ($remote_element->attributes() as $key => $value) {
 						$rvalue  = $this->xml_decode($value);
@@ -731,7 +731,7 @@ class DockerUpdate{
 			}
 		}
 		if ($changed) {
-			// Format output and save to file if there were any commited changes
+			// Format output and save to file if there were any committed changes
 			//$this->debug("Saving template modifications to '$file");
 			$dom = new DOMDocument('1.0');
 			$dom->preserveWhiteSpace = false;

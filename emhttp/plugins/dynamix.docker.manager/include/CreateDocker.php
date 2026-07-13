@@ -666,7 +666,7 @@ function addConfigPopup() {
   var title = "_(Add Configuration)_";
   var popup = $("#dialogAddConfig");
 
-  // Load popup the popup with the template info
+  // Load the popup with the template info
   popup.html($("#templatePopupConfig").html());
 
   // Add switchButton to checkboxes
@@ -724,7 +724,7 @@ function editConfigPopup(num,disabled) {
   var title = "_(Edit Configuration)_";
   var popup = $("#dialogAddConfig");
 
-  // Load popup the popup with the template info
+  // Load the popup with the template info
   popup.html($("#templatePopupConfig").html());
 
   // Load existing config info

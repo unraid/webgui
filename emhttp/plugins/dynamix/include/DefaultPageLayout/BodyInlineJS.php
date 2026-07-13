@@ -474,7 +474,7 @@ function fillAvailableHeight(params = { // default params
     return acc + totalForElement;
   }, 0);
 
-  // subtract addtional spacing from the target height to provide spacing between the actions & the footer
+  // subtract additional spacing from the target height to provide spacing between the actions & the footer
   targetHeight -= params.manualSpacingOffset || 10;
 
   const finalHeight = Math.max(targetHeight, minHeight);
@@ -507,9 +507,9 @@ $(document).on('mouseenter', 'a.info', function() {
     const aInfoPosition = $(this).offset();
     const scrollTop = $(window).scrollTop();
     const scrollLeft = $(window).scrollLeft();
-    const addtionalOffset = 16;
-    const top = aInfoPosition.top - scrollTop + addtionalOffset;
-    const left = aInfoPosition.left - scrollLeft + addtionalOffset;
+    const additionalOffset = 16;
+    const top = aInfoPosition.top - scrollTop + additionalOffset;
+    const left = aInfoPosition.left - scrollLeft + additionalOffset;
     tooltip.css({ top, left });
   }
 });
