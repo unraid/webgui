@@ -468,10 +468,17 @@ if (window.matchMedia) {
 // fading (now-invisible but still laid-out) modal from eating clicks; the guard
 // avoids stripping .nchan off a modal that was reopened in the meantime.
 function nchanCloseModal(doClose) {
-  $('.sweet-alert').css('pointer-events','none');
+  var $sa = $('.sweet-alert');
+  $sa.css('pointer-events','none');
   if (doClose && typeof swal!=='undefined' && swal.close) swal.close();
+  // SweetAlert reuses the same .sweet-alert node for every dialog and only
+  // replaces its built-in title/body/buttons. The task sheet inserts this
+  // state row itself, so leaving it behind makes the next ordinary warning
+  // (for example Abort or plugin uninstall) inherit stale In Progress /
+  // Finished content. Remove task-owned state as part of the close handoff;
+  // keep the .nchan class until the fade completes to avoid the old close flash.
+  $sa.children('.nchan-state').remove();
   setTimeout(function(){
-    var $sa = $('.sweet-alert');
     $sa.css('pointer-events','');
     if (!foregroundTaskId) $sa.removeClass('nchan');
   }, 350);
