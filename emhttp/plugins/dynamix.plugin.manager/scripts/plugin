@@ -594,7 +594,7 @@ if ($method == 'checkall') {
     // skip OS related plugins
     if (in_array(basename($link,'.plg'),$builtin)) continue;
     // only consider symlinks
-    $installed_plugin_file = @readlink($link);
+    $installed_plugin_file = installed_plugin($link);
     if ($installed_plugin_file === false) continue;
     if (plugin('pluginURL', $installed_plugin_file, $error) === false) continue;
     $plugin = basename($installed_plugin_file);
@@ -617,7 +617,7 @@ if ($method == 'updateall') {
     // skip OS related plugins
     if (in_array(basename($link,'.plg'),$builtin)) continue;
     // only consider symlinks
-    $installed_plugin_file = @readlink($link);
+    $installed_plugin_file = installed_plugin($link);
     if ($installed_plugin_file === false) continue;
     if (plugin('pluginURL', $installed_plugin_file, $error) === false) continue;
     $version = plugin('version', $installed_plugin_file, $error);
@@ -643,7 +643,7 @@ if ($method == 'checkos') {
   }
   foreach ($builtin as $link) {
     // only consider symlinks
-    $installed_plugin_file = @readlink("$plugins/$link.plg");
+    $installed_plugin_file = installed_plugin("$plugins/$link.plg");
     if ($installed_plugin_file === false) continue;
     if (plugin("pluginURL", $installed_plugin_file, $error) === false) continue;
     $plugin = basename($installed_plugin_file);
