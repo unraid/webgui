@@ -229,6 +229,7 @@ function xmlToVar($xml) {
   $out['ExtraParams']                  = $extraParams;
   $out['PostArgs']                     = xml_decode($xml->PostArgs);
   $out['CPUset']                       = xml_decode($xml->CPUset);
+  $out['Memory']                       = xml_decode($xml->Memory ?? '');
   $out['DonateText']                   = xml_decode($xml->DonateText);
   $out['DonateLink']                   = xml_decode($xml->DonateLink);
   $out['Requires']                     = xml_decode($xml->Requires);
