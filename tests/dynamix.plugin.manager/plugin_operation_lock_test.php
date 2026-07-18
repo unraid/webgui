@@ -1172,6 +1172,15 @@ $private_receipt = plugin_manager_write_complete_download(
   '<PLUGIN name="private-download" version="2026.07.18"/>'
 );
 test_assert(is_array($private_receipt), 'Private network candidate did not produce a receipt');
+test_assert(
+  plugin_manager_private_artifact_is_safe(
+    $private_download,
+    plugin_manager_private_download_directory(),
+    '/^\.plugin-check-[A-Za-z0-9]+$/D',
+    0600
+  ),
+  'Private network candidate failed its parent-identity boundary'
+);
 $replacement = "$private_directory/.plugin-check-replacement";
 file_put_contents($replacement, '<PLUGIN name="attacker" version="9999.01.01"/>');
 chmod($replacement, 0600);
@@ -1191,6 +1200,137 @@ test_assert(
     !file_exists("$directory/replacement.plg"),
   'A replaced private candidate was published through its stale receipt'
 );
+
+$alias_target = "$root/private-alias-target";
+$alias_parent = "$root/private-alias";
+mkdir("$alias_target/unraid-plugin-manager", 0700, true);
+symlink($alias_target, $alias_parent);
+$alias_lock = "$alias_parent/unraid-plugin-manager/operations.lock";
+putenv(PLUGIN_MANAGER_LOCK_PATH_ENV."=$alias_lock");
+$alias_directory = plugin_manager_private_download_directory();
+$alias_download = plugin_manager_create_private_download_file();
+$canonical_alias_download =
+  realpath(dirname($alias_download)).'/'.basename($alias_download);
+test_assert(
+  plugin_manager_private_artifact_is_safe(
+    $canonical_alias_download,
+    $alias_directory,
+    '/^\.plugin-check-[A-Za-z0-9]+$/D',
+    0600
+  ),
+  'Canonical tempnam path was rejected through a symlinked parent alias'
+);
+chmod($alias_download, 0644);
+test_assert(
+  !plugin_manager_private_artifact_is_safe(
+    $canonical_alias_download,
+    $alias_directory,
+    '/^\.plugin-check-[A-Za-z0-9]+$/D',
+    0600
+  ),
+  'A private artifact with a weakened mode passed its boundary'
+);
+chmod($alias_download, 0600);
+$wrong_name = "$alias_directory/private-download";
+file_put_contents($wrong_name, 'wrong-name');
+chmod($wrong_name, 0600);
+test_assert(
+  !plugin_manager_private_artifact_is_safe(
+    $wrong_name,
+    $alias_directory,
+    '/^\.plugin-check-[A-Za-z0-9]+$/D',
+    0600
+  ),
+  'A private artifact with an unexpected leaf name passed its boundary'
+);
+$outside_directory = "$root/private-alias-outside";
+mkdir($outside_directory, 0700);
+$outside_download = "$outside_directory/".basename($alias_download);
+file_put_contents($outside_download, 'outside');
+chmod($outside_download, 0600);
+test_assert(
+  !plugin_manager_private_artifact_is_safe(
+    $outside_download,
+    $alias_directory,
+    '/^\.plugin-check-[A-Za-z0-9]+$/D',
+    0600
+  ),
+  'A matching private basename escaped its validated parent inode'
+);
+$alias_symlink = "$alias_directory/.plugin-check-symlink";
+symlink($outside_download, $alias_symlink);
+test_assert(
+  !plugin_manager_private_artifact_is_safe(
+    $alias_symlink,
+    $alias_directory,
+    '/^\.plugin-check-[A-Za-z0-9]+$/D',
+    0600
+  ),
+  'A private artifact leaf symlink passed the parent-identity boundary'
+);
+
+$alias_plugin = 'private-alias-snapshot.plg';
+$alias_latest = "$root/$alias_plugin";
+test_assert(
+  is_array(
+    plugin_manager_write_complete_download(
+      $alias_download,
+      '<PLUGIN name="private-alias-snapshot" version="2026.07.18"/>'
+    )
+  ),
+  'Unable to write the aliased private snapshot candidate'
+);
+$alias_generation = plugin_manager_reserve_plugin_check_generation($alias_plugin);
+test_assert(
+  test_publish_plugin_check_artifact(
+    $alias_plugin,
+    $alias_generation,
+    $alias_download,
+    $alias_latest
+  ),
+  'Unable to publish the aliased private snapshot fixture'
+);
+$previous_scope = [
+  PLUGIN_MANAGER_LOCK_TOKEN_ENV => getenv(PLUGIN_MANAGER_LOCK_TOKEN_ENV),
+  PLUGIN_MANAGER_LOCK_SCOPE_ENV => getenv(PLUGIN_MANAGER_LOCK_SCOPE_ENV)
+];
+$alias_token = bin2hex(random_bytes(16));
+$alias_scope = "$alias_lock.scope.$alias_token";
+mkdir($alias_scope, 0700);
+mkdir("$alias_scope.snapshots", 0700);
+putenv(PLUGIN_MANAGER_LOCK_TOKEN_ENV."=$alias_token");
+putenv(PLUGIN_MANAGER_LOCK_SCOPE_ENV."=$alias_scope");
+$alias_snapshot = plugin_manager_snapshot_plugin_check_artifact(
+  $alias_plugin,
+  $alias_latest
+);
+test_assert(
+  is_array($alias_snapshot) &&
+    plugin_manager_read_plugin_check_snapshot($alias_snapshot) ===
+      '<PLUGIN name="private-alias-snapshot" version="2026.07.18"/>',
+  'Update snapshot failed through a symlinked private parent alias'
+);
+chmod($alias_snapshot['path'], 0600);
+test_assert(
+  plugin_manager_read_plugin_check_snapshot($alias_snapshot) === false,
+  'A writable private update snapshot remained readable through its receipt'
+);
+chmod($alias_snapshot['path'], 0400);
+$outside_snapshot = "$outside_directory/.plugin-update-outsidescope";
+$outside_snapshot_contents =
+  '<PLUGIN name="outside-snapshot" version="9999.01.01"/>';
+file_put_contents($outside_snapshot, $outside_snapshot_contents);
+chmod($outside_snapshot, 0400);
+test_assert(
+  plugin_manager_read_plugin_check_snapshot([
+    'generation' => 1,
+    'hash' => hash('sha256', $outside_snapshot_contents),
+    'path' => $outside_snapshot
+  ]) === false,
+  'A matching private snapshot receipt escaped its validated scope inode'
+);
+test_restore_snapshot_scope($previous_scope);
+@unlink($alias_download);
 
 $hostile_shared = "$root/hostile-shared";
 mkdir($hostile_shared, 0777);
@@ -1263,6 +1403,29 @@ test_assert(
     !str_contains($plugin_source, "tempnam(\$tmp, '.plugin-check-')"),
   'API or CLI network checks still stage candidates in the shared artifact directory'
 );
+foreach (
+  [
+    $plugin_source,
+    $plugin_api_source,
+    file_get_contents(
+      dirname(__DIR__, 2).
+        '/emhttp/plugins/dynamix.plugin.manager/include/PluginHelpers.php'
+    ),
+    $show_plugins_source,
+    file_get_contents(
+      dirname(__DIR__, 2).
+        '/emhttp/plugins/dynamix.plugin.manager/include/ShowChanges.php'
+    )
+  ] as $private_consumer_source
+) {
+  test_assert(
+    str_contains(
+      $private_consumer_source,
+      'plugin_manager_private_artifact_is_safe'
+    ),
+    'A private artifact consumer bypasses the shared parent-identity boundary'
+  );
+}
 test_assert(
   str_contains($plugin_api_source, 'plugin_manager_write_shared_artifact($changes_path,$changes)') &&
     str_contains($plugin_api_source, "plugin_manager_write_shared_artifact('/tmp/plugins/my_alerts.txt',\$alerts)") &&
@@ -2293,7 +2456,8 @@ $consistency = plugin_manager_with_operation_lock(
       'persisted' => file_get_contents($persisted),
       'shared' => file_get_contents($latest),
       'selected_generation' => $selected_generation,
-      'nested_generation' => $nested_generation
+      'nested_generation' => $nested_generation,
+      'receipt' => $receipt
     ];
   }
 );
@@ -2306,9 +2470,10 @@ test_assert(
     $consistency['selected_generation'] < $consistency['nested_generation'],
   'Nested same-plugin check did not replace only the mutable shared cache'
 );
-test_restore_snapshot_scope($snapshot_environment);
+$snapshot_receipt = $consistency['receipt'];
 
-$directory = test_directory($root, 'atomic-snapshot-persistence');
+$directory = "$root/atomic-snapshot-persistence";
+mkdir($directory, 0700);
 $target = "$directory/boot-plugin.plg";
 $prior_target = "$directory/prior-plugin.plg";
 $installed_link = "$directory/installed-plugin.plg";
@@ -2399,6 +2564,7 @@ test_assert(
   is_link($installed_link) && readlink($installed_link) === $target,
   'Successful persistence did not atomically update the installed symlink'
 );
+test_restore_snapshot_scope($snapshot_environment);
 
 $plugins_page_source = file_get_contents(
   dirname(__DIR__, 2).'/emhttp/plugins/dynamix.plugin.manager/Plugins.page'

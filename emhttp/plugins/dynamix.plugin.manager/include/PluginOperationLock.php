@@ -504,6 +504,58 @@ function plugin_manager_expected_path_owner(bool $production): ?int {
 }
 
 /**
+ * Validate a private regular file by the identity of its already-secured
+ * parent, not by the spelling of that parent. Linux tempnam() returns /run
+ * paths when called through the production /var/run symlink.
+ */
+function plugin_manager_private_artifact_is_safe(
+  string $path,
+  string $directory,
+  string $basename_pattern,
+  int $mode
+): bool {
+  if (
+    $path === '' ||
+    $path[0] !== '/' ||
+    $directory === '' ||
+    $directory[0] !== '/' ||
+    preg_match($basename_pattern, basename($path)) !== 1
+  ) {
+    return false;
+  }
+
+  clearstatcache(true, $directory);
+  clearstatcache(true, dirname($path));
+  clearstatcache(true, $path);
+  $directory_status = @lstat($directory);
+  $parent_status = @lstat(dirname($path));
+  $path_status = @lstat($path);
+  [$lock, $production] = plugin_manager_operation_lock_path();
+  unset($lock);
+  $expected_owner = plugin_manager_expected_path_owner($production);
+
+  return
+    $directory_status !== false &&
+    $parent_status !== false &&
+    $path_status !== false &&
+    plugin_manager_lock_path_type($directory_status) === 0040000 &&
+    plugin_manager_lock_path_type($parent_status) === 0040000 &&
+    plugin_manager_lock_path_type($path_status) === 0100000 &&
+    ($directory_status['mode'] & 07777) === 0700 &&
+    $directory_status['dev'] === $parent_status['dev'] &&
+    $directory_status['ino'] === $parent_status['ino'] &&
+    ($path_status['mode'] & 07777) === $mode &&
+    (
+      $expected_owner === null ||
+      (
+        $directory_status['uid'] === $expected_owner &&
+        $parent_status['uid'] === $expected_owner &&
+        $path_status['uid'] === $expected_owner
+      )
+    );
+}
+
+/**
  * Return the root/current-user-owned mode-0700 directory used for network
  * candidates. It shares the already validated operation-lock parent rather
  * than relying on the ownership of /tmp/plugins.
@@ -543,36 +595,18 @@ function plugin_manager_create_private_download_file(
   }
   $directory = plugin_manager_private_download_directory();
   $path = tempnam($directory, $prefix);
-  clearstatcache(true, $directory);
-  if (is_string($path)) clearstatcache(true, dirname($path));
-  $directory_status = @lstat($directory);
-  $path_parent_status = is_string($path) ? @lstat(dirname($path)) : false;
   if (
     $path === false ||
-    $directory_status === false ||
-    $path_parent_status === false ||
-    plugin_manager_lock_path_type($path_parent_status) !== 0040000 ||
-    $directory_status['dev'] !== $path_parent_status['dev'] ||
-    $directory_status['ino'] !== $path_parent_status['ino'] ||
-    !@chmod($path, 0600)
+    !@chmod($path, 0600) ||
+    !plugin_manager_private_artifact_is_safe(
+      $path,
+      $directory,
+      '/^'.preg_quote($prefix, '/').'[A-Za-z0-9]+$/D',
+      0600
+    )
   ) {
     if (is_string($path)) @unlink($path);
     throw new RuntimeException('Unable to create private Plugin Manager download file');
-  }
-
-  clearstatcache(true, $path);
-  $status = @lstat($path);
-  [$lock, $production] = plugin_manager_operation_lock_path();
-  unset($lock);
-  $expected_owner = plugin_manager_expected_path_owner($production);
-  if (
-    $status === false ||
-    plugin_manager_lock_path_type($status) !== 0100000 ||
-    ($status['mode'] & 07777) !== 0600 ||
-    ($expected_owner !== null && $status['uid'] !== $expected_owner)
-  ) {
-    @unlink($path);
-    throw new RuntimeException('Plugin Manager private download file is unsafe');
   }
   return $path;
 }
@@ -1447,21 +1481,14 @@ function plugin_manager_snapshot_plugin_check_artifact(
         throw new RuntimeException('Unable to create private Plugin Manager update snapshot');
       }
       if (
-        dirname($snapshot) !== $snapshot_parent ||
         file_put_contents($snapshot, $contents, LOCK_EX) !== strlen($contents) ||
-        !@chmod($snapshot, 0400)
-      ) {
-        @unlink($snapshot);
-        throw new RuntimeException('Unable to secure Plugin Manager update snapshot');
-      }
-      clearstatcache(true, $snapshot);
-      $snapshot_status = @lstat($snapshot);
-      $owner = plugin_manager_effective_user_id();
-      if (
-        $snapshot_status === false ||
-        plugin_manager_lock_path_type($snapshot_status) !== 0100000 ||
-        ($snapshot_status['mode'] & 07777) !== 0400 ||
-        ($owner !== null && $snapshot_status['uid'] !== $owner)
+        !@chmod($snapshot, 0400) ||
+        !plugin_manager_private_artifact_is_safe(
+          $snapshot,
+          $snapshot_parent,
+          '/^\.plugin-update-[A-Za-z0-9]+$/D',
+          0400
+        )
       ) {
         @unlink($snapshot);
         throw new RuntimeException('Unable to secure Plugin Manager update snapshot');
@@ -1495,14 +1522,23 @@ function plugin_manager_read_plugin_check_snapshot(array $receipt): string|false
   $generation = $receipt['generation'] ?? null;
   $hash = $receipt['hash'] ?? null;
   $path = $receipt['path'] ?? null;
+  try {
+    $snapshot_directory = plugin_manager_operation_snapshot_directory();
+  } catch (Throwable) {
+    return false;
+  }
   if (
     !is_int($generation) ||
     $generation < 1 ||
     !is_string($hash) ||
     !preg_match('/^[a-f0-9]{64}$/D', $hash) ||
     !is_string($path) ||
-    !is_file($path) ||
-    is_link($path)
+    !plugin_manager_private_artifact_is_safe(
+      $path,
+      $snapshot_directory,
+      '/^\.plugin-update-[A-Za-z0-9]+$/D',
+      0400
+    )
   ) {
     return false;
   }

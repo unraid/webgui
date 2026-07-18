@@ -20,13 +20,26 @@ extract(parse_plugin_cfg('dynamix',true));
 $_SERVER['REQUEST_URI'] = 'plugins';
 require_once "$docroot/webGui/include/Translations.php";
 
-$valid = ['/var/tmp/','/tmp/plugins/',plugin_manager_private_download_directory().'/'];
+$valid = ['/var/tmp/','/tmp/plugins/'];
 $good  = false;
 ?>
 <body style="margin:14px 10px">
 <?
 if ($file = realpath(unscript(_var($_GET,'file')))) {
   foreach ($valid as $check) if (strncmp($file,$check,strlen($check))===0) $good = true;
+  try {
+    $good =
+      $good ||
+      plugin_manager_private_artifact_is_safe(
+        $file,
+        plugin_manager_private_download_directory(),
+        '/^release-notes-[a-f0-9]{64}\.txt$/D',
+        0644
+      );
+  } catch (Throwable) {
+    // Keep legacy release-note locations available if the private boundary is
+    // unavailable; never accept an unverified private path.
+  }
   if ($good && pathinfo($file,PATHINFO_EXTENSION)=='txt') echo Markdown(file_get_contents($file));
 } else {
   echo Markdown("*"._('No release notes available')."!*");

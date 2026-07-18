@@ -854,7 +854,15 @@ if ($method === 'branchcheck') {
     $target =
       plugin_manager_private_download_directory().
       '/os-branch-'.hash('sha256', $selected_contents).'.plg';
-    if (!plugin_manager_write_shared_artifact($target, $selected_contents, 0600)) {
+    if (
+      !plugin_manager_write_shared_artifact($target, $selected_contents, 0600) ||
+      !plugin_manager_private_artifact_is_safe(
+        $target,
+        plugin_manager_private_download_directory(),
+        '/^os-branch-[a-f0-9]{64}\.plg$/D',
+        0600
+      )
+    ) {
       throw new RuntimeException('Unable to publish OS branch definition');
     }
     echo "\n_PLUGIN_BRANCH_RESULT_=".base64_encode(json_encode(
@@ -1229,8 +1237,12 @@ if ($method == 'check') {
   try {
     $candidate_path_is_private =
       is_string($download) &&
-      dirname($download) === plugin_manager_private_download_directory() &&
-      str_starts_with(basename($download), '.plugin-check-');
+      plugin_manager_private_artifact_is_safe(
+        $download,
+        plugin_manager_private_download_directory(),
+        '/^\.plugin-check-[A-Za-z0-9]+$/D',
+        0600
+      );
   } catch (Throwable) {
     $candidate_path_is_private = false;
   }

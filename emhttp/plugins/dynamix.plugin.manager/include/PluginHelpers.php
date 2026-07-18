@@ -87,19 +87,12 @@ function plugin_branch_check($plugin_file, $branch) {
     return false;
   }
   if (
-    dirname($path) !== $artifact_directory ||
-    !preg_match('/^os-branch-[a-f0-9]{64}\.plg$/D', basename($path))
-  ) {
-    return false;
-  }
-  clearstatcache(true, $path);
-  $path_status = @lstat($path);
-  if (
-    $path === '' ||
-    $path[0] !== '/' ||
-    $path_status === false ||
-    ($path_status['mode'] & 0170000) !== 0100000 ||
-    ($path_status['mode'] & 07777) !== 0600 ||
+    !plugin_manager_private_artifact_is_safe(
+      $path,
+      $artifact_directory,
+      '/^os-branch-[a-f0-9]{64}\.plg$/D',
+      0600
+    ) ||
     !is_string($past) ||
     !is_string($next)
   ) {

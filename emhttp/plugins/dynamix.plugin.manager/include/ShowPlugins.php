@@ -218,7 +218,19 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
       } catch (Throwable) {
         $notes_published = false;
       }
-      if ($notes_published) {
+      try {
+        $notes_safe =
+          $notes_published &&
+          plugin_manager_private_artifact_is_safe(
+            $txtfile,
+            plugin_manager_private_download_directory(),
+            '/^release-notes-[a-f0-9]{64}\.txt$/D',
+            0644
+          );
+      } catch (Throwable) {
+        $notes_safe = false;
+      }
+      if ($notes_safe) {
         $version .= "&nbsp;<span class='fa fa-info-circle fa-fw big blue-text' title='"._('View Release Notes')."' onclick=\"openChanges('showchanges $txtfile','"._('Release Notes')."')\"></span>";
       }
     }

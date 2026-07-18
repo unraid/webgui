@@ -79,7 +79,13 @@ switch ($_POST['action']) {
 				$download = plugin_manager_create_private_download_file();
 				$download_receipt = null;
 				if ( download_url($url,$download,$download_receipt) === false ||
-					!is_array($download_receipt) ) {
+					!is_array($download_receipt) ||
+					!plugin_manager_private_artifact_is_safe(
+						$download,
+						plugin_manager_private_download_directory(),
+						'/^\.plugin-check-[A-Za-z0-9]+$/D',
+						0600
+					) ) {
 					@unlink($download);
 					throw new RuntimeException("Plugin download failed");
 				}
