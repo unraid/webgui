@@ -9,7 +9,9 @@
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Wrappers.php";
 require_once "$docroot/webGui/include/publish.php";
+require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginOperationLock.php";
 $logger = 'plugin-manager';
+const PLUGIN_MANAGER_CHECK_PHASE_ENV = 'UNRAID_PLUGIN_MANAGER_CHECK_PHASE';
 
 $usage = <<<EOF
 Process plugin files.
@@ -291,6 +293,38 @@ function filter_url($url) {
     $new_url = "";
   }
   return($new_url);
+}
+
+// Revoke a failed check generation without deleting a newer writer's artifact.
+// The check command already holds the global operation lock.
+function invalidate_failed_plugin_check($plugin, $generation, $plugin_file, $error) {
+  try {
+    plugin_manager_invalidate_plugin_check_artifact($plugin, $generation, $plugin_file);
+    return $error;
+  } catch (Throwable $invalidate_error) {
+    $prefix = $error ? "$error; " : '';
+    return $prefix."unable to revoke update artifact: {$invalidate_error->getMessage()}";
+  }
+}
+
+function plugin_manager_check_identity($installed_plugin_file, $plugin_url) {
+  return hash('sha256', $installed_plugin_file."\0".$plugin_url);
+}
+
+function plugin_manager_encode_check_phase($phase) {
+  return base64_encode(json_encode($phase, JSON_THROW_ON_ERROR));
+}
+
+function plugin_manager_decode_check_phase($encoded) {
+  $json = is_string($encoded) ? base64_decode($encoded, true) : false;
+  if (!is_string($json)) {
+    throw new RuntimeException('Plugin Manager check phase receipt is invalid');
+  }
+  $phase = json_decode($json, true, 8, JSON_THROW_ON_ERROR);
+  if (!is_array($phase)) {
+    throw new RuntimeException('Plugin Manager check phase receipt is invalid');
+  }
+  return $phase;
 }
 
 // Interpret a plugin file
@@ -645,6 +679,10 @@ if ($argc < 3) {
   done(1);
 }
 
+if ($method != 'check') {
+  plugin_manager_serialize_operation($method, $script, $argv);
+}
+
 // plugin install [plugin_file] / plugin download [plugin_file]
 // cases:
 // a) dirname of [plugin_file] is /boot/config/plugins (system startup)
@@ -796,36 +834,236 @@ if ($method == 'install') {
 if ($method == 'check') {
   $plugin = $argv[2];
   $symlink = "$plugins/$plugin";
-  write("plugin: checking: $plugin ...\n");
-  $installed_plugin_file = @readlink($symlink);
-  if ($installed_plugin_file === false) {
-    write("plugin: not installed\n");
-    // run hook scripts for post processing
-    post_hooks(1);
-    done(1);
-  }
-  $installed_pluginURL = plugin('pluginURL', $installed_plugin_file, $error);
-  if ($installed_pluginURL === false) {
-    write("plugin: $error\n");
-    // run hook scripts for post processing
-    post_hooks($error);
-    done(1);
-  }
   $plugin_file = "$tmp/$plugin";
-  if ( (download($installed_pluginURL, $plugin_file, $error) === false) && (download(filter_url($installed_pluginURL), $plugin_file, $error) === false) ) {
+  $encoded_phase = getenv(PLUGIN_MANAGER_CHECK_PHASE_ENV);
+
+  if ($encoded_phase === false) {
+    write("plugin: checking: $plugin ...\n");
+    $generation = null;
+    $download = null;
+    $candidate_hash = null;
+    $expected_identity = null;
+    $preparation_error = null;
+
+    $installed_plugin_file = realpath($symlink);
+    if ($installed_plugin_file === false) {
+      $preparation_error = 'not installed';
+    } else {
+      try {
+        $generation = plugin_manager_reserve_plugin_check_generation($plugin);
+      } catch (Throwable $lock_error) {
+        $preparation_error = $lock_error->getMessage();
+      }
+    }
+
+    if ($preparation_error === null) {
+      $installed_pluginURL = plugin_attribute_uncached(
+        'pluginURL',
+        $installed_plugin_file
+      );
+      if ($installed_pluginURL === false) {
+        $preparation_error = 'pluginURL attribute is missing';
+      } else {
+        $expected_identity = plugin_manager_check_identity(
+          $installed_plugin_file,
+          $installed_pluginURL
+        );
+        $download = tempnam($tmp, '.plugin-check-');
+        if ($download === false) {
+          $preparation_error = 'unable to create private download file';
+        } elseif (
+          download($installed_pluginURL, $download, $error) === false &&
+          download(filter_url($installed_pluginURL), $download, $error) === false
+        ) {
+          $preparation_error = $error ?: 'plugin download failed';
+          @unlink($download);
+          $download = null;
+        } else {
+          $candidate_hash = @hash_file('sha256', $download);
+          if (!is_string($candidate_hash)) {
+            $preparation_error = 'unable to verify private download file';
+            @unlink($download);
+            $download = null;
+          }
+        }
+      }
+    }
+
+    try {
+      $encoded_phase = plugin_manager_encode_check_phase([
+        'version' => 1,
+        'plugin' => $plugin,
+        'generation' => $generation,
+        'candidate' => $download,
+        'candidate_hash' => $candidate_hash,
+        'identity' => $expected_identity,
+        'error' => $preparation_error
+      ]);
+      putenv(PLUGIN_MANAGER_CHECK_PHASE_ENV."=$encoded_phase");
+      $lock_command = plugin_manager_operation_lock_command(
+        'validate',
+        $script,
+        $argv
+      );
+    } catch (Throwable $lock_error) {
+      putenv(PLUGIN_MANAGER_CHECK_PHASE_ENV);
+      if (is_string($download)) @unlink($download);
+      fwrite(STDERR, "plugin: unable to acquire operation lock: {$lock_error->getMessage()}\n");
+      done(1);
+    }
+
+    if ($lock_command !== null) {
+      passthru($lock_command, $status);
+      putenv(PLUGIN_MANAGER_CHECK_PHASE_ENV);
+      if (is_string($download)) @unlink($download);
+      done($status);
+    }
+  }
+
+  // A direct caller with a phase receipt still has to enter the supervised
+  // scope. A re-executed or nested caller recognizes its live owner here.
+  plugin_manager_serialize_operation('validate', $script, $argv);
+
+  try {
+    $phase = plugin_manager_decode_check_phase($encoded_phase);
+  } catch (Throwable $phase_error) {
+    putenv(PLUGIN_MANAGER_CHECK_PHASE_ENV);
+    write("plugin: {$phase_error->getMessage()}\n");
+    post_hooks($phase_error->getMessage());
+    done(1);
+  }
+  putenv(PLUGIN_MANAGER_CHECK_PHASE_ENV);
+
+  $generation = $phase['generation'] ?? null;
+  $download = $phase['candidate'] ?? null;
+  $candidate_hash = $phase['candidate_hash'] ?? null;
+  $expected_identity = $phase['identity'] ?? null;
+  $preparation_error = $phase['error'] ?? null;
+  if (
+    ($phase['version'] ?? null) !== 1 ||
+    ($phase['plugin'] ?? null) !== $plugin ||
+    ($generation !== null && (!is_int($generation) || $generation < 1)) ||
+    ($preparation_error !== null && !is_string($preparation_error))
+  ) {
+    $preparation_error = 'Plugin Manager check phase receipt is invalid';
+  }
+
+  if ($preparation_error !== null) {
+    if (is_int($generation)) {
+      $preparation_error = invalidate_failed_plugin_check(
+        $plugin,
+        $generation,
+        $plugin_file,
+        $preparation_error
+      );
+    }
+    write("plugin: $preparation_error\n");
+    post_hooks($preparation_error);
+    done(1);
+  }
+
+  $current_plugin_file = realpath($symlink);
+  $current_plugin_url = $current_plugin_file === false
+    ? false
+    : plugin_attribute_uncached('pluginURL', $current_plugin_file);
+  $identity_matches =
+    is_string($expected_identity) &&
+    preg_match('/^[a-f0-9]{64}$/D', $expected_identity) &&
+    is_string($current_plugin_file) &&
+    is_string($current_plugin_url) &&
+    hash_equals(
+      $expected_identity,
+      plugin_manager_check_identity($current_plugin_file, $current_plugin_url)
+    );
+  if (is_string($download)) clearstatcache(true, $download);
+  $candidate_status = is_string($download) ? @lstat($download) : false;
+  $candidate_matches =
+    is_int($generation) &&
+    is_string($download) &&
+    dirname($download) === $tmp &&
+    str_starts_with(basename($download), '.plugin-check-') &&
+    $candidate_status !== false &&
+    plugin_manager_lock_path_type($candidate_status) === 0100000 &&
+    is_string($candidate_hash) &&
+    preg_match('/^[a-f0-9]{64}$/D', $candidate_hash) &&
+    hash_equals($candidate_hash, (string)@hash_file('sha256', $download));
+  if (!$identity_matches || !$candidate_matches) {
+    if (
+      is_string($download) &&
+      dirname($download) === $tmp &&
+      str_starts_with(basename($download), '.plugin-check-') &&
+      $candidate_status !== false &&
+      plugin_manager_lock_path_type($candidate_status) === 0100000
+    ) {
+      @unlink($download);
+    }
+    $error = invalidate_failed_plugin_check(
+      $plugin,
+      (int)$generation,
+      $plugin_file,
+      'plugin identity or downloaded artifact changed before publication'
+    );
     write("plugin: $error\n");
-    @unlink($plugin_file);
-    // run hook scripts for post processing
     post_hooks($error);
+    done(1);
+  }
+
+  $publish_error = '';
+  try {
+    $published = plugin_manager_publish_plugin_check_artifact(
+      $plugin,
+      $generation,
+      $download,
+      $plugin_file
+    );
+  } catch (Throwable $lock_error) {
+    $published = false;
+    $publish_error = $lock_error->getMessage();
+  } finally {
+    @unlink($download);
+  }
+  if (!$published) {
+    $publish_error = $publish_error ?: 'unable to publish update artifact';
+    $publish_error = invalidate_failed_plugin_check(
+      $plugin,
+      $generation,
+      $plugin_file,
+      $publish_error
+    );
+    write("plugin: $publish_error\n");
+    post_hooks($publish_error);
     done(1);
   }
   // run hook scripts for pre processing
   pre_hooks();
   $version = plugin('version', $plugin_file, $error);
   if ($version === false) {
+    $error = invalidate_failed_plugin_check($plugin, $generation, $plugin_file, $error);
     write("plugin: $error\n");
     // run hook scripts for post processing
     post_hooks($error);
+    done(1);
+  }
+  $finalize_error = '';
+  try {
+    $finalized = plugin_manager_finalize_plugin_check_artifact(
+      $plugin,
+      $generation,
+      $plugin_file
+    );
+  } catch (Throwable $lock_error) {
+    $finalized = false;
+    $finalize_error = $lock_error->getMessage();
+  }
+  if (!$finalized) {
+    $finalize_error = invalidate_failed_plugin_check(
+      $plugin,
+      $generation,
+      $plugin_file,
+      $finalize_error ?: 'unable to finalize update artifact'
+    );
+    write("plugin: $finalize_error\n");
+    post_hooks($finalize_error);
     done(1);
   }
   write("$version\n");
@@ -859,34 +1097,77 @@ if ($method == 'update') {
   }
   // verify previous check has been done
   $plugin_file = "$tmp/$plugin";
-  if (!file_exists($plugin_file)) {
-    write("plugin: $plugin_file does not exist, check for updates first\n");
+  $artifact_error = '';
+  try {
+    $artifact_current = plugin_manager_plugin_check_artifact_is_current($plugin, $plugin_file);
+  } catch (Throwable $lock_error) {
+    $artifact_current = false;
+    $artifact_error = $lock_error->getMessage();
+  }
+  if (!$artifact_current) {
+    write("plugin: $plugin_file is not from a current successful check, check for updates first\n");
+    if ($artifact_error) write("plugin: $artifact_error\n");
     exit (1);
   }
-  // bergware - check Unraid version dependency (if present)
+  // run hook scripts for pre processing
+  pre_hooks();
+
+  // The update hook may refresh or revoke the shared artifact. Capture one
+  // finalized generation under its state lock and use only that private,
+  // read-only snapshot for validation, execution, and persistence.
+  $snapshot_error = '';
+  try {
+    $snapshot_receipt = plugin_manager_snapshot_plugin_check_artifact($plugin, $plugin_file);
+  } catch (Throwable $lock_error) {
+    $snapshot_receipt = null;
+    $snapshot_error = $lock_error->getMessage();
+  }
+  if ($snapshot_receipt === null) {
+    $error = "$plugin_file is not from a current successful check";
+    if ($snapshot_error) $error .= ": $snapshot_error";
+    write("plugin: $error\n");
+    post_hooks($error);
+    done(1);
+  }
+  $plugin_file = $snapshot_receipt['path'];
+
+  // A trusted caller may add a restrictive policy for its own operation.
+  // Enforce it against the exact post-hook snapshot before any plugin command.
+  try {
+    plugin_manager_enforce_artifact_policy('update', $plugin, $snapshot_receipt);
+  } catch (Throwable $policy_error) {
+    $error = $policy_error->getMessage();
+    write("plugin: $error\n");
+    post_hooks($error);
+    done(1);
+  }
+
+  // Re-run every update decision against the exact post-hook snapshot.
   $min = plugin('min', $plugin_file, $error);
   if ($min && version_compare($check_version, $min, '<')) {
     write("plugin: installed Unraid version is too low, require at least version $min\n");
-    // run hook scripts for post processing
     post_hooks($error);
     done(1);
   }
   $max = plugin('max', $plugin_file, $error) ?: plugin('Unraid', $plugin_file, $error);
   if ($max && version_compare($check_version, $max, '>')) {
     write("plugin: installed Unraid version is too high, require at most version $max\n");
-    // run hook scripts for post processing
     post_hooks($error);
     done(1);
   }
-  // check for a reinstall of same version
-  if (strcmp(plugin('version', $installed_plugin_file, $error), plugin('version', $plugin_file, $error)) === 0) {
+  $installed_version = plugin('version', $installed_plugin_file, $error);
+  $snapshot_version = plugin('version', $plugin_file, $error);
+  if ($installed_version === false || $snapshot_version === false) {
+    write("plugin: $error\n");
+    post_hooks($error);
+    done(1);
+  }
+  if (strcmp($installed_version, $snapshot_version) === 0) {
     write("Not reinstalling same version\n");
-    // run hook scripts for post processing
     post_hooks($error);
     done(1);
   }
-  // run hook scripts for pre processing
-  pre_hooks();
+
   // install the updated plugin
   if (plugin('install', $plugin_file, $error) === false) {
     write("plugin: $error\n");
@@ -894,16 +1175,31 @@ if ($method == 'update') {
     post_hooks($error);
     done(1);
   }
+  $snapshot_contents = plugin_manager_read_plugin_check_snapshot($snapshot_receipt);
+  if ($snapshot_contents === false) {
+    $error = 'private update snapshot changed during plugin execution';
+    write("plugin: $error\n");
+    post_hooks($error);
+    done(1);
+  }
   // install was successful, save the updated plugin so it installs again next boot
   $target = $download_only ? "$nextboot/$plugin" : "$boot/$plugin";
   $status = $download_only ? 'downloaded' : 'updated';
-  // For normal update, unlink existing symlink before copying
-  if (!$download_only) unlink($symlink);
-  // Ensure target directory exists and copy plugin file
+  // Persist the exact executed snapshot through a synced sibling file and
+  // atomic rename. The installed link remains valid throughout the commit.
   @mkdir(dirname($target), 0770, true);
-  copy($plugin_file, $target);
-  // For normal update, create symlink to mark as installed
-  if (!$download_only) symlink($target, $symlink);
+  try {
+    plugin_manager_commit_plugin_check_snapshot(
+      $snapshot_receipt,
+      $target,
+      $download_only ? null : $symlink
+    );
+  } catch (Throwable $persist_error) {
+    $error = $persist_error->getMessage();
+    write("plugin: $error\n");
+    post_hooks($error);
+    done(1);
+  }
   write("plugin: $plugin $status\n");
   my_logger("$plugin $status", $logger);
   // run hook scripts for post processing

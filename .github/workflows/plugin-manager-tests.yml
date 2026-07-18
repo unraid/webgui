@@ -1,0 +1,55 @@
+name: Plugin Manager Tests
+
+on:
+  pull_request:
+    paths:
+      - 'emhttp/plugins/dynamix.plugin.manager/**'
+      - 'tests/dynamix.plugin.manager/**'
+      - '.github/workflows/plugin-manager-tests.yml'
+  push:
+    branches:
+      - master
+    paths:
+      - 'emhttp/plugins/dynamix.plugin.manager/**'
+      - 'tests/dynamix.plugin.manager/**'
+      - '.github/workflows/plugin-manager-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host-operation-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f # 2.35.5
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: none
+
+      - name: Run Plugin Manager integration tests
+        run: tests/dynamix.plugin.manager/run.sh
+
+      - name: Verify touched PHP and page entrypoints
+        run: |
+          php -l emhttp/plugins/dynamix.plugin.manager/Plugins.page
+          php -l emhttp/plugins/dynamix.plugin.manager/include/PluginHelpers.php
+          php -l emhttp/plugins/dynamix.plugin.manager/include/PluginOperationLock.php
+          php -l emhttp/plugins/dynamix.plugin.manager/scripts/PluginAPI.php
+          php -l emhttp/plugins/dynamix.plugin.manager/scripts/plugin
+          php -l tests/dynamix.plugin.manager/plugin_operation_lock_test.php
+          sh -n tests/dynamix.plugin.manager/run.sh
+
+      - name: Verify lock supervisor shell
+        run: |
+          bash -n emhttp/plugins/dynamix.plugin.manager/scripts/plugin-operation-lock
+          shellcheck \
+            emhttp/plugins/dynamix.plugin.manager/scripts/plugin-operation-lock \
+            tests/dynamix.plugin.manager/run.sh

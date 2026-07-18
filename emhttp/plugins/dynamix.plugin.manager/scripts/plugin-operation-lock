@@ -1,0 +1,165 @@
+#!/bin/bash
+set -u
+
+token="${UNRAID_PLUGIN_MANAGER_LOCK_TOKEN:-}"
+scope="${UNRAID_PLUGIN_MANAGER_LOCK_SCOPE:-}"
+flock_path="${1:-}"
+lock_path="${2:-}"
+snapshot_dir="$scope.snapshots"
+
+case "$token" in
+  *[!a-f0-9]*|'') exit 70 ;;
+esac
+[ "${#token}" -eq 32 ] || exit 70
+[ "$#" -ge 4 ] || exit 70
+[ "$3" = "--" ] || exit 70
+[ -x "$flock_path" ] || exit 70
+case "$lock_path" in
+  /*) ;;
+  *) exit 70 ;;
+esac
+[ "$scope" = "$lock_path.scope.$token" ] || exit 70
+
+# Re-exec once so /proc/$pid/environ contains the owner identity. Exporting
+# variables in an already-running shell is not reliably reflected by procfs.
+if [ "${UNRAID_PLUGIN_MANAGER_LOCK_SUPERVISOR_ACTIVE:-0}" != "1" ] ||
+  [ "${UNRAID_PLUGIN_MANAGER_LOCK_OWNER_PID:-}" != "$$" ]; then
+  export UNRAID_PLUGIN_MANAGER_LOCK_OWNER_PID="$$"
+  export UNRAID_PLUGIN_MANAGER_LOCK_SUPERVISOR_ACTIVE=1
+  exec "$0" "$@"
+fi
+shift 3
+[ "$#" -gt 0 ] || exit 70
+
+umask 077
+
+# The signal-aware supervisor is the actual mutex owner. Open the descriptor
+# only after PHP has validated the private lock path, verify that the opened
+# descriptor still names that path, and acquire flock on the shared open-file
+# description. The operation child closes this descriptor explicitly below.
+exec {lock_fd}<>"$lock_path" || exit 70
+if [ ! -f "$lock_path" ] ||
+  [ -L "$lock_path" ] ||
+  [ ! "/proc/$$/fd/$lock_fd" -ef "$lock_path" ]; then
+  exec {lock_fd}>&-
+  exit 70
+fi
+"$flock_path" "$lock_fd" || {
+  exec {lock_fd}>&-
+  exit 70
+}
+
+mkdir -- "$scope" || exit 70
+chmod 0700 "$scope" || exit 70
+mkdir -- "$snapshot_dir" || exit 70
+chmod 0700 "$snapshot_dir" || exit 70
+
+member_is_live() {
+  local lease="$1"
+  local identity="${lease##*/}"
+  local pid="${identity%%.*}"
+  local expected_start="${identity#*.}"
+  local stat=""
+  local fields=""
+  local current_start=""
+
+  case "$pid:$expected_start" in
+    *[!0-9:]*|:*|*:) return 1 ;;
+  esac
+  stat=$(cat "/proc/$pid/stat" 2>/dev/null) || return 1
+  fields="${stat##*) }"
+  # After removing pid/comm, starttime (field 22) is word 20.
+  # shellcheck disable=SC2086
+  set -- $fields
+  [ "$#" -ge 20 ] || return 1
+  case "$1" in
+    Z|X|x) return 1 ;;
+  esac
+  shift 19
+  current_start="$1"
+  [ "$current_start" = "$expected_start" ]
+}
+
+release_scope_after_members_exit() {
+  local empty_scans=0
+  local live=0
+  local lease=""
+
+  while [ "$empty_scans" -lt 2 ]; do
+    live=0
+    shopt -s nullglob
+    for lease in "$scope"/*; do
+      if [ -f "$lease" ] && [ ! -L "$lease" ] && member_is_live "$lease"; then
+        live=1
+      else
+        rm -rf -- "$lease"
+      fi
+    done
+    shopt -u nullglob
+
+    if [ "$live" -eq 1 ]; then
+      empty_scans=0
+    else
+      empty_scans=$((empty_scans + 1))
+    fi
+    if [ "$empty_scans" -ge 2 ]; then
+      # rmdir is the atomic empty check. A nested invocation may register after
+      # our scan; in that case rmdir observes the lease and we resume waiting.
+      if rmdir -- "$scope" 2>/dev/null; then
+        # Retiring the scope first prevents any late member registration from
+        # racing cleanup. Remove only this token-derived sibling directory.
+        rm -rf -- "$snapshot_dir"
+        return 0
+      fi
+      empty_scans=0
+    fi
+    sleep 0.05
+  done
+}
+
+child_pid=""
+pending_signal=""
+
+# Invoked indirectly by the signal traps below.
+# shellcheck disable=SC2329
+forward_signal() {
+  pending_signal="$1"
+  if [ -n "$child_pid" ]; then
+    kill -s "$1" -- "-$child_pid" 2>/dev/null ||
+      kill -s "$1" "$child_pid" 2>/dev/null ||
+      true
+  fi
+}
+
+trap 'forward_signal TERM' TERM
+trap 'forward_signal INT' INT
+trap 'forward_signal HUP' HUP
+
+# Give the operation a private process group. A signal sent to the invoking
+# foreground group reaches the supervisor once; the supervisor then forwards it
+# once to the complete operation group. The lock descriptor is closed before
+# any plugin-controlled process starts, so unrelated descendants cannot retain
+# the mutex accidentally.
+set -m
+"$@" {lock_fd}>&- &
+child_pid=$!
+set +m
+if [ -n "$pending_signal" ]; then
+  kill -s "$pending_signal" -- "-$child_pid" 2>/dev/null ||
+    kill -s "$pending_signal" "$child_pid" 2>/dev/null ||
+    true
+fi
+
+# A trapped signal interrupts wait even when the child is still running. Keep
+# supervising until the child has actually exited so flock cannot release the
+# host mutex while the operation survives as an orphan.
+while true; do
+  wait "$child_pid"
+  status=$?
+  if ! kill -0 "$child_pid" 2>/dev/null; then
+    break
+  fi
+done
+child_pid=""
+release_scope_after_members_exit
+exit "$status"

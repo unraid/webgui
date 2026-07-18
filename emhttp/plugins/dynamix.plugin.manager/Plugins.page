@@ -18,10 +18,11 @@ Code="e944"
  */
 ?>
 <?
-// Remove stale /tmp/plugin/*.plg entries (check that script 'plugin' is not running to avoid clashes)
-if (!exec('pgrep --ns $$ -f '."$docroot/plugins/dynamix.plugin.manager/scripts/plugin")) {
+require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginOperationLock.php";
+// Remove stale update artifacts only when no host-wide plugin operation is active.
+plugin_manager_with_nonblocking_operation_lock(function(): void {
   foreach (glob("/tmp/plugins/*.{plg,txt}", GLOB_NOSORT+GLOB_BRACE) as $entry) if (!file_exists("/var/log/plugins/".basename($entry))) @unlink($entry);
-}
+});
 $check = $notify['version'] ? 0 : 1;
 ?>
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.filetree.css')?>">

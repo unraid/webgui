@@ -12,6 +12,7 @@
 
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginHelpers.php";
+require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginOperationLock.php";
 require_once "$docroot/plugins/dynamix/include/Secure.php";
 
 //add translations
@@ -32,8 +33,9 @@ function download_url($url, $path = "") {
 	]);
 	$out = curl_exec($ch);
 	curl_close($ch);
-	if ( $path ) file_put_contents($path,$out);
-	return $out ?: false;
+	if ( !is_string($out) || $out === '' ) return false;
+	if ( $path && !plugin_manager_write_complete_download($path,$out) ) return false;
+	return $out;
 }
 
 switch ($_POST['action']) {
@@ -47,33 +49,75 @@ switch ($_POST['action']) {
 			echo json_encode(["updateAvailable"=>false]);
 			break;
 		}
-		exec("mkdir -p /tmp/plugins");
-		@unlink("/tmp/plugins/$plugin");
-		$url = plugin("pluginURL","/boot/config/plugins/$plugin");
-		download_url($url,"/tmp/plugins/$plugin");
-		$changes = plugin("changes","/tmp/plugins/$plugin");
-		$alerts = plugin("alert","/tmp/plugins/$plugin");
-		$version = plugin("version","/tmp/plugins/$plugin");
-		$installedVersion = plugin("version","/boot/config/plugins/$plugin");
-		$min = plugin("min","/tmp/plugins/$plugin") ?: "6.4.0";
-		if ( $changes ) {
-			file_put_contents("/tmp/plugins/".pathinfo($plugin, PATHINFO_FILENAME).".txt",$changes);
-		} else {
-			@unlink("/tmp/plugins/".pathinfo($plugin, PATHINFO_FILENAME).".txt");
+		$response = null;
+		$generation = null;
+		try {
+			$file = realpath("/boot/config/plugins/$plugin");
+			if ( $file === false ) throw new RuntimeException("Plugin disappeared");
+			$url = plugin_attribute_uncached("pluginURL",$file);
+			$generation = plugin_manager_reserve_plugin_check_generation($plugin);
+			exec("mkdir -p /tmp/plugins");
+			$download = tempnam("/tmp/plugins", ".plugin-check-");
+			if ( $download === false || download_url($url,$download) === false ) {
+				if ( is_string($download) ) @unlink($download);
+				throw new RuntimeException("Plugin download failed");
+			}
+			try {
+				$response = plugin_manager_with_operation_lock(function() use ($plugin, $name, $file, $url, $generation, $download) {
+					$current = realpath("/boot/config/plugins/$plugin");
+					if ( $current !== $file || plugin_attribute_uncached("pluginURL",$current) !== $url ) return null;
+					$latest = "/tmp/plugins/$plugin";
+					if ( !plugin_manager_publish_plugin_check_artifact($plugin,$generation,$download,$latest) ) return null;
+					$changes = plugin("changes",$latest);
+					$alerts = plugin("alert",$latest);
+					$version = plugin("version",$latest);
+					$installedVersion = plugin("version","/boot/config/plugins/$plugin");
+					if ( $version === false || $installedVersion === false ) return null;
+					$min = plugin("min",$latest) ?: "6.4.0";
+					if ( !plugin_manager_finalize_plugin_check_artifact($plugin,$generation,$latest) ) return null;
+					if ( $changes ) {
+						file_put_contents("/tmp/plugins/".pathinfo($plugin, PATHINFO_FILENAME).".txt",$changes);
+					} else {
+						@unlink("/tmp/plugins/".pathinfo($plugin, PATHINFO_FILENAME).".txt");
+					}
+					if ( $alerts ) {
+						file_put_contents('/tmp/plugins/my_alerts.txt',$alerts);
+					} else {
+						@unlink('/tmp/plugins/my_alerts.txt');
+					}
+					$update = false;
+					if ( strcmp($version,$installedVersion) > 0 ) {
+						$unraid = parse_ini_file("/etc/unraid-version");
+						$update = version_compare($min,$unraid['version'],'<=');
+					}
+					$updateMessage = sprintf(_("%s: An update is available."),$name);
+					$linkMessage = sprintf(_("Click here to install version %s"),$version);
+					return ["updateAvailable"=>$update, "version"=>$version, "min"=>$min, "alert"=>$alerts, "changes"=>$changes, "installedVersion"=>$installedVersion, "updateMessage"=>$updateMessage, "linkMessage"=>$linkMessage];
+				});
+			} finally {
+				@unlink($download);
+			}
+		} catch (Throwable) {
+			$response = null;
 		}
-		if ( $alerts ) {
-			file_put_contents('/tmp/plugins/my_alerts.txt',$alerts);
-		} else {
-			@unlink('/tmp/plugins/my_alerts.txt');
+		if ( $response === null && is_int($generation) ) {
+			try {
+				plugin_manager_with_operation_lock(
+					fn() => plugin_manager_invalidate_plugin_check_artifact(
+						$plugin,
+						$generation,
+						"/tmp/plugins/$plugin"
+					)
+				);
+			} catch (Throwable) {
+				// A failed invalidation remains fail-closed through the update gate.
+			}
 		}
-		$update = false;
-		if ( strcmp($version,$installedVersion) > 0 ) {
-			$unraid = parse_ini_file("/etc/unraid-version");
-			$update = version_compare($min,$unraid['version'],'<=');
+		if ( $response === null ) {
+			echo json_encode(["updateAvailable"=>false]);
+			break;
 		}
-		$updateMessage = sprintf(_("%s: An update is available."),$name);
-		$linkMessage = sprintf(_("Click here to install version %s"),$version);
-		echo json_encode(["updateAvailable"=>$update, "version"=>$version, "min"=>$min, "alert"=>$alerts, "changes"=>$changes, "installedVersion"=>$installedVersion, "updateMessage"=>$updateMessage, "linkMessage"=>$linkMessage]);
+		echo json_encode($response);
 		break;
 
 	case 'addRebootNotice':
