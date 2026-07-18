@@ -34,7 +34,7 @@ function test_publish_plugin_check_artifact(
   string $candidate,
   string $latest
 ): bool {
-  return plugin_manager_publish_plugin_check_artifact(
+  return test_stage_plugin_check_artifact(
     $plugin,
     $generation,
     $candidate,
@@ -42,6 +42,21 @@ function test_publish_plugin_check_artifact(
   ) && plugin_manager_finalize_plugin_check_artifact(
     $plugin,
     $generation,
+    $latest
+  );
+}
+
+function test_stage_plugin_check_artifact(
+  string $plugin,
+  int $generation,
+  string $candidate,
+  string $latest
+): bool {
+  $receipt = plugin_manager_capture_download_receipt($candidate);
+  return is_array($receipt) && plugin_manager_publish_plugin_check_artifact(
+    $plugin,
+    $generation,
+    $receipt,
     $latest
   );
 }
@@ -744,13 +759,13 @@ test_assert(
   'API and CLI make staged artifacts current before semantic validation'
 );
 test_assert(
-  str_contains($plugin_api_source, 'download_url($url,$download)'),
+  str_contains($plugin_api_source, 'download_url($url,$download,$download_receipt)'),
   'PluginAPI no longer performs its existing update-artifact download'
 );
 test_assert(
   str_contains(
     $plugin_api_source,
-    'plugin_manager_write_complete_download($path,$out)'
+    '$receipt = plugin_manager_write_complete_download($path,$out)'
   ),
   'PluginAPI does not verify its complete temporary download write'
 );
@@ -759,7 +774,7 @@ test_assert(
   'PluginAPI changed its check endpoint into the hook-running plugin check command'
 );
 test_assert(
-  strpos($plugin_api_source, 'download_url($url,$download)') <
+  strpos($plugin_api_source, 'download_url($url,$download,$download_receipt)') <
     strpos($plugin_api_source, 'plugin_manager_with_operation_lock'),
   'PluginAPI holds the host-wide lock across its remote update-artifact download'
 );
@@ -845,6 +860,89 @@ test_assert(
   'Complete PluginAPI download verification accepted an injected partial write'
 );
 
+$directory = test_directory($root, 'private-download-boundary');
+$private_download = plugin_manager_create_private_download_file();
+$private_directory = dirname($private_download);
+test_assert(
+  dirname($private_directory) === $directory &&
+    (fileperms($private_directory) & 07777) === 0700 &&
+    (fileperms($private_download) & 07777) === 0600,
+  'Network candidate was not created under the private operation-lock boundary'
+);
+$private_receipt = plugin_manager_write_complete_download(
+  $private_download,
+  '<PLUGIN name="private-download" version="2026.07.18"/>'
+);
+test_assert(is_array($private_receipt), 'Private network candidate did not produce a receipt');
+$replacement = "$private_directory/.plugin-check-replacement";
+file_put_contents($replacement, '<PLUGIN name="attacker" version="9999.01.01"/>');
+chmod($replacement, 0600);
+rename($replacement, $private_download);
+test_assert(
+  plugin_manager_read_download_receipt($private_receipt) === false,
+  'A path replacement still matched the exact network-candidate receipt'
+);
+$replacement_generation = plugin_manager_reserve_plugin_check_generation('replacement.plg');
+test_assert(
+  !plugin_manager_publish_plugin_check_artifact(
+    'replacement.plg',
+    $replacement_generation,
+    $private_receipt,
+    "$directory/replacement.plg"
+  ) &&
+    !file_exists("$directory/replacement.plg"),
+  'A replaced private candidate was published through its stale receipt'
+);
+
+$hostile_shared = "$root/hostile-shared";
+mkdir($hostile_shared, 0777);
+chmod($hostile_shared, 0777);
+plugin_manager_prepare_shared_artifact_directory($hostile_shared);
+test_assert(
+  (fileperms($hostile_shared) & 0022) === 0,
+  'An owned group/other-writable shared artifact directory was not secured'
+);
+$hostile_target = "$root/hostile-shared-link";
+symlink($hostile_shared, $hostile_target);
+test_assert_throws(
+  fn() => plugin_manager_prepare_shared_artifact_directory($hostile_target),
+  'missing or unsafe',
+  'A symlink shared artifact directory was trusted'
+);
+if (plugin_manager_effective_user_id() === 0 && function_exists('chown')) {
+  $foreign_shared = "$root/foreign-owned-shared";
+  mkdir($foreign_shared, 0700);
+  chown($foreign_shared, 65534);
+  test_assert_throws(
+    fn() => plugin_manager_prepare_shared_artifact_directory($foreign_shared),
+    'missing or unsafe',
+    'A foreign-owned shared artifact directory was trusted'
+  );
+}
+
+$safe_shared = "$directory/shared";
+mkdir($safe_shared, 0700);
+$victim = "$directory/victim";
+$shared_output = "$safe_shared/changes.txt";
+file_put_contents($victim, 'preserve-victim');
+symlink($victim, $shared_output);
+test_assert(
+  plugin_manager_write_shared_artifact($shared_output, 'safe-release-notes') &&
+    file_get_contents($victim) === 'preserve-victim' &&
+    !is_link($shared_output) &&
+    file_get_contents($shared_output) === 'safe-release-notes',
+  'Atomic shared-artifact publication followed an attacker-controlled symlink'
+);
+unlink($shared_output);
+symlink($victim, $shared_output);
+test_assert(
+  plugin_manager_remove_shared_artifact($shared_output) &&
+    file_get_contents($victim) === 'preserve-victim' &&
+    !file_exists($shared_output) &&
+    !is_link($shared_output),
+  'Shared-artifact removal followed an attacker-controlled symlink'
+);
+
 $attribute_fixture = "$root/attribute-revalidation.plg";
 file_put_contents($attribute_fixture, '<PLUGIN pluginURL="https://old.invalid/plugin.plg"/>');
 test_assert(
@@ -858,8 +956,20 @@ test_assert(
   'Uncached plugin attribute reader retained a replaced same-path plugin identity'
 );
 test_assert(
-  str_contains($plugin_api_source, 'plugin_manager_publish_plugin_check_artifact($plugin,$generation,$download,$latest)'),
+  str_contains($plugin_api_source, 'plugin_manager_publish_plugin_check_artifact($plugin,$generation,$download_receipt,$latest)'),
   'PluginAPI bypasses ordered atomic publication for its uniquely downloaded artifact'
+);
+test_assert(
+  str_contains($plugin_api_source, 'plugin_manager_create_private_download_file()') &&
+    str_contains($plugin_source, 'plugin_manager_create_private_download_file()') &&
+    !str_contains($plugin_source, "tempnam(\$tmp, '.plugin-check-')"),
+  'API or CLI network checks still stage candidates in the shared artifact directory'
+);
+test_assert(
+  str_contains($plugin_api_source, 'plugin_manager_write_shared_artifact($changes_path,$changes)') &&
+    str_contains($plugin_api_source, "plugin_manager_write_shared_artifact('/tmp/plugins/my_alerts.txt',\$alerts)") &&
+    !str_contains($plugin_api_source, "file_put_contents('/tmp/plugins/my_alerts.txt'"),
+  'PluginAPI release-note or alert output bypasses safe shared-artifact publication'
 );
 $update_block = strpos($plugin_source, "if (\$method == 'update')");
 $update_gate = strpos(
@@ -1092,7 +1202,7 @@ $first = "$directory/first-success";
 file_put_contents($first, 'first-success');
 $first_generation = plugin_manager_reserve_plugin_check_generation($plugin);
 test_assert(
-  plugin_manager_publish_plugin_check_artifact(
+  test_stage_plugin_check_artifact(
     $plugin,
     $first_generation,
     $first,
@@ -1143,7 +1253,7 @@ test_assert(
 $obsolete = "$directory/obsolete-download";
 file_put_contents($obsolete, 'obsolete');
 test_assert(
-  !plugin_manager_publish_plugin_check_artifact(
+  !test_stage_plugin_check_artifact(
     $plugin,
     $first_generation,
     $obsolete,

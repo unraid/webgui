@@ -841,7 +841,7 @@ if ($method == 'check') {
     write("plugin: checking: $plugin ...\n");
     $generation = null;
     $download = null;
-    $candidate_hash = null;
+    $candidate_receipt = null;
     $expected_identity = null;
     $preparation_error = null;
 
@@ -868,8 +868,16 @@ if ($method == 'check') {
           $installed_plugin_file,
           $installed_pluginURL
         );
-        $download = tempnam($tmp, '.plugin-check-');
-        if ($download === false) {
+        try {
+          plugin_manager_prepare_shared_artifact_directory($tmp);
+          $download = plugin_manager_create_private_download_file();
+        } catch (Throwable $download_error) {
+          $download = null;
+          $preparation_error = $download_error->getMessage();
+        }
+        if ($preparation_error !== null) {
+          // The shared/private artifact boundary could not be secured.
+        } elseif (!is_string($download)) {
           $preparation_error = 'unable to create private download file';
         } elseif (
           download($installed_pluginURL, $download, $error) === false &&
@@ -879,8 +887,8 @@ if ($method == 'check') {
           @unlink($download);
           $download = null;
         } else {
-          $candidate_hash = @hash_file('sha256', $download);
-          if (!is_string($candidate_hash)) {
+          $candidate_receipt = plugin_manager_capture_download_receipt($download);
+          if (!is_array($candidate_receipt)) {
             $preparation_error = 'unable to verify private download file';
             @unlink($download);
             $download = null;
@@ -891,11 +899,10 @@ if ($method == 'check') {
 
     try {
       $encoded_phase = plugin_manager_encode_check_phase([
-        'version' => 1,
+        'version' => 2,
         'plugin' => $plugin,
         'generation' => $generation,
-        'candidate' => $download,
-        'candidate_hash' => $candidate_hash,
+        'candidate_receipt' => $candidate_receipt,
         'identity' => $expected_identity,
         'error' => $preparation_error
       ]);
@@ -935,14 +942,17 @@ if ($method == 'check') {
   putenv(PLUGIN_MANAGER_CHECK_PHASE_ENV);
 
   $generation = $phase['generation'] ?? null;
-  $download = $phase['candidate'] ?? null;
-  $candidate_hash = $phase['candidate_hash'] ?? null;
+  $candidate_receipt = $phase['candidate_receipt'] ?? null;
+  $download = is_array($candidate_receipt)
+    ? ($candidate_receipt['path'] ?? null)
+    : null;
   $expected_identity = $phase['identity'] ?? null;
   $preparation_error = $phase['error'] ?? null;
   if (
-    ($phase['version'] ?? null) !== 1 ||
+    ($phase['version'] ?? null) !== 2 ||
     ($phase['plugin'] ?? null) !== $plugin ||
     ($generation !== null && (!is_int($generation) || $generation < 1)) ||
+    ($candidate_receipt !== null && !is_array($candidate_receipt)) ||
     ($preparation_error !== null && !is_string($preparation_error))
   ) {
     $preparation_error = 'Plugin Manager check phase receipt is invalid';
@@ -975,28 +985,23 @@ if ($method == 'check') {
       $expected_identity,
       plugin_manager_check_identity($current_plugin_file, $current_plugin_url)
     );
-  if (is_string($download)) clearstatcache(true, $download);
-  $candidate_status = is_string($download) ? @lstat($download) : false;
+  $candidate_contents = is_array($candidate_receipt)
+    ? plugin_manager_read_download_receipt($candidate_receipt)
+    : false;
+  try {
+    $candidate_path_is_private =
+      is_string($download) &&
+      dirname($download) === plugin_manager_private_download_directory() &&
+      str_starts_with(basename($download), '.plugin-check-');
+  } catch (Throwable) {
+    $candidate_path_is_private = false;
+  }
   $candidate_matches =
     is_int($generation) &&
-    is_string($download) &&
-    dirname($download) === $tmp &&
-    str_starts_with(basename($download), '.plugin-check-') &&
-    $candidate_status !== false &&
-    plugin_manager_lock_path_type($candidate_status) === 0100000 &&
-    is_string($candidate_hash) &&
-    preg_match('/^[a-f0-9]{64}$/D', $candidate_hash) &&
-    hash_equals($candidate_hash, (string)@hash_file('sha256', $download));
+    $candidate_path_is_private &&
+    is_string($candidate_contents);
   if (!$identity_matches || !$candidate_matches) {
-    if (
-      is_string($download) &&
-      dirname($download) === $tmp &&
-      str_starts_with(basename($download), '.plugin-check-') &&
-      $candidate_status !== false &&
-      plugin_manager_lock_path_type($candidate_status) === 0100000
-    ) {
-      @unlink($download);
-    }
+    if ($candidate_path_is_private) @unlink($download);
     $error = invalidate_failed_plugin_check(
       $plugin,
       (int)$generation,
@@ -1013,7 +1018,7 @@ if ($method == 'check') {
     $published = plugin_manager_publish_plugin_check_artifact(
       $plugin,
       $generation,
-      $download,
+      $candidate_receipt,
       $plugin_file
     );
   } catch (Throwable $lock_error) {

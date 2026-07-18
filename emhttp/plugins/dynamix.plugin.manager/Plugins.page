@@ -21,6 +21,11 @@ Code="e944"
 require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginOperationLock.php";
 // Remove stale update artifacts only when no host-wide plugin operation is active.
 plugin_manager_with_nonblocking_operation_lock(function(): void {
+  try {
+    plugin_manager_prepare_shared_artifact_directory();
+  } catch (Throwable) {
+    return;
+  }
   foreach (glob("/tmp/plugins/*.{plg,txt}", GLOB_NOSORT+GLOB_BRACE) as $entry) if (!file_exists("/var/log/plugins/".basename($entry))) @unlink($entry);
 });
 $check = $notify['version'] ? 0 : 1;

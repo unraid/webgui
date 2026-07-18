@@ -10,6 +10,7 @@ const PLUGIN_MANAGER_LOCK_TOKEN_ENV = 'UNRAID_PLUGIN_MANAGER_LOCK_TOKEN';
 const PLUGIN_MANAGER_LOCK_SCOPE_ENV = 'UNRAID_PLUGIN_MANAGER_LOCK_SCOPE';
 const PLUGIN_MANAGER_ARTIFACT_POLICY_ENV = 'UNRAID_PLUGIN_MANAGER_ARTIFACT_POLICY';
 const PLUGIN_MANAGER_DEFAULT_LOCK_PATH = '/var/run/unraid-plugin-manager/operations.lock';
+const PLUGIN_MANAGER_SHARED_ARTIFACT_DIRECTORY = '/tmp/plugins';
 
 /**
  * Aggregate operations intentionally remain unlocked. They invoke this command
@@ -246,6 +247,112 @@ function plugin_manager_prepare_lock_path(string $lock, bool $production): void 
     if ($lock_status === false || ($lock_status['mode'] & 07777) !== 0600) {
       throw new RuntimeException("Plugin Manager lock file must have mode 0600: $lock");
     }
+  }
+}
+
+function plugin_manager_expected_path_owner(bool $production): ?int {
+  return $production ? 0 : plugin_manager_effective_user_id();
+}
+
+/**
+ * Return the root/current-user-owned mode-0700 directory used for network
+ * candidates. It shares the already validated operation-lock parent rather
+ * than relying on the ownership of /tmp/plugins.
+ */
+function plugin_manager_private_download_directory(): string {
+  [$lock, $production] = plugin_manager_operation_lock_path();
+  plugin_manager_prepare_lock_path($lock, $production);
+
+  $directory = dirname($lock).'/downloads';
+  clearstatcache(true, $directory);
+  $status = @lstat($directory);
+  if ($status === false) {
+    @mkdir($directory, 0700);
+    clearstatcache(true, $directory);
+    $status = @lstat($directory);
+  }
+
+  $expected_owner = plugin_manager_expected_path_owner($production);
+  if (
+    $status === false ||
+    plugin_manager_lock_path_type($status) !== 0040000 ||
+    ($status['mode'] & 07777) !== 0700 ||
+    ($expected_owner !== null && $status['uid'] !== $expected_owner)
+  ) {
+    throw new RuntimeException(
+      'Plugin Manager private download directory is missing or unsafe'
+    );
+  }
+  return $directory;
+}
+
+function plugin_manager_create_private_download_file(): string {
+  $directory = plugin_manager_private_download_directory();
+  $path = tempnam($directory, '.plugin-check-');
+  if ($path === false || dirname($path) !== $directory || !@chmod($path, 0600)) {
+    if (is_string($path)) @unlink($path);
+    throw new RuntimeException('Unable to create private Plugin Manager download file');
+  }
+
+  clearstatcache(true, $path);
+  $status = @lstat($path);
+  [$lock, $production] = plugin_manager_operation_lock_path();
+  unset($lock);
+  $expected_owner = plugin_manager_expected_path_owner($production);
+  if (
+    $status === false ||
+    plugin_manager_lock_path_type($status) !== 0100000 ||
+    ($status['mode'] & 07777) !== 0600 ||
+    ($expected_owner !== null && $status['uid'] !== $expected_owner)
+  ) {
+    @unlink($path);
+    throw new RuntimeException('Plugin Manager private download file is unsafe');
+  }
+  return $path;
+}
+
+/**
+ * Validate the shared artifact directory without following a leaf symlink.
+ * A root-owned, non-group/other-writable child of sticky /tmp cannot be
+ * replaced by another local principal.
+ */
+function plugin_manager_prepare_shared_artifact_directory(
+  string $directory = PLUGIN_MANAGER_SHARED_ARTIFACT_DIRECTORY
+): void {
+  if ($directory === '' || $directory[0] !== '/') {
+    throw new RuntimeException('Plugin Manager shared artifact directory must be absolute');
+  }
+
+  clearstatcache(true, $directory);
+  $status = @lstat($directory);
+  if ($status === false) {
+    @mkdir($directory, 0755);
+    clearstatcache(true, $directory);
+    $status = @lstat($directory);
+  }
+
+  [$lock, $production] = plugin_manager_operation_lock_path();
+  unset($lock);
+  $expected_owner = plugin_manager_expected_path_owner($production);
+  if (
+    $status !== false &&
+    plugin_manager_lock_path_type($status) === 0040000 &&
+    ($expected_owner === null || $status['uid'] === $expected_owner) &&
+    ($status['mode'] & 0022) !== 0
+  ) {
+    @chmod($directory, 0755);
+    clearstatcache(true, $directory);
+    $status = @lstat($directory);
+  }
+  if (
+    $status === false ||
+    plugin_manager_lock_path_type($status) !== 0040000 ||
+    ($status['mode'] & 0022) !== 0 ||
+    ($expected_owner !== null && $status['uid'] !== $expected_owner)
+  ) {
+    throw new RuntimeException(
+      "Plugin Manager shared artifact directory is missing or unsafe: $directory"
+    );
   }
 }
 
@@ -520,6 +627,188 @@ function plugin_manager_write_plugin_check_state(
 }
 
 /**
+ * Capture the exact regular inode and bytes produced by a completed network
+ * download. The receipt is safe to carry across the global-lock wait.
+ *
+ * @return array{path: string, hash: string, dev: int, ino: int, size: int}|false
+ */
+function plugin_manager_capture_download_receipt(
+  string $path,
+  ?string $expected_hash = null
+): array|false {
+  if (
+    $path === '' ||
+    $path[0] !== '/' ||
+    (
+      $expected_hash !== null &&
+      !preg_match('/^[a-f0-9]{64}$/D', $expected_hash)
+    )
+  ) {
+    return false;
+  }
+
+  clearstatcache(true, $path);
+  $path_status = @lstat($path);
+  if (
+    $path_status === false ||
+    plugin_manager_lock_path_type($path_status) !== 0100000 ||
+    ($path_status['mode'] & 0022) !== 0
+  ) {
+    return false;
+  }
+
+  [$lock, $production] = plugin_manager_operation_lock_path();
+  unset($lock);
+  $expected_owner = plugin_manager_expected_path_owner($production);
+  if ($expected_owner !== null && $path_status['uid'] !== $expected_owner) {
+    return false;
+  }
+
+  $handle = @fopen($path, 'rb');
+  if ($handle === false) return false;
+  try {
+    if (!@flock($handle, LOCK_SH)) return false;
+    clearstatcache(true, $path);
+    $opened_path_status = @lstat($path);
+    $handle_status = @fstat($handle);
+    if (
+      $opened_path_status === false ||
+      $handle_status === false ||
+      plugin_manager_lock_path_type($opened_path_status) !== 0100000 ||
+      plugin_manager_lock_path_type($handle_status) !== 0100000 ||
+      $opened_path_status['dev'] !== $handle_status['dev'] ||
+      $opened_path_status['ino'] !== $handle_status['ino'] ||
+      ($opened_path_status['mode'] & 0022) !== 0 ||
+      ($expected_owner !== null && $opened_path_status['uid'] !== $expected_owner)
+    ) {
+      return false;
+    }
+
+    $contents = stream_get_contents($handle);
+    if (!is_string($contents) || $contents === '') return false;
+    $hash = hash('sha256', $contents);
+    if ($expected_hash !== null && !hash_equals($expected_hash, $hash)) {
+      return false;
+    }
+
+    clearstatcache(true, $path);
+    $final_path_status = @lstat($path);
+    $final_handle_status = @fstat($handle);
+    if (
+      $final_path_status === false ||
+      $final_handle_status === false ||
+      $final_path_status['dev'] !== $final_handle_status['dev'] ||
+      $final_path_status['ino'] !== $final_handle_status['ino'] ||
+      $final_handle_status['size'] !== strlen($contents)
+    ) {
+      return false;
+    }
+
+    return [
+      'path' => $path,
+      'hash' => $hash,
+      'dev' => $final_handle_status['dev'],
+      'ino' => $final_handle_status['ino'],
+      'size' => $final_handle_status['size']
+    ];
+  } finally {
+    @flock($handle, LOCK_UN);
+    fclose($handle);
+  }
+}
+
+/**
+ * Read only the inode and bytes named by a previously captured receipt.
+ *
+ * @param array{path: string, hash: string, dev: int, ino: int, size: int} $receipt
+ */
+function plugin_manager_read_download_receipt(array $receipt): string|false {
+  $path = $receipt['path'] ?? null;
+  $hash = $receipt['hash'] ?? null;
+  $dev = $receipt['dev'] ?? null;
+  $ino = $receipt['ino'] ?? null;
+  $size = $receipt['size'] ?? null;
+  if (
+    !is_string($path) ||
+    $path === '' ||
+    $path[0] !== '/' ||
+    !is_string($hash) ||
+    !preg_match('/^[a-f0-9]{64}$/D', $hash) ||
+    !is_int($dev) ||
+    !is_int($ino) ||
+    !is_int($size) ||
+    $size < 1
+  ) {
+    return false;
+  }
+
+  clearstatcache(true, $path);
+  $path_status = @lstat($path);
+  [$lock, $production] = plugin_manager_operation_lock_path();
+  unset($lock);
+  $expected_owner = plugin_manager_expected_path_owner($production);
+  if (
+    $path_status === false ||
+    plugin_manager_lock_path_type($path_status) !== 0100000 ||
+    $path_status['dev'] !== $dev ||
+    $path_status['ino'] !== $ino ||
+    $path_status['size'] !== $size ||
+    ($path_status['mode'] & 0022) !== 0 ||
+    ($expected_owner !== null && $path_status['uid'] !== $expected_owner)
+  ) {
+    return false;
+  }
+
+  $handle = @fopen($path, 'rb');
+  if ($handle === false) return false;
+  try {
+    if (!@flock($handle, LOCK_SH)) return false;
+    clearstatcache(true, $path);
+    $opened_path_status = @lstat($path);
+    $handle_status = @fstat($handle);
+    if (
+      $opened_path_status === false ||
+      $handle_status === false ||
+      $opened_path_status['dev'] !== $dev ||
+      $opened_path_status['ino'] !== $ino ||
+      $handle_status['dev'] !== $dev ||
+      $handle_status['ino'] !== $ino ||
+      $handle_status['size'] !== $size
+    ) {
+      return false;
+    }
+
+    $contents = stream_get_contents($handle);
+    if (
+      !is_string($contents) ||
+      strlen($contents) !== $size ||
+      !hash_equals($hash, hash('sha256', $contents))
+    ) {
+      return false;
+    }
+
+    clearstatcache(true, $path);
+    $final_path_status = @lstat($path);
+    $final_handle_status = @fstat($handle);
+    if (
+      $final_path_status === false ||
+      $final_handle_status === false ||
+      $final_path_status['dev'] !== $dev ||
+      $final_path_status['ino'] !== $ino ||
+      $final_handle_status['dev'] !== $dev ||
+      $final_handle_status['ino'] !== $ino ||
+      $final_handle_status['size'] !== $size
+    ) {
+      return false;
+    }
+    return $contents;
+  } finally {
+    @flock($handle, LOCK_UN);
+    fclose($handle);
+  }
+}
+
+/**
  * @param array{valid: bool, hash: ?string} $state
  */
 function plugin_manager_plugin_check_artifact_matches_state(
@@ -563,7 +852,7 @@ function plugin_manager_reserve_plugin_check_generation(string $plugin): int {
 function plugin_manager_publish_plugin_check_artifact(
   string $plugin,
   int $generation,
-  string $candidate,
+  array $candidate_receipt,
   string $latest
 ): bool {
   if ($generation < 1) {
@@ -572,26 +861,47 @@ function plugin_manager_publish_plugin_check_artifact(
 
   return plugin_manager_with_plugin_check_lock(
     $plugin,
-    static function ($handle) use ($generation, $candidate, $latest): bool {
+    static function ($handle) use ($generation, $candidate_receipt, $latest): bool {
       $state = plugin_manager_read_plugin_check_state($handle);
       if ($generation < $state['published']) {
         return plugin_manager_plugin_check_artifact_matches_state($state, $latest);
       }
-      if (!is_file($candidate) || is_link($candidate)) return false;
-      $candidate_hash = @hash_file('sha256', $candidate);
-      if (!is_string($candidate_hash)) return false;
+
+      $contents = plugin_manager_read_download_receipt($candidate_receipt);
+      if ($contents === false) return false;
+      $candidate_hash = $candidate_receipt['hash'];
+      plugin_manager_prepare_shared_artifact_directory(dirname($latest));
+      $stage = plugin_manager_stage_sibling_contents(
+        $latest,
+        'check-artifact',
+        $contents,
+        0600
+      );
+      if (!hash_equals($candidate_hash, $stage['hash'])) {
+        @unlink($stage['path']);
+        return false;
+      }
 
       $previous_state = $state;
       $state['next'] = max($state['next'], $generation);
       $state['published'] = $generation;
       $state['valid'] = false;
       $state['hash'] = $candidate_hash;
-      plugin_manager_write_plugin_check_state($handle, $state);
-      if (@rename($candidate, $latest)) return true;
-
-      $previous_state['next'] = max($previous_state['next'], $generation);
-      plugin_manager_write_plugin_check_state($handle, $previous_state);
-      return false;
+      try {
+        plugin_manager_write_plugin_check_state($handle, $state);
+        if (!@rename($stage['path'], $latest)) {
+          $previous_state['next'] = max($previous_state['next'], $generation);
+          plugin_manager_write_plugin_check_state($handle, $previous_state);
+          @unlink($stage['path']);
+          return false;
+        }
+        $committed_hash = @hash_file('sha256', $latest);
+        return is_string($committed_hash) &&
+          hash_equals($candidate_hash, $committed_hash);
+      } catch (Throwable $error) {
+        @unlink($stage['path']);
+        throw $error;
+      }
     }
   );
 }
@@ -1059,7 +1369,7 @@ function plugin_manager_write_complete_download(
   string $path,
   string $contents,
   ?int $inject_failure_after = null
-): bool {
+): array|false {
   if ($contents === '' || is_link($path)) return false;
   clearstatcache(true, $path);
   $path_status = @lstat($path);
@@ -1115,10 +1425,30 @@ function plugin_manager_write_complete_download(
 
     clearstatcache(true, $path);
     $status = @lstat($path);
-    return
-      $status !== false &&
-      plugin_manager_lock_path_type($status) === 0100000 &&
-      $status['size'] === $length;
+    $final_handle_status = @fstat($handle);
+    [$lock, $production] = plugin_manager_operation_lock_path();
+    unset($lock);
+    $expected_owner = plugin_manager_expected_path_owner($production);
+    if (
+      $status === false ||
+      $final_handle_status === false ||
+      plugin_manager_lock_path_type($status) !== 0100000 ||
+      plugin_manager_lock_path_type($final_handle_status) !== 0100000 ||
+      $status['dev'] !== $final_handle_status['dev'] ||
+      $status['ino'] !== $final_handle_status['ino'] ||
+      $status['size'] !== $length ||
+      ($status['mode'] & 0022) !== 0 ||
+      ($expected_owner !== null && $status['uid'] !== $expected_owner)
+    ) {
+      return false;
+    }
+    return [
+      'path' => $path,
+      'hash' => hash('sha256', $contents),
+      'dev' => $final_handle_status['dev'],
+      'ino' => $final_handle_status['ino'],
+      'size' => $length
+    ];
   } finally {
     @flock($handle, LOCK_UN);
     fclose($handle);
@@ -1168,6 +1498,44 @@ function plugin_manager_stage_sibling_contents(
     @unlink($stage['path']);
     throw $error;
   }
+}
+
+function plugin_manager_write_shared_artifact(
+  string $path,
+  string $contents,
+  int $mode = 0644
+): bool {
+  if ($contents === '' || $path === '' || $path[0] !== '/') return false;
+  plugin_manager_prepare_shared_artifact_directory(dirname($path));
+  $stage = plugin_manager_stage_sibling_contents(
+    $path,
+    'shared-artifact',
+    $contents,
+    $mode
+  );
+  try {
+    if (!@rename($stage['path'], $path)) return false;
+    clearstatcache(true, $path);
+    $status = @lstat($path);
+    $hash = @hash_file('sha256', $path);
+    return
+      $status !== false &&
+      plugin_manager_lock_path_type($status) === 0100000 &&
+      is_string($hash) &&
+      hash_equals($stage['hash'], $hash);
+  } finally {
+    @unlink($stage['path']);
+  }
+}
+
+function plugin_manager_remove_shared_artifact(string $path): bool {
+  if ($path === '' || $path[0] !== '/') return false;
+  plugin_manager_prepare_shared_artifact_directory(dirname($path));
+  clearstatcache(true, $path);
+  $status = @lstat($path);
+  if ($status === false) return true;
+  if (plugin_manager_lock_path_type($status) === 0040000) return false;
+  return @unlink($path);
 }
 
 function plugin_manager_create_sibling_symlink(string $link, string $target): string {
