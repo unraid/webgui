@@ -460,6 +460,37 @@ function plugin_manager_with_operation_lock(callable $operation): mixed {
 }
 
 /**
+ * Run an API check publication while holding the host-wide mutex. A null result
+ * or exception means the reserved generation failed and must be revoked before
+ * another operation can acquire the mutex and consume an older artifact.
+ */
+function plugin_manager_with_plugin_check_operation_lock(
+  string $plugin,
+  int $generation,
+  string $latest,
+  callable $operation
+): mixed {
+  return plugin_manager_with_operation_lock(
+    static function() use ($plugin, $generation, $latest, $operation): mixed {
+      $successful = false;
+      try {
+        $result = $operation();
+        $successful = $result !== null;
+        return $result;
+      } finally {
+        if (!$successful) {
+          plugin_manager_invalidate_plugin_check_artifact(
+            $plugin,
+            $generation,
+            $latest
+          );
+        }
+      }
+    }
+  );
+}
+
+/**
  * Run a short per-plugin check-state transaction. Callers must never hold this
  * lock while waiting for the global operation lock: global-lock holders also
  * use it briefly when publishing an artifact.

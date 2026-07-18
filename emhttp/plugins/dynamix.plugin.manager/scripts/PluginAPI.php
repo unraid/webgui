@@ -54,6 +54,7 @@ switch ($_POST['action']) {
 		}
 			$response = null;
 			$generation = null;
+			$lock_entered = false;
 			try {
 				$file = realpath("/boot/config/plugins/$plugin");
 				if ( $file === false ) throw new RuntimeException("Plugin disappeared");
@@ -68,53 +69,59 @@ switch ($_POST['action']) {
 					throw new RuntimeException("Plugin download failed");
 				}
 				try {
-					$response = plugin_manager_with_operation_lock(function() use ($plugin, $name, $file, $url, $generation, $download_receipt) {
-						$current = realpath("/boot/config/plugins/$plugin");
-						if ( $current !== $file || plugin_attribute_uncached("pluginURL",$current) !== $url ) return null;
-						$latest = "/tmp/plugins/$plugin";
-						if ( !plugin_manager_publish_plugin_check_artifact($plugin,$generation,$download_receipt,$latest) ) return null;
-						$changes = plugin("changes",$latest);
-						$alerts = plugin("alert",$latest);
-						$version = plugin("version",$latest);
-						$installedVersion = plugin("version","/boot/config/plugins/$plugin");
-						if ( $version === false || $installedVersion === false ) return null;
-						$min = plugin("min",$latest) ?: "6.4.0";
-						if ( !plugin_manager_finalize_plugin_check_artifact($plugin,$generation,$latest) ) return null;
-						$changes_path = "/tmp/plugins/".pathinfo($plugin, PATHINFO_FILENAME).".txt";
-						if ( $changes ) {
-							if ( !plugin_manager_write_shared_artifact($changes_path,$changes) ) {
-								throw new RuntimeException("Unable to publish plugin changes");
+					$latest = "/tmp/plugins/$plugin";
+					$response = plugin_manager_with_plugin_check_operation_lock(
+						$plugin,
+						$generation,
+						$latest,
+						function() use ($plugin, $name, $file, $url, $generation, $download_receipt, $latest, &$lock_entered) {
+							$lock_entered = true;
+							$current = realpath("/boot/config/plugins/$plugin");
+							if ( $current !== $file || plugin_attribute_uncached("pluginURL",$current) !== $url ) return null;
+							if ( !plugin_manager_publish_plugin_check_artifact($plugin,$generation,$download_receipt,$latest) ) return null;
+							$changes = plugin("changes",$latest);
+							$alerts = plugin("alert",$latest);
+							$version = plugin("version",$latest);
+							$installedVersion = plugin("version","/boot/config/plugins/$plugin");
+							if ( $version === false || $installedVersion === false ) return null;
+							$min = plugin("min",$latest) ?: "6.4.0";
+							if ( !plugin_manager_finalize_plugin_check_artifact($plugin,$generation,$latest) ) return null;
+							$changes_path = "/tmp/plugins/".pathinfo($plugin, PATHINFO_FILENAME).".txt";
+							if ( $changes ) {
+								if ( !plugin_manager_write_shared_artifact($changes_path,$changes) ) {
+									throw new RuntimeException("Unable to publish plugin changes");
+								}
+							} else {
+								if ( !plugin_manager_remove_shared_artifact($changes_path) ) {
+									throw new RuntimeException("Unable to remove plugin changes");
+								}
 							}
-						} else {
-							if ( !plugin_manager_remove_shared_artifact($changes_path) ) {
-								throw new RuntimeException("Unable to remove plugin changes");
+							if ( $alerts ) {
+								if ( !plugin_manager_write_shared_artifact('/tmp/plugins/my_alerts.txt',$alerts) ) {
+									throw new RuntimeException("Unable to publish plugin alerts");
+								}
+							} else {
+								if ( !plugin_manager_remove_shared_artifact('/tmp/plugins/my_alerts.txt') ) {
+									throw new RuntimeException("Unable to remove plugin alerts");
+								}
 							}
+							$update = false;
+							if ( strcmp($version,$installedVersion) > 0 ) {
+								$unraid = parse_ini_file("/etc/unraid-version");
+								$update = version_compare($min,$unraid['version'],'<=');
+							}
+							$updateMessage = sprintf(_("%s: An update is available."),$name);
+							$linkMessage = sprintf(_("Click here to install version %s"),$version);
+							return ["updateAvailable"=>$update, "version"=>$version, "min"=>$min, "alert"=>$alerts, "changes"=>$changes, "installedVersion"=>$installedVersion, "updateMessage"=>$updateMessage, "linkMessage"=>$linkMessage];
 						}
-						if ( $alerts ) {
-							if ( !plugin_manager_write_shared_artifact('/tmp/plugins/my_alerts.txt',$alerts) ) {
-								throw new RuntimeException("Unable to publish plugin alerts");
-							}
-						} else {
-							if ( !plugin_manager_remove_shared_artifact('/tmp/plugins/my_alerts.txt') ) {
-								throw new RuntimeException("Unable to remove plugin alerts");
-							}
-						}
-						$update = false;
-						if ( strcmp($version,$installedVersion) > 0 ) {
-							$unraid = parse_ini_file("/etc/unraid-version");
-							$update = version_compare($min,$unraid['version'],'<=');
-						}
-						$updateMessage = sprintf(_("%s: An update is available."),$name);
-						$linkMessage = sprintf(_("Click here to install version %s"),$version);
-						return ["updateAvailable"=>$update, "version"=>$version, "min"=>$min, "alert"=>$alerts, "changes"=>$changes, "installedVersion"=>$installedVersion, "updateMessage"=>$updateMessage, "linkMessage"=>$linkMessage];
-					});
+					);
 				} finally {
 					@unlink($download);
 				}
 		} catch (Throwable) {
 			$response = null;
 		}
-		if ( $response === null && is_int($generation) ) {
+		if ( $response === null && is_int($generation) && !$lock_entered ) {
 			try {
 				plugin_manager_with_operation_lock(
 					fn() => plugin_manager_invalidate_plugin_check_artifact(

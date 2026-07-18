@@ -567,6 +567,34 @@ function test_worker(array $argv): never {
     exit($published ? 0 : 1);
   }
 
+  if ($mode === '--check-artifact-gate-reader') {
+    [, , $directory, $plugin] = $argv;
+    $latest = "$directory/$plugin";
+    $handle = plugin_manager_open_operation_lock();
+    if (!@flock($handle, LOCK_EX | LOCK_NB)) {
+      file_put_contents("$directory/update-blocked", 'yes');
+      if (!@flock($handle, LOCK_EX)) {
+        fclose($handle);
+        test_fail('Concurrent update could not acquire the operation lock');
+      }
+    }
+    try {
+      file_put_contents("$directory/update-entered", 'yes');
+      $accepted = plugin_manager_plugin_check_artifact_is_current(
+        $plugin,
+        $latest
+      );
+      file_put_contents(
+        "$directory/update-observed",
+        $accepted ? 'accepted' : 'rejected'
+      );
+    } finally {
+      @flock($handle, LOCK_UN);
+      fclose($handle);
+    }
+    exit(0);
+  }
+
   if ($mode === '--spawn-background') {
     [, , $method, $delay_ms, $marker] = $argv;
     plugin_manager_serialize_operation($method, __FILE__, $argv);
@@ -728,8 +756,11 @@ $plugin_api_source = file_get_contents(
   dirname(__DIR__, 2).'/emhttp/plugins/dynamix.plugin.manager/scripts/PluginAPI.php'
 );
 test_assert(
-  str_contains($plugin_api_source, 'plugin_manager_with_operation_lock'),
-  'PluginAPI update checks do not use the host-wide operation lock'
+  str_contains(
+    $plugin_api_source,
+    'plugin_manager_with_plugin_check_operation_lock'
+  ),
+  'PluginAPI update checks do not atomically revoke failures under the host-wide operation lock'
 );
 test_assert(
   str_contains($plugin_api_source, 'plugin_manager_reserve_plugin_check_generation'),
@@ -754,6 +785,13 @@ test_assert(
   'API and CLI check failures do not revoke their publication generation'
 );
 test_assert(
+  str_contains(
+    $plugin_api_source,
+    '$response === null && is_int($generation) && !$lock_entered'
+  ),
+  'PluginAPI retries invalidation outside the host lock after its callback entered'
+);
+test_assert(
   str_contains($plugin_api_source, 'plugin_manager_finalize_plugin_check_artifact') &&
     str_contains($plugin_source, 'plugin_manager_finalize_plugin_check_artifact'),
   'API and CLI make staged artifacts current before semantic validation'
@@ -775,7 +813,7 @@ test_assert(
 );
 test_assert(
   strpos($plugin_api_source, 'download_url($url,$download,$download_receipt)') <
-    strpos($plugin_api_source, 'plugin_manager_with_operation_lock'),
+    strpos($plugin_api_source, 'plugin_manager_with_plugin_check_operation_lock'),
   'PluginAPI holds the host-wide lock across its remote update-artifact download'
 );
 test_assert(
@@ -1299,6 +1337,105 @@ test_assert(
   !file_exists($latest) &&
     !plugin_manager_plugin_check_artifact_is_current($plugin, $latest),
   'A parse failure left its own published artifact available to update'
+);
+
+$directory = test_directory($root, 'api-rejection-atomic-invalidation');
+$plugin = 'api-rejected.plg';
+$latest = "$directory/$plugin";
+$initial = "$directory/initial-success";
+file_put_contents($initial, 'initial-success');
+$initial_generation = plugin_manager_reserve_plugin_check_generation($plugin);
+test_assert(
+  test_publish_plugin_check_artifact(
+    $plugin,
+    $initial_generation,
+    $initial,
+    $latest
+  ),
+  'Initial API rejection fixture could not be published'
+);
+$failed_generation = plugin_manager_reserve_plugin_check_generation($plugin);
+$updater = null;
+$response = plugin_manager_with_plugin_check_operation_lock(
+  $plugin,
+  $failed_generation,
+  $latest,
+  static function() use ($directory, $plugin, &$updater) {
+    $updater = test_start_process([
+      '--check-artifact-gate-reader',
+      $directory,
+      $plugin
+    ]);
+    test_wait_for(
+      fn() => is_file("$directory/update-blocked"),
+      2.0,
+      'Concurrent update was not blocked after API rejection'
+    );
+    test_assert(
+      !is_file("$directory/update-entered"),
+      'Concurrent update entered before the rejected API generation was invalidated'
+    );
+    return null;
+  }
+);
+test_assert($response === null, 'Rejected API callback returned a successful response');
+test_assert(is_array($updater), 'Rejected API callback did not start its concurrent update');
+$update_result = test_finish_process($updater);
+test_assert(
+  $update_result[0] === 0,
+  "Concurrent update gate failed: {$update_result[2]}"
+);
+test_assert(
+  file_get_contents("$directory/update-observed") === 'rejected',
+  'Concurrent update consumed the prior artifact between API rejection and invalidation'
+);
+test_assert(
+  !file_exists($latest) &&
+    !plugin_manager_plugin_check_artifact_is_current($plugin, $latest),
+  'Rejected API generation did not revoke the prior successful artifact'
+);
+
+$throwing_candidate = "$directory/throwing-candidate";
+file_put_contents($throwing_candidate, 'throwing-candidate');
+$throwing_generation = plugin_manager_reserve_plugin_check_generation($plugin);
+test_assert_throws(
+  static function() use (
+    $plugin,
+    $throwing_generation,
+    $throwing_candidate,
+    $latest
+  ): void {
+    plugin_manager_with_plugin_check_operation_lock(
+      $plugin,
+      $throwing_generation,
+      $latest,
+      static function() use (
+        $plugin,
+        $throwing_generation,
+        $throwing_candidate,
+        $latest
+      ): never {
+        if (
+          !test_publish_plugin_check_artifact(
+            $plugin,
+            $throwing_generation,
+            $throwing_candidate,
+            $latest
+          )
+        ) {
+          test_fail('Throwing API failure fixture could not be published');
+        }
+        throw new RuntimeException('injected API callback failure');
+      }
+    );
+  },
+  'injected API callback failure',
+  'Thrown API callback failure did not escape its host-lock scope'
+);
+test_assert(
+  !file_exists($latest) &&
+    !plugin_manager_plugin_check_artifact_is_current($plugin, $latest),
+  'Thrown API callback failure left its finalized artifact available to update'
 );
 
 $directory = test_directory($root, 'post-hook-incompatible-snapshot');
