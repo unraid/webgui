@@ -41,6 +41,21 @@ function download_url($url, $path = "", &$receipt = null) {
 	return $out;
 }
 
+function plugin_manager_revoke_failed_api_plugin_check(
+	mixed $response,
+	mixed $generation,
+	bool $lock_entered,
+	string $plugin,
+	string $latest
+): void {
+	if ( $response !== null || !is_int($generation) || $lock_entered ) return;
+	try {
+		plugin_manager_revoke_unserialized_plugin_check($plugin,$generation,$latest);
+	} catch (Throwable) {
+		// Preserve the API response contract after the durable fallback also fails.
+	}
+}
+
 switch ($_POST['action']) {
 	case 'checkPlugin':
 		$options = $_POST['options'] ?? '';
@@ -121,19 +136,13 @@ switch ($_POST['action']) {
 		} catch (Throwable) {
 			$response = null;
 		}
-		if ( $response === null && is_int($generation) && !$lock_entered ) {
-			try {
-				plugin_manager_with_operation_lock(
-					fn() => plugin_manager_invalidate_plugin_check_artifact(
-						$plugin,
-						$generation,
-						"/tmp/plugins/$plugin"
-					)
-				);
-			} catch (Throwable) {
-				// A failed invalidation remains fail-closed through the update gate.
-			}
-		}
+		plugin_manager_revoke_failed_api_plugin_check(
+			$response,
+			$generation,
+			$lock_entered,
+			$plugin,
+			"/tmp/plugins/$plugin"
+		);
 		if ( $response === null ) {
 			echo json_encode(["updateAvailable"=>false]);
 			break;

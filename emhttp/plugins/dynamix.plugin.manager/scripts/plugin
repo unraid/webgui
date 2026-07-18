@@ -684,7 +684,18 @@ if ($argc < 3) {
 }
 
 if ($method != 'check') {
-  plugin_manager_serialize_operation($method, $script, $argv);
+  try {
+    $lock_command = plugin_manager_operation_lock_command($method, $script, $argv);
+  } catch (Throwable $lock_error) {
+    fwrite(STDERR, "plugin: unable to acquire operation lock: {$lock_error->getMessage()}\n");
+    done(1);
+  }
+  if ($lock_command !== null) {
+    if ($nchan) putenv(PLUGIN_MANAGER_NCHAN_CHILD_ENV.'=1');
+    passthru($lock_command, $status);
+    if ($nchan) putenv(PLUGIN_MANAGER_NCHAN_CHILD_ENV);
+    done($status);
+  }
 }
 
 // Build one branch-specific OS plugin definition under the supervised host
@@ -1313,7 +1324,7 @@ if ($method == 'update') {
   if (!$artifact_current) {
     write("plugin: $plugin_file is not from a current successful check, check for updates first\n");
     if ($artifact_error) write("plugin: $artifact_error\n");
-    exit (1);
+    done(1);
   }
   // run hook scripts for pre processing
   pre_hooks();

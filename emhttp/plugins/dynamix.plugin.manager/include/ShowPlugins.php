@@ -29,7 +29,7 @@ $init    = unscript(_var($_GET,'init'));
 $empty   = true;
 $install = false;
 $updates = 0;
-$alerts  = '/tmp/plugins/my_alerts.txt';
+$alerts  ??= '/tmp/plugins/my_alerts.txt';
 $alert_contents = '';
 $builtin = ['unRAIDServer'];
 $plugins = "/var/log/plugins/*.plg";
@@ -66,7 +66,7 @@ if ($audit) {
   [$plg,$action] = my_explode(':',$audit);
   switch ($action) {
     case 'return' : $check = true; break;
-    case 'remove' : $plugins = '/var/log/plugins/.plugin-manager-none'; break;
+    case 'remove' : return;
     case 'install': $install = true;
     case 'update' : $plugins = "/var/log/plugins/$plg.plg"; break;
   }

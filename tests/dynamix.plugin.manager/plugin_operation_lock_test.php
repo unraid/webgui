@@ -4,6 +4,7 @@
 // License: GPLv2 only
 
 require_once dirname(__DIR__, 2).'/emhttp/plugins/dynamix.plugin.manager/include/PluginOperationLock.php';
+$repo = dirname(__DIR__, 2);
 $docroot = dirname(__DIR__, 2).'/emhttp';
 require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginHelpers.php";
 
@@ -781,7 +782,14 @@ test_assert(is_string($artifact_policy), 'Artifact-policy fixture is not canonic
 $plugin_source = file_get_contents(
   dirname(__DIR__, 2).'/emhttp/plugins/dynamix.plugin.manager/scripts/plugin'
 );
-$lock_call = strpos($plugin_source, 'plugin_manager_serialize_operation($method, $script, $argv);');
+$lock_block = strpos($plugin_source, "if (\$method != 'check') {");
+$lock_call = $lock_block === false
+  ? false
+  : strpos(
+    $plugin_source,
+    'plugin_manager_operation_lock_command($method, $script, $argv)',
+    $lock_block
+  );
 test_assert($lock_call !== false, 'The plugin executable does not invoke the operation lock');
 foreach (["if (\$method == 'checkall')", "if (\$method == 'updateall')", "if (\$method == 'checkos')"] as $marker) {
   $aggregate = strpos($plugin_source, $marker);
@@ -791,14 +799,20 @@ foreach (["if (\$method == 'install')", "if (\$method == 'update')", "if (\$meth
   $leaf = strpos($plugin_source, $marker, $lock_call);
   test_assert($leaf !== false && $leaf > $lock_call, "$marker must run after lock acquisition");
 }
-test_assert(
-  str_contains(
-    $plugin_source,
-    "if (\$method != 'check') {\n  plugin_manager_serialize_operation(\$method, \$script, \$argv);\n}"
-  ),
-  'The CLI check still acquires the host lock before its network phase'
-);
 $check_block = strpos($plugin_source, "if (\$method == 'check')");
+test_assert(
+  $lock_block !== false &&
+    $lock_block < $lock_call &&
+    str_contains(
+      substr($plugin_source, $lock_block, $check_block - $lock_block),
+      "putenv(PLUGIN_MANAGER_NCHAN_CHILD_ENV.'=1')"
+    ) &&
+    str_contains(
+      substr($plugin_source, $lock_block, $check_block - $lock_block),
+      'done($status)'
+  ),
+  'A serialized nchan operation does not hand completion ownership back to its parent'
+);
 $check_download = strpos($plugin_source, 'download($installed_pluginURL, $download, $error)', $check_block);
 $check_phase_lock = strpos(
   $plugin_source,
@@ -944,17 +958,35 @@ test_assert(
   'PluginAPI holds the per-plugin state lock while waiting for the global lock'
 );
 test_assert(
-  str_contains($plugin_api_source, 'plugin_manager_invalidate_plugin_check_artifact') &&
+  str_contains($plugin_api_source, 'plugin_manager_revoke_failed_api_plugin_check') &&
+    str_contains($plugin_api_source, 'plugin_manager_revoke_unserialized_plugin_check') &&
     str_contains($plugin_source, 'invalidate_failed_plugin_check') &&
     str_contains($plugin_source, 'plugin_manager_revoke_unserialized_plugin_check'),
   'API and CLI check failures do not revoke their publication generation'
 );
 test_assert(
-  str_contains(
-    $plugin_api_source,
-    '$response === null && is_int($generation) && !$lock_entered'
-  ),
+  str_contains($plugin_api_source, '$response !== null || !is_int($generation) || $lock_entered'),
   'PluginAPI retries invalidation outside the host lock after its callback entered'
+);
+$update_gate_start = strpos($plugin_source, 'if (!$artifact_current) {');
+$update_gate_end = $update_gate_start === false
+  ? false
+  : strpos($plugin_source, 'pre_hooks();', $update_gate_start);
+$update_gate =
+  $update_gate_start !== false &&
+  $update_gate_end !== false &&
+  $update_gate_end > $update_gate_start
+    ? substr($plugin_source, $update_gate_start, $update_gate_end - $update_gate_start)
+    : '';
+test_assert(
+  $update_gate !== '' &&
+    str_contains($update_gate, 'done(1);') &&
+    !str_contains($update_gate, 'exit'),
+  'A rejected update can bypass the common nchan completion path'
+);
+test_assert(
+  str_contains($show_plugins_source, "case 'remove' : return;"),
+  'A remove audit can still clear alerts belonging to other plugins'
 );
 test_assert(
   str_contains($plugin_api_source, 'plugin_manager_finalize_plugin_check_artifact') &&
@@ -1465,6 +1497,133 @@ test_assert(
   !file_exists($latest) &&
     !plugin_manager_plugin_check_artifact_is_current($plugin, $latest),
   'A broken global lock path prevented durable reserved-generation revocation'
+);
+
+$isolated_docroot = "$root/isolated-docroot";
+mkdir("$isolated_docroot/webGui/include", 0700, true);
+mkdir("$isolated_docroot/plugins/dynamix/include", 0700, true);
+mkdir("$isolated_docroot/plugins/dynamix.plugin.manager/include", 0700, true);
+file_put_contents(
+  "$isolated_docroot/webGui/include/Helpers.php",
+  <<<'PHP'
+<?PHP
+function unscript($value) { return $value; }
+function _var($values, $key) { return $values[$key] ?? ''; }
+function my_explode($separator, $value) {
+  return array_pad(explode($separator, $value, 2), 2, '');
+}
+PHP
+);
+file_put_contents(
+  "$isolated_docroot/plugins/dynamix.plugin.manager/include/PluginHelpers.php",
+  "<?PHP\n"
+);
+file_put_contents(
+  "$isolated_docroot/plugins/dynamix/include/Secure.php",
+  "<?PHP\n"
+);
+file_put_contents(
+  "$isolated_docroot/plugins/dynamix/include/Translations.php",
+  "<?PHP\n"
+);
+file_put_contents(
+  "$isolated_docroot/webGui/include/Translations.php",
+  "<?PHP\n"
+);
+symlink(
+  "$repo/emhttp/plugins/dynamix.plugin.manager/include/PluginOperationLock.php",
+  "$isolated_docroot/plugins/dynamix.plugin.manager/include/PluginOperationLock.php"
+);
+
+$directory = test_directory($root, 'real-api-unsafe-global-lock');
+$api_wrapper = "$root/plugin-api-failure-wrapper";
+$api_wrapper_source =
+  "<?PHP\n".
+  '$docroot = '.var_export($isolated_docroot, true).";\n".
+  '$_POST = ["action" => "test-noop"];'."\n".
+  'require '.var_export(
+    "$repo/emhttp/plugins/dynamix.plugin.manager/scripts/PluginAPI.php",
+    true
+  ).";\n".
+  <<<'PHP'
+[$script, $directory] = $argv;
+$plugin = 'api-unsafe-global-lock.plg';
+$latest = "$directory/$plugin";
+$successful = "$directory/successful";
+file_put_contents($successful, 'successful-before-api-lock-failure');
+$successful_generation = plugin_manager_reserve_plugin_check_generation($plugin);
+$receipt = plugin_manager_capture_download_receipt($successful);
+if (
+  !is_array($receipt) ||
+  !plugin_manager_publish_plugin_check_artifact(
+    $plugin,
+    $successful_generation,
+    $receipt,
+    $latest
+  ) ||
+  !plugin_manager_finalize_plugin_check_artifact(
+    $plugin,
+    $successful_generation,
+    $latest
+  )
+) {
+  exit(2);
+}
+$reserved_generation = plugin_manager_reserve_plugin_check_generation($plugin);
+plugin_manager_prepare_lock_path("$directory/plugin-manager.lock", false);
+unlink("$directory/plugin-manager.lock");
+mkdir("$directory/plugin-manager.lock", 0700);
+plugin_manager_revoke_failed_api_plugin_check(
+  null,
+  $reserved_generation,
+  false,
+  $plugin,
+  $latest
+);
+exit(
+  !file_exists($latest) &&
+  !plugin_manager_plugin_check_artifact_is_current($plugin, $latest)
+    ? 0
+    : 3
+);
+PHP;
+file_put_contents($api_wrapper, $api_wrapper_source);
+$api_environment = getenv();
+$api_environment[PLUGIN_MANAGER_LOCK_PATH_ENV] = "$directory/plugin-manager.lock";
+$api_result = test_finish_process(
+  test_start_command([PHP_BINARY, $api_wrapper, $directory], $api_environment)
+);
+test_assert(
+  $api_result[0] === 0,
+  "The real PluginAPI fallback did not durably revoke through an unsafe global lock: ".
+    "{$api_result[1]} {$api_result[2]}"
+);
+
+$directory = test_directory($root, 'show-plugins-remove-alert');
+$retained_alert = "$directory/my_alerts.txt";
+file_put_contents($retained_alert, 'unrelated alert');
+$show_wrapper = "$root/show-plugins-remove-wrapper";
+$show_wrapper_source =
+  "<?PHP\n".
+  'error_reporting(E_ALL);'."\n".
+  '$docroot = '.var_export($isolated_docroot, true).";\n".
+  '$alerts = '.var_export($retained_alert, true).";\n".
+  '$_GET = ["audit" => "removed-plugin.plg:remove"];'."\n".
+  'ob_start();'."\n".
+  'require '.var_export(
+    "$repo/emhttp/plugins/dynamix.plugin.manager/include/ShowPlugins.php",
+    true
+  ).";\n".
+  'ob_end_clean();'."\n".
+  'exit(file_get_contents($alerts) === "unrelated alert" ? 0 : 1);'."\n";
+file_put_contents($show_wrapper, $show_wrapper_source);
+$show_result = test_finish_process(
+  test_start_command([PHP_BINARY, '-d', 'short_open_tag=1', $show_wrapper])
+);
+test_assert(
+  $show_result[0] === 0,
+  "A real ShowPlugins remove audit failed with status {$show_result[0]}: ".
+    "{$show_result[1]} {$show_result[2]}"
 );
 
 $directory = test_directory($root, 'failed-generation-invalidation');
@@ -3303,7 +3462,6 @@ test_assert(microtime(true) - $started < 0.2, 'Busy nonblocking maintenance wait
 $holder_result = test_finish_process($holder);
 test_assert($holder_result[0] === 0, "Nonblocking test holder failed: {$holder_result[2]}");
 
-$repo = dirname(__DIR__, 2);
 $wrapper = "$root/plugin-executable";
 $wrapper_source = <<<'PHP'
 #!/usr/bin/env php
@@ -3480,6 +3638,74 @@ $cli_wrapper_source =
   'require '.var_export($cli_plugin, true).";\n";
 file_put_contents($cli_wrapper, $cli_wrapper_source);
 chmod($cli_wrapper, 0755);
+$invalid_plugin = 'invalid-update.plg';
+$invalid_installed = "$root/invalid-update-installed.plg";
+file_put_contents(
+  $invalid_installed,
+  '<PLUGIN name="invalid-update" version="2026.07.17"></PLUGIN>'
+);
+symlink($invalid_installed, "$cli_plugins/$invalid_plugin");
+file_put_contents($nchan_log, '');
+$invalid_update_environment = $nchan_environment;
+$invalid_update_environment[PLUGIN_MANAGER_LOCK_SUPERVISOR_PATH_ENV] =
+  "$repo/emhttp/plugins/dynamix.plugin.manager/scripts/plugin-operation-lock";
+$invalid_update_result = test_finish_process(
+  test_start_command(
+    [$cli_wrapper, 'update', $invalid_plugin, 'nchan'],
+    $invalid_update_environment
+  )
+);
+test_assert(
+  $invalid_update_result[0] === 1,
+  "Nchan invalid-artifact update returned an unexpected status: ".
+    "{$invalid_update_result[2]}"
+);
+$invalid_update_messages = array_map(
+  static fn($message) => base64_decode($message, true),
+  file($nchan_log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: []
+);
+test_assert(
+  count(
+    array_filter(
+      $invalid_update_messages,
+      static fn($message) => $message === '_DONE_'
+    )
+  ) === 1,
+  'An nchan invalid-artifact update did not emit exactly one completion marker: '.
+    json_encode([
+      'messages' => $invalid_update_messages,
+      'stdout' => $invalid_update_result[1],
+      'stderr' => $invalid_update_result[2]
+    ])
+);
+file_put_contents($nchan_log, '');
+$invalid_update_startup_environment = $invalid_update_environment;
+$invalid_update_startup_environment[PLUGIN_MANAGER_LOCK_SUPERVISOR_PATH_ENV] =
+  '/bin/false';
+$invalid_update_startup_result = test_finish_process(
+  test_start_command(
+    [$cli_wrapper, 'update', $invalid_plugin, 'nchan'],
+    $invalid_update_startup_environment
+  )
+);
+test_assert(
+  $invalid_update_startup_result[0] === 1,
+  "Nchan update lock-startup failure returned an unexpected status: ".
+    "{$invalid_update_startup_result[2]}"
+);
+$invalid_update_startup_messages = array_map(
+  static fn($message) => base64_decode($message, true),
+  file($nchan_log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: []
+);
+test_assert(
+  count(
+    array_filter(
+      $invalid_update_startup_messages,
+      static fn($message) => $message === '_DONE_'
+    )
+  ) === 1,
+  'An nchan update lock-startup failure did not emit exactly one completion marker'
+);
 $cli_environment = getenv();
 $cli_environment[PLUGIN_MANAGER_LOCK_SUPERVISOR_PATH_ENV] =
   "$directory/not-executable";
