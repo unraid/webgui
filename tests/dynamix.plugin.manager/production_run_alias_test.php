@@ -81,6 +81,9 @@ $installed = "/boot/config/plugins/$plugin";
 $latest_source = "$root/$plugin";
 $latest = "/tmp/plugins/$plugin";
 $wrapper = "$root/plugin";
+$showchanges_bootstrap = "$root/showchanges-bootstrap.php";
+$showchanges_script =
+  "$repo/emhttp/plugins/dynamix.plugin.manager/scripts/showchanges";
 $fake_bin = "$root/bin";
 
 @mkdir($root, 0700, true);
@@ -139,6 +142,10 @@ file_put_contents(
     ).";\n"
 );
 chmod($wrapper, 0755);
+file_put_contents(
+  $showchanges_bootstrap,
+  '<?PHP $docroot = '.var_export("$repo/emhttp", true).";\n"
+);
 
 $environment = getenv();
 foreach (
@@ -196,5 +203,44 @@ production_alias_assert(
     glob('/run/unraid-plugin-manager/operations.lock.scope.*') === [],
   "Production-default CLI update snapshot failed: {$update[1]} {$update[2]}"
 );
+
+$release_notes =
+  "# Production Alias Release Notes\n\n".
+  "Alias-safe renderer sentinel.\n";
+$release_notes_path =
+  $private_directory.
+  '/release-notes-'.hash('sha256', $release_notes).'.txt';
+production_alias_assert(
+  plugin_manager_with_operation_lock(
+    static fn() => plugin_manager_write_shared_artifact(
+      $release_notes_path,
+      $release_notes
+    )
+  ),
+  'Unable to publish production-alias release notes'
+);
+$showchanges = production_alias_run(
+  [
+    PHP_BINARY,
+    '-d',
+    'short_open_tag=1',
+    '-d',
+    "auto_prepend_file=$showchanges_bootstrap",
+    $showchanges_script,
+    $release_notes_path
+  ],
+  $environment
+);
+production_alias_assert(
+  $showchanges[0] === 0 &&
+    str_contains(
+      $showchanges[1],
+      '<h1>Production Alias Release Notes</h1>'
+    ) &&
+    str_contains($showchanges[1], 'Alias-safe renderer sentinel.'),
+  "Production-default release-note renderer failed: ".
+    "{$showchanges[1]} {$showchanges[2]}"
+);
+@unlink($release_notes_path);
 
 echo "Production /var/run alias integration test passed.\n";

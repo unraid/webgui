@@ -26,12 +26,27 @@ $file  = realpath($argv[1]??'');
 $valid = [
   '/var/tmp/',
   '/tmp/plugins/',
-  '/boot/previous',
-  plugin_manager_private_download_directory().'/'
+  '/boot/previous'
 ];
 $good  = false;
 
 foreach ($valid as $check) if (strncmp($file,$check,strlen($check))===0) $good = true;
+try {
+  $good =
+    $good ||
+    (
+      $file &&
+      plugin_manager_private_artifact_is_safe(
+        $file,
+        plugin_manager_private_download_directory(),
+        '/^release-notes-[a-f0-9]{64}\.txt$/D',
+        0644
+      )
+    );
+} catch (Throwable) {
+  // Keep legacy release-note locations available if the private boundary is
+  // unavailable; never accept an unverified private path.
+}
 if ($file && $good && pathinfo($file)['extension']=='txt') {
   echo Markdown(file_get_contents($file));
 } else {

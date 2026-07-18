@@ -948,6 +948,10 @@ $show_plugins_source = file_get_contents(
   dirname(__DIR__, 2).
     '/emhttp/plugins/dynamix.plugin.manager/include/ShowPlugins.php'
 );
+$show_changes_script_source = file_get_contents(
+  dirname(__DIR__, 2).
+    '/emhttp/plugins/dynamix.plugin.manager/scripts/showchanges'
+);
 $plugin_rm_source = file_get_contents(
   dirname(__DIR__, 2).
     '/emhttp/plugins/dynamix.plugin.manager/scripts/plugin_rm'
@@ -1412,6 +1416,7 @@ foreach (
         '/emhttp/plugins/dynamix.plugin.manager/include/PluginHelpers.php'
     ),
     $show_plugins_source,
+    $show_changes_script_source,
     file_get_contents(
       dirname(__DIR__, 2).
         '/emhttp/plugins/dynamix.plugin.manager/include/ShowChanges.php'
