@@ -14,6 +14,7 @@
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginHelpers.php";
+require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginOperationLock.php";
 
 // add translations
 $_SERVER['REQUEST_URI'] = 'plugins';
@@ -29,6 +30,7 @@ $empty   = true;
 $install = false;
 $updates = 0;
 $alerts  = '/tmp/plugins/my_alerts.txt';
+$alert_contents = '';
 $builtin = ['unRAIDServer'];
 $plugins = "/var/log/plugins/*.plg";
 $ncsi    = null; // network connection status indicator
@@ -42,7 +44,21 @@ if ($cmd=='alert') {
 
 if ($cmd=='pending') {
   // prepare pending status for multi operations
-  foreach (explode('*',_var($_GET,'plugin')) as $plugin) file_put_contents("/tmp/plugins/pluginPending/$plugin",'multi');
+  try {
+    plugin_manager_with_operation_lock(function(): void {
+      $pending = '/tmp/plugins/pluginPending';
+      plugin_manager_prepare_shared_artifact_directory($pending);
+      foreach (explode('*',_var($_GET,'plugin')) as $plugin) {
+        $name = basename($plugin);
+        if ($name === '' || $name !== $plugin) continue;
+        if (!plugin_manager_write_shared_artifact("$pending/$name", 'multi', 0600)) {
+          throw new RuntimeException('Unable to publish pending plugin status');
+        }
+      }
+    });
+  } catch (Throwable) {
+    http_response_code(503);
+  }
   die();
 }
 
@@ -50,13 +66,12 @@ if ($audit) {
   [$plg,$action] = my_explode(':',$audit);
   switch ($action) {
     case 'return' : $check = true; break;
-    case 'remove' : return;
+    case 'remove' : $plugins = '/var/log/plugins/.plugin-manager-none'; break;
     case 'install': $install = true;
     case 'update' : $plugins = "/var/log/plugins/$plg.plg"; break;
   }
 }
 
-delete_file($alerts);
 foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
   //only consider symlinks
   $plugin_file = @readlink($plugin_link);
@@ -133,17 +148,13 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
     $past = false;
     //toggle stable/next release?
     if ($os && $branch) {
-      $past = plugin('version',$plugin_file);
-      $tmp_plg = "$name-.plg";
-      $tmp_file = "/var/tmp/$name.plg";
-      copy($plugin_file,$tmp_file);
-      exec("sed -ri 's|^(<!ENTITY category).*|\\1 \"{$branch}\">|' $tmp_file");
-      symlink($tmp_file,"/var/log/plugins/$tmp_plg");
-      $next = array_filter(explode("\n",check_plugin($tmp_plg,$ncsi)),function($row){return is_numeric($row[0]);});
-      $next = end($next);
-      if (version_compare($next,$past,'>')) {
-        copy("/tmp/plugins/$tmp_plg",$tmp_file);
-        $plugin_file = $tmp_file;
+      $branch_result = plugin_branch_check($plugin_file, $branch);
+      if (is_array($branch_result)) {
+        $past = $branch_result['past'];
+        $plugin_file = $branch_result['path'];
+        $checked = true;
+      } else {
+        $checked = false;
       }
     }
     //version
@@ -155,7 +166,9 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
     $changes_file = $plugin_file;
     $url = plugin('pluginURL',$plugin_file);
     if ($url !== false) {
-      $filename = "/tmp/plugins/".(($os && $branch) ? $tmp_plg : basename($url));
+      $filename = ($os && $branch)
+        ? $plugin_file
+        : "/tmp/plugins/".basename($url);
       if ($checked && file_exists($filename)) {
         if ($past && $past != $version) {
           $status = make_link('install',$plugin_file,'forced');
@@ -192,21 +205,46 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
     elseif ($status=='up-to-date') $rank = '3';
     else $rank = '4';
     if (($changes = plugin('changes',$changes_file)) !== false) {
-      $txtfile = "/tmp/plugins/".basename($plugin_file,'.plg').".txt";
-      file_put_contents($txtfile,$changes);
-      $version .= "&nbsp;<span class='fa fa-info-circle fa-fw big blue-text' title='"._('View Release Notes')."' onclick=\"openChanges('showchanges $txtfile','"._('Release Notes')."')\"></span>";
+      try {
+        $txtfile =
+          plugin_manager_private_download_directory().
+          '/release-notes-'.hash('sha256', $changes).'.txt';
+        $notes_published = plugin_manager_with_operation_lock(
+          static fn() => plugin_manager_write_shared_artifact(
+            $txtfile,
+            $changes
+          )
+        );
+      } catch (Throwable) {
+        $notes_published = false;
+      }
+      if ($notes_published) {
+        $version .= "&nbsp;<span class='fa fa-info-circle fa-fw big blue-text' title='"._('View Release Notes')."' onclick=\"openChanges('showchanges $txtfile','"._('Release Notes')."')\"></span>";
+      }
     }
     if ($rank < 2 && ($alert = plugin('alert',$changes_file)) !== false) {
       // generate alert message (if existing) when newer version is available
-      file_put_contents($alerts,($os ? "" : "## $name\n\n").$alert."\n\n",FILE_APPEND);
+      $alert_contents .= ($os ? "" : "## $name\n\n").$alert."\n\n";
     }
     //write plugin information
     $empty = false;
     $id = str_replace('.','-',$name);
     echo "vid-$id::$date::$version\rsid-$id::$rank::$status\n";
-    //remove temporary symlink
-    @unlink("/var/log/plugins/$tmp_plg");
   }
+}
+try {
+  plugin_manager_with_operation_lock(
+    static function() use ($alerts, $alert_contents): void {
+      $published = $alert_contents === ''
+        ? plugin_manager_remove_shared_artifact($alerts)
+        : plugin_manager_write_shared_artifact($alerts, $alert_contents);
+      if (!$published) {
+        throw new RuntimeException('Unable to publish plugin alerts');
+      }
+    }
+  );
+} catch (Throwable) {
+  // A stale alert is safer than a partially-written alert document.
 }
 if ($empty) echo "<tr><td colspan='6' style='text-align:center;padding-top:12px'><i class='fa fa-check-square-o icon'></i> "._('No plugins installed')."</td><tr>";
 if (!$init && !($os??false)) echo "\0".$updates;

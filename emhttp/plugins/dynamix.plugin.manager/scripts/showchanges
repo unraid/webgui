@@ -14,6 +14,7 @@
 <?
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Wrappers.php";
+require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginOperationLock.php";
 extract(parse_plugin_cfg('dynamix',true));
 
 // add translations
@@ -22,7 +23,12 @@ $login_locale = _var($display,'locale');
 require_once "$docroot/webGui/include/Translations.php";
 
 $file  = realpath($argv[1]??'');
-$valid = ['/var/tmp/','/tmp/plugins/','/boot/previous'];
+$valid = [
+  '/var/tmp/',
+  '/tmp/plugins/',
+  '/boot/previous',
+  plugin_manager_private_download_directory().'/'
+];
 $good  = false;
 
 foreach ($valid as $check) if (strncmp($file,$check,strlen($check))===0) $good = true;

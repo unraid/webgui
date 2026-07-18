@@ -22,7 +22,20 @@ const PLUGIN_MANAGER_SHARED_ARTIFACT_DIRECTORY = '/tmp/plugins';
  * because publication and the shared pre/post hooks are the mutating phases.
  */
 function plugin_manager_operation_requires_lock(string $method): bool {
-  return in_array($method, ['install', 'check', 'update', 'download', 'remove', 'validate'], true);
+  return in_array(
+    $method,
+    [
+      'install',
+      'check',
+      'update',
+      'download',
+      'remove',
+      'validate',
+      'branchcheck',
+      'history-delete'
+    ],
+    true
+  );
 }
 
 /**
@@ -515,9 +528,14 @@ function plugin_manager_private_download_directory(): string {
   return $directory;
 }
 
-function plugin_manager_create_private_download_file(): string {
+function plugin_manager_create_private_download_file(
+  string $prefix = '.plugin-check-'
+): string {
+  if (!preg_match('/^\.[a-z0-9][a-z0-9-]{0,30}[a-z0-9]-$/D', $prefix)) {
+    throw new RuntimeException('Plugin Manager private download prefix is invalid');
+  }
   $directory = plugin_manager_private_download_directory();
-  $path = tempnam($directory, '.plugin-check-');
+  $path = tempnam($directory, $prefix);
   if ($path === false || dirname($path) !== $directory || !@chmod($path, 0600)) {
     if (is_string($path)) @unlink($path);
     throw new RuntimeException('Unable to create private Plugin Manager download file');

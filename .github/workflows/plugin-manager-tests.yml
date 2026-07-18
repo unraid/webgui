@@ -43,14 +43,19 @@ jobs:
           php -l emhttp/plugins/dynamix.plugin.manager/include/PluginAttributes.php
           php -l emhttp/plugins/dynamix.plugin.manager/include/PluginHelpers.php
           php -l emhttp/plugins/dynamix.plugin.manager/include/PluginOperationLock.php
+          php -l emhttp/plugins/dynamix.plugin.manager/include/ShowChanges.php
+          php -l emhttp/plugins/dynamix.plugin.manager/include/ShowPlugins.php
           php -l emhttp/plugins/dynamix.plugin.manager/scripts/PluginAPI.php
           php -l emhttp/plugins/dynamix.plugin.manager/scripts/plugin
+          php -l emhttp/plugins/dynamix.plugin.manager/scripts/showchanges
           php -l tests/dynamix.plugin.manager/plugin_operation_lock_test.php
           sh -n tests/dynamix.plugin.manager/run.sh
 
       - name: Verify lock supervisor shell
         run: |
           bash -n emhttp/plugins/dynamix.plugin.manager/scripts/plugin-operation-lock
+          bash -n emhttp/plugins/dynamix.plugin.manager/scripts/plugin_rm
           shellcheck \
             emhttp/plugins/dynamix.plugin.manager/scripts/plugin-operation-lock \
+            emhttp/plugins/dynamix.plugin.manager/scripts/plugin_rm \
             tests/dynamix.plugin.manager/run.sh

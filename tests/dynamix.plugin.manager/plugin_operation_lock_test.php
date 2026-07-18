@@ -693,6 +693,21 @@ function test_worker(array $argv): never {
     test_enter_critical_section($directory, $id, 10, 0);
   }
 
+  if ($mode === '--display-artifact-writer') {
+    [, , $directory, $path, $contents, $hold_ms] = $argv;
+    plugin_manager_with_operation_lock(
+      static function() use ($directory, $path, $contents, $hold_ms): void {
+        test_append_event($directory, "display-enter $contents");
+        usleep((int)$hold_ms * 1000);
+        if (!plugin_manager_write_shared_artifact($path, $contents)) {
+          test_fail('Unable to publish display artifact');
+        }
+        test_append_event($directory, "display-exit $contents");
+      }
+    );
+    exit(0);
+  }
+
   test_fail("Unknown worker mode: $mode");
 }
 
@@ -811,7 +826,18 @@ test_assert(
   'download must be normalized to a serialized update before lock acquisition'
 );
 
-foreach (['install', 'check', 'update', 'download', 'remove', 'validate'] as $method) {
+foreach (
+  [
+    'install',
+    'check',
+    'update',
+    'download',
+    'remove',
+    'validate',
+    'branchcheck',
+    'history-delete'
+  ] as $method
+) {
   test_assert(plugin_manager_operation_requires_lock($method), "$method must be serialized");
 }
 foreach (['checkall', 'updateall', 'checkos', 'version', 'pluginURL'] as $method) {
@@ -840,6 +866,78 @@ test_assert(
   str_contains($plugin_source, 'plugin_manager_reserve_plugin_check_generation') &&
     str_contains($plugin_source, 'plugin_manager_publish_plugin_check_artifact'),
   'The plugin CLI does not use the shared same-plugin publication protocol'
+);
+$show_plugins_source = file_get_contents(
+  dirname(__DIR__, 2).
+    '/emhttp/plugins/dynamix.plugin.manager/include/ShowPlugins.php'
+);
+$plugin_rm_source = file_get_contents(
+  dirname(__DIR__, 2).
+    '/emhttp/plugins/dynamix.plugin.manager/scripts/plugin_rm'
+);
+$supervisor_source = file_get_contents(
+  dirname(__DIR__, 2).
+    '/emhttp/plugins/dynamix.plugin.manager/scripts/plugin-operation-lock'
+);
+test_assert(
+  str_contains($show_plugins_source, 'plugin_branch_check($plugin_file, $branch)') &&
+    !str_contains($show_plugins_source, '/var/tmp/') &&
+    !str_contains($show_plugins_source, 'unRAIDServer-.plg') &&
+    !str_contains($show_plugins_source, 'file_put_contents('),
+  'ShowPlugins still exposes branch-check or display-artifact intermediate state'
+);
+test_assert(
+  str_contains($show_plugins_source, 'plugin_manager_write_shared_artifact') &&
+    str_contains($show_plugins_source, 'plugin_manager_with_operation_lock'),
+  'ShowPlugins display artifacts are not atomically published under the host lock'
+);
+test_assert(
+  str_contains($plugin_rm_source, 'history-delete') &&
+    !preg_match('/(^|[;&|[:space:]])rm([[:space:]]|$)/m', $plugin_rm_source),
+  'plugin_rm still mutates persistent boot history outside the serialized CLI leaf'
+);
+$branch_source_start = strpos($plugin_source, "if (\$method === 'branchcheck')");
+$branch_source_end = strpos($plugin_source, "if (\$method === 'history-delete')");
+$branch_source =
+  is_int($branch_source_start) &&
+  is_int($branch_source_end) &&
+  $branch_source_end > $branch_source_start
+    ? substr(
+      $plugin_source,
+      $branch_source_start,
+      $branch_source_end - $branch_source_start
+    )
+    : '';
+$branch_pre_hooks = strpos($branch_source, 'pre_hooks();');
+$branch_receipt_capture = strpos(
+  $branch_source,
+  'plugin_manager_capture_download_receipt($download)'
+);
+$branch_exact_parse = strpos(
+  $branch_source,
+  'simplexml_load_string($checked_contents'
+);
+test_assert(
+  $branch_source !== '' &&
+    !str_contains($branch_source, 'synthetic installed link') &&
+    $branch_pre_hooks !== false &&
+    $branch_receipt_capture !== false &&
+    $branch_exact_parse !== false &&
+    $branch_pre_hooks < $branch_receipt_capture &&
+    $branch_receipt_capture < $branch_exact_parse,
+  'OS branch check does not select and parse the exact post-hook bytes'
+);
+test_assert(
+  str_contains($supervisor_source, '.operation-identity') &&
+    str_contains($supervisor_source, '[ "$pid" -gt 1 ]') &&
+    str_contains($supervisor_source, 'bootstrap_pid="$BASHPID"') &&
+    str_contains($supervisor_source, '"/proc/$bootstrap_pid/stat"') &&
+    str_contains(
+      $supervisor_source,
+      'member_is_process_group_leader "$snapshot_dir/$identity"'
+    ) &&
+    !str_contains($supervisor_source, '-$finished_guardian_pid'),
+  'Unexpected guardian death can target an unvalidated or stale process group'
 );
 test_assert(
   !str_contains($plugin_api_source, 'plugin_manager_with_plugin_check_lock'),
@@ -2532,6 +2630,11 @@ test_wait_for(
 );
 $guardian_pid = (int)trim(file_get_contents("$directory/guardian-pid"));
 $mutation_pid = (int)trim(file_get_contents("$directory/mutation-pid"));
+$mutation_start = plugin_manager_process_start_time($mutation_pid);
+test_assert(
+  is_string($mutation_start),
+  'Unable to capture guardian-death mutation identity'
+);
 test_assert(
   $guardian_pid > 1 && posix_kill($guardian_pid, 9),
   'Unable to kill only the lock guardian'
@@ -2543,8 +2646,15 @@ $guardian_result = test_finish_process($killed_guardian);
 $contender_result = test_finish_process($contender);
 test_assert($guardian_result[0] !== 0, 'SIGKILLed lock guardian unexpectedly succeeded');
 test_assert(
-  in_array(test_process_state($mutation_pid), [null, 'Z', 'X', 'x'], true),
-  'The coordinator left mutation code running after guardian death'
+  !plugin_manager_lock_member_is_live("$mutation_pid.$mutation_start"),
+  'The coordinator left the same mutation identity running after guardian death: '.
+    json_encode([
+      'guardian' => $guardian_pid,
+      'mutation' => "$mutation_pid.$mutation_start",
+      'mutation_parent' => test_process_parent($mutation_pid),
+      'mutation_group' => posix_getpgid($mutation_pid),
+      'mutation_state' => test_process_state($mutation_pid)
+    ])
 );
 test_assert(
   $contender_result[0] === 0,
@@ -2613,6 +2723,25 @@ while (true) {
   }
   usleep(10000);
 }
+$identity_markers = glob(
+  "$directory/plugin-manager.lock.scope.*.snapshots/.operation-identity"
+) ?: [];
+test_assert(
+  count($identity_markers) === 1,
+  'Escaped-member fixture did not publish one operation identity marker'
+);
+$stale_process = test_start_command(['/bin/sleep', '0.05']);
+$stale_status = proc_get_status($stale_process[0]);
+$stale_pid = (int)$stale_status['pid'];
+$stale_start = plugin_manager_process_start_time($stale_pid);
+test_assert(
+  is_string($stale_start),
+  'Unable to capture stale operation-marker identity'
+);
+test_finish_process($stale_process);
+chmod($identity_markers[0], 0600);
+file_put_contents($identity_markers[0], "$stale_pid.$stale_start\n");
+chmod($identity_markers[0], 0400);
 test_assert(
   $guardian_pid > 1 && posix_kill($guardian_pid, 9),
   'Unable to kill the guardian with an escaped registered member'
@@ -2695,6 +2824,26 @@ SH;
       in_array("child-ready-$signal", test_events($directory), true),
     2.0,
     "$signal supervisor child did not start"
+  );
+  $operation_markers = glob(
+    "$directory/plugin-manager.lock.scope.*.snapshots/.operation-identity"
+  ) ?: [];
+  $operation_identity = count($operation_markers) === 1
+    ? trim((string)file_get_contents($operation_markers[0]))
+    : '';
+  $operation_pid = (int)strstr($operation_identity, '.', true);
+  test_assert(
+    count($operation_markers) === 1 &&
+      plugin_manager_lock_member_is_live($operation_identity) &&
+      posix_getpgid($operation_pid) === $operation_pid,
+    "$signal supervisor published an invalid operation identity: ".
+      json_encode([
+        'identity' => $operation_identity,
+        'live' => plugin_manager_lock_member_is_live($operation_identity),
+        'group' => posix_getpgid($operation_pid),
+        'parent' => test_process_parent($operation_pid),
+        'state' => test_process_state($operation_pid)
+      ])
   );
   $supervisor_pid = (int)trim(file_get_contents("$directory/supervisor-pid"));
   $supervisor_group = $supervisor_pid > 1 ? posix_getpgid($supervisor_pid) : false;
@@ -2793,6 +2942,29 @@ SH;
     "Direct $signal guardian child did not start"
   );
   $guardian_pid = (int)trim(file_get_contents("$directory/guardian-pid"));
+  $operation_markers = glob(
+    "$directory/plugin-manager.lock.scope.*.snapshots/.operation-identity"
+  ) ?: [];
+  $operation_identity = count($operation_markers) === 1
+    ? trim((string)file_get_contents($operation_markers[0]))
+    : '';
+  $operation_pid = (int)strstr($operation_identity, '.', true);
+  test_assert(
+    count($operation_markers) === 1 &&
+      plugin_manager_lock_member_is_live($operation_identity) &&
+      posix_getpgid($operation_pid) === $operation_pid &&
+      test_process_parent($operation_pid) === $guardian_pid,
+    "Direct $signal guardian does not directly supervise the operation: ".
+      json_encode([
+        'guardian' => $guardian_pid,
+        'operation' => $operation_identity,
+        'operation_parent' => test_process_parent($operation_pid),
+        'operation_group' => posix_getpgid($operation_pid),
+        'operation_live' => plugin_manager_lock_member_is_live($operation_identity),
+        'operation_start' => plugin_manager_process_start_time($operation_pid),
+        'operation_state' => test_process_state($operation_pid)
+      ])
+  );
   test_assert(
     $guardian_pid > 1 && posix_kill($guardian_pid, $expectation['number']),
     "Unable to signal only the $signal guardian"
@@ -3047,6 +3219,60 @@ test_assert(
   'Serialized Core and unrelated plugin operations left unexpected simulated pkgtools state'
 );
 
+$directory = test_directory($root, 'display-artifact-concurrency');
+$display_artifact = "$directory/display.txt";
+$first_display = test_start_process([
+  '--display-artifact-writer',
+  $directory,
+  $display_artifact,
+  'first-complete-document',
+  '220'
+]);
+test_wait_for(
+  fn() => in_array(
+    'display-enter first-complete-document',
+    test_events($directory),
+    true
+  ),
+  2.0,
+  'First display-artifact publisher never acquired the host lock'
+);
+$second_display = test_start_process([
+  '--display-artifact-writer',
+  $directory,
+  $display_artifact,
+  'second-complete-document',
+  '0'
+]);
+$cleanup_ran = false;
+test_assert(
+  !plugin_manager_with_nonblocking_operation_lock(
+    function() use (&$cleanup_ran, $display_artifact): void {
+      $cleanup_ran = true;
+      plugin_manager_remove_shared_artifact($display_artifact);
+    }
+  ),
+  'Display-artifact cleanup raced an active publisher'
+);
+test_assert(!$cleanup_ran, 'Busy display-artifact cleanup callback ran');
+$first_display_result = test_finish_process($first_display);
+$second_display_result = test_finish_process($second_display);
+test_assert(
+  $first_display_result[0] === 0 && $second_display_result[0] === 0,
+  "Serialized display-artifact publication failed: ".
+    "{$first_display_result[2]} {$second_display_result[2]}"
+);
+test_assert(
+  file_get_contents($display_artifact) === 'second-complete-document' &&
+    test_events($directory) === [
+      'display-enter first-complete-document',
+      'display-exit first-complete-document',
+      'display-enter second-complete-document',
+      'display-exit second-complete-document'
+    ],
+  'Display artifacts were partially published or reordered around cleanup'
+);
+
 $directory = test_directory($root, 'nonblocking-free');
 $maintenance_ran = false;
 test_assert(
@@ -3271,6 +3497,219 @@ test_assert(
   !file_exists($latest) &&
     !plugin_manager_plugin_check_artifact_is_current($plugin, $latest),
   'Real CLI lock-command failure did not durably revoke its reserved generation'
+);
+
+$directory = test_directory($root, 'real-cli-branch-check');
+$branch_source = "$root/unRAIDServer-branch-source.plg";
+$branch_contents = <<<'PLG'
+<!DOCTYPE PLUGIN [
+<!ENTITY category "stable">
+]>
+<PLUGIN name="unRAIDServer" version="2026.07.18"
+  pluginURL="http://127.0.0.1:9/unRAIDServer-&category;.plg"
+  category="&category;"></PLUGIN>
+PLG;
+file_put_contents($branch_source, $branch_contents);
+$holder = test_start_process([
+  '--critical', 'install', $directory, 'branch-holder', '300', '0'
+]);
+test_wait_for(
+  fn() => in_array('enter branch-holder', test_events($directory), true),
+  2.0,
+  'Branch-check holder never acquired the host lock'
+);
+$branch_result = test_finish_process(
+  test_start_command([$cli_wrapper, 'branchcheck', $branch_source, 'next'])
+);
+$holder_result = test_finish_process($holder);
+test_assert($holder_result[0] === 0, "Branch-check holder failed: {$holder_result[2]}");
+test_assert(
+  $branch_result[0] === 0 && $branch_result[3] >= 0.2,
+  "Real branch check did not serialize behind the host lock: {$branch_result[2]}"
+);
+$branch_receipt_match = [];
+preg_match(
+  '/^_PLUGIN_BRANCH_RESULT_=(.+)$/m',
+  $branch_result[1],
+  $branch_receipt_match
+);
+$branch_json = isset($branch_receipt_match[1])
+  ? base64_decode(trim($branch_receipt_match[1]), true)
+  : false;
+$branch_receipt = is_string($branch_json)
+  ? json_decode($branch_json, true)
+  : null;
+$branch_path = is_array($branch_receipt) ? ($branch_receipt['path'] ?? null) : null;
+test_assert(
+  is_string($branch_path) &&
+    is_file($branch_path) &&
+    str_contains(
+      (string)file_get_contents($branch_path),
+      '<!ENTITY category "next">'
+    ),
+  'Real branch check did not atomically publish its private branch definition: '.
+    "{$branch_result[1]} {$branch_result[2]} path=".
+    var_export($branch_path, true)
+);
+test_assert(
+  !file_exists("$cli_plugins/unRAIDServer-.plg") &&
+    !is_link("$cli_plugins/unRAIDServer-.plg") &&
+    !file_exists("$cli_tmp/unRAIDServer-.plg"),
+  'Branch check exposed synthetic installed or shared update state'
+);
+
+$directory = test_directory($root, 'killed-real-cli-branch-check');
+$kill_branch_source = "$root/unRAIDServer-killed-branch.plg";
+file_put_contents($kill_branch_source, $branch_contents);
+$wget_directory = "$root/wget-fixture";
+mkdir($wget_directory, 0700);
+$wget = "$wget_directory/wget";
+file_put_contents(
+  $wget,
+  <<<'SH'
+#!/bin/sh
+printf '%s\n' "$PPID" > "$PLUGIN_MANAGER_TEST_WGET_READY"
+sleep 10
+exit 1
+SH
+);
+chmod($wget, 0755);
+$kill_environment = getenv();
+$kill_environment['PATH'] =
+  $wget_directory.':'.($kill_environment['PATH'] ?? '/usr/bin:/bin');
+$kill_environment['PLUGIN_MANAGER_TEST_WGET_READY'] = "$directory/wget-ready";
+$killed_branch = test_start_command(
+  [$cli_wrapper, 'branchcheck', $kill_branch_source, 'next'],
+  $kill_environment
+);
+test_wait_for(
+  fn() => is_file("$directory/wget-ready"),
+  2.0,
+  'Killed branch check did not reach its private download'
+);
+$download_parent = (int)trim(file_get_contents("$directory/wget-ready"));
+$mutation_group = $download_parent > 1 ? posix_getpgid($download_parent) : false;
+test_assert(
+  is_int($mutation_group) &&
+    $mutation_group > 1 &&
+    $mutation_group !== posix_getpgrp() &&
+    posix_kill(-$mutation_group, 9),
+  'Unable to SIGKILL the branch-check mutation group'
+);
+$killed_branch_result = test_finish_process($killed_branch);
+test_assert(
+  $killed_branch_result[0] !== 0,
+  'SIGKILLed branch check unexpectedly succeeded'
+);
+$killed_target =
+  plugin_manager_private_download_directory().
+  '/os-branch-'.hash(
+    'sha256',
+    str_replace(
+      '<!ENTITY category "stable">',
+      '<!ENTITY category "next">',
+      $branch_contents
+    )
+  ).'.plg';
+test_assert(
+  !file_exists("$cli_plugins/unRAIDServer-.plg") &&
+    !is_link("$cli_plugins/unRAIDServer-.plg") &&
+    !file_exists("$cli_tmp/unRAIDServer-.plg") &&
+    !file_exists($killed_target),
+  'SIGKILLed branch check left synthetic or partially-published state'
+);
+$branch_private_directory = plugin_manager_private_download_directory();
+$first_branch_debris =
+  glob("$branch_private_directory/.plugin-branch-*", GLOB_NOSORT) ?: [];
+test_assert(
+  count($first_branch_debris) <= 2,
+  'One SIGKILLed branch check left unbounded private temporary files'
+);
+$kill_environment['PLUGIN_MANAGER_TEST_WGET_READY'] =
+  "$directory/wget-ready-second";
+$killed_branch_again = test_start_command(
+  [$cli_wrapper, 'branchcheck', $kill_branch_source, 'next'],
+  $kill_environment
+);
+test_wait_for(
+  fn() => is_file("$directory/wget-ready-second"),
+  2.0,
+  'Repeated killed branch check did not reach its private download'
+);
+$second_branch_debris =
+  glob("$branch_private_directory/.plugin-branch-*", GLOB_NOSORT) ?: [];
+test_assert(
+  count($second_branch_debris) <= 2 &&
+    array_intersect($first_branch_debris, $second_branch_debris) === [],
+  'A later branch check did not retire prior private SIGKILL debris'
+);
+$download_parent = (int)trim(
+  file_get_contents("$directory/wget-ready-second")
+);
+$mutation_group = $download_parent > 1
+  ? posix_getpgid($download_parent)
+  : false;
+test_assert(
+  is_int($mutation_group) &&
+    $mutation_group > 1 &&
+    $mutation_group !== posix_getpgrp() &&
+    posix_kill(-$mutation_group, 9),
+  'Unable to SIGKILL the repeated branch-check mutation group'
+);
+$killed_branch_again_result = test_finish_process($killed_branch_again);
+$remaining_branch_debris =
+  glob("$branch_private_directory/.plugin-branch-*", GLOB_NOSORT) ?: [];
+test_assert(
+  $killed_branch_again_result[0] !== 0 &&
+    count($remaining_branch_debris) <= 2 &&
+    !file_exists($killed_target),
+  'Repeated SIGKILL accumulated private debris or published partial state'
+);
+
+$directory = test_directory($root, 'real-cli-history-delete');
+$history_boot = "$root/history-boot/config/plugins";
+mkdir("{$history_boot}-error", 0700, true);
+mkdir("{$history_boot}-stale", 0700, true);
+$history_source = str_replace(
+  "\$boot          = '/boot/config/plugins';",
+  '$boot          = '.var_export($history_boot, true).';',
+  $cli_plugin_source,
+  $history_replacements
+);
+test_assert(
+  $history_replacements === 1,
+  'Unable to isolate boot history paths for CLI deletion testing'
+);
+$history_plugin = "$root/plugin-history-copy";
+file_put_contents($history_plugin, $history_source);
+$history_wrapper = "$root/plugin-history-executable";
+file_put_contents(
+  $history_wrapper,
+  "#!/usr/bin/env php\n<?PHP\n".
+    '$docroot = '.var_export($nchan_root, true).";\n".
+    'require '.var_export($history_plugin, true).";\n"
+);
+chmod($history_wrapper, 0755);
+$history_file = "{$history_boot}-stale/old-plugin.plg";
+file_put_contents($history_file, '<PLUGIN name="old-plugin" version="1"></PLUGIN>');
+$holder = test_start_process([
+  '--critical', 'install', $directory, 'history-holder', '300', '0'
+]);
+test_wait_for(
+  fn() => in_array('enter history-holder', test_events($directory), true),
+  2.0,
+  'History-delete holder never acquired the host lock'
+);
+$history_result = test_finish_process(
+  test_start_command([$history_wrapper, 'history-delete', $history_file])
+);
+$holder_result = test_finish_process($holder);
+test_assert($holder_result[0] === 0, "History-delete holder failed: {$holder_result[2]}");
+test_assert(
+  $history_result[0] === 0 &&
+    $history_result[3] >= 0.2 &&
+    !file_exists($history_file),
+  "Boot-history deletion did not serialize its persistent mutation: {$history_result[2]}"
 );
 
 $directory = test_directory($root, 'executable-stale-owner');

@@ -55,6 +55,59 @@ function check_plugin($arg, &$ncsi) {
   return $ncsi ? plugin('check',$arg) : false;
 }
 
+function plugin_branch_check($plugin_file, $branch) {
+  global $docroot;
+  $command =
+    escapeshellarg("$docroot/plugins/dynamix.plugin.manager/scripts/plugin").
+    ' branchcheck '.escapeshellarg($plugin_file).' '.escapeshellarg($branch);
+  exec("$command 2>/dev/null", $output, $status);
+  if ($status !== 0 || !$output) return false;
+
+  $receipt = null;
+  foreach (array_reverse($output) as $line) {
+    if (str_starts_with($line, '_PLUGIN_BRANCH_RESULT_=')) {
+      $receipt = substr($line, strlen('_PLUGIN_BRANCH_RESULT_='));
+      break;
+    }
+  }
+  $encoded = is_string($receipt) ? base64_decode($receipt, true) : false;
+  if (!is_string($encoded)) return false;
+  try {
+    $result = json_decode($encoded, true, 8, JSON_THROW_ON_ERROR);
+  } catch (Throwable) {
+    return false;
+  }
+  $path = $result['path'] ?? null;
+  $past = $result['past'] ?? null;
+  $next = $result['next'] ?? null;
+  if (!is_string($path)) return false;
+  try {
+    $artifact_directory = plugin_manager_private_download_directory();
+  } catch (Throwable) {
+    return false;
+  }
+  if (
+    dirname($path) !== $artifact_directory ||
+    !preg_match('/^os-branch-[a-f0-9]{64}\.plg$/D', basename($path))
+  ) {
+    return false;
+  }
+  clearstatcache(true, $path);
+  $path_status = @lstat($path);
+  if (
+    $path === '' ||
+    $path[0] !== '/' ||
+    $path_status === false ||
+    ($path_status['mode'] & 0170000) !== 0100000 ||
+    ($path_status['mode'] & 07777) !== 0600 ||
+    !is_string($past) ||
+    !is_string($next)
+  ) {
+    return false;
+  }
+  return ['path' => $path, 'past' => $past, 'next' => $next];
+}
+
 function make_link($method, $arg, $extra='') {
   $plg = basename($arg,'.plg').':'.$method;
   $id = str_replace(['.',' ','_'],'',$plg);

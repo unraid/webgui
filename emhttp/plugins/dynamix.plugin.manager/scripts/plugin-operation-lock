@@ -5,6 +5,7 @@ token="${UNRAID_PLUGIN_MANAGER_LOCK_TOKEN:-}"
 scope="${UNRAID_PLUGIN_MANAGER_LOCK_SCOPE:-}"
 flock_path="${1:-}"
 lock_path="${2:-}"
+setsid_path="${flock_path%/*}/setsid"
 snapshot_dir="$scope.snapshots"
 lane_dir="$scope.lane.members"
 lane_lock="$scope.lane.lock"
@@ -16,6 +17,7 @@ esac
 [ "$#" -ge 4 ] || exit 70
 [ "$3" = "--" ] || exit 70
 [ -x "$flock_path" ] || exit 70
+[ -x "$setsid_path" ] || exit 70
 case "$lock_path" in
   /*) ;;
   *) exit 70 ;;
@@ -48,6 +50,26 @@ member_is_live() {
   shift 19
   current_start="$1"
   [ "$current_start" = "$expected_start" ]
+}
+
+member_is_process_group_leader() {
+  local lease="$1"
+  local identity="${lease##*/}"
+  local pid="${identity%%.*}"
+  local stat=""
+  local fields=""
+  local process_group=""
+  local -a stat_fields=()
+
+  member_is_live "$lease" || return 1
+  [ "$pid" -gt 1 ] || return 1
+  stat=$(cat "/proc/$pid/stat" 2>/dev/null) || return 1
+  fields="${stat##*) }"
+  read -r -a stat_fields <<< "$fields"
+  [ "${#stat_fields[@]}" -ge 20 ] || return 1
+  # After removing pid/comm, pgrp (field 5) is array index 2.
+  process_group="${stat_fields[2]}"
+  [ "$process_group" = "$pid" ]
 }
 
 release_scope_after_members_exit() {
@@ -114,8 +136,56 @@ terminate_scope_members() {
   done
 }
 
+terminate_marked_operation_group() {
+  local identity=""
+  local pid=""
+
+  identity=$(cat "$snapshot_dir/.operation-identity" 2>/dev/null || true)
+  pid="${identity%%.*}"
+  if member_is_process_group_leader "$snapshot_dir/$identity"; then
+    # Revalidate identity and group leadership immediately before signalling;
+    # never target a stale/reused PID or a supervisor's process group.
+    if member_is_process_group_leader "$snapshot_dir/$identity"; then
+      kill -KILL -- "-$pid" 2>/dev/null || true
+      while member_is_live "$snapshot_dir/$identity"; do
+        sleep 0.01
+      done
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
 shift 3
 [ "$#" -gt 0 ] || exit 70
+
+# Entered beneath setsid by the guardian. Publish the operation's identity only
+# after it is the leader of its final private process group, then exec mutation
+# code without any lock descriptor or internal supervisor mode.
+if [ "${UNRAID_PLUGIN_MANAGER_LOCK_OPERATION_BOOTSTRAP:-0}" = "1" ]; then
+  bootstrap_pid="$BASHPID"
+  stat=$(cat "/proc/$bootstrap_pid/stat" 2>/dev/null) || exit 70
+  fields="${stat##*) }"
+  read -r -a stat_fields <<< "$fields"
+  [ "${#stat_fields[@]}" -ge 20 ] || exit 70
+  start_time="${stat_fields[19]}"
+  process_group="${stat_fields[2]}"
+  case "$bootstrap_pid:$start_time:$process_group" in
+    *[!0-9:]*|:*|*:) exit 70 ;;
+  esac
+  [ "$bootstrap_pid" -gt 1 ] || exit 70
+  [ "$process_group" = "$bootstrap_pid" ] || exit 70
+  child_ready_path="$snapshot_dir/.operation-identity"
+  printf '%s.%s\n' "$bootstrap_pid" "$start_time" > "$child_ready_path" || exit 70
+  chmod 0400 "$child_ready_path" || exit 70
+  trap - INT QUIT TERM HUP
+  export UNRAID_PLUGIN_MANAGER_LOCK_GUARDIAN=''
+  export UNRAID_PLUGIN_MANAGER_LOCK_FD=''
+  export UNRAID_PLUGIN_MANAGER_LOCK_OPERATION_BOOTSTRAP=''
+  export UNRAID_PLUGIN_MANAGER_LOCK_ENTRY="$token"
+  exec "$@"
+fi
 
 # The guardian inherits the already-locked descriptor and re-execs once so
 # procfs exposes its owner identity. If the coordinating supervisor is killed,
@@ -138,8 +208,9 @@ if [ "${UNRAID_PLUGIN_MANAGER_LOCK_GUARDIAN:-0}" = "1" ]; then
   [ "/proc/$$/fd/$lock_fd" -ef "$lock_path" ] || exit 70
 
   child_pid=""
+  launcher_pid=""
   child_ready=0
-  child_ready_path="$snapshot_dir/.operation-pgid"
+  child_ready_path="$snapshot_dir/.operation-identity"
   pending_signal=""
 
   # Invoked indirectly by the signal traps below.
@@ -162,26 +233,28 @@ if [ "${UNRAID_PLUGIN_MANAGER_LOCK_GUARDIAN:-0}" = "1" ]; then
   # descriptor. Its bootstrap publishes that group only after resetting signal
   # dispositions, closing the pending-signal race. The one-use entry token
   # distinguishes the direct operation from nested plugin invocations.
-  set -m
-  (
-    # Bash starts an asynchronous command with INT/QUIT ignored when job
-    # control is disabled. Restore defaults before exec so the operation can
-    # install its own traps while remaining in the guardian process group.
-    trap - INT QUIT TERM HUP
-    printf '%s\n' "$BASHPID" > "$child_ready_path" || exit 70
-    export UNRAID_PLUGIN_MANAGER_LOCK_GUARDIAN=''
-    export UNRAID_PLUGIN_MANAGER_LOCK_FD=''
-    export UNRAID_PLUGIN_MANAGER_LOCK_ENTRY="$token"
-    exec "$@" {lock_fd}>&-
-  ) &
-  child_pid=$!
   set +m
-  while [ ! -f "$child_ready_path" ] && kill -0 "$child_pid" 2>/dev/null; do
+  (
+    # Bash otherwise starts an asynchronous command with INT/QUIT ignored.
+    # Reset dispositions in the forked shell before it becomes the operation.
+    trap - INT QUIT TERM HUP
+    export UNRAID_PLUGIN_MANAGER_LOCK_OPERATION_BOOTSTRAP=1
+    exec {lock_fd}>&-
+    exec "$setsid_path" -w \
+      "$0" "$flock_path" "$lock_path" -- "$@"
+  ) &
+  launcher_pid=$!
+  operation_identity=""
+  while kill -0 "$launcher_pid" 2>/dev/null; do
+    operation_identity=$(cat "$child_ready_path" 2>/dev/null || true)
+    if [ "${operation_identity%%.*}" = "$launcher_pid" ] &&
+      member_is_process_group_leader "$snapshot_dir/$operation_identity"; then
+      child_pid="${operation_identity%%.*}"
+      child_ready=1
+      break
+    fi
     sleep 0.01
   done
-  if [ "$(cat "$child_ready_path" 2>/dev/null)" = "$child_pid" ]; then
-    child_ready=1
-  fi
   if [ -n "$pending_signal" ]; then
     signal="$pending_signal"
     pending_signal=""
@@ -191,12 +264,13 @@ if [ "${UNRAID_PLUGIN_MANAGER_LOCK_GUARDIAN:-0}" = "1" ]; then
   fi
 
   while true; do
-    wait "$child_pid"
+    wait "$launcher_pid"
     status=$?
-    if ! kill -0 "$child_pid" 2>/dev/null; then
+    if ! kill -0 "$launcher_pid" 2>/dev/null; then
       break
     fi
   done
+  launcher_pid=""
   child_pid=""
   release_scope_after_members_exit
   exec {lock_fd}>&-
@@ -266,19 +340,13 @@ while true; do
     break
   fi
 done
-finished_guardian_pid="$guardian_pid"
 guardian_pid=""
 
 # A normally exiting guardian retires the scope itself. If it died
 # unexpectedly, terminate its mutation group before this last flock reference
 # is closed, then perform the same lease-aware retirement locally.
 if [ -d "$scope" ]; then
-  kill -KILL -- "-$finished_guardian_pid" 2>/dev/null || true
-  operation_pid=$(cat "$snapshot_dir/.operation-pgid" 2>/dev/null || true)
-  case "$operation_pid" in
-    *[!0-9]*|'') ;;
-    *) kill -KILL -- "-$operation_pid" 2>/dev/null || true ;;
-  esac
+  terminate_marked_operation_group || true
   terminate_scope_members
   release_scope_after_members_exit
 fi

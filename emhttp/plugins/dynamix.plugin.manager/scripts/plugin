@@ -687,6 +687,188 @@ if ($method != 'check') {
   plugin_manager_serialize_operation($method, $script, $argv);
 }
 
+// Build one branch-specific OS plugin definition under the supervised host
+// lock. Candidate and downloaded definitions stay private; only the immutable,
+// content-addressed result is published for the requesting UI process.
+if ($method === 'branchcheck') {
+  $source = isset($argv[2]) ? realpath($argv[2]) : false;
+  $branch = $argv[3] ?? '';
+  if (
+    $source === false ||
+    !is_file($source) ||
+    is_link($source) ||
+    !preg_match('/^[A-Za-z0-9._-]+$/D', $branch) ||
+    plugin_attribute_uncached('name', $source) !== 'unRAIDServer'
+  ) {
+    fwrite(STDERR, "plugin: invalid OS branch check request\n");
+    done(1);
+  }
+
+  $past = plugin_attribute_uncached('version', $source);
+  $contents = @file_get_contents($source);
+  $replacements = 0;
+  $candidate_contents = is_string($contents)
+    ? preg_replace(
+      '/^(<!ENTITY\s+category).*$/m',
+      '$1 "'.$branch.'">',
+      $contents,
+      1,
+      $replacements
+    )
+    : false;
+  if (
+    !is_string($past) ||
+    !is_string($candidate_contents) ||
+    $candidate_contents === '' ||
+    $replacements !== 1
+  ) {
+    fwrite(STDERR, "plugin: unable to prepare OS branch definition\n");
+    done(1);
+  }
+
+  $candidate = null;
+  $branch_plugin_name = 'unRAIDServer-.plg';
+  $download = null;
+  try {
+    $private_directory = plugin_manager_private_download_directory();
+    $stale_branch_paths = array_merge(
+      glob("$private_directory/.plugin-branch-*", GLOB_NOSORT) ?: [],
+      glob(
+        "$private_directory/.os-branch-*.plg.shared-artifact-*",
+        GLOB_NOSORT
+      ) ?: []
+    );
+    foreach ($stale_branch_paths as $stale_branch_path) {
+      $stale_status = @lstat($stale_branch_path);
+      if (
+        $stale_status !== false &&
+        plugin_manager_lock_path_type($stale_status) !== 0040000
+      ) {
+        @unlink($stale_branch_path);
+      }
+    }
+
+    $candidate = plugin_manager_create_private_download_file('.plugin-branch-');
+    if (!is_array(plugin_manager_write_complete_download($candidate, $candidate_contents))) {
+      throw new RuntimeException('Unable to persist OS branch candidate');
+    }
+
+    $next = $past;
+    $selected_contents = $candidate_contents;
+    $plugin_url = plugin_attribute_uncached('pluginURL', $candidate);
+    $check_error = '';
+    if (is_string($plugin_url) && $plugin_url !== '') {
+      $download = plugin_manager_create_private_download_file('.plugin-branch-');
+      if (
+        download($plugin_url, $download, $check_error) === false &&
+        download(filter_url($plugin_url), $download, $check_error) === false
+      ) {
+        @unlink($download);
+        $download = null;
+      } else {
+        $saved_method = $method;
+        $method = 'check';
+        $plugin = $branch_plugin_name;
+        try {
+          pre_hooks();
+          // Hooks run before the semantic check. Capture and read only the
+          // exact post-hook bytes used for both version selection and output.
+          $receipt = plugin_manager_capture_download_receipt($download);
+          $checked_contents = is_array($receipt)
+            ? plugin_manager_read_download_receipt($receipt)
+            : false;
+          $checked_xml = is_string($checked_contents)
+            ? @simplexml_load_string($checked_contents, null, LIBXML_NOCDATA)
+            : false;
+          $checked_attributes = $checked_xml === false
+            ? []
+            : (array)$checked_xml->attributes();
+          $checked_version =
+            isset($checked_attributes['@attributes']['version'])
+              ? (string)$checked_attributes['@attributes']['version']
+              : false;
+          if (
+            is_string($checked_version) &&
+            is_string($checked_contents) &&
+            $checked_contents !== '' &&
+            version_compare($checked_version, $past, '>')
+          ) {
+            $next = $checked_version;
+            $selected_contents = $checked_contents;
+          } elseif ($checked_version === false) {
+            $check_error = 'downloaded OS branch definition has no version';
+          }
+        } finally {
+          $method = $saved_method;
+        }
+      }
+    } else {
+      $check_error = 'pluginURL attribute is missing';
+    }
+    $saved_method = $method;
+    $method = 'check';
+    $plugin = $branch_plugin_name;
+    try {
+      post_hooks($check_error);
+    } finally {
+      $method = $saved_method;
+    }
+
+    $target =
+      plugin_manager_private_download_directory().
+      '/os-branch-'.hash('sha256', $selected_contents).'.plg';
+    if (!plugin_manager_write_shared_artifact($target, $selected_contents, 0600)) {
+      throw new RuntimeException('Unable to publish OS branch definition');
+    }
+    echo "\n_PLUGIN_BRANCH_RESULT_=".base64_encode(json_encode(
+      ['path' => $target, 'past' => $past, 'next' => $next],
+      JSON_THROW_ON_ERROR
+    ))."\n";
+  } catch (Throwable $branch_error) {
+    fwrite(STDERR, "plugin: {$branch_error->getMessage()}\n");
+    $branch_status = 1;
+  } finally {
+    if (is_string($candidate)) @unlink($candidate);
+    if (is_string($download)) @unlink($download);
+  }
+  done($branch_status ?? 0);
+}
+
+// Delete one boot-history entry through the same serialized leaf used by all
+// other persistent plugin mutations.
+if ($method === 'history-delete') {
+  $history_file = $argv[2] ?? '';
+  $history_parent = dirname($history_file);
+  if (
+    !in_array(
+      $history_parent,
+      ["{$boot}-error", "{$boot}-stale"],
+      true
+    ) ||
+    basename($history_file) === '' ||
+    pathinfo($history_file, PATHINFO_EXTENSION) !== 'plg'
+  ) {
+    fwrite(STDERR, "plugin: invalid history path\n");
+    done(1);
+  }
+  clearstatcache(true, $history_file);
+  $history_status = @lstat($history_file);
+  if (
+    $history_status === false ||
+    plugin_manager_lock_path_type($history_status) !== 0100000
+  ) {
+    fwrite(STDERR, "plugin: history entry is missing or unsafe\n");
+    done(1);
+  }
+
+  write("Deleting $history_file ...".($nchan ? ' ' : "\n"));
+  if (!@unlink($history_file)) {
+    fwrite(STDERR, "plugin: unable to delete history entry\n");
+    done(1);
+  }
+  done(0);
+}
+
 // plugin install [plugin_file] / plugin download [plugin_file]
 // cases:
 // a) dirname of [plugin_file] is /boot/config/plugins (system startup)

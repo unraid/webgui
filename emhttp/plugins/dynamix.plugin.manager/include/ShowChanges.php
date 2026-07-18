@@ -13,13 +13,14 @@
 <?
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Wrappers.php";
+require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginOperationLock.php";
 extract(parse_plugin_cfg('dynamix',true));
 
 // add translations
 $_SERVER['REQUEST_URI'] = 'plugins';
 require_once "$docroot/webGui/include/Translations.php";
 
-$valid = ['/var/tmp/','/tmp/plugins/'];
+$valid = ['/var/tmp/','/tmp/plugins/',plugin_manager_private_download_directory().'/'];
 $good  = false;
 ?>
 <body style="margin:14px 10px">

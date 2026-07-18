@@ -1,18 +1,13 @@
 #!/bin/bash
+set -u
 
-write(){
-  for message in "$@"; do
-    curl -sfd "$message" --unix-socket /var/run/nginx.socket http://localhost/pub/plugins?buffer_length=1 >/dev/null 2>&1
-  done
-}
+plugin="/usr/local/emhttp/plugins/dynamix.plugin.manager/scripts/plugin"
+history_file="${1:-}"
 
-# put some restrictions on 'delete'
-if [[ $1 == /boot/config/plugins-error/* || $1 == /boot/config/plugins-stale/* ]]; then
-  text="Deleting $1 ..."
-  if [[ -z $2 ]]; then
-    echo "$text"
-  else
-    write "$text " "_DONE_" ""
-  fi
-  rm $1
+[ -x "$plugin" ] || exit 1
+[ -n "$history_file" ] || exit 1
+
+if [ -n "${2:-}" ]; then
+  exec "$plugin" history-delete "$history_file" nchan
 fi
+exec "$plugin" history-delete "$history_file"
