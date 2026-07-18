@@ -214,7 +214,7 @@ if [ "${UNRAID_PLUGIN_MANAGER_LOCK_GUARDIAN:-0}" = "1" ]; then
   pending_signal=""
 
   # Invoked indirectly by the signal traps below.
-  # shellcheck disable=SC2329
+  # shellcheck disable=SC2317,SC2329
   record_child_signal() {
     if [ "$child_ready" -eq 1 ] && [ -n "$child_pid" ]; then
       kill -s "$1" -- "-$child_pid" 2>/dev/null ||
@@ -305,7 +305,7 @@ guardian_pid=""
 pending_signal=""
 
 # Invoked indirectly by the signal traps below.
-# shellcheck disable=SC2329
+# shellcheck disable=SC2317,SC2329
 forward_guardian_signal() {
   if [ -n "$guardian_pid" ]; then
     kill -s "$1" "$guardian_pid" 2>/dev/null || true
