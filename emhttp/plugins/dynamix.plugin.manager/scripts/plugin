@@ -621,8 +621,14 @@ if ($method == 'checkall') {
     if ($installed_plugin_file === false) continue;
     if (plugin('pluginURL', $installed_plugin_file, $error) === false) continue;
     $plugin = basename($installed_plugin_file);
+    if (!plugin_manager_valid_plugin_basename($plugin)) continue;
     write("plugin: checking $plugin ...\n");
-    exec("$cmd check $plugin >/dev/null");
+    exec(
+      escapeshellarg($cmd).
+      ' check '.
+      escapeshellarg($plugin).
+      ' >/dev/null'
+    );
   }
   write("plugin: checking finished.\n");
   done(0);
@@ -643,13 +649,19 @@ if ($method == 'updateall') {
     $installed_plugin_file = @readlink($link);
     if ($installed_plugin_file === false) continue;
     if (plugin('pluginURL', $installed_plugin_file, $error) === false) continue;
-    $version = plugin('version', $installed_plugin_file, $error);
     $plugin = basename($installed_plugin_file);
+    if (!plugin_manager_valid_plugin_basename($plugin)) continue;
+    $version = plugin('version', $installed_plugin_file, $error);
     $latest = plugin('version', "$tmp/$plugin", $error);
     // update only when newer
     if (strcmp($latest,$version) > 0) {
       write("plugin: updating $plugin ...\n");
-      exec("$cmd update $plugin >/dev/null");
+      exec(
+        escapeshellarg($cmd).
+        ' update '.
+        escapeshellarg($plugin).
+        ' >/dev/null'
+      );
     }
   }
   write("plugin: updating finished.\n");
@@ -670,8 +682,14 @@ if ($method == 'checkos') {
     if ($installed_plugin_file === false) continue;
     if (plugin("pluginURL", $installed_plugin_file, $error) === false) continue;
     $plugin = basename($installed_plugin_file);
+    if (!plugin_manager_valid_plugin_basename($plugin)) continue;
     write("plugin: checking $plugin ...\n");
-    exec("$cmd check $plugin >/dev/null");
+    exec(
+      escapeshellarg($cmd).
+      ' check '.
+      escapeshellarg($plugin).
+      ' >/dev/null'
+    );
   }
   write("plugin: checking finished.\n");
   done(0);

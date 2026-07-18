@@ -795,6 +795,40 @@ foreach (["if (\$method == 'checkall')", "if (\$method == 'updateall')", "if (\$
   $aggregate = strpos($plugin_source, $marker);
   test_assert($aggregate !== false && $aggregate < $lock_call, "$marker must run before lock acquisition");
 }
+foreach (
+  [
+    'checkall' => ["if (\$method == 'updateall')", 'check'],
+    'updateall' => ["if (\$method == 'checkos')", 'update'],
+    'checkos' => ['// MAIN - two or three arguments', 'check']
+  ] as $aggregate_method => [$next_marker, $recursive_method]
+) {
+  $aggregate_start = strpos(
+    $plugin_source,
+    "if (\$method == '$aggregate_method')"
+  );
+  $aggregate_end = strpos($plugin_source, $next_marker, $aggregate_start);
+  $aggregate_source =
+    $aggregate_start !== false &&
+    $aggregate_end !== false &&
+    $aggregate_end > $aggregate_start
+      ? substr(
+        $plugin_source,
+        $aggregate_start,
+        $aggregate_end - $aggregate_start
+      )
+      : '';
+  test_assert(
+    $aggregate_source !== '' &&
+      str_contains(
+        $aggregate_source,
+        'plugin_manager_valid_plugin_basename($plugin)'
+      ) &&
+      str_contains($aggregate_source, 'escapeshellarg($cmd)') &&
+      str_contains($aggregate_source, "' $recursive_method '") &&
+      str_contains($aggregate_source, 'escapeshellarg($plugin)'),
+    "$aggregate_method does not validate and quote its recursive plugin command"
+  );
+}
 foreach (["if (\$method == 'install')", "if (\$method == 'update')", "if (\$method == 'remove')"] as $marker) {
   $leaf = strpos($plugin_source, $marker, $lock_call);
   test_assert($leaf !== false && $leaf > $lock_call, "$marker must run after lock acquisition");
@@ -3781,6 +3815,90 @@ test_assert(
     !plugin_manager_plugin_check_artifact_is_current($plugin, $latest),
   'Real CLI lock-command failure did not durably revoke its reserved generation'
 );
+
+$directory = test_directory($root, 'aggregate-derived-name-boundary');
+foreach (glob("$cli_plugins/*.plg", GLOB_NOSORT) ?: [] as $installed_link) {
+  @unlink($installed_link);
+}
+$aggregate_marker = "$directory/recursive-mutation";
+$aggregate_nchan_log = "$directory/nchan-messages";
+$aggregate_unsafe_basename =
+  'odd plugin;touch${IFS}${PLUGIN_MANAGER_TEST_AGGREGATE_MARKER};#.plg';
+$aggregate_unsafe_target = "$root/$aggregate_unsafe_basename";
+$aggregate_odd_basename = 'space separated plugin.plg';
+$aggregate_odd_target = "$root/$aggregate_odd_basename";
+file_put_contents(
+  $aggregate_unsafe_target,
+  '<PLUGIN name="aggregate-unsafe" version="2026.07.18" '.
+    'pluginURL="http://127.0.0.1:9/aggregate-unsafe.plg"></PLUGIN>'
+);
+file_put_contents(
+  $aggregate_odd_target,
+  '<PLUGIN name="aggregate-odd" version="2026.07.18" '.
+    'pluginURL="http://127.0.0.1:9/aggregate-odd.plg"></PLUGIN>'
+);
+symlink(
+  $aggregate_unsafe_target,
+  "$cli_plugins/aggregate-derived-name.plg"
+);
+symlink(
+  $aggregate_odd_target,
+  "$cli_plugins/unRAIDServer.plg"
+);
+$aggregate_environment = getenv();
+$aggregate_environment['PLUGIN_MANAGER_TEST_AGGREGATE_MARKER'] =
+  $aggregate_marker;
+$aggregate_environment['PLUGIN_MANAGER_TEST_NCHAN_LOG'] =
+  $aggregate_nchan_log;
+foreach (['checkall', 'updateall', 'checkos'] as $aggregate_method) {
+  @unlink($aggregate_marker);
+  file_put_contents($aggregate_nchan_log, '');
+  $aggregate_result = test_finish_process(
+    test_start_command(
+      [$cli_wrapper, $aggregate_method, 'nchan'],
+      $aggregate_environment
+    )
+  );
+  $aggregate_messages = array_map(
+    static fn($message) => base64_decode($message, true),
+    file(
+      $aggregate_nchan_log,
+      FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES
+    ) ?: []
+  );
+  test_assert(
+    $aggregate_result[0] === 0,
+    "$aggregate_method rejected its aggregate request: ".
+      "{$aggregate_result[1]} {$aggregate_result[2]}"
+  );
+  test_assert(
+    !file_exists($aggregate_marker),
+    "$aggregate_method executed a command embedded in a derived plugin basename"
+  );
+  test_assert(
+    count(
+      array_filter(
+        $aggregate_messages,
+        static fn($message) => $message === '_DONE_'
+      )
+    ) === 1,
+    "$aggregate_method did not retain exactly one nchan completion owner"
+  );
+  test_assert(
+    !array_filter(
+      $aggregate_messages,
+      static fn($message) =>
+        is_string($message) &&
+        (
+          str_contains($message, 'odd plugin') ||
+          str_contains($message, 'space separated plugin')
+        )
+    ),
+    "$aggregate_method recursively processed an unsafe derived plugin basename"
+  );
+}
+@unlink("$cli_plugins/aggregate-derived-name.plg");
+@unlink("$cli_plugins/unRAIDServer.plg");
 
 $directory = test_directory($root, 'real-cli-branch-check');
 $branch_source = "$root/unRAIDServer-branch-source.plg";
