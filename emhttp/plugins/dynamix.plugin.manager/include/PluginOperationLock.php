@@ -978,13 +978,42 @@ function plugin_manager_finalize_plugin_check_artifact(
 }
 
 /**
+ * Remove a shared check artifact and verify that its pathname no longer names
+ * any object. This is the fail-closed fallback when generation-state revocation
+ * could not be committed durably.
+ */
+function plugin_manager_quarantine_plugin_check_artifact(string $latest): void {
+  if ($latest === '' || $latest[0] !== '/') {
+    throw new RuntimeException('Plugin Manager check artifact path is invalid');
+  }
+
+  clearstatcache(true, $latest);
+  $status = @lstat($latest);
+  if ($status === false) return;
+  if (
+    plugin_manager_lock_path_type($status) === 0040000 ||
+    !@unlink($latest)
+  ) {
+    throw new RuntimeException('Unable to quarantine Plugin Manager check artifact');
+  }
+
+  clearstatcache(true, $latest);
+  if (@lstat($latest) !== false) {
+    throw new RuntimeException('Unable to verify Plugin Manager check artifact quarantine');
+  }
+}
+
+/**
  * Revoke a failed generation while holding the global operation lock. A newer
  * successful publication wins and is never removed by an older failure.
+ *
+ * @param array{stage_open?: bool, stage_write_after?: int, rename?: bool} $faults
  */
 function plugin_manager_invalidate_plugin_check_artifact(
   string $plugin,
   int $generation,
-  string $latest
+  string $latest,
+  array $faults = []
 ): bool {
   if ($generation < 1) {
     throw new RuntimeException('Plugin Manager check generation is invalid');
@@ -992,7 +1021,7 @@ function plugin_manager_invalidate_plugin_check_artifact(
 
   return plugin_manager_with_plugin_check_lock(
     $plugin,
-    static function ($handle) use ($generation, $latest): bool {
+    static function ($handle) use ($generation, $latest, $faults): bool {
       $state = plugin_manager_read_plugin_check_state($handle);
       if ($generation < $state['published']) return false;
 
@@ -1000,11 +1029,21 @@ function plugin_manager_invalidate_plugin_check_artifact(
       $state['published'] = $generation;
       $state['valid'] = false;
       $state['hash'] = null;
-      plugin_manager_write_plugin_check_state($handle, $state);
-      if (!file_exists($latest) && !is_link($latest)) return true;
-      if (is_dir($latest) || !@unlink($latest)) {
-        throw new RuntimeException('Unable to revoke Plugin Manager check artifact');
+      try {
+        plugin_manager_write_plugin_check_state($handle, $state, $faults);
+      } catch (Throwable $state_error) {
+        try {
+          plugin_manager_quarantine_plugin_check_artifact($latest);
+        } catch (Throwable $quarantine_error) {
+          throw new RuntimeException(
+            "{$state_error->getMessage()}; {$quarantine_error->getMessage()}",
+            0,
+            $state_error
+          );
+        }
+        throw $state_error;
       }
+      plugin_manager_quarantine_plugin_check_artifact($latest);
       return true;
     }
   );

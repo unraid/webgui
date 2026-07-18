@@ -1438,6 +1438,136 @@ test_assert(
   'Thrown API callback failure left its finalized artifact available to update'
 );
 
+foreach (
+  [
+    'state-short-write' => [
+      ['stage_write_after' => 3],
+      'Injected Plugin Manager short write'
+    ],
+    'state-rename-failure' => [
+      ['rename' => true],
+      'Unable to atomically commit Plugin Manager check state'
+    ]
+  ] as $failure => [$faults, $expected_diagnostic]
+) {
+  $directory = test_directory($root, "failed-invalidation-$failure");
+  $plugin = "$failure.plg";
+  $latest = "$directory/$plugin";
+  $candidate = "$directory/initial-success";
+  file_put_contents($candidate, "initial-success-$failure");
+  $initial_generation = plugin_manager_reserve_plugin_check_generation($plugin);
+  test_assert(
+    test_publish_plugin_check_artifact(
+      $plugin,
+      $initial_generation,
+      $candidate,
+      $latest
+    ),
+    "Initial $failure invalidation fixture could not be published"
+  );
+  $failed_generation = plugin_manager_reserve_plugin_check_generation($plugin);
+  $state_lock = "$directory/check-".hash('sha256', $plugin).'.lock';
+  $state_path = "$state_lock.state";
+  $state_before_failure = file_get_contents($state_path);
+  $updater = null;
+  $diagnostic = null;
+
+  try {
+    plugin_manager_with_operation_lock(
+      static function() use (
+        $directory,
+        $plugin,
+        $failed_generation,
+        $latest,
+        $failure,
+        $faults,
+        &$updater
+      ): void {
+        $updater = test_start_process([
+          '--check-artifact-gate-reader',
+          $directory,
+          $plugin
+        ]);
+        test_wait_for(
+          fn() => is_file("$directory/update-blocked"),
+          2.0,
+          "Concurrent update was not blocked before $failure invalidation"
+        );
+        plugin_manager_invalidate_plugin_check_artifact(
+          $plugin,
+          $failed_generation,
+          $latest,
+          $faults
+        );
+      }
+    );
+  } catch (Throwable $error) {
+    $diagnostic = $error->getMessage();
+  }
+
+  test_assert(
+    $diagnostic === $expected_diagnostic,
+    "$failure invalidation did not preserve its state-write diagnostic: ".
+      (string)$diagnostic
+  );
+  test_assert(
+    file_get_contents($state_path) === $state_before_failure,
+    "$failure invalidation damaged the prior durable generation state"
+  );
+  test_assert(
+    is_array($updater),
+    "$failure invalidation did not start its concurrent update"
+  );
+  $update_result = test_finish_process($updater);
+  test_assert(
+    $update_result[0] === 0,
+    "Concurrent update after $failure invalidation failed: {$update_result[2]}"
+  );
+  test_assert(
+    file_get_contents("$directory/update-observed") === 'rejected',
+    "Concurrent update consumed old bytes after $failure invalidation"
+  );
+  test_assert(
+    !file_exists($latest) &&
+      !is_link($latest) &&
+      !plugin_manager_plugin_check_artifact_is_current($plugin, $latest),
+    "$failure invalidation left the prior artifact available to update"
+  );
+}
+
+$directory = test_directory($root, 'failed-invalidation-quarantine');
+$plugin = 'failed-quarantine.plg';
+$latest = "$directory/$plugin";
+$candidate = "$directory/initial-success";
+file_put_contents($candidate, 'initial-success');
+$initial_generation = plugin_manager_reserve_plugin_check_generation($plugin);
+test_assert(
+  test_publish_plugin_check_artifact(
+    $plugin,
+    $initial_generation,
+    $candidate,
+    $latest
+  ),
+  'Initial failed-quarantine fixture could not be published'
+);
+$failed_generation = plugin_manager_reserve_plugin_check_generation($plugin);
+unlink($latest);
+mkdir($latest, 0700);
+test_assert_throws(
+  fn() => plugin_manager_with_operation_lock(
+    fn() => plugin_manager_invalidate_plugin_check_artifact(
+      $plugin,
+      $failed_generation,
+      $latest,
+      ['rename' => true]
+    )
+  ),
+  'Unable to atomically commit Plugin Manager check state; '.
+    'Unable to quarantine Plugin Manager check artifact',
+  'Failed generation-state commit hid an unverifiable artifact quarantine'
+);
+rmdir($latest);
+
 $directory = test_directory($root, 'post-hook-incompatible-snapshot');
 $snapshot_environment = test_activate_snapshot_scope($directory);
 $plugin = 'hook-refresh.plg';
