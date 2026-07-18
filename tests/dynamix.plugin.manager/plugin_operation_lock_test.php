@@ -1162,7 +1162,7 @@ $directory = test_directory($root, 'private-download-boundary');
 $private_download = plugin_manager_create_private_download_file();
 $private_directory = dirname($private_download);
 test_assert(
-  dirname($private_directory) === $directory &&
+  realpath(dirname($private_directory)) === realpath($directory) &&
     (fileperms($private_directory) & 07777) === 0700 &&
     (fileperms($private_download) & 07777) === 0600,
   'Network candidate was not created under the private operation-lock boundary'

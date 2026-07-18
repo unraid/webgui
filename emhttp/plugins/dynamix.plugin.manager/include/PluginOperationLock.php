@@ -543,7 +543,19 @@ function plugin_manager_create_private_download_file(
   }
   $directory = plugin_manager_private_download_directory();
   $path = tempnam($directory, $prefix);
-  if ($path === false || dirname($path) !== $directory || !@chmod($path, 0600)) {
+  clearstatcache(true, $directory);
+  if (is_string($path)) clearstatcache(true, dirname($path));
+  $directory_status = @lstat($directory);
+  $path_parent_status = is_string($path) ? @lstat(dirname($path)) : false;
+  if (
+    $path === false ||
+    $directory_status === false ||
+    $path_parent_status === false ||
+    plugin_manager_lock_path_type($path_parent_status) !== 0040000 ||
+    $directory_status['dev'] !== $path_parent_status['dev'] ||
+    $directory_status['ino'] !== $path_parent_status['ino'] ||
+    !@chmod($path, 0600)
+  ) {
     if (is_string($path)) @unlink($path);
     throw new RuntimeException('Unable to create private Plugin Manager download file');
   }
