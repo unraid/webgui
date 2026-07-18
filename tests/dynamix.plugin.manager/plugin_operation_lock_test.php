@@ -155,6 +155,17 @@ function test_process_state(int $pid): ?string {
   return isset($fields[0]) ? (string)$fields[0] : null;
 }
 
+function test_process_parent(int $pid): ?int {
+  $stat = @file_get_contents("/proc/$pid/stat");
+  if ($stat === false) return null;
+  $command_end = strrpos($stat, ') ');
+  if ($command_end === false) return null;
+  $fields = preg_split('/\s+/', trim(substr($stat, $command_end + 2)));
+  return isset($fields[1]) && ctype_digit((string)$fields[1])
+    ? (int)$fields[1]
+    : null;
+}
+
 function test_directory(string $root, string $name): string {
   $directory = "$root/$name";
   if (!mkdir($directory, 0700, true) && !is_dir($directory)) {
@@ -272,6 +283,36 @@ function test_worker(array $argv): never {
     exit(0);
   }
 
+  if ($mode === '--nested-siblings-parent') {
+    [, , $method, $directory] = $argv;
+    plugin_manager_serialize_operation($method, __FILE__, $argv);
+    $first = test_start_process([
+      '--critical', 'remove', $directory, 'nested-first', '180', '0'
+    ]);
+    $second = test_start_process([
+      '--critical', 'check', $directory, 'nested-second', '20', '0'
+    ]);
+    $first_result = test_finish_process($first);
+    $second_result = test_finish_process($second);
+    if ($first_result[0] !== 0) fwrite(STDERR, $first_result[2]);
+    if ($second_result[0] !== 0) fwrite(STDERR, $second_result[2]);
+    exit($first_result[0] ?: $second_result[0]);
+  }
+
+  if ($mode === '--nested-chain') {
+    [, , $method, $marker, $depth] = $argv;
+    plugin_manager_serialize_operation($method, __FILE__, $argv);
+    if ((int)$depth === 0) {
+      file_put_contents($marker, 'nested-chain');
+      exit(0);
+    }
+    $child = test_finish_process(test_start_process([
+      '--nested-chain', 'validate', $marker, (string)((int)$depth - 1)
+    ]), 3.0);
+    if ($child[0] !== 0) fwrite(STDERR, $child[2]);
+    exit($child[0]);
+  }
+
   if ($mode === '--owner-death-parent') {
     [, , $method, $directory] = $argv;
     plugin_manager_serialize_operation($method, __FILE__, $argv);
@@ -292,10 +333,35 @@ function test_worker(array $argv): never {
     test_enter_critical_section($directory, 'nested-survivor', 650, 0);
   }
 
+  if ($mode === '--escaped-member-parent') {
+    [, , $method, $directory, $setsid] = $argv;
+    plugin_manager_serialize_operation($method, __FILE__, $argv);
+    $escaped_command = [
+      $setsid,
+      PHP_BINARY,
+      __FILE__,
+      '--escaped-member',
+      'remove',
+      $directory
+    ];
+    $escaped = test_start_command($escaped_command);
+    while (true) usleep(50000);
+  }
+
+  if ($mode === '--escaped-member') {
+    [, , $method, $directory] = $argv;
+    plugin_manager_serialize_operation($method, __FILE__, $argv);
+    file_put_contents("$directory/escaped-member-pid", (string)getmypid());
+    while (true) usleep(50000);
+  }
+
   if ($mode === '--late-registration-parent') {
     [, , $method, $directory] = $argv;
     plugin_manager_serialize_operation($method, __FILE__, $argv);
-    test_detach(['--late-registration-child', 'remove', $directory]);
+    test_detach(
+      ['--late-registration-child', 'remove', $directory],
+      "$directory/late-child-output"
+    );
     exit(0);
   }
 
@@ -781,7 +847,8 @@ test_assert(
 );
 test_assert(
   str_contains($plugin_api_source, 'plugin_manager_invalidate_plugin_check_artifact') &&
-    str_contains($plugin_source, 'invalidate_failed_plugin_check'),
+    str_contains($plugin_source, 'invalidate_failed_plugin_check') &&
+    str_contains($plugin_source, 'plugin_manager_revoke_unserialized_plugin_check'),
   'API and CLI check failures do not revoke their publication generation'
 );
 test_assert(
@@ -1231,6 +1298,75 @@ test_assert(
     'publish-enter phase-check'
   ],
   'CLI check did not keep download outside and publication inside the host lock'
+);
+
+$directory = test_directory($root, 'lock-command-failure-invalidation');
+$plugin = 'lock-command-failure.plg';
+$latest = "$directory/$plugin";
+$successful = "$directory/successful";
+file_put_contents($successful, 'successful-before-lock-failure');
+$successful_generation = plugin_manager_reserve_plugin_check_generation($plugin);
+test_assert(
+  test_publish_plugin_check_artifact(
+    $plugin,
+    $successful_generation,
+    $successful,
+    $latest
+  ),
+  'Unable to publish the artifact preceding a lock-command failure'
+);
+$reserved_generation = plugin_manager_reserve_plugin_check_generation($plugin);
+$previous_supervisor = getenv(PLUGIN_MANAGER_LOCK_SUPERVISOR_PATH_ENV);
+putenv(PLUGIN_MANAGER_LOCK_SUPERVISOR_PATH_ENV."=$directory/not-executable");
+test_assert_throws(
+  fn() => plugin_manager_operation_lock_command('validate', __FILE__, $argv),
+  'lock supervisor is not executable',
+  'Lock-command failure injection did not fail before check publication'
+);
+plugin_manager_revoke_unserialized_plugin_check(
+  $plugin,
+  $reserved_generation,
+  $latest
+);
+putenv(
+  $previous_supervisor === false
+    ? PLUGIN_MANAGER_LOCK_SUPERVISOR_PATH_ENV
+    : PLUGIN_MANAGER_LOCK_SUPERVISOR_PATH_ENV."=$previous_supervisor"
+);
+test_assert(
+  !file_exists($latest) &&
+    !plugin_manager_plugin_check_artifact_is_current($plugin, $latest),
+  'A reserved generation retained an older artifact after lock-command construction failed'
+);
+
+$directory = test_directory($root, 'unsafe-global-lock-invalidation');
+$plugin = 'unsafe-global-lock.plg';
+$latest = "$directory/$plugin";
+$successful = "$directory/successful";
+file_put_contents($successful, 'successful-before-unsafe-lock');
+$successful_generation = plugin_manager_reserve_plugin_check_generation($plugin);
+test_assert(
+  test_publish_plugin_check_artifact(
+    $plugin,
+    $successful_generation,
+    $successful,
+    $latest
+  ),
+  'Unable to publish the artifact preceding an unsafe global lock'
+);
+$reserved_generation = plugin_manager_reserve_plugin_check_generation($plugin);
+plugin_manager_prepare_lock_path("$directory/plugin-manager.lock", false);
+unlink("$directory/plugin-manager.lock");
+mkdir("$directory/plugin-manager.lock", 0700);
+plugin_manager_revoke_unserialized_plugin_check(
+  $plugin,
+  $reserved_generation,
+  $latest
+);
+test_assert(
+  !file_exists($latest) &&
+    !plugin_manager_plugin_check_artifact_is_current($plugin, $latest),
+  'A broken global lock path prevented durable reserved-generation revocation'
 );
 
 $directory = test_directory($root, 'failed-generation-invalidation');
@@ -2034,6 +2170,45 @@ test_assert(
   'A retired inherited scope did not fall back to a fresh global lock acquisition'
 );
 
+$directory = test_directory($root, 'version-one-scope-drain');
+$token = str_repeat('c', 32);
+$scope = "$directory/plugin-manager.lock.scope.$token";
+mkdir($scope, 0700);
+$owner_environment = getenv();
+$owner_environment[PLUGIN_MANAGER_LOCK_TOKEN_ENV] = $token;
+$owner_environment[PLUGIN_MANAGER_LOCK_SCOPE_ENV] = $scope;
+unset($owner_environment[PLUGIN_MANAGER_LOCK_PROTOCOL_ENV]);
+$owner = test_start_command(['/bin/sleep', '2'], $owner_environment);
+$owner_status = proc_get_status($owner[0]);
+$owner_pid = $owner_status['pid'];
+test_wait_for(
+  function () use ($owner_pid, $token): bool {
+    $environment = @file_get_contents("/proc/$owner_pid/environ");
+    return $environment !== false &&
+      str_contains($environment, PLUGIN_MANAGER_LOCK_TOKEN_ENV."=$token");
+  },
+  1.0,
+  'Version-1 lock owner did not expose its identity'
+);
+$inherited_environment = [
+  PLUGIN_MANAGER_LOCK_OWNER_PID_ENV => getenv(PLUGIN_MANAGER_LOCK_OWNER_PID_ENV),
+  PLUGIN_MANAGER_LOCK_TOKEN_ENV => getenv(PLUGIN_MANAGER_LOCK_TOKEN_ENV),
+  PLUGIN_MANAGER_LOCK_SCOPE_ENV => getenv(PLUGIN_MANAGER_LOCK_SCOPE_ENV)
+];
+putenv(PLUGIN_MANAGER_LOCK_OWNER_PID_ENV."=$owner_pid");
+putenv(PLUGIN_MANAGER_LOCK_TOKEN_ENV."=$token");
+putenv(PLUGIN_MANAGER_LOCK_SCOPE_ENV."=$scope");
+$command = plugin_manager_operation_lock_command('remove', __FILE__, $argv);
+foreach ($inherited_environment as $name => $value) {
+  putenv($value === false ? $name : "$name=$value");
+}
+proc_terminate($owner[0]);
+test_finish_process($owner);
+test_assert(
+  $command === null,
+  'New Plugin Manager code did not preserve an in-flight version-1 reentrant scope'
+);
+
 $directory = test_directory($root, 'replaced-member-scope');
 $scope = "$directory/member.scope";
 mkdir($scope, 0700);
@@ -2213,6 +2388,34 @@ test_assert(
   'A synchronous descendant stateful operation did not execute inside the parent lock scope'
 );
 
+$directory = test_directory($root, 'nested-siblings');
+$siblings = test_finish_process(test_start_process([
+  '--nested-siblings-parent', 'install', $directory
+]), 3.0);
+test_assert($siblings[0] === 0, "Nested sibling operations failed: {$siblings[2]}");
+$sibling_events = test_events($directory);
+test_assert(
+  count($sibling_events) === 4 &&
+    count(array_filter($sibling_events, fn($event) => str_starts_with($event, 'overlap '))) === 0,
+  'Parallel nested sibling operations were admitted together'
+);
+for ($event = 0; $event < count($sibling_events); $event += 2) {
+  test_assert(
+    str_starts_with($sibling_events[$event], 'enter ') &&
+      $sibling_events[$event + 1] ===
+        'exit '.substr($sibling_events[$event], strlen('enter ')),
+    'Nested sibling operation event pairs were not serialized'
+  );
+}
+
+$directory = test_directory($root, 'nested-chain');
+$marker = "$directory/complete";
+$chain = test_finish_process(test_start_process([
+  '--nested-chain', 'install', $marker, '3'
+]), 4.0);
+test_assert($chain[0] === 0, "Three-level nested operation chain deadlocked: {$chain[2]}");
+test_assert(is_file($marker), 'Three-level nested operation chain did not reach its leaf');
+
 $directory = test_directory($root, 'owner-death');
 $owner = test_start_process(['--owner-death-parent', 'install', $directory]);
 test_wait_for(
@@ -2242,6 +2445,203 @@ test_assert(
 $flock_path = getenv(PLUGIN_MANAGER_FLOCK_PATH_ENV) ?: '/usr/bin/flock';
 $setsid_path = dirname($flock_path).'/setsid';
 test_assert(is_executable($setsid_path), 'Process-group signal tests require setsid');
+
+$directory = test_directory($root, 'killed-coordinator');
+$coordinator_child = <<<'SH'
+directory="$1"
+printf "%s\n" "enter original" >> "$directory/events"
+sleep 0.55
+printf "%s\n" "exit original" >> "$directory/events"
+SH;
+$coordinator_command = plugin_manager_operation_lock_command(
+  'install',
+  '/bin/bash',
+  ['/bin/bash', '-c', $coordinator_child, 'coordinator-child', $directory]
+);
+test_assert($coordinator_command !== null, 'Unable to build coordinator-death command');
+$killed_coordinator = test_start_command([
+  $setsid_path,
+  '/bin/bash',
+  '-c',
+  $coordinator_command
+]);
+test_wait_for(
+  fn() => in_array('enter original', test_events($directory), true),
+  2.0,
+  'Coordinator-death mutation did not start'
+);
+$coordinator_status = proc_get_status($killed_coordinator[0]);
+$coordinator_pid = (int)$coordinator_status['pid'];
+test_assert(
+  $coordinator_status['running'] &&
+    $coordinator_pid > 1 &&
+    posix_kill($coordinator_pid, 9),
+  'Unable to kill only the lock coordinator'
+);
+$contender = test_start_process([
+  '--critical', 'remove', $directory, 'coordinator-contender', '10', '0'
+]);
+usleep(120000);
+test_assert(
+  !in_array('enter coordinator-contender', test_events($directory), true),
+  'Coordinator SIGKILL released the host lock while its mutation survived'
+);
+$killed_result = test_finish_process($killed_coordinator);
+$contender_result = test_finish_process($contender);
+test_assert($killed_result[0] !== 0, 'SIGKILLed lock coordinator unexpectedly succeeded');
+test_assert(
+  $contender_result[0] === 0,
+  "Coordinator-death contender failed: {$contender_result[2]}"
+);
+test_assert(
+  test_events($directory) === [
+    'enter original',
+    'exit original',
+    'enter coordinator-contender',
+    'exit coordinator-contender'
+  ],
+  'The guardian did not retain and release the host lock around coordinator death'
+);
+
+$directory = test_directory($root, 'killed-guardian');
+$guardian_child = <<<'SH'
+directory="$1"
+printf "%s\n" "$PPID" > "$directory/guardian-pid"
+printf "%s\n" "$$" > "$directory/mutation-pid"
+printf "%s\n" "guardian mutation entered" >> "$directory/events"
+while :; do sleep 0.05; done
+SH;
+$guardian_command = plugin_manager_operation_lock_command(
+  'install',
+  '/bin/bash',
+  ['/bin/bash', '-c', $guardian_child, 'guardian-child', $directory]
+);
+test_assert($guardian_command !== null, 'Unable to build guardian-death command');
+$killed_guardian = test_start_command([
+  $setsid_path,
+  '/bin/bash',
+  '-c',
+  $guardian_command
+]);
+test_wait_for(
+  fn() => is_file("$directory/guardian-pid") &&
+    is_file("$directory/mutation-pid") &&
+    in_array('guardian mutation entered', test_events($directory), true),
+  2.0,
+  'Guardian-death mutation did not start'
+);
+$guardian_pid = (int)trim(file_get_contents("$directory/guardian-pid"));
+$mutation_pid = (int)trim(file_get_contents("$directory/mutation-pid"));
+test_assert(
+  $guardian_pid > 1 && posix_kill($guardian_pid, 9),
+  'Unable to kill only the lock guardian'
+);
+$contender = test_start_process([
+  '--critical', 'remove', $directory, 'guardian-contender', '10', '0'
+]);
+$guardian_result = test_finish_process($killed_guardian);
+$contender_result = test_finish_process($contender);
+test_assert($guardian_result[0] !== 0, 'SIGKILLed lock guardian unexpectedly succeeded');
+test_assert(
+  in_array(test_process_state($mutation_pid), [null, 'Z', 'X', 'x'], true),
+  'The coordinator left mutation code running after guardian death'
+);
+test_assert(
+  $contender_result[0] === 0,
+  "Guardian-death contender failed: {$contender_result[2]}"
+);
+test_assert(
+  test_events($directory) === [
+    'guardian mutation entered',
+    'enter guardian-contender',
+    'exit guardian-contender'
+  ],
+  'The coordinator did not terminate guardian-less mutation before releasing the host lock'
+);
+
+$directory = test_directory($root, 'escaped-member-guardian-death');
+$escaped_owner = test_start_process([
+  '--escaped-member-parent',
+  'install',
+  $directory,
+  $setsid_path
+]);
+$escaped_fixture_started = microtime(true);
+$guardian_pid = null;
+$escaped_pid = null;
+while (true) {
+  $lane_records = [];
+  foreach (glob("$directory/*.lane.members/*") ?: [] as $record) {
+    $lane_records[basename($record)] = @file_get_contents($record);
+  }
+  $roots = array_keys(array_filter(
+    $lane_records,
+    static fn($parent) => $parent === '-'
+  ));
+  if (count($roots) === 1) {
+    $root_identity = $roots[0];
+    $children = array_keys(array_filter(
+      $lane_records,
+      static fn($parent) => $parent === $root_identity
+    ));
+    if (count($children) === 1) {
+      $root_pid = (int)strstr($root_identity, '.', true);
+      $escaped_pid = (int)strstr($children[0], '.', true);
+      $guardian_pid = test_process_parent($root_pid);
+      if (
+        is_int($guardian_pid) &&
+        $guardian_pid > 1 &&
+        plugin_manager_lock_member_is_live($children[0])
+      ) {
+        break;
+      }
+    }
+  }
+  $escaped_owner_status = proc_get_status($escaped_owner[0]);
+  if (!$escaped_owner_status['running']) {
+    $escaped_owner_result = test_finish_process($escaped_owner);
+    test_fail(
+      "Escaped-member guardian-death fixture exited early: ".
+        "{$escaped_owner_result[1]} {$escaped_owner_result[2]}"
+    );
+  }
+  if (microtime(true) - $escaped_fixture_started > 3.0) {
+    test_fail(
+      'Escaped-member guardian-death fixture did not start: lane='.
+        json_encode($lane_records)
+    );
+  }
+  usleep(10000);
+}
+test_assert(
+  $guardian_pid > 1 && posix_kill($guardian_pid, 9),
+  'Unable to kill the guardian with an escaped registered member'
+);
+$contender = test_start_process([
+  '--critical', 'check', $directory, 'escaped-member-contender', '10', '0'
+]);
+$escaped_owner_result = test_finish_process($escaped_owner);
+$contender_result = test_finish_process($contender);
+test_assert(
+  $escaped_owner_result[0] !== 0,
+  'Guardian death with an escaped member unexpectedly succeeded'
+);
+test_assert(
+  in_array(test_process_state($escaped_pid), [null, 'Z', 'X', 'x'], true),
+  'Unexpected guardian death did not fail-stop an escaped registered member'
+);
+test_assert(
+  $contender_result[0] === 0,
+  "Escaped-member contender deadlocked after guardian death: {$contender_result[2]}"
+);
+test_assert(
+  test_events($directory) === [
+    'enter escaped-member-contender',
+    'exit escaped-member-contender'
+  ],
+  'Escaped-member cleanup released the lock before fail-stop completed'
+);
+
 foreach (
   [
     'TERM' => ['number' => 15, 'status' => 42],
@@ -2337,6 +2737,105 @@ SH;
       "exit $signal_name-contender"
     ],
     "$signal supervisor did not wait, clean up, and release in order"
+  );
+  test_assert(
+    count(array_filter(
+      test_events($directory),
+      static fn($event) => $event === "child-signal-$signal"
+    )) === 1,
+    "Coordinator-forwarded $signal reached the mutation more than once"
+  );
+}
+
+foreach (
+  [
+    'TERM' => ['number' => 15, 'status' => 52],
+    'INT' => ['number' => 2, 'status' => 53],
+    'HUP' => ['number' => 1, 'status' => 54]
+  ] as $signal => $expectation
+) {
+  $signal_name = strtolower($signal);
+  $directory = test_directory($root, "direct-guardian-signal-$signal_name");
+  $signal_child = <<<'SH'
+signal="$1"
+status="$2"
+directory="$3"
+on_signal() {
+  printf "%s\n" "direct-child-signal-$signal" >> "$directory/events"
+  sleep 0.2
+  printf "%s\n" "direct-child-exit-$signal" >> "$directory/events"
+  exit "$status"
+}
+trap on_signal "$signal"
+printf "%s\n" "$PPID" > "$directory/guardian-pid"
+printf "%s\n" "direct-child-ready-$signal" >> "$directory/events"
+while :; do sleep 0.05; done
+SH;
+  $signal_command = plugin_manager_operation_lock_command(
+    'install',
+    '/bin/bash',
+    [
+      '/bin/bash',
+      '-c',
+      $signal_child,
+      'direct-signal-child',
+      $signal,
+      (string)$expectation['status'],
+      $directory
+    ]
+  );
+  test_assert($signal_command !== null, "Unable to build direct $signal guardian command");
+  $signalled = test_start_command([$setsid_path, '/bin/bash', '-c', $signal_command]);
+  test_wait_for(
+    fn() => is_file("$directory/guardian-pid") &&
+      in_array("direct-child-ready-$signal", test_events($directory), true),
+    2.0,
+    "Direct $signal guardian child did not start"
+  );
+  $guardian_pid = (int)trim(file_get_contents("$directory/guardian-pid"));
+  test_assert(
+    $guardian_pid > 1 && posix_kill($guardian_pid, $expectation['number']),
+    "Unable to signal only the $signal guardian"
+  );
+  test_wait_for(
+    fn() => in_array("direct-child-signal-$signal", test_events($directory), true),
+    2.0,
+    "Guardian PID-only $signal was not forwarded to its child"
+  );
+  $contender = test_start_process([
+    '--critical', 'remove', $directory, "direct-$signal_name-contender", '10', '0'
+  ]);
+  usleep(80000);
+  test_assert(
+    !in_array("enter direct-$signal_name-contender", test_events($directory), true),
+    "Guardian PID-only $signal released the lock before child cleanup"
+  );
+  $signalled_result = test_finish_process($signalled);
+  $contender_result = test_finish_process($contender);
+  test_assert(
+    $signalled_result[0] === $expectation['status'],
+    "Guardian PID-only $signal did not preserve child status: {$signalled_result[2]}"
+  );
+  test_assert(
+    $contender_result[0] === 0,
+    "Guardian PID-only $signal contender failed: {$contender_result[2]}"
+  );
+  test_assert(
+    test_events($directory) === [
+      "direct-child-ready-$signal",
+      "direct-child-signal-$signal",
+      "direct-child-exit-$signal",
+      "enter direct-$signal_name-contender",
+      "exit direct-$signal_name-contender"
+    ],
+    "Guardian PID-only $signal did not wait, clean up, and release in order"
+  );
+  test_assert(
+    count(array_filter(
+      test_events($directory),
+      static fn($event) => $event === "direct-child-signal-$signal"
+    )) === 1,
+    "Guardian PID-only $signal reached the mutation more than once"
   );
 }
 
@@ -2446,7 +2945,8 @@ foreach (range(1, 10) as $attempt) {
   test_wait_for(
     fn() => in_array('exit late-child', test_events($directory), true),
     10.0,
-    "Late-registration child $attempt did not finish"
+    "Late-registration child $attempt did not finish: ".
+      (@file_get_contents("$directory/late-child-output") ?: 'no output')
   );
   test_assert(
     count(array_filter(test_events($directory), fn($event) => str_starts_with($event, 'overlap '))) === 0,
@@ -2623,6 +3123,154 @@ test_assert(
 test_assert(
   !str_contains($actual[2], 'unable to acquire operation lock'),
   "Plugin executable could not recognize its owner-only re-entry: {$actual[2]}"
+);
+
+$nchan_root = "$root/nchan-docroot";
+mkdir("$nchan_root/webGui/include", 0700, true);
+mkdir("$nchan_root/plugins/dynamix.plugin.manager/include", 0700, true);
+file_put_contents(
+  "$nchan_root/webGui/include/Wrappers.php",
+  "<?PHP\nfunction my_logger(...\$arguments): void {}\n"
+);
+file_put_contents(
+  "$nchan_root/webGui/include/publish.php",
+  <<<'PHP'
+<?PHP
+function publish($endpoint, $message, $len = 1, $abort = false) {
+  $log = getenv('PLUGIN_MANAGER_TEST_NCHAN_LOG');
+  if (is_string($log)) {
+    file_put_contents($log, base64_encode((string)$message)."\n", FILE_APPEND | LOCK_EX);
+  }
+  return true;
+}
+PHP
+);
+symlink(
+  "$repo/emhttp/plugins/dynamix.plugin.manager/include/PluginOperationLock.php",
+  "$nchan_root/plugins/dynamix.plugin.manager/include/PluginOperationLock.php"
+);
+symlink(
+  "$repo/emhttp/plugins/dynamix.plugin.manager/include/PluginAttributes.php",
+  "$nchan_root/plugins/dynamix.plugin.manager/include/PluginAttributes.php"
+);
+$nchan_wrapper = "$root/plugin-nchan-executable";
+$nchan_wrapper_source =
+  "#!/usr/bin/env php\n<?PHP\n".
+  '$docroot = '.var_export($nchan_root, true).";\n".
+  'require '.var_export(
+    "$repo/emhttp/plugins/dynamix.plugin.manager/scripts/plugin",
+    true
+  ).";\n";
+file_put_contents($nchan_wrapper, $nchan_wrapper_source);
+chmod($nchan_wrapper, 0755);
+$directory = test_directory($root, 'nchan-completion');
+$nchan_log = "$directory/messages";
+$nchan_environment = getenv();
+$nchan_environment['PLUGIN_MANAGER_TEST_NCHAN_LOG'] = $nchan_log;
+$nchan_result = test_finish_process(
+  test_start_command([$nchan_wrapper, 'check', 'missing.plg', 'nchan'], $nchan_environment)
+);
+test_assert($nchan_result[0] === 1, "Nchan check returned an unexpected status: {$nchan_result[2]}");
+$nchan_messages = array_map(
+  static fn($message) => base64_decode($message, true),
+  file($nchan_log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: []
+);
+test_assert(
+  count(array_filter($nchan_messages, static fn($message) => $message === '_DONE_')) === 1,
+  'A supervised nchan check emitted more than one completion marker'
+);
+file_put_contents($nchan_log, '');
+$nchan_environment[PLUGIN_MANAGER_LOCK_SUPERVISOR_PATH_ENV] = '/bin/false';
+$nchan_result = test_finish_process(
+  test_start_command([$nchan_wrapper, 'check', 'missing.plg', 'nchan'], $nchan_environment)
+);
+test_assert(
+  $nchan_result[0] === 1,
+  "Nchan supervisor-startup failure returned an unexpected status: {$nchan_result[2]}"
+);
+$nchan_messages = array_map(
+  static fn($message) => base64_decode($message, true),
+  file($nchan_log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: []
+);
+test_assert(
+  count(array_filter($nchan_messages, static fn($message) => $message === '_DONE_')) === 1,
+  'An nchan supervisor-startup failure did not emit exactly one completion marker'
+);
+
+$directory = test_directory($root, 'real-cli-lock-command-failure');
+$cli_plugins = "$root/real-cli-installed";
+$cli_tmp = "$root/real-cli-tmp";
+mkdir($cli_plugins, 0700);
+mkdir($cli_tmp, 0700);
+$plugin = 'real-cli-revoke.plg';
+$installed = "$root/real-cli-installed.plg";
+file_put_contents(
+  $installed,
+  '<PLUGIN name="real-cli-revoke" version="2026.07.18" '.
+    'pluginURL="http://127.0.0.1:9/real-cli-revoke.plg"></PLUGIN>'
+);
+symlink($installed, "$cli_plugins/$plugin");
+$latest = "$cli_tmp/$plugin";
+$successful = "$root/real-cli-successful.plg";
+file_put_contents(
+  $successful,
+  '<PLUGIN name="real-cli-revoke" version="2026.07.17"></PLUGIN>'
+);
+$successful_generation = plugin_manager_reserve_plugin_check_generation($plugin);
+test_assert(
+  test_publish_plugin_check_artifact(
+    $plugin,
+    $successful_generation,
+    $successful,
+    $latest
+  ),
+  'Unable to publish the artifact preceding a real CLI lock-command failure'
+);
+$cli_plugin_source = file_get_contents(
+  "$repo/emhttp/plugins/dynamix.plugin.manager/scripts/plugin"
+);
+$cli_plugin_source = str_replace(
+  [
+    "\$plugins       = '/var/log/plugins';",
+    "\$tmp           = '/tmp/plugins';"
+  ],
+  [
+    '$plugins       = '.var_export($cli_plugins, true).';',
+    '$tmp           = '.var_export($cli_tmp, true).';'
+  ],
+  $cli_plugin_source,
+  $cli_replacements
+);
+test_assert(
+  $cli_replacements === 2,
+  'Unable to isolate real CLI plugin paths for lock-command failure testing'
+);
+$cli_plugin = "$root/plugin-real-cli-copy";
+file_put_contents($cli_plugin, $cli_plugin_source);
+$cli_wrapper = "$root/plugin-real-cli-executable";
+$cli_wrapper_source =
+  "#!/usr/bin/env php\n<?PHP\n".
+  '$docroot = '.var_export($nchan_root, true).";\n".
+  'require '.var_export($cli_plugin, true).";\n";
+file_put_contents($cli_wrapper, $cli_wrapper_source);
+chmod($cli_wrapper, 0755);
+$cli_environment = getenv();
+$cli_environment[PLUGIN_MANAGER_LOCK_SUPERVISOR_PATH_ENV] =
+  "$directory/not-executable";
+$cli_result = test_finish_process(
+  test_start_command([$cli_wrapper, 'check', $plugin], $cli_environment)
+);
+test_assert(
+  $cli_result[0] === 1 &&
+    str_contains($cli_result[1], 'plugin: downloading: real-cli-revoke.plg') &&
+    str_contains($cli_result[2], 'lock supervisor is not executable'),
+  "Real CLI did not parse, download, and enter its lock-command failure catch: ".
+    "{$cli_result[1]} {$cli_result[2]}"
+);
+test_assert(
+  !file_exists($latest) &&
+    !plugin_manager_plugin_check_artifact_is_current($plugin, $latest),
+  'Real CLI lock-command failure did not durably revoke its reserved generation'
 );
 
 $directory = test_directory($root, 'executable-stale-owner');

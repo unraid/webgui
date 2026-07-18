@@ -8,6 +8,9 @@ const PLUGIN_MANAGER_LOCK_SUPERVISOR_PATH_ENV = 'UNRAID_PLUGIN_MANAGER_LOCK_SUPE
 const PLUGIN_MANAGER_LOCK_OWNER_PID_ENV = 'UNRAID_PLUGIN_MANAGER_LOCK_OWNER_PID';
 const PLUGIN_MANAGER_LOCK_TOKEN_ENV = 'UNRAID_PLUGIN_MANAGER_LOCK_TOKEN';
 const PLUGIN_MANAGER_LOCK_SCOPE_ENV = 'UNRAID_PLUGIN_MANAGER_LOCK_SCOPE';
+const PLUGIN_MANAGER_LOCK_PROTOCOL_ENV = 'UNRAID_PLUGIN_MANAGER_LOCK_PROTOCOL';
+const PLUGIN_MANAGER_LOCK_ENTRY_ENV = 'UNRAID_PLUGIN_MANAGER_LOCK_ENTRY';
+const PLUGIN_MANAGER_LOCK_MEMBER_ENV = 'UNRAID_PLUGIN_MANAGER_LOCK_MEMBER';
 const PLUGIN_MANAGER_ARTIFACT_POLICY_ENV = 'UNRAID_PLUGIN_MANAGER_ARTIFACT_POLICY';
 const PLUGIN_MANAGER_DEFAULT_LOCK_PATH = '/var/run/unraid-plugin-manager/operations.lock';
 const PLUGIN_MANAGER_SHARED_ARTIFACT_DIRECTORY = '/tmp/plugins';
@@ -29,6 +32,8 @@ function plugin_manager_operation_requires_lock(string $method): bool {
  * nested operation exit, including when the direct operation is killed.
  */
 function plugin_manager_operation_has_live_owner(): bool {
+  static $registered_scope = null;
+
   $owner_pid = getenv(PLUGIN_MANAGER_LOCK_OWNER_PID_ENV);
   $token = getenv(PLUGIN_MANAGER_LOCK_TOKEN_ENV);
   $scope = getenv(PLUGIN_MANAGER_LOCK_SCOPE_ENV);
@@ -63,7 +68,23 @@ function plugin_manager_operation_has_live_owner(): bool {
     throw new RuntimeException('Plugin Manager lock scope is invalid');
   }
 
-  return plugin_manager_register_lock_member($scope);
+  if ($registered_scope === $scope) return true;
+  if (!plugin_manager_register_lock_member($scope)) return false;
+  if (
+    !in_array(
+      PLUGIN_MANAGER_LOCK_PROTOCOL_ENV.'=2',
+      $owner_environment,
+      true
+    )
+  ) {
+    // Version-1 supervisors predate nested admission lanes. Preserve their
+    // established reentrant behavior until an in-flight old scope drains.
+    $registered_scope = $scope;
+    return true;
+  }
+  plugin_manager_join_lock_lane($scope, $token);
+  $registered_scope = $scope;
+  return true;
 }
 
 function plugin_manager_process_start_time(int $pid): ?string {
@@ -75,6 +96,24 @@ function plugin_manager_process_start_time(int $pid): ?string {
   $fields = preg_split('/\s+/', trim(substr($stat, $command_end + 2)));
   $start_time = $fields[19] ?? null;
   return is_string($start_time) && preg_match('/^\d+$/D', $start_time) ? $start_time : null;
+}
+
+function plugin_manager_process_identity(int $pid): ?string {
+  $start_time = plugin_manager_process_start_time($pid);
+  return $start_time === null ? null : "$pid.$start_time";
+}
+
+function plugin_manager_lock_member_is_live(string $identity): bool {
+  if (!preg_match('/^([1-9]\d*)\.(\d+)$/D', $identity, $matches)) return false;
+
+  $stat = @file_get_contents("/proc/{$matches[1]}/stat");
+  if ($stat === false) return false;
+  $command_end = strrpos($stat, ') ');
+  if ($command_end === false) return false;
+  $fields = preg_split('/\s+/', trim(substr($stat, $command_end + 2)));
+  return isset($fields[0], $fields[19]) &&
+    !in_array($fields[0], ['Z', 'X', 'x'], true) &&
+    hash_equals($matches[2], (string)$fields[19]);
 }
 
 /**
@@ -154,6 +193,196 @@ function plugin_manager_register_lock_member(string $scope): bool {
     @unlink($lease);
   });
   return true;
+}
+
+/**
+ * Open the short-lived admission mutex and validate the sibling lane
+ * directory created by the flock supervisor.
+ *
+ * @return array{resource, string}
+ */
+function plugin_manager_open_lock_lane(string $scope): array {
+  $lane = "$scope.lane.members";
+  $lock = "$scope.lane.lock";
+  [$operation_lock, $production] = plugin_manager_operation_lock_path();
+  unset($operation_lock);
+  $expected_owner = plugin_manager_expected_path_owner($production);
+
+  clearstatcache(true, $lane);
+  $lane_status = @lstat($lane);
+  clearstatcache(true, $lock);
+  $lock_status = @lstat($lock);
+  if (
+    $lane_status === false ||
+    plugin_manager_lock_path_type($lane_status) !== 0040000 ||
+    ($lane_status['mode'] & 07777) !== 0700 ||
+    ($expected_owner !== null && $lane_status['uid'] !== $expected_owner) ||
+    $lock_status === false ||
+    plugin_manager_lock_path_type($lock_status) !== 0100000 ||
+    ($lock_status['mode'] & 07777) !== 0600 ||
+    ($expected_owner !== null && $lock_status['uid'] !== $expected_owner)
+  ) {
+    throw new RuntimeException('Plugin Manager lock lane is missing or unsafe');
+  }
+
+  $handle = @fopen($lock, 'r+');
+  $opened_status = $handle === false ? false : @fstat($handle);
+  if (
+    $handle === false ||
+    $opened_status === false ||
+    plugin_manager_lock_path_type($opened_status) !== 0100000 ||
+    $opened_status['dev'] !== $lock_status['dev'] ||
+    $opened_status['ino'] !== $lock_status['ino']
+  ) {
+    if (is_resource($handle)) fclose($handle);
+    throw new RuntimeException('Unable to open Plugin Manager lock lane');
+  }
+
+  return [$handle, $lane];
+}
+
+/**
+ * Read and validate lane records while the caller holds the admission mutex.
+ *
+ * @return array<string, string>
+ */
+function plugin_manager_read_lock_lane(string $lane): array {
+  $records = [];
+  foreach (glob("$lane/*", GLOB_NOSORT) ?: [] as $path) {
+    $identity = basename($path);
+    clearstatcache(true, $path);
+    $status = @lstat($path);
+    $parent = @file_get_contents($path);
+    if (
+      !preg_match('/^[1-9]\d*\.\d+$/D', $identity) ||
+      $status === false ||
+      plugin_manager_lock_path_type($status) !== 0100000 ||
+      ($status['mode'] & 07777) !== 0600 ||
+      !is_string($parent) ||
+      ($parent !== '-' && !preg_match('/^[1-9]\d*\.\d+$/D', $parent))
+    ) {
+      throw new RuntimeException('Plugin Manager lock lane member is unsafe');
+    }
+    $records[$identity] = $parent;
+  }
+  return $records;
+}
+
+/**
+ * Dead leaves are safe to discard. A dead parent with a live descendant is
+ * retained so that a sibling cannot enter while the orphaned subtree runs.
+ *
+ * @param array<string, string> $records
+ * @return array<string, string>
+ */
+function plugin_manager_prune_lock_lane(string $lane, array $records): array {
+  do {
+    $removed = false;
+    foreach ($records as $identity => $parent) {
+      if (
+        !plugin_manager_lock_member_is_live($identity) &&
+        !in_array($identity, $records, true)
+      ) {
+        if (!@unlink("$lane/$identity") && is_file("$lane/$identity")) {
+          throw new RuntimeException('Unable to retire Plugin Manager lock lane member');
+        }
+        unset($records[$identity]);
+        $removed = true;
+      }
+    }
+  } while ($removed);
+  return $records;
+}
+
+function plugin_manager_release_lock_lane_member(string $identity, string $scope): void {
+  try {
+    [$handle, $lane] = plugin_manager_open_lock_lane($scope);
+    if (!@flock($handle, LOCK_EX)) {
+      fclose($handle);
+      return;
+    }
+    $records = plugin_manager_prune_lock_lane(
+      $lane,
+      plugin_manager_read_lock_lane($lane)
+    );
+    if (!in_array($identity, $records, true)) @unlink("$lane/$identity");
+    @flock($handle, LOCK_UN);
+    fclose($handle);
+  } catch (Throwable) {
+    // The global scope may already be retiring during process shutdown.
+  }
+}
+
+/**
+ * Serialize sibling plugin invocations inside one reentrant global scope.
+ * A child joins below its nearest plugin-process parent; grandchildren use a
+ * different parent record and therefore cannot deadlock their synchronous
+ * ancestor. Dead parent records remain until their live subtree exits.
+ */
+function plugin_manager_join_lock_lane(string $scope, string $token): void {
+  $identity = plugin_manager_process_identity(getmypid());
+  if ($identity === null) {
+    throw new RuntimeException('Unable to identify Plugin Manager lock lane member');
+  }
+
+  $entry = getenv(PLUGIN_MANAGER_LOCK_ENTRY_ENV);
+  $parent = getenv(PLUGIN_MANAGER_LOCK_MEMBER_ENV);
+  $root_entry = $entry !== false && hash_equals($token, $entry);
+  putenv(PLUGIN_MANAGER_LOCK_ENTRY_ENV);
+  if ($entry !== false && !$root_entry) {
+    throw new RuntimeException('Plugin Manager lock entry is invalid');
+  }
+  if (!$root_entry && (!is_string($parent) || !preg_match('/^[1-9]\d*\.\d+$/D', $parent))) {
+    throw new RuntimeException('Plugin Manager lock lane parent is invalid');
+  }
+
+  while (true) {
+    [$handle, $lane] = plugin_manager_open_lock_lane($scope);
+    if (!@flock($handle, LOCK_EX)) {
+      fclose($handle);
+      throw new RuntimeException('Unable to acquire Plugin Manager lock lane');
+    }
+
+    $records = plugin_manager_prune_lock_lane(
+      $lane,
+      plugin_manager_read_lock_lane($lane)
+    );
+    $record_parent = $root_entry ? '-' : $parent;
+    $parent_exists = $root_entry || isset($records[$parent]);
+    $branch_is_idle = !in_array($record_parent, $records, true);
+    if (
+      ($parent_exists && $branch_is_idle) ||
+      (!$parent_exists && $records === [])
+    ) {
+      if (!$parent_exists) $record_parent = '-';
+      $path = "$lane/$identity";
+      $record = @fopen($path, 'x');
+      if (
+        $record === false ||
+        fwrite($record, $record_parent) !== strlen($record_parent) ||
+        !fflush($record) ||
+        !@chmod($path, 0600)
+      ) {
+        if (is_resource($record)) fclose($record);
+        @unlink($path);
+        @flock($handle, LOCK_UN);
+        fclose($handle);
+        throw new RuntimeException('Unable to register Plugin Manager lock lane member');
+      }
+      fclose($record);
+      @flock($handle, LOCK_UN);
+      fclose($handle);
+      putenv(PLUGIN_MANAGER_LOCK_MEMBER_ENV."=$identity");
+      register_shutdown_function(
+        static fn() => plugin_manager_release_lock_lane_member($identity, $scope)
+      );
+      return;
+    }
+
+    @flock($handle, LOCK_UN);
+    fclose($handle);
+    usleep(50000);
+  }
 }
 
 function plugin_manager_lock_path_type(array $status): int {
@@ -488,6 +717,44 @@ function plugin_manager_with_plugin_check_operation_lock(
       }
     }
   );
+}
+
+/**
+ * A check reserves its generation before downloading. If lock-command
+ * construction then fails, revoke that generation under the same host mutex
+ * so an older successful artifact cannot remain eligible for update.
+ */
+function plugin_manager_revoke_unserialized_plugin_check(
+  string $plugin,
+  int $generation,
+  string $latest
+): void {
+  $revoke = static fn() => plugin_manager_invalidate_plugin_check_artifact(
+    $plugin,
+    $generation,
+    $latest
+  );
+
+  try {
+    if (plugin_manager_operation_has_live_owner()) {
+      $revoke();
+      return;
+    }
+    plugin_manager_with_operation_lock($revoke);
+  } catch (Throwable $lock_error) {
+    // The generation transaction itself is serialized by the per-plugin lock.
+    // If the host-lock path is what failed, direct invalidation is still safe
+    // against a concurrent publisher and makes revocation durable after repair.
+    try {
+      $revoke();
+    } catch (Throwable $revoke_error) {
+      throw new RuntimeException(
+        "{$lock_error->getMessage()}; {$revoke_error->getMessage()}",
+        0,
+        $lock_error
+      );
+    }
+  }
 }
 
 /**

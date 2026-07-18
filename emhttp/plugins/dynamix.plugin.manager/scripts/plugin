@@ -9,9 +9,13 @@
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Wrappers.php";
 require_once "$docroot/webGui/include/publish.php";
+require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginAttributes.php";
 require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginOperationLock.php";
 $logger = 'plugin-manager';
 const PLUGIN_MANAGER_CHECK_PHASE_ENV = 'UNRAID_PLUGIN_MANAGER_CHECK_PHASE';
+const PLUGIN_MANAGER_NCHAN_CHILD_ENV = 'UNRAID_PLUGIN_MANAGER_NCHAN_CHILD';
+$nchan_child = getenv(PLUGIN_MANAGER_NCHAN_CHILD_ENV) === '1';
+putenv(PLUGIN_MANAGER_NCHAN_CHILD_ENV);
 
 $usage = <<<EOF
 Process plugin files.
@@ -186,8 +190,8 @@ function error_desc($code) {
 // Signal DONE to caller
 //
 function done($code) {
-  global $nchan;
-  if ($nchan) write('_DONE_','');
+  global $nchan, $nchan_child;
+  if ($nchan && !$nchan_child) write('_DONE_','');
   exit($code);
 }
 
@@ -915,12 +919,27 @@ if ($method == 'check') {
     } catch (Throwable $lock_error) {
       putenv(PLUGIN_MANAGER_CHECK_PHASE_ENV);
       if (is_string($download)) @unlink($download);
-      fwrite(STDERR, "plugin: unable to acquire operation lock: {$lock_error->getMessage()}\n");
+      $lock_message = $lock_error->getMessage();
+      if (is_int($generation)) {
+        try {
+          plugin_manager_revoke_unserialized_plugin_check(
+            $plugin,
+            $generation,
+            $plugin_file
+          );
+        } catch (Throwable $invalidate_error) {
+          $lock_message .=
+            "; unable to revoke update artifact: {$invalidate_error->getMessage()}";
+        }
+      }
+      fwrite(STDERR, "plugin: unable to acquire operation lock: $lock_message\n");
       done(1);
     }
 
     if ($lock_command !== null) {
+      putenv(PLUGIN_MANAGER_NCHAN_CHILD_ENV.'=1');
       passthru($lock_command, $status);
+      putenv(PLUGIN_MANAGER_NCHAN_CHILD_ENV);
       putenv(PLUGIN_MANAGER_CHECK_PHASE_ENV);
       if (is_string($download)) @unlink($download);
       done($status);

@@ -13,16 +13,7 @@
 <?
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Wrappers.php";
-
-// Read one plugin attribute without the path-keyed request cache.
-function plugin_attribute_uncached($method, $arg) {
-  if (!$arg || !is_file($arg)) return false;
-  $xml = @simplexml_load_file($arg, NULL, LIBXML_NOCDATA);
-  if (!$xml) return false;
-  $attributes = (array)$xml->attributes();
-  if ($method == 'attributes') return json_encode($attributes['@attributes'] ?? []);
-  return isset($attributes['@attributes'][$method]) ? (string)$attributes['@attributes'][$method] : false;
-}
+require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginAttributes.php";
 
 // Invoke the plugin command with indicated method
 function plugin($method, $arg = '', $dontCache = false) {

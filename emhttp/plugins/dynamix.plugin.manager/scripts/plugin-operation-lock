@@ -6,6 +6,8 @@ scope="${UNRAID_PLUGIN_MANAGER_LOCK_SCOPE:-}"
 flock_path="${1:-}"
 lock_path="${2:-}"
 snapshot_dir="$scope.snapshots"
+lane_dir="$scope.lane.members"
+lane_lock="$scope.lane.lock"
 
 case "$token" in
   *[!a-f0-9]*|'') exit 70 ;;
@@ -20,39 +22,7 @@ case "$lock_path" in
 esac
 [ "$scope" = "$lock_path.scope.$token" ] || exit 70
 
-# Re-exec once so /proc/$pid/environ contains the owner identity. Exporting
-# variables in an already-running shell is not reliably reflected by procfs.
-if [ "${UNRAID_PLUGIN_MANAGER_LOCK_SUPERVISOR_ACTIVE:-0}" != "1" ] ||
-  [ "${UNRAID_PLUGIN_MANAGER_LOCK_OWNER_PID:-}" != "$$" ]; then
-  export UNRAID_PLUGIN_MANAGER_LOCK_OWNER_PID="$$"
-  export UNRAID_PLUGIN_MANAGER_LOCK_SUPERVISOR_ACTIVE=1
-  exec "$0" "$@"
-fi
-shift 3
-[ "$#" -gt 0 ] || exit 70
-
 umask 077
-
-# The signal-aware supervisor is the actual mutex owner. Open the descriptor
-# only after PHP has validated the private lock path, verify that the opened
-# descriptor still names that path, and acquire flock on the shared open-file
-# description. The operation child closes this descriptor explicitly below.
-exec {lock_fd}<>"$lock_path" || exit 70
-if [ ! -f "$lock_path" ] ||
-  [ -L "$lock_path" ] ||
-  [ ! "/proc/$$/fd/$lock_fd" -ef "$lock_path" ]; then
-  exec {lock_fd}>&-
-  exit 70
-fi
-"$flock_path" "$lock_fd" || {
-  exec {lock_fd}>&-
-  exit 70
-}
-
-mkdir -- "$scope" || exit 70
-chmod 0700 "$scope" || exit 70
-mkdir -- "$snapshot_dir" || exit 70
-chmod 0700 "$snapshot_dir" || exit 70
 
 member_is_live() {
   local lease="$1"
@@ -106,9 +76,10 @@ release_scope_after_members_exit() {
       # rmdir is the atomic empty check. A nested invocation may register after
       # our scan; in that case rmdir observes the lease and we resume waiting.
       if rmdir -- "$scope" 2>/dev/null; then
-        # Retiring the scope first prevents any late member registration from
-        # racing cleanup. Remove only this token-derived sibling directory.
-        rm -rf -- "$snapshot_dir"
+        # Retiring the scope first prevents late registration from racing
+        # cleanup of the token-derived sibling paths.
+        rm -rf -- "$snapshot_dir" "$lane_dir"
+        rm -f -- "$lane_lock"
         return 0
       fi
       empty_scans=0
@@ -117,49 +88,199 @@ release_scope_after_members_exit() {
   done
 }
 
-child_pid=""
+terminate_scope_members() {
+  local lease=""
+  local identity=""
+  local pid=""
+  local signal=""
+
+  # Unexpected guardian death invalidates the whole mutation tree. Terminate
+  # registered members which escaped its process group so none can deadlock by
+  # trying to reacquire the global mutex while the coordinator waits for its
+  # lease. Revalidate PID/start-time identity immediately before every signal.
+  for signal in TERM KILL; do
+    shopt -s nullglob
+    for lease in "$scope"/*; do
+      if [ -f "$lease" ] && [ ! -L "$lease" ] && member_is_live "$lease"; then
+        identity="${lease##*/}"
+        pid="${identity%%.*}"
+        if member_is_live "$lease"; then
+          kill -s "$signal" "$pid" 2>/dev/null || true
+        fi
+      fi
+    done
+    shopt -u nullglob
+    [ "$signal" = "KILL" ] || sleep 0.1
+  done
+}
+
+shift 3
+[ "$#" -gt 0 ] || exit 70
+
+# The guardian inherits the already-locked descriptor and re-execs once so
+# procfs exposes its owner identity. If the coordinating supervisor is killed,
+# this process keeps flock until the mutation and every registered descendant
+# have exited.
+if [ "${UNRAID_PLUGIN_MANAGER_LOCK_GUARDIAN:-0}" = "1" ]; then
+  lock_fd="${UNRAID_PLUGIN_MANAGER_LOCK_FD:-}"
+  case "$lock_fd" in
+    *[!0-9]*|'') exit 70 ;;
+  esac
+  if [ "${UNRAID_PLUGIN_MANAGER_LOCK_OWNER_PID:-}" != "$$" ] ||
+    [ "${UNRAID_PLUGIN_MANAGER_LOCK_PROTOCOL:-}" != "2" ]; then
+    export UNRAID_PLUGIN_MANAGER_LOCK_OWNER_PID="$$"
+    export UNRAID_PLUGIN_MANAGER_LOCK_PROTOCOL=2
+    exec "$0" "$flock_path" "$lock_path" -- "$@"
+  fi
+  [ "${UNRAID_PLUGIN_MANAGER_LOCK_PROTOCOL:-}" = "2" ] || exit 70
+  [ -f "$lock_path" ] || exit 70
+  [ ! -L "$lock_path" ] || exit 70
+  [ "/proc/$$/fd/$lock_fd" -ef "$lock_path" ] || exit 70
+
+  child_pid=""
+  child_ready=0
+  child_ready_path="$snapshot_dir/.operation-pgid"
+  pending_signal=""
+
+  # Invoked indirectly by the signal traps below.
+  # shellcheck disable=SC2329
+  record_child_signal() {
+    if [ "$child_ready" -eq 1 ] && [ -n "$child_pid" ]; then
+      kill -s "$1" -- "-$child_pid" 2>/dev/null ||
+        kill -s "$1" "$child_pid" 2>/dev/null ||
+        true
+    else
+      pending_signal="$1"
+    fi
+  }
+
+  trap 'record_child_signal TERM' TERM
+  trap 'record_child_signal INT' INT
+  trap 'record_child_signal HUP' HUP
+
+  # The operation gets its own process group and never receives the mutex
+  # descriptor. Its bootstrap publishes that group only after resetting signal
+  # dispositions, closing the pending-signal race. The one-use entry token
+  # distinguishes the direct operation from nested plugin invocations.
+  set -m
+  (
+    # Bash starts an asynchronous command with INT/QUIT ignored when job
+    # control is disabled. Restore defaults before exec so the operation can
+    # install its own traps while remaining in the guardian process group.
+    trap - INT QUIT TERM HUP
+    printf '%s\n' "$BASHPID" > "$child_ready_path" || exit 70
+    export UNRAID_PLUGIN_MANAGER_LOCK_GUARDIAN=''
+    export UNRAID_PLUGIN_MANAGER_LOCK_FD=''
+    export UNRAID_PLUGIN_MANAGER_LOCK_ENTRY="$token"
+    exec "$@" {lock_fd}>&-
+  ) &
+  child_pid=$!
+  set +m
+  while [ ! -f "$child_ready_path" ] && kill -0 "$child_pid" 2>/dev/null; do
+    sleep 0.01
+  done
+  if [ "$(cat "$child_ready_path" 2>/dev/null)" = "$child_pid" ]; then
+    child_ready=1
+  fi
+  if [ -n "$pending_signal" ]; then
+    signal="$pending_signal"
+    pending_signal=""
+    kill -s "$signal" -- "-$child_pid" 2>/dev/null ||
+      kill -s "$signal" "$child_pid" 2>/dev/null ||
+      true
+  fi
+
+  while true; do
+    wait "$child_pid"
+    status=$?
+    if ! kill -0 "$child_pid" 2>/dev/null; then
+      break
+    fi
+  done
+  child_pid=""
+  release_scope_after_members_exit
+  exec {lock_fd}>&-
+  exit "$status"
+fi
+
+# The coordinator validates and acquires the mutex, then gives a guardian a
+# second reference to the same flock-owned open file description. Mutation
+# code receives neither reference.
+exec {lock_fd}<>"$lock_path" || exit 70
+if [ ! -f "$lock_path" ] ||
+  [ -L "$lock_path" ] ||
+  [ ! "/proc/$$/fd/$lock_fd" -ef "$lock_path" ]; then
+  exec {lock_fd}>&-
+  exit 70
+fi
+"$flock_path" "$lock_fd" || {
+  exec {lock_fd}>&-
+  exit 70
+}
+
+mkdir -- "$scope" || exit 70
+chmod 0700 "$scope" || exit 70
+mkdir -- "$snapshot_dir" || exit 70
+chmod 0700 "$snapshot_dir" || exit 70
+mkdir -- "$lane_dir" || exit 70
+chmod 0700 "$lane_dir" || exit 70
+: > "$lane_lock" || exit 70
+chmod 0600 "$lane_lock" || exit 70
+
+guardian_pid=""
 pending_signal=""
 
 # Invoked indirectly by the signal traps below.
 # shellcheck disable=SC2329
-forward_signal() {
-  pending_signal="$1"
-  if [ -n "$child_pid" ]; then
-    kill -s "$1" -- "-$child_pid" 2>/dev/null ||
-      kill -s "$1" "$child_pid" 2>/dev/null ||
-      true
+forward_guardian_signal() {
+  if [ -n "$guardian_pid" ]; then
+    kill -s "$1" "$guardian_pid" 2>/dev/null || true
+  else
+    pending_signal="$1"
   fi
 }
 
-trap 'forward_signal TERM' TERM
-trap 'forward_signal INT' INT
-trap 'forward_signal HUP' HUP
+trap 'forward_guardian_signal TERM' TERM
+trap 'forward_guardian_signal INT' INT
+trap 'forward_guardian_signal HUP' HUP
 
-# Give the operation a private process group. A signal sent to the invoking
-# foreground group reaches the supervisor once; the supervisor then forwards it
-# once to the complete operation group. The lock descriptor is closed before
-# any plugin-controlled process starts, so unrelated descendants cannot retain
-# the mutex accidentally.
+# A private guardian process group keeps a coordinator-only SIGKILL from
+# reaching either lock guardian or mutation. Ordinary signals are forwarded
+# through the two supervisors and preserve the mutation's final status.
 set -m
-"$@" {lock_fd}>&- &
-child_pid=$!
+UNRAID_PLUGIN_MANAGER_LOCK_GUARDIAN=1 \
+UNRAID_PLUGIN_MANAGER_LOCK_FD="$lock_fd" \
+  "$0" "$flock_path" "$lock_path" -- "$@" &
+guardian_pid=$!
 set +m
 if [ -n "$pending_signal" ]; then
-  kill -s "$pending_signal" -- "-$child_pid" 2>/dev/null ||
-    kill -s "$pending_signal" "$child_pid" 2>/dev/null ||
-    true
+  signal="$pending_signal"
+  pending_signal=""
+  kill -s "$signal" "$guardian_pid" 2>/dev/null || true
 fi
 
-# A trapped signal interrupts wait even when the child is still running. Keep
-# supervising until the child has actually exited so flock cannot release the
-# host mutex while the operation survives as an orphan.
 while true; do
-  wait "$child_pid"
+  wait "$guardian_pid"
   status=$?
-  if ! kill -0 "$child_pid" 2>/dev/null; then
+  if ! kill -0 "$guardian_pid" 2>/dev/null; then
     break
   fi
 done
-child_pid=""
-release_scope_after_members_exit
+finished_guardian_pid="$guardian_pid"
+guardian_pid=""
+
+# A normally exiting guardian retires the scope itself. If it died
+# unexpectedly, terminate its mutation group before this last flock reference
+# is closed, then perform the same lease-aware retirement locally.
+if [ -d "$scope" ]; then
+  kill -KILL -- "-$finished_guardian_pid" 2>/dev/null || true
+  operation_pid=$(cat "$snapshot_dir/.operation-pgid" 2>/dev/null || true)
+  case "$operation_pid" in
+    *[!0-9]*|'') ;;
+    *) kill -KILL -- "-$operation_pid" 2>/dev/null || true ;;
+  esac
+  terminate_scope_members
+  release_scope_after_members_exit
+fi
+exec {lock_fd}>&-
 exit "$status"
