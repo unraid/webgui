@@ -857,6 +857,35 @@ foreach (
 foreach (['checkall', 'updateall', 'checkos', 'version', 'pluginURL'] as $method) {
   test_assert(!plugin_manager_operation_requires_lock($method), "$method must remain unlocked");
 }
+foreach (
+  [
+    'community.app.plg',
+    'unRAIDServer-.plg',
+    'plugin_name+variant.plg'
+  ] as $plugin
+) {
+  test_assert(
+    plugin_manager_valid_plugin_basename($plugin),
+    "Safe plugin basename was rejected: $plugin"
+  );
+}
+foreach (
+  [
+    '',
+    '.plg',
+    '../plugin.plg',
+    '..\plugin.plg',
+    '/tmp/plugin.plg',
+    "plugin.plg\nEVIL=1",
+    'plugin.xml',
+    'plugin name.plg'
+  ] as $plugin
+) {
+  test_assert(
+    !plugin_manager_valid_plugin_basename($plugin),
+    "Unsafe plugin basename was accepted: ".json_encode($plugin)
+  );
+}
 
 $plugin_api_source = file_get_contents(
   dirname(__DIR__, 2).'/emhttp/plugins/dynamix.plugin.manager/scripts/PluginAPI.php'
@@ -3580,6 +3609,34 @@ test_assert(
   count(array_filter($nchan_messages, static fn($message) => $message === '_DONE_')) === 1,
   'An nchan supervisor-startup failure did not emit exactly one completion marker'
 );
+foreach (['check', 'update', 'download', 'remove'] as $invalid_method) {
+  file_put_contents($nchan_log, '');
+  $invalid_name_result = test_finish_process(
+    test_start_command(
+      [$nchan_wrapper, $invalid_method, '../../etc/arbitrary.plg', 'nchan'],
+      $nchan_environment
+    )
+  );
+  test_assert(
+    $invalid_name_result[0] === 1,
+    "$invalid_method accepted a path-like plugin name: ".
+      "{$invalid_name_result[1]} {$invalid_name_result[2]}"
+  );
+  $invalid_name_messages = array_map(
+    static fn($message) => base64_decode($message, true),
+    file($nchan_log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: []
+  );
+  test_assert(
+    in_array("plugin: invalid plugin basename\n", $invalid_name_messages, true) &&
+      count(
+        array_filter(
+          $invalid_name_messages,
+          static fn($message) => $message === '_DONE_'
+        )
+      ) === 1,
+    "$invalid_method path rejection did not emit one nchan completion marker"
+  );
+}
 
 $directory = test_directory($root, 'real-cli-lock-command-failure');
 $cli_plugins = "$root/real-cli-installed";

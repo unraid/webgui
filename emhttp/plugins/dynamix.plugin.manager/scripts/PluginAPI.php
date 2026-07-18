@@ -63,7 +63,7 @@ switch ($_POST['action']) {
 		$name = unbundle($options['name'] ?? $plugin);
 		$file = "/boot/config/plugins/$plugin";
 		$file = realpath($file)==$file ? $file : "";
-		if ( ! $plugin || ! file_exists($file) ) {
+		if ( !plugin_manager_valid_plugin_basename($plugin) || ! file_exists($file) ) {
 			echo json_encode(["updateAvailable"=>false]);
 			break;
 		}

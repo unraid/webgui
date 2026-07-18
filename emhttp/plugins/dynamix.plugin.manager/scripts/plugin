@@ -683,6 +683,14 @@ if ($argc < 3) {
   done(1);
 }
 
+if (
+  in_array($method, ['check', 'update', 'remove'], true) &&
+  !plugin_manager_valid_plugin_basename($argv[2] ?? null)
+) {
+  write("plugin: invalid plugin basename\n");
+  done(1);
+}
+
 if ($method != 'check') {
   try {
     $lock_command = plugin_manager_operation_lock_command($method, $script, $argv);

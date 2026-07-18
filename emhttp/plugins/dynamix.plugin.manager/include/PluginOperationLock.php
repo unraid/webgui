@@ -15,6 +15,13 @@ const PLUGIN_MANAGER_ARTIFACT_POLICY_ENV = 'UNRAID_PLUGIN_MANAGER_ARTIFACT_POLIC
 const PLUGIN_MANAGER_DEFAULT_LOCK_PATH = '/var/run/unraid-plugin-manager/operations.lock';
 const PLUGIN_MANAGER_SHARED_ARTIFACT_DIRECTORY = '/tmp/plugins';
 
+function plugin_manager_valid_plugin_basename(mixed $plugin): bool {
+  return is_string($plugin) &&
+    $plugin !== '' &&
+    basename($plugin) === $plugin &&
+    preg_match('/\A[A-Za-z0-9][A-Za-z0-9._+-]*[.]plg\z/D', $plugin) === 1;
+}
+
 /**
  * Aggregate operations intentionally remain unlocked. They invoke this command
  * recursively, and each stateful child operation takes the host-wide lock.
