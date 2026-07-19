@@ -22,19 +22,24 @@ require_once "$docroot/webGui/include/Translations.php";
 
 $protectedShrinkFiles = parity_protected_shrink_files();
 $downgradeMarker = '/var/run/unraid-os-downgrade';
-$downgradeMarkerHandle = @fopen($downgradeMarker, 'x');
+$downgradeDecision = parity_protected_shrink_begin_downgrade(
+  $protectedShrinkFiles,
+  $downgradeMarker
+);
 
-if ($downgradeMarkerHandle === false) {
+if ($downgradeDecision === 'interlock_unavailable') {
+  http_response_code(503);
+  echo _('The Unraid downgrade safety lock is unavailable. Nothing was changed.');
+  exit;
+}
+
+if ($downgradeDecision === 'downgrade_pending') {
   http_response_code(409);
   echo _('An Unraid downgrade is already pending.');
   exit;
 }
 
-fclose($downgradeMarkerHandle);
-chmod($downgradeMarker, 0600);
-
-if (parity_protected_shrink_active($protectedShrinkFiles)) {
-  unlink($downgradeMarker);
+if ($downgradeDecision === 'protected_shrink_active') {
   http_response_code(409);
   echo _('Finish or recover the active parity-protected disk removal before downgrading Unraid.');
   exit;
