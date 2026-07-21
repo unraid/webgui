@@ -224,6 +224,7 @@ if (isset($_POST['contName'])) {
   }
   if ($startContainer) $cmd = str_replace('/docker create ', '/docker run -d ', $cmd);
   execCommand($cmd);
+  connectExtraNetworks($Name, $_POST['contExtraNetworks'] ?? '', $_POST['contNetwork'] ?? '', true);
   if ($startContainer) addRoute($Name); // add route for remote WireGuard access
 
   dockerUIBlockerScript(false);
@@ -302,6 +303,7 @@ if (isset($_GET['updateContainer'])){
       exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker rm '" . escapeshellarg($Name) . "'");
     }
     execCommand($cmd, $echo);
+    connectExtraNetworks($Name, getXmlVal($xml, "ExtraNetworks"), $Network, $echo);
     if ($startContainer) addRoute($Name); // add route for remote WireGuard access
     $DockerClient->flushCaches();
     $newImageID = $DockerClient->getImageID($Repository);
@@ -953,6 +955,8 @@ $(function() {
     load_contOverview();
     $("#catSelect").dropdownchecklist("destroy");
     $("#catSelect").dropdownchecklist({emptyText:"_(Select categories)_...", maxDropHeight:200, width:300, explicitClose:"..._(close)_"});
+    $("#contExtraNetworks").dropdownchecklist("destroy");
+    $("#contExtraNetworks").dropdownchecklist({emptyText:"_(None)_", maxDropHeight:200, width:300, explicitClose:"..._(close)_"});
   });
 });
 </script>
@@ -1186,6 +1190,16 @@ _(Network Type)_:
   ?>
   <?=mk_option(1,$network,_('Custom')." : $name")?>
   <?endforeach;?></select>
+
+_(Additional Networks)_:
+: <select id="contExtraNetworks" name="contExtraNetworks[]" multiple="multiple" style="display:none">
+  <?php $extraNets = isset($xml['ExtraNetworks']) ? preg_split('/[\s,]+/', trim($xml['ExtraNetworks']), -1, PREG_SPLIT_NO_EMPTY) : []; ?>
+  <?foreach ($custom as $network):?>
+  <?php if (in_array($network, ['host','none','bridge','container'])) continue; ?>
+  <option value="<?=htmlspecialchars($network)?>"<?=in_array($network,$extraNets)?' selected':''?>><?=htmlspecialchars($network)?></option>
+  <?endforeach;?></select>
+
+> _(Attach the container to more custom networks in addition to the primary Network Type above. Applied with `docker network connect` after creation. Use the checkbox dropdown to select one or more additional networks.)_
 
 <div markdown="1" class="myIP noshow">
 _(Fixed IP address)_ (_(optional)_):
@@ -2024,6 +2038,8 @@ $(function() {
   $('.switch-on-off').switchButton({labels_placement:'right',on_label:"_(On)_",off_label:"_(Off)_"});
   // Add dropdownchecklist to Select Categories
   $("#catSelect").dropdownchecklist({emptyText:"_(Select categories)_...", maxDropHeight:200, width:300, explicitClose:"..._(close)_"});
+  // Add dropdownchecklist to Additional Networks
+  $("#contExtraNetworks").dropdownchecklist({emptyText:"_(None)_", maxDropHeight:200, width:300, explicitClose:"..._(close)_"});
   <?if ($authoringMode){
     echo "$('.advancedview').prop('checked','true'); $('.advancedview').change();";
     echo "$('.advancedview').siblings('.switch-button-background').click();";

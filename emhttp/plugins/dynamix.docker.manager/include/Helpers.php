@@ -134,6 +134,11 @@ function postToXML($post, $setOwnership=false) {
   } else {
     $xml->Network                  = xml_encode($post['contNetwork']);
   }
+  // Additional networks the container is attached to after creation (docker
+  // network connect). Stored comma-separated; the primary <Network> is excluded.
+  $extraNetworks = $post['contExtraNetworks'] ?? '';
+  if (is_array($extraNetworks)) $extraNetworks = implode(',', $extraNetworks);
+  $xml->ExtraNetworks              = xml_encode(trim($extraNetworks));
   $xml->MyIP                       = xml_encode($post['contMyIP']);
   $extraNetwork                    = hasNetworkParam($post['contExtraParams'] ?? '');
   $myMAC                           = $extraNetwork ? '' : normalizeMacAddress(trim($post['contMyMAC'] ?? '') ?: extractMacAddressParam($post['contExtraParams'] ?? ''));
@@ -212,6 +217,7 @@ function xmlToVar($xml) {
   $out['Repository']                   = xml_decode($xml->Repository);
   $out['Registry']                     = xml_decode($xml->Registry);
   $out['Network']                      = xml_decode($xml->Network);
+  $out['ExtraNetworks']                = xml_decode($xml->ExtraNetworks ?? '');
   $out['MyIP']                         = xml_decode($xml->MyIP ?? '');
   $extraParams                         = xml_decode($xml->ExtraParams ?? '');
   $extraNetwork                        = hasNetworkParam($extraParams);
@@ -569,6 +575,32 @@ function xmlToCommand($xml, $create_paths=false) {
          $cmdName, $TS_entrypoint, $cmdNetwork, $cmdMyIP, $cmdCPUset, $cmdMemory, $pid_limit, $cmdPrivileged, implode(' -e ', $Variables), $TS_hostname, $TS_exitnode, $TS_exitnode_ip, $TS_lan_access, $TS_routes, $TS_accept_routes, $TS_ssh, $TS_userspace_networking, $TS_serve_funnel, $TS_serve_port, $TS_serve_target, $TS_serve_local_path, $TS_serve_protocol, $TS_serve_protocol_port, $TS_serve_path, $TS_daemon_params, $TS_extra_params, $TS_state_dir, $TS_troubleshooting, $TS_postargs, implode(' -l ', $Labels), $TS_web_ui, $TS_hostname_label, implode(' -p ', $Ports), implode(' -v ', $Volumes), $TS_hook, $TS_cap, $TS_tundev, implode(' --device=', $Devices), $xml['ExtraParams'], escapeshellarg($xml['Repository']), $xml['PostArgs']);
   return [preg_replace('/\s\s+/', ' ', $cmd), $xml['Name'], $xml['Repository']];
 }
+
+// Attach a container to additional custom networks after it has been created.
+// `docker create/run` only accepts one --network, so extra networks (stored in
+// the template's <ExtraNetworks>, comma/space separated) are wired up here with
+// `docker network connect`. Idempotent and safe on both created and running
+// containers; the primary network is skipped so it is never double-connected.
+function connectExtraNetworks($name, $extra, $primary='', $echo=false) {
+  global $docroot;
+  if (is_array($extra)) $extra = implode(',', $extra);
+  if (!is_string($extra) || !strlen(trim($extra)) || !strlen(trim($name))) return;
+  $script = $docroot.'/plugins/dynamix.docker.manager/scripts/docker';
+  $done = [];
+  foreach (preg_split('/[\s,]+/', trim($extra)) as $net) {
+    $net = trim($net);
+    if (!strlen($net)) continue;
+    $key = strtolower($net);
+    if ($key == strtolower(trim($primary)) || isset($done[$key])) continue;
+    $done[$key] = true;
+    exec($script.' network connect '.escapeshellarg($net).' '.escapeshellarg($name).' 2>&1', $o, $rc);
+    if ($echo) {
+      $msg = $rc===0 ? _('Connected network') : _('Could not connect network');
+      echo "<script>addLog('<b>".addslashes(htmlspecialchars($msg.": $net"))."</b>');</script>\n"; @flush();
+    }
+  }
+}
+
 function stopContainer($name, $t=false, $echo=true) {
   global $DockerClient;
   $waitID = mt_rand();
