@@ -25,6 +25,7 @@ $audit   = unscript(_var($_GET,'audit'));
 $check   = unscript(_var($_GET,'check'));
 $cmd     = unscript(_var($_GET,'cmd'));
 $init    = unscript(_var($_GET,'init'));
+$one     = unscript(_var($_GET,'one')); // single-plugin update check (fired per row, in parallel)
 $empty   = true;
 $install = false;
 $updates = 0;
@@ -55,6 +56,13 @@ if ($audit) {
     case 'update' : $plugins = "/var/log/plugins/$plg.plg"; break;
   }
 }
+
+// Restrict to a single installed plugin so its (network) update check can run
+// in parallel with the others, instead of the legacy serial sweep that blocks
+// the page on the slowest/unreachable plugin. Goes through the normal update
+// check path below (no $audit, $check stays falsy) and returns just this
+// plugin's vid-/sid- line.
+if ($one) $plugins = "/var/log/plugins/".basename($one,'.plg').".plg";
 
 delete_file($alerts);
 foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
