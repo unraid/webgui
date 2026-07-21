@@ -73,7 +73,10 @@ function task_delete($id) {
 // so without this every finished task would leave its retained buffer parked in
 // nchan shared memory for the life of the nginx process.
 function task_channel_delete($id) {
-  $com = curl_init("http://localhost/pub/task-$id");
+  // buffer_length is required by the /pub/ location config for every method
+  // (nchan_message_buffer_length $arg_buffer_length); without it nginx errors
+  // out before nchan sees the DELETE
+  $com = curl_init("http://localhost/pub/task-$id?buffer_length=1");
   curl_setopt_array($com, [
     CURLOPT_UNIX_SOCKET_PATH => '/var/run/nginx.socket',
     CURLOPT_CUSTOMREQUEST    => 'DELETE',
