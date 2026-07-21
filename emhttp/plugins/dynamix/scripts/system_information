@@ -83,38 +83,57 @@ if (!empty($iommu_groups)) {
   $iommu .= '</a>';
 }
 
+$normalize_binary_unit = function($value) {
+  return preg_replace_callback('/\b([KMGTPE]?)(?:i)?B\b/i',function($match) {
+    $prefix = strtoupper($match[1] ?? '');
+    return $prefix ? "{$prefix}iB" : 'B';
+  },$value ?? '');
+};
+
 $cache_installed = [];
 $cache_devices = dmidecode('Cache Information',7);
-foreach ($cache_devices as $device) $cache_installed[] = $device['Socket Designation'].": ".str_replace(['kB','B'],['KB','iB'],$device['Installed Size']);
+foreach ($cache_devices as $device) {
+  $cache_installed[] = $device['Socket Designation'].": ".$normalize_binary_unit($device['Installed Size'] ?? '');
+}
 
 /*
  Memory Device (16) will get us each ram chip. By matching on MB it'll filter out Flash/Bios chips
- Sum up all the Memory Devices to get the amount of system memory installed. Convert MB to GB
+ Sum up all the Memory Devices to get the amount of system memory installed. Convert MiB to GiB
  Physical Memory Array (16) usually one of these for a desktop-class motherboard but higher-end xeon motherboards
- might have two or more of these.  The trick is to filter out any Flash/Bios types by matching on GB
+ might have two or more of these.  The trick is to filter out any Flash/Bios types by matching on GiB
  Sum up all the Physical Memory Arrays to get the motherboard's total memory capacity
  Extract error correction type, if none, do not include additional information in the output
  If maximum < installed then roundup maximum to the next power of 2 size of installed. E.g. 6 -> 8 or 12 -> 16
 */
-$sizes = ['MB','GB','TB'];
+$memory_units = [
+  // dmidecode reports memory capacities using binary math; treat both SI and IEC labels as base-1024.
+  // This keeps parsing consistent across dmidecode versions that may print GB/TB or GiB/TiB.
+  'kb' => 1/1024, 'kib' => 1/1024,
+  'mb' => 1,      'mib' => 1,
+  'gb' => 1024,   'gib' => 1024,
+  'tb' => 1048576,'tib' => 1048576,
+  'pb' => 1073741824, 'pib' => 1073741824
+];
+$parse_memory_to_mib = function($value) use ($memory_units) {
+  if (!preg_match('/([0-9.]+)\s*([A-Za-z]+)/',$value ?? '',$match)) return 0;
+  $size = (float)$match[1];
+  $unit = strtolower($match[2]);
+  return isset($memory_units[$unit]) ? (int)round($size*$memory_units[$unit]) : 0;
+};
 $memory_type = $ecc = '';
 $memory_installed = $memory_maximum = 0;
 $memory_devices = dmidecode('Memory Device',17);
 $modules = 0;
 foreach ($memory_devices as $device) {
   if (empty($device['Type']) || $device['Type']=='Unknown') continue;
-  [$size, $unit] = my_explode(' ',$device['Size']);
-  $base = array_search($unit,$sizes);
-  if ($base!==false) $memory_installed += $size*pow(1024,$base);
+  $memory_installed += $parse_memory_to_mib($device['Size'] ?? '');
   if (!$memory_type) $memory_type = $device['Type'];
   $modules++;
 }
 $memory = $modules > 1 ? "<span class='link blue-text' onclick=\"$('tr.ram').toggle()\">"._('Memory').":</span>" : _('Memory').':';
 $memory_array = dmidecode('Physical Memory Array',16);
 foreach ($memory_array as $device) {
-  [$size, $unit] = my_explode(' ',$device['Maximum Capacity']);
-  $base = array_search($unit,$sizes);
-  if ($base>=1) $memory_maximum += $size*pow(1024,$base);
+  $memory_maximum += $parse_memory_to_mib($device['Maximum Capacity'] ?? '');
   if (!$ecc && isset($device['Error Correction Type']) && $device['Error Correction Type']!='None') $ecc = $device['Error Correction Type']." ";
 }
 if ($memory_installed >= 1048576) {
@@ -152,7 +171,7 @@ span.link{text-decoration:underline;cursor:pointer}
 <?
 foreach ($memory_devices as $device) {
   if (empty($device['Type']) || $device['Type']=='Unknown') continue;
-  $size = preg_replace('/( .)B$/','$1iB',_var($device,'Size',0));
+  $size = $normalize_binary_unit(_var($device,'Size',0));
   echo "<tr class='ram'><td></td><td>",$device['Locator'],": ",_var($device,'Manufacturer')," ",_var($device,'Part Number'),", $size ",_var($device,'Type')," @ ",_var($device,'Configured Memory Speed'),"</td></tr>";
 }
 
