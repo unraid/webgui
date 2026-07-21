@@ -115,6 +115,17 @@ function base_net($route) {
   return substr(explode('/',$route)[0],0,-2);
 }
 
+// Derive the IPv4 gateway rc.docker would use when none is configured:
+// the subnet's first usable host (e.g. 192.168.10.0/24 -> 192.168.10.1).
+// Calls the same scripts/derive_gateway helper rc.docker uses, so the logic
+// is not duplicated. Returns '' if not derivable.
+function derive_gw($route) {
+  global $docroot;
+  $route = trim((string)$route);
+  if ($route === '') return '';
+  return exec($docroot."/plugins/dynamix.docker.manager/scripts/derive_gateway ".escapeshellarg($route));
+}
+
 $bgcolor = $themeHelper->isLightTheme() ? '#f2f2f2' : '#1c1c1c'; // $themeHelper set in DefaultPageLayout.php
 
 //Check if docker.cfg does exist
@@ -315,6 +326,7 @@ _(Preserve user defined networks)_:
 $net = normalize($network);
 $docker_auto = "DOCKER_AUTO_$net";
 $docker_dhcp = "DOCKER_DHCP_$net";
+$docker_gw   = "DOCKER_GATEWAY_$net";
 ?>
 <input type="hidden" name="<?=$docker_auto?>" value="<?=_var($dockercfg,$docker_auto)?>">
 
@@ -369,8 +381,9 @@ _(IPv4 custom network on interface)_ <?=$network?> (_(optional)_):
       <span class="<?=$ip4class?>">
         <strong><?=_('Subnet')?>:</strong> <?=str_replace(' ', '<br><b>'._('Subnet').': </b>', $route)?>
       </span>
-      <span class="<?=$gw4class?>">
-        <strong><?=_('Gateway')?>:</strong> <?=$gateway[$network] ?: '---'?>
+      <span class="<?=$gw4class?> flex flex-row items-center gap-2">
+        <strong><?=_('Gateway')?>:</strong>
+        <input type="text" id="<?=$docker_dhcp?>_gw" name="<?=$docker_gw?>" class="ip4" value="<?=htmlspecialchars(_var($dockercfg,$docker_gw))?>" placeholder="<?=htmlspecialchars($gateway[$network] ?: derive_gw($route))?>" title="_(IPv4 address A.B.C.D)_"<?=$autoDisabled?>>
       </span>
       <span class="flex flex-row items-center gap-2">
         <span class="flex flex-row items-center gap-2">
@@ -464,6 +477,7 @@ _(IPv4 custom network on interface)_ <?=$network?> (_(optional)_):
 $net = normalize($network);
 $docker_auto  = "DOCKER_AUTO_$net";
 $docker_dhcp6 = "DOCKER_DHCP6_$net";
+$docker_gw6   = "DOCKER_GATEWAY6_$net";
 ?>
 <?if ($network != 'wlan0' || lan_port('wlan0',true) == 1):?>
 
@@ -485,7 +499,10 @@ _(IPv6 custom network on interface)_ <?=$network?> (_(optional)_):
     </label>
     <span id="<?=$docker_dhcp6?>_line" class="<?=$auto6Disabled?>">
       <span class="ip6">**_(Subnet)_:** <?=str_replace(' ', '<br><b>'._('Subnet').': </b>', $route)?></span>
-      <span class="gw6">**_(Gateway)_:** <?=$gateway6[$network] ?: '---'?></span>
+      <span class="gw6 flex flex-row items-center gap-2">
+        <strong><?=_('Gateway')?>:</strong>
+        <input type="text" id="<?=$docker_dhcp6?>_gw" name="<?=$docker_gw6?>" class="gw6" value="<?=htmlspecialchars(_var($dockercfg,$docker_gw6))?>" placeholder="<?=htmlspecialchars($gateway6[$network] ?: '')?>" title="_(IPv6 address nnnn:xxxx::yyyy)_"<?=$auto6Disabled?>>
+      </span>
     </span>
   </span>
 
@@ -591,7 +608,7 @@ $docker_dhcp = "DOCKER_DHCP_$net";
 _(IPv4 custom network on interface)_ <?=$network?>:
 : <span class="flex flex-row flex-wrap items-center gap-4">
     <span class="<?=$gw4class?>">**_(Subnet)_:** <?=str_replace(' ', '<br><b>'._('Subnet').': </b>', $route)?></span>
-    <span class="<?=$gw4class?>">**_(Gateway)_:** <?=$gateway[$network] ?: '---'?></span>
+    <span class="<?=$gw4class?>">**_(Gateway)_:** <?=$gateway[$network] ?: (_var($dockercfg,"DOCKER_GATEWAY_$net") ?: (derive_gw($route) ?: '---'))?></span>
     <span>**_(DHCP pool)_:** <?=_var($dockercfg,$docker_dhcp) ?: "_(not set)_"?><?if (isset($dockercfg[$docker_dhcp])):?>&nbsp;&nbsp;(<?=pow(2,32-my_explode('/',$dockercfg[$docker_dhcp])[1])?> _(hosts)_)<?endif;?></span>
   </span>
 
@@ -784,7 +801,9 @@ function prepareDocker(form) {
     $(mask).prop('disabled',true);
   });
   $(form).find('input[name^="DOCKER_GATEWAY_"]').each(function(){
-    var edit = '#'+$(this).attr('name').replace('GATEWAY','CUSTOM')+'_edit';
+    var custom = '#'+$(this).attr('name').replace('GATEWAY','CUSTOM')+'_edit';
+    var auto = '#'+$(this).attr('name').replace('GATEWAY','DHCP')+'_edit';
+    var edit = $(custom).length ? custom : auto;
     if (!$(edit).prop('checked')) $(this).val('').prop('disabled',false);
   });
   $(form).find('input[name^="DOCKER_RANGE_"]').each(function(){
@@ -809,7 +828,9 @@ function prepareDocker(form) {
     $(mask6).prop('disabled',true);
   });
   $(form).find('input[name^="DOCKER_GATEWAY6_"]').each(function(){
-    var edit6 = '#'+$(this).attr('name').replace('GATEWAY','CUSTOM')+'_edit';
+    var custom6 = '#'+$(this).attr('name').replace('GATEWAY','CUSTOM')+'_edit';
+    var auto6 = '#'+$(this).attr('name').replace('GATEWAY','DHCP')+'_edit';
+    var edit6 = $(custom6).length ? custom6 : auto6;
     if (!$(edit6).prop('checked')) $(this).val('').prop('disabled',false);
   });
   $(form).find('input[name^="DOCKER_RANGE6_"]').each(function(){
@@ -842,6 +863,7 @@ function changeEdit(id, ip) {
     auto.val(auto.val().replace(ip,''));
     if (auto.val() == '') auto.val('no');
   }
+  $(id1+'gw').prop('disabled',!checked);
   changeDHCP(id, ip, $('#'+id.replace('edit','dhcp')).prop('checked'));
 }
 
