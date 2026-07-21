@@ -37,9 +37,32 @@ function publish($endpoint, $message, $len=1, $abort=false, $abortTime=30) {
   // message to the task's log so it can be replayed when the task is brought
   // back to the foreground. Messages are delimited by RS (\x1e) to preserve
   // boundaries even when a message itself contains newlines.
+  //
+  // Each captured message is also mirrored onto the task's own channel
+  // (task-<id>) as "<log byte offset>\x1f<message>". The foreground modal
+  // streams from that channel instead of the shared per-type one, so output
+  // can never be misattributed across tasks (a retained _DONE_ from an earlier
+  // op must not finish the next one), and the offset lets the client drop any
+  // live message the log replay already rendered (X-Task-Log-Size in
+  // TaskCommand.php) instead of duplicating it at the replay/live boundary.
+  // The size-then-append is done under LOCK_EX and the log reader takes
+  // LOCK_SH, so offsets are race-free and reads land on record boundaries.
+  // A buffer of 10 lets a subscriber joining mid-stream pick up a small
+  // backlog (dedupe makes redelivery harmless). The endpoint-prefix guard
+  // keeps the mirror publish itself from being captured again.
   $taskId = getenv('NCHAN_TASK');
-  if ($taskId !== false && $taskId !== '' && ctype_xdigit($taskId)) {
-    @file_put_contents("/var/local/emhttp/tasks/$taskId.log", $message."\x1e", FILE_APPEND);
+  if ($taskId !== false && $taskId !== '' && ctype_xdigit($taskId) && strncmp($endpoint,'task-',5) !== 0) {
+    $fh = @fopen("/var/local/emhttp/tasks/$taskId.log", 'c');
+    if ($fh) {
+      @flock($fh, LOCK_EX);
+      fseek($fh, 0, SEEK_END);
+      $offset = ftell($fh);
+      fwrite($fh, $message."\x1e");
+      fflush($fh);
+      @flock($fh, LOCK_UN);
+      fclose($fh);
+      publish("task-$taskId", $offset."\x1f".$message, 10);
+    }
   }
 
   if ( is_file("/tmp/publishPaused") )

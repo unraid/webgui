@@ -72,10 +72,25 @@ case 'clear':
   die();
 
 case 'log':
-  // output captured so far, for foreground replay
+  // Output captured so far, for foreground replay. X-Task-Log-Size is the
+  // exact byte length served: live task-channel messages carry their log
+  // byte offset (see publish.php) and the client drops any live message whose
+  // offset falls below this, so the replay/live handoff never duplicates or
+  // loses a record. Read under the shared lock (publish.php appends under the
+  // exclusive one) so the length always lands on a record boundary.
   header('Content-Type: text/plain');
-  if (task_valid_id($id) && is_file(task_log($id))) readfile(task_log($id));
-  die();
+  $data = '';
+  if (task_valid_id($id) && is_file(task_log($id))) {
+    $fh = @fopen(task_log($id), 'rb');
+    if ($fh) {
+      @flock($fh, LOCK_SH);
+      $data = stream_get_contents($fh) ?: '';
+      @flock($fh, LOCK_UN);
+      fclose($fh);
+    }
+  }
+  header('X-Task-Log-Size: '.strlen($data));
+  die($data);
 
 case 'list':
   header('Content-Type: application/json');

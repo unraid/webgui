@@ -65,6 +65,22 @@ function task_write($task) {
 function task_delete($id) {
   if (!task_valid_id($id)) return;
   delete_file(task_path($id), task_log($id));
+  task_channel_delete($id);
+}
+
+// Drop the task's mirrored nchan channel (see publish.php) along with the task.
+// The generic /pub/ location keeps messages forever (nchan_message_timeout 0),
+// so without this every finished task would leave its retained buffer parked in
+// nchan shared memory for the life of the nginx process.
+function task_channel_delete($id) {
+  $com = curl_init("http://localhost/pub/task-$id");
+  curl_setopt_array($com, [
+    CURLOPT_UNIX_SOCKET_PATH => '/var/run/nginx.socket',
+    CURLOPT_CUSTOMREQUEST    => 'DELETE',
+    CURLOPT_RETURNTRANSFER   => 1,
+  ]);
+  curl_exec($com);
+  curl_close($com);
 }
 
 // all tasks, oldest first (FIFO by creation time, id breaks ties)

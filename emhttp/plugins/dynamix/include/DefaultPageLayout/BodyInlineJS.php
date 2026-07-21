@@ -94,20 +94,15 @@ nchan_wlan0.start();
 //  Multi-task background operation system (shared across clients/subsystems)
 // ---------------------------------------------------------------------------
 //  The backend (TaskQueue.php + the `tasks` daemon) owns the queue: at most one
-//  RUNNING op per type, so the live /sub/<type> channels never interleave. The
-//  full task list is broadcast on /sub/tasks; per-task output is captured to a
-//  server-side log and replayed when a task is brought to the foreground.
+//  RUNNING op per type, so the legacy shared /sub/<type> channels never
+//  interleave. The full task list is broadcast on /sub/tasks; per-task output
+//  is captured to a server-side log (replayed on foreground) and mirrored on a
+//  per-task channel /sub/task-<id> that the foreground modal streams from.
 // ===========================================================================
-var nchan_plugins  = new NchanSubscriber('/sub/plugins',{subscriber:'websocket', reconnectTimeout:5000});
-var nchan_docker   = new NchanSubscriber('/sub/docker',{subscriber:'websocket', reconnectTimeout:5000});
-var nchan_vmaction = new NchanSubscriber('/sub/vmaction',{subscriber:'websocket', reconnectTimeout:5000});
-const nchanByType  = {plugins:nchan_plugins, docker:nchan_docker, vmaction:nchan_vmaction};
-
 const TASK_ENDPOINT = '/plugins/dynamix/include/TaskCommand.php';
 var taskList = [];
 const taskPrev = {};
 var foregroundTaskId = null;
-var foregroundType = null;
 
 function taskById(id)  { for (var i=0;i<taskList.length;i++) if (taskList[i].id==id)  return taskList[i]; return null; }
 function taskByPid(pid){ for (var i=0;i<taskList.length;i++) if (taskList[i].pid==pid) return taskList[i]; return null; }
@@ -118,7 +113,34 @@ function escapeTaskHtml(s){ return $('<div>').text(s==null?'':String(s)).html();
 // a no-op start/stop can't raise and abort the surrounding handler.
 function nchanStart(sub){ try { if (sub && !sub.running) sub.start(); } catch(e) {} }
 function nchanStop(sub) { try { if (sub &&  sub.running) sub.stop();  } catch(e) {} }
-function stopAllTypeChannels(){ nchanStop(nchan_plugins); nchanStop(nchan_docker); nchanStop(nchan_vmaction); }
+
+// Live output for the foreground modal comes from the task's OWN channel
+// (/sub/task-<id>), not the shared per-type channels. publish.php mirrors every
+// captured message there, prefixed with the message's byte offset in the task
+// log ("<offset>\x1f<message>"). Two problems with the shared /sub/<type>
+// channels made them unusable for the modal:
+//   - they don't identify the originating task, so nchan's retained message
+//     (generic /pub/ channels never expire) leaks across tasks: a new running
+//     task's modal would consume the PREVIOUS task's retained _DONE_ and flip
+//     to Finished while the new op was still running
+//   - the retained last message re-delivered on subscribe duplicated the last
+//     record already rendered by the log replay (N records -> N+1 rows)
+// The offset tag solves the second exactly: the log replay reports how many
+// bytes it covered (X-Task-Log-Size) and every live message whose offset falls
+// inside that range is already on screen, so it's dropped. The shared type
+// channels are still published for any external subscriber.
+var taskSub = null, taskSubId = null, replayedBytes = 0;
+function startTaskChannel(id) {
+  if (taskSub && taskSubId === id) return;
+  stopTaskChannel();
+  taskSubId = id;
+  taskSub = new NchanSubscriber('/sub/task-'+id,{subscriber:'websocket', reconnectTimeout:5000});
+  taskSub.on('message', function(data){ routeTaskMessage(id, data); });
+  nchanStart(taskSub);
+}
+function stopTaskChannel() {
+  if (taskSub) { nchanStop(taskSub); taskSub = null; taskSubId = null; }
+}
 
 // progress_dots / progress_span (declared in HeadInlineJS) are global wait-spinner
 // timers keyed by element id. Clear them when (re)opening or closing a modal so a
@@ -181,22 +203,31 @@ function renderMessage(type, data) {
   box.scrollTop(box[0].scrollHeight);
 }
 
-// live channel messages render only into the foregrounded task's modal
-function routeMessage(type, data) {
-  if (!data) return;
-  if (data=='_DONE_' || data=='_ERROR_') {
-    if (foregroundTaskId && foregroundType==type) { if (data=='_ERROR_') openError(data); else openDone(data); }
-    return;
+// live per-task channel messages render only into the foregrounded task's modal
+function routeTaskMessage(id, raw) {
+  if (foregroundTaskId !== id || !raw) return;
+  var data = raw, sep = raw.indexOf('\x1f');
+  // strip the "<log byte offset>\x1f" tag; drop anything the replay already covered
+  if (sep > 0 && /^\d+$/.test(raw.slice(0,sep))) {
+    if (parseInt(raw.slice(0,sep),10) < replayedBytes) return;
+    data = raw.slice(sep+1);
   }
-  if (foregroundTaskId && foregroundType==type) renderMessage(type, data);
+  if (!data) return;
+  if (data=='_DONE_')  { openDone(data);  return; }
+  if (data=='_ERROR_') { openError(data); return; }
+  var t = taskById(id);
+  renderMessage(t ? t.type : 'plugins', data);
 }
-nchan_plugins.on('message',  function(data){ routeMessage('plugins',  data); });
-nchan_docker.on('message',   function(data){ routeMessage('docker',   data); });
-nchan_vmaction.on('message', function(data){ routeMessage('vmaction', data); });
 
-// legacy per-op reload callback ( (func||'loadlist')(plg) ), suppressed for ':return'
+// Legacy per-op reload callback ( (func||'loadlist')(plg) ), suppressed for
+// ':return'. The legacy modal fired this whenever plg was non-null, so an
+// empty plg with an explicit func (e.g. Apps.page openPlugin(...,'','refresh'),
+// CA's ca_openPlugin(...,'','OpenSidebarAndRefreshDisplay')) still refreshed
+// the page. Task records serialize plg/func as strings, so "a callback was
+// requested" means either field is non-empty -- requiring a truthy plg alone
+// silently dropped every empty-identifier refresh.
 function fireTaskCallback(t) {
-  if (t && t.plg && t.plg != ':return') {
+  if (t && t.plg != ':return' && (t.plg || t.func)) {
     var fn = window[t.func || 'loadlist'];
     if (typeof fn === 'function') setTimeout(function(){ fn(t.plg); },250);
   }
@@ -281,8 +312,7 @@ function foregroundTask(id) {
   var task = taskById(id);
   if (!task) return;
   foregroundTaskId = id;
-  foregroundType = task.type;
-  stopAllTypeChannels();
+  stopTaskChannel();
   clearProgressDots();
   // Drive the modal by task status, not the per-type `button` flag (which made
   // docker ops hide the Close button while running and disabled the confirm
@@ -300,8 +330,8 @@ function foregroundTask(id) {
                   : "<i class='fa fa-refresh fa-spin fa-fw'></i> <?=_('In Progress')?>";
   swal({title:escapeTaskHtml(task.title),text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:finished,confirmButtonText:"<?=_('Dismiss')?>"},function(close){
     // confirm/Dismiss (or Esc): background while running, clear once finished
-    if (foregroundTaskId===id) { foregroundTaskId=null; foregroundType=null; }
-    stopAllTypeChannels();
+    if (foregroundTaskId===id) foregroundTaskId=null;
+    stopTaskChannel();
     clearProgressDots();
     var fresh = taskById(id);
     if (fresh && (fresh.status=='done'||fresh.status=='error')) { fireTaskCallback(fresh); dismissTask(id); }
@@ -319,8 +349,11 @@ function foregroundTask(id) {
   var closeTip = finished ? "<?=_('Minimize - keeps it in the tray')?>" : "<?=_('Minimize - keeps running in the background')?>";
   decorateNchanSheet({ close:'minimize', tip: closeTip });
   $('pre#swaltext').html('');
-  $.get(TASK_ENDPOINT,{action:'log',id:id},function(logdata){
+  $.get(TASK_ENDPOINT,{action:'log',id:id},function(logdata,_st,xhr){
     if (foregroundTaskId!==id) return; // user moved on while loading
+    // byte length of the log as served: live messages tagged with an offset
+    // below this were rendered by this replay (see routeTaskMessage)
+    replayedBytes = parseInt(xhr && xhr.getResponseHeader('X-Task-Log-Size'),10) || 0;
     var msgs = (logdata||'').split('\x1e');
     for (var i=0;i<msgs.length;i++) {
       var m = msgs[i];
@@ -328,7 +361,7 @@ function foregroundTask(id) {
       renderMessage(task.type, m);
     }
     var fresh = taskById(id);
-    if (fresh && fresh.status=='running')    nchanStart(nchanByType[task.type]);
+    if (fresh && (fresh.status=='running' || fresh.status=='queued')) startTaskChannel(id);
     else if (fresh && fresh.status=='done')  openDone('_DONE_');
     else if (fresh && fresh.status=='error') openError('_ERROR_');
   },'text');
@@ -341,7 +374,10 @@ function onTaskListUpdate() {
     if (prev !== t.status) {
       if (t.status=='done' || t.status=='error') {
         if (foregroundTaskId==t.id) {
-          stopAllTypeChannels();
+          // Leave the task channel subscribed: the status broadcast (/sub/tasks)
+          // and the task's own output channel race over separate sockets, so the
+          // last few output records may still be in flight. The modal's close/
+          // minimize handlers stop the channel.
           if (t.status=='error') openError('_ERROR_'); else openDone('_DONE_');
           // callback fired when the user closes the modal
         } else if (prev !== undefined) {
@@ -361,7 +397,7 @@ function onTaskListUpdate() {
         }
       } else if (t.status=='running' && foregroundTaskId==t.id) {
         $('#pluginProgressTitle').attr('class','nchan-state nchan-running').html("<i class='fa fa-refresh fa-spin fa-fw'></i> <?=_('In Progress')?>");
-        nchanStart(nchanByType[t.type]);
+        startTaskChannel(t.id);
       }
     }
     taskPrev[t.id] = t.status;
@@ -485,8 +521,8 @@ function nchanCloseModal(doClose) {
 }
 
 function minimizeForegroundTask() {
-  if (foregroundTaskId) { foregroundTaskId=null; foregroundType=null; }
-  stopAllTypeChannels();
+  foregroundTaskId=null;
+  stopTaskChannel();
   clearProgressDots();
   nchanCloseModal(true);
   trayRender();
