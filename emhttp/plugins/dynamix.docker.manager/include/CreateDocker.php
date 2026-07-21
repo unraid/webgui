@@ -1134,7 +1134,7 @@ Template URL:
 </div>
 <div markdown="1" class="advanced">
 _(Icon URL)_:
-: <input type="text" name="contIcon">
+: <input type="text" name="contIcon"> <img id="contIconPreview" alt="" onerror="this.src='/plugins/dynamix.docker.manager/images/question.png'" style="display:none;height:32px;width:32px;vertical-align:middle;margin-left:8px;border-radius:4px;object-fit:contain">
 
 :docker_client_icon_url_help:
 
@@ -2023,6 +2023,16 @@ $(function() {
     echo "$('.advancedview').prop('checked','true'); $('.advancedview').change();";
     echo "$('.advancedview').siblings('.switch-button-background').click();";
   }?>
+  // Live preview of the container Icon URL (mirrors the icon shown in the container list)
+  (function(){
+    var $inp = $('input[name="contIcon"]'), $img = $('#contIconPreview');
+    function update(){
+      var url = ($inp.val()||'').trim();
+      if (url) $img.attr('src', url).show(); else $img.hide();
+    }
+    $inp.on('input change', update);
+    update();
+  })();
 });
 
 if (window.location.href.indexOf("/Apps/") > 0  && <? if (is_file($xmlTemplate)) echo "true"; else echo "false"; ?> ) {
