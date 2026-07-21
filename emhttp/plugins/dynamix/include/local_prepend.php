@@ -16,7 +16,14 @@
 
 function csrf_terminate($reason) {
   exec('logger -t webGUI -- '.escapeshellarg("error: {$_SERVER['REQUEST_URI']} - {$reason} csrf_token"));
-  exit;
+  // Reject with an explicit 403 instead of a silent empty 200 so callers can
+  // tell a CSRF failure apart from a genuine empty result (e.g. a fetch-based
+  // status read must not render as "service down" when it was simply blocked).
+  if (!headers_sent()) {
+    http_response_code(403);
+    header('Content-Type: application/json');
+  }
+  exit(json_encode(['error' => "{$reason} csrf_token"]));
 }
 
 putenv('PATH=.:/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin');
