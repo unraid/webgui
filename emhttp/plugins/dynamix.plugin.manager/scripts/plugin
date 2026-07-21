@@ -525,6 +525,21 @@ function move($src_file, $tar_dir) {
   return rename($src_file, $tar_dir."/".basename($src_file));
 }
 
+// Resolve the installed plugin file that a tracking symlink points at, or FALSE
+// if the plugin is not installed. A dangling symlink - one whose target .plg has
+// been removed or renamed on the flash out-of-band - is treated as not installed
+// and the stale link is cleaned up, so a subsequent install/update/check starts
+// from a clean state instead of failing to parse the missing target.
+function installed_plugin($symlink) {
+  $target = @readlink($symlink);
+  if ($target === false) return false;
+  if (!is_file($target)) {
+    @unlink($symlink);
+    return false;
+  }
+  return $target;
+}
+
 $notify        = '/usr/local/emhttp/webGui/scripts/notify';
 $boot          = '/boot/config/plugins';
 $nextboot      = '/boot/config/plugins-nextboot';
@@ -586,7 +601,7 @@ if ($method == 'checkall') {
     // skip OS related plugins
     if (in_array(basename($link,'.plg'),$builtin)) continue;
     // only consider symlinks
-    $installed_plugin_file = @readlink($link);
+    $installed_plugin_file = installed_plugin($link);
     if ($installed_plugin_file === false) continue;
     if (plugin('pluginURL', $installed_plugin_file, $error) === false) continue;
     $plugin = basename($installed_plugin_file);
@@ -609,7 +624,7 @@ if ($method == 'updateall') {
     // skip OS related plugins
     if (in_array(basename($link,'.plg'),$builtin)) continue;
     // only consider symlinks
-    $installed_plugin_file = @readlink($link);
+    $installed_plugin_file = installed_plugin($link);
     if ($installed_plugin_file === false) continue;
     if (plugin('pluginURL', $installed_plugin_file, $error) === false) continue;
     $version = plugin('version', $installed_plugin_file, $error);
@@ -635,7 +650,7 @@ if ($method == 'checkos') {
   }
   foreach ($builtin as $link) {
     // only consider symlinks
-    $installed_plugin_file = @readlink("$plugins/$link.plg");
+    $installed_plugin_file = installed_plugin("$plugins/$link.plg");
     if ($installed_plugin_file === false) continue;
     if (plugin("pluginURL", $installed_plugin_file, $error) === false) continue;
     $plugin = basename($installed_plugin_file);
@@ -708,7 +723,7 @@ if ($method == 'install') {
   }
   $symlink = "$plugins/$plugin";
   // check for re-install
-  $installed_plugin_file = @readlink($symlink);
+  $installed_plugin_file = installed_plugin($symlink);
   if ($installed_plugin_file !== false) {
     if ($plugin_file == $installed_plugin_file) {
       write("plugin: not re-installing same plugin\n");
@@ -804,7 +819,7 @@ if ($method == 'check') {
   $plugin = $argv[2];
   $symlink = "$plugins/$plugin";
   write("plugin: checking: $plugin ...\n");
-  $installed_plugin_file = @readlink($symlink);
+  $installed_plugin_file = installed_plugin($symlink);
   if ($installed_plugin_file === false) {
     write("plugin: not installed\n");
     // run hook scripts for post processing
@@ -857,7 +872,7 @@ if ($method == 'update') {
   }
   $action = $download_only ? 'downloading' : 'updating';
   write("plugin: $action: $plugin\n");
-  $installed_plugin_file = @readlink($symlink);
+  $installed_plugin_file = installed_plugin($symlink);
   if ($installed_plugin_file === false) {
     write("plugin: $plugin not installed\n");
     // run hook scripts for post processing
