@@ -154,6 +154,20 @@ jobs:
             cp -a old/. build/orig/ 2>/dev/null || true
           fi
 
+          # Record the intended mode of every changed file. Unified diffs carry
+          # no permission bits, so `patch` creates new files with the umask
+          # (0644) and drops the exec bit. The installer re-applies these modes
+          # after patching/installing.
+          : > build/modes.txt
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            [ -f "$file" ] || continue
+            sys=$(map_path "$file")
+            [ -n "$sys" ] || continue
+            printf '%s %s\n' "$(stat -c '%a' "$file")" "$sys" >> build/modes.txt
+          done < changed_files.txt
+          echo "modes.txt:"; cat build/modes.txt
+
           find build -type f | sed 's|^build/||' > file_list.txt
           echo "Payload contents:"; cat file_list.txt
 

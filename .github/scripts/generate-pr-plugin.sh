@@ -114,10 +114,18 @@ if [ -f "$PLUGIN_DIR/text_files.txt" ]; then
             echo "⚠️  Warning: could not re-apply $(basename "$other")'s changes; reinstall it or reboot to restore them"
             logger -t webgui-pr "re-apply of $(basename "$other") patch failed during $(basename "$PLUGIN_DIR") rollback"
         fi
+        # Re-applying the patch recreates any new files at 0644; restore modes.
+        if [ -f "$other/modes.txt" ]; then
+            while read -r mode sys; do
+                [ -n "$mode" ] && [ -n "$sys" ] || continue
+                [ -e "/$sys" ] && chmod "$mode" "/$sys"
+            done < "$other/modes.txt"
+        fi
     done
 fi
 rm -f "$PATCH_APPLIED"
 rm -rf "$PLUGIN_DIR/orig"
+rm -f "$PLUGIN_DIR/modes.txt"
 : > "$PLUGIN_DIR/text_files.txt"
 
 # Restore any previously installed binary files
@@ -235,27 +243,56 @@ if [ -s "$PAYLOAD/binary_files.txt" ]; then
     done < "$PAYLOAD/binary_files.txt"
 fi
 
+# ---- Restore file modes ----------------------------------------------------
+# Unified diffs carry no permission bits, so patched/new text files land 0644
+# and lose any exec bit. Re-apply the modes recorded at build time. Persist
+# modes.txt so rolling back another PR plugin can restore them too.
+if [ -f "$PAYLOAD/modes.txt" ]; then
+    cp -f "$PAYLOAD/modes.txt" "$PLUGIN_DIR/modes.txt"
+    while read -r mode sys; do
+        [ -n "$mode" ] && [ -n "$sys" ] || continue
+        [ -e "/$sys" ] && chmod "$mode" "/$sys"
+    done < "$PAYLOAD/modes.txt"
+    echo "✅ File modes restored"
+fi
+
+# ---- Restart patched nchan publishers --------------------------------------
+# nchan publishers (scripts under .../nchan/) are long-running loops. The running
+# process keeps executing the OLD script after we patch it on disk - and a browser
+# reload won't fix it, because DefaultPageLayout only (re)launches a publisher that
+# is NOT already running. So a patched publisher would keep streaming stale output
+# until every tab closes and monitor_nchan idle-reaps it. Kill the ones this PR
+# touched; DefaultPageLayout respawns them with the new code on the next page load.
+# Safe: monitor_nchan kills these routinely, and subscribers stay connected and
+# resume from the respawned publisher (matches the ResetTZ.php reload pattern).
+if [ -s "$PAYLOAD/text_files.txt" ]; then
+    grep -aoE '/nchan/[^/]+$' "$PAYLOAD/text_files.txt" 2>/dev/null | sed 's#^/##' | sort -u | while IFS= read -r rel; do
+        [ -n "$rel" ] || continue
+        if pkill -f "$rel" 2>/dev/null; then echo "Restarted nchan publisher: $rel"; fi
+    done
+fi
+
 # ---- Reactivate overlaid system daemons ------------------------------------
 # The patch is applied late (on install, and at boot AFTER rc.M has already
 # started these daemons with the stock config), so config we just overlaid does
 # not take effect until the matching daemon is bounced — a plain reboot alone
 # does not help because the plugin re-applies after rc.M each time. Restart the
-# affected daemons here. Keep this to daemons that are safe to bounce live.
-CHANGED="$PAYLOAD/pr.patch"
-changed_matches() { [ -s "$CHANGED" ] && grep -qE "$1" "$CHANGED"; }
-
-# elogind owns the physical power key unless a drop-in tells it to ignore it;
-# it only reads logind.conf.d/ at startup, so reload it when that config changes.
-if changed_matches '(^|[ /])etc/elogind/|(^|[ /])etc/rc\.d/rc\.elogind' && [ -x /etc/rc.d/rc.elogind ]; then
-    echo "Reloading elogind (session/power-key policy changed)..."
-    /etc/rc.d/rc.elogind restart >/dev/null 2>&1 || true
+# affected daemons here (after modes are restored, so their rc scripts are
+# executable). Keep this to daemons that are safe to bounce live. Paths in
+# text_files.txt are the packaged layout (etc/rc.d/* maps to usr/local/etc/rc.d/*).
+if [ -s "$PAYLOAD/text_files.txt" ]; then
+    # elogind owns the physical power key unless a drop-in tells it to ignore it;
+    # it only reads logind.conf.d/ at startup, so reload it when that changes.
+    if grep -qE 'etc/elogind/|rc\.d/rc\.elogind$' "$PAYLOAD/text_files.txt" && [ -x /etc/rc.d/rc.elogind ]; then
+        echo "Reloading elogind (session/power-key policy changed)..."
+        /etc/rc.d/rc.elogind restart >/dev/null 2>&1 || true
+    fi
+    # rc.acpid installs Unraid's ACPI handler over the stock one at (re)start.
+    if grep -qE 'etc/acpi/|rc\.d/rc\.acpid$' "$PAYLOAD/text_files.txt" && [ -x /etc/rc.d/rc.acpid ]; then
+        echo "Restarting acpid (ACPI handler changed)..."
+        /etc/rc.d/rc.acpid restart >/dev/null 2>&1 || true
+    fi
 fi
-# rc.acpid installs Unraid's ACPI handler over the stock one at (re)start.
-if changed_matches '(^|[ /])etc/acpi/|(^|[ /])etc/rc\.d/rc\.acpid' && [ -x /etc/rc.d/rc.acpid ]; then
-    echo "Restarting acpid (ACPI handler changed)..."
-    /etc/rc.d/rc.acpid restart >/dev/null 2>&1 || true
-fi
-
 echo ""
 echo "✅ Installation complete for PR #PR_PLACEHOLDER"
 echo "⚠️  This is a TEST plugin — remove it before applying production updates"
@@ -349,6 +386,13 @@ if [ -f "$PLUGIN_DIR/text_files.txt" ]; then
             echo "⚠️  Warning: could not re-apply $(basename "$other")'s changes; reinstall it or reboot to restore them"
             logger -t webgui-pr "re-apply of $(basename "$other") patch failed during $(basename "$PLUGIN_DIR") rollback"
         fi
+    done
+    # Restart any nchan publishers this PR patched so the live process drops the
+    # patched code and respawns from the restored original on the next page load
+    # (long-running publishers don't pick up the on-disk change until killed).
+    grep -aoE '/nchan/[^/]+$' "$PLUGIN_DIR/text_files.txt" 2>/dev/null | sed 's#^/##' | sort -u | while IFS= read -r rel; do
+        [ -n "$rel" ] || continue
+        if pkill -f "$rel" 2>/dev/null; then echo "Restarted nchan publisher: $rel"; fi
     done
     echo "✅ Text changes restored"
 fi
