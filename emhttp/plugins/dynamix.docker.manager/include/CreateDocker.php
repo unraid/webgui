@@ -1148,6 +1148,11 @@ _(Extra Parameters)_:
 
 :docker_extra_parameters_help:
 
+_(Memory limit)_:
+: <input type="text" name="contMemory" placeholder="_(unlimited)_" pattern="[0-9]+[bkmgBKMG]?" title="_(Number of bytes, or a number followed by b, k, m or g (e.g. 512m, 2g))_">
+
+:docker_memory_limit_help:
+
 _(Post Arguments)_:
 : <input type="text" name="contPostArgs">
 
