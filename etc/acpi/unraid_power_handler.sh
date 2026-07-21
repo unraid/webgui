@@ -54,6 +54,16 @@ case "$group" in
 button)
   case "$action" in
   power)
+    # Debounce: some boards/acpid setups deliver the same power-button event
+    # more than once in quick succession, which would log (and act on) it
+    # twice. Ignore a repeat within 1 second of the previous press.
+    STAMP=/run/unraid_powerbutton.stamp
+    now=$(date +%s%N)
+    last=$(cat "$STAMP" 2>/dev/null)
+    echo "$now" >"$STAMP"
+    if [[ -n $last && $(( (now - last) / 1000000 )) -lt 1000 ]]; then
+      exit 0
+    fi
     behavior=$(grep -Pom1 '^powerbutton="\K[^"]+' "$CFG" 2>/dev/null)
     run_powerbutton "${behavior:-shutdown}"
     ;;
