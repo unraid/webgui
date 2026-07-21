@@ -221,7 +221,7 @@ function pre_hooks() {
   $hooks = "/usr/local/emhttp/plugins/dynamix.plugin.manager/pre-hooks";
   foreach (glob("$hooks/*") as $hook) if (is_executable($hook)) {
     write("Executing hook script: ".basename($hook)."\n");
-    run("$hook plugin $method $plugin");
+    run(escapeshellarg($hook)." plugin ".escapeshellarg($method)." ".escapeshellarg($plugin));
   }
 }
 
@@ -235,7 +235,7 @@ function post_hooks($error='') {
   $hooks = "/usr/local/emhttp/plugins/dynamix.plugin.manager/post-hooks";
   foreach (glob("$hooks/*") as $hook) if (is_executable($hook)) {
     write("Executing hook script: ".basename($hook)."\n");
-    run("$hook plugin $method $plugin $error");
+    run(escapeshellarg($hook)." plugin ".escapeshellarg($method)." ".escapeshellarg($plugin)." ".escapeshellarg($error));
   }
 }
 
