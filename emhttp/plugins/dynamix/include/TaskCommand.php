@@ -36,7 +36,14 @@ case 'abort':
   $task = task_read($id);
   if ($task) {
     if ($task['status']==='running' && ctype_digit((string)$task['pid']) && (int)$task['pid'] > 1) {
-      exec('kill '.escapeshellarg($task['pid']));
+      $pid = (int)$task['pid'];
+      // The task runs in its own session/process group (task_launch uses setsid),
+      // so signal the whole group with a negative pid to stop the underlying
+      // operation AND every child it spawned. Killing only the wrapper's pid left
+      // the real worker (e.g. a docker update) orphaned and running to completion.
+      // The bare-pid kill is a fallback in case the group was never established.
+      exec('kill -TERM -'.$pid.' 2>/dev/null');
+      exec('kill -TERM '.$pid.' 2>/dev/null');
       foreach (glob('/tmp/plugins/pluginPending/*') ?: [] as $file) @unlink($file);
       $task['status']   = 'error';
       $task['finished'] = time();

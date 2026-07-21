@@ -135,7 +135,13 @@ function task_launch(&$task) {
   // metacharacter) in the resolved args cannot break out of the outer shell;
   // bash still word-splits the args internally, preserving multi-arg commands.
   $payload = 'sleep .3 && '.$name.' '.$args.$suffix.$stamp;
-  $pid = exec($env.'nohup bash -c '.escapeshellarg($payload).' 1>/dev/null 2>&1 & echo $!');
+  // setsid runs the operation in its own session + process group (pid == pgid),
+  // so Abort (TaskCommand.php) can signal the whole tree via a negative-pid group
+  // kill and actually stop the underlying command and every child it spawned.
+  // With a plain nohup the wrapper shell stays in php-fpm's process group: killing
+  // just its pid orphaned the real worker (e.g. a docker update), which then ran
+  // to completion after the task was already marked error.
+  $pid = exec($env.'setsid bash -c '.escapeshellarg($payload).' 1>/dev/null 2>&1 & echo $!');
   $task['pid']     = $pid;
   $task['status']  = 'running';
   $task['started'] = time();
