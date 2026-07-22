@@ -10,13 +10,23 @@ function parity_protected_shrink_files($bootConfigRoot = '/boot/config') {
 }
 
 function parity_protected_shrink_active($protectedShrinkFiles) {
-  $states = array_map('parity_protected_shrink_path_state', $protectedShrinkFiles);
+  if (count($protectedShrinkFiles) !== 2) {
+    $states = array_map('parity_protected_shrink_path_state', $protectedShrinkFiles);
+    return count(array_filter($states, fn($state) => $state !== 'absent')) !== 0;
+  }
+
+  $trustedRoot = parity_protected_shrink_trusted_root($protectedShrinkFiles);
+  if ($trustedRoot === false) return true;
+
+  $states = array_map(
+    fn($path) => parity_protected_shrink_path_state($path, null, null, $trustedRoot),
+    $protectedShrinkFiles
+  );
   if (count(array_filter($states, fn($state) => $state !== 'absent')) === 0) return false;
-  if (count($protectedShrinkFiles) !== 2) return true;
   if (in_array('invalid', $states, true) || in_array('absent', $states, true)) return true;
 
-  $canonical = parity_protected_shrink_completed_identity($protectedShrinkFiles[0]);
-  $recovery = parity_protected_shrink_completed_identity($protectedShrinkFiles[1]);
+  $canonical = parity_protected_shrink_completed_identity($protectedShrinkFiles[0], $trustedRoot);
+  $recovery = parity_protected_shrink_completed_identity($protectedShrinkFiles[1], $trustedRoot);
 
   // Core releases its mutation fence only after both durable copies contain
   // the same version-7 terminal tombstone. Missing, malformed, active, legacy,
@@ -25,8 +35,8 @@ function parity_protected_shrink_active($protectedShrinkFiles) {
     !parity_protected_shrink_identity_equal($canonical, $recovery);
 }
 
-function parity_protected_shrink_completed_identity($path) {
-  if (parity_protected_shrink_path_state($path) !== 'regular') return false;
+function parity_protected_shrink_completed_identity($path, $trustedRoot = null) {
+  if (parity_protected_shrink_path_state($path, null, null, $trustedRoot) !== 'regular') return false;
 
   $body = @file_get_contents($path);
   if ($body === false) return false;
@@ -78,36 +88,39 @@ function parity_protected_shrink_completed_identity($path) {
   ];
 }
 
-function parity_protected_shrink_path_state($path, $lstat = null, $scandir = null) {
+function parity_protected_shrink_trusted_root($protectedShrinkFiles) {
+  $roots = array_map(fn($path) => dirname(dirname(dirname($path))), $protectedShrinkFiles);
+  return count(array_unique($roots)) === 1 ? $roots[0] : false;
+}
+
+function parity_protected_shrink_path_state(
+  $path,
+  $lstat = null,
+  $scandir = null,
+  $trustedRoot = null
+) {
   $lstat ??= fn($candidate) => @lstat($candidate);
   $scandir ??= fn($candidate) => @scandir($candidate);
+  $path = rtrim($path, '/');
+  $trustedRoot = rtrim($trustedRoot ?? dirname($path), '/');
 
-  clearstatcache(true, $path);
-  $stat = $lstat($path);
-  if ($stat !== false) {
-    return parity_protected_shrink_stat_type($stat) === 'regular' ? 'regular' : 'invalid';
+  if ($path === '' || $trustedRoot === '') return 'invalid';
+  if ($path !== $trustedRoot && !str_starts_with($path, "$trustedRoot/")) return 'invalid';
+
+  $rootStat = $lstat($trustedRoot);
+  if ($rootStat === false || parity_protected_shrink_stat_type($rootStat) !== 'directory') {
+    return 'invalid';
   }
 
-  // PHP does not expose lstat errno. Prove ENOENT by finding the nearest
-  // real, readable ancestor and descending through exact directory entries.
-  // Any symlink/non-directory ancestor, unreadable directory, or listed but
-  // unstatable component fails closed.
-  $candidate = rtrim($path, '/');
-  $missing = [];
+  // PHP does not expose lstat errno. Descend from the trusted real boot root:
+  // a missing name in a successfully enumerated real directory proves ENOENT;
+  // every symlink, I/O error, or listed-but-unstatable component fails closed.
+  $relative = ltrim(substr($path, strlen($trustedRoot)), '/');
+  $parts = $relative === '' ? [] : explode('/', $relative);
+  $candidate = $trustedRoot;
 
-  while (true) {
-    $stat = $lstat($candidate);
-    if ($stat !== false) break;
-
-    $parent = dirname($candidate);
-    if ($parent === $candidate) return 'invalid';
-    $missing[] = basename($candidate);
-    $candidate = $parent;
-  }
-
-  if (parity_protected_shrink_stat_type($stat) !== 'directory') return 'invalid';
-
-  foreach (array_reverse($missing) as $index => $name) {
+  foreach ($parts as $index => $name) {
+    if ($name === '' || $name === '.' || $name === '..') return 'invalid';
     $entries = $scandir($candidate);
     if ($entries === false) return 'invalid';
     if (!in_array($name, $entries, true)) return 'absent';
@@ -116,7 +129,7 @@ function parity_protected_shrink_path_state($path, $lstat = null, $scandir = nul
     $stat = $lstat($candidate);
     if ($stat === false) return 'invalid';
 
-    $last = $index === count($missing) - 1;
+    $last = $index === count($parts) - 1;
     $expectedType = $last ? 'regular' : 'directory';
     if (parity_protected_shrink_stat_type($stat) !== $expectedType) return 'invalid';
   }

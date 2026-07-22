@@ -196,6 +196,27 @@ assert_same(
 unlink($symlinkParent);
 rmdir($realParent);
 
+$symlinkBootRoot = "$testRoot/symlink-boot";
+$alternateBootRoot = "$testRoot/alternate-boot";
+mkdir("$symlinkBootRoot", 0700, true);
+mkdir("$alternateBootRoot/unraid/storage", 0700, true);
+symlink("$alternateBootRoot/unraid", "$symlinkBootRoot/unraid");
+$symlinkAncestorFiles = parity_protected_shrink_files($symlinkBootRoot);
+write_intent($symlinkAncestorFiles[0], $completed);
+write_intent($symlinkAncestorFiles[1], $completed);
+assert_same(
+  true,
+  parity_protected_shrink_active($symlinkAncestorFiles),
+  'A symlinked ancestor below the trusted boot root must fail closed.'
+);
+unlink($symlinkAncestorFiles[0]);
+unlink($symlinkAncestorFiles[1]);
+unlink("$symlinkBootRoot/unraid");
+rmdir("$alternateBootRoot/unraid/storage");
+rmdir("$alternateBootRoot/unraid");
+rmdir($alternateBootRoot);
+rmdir($symlinkBootRoot);
+
 assert_same(
   'completion_durability_unavailable',
   parity_protected_shrink_begin_downgrade(
