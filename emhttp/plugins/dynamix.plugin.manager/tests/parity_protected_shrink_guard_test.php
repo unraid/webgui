@@ -52,7 +52,6 @@ assert_same(
 $testRoot = sys_get_temp_dir().'/parity-protected-shrink-guard-'.bin2hex(random_bytes(8));
 $testFiles = parity_protected_shrink_files($testRoot);
 mkdir(dirname($testFiles[0]), 0700, true);
-mkdir(dirname($testFiles[2]), 0700, true);
 $testMarker = "$testRoot/downgrade";
 $testInterlock = "$testRoot/interlock";
 
@@ -117,6 +116,28 @@ assert_same(
   'Identity-divergent completed copies must block downgrade.'
 );
 
+write_intent(
+  $testFiles[0],
+  protected_shrink_intent('completed', [
+    'version' => 7,
+    'device_id' => '0123',
+    'topology' => ['array_slots' => ['disk2' => '0123']],
+  ])
+);
+write_intent(
+  $testFiles[1],
+  protected_shrink_intent('completed', [
+    'version' => 7,
+    'device_id' => '123',
+    'topology' => ['array_slots' => ['disk2' => '123']],
+  ])
+);
+assert_same(
+  true,
+  parity_protected_shrink_active($testFiles),
+  'Numeric-looking identities must compare as exact strings.'
+);
+
 file_put_contents($testFiles[1], '{');
 assert_same(
   true,
@@ -134,8 +155,13 @@ assert_same(
 unlink($testFiles[0]);
 unlink($testFiles[1]);
 
-file_put_contents($testFiles[4], 'stage=prepared\n');
-assert_same(true, parity_protected_shrink_active($testFiles), 'A daemon proof must block downgrade.');
+mkdir($testFiles[1]);
+assert_same(
+  true,
+  parity_protected_shrink_active($testFiles),
+  'A present non-regular recovery path must fail closed.'
+);
+rmdir($testFiles[1]);
 
 $firstLock = parity_protected_shrink_interlock_acquire($testInterlock);
 assert_same(true, is_resource($firstLock), 'The first interlock owner must acquire the lock.');
@@ -149,11 +175,9 @@ $nextLock = parity_protected_shrink_interlock_acquire($testInterlock, true);
 assert_same(true, is_resource($nextLock), 'The lock must transfer after its owner releases it.');
 parity_protected_shrink_interlock_release($nextLock);
 
-unlink($testFiles[4]);
 unlink($testInterlock);
 rmdir(dirname($testFiles[0]));
 rmdir(dirname(dirname($testFiles[0])));
-rmdir(dirname($testFiles[2]));
 rmdir($testRoot);
 
 echo "parity protected shrink downgrade guard: ok\n";

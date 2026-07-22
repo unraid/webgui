@@ -6,35 +6,27 @@ function parity_protected_shrink_files($bootConfigRoot = '/boot/config') {
   return [
     "$bootConfigRoot/unraid/storage/parity-protected-shrink.json",
     "$bootConfigRoot/unraid/storage/parity-protected-shrink.recovery.json",
-    "$bootConfigRoot/storage/parity-protected-shrink-prepared",
-    "$bootConfigRoot/storage/parity-protected-shrink-prepared-complete",
-    "$bootConfigRoot/storage/parity-protected-shrink-daemon",
   ];
 }
 
 function parity_protected_shrink_active($protectedShrinkFiles) {
-  $coreFiles = array_slice($protectedShrinkFiles, 0, 2);
-  $legacyFiles = array_slice($protectedShrinkFiles, 2);
-
-  foreach ($legacyFiles as $protectedShrinkFile) {
-    if (is_file($protectedShrinkFile)) return true;
-  }
-
   $corePresent = false;
-  foreach ($coreFiles as $coreFile) {
-    if (is_file($coreFile)) $corePresent = true;
+  foreach ($protectedShrinkFiles as $protectedShrinkFile) {
+    clearstatcache(true, $protectedShrinkFile);
+    if (@lstat($protectedShrinkFile) !== false) $corePresent = true;
   }
 
   if (!$corePresent) return false;
-  if (count($coreFiles) !== 2) return true;
+  if (count($protectedShrinkFiles) !== 2) return true;
 
-  $canonical = parity_protected_shrink_completed_identity($coreFiles[0]);
-  $recovery = parity_protected_shrink_completed_identity($coreFiles[1]);
+  $canonical = parity_protected_shrink_completed_identity($protectedShrinkFiles[0]);
+  $recovery = parity_protected_shrink_completed_identity($protectedShrinkFiles[1]);
 
   // Core releases its mutation fence only after both durable copies contain
   // the same version-7 terminal tombstone. Missing, malformed, active, legacy,
   // or identity-divergent copies remain downgrade-blocking.
-  return $canonical === false || $recovery === false || $canonical != $recovery;
+  return $canonical === false || $recovery === false ||
+    !parity_protected_shrink_identity_equal($canonical, $recovery);
 }
 
 function parity_protected_shrink_completed_identity($path) {
@@ -88,6 +80,19 @@ function parity_protected_shrink_completed_identity($path) {
       'pool_members' => $poolMemberValues,
     ],
   ];
+}
+
+function parity_protected_shrink_identity_equal($left, $right) {
+  if (gettype($left) !== gettype($right)) return false;
+  if (!is_array($left)) return $left === $right;
+  if (count($left) !== count($right)) return false;
+
+  foreach ($left as $key => $value) {
+    if (!array_key_exists($key, $right)) return false;
+    if (!parity_protected_shrink_identity_equal($value, $right[$key])) return false;
+  }
+
+  return true;
 }
 
 function parity_protected_shrink_interlock_path() {
