@@ -54,11 +54,12 @@ $testFiles = parity_protected_shrink_files($testRoot);
 mkdir(dirname($testFiles[0]), 0700, true);
 $testMarker = "$testRoot/downgrade";
 $testInterlock = "$testRoot/interlock";
+$testSync = fn() => true;
 
 assert_same(false, parity_protected_shrink_active($testFiles), 'No proof must report idle.');
 assert_same(
   'ok',
-  parity_protected_shrink_begin_downgrade($testFiles, $testMarker, $testInterlock),
+  parity_protected_shrink_begin_downgrade($testFiles, $testMarker, $testInterlock, $testSync),
   'Downgrade should publish its marker while no protected shrink exists.'
 );
 assert_same(true, is_file($testMarker), 'A successful downgrade decision must retain its marker.');
@@ -69,7 +70,7 @@ write_intent($testFiles[1], protected_shrink_intent('zeroing'));
 assert_same(true, parity_protected_shrink_active($testFiles), 'An active Core intent must block downgrade.');
 assert_same(
   'protected_shrink_active',
-  parity_protected_shrink_begin_downgrade($testFiles, $testMarker, $testInterlock),
+  parity_protected_shrink_begin_downgrade($testFiles, $testMarker, $testInterlock, $testSync),
   'A Core intent committed under the interlock must win over downgrade.'
 );
 assert_same(false, is_file($testMarker), 'A rejected downgrade must remove its transient marker.');
@@ -84,7 +85,7 @@ assert_same(
 );
 assert_same(
   'protected_shrink_active',
-  parity_protected_shrink_begin_downgrade($testFiles, $testMarker, $testInterlock),
+  parity_protected_shrink_begin_downgrade($testFiles, $testMarker, $testInterlock, $testSync),
   'A recovery-only checkpoint must retain the rollback fence.'
 );
 assert_same(false, is_file($testMarker), 'A recovery-only rejection must remove its marker.');
@@ -100,7 +101,7 @@ assert_same(
 );
 assert_same(
   'ok',
-  parity_protected_shrink_begin_downgrade($testFiles, $testMarker, $testInterlock),
+  parity_protected_shrink_begin_downgrade($testFiles, $testMarker, $testInterlock, $testSync),
   'The terminal tombstone must agree with Core and release the downgrade path.'
 );
 assert_same(true, is_file($testMarker), 'An allowed completed downgrade must retain its marker.');
@@ -162,6 +163,58 @@ assert_same(
   'A present non-regular recovery path must fail closed.'
 );
 rmdir($testFiles[1]);
+
+write_intent($testFiles[1], $completed);
+symlink($testFiles[1], $testFiles[0]);
+assert_same(
+  true,
+  parity_protected_shrink_active($testFiles),
+  'A symlink to a valid completion record must fail closed.'
+);
+unlink($testFiles[0]);
+unlink($testFiles[1]);
+
+assert_same(
+  'invalid',
+  parity_protected_shrink_path_state(
+    $testFiles[0],
+    fn($_path) => false,
+    fn($_path) => false
+  ),
+  'An unclassifiable lstat failure must not be treated as absence.'
+);
+
+assert_same(
+  'completion_durability_unavailable',
+  parity_protected_shrink_begin_downgrade(
+    $testFiles,
+    $testMarker,
+    $testInterlock,
+    fn() => false
+  ),
+  'A failed filesystem barrier must reject downgrade.'
+);
+assert_same(false, is_file($testMarker), 'A failed barrier must remove its transient marker.');
+
+write_intent($testFiles[0], $completed);
+write_intent($testFiles[1], $completed);
+$mutatingBarrier = function() use ($testFiles) {
+  write_intent($testFiles[0], protected_shrink_intent('signing'));
+  return true;
+};
+assert_same(
+  'protected_shrink_active',
+  parity_protected_shrink_begin_downgrade(
+    $testFiles,
+    $testMarker,
+    $testInterlock,
+    $mutatingBarrier
+  ),
+  'Downgrade must reread both records after the durability barrier.'
+);
+assert_same(false, is_file($testMarker), 'A failed reread must remove its transient marker.');
+unlink($testFiles[0]);
+unlink($testFiles[1]);
 
 $firstLock = parity_protected_shrink_interlock_acquire($testInterlock);
 assert_same(true, is_resource($firstLock), 'The first interlock owner must acquire the lock.');

@@ -33,6 +33,12 @@ if ($downgradeDecision === 'interlock_unavailable') {
   exit;
 }
 
+if ($downgradeDecision === 'completion_durability_unavailable') {
+  http_response_code(503);
+  echo _('The protected disk-removal safety record could not be synchronized. Nothing was changed.');
+  exit;
+}
+
 if ($downgradeDecision === 'downgrade_pending') {
   http_response_code(409);
   echo _('An Unraid downgrade is already pending.');

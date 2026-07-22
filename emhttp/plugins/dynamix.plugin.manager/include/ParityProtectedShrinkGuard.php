@@ -10,14 +10,10 @@ function parity_protected_shrink_files($bootConfigRoot = '/boot/config') {
 }
 
 function parity_protected_shrink_active($protectedShrinkFiles) {
-  $corePresent = false;
-  foreach ($protectedShrinkFiles as $protectedShrinkFile) {
-    clearstatcache(true, $protectedShrinkFile);
-    if (@lstat($protectedShrinkFile) !== false) $corePresent = true;
-  }
-
-  if (!$corePresent) return false;
+  $states = array_map('parity_protected_shrink_path_state', $protectedShrinkFiles);
+  if (count(array_filter($states, fn($state) => $state !== 'absent')) === 0) return false;
   if (count($protectedShrinkFiles) !== 2) return true;
+  if (in_array('invalid', $states, true) || in_array('absent', $states, true)) return true;
 
   $canonical = parity_protected_shrink_completed_identity($protectedShrinkFiles[0]);
   $recovery = parity_protected_shrink_completed_identity($protectedShrinkFiles[1]);
@@ -30,7 +26,7 @@ function parity_protected_shrink_active($protectedShrinkFiles) {
 }
 
 function parity_protected_shrink_completed_identity($path) {
-  if (!is_file($path)) return false;
+  if (parity_protected_shrink_path_state($path) !== 'regular') return false;
 
   $body = @file_get_contents($path);
   if ($body === false) return false;
@@ -82,6 +78,45 @@ function parity_protected_shrink_completed_identity($path) {
   ];
 }
 
+function parity_protected_shrink_path_state($path, $lstat = null, $scandir = null) {
+  $lstat ??= fn($candidate) => @lstat($candidate);
+  $scandir ??= fn($candidate) => @scandir($candidate);
+
+  clearstatcache(true, $path);
+  $stat = $lstat($path);
+  if ($stat !== false) {
+    $mode = $stat['mode'] ?? null;
+    return is_int($mode) && ($mode & 0170000) === 0100000 ? 'regular' : 'invalid';
+  }
+
+  // PHP does not expose lstat errno. Prove ENOENT by finding the nearest
+  // readable ancestor whose directory entries omit the next path component.
+  // Any unreadable ancestor or present-but-unstattable component fails closed.
+  $candidate = rtrim($path, '/');
+  while ($candidate !== '' && $candidate !== '/') {
+    $parent = dirname($candidate);
+    $name = basename($candidate);
+    $entries = $scandir($parent);
+
+    if ($entries !== false) {
+      return in_array($name, $entries, true) ? 'invalid' : 'absent';
+    }
+
+    $candidate = $parent;
+  }
+
+  return 'invalid';
+}
+
+function parity_protected_shrink_sync_barrier($syncBarrier = null) {
+  if (is_callable($syncBarrier)) return $syncBarrier() === true;
+
+  $output = [];
+  $status = 1;
+  exec('/bin/sync', $output, $status);
+  return $status === 0;
+}
+
 function parity_protected_shrink_identity_equal($left, $right) {
   if (gettype($left) !== gettype($right)) return false;
   if (!is_array($left)) return $left === $right;
@@ -124,7 +159,8 @@ function parity_protected_shrink_interlock_release($handle) {
 function parity_protected_shrink_begin_downgrade(
   $protectedShrinkFiles,
   $downgradeMarker = '/var/run/unraid-os-downgrade',
-  $interlockPath = null
+  $interlockPath = null,
+  $syncBarrier = null
 ) {
   $interlockHandle = parity_protected_shrink_interlock_acquire($interlockPath);
   if ($interlockHandle === false) return 'interlock_unavailable';
@@ -136,6 +172,15 @@ function parity_protected_shrink_begin_downgrade(
 
     fclose($downgradeMarkerHandle);
     @chmod($downgradeMarker, 0600);
+
+    if (!parity_protected_shrink_sync_barrier($syncBarrier)) {
+      @unlink($downgradeMarker);
+      return 'completion_durability_unavailable';
+    }
+
+    foreach ($protectedShrinkFiles as $protectedShrinkFile) {
+      clearstatcache(true, $protectedShrinkFile);
+    }
 
     if (parity_protected_shrink_active($protectedShrinkFiles)) {
       @unlink($downgradeMarker);
