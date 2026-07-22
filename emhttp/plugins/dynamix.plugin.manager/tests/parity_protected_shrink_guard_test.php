@@ -54,7 +54,13 @@ $testFiles = parity_protected_shrink_files($testRoot);
 mkdir(dirname($testFiles[0]), 0700, true);
 $testMarker = "$testRoot/downgrade";
 $testInterlock = "$testRoot/interlock";
-$testSync = fn() => true;
+$testSync = fn($_trustedRoot) => true;
+
+assert_same(
+  '/bin/sync -f '.escapeshellarg($testRoot),
+  parity_protected_shrink_sync_command($testRoot),
+  'The production barrier must use reportable syncfs semantics on the trusted boot filesystem.'
+);
 
 assert_same(false, parity_protected_shrink_active($testFiles), 'No proof must report idle.');
 assert_same(
@@ -223,7 +229,7 @@ assert_same(
     $testFiles,
     $testMarker,
     $testInterlock,
-    fn() => false
+    fn($_trustedRoot) => false
   ),
   'A failed filesystem barrier must reject downgrade.'
 );
@@ -231,7 +237,7 @@ assert_same(false, is_file($testMarker), 'A failed barrier must remove its trans
 
 write_intent($testFiles[0], $completed);
 write_intent($testFiles[1], $completed);
-$mutatingBarrier = function() use ($testFiles) {
+$mutatingBarrier = function($_trustedRoot) use ($testFiles) {
   write_intent($testFiles[0], protected_shrink_intent('signing'));
   return true;
 };

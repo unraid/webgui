@@ -148,13 +148,17 @@ function parity_protected_shrink_stat_type($stat) {
   return 'invalid';
 }
 
-function parity_protected_shrink_sync_barrier($syncBarrier = null) {
-  if (is_callable($syncBarrier)) return $syncBarrier() === true;
+function parity_protected_shrink_sync_barrier($trustedRoot, $syncBarrier = null) {
+  if (is_callable($syncBarrier)) return $syncBarrier($trustedRoot) === true;
 
   $output = [];
   $status = 1;
-  exec('/bin/sync', $output, $status);
+  exec(parity_protected_shrink_sync_command($trustedRoot), $output, $status);
   return $status === 0;
+}
+
+function parity_protected_shrink_sync_command($trustedRoot) {
+  return '/bin/sync -f '.escapeshellarg($trustedRoot);
 }
 
 function parity_protected_shrink_identity_equal($left, $right) {
@@ -213,7 +217,8 @@ function parity_protected_shrink_begin_downgrade(
     fclose($downgradeMarkerHandle);
     @chmod($downgradeMarker, 0600);
 
-    if (!parity_protected_shrink_sync_barrier($syncBarrier)) {
+    $trustedRoot = parity_protected_shrink_trusted_root($protectedShrinkFiles);
+    if ($trustedRoot === false || !parity_protected_shrink_sync_barrier($trustedRoot, $syncBarrier)) {
       @unlink($downgradeMarker);
       return 'completion_durability_unavailable';
     }
