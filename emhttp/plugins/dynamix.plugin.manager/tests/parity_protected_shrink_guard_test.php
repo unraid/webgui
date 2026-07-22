@@ -184,6 +184,18 @@ assert_same(
   'An unclassifiable lstat failure must not be treated as absence.'
 );
 
+$realParent = "$testRoot/real-parent";
+$symlinkParent = "$testRoot/symlink-parent";
+mkdir($realParent);
+symlink($realParent, $symlinkParent);
+assert_same(
+  'invalid',
+  parity_protected_shrink_path_state("$symlinkParent/missing.json"),
+  'A symlinked parent must not be used to prove a protected path absent.'
+);
+unlink($symlinkParent);
+rmdir($realParent);
+
 assert_same(
   'completion_durability_unavailable',
   parity_protected_shrink_begin_downgrade(

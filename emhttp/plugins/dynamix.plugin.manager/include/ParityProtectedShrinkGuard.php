@@ -85,25 +85,52 @@ function parity_protected_shrink_path_state($path, $lstat = null, $scandir = nul
   clearstatcache(true, $path);
   $stat = $lstat($path);
   if ($stat !== false) {
-    $mode = $stat['mode'] ?? null;
-    return is_int($mode) && ($mode & 0170000) === 0100000 ? 'regular' : 'invalid';
+    return parity_protected_shrink_stat_type($stat) === 'regular' ? 'regular' : 'invalid';
   }
 
   // PHP does not expose lstat errno. Prove ENOENT by finding the nearest
-  // readable ancestor whose directory entries omit the next path component.
-  // Any unreadable ancestor or present-but-unstattable component fails closed.
+  // real, readable ancestor and descending through exact directory entries.
+  // Any symlink/non-directory ancestor, unreadable directory, or listed but
+  // unstatable component fails closed.
   $candidate = rtrim($path, '/');
-  while ($candidate !== '' && $candidate !== '/') {
+  $missing = [];
+
+  while (true) {
+    $stat = $lstat($candidate);
+    if ($stat !== false) break;
+
     $parent = dirname($candidate);
-    $name = basename($candidate);
-    $entries = $scandir($parent);
-
-    if ($entries !== false) {
-      return in_array($name, $entries, true) ? 'invalid' : 'absent';
-    }
-
+    if ($parent === $candidate) return 'invalid';
+    $missing[] = basename($candidate);
     $candidate = $parent;
   }
+
+  if (parity_protected_shrink_stat_type($stat) !== 'directory') return 'invalid';
+
+  foreach (array_reverse($missing) as $index => $name) {
+    $entries = $scandir($candidate);
+    if ($entries === false) return 'invalid';
+    if (!in_array($name, $entries, true)) return 'absent';
+
+    $candidate .= ($candidate === '/' ? '' : '/').$name;
+    $stat = $lstat($candidate);
+    if ($stat === false) return 'invalid';
+
+    $last = $index === count($missing) - 1;
+    $expectedType = $last ? 'regular' : 'directory';
+    if (parity_protected_shrink_stat_type($stat) !== $expectedType) return 'invalid';
+  }
+
+  return 'regular';
+}
+
+function parity_protected_shrink_stat_type($stat) {
+  $mode = $stat['mode'] ?? null;
+  if (!is_int($mode)) return 'invalid';
+
+  $type = $mode & 0170000;
+  if ($type === 0100000) return 'regular';
+  if ($type === 0040000) return 'directory';
 
   return 'invalid';
 }
