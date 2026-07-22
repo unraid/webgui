@@ -5,6 +5,7 @@ function parity_protected_shrink_files($bootConfigRoot = '/boot/config') {
 
   return [
     "$bootConfigRoot/unraid/storage/parity-protected-shrink.json",
+    "$bootConfigRoot/unraid/storage/parity-protected-shrink.recovery.json",
     "$bootConfigRoot/storage/parity-protected-shrink-prepared",
     "$bootConfigRoot/storage/parity-protected-shrink-prepared-complete",
     "$bootConfigRoot/storage/parity-protected-shrink-daemon",

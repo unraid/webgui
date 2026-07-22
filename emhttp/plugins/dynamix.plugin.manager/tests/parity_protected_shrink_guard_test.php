@@ -16,6 +16,11 @@ assert_same(
   'The downgrade guard must use the production Core intent path.'
 );
 assert_same(
+  '/boot/config/unraid/storage/parity-protected-shrink.recovery.json',
+  $productionFiles[1],
+  'The downgrade guard must include the production Core recovery path.'
+);
+assert_same(
   '/var/run/unraid-os-storage-interlock',
   parity_protected_shrink_interlock_path(),
   'Core and WebGUI must use the same cross-process interlock path.'
@@ -24,7 +29,7 @@ assert_same(
 $testRoot = sys_get_temp_dir().'/parity-protected-shrink-guard-'.bin2hex(random_bytes(8));
 $testFiles = parity_protected_shrink_files($testRoot);
 mkdir(dirname($testFiles[0]), 0700, true);
-mkdir(dirname($testFiles[1]), 0700, true);
+mkdir(dirname($testFiles[2]), 0700, true);
 $testMarker = "$testRoot/downgrade";
 $testInterlock = "$testRoot/interlock";
 
@@ -46,7 +51,22 @@ assert_same(
 );
 assert_same(false, is_file($testMarker), 'A rejected downgrade must remove its transient marker.');
 unlink($testFiles[0]);
-file_put_contents($testFiles[2], 'stage=prepared\n');
+
+file_put_contents($testFiles[1], '{}');
+assert_same(
+  true,
+  parity_protected_shrink_active($testFiles),
+  'A recovery-only Core intent must block downgrade.'
+);
+assert_same(
+  'protected_shrink_active',
+  parity_protected_shrink_begin_downgrade($testFiles, $testMarker, $testInterlock),
+  'A recovery-only checkpoint must retain the rollback fence.'
+);
+assert_same(false, is_file($testMarker), 'A recovery-only rejection must remove its marker.');
+unlink($testFiles[1]);
+
+file_put_contents($testFiles[4], 'stage=prepared\n');
 assert_same(true, parity_protected_shrink_active($testFiles), 'A daemon proof must block downgrade.');
 
 $firstLock = parity_protected_shrink_interlock_acquire($testInterlock);
@@ -61,11 +81,11 @@ $nextLock = parity_protected_shrink_interlock_acquire($testInterlock, true);
 assert_same(true, is_resource($nextLock), 'The lock must transfer after its owner releases it.');
 parity_protected_shrink_interlock_release($nextLock);
 
-unlink($testFiles[2]);
+unlink($testFiles[4]);
 unlink($testInterlock);
 rmdir(dirname($testFiles[0]));
 rmdir(dirname(dirname($testFiles[0])));
-rmdir(dirname($testFiles[1]));
+rmdir(dirname($testFiles[2]));
 rmdir($testRoot);
 
 echo "parity protected shrink downgrade guard: ok\n";
