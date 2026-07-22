@@ -9,6 +9,29 @@ function assert_same($expected, $actual, $message) {
   }
 }
 
+function protected_shrink_intent($stage, $overrides = []) {
+  return array_replace_recursive([
+    'version' => 6,
+    'disk' => 'disk2',
+    'device_id' => 'QA-DISK-2',
+    'boot_id' => 'qa-boot',
+    'stage' => $stage,
+    'topology' => [
+      'data_slot_count' => 2,
+      'array_slots' => [
+        'parity' => 'QA-PARITY',
+        'disk1' => 'QA-DISK-1',
+        'disk2' => 'QA-DISK-2',
+      ],
+      'pool_members' => ['cache' => ['QA-CACHE']],
+    ],
+  ], $overrides);
+}
+
+function write_intent($path, $intent) {
+  file_put_contents($path, json_encode($intent, JSON_THROW_ON_ERROR));
+}
+
 $productionFiles = parity_protected_shrink_files();
 assert_same(
   '/boot/config/unraid/storage/parity-protected-shrink.json',
@@ -42,8 +65,9 @@ assert_same(
 assert_same(true, is_file($testMarker), 'A successful downgrade decision must retain its marker.');
 unlink($testMarker);
 
-file_put_contents($testFiles[0], '{}');
-assert_same(true, parity_protected_shrink_active($testFiles), 'A Core intent must block downgrade.');
+write_intent($testFiles[0], protected_shrink_intent('zeroing'));
+write_intent($testFiles[1], protected_shrink_intent('zeroing'));
+assert_same(true, parity_protected_shrink_active($testFiles), 'An active Core intent must block downgrade.');
 assert_same(
   'protected_shrink_active',
   parity_protected_shrink_begin_downgrade($testFiles, $testMarker, $testInterlock),
@@ -51,8 +75,9 @@ assert_same(
 );
 assert_same(false, is_file($testMarker), 'A rejected downgrade must remove its transient marker.');
 unlink($testFiles[0]);
+unlink($testFiles[1]);
 
-file_put_contents($testFiles[1], '{}');
+write_intent($testFiles[1], protected_shrink_intent('zeroing'));
 assert_same(
   true,
   parity_protected_shrink_active($testFiles),
@@ -64,6 +89,49 @@ assert_same(
   'A recovery-only checkpoint must retain the rollback fence.'
 );
 assert_same(false, is_file($testMarker), 'A recovery-only rejection must remove its marker.');
+unlink($testFiles[1]);
+
+$completed = protected_shrink_intent('completed', ['version' => 7]);
+write_intent($testFiles[0], $completed);
+write_intent($testFiles[1], $completed);
+assert_same(
+  false,
+  parity_protected_shrink_active($testFiles),
+  'An identity-equivalent version-7 completion pair must permit downgrade.'
+);
+assert_same(
+  'ok',
+  parity_protected_shrink_begin_downgrade($testFiles, $testMarker, $testInterlock),
+  'The terminal tombstone must agree with Core and release the downgrade path.'
+);
+assert_same(true, is_file($testMarker), 'An allowed completed downgrade must retain its marker.');
+unlink($testMarker);
+
+write_intent(
+  $testFiles[1],
+  protected_shrink_intent('completed', ['version' => 7, 'boot_id' => 'different-boot'])
+);
+assert_same(
+  true,
+  parity_protected_shrink_active($testFiles),
+  'Identity-divergent completed copies must block downgrade.'
+);
+
+file_put_contents($testFiles[1], '{');
+assert_same(
+  true,
+  parity_protected_shrink_active($testFiles),
+  'A torn completed recovery copy must block downgrade.'
+);
+
+write_intent($testFiles[0], protected_shrink_intent('signing', ['completed' => true]));
+write_intent($testFiles[1], protected_shrink_intent('signing', ['completed' => true]));
+assert_same(
+  true,
+  parity_protected_shrink_active($testFiles),
+  'Legacy additive completion must stay fenced until Core migrates both copies.'
+);
+unlink($testFiles[0]);
 unlink($testFiles[1]);
 
 file_put_contents($testFiles[4], 'stage=prepared\n');
