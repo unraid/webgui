@@ -27,34 +27,21 @@ $downgradeDecision = parity_protected_shrink_begin_downgrade(
   $downgradeMarker
 );
 
-if ($downgradeDecision === 'interlock_unavailable') {
-  http_response_code(503);
-  echo _('The Unraid downgrade safety lock is unavailable. Nothing was changed.');
+$downgradeRejection = parity_protected_shrink_handle_downgrade_decision(
+  $downgradeDecision,
+  function() use ($docroot) {
+    $tmpdir="/boot/deletemedowngrade.".uniqid();
+    mkdir($tmpdir);
+    exec("mv -f /boot/bz* $tmpdir");
+    exec("mv -f /boot/previous/* /boot");
+    $version = unscript(_var($_GET,'version'));
+    file_put_contents("$docroot/plugins/unRAIDServer/README.md","**"._('DOWNGRADE TO VERSION')." $version**");
+  }
+);
+
+if ($downgradeRejection !== null) {
+  http_response_code($downgradeRejection['status']);
+  echo _($downgradeRejection['message']);
   exit;
 }
-
-if ($downgradeDecision === 'completion_durability_unavailable') {
-  http_response_code(503);
-  echo _('The protected disk-removal safety record could not be synchronized. Nothing was changed.');
-  exit;
-}
-
-if ($downgradeDecision === 'downgrade_pending') {
-  http_response_code(409);
-  echo _('An Unraid downgrade is already pending.');
-  exit;
-}
-
-if ($downgradeDecision === 'protected_shrink_active') {
-  http_response_code(409);
-  echo _('Finish or recover the active parity-protected disk removal before downgrading Unraid.');
-  exit;
-}
-
-$tmpdir="/boot/deletemedowngrade.".uniqid();
-mkdir($tmpdir);
-exec("mv -f /boot/bz* $tmpdir");
-exec("mv -f /boot/previous/* /boot");
-$version = unscript(_var($_GET,'version'));
-file_put_contents("$docroot/plugins/unRAIDServer/README.md","**"._('DOWNGRADE TO VERSION')." $version**");
 ?>

@@ -238,4 +238,37 @@ function parity_protected_shrink_begin_downgrade(
   }
 }
 
+function parity_protected_shrink_handle_downgrade_decision($decision, $performDowngrade) {
+  $rejections = [
+    'interlock_unavailable' => [
+      'status' => 503,
+      'message' => 'The Unraid downgrade safety lock is unavailable. Nothing was changed.',
+    ],
+    'completion_durability_unavailable' => [
+      'status' => 503,
+      'message' => 'The protected disk-removal safety record could not be synchronized. Nothing was changed.',
+    ],
+    'downgrade_pending' => [
+      'status' => 409,
+      'message' => 'An Unraid downgrade is already pending.',
+    ],
+    'protected_shrink_active' => [
+      'status' => 409,
+      'message' => 'Finish or recover the active parity-protected disk removal before downgrading Unraid.',
+    ],
+  ];
+
+  if (isset($rejections[$decision])) return $rejections[$decision];
+
+  if ($decision !== 'ok') {
+    return [
+      'status' => 503,
+      'message' => 'The Unraid downgrade safety state could not be verified. Nothing was changed.',
+    ];
+  }
+
+  $performDowngrade();
+  return null;
+}
+
 ?>
