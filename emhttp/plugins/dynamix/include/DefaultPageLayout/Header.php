@@ -1,9 +1,9 @@
 <?php
-// Unraid 7.3+ ships a single consolidated header web component (<unraid-header>)
+// Unraid 7.4+ ships a single consolidated header web component (<unraid-header>)
 // that owns the whole header and its responsive layout. Older releases keep the
 // legacy multi-component header (logo/version + user profile) as a fallback.
 $headerOsVersion = @parse_ini_file('/etc/unraid-version')['version'] ?? '0';
-$headerUseConsolidated = version_compare($headerOsVersion, '7.3', '>=');
+$headerUseConsolidated = version_compare($headerOsVersion, '7.4', '>=');
 $headerClass = trim($display['banner'] . ($headerUseConsolidated ? ' unraid-consolidated-header' : ''));
 ?>
 <div id="header" class="<?=$headerClass?>">
