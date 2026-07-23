@@ -1,13 +1,9 @@
 <?php
-// Unraid 7.3+ ships a single consolidated header web component (<unraid-header>)
-// that owns the whole header and its responsive layout. Older releases keep the
-// legacy multi-component header (logo/version + user profile) as a fallback.
-$headerOsVersion = @parse_ini_file('/etc/unraid-version')['version'] ?? '0';
-$headerUseConsolidated = version_compare($headerOsVersion, '7.3', '>=');
-$headerClass = trim($display['banner'] . ($headerUseConsolidated ? ' unraid-consolidated-header' : ''));
+// This template is installed only with the consolidated <unraid-header>
+// component, which owns the full header and its responsive layout.
+$headerClass = trim($display['banner'] . ' unraid-consolidated-header');
 ?>
 <div id="header" class="<?=$headerClass?>">
-<?php if ($headerUseConsolidated): ?>
     <?php
         require_once "$docroot/plugins/dynamix.my.servers/include/state.php";
         $headerServerState = new ServerState();
@@ -45,11 +41,4 @@ $headerClass = trim($display['banner'] . ($headerUseConsolidated ? ' unraid-cons
         show-array-usage="<?= $headerShowArrayUsage ?>"
         header-logo-style="<?= $headerLogoStyle ?>"
     ><a class="unraid-header-boot-logo" href="https://unraid.net" target="_blank" rel="noopener" aria-label="Unraid"><img src="/webGui/images/UN-logotype-gradient.svg" alt="Unraid" /></a></unraid-header>
-<?php else: ?>
-    <unraid-header-os-version></unraid-header-os-version>
-    <? if ($display['usage'] && $themeHelper->isSidebarTheme()): ?>
-        <span id='array-usage-sidenav'></span>
-    <? endif; ?>
-    <?include "$docroot/plugins/dynamix.my.servers/include/myservers2.php"?>
-<?php endif; ?>
 </div>
