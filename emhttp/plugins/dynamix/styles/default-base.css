@@ -495,6 +495,18 @@ textarea:where(:not(.unapi *)) {
 
 #header.unraid-consolidated-header #UnraidHeader {
     min-height: inherit;
+}
+
+/* The light-DOM boot logo must occupy the same inset box as the mounted
+   #UnraidHeader so the logo does not jump when <unraid-header> upgrades.
+   #UnraidHeader carries the inset via its padding but only exists post-mount, so
+   the boot logo shares the same padding (here and in the desktop breakpoint
+   below) and is full-height + vertically centered (see Header.php). It only
+   exists pre-mount (replaceChildren discards it), so this never affects the
+   mounted layout. */
+#header.unraid-consolidated-header #UnraidHeader,
+#header.unraid-consolidated-header .unraid-header-boot-logo {
+    box-sizing: border-box;
     padding: .5rem 1rem;
 }
 
@@ -2441,7 +2453,8 @@ div#title.ud {
         padding-left: 0;
     }
 
-    #header.unraid-consolidated-header #UnraidHeader {
+    #header.unraid-consolidated-header #UnraidHeader,
+    #header.unraid-consolidated-header .unraid-header-boot-logo {
         padding-left: calc(64px + 1rem);
         padding-right: 1rem;
     }
