@@ -65,7 +65,12 @@ $headerClass = trim($display['banner'] . ' unraid-consolidated-header');
             display: inline-flex;
             align-items: center;
             gap: 4px;
-            color: var(--header-text-secondary);
+            /* Neutral placeholder gray. The real per-theme secondary color
+               (--header-text-secondary: #999 on white/black, #606e7f on
+               gray/azure) only exists in the mounted .unapi scope, so a fixed
+               mid-gray reads fine on both light and dark header backgrounds and
+               makes the swap-in a gentle shift instead of a dark->gray flash. */
+            color: #999;
             font-weight: 600;
             line-height: 1;
             font-size: 12px;
