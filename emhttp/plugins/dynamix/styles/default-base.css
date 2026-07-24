@@ -481,7 +481,10 @@ textarea:where(:not(.unapi *)) {
     gap: 0;
     min-height: 86px;
     padding-left: 0;
-    background-size: 100% 86px;
+    /* The consolidated header's actual height grows with its content (meta
+       row, array-usage bar), so a fixed background-size crops the banner
+       image once the box exceeds it. Stretch to the box's real size instead. */
+    background-size: 100% 100%;
 }
 
 #header.unraid-consolidated-header unraid-header {
