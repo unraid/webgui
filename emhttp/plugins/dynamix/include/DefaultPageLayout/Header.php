@@ -46,7 +46,10 @@ $headerClass = trim($display['banner'] . ' unraid-consolidated-header');
             height: 100%;
             padding-top: 12px; /* desktop: mounted logo top offset */
         }
-        #header.unraid-consolidated-header .unraid-header-boot-logo svg {
+        /* Scope to the logo link's svg only — a bare `.unraid-header-boot-logo svg`
+           descendant selector also matches the version info icon below and would
+           stretch it to the logo width. */
+        #header.unraid-consolidated-header .unraid-header-boot-logo a svg {
             display: block;
             width: 14rem;
             max-width: 100%;
@@ -82,7 +85,7 @@ $headerClass = trim($display['banner'] . ' unraid-consolidated-header');
             flex-shrink: 0;
         }
         @media (min-width: 30rem) {
-            #header.unraid-consolidated-header .unraid-header-boot-logo svg {
+            #header.unraid-consolidated-header .unraid-header-boot-logo a svg {
                 width: 16rem;
             }
             #header.unraid-consolidated-header .unraid-header-boot-version {
