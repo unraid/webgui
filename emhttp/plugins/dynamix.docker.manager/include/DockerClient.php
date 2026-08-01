@@ -898,7 +898,8 @@ class DockerClient {
 		// Attempt to remove container
 		$this->getDockerJSON("/containers/$id?force=1", 'DELETE', $code);
 		if (isset($info[$name])) {
-			if (isset($info[$name]['icon'])) {
+			// never unlink the shared default icon recorded for icon-less containers
+			if (isset($info[$name]['icon']) && $info[$name]['icon'] != '/plugins/dynamix.docker.manager/images/question.png') {
 				$iconRAM = $docroot.$info[$name]['icon'];
 				$iconUSB = str_replace($dockerManPaths['images-ram'], $dockerManPaths['images'], $iconRAM);
 				if ($cache>=1 && is_file($iconRAM)) unlink($iconRAM);
