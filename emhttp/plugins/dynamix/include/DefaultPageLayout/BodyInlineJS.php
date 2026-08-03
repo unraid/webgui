@@ -98,6 +98,8 @@ nchan_wlan0.start();
 //  interleave. The full task list is broadcast on /sub/tasks; per-task output
 //  is captured to a server-side log (replayed on foreground) and mirrored on a
 //  per-task channel /sub/task-<id> that the foreground modal streams from.
+//  Capture occurs at Nginx's shared publisher boundary, so direct legacy
+//  publishers and WebGUI's publish() helper follow the same task-owned path.
 // ===========================================================================
 const TASK_ENDPOINT = '/plugins/dynamix/include/TaskCommand.php';
 var taskList = [];
@@ -115,9 +117,9 @@ function nchanStart(sub){ try { if (sub && !sub.running) sub.start(); } catch(e)
 function nchanStop(sub) { try { if (sub &&  sub.running) sub.stop();  } catch(e) {} }
 
 // Live output for the foreground modal comes from the task's OWN channel
-// (/sub/task-<id>), not the shared per-type channels. publish.php mirrors every
-// captured message there, prefixed with the message's byte offset in the task
-// log ("<offset>\x1f<message>"). Two problems with the shared /sub/<type>
+// (/sub/task-<id>), not the shared per-type channels. task_capture() mirrors
+// every captured message there, prefixed with the message's byte offset in the
+// task log ("<offset>\x1f<message>"). Two problems with the shared /sub/<type>
 // channels made them unusable for the modal:
 //   - they don't identify the originating task, so nchan's retained message
 //     (generic /pub/ channels never expire) leaks across tasks: a new running

@@ -15,9 +15,10 @@
  * Backend task queue shared across subsystems (plugins / docker / vmaction).
  *
  * State lives in TASK_DIR as one <id>.json per task plus a per-task <id>.log
- * capturing the operation's nchan output (written by publish.php when the
- * NCHAN_TASK env var is set). The full task list is broadcast to all clients
- * on the `tasks` nchan channel whenever it changes.
+ * capturing the operation's nchan output. Nginx sends every shared task-type
+ * publication through TaskCapture.php, including legacy scripts that POST
+ * directly to /pub/<type>. The full task list is broadcast to all clients on
+ * the `tasks` nchan channel whenever it changes.
  *
  * Scheduling rule: at most one RUNNING task per type at any time, so the
  * existing shared live channels (/sub/plugins, /sub/docker, /sub/vmaction)
@@ -68,7 +69,8 @@ function task_delete($id) {
   task_channel_delete($id);
 }
 
-// Drop the task's mirrored nchan channel (see publish.php) along with the task.
+// Drop the task's mirrored nchan channel (see task_capture()) along with the
+// task.
 // The generic /pub/ location keeps messages forever (nchan_message_timeout 0),
 // so without this every finished task would leave its retained buffer parked in
 // nchan shared memory for the life of the nginx process.
@@ -111,6 +113,42 @@ function task_running_type($type) {
   return null;
 }
 
+// Persist and mirror one message published on a shared task-type channel.
+// Capture happens from Nginx's publisher hook instead of publish.php because
+// third-party plugin scripts commonly POST straight to /pub/plugins. The task
+// queue guarantees at most one running task per type, which makes the shared
+// channel -> task association unambiguous.
+//
+// Messages are RS-delimited in the log. The task channel carries the record's
+// byte offset as "<offset>\x1f<message>", allowing the foreground client to
+// dedupe precisely against a simultaneous log replay. The append is exclusive
+// and TaskCommand.php reads under a shared lock, so offsets always land on
+// record boundaries.
+function task_capture($type, $message) {
+  if (!in_array($type, TASK_TYPES, true)) return false;
+  $task = task_running_type($type);
+  if (!$task || !task_valid_id($task['id'])) return false;
+
+  $fh = @fopen(task_log($task['id']), 'c');
+  if (!$fh) return false;
+  @flock($fh, LOCK_EX);
+  fseek($fh, 0, SEEK_END);
+  $offset = ftell($fh);
+  $record = $message."\x1e";
+  $written = $offset !== false ? fwrite($fh, $record) : false;
+  $complete = $written === strlen($record);
+  if (!$complete && $offset !== false) ftruncate($fh, $offset);
+  fflush($fh);
+  @flock($fh, LOCK_UN);
+  fclose($fh);
+  if (!$complete) return false;
+
+  // A small retained buffer lets a foreground subscriber joining mid-stream
+  // catch up; byte offsets make any redelivery harmless.
+  publish("task-{$task['id']}", $offset."\x1f".$message, 10);
+  return true;
+}
+
 // resolve a command to an absolute script path the same way StartCommand.php does
 function task_resolve($cmd) {
   global $docroot;
@@ -124,7 +162,7 @@ function task_resolve($cmd) {
   return [$name, $args];
 }
 
-// launch a task in the background, capturing its output to <id>.log via NCHAN_TASK
+// launch a task in the background; Nginx's publisher hook captures its output
 function task_launch(&$task) {
   global $docroot;
   // guard: never run two of the same type at once
@@ -139,15 +177,18 @@ function task_launch(&$task) {
   [$name,$args] = $resolved;
   // plugin scripts publish to nchan only when their last argument is 'nchan'
   $suffix = $task['type']==='plugins' ? ' nchan' : '';
+  // Keep the task id available to task-aware scripts and diagnostics. Output
+  // capture itself no longer depends on this variable: TaskCapture.php handles
+  // every publication on the shared type channel, including legacy scripts.
   $env = 'NCHAN_TASK='.escapeshellarg($task['id']).' ';
   // The command records its own terminal state on exit: capture its exit code
   // and hand it to task_complete, which marks the task done/error, advances the
   // queue and broadcasts. This makes completion authoritative at the source
   // instead of relying on the scheduler daemon to observe the PID disappear
   // (which it can miss on PID reuse or a daemon-restart race). NCHAN_TASK is
-  // cleared for the stamp so its `tasks` broadcast isn't captured into this
-  // task's foreground-replay log. The daemon stays a fallback for the case where
-  // the process is hard-killed before the stamp can run.
+  // cleared before the completion helper because the operation itself is over.
+  // The daemon stays a fallback for the case where the process is hard-killed
+  // before the stamp can run.
   $complete = "$docroot/plugins/dynamix/include/task_complete";
   $stamp = '; rc=$?; NCHAN_TASK= '.escapeshellarg($complete).' '.escapeshellarg($task['id']).' "$rc"';
   // escapeshellarg the whole bash -c payload so a single quote (or other shell
@@ -186,9 +227,9 @@ function task_advance($type) {
 
 // the operation reported a failure if its captured output contains the _ERROR_
 // control record. The log is RS(\x1e)-delimited and _DONE_/_ERROR_ are discrete
-// records (see publish.php), so match _ERROR_ as a whole record the same way the
-// live channel does (routeMessage) — a log line that merely contains the text
-// must not trip a false failure.
+// records (see task_capture()), so match _ERROR_ as a whole record the same way
+// the live channel does (routeMessage) — a log line that merely contains the
+// text must not trip a false failure.
 function task_log_has_error($id) {
   $log = task_log($id);
   if (!is_file($log)) return false;

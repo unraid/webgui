@@ -74,10 +74,11 @@ case 'clear':
 case 'log':
   // Output captured so far, for foreground replay. X-Task-Log-Size is the
   // exact byte length served: live task-channel messages carry their log
-  // byte offset (see publish.php) and the client drops any live message whose
-  // offset falls below this, so the replay/live handoff never duplicates or
-  // loses a record. Read under the shared lock (publish.php appends under the
-  // exclusive one) so the length always lands on a record boundary.
+  // byte offset (see task_capture() in TaskQueue.php) and the client drops any
+  // live message whose offset falls below this, so the replay/live handoff
+  // never duplicates or loses a record. Read under the shared lock
+  // (task_capture() appends under the exclusive one) so the length always
+  // lands on a record boundary.
   header('Content-Type: text/plain');
   $data = '';
   if (task_valid_id($id) && is_file(task_log($id))) {
