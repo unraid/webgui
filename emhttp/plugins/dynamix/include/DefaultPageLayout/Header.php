@@ -28,23 +28,62 @@ $headerClass = trim($display['banner'] . ' unraid-consolidated-header');
     <style>
         /* Light-DOM fallback: paint the logo + version before <unraid-header>
            mounts so the header does not pop in on page load. The mount engine
-           calls replaceChildren(), so this markup is discarded on upgrade. To
-           avoid a position jump, the boot logo/version are pinned to where the
-           mounted logo/version land (measured). Values are in px, not rem,
-           because the webgui light DOM roots at 62.5% (1rem = 10px) while the
-           mounted component's `.unapi` scope roots at 16px, so rem here would
-           render half-size. `padding-top` top-anchors the logo at the mounted
-           offset (the logo left inset is shared with #UnraidHeader in
-           default-base.css). Only exists pre-mount, so this never affects the
-           mounted layout. */
+           calls replaceChildren(), so this markup is discarded on upgrade.
+
+           This mirrors the mounted `.unraid-header-shell` GRID rather than
+           pinning the logo at measured pixel offsets. Hard-coded offsets cannot
+           work: the logo's position depends on the meta row's height, which
+           varies by theme (sidebar themes add the array-usage bar), by the root
+           font size, and by the breakpoint. Reproducing the grid — including an
+           invisible meta row with the same content boxes — lets the browser
+           compute the same position the mounted component will, so the two agree
+           by construction. Sizes use the same rem values as the mounted
+           component so both scale together with the root font size. */
+        #header.unraid-consolidated-header .unraid-header-boot {
+            display: grid;
+            column-gap: 0.75rem;
+            align-items: stretch;
+            grid-template-columns: minmax(0, 1fr) auto;
+            grid-template-rows: auto minmax(max-content, 1fr) auto;
+            height: 100%;
+        }
+        /* Invisible stand-in for the mounted meta row (the uptime / registration
+           line). It only has to occupy the same height, since that is what
+           pushes the logo down. Deliberately does NOT reserve space for the
+           array-usage bar: that renders only once array data resolves
+           (`v-if="hasData"` in ArrayUsage.vue), so at boot the mounted meta row
+           is this single line even on sidebar themes.
+
+           Sizes here are px, not rem, and intentionally so: the webGUI light DOM
+           roots at 62.5% (1rem = 10px) while the mounted component's Tailwind
+           scale is px-based (text-xs -> 12px, gap-y-2 -> 8px). Matching the
+           mounted pixel sizes is what keeps the two in step. */
+        #header.unraid-consolidated-header .unraid-header-boot-meta {
+            grid-column: 2;
+            grid-row: 1;
+            align-self: start;
+            justify-self: end;
+            visibility: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            font-size: 12px;
+            line-height: 16px;
+        }
         #header.unraid-consolidated-header .unraid-header-boot-logo {
+            grid-column: 1;
+            grid-row: 1 / -1;
+            align-self: center;
+            justify-self: start;
             display: flex;
             flex-direction: column;
             align-items: flex-start;
-            justify-content: flex-start;
-            gap: 13px; /* logo -> version visual gap (measured) */
-            height: 100%;
-            padding-top: 12px; /* desktop: mounted logo top offset */
+            /* Layout gap matches the mounted logo block (gap-y-2 -> 8px). The
+               extra visual space under the logo comes from the version's
+               relative offset below, exactly as in the mounted component, so the
+               block's LAYOUT height matches and centering agrees. */
+            gap: 8px;
+            min-width: 0;
         }
         /* Scope to the logo link's svg only — a bare `.unraid-header-boot-logo svg`
            descendant selector also matches the version info icon below and would
@@ -63,11 +102,18 @@ $headerClass = trim($display['banner'] . ' unraid-consolidated-header');
         }
         /* Boot version placeholder mirroring the mounted HeaderVersion (info icon
            + version text) so the group height matches and there is no size flash.
-           px sizing matches the mounted text-xs / text-sm (12px / 14px). */
+           Uses the same rem sizing as the mounted text-xs / xs:text-sm so both
+           scale together with the root font size. */
         #header.unraid-consolidated-header .unraid-header-boot-version {
             display: inline-flex;
             align-items: center;
             gap: 4px;
+            /* Mirrors the mounted `.uh-version` relative offset (0.5rem against
+               the 10px light-DOM root -> 5px): shifts the version down visually
+               without adding layout height, so the boot block's height still
+               matches the mounted block. */
+            position: relative;
+            top: 5px;
             /* Neutral placeholder gray. The real per-theme secondary color
                (--header-text-secondary: #999 on white/black, #606e7f on
                gray/azure) only exists in the mounted .unapi scope, so a fixed
@@ -92,12 +138,17 @@ $headerClass = trim($display['banner'] . ' unraid-consolidated-header');
                 font-size: 14px;
             }
         }
-        /* Below sm the mounted logo sits in the middle grid band, pushed down by
-           the full-width uptime/registration strip, so top-anchor it lower to
-           match the mounted logo offset there (measured). */
+        /* Below sm the mounted meta row spans the full width as a top strip and
+           the logo block moves to the middle grid row — mirror both so the logo
+           lands in the same band. */
         @media (max-width: 639.98px) {
+            #header.unraid-consolidated-header .unraid-header-boot-meta {
+                grid-column: 1 / -1;
+                justify-self: stretch;
+                align-items: flex-start;
+            }
             #header.unraid-consolidated-header .unraid-header-boot-logo {
-                padding-top: 28px;
+                grid-row: 2;
             }
         }
     </style>
@@ -105,5 +156,5 @@ $headerClass = trim($display['banner'] . ' unraid-consolidated-header');
         server="<?= $headerServerState->getServerStateJsonForHtmlAttr() ?>"
         show-array-usage="<?= $headerShowArrayUsage ?>"
         header-logo-style="<?= $headerLogoStyle ?>"
-    ><span class="unraid-header-boot-logo" style="display:flex;flex-direction:column;align-items:flex-start;gap:13px;height:100%;text-align:left"><a href="https://unraid.net" target="_blank" rel="noopener" aria-label="Unraid"><?php if ($headerLogoStyle === 'theme'): ?><svg class="unraid-header-boot-logo-theme" xmlns="http://www.w3.org/2000/svg" width="140" height="24.6" viewBox="0 0 222.36 39.04" aria-hidden="true"><path fill="currentColor" d="<?=$headerBootLogoPath?>"/></svg><?php else: ?><svg xmlns="http://www.w3.org/2000/svg" width="140" height="24.6" viewBox="0 0 222.36 39.04" aria-hidden="true"><defs><linearGradient id="unraid-header-boot-logo-gradient" x1="47.53" y1="79.1" x2="170.71" y2="-44.08" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#e32929"/><stop offset="1" stop-color="#ff8d30"/></linearGradient></defs><path fill="url(#unraid-header-boot-logo-gradient)" d="<?=$headerBootLogoPath?>"/></svg><?php endif; ?></a><span class="unraid-header-boot-version" aria-hidden="true" style="display:inline-flex;align-items:center;gap:4px;color:#999;font-weight:600;line-height:1;white-space:nowrap"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 0 1 .67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 0 1 1-.671-1.34l.041-.022ZM12 9a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clip-rule="evenodd"/></svg><?= htmlspecialchars($headerBootVersion, ENT_QUOTES) ?></span></span></unraid-header>
+    ><span class="unraid-header-boot"><span class="unraid-header-boot-meta" aria-hidden="true"><span>&nbsp;</span></span><span class="unraid-header-boot-logo"><a href="https://unraid.net" target="_blank" rel="noopener" aria-label="Unraid"><?php if ($headerLogoStyle === 'theme'): ?><svg class="unraid-header-boot-logo-theme" xmlns="http://www.w3.org/2000/svg" width="140" height="24.6" viewBox="0 0 222.36 39.04" aria-hidden="true"><path fill="currentColor" d="<?=$headerBootLogoPath?>"/></svg><?php else: ?><svg xmlns="http://www.w3.org/2000/svg" width="140" height="24.6" viewBox="0 0 222.36 39.04" aria-hidden="true"><defs><linearGradient id="unraid-header-boot-logo-gradient" x1="47.53" y1="79.1" x2="170.71" y2="-44.08" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#e32929"/><stop offset="1" stop-color="#ff8d30"/></linearGradient></defs><path fill="url(#unraid-header-boot-logo-gradient)" d="<?=$headerBootLogoPath?>"/></svg><?php endif; ?></a><span class="unraid-header-boot-version" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 0 1 .67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 0 1 1-.671-1.34l.041-.022ZM12 9a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clip-rule="evenodd"/></svg><?= htmlspecialchars($headerBootVersion, ENT_QUOTES) ?></span></span></span></unraid-header>
 </div>
