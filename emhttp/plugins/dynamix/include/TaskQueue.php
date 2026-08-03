@@ -20,10 +20,10 @@
  * directly to /pub/<type>. The full task list is broadcast to all clients on
  * the `tasks` nchan channel whenever it changes.
  *
- * Scheduling rule: at most one RUNNING task per type at any time, so the
- * existing shared live channels (/sub/plugins, /sub/docker, /sub/vmaction)
- * never have two concurrent publishers. Additional same-type operations are
- * queued and auto-started by the `tasks` daemon when the running one finishes.
+ * Scheduling rule: at most one queue-owned active task per type at any time.
+ * Additional same-type operations are queued and auto-started by the `tasks`
+ * daemon when the active one finishes. Unrelated legacy processes can still
+ * publish on the shared type channels and are outside this queue invariant.
  */
 
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
@@ -35,6 +35,7 @@ require_once "$docroot/webGui/include/Secure.php";
 define('TASK_DIR', '/var/local/emhttp/tasks');
 define('TASK_DAEMON', 'plugins/dynamix/nchan/tasks');
 define('TASK_DONE_TTL', 86400); // prune done/error tasks after 1 day
+define('TASK_ABORT_GRACE', 5);   // seconds before an abort escalates TERM -> KILL
 define('TASK_TYPES', ['plugins','docker','vmaction']);
 
 // task ids are produced by uniqid() => lowercase hex; validate anything used in a path
@@ -61,6 +62,112 @@ function task_read($id) {
 function task_write($task) {
   task_dir();
   return file_put_contents_atomic(task_path($task['id']), json_encode($task));
+}
+
+function task_type_lock($type) {
+  if (!in_array($type, TASK_TYPES, true)) return false;
+  $lock = @fopen(task_dir()."/.$type.lock", 'c');
+  if (!$lock) return false;
+  if (!flock($lock, LOCK_EX)) { fclose($lock); return false; }
+  return $lock;
+}
+
+function task_type_unlock($lock) {
+  flock($lock, LOCK_UN);
+  fclose($lock);
+}
+
+// Read the Linux process identity fields needed to distinguish a task's
+// session leader from a later process that reused the same numeric PID.
+function task_proc_stat($pid) {
+  if (!ctype_digit((string)$pid) || (int)$pid <= 1) return null;
+  $stat = @file_get_contents("/proc/$pid/stat");
+  if (!is_string($stat)) return null;
+  $end = strrpos($stat, ')');
+  if ($end === false) return null;
+  $fields = preg_split('/\s+/', trim(substr($stat, $end + 1)));
+  if (count($fields) < 20) return null;
+  return [
+    'pid'       => (int)$pid,
+    'state'     => (string)$fields[0], // proc field 3
+    'pgrp'      => (int)$fields[2],  // proc field 5
+    'session'   => (int)$fields[3],  // proc field 6
+    'starttime' => (string)$fields[19], // proc field 22
+  ];
+}
+
+function task_process_identity($handshake) {
+  for ($i = 0; $i < 200; $i++) {
+    $claimed = trim((string)@file_get_contents($handshake));
+    $stat = task_proc_stat($claimed);
+    if ($stat && $stat['state']==='T' && $stat['pgrp']===(int)$claimed && $stat['session']===(int)$claimed) return $stat;
+    usleep(10000);
+  }
+  return null;
+}
+
+function task_process_group_alive($task) {
+  $pid = (int)($task['pid'] ?? 0);
+  $pgrp = (int)($task['pgrp'] ?? 0);
+  $session = (int)($task['session'] ?? 0);
+  $starttime = (string)($task['pid_start'] ?? '');
+  if ($pid <= 1 || $pgrp !== $pid || $session !== $pid || $starttime === '') return false;
+
+  // If the leader PID exists but its birth time changed, the id was reused and
+  // must never be treated as (or signalled as) this task's process group.
+  $leader = task_proc_stat($pid);
+  if ($leader && $leader['starttime'] !== $starttime) return false;
+  if ($leader && $leader['state']!=='Z' && $leader['pgrp']===$pgrp && $leader['session']===$session) return true;
+  // The leader can exit before descendants finish. In that case scan for a
+  // surviving member of the original session/process group.
+  foreach (glob('/proc/[0-9]*/stat', GLOB_NOSORT) ?: [] as $file) {
+    $member = task_proc_stat(basename(dirname($file)));
+    if ($member && $member['state']!=='Z' && $member['pgrp']===$pgrp && $member['session']===$session) return true;
+  }
+  return false;
+}
+
+function task_signal_group($task, $signal) {
+  if (!task_process_group_alive($task)) return false;
+  $pgrp = (int)$task['pgrp'];
+  exec('kill -'.$signal.' -'.$pgrp.' 2>/dev/null', $out, $rc);
+  return $rc === 0;
+}
+
+function task_wait_group_exit($task, $attempts = 100) {
+  for ($i = 0; $i < $attempts; $i++) {
+    if (!task_process_group_alive($task)) return true;
+    usleep(10000);
+  }
+  return !task_process_group_alive($task);
+}
+
+// Fail closed after an owned launcher exists but cannot be safely started.
+// Never release its type slot until the group is confirmed gone; if it survives
+// KILL, persist an aborting sentinel for the daemon to keep monitoring.
+function task_fail_launch(&$task, $handshake) {
+  task_signal_group($task, 'KILL');
+  if (task_wait_group_exit($task, 200)) {
+    $task['status'] = 'error';
+    $task['finished'] = time();
+    if (!task_write($task)) @unlink(task_path($task['id']));
+    @unlink($handshake);
+    return false;
+  }
+
+  $task['status'] = 'aborting';
+  $task['abort_requested'] = 0; // daemon escalates immediately
+  // A prior state write may have failed. Keep the caller's type lock and retry
+  // until either the sentinel is durable or the stopped group is confirmed gone.
+  while (!task_write($task)) {
+    task_signal_group($task, 'KILL');
+    if (task_wait_group_exit($task, 100)) {
+      @unlink($handshake);
+      @unlink(task_path($task['id']));
+      return false;
+    }
+  }
+  return false;
 }
 
 function task_delete($id) {
@@ -109,15 +216,15 @@ function task_publish() {
 // the single running task of a type, or null
 function task_running_type($type) {
   foreach (task_list() as $t)
-    if ($t['type']===$type && $t['status']==='running') return $t;
+    if ($t['type']===$type && in_array($t['status'], ['running','aborting'], true)) return $t;
   return null;
 }
 
 // Persist and mirror one message published on a shared task-type channel.
 // Capture happens from Nginx's publisher hook instead of publish.php because
 // third-party plugin scripts commonly POST straight to /pub/plugins. The task
-// queue guarantees at most one running task per type, which makes the shared
-// channel -> task association unambiguous.
+// queue guarantees at most one queue-owned active task per type. A publication
+// from an unrelated process of the same type remains a known attribution limit.
 //
 // Messages are RS-delimited in the log. The task channel carries the record's
 // byte offset as "<offset>\x1f<message>", allowing the foreground client to
@@ -131,7 +238,11 @@ function task_capture($type, $message) {
 
   $fh = @fopen(task_log($task['id']), 'c');
   if (!$fh) return false;
-  @flock($fh, LOCK_EX);
+  if (!flock($fh, LOCK_EX)) {
+    fclose($fh);
+    my_logger("Task capture failed to lock log for {$task['id']}");
+    return false;
+  }
   fseek($fh, 0, SEEK_END);
   $offset = ftell($fh);
   $record = $message."\x1e";
@@ -139,13 +250,19 @@ function task_capture($type, $message) {
   $complete = $written === strlen($record);
   if (!$complete && $offset !== false) ftruncate($fh, $offset);
   fflush($fh);
-  @flock($fh, LOCK_UN);
-  fclose($fh);
-  if (!$complete) return false;
+  if (!$complete) {
+    flock($fh, LOCK_UN);
+    fclose($fh);
+    my_logger("Task capture failed to append log for {$task['id']}");
+    return false;
+  }
 
   // A small retained buffer lets a foreground subscriber joining mid-stream
-  // catch up; byte offsets make any redelivery harmless.
+  // catch up; byte offsets make any redelivery harmless. Keep the log lock
+  // through the mirror publish so concurrent writers preserve offset order.
   publish("task-{$task['id']}", $offset."\x1f".$message, 10);
+  flock($fh, LOCK_UN);
+  fclose($fh);
   return true;
 }
 
@@ -171,7 +288,7 @@ function task_launch(&$task) {
   if (!$resolved) {
     $task['status']   = 'error';
     $task['finished'] = time();
-    task_write($task);
+    if (!task_write($task)) @unlink(task_path($task['id']));
     return false;
   }
   [$name,$args] = $resolved;
@@ -194,19 +311,55 @@ function task_launch(&$task) {
   // escapeshellarg the whole bash -c payload so a single quote (or other shell
   // metacharacter) in the resolved args cannot break out of the outer shell;
   // bash still word-splits the args internally, preserving multi-arg commands.
-  $payload = 'sleep .3 && '.$name.' '.$args.$suffix.$stamp;
+  // The wrapper writes its own PID and stops before the operation begins. PHP
+  // validates + persists that process identity, then resumes the group. This
+  // handshake means no privileged payload can run untracked and cleanup never
+  // has to signal an unverified numeric PID.
+  $handshake = task_dir().'/.launch-'.$task['id'];
+  @unlink($handshake);
+  $gate = 'printf "%s\\n" "$$" > '.escapeshellarg($handshake).' || exit 125; kill -STOP $$; rm -f '.escapeshellarg($handshake).'; ';
+  $payload = $gate.'sleep .3 && '.$name.' '.$args.$suffix.$stamp;
   // setsid runs the operation in its own session + process group (pid == pgid),
   // so Abort (TaskCommand.php) can signal the whole tree via a negative-pid group
   // kill and actually stop the underlying command and every child it spawned.
   // With a plain nohup the wrapper shell stays in php-fpm's process group: killing
   // just its pid orphaned the real worker (e.g. a docker update), which then ran
   // to completion after the task was already marked error.
-  $pid = exec($env.'setsid bash -c '.escapeshellarg($payload).' 1>/dev/null 2>&1 & echo $!');
+  exec($env.'setsid bash -c '.escapeshellarg($payload).' 1>/dev/null 2>&1 &');
+  $identity = task_process_identity($handshake);
+  if (!$identity) {
+    // A matching handshake file plus a stopped process proves ownership even
+    // when setsid failed to establish the expected group. Kill only that owned
+    // launcher PID; never fall back to an unverified numeric PID or group.
+    $claimed = trim((string)@file_get_contents($handshake));
+    $stopped = task_proc_stat($claimed);
+    if ($stopped && $stopped['state']==='T') exec('kill -KILL '.(int)$claimed.' 2>/dev/null');
+    @unlink($handshake);
+    $task['status'] = 'error';
+    $task['finished'] = time();
+    if (!task_write($task)) @unlink(task_path($task['id']));
+    return false;
+  }
+  $pid = (string)$identity['pid'];
   $task['pid']     = $pid;
+  $task['pid_start'] = $identity['starttime'];
+  $task['pgrp']    = $identity['pgrp'];
+  $task['session'] = $identity['session'];
   $task['status']  = 'running';
   $task['started'] = time();
-  task_write($task);
+  if (!task_write($task)) return task_fail_launch($task, $handshake);
+  if (!task_signal_group($task, 'CONT')) return task_fail_launch($task, $handshake);
+  @unlink($handshake);
   return $pid;
+}
+
+// Caller holds the per-type lock.
+function task_advance_locked($type) {
+  if (task_running_type($type)) return false;
+  foreach (task_list() as $task) {
+    if ($task['type']===$type && $task['status']==='queued') return task_launch($task);
+  }
+  return false;
 }
 
 // start the next queued task of a type if nothing of that type is running.
@@ -215,14 +368,11 @@ function task_launch(&$task) {
 // completion stamp firing at the same instant) could both pass task_running_type
 // and double-launch the next queued task. Callers must NOT already hold the lock.
 function task_advance($type) {
-  $lock = fopen(task_dir()."/.$type.lock", 'c');
-  if ($lock) flock($lock, LOCK_EX);
-  if (!task_running_type($type)) {
-    foreach (task_list() as $t) {
-      if ($t['type']===$type && $t['status']==='queued') { task_launch($t); break; }
-    }
-  }
-  if ($lock) { flock($lock, LOCK_UN); fclose($lock); }
+  $lock = task_type_lock($type);
+  if (!$lock) return false;
+  task_advance_locked($type);
+  task_type_unlock($lock);
+  return true;
 }
 
 // the operation reported a failure if its captured output contains the _ERROR_
@@ -244,26 +394,26 @@ function task_log_has_error($id) {
 // Record a task's terminal state from its command's own exit (invoked by the
 // wrapper in task_launch via plugins/dynamix/include/task_complete). $rc is the
 // command's exit code; a task is an error when it exited non-zero or published
-// an _ERROR_ record. Marking is done under the per-type lock; the lock is then
-// released before advancing so the (also-locking) task_advance can't deadlock on
-// the same handle. An already-finalized task (e.g. aborted via TaskCommand.php,
-// or marked by the daemon first) is left untouched.
+// an _ERROR_ record. Marking and selection of the next queued task are atomic
+// under the per-type lock. An already-finalized task (or one marked by the
+// daemon first) is left untouched.
 function task_complete($id, $rc) {
   $task = task_read($id);
   if (!$task) return;
   $type = $task['type'];
-  $lock = fopen(task_dir()."/.$type.lock", 'c');
-  if ($lock) flock($lock, LOCK_EX);
+  $lock = task_type_lock($type);
+  if (!$lock) return false;
   $task = task_read($id); // re-read under lock
   $changed = false;
-  if ($task && $task['status']==='running') {
-    $task['status']   = ((int)$rc !== 0 || task_log_has_error($id)) ? 'error' : 'done';
+  if ($task && in_array($task['status'], ['running','aborting'], true)) {
+    $task['status']   = ($task['status']==='aborting' || (int)$rc !== 0 || task_log_has_error($id)) ? 'error' : 'done';
     $task['finished'] = time();
-    task_write($task);
-    $changed = true;
+    $changed = (bool)task_write($task);
+    if ($changed) task_advance_locked($type);
   }
-  if ($lock) { flock($lock, LOCK_UN); fclose($lock); }
-  if ($changed) { task_advance($type); task_publish(); }
+  task_type_unlock($lock);
+  if ($changed) task_publish();
+  return $changed;
 }
 
 // (re)start the scheduling daemon if it isn't already running
@@ -276,18 +426,18 @@ function task_daemon_start() {
 
 // create (and possibly immediately start) a task; returns the task record
 function task_create($type,$cmd,$title,$plg,$func,$start,$button) {
-  if (!in_array($type, TASK_TYPES)) return null;
+  if (!in_array($type, TASK_TYPES, true)) return null;
   // Serialize the dedupe -> create -> launch sequence per type. Without this,
   // two concurrent requests (e.g. a double click) could both pass the dedupe
   // and task_running_type() checks and each call task_launch(), violating the
   // "at most one running task per type" invariant the whole design relies on.
-  $lock = fopen(task_dir()."/.$type.lock", 'c');
-  if ($lock) flock($lock, LOCK_EX);
+  $lock = task_type_lock($type);
+  if (!$lock) return null;
   // dedupe: unless unconditional (start==1), don't queue an identical pending/running op
   if ((int)$start !== 1) {
     foreach (task_list() as $t) {
-      if ($t['type']===$type && $t['cmd']===$cmd && in_array($t['status'],['queued','running'])) {
-        if ($lock) { flock($lock, LOCK_UN); fclose($lock); }
+      if ($t['type']===$type && $t['cmd']===$cmd && in_array($t['status'],['queued','running','aborting'], true)) {
+        task_type_unlock($lock);
         return $t;
       }
     }
@@ -302,17 +452,20 @@ function task_create($type,$cmd,$title,$plg,$func,$start,$button) {
     'start'    => (int)$start,
     'button'   => (int)$button,
     'pid'      => '',
+    'pid_start'=> '',
+    'pgrp'     => 0,
+    'session'  => 0,
     'status'   => 'queued',
     'created'  => time(),
     'started'  => 0,
     'finished' => 0,
   ];
-  task_write($task);
-  if (!task_running_type($type)) task_launch($task);
-  if ($lock) { flock($lock, LOCK_UN); fclose($lock); }
+  if (!task_write($task)) { task_type_unlock($lock); return null; }
+  task_advance_locked($type);
+  task_type_unlock($lock);
   task_daemon_start();
   task_publish();
-  return task_read($task['id']) ?: $task;
+  return task_read($task['id']);
 }
 
 // remove finished tasks older than the TTL (called by the daemon on startup)

@@ -11,12 +11,18 @@
  */
 ?>
 <?
-// POST mutations (create/abort/dismiss) are CSRF-protected globally by local_prepend.php.
+// Mutations are POST-only and CSRF-protected globally by local_prepend.php.
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/plugins/dynamix/include/TaskQueue.php";
 
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 $id     = $_POST['id'] ?? $_GET['id'] ?? '';
+$mutations = ['create','abort','dismiss','clear'];
+if (in_array($action, $mutations, true) && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+  header('Allow: POST');
+  http_response_code(405);
+  die();
+}
 
 switch ($action) {
 case 'create':
@@ -35,24 +41,30 @@ case 'create':
 case 'abort':
   $task = task_read($id);
   if ($task) {
-    if ($task['status']==='running' && ctype_digit((string)$task['pid']) && (int)$task['pid'] > 1) {
-      $pid = (int)$task['pid'];
-      // The task runs in its own session/process group (task_launch uses setsid),
-      // so signal the whole group with a negative pid to stop the underlying
-      // operation AND every child it spawned. Killing only the wrapper's pid left
-      // the real worker (e.g. a docker update) orphaned and running to completion.
-      // The bare-pid kill is a fallback in case the group was never established.
-      exec('kill -TERM -'.$pid.' 2>/dev/null');
-      exec('kill -TERM '.$pid.' 2>/dev/null');
+    $lock = task_type_lock($task['type']);
+    if (!$lock) { http_response_code(503); die(); }
+    $task = task_read($id);
+    if ($task && $task['status']==='running') {
+      // Keep the type slot occupied until task_complete or the daemon confirms
+      // that the owned process group has exited. Advancing immediately after an
+      // asynchronous TERM can overlap two destructive operations and attribute
+      // the old operation's trailing output to the new task.
+      $task['status'] = 'aborting';
+      $task['abort_requested'] = time();
+      if (!task_write($task)) {
+        task_type_unlock($lock);
+        http_response_code(500);
+        die();
+      }
+      task_signal_group($task, 'TERM');
       foreach (glob('/tmp/plugins/pluginPending/*') ?: [] as $file) @unlink($file);
-      $task['status']   = 'error';
-      $task['finished'] = time();
-      task_write($task);
-      task_advance($task['type']);
-    } else {
-      // queued (or already finished) task: just drop it
+    } elseif ($task && $task['status']!=='aborting') {
+      // A queued task can be removed while holding the same type lock used by
+      // advancement, so cancellation cannot race with task_launch().
       task_delete($id);
     }
+    task_type_unlock($lock);
+    if ($task && $task['status']==='aborting') task_daemon_start();
     task_publish();
   }
   die();
@@ -84,9 +96,14 @@ case 'log':
   if (task_valid_id($id) && is_file(task_log($id))) {
     $fh = @fopen(task_log($id), 'rb');
     if ($fh) {
-      @flock($fh, LOCK_SH);
+      if (!flock($fh, LOCK_SH)) {
+        fclose($fh);
+        my_logger("Task log replay failed to lock $id");
+        http_response_code(503);
+        die();
+      }
       $data = stream_get_contents($fh) ?: '';
-      @flock($fh, LOCK_UN);
+      flock($fh, LOCK_UN);
       fclose($fh);
     }
   }

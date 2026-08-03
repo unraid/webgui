@@ -175,7 +175,8 @@ function bannerAlert() {}
 // and the task tray lets any client re-open or background it.
 //   start  = 0 : run command only when not already running (default)
 //   start  = 1 : run command unconditionally
-//   button : show/hide the CLOSE button (per-type meaning preserved downstream)
+//   button : retained in the signature/record for caller compatibility; the
+//            shared task sheet now derives its controls from task status
 function openPlugin(cmd,title,plg,func,start=0,button=0)   { createTask('plugins', cmd,title,plg,func,start,button); }
 function openDocker(cmd,title,plg,func,start=0,button=0)   { createTask('docker',  cmd,title,plg,func,start,button); }
 function openVMAction(cmd,title,plg,func,start=0,button=0) { createTask('vmaction',cmd,title,plg,func,start,button); }
@@ -188,6 +189,9 @@ function createTask(type,cmd,title,plg,func,start,button) {
   },function(res) {
     $('div.spinner.fixed').hide();
     if (!res || !res.id) return;
+    // Completion callbacks belong to tabs that initiated/joined the operation,
+    // not every tab that happens to observe the shared task-list transition.
+    taskCallbackOwned[res.id] = true;
     // The authoritative task list is broadcast asynchronously on /sub/tasks and
     // can land *after* this AJAX response. Without the entry in taskList,
     // foregroundTask() can't find the task and bails, so the modal never opens
@@ -198,6 +202,7 @@ function createTask(type,cmd,title,plg,func,start,button) {
       taskList.push({id:res.id,type:type,title:title,cmd:cmd,plg:plg||'',func:func||'',
                      start:start||0,button:button||0,pid:'',status:res.status||'running',
                      created:0,started:0,finished:0});
+      taskPrev[res.id] = res.status||'running';
       if (typeof trayRender==='function') trayRender();
     }
     foregroundTask(res.id);

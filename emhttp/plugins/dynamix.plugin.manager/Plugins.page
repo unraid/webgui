@@ -206,7 +206,7 @@ function loadlist(id,check) {
   });
 }
 // Row buttons are rendered server-side (make_link) from the task queue: a plugin
-// with a running/queued task shows "Upgrading" (disabled). Refresh the rows when
+// with an active/queued task shows "Upgrading" (disabled). Refresh the rows when
 // the set of active plugin tasks changes, so that state appears/clears live —
 // loadlist(null,1) re-renders just the status cells (no network re-check, no
 // flickery full reload). The task queue is the single source of truth.
@@ -216,7 +216,7 @@ function onPluginTasksChanged() {
   if (typeof taskList !== 'undefined') {
     for (var i=0;i<taskList.length;i++) {
       var t = taskList[i];
-      if (t && t.type=='plugins' && (t.status=='running'||t.status=='queued')) sig += t.id+';';
+      if (t && t.type=='plugins' && (t.status=='running'||t.status=='aborting'||t.status=='queued')) sig += t.id+';';
     }
   }
   if (sig !== _plgTaskSig) { _plgTaskSig = sig; loadlist(null,1); }

@@ -104,6 +104,8 @@ nchan_wlan0.start();
 const TASK_ENDPOINT = '/plugins/dynamix/include/TaskCommand.php';
 var taskList = [];
 const taskPrev = {};
+const taskCallbackFired = {};
+const taskCallbackOwned = {};
 var foregroundTaskId = null;
 
 function taskById(id)  { for (var i=0;i<taskList.length;i++) if (taskList[i].id==id)  return taskList[i]; return null; }
@@ -132,16 +134,21 @@ function nchanStop(sub) { try { if (sub &&  sub.running) sub.stop();  } catch(e)
 // inside that range is already on screen, so it's dropped. The shared type
 // channels are still published for any external subscriber.
 var taskSub = null, taskSubId = null, replayedBytes = 0;
-function startTaskChannel(id) {
+var taskReplayReady = false, taskPendingMessages = [], taskReplayRequest = 0;
+function startTaskChannel(id, onConnect) {
   if (taskSub && taskSubId === id) return;
   stopTaskChannel();
   taskSubId = id;
   taskSub = new NchanSubscriber('/sub/task-'+id,{subscriber:'websocket', reconnectTimeout:5000});
   taskSub.on('message', function(data){ routeTaskMessage(id, data); });
+  if (onConnect) taskSub.once('connect', onConnect);
   nchanStart(taskSub);
 }
 function stopTaskChannel() {
   if (taskSub) { nchanStop(taskSub); taskSub = null; taskSubId = null; }
+  taskReplayRequest++;
+  taskReplayReady = false;
+  taskPendingMessages = [];
 }
 
 // progress_dots / progress_span (declared in HeadInlineJS) are global wait-spinner
@@ -208,6 +215,7 @@ function renderMessage(type, data) {
 // live per-task channel messages render only into the foregrounded task's modal
 function routeTaskMessage(id, raw) {
   if (foregroundTaskId !== id || !raw) return;
+  if (!taskReplayReady) { taskPendingMessages.push(raw); return; }
   var data = raw, sep = raw.indexOf('\x1f');
   // strip the "<log byte offset>\x1f" tag; drop anything the replay already covered
   if (sep > 0 && /^\d+$/.test(raw.slice(0,sep))) {
@@ -221,6 +229,40 @@ function routeTaskMessage(id, raw) {
   renderMessage(t ? t.type : 'plugins', data);
 }
 
+function loadTaskReplay(id, task, reset) {
+  var request = ++taskReplayRequest;
+  $.get(TASK_ENDPOINT,{action:'log',id:id},function(logdata,_st,xhr){
+    if (foregroundTaskId!==id || request!==taskReplayRequest) return;
+    if (reset) $('pre#swaltext').html('');
+    replayedBytes = parseInt(xhr && xhr.getResponseHeader('X-Task-Log-Size'),10) || 0;
+    var msgs = (logdata||'').split('\x1e');
+    for (var i=0;i<msgs.length;i++) {
+      var m = msgs[i];
+      if (m==='' || m==='_DONE_' || m==='_ERROR_') continue;
+      renderMessage(task.type, m);
+    }
+    taskPendingMessages.sort(function(a,b){
+      var as = a.indexOf('\x1f'), bs = b.indexOf('\x1f');
+      var ao = as>0 ? parseInt(a.slice(0,as),10) : Number.MAX_VALUE;
+      var bo = bs>0 ? parseInt(b.slice(0,bs),10) : Number.MAX_VALUE;
+      return ao-bo;
+    });
+    var pending = taskPendingMessages;
+    taskPendingMessages = [];
+    taskReplayReady = true;
+    for (var j=0;j<pending.length;j++) routeTaskMessage(id, pending[j]);
+    var fresh = taskById(id);
+    if (fresh && fresh.status=='done')  openDone('_DONE_');
+    else if (fresh && fresh.status=='error') openError('_ERROR_');
+  },'text').fail(function(){
+    if (foregroundTaskId!==id || request!==taskReplayRequest) return;
+    taskReplayReady = true;
+    var pending = taskPendingMessages;
+    taskPendingMessages = [];
+    for (var i=0;i<pending.length;i++) routeTaskMessage(id, pending[i]);
+  });
+}
+
 // Legacy per-op reload callback ( (func||'loadlist')(plg) ), suppressed for
 // ':return'. The legacy modal fired this whenever plg was non-null, so an
 // empty plg with an explicit func (e.g. Apps.page openPlugin(...,'','refresh'),
@@ -229,9 +271,12 @@ function routeTaskMessage(id, raw) {
 // requested" means either field is non-empty -- requiring a truthy plg alone
 // silently dropped every empty-identifier refresh.
 function fireTaskCallback(t) {
-  if (t && t.plg != ':return' && (t.plg || t.func)) {
+  if (t && taskCallbackOwned[t.id] && !taskCallbackFired[t.id] && t.plg != ':return' && (t.plg || t.func)) {
     var fn = window[t.func || 'loadlist'];
-    if (typeof fn === 'function') setTimeout(function(){ fn(t.plg); },250);
+    if (typeof fn === 'function') {
+      taskCallbackFired[t.id] = true;
+      setTimeout(function(){ fn(t.plg); },250);
+    }
   }
 }
 
@@ -308,8 +353,10 @@ function decorateNchanSheet(opts) {
   $('.sweet-alert').append("<a class='nchan-close' title=\""+tip+"\" onclick='"+onclick+"'><i class='fa "+icon+" fa-fw'></i></a>");
 }
 
-// bring a task to the foreground: open the modal, replay its server-side log,
-// then stream live if it is still running
+// bring a task to the foreground: establish the live subscriber first, buffer
+// offset-tagged messages while replaying the durable log, then drain anything
+// newer than that snapshot. Waiting for the subscriber's connect event closes
+// the replay/live loss window even when a burst exceeds nchan's retained buffer.
 function foregroundTask(id) {
   var task = taskById(id);
   if (!task) return;
@@ -329,6 +376,7 @@ function foregroundTask(id) {
                   : task.status=='error' ? 'nchan-error' : 'nchan-running';
   var stateHtml   = task.status=='done'  ? "<i class='fa fa-check fa-fw'></i> <?=_('Finished')?>"
                   : task.status=='error' ? "<i class='fa fa-warning fa-fw'></i> <?=_('Error')?>"
+                  : task.status=='aborting' ? "<i class='fa fa-refresh fa-spin fa-fw'></i> <?=_('Aborting')?>"
                   : "<i class='fa fa-refresh fa-spin fa-fw'></i> <?=_('In Progress')?>";
   swal({title:escapeTaskHtml(task.title),text:"<pre id='swaltext'></pre><hr>",html:true,animation:'none',showConfirmButton:finished,confirmButtonText:"<?=_('Dismiss')?>"},function(close){
     // confirm/Dismiss (or Esc): background while running, clear once finished
@@ -348,25 +396,26 @@ function foregroundTask(id) {
   // task running in the tray; removal is the separate Dismiss button. openDone/
   // openError swap the tooltip to the finished form. decorateNchanSheet adds this
   // control plus the shared resize grip and restores the remembered width.
-  var closeTip = finished ? "<?=_('Minimize - keeps it in the tray')?>" : "<?=_('Minimize - keeps running in the background')?>";
+  var closeTip = finished || task.status=='aborting' ? "<?=_('Minimize - keeps it in the tray')?>" : "<?=_('Minimize - keeps running in the background')?>";
   decorateNchanSheet({ close:'minimize', tip: closeTip });
   $('pre#swaltext').html('');
-  $.get(TASK_ENDPOINT,{action:'log',id:id},function(logdata,_st,xhr){
-    if (foregroundTaskId!==id) return; // user moved on while loading
-    // byte length of the log as served: live messages tagged with an offset
-    // below this were rendered by this replay (see routeTaskMessage)
-    replayedBytes = parseInt(xhr && xhr.getResponseHeader('X-Task-Log-Size'),10) || 0;
-    var msgs = (logdata||'').split('\x1e');
-    for (var i=0;i<msgs.length;i++) {
-      var m = msgs[i];
-      if (m==='' || m==='_DONE_' || m==='_ERROR_') continue;
-      renderMessage(task.type, m);
-    }
-    var fresh = taskById(id);
-    if (fresh && (fresh.status=='running' || fresh.status=='queued')) startTaskChannel(id);
-    else if (fresh && fresh.status=='done')  openDone('_DONE_');
-    else if (fresh && fresh.status=='error') openError('_ERROR_');
-  },'text');
+  taskReplayReady = false;
+  taskPendingMessages = [];
+  var replayStarted = false;
+  var connectFallback = setTimeout(function(){
+    if (foregroundTaskId!==id || (taskSub && taskSub.connected)) return;
+    replayStarted = true;
+    loadTaskReplay(id, task, false);
+  }, 2000);
+  startTaskChannel(id, function(){
+    clearTimeout(connectFallback);
+    // If the bounded fallback already started, replace its snapshot after the
+    // subscriber is confirmed ready. Messages arriving from this point are
+    // buffered and reconciled against the fresh byte cutoff.
+    taskReplayReady = false;
+    taskPendingMessages = [];
+    loadTaskReplay(id, task, replayStarted);
+  });
 }
 
 // react to the shared task list pushed on /sub/tasks
@@ -397,8 +446,9 @@ function onTaskListUpdate() {
           // finished task still shows in the tray for the user to dismiss.
           fireTaskCallback(t);
         }
-      } else if (t.status=='running' && foregroundTaskId==t.id) {
-        $('#pluginProgressTitle').attr('class','nchan-state nchan-running').html("<i class='fa fa-refresh fa-spin fa-fw'></i> <?=_('In Progress')?>");
+      } else if ((t.status=='running' || t.status=='aborting') && foregroundTaskId==t.id) {
+        var activeText = t.status=='aborting' ? "<?=_('Aborting')?>" : "<?=_('In Progress')?>";
+        $('#pluginProgressTitle').attr('class','nchan-state nchan-running').html("<i class='fa fa-refresh fa-spin fa-fw'></i> "+activeText);
         startTaskChannel(t.id);
       }
     }
@@ -443,6 +493,9 @@ function trayRender() {
     if (t.status=='running') {
       icon = "<i class='fa fa-circle-o-notch fa-spin fa-fw'></i>";
       actions = show + "<a class='op-act' onclick='confirmAbortTask(\""+safeId+"\")' title=\"<?=_('Abort')?>\"><i class='fa fa-stop-circle fa-fw'></i></a>";
+    } else if (t.status=='aborting') {
+      icon = "<i class='fa fa-circle-o-notch fa-spin fa-fw' title=\"<?=_('Aborting')?>\"></i>";
+      actions = show;
     } else if (t.status=='queued') {
       icon = "<i class='fa fa-clock-o fa-fw'></i>";
       actions = "<a class='op-act' onclick='cancelTask(\""+safeId+"\")' title=\"<?=_('Cancel')?>\"><i class='fa fa-times fa-fw'></i></a>";

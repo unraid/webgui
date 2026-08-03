@@ -18,7 +18,8 @@
  * Primary completion is recorded by each task itself on exit (task_complete,
  * wired up in task_launch). This daemon is the fallback + queue driver: it
  * catches tasks whose process vanished without stamping a result (e.g. a hard
- * kill), marks them done/error, auto-starts the next queued task of that type,
+ * kill), marks them error, completes bounded abort escalation, auto-starts the
+ * next queued task of that type,
  * and broadcasts the updated list. Exits once nothing is running or queued; it
  * is (re)started on demand by task_create() and by the page-load nchan sweep in
  * DefaultPageLayout.php.
@@ -26,12 +27,6 @@
 
 $docroot = '/usr/local/emhttp';
 require_once "$docroot/plugins/dynamix/include/TaskQueue.php";
-
-// a task's stored pid is alive while /proc/<pid> exists; require a numeric pid so
-// an empty/garbage value can't match the /proc directory itself and wedge a task
-function task_pid_alive($pid) {
-  return ctype_digit((string)$pid) && file_exists("/proc/$pid");
-}
 
 // task_log_has_error() is shared with task_complete and lives in TaskQueue.php.
 
@@ -43,14 +38,38 @@ while (true) {
   $changed = false;
   $freed   = [];
 
-  foreach (task_list() as $t) {
-    if ($t['status']==='running' && !task_pid_alive($t['pid'])) {
-      $t['status']   = task_log_has_error($t['id']) ? 'error' : 'done';
-      $t['finished'] = time();
-      task_write($t);
-      $freed[$t['type']] = true;
-      $changed = true;
+  foreach (task_list() as $candidate) {
+    if (!in_array($candidate['status'], ['running','aborting'], true)) continue;
+    $lock = task_type_lock($candidate['type']);
+    if (!$lock) continue;
+    // Re-read under the same type lock used by task_complete/abort. The outer
+    // task_list snapshot may be stale by the time the daemon reaches it.
+    $t = task_read($candidate['id']);
+    if (!$t || !in_array($t['status'], ['running','aborting'], true)) {
+      task_type_unlock($lock);
+      continue;
     }
+    $alive = task_process_group_alive($t);
+    if ($t['status']==='aborting' && $alive) {
+      if (time() - (int)($t['abort_requested'] ?? 0) >= TASK_ABORT_GRACE)
+        task_signal_group($t, 'KILL');
+      task_type_unlock($lock);
+      continue;
+    }
+    if (!$alive) {
+      // A successful/ordinary failure exit stamps its authoritative result via
+      // task_complete before disappearing. Reaching this fallback means the
+      // wrapper was killed, crashed, or never reached its stamp, so success is
+      // unknown and must fail closed even when no _ERROR_ record was published.
+      $t['status']   = 'error';
+      $t['finished'] = time();
+      if (task_write($t)) {
+        @unlink(task_dir().'/.launch-'.$t['id']);
+        task_advance_locked($t['type']);
+        $changed = true;
+      }
+    }
+    task_type_unlock($lock);
   }
 
   // also launch any queued type that has nothing running. Covers a daemon
@@ -72,7 +91,7 @@ while (true) {
   // exit when there is no more work; the daemon is restarted on demand
   $active = false;
   foreach (task_list() as $t) {
-    if ($t['status']==='running' || $t['status']==='queued') { $active = true; break; }
+    if (in_array($t['status'], ['running','aborting','queued'], true)) { $active = true; break; }
   }
   if (!$active) break;
 

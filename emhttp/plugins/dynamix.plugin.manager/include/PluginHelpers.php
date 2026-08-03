@@ -15,12 +15,12 @@ $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Wrappers.php";
 require_once "$docroot/plugins/dynamix/include/TaskQueue.php";
 
-// true when the backend task queue has a running/queued task targeting this .plg
+// true when the backend task queue has an active/queued task targeting this .plg
 // (the task queue is the source of truth for an in-flight install/update)
 function plugin_task_busy($arg) {
   if (!$arg) return false;
   foreach (task_list() as $t) {
-    if ($t['type']==='plugins' && in_array($t['status'],['running','queued'],true)
+    if ($t['type']==='plugins' && in_array($t['status'],['running','aborting','queued'],true)
         && in_array($arg, preg_split('/\s+/', trim($t['cmd'])), true)) return true;
   }
   return false;
