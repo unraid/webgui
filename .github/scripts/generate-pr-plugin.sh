@@ -272,6 +272,27 @@ if [ -s "$PAYLOAD/text_files.txt" ]; then
     done
 fi
 
+# ---- Reactivate overlaid system daemons ------------------------------------
+# The patch is applied late (on install, and at boot AFTER rc.M has already
+# started these daemons with the stock config), so config we just overlaid does
+# not take effect until the matching daemon is bounced — a plain reboot alone
+# does not help because the plugin re-applies after rc.M each time. Restart the
+# affected daemons here (after modes are restored, so their rc scripts are
+# executable). Keep this to daemons that are safe to bounce live. Paths in
+# text_files.txt are the packaged layout (etc/rc.d/* maps to usr/local/etc/rc.d/*).
+if [ -s "$PAYLOAD/text_files.txt" ]; then
+    # elogind owns the physical power key unless a drop-in tells it to ignore it;
+    # it only reads logind.conf.d/ at startup, so reload it when that changes.
+    if grep -qE 'etc/elogind/|rc\.d/rc\.elogind$' "$PAYLOAD/text_files.txt" && [ -x /etc/rc.d/rc.elogind ]; then
+        echo "Reloading elogind (session/power-key policy changed)..."
+        /etc/rc.d/rc.elogind restart >/dev/null 2>&1 || true
+    fi
+    # rc.acpid installs Unraid's ACPI handler over the stock one at (re)start.
+    if grep -qE 'etc/acpi/|rc\.d/rc\.acpid$' "$PAYLOAD/text_files.txt" && [ -x /etc/rc.d/rc.acpid ]; then
+        echo "Restarting acpid (ACPI handler changed)..."
+        /etc/rc.d/rc.acpid restart >/dev/null 2>&1 || true
+    fi
+fi
 echo ""
 echo "✅ Installation complete for PR #PR_PLACEHOLDER"
 echo "⚠️  This is a TEST plugin — remove it before applying production updates"
