@@ -108,6 +108,16 @@ const taskCallbackFired = {};
 const taskCallbackOwned = {};
 var foregroundTaskId = null;
 
+// SweetAlert reuses one global .sweet-alert node. When a task sheet is being
+// minimized, do not let a second dialog reuse that node until SweetAlert's
+// asynchronous close handoff has completed. Otherwise an ordinary warning
+// (notably Abort) can inherit the task-sheet class and be hidden by the stale
+// close callback from the previous dialog.
+var taskModalClosing = false;
+var taskModalCloseToken = 0;
+var taskModalCloseTimer = null;
+var taskModalCloseQueue = [];
+
 function taskById(id)  { for (var i=0;i<taskList.length;i++) if (taskList[i].id==id)  return taskList[i]; return null; }
 function taskByPid(pid){ for (var i=0;i<taskList.length;i++) if (taskList[i].pid==pid) return taskList[i]; return null; }
 function escapeTaskHtml(s){ return $('<div>').text(s==null?'':String(s)).html(); }
@@ -558,21 +568,48 @@ if (window.matchMedia) {
 // the default swal look for a frame (the "flash"). pointer-events:none keeps the
 // fading (now-invisible but still laid-out) modal from eating clicks; the guard
 // avoids stripping .nchan off a modal that was reopened in the meantime.
+function clearNchanChrome($sa) {
+  $sa = $sa || $('.sweet-alert');
+  $sa.removeClass('nchan').css('pointer-events','');
+  $sa.children('.nchan-state,.nchan-close,.nchan-resize').remove();
+}
+
+function finishTaskModalClose(token) {
+  if (!taskModalClosing || token !== taskModalCloseToken) return;
+  if (taskModalCloseTimer) clearTimeout(taskModalCloseTimer);
+  taskModalCloseTimer = null;
+  taskModalClosing = false;
+  clearNchanChrome($('.sweet-alert'));
+  var queued = taskModalCloseQueue;
+  taskModalCloseQueue = [];
+  for (var i=0;i<queued.length;i++) setTimeout(queued[i],0);
+}
+
 function nchanCloseModal(doClose) {
   var $sa = $('.sweet-alert');
-  $sa.css('pointer-events','none');
-  if (doClose && typeof swal!=='undefined' && swal.close) swal.close();
-  // SweetAlert reuses the same .sweet-alert node for every dialog and only
-  // replaces its built-in title/body/buttons. The task sheet inserts this
-  // state row itself, so leaving it behind makes the next ordinary warning
-  // (for example Abort or plugin uninstall) inherit stale In Progress /
-  // Finished content. Remove task-owned state as part of the close handoff;
-  // keep the .nchan class until the fade completes to avoid the old close flash.
-  $sa.children('.nchan-state').remove();
-  setTimeout(function(){
-    $sa.css('pointer-events','');
-    if (!foregroundTaskId) $sa.removeClass('nchan');
-  }, 350);
+  if (doClose && typeof swal!=='undefined' && swal.close) {
+    var token = ++taskModalCloseToken;
+    taskModalClosing = true;
+    $sa.css('pointer-events','none');
+    // Remove task-owned content immediately, but keep the task-sheet class
+    // through SweetAlert's close animation so the sheet does not flash back to
+    // the ordinary dialog layout while disappearing.
+    $sa.children('.nchan-state').remove();
+    if (taskModalCloseTimer) clearTimeout(taskModalCloseTimer);
+    // The foreground task callback normally runs when SweetAlert has completed
+    // its close. Keep a fallback for callers/browsers that do not invoke it.
+    taskModalCloseTimer = setTimeout(function(){ finishTaskModalClose(token); },750);
+    swal.close();
+    return;
+  }
+  if (taskModalClosing) {
+    // This is the foreground task's delayed SweetAlert callback. Defer one tick
+    // so any final library cleanup runs before the next dialog is opened.
+    var token = taskModalCloseToken;
+    setTimeout(function(){ finishTaskModalClose(token); },0);
+    return;
+  }
+  clearNchanChrome($sa);
 }
 
 function minimizeForegroundTask() {
@@ -587,9 +624,16 @@ function cancelTask(id) { $.post(TASK_ENDPOINT,{action:'abort',id:id}); }
 function dismissTask(id){ $.post(TASK_ENDPOINT,{action:'dismiss',id:id}); }
 function clearFinishedTasks(){ $.post(TASK_ENDPOINT,{action:'clear'}); }
 function confirmAbortTask(id) {
-  swal({title:"<?=_('Abort background operation')?>",text:"<?=_('This may leave an unknown state')?>",html:true,animation:'none',type:'warning',showCancelButton:true,confirmButtonText:"<?=_('Proceed')?>",cancelButtonText:"<?=_('Cancel')?>"},function(){
-    $.post(TASK_ENDPOINT,{action:'abort',id:id});
-  });
+  var show = function() {
+    // Defensive cleanup keeps this ordinary warning independent of any task
+    // chrome left on SweetAlert's shared singleton node.
+    clearNchanChrome($('.sweet-alert'));
+    swal({title:"<?=_('Abort background operation')?>",text:"<?=_('This may leave an unknown state')?>",html:true,animation:'none',type:'warning',showCancelButton:true,confirmButtonText:"<?=_('Proceed')?>",cancelButtonText:"<?=_('Cancel')?>"},function(){
+      $.post(TASK_ENDPOINT,{action:'abort',id:id});
+    });
+  };
+  if (taskModalClosing) taskModalCloseQueue.push(show);
+  else show();
 }
 
 const scrollDuration = 500;
