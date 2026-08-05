@@ -107,7 +107,7 @@ function updateContainer(container) {
   swal({
     title:_('Are you sure?'),text:_('Update container')+': '+container, type:'warning',html:true,showCancelButton:true,closeOnConfirm:false,confirmButtonText:_('Yes, update it!'),cancelButtonText:_('Cancel')
   },function(){
-    openDocker('update_container '+encodeURIComponent(container),_('Updating the container'),'','loadlist');
+    openDocker('update_container '+encodeURIComponent(container),_('Update container')+': '+container,'','loadlist');
   });
 }
 function rmContainer(container, image, id) {
@@ -182,7 +182,7 @@ function updateAll() {
   $('input[type=button]').prop('disabled',true);
   var ct = [];
   for (var i=0,d; d=docker[i]; i++) if (d.update==1) ct.push(encodeURIComponent(d.name));
-  openDocker('update_container '+ct.join('*'),_('Updating all Containers'),'','loadlist');
+  openDocker('update_container '+ct.join('*'),_('Updating all Containers')+' ('+ct.length+')','','loadlist');
 }
 function rebuildAll() {
   $('input[type=button]').prop('disabled',true);
