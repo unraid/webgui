@@ -1,0 +1,33 @@
+#!/bin/bash
+#
+# Shared runtime configuration for the configurable power button.
+#
+# The webgui repository is extracted under /usr/local in a full Unraid
+# release, while PR test plugins apply etc/* directly under /. Resolve both
+# layouts into the runtime /etc paths consumed by acpid and elogind.
+
+powerbutton_configure_acpid(){
+  local root="${POWERBUTTON_RUNTIME_ROOT:-}"
+  local runtime_dir="$root/etc/acpi"
+  local source="$runtime_dir/unraid_power_handler.sh"
+
+  if [[ ! -f $source ]]; then
+    source="$root/usr/local/etc/acpi/unraid_power_handler.sh"
+  fi
+  [[ -f $source ]] || return 0
+
+  mkdir -p "$runtime_dir/powerbutton.d"
+  install -m 0755 "$source" "$runtime_dir/acpi_handler.sh"
+}
+
+powerbutton_configure_elogind(){
+  local root="${POWERBUTTON_RUNTIME_ROOT:-}"
+  local target="$root/etc/elogind/logind.conf.d/20-unraid-powerbutton.conf"
+  local packaged="$root/usr/local/etc/elogind/logind.conf.d/20-unraid-powerbutton.conf"
+
+  [[ -f $target ]] && return 0
+  [[ -f $packaged ]] || return 0
+
+  mkdir -p "$(dirname "$target")"
+  install -m 0644 "$packaged" "$target"
+}

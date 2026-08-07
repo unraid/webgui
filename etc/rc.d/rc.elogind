@@ -26,6 +26,7 @@ PIDFILE="/run/elogind.pid"
 
 # run & log functions
 . /etc/rc.d/rc.runlog
+. /etc/rc.d/rc.powerbutton
 
 elogind_running(){
   sleep 0.1
@@ -36,6 +37,7 @@ elogind_start(){
   log "Starting $DAEMON..."
   local REPLY
   [[ -x $ELOGIND ]] || exit 1
+  powerbutton_configure_elogind
   [[ -d /run/user ]] || mkdir -p /run/user
   if [[ ! -d /run/systemd ]]; then
     mkdir -p /run/elogind /sys/fs/cgroup/elogind
