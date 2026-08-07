@@ -503,6 +503,54 @@ textarea:where(:not(.unapi *)) {
     align-self: stretch;
 }
 
+#header.unraid-consolidated-header {
+    align-items: stretch;
+    gap: 0;
+    min-height: 86px;
+    padding-left: 0;
+    /* The consolidated header's actual height grows with its content (meta
+       row, array-usage bar), so a fixed background-size crops the banner
+       image once the box exceeds it. Stretch to the box's real size instead. */
+    background-size: 100% 100%;
+}
+
+#header.unraid-consolidated-header unraid-header {
+    align-self: stretch;
+    display: block;
+    width: 100%;
+}
+
+#header.unraid-consolidated-header #UnraidHeader {
+    min-height: inherit;
+    /* Fill the stretched <unraid-header> host. Without this the shell is shorter
+       than #header, so the banner-gradient layer inside it (inset-y-0) stops
+       short and the gradient looks clipped at the top and bottom. Filling the
+       host also means the shell and the light-DOM boot placeholder center their
+       content in the same box. */
+    height: 100%;
+}
+
+/* The light-DOM boot logo must occupy the same inset box as the mounted
+   #UnraidHeader so the logo does not jump when <unraid-header> upgrades.
+   #UnraidHeader carries the inset via its padding but only exists post-mount, so
+   the boot logo shares the same padding (here and in the desktop breakpoint
+   below) and is full-height + vertically centered (see Header.php). It only
+   exists pre-mount (replaceChildren discards it), so this never affects the
+   mounted layout. */
+#header.unraid-consolidated-header #UnraidHeader,
+#header.unraid-consolidated-header .unraid-header-boot-logo {
+    box-sizing: border-box;
+    padding: .5rem 1rem;
+}
+
+#header.unraid-consolidated-header .block {
+    background-color: transparent;
+    float: none;
+    margin: 0;
+    padding: 0;
+    text-align: inherit;
+}
+
 /**
  * Tools page, rotate the Downgrade icon to prevent needing to add a new icon to the icon font.
  * The pseudo element is targeted here otherwise the rotation of the span would mess up spacing with the text.
@@ -2822,6 +2870,16 @@ div#title.ud {
         border-bottom: 1px solid var(--gray-600);
         box-sizing: border-box;
         padding-left: 80px;
+    }
+
+    #header.unraid-consolidated-header {
+        padding-left: 0;
+    }
+
+    #header.unraid-consolidated-header #UnraidHeader,
+    #header.unraid-consolidated-header .unraid-header-boot-logo {
+        padding-left: calc(64px + 1rem);
+        padding-right: 1rem;
     }
 
     #header .logo {
