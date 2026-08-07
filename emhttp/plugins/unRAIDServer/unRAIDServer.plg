@@ -366,6 +366,22 @@ rm -f /boot/config/plugins/dynamix.plg
 if [[ -x /usr/local/emhttp/plugins/unraid.patch/scripts/patch.php ]]; then
   /usr/local/emhttp/plugins/unraid.patch/scripts/patch.php check &version;
 fi
+# Fire the generic 'os_update' event: a pre-reboot hook for an OS update that
+# any plugin can register for (config migration, backups, compatibility checks
+# and - for out-of-tree driver plugins - staging a build matching the INCOMING
+# kernel so a reboot never lands on a kernel without its driver). The new release
+# files - including changes.txt - are already on the flash here; pass the
+# incoming Unraid version and kernel release as context (consumers ignore what
+# they do not need). Hooks run synchronously, so the reboot prompt below only
+# appears once they have finished. Self-registering: a plugin just installs an
+# executable at its event/os_update path - no hardcoded list.
+new_kernel=$(awk '/[Ll]inux kernel/{f=3} f>0{if(match($0,/[0-9]+(\.[0-9]+)+/)){print substr($0,RSTART,RLENGTH);exit}f--}' /boot/changes.txt 2>/dev/null | head -1)
+if [ -n "$new_kernel" ]; then new_kernel="${new_kernel}-Unraid"; fi
+if [ -x /usr/local/sbin/emhttp_event ]; then
+  # Bound the whole dispatch so a wedged hook cannot stall the update forever;
+  # a hook that needs longer should background itself and notify (see emhttp_event).
+  timeout 300 /usr/local/sbin/emhttp_event os_update "&version;" "$new_kernel"
+fi
 # ensure writes to USB flash boot device have completed
 sync -f /boot
 if [ -z "${plg_update_helper}" ]; then
