@@ -5,6 +5,17 @@
 # This is the 'mover' script used for moving files between pools and/or the main unRAID array.
 # It is typically invoked via cron.
 
+# First we check if it's valid for this script run: pool use in shfs must be enabled and
+# an instance of the script must not already be running.
+
+# Next, check each of the top-level directories (shares) on each pool.
+# If, and only if, the 'Use Cache' setting for the share is set to "yes", we use 'find' to
+# list the objects (files and directories) of that share directory, moving them to the array.
+# Next, we check each of the top-level directories (shares) on each array disk (in sorted order).
+# If, and only if, the 'Use Cache' setting for the share is set to "prefer", we use 'find' to
+# list the objects (files and directories) of that share directory, moving them to the pool
+# associted with the share.
+
 # The script is set up so that hidden directories (i.e., directory names beginning with a '.'
 # character) at the topmost level of a pool or an array disk are not moved.  This behavior
 # can be turned off by uncommenting the following line:
@@ -26,11 +37,233 @@
 PIDFILE="/var/run/mover.pid"
 CFGPATH="/boot/config/shares"
 DEBUGGING=""
+MOVERSTATUS="/usr/local/emhttp/state/mover.ini"
+GLOBAL_SHARECFG="/boot/config/share.cfg"
+MOVER_PROGRESS="disabled"
+TOTAL=0
+REMAIN=0
+SHARE_TOTAL=0
+SHARE_REMAIN=0
+START_TIME=0
+CURRENT_SHARE_STARTED=0
+declare -A SHARE_TOTALS SHARE_REMAINS SHARE_START_TIME
+
+mover_progress_enabled() {
+  [[ $MOVER_PROGRESS == "enabled" ]]
+}
+
+inivalue() {
+  local value="${1//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '"%s"\n' "$value"
+}
+
+tree_size() {
+  find "$1" -depth -type f -printf '%s\n' 2>/dev/null | awk '{total += $1} END {print total + 0}'
+}
+
+file_size() {
+  if [[ -f "$1" ]]; then
+    stat -c '%s' -- "$1" 2>/dev/null || echo 0
+  else
+    echo 0
+  fi
+}
+
+percent_done() {
+  local total="$1"
+  local remain="$2"
+
+  if [[ $total -gt 0 ]]; then
+    awk -v total="$total" -v remain="$remain" 'BEGIN {printf "%.2f", ((total - remain) / total) * 100}'
+  else
+    echo 0
+  fi
+}
+
+throughput_rate() {
+  local moved="$1"
+  local elapsed="$2"
+
+  if [[ $moved -gt 0 && $elapsed -gt 0 ]]; then
+    awk -v moved="$moved" -v elapsed="$elapsed" 'BEGIN {printf "%.0f", moved / elapsed}'
+  else
+    echo 0
+  fi
+}
+
+eta_seconds() {
+  local remain="$1"
+  local rate="$2"
+
+  if [[ $remain -gt 0 && $rate -gt 0 ]]; then
+    awk -v remain="$remain" -v rate="$rate" 'BEGIN {printf "%.0f", remain / rate}'
+  else
+    echo 0
+  fi
+}
+
+writestatus() {
+  mover_progress_enabled || return
+
+  local file="$1"
+  local action="$2"
+  local filepercent="${3:-0}"
+  local tmp="${MOVERSTATUS}.$$"
+  local now elapsed moved rate eta share_elapsed share_moved share_rate share_eta
+
+  now=$(date +%s)
+  elapsed=$((START_TIME > 0 && now > START_TIME ? now - START_TIME : 0))
+  moved=$((TOTAL > REMAIN ? TOTAL - REMAIN : 0))
+  rate=$(throughput_rate "$moved" "$elapsed")
+  eta=$(eta_seconds "$REMAIN" "$rate")
+  share_elapsed=$((CURRENT_SHARE_STARTED > 0 && now > CURRENT_SHARE_STARTED ? now - CURRENT_SHARE_STARTED : 0))
+  share_moved=$((SHARE_TOTAL > SHARE_REMAIN ? SHARE_TOTAL - SHARE_REMAIN : 0))
+  share_rate=$(throughput_rate "$share_moved" "$share_elapsed")
+  share_eta=$(eta_seconds "$SHARE_REMAIN" "$share_rate")
+
+  {
+    echo "TotalSize=${TOTAL}"
+    echo "RemainSize=${REMAIN}"
+    echo "Throughput=${rate}"
+    echo "ETA=${eta}"
+    echo "ShareTotal=${SHARE_TOTAL}"
+    echo "ShareRemain=${SHARE_REMAIN}"
+    echo "ShareThroughput=${share_rate}"
+    echo "ShareETA=${share_eta}"
+    printf 'File=%s\n' "$(inivalue "$file")"
+    printf 'Action=%s\n' "$(inivalue "$action")"
+    echo "Filepercent=${filepercent}"
+    echo "Showlines=5"
+    echo "Selectlines=1,2,3,4,5"
+    echo "movertitle1=File being processed:"
+    echo "movertitle2=Action:"
+    echo "movertitle3=Progress:"
+    echo "movertitle4=Overall Progress:"
+    echo "movertitle5=Estimated Completion:"
+  } > "$tmp"
+  mv -f "$tmp" "$MOVERSTATUS"
+}
+
+count_path() {
+  local path="$1"
+  local size
+
+  size=$(tree_size "$path")
+  TOTAL=$((TOTAL + size))
+  REMAIN=$((REMAIN + size))
+  SHARE_TOTALS["$SHARE"]=$((${SHARE_TOTALS["$SHARE"]:-0} + size))
+  SHARE_REMAINS["$SHARE"]=$((${SHARE_REMAINS["$SHARE"]:-0} + size))
+}
+
+prepare_share_progress() {
+  local share_key="$SHARE"
+
+  if [[ -z ${SHARE_START_TIME[$share_key]} ]]; then
+    SHARE_START_TIME[$share_key]=$(date +%s)
+  fi
+  CURRENT_SHARE_STARTED=${SHARE_START_TIME[$share_key]}
+  SHARE_TOTAL=${SHARE_TOTALS["$SHARE"]:-0}
+  SHARE_REMAIN=${SHARE_REMAINS["$SHARE"]:-0}
+}
+
+decrement_progress() {
+  local size="$1"
+
+  [[ $size -le 0 ]] && return
+  REMAIN=$((REMAIN > size ? REMAIN - size : 0))
+  SHARE_REMAINS["$SHARE"]=$((${SHARE_REMAINS["$SHARE"]:-0} > size ? ${SHARE_REMAINS["$SHARE"]:-0} - size : 0))
+  SHARE_REMAIN=${SHARE_REMAINS["$SHARE"]:-0}
+}
 
 move() {
-  find "$1" -depth 2>/dev/null | /usr/libexec/unraid/move $DEBUGGING
+  local path
+  local size
+  local action
+  local progress=0
+
+  if mover_progress_enabled; then
+    progress=1
+    prepare_share_progress
+  fi
+  while IFS= read -r path; do
+    if [[ $progress -eq 1 ]]; then
+      size=$(file_size "$path")
+      action="Moving share ${SHARE}"
+      writestatus "$path" "$action" "$(percent_done "$SHARE_TOTAL" "$SHARE_REMAIN")"
+    fi
+    printf '%s\n' "$path" | /usr/libexec/unraid/move $DEBUGGING
+    if [[ $progress -eq 1 && $size -gt 0 && ! -e "$path" ]]; then
+      decrement_progress "$size"
+    fi
+  done < <(find "$1" -depth 2>/dev/null)
+
   # second pass to clean up leftover empty directories
-  find "$1" -depth -type d 2>/dev/null | /usr/libexec/unraid/move $DEBUGGING
+  while IFS= read -r path; do
+    if [[ $progress -eq 1 ]]; then
+      writestatus "$path" "Cleaning up share ${SHARE}" "$(percent_done "$SHARE_TOTAL" "$SHARE_REMAIN")"
+    fi
+    printf '%s\n' "$path" | /usr/libexec/unraid/move $DEBUGGING
+  done < <(find "$1" -depth -type d 2>/dev/null)
+}
+
+calculate_totals() {
+  local sharecfg sharepath disk emptying
+  local -a disks arr
+
+  TOTAL=0
+  REMAIN=0
+  SHARE_TOTALS=()
+  SHARE_REMAINS=()
+  SHARE_START_TIME=()
+
+  for sharecfg in $CFGPATH/*.cfg ; do
+    SHARE=$(basename "$sharecfg" .cfg)
+    shareUseCache=""
+    shareCachePool=""
+    shareCachePool2=""
+    source <(fromdos < "$sharecfg")
+
+    if [[ $shareUseCache = yes && -n $shareCachePool && -d "/mnt/$shareCachePool/$SHARE" ]]; then
+      if [[ -n $shareCachePool2 ]]; then
+        if [[ -d "/mnt/$shareCachePool2" ]]; then
+          count_path "/mnt/$shareCachePool/$SHARE"
+        fi
+      else
+        disks=(/mnt/disk[1-9]/ /mnt/disk[1-9][0-9]/)
+        if [[ ${#disks[@]} -gt 0 ]]; then
+          count_path "/mnt/$shareCachePool/$SHARE"
+        fi
+      fi
+    fi
+
+    if [[ $shareUseCache = prefer ]]; then
+      if [[ -n $shareCachePool2 ]]; then
+        if [[ -d "/mnt/$shareCachePool2/$SHARE" && -n $shareCachePool && -d "/mnt/$shareCachePool" ]]; then
+          count_path "/mnt/$shareCachePool2/$SHARE"
+        fi
+      else
+        if [[ -n $shareCachePool && -d "/mnt/$shareCachePool" ]]; then
+          for sharepath in /mnt/disk[1-9]/"$SHARE"/ /mnt/disk[1-9][0-9]/"$SHARE"/ ; do
+            count_path "$sharepath"
+          done
+        fi
+      fi
+    fi
+  done
+
+  emptying=$(grep '^shareUserEmptying=' /boot/config/share.cfg | cut -d'"' -f2)
+  IFS=',' read -ra arr <<< "$emptying"
+  if [[ -n $emptying ]]; then
+    for disk in "${arr[@]}"; do
+      for sharepath in /mnt/$disk/* ; do
+        SHARE=$(basename "$sharepath")
+        if [[ -d "$sharepath" && -f "$CFGPATH/$SHARE.cfg" ]]; then
+          count_path "$sharepath"
+        fi
+      done
+    done
+  fi
 }
 
 start() {
@@ -41,13 +274,29 @@ start() {
     fi
   fi
 
+
   echo $$ >/var/run/mover.pid
   echo "mover: started" >&2
+  MOVER_PROGRESS=$(grep '^shareMoverProgress=' "$GLOBAL_SHARECFG" 2>/dev/null | cut -d'"' -f2)
+  MOVER_PROGRESS=${MOVER_PROGRESS:-disabled}
+  if ! mover_progress_enabled; then
+    rm -f $MOVERSTATUS
+  fi
 
   shopt -s nullglob
+  if mover_progress_enabled; then
+    START_TIME=$(date +%s)
+    writestatus "" "Calculating mover totals" 0
+    calculate_totals
+    writestatus "" "Mover totals calculated" 0
+    sleep 2
+  fi
 
   for SHARECFG in $CFGPATH/*.cfg ; do
     SHARE=$(basename "$SHARECFG" .cfg)
+    shareUseCache=""
+    shareCachePool=""
+    shareCachePool2=""
     source <(fromdos < "$SHARECFG")
 
     # maybe move from primary to secondary
@@ -87,27 +336,30 @@ start() {
   # maybe empty an array disk
   EMPTYING=$(grep '^shareUserEmptying=' /boot/config/share.cfg | cut -d'"' -f2)
   IFS=',' read -ra arr <<< "$EMPTYING"
-  for DISK in "${arr[@]}"; do
-    # we can only empty share directories
-    for SHAREPATH in /mnt/$DISK/* ; do
-      SHARE=$(basename "$SHAREPATH")
-      if [[ -d "$SHAREPATH" && -f "$CFGPATH/$SHARE.cfg" ]]; then
-        move "$SHAREPATH"
+  if [[ -n $EMPTYING ]]; then
+    for DISK in "${arr[@]}"; do
+      # we can only empty share directories
+      for SHAREPATH in /mnt/$DISK/* ; do
+        SHARE=$(basename "$SHAREPATH")
+        if [[ -d "$SHAREPATH" && -f "$CFGPATH/$SHARE.cfg" ]]; then
+          move "$SHAREPATH"
+        fi
+      done
+
+      # output list of files which could not be moved
+      # use 'find' in case huge number of files left in /mnt/$DISK
+      count=$(find /mnt/$DISK -mindepth 1 | wc -l)
+      if [ "$count" -gt 0 ]; then
+        find /mnt/$DISK -mindepth 1 -depth -printf 'move: %p Not moved\n' | head -n 100
+        if [ "$count" -gt 100 ]; then
+          echo "[output truncated to first 100 entries]"
+          writestatus "" "Mover output truncated" "$(percent_done "$SHARE_TOTAL" "$SHARE_REMAIN")"
+        fi
       fi
     done
-
-    # output list of files which could not be moved
-    # use 'find' in case huge number of files left in /mnt/$DISK
-    count=$(find /mnt/$DISK -mindepth 1 | wc -l)
-    if [ "$count" -gt 0 ]; then
-      find /mnt/$DISK -mindepth 1 -depth -printf 'move: %p Not moved\n' | head -n 100
-      if [ "$count" -gt 100 ]; then
-        echo "[output truncated to first 100 entries]"
-      fi
-    fi
-  done
-
+  fi
   rm -f $PIDFILE
+  rm -f $MOVERSTATUS
   echo "mover: finished" >&2
 }
 
