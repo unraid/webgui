@@ -901,9 +901,14 @@ class DockerClient {
 			// never unlink the shared default icon recorded for icon-less containers
 			if (isset($info[$name]['icon']) && $info[$name]['icon'] != '/plugins/dynamix.docker.manager/images/question.png') {
 				$iconRAM = $docroot.$info[$name]['icon'];
-				$iconUSB = str_replace($dockerManPaths['images-ram'], $dockerManPaths['images'], $iconRAM);
-				if ($cache>=1 && is_file($iconRAM)) unlink($iconRAM);
-				if ($cache==2 && $code===true && is_file($iconUSB)) unlink($iconUSB);
+				// Only remove per-container cached icons (they live under images-ram).
+				// Icon-less containers record the shared fallback (e.g. question.png) as
+				// their icon; unlinking that would delete it system-wide until reboot.
+				if (strpos($iconRAM, $dockerManPaths['images-ram']) === 0) {
+					$iconUSB = str_replace($dockerManPaths['images-ram'], $dockerManPaths['images'], $iconRAM);
+					if ($cache>=1 && is_file($iconRAM)) unlink($iconRAM);
+					if ($cache==2 && $code===true && is_file($iconUSB)) unlink($iconUSB);
+				}
 			}
 			unset($info[$name]);
 			DockerUtil::saveJSON($dockerManPaths['webui-info'], $info);
