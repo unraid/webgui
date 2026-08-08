@@ -67,9 +67,9 @@ _(Source folder)_:
     <input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''">
     <span class="dfm_sparse">_(Use sparse option)_</span>
   </label>
-  <label for="dfm_exist" class="inline-flex flex-wrap items-center gap-4">
-    <input type="checkbox" id="dfm_exist" value="" onchange="this.value=this.checked?'1':''">
-    <span class="dfm_exist">_(Overwrite existing files)_</span>
+  <label for="dfm_overwrite" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_overwrite" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_overwrite">_(Overwrite existing files)_</span>
   </label>
   <span class="dfm_text"></span>
 </span>
@@ -91,9 +91,9 @@ _(Source folder)_:
     <input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''">
     <span class="dfm_sparse">_(Use sparse option)_</span>
   </label>
-  <label for="dfm_exist" class="inline-flex flex-wrap items-center gap-4">
-    <input type="checkbox" id="dfm_exist" value="" onchange="this.value=this.checked?'1':''">
-    <span class="dfm_exist">_(Overwrite existing files)_</span>
+  <label for="dfm_overwrite" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_overwrite" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_overwrite">_(Overwrite existing files)_</span>
   </label>
   <span class="dfm_text"></span>
 </span>
@@ -137,9 +137,9 @@ _(Source file)_:
     <input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''">
     <span class="dfm_sparse">_(Use sparse option)_</span>
   </label>
-  <label for="dfm_exist" class="inline-flex flex-wrap items-center gap-4">
-    <input type="checkbox" id="dfm_exist" value="" onchange="this.value=this.checked?'1':''">
-    <span class="dfm_exist">_(Overwrite existing files)_</span>
+  <label for="dfm_overwrite" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_overwrite" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_overwrite">_(Overwrite existing files)_</span>
   </label>
   <span class="dfm_text"></span>
 </span>
@@ -161,9 +161,9 @@ _(Source file)_:
     <input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''">
     <span class="dfm_sparse">_(Use sparse option)_</span>
   </label>
-  <label for="dfm_exist" class="inline-flex flex-wrap items-center gap-4">
-    <input type="checkbox" id="dfm_exist" value="" onchange="this.value=this.checked?'1':''">
-    <span class="dfm_exist">_(Overwrite existing files)_</span>
+  <label for="dfm_overwrite" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_overwrite" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_overwrite">_(Overwrite existing files)_</span>
   </label>
   <span class="dfm_text"></span>
 </span>
@@ -207,9 +207,9 @@ _(Source)_:
     <input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''">
     <span class="dfm_sparse">_(Use sparse option)_</span>
   </label>
-  <label for="dfm_exist" class="inline-flex flex-wrap items-center gap-4">
-    <input type="checkbox" id="dfm_exist" value="" onchange="this.value=this.checked?'1':''">
-    <span class="dfm_exist">_(Overwrite existing files)_</span>
+  <label for="dfm_overwrite" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_overwrite" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_overwrite">_(Overwrite existing files)_</span>
   </label>
   <span class="dfm_text"></span>
 </span>
@@ -231,9 +231,9 @@ _(Source)_:
     <input type="checkbox" id="dfm_sparse" value="" onchange="this.value=this.checked?'1':''">
     <span class="dfm_sparse">_(Use sparse option)_</span>
   </label>
-  <label for="dfm_exist" class="inline-flex flex-wrap items-center gap-4">
-    <input type="checkbox" id="dfm_exist" value="" onchange="this.value=this.checked?'1':''">
-    <span class="dfm_exist">_(Overwrite existing files)_</span>
+  <label for="dfm_overwrite" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_overwrite" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_overwrite">_(Overwrite existing files)_</span>
   </label>
   <span class="dfm_text"></span>
 </span>
@@ -362,5 +362,65 @@ $.post('/webGui/include/Control.php',{mode:'jobs'},function(jobs){
 });
 </script>
 !-->
+</div>
+
+<div markdown="1" id="dfm_templateCompress">
+_(Source)_:
+: <span id="dfm_source"></span>
+
+_(Archive format)_:
+: <select id="dfm_format" onchange="updateArchiveName()">
+  <option value="zip">ZIP (_.zip_)</option>
+  <option value="tar">TAR (_.tar_)</option>
+  <option value="tar.gz">TAR.GZ (_.tar.gz_)</option>
+  <option value="tar.bz2">TAR.BZ2 (_.tar.bz2_)</option>
+  <option value="tar.xz">TAR.XZ (_.tar.xz_)</option>
+  <option value="tar.zst">TAR.ZST (_.tar.zst - recommended for appdata_)</option>
+  <option value="tar.lz4">TAR.LZ4 (_.tar.lz4_)</option>
+  <option value="gz" class="dfm_single_format">GZ (_.gz_)</option>
+  <option value="xz" class="dfm_single_format">XZ (_.xz_)</option>
+  <option value="bz2" class="dfm_single_format">BZ2 (_.bz2_)</option>
+  <option value="zst" class="dfm_single_format">ZST (_.zst_)</option>
+  <option value="lz4" class="dfm_single_format">LZ4 (_.lz4_)</option>
+</select>
+
+_(Archive name)_:
+: <input type="text" id="dfm_archive_name" autocomplete="off" spellcheck="false" value="">
+
+<wbr />
+: <span class="flex flex-col gap-4">
+  <label for="dfm_overwrite" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_overwrite" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_overwrite">_(Overwrite existing archive)_</span>
+  </label>
+
+  <span class="dfm_text"></span>
+</span>
+
+<wbr />
+: _(save to)_ ...
+
+_(Target folder)_:
+: <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickmatch="" data-pickroot="" data-picktop="">
+</div>
+
+<div markdown="1" id="dfm_templateExtract">
+_(Archive)_:
+: <span id="dfm_source"></span>
+
+<wbr />
+: <span class="flex flex-col gap-4">
+  <label for="dfm_overwrite" class="inline-flex flex-wrap items-center gap-4">
+    <input type="checkbox" id="dfm_overwrite" value="" onchange="this.value=this.checked?'1':''">
+    <span class="dfm_overwrite">_(Overwrite existing files)_</span>
+  </label>
+  <span class="dfm_text"></span>
+</span>
+
+<wbr />
+: _(extract to)_ ...
+
+_(Target folder)_:
+: <input type="text" id="dfm_target" autocomplete="off" spellcheck="false" value="" data-pickcloseonfile="true" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickmatch="" data-pickroot="" data-picktop="">
 </div>
 </div>
