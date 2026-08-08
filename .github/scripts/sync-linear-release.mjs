@@ -24,6 +24,8 @@ const tagSha = requiredEnv("TAG_SHA");
 const issueIdsPath = requiredEnv("ISSUE_IDS_PATH");
 const featureOsUrlsPath = env.FEATUREOS_URLS_PATH;
 const githubPrUrlsPath = env.GITHUB_PR_URLS_PATH;
+const prSummaryPath = env.PR_SUMMARY_PATH;
+const logPath = env.LOG_PATH;
 
 const pipelineName = RELEASE_PIPELINE_BY_CHANNEL[releaseChannel];
 if (!pipelineName) {
@@ -38,6 +40,7 @@ const githubPrUrls = githubPrUrlsPath ? readLines(githubPrUrlsPath) : [];
 const pipeline = await findReleasePipeline(pipelineName);
 const targetStage = findStage(pipeline, targetStageName);
 const release = await upsertRelease({ pipeline, targetStage });
+await syncWebguiReleaseNotes(pipeline, release);
 const relatedReleases = await resolveRelatedReleases(pipeline);
 const syncResult = await syncIssuesToRelease(release, relatedReleases, { issueIdentifiers, featureOsUrls, githubPrUrls });
 
@@ -304,6 +307,13 @@ async function findRelease(pipelineId, version, name) {
             name
             type
           }
+          releaseNotes {
+            id
+            title
+            documentContent {
+              content
+            }
+          }
         }
       }
     }
@@ -330,6 +340,13 @@ async function createRelease(input) {
             id
             name
             type
+          }
+          releaseNotes {
+            id
+            title
+            documentContent {
+              content
+            }
           }
         }
       }
@@ -360,6 +377,13 @@ async function updateRelease(id, input) {
             name
             type
           }
+          releaseNotes {
+            id
+            title
+            documentContent {
+              content
+            }
+          }
         }
       }
     }
@@ -370,6 +394,124 @@ async function updateRelease(id, input) {
   }
 
   return data.releaseUpdate.release;
+}
+
+async function syncWebguiReleaseNotes(pipeline, release) {
+  const content = buildWebguiReleaseNotes();
+  if (!content || !release?.id) {
+    return;
+  }
+
+  const title = `Version ${tagName}`;
+  const existingNote = findReleaseNote(release, title);
+  const nextContent = renderManagedSection(
+    existingNote?.documentContent?.content || "",
+    "notification-worker-webgui-release-notes",
+    title,
+    content,
+  );
+
+  if (existingNote?.id) {
+    if (nextContent !== (existingNote.documentContent?.content || "") || existingNote.title !== title) {
+      await updateReleaseNote(existingNote.id, {
+        releaseId: release.id,
+        title,
+        content: nextContent,
+      });
+    }
+    return;
+  }
+
+  await createReleaseNote({
+    pipelineId: pipeline.id,
+    releaseId: release.id,
+    title,
+    content: nextContent,
+  });
+}
+
+function buildWebguiReleaseNotes() {
+  const prSummaries = prSummaryPath ? readOptionalLines(prSummaryPath) : [];
+  const commitSubjects = logPath ? readCommitSubjects(logPath) : [];
+  const metadata = [
+    `Tag: \`${tagName}\``,
+    `Commit: \`${tagSha}\``,
+    env.PREVIOUS_TAG ? `Previous tag: \`${env.PREVIOUS_TAG}\`` : undefined,
+    env.RANGE_SPEC ? `Commit range: \`${env.RANGE_SPEC}\`` : undefined,
+  ].filter(Boolean);
+  const sections = [["## Release Metadata", ...metadata]];
+
+  if (prSummaries.length > 0) {
+    sections.push(["## WebGUI Pull Requests", ...prSummaries]);
+  }
+  if (issueIdentifiers.length > 0) {
+    sections.push(["## Linked Linear Issues", ...issueIdentifiers.map((id) => `- ${id}`)]);
+  }
+  if (featureOsUrls.length > 0) {
+    sections.push(["## Linked FeatureOS Posts", ...featureOsUrls.map((url) => `- ${url}`)]);
+  }
+  if (prSummaries.length === 0 && commitSubjects.length > 0) {
+    sections.push(["## Commit Summary", ...commitSubjects.slice(0, 25).map((subject) => `- ${subject}`)]);
+  }
+
+  return sections.map((section) => section.join("\n")).join("\n\n").trim();
+}
+
+function findReleaseNote(release, title) {
+  const normalizedTitle = title.trim().toLowerCase();
+  const marker = managedSectionStartMarker("notification-worker-webgui-release-notes", title);
+  return (release.releaseNotes || []).find((note) => (note.title || "").trim().toLowerCase() === normalizedTitle)
+    || (release.releaseNotes || []).find((note) => (note.documentContent?.content || "").includes(marker));
+}
+
+async function createReleaseNote(input) {
+  const data = await graphql(`
+    mutation CreateReleaseNote($input: ReleaseNoteCreateInput!) {
+      releaseNoteCreate(input: $input) {
+        success
+        releaseNote {
+          id
+          title
+        }
+      }
+    }
+  `, {
+    input: dropUndefined({
+      pipelineId: input.pipelineId,
+      releaseIds: [input.releaseId],
+      title: input.title,
+      content: input.content,
+    }),
+  });
+
+  if (!data.releaseNoteCreate.success) {
+    throw new Error(`Linear release note create failed for ${input.releaseId}`);
+  }
+}
+
+async function updateReleaseNote(id, input) {
+  const data = await graphql(`
+    mutation UpdateReleaseNote($id: String!, $input: ReleaseNoteUpdateInput!) {
+      releaseNoteUpdate(id: $id, input: $input) {
+        success
+        releaseNote {
+          id
+          title
+        }
+      }
+    }
+  `, {
+    id,
+    input: dropUndefined({
+      releaseIds: [input.releaseId],
+      title: input.title,
+      content: input.content,
+    }),
+  });
+
+  if (!data.releaseNoteUpdate.success) {
+    throw new Error(`Linear release note update failed for ${id}`);
+  }
 }
 
 async function findIssue(identifier) {
@@ -546,6 +688,67 @@ function readLines(path) {
     .map((line) => line.trim())
     .filter(Boolean)
     .filter((value, index, values) => values.indexOf(value) === index);
+}
+
+function readOptionalLines(path) {
+  try {
+    return readLines(path);
+  } catch {
+    return [];
+  }
+}
+
+function readCommitSubjects(path) {
+  try {
+    return readFileSync(path, "utf8")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("Merge pull request #"))
+      .filter((value, index, values) => values.indexOf(value) === index);
+  } catch {
+    return [];
+  }
+}
+
+function renderManagedSection(content, markerPrefix, title, body) {
+  const normalizedTitle = title.trim() || "Release Notes";
+  const normalizedBody = body.trim();
+  if (!normalizedBody) {
+    return content;
+  }
+
+  const startMarker = managedSectionStartMarker(markerPrefix, normalizedTitle);
+  const endMarker = `<!-- ${markerPrefix}:end:${stableMarkerHash(normalizedTitle)} -->`;
+  const section = [
+    startMarker,
+    `# ${normalizedTitle}`,
+    "",
+    normalizedBody,
+    endMarker,
+  ].join("\n").trim();
+  const existing = content.trim();
+  const pattern = new RegExp(`${escapeRegExp(startMarker)}[\\s\\S]*?${escapeRegExp(endMarker)}`, "m");
+  if (pattern.test(existing)) {
+    return existing.replace(pattern, section).trim();
+  }
+
+  return [existing, section].filter(Boolean).join("\n\n").trim();
+}
+
+function managedSectionStartMarker(markerPrefix, title) {
+  return `<!-- ${markerPrefix}:start:${stableMarkerHash(title.trim() || "Release Notes")} -->`;
+}
+
+function stableMarkerHash(value) {
+  let hash = 5381;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) + hash) ^ value.charCodeAt(index);
+  }
+  return (hash >>> 0).toString(16);
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function candidateAttachmentUrls(url) {
