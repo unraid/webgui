@@ -11,6 +11,7 @@ DAEMON="ACPI power management daemon"
 
 # run & log functions
 . /etc/rc.d/rc.runlog
+. /etc/rc.d/rc.powerbutton
 
 acpid_running(){
   sleep 0.1
@@ -23,12 +24,7 @@ acpid_running(){
 # Options > Power Button) live from dynamix.cfg, so no reload is needed when
 # the setting changes.
 acpid_configure(){
-  local SRC=/etc/acpi/unraid_power_handler.sh
-  # Drop-in dir for plugin-provided power button actions (see README there).
-  mkdir -p /etc/acpi/powerbutton.d
-  if [[ -f $SRC ]]; then
-    install -m 0755 "$SRC" /etc/acpi/acpi_handler.sh
-  fi
+  powerbutton_configure_acpid
 }
 
 acpid_start(){
