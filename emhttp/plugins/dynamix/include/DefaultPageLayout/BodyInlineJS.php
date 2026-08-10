@@ -302,11 +302,11 @@ function fireTaskCallback(t) {
 var NCHAN_SHEET_WIDTH_KEY = 'unraid.nchanSheet.width';
 function nchanSheetWidthBounds() {
   var cap = Math.round(window.innerWidth * 0.9);
-  return { min: Math.min(600, cap), max: Math.max(Math.min(600, cap), cap) }; // 600px == the 60rem default
+  return { min: Math.min(600, cap), max: Math.max(Math.min(600, cap), cap) }; // allow resizing below the 80rem CSS default
 }
 function applyNchanSheetWidth() {
   var w = parseInt(localStorage.getItem(NCHAN_SHEET_WIDTH_KEY), 10);
-  if (!w) return;                                   // no preference -> CSS default (60rem)
+  if (!w) return;                                   // no preference -> CSS default (80rem)
   var b = nchanSheetWidthBounds();
   w = Math.max(b.min, Math.min(w, b.max));
   document.documentElement.style.setProperty('--nchan-sheet-width', w + 'px');
