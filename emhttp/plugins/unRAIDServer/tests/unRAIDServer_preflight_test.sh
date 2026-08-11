@@ -27,7 +27,9 @@ FAKE_BLKID="$TEMP_ROOT/blkid"
 printf '%s\n' \
   '#!/bin/bash' \
   'printf "%s\n" "$*" >> "$BLKID_LOG"' \
-  'if [[ -n "${BLKID_RESULT:-}" ]]; then' \
+  'if [[ "$*" == *" PTTYPE "* ]]; then' \
+  '  printf "%s\n" "${BLKID_PTTYPE:-}"' \
+  'elif [[ -n "${BLKID_RESULT:-}" ]]; then' \
   '  printf "%s\n" "$BLKID_RESULT"' \
   'fi' > "$FAKE_BLKID"
 chmod +x "$FAKE_BLKID"
@@ -95,7 +97,8 @@ finish_case() {
   fi
 }
 
-# Arguments: version, var.ini mode, var.ini content, mount mode, block state, blkid result.
+# Arguments: version, var.ini mode, var.ini content, mount mode, block state,
+# ReiserFS result, partition-table type.
 run_preflight() {
   local target_version="$1"
   local var_mode="$2"
@@ -103,6 +106,7 @@ run_preflight() {
   local mount_mode="$4"
   local block_state="$5"
   local blkid_result="$6"
+  local partition_table="${7:-}"
   local case_dir
   local run_script
   local var_ini
@@ -162,6 +166,7 @@ run_preflight() {
     UNRAID_PREFLIGHT_BLKID_CMD="$FAKE_BLKID" \
     BLKID_LOG="$blkid_log" \
     BLKID_RESULT="$blkid_result" \
+    BLKID_PTTYPE="$partition_table" \
     bash "$run_script" 2>&1); then
     LAST_STATUS=0
   else
@@ -263,9 +268,16 @@ for fixture in \
   assert_status 1
   assert_output_contains "$PARTITION_BLOCK"
   assert_output_contains '*** Recreate the Unraid boot device with a partition table and retry.'
-  assert_blkid_calls 1
+  assert_blkid_calls 2
   finish_case
 done
+
+begin_case "a whole boot device with a partition table is allowed"
+run_preflight '7.3.0-beta.0.1' missing '' /dev/sda whole '' dos
+assert_status 0
+assert_output ''
+assert_blkid_calls 2
+finish_case
 
 begin_case "a missing sysfs entry does not cause a false block"
 run_preflight '7.3.0-beta.0.1' missing '' /dev/sda missing ''

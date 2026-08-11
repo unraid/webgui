@@ -128,6 +128,7 @@ boot_device_has_no_partition() {
   local mount_point
   local boot_mount_count=0
   local block_name
+  local partition_table
 
   [[ -r "$MOUNTS_FILE" ]] || return 1
   while read -r mount_device mount_point _; do
@@ -148,7 +149,10 @@ boot_device_has_no_partition() {
   esac
 
   [[ -e "$SYS_BLOCK_ROOT/$block_name" ]] || return 1
-  [[ ! -e "$SYS_BLOCK_ROOT/$block_name/partition" ]]
+  [[ ! -e "$SYS_BLOCK_ROOT/$block_name/partition" ]] || return 1
+
+  partition_table=$("$BLKID_CMD" -p -s PTTYPE -o value "$boot_device" 2>/dev/null)
+  [[ -z "$partition_table" ]]
 }
 
 if [[ $(php -r "echo version_compare('$version', '7.3.0-beta.0.1');") -lt 0 ]]; then
