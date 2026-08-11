@@ -158,7 +158,7 @@ boot_device_has_no_partition() {
 if [[ $(php -r "echo version_compare('$version', '7.3.0-beta.0.1');") -lt 0 ]]; then
   TPM_GUID=$(read_var_value tpmGUID)
   if [[ "${TPM_GUID:0:3}" == "01-" ]]; then
-    echo "*** Installing an Unraid version below 7.3.0-beta.0.1 is blocked for TPM-based license keys."
+    echo "*** Installing an Unraid version below 7.3 is blocked for TPM-based license keys."
     exit 1
   fi
 
@@ -182,7 +182,7 @@ fi
 
 if boot_device_has_no_partition; then
   echo "***"
-  echo "*** Installing Unraid 7.3.0-beta.0.1 or later is blocked because the boot device has no partition table."
+  echo "*** Installing Unraid 7.3 or later is blocked because the boot device has no partition table."
   echo "*** Recreate the Unraid boot device with a partition table and retry."
   echo "***"
   exit 1

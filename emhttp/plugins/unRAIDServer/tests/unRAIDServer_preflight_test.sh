@@ -177,9 +177,9 @@ run_preflight() {
   LAST_BLKID_ARGS=$(head -n 1 "$blkid_log")
 }
 
-TPM_BLOCK='*** Installing an Unraid version below 7.3.0-beta.0.1 is blocked for TPM-based license keys.'
+TPM_BLOCK='*** Installing an Unraid version below 7.3 is blocked for TPM-based license keys.'
 BOOT_WARNING='*** Warning: The boot device is not eligible for features introduced in Unraid 7.3. The installation will continue.'
-PARTITION_BLOCK='*** Installing Unraid 7.3.0-beta.0.1 or later is blocked because the boot device has no partition table.'
+PARTITION_BLOCK='*** Installing Unraid 7.3 or later is blocked because the boot device has no partition table.'
 REISER_OUTPUT=$'***\n*** ReiserFS filesystem(s) detected:\n/dev/md1\n*** Upgrading to this Unraid version is blocked while ReiserFS is in use.\n*** Please migrate all ReiserFS disks to a supported filesystem and retry.\n***'
 
 begin_case "a target immediately before the boundary uses the older-version checks"
