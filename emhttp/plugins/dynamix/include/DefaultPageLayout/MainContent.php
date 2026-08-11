@@ -47,11 +47,13 @@ function process_icon($icon, $docroot, $root) {
     global $defaultIcon;
     if (substr($icon, -4) == '.png') {
         if (file_exists("$docroot/$root/images/$icon")) {
-            return "<img src=\"/$root/images/$icon\" class=\"PanelImg\">";
+            $path = theme_icon("$root/images/$icon");
         } elseif (file_exists("$docroot/$root/$icon")) {
-            return "<img src=\"/$root/$icon\" class=\"PanelImg\">";
+            $path = theme_icon("$root/$icon");
+        } else {
+            return $defaultIcon;
         }
-        return $defaultIcon;
+        return "<img src=\"/$path\" class=\"PanelImg\">";
     } elseif (substr($icon, 0, 5) == 'icon-') {
         return "<i class=\"$icon PanelIcon\"></i>";
     } elseif ($icon[0] != '<') {
