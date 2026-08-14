@@ -39,13 +39,55 @@ case 'plugin':
     // validate plugin update (not applicable to OS updates)
     if (in_array($name, $unraid)) break;
     $new_plugin = "/tmp/plugins/$name";
+    $invalid    = "/tmp/plugins/$name.invalid";
     if (plugin('version', $new_plugin) > plugin('version', $plugin)) {
       echo "Validating $name update\n";
-      if (($status = plugin('validate', $new_plugin)) != 'valid') {
-        echo "$status\n";
+      $new_version = plugin('version', $new_plugin);
+      // scripts/plugin exits non-zero and prints "plugin: <reason>" on failure
+      // (bad hash, or the update files failing to download for the hash check)
+      $output = [];
+      exec("$docroot/plugins/dynamix.plugin.manager/scripts/plugin validate ".escapeshellarg($new_plugin)." 2>&1", $output, $retval);
+      if ($retval != 0) {
+        $reason = trim(preg_replace('/^plugin:\s*/m', '', implode("\n", $output)));
+        // Classify the failure so the webGUI can explain it (and what to do)
+        // instead of silently reverting to "up-to-date". Validation downloads
+        // the update's files to /tmp (rootfs) and checks their hash, so the
+        // usual culprits are a full root filesystem, a transient network error,
+        // or a genuine bad hash.
+        $free_kb = (int)trim((string)@shell_exec("df -Pk /tmp 2>/dev/null | awk 'NR==2{print \$4}'"));
+        $free_mb = $free_kb > 0 ? intdiv($free_kb, 1024) : 0;
+        if (stripos($reason, 'hash') !== false) {
+          $category = 'integrity';
+          $summary  = 'integrity check failed (bad hash)';
+          $message  = 'The update failed its integrity check (bad hash). The download may be incomplete or corrupt. Check for updates again shortly.';
+        } elseif ($free_kb > 0 && $free_kb < 102400) {
+          $category = 'diskspace';
+          $summary  = 'low on disk space';
+          $message  = sprintf('Not enough free space to download and verify the update (%s MB free). Free up space and check for updates again.', $free_mb);
+        } else {
+          $category = 'download';
+          $summary  = 'update files could not be downloaded';
+          $message  = 'Could not download the update files to verify them. This may be a temporary network problem. Check for updates again shortly.';
+        }
+        echo "$message\n";
+        // An update is available but failed validation. Record the available
+        // version and the classified reason so the webGUI can surface it.
+        file_put_contents($invalid, json_encode([
+          'version'  => $new_version,
+          'category' => $category,
+          'summary'  => $summary,
+          'message'  => $message,
+          'reason'   => $reason,
+        ]));
         // restore original plugin and undo update
         copy($plugin, $new_plugin);
+      } else {
+        // validation passed - clear any stale failure marker
+        @unlink($invalid);
       }
+    } else {
+      // no newer version available - clear any stale failure marker
+      @unlink($invalid);
     }
     break;
   }
