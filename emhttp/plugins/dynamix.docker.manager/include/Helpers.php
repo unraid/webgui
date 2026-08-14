@@ -820,10 +820,12 @@ function getCurlHandle($url, $method='GET') {
   curl_setopt($ch, CURLOPT_ENCODING, "");
   curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
   curl_setopt($ch, CURLOPT_REFERER, "");
+  curl_setopt($ch, CURLOPT_USERAGENT, "docker/Unraid os/Docker-Client");
   if ($method === 'HEAD') {
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'HEAD');
     curl_setopt($ch, CURLOPT_HEADER, true);
     curl_setopt($ch, CURLOPT_NOBODY, true);
+    curl_setopt($ch, CURLOPT_USERAGENT, "docker/Unraid os/Docker-Client");
   }
   return $ch;
 }
