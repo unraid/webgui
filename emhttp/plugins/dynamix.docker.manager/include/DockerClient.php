@@ -536,7 +536,7 @@ class DockerUpdate{
 		/*
 		 * Step 2: Get www-authenticate header from manifest url to generate token or basic auth
 		 */
-		$header = ['Accept: application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json,application/vnd.oci.image.index.v1+json'];
+		$header = ['Accept: application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json,application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json'];
 		$digest_ch = getCurlHandle($manifestURL, 'HEAD', $header);
 		preg_match('@www-authenticate:\s*Bearer\s*(.*)@i', $reply, $matches);
 		if (!empty($matches[1])) {
