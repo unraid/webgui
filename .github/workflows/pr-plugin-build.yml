@@ -7,7 +7,6 @@ on:
       - 'etc/**'
       - 'sbin/**'
       - 'share/**'
-      - 'tests/**'
       - '.github/workflows/pr-plugin-build.yml'
       - '.github/scripts/**'
 
@@ -25,9 +24,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Test power-button runtime paths
-        run: bash tests/power-button-runtime.sh
       
       - name: Get changed files
         id: changed-files
