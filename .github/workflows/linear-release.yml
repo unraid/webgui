@@ -46,10 +46,14 @@ jobs:
         shell: bash
 
     steps:
+      # Range mode derives the shipped set from `previous-tag..HEAD`, so HEAD
+      # must BE the tag. On a dispatch, `github.ref` is the branch the run was
+      # started from, which would measure the wrong range — check out the
+      # requested tag instead.
       - name: Checkout tag
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || github.ref_name }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
           fetch-depth: 0
 
       - name: Resolve release range
