@@ -224,6 +224,7 @@ if (isset($_POST['contName'])) {
   }
   if ($startContainer) $cmd = str_replace('/docker create ', '/docker run -d ', $cmd);
   execCommand($cmd);
+  connectExtraNetworks($Name, $_POST['contExtraNetworks'] ?? '', $_POST['contNetwork'] ?? '', true);
   if ($startContainer) addRoute($Name); // add route for remote WireGuard access
 
   dockerUIBlockerScript(false);
@@ -302,6 +303,7 @@ if (isset($_GET['updateContainer'])){
       exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker rm '" . escapeshellarg($Name) . "'");
     }
     execCommand($cmd, $echo);
+    connectExtraNetworks($Name, getXmlVal($xml, "ExtraNetworks"), $Network, $echo);
     if ($startContainer) addRoute($Name); // add route for remote WireGuard access
     $DockerClient->flushCaches();
     $newImageID = $DockerClient->getImageID($Repository);
@@ -953,6 +955,8 @@ $(function() {
     load_contOverview();
     $("#catSelect").dropdownchecklist("destroy");
     $("#catSelect").dropdownchecklist({emptyText:"_(Select categories)_...", maxDropHeight:200, width:300, explicitClose:"..._(close)_"});
+    $("#contExtraNetworks").dropdownchecklist("destroy");
+    $("#contExtraNetworks").dropdownchecklist({emptyText:"_(None)_", maxDropHeight:200, width:300, explicitClose:"..._(close)_"});
   });
 });
 </script>
@@ -1134,7 +1138,7 @@ Template URL:
 </div>
 <div markdown="1" class="advanced">
 _(Icon URL)_:
-: <input type="text" name="contIcon">
+: <input type="text" name="contIcon"> <img id="contIconPreview" alt="" onerror="this.src='/plugins/dynamix.docker.manager/images/question.png'" style="display:none;height:32px;width:32px;vertical-align:middle;margin-left:8px;border-radius:4px;object-fit:contain">
 
 :docker_client_icon_url_help:
 
@@ -1147,6 +1151,11 @@ _(Extra Parameters)_:
 : <input type="text" name="contExtraParams">
 
 :docker_extra_parameters_help:
+
+_(Memory limit)_:
+: <input type="text" name="contMemory" placeholder="_(unlimited)_" pattern="[0-9]+[bkmgBKMG]?" title="_(Number of bytes, or a number followed by b, k, m or g (e.g. 512m, 2g))_">
+
+:docker_memory_limit_help:
 
 _(Post Arguments)_:
 : <input type="text" name="contPostArgs">
@@ -1181,6 +1190,16 @@ _(Network Type)_:
   ?>
   <?=mk_option(1,$network,_('Custom')." : $name")?>
   <?endforeach;?></select>
+
+_(Additional Networks)_:
+: <select id="contExtraNetworks" name="contExtraNetworks[]" multiple="multiple" style="display:none">
+  <?php $extraNets = isset($xml['ExtraNetworks']) ? preg_split('/[\s,]+/', trim($xml['ExtraNetworks']), -1, PREG_SPLIT_NO_EMPTY) : []; ?>
+  <?foreach ($custom as $network):?>
+  <?php if (in_array($network, ['host','none','bridge','container'])) continue; ?>
+  <option value="<?=htmlspecialchars($network)?>"<?=in_array($network,$extraNets)?' selected':''?>><?=htmlspecialchars($network)?></option>
+  <?endforeach;?></select>
+
+> _(Attach the container to more custom networks in addition to the primary Network Type above. Applied with `docker network connect` after creation. Use the checkbox dropdown to select one or more additional networks.)_
 
 <div markdown="1" class="myIP noshow">
 _(Fixed IP address)_ (_(optional)_):
@@ -2019,10 +2038,22 @@ $(function() {
   $('.switch-on-off').switchButton({labels_placement:'right',on_label:"_(On)_",off_label:"_(Off)_"});
   // Add dropdownchecklist to Select Categories
   $("#catSelect").dropdownchecklist({emptyText:"_(Select categories)_...", maxDropHeight:200, width:300, explicitClose:"..._(close)_"});
+  // Add dropdownchecklist to Additional Networks
+  $("#contExtraNetworks").dropdownchecklist({emptyText:"_(None)_", maxDropHeight:200, width:300, explicitClose:"..._(close)_"});
   <?if ($authoringMode){
     echo "$('.advancedview').prop('checked','true'); $('.advancedview').change();";
     echo "$('.advancedview').siblings('.switch-button-background').click();";
   }?>
+  // Live preview of the container Icon URL (mirrors the icon shown in the container list)
+  (function(){
+    var $inp = $('input[name="contIcon"]'), $img = $('#contIconPreview');
+    function update(){
+      var url = ($inp.val()||'').trim();
+      if (url) $img.attr('src', url).show(); else $img.hide();
+    }
+    $inp.on('input change', update);
+    update();
+  })();
 });
 
 if (window.location.href.indexOf("/Apps/") > 0  && <? if (is_file($xmlTemplate)) echo "true"; else echo "false"; ?> ) {

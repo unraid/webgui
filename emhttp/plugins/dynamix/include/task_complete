@@ -1,0 +1,29 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+/**
+ * Stamp a task's terminal state from the launched command itself (see
+ * TaskQueue.php / task_launch). Invoked as the tail of the backgrounded command:
+ *
+ *   task_complete <id> <exitcode>
+ *
+ * Recording completion at the source means a task is marked done/error the
+ * instant its command exits, independent of the scheduler daemon observing the
+ * PID disappear (which it can miss on PID reuse or a daemon-restart race).
+ */
+$docroot = '/usr/local/emhttp';
+require_once "$docroot/plugins/dynamix/include/TaskQueue.php";
+
+task_complete($argv[1] ?? '', (int)($argv[2] ?? 0));
+?>

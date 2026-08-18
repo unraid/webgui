@@ -1,0 +1,118 @@
+<?PHP
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+// Mutations are POST-only and CSRF-protected globally by local_prepend.php.
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/plugins/dynamix/include/TaskQueue.php";
+
+$action = $_POST['action'] ?? $_GET['action'] ?? '';
+$id     = $_POST['id'] ?? $_GET['id'] ?? '';
+$mutations = ['create','abort','dismiss','clear'];
+if (in_array($action, $mutations, true) && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+  header('Allow: POST');
+  http_response_code(405);
+  die();
+}
+
+switch ($action) {
+case 'create':
+  $task = task_create(
+    $_POST['type']  ?? '',
+    rawurldecode($_POST['cmd'] ?? ''),
+    rawurldecode($_POST['title'] ?? ''),
+    $_POST['plg']   ?? '',
+    $_POST['func']  ?? '',
+    $_POST['start'] ?? 0,
+    $_POST['button'] ?? 0
+  );
+  header('Content-Type: application/json');
+  die(json_encode($task ? ['id'=>$task['id'],'status'=>$task['status']] : ['error'=>'invalid']));
+
+case 'abort':
+  $task = task_read($id);
+  if ($task) {
+    $lock = task_type_lock($task['type']);
+    if (!$lock) { http_response_code(503); die(); }
+    $task = task_read($id);
+    if ($task && $task['status']==='running') {
+      // Keep the type slot occupied until task_complete or the daemon confirms
+      // that the owned process group has exited. Advancing immediately after an
+      // asynchronous TERM can overlap two destructive operations and attribute
+      // the old operation's trailing output to the new task.
+      $task['status'] = 'aborting';
+      $task['abort_requested'] = time();
+      if (!task_write($task)) {
+        task_type_unlock($lock);
+        http_response_code(500);
+        die();
+      }
+      task_signal_group($task, 'TERM');
+      foreach (glob('/tmp/plugins/pluginPending/*') ?: [] as $file) @unlink($file);
+    } elseif ($task && $task['status']!=='aborting') {
+      // A queued task can be removed while holding the same type lock used by
+      // advancement, so cancellation cannot race with task_launch().
+      task_delete($id);
+    }
+    task_type_unlock($lock);
+    if ($task && $task['status']==='aborting') task_daemon_start();
+    task_publish();
+  }
+  die();
+
+case 'dismiss':
+  $task = task_read($id);
+  if ($task && in_array($task['status'],['done','error'])) {
+    task_delete($id);
+    task_publish();
+  }
+  die();
+
+case 'clear':
+  // remove every finished (done/error) task at once
+  task_clear_finished();
+  task_publish();
+  die();
+
+case 'log':
+  // Output captured so far, for foreground replay. X-Task-Log-Size is the
+  // exact byte length served: live task-channel messages carry their log
+  // byte offset (see task_capture() in TaskQueue.php) and the client drops any
+  // live message whose offset falls below this, so the replay/live handoff
+  // never duplicates or loses a record. Read under the shared lock
+  // (task_capture() appends under the exclusive one) so the length always
+  // lands on a record boundary.
+  header('Content-Type: text/plain');
+  $data = '';
+  if (task_valid_id($id) && is_file(task_log($id))) {
+    $fh = @fopen(task_log($id), 'rb');
+    if ($fh) {
+      if (!flock($fh, LOCK_SH)) {
+        fclose($fh);
+        my_logger("Task log replay failed to lock $id");
+        http_response_code(503);
+        die();
+      }
+      $data = stream_get_contents($fh) ?: '';
+      flock($fh, LOCK_UN);
+      fclose($fh);
+    }
+  }
+  header('X-Task-Log-Size: '.strlen($data));
+  die($data);
+
+case 'list':
+  header('Content-Type: application/json');
+  die(json_encode(task_list()));
+}
+die();
+?>

@@ -62,6 +62,10 @@ $nchan = ['webGui/nchan/notify_poller', 'webGui/nchan/session_check'];
 if ($wlan0) {
     $nchan[] = 'webGui/nchan/wlan0';
 }
+// keep the task scheduler alive while background operations exist (it exits when idle)
+if (glob('/var/local/emhttp/tasks/*.json')) {
+    $nchan[] = 'plugins/dynamix/nchan/tasks';
+}
 // build nchan scripts from found pages
 $allPages = array_merge($taskPages, $buttonPages, $pages);
 foreach ($allPages as $page) {

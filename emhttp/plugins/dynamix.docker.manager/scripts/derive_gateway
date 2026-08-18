@@ -1,0 +1,21 @@
+#!/bin/bash
+# Derive the IPv4 gateway for a subnet: the first usable host address
+# (e.g. 192.168.10.0/24 -> 192.168.10.1). Prints nothing if not derivable.
+#
+# Restores the pre-Docker-28 behavior where macvlan/ipvlan networks created
+# without an explicit gateway implicitly used the subnet's first address.
+# Shared by etc/rc.d/rc.docker and the Docker Settings page so the logic
+# lives in one place.
+#
+# Usage: derive_gateway "<subnet-cidr>"   (a space-separated list is accepted;
+#        only the first subnet is used)
+CIDR=${1%% *}
+IP=${CIDR%/*}; MASK=${CIDR#*/}
+[[ $IP == *.*.*.* && $MASK =~ ^[0-9]+$ ]] || exit 0
+(( MASK >= 1 && MASK <= 30 )) || exit 0
+IFS=. read -r A B C D <<< "$IP"
+IPNUM=$(( (A<<24) + (B<<16) + (C<<8) + D ))
+MASKNUM=$(( (0xFFFFFFFF << (32-MASK)) & 0xFFFFFFFF ))
+NET=$(( IPNUM & MASKNUM ))
+HOST=$(( NET + 1 ))
+printf '%d.%d.%d.%d\n' $(( (HOST>>24)&255 )) $(( (HOST>>16)&255 )) $(( (HOST>>8)&255 )) $(( HOST&255 ))

@@ -93,17 +93,83 @@ fi
 </FILE>
 
 <!--
-Block upgrade when ReiserFS filesystems are present
+Block installation when the target version is not compatible with the current system
 -->
 <FILE Run="/bin/bash" Method="install">
 <INLINE>
 version="&version;"
 <![CDATA[
+# OS-618 compatibility preflight start
+VAR_INI=${UNRAID_PREFLIGHT_VAR_INI:-/usr/local/emhttp/state/var.ini}
+MOUNTS_FILE=${UNRAID_PREFLIGHT_MOUNTS_FILE:-/proc/mounts}
+SYS_BLOCK_ROOT=${UNRAID_PREFLIGHT_SYS_BLOCK_ROOT:-/sys/class/block}
+BLKID_CMD=${UNRAID_PREFLIGHT_BLKID_CMD:-/sbin/blkid}
+
+read_var_value() {
+  local requested_key="$1"
+
+  [[ -r "$VAR_INI" ]] || return 0
+  awk -F= -v key="$requested_key" '
+    $1 == key {
+      value = substr($0, length(key) + 2)
+      sub(/\r$/, "", value)
+      if (value ~ /^".*"$/) {
+        value = substr(value, 2, length(value) - 2)
+      }
+      print value
+      exit
+    }
+  ' "$VAR_INI" 2>/dev/null
+}
+
+boot_device_has_no_partition() {
+  local boot_device=""
+  local mount_device
+  local mount_point
+  local boot_mount_count=0
+  local block_name
+  local partition_table
+
+  [[ -r "$MOUNTS_FILE" ]] || return 1
+  while read -r mount_device mount_point _; do
+    [[ "$mount_point" == "/boot" ]] || continue
+    boot_device="$mount_device"
+    boot_mount_count=$((boot_mount_count + 1))
+  done < "$MOUNTS_FILE"
+
+  [[ $boot_mount_count -eq 1 ]] || return 1
+  case "$boot_device" in
+    /dev/*) ;;
+    *) return 1 ;;
+  esac
+
+  block_name=${boot_device#/dev/}
+  case "$block_name" in
+    ""|*/*) return 1 ;;
+  esac
+
+  [[ -e "$SYS_BLOCK_ROOT/$block_name" ]] || return 1
+  [[ ! -e "$SYS_BLOCK_ROOT/$block_name/partition" ]] || return 1
+
+  partition_table=$("$BLKID_CMD" -p -s PTTYPE -o value "$boot_device" 2>/dev/null)
+  [[ -z "$partition_table" ]]
+}
+
 if [[ $(php -r "echo version_compare('$version', '7.3.0-beta.0.1');") -lt 0 ]]; then
+  TPM_GUID=$(read_var_value tpmGUID)
+  if [[ "${TPM_GUID:0:3}" == "01-" ]]; then
+    echo "*** Installing an Unraid version below 7.3 is blocked for TPM-based license keys."
+    exit 1
+  fi
+
+  BOOT_ELIGIBLE=$(read_var_value bootEligible)
+  if [[ -n "$BOOT_ELIGIBLE" && "$BOOT_ELIGIBLE" != "yes" ]]; then
+    echo "*** Warning: The boot device is not eligible for features introduced in Unraid 7.3. The installation will continue."
+  fi
   exit 0
 fi
 
-REISER_DEVICES=$(/sbin/blkid -c /dev/null -t TYPE=reiserfs -o device 2>/dev/null)
+REISER_DEVICES=$("$BLKID_CMD" -c /dev/null -t TYPE=reiserfs -o device 2>/dev/null)
 if [[ -n "$REISER_DEVICES" ]]; then
   echo "***"
   echo "*** ReiserFS filesystem(s) detected:"
@@ -113,7 +179,17 @@ if [[ -n "$REISER_DEVICES" ]]; then
   echo "***"
   exit 1
 fi
+
+if boot_device_has_no_partition; then
+  echo "***"
+  echo "*** Installing Unraid 7.3 or later is blocked because the boot device has no partition table."
+  echo "*** Recreate the Unraid boot device with a partition table and retry."
+  echo "***"
+  exit 1
+fi
+
 exit 0
+# OS-618 compatibility preflight end
 ]]>
 </INLINE>
 </FILE>

@@ -25,6 +25,7 @@ $audit   = unscript(_var($_GET,'audit'));
 $check   = unscript(_var($_GET,'check'));
 $cmd     = unscript(_var($_GET,'cmd'));
 $init    = unscript(_var($_GET,'init'));
+$one     = unscript(_var($_GET,'one')); // single-plugin update check (fired per row, in parallel)
 $empty   = true;
 $install = false;
 $updates = 0;
@@ -55,6 +56,13 @@ if ($audit) {
     case 'update' : $plugins = "/var/log/plugins/$plg.plg"; break;
   }
 }
+
+// Restrict to a single installed plugin so its (network) update check can run
+// in parallel with the others, instead of the legacy serial sweep that blocks
+// the page on the slowest/unreachable plugin. Goes through the normal update
+// check path below (no $audit, $check stays falsy) and returns just this
+// plugin's vid-/sid- line.
+if ($one) $plugins = "/var/log/plugins/".basename($one,'.plg').".plg";
 
 delete_file($alerts);
 foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
@@ -186,7 +194,30 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
         }
       }
     }
-    if (strpos($status,'update')!==false) $rank = '0';
+    // an available update that failed validation: surface it instead of the
+    // silent "up-to-date" the revert would otherwise produce (marker written by
+    // the pre_plugin_checks hook). Common cause: the root filesystem is full so
+    // the update files can't be downloaded for the integrity check.
+    $validation_failed = false;
+    if (!$os && $checked) {
+      $invalid = "/tmp/plugins/".basename($plugin_file).".invalid";
+      if (is_file($invalid)) {
+        $info   = json_decode(file_get_contents($invalid),true) ?: [];
+        $newver = (string)($info['version'] ?? '');
+        if ($newver !== '' && strcmp($newver,$version) > 0) {
+          $summary = trim((string)($info['summary'] ?? $info['reason'] ?? ''));
+          $message = trim((string)($info['message'] ?? $summary));
+          $version .= "<br><span class='red-text'>$newver</span>";
+          $status  = "<span class='warning'".($message ? " title='".htmlspecialchars($message,ENT_QUOTES)."'" : "")."><i class='fa fa-exclamation-triangle' aria-hidden='true'></i> "._('update validation failed')."</span>";
+          if ($summary !== '') $status .= "<br><span class='orange-text' style='font-size:smaller'>".htmlspecialchars($summary,ENT_QUOTES)."</span>";
+          $validation_failed = true;
+        } else {
+          @unlink($invalid);
+        }
+      }
+    }
+    if ($validation_failed) $rank = '0';
+    elseif (strpos($status,'update')!==false) $rank = '0';
     elseif (strpos($status,'install')!==false) $rank = '1';
     elseif ($status=='need check') $rank = '2';
     elseif ($status=='up-to-date') $rank = '3';

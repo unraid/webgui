@@ -170,6 +170,30 @@ build_servers(){
 	        nchan_message_buffer_length $arg_buffer_length;
 	        nchan_message_timeout 30s;
 	    }
+	    # Capture task output at the publisher boundary. Existing plugin scripts
+	    # (including Community Apps and plugin_rm) POST directly to /pub/plugins
+	    # and never call WebGUI's publish(), so this hook is the only common path
+	    # for both legacy and first-party publishers.
+	    location ~ ^/pub/(plugins|docker|vmaction)$ {
+	        nchan_publisher;
+	        nchan_channel_id "$1";
+	        nchan_message_buffer_length $arg_buffer_length;
+	        nchan_message_timeout 0;
+	        nchan_publisher_upstream_request /task-capture;
+	    }
+	    location = /task-capture {
+	        internal;
+	        include fastcgi_params;
+	        fastcgi_param SCRIPT_FILENAME /usr/local/emhttp/plugins/dynamix/include/TaskCapture.php;
+	        fastcgi_param SCRIPT_NAME /plugins/dynamix/include/TaskCapture.php;
+	        fastcgi_param REQUEST_URI "/task-capture/$nchan_channel_id";
+	        # Nchan forwards the published message as the request body. Use GET
+	        # for the internal FastCGI hop so the global browser-facing CSRF
+	        # check does not reject this trusted, non-browser request.
+	        fastcgi_param REQUEST_METHOD GET;
+	        fastcgi_param QUERY_STRING "type=$nchan_channel_id";
+	        fastcgi_param HTTP_X_TASK_CAPTURE 1;
+	    }
 	    location ~ /pub/(.*)$ {
 	        nchan_publisher;
 	        nchan_channel_id "$1";
