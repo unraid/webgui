@@ -5,8 +5,8 @@ run-name: Linear release for ${{ github.event_name == 'workflow_dispatch' && inp
 # Marks the Linear tickets that shipped in a tag as Released, using the shared
 # workflow-stack `linear-release` action in `range` mode — the same release-sweep
 # contract unraid/core uses. The shipped set comes from the pull requests merged
-# between the previous tag and this one; only tickets sitting in `source-state`
-# move, so anything still in QA is left alone.
+# into the release range; only tickets sitting in `source-state` move, so
+# anything still in QA is left alone.
 #
 # This repository no longer writes Linear *release objects* or their stages.
 # Those are owned by notification-worker, which creates them from real
@@ -24,6 +24,11 @@ on:
         description: "Existing tag to sync to Linear"
         required: true
         type: string
+      dry_run:
+        description: "Report the tickets that would move without updating Linear"
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -47,7 +52,7 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || github.ref_name }}
           fetch-depth: 0
 
-      - name: Resolve tag
+      - name: Resolve release range
         id: tag
         run: |
           set -Eeuo pipefail
@@ -71,13 +76,13 @@ jobs:
             exit 1
           fi
 
-          # A prerelease tag (7.3.3-rc.0.1) is an internal build; a bare
-          # x.y.z tag is the public release. Only the public tag sweeps
-          # tickets to Released — see the note in the PR description about
-          # extending this to internal tags.
+          # A prerelease tag (7.3.3-rc.0.1) is an internal build; a bare x.y.z
+          # tag is the public release. Only the public tag sweeps tickets to
+          # Released — see the PR description about extending this to internal
+          # tags.
           if [[ "$TAG_NAME" == *"-"* ]]; then
             RELEASE_CHANNEL="internal"
-          elif [[ "$TAG_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          elif [[ "$TAG_NAME" =~ ^[0-9]{1,2}\.[0-9]+\.[0-9]+$ ]]; then
             RELEASE_CHANNEL="public"
           else
             echo "Unsupported release tag format: ${TAG_NAME}" >&2
@@ -87,21 +92,42 @@ jobs:
           # The major is bounded to two digits on purpose: this repository still
           # carries legacy date tags (2016.08.18) that otherwise satisfy an
           # unbounded x.y.z pattern and pollute the ordering.
-          SEMVER_TAGS="$(
-            git tag --list '[0-9]*' \
-              | grep -E '^[0-9]{1,2}\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$' \
-              | sort -V
-          )"
+          STABLE_RE='^[0-9]{1,2}\.[0-9]+\.[0-9]+$'
+          ANY_RE='^[0-9]{1,2}\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$'
+
+          # A stable tag is cut at the SAME commit as its final release
+          # candidate (7.3.2 and 7.3.2-rc.1 are both 369f0b29), so bounding a
+          # public release by the immediately preceding tag yields an empty
+          # range and sweeps nothing. Bound it by the previous *stable* tag so
+          # the range covers everything that reached users since the last
+          # public release.
+          if [ "$RELEASE_CHANNEL" = "public" ]; then
+            CANDIDATE_TAGS="$(git tag --list '[0-9]*' | grep -E "$STABLE_RE" | sort -V)"
+          else
+            CANDIDATE_TAGS="$(git tag --list '[0-9]*' | grep -E "$ANY_RE" | sort -V)"
+          fi
+
           PREVIOUS_TAG="$(
-            printf '%s\n' "$SEMVER_TAGS" \
+            printf '%s\n' "$CANDIDATE_TAGS" \
               | awk -v tag="$TAG_NAME" '$0 == tag { print previous; exit } { previous = $0 }'
           )"
+
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "Could not resolve the tag preceding '${TAG_NAME}' among ${RELEASE_CHANNEL} tags." >&2
+            echo "Re-run this workflow manually once the bounding tag exists." >&2
+            exit 1
+          fi
+
+          RANGE_COMMITS="$(git rev-list --count "${PREVIOUS_TAG}..${TAG_NAME}")"
 
           {
             echo "tag_name=${TAG_NAME}"
             echo "previous_tag=${PREVIOUS_TAG}"
             echo "release_channel=${RELEASE_CHANNEL}"
+            echo "range_commits=${RANGE_COMMITS}"
           } >> "$GITHUB_OUTPUT"
+
+          echo "Release range ${PREVIOUS_TAG}..${TAG_NAME} (${RELEASE_CHANNEL}): ${RANGE_COMMITS} commit(s)"
 
       - name: Release Linear tickets shipped in this tag
         if: steps.tag.outputs.release_channel == 'public'
@@ -114,4 +140,5 @@ jobs:
           released-state: Released
           previous-tag: ${{ steps.tag.outputs.previous_tag }}
           summary: "true"
+          dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
           linear-api-key: ${{ secrets.LINEAR_API_KEY }}
