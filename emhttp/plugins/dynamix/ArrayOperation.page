@@ -430,9 +430,15 @@ $('div[class=title]:not(":last, .disable_diskio") .right').each(function(){$(thi
 <?endif;?>
 $('.tooltip_diskio').tooltipster({delay:100,trigger:'custom',triggerOpen:{mouseenter:true},triggerClose:{click:false,scroll:true,mouseleave:true}});
 
+var maxmoverlines = 5;
+function hideMoverRows() {
+  for (let i = 0; i < maxmoverlines; i++) {
+    $('#moverrow'+i).prop('hidden', true);
+  }
+}
+
 <?if (_var($var,'fsState') == 'Started'):?>
 var mymonitor = new NchanSubscriber('/sub/mymonitor',{subscriber:'websocket', reconnectTimeout:5000});
-var maxmoverlines = 5 ;
 mymonitor.on('message', function(state) {
   switch (state) {
   case '0': // normal operation
@@ -445,14 +451,12 @@ mymonitor.on('message', function(state) {
 <?if (_var($var,'shareUser') == 'e' && $pool_devices):?>
     $('#mover-button').prop('disabled',false);
     $('#mover-text').html("<b>_(Move)_</b> _(will immediately invoke the Mover)_.&nbsp;<a href=\"/Main/Settings/Scheduler\"<?if($tabbed):?> onclick=\"$.cookie('one','tab2')\"<?endif;?>>(_(Schedule)_)</a>");
-    for (let i = 0; i < maxmoverlines; i++) {
-      $('#moverrow'+i ).hide();
-     }   
 <?endif;?>
 <?if (!$pool_devices):?>
     $('#mover-button').prop('disabled',false);
     $('#mover-text').html("<b>_(Empty)_</b> _(will immediately invoke the Mover to Empty a disk)_.&nbsp;<a href=\"/Main/Settings/Scheduler\"<?if($tabbed):?> onclick=\"$.cookie('one','tab2')\"<?endif;?>>(_(Schedule)_)</a>");
 <?endif;?>
+    hideMoverRows();
     break;
   case '1': // parity running
     $('#stop-button').prop('disabled',true);
@@ -468,10 +472,8 @@ mymonitor.on('message', function(state) {
 <?if (!$pool_devices):?>
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ -- _(Parity operation is running)_");
-    for (let i = 0; i < maxmoverlines; i++) {
-      $('#moverrow'+i ).hide();
-     }
 <?endif;?>
+    hideMoverRows();
     break;
   case '2': // mover running
     $('#stop-button').prop('disabled',true);
@@ -497,10 +499,8 @@ mymonitor.on('message', function(state) {
 <?if (!$pool_devices):?>
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ -- _(BTRFS operation is running)_");
-    for (let i = 0; i < maxmoverlines; i++) {
-      $('#moverrow'+i ).hide();
-     }
 <?endif;?>
+    hideMoverRows();
     break;
   }
 });
@@ -516,6 +516,7 @@ var moverStatus = new NchanSubscriber('/sub/mover',{subscriber:'websocket'});
 moverStatus.on('message', function(moverdata) {
   var moverlines = 0;
   var selectlines = [] ;
+  hideMoverRows();
   try {
     moverdata = JSON.parse(moverdata);
     $.each(moverdata,function(key,value) {
@@ -533,21 +534,15 @@ moverStatus.on('message', function(moverdata) {
   }
 
     if(moverlines > maxmoverlines) moverlines = maxmoverlines;
-    if(moverlines == 0) {
-    for (let i = 0; i < 5; i++) {
-      $('#moverrow'+i ).hide();
-    };
-  };
-  for (let i = 0; i < maxmoverlines; i++) {
-    $('#moverrow'+i).hide();
-  }
   for (let i = 0; i < moverlines; i++) {
     var selectline =  i + 1;
     var selectlinestr = selectline.toString();
     var checkselectline = selectlines.includes(selectlinestr);
-    if (checkselectline == true)  $('#moverrow'+i ).show(); else  $('#moverrow'+i ).hide(); 
+    if (checkselectline == true) $('#moverrow'+i).prop('hidden', false);
      };
 });
+moverStatus.on('error', hideMoverRows);
+moverStatus.on('disconnect', hideMoverRows);
 
 moverStatus.start();
 
@@ -958,6 +953,11 @@ endswitch;
 <form name="mover_schedule" method="POST" action="/update.htm" target="progressFrame">
 <table markdown="1" class="ArrayOperation-Table array_status noshift">
 <tr><td></td><td><input type="submit" id="mover-button" name="cmdStartMover" value="_(Empty)_"></td><td id="mover-text"></td></tr>
+ <tr id="moverrow0" hidden><td></td><td><span id="movertitle0">_(File being processed)_</span></td><td id="moverline0"></td><td></td></tr>
+ <tr id="moverrow1" hidden><td></td><td id="movertitle1">_(Action)_</td><td id="moverline1"></td><td></td></tr>
+ <tr id="moverrow2" hidden><td></td><td id="movertitle2">_(Progress)_</td><td><span id="moverline2" style="width:50"></span></td><td></td></tr>
+ <tr id="moverrow3" hidden><td></td><td id="movertitle3">_(Transfering To Array)_:</td><td id="moverline3"></td><td></td></tr>
+ <tr id="moverrow4" hidden><td></td><td id="movertitle4">_(Transfering From Array)_:</td><td id="moverline4"></td><td></td></tr>
 </table>
 </form>
 <?endif;?>

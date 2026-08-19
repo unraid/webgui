@@ -88,6 +88,17 @@ function mover_bar($percent, $text='') {
   $text = $text ?: $percent.'%';
   return "<div class='usage-disk' style='width:50%'><span style='width:$percent%' class='greenbar'></span><span>$text</span></div>";
 }
+function mover_pid() {
+  $pid = trim((string)@file_get_contents('/var/run/mover.pid'));
+  return ctype_digit($pid) && (int)$pid > 0 ? (int)$pid : 0;
+}
+function mover_running_pid() {
+  $pid = mover_pid();
+  if (!$pid) return 0;
+  $cmdline = (string)@file_get_contents("/proc/$pid/cmdline");
+  $cmdline = str_replace("\0", ' ', $cmdline);
+  return preg_match('/(^|[[:space:]])([^[:space:]]*\/)?mover([[:space:]]|$)/', $cmdline) === 1 ? $pid : 0;
+}
 
 while (true) {
 	$var = (array)@parse_ini_file("$varroot/var.ini");
@@ -156,11 +167,12 @@ while (true) {
 	}
 
 	/* Determine process state */
+	$mover_pid = mover_running_pid();
 	if (_var($var, 'fsState') != "Started") {
 		$process = -1;
 	} elseif ($spot > 0 && $bytes > 0) {
 		$process = 1;
-	} elseif (_var($var, 'shareMoverActive') == "yes") {
+	} elseif (_var($var, 'shareMoverActive') == "yes" && $mover_pid) {
 		$process = 2;
 	} elseif (exec('ps -C btrfs -o cmd=|grep -cv show') > 0) {
 		$process = 3;
@@ -172,40 +184,44 @@ while (true) {
 
   if ($process == 2) {
     $moverdata = [];
-    if ( file_exists("$varroot/mover.ini")) {
+    if (file_exists("$varroot/mover.ini") && $mover_pid) {
       $moverstat = @parse_ini_file("$varroot/mover.ini") ?: [];
-      $mover = $moverstat;
-      $totalSize = _var($moverstat, 'TotalSize', _var($moverstat, 'TotalToArray', 0) + _var($moverstat, 'TotalFromArray', 0));
-      $remainSize = _var($moverstat, 'RemainSize', _var($moverstat, 'RemainToArray', 0) + _var($moverstat, 'RemainFromArray', 0));
-      $perc = mover_percent(_var($moverstat, 'Filepercent', 0));
-      $throughput = _var($moverstat, 'Throughput', 0);
-      $eta = mover_duration(_var($moverstat, 'ETA', 0));
-      $rate = $throughput > 0 ? my_scale($throughput, $unit, 1)." $unit/sec" : _('Unknown');
-      $value1 = mover_bar($perc);
-      if ($totalSize > 0) {
-        $totalPerc = mover_percent(($totalSize - $remainSize) / $totalSize * 100);
-        $value2 = $remainSize > 0
-          ? mover_bar($totalPerc)
-          : _("Transfer complete");
+      if ((int)_var($moverstat, 'MoverPid', 0) === $mover_pid) {
+        $mover = $moverstat;
+        $totalSize = _var($moverstat, 'TotalSize', _var($moverstat, 'TotalToArray', 0) + _var($moverstat, 'TotalFromArray', 0));
+        $remainSize = _var($moverstat, 'RemainSize', _var($moverstat, 'RemainToArray', 0) + _var($moverstat, 'RemainFromArray', 0));
+        $perc = mover_percent(_var($moverstat, 'Filepercent', 0));
+        $throughput = _var($moverstat, 'Throughput', 0);
+        $eta = mover_duration(_var($moverstat, 'ETA', 0));
+        $rate = $throughput > 0 ? my_scale($throughput, $unit, 1)." $unit/sec" : _('Unknown');
+        $value1 = mover_bar($perc);
+        if ($totalSize > 0) {
+          $totalPerc = mover_percent(($totalSize - $remainSize) / $totalSize * 100);
+          $value2 = $remainSize > 0
+            ? mover_bar($totalPerc)
+            : _("Transfer complete");
+        } else {
+          $value2 = _("Nothing to move");
+        }
+        $value3 = _("ETA").": $eta &bullet; "._("Speed").": $rate";
+        $moverdata = [
+          'Showlines' => (int)_var($moverstat, 'Showlines', 0),
+          'Selectlines' => _var($moverstat, 'Selectlines', ''),
+          'movertitle0' => mover_html(_(_var($moverstat, 'movertitle1', 'File being processed:'))),
+          'movertitle1' => mover_html(_(_var($moverstat, 'movertitle2', 'Action:'))),
+          'movertitle2' => mover_html(_(_var($moverstat, 'movertitle3', 'Progress:'))),
+          'movertitle3' => mover_html(_(_var($moverstat, 'movertitle4', 'Overall Progress:'))),
+          'movertitle4' => mover_html(_(_var($moverstat, 'movertitle5', 'Estimated Completion:'))),
+          'moverline0' => mover_html(_var($moverstat, 'File')),
+          'moverline1' => mover_html(_var($moverstat, 'Action')),
+          'moverline2' => $value1,
+          'moverline3' => $value2,
+          'moverline4' => $value3,
+        ];
+        $timer = 1;
       } else {
-        $value2 = _("Nothing to move");
+        $moverdata['Showlines'] = 0; $mover = -1 ; $timer = 3 ;
       }
-      $value3 = _("ETA").": $eta &bullet; "._("Speed").": $rate";
-      $moverdata = [
-        'Showlines' => (int)_var($moverstat, 'Showlines', 0),
-        'Selectlines' => _var($moverstat, 'Selectlines', ''),
-        'movertitle0' => mover_html(_(_var($moverstat, 'movertitle1', 'File being processed:'))),
-        'movertitle1' => mover_html(_(_var($moverstat, 'movertitle2', 'Action:'))),
-        'movertitle2' => mover_html(_(_var($moverstat, 'movertitle3', 'Progress:'))),
-        'movertitle3' => mover_html(_(_var($moverstat, 'movertitle4', 'Overall Progress:'))),
-        'movertitle4' => mover_html(_(_var($moverstat, 'movertitle5', 'Estimated Completion:'))),
-        'moverline0' => mover_html(_var($moverstat, 'File')),
-        'moverline1' => mover_html(_var($moverstat, 'Action')),
-        'moverline2' => $value1,
-        'moverline3' => $value2,
-        'moverline4' => $value3,
-      ];
-      $timer = 1;
     } else {
       $moverdata['Showlines'] = 0; $mover = -1 ; $timer = 3 ;
     }

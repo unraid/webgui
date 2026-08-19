@@ -103,6 +103,55 @@ eta_seconds() {
   fi
 }
 
+read_pid() {
+  [[ -r "$PIDFILE" ]] && tr -d '[:space:]' < "$PIDFILE"
+}
+
+is_mover_pid() {
+  local pid="$1"
+  local cmdline
+
+  [[ $pid =~ ^[0-9]+$ && $pid -gt 0 ]] || return 1
+  [[ -r "/proc/$pid/cmdline" ]] || return 1
+  cmdline=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null) || return 1
+  [[ $cmdline =~ (^|[[:space:]])([^[:space:]]*/)?mover([[:space:]]|$) ]]
+}
+
+cleanup() {
+  local pid
+
+  pid=$(read_pid)
+  if [[ $pid == "$$" ]]; then
+    rm -f -- "$PIDFILE" "$MOVERSTATUS" "${MOVERSTATUS}.$$"
+  fi
+}
+
+acquire_pidfile() {
+  local pid
+
+  if [[ -f "$PIDFILE" ]]; then
+    pid=$(read_pid)
+    if is_mover_pid "$pid"; then
+      echo "mover: already running" >&2
+      exit 1
+    fi
+    rm -f -- "$PIDFILE"
+  fi
+
+  if ! (set -o noclobber; printf '%s\n' "$$" > "$PIDFILE") 2>/dev/null; then
+    pid=$(read_pid)
+    if is_mover_pid "$pid"; then
+      echo "mover: already running" >&2
+      exit 1
+    fi
+    rm -f -- "$PIDFILE"
+    if ! (set -o noclobber; printf '%s\n' "$$" > "$PIDFILE") 2>/dev/null; then
+      echo "mover: already running" >&2
+      exit 1
+    fi
+  fi
+}
+
 writestatus() {
   mover_progress_enabled || return
 
@@ -131,6 +180,7 @@ writestatus() {
     echo "ShareRemain=${SHARE_REMAIN}"
     echo "ShareThroughput=${share_rate}"
     echo "ShareETA=${share_eta}"
+    echo "MoverPid=$$"
     printf 'File=%s\n' "$(inivalue "$file")"
     printf 'Action=%s\n' "$(inivalue "$action")"
     echo "Filepercent=${filepercent}"
@@ -142,7 +192,10 @@ writestatus() {
     echo "movertitle4=Overall Progress:"
     echo "movertitle5=Estimated Completion:"
   } > "$tmp"
-  mv -f "$tmp" "$MOVERSTATUS"
+  if ! mv -f -- "$tmp" "$MOVERSTATUS"; then
+    rm -f -- "$tmp" "$MOVERSTATUS"
+    return 1
+  fi
 }
 
 count_path() {
@@ -180,16 +233,24 @@ move() {
   local path
   local size
   local action
+  local cleanup_action
+  local empty_disk="${2:-}"
   local progress=0
 
   if mover_progress_enabled; then
     progress=1
     prepare_share_progress
+    if [[ -n $empty_disk ]]; then
+      action="Emptying ${empty_disk}"
+      cleanup_action="Emptying ${empty_disk} (cleaning up)"
+    else
+      action="Moving share ${SHARE}"
+      cleanup_action="Cleaning up share ${SHARE}"
+    fi
   fi
   while IFS= read -r path; do
     if [[ $progress -eq 1 ]]; then
       size=$(file_size "$path")
-      action="Moving share ${SHARE}"
       writestatus "$path" "$action" "$(percent_done "$SHARE_TOTAL" "$SHARE_REMAIN")"
     fi
     printf '%s\n' "$path" | /usr/libexec/unraid/move $DEBUGGING
@@ -201,7 +262,7 @@ move() {
   # second pass to clean up leftover empty directories
   while IFS= read -r path; do
     if [[ $progress -eq 1 ]]; then
-      writestatus "$path" "Cleaning up share ${SHARE}" "$(percent_done "$SHARE_TOTAL" "$SHARE_REMAIN")"
+      writestatus "$path" "$cleanup_action" "$(percent_done "$SHARE_TOTAL" "$SHARE_REMAIN")"
     fi
     printf '%s\n' "$path" | /usr/libexec/unraid/move $DEBUGGING
   done < <(find "$1" -depth -type d 2>/dev/null)
@@ -267,21 +328,13 @@ calculate_totals() {
 }
 
 start() {
-  if [ -f $PIDFILE ]; then
-    if ps h $(cat $PIDFILE) | grep mover ; then
-        echo "mover: already running" >&2
-        exit 1
-    fi
-  fi
-
-
-  echo $$ >/var/run/mover.pid
+  trap cleanup EXIT
+  trap 'exit 143' HUP INT TERM
+  acquire_pidfile
   echo "mover: started" >&2
   MOVER_PROGRESS=$(grep '^shareMoverProgress=' "$GLOBAL_SHARECFG" 2>/dev/null | cut -d'"' -f2)
   MOVER_PROGRESS=${MOVER_PROGRESS:-disabled}
-  if ! mover_progress_enabled; then
-    rm -f $MOVERSTATUS
-  fi
+  rm -f -- "$MOVERSTATUS"
 
   shopt -s nullglob
   if mover_progress_enabled; then
@@ -342,7 +395,7 @@ start() {
       for SHAREPATH in /mnt/$DISK/* ; do
         SHARE=$(basename "$SHAREPATH")
         if [[ -d "$SHAREPATH" && -f "$CFGPATH/$SHARE.cfg" ]]; then
-          move "$SHAREPATH"
+          move "$SHAREPATH" "$DISK"
         fi
       done
 
@@ -358,28 +411,44 @@ start() {
       fi
     done
   fi
-  rm -f $PIDFILE
-  rm -f $MOVERSTATUS
+  rm -f -- "$PIDFILE" "$MOVERSTATUS"
   echo "mover: finished" >&2
 }
 
 killtree() {
-  local pid=$1 child
+  local pid=$1 signal=${2:-TERM} child
     
-  for child in $(pgrep --ns $$ -P $pid); do
-    killtree $child
+  for child in $(pgrep --ns $$ -P "$pid"); do
+    killtree "$child" "$signal"
   done
-  [ $pid -ne $$ ] && kill -TERM $pid
+  if [[ $pid -ne $$ ]]; then
+    kill -"$signal" "$pid" 2>/dev/null || true
+  fi
 }
 
 stop() {
-  if [ ! -f $PIDFILE ]; then
+  if [[ ! -f "$PIDFILE" ]]; then
     echo "mover: not running"
     exit 0
   fi
-  killtree $(cat $PIDFILE)
-  sleep 2
-  rm -f $PIDFILE
+
+  local pid
+  pid=$(read_pid)
+  if ! is_mover_pid "$pid"; then
+    rm -f -- "$PIDFILE" "$MOVERSTATUS"
+    echo "mover: not running"
+    exit 0
+  fi
+
+  killtree "$pid" TERM
+  for _ in {1..20}; do
+    is_mover_pid "$pid" || break
+    sleep 0.1
+  done
+  if is_mover_pid "$pid"; then
+    killtree "$pid" KILL
+  fi
+  rm -f -- "$PIDFILE" "$MOVERSTATUS"
   echo "mover: stopped"
 }
 
@@ -402,7 +471,7 @@ stop)
   stop
   ;;
 status)
-  [ -f $PIDFILE ]
+  [[ -f "$PIDFILE" ]] && is_mover_pid "$(read_pid)"
   ;;
 *)
   usage
