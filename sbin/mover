@@ -46,7 +46,7 @@ SHARE_TOTAL=0
 SHARE_REMAIN=0
 START_TIME=0
 CURRENT_SHARE_STARTED=0
-declare -A SHARE_TOTALS SHARE_REMAINS SHARE_START_TIME
+declare -A SHARE_TOTALS SHARE_REMAINS SHARE_START_TIME COUNTED_PATHS
 
 mover_progress_enabled() {
   [[ $MOVER_PROGRESS == "enabled" ]]
@@ -200,9 +200,12 @@ writestatus() {
 
 count_path() {
   local path="$1"
+  local normalized="${path%/}"
   local size
 
-  size=$(tree_size "$path")
+  [[ -n ${COUNTED_PATHS[$normalized]+x} ]] && return
+  COUNTED_PATHS["$normalized"]=1
+  size=$(tree_size "$normalized")
   TOTAL=$((TOTAL + size))
   REMAIN=$((REMAIN + size))
   SHARE_TOTALS["$SHARE"]=$((${SHARE_TOTALS["$SHARE"]:-0} + size))
@@ -277,6 +280,7 @@ calculate_totals() {
   SHARE_TOTALS=()
   SHARE_REMAINS=()
   SHARE_START_TIME=()
+  COUNTED_PATHS=()
 
   for sharecfg in $CFGPATH/*.cfg ; do
     SHARE=$(basename "$sharecfg" .cfg)
@@ -317,7 +321,9 @@ calculate_totals() {
   IFS=',' read -ra arr <<< "$emptying"
   if [[ -n $emptying ]]; then
     for disk in "${arr[@]}"; do
-      for sharepath in /mnt/$disk/* ; do
+      disk="${disk//[[:space:]]/}"
+      [[ $disk =~ ^disk[1-9][0-9]*$ ]] || continue
+      for sharepath in "/mnt/$disk"/* ; do
         SHARE=$(basename "$sharepath")
         if [[ -d "$sharepath" && -f "$CFGPATH/$SHARE.cfg" ]]; then
           count_path "$sharepath"
@@ -391,8 +397,10 @@ start() {
   IFS=',' read -ra arr <<< "$EMPTYING"
   if [[ -n $EMPTYING ]]; then
     for DISK in "${arr[@]}"; do
+      DISK="${DISK//[[:space:]]/}"
+      [[ $DISK =~ ^disk[1-9][0-9]*$ ]] || continue
       # we can only empty share directories
-      for SHAREPATH in /mnt/$DISK/* ; do
+      for SHAREPATH in "/mnt/$DISK"/* ; do
         SHARE=$(basename "$SHAREPATH")
         if [[ -d "$SHAREPATH" && -f "$CFGPATH/$SHARE.cfg" ]]; then
           move "$SHAREPATH" "$DISK"
@@ -401,9 +409,9 @@ start() {
 
       # output list of files which could not be moved
       # use 'find' in case huge number of files left in /mnt/$DISK
-      count=$(find /mnt/$DISK -mindepth 1 | wc -l)
+      count=$(find "/mnt/$DISK" -mindepth 1 | wc -l)
       if [ "$count" -gt 0 ]; then
-        find /mnt/$DISK -mindepth 1 -depth -printf 'move: %p Not moved\n' | head -n 100
+        find "/mnt/$DISK" -mindepth 1 -depth -printf 'move: %p Not moved\n' | head -n 100
         if [ "$count" -gt 100 ]; then
           echo "[output truncated to first 100 entries]"
           writestatus "" "Mover output truncated" "$(percent_done "$SHARE_TOTAL" "$SHARE_REMAIN")"
@@ -411,42 +419,32 @@ start() {
       fi
     done
   fi
+
   rm -f -- "$PIDFILE" "$MOVERSTATUS"
   echo "mover: finished" >&2
 }
 
-killtree() {
-  local pid=$1 signal=${2:-TERM} child
-    
-  for child in $(pgrep --ns $$ -P "$pid"); do
-    killtree "$child" "$signal"
-  done
-  if [[ $pid -ne $$ ]]; then
-    kill -"$signal" "$pid" 2>/dev/null || true
-  fi
-}
-
 stop() {
+  local pid
+
   if [[ ! -f "$PIDFILE" ]]; then
     echo "mover: not running"
-    exit 0
+    return 0
   fi
-
-  local pid
   pid=$(read_pid)
   if ! is_mover_pid "$pid"; then
     rm -f -- "$PIDFILE" "$MOVERSTATUS"
     echo "mover: not running"
-    exit 0
+    return 0
   fi
 
-  killtree "$pid" TERM
+  kill -TERM "$pid" 2>/dev/null || true
   for _ in {1..20}; do
     is_mover_pid "$pid" || break
     sleep 0.1
   done
   if is_mover_pid "$pid"; then
-    killtree "$pid" KILL
+    kill -KILL "$pid" 2>/dev/null || true
   fi
   rm -f -- "$PIDFILE" "$MOVERSTATUS"
   echo "mover: stopped"
