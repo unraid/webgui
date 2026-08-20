@@ -158,6 +158,7 @@ writestatus() {
   local file="$1"
   local action="$2"
   local filepercent="${3:-0}"
+  local progress_title="${4:-Share Progress:}"
   local tmp="${MOVERSTATUS}.$$"
   local now elapsed moved rate eta share_elapsed share_moved share_rate share_eta
 
@@ -188,7 +189,7 @@ writestatus() {
     echo "Selectlines=1,2,3,4,5"
     echo "movertitle1=File being processed:"
     echo "movertitle2=Action:"
-    echo "movertitle3=Share Progress:"
+    echo "movertitle3=${progress_title}"
     echo "movertitle4=Overall Progress:"
     echo "movertitle5=Estimated Completion:"
   } > "$tmp"
@@ -239,6 +240,7 @@ move() {
   local cleanup_action
   local empty_disk="${2:-}"
   local progress=0
+  local progress_title="Share Progress:"
 
   if mover_progress_enabled; then
     progress=1
@@ -246,6 +248,7 @@ move() {
     if [[ -n $empty_disk ]]; then
       action="Emptying ${empty_disk}"
       cleanup_action="Emptying ${empty_disk} (cleaning up)"
+      progress_title="Disk Progress:"
     else
       action="Moving share ${SHARE}"
       cleanup_action="Cleaning up share ${SHARE}"
@@ -254,7 +257,7 @@ move() {
   while IFS= read -r path; do
     if [[ $progress -eq 1 ]]; then
       size=$(file_size "$path")
-      writestatus "$path" "$action" "$(percent_done "$SHARE_TOTAL" "$SHARE_REMAIN")"
+      writestatus "$path" "$action" "$(percent_done "$SHARE_TOTAL" "$SHARE_REMAIN")" "$progress_title"
     fi
     printf '%s\n' "$path" | /usr/libexec/unraid/move $DEBUGGING
     if [[ $progress -eq 1 && $size -gt 0 && ! -e "$path" ]]; then
@@ -265,7 +268,7 @@ move() {
   # second pass to clean up leftover empty directories
   while IFS= read -r path; do
     if [[ $progress -eq 1 ]]; then
-      writestatus "$path" "$cleanup_action" "$(percent_done "$SHARE_TOTAL" "$SHARE_REMAIN")"
+      writestatus "$path" "$cleanup_action" "$(percent_done "$SHARE_TOTAL" "$SHARE_REMAIN")" "$progress_title"
     fi
     printf '%s\n' "$path" | /usr/libexec/unraid/move $DEBUGGING
   done < <(find "$1" -depth -type d 2>/dev/null)
