@@ -584,9 +584,10 @@ function xmlToCommand($xml, $create_paths=false) {
 function connectExtraNetworks($name, $extra, $primary='', $echo=false) {
   global $docroot;
   if (is_array($extra)) $extra = implode(',', $extra);
-  if (!is_string($extra) || !strlen(trim($extra)) || !strlen(trim($name))) return;
+  if (!is_string($extra) || !strlen(trim($extra)) || !strlen(trim($name))) return true;
   $script = $docroot.'/plugins/dynamix.docker.manager/scripts/docker';
   $done = [];
+  $success = true;
   foreach (preg_split('/[\s,]+/', trim($extra)) as $net) {
     $net = trim($net);
     if (!strlen($net)) continue;
@@ -594,11 +595,13 @@ function connectExtraNetworks($name, $extra, $primary='', $echo=false) {
     if ($key == strtolower(trim($primary)) || isset($done[$key])) continue;
     $done[$key] = true;
     exec($script.' network connect '.escapeshellarg($net).' '.escapeshellarg($name).' 2>&1', $o, $rc);
+    if ($rc !== 0) $success = false;
     if ($echo) {
       $msg = $rc===0 ? _('Connected network') : _('Could not connect network');
       echo "<script>addLog('<b>".addslashes(htmlspecialchars($msg.": $net"))."</b>');</script>\n"; @flush();
     }
   }
+  return $success;
 }
 
 function stopContainer($name, $t=false, $echo=true) {
