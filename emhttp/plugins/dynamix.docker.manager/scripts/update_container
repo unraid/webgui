@@ -162,6 +162,8 @@ foreach (explode('*',rawurldecode($argv[1])) as $value) {
   $xml = file_get_contents($tmpl);
   [$cmd, $Name, $Repository] = xmlToCommand($tmpl);
   $Registry = getXmlVal($xml, "Registry");
+  $Network = getXmlVal($xml, "Network");
+  $ExtraNetworks = getXmlVal($xml, "ExtraNetworks");
   $TS_Enabled = getXmlVal($xml, "TailscaleEnabled");
   $oldImageID = $DockerClient->getImageID($Repository);
   // pull image
@@ -195,6 +197,7 @@ foreach (explode('*',rawurldecode($argv[1])) as $value) {
     exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker rm '" . escapeshellarg($Name) . "'");
   }
   execCommand_nchan($cmd);
+  connectExtraNetworks($Name, $ExtraNetworks, $Network);
   if ($startContainer) addRoute($Name); // add route for remote WireGuard access
   $DockerClient->flushCaches();
   $newImageID = $DockerClient->getImageID($Repository);
