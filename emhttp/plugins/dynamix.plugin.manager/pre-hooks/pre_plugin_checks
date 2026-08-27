@@ -41,6 +41,11 @@ case 'plugin':
     $new_plugin = "/tmp/plugins/$name";
     $invalid    = "/tmp/plugins/$name.invalid";
     if (plugin('version', $new_plugin) > plugin('version', $plugin)) {
+      if (plugin('skipPrecheckValidation', $new_plugin) === 'true') {
+        // Defer URL-backed FILE validation until install when requested by the manifest.
+        @unlink($invalid);
+        break;
+      }
       echo "Validating $name update\n";
       $new_version = plugin('version', $new_plugin);
       // scripts/plugin exits non-zero and prints "plugin: <reason>" on failure
