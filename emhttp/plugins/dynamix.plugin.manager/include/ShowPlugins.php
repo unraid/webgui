@@ -122,7 +122,10 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
     echo "<td><span class='desc_readmore' style='display:block'>$desc</span> $support</td>";
     echo "<td>$author</td>";
     echo "<td id='vid-$id' data='$date'>$version&nbsp;<span class='fa fa-info-circle fa-fw big blue-text'></span></td>";
-    echo "<td id='sid-$id' data='0'><span style='color:#267CA8'><i class='fa fa-refresh fa-spin fa-fw'></i>&nbsp;$status</span></td>";
+    // Rank 3 ('up-to-date') is the placeholder while the check is pending, so a
+    // row that resolves up-to-date - the common case - keeps its sort position.
+    // Only rows that actually gain an update (rank 0/1) move, floating to the top.
+    echo "<td id='sid-$id' data='3'><span style='color:#267CA8'><i class='fa fa-refresh fa-spin fa-fw'></i>&nbsp;$status</span></td>";
     echo "<td>";
     if ($os) {
       $regular = ['stable','next'];
