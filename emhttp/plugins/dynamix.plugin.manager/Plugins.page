@@ -90,11 +90,19 @@ function updateInfo(data) {
     var fields = update.split('\r');
     for (var i=0,field; field=fields[i]; i++) {
       var row = field.split('::');
-      $('#'+row[0]).attr('data',row[1]).html(row[2]);
-      var removeButton = $('input[data="'+row[0].substr(4).replace(/-/g,'.')+'.plg'+'"]');
+      var cell = $('#'+row[0]);
+      cell.attr('data',row[1]).html(row[2]);
+      // Use the server-provided cell to find the row. The internal plugin name
+      // can differ from the installed filename (for example, unraid.core vs
+      // unraid.core.prod.plg), so reconstructing the Remove control selector
+      // from the cell ID is not reliable.
+      var removeButton = cell.closest('tr').find('input.remove');
       if (row[2].indexOf('hourglass') >= 0) removeButton.hide(); else removeButton.show();
     }
   }
+}
+function statusCellForPlugin(plg) {
+  return $('input.remove').filter(function(){return $(this).attr('data')==plg;}).first().closest('tr').find('td').eq(4);
 }
 function initlist() {
   timers.plugins = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
@@ -119,17 +127,28 @@ function initlist() {
 // failed check only affects its own row (never the page), and times out into a
 // definite "cannot check" state instead of spinning forever.
 var pluginUpdates = 0;
+// A pending row keeps a rank it would plausibly end on - the 'up-to-date' rank
+// (3) on first load, its previous result on a re-check - so re-sorting only
+// moves rows whose Status rank actually changed. Plugins that turn out to have
+// an update (rank 0/1) float to the top as their result lands; the rest stay put.
 function checkPlugin(plg) {
   var name = plg.replace(/\.plg$/,'');
+  var statusCell = statusCellForPlugin(plg);
+  var rank = statusCell.attr('data');
   return $.ajax({url:'/plugins/dynamix.plugin.manager/include/ShowPlugins.php',data:{one:name},timeout:20000})
     .done(function(data){
       data = (data||'').split('\0');
       updateInfo(data[0]);
       pluginUpdates += (parseInt(data[1],10) || 0);
-    })
+  })
     .fail(function(){
-      var id = name.replace(/\./g,'-');
-      $('#sid-'+id).attr('data','4').html("<span class='red-text'><i class='fa fa-exclamation-triangle fa-fw'></i>&nbsp;<?=_('cannot check')?></span>");
+    statusCell.attr('data','4').html("<span class='red-text'><i class='fa fa-exclamation-triangle fa-fw'></i>&nbsp;<?=_('cannot check')?></span>");
+  })
+    .always(function(){
+      // 'update' re-applies the current sort, moving the row into its new
+      // group; 'updateCache' only refreshes the parsed cache so a later header
+      // click still sorts on current data. Skip the resort when nothing moved.
+      $('#plugin_table').trigger(statusCell.attr('data') === rank ? 'updateCache' : 'update');
     });
 }
 function checkPlugins(reset) {
@@ -142,8 +161,9 @@ function checkPlugins(reset) {
       seen[d]=1;
       queue.push(d);
       if (reset) {
-        var id = d.replace(/\.plg$/,'').replace(/\./g,'-');
-        $('#sid-'+id).attr('data','0').html("<span style='color:#267CA8'><i class='fa fa-refresh fa-spin fa-fw'></i>&nbsp;<?=_('checking')?>...</span>");
+        // Show the spinner but keep the row's current rank as its pending value,
+        // so a re-check only moves rows whose status actually changed.
+        statusCellForPlugin(d).html("<span style='color:#267CA8'><i class='fa fa-refresh fa-spin fa-fw'></i>&nbsp;<?=_('checking')?>...</span>");
       }
     }
   });
@@ -157,12 +177,6 @@ function checkPlugins(reset) {
       active++;
       checkPlugin(queue[idx++]).always(function(){
         active--; done++;
-        // Refresh the sort cache in place (do NOT 'update', which re-applies
-        // sortList and re-sorts by Status). Each check changes a row's Status
-        // rank, so 'update' would make rows jump around as results land. Rows
-        // stay in their initial order; a later header click still sorts on the
-        // current data because the cache is kept fresh.
-        $('#plugin_table').trigger('updateCache');
         if (done == total) {
           if (pluginUpdates > 1) $('#updateall').show(); else $('#updateall').hide();
           $('#checkall').find('input').prop('disabled',false);
