@@ -90,8 +90,13 @@ function updateInfo(data) {
     var fields = update.split('\r');
     for (var i=0,field; field=fields[i]; i++) {
       var row = field.split('::');
-      $('#'+row[0]).attr('data',row[1]).html(row[2]);
-      var removeButton = $('input[data="'+row[0].substr(4).replace(/-/g,'.')+'.plg'+'"]');
+      var cell = $('#'+row[0]);
+      cell.attr('data',row[1]).html(row[2]);
+      // Use the server-provided cell to find the row. The internal plugin name
+      // can differ from the installed filename (for example, unraid.core vs
+      // unraid.core.prod.plg), so reconstructing the Remove control selector
+      // from the cell ID is not reliable.
+      var removeButton = cell.closest('tr').find('input.remove');
       if (row[2].indexOf('hourglass') >= 0) removeButton.hide(); else removeButton.show();
     }
   }
