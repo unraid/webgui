@@ -116,6 +116,22 @@ $diskInfo = fs_info($disk, true);
 assertContainsText('Mounted', $diskInfo, 'Stopped filesystems must keep showing their status.');
 assertNotContainsText('usage-disk', $diskInfo, 'Stopped filesystems must not show a usage bar.');
 
+$bootDisk = $disk;
+$bootDisk['type'] = 'Flash';
+$bootInfo = fs_info($bootDisk, true);
+assertContainsText('25', $bootInfo, 'Stopped flash boot devices must show used space.');
+assertContainsText('75', $bootInfo, 'Stopped flash boot devices must show free space.');
+
+$bootPoolDisk = $disk;
+$bootPoolDisk['type'] = 'Cache';
+$bootPoolDisk['showUsageWhenStopped'] = true;
+$bootPoolInfo = fs_info($bootPoolDisk, true);
+assertContainsText('25', $bootPoolInfo, 'Stopped internal boot pools must show used space.');
+assertContainsText('75', $bootPoolInfo, 'Stopped internal boot pools must show free space.');
+
+$dataPoolInfo = fs_info($disk, true);
+assertNotContainsText('usage-disk', $dataPoolInfo, 'Stopped data pools must not show a usage bar.');
+
 $var['fsState'] = 'Started';
 $diskInfo = fs_info($disk, true);
 assertContainsText('usage-disk', $diskInfo, 'Started filesystems must keep showing a usage bar.');
