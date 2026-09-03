@@ -96,6 +96,9 @@ function updateInfo(data) {
     }
   }
 }
+function statusCellForPlugin(plg) {
+  return $('input.remove').filter(function(){return $(this).attr('data')==plg;}).first().closest('tr').find('td').eq(4);
+}
 function initlist() {
   timers.plugins = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
   $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{init:true,check:<?=$check?>},function(data) {
@@ -125,22 +128,22 @@ var pluginUpdates = 0;
 // an update (rank 0/1) float to the top as their result lands; the rest stay put.
 function checkPlugin(plg) {
   var name = plg.replace(/\.plg$/,'');
-  var sid = '#sid-'+name.replace(/\./g,'-');
-  var rank = $(sid).attr('data');
+  var statusCell = statusCellForPlugin(plg);
+  var rank = statusCell.attr('data');
   return $.ajax({url:'/plugins/dynamix.plugin.manager/include/ShowPlugins.php',data:{one:name},timeout:20000})
     .done(function(data){
       data = (data||'').split('\0');
       updateInfo(data[0]);
       pluginUpdates += (parseInt(data[1],10) || 0);
-    })
+  })
     .fail(function(){
-      $(sid).attr('data','4').html("<span class='red-text'><i class='fa fa-exclamation-triangle fa-fw'></i>&nbsp;<?=_('cannot check')?></span>");
-    })
+    statusCell.attr('data','4').html("<span class='red-text'><i class='fa fa-exclamation-triangle fa-fw'></i>&nbsp;<?=_('cannot check')?></span>");
+  })
     .always(function(){
       // 'update' re-applies the current sort, moving the row into its new
       // group; 'updateCache' only refreshes the parsed cache so a later header
       // click still sorts on current data. Skip the resort when nothing moved.
-      $('#plugin_table').trigger($(sid).attr('data') === rank ? 'updateCache' : 'update');
+      $('#plugin_table').trigger(statusCell.attr('data') === rank ? 'updateCache' : 'update');
     });
 }
 function checkPlugins(reset) {
@@ -155,8 +158,7 @@ function checkPlugins(reset) {
       if (reset) {
         // Show the spinner but keep the row's current rank as its pending value,
         // so a re-check only moves rows whose status actually changed.
-        var id = d.replace(/\.plg$/,'').replace(/\./g,'-');
-        $('#sid-'+id).html("<span style='color:#267CA8'><i class='fa fa-refresh fa-spin fa-fw'></i>&nbsp;<?=_('checking')?>...</span>");
+        statusCellForPlugin(d).html("<span style='color:#267CA8'><i class='fa fa-refresh fa-spin fa-fw'></i>&nbsp;<?=_('checking')?>...</span>");
       }
     }
   });
