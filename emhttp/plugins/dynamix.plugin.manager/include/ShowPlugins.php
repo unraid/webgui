@@ -223,7 +223,7 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
     elseif (strpos($status,'update')!==false) $rank = '0';
     elseif (strpos($status,'install')!==false) $rank = '1';
     elseif ($status=='need check') $rank = '2';
-    elseif ($status=='up-to-date') $rank = '3';
+    elseif (strpos($status,'up-to-date')!==false) $rank = '3';
     else $rank = '4';
     if (($changes = plugin('changes',$changes_file)) !== false) {
       $txtfile = "/tmp/plugins/".basename($plugin_file,'.plg').".txt";
