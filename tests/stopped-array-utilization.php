@@ -104,7 +104,8 @@ my_usage();
 $navigationUsage = ob_get_clean();
 assertContainsText('50%', $navigationUsage, 'Started arrays must keep showing the usage percentage.');
 
-$disk = [
+$bootPartition = [
+  'type' => 'Cache',
   'fsStatus' => 'Mounted',
   'fsType' => 'xfs',
   'fsSize' => 100,
@@ -112,28 +113,25 @@ $disk = [
   'fsFree' => 75,
 ];
 $var['fsState'] = 'Stopped';
-$diskInfo = fs_info($disk, true);
-assertContainsText('Mounted', $diskInfo, 'Stopped filesystems must keep showing their status.');
-assertNotContainsText('usage-disk', $diskInfo, 'Stopped filesystems must not show a usage bar.');
+$bootInfo = fs_info($bootPartition, true);
+assertContainsText('25', $bootInfo, 'Stopped mounted boot partitions must show used space.');
+assertContainsText('75', $bootInfo, 'Stopped mounted boot partitions must show free space.');
+assertContainsText('usage-disk', $bootInfo, 'Stopped mounted boot partitions must show usage bars.');
 
-$bootDisk = $disk;
-$bootDisk['type'] = 'Flash';
-$bootInfo = fs_info($bootDisk, true);
-assertContainsText('25', $bootInfo, 'Stopped flash boot devices must show used space.');
-assertContainsText('75', $bootInfo, 'Stopped flash boot devices must show free space.');
+$flashBootDisk = $bootPartition;
+$flashBootDisk['type'] = 'Flash';
+$flashBootInfo = fs_info($flashBootDisk, true);
+assertContainsText('25', $flashBootInfo, 'Stopped mounted flash boot devices must show used space.');
+assertContainsText('75', $flashBootInfo, 'Stopped mounted flash boot devices must show free space.');
 
-$bootPoolDisk = $disk;
-$bootPoolDisk['type'] = 'Cache';
-$bootPoolDisk['showUsageWhenStopped'] = true;
-$bootPoolInfo = fs_info($bootPoolDisk, true);
-assertContainsText('25', $bootPoolInfo, 'Stopped internal boot pools must show used space.');
-assertContainsText('75', $bootPoolInfo, 'Stopped internal boot pools must show free space.');
-
-$dataPoolInfo = fs_info($disk, true);
-assertNotContainsText('usage-disk', $dataPoolInfo, 'Stopped data pools must not show a usage bar.');
+$dataPartition = $bootPartition;
+$dataPartition['fsStatus'] = 'Unmounted';
+$dataInfo = fs_info($dataPartition, true);
+assertContainsText('Unmounted', $dataInfo, 'Stopped unmounted data partitions must show their status.');
+assertNotContainsText('usage-disk', $dataInfo, 'Stopped unmounted data partitions must not show a usage bar.');
 
 $var['fsState'] = 'Started';
-$diskInfo = fs_info($disk, true);
+$diskInfo = fs_info($bootPartition, true);
 assertContainsText('usage-disk', $diskInfo, 'Started filesystems must keep showing a usage bar.');
 
 echo "Stopped array utilization regression test passed.\n";

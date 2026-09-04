@@ -380,7 +380,6 @@ function pool_function_row(string $label, ?array $poolDisk, ?array $firstMember,
   $disk['fsStatus'] = _var($fsOverride,'fsStatus',_var($poolDisk,'fsStatus',_var($firstMember,'fsStatus','')));
   $disk['fsType']   = _var($fsOverride,'fsType',_var($poolDisk,'fsType',_var($firstMember,'fsType','')));
   $disk['fsMountpoint'] = _var($fsOverride,'fsMountpoint',_var($poolDisk,'fsMountpoint',_var($firstMember,'fsMountpoint','')));
-  $disk['showUsageWhenStopped'] = _var($fsOverride,'showUsageWhenStopped',false);
   $disk['fsSize']   = _var($metrics,'fsSize',_var($poolDisk,'fsSize',_var($firstMember,'fsSize','')));
   $disk['fsUsed']   = _var($metrics,'fsUsed',_var($poolDisk,'fsUsed',_var($firstMember,'fsUsed','')));
   $disk['fsFree']   = _var($metrics,'fsFree',_var($poolDisk,'fsFree',_var($firstMember,'fsFree','')));
@@ -687,14 +686,11 @@ function effective_fs_size(&$disk) {
 }
 
 function fs_info(&$disk,$online = false) {
-  global $display, $var;
+  global $display;
   $echo = [];
   if (empty(_var($disk,'fsStatus','')))
     return "<td colspan='4'></td>";
-  $showUsage = _var($var,'fsState') == 'Started'
-    || _var($disk,'type') == 'Flash'
-    || _var($disk,'showUsageWhenStopped',false);
-  if (_var($disk,'fsStatus')=='Mounted' && $showUsage) {
+  if (_var($disk,'fsStatus')=='Mounted') {
     $fsSize = effective_fs_size($disk);
     $echo[] = "<td>".vfs_type($disk,$online)."</td>";
     $echo[] = "<td>".my_scale($fsSize*1024,$unit,-1)." $unit</td>";
@@ -1148,7 +1144,6 @@ while (true) {
           'fsType' => $bootFsType,
           'fsStatus' => $bootFsStatus,
           'fsMountpoint' => $bootMountPoint,
-          'showUsageWhenStopped' => true,
         ],
         true,
         $bootPoolName,
@@ -1294,7 +1289,6 @@ while (true) {
             'fsType' => $bootFsType,
             'fsStatus' => $bootFsStatus,
             'fsMountpoint' => $bootMountPoint,
-            'showUsageWhenStopped' => true,
           ],
           true,
           $bootPoolName,
@@ -1436,7 +1430,6 @@ while (true) {
             'fsType' => $bootFsType,
             'fsStatus' => $bootFsStatus,
             'fsMountpoint' => $bootMountPoint,
-            'showUsageWhenStopped' => true,
           ],
           true,
           $bootPoolName,
