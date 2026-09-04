@@ -17,8 +17,6 @@ Tag="calendar-check-o"
 <?
 $mode = ['Disabled','Hourly','Daily','Weekly','Monthly'];
 $days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-$share_cfg = (array)@parse_ini_file('/boot/config/share.cfg');
-$shareMoverProgress = ($share_cfg['shareMoverProgress'] ?? '') === 'enabled' ? 'enabled' : 'disabled';
 $setup = true;
 $buttontext = _('Move now');
 if (!$pool_devices) {
@@ -138,8 +136,9 @@ _(Mover logging)_:
 
 _(Mover Progress)_:
 : <select name="shareMoverProgress">
-  <?=mk_option($shareMoverProgress, "enabled", _("Enabled"))?>
-  <?=mk_option($shareMoverProgress, "disabled", _("Disabled"))?>
+  <?$var['shareMoverProgress'] = $var['shareMoverProgress'] ?? "no"; ?>
+  <?=mk_option($var['shareMoverProgress'], "yes", _("Enabled"))?>
+  <?=mk_option($var['shareMoverProgress'], "no", _("Disabled"))?>
   </select>
 
 :mover_progress_help:
