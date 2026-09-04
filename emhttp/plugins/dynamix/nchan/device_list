@@ -686,11 +686,11 @@ function effective_fs_size(&$disk) {
 }
 
 function fs_info(&$disk,$online = false) {
-  global $display, $var;
+  global $display;
   $echo = [];
   if (empty(_var($disk,'fsStatus','')))
     return "<td colspan='4'></td>";
-  if (_var($disk,'fsStatus')=='Mounted' && _var($var,'fsState') == 'Started') {
+  if (_var($disk,'fsStatus')=='Mounted') {
     $fsSize = effective_fs_size($disk);
     $echo[] = "<td>".vfs_type($disk,$online)."</td>";
     $echo[] = "<td>".my_scale($fsSize*1024,$unit,-1)." $unit</td>";
