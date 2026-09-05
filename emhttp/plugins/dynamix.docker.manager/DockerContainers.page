@@ -136,7 +136,12 @@ function scheduleNextLoad(delay) {
   }
   setTimeout(loadlist, delay);
 }
+var dockerLoading = false;
 function loadlist(init,focus=false) {
+  // A focus reload is only there to re-render the list once the tab is visible. If a request is already
+  // in flight its response will do that, so don't start an overlapping request.
+  if (focus && dockerLoading) return;
+  dockerLoading = true;
   timers.docker = setTimeout(function(){$('div.spinner.fixed').show('slow');},500);
   docker = [];
   $.get('/plugins/dynamix.docker.manager/include/DockerContainers.php',function(d) {
@@ -210,7 +215,7 @@ function loadlist(init,focus=false) {
     <?endif;?>
     if (!update) $('input#updateAll').prop('disabled',true);
     if (rebuild) rebuildAll();
-  });
+  }).always(function(){dockerLoading = false;});
 }
 function contSizes() {
   // show spinner over window
