@@ -49,18 +49,25 @@ function assertSameValue(string $expected, string $actual, string $message): voi
 }
 
 $fileManager = dirname(__DIR__) . '/emhttp/plugins/dynamix/nchan/file_manager';
-$resolveFunction = extractFunction(file_get_contents($fileManager), 'resolve_rsync_path');
-eval($resolveFunction);
+$fileManagerSource = file_get_contents($fileManager);
+if ($fileManagerSource === false) throw new RuntimeException('Could not read the File Manager source.');
+
+foreach (['truepath', 'validname', 'resolve_rsync_path', 'rsync_target'] as $function) {
+  eval(extractFunction($fileManagerSource, $function));
+}
+
+assertSameValue('', rsync_target('/tmp/outside/'), 'A target outside the allowed roots must be rejected.');
+assertSameValue('2', (string)substr_count($fileManagerSource, '$target = rsync_target($target);'), 'Copy and move must both use the rsync target adapter.');
 
 $root = sys_get_temp_dir() . '/unraid-file-manager-path-' . bin2hex(random_bytes(6));
 $real = "$root/real";
 $link = "$root/link";
 
-if (!mkdir($real, 0777, true) || !symlink($real, $link)) {
-  throw new RuntimeException('Could not create the symlink test fixture.');
-}
-
 try {
+  if (!mkdir($real, 0777, true) || !symlink($real, $link)) {
+    throw new RuntimeException('Could not create the symlink test fixture.');
+  }
+
   $resolvedReal = realpath($real);
   assertSameValue("$resolvedReal/", resolve_rsync_path("$link/"), 'An existing symlink target must resolve physically.');
   assertSameValue("$resolvedReal/new/deep/", resolve_rsync_path("$link/new/deep/"), 'A missing descendant must remain under the resolved parent.');

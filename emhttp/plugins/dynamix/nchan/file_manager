@@ -282,6 +282,12 @@ function validname($name, $real=true) {
   return in_array($root, ['mnt','boot']) ? $path.'/'.basename($name).(mb_substr($name,-1) == '/' ? '/' : '') : '';
 }
 
+/**
+ * Resolve existing path components for an rsync destination.
+ *
+ * @param string $name The validated destination path.
+ * @return string The resolved path, or an empty string when resolution fails.
+ */
 function resolve_rsync_path($name) {
   // Rsync 3.5.0 rejects untrusted symlink components in operator-supplied paths.
   // Resolve existing components physically, then append missing destination components.
@@ -305,6 +311,12 @@ function resolve_rsync_path($name) {
   return $path.($trailing_slash ? '/' : '');
 }
 
+/**
+ * Validate and resolve a destination for an rsync operation.
+ *
+ * @param string $name The requested destination path.
+ * @return string The safe rsync destination, or an empty string when invalid.
+ */
 function rsync_target($name) {
   $target = validname($name, false);
   if (!$target) return '';
