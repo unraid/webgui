@@ -282,6 +282,38 @@ function validname($name, $real=true) {
   return in_array($root, ['mnt','boot']) ? $path.'/'.basename($name).(mb_substr($name,-1) == '/' ? '/' : '') : '';
 }
 
+function resolve_rsync_path($name) {
+  // Rsync 3.5.0 rejects untrusted symlink components in operator-supplied paths.
+  // Resolve existing components physically, then append missing destination components.
+  $trailing_slash = mb_substr($name, -1) == '/';
+  $path = rtrim($name, '/');
+  $missing = [];
+
+  while (!file_exists($path) && $path != '/') {
+    if (is_link($path)) return '';
+    $missing[] = basename($path);
+    $path = dirname($path);
+  }
+
+  $path = realpath($path);
+  if ($path === false) return '';
+
+  while (!empty($missing)) {
+    $path .= '/'.array_pop($missing);
+  }
+
+  return $path.($trailing_slash ? '/' : '');
+}
+
+function rsync_target($name) {
+  $target = validname($name, false);
+  if (!$target) return '';
+
+  $target = resolve_rsync_path($target);
+  $root = explode('/', $target)[1] ?? '';
+  return in_array($root, ['mnt','boot']) ? $target : '';
+}
+
 function update_translation($locale) {
   global $docroot,$language;
   $language = [];
@@ -456,7 +488,7 @@ while (true) {
       // start action
       } else {
         parse_rsync_progress(null, null, true); // Reset static variables
-        $target = validname($target, false);
+        $target = rsync_target($target);
         if ($target) {
           $mkpath = isdir($target) ? '--mkpath' : '';
           $cmd = "rsync -ahPIX$H $sparse $exist $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
@@ -500,7 +532,7 @@ while (true) {
       // start action
       } else {
         parse_rsync_progress(null, null, true); // Reset static variables
-        $target = validname($target, false);
+        $target = rsync_target($target);
         if ($target) {
           $mkpath = isdir($target) ? '--mkpath' : '';
 
