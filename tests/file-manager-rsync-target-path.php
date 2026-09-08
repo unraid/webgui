@@ -48,6 +48,11 @@ function assertSameValue(string $expected, string $actual, string $message): voi
   }
 }
 
+function assertContainsText(string $needle, string $haystack, string $message): void
+{
+  if (!str_contains($haystack, $needle)) throw new RuntimeException($message);
+}
+
 $fileManager = dirname(__DIR__) . '/emhttp/plugins/dynamix/nchan/file_manager';
 $fileManagerSource = file_get_contents($fileManager);
 if ($fileManagerSource === false) throw new RuntimeException('Could not read the File Manager source.');
@@ -57,7 +62,18 @@ foreach (['truepath', 'validname', 'resolve_rsync_path', 'rsync_target'] as $fun
 }
 
 assertSameValue('', rsync_target('/tmp/outside/'), 'A target outside the allowed roots must be rejected.');
-assertSameValue('2', (string)substr_count($fileManagerSource, '$target = rsync_target($target);'), 'Copy and move must both use the rsync target adapter.');
+
+$copyStart = strpos($fileManagerSource, 'case 3:  // copy folder');
+$moveStart = strpos($fileManagerSource, 'case 4: // move folder');
+$moveEnd = strpos($fileManagerSource, 'case 11: // change owner', $moveStart ?: 0);
+if ($copyStart === false || $moveStart === false || $moveEnd === false || $copyStart >= $moveStart) {
+  throw new RuntimeException('Could not isolate copy and move operation bodies.');
+}
+
+$copyBody = substr($fileManagerSource, $copyStart, $moveStart - $copyStart);
+$moveBody = substr($fileManagerSource, $moveStart, $moveEnd - $moveStart);
+assertContainsText('$target = rsync_target($target);', $copyBody, 'Copy must use the rsync target adapter.');
+assertContainsText('$target = rsync_target($target);', $moveBody, 'Move must use the rsync target adapter.');
 
 $root = sys_get_temp_dir() . '/unraid-file-manager-path-' . bin2hex(random_bytes(6));
 $real = "$root/real";
