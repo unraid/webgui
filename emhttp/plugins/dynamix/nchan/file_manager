@@ -316,7 +316,7 @@ function rsync_exclusive_share_target($path) {
   // system.LOCATION is maintained by Unraid and identifies the backing
   // storage for an exclusive user share. It prevents a similarly shaped link
   // from being treated as the OS-managed mapping.
-  $location = trim((string)@shell_exec("getfattr --absolute-names --only-values -n system.LOCATION " . escapeshellarg($path) . " 2>/dev/null"));
+  $location = trim((string)@shell_exec("getfattr --no-dereference --absolute-names --only-values -n system.LOCATION " . escapeshellarg($path) . " 2>/dev/null"));
   if (!preg_match('/^[A-Za-z0-9._-]+$/D', $location) || $location !== $target_parts[1]) return '';
 
   $disks_state = rtrim($docroot ?? '/usr/local/emhttp', '/') . '/state/disks.ini';
