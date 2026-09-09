@@ -53,13 +53,20 @@ function assertContainsText(string $needle, string $haystack, string $message): 
   if (!str_contains($haystack, $needle)) throw new RuntimeException($message);
 }
 
+function assertNotContainsText(string $needle, string $haystack, string $message): void
+{
+  if (str_contains($haystack, $needle)) throw new RuntimeException($message);
+}
+
 $fileManager = dirname(__DIR__) . '/emhttp/plugins/dynamix/nchan/file_manager';
 $fileManagerSource = file_get_contents($fileManager);
 if ($fileManagerSource === false) throw new RuntimeException('Could not read the File Manager source.');
 
-foreach (['truepath', 'validname', 'resolve_rsync_path', 'rsync_target'] as $function) {
+foreach (['truepath', 'validname', 'rsync_share_is_exclusive', 'rsync_exclusive_share_target', 'resolve_rsync_path', 'rsync_target'] as $function) {
   eval(extractFunction($fileManagerSource, $function));
 }
+
+assertNotContainsText('realpath(', extractFunction($fileManagerSource, 'resolve_rsync_path'), 'The rsync path resolver must not follow arbitrary symlinks with realpath().');
 
 assertSameValue('', rsync_target('/tmp/outside/'), 'A target outside the allowed roots must be rejected.');
 
@@ -84,9 +91,8 @@ try {
     throw new RuntimeException('Could not create the symlink test fixture.');
   }
 
-  $resolvedReal = realpath($real);
-  assertSameValue("$resolvedReal/", resolve_rsync_path("$link/"), 'An existing symlink target must resolve physically.');
-  assertSameValue("$resolvedReal/new/deep/", resolve_rsync_path("$link/new/deep/"), 'A missing descendant must remain under the resolved parent.');
+  assertSameValue('', resolve_rsync_path("$link/"), 'An unrecognized symlink destination must be rejected.');
+  assertSameValue('', resolve_rsync_path("$link/new/deep/"), 'A missing descendant under an unrecognized symlink must be rejected.');
 } finally {
   if (is_link($link)) unlink($link);
   if (is_dir($real)) rmdir($real);
