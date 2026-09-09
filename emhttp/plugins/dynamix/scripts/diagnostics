@@ -28,6 +28,7 @@ $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/Wrappers.php";
 require_once "$docroot/webGui/include/publish.php";
+require_once "$docroot/webGui/include/DiagnosticsAnonymizer.php";
 
 if (is_file('/boot/syslinux/syslinux.cfg')) {
   $bootenv = '/boot/syslinux';
@@ -127,19 +128,9 @@ function maskIP($file) {
   global $all;
 
   if ($all) return;
-
-  // anonymize public IPv4 addresses
-  $rfc1918 = "(127|10|172\.1[6-9]|172\.2[0-9]|172\.3[0-1]|192\.168)((\.[0-9]{1,3}){2,3}([/\" .]|$))";
-  run("sed -ri 's/([\"\[ ]){$rfc1918}/\\1@@@\\2\\3/g; s/([\"\[ ][0-9]{1,3}\.)([0-9]{1,3}\.){2}([0-9]{1,3})([/\" .]|$)/\\1XXX.XXX.\\3\\4/g; s/@@@//g' ".escapeshellarg($file));
-
-  // Anonymize IPv6 addresses without brackets
-  run("sed -ri 's/(([0-9a-f]{1,4}:){4})(([0-9a-f]{1,4}:){3}|:)([0-9a-f]{1,4})([ .:/]|$)/\\1XXXX:XXXX:XXXX:\\5\\6/g' ".escapeshellarg($file));
-
-  // Anonymize IPv6 addresses with brackets
-  run("sed -ri 's/(\[([0-9a-f]{1,4}:){4})(([0-9a-f]{1,4}:){3}|:)([0-9a-f]{1,4})(\])([ .:/]|$)/\\1XXXX:XXXX:XXXX:\\5\\6/g' ".escapeshellarg($file));
-
-  // Handle any remaining edge cases, e.g., addresses with subnet masks
-  run("sed -ri 's/(([0-9a-f]{1,4}:){4})(([0-9a-f]{1,4}:){3}|:)([0-9a-f]{1,4})(\/[0-9]{1,3})([ .:/]|$)/\\1XXXX:XXXX:XXXX:\\5\\7/g' ".escapeshellarg($file));
+  $text = @file_get_contents($file);
+  if ($text === false) return;
+  file_put_contents($file, diagnostics_anonymize_ip_text($text));
 }
 
 function download_url($url, $path="", $bg=false, $timeout=15) {
@@ -521,6 +512,7 @@ foreach (glob("$path/*.ini") as $file) {
   // skip users file in anonymized mode
   if ($all || $ini != "users") file_put_contents("/$diag/system/vars.txt",preg_replace(["/\n/","/^Array/"],["\r\n",$ini],anonymize(print_r(parse_ini_file($file,true),true),1)),FILE_APPEND);
 }
+maskIP("/$diag/system/vars.txt");
 
 // Create loads.txt
 $cpuload = run("uptime")."  Cores: ".run("nproc")."\r\n".(string)@file_get_contents("$path/cpuload.ini")."\r\n";
