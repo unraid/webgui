@@ -282,33 +282,102 @@ function validname($name, $real=true) {
   return in_array($root, ['mnt','boot']) ? $path.'/'.basename($name).(mb_substr($name,-1) == '/' ? '/' : '') : '';
 }
 
+function rsync_share_is_exclusive($share) {
+  global $docroot;
+  $state = rtrim($docroot ?? '/usr/local/emhttp', '/') . '/state/shares.ini';
+  $shares = @parse_ini_file($state, true);
+  return is_array($shares) && in_array((string)($shares[$share]['exclusive'] ?? ''), ['yes', '1'], true);
+}
+
 /**
- * Resolve existing path components for an rsync destination.
+ * Return the physical path for an OS-managed exclusive-share link.
+ *
+ * The link is trusted only when it is an exclusive share, its system location
+ * matches the link target, and it points to a configured storage device.
+ *
+ * @param string $path The symlink path.
+ * @return string The trusted physical target, or an empty string otherwise.
+ */
+function rsync_exclusive_share_target($path) {
+  global $docroot;
+  if (!preg_match('#^/mnt/(user|user0)/([^/]+)$#', $path, $matches)) return '';
+
+  $share = $matches[2];
+  if (!rsync_share_is_exclusive($share)) return '';
+
+  $link_target = @readlink($path);
+  if (!is_string($link_target) || $link_target === '') return '';
+  if (mb_substr($link_target, 0, 1) !== '/') $link_target = dirname($path) . '/' . $link_target;
+  $target = truepath($link_target);
+
+  if (!preg_match('#^/mnt/([^/]+)/([^/]+)$#', $target, $target_parts)) return '';
+  if ($target_parts[2] !== $share || in_array($target_parts[1], ['user', 'user0', 'rootshare'], true)) return '';
+
+  // system.LOCATION is maintained by Unraid and identifies the backing
+  // storage for an exclusive user share. It prevents a similarly shaped link
+  // from being treated as the OS-managed mapping.
+  $location = trim((string)@shell_exec("getfattr --absolute-names --only-values -n system.LOCATION " . escapeshellarg($path) . " 2>/dev/null"));
+  if (!preg_match('/^[A-Za-z0-9._-]+$/D', $location) || $location !== $target_parts[1]) return '';
+
+  $disks_state = rtrim($docroot ?? '/usr/local/emhttp', '/') . '/state/disks.ini';
+  $disks = @parse_ini_file($disks_state, true);
+  if (!is_array($disks) || !array_key_exists($target_parts[1], $disks)) return '';
+
+  return is_dir($target) ? $target : '';
+}
+
+/**
+ * Resolve a validated destination without following arbitrary symlinks.
+ *
+ * Only the OS-managed exclusive-share link is translated to its physical
+ * backing path. All other symlink components are rejected so the compatibility
+ * path cannot bypass rsync's symlink policy with a pre-resolved attacker-
+ * controlled path.
  *
  * @param string $name The validated destination path.
  * @return string The resolved path, or an empty string when resolution fails.
  */
 function resolve_rsync_path($name) {
-  // Rsync 3.5.0 rejects untrusted symlink components in operator-supplied paths.
-  // Resolve existing components physically, then append missing destination components.
   $trailing_slash = mb_substr($name, -1) == '/';
-  $path = rtrim($name, '/');
-  $missing = [];
+  $pending = array_values(array_filter(explode('/', trim($name, '/')), 'mb_strlen'));
+  $resolved = [];
+  $symlink_count = 0;
 
-  while (!file_exists($path) && $path != '/') {
-    if (is_link($path)) return '';
-    $missing[] = basename($path);
-    $path = dirname($path);
+  while (!empty($pending)) {
+    $part = array_shift($pending);
+    if ($part === '.' || $part === '') continue;
+    if ($part === '..') {
+      if (!empty($resolved)) array_pop($resolved);
+      continue;
+    }
+
+    $candidate = '/' . implode('/', array_merge($resolved, [$part]));
+    $stat = @lstat($candidate);
+    if ($stat === false) {
+      $resolved[] = $part;
+      foreach ($pending as $remaining) {
+        if ($remaining !== '') $resolved[] = $remaining;
+      }
+      break;
+    }
+
+    if ((($stat['mode'] ?? 0) & 0170000) === 0120000) {
+      if (++$symlink_count > 40) return '';
+      $target = rsync_exclusive_share_target($candidate);
+      if ($target === '') return '';
+
+      // Restart from the absolute trusted target so its components are still
+      // checked rather than blindly accepting a second symlink.
+      $resolved = [];
+      $pending = array_merge(array_values(array_filter(explode('/', trim($target, '/')), 'mb_strlen')), $pending);
+      continue;
+    }
+
+    $resolved[] = $part;
   }
 
-  $path = realpath($path);
-  if ($path === false) return '';
-
-  while (!empty($missing)) {
-    $path .= '/'.array_pop($missing);
-  }
-
-  return $path.($trailing_slash ? '/' : '');
+  $path = '/' . implode('/', $resolved);
+  return $path . ($trailing_slash && $path !== '/' ? '/' : '');
 }
 
 /**
