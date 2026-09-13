@@ -615,14 +615,15 @@ class DockerUpdate{
 		$updateStatus = DockerUtil::loadJSON($dockerManPaths['update-status']);
 		$images = $image ? [DockerUtil::ensureImageTag($image)] : array_map(function($ar){return $ar['Tags'][0]??'';}, $DockerClient->getDockerImages());
 		foreach ($images as $img) {
-			$localVersion = null;
-			if (!empty($updateStatus[$img]) && array_key_exists('local', $updateStatus[$img])) {
+			$remoteVersion = $this->getRemoteVersionV2($img);
+			// always re-inspect the local image: its digest changes whenever the image is replaced
+			// outside the docker manager (docker pull/recreate via CLI or API), and a cached digest
+			// would keep reporting a stale update status forever
+			$localVersion = $this->inspectLocalVersion($img, $remoteVersion);
+			if ($localVersion === null && !empty($updateStatus[$img]) && array_key_exists('local', $updateStatus[$img])) {
+				// image has no repo digest (e.g. built locally), keep the last known value
 				$localVersion = $updateStatus[$img]['local'];
 			}
-			if ($localVersion === null) {
-				$localVersion = $this->inspectLocalVersion($img);
-			}
-			$remoteVersion = $this->getRemoteVersionV2($img);
 			$status = ($localVersion && $remoteVersion) ? (($remoteVersion == $localVersion) ? 'true' : 'false') : 'undef';
 			$updateStatus[$img] = ['local' => $localVersion, 'remote' => $remoteVersion, 'status' => $status];
 			//$this->debug("Update status: Image='$img', Local='$localVersion', Remote='$remoteVersion', Status='$status'");
@@ -630,16 +631,24 @@ class DockerUpdate{
 		DockerUtil::saveJSON($dockerManPaths['update-status'], $updateStatus);
 	}
 
-	public function inspectLocalVersion($image) {
+	public function inspectLocalVersion($image, $remote=null) {
 		$DockerClient = new DockerClient();
 		$inspect      = $DockerClient->getDockerJSON('/images/'.$image.'/json');
 		if (empty($inspect['RepoDigests'])) return null;
 
-		$repoDigest = $inspect['RepoDigests'][array_key_last($inspect['RepoDigests'])];
-		$shaPos = strpos($repoDigest, '@sha256:');
-		if ($shaPos === false) return null;
+		$digests = [];
+		foreach ($inspect['RepoDigests'] as $repoDigest) {
+			$shaPos = strpos($repoDigest, '@sha256:');
+			if ($shaPos !== false) $digests[] = substr($repoDigest, $shaPos + 1);
+		}
+		if (!$digests) return null;
 
-		return substr($repoDigest, $shaPos + 1);
+		// one image can carry several digests for the same repo (a multiarch tag that got re-pushed
+		// keeps the older manifest list too), and the tag does not always point at the newest entry.
+		// If the digest the tag currently resolves to is among them, this image is that tag.
+		if ($remote !== null && in_array($remote, $digests, true)) return $remote;
+
+		return end($digests);
 	}
 
 	public function setUpdateStatus($image, $version) {
