@@ -51,7 +51,7 @@ foreach ($vms as $vm) {
   $id = $lv->domain_get_id($res) ?: '-';
   $autostart = $lv->domain_get_autostart($res) ? 'checked' : '';
   $state = $lv->domain_state_translate($dom['state']);
-  $icon = $lv->domain_get_icon_url($res);
+  $icon = theme_icon($lv->domain_get_icon_url($res));
   $image = substr($icon,-4)=='.png' ? "<img src='$icon' class='img'>" : (substr($icon,0,5)=='icon-' ? "<i class='$icon img'></i>" : "<i class='fa fa-$icon img'></i>");
   $arrConfig = domain_to_config($uuid);
   $snapshots = getvmsnapshots($vm) ;

@@ -88,6 +88,7 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
         } else {
           $icon = "plugins/dynamix.plugin.manager/images/dynamix.plugin.manager.png";
         }
+        $icon = theme_icon($icon);
         $icon = "<img src='/$icon' class='list'>";
       } elseif (substr($icon,0,5)=='icon-') {
         $icon = "<i class='$icon list'></i>";
@@ -97,7 +98,7 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
       }
       $link = $launch ? "<a href='/$launch' class='list'>$icon</a>" : $icon;
     } else {
-      $icon = icon($name);
+      $icon = theme_icon(icon($name));
       $link = $launch ? "<a href='/$launch' class='list'><img src='/$icon' class='list'></a>" : "<img src='/$icon' class='list'>";
     }
     //description

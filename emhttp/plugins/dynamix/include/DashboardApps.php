@@ -176,7 +176,7 @@ if ($_POST['vms']) {
       }
     }
     $menu = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($vm), addslashes($uuid), addslashes($template), $state, addslashes($vmrcurl), strtoupper($vmrcprotocol), addslashes($log),addslashes($fstype), $vmrcconsole,false,addslashes(str_replace('"',"'",$WebUI)),$pcierror,$srioverror);
-    $icon = $lv->domain_get_icon_url($res);
+    $icon = theme_icon($lv->domain_get_icon_url($res));
     switch ($state) {
     case 'running':
       $shape = 'play';
