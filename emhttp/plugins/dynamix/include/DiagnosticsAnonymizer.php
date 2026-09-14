@@ -104,6 +104,16 @@ function diagnostics_anonymize_storage_text($text, $shareMap, $pools)
   return $text;
 }
 
+function diagnostics_anonymize_vm_name($name)
+{
+  $len = strlen($name);
+  if ($len > 2) {
+    return substr($name, 0, 1) . str_repeat('-', $len - 2) . substr($name, -1);
+  }
+  if ($len === 2) return substr($name, 0, 1) . '-';
+  return $name;
+}
+
 function diagnostics_anonymize_named_text($text, $nameMap)
 {
   $names = [];

@@ -80,6 +80,24 @@ assertSameText(
 );
 
 assertSameText(
+  't-----m',
+  diagnostics_anonymize_vm_name('test-vm'),
+  'Long VM names must preserve only their first and last characters.'
+);
+
+assertSameText(
+  'V-',
+  diagnostics_anonymize_vm_name('VM'),
+  'Two-character VM names must mask their second character.'
+);
+
+assertSameText(
+  'X',
+  diagnostics_anonymize_vm_name('X'),
+  'One-character VM names can remain unchanged.'
+);
+
+assertSameText(
   'user/archive- /mnt/user/a-------/docs /mnt/user0/a-------/docs data/a-------',
   diagnostics_anonymize_storage_text(
     'user/archive- /mnt/user/archive-/docs /mnt/user0/archive-/docs data/archive-',

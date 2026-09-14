@@ -413,12 +413,7 @@ function anonymize_vm_name($name) {
   if ($all) return $name;
   if (isset($vmAnonMap[$name])) return $vmAnonMap[$name];
 
-  $len = strlen($name);
-  if ($len > 2) {
-    $anon = substr($name, 0, 1) . str_repeat('-', $len - 2) . substr($name, -1);
-  } else {
-    $anon = $name;
-  }
+  $anon = diagnostics_anonymize_vm_name($name);
 
   $base = $anon;
   $i = 1;
