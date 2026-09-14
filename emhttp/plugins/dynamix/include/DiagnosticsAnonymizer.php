@@ -81,9 +81,9 @@ function diagnostics_anonymize_storage_text($text, $shareMap, $pools)
     if ($orig === $anon) continue;
     $origEsc = preg_quote($orig, '/');
     $text = preg_replace_callback(
-      "/(\\/mnt\\/(?:$mountPattern)\\/)" . $origEsc . "(\\b)/",
+      "/(\\/mnt\\/(?:$mountPattern)\\/)" . $origEsc . "(?=\\/|[\\s]|$)/",
       function ($match) use ($anon) {
-        return $match[1] . $anon . $match[2];
+        return $match[1] . $anon;
       },
       $text
     );
@@ -106,18 +106,24 @@ function diagnostics_anonymize_storage_text($text, $shareMap, $pools)
 
 function diagnostics_anonymize_named_text($text, $nameMap)
 {
+  $names = [];
   foreach ($nameMap as $orig => $anon) {
-    if ($orig === '') continue;
-    $origEsc = preg_quote($orig, '/');
-    $text = preg_replace_callback(
-      "/(?<![A-Za-z0-9_-])" . $origEsc . "(?![A-Za-z0-9_-])/",
-      function ($match) use ($anon) {
-        return $anon;
-      },
-      $text
-    );
-    if ($text === null) return null;
+    if ($orig !== '') $names[$orig] = $anon;
   }
+  if (!$names) return $text;
 
-  return $text;
+  uksort($names, function ($left, $right) {
+    return strlen($right) <=> strlen($left);
+  });
+  $pattern = implode('|', array_map(function ($name) {
+    return preg_quote($name, '/');
+  }, array_keys($names)));
+
+  return preg_replace_callback(
+    "/(?<![A-Za-z0-9_-])(?:$pattern)(?![A-Za-z0-9_-])/",
+    function ($match) use ($names) {
+      return $names[$match[0]];
+    },
+    $text
+  );
 }

@@ -80,12 +80,31 @@ assertSameText(
 );
 
 assertSameText(
-  '<name>vm-1</name> path /var/lib/libvirt/images/vm-1.qcow2',
+  'user/archive- /mnt/user/a-------/docs /mnt/user0/a-------/docs data/a-------',
+  diagnostics_anonymize_storage_text(
+    'user/archive- /mnt/user/archive-/docs /mnt/user0/archive-/docs data/archive-',
+    ['archive-' => 'a-------'],
+    ['data']
+  ),
+  'Share names ending in punctuation must be anonymized in user, user0, and pool paths.'
+);
+
+assertSameText(
+  '<name>t-----m</name> path /var/lib/libvirt/images/t-----m.qcow2',
   diagnostics_anonymize_named_text(
     '<name>test-vm</name> path /var/lib/libvirt/images/test-vm.qcow2',
-    ['test-vm' => 'vm-1']
+    ['test-vm' => 't-----m']
   ),
   'VM names must be anonymized in XML content and paths.'
+);
+
+assertSameText(
+  'vm-1 v--1',
+  diagnostics_anonymize_named_text(
+    'alpha vm-1',
+    ['alpha' => 'vm-1', 'vm-1' => 'v--1']
+  ),
+  'Generated anonymous names must not be replaced by later name mappings.'
 );
 
 echo "Diagnostics anonymizer tests passed.\n";

@@ -406,13 +406,30 @@ function anonymize_domain(&$text) {
 
 // anonymize VM names consistently across qemu filenames and XML content
 $vmAnonMap = [];
+$vmAnonUsed = [];
 function anonymize_vm_name($name) {
-  global $all, $vmAnonMap;
+  global $all, $vmAnonMap, $vmAnonUsed;
 
   if ($all) return $name;
   if (isset($vmAnonMap[$name])) return $vmAnonMap[$name];
-  $vmAnonMap[$name] = 'vm-' . (count($vmAnonMap) + 1);
-  return $vmAnonMap[$name];
+
+  $len = strlen($name);
+  if ($len > 2) {
+    $anon = substr($name, 0, 1) . str_repeat('-', $len - 2) . substr($name, -1);
+  } else {
+    $anon = $name;
+  }
+
+  $base = $anon;
+  $i = 1;
+  while (in_array($anon, $vmAnonUsed, true)) {
+    $anon = $base . " ($i)";
+    $i++;
+  }
+
+  $vmAnonMap[$name] = $anon;
+  $vmAnonUsed[] = $anon;
+  return $anon;
 }
 
 function anonymize_vm_names_in_file($file) {
