@@ -64,6 +64,14 @@ function log_error($message, $command = '') {
   file_put_contents($error_log, $log_message . "\r\n", FILE_APPEND);
 }
 
+function abort_anonymization($message, $file = '') {
+  log_error($message);
+  if ($file && file_exists($file) && !@unlink($file)) {
+    log_error("Unable to remove unmasked diagnostics file");
+  }
+  throw new RuntimeException("Diagnostics anonymization failed");
+}
+
 // Modify run function to include error logging
 function run($cmd, &$save=null, $timeout=30) {
   global $cli,$diag;
@@ -127,10 +135,14 @@ function anonymize($text, $select) {
 function maskIP($file) {
   global $all;
 
-  if ($all) return;
+  if ($all || !file_exists($file)) return;
   $text = @file_get_contents($file);
-  if ($text === false) return;
-  file_put_contents($file, diagnostics_anonymize_ip_text($text));
+  if ($text === false) abort_anonymization("Unable to read diagnostics file for IP anonymization", $file);
+  $masked = diagnostics_anonymize_ip_text($text);
+  if ($masked === null) abort_anonymization("Unable to anonymize IP addresses in diagnostics file", $file);
+  if (@file_put_contents($file, $masked) !== strlen($masked)) {
+    abort_anonymization("Unable to write anonymized diagnostics file", $file);
+  }
 }
 
 function download_url($url, $path="", $bg=false, $timeout=15) {
@@ -356,17 +368,20 @@ function anonymize_email($file) {
   run("todos <".escapeshellarg($file)." >".escapeshellarg($log));
   if (!$all) {
     run("sed -ri 's/\b[^[:space:]\/<>\"'\'']+@[^[:space:]\/<>\"'\'']+\.[^[:space:]\/<>\"'\'']+/email@removed.com/g' ".escapeshellarg($log));
+    anonymize_domain_file($log);
+    maskIP($log);
   }
 }
 
 function anonymize_domain_file($file) {
   global $all;
-  
-  if ( !$all ) {
+
+  if (!$all && file_exists($file)) {
     $text = @file_get_contents($file);
-    if ( $text !== false) {
-      anonymize_domain($text);
-      file_put_contents($file, $text);
+    if ($text === false) abort_anonymization("Unable to read diagnostics file for domain anonymization", $file);
+    anonymize_domain($text);
+    if (@file_put_contents($file, $text) !== strlen($text)) {
+      abort_anonymization("Unable to write domain-anonymized diagnostics file", $file);
     }
   }
 }
@@ -383,6 +398,33 @@ function anonymize_domain(&$text) {
     if (strpos($domain,".") !== false) {
       $text = str_ireplace($domain,"removed_TLD",$text);
     }
+    $masked = diagnostics_anonymize_tailscale_text($text);
+    if ($masked === null) abort_anonymization("Unable to anonymize Tailscale domains");
+    $text = $masked;
+  }
+}
+
+// anonymize VM names consistently across qemu filenames and XML content
+$vmAnonMap = [];
+function anonymize_vm_name($name) {
+  global $all, $vmAnonMap;
+
+  if ($all) return $name;
+  if (isset($vmAnonMap[$name])) return $vmAnonMap[$name];
+  $vmAnonMap[$name] = 'vm-' . (count($vmAnonMap) + 1);
+  return $vmAnonMap[$name];
+}
+
+function anonymize_vm_names_in_file($file) {
+  global $all, $vmAnonMap;
+
+  if ($all || !$vmAnonMap || !file_exists($file)) return;
+  $text = @file_get_contents($file);
+  if ($text === false) abort_anonymization("Unable to read diagnostics file for VM name anonymization", $file);
+  $masked = diagnostics_anonymize_named_text($text, $vmAnonMap);
+  if ($masked === null) abort_anonymization("Unable to anonymize VM names in diagnostics file", $file);
+  if (@file_put_contents($file, $masked) !== strlen($masked)) {
+    abort_anonymization("Unable to write VM-anonymized diagnostics file", $file);
   }
 }
 
@@ -415,23 +457,18 @@ function anonymize_share_name($share) {
 }
 
 function anonymize_share_names_in_file($file, $shareMap, $pools) {
-  if (!$shareMap || !file_exists($file)) return;
+  global $all;
 
-  $poolPattern = implode('|', array_map(function($p) {
-    return preg_quote($p, '/');
-  }, $pools));
-  $mountPattern = $poolPattern ? "user|user0|$poolPattern" : "user|user0";
+  if ($all || !$shareMap || !file_exists($file)) return;
 
   $text = @file_get_contents($file);
-  if ($text === false) return;
+  if ($text === false) abort_anonymization("Unable to read diagnostics file for share anonymization", $file);
 
-  foreach ($shareMap as $orig => $anon) {
-    if ($orig === $anon) continue;
-    $origEsc = preg_quote($orig, '/');
-    $text = preg_replace("/(\\/mnt\\/(?:$mountPattern)\\/)" . $origEsc . "(\\b)/", "\\1$anon\\2", $text);
+  $masked = diagnostics_anonymize_storage_text($text, $shareMap, $pools);
+  if ($masked === null) abort_anonymization("Unable to anonymize share names in diagnostics file", $file);
+  if (@file_put_contents($file, $masked) !== strlen($masked)) {
+    abort_anonymization("Unable to write share-anonymized diagnostics file", $file);
   }
-
-  file_put_contents($file, $text);
 }
 
 // diagnostics start
@@ -539,7 +576,10 @@ run("lspci -knn 2>/dev/null|todos >".escapeshellarg("/$diag/system/lspci.txt"));
 run("lspci -vv 2>/dev/null| awk -b '/ASPM/{print $0}' RS=|grep -P '(^[a-z0-9:.]+|ASPM |Disabled;|Enabled;)'|todos >".escapeshellarg("/$diag/system/aspm-status.txt"));
 run("lsusb -vt 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsusb.txt"));
 run("free -mth 2>/dev/null|todos >".escapeshellarg("/$diag/system/memory.txt"));
-run("lsof -Pni 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsof.txt"));
+$lsof = $all
+  ? "lsof -Pni 2>/dev/null"
+  : "lsof -Pni 2>/dev/null|awk 'NR==1 || /\\(LISTEN\\)/ || (/ UDP / && \$0 !~ /->/)'";
+run($lsof."|todos >".escapeshellarg("/$diag/system/lsof.txt"));
 run("lsmod|sort 2>/dev/null|todos >".escapeshellarg("/$diag/system/lsmod.txt"));
 run("df -h 2>/dev/null|todos >".escapeshellarg("/$diag/system/df.txt"));
 run("ip -br a|awk '/^(eth|bond)[0-9]+ /{print \$1}'|sort",$ports);
@@ -779,20 +819,31 @@ if (file_exists($libvirtd)) {
 $qemu = glob("/var/log/libvirt/qemu/*.log*");
 if ($qemu) {
   foreach ($qemu as $file) {
-    $log = "/$diag/qemu/".basename($file,'.log');
+    $fileName = basename($file);
+    $vmName = preg_replace('/\\.log(?:\\..*)?$/', '', $fileName);
+    $logSuffix = substr($fileName, strlen($vmName));
+    $logName = anonymize_vm_name($vmName);
+    $log = "/$diag/qemu/" . $logName . ($logSuffix === '.log' ? '' : $logSuffix);
     run("todos <".escapeshellarg($file)." >".escapeshellarg("$log.txt"));
     if (filesize($file)>=$max) {
       run("tail -n 200 ".escapeshellarg("$log.txt")." >".escapeshellarg("$log.last200.txt"));
       run("truncate -s '<$max' ".escapeshellarg("$log.txt"));
+      anonymize_vm_names_in_file("$log.last200.txt");
     }
+    anonymize_vm_names_in_file("$log.txt");
   }
 } else {
   file_put_contents("/$diag/qemu/no qemu log files","");
 }
 
 // copy VM XML config files
-if (glob("/etc/libvirt/qemu/*.xml")) {
-  run("cp -- /etc/libvirt/qemu/*.xml ".escapeshellarg("/$diag/xml"));
+$xml_files = glob("/etc/libvirt/qemu/*.xml");
+if ($xml_files) {
+  foreach ($xml_files as $file) {
+    $vmName = basename($file, '.xml');
+    $dest = "/$diag/xml/" . anonymize_vm_name($vmName) . '.xml';
+    run("cp -- ".escapeshellarg($file)." ".escapeshellarg($dest));
+  }
 }
 
 // anonymize MAC OSK info
@@ -800,6 +851,7 @@ $all_xml = glob("/$diag/xml/*.xml");
 foreach ($all_xml as $xml) {
   run("sed -ri 's/(,osk=).+/\\1.../' ".escapeshellarg("$xml"));
   run("sed -ri 's/(passwd=).+/\\1.../' ".escapeshellarg("$xml"));
+  anonymize_vm_names_in_file($xml);
 }
 
 // copy syslog information (anonymize if applicable)

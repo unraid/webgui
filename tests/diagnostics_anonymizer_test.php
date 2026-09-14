@@ -57,4 +57,35 @@ assertSameText(
   'IPv4 masking and non-IP values must remain unchanged.'
 );
 
+assertSameText(
+  'netmask 255.255.255.0 unspecified 0.0.0.0 private 192.168.1.2 link-local 169.254.1.1 reserved 240.0.0.1',
+  diagnostics_anonymize_ip_text('netmask 255.255.255.0 unspecified 0.0.0.0 private 192.168.1.2 link-local 169.254.1.1 reserved 240.0.0.1'),
+  'Reserved, private, unspecified, and link-local IPv4 values must remain unchanged.'
+);
+
+assertSameText(
+  'tailscale removed.ts.net path /boot/config/plugins/removed.ts.net.key',
+  diagnostics_anonymize_tailscale_text('tailscale node.tailnet.ts.net path /boot/config/plugins/node.tailnet.ts.net.key'),
+  'Tailscale hostnames must be anonymized in text and paths.'
+);
+
+assertSameText(
+  'data/p----s 4.7T /mnt/data/p----s',
+  diagnostics_anonymize_storage_text(
+    'data/photos 4.7T /mnt/data/photos',
+    ['photos' => 'p----s'],
+    ['data']
+  ),
+  'ZFS source names and mount paths must use the same anonymized share name.'
+);
+
+assertSameText(
+  '<name>vm-1</name> path /var/lib/libvirt/images/vm-1.qcow2',
+  diagnostics_anonymize_named_text(
+    '<name>test-vm</name> path /var/lib/libvirt/images/test-vm.qcow2',
+    ['test-vm' => 'vm-1']
+  ),
+  'VM names must be anonymized in XML content and paths.'
+);
+
 echo "Diagnostics anonymizer tests passed.\n";
