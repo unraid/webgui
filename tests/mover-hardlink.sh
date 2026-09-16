@@ -26,6 +26,7 @@ if [[ $(uname -s) == Darwin ]]; then
   case "$format" in
     %s) /usr/bin/stat -f '%z' -- "$path" ;;
     %d:%i) /usr/bin/stat -f '%d:%i' -- "$path" ;;
+    %d:%i\ %h) /usr/bin/stat -f '%d:%i %l' -- "$path" ;;
     %D:%i\ %s) /usr/bin/stat -f '%d:%i %z' -- "$path" ;;
     *) exit 1 ;;
   esac
@@ -55,6 +56,11 @@ done
 if [[ $has_printf -eq 1 ]]; then
   /usr/bin/find "$root" "${args[@]}" -exec stat -c '%D:%i %s' -- {} \;
 else
+  if [[ -n ${FIND_PARTIAL_OUTPUT:-} && -n ${FIND_PARTIAL_MARKER:-} && ! -e "$FIND_PARTIAL_MARKER" ]]; then
+    : > "$FIND_PARTIAL_MARKER"
+    printf '%s\n' "$FIND_PARTIAL_OUTPUT"
+    exit 1
+  fi
   if /usr/bin/find "$root" "${args[@]}"; then
     find_status=0
   else
@@ -135,6 +141,42 @@ single_id=$(awk -F '\t' -v single="$tmpdir/source/third/single.iso" '$2 == singl
 
 [[ $REMAIN -eq 0 && ${SHARE_REMAIN:-0} -eq 0 ]] || {
   echo "hardlink progress was not decremented once for the group" >&2
+  exit 1
+}
+
+partial_group_root="$tmpdir/source/partial-group"
+partial_group_alias_a="$partial_group_root/alias-a.iso"
+partial_group_alias_b="$partial_group_root/alias-b.iso"
+partial_group_single="$partial_group_root/single.iso"
+partial_group_marker="$tmpdir/partial-group.marker"
+mkdir -p "$partial_group_root"
+printf 'partial-group-data' > "$partial_group_alias_a"
+ln "$partial_group_alias_a" "$partial_group_alias_b"
+printf 'partial-group-single-data' > "$partial_group_single"
+: > "$MOVE_LOG"
+FIND_PARTIAL_OUTPUT=$(printf '%s\n%s' "$partial_group_alias_a" "$partial_group_single")
+export FIND_PARTIAL_OUTPUT FIND_PARTIAL_MARKER="$partial_group_marker"
+# shellcheck disable=SC2034
+MOVER_PROGRESS=disabled
+# shellcheck disable=SC2034
+SHARE='partial-group'
+move "$partial_group_root"
+unset FIND_PARTIAL_OUTPUT FIND_PARTIAL_MARKER
+
+if grep -F -- "$partial_group_alias_a" "$MOVE_LOG" >/dev/null || grep -F -- "$partial_group_alias_b" "$MOVE_LOG" >/dev/null; then
+  echo "an incomplete hardlink group was passed to the move helper" >&2
+  exit 1
+fi
+grep -F -- "$partial_group_single" "$MOVE_LOG" >/dev/null || {
+  echo "a standalone file was skipped after an incomplete hardlink group" >&2
+  exit 1
+}
+[[ -e "$partial_group_alias_a" && -e "$partial_group_alias_b" ]] || {
+  echo "an incomplete hardlink group was removed" >&2
+  exit 1
+}
+[[ ! -e "$partial_group_single" ]] || {
+  echo "a standalone file from a partial find result was not moved" >&2
   exit 1
 }
 

@@ -49,7 +49,7 @@ START_TIME=0
 CURRENT_SHARE_STARTED=0
 MOVE_FILE_LIST=""
 declare -A SHARE_TOTALS SHARE_REMAINS SHARE_START_TIME COUNTED_PATHS
-declare -A HARDLINK_PATH_GROUP HARDLINK_GROUP_PATHS HARDLINK_GROUP_COUNTS HARDLINK_GROUP_PROCESSED HARDLINK_PATH_SKIPPED
+declare -A HARDLINK_PATH_GROUP HARDLINK_GROUP_PATHS HARDLINK_GROUP_COUNTS HARDLINK_GROUP_PROCESSED HARDLINK_PATH_SKIPPED HARDLINK_GROUP_LINK_COUNTS HARDLINK_GROUP_SKIPPED
 
 mover_progress_enabled() {
   [[ $MOVER_PROGRESS == "enabled" ]]
@@ -240,17 +240,34 @@ decrement_progress() {
 
 prepare_hardlink_groups() {
   local file_list="$1"
-  local path inode count
+  local partial_list="${2:-0}"
+  local path inode count stat_info link_count
 
   HARDLINK_PATH_GROUP=()
   HARDLINK_GROUP_PATHS=()
   HARDLINK_GROUP_COUNTS=()
   HARDLINK_GROUP_PROCESSED=()
   HARDLINK_PATH_SKIPPED=()
+  HARDLINK_GROUP_LINK_COUNTS=()
+  HARDLINK_GROUP_SKIPPED=()
 
   while IFS= read -r path; do
     [[ -f "$path" ]] || continue
-    if ! inode=$(stat -c '%d:%i' -- "$path" 2>/dev/null) || [[ -z $inode ]]; then
+    if [[ $partial_list -ne 0 ]]; then
+      if ! stat_info=$(stat -c '%d:%i %h' -- "$path" 2>/dev/null) || [[ -z $stat_info ]]; then
+        echo "mover: unable to inspect hardlink identity for $path" >&2
+        HARDLINK_PATH_SKIPPED["$path"]=1
+        continue
+      fi
+      inode="${stat_info% *}"
+      link_count="${stat_info##* }"
+      if [[ ! $link_count =~ ^[0-9]+$ ]]; then
+        echo "mover: unable to inspect hardlink count for $path" >&2
+        HARDLINK_PATH_SKIPPED["$path"]=1
+        continue
+      fi
+      HARDLINK_GROUP_LINK_COUNTS["$inode"]="$link_count"
+    elif ! inode=$(stat -c '%d:%i' -- "$path" 2>/dev/null) || [[ -z $inode ]]; then
       echo "mover: unable to inspect hardlink identity for $path" >&2
       HARDLINK_PATH_SKIPPED["$path"]=1
       continue
@@ -261,6 +278,14 @@ prepare_hardlink_groups() {
     count=${HARDLINK_GROUP_COUNTS[$inode]:-0}
     HARDLINK_GROUP_COUNTS["$inode"]=$((count + 1))
   done < "$file_list"
+
+  if [[ $partial_list -ne 0 ]]; then
+    for inode in "${!HARDLINK_GROUP_COUNTS[@]}"; do
+      if [[ ${HARDLINK_GROUP_COUNTS[$inode]:-0} -lt ${HARDLINK_GROUP_LINK_COUNTS[$inode]:-0} ]]; then
+        HARDLINK_GROUP_SKIPPED["$inode"]=1
+      fi
+    done
+  fi
 }
 
 move_single_path() {
@@ -319,13 +344,17 @@ move_file_list() {
   local progress="$2"
   local action="$3"
   local progress_title="$4"
+  local partial_list="${5:-0}"
   local path inode
 
-  prepare_hardlink_groups "$file_list" || return 1
+  prepare_hardlink_groups "$file_list" "$partial_list" || return 1
 
   while IFS= read -r path; do
     [[ -n ${HARDLINK_PATH_SKIPPED[$path]+x} ]] && continue
     inode="${HARDLINK_PATH_GROUP[$path]:-}"
+    if [[ -n $inode && -n ${HARDLINK_GROUP_SKIPPED[$inode]+x} ]]; then
+      continue
+    fi
     if [[ -n $inode && ${HARDLINK_GROUP_COUNTS[$inode]:-0} -gt 1 ]]; then
       if [[ -z ${HARDLINK_GROUP_PROCESSED[$inode]+x} ]]; then
         HARDLINK_GROUP_PROCESSED["$inode"]=1
@@ -379,7 +408,7 @@ move() {
       return 1
     fi
   fi
-  if ! move_file_list "$file_list" "$progress" "$action" "$progress_title"; then
+  if ! move_file_list "$file_list" "$progress" "$action" "$progress_title" "$find_status"; then
     rm -f -- "$file_list"
     MOVE_FILE_LIST=""
     return 1
@@ -391,6 +420,8 @@ move() {
   HARDLINK_GROUP_COUNTS=()
   HARDLINK_GROUP_PROCESSED=()
   HARDLINK_PATH_SKIPPED=()
+  HARDLINK_GROUP_LINK_COUNTS=()
+  HARDLINK_GROUP_SKIPPED=()
 
   # second pass to clean up leftover empty directories
   while IFS= read -r path; do
