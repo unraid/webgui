@@ -49,7 +49,7 @@ START_TIME=0
 CURRENT_SHARE_STARTED=0
 MOVE_FILE_LIST=""
 declare -A SHARE_TOTALS SHARE_REMAINS SHARE_START_TIME COUNTED_PATHS
-declare -A HARDLINK_PATH_GROUP HARDLINK_GROUP_PATHS HARDLINK_GROUP_COUNTS HARDLINK_GROUP_PROCESSED
+declare -A HARDLINK_PATH_GROUP HARDLINK_GROUP_PATHS HARDLINK_GROUP_COUNTS HARDLINK_GROUP_PROCESSED HARDLINK_PATH_SKIPPED
 
 mover_progress_enabled() {
   [[ $MOVER_PROGRESS == "enabled" ]]
@@ -246,12 +246,14 @@ prepare_hardlink_groups() {
   HARDLINK_GROUP_PATHS=()
   HARDLINK_GROUP_COUNTS=()
   HARDLINK_GROUP_PROCESSED=()
+  HARDLINK_PATH_SKIPPED=()
 
   while IFS= read -r path; do
     [[ -f "$path" ]] || continue
     if ! inode=$(stat -c '%d:%i' -- "$path" 2>/dev/null) || [[ -z $inode ]]; then
       echo "mover: unable to inspect hardlink identity for $path" >&2
-      return 1
+      HARDLINK_PATH_SKIPPED["$path"]=1
+      continue
     fi
 
     HARDLINK_PATH_GROUP["$path"]="$inode"
@@ -322,6 +324,7 @@ move_file_list() {
   prepare_hardlink_groups "$file_list" || return 1
 
   while IFS= read -r path; do
+    [[ -n ${HARDLINK_PATH_SKIPPED[$path]+x} ]] && continue
     inode="${HARDLINK_PATH_GROUP[$path]:-}"
     if [[ -n $inode && ${HARDLINK_GROUP_COUNTS[$inode]:-0} -gt 1 ]]; then
       if [[ -z ${HARDLINK_GROUP_PROCESSED[$inode]+x} ]]; then
@@ -343,7 +346,7 @@ move() {
   local empty_disk="${2:-}"
   local progress=0
   local progress_title="Share Progress:"
-  local file_list
+  local file_list find_status
 
   if mover_progress_enabled; then
     progress=1
@@ -363,11 +366,18 @@ move() {
     return 1
   fi
   MOVE_FILE_LIST="$file_list"
-  if ! find "$1" -depth > "$file_list" 2>/dev/null; then
+  if find "$1" -depth > "$file_list" 2>/dev/null; then
+    find_status=0
+  else
+    find_status=$?
+  fi
+  if [[ $find_status -ne 0 ]]; then
     echo "mover: unable to enumerate files in $1" >&2
-    rm -f -- "$file_list"
-    MOVE_FILE_LIST=""
-    return 1
+    if [[ ! -s "$file_list" ]]; then
+      rm -f -- "$file_list"
+      MOVE_FILE_LIST=""
+      return 1
+    fi
   fi
   if ! move_file_list "$file_list" "$progress" "$action" "$progress_title"; then
     rm -f -- "$file_list"
@@ -380,6 +390,7 @@ move() {
   HARDLINK_GROUP_PATHS=()
   HARDLINK_GROUP_COUNTS=()
   HARDLINK_GROUP_PROCESSED=()
+  HARDLINK_PATH_SKIPPED=()
 
   # second pass to clean up leftover empty directories
   while IFS= read -r path; do

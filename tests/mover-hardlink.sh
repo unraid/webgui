@@ -19,6 +19,9 @@ set -euo pipefail
 
 format="$2"
 path="$4"
+if [[ -n ${STAT_FAIL_PATH:-} && $path == "$STAT_FAIL_PATH" ]]; then
+  exit 1
+fi
 if [[ $(uname -s) == Darwin ]]; then
   case "$format" in
     %s) /usr/bin/stat -f '%z' -- "$path" ;;
@@ -52,7 +55,13 @@ done
 if [[ $has_printf -eq 1 ]]; then
   /usr/bin/find "$root" "${args[@]}" -exec stat -c '%D:%i %s' -- {} \;
 else
-  /usr/bin/find "$root" "${args[@]}"
+  if /usr/bin/find "$root" "${args[@]}"; then
+    find_status=0
+  else
+    find_status=$?
+  fi
+  [[ ${FIND_FAIL_AFTER_OUTPUT:-0} -eq 1 ]] && exit 1
+  exit "$find_status"
 fi
 EOF
 
@@ -126,6 +135,56 @@ single_id=$(awk -F '\t' -v single="$tmpdir/source/third/single.iso" '$2 == singl
 
 [[ $REMAIN -eq 0 && ${SHARE_REMAIN:-0} -eq 0 ]] || {
   echo "hardlink progress was not decremented once for the group" >&2
+  exit 1
+}
+
+stat_failure_root="$tmpdir/source/stat-failure"
+stat_failure_path="$stat_failure_root/uninspectable.iso"
+stat_valid_path="$stat_failure_root/valid.iso"
+mkdir -p "$stat_failure_root"
+printf 'uninspectable-data' > "$stat_failure_path"
+printf 'valid-data' > "$stat_valid_path"
+: > "$MOVE_LOG"
+export STAT_FAIL_PATH="$stat_failure_path"
+# shellcheck disable=SC2034
+MOVER_PROGRESS=disabled
+# shellcheck disable=SC2034
+SHARE='stat-failure'
+move "$stat_failure_root"
+unset STAT_FAIL_PATH
+
+if grep -F -- "$stat_failure_path" "$MOVE_LOG" >/dev/null; then
+  echo "a path with a failed hardlink identity lookup was moved" >&2
+  exit 1
+fi
+grep -F -- "$stat_valid_path" "$MOVE_LOG" >/dev/null || {
+  echo "a valid path was skipped after another identity lookup failed" >&2
+  exit 1
+}
+[[ -e "$stat_failure_path" ]] || {
+  echo "a path with a failed hardlink identity lookup was removed" >&2
+  exit 1
+}
+
+partial_find_root="$tmpdir/source/partial-find"
+partial_find_path="$partial_find_root/partial.iso"
+mkdir -p "$partial_find_root"
+printf 'partial-find-data' > "$partial_find_path"
+: > "$MOVE_LOG"
+export FIND_FAIL_AFTER_OUTPUT=1
+# shellcheck disable=SC2034
+MOVER_PROGRESS=disabled
+# shellcheck disable=SC2034
+SHARE='partial-find'
+move "$partial_find_root"
+unset FIND_FAIL_AFTER_OUTPUT
+
+grep -F -- "$partial_find_path" "$MOVE_LOG" >/dev/null || {
+  echo "a usable partial find result was not processed" >&2
+  exit 1
+}
+[[ ! -e "$partial_find_path" ]] || {
+  echo "a file from a usable partial find result was not moved" >&2
   exit 1
 }
 
