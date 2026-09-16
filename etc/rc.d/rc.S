@@ -127,10 +127,24 @@ done
 reinstate_pool_members() {
   local POOL=$1
   shift
-  local DEV I
+  local DEV I STABLE
   [[ -n $POOL ]] || return 0
-  for (( I = 0; I < 3; I++ )); do
-    [[ $(/sbin/zpool get -H -o value health "$POOL" 2>/dev/null) == ONLINE ]] && return 0
+  # A single-device pool has no mirror member that can drop, so there is nothing
+  # to wait for and nothing to reinstate. This keeps the ordinary single flash
+  # boot exactly as fast as it was.
+  (( $# > 1 )) || return 0
+  # One ONLINE sample proves nothing here: the whole failure being guarded
+  # against is a pool that reads healthy and loses a member moments later, and
+  # this runs immediately after the import check, well inside that window.
+  # Returning on the first sample would repeat the mistake it exists to catch.
+  # Require the pool to hold ONLINE across consecutive samples instead.
+  STABLE=0
+  for (( I = 0; I < 6; I++ )); do
+    if [[ $(/sbin/zpool get -H -o value health "$POOL" 2>/dev/null) == ONLINE ]]; then
+      (( ++STABLE >= 3 )) && return 0
+    else
+      STABLE=0
+    fi
     /bin/sleep 1
   done
   log "pool is not ONLINE after import; reinstating members"
