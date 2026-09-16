@@ -109,6 +109,42 @@ for x in "$@"; do
   esac
 done
 
+# A mirrored boot pool can import healthy and then drop a member moments later.
+# The returning member resilvers cleanly, then ZFS closes it and the reopen fails,
+# leaving it UNAVAIL with an intact on-disk label and no read, write or checksum
+# errors. Nothing reinstates it afterwards: this system runs no ZED, and the
+# import checks above have already returned by the time the member drops. The
+# pool then stays degraded until somebody notices, which for a boot mirror means
+# the redundancy is silently gone.
+#
+# Give the pool a moment to settle, then ask ZFS to bring back each member.
+# `zpool online` on a member that is already ONLINE does nothing, so this needs
+# no state parsing -- useful here, where awk and sed are not yet available.
+#
+# Bounded and never fatal. A pool that cannot be repaired still boots on its
+# surviving member exactly as it did before; the cost is the wait below, paid
+# only on a boot that is already degraded.
+reinstate_pool_members() {
+  local POOL=$1
+  shift
+  local DEV I
+  [[ -n $POOL ]] || return 0
+  for (( I = 0; I < 3; I++ )); do
+    [[ $(/sbin/zpool get -H -o value health "$POOL" 2>/dev/null) == ONLINE ]] && return 0
+    /bin/sleep 1
+  done
+  log "pool is not ONLINE after import; reinstating members"
+  for DEV in "$@"; do
+    /sbin/zpool online "$POOL" "$DEV"
+  done
+  for (( I = 0; I < 10; I++ )); do
+    [[ $(/sbin/zpool get -H -o value health "$POOL" 2>/dev/null) == ONLINE ]] && break
+    /bin/sleep 1
+  done
+  log "pool is $(/sbin/zpool get -H -o value health "$POOL" 2>/dev/null) after reinstating members"
+  return 0
+}
+
 # find which device/partition has the label LABEL or uuid UUID 
 DEVICE=""
 FSTYPE=""
@@ -149,11 +185,15 @@ find_device() {
           log "pool is healthy"
           # check for resizing the pool
           /sbin/zpool online -e "$POOL" $DEVICE
+          # a member can still drop after this check; do not leave it behind
+          reinstate_pool_members "$POOL" $DEVICE
           return 0
         fi
         # maybe a device is missing, wait for it to come online
         if (( TIMEOUT == 1 )); then
-          log "pool is degraded"
+          reinstate_pool_members "$POOL" $DEVICE
+          # only still degraded if reinstating did not bring the members back
+          [[ $(/sbin/zpool get -H -o value health "$POOL" 2>/dev/null) == ONLINE ]] || log "pool is degraded"
           return 0
         fi
         /sbin/zpool export "$POOL"
