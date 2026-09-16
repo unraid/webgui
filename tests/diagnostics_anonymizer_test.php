@@ -125,4 +125,24 @@ assertSameText(
   'Generated anonymous names must not be replaced by later name mappings.'
 );
 
+$diagnosticsScript = file_get_contents(dirname(__DIR__) . '/emhttp/plugins/dynamix/scripts/diagnostics');
+if ($diagnosticsScript === false) {
+  throw new RuntimeException('Unable to read the diagnostics script.');
+}
+
+$syslogStart = strpos($diagnosticsScript, 'function anonymize_syslog');
+$syslogEnd = $syslogStart === false
+  ? false
+  : strpos($diagnosticsScript, '// anonymize email addresses', $syslogStart);
+if ($syslogStart === false || $syslogEnd === false) {
+  throw new RuntimeException('Unable to locate anonymize_syslog in the diagnostics script.');
+}
+
+$syslogFunction = substr($diagnosticsScript, $syslogStart, $syslogEnd - $syslogStart);
+$tailCreation = strpos($syslogFunction, '$log.last200.txt');
+$tailAnonymization = strpos($syslogFunction, 'anonymize_domain_file("$log.last200.txt")');
+if ($tailCreation === false || $tailAnonymization === false || $tailAnonymization < $tailCreation) {
+  throw new RuntimeException('Large syslog tails must pass through domain anonymization.');
+}
+
 echo "Diagnostics anonymizer tests passed.\n";

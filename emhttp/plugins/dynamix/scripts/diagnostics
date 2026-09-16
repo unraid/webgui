@@ -358,6 +358,7 @@ function anonymize_syslog($file) {
   if (basename($file)=='syslog' && filesize($file)>=$max) run("tail -n 200 ".escapeshellarg("$log.txt")." >".escapeshellarg("$log.last200.txt"));
   run("truncate -s '<$max' ".escapeshellarg("$log.txt"));
   anonymize_domain_file("$log.txt");
+  if (file_exists("$log.last200.txt")) anonymize_domain_file("$log.last200.txt");
 }
 
 // anonymize email addresses
