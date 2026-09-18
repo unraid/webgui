@@ -150,7 +150,7 @@ function my_usage() {
       $arrayfree += _var($disk,'fsFree',0);
     }
   }
-  if (_var($var,'fsNumMounted',0) > 0) {
+  if (_var($var,'fsState') == 'Started' && _var($var,'fsNumMounted',0) > 0) {
     $used = $arraysize ? 100-round(100*$arrayfree/$arraysize) : 0;
     echo "<div class='usage-bar'><span style='width:{$used}%' class='".usage_color($display,$used,false)."'>{$used}%</span></div>";
   } else {

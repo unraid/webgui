@@ -282,6 +282,119 @@ function validname($name, $real=true) {
   return in_array($root, ['mnt','boot']) ? $path.'/'.basename($name).(mb_substr($name,-1) == '/' ? '/' : '') : '';
 }
 
+function rsync_share_is_exclusive($share) {
+  global $docroot;
+  $state = rtrim($docroot ?? '/usr/local/emhttp', '/') . '/state/shares.ini';
+  $shares = @parse_ini_file($state, true);
+  return is_array($shares) && in_array((string)($shares[$share]['exclusive'] ?? ''), ['yes', '1'], true);
+}
+
+/**
+ * Return the physical path for an OS-managed exclusive-share link.
+ *
+ * The link is trusted only when it is an exclusive share, its system location
+ * matches the link target, and it points to a configured storage device.
+ *
+ * @param string $path The symlink path.
+ * @return string The trusted physical target, or an empty string otherwise.
+ */
+function rsync_exclusive_share_target($path) {
+  global $docroot;
+  if (!preg_match('#^/mnt/(user|user0)/([^/]+)$#', $path, $matches)) return '';
+
+  $share = $matches[2];
+  if (!rsync_share_is_exclusive($share)) return '';
+
+  $link_target = @readlink($path);
+  if (!is_string($link_target) || $link_target === '') return '';
+  if (mb_substr($link_target, 0, 1) !== '/') $link_target = dirname($path) . '/' . $link_target;
+  $target = truepath($link_target);
+
+  if (!preg_match('#^/mnt/([^/]+)/([^/]+)$#', $target, $target_parts)) return '';
+  if ($target_parts[2] !== $share || in_array($target_parts[1], ['user', 'user0', 'rootshare'], true)) return '';
+
+  // system.LOCATION is maintained by Unraid and identifies the backing
+  // storage for an exclusive user share. It prevents a similarly shaped link
+  // from being treated as the OS-managed mapping.
+  $location = trim((string)@shell_exec("getfattr --no-dereference --absolute-names --only-values -n system.LOCATION " . escapeshellarg($path) . " 2>/dev/null"));
+  if (!preg_match('/^[A-Za-z0-9._-]+$/D', $location) || $location !== $target_parts[1]) return '';
+
+  $disks_state = rtrim($docroot ?? '/usr/local/emhttp', '/') . '/state/disks.ini';
+  $disks = @parse_ini_file($disks_state, true);
+  if (!is_array($disks) || !array_key_exists($target_parts[1], $disks)) return '';
+
+  return is_dir($target) ? $target : '';
+}
+
+/**
+ * Resolve a validated destination without following arbitrary symlinks.
+ *
+ * Only the OS-managed exclusive-share link is translated to its physical
+ * backing path. All other symlink components are rejected so the compatibility
+ * path cannot bypass rsync's symlink policy with a pre-resolved attacker-
+ * controlled path.
+ *
+ * @param string $name The validated destination path.
+ * @return string The resolved path, or an empty string when resolution fails.
+ */
+function resolve_rsync_path($name) {
+  $trailing_slash = mb_substr($name, -1) == '/';
+  $pending = array_values(array_filter(explode('/', trim($name, '/')), 'mb_strlen'));
+  $resolved = [];
+  $symlink_count = 0;
+
+  while (!empty($pending)) {
+    $part = array_shift($pending);
+    if ($part === '.' || $part === '') continue;
+    if ($part === '..') {
+      if (!empty($resolved)) array_pop($resolved);
+      continue;
+    }
+
+    $candidate = '/' . implode('/', array_merge($resolved, [$part]));
+    $stat = @lstat($candidate);
+    if ($stat === false) {
+      $resolved[] = $part;
+      foreach ($pending as $remaining) {
+        if ($remaining !== '') $resolved[] = $remaining;
+      }
+      break;
+    }
+
+    if ((($stat['mode'] ?? 0) & 0170000) === 0120000) {
+      if (++$symlink_count > 40) return '';
+      $target = rsync_exclusive_share_target($candidate);
+      if ($target === '') return '';
+
+      // Restart from the absolute trusted target so its components are still
+      // checked rather than blindly accepting a second symlink.
+      $resolved = [];
+      $pending = array_merge(array_values(array_filter(explode('/', trim($target, '/')), 'mb_strlen')), $pending);
+      continue;
+    }
+
+    $resolved[] = $part;
+  }
+
+  $path = '/' . implode('/', $resolved);
+  return $path . ($trailing_slash && $path !== '/' ? '/' : '');
+}
+
+/**
+ * Validate and resolve a destination for an rsync operation.
+ *
+ * @param string $name The requested destination path.
+ * @return string The safe rsync destination, or an empty string when invalid.
+ */
+function rsync_target($name) {
+  $target = validname($name, false);
+  if (!$target) return '';
+
+  $target = resolve_rsync_path($target);
+  $root = explode('/', $target)[1] ?? '';
+  return in_array($root, ['mnt','boot']) ? $target : '';
+}
+
 function update_translation($locale) {
   global $docroot,$language;
   $language = [];
@@ -456,7 +569,7 @@ while (true) {
       // start action
       } else {
         parse_rsync_progress(null, null, true); // Reset static variables
-        $target = validname($target, false);
+        $target = rsync_target($target);
         if ($target) {
           $mkpath = isdir($target) ? '--mkpath' : '';
           $cmd = "rsync -ahPIX$H $sparse $exist $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
@@ -500,7 +613,7 @@ while (true) {
       // start action
       } else {
         parse_rsync_progress(null, null, true); // Reset static variables
-        $target = validname($target, false);
+        $target = rsync_target($target);
         if ($target) {
           $mkpath = isdir($target) ? '--mkpath' : '';
 
