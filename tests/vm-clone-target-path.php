@@ -2,6 +2,7 @@
 <?php
 declare(strict_types=1);
 
+/** Fails with $message unless $actual matches $expected. */
 function assertSameValue(string $expected, string $actual, string $message): void
 {
   if ($expected !== $actual) {
@@ -9,6 +10,7 @@ function assertSameValue(string $expected, string $actual, string $message): voi
   }
 }
 
+/** Fails with $message unless $needle appears in $haystack. */
 function assertContainsText(string $needle, string $haystack, string $message): void
 {
   if (!str_contains($haystack, $needle)) throw new RuntimeException($message);
@@ -26,6 +28,10 @@ function cloneTargetPath(string $sourceDisk, string $vm, string $clone, string $
   return str_replace('/mnt/user/', "/mnt/$sourceRealDisk/", $target);
 }
 
+/**
+ * Mirrors the only directory vm_clone() creates: DOMAINDIR with the clone name
+ * appended, remapped onto the selected pool when the VM pins one.
+ */
 function cloneDir(string $domainDir, string $clone, string $storage): string
 {
   if ($storage === 'default') return $domainDir.$clone;
