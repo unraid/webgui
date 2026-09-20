@@ -1792,8 +1792,6 @@ class Array2XML {
 		foreach ($config["disk"] as $diskid => $disk) {
 			$file_clone[$diskid]["source"] = $config["disk"][$diskid]["new"];
 			$config["disk"][$diskid]["new"] = str_replace($vm,$clone,$config["disk"][$diskid]["new"]);
-			$pi = pathinfo($config["disk"][$diskid]["new"]);
-			$isdir = is_dir($pi['dirname']);
 			if (is_file($config["disk"][$diskid]["new"])) $file_exists = true;
 			write("addLog\0".htmlspecialchars(_("Checking from file:").$file_clone[$diskid]["source"]));
 			write("addLog\0".htmlspecialchars(_("Checking to file:").$config["disk"][$diskid]["new"]));
@@ -1818,6 +1816,14 @@ class Array2XML {
 			$reptgt = str_replace('/mnt/user/', "/mnt/$sourcerealdisk/", $target);
 			$repsrc = str_replace('/mnt/user/', "/mnt/$sourcerealdisk/", $source);
 			}
+
+			# $clonedir above is DOMAINDIR.$clone, which is not necessarily the directory
+			# this image lands in: the target is derived from the source VM's own disk path
+			# and can sit on another pool or disk. Create it, the way the new VM path does in
+			# libvirt.php, otherwise the copy runs into a directory that was never created.
+			$tgtdir = dirname($reptgt);
+			if (!is_dir($tgtdir)) my_mkdir($tgtdir,0777,true);
+			if (!is_dir($tgtdir)) { write("addLog\0".htmlspecialchars(_("Unable to create target directory").": ".$tgtdir)); return( false); }
 
 			$refresult = getFilesystemAndReflinkMode($repsrc);
 			$refcmdaction = $refresult['reflink_mode'];
