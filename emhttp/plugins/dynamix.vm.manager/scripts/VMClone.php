@@ -29,6 +29,13 @@ function write(...$messages) {
   }
 }
 
+/**
+ * Runs a clone copy command and streams its progress to the browser.
+ *
+ * $refcmd, when supplied, is attempted first and $command is only run if it
+ * fails. Returns true when the copy that ran ended successfully; vm_clone()
+ * relies on that to decide whether the clone may be defined.
+ */
 function execCommand_nchan_clone($command,$idx,$refcmd=false) {
   $waitID = mt_rand();
   $reflinkok = false;

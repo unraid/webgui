@@ -2,16 +2,19 @@
 <?php
 declare(strict_types=1);
 
+/** Fails with $message unless $needle appears in $haystack. */
 function assertContainsText(string $needle, string $haystack, string $message): void
 {
   if (!str_contains($haystack, $needle)) throw new RuntimeException($message);
 }
 
+/** Fails with $message if $needle appears in $haystack. */
 function assertMissingText(string $needle, string $haystack, string $message): void
 {
   if (str_contains($haystack, $needle)) throw new RuntimeException($message);
 }
 
+/** Runs $command through popen(), reads it to EOF and returns the pclose() status. */
 function drainAndClose(string $command): int
 {
   $proc = popen($command, 'r');
