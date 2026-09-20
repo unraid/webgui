@@ -204,10 +204,21 @@ function write(...$messages){
 }
 
 // Run command and obtain output
+// Output is read character by character and flushed on CR or LF, this way progress
+// lines which only use CR (no LF in between) are passed on tick by tick. fgets()
+// breaks on LF only, causing all CR ticks to pile up into a single message which
+// the receiving side can no longer render in place. Same approach as 'multiplugin'
 //
 function run($command) {
   $run = popen($command,'r');
-  while (!feof($run)) write(fgets($run));
+  $line = '';
+  while (!feof($run)) {
+    $char = fgetc($run);
+    if ($char === false) break;
+    $line .= $char;
+    if (in_array($char,["\r","\n"])) {write($line); $line = '';}
+  }
+  if ($line !== '') write($line);
   return pclose($run);
 }
 

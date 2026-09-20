@@ -176,7 +176,7 @@ function renderMessage(type, data) {
   if (type=='plugins') {
     const text = box.html().split('<br>');
     if (data.slice(-1) == '\r') text[text.length-1] = data.slice(0,-1);
-    else text.push(data.slice(0,-1));
+    else text.push(data.endsWith("\n") ? data.slice(0,-1) : data);
     box.html(text.join('<br>')).scrollTop(box[0].scrollHeight);
     return;
   }
