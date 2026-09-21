@@ -140,6 +140,26 @@ function ini_decode_value($value) {
   return $value;
 }
 
+/**
+ * Core can attach structured notification metadata through environment variables.
+ * Environment transport keeps this backward-compatible across independently released
+ * Core/webGui versions: old scripts ignore it, new scripts persist it.
+ */
+function notification_metadata_from_env() {
+  $fields = [
+    'source_id' => 'UNRAID_NOTIFY_SOURCE_ID',
+    'event_id' => 'UNRAID_NOTIFY_EVENT_ID',
+    'event_source' => 'UNRAID_NOTIFY_EVENT_SOURCE',
+    'event_category' => 'UNRAID_NOTIFY_EVENT_CATEGORY',
+  ];
+  $metadata = [];
+  foreach ($fields as $field => $env) {
+    $value = getenv($env);
+    if ($value !== false && $value !== '') $metadata[$field] = $value;
+  }
+  return $metadata;
+}
+
 // start
 if ($argc == 1) exit(usage());
 
@@ -299,26 +319,27 @@ case 'add':
   @unlink((($persistent ? $unread : $active))."/{$fileName}");
   $entity = $overrule===false ? $notify[$importance] : $overrule;
   $cleanSubject = clean_subject($subject);
-  $archiveData = [
+  $metadata = notification_metadata_from_env();
+  $archiveData = array_merge([
     'timestamp' => $timestamp,
     'event' => $event,
     'subject' => $cleanSubject,
     'description' => $description,
     'importance' => $importance,
-  ];
+  ], $metadata);
   if ($message) $archiveData['message'] = str_replace('\n','<br>',$message);
   // Persistent (condition-style) notifications are never archived - they clear when
   // their condition resolves - so skip writing the archive copy for them.
   if (!$mailtest && !$persistent) file_put_contents($archiveFile, build_ini_string($archiveData));
   if (($entity & 1)==1 && !$mailtest && !$noBrowser) {
-    $unreadData = [
+    $unreadData = array_merge([
       'timestamp' => $timestamp,
       'event' => $event,
       'subject' => $cleanSubject,
       'description' => $description,
       'importance' => $importance,
       'link' => $link,
-    ];
+    ], $metadata);
     if ($key !== '') $unreadData['key'] = $key;
     if ($persistent) $unreadData['persistent'] = 'true';
     // Generation stamp for JS-sourced banner notifications: lets reconciliation
