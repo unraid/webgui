@@ -31,8 +31,22 @@ if ($_SERVER['REQUEST_URI'] == '/logout') {
 // If issue with license key redirect to Tools/Registration, otherwise go to start page
 $start_page = (!empty(_var($var,'regCheck'))) ? 'Tools/Registration' : _var($var,'START_PAGE','Main');
 
-$result = exec( "/usr/bin/passwd --status root");
-if (($result === false) || (substr($result, 0, 6) !== "root P"))
+$root_status_output = [];
+$root_status_code = -1;
+
+function root_password_setup_allowed($output, $exit_code)
+{
+    if ($exit_code !== 0 || !is_array($output) || count($output) !== 1 || !is_string($output[0]))
+        return false;
+
+    $status_fields = preg_split('/\s+/', trim($output[0]));
+    return is_array($status_fields) && ($status_fields[0] ?? null) === 'root' && ($status_fields[1] ?? null) === 'NP';
+}
+
+exec("/usr/bin/passwd --status root", $root_status_output, $root_status_code);
+$can_set_root_password = root_password_setup_allowed($root_status_output, $root_status_code);
+
+if ($can_set_root_password)
   include "$docroot/webGui/include/.set-password.php";
 else
   include "$docroot/webGui/include/.login.php";
