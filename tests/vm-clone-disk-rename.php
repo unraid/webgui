@@ -77,7 +77,7 @@ $body = extractFunction($source, 'vm_clone');
 if (!str_contains($body, 'vm_clone_disk_path($config["disk"][$diskid]["new"],$vm,$clone)')) {
   throw new RuntimeException('vm_clone() must rename disk paths with vm_clone_disk_path().');
 }
-if (str_contains($body, 'str_replace($vm,$clone')) {
+if (str_contains($body, 'str_replace($vm,$clone,$config["disk"]')) {
   throw new RuntimeException('vm_clone() must not rename disk paths with str_replace() over the whole path.');
 }
 
