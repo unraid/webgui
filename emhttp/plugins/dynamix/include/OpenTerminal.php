@@ -53,6 +53,9 @@ function terminal_param($name, $default=null) {
 function terminal_identifier($value) {
   return is_string($value) && preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]*\z/', $value)===1;
 }
+function terminal_log_identifier($value) {
+  return is_string($value) && preg_match('/\A[A-Za-z0-9][A-Za-z0-9_. -]*\z/', $value)===1;
+}
 function terminal_shell($value) {
   return is_string($value) && in_array($value,['sh','bash'],true);
 }
@@ -62,7 +65,7 @@ function terminal_log_file($path,$relative) {
   if ($root===false) return false;
   $root = rtrim($root,'/').'/';
   $file = realpath($root.$relative);
-  return is_string($file) && strncmp($file,$root,strlen($root))===0 ? $file : false;
+  return is_string($file) && is_file($file) && strncmp($file,$root,strlen($root))===0 ? $file : false;
 }
 function terminal_abort() {
   http_response_code(400);
@@ -72,6 +75,9 @@ $tag = terminal_param('tag');
 if ($tag===false) terminal_abort();
 switch ($tag) {
 case 'ttyd':
+  $more = terminal_param('more','');
+  if ($more===false || ($more!=='' && preg_match('/[\x00-\x1F\x7F]/',$more)) || ($more!=='' && $more[0]!=='/')) terminal_abort();
+
   // check if ttyd already running
   $sock = "/var/run/ttyd.sock";
   $user_shell = escapeshellarg(posix_getpwuid(0)['shell']);
@@ -83,8 +89,6 @@ case 'ttyd':
     if ($retval != 0) exec("kill ".$ttyd_pid[0]);
   }
   
-  $more = terminal_param('more','');
-  if ($more===false || ($more!=='' && preg_match('/[\x00-\x1F\x7F]/',$more))) terminal_abort();
   if (!empty($more) && substr($more, 0, 1) === '/') {
     // Terminal at specific path - use 'more' parameter to pass path
     // Note: openTerminal(tag, name, more) in JS only has 3 params, so we reuse 'more'
@@ -129,7 +133,8 @@ case 'syslog':
   $path = '/var/log/';
   $name = terminal_param('name','');
   if ($name===false) terminal_abort();
-  $file = realpath($path.$name);
+  $file = terminal_log_file($path,$name);
+  if ($file===false) terminal_abort();
   $sock = "/var/run/syslog.sock";
   exec("ttyd-exec -s9 -om1 -i ".escapeshellarg($sock)." ".command($path,$file));
   break;
@@ -149,7 +154,7 @@ case 'log':
   $name = terminal_param('name');
   $more = terminal_param('more');
   $file = terminal_log_file($path,$more);
-  if (!terminal_identifier($name) || $file===false) terminal_abort();
+  if (!terminal_log_identifier($name) || $file===false) terminal_abort();
   $sock = "/var/tmp/$name.sock";
   exec("ttyd-exec -s9 -om1 -i ".escapeshellarg($sock)." ".command($path,$file));
   break;
