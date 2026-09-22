@@ -1799,10 +1799,6 @@ class Array2XML {
 			$file_clone[$diskid]["target"] = $config["disk"][$diskid]["new"];
 			}
 
-		if ($storage == "default") $clonedir = $domain_cfg['DOMAINDIR'].$clone; else $clonedir = str_replace('/mnt/user/', "/mnt/$storage/", $domain_cfg['DOMAINDIR']).$clone;
-		if (!is_dir($clonedir)) {
-			my_mkdir($clonedir,0777,true);
-		}
 		write("addLog\0".htmlspecialchars(_("Checking for image files")));
 		if ($file_exists && $overwrite != "yes") { write("addLog\0".htmlspecialchars(_("New image file names exist and Overwrite is not allowed")));  return( false); }
 
@@ -1817,12 +1813,16 @@ class Array2XML {
 			$repsrc = str_replace('/mnt/user/', "/mnt/$sourcerealdisk/", $source);
 			}
 
-			# $clonedir above is DOMAINDIR.$clone, which is not necessarily the directory
-			# this image lands in: the target is derived from the source VM's own disk path
-			# and can sit on another pool or disk. Create it, the way the new VM path does in
-			# libvirt.php, otherwise the copy runs into a directory that was never created.
+			# The target is derived from the source VM's own disk path, not from DOMAINDIR,
+			# so it can sit on another pool or disk. Create its directory, the way the new VM
+			# path does in libvirt.php, but only as a sibling of the source VM's directory:
+			# str_replace($vm,$clone) rewrites every occurrence of the VM name, so a VM called
+			# "user" or "domains" would otherwise create directories anywhere under /mnt.
 			$tgtdir = dirname($reptgt);
-			if (!is_dir($tgtdir)) my_mkdir($tgtdir,0777,true);
+			if (!is_dir($tgtdir)) {
+				if (!is_file($repsrc) || dirname($tgtdir) !== dirname(dirname($repsrc))) { write("addLog\0".htmlspecialchars(_("Refusing to create clone target directory").": ".$tgtdir)); return( false); }
+				my_mkdir($tgtdir,0777,true);
+			}
 			if (!is_dir($tgtdir)) { write("addLog\0".htmlspecialchars(_("Unable to create target directory").": ".$tgtdir)); return( false); }
 
 			$refresult = getFilesystemAndReflinkMode($repsrc);

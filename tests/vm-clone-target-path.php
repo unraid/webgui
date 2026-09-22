@@ -29,13 +29,19 @@ function cloneTargetPath(string $sourceDisk, string $vm, string $clone, string $
 }
 
 /**
- * Mirrors the only directory vm_clone() creates: DOMAINDIR with the clone name
- * appended, remapped onto the selected pool when the VM pins one.
+ * Mirrors the only directory vm_clone() used to create: DOMAINDIR with the clone
+ * name appended, remapped onto the selected pool when the VM pins one.
  */
 function cloneDir(string $domainDir, string $clone, string $storage): string
 {
   if ($storage === 'default') return $domainDir.$clone;
   return str_replace('/mnt/user/', "/mnt/$storage/", $domainDir).$clone;
+}
+
+/** True when $targetDir sits next to the source VM's directory, the only place a clone may create. */
+function isSiblingOfSource(string $targetDir, string $sourceDisk): bool
+{
+  return dirname($targetDir) === dirname(dirname($sourceDisk));
 }
 
 // A VM whose disks live outside the default VM storage path. Both are pools here,
@@ -59,6 +65,26 @@ if (dirname($target) === cloneDir('/mnt/user/domains/', 'Kali_clone', 'default')
   throw new RuntimeException('Test scenario is wrong: the two directories must differ here.');
 }
 
+// Normal clones land next to the source VM's directory.
+if (!isSiblingOfSource(dirname(cloneTargetPath($sourceDisk, 'Arch', 'Arch_clone', '')), $sourceDisk)) {
+  throw new RuntimeException('A normal clone must be allowed to create its directory.');
+}
+
+// str_replace() rewrites every occurrence of the VM name, so some names produce targets
+// far from the source: on the RAM-backed /mnt itself, or as a new top-level share.
+foreach ([
+  ['user', '/mnt/user_clone/domains/user_clone'],
+  ['domains', '/mnt/pool_one/domains_clone/domains_clone'],
+  ['a', '/mnt/pool_one/doma_cloneins/a_clone'],
+] as [$vm, $expectedDir]) {
+  $src = "/mnt/user/domains/$vm/vdisk1.img";
+  $tgtDir = dirname(cloneTargetPath($src, $vm, $vm.'_clone', 'pool_one'));
+  assertSameValue($expectedDir, $tgtDir, "Rewritten target for VM '$vm'.");
+  if (isSiblingOfSource($tgtDir, str_replace('/mnt/user/', '/mnt/pool_one/', $src))) {
+    throw new RuntimeException("A clone of VM '$vm' must not be allowed to create $tgtDir.");
+  }
+}
+
 $repo = dirname(__DIR__);
 $source = file_get_contents("$repo/emhttp/plugins/dynamix.vm.manager/include/libvirt_helpers.php");
 if ($source === false) throw new RuntimeException('Could not read libvirt_helpers.php.');
@@ -73,10 +99,21 @@ assertContainsText(
   'vm_clone() must derive the directory the image is actually copied into.'
 );
 assertContainsText(
-  'if (!is_dir($tgtdir)) my_mkdir($tgtdir,0777,true);',
+  'my_mkdir($tgtdir,0777,true);',
   $body,
   'vm_clone() must create the copy target directory.'
 );
+
+assertContainsText(
+  'dirname($tgtdir) !== dirname(dirname($repsrc))',
+  $body,
+  'vm_clone() must only create a target directory next to the source VM directory.'
+);
+$cloneEnd = strpos($body, 'function compare_creationtime');
+if ($cloneEnd === false) throw new RuntimeException('Could not find the end of vm_clone().');
+if (str_contains(substr($body, 0, $cloneEnd), 'my_mkdir($clonedir')) {
+  throw new RuntimeException('vm_clone() must not create DOMAINDIR.$clone; no image is copied there.');
+}
 
 $mkdirAt = strpos($body, 'my_mkdir($tgtdir,0777,true);');
 $copyAt = strpos($body, "\$cmdstr = \"cp --reflink=");
