@@ -20,7 +20,8 @@ $_SERVER['REQUEST_URI'] = 'plugins';
 require_once "$docroot/webGui/include/Translations.php";
 
 $system  = unscript(_var($_GET,'system'));
-$branch  = unscript(_var($_GET,'branch'));
+$branch  = _var($_GET,'branch');
+$branch  = is_string($branch) && preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]*\z/',$branch)===1 ? $branch : '';
 $audit   = unscript(_var($_GET,'audit'));
 $check   = unscript(_var($_GET,'check'));
 $cmd     = unscript(_var($_GET,'cmd'));
@@ -137,7 +138,8 @@ foreach (glob($plugins,GLOB_NOSORT) as $plugin_link) {
       $tmp_plg = "$name-.plg";
       $tmp_file = "/var/tmp/$name.plg";
       copy($plugin_file,$tmp_file);
-      exec("sed -ri 's|^(<!ENTITY category).*|\\1 \"{$branch}\">|' $tmp_file");
+      $sed = 's|^(<!ENTITY category).*|\\1 "'.$branch.'">|';
+      exec('sed -ri '.escapeshellarg($sed).' '.escapeshellarg($tmp_file));
       symlink($tmp_file,"/var/log/plugins/$tmp_plg");
       $next = array_filter(explode("\n",check_plugin($tmp_plg,$ncsi)),function($row){return is_numeric($row[0]);});
       $next = end($next);
