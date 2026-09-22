@@ -38,16 +38,49 @@ function wait($name,$cmd) {
 }
 function command($path,$file) {
   global $run,$wait,$rows;
-  return (file_exists($file) && substr($file,0,strlen($path))==$path) ? "$run tail -f -n $rows '$file'" : $wait;
+  $root = realpath($path);
+  $root = $root===false ? false : rtrim($root,'/').'/';
+  return ($root!==false && is_string($file) && file_exists($file) && strncmp($file,$root,strlen($root))===0) ? "$run tail -f -n $rows ".escapeshellarg($file) : $wait;
 }
 function sed_escape($s) {
-  // escape sed replacement meta characters: & and \
-  return str_replace(['\\', '&'], ['\\\\', '\\&'], $s);
+  // escape sed replacement meta characters: &, # and \
+  return str_replace(['\\', '&', '#'], ['\\\\', '\\&', '\\#'], $s);
 }
-switch ($_GET['tag']) {
+function terminal_param($name, $default=null) {
+  if (!array_key_exists($name,$_GET)) return $default;
+  return is_string($_GET[$name]) ? $_GET[$name] : false;
+}
+function terminal_identifier($value) {
+  return is_string($value) && preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]*\z/', $value)===1;
+}
+function terminal_log_identifier($value) {
+  return is_string($value) && preg_match('/\A[A-Za-z0-9][A-Za-z0-9_. -]*\z/', $value)===1;
+}
+function terminal_shell($value) {
+  return is_string($value) && in_array($value,['sh','bash'],true);
+}
+function terminal_log_file($path,$relative) {
+  if (!is_string($relative) || $relative==='' || $relative[0]==='/' || preg_match('/[\x00-\x1F\x7F]/',$relative) || preg_match('#(?:^|/)\.{1,2}(?:/|$)#',$relative)) return false;
+  $root = realpath($path);
+  if ($root===false) return false;
+  $root = rtrim($root,'/').'/';
+  $file = realpath($root.$relative);
+  return is_string($file) && is_file($file) && strncmp($file,$root,strlen($root))===0 ? $file : false;
+}
+function terminal_abort() {
+  http_response_code(400);
+  exit;
+}
+$tag = terminal_param('tag');
+if ($tag===false) terminal_abort();
+switch ($tag) {
 case 'ttyd':
+  $more = terminal_param('more','');
+  if ($more===false || ($more!=='' && preg_match('/[\x00-\x1F\x7F]/',$more)) || ($more!=='' && $more[0]!=='/')) terminal_abort();
+
   // check if ttyd already running
   $sock = "/var/run/ttyd.sock";
+  $user_shell = escapeshellarg(posix_getpwuid(0)['shell']);
   exec('pgrep --ns $$ -f '."'$sock'", $ttyd_pid, $retval);
   if ($retval == 0) {
     // check if there are any child processes, ie, curently open tty windows
@@ -56,7 +89,6 @@ case 'ttyd':
     if ($retval != 0) exec("kill ".$ttyd_pid[0]);
   }
   
-  $more = $_GET['more'] ?? '';
   if (!empty($more) && substr($more, 0, 1) === '/') {
     // Terminal at specific path - use 'more' parameter to pass path
     // Note: openTerminal(tag, name, more) in JS only has 3 params, so we reuse 'more'
@@ -64,10 +96,7 @@ case 'ttyd':
     
     // Validate path
     $real_path = realpath($more);
-    if ($real_path === false) {
-      // Path doesn't exist - fall back to home directory
-      $real_path = '/root';
-    }
+    if ($real_path === false || !is_dir($real_path)) terminal_abort();
     
     // Set script variables
     $unique_id = getmypid() . '_' . uniqid(); // prevent race condition with multiple terminals
@@ -75,9 +104,6 @@ case 'ttyd':
     $profile = "/tmp/file.manager.terminal.$unique_id.profile";
     $escaped_path = str_replace("'", "'\\''", $real_path);
     $sed_escaped = sed_escape($escaped_path);
-    
-    // Get user's shell (same as standard terminal)
-    $user_shell = posix_getpwuid(0)['shell'];
     
     // Create startup script similar to ~/.bashrc
     // Note: We can not use ~/.bashrc as it loads /etc/profile which does 'cd $HOME'
@@ -95,58 +121,70 @@ BASH;
     
     file_put_contents($exec, $script_content);
     chmod($exec, 0755);
-    exec("ttyd-exec -i '$sock' $exec");
+    exec("ttyd-exec -i ".escapeshellarg($sock)." ".escapeshellarg($exec));
 
   // Standard login shell
   } else {
-    if ($retval != 0) exec("ttyd-exec -i '$sock' '" . posix_getpwuid(0)['shell'] . "' --login");
+    if ($retval != 0) exec("ttyd-exec -i ".escapeshellarg($sock)." $user_shell --login");
   }
   break;
 case 'syslog':
   // read syslog file
   $path = '/var/log/';
-  $file = realpath($path.$_GET['name']);
+  $name = terminal_param('name','');
+  if ($name===false) terminal_abort();
+  $file = terminal_log_file($path,$name);
+  if ($file===false) terminal_abort();
   $sock = "/var/run/syslog.sock";
-  exec("ttyd-exec -s9 -om1 -i '$sock' ".command($path,$file));
+  exec("ttyd-exec -s9 -om1 -i ".escapeshellarg($sock)." ".command($path,$file));
   break;
 case 'disklog':
   // read disk log info (main page)
-  $name = unbundle($_GET['name']);
+  $name = terminal_param('name');
+  if (!terminal_identifier($name)) terminal_abort();
   $sock = "/var/tmp/$name.sock";
-  $ata  = exec("ls -n '/sys/block/$name'|grep -Pom1 'ata\d+'");
+  $ata  = exec("ls -n ".escapeshellarg("/sys/block/$name")."|grep -Pom1 'ata\\d+'");
   $dev  = $ata ? $name.'|'.$ata.'[.:]' : $name;
-  exec("ttyd-exec -s9 -om1 -i '$sock' ".wait($name,"grep -P \"'$dev'\" '/var/log/syslog*'"));
+  $exec = wait($name,"grep -P ".escapeshellarg($dev)." /var/log/syslog*");
+  exec("ttyd-exec -s9 -om1 -i ".escapeshellarg($sock)." ".escapeshellarg($exec));
   break;
 case 'log':
   // read vm log file
   $path = '/var/log/';
-  $name = unbundle($_GET['name']);
-  $file = realpath($path.$_GET['more']);
+  $name = terminal_param('name');
+  $more = terminal_param('more');
+  $file = terminal_log_file($path,$more);
+  if (!terminal_log_identifier($name) || $file===false) terminal_abort();
   $sock = "/var/tmp/$name.sock";
-  exec("ttyd-exec -s9 -om1 -i '$sock' ".command($path,$file));
+  exec("ttyd-exec -s9 -om1 -i ".escapeshellarg($sock)." ".command($path,$file));
   break;
 case 'docker':
-  $name = unbundle($_GET['name']);
-  $more = unbundle($_GET['more']) ?: 'sh';
+  $name = terminal_param('name');
+  $more = terminal_param('more');
+  if ($more===false) terminal_abort();
+  if ($more===null || $more==='') $more = 'sh';
+  if (!terminal_identifier($name) || ($more!=='.log' && !terminal_shell($more))) terminal_abort();
   if ($more=='.log') {
     // read docker container log
     $sock = "/var/tmp/$name.log.sock";
-    if (empty(exec("docker ps --filter=name='$name' --format={{.Names}}")))
-      $docker = wait($name,"docker logs -n $rows '$name'"); // container stopped
+    if (empty(exec("docker ps --filter=name=".escapeshellarg($name)." --format={{.Names}}")))
+      $docker = escapeshellarg(wait($name,"docker logs -n $rows ".escapeshellarg($name))); // container stopped
     else
-      $docker = "$run docker logs -f -n $rows '$name'"; // container started
-    exec("ttyd-exec -s9 -om1 -i '$sock' $docker");
+      $docker = "$run docker logs -f -n $rows ".escapeshellarg($name); // container started
+    exec("ttyd-exec -s9 -om1 -i ".escapeshellarg($sock)." $docker");
   } else {
     // docker console command
     $sock = "/var/tmp/$name.sock";
-    exec("ttyd-exec -s9 -om1 -i '$sock' docker exec -it '$name' $more");
+    exec("ttyd-exec -s9 -om1 -i ".escapeshellarg($sock)." docker exec -it ".escapeshellarg($name)." ".escapeshellarg($more));
   }
   break;
 case 'lxc':
-  $name = unbundle($_GET['name']);
-  $more = unbundle($_GET['more']);
+  $name = terminal_param('name');
+  $more = terminal_param('more');
+  if (!terminal_identifier($name) || $more===false || ($more!==null && $more!=='' && !terminal_shell($more))) terminal_abort();
   $sock = "/var/tmp/$name.sock";
-  exec("ttyd-exec -s9 -om1 -i '$sock' lxc-attach '$name' $more");
+  $shell = ($more===null || $more==='') ? '' : ' '.escapeshellarg($more);
+  exec("ttyd-exec -s9 -om1 -i ".escapeshellarg($sock)." lxc-attach ".escapeshellarg($name).$shell);
   break;
 }
 ?>
