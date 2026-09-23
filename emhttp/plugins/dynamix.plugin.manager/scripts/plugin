@@ -250,15 +250,78 @@ function post_hooks($error='') {
   }
 }
 
+function remote_url_allowed($url) {
+  $parts = parse_url(trim((string)$url));
+  return is_array($parts)
+    && ($parts['scheme'] ?? '') === 'https'
+    && !isset($parts['user'],$parts['pass'])
+    && !empty($parts['host'])
+    && !isset($parts['fragment']);
+}
+
+function trusted_plugin_key($plugin) {
+  $base = pathinfo(basename((string)$plugin),PATHINFO_FILENAME);
+  if (!preg_match('/\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z/D',$base)) return false;
+  $directory = '/boot/config/plugins/plugin-manager/trusted-keys';
+  $root = realpath($directory);
+  if ($root === false || !is_dir($root)) return false;
+  $key = "$root/$base.pub";
+  return !is_link($key) && is_file($key) && realpath(dirname($key)) === $root ? $key : false;
+}
+
+function verify_manifest_signature($manifest,$signature,$key,&$error) {
+  $data = @file_get_contents($signature);
+  if ($data === false) {
+    $error = 'manifest signature cannot be read';
+    return false;
+  }
+  $trimmed = trim($data);
+  if ($trimmed !== '' && !str_contains($data,"\0") && preg_match('/\A[A-Za-z0-9+\/\r\n]+={0,2}\z/',$trimmed)) {
+    $decoded = base64_decode($trimmed,true);
+    if ($decoded !== false) file_put_contents($signature,$decoded,LOCK_EX);
+  }
+  $output = [];
+  exec('openssl dgst -sha256 -verify '.escapeshellarg($key).' -signature '.escapeshellarg($signature).' '.escapeshellarg($manifest).' 2>&1',$output,$status);
+  if ($status !== 0) {
+    $error = 'manifest signature verification failed';
+    return false;
+  }
+  return true;
+}
+
+function download_signed_manifest($url,$name,$plugin,&$error,$write=true) {
+  if (!remote_url_allowed($url)) {
+    $error = 'plugin manifest URL must use HTTPS without redirects';
+    return false;
+  }
+  if (!($key = trusted_plugin_key($plugin))) {
+    $error = 'no trusted publisher key for plugin manifest';
+    return false;
+  }
+  $signature = tempnam('/tmp','plugin-signature-');
+  if ($signature === false) {
+    $error = 'unable to create manifest signature temporary file';
+    return false;
+  }
+  $ok = download($url,$name,$error,$write)
+    && download($url.'.sig',$signature,$error,false)
+    && verify_manifest_signature($name,$signature,$key,$error);
+  @unlink($signature);
+  if (!$ok) @unlink($name);
+  return $ok;
+}
+
 // Download a file from a URL.
 // Returns TRUE if success else FALSE and fills in error.
 //
 function download($url, $name, &$error, $write=true) {
-  if ($url) {
+  $url = trim((string)$url);
+  if ($url && remote_url_allowed($url)) {
     $plg = basename($url);
     $plg = str_replace('"', '', $plg);
     $tries = (strpos($url, '.cdn') !== false) ? "1" : "3";
-    if ($file = popen("wget --compression=auto --no-cache --progress=dot --retry-connrefused --prefer-family=IPv4 --timeout=10 --tries=$tries --waitretry=$tries -O $name $url 2>&1", 'r')) {
+    $command = "wget --compression=auto --no-cache --progress=dot --retry-connrefused --prefer-family=IPv4 --max-redirect=0 --timeout=10 --tries=$tries --waitretry=$tries -O ".escapeshellarg($name)." ".escapeshellarg($url)." 2>&1";
+    if ($file = popen($command, 'r')) {
       if ($write) write("plugin: downloading: $plg ...\r");
       $level = -1;
         while (($line = fgets($file)) !== false) {
@@ -275,7 +338,7 @@ function download($url, $name, &$error, $write=true) {
         return false;
       }
       clearstatcache(true, $name);
-      if (filesize($name) == 0) {
+      if (!is_file($name) || filesize($name) == 0) {
         $error = "$plg download failure: zero-length file";
         if ($write) write("plugin: download failure: zero-length file\r","\n");
         return false;
@@ -288,7 +351,7 @@ function download($url, $name, &$error, $write=true) {
       return false;
     }
   } else {
-    // The url is empty
+    $error = $url ? 'plugin URL must use HTTPS' : 'plugin URL is empty';
     return false;
   }
 }
@@ -350,12 +413,17 @@ function plugin($method, $plugin_file, &$error) {
       return false;
     }
     foreach ($xml->FILE as $file) if ($file->URL) {
-      if (!$file->SHA256 and !$file->MD5) continue;
+      $sha256 = strtolower(trim((string)$file->SHA256));
+      if (!preg_match('/\A[0-9a-f]{64}\z/D',$sha256)) {
+        $error = 'external file requires a SHA256 value';
+        @unlink($name);
+        return false;
+      }
       if ( (download($file->URL, $name, $error, false) === false) && (download(filter_url($file->URL), $name, $error, false) === false) ) {
         @unlink($name);
         return false;
       }
-      if (($file->SHA256 && hash_file('sha256',$name) != $file->SHA256) or ($file->MD5 && md5_file($name) != $file->MD5)) {
+      if (hash_file('sha256',$name) !== $sha256) {
         $error = "bad hash value";
         @unlink($name);
         return false;
@@ -383,6 +451,10 @@ function plugin($method, $plugin_file, &$error) {
     if (isset($file->attributes()->Method)) {
       if (!in_array($method, explode(" ", $file->attributes()->Method))) continue;
     } elseif ($method != 'install') continue;
+    if ($file->URL && !preg_match('/\A[0-9a-f]{64}\z/Di',trim((string)$file->SHA256))) {
+      $error = 'external file requires a SHA256 value';
+      return false;
+    }
     $name = $file->attributes()->Name ?: '';
     // bergware - check Unraid version dependency (if present)
     $min = $file->attributes()->Min;
@@ -419,18 +491,10 @@ function plugin($method, $plugin_file, &$error) {
           return false;
         }
       }
-      // If file already exists, check the SHA256/MD5 (if supplied)
+      // If file already exists, check the SHA256 value.
       if (file_exists($name)) {
-        if ($file->SHA256) {
-          my_logger("checking: $name - SHA256", $logger);
-          if (hash_file('sha256', $name) != $file->SHA256) {
-            unlink($name);
-          }
-        } elseif ($file->MD5) {
-          my_logger("checking: $name - MD5", $logger);
-          if (md5_file($name) != $file->MD5) {
-            unlink($name);
-          }
+        if ($file->URL && hash_file('sha256', $name) !== strtolower(trim((string)$file->SHA256))) {
+          unlink($name);
         }
       }
       // If file already exists, do not overwrite
@@ -465,26 +529,17 @@ function plugin($method, $plugin_file, &$error) {
           return false;
         }
       } elseif ($file->URL) {
-        // for download file, download and maybe verify the file MD5
+        // for download file, download and verify the file SHA256
         my_logger("creating: $name - downloading from URL $file->URL", $logger);
         if ( (download($file->URL, $name, $error) === false) && (download(filter_url($file->URL), $name, $error) === false) ) {
           @unlink($name);
           return false;
         }
-        if ($file->SHA256) {
-          my_logger("checking: $name - SHA256", $logger);
-          if (hash_file('sha256', $name) != $file->SHA256) {
-            $error = "bad file SHA256: $name";
-            unlink($name);
-            return false;
-          }
-        } elseif ($file->MD5) {
-          my_logger("checking: $name - MD5", $logger);
-          if (md5_file($name) != $file->MD5) {
-            $error = "bad file MD5: $name";
-            unlink($name);
-            return false;
-          }
+        my_logger("checking: $name - SHA256", $logger);
+        if (hash_file('sha256', $name) !== strtolower(trim((string)$file->SHA256))) {
+          $error = "bad file SHA256: $name";
+          unlink($name);
+          return false;
         }
       }
       // Maybe change the file mode
@@ -700,7 +755,7 @@ if ($method == 'install') {
     pre_hooks();
     $plugin_file = "$tmp/$plugin";
     write("plugin: downloading: $plugin\n");
-    if ( (download($pluginURL, $plugin_file, $error) === false) && (download(filter_url($pluginURL), $plugin_file, $error) === false) ) {
+    if ( (download_signed_manifest($pluginURL, $plugin_file, $plugin, $error) === false) && (download_signed_manifest(filter_url($pluginURL), $plugin_file, $plugin, $error) === false) ) {
       write("plugin: $error\n");
       @unlink($plugin_file);
       // run hook scripts for post processing
@@ -845,7 +900,7 @@ if ($method == 'check') {
     done(1);
   }
   $plugin_file = "$tmp/$plugin";
-  if ( (download($installed_pluginURL, $plugin_file, $error) === false) && (download(filter_url($installed_pluginURL), $plugin_file, $error) === false) ) {
+  if ( (download_signed_manifest($installed_pluginURL, $plugin_file, $plugin, $error) === false) && (download_signed_manifest(filter_url($installed_pluginURL), $plugin_file, $plugin, $error) === false) ) {
     write("plugin: $error\n");
     @unlink($plugin_file);
     // run hook scripts for post processing
