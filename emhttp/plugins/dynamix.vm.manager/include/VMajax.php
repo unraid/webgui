@@ -627,16 +627,27 @@ case 'disk-create':
 	break;
 
 case 'disk-resize':
-	$disk = $_REQUEST['disk'];
-	$capacity = str_replace(["KB","MB","GB","TB","PB", " ", ","], ["K","M","G","T","P", "", ""], strtoupper($_REQUEST['cap']));
-	$old_capacity = str_replace(["KB","MB","GB","TB","PB", " ", ","], ["K","M","G","T","P", "", ""], strtoupper($_REQUEST['oldcap']));
-	if (substr($old_capacity,0,-1) < substr($capacity,0,-1)){
-		$strLastLine = exec("qemu-img resize -q ".escapeshellarg($disk)." ".escapeshellarg($capacity)." 2>&1", $out, $status);
+	$dev = unscript(_var($request,'dev'));
+	$disk = false;
+	$old_capacity = false;
+	if (preg_match('/\\A[A-Za-z0-9._-]+\\z/D',$dev)) foreach ($lv->get_disk_stats($domName) as $diskInfo) {
+		if (($diskInfo['device'] ?? '') !== $dev) continue;
+		$disk = $diskInfo['file'] ?? false;
+		$old_capacity = (float)($diskInfo['capacity'] ?? 0);
+		break;
+	}
+	$capacity = vm_size_arg($request['cap'] ?? '');
+	$diskReal = $disk ? realpath($disk) : false;
+	$mntReal = realpath('/mnt');
+	if (!$diskReal || !$mntReal || strncmp($diskReal,$mntReal.'/',strlen($mntReal)+1)!==0 || $capacity === false || vm_size_bytes($capacity) <= $old_capacity) {
+		$arrResponse = ['error' => _('Disk capacity must be greater than the current capacity')];
+		break;
+	}
+	if ($disk && $capacity !== false){
+		$strLastLine = exec("qemu-img resize -q ".escapeshellarg($diskReal)." ".escapeshellarg($capacity)." 2>&1", $out, $status);
 		$arrResponse = empty($status)
 		? ['success' => true]
 		: ['error' => $strLastLine];
-	} else {
-		$arrResponse = ['error' => sprintf(_("Disk capacity has to be greater than %s"), $old_capacity)];
 	}
 	break;
 
