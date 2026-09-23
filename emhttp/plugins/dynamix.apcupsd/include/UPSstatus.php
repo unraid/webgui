@@ -35,14 +35,14 @@ $state = [
   'SHUTTING DOWN' => _('System goes down')
 ];
 
-$red     = "class='red-text'";
-$green   = "class='green-text'";
-$orange  = "class='orange-text'";
-$defaultCell = "<td>-</td>";
-$status  = array_fill(0,7,$defaultCell);
+$red     = 'red-text';
+$green   = 'green-text';
+$orange  = 'orange-text';
+$status  = array_fill(0,7,['text' => '-', 'class' => '']);
 $result  = [];
-$level   = $_POST['level'] ?: 10;
-$runtime = $_POST['runtime'] ?: 5;
+$rows    = [];
+$level   = (float)($_POST['level'] ?? 10);
+$runtime = (float)($_POST['runtime'] ?? 5);
 
 if (file_exists("/var/run/apcupsd.pid")) {
   exec("/sbin/apcaccess 2>/dev/null", $rows);
@@ -50,60 +50,65 @@ if (file_exists("/var/run/apcupsd.pid")) {
     [$key,$val] = array_map('trim',array_pad(explode(':',$rows[$i],2),2,''));
     switch ($key) {
     case 'MODEL':
-      $status[0] = "<td $green>$val</td>";
+      $status[0] = ['text' => $val, 'class' => $green];
       break;
     case 'STATUS':
       $text = strtr($val, $state);
-      $status[1] = $val ? (strpos($val,'ONLINE')!==false ? "<td $green>$text</td>" : "<td $red>$text</td>") : "<td $orange>"._('Refreshing')."...</td>";
+      $status[1] = $val ? ['text' => $text, 'class' => strpos($val,'ONLINE')!==false ? $green : $red] : ['text' => _('Refreshing').'...', 'class' => $orange];
       break;
     case 'BCHARGE':
       $charge = round(strtok($val,' '));
-      $status[2] = $charge>$level ? "<td $green>$charge %</td>" : "<td $red>$charge %</td>";
+      $status[2] = ['text' => "$charge %", 'class' => $charge>$level ? $green : $red];
       break;
     case 'TIMELEFT':
       $time = round(strtok($val,' '));
       $unit = _('minutes');
-      $status[3] = $time>$runtime ? "<td $green>$time $unit</td>" : "<td $red>$time $unit</td>";
+      $status[3] = ['text' => "$time $unit", 'class' => $time>$runtime ? $green : $red];
       break;
     case 'NOMPOWER':
-      $power = strtok($val,' ');
-      $status[4] = $power>0 ? "<td $green>$power W</td>" : "<td $red>$power W</td>";
+      $power = (float)strtok($val,' ');
+      $status[4] = ['text' => "$power W", 'class' => $power>0 ? $green : $red];
       break;
     case 'LOADPCT':
-      $load = strtok($val,' ');
-      $status[5] = round($load)." %";
+      $load = (float)strtok($val,' ');
+      $status[5] = ['text' => round($load)." %", 'class' => ''];
       break;
     case 'OUTPUTV':
-      $output = round(strtok($val,' '));
-      $status[6] = "$output V";
+      $output = round((float)strtok($val,' '));
+      $status[6] = ['text' => "$output V", 'class' => ''];
       break;
     case 'NOMINV':
-      $volt = strtok($val,' ');
+      $volt = (float)strtok($val,' ');
       $minv = floor($volt / 1.1); // +/- 10% tolerance
       $maxv = ceil($volt * 1.1);
       break;
     case 'LINEFREQ':
-      $freq = round(strtok($val,' '));
+      $freq = round((float)strtok($val,' '));
       break;
     }
-    if ($i%2==0) $result[] = "<tr>";
-    $result[]= "<td><strong>$key</strong></td><td>$val</td>";
-    if ($i%2==1) $result[] = "</tr>";
+    $result[] = ['key' => $key, 'value' => $val];
   }
-  if (count($rows)%2==1) $result[] = "<td></td><td></td></tr>";
 
   // If the override is defined, override the power value, using the same implementation as above.
   // This is a better implementation, as it allows the existing Unraid code to work with the override.
   if ($overrideUpsCapacity > 0) {
     $power = $overrideUpsCapacity;
-    $status[4] = $power>0 ? "<td $green>$power W</td>" : "<td $red>$power W</td>";
+    $status[4] = ['text' => "$power W", 'class' => $power>0 ? $green : $red];
   }
 
-  if ( ($power??false) && isset($load)) $status[5] = ($load<90 ? "<td $green>" : "<td $red>").round($power*$load/100)." W (".$status[5].")</td>";
-  elseif (isset($load)) $status[5] = ($load<90 ? "<td $green>" : "<td $red>").$status[5]."</td>";
-  $status[6] = isset($output) ? ((!$volt || ($minv<$output && $output<$maxv) ? "<td $green>" : "<td $red>").$status[6].(isset($freq) ? " ~ $freq Hz" : "")."</td>") : $status[6];
+  if (($power??false) && isset($load)) {
+    $status[5] = ['text' => round($power*$load/100)." W (".round($load)." %)", 'class' => $load<90 ? $green : $red];
+  } elseif (isset($load)) {
+    $status[5]['class'] = $load<90 ? $green : $red;
+  }
+  if (isset($output)) {
+    $withinRange = !($volt??0) || ($minv<$output && $output<$maxv);
+    $status[6]['text'] .= isset($freq) ? " ~ $freq Hz" : '';
+    $status[6]['class'] = $withinRange ? $green : $red;
+  }
 }
-if (empty($rows)) $result[] = "<tr><td colspan='4' style='text-align:center'>"._('No information available')."</td></tr>";
+if (empty($rows)) $result[] = ['message' => _('No information available')];
 
-echo "<tr class='ups'>",implode($status),"</tr>\n",implode($result);
+header('Content-Type: application/json');
+echo json_encode(['summary' => $status, 'details' => $result]);
 ?>
