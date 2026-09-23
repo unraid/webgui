@@ -29,14 +29,38 @@ CONF6="/proc/sys/net/ipv6/conf"
 # library functions
 . /etc/rc.d/rc.library.source
 
-# get settings
-[[ -r $INI ]] && . $INI
-PORT=${PORT:-wlan0}
-
 # return variable value from file
 var(){
   [[ -r "$2" ]] && grep -Pom1 "^$1=\"\K[^\"]+" "$2"
 }
+
+# Read the generated state as inert base64 key/value data. Never source it.
+ini(){
+  local key="$1" file="$2" value legacy
+  [[ $key =~ ^[A-Za-z0-9_]+$ && -r $file ]] || return 1
+  value=$(grep -Pom1 "^${key}=\K[A-Za-z0-9_-]*$" "$file") && {
+    value=${value//-/+}
+    value=${value//_/\/}
+    while (( ${#value} % 4 )); do value+='='; done
+    printf '%s' "$value" | base64 -d 2>/dev/null
+    return
+  }
+  # Read the previous quoted format as data so existing installations migrate
+  # without evaluating any part of the old file.
+  legacy=$(grep -Pom1 "^${key}=\"\K[^\"]*(?=\")$" "$file") || return 1
+  printf '%s' "$legacy"
+}
+
+load_ini(){
+  local key
+  for key in PORT SSID ATTR1 ATTR2 ATTR3 ATTR4 USERNAME PASSWORD AUTOJOIN SECURITY DHCP4 DNS4 IP4 MASK4 GATEWAY4 SERVER4 DHCP6 DNS6 IP6 MASK6 GATEWAY6 SERVER6 HOSTNAME; do
+    printf -v "$key" '%s' "$(ini "$key" "$INI")"
+  done
+  PORT=${PORT:-wlan0}
+}
+
+# get settings without evaluating generated content
+load_ini
 
 # return interface index
 index(){

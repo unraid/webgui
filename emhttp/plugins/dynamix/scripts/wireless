@@ -21,7 +21,8 @@ $ini   = '/var/local/emhttp/wireless.ini';
 $cfg   = '/boot/config/wireless.cfg';
 $wifi  = is_file($cfg) ? (array)parse_ini_file($cfg,true) : [];
 $port  = array_key_first($wifi);
-$text  = ["PORT=\"$port\""];
+$encode = static fn($value) => rtrim(strtr(base64_encode((string)$value),'+/','-_'),'=');
+$text  = ["PORT=".$encode($port)];
 
 if ($arg == 'yes') {
   exec("/etc/rc.d/rc.wireless start &>/dev/null &");
@@ -32,9 +33,9 @@ if ($arg == 'yes') {
   foreach ($wifi as $network => $block) {
     if ($network == $port) continue;
     if (($block['GROUP']??'') == $state && (!$arg || $arg == $network)) {
-      $text[] = "SSID=\"$network\"";
+      $text[] = "SSID=".$encode($network);
       unset($block['GROUP']);
-      foreach ($block as $key => $value) $text[] = "$key=\"$value\"";
+      foreach ($block as $key => $value) $text[] = "$key=".$encode($value);
     }
   }
   if (count($text)>2) {
