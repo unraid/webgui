@@ -43,55 +43,158 @@ function validname($name) {
 function escape($name) {return escapeshellarg(validname($name));}
 function quoted($name) {return is_array($name) ? implode(' ',array_map('escape',$name)) : escape($name);}
 
-switch ($_POST['mode'] ?? $_GET['mode'] ?? '') {
+function valid_upload_target($name) {
+  $name = (string)$name;
+  $file = validname($name);
+  $base = basename($name);
+  return $file && $base === basename($file) && preg_match('/\\A[A-Za-z0-9][A-Za-z0-9._ -]{0,254}\\z/D',$base) ? $file : '';
+}
+
+function upload_state_path($uploadId) {
+  return preg_match('/\\A[a-f0-9]{48}\\z/D',(string)$uploadId) ? "/var/tmp/file-upload-$uploadId.json" : '';
+}
+
+function upload_session_key() {
+  if (session_status() !== PHP_SESSION_ACTIVE) @session_start();
+  return session_id() !== '' ? hash('sha256',session_id()) : '';
+}
+
+function open_upload_state($uploadId) {
+  $path = upload_state_path($uploadId);
+  if (!$path || !($handle = @fopen($path,'c+')) || !@flock($handle,LOCK_EX)) return [false,false,$path];
+  rewind($handle);
+  $state = json_decode(stream_get_contents($handle),true);
+  return [is_array($state) ? $state : false,$handle,$path];
+}
+
+function remove_upload_state($handle,$path,$file='') {
+  if (is_resource($handle)) {flock($handle,LOCK_UN); fclose($handle);}
+  if ($path) @unlink($path);
+  if ($file) @unlink($file);
+}
+
+$mode = $_POST['mode'] ?? $_GET['mode'] ?? '';
+if (in_array($mode,['upload','stop'],true) && ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+  http_response_code(405);
+  header('Allow: POST');
+  die('error:post-required');
+}
+
+switch ($mode) {
 case 'upload':
-  $file = validname(rawurldecode($_POST['file'] ?? $_GET['file'] ?? ''));
-  if (!$file) die('stop');
+  $uploadId = (string)($_POST['uploadId'] ?? $_GET['uploadId'] ?? '');
   $start = (int)($_POST['start'] ?? $_GET['start'] ?? 0);
   $cancel = (int)($_POST['cancel'] ?? $_GET['cancel'] ?? 0);
-  $local = "/var/tmp/".basename($file).".tmp";
-  // Check cancel BEFORE creating new file
-  if ($cancel==1) {
-    if (file_exists($local)) {
-      $file = file_get_contents($local);
-      if ($file !== false) delete_file($file);
+  $total = (int)($_POST['total'] ?? $_GET['total'] ?? 0);
+  $sessionKey = upload_session_key();
+  if (!$sessionKey || $start < 0) die('error:session');
+
+  if ($cancel === 1) {
+    [$state,$stateHandle,$statePath] = open_upload_state($uploadId);
+    if (!$state || !hash_equals((string)($state['session'] ?? ''),$sessionKey)) {
+      if (is_resource($stateHandle)) {flock($stateHandle,LOCK_UN); fclose($stateHandle);}
+      die('stop');
     }
-    delete_file($local);
+    $target = (string)($state['file'] ?? '');
+    $stat = @lstat($target);
+    $sameFile = $stat && (int)$stat['dev'] === (int)($state['dev'] ?? -1) && (int)$stat['ino'] === (int)($state['ino'] ?? -1);
+    remove_upload_state($stateHandle,$statePath,$sameFile ? $target : '');
     die('stop');
   }
-  if ($start === 0) {
-    $my = pathinfo($file); $n = 0;
-    while (file_exists($file)) $file = $my['dirname'].'/'.preg_replace('/ \(\d+\)$/','',$my['filename']).' ('.++$n.')'.($my['extension'] ? '.'.$my['extension'] : '');
-    file_put_contents($local,$file);
-    // create file with proper permissions and owner
-    touch($file);
+
+  $newUpload = $uploadId === '' && $start === 0;
+  if ($newUpload) {
+    $file = valid_upload_target(rawurldecode($_POST['file'] ?? $_GET['file'] ?? ''));
+    if (!$file || $total < 0) die('stop');
+    $info = pathinfo($file); $n = 0;
+    while (file_exists($file) || is_link($file)) $file = $info['dirname'].'/'.preg_replace('/ \(\d+\)$/','',$info['filename']).' ('.++$n.')'.($info['extension'] ? '.'.$info['extension'] : '');
+    $handle = @fopen($file,'x+b');
+    if (!$handle) die('error:create');
+    chmod($file,0600);
+    $stat = fstat($handle);
+    $uploadId = bin2hex(random_bytes(24));
+    $statePath = upload_state_path($uploadId);
+    $stateHandle = @fopen($statePath,'x+b');
+    if (!$stateHandle) {fclose($handle); @unlink($file); die('error:state');}
+    $state = ['file'=>$file,'session'=>$sessionKey,'total'=>$total,'dev'=>(int)$stat['dev'],'ino'=>(int)$stat['ino']];
+    fwrite($stateHandle,json_encode($state));
+    fflush($stateHandle);
+    flock($stateHandle,LOCK_UN);
+    fclose($stateHandle);
+    unset($stateHandle);
+  } else {
+    [$state,$stateHandle,$statePath] = open_upload_state($uploadId);
+    if (!$state || !hash_equals((string)($state['session'] ?? ''),$sessionKey)) {
+      if (is_resource($stateHandle)) {flock($stateHandle,LOCK_UN); fclose($stateHandle);}
+      die('error:state');
+    }
+    $file = (string)($state['file'] ?? '');
+    if ($total > 0 && (int)($state['total'] ?? 0) !== $total) {
+      remove_upload_state($stateHandle,$statePath);
+      die('error:total');
+    }
+    $total = (int)($state['total'] ?? $total);
+    $targetStat = @lstat($file);
+    if (!$targetStat || is_link($file) || (int)$targetStat['dev'] !== (int)($state['dev'] ?? -1) || (int)$targetStat['ino'] !== (int)($state['ino'] ?? -1)) {
+      remove_upload_state($stateHandle,$statePath);
+      die('error:target');
+    }
+    $handle = @fopen($file,'c+b');
+    if (!$handle || !flock($handle,LOCK_EX)) {
+      if (is_resource($handle)) fclose($handle);
+      remove_upload_state($stateHandle,$statePath);
+      die('error:open');
+    }
+  }
+
+  if (!isset($stateHandle)) [$state,$stateHandle,$statePath] = open_upload_state($uploadId);
+  $targetStat = fstat($handle);
+  if (!$targetStat || (int)$targetStat['size'] !== $start) {
+    flock($handle,LOCK_UN); fclose($handle);
+    if (is_resource($stateHandle)) {flock($stateHandle,LOCK_UN); fclose($stateHandle);}
+    die('error:offset');
+  }
+  if (isset($_POST['data'])) {
+    $chunk = base64_decode($_POST['data'],true);
+  } else {
+    $chunk = file_get_contents('php://input');
+    if (strlen($chunk) > 21000000) $chunk = false;
+  }
+  if ($chunk === false || $total > 0 && $start + strlen($chunk) > $total) {
+    flock($handle,LOCK_UN); fclose($handle);
+    if (is_resource($stateHandle)) {flock($stateHandle,LOCK_UN); fclose($stateHandle);}
+    die('error:chunk');
+  }
+  $written = 0;
+  while ($written < strlen($chunk)) {
+    $count = fwrite($handle,substr($chunk,$written));
+    if ($count === false) break;
+    $written += $count;
+  }
+  fflush($handle);
+  $complete = $total === 0 || $start + $written === $total;
+  if ($written !== strlen($chunk)) $complete = false;
+  if ($complete) {
     chgrp($file,'users');
     chown($file,'nobody');
     chmod($file,0666);
   }
-  $file = file_get_contents($local);
-  // Temp file does not exist
-  if ($file === false) {
-    die('error:tempfile');
+  flock($handle,LOCK_UN); fclose($handle);
+  if (is_resource($stateHandle)) {flock($stateHandle,LOCK_UN); fclose($stateHandle);}
+  if ($complete) @unlink($statePath);
+  die(json_encode(['uploadId'=>$uploadId,'complete'=>$complete]));
+case 'stop':
+  $uploadId = (string)($_POST['uploadId'] ?? $_GET['uploadId'] ?? '');
+  [$state,$stateHandle,$statePath] = open_upload_state($uploadId);
+  if ($state && hash_equals((string)($state['session'] ?? ''),upload_session_key())) {
+    $target = (string)($state['file'] ?? '');
+    $stat = @lstat($target);
+    $sameFile = $stat && (int)$stat['dev'] === (int)($state['dev'] ?? -1) && (int)$stat['ino'] === (int)($state['ino'] ?? -1);
+    remove_upload_state($stateHandle,$statePath,$sameFile ? $target : '');
+  } elseif (is_resource($stateHandle)) {
+    flock($stateHandle,LOCK_UN); fclose($stateHandle);
   }
-  // Support both legacy base64 method and new raw binary method
-  if (isset($_POST['data'])) {
-    // Legacy base64 upload method (backward compatible)
-    $chunk = base64_decode($_POST['data']);
-  } else {
-    // New raw binary upload method (read from request body)
-    $chunk = file_get_contents('php://input');
-    if (strlen($chunk) > 21000000) { // slightly more than 20MB to allow overhead
-      unlink($local);
-      die('error:chunksize:'.strlen($chunk));
-    }
-  }
-  if (file_put_contents($file,$chunk,FILE_APPEND)===false) {
-    delete_file($file);
-    delete_file($local);
-    die('error:write');
-  }
-  die();
+  die('stop');
 case 'calc':
   extract(parse_plugin_cfg('dynamix',true));
   $source = explode("\n",rawurldecode($_POST['source'] ?? ''));
@@ -156,11 +259,6 @@ case 'edit':
   die($file ? file_get_contents($file) : '');
 case 'save':
   if ($file = validname(rawurldecode($_POST['file']))) file_put_contents($file,rawurldecode($_POST['data']));
-  die();
-case 'stop':
-  // Prevent path traversal: only use basename (no directory components)
-  $file = basename(rawurldecode($_POST['file'] ?? ''));
-  if ($file !== '') delete_file("/var/tmp/$file.tmp");
   die();
 case 'start':
   $active = '/var/tmp/file.manager.active';
