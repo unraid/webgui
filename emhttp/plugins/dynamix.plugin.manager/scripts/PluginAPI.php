@@ -18,7 +18,27 @@ require_once "$docroot/plugins/dynamix/include/Secure.php";
 $_SERVER['REQUEST_URI'] = "plugins";
 require_once "$docroot/plugins/dynamix/include/Translations.php";
 
+function plugin_remote_url_allowed($url) {
+	$parts = parse_url(trim((string)$url));
+	return is_array($parts)
+		&& ($parts['scheme'] ?? '') === 'https'
+		&& !isset($parts['user'],$parts['pass'])
+		&& !empty($parts['host'])
+		&& !isset($parts['fragment']);
+}
+
+function plugin_trusted_key($plugin) {
+	$base = pathinfo(basename((string)$plugin),PATHINFO_FILENAME);
+	if (!preg_match('/\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z/D',$base)) return false;
+	$directory = '/boot/config/plugins/plugin-manager/trusted-keys';
+	$root = realpath($directory);
+	if ($root === false || !is_dir($root)) return false;
+	$key = "$root/$base.pub";
+	return !is_link($key) && is_file($key) && realpath(dirname($key)) === $root ? $key : false;
+}
+
 function download_url($url, $path = "") {
+	if (!plugin_remote_url_allowed($url)) return false;
 	$ch = curl_init();
 	curl_setopt_array($ch,[
 		CURLOPT_URL => $url,
@@ -28,12 +48,31 @@ function download_url($url, $path = "") {
 		CURLOPT_TIMEOUT => 45,
 		CURLOPT_ENCODING => "",
 		CURLOPT_RETURNTRANSFER => true,
-		CURLOPT_FOLLOWLOCATION => true
+		CURLOPT_FOLLOWLOCATION => false,
+		CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+		CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
+		CURLOPT_FAILONERROR => true
 	]);
 	$out = curl_exec($ch);
 	curl_close($ch);
-	if ( $path ) file_put_contents($path,$out);
-	return $out ?: false;
+	if ($out === false) return false;
+	if ($path && file_put_contents($path,$out,LOCK_EX) === false) return false;
+	return $out;
+}
+
+function download_signed_manifest($url,$plugin,$path) {
+	$key = plugin_trusted_key($plugin);
+	if (!$key || !plugin_remote_url_allowed($url)) return false;
+	$manifest = download_url($url,$path);
+	$signature = download_url($url.'.sig');
+	if ($manifest === false || $signature === false) return false;
+	$trimmed = trim($signature);
+	if ($trimmed !== '' && !str_contains($signature,"\0") && preg_match('/\A[A-Za-z0-9+\/\r\n]+={0,2}\z/',$trimmed)) {
+		$decoded = base64_decode($trimmed,true);
+		if ($decoded !== false) $signature = $decoded;
+	}
+	$public = @openssl_pkey_get_public(@file_get_contents($key));
+	return $public && openssl_verify($manifest,$signature,$public,OPENSSL_ALGO_SHA256) === 1;
 }
 
 switch ($_POST['action']) {
@@ -50,7 +89,11 @@ switch ($_POST['action']) {
 		exec("mkdir -p /tmp/plugins");
 		@unlink("/tmp/plugins/$plugin");
 		$url = plugin("pluginURL","/boot/config/plugins/$plugin");
-		download_url($url,"/tmp/plugins/$plugin");
+		if (!$url || !download_signed_manifest($url,$plugin,"/tmp/plugins/$plugin")) {
+			@unlink("/tmp/plugins/$plugin");
+			echo json_encode(["updateAvailable"=>false]);
+			break;
+		}
 		$changes = plugin("changes","/tmp/plugins/$plugin");
 		$alerts = plugin("alert","/tmp/plugins/$plugin");
 		$version = plugin("version","/tmp/plugins/$plugin");
