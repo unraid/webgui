@@ -327,17 +327,17 @@ wifi_join(){
     return
   fi
   $OPENSSL reload
-  [[ -n $USERNAME ]] && DECRYPT1=$($OPENSSL decrypt "$USERNAME")
+  [[ -n $USERNAME ]] && DECRYPT1=$($OPENSSL decrypt "$USERNAME"); STATUS1=$?
   [[ -n $DECRYPT1 ]] && USERNAME=$DECRYPT1
-  [[ -n $PASSWORD ]] && DECRYPT2=$($OPENSSL decrypt "$PASSWORD")
+  [[ -n $PASSWORD ]] && DECRYPT2=$($OPENSSL decrypt "$PASSWORD"); STATUS2=$?
   [[ -n $DECRYPT2 ]] && PASSWORD=$DECRYPT2
 # plain username, encrypt username in settings file
-  if [[ -n $USERNAME && -z $DECRYPT1 ]]; then
+  if [[ -n $USERNAME && ($STATUS1 == 2 || -z $DECRYPT1) ]]; then
     ENCRYPT1=$($OPENSSL encrypt "$USERNAME")
     sed -ri "s/^(USERNAME=\").+$/\1$ENCRYPT1\"/" $CFG
   fi
 # plain password, encrypt password in settings file
-  if [[ -n $PASSWORD && -z $DECRYPT2 ]]; then
+  if [[ -n $PASSWORD && ($STATUS2 == 2 || -z $DECRYPT2) ]]; then
     ENCRYPT2=$($OPENSSL encrypt "$PASSWORD")
     sed -ri "s/^(PASSWORD=\").+$/\1$ENCRYPT2\"/" $CFG
   fi

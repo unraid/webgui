@@ -13,23 +13,94 @@
 ?>
 <?
 $ssl_input = '/etc/rc.d/rc.ssl.input';
-if (is_readable($ssl_input)) extract(parse_ini_file($ssl_input));
 
-switch ($argv[1]) {
+function b64url_encode($value) {
+  return rtrim(strtr(base64_encode($value),'+/','-_'),'=');
+}
+
+function b64url_decode($value) {
+  $value = strtr((string)$value,'-_','+/');
+  $padding = strlen($value) % 4;
+  if ($padding) $value .= str_repeat('=',4-$padding);
+  return base64_decode($value,true);
+}
+
+function ensure_crypto_config() {
+  global $ssl_input;
+  $config = is_readable($ssl_input) ? (array)@parse_ini_file($ssl_input) : [];
+  if (($config['cipher'] ?? '') === 'aes-256-gcm' && strlen((string)($config['key'] ?? '')) > 0) {
+    @chmod($ssl_input,0600);
+    return $config;
+  }
+  $new = ['cipher'=>'aes-256-gcm','key'=>b64url_encode(random_bytes(32))];
+  if (($config['cipher'] ?? '') === 'aes-256-cbc' && !empty($config['key']) && !empty($config['iv'])) {
+    $new['legacy_cipher'] = 'aes-256-cbc';
+    $new['legacy_key'] = $config['key'];
+    $new['legacy_iv'] = $config['iv'];
+  }
+  $directory = dirname($ssl_input);
+  if (!is_dir($directory) && !@mkdir($directory,0700,true)) return false;
+  $temporary = $ssl_input.'.'.bin2hex(random_bytes(8));
+  $text = '';
+  foreach ($new as $name => $value) $text .= "$name=$value\n";
+  if (@file_put_contents($temporary,$text,LOCK_EX) === false || !@chmod($temporary,0600) || !@rename($temporary,$ssl_input)) {
+    @unlink($temporary);
+    return false;
+  }
+  return $new;
+}
+
+function encrypt_value($value,$config) {
+  $key = b64url_decode($config['key'] ?? '');
+  if ($key === false || strlen($key) !== 32) return false;
+  $nonce = random_bytes(12);
+  $tag = '';
+  $ciphertext = openssl_encrypt((string)$value,'aes-256-gcm',$key,OPENSSL_RAW_DATA,$nonce,$tag,'',16);
+  return $ciphertext === false ? false : 'v2:'.b64url_encode($nonce).':'.b64url_encode($tag).':'.b64url_encode($ciphertext);
+}
+
+function decrypt_value($value,$config,&$legacy=false) {
+  $value = (string)$value;
+  if (str_starts_with($value,'v2:')) {
+    $parts = explode(':',$value,4);
+    if (count($parts) !== 4) return false;
+    $key = b64url_decode($config['key'] ?? '');
+    $nonce = b64url_decode($parts[1]);
+    $tag = b64url_decode($parts[2]);
+    $ciphertext = b64url_decode($parts[3]);
+    if ($key === false || strlen($key) !== 32 || $nonce === false || strlen($nonce) !== 12 || $tag === false || strlen($tag) !== 16 || $ciphertext === false) return false;
+    return openssl_decrypt($ciphertext,'aes-256-gcm',$key,OPENSSL_RAW_DATA,$nonce,$tag,'');
+  }
+  if (($config['legacy_cipher'] ?? '') === 'aes-256-cbc' && !empty($config['legacy_key']) && !empty($config['legacy_iv'])) {
+    $plain = openssl_decrypt($value,$config['legacy_cipher'],$config['legacy_key'],0,$config['legacy_iv']);
+    if ($plain !== false) {
+      $legacy = true;
+      return $plain;
+    }
+  }
+  return false;
+}
+
+switch ($argv[1] ?? '') {
 case 'reload':
-  if (file_exists($ssl_input)) break;
 case 'load':
-  $key = exec("dmidecode -qt1 | grep -Pom1 'Manufacturer: \K.+' | sed -r 's/[^0-9a-zA-Z._-]/_/g'")."ABCDEFGH";
-  $iv  = "12".exec("cat /sys/class/net/wlan0/address | sed 's/://g'")."34";
-  file_put_contents($ssl_input, "cipher=aes-256-cbc\nkey=".substr($key,0,63)."\niv=$iv\n");
+  if (ensure_crypto_config() === false) exit(1);
   break;
 case 'encrypt':
-  if (!empty($argv[2]) && isset($cipher,$key,$iv)) $encrypt = openssl_encrypt($argv[2],$cipher,$key,0,$iv);
-  if (!empty($encrypt)) echo "$encrypt";
+  if (!array_key_exists(2,$argv) || $argv[2] === '') break;
+  $config = ensure_crypto_config();
+  $encrypt = $config === false ? false : encrypt_value($argv[2],$config);
+  if ($encrypt === false) exit(1);
+  echo $encrypt;
   break;
 case 'decrypt':
-  if (!empty($argv[2]) && isset($cipher,$key,$iv)) $decrypt = openssl_decrypt($argv[2],$cipher,$key,0,$iv);
-  if (!empty($decrypt)) echo "$decrypt";
+  if (!array_key_exists(2,$argv) || $argv[2] === '') break;
+  $config = ensure_crypto_config();
+  $legacy = false;
+  $decrypt = $config === false ? false : decrypt_value($argv[2],$config,$legacy);
+  if ($decrypt === false) exit(1);
+  echo $decrypt;
+  if ($legacy) exit(2);
   break;
 }
 ?>
