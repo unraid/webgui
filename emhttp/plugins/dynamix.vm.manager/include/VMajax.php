@@ -95,8 +95,10 @@ function embed(&$bootcfg, $env, $key, $value) {
 }
 
 $arrSizePrefix = [0 => '', 1 => 'K', 2 => 'M', 3 => 'G', 4 => 'T', 5 => 'P'];
-$action        = unscript(_var($_REQUEST,'action'));
-$uuid          = unscript(_var($_REQUEST,'uuid'));
+$requestMethod = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$request       = $requestMethod === 'POST' ? $_POST : $_GET;
+$action        = unscript(_var($request,'action'));
+$uuid          = unscript(_var($request,'uuid'));
 $arrResponse   = [];
 
 if ($uuid) {

@@ -24,7 +24,7 @@ $branch  = _var($_GET,'branch');
 $branch  = is_string($branch) && preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]*\z/',$branch)===1 ? $branch : '';
 $audit   = unscript(_var($_GET,'audit'));
 $check   = unscript(_var($_GET,'check'));
-$cmd     = unscript(_var($_GET,'cmd'));
+$cmd     = unscript(_var($_POST,'cmd') ?: _var($_GET,'cmd'));
 $init    = unscript(_var($_GET,'init'));
 $one     = unscript(_var($_GET,'one')); // single-plugin update check (fired per row, in parallel)
 $empty   = true;
@@ -43,8 +43,25 @@ if ($cmd=='alert') {
 }
 
 if ($cmd=='pending') {
-  // prepare pending status for multi operations
-  foreach (explode('*',_var($_GET,'plugin')) as $plugin) file_put_contents("/tmp/plugins/pluginPending/$plugin",'multi');
+  if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+    http_response_code(405);
+    header('Allow: POST');
+    die();
+  }
+  // Prepare pending status for multi operations below one fixed directory.
+  $pendingRoot = realpath('/tmp/plugins/pluginPending');
+  if ($pendingRoot === false) {
+    @mkdir('/tmp/plugins/pluginPending',0700,true);
+    $pendingRoot = realpath('/tmp/plugins/pluginPending');
+  }
+  if ($pendingRoot === false) die();
+  foreach (explode('*',_var($_POST,'plugin')) as $plugin) {
+    $plugin = trim($plugin);
+    if (!preg_match('/\\A[A-Za-z0-9][A-Za-z0-9._-]*\\.plg\\z/D',$plugin)) continue;
+    $target = "$pendingRoot/$plugin";
+    if (basename($target) !== $plugin || is_link($target) || realpath(dirname($target)) !== $pendingRoot) continue;
+    file_put_contents($target,'multi',LOCK_EX);
+  }
   die();
 }
 
