@@ -236,16 +236,29 @@ if (isset($_POST['contName'])) {
 ##   UPDATE CONTAINER   ##
 ##########################
 
-if (isset($_GET['updateContainer'])){
-  $echo = empty($_GET['mute']);
+if (isset($_POST['updateContainer'])){
+  if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+    http_response_code(405);
+    header('Allow: POST');
+    die(_('POST required'));
+  }
+  $containers = $_POST['ct'] ?? [];
+  if (!is_array($containers)) $containers = [$containers];
+  if (count($containers) > 1 && ($_POST['confirmed'] ?? '') !== 'yes') {
+    http_response_code(400);
+    die(_('Confirmation required'));
+  }
+  $echo = empty($_POST['mute']);
   if ($echo) {
     readfile("$docroot/plugins/dynamix.docker.manager/log.htm");
     echo '<link type="text/css" rel="stylesheet" href="'.autov("/plugins/dynamix.docker.manager/sheets/AddContainer.css",true).'">';
     dockerUIBlockerScript(true);
     @flush();
   }
-  foreach ($_GET['ct'] as $value) {
-    $tmpl = $DockerTemplates->getUserTemplate(unscript(urldecode($value)));
+  foreach ($containers as $value) {
+    $value = unscript(urldecode((string)$value));
+    if (!preg_match('/\\A[A-Za-z0-9][A-Za-z0-9 ._-]{0,127}\\z/D',$value)) continue;
+    $tmpl = $DockerTemplates->getUserTemplate($value);
     if ($echo && !$tmpl) {
       echo "<script>addLog('<p>"._('Configuration not found').". "._('Was this container created using this plugin')."?</p>');</script>";
       @flush();
