@@ -190,6 +190,7 @@ foreach ($xml_files as $xml_file) {
         $vHelp = preg_replace('#\[([^\]]*)\]#', '<$1>', $v->attributes()->Help);
         $currentValue = isset($values[$vName]) ? $values[$vName] : $vDefault;
         $isTitleOrMessage = preg_match('/title|message/', $vDesc);
+        $isVerify = preg_match('/verify/i', $vDesc);
         ?>
         <dl>
             <dt><?= $vDesc ?>:</dt>
@@ -201,6 +202,11 @@ foreach ($xml_files as $xml_file) {
                         <?php foreach ($fields as $field): ?>
                             <?= mk_option_check($value, '$'.strtoupper($field), _($field)) ?>
                         <?php endforeach; ?>
+                    </select>
+                <?php elseif ($isVerify): ?>
+                    <select name="<?= $vName ?>" class="variable">
+                        <?= mk_option($currentValue, 'yes', _('Yes')) ?>
+                        <?= mk_option($currentValue, 'no', _('No')) ?>
                     </select>
                 <?php else: ?>
                     <input type="text" name="<?= $vName ?>" class="variable" required value="<?= $currentValue ?>">
