@@ -66,30 +66,72 @@ function check_plugin($arg, &$ncsi) {
   return $ncsi ? plugin('check',$arg) : false;
 }
 
+function plugin_delete_roots() {
+  return [
+    'error' => '/boot/config/plugins-error',
+    'stale' => '/boot/config/plugins-stale'
+  ];
+}
+
+function plugin_delete_secret() {
+  static $secret;
+  if ($secret !== null) return $secret;
+  $path = '/var/local/emhttp/plugins/dynamix.plugin.manager/delete.key';
+  $directory = dirname($path);
+  if (!is_dir($directory)) @mkdir($directory,0700,true);
+  if (!is_file($path)) {
+    $candidate = random_bytes(32);
+    if (@file_put_contents($path,$candidate,LOCK_EX) !== false) @chmod($path,0600);
+  }
+  $secret = @file_get_contents($path);
+  return is_string($secret) && strlen($secret) >= 32 ? $secret : false;
+}
+
+function plugin_delete_token($arg) {
+  $real = realpath((string)$arg);
+  $base = basename((string)$arg);
+  if (!$real || !is_file($real) || is_link((string)$arg) || !preg_match('/\A[A-Za-z0-9][A-Za-z0-9._-]*\.plg\z/D',$base)) return '';
+  $secret = plugin_delete_secret();
+  if ($secret === false) return '';
+  foreach (plugin_delete_roots() as $label => $directory) {
+    $root = realpath($directory);
+    if ($root && dirname($real) === $root) return hash_hmac('sha256',"$label/$base",$secret);
+  }
+  return '';
+}
+
+function plugin_js_string($value) {
+  return json_encode((string)$value,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_UNESCAPED_SLASHES);
+}
+
 function make_link($method, $arg, $extra='') {
+  $arg = (string)$arg;
   $plg = basename($arg,'.plg').':'.$method;
-  $id = str_replace(['.',' ','_'],'',$plg);
-  $check = $method=='remove' ? "<input type='checkbox' data='$arg' class='remove' onClick='document.getElementById(\"$id\").disabled=!this.checked;multiRemove()'>" : "";
+  $id = substr(hash('sha256',$plg),0,16);
+  $argHtml = htmlspecialchars($arg,ENT_QUOTES,'UTF-8');
+  $check = $method=='remove' ? "<input type='checkbox' data='$argHtml' class='remove' onClick='document.getElementById(\"$id\").disabled=!this.checked;multiRemove()'>" : "";
   $disabled = $check ? ' disabled' : '';
   if ($method == 'update' && $extra) {
     $disabled = 'disabled';
-    $id = $extra;
+    $id = htmlspecialchars($extra,ENT_QUOTES,'UTF-8');
   }
   if ($method == 'delete') {
-    $cmd  = "plugin_rm $arg";
-    $func = "refresh";
-    $plg  = "";
+    $token = plugin_delete_token($arg);
+    $onclick = $token
+      ? "if(!confirm(".plugin_js_string(_('Delete this plugin?'))."))return false;$.post('/plugins/dynamix.plugin.manager/include/DeletePlugin.php',{id:".plugin_js_string($token).",csrf_token:csrf_token},function(){location.reload();});"
+      : 'return false;';
   } else {
-    $cmd  = "plugin $method $arg".($extra?" $extra":"");
-    $func = "loadlist";
+    $cmd = 'plugin '.escapeshellarg($method).' '.escapeshellarg($arg).($extra?' '.escapeshellarg($extra):'');
+    $onclick = 'openInstall('.plugin_js_string($cmd).','.plugin_js_string(ucwords($method).' Plugin').','.plugin_js_string($plg).',"loadlist")';
   }
   if (in_array($method,['update','install']) && plugin_task_busy($arg)) {
     $label = $method=='install' ? _('Installing') : _('Upgrading');
     return "<span class='orange-text'><i class='fa fa-hourglass-o fa-fw'></i>&nbsp;$label</span>";
-  } elseif (is_file("/tmp/plugins/pluginPending/$arg") && !$check) {
+  } elseif (is_file("/tmp/plugins/pluginPending/".basename($arg)) && !$check) {
     return "<span class='orange-text'><i class='fa fa-hourglass-o fa-fw'></i>&nbsp;"._('pending')."</span>";
   } else {
-    return "$check<input type='button' id='$id' data='$arg' class='$method' value=\""._(ucfirst($method))."\" onclick='openInstall(\"$cmd\",\""._(ucwords($method)." Plugin")."\",\"$plg\",\"$func\");'$disabled>";
+    $label = htmlspecialchars(_(ucfirst($method)),ENT_QUOTES,'UTF-8');
+    return "$check<input type='button' id='$id' data='$argHtml' class='".htmlspecialchars($method,ENT_QUOTES,'UTF-8')."' value=\"$label\" onclick=\"".htmlspecialchars($onclick,ENT_QUOTES,'UTF-8')."\"$disabled>";
   }
 }
 
