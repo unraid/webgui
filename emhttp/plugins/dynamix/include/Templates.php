@@ -358,7 +358,7 @@ $('#dfm_viewer').click();
 <div id="dfm_jobs"></div>
 <script>
 $.post('/webGui/include/Control.php',{mode:'jobs'},function(jobs){
-  $('#dfm_jobs').html(jobs);
+  renderJobs(jobs);
 });
 </script>
 !-->
