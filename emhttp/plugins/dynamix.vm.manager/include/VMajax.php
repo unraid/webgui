@@ -960,7 +960,7 @@ case 'virtio-win-iso-remove':
 	break;
 
 case 'vm-template-remove':
-	$template = $_REQUEST['template'];
+	$template = $request['template'];
 	$templateslocation = "/boot/config/plugins/dynamix.vm.manager/savedtemplates.json";
 	if (is_file($templateslocation)){
 		$ut = json_decode(file_get_contents($templateslocation),true) ;
@@ -971,11 +971,13 @@ case 'vm-template-remove':
 	break;
 
 case 'vm-template-save':
-	$template = $_REQUEST['template'];
-	$name = $_REQUEST['name'];
-	$replace = $_REQUEST['replace'];
+	$template = $request['template'] ?? null;
+	$name = vm_template_path($request['name'] ?? '');
+	$replace = $request['replace'] ?? 'no';
 
-	if (is_file($name) && $replace == "no"){
+	if (!$name) {
+		$arrResponse = ['success' => false, 'error' => _('Invalid template name')];
+	} elseif (is_file($name) && $replace == "no"){
 		$arrResponse = ['success' => false, 'error' => _("File exists")];
 	} else {
 		$error = file_put_contents($name,json_encode($template));
@@ -987,13 +989,23 @@ case 'vm-template-save':
 	break;
 
 case 'vm-template-import':
-	$template = $_REQUEST['template'];
-	$name = $_REQUEST['name'];
-	$replace = $_REQUEST['replace'];
+	$template = $request['template'];
+	$name = $request['name'];
+	$replace = $request['replace'];
 	$templateslocation = "/boot/config/plugins/dynamix.vm.manager/savedtemplates.json";
 
 	if ($template==="*file") {
-		$template=json_decode(file_get_contents($name));
+		$source = vm_template_source_path($name);
+		if (!$source) {
+			$arrResponse = ['success' => false, 'error' => _('Invalid template file')];
+			break;
+		}
+		$template=json_decode(file_get_contents($source));
+		if ($template === null && json_last_error() !== JSON_ERROR_NONE) {
+			$arrResponse = ['success' => false, 'error' => _('Invalid template JSON')];
+			break;
+		}
+		$name = $source;
 	}
 
 	$namepathinfo = pathinfo($name);
