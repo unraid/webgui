@@ -39,7 +39,7 @@ CFGPATH="/boot/config/shares"
 DEBUGGING=""
 MOVERSTATUS="/usr/local/emhttp/state/mover.ini"
 GLOBAL_SHARECFG="/boot/config/share.cfg"
-MOVER_PROGRESS="disabled"
+MOVER_PROGRESS="no"
 TOTAL=0
 REMAIN=0
 SHARE_TOTAL=0
@@ -49,7 +49,7 @@ CURRENT_SHARE_STARTED=0
 declare -A SHARE_TOTALS SHARE_REMAINS SHARE_START_TIME COUNTED_PATHS
 
 mover_progress_enabled() {
-  [[ $MOVER_PROGRESS == "enabled" ]]
+  [[ "$MOVER_PROGRESS" == "yes" ]]
 }
 
 inivalue() {
@@ -342,7 +342,7 @@ start() {
   acquire_pidfile
   echo "mover: started" >&2
   MOVER_PROGRESS=$(grep '^shareMoverProgress=' "$GLOBAL_SHARECFG" 2>/dev/null | cut -d'"' -f2)
-  MOVER_PROGRESS=${MOVER_PROGRESS:-disabled}
+  MOVER_PROGRESS=${MOVER_PROGRESS:-no}
   rm -f -- "$MOVERSTATUS"
 
   shopt -s nullglob
