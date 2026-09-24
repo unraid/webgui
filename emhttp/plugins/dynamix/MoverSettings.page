@@ -136,7 +136,7 @@ _(Mover logging)_:
 
 _(Mover Progress)_:
 : <select name="shareMoverProgress">
-  <?$var['shareMoverProgress'] = $var['shareMoverProgress'] ?? "no"; ?>
+  <?$var['shareMoverProgress'] = _var($var, 'shareMoverProgress', 'no') === 'yes' ? 'yes' : 'no'; ?>
   <?=mk_option($var['shareMoverProgress'], "yes", _("Enabled"))?>
   <?=mk_option($var['shareMoverProgress'], "no", _("Disabled"))?>
   </select>
