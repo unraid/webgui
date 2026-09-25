@@ -628,8 +628,28 @@ function makeConfig(opts) {
     value.prop("autocomplete","new-password");
     value.prop("type", "password");
   }
+  // Colour field: a Variable whose value is a #RRGGBB hex gets a native colour
+  // swatch beside the text box (synced both ways by the delegated handlers below).
+  // The text box stays — typing, pasting and an empty value keep working, and the
+  // swatch never changes the value unless clicked. Backwards-compatible: no new
+  // template attribute, and existing "#rrggbb" defaults upgrade for free.
+  if (opts.Type == "Variable" && opts.Mask != "true" && /^#[0-9a-fA-F]{6}$/i.test(opts.Value || opts.Default)) {
+    value.addClass("dockerColorText");
+    var swatchVal = /^#[0-9a-fA-F]{6}$/i.test(opts.Value) ? opts.Value : opts.Default;
+    value.after("<input type='color' class='dockerColorSwatch' value='"+swatchVal+"' title='_(Pick a colour)_' aria-label='_(Pick a colour)_'>");
+  }
   return newConfig.prop('outerHTML');
 }
+
+// Keep a colour field's text box and its swatch in sync, both directions.
+$(document).on("input", ".dockerColorSwatch", function() {
+  var t = $(this).siblings("input.dockerColorText").first();
+  if (t.length) t.val(this.value).trigger("change");
+});
+$(document).on("input", "input.dockerColorText", function() {
+  if (/^#[0-9a-fA-F]{6}$/i.test(this.value))
+    $(this).siblings(".dockerColorSwatch").first().val(this.value);
+});
 
 function stripTags(string) {
   return string.replace(/(<([^>]+)>)/ig,"");
