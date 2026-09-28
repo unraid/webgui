@@ -37,17 +37,19 @@ function renderUPS(data) {
   }
   var summary = document.getElementById('ups_summary');
   var details = document.getElementById('ups_status');
-  if (!summary || !details) return;
-  summary.replaceChildren();
-  var summaryRow = document.createElement('tr');
-  summaryRow.className = 'ups';
-  (data.summary || []).forEach(function(cell) {
-    var summaryCell = document.createElement('td');
-    summaryCell.className = cell.class || '';
-    summaryCell.textContent = cell.text || '';
-    summaryRow.appendChild(summaryCell);
-  });
-  summary.appendChild(summaryRow);
+  if (!details) return;
+  if (summary) {
+    summary.replaceChildren();
+    var summaryRow = document.createElement('tr');
+    summaryRow.className = 'ups';
+    (data.summary || []).forEach(function(cell) {
+      var summaryCell = document.createElement('td');
+      summaryCell.className = cell.class || '';
+      summaryCell.textContent = cell.text || '';
+      summaryRow.appendChild(summaryCell);
+    });
+    summary.appendChild(summaryRow);
+  }
 
   details.replaceChildren();
   var detailRow;
