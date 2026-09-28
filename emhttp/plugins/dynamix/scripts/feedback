@@ -231,7 +231,7 @@ function form_submit(url, params, tab, diagnostics) {
   $('div.spinner.fixed').show();
   if (diagnostics) {
     var anonymize = $('#anonymize').is(':checked') ? '1' : '';
-    $.post('/webGui/include/Feedback.php',{getdiagnostics:1, anonymize:anonymize, csrf_token:csrf_token}, function(data){
+    $.get('/webGui/include/Feedback.php',{getdiagnostics:1, anonymize:anonymize}, function(data){
       params.diagnostics = data;
       form_submit(url, params, tab);
     }).fail(function(){
