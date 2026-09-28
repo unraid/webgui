@@ -130,15 +130,16 @@ function render_wifi_section(target,section) {
       var row = document.createElement('dd');
       var content = document.createElement('span');
       content.className = 'inline-flex flex-row items-center gap-2';
+      var networkName = entry.network == null ? '' : String(entry.network);
       var network = document.createElement('span');
-      network.textContent = entry.network || '';
+      network.textContent = networkName;
       content.appendChild(network);
 
       var connect = document.createElement('i');
       connect.className = 'fa fa-wifi hand '+(entry.color || 'grey')+'-text';
       connect.title = entry.title || '';
       connect.addEventListener('click',function() {
-        manage_wifi(encodeURIComponent(entry.network || ''),entry.task);
+        manage_wifi(encodeURIComponent(networkName),entry.task);
       });
       content.appendChild(connect);
 
