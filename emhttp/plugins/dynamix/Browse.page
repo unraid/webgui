@@ -1317,7 +1317,11 @@ function uploadFile(files,index,start,time,prefetchedBuffer,uploadId) {
       return;
     }
     uploadId = result.uploadId;
-    if (result.complete) {stopUpload(file.name, false, null, uploadId); return;}
+    if (result.complete) {
+      if (index < files.length-1) uploadFile(files,index+1,0,time,null,null);
+      else stopUpload(file.name, false, null, uploadId);
+      return;
+    }
     if (next < file.size) {
       var total = 0;
       var completed = 0;
