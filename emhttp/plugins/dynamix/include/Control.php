@@ -59,9 +59,13 @@ function upload_session_key() {
   return session_id() !== '' ? hash('sha256',session_id()) : '';
 }
 
-function open_upload_state($uploadId) {
+function open_upload_state($uploadId,$nonBlocking=false) {
   $path = upload_state_path($uploadId);
-  if (!$path || !($handle = @fopen($path,'c+')) || !@flock($handle,LOCK_EX)) return [false,false,$path];
+  $lock = LOCK_EX | ($nonBlocking ? LOCK_NB : 0);
+  if (!$path || !($handle = @fopen($path,'c+')) || !@flock($handle,$lock)) {
+    if (is_resource($handle ?? null)) fclose($handle);
+    return [false,false,$path];
+  }
   rewind($handle);
   $state = json_decode(stream_get_contents($handle),true);
   return [is_array($state) ? $state : false,$handle,$path];
@@ -73,12 +77,33 @@ function remove_upload_state($handle,$path,$file='') {
   if ($file) @unlink($file);
 }
 
+function cleanup_upload_states() {
+  $expiry = time() - 3600;
+  foreach (glob('/var/tmp/file-upload-*.json') ?: [] as $path) {
+    $mtime = @filemtime($path);
+    if ($mtime === false || $mtime > $expiry || !preg_match('/\A\/var\/tmp\/file-upload-([a-f0-9]{48})\.json\z/D',$path,$match)) continue;
+    [$state,$stateHandle,$statePath] = open_upload_state($match[1],true);
+    if (!is_resource($stateHandle)) continue;
+    $stateMtime = @filemtime($statePath);
+    if (!$state || $statePath !== $path || $stateMtime === false || $stateMtime > $expiry) {
+      if (is_resource($stateHandle)) {flock($stateHandle,LOCK_UN); fclose($stateHandle);}
+      if (!$state && $statePath === $path) @unlink($statePath);
+      continue;
+    }
+    $target = (string)($state['file'] ?? '');
+    $stat = @lstat($target);
+    $sameFile = valid_upload_target($target) && $stat && (int)$stat['dev'] === (int)($state['dev'] ?? -1) && (int)$stat['ino'] === (int)($state['ino'] ?? -1);
+    remove_upload_state($stateHandle,$statePath,$sameFile ? $target : '');
+  }
+}
+
 $mode = $_POST['mode'] ?? $_GET['mode'] ?? '';
 if (in_array($mode,['upload','stop'],true) && ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
   http_response_code(405);
   header('Allow: POST');
   die('error:post-required');
 }
+if ($mode === 'upload') cleanup_upload_states();
 
 switch ($mode) {
 case 'upload':
@@ -165,7 +190,7 @@ case 'upload':
     $chunk = file_get_contents('php://input');
     if (strlen($chunk) > 21000000) $chunk = false;
   }
-  if ($chunk === false || $total > 0 && $start + strlen($chunk) > $total) {
+  if ($chunk === false || ($total === 0 && ($start !== 0 || strlen($chunk) !== 0)) || ($total > 0 && $start + strlen($chunk) > $total)) {
     flock($handle,LOCK_UN); fclose($handle);
     if (is_resource($stateHandle)) {flock($stateHandle,LOCK_UN); fclose($stateHandle);}
     die('error:chunk');
@@ -177,13 +202,14 @@ case 'upload':
     $written += $count;
   }
   fflush($handle);
-  $complete = $total === 0 || $start + $written === $total;
+  $complete = $total === 0 ? ($start === 0 && $written === 0) : $start + $written === $total;
   if ($written !== strlen($chunk)) $complete = false;
   if ($complete) {
     chgrp($file,'users');
     chown($file,'nobody');
     chmod($file,0666);
   }
+  if (!$complete) @touch($statePath);
   flock($handle,LOCK_UN); fclose($handle);
   if (is_resource($stateHandle)) {flock($stateHandle,LOCK_UN); fclose($stateHandle);}
   if ($complete) @unlink($statePath);
