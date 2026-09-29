@@ -154,6 +154,11 @@ case 'upload':
     if (is_resource($stateHandle)) {flock($stateHandle,LOCK_UN); fclose($stateHandle);}
     die('error:offset');
   }
+  if (fseek($handle,$start,SEEK_SET) !== 0) {
+    flock($handle,LOCK_UN); fclose($handle);
+    if (is_resource($stateHandle)) {flock($stateHandle,LOCK_UN); fclose($stateHandle);}
+    die('error:offset');
+  }
   if (isset($_POST['data'])) {
     $chunk = base64_decode($_POST['data'],true);
   } else {
