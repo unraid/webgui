@@ -42,6 +42,12 @@ function validUpnpUrl($url) {
   return is_array($parsed) && in_array(strtolower($parsed['scheme'] ?? ''), ['http', 'https'], true) && !empty($parsed['host']);
 }
 
+function validUpnpGatewayUrl($url, $gateway) {
+  if (!validUpnpUrl($url) || !is_string($gateway) || filter_var($gateway, FILTER_VALIDATE_IP) === false) return false;
+  $host = parse_url($url, PHP_URL_HOST);
+  return is_string($host) && filter_var($host, FILTER_VALIDATE_IP) !== false && $host === $gateway;
+}
+
 function validUpnpLink($link) {
   return is_string($link) && preg_match('/\A[A-Za-z0-9_.:-]{1,64}\z/', $link) === 1 && isPort($link);
 }
@@ -588,7 +594,7 @@ case 'upnp':
     if (!validUpnpLink($link) || !filter_var($gw, FILTER_VALIDATE_IP)) {
       $xml = '';
     } else {
-      if ($xml && !validUpnpUrl($xml)) $xml = '';
+      if ($xml && !validUpnpGatewayUrl($xml, $gw)) $xml = '';
       if ($xml) {
         exec(
           'timeout ' . $t1 . ' stdbuf -o0 upnpc -u ' . escapeshellarg($xml) . ' -m ' . escapeshellarg($link) . " -l 2>&1|grep -qm1 'refused'",
@@ -603,7 +609,7 @@ case 'upnp':
           $desc
         );
         foreach ($desc as $url) {
-          if ($url && validUpnpUrl($url) && strpos($url, $gw . ':') !== false) {
+          if ($url && validUpnpGatewayUrl($url, $gw)) {
             $xml = $url;
             break;
           }
