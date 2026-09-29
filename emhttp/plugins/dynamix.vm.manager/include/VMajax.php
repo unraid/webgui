@@ -639,7 +639,11 @@ case 'disk-resize':
 	$capacity = vm_size_arg($request['cap'] ?? '');
 	$diskReal = $disk ? realpath($disk) : false;
 	$mntReal = realpath('/mnt');
-	if (!$diskReal || !$mntReal || strncmp($diskReal,$mntReal.'/',strlen($mntReal)+1)!==0 || $capacity === false || vm_size_bytes($capacity) <= $old_capacity) {
+	if (!$diskReal || !$mntReal || strncmp($diskReal,$mntReal.'/',strlen($mntReal)+1)!==0) {
+		$arrResponse = ['error' => _('Invalid disk device')];
+		break;
+	}
+	if ($capacity === false || vm_size_bytes($capacity) <= $old_capacity) {
 		$arrResponse = ['error' => _('Disk capacity must be greater than the current capacity')];
 		break;
 	}
