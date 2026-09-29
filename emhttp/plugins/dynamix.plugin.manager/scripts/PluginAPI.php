@@ -22,7 +22,8 @@ function plugin_remote_url_allowed($url) {
 	$parts = parse_url(trim((string)$url));
 	return is_array($parts)
 		&& ($parts['scheme'] ?? '') === 'https'
-		&& !isset($parts['user'],$parts['pass'])
+		&& !isset($parts['user'])
+		&& !isset($parts['pass'])
 		&& !empty($parts['host'])
 		&& !isset($parts['fragment']);
 }

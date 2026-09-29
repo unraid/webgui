@@ -254,7 +254,8 @@ function remote_url_allowed($url) {
   $parts = parse_url(trim((string)$url));
   return is_array($parts)
     && ($parts['scheme'] ?? '') === 'https'
-    && !isset($parts['user'],$parts['pass'])
+    && !isset($parts['user'])
+    && !isset($parts['pass'])
     && !empty($parts['host'])
     && !isset($parts['fragment']);
 }
@@ -755,7 +756,8 @@ if ($method == 'install') {
     pre_hooks();
     $plugin_file = "$tmp/$plugin";
     write("plugin: downloading: $plugin\n");
-    if ( (download_signed_manifest($pluginURL, $plugin_file, $plugin, $error) === false) && (download_signed_manifest(filter_url($pluginURL), $plugin_file, $plugin, $error) === false) ) {
+    $fallbackURL = filter_url($pluginURL);
+    if ( (download_signed_manifest($pluginURL, $plugin_file, $plugin, $error) === false) && ($fallbackURL === '' || download_signed_manifest($fallbackURL, $plugin_file, $plugin, $error) === false) ) {
       write("plugin: $error\n");
       @unlink($plugin_file);
       // run hook scripts for post processing
@@ -900,7 +902,8 @@ if ($method == 'check') {
     done(1);
   }
   $plugin_file = "$tmp/$plugin";
-  if ( (download_signed_manifest($installed_pluginURL, $plugin_file, $plugin, $error) === false) && (download_signed_manifest(filter_url($installed_pluginURL), $plugin_file, $plugin, $error) === false) ) {
+  $fallbackURL = filter_url($installed_pluginURL);
+  if ( (download_signed_manifest($installed_pluginURL, $plugin_file, $plugin, $error) === false) && ($fallbackURL === '' || download_signed_manifest($fallbackURL, $plugin_file, $plugin, $error) === false) ) {
     write("plugin: $error\n");
     @unlink($plugin_file);
     // run hook scripts for post processing
