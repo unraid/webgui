@@ -142,7 +142,11 @@ function vm_domain_xml_allowed($xml) {
 	foreach ($dom->getElementsByTagName('disk') as $disk) {
 		$source = null;
 		foreach ($disk->childNodes as $child) if ($child instanceof DOMElement && $child->localName === 'source') {$source = $child; break;}
-		if (!$source || !$source->hasAttribute('file') || $source->attributes->length !== 1 || !vm_storage_path_allowed($source->getAttribute('file'))) return false;
+		if (!$source) {
+			if ($disk->getAttribute('device') !== 'cdrom') return false;
+			continue;
+		}
+		if (!$source->hasAttribute('file') || $source->attributes->length !== 1 || !vm_storage_path_allowed($source->getAttribute('file'))) return false;
 	}
 	return true;
 }
