@@ -102,10 +102,12 @@ try {
     $movedPrevious[$entry] = $target;
   }
 } catch (Throwable $error) {
-  foreach ($movedPrevious as $entry => $source) @rename($source,"$previousDir/$entry");
-  foreach ($movedCurrent as $entry => $source) @rename($source,"$bootDir/$entry");
-  @rmdir($tmpdir);
+  $restoreFailed = false;
+  foreach ($movedPrevious as $entry => $source) if (!@rename($source,"$previousDir/$entry")) $restoreFailed = true;
+  foreach ($movedCurrent as $entry => $source) if (!@rename($source,"$bootDir/$entry")) $restoreFailed = true;
   http_response_code(500);
+  if ($restoreFailed) die(json_encode(['error' => _('Boot switch failed and restore was incomplete'), 'backup' => $tmpdir]));
+  @rmdir($tmpdir);
   die(json_encode(['error' => _('Boot switch failed; previous files were restored')]));
 }
 
