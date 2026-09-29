@@ -413,6 +413,13 @@ build_locations(){
 	    try_files /login.php =404;
 	    include fastcgi_params;
 	}
+	location = /auth-request.php {
+	    internal;
+	    include fastcgi_params;
+	    fastcgi_param SCRIPT_FILENAME /usr/local/emhttp/auth-request.php;
+	    fastcgi_param SCRIPT_NAME /auth-request.php;
+	    fastcgi_pass unix:/var/run/php-fpm.sock;
+	}
 	#
 	# Redirect to login page on failed authentication (401)
 	#
@@ -435,7 +442,8 @@ build_locations(){
 	#
 	# nchan subscriber endpoint
 	#
-	location ~ ^/sub/(.*)$ {
+	location ~ ^/sub/([A-Za-z0-9][A-Za-z0-9_.:-]{0,127}(?:,[A-Za-z0-9][A-Za-z0-9_.:-]{0,127})*)$ {
+	    auth_request /auth-request.php;
 	    nchan_subscriber;
 	    nchan_subscriber_timeout 0;
 	    # nchan_authorize_request <url here>
@@ -467,7 +475,8 @@ build_locations(){
 	#
 	# websocket proxy
 	#
-	location ~ /wsproxy/(.*)$ {
+	location ~ ^/wsproxy/((?:5[7-9][0-9]{2}|[6-9][0-9]{3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]))/$ {
+	    auth_request /auth-request.php;
 	    proxy_read_timeout 3600;
 	    proxy_pass http://127.0.0.1:$1;
 	    proxy_http_version 1.1;
