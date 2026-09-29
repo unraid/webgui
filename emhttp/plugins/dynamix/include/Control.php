@@ -62,7 +62,7 @@ function upload_session_key() {
 function open_upload_state($uploadId,$nonBlocking=false) {
   $path = upload_state_path($uploadId);
   $lock = LOCK_EX | ($nonBlocking ? LOCK_NB : 0);
-  if (!$path || !($handle = @fopen($path,'c+')) || !@flock($handle,$lock)) {
+  if (!$path || !($handle = @fopen($path,'r+')) || !@flock($handle,$lock)) {
     if (is_resource($handle ?? null)) fclose($handle);
     return [false,false,$path];
   }
