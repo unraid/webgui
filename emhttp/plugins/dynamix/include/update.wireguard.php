@@ -625,12 +625,14 @@ case 'autostart':
   break;
 case 'upnp':
   $upnp = '/var/tmp/upnp';
+  $writeCache = true;
   if (is_executable('/usr/bin/upnpc')) {
     $gw = _var($_POST,'#gw');
     $link = _var($_POST,'#link');
     $xml = @file_get_contents($upnp) ?: '';
     if (!validUpnpLink($link) || !filter_var($gw, FILTER_VALIDATE_IP)) {
       $xml = '';
+      $writeCache = false;
     } else {
       if ($xml && !validUpnpGatewayUrl($xml, $gw)) $xml = '';
       if ($xml) {
@@ -655,7 +657,7 @@ case 'upnp':
       }
     }
   } else $xml = "";
-  file_put_contents($upnp, $xml);
+  if ($writeCache) file_put_contents($upnp, $xml);
   echo $xml;
   break;
 case 'upnpc':
