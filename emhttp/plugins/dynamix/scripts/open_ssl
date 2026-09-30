@@ -12,7 +12,8 @@
  */
 ?>
 <?
-$ssl_input = '/etc/rc.d/rc.ssl.input';
+$ssl_input = '/boot/config/plugins/dynamix/ssl.input';
+$legacy_ssl_input = '/etc/rc.d/rc.ssl.input';
 
 function b64url_encode($value) {
   return rtrim(strtr(base64_encode($value),'+/','-_'),'=');
@@ -26,14 +27,23 @@ function b64url_decode($value) {
 }
 
 function ensure_crypto_config() {
-  global $ssl_input;
+  global $ssl_input,$legacy_ssl_input;
   $config = is_readable($ssl_input) ? (array)@parse_ini_file($ssl_input) : [];
   if (($config['cipher'] ?? '') === 'aes-256-gcm' && strlen((string)($config['key'] ?? '')) > 0) {
     @chmod($ssl_input,0600);
     return $config;
   }
+  $legacy = is_readable($legacy_ssl_input) ? (array)@parse_ini_file($legacy_ssl_input) : [];
+  if ($legacy) $config = $legacy;
   $new = ['cipher'=>'aes-256-gcm','key'=>b64url_encode(random_bytes(32))];
-  if (($config['cipher'] ?? '') === 'aes-256-cbc' && !empty($config['key']) && !empty($config['iv'])) {
+  if (($config['cipher'] ?? '') === 'aes-256-gcm' && !empty($config['key'])) {
+    $new['key'] = $config['key'];
+  }
+  if (($config['legacy_cipher'] ?? '') === 'aes-256-cbc' && !empty($config['legacy_key']) && !empty($config['legacy_iv'])) {
+    $new['legacy_cipher'] = 'aes-256-cbc';
+    $new['legacy_key'] = $config['legacy_key'];
+    $new['legacy_iv'] = $config['legacy_iv'];
+  } elseif (($config['cipher'] ?? '') === 'aes-256-cbc' && !empty($config['key']) && !empty($config['iv'])) {
     $new['legacy_cipher'] = 'aes-256-cbc';
     $new['legacy_key'] = $config['key'];
     $new['legacy_iv'] = $config['iv'];
