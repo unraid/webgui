@@ -1,4 +1,7 @@
 <?php
+/**
+ * Return the request path without query parameters for route checks.
+ */
 function getRequestUriPath(): string {
   $requestUri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
   return is_string($requestUri) ? $requestUri : '/';
@@ -46,7 +49,9 @@ function isWebComponentsRequest(string $requestUri): bool {
   return $requestUri === $webComponentsDirectory || str_starts_with($requestUri, $webComponentsDirectory . '/');
 }
 
-// VNC exposes a separate WebSocket port; the browser SPICE client uses its graphics port.
+/**
+ * Extract allowed VNC WebSocket and SPICE graphics ports from domain XML.
+ */
 function wsproxy_ports_from_xml(string $xml): array {
   $ports = [];
   if (!preg_match_all('/<graphics\b([^>]*)>/i', $xml, $graphicsMatches)) {
@@ -81,6 +86,9 @@ function wsproxy_ports_from_xml(string $xml): array {
   return array_map('intval', array_keys($ports));
 }
 
+/**
+ * Return allowed console ports exposed by currently running domains.
+ */
 function wsproxy_active_ports(): array {
   // Read live domains so auto-assigned ports and stopped VMs are not accepted.
   $virsh = trim((string)@shell_exec('command -v virsh 2>/dev/null'));
@@ -113,6 +121,9 @@ function wsproxy_active_ports(): array {
   return array_map('intval', array_keys($ports));
 }
 
+/**
+ * Check that a proxy request targets an allowed port on a running VM.
+ */
 function wsproxy_request_is_allowed(string $requestUri): bool {
   if (!preg_match('#^/wsproxy/([0-9]{4,5})/$#', $requestUri, $matches)) {
     return false;

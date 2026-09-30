@@ -2154,6 +2154,9 @@ foreach ($arrConfig['evdev'] as $i => $arrEvdev) {
 var storageType = "<?=get_storage_fstype($arrConfig['template']['storage']);?>";
 var storageLoc  = "<?=$arrConfig['template']['storage']?>";
 
+/**
+ * Keep the manual console-port fields aligned with the selected console mode.
+ */
 function updateVMConsolePortFields() {
 	const protocol = $("#protocol").val() || "vnc";
 	const manualPort = $("#autoport").val() === "no";
@@ -2165,16 +2168,35 @@ function updateVMConsolePortFields() {
 	$("#wsport,#WSPorttext").toggleClass('hidden', !(manualPort && isVNC));
 }
 
+/**
+ * Validate editable manual console ports for the active virtual console.
+ */
 function checkVNCPorts() {
 	updateVMConsolePortFields();
 	if ($("#autoport").val() === "yes") return true;
 
-	const protocol = $("#protocol").val() || "vnc";
-	const port = Number($("#port").val());
-	const wsport = Number($("#wsport").val());
+	const $gpu = $("#vmform .gpu").first();
+	const $protocol = $("#protocol");
+	const $autoport = $("#autoport");
+	const $port = $("#port");
+	const $wsport = $("#wsport");
+	if (!$gpu.length || $gpu.is(":disabled") || $gpu.val() !== "virtual"
+		|| !$protocol.length || $protocol.is(":disabled")
+		|| !$autoport.length || $autoport.is(":disabled") || $autoport.val() !== "no"
+		|| !$port.length || $port.is(":disabled")) {
+		return true;
+	}
+	if (!$port.is(":visible")) return true;
+
+	const protocol = $protocol.val() || "vnc";
+	const port = Number($port.val());
+	const wsport = Number($wsport.val());
 	const vmrcPortMax = 5999;
 	const portValid = Number.isInteger(port) && port >= 5900 && port <= vmrcPortMax;
-	const wsPortValid = protocol !== "vnc" || (Number.isInteger(wsport) && wsport >= 5700 && wsport <= 5899);
+	const wsPortEditable = $wsport.length && !$wsport.is(":disabled") && $wsport.is(":visible");
+	const wsPortValid = protocol !== "vnc"
+		|| !wsPortEditable
+		|| (Number.isInteger(wsport) && wsport >= 5700 && wsport <= 5899);
 
 	if (!portValid || !wsPortValid) {
 		swal({
