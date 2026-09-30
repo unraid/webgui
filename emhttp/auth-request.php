@@ -1,4 +1,11 @@
 <?php
+function getRequestUriPath(): string {
+  $requestUri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+  return is_string($requestUri) ? $requestUri : '/';
+}
+
+$requestUri = getRequestUriPath();
+
 // only start the session if a session cookie exists
 if (isset($_COOKIE[session_name()])) {
   session_start();
@@ -8,7 +15,11 @@ if (isset($_COOKIE[session_name()])) {
       $_SESSION['unraid_login'] = time();
     }
     session_write_close();
-    http_response_code(200);
+    if (str_starts_with($requestUri, '/wsproxy/') && !wsproxy_request_is_allowed($requestUri)) {
+      http_response_code(403);
+    } else {
+      http_response_code(200);
+    }
     exit;
   }
   session_write_close();
@@ -35,9 +46,80 @@ function isWebComponentsRequest(string $requestUri): bool {
   return $requestUri === $webComponentsDirectory || str_starts_with($requestUri, $webComponentsDirectory . '/');
 }
 
-function getRequestUriPath(): string {
-  $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-  return is_string($requestUri) ? $requestUri : '/';
+// VNC exposes a separate WebSocket port; the browser SPICE client uses its graphics port.
+function wsproxy_ports_from_xml(string $xml): array {
+  $ports = [];
+  if (!preg_match_all('/<graphics\b([^>]*)>/i', $xml, $graphicsMatches)) {
+    return [];
+  }
+
+  foreach ($graphicsMatches[1] as $attributes) {
+    if (!preg_match('/\btype\s*=\s*([\'\"])([^\'\"]+)\1/i', $attributes, $typeMatch)) {
+      continue;
+    }
+
+    $portAttribute = match (strtolower($typeMatch[2])) {
+      'vnc' => 'websocket',
+      'spice' => 'port',
+      default => null,
+    };
+    if ($portAttribute === null) {
+      continue;
+    }
+
+    $portPattern = '/\b' . $portAttribute . '\s*=\s*([\'\"])(-?\d+)\1/i';
+    if (preg_match($portPattern, $attributes, $portMatch)) {
+      $port = (int)$portMatch[2];
+      $minimumPort = $portAttribute === 'websocket' ? 5700 : 5900;
+      $maximumPort = $portAttribute === 'websocket' ? 5899 : 65535;
+      if ($port >= $minimumPort && $port <= $maximumPort) {
+        $ports[$port] = true;
+      }
+    }
+  }
+
+  return array_map('intval', array_keys($ports));
+}
+
+function wsproxy_active_ports(): array {
+  // Read live domains so auto-assigned ports and stopped VMs are not accepted.
+  $virsh = trim((string)@shell_exec('command -v virsh 2>/dev/null'));
+  if ($virsh === '') {
+    return [];
+  }
+
+  $domainList = @shell_exec(escapeshellarg($virsh) . ' list --name 2>/dev/null');
+  if (!is_string($domainList)) {
+    return [];
+  }
+
+  $ports = [];
+  foreach (preg_split('/\R/', trim($domainList)) as $domain) {
+    $domain = trim($domain);
+    if ($domain === '') {
+      continue;
+    }
+
+    $xml = @shell_exec(escapeshellarg($virsh) . ' dumpxml ' . escapeshellarg($domain) . ' 2>/dev/null');
+    if (!is_string($xml)) {
+      continue;
+    }
+
+    foreach (wsproxy_ports_from_xml($xml) as $port) {
+      $ports[$port] = true;
+    }
+  }
+
+  return array_map('intval', array_keys($ports));
+}
+
+function wsproxy_request_is_allowed(string $requestUri): bool {
+  if (!preg_match('#^/wsproxy/([0-9]{4,5})/$#', $requestUri, $matches)) {
+    return false;
+  }
+
+  $port = (int)$matches[1];
+  return $port >= 5700 && $port <= 65535 && in_array($port, wsproxy_active_ports(), true);
 }
 
 function getAllowedExternalPublicAssetTargets(): array {
