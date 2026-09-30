@@ -32,31 +32,69 @@ $dockernet = "172.31";
 $t1 = '10'; // 10 sec timeout
 $t2 = '15'; // 15 sec timeout
 
+/**
+ * Check whether a network interface exists.
+ *
+ * @param string $dev Interface name.
+ * @return bool Whether the interface exists.
+ */
 function isPort($dev) {
   return file_exists("/sys/class/net/$dev");
 }
 
+/**
+ * Check whether a UPnP description URL is an HTTP(S) URL with a host.
+ *
+ * @param mixed $url Candidate description URL.
+ * @return bool Whether the URL is valid.
+ */
 function validUpnpUrl($url) {
   if (!is_string($url) || strlen($url) > 2048 || preg_match('/[\x00-\x20\x7F]/', $url)) return false;
   $parsed = parse_url($url);
   return is_array($parsed) && in_array(strtolower($parsed['scheme'] ?? ''), ['http', 'https'], true) && !empty($parsed['host']);
 }
 
+/**
+ * Check whether a UPnP description URL belongs to the discovered gateway.
+ *
+ * @param mixed $url Candidate description URL.
+ * @param mixed $gateway Expected gateway address.
+ * @return bool Whether the URL host matches the gateway.
+ */
 function validUpnpGatewayUrl($url, $gateway) {
   if (!validUpnpUrl($url) || !is_string($gateway) || filter_var($gateway, FILTER_VALIDATE_IP) === false) return false;
   $host = parse_url($url, PHP_URL_HOST);
   return is_string($host) && filter_var($host, FILTER_VALIDATE_IP) !== false && $host === $gateway;
 }
 
+/**
+ * Check whether a UPnP link names an existing network interface.
+ *
+ * @param mixed $link Candidate interface name.
+ * @return bool Whether the link is valid.
+ */
 function validUpnpLink($link) {
   return is_string($link) && preg_match('/\A[A-Za-z0-9_.:-]{1,64}\z/', $link) === 1 && isPort($link);
 }
 
+/**
+ * Check whether a WireGuard interface name is valid and configured.
+ *
+ * @param mixed $vtun Candidate WireGuard interface name.
+ * @return bool Whether the interface is valid and configured.
+ */
 function validWireguardInterface($vtun) {
   global $etc;
   return is_string($vtun) && preg_match('/\Awg(?:[0-9]+|X)\z/', $vtun) === 1 && is_file("$etc/$vtun.conf");
 }
 
+/**
+ * Check whether an interface currently reports carrier.
+ *
+ * @param string $dev Interface name.
+ * @param int $loop Number of checks to perform.
+ * @return bool Whether the interface has carrier.
+ */
 function carrier($dev, $loop=3) {
   if (!isPort($dev)) return false;
   try {
