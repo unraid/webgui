@@ -18,6 +18,15 @@ Cond="glob('/boot/config/plugins-stale/*.plg')"
 <?
 require_once "$docroot/plugins/dynamix.plugin.manager/include/PluginHelpers.php";
 
+function stale_plugin_description($text) {
+  $markdown = new \Michelf\MarkdownExtra();
+  $markdown->no_markup = true;
+  $markdown->url_filter_func = static function($url) {
+    return preg_match('/\A(?:https?:|mailto:)/i',$url) ? $url : '';
+  };
+  return $markdown->transform((string)$text);
+}
+
 echo "<table class='tablesorter plugins shift' id='plugin_table'><thead>";
 echo "<tr><th></th><th>".('Plugin')."</th><th>"._('Author')."</th><th>"._('Version')."</th><th>"._('Status')."</th><th></th></tr>";
 echo "</thead><tbody>";
@@ -33,9 +42,9 @@ foreach (glob("/boot/config/plugins-stale/*.plg", GLOB_NOSORT) as $plugin_file) 
   // desc
   $readme = "plugins/{$name}/README.md";
   if (file_exists($readme))
-    $desc = Markdown(file_get_contents($readme));
+    $desc = stale_plugin_description(file_get_contents($readme));
   else
-    $desc = Markdown("**{$name}**");
+    $desc = stale_plugin_description("**{$name}**");
 
   // author
   $author = plugin("author", $plugin_file);
