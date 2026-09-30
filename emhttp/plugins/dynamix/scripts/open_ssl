@@ -26,19 +26,60 @@ function b64url_decode($value) {
   return base64_decode($value,true);
 }
 
+function valid_gcm_config($config) {
+  $key = b64url_decode($config['key'] ?? '');
+  return ($config['cipher'] ?? '') === 'aes-256-gcm' && $key !== false && strlen($key) === 32;
+}
+
+function valid_legacy_config($config) {
+  return ($config['cipher'] ?? '') === 'aes-256-cbc' &&
+    isset($config['key'],$config['iv']) && $config['key'] !== '' && $config['iv'] !== '';
+}
+
 function ensure_crypto_config() {
   global $ssl_input,$legacy_ssl_input;
-  $config = is_readable($ssl_input) ? (array)@parse_ini_file($ssl_input) : [];
-  if (($config['cipher'] ?? '') === 'aes-256-gcm' && strlen((string)($config['key'] ?? '')) > 0) {
+  $directory = dirname($ssl_input);
+  if (!is_dir($directory) && !@mkdir($directory,0700,true)) return false;
+  $lock = @fopen($ssl_input.'.lock','c');
+  if ($lock === false || !@flock($lock,LOCK_EX)) {
+    if ($lock !== false) @fclose($lock);
+    return false;
+  }
+  $release = function() use ($lock) {
+    @flock($lock,LOCK_UN);
+    @fclose($lock);
+  };
+
+  $config = [];
+  if (file_exists($ssl_input)) {
+    if (!is_readable($ssl_input) || ($parsed = @parse_ini_file($ssl_input)) === false) {
+      $release();
+      return false;
+    }
+    $config = (array)$parsed;
+    if (!valid_gcm_config($config) && !valid_legacy_config($config)) {
+      $release();
+      return false;
+    }
+  } elseif (file_exists($legacy_ssl_input)) {
+    if (!is_readable($legacy_ssl_input) || ($parsed = @parse_ini_file($legacy_ssl_input)) === false) {
+      $release();
+      return false;
+    }
+    $config = (array)$parsed;
+    if (!valid_legacy_config($config)) {
+      $release();
+      return false;
+    }
+  }
+
+  if (valid_gcm_config($config)) {
     @chmod($ssl_input,0600);
+    $release();
     return $config;
   }
-  $legacy = is_readable($legacy_ssl_input) ? (array)@parse_ini_file($legacy_ssl_input) : [];
-  if ($legacy) $config = $legacy;
+
   $new = ['cipher'=>'aes-256-gcm','key'=>b64url_encode(random_bytes(32))];
-  if (($config['cipher'] ?? '') === 'aes-256-gcm' && !empty($config['key'])) {
-    $new['key'] = $config['key'];
-  }
   if (($config['legacy_cipher'] ?? '') === 'aes-256-cbc' && !empty($config['legacy_key']) && !empty($config['legacy_iv'])) {
     $new['legacy_cipher'] = 'aes-256-cbc';
     $new['legacy_key'] = $config['legacy_key'];
@@ -48,15 +89,15 @@ function ensure_crypto_config() {
     $new['legacy_key'] = $config['key'];
     $new['legacy_iv'] = $config['iv'];
   }
-  $directory = dirname($ssl_input);
-  if (!is_dir($directory) && !@mkdir($directory,0700,true)) return false;
   $temporary = $ssl_input.'.'.bin2hex(random_bytes(8));
   $text = '';
   foreach ($new as $name => $value) $text .= "$name=$value\n";
   if (@file_put_contents($temporary,$text,LOCK_EX) === false || !@chmod($temporary,0600) || !@rename($temporary,$ssl_input)) {
     @unlink($temporary);
+    $release();
     return false;
   }
+  $release();
   return $new;
 }
 

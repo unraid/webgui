@@ -308,14 +308,16 @@ wifi_join(){
   [[ -n $PASSWORD ]] && DECRYPT2=$($OPENSSL decrypt "$PASSWORD"); STATUS2=$?
   [[ -n $DECRYPT2 ]] && PASSWORD=$DECRYPT2
 # plain username, encrypt username in settings file
-  if [[ -n $USERNAME && ($STATUS1 == 2 || -z $DECRYPT1) ]]; then
-    ENCRYPT1=$($OPENSSL encrypt "$USERNAME")
-    sed -ri "s/^(USERNAME=\").+$/\1$ENCRYPT1\"/" $CFG
+  if [[ -n $USERNAME && ($STATUS1 == 2 || (-z $DECRYPT1 && $USERNAME != v2:*)) ]]; then
+    if ENCRYPT1=$($OPENSSL encrypt "$USERNAME") && [[ -n $ENCRYPT1 ]]; then
+      sed -ri "s/^(USERNAME=\").+$/\1$ENCRYPT1\"/" $CFG
+    fi
   fi
 # plain password, encrypt password in settings file
-  if [[ -n $PASSWORD && ($STATUS2 == 2 || -z $DECRYPT2) ]]; then
-    ENCRYPT2=$($OPENSSL encrypt "$PASSWORD")
-    sed -ri "s/^(PASSWORD=\").+$/\1$ENCRYPT2\"/" $CFG
+  if [[ -n $PASSWORD && ($STATUS2 == 2 || (-z $DECRYPT2 && $PASSWORD != v2:*)) ]]; then
+    if ENCRYPT2=$($OPENSSL encrypt "$PASSWORD") && [[ -n $ENCRYPT2 ]]; then
+      sed -ri "s/^(PASSWORD=\").+$/\1$ENCRYPT2\"/" $CFG
+    fi
   fi
   SECURITY=${SECURITY:-$ATTR3}
   # replace space in enterprise security type
