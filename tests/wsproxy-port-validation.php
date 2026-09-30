@@ -82,4 +82,15 @@ assertSameValues(
   'Only the VNC websocket and SPICE graphics ports should be proxy targets.'
 );
 
+$nginxSource = file_get_contents(dirname(__DIR__) . '/etc/rc.d/rc.nginx');
+if ($nginxSource === false) {
+  throw new RuntimeException('Could not read rc.nginx.');
+}
+if (substr_count($nginxSource, 'auth_request /auth-request.php;') !== 0) {
+  throw new RuntimeException('Route-level auth_request directives must use the parent auth scope.');
+}
+if (strpos($nginxSource, 'location ~ "^/wsproxy/(5[7-9][0-9]{2})/$"') === false) {
+  throw new RuntimeException('The wsproxy route must be limited to ports 5700-5999.');
+}
+
 echo "WebSocket proxy port validation test passed.\n";
