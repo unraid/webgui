@@ -666,7 +666,8 @@ case 'upnpc':
   $vtun = _var($_POST,'#vtun');
   $link = _var($_POST,'#link');
   $ip   = _var($_POST,'#ip');
-  if (!validUpnpUrl($xml) || !validWireguardInterface($vtun) || !validUpnpLink($link) || !filter_var($ip, FILTER_VALIDATE_IP)) break;
+  $cachedXml = @file_get_contents('/var/tmp/upnp') ?: '';
+  if (!validUpnpUrl($xml) || $xml !== $cachedXml || !validWireguardInterface($vtun) || !validUpnpLink($link) || !filter_var($ip, FILTER_VALIDATE_IP)) break;
   if (_var($_POST,'#wg') == 'active') {
     $pattern = "^(ExternalIPAddress = \\K.+|.+\\KUDP.+>" . preg_quote($ip, '/') . ":[0-9]+ 'WireGuard-" . preg_quote($vtun, '/') . "')";
     exec(
