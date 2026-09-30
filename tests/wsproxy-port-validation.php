@@ -89,6 +89,9 @@ if ($nginxSource === false) {
 if (substr_count($nginxSource, 'auth_request /auth-request.php;') !== 0) {
   throw new RuntimeException('Route-level auth_request directives must use the parent auth scope.');
 }
+if (strpos($nginxSource, 'location = /auth-request.php') !== false) {
+  throw new RuntimeException('The route-local auth-request location must use the parent auth scope.');
+}
 if (strpos($nginxSource, 'location ~ "^/wsproxy/(5[7-9][0-9]{2})/$"') === false) {
   throw new RuntimeException('The wsproxy route must be limited to ports 5700-5999.');
 }

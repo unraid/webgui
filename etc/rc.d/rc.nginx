@@ -413,12 +413,6 @@ build_locations(){
 	    try_files /login.php =404;
 	    include fastcgi_params;
 	}
-	location = /auth-request.php {
-	    internal;
-	    include fastcgi_params;
-	    fastcgi_param SCRIPT_FILENAME /usr/local/emhttp/auth-request.php;
-	    fastcgi_param SCRIPT_NAME /auth-request.php;
-	}
 	#
 	# Redirect to login page on failed authentication (401)
 	#
