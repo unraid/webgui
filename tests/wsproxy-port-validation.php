@@ -67,6 +67,8 @@ $xml = <<<'XML'
   <devices>
     <graphics type='vnc' port='5900' websocket='5700'/>
     <graphics type='spice' port='5901' websocket='5701'/>
+    <graphics type='spice' port='5999' websocket='5702'/>
+    <graphics type='spice' port='6000' websocket='5703'/>
     <graphics type='sdl' port='65534'/>
     <graphics type='vnc' port='5902' websocket='65534'/>
     <graphics type='vnc' port='-1' websocket='-1'/>
@@ -75,7 +77,7 @@ $xml = <<<'XML'
 XML;
 
 assertSameValues(
-  [5700, 5901],
+  [5700, 5901, 5999],
   wsproxy_ports_from_xml($xml),
   'Only the VNC websocket and SPICE graphics ports should be proxy targets.'
 );

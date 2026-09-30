@@ -71,7 +71,7 @@ function wsproxy_ports_from_xml(string $xml): array {
     if (preg_match($portPattern, $attributes, $portMatch)) {
       $port = (int)$portMatch[2];
       $minimumPort = $portAttribute === 'websocket' ? 5700 : 5900;
-      $maximumPort = $portAttribute === 'websocket' ? 5899 : 65535;
+      $maximumPort = $portAttribute === 'websocket' ? 5899 : 5999;
       if ($port >= $minimumPort && $port <= $maximumPort) {
         $ports[$port] = true;
       }
@@ -119,7 +119,7 @@ function wsproxy_request_is_allowed(string $requestUri): bool {
   }
 
   $port = (int)$matches[1];
-  return $port >= 5700 && $port <= 65535 && in_array($port, wsproxy_active_ports(), true);
+  return $port >= 5700 && $port <= 5999 && in_array($port, wsproxy_active_ports(), true);
 }
 
 function getAllowedExternalPublicAssetTargets(): array {
