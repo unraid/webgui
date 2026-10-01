@@ -56,7 +56,9 @@ function upload_state_path($uploadId) {
 
 function upload_session_key() {
   if (session_status() !== PHP_SESSION_ACTIVE) @session_start();
-  return session_id() !== '' ? hash('sha256',session_id()) : '';
+  $id = session_id();
+  if (session_status() === PHP_SESSION_ACTIVE) @session_write_close();
+  return $id !== '' ? hash('sha256',$id) : '';
 }
 
 function open_upload_state($uploadId,$nonBlocking=false) {
@@ -115,15 +117,29 @@ case 'upload':
   if (!$sessionKey || $start < 0) die('error:session');
 
   if ($cancel === 1) {
-    [$state,$stateHandle,$statePath] = open_upload_state($uploadId);
-    if (!$state || !hash_equals((string)($state['session'] ?? ''),$sessionKey)) {
-      if (is_resource($stateHandle)) {flock($stateHandle,LOCK_UN); fclose($stateHandle);}
-      die('stop');
+    $cancelTarget = '';
+    if ($uploadId === '') {
+      $cancelTarget = valid_upload_target(rawurldecode($_POST['file'] ?? $_GET['file'] ?? ''));
+      if (!$cancelTarget) die('stop');
     }
-    $target = (string)($state['file'] ?? '');
-    $stat = @lstat($target);
-    $sameFile = $stat && (int)$stat['dev'] === (int)($state['dev'] ?? -1) && (int)$stat['ino'] === (int)($state['ino'] ?? -1);
-    remove_upload_state($stateHandle,$statePath,$sameFile ? $target : '');
+    $statePaths = $uploadId !== '' ? [upload_state_path($uploadId)] : (glob('/var/tmp/file-upload-*.json') ?: []);
+    foreach ($statePaths as $candidatePath) {
+      if (!preg_match('/\A\/var\/tmp\/file-upload-([a-f0-9]{48})\.json\z/D',(string)$candidatePath,$match)) continue;
+      [$state,$stateHandle,$statePath] = open_upload_state($match[1]);
+      if (!$state || !hash_equals((string)($state['session'] ?? ''),$sessionKey)) {
+        if (is_resource($stateHandle)) {flock($stateHandle,LOCK_UN); fclose($stateHandle);}
+        continue;
+      }
+      $target = (string)($state['file'] ?? '');
+      if ($uploadId === '' && $target !== $cancelTarget) {
+        flock($stateHandle,LOCK_UN); fclose($stateHandle);
+        continue;
+      }
+      $stat = @lstat($target);
+      $sameFile = valid_upload_target($target) && $stat && (int)$stat['dev'] === (int)($state['dev'] ?? -1) && (int)$stat['ino'] === (int)($state['ino'] ?? -1);
+      remove_upload_state($stateHandle,$statePath,$sameFile ? $target : '');
+      break;
+    }
     die('stop');
   }
 
@@ -195,15 +211,23 @@ case 'upload':
     if (is_resource($stateHandle)) {flock($stateHandle,LOCK_UN); fclose($stateHandle);}
     die('error:chunk');
   }
+  $chunkLength = strlen($chunk);
   $written = 0;
-  while ($written < strlen($chunk)) {
+  $writeError = false;
+  while ($written < $chunkLength) {
     $count = fwrite($handle,substr($chunk,$written));
-    if ($count === false) break;
+    if ($count === false || $count === 0) {$writeError = true; break;}
     $written += $count;
+  }
+  if ($writeError) {
+    $sameFile = valid_upload_target($file) && (int)$targetStat['dev'] === (int)($state['dev'] ?? -1) && (int)$targetStat['ino'] === (int)($state['ino'] ?? -1);
+    flock($handle,LOCK_UN); fclose($handle);
+    remove_upload_state($stateHandle,$statePath,$sameFile ? $file : '');
+    die('error:write');
   }
   fflush($handle);
   $complete = $total === 0 ? ($start === 0 && $written === 0) : $start + $written === $total;
-  if ($written !== strlen($chunk)) $complete = false;
+  if ($written !== $chunkLength) $complete = false;
   if ($complete) {
     chgrp($file,'users');
     chown($file,'nobody');
@@ -216,11 +240,12 @@ case 'upload':
   die(json_encode(['uploadId'=>$uploadId,'complete'=>$complete]));
 case 'stop':
   $uploadId = (string)($_POST['uploadId'] ?? $_GET['uploadId'] ?? '');
+  $sessionKey = upload_session_key();
   [$state,$stateHandle,$statePath] = open_upload_state($uploadId);
-  if ($state && hash_equals((string)($state['session'] ?? ''),upload_session_key())) {
+  if ($state && hash_equals((string)($state['session'] ?? ''),$sessionKey)) {
     $target = (string)($state['file'] ?? '');
     $stat = @lstat($target);
-    $sameFile = $stat && (int)$stat['dev'] === (int)($state['dev'] ?? -1) && (int)$stat['ino'] === (int)($state['ino'] ?? -1);
+    $sameFile = valid_upload_target($target) && $stat && (int)$stat['dev'] === (int)($state['dev'] ?? -1) && (int)$stat['ino'] === (int)($state['ino'] ?? -1);
     remove_upload_state($stateHandle,$statePath,$sameFile ? $target : '');
   } elseif (is_resource($stateHandle)) {
     flock($stateHandle,LOCK_UN); fclose($stateHandle);
