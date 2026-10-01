@@ -19,7 +19,7 @@ require_once "$docroot/webGui/include/Encryption.php";
 
 function usage() {
   echo <<<EOT
-notify [-e "event"] [-s "subject"] [-d "description"] [-i "normal|warning|alert"] [-m "message"] [-x] [-t] [-b] [add]
+notify [-e "event"] [-s "subject"] [-d "description"] [-i "normal|warning|alert"] [-m "message"] [-k "key"] [-p] [-x] [-t] [-b] [add]
   create a notification
   use -e to specify the event
   use -s to specify a subject
@@ -27,11 +27,16 @@ notify [-e "event"] [-s "subject"] [-d "description"] [-i "normal|warning|alert"
   use -i to specify the severity
   use -m to specify a message (long description)
   use -l to specify a link (clicking the notification will take you to that location)
+  use -k to specify a stable key; raising the same key again replaces the notification (idempotent)
+  use -p to make the notification persistent (sticky in the bell, not user-dismissible; clear it with 'notify clear -k key')
   use -x to create a single notification ticket
   use -r to specify recipients and not use default
   use -t to force send email only (for testing)
   use -b to NOT send a browser notification
   all options are optional
+
+notify clear -k "key"
+  Resolve a keyed (typically persistent) notification, removing it from the bell.
 
 notify init
   Initialize the notification subsystem.
@@ -143,6 +148,18 @@ extract(parse_plugin_cfg("dynamix",true));
 $path    = _var($notify,'path','/tmp/notifications');
 $unread  = "$path/unread";
 $archive = "$path/archive";
+// Condition-style notifications (e.g. "Modified GUI installed") are derived state:
+// true only while their condition holds, and re-raised on every page load. They live
+// in their own directory so they can be retrieved cheaply without scanning the whole
+// unread set, and so bulk archive/delete never touch them. 'notify get' unions this
+// with unread so the legacy nchan poller still surfaces them.
+//
+// This directory is ALWAYS tmpfs, never the user-configurable $path (which may point
+// at the flash boot device when "Store notifications to boot drive" is set). Persisting
+// a derived condition across reboots is what strands it forever when the condition is
+// gone (e.g. the plugin was removed); keeping it off-disk makes a reboot free GC — the
+// next page load re-raises only conditions that are still true.
+$active  = "/tmp/notifications/active";
 $agents_dir = "/boot/config/plugins/dynamix/notifications/agents";
 if (is_dir($agents_dir)) {
   $agents = [];
@@ -155,13 +172,14 @@ if (is_dir($agents_dir)) {
 
 switch ($argv[1][0]=='-' ? 'add' : $argv[1]) {
 case 'init':
-  $files = glob("$unread/*.notify", GLOB_NOSORT);
+  $files = array_merge(glob("$unread/*.notify", GLOB_NOSORT) ?: [], glob("$active/*.notify", GLOB_NOSORT) ?: []);
   foreach ($files as $file) if (!is_readable($file)) chmod($file,0666);
   break;
 
 case 'smtp-init':
   @mkdir($unread,0755,true);
   @mkdir($archive,0755,true);
+  @mkdir($active,0755,true);
   $conf   = [];
   $conf[] = "# Generated settings:";
   $conf[] = "Root={$ssmtp['root']}";
@@ -184,6 +202,7 @@ case 'smtp-init':
 case 'cron-init':
   @mkdir($unread,0755,true);
   @mkdir($archive,0755,true);
+  @mkdir($active,0755,true);
   $text = empty($notify['status']) ? "" : "# Generated array status check schedule:\n{$notify['status']} $docroot/plugins/dynamix/scripts/statuscheck &> /dev/null\n\n";
   parse_cron_cfg("dynamix", "status-check", $text);
   $text = empty($notify['unraidos']) ? "" : "# Generated Unraid OS update check schedule:\n{$notify['unraidos']} $docroot/plugins/dynamix.plugin.manager/scripts/unraidcheck &> /dev/null\n\n";
@@ -209,8 +228,11 @@ case 'add':
   $mailtest = false;
   $overrule = false;
   $noBrowser = false;
+  $key = '';
+  $persistent = false;
+  $gen = '';
 
-  $options = getopt("l:e:s:d:i:m:r:xtb");
+  $options = getopt("l:e:s:d:i:m:r:k:g:xtbp");
   foreach ($options as $option => $value) {
     switch ($option) {
      case 'e':
@@ -241,6 +263,15 @@ case 'add':
      case 'b':
       $noBrowser = true;
       break;
+     case 'k':
+      $key = $value;
+      break;
+     case 'p':
+      $persistent = true;
+      break;
+     case 'g':
+      $gen = $value;
+      break;
      case 'l':
       $nginx = (array)@parse_ini_file('/var/local/emhttp/nginx.ini');
       $link = $value;
@@ -249,9 +280,23 @@ case 'add':
     }
   }
 
-  $unread = "{$unread}/".safe_filename("{$event}-{$ticket}.notify");
-  $archive = "{$archive}/".safe_filename("{$event}-{$ticket}.notify");
-  if (file_exists($archive)) break;
+  // Condition-style notifications use a stable key for the filename so raising the
+  // same condition again overwrites it (idempotent) instead of stacking duplicates.
+  $idBase = $key !== '' ? $key : "{$event}-{$ticket}";
+  $fileName = safe_filename("{$idBase}.notify");
+  // Persistent notifications live in 'active'; transient ones in 'unread'.
+  $targetDir = $persistent ? $active : $unread;
+  $unreadFile = "{$targetDir}/{$fileName}";
+  $archiveFile = "{$archive}/{$fileName}";
+  // Legacy dedup: don't recreate a notification the user already archived.
+  // Keyed (condition-style) notifications are exempt: re-raising a condition should
+  // re-pin it, so clear any stale archived copy and proceed instead of bailing.
+  if (file_exists($archiveFile)) {
+    if ($key !== '') @unlink($archiveFile); else break;
+  }
+  // Clear any stale copy in the other store (e.g. a persistent notification that was
+  // previously written to unread before being relocated to active, or vice versa).
+  @unlink((($persistent ? $unread : $active))."/{$fileName}");
   $entity = $overrule===false ? $notify[$importance] : $overrule;
   $cleanSubject = clean_subject($subject);
   $archiveData = [
@@ -262,7 +307,9 @@ case 'add':
     'importance' => $importance,
   ];
   if ($message) $archiveData['message'] = str_replace('\n','<br>',$message);
-  if (!$mailtest) file_put_contents($archive, build_ini_string($archiveData));
+  // Persistent (condition-style) notifications are never archived - they clear when
+  // their condition resolves - so skip writing the archive copy for them.
+  if (!$mailtest && !$persistent) file_put_contents($archiveFile, build_ini_string($archiveData));
   if (($entity & 1)==1 && !$mailtest && !$noBrowser) {
     $unreadData = [
       'timestamp' => $timestamp,
@@ -272,7 +319,13 @@ case 'add':
       'importance' => $importance,
       'link' => $link,
     ];
-    file_put_contents($unread, build_ini_string($unreadData));
+    if ($key !== '') $unreadData['key'] = $key;
+    if ($persistent) $unreadData['persistent'] = 'true';
+    // Generation stamp for JS-sourced banner notifications: lets reconciliation
+    // clear banners that were not re-raised on the latest page load.
+    if ($gen !== '') $unreadData['gen'] = $gen;
+    @mkdir($targetDir, 0755, true);
+    file_put_contents($unreadFile, build_ini_string($unreadData));
   }
   if (($entity & 2)==2 || $mailtest) generate_email($event, $cleanSubject, str_replace('<br>','. ',$description), $importance, $message, $recipients, $fqdnlink);
   if (($entity & 4)==4 && !$mailtest) { if (is_array($agents)) {foreach ($agents as $agent) {exec("TIMESTAMP='$timestamp' EVENT=".escapeshellarg($event)." SUBJECT=".escapeshellarg($cleanSubject)." DESCRIPTION=".escapeshellarg($description)." IMPORTANCE=".escapeshellarg($importance)." CONTENT=".escapeshellarg($message)." LINK=".escapeshellarg($fqdnlink)." bash ".$agent);};}};
@@ -281,7 +334,9 @@ case 'add':
 case 'get':
   $output = [];
   $json = [];
-  $files = glob("$unread/*.notify", GLOB_NOSORT);
+  // Union persistent ('active') with transient ('unread') so the legacy nchan
+  // poller and any 'notify get' consumer still see condition-style notifications.
+  $files = array_merge(glob("$unread/*.notify", GLOB_NOSORT) ?: [], glob("$active/*.notify", GLOB_NOSORT) ?: []);
   usort($files, function($a,$b){return filemtime($a)-filemtime($b);});
   $i = 0;
   foreach ($files as $file) {
@@ -307,6 +362,25 @@ case 'archive':
   if ($argc != 3) exit(usage());
   $file = $argv[2];
   if (strpos(realpath("$unread/$file"),$unread.'/')===0) @unlink("$unread/$file");
+  break;
+
+case 'clear':
+  // Resolve a condition-style notification by its stable key:
+  //   notify clear <key>   (or)   notify clear -k <key>
+  // Parse argv directly: getopt() stops at the leading 'clear' sub-command.
+  $key = '';
+  if (isset($argv[2])) {
+    if ($argv[2] === '-k') $key = $argv[3] ?? '';
+    elseif ($argv[2][0] !== '-') $key = $argv[2];
+  }
+  if ($key === '') exit(usage());
+  $name = safe_filename("{$key}.notify");
+  // Sweep all stores: persistent ('active') is the usual home, but also clear any
+  // stale unread/archive twin left from before the active/ split or a prior raise.
+  foreach ([$active, $unread, $archive] as $dir) {
+    $target = "$dir/$name";
+    if (strpos(realpath($target) ?: '', $dir.'/')===0) @unlink($target);
+  }
   break;
 }
 
