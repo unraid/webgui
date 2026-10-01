@@ -215,8 +215,8 @@ if (isset($_POST['contName'])) {
     exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker create --name '" . escapeshellarg($Name) . "' '" . escapeshellarg($Repository) . "'");
     // Get Entrypoint and Cmd from docker inspect
     $containerInfo = $DockerClient->getContainerDetails($Name);
-    $ts_env  = isset($containerInfo['Config']['Entrypoint']) ? '-e ORG_ENTRYPOINT="' . implode(' ', $containerInfo['Config']['Entrypoint']) . '" ' : '';
-    $ts_env .= isset($containerInfo['Config']['Cmd']) ? '-e ORG_CMD="' . implode(' ', $containerInfo['Config']['Cmd']) . '" ' : '';
+    $ts_env  = docker_env_option('ORG_ENTRYPOINT',$containerInfo['Config']['Entrypoint'] ?? []);
+    $ts_env .= docker_env_option('ORG_CMD',$containerInfo['Config']['Cmd'] ?? []);
     // Insert Entrypoint and Cmd to docker command
     $cmd = str_replace('-l net.unraid.docker.managed=dockerman', $ts_env . '-l net.unraid.docker.managed=dockerman' , $cmd);
     // Remove preliminary container
@@ -295,8 +295,8 @@ if (isset($_GET['updateContainer'])){
       exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker create --name '" . escapeshellarg($Name) . "' '" . escapeshellarg($Repository) . "'");
       // Get Entrypoint and Cmd from docker inspect
       $containerInfo = $DockerClient->getContainerDetails($Name);
-      $ts_env  = isset($containerInfo['Config']['Entrypoint']) ? '-e ORG_ENTRYPOINT="' . implode(' ', $containerInfo['Config']['Entrypoint']) . '" ' : '';
-      $ts_env .= isset($containerInfo['Config']['Cmd']) ? '-e ORG_CMD="' . implode(' ', $containerInfo['Config']['Cmd']) . '" ' : '';
+      $ts_env  = docker_env_option('ORG_ENTRYPOINT',$containerInfo['Config']['Entrypoint'] ?? []);
+      $ts_env .= docker_env_option('ORG_CMD',$containerInfo['Config']['Cmd'] ?? []);
       // Insert Entrypoint and Cmd to docker command
       $cmd = str_replace('-l net.unraid.docker.managed=dockerman', $ts_env . '-l net.unraid.docker.managed=dockerman' , $cmd);
       // Remove preliminary container
