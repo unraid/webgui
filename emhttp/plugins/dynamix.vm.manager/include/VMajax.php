@@ -95,9 +95,123 @@ function embed(&$bootcfg, $env, $key, $value) {
 }
 
 $arrSizePrefix = [0 => '', 1 => 'K', 2 => 'M', 3 => 'G', 4 => 'T', 5 => 'P'];
-$action        = unscript(_var($_REQUEST,'action'));
-$uuid          = unscript(_var($_REQUEST,'uuid'));
+$requestMethod = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$request       = $requestMethod === 'POST' ? $_POST : $_GET;
+$action        = unscript(_var($request,'action'));
+$uuid          = unscript(_var($request,'uuid'));
 $arrResponse   = [];
+
+function vm_storage_path_allowed($path) {
+	$path = (string)$path;
+	$normalized = preg_replace('#/+#','/', $path);
+	if ($normalized === false
+		|| $normalized === ''
+		|| $normalized[0] !== '/'
+		|| str_contains($normalized,"\0")
+		|| str_contains($normalized,'/../')
+		|| str_ends_with($normalized,'/..')) return false;
+
+	if (!preg_match('#\\A(/mnt/(?:user|cache|disk[0-9]+))(?:/|$)#',$normalized,$matches)) return false;
+	$root = realpath($matches[1]);
+	if ($root === false) return false;
+
+	// Resolve the existing portion of the path so symlinks cannot escape the allowed root.
+	// A missing final path is still valid, but a broken symlink is rejected fail-closed.
+	$candidate = $normalized;
+	while ($candidate !== '' && $candidate !== '/') {
+		$resolved = realpath($candidate);
+		if ($resolved !== false) {
+			return $resolved === $root || strncmp($resolved,$root.'/',strlen($root)+1) === 0;
+		}
+		if (is_link($candidate)) return false;
+		$parent = dirname($candidate);
+		if ($parent === $candidate) break;
+		$candidate = $parent;
+	}
+	return false;
+}
+
+function vm_domain_xml_allowed($xml) {
+	$xml = (string)$xml;
+	if ($xml === '' || strlen($xml) > 262144 || preg_match('/<!DOCTYPE|<!ENTITY/i',$xml)) return false;
+	$dom = new DOMDocument();
+	$dom->resolveExternals = false;
+	$dom->substituteEntities = false;
+	if (!@$dom->loadXML($xml, LIBXML_NONET | LIBXML_NOBLANKS)) return false;
+	$root = $dom->documentElement;
+	if (!$root || $root->localName !== 'domain') return false;
+	foreach ($dom->getElementsByTagName('*') as $node) {
+		$name = $node->localName;
+		if (in_array($name,['commandline','arg','env','hostdev','filesystem'],true)) return false;
+		if ($node->namespaceURI === 'http://libvirt.org/schemas/domain/qemu/1.0') return false;
+		if (in_array($name,['emulator','loader','nvram'],true)) {
+			$value = trim($node->textContent);
+			if ($name === 'emulator' && !preg_match('#\\A/usr/bin/qemu-system-[A-Za-z0-9._-]+\\z#',$value)) return false;
+			if ($name === 'loader' && !preg_match('#\\A/usr/share/(?:OVMF|edk2|qemu)/[A-Za-z0-9._/-]+\\z#',$value)) return false;
+			if ($name === 'nvram' && !vm_storage_path_allowed($value)) return false;
+		}
+		if ($node->hasAttributes()) foreach ($node->attributes as $attribute) {
+			$attributeName = $attribute->localName;
+			$value = trim($attribute->value);
+			if (($attributeName === 'dev' && $name !== 'target') || $attributeName === 'dir' || $attributeName === 'path') return false;
+			if ($attributeName === 'file' && !vm_storage_path_allowed($value)) return false;
+			if ($name === 'disk' && $attributeName === 'type' && $value !== 'file') return false;
+		}
+	}
+	foreach ($dom->getElementsByTagName('disk') as $disk) {
+		$source = null;
+		foreach ($disk->childNodes as $child) if ($child instanceof DOMElement && $child->localName === 'source') {$source = $child; break;}
+		if (!$source) {
+			if ($disk->getAttribute('device') !== 'cdrom') return false;
+			continue;
+		}
+		if (!$source->hasAttribute('file') || $source->attributes->length !== 1 || !vm_storage_path_allowed($source->getAttribute('file'))) return false;
+	}
+	return true;
+}
+
+function vm_size_arg($value) {
+  $value = strtoupper(str_replace(['KB','MB','GB','TB','PB','EB',' ',',','B'],['K','M','G','T','P','E','','',''],trim((string)$value)));
+	return preg_match('/\\A(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?[KMGTPE]?\\z/D',$value) ? $value : false;
+}
+
+function vm_size_bytes($value) {
+	$value = vm_size_arg($value);
+	if ($value === false) return false;
+	if (preg_match('/\\A([0-9]+(?:\\.[0-9]+)?)([KMGTPE]?)\\z/D',$value,$match)) {
+		$units = [''=>0,'K'=>1,'M'=>2,'G'=>3,'T'=>4,'P'=>5,'E'=>6];
+		return (float)$match[1] * pow(1024,$units[$match[2]]);
+	}
+	return false;
+}
+
+function vm_template_path($name) {
+	$directory = '/boot/config/plugins/dynamix.vm.manager/templates';
+	if (!is_dir($directory) && !@mkdir($directory,0700,true)) return false;
+	$root = realpath($directory);
+	$base = basename((string)$name);
+	if ($root === false || $base === '' || str_contains((string)$name,"\0")) return false;
+	if (!preg_match('/\\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.json\\z/iD',$base)) return false;
+	$target = "$root/$base";
+	return !is_link($target) && realpath(dirname($target)) === $root ? $target : false;
+}
+
+function vm_template_source_path($name) {
+	$name = (string)$name;
+	$base = basename($name);
+	if (!vm_storage_path_allowed($name) || !preg_match('/\\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.json\\z/iD',$base)) return false;
+	$real = realpath($name);
+	return $real !== false && is_file($real) && !is_link($name)
+		&& vm_storage_path_allowed($real) && realpath(dirname($name)) === dirname($real) ? $real : false;
+}
+
+$readOnlyActions = ['domain-state','file-info','generate-mac','get-vm-icons','get-usb-devices','snap-list','snap-images','get_storage_fstype','virtio-win-iso-info'];
+if ($requestMethod !== 'POST' && !in_array($action,$readOnlyActions,true)) {
+	header('Allow: POST');
+	http_response_code(405);
+	header('Content-Type: application/json');
+	die(json_encode(['error' => _('POST required')]));
+}
 
 if ($uuid) {
 	requireLibvirt();
@@ -111,7 +225,7 @@ if ($uuid) {
 switch ($action) {
 case 'domain-autostart':
 	requireLibvirt();
-	$arrResponse = $lv->domain_set_autostart($domName, $_REQUEST['autostart']!='false')
+	$arrResponse = $lv->domain_set_autostart($domName, $request['autostart']!='false')
 	? ['success' => true, 'autostart' => (bool)$lv->domain_get_autostart($domName)]
 	: ['error' => $lv->get_last_error()];
 	break;
@@ -202,7 +316,7 @@ case 'domain-consoleRV':
 case 'domain-openWebUI':
 	requireLibvirt();
 	$dom = $lv->get_domain_by_name($domName);
-	$WebUI = unscript(_var($_REQUEST,'vmrcurl'));
+	$WebUI = unscript(_var($request,'vmrcurl'));
 	$myIP = get_vm_ip($dom);
 	if (strpos($WebUI,"[IP]") && $myIP == NULL)  $arrResponse['error'] = _("No IP, guest agent not installed");
 	$WebUI = preg_replace("%\[IP\]%", $myIP, $WebUI);
@@ -296,7 +410,12 @@ case 'domain-undefine':
 
 case 'domain-define':
 	requireLibvirt();
-	$domName = $lv->domain_define($_REQUEST['xml']);
+	$xml = $request['xml'] ?? '';
+	if (!vm_domain_xml_allowed($xml)) {
+		$arrResponse = ['error' => _('VM definition contains an unsupported host resource')];
+		break;
+	}
+	$domName = $lv->domain_define($xml);
 	$arrResponse = $domName
 	? ['success' => true, 'state' => $lv->domain_get_state($domName)]
 	: ['error' => $lv->get_last_error()];
@@ -312,22 +431,22 @@ case 'domain-state':
 
 case 'domain-diskdev':
 	requireLibvirt();
-	$arrResponse = $lv->domain_set_disk_dev($domName, $_REQUEST['olddev'], $_REQUEST['diskdev'])
+	$arrResponse = $lv->domain_set_disk_dev($domName, $request['olddev'], $request['diskdev'])
 	? ['success' => true]
 	: ['error' => $lv->get_last_error()];
 	break;
 
 case 'cdrom-change':
 	requireLibvirt();
-	$arrResponse = $lv->domain_change_cdrom($domName, $_REQUEST['cdrom'], $_REQUEST['dev'], $_REQUEST['bus'])
+	$arrResponse = $lv->domain_change_cdrom($domName, $request['cdrom'], $request['dev'], $request['bus'])
 	? ['success' => true]
 	: ['error' => $lv->get_last_error()];
 	break;
 
 case 'change-media':
 	requireLibvirt();
-	$dev= $_REQUEST['dev'];
-	$file= $_REQUEST['file'];
+	$dev= $request['dev'];
+	$file= $request['file'];
 	$cmdstr = "virsh change-media ".escapeshellarg($domName)." ".escapeshellarg($dev)." ".escapeshellarg($file); #PHPS -changed
 	$rtn=shell_exec($cmdstr)
 		? ['success' => true]
@@ -343,7 +462,7 @@ case 'change-media-both':
 		if ($cd['device'] == 'hda') $hda = true ;
 		if ($cd['device'] == 'hdb') $hdb = true ;
 	}
-	$file= $_REQUEST['file'];
+	$file= $request['file'];
 	if ($file != "" && $hda == false) {
 		$cmdstr = "virsh attach-disk ".escapeshellarg($domName)." ".escapeshellarg($file)." hda --type cdrom --targetbus sata --config" ; #PHPS - Changed
 	} else {
@@ -356,7 +475,7 @@ case 'change-media-both':
 
 	if (isset($rtn['error'])) return ;
 
-	$file2 = $_REQUEST['file2'];
+	$file2 = $request['file2'];
 	if ($file2 != "" && $hdb == false) {
 		$cmdstr = "virsh attach-disk ".escapeshellarg($domName)." ".escapeshellarg($file2)." hdb --type cdrom --targetbus sata --config" ; #PHPS - Changed
 	} else  {
@@ -370,21 +489,21 @@ case 'change-media-both':
 
 case 'memory-change':
 	requireLibvirt();
-	$arrResponse = $lv->domain_set_memory($domName, $_REQUEST['memory']*1024)
+	$arrResponse = $lv->domain_set_memory($domName, $request['memory']*1024)
 	? ['success' => true]
 	: ['error' => $lv->get_last_error()];
 	break;
 
 case 'vcpu-change':
 	requireLibvirt();
-	$arrResponse = $lv->domain_set_vcpu($domName, $_REQUEST['vcpu'])
+	$arrResponse = $lv->domain_set_vcpu($domName, $request['vcpu'])
 	? ['success' => true]
 	: ['error' => $lv->get_last_error()];
 	break;
 
 case 'bootdev-change':
 	requireLibvirt();
-	$arrResponse = $lv->domain_set_boot_device($domName, $_REQUEST['bootdev'])
+	$arrResponse = $lv->domain_set_boot_device($domName, $request['bootdev'])
 	? ['success' => true]
 	: ['error' => $lv->get_last_error()];
 	break;
@@ -392,7 +511,7 @@ case 'bootdev-change':
 case 'disk-remove':
 	requireLibvirt();
 	// libvirt-php has an issue with detaching a disk, use virsh tool instead
-	exec("virsh detach-disk ".escapeshellarg($uuid)." ".escapeshellarg($_REQUEST['dev'])." 2>&1", $arrOutput, $intReturnCode);
+	exec("virsh detach-disk ".escapeshellarg($uuid)." ".escapeshellarg($request['dev'])." 2>&1", $arrOutput, $intReturnCode);
 	$arrResponse = $intReturnCode==0
 	? ['success' => true]
 	: ['error' => str_replace('error: ', '', implode('. ', $arrOutput))];
@@ -407,12 +526,12 @@ case 'snap-create':
 
 case 'snap-create-external':
 	requireLibvirt();
-	$arrResponse = vm_snapshot($domName,$_REQUEST['snapshotname'],$_REQUEST['desc'],$_REQUEST['free'],$_REQUEST['fstype'],$_REQUEST['memorydump']) ;
+	$arrResponse = vm_snapshot($domName,$request['snapshotname'],$request['desc'],$request['free'],$request['fstype'],$request['memorydump']) ;
 	break;
 
 case 'snap-images':
 	requireLibvirt();
-	$html = vm_snapimages($domName,$_REQUEST['snapshotname'],$_REQUEST['only']) ;
+	$html = vm_snapimages($domName,$request['snapshotname'],$request['only']) ;
 	$arrResponse = ['html' => $html , 'success' => true] ;
 	break;
 
@@ -431,37 +550,37 @@ case 'snap-list':
 
 case 'snap-revert-external':
 	requireLibvirt();
-	$arrResponse = vm_revert($domName,$_REQUEST['snapshotname'],$_REQUEST['remove'], $_REQUEST['removemeta']) ;
+	$arrResponse = vm_revert($domName,$request['snapshotname'],$request['remove'], $request['removemeta']) ;
 	break;
 
 case 'snap-remove-external':
 	requireLibvirt();
-	$arrResponse = vm_snapremove($domName,$_REQUEST['snapshotname']) ;
+	$arrResponse = vm_snapremove($domName,$request['snapshotname']) ;
 	break;
 
 case 'snap-delete':
 	requireLibvirt();
-	$arrResponse = $lv->domain_snapshot_delete($domName, $_REQUEST['snap'])
+	$arrResponse = $lv->domain_snapshot_delete($domName, $request['snap'])
 	? ['success' => true]
 	: ['error' => $lv->get_last_error()];
 	break;
 
 case 'snap-revert':
 	requireLibvirt();
-	$arrResponse = $lv->domain_snapshot_revert($domName, $_REQUEST['snap'])
+	$arrResponse = $lv->domain_snapshot_revert($domName, $request['snap'])
 	? ['success' => true]
 	: ['error' => $lv->get_last_error()];
 	break;
 
 case 'snap-desc':
 	requireLibvirt();
-	$arrResponse = $lv->snapshot_set_metadata($domName, $_REQUEST['snap'], $_REQUEST['snapdesc'])
+	$arrResponse = $lv->snapshot_set_metadata($domName, $request['snap'], $request['snapdesc'])
 	? ['success' => true]
 	: ['error' => $lv->get_last_error()];
 	break;
 
 case 'get_storage_fstype':
-	$fstype = get_storage_fstype(unscript(_var($_REQUEST,'storage')));
+	$fstype = get_storage_fstype(unscript(_var($request,'storage')));
 	$arrResponse = ['fstype' => $fstype , 'success' => true] ;
 	break;
 
@@ -516,9 +635,9 @@ case 'vm-removal':
 	break;
 
 case 'disk-create':
-	$disk = $_REQUEST['disk'];
-	$driver = $_REQUEST['driver'];
-	$size = str_replace(["KB","MB","GB","TB","PB", " ", ","], ["K","M","G","T","P", "", ""], strtoupper($_REQUEST['size']));
+	$disk = $request['disk'];
+	$driver = $request['driver'];
+	$size = str_replace(["KB","MB","GB","TB","PB", " ", ","], ["K","M","G","T","P", "", ""], strtoupper($request['size']));
 	$dir = dirname($disk);
 	#if (!is_dir($dir)) mkdir($dir);
 	if (!is_dir($dir)) my_mkdir($dir);
@@ -531,21 +650,36 @@ case 'disk-create':
 	break;
 
 case 'disk-resize':
-	$disk = $_REQUEST['disk'];
-	$capacity = str_replace(["KB","MB","GB","TB","PB", " ", ","], ["K","M","G","T","P", "", ""], strtoupper($_REQUEST['cap']));
-	$old_capacity = str_replace(["KB","MB","GB","TB","PB", " ", ","], ["K","M","G","T","P", "", ""], strtoupper($_REQUEST['oldcap']));
-	if (substr($old_capacity,0,-1) < substr($capacity,0,-1)){
-		$strLastLine = exec("qemu-img resize -q ".escapeshellarg($disk)." ".escapeshellarg($capacity)." 2>&1", $out, $status);
+	$dev = unscript(_var($request,'dev'));
+	$disk = false;
+	$old_capacity = false;
+	if (preg_match('/\\A[A-Za-z0-9._-]+\\z/D',$dev)) foreach ($lv->get_disk_stats($domName) as $diskInfo) {
+		if (($diskInfo['device'] ?? '') !== $dev) continue;
+		$disk = $diskInfo['file'] ?? false;
+		$old_capacity = (float)($diskInfo['capacity'] ?? 0);
+		break;
+	}
+	$capacity = vm_size_arg($request['cap'] ?? '');
+	$diskReal = $disk ? realpath($disk) : false;
+	$mntReal = realpath('/mnt');
+	if (!$diskReal || !$mntReal || strncmp($diskReal,$mntReal.'/',strlen($mntReal)+1)!==0) {
+		$arrResponse = ['error' => _('Invalid disk device')];
+		break;
+	}
+	if ($capacity === false || vm_size_bytes($capacity) <= $old_capacity) {
+		$arrResponse = ['error' => _('Disk capacity must be greater than the current capacity')];
+		break;
+	}
+	if ($disk && $capacity !== false){
+		$strLastLine = exec("qemu-img resize -q ".escapeshellarg($diskReal)." ".escapeshellarg($capacity)." 2>&1", $out, $status);
 		$arrResponse = empty($status)
 		? ['success' => true]
 		: ['error' => $strLastLine];
-	} else {
-		$arrResponse = ['error' => sprintf(_("Disk capacity has to be greater than %s"), $old_capacity)];
 	}
 	break;
 
 case 'file-info':
-	$file = $_REQUEST['file'];
+	$file = $request['file'];
 	$arrResponse = [
 		'isfile' => (!empty($file) ? is_file($file) : false),
 		'isdir' => (!empty($file) ? is_dir($file) : false),
@@ -638,8 +772,8 @@ case 'cmdlineoverride':
 		$env = 'grub';
 		$bootcfg = file($cfg, FILE_IGNORE_NEW_LINES);
 	}
-	$m1 = embed($bootcfg, $env, 'pcie_acs_override', $_REQUEST['pcie']);
-	$m2 = embed($bootcfg, $env, 'vfio_iommu_type1.allow_unsafe_interrupts', $_REQUEST['vfio']);
+	$m1 = embed($bootcfg, $env, 'pcie_acs_override', $request['pcie']);
+	$m2 = embed($bootcfg, $env, 'vfio_iommu_type1.allow_unsafe_interrupts', $request['vfio']);
 	if ($m1||$m2) file_put_contents($cfg, implode("\n",$bootcfg)."\n");
 	$arrResponse = ['success' => true, 'modified' => $m1|$m2];
 	break;
@@ -665,8 +799,8 @@ case 'reboot':
 	break;
 
 case 'virtio-win-iso-info':
-	$path = $_REQUEST['path'];
-	$file = $_REQUEST['file'];
+	$path = $request['path'];
+	$file = $request['file'];
 	$pid = pgrep('-f "VirtIOWin_'.basename($file, '.iso').'_install.sh"', false);
 	if (empty($file)) {
 		$arrResponse = ['exists' => false, 'pid' => $pid];
@@ -689,35 +823,35 @@ case 'virtio-win-iso-info':
 
 case 'virtio-win-iso-download':
 	$arrDownloadVirtIO = [];
-	$strKeyName = basename($_REQUEST['download_version'], '.iso');
+	$strKeyName = basename($request['download_version'], '.iso');
 	if (array_key_exists($strKeyName, $virtio_isos)) {
 		$arrDownloadVirtIO = $virtio_isos[$strKeyName];
 	}
 	if (empty($arrDownloadVirtIO)) {
-		$arrResponse = ['error' => _('Unknown version').': '.$_REQUEST['download_version']];
-	} elseif (empty($_REQUEST['download_path'])) {
+		$arrResponse = ['error' => _('Unknown version').': '.$request['download_version']];
+	} elseif (empty($request['download_path'])) {
 		$arrResponse = ['error' => _('Specify a ISO storage path first')];
-	} elseif (!is_dir($_REQUEST['download_path'])) {
+	} elseif (!is_dir($request['download_path'])) {
 		$arrResponse = ['error' => _("ISO storage path doesn't exist, please create the user share (or empty folder) first")];
-	} elseif (substr(realpath($_REQUEST['download_path'])?:'',0,5) != '/mnt/') {
+	} elseif (substr(realpath($request['download_path'])?:'',0,5) != '/mnt/') {
 		$arrResponse = ['error' => _('Invalid storage path')];
 	} else {
-		@mkdir($_REQUEST['download_path'], 0777, true);
-		$_REQUEST['download_path'] = realpath($_REQUEST['download_path']).'/';
+		@mkdir($request['download_path'], 0777, true);
+		$request['download_path'] = realpath($request['download_path']).'/';
 		// Check free space
-		if (disk_free_space($_REQUEST['download_path']) < $arrDownloadVirtIO['size']+10000) {
+		if (disk_free_space($request['download_path']) < $arrDownloadVirtIO['size']+10000) {
 			$arrResponse['error'] = sprintf(_('Not enough free space, need at least %s MB'), ceil($arrDownloadVirtIO['size']/1000000));
 			break;
 		}
-		$boolCheckOnly = !empty($_REQUEST['checkonly']);
+		$boolCheckOnly = !empty($request['checkonly']);
 		$strInstallScript = '/tmp/VirtIOWin_'.$strKeyName.'_install.sh';
 		$strInstallScriptPgrep = '-f "VirtIOWin_'.$strKeyName.'_install.sh"';
-		$strTargetFile = $_REQUEST['download_path'].$arrDownloadVirtIO['name'];
+		$strTargetFile = $request['download_path'].$arrDownloadVirtIO['name'];
 		$strLogFile = $strTargetFile.'.log';
 		$strMD5File = $strTargetFile.'.md5';
 		$strMD5StatusFile = $strTargetFile.'.md5status';
 		// Save to /boot/config/domain.conf
-		$domain_cfg['MEDIADIR'] = $_REQUEST['download_path'];
+		$domain_cfg['MEDIADIR'] = $request['download_path'];
 		$domain_cfg['VIRTIOISO'] = $strTargetFile;
 		$tmp = ''; $monitor = '/tmp/wget.monitor'; $dots = '... ';
 		foreach ($domain_cfg as $key => $value) $tmp .= "$key=\"$value\"\n";
@@ -726,7 +860,7 @@ case 'virtio-win-iso-download':
 		$strDownloadPgrep = '-f "wget.*'.$strTargetFile.'.*'.$arrDownloadVirtIO['url'].'"';
 		$strVerifyCmd = $arrDownloadVirtIO['md5'] ? 'md5sum -c '.escapeshellarg($strMD5File) : 'md5sum '.escapeshellarg($strTargetFile);
 		$strVerifyPgrep = '-f "md5sum.*'.($arrDownloadVirtIO['md5'] ? $strMD5File : $strTargetFile).'"';
-		$strCleanCmd = '(chmod 777 '.escapeshellarg($_REQUEST['download_path']).' '.escapeshellarg($strTargetFile).'; chown nobody:users '.escapeshellarg($_REQUEST['download_path']).' '.escapeshellarg($strTargetFile).'; rm -f '.escapeshellarg($strMD5File).' '.escapeshellarg($strMD5StatusFile).')';
+		$strCleanCmd = '(chmod 777 '.escapeshellarg($request['download_path']).' '.escapeshellarg($strTargetFile).'; chown nobody:users '.escapeshellarg($request['download_path']).' '.escapeshellarg($strTargetFile).'; rm -f '.escapeshellarg($strMD5File).' '.escapeshellarg($strMD5StatusFile).')';
 		//$strCleanPgrep = '-f "chmod.*chown.*rm.*'.$strMD5StatusFile.'"';
 		$strAllCmd = "#!/bin/bash\n\n";
 		$strAllCmd .= $strDownloadCmd.' >>'.escapeshellarg($strLogFile)." 2>".escapeshellarg($monitor)." && sleep 1 && "; #PHPS - Changed
@@ -802,15 +936,15 @@ case 'virtio-win-iso-download':
 
 case 'virtio-win-iso-cancel':
 	$arrDownloadVirtIO = [];
-	$strKeyName = basename($_REQUEST['download_version'], '.iso');
+	$strKeyName = basename($request['download_version'], '.iso');
 	if (array_key_exists($strKeyName, $virtio_isos)) {
 		$arrDownloadVirtIO = $virtio_isos[$strKeyName];
 	}
 	if (empty($arrDownloadVirtIO)) {
-		$arrResponse = ['error' => _('Unknown version').': '.$_REQUEST['download_version']];
-	} elseif (empty($_REQUEST['download_path'])) {
+		$arrResponse = ['error' => _('Unknown version').': '.$request['download_version']];
+	} elseif (empty($request['download_path'])) {
 		$arrResponse = ['error' => _('ISO storage path was empty')];
-	} elseif (!is_dir($_REQUEST['download_path'])) {
+	} elseif (!is_dir($request['download_path'])) {
 		$arrResponse = ['error' => _("ISO storage path doesn't exist")];
 	} else {
 		$strInstallScriptPgrep = '-f "VirtIOWin_'.$strKeyName.'_install.sh"';
@@ -821,7 +955,7 @@ case 'virtio-win-iso-cancel':
 			if (!posix_kill($pid, SIGTERM)) {
 				$arrResponse = ['error' => _("Wasn't able to stop the process")];
 			} else {
-				$strTargetFile = $_REQUEST['download_path'].$arrDownloadVirtIO['name'];
+				$strTargetFile = $request['download_path'].$arrDownloadVirtIO['name'];
 				$strLogFile = $strTargetFile.'.log';
 				$strMD5File = $strTargetFile.'.md5';
 				$strMD5StatusFile = $strTargetFile.'.md5status';
@@ -836,8 +970,8 @@ case 'virtio-win-iso-cancel':
 	break;
 
 case 'virtio-win-iso-remove':
-	$path = $_REQUEST['path'];
-	$file = $_REQUEST['file'];
+	$path = $request['path'];
+	$file = $request['file'];
 	$pid = pgrep('-f "VirtIOWin_'.basename($file, '.iso').'_install.sh"', false);
 	if (empty($file) || substr($file, -4) !== '.iso') {
 		$arrResponse = ['success' => false];
@@ -864,7 +998,7 @@ case 'virtio-win-iso-remove':
 	break;
 
 case 'vm-template-remove':
-	$template = $_REQUEST['template'];
+	$template = $request['template'];
 	$templateslocation = "/boot/config/plugins/dynamix.vm.manager/savedtemplates.json";
 	if (is_file($templateslocation)){
 		$ut = json_decode(file_get_contents($templateslocation),true) ;
@@ -875,11 +1009,13 @@ case 'vm-template-remove':
 	break;
 
 case 'vm-template-save':
-	$template = $_REQUEST['template'];
-	$name = $_REQUEST['name'];
-	$replace = $_REQUEST['replace'];
+	$template = $request['template'] ?? null;
+	$name = vm_template_path($request['name'] ?? '');
+	$replace = $request['replace'] ?? 'no';
 
-	if (is_file($name) && $replace == "no"){
+	if (!$name) {
+		$arrResponse = ['success' => false, 'error' => _('Invalid template name')];
+	} elseif (is_file($name) && $replace == "no"){
 		$arrResponse = ['success' => false, 'error' => _("File exists")];
 	} else {
 		$error = file_put_contents($name,json_encode($template));
@@ -891,13 +1027,23 @@ case 'vm-template-save':
 	break;
 
 case 'vm-template-import':
-	$template = $_REQUEST['template'];
-	$name = $_REQUEST['name'];
-	$replace = $_REQUEST['replace'];
+	$template = $request['template'];
+	$name = $request['name'];
+	$replace = $request['replace'];
 	$templateslocation = "/boot/config/plugins/dynamix.vm.manager/savedtemplates.json";
 
 	if ($template==="*file") {
-		$template=json_decode(file_get_contents($name));
+		$source = vm_template_source_path($name);
+		if (!$source) {
+			$arrResponse = ['success' => false, 'error' => _('Invalid template file')];
+			break;
+		}
+		$template=json_decode(file_get_contents($source));
+		if ($template === null && json_last_error() !== JSON_ERROR_NONE) {
+			$arrResponse = ['success' => false, 'error' => _('Invalid template JSON')];
+			break;
+		}
+		$name = $source;
 	}
 
 	$namepathinfo = pathinfo($name);
