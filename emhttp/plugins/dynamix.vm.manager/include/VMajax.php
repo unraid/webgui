@@ -104,12 +104,31 @@ $arrResponse   = [];
 function vm_storage_path_allowed($path) {
 	$path = (string)$path;
 	$normalized = preg_replace('#/+#','/', $path);
-	return $normalized !== false
-		&& $normalized !== ''
-		&& $normalized[0] === '/'
-		&& !str_contains($normalized,'/../')
-		&& !str_ends_with($normalized,'/..')
-		&& preg_match('#\\A/mnt/(?:user|cache|disk[0-9]+)(?:/|$)#', $normalized);
+	if ($normalized === false
+		|| $normalized === ''
+		|| $normalized[0] !== '/'
+		|| str_contains($normalized,"\0")
+		|| str_contains($normalized,'/../')
+		|| str_ends_with($normalized,'/..')) return false;
+
+	if (!preg_match('#\\A(/mnt/(?:user|cache|disk[0-9]+))(?:/|$)#',$normalized,$matches)) return false;
+	$root = realpath($matches[1]);
+	if ($root === false) return false;
+
+	// Resolve the existing portion of the path so symlinks cannot escape the allowed root.
+	// A missing final path is still valid, but a broken symlink is rejected fail-closed.
+	$candidate = $normalized;
+	while ($candidate !== '' && $candidate !== '/') {
+		$resolved = realpath($candidate);
+		if ($resolved !== false) {
+			return $resolved === $root || strncmp($resolved,$root.'/',strlen($root)+1) === 0;
+		}
+		if (is_link($candidate)) return false;
+		$parent = dirname($candidate);
+		if ($parent === $candidate) break;
+		$candidate = $parent;
+	}
+	return false;
 }
 
 function vm_domain_xml_allowed($xml) {
