@@ -294,13 +294,16 @@ function fileEdit(id) {
     return;
   }
   dfm.window = $("#dfm_dialogWindow");
+  window.dfm_file_source = source;
   if (!known.includes(ext)) {
     // file viewer - supported file extensions: .pdf, .jpg, .png, .jpeg, .gif
-    dfm.window.html($("#dfm_templateViewFile").html().replace('{$0}',source).dfm_build());
+    dfm.window.html($("#dfm_templateViewFile").html().dfm_build());
+    delete window.dfm_file_source;
     return;
   }
   // file editor dialog
-  dfm.window.html($("#dfm_templateEditFile").html().replace('{$0}',source).dfm_build());
+  dfm.window.html($("#dfm_templateEditFile").html().dfm_build());
+  delete window.dfm_file_source;
   dfm.window.dialog({
     classes: {'ui-dialog': 'ui-dfm ui-corner-all'},
     autoOpen: true,
