@@ -61,7 +61,10 @@ function generate_email($event, $subject, $description, $importance, $message, $
   $headers   = [];
   // mail() through ssmtp adds neither Date nor Message-ID; without them
   // Outlook files the mail as junk and Gmail drops it.
-  $domain    = strpos($ssmtp['root'], '@') !== false ? substr(strrchr($ssmtp['root'], '@'), 1) : gethostname();
+  // The Message-ID needs a valid domain: the sender's, else the hostname.
+  $domain    = 'localhost';
+  foreach ([substr(strrchr($ssmtp['root'], '@') ?: '', 1), gethostname()] as $candidate)
+    if (preg_match('/^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$/', (string)$candidate)) { $domain = $candidate; break; }
   $headers[] = "Date: ".date('r');
   $headers[] = "Message-ID: <".bin2hex(random_bytes(16))."@$domain>";
   $headers[] = "MIME-Version: 1.0";
