@@ -1822,7 +1822,7 @@ class Array2XML {
 			$refresult = getFilesystemAndReflinkMode($repsrc);
 			$refcmdaction = $refresult['reflink_mode'];
 			$refcmdfs = $refresult['filesystem'];
-			$cmdstr = "cp --reflink=$refcmdaction '$repsrc' '$reptgt'";
+			$cmdstr = "cp --reflink=".escapeshellarg($refcmdaction)." ".escapeshellarg($repsrc)." ".escapeshellarg($reptgt);
 			write("addLog\0".htmlspecialchars(_("Reflink Action")." ".$refcmdaction." "._("for filesystem")." ".$refcmdfs));
 			if ($reflink == true) { $refcmd = $cmdstr; } else {$refcmd = false; }
 			if ($refresult['filesystem'] == "zfs" && $refresult['reflink_mode'] == "skip") {
@@ -1830,7 +1830,7 @@ class Array2XML {
 				$refcmd = false;
 			}
 
-			$cmdstr = "rsync -ahPIXS  --out-format=%f --info=flist0,misc0,stats0,name1,progress2 '$repsrc' '$reptgt'";
+			$cmdstr = "rsync -ahPIXS  --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".escapeshellarg($repsrc)." ".escapeshellarg($reptgt);
 			$error = execCommand_nchan_clone($cmdstr,$target,$refcmd); #PHPS
 			if (!$error) { write("addLog\0".htmlspecialchars("Image copied failed."));  return( false); }
 		}
