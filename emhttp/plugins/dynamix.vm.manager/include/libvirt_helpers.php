@@ -1927,7 +1927,7 @@ class Array2XML {
 				$file = $disk["file"];
 				if ($disk['device'] == "hdc" ) $primarypath = dirname(transpose_user_path($file));
 				$output = array();
-				exec("qemu-img info --backing-chain -U '$file'  | grep image:",$output); #PHPS
+				exec("qemu-img info --backing-chain -U ".escapeshellarg($file)."  | grep image:",$output); #PHPS
 				foreach($output as $key => $line) {
 					$line=str_replace("image: ","",$line);
 					$output[$key] = $line;
@@ -1985,7 +1985,7 @@ class Array2XML {
 				$file = $disk["source"]["@attributes"]["file"];
 				$diskid = $disk["@attributes"]["name"];
 				$output = array();
-				exec("qemu-img info --backing-chain -U '$file'  | grep image:",$output);
+				exec("qemu-img info --backing-chain -U ".escapeshellarg($file)."  | grep image:",$output);
 				foreach($output as $key => $line) {
 					$line=str_replace("image: ","",$line);
 					$output[$key] = $line;
@@ -2330,7 +2330,7 @@ class Array2XML {
 		foreach($disks as $disk)   {
 			$file = $disk["file"];
 			$output = array();
-			exec("qemu-img info --backing-chain -U '$file'  | grep image:",$output);
+			exec("qemu-img info --backing-chain -U ".escapeshellarg($file)."  | grep image:",$output);
 			foreach($output as $key => $line) {
 				$line=str_replace("image: ","",$line);
 				$output[$key] = $line;
@@ -2386,7 +2386,7 @@ class Array2XML {
 		foreach($disks as $disk)   {
 			$file = $disk["file"];
 			$output = array();
-			exec("qemu-img info --backing-chain -U \"$file\"  | grep image:",$output);
+			exec("qemu-img info --backing-chain -U ".escapeshellarg($file)."  | grep image:",$output);
 			foreach($output as $key => $line) {
 				$line=str_replace("image: ","",$line);
 				$output[$key] = $line;
@@ -2579,7 +2579,7 @@ OPTIONS
 	foreach($disks as $disk)   {
 		$file = $disk["file"];
 		$output = array();
-		exec("qemu-img info --backing-chain -U '$file'  | grep image:",$output);
+		exec("qemu-img info --backing-chain -U ".escapeshellarg($file)."  | grep image:",$output);
 		foreach($output as $key => $line) {
 			$line=str_replace("image: ","",$line);
 			$output[$key] = $line;
