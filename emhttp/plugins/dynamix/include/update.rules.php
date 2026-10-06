@@ -11,12 +11,16 @@
  */
 ?>
 <?
-$cfg = $_POST['#cfg'];
+$cfg = '/boot/config/network-rules.cfg';
 foreach ($_POST as $name => $mac) {
-  if ($name[0]=='#') continue;
-  $row = exec("grep -n '$mac' ".escapeshellarg($cfg)."|cut -d: -f1");
-  if ($row) exec("sed -ri '{$row}s/(NAME=\")[^\"]+/\\1{$name}/' ".escapeshellarg($cfg));
+  if (!preg_match('/^eth\d+$/', (string)$name)) continue;
+  if (!preg_match('/^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$/', (string)$mac)) continue;
+  $row = exec('grep -n -- '.escapeshellarg($mac).' '.escapeshellarg($cfg).'|cut -d: -f1');
+  if (ctype_digit((string)$row) && (int)$row > 0) {
+    $expression = (int)$row.'s/(NAME=")[^\"]+/\\1'.$name.'/';
+    exec('sed -ri '.escapeshellarg($expression).' '.escapeshellarg($cfg));
+  }
 }
-exec("touch /tmp/network-rules.tmp");
+touch('/tmp/network-rules.tmp');
 $save = false;
 ?>
