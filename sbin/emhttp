@@ -27,10 +27,13 @@
 # run & log functions
 . /etc/rc.d/rc.runlog
 
-while getopts ":p:r" OPT; do
+DEBUG_OPT=()
+
+while getopts ":p:rd:" OPT; do
   case $OPT in
     p) ;;
     r) ;;
+    d) DEBUG_OPT=(-d "$OPTARG") ;;
     *) echo "unknown option $OPT"
        exit 1
   esac
@@ -46,7 +49,7 @@ case "${1:-start}" in
     exit 1
   fi
   # start emhttpd
-  /usr/libexec/unraid/emhttpd
+  /usr/libexec/unraid/emhttpd "${DEBUG_OPT[@]}"
   ;;
 'stop')
   log "Stopping web services..."
