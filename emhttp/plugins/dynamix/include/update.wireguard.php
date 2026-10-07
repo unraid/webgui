@@ -105,15 +105,15 @@ function wgState($vtun, $state, $type=0) {
   global $t1, $etc;
   $tmp = '/tmp/wg-quick.tmp';
   $log = '/var/log/wg-quick.log';
-  exec("timeout $t1 wg-quick $state $vtun 2>$tmp");
+  exec('timeout '.escapeshellarg($t1).' wg-quick '.escapeshellarg($state).' '.escapeshellarg($vtun).' 2>'.escapeshellarg($tmp));
   file_put_contents($log, "wg-quick $state $vtun\n".file_get_contents($tmp)."\n", FILE_APPEND);
   if ($type == 8) {
     // make VPN tunneled access for Docker containers only
     $table = exec("grep -Pom1 'fwmark \K[\d]+' $tmp");
-    $route = implode(ipv4Addr(exec("grep -Pom1 '^Address=\K.+$' $etc/$vtun.conf")));
+    $route = implode(ipv4Addr(exec("grep -Pom1 '^Address=\K.+$' ".escapeshellarg("$etc/$vtun.conf")));
     sleep(1);
-    exec("ip -4 route flush table $table");
-    exec("ip -4 route add $route dev $vtun table $table");
+    exec('ip -4 route flush table '.escapeshellarg($table));
+    exec('ip -4 route add '.escapeshellarg($route).' dev '.escapeshellarg($vtun).' table '.escapeshellarg($table));
   }
   delete_file($tmp);
 }
@@ -136,7 +136,7 @@ function normalize(&$id) {
 }
 
 function dockerNet($vtun) {
-  return empty(exec("docker network ls --filter name='$vtun' --format='{{.Name}}'"));
+  return empty(exec('docker network ls --filter name='.escapeshellarg($vtun).' --format='.escapeshellarg('{{.Name}}')));
 }
 
 function addDocker($vtun) {
@@ -144,7 +144,7 @@ function addDocker($vtun) {
   $error = false;
   [$index,$network] = newNet($vtun);
   if ($dockerd && dockerNet($vtun)) {
-    exec("docker network create -o 'com.docker.network.driver.mtu'='1420' $vtun --subnet=$network 2>/dev/null");
+    exec('docker network create -o '.escapeshellarg('com.docker.network.driver.mtu').'='.escapeshellarg('1420').' '.escapeshellarg($vtun).' --subnet='.escapeshellarg($network).' 2>/dev/null');
     $error = dockerNet($vtun);
   }
   if (!$error && !isNet($network)) {
@@ -163,7 +163,7 @@ function delDocker($vtun) {
   $error = false;
   [$index,$network] = newNet($vtun);
   if ($dockerd && !dockerNet($vtun)) {
-    exec("docker network rm $vtun 2>/dev/null");
+    exec('docker network rm '.escapeshellarg($vtun).' 2>/dev/null');
     $error = !dockerNet($vtun);
   }
   if (!$error && isNet($network)) {
