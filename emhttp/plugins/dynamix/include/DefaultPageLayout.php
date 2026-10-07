@@ -81,11 +81,16 @@ if (count($pages)) {
     // start nchan scripts which are new or have been terminated but still should be running
     if (count($running)) {
         file_put_contents_atomic($nchan_pid, implode("\n", $running) . "\n");
+        // scan the process table once for all scripts, not once per script
+        $output = [];
+        exec('pgrep --ns $$ -af ' . escapeshellarg("$docroot/"),$output);
+        $alive = [];
+        foreach ($output as $line) {
+            foreach (explode(' ', $line) as $arg) $alive[$arg] = true;
+        }
         foreach ($running as $row) {
             $script = explode(':', $row, 2)[0];
-            $output = [];
-            exec('pgrep --ns $$ -f ' . escapeshellarg("$docroot/$script"),$output,$retval);
-            if ($retval !== 0) { // 0=found; 1=none; 2=error
+            if (!isset($alive["$docroot/$script"])) {
                 exec(escapeshellarg("$docroot/$script") . ' >/dev/null 2>&1 &');
             }
         }
