@@ -337,13 +337,25 @@ class DockerTemplates {
 			// looking for a match. Bad.
 			$labelIconUrl = $ct['Icon'] ?? null;
 			if (!$communityApplications) {
+				$isDockerman = ($ct['Manager'] ?? '') === 'dockerman';
+				$preferLabelIcon = !empty($labelIconUrl) && !$isDockerman;
+				$labelIconChanged = $preferLabelIcon
+					&& ($tmp['icon-url'] ?? '') !== $labelIconUrl;
+				$labelIconRemoved = !$isDockerman && !empty($tmp['icon-url']) && empty($labelIconUrl);
 				$iconExists = !empty($tmp['icon'])
 					&& (is_file($tmp['icon']) || is_file($docroot . $tmp['icon']));
-				if (!$iconExists || $reload) {
-					$tmp['icon'] = $this->getIcon($image, $name, $labelIconUrl ?: ($tmp['icon'] ?? ''));
+				if ($labelIconRemoved) {
+					$this->purgeUnusedIconFiles($name);
+					$tmp['icon'] = '/plugins/dynamix.docker.manager/images/question.png';
+					unset($tmp['icon-url']);
+				} elseif (!$iconExists || $reload || $labelIconChanged) {
+					$tmp['icon'] = $this->getIcon($image, $name, $labelIconUrl ?: ($tmp['icon'] ?? ''), $preferLabelIcon);
+					if ($preferLabelIcon) $tmp['icon-url'] = $labelIconUrl;
 					// Explicitly return the fallback asset, so that subsequent polls see
 					// the local file instead of rerunning the expensive template scan
 					if (empty($tmp['icon'])) $tmp['icon'] = '/plugins/dynamix.docker.manager/images/question.png';
+				} elseif (!$preferLabelIcon) {
+					unset($tmp['icon-url']);
 				}
 			}
 			if ($ct['Running']) {
@@ -430,14 +442,28 @@ class DockerTemplates {
 		return $info;
 	}
 
-	public function getIcon($Repository,$contName,$tmpIconUrl='') {
+	private function getIconFile($imgUrl) {
+		return sprintf('%s-%s.png', 'icon', sha1($imgUrl));
+	}
+
+	private function getIconRamPath($contName, $imgUrl) {
+		global $dockerManPaths;
+		return sprintf('%s/%s-%s', $dockerManPaths['images-ram'], $contName, $this->getIconFile($imgUrl));
+	}
+
+	public function getIcon($Repository,$contName,$iconUrl='',$preferIconUrl=false) {
 		global $docroot, $dockerManPaths;
-		$imgUrl = $this->getTemplateValue($Repository, 'Icon','all',$contName);
-		if (!$imgUrl) $imgUrl = $tmpIconUrl;
+		if ($preferIconUrl) {
+			$imgUrl = $iconUrl ?: $this->getTemplateValue($Repository, 'Icon','all',$contName);
+		} else {
+			$imgUrl = $this->getTemplateValue($Repository, 'Icon','all',$contName);
+			if (!$imgUrl) $imgUrl = $iconUrl;
+		}
 		if (!$imgUrl || trim($imgUrl) == "/plugins/dynamix.docker.manager/images/question.png") return '';
 
-		$iconRAM = sprintf('%s/%s-%s.png', $dockerManPaths['images-ram'], $contName, 'icon');
-		$icon    = sprintf('%s/%s-%s.png', $dockerManPaths['images'], $contName, 'icon');
+		$iconFile = $this->getIconFile($imgUrl);
+		$iconRAM = $this->getIconRamPath($contName, $imgUrl);
+		$icon    = sprintf('%s/%s', $dockerManPaths['images'], $iconFile);
 
 		if (!is_dir(dirname($iconRAM))) mkdir(dirname($iconRAM), 0755, true);
 		if (!is_dir(dirname($icon))) mkdir(dirname($icon), 0755, true);
@@ -447,13 +473,45 @@ class DockerTemplates {
 			@copy($icon, $iconRAM);
 		}
 		if (!is_file($icon) && is_file($iconRAM)) {
-			@copy($iconRAM,$icon);
+			@copy($iconRAM, $icon);
 		}
 		if (!is_file($iconRAM)) {
 			my_logger("$contName: Could not download icon $imgUrl");
 		}
+		else {
+			$this->purgeUnusedIconFiles($contName, $iconFile);
+		}
 
 		return (is_file($iconRAM)) ? str_replace($docroot, '', $iconRAM) : '';
+	}
+
+	public function purgeUnusedIconFiles($contName, $keepIcon='') {
+		global $docroot, $dockerManPaths;
+
+		$icon_glob = sprintf('%s/%s-*.png', $dockerManPaths['images-ram'], $contName);
+		$ramFiles = glob($icon_glob);
+		foreach ($ramFiles as $filename) {
+			if ( ($keepIcon === '') || !(strpos($filename, $keepIcon) !== false) ) {
+				@unlink($filename);
+			}
+		}
+
+		$icon_glob = sprintf('%s/%s*.png', $dockerManPaths['images'], $contName);
+		foreach (glob($icon_glob) as $filename) {
+			if ( ($keepIcon === '') || !(strpos($filename, $keepIcon) !== false) ) {
+				@unlink($filename);
+			}
+		}
+
+		foreach ($ramFiles as $ramFile) {
+			if ( strpos($ramFile, '-icon-') !== false ) {
+				$suffix = substr($ramFile, strrpos($ramFile, '-icon-') + 6);
+				if ( $suffix && !glob($dockerManPaths['images-ram'].'/*icon-'.$suffix) ) {
+					$filename = sprintf('%s/icon-%s', $dockerManPaths['images'], $suffix);
+					@unlink($filename);
+				}
+			}
+		}
 	}
 }
 
