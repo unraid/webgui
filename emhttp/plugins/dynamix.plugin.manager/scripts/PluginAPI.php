@@ -82,6 +82,10 @@ switch ($_POST['action']) {
 		$existing = (array)@file("/tmp/reboot_notifications",FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 		$existing[] = $message;
 		file_put_contents("/tmp/reboot_notifications",implode("\n",array_unique($existing)));
+		// Surface "reboot required" as a persistent notification (sticky in the bell,
+		// keyed so repeated notices update rather than stack). It clears on reboot
+		// (RAM-backed /tmp is wiped) or via removeRebootNotice below.
+		exec("/usr/local/emhttp/webGui/scripts/notify -p -k reboot-required -i alert -e ".escapeshellarg("Reboot required")." -s ".escapeshellarg("Reboot required")." -d ".escapeshellarg($message)." &>/dev/null");
 		break;
 
 	case 'removeRebootNotice':
@@ -89,6 +93,8 @@ switch ($_POST['action']) {
 		$existing = file_get_contents("/tmp/reboot_notifications");
 		$newReboots = str_replace($message,"",$existing);
 		file_put_contents("/tmp/reboot_notifications",$newReboots);
+		// Once no reboot reasons remain, resolve the persistent notification.
+		if (trim($newReboots)==="") exec("/usr/local/emhttp/webGui/scripts/notify clear -k reboot-required &>/dev/null");
 		break;
 }
 ?>
