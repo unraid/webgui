@@ -32,10 +32,69 @@ $dockernet = "172.31";
 $t1 = '10'; // 10 sec timeout
 $t2 = '15'; // 15 sec timeout
 
+/**
+ * Check whether a network interface exists.
+ *
+ * @param string $dev Interface name.
+ * @return bool Whether the interface exists.
+ */
 function isPort($dev) {
   return file_exists("/sys/class/net/$dev");
 }
 
+/**
+ * Check whether a UPnP description URL is an HTTP(S) URL with a host.
+ *
+ * @param mixed $url Candidate description URL.
+ * @return bool Whether the URL is valid.
+ */
+function validUpnpUrl($url) {
+  if (!is_string($url) || strlen($url) > 2048 || preg_match('/[\x00-\x20\x7F]/', $url)) return false;
+  $parsed = parse_url($url);
+  return is_array($parsed) && in_array(strtolower($parsed['scheme'] ?? ''), ['http', 'https'], true) && !empty($parsed['host']);
+}
+
+/**
+ * Check whether a UPnP description URL belongs to the discovered gateway.
+ *
+ * @param mixed $url Candidate description URL.
+ * @param mixed $gateway Expected gateway address.
+ * @return bool Whether the URL host matches the gateway.
+ */
+function validUpnpGatewayUrl($url, $gateway) {
+  if (!validUpnpUrl($url) || !is_string($gateway) || filter_var($gateway, FILTER_VALIDATE_IP) === false) return false;
+  $host = parse_url($url, PHP_URL_HOST);
+  return is_string($host) && filter_var($host, FILTER_VALIDATE_IP) !== false && $host === $gateway;
+}
+
+/**
+ * Check whether a UPnP link names an existing network interface.
+ *
+ * @param mixed $link Candidate interface name.
+ * @return bool Whether the link is valid.
+ */
+function validUpnpLink($link) {
+  return is_string($link) && preg_match('/\A[A-Za-z0-9_.:-]{1,64}\z/', $link) === 1 && isPort($link);
+}
+
+/**
+ * Check whether a WireGuard interface name is valid and configured.
+ *
+ * @param mixed $vtun Candidate WireGuard interface name.
+ * @return bool Whether the interface is valid and configured.
+ */
+function validWireguardInterface($vtun) {
+  global $etc;
+  return is_string($vtun) && preg_match('/\Awg(?:[0-9]+|X)\z/', $vtun) === 1 && is_file("$etc/$vtun.conf");
+}
+
+/**
+ * Check whether an interface currently reports carrier.
+ *
+ * @param string $dev Interface name.
+ * @param int $loop Number of checks to perform.
+ * @return bool Whether the interface has carrier.
+ */
 function carrier($dev, $loop=3) {
   if (!isPort($dev)) return false;
   try {
@@ -566,20 +625,39 @@ case 'autostart':
   break;
 case 'upnp':
   $upnp = '/var/tmp/upnp';
+  $writeCache = true;
   if (is_executable('/usr/bin/upnpc')) {
-    $gw = _var($_POST,'#gw').':';
+    $gw = _var($_POST,'#gw');
     $link = _var($_POST,'#link');
     $xml = @file_get_contents($upnp) ?: '';
-    if ($xml) {
-      exec("timeout $t1 stdbuf -o0 upnpc -u $xml -m $link -l 2>&1|grep -qm1 'refused'",$output,$code);
-      if ($code != 1) $xml = '';
-    }
-    if (!$xml) {
-      exec("timeout $t2 stdbuf -o0 upnpc -m $link -l 2>/dev/null|grep -Po 'desc: \K.+'",$desc);
-      foreach ($desc as $url) if ($url && strpos($url,$gw) !== false) {$xml = $url; break;}
+    if (!validUpnpLink($link) || !filter_var($gw, FILTER_VALIDATE_IP)) {
+      $xml = '';
+      $writeCache = false;
+    } else {
+      if ($xml && !validUpnpGatewayUrl($xml, $gw)) $xml = '';
+      if ($xml) {
+        exec(
+          'timeout ' . $t1 . ' stdbuf -o0 upnpc -u ' . escapeshellarg($xml) . ' -m ' . escapeshellarg($link) . " -l 2>&1|grep -qm1 'refused'",
+          $output,
+          $code
+        );
+        if ($code != 1) $xml = '';
+      }
+      if (!$xml) {
+        exec(
+          'timeout ' . $t2 . ' stdbuf -o0 upnpc -m ' . escapeshellarg($link) . " -l 2>/dev/null|grep -Po 'desc: \\K.+'",
+          $desc
+        );
+        foreach ($desc as $url) {
+          if ($url && validUpnpGatewayUrl($url, $gw)) {
+            $xml = $url;
+            break;
+          }
+        }
+      }
     }
   } else $xml = "";
-  file_put_contents($upnp, $xml);
+  if ($writeCache) file_put_contents($upnp, $xml);
   echo $xml;
   break;
 case 'upnpc':
@@ -588,8 +666,14 @@ case 'upnpc':
   $vtun = _var($_POST,'#vtun');
   $link = _var($_POST,'#link');
   $ip   = _var($_POST,'#ip');
+  $cachedXml = @file_get_contents('/var/tmp/upnp') ?: '';
+  if (!validUpnpUrl($xml) || $xml !== $cachedXml || !validWireguardInterface($vtun) || !validUpnpLink($link) || !filter_var($ip, FILTER_VALIDATE_IP)) break;
   if (_var($_POST,'#wg') == 'active') {
-    exec("timeout $t1 stdbuf -o0 upnpc -u $xml -m $link -l 2>/dev/null|grep -Po \"^(ExternalIPAddress = \K.+|.+\KUDP.+>$ip:[0-9]+ 'WireGuard-$vtun')\"", $upnp);
+    $pattern = "^(ExternalIPAddress = \\K.+|.+\\KUDP.+>" . preg_quote($ip, '/') . ":[0-9]+ 'WireGuard-" . preg_quote($vtun, '/') . "')";
+    exec(
+      'timeout ' . $t1 . ' stdbuf -o0 upnpc -u ' . escapeshellarg($xml) . ' -m ' . escapeshellarg($link) . ' -l 2>/dev/null|grep -Po ' . escapeshellarg($pattern),
+      $upnp
+    );
     [$addr, $upnp] = array_pad($upnp, 2, '');
     [$type, $rule] = my_explode(' ', $upnp);
     echo $rule ? "UPnP: $addr:$rule/$type" : _("UPnP: forwarding not set");
