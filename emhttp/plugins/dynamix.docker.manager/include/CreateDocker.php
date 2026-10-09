@@ -236,16 +236,33 @@ if (isset($_POST['contName'])) {
 ##   UPDATE CONTAINER   ##
 ##########################
 
-if (isset($_GET['updateContainer'])){
-  $echo = empty($_GET['mute']);
+if (isset($_POST['updateContainer']) || isset($_GET['updateContainer'])){
+  if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+    http_response_code(405);
+    header('Allow: POST');
+    die(_('POST required'));
+  }
+  $containers = $_POST['ct'] ?? [];
+  if (!is_array($containers)) $containers = [$containers];
+  if (count($containers) > 1 && ($_POST['confirmed'] ?? '') !== 'yes') {
+    http_response_code(400);
+    die(_('Confirmation required'));
+  }
+  $echo = empty($_POST['mute']);
   if ($echo) {
     readfile("$docroot/plugins/dynamix.docker.manager/log.htm");
     echo '<link type="text/css" rel="stylesheet" href="'.autov("/plugins/dynamix.docker.manager/sheets/AddContainer.css",true).'">';
     dockerUIBlockerScript(true);
     @flush();
   }
-  foreach ($_GET['ct'] as $value) {
-    $tmpl = $DockerTemplates->getUserTemplate(unscript(urldecode($value)));
+  $invalidContainers = [];
+  foreach ($containers as $value) {
+    $value = unscript(urldecode((string)$value));
+    if (!preg_match('/\\A[A-Za-z0-9][A-Za-z0-9 ._-]*\\z/D',$value)) {
+      $invalidContainers[] = $value;
+      continue;
+    }
+    $tmpl = $DockerTemplates->getUserTemplate($value);
     if ($echo && !$tmpl) {
       echo "<script>addLog('<p>"._('Configuration not found').". "._('Was this container created using this plugin')."?</p>');</script>";
       @flush();
@@ -309,6 +326,16 @@ if (isset($_GET['updateContainer'])){
     $newImageID = $DockerClient->getImageID($Repository);
     // remove old orphan image since it's no longer used by this container
     if ($oldImageID && $oldImageID != $newImageID) removeImage($oldImageID, $echo);
+  }
+  if ($invalidContainers) {
+    $invalid = [];
+    foreach ($invalidContainers as $container) $invalid[] = addslashes(htmlspecialchars($container,ENT_QUOTES | ENT_SUBSTITUTE,'UTF-8'));
+    if ($echo) {
+      echo "<script>addLog('<p class=\"error\"><b>"._('Invalid container name').":</b> ".implode(', ',$invalid)."</p>');</script>";
+      @flush();
+    } else {
+      http_response_code(400);
+    }
   }
   if ($echo) {
     dockerUIBlockerScript(false);

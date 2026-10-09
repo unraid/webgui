@@ -66,8 +66,8 @@ function vsize($size,$expand=true) {
   }
 }
 
-$uuid = unscript(_var($_GET,'uuid'));
-$subaction = _var($_GET,'subaction');
+$uuid = unscript(_var($_POST,'uuid') ?: _var($_GET,'uuid'));
+$subaction = _var($_POST,'subaction');
 if (isset($_GET['refresh'])) {
   $vm = unscript(_var($_GET,'name'));
   if ($lv->domain_is_active($vm)) {
@@ -80,15 +80,29 @@ if (isset($_GET['refresh'])) {
 if ($subaction) {
   $vm = $lv->domain_get_name_by_uuid($uuid);
   if ($subaction == 'disk-resize') {
-    $capacity = vsize($_GET['cap']);
-    if ($capacity > vsize($_GET['oldcap'])) {
-      shell_exec("qemu-img resize -q ".escapeshellarg(unscript($_GET['disk']??''))." ".vsize($capacity,0));
-    $msg = $vm." disk capacity has been changed to {$_GET['cap']}";
+    $requestedDev = unscript(_var($_POST,'dev'));
+    $capacity = vsize(_var($_POST,'cap'));
+    $disk = false;
+    $oldCapacity = 0;
+    foreach ($lv->get_disk_stats($vm) as $diskInfo) {
+      if (($diskInfo['device'] ?? '') === $requestedDev && !empty($diskInfo['file'])) {
+        $disk = realpath($diskInfo['file']);
+        $oldCapacity = (float)($diskInfo['capacity'] ?? 0);
+        break;
+      }
+    }
+    $mnt = realpath('/mnt');
+    if ($disk && $mnt && strncmp($disk,$mnt.'/',strlen($mnt)+1)===0 && $capacity > $oldCapacity) {
+      $output = [];
+      exec("qemu-img resize -q ".escapeshellarg($disk)." ".escapeshellarg(vsize($capacity,0))." 2>&1",$output,$status);
+      $msg = $status === 0
+      ? $vm." disk capacity has been changed to ".htmlspecialchars(_var($_POST,'cap'))
+      : "Error: unable to change disk capacity";
     } else {
-      $msg = "Error: disk capacity has to be greater than {$_GET['oldcap']}";
+      $msg = "Error: disk capacity has to be greater than the current capacity";
     }
   } elseif ($subaction == 'disk-remove') {
-    $msg = $lv->domain_disk_remove($vm,_var($_GET,'dev'))
+    $msg = $lv->domain_disk_remove($vm,_var($_POST,'dev'))
     ? "$vm disk has been removed"
     : "Error: ".$lv->get_last_error();
   } elseif ($subaction == 'snap-create') {
@@ -96,15 +110,15 @@ if ($subaction) {
     ? "Snapshot for $vm has been created"
     : "Error: ".$lv->get_last_error();
   } elseif ($subaction == 'snap-delete') {
-    $msg = $lv->domain_snapshot_delete($vm,_var($_GET,'snap'))
+    $msg = $lv->domain_snapshot_delete($vm,_var($_POST,'snap'))
     ? "Snapshot for $vm has been deleted"
     : "Error: ".$lv->get_last_error();
   } elseif ($subaction == 'snap-revert') {
-    $msg = $lv->domain_snapshot_revert($vm,_var($_GET,'snap'))
+    $msg = $lv->domain_snapshot_revert($vm,_var($_POST,'snap'))
     ? "$vm has been reverted"
     : "Error: ".$lv->get_last_error();
   } elseif ($subaction == 'snap-desc') {
-    $msg = $lv->snapshot_set_metadata($vm,_var($_GET,'snap'),_var($_POST,'snapdesc'))
+    $msg = $lv->snapshot_set_metadata($vm,_var($_POST,'snap'),_var($_POST,'snapdesc'))
     ? "Snapshot description for $vm has been saved"
     : "Error: ".$lv->get_last_error();
   }
