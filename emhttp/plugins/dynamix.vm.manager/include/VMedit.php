@@ -126,7 +126,7 @@ if (strpos($strSelectedTemplate,"User-") !== false) {
 			<td>_(Icon)_:</td>
 			<td class="template_img_parent">
 				<input type="hidden" name="template[icon]" id="template_icon" value="<?=htmlspecialchars($arrLoad['icon'])?>" />
-				<img id="template_img" src="<?=htmlspecialchars($strIconURL)?>" width="48" height="48" title="_(Change Icon)_..."/>
+				<img id="template_img" src="<?=htmlspecialchars(theme_icon($strIconURL))?>" width="48" height="48" title="_(Change Icon)_..."/>
 				<div id="template_img_chooser_outer">
 					<div id="template_img_chooser">
 					<?
@@ -136,7 +136,11 @@ if (strpos($strSelectedTemplate,"User-") !== false) {
 					];
 					foreach ($arrImagePaths as $strGlob => $strIconURLBase) {
 						foreach (glob($strGlob) as $png_file) {
-							echo '<div class="template_img_chooser_inner"><img src="'.$strIconURLBase.basename($png_file).'" basename="'.basename($png_file).'"><p>'.basename($png_file,'.png').'</p></div>';
+							// A -dark/-light variant (see theme_icon()) is served automatically for its
+							// canonical icon and must not also appear as its own separate chooser entry.
+							if (preg_match('/-(dark|light)\.png$/', $png_file)) continue;
+							$strChooserIconURL = theme_icon($strIconURLBase.basename($png_file));
+							echo '<div class="template_img_chooser_inner"><img src="'.$strChooserIconURL.'" basename="'.basename($png_file).'"><p>'.basename($png_file,'.png').'</p></div>';
 						}
 					}
 					?>
