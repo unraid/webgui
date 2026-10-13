@@ -78,6 +78,15 @@ try {
     check(delete_command([$bad], 1) === '', 'Reject root, traversal or outside operand');
   }
   check(delete_command(["$root/mnt/disk2/share"], 6) === '', 'File action must refuse a directory');
+  // Execute the production delete-start branch with a refused pool-root operand.
+  // Completion's dataset cleanup is guarded by $zfs, so refusal must clear it.
+  $start = strpos($fileManagerSource, '        $cmd = delete_command($source, $action);');
+  $end = strpos($fileManagerSource, "      }\n      break;\n    case 2:", $start);
+  check($start !== false && $end !== false, 'Locate production delete-start branch');
+  $source = ["$root/mnt/disk2/"]; $action = 1; $zfs = 'pool/'; $reply = [];
+  eval(substr($fileManagerSource, $start, $end - $start));
+  check($zfs === '' && !empty($reply['error']), 'Refused delete must report error and suppress dataset cleanup');
+
   check(delete_command(["$root/mnt/disk2/share/unique.txt", "$root/outside/keep.txt"], 1) === '', 'Invalid batch must fail before any deletion');
   symlink("$root/outside", "$root/mnt/disk2/share/link");
   check(delete_command(["$root/mnt/disk2/share/link/keep.txt"], 1) === '', 'Reject symlink parent');

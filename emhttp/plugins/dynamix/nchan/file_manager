@@ -561,6 +561,8 @@ while (true) {
           exec("$cmd 1>$status 2>$error & echo \$!", $pid);
         } else {
           $reply['error'] = _('Invalid source name');
+          // A refused delete must not trigger the completion-time dataset cleanup.
+          $zfs = '';
         }
       }
       break;
