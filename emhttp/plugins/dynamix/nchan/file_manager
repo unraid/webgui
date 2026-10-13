@@ -473,6 +473,25 @@ if (!file_exists($empty_dir)) {
   mkdir($empty_dir);
 }
 
+// Validate every delete operand before starting any deletion. Resolve parents
+// with the existing exclusive-share policy, but never follow the selected link.
+function delete_command($sources, $action) {
+  $paths = [];
+  foreach ($sources as $name) {
+    $name = rtrim($name, '/');
+    if ($name !== truepath($name) || !preg_match('#^/(?:mnt/[^/]+/[^/]+|boot/[^/]+)(?:/|$)#', $name)) return '';
+    $parent = resolve_rsync_path(dirname($name));
+    if (!$parent) return '';
+    $path = $parent.'/'.basename($name);
+    if (!preg_match('#^/(?:mnt/[^/]+/[^/]+|boot/[^/]+)(?:/|$)#', $path) || @lstat($path) === false) return '';
+    if ($action == 6 && !is_link($path) && is_dir($path)) return '';
+    $paths[] = escapeshellarg($path);
+  }
+  if (!$paths) return '';
+  // File actions never recurse, even if the selected entry changes to a folder.
+  return 'find '.implode(' ', $paths).($action == 6 ? ' -maxdepth 0' : '').' -name "*" -print -delete';
+}
+
 // initialize $delete_empty_dirs state: null = not a move operation (yet), true = rsync copy-delete phase, false = cleanup phase (done)
 $delete_empty_dirs = null;
 
@@ -537,7 +556,12 @@ while (true) {
 
       // start action
       } else {
-        exec("find ".quoted($source)." -name \"*\" -print -delete 1>$status 2>$null & echo \$!", $pid);
+        $cmd = delete_command($source, $action);
+        if ($cmd) {
+          exec("$cmd 1>$status 2>$error & echo \$!", $pid);
+        } else {
+          $reply['error'] = _('Invalid source name');
+        }
       }
       break;
     case 2: // rename folder
