@@ -473,8 +473,8 @@ if (!file_exists($empty_dir)) {
   mkdir($empty_dir);
 }
 
-// Validate every delete operand before starting any deletion. Resolve parents
-// with the existing exclusive-share policy, but never follow the selected link.
+// Validate the complete batch before starting deletion. Ordinary selected links
+// are unlinked; only a folder action on a trusted exclusive share follows it.
 function delete_command($sources, $action) {
   $paths = [];
   foreach ($sources as $name) {
@@ -483,13 +483,58 @@ function delete_command($sources, $action) {
     $parent = resolve_rsync_path(dirname($name));
     if (!$parent) return '';
     $path = $parent.'/'.basename($name);
+    if ($action == 1 && is_link($path)) {
+      $exclusive = rsync_exclusive_share_target($path);
+      if ($exclusive) $path = resolve_rsync_path($exclusive);
+    }
     if (!preg_match('#^/(?:mnt/[^/]+/[^/]+|boot/[^/]+)(?:/|$)#', $path) || @lstat($path) === false) return '';
     if ($action == 6 && !is_link($path) && is_dir($path)) return '';
-    $paths[] = escapeshellarg($path);
+    $paths[] = $path;
   }
   if (!$paths) return '';
-  // File actions never recurse, even if the selected entry changes to a folder.
-  return 'find '.implode(' ', $paths).($action == 6 ? ' -maxdepth 0' : '').' -name "*" -print -delete';
+
+  // ZFS mountpoints cannot be removed by find. Leave selected dataset roots
+  // and their ancestors until the empty datasets have been destroyed below.
+  $datasets = []; $deferred = [];
+  if ($action == 1) {
+    exec('zfs list -H -o name,mountpoint -t filesystem 2>/dev/null', $rows, $result);
+    if ($result == 0) foreach ($rows as $row) {
+      $fields = explode("\t", $row);
+      if (count($fields) != 2) continue;
+      [$dataset, $mount] = $fields;
+      if ($mount !== '/mnt/'.$dataset || $mount !== truepath($mount)) continue;
+      foreach ($paths as $path) {
+        if (is_link($path) || !is_dir($path) || ($mount !== $path && strpos($mount, $path.'/') !== 0)) continue;
+        // Check all components even for the ZFS-reported mountpoint.
+        if (resolve_rsync_path($mount) !== $mount || !is_dir($mount)) continue;
+        $datasets[$mount] = $dataset;
+        for ($dir = $mount; $dir === $path || strpos($dir, $path.'/') === 0; $dir = dirname($dir)) $deferred[$dir] = true;
+      }
+    }
+  }
+  $cmd = 'find '.implode(' ', array_map('escapeshellarg', $paths)).($action == 6 ? ' -maxdepth 0' : '').' -name "*" -print';
+  foreach (array_keys($deferred) as $dir) {
+    // find -path is a glob even when its shell argument is quoted.
+    $literal = strtr($dir, ['\\' => '\\\\', '*' => '\\*', '?' => '\\?', '[' => '\\[']);
+    $cmd .= ' ! \( -type d -path '.escapeshellarg($literal).' \)';
+  }
+  $cmd .= ' -delete';
+  if (!$datasets) return $cmd;
+
+  // Keep cleanup in the same monitored process. This avoids state being lost
+  // when the daemon reloads the original job JSON or restarts between polls.
+  uksort($deferred, function($a, $b) { return strlen($b) <=> strlen($a); });
+  foreach ($deferred as $dir => $unused) {
+    $quoted = escapeshellarg($dir);
+    if (isset($datasets[$dir])) {
+      // Include hidden entries; do not recurse through child datasets or use
+      // destroy -r. Snapshot, permission and busy failures remain on stderr.
+      $cmd .= '; if [ -d '.$quoted.' ] && [ ! -L '.$quoted.' ] && dfm_entries="$(find '.$quoted.' -mindepth 1 -maxdepth 1 -print -quit)" && [ -z "$dfm_entries" ]; then zfs destroy '.escapeshellarg($datasets[$dir]).'; fi';
+    } else {
+      $cmd .= '; if [ -d '.$quoted.' ] && [ ! -L '.$quoted.' ]; then rmdir -- '.$quoted.'; fi';
+    }
+  }
+  return '{ '.$cmd.'; }';
 }
 
 // initialize $delete_empty_dirs state: null = not a move operation (yet), true = rsync copy-delete phase, false = cleanup phase (done)
@@ -846,7 +891,7 @@ while (true) {
           ]);
           $reply['done'] = 2;
         }
-        if ($zfs) {
+        if ($zfs && !in_array($action, [1, 6])) {
           $pools = explode("\r",$zfs);
           foreach ($pools as $pool) {
             unset($datasets);
