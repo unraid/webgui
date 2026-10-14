@@ -13,6 +13,8 @@ mkdir("$root/mnt/user", 0777, true);
 $originalPath = getenv('PATH');
 $realFind = trim((string)shell_exec('command -v find'));
 putenv("OS1053_REAL_FIND=$realFind");
+$realRmdir = trim((string)shell_exec('command -v rmdir'));
+putenv("OS1053_REAL_RMDIR=$realRmdir");
 // Adapt only the production mount prefix and function names to our temporary
 // root. Keep the real exclusive-share metadata, resolver and delete decisions.
 $names = ['rsync_share_is_exclusive', 'rsync_exclusive_share_target', 'resolve_rsync_path', 'delete_command'];
@@ -26,8 +28,14 @@ foreach ($names as $function) {
   eval($code);
 }
 file_put_contents("$docroot/state/shares.ini", "[exclusive]\nexclusive=yes\n[file-link]\nexclusive=yes\n");
-file_put_contents("$docroot/state/disks.ini", "[cache]\ntype=Cache\nuuid=test\n");
-file_put_contents("$root/bin/getfattr", "#!/bin/sh\nprintf '%s\\n' cache\n");
+file_put_contents("$docroot/state/disks.ini", "[cache]\ntype=Cache\nuuid=test\n[p]\ntype=Cache\nuuid=test\n[disk1]\ntype=Data\nuuid=test\n");
+file_put_contents("$root/bin/getfattr", <<<'SCRIPT'
+#!/usr/bin/env php
+<?php
+if (in_array('system.LOCATIONS', $argv, true)) echo getenv('OS1053_LOCATIONS') !== false ? getenv('OS1053_LOCATIONS') : 'cache';
+else echo 'cache';
+SCRIPT
+);
 chmod("$root/bin/getfattr", 0700);
 // No host ZFS or mount operations: inventory and destroy use only this fixture.
 file_put_contents("$root/bin/zfs", <<<'SCRIPT'
@@ -68,7 +76,7 @@ if (in_array('-delete', $args, true)) {
   $state = json_decode(file_get_contents($r.'/zfs.json'), true);
   $sources = [];
   foreach ($args as $arg) { if (str_starts_with($arg,'-')) break; $sources[] = $arg; }
-  foreach ($state['datasets'] as $mount) {
+  foreach (array_merge(array_values($state['datasets']), array_keys($state['virtual'] ?? [])) as $mount) {
     $selected = false;
     foreach ($sources as $source) if ($mount === $source || str_starts_with($mount,$source.'/')) $selected = true;
     if (!$selected) continue;
@@ -87,10 +95,25 @@ exit($errors ? 1 : $result);
 SCRIPT
 );
 chmod("$root/bin/find", 0700);
+// A virtual FUSE directory remains busy while its backing datasets exist.
+file_put_contents("$root/bin/rmdir", <<<'SCRIPT'
+#!/usr/bin/env php
+<?php
+$r=getenv('OS1053_ZFS_FIXTURE');
+$s=json_decode(file_get_contents($r.'/zfs.json'),true);
+$dir=$argv[count($argv)-1];
+foreach (($s['virtual'][$dir] ?? []) as $mount) if (is_dir($mount)) {
+  fwrite(STDERR,"rmdir: fixture FUSE backing dataset is busy\n"); exit(1);
+}
+passthru(escapeshellarg(getenv('OS1053_REAL_RMDIR')).' '.implode(' ',array_map('escapeshellarg',array_slice($argv,1))),$code);
+exit($code);
+SCRIPT
+);
+chmod("$root/bin/rmdir",0700);
 putenv("PATH=$root/bin:$originalPath"); putenv("OS1053_ZFS_FIXTURE=$root");
-function inventory(array $datasets, array $fail = []): void {
+function inventory(array $datasets, array $fail = [], array $virtual = []): void {
   global $root;
-  file_put_contents("$root/zfs.json", json_encode(['datasets'=>$datasets,'fail'=>$fail]));
+  file_put_contents("$root/zfs.json", json_encode(['datasets'=>$datasets,'fail'=>$fail,'virtual'=>$virtual]));
   file_put_contents("$root/destroy.log", '');
 }
 function populated(string $dir): void {
@@ -108,7 +131,8 @@ function executeFixture(array $sources, int $action): array {
 }
 try {
   // The reviewed baseline command reproduces both causal failures locally.
-  $baseline = shell_exec('git show 3b8086ee19cc94f1ad507e17af58026d14645161:emhttp/plugins/dynamix/nchan/file_manager');
+  $baseline = file_get_contents(__DIR__.'/fixtures/file-manager-delete-baseline.php');
+  ensure($baseline !== false, 'Stored baseline fixture must be available');
   $code = extractFunction($baseline,'delete_command');
   $code = str_replace('delete_command(', 'baseline_delete_command(', $code);
   foreach (array_slice($names,0,3) as $name) $code = str_replace($name.'(', 'fixture_'.$name.'(', $code);
@@ -138,6 +162,90 @@ try {
   inventory(['cache/pool-share'=>"$root/mnt/cache/pool-share"]);
   [$status,$error] = executeFixture(["$root/mnt/cache/pool-share/"], 1);
   ensure($status === 0 && $error === '' && !is_dir("$root/mnt/cache/pool-share"), 'Pool dataset completes with empty stderr');
+
+  // Model a nonexclusive FUSE share with a metadata-listed backing dataset
+  // already empty after virtual content deletion. No actual FUSE mount is used.
+  populated("$root/mnt/user/fuse");
+  mkdir("$root/mnt/cache/fuse");
+  mkdir("$root/mnt/cache/fuse-other");
+  mkdir("$root/mnt/unlisted/fuse",0777,true);
+  inventory(['cache/fuse'=>"$root/mnt/cache/fuse",'cache/fuse-other'=>"$root/mnt/cache/fuse-other",'unlisted/fuse'=>"$root/mnt/unlisted/fuse"], [], ["$root/mnt/user/fuse"=>["$root/mnt/cache/fuse"]]);
+  // Before cleanup mapping, the FUSE command is the same plain find form
+  // as the stored baseline. It cannot remove the modeled virtual mount root.
+  exec(baseline_delete_command(["$root/mnt/user/fuse/"],1).' 2>'.escapeshellarg("$root/stderr"),$out,$rc);
+  ensure($rc !== 0 && str_contains(file_get_contents("$root/stderr"),'Device or resource busy') && is_dir("$root/mnt/cache/fuse"), 'Unmapped FUSE deletion leaves the backing dataset and reports busy');
+  exec("zfs list -Ho name | grep '^user/fuse'",$legacyDatasets,$legacyResult);
+  ensure($legacyDatasets === [], 'Previous user/share cleanup hint also misses physical datasets');
+  [$status,$error] = executeFixture(["$root/mnt/user/fuse/"],1);
+  ensure($status === 0 && $error === '' && !is_dir("$root/mnt/cache/fuse"), 'FUSE share deletion cleans its metadata-listed empty backing dataset');
+  ensure(!is_dir("$root/mnt/user/fuse") && is_dir("$root/mnt/cache/fuse-other") && is_dir("$root/mnt/unlisted/fuse"), 'FUSE cleanup preserves prefix siblings and unlisted devices');
+  ensure(trim(file_get_contents("$root/destroy.log")) === 'cache/fuse', 'FUSE cleanup destroys only the selected backing dataset');
+
+  // Multiple backing copies, including a short pool name: all datasets must
+  // finish before virtual rmdir, independent of path string lengths.
+  populated("$root/mnt/user/multiple");
+  foreach (['cache','p'] as $pool) ensure(mkdir("$root/mnt/$pool/multiple",0777,true), 'Create both backing copies');
+  inventory(['cache/multiple'=>"$root/mnt/cache/multiple",'p/multiple'=>"$root/mnt/p/multiple"],[],["$root/mnt/user/multiple"=>["$root/mnt/cache/multiple","$root/mnt/p/multiple"]]);
+  putenv('OS1053_LOCATIONS=cache,p');
+  [$status,$error] = executeFixture(["$root/mnt/user/multiple"],1);
+  ensure($status === 0 && $error === '' && !is_dir("$root/mnt/p/multiple") && !is_dir("$root/mnt/cache/multiple"), 'FUSE cleans all metadata-listed copies before virtual rmdir');
+  $destroyed=explode("\n",trim(file_get_contents("$root/destroy.log"))); sort($destroyed);
+  ensure($destroyed === ['cache/multiple','p/multiple'], 'Both configured backing dataset copies are destroyed');
+
+  mkdir("$root/mnt/user0",0777,true); populated("$root/mnt/user0/array-only");
+  foreach (['cache','disk1'] as $disk) mkdir("$root/mnt/$disk/array-only",0777,true);
+  inventory(['cache/array-only'=>"$root/mnt/cache/array-only",'disk1/array-only'=>"$root/mnt/disk1/array-only"],[],["$root/mnt/user0/array-only"=>["$root/mnt/disk1/array-only"]]);
+  putenv('OS1053_LOCATIONS=cache,disk1');
+  [$status,$error] = executeFixture(["$root/mnt/user0/array-only"],1);
+  ensure($status === 0 && $error === '' && is_dir("$root/mnt/cache/array-only") && !is_dir("$root/mnt/disk1/array-only"), 'user0 excludes Cache even if metadata advertises it');
+
+  // Mapping keeps the selected relative subtree; its dataset parents remain.
+  foreach (['cache','p'] as $pool) {
+    mkdir("$root/mnt/$pool/nested/sub",0777,true);
+    file_put_contents("$root/mnt/$pool/nested/sibling",'sibling');
+  }
+  populated("$root/mnt/user/nested/sub");
+  file_put_contents("$root/mnt/user/nested/sibling",'sibling');
+  putenv('OS1053_LOCATIONS=cache,p');
+  inventory(['cache/nested'=>"$root/mnt/cache/nested",'cache/nested/sub'=>"$root/mnt/cache/nested/sub",'p/nested'=>"$root/mnt/p/nested",'p/nested/sub'=>"$root/mnt/p/nested/sub"],[],["$root/mnt/user/nested/sub"=>["$root/mnt/cache/nested/sub","$root/mnt/p/nested/sub"]]);
+  [$status,$error] = executeFixture(["$root/mnt/user/nested/sub"],1);
+  ensure($status === 0 && $error === '' && !is_dir("$root/mnt/cache/nested/sub") && !is_dir("$root/mnt/p/nested/sub"), 'Nested FUSE deletion cleans only selected backing subtrees');
+  ensure(file_exists("$root/mnt/cache/nested/sibling") && file_exists("$root/mnt/p/nested/sibling") && file_exists("$root/mnt/user/nested/sibling"), 'Nested cleanup preserves dataset parents and all sibling copies');
+
+  // A backing entry remaining after virtual deletion blocks destruction,
+  // including hidden files. The virtual busy error remains visible.
+  populated("$root/mnt/user/retained");
+  mkdir("$root/mnt/cache/retained"); file_put_contents("$root/mnt/cache/retained/.retained",'preserve');
+  inventory(['cache/retained'=>"$root/mnt/cache/retained"],[],["$root/mnt/user/retained"=>["$root/mnt/cache/retained"]]);
+  putenv('OS1053_LOCATIONS=cache');
+  [$status,$error] = executeFixture(["$root/mnt/user/retained"],1);
+  ensure(file_exists("$root/mnt/cache/retained/.retained") && file_get_contents("$root/destroy.log") === '' && $error !== '', 'Nonempty mapped dataset is preserved with a genuine error');
+
+  foreach (['','cache;echo unsafe','unlisted'] as $location) {
+    populated("$root/mnt/user/no-mapping"); mkdir("$root/mnt/cache/no-mapping");
+    inventory(['cache/no-mapping'=>"$root/mnt/cache/no-mapping"]);
+    putenv("OS1053_LOCATIONS=$location");
+    [$status,$error] = executeFixture(["$root/mnt/user/no-mapping"],1);
+    ensure(is_dir("$root/mnt/cache/no-mapping") && file_get_contents("$root/destroy.log") === '', 'Missing, malformed and unconfigured metadata authorize no dataset cleanup');
+    rmdir("$root/mnt/cache/no-mapping");
+  }
+  putenv('OS1053_LOCATIONS=cache');
+  populated("$root/mnt/user/physical-link");
+  symlink("$root/outside", "$root/mnt/cache/physical-link");
+  inventory(['cache/physical-link'=>"$root/mnt/cache/physical-link"]);
+  [$status,$error] = executeFixture(["$root/mnt/user/physical-link"],1);
+  ensure(file_exists("$root/outside/content") && file_get_contents("$root/destroy.log") === '', 'FUSE mapping rejects physical symlink targets');
+  mkdir("$root/outside/sub"); file_put_contents("$root/outside/sub/keep",'outside');
+  populated("$root/mnt/user/parent-link/sub");
+  symlink("$root/outside", "$root/mnt/cache/parent-link");
+  inventory(['cache/parent-link/sub'=>"$root/mnt/cache/parent-link/sub"]);
+  [$status,$error] = executeFixture(["$root/mnt/user/parent-link/sub"],1);
+  ensure(file_exists("$root/outside/sub/keep") && file_get_contents("$root/destroy.log") === '', 'Physical symlink ancestry cannot enter FUSE cleanup scopes');
+  symlink("$root/outside", "$root/mnt/user/virtual-link");
+  mkdir("$root/mnt/cache/virtual-link");
+  inventory(['cache/virtual-link'=>"$root/mnt/cache/virtual-link"]);
+  [$status,$error] = executeFixture(["$root/mnt/user/virtual-link/"],1);
+  ensure(!is_link("$root/mnt/user/virtual-link") && is_dir("$root/mnt/cache/virtual-link") && file_exists("$root/outside/content") && file_get_contents("$root/destroy.log") === '', 'Virtual symlink deletion stays unlink-only without mapped cleanup');
 
   // Selected ordinary ancestor, nested datasets, and literal find glob syntax.
   $parent = "$root/mnt/cache/parent[*]?";
@@ -206,7 +314,7 @@ try {
   // In-process cleanup replaces the old completion sweep only for deletes.
   ensure(str_contains($fileManagerSource, 'if ($zfs && !in_array($action, [1, 6]))'), 'Deletion must not repeat the old broad ZFS completion sweep');
 } finally {
-  putenv("PATH=$originalPath"); putenv('OS1053_ZFS_FIXTURE'); putenv('OS1053_PROBE_MODE'); putenv('OS1053_REAL_FIND');
+  putenv("PATH=$originalPath"); putenv('OS1053_ZFS_FIXTURE'); putenv('OS1053_PROBE_MODE'); putenv('OS1053_REAL_FIND'); putenv('OS1053_REAL_RMDIR'); putenv('OS1053_LOCATIONS');
   $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
   foreach ($it as $entry) {
     if ($entry->isDir() && !$entry->isLink()) rmdir($entry->getPathname()); else unlink($entry->getPathname());

@@ -498,17 +498,40 @@ function delete_command($sources, $action) {
   $datasets = []; $deferred = [];
   if ($action == 1) {
     exec('zfs list -H -o name,mountpoint -t filesystem 2>/dev/null', $rows, $result);
+    global $docroot;
+    $disks = @parse_ini_file(rtrim($docroot ?? '/usr/local/emhttp', '/').'/state/disks.ini', true);
+    $scopes = [];
+    foreach ($paths as $path) {
+      if (is_link($path) || !is_dir($path)) continue;
+      $scopes[$path] = [$path];
+      if (!preg_match('#^/mnt/(user|user0)/(.+)$#', $path, $share)) continue;
+      $scopes[$path] = [];
+      // FUSE metadata identifies the backing devices for this exact entry.
+      // Use them only for cleanup selection, never as extra find operands.
+      $locations = trim((string)@shell_exec('getfattr --no-dereference --absolute-names --only-values -n system.LOCATIONS '.escapeshellarg($path).' 2>/dev/null'));
+      foreach (explode(',', $locations) as $device) {
+        if (!preg_match('/^[A-Za-z0-9._-]+$/D', $device) || !is_array($disks) || empty($disks[$device]['uuid'])) continue;
+        $type = $disks[$device]['type'] ?? '';
+        if (!in_array($type, ['Data', 'Cache']) || ($share[1] == 'user0' && $type == 'Cache')) continue;
+        $physical = '/mnt/'.$device.'/'.$share[2];
+        if (resolve_rsync_path($physical) === $physical && is_dir($physical)) $scopes[$path][] = $physical;
+      }
+    }
     if ($result == 0) foreach ($rows as $row) {
       $fields = explode("\t", $row);
       if (count($fields) != 2) continue;
       [$dataset, $mount] = $fields;
       if ($mount !== '/mnt/'.$dataset || $mount !== truepath($mount)) continue;
-      foreach ($paths as $path) {
-        if (is_link($path) || !is_dir($path) || ($mount !== $path && strpos($mount, $path.'/') !== 0)) continue;
-        // Check all components even for the ZFS-reported mountpoint.
-        if (resolve_rsync_path($mount) !== $mount || !is_dir($mount)) continue;
+      foreach ($scopes as $path => $physical_paths) foreach ($physical_paths as $physical) {
+        if ($mount !== $physical && strpos($mount, $physical.'/') !== 0) continue;
+        // Check both physical and virtual components before accepting a mount.
+        $virtual = $path.substr($mount, strlen($physical));
+        if (resolve_rsync_path($mount) !== $mount || !is_dir($mount) || resolve_rsync_path($virtual) !== $virtual || !is_dir($virtual)) continue;
         $datasets[$mount] = $dataset;
-        for ($dir = $mount; $dir === $path || strpos($dir, $path.'/') === 0; $dir = dirname($dir)) $deferred[$dir] = true;
+        for ($dir = $mount; $dir === $physical || strpos($dir, $physical.'/') === 0; $dir = dirname($dir)) {
+          $deferred[$dir] = true;
+          $deferred[$path.substr($dir, strlen($physical))] = true;
+        }
       }
     }
   }
@@ -523,16 +546,20 @@ function delete_command($sources, $action) {
 
   // Keep cleanup in the same monitored process. This avoids state being lost
   // when the daemon reloads the original job JSON or restarts between polls.
+  // Finish all datasets before removing either physical or FUSE ancestors;
+  // virtual paths can be longer than their physical pool names.
+  uksort($datasets, function($a, $b) { return strlen($b) <=> strlen($a); });
+  foreach ($datasets as $dir => $dataset) {
+    $quoted = escapeshellarg($dir);
+    // Include hidden entries; do not use destroy -r. Probe, snapshot,
+    // permission and busy failures remain on stderr.
+    $cmd .= '; if [ -d '.$quoted.' ] && [ ! -L '.$quoted.' ] && dfm_entries="$(find '.$quoted.' -mindepth 1 -maxdepth 1 -print -quit)" && [ -z "$dfm_entries" ]; then zfs destroy '.escapeshellarg($dataset).'; fi';
+  }
   uksort($deferred, function($a, $b) { return strlen($b) <=> strlen($a); });
   foreach ($deferred as $dir => $unused) {
+    if (isset($datasets[$dir])) continue;
     $quoted = escapeshellarg($dir);
-    if (isset($datasets[$dir])) {
-      // Include hidden entries; do not recurse through child datasets or use
-      // destroy -r. Snapshot, permission and busy failures remain on stderr.
-      $cmd .= '; if [ -d '.$quoted.' ] && [ ! -L '.$quoted.' ] && dfm_entries="$(find '.$quoted.' -mindepth 1 -maxdepth 1 -print -quit)" && [ -z "$dfm_entries" ]; then zfs destroy '.escapeshellarg($datasets[$dir]).'; fi';
-    } else {
-      $cmd .= '; if [ -d '.$quoted.' ] && [ ! -L '.$quoted.' ]; then rmdir -- '.$quoted.'; fi';
-    }
+    $cmd .= '; if [ -d '.$quoted.' ] && [ ! -L '.$quoted.' ]; then rmdir -- '.$quoted.'; fi';
   }
   return '{ '.$cmd.'; }';
 }
