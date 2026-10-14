@@ -473,6 +473,97 @@ if (!file_exists($empty_dir)) {
   mkdir($empty_dir);
 }
 
+// Validate the complete batch before starting deletion. Ordinary selected links
+// are unlinked; only a folder action on a trusted exclusive share follows it.
+function delete_command($sources, $action) {
+  $paths = [];
+  foreach ($sources as $name) {
+    $name = rtrim($name, '/');
+    if ($name !== truepath($name) || !preg_match('#^/(?:mnt/[^/]+/[^/]+|boot/[^/]+)(?:/|$)#', $name)) return '';
+    $parent = resolve_rsync_path(dirname($name));
+    if (!$parent) return '';
+    $path = $parent.'/'.basename($name);
+    if ($action == 1 && is_link($path)) {
+      $exclusive = rsync_exclusive_share_target($path);
+      if ($exclusive) $path = resolve_rsync_path($exclusive);
+    }
+    if (!preg_match('#^/(?:mnt/[^/]+/[^/]+|boot/[^/]+)(?:/|$)#', $path) || @lstat($path) === false) return '';
+    if ($action == 6 && !is_link($path) && is_dir($path)) return '';
+    $paths[] = $path;
+  }
+  if (!$paths) return '';
+
+  // ZFS mountpoints cannot be removed by find. Leave selected dataset roots
+  // and their ancestors until the empty datasets have been destroyed below.
+  $datasets = []; $deferred = [];
+  if ($action == 1) {
+    exec('zfs list -H -o name,mountpoint -t filesystem 2>/dev/null', $rows, $result);
+    global $docroot;
+    $disks = @parse_ini_file(rtrim($docroot ?? '/usr/local/emhttp', '/').'/state/disks.ini', true);
+    $scopes = [];
+    foreach ($paths as $path) {
+      if (is_link($path) || !is_dir($path)) continue;
+      $scopes[$path] = [$path];
+      if (!preg_match('#^/mnt/(user|user0)/(.+)$#', $path, $share)) continue;
+      $scopes[$path] = [];
+      // FUSE metadata identifies the backing devices for this exact entry.
+      // Use them only for cleanup selection, never as extra find operands.
+      $locations = trim((string)@shell_exec('getfattr --no-dereference --absolute-names --only-values -n system.LOCATIONS '.escapeshellarg($path).' 2>/dev/null'));
+      foreach (explode(',', $locations) as $device) {
+        if (!preg_match('/^[A-Za-z0-9._-]+$/D', $device) || !is_array($disks) || empty($disks[$device]['uuid'])) continue;
+        $type = $disks[$device]['type'] ?? '';
+        if (!in_array($type, ['Data', 'Cache']) || ($share[1] == 'user0' && $type == 'Cache')) continue;
+        $physical = '/mnt/'.$device.'/'.$share[2];
+        if (resolve_rsync_path($physical) === $physical && is_dir($physical)) $scopes[$path][] = $physical;
+      }
+    }
+    if ($result == 0) foreach ($rows as $row) {
+      $fields = explode("\t", $row);
+      if (count($fields) != 2) continue;
+      [$dataset, $mount] = $fields;
+      if ($mount !== '/mnt/'.$dataset || $mount !== truepath($mount)) continue;
+      foreach ($scopes as $path => $physical_paths) foreach ($physical_paths as $physical) {
+        if ($mount !== $physical && strpos($mount, $physical.'/') !== 0) continue;
+        // Check both physical and virtual components before accepting a mount.
+        $virtual = $path.substr($mount, strlen($physical));
+        if (resolve_rsync_path($mount) !== $mount || !is_dir($mount) || resolve_rsync_path($virtual) !== $virtual || !is_dir($virtual)) continue;
+        $datasets[$mount] = $dataset;
+        for ($dir = $mount; $dir === $physical || strpos($dir, $physical.'/') === 0; $dir = dirname($dir)) {
+          $deferred[$dir] = true;
+          $deferred[$path.substr($dir, strlen($physical))] = true;
+        }
+      }
+    }
+  }
+  $cmd = 'find '.implode(' ', array_map('escapeshellarg', $paths)).($action == 6 ? ' -maxdepth 0' : '').' -name "*" -print';
+  foreach (array_keys($deferred) as $dir) {
+    // find -path is a glob even when its shell argument is quoted.
+    $literal = strtr($dir, ['\\' => '\\\\', '*' => '\\*', '?' => '\\?', '[' => '\\[']);
+    $cmd .= ' ! \( -type d -path '.escapeshellarg($literal).' \)';
+  }
+  $cmd .= ' -delete';
+  if (!$datasets) return $cmd;
+
+  // Keep cleanup in the same monitored process. This avoids state being lost
+  // when the daemon reloads the original job JSON or restarts between polls.
+  // Finish all datasets before removing either physical or FUSE ancestors;
+  // virtual paths can be longer than their physical pool names.
+  uksort($datasets, function($a, $b) { return strlen($b) <=> strlen($a); });
+  foreach ($datasets as $dir => $dataset) {
+    $quoted = escapeshellarg($dir);
+    // Include hidden entries; do not use destroy -r. Probe, snapshot,
+    // permission and busy failures remain on stderr.
+    $cmd .= '; if [ -d '.$quoted.' ] && [ ! -L '.$quoted.' ] && dfm_entries="$(find '.$quoted.' -mindepth 1 -maxdepth 1 -print -quit)" && [ -z "$dfm_entries" ]; then zfs destroy '.escapeshellarg($dataset).'; fi';
+  }
+  uksort($deferred, function($a, $b) { return strlen($b) <=> strlen($a); });
+  foreach ($deferred as $dir => $unused) {
+    if (isset($datasets[$dir])) continue;
+    $quoted = escapeshellarg($dir);
+    $cmd .= '; if [ -d '.$quoted.' ] && [ ! -L '.$quoted.' ]; then rmdir -- '.$quoted.'; fi';
+  }
+  return '{ '.$cmd.'; }';
+}
+
 // initialize $delete_empty_dirs state: null = not a move operation (yet), true = rsync copy-delete phase, false = cleanup phase (done)
 $delete_empty_dirs = null;
 
@@ -537,7 +628,14 @@ while (true) {
 
       // start action
       } else {
-        exec("find ".quoted($source)." -name \"*\" -print -delete 1>$status 2>$null & echo \$!", $pid);
+        $cmd = delete_command($source, $action);
+        if ($cmd) {
+          exec("$cmd 1>$status 2>$error & echo \$!", $pid);
+        } else {
+          $reply['error'] = _('Invalid source name');
+          // A refused delete must not trigger the completion-time dataset cleanup.
+          $zfs = '';
+        }
       }
       break;
     case 2: // rename folder
@@ -820,7 +918,7 @@ while (true) {
           ]);
           $reply['done'] = 2;
         }
-        if ($zfs) {
+        if ($zfs && !in_array($action, [1, 6])) {
           $pools = explode("\r",$zfs);
           foreach ($pools as $pool) {
             unset($datasets);
