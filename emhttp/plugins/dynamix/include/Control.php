@@ -51,6 +51,14 @@ function valid_upload_target($name) {
     && preg_match('/\\A[^\x00-\x1F\x7F\\/\\\\]+\\z/uD',$base) === 1 ? $file : '';
 }
 
+function upload_state_file($state) {
+  $file = (string)($state['file'] ?? '');
+  $stat = @lstat($file);
+  return valid_upload_target($file) && $stat && !is_link($file)
+    && (int)$stat['dev'] === (int)($state['dev'] ?? -1)
+    && (int)$stat['ino'] === (int)($state['ino'] ?? -1) ? $file : '';
+}
+
 function upload_state_path($uploadId) {
   return preg_match('/\\A[a-f0-9]{48}\\z/D',(string)$uploadId) ? "/var/tmp/file-upload-$uploadId.json" : '';
 }
@@ -93,10 +101,7 @@ function cleanup_upload_states() {
       if (!$state && $statePath === $path) @unlink($statePath);
       continue;
     }
-    $target = (string)($state['file'] ?? '');
-    $stat = @lstat($target);
-    $sameFile = valid_upload_target($target) && $stat && (int)$stat['dev'] === (int)($state['dev'] ?? -1) && (int)$stat['ino'] === (int)($state['ino'] ?? -1);
-    remove_upload_state($stateHandle,$statePath,$sameFile ? $target : '');
+    remove_upload_state($stateHandle,$statePath,upload_state_file($state));
   }
 }
 
@@ -172,7 +177,7 @@ case 'upload':
     }
     $file = (string)($state['file'] ?? '');
     if ($total > 0 && (int)($state['total'] ?? 0) !== $total) {
-      remove_upload_state($stateHandle,$statePath);
+      remove_upload_state($stateHandle,$statePath,upload_state_file($state));
       die('error:total');
     }
     $total = (int)($state['total'] ?? $total);
@@ -208,8 +213,9 @@ case 'upload':
     if (strlen($chunk) > 21000000) $chunk = false;
   }
   if ($chunk === false || ($total === 0 && ($start !== 0 || strlen($chunk) !== 0)) || ($total > 0 && $start + strlen($chunk) > $total)) {
+    $failedTarget = upload_state_file($state);
     flock($handle,LOCK_UN); fclose($handle);
-    if (is_resource($stateHandle)) {flock($stateHandle,LOCK_UN); fclose($stateHandle);}
+    remove_upload_state($stateHandle,$statePath,$failedTarget);
     die('error:chunk');
   }
   $chunkLength = strlen($chunk);
@@ -221,9 +227,9 @@ case 'upload':
     $written += $count;
   }
   if ($writeError) {
-    $sameFile = valid_upload_target($file) && (int)$targetStat['dev'] === (int)($state['dev'] ?? -1) && (int)$targetStat['ino'] === (int)($state['ino'] ?? -1);
+    $sameFile = upload_state_file($state);
     flock($handle,LOCK_UN); fclose($handle);
-    remove_upload_state($stateHandle,$statePath,$sameFile ? $file : '');
+    remove_upload_state($stateHandle,$statePath,$sameFile);
     die('error:write');
   }
   fflush($handle);
@@ -244,10 +250,7 @@ case 'stop':
   $sessionKey = upload_session_key();
   [$state,$stateHandle,$statePath] = open_upload_state($uploadId);
   if ($state && hash_equals((string)($state['session'] ?? ''),$sessionKey)) {
-    $target = (string)($state['file'] ?? '');
-    $stat = @lstat($target);
-    $sameFile = valid_upload_target($target) && $stat && (int)$stat['dev'] === (int)($state['dev'] ?? -1) && (int)$stat['ino'] === (int)($state['ino'] ?? -1);
-    remove_upload_state($stateHandle,$statePath,$sameFile ? $target : '');
+    remove_upload_state($stateHandle,$statePath,upload_state_file($state));
   } elseif (is_resource($stateHandle)) {
     flock($stateHandle,LOCK_UN); fclose($stateHandle);
   }

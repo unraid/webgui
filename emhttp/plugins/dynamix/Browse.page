@@ -1253,7 +1253,7 @@ function stopUpload(file,error,errorType,uploadId,filePath) {
   window.onbeforeunload = null;
   currentXhr = null;
   if (uploadId) $.post('/webGui/include/Control.php',{mode:'stop',uploadId:uploadId});
-  else if (filePath) $.post('/webGui/include/Control.php',{mode:'upload',file:filePath,cancel:1});
+  else if (!error && filePath) $.post('/webGui/include/Control.php',{mode:'upload',file:filePath,cancel:1});
   $('#dfm_uploadButton').val("_(Upload)_").prop('onclick',null).off('click').click(function(){$('#dfm_upload').click();});
   $('#dfm_uploadStatus').html('');
   $('#dfm_upload').val('');
