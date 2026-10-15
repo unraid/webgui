@@ -92,14 +92,17 @@ if ($subaction) {
       }
     }
     $mnt = realpath('/mnt');
-    if ($disk && $mnt && strncmp($disk,$mnt.'/',strlen($mnt)+1)===0 && $capacity > $oldCapacity) {
+    $diskPathAllowed = $disk && $mnt && strncmp($disk,$mnt.'/',strlen($mnt)+1)===0;
+    if (!$diskPathAllowed) {
+      $msg = "Error: invalid disk device";
+    } elseif ($capacity <= $oldCapacity) {
+      $msg = "Error: disk capacity has to be greater than the current capacity";
+    } else {
       $output = [];
       exec("qemu-img resize -q ".escapeshellarg($disk)." ".escapeshellarg(vsize($capacity,0))." 2>&1",$output,$status);
       $msg = $status === 0
       ? $vm." disk capacity has been changed to ".htmlspecialchars(_var($_POST,'cap'))
       : "Error: unable to change disk capacity";
-    } else {
-      $msg = "Error: disk capacity has to be greater than the current capacity";
     }
   } elseif ($subaction == 'disk-remove') {
     $msg = $lv->domain_disk_remove($vm,_var($_POST,'dev'))
