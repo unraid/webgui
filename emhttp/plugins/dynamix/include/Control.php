@@ -47,7 +47,8 @@ function valid_upload_target($name) {
   $name = (string)$name;
   $file = validname($name);
   $base = basename($name);
-  return $file && $base === basename($file) && preg_match('/\\A[A-Za-z0-9][A-Za-z0-9._ -]{0,254}\\z/D',$base) ? $file : '';
+  return $file && $base === basename($file) && strlen($base) <= 255
+    && preg_match('/\\A[^\x00-\x1F\x7F\\/\\\\]+\\z/uD',$base) === 1 ? $file : '';
 }
 
 function upload_state_path($uploadId) {
