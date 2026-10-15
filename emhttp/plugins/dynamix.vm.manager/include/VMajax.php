@@ -185,17 +185,6 @@ function vm_size_bytes($value) {
 	return false;
 }
 
-function vm_template_path($name) {
-	$directory = '/boot/config/plugins/dynamix.vm.manager/templates';
-	if (!is_dir($directory) && !@mkdir($directory,0700,true)) return false;
-	$root = realpath($directory);
-	$base = basename((string)$name);
-	if ($root === false || $base === '' || str_contains((string)$name,"\0")) return false;
-	if (!preg_match('/\\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.json\\z/iD',$base)) return false;
-	$target = "$root/$base";
-	return !is_link($target) && realpath(dirname($target)) === $root ? $target : false;
-}
-
 function vm_template_source_path($name) {
 	$name = (string)$name;
 	$base = basename($name);
@@ -1006,24 +995,6 @@ case 'vm-template-remove':
 		file_put_contents($templateslocation,json_encode($ut,JSON_PRETTY_PRINT));
 	}
 	$arrResponse = ['success' => true];
-	break;
-
-case 'vm-template-save':
-	$template = $request['template'] ?? null;
-	$name = vm_template_path($request['name'] ?? '');
-	$replace = $request['replace'] ?? 'no';
-
-	if (!$name) {
-		$arrResponse = ['success' => false, 'error' => _('Invalid template name')];
-	} elseif (is_file($name) && $replace == "no"){
-		$arrResponse = ['success' => false, 'error' => _("File exists")];
-	} else {
-		$error = file_put_contents($name,json_encode($template));
-		if ($error !== false)  $arrResponse = ['success' => true];
-		else {
-			$arrResponse = ['success' => false, 'error' => _("File write failed")];
-		}
-	}
 	break;
 
 case 'vm-template-import':
