@@ -145,7 +145,7 @@ find_device() {
           return 1
         fi
         POOL=$(/sbin/zpool list -H -o name)
-        if /sbin/zpool status -x "$POOL" ; then
+        if POOL_HEALTH=$(/sbin/zpool get -H -o value health "$POOL") && [[ "$POOL_HEALTH" == "ONLINE" ]]; then
           log "pool is healthy"
           # check for resizing the pool
           /sbin/zpool online -e "$POOL" $DEVICE
