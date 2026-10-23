@@ -1,15 +1,8 @@
 {
   "disposition": "PATCH",
-  "expected_structural_delta": "One existing production predicate; one isolated regression test; zero new runtime owners, helpers, dependencies or services. Governance queries as-of 2026-10-23 returned no matching Decision or Trust Boundary for Limetech/Unraid OS7.4/unraid-webgui/ZFS boot pool.",
-  "minimum_design": "Replace exit-status-only zpool status predicate with successful zpool get health plus exact ONLINE comparison. Preserve current import/export, expansion, TIMEOUT and non-ZFS paths. Exclude DST-252 post-import member recovery.",
-  "outcome": "G1: only a successful exact ONLINE health result selects the healthy return; degraded/unknown/failed probes retain existing bounded retry-count behavior and last-iteration degraded boot. G2: non-ZFS boot remains unchanged.",
-  "reuse_decisions": [
-    {
-      "decision": "extend existing health predicate",
-      "name": "etc/rc.d/rc.S find_device",
-      "rationale": "Reuse existing retry loop and expansion; no new helper, dependency or state owner. Independent architecture reviewer returned PATCH."
-    }
-  ],
+  "forecast_commit": "c513f93580bfc7ab95bb0b36e468aabdb2c4de0e",
+  "reviewed_sha": "fbad6b2efcb5b9202133ad2e40a1bc88200a11f5",
   "schema": "limetech.ai-review-marker.v2",
-  "stage": "forecast"
+  "stage": "final",
+  "unresolved_proportionality_findings": []
 }
