@@ -1,0 +1,19 @@
+name: Sync fork
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # Run every 6 hours
+  workflow_dispatch:         # Allow manual runs from the Actions tab
+
+permissions:
+  contents: write            # Required to push synced commits to the fork
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      # Merge upstream into this fork's branch, keeping fork-only commits
+      # (like this workflow file). Fails only on real merge conflicts.
+      - run: gh api repos/${{ github.repository }}/merge-upstream -f branch=master
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
