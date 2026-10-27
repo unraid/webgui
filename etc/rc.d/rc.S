@@ -140,6 +140,7 @@ find_device() {
 	# check for resizing boot partitions
 	/sbin/resize_boot $DEVICE
         # import the pool, if all devices are present pool will be 'healthy'
+      	TIME0=$SECONDS
         if ! /sbin/zpool import -d ${DEVICE// / -d } -N "$UUID" ; then
           log "zpool import failed"
           return 1
@@ -147,12 +148,13 @@ find_device() {
         POOL=$(/sbin/zpool list -H -o name)
         if POOL_HEALTH=$(/sbin/zpool get -H -o value health "$POOL") && [[ "$POOL_HEALTH" == "ONLINE" ]]; then
           log "pool is healthy"
-          # check for resizing the pool
+          # check for resizing the pool (only if healthy)
           /sbin/zpool online -e "$POOL" $DEVICE
           return 0
         fi
-        # maybe a device is missing, wait for it to come online
-        if (( TIMEOUT == 1 )); then
+        # a device is missing, maybe wait for it to come online
+     	TIMEOUT=$(( TIMEOUT - (SECONDS - TIME0) ))
+        if (( TIMEOUT < 2 )); then
           log "pool is degraded"
           return 0
         fi
