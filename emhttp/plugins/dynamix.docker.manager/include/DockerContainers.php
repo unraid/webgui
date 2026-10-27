@@ -133,7 +133,9 @@ foreach ($containers as $ct) {
   $ct['Volumes'] = is_array($ct['Volumes']) ? $ct['Volumes'] : [];
   foreach ($ct['Volumes'] as $mount) {
     [$host_path,$container_path,$access_mode] = my_explode(':',$mount,3);
-    $paths[] = sprintf('%s<i class="fa fa-%s" style="margin:0 6px"></i>%s', htmlspecialchars($container_path), $access_mode=='ro'?'long-arrow-left':'arrows-h', htmlspecialchars($host_path));
+    $link_open = sprintf('<a href="/Shares/Browse?dir=%s">', urlencode($host_path));
+    $link_close = '</a>';
+    $paths[] = sprintf('%s<i class="fa fa-%s" style="margin:0 6px"></i>%s%s%s', htmlspecialchars($container_path), $access_mode=='ro'?'long-arrow-left':'arrows-h', $link_open, htmlspecialchars($host_path), $link_close);
   }
   echo "<tr class='sortable'><td class='ct-name' style='width:220px;padding:8px'><i class='fa fa-arrows-v mover orange-text'></i>";
   if ($template && empty($composestack)) {
