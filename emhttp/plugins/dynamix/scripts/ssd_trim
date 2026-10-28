@@ -85,7 +85,9 @@ function zfs_trim($write) {
 /* Perform fstrim on XFS and Btrfs filesystems */
 function xfs_btrfs_trim($write) {
   /* Use findmnt with JSON output and jq to ensure accurate parsing */
-  exec("findmnt -lnt btrfs,xfs -J | jq -r '.filesystems[] | select(.source | test(\"^/dev/\")) | \"\\(.target)\\t\\(.source)\"'", $mounts);
+  /* fstrim trims the whole filesystem, so trim each one once (one MAJ:MIN)
+     instead of again for every bind mount, through the mount of its root */
+  exec("findmnt -lnt btrfs,xfs -J -o TARGET,SOURCE,MAJ:MIN,FSROOT | jq -r '[.filesystems[] | select(.source | test(\"^/dev/\"))] | sort_by(.fsroot != \"/\") | unique_by(.\"maj:min\") | .[] | \"\\(.target)\\t\\(.source)\"'", $mounts);
 
   foreach ($mounts as $mount) {
     /* Split using tab as the delimiter */
