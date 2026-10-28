@@ -1698,6 +1698,18 @@ class Array2XML {
 		return $copypaste;
 	}
 
+	# Renames a disk image path for a clone. Only the VM's own directory (the image's
+	# parent, when it is named after the VM) and a file name that starts with the VM
+	# name followed by a separator are changed; str_replace() over the whole path also
+	# rewrote unrelated components that merely contain the name.
+	function vm_clone_disk_path($path, $vm, $clone) {
+		$dir = dirname($path);
+		$file = basename($path);
+		if (basename($dir) === $vm) $dir = dirname($dir).'/'.$clone;
+		if (strpos($file, $vm) === 0 && preg_match('/^[-_. ]/', substr($file, strlen($vm)))) $file = $clone.substr($file, strlen($vm));
+		return $dir.'/'.$file;
+	}
+
 	function vm_clone($vm, $clone ,$overwrite,$start,$edit, $free, $waitID, $regenmac) {
 		global $lv,$domain_cfg,$arrDisplayOptions;
 		/*
@@ -1791,7 +1803,7 @@ class Array2XML {
 		if ($config['disk'][0]['new'] != "") {
 		foreach ($config["disk"] as $diskid => $disk) {
 			$file_clone[$diskid]["source"] = $config["disk"][$diskid]["new"];
-			$config["disk"][$diskid]["new"] = str_replace($vm,$clone,$config["disk"][$diskid]["new"]);
+			$config["disk"][$diskid]["new"] = vm_clone_disk_path($config["disk"][$diskid]["new"],$vm,$clone);
 			$pi = pathinfo($config["disk"][$diskid]["new"]);
 			$isdir = is_dir($pi['dirname']);
 			if (is_file($config["disk"][$diskid]["new"])) $file_exists = true;
