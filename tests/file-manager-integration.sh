@@ -75,15 +75,15 @@ if [[ ! $ssh_host || $ssh_host == "-h" || $ssh_host == "--help" ]]; then
 fi
 
 # deploy this script to and run on remote host
-if [[ $ssh_host && $0 != "/tmp/test-file-manager.sh" ]]; then
-  scp "$0" "$ssh_user@$ssh_host:/tmp/test-file-manager.sh" || { echo "Error: Failed to copy to remote host" 1>&2; exit 1; }
+if [[ $ssh_host && $0 != "/tmp/file-manager-integration.sh" ]]; then
+  scp "$0" "$ssh_user@$ssh_host:/tmp/file-manager-integration.sh" || { echo "Error: Failed to copy to remote host" 1>&2; exit 1; }
   # prepend ENV overrides so they are available on the remote host
   local_env=""
   [[ ${TIMEOUT:-} ]] && local_env+="TIMEOUT=$(printf '%q' "$TIMEOUT") "
   [[ ${MULTI:-}   ]] && local_env+="MULTI=$(printf '%q' "$MULTI") "
   [[ ${SINGLE:-}  ]] && local_env+="SINGLE=$(printf '%q' "$SINGLE") "
   # shellcheck disable=SC2086
-  ssh -t "$ssh_user@$ssh_host" "${local_env}bash /tmp/test-file-manager.sh ${script_args[*]}" || { echo "Error: Failed to run test on remote host" 1>&2; exit 1; }
+  ssh -t "$ssh_user@$ssh_host" "${local_env}bash /tmp/file-manager-integration.sh ${script_args[*]}" || { echo "Error: Failed to run test on remote host" 1>&2; exit 1; }
   exit
 fi
 
