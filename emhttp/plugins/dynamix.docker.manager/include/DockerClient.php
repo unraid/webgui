@@ -338,6 +338,7 @@ class DockerTemplates {
 			$labelIconUrl = $ct['Icon'] ?? null;
 			if (!$communityApplications) {
 				$iconExists = !empty($tmp['icon'])
+					&& $tmp['icon'] !== '/plugins/dynamix.docker.manager/images/question.png'
 					&& (is_file($tmp['icon']) || is_file($docroot . $tmp['icon']));
 				if (!$iconExists || $reload) {
 					$tmp['icon'] = $this->getIcon($image, $name, $labelIconUrl ?: ($tmp['icon'] ?? ''));
