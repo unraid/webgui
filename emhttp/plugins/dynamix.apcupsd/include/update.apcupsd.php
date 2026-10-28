@@ -16,14 +16,22 @@ $conf  = "/etc/apcupsd/apcupsd.conf";
 $new   = array_replace_recursive($_POST, $default);
 $cable = $new['UPSCABLE']=='custom' ? $new['CUSTOMUPSCABLE'] : $new['UPSCABLE'];
 
+function apcupsd_set($key, $value, $conf) {
+  // Keep the replacement a single sed command even when a submitted value
+  // contains line breaks, then quote the complete expression for the shell.
+  $value = preg_replace('/[\r\n]/', ' ', (string)$value);
+  $expression = '/^'.preg_quote($key, '/').'/c\\'.$key.' '.$value;
+  exec('sed -i -e '.escapeshellarg($expression).' '.escapeshellarg($conf));
+}
+
 exec("/etc/rc.d/rc.apcupsd stop");
-exec("sed -i -e '/^NISIP/c\\NISIP 0.0.0.0' $conf");
-exec("sed -i -e '/^UPSTYPE/c\\UPSTYPE '".str_replace("'","\\'",$new['UPSTYPE'])."'' $conf");
-exec("sed -i -e '/^DEVICE/c\\DEVICE '".str_replace("'","\\'",$new['DEVICE'])."'' $conf");
-exec("sed -i -e '/^BATTERYLEVEL/c\\BATTERYLEVEL '".intval($new['BATTERYLEVEL'])."'' $conf");
-exec("sed -i -e '/^MINUTES/c\\MINUTES '".intval($new['MINUTES'])."'' $conf");
-exec("sed -i -e '/^TIMEOUT/c\\TIMEOUT '".intval($new['TIMEOUT'])."'' $conf");
-exec("sed -i -e '/^UPSCABLE/c\\UPSCABLE '".str_replace("'","\\'",$cable)."'' $conf");
+apcupsd_set('NISIP', '0.0.0.0', $conf);
+apcupsd_set('UPSTYPE', $new['UPSTYPE'], $conf);
+apcupsd_set('DEVICE', $new['DEVICE'], $conf);
+apcupsd_set('BATTERYLEVEL', intval($new['BATTERYLEVEL']), $conf);
+apcupsd_set('MINUTES', intval($new['MINUTES']), $conf);
+apcupsd_set('TIMEOUT', intval($new['TIMEOUT']), $conf);
+apcupsd_set('UPSCABLE', $cable, $conf);
 
 if ($new['KILLUPS']=='yes' && $new['SERVICE']=='enable')
   exec("! grep -q apccontrol /etc/rc.d/rc.6 && sed -i -e 's:/sbin/poweroff:/etc/apcupsd/apccontrol killpower; /sbin/poweroff:' /etc/rc.d/rc.6");

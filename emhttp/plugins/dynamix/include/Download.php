@@ -17,20 +17,53 @@ $file = $_POST['file']??'';
 
 function validpath($file) {
   global $docroot;
-  return realpath(dirname("$docroot/$file")) == $docroot;
+  return is_string($file) && $file !== '' && basename($file) === $file
+    && realpath(dirname("$docroot/$file")) === realpath($docroot);
+}
+
+function path_in_root($path, $root) {
+  $root = realpath($root);
+  return $root !== false && ($path === $root || strncmp($path, $root.'/', strlen($root) + 1) === 0);
+}
+
+function validsource($source) {
+  global $docroot;
+  if (!is_string($source) || $source === '') return '';
+  $candidates = [$source];
+  if ($source[0] !== '/' && basename($source) === $source) $candidates[] = "$docroot/$source";
+  foreach (array_unique($candidates) as $candidate) {
+    $path = realpath($candidate);
+    if ($path === false || !is_file($path)) continue;
+    // These are the only local sources exposed by the webGUI download flows.
+    if ($source[0] !== '/' && path_in_root($path, $docroot)
+      && basename($path) === $source && pathinfo($path, PATHINFO_EXTENSION) === 'txt') return $path;
+    if ($path === '/var/log/syslog' || $path === '/boot/logs/syslog-previous') return $path;
+    if ((path_in_root($path, '/etc/wireguard') || path_in_root($path, '/boot/config/wireguard'))
+      && in_array(pathinfo($path, PATHINFO_EXTENSION), ['conf','png'])) return $path;
+    $rsyslog = @parse_ini_file('/boot/config/rsyslog.cfg');
+    $folder = $rsyslog['server_folder'] ?? '';
+    if (!empty($rsyslog['local_server']) && $folder && path_in_root($path, $folder)
+      && preg_match('/^syslog-.*\.log$/', basename($path))) return $path;
+  }
+  return '';
 }
 
 switch ($_POST['cmd']) {
 case 'save':
   if (!validpath($file)) break;
-  $source = $_POST['source']??'';
+  $source = validsource($_POST['source']??'');
   $opts = $_POST['opts'] ?? 'qlj';
-  if ($source && in_array(pathinfo($source,PATHINFO_EXTENSION),['txt','conf','png'])) {
-    exec("zip -$opts ".escapeshellarg("$docroot/$file")." ".escapeshellarg($source));
+  if (!$source || !preg_match('/^[qlj]+$/', (string)$opts)) break;
+  $destination = "$docroot/$file";
+  if (in_array(pathinfo($source,PATHINFO_EXTENSION),['txt','conf','png'])) {
+    exec('zip -'.(string)$opts.' '.escapeshellarg($destination).' '.escapeshellarg($source));
   } else {
-    $tmp = "/var/tmp/".basename($source).".txt";
-    copy($source, $tmp);
-    exec("zip -$opts ".escapeshellarg("$docroot/$file")." ".escapeshellarg($tmp));
+    $tmp = tempnam('/var/tmp', 'download-');
+    if ($tmp === false || !copy($source, $tmp)) {
+      if ($tmp !== false) @unlink($tmp);
+      break;
+    }
+    exec('zip -'.(string)$opts.' '.escapeshellarg($destination).' '.escapeshellarg($tmp));
     @unlink($tmp);
   }
   echo "/$file";
