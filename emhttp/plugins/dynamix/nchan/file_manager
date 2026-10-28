@@ -1289,27 +1289,29 @@ while (true) {
         fm_debug_log('extract start: archive=' . $archive . ', dest=' . $dest);
         fm_debug_log('extract start: quoted_archive=' . quoted($archive) . ', quoted_dest=' . quoted($dest));
 
+        // Docker paths get root:root (directories 755, single-file output 600), all other shares get nobody:users (777/666).
+        // note: required even if dest already exists, because the single-file decompressors set the owner of their output file
+        $docker_cfg = @parse_ini_file('/boot/config/docker.cfg') ?: [];
+        $docker_subpaths = [];
+        foreach (['DOCKER_APP_CONFIG_PATH', 'DOCKER_IMAGE_FILE'] as $key) {
+          $val = rtrim(trim($docker_cfg[$key] ?? ''), '/');
+          if ($val && preg_match('#^/mnt/[^/]+/(.+)$#', $val, $m)) {
+            $docker_subpaths[] = $m[1];
+          }
+        }
+        if (empty($docker_subpaths)) $docker_subpaths = ['appdata', 'docker'];
+        $is_docker_dest = false;
+        if (preg_match('#^/mnt/[^/]+/(.+)$#', $dest, $m)) {
+          foreach ($docker_subpaths as $dp) {
+            if ($m[1] === $dp || str_starts_with($m[1], $dp.'/')) {
+              $is_docker_dest = true;
+              break;
+            }
+          }
+        }
+
         // Create dest with proper permissions if it doesn't exist.
-        // Docker paths get root:root 755, all other shares get nobody:users 777.
         if (!is_dir($dest)) {
-          $docker_cfg = @parse_ini_file('/boot/config/docker.cfg') ?: [];
-          $docker_subpaths = [];
-          foreach (['DOCKER_APP_CONFIG_PATH', 'DOCKER_IMAGE_FILE'] as $key) {
-            $val = rtrim(trim($docker_cfg[$key] ?? ''), '/');
-            if ($val && preg_match('#^/mnt/[^/]+/(.+)$#', $val, $m)) {
-              $docker_subpaths[] = $m[1];
-            }
-          }
-          if (empty($docker_subpaths)) $docker_subpaths = ['appdata', 'docker'];
-          $is_docker_dest = false;
-          if (preg_match('#^/mnt/[^/]+/(.+)$#', $dest, $m)) {
-            foreach ($docker_subpaths as $dp) {
-              if ($m[1] === $dp || str_starts_with($m[1], $dp.'/')) {
-                $is_docker_dest = true;
-                break;
-              }
-            }
-          }
           $new_root = $dest;
           $check = $dest;
           while ($check !== '/' && !is_dir($check)) {
