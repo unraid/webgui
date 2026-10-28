@@ -215,7 +215,7 @@ dockerload.on('message', function(msg){
   var data = msg.split('\n');
   for (var i=0,row; row=data[i]; i++) {
     var id = row.split(';');
-    var w1 = Math.round(Math.min(id[1].slice(0,-1)/<?=count(preg_split('/[,-]/',implode(',',$cpus)))?>,100)*100)/100+'%';
+    var w1 = Math.round(Math.min(id[1].slice(0,-1)/<?=count(parse_cpu_ranges('/sys/devices/system/cpu/online') ?: $cpus)?>,100)*100)/100+'%';
     $('.cpu-'+id[0]).text(w1.replace('.','<?=_var($display,'number','.,')[0]?>'));
     $('.mem-'+id[0]).text(id[2]);
     $('#cpu-'+id[0]).css('width',w1);
