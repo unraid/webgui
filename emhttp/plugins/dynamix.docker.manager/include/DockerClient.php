@@ -533,6 +533,8 @@ class DockerUpdate{
 			//$this->debug('Error: curl error getting manifest: '.curl_error($ch));
 			return null;
 		}
+		// Authenticate against the final manifest URL, so cross-host redirects do not drop the token.
+		$manifestURL = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
 		/*
 		 * Step 2: Get www-authenticate header from manifest url to generate token or basic auth
 		 */
@@ -578,8 +580,8 @@ class DockerUpdate{
 		 */
 		curl_setopt($digest_ch, CURLOPT_HTTPHEADER, $header);
 		$reply = curl_exec($digest_ch);
-		if (curl_errno($ch) !== 0) {
-			//$this->debug('Error: curl error getting manifest: '.curl_error($ch));
+		if (curl_errno($digest_ch) !== 0) {
+			//$this->debug('Error: curl error getting manifest: '.curl_error($digest_ch));
 			return null;
 		}
 		preg_match('@Docker-Content-Digest:\s*(.*)@i', $reply, $matches);
