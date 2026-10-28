@@ -47,7 +47,8 @@
             <? if (empty($button['Link'])): ?>
                 <? $icon = $button['Icon']; ?>
                 <? if (substr($icon, -4) == '.png'): ?>
-                    <? $icon = "<img src='/{$button['root']}/icons/$icon' class='system'>"; ?>
+                    <? $icon = theme_icon("{$button['root']}/icons/$icon"); ?>
+                    <? $icon = "<img src='/$icon' class='system'>"; ?>
                 <? elseif (substr($icon, 0, 5) == 'icon-'): ?>
                     <? $icon = "<b class='$icon system'></b>"; ?>
                 <? else: ?>
