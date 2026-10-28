@@ -128,6 +128,8 @@ on_exit() {
     [[ -d $fm_cgroup ]] && rmdir "$fm_cgroup"
   fi
   [[ $io_controller_enabled ]] && echo "-io" > /sys/fs/cgroup/cgroup.subtree_control
+  # monitor_nchan starts its loop in the background: in its own session, otherwise it ends with this ssh session
+  [[ $monitor_nchan_stopped ]] && setsid /usr/local/sbin/monitor_nchan >/dev/null 2>&1 </dev/null
   # the settings which the speed limit test changed (the backup only exists while the test runs)
   [[ -f $fm_cfg_backup ]] && mv -f "$fm_cfg_backup" "$fm_cfg"
   # the debug trigger must never stay on the server, otherwise the next file_manager (e.g. started by the WebGUI) logs and keeps job
@@ -150,6 +152,7 @@ trap on_exit EXIT
 trap on_signal INT TERM
 
 io_controller_enabled=
+monitor_nchan_stopped=
 # check condition and print pass/fail
 pass=0
 fail=0
@@ -1288,6 +1291,31 @@ job_processes() {
   ps -o pid=,comm= -p "${pids%,}" | grep -E ' (tar|pv|gzip|bzip2|xz|zstd|lz4|zip|unzip|pvzip)$'
 }
 
+# test that a single-file archive with an uppercase extension is extracted to a file with the name of the archive without the extension
+# and does not overwrite the archive, if the target is the folder of the archive
+test_extract_uppercase() {
+  local dir="$dst_path/uppercase" archive checksum rc
+
+  should_run extract arc 17 || return 0
+
+  echo -e "\n=== extract an archive with an uppercase extension into its own folder ==="
+
+  rm -rf "${dir:?}"
+  mkdir -p "$dir"
+  archive="$dir/Hello World.TXT.GZ"
+  gzip -c "$files_path/hello.txt" >"$archive"
+  checksum=$(md5sum <"$archive")
+
+  run_action 17 "$archive" "$dir/" 1; rc=$?
+  check "extract uppercase: action run must succeed" "$rc"
+
+  rc=1 && [[ -f "$dir/Hello World.TXT" ]] && cmp -s "$dir/Hello World.TXT" "$files_path/hello.txt" && rc=0
+  check "extract uppercase: the file must be named like the archive without the extension and have the content of the original" "$rc"
+
+  rc=1 && [[ $(md5sum <"$archive") == "$checksum" ]] && rc=0
+  check "extract uppercase: the archive must not be overwritten" "$rc"
+}
+
 # test that a compress job fails and publishes no archive if the source is invalid: a source which does not exist, or a folder or
 # several files as source of a single-file format (.gz, ...)
 # args: label format source archive_name expected_error
@@ -1607,6 +1635,16 @@ if ! echo "$test_device rbps=max" > "$fm_cgroup/io.max"; then
 fi
 echo "  throttling reads of device $test_device ($test_source, $test_fs) to $fm_read_limit bytes/s in cgroup $fm_cgroup (shell is in $(cat /proc/self/cgroup))"
 
+# Unraid's monitor_nchan stops every process with /usr/local/emhttp/*/nchan/* in its command line, which includes the worker of this test,
+# as soon as no browser tab is open (after a page of the web UI was loaded). It is stopped while the test runs and started again at the end.
+monitor_nchan_pid=
+[[ -s /var/run/monitor_nchan.pid ]] && monitor_nchan_pid=$(cat /var/run/monitor_nchan.pid)
+if [[ $monitor_nchan_pid && -d /proc/$monitor_nchan_pid ]]; then
+  kill "$monitor_nchan_pid"
+  monitor_nchan_stopped=1
+  echo "  stopped monitor_nchan (it is started again at the end)"
+fi
+
 # ===========================
 # create source files
 # ===========================
@@ -1645,6 +1683,7 @@ done
 for fmt in "${archive_single_formats[@]}"; do
   test_extract "$fmt" "$arc_path/urandom150MB.bin.$fmt" "$dst_path/extract_big_$fmt/"
 done
+test_extract_uppercase
 
 # ===========================
 # invalid and failing compress tests

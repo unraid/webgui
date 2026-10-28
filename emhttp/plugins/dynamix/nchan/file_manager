@@ -1407,7 +1407,12 @@ while (true) {
             'zst' => 'unzstd -c',
             'lz4' => 'unlz4 -c',
           ][$ext];
-          $out_base = basename($archive, '.' . $ext);
+          // cut the extension by its length, basename() removes a suffix case-sensitively and would keep ".GZ"
+          $out_base = substr(basename($archive), 0, -(strlen($ext) + 1));
+          if ($out_base === '') {
+            $reply['error'] = _('Invalid source path');
+            break;
+          }
           $out_path = rtrim($dest, '/') . '/' . $out_base;
           // overwrite check: if dest file exists and overwrite not set, abort
           if (!$overwrite && file_exists($out_path)) {
