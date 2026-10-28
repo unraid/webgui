@@ -19,13 +19,13 @@
 # - stops file_manager so the next start picks up the debug trigger
 # - writes JSON for each action to /var/tmp/file.manager.active (as Control.php would do it)
 # - waits for file_manager worker to process it and reads nchan output from debug file
-# - verifies output
+# - throttles the reads of every job (see "I/O throttling" below) so each job runs long enough to show progress
+# - verifies output and the progress which is shown to the user (check_progress)
 # - removes debug trigger and debug files on cleanup
 # ##################################################################### #
 
 # settings
 fm_job_json_file=/var/tmp/file.manager.active
-fm_exitcode_file=/var/tmp/file.manager.exitcode
 fm_stdout_file=/var/tmp/file.manager.status
 fm_error_file=/var/tmp/file.manager.error
 fm_file="/usr/local/emhttp/webGui/nchan/file_manager"
@@ -39,6 +39,13 @@ files_path="$src_path/files"
 dst_path="$test_path/dst"
 special_chars_name=$'utf8_файл\nspecial&chars\*file\$'
 job_timeout=${TIMEOUT:-200}
+fm_nchan_ts_file="/var/tmp/file.manager.nchan.ts.debug"
+# Every job reads at most this many bytes per second (20 MiB/s), which is below the speed of any array disk (HDD: 50-250 MB/s,
+# NVMe: GB/s). So the duration of a job depends on its size and not on the disks of the person who runs the test.
+fm_read_limit=20971520
+# jobs which have to read at least 5 seconds worth of data must show progress
+progress_min_bytes=$((fm_read_limit * 5))
+fm_cgroup=/sys/fs/cgroup/file-manager-test
 IFS=' ' read -ra archive_multi_formats <<< "${MULTI:-tar.bz2 tar.lz4 tar.gz tar.xz tar.zst zip}"
 IFS=' ' read -ra archive_single_formats <<< "${SINGLE:-bz2 gz lz4 xz zst}"
 script_args=("$@")
@@ -49,6 +56,8 @@ if [[ ! $ssh_host || $ssh_host == "-h" || $ssh_host == "--help" ]]; then
   echo "Filters (any combination, space-separated):"
   echo "  compress, cmp, 16     compress tests (action 16)"
   echo "  extract, 17           extract tests (action 17)"
+  echo "  invalid               compress tests with invalid or failing sources (action 16)"
+  echo "  cancel, 99            cancel tests (cancel of compress and extract)"
   echo "  arc                   compress and extract tests (actions 16, 17)"
   echo "  rename, rn, 2, 7       rename tests (actions 2, 7)"
   echo "  move, mv, 4, 9         move tests (actions 4, 9)"
@@ -65,6 +74,11 @@ if [[ ! $ssh_host || $ssh_host == "-h" || $ssh_host == "--help" ]]; then
   echo "                   default: tar.bz2 tar.lz4 tar.gz tar.xz tar.zst zip"
   echo "  SINGLE='...'     space-separated single-file archive formats"
   echo "                   default: bz2 gz lz4 xz zst"
+  echo ""
+  echo "Every output line starts with the wall clock time and the seconds since the start."
+  echo "Every job is throttled to 20 MiB/s (cgroup v2 io.max) after the page cache was dropped, so"
+  echo "the progress which is shown to the user can be compared with the real values."
+  echo "Requires root and a cgroup v2 with the io controller (Unraid 7)."
   echo ""
   echo "Examples:"
   echo "  $(basename -- "$0") Tower              # run all tests"
@@ -87,12 +101,31 @@ if [[ $ssh_host && $0 != "/tmp/file-manager-integration.sh" ]]; then
   exit
 fi
 
+# prefix every output line with the wall clock time and the seconds since start, e.g.:
+# 10:04:12.832 +809.463s [PASS] compress zip: archive creation must succeed
+ts_start=${EPOCHREALTIME//[.,]/}
+exec > >(while IFS= read -r ts_line; do
+  ts_now=${EPOCHREALTIME//[.,]/}
+  ts_elapsed=$(( (ts_now - ts_start) / 1000 ))
+  ts_micro=${EPOCHREALTIME#*[.,]}
+  printf '%(%H:%M:%S)T.%s +%d.%03ds %s\n' "${EPOCHREALTIME%%[.,]*}" "${ts_micro:0:3}" "$((ts_elapsed / 1000))" "$((ts_elapsed % 1000))" "$ts_line"
+done) 2>&1
+
 # functions
 
 on_exit() {
   local rc=$?
   echo -e "\n=== exit ==="
   stop_file_manager
+  # leave the cgroup and remove it (the cgroup2-unraid daemon may have done this already) and the io controller (only if this test enabled it)
+  if [[ -d $fm_cgroup ]]; then
+    echo $$ > /sys/fs/cgroup/cgroup.procs
+    [[ -d $fm_cgroup ]] && rmdir "$fm_cgroup"
+  fi
+  [[ $io_controller_enabled ]] && echo "-io" > /sys/fs/cgroup/cgroup.subtree_control
+  # the debug trigger must never stay on the server, otherwise the next file_manager (e.g. started by the WebGUI) logs and keeps job
+  # files. The debug output of failed tests stays for inspection (clean_up_created_files removes it after successful tests).
+  rm -f /var/tmp/file.manager.debug /var/tmp/file.manager.force-copy-delete.debug
   if [[ $rc -eq 0 ]]; then
     clean_up_created_files
   else
@@ -109,6 +142,7 @@ on_signal() {
 trap on_exit EXIT
 trap on_signal INT TERM
 
+io_controller_enabled=
 # check condition and print pass/fail
 pass=0
 fail=0
@@ -127,7 +161,7 @@ check() {
 remove_job_files() {
   local timestamp
   timestamp=$(date +%Y%m%d%H%M%S)
-  for f in "$fm_job_json_file" "$fm_exitcode_file" "$fm_stdout_file" "$fm_error_file"; do
+  for f in "$fm_job_json_file" "$fm_stdout_file" "$fm_error_file"; do
     if [[ -f $f ]]; then
       # output first 10 and last 10 lines of each file for debugging before moving
       echo "  removing $f (first and last 10 lines):"
@@ -192,9 +226,9 @@ clean_up_created_files() {
   rm -f /var/tmp/file.manager.debug /var/tmp/file.manager.*.debug
 }
 
-# file manager is considered busy if any of the job files exist (job JSON, exit code, stdout, etc.)
+# file manager is considered busy if any of the job files exist (job JSON, stdout, stderr)
 is_action_in_progress() {
-  [[ -f $fm_job_json_file || -f $fm_exitcode_file || -f $fm_stdout_file || -f $fm_error_file ]]
+  [[ -f $fm_job_json_file || -f $fm_stdout_file || -f $fm_error_file ]]
 }
 
 # cancel currently active job (if any) by writing cancel action JSON (file_manager deletes $fm_job_json_file)
@@ -208,15 +242,158 @@ cancel_action() {
   fi
 }
 
-# write JSON data to file_manager's action file and wait for completion
+# check what the user sees of the last run_action: the progress which file_manager publishes through nchan
+# args: label expected_bytes [expected_total]
+#   expected_bytes: bytes the job has to read (size of the source for compress, copy and move, size of the archive for extract)
+#   expected_total: the "Total" which is shown (default: expected_bytes; zip extract shows the uncompressed size)
+#
+# All jobs are throttled to $fm_read_limit, so the real values are known: speed <= ~$fm_read_limit and duration >= expected_bytes / $fm_read_limit.
+# Jobs which read at least $progress_min_bytes (= 5 seconds worth of data) must show progress: a first progress line (the speed needs
+# a few seconds to be calculated, so it shows "ETA: N/A") and at least two more lines with speed and ETA.
+check_progress() {
+  local label=$1 expected_bytes=$2 expected_total=${3:-$2}
+  local count problems="" cond=0
+  # the update interval of file_manager is one second: more than 2.5 seconds without a message looks like a hang
+  local max_silence_ms=2500
+  # a job must be finished 2 seconds after it showed 100%
+  local max_after_100_ms=2000
+  local min_lines=3 min_eta_lines=2
+  # tolerance of the shown total: +-10%
+  local total_tolerance=10
+
+  # 1. one row per nchan message, e.g. for these messages
+  #      {"status":{"action":16,"text":[]}}
+  #      {"status":{"action":16,"text":["Compressing... files/a.bin","Completed: 8%,  Total: 285MB,  ETA: N/A"]}}
+  #      {"status":{"action":16,"text":["Compressing... files/a.bin","Completed: 24%,  Total: 285MB,  Speed: 25MB/s,  ETA: 0:00:08"]}}
+  #      {"status":{"action":16,"text":["Done"]},"done":1,"error":""}
+  #    and their arrival times (in $fm_nchan_ts_file) the rows are (the first column is the time in milliseconds):
+  #      1761646800210  -   -         -  -          0     <- empty status at the start of the job
+  #      1761646801260  8   -         -  298844160  0     <- first progress line, no speed yet
+  #      1761646803310  24  26214400  8  298844160  0     <- percent, speed (bytes/s), ETA (seconds), total (bytes), done
+  #      1761646806400  -   -         -  -          1     <- Done
+  #    "-" = not shown. The order of the values in the text differs between rsync and the other actions, the filter does not care.
+  local r_ms=() r_pct=() r_speed=() r_eta=() r_total=() r_done=()
+  local ts pct speed eta total done_flag
+  count=$(wc -l <"$fm_nchan_ts_file")
+  while IFS=$'\t' read -r ts pct speed eta total done_flag; do
+    r_ms+=("$(( ${ts//[.,]/} / 1000 ))")
+    r_pct+=("$pct")
+    r_speed+=("$speed")
+    r_eta+=("$eta")
+    r_total+=("$total")
+    r_done+=("$done_flag")
+  done < <(paste "$fm_nchan_ts_file" <(head -n "$count" "$fm_debug_nchan_file" | jq -r '
+    # "1.52GB" -> bytes (binary units; rsync prints "kB")
+    def to_bytes:
+      capture("^(?<number>[0-9.]+)(?<unit>[a-zA-Z]*)$")
+      | (.unit | ascii_upcase) as $unit
+      | (.number | tonumber) * ({"": 1, "B": 1, "KB": 1024, "MB": 1048576, "GB": 1073741824, "TB": 1099511627776}[$unit] // 1)
+      | floor;
+    (.status.text[1] // "") as $text
+    | [
+        (($text | capture("Completed: (?<v>[0-9]+)%") | .v) // "-"),
+        (($text | capture("Speed: (?<v>[0-9.]+[a-zA-Z]+)/s") | .v | to_bytes) // "-"),
+        (($text | capture("ETA: (?<h>[0-9]+):(?<m>[0-9]+):(?<s>[0-9]+)") | (.h | tonumber) * 3600 + (.m | tonumber) * 60 + (.s | tonumber)) // "-"),
+        (($text | capture("Total: (?<v>[0-9.]+[a-zA-Z]+)") | .v | to_bytes) // "-"),
+        (.done // 0)
+      ]
+    | @tsv'))
+
+  # 2. the job is finished when the done message arrived
+  local i first_ms=${r_ms[0]} done_ms=0
+  for i in "${!r_ms[@]}"; do
+    [[ ${r_done[i]} == 1 ]] && done_ms=${r_ms[i]}
+  done
+  if [[ $done_ms -eq 0 ]]; then
+    problems+="no done message"$'\n'
+    done_ms=${r_ms[-1]}
+  fi
+  local duration_ms=$(( done_ms - first_ms ))
+  # speeds above this are not possible, because the reads are throttled. Zip extract shows the uncompressed bytes,
+  # which are more than the bytes which are read from the archive (expected_total / expected_bytes)
+  local max_speed=$(( fm_read_limit * 2 * expected_total / (expected_bytes > 0 ? expected_bytes : 1) ))
+  # average speed of the whole job, shown speeds below a third of it are no real speeds
+  local avg_speed=0
+  (( duration_ms > 0 )) && avg_speed=$(( expected_total * 1000 / duration_ms ))
+
+  # 3. check every message
+  local progress_lines=0 eta_lines=0 last_pct=0 first_progress_ms=0 ms_100=0 prev_ms=$first_ms
+  local when remaining_ms diff_ms
+  for i in "${!r_ms[@]}"; do
+    printf -v when '+%d.%01ds' $(( (r_ms[i] - first_ms) / 1000 )) $(( (r_ms[i] - first_ms) % 1000 / 100 ))
+
+    # silence: time since the previous message (the last message is the done message)
+    if (( r_ms[i] - prev_ms > max_silence_ms )); then
+      problems+="no message for $(( (r_ms[i] - prev_ms) / 1000 )).$(( (r_ms[i] - prev_ms) % 1000 / 100 ))s before $when"$'\n'
+    fi
+    prev_ms=${r_ms[i]}
+
+    # messages without percent are the empty status at the start and the done message
+    [[ ${r_pct[i]} == - ]] && continue
+    progress_lines=$((progress_lines + 1))
+    [[ ${r_eta[i]} != - ]] && eta_lines=$((eta_lines + 1))
+
+    # percent: never above 100, never decreasing
+    (( r_pct[i] > 100 )) && problems+="percent above 100 (${r_pct[i]}%) at $when"$'\n'
+    (( r_pct[i] < last_pct )) && problems+="percent decreased from $last_pct% to ${r_pct[i]}% at $when"$'\n'
+    last_pct=${r_pct[i]}
+    (( r_pct[i] >= 100 && ms_100 == 0 )) && ms_100=${r_ms[i]}
+
+    # total: must be the size which was given to the job
+    if [[ ${r_total[i]} != - && $expected_total -gt 0 ]]; then
+      diff_ms=$(( r_total[i] > expected_total ? r_total[i] - expected_total : expected_total - r_total[i] ))
+      (( diff_ms * 100 > expected_total * total_tolerance )) && problems+="total ${r_total[i]} bytes at $when, but the job has $expected_total bytes"$'\n'
+    fi
+
+    # the first progress line is the start of the job and not checked for speed and ETA
+    if (( first_progress_ms == 0 )); then
+      first_progress_ms=${r_ms[i]}
+      continue
+    fi
+
+    # speed: not faster than the throttle allows and not near zero
+    if [[ ${r_speed[i]} != - ]]; then
+      (( r_speed[i] > max_speed )) && problems+="speed ${r_speed[i]} bytes/s at $when is above the limit of $max_speed bytes/s"$'\n'
+      (( r_speed[i] * 3 < avg_speed )) && problems+="speed ${r_speed[i]} bytes/s at $when is far below the average of $avg_speed bytes/s"$'\n'
+    fi
+
+    # ETA: must be about the real remaining time. The speed of a compressor depends on the data (random data: bzip2 11 MB/s, zeros:
+    # limited by the read limit), so the ETA is never exact. An ETA which is too long is harmless: the compressible rest of a zip
+    # extract (text, zeros) is done within a second, while the ETA was based on the speed of the random data. An ETA which is too
+    # short is the one which annoys the user ("ETA 0:00:05" for a job which has 90 seconds left). Tolerance: at most twice as
+    # long (plus 5 seconds) and at least half as long (minus 3 seconds).
+    if [[ ${r_eta[i]} != - ]]; then
+      remaining_ms=$(( done_ms - r_ms[i] ))
+      if (( r_eta[i] * 1000 > remaining_ms * 2 + 5000 || r_eta[i] * 1000 * 2 + 3000 < remaining_ms )); then
+        problems+="ETA ${r_eta[i]}s at $when, but $(( remaining_ms / 1000 ))s remained"$'\n'
+      fi
+    fi
+  done
+
+  # 4. the job must be finished soon after it showed 100%
+  if (( ms_100 > 0 && done_ms - ms_100 > max_after_100_ms )); then
+    problems+="job was still running $(( (done_ms - ms_100) / 1000 )).$(( (done_ms - ms_100) % 1000 / 100 ))s after it showed 100%"$'\n'
+  fi
+
+  # 5. long jobs must show enough progress
+  if (( expected_bytes >= progress_min_bytes )); then
+    (( progress_lines < min_lines )) && problems+="only $progress_lines progress lines (at least $min_lines expected)"$'\n'
+    (( eta_lines < min_eta_lines )) && problems+="only $eta_lines progress lines with an ETA (at least $min_eta_lines expected)"$'\n'
+  fi
+
+  echo "  progress: $progress_lines lines ($eta_lines with ETA), job took $(( duration_ms / 1000 )).$(( duration_ms % 1000 / 100 ))s for $expected_bytes bytes (limit $fm_read_limit bytes/s)"
+  if [[ $problems ]]; then
+    echo "  progress problems:"$'\n'"${problems%$'\n'}" | sed 's/^/  /'
+    cond=1
+  fi
+  check "$label: progress shown to the user must be plausible" $cond
+}
+
+# print the JSON of a job like Control.php writes it to the action file
 # args: action source target overwrite [format archive_name]
-# returns 0 on success (exit code 0), 1 on failure or timeout
-run_action() {
+job_json() {
   local action=$1 source=$2 target=$3 overwrite=$4
   local format=${5:-} archive_name=${6:-}
-  local json rc
-
-  # build action JSON
   # title is unused by file_manager (not read in any switch case); format/archive_name are harmless empty strings for action 17
   local title
   case $action in
@@ -234,10 +411,21 @@ run_action() {
     --arg archive_name "$archive_name"
   )
   # shellcheck disable=SC2016
-  if ! json=$(jq -n "${jq_args[@]}" '{"action":$action,"title":$title,"source":$source,"target":$target,"sparse":"","overwrite":$overwrite,"zfs":"","format":$format,"archive_name":$archive_name}'); then
+  if ! jq -n "${jq_args[@]}" '{"action":$action,"title":$title,"source":$source,"target":$target,"sparse":"","overwrite":$overwrite,"zfs":"","format":$format,"archive_name":$archive_name}'; then
     echo "Error: jq failed" 1>&2
     exit 1
   fi
+}
+
+# write JSON data to file_manager's action file and wait for completion
+# args: action source target overwrite [format archive_name]
+# returns 0 on success (exit code 0), 1 on failure or timeout
+run_action() {
+  local action=$1 source=$2 target=$3 overwrite=$4
+  local format=${5:-} archive_name=${6:-}
+  local json rc
+
+  json=$(job_json "$action" "$source" "$target" "$overwrite" "$format" "$archive_name")
   echo "JSON: $json" | sed 's/^/  /'
 
   # ensure file_manager is running
@@ -253,6 +441,15 @@ run_action() {
   echo "  run action"
 
   printf "" >"$fm_debug_nchan_file"
+  printf "" >"$fm_nchan_ts_file"
+  # in debug mode file_manager keeps the stderr of a job as .debug file. Jobs which write none (create folder, ...)
+  # would read the one of an earlier job, e.g. the error of a compress job which failed on purpose
+  rm -f "$fm_error_file.debug"
+
+  # read from the disk (not from the page cache, like a user who compresses files which were not accessed recently) with the read limit
+  sync
+  echo 3 > /proc/sys/vm/drop_caches
+  echo "$test_device rbps=$fm_read_limit" > "$fm_cgroup/io.max"
 
   # write JSON to job file to trigger file_manager action
   echo "$json" >"$fm_job_json_file"
@@ -261,10 +458,12 @@ run_action() {
   # timeout acts as safety net in case file_manager hangs
   local start=$SECONDS
   timeout "$job_timeout" tail -n +1 -f "$fm_debug_nchan_file" | while IFS= read -r line; do
+    echo "$EPOCHREALTIME" >>"$fm_nchan_ts_file"
     echo "  nchan: $line"
     [[ $line == *'"done":1'* || $line == *'"done":2'* ]] && break
   done
   local rc=${PIPESTATUS[0]}
+  echo "$test_device rbps=max" > "$fm_cgroup/io.max"
 
   if [[ $rc -eq 124 ]]; then
     echo "Error: timeout after ${job_timeout}s"
@@ -272,16 +471,8 @@ run_action() {
     return 2
   fi
 
-  # rc -1 = FM_EXITCODE_FILE not written for this op type (multi-file extract) => N/A, not failure
-  # rc  0 = explicit success
-  # rc >0 = explicit failure
-  rc=-1
-  if [[ -f $fm_exitcode_file ]]; then
-    rc=$(cat "$fm_exitcode_file")
-  elif [[ -f $fm_exitcode_file.debug ]]; then
-    rc=$(cat "$fm_exitcode_file.debug")
-  fi
   # treat non-empty stderr as failure
+  rc=0
   local stderr
   stderr=$(cat "$fm_error_file" 2>/dev/null)
   [[ ! $stderr ]] && stderr=$(cat "$fm_error_file.debug" 2>/dev/null)
@@ -296,8 +487,8 @@ run_action() {
     echo "  nchan error: $nchan_err"
     rc=99
   fi
-  echo "  exit code: $rc, waited: $((SECONDS - start))s"
-  [[ $rc -eq 0 || $rc -eq -1 ]]
+  echo "  result: $rc, waited: $((SECONDS - start))s"
+  [[ $rc -eq 0 ]]
 }
 
 # returns 0 if test section should run: no filter set, or any keyword matches a filter arg
@@ -351,6 +542,7 @@ test_compress() {
 
   run_action 16 "$input_file" "$target" 1 "$format" "$archive_name"
   rc=$?
+  [[ $rc -eq 0 ]] && check_progress "compress $format" "$(du -sb -- "$input_file" | cut -f1)"
   # check nchan output: no empty publishes, empty text at most once, % non-decreasing, text[0] = "Compressing..."
   local empty_text_count=0 last_pct=-1 text0 text1 err_msg pct text_len speed_unit
   while IFS= read -r line; do
@@ -441,6 +633,14 @@ test_extract() {
   mkdir "$dest" || { echo "Error: failed to create destination directory $dest" 1>&2; exit 1; }
 
   run_action 17 "$archive" "$dest" 0; rc=$?
+  # the percentage is based on the bytes which are read from the archive. Only zip shows the uncompressed size as total.
+  if [[ $rc -eq 0 ]]; then
+    if [[ $format == zip ]]; then
+      check_progress "extract $format" "$(stat -c%s -- "$archive")" "$(du -sb -- "$source_dir" | cut -f1)"
+    else
+      check_progress "extract $format" "$(stat -c%s -- "$archive")"
+    fi
+  fi
 
   # check nchan output: no empty publishes, empty text at most once, % non-decreasing, text[0] = "Extracting..."
   local empty_text_count=0 last_pct=-1 text0 text1 err_msg pct text_len speed_unit
@@ -934,6 +1134,7 @@ test_copy() {
   fi
 
   run_action "$action" "$source" "$dest_dir" 0; rc=$?
+  [[ $rc -eq 0 ]] && check_progress "copy $label" "$(du -sb -- "$source" | cut -f1)"
 
   # check nchan output: text[0] must be "Copying..." or "Done"
   local empty_text_count=0 text0 text_len
@@ -978,7 +1179,7 @@ test_copy_folder() { test_copy "$1" "$2" "$3" 3; }
 test_move() {
   local label=$1 source=$2 dest_dir=$3 action=$4
   local force_copy_delete=${5:-}
-  local rc dest_item pre
+  local rc dest_item pre source_bytes
   local force_file=/var/tmp/file.manager.force-copy-delete.debug
 
   should_run move mv 4 9 || return 0
@@ -1013,6 +1214,7 @@ test_move() {
 
   # fingerprint source before move to verify integrity at destination
   pre=$(find_metadata "$source")
+  source_bytes=$(du -sb -- "$source" | cut -f1)
 
   # force rsync copy-delete path if requested (requires FM_DEBUG_MODE active)
   # FM_DEBUG_FORCE_COPY_DELETE is a PHP define() evaluated at process start, so file_manager
@@ -1023,6 +1225,8 @@ test_move() {
   fi
 
   run_action "$action" "$source" "$dest_dir" 0; rc=$?
+  # rsync-rename does not read any data (it renames), so the read limit does not apply and there is no progress to check
+  [[ $rc -eq 0 && $force_copy_delete ]] && check_progress "move $path_label" "$source_bytes"
 
   [[ $force_copy_delete ]] && rm -f "$force_file"
 
@@ -1069,8 +1273,142 @@ test_move() {
 test_move_file()   { test_move "$1" "$2" "$3" 9 "${4:-}"; }
 test_move_folder() { test_move "$1" "$2" "$3" 4 "${4:-}"; }
 
+# print the processes of the running job: everything in the cgroup of this test which is named like a tool of a compress/extract job
+# (the shell of the test and the worker, which is php, are not listed)
+job_processes() {
+  local pids
+  pids=$(tr '\n' ',' <"$fm_cgroup/cgroup.procs")
+  ps -o pid=,comm= -p "${pids%,}" | grep -E ' (tar|pv|gzip|bzip2|xz|zstd|lz4|zip|unzip|pvzip)$'
+}
+
+# test that a compress job fails and publishes no archive if the source is invalid: a source which does not exist, or a folder or
+# several files as source of a single-file format (.gz, ...)
+# args: label format source archive_name expected_error
+test_compress_invalid() {
+  local label=$1 format=$2 source=$3 archive_name=$4 expected_error=$5
+  local rc error_text
+
+  should_run compress invalid arc cmp 16 || return 0
+
+  echo -e "\n=== compress $format with invalid source: $label ==="
+
+  rm -f "${dst_path:?}/$archive_name"
+  run_action 16 "$source" "$dst_path" 1 "$format" "$archive_name" && rc=1 || rc=0
+  check "compress $format ($label): action run must fail" "$rc"
+
+  error_text=$(jq -r '.error // empty' "$fm_debug_nchan_file" | head -1)
+  rc=1 && [[ $error_text == *"$expected_error"* ]] && rc=0
+  check "compress $format ($label): the user must see an error like '$expected_error' (is: '$error_text')" "$rc"
+
+  rc=0 && [[ -e "$dst_path/$archive_name" ]] && rc=1
+  check "compress $format ($label): no archive may be published" "$rc"
+}
+
+# test that a compress job fails and publishes no archive if a file is changed while tar reads it, because the archive would not
+# contain a consistent state of the file
+test_compress_changing_source() {
+  local format=tar.gz archive_name=changing.tar.gz
+  local changing_path="$src_path/changing" writer rc error_text
+
+  should_run compress invalid arc cmp 16 || return 0
+
+  echo -e "\n=== compress $format with a file which changes while it is archived ==="
+
+  rm -rf "${changing_path:?}" "${dst_path:?}/$archive_name"
+  mkdir -p "$changing_path"
+  head -c 100M "$files_path/urandom150MB.bin" >"$changing_path/changing.bin"
+
+  # the file is read with the read limit (about 5 seconds), so one of the appends happens while tar reads it
+  (for _ in {1..30}; do echo "$EPOCHREALTIME" >>"$changing_path/changing.bin"; sleep 1; done) &
+  writer=$!
+  run_action 16 "$changing_path/changing.bin" "$dst_path" 1 "$format" "$archive_name" && rc=1 || rc=0
+  kill "$writer"
+  wait "$writer"
+  check "compress $format (changing file): action run must fail" "$rc"
+
+  error_text=$(jq -r '.error // empty' "$fm_debug_nchan_file" | head -1)
+  rc=1 && [[ $error_text == *"file changed as we read it"* ]] && rc=0
+  check "compress $format (changing file): the user must see an error (is: '$error_text')" "$rc"
+
+  rc=0 && [[ -e "$dst_path/$archive_name" ]] && rc=1
+  check "compress $format (changing file): no archive may be published" "$rc"
+
+  rm -rf "${changing_path:?}"
+}
+
+# test that a cancel stops all processes of the job (tar, zip, xz, ...) and leaves no temporary file in the target
+# args: label action source target [format archive_name]
+test_cancel() {
+  local label=$1 action=$2 source=$3 target=$4
+  local format=${5:-} archive_name=${6:-}
+  local json rc running leftovers
+
+  should_run cancel arc 16 17 99 || return 0
+
+  echo -e "\n=== cancel $label (action $action) ==="
+
+  rm -rf "${target:?}"
+  mkdir -p "$target"
+  json=$(job_json "$action" "$source" "$target" 1 "$format" "$archive_name")
+  run_file_manager
+  if is_action_in_progress; then
+    echo "Error: can not start new action as file_manager is busy (job files still exist)!" 1>&2
+    fail=$((fail + 1))
+    return 2
+  fi
+
+  # read from the disk with the read limit (see run_action), so the job is still running when it is canceled
+  printf "" >"$fm_debug_nchan_file"
+  sync
+  echo 3 > /proc/sys/vm/drop_caches
+  echo "$test_device rbps=$fm_read_limit" > "$fm_cgroup/io.max"
+  echo "$json" >"$fm_job_json_file"
+  sleep 3
+
+  # the job must really run, otherwise the cancel would not be tested
+  running=$(job_processes)
+  rc=1 && [[ $running ]] && rc=0
+  check "cancel $label: the job must be running before it is canceled" "$rc"
+
+  # cancel like Control.php does: the cancel JSON keeps the temporary file of the running job (target_tmp)
+  echo "  cancel"
+  jq -c '.action = 99' "$fm_job_json_file" >"$fm_job_json_file.cancel" && mv "$fm_job_json_file.cancel" "$fm_job_json_file"
+  sleep 3
+  sed 's/^/  nchan: /' "$fm_debug_nchan_file"
+
+  rc=0
+  is_action_in_progress && rc=1
+  check "cancel $label: job files must be removed" "$rc"
+
+  running=$(job_processes)
+  rc=0
+  if [[ $running ]]; then
+    rc=1
+    echo "  still running: ${running//$'\n'/, }"
+    echo "$running" | awk '{print $1}' | xargs kill
+  fi
+  check "cancel $label: no process of the job may keep running" "$rc"
+  # the read limit stays until now, otherwise processes which were not stopped would finish quickly and could not be found
+  echo "$test_device rbps=max" > "$fm_cgroup/io.max"
+
+  # hidden temporary file of file_manager (.name_uniqid.tmp) and the temporary file of zip (zi followed by 6 characters)
+  leftovers=$(find "$target" -maxdepth 1 \( -name '.*.tmp' -o -name 'zi??????' \))
+  rc=0
+  [[ $leftovers ]] && { rc=1; echo "  left in the target: ${leftovers//$'\n'/, }"; }
+  check "cancel $label: no temporary file may be left in the target" "$rc"
+
+  rm -rf "${target:?}"
+}
+
 # create source files; idempotent - safe to call multiple times
 create_source_files() {
+  # files of an older layout (other file names or sizes) and their reference archives must not be mixed with the current ones
+  local layout_marker="$src_path/.layout-3"
+  if [[ -d $src_path && ! -f $layout_marker ]]; then
+    rm -rf "${src_path:?}" || { echo "Error: failed to remove $src_path" 1>&2; exit 1; }
+    echo "  removed test files of an older layout"
+  fi
+
   # create directories
   [[ ! -d "$test_path" ]] && ! mkdir -m 777 "$test_path" && { echo "Error: failed to create $test_path" 1>&2; exit 1; }
   [[ ! -d "$src_path" ]] && ! mkdir -m 777 "$src_path" && { echo "Error: failed to create $src_path" 1>&2; exit 1; }
@@ -1079,22 +1417,34 @@ create_source_files() {
   [[ ! -d "$arc_path" ]] && ! mkdir -m 777 "$arc_path" && { echo "Error: failed to create $arc_path" 1>&2; exit 1; }
   [[ ! -d "$files_path/small_files" ]] && ! mkdir -m 777 "$files_path/small_files" && { echo "Error: failed to create $files_path/small_files" 1>&2; exit 1; }
 
-  # random data (compressible only slightly)
+  # The jobs read with 20 MiB/s (see "I/O throttling"), so the sizes decide how long a job runs and how many progress lines it shows:
+  # a job which reads 150 MB takes 7.5 seconds. The archive of $files_path is about 190 MB, so extracting it takes 9 seconds.
+  # random data: the worst case for compressors, the archive is as big as the source
   [[ ! -f "$files_path/small_files/urandom10MB.bin" ]] && dd if=/dev/urandom bs=1M count=10 of="$files_path/small_files/urandom10MB.bin"
-  [[ ! -f "$files_path/urandom100MB.bin" ]] && dd if=/dev/urandom bs=1M count=100 of="$files_path/urandom100MB.bin"
-  [[ ! -f "$files_path/urandom1000MB.bin" ]] && dd if=/dev/urandom bs=1M count=1000 of="$files_path/urandom1000MB.bin"
+  [[ ! -f "$files_path/urandom150MB.bin" ]] && dd if=/dev/urandom bs=1M count=150 of="$files_path/urandom150MB.bin"
 
-  # zeros (highly compressible)
-  [[ ! -f "$files_path/small_files/zero10MB.bin" ]] && dd if=/dev/zero  bs=1M count=10 of="$files_path/small_files/zero10MB.bin"
-  [[ ! -f "$files_path/zero100MB.bin" ]] && dd if=/dev/zero  bs=1M count=100 of="$files_path/zero100MB.bin"
-  [[ ! -f "$files_path/zero1000MB.bin" ]] && dd if=/dev/zero  bs=1M count=1000 of="$files_path/zero1000MB.bin"
-
-  # create partially compressible file: random data with zero blocks interspersed
-  if [[ ! -f "$files_path/mix1000MB.bin" ]]; then
-    for _ in {1..50}; do
-      cat "$files_path/small_files/urandom10MB.bin" "$files_path/small_files/zero10MB.bin"
-    done >"$files_path/mix1000MB.bin"
+  # text: 9 million random words of a vocabulary of 3000 words with a decreasing probability, like a log or a document. The
+  # compression ratio is 1.5 (lz4) to 4 (bzip2) and, like for real text, the archive is much smaller than the source.
+  # example: "kdgiqr btqyeyiih kmhhy yakp lgdww nnv uxxdl zlwpl suhph uie ihelzqypn bwttmhswg."
+  if [[ ! -f "$files_path/text60MB.txt" ]]; then
+    LC_ALL=C awk 'BEGIN {
+      srand(7)
+      split("abcdefghijklmnopqrstuvwxyz", letters, "")
+      # vocabulary: 3000 words of 3-9 random letters
+      for (i = 1; i <= 3000; i++) {
+        length_of_word = 3 + int(rand() * 7)
+        word = ""
+        for (j = 0; j < length_of_word; j++) word = word letters[1 + int(rand() * 26)]
+        vocabulary[i] = word
+      }
+      # rand() * rand() prefers the first words of the vocabulary; a sentence has 12 words
+      for (k = 0; k < 9000000; k++) printf "%s%s", vocabulary[1 + int(rand() * rand() * 3000)], (k % 12 == 11 ? ".\n" : " ")
+    }' >"$files_path/text60MB.txt"
   fi
+
+  # zeros: extremely compressible, the archive is almost empty
+  [[ ! -f "$files_path/small_files/zero10MB.bin" ]] && dd if=/dev/zero  bs=1M count=10 of="$files_path/small_files/zero10MB.bin"
+  [[ ! -f "$files_path/zero40MB.bin" ]] && dd if=/dev/zero  bs=1M count=40 of="$files_path/zero40MB.bin"
 
   # create huge amount of empty directories
   [[ ! -d "$files_path/empty_dirs" ]] && ! mkdir "$files_path/empty_dirs" && { echo "Error: failed to create $files_path/empty_dirs" 1>&2; exit 1; }
@@ -1115,7 +1465,7 @@ create_source_files() {
   [[ ! -f "$files_path/utf8_файл.txt" ]] && echo "utf-8 filename" >"$files_path/utf8_файл.txt"
 
   # create file with newline and tabulator in name
-  [[ ! -f "$files_path/$'newline\ntab\tfile.txt'" ]] && echo "newline in filename" >"$files_path/$'newline\ntab\tfile.txt'"
+  [[ ! -f "$files_path/"$'newline\ntab\tfile.txt' ]] && echo "newline in filename" >"$files_path/"$'newline\ntab\tfile.txt'
 
   # create file with shell-related special chars in name
   [[ ! -f "$files_path/shell.\${specific}.special&chars\$file|name.txt" ]] && echo "special chars in filename" >"$files_path/shell.\${specific}.special&chars\$file|name.txt"
@@ -1129,7 +1479,11 @@ create_source_files() {
   [[ ! -f "$files_path/delete_dir/file.txt" ]] && echo "file in dir" >"$files_path/delete_dir/file.txt"
   [[ ! -f "$files_path/delete_dir/subdir/file.txt" ]] && echo "file in subdir" >"$files_path/delete_dir/subdir/file.txt"
 
-  # create file and directory for rename test (renamed targets are left in place; re-created by guards on next run)
+  # remove the renamed targets of the rename tests, they are not part of the reference archives of the extract tests
+  # (which are reused by the next run)
+  rm -rf "${files_path:?}/$special_chars_name-renamed.txt" "${files_path:?}/$special_chars_name-renamed-dir"
+
+  # create file and directory for rename test (the originals are re-created by the guards after the rename tests)
   [[ ! -f "$files_path/$special_chars_name-rename.txt" ]] && echo "file for rename test" >"$files_path/$special_chars_name-rename.txt"
   [[ ! -d "$files_path/$special_chars_name-rename-dir" ]] && mkdir "$files_path/$special_chars_name-rename-dir"
   [[ ! -f "$files_path/$special_chars_name-rename-dir/content.txt" ]] && echo "content in rename dir" >"$files_path/$special_chars_name-rename-dir/content.txt"
@@ -1184,9 +1538,11 @@ create_source_files() {
   done
   for fmt in "${archive_single_formats[@]}"; do
     [[ ! -f "$arc_path/$special_chars_name.txt.$fmt" ]] && build_archive "$fmt" "$files_path/$special_chars_name.txt" "$arc_path" "$special_chars_name.txt.$fmt"
+    [[ ! -f "$arc_path/urandom150MB.bin.$fmt" ]] && build_archive "$fmt" "$files_path/urandom150MB.bin" "$arc_path" "urandom150MB.bin.$fmt"
   done
   find "$arc_path" -exec touch -h -t 202001010000 {} +
 
+  touch "$layout_marker"
   echo "  test files have been created in $src_path"
 }
 
@@ -1201,6 +1557,30 @@ printf "" >"$fm_debug_nchan_file"
 
 # stop running file_manager so the next start picks up the debug trigger
 stop_file_manager
+
+# ===========================
+# I/O throttling
+# ===========================
+# Every job reads with at most $fm_read_limit, no matter how fast the disk of the person who runs the test is. So each job runs
+# long enough to show several progress updates and the shown values can be compared with the real ones.
+# - cgroup v2 io.max limits the reads of the block device which holds the test files (set in run_action while a job runs)
+# - the file_manager worker is started from this shell, so tar, zip, rsync, xz, ... inherit the cgroup and the limit
+# - the page cache is dropped before each job, otherwise the files would be read from RAM and not from the disk
+# - Unraid removes empty cgroups after a few seconds (cgroup2-unraid), so this shell moves into the cgroup right after creating it
+if [[ $(cat /sys/fs/cgroup/cgroup.controllers) != *io* ]]; then
+  echo "Error: this test requires cgroup v2 with the io controller (Unraid 7)" 1>&2
+  exit 1
+fi
+test_device=$(findmnt -n -o MAJ:MIN --target "${test_path%/*}" | tr -d ' ')
+if [[ $(cat /sys/fs/cgroup/cgroup.subtree_control) != *io* ]]; then
+  echo "+io" > /sys/fs/cgroup/cgroup.subtree_control
+  io_controller_enabled=1
+fi
+for attempt in {1..5}; do
+  mkdir -p "$fm_cgroup" && echo $$ > "$fm_cgroup/cgroup.procs" && break
+  [[ $attempt -eq 5 ]] && { echo "Error: failed to move into the cgroup $fm_cgroup" 1>&2; exit 1; }
+done
+echo "  throttling reads of device $test_device to $fm_read_limit bytes/s in cgroup $fm_cgroup (shell is in $(cat /proc/self/cgroup))"
 
 # ===========================
 # create source files
@@ -1220,6 +1600,10 @@ done
 for fmt in "${archive_single_formats[@]}"; do
   test_compress "$fmt" "$dst_path/$special_chars_name.txt.$fmt" "$files_path/$special_chars_name.txt" 1
 done
+# a larger single file runs long enough to show progress
+for fmt in "${archive_single_formats[@]}"; do
+  test_compress "$fmt" "$dst_path/urandom150MB.bin.$fmt" "$files_path/urandom150MB.bin"
+done
 
 # ===========================
 # extract tests
@@ -1233,6 +1617,28 @@ done
 for fmt in "${archive_single_formats[@]}"; do
   test_extract "$fmt" "$arc_path/$special_chars_name.txt.$fmt" "$dst_path/extract_$fmt/" 1
 done
+for fmt in "${archive_single_formats[@]}"; do
+  test_extract "$fmt" "$arc_path/urandom150MB.bin.$fmt" "$dst_path/extract_big_$fmt/"
+done
+
+# ===========================
+# invalid and failing compress tests
+# ===========================
+test_compress_invalid "second source does not exist" tar.gz "$files_path/hello.txt"$'\r'"$files_path/does_not_exist.txt" invalid.tar.gz "Cannot stat"
+test_compress_invalid "second source does not exist" zip "$files_path/hello.txt"$'\r'"$files_path/does_not_exist.txt" invalid.zip "name not matched"
+test_compress_invalid "folder" gz "$files_path/small_files" invalid-folder.gz "Single-file formats require exactly one file"
+test_compress_invalid "two files" gz "$files_path/hello.txt"$'\r'"$files_path/empty.txt" invalid-two.gz "Single-file formats require exactly one file"
+test_compress_changing_source
+
+# ===========================
+# cancel tests
+# ===========================
+for fmt in tar.bz2 zip; do
+  [[ " ${archive_multi_formats[*]} " == *" $fmt "* ]] || continue
+  test_cancel "compress $fmt" 16 "$files_path" "$dst_path/cancel" "$fmt" "cancel.$fmt"
+  test_cancel "extract $fmt" 17 "$arc_path/archive.$fmt" "$dst_path/cancel/"
+done
+[[ " ${archive_single_formats[*]} " == *" xz "* ]] && test_cancel "compress xz (single file)" 16 "$files_path/urandom150MB.bin" "$dst_path/cancel" xz cancel.xz
 
 # ===========================
 # create folder tests

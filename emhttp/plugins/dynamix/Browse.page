@@ -62,6 +62,8 @@ foreach (['DOCKER_APP_CONFIG_PATH', 'DOCKER_IMAGE_FILE'] as $key) {
   $val = rtrim(trim($docker_cfg[$key] ?? ''), '/');
   if ($val && preg_match('#^/mnt/[^/]+/(.+)$#', $val, $m)) {
     $dfm_docker_subpaths[] = $m[1];
+    // DOCKER_IMAGE_FILE is a file (e.g. /mnt/user/system/docker/docker.img): its folder belongs to the docker data as well
+    if (is_file($val) && dirname($m[1]) !== '.') $dfm_docker_subpaths[] = dirname($m[1]);
   }
 }
 // Fallback to defaults when docker is not configured
@@ -923,7 +925,9 @@ function doAction(action, title, id) {
     dfm_createSource(source.dfm_strip());
     // Remove single-file-only format options unless exactly one file (not folder) is selected
     var sources = source.split('\r').filter(Boolean);
-    var isSingleFile = sources.length === 1 && !sources[0].endsWith('/');
+    // note: folders below a user share have no trailing slash (see data()), so the type of the row decides
+    var isFolder = !link && $('#'+id).attr('type') == 'd';
+    var isSingleFile = sources.length === 1 && !sources[0].endsWith('/') && !isFolder;
     if (!isSingleFile) {
       dfm.window.find('.dfm_single_format').remove();
     }
@@ -934,15 +938,12 @@ function doAction(action, title, id) {
     // Set target to current directory
     dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
-      // Update archive name when target changes
-      updateArchiveName();
     });
     dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
     // Bind format change to update archive name
     dfm.window.find('#dfm_format').on('change', updateArchiveName);
     // Set initial archive name with uniqueness check
     updateArchiveName();
-    console.log('Compress dialog opened', {source: source, dir: dir});
     break;
   case 17: // extract
     dfm.window.html($('#dfm_templateExtract').html());
@@ -1024,7 +1025,6 @@ function doAction(action, title, id) {
         var format = action == 16 ? dfm.window.find('#dfm_format').val() : '';
         var archive_name = action == 16 ? dfm.window.find('#dfm_archive_name').val() : '';
         if (action == 16) {
-          console.log('Compress parameters:', {action: action, source: source, target: target, format: format, archive_name: archive_name});
           if (!archive_name) {errorTarget(); return;}
         }
         dfm.window.find('.dfm_text').removeClass('orange-text').html("_(Running)_...");
@@ -1044,7 +1044,6 @@ function doAction(action, title, id) {
         if (action == 16) {
           postData.format = encodeURIComponent(format);
           postData.archive_name = encodeURIComponent(archive_name);
-          console.log('Sending compress request to Control.php:', postData);
         }
         $.post('/webGui/include/Control.php',postData,function(){
           $.post('/webGui/include/Control.php',{mode:'read'},function(data){
@@ -1294,14 +1293,11 @@ function doActions(action, title) {
     dfm.window.find('#dfm_format').val(isAppdata ? 'tar.zst' : 'zip');
     dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
-      // Update archive name when target changes
-      updateArchiveName();
     });
     dfm.window.find('#dfm_target').addClass('dfm-target-with-tree');
     dfm.window.find('#dfm_format').on('change', updateArchiveName);
     // Set initial archive name with uniqueness check
     updateArchiveName();
-    console.log('Bulk compress dialog opened', {sources: source, bulk: bulk});
     break;
   case 17: // extract (toolbar: exactly one archive file selected)
     dfm.window.html($('#dfm_templateExtract').html());
@@ -1373,7 +1369,6 @@ function doActions(action, title) {
             var valid = ud ? /^\/mnt\/.+/ : (user ? /^\/mnt\/(user0?|disks|remotes)\/.+/ : /^\/mnt\/(?!.*(user0?|rootshare)\/).+$|^\/boot\/.+/);
             var format = dfm.window.find('#dfm_format').val();
             var archive_name = dfm.window.find('#dfm_archive_name').val();
-            console.log('Bulk compress Start clicked:', {target: target, format: format, archive_name: archive_name, bulk: bulk});
             if (!archive_name) {errorTarget(); return;}
             break;
           default:
@@ -1401,7 +1396,6 @@ function doActions(action, title) {
         if (action == 16) {
           postData.format = encodeURIComponent(format);
           postData.archive_name = encodeURIComponent(archive_name);
-          console.log('Sending bulk compress request:', postData);
         }
         $.post('/webGui/include/Control.php',postData,function(){
           $.post('/webGui/include/Control.php',{mode:'read'},function(data){

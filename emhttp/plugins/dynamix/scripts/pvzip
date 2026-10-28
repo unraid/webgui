@@ -13,10 +13,10 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
-# Usage (compress): pvzip zip   <total_bytes> <dot_mb> [fname_file]
-# Usage (extract):  pvzip unzip <total_bytes> <archive_path> [fname_file]
+# Usage (compress): pvzip zip   <total_bytes> <dot_mb> [current_file]
+# Usage (extract):  pvzip unzip <total_bytes> <archive_path> [current_file]
 #
-# Reads zip/unzip stdout from stdin, writes current filename to fname_file,
+# Reads zip/unzip stdout from stdin, writes current filename to current_file,
 # emits "elapsed bytes\n" lines to stderr every ~1 second (same format as pv).
 # The PHP parse_pv_progress() function reads these lines from the $status file.
 #
@@ -31,11 +31,11 @@ total_bytes=$2
 # zip: dot_mb (MB per dot); unzip: path to archive
 arg3=$3
 # optional: path to file where current filename is written
-fname_file=${4:-}
+current_file=${4:-}
 
 if [[ ! $mode || ! $total_bytes || ! $arg3 ]]; then
-  printf 'Usage: pv-zip zip   <total_bytes> <dot_mb> [fname_file]\n' >&2
-  printf '       pv-zip unzip <total_bytes> <archive_path> [fname_file]\n' >&2
+  printf 'Usage: pv-zip zip   <total_bytes> <dot_mb> [current_file]\n' >&2
+  printf '       pv-zip unzip <total_bytes> <archive_path> [current_file]\n' >&2
   exit 1
 fi
 
@@ -87,7 +87,7 @@ if [[ $mode == zip ]]; then
           else print int(n)
         }')
         dot_progress=0
-        [[ $fname_file ]] && printf '%s' "$fname" > "$fname_file"
+        [[ $current_file ]] && printf '%s' "$fname" > "$current_file"
         dot_mode=1
       elif [[ ! $char ]]; then
         char_buf=""
@@ -158,7 +158,7 @@ elif [[ $mode == unzip ]]; then
           func="${fname_to_uncompressed[$candidate]:-0}"
           committed=$(( committed + func ))
           bytes_done=$committed
-          [[ $fname_file ]] && printf '%s' "$candidate" > "$fname_file"
+          [[ $current_file ]] && printf '%s' "$candidate" > "$current_file"
         fi
         maybe_emit
         char_buf=""
@@ -190,7 +190,7 @@ elif [[ $mode == unzip ]]; then
     candidate="${candidate%"${candidate##*[! ]}"}"
     polling_fpath="$candidate"
     polling_uncompressed="${fname_to_uncompressed[$candidate]:-0}"
-    [[ $fname_file ]] && printf '%s' "$candidate" > "$fname_file"
+    [[ $current_file ]] && printf '%s' "$candidate" > "$current_file"
     already_handled=1
     # first stat poll immediately
     cur_size=$(stat -c%s -- "$polling_fpath" 2>/dev/null || echo 0)
