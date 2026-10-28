@@ -347,6 +347,13 @@ function isArchive(name) {
   return /\.(zip|tar|tgz|tbz2|txz|tar\.gz|tar\.bz2|tar\.xz|tar\.zst|tar\.lz4|gz|bz2|xz|zst|lz4)$/i.test(name);
 }
 
+function selectDefaultFormat(isAppdata) {
+  var $format = dfm.window.find('#dfm_format');
+  $format.val(isAppdata ? 'tar.zst' : 'zip');
+  // the preferred format is not offered if the user did not select it in the File Manager settings
+  if (!$format.val()) $format.prop('selectedIndex', 0);
+}
+
 function updateArchiveName() {
   var $dialog = dfm.window;
   // Get first source name from data attribute (set when dialog opened)
@@ -934,7 +941,7 @@ function doAction(action, title, id) {
     // Detect if source is under a configured docker/appdata path for default format selection
     var srcSubpath = source.replace(/^\/mnt\/[^\/]+\//, '');
     var isAppdata = dfm_docker_subpaths.some(function(p) { return srcSubpath === p || srcSubpath.indexOf(p + '/') === 0; });
-    dfm.window.find('#dfm_format').val(isAppdata ? 'tar.zst' : 'zip');
+    selectDefaultFormat(isAppdata);
     // Set target to current directory
     dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
@@ -1290,7 +1297,7 @@ function doActions(action, title) {
     // Detect if source is under a configured docker/appdata path for default format selection
     var srcSubpath = firstSource.replace(/^\/mnt\/[^\/]+\//, '');
     var isAppdata = dfm_docker_subpaths.some(function(p) { return srcSubpath === p || srcSubpath.indexOf(p + '/') === 0; });
-    dfm.window.find('#dfm_format').val(isAppdata ? 'tar.zst' : 'zip');
+    selectDefaultFormat(isAppdata);
     dfm.window.find('#dfm_target').val(dir).attr('data-pickroot',root).attr('data-picktop',root).attr('data-pickmatch',match).attr('data-pickfilter','SHOW_POPULAR').fileTreeAttach(null,null,function(path){
       dfm.window.find('#dfm_target').val(path).change();
     });

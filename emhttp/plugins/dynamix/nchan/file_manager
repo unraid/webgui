@@ -661,6 +661,8 @@ while (true) {
   if (isset($action)) {
     // check for language changes
     extract(parse_plugin_cfg('dynamix', true));
+    // bandwidth limit of rsync (copy and move): the setting is in MB/s, rsync expects KiB/s. Empty means no limit.
+    $bwlimit = (int)($filemanager['bwlimit'] ?? 0) > 0 ? '--bwlimit=' . ((int)$filemanager['bwlimit'] * 1024) : '';
     if ($display['locale'] != $locale_init) {
       $locale_init = $display['locale'];
       update_translation($locale_init);
@@ -751,7 +753,7 @@ while (true) {
         if ($target) {
           $mkpath = isdir($target) ? '--mkpath' : '';
           $ignore_existing = $overwrite ? '' : '--ignore-existing';
-          $cmd = "rsync -ahPIXH $sparse $ignore_existing $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
+          $cmd = "rsync -ahPIXH $sparse $ignore_existing $mkpath $bwlimit --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
           // note: -H (always on) preserves hard links within the transferred files, so that a copy is a 1:1 copy.
           // note: rsync defaults to "inc_recurse mode" which causes creating the whole directory structure at target before transfering files.
           //       This is a problem because those target directories get temporary permissions of "root:root" and "chmod 0700", which
@@ -928,7 +930,7 @@ while (true) {
           } else {
             $delete_empty_dirs = true; // cleanup needed: rsync --remove-source-files leaves empty directories
             $ignore_existing = $overwrite ? '' : '--ignore-existing';
-            $cmd = "rsync -ahPIXH $sparse $ignore_existing $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
+            $cmd = "rsync -ahPIXH $sparse $ignore_existing $mkpath $bwlimit --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
             // note: rsync defaults to "inc_recurse mode" which causes creating the whole directory structure at target before transfering files.
             //       This is a problem because those target directories get temporary permissions of "root:root" and "chmod 0700", which
             //       breaks access for all unraid users through /mnt/user/sharename. We avoid this behavior by using "--no-inc-recursive".

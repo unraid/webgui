@@ -46,6 +46,10 @@ fm_read_limit=20971520
 # jobs which have to read at least 5 seconds worth of data must show progress
 progress_min_bytes=$((fm_read_limit * 5))
 fm_cgroup=/sys/fs/cgroup/file-manager-test
+# settings of the File Manager (section [filemanager]), the speed limit test sets bwlimit and restores the file from the backup
+fm_cfg=/boot/config/plugins/dynamix/dynamix.cfg
+fm_cfg_backup=/var/tmp/dynamix.cfg.file-manager-test
+bwlimit_mb=5
 IFS=' ' read -ra archive_multi_formats <<< "${MULTI:-tar.bz2 tar.lz4 tar.gz tar.xz tar.zst zip}"
 IFS=' ' read -ra archive_single_formats <<< "${SINGLE:-bz2 gz lz4 xz zst}"
 script_args=("$@")
@@ -78,7 +82,8 @@ if [[ ! $ssh_host || $ssh_host == "-h" || $ssh_host == "--help" ]]; then
   echo "Every output line starts with the wall clock time and the seconds since the start."
   echo "Every job is throttled to 20 MiB/s (cgroup v2 io.max) after the page cache was dropped, so"
   echo "the progress which is shown to the user can be compared with the real values."
-  echo "Requires root and a cgroup v2 with the io controller (Unraid 7)."
+  echo "Requires root and a cgroup v2 with the io controller (Unraid 7). The test files must not be on zfs,"
+  echo "because the reads from zfs can not be throttled with a cgroup."
   echo ""
   echo "Examples:"
   echo "  $(basename -- "$0") Tower              # run all tests"
@@ -123,6 +128,8 @@ on_exit() {
     [[ -d $fm_cgroup ]] && rmdir "$fm_cgroup"
   fi
   [[ $io_controller_enabled ]] && echo "-io" > /sys/fs/cgroup/cgroup.subtree_control
+  # the settings which the speed limit test changed (the backup only exists while the test runs)
+  [[ -f $fm_cfg_backup ]] && mv -f "$fm_cfg_backup" "$fm_cfg"
   # the debug trigger must never stay on the server, otherwise the next file_manager (e.g. started by the WebGUI) logs and keeps job
   # files. The debug output of failed tests stays for inspection (clean_up_created_files removes it after successful tests).
   rm -f /var/tmp/file.manager.debug /var/tmp/file.manager.force-copy-delete.debug
@@ -685,7 +692,7 @@ test_extract() {
   check "nchan extract $format: empty status must appear at most once ($empty_text_count)" $(( empty_text_count > 1 ? 1 : 0 ))
   check "extract $format: action run must succeed" "$rc"
 
-  local extracted_file_count extracted_file
+  local extracted_file_count extracted_file extracted_subdir
   extracted_file_count=$(find "$dest" -type f -printf '.' | wc -c)
   if [[ $extracted_file_count -eq 1 ]]; then
     extracted_file=$(find "$dest" -type f)
@@ -1571,7 +1578,21 @@ if [[ $(cat /sys/fs/cgroup/cgroup.controllers) != *io* ]]; then
   echo "Error: this test requires cgroup v2 with the io controller (Unraid 7)" 1>&2
   exit 1
 fi
-test_device=$(findmnt -n -o MAJ:MIN --target "${test_path%/*}" | tr -d ' ')
+# zfs issues its I/O with kernel threads and assigns every bio to the root cgroup (vdev_disk.c: vdev_bio_associate_blkg), so the
+# cgroup of the process which reads does not limit it. Additionally the ARC is not emptied by drop_caches.
+test_fs=$(findmnt -n -o FSTYPE --target "${test_path%/*}")
+if [[ $test_fs == zfs ]]; then
+  echo "Error: reads from zfs can not be throttled with a cgroup, use a path on a disk with another filesystem" 1>&2
+  exit 1
+fi
+# io.max only accepts the number of a whole block device. The number which findmnt reports for the mount is the one of a partition
+# (e.g. a pool disk) or an anonymous one (btrfs: 0:NN), so the number is taken from the device of the mount source and from its
+# disk if it is a partition. A btrfs subvolume is appended to the source (/dev/sdb1[/subvol]). Only the first device of a btrfs
+# filesystem with several devices is throttled.
+test_source=$(findmnt -n -o SOURCE --target "${test_path%/*}")
+test_source=${test_source%%\[*}
+test_disk=$(lsblk -dno PKNAME "$test_source")
+test_device=$(lsblk -dno MAJ:MIN "/dev/${test_disk:-${test_source##*/}}" | tr -d ' ')
 if [[ $(cat /sys/fs/cgroup/cgroup.subtree_control) != *io* ]]; then
   echo "+io" > /sys/fs/cgroup/cgroup.subtree_control
   io_controller_enabled=1
@@ -1580,7 +1601,11 @@ for attempt in {1..5}; do
   mkdir -p "$fm_cgroup" && echo $$ > "$fm_cgroup/cgroup.procs" && break
   [[ $attempt -eq 5 ]] && { echo "Error: failed to move into the cgroup $fm_cgroup" 1>&2; exit 1; }
 done
-echo "  throttling reads of device $test_device to $fm_read_limit bytes/s in cgroup $fm_cgroup (shell is in $(cat /proc/self/cgroup))"
+if ! echo "$test_device rbps=max" > "$fm_cgroup/io.max"; then
+  echo "Error: io.max does not accept the device $test_device of $test_source, the reads of ${test_path%/*} can not be throttled" 1>&2
+  exit 1
+fi
+echo "  throttling reads of device $test_device ($test_source, $test_fs) to $fm_read_limit bytes/s in cgroup $fm_cgroup (shell is in $(cat /proc/self/cgroup))"
 
 # ===========================
 # create source files
@@ -1683,6 +1708,36 @@ test_search "no match pattern" "$files_path" "no_such_file_xyz.bin"
 # ===========================
 test_copy_file   "special chars" "$files_path/$special_chars_name-copy.txt" "$dst_path"
 test_copy_folder "files dir" "$files_path" "$dst_path"
+
+# ===========================
+# copy and move with a speed limit
+# ===========================
+# The speed limit of the File Manager settings (bwlimit in MB/s) is passed to rsync as --bwlimit. The worker reads the settings for
+# every job. The copy is the first and the move with rsync copy-delete the second rsync call which uses the limit.
+if should_run copy cp move mv; then
+  echo -e "\n=== speed limit of $bwlimit_mb MB/s for copy and move ==="
+  cp -p "$fm_cfg" "$fm_cfg_backup"
+  awk '/^\[/{skip = ($0 == "[filemanager]")} !skip' "$fm_cfg_backup" > "$fm_cfg"
+  printf '[filemanager]\nbwlimit="%s"\n' "$bwlimit_mb" >> "$fm_cfg"
+  bwlimit_source="$files_path/text60MB.txt"
+  bwlimit_expected_ms=$(( $(stat -c %s "$bwlimit_source") * 1000 / (bwlimit_mb * 1048576) ))
+  for bwlimit_action in copy move; do
+    bwlimit_start=${EPOCHREALTIME/./}
+    if [[ $bwlimit_action == copy ]]; then
+      should_run copy cp || continue
+      test_copy_file "speed limit" "$bwlimit_source" "$dst_path"
+    else
+      should_run move mv || continue
+      test_move_file "speed limit copy-delete" "$bwlimit_source" "$dst_path" 1
+    fi
+    bwlimit_ms=$(( (${EPOCHREALTIME/./} - bwlimit_start) / 1000 ))
+    echo "  $bwlimit_action took $((bwlimit_ms / 1000)) s, expected about $((bwlimit_expected_ms / 1000)) s"
+    check "$bwlimit_action with a speed limit of $bwlimit_mb MB/s: must take at least 80% of the expected $((bwlimit_expected_ms / 1000)) s (took $((bwlimit_ms / 1000)) s)" $(( bwlimit_ms * 10 >= bwlimit_expected_ms * 8 ? 0 : 1 ))
+    check "$bwlimit_action with a speed limit of $bwlimit_mb MB/s: must not take more than twice the expected time plus 10 s (took $((bwlimit_ms / 1000)) s)" $(( bwlimit_ms <= bwlimit_expected_ms * 2 + 10000 ? 0 : 1 ))
+  done
+  mv -f "$fm_cfg_backup" "$fm_cfg"
+  create_source_files >/dev/null # the move removed the source file
+fi
 
 # ===========================
 # move tests

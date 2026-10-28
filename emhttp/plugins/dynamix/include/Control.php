@@ -232,6 +232,12 @@ case 'undo':
     }
   }
   die($undo);
+case 'popular_remove':
+  removePopularDestinations([rawurldecode($_POST['path'] ?? '')]);
+  die('done');
+case 'popular_clear':
+  removePopularDestinations();
+  die('done');
 case 'read':
   $active = '/var/tmp/file.manager.active';
   $read = file_exists($active) ? file_get_contents($active) : '';
