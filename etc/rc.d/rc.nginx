@@ -413,6 +413,13 @@ build_locations(){
 	    try_files /login.php =404;
 	    include fastcgi_params;
 	}
+	location = /auth-request.php {
+	    internal;
+	    include fastcgi_params;
+	    fastcgi_param SCRIPT_FILENAME /usr/local/emhttp/auth-request.php;
+	    fastcgi_param SCRIPT_NAME /auth-request.php;
+	    fastcgi_pass unix:/var/run/php-fpm.sock;
+	}
 	#
 	# Redirect to login page on failed authentication (401)
 	#
@@ -533,7 +540,8 @@ build_locations(){
 	#
 	# proxy webterminal to ttyd server listening on unix:/var/run/<tag>.sock
 	#
-	location ~ /webterminal/(.*)/(.*)$ {
+	location ~ ^/webterminal/(ttyd|syslog)/(.*)$ {
+	    auth_request /auth-request.php;
 	    proxy_read_timeout 864000; # 10 days(!)
 	    proxy_pass http://unix:/var/run/$1.sock:/$2;
 	    proxy_http_version 1.1;
@@ -547,7 +555,8 @@ build_locations(){
 	#
 	# proxy logterminal to ttyd server listening on unix:/var/tmp/<tag>.sock
 	#
-	location ~ /logterminal/(.*)/(.*)$ {
+	location ~ ^/logterminal/([A-Za-z0-9][A-Za-z0-9_.-]{0,127})/(.*)$ {
+	    auth_request /auth-request.php;
 	    proxy_read_timeout 864000; # 10 days(!)
 	    proxy_pass http://unix:/var/tmp/$1.sock:/$2;
 	    proxy_http_version 1.1;
