@@ -160,7 +160,7 @@ function applyCfg() {
     }
     if (element.type === "checkbox" && element.className.substring(0, 7) === "vfiommu") {
       var pciId = element.id.replace(/^vfvfio/, "");
-      var mac = document.getElementById("vfmac" + pciId).value;
+      var mac = getVFMacValue(pciId);
       var elvfvfio = document.getElementById("vfvfio" + pciId).checked;
       if (elvfvfio == true) var vfvfio = "1"; else vfvfio = "0";
       string2 = string2 + element.value + "|" + vfvfio + "|" + mac + " ";
@@ -200,9 +200,14 @@ function applyCfg() {
   });
 }
 
+function getVFMacValue(pciId) {
+  var macField = document.getElementById("vfmac" + pciId);
+  return macField ? macField.value : '00:00:00:00:00:00';
+}
+
 function saveVFSettingsConfig(pciId,vd,class_id,interactive=1) {
   var message = "_(System Devices)_: _(A reboot is required to apply changes)_";
-  if (class_id == '0x02') var mac = document.getElementById("vfmac" + pciId).value; else var mac = null;
+  if (class_id == '0x02') var mac = getVFMacValue(pciId); else var mac = null;
   var vfio = document.getElementById("vfvfio" + pciId).checked;
 
   $.post( "/plugins/dynamix/include/update.sriov-cfg.php", { type:"sriovsettings", pciid: pciId, vd:vd, vfio:vfio, mac:mac, class_id:class_id } )
@@ -220,6 +225,7 @@ function saveVFSettingsConfig(pciId,vd,class_id,interactive=1) {
     if (interactive == 1)  reloadT1();
   });
 }
+
 function saveVFsConfig(pciId,vd,interactive=1) {
   var message = "_(System Devices)_: _(A reboot is required to apply changes)_";
   var numvfs = document.getElementById("vf" + pciId).value;
@@ -431,7 +437,7 @@ function applyVFsConfig(pciId, vd, vfs) {
 function applyVFSettings(pciId, vd, currentvfio, currentmac,class_id) {
 
   const message = "_(System Devices)_: _(A reboot is required to apply changes)_";
-  if (class_id == '0x02') var mac = document.getElementById("vfmac" + pciId).value; else var mac = null;
+  if (class_id == '0x02') var mac = getVFMacValue(pciId); else var mac = null;
   const vfio = document.getElementById("vfvfio" + pciId).checked;
 
   // --- Step 1: Check for active VMs (always returns JSON) ---

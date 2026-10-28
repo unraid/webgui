@@ -32,6 +32,66 @@ function xml_decode($string) {
   return strval(html_entity_decode($string, ENT_XML1, 'UTF-8'));
 }
 
+function extraParamsWithQuotedValuesMasked($extraParams) {
+  return preg_replace('/"[^"\\\\]*(?:\\\\.[^"\\\\]*)*"|\'[^\']*\'/', '""', $extraParams);
+}
+
+function replaceUnquotedExtraParams($extraParams, $callback) {
+  $parts = preg_split('/("[^"\\\\]*(?:\\\\.[^"\\\\]*)*"|\'[^\']*\')/', $extraParams, -1, PREG_SPLIT_DELIM_CAPTURE);
+  if ($parts === false) {
+    return $extraParams;
+  }
+  foreach ($parts as $i => $part) {
+    if ($part === '' || $part[0] === '"' || $part[0] === "'") {
+      continue;
+    }
+    $parts[$i] = $callback($part);
+  }
+  return implode('', $parts);
+}
+
+function extractMacAddressParam($extraParams) {
+  if (!is_string($extraParams)) {
+    return '';
+  }
+  $extraParams = extraParamsWithQuotedValuesMasked($extraParams);
+  if (preg_match('/(?:^|\s)--mac-address=([^\s\'"]+)/', $extraParams, $match)) {
+    return trim($match[1]);
+  }
+  if (preg_match('/(?:^|\s)--mac-address\s+([^\s\'"]+)/', $extraParams, $match)) {
+    return trim($match[1]);
+  }
+  return '';
+}
+
+function removeMacAddressParam($extraParams) {
+  if (!is_string($extraParams) || $extraParams === '') {
+    return '';
+  }
+  $extraParams = replaceUnquotedExtraParams($extraParams, function($part) {
+    $part = preg_replace('/(^|\s)--mac-address=[^\s\'"]+/', '$1', $part);
+    return preg_replace('/(^|\s)--mac-address\s+[^\s\'"]+/', '$1', $part);
+  });
+  return trim($extraParams);
+}
+
+function hasNetworkParam($extraParams) {
+  return is_string($extraParams) && preg_match('/(?:^|\s)--net(?:work)?(?:=|\s+)[^\s\'"]+/', extraParamsWithQuotedValuesMasked($extraParams));
+}
+
+function normalizeMacAddress($mac) {
+  $mac = strtolower(trim($mac ?? ''));
+  if ($mac === '') {
+    return '';
+  }
+  if (preg_match('/^[0-9a-f]{12}$/', $mac)) {
+    $mac = implode(':', str_split($mac, 2));
+  } else {
+    $mac = str_replace('-', ':', $mac);
+  }
+  return preg_match('/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/', $mac) ? $mac : '';
+}
+
 function generateTSwebui($url, $serve, $webUI) {
   if (!isset($webUI)) {
     return '';
@@ -74,7 +134,15 @@ function postToXML($post, $setOwnership=false) {
   } else {
     $xml->Network                  = xml_encode($post['contNetwork']);
   }
+  // Additional networks the container is attached to after creation (docker
+  // network connect). Stored comma-separated; the primary <Network> is excluded.
+  $extraNetworks = $post['contExtraNetworks'] ?? '';
+  if (is_array($extraNetworks)) $extraNetworks = implode(',', $extraNetworks);
+  $xml->ExtraNetworks              = xml_encode(trim($extraNetworks));
   $xml->MyIP                       = xml_encode($post['contMyIP']);
+  $extraNetwork                    = hasNetworkParam($post['contExtraParams'] ?? '');
+  $myMAC                           = $extraNetwork ? '' : normalizeMacAddress(trim($post['contMyMAC'] ?? '') ?: extractMacAddressParam($post['contExtraParams'] ?? ''));
+  $xml->MyMAC                      = xml_encode($myMAC);
   $xml->Shell                      = xml_encode($post['contShell']);
   $xml->Privileged                 = strtolower($post['contPrivileged']??'')=='on' ? 'true' : 'false';
   $xml->Support                    = xml_encode($post['contSupport']);
@@ -85,9 +153,10 @@ function postToXML($post, $setOwnership=false) {
   $xml->WebUI                      = xml_encode(trim($post['contWebUI']));
   $xml->TemplateURL                = xml_encode($post['contTemplateURL']);
   $xml->Icon                       = xml_encode(trim($post['contIcon']));
-  $xml->ExtraParams                = xml_encode($post['contExtraParams']);
+  $xml->ExtraParams                = xml_encode($myMAC && !$extraNetwork ? removeMacAddressParam($post['contExtraParams']) : $post['contExtraParams']);
   $xml->PostArgs                   = xml_encode($post['contPostArgs']);
   $xml->CPUset                     = xml_encode($post['contCPUset']);
+  $xml->Memory                     = xml_encode(trim($post['contMemory']??''));
   $xml->DateInstalled              = xml_encode(time());
   $xml->DonateText                 = xml_encode($post['contDonateText']);
   $xml->DonateLink                 = xml_encode($post['contDonateLink']);
@@ -148,7 +217,11 @@ function xmlToVar($xml) {
   $out['Repository']                   = xml_decode($xml->Repository);
   $out['Registry']                     = xml_decode($xml->Registry);
   $out['Network']                      = xml_decode($xml->Network);
+  $out['ExtraNetworks']                = xml_decode($xml->ExtraNetworks ?? '');
   $out['MyIP']                         = xml_decode($xml->MyIP ?? '');
+  $extraParams                         = xml_decode($xml->ExtraParams ?? '');
+  $extraNetwork                        = hasNetworkParam($extraParams);
+  $out['MyMAC']                        = $extraNetwork ? '' : normalizeMacAddress(xml_decode($xml->MyMAC ?? '') ?: extractMacAddressParam($extraParams));
   $out['Shell']                        = xml_decode($xml->Shell ?? 'sh');
   $out['Privileged']                   = xml_decode($xml->Privileged);
   $out['Support']                      = xml_decode($xml->Support);
@@ -159,9 +232,10 @@ function xmlToVar($xml) {
   $out['WebUI']                        = xml_decode($xml->WebUI);
   $out['TemplateURL']                  = xml_decode($xml->TemplateURL);
   $out['Icon']                         = xml_decode($xml->Icon);
-  $out['ExtraParams']                  = xml_decode($xml->ExtraParams);
+  $out['ExtraParams']                  = $extraParams;
   $out['PostArgs']                     = xml_decode($xml->PostArgs);
   $out['CPUset']                       = xml_decode($xml->CPUset);
+  $out['Memory']                       = xml_decode($xml->Memory ?? '');
   $out['DonateText']                   = xml_decode($xml->DonateText);
   $out['DonateLink']                   = xml_decode($xml->DonateLink);
   $out['Requires']                     = xml_decode($xml->Requires);
@@ -325,14 +399,31 @@ function xmlToCommand($xml, $create_paths=false) {
   $xml           = xmlToVar($xml);
   $cmdName       = strlen($xml['Name']) ? '--name='.escapeshellarg($xml['Name']) : '';
   $cmdPrivileged = strtolower($xml['Privileged'])=='true' ? '--privileged=true' : '';
-  if (preg_match('/^container:(.*)/', $xml['Network'])) {
-    $cmdNetwork  = preg_match('/\-\-net(work)?=/',$xml['ExtraParams']) ? "" : '--net='.escapeshellarg($xml['Network']);
-  } else {
-    $cmdNetwork  = preg_match('/\-\-net(work)?=/',$xml['ExtraParams']) ? "" : '--net='.escapeshellarg(strtolower($xml['Network']));
-  }
+  $extraNetwork  = hasNetworkParam($xml['ExtraParams']);
   $cmdMyIP       = '';
-  foreach (explode(' ',str_replace(',',' ',$xml['MyIP'])) as $myIP) if ($myIP) $cmdMyIP .= (strpos($myIP,':')?'--ip6=':'--ip=').escapeshellarg($myIP).' ';
+  if (preg_match('/^container:(.*)/', $xml['Network'])) {
+    $cmdNetwork  = $extraNetwork ? "" : '--net='.escapeshellarg($xml['Network']);
+  } else {
+    $networkName = strtolower($xml['Network']);
+    if ($extraNetwork) {
+      $cmdNetwork = "";
+    } elseif (strlen($xml['MyMAC']) && !in_array($networkName, ['host','none'])) {
+      $xml['ExtraParams'] = removeMacAddressParam($xml['ExtraParams']);
+      $networkEndpoint = ['name='.$networkName];
+      foreach (explode(' ',str_replace(',',' ',$xml['MyIP'])) as $myIP) {
+        if ($myIP) $networkEndpoint[] = (strpos($myIP,':') !== false ? 'ip6=' : 'ip=').$myIP;
+      }
+      $networkEndpoint[] = 'mac-address='.$xml['MyMAC'];
+      $cmdNetwork = '--network='.escapeshellarg(implode(',', $networkEndpoint));
+    } else {
+      $cmdNetwork  = '--net='.escapeshellarg($networkName);
+    }
+  }
+  if (!strlen($xml['MyMAC']) || preg_match('/^container:(.*)/', $xml['Network']) || $extraNetwork) {
+    foreach (explode(' ',str_replace(',',' ',$xml['MyIP'])) as $myIP) if ($myIP) $cmdMyIP .= (strpos($myIP,':') !== false ? '--ip6=' : '--ip=').escapeshellarg($myIP).' ';
+  }
   $cmdCPUset     = strlen($xml['CPUset']) ? '--cpuset-cpus='.escapeshellarg($xml['CPUset']) : '';
+  $cmdMemory     = strlen($xml['Memory']??'') ? '--memory='.escapeshellarg($xml['Memory']) : '';
   $Volumes       = [''];
   $Ports         = [''];
   $Variables     = [''];
@@ -480,10 +571,39 @@ function xmlToCommand($xml, $create_paths=false) {
     $pid_limit = "";
   }
 
-  $cmd = sprintf($docroot.'/plugins/dynamix.docker.manager/scripts/docker create %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s',
-         $cmdName, $TS_entrypoint, $cmdNetwork, $cmdMyIP, $cmdCPUset, $pid_limit, $cmdPrivileged, implode(' -e ', $Variables), $TS_hostname, $TS_exitnode, $TS_exitnode_ip, $TS_lan_access, $TS_routes, $TS_accept_routes, $TS_ssh, $TS_userspace_networking, $TS_serve_funnel, $TS_serve_port, $TS_serve_target, $TS_serve_local_path, $TS_serve_protocol, $TS_serve_protocol_port, $TS_serve_path, $TS_daemon_params, $TS_extra_params, $TS_state_dir, $TS_troubleshooting, $TS_postargs, implode(' -l ', $Labels), $TS_web_ui, $TS_hostname_label, implode(' -p ', $Ports), implode(' -v ', $Volumes), $TS_hook, $TS_cap, $TS_tundev, implode(' --device=', $Devices), $xml['ExtraParams'], escapeshellarg($xml['Repository']), $xml['PostArgs']);
+  $cmd = sprintf($docroot.'/plugins/dynamix.docker.manager/scripts/docker create %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s',
+         $cmdName, $TS_entrypoint, $cmdNetwork, $cmdMyIP, $cmdCPUset, $cmdMemory, $pid_limit, $cmdPrivileged, implode(' -e ', $Variables), $TS_hostname, $TS_exitnode, $TS_exitnode_ip, $TS_lan_access, $TS_routes, $TS_accept_routes, $TS_ssh, $TS_userspace_networking, $TS_serve_funnel, $TS_serve_port, $TS_serve_target, $TS_serve_local_path, $TS_serve_protocol, $TS_serve_protocol_port, $TS_serve_path, $TS_daemon_params, $TS_extra_params, $TS_state_dir, $TS_troubleshooting, $TS_postargs, implode(' -l ', $Labels), $TS_web_ui, $TS_hostname_label, implode(' -p ', $Ports), implode(' -v ', $Volumes), $TS_hook, $TS_cap, $TS_tundev, implode(' --device=', $Devices), $xml['ExtraParams'], escapeshellarg($xml['Repository']), $xml['PostArgs']);
   return [preg_replace('/\s\s+/', ' ', $cmd), $xml['Name'], $xml['Repository']];
 }
+
+// Attach a container to additional custom networks after it has been created.
+// `docker create/run` only accepts one --network, so extra networks (stored in
+// the template's <ExtraNetworks>, comma/space separated) are wired up here with
+// `docker network connect`. Idempotent and safe on both created and running
+// containers; the primary network is skipped so it is never double-connected.
+function connectExtraNetworks($name, $extra, $primary='', $echo=false) {
+  global $docroot;
+  if (is_array($extra)) $extra = implode(',', $extra);
+  if (!is_string($extra) || !strlen(trim($extra)) || !strlen(trim($name))) return true;
+  $script = $docroot.'/plugins/dynamix.docker.manager/scripts/docker';
+  $done = [];
+  $success = true;
+  foreach (preg_split('/[\s,]+/', trim($extra)) as $net) {
+    $net = trim($net);
+    if (!strlen($net)) continue;
+    $key = strtolower($net);
+    if ($key == strtolower(trim($primary)) || isset($done[$key])) continue;
+    $done[$key] = true;
+    exec($script.' network connect '.escapeshellarg($net).' '.escapeshellarg($name).' 2>&1', $o, $rc);
+    if ($rc !== 0) $success = false;
+    if ($echo) {
+      $msg = $rc===0 ? _('Connected network') : _('Could not connect network');
+      echo "<script>addLog('<b>".addslashes(htmlspecialchars($msg.": $net"))."</b>');</script>\n"; @flush();
+    }
+  }
+  return $success;
+}
+
 function stopContainer($name, $t=false, $echo=true) {
   global $DockerClient;
   $waitID = mt_rand();
@@ -703,6 +823,7 @@ function getCurlHandle($url, $method='GET') {
   curl_setopt($ch, CURLOPT_ENCODING, "");
   curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
   curl_setopt($ch, CURLOPT_REFERER, "");
+  curl_setopt($ch, CURLOPT_USERAGENT, "docker/Unraid os/Docker-Client");
   if ($method === 'HEAD') {
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'HEAD');
     curl_setopt($ch, CURLOPT_HEADER, true);

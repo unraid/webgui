@@ -323,7 +323,7 @@ function getMode(file){
   var modelist = require('ace/ext/modelist');
   return modelist.getModeForPath(file).mode;
 }
-var source = "{$0}";
+var source = window.dfm_file_source;
 var editor = ace.edit('dfm_editor');
 editor.session.setMode(getMode(source));
 editor.setOptions({
@@ -344,9 +344,10 @@ $.post('/webGui/include/Control.php',{mode:'edit',file:encodeURIComponent(source
 
 <div id="dfm_templateViewFile">
 <!--!
-<img id="dfm_viewer" href="{$0}">
+<img id="dfm_viewer">
 <script src="<?autov('/webGui/javascript/EZView.js')?>"></script>
 <script>
+document.getElementById('dfm_viewer').setAttribute('href',window.dfm_file_source);
 $('#dfm_viewer').EZView();
 $('#dfm_viewer').click();
 </script>
@@ -358,7 +359,7 @@ $('#dfm_viewer').click();
 <div id="dfm_jobs"></div>
 <script>
 $.post('/webGui/include/Control.php',{mode:'jobs'},function(jobs){
-  $('#dfm_jobs').html(jobs);
+  renderJobs(jobs);
 });
 </script>
 !-->

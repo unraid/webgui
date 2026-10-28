@@ -266,9 +266,9 @@ foreach ($shares as $name => $share) {
 		}
 	}
 
-	echo "<tr><td><a class='view' href=\"/$path/Browse?dir=/mnt/user/", htmlspecialchars($name), "\"><i class=\"icon-u-tab\" title=\"", _('Browse'), " /mnt/user/" . htmlspecialchars($name), "\"></i></a>";
+	echo "<tr><td><a class='view info' href=\"/$path/Browse?dir=/mnt/user/", rawurlencode($name), "\"><i class=\"fa fa-folder-o\"></i><span>", _('Open in File Manager'), "</span></a>";
 	echo "<a class='info nohand' onclick='return false'><i class='fa fa-$orb orb $color-orb'></i><span style='left:18px'>$help</span></a>$luks<a href=\"/$path/Share?name=";
-	echo rawurlencode($name), "\" onclick=\"$.cookie('one','tab1')\">$name</a></td>";
+	echo rawurlencode($name), "\" onclick=\"$.cookie('one','tab1')\">", htmlspecialchars($name, ENT_QUOTES, 'UTF-8'), "</a></td>";
         echo "<td>", htmlspecialchars(_var($share,'comment')), "</td>";
 	echo "<td>", user_share_settings($var['shareSMBEnabled'], $sec[$name]), "</td>";
 	echo "<td>", user_share_settings($var['shareNFSEnabled'], $sec_nfs[$name]), "</td>";

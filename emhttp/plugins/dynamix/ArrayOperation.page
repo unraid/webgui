@@ -54,8 +54,8 @@ function check_encryption() {
   echo mk_option(1,'text',_('Passphrase'));
   echo mk_option(1,'file',_('Keyfile'));
   echo "</select></td></tr>";
-  echo "<tr id='text'><td></td><td><label for='key-passphrase'>",_('Passphrase'),":</label></td><td><div class='flex flex-row items-center gap-2'><input id='key-passphrase' type='password' name='text' maxlength='512' value='' onkeyup='selectInput(this.form)' placeholder=\""._('use printable characters only')."\"><label class='inline-flex flex-row items-center gap-2 flex-shrink-0'><input name='showPass' type='checkbox' onchange='selectInput(this.form)'>"._('show passphrase')."</label></div></td></tr>";
-  echo "<tr id='copy' class='hidden'><td></td><td><label for='key-retype-passphrase'>",_('Retype passphrase'),":</label></td><td><input id='key-retype-passphrase' type='password' name='copy' maxlength='512' value='' onkeyup='selectInput(this.form)'></td></tr>";
+  echo "<tr id='text'><td></td><td><label for='key-passphrase'>",_('Passphrase'),":</label></td><td><div class='flex flex-row items-center gap-2'><input id='key-passphrase' type='password' name='text' maxlength='512' value='' onkeyup='selectInput(this.form)' onkeydown='submitOnEnter(event)' placeholder=\""._('use printable characters only')."\"><label class='inline-flex flex-row items-center gap-2 flex-shrink-0'><input name='showPass' type='checkbox' onchange='selectInput(this.form)'>"._('show passphrase')."</label></div></td></tr>";
+  echo "<tr id='copy' class='hidden'><td></td><td><label for='key-retype-passphrase'>",_('Retype passphrase'),":</label></td><td><input id='key-retype-passphrase' type='password' name='copy' maxlength='512' value='' onkeyup='selectInput(this.form)' onkeydown='submitOnEnter(event)'></td></tr>";
   echo "<tr id='file' class='hidden'><td></td><td><label for='key-file-upload'>",_('Keyfile'),":</label></td><td><input id='key-file-upload' type='file' name='local' onchange='getFileContent(event,this.form)'></td></tr>";
 }
 
@@ -151,6 +151,24 @@ function toggle_diskio(init) {
 
 function base64(str) {
   return window.btoa(unescape(encodeURIComponent(str)));
+}
+
+function submitOnEnter(event) {
+  if (event.key !== 'Enter') return;
+
+  const field = event.target.name;
+  if (field !== 'text' && field !== 'copy') return;
+
+  const start = $('#cmdStart');
+  if (start.length && !start.prop('disabled')) {
+    // Passphrase validated (and matches the retype field when shown): start.
+    event.preventDefault();
+    start.click();
+  } else if (field === 'text' && $('#copy').is(':visible')) {
+    // Set-new-passphrase flow: confirm in the retype field before starting.
+    event.preventDefault();
+    $('#key-retype-passphrase').focus();
+  }
 }
 
 function selectInput(form) {
@@ -412,6 +430,13 @@ $('div[class=title]:not(":last, .disable_diskio") .right').each(function(){$(thi
 <?endif;?>
 $('.tooltip_diskio').tooltipster({delay:100,trigger:'custom',triggerOpen:{mouseenter:true},triggerClose:{click:false,scroll:true,mouseleave:true}});
 
+var maxmoverlines = 5;
+function hideMoverRows() {
+  for (let i = 0; i < maxmoverlines; i++) {
+    $('#moverrow'+i).prop('hidden', true);
+  }
+}
+
 <?if (_var($var,'fsState') == 'Started'):?>
 var mymonitor = new NchanSubscriber('/sub/mymonitor',{subscriber:'websocket', reconnectTimeout:5000});
 mymonitor.on('message', function(state) {
@@ -431,6 +456,7 @@ mymonitor.on('message', function(state) {
     $('#mover-button').prop('disabled',false);
     $('#mover-text').html("<b>_(Empty)_</b> _(will immediately invoke the Mover to Empty a disk)_.&nbsp;<a href=\"/Main/Settings/Scheduler\"<?if($tabbed):?> onclick=\"$.cookie('one','tab2')\"<?endif;?>>(_(Schedule)_)</a>");
 <?endif;?>
+    hideMoverRows();
     break;
   case '1': // parity running
     $('#stop-button').prop('disabled',true);
@@ -447,6 +473,7 @@ mymonitor.on('message', function(state) {
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ -- _(Parity operation is running)_");
 <?endif;?>
+    hideMoverRows();
     break;
   case '2': // mover running
     $('#stop-button').prop('disabled',true);
@@ -454,6 +481,8 @@ mymonitor.on('message', function(state) {
 <?if (_var($var,'shareUser') == 'e' && $pool_devices):?>
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ - _(Mover is running)_.");
+
+
 <?endif;?>
 <?if (!$pool_devices):?>
     $('#mover-button').prop('disabled',true);
@@ -471,6 +500,7 @@ mymonitor.on('message', function(state) {
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ -- _(BTRFS operation is running)_");
 <?endif;?>
+    hideMoverRows();
     break;
   }
 });
@@ -481,6 +511,42 @@ var arraymonitor = new NchanSubscriber('/sub/arraymonitor',{subscriber:'websocke
 arraymonitor.on('message', function(state) {
   if (state == 1 && !timers.arraymonitor) timers.arraymonitor = setTimeout(refresh,1250);
 });
+
+<?if (_var($var,'shareMoverProgress','no') === 'yes'):?>
+var moverStatus = new NchanSubscriber('/sub/mover',{subscriber:'websocket'});
+moverStatus.on('message', function(moverdata) {
+  var moverlines = 0;
+  var selectlines = [] ;
+  hideMoverRows();
+  try {
+    moverdata = JSON.parse(moverdata);
+    $.each(moverdata,function(key,value) {
+      if(key=="Showlines") {moverlines=value;}
+      if(key=="Selectlines") {selectlines=String(value).split(',');}
+      $('#'+key).html(value);
+    });
+  } catch(e) {
+    $.each(moverdata.split(';'),function(k,v) {
+    var keydata = v.split('#');
+        if(keydata[0]=="Showlines") {moverlines=keydata[1];}
+        if(keydata[0]=="Selectlines") {selectlines=keydata[1].split(',');}
+        $('#'+keydata[0]).html(keydata[1]);
+      });
+  }
+
+    if(moverlines > maxmoverlines) moverlines = maxmoverlines;
+  for (let i = 0; i < moverlines; i++) {
+    var selectline =  i + 1;
+    var selectlinestr = selectline.toString();
+    var checkselectline = selectlines.includes(selectlinestr);
+    if (checkselectline == true) $('#moverrow'+i).prop('hidden', false);
+     };
+});
+moverStatus.on('error', hideMoverRows);
+moverStatus.on('disconnect', hideMoverRows);
+
+moverStatus.start();
+<?endif;?>
 
 var devices = new NchanSubscriber('/sub/devices<?=$spot?",parity":""?>',{subscriber:'websocket', reconnectTimeout:5000});
 devices.on('message', function(msg, meta) {
@@ -598,7 +664,7 @@ window.onunload = function(){
   case "Started":?>
     <tr><td><?status_indicator()?>**_(Started)_<?=((_var($var,'startMode')=='Maintenance')?' - _(Maintenance Mode)_':'')?>**</td>
     <td><input type="button" id="stop-button" value="_(Stop)_" onclick="stopArray(this.form)"></td>
-    <td>**_(Stop)_** _(will take the array off-line)_.<span id="stop-text"></span></td></tr>
+    <td>**_(Stop)_** _(will take the array offline)_.<span id="stop-text"></span></td></tr>
 <?  if (_var($var,'fsNumUnmountable',0) > 0):?>
       <tr><td>**<?=_('Unmountable disk'.(_var($var,'fsNumUnmountable',0) == 1 ? '' : 's').' present')?>:**<br>
 <?    $cache = [];
@@ -753,7 +819,7 @@ window.onunload = function(){
       switch (_var($var,'mdState')):
       case "STARTED":
 ?>      <tr><td><?status_indicator()?>**_(Stopped)_**. _(Configuration valid)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-        <td>**_(Start)_** _(will bring the array on-line)_.</td></tr>
+        <td>**_(Start)_** _(will bring the array online)_.</td></tr>
 <?      maintenance_mode();
         check_encryption();
         break;
@@ -762,24 +828,24 @@ window.onunload = function(){
         if ($action[0] == "recon"):
           $resync = resync($action[1]);
 ?>        <tr><td><?status_indicator()?>**_(Stopped)_**. _(Configuration valid)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-          <td>**<?=_('Start')?>** <?=_("will bring the array on-line and start **$resync**")?>.</td></tr>
+          <td>**<?=_('Start')?>** <?=_("will bring the array online and start **$resync**")?>.</td></tr>
 <?      elseif ($action[0] == "clear"):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(New data disk(s) detected)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-          <td>**_(Start)_** _(will bring the array on-line and start **Disk-Clear** of new data disk(s))_.</td></tr>
+          <td>**_(Start)_** _(will bring the array online and start **Disk-Clear** of new data disk(s))_.</td></tr>
 <?      elseif (_var($var,'sbClean') != "yes" && $action[0] == "check" && count($action) > 1):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Unclean shutdown detected)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-          <td>**_(Start)_** _(will bring the array on-line and start **Parity-Check**)_.
+          <td>**_(Start)_** _(will bring the array online and start **Parity-Check**)_.
           <br><input type="checkbox" name="optionCorrect" value="correct" checked><small>_(Write corrections to parity)_</small></td></tr>
 <?      elseif (_var($var,'sbClean') != "yes" && $action[0] == "check"):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Unclean shutdown detected)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-          <td>**_(Start)_** _(will bring the array on-line)_.</td></tr>
+          <td>**_(Start)_** _(will bring the array online)_.</td></tr>
 <?      elseif (missing_cache()):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Missing pool disk)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)" disabled></td>
-          <td>**_(Start)_** _(will remove the missing pool disk and then bring the array on-line)_.
+          <td>**_(Start)_** _(will remove the missing pool disk and then bring the array online)_.
           <br><input type="checkbox" name="confirmStart" value="OFF" onclick="$('#cmdStart').prop('disabled',!arrayOps.confirmStart.checked)"><small>_(Yes, I want to do this)_</small></td></tr>
 <?      else:?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Configuration valid)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-          <td>**_(Start)_** _(will bring the array on-line)_.</td></tr>
+          <td>**_(Start)_** _(will bring the array online)_.</td></tr>
 <?      endif;
         maintenance_mode();
         check_encryption();
@@ -787,11 +853,11 @@ window.onunload = function(){
       case "NEW_ARRAY":
         if (strpos(_var($disks['parity'],'status'),"DISK_NP") === 0 && strpos(_var($disks['parity2'],'status'),"DISK_NP") === 0):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Configuration valid)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-          <td>**_(Start)_** _(will record all disk information and bring the array on-line)_.
+          <td>**_(Start)_** _(will record all disk information and bring the array online)_.
           <br>_(The array will be immediately available, but **unprotected** since *parity* has not been assigned)_.</td></tr>
 <?      else:?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Configuration valid)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this,true)"></td>
-          <td>**_(Start)_** _(will record all disk information, bring the array on-line, and start Parity-Sync)_.
+          <td>**_(Start)_** _(will record all disk information, bring the array online, and start Parity-Sync)_.
           <br>_(The array will be immediately available, but **unprotected** until Parity-Sync completes)_.
           <br><input type="checkbox" name="md_invalidslot" value="99">_(Parity is already valid)_.</td></tr>
 <?      endif;
@@ -800,7 +866,7 @@ window.onunload = function(){
         break;
       case "DISABLE_DISK":?>
         <tr><td><?status_indicator()?>**_(Stopped)_**. _(Missing disk)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)" disabled></td>
-        <td>**_(Start)_** _(will disable the missing disk and then bring the array on-line. Install a replacement disk as soon as possible)_.
+        <td>**_(Start)_** _(will disable the missing disk and then bring the array online. Install a replacement disk as soon as possible)_.
         <br><input type="checkbox" name="confirmStart" value="OFF" onclick="$('#cmdStart').prop('disabled',!arrayOps.confirmStart.checked)"><small>_(Yes, I want to do this)_</small></td></tr>
 <?      maintenance_mode();
         check_encryption();
@@ -814,7 +880,7 @@ window.onunload = function(){
       case "SWAP_DSBL":
         if (_var($var,'fsCopyPrcnt') == "100"):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Upgrading disk/swapping parity)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-          <td>**_(Start)_** _(will expand the file system of the data disk (if possible); then bring the array on-line and start Data-Rebuild)_.</td></tr>
+          <td>**_(Start)_** _(will expand the file system of the data disk (if possible); then bring the array online and start Data-Rebuild)_.</td></tr>
 <?        maintenance_mode();
           check_encryption();
         else:?>
@@ -877,6 +943,11 @@ endswitch;
 <form name="mover_schedule" method="POST" action="/update.htm" target="progressFrame">
 <table markdown="1" class="ArrayOperation-Table array_status noshift">
 <tr><td></td><td><input type="submit" id="mover-button" name="cmdStartMover" value="_(Move)_"></td><td id="mover-text"></td></tr>
+ <tr id="moverrow0" hidden><td></td><td><span id="movertitle0">_(File being processed)_</span></td><td id="moverline0"></td><td></td></tr>
+ <tr id="moverrow1" hidden><td></td><td id="movertitle1">_(Action)_</td><td id="moverline1"></td><td></td></tr>
+ <tr id="moverrow2" hidden><td></td><td id="movertitle2">_(Progress)_</td><td><span id="moverline2" style="width:50"></span></td><td></td></tr>
+ <tr id="moverrow3" hidden><td></td><td id="movertitle3">_(Transfering To Array)_:</td><td id="moverline3"></td><td></td></tr>
+ <tr id="moverrow4" hidden><td></td><td id="movertitle4">_(Transfering From Array)_:</td><td id="moverline4"></td><td></td></tr>
 </table>
 </form>
 <?endif;?>
@@ -884,6 +955,11 @@ endswitch;
 <form name="mover_schedule" method="POST" action="/update.htm" target="progressFrame">
 <table markdown="1" class="ArrayOperation-Table array_status noshift">
 <tr><td></td><td><input type="submit" id="mover-button" name="cmdStartMover" value="_(Empty)_"></td><td id="mover-text"></td></tr>
+ <tr id="moverrow0" hidden><td></td><td><span id="movertitle0">_(File being processed)_</span></td><td id="moverline0"></td><td></td></tr>
+ <tr id="moverrow1" hidden><td></td><td id="movertitle1">_(Action)_</td><td id="moverline1"></td><td></td></tr>
+ <tr id="moverrow2" hidden><td></td><td id="movertitle2">_(Progress)_</td><td><span id="moverline2" style="width:50"></span></td><td></td></tr>
+ <tr id="moverrow3" hidden><td></td><td id="movertitle3">_(Transfering To Array)_:</td><td id="moverline3"></td><td></td></tr>
+ <tr id="moverrow4" hidden><td></td><td id="movertitle4">_(Transfering From Array)_:</td><td id="moverline4"></td><td></td></tr>
 </table>
 </form>
 <?endif;?>

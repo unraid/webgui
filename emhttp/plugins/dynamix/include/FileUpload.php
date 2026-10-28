@@ -21,6 +21,28 @@ $safepaths = ["$boot/dynamix"];
 $safeexts  = ['.png'];
 $result    = false;
 
+function in_safe_path(string $path, string $base): bool {
+  $path = rtrim($path, '/').'/';
+  $base = rtrim($base, '/').'/';
+  return strpos($path, $base) === 0;
+}
+
+function remove_tree(string $dir): bool {
+  if (!is_dir($dir)) return false;
+  $items = scandir($dir);
+  if ($items === false) return false;
+  foreach ($items as $item) {
+    if ($item === '.' || $item === '..') continue;
+    $entry = "$dir/$item";
+    if (is_dir($entry) && !is_link($entry)) {
+      if (!remove_tree($entry)) return false;
+    } elseif (!@unlink($entry)) {
+      return false;
+    }
+  }
+  return @rmdir($dir);
+}
+
 require_once "$docroot/webGui/include/Helpers.php";
 
 switch ($_POST['cmd'] ?? 'load') {
@@ -47,20 +69,37 @@ case 'load':
 case 'save':
   // move uploaded file ($verifiedPNG) to final destination
   $verifiedPNG = "$temp/".basename($file);
-  $path = $_POST['path'];
+  $path = $_POST['path'] ?? '';
+  $outputRaw = $_POST['output'] ?? '';
+  $output = basename($outputRaw);
+  $outputExt = strtolower(substr($output, -4));
+  $isValidFilename = $output !== '' && $output === $outputRaw && preg_match('/^[A-Za-z0-9._$-]+$/', $output);
   foreach ($safepaths as $safepath) {
-    if (strpos(dirname("$path/{$_POST['output']}"),$safepath)===0 && in_array(substr(basename($_POST['output']),-4),$safeexts)) {
-      exec("mkdir -p ".escapeshellarg(realpath($path)));
-      $result = @rename($verifiedPNG, "$path/{$_POST['output']}");
+    $safeBase = realpath($safepath);
+    $targetDir = realpath($path);
+    if (!$targetDir && $safeBase) {
+      $parentDir = realpath(dirname($path));
+      if ($parentDir && in_safe_path($parentDir, $safeBase) && @mkdir($path, 0777, true)) {
+        $targetDir = realpath($path);
+      }
+    }
+    if ($targetDir && $safeBase && in_safe_path($targetDir, $safeBase) && $isValidFilename && in_array($outputExt, $safeexts, true)) {
+      if (is_dir($targetDir)) {
+        $result = @rename($verifiedPNG, "$targetDir/$output");
+      }
       break;
     }
   }
   break;
 case 'delete':
-  $path = $_POST['path'];
+  $path = $_POST['path'] ?? '';
+  $file = basename($file);
+  $targetFile = realpath("$path/$file");
+  $targetExt = $targetFile ? strtolower(substr($targetFile, -4)) : '';
   foreach ($safepaths as $safepath) {
-    if (strpos(realpath("$path/$file"), $safepath) === 0 && in_array(substr(realpath("$path/$file"), -4), $safeexts)) {
-      exec("rm -f ".escapeshellarg(realpath("$path/$file")));
+    $safeBase = realpath($safepath);
+    if ($targetFile && $safeBase && in_safe_path($targetFile, $safeBase) && in_array($targetExt, $safeexts, true)) {
+      @unlink($targetFile);
       $result = true;
       break;
     }
@@ -70,14 +109,37 @@ case 'add':
   $file = basename($file);
   $path = "$docroot/languages/$file";
   $save = "/tmp/lang-$file.zip";
-  exec("mkdir -p $path");
+  if (!is_dir($path) && !@mkdir($path, 0777, true)) break;
   if ($result = file_put_contents($save,base64_decode(preg_replace('/^data:.*;base64,/','',$_POST['filedata'])))) {
     @unlink("$docroot/webGui/javascript/translate.$file.js");
     foreach (glob("$path/*.dot",GLOB_NOSORT) as $dot_file) unlink($dot_file);
-    exec("unzip -qqjLo -d $path $save", $dummy, $err);
+    $err = 0;
+    $zip = new ZipArchive();
+    if ($zip->open($save) === true) {
+      for ($i = 0; $i < $zip->numFiles; $i++) {
+        $entry = $zip->getNameIndex($i);
+        if ($entry === false) continue;
+        if (substr($entry, -1) === '/') continue;
+        $content = $zip->getFromIndex($i);
+        if ($content === false) {
+          $err = 2;
+          break;
+        }
+        $name = strtolower(basename($entry));
+        if ($name === '') continue;
+        if (!preg_match('/\.(dot|txt|json)$/', $name)) continue;
+        if (file_put_contents("$path/$name", $content) === false) {
+          $err = 2;
+          break;
+        }
+      }
+      $zip->close();
+    } else {
+      $err = 2;
+    }
     @unlink($save);
     if ($err > 1) {
-      exec("rm -rf $path");
+      remove_tree($path);
       $result = false;
       break;
     }
@@ -101,7 +163,7 @@ case 'rm':
   $file = basename($file);
   $path = "$docroot/languages/$file";
   if ($result = is_dir($path)) {
-    exec("rm -rf $path");
+    $result = remove_tree($path);
     @unlink("$docroot/webGui/javascript/translate.$file.js");
     @unlink("$boot/lang-$file.xml");
     @unlink("$plugins/lang-$file.xml");

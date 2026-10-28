@@ -16,6 +16,7 @@ permissions:
 
 jobs:
   cleanup-r2:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.merged != true }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -143,4 +144,4 @@ jobs:
             The test plugin and associated files for this PR have been removed from the preview environment.
 
             ---
-            <sub>🤖 This comment is automatically generated when a PR is closed.</sub>
+            <sub>🤖 This comment is automatically generated when a PR is closed without merging.</sub>

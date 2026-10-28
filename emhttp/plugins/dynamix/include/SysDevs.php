@@ -368,7 +368,9 @@ case 't1':
               exec('ls -al /sys/block/sd* /sys/block/hd* /sys/block/sr* /sys/block/nvme* 2>/dev/null | grep -i "'.$pciaddress.'"',$getsata);
               foreach($getsata as $satadevice) {
                 $satadevice = substr($satadevice, strrpos($satadevice, '/', -1)+1);
-                $search = preg_grep('/'.$satadevice.'.*/', $lsscsi);
+                // Match the exact block device token to avoid false matches (e.g. sda matching sdaa).
+                $devicePattern = '/\\/dev\\/'.preg_quote($satadevice, '/').'\\b/';
+                $search = preg_grep($devicePattern, $lsscsi);
                 foreach ($search as $deviceline) {
                   echo '<tr><td></td><td></td><td></td><td></td><td>',$deviceline,'</td></tr>';
                 }
@@ -387,7 +389,17 @@ case 't1':
             break;
         }
 
-        if (array_key_exists($pciaddress,$sriov) && in_array(substr($sriov[$pciaddress]['class_id'],0,4),$allowedPCIClass)) {
+        static $i915SriovPluginInstalled = null;
+        if ($i915SriovPluginInstalled === null) {
+          $i915SriovPluginInstalled = is_file('/boot/config/plugins/i915-sriov.plg')
+            || is_file('/var/log/plugins/i915-sriov.plg');
+        }
+        $isI915SriovPci = (substr($pciaddress, -7) === '00:02.0');
+        $showI915SriovOptions = $i915SriovPluginInstalled && $isI915SriovPci;
+        $isAllowedSriovDevice = array_key_exists($pciaddress,$sriov)
+          && in_array(substr($sriov[$pciaddress]['class_id'],0,4),$allowedPCIClass);
+
+        if ($isAllowedSriovDevice && (!$isI915SriovPci || $showI915SriovOptions)) {
           echo "<tr><td></td><td></td><td></td><td></td><td>";
           echo _("SR-IOV Available VFs").":{$sriov[$pciaddress]['total_vfs']}";
           $num_vfs= $sriov[$pciaddress]['num_vfs'];

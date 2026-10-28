@@ -39,6 +39,14 @@ detect_bootloader() {
 
 BOOTLOADER_TYPE="${BOOTLOADER_TYPE:-$(detect_bootloader)}"
 
+normalize_file_to_crlf() {
+    local file_path="$1"
+    local normalized_file="${file_path}.crlf"
+
+    awk '{ sub(/\r$/, ""); printf "%s\r\n", $0 }' "$file_path" > "$normalized_file"
+    mv "$normalized_file" "$file_path"
+}
+
 #############################################
 # JSON Escaping Function
 #############################################
@@ -263,22 +271,32 @@ parse_append_line() {
 
     # Extract append line for specific label
     # Matches from "label $label" to the next "label" or end of file
-    awk -v label="$label" '
-        BEGIN { label=tolower(label) }
-        /^label / {
+    # Normalize CRLF to LF for parsing (DOS-edited syslinux.cfg)
+    tr -d '\r' < "$cfg_file" | awk -v label="$label" '
+        BEGIN {
+            label=tolower(label)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", label)
+            gsub(/[[:space:]]+/, " ", label)
+        }
+        {
+            sub(/\r$/, "")
+        }
+        /^label[[:space:]]+/ {
             line=tolower($0)
-            if (line ~ "^label " label "$") {
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+            gsub(/[[:space:]]+/, " ", line)
+            if (line ~ "^label[[:space:]]+" label "$") {
                 in_section=1
             } else {
                 in_section=0
             }
         }
-        in_section && /^  append/ {
-            sub(/^  append /, "")
+        in_section && /^[[:space:]]*append([[:space:]]|$)/ {
+            sub(/^[[:space:]]*append[[:space:]]+/, "")
             print
             exit
         }
-    ' "$cfg_file"
+    '
 }
 
 #############################################
@@ -288,7 +306,8 @@ parse_grub_linux_args() {
     local label="$1"
     local cfg_file="${2:-$GRUB_CFG}"
 
-    awk -v label="$label" '
+    # Normalize CRLF to LF for parsing (DOS-edited grub.cfg)
+    tr -d '\r' < "$cfg_file" | awk -v label="$label" '
         $0 ~ /^menuentry / {
             in_section = (index($0, "\"" label "\"") > 0 || index($0, "\x27" label "\x27") > 0)
         }
@@ -303,7 +322,7 @@ parse_grub_linux_args() {
             }
             exit
         }
-    ' "$cfg_file"
+    '
 }
 
 #############################################
@@ -349,7 +368,7 @@ extract_grub_timeout() {
     local cfg_file="${1:-$GRUB_CFG}"
 
     if [[ -f "$cfg_file" ]]; then
-        grep "^set timeout=" "$cfg_file" | awk -F'=' '{print $2}' | tr -d '\r' | head -n 1
+        tr -d '\r' < "$cfg_file" | grep "^set timeout=" | awk -F'=' '{print $2}' | head -n 1
     else
         echo ""
     fi
@@ -660,7 +679,7 @@ build_append_line() {
 # 4. Power Management (usbcore.autosuspend, nvme_core, pcie_aspm, pcie_port_pm)
 # 5. Custom Parameters (in array order, excluding pci=)
 build_append_line_gui_safe() {
-    local params="initrd=/bzroot"
+    local params="initrd=/bzroot,/bzroot-gui"
 
     # 1. VM Passthrough (safe for GUI mode)
     [[ -n "${ACS_OVERRIDE}" ]] && params="$params pcie_acs_override=${ACS_OVERRIDE}"
@@ -733,7 +752,7 @@ build_kernel_args() {
 }
 
 build_kernel_args_gui_safe() {
-    echo "$(build_append_line_gui_safe | sed 's/^initrd=\/bzroot[ ]*//')"
+    echo "$(build_append_line_gui_safe | sed 's/^initrd=\/bzroot,\/bzroot-gui[ ]*//')"
 }
 
 #############################################
@@ -748,16 +767,16 @@ validate_config() {
         return 1
     fi
 
-    # Check required labels exist
-    if ! grep -qi "^label unraid OS$" "$cfg_file"; then
+    # Check required labels exist (strip CR so ^/$ match CRLF files)
+    if ! tr -d '\r' < "$cfg_file" | grep -qi "^label unraid OS$"; then
         return 1
     fi
 
-    if ! grep -qi "^label unraid OS GUI Mode$" "$cfg_file"; then
+    if ! tr -d '\r' < "$cfg_file" | grep -qi "^label unraid OS GUI Mode$"; then
         return 1
     fi
 
-    if ! grep -qi "^label unraid OS Safe Mode" "$cfg_file"; then
+    if ! tr -d '\r' < "$cfg_file" | grep -qi "^label unraid OS Safe Mode"; then
         return 1
     fi
 
@@ -792,30 +811,72 @@ update_default_boot() {
     awk '!/^  menu default$/' "$temp_file" > "${temp_file}.default"
     mv "${temp_file}.default" "$temp_file"
 
-    # Now add "menu default" to the target label
+    # Now add "menu default" immediately after the target label
     awk -v label="$target_label" '
         /^label / {
             current_label = $0
             sub(/^label /, "", current_label)
-            in_target = (current_label == label)
+            print
+            if (current_label == label) {
+                print "  menu default"
+            }
+            next
         }
         {
             print
-            # After printing the label line, check if we need to add menu default
-            if (in_target && /^label /) {
-                # Check if next line exists and is not menu default
-                getline next_line
-                if (next_line !~ /^  menu default$/) {
-                    print "  menu default"
-                    print next_line
-                } else {
-                    print next_line
-                }
-                in_target = 0
-            }
         }
     ' "$temp_file" > "${temp_file}.default"
     mv "${temp_file}.default" "$temp_file"
+}
+
+update_syslinux_label_append() {
+    local target_label="$1"
+    local append_args="$2"
+    local cfg_file="$3"
+
+    awk -v label="$target_label" -v append_args="$append_args" '
+        BEGIN {
+            normalized_label = label
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", normalized_label)
+            gsub(/[[:space:]]+/, " ", normalized_label)
+        }
+        /^[[:space:]]*label[[:space:]]+/ {
+            if (in_section && !replaced) {
+                print section_indent "append " append_args
+            }
+
+            current_label = $0
+            sub(/^[[:space:]]*label[[:space:]]+/, "", current_label)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", current_label)
+            gsub(/[[:space:]]+/, " ", current_label)
+            in_section = (current_label == normalized_label)
+            replaced = 0
+            section_indent = "  "
+        }
+        {
+            if (in_section && $0 ~ /^[[:space:]]*append([[:space:]]|$)/) {
+                if (!replaced) {
+                    match($0, /^[[:space:]]*/)
+                    section_indent = substr($0, RSTART, RLENGTH)
+                    if (section_indent == "") {
+                        section_indent = "  "
+                    }
+                    print section_indent "append " append_args
+                    replaced = 1
+                }
+                next
+            }
+
+            print
+        }
+        END {
+            if (in_section && !replaced) {
+                print section_indent "append " append_args
+            }
+        }
+    ' "$cfg_file" > "${cfg_file}.append"
+
+    mv "${cfg_file}.append" "$cfg_file"
 }
 
 #############################################
@@ -861,100 +922,46 @@ write_config() {
     local temp_file=$(mktemp -p "$(dirname "$SYSLINUX_CFG")")
     cp "$SYSLINUX_CFG" "$temp_file"
 
+    # Strip CR from CRLF so awk/grep/sed-based syslinux updates match Unix line endings.
+    local temp_lf="${temp_file}.lf"
+    tr -d '\r' < "$temp_file" > "$temp_lf" && mv "$temp_lf" "$temp_file"
+
     # Update "Unraid OS" label if enabled in UI
     if [[ "${APPLY_TO_UNRAID_OS}" == "1" ]]; then
-        awk -v new_append="  append $new_append" '
-            /^label Unraid OS$/ {
-                in_section=1
-            }
-            /^label / && !/^label Unraid OS$/ {
-                in_section=0
-            }
-            {
-                if (in_section && /^  append/) {
-                    print new_append
-                } else {
-                    print
-                }
-            }
-        ' "$temp_file" > "${temp_file}.1"
-        mv "${temp_file}.1" "$temp_file"
+        update_syslinux_label_append "Unraid OS" "$new_append" "$temp_file"
     fi
 
     # Update "Unraid OS GUI Mode" label if enabled in UI
     if [[ "${APPLY_TO_GUI_MODE}" == "1" ]]; then
 
         # Optionally exclude framebuffer parameters for GUI mode entries
+        local gui_append
         if [[ "${EXCLUDE_FRAMEBUFFER_FROM_GUI}" == "1" ]]; then
-            local gui_append="  append $(build_append_line_gui_safe)"
+            gui_append="$(build_append_line_gui_safe)"
         else
-            local gui_append="  append $new_append"
+            gui_append="$(echo "$new_append" | sed 's/^initrd=\/bzroot\([ ]\|$\)/initrd=\/bzroot,\/bzroot-gui\1/')"
         fi
 
-        awk -v new_append="$gui_append" '
-            /^label Unraid OS GUI Mode$/ {
-                in_section=1
-            }
-            /^label / && !/^label Unraid OS GUI Mode$/ {
-                in_section=0
-            }
-            {
-                if (in_section && /^  append/) {
-                    print new_append
-                } else {
-                    print
-                }
-            }
-        ' "$temp_file" > "${temp_file}.2"
-        mv "${temp_file}.2" "$temp_file"
+        update_syslinux_label_append "Unraid OS GUI Mode" "$gui_append" "$temp_file"
     fi
 
     # Update "Unraid OS Safe Mode" label if enabled in UI
     if [[ "${APPLY_TO_SAFE_MODE}" == "1" ]]; then
-        awk -v new_append="  append $new_append" '
-            /^label Unraid OS Safe Mode/ {
-                in_section=1
-            }
-            /^label / && !/^label Unraid OS Safe Mode/ {
-                in_section=0
-            }
-            {
-                if (in_section && /^  append/) {
-                    print new_append
-                } else {
-                    print
-                }
-            }
-        ' "$temp_file" > "${temp_file}.3"
-        mv "${temp_file}.3" "$temp_file"
+        update_syslinux_label_append "Unraid OS Safe Mode (no plugins, no GUI)" "$new_append" "$temp_file"
     fi
 
     # Update "Unraid OS GUI Safe Mode" label if enabled in UI
     if [[ "${APPLY_TO_GUI_SAFE_MODE}" == "1" ]]; then
 
         # Optionally exclude framebuffer parameters for GUI mode entries
+        local gui_safe_append
         if [[ "${EXCLUDE_FRAMEBUFFER_FROM_GUI}" == "1" ]]; then
-            local gui_safe_append="  append $(build_append_line_gui_safe)"
+            gui_safe_append="$(build_append_line_gui_safe)"
         else
-            local gui_safe_append="  append $new_append"
+            gui_safe_append="$(echo "$new_append" | sed 's/^initrd=\/bzroot\([ ]\|$\)/initrd=\/bzroot,\/bzroot-gui\1/')"
         fi
 
-        awk -v new_append="$gui_safe_append" '
-            /^label Unraid OS GUI Safe Mode/ {
-                in_section=1
-            }
-            /^label / && !/^label Unraid OS GUI Safe Mode/ {
-                in_section=0
-            }
-            {
-                if (in_section && /^  append/) {
-                    print new_append
-                } else {
-                    print
-                }
-            }
-        ' "$temp_file" > "${temp_file}.4"
-        mv "${temp_file}.4" "$temp_file"
+        update_syslinux_label_append "Unraid OS GUI Safe Mode (no plugins)" "$gui_safe_append" "$temp_file"
     fi
 
     # Update default boot entry if requested
@@ -967,6 +974,8 @@ write_config() {
         sed -i.timeout "s/^timeout .*/timeout ${TIMEOUT}/" "$temp_file"
         rm -f "${temp_file}.timeout"
     fi
+
+    normalize_file_to_crlf "$temp_file"
 
     # Validate the modified config
     if validate_config "$temp_file"; then
@@ -998,14 +1007,34 @@ update_grub_entry() {
         $0 ~ /^menuentry / {
             in_section = (index($0, "\"" label "\"") > 0 || index($0, "'" label "'") > 0)
         }
+        function has_token(tokens, token, arr, i, n) {
+            n = split(tokens, arr, /[[:space:]]+/)
+            for (i = 1; i <= n; i++) {
+                if (arr[i] == token) {
+                    return 1
+                }
+            }
+            return 0
+        }
         {
             if (in_section && match($0, /^[ \t]*(linux|linuxefi)[ \t]+([^ \t]+)[ \t]*(.*)$/, m)) {
                 match($0, /^[ \t]*/)
                 indent = substr($0, RSTART, RLENGTH)
                 cmd = m[1]
                 kernel = m[2]
-                if (new_args != "") {
-                    print indent cmd " " kernel " " new_args
+                existing_args = m[3]
+                final_args = new_args
+
+                # Preserve entry selector flags so mode identity remains unchanged.
+                if (has_token(existing_args, "unraidguimode") && !has_token(final_args, "unraidguimode")) {
+                    final_args = "unraidguimode" ((final_args != "") ? " " final_args : "")
+                }
+                if (has_token(existing_args, "unraidsafemode") && !has_token(final_args, "unraidsafemode")) {
+                    final_args = "unraidsafemode" ((final_args != "") ? " " final_args : "")
+                }
+
+                if (final_args != "") {
+                    print indent cmd " " kernel " " final_args
                 } else {
                     print indent cmd " " kernel
                 }
@@ -1078,6 +1107,9 @@ write_config_grub() {
 
     local temp_file=$(mktemp -p "$(dirname "$GRUB_CFG")")
     cp "$GRUB_CFG" "$temp_file"
+    # Strip CR from CRLF so awk/grep/sed in update_grub_* match Unix line endings
+    local temp_lf="${temp_file}.lf"
+    tr -d '\r' < "$temp_file" > "$temp_lf" && mv "$temp_lf" "$temp_file"
 
     if [[ "${APPLY_TO_UNRAID_OS}" == "1" ]]; then
         update_grub_entry "Unraid OS" "$new_args" "$temp_file"
@@ -1115,6 +1147,8 @@ write_config_grub() {
             sed -i "1iset timeout=${timeout_seconds}" "$temp_file"
         fi
     fi
+
+    normalize_file_to_crlf "$temp_file"
 
     # Basic validation: ensure the config is non-empty and has at least one menuentry
     if [[ ! -s "$temp_file" ]] || ! grep -q '^menuentry ' "$temp_file"; then
@@ -1166,6 +1200,8 @@ write_raw_config() {
 
     # Write raw config to temp file
     echo "$RAW_CONFIG" > "$temp_file"
+
+    normalize_file_to_crlf "$temp_file"
 
     # Validate the raw config (syslinux only)
     if [[ "$BOOTLOADER_TYPE" == "grub" ]] || validate_config "$temp_file"; then

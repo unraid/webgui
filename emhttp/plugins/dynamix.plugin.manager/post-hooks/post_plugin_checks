@@ -42,6 +42,8 @@ case 'plugin':
   case 'update':
     // abort if method was unsuccessful
     if ($error) break;
+    // a successful install/update clears any prior validation-failure marker
+    @unlink("/tmp/plugins/$name.invalid");
     // update support link in plugin file
     $info = readJson('/tmp/community.applications/tempFiles/templates.json');
     // find matching support link

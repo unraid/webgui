@@ -87,7 +87,7 @@ _(Other networks)_:
 _(Add network)_:
 : <span>
     <input name="CUSTOM" type="text" class="narrow" maxlength="32" autocomplete="off" spellcheck="false" value="">
-    <i class="fa fa-wifi hand grey-text" onclick="manage_wifi(encodeURIComponent($('input[name=CUSTOM]').val()),3)" title="<?=$title?>"></i>
+    <i id="add-network" class="fa fa-wifi hand grey-text" title="<?=$title?>"></i>
   </span>
 
 </div>
@@ -102,13 +102,63 @@ function update_wifi(load) {
   $.post('/webGui/include/Wireless.php',{cmd:'list',load:load},function(text) {
     if (text.length > 0) {
       var wifi = JSON.parse(text);
-      $('#connected').html(wifi.active);
-      $('#my_networks').html(wifi.saved);
-      if (typeof wifi.other == 'string') $('#other_networks').html(wifi.other);
+      wifiPort = wifi.port || '';
+      render_wifi_section(document.getElementById('connected'),wifi.active);
+      render_wifi_section(document.getElementById('my_networks'),wifi.saved);
+      render_wifi_section(document.getElementById('other_networks'),wifi.other);
     }
   });
   timers.wifi = setTimeout(update_wifi,6000);
 }
+
+function render_wifi_section(target,section) {
+  if (!target || !section) return;
+  if (section.visible === false) {
+    target.replaceChildren();
+    return;
+  }
+  var list = document.createElement('dl');
+  var heading = document.createElement('dt');
+  heading.textContent = section.heading+':';
+  list.appendChild(heading);
+  if (!section.items || section.items.length == 0) {
+    var empty = document.createElement('dd');
+    empty.textContent = section.empty || '';
+    list.appendChild(empty);
+  } else {
+    section.items.forEach(function(entry) {
+      var row = document.createElement('dd');
+      var content = document.createElement('span');
+      content.className = 'inline-flex flex-row items-center gap-2';
+      var networkName = entry.network == null ? '' : String(entry.network);
+      var network = document.createElement('span');
+      network.textContent = networkName;
+      content.appendChild(network);
+
+      var connect = document.createElement('i');
+      connect.className = 'fa fa-wifi hand '+(entry.color || 'grey')+'-text';
+      connect.title = entry.title || '';
+      connect.addEventListener('click',function() {
+        manage_wifi(encodeURIComponent(networkName),entry.task);
+      });
+      content.appendChild(connect);
+
+      if (entry.info) {
+        var info = document.createElement('input');
+        info.type = 'button';
+        info.className = 'form';
+        info.value = entry.infoLabel || '';
+        info.addEventListener('click',function() { networkInfo(wifiPort); });
+        content.appendChild(info);
+      }
+      row.appendChild(content);
+      list.appendChild(row);
+    });
+  }
+  target.replaceChildren(list);
+}
+
+var wifiPort = '';
 
 function manage_wifi(ssid,task) {
   if (task == 2) {
@@ -184,6 +234,9 @@ function showSecurity(val) {
 <?if (_var($wlan0,'WIFI')=='yes'):?>
 $(function() {
   $('#wifi').show();
+  $('#add-network').on('click',function() {
+    manage_wifi(encodeURIComponent($('input[name=CUSTOM]').val()),3);
+  });
   update_wifi(1);
 });
 <?endif;?>

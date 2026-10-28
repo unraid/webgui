@@ -7,6 +7,9 @@
 # Remove a missing device
 # mkbootable remove missing|<devoce>
 
+# Resize the device boot partition
+# mkbootable resize <device> <size>
+
 # Reconfigure grub.cfg and theme.txt after UUID change
 # mkbootable reconfigure
 
@@ -66,6 +69,19 @@ create_partitions() {
   udevadm settle
 }
 
+# resize the boot partition
+# note: this actually just shrinks partition 4 to make room for a SIZE boot area. Partition 3 is
+# expanded in rc.S just before the zpool is imported.
+#
+resize_partitions() {
+  log "expanding device ($DEV) boot area size to $SIZE MiB"
+  sgdisk "/dev/$DEV" \
+    --delete=4 \
+    --new=4:${SIZE}MiB:0        --typecode=4:8300
+  partprobe "/dev/$DEV"
+  udevadm settle
+}
+
 install_grub() {
   # format the EFI System Partition (partition 2) with FAT32 and mount
   mkfs.fat -F32 -n EFI "$EFI_PART"
@@ -78,10 +94,14 @@ install_grub() {
     --boot-directory="$BOOT" \
     --efi-directory="$BOOT/efi" \
     --modules="part_gpt zfs zfsinfo search search_fs_uuid configfile normal" \
-    --removable
+    --removable --no-nvram
 
   # BIOS install
-  grub-install --target=i386-pc "/dev/$DEV"
+  grub-install \
+    --target=i386-pc "/dev/$DEV" \
+    --boot-directory="$BOOT" \
+    --modules="part_gpt zfs zfsinfo search search_fs_uuid configfile normal" \
+    --no-floppy --no-rs-codes
 
   # we don't need this mounted anymore
   umount "$BOOT/efi"
@@ -135,7 +155,7 @@ add_device() {
 
 remove_device() {
   if [[ "$DEV" = "missing" ]]; then
-    TARGET=$(zpool status -P "$POOL" | awk '/was \/dev/ {print $1; exit}')
+    TARGET="$(zpool status -P "$POOL" | awk '/^\t    / && ($2 == "OFFLINE" || $2 == "FAULTED" || $2 == "REMOVED" || $2 == "UNAVAIL") { print $1; exit }')"
     zpool detach "$POOL" "$TARGET"
   else
     zpool detach "$POOL" "$BOOT_PART"
@@ -149,7 +169,10 @@ case "$OPER" in
 'remove')
   remove_device
   ;;
-'configure')
+'resize')
+  resize_partitions
+  ;;
+'reconfigure')
   configure_grub
   ;;
 *)

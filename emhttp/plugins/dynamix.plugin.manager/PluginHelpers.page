@@ -47,6 +47,37 @@ function ca_pluginUpdateInstall(plugin) {
 	});
 }
 
+function ca_pluginUpdateHTML(plugin,pluginFilename,result,options) {
+	var container = document.createElement('span');
+	var message = document.createElement('span');
+	message.textContent = result.updateMessage || '';
+	container.appendChild(message);
+
+	var changes = document.createElement('span');
+	changes.className = 'bannerInfo fa fa-info-circle big';
+	changes.title = "_(View Release Notes)_";
+	changes.setAttribute('role','button');
+	changes.setAttribute('onclick','openChanges('+JSON.stringify('showchanges /tmp/plugins/'+pluginFilename+'.txt')+','+JSON.stringify("_(Release Notes)_")+')');
+	container.appendChild(changes);
+
+	var install = document.createElement('a');
+	install.className = 'ca_PluginUpdateInstall';
+	install.setAttribute('onclick','ca_pluginUpdateInstall('+JSON.stringify(String(plugin))+')');
+	install.textContent = result.linkMessage || '';
+	container.appendChild(install);
+
+	if (options.element && !options.noDismiss) {
+		var dismiss = document.createElement('span');
+		dismiss.className = 'ca_PluginUpdateDismiss';
+		var close = document.createElement('i');
+		close.className = 'fa fa-close';
+		close.setAttribute('onclick','ca_hidePluginUpdate('+JSON.stringify(String(plugin))+','+JSON.stringify(String(result.version || ''))+','+JSON.stringify(options.element)+')');
+		dismiss.appendChild(close);
+		container.appendChild(dismiss);
+	}
+	return container.innerHTML;
+}
+
 function caPluginUpdateCheck(plugin,options=[],callback) {
 	var pluginFilename = plugin.substr(0, plugin.lastIndexOf("."));
 	console.time("checkPlugin "+plugin);
@@ -63,16 +94,13 @@ function caPluginUpdateCheck(plugin,options=[],callback) {
 		if ( options.debug == true ) result.updateAvailable = true;
 		if ( ! options.element && ! options.dontShow ) {
 			if ( result.updateAvailable ) {
-				var HTML = result.updateMessage+"<span class='bannerInfo fa fa-info-circle big' title=\"_(View Release Notes)_\" onclick='openChanges(\"showchanges /tmp/plugins/"+pluginFilename+".txt\",\"_(Release Notes)_\")'></span><a class='ca_PluginUpdateInstall' onclick='ca_pluginUpdateInstall(\""+plugin+"\")'>"+result.linkMessage+"</a>";
+				var HTML = ca_pluginUpdateHTML(plugin,pluginFilename,result,options);
 				addBannerWarning(HTML,false,options.noDismiss);
 			}
 		} else {
 			if ( $.cookie(plugin) != result.version ) {
 				if ( result.updateAvailable ) {
-					var HTML = result.updateMessage+"<span class='bannerInfo fa fa-info-circle big' title=\"_(View Release Notes)_\" onclick='openChanges(\"showchanges /tmp/plugins/"+pluginFilename+".txt\",\"_(Release Notes)_\")'></span><a class='ca_PluginUpdateInstall' onclick='ca_pluginUpdateInstall(\""+plugin+"\")'>"+result.linkMessage+"</a>";
-					if ( ! options.noDismiss ) {
-						HTML = HTML.concat("<span class='ca_PluginUpdateDismiss'><i class='fa fa-close' onclick='ca_hidePluginUpdate(\""+plugin+"\",\""+result.version+"\",\""+options.element+"\")'></i></span>");
-					}
+					var HTML = ca_pluginUpdateHTML(plugin,pluginFilename,result,options);
 					result.HTML = HTML;
 					if ( ! options.dontShow ) {
 						$(options.element).html(HTML);

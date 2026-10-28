@@ -120,9 +120,18 @@ avahid_reload(){
 }
 
 avahid_update(){
-  if avahid_running && check && [[ "$(this allow-interfaces)" != "$BIND" ]]; then
-    log "Updating $DAEMON..."
-    avahid_restart # note we need restart here, not reload in order to update interfaces
+  if avahid_running; then
+    # only restart a running daemon when the computed bind list changed
+    if check && [[ "$(this allow-interfaces)" != "$BIND" ]]; then
+      log "Updating $DAEMON..."
+      avahid_restart # note we need restart here, not reload in order to update interfaces
+    fi
+  else
+    # recover daemon when interfaces are back, even if config already matches computed bind list
+    if check && [[ -n $BIND ]]; then
+      log "Recovering $DAEMON..."
+      avahid_start # handle case where avahi-daemon exited because no suitable interfaces
+    fi
   fi
 }
 

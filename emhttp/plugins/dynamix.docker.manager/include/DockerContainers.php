@@ -28,7 +28,7 @@ $user_prefs      = $dockerManPaths['user-prefs'];
 $autostart_file  = $dockerManPaths['autostart-file'];
 
 if (!$containers && !$images) {
-  echo "<tr><td colspan='7' style='text-align:center;padding-top:12px'>"._('No Docker containers installed')."</td></tr>";
+  echo "<tr><td colspan='10' style='text-align:center;padding-top:12px'>"._('No Docker containers installed')."</td></tr>";
   return;
 }
 
@@ -51,54 +51,11 @@ $null = '0.0.0.0';
 $autostart = (array)@file($autostart_file,FILE_IGNORE_NEW_LINES);
 $names = array_map('var_split',$autostart);
 
-// Grab Tailscale json from container
 function tailscale_stats($name) {
-  exec("docker exec -i ".$name." /bin/sh -c \"tailscale status --json | jq '{Self: .Self, ExitNodeStatus: .ExitNodeStatus, Version: .Version}'\" 2>/dev/null", $TS_stats);
-  if (!empty($TS_stats)) {
-    $TS_stats = implode("\n", $TS_stats);
-    return json_decode($TS_stats, true);
-  }
-  return '';
+  return DockerUtil::tailscaleStatus($name) ?: '';
 }
-
-// Download Tailscal JSON and return Array, refresh file if older than 24 hours
-function tailscale_json_dl($file, $url) {
-  $dl_status = 0;
-  if (!is_dir('/tmp/tailscale')) {
-    mkdir('/tmp/tailscale', 0777, true);
-  }
-  if (!file_exists($file)) {
-    exec("wget -T 3 -q -O ".$file." ".$url, $output, $dl_status);
-  } else {
-    $fileage =  time() - filemtime($file);
-    if ($fileage > 86400) {
-      unlink($file);
-      exec("wget -T 3 -q -O ".$file." ".$url, $output, $dl_status);
-    }
-  }
-  if ($dl_status === 0) {
-    return json_decode(@file_get_contents($file), true);
-  } elseif ($dl_status === 0 && is_file($file)) {
-    return json_decode(@file_get_contents($file), true);
-  } else {
-    unlink($file);
-    return '';
-  }
-}
-
-// Grab Tailscale DERP map JSON
-$TS_derp_url = 'https://login.tailscale.com/derpmap/default';
-$TS_derp_file = '/tmp/tailscale/tailscale-derpmap.json';
-$TS_derp_list = tailscale_json_dl($TS_derp_file, $TS_derp_url);
-
-// Grab Tailscale version JSON
-$TS_version_url = 'https://pkgs.tailscale.com/stable/?mode=json';
-$TS_version_file = '/tmp/tailscale/tailscale-latest-version.json';
-// Extract tarbal version string
-$TS_latest_version = tailscale_json_dl($TS_version_file, $TS_version_url);
-if (!empty($TS_latest_version)) {
-  $TS_latest_version = $TS_latest_version["TarballsVersion"];
-}
+$TS_derp_list      = DockerUtil::tailscaleDerpMap() ?: '';
+$TS_latest_version = DockerUtil::tailscaleLatestVersion() ?: '';
 
 function my_lang_time($text) {
   [$number, $text] = my_explode(' ',$text,2);
@@ -140,7 +97,7 @@ foreach ($containers as $ct) {
   $color = $status=='started' ? 'green-text' : ($status=='paused' ? 'orange-text' : 'red-text');
   $update = $updateStatus==1 && !empty($compose) ? 'blue-text' : '';
   $icon = $info['icon'] ?: '/plugins/dynamix.docker.manager/images/question.png';
-  $image = substr($icon,-4)=='.png' ? "<img src='$icon?".filemtime("$docroot{$info['icon']}")."' class='img' onerror=this.src='/plugins/dynamix.docker.manager/images/question.png';>" : (substr($icon,0,5)=='icon-' ? "<i class='$icon img'></i>" : "<i class='fa fa-$icon img'></i>");
+  $image = substr($icon,-4)=='.png' ? "<img src='$icon?".filemtime("$docroot{$info['icon']}")."' class='img' onerror=\"this.onerror=null;this.src='/plugins/dynamix.docker.manager/images/question.png';\">" : (substr($icon,0,5)=='icon-' ? "<i class='$icon img'></i>" : "<i class='fa fa-$icon img'></i>");
   $wait = var_split($autostart[array_search($name,$names)]??'',1);
   $networks = [];
   $network_ips = [];
@@ -154,14 +111,16 @@ foreach ($containers as $ct) {
   }
   foreach($ct['Networks'] as $netName => $netVals) {
     $networks[] = $netName;
-    $network_ips[] = $running ? $netVals['IPAddress'] : null;
+    $network_ip = $running ? htmlspecialchars((string)$netVals['IPAddress']) : '';
+    $network_mac = $running ? htmlspecialchars((string)($netVals['MacAddress'] ?? '')) : '';
+    $network_ips[] = $network_mac ? "$network_ip<span class='advanced'><br>$network_mac</span>" : $network_ip;
     if (isset($ct['Networks']['host'])) {
       $ports_external[] = sprintf('%s', $netVals['IPAddress']);
       $ports_internal[0] = sprintf('%s', 'all');
     } elseif (!isset($ct['Ports']['vlan']) || strpos($ct['NetworkMode'],'container:')!==false) {
       foreach ($ct['Ports'] as $port) {
         if (_var($port,'PublicPort') && _var($port,'Driver') == 'bridge') {
-          if (_var($port, "HostIp") != "") $hostip = _var($port, "HostIp"); else $hostip = $host; 
+          if (_var($port, "HostIp") != "") $hostip = _var($port, "HostIp"); else $hostip = $host;
           $ports_external[] = sprintf('%s:%s', $hostip, strtoupper(_var($port,'PublicPort')));
         }
         if ((!isset($ct['Networks']['host'])) || (!isset($ct['Networks']['vlan']))) {
@@ -238,31 +197,33 @@ foreach ($containers as $ct) {
       $TSstats = tailscale_stats($name);
       if (!empty($TSstats)) {
         // Construct TSinfo from TSstats
-        $TSinfo = '';
+        $TSinfo = [];
         if (!$TSstats["Self"]["Online"]) {
-          $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("Online").":</span><span class='ui-tailscale-value'>&#10060;<br/>"._("Please check the logs")."!</span></div>";
+          $TSinfo[] = _("Online").": ✕\n"._("Please check the logs")."!";
         } else {
           $TS_version = explode('-', $TSstats["Version"])[0];
           if (!empty($TS_version)) {
             if (!empty($TS_latest_version)) {
               if (version_compare($TS_version, $TS_latest_version, '<')) {
-                $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("Tailscale").":</span><span class='ui-tailscale-value'>v".$TS_version." &#10132; v".$TS_latest_version." "._("available")."!</span></div>";
+                $TSinfo[] = _("Tailscale").": v".$TS_version." → v".$TS_latest_version." "._("available")."!";
               } else {
-                $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("Tailscale").":</span><span class='ui-tailscale-value'>v".$TS_version."</span></div>";
+                $TSinfo[] = _("Tailscale").": v".$TS_version;
               }
             } else {
-              $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>".("Tailscale").":</span><span class='ui-tailscale-value'>v".$TS_version."</span></div>";
+              $TSinfo[] = _("Tailscale").": v".$TS_version;
             }
           }
-          $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("Online").":</span><span class='ui-tailscale-value'>&#9989;</span></div>";
-          $TS_DNSName = $TSstats["Self"]["DNSName"];
-          $TS_HostNameActual = substr($TS_DNSName, 0, strpos($TS_DNSName, '.'));
+          $TSinfo[] = _("Online").": ✓";
+          $TS_DNSName = $TSstats["Self"]["DNSName"] ?? '';
+          $TS_dot = strpos($TS_DNSName, '.');
+          $TS_HostNameActual = $TS_dot === false ? $TS_DNSName : substr($TS_DNSName, 0, $TS_dot);
           if (strcasecmp($TS_HostNameActual, $TShostname) !== 0 && !empty($TS_DNSName)) {
-            $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("Hostname").":</span><span class='ui-tailscale-value'>"._("Real Hostname")." &#10132; ".$TS_HostNameActual."</span></div>";
+            $TSinfo[] = _("Hostname").": "._("Real Hostname")." → ".$TS_HostNameActual;
           } else {
-            $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("Hostname").":</span><span class='ui-tailscale-value'>".$TShostname."</span></div>";
+            $TSinfo[] = _("Hostname").": ".$TShostname;
           }
           // Map region relay code to cleartext region if TS_derp_list is available
+          $TSregion = '';
           if (!empty($TS_derp_list)) {
             foreach ($TS_derp_list['Regions'] as $region) {
               if ($region['RegionCode'] === $TSstats["Self"]["Relay"]) {
@@ -271,31 +232,32 @@ foreach ($containers as $ct) {
               }
             }
             if (!empty($TSregion)) {
-              $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("DERP Relay").":</span><span class='ui-tailscale-value'>".$TSregion."</span></div>";
+              $TSinfo[] = _("DERP Relay").": ".$TSregion;
             } else {
-              $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("DERP Relay").":</span><span class='ui-tailscale-value'>".$TSstats["Self"]["Relay"]."</span></div>";
+              $TSinfo[] = _("DERP Relay").": ".($TSstats["Self"]["Relay"] ?? '');
             }
           } else {
-            $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("DERP Relay").":</span><span class='ui-tailscale-value'>".$TSstats["Self"]["Relay"]."</span></div>";
+            $TSinfo[] = _("DERP Relay").": ".($TSstats["Self"]["Relay"] ?? '');
           }
           if (!empty($TSstats["Self"]["TailscaleIPs"])) {
-            $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("Addresses").":</span><span class='ui-tailscale-value'>".implode("<br/>", $TSstats["Self"]["TailscaleIPs"])."</span></div>";
+            $TSinfo[] = _("Addresses").": ".implode(', ', $TSstats["Self"]["TailscaleIPs"]);
           }
           if (!empty($TSstats["Self"]["PrimaryRoutes"])) {
-            $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("Routes").":</span><span class='ui-tailscale-value'>".implode("<br/>", $TSstats["Self"]["PrimaryRoutes"])."</span></div>";
+            $TSinfo[] = _("Routes").": ".implode(', ', $TSstats["Self"]["PrimaryRoutes"]);
           }
-          if ($TSstats["Self"]["ExitNodeOption"]) {
-            $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("Is Exit Node").":</span><span class='ui-tailscale-value'>&#9989;</span></div>";
+          if ($TSstats["Self"]["ExitNodeOption"] ?? false) {
+            $TSinfo[] = _("Is Exit Node").": ✓";
           } else {
             if (!empty($TSstats["ExitNodeStatus"])) {
-              $TS_exit_node_status = ($TSstats["ExitNodeStatus"]["Online"]) ? "&#9989;" : "&#10060;";
-              $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("Exit Node").":</span><span class='ui-tailscale-value'>".strstr($TSstats["ExitNodeStatus"]["TailscaleIPs"][0], '/', true)." | Status: ".$TS_exit_node_status ."</span></div>";
+              $TS_exit_node_status = ($TSstats["ExitNodeStatus"]["Online"] ?? false) ? "✓" : "✕";
+              $TS_exit_node_ip = strstr($TSstats["ExitNodeStatus"]["TailscaleIPs"][0] ?? '', '/', true);
+              $TSinfo[] = _("Exit Node").": ".$TS_exit_node_ip." | "._("Status").": ".$TS_exit_node_status;
             } else {
-              $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("Is Exit Node").":</span><span class='ui-tailscale-value'>&#10060;</span></div>";
+              $TSinfo[] = _("Is Exit Node").": ✕";
             }
           }
           if (!empty($TSwebGui)) {
-            $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("URL").":</span><span class='ui-tailscale-value'>".$TSwebGui."</span></div>";
+            $TSinfo[] = _("URL").": ".$TSwebGui;
           }
           if (!empty($TSstats["Self"]["KeyExpiry"])) {
             $TS_expiry = new DateTime($TSstats["Self"]["KeyExpiry"]);
@@ -303,21 +265,24 @@ foreach ($containers as $ct) {
             $TS_expiry_formatted = $TS_expiry->format('Y-m-d');
             $TS_expiry_diff = $current_Date->diff($TS_expiry);
             if ($TS_expiry_diff->invert) {
-              $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("Key Expiry").":</span><span class='ui-tailscale-value'>&#10060; "._("Expired! Renew/Disable key expiry!")."</span></div>";
+              $TSinfo[] = _("Key Expiry").": ✕ "._("Expired! Renew/Disable key expiry!");
             } else {
-              $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("Key Expiry").":</span><span class='ui-tailscale-value'>".$TS_expiry_formatted." (".$TS_expiry_diff->days." days)</span></div>";
+              $TSinfo[] = _("Key Expiry").": ".$TS_expiry_formatted." (".$TS_expiry_diff->days." days)";
             }
           }
         }
-        // Display TSinfo if data was fetched correctly
-        $TS_status = "<br/><div class='TS_tooltip' style='cursor:pointer; display: inline-block;' data-tstitle='".htmlspecialchars($TSinfo)."'><img src='/plugins/dynamix.docker.manager/images/tailscale.png' style='height: 1.23em;'> Tailscale</div>";
+        // Display plain text status so tooltip content cannot be interpreted as markup.
+        $TScontent = htmlspecialchars(implode("\n",$TSinfo), ENT_QUOTES, 'UTF-8');
+        $TS_status = "<br/><div class='TS_tooltip' style='cursor:pointer; display: inline-block;' data-tstitle=\"".$TScontent."\"><img src='/plugins/dynamix.docker.manager/images/tailscale.png' style='height: 1.23em;'> Tailscale</div>";
       } else {
         // Display message to refresh page if Tailscale in the container wasn't maybe ready to get the data
-        $TS_status = "<br/><div class='TS_tooltip' style='display: inline-block;' data-tstitle='"._("Error gathering Tailscale information from container").".<br/>"._("Please check the logs and refresh the page")."'><img src='/plugins/dynamix.docker.manager/images/tailscale.png' style='height: 1.23em;'> Tailscale</div>";
+        $TScontent = htmlspecialchars(_("Error gathering Tailscale information from container")."\n"._("Please check the logs and refresh the page"), ENT_QUOTES, 'UTF-8');
+        $TS_status = "<br/><div class='TS_tooltip' style='display: inline-block;' data-tstitle=\"".$TScontent."\"><img src='/plugins/dynamix.docker.manager/images/tailscale.png' style='height: 1.23em;'> Tailscale</div>";
       }
     } else {
       // Display message that container isn't running
-      $TS_status = "<br/><div class='TS_tooltip' style='cursor:pointer;display: inline-block;' data-tstitle='"._("Container not running")."'><img src='/plugins/dynamix.docker.manager/images/tailscale.png' style='height: 1.23em;'> Tailscale</div>";
+      $TScontent = htmlspecialchars(_("Container not running"), ENT_QUOTES, 'UTF-8');
+      $TS_status = "<br/><div class='TS_tooltip' style='cursor:pointer;display: inline-block;' data-tstitle=\"".$TScontent."\"><img src='/plugins/dynamix.docker.manager/images/tailscale.png' style='height: 1.23em;'> Tailscale</div>";
     }
   }
   echo "<div class='advanced'><i class='fa fa-info-circle fa-fw'></i> ".compress(_($version),12,0)."</div></td>";
@@ -346,7 +311,7 @@ foreach ($images as $image) {
   $menu = sprintf("onclick=\"addDockerImageContext('%s','%s')\"", $id, implode(',',$image['Tags']));
   echo "<tr class='advanced'><td style='width:220px;padding:8px'>";
   echo "<span class='outer apps'><span id='$id' $menu class='hand'><img src='/webGui/images/disk.png' class='img'></span><span class='inner'>("._('orphan image').")<br><i class='fa fa-square stopped grey-text'></i><span class='state'>"._('stopped')."</span></span></span>";
-  echo "</td><td colspan='6'>"._('Image ID').": $id<br>";
+  echo "</td><td colspan='8'>"._('Image ID').": $id<br>";
   echo implode(', ',$image['Tags']);
   echo "</td><td>"._('Created')." ".htmlspecialchars(_($image['Created'],0))."</td></tr>";
 }

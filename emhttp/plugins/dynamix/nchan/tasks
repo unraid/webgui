@@ -1,0 +1,102 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+/**
+ * Task scheduler daemon (see TaskQueue.php).
+ *
+ * Primary completion is recorded by each task itself on exit (task_complete,
+ * wired up in task_launch). This daemon is the fallback + queue driver: it
+ * catches tasks whose process vanished without stamping a result (e.g. a hard
+ * kill), marks them error, completes bounded abort escalation, auto-starts the
+ * next queued task of that type,
+ * and broadcasts the updated list. Exits once nothing is running or queued; it
+ * is (re)started on demand by task_create() and by the page-load nchan sweep in
+ * DefaultPageLayout.php.
+ */
+
+$docroot = '/usr/local/emhttp';
+require_once "$docroot/plugins/dynamix/include/TaskQueue.php";
+
+// task_log_has_error() is shared with task_complete and lives in TaskQueue.php.
+
+// tidy up stale finished tasks, then publish the current state for any client
+task_prune();
+task_publish();
+
+while (true) {
+  $changed = false;
+  $freed   = [];
+
+  foreach (task_list() as $candidate) {
+    if (!in_array($candidate['status'], ['running','aborting'], true)) continue;
+    $lock = task_type_lock($candidate['type']);
+    if (!$lock) continue;
+    // Re-read under the same type lock used by task_complete/abort. The outer
+    // task_list snapshot may be stale by the time the daemon reaches it.
+    $t = task_read($candidate['id']);
+    if (!$t || !in_array($t['status'], ['running','aborting'], true)) {
+      task_type_unlock($lock);
+      continue;
+    }
+    $alive = task_process_group_alive($t);
+    if ($t['status']==='aborting' && $alive) {
+      if (time() - (int)($t['abort_requested'] ?? 0) >= TASK_ABORT_GRACE)
+        task_signal_group($t, 'KILL');
+      task_type_unlock($lock);
+      continue;
+    }
+    if (!$alive) {
+      // A successful/ordinary failure exit stamps its authoritative result via
+      // task_complete before disappearing. Reaching this fallback means the
+      // wrapper was killed, crashed, or never reached its stamp, so success is
+      // unknown and must fail closed even when no _ERROR_ record was published.
+      $t['status']   = 'error';
+      $t['finished'] = time();
+      if (task_write($t)) {
+        @unlink(task_dir().'/.launch-'.$t['id']);
+        task_advance_locked($t['type']);
+        $changed = true;
+      }
+    }
+    task_type_unlock($lock);
+  }
+
+  // also launch any queued type that has nothing running. Covers a daemon
+  // (re)started by the page-load nchan sweep with queued-but-not-running
+  // records: without this it would treat those as "active" below and sleep
+  // forever without ever advancing the queue.
+  foreach (task_list() as $t) {
+    if ($t['status']==='queued' && !task_running_type($t['type'])) {
+      $freed[$t['type']] = true;
+      $changed = true;
+    }
+  }
+
+  // start the next queued op for every type that just freed up
+  foreach (array_keys($freed) as $type) task_advance($type);
+
+  if ($changed) task_publish();
+
+  // exit when there is no more work; the daemon is restarted on demand
+  $active = false;
+  foreach (task_list() as $t) {
+    if (in_array($t['status'], ['running','aborting','queued'], true)) { $active = true; break; }
+  }
+  if (!$active) break;
+
+  usleep(250000); // 250ms, same cadence as the file_manager worker
+}
+
+removeNChanScript();
+?>

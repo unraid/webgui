@@ -1404,7 +1404,7 @@ stabling is enabled.
 :end
 
 :ftp_server_help:
-Enable or disable the FTP server daemon. By default the FTP server is enabled.
+Enable or disable the FTP server daemon. By default the FTP server is disabled.
 This setting is not saved, i.e. upon system reboot it will revert to its default setting.
 :end
 
@@ -1646,6 +1646,18 @@ Choose if rebooting or powering down the server needs a confirmation checkbox.
 
 :confirm_array_stop_help:
 Choose if stopping the array needs a confirmation checkbox.
+:end
+
+:powerbutton_behavior_help:
+Choose what happens when the server's physical power button is pressed.
+
+**Shut down** performs a clean shutdown (stops the array and powers off). This is the default behavior.
+
+**Reboot** performs a clean reboot.
+
+**Do nothing** ignores the button press and only logs the event. This is useful on small form factor hardware where the power button is easily bumped, to prevent accidental shutdowns.
+
+Plugins may add further actions (for example, Sleep via the S3 Sleep plugin, or running a User Script).
 :end
 
 :display_settings_help:
@@ -2158,6 +2170,10 @@ For the other schedules choose here the time of the day the mover should start.
 Write mover messages to the syslog file.
 :end
 
+:mover_progress_help:
+Enable progress display and allow a user override.
+:end
+
 :notifications_display_help:
 In *Detailed* view all notifications will be displayed on screen as soon as they arrive.<br>
 Notifications can be acknowledged individually or all at once.
@@ -2367,6 +2383,12 @@ If you wish to append additional arguments AFTER the container definition, you c
 The content of this field is container specific.
 :end
 
+:docker_memory_limit_help:
+The maximum amount of memory the container is allowed to use (Docker <code>--memory</code>).<br>
+Use a plain number for bytes, or a suffix: <b>b</b>, <b>k</b>, <b>m</b>, <b>g</b> (for example <b>512m</b> or <b>2g</b>). The minimum allowed value is 6m.<br>
+Leave empty for no limit (default). If you also set <code>--memory</code> in Extra Parameters, that value takes precedence.
+:end
+
 :docker_cpu_pinning_help:
 Checking a CPU core(s) will limit the container to run on the selected cores only. Selecting no cores lets the container run on all available cores (default)
 :end
@@ -2377,6 +2399,12 @@ If the Host type is selected, the application will be given access to communicat
 Generally speaking, it is recommended to leave this setting to its default value as specified per application template.
 
 IMPORTANT NOTE:  If adjusting port mappings, do not modify the settings for the Container port as only the Host port can be adjusted.
+:end
+
+:docker_fixed_mac_help:
+Assigns the container's MAC address on the selected Docker network endpoint. Use a valid unicast MAC address; the first octet must be even, e.g. 02:42:9a:0d:7e:c0.
+
+This avoids using the legacy container-level --mac-address option in Extra Parameters.
 :end
 
 :docker_container_network_help:

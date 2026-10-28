@@ -86,6 +86,26 @@ function run($command) {
   return pclose($run);
 }
 
+function remove_tree(string $dir): bool {
+  if (!is_dir($dir)) return false;
+  $items = scandir($dir);
+  if ($items === false) return false;
+  foreach ($items as $item) {
+    if ($item === '.' || $item === '..') continue;
+    $entry = "$dir/$item";
+    if (is_dir($entry) && !is_link($entry)) {
+      if (!remove_tree($entry)) return false;
+    } elseif (!@unlink($entry)) {
+      return false;
+    }
+  }
+  return @rmdir($dir);
+}
+
+function valid_language_pack_name($name): bool {
+  return is_string($name) && $name !== '' && preg_match('/^[A-Za-z0-9._$-]+$/', $name);
+}
+
 // Run hooked scripts before correct execution of "method"
 // method = install, update, remove, check
 // hook programs receives three parameters: type=language and method and language-name
@@ -159,7 +179,11 @@ function language($method, $xml_file, &$error) {
   switch ($method) {
   case 'install':
     $url = $xml->LanguageURL;
-    $name = $xml->LanguagePack;
+    $name = (string)$xml->LanguagePack;
+    if (!valid_language_pack_name($name)) {
+      $error = "invalid language pack";
+      return false;
+    }
     $save = "$boot/dynamix/lang-$name.zip";
     if (!file_exists($save)) {
       if ($url) {
@@ -173,22 +197,54 @@ function language($method, $xml_file, &$error) {
       }
     }
     $path = "$docroot/languages/$name";
-    exec("mkdir -p $path");
+    if (!is_dir($path) && !@mkdir($path, 0777, true)) {
+      $error = "failed to create language directory";
+      return false;
+    }
     @unlink("$docroot/webGui/javascript/translate.$name.js");
-    foreach (glob("$path/*.dot",GLOB_NOSORT) as $dot_file) unlink($dot_file);
-    exec("unzip -qqLjo -d $path $save", $dummy, $err);
+    foreach (['*.dot', '*.txt', '*.json'] as $pattern) {
+      foreach (glob("$path/$pattern", GLOB_NOSORT) as $lang_file) @unlink($lang_file);
+    }
+    $err = 0;
+    $zip = new ZipArchive();
+    if ($zip->open($save) === true) {
+      for ($i = 0; $i < $zip->numFiles; $i++) {
+        $entry = $zip->getNameIndex($i);
+        if ($entry === false) continue;
+        if (substr($entry, -1) === '/') continue;
+        $content = $zip->getFromIndex($i);
+        if ($content === false) {
+          $err = 2;
+          break;
+        }
+        $entryName = strtolower(basename($entry));
+        if ($entryName === '') continue;
+        if (!preg_match('/\.(dot|txt|json)$/', $entryName)) continue;
+        if (file_put_contents("$path/$entryName", $content) === false) {
+          $err = 2;
+          break;
+        }
+      }
+      $zip->close();
+    } else {
+      $err = 2;
+    }
     if ($err > 1) {
       @unlink($save);
-      exec("rm -rf $path");
+      remove_tree($path);
       $error = "unzip failed. Error code $err";
       return false;
     }
     return true;
   case 'remove':
-    $name = $xml->LanguagePack;
+    $name = (string)$xml->LanguagePack;
     if ($name) {
+      if (!valid_language_pack_name($name)) {
+        $error = "invalid language pack";
+        return false;
+      }
       $path = "$docroot/languages/$name";
-      exec("rm -rf $path");
+      if (is_dir($path)) remove_tree($path);
       @unlink("$docroot/webGui/javascript/translate.$name.js");
       @unlink("$boot/lang-$name.xml");
       @unlink("$plugins/lang-$name.xml");

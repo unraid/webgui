@@ -67,7 +67,6 @@ function acceptableCert($certFile, $hostname, $expectedURL)
 $tasks       = find_tasks();
 $nginx       = (array)@parse_ini_file('/var/local/emhttp/nginx.ini');
 $addr        = _var($nginx, 'NGINX_LANIP') ?: _var($nginx, 'NGINX_LANIP6');
-$warnipv6    = !empty(_var($nginx, 'NGINX_LANIP6')) || !empty(_var($nginx, 'NGINX_WANIP6')) || (strpos(_var($nginx, 'NGINX_BIND'), ':') !== false);
 $keyfile     = empty(_var($var, 'regFILE')) ? false : @file_get_contents(_var($var, 'regFILE'));
 $cert2Issuer = '';
 $isWildcardCert = false;
@@ -140,11 +139,6 @@ if ($cert3Present) {
     $cert3Subject = exec("/usr/bin/openssl x509 -in $cert3File -noout -subject -nameopt multiline 2>/dev/null|sed -n 's/ *commonName *= //p'");
     $cert3Issuer  = exec("/usr/bin/openssl x509 -in $cert3File -noout -text | sed -n -e 's/^.*Issuer: //p'");
     $cert3Expires = exec("/usr/bin/openssl x509 -in $cert3File -noout -text | sed -n -e 's/^.*Not After : //p'");
-}
-
-// Note: this disables FQDN6 urls since they are not supported by myunraid.net DNS currently
-if (!empty($nginx['NGINX_LANFQDN6'])) {
-    unset($nginx['NGINX_LANFQDN6']);
 }
 
 $http_port       = _var($var, 'PORT', '80') != '80' ? ":{$var['PORT']}" : '';
@@ -224,9 +218,8 @@ foreach ($nginx as $key => $host) {
     if (strpos($key, 'FQDN') === false) {
         continue;
     }
-    // Extract the interface from the key, e.g., 'NGINX_LANFQDN' -> 'LAN', 'NGINX_WANFQDN' -> 'WAN', NGINX_WG0FQDN -> WG, NGINX_TAILSCALE1FQDN -> TAILSCALE
-    // Note: this specifically excludes FQDN6 urls since they are not supported by myunraid.net DNS currently
-    if (preg_match('/^NGINX_([A-Z]+)(\d*)FQDN$/', $key, $matches)) {
+    // Extract the interface from the key, e.g., 'NGINX_LANFQDN' -> 'LAN', 'NGINX_WANFQDN' -> 'WAN', NGINX_WG0FQDN -> WG, NGINX_TAILSCALE1FQDN6 -> TAILSCALE
+    if (preg_match('/^NGINX_([A-Z]+)(\d*)FQDN6?$/', $key, $matches)) {
         $interface = $matches[1]; // Interface type (LAN, WAN, WG, TAILSCALE, etc.)
         // ignore the WAN interface because we don't have access to the WANPORT here
         if ($interface == "WAN") {
@@ -533,7 +526,7 @@ _(Unraid Let's Encrypt certificate)_:
 : <?=$cert2File?>
 
 _(Certificate URL)_:
-: <?="<a class='localURL' href='https://$subject2URL$https_port'>$cert2Subject</a>"?><?php if ($warnipv6): ?> _((does not support IPv6 addresses))_<?php endif; ?>
+: <?="<a class='localURL' href='https://$subject2URL$https_port'>$cert2Subject</a>"?>
 
 _(Certificate issuer)_:
 : <?=$cert2Issuer?>

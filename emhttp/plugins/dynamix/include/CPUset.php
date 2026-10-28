@@ -143,6 +143,9 @@ case 'is':
     $isol = "";
     $isolcpus = [];
     $bootcfg = file('/boot/grub/grub.cfg', FILE_IGNORE_NEW_LINES);
+    $bootentry = 0;
+    $in_menuentry = false;
+    $current_entry = '';
     // find the default section
     $menu_entries = [];
     foreach ($bootcfg as $line) {
@@ -165,13 +168,15 @@ case 'is':
       }
     }
     // search in selected menuentry
-    $menuentry = explode("\n", $menu_entries[$bootentry]);
-    // find the current isolcpus setting
-    if (scan($menu_entries[$bootentry],'linux ')) {
-      foreach ($menuentry as $cmd) {
-        if (scan($cmd,'isolcpus')) {
-          $isol = explode('=',$cmd)[1];
-          break;
+    if (isset($menu_entries[$bootentry])) {
+      $menuentry = explode("\n", $menu_entries[$bootentry]);
+      // find the current isolcpus setting
+      if (scan($menu_entries[$bootentry],'linux ') || scan($menu_entries[$bootentry],'linuxefi ')) {
+        foreach ($menuentry as $cmd) {
+          if (preg_match('/\bisolcpus=([^ \t]+)/', $cmd, $match)) {
+            $isol = $match[1];
+            break;
+          }
         }
       }
     }
@@ -179,8 +184,16 @@ case 'is':
   if ($isol != '') {
     // convert to individual numbers
     foreach (explode(',',$isol) as $cpu) {
-      [$first,$last] = my_explode('-',$cpu);
-      $last = $last ?: $first;
+      $cpu = trim($cpu);
+      if ($cpu === '') continue;
+
+      // Handle only numeric tokens/ranges (e.g. 2, 4-7); skip named flags.
+      if (!preg_match('/^(\d+)(?:-(\d+))?$/', $cpu, $range)) continue;
+
+      $first = (int)$range[1];
+      $last = isset($range[2]) ? (int)$range[2] : $first;
+      if ($last < $first) [$first,$last] = [$last,$first];
+
       for ($x = $first; $x <= $last; $x++) $isolcpus[] = $x;
     }
     sort($isolcpus,SORT_NUMERIC);

@@ -24,8 +24,23 @@ function write(&$rows) {
 }
 
 function validdir($dir) {
-  $path = realpath($dir);
-  return in_array(explode('/', $path)[1] ?? '', ['mnt','boot']) ? $path : '';
+  $real = realpath($dir);
+  // Validate against the real (symlink-resolved) path: it must live under /mnt or /boot.
+  if ($real === false || !in_array(explode('/', $real)[1] ?? '', ['mnt','boot'])) return '';
+  // An exclusive share is exposed as a symlink /mnt/user/<share> -> /mnt/<pool|disk>/<share>,
+  // so realpath() would kick the File Manager out of user-share space and rewrite the whole
+  // listing (every row's path and LOCATION) to the raw /mnt/<disk> path. Keep the user-share
+  // path the caller asked for - FUSE is bypassed for exclusive shares, so it is the same data
+  // at native speed. Canonicalize lexically (no filesystem) so '..' can never escape /mnt/user.
+  $parts = [];
+  foreach (explode('/', $dir) as $p) {
+    if ($p === '' || $p === '.') continue;
+    if ($p === '..') { array_pop($parts); continue; }
+    $parts[] = $p;
+  }
+  $canon = '/'.implode('/', $parts);
+  if (preg_match('#^/mnt/(user0?|rootshare)(/|$)#', $canon) && is_dir($canon)) return $canon;
+  return $real;
 }
 
 function escapeQuote($data) {
@@ -239,7 +254,7 @@ for ($i = 0; $i + 8 <= count($fields_array); $i += 8) {
     }
     $tag = count($devs) > 1 ? 'warning' : '';
     $text[] = '<tr><td><i id="check_'.$objs.'" class="fa fa-fw fa-square-o" onclick="selectOne(this.id)"></i></td>';
-    $text[] = '<td class="ext" data="'.$ext.'"><i class="'.icon_class($ext).'"></i></td>';
+    $text[] = '<td class="ext" data="'.htmlspecialchars($ext, ENT_QUOTES, 'UTF-8').'"><i class="'.icon_class($ext).'"></i></td>';
     $symlink_tooltip = $is_symlink ? '<a class="info" href="#" onclick="return false;"><i class="fa fa-external-link" style="margin-left:4px;"></i><span>'.htmlspecialchars($symlinks[basename($name)]['target'] ?? '').'</span></a>' : '';
     $text[] = '<td id="name_'.$objs.'" class="'.$tag.'" oncontextmenu="fileContextMenu(this.id,\'right\');return false">'.($is_broken ? nl2br(htmlspecialchars(basename($name))) : '<span style="cursor:pointer" onclick="fileEdit(\'name_'.$objs.'\')">'.nl2br(htmlspecialchars(basename($name))).'</span>').$symlink_tooltip.'</td>';
     $text[] = '<td id="owner_'.$objs.'" class="'.$tag.'">'.$owner.'</td>';

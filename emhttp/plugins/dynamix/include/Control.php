@@ -141,11 +141,16 @@ case 'jobs':
     $task = $data['task'] ?? '';
     $source = explode("\r",$data['source'] ?? '');
     $target = $data['target'] ?? '';
-    $more = count($source) > 1 ? " (".sprintf("and %s more",count($source)-1).") " : "";
-    $jobs[] = '<i id="queue_'.$job.'" class="fa fa-fw fa-square-o blue-text job" onclick="selectOne(this.id,false)"></i>'._('Job')." [".sprintf("%'.04d",$job++)."] - $task ".$source[0].$more.($target ? " --> $target" : "");
+    $jobs[] = [
+      'id' => $job++,
+      'label' => _('Job'),
+      'task' => $task,
+      'source' => $source[0],
+      'more' => count($source) > 1 ? sprintf(_('and %s more'),count($source)-1) : '',
+      'target' => $target
+    ];
   }
-  $jobs = '<div id="dfm_joblist">'.implode("<br>",$jobs).'</div>';
-  die($jobs);
+  die(json_encode($jobs));
 case 'edit':
   $file = validname(rawurldecode($_POST['file']));
   die($file ? file_get_contents($file) : '');

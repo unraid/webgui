@@ -17,6 +17,11 @@ require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 require_once "$docroot/webGui/include/SriovHelpers.php";
 
+function vm_manager_escape_html($value)
+{
+  return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
 // add translations
 $_SERVER['REQUEST_URI'] = 'vms';
 require_once "$docroot/webGui/include/Translations.php";
@@ -96,6 +101,8 @@ foreach ($vms as $vm) {
   $vmrcurl = '';
   $graphics = '';
   $virtual = false ;
+  $arrValidGPUDevices = !empty($arrConfig['gpu']) ? getValidGPUDevices() : [];
+  $vrtmodel = '';
   if (isset($arrConfig['gpu'][0]['model'])) {$vrtdriver=" "._("Driver").strtoupper(":{$arrConfig['gpu'][0]['model']} "); $vrtmodel =$arrConfig['gpu'][0]['model'];} else $vrtdriver = "";
   if (isset($arrConfig['gpu'][0]['render']) && $vrtmodel == "virtio3d") {
     if (isset($arrConfig['gpu'][0]['render']) && $arrConfig['gpu'][0]['render'] == "auto") $vrtdriver .= "<br>"._("RenderGPU").":"._("Auto"); else $vrtdriver .= "<br>"._("RenderGPU").":{$arrValidGPUDevices[$arrConfig['gpu'][0]['render']]['name']}";
@@ -115,7 +122,6 @@ foreach ($vms as $vm) {
     $virtual = true ;
   }
   if (!empty($arrConfig['gpu'])) {
-    $arrValidGPUDevices = getValidGPUDevices();
     foreach ($arrConfig['gpu'] as $arrGPU) {
       if ($arrGPU['id'] == "nogpu") {$graphics .= "No GPU"."\n";continue;}
       foreach ($arrValidGPUDevices as $arrDev) {
@@ -188,12 +194,14 @@ foreach ($vms as $vm) {
         $iphdwadr = $arrIP["hwaddr"] == "" ? _("N/A") : $arrIP["hwaddr"];
         $iplist = $arrIP["addrs"];
         foreach ($iplist as $arraddr) {
-          $ipaddrval = $arraddr["addr"];
-          if (preg_match('/^f[c-f]/',$ipaddrval)) continue; // omit ipv6 private addresses
+          $ipaddr = (string)$arraddr["addr"];
+          if (preg_match('/^f[c-f]/',$ipaddr)) continue; // omit ipv6 private addresses
           $iptype = $arraddr["type"] ? "ipv6" : "ipv4";
-          $ipprefix = $arraddr["prefix"];
+          $ipprefix = vm_manager_escape_html((string)$arraddr["prefix"]);
           $ipnamemac = "$ipname ($iphdwadr)";
           if (!in_array($ipnamemac,$duplicates)) $duplicates[] = $ipnamemac; else $ipnamemac = "";
+          $ipnamemac = vm_manager_escape_html($ipnamemac);
+          $ipaddrval = vm_manager_escape_html($ipaddr);
           $ipliststr .= "<tr><td>$ipnamemac</td><td></td><td></td><td>$iptype</td><td>$ipaddrval</td><td>$ipprefix</td></tr>";
           $iptablestr .= "$ipaddrval/$ipprefix\n" ;
         }

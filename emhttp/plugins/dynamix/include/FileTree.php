@@ -31,6 +31,25 @@ function path($dir) {
   return mb_substr($dir,-1) == '/' ? $dir : $dir.'/';
 }
 
+function tree_dir($dir) {
+  $real = realpath($dir);
+  if ($real === false) return false;
+
+  // Exclusive shares are symlinks into their backing pool. Keep the requested
+  // user-share path so selecting a nested destination does not switch the
+  // File Manager target from /mnt/user to /mnt/<pool>.
+  $parts = [];
+  foreach (explode('/', $dir) as $part) {
+    if ($part === '' || $part === '.') continue;
+    if ($part === '..') { array_pop($parts); continue; }
+    $parts[] = $part;
+  }
+  $canonical = '/'.implode('/', $parts);
+  if (preg_match('#^/mnt/(user0?|rootshare)(/|$)#', $canonical) && is_dir($canonical)) return $canonical;
+
+  return $real;
+}
+
 function is_top($dir) {
   global $fileTreeRoot;
   return mb_strlen($dir) > mb_strlen($fileTreeRoot);
@@ -45,8 +64,9 @@ function my_dir($name) {
   return ($rootdir === $userdir && in_array($name, $UDincluded)) ? $topdir : $rootdir;
 }
 
-$fileTreeRoot = path(realpath($_POST['root']));
+$fileTreeRoot = tree_dir($_POST['root']);
 if (!$fileTreeRoot) exit("ERROR: Root filesystem directory not set in jqueryFileTree.php");
+$fileTreeRoot = path($fileTreeRoot);
 
 $docroot = '/usr/local/emhttp';
 require_once "$docroot/webGui/include/Secure.php";
@@ -56,7 +76,9 @@ require_once "$docroot/plugins/dynamix/include/PopularDestinations.php";
 
 $mntdir   = '/mnt/';
 $userdir  = '/mnt/user/';
-$rootdir  = path(realpath($_POST['dir']));
+$rootdir  = tree_dir($_POST['dir']);
+if (!$rootdir) exit("ERROR: Filesystem directory not set in jqueryFileTree.php");
+$rootdir  = path($rootdir);
 $topdir   = str_replace($userdir, $mntdir, $rootdir);
 $filters  = (array)$_POST['filter'];
 $match    = $_POST['match'];

@@ -16,36 +16,23 @@ Tag="usb"
 ?>
 <?$tpmEnabled = !empty($var['flashGUID']) && strpos($var['flashGUID'], '01-') !== 0 && !empty($var['tpmGUID']) ? true : false;?>
 <script>
-function cleanUp(zip) {
-  if (document.hasFocus()) {
-    $('input[value="_(Creating boot device backup)_..."]').val("_(Boot device backup)_").prop('disabled',false);
-    $('div.spinner').hide('slow');
-    $('#pleaseWait').hide('slow');
-    $.post('/webGui/include/Download.php',{cmd:'unlink',file:zip});
+function backup() {
+  var level = $('#backupLevel').val();
+  if ($('#backupMode').val() === 'save') {
+    // Background job tracked by the shared task tray (openPlugin -> TaskQueue):
+    // it shows in the tray, opens the standard progress modal, and keeps running
+    // when the modal is closed. flash_backup_save publishes progress on the
+    // standard 'plugins' task channel and exits 0/non-zero for done/error.
+    openPlugin('flash_backup_save '+level, "_(Boot device backup)_", '', '', 1);
   } else {
-    setTimeout(function(){cleanUp(zip);},2000);
+    // Stream straight to the browser; the browser's own download indicator shows
+    // progress. A hidden iframe (not window.location) keeps us on this page.
+    $('#fbFrame').remove();
+    $('<iframe>',{id:'fbFrame',src:'/webGui/include/FlashBackup.php?level='+level}).hide().appendTo('body');
+    swal({title:"_(Boot device backup)_",text:"_(Your download will begin shortly)_",type:'info',html:true,animation:'none',timer:4000,showConfirmButton:false});
   }
 }
-function backup() {
-  $('input[value="_(Boot device backup)_"]').val('_(Creating boot device backup)_...').prop('disabled',true);
-  $('div.spinner').show('slow');
-  $('#pleaseWait').show('slow');
-  $.post('/webGui/include/Download.php',{cmd:'backup'},function(zip) {
-    if (zip) {
-      location = '/'+zip;
-      setTimeout(function(){cleanUp(zip);},6000);
-    } else {
-      var $btn = $('input[value="_(Creating boot device backup)_..."]');
-      $btn.val("_(Boot device backup)_").prop('disabled',false);
-      $('div.spinner').hide('slow');
-      $('#pleaseWait').hide('slow');
-      swal({title:"_(Creation error)_",text:"_(Insufficient free disk space available)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
-    }
-  });
-}
 </script>
-<div id="pleaseWait" style="display:none;text-align:center;margin-bottom:24px"><span class="red-text strong">_(Please wait)_... _(creating boot device backup zip file (this may take several minutes))_</span></div>
-
 _(Active GUID)_:
 : <?if (!empty($var['flashGUID'])):?>
     <?=htmlspecialchars($var['flashGUID'], ENT_QUOTES, 'UTF-8');?>
@@ -81,8 +68,48 @@ _(TPM GUID)_:
 
 :flash_backup_help:
 
+_(Backup mode)_:
+: <select id="backupMode">
+    <option value="download" selected>_(Download to your computer)_</option>
+    <option value="save">_(Save to the server)_</option>
+  </select>
+
+_(Compression level)_:
+: <select id="backupLevel">
+    <option value="0">_(None - fastest)_</option>
+    <option value="1">_(Low)_</option>
+    <option value="6" selected>_(Normal)_</option>
+    <option value="9">_(Maximum - smallest)_</option>
+  </select>
+
 &nbsp;
 : <span class="inline-block">
     <input type="button" value="_(Boot device backup)_" onclick="backup()">
     <input type="button" value="_(Done)_" onclick="done()">
   </span>
+
+<?
+// List boot backups already saved on the server (save-to-server mode keeps them
+// on a pool/array/boot mount). Build a single inline value string so it stays in
+// the definition-list value column like the rows above (a multi-line block here
+// breaks out of the markdown definition list and renders full-width).
+$fb_saved = [];
+foreach (array_merge(glob("/mnt/*/*-boot-backup-*.zip"), glob("/mnt/user/*/*-boot-backup-*.zip"), glob("/boot/*-boot-backup-*.zip")) as $fb_f) {
+  $fb_r = realpath($fb_f);
+  if ($fb_r && is_file($fb_r)) $fb_saved[$fb_r] = filesize($fb_r);
+}
+krsort($fb_saved);
+$fb_rows = [];
+foreach ($fb_saved as $fb_path => $fb_size) {
+  $fb_bn = basename($fb_path); $fb_dir = dirname($fb_path);
+  $fb_rows[] = "<code>".htmlspecialchars($fb_path, ENT_QUOTES, 'UTF-8')."</code> (".number_format($fb_size/1073741824, 2)." GB) &nbsp;"
+    ."<a href='/webGui/include/FlashBackup.php?serve=".urlencode($fb_bn)."'><i class='fa fa-download'></i> "._('Download')."</a>"
+    ." &nbsp;&middot;&nbsp; <a href='/Main/Browse?dir=".urlencode($fb_dir)."'><i class='fa fa-folder-open'></i> "._('File Manager')."</a>";
+}
+$fb_html = implode('<br>', $fb_rows);
+?>
+<?if ($fb_html):?>
+_(Saved backups on this server)_:
+: <?=$fb_html?>
+
+<?endif;?>

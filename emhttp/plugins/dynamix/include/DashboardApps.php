@@ -94,7 +94,7 @@ if ($_POST['docker']) {
     $color = $status=='started' ? 'green-text' : ($status=='paused' ? 'orange-text' : 'red-text');
     $update = $updateStatus==1 ? 'blue-text' : '';
     $icon = $info['icon'] ?: '/plugins/dynamix.docker.manager/images/question.png';
-    $image = substr($icon,-4)=='.png' ? "<img src='$icon?".filemtime("$docroot{$info['icon']}")."' class='img' onerror=this.src='/plugins/dynamix.docker.manager/images/question.png';>" : (substr($icon,0,5)=='icon-' ? "<i class='$icon img'></i>" : "<i class='fa fa-$icon img'></i>");
+    $image = substr($icon,-4)=='.png' ? "<img src='$icon?".filemtime("$docroot{$info['icon']}")."' class='img' onerror=\"this.onerror=null;this.src='/plugins/dynamix.docker.manager/images/question.png';\">" : (substr($icon,0,5)=='icon-' ? "<i class='$icon img'></i>" : "<i class='fa fa-$icon img'></i>");
     echo "<span class='outer solid apps $status'><span id='$id' $menu class='hand'>$image</span><span class='inner'><span class='$update'>$name</span><br><i class='fa fa-$shape $status $color'></i><span class='state'>"._($status)."</span></span></span>";
   }
   $none = count($containers) ? _('No running docker containers') : _('No docker containers defined');

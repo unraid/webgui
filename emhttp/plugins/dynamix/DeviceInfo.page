@@ -25,6 +25,7 @@ $events     = explode('|', $disk['smEvents'] ?? $var['smEvents'] ?? $numbers);
 $mode       = ['Disabled','Hourly','Daily','Weekly','Monthly'];
 $days       = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 $sheets     = [];
+$isDedicatedBootPool = (_var($disk,'type') === 'Cache' && strtolower((string)_var($disk,'bootPool','no')) === 'dedicated');
 $i = $n     = 0;
 
 function hasSubpools($name)
@@ -39,6 +40,8 @@ function hasSubpools($name)
     return false;
 }
 $fsTypeDisabled = (_var($disk, 'fsType') == 0);
+$diskCompressionDisabled = false;
+$diskAutotrimDisabled = false;
 if (_var($disk,'type')== "Boot") {
     $fsTypeImmutable = true;
     $fsProfileImmutable = true;
@@ -50,6 +53,13 @@ if (_var($disk,'type')== "Boot") {
     $fsTypeImmutable = true;
     $fsProfileImmutable = !(_var($var, 'fsState') == 'Stopped' && empty(_var($disk, 'fsGroups', '1')));
 }
+  if ($isDedicatedBootPool) {
+    $fsTypeDisabled = true;
+    $diskCompressionDisabled = true;
+    $diskAutotrimDisabled = true;
+    $fsTypeImmutable = true;
+    $fsProfileImmutable = true;
+  }
 
 foreach ($disks as $sheet) {
     if (_var($sheet, 'type') == "Flash" || _var($sheet, 'color') == "grey-off" || empty($sheet['name'])) {
@@ -79,12 +89,7 @@ $textErase = isPool($name) ? _('This will ERASE content of ALL devices in the po
 $textDelete = _('This will unassign all devices from the pool but will NOT modify any device contents');
 $poolBootSizeLocked = false;
 if (isPool($name) && !isSubpool($name)) {
-  $poolConfigPath = "/boot/config/pools/$name.cfg";
-  if (is_file($poolConfigPath)) {
-    $poolConfig = parse_ini_file($poolConfigPath, false, INI_SCANNER_RAW) ?: [];
-    $poolBootSize = _var($poolConfig, 'diskBootSize', '0');
-    $poolBootSizeLocked = ((string)$poolBootSize !== '0' && $poolBootSize !== '');
-  }
+  $poolBootSizeLocked = _var($disk, 'bootPool', 'no') != 'no';
 }
 
 function disabled_if($condition)
@@ -189,6 +194,25 @@ function is_upgraded_ZFS_pool($pool_name)
 <?endif;?>
 
 String.prototype.celsius = function(){return Math.round((parseInt(this)-32)*5/9).toString();}
+
+function isReservedPoolName(poolname, reserved) {
+  var name = (poolname || '').trim().toLowerCase();
+  var reservedPrefixes = ['mirror', 'raidz', 'draid', 'spare'];
+
+  if (!name) return false;
+
+  return reserved.some(function(entry) {
+    var reservedName = (entry || '').toLowerCase();
+    if (!reservedName) return false;
+    if (reservedName.endsWith('*')) {
+      return name.startsWith(reservedName.slice(0, -1));
+    }
+    if (reservedPrefixes.includes(reservedName)) {
+      return name === reservedName || name.startsWith(reservedName);
+    }
+    return name === reservedName;
+  });
+}
 
 function setFloor() {
   if ($('#shareFloor').length==0) return;
@@ -389,6 +413,9 @@ function selectDiskFsProfileZFS(slots,init,subpool) {
     selectDiskFsWidthZFS(slots,false);
   });
 }
+var isDedicatedBootPool = <?= $isDedicatedBootPool ? 'true' : 'false' ?>;
+var fsTypeDisabledByServer = <?= $fsTypeDisabled ? 'true' : 'false' ?>;
+var fsProfileDisabledByServer = <?= $fsProfileImmutable ? 'true' : 'false' ?>;
 /* called upon page load (init==true) and when user changes file system type (init==false) */
 function selectDiskFsProfile(init) {
   var t = init ? null : 'slow';
@@ -406,6 +433,10 @@ function selectDiskFsProfile(init) {
   } else {
     fsType = 'zfs';
   }
+
+  $('#diskFsType').prop('disabled', fsTypeDisabledByServer || isDedicatedBootPool);
+  $('#diskFsProfile').prop('disabled', fsProfileDisabledByServer || isDedicatedBootPool);
+  $('#diskFsWidth').prop('disabled', fsProfileDisabledByServer || isDedicatedBootPool);
 
   if (slots == 1 || fsType == 'auto') {
     $('#profile').hide(t);
@@ -440,24 +471,27 @@ function selectDiskFsProfile(init) {
     selectDiskFsProfileEXFAT();
   }
 
-  if (subpool != '' || fsType == 'auto' || fsType.indexOf('xfs') != -1 || fsType.indexOf('ext') != -1 || fsType.indexOf('ntfs') != -1 || fsType.indexOf('exfat') != -1) {
+  var compressionDisabled = (subpool != '' || fsType == 'auto' || fsType.indexOf('xfs') != -1 || fsType.indexOf('ext') != -1 || fsType.indexOf('ntfs') != -1 || fsType.indexOf('exfat') != -1);
+  if (compressionDisabled) {
     $('#compression').hide(t);
-    $('#diskCompression').prop('disabled',true);
+    $('#diskCompression').prop('disabled', compressionDisabled || isDedicatedBootPool);
   } else {
     $('#compression').show(t);
-    $('#diskCompression').prop('disabled',(fsStatus == 'Mounted'));
+    $('#diskCompression').prop('disabled', (fsStatus == 'Mounted') || isDedicatedBootPool);
   }
 
 <?if (diskType('Data') || isSubpool($name)):?>
   $('#autotrim').hide(t);
-  $('#diskAutotrim').prop('disabled',true);
+  var autotrimDisabled = true;
+  $('#diskAutotrim').prop('disabled', autotrimDisabled || isDedicatedBootPool);
 <?else:?>
   if (fsType == 'auto') {
     $('#autotrim').hide(t);
-    $('#diskAutotrim').prop('disabled',true);
+    var autotrimDisabled = true;
+    $('#diskAutotrim').prop('disabled', autotrimDisabled || isDedicatedBootPool);
   } else {
     $('#autotrim').show(t);
-    $('#diskAutotrim').prop('disabled',(fsStatus == 'Mounted'));
+    $('#diskAutotrim').prop('disabled', (fsStatus == 'Mounted') || isDedicatedBootPool);
   }
 <?endif;?>
 }
@@ -696,8 +730,9 @@ function validate(poolname) {
   var reserved = [<?=makeList(explode(',', _var($var, 'reservedNames')))?>];
   var shares = [<?=makeList(array_map('sharename', glob('boot/config/shares/*.cfg', GLOB_NOSORT)))?>];
   var pools = [<?=makeList($pools)?>];
+  poolname = (poolname || '').trim();
   if (!poolname.trim()) return false;
-  if (reserved.includes(poolname)) {
+  if (isReservedPoolName(poolname, reserved)) {
     swal({title:"_(Invalid pool name)_",text:"_(Do not use reserved names)_",type:'error',html:true,confirmButtonText:"_(Ok)_"});
     return false;
   } else if (shares.includes(poolname)) {
@@ -945,7 +980,7 @@ _(Allocation profile)_:
 </div>
 <div markdown="1" id="compression">
 _(Compression)_:
-: <select id="diskCompression" name="diskCompression.<?=_var($disk, 'idx', 0)?>">
+: <select id="diskCompression" name="diskCompression.<?=_var($disk, 'idx', 0)?>" <?=disabled_if($diskCompressionDisabled)?>>
   <?=mk_option(_var($disk, 'compression'), "off", _('Off'))?>
   <?=mk_option(_var($disk, 'compression'), "on", _('On'))?>
   </select>
@@ -954,7 +989,7 @@ _(Compression)_:
 </div>
 <div markdown="1" id="autotrim">
 _(Autotrim)_:
-: <select id="diskAutotrim" name="diskAutotrim.<?=_var($disk, 'idx', 0)?>">
+: <select id="diskAutotrim" name="diskAutotrim.<?=_var($disk, 'idx', 0)?>" <?=disabled_if($diskAutotrimDisabled)?>>
   <?=mk_option(_var($disk, 'autotrim'), "on", _('On'))?>
   <?=mk_option(_var($disk, 'autotrim'), "off", _('Off'))?>
   </select>
@@ -1011,7 +1046,7 @@ _(Critical disk utilization threshold)_ (%):
   <?endif;?>
   <?if (isPool($name) && isSubpool($name)===false):?>
     <?if (_var($var,'fsState')=="Stopped" || (_var($var,'fsState')=="Started" && _var($var,'startMode')!="Normal")): $erasable=true; endif;?>
-    <input type="button" id="eraseButton" value="_(Erase Pool)_" onclick="eraseDisk()"<?=$erasable ? '' : ' disabled'?>>
+    <input type="button" id="eraseButton" value="_(Erase Pool)_" onclick="eraseDisk()"<?=($erasable && !$isDedicatedBootPool) ? '' : ' disabled'?>>
     <?if (_var($var,'fsState')=="Stopped" && !$poolBootSizeLocked): $removeable=true; endif;?>
     <input type="button" id="removeButton" value="_(Remove Pool)_" onclick="removePool()"<?=$removeable ? '' : ' disabled'?>>
   <?endif;?>
@@ -1020,6 +1055,7 @@ _(Critical disk utilization threshold)_ (%):
 
 <?if (fsType('btrfs')):?>
 <?if (_var($disk,'fsStatus')=="Mounted"):?>
+<?if (isPool($name)):?>
 <div id="poolsummary" class="title nocontrol">
   <span class="left">
     <i class="title fa fa-hdd-o"></i> _(Pool Status)_
@@ -1044,6 +1080,7 @@ if (!empty($poolstatus['pools'][$poolName])) {
 ?>
 _(pool status)_:
 : <span class="<?=$statusClass?>"><?=$status?><?=$statusLink?></span>
+<?endif;?>
 
 </form>
 
@@ -1383,6 +1420,7 @@ _(btrfs check status)_:
 <?endif;?>
 <?if (fsType('zfs') && !isSubpool($name)):?>
 <?if (_var($disk,'fsStatus')=="Mounted"):?>
+<?if (isPool($name)):?>
 <div id="poolsummary" class="title nocontrol">
   <span class="left">
     <i class="title fa fa-info-circle"></i>_(Pool Status Summary)_
@@ -1407,6 +1445,7 @@ if (!empty($poolstatus['pools'][$poolName])) {
 ?>
 _(pool status)_:
 : <span class="<?=$statusClass?>"><?=$status?><?=$statusLink?></span>
+<?endif;?>
 
 </form>
 <?endif;?>

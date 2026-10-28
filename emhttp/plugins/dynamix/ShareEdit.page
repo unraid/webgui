@@ -435,7 +435,7 @@ _(Primary storage (for new files and folders))_:
 : <select id="primary" name="shareCachePool" onchange="form.shareFloor.value='';updateScreen(z(4),'slow')">
   <?=mk_option(primary(), '', _('Array'),  $poolsOnly ? 'disabled' : '')?>
   <?foreach ($pools as $pool):?>
-  <?if ($disks[$pool]['devices']) echo mk_option(primary(),$pool,my_disk($pool),$disks[$pool]['shareEnabled']=='yes'?"":"disabled")?>
+  <?if ($disks[$pool]['devices'] && $disks[$pool]['shareEnabled']=='yes') echo mk_option(primary(),$pool,my_disk($pool))?>
   <?endforeach;?>
   <?if ($share['cachePool']):?>
   <option id="cachePoolOption" value="<?= $share['cachePool'] ?>" disabled><?= $cachePoolCapitalized ?></option>
@@ -505,7 +505,7 @@ _(Secondary storage)_:
   <?=mk_option(secondary(),'0',_('None'))?>
   <?=mk_option(secondary(),'1',_('Array'),  $poolsOnly ? 'disabled' : '')?>
   <?foreach ($pools as $pool):?>
-  <?if ($disks[$pool]['devices']) echo mk_option(secondary(),$pool,my_disk($pool),$disks[$pool]['shareEnabled']=='yes'?"":"disabled")?>
+  <?if ($disks[$pool]['devices'] && $disks[$pool]['shareEnabled']=='yes') echo mk_option(secondary(),$pool,my_disk($pool))?>
   <?endforeach;?>
   <?if ($share['cachePool2']):?>
   <option id="cachePoolOption2" value="<?= $share['cachePool2'] ?>" disabled><?= $cachePoolCapitalized2 ?></option>
