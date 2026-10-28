@@ -234,7 +234,7 @@ run_action() {
     --arg archive_name "$archive_name"
   )
   # shellcheck disable=SC2016
-  if ! json=$(jq -n "${jq_args[@]}" '{"action":$action,"title":$title,"source":$source,"target":$target,"H":"","sparse":"","overwrite":$overwrite,"zfs":"","format":$format,"archive_name":$archive_name}'); then
+  if ! json=$(jq -n "${jq_args[@]}" '{"action":$action,"title":$title,"source":$source,"target":$target,"sparse":"","overwrite":$overwrite,"zfs":"","format":$format,"archive_name":$archive_name}'); then
     echo "Error: jq failed" 1>&2
     exit 1
   fi

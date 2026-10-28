@@ -823,7 +823,6 @@ function doAction(action, title, id) {
   var ud     = ['disks','remotes'].includes(path[1]); // unassigned devices
   var match  = ud || user ? '' : '^(?!\\/mnt\\/(user0?|rootshare)\\/).*$';
   var name   = path.pop() || path.pop();
-  var hdlink = "<?=$var['fuse_directio'] == 1 ? '1' : ''?>";
   dfm.window = $("#dfm_dialogWindow");
   switch (action) {
   case 0: // create folder
@@ -1041,7 +1040,7 @@ function doAction(action, title, id) {
         }
         dfm_footer('hide');
         dfm_fileManager('start');
-        var postData = {mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),overwrite:dfm.window.find('#dfm_overwrite').val(),zfs:encodeURIComponent(zfs)};
+        var postData = {mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),sparse:dfm.window.find('#dfm_sparse').val(),overwrite:dfm.window.find('#dfm_overwrite').val(),zfs:encodeURIComponent(zfs)};
         if (action == 16) {
           postData.format = encodeURIComponent(format);
           postData.archive_name = encodeURIComponent(archive_name);
@@ -1099,7 +1098,7 @@ function doAction(action, title, id) {
           }
           if (!target || !valid.test(target)) {errorTarget(); return;}
         } else target = '';
-        var postDataSingleQueue = {mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),overwrite:dfm.window.find('#dfm_overwrite').val(),zfs:encodeURIComponent(zfs)};
+        var postDataSingleQueue = {mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source),target:encodeURIComponent(target),sparse:dfm.window.find('#dfm_sparse').val(),overwrite:dfm.window.find('#dfm_overwrite').val(),zfs:encodeURIComponent(zfs)};
         if (action == 16) {
           postDataSingleQueue.format = encodeURIComponent(format_queue);
           postDataSingleQueue.archive_name = encodeURIComponent(archive_name_queue);
@@ -1154,7 +1153,6 @@ function doActions(action, title) {
     var ud     = ['disks','remotes'].includes(path[1]); // unassigned devices
     var match  = ud || user ? '' : '^(?!\\/mnt\\/(user0?|rootshare)\\/).*$';
     var name   = path.pop() || path.pop();
-    var hdlink = "<?=$var['fuse_directio'] == 1 ? '1' : ''?>";
     var u      = false;
     var d      = false;
     if (bulk) {
@@ -1199,7 +1197,6 @@ function doActions(action, title) {
     var ud     = ['disks','remotes'].includes(path[1]);
     var match  = ud || user ? '' : '^(?!\\/mnt\\/(user0?|rootshare)\\/).*$';
     var bulk   = source.length > 1;
-    var hdlink = "<?=$var['fuse_directio'] == 1 ? '1' : ''?>";
   }
   dfm.window = $("#dfm_dialogWindow");
   switch (action) {
@@ -1400,7 +1397,7 @@ function doActions(action, title) {
         dfm.window.find('.dfm_text').removeClass('orange-text').html("_(Running)_...");
         dfm_footer('hide');
         dfm_fileManager('start');
-        var postData = {mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),overwrite:dfm.window.find('#dfm_overwrite').val(),zfs:encodeURIComponent(zfs.join('\r'))};
+        var postData = {mode:'file',action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),sparse:dfm.window.find('#dfm_sparse').val(),overwrite:dfm.window.find('#dfm_overwrite').val(),zfs:encodeURIComponent(zfs.join('\r'))};
         if (action == 16) {
           postData.format = encodeURIComponent(format);
           postData.archive_name = encodeURIComponent(archive_name);
@@ -1459,7 +1456,7 @@ function doActions(action, title) {
           }
           if (!target || !valid.test(target)) {errorTarget(); return;}
         } else target = '';
-        var postDataQueue = {mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),hdlink:hdlink,sparse:dfm.window.find('#dfm_sparse').val(),overwrite:dfm.window.find('#dfm_overwrite').val(),zfs:encodeURIComponent(zfs.join('\r'))};
+        var postDataQueue = {mode:'file',task:encodeURIComponent(title.toLowerCase()),action:action,title:encodeURIComponent(title),source:encodeURIComponent(source.join('\r')),target:encodeURIComponent(target),sparse:dfm.window.find('#dfm_sparse').val(),overwrite:dfm.window.find('#dfm_overwrite').val(),zfs:encodeURIComponent(zfs.join('\r'))};
         if (action == 16) {
           postDataQueue.format = encodeURIComponent(format_queue);
           postDataQueue.archive_name = encodeURIComponent(archive_name_queue);

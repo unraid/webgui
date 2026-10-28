@@ -244,7 +244,6 @@ case 'file':
     'title' => rawurldecode($_POST['title'] ?? ''),
     'source' => rawurldecode($_POST['source'] ?? ''),
     'target' => rawurldecode($_POST['target'] ?? ''),
-    'H' => empty($_POST['hdlink']) ? '' : 'H',
     'sparse' => empty($_POST['sparse']) ? '' : '--sparse',
     'overwrite' => empty($_POST['overwrite']) ? 0 : 1,
     'zfs' => rawurldecode($_POST['zfs'] ?? '')

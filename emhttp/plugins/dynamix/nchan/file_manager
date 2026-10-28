@@ -617,9 +617,9 @@ $last_published_time = 0;
 while (true) {
   // Reset all per-iteration variables. $tar_flags/$cmd must be here to prevent stale
   // values from a previous tar iteration overriding the zip code path.
-  unset($action, $source, $target, $H, $sparse, $overwrite, $zfs, $format, $archive_name, $target_tmp, $tar_flags, $single_compressor, $pv_compressor, $pv_single_compress, $cmd);
+  unset($action, $source, $target, $sparse, $overwrite, $zfs, $format, $archive_name, $target_tmp, $tar_flags, $single_compressor, $pv_compressor, $pv_single_compress, $cmd);
 
-  // read job parameters from JSON file: $action, $title, $source, $target, $H, $sparse, $overwrite, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
+  // read job parameters from JSON file: $action, $title, $source, $target, $sparse, $overwrite, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
   if (file_exists($active)) {
     $json = file_get_contents($active);
     $data = json_decode($json, true);
@@ -738,7 +738,8 @@ while (true) {
         if ($target) {
           $mkpath = isdir($target) ? '--mkpath' : '';
           $ignore_existing = $overwrite ? '' : '--ignore-existing';
-          $cmd = "rsync -ahPIX$H $sparse $ignore_existing $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
+          $cmd = "rsync -ahPIXH $sparse $ignore_existing $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
+          // note: -H (always on) preserves hard links within the transferred files, so that a copy is a 1:1 copy.
           // note: rsync defaults to "inc_recurse mode" which causes creating the whole directory structure at target before transfering files.
           //       This is a problem because those target directories get temporary permissions of "root:root" and "chmod 0700", which
           //       breaks access for all unraid users through /mnt/user/sharename. We avoid this behavior by using "--no-inc-recursive".
@@ -914,7 +915,7 @@ while (true) {
           } else {
             $delete_empty_dirs = true; // cleanup needed: rsync --remove-source-files leaves empty directories
             $ignore_existing = $overwrite ? '' : '--ignore-existing';
-            $cmd = "rsync -ahPIX$H $sparse $ignore_existing $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
+            $cmd = "rsync -ahPIXH $sparse $ignore_existing $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
             // note: rsync defaults to "inc_recurse mode" which causes creating the whole directory structure at target before transfering files.
             //       This is a problem because those target directories get temporary permissions of "root:root" and "chmod 0700", which
             //       breaks access for all unraid users through /mnt/user/sharename. We avoid this behavior by using "--no-inc-recursive".
