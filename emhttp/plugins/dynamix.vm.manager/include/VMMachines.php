@@ -257,11 +257,11 @@ foreach ($vms as $vm) {
     echo "<tr><td>$disk $reallocationstr</td><td>$serial</td><td>$bus</td>";
     if ($state == 'shutoff') {
       echo "<td title='Click to increase Disk Size'>";
-      echo "<form method='get' action=''>";
+      echo "<form method='post' action=''>";
       echo "<input type='hidden' name='subaction' value='disk-resize'>";
       echo "<input type='hidden' name='uuid' value='".$uuid."'>";
-      echo "<input type='hidden' name='disk' value='".htmlspecialchars($disk)."'>";
-      echo "<input type='hidden' name='oldcap' value='".$capacity."'>";
+      echo "<input type='hidden' name='dev' value='".htmlspecialchars($dev,ENT_QUOTES)."'>";
+      echo "<input type='hidden' name='csrf_token' value='".htmlspecialchars(_var($var,'csrf_token'),ENT_QUOTES)."'>";
       echo "<span class='diskresize' style='width:30px'>";
       echo "<span class='text'><a href='#' onclick='return false'>$capacity</a></span>";
       echo "<input class='input' type='text' style='width:46px' name='cap' value='$capacity' val='diskresize' hidden>";

@@ -71,7 +71,7 @@ function updateList() {
   $('input.update').each(function(){plugin.push($(this).attr('data'));});
   var plugins = plugin.join('*');
   $('#updateall').hide();
-  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{cmd:'pending',plugin:plugins},function() {
+  $.post('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{cmd:'pending',plugin:plugins},function() {
     openPlugin("multiplugin update "+plugins,"_(Update All Plugins)_",":return","loadlist",1);
   });
 }
@@ -80,7 +80,7 @@ function removeList() {
   $('input.remove:checked').each(function(){plugin.push($(this).attr('data'));});
   var plugins = plugin.join('*');
   $('#removeall').hide();
-  $.get('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{cmd:'pending',plugin:plugins},function() {
+  $.post('/plugins/dynamix.plugin.manager/include/ShowPlugins.php',{cmd:'pending',plugin:plugins},function() {
     openPlugin("multiplugin remove "+plugins,"_(Remove Selected Plugins)_","","refresh",1);
   });
 }
