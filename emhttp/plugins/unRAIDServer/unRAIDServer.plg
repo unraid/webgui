@@ -9,7 +9,7 @@
 <!ENTITY category  "">
 <!ENTITY pluginURL "">
 <!ENTITY zip       "">
-<!ENTITY md5       "">
+<!ENTITY sha256    "">
 <!ENTITY notes     "">
 <!ENTITY files     "bz*,make_bootable.bat,make_bootable_linux,make_bootable_mac,memtest*,changes.txt,license.txt,syslinux/syslinux.cfg-">
 <!ENTITY infozip   "infozip-6.0-i486-1.txz">
@@ -82,10 +82,6 @@ if [[ "${version:0:2}" == "5." ]]; then
   # download the release
   if ! wget --no-check-certificate &zip; -O /tmp/&name;.zip ; then
     echo "&zip; download error $?"
-    exit 1
-  fi
-  if ! wget --no-check-certificate &md5; -O /tmp/&name;.md5 ; then
-    echo "&md5; download error $?"
     exit 1
   fi
 fi
@@ -279,19 +275,24 @@ For unRAID-6 we download here, verifying certificiate
 -->
 <FILE Name="/tmp/&name;.zip">
 <URL>&zip;</URL>
-</FILE>
-<FILE Name="/tmp/&name;.md5">
-<URL>&md5;</URL>
+<SHA256>&sha256;</SHA256>
 </FILE>
 
 <FILE Name="/tmp/&name;.sh" Run="/bin/bash">
 <INLINE>
 rm /tmp/&name;.sh
-# check download and extract
-sum1=$(/usr/bin/md5sum /tmp/&name;.zip)
-sum2=$(cat /tmp/&name;.md5)
-if [[ "${sum1:0:32}" != "${sum2:0:32}" ]]; then
-  echo "wrong md5"
+# Check before extraction even on older plugin managers that ignore SHA256 tags.
+sha256expect="&sha256;"
+if [[ ! "$sha256expect" =~ ^[0-9a-f]{64}$ ]]; then
+  echo "missing or invalid release SHA256"
+  exit 1
+fi
+if ! sha256actual=$(/usr/bin/sha256sum /tmp/&name;.zip); then
+  echo "cannot calculate release SHA256"
+  exit 1
+fi
+if [[ "${sha256actual:0:64}" != "$sha256expect" ]]; then
+  echo "wrong release SHA256"
   exit 1
 fi
 # check if enough free space on flash
