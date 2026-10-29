@@ -1095,6 +1095,12 @@ while (true) {
 
         fm_debug_log('Start compress: format=' . $format . ', archive=' . $archive_path);
 
+        // a folder is never replaced, without this check the archive would be created completely and then fail at the rename
+        if (is_dir($archive_path)) {
+          $reply['error'] = _('A folder with this name already exists');
+          break;
+        }
+
         // Check if target archive already exists (skip check when overwrite is allowed)
         if (!$overwrite && file_exists($archive_path)) {
           $reply['error'] = _('Archive already exists');
@@ -1409,11 +1415,16 @@ while (true) {
           ][$ext];
           // cut the extension by its length, basename() removes a suffix case-sensitively and would keep ".GZ"
           $out_base = substr(basename($archive), 0, -(strlen($ext) + 1));
-          if ($out_base === '') {
+          if ($out_base === '' || $out_base === '.' || $out_base === '..') {
             $reply['error'] = _('Invalid source path');
             break;
           }
           $out_path = rtrim($dest, '/') . '/' . $out_base;
+          // a folder is never replaced, without this check the file would be extracted completely and then fail at the rename
+          if (is_dir($out_path)) {
+            $reply['error'] = _('A folder with this name already exists');
+            break;
+          }
           // overwrite check: if dest file exists and overwrite not set, abort
           if (!$overwrite && file_exists($out_path)) {
             $reply['error'] = _('File already exists');
@@ -1565,9 +1576,14 @@ while (true) {
         // Errors which were found before the job was started (e.g. "Archive already exists") reach this block as well.
         if (in_array($action, [16, 17]) && isset($target_tmp)) {
           if (empty($reply['error']) && (!file_exists($error) || filesize($error) === 0) && isset($archive_path, $archive_chown, $archive_chmod)) {
-            rename($target_tmp, $archive_path);
-            exec('chown ' . escapeshellarg($archive_chown) . ' ' . escapeshellarg($archive_path));
-            exec('chmod ' . escapeshellarg($archive_chmod) . ' ' . escapeshellarg($archive_path));
+            // the owner and permissions are only set for the new file, the rename fails if the target is a folder
+            if (rename($target_tmp, $archive_path)) {
+              exec('chown ' . escapeshellarg($archive_chown) . ' ' . escapeshellarg($archive_path));
+              exec('chmod ' . escapeshellarg($archive_chmod) . ' ' . escapeshellarg($archive_path));
+            } else {
+              @unlink($target_tmp);
+              $reply['error'] = sprintf(_('Could not create %s'), $archive_path);
+            }
           } else {
             @unlink($target_tmp);
           }

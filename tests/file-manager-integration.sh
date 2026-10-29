@@ -60,7 +60,8 @@ if [[ ! $ssh_host || $ssh_host == "-h" || $ssh_host == "--help" ]]; then
   echo "Filters (any combination, space-separated):"
   echo "  compress, cmp, 16     compress tests (action 16)"
   echo "  extract, 17           extract tests (action 17)"
-  echo "  invalid               compress tests with invalid or failing sources (action 16)"
+  echo "  merge                 extract into a folder which already has some of the files (action 17)"
+  echo "  invalid               compress and extract tests with invalid or failing sources (actions 16, 17)"
   echo "  cancel, 99            cancel tests (cancel of compress and extract)"
   echo "  arc                   compress and extract tests (actions 16, 17)"
   echo "  rename, rn, 2, 7       rename tests (actions 2, 7)"
@@ -1316,6 +1317,98 @@ test_extract_uppercase() {
   check "extract uppercase: the archive must not be overwritten" "$rc"
 }
 
+# test that extracting an archive of several files into a folder which already has some of them only replaces the files of the archive
+# (with overwrite) or keeps them (without overwrite) and keeps all other files of the folder
+# archive: data/foo.txt, data/sub/bar.txt - folder: data/foo.txt (old), data/sub/baz.txt
+# args: format overwrite
+test_extract_merge() {
+  local format=$1 overwrite=$2
+  local merge_dir="$arc_path/merge" target="$dst_path/merge_${format}_$overwrite"
+  local expected_foo="from archive" rc
+
+  should_run extract merge arc 17 || return 0
+
+  echo -e "\n=== extract $format into a folder which has some of the files (overwrite=$overwrite) ==="
+
+  # the archive is built from the same files for every format
+  rm -rf "${merge_dir:?}"
+  mkdir -p "$merge_dir/data/sub"
+  echo "from archive" >"$merge_dir/data/foo.txt"
+  echo "bar" >"$merge_dir/data/sub/bar.txt"
+  build_archive "$format" "$merge_dir/data" "$merge_dir" "merge.$format" >/dev/null
+
+  rm -rf "${target:?}"
+  mkdir -p "$target/data/sub"
+  echo "old" >"$target/data/foo.txt"
+  echo "baz" >"$target/data/sub/baz.txt"
+
+  run_action 17 "$merge_dir/merge.$format" "$target/" "$overwrite"; rc=$?
+  check "extract $format merge overwrite=$overwrite: action run must succeed" "$rc"
+
+  [[ $overwrite -eq 0 ]] && expected_foo="old"
+  rc=1 && [[ $(cat "$target/data/foo.txt") == "$expected_foo" ]] && rc=0
+  check "extract $format merge overwrite=$overwrite: data/foo.txt must be '$expected_foo' (is: '$(cat "$target/data/foo.txt")')" "$rc"
+  rc=1 && [[ $(cat "$target/data/sub/bar.txt") == "bar" ]] && rc=0
+  check "extract $format merge overwrite=$overwrite: data/sub/bar.txt of the archive must be added" "$rc"
+  rc=1 && [[ $(cat "$target/data/sub/baz.txt") == "baz" ]] && rc=0
+  check "extract $format merge overwrite=$overwrite: data/sub/baz.txt which is not in the archive must be kept" "$rc"
+}
+
+# test that an archive which would be extracted to the name of a folder fails, does not change the permissions of any folder and leaves no
+# temporary file: "..gz" is extracted to ".", "...gz" to ".." and "data.gz" to "data" if this is a folder
+# args: label archive_name expected_error [folder_name]
+test_extract_invalid_target() {
+  local label=$1 archive_name=$2 expected_error=$3 folder_name=${4:-}
+  local dir="$dst_path/invalid_target" folder="$dst_path/invalid_target/$folder_name"
+  local dir_before parent_before folder_before dir_now parent_now folder_now rc error_text leftovers
+
+  should_run extract invalid arc 17 || return 0
+
+  echo -e "\n=== extract $label ==="
+
+  rm -rf "${dir:?}"
+  mkdir -p "$dir"
+  if [[ $folder_name ]]; then
+    mkdir -p "$folder"
+    echo "content" >"$folder/file.txt"
+    chmod 755 "$folder"
+    folder_before=$(stat -c '%a %u:%g' "$folder")
+  fi
+  gzip -c "$files_path/hello.txt" >"$dir/$archive_name"
+  dir_before=$(stat -c '%a %u:%g' "$dir")
+  parent_before=$(stat -c '%a %u:%g' "$dst_path")
+
+  run_action 17 "$dir/$archive_name" "$dir/" 1 && rc=1 || rc=0
+  check "extract $label: action run must fail" "$rc"
+
+  error_text=$(jq -r '.error // empty' "$fm_debug_nchan_file" | head -1)
+  rc=1 && [[ $error_text == *"$expected_error"* ]] && rc=0
+  check "extract $label: the user must see an error like '$expected_error' (is: '$error_text')" "$rc"
+
+  dir_now=$(stat -c '%a %u:%g' "$dir")
+  parent_now=$(stat -c '%a %u:%g' "$dst_path")
+  rc=1 && [[ $dir_now == "$dir_before" ]] && rc=0
+  check "extract $label: the permissions of the target folder must not change ($dir_before, now $dir_now)" "$rc"
+  rc=1 && [[ $parent_now == "$parent_before" ]] && rc=0
+  check "extract $label: the permissions of the parent folder must not change ($parent_before, now $parent_now)" "$rc"
+  if [[ $folder_name ]]; then
+    folder_now=$(stat -c '%a %u:%g' "$folder")
+    rc=1 && [[ $folder_now == "$folder_before" ]] && rc=0
+    check "extract $label: the permissions of the existing folder must not change ($folder_before, now $folder_now)" "$rc"
+  fi
+
+  leftovers=$(find "$dir" -maxdepth 1 -name '.*.tmp')
+  rc=0
+  [[ $leftovers ]] && { rc=1; echo "  left in the target: ${leftovers//$'\n'/, }"; }
+  check "extract $label: no temporary file may be left in the target" "$rc"
+
+  # a failed test must not break the folders of the following tests
+  chmod "${dir_before% *}" "$dir"
+  chown "${dir_before#* }" "$dir"
+  chmod "${parent_before% *}" "$dst_path"
+  chown "${parent_before#* }" "$dst_path"
+}
+
 # test that a compress job fails and publishes no archive if the source is invalid: a source which does not exist, or a folder or
 # several files as source of a single-file format (.gz, ...)
 # args: label format source archive_name expected_error
@@ -1369,6 +1462,40 @@ test_compress_changing_source() {
   check "compress $format (changing file): no archive may be published" "$rc"
 
   rm -rf "${changing_path:?}"
+}
+
+# test that a compress job fails at once if the archive would get the name of a folder (also with overwrite), does not change the permissions
+# of the folder and leaves no temporary file
+test_compress_over_folder() {
+  local folder="$dst_path/folder.tar.gz" folder_before folder_now rc error_text leftovers
+
+  should_run compress invalid arc cmp 16 || return 0
+
+  echo -e "\n=== compress to the name of an existing folder ==="
+
+  rm -rf "${folder:?}"
+  mkdir -p "$folder"
+  echo "content" >"$folder/file.txt"
+  chmod 755 "$folder"
+  folder_before=$(stat -c '%a %u:%g' "$folder")
+
+  run_action 16 "$files_path/hello.txt" "$dst_path" 1 tar.gz "folder.tar.gz" && rc=1 || rc=0
+  check "compress to a folder name: action run must fail" "$rc"
+
+  error_text=$(jq -r '.error // empty' "$fm_debug_nchan_file" | head -1)
+  rc=1 && [[ $error_text == *"A folder with this name already exists"* ]] && rc=0
+  check "compress to a folder name: the user must see an error like 'A folder with this name already exists' (is: '$error_text')" "$rc"
+
+  folder_now=$(stat -c '%a %u:%g' "$folder")
+  rc=1 && [[ $folder_now == "$folder_before" ]] && rc=0
+  check "compress to a folder name: the permissions of the folder must not change ($folder_before, now $folder_now)" "$rc"
+
+  leftovers=$(find "$dst_path" -maxdepth 1 -name '.*.tmp')
+  rc=0
+  [[ $leftovers ]] && { rc=1; echo "  left in the target: ${leftovers//$'\n'/, }"; }
+  check "compress to a folder name: no temporary file may be left in the target" "$rc"
+
+  rm -rf "${folder:?}"
 }
 
 # test that a cancel stops all processes of the job (tar, zip, xz, ...) and leaves no temporary file in the target
@@ -1639,7 +1766,8 @@ echo "  throttling reads of device $test_device ($test_source, $test_fs) to $fm_
 # as soon as no browser tab is open (after a page of the web UI was loaded). It is stopped while the test runs and started again at the end.
 monitor_nchan_pid=
 [[ -s /var/run/monitor_nchan.pid ]] && monitor_nchan_pid=$(cat /var/run/monitor_nchan.pid)
-if [[ $monitor_nchan_pid && -d /proc/$monitor_nchan_pid ]]; then
+# the PID of an ended monitor can belong to another process now, which must not be stopped
+if [[ $monitor_nchan_pid && -r /proc/$monitor_nchan_pid/cmdline && $(tr '\0' ' ' </proc/"$monitor_nchan_pid"/cmdline) == *monitor_nchan* ]]; then
   kill "$monitor_nchan_pid"
   monitor_nchan_stopped=1
   echo "  stopped monitor_nchan (it is started again at the end)"
@@ -1684,6 +1812,11 @@ for fmt in "${archive_single_formats[@]}"; do
   test_extract "$fmt" "$arc_path/urandom150MB.bin.$fmt" "$dst_path/extract_big_$fmt/"
 done
 test_extract_uppercase
+for fmt in "${archive_multi_formats[@]}"; do
+  for overwrite in 0 1; do
+    test_extract_merge "$fmt" "$overwrite"
+  done
+done
 
 # ===========================
 # invalid and failing compress tests
@@ -1693,6 +1826,10 @@ test_compress_invalid "second source does not exist" zip "$files_path/hello.txt"
 test_compress_invalid "folder" gz "$files_path/small_files" invalid-folder.gz "Single-file formats require exactly one file"
 test_compress_invalid "two files" gz "$files_path/hello.txt"$'\r'"$files_path/empty.txt" invalid-two.gz "Single-file formats require exactly one file"
 test_compress_changing_source
+test_extract_invalid_target "to the name of the folder '.' (archive ..gz)" "..gz" "Invalid source path"
+test_extract_invalid_target "to the name of the folder '..' (archive ...gz)" "...gz" "Invalid source path"
+test_extract_invalid_target "over a folder with the same name (archive data.gz)" "data.gz" "A folder with this name already exists" "data"
+test_compress_over_folder
 
 # ===========================
 # cancel tests
