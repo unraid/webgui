@@ -493,6 +493,17 @@ build_locations(){
 	    include fastcgi_params;
 	}
 	#
+	# Vite build output of the Connect/API web components: every JS/CSS/font file name embeds a
+	# content hash and the files carry no ?v= querystring, so the rule below never cached them.
+	# Hashed files are immutable - cache indefinitely. Must come before the generic rule below.
+	#
+	location ~ ^/plugins/dynamix\.my\.servers/unraid-components/.*\.(js|css|woff2?)$ {
+	    gzip on;
+	    gzip_disable "MSIE [1-6]\.";
+	    gzip_types text/css application/javascript text/javascript application/x-javascript application/font-woff font-woff;
+	    expires max;
+	}
+	#
 	# enable compression of JS/CSS/WOFF files
 	# if version tag on querystring, tell browser to cache indefinitely
 	#
