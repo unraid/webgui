@@ -13,6 +13,9 @@
 # Reconfigure grub.cfg and theme.txt after UUID change
 # mkbootable reconfigure
 
+# Verify that the installed grub version matches current grub version, re-install if different
+# mkbootable verify
+
 #set -euo pipefail
 #set -x
 source /etc/rc.d/rc.runlog
@@ -83,10 +86,29 @@ resize_partitions() {
 }
 
 install_grub() {
-  # format the EFI System Partition (partition 2) with FAT32 and mount
-  mkfs.fat -F32 -n EFI "$EFI_PART"
+  local VERSION
+  VERSION=$(grub-install --version) || return 1
+
   mkdir -p -m 0700 "$BOOT/efi"
-  mount "$EFI_PART" "$BOOT/efi"
+
+  if [[ "$1" == "verify" ]]; then
+    # Skip re-nstallation if GRUB version matches
+    if mount "$EFI_PART" "$BOOT/efi" ; then
+      if [[ -f "$BOOT/efi/grub_version" ]]; then
+        if [[ $(<"$BOOT/efi/grub_version") == "$VERSION" ]]; then
+          umount "$BOOT/efi"
+          return 0
+        fi
+      fi
+      umount "$BOOT/efi"
+    fi
+  fi
+
+  # Format EFI FAT32 partition and mount
+  mkfs.fat -F32 -n EFI "$EFI_PART" || return 1
+  mount "$EFI_PART" "$BOOT/efi" || return 1
+
+  log "$VERSION -> /dev/$DEV"
 
   # UEFI install
   grub-install \
@@ -94,16 +116,24 @@ install_grub() {
     --boot-directory="$BOOT" \
     --efi-directory="$BOOT/efi" \
     --modules="part_gpt zfs zfsinfo search search_fs_uuid configfile normal" \
-    --removable --no-nvram
+    --removable --no-nvram || {
+      umount "$BOOT/efi"
+      return 1
+    }
 
   # BIOS install
   grub-install \
     --target=i386-pc "/dev/$DEV" \
     --boot-directory="$BOOT" \
     --modules="part_gpt zfs zfsinfo search search_fs_uuid configfile normal" \
-    --no-floppy --no-rs-codes
+    --no-floppy --no-rs-codes || {
+      umount "$BOOT/efi"
+      return 1
+    }
 
-  # we don't need this mounted anymore
+  # Record GRUB version after successful installation
+  printf '%s\n' "$VERSION" > "$BOOT/efi/grub_version"
+
   umount "$BOOT/efi"
 }
 
@@ -174,6 +204,9 @@ case "$OPER" in
   ;;
 'reconfigure')
   configure_grub
+  ;;
+'verify')
+  install_grub "verify"
   ;;
 *)
   log "error 2" # shouldn't happen
