@@ -87,8 +87,10 @@ function my_devs(&$devs,$name,$menu) {
         case 3: $text[$i] = '<span class="dfm_device"><a class="info" onclick="return false"><i class="lock fa fa-fw fa-lock red-text"></i><span>'._('Locked: wrong encryption key').'</span></a>'; break;
        default: $text[$i] = '<span class="dfm_device"><a class="info" onclick="return false"><i class="lock fa fa-fw fa-lock red-text"></i><span>'._('Locked: unknown error').'</span></a>'; break;
       }
-      $root = ($dev == 'flash' ? "/boot/$name" : "/mnt/$dev/$name");
-      $text[$i] .= '<span id="device_'.$i.'" class="hand" onclick="'.$menu.'(\''.$root.'\','.$i.')" oncontextmenu="'.$menu.'(\''.$root.'\','.$i.');return false">'.compress($dev,11,0).'</span></span>';
+      // Only replace the user-share mount component; keep the complete row path.
+      $root = preg_replace('#^/mnt/user0?(?=/|$)#', '/mnt/'.$dev, $name);
+      $call = htmlspecialchars($menu.'('.json_encode($root, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT).','.$i.')', ENT_QUOTES, 'UTF-8');
+      $text[$i] .= '<span id="device_'.$i.'" class="hand" onclick="'.$call.'" oncontextmenu="'.$call.';return false">'.compress($dev,11,0).'</span></span>';
     }
     $i++;
   }
@@ -242,7 +244,7 @@ for ($i = 0; $i + 8 <= count($fields_array); $i += 8) {
     $text[] = '<td id="perm_'.$objs.'">'.$perm.'</td>';
     $text[] = '<td data="0">&lt;'.$folder.'&gt;</td>';
     $text[] = '<td data="'.$time.'"><span class="my_time">'.my_time($time,$fmt).'</span><span class="my_age" style="display:none">'.my_age($time).'</span></td>';
-    $text[] = '<td class="loc">'.my_devs($devs,$dev_name,'deviceFolderContextMenu').'</td>';
+    $text[] = '<td class="loc">'.my_devs($devs,$name,'deviceFolderContextMenu').'</td>';
     $text[] = '<td><i id="row_'.$objs.'" data="'.htmlspecialchars($name, ENT_QUOTES, 'UTF-8').'" type="d" class="fa fa-plus-square-o" onclick="folderContextMenu(this.id,\'both\')" oncontextmenu="folderContextMenu(this.id,\'both\');return false">...</i></td></tr>';
     $dirs[] = gzdeflate(implode($text));
   } else {
@@ -261,7 +263,7 @@ for ($i = 0; $i + 8 <= count($fields_array); $i += 8) {
     $text[] = '<td id="perm_'.$objs.'" class="'.$tag.'">'.$perm.'</td>';
     $text[] = '<td data="'.$size.'" class="'.$tag.'">'.my_scale($size,$unit).' '.$unit.'</td>';
     $text[] = '<td data="'.$time.'" class="'.$tag.'"><span class="my_time">'.my_time($time,$fmt).'</span><span class="my_age" style="display:none">'.my_age($time).'</span></td>';
-    $text[] = '<td class="loc '.$tag.'">'.my_devs($devs,$dev_name,'deviceFileContextMenu').'</td>';
+    $text[] = '<td class="loc '.$tag.'">'.my_devs($devs,$name,'deviceFileContextMenu').'</td>';
     $text[] = '<td><i id="row_'.$objs.'" data="'.htmlspecialchars($name, ENT_QUOTES, 'UTF-8').'" type="f" class="fa fa-plus-square-o" onclick="fileContextMenu(this.id,\'both\')" oncontextmenu="fileContextMenu(this.id,\'both\');return false">...</i></td></tr>';
     $files[] = gzdeflate(implode($text));
     $total += $size;
