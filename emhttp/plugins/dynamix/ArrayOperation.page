@@ -452,14 +452,17 @@ function hideMoverRows() {
 }
 
 // disable Reboot and Shutdown while a job is running and say which one
+// buttons are only disabled once the job list names a job; if the lookup fails or finds nothing they stay usable
 function jobsBlock(block) {
-  $('input[name="reboot"],input[name="shutdown"]').prop('disabled',block);
-  if (!block) {$('#jobs-info').html(''); return;}
-  $.getJSON('/webGui/include/ActiveJobs.php',function(jobs) {
-    if (!jobs.length) {$('#jobs-info').html(''); return;}
+  var buttons = $('input[name="reboot"],input[name="shutdown"]');
+  var release = function(){buttons.prop('disabled',false); $('#jobs-info').html('');};
+  if (!block) {release(); return;}
+  $.getJSON('/webGui/include/ActiveJobs.php').done(function(jobs) {
+    if (!$.isArray(jobs) || !jobs.length) {release(); return;}
+    buttons.prop('disabled',true);
     $('#jobs-info').html("<small>_(Disabled)_ -- _(Reboot and Shutdown are blocked while the following is running)_:</small>"+jobsHtml(jobs)
       +"<small><a href='#' onclick=\"jobsOverride('reboot',function(){forceShutdown('reboot')});return false\">_(Reboot anyway)_...</a> &bull; <a href='#' onclick=\"jobsOverride('shutdown',function(){forceShutdown('shutdown')});return false\">_(Shutdown anyway)_...</a></small>");
-  });
+  }).fail(release);
 }
 
 function forceShutdown(cmd) {
