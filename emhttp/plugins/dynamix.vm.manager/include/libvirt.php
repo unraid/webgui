@@ -2227,7 +2227,7 @@ class Libvirt {
 				$boot =$xpath->query('boot/@order', $objNode)->Item(0)->nodeValue ?? "";
 				$devid = str_replace('0x', '', 'pci_'.$dom.'_'.$bus.'_'.$slot.'_'.$func);
 				$tmp2 = $this->get_node_device_information($devid);
-				$guest["multi"] = $xpath->query('address/@multifunction', $objNode)->Item(0)->nodeValue ?? "" ? "on" : "off";
+				$guest["multi"] = ($xpath->query('address/@multifunction', $objNode)->Item(0)->nodeValue ?? "") == "on" ? "on" : "off";
 				$guest["dom"]  = $xpath->query('address/@domain', $objNode)->Item(0)->nodeValue;
 				$guest["bus"]  = $xpath->query('address/@bus', $objNode)->Item(0)->nodeValue;
 				$guest["slot"] = $xpath->query('address/@slot', $objNode)->Item(0)->nodeValue;

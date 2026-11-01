@@ -1498,8 +1498,12 @@ class Array2XML {
 				$v = $d['source']['vendor']['@attributes']['id'];
 				$p = $d['source']['product']['@attributes']['id'];
 				$p2 = $d['source']['address']['@attributes'];
-				if ($v && $p && $v==$vendor && $p==$product) unset($old['devices']['hostdev'][$k]);
-				if ($p2['bus'] && $p2['slot'] && $p2['function'] && $p2['bus']==$pci['bus'] && $p2['slot']==$pci['slot'] && $p2['function']==$function) unset($old['devices']['hostdev'][$k]);
+				$match = ($v && $p && $v==$vendor && $p==$product) || ($p2['bus'] && $p2['slot'] && $p2['function'] && $p2['bus']==$pci['bus'] && $p2['slot']==$pci['slot'] && $p2['function']==$function);
+				if (!$match) continue;
+				// keep a hand-set guest address the GUI has no field for (boot order, rom and multifunction come from the form)
+				if (isset($new['devices']['hostdev'][$key], $d['address']) && !isset($new['devices']['hostdev'][$key]['address']) && ($d['address']['@attributes']['multifunction'] ?? '') != 'on')
+					$new['devices']['hostdev'][$key]['address'] = $d['address'];
+				unset($old['devices']['hostdev'][$k]);
 			}
 		}
 		// remove and rebuild usb + scsi controllers
