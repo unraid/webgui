@@ -38,6 +38,7 @@ if [[ -f /var/run/mover.pid ]]; then
   timeout 10 /usr/local/sbin/mover stop 2>&1 | log
   if pgrep -x move >/dev/null; then
     for PID in $(find /proc/[0-9]*/fd -lname '*.partial' 2>/dev/null | cut -d/ -f3 | sort -u); do
+      [[ $(cat /proc/$PID/comm 2>/dev/null) == shfs ]] || continue  # only the user share process copies for the mover
       log "Ending $(cat /proc/$PID/comm) (pid $PID) which is copying a file for the mover"
       kill -KILL $PID
     done
@@ -73,13 +74,14 @@ done
 #    get the normal graceful stop first.
 (
   sleep $((TIMEOUT * 2 / 3))
+  # -M: act only while $MNT is still a mount point; once unmounted, fuser -m would match the root file system
   for MNT in $(findmnt -rn -t xfs,btrfs,zfs,ext4 -o TARGET | grep '^/mnt/'); do
-    PIDS=$(fuser -m "$MNT" 2>/dev/null)
+    PIDS=$(fuser -M -m "$MNT" 2>/dev/null)
     [[ -z $PIDS ]] && continue
     log "Still busy after $((TIMEOUT * 2 / 3)) seconds: ending processes holding $MNT:$PIDS"
-    fuser -k -TERM -m "$MNT" &>/dev/null
+    fuser -k -TERM -M -m "$MNT" &>/dev/null
     sleep 3
-    fuser -k -KILL -m "$MNT" &>/dev/null
+    fuser -k -KILL -M -m "$MNT" &>/dev/null
   done
 ) &
 WATCHDOG=$!
