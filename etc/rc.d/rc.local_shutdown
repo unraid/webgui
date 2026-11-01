@@ -25,6 +25,65 @@ fi
 . /var/local/emhttp/var.ini
 TIMEOUT=${shutdownTimeout:-90}
 
+# Clear what would keep the array from stopping within the time-out, so that a
+# shutdown which cannot be blocked (UPS, power button, command line) ends clean.
+# Every step is bounded and logged; the waiting steps run in the background.
+
+# 1. Mover: 'mover stop' ends the mover script but not the file being copied. That copy
+#    runs inside shfs and ignores signals sent to 'move', so the user share stays busy
+#    until the file is complete. End the shfs which holds the partial file. The source
+#    file is untouched, the partial file stays on the array disk and is not complete.
+if [[ -f /var/run/mover.pid ]]; then
+  log "Stopping mover"
+  timeout 10 /usr/local/sbin/mover stop 2>&1 | log
+  if pgrep -x move >/dev/null; then
+    for PID in $(find /proc/[0-9]*/fd -lname '*.partial' 2>/dev/null | cut -d/ -f3 | sort -u); do
+      log "Ending $(cat /proc/$PID/comm) (pid $PID) which is copying a file for the mover"
+      kill -KILL $PID
+    done
+  fi
+fi
+
+# 2. btrfs: a running scrub or balance keeps the pool busy. Cancel the scrub (progress is
+#    lost). Cancel the balance in the background: 'balance cancel' returned in 1 s where
+#    'balance pause' waited 101 s for the current chunk in the same test, and the array
+#    stop below proceeds meanwhile. A cancelled balance is not resumed at the next start.
+for MNT in $(findmnt -rn -t btrfs -o TARGET | grep '^/mnt/'); do
+  if btrfs scrub status "$MNT" 2>/dev/null | grep -q '^ *Status: *running'; then
+    log "Cancelling btrfs scrub on $MNT"
+    timeout 10 btrfs scrub cancel "$MNT" 2>&1 | log
+  fi
+  if btrfs balance status "$MNT" 2>/dev/null | grep -q 'is running'; then
+    log "Cancelling btrfs balance on $MNT (in background)"
+    timeout $TIMEOUT btrfs balance cancel "$MNT" &>/dev/null &
+  fi
+done
+
+# 2b. ZFS: pause a scrub in progress; it resumes with 'zpool scrub' (restarts from the saved position)
+for POOL in $(zpool list -H -o name 2>/dev/null); do
+  if zpool status "$POOL" 2>/dev/null | grep -q 'scrub in progress'; then
+    log "Pausing ZFS scrub on $POOL"
+    timeout 10 zpool scrub -p "$POOL" 2>&1 | log
+  fi
+done
+
+# 3. Watchdog: if the array is still not stopped after two thirds of the time-out, end the
+#    processes which still hold files below /mnt (TERM, then KILL) instead of waiting for the
+#    forced shutdown. Only starts after the array stop began, so containers, VMs and shares
+#    get the normal graceful stop first.
+(
+  sleep $((TIMEOUT * 2 / 3))
+  for MNT in $(findmnt -rn -t xfs,btrfs,zfs,ext4 -o TARGET | grep '^/mnt/'); do
+    PIDS=$(fuser -m "$MNT" 2>/dev/null)
+    [[ -z $PIDS ]] && continue
+    log "Still busy after $((TIMEOUT * 2 / 3)) seconds: ending processes holding $MNT:$PIDS"
+    fuser -k -TERM -m "$MNT" &>/dev/null
+    sleep 3
+    fuser -k -KILL -m "$MNT" &>/dev/null
+  done
+) &
+WATCHDOG=$!
+
 # Try to stop the array
 log "Waiting up to $TIMEOUT seconds for graceful shutdown..."
 if ! timeout $TIMEOUT curl -s --unix-socket /var/run/emhttpd.socket http://localhost/update.htm?cmdStop=apply\&csrf_token=$csrf_token >/dev/null; then
@@ -39,6 +98,7 @@ if ! timeout $TIMEOUT curl -s --unix-socket /var/run/emhttpd.socket http://local
   log "Generating diagnostics..."
   /usr/local/sbin/diagnostics
 fi
+kill $WATCHDOG 2>/dev/null
 
 # Stop emhttpd
 log "Stopping emhttpd"
