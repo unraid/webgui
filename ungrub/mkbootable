@@ -86,8 +86,27 @@ resize_partitions() {
 }
 
 install_grub() {
-  local VERSION
-  VERSION=$(grub-install --version) || return 1
+  # get the current installed GRUB package version
+  local VERSION ID_LIKE
+  # source from subshell to avoid overwriting any existing variables
+  ID_LIKE=$(
+    [[ -f /etc/os-release ]] && . /etc/os-release
+    printf '%s' "${ID_LIKE:-}"
+  )
+  case "$ID_LIKE" in
+    slackware)
+      # SlackWare GRUB package version
+      VERSION=$(basename /var/lib/pkgtools/packages/grub-*)
+      ;;
+    fedora)
+      # Fedora GRUB package version
+      VERSION=$(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}\n' grub2-tools)
+      ;;
+    *)
+      # fallback: use upstream program version
+      VERSION=$(grub-install --version)
+      ;;
+  esac
 
   mkdir -p -m 0700 "$BOOT/efi"
 
