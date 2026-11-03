@@ -254,6 +254,8 @@ function check_smart(&$disk,$port,$text,$info) {
   get_ctlr_options($type, $disk);
   $file = "/var/local/emhttp/smart/$name";
   exec("awk 'NR>7{print $1,$2,$4,$6,$9,$10}' ".escapeshellarg($file)." 2>/dev/null", $codes);
+  // SAS devices report no attribute table: treat the grown defect list like attribute 5 (reallocated sectors)
+  if (_var($disk,'transport')=='scsi' && preg_match('/^Elements in grown defect list: (\d+)/m', (string)@file_get_contents($file), $sas)) $codes[] = "5 Elements_in_grown_defect_list 0 0 - {$sas[1]}";
   $item = 'smart';
   foreach ($codes as $code) {
     if (!$code || !is_numeric($code[0])) continue;
