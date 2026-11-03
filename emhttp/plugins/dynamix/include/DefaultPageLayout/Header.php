@@ -33,7 +33,7 @@ $headerClass = trim($display['banner'] . ' unraid-consolidated-header');
             column-gap: 0.75rem;
             align-items: stretch;
             grid-template-columns: minmax(0, 1fr) auto;
-            grid-template-rows: minmax(18px, auto) minmax(40px, 1fr) auto;
+            grid-template-rows: minmax(18px, auto) minmax(48px, 1fr) auto;
         }
         #header.unraid-consolidated-header .unraid-header-boot-meta {
             grid-column: 2;
