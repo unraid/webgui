@@ -105,7 +105,6 @@ $dashboardSource = file_get_contents("$repo/emhttp/plugins/dynamix/nchan/update_
 if ($monitorSource === false || $dashboardSource === false) throw new RuntimeException('Could not read the monitor and Dashboard sources.');
 
 $root = sys_get_temp_dir() . '/unraid-smart-sas-' . bin2hex(random_bytes(6));
-if (!mkdir("$root/smart", 0777, true)) throw new RuntimeException('Could not create the SMART fixture directory.');
 
 // Point both readers at the fixture directory; everything else runs as checked in.
 $redirect = static function (string $code, string $path) use ($root): string {
@@ -116,6 +115,9 @@ $redirect = static function (string $code, string $path) use ($root): string {
 eval($redirect(extractFunction($monitorSource, 'check_smart'), '"/var/local/emhttp/smart/$name"'));
 eval(extractFunction($dashboardSource, 'normalize'));
 eval($redirect(extractFunction($dashboardSource, 'device_smart'), '"state/smart/$name"'));
+
+// Created only after the functions load, so a failed extraction leaves nothing behind.
+if (!mkdir("$root/smart", 0777, true)) throw new RuntimeException('Could not create the SMART fixture directory.');
 
 // The notify tool is replaced by a stub that records the arguments of each call on one line.
 $notify = "$root/notify";
