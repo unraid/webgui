@@ -33,7 +33,7 @@ $headerClass = trim($display['banner'] . ' unraid-consolidated-header');
             column-gap: 0.75rem;
             align-items: stretch;
             grid-template-columns: minmax(0, 1fr) auto;
-            grid-template-rows: minmax(16px, auto) minmax(40px, 1fr) auto;
+            grid-template-rows: minmax(18px, auto) minmax(40px, 1fr) auto;
         }
         #header.unraid-consolidated-header .unraid-header-boot-meta {
             grid-column: 2;
@@ -110,7 +110,7 @@ $headerClass = trim($display['banner'] . ' unraid-consolidated-header');
         @media (max-width: 639.98px) {
             #header.unraid-consolidated-header .unraid-header-boot {
                 grid-template-columns: fit-content(60vw) minmax(0, 1fr);
-                grid-template-rows: minmax(16px, auto) minmax(44px, auto) minmax(21px, auto);
+                grid-template-rows: minmax(18px, auto) minmax(44px, auto) minmax(21px, auto);
                 gap: 4px;
             }
             #header.unraid-consolidated-header .unraid-header-boot-meta {
