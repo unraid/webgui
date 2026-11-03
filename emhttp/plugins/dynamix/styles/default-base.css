@@ -504,6 +504,8 @@ textarea:where(:not(.unapi *)) {
 }
 
 #header.unraid-consolidated-header {
+    --unraid-header-inset: 10px;
+    --unraid-header-padding-block: 5px;
     align-items: stretch;
     gap: 0;
     min-height: 86px;
@@ -518,9 +520,11 @@ textarea:where(:not(.unapi *)) {
     align-self: stretch;
     display: block;
     width: 100%;
+    min-height: inherit;
 }
 
-#header.unraid-consolidated-header #UnraidHeader {
+#header.unraid-consolidated-header #UnraidHeader,
+#header.unraid-consolidated-header .unraid-header-boot {
     min-height: inherit;
     /* Fill the stretched <unraid-header> host. Without this the shell is shorter
        than #header, so the banner-gradient layer inside it (inset-y-0) stops
@@ -530,17 +534,12 @@ textarea:where(:not(.unapi *)) {
     height: 100%;
 }
 
-/* The light-DOM boot logo must occupy the same inset box as the mounted
-   #UnraidHeader so the logo does not jump when <unraid-header> upgrades.
-   #UnraidHeader carries the inset via its padding but only exists post-mount, so
-   the boot logo shares the same padding (here and in the desktop breakpoint
-   below) and is full-height + vertically centered (see Header.php). It only
-   exists pre-mount (replaceChildren discards it), so this never affects the
-   mounted layout. */
+/* Share the host's inset contract across boot markup and the mounted grid. */
 #header.unraid-consolidated-header #UnraidHeader,
-#header.unraid-consolidated-header .unraid-header-boot-logo {
+#header.unraid-consolidated-header .unraid-header-boot {
     box-sizing: border-box;
-    padding: .5rem 1rem;
+    padding: var(--unraid-header-padding-block) var(--unraid-header-inset);
+    padding-inline-start: var(--unraid-header-inset-start, var(--unraid-header-inset));
 }
 
 #header.unraid-consolidated-header .block {
@@ -2877,10 +2876,8 @@ div#title.ud {
         padding-left: 0;
     }
 
-    #header.unraid-consolidated-header #UnraidHeader,
-    #header.unraid-consolidated-header .unraid-header-boot-logo {
-        padding-left: calc(64px + 1rem);
-        padding-right: 1rem;
+    #header.unraid-consolidated-header {
+        --unraid-header-inset-start: calc(64px + var(--unraid-header-inset));
     }
 
     #header .logo {
