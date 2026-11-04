@@ -482,9 +482,25 @@ function my_rmdir($dirname) {
   switch ($fstype) {
     case "zfs":
       $zfsoutput = array();
-      $zfsdataset = trim(shell_exec("zfs list -H -o name  ".escapeshellarg($dirname))) ;
-      $cmdstr = "zfs destroy \"$zfsdataset\"  2>&1 ";
+      $zfsdataset = '';
+      $cmdstr = "zfs list -H -o name,mountpoint ".escapeshellarg($dirname)." 2>&1";
       $error = exec($cmdstr,$zfsoutput,$rtncode);
+      if ($rtncode == 0) {
+        [$zfsdataset, $mountpoint] = array_pad(explode("\t", $zfsoutput[0] ?? '', 2), 2, '');
+        $dirpath = realpath($dirname);
+        $mountpath = $mountpoint !== '' ? realpath($mountpoint) : false;
+        // A path inside a dataset resolves to the containing dataset, too.
+        if ($zfsdataset !== '' && $dirpath !== false && $mountpath === $dirpath) {
+          $zfsoutput = array();
+          $cmdstr = "zfs destroy ".escapeshellarg($zfsdataset)."  2>&1 ";
+          $error = exec($cmdstr,$zfsoutput,$rtncode);
+        } else {
+          return [
+            'rtncode' => rmdir($dirname) ? 0 : 1,
+            'type' => $fstype,
+          ];
+        }
+      }
       $return = [
         'rtncode' => $rtncode,
         'output' => $zfsoutput,
