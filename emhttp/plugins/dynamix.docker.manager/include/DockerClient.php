@@ -1089,6 +1089,18 @@ class DockerClient {
 		return null;
 	}
 
+	public function getContainerImageID($Name) {
+		foreach ($this->getDockerContainers() as $ct) {
+			if ($ct['Name']==$Name) return $ct['ImageId'];
+		}
+		return null;
+	}
+
+	public function isOrphanImage($id) {
+		$image = $this->getDockerImages()[$id] ?? null;
+		return $image && !$image['Tags'] && !$image['usedBy'];
+	}
+
 	public function getImageID($Image) {
 		if (!strpos($Image,':')) $Image .= ':latest';
 		foreach ($this->getDockerImages() as $img) {
