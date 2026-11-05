@@ -29,8 +29,16 @@ function write(...$messages) {
   }
 }
 
+/**
+ * Runs a clone copy command and streams its progress to the browser.
+ *
+ * $refcmd, when supplied, is attempted first and $command is only run if it
+ * fails. Returns true when the copy that ran ended successfully; vm_clone()
+ * relies on that to decide whether the clone may be defined.
+ */
 function execCommand_nchan_clone($command,$idx,$refcmd=false) {
   $waitID = mt_rand();
+  $reflinkok = false;
   if ($refcmd) {
     [$cmd,$args] = explode(' ',$refcmd,2);
     write("<p class='logLine'></p>","addLog\0<fieldset class='docker'><legend>"._('Command execution')."</legend>".basename($cmd).' '.str_replace(" -","<br>&nbsp;&nbsp;-",htmlspecialchars($args))."<br><span id='wait-$waitID'>"._('Please wait')." </span><p class='logLine'></p></fieldset>","show_Wait\0$waitID");
@@ -49,7 +57,10 @@ function execCommand_nchan_clone($command,$idx,$refcmd=false) {
     [$cmd,$args] = explode(' ',$command,2);
     write("<p class='logLine'></p>","addLog\0<fieldset class='docker'><legend>"._('Command execution')."</legend>".basename($cmd).' '.str_replace(" -","<br>&nbsp;&nbsp;-",htmlspecialchars($args))."<br><span id='wait-$waitID'>"._('Please wait')." </span><p class='logLine'></p></fieldset>","show_Wait\0$waitID");
     write("addToID\0$idx\0Cloning VM: ") ;
-    $proc = popen("$command 2>&1 &",'r');
+    # No trailing '&': backgrounding the command inside the popen shell makes the
+    # shell exit immediately, so pclose() always returns 0 and a failed copy is
+    # reported to vm_clone() as a success.
+    $proc = popen("$command 2>&1",'r');
     while ($out = fread($proc,100)) {
       $out = preg_replace("%[\t\n\x0B\f\r]+%", '',$out);
       $out = trim($out);
