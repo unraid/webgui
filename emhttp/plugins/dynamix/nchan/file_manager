@@ -2,6 +2,7 @@
 <?PHP
 /* Copyright 2005-2025, Lime Technology
  * Copyright 2012-2025, Bergware International.
+ * Copyright 2026, Marc Gutt, Gutt.IT
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version 2,
@@ -21,9 +22,37 @@ $empty_dir = '/var/tmp/file.manager.empty_dir/'; // trailing slash is required f
 $null    = '/dev/null';
 $timer   = time();
 
+// stderr of pv: its progress lines ("<seconds> <bytes>", e.g. "2.0004 20971520") go to the status file, everything else
+// (e.g. "pv: failed to read file: ...") is an error of the job and goes to its stderr ($error). The sed is unbuffered (-u),
+// otherwise the progress lines would not reach the status file before the job is done.
+$pv_stderr = "2> >(sed -u -E -e '/^[0-9.]+ [0-9]+\$/{w $status' -e 'd}' >&2)";
+
 // Rsync progress calculation constants
 define('RSYNC_MIN_PROGRESS_PERCENT', 3);   // Minimum progress percentage before calculating total size
 define('RSYNC_TOTAL_SIZE_SAMPLES', 5);     // Number of measurements to average for total size calculation
+
+// zip compress progress: zip prints one dot per this many MB of a file (zip -ds), the progress of the zip archive advances with each dot
+define('COMPRESS_DOT_SIZE_MB', 10);
+
+// pv progress: pv writes an additional line right after it was blocked. Lines closer together than this are merged,
+// because the speed calculated from such a short time span is wrong
+define('PV_MIN_EVENT_GAP_SECONDS', 0.5);
+
+// pv progress: speed and ETA are only shown when the last pv lines span at least this time, otherwise "N/A" is shown
+define('PV_MIN_SPEED_WINDOW_SECONDS', 2.0);
+define('PVZIP', '/usr/local/emhttp/plugins/dynamix/scripts/pvzip');
+
+// currently processed file
+define('CURRENT_FILE', '/var/tmp/file.manager.current_file');
+
+// zip writes its warnings and errors to stdout, which pvzip reads. The log file only contains them (and a header and footer).
+// The name needs a dot, otherwise zip appends ".log"
+define('ZIP_LOG', '/var/tmp/file.manager.zip.log');
+
+// debug mode
+define('FM_DEBUG_NCHAN_FILE', '/var/tmp/file.manager.nchan.debug');
+define('FM_DEBUG_MODE', file_exists(FM_DEBUG_NCHAN_FILE));
+define('FM_DEBUG_FORCE_COPY_DELETE', FM_DEBUG_MODE && file_exists('/var/tmp/file.manager.force-copy-delete.debug'));
 
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/Wrappers.php";
@@ -46,9 +75,26 @@ function fm_pools_filter(&$disks) {
   return array_keys(pool_only($disks));
 }
 
+function fm_delete_file(...$files) {
+  if (!FM_DEBUG_MODE) {
+    return delete_file(...$files);
+  }
+  foreach ($files as $f) {
+    if (!$f || !file_exists($f)) continue;
+    rename($f, $f . '.debug');
+  }
+}
+
+function fm_debug_log(string $msg): void {
+  if (FM_DEBUG_MODE) exec('logger -t file_manager ' . escapeshellarg($msg));
+}
+
 function pid_exists($pid) {
+  $original_pid = $pid;
   $pid = is_array($pid) ? $pid[0] : $pid;
-  return $pid && file_exists("/proc/$pid") ? $pid : false;
+  $exists = file_exists("/proc/$pid");
+  fm_debug_log('pid_exists: original=' . json_encode($original_pid) . ', extracted=' . $pid . ', /proc exists=' . ($exists ? 'YES' : 'NO'));
+  return $pid && $exists ? $pid : false;
 }
 
 function isdir($name) {
@@ -155,6 +201,109 @@ function calculate_eta($transferred, $percent, $speed, $last_rsync_eta_seconds =
 }
 
 /**
+ * Parse pv --numeric --timer --bytes progress output.
+ *
+ * pv writes one "elapsed bytes" line per interval to $status.
+ * Reads incrementally, computes speed from a rolling window of up to 10 samples. Speed and ETA are
+ * only shown when the window spans at least PV_MIN_SPEED_WINDOW_SECONDS.
+ * Reads the current filename from CURRENT_FILE (last line, written by tar and pvzip), without that file $single_name is shown.
+ *
+ * Used for: all tar variants (compress/extract), single-file compress/extract.
+ *
+ * @param string|null $status       Path to pv status file
+ * @param int         $total_bytes  Total bytes expected (for %, ETA)
+ * @param string|null $action_label Label for the action
+ * @param bool        $reset        Reset static state
+ * @param string|null $single_name  Name shown when CURRENT_FILE does not exist (single-file compress/extract)
+ * @return array Text array with progress info
+ */
+function parse_pv_progress($status, $total_bytes, $action_label, $reset = false, $single_name = null) {
+  static $last_line_number = 0;
+  static $progress_events = []; // [elapsed, bytes]
+  static $last_eta_seconds = null;
+
+  if ($reset) {
+    $last_line_number = 0;
+    $progress_events = [];
+    $last_eta_seconds = null;
+    return [];
+  }
+
+  $text[0] = $action_label . '... ';
+
+  // tar lists every file, so only the last line is read (the list can be very long)
+  if (file_exists(CURRENT_FILE)) {
+    $current_file = ltrim(trim((string)exec('tail -n 1 ' . escapeshellarg(CURRENT_FILE))), './');
+    if ($current_file !== '') $text[0] .= mb_strimhalf($current_file, 70, '...');
+  } elseif ($single_name) {
+    $text[0] .= mb_strimhalf($single_name, 70, '...');
+  }
+
+  // Read new pv lines ("elapsed bytes" per line)
+  $start_line = $last_line_number + 1;
+  $new_lines = [];
+  exec("tail -n +" . escapeshellarg($start_line) . " " . escapeshellarg($status) . " 2>/dev/null", $new_lines);
+  foreach ($new_lines as $line) {
+    $line = trim($line);
+    $parts = explode(' ', $line, 2);
+    if (count($parts) !== 2) continue;
+    $elapsed = floatval($parts[0]);
+    $bytes   = floatval($parts[1]);
+    if ($elapsed <= 0 || $bytes < 0) continue;
+    $last_index = count($progress_events) - 1;
+    if ($last_index >= 0 && $elapsed - $progress_events[$last_index][0] < PV_MIN_EVENT_GAP_SECONDS) {
+      $progress_events[$last_index] = [$elapsed, $bytes];
+    } else {
+      $progress_events[] = [$elapsed, $bytes];
+    }
+    if (count($progress_events) > 10) array_shift($progress_events);
+  }
+  $last_line_number += count($new_lines);
+
+  if (empty($progress_events)) return [];
+
+  $last_event = $progress_events[count($progress_events) - 1];
+  $processed_bytes = $last_event[1];
+  if ($processed_bytes <= 0) return [];
+
+  // Speed from rolling window using pv timestamps
+  $speed_bytes = 0;
+  if (count($progress_events) >= 2) {
+    $first = $progress_events[0];
+    $last  = $progress_events[count($progress_events) - 1];
+    $dt = $last[0] - $first[0];
+    $db = $last[1] - $first[1];
+    if ($dt >= PV_MIN_SPEED_WINDOW_SECONDS && $db > 0) $speed_bytes = $db / $dt;
+  }
+  $speed = $speed_bytes > 0 ? bytes_to_size($speed_bytes) . '/s' : '';
+
+  $progress_parts = [];
+  if ($total_bytes > 0) {
+    $percent = min(100, intval($processed_bytes / $total_bytes * 100));
+    $eta = 'N/A';
+    if ($speed_bytes > 0) {
+      $remaining = max(0.0, $total_bytes - $processed_bytes);
+      $eta_s = $remaining / $speed_bytes;
+      if ($last_eta_seconds !== null) {
+        $eta_s = $last_eta_seconds * 0.7 + $eta_s * 0.3;
+      }
+      $last_eta_seconds = max(0.0, $eta_s);
+      $eta = seconds_to_time(max(0, intval($eta_s)));
+    }
+    $progress_parts[] = _('Completed') . ': ' . $percent . '%';
+    $progress_parts[] = _('Total') . ': ' . bytes_to_size($total_bytes);
+    if ($speed) $progress_parts[] = _('Speed') . ': ' . $speed;
+    $progress_parts[] = _('ETA') . ': ' . $eta;
+  } else {
+    $progress_parts[] = bytes_to_size($processed_bytes) . ' ' . _('transferred');
+    if ($speed) $progress_parts[] = _('Speed') . ': ' . $speed;
+  }
+  $text[1] = implode(',  ', $progress_parts);
+
+  return $text;
+}
+
+/**
  * Parse rsync progress output and track transfer statistics.
  *
  * Uses static variables to maintain state across multiple calls during a single operation.
@@ -205,21 +354,21 @@ function parse_rsync_progress($status, $action_label, $reset = false) {
       // This causes ~2% error per percent point. We average multiple measurements at different percents.
       if ($total_size === null || count($total_calculations) < RSYNC_TOTAL_SIZE_SAMPLES) {
         $percent_val = intval(str_replace('%', '', $percent));
-        
+
         // Track if this is a "running transfer" line (no xfr# info)
         $is_running_line = !isset($parts[4]);
-        
+
         // Calculate total when we have minimum progress on a running transfer line
         // and the percent changed since last calculation
         if ($is_running_line && $percent_val >= RSYNC_MIN_PROGRESS_PERCENT && $last_calc_percent !== $percent_val) {
           // Convert transferred size to bytes
           $transferred_bytes = size_to_bytes($transferred);
-          
+
           // Calculate total from transferred and percent (rsync truncates, so add 0.5% for better accuracy)
           $calculated_total = $transferred_bytes * 100 / ($percent_val + 0.5);
           $total_calculations[] = $calculated_total;
           $last_calc_percent = $percent_val;
-          
+
           // Once we have enough measurements, average them and lock the value
           if (count($total_calculations) >= RSYNC_TOTAL_SIZE_SAMPLES) {
             $total_size = array_sum($total_calculations) / count($total_calculations);
@@ -242,14 +391,14 @@ function parse_rsync_progress($status, $action_label, $reset = false) {
       $progress_parts[] = _('Completed') . ": " . $percent;
       $progress_parts[] = _('Speed') . ": " . $speed;
       $progress_parts[] = _('ETA') . ": " . $time;
-      
+
       // Always show Total (either calculated or N/A)
       if ($total_size !== null) {
         $progress_parts[] = _('Total') . ": ~" . bytes_to_size($total_size);
       } else {
         $progress_parts[] = _('Total') . ": N/A";
       }
-      
+
       $text[1] = implode(",  ", $progress_parts);
     }
   }
@@ -317,7 +466,7 @@ function rsync_exclusive_share_target($path) {
   // storage for an exclusive user share. It prevents a similarly shaped link
   // from being treated as the OS-managed mapping.
   $location = trim((string)@shell_exec("getfattr --no-dereference --absolute-names --only-values -n system.LOCATION " . escapeshellarg($path) . " 2>/dev/null"));
-  if (!preg_match('/^[A-Za-z0-9._-]+$/D', $location) || $location !== $target_parts[1]) return '';
+  if (!preg_match('/^[A-Za-z0-9._~-]+$/D', $location) || $location !== $target_parts[1]) return '';
 
   $disks_state = rtrim($docroot ?? '/usr/local/emhttp', '/') . '/state/disks.ini';
   $disks = @parse_ini_file($disks_state, true);
@@ -412,7 +561,8 @@ function cat($file) {
   global $null;
   $results = [];
   $set = [];
-  $rows = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+  // use null-separated read to handle filenames with newlines
+  $rows = array_filter(explode("\0", file_get_contents($file) ?: ''), fn($s) => $s !== '');
   if (count($rows) > 0) {
     natcasesort($rows);
     $user = array_filter($rows, function($path){return preg_match('/^\/mnt\/user0?\//', $path);});
@@ -448,7 +598,12 @@ function quoted($name) {return is_array($name) ? implode(' ',array_map('escape',
 function source($name) {return is_array($name) ? implode(' ',array_map('escapeshellarg', $name)) : escapeshellarg($name);}
 
 function rsync_escape_component($s) {
-  // escape: *, ?, [, ], \
+  // escape rsync pattern special chars: *, ?, [, ], and also \
+  // note: \ must be escaped too - a literal filename like "foo\*bar.txt" needs 
+  //       pattern \\\* (escaped-\ + escaped-*), so rsync matches it as a literal 
+  //       backslash followed by a literal asterisk.
+  //       without escaping \, the pattern \* would be treated as an escaped wildcard (literal *)
+  //       but the original backslash would be silently consumed
   return preg_replace('/([*?\[\]\\\\])/', '\\\\$1', $s);
 }
 
@@ -475,14 +630,17 @@ if (!file_exists($empty_dir)) {
 
 // initialize $delete_empty_dirs state: null = not a move operation (yet), true = rsync copy-delete phase, false = cleanup phase (done)
 $delete_empty_dirs = null;
+$pid = false;
+$last_published_status = null;
+$last_published_time = 0;
 
 // infinite loop to monitor and execute file operations
 // Note: exec() uses /bin/sh which is symlinked to bash in unraid and a requirement for process substitution syntax >(...)
 while (true) {
-  unset($action, $source, $target, $H, $sparse, $exist, $zfs);
-  if  (!isset($pid)) $pid = false;
+  // Reset all per-iteration variables, a job must not see the values of the previous one
+  unset($action, $source, $target, $sparse, $overwrite, $zfs, $format, $archive_name, $target_tmp, $zbin, $single, $cmd);
 
-  // read job parameters from JSON file: $action, $title, $source, $target, $H, $sparse, $exist, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
+  // read job parameters from JSON file: $action, $title, $source, $target, $sparse, $overwrite, $zfs (set by emhttp/plugins/dynamix/include/Control.php)
   if (file_exists($active)) {
     $json = file_get_contents($active);
     $data = json_decode($json, true);
@@ -503,20 +661,35 @@ while (true) {
   if (isset($action)) {
     // check for language changes
     extract(parse_plugin_cfg('dynamix', true));
+    // bandwidth limit of rsync (copy and move): the setting is in MB/s, rsync expects KiB/s. Empty means no limit.
+    $bwlimit = (int)($filemanager['bwlimit'] ?? 0) > 0 ? '--bwlimit=' . ((int)$filemanager['bwlimit'] * 1024) : '';
     if ($display['locale'] != $locale_init) {
       $locale_init = $display['locale'];
       update_translation($locale_init);
     }
     $source = explode("\r", $source);
+
+    // When no process is running yet, clear any stale nchan state from the previous operation.
+    // nchan buffers the last message for 30s; without this a new client would briefly see
+    // the previous operation's final status.
+    if (!$pid) {
+      $last_published_status = null;
+      $last_published_time = 0;
+      // Clears stale progress from the nchan buffer. Uses the same {status:{...}} envelope
+      // as normal replies so the JS handler processes it uniformly (empty text = no output).
+      publish('filemanager', json_encode(['status' => ['action' => $action, 'text' => []]]));
+      if (FM_DEBUG_MODE) file_put_contents(FM_DEBUG_NCHAN_FILE, json_encode(['status' => ['action' => $action, 'text' => []]]) . "\n", FILE_APPEND);
+    }
+
     switch ($action) {
     case 0: // create folder
 
       // return status of running action
       if (!empty($pid)) {
-        $reply['status'] = json_encode([
+        $reply['status'] = [
           'action' => $action,
           'text' => [_('Creating').'...']
-        ]);
+        ];
 
       // start action
       } else {
@@ -530,10 +703,10 @@ while (true) {
 
       // return status of running action
       if (!empty($pid)) {
-        $reply['status'] = json_encode([
+        $reply['status'] = [
           'action' => $action,
           'text' => [mb_strimhalf(exec("tail -1 $status"), 70, '...')]
-        ]);
+        ];
 
       // start action
       } else {
@@ -545,15 +718,22 @@ while (true) {
 
       // return status of running action
       if (!empty($pid)) {
-        $reply['status'] = json_encode([
+        $reply['status'] = [
           'action' => $action,
           'text' => [_('Renaming').'...']
-        ]);
+        ];
 
       // start action
       } else {
         $path = dirname($source[0]);
-        exec("mv -f ".quoted($source)." ".quoted("$path/$target")." 1>$null 2>$error & echo \$!", $pid);
+        $target_path = "$path/$target";
+
+        // Check if target already exists
+        if (file_exists($target_path)) {
+          $reply['error'] = _('Target already exists');
+        } else {
+          exec("mv ".quoted($source)." ".quoted($target_path)." 1>$null 2>$error & echo \$!", $pid);
+        }
       }
       break;
     case 3:  // copy folder
@@ -561,10 +741,10 @@ while (true) {
 
       // return status of running action
       if (!empty($pid)) {
-        $reply['status'] = json_encode([
+        $reply['status'] = [
           'action' => $action,
           'text' => parse_rsync_progress($status, _('Copying'))
-        ]);
+        ];
 
       // start action
       } else {
@@ -572,7 +752,9 @@ while (true) {
         $target = rsync_target($target);
         if ($target) {
           $mkpath = isdir($target) ? '--mkpath' : '';
-          $cmd = "rsync -ahPIX$H $sparse $exist $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
+          $ignore_existing = $overwrite ? '' : '--ignore-existing';
+          $cmd = "rsync -ahPIXH $sparse $ignore_existing $mkpath $bwlimit --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
+          // note: -H (always on) preserves hard links within the transferred files, so that a copy is a 1:1 copy.
           // note: rsync defaults to "inc_recurse mode" which causes creating the whole directory structure at target before transfering files.
           //       This is a problem because those target directories get temporary permissions of "root:root" and "chmod 0700", which
           //       breaks access for all unraid users through /mnt/user/sharename. We avoid this behavior by using "--no-inc-recursive".
@@ -597,23 +779,25 @@ while (true) {
 
         // cleanup empty directories: simple status
         if ($delete_empty_dirs === false) {
-          $reply['status'] = json_encode([
+          $reply['status'] = [
             'action' => $action,
             'text' => [mb_strimhalf(exec("tail -1 $status"), 70, '...')]
-          ]);
+          ];
 
         // moving: progress
         } else {
-          $reply['status'] = json_encode([
+          $reply['status'] = [
             'action' => $action,
             'text' => parse_rsync_progress($status, _('Moving'))
-          ]);
+          ];
         }
 
       // start action
       } else {
         parse_rsync_progress(null, null, true); // Reset static variables
+        fm_debug_log('move/start: action=' . $action . ' target_raw=' . addcslashes($target ?? 'NULL', "\0..\37\\"));
         $target = rsync_target($target);
+        fm_debug_log('move/start: target_valid=' . addcslashes($target ?: 'EMPTY', "\0..\37\\"));
         if ($target) {
           $mkpath = isdir($target) ? '--mkpath' : '';
 
@@ -668,7 +852,7 @@ while (true) {
               }
 
               // selected source files and directories must not exist on target when "Overwrite existing files" is not set
-              if (!empty($exist)) { // would add "--ignore-existing" to rsync
+              if (!$overwrite) { // skip overwrite check when overwrite is enabled
                 $target_item = rtrim($target, '/') . '/' . basename($valid_source_path);
                 if (file_exists($target_item)) {
                   $use_rsync_rename = false;
@@ -696,6 +880,10 @@ while (true) {
           // - missing directories are created in --backup-dir (like using --mkpath)
           // - rsync prefixes the moved files with "deleting " in the output, which we strip with sed, to not confuse the user
           // - rsync --backup deletes empty directories instead of moving them to --backup-dir (https://github.com/RsyncProject/rsync/issues/842), so we copy empty directories first
+          // - we can not use "mv" here as it cannot move files/dirs into a target directory that already
+          //   contains files with the same name
+          if (FM_DEBUG_FORCE_COPY_DELETE) $use_rsync_rename = false;
+          fm_debug_log('move/start: use_rsync_rename=' . ($use_rsync_rename ? 'true' : 'false'));
           if ($use_rsync_rename) {
             $parent_dir = dirname(validname($source[0]));
             $parent_dir_escaped = escapeshellarg($parent_dir);
@@ -712,26 +900,42 @@ while (true) {
               }
             }
             $source_relative_joined = implode(' ', $source_relative);
-            
-            // Execute both rsync commands in a single bash block so they share the same PID and output stream
-            // First: copy only empty directories to target, then: move everything with rsync rename trick
+
+            // Execute all steps in a single bash block so they share the same PID and output stream:
+            // (0) record dir mtimes, (1) copy empty dirs, (2) rsync rename trick, (3) restore dir mtimes
+            // note: rsync --backup-dir creates directories with mkdir (new mtime) instead of preserving the original,
+            //       so we record dir mtimes before the move and restore them afterwards
             $cmd = <<<BASH
             {
-              cd $parent_dir_escaped && 
+              cd $parent_dir_escaped &&
+              declare -A _dm &&
+              while IFS= read -r -d $'\\0' _ts && IFS= read -r -d $'\\0' _p; do
+                _dm["\$_p"]="\$_ts"
+              done < <(find $source_relative_joined -type d -printf '%T@\\0%p\\0') &&
               find $source_relative_joined -type d -empty -print0 | rsync -aX --files-from=- --from0 --out-format=%f --info=flist0,misc0,stats0,name1,progress2 -d . $target_escaped &&
-              rsync -r --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --delete --backup --backup-dir=$target_escaped $rsync_includes --exclude='*' $empty_dir_escaped $parent_dir_escaped
+              rsync -r --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --delete --backup --backup-dir=$target_escaped $rsync_includes --exclude='*' $empty_dir_escaped $parent_dir_escaped &&
+              for _p in "\${!_dm[@]}"; do
+                touch -d "@\${_dm[\$_p]}" -- $target_escaped/"\${_p#./}" 2>/dev/null
+              done
             } > >(stdbuf -o0 tr '\\r' '\\n' | sed 's/^deleting //' >$status) 2>$error & echo \$!
             BASH;
 
+            if (FM_DEBUG_MODE) @file_put_contents('/var/tmp/fm_debug_cmd.txt', 'rsync-rename: ' . addcslashes($cmd, "\0..\37\\") . "\n---\n", FILE_APPEND);
+            fm_debug_log('move/cmd(rr): ' . substr(addcslashes($cmd, "\0..\37\\"), 0, 300));
+            fm_debug_log('move/cmd(rr)2: ' . substr(addcslashes($cmd, "\0..\37\\"), 300, 300));
+            fm_debug_log('move/includes: ' . addcslashes($rsync_includes, "\0..\37\\"));
             exec($cmd, $pid);
 
           // use rsync copy-delete
           } else {
             $delete_empty_dirs = true; // cleanup needed: rsync --remove-source-files leaves empty directories
-            $cmd = "rsync -ahPIX$H $sparse $exist $mkpath --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
+            $ignore_existing = $overwrite ? '' : '--ignore-existing';
+            $cmd = "rsync -ahPIXH $sparse $ignore_existing $mkpath $bwlimit --no-inc-recursive --out-format=%f --info=flist0,misc0,stats0,name1,progress2 --remove-source-files ".quoted($source)." ".escapeshellarg($target)." > >(stdbuf -o0 tr '\\r' '\\n' >$status) 2>$error & echo \$!";
             // note: rsync defaults to "inc_recurse mode" which causes creating the whole directory structure at target before transfering files.
             //       This is a problem because those target directories get temporary permissions of "root:root" and "chmod 0700", which
             //       breaks access for all unraid users through /mnt/user/sharename. We avoid this behavior by using "--no-inc-recursive".
+            if (FM_DEBUG_MODE) @file_put_contents('/var/tmp/fm_debug_cmd.txt', 'copy-delete: ' . addcslashes($cmd, "\0..\37\\") . "\n---\n", FILE_APPEND);
+            fm_debug_log('move/cmd(cd): ' . substr(addcslashes($cmd, "\0..\37\\"), 0, 300));
             exec($cmd, $pid);
           }
 
@@ -745,25 +949,25 @@ while (true) {
       // return status of running action
       if (!empty($pid)) {
         $file_line = exec("tail -2 $status | grep -Pom1 \"^.+ of '\\K[^']+\"");
-        $reply['status'] = json_encode([
+        $reply['status'] = [
           'action' => $action,
           'text' => [_('Updating').'... '.mb_strimhalf($file_line, 70, '...')]
-        ]);
+        ];
 
       // start action
       } else {
         exec("chown -Rfv $target ".quoted($source)." 1>$status 2>$error & echo \$!", $pid);
       }
       break;
-    case 12: // change permission
+    case 12: // change permissionfile changed while it was read
 
       // return status of running action
       if (!empty($pid)) {
         $file_line = exec("tail -2 $status | grep -Pom1 \"^.+ of '\\K[^']+\"");
-        $reply['status'] = json_encode([
+        $reply['status'] = [
           'action' => $action,
           'text' => [_('Updating').'... '.mb_strimhalf($file_line, 70, '...')]
-        ]);
+        ];
 
       // start action
       } else {
@@ -774,27 +978,564 @@ while (true) {
 
       // return status of running action
       if (!empty($pid)) {
-        $count = exec("wc -l $status | grep -Pom1 '^[0-9]+'");
-        $reply['status'] = json_encode([
+        // count null terminators to handle filenames with newlines correctly
+        $count = substr_count(file_get_contents($status) ?: '', "\0");
+        $reply['status'] = [
           'action' => $action,
           'text' => [_('Searching').'... '.$count]
-        ]);
+        ];
 
       // start action
       } else {
-        exec("find ".source($source)." -iname ".escapeshellarg($target)." 1>$status 2>$null & echo \$!", $pid);
+        // use -print0 so filenames with newlines are not split across lines
+        exec("find ".source($source)." -iname ".escapeshellarg($target)." -print0 1>$status 2>$null & echo \$!", $pid);
       }
       break;
-    case 99: // kill running background process
-      if (!empty($pid)) exec("kill $pid");
-      delete_file($active, $pid_file, $status, $error);
+    case 16: // compress
+
+      // return status of running action
+      if (!empty($pid)) {
+        fm_debug_log('Case 16 status check: pid=' . $pid);
+        $format = $format ?? 'zip';
+        $archive_name = basename($archive_name ?? 'archive.zip');
+        $archive_path = rtrim($target, '/').'/'.$archive_name;
+
+        fm_debug_log('Status check: format=' . $format . ', status_file=' . $status . ', exists=' . (file_exists($status) ? 'yes' : 'no'));
+
+        // single-file formats have no tar/zip filename output, so show the name of the file which is compressed
+        $text = parse_pv_progress($status, (int)($pv_total_bytes ?? 0), _('Compressing'), false, basename($source[0]));
+
+        if (!empty($text)) {
+          $reply['status'] = [
+            'action' => $action,
+            'text' => $text
+          ];
+        }
+
+      // start action
+      } else {
+        if (FM_DEBUG_MODE) {
+          fm_debug_log('Case 16 start: pid is empty, starting new job');
+          @unlink('/tmp/status-debug-compress.txt');
+          if (file_exists($active)) copy($active, '/tmp/active-debug-compress.txt');
+          fm_debug_log('Case 16 start: archive_name=' . ($archive_name ?? 'NULL') . ', format=' . ($format ?? 'NULL') . ', target=' . ($target ?? 'NULL'));
+        }
+        parse_pv_progress(null, 0, null, true);
+        @unlink(CURRENT_FILE);
+        $dot_mb = COMPRESS_DOT_SIZE_MB;
+        $format = $format ?? 'zip';
+        $archive_name = basename($archive_name ?? 'archive.zip');
+        if ($archive_name === '' || $archive_name === '.' || $archive_name === '..') {
+          $reply['error'] = _('Invalid archive name');
+          break;
+        }
+        $target = validname($target, false);
+        if (!$target) {
+          $reply['error'] = _('Invalid target path');
+          break;
+        }
+        $archive_path = rtrim($target, '/').'/'.$archive_name;
+        // Set archive permissions: docker paths get root:root 600,
+        // all other paths (shares) get nobody:users 666 (matches Unraid share standard)
+        $docker_cfg = @parse_ini_file('/boot/config/docker.cfg') ?: [];
+        $docker_subpaths = [];
+        foreach (['DOCKER_APP_CONFIG_PATH', 'DOCKER_IMAGE_FILE'] as $key) {
+          $val = rtrim(trim($docker_cfg[$key] ?? ''), '/');
+          // Strip /mnt/<disk>/ prefix so the subpath matches on any disk/pool
+          if ($val && preg_match('#^/mnt/[^/]+/(.+)$#', $val, $m)) {
+            $docker_subpaths[] = $m[1];
+            // DOCKER_IMAGE_FILE is a file (e.g. /mnt/user/system/docker/docker.img): its folder belongs to the docker data as well
+            if (is_file($val) && dirname($m[1]) !== '.') $docker_subpaths[] = dirname($m[1]);
+          }
+        }
+        if (empty($docker_subpaths)) {
+          $docker_subpaths = ['appdata', 'docker'];
+        }
+        $is_docker_path = false;
+        if (preg_match('#^/mnt/[^/]+/(.+)$#', $archive_path, $m)) {
+          $archive_subpath = $m[1];
+          foreach ($docker_subpaths as $dp) {
+            if ($archive_subpath === $dp || str_starts_with($archive_subpath, $dp.'/')) {
+              $is_docker_path = true;
+              break;
+            }
+          }
+        }
+        $archive_chown = $is_docker_path ? 'root:root' : 'nobody:users';
+        $archive_chmod = $is_docker_path ? '600' : '666';
+        // Create target directory with proper permissions if user typed a new path
+        $target_trimmed = rtrim($target, '/');
+        if (!is_dir($target_trimmed)) {
+          $new_root = $target_trimmed;
+          $check = $target_trimmed;
+          while ($check !== '/' && !is_dir($check)) {
+            $new_root = $check;
+            $check = dirname($check);
+          }
+          exec("mkdir -pm0".($is_docker_path ? '755' : '777')." ".quoted($target_trimmed));
+          if (!$is_docker_path) exec("chown -R nobody:users ".quoted($new_root));
+        }
+        // unique tmp path in same dir; loop to avoid collision with existing files
+        do {
+          $target_tmp = rtrim($target, '/').'/.'.$archive_name.'_'.uniqid('', true).'.tmp';
+        } while (file_exists($target_tmp));
+        // persist fields in active JSON so case 99 (cancel) and completion block can use them
+        if (file_exists($active)) {
+          $active_data = json_decode(file_get_contents($active), true);
+          // Only update if decoding succeeded; a failed decode would produce an array without
+          // 'source', causing mode:'read' to return JSON that makes the JS dialog lose its sources.
+          if (is_array($active_data)) {
+            $active_data['target_tmp']    = $target_tmp;
+            $active_data['archive_path']  = $archive_path;
+            $active_data['archive_chown'] = $archive_chown;
+            $active_data['archive_chmod'] = $archive_chmod;
+            file_put_contents($active, json_encode($active_data));
+          }
+        }
+
+        fm_debug_log('Start compress: format=' . $format . ', archive=' . $archive_path);
+
+        // a folder is never replaced, without this check the archive would be created completely and then fail at the rename
+        if (is_dir($archive_path)) {
+          $reply['error'] = _('A folder with this name already exists');
+          break;
+        }
+
+        // Check if target archive already exists (skip check when overwrite is allowed)
+        if (!$overwrite && file_exists($archive_path)) {
+          $reply['error'] = _('Archive already exists');
+          break;
+        }
+
+        // Use parent directory of first source as working directory.
+        // All selected files are always from the same directory in the file manager view.
+        $source_path = validname(rtrim($source[0], '/'));
+        if (!$source_path) {
+          $reply['error'] = _('Invalid source path');
+          break;
+        }
+        $source_parent = dirname($source_path);
+        $source_basenames = [];
+        $source_files = [];
+        $source_valid = true;
+        foreach ($source as $s) {
+          $valid = validname(rtrim($s, '/'));
+          if (!$valid || dirname($valid) !== $source_parent) {
+            $source_valid = false;
+            break;
+          }
+          $source_basenames[] = basename($valid);
+          $source_files[] = $valid;
+        }
+        if (!$source_valid) {
+          $reply['error'] = _('Invalid source path');
+          break;
+        }
+        // the formats of a single file (.gz, ...) can not contain a folder or several files, pv/gzip would publish an empty archive
+        if (in_array($format, ['gz', 'xz', 'bz2', 'zst', 'lz4'], true) && (count($source_files) !== 1 || !is_file($source_files[0]))) {
+          $reply['error'] = _('Single-file formats require exactly one file');
+          break;
+        }
+
+        // Build compression command based on format
+        $escaped_basenames = implode(' ', array_map('escapeshellarg', $source_basenames));
+        // Escape all user-controlled paths, so shell metacharacters in filenames (quotes, $, backticks) cannot break out of the command
+        $esc_source_parent = escapeshellarg($source_parent);
+        $esc_target_tmp    = escapeshellarg($target_tmp);
+
+        $single = false;
+        switch ($format) {
+        case 'zip':
+          $du_sources = implode(' ', array_map(function($bn) use ($source_parent) {
+            return escapeshellarg($source_parent . '/' . $bn);
+          }, $source_basenames));
+          $du_out = [];
+          exec("du -sb $du_sources 2>/dev/null | awk '{s+=\$1}END{print s+0}'", $du_out);
+          $pv_total_bytes = (int)($du_out[0] ?? 0);
+          if (file_exists($active)) {
+            $active_data = json_decode(file_get_contents($active), true);
+            if (is_array($active_data)) {
+              $active_data['pv_total_bytes'] = $pv_total_bytes;
+              file_put_contents($active, json_encode($active_data));
+            }
+          }
+          $zip_args = implode(' ', [
+            '-r',       // recursion into directories
+            '-y',       // store symlinks as symlinks
+            '-du',      // displays file sizes
+            '-dd',      // display dot per dot size
+            '-ds', $dot_mb . 'm', // chunk size per dot
+            '-lf', ZIP_LOG,       // log warnings and errors
+            $esc_target_tmp,
+            '--',
+            $escaped_basenames,
+          ]);
+          $pv_zip_args = implode(' ', [
+            'zip',
+            $pv_total_bytes,
+            $dot_mb,
+            CURRENT_FILE,
+          ]);
+          // pvzip reads zip stdout, writes CURRENT_FILE + emits pv-compatible elapsed/bytes to stderr
+          // LANG=en_US.UTF-8 required: Unraid has POSIX locale by default, causing zip
+          // to mangle non-ASCII filenames as #Uxxxx escape sequences in the archive.
+          // grep: every line of ZIP_LOG which starts with "zip" is a warning or an error, it is written to the stderr of the job
+          $cmd = "LANG=en_US.UTF-8 zip $zip_args | " . PVZIP . " $pv_zip_args 2>$status; grep -oP '^[[:space:]]*\\Kzip.*' " . ZIP_LOG . " >&2";
+          break;
+        case 'tar':
+          $zbin = 'cat';  // no compression, pipe through as-is
+          break;
+        case 'tar.gz':
+          $zbin = 'gzip';
+          break;
+        case 'tar.bz2':
+          $zbin = 'bzip2';
+          break;
+        case 'tar.xz':
+          // xz reads far ahead of the compression into buffers of its threads (block size = 3x preset by default), so pv would show 100%
+          // long before the compression is done. A small block size limits the read-ahead to a few MiB (archive gets ~4% bigger).
+          $zbin = 'xz --block-size=4MiB';
+          break;
+        case 'tar.zst':
+          $zbin = 'zstd';
+          break;
+        case 'tar.lz4':
+          $zbin = 'lz4';
+          break;
+        case 'gz':
+          $zbin = 'gzip';
+          $single = true;
+          break;
+        case 'xz':
+          $zbin = 'xz --block-size=4MiB'; // see tar.xz
+          $single = true;
+          break;
+        case 'bz2':
+          $zbin = 'bzip2';
+          $single = true;
+          break;
+        case 'zst':
+          $zbin = 'zstd';
+          $single = true;
+          break;
+        case 'lz4':
+          $zbin = 'lz4';
+          $single = true;
+          break;
+        default:
+          $reply['error'] = sprintf(_('Unsupported archive format: %s'), $format);
+          break 2; // break out of switch($format) and switch($action)
+        }
+
+        // set command for multi-file compression (zip has its command already)
+        if (!$single && $format !== 'zip') {
+          $du_sources = implode(' ', array_map(function($bn) use ($source_parent) {
+            return escapeshellarg($source_parent . '/' . $bn);
+          }, $source_basenames));
+          $du_out = [];
+          exec("du -sb $du_sources 2>/dev/null | awk '{s+=\$1}END{print s+0}'", $du_out);
+          $pv_total_bytes = (int)($du_out[0] ?? 0);
+          fm_debug_log('pv compress tar.zst: pv_total_bytes=' . $pv_total_bytes);
+          if (file_exists($active)) {
+            $active_data = json_decode(file_get_contents($active), true);
+            if (is_array($active_data)) {
+              $active_data['pv_total_bytes'] = $pv_total_bytes;
+              file_put_contents($active, json_encode($active_data));
+            }
+          }
+          $pv_args = implode(' ', [
+            '--interval 1',           // report progress every 1 second
+            '--numeric',              // output machine-readable lines (elapsed bytes)
+            '--timer',                // include elapsed time in numeric output
+            '--bytes',                // include byte count in numeric output
+            "--size $pv_total_bytes", // expected total for ETA
+          ]);
+          $tar_args = implode(' ', [
+            '--create',     // create new archive
+            '--file=-',     // write to stdout
+            '--no-unquote', // do not unquote filenames read from -T
+            '--xattrs',     // preserve extended attributes
+            '--acls',       // preserve POSIX ACLs
+            '--sparse',     // handle sparse files efficiently (VM images, databases)
+            '--verbose',    // list the filenames (written to the index file)
+            "--xattrs-include='*.*'",        // include all namespaces: user, security, etc.
+            '--index-file=' . CURRENT_FILE,  // stderr only contains errors
+            "-- $escaped_basenames",
+          ]);
+          $cmd = "tar $tar_args | pv $pv_args $pv_stderr | $zbin > $esc_target_tmp";
+
+        // set command for single file compression
+        } elseif ($single) {
+          $esc_basename = escapeshellarg($source_basenames[0]);
+          $source_fsize = (int)(filesize($source_path) ?: 0);
+          $pv_args = implode(' ', [
+            '--interval 1',         // report progress every 1 second
+            '--numeric',            // output machine-readable lines (elapsed bytes)
+            '--timer',              // include elapsed time in numeric output
+            '--bytes',              // include byte count in numeric output
+            "--size $source_fsize", // expected total for %/ETA
+          ]);
+          $pv_total_bytes = $source_fsize;
+          if (file_exists($active)) {
+            $active_data = json_decode(file_get_contents($active), true);
+            if (is_array($active_data)) {
+              $active_data['pv_total_bytes'] = $pv_total_bytes;
+              file_put_contents($active, json_encode($active_data));
+            }
+          }
+          $cmd = "pv $pv_args -- $esc_basename $pv_stderr | $zbin > $esc_target_tmp";
+        }
+
+        if (FM_DEBUG_MODE) {
+          fm_debug_log('Executing command (first 300 chars): ' . substr($cmd ?? '', 0, 300));
+          file_put_contents('/tmp/cmd-debug-compress.txt', $cmd ?? '(null)');
+        }
+        // set -m: own process group, its id is the PID, so a cancel stops every command of the pipeline (tar starts its decompressor itself)
+        // wait: the sed of $pv_stderr is not part of the pipeline, so the job would be finished (PID gone) while sed may not have
+        //       written the error message of pv to $error yet and the archive of a failed job would be published
+        // 2>$error: everything which a command writes to stderr is an error of the job, the archive is only published if $error is empty
+        exec("set -m; { cd $esc_source_parent && $cmd; wait; } >/dev/null 2>$error & echo \$!", $pid);
+        if (FM_DEBUG_MODE && !empty($pid[0])) {
+          $ps_out = [];
+          exec('ps -p ' . (int)$pid[0] . ' -o pid,cmd --no-headers 2>/dev/null', $ps_out);
+          fm_debug_log('Process cmd: ' . implode(' ', $ps_out));
+        }
+      }
+      break;
+    case 17: // extract
+
+      // return status of running action
+      if (!empty($pid)) {
+        // single-file formats have no tar/zip filename output, so show the name of the file which is written
+        $text = parse_pv_progress($status, (int)($pv_total_bytes ?? 0), _('Extracting'), false, preg_replace('/\.(gz|bz2|xz|zst|lz4)$/i', '', basename($source[0])));
+        if (!empty($text)) {
+          $reply['status'] = [
+            'action' => $action,
+            'text' => $text
+          ];
+        }
+
+      // start action
+      } else {
+        $archive = validname($source[0]);
+        if (!$archive) {
+          $reply['error'] = _('Invalid source path');
+          break;
+        }
+        $dest = rtrim($target, '/');
+        $dest = validname($dest, false);
+        if (!$dest) {
+          $reply['error'] = _('Invalid target path');
+          break;
+        }
+        // Pre-escape user-controlled paths for safe interpolation
+        $esc_archive = escapeshellarg($archive);
+        $esc_dest    = escapeshellarg($dest);
+
+        fm_debug_log('extract start: archive=' . $archive . ', dest=' . $dest);
+        fm_debug_log('extract start: quoted_archive=' . quoted($archive) . ', quoted_dest=' . quoted($dest));
+
+        // Docker paths get root:root (directories 755, single-file output 600), all other shares get nobody:users (777/666).
+        // note: required even if dest already exists, because the single-file decompressors set the owner of their output file
+        $docker_cfg = @parse_ini_file('/boot/config/docker.cfg') ?: [];
+        $docker_subpaths = [];
+        foreach (['DOCKER_APP_CONFIG_PATH', 'DOCKER_IMAGE_FILE'] as $key) {
+          $val = rtrim(trim($docker_cfg[$key] ?? ''), '/');
+          if ($val && preg_match('#^/mnt/[^/]+/(.+)$#', $val, $m)) {
+            $docker_subpaths[] = $m[1];
+            // DOCKER_IMAGE_FILE is a file (e.g. /mnt/user/system/docker/docker.img): its folder belongs to the docker data as well
+            if (is_file($val) && dirname($m[1]) !== '.') $docker_subpaths[] = dirname($m[1]);
+          }
+        }
+        if (empty($docker_subpaths)) $docker_subpaths = ['appdata', 'docker'];
+        $is_docker_dest = false;
+        if (preg_match('#^/mnt/[^/]+/(.+)$#', $dest, $m)) {
+          foreach ($docker_subpaths as $dp) {
+            if ($m[1] === $dp || str_starts_with($m[1], $dp.'/')) {
+              $is_docker_dest = true;
+              break;
+            }
+          }
+        }
+
+        // Create dest with proper permissions if it doesn't exist.
+        if (!is_dir($dest)) {
+          $new_root = $dest;
+          $check = $dest;
+          while ($check !== '/' && !is_dir($check)) {
+            $new_root = $check;
+            $check = dirname($check);
+          }
+          exec("mkdir -pm0".($is_docker_dest ? '755' : '777')." ".quoted($dest));
+          if (!$is_docker_dest) exec("chown -R nobody:users ".quoted($new_root));
+        }
+
+        // Reset progress parser state for new extract operation (shares static vars with compress)
+        parse_pv_progress(null, 0, null, true);
+        @unlink(CURRENT_FILE);
+
+        // Set shell command for zip
+        if (preg_match('/\.zip$/i', $archive)) {
+          $unzip_overwrite_flag = $overwrite ? '-o' : '-n';
+          // -^ preserves special characters (e.g. newlines)
+          // note: stat-poller in the progress script requires this, too
+          // LANG=en_US.UTF-8 required: With POSIX locale, unzip mangles
+          // non-ASCII filenames as #Uxxxx escape sequences on extraction.
+          // Also set in the progress script's 'unzip -l' call, so both sides use the same locale.
+          // Total uncompressed size for progress: reflects actual bytes written to disk.
+          // filesize($archive) would cause ETA explosion for highly compressible files
+          // (e.g. all-zeros: 4GB -> 600KB -> speed ~0, ETA -> hours).
+          $unzip_total_out = [];
+          exec("LANG=en_US.UTF-8 unzip -lv " . $esc_archive . " 2>/dev/null | awk 'NF>=8 && /^[[:space:]]*[0-9]/{s+=\$1}END{print s+0}'", $unzip_total_out);
+          $pv_total_bytes = (int)($unzip_total_out[0] ?? 0) ?: (int)(filesize($archive) ?: 0);
+          if (file_exists($active)) {
+            $active_data = json_decode(file_get_contents($active), true);
+            if (is_array($active_data)) {
+              $active_data['pv_total_bytes'] = $pv_total_bytes;
+              file_put_contents($active, json_encode($active_data));
+            }
+          }
+          $pv_zip_args = implode(' ', [
+            'unzip',
+            $pv_total_bytes,
+            $esc_archive,
+            CURRENT_FILE,
+          ]);
+          $cmd = "LANG=en_US.UTF-8 unzip -^ $unzip_overwrite_flag $esc_archive | " . PVZIP . " $pv_zip_args 2>$status";
+
+        // Single-file decompressors: output filename = archive name without last extension
+        } elseif (preg_match('/\.(gz|bz2|xz|zst|lz4)$/i', $archive, $m) && !preg_match('/\.tar\.[^.]+$/i', $archive)) {
+          $ext = strtolower($m[1]);
+          $decompressor = [
+            'gz'  => 'gunzip -c',
+            'bz2' => 'bunzip2 -c',
+            'xz'  => 'unxz -c',
+            'zst' => 'unzstd -c',
+            'lz4' => 'unlz4 -c',
+          ][$ext];
+          // cut the extension by its length, basename() removes a suffix case-sensitively and would keep ".GZ"
+          $out_base = substr(basename($archive), 0, -(strlen($ext) + 1));
+          if ($out_base === '' || $out_base === '.' || $out_base === '..') {
+            $reply['error'] = _('Invalid source path');
+            break;
+          }
+          $out_path = rtrim($dest, '/') . '/' . $out_base;
+          // a folder is never replaced, without this check the file would be extracted completely and then fail at the rename
+          if (is_dir($out_path)) {
+            $reply['error'] = _('A folder with this name already exists');
+            break;
+          }
+          // overwrite check: if dest file exists and overwrite not set, abort
+          if (!$overwrite && file_exists($out_path)) {
+            $reply['error'] = _('File already exists');
+            break;
+          }
+          // write to hidden tmp file first; rename to final name on success
+          $target_tmp = rtrim($dest, '/') . '/.' . $out_base . '_' . uniqid('', true) . '.tmp';
+          $esc_target_tmp = escapeshellarg($target_tmp);
+          $archive_path   = $out_path;
+          $archive_chown  = $is_docker_dest ? 'root:root' : 'nobody:users';
+          $archive_chmod  = $is_docker_dest ? '600' : '666';
+          $pv_total_bytes = filesize($archive) ?: 0;
+          if (file_exists($active)) {
+            $active_data = json_decode(file_get_contents($active), true);
+            if (is_array($active_data)) {
+              $active_data['target_tmp']    = $target_tmp;
+              $active_data['archive_path']  = $archive_path;
+              $active_data['archive_chown'] = $archive_chown;
+              $active_data['archive_chmod'] = $archive_chmod;
+              $active_data['pv_total_bytes'] = $pv_total_bytes;
+              file_put_contents($active, json_encode($active_data));
+            }
+          }
+          $pv_args = implode(' ', [
+            '--interval 1',           // report progress every 1 second
+            '--numeric',              // output machine-readable lines (elapsed bytes)
+            '--timer',                // include elapsed time in numeric output
+            '--bytes',                // include byte count in numeric output
+            "--size $pv_total_bytes", // expected total for %/ETA
+            '--',                     // end of options
+            $esc_archive,
+          ]);
+          $cmd = "pv $pv_args $pv_stderr | $decompressor > $esc_target_tmp";
+
+        // Set shell command for tar
+        } else {
+
+          // Detect decompressor from archive extension
+          if (preg_match('/\.(tar\.gz|tgz)$/i', $archive)) {
+            $tar_decompress = '--use-compress-program=gzip';
+          } elseif (preg_match('/\.(tar\.bz2|tbz2)$/i', $archive)) {
+            $tar_decompress = '--use-compress-program=bzip2';
+          } elseif (preg_match('/\.(tar\.xz|txz)$/i', $archive)) {
+            $tar_decompress = '--use-compress-program=xz';
+          } elseif (preg_match('/\.(tar\.zst)$/i', $archive)) {
+            $tar_decompress = '--use-compress-program=zstd';
+          } elseif (preg_match('/\.(tar\.lz4)$/i', $archive)) {
+            $tar_decompress = '--use-compress-program=lz4';
+          } else {
+            $tar_decompress = '';  // plain tar, no decompressor
+          }
+
+          $pv_total_bytes = filesize($archive) ?: 0;
+          fm_debug_log('pv extract tar: pv_total_bytes=' . $pv_total_bytes . ', decompress=' . ($tar_decompress ?: 'none'));
+          if (file_exists($active)) {
+            $active_data = json_decode(file_get_contents($active), true);
+            if (is_array($active_data)) {
+              $active_data['pv_total_bytes'] = $pv_total_bytes;
+              file_put_contents($active, json_encode($active_data));
+            }
+          }
+          $keep_existing_files = $overwrite ? '' : '--skip-old-files --warning=no-existing-file';
+          $pv_args = implode(' ', [
+            '--interval 1',           // report progress every 1 second
+            '--numeric',              // output machine-readable lines (elapsed bytes)
+            '--timer',                // include elapsed time in numeric output
+            '--bytes',                // include byte count in numeric output
+            "--size $pv_total_bytes", // expected total for ETA
+            '--',                     // end of options
+            $esc_archive,
+          ]);
+          $tar_args = implode(' ', array_filter([
+            '--extract',              // extract files from archive
+            $tar_decompress,          // decompressor (empty string for plain tar)
+            '--file=-',               // read from stdin (pv output)
+            '--no-unquote',           // do not unquote filenames read from -T
+            '--xattrs',               // restore extended attributes
+            "--xattrs-include='*.*'", // include all namespaces: user.*, security.*, trusted.*, etc.
+            '--acls',                 // restore POSIX ACLs
+            '--sparse',               // restore sparse files (VM images, databases)
+            '--numeric-owner',        // restore exact uid/gid numbers, not name-based lookup
+            '--verbose',              // write filenames to stdout (captured to CURRENT_FILE)
+            $keep_existing_files,
+          ]));
+          $cmd = "pv $pv_args $pv_stderr | tar $tar_args >" . CURRENT_FILE;
+        }
+
+        fm_debug_log('extract cmd=' . substr($cmd, 0, 200));
+        // see compress for explanation of set -m, wait and 2>$error
+        exec("set -m; { cd $esc_dest && $cmd; wait; } >/dev/null 2>$error & echo \$!", $pid);
+        fm_debug_log('extract pid=' . json_encode($pid));
+      }
+      break;
+    case 99: // cancel
+      // compress/extract jobs run in their own process group (set -m), the PID of every other job (rsync, ...) is a single process
+      $cancel_pid = (int)(is_array($pid) ? $pid[0] : $pid);
+      if ($cancel_pid > 1) exec("kill -TERM -- -$cancel_pid 2>/dev/null || kill $cancel_pid");
+      // clean up compress tmp file if present (loaded from active JSON via extract)
+      if (!empty($target_tmp)) {
+        @unlink($target_tmp);
+      }
+      @unlink(CURRENT_FILE);
+      fm_delete_file($active, $pid_file, $status, $error, ZIP_LOG);
+      // no job is running anymore
       unset($pid);
       $delete_empty_dirs = null;
-      break;
-    default:
       continue 2;
     }
+    fm_debug_log('After switch: action=' . $action . ', pid before pid_exists=' . json_encode($pid ?? null));
     $pid = pid_exists($pid??0);
+    fm_debug_log('After pid_exists: pid=' . json_encode($pid));
 
     // Store PID to survive file_manager restarts
     if ($pid !== false) {
@@ -808,16 +1549,16 @@ while (true) {
         $pid = pid_exists($pid);
       } else {
         if ($action != 15) {
-          $reply['status'] = json_encode([
+          $reply['status'] = [
             'action' => $action,
             'text' => [_('Done')]
-          ]);
+          ];
           $reply['done'] = 1;
         } else {
-          $reply['status'] = json_encode([
+          $reply['status'] = [
             'action' => $action,
             'results' => cat($status)
-          ]);
+          ];
           $reply['done'] = 2;
         }
         if ($zfs) {
@@ -828,19 +1569,105 @@ while (true) {
             foreach ($datasets as $dataset) if (exec("ls --indicator-style=none /mnt/$dataset|wc -l")==0) exec("zfs destroy $dataset 2>/dev/null");
           }
         }
-        if (file_exists($error)) $reply['error'] = trim(file_get_contents($error));
-        delete_file($active, $pid_file, $status, $error);
+
+        // For compress/extract-single-file: move tmp to final name + set permissions, or clean up on failure.
+        // Every error message is a failure: a file which changed while it was read, a file which could not be read, ...
+        // would result in an archive which does not contain the files as the user expects it.
+        // Errors which were found before the job was started (e.g. "Archive already exists") reach this block as well.
+        if (in_array($action, [16, 17]) && isset($target_tmp)) {
+          if (empty($reply['error']) && (!file_exists($error) || filesize($error) === 0) && isset($archive_path, $archive_chown, $archive_chmod)) {
+            // the owner and permissions are only set for the new file, the rename fails if the target is a folder
+            if (rename($target_tmp, $archive_path)) {
+              exec('chown ' . escapeshellarg($archive_chown) . ' ' . escapeshellarg($archive_path));
+              exec('chmod ' . escapeshellarg($archive_chmod) . ' ' . escapeshellarg($archive_path));
+            } else {
+              @unlink($target_tmp);
+              $reply['error'] = sprintf(_('Could not create %s'), $archive_path);
+            }
+          } else {
+            @unlink($target_tmp);
+          }
+        }
+
+        // zip: restore symlink mtimes
+        // note: unzip does not call lutimes() for symlinks (https://sourceforge.net/p/infozip/bugs/19/)
+        if ($action == 17 && !empty($source[0]) && preg_match('/\.zip$/i', $source[0])) {
+          $zip_arc = validname($source[0]);
+          $zip_dst = validname(rtrim($target, '/'), false);
+          if ($zip_arc && $zip_dst) {
+            $za = new ZipArchive();
+            if ($za->open($zip_arc) === true) {
+              $base = realpath($zip_dst);
+              if ($base !== false) {
+                for ($i = 0; $i < $za->numFiles; $i++) {
+                  // identify symlinks via Unix external attributes (S_IFLNK = 0xA000 in high 16 bits)
+                  if (!$za->getExternalAttributesIndex($i, $opsys, $attr)) continue;
+                  if ($opsys !== ZipArchive::OPSYS_UNIX || ($attr >> 16 & 0xF000) !== 0xA000) continue;
+                  $zstat = $za->statIndex($i);
+                  if (!$zstat || empty($zstat['mtime'])) continue;
+                  $name = rtrim($zstat['name'], '/');
+                  if (!$name) continue;
+                  $dir_real = realpath(dirname($base . '/' . $name));
+                  if ($dir_real === false || !str_starts_with($dir_real . '/', $base . '/')) continue;
+                  exec('touch -h -m -d @' . (int)$zstat['mtime'] . ' ' . escapeshellarg($dir_real . '/' . basename($name)));
+                }
+              }
+              $za->close();
+            }
+            fm_debug_log('zip extract: symlink mtimes restored');
+          }
+        }
+
+        @unlink(CURRENT_FILE);
+
+        if (file_exists($error)) {
+          // the (empty) error file of a job must not replace an error message which was set before
+          $stderr = trim(file_get_contents($error));
+          if ($stderr !== '' || empty($reply['error'])) $reply['error'] = $stderr;
+        }
+
+        // Debug: Copy status file before deletion (compress and extract)
+        if (FM_DEBUG_MODE && ($action == 16 || $action == 17) && file_exists($status)) {
+          $debug_copy = $action == 16 ? '/tmp/status-debug-compress.txt' : '/tmp/status-debug-extract.txt';
+          copy($status, $debug_copy);
+          fm_debug_log('Status file copied to ' . $debug_copy . ' before deletion');
+        }
+
+        fm_delete_file($active, $pid_file, $status, $error, ZIP_LOG);
         unset($pid);
         $delete_empty_dirs = null;
       }
     }
   }
   if (time() - $timer) {
-    // update every second
+    // time() has 1-second resolution: fires once per second regardless of usleep() interval.
+    // Signals Browse.page whether an operation is active (1) or finished (0) so it can
+    // trigger a directory refresh after completion.
     publish('filemonitor', file_exists($active) ? 1 : 0);
     $timer = time();
   }
-  publish('filemanager', json_encode($reply));
-  usleep(250000);
+  $now = time();
+  // Don't publish identical status (avoids redundant nchan traffic for rsync/zip).
+  // But republish every 20s to keep nchan buffer alive (nchan_message_timeout in /etc/rc.d/rc.nginx is 30s).
+  if (isset($reply['status']) && !isset($reply['done'])) {
+    if ($reply['status'] === $last_published_status && ($now - $last_published_time) < 20) {
+      unset($reply['status']);
+    } else {
+      $last_published_status = $reply['status'];
+      $last_published_time = $now;
+    }
+  } elseif (!isset($reply['status']) && !isset($reply['done']) && isset($action) && $last_published_status !== null && ($now - $last_published_time) >= 20) {
+    // No new status but process still running: republish last to keep nchan buffer alive
+    $reply['status'] = $last_published_status;
+    $last_published_time = $now;
+  }
+  // publish new status or error, or if action just completed (done=1 or 2)
+  if (!empty($reply)) {
+    publish('filemanager', json_encode($reply));
+    if (FM_DEBUG_MODE) file_put_contents(FM_DEBUG_NCHAN_FILE, json_encode($reply) . "\n", FILE_APPEND);
+  }
+  // Slow down polling while any background process is running: sub-second updates
+  // are pointless since the user can't react faster and pv/rsync write once per second anyway.
+  usleep(isset($pid) ? 1000000 : 250000);
 }
 ?>

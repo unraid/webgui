@@ -1,0 +1,67 @@
+Menu="FileManagerSettings:2"
+Title="Popular Destinations"
+Tag="star-o"
+---
+<?PHP
+/* Copyright 2026, Marc Gutt, Gutt.IT
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+require_once "$docroot/plugins/dynamix/include/PopularDestinations.php";
+$dfm_destinations = getPopularDestinations(MAX_ENTRIES);
+?>
+<script>
+// show a hint instead of an empty list and disable the button if no destination is left
+function updatePopularDestinations() {
+  var empty = $('.dfm-destination').length == 0;
+  $('#dfm_no_destinations').toggleClass('hidden', !empty);
+  $('#dfm_delete_all').prop('disabled', empty);
+}
+
+function removePopularDestination(icon) {
+  var row = $(icon).closest('.dfm-destination');
+  $.post('/webGui/include/Control.php',{mode:'popular_remove',path:encodeURIComponent(row.attr('data-path'))},function(){
+    row.remove();
+    updatePopularDestinations();
+  });
+}
+
+function deleteAllPopularDestinations() {
+  swal({
+    title:"_(Proceed)_?",
+    text:"_(This deletes all popular destinations)_",
+    type:'warning',
+    showCancelButton:true,
+    confirmButtonText:"_(Proceed)_",
+    cancelButtonText:"_(Cancel)_"
+  },function(confirmed){
+    if (!confirmed) return;
+    $.post('/webGui/include/Control.php',{mode:'popular_clear'},function(){
+      $('.dfm-destination').remove();
+      updatePopularDestinations();
+    });
+  });
+}
+</script>
+
+_(Destinations)_:
+: <span class="flex flex-col gap-4">
+<?foreach ($dfm_destinations as $dfm_path):?>
+  <span class="dfm-destination inline-flex items-center gap-4" data-path="<?=htmlspecialchars($dfm_path)?>"><i class="fa fa-fw fa-close control" onclick="removePopularDestination(this)" title="_(Remove)_"></i><span><?=htmlspecialchars($dfm_path)?></span></span>
+<?endforeach;?>
+  <span id="dfm_no_destinations" class="<?=$dfm_destinations ? 'hidden' : ''?>">_(No popular destinations yet)_</span>
+</span>
+
+:filemanager_destinations_help:
+
+<input type="button" id="dfm_delete_all" value="_(Delete all)_" onclick="deleteAllPopularDestinations()"<?=$dfm_destinations ? '' : ' disabled'?>>
+: <span class="inline-block">
+  <input type="button" value="_(Done)_" onclick="done()">
+</span>

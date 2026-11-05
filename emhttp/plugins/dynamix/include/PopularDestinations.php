@@ -180,4 +180,43 @@ function getPopularDestinations($limit = 5) {
     return $dest['path'];
   }, $result);
 }
+
+/**
+ * Remove popular destinations (File Manager settings)
+ * @param array|null $paths Paths to remove, null removes all of them
+ */
+function removePopularDestinations($paths = null) {
+  if (!file_exists(POPULAR_DESTINATIONS_FILE)) {
+    return;
+  }
+
+  $fp = fopen(POPULAR_DESTINATIONS_FILE, 'c+');
+  if ($fp === false) {
+    exec('logger -t webGUI "Error: Cannot open popular destinations file: ' . POPULAR_DESTINATIONS_FILE . '"');
+    return;
+  }
+
+  // Acquire exclusive lock for entire read-modify-write cycle (see updatePopularDestinations)
+  if (!flock($fp, LOCK_EX)) {
+    exec('logger -t webGUI "Error: Cannot lock popular destinations file: ' . POPULAR_DESTINATIONS_FILE . '"');
+    fclose($fp);
+    return;
+  }
+
+  $data = json_decode(stream_get_contents($fp), true);
+  if (!is_array($data) || !isset($data['destinations'])) {
+    $data = ['destinations' => []];
+  }
+  $data['destinations'] = $paths === null ? [] : array_values(array_filter($data['destinations'], function($dest) use ($paths) {
+    return !in_array($dest['path'] ?? '', $paths, true);
+  }));
+
+  $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+  if (ftruncate($fp, 0) === false || fseek($fp, 0) === -1 || fwrite($fp, $json) === false) {
+    exec('logger -t webGUI "Error: Failed to write popular destinations file: ' . POPULAR_DESTINATIONS_FILE . '"');
+  }
+
+  flock($fp, LOCK_UN);
+  fclose($fp);
+}
 ?>

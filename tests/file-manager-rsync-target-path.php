@@ -69,6 +69,8 @@ foreach (['truepath', 'validname', 'rsync_share_is_exclusive', 'rsync_exclusive_
 assertNotContainsText('realpath(', extractFunction($fileManagerSource, 'resolve_rsync_path'), 'The rsync path resolver must not follow arbitrary symlinks with realpath().');
 assertContainsText('--no-dereference', extractFunction($fileManagerSource, 'rsync_exclusive_share_target'), 'The exclusive-share location lookup must inspect the symlink itself.');
 
+assertContainsText('A-Za-z0-9._~-', extractFunction($fileManagerSource, 'rsync_exclusive_share_target'), 'The exclusive-share location check must accept "~" used in subpool names.');
+
 assertSameValue('', rsync_target('/tmp/outside/'), 'A target outside the allowed roots must be rejected.');
 
 $copyStart = strpos($fileManagerSource, 'case 3:  // copy folder');

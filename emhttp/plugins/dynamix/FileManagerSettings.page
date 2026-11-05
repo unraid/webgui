@@ -1,0 +1,70 @@
+Menu="UserPreferences"
+Type="xmenu"
+Title="File Manager"
+Icon="files-o"
+Tag="files-o"
+---
+<?PHP
+/* Copyright 2026, Marc Gutt, Gutt.IT
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+include "$docroot/webGui/include/FileManagerFormats.php";
+
+// one checkbox per format, the formats for a single file are listed separately
+$dfm_checkboxes = ['multi' => '', 'single' => ''];
+foreach ($dfm_formats as $dfm_format => $dfm_label) {
+  $dfm_group = in_array($dfm_format, $dfm_single_formats) ? 'single' : 'multi';
+  $dfm_checked = in_array($dfm_format, $dfm_enabled) ? ' checked' : '';
+  $dfm_checkboxes[$dfm_group] .= "<label class=\"inline-flex items-center gap-4\"><input type=\"checkbox\" class=\"dfm-$dfm_group\" value=\"$dfm_format\"$dfm_checked><span>$dfm_label</span></label>";
+}
+?>
+<script>
+function prepareFileManagerSettings(form, event) {
+  var multi  = $(form).find('input.dfm-multi:checked').map(function(){return this.value;}).get();
+  var single = $(form).find('input.dfm-single:checked').map(function(){return this.value;}).get();
+  // the default button restores the formats of default.cfg, so it does not need a selection
+  var isDefault = event.submitter && event.submitter.name == '#default';
+  if (!multi.length && !isDefault) {
+    swal({title:"_(Archive formats)_",text:"_(Select at least one format for folders and several files)_!",type:"error",html:true,confirmButtonText:"_(Ok)_"});
+    return false;
+  }
+  form.elements['multi'].value = multi.join(',');
+  form.elements['single'].value = single.join(',');
+  return true;
+}
+</script>
+
+<form markdown="1" name="filemanager_settings" method="POST" action="/update.php" target="progressFrame" onsubmit="return prepareFileManagerSettings(this, event)">
+<input type="hidden" name="#file" value="dynamix/dynamix.cfg"/>
+<input type="hidden" name="#section" value="filemanager"/>
+<input type="hidden" name="multi" value=""/>
+<input type="hidden" name="single" value=""/>
+
+_(Copy and move speed limit)_:
+: <input type="number" name="bwlimit" min="1" step="1" value="<?=htmlspecialchars($dfm_settings['bwlimit'] ?? '')?>" placeholder="_(unlimited)_"><span class="input-instructions">_(Whole numbers in MB/s, leave empty for no limit)_</span>
+
+:filemanager_bwlimit_help:
+
+_(Compress formats for folders and several files)_:
+: <span class="flex flex-col gap-4"><?=$dfm_checkboxes['multi']?></span>
+
+_(Compress formats for a single file)_:
+: <span class="flex flex-col gap-4"><?=$dfm_checkboxes['single']?></span>
+
+:filemanager_formats_help:
+
+<input type="submit" name="#default" value="_(Default)_">
+: <span class="inline-block">
+  <input type="submit" name="#apply" value="_(Apply)_" disabled>
+  <input type="button" value="_(Done)_" onclick="done()">
+</span>
+
+</form>
