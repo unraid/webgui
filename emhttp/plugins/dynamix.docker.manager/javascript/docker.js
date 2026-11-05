@@ -87,9 +87,7 @@ function popupWithIframe(title, cmd, reload, func) {
   $('.ui-button-text').css({'padding':'0px 5px'});
 }
 function execUpContainer(container) {
-  var title = _('Updating the container TEST')+': '+container;
-  var cmd = '/plugins/dynamix.docker.manager/include/CreateDocker.php?updateContainer=true&ct[]='+encodeURIComponent(container);
-  popupWithIframe(title, cmd, true, 'loadlist');
+  updateContainer(container);
 }
 function addContainer() {
   var path = location.pathname;
@@ -185,9 +183,15 @@ function updateAll() {
   openDocker('update_container '+ct.join('*'),_('Updating all Containers')+' ('+ct.length+')','','loadlist');
 }
 function rebuildAll() {
-  $('input[type=button]').prop('disabled',true);
-  $('div.spinner.fixed').show('slow');
   var ct = [];
   for (var i=0,d; d=docker[i]; i++) if (d.update==2) ct.push(encodeURIComponent(d.name));
-  $.get('/plugins/dynamix.docker.manager/include/CreateDocker.php',{updateContainer:true,mute:true,ct},function(){loadlist();});
+  if (!ct.length) return;
+  swal({
+    title:_('Proceed?'),text:_('Rebuild the listed containers?'),type:'warning',html:true,showCancelButton:true,confirmButtonText:_('Proceed'),cancelButtonText:_('Cancel')
+  },function(confirmed){
+    if (!confirmed) return;
+    $('input[type=button]').prop('disabled',true);
+    $('div.spinner.fixed').show('slow');
+    $.post('/plugins/dynamix.docker.manager/include/CreateDocker.php',{updateContainer:true,mute:true,confirmed:'yes',ct:ct},function(){loadlist();});
+  });
 }
