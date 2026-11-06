@@ -77,8 +77,17 @@ function addLog(logLine) {
   }
 }
 function addCloseButton() {
-  var done = location.search.split('&').pop().split('=')[1];
-  addLog("<p class='centered'><button class='logLine' type='button' onclick='" + (parent.Shadowbox ? "parent.Shadowbox" : "window") + ".close()'>"+decodeURI(done)+"</button></p>");
+  var done = new URLSearchParams(window.location.search).get('done') || '';
+  var paragraph = document.createElement('p');
+  paragraph.className = 'centered';
+  var button = document.createElement('button');
+  button.className = 'logLine';
+  button.type = 'button';
+  button.textContent = done;
+  // Keep the close action on the serialized button because addLog updates the log markup.
+  button.setAttribute('onclick',(parent.Shadowbox ? 'parent.Shadowbox' : 'window')+'.close()');
+  paragraph.appendChild(button);
+  addLog(paragraph.outerHTML);
 }
 </script>
 </head>
