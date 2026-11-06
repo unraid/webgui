@@ -12,6 +12,12 @@
  */
 ?>
 <?
+function docker_env_option($name,$values) {
+  if (!is_array($values) || !$values) return '';
+  $values = array_map('strval',$values);
+  return '-e '.escapeshellarg($name.'='.implode(' ',$values)).' ';
+}
+
 function addRoute($ct) {
   // add static route(s) for remote WireGuard access
   [$pid,$net] = array_pad(explode(' ',exec("docker inspect --format='{{.State.Pid}} {{.NetworkSettings.Networks}}' $ct")),2,'');
