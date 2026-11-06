@@ -1500,9 +1500,13 @@ class Array2XML {
 				$p2 = $d['source']['address']['@attributes'];
 				$match = ($v && $p && $v==$vendor && $p==$product) || ($p2['bus'] && $p2['slot'] && $p2['function'] && $p2['bus']==$pci['bus'] && $p2['slot']==$pci['slot'] && $p2['function']==$function);
 				if (!$match) continue;
-				// keep a hand-set guest address the GUI has no field for (boot order, rom and multifunction come from the form)
-				if (isset($new['devices']['hostdev'][$key], $d['address']) && !isset($new['devices']['hostdev'][$key]['address']) && ($d['address']['@attributes']['multifunction'] ?? '') != 'on')
-					$new['devices']['hostdev'][$key]['address'] = $d['address'];
+				// keep what the GUI has no field for: a user alias and a hand-set guest address (boot order, rom and multifunction come from the form)
+				if (isset($new['devices']['hostdev'][$key])) {
+					if (isset($d['alias']) && !isset($new['devices']['hostdev'][$key]['alias'])) $new['devices']['hostdev'][$key]['alias'] = $d['alias'];
+					// function 1-7 stays with the form: function 0 of that slot may be rebuilt or dropped, and a guest skips a slot without function 0
+					if (isset($d['address']) && !isset($new['devices']['hostdev'][$key]['address']) && ($d['address']['@attributes']['multifunction'] ?? '') != 'on' && hexdec($d['address']['@attributes']['function'] ?? '0')==0)
+						$new['devices']['hostdev'][$key]['address'] = $d['address'];
+				}
 				unset($old['devices']['hostdev'][$k]);
 			}
 		}
