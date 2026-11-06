@@ -22,6 +22,22 @@ function vm_manager_escape_html($value)
   return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+function vm_manager_js_value($value)
+{
+  $json = json_encode($value, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE);
+  return $json === false ? 'null' : $json;
+}
+
+function vm_manager_js_call($function, ...$args)
+{
+  return $function.'('.implode(',', array_map('vm_manager_js_value', $args)).')';
+}
+
+function vm_manager_onclick($call)
+{
+  return 'onclick="'.vm_manager_escape_html($call).'"';
+}
+
 // add translations
 $_SERVER['REQUEST_URI'] = 'vms';
 require_once "$docroot/webGui/include/Translations.php";
@@ -56,8 +72,9 @@ foreach ($vms as $vm) {
   $id = $lv->domain_get_id($res) ?: '-';
   $autostart = $lv->domain_get_autostart($res) ? 'checked' : '';
   $state = $lv->domain_state_translate($dom['state']);
-  $icon = $lv->domain_get_icon_url($res);
-  $image = substr($icon,-4)=='.png' ? "<img src='$icon' class='img'>" : (substr($icon,0,5)=='icon-' ? "<i class='$icon img'></i>" : "<i class='fa fa-$icon img'></i>");
+  $icon = (string)$lv->domain_get_icon_url($res);
+  $iconHtml = vm_manager_escape_html($icon);
+  $image = substr($icon,-4)=='.png' ? "<img src='$iconHtml' class='img'>" : (substr($icon,0,5)=='icon-' ? "<i class='$iconHtml img'></i>" : "<i class='fa fa-$iconHtml img'></i>");
   $arrConfig = domain_to_config($uuid);
   $snapshots = getvmsnapshots($vm) ;
   $vmpciids = $lv->domain_get_vm_pciids($vm);
@@ -103,9 +120,9 @@ foreach ($vms as $vm) {
   $virtual = false ;
   $arrValidGPUDevices = !empty($arrConfig['gpu']) ? getValidGPUDevices() : [];
   $vrtmodel = '';
-  if (isset($arrConfig['gpu'][0]['model'])) {$vrtdriver=" "._("Driver").strtoupper(":{$arrConfig['gpu'][0]['model']} "); $vrtmodel =$arrConfig['gpu'][0]['model'];} else $vrtdriver = "";
+  if (isset($arrConfig['gpu'][0]['model'])) {$vrtdriver=" "._("Driver").strtoupper(":".vm_manager_escape_html($arrConfig['gpu'][0]['model'])." "); $vrtmodel =$arrConfig['gpu'][0]['model'];} else $vrtdriver = "";
   if (isset($arrConfig['gpu'][0]['render']) && $vrtmodel == "virtio3d") {
-    if (isset($arrConfig['gpu'][0]['render']) && $arrConfig['gpu'][0]['render'] == "auto") $vrtdriver .= "<br>"._("RenderGPU").":"._("Auto"); else $vrtdriver .= "<br>"._("RenderGPU").":{$arrValidGPUDevices[$arrConfig['gpu'][0]['render']]['name']}";
+    if (isset($arrConfig['gpu'][0]['render']) && $arrConfig['gpu'][0]['render'] == "auto") $vrtdriver .= "<br>"._("RenderGPU").":"._("Auto"); else $vrtdriver .= "<br>"._("RenderGPU").":".vm_manager_escape_html($arrValidGPUDevices[$arrConfig['gpu'][0]['render']]['name']);
   }
   if ($vmrcport > 0) {
     $wsport = $lv->domain_get_ws_port($res);
@@ -127,10 +144,10 @@ foreach ($vms as $vm) {
       foreach ($arrValidGPUDevices as $arrDev) {
         if ($arrGPU['id'] == $arrDev['id']) {
           if (count(array_filter($arrValidGPUDevices, function($v) use ($arrDev) { return $v['name'] == $arrDev['name']; })) > 1) {
-            $graphics .= $arrDev['name'].' ('.$arrDev['id'].')'."\n";
+            $graphics .= vm_manager_escape_html($arrDev['name']).' ('.vm_manager_escape_html($arrDev['id']).')'."\n";
             if (!$virtual) $vmrcprotocol = "VGA";
           } else {
-            $graphics .= $arrDev['name']."\n";
+            $graphics .= vm_manager_escape_html($arrDev['name'])."\n";
             if (!$virtual) $vmrcprotocol = "VGA";
           }
         }
@@ -141,8 +158,8 @@ foreach ($vms as $vm) {
   unset($dom);
   if (!isset($domain_cfg["CONSOLE"])) $vmrcconsole = "web" ; else $vmrcconsole = $domain_cfg["CONSOLE"] ;
   if (!isset($domain_cfg["RDPOPT"])) $vmrcconsole .= ";no" ; else $vmrcconsole .= ";".$domain_cfg["RDPOPT"] ;
-  $menu = sprintf("onclick=\"addVMContext('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s', '%s', %s)\"", addslashes($vm),addslashes($uuid),addslashes($template),$state,addslashes($vmrcurl),strtoupper($vmrcprotocol),addslashes($log),addslashes($fstype), $vmrcconsole,false,addslashes(str_replace('"',"'",$WebUI)),$pcierror,$srioverror);
-  $kvm[] = "kvm.push({id:'$uuid',state:'$state'});";
+  $menu = vm_manager_onclick(vm_manager_js_call('addVMContext', $vm, $uuid, $template, $state, $vmrcurl, strtoupper($vmrcprotocol), $log, $fstype, $vmrcconsole, false, str_replace('"', "'", $WebUI), $pcierror, $srioverror));
+  $kvm[] = 'kvm.push({id:'.vm_manager_js_value($uuid).',state:'.vm_manager_js_value($state).'});';
   switch ($state) {
   case 'running':
     $shape = 'play';
@@ -197,13 +214,11 @@ foreach ($vms as $vm) {
           $ipaddr = (string)$arraddr["addr"];
           if (preg_match('/^f[c-f]/',$ipaddr)) continue; // omit ipv6 private addresses
           $iptype = $arraddr["type"] ? "ipv6" : "ipv4";
-          $ipprefix = vm_manager_escape_html((string)$arraddr["prefix"]);
+          $ipprefix = (string)$arraddr["prefix"];
           $ipnamemac = "$ipname ($iphdwadr)";
           if (!in_array($ipnamemac,$duplicates)) $duplicates[] = $ipnamemac; else $ipnamemac = "";
-          $ipnamemac = vm_manager_escape_html($ipnamemac);
-          $ipaddrval = vm_manager_escape_html($ipaddr);
-          $ipliststr .= "<tr><td>$ipnamemac</td><td></td><td></td><td>$iptype</td><td>$ipaddrval</td><td>$ipprefix</td></tr>";
-          $iptablestr .= "$ipaddrval/$ipprefix\n" ;
+          $ipliststr .= "<tr><td>".vm_manager_escape_html($ipnamemac)."</td><td></td><td></td><td>".vm_manager_escape_html($iptype)."</td><td>".vm_manager_escape_html($ipaddr)."</td><td>".vm_manager_escape_html($ipprefix)."</td></tr>";
+          $iptablestr .= vm_manager_escape_html($ipaddr)."/".vm_manager_escape_html($ipprefix)."\n" ;
         }
       }
     }
@@ -218,22 +233,22 @@ foreach ($vms as $vm) {
   }
   $iptablestr = str_replace("\n", "<br>", trim($iptablestr));
 
-  $changemedia = "getisoimageboth(\"{$uuid}\",\"hda\",\"{$cdbus}\",\"{$cdfile}\",\"hdb\",\"{$cdbus2}\",\"{$cdfile2}\")";
+  $changemedia = vm_manager_js_call('getisoimageboth', $uuid, 'hda', $cdbus, $cdfile, 'hdb', $cdbus2, $cdfile2);
   $title = _('Select ISO image');
-  $cdstr = $cdromcount." / 2<a class='hand' title='$title' href='#' onclick='$changemedia'><i class='fa fa-dot-circle-o'></i></a>";
+  $cdstr = $cdromcount." / 2<a class='hand' title='".vm_manager_escape_html($title)."' href='#' ".vm_manager_onclick($changemedia)."><i class='fa fa-dot-circle-o'></i></a>";
   echo "<tr parent-id='$i' class='sortable'><td class='vm-name' style='width:220px;padding:8px'><i class='fa fa-arrows-v mover orange-text'></i>";
-  echo "<span class='outer'><span id='vm-$uuid' $menu class='hand'>$image</span>";
-  echo "<span class='inner'><a href='#' onclick='return toggle_id(\"name-$i\")' title='click for more VM info'>$vm</a>";
+  echo "<span class='outer'><span id='vm-".vm_manager_escape_html($uuid)."' $menu class='hand'>$image</span>";
+  echo "<span class='inner'><a href='#' onclick='return toggle_id(\"name-$i\")' title='click for more VM info'>".vm_manager_escape_html($vm)."</a>";
   if ($pcierror) echo "<i class=\"fa fa-warning fa-fw orange-text\" title=\""._('PCI Changed')."\n"._('Start disabled')."\"></i>";
   if ($srioverror) echo "<i class=\"fa fa-warning fa-fw orange-text\" title=\""._('SR-IOV root device found')."\n"._('Start disabled')."\"></i>";
-  echo "<br><i class='fa fa-$shape $status $color'></i><span class='state'>"._($status)." </span></span></span></td>";
-  echo "<td>$desc</td>";
-  echo "<td><a class='vcpu-$uuid' style='cursor:pointer'>$vcpu</a></td>";
-  echo "<td>$mem</td>";
-  echo "<td title='$diskdesc'><span class='state' >$disks&nbsp;&nbsp;&nbsp;&nbsp;$cdstr<br>$snapshotstr</span></td>";
+  echo "<br><i class='fa fa-".vm_manager_escape_html($shape)." ".vm_manager_escape_html($status)." ".vm_manager_escape_html($color)."'></i><span class='state'>".vm_manager_escape_html(_($status))." </span></span></span></td>";
+  echo "<td>".vm_manager_escape_html($desc)."</td>";
+  echo "<td><a class='vcpu-".vm_manager_escape_html($uuid)."' style='cursor:pointer'>".vm_manager_escape_html($vcpu)."</a></td>";
+  echo "<td>".vm_manager_escape_html($mem)."</td>";
+  echo "<td title='".vm_manager_escape_html($diskdesc)."'><span class='state' >".vm_manager_escape_html($disks)."&nbsp;&nbsp;&nbsp;&nbsp;$cdstr<br>".vm_manager_escape_html($snapshotstr)."</span></td>";
   echo "<td><span class='vmgraphics'>$graphics</td>";
   echo "<td><span class='vmgraphics'>$iptablestr</td>";
-  echo "<td><input class='autostart' type='checkbox' name='auto_{$vm}' title=\""._('Toggle VM autostart')."\" uuid='$uuid' $autostart></td></tr>";
+  echo "<td><input class='autostart' type='checkbox' name='auto_".vm_manager_escape_html($vm)."' title=\"".vm_manager_escape_html(_('Toggle VM autostart'))."\" uuid='".vm_manager_escape_html($uuid)."' $autostart></td></tr>";
 
   /* Disk device information */
   echo "<tr child-id='$i' id='name-$i".(in_array('name-'.$i++,$show) ? "'>" : "' style='display:none'>");
@@ -254,22 +269,22 @@ foreach ($vms as $vm) {
     if ($boot < 1) $boot = _('Not set');
     $reallocation = trim(get_realvolume($disk));
     if (!empty($reallocation)) $reallocationstr = "($reallocation)"; else $reallocationstr = "";
-    echo "<tr><td>$disk $reallocationstr</td><td>$serial</td><td>$bus</td>";
+    echo "<tr><td>".vm_manager_escape_html($disk)." ".vm_manager_escape_html($reallocationstr)."</td><td>".vm_manager_escape_html($serial)."</td><td>".vm_manager_escape_html($bus)."</td>";
     if ($state == 'shutoff') {
       echo "<td title='Click to increase Disk Size'>";
       echo "<form method='get' action=''>";
       echo "<input type='hidden' name='subaction' value='disk-resize'>";
-      echo "<input type='hidden' name='uuid' value='".$uuid."'>";
-      echo "<input type='hidden' name='disk' value='".htmlspecialchars($disk)."'>";
-      echo "<input type='hidden' name='oldcap' value='".$capacity."'>";
+      echo "<input type='hidden' name='uuid' value='".vm_manager_escape_html($uuid)."'>";
+      echo "<input type='hidden' name='disk' value='".vm_manager_escape_html($disk)."'>";
+      echo "<input type='hidden' name='oldcap' value='".vm_manager_escape_html($capacity)."'>";
       echo "<span class='diskresize' style='width:30px'>";
-      echo "<span class='text'><a href='#' onclick='return false'>$capacity</a></span>";
-      echo "<input class='input' type='text' style='width:46px' name='cap' value='$capacity' val='diskresize' hidden>";
+      echo "<span class='text'><a href='#' onclick='return false'>".vm_manager_escape_html($capacity)."</a></span>";
+      echo "<input class='input' type='text' style='width:46px' name='cap' value='".vm_manager_escape_html($capacity)."' val='diskresize' hidden>";
       echo "</span></form></td>";
     } else {
-      echo "<td>$capacity</td>";
+      echo "<td>".vm_manager_escape_html($capacity)."</td>";
     }
-    echo "<td>$allocation</td><td>$boot</td></tr>";
+    echo "<td>".vm_manager_escape_html($allocation)."</td><td>".vm_manager_escape_html($boot)."</td></tr>";
   }
 
   /* Display VM cdroms */
@@ -285,13 +300,13 @@ foreach ($vms as $vm) {
     if ($boot < 1) $boot = _('Not set');
     if ($disk != "" ) {
       $title = _('Eject CD Drive');
-      $changemedia = "changemedia(\"{$uuid}\",\"{$dev}\",\"{$bus}\", \"--eject\")";
-      echo "<tr><td>$disk <a title='$title' href='#' onclick='$changemedia'> <i class='fa fa-eject'></i></a></td><td></td><td>$bus</td><td><span title='$tooltip' data-toggle='tooltip'>$capacity</span></td><td>$allocation</td><td>$boot</td></tr>";
+      $changemedia = vm_manager_js_call('changemedia', $uuid, $dev, $bus, '--eject');
+      echo "<tr><td>".vm_manager_escape_html($disk)." <a title='".vm_manager_escape_html($title)."' href='#' ".vm_manager_onclick($changemedia)."> <i class='fa fa-eject'></i></a></td><td></td><td>".vm_manager_escape_html($bus)."</td><td><span title='".vm_manager_escape_html($tooltip)."' data-toggle='tooltip'>".vm_manager_escape_html($capacity)."</span></td><td>".vm_manager_escape_html($allocation)."</td><td>".vm_manager_escape_html($boot)."</td></tr>";
     } else {
       $title = _('Insert CD');
-      $changemedia = "changemedia(\"{$uuid}\",\"{$dev}\",\"{$bus}\",\"--select\")";
+      $changemedia = vm_manager_js_call('changemedia', $uuid, $dev, $bus, '--select');
       $disk = _("No CD image inserted into drive");
-      echo "<tr><td>$disk<a title='$title' href='#' onclick='$changemedia'><i class='fa fa-dot-circle-o'></i></a></td><td></td><td>$bus</td><td>$capacity</td><td>$allocation</td><td>$boot</td></tr>";
+      echo "<tr><td>".vm_manager_escape_html($disk)."<a title='".vm_manager_escape_html($title)."' href='#' ".vm_manager_onclick($changemedia)."><i class='fa fa-dot-circle-o'></i></a></td><td></td><td>".vm_manager_escape_html($bus)."</td><td>".vm_manager_escape_html($capacity)."</td><td>".vm_manager_escape_html($allocation)."</td><td>".vm_manager_escape_html($boot)."</td></tr>";
     }
   }
   echo "</tbody>";
@@ -321,8 +336,8 @@ foreach ($vms as $vm) {
         $snapshotmemory = _(ucfirst($snapshot["memory"]["@attributes"]["snapshot"]));
         $snapshotparent = $snapshot["parent"] ? $snapshot["parent"]  : "None";
         $snapshotdatetime = my_time($snapshot["creationtime"],"Y-m-d" )."<br>".my_time($snapshot["creationtime"],"H:i:s");
-        $snapmenu = sprintf("onclick=\"addVMSnapContext('%s','%s','%s','%s','%s','%s')\"", addslashes($vm),addslashes($uuid),addslashes($template),$state,$snapshot["name"],$snapshot["method"]);
-        echo "<tr><td><span id='vmsnap-$uuid' $snapmenu class='hand'>$tab|__&nbsp;&nbsp;<i class='fa fa-clone'></i></span>&nbsp;",$snapshot["name"],"</td><td>$snapshotdesc</td><td><span class='inner' style='font-size:1.1rem;'>$snapshotdatetime</span></td><td>$snapshotstate</td><td>$snapshotparent</td><td>$snapshotmemory</td></tr>";
+        $snapmenu = vm_manager_onclick(vm_manager_js_call('addVMSnapContext', $vm, $uuid, $template, $state, $snapshot["name"], $snapshot["method"]));
+        echo "<tr><td><span id='vmsnap-".vm_manager_escape_html($uuid)."' $snapmenu class='hand'>$tab|__&nbsp;&nbsp;<i class='fa fa-clone'></i></span>&nbsp;".vm_manager_escape_html($snapshot["name"])."</td><td>".vm_manager_escape_html($snapshotdesc)."</td><td><span class='inner' style='font-size:1.1rem;'>$snapshotdatetime</span></td><td>".vm_manager_escape_html($snapshotstate)."</td><td>".vm_manager_escape_html($snapshotparent)."</td><td>".vm_manager_escape_html($snapshotmemory)."</td></tr>";
         $tab .="&nbsp;&nbsp;&nbsp;&nbsp;";
       }
       echo "</tbody>";
