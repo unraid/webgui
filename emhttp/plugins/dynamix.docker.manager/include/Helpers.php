@@ -729,7 +729,7 @@ function pullImage($name, $image, $echo=true) {
     @flush();
   }
   if (!empty($strError)) {
-    my_logger("Pull of $image failed: $strError");
+    my_logger("Pull of $image failed");
     if ($echo) {
       echo "<script>addLog('<br><span class=\"error\"><b>",_('Error'),":</b> ",addslashes(htmlspecialchars($strError)),"</span>');</script>\n";
       @flush();
@@ -739,7 +739,7 @@ function pullImage($name, $image, $echo=true) {
   return true;
 }
 
-function execCommand($command, $echo=true) {
+function execCommand($command, $echo=true, $name='') {
   $waitID = mt_rand();
   if ($echo) {
     [$cmd,$args] = explode(' ',$command,2);
@@ -760,10 +760,7 @@ function execCommand($command, $echo=true) {
   }
   $retval = pclose($proc);
   // The command line holds the variables, masked ones included, and its output can repeat them: name and exit code only
-  if ($retval) {
-    $name = preg_match("/--name='?([^\s']+)/", $command, $match) ? " for {$match[1]}" : '';
-    my_logger("Docker command$name failed with exit code $retval");
-  }
+  if ($retval) my_logger("Docker command for $name failed with exit code $retval");
   if ($echo) echo '<script>stop_Wait('.$waitID.');</script>';
   $out = $retval ?  _('The command failed').'.' : _('The command finished successfully').'!';
   if ($echo) echo '<script>addLog(\'<br><b>',$out,'</b>\');</script>';
