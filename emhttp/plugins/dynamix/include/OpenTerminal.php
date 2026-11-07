@@ -138,6 +138,13 @@ case 'syslog':
   $sock = "/var/run/syslog.sock";
   exec("ttyd-exec -s9 -om1 -i ".escapeshellarg($sock)." ".command($path,$file));
   break;
+case 'shutdownlog':
+  // live syslog on the reboot/shutdown page, separate from the System Log window
+  // the viewer ends itself when the web services stop, so nginx does not wait for this connection
+  $sock = "/var/tmp/shutdownlog.sock";
+  $stop = '(tail -n0 -F /var/log/syslog | grep -qm1 -F "emhttp: Stopping web services"; kill $$) & exec '.command('/var/log/','/var/log/syslog');
+  exec("ttyd-exec -s9 -om1 -i ".escapeshellarg($sock)." bash -c ".escapeshellarg($stop));
+  break;
 case 'disklog':
   // read disk log info (main page)
   $name = terminal_param('name');

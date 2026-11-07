@@ -30,6 +30,10 @@ $themeName = $themeHelper->getThemeName();
 
 $onload_function = '';
 
+// the full log survives the reboot as /boot/logs/syslog-previous when it is mirrored or copied to the boot device (see rc.6)
+$syslog_cfg = (array)@parse_ini_file('/boot/config/rsyslog.cfg');
+$syslog_saved = _var($syslog_cfg,'syslog_flash')!='' || _var($syslog_cfg,'syslog_shutdown')=='';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   $safemode = '/boot/unraidsafemode';
@@ -101,6 +105,24 @@ body {
   font-weight: 400;
   line-height: 1.5;
 }
+.boot-log {
+  max-width: 120rem;
+  margin: 2rem auto 0;
+}
+.boot-log[hidden] {
+  display: none;
+}
+.boot-log iframe {
+  display: block;
+  width: 100%;
+  height: 40vh;
+  border: 1px solid var(--border-color);
+}
+.boot-log-note {
+  font-size: 1.4rem;
+  text-align: center;
+  margin-top: 1rem;
+}
 </style>
 
 <script src="<?autov('/webGui/javascript/dynamix.js')?>"></script>
@@ -166,14 +188,31 @@ function timer() {
   var now = new Date();
   return Math.round((now.getTime()-start.getTime())/1000);
 }
+function bootlog_open() {
+  // live syslog in its own ttyd instance, so an open System Log window is not affected
+  $.get('/webGui/include/OpenTerminal.php',{tag:'shutdownlog'},function(){
+    setTimeout(function(){$('.js-bootLogView').attr('src','/logterminal/shutdownlog/'); $('.js-bootLog').prop('hidden',false);},200);
+  });
+}
+function bootlog_closed() {
+  // the server stopped its web services: the panel keeps the last lines it received
+  if ($('.js-bootLog').prop('hidden') || $('.js-bootLogNote').text()) return;
+  var note = "<?=_('Connection to the server closed at')?> "+new Date().toLocaleTimeString()+". <?=_('The rest of the shutdown is not shown')?>.";
+<?if ($syslog_saved):?>
+  note += " <?=_('The full log will be in /boot/logs/syslog-previous after the next boot')?>.";
+<?endif;?>
+  $('.js-bootLogNote').text(note);
+}
 function reboot_now() {
   $('.js-bootTitle').html("<?=_('Reboot')?> - <?=gethostname()?>");
   boot.start();
+  bootlog_open();
   reboot_online();
 }
 function shutdown_now() {
   $('.js-bootTitle').html("<?=_('Shutdown')?> - <?=gethostname()?>");
   boot.start();
+  bootlog_open();
   shutdown_online();
 }
 function reboot_online() {
@@ -182,7 +221,7 @@ function reboot_online() {
     $('.js-powerStatus').html("<?=_('System is going down')?>... "+timer());
     setTimeout(reboot_online,500);
   })
-  .fail(function(){start=new Date(); setTimeout(reboot_offline,500);});
+  .fail(function(){start=new Date(); bootlog_closed(); setTimeout(reboot_offline,500);});
 }
 function reboot_offline() {
   $.ajax({url:'/webGui/include/ProcessStatus.php',type:'POST',data:{name:'emhttpd',update:true},timeout:500})
@@ -198,7 +237,7 @@ function shutdown_online() {
     $('.js-powerStatus').html("<?=_('System is going down')?>... "+timer());
     setTimeout(shutdown_online,500);
   })
-  .fail(function(){start=new Date(); setTimeout(shutdown_offline,500);});
+  .fail(function(){start=new Date(); bootlog_closed(); setTimeout(shutdown_offline,500);});
 }
 function shutdown_offline() {
   var time = timer();
@@ -228,5 +267,9 @@ $(document).ajaxSend(function(elm, xhr, s){
   <h1 class="js-bootTitle boot-title"></h1>
   <h2 class="js-arrayStatus boot-subtext"><?= $array_status ?></h2>
   <h3 class="js-powerStatus boot-subtext"></h3>
+  <div class="js-bootLog boot-log" hidden>
+    <iframe class="js-bootLogView" title="<?=_('System Log')?>"></iframe>
+    <p class="js-bootLogNote boot-log-note" aria-live="polite"></p>
+  </div>
 </body>
 </html>
