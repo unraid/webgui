@@ -737,15 +737,18 @@ docker_container_start(){
 }
 
 # Stop a container after the running containers that share its network
-# (network_mode: container:<name or id>). Fails when the time budget is used up.
+# (network_mode: container:<name or id>). Returns 1 when the time budget is used
+# up. Returns 2 when this container or one of those failed to stop: it is then
+# left for the final stop, together with the rest.
 docker_stop_one(){
   local DEP
   for DEP in $(awk -v n="$1" '{name[NR]=$1; id[NR]=$2; mode[NR]=$3; if ($1==n) me=$2}
     END{for (k in mode) if (mode[k]=="container:"n || (length(mode[k])>20 && index("container:"me,mode[k])==1)) print name[k]}' <<<"$NETWORKS"); do
-    [[ $DONE == *" $DEP "* ]] || docker_stop_one $DEP || return 1
+    [[ $FAILED == *" $DEP "* ]] && return 2
+    [[ $DONE == *" $DEP "* ]] || docker_stop_one $DEP || return $?
   done
   [[ $((SECONDS-BEGIN)) -lt $LIMIT ]] || return 1
-  docker stop --time=$TIME $1 >/dev/null
+  if ! docker stop --time=$TIME $1 >/dev/null; then FAILED="$FAILED $1 "; return 2; fi
   DONE="$DONE $1 "
 }
 
@@ -754,14 +757,17 @@ docker_stop_one(){
 # The tab shows containers without a saved position together with position 0,
 # so the tab gives no order among those; they are stopped last, together.
 # Without userprefs.cfg the autostart file order is used. Containers not
-# stopped within the time budget are stopped together, as before.
+# stopped within the time budget are stopped together, as before. So are
+# containers whose stop failed, and the containers whose network they use.
 docker_container_stop(){
   log "Stopping containers..."
   if ! docker_running; then return 1; fi
-  local TIME=${DOCKER_TIMEOUT:-10} BEGIN=$SECONDS DONE="" CONTAINER ORDER NETWORKS RUNNING LIMIT
+  local TIME=${DOCKER_TIMEOUT:-10} BEGIN=$SECONDS DONE="" FAILED="" CONTAINER ORDER NETWORKS RUNNING LIMIT
+  [[ $TIME =~ ^[0-9]+$ ]] || TIME=10
   # budget: half of the shutdown time-out, less two container time-outs
   LIMIT=$(awk -F'"' '/^shutdownTimeout=/{print $2}' /var/local/emhttp/var.ini 2>/dev/null)
-  LIMIT=$(( ${LIMIT:-90}/2 - 2*TIME ))
+  [[ $LIMIT =~ ^[0-9]+$ ]] || LIMIT=90
+  LIMIT=$(( LIMIT/2 - 2*TIME ))
   RUNNING=$(running_containers)
   if [[ -n $RUNNING ]]; then
     if [[ -s $USER_PREFS ]]; then
@@ -772,7 +778,9 @@ docker_container_stop(){
     if [[ -n $ORDER ]]; then
       NETWORKS=$(docker inspect --format='{{slice .Name 1}} {{.Id}} {{.HostConfig.NetworkMode}}' $RUNNING 2>/dev/null)
       for CONTAINER in $(tac <<<"$ORDER" | grep -xF "$RUNNING"); do
-        [[ $DONE == *" $CONTAINER "* ]] || docker_stop_one $CONTAINER || break
+        [[ $DONE == *" $CONTAINER "* || $FAILED == *" $CONTAINER "* ]] && continue
+        docker_stop_one $CONTAINER
+        [[ $? -eq 1 ]] && break
       done
     fi
     RUNNING=$(running_containers)
