@@ -941,7 +941,7 @@ endswitch;
  <tr><td></td><td class="line" colspan="2"></td></tr>
 </table>
 <?if (_var($var,'shareUser') == 'e' && $pool_devices):?>
-<form name="mover_schedule" method="POST" action="/update.htm" target="progressFrame">
+<form name="mover_schedule" method="POST" action="<?=$array_ctx['update']?>" target="progressFrame">
 <table markdown="1" class="ArrayOperation-Table array_status noshift">
 <tr><td></td><td><input type="submit" id="mover-button" name="cmdStartMover" value="_(Move)_"></td><td id="mover-text"></td></tr>
  <tr id="moverrow0" hidden><td></td><td><span id="movertitle0">_(File being processed)_</span></td><td id="moverline0"></td><td></td></tr>
@@ -953,7 +953,7 @@ endswitch;
 </form>
 <?endif;?>
 <?if (_var($var,'shareUser') == 'e' && !$pool_devices):?>
-<form name="mover_schedule" method="POST" action="/update.htm" target="progressFrame">
+<form name="mover_schedule" method="POST" action="<?=$array_ctx['update']?>" target="progressFrame">
 <table markdown="1" class="ArrayOperation-Table array_status noshift">
 <tr><td></td><td><input type="submit" id="mover-button" name="cmdStartMover" value="_(Empty)_"></td><td id="mover-text"></td></tr>
  <tr id="moverrow0" hidden><td></td><td><span id="movertitle0">_(File being processed)_</span></td><td id="moverline0"></td><td></td></tr>

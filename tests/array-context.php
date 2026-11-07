@@ -53,4 +53,11 @@ foreach (['update', 'parity', 'toggle'] as $key) {
   if ($second[$key] === $default[$key]) throw new RuntimeException("Array 2 must not send commands to the default array ($key).");
 }
 
+// The Main array sections must send their commands through the context, not to the default endpoint.
+$page = file_get_contents("$repo/emhttp/plugins/dynamix/ArrayOperation.page");
+if ($page === false) throw new RuntimeException('Could not read ArrayOperation.page.');
+if (str_contains($page, 'action="/update.htm"')) {
+  throw new RuntimeException('ArrayOperation.page must post to $array_ctx[\'update\'], not /update.htm.');
+}
+
 echo "Array context regression test passed.\n";
