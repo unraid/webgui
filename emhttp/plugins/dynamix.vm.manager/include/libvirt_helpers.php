@@ -1569,6 +1569,9 @@ class Array2XML {
 					$own = ['type','port','autoport','websocket','keymap','passwd','passwdValidTo'];
 					foreach ($d['@attributes'] ?? [] as $a => $val) if (!in_array($a, $own) && ($a=='listen' || !isset($graphics[$n]['@attributes'][$a]))) $graphics[$n]['@attributes'][$a] = $val;
 					foreach ($d as $c => $val) if ($c != '@attributes' && $c != 'mouse' && ($c=='listen' || !isset($graphics[$n][$c]))) $graphics[$n][$c] = $val;
+					// a stored listen child without the listen attribute: drop the form's 0.0.0.0, libvirt would copy it into an empty
+					// <listen type='address'/> (instead of the qemu.conf default) or reject it as not matching the child's address
+					if (isset($d['listen']) && !isset($d['@attributes']['listen'])) unset($graphics[$n]['@attributes']['listen']);
 					break;
 				}
 			}
