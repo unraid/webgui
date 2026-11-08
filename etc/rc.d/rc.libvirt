@@ -45,10 +45,6 @@ VIRTLOCK="virtlock daemon"
 # Read Unraid configuration
 [[ -f $BOOT_DOMAIN ]] && . $BOOT_DOMAIN
 
-vmstate(){
-  virsh list --all | awk -F'[[:space:]][[:space:]]+' 'NR>2 && /^.+$/{print $3}'
-}
-
 vmlist(){
   local STATE=
   for ARG in ${@: 1}; do
@@ -57,21 +53,47 @@ vmlist(){
   virsh list --uuid $STATE | tail -n +1 | grep -v '^$'
 }
 
-waitfor(){
-  local C=0
-  while [[ $C -lt $TIMEOUT && $(virsh list --state-$1 | awk "NR>2 && /${2:-^.+$}/" | wc -l) -gt 0 ]]; do
-    if [[ $C -eq 0 ]]; then # echo Timeout info just one time and only if virsh returned something
-      log "Waiting $TIMEOUT seconds for VMs with state: $1"
-    fi
-    ((C++))
-    sleep 1
+vmfilter(){
+  # list UUIDs of VMs in virsh list state $1, optionally only those whose domstate is $2
+  local UUID
+  for UUID in $(vmlist "$1"); do
+    [[ -z $2 || $(virsh domstate "$UUID" 2>/dev/null) == "$2" ]] && echo "$UUID"
   done
+}
+
+vmnames(){
+  local UUID LIST=
+  for UUID in $*; do
+    LIST="$LIST, ${NAMES[$UUID]:-$UUID}"
+  done
+  echo "${LIST:2}"
+}
+
+waitfor(){
+  local START=$SECONDS C=0 NEXT=30 UUID LAST NOW
+  NOW=$(vmfilter "$1" "$2")
+  [[ -z $NOW ]] && return
+  log "Waiting $TIMEOUT seconds for VMs with state: ${2:-$1} ($(vmnames "$NOW"))"
+  while [[ -n $NOW && $C -lt $TIMEOUT ]]; do
+    sleep 1
+    C=$((SECONDS-START))
+    LAST=$NOW
+    NOW=$(vmfilter "$1" "$2")
+    for UUID in $LAST; do
+      [[ $NOW == *$UUID* ]] || log "VM ${NAMES[$UUID]:-$UUID} is $(virsh domstate "$UUID" 2>/dev/null || echo gone) after $C seconds"
+    done
+    if [[ -n $NOW && $C -ge $NEXT && $C -lt $TIMEOUT ]]; then
+      log "Still waiting for VMs with state: ${2:-$1} ($(vmnames "$NOW")), $((TIMEOUT-C)) seconds left"
+      NEXT=$((C-C%30+30))
+    fi
+  done
+  [[ -n $NOW ]] && log "Timeout after $C seconds, VMs still with state: ${2:-$1} ($(vmnames "$NOW"))"
 }
 
 stop_running_machines(){
   # create names array
   declare -A NAMES
-  while IFS='\n' read -r ID; do
+  while IFS= read -r ID; do
     [[ -n $ID ]] && NAMES[${ID:0:36}]=${ID:37}
   done <<< $(virsh list --all --uuid --name)
 
@@ -101,15 +123,10 @@ stop_running_machines(){
   waitfor running
 
   # graceful shutdown of suspended VMs
-  i=0; UUID=($(vmlist all))
-  while IFS='\n' read -r STATE; do
-    # check explicitely for suspended VMs
-    if [[ $STATE == pmsuspended ]]; then
-      log "Stopping suspended VM: ${NAMES[${UUID[$i]}]}"
-      virsh destroy ${UUID[$i]} --graceful &>/dev/null
-    fi
-    ((I++))
-  done <<< $(vmstate)
+  for UUID in $(vmfilter other pmsuspended); do
+    log "Stopping suspended VM: ${NAMES[$UUID]}"
+    virsh destroy $UUID --graceful &>/dev/null
+  done
   # wait until VMs are stopped
   waitfor other pmsuspended
 
