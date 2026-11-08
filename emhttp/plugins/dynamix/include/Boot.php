@@ -30,7 +30,8 @@ $themeName = $themeHelper->getThemeName();
 
 $onload_function = '';
 
-// the full log survives the reboot as /boot/logs/syslog-previous when it is mirrored or copied to the boot device (see rc.6)
+// the full log can survive the reboot as /boot/logs/syslog-previous when it is mirrored or copied to the boot device
+// rc.6 skips the copy when the boot device lacks space, so the page only says it may be there
 $syslog_cfg = (array)@parse_ini_file('/boot/config/rsyslog.cfg');
 $syslog_saved = _var($syslog_cfg,'syslog_flash')!='' || _var($syslog_cfg,'syslog_shutdown')=='';
 
@@ -109,7 +110,8 @@ body {
   max-width: 120rem;
   margin: 2rem auto 0;
 }
-.boot-log[hidden] {
+.boot-log[hidden],
+.boot-log [hidden] {
   display: none;
 }
 .boot-log iframe {
@@ -188,20 +190,30 @@ function timer() {
   var now = new Date();
   return Math.round((now.getTime()-start.getTime())/1000);
 }
+var bootlog_done = false;
 function bootlog_open() {
   // live syslog in its own ttyd instance, so an open System Log window is not affected
-  $.get('/webGui/include/OpenTerminal.php',{tag:'shutdownlog'},function(){
-    setTimeout(function(){$('.js-bootLogView').attr('src','/logterminal/shutdownlog/'); $('.js-bootLog').prop('hidden',false);},200);
+  $.get('/webGui/include/OpenTerminal.php',{tag:'shutdownlog'})
+  .done(function(){
+    setTimeout(function(){
+      if (!bootlog_done) $('.js-bootLogView').attr('src','/logterminal/shutdownlog/').prop('hidden',false);
+      $('.js-bootLog').prop('hidden',false);
+    },200);
+  })
+  .fail(function(){
+    $('.js-bootLogNote').text("<?=_('The system log could not be opened')?>.");
+    $('.js-bootLog').prop('hidden',false);
   });
 }
 function bootlog_closed() {
-  // the server stopped its web services: the panel keeps the last lines it received
-  if ($('.js-bootLog').prop('hidden') || $('.js-bootLogNote').text()) return;
-  var note = "<?=_('Connection to the server closed at')?> "+new Date().toLocaleTimeString()+". <?=_('The rest of the shutdown is not shown')?>.";
+  // the status check failed, normally because the server stopped its web services: the panel keeps the last lines it received
+  if (bootlog_done) return;
+  bootlog_done = true;
+  var note = "<?=_('The server stopped responding at')?> "+new Date().toLocaleTimeString()+". <?=_('Later lines may not be shown')?>.";
 <?if ($syslog_saved):?>
-  note += " <?=_('The full log will be in /boot/logs/syslog-previous after the next boot')?>.";
+  note += " <?=_('If the log could be saved to the boot device, the full log will be in /boot/logs/syslog-previous after the next boot')?>.";
 <?endif;?>
-  $('.js-bootLogNote').text(note);
+  $('.js-bootLogNote').text(function(i,text){return text ? text+' '+note : note;});
 }
 function reboot_now() {
   $('.js-bootTitle').html("<?=_('Reboot')?> - <?=gethostname()?>");
@@ -268,7 +280,7 @@ $(document).ajaxSend(function(elm, xhr, s){
   <h2 class="js-arrayStatus boot-subtext"><?= $array_status ?></h2>
   <h3 class="js-powerStatus boot-subtext"></h3>
   <div class="js-bootLog boot-log" hidden>
-    <iframe class="js-bootLogView" title="<?=_('System Log')?>"></iframe>
+    <iframe class="js-bootLogView" title="<?=_('System Log')?>" hidden></iframe>
     <p class="js-bootLogNote boot-log-note" aria-live="polite"></p>
   </div>
 </body>
