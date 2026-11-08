@@ -30,9 +30,9 @@ function openInternalBootWizard() {
   <p><strong>_(Internal Boot)_</strong></p>
   <p>_(Configure an internal boot device without opening the full onboarding wizard)_.</p>
   <?if (_var($var,'fsState')=="Started"):?>
-  <p class="warning"><i class="fa fa-warning"></i> _(Array must be stopped to configure internal boot)_.</p>
+  <p class="warning"><i class="fa fa-warning"></i> _(Array and/or pools must be stopped to configure internal boot)_.</p>
   <?else:?>
-  <p class="blue-text"><i class="fa fa-info-circle"></i> _(Available while the array is stopped)_.</p>
+  <p class="blue-text"><i class="fa fa-info-circle"></i> _(Available while the array and/or pools are stopped)_.</p>
   <?endif;?>
   <p style="margin-top:1rem;margin-bottom:0;">
     <input type="button" value="_(Open Wizard)_" onclick="openInternalBootWizard()" <?if (_var($var,'fsState')=="Started"):?>disabled<?endif;?>>

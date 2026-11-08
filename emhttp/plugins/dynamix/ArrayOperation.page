@@ -63,7 +63,7 @@ function maintenance_mode() {
   echo "<tr>";
   echo "<td></td>";
   echo "<td><label class='flex flex-row items-center gap-2'><input type='checkbox' name='startMode' value='Maintenance'>",_('Maintenance mode'),"</label></td>";
-  echo "<td><b>",_('Maintenance mode'),"</b> - ",_('if checked, Start array but do not mount disks'),"</td>";
+  echo "<td><b>",_('Maintenance mode'),"</b> - ",_('if checked, Start array and/or pools but do not mount disks'),"</td>";
   echo "</tr>";
 }
 
@@ -309,7 +309,7 @@ function stopArray(form) {
 <?if ($confirm['stop']):?>
   swal({
     title:"_(Proceed)_?",
-    text:"_(This will stop the array)_",
+    text:"_(This will stop the array and/or pools)_",
     type:'warning',
     html:true,
     showCancelButton:true,
@@ -664,7 +664,7 @@ window.onunload = function(){
   case "Started":?>
     <tr><td><?status_indicator()?>**_(Started)_<?=((_var($var,'startMode')=='Maintenance')?' - _(Maintenance Mode)_':'')?>**</td>
     <td><input type="button" id="stop-button" value="_(Stop)_" onclick="stopArray(this.form)"></td>
-    <td>**_(Stop)_** _(will take the array offline)_.<span id="stop-text"></span></td></tr>
+    <td>**_(Stop)_** _(will take the array and/or pools offline)_.<span id="stop-text"></span></td></tr>
 <?  if (_var($var,'fsNumUnmountable',0) > 0):?>
       <tr><td>**<?=_('Unmountable disk'.(_var($var,'fsNumUnmountable',0) == 1 ? '' : 's').' present')?>:**<br>
 <?    $cache = [];
@@ -819,7 +819,7 @@ window.onunload = function(){
       switch (_var($var,'mdState')):
       case "STARTED":
 ?>      <tr><td><?status_indicator()?>**_(Stopped)_**. _(Configuration valid)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-        <td>**_(Start)_** _(will bring the array online)_.</td></tr>
+        <td>**_(Start)_** _(will bring the array and/or pools online)_.</td></tr>
 <?      maintenance_mode();
         check_encryption();
         break;
@@ -838,14 +838,14 @@ window.onunload = function(){
           <br><input type="checkbox" name="optionCorrect" value="correct" checked><small>_(Write corrections to parity)_</small></td></tr>
 <?      elseif (_var($var,'sbClean') != "yes" && $action[0] == "check"):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Unclean shutdown detected)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-          <td>**_(Start)_** _(will bring the array online)_.</td></tr>
+          <td>**_(Start)_** _(will bring the array and/or pools online)_.</td></tr>
 <?      elseif (missing_cache()):?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Missing pool disk)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)" disabled></td>
-          <td>**_(Start)_** _(will remove the missing pool disk and then bring the array online)_.
+          <td>**_(Start)_** _(will remove the missing pool disk and then bring the array and/or pools online)_.
           <br><input type="checkbox" name="confirmStart" value="OFF" onclick="$('#cmdStart').prop('disabled',!arrayOps.confirmStart.checked)"><small>_(Yes, I want to do this)_</small></td></tr>
 <?      else:?>
           <tr><td><?status_indicator()?>**_(Stopped)_**. _(Configuration valid)_.</td><td><input type="button" id="cmdStart" value="_(Start)_" onclick="prepareInput(this.form,this)"></td>
-          <td>**_(Start)_** _(will bring the array online)_.</td></tr>
+          <td>**_(Start)_** _(will bring the array and/or pools online)_.</td></tr>
 <?      endif;
         maintenance_mode();
         check_encryption();
