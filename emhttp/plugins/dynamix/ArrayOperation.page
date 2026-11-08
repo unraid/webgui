@@ -17,6 +17,7 @@ Nchan="device_list,disk_load,parity_list"
 ?>
 <?
 $array_ctx = array_context(_var($page,'ArrayId',1));
+if ($array_ctx['id'] > 1) {$array_vars = array_context_vars($array_ctx); $array_host = compact(array_keys($array_vars)); extract($array_vars);}
 $keyfile = file_exists(_var($var,'luksKeyfile'));
 $spot    = _var($var,'mdResyncPos',0)>0;
 $poolsOnly = (_var($var,'SYS_ARRAY_SLOTS') == 0 ) ? true : false;
@@ -973,7 +974,7 @@ endswitch;
  <tr><td></td><td class="line" colspan="2"></td></tr>
 </table>
 </form>
-<?endif;?><!-- markdown fix -->
+<?endif;?><!-- markdown fix --><?if ($array_ctx['id'] == 1):?>
 <form name="shutdownOps" method="POST" action="/webGui/include/Boot.php">
 <table markdown="1" class="ArrayOperation-Table array_status noshift">
  <tr><td></td><td><span class="buttons-spaced"><input type="button" name="reboot" value="_(Reboot)_" onclick="shutdown_now(this.form,'reboot')"><input type="button" name="shutdown" value="_(Shutdown)_" onclick="shutdown_now(this.form,'shutdown')"></span></td>
@@ -981,6 +982,7 @@ endswitch;
  <tr><td></td><td class="line" colspan="2"></td></tr>
 </table>
 </form>
+<?endif;?>
 <!-- markdown fix --></p><?if (isset($display['sleep'])) eval('?>'.parse_file($display['sleep']))?>
 
 :array_status_help:
@@ -992,3 +994,4 @@ endswitch;
 :encryption_help:
 <?endif;?>
 <?endif;?>
+<?if ($array_ctx['id'] > 1) extract($array_host);?>

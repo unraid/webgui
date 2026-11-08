@@ -321,6 +321,21 @@ function array_context($id=1) {
   return array_merge($ctx, $own, array_intersect_key($ini, array_flip(['state','tmp','config','update','parity','toggle'])));
 }
 
+/* The emhttp state of the array in $ctx, under the names template.php uses for the host state.
+ * A page showing an additional array uses these in place of the host values while it renders. */
+function array_context_vars($ctx) {
+  $state = $ctx['state'];
+  $vars  = [];
+  foreach (['devs','disks','sec','sec_nfs','shares','users'] as $key) $vars[$key] = (array)@parse_ini_file("$state/$key.ini",true);
+  $vars['var'] = (array)@parse_ini_file("$state/var.ini");
+  $vars['pool_devices'] = $vars['bootpool_devices'] = false;
+  $vars['pools'] = pools_filter($vars['disks']);
+  foreach ($vars['pools'] as $pool) $vars['pool_devices'] |= _var($vars['disks'][$pool],'devices')!='';
+  $vars['bootpools'] = flash_filter($vars['disks']);
+  foreach ($vars['bootpools'] as $bootpool) $vars['bootpool_devices'] |= _var($vars['disks'][$bootpool],'devices')!='';
+  return $vars;
+}
+
 function urlencode_path($path) {
   return str_replace("%2F", "/", urlencode($path));
 }

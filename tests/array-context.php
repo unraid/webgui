@@ -60,4 +60,45 @@ if (str_contains($page, 'action="/update.htm"')) {
   throw new RuntimeException('ArrayOperation.page must post to $array_ctx[\'update\'], not /update.htm.');
 }
 
+// An additional array's page reads that array's own emhttp state, under the names of the host state.
+$functionStart = strpos($source, 'function array_context_vars');
+$functionEnd = $functionStart === false ? false : strpos($source, "\n}\n", $functionStart);
+if ($functionStart === false || $functionEnd === false) {
+  throw new RuntimeException('Could not find array_context_vars().');
+}
+function _var(&$name, $key=null, $default='') { return is_null($key) ? ($name ?? $default) : ($name[$key] ?? $default); }
+function pools_filter($disks) { return array_keys(array_filter($disks, fn($disk) => ($disk['type'] ?? '') === 'Cache')); }
+function flash_filter($disks) { return array_keys(array_filter($disks, fn($disk) => ($disk['type'] ?? '') === 'Flash')); }
+eval(substr($source, $functionStart, $functionEnd - $functionStart + 2));
+
+$state = sys_get_temp_dir().'/array-context-'.getmypid();
+if (!mkdir($state)) throw new RuntimeException("Could not create $state.");
+file_put_contents("$state/var.ini", "mdState=\"STARTED\"\nfsState=\"Started\"\n");
+file_put_contents("$state/disks.ini", "[parity]\ntype=\"Parity\"\n[disk1]\ntype=\"Data\"\n[cache]\ntype=\"Cache\"\ndevices=\"1\"\n");
+$vars = array_context_vars(['state' => $state] + $second);
+array_map('unlink', glob("$state/*.ini"));
+rmdir($state);
+$keys = array_keys($vars);
+sort($keys);
+assertSameValue(['bootpool_devices','bootpools','devs','disks','pool_devices','pools','sec','sec_nfs','shares','users','var'], $keys, 'array_context_vars() must return the page globals of template.php.');
+assertSameValue('Started', $vars['var']['fsState'], 'array_context_vars() must read var.ini from the array\'s state dir.');
+assertSameValue(['parity','disk1','cache'], array_keys($vars['disks']), 'array_context_vars() must read disks.ini from the array\'s state dir.');
+assertSameValue([['cache'], 1], [$vars['pools'], $vars['pool_devices']], 'array_context_vars() must derive the pools from the array\'s own disks.');
+
+// Both Main array sections take the array's state only for an additional array, and give the host state back at the end.
+$take = "if (\$array_ctx['id'] > 1) {\$array_vars = array_context_vars(\$array_ctx); \$array_host = compact(array_keys(\$array_vars)); extract(\$array_vars);}";
+$give = "<?if (\$array_ctx['id'] > 1) extract(\$array_host);?>";
+$devicesPage = file_get_contents("$repo/emhttp/plugins/dynamix/ArrayDevices.page");
+if ($devicesPage === false) throw new RuntimeException('Could not read ArrayDevices.page.');
+foreach (['ArrayDevices.page' => $devicesPage, 'ArrayOperation.page' => $page] as $file => $text) {
+  assertSameValue(1, substr_count($text, 'array_context_vars('), "$file must call array_context_vars() exactly once.");
+  if (!str_contains($text, $take)) throw new RuntimeException("$file must take the array state only when its id is above 1.");
+  if (!str_ends_with(rtrim($text), $give)) throw new RuntimeException("$file must give the host state back as its last line.");
+}
+
+// Reboot/Shutdown is host-wide: shown with the default array only.
+if (!preg_match('#<\?if \(\$array_ctx\[\'id\'\] == 1\):\?>\n<form name="shutdownOps"[^<]*(?:<(?!/form>)[^<]*)*</form>\n<\?endif;\?>\n#', $page)) {
+  throw new RuntimeException('ArrayOperation.page must show the shutdownOps form only for the default array.');
+}
+
 echo "Array context regression test passed.\n";
