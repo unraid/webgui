@@ -490,7 +490,7 @@ function xmlToCommand($xml, $create_paths=false) {
   $TS_postargs = '';
   // Get all information from xml and create variables for cmd
   // The form hides both options on Host networks, but templates and Extra Parameters can still request them
-  if ($xml['Network'] == 'host' || preg_match('/(^|\s)--net(work)?[= ][\'"]?host\b/', $xml['ExtraParams'])) $xml['TailscaleEnabled'] = $xml['NetbirdEnabled'] = 'false';
+  if ($xml['Network'] == 'host' || (preg_match('/^container:(.+)/', $xml['Network'], $m) && trim(shell_exec("docker inspect -f '{{.HostConfig.NetworkMode}}' " . escapeshellarg($m[1]) . " 2>/dev/null") ?? '') == 'host') || preg_match('/(^|\s)--net(work)?[= ][\'"]?host\b/', $xml['ExtraParams'])) $xml['TailscaleEnabled'] = $xml['NetbirdEnabled'] = 'false';
   if ($xml['TailscaleEnabled'] == 'true') {
     $TS_entrypoint = '--entrypoint=\'/opt/unraid/tailscale\'';
     $TS_hook = '-v \'/usr/local/share/docker/tailscale_container_hook\':\'/opt/unraid/tailscale\'';
