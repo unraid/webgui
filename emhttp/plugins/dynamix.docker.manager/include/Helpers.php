@@ -417,7 +417,8 @@ function xmlSecurity(&$template) {
 function effectiveNetwork($network) {
   // Follow chained container: networks, with a hop limit against cycles
   for ($hops = 0; $hops < 10 && preg_match('/^container:(.+)/', $network, $m); $hops++) $network = (new DockerClient())->getContainerDetails($m[1])['HostConfig']['NetworkMode'] ?? '';
-  return $network;
+  // A target that can't be resolved counts as host, so the guards fail closed
+  return $network === '' || str_starts_with($network, 'container:') ? 'host' : $network;
 }
 
 // The Tailscale and NetBird hooks need the image's own Entrypoint and Cmd to start the application

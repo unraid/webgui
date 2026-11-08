@@ -164,7 +164,6 @@ foreach (explode('*',rawurldecode($argv[1])) as $value) {
   $Registry = getXmlVal($xml, "Registry");
   $Network = getXmlVal($xml, "Network");
   $ExtraNetworks = getXmlVal($xml, "ExtraNetworks");
-  $TS_Enabled = (getXmlVal($xml, "TailscaleEnabled") == 'true' || getXmlVal($xml, "NetbirdEnabled") == 'true') ? 'true' : '';
   $oldImageID = $DockerClient->getImageID($Repository);
   // pull image
   if (!pullImage_nchan($Name, $Repository)) continue;
@@ -184,7 +183,7 @@ foreach (explode('*',rawurldecode($argv[1])) as $value) {
   // force kill container if still running after 10 seconds
   if (empty($_GET['communityApplications'])) removeContainer_nchan($Name);
   // Extract real Entrypoint and Cmd from container for Tailscale
-  if ($TS_Enabled == 'true') {
+  if (str_contains($cmd, "--entrypoint='/opt/unraid/")) {
     // Create preliminary base container but don't run it
     exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker create --name '" . escapeshellarg($Name) . "' '" . escapeshellarg($Repository) . "'");
     // Get Entrypoint and Cmd from docker inspect

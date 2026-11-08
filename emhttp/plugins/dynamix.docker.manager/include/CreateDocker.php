@@ -210,7 +210,7 @@ if (isset($_POST['contName'])) {
     }
   }
   // Extract real Entrypoint and Cmd from container for Tailscale or NetBird
-  if ((isset($_POST['contTailscale']) && strtolower($_POST['contTailscale']) == 'on') || (isset($_POST['contNetbird']) && strtolower($_POST['contNetbird']) == 'on')) {
+  if (str_contains($cmd, "--entrypoint='/opt/unraid/")) {
     // Create preliminary base container but don't run it
     exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker create --name '" . escapeshellarg($Name) . "' '" . escapeshellarg($Repository) . "'");
     // Get Entrypoint and Cmd from docker inspect
@@ -256,7 +256,6 @@ if (isset($_GET['updateContainer'])){
     $Registry = getXmlVal($xml, "Registry");
     $ExtraParams = getXmlVal($xml, "ExtraParams");
     $Network = getXmlVal($xml, "Network");
-    $TS_Enabled = (getXmlVal($xml, "TailscaleEnabled") == 'true' || getXmlVal($xml, "NetbirdEnabled") == 'true') ? 'true' : '';
     $oldImageID = $DockerClient->getImageID($Repository);
     // pull image
     if ($echo && !pullImage($Name, $Repository)) continue;
@@ -290,7 +289,7 @@ if (isset($_GET['updateContainer'])){
     // force kill container if still running after time-out
     if (empty($_GET['communityApplications'])) removeContainer($Name, $echo);
     // Extract real Entrypoint and Cmd from container for Tailscale
-    if ($TS_Enabled == 'true') {
+    if (str_contains($cmd, "--entrypoint='/opt/unraid/")) {
       // Create preliminary base container but don't run it
       exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker create --name '" . escapeshellarg($Name) . "' '" . escapeshellarg($Repository) . "'");
       // Get Entrypoint and Cmd from docker inspect
