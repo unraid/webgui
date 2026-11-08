@@ -164,7 +164,7 @@ foreach (explode('*',rawurldecode($argv[1])) as $value) {
   $Registry = getXmlVal($xml, "Registry");
   $Network = getXmlVal($xml, "Network");
   $ExtraNetworks = getXmlVal($xml, "ExtraNetworks");
-  $TS_Enabled = getXmlVal($xml, "TailscaleEnabled");
+  $TS_Enabled = getXmlVal($xml, "TailscaleEnabled") ?: getXmlVal($xml, "NetbirdEnabled");
   $oldImageID = $DockerClient->getImageID($Repository);
   // pull image
   if (!pullImage_nchan($Name, $Repository)) continue;
@@ -189,8 +189,8 @@ foreach (explode('*',rawurldecode($argv[1])) as $value) {
     exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker create --name '" . escapeshellarg($Name) . "' '" . escapeshellarg($Repository) . "'");
     // Get Entrypoint and Cmd from docker inspect
     $containerInfo = $DockerClient->getContainerDetails($Name);
-    $ts_env  = isset($containerInfo['Config']['Entrypoint']) ? '-e ORG_ENTRYPOINT="' . implode(' ', $containerInfo['Config']['Entrypoint']) . '" ' : '';
-    $ts_env .= isset($containerInfo['Config']['Cmd']) ? '-e ORG_CMD="' . implode(' ', $containerInfo['Config']['Cmd']) . '" ' : '';
+    $ts_env  = isset($containerInfo['Config']['Entrypoint']) ? '-e ORG_ENTRYPOINT=' . escapeshellarg(implode(' ', array_map('escapeshellarg', $containerInfo['Config']['Entrypoint']))) . ' ' : '';
+    $ts_env .= isset($containerInfo['Config']['Cmd']) ? '-e ORG_CMD=' . escapeshellarg(implode(' ', array_map('escapeshellarg', $containerInfo['Config']['Cmd']))) . ' ' : '';
     // Insert Entrypoint and Cmd to docker command
     $cmd = str_replace('-l net.unraid.docker.managed=dockerman', $ts_env . '-l net.unraid.docker.managed=dockerman' , $cmd);
     // Remove preliminary container
