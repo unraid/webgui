@@ -413,6 +413,24 @@ function xmlSecurity(&$template) {
   }
 }
 
+// A container that joins another container's network uses that container's network mode
+function effectiveNetwork($network) {
+  if (preg_match('/^container:(.+)/', $network, $m)) $network = (new DockerClient())->getContainerDetails($m[1])['HostConfig']['NetworkMode'] ?? '';
+  return $network;
+}
+
+// The Tailscale and NetBird hooks need the image's own Entrypoint and Cmd to start the application
+function addOriginalCommand($cmd, $repository, $name) {
+  if (!str_contains($cmd, "--entrypoint='/opt/unraid/")) return $cmd;
+  $DockerClient = new DockerClient();
+  $image = $DockerClient->getDockerJSON('/images/'.$repository.'/json')['Config'] ?? [];
+  $env = [];
+  foreach (['ENTRYPOINT' => 'Entrypoint', 'CMD' => 'Cmd'] as $var => $key) if (isset($image[$key])) $env[] = "ORG_$var=" . implode(' ', array_map('escapeshellarg', $image[$key]));
+  // Fall back to the values of the container being replaced if the image can't be inspected
+  if (!$image) $env = preg_grep('/^ORG_(ENTRYPOINT|CMD)=/', $DockerClient->getContainerDetails($name)['Config']['Env'] ?? []);
+  return $env ? str_replace('-l net.unraid.docker.managed=dockerman', '-e '.implode(' -e ', array_map('escapeshellarg', $env)).' -l net.unraid.docker.managed=dockerman', $cmd) : $cmd;
+}
+
 function xmlToCommand($xml, $create_paths=false) {
   global $docroot, $var, $driver, $dockercfg;
   $xml           = xmlToVar($xml);
@@ -490,7 +508,8 @@ function xmlToCommand($xml, $create_paths=false) {
   $TS_postargs = '';
   // Get all information from xml and create variables for cmd
   // The form hides both options on Host networks, but templates and Extra Parameters can still request them
-  if ($xml['Network'] == 'host' || (preg_match('/^container:(.+)/', $xml['Network'], $m) && trim(shell_exec("docker inspect -f '{{.HostConfig.NetworkMode}}' " . escapeshellarg($m[1]) . " 2>/dev/null") ?? '') == 'host') || preg_match('/(^|\s)--net(work)?[= ][\'"]?host\b/', $xml['ExtraParams'])) $xml['TailscaleEnabled'] = $xml['NetbirdEnabled'] = 'false';
+  $network = preg_match('/(^|\s)--net(work)?[= ][\'"]?([^\s\'"]+)/', $xml['ExtraParams'], $m) ? $m[3] : $xml['Network'];
+  if (effectiveNetwork($network) == 'host') $xml['TailscaleEnabled'] = $xml['NetbirdEnabled'] = 'false';
   if ($xml['TailscaleEnabled'] == 'true') {
     $TS_entrypoint = '--entrypoint=\'/opt/unraid/tailscale\'';
     $TS_hook = '-v \'/usr/local/share/docker/tailscale_container_hook\':\'/opt/unraid/tailscale\'';

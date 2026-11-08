@@ -38,11 +38,11 @@ case 'restart':
 			$arrResponse = ['success' => _('Container not found.  Try reloading this page to fix.')];
 			break;
 		}
-		if ($info[$key]['NetworkMode'] == "host" && strtok($info[$key]['Cmd'], ' ') == "/opt/unraid/tailscale") {
+		if (effectiveNetwork($info[$key]['NetworkMode']) == "host" && strtok($info[$key]['Cmd'], ' ') == "/opt/unraid/tailscale") {
 			$arrResponse = ['success'=> _('For security reasons, containers with Network Type "Host" should not have Tailscale enabled. Please disable Tailscale in this container or change the Network Type of the container.')];
 			break;
 		}
-		if ($info[$key]['NetworkMode'] == "host" && strtok($info[$key]['Cmd'], ' ') == "/opt/unraid/netbird") {
+		if (effectiveNetwork($info[$key]['NetworkMode']) == "host" && strtok($info[$key]['Cmd'], ' ') == "/opt/unraid/netbird") {
 			$arrResponse = ['success'=> _('For security reasons, containers with Network Type "Host" should not have NetBird enabled. Please disable NetBird in this container or change the Network Type of the container.')];
 			break;
 		}

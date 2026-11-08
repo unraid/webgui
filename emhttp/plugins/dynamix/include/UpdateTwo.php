@@ -146,6 +146,7 @@ case 'ct':
 	/* get full template path */
 	$xml = $DockerTemplates->getUserTemplate($name);
 	list($cmd, $ct, $repository) = xmlToCommand($xml);
+	$cmd = addOriginalCommand($cmd, $repository, $ct);
 	$imageID = $DockerClient->getImageID($repository);
 
 	/* pull image */
