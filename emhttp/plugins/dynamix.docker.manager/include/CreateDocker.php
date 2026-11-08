@@ -210,7 +210,7 @@ if (isset($_POST['contName'])) {
     }
   }
   // Extract real Entrypoint and Cmd from container for Tailscale or NetBird
-  if ((isset($_POST['contTailscale']) && $_POST['contTailscale'] == 'on') || (isset($_POST['contNetbird']) && $_POST['contNetbird'] == 'on')) {
+  if ((isset($_POST['contTailscale']) && strtolower($_POST['contTailscale']) == 'on') || (isset($_POST['contNetbird']) && strtolower($_POST['contNetbird']) == 'on')) {
     // Create preliminary base container but don't run it
     exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker create --name '" . escapeshellarg($Name) . "' '" . escapeshellarg($Repository) . "'");
     // Get Entrypoint and Cmd from docker inspect

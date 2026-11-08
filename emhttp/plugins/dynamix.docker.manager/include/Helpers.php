@@ -415,7 +415,8 @@ function xmlSecurity(&$template) {
 
 // A container that joins another container's network uses that container's network mode
 function effectiveNetwork($network) {
-  if (preg_match('/^container:(.+)/', $network, $m)) $network = (new DockerClient())->getContainerDetails($m[1])['HostConfig']['NetworkMode'] ?? '';
+  // Follow chained container: networks, with a hop limit against cycles
+  for ($hops = 0; $hops < 10 && preg_match('/^container:(.+)/', $network, $m); $hops++) $network = (new DockerClient())->getContainerDetails($m[1])['HostConfig']['NetworkMode'] ?? '';
   return $network;
 }
 
