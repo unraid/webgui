@@ -755,18 +755,19 @@ docker_stop_one(){
 # Stop the Unraid managed containers in the reverse of the Docker tab order,
 # one at a time. The tab order is saved in userprefs.cfg as 0="name", 1="name"...
 # The tab shows containers without a saved position together with position 0,
-# so the tab gives no order among those; they are stopped last, together.
-# Without userprefs.cfg the autostart file order is used. Containers not
+# so the tab gives no order among those; they are stopped last, together,
+# except that a container among them whose network another container uses is
+# stopped on its own after that container. Without userprefs.cfg the autostart file order is used. Containers not
 # stopped within the time budget are stopped together, as before. So are
 # containers whose stop failed, and the containers whose network they use.
 docker_container_stop(){
   log "Stopping containers..."
   if ! docker_running; then return 1; fi
   local TIME=${DOCKER_TIMEOUT:-10} BEGIN=$SECONDS DONE="" FAILED="" CONTAINER ORDER NETWORKS RUNNING LIMIT
-  [[ $TIME =~ ^[0-9]+$ ]] || TIME=10
+  [[ $TIME =~ ^[0-9]+$ ]] && TIME=$((10#$TIME)) || TIME=10
   # budget: half of the shutdown time-out, less two container time-outs
   LIMIT=$(awk -F'"' '/^shutdownTimeout=/{print $2}' /var/local/emhttp/var.ini 2>/dev/null)
-  [[ $LIMIT =~ ^[0-9]+$ ]] || LIMIT=90
+  [[ $LIMIT =~ ^[0-9]+$ ]] && LIMIT=$((10#$LIMIT)) || LIMIT=90
   LIMIT=$(( LIMIT/2 - 2*TIME ))
   RUNNING=$(running_containers)
   if [[ -n $RUNNING ]]; then
@@ -775,14 +776,14 @@ docker_container_stop(){
     else
       ORDER=$(awk 'NF&&!s[$1]++{print $1}' $DOCKER_ROOT/unraid-autostart 2>/dev/null)
     fi
-    if [[ -n $ORDER ]]; then
-      NETWORKS=$(docker inspect --format='{{slice .Name 1}} {{.Id}} {{.HostConfig.NetworkMode}}' $RUNNING 2>/dev/null)
-      for CONTAINER in $(tac <<<"$ORDER" | grep -xF "$RUNNING"); do
-        [[ $DONE == *" $CONTAINER "* || $FAILED == *" $CONTAINER "* ]] && continue
-        docker_stop_one $CONTAINER
-        [[ $? -eq 1 ]] && break
-      done
-    fi
+    NETWORKS=$(docker inspect --format='{{slice .Name 1}} {{.Id}} {{.HostConfig.NetworkMode}}' $RUNNING 2>/dev/null)
+    # the ordered containers first, then the remaining containers whose network another container uses
+    for CONTAINER in $(tac <<<"$ORDER" | grep -xF "$RUNNING") $(awk '{name[NR]=$1; id[NR]=$2; mode[NR]=$3}
+      END{for (k in mode) if (mode[k] ~ /^container:/) for (j in name) if (mode[k]=="container:"name[j] || (length(mode[k])>20 && index("container:"id[j],mode[k])==1)) print name[j]}' <<<"$NETWORKS" | sort -u); do
+      [[ $DONE == *" $CONTAINER "* || $FAILED == *" $CONTAINER "* ]] && continue
+      docker_stop_one $CONTAINER
+      [[ $? -eq 1 ]] && break
+    done
     RUNNING=$(running_containers)
     [[ -n $RUNNING ]] && docker stop --time=$TIME $RUNNING >/dev/null
   fi
