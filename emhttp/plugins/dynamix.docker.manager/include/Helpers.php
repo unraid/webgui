@@ -510,7 +510,7 @@ function xmlToCommand($xml, $create_paths=false) {
   $TS_postargs = '';
   // Get all information from xml and create variables for cmd
   // The form hides both options on Host networks, but templates and Extra Parameters can still request them
-  $network = preg_match('/(^|\s)--net(work)?[= ][\'"]?([^\s\'"]+)/', $xml['ExtraParams'], $m) ? $m[3] : $xml['Network'];
+  $network = preg_match('/(^|\s)--net(work)?[=\s][\'"]?([^\s\'"]+)/', $xml['ExtraParams'], $m) ? $m[3] : $xml['Network'];
   if (effectiveNetwork($network) == 'host') $xml['TailscaleEnabled'] = $xml['NetbirdEnabled'] = 'false';
   if ($xml['TailscaleEnabled'] == 'true') {
     $TS_entrypoint = '--entrypoint=\'/opt/unraid/tailscale\'';
