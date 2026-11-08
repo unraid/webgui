@@ -29,6 +29,10 @@ $xml    = file_get_contents($tmpl);
 [$cmd,$name,$repository] = xmlToCommand($tmpl);
 $old = $DockerClient->getImageID($repository);
 
+// Keep the original image command that the Tailscale and NetBird hooks start
+$env = preg_grep('/^ORG_(ENTRYPOINT|CMD)=/', $DockerClient->getContainerDetails($name)['Config']['Env'] ?? []);
+if ($env) $cmd = str_replace('-l net.unraid.docker.managed=dockerman', '-e ' . implode(' -e ', array_map('escapeshellarg', $env)) . ' -l net.unraid.docker.managed=dockerman', $cmd);
+
 removeContainer($name,false,false);
 execCommand(str_replace('/docker create ','/docker run -d ',$cmd),false);
 if (!in_array($name,$start)) stopContainer($name,false,false);

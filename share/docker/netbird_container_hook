@@ -17,7 +17,7 @@ exec_entrypoint() {
   echo
   echo "======================="
   echo
-  eval "exec ${ORG_ENTRYPOINT} ${ORG_CMD} ${ORG_POSTARGS}"
+  eval "exec ${ORG_ENTRYPOINT} ${ORG_POSTARGS:-${ORG_CMD}}"
 }
 
 error_handler() {
@@ -166,10 +166,10 @@ if [ ! -z "${NETBIRD_HOSTNAME}" ]; then
   echo "Setting host name to \"${NETBIRD_HOSTNAME}\""
   NB_PARAMS="${NB_PARAMS} --hostname=$(echo "${NETBIRD_HOSTNAME}" | tr -d ' ')"
 fi
-if [ ! -z "${NETBIRD_MANAGEMENT_URL}" ]; then
-  echo "Using management server: ${NETBIRD_MANAGEMENT_URL}"
-  NB_PARAMS="${NB_PARAMS} --management-url=${NETBIRD_MANAGEMENT_URL}"
-fi
+# Pass the Cloud URL explicitly, or a cleared field keeps the previously saved server
+NETBIRD_MANAGEMENT_URL="${NETBIRD_MANAGEMENT_URL:-https://api.netbird.io:443}"
+echo "Using management server: ${NETBIRD_MANAGEMENT_URL}"
+NB_PARAMS="${NB_PARAMS} --management-url=${NETBIRD_MANAGEMENT_URL}"
 
 echo "Starting NetBird"
 if [ ! -z "${NB_KEY}" ]; then

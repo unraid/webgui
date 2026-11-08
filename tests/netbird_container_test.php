@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 $docroot = dirname(__DIR__) . '/emhttp';
-$subnet = ['bridge' => ''];
+$subnet = ['bridge' => '', 'host' => ''];
 $driver = ['bridge' => 'bridge'];
 $var = [];
 $dockercfg = ['DOCKER_APP_CONFIG_PATH' => sys_get_temp_dir()];
@@ -20,7 +20,8 @@ function assertTrue(bool $condition, string $message): void
 
 function buildCommand(array $fields): string
 {
-  $xml = "<Container><Name>web</Name><Repository>nginx:alpine</Repository><Network>bridge</Network><ExtraParams></ExtraParams><PostArgs>--flag</PostArgs>";
+  $fields += ['Network' => 'bridge', 'ExtraParams' => ''];
+  $xml = "<Container><Name>web</Name><Repository>nginx:alpine</Repository><PostArgs>--flag</PostArgs>";
   foreach ($fields as $field => $value) {
     $xml .= "<$field>$value</$field>";
   }
@@ -50,5 +51,12 @@ assertTrue(!str_contains($cmd, '--entrypoint') && !str_contains($cmd, 'ORG_POSTA
 
 $cmd = buildCommand(['TailscaleEnabled' => 'true']);
 assertTrue(str_contains($cmd, "-e ORG_POSTARGS='--flag'"), 'Tailscale must keep handing post arguments to the hook.');
+
+
+$cmd = buildCommand(['Network' => 'host', 'NetbirdEnabled' => 'true']);
+assertTrue(!str_contains($cmd, '/opt/unraid/netbird'), 'NetBird must not be added on the host network.');
+
+$cmd = buildCommand(['ExtraParams' => '--net=host', 'TailscaleEnabled' => 'true']);
+assertTrue(!str_contains($cmd, '/opt/unraid/tailscale') && str_contains($cmd, '--flag'), 'Tailscale must not be added when Extra Parameters select the host network.');
 
 echo "NetBird container tests passed.\n";

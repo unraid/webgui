@@ -164,7 +164,7 @@ foreach (explode('*',rawurldecode($argv[1])) as $value) {
   $Registry = getXmlVal($xml, "Registry");
   $Network = getXmlVal($xml, "Network");
   $ExtraNetworks = getXmlVal($xml, "ExtraNetworks");
-  $TS_Enabled = getXmlVal($xml, "TailscaleEnabled") ?: getXmlVal($xml, "NetbirdEnabled");
+  $TS_Enabled = (getXmlVal($xml, "TailscaleEnabled") == 'true' || getXmlVal($xml, "NetbirdEnabled") == 'true') ? 'true' : '';
   $oldImageID = $DockerClient->getImageID($Repository);
   // pull image
   if (!pullImage_nchan($Name, $Repository)) continue;

@@ -256,7 +256,7 @@ if (isset($_GET['updateContainer'])){
     $Registry = getXmlVal($xml, "Registry");
     $ExtraParams = getXmlVal($xml, "ExtraParams");
     $Network = getXmlVal($xml, "Network");
-    $TS_Enabled = getXmlVal($xml, "TailscaleEnabled") ?: getXmlVal($xml, "NetbirdEnabled");
+    $TS_Enabled = (getXmlVal($xml, "TailscaleEnabled") == 'true' || getXmlVal($xml, "NetbirdEnabled") == 'true') ? 'true' : '';
     $oldImageID = $DockerClient->getImageID($Repository);
     // pull image
     if ($echo && !pullImage($Name, $Repository)) continue;
