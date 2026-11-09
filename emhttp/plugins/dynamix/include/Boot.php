@@ -201,7 +201,8 @@ function bootlog_open() {
     },200);
   })
   .fail(function(){
-    $('.js-bootLogNote').text("<?=_('The system log could not be opened')?>.");
+    // keep a note the status check may have written already
+    $('.js-bootLogNote').text(function(i,text){return (text ? text+' ' : '')+"<?=_('The system log could not be opened')?>.";});
     $('.js-bootLog').prop('hidden',false);
   });
 }
