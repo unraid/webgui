@@ -1,7 +1,8 @@
 #!/bin/bash
 # Verify that manage_boot_params.sh write_config applies the correct
-# bootloader-specific default timeout when TIMEOUT is not given (as the
-# "Reset to default" action does), and writes an explicit TIMEOUT unchanged.
+# bootloader-specific default timeout when TIMEOUT is unset or empty (the
+# "Reset to default" action passes it empty), and writes an explicit TIMEOUT
+# unchanged.
 # GRUB uses seconds; syslinux uses deciseconds. Both defaults are 5 seconds.
 #
 # Requires bash, GNU sed, GNU awk and GNU coreutils (as on Unraid).
@@ -48,7 +49,7 @@ label Unraid OS Safe Mode (no plugins, no GUI)
 EOF
 }
 
-# run_write <bootloader> <timeout-or-"unset">
+# run_write <bootloader> <timeout, "empty" or "unset">
 run_write() {
   local bootloader="$1" timeout="$2" case_dir
   case_dir=$(mktemp -d "$tmpdir/case.XXXXXX")
@@ -63,7 +64,11 @@ run_write() {
     APPLY_TO_UNRAID_OS=1
     APPLY_TO_GUI_MODE=1
   )
-  [[ $timeout != unset ]] && env_args+=(TIMEOUT="$timeout")
+  case $timeout in
+    unset) ;;
+    empty) env_args+=(TIMEOUT=) ;;
+    *) env_args+=(TIMEOUT="$timeout") ;;
+  esac
 
   if [[ $bootloader == grub ]]; then
     write_grub_cfg "$case_dir/grub.cfg"
@@ -95,10 +100,12 @@ check() {
   fi
 }
 
-check "grub default (reset)" grub unset "set timeout=5"
+check "grub default (unset)" grub unset "set timeout=5"
+check "grub default (empty, as reset sends)" grub empty "set timeout=5"
 check "grub explicit 10s" grub 10 "set timeout=10"
 check "grub explicit 0s" grub 0 "set timeout=0"
-check "syslinux default (reset)" syslinux unset "timeout 50"
+check "syslinux default (unset)" syslinux unset "timeout 50"
+check "syslinux default (empty, as reset sends)" syslinux empty "timeout 50"
 check "syslinux explicit 10s" syslinux 100 "timeout 100"
 check "syslinux explicit 0s" syslinux 0 "timeout 0"
 

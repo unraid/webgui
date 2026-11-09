@@ -14,7 +14,8 @@ COMMENTS_FILE="${COMMENTS_FILE:-/boot/config/custom_params_comments.json}"
 HW_INIT_FLAG="/boot/config/plugins/dynamix/boot_params_hw_initialized"
 MAX_BACKUPS=10
 # Default boot menu timeout (5 seconds) in each bootloader's unit.
-# Applied by write_config when TIMEOUT is empty (e.g. "Reset to default").
+# write_config uses it when TIMEOUT is empty (e.g. "Reset to default");
+# read_config uses it when the config has no timeout line.
 DEFAULT_SYSLINUX_TIMEOUT=50  # deciseconds
 DEFAULT_GRUB_TIMEOUT=5       # seconds
 
