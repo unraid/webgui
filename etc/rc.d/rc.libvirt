@@ -76,11 +76,12 @@ waitfor(){
   log "Waiting $TIMEOUT seconds for VMs with state: ${2:-$1} ($(vmnames "$NOW"))"
   while [[ -n $NOW && $C -lt $TIMEOUT ]]; do
     sleep 1
-    C=$((SECONDS-START))
     LAST=$NOW
     NOW=$(vmfilter "$1" "$2")
+    # elapsed time after the poll, so a slow poll cannot start another round past the time-out
+    C=$((SECONDS-START))
     for UUID in $LAST; do
-      [[ $NOW == *$UUID* ]] || log "VM ${NAMES[$UUID]:-$UUID} is $(virsh domstate "$UUID" 2>/dev/null || echo gone) after $C seconds"
+      [[ $NOW == *$UUID* ]] || log "VM ${NAMES[$UUID]:-$UUID} is $(virsh domstate "$UUID" 2>/dev/null || echo 'unknown (virsh domstate failed)') after $C seconds"
     done
     if [[ -n $NOW && $C -ge $NEXT && $C -lt $TIMEOUT ]]; then
       log "Still waiting for VMs with state: ${2:-$1} ($(vmnames "$NOW")), $((TIMEOUT-C)) seconds left"
