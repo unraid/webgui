@@ -215,6 +215,8 @@ function bootlog_closed() {
   note += " <?=_('If the log could be saved to the boot device, the full log will be in /boot/logs/syslog-previous after the next boot')?>.";
 <?endif;?>
   $('.js-bootLogNote').text(function(i,text){return text ? text+' '+note : note;});
+  // show the note now, also while the viewer request is still pending
+  $('.js-bootLog').prop('hidden',false);
 }
 function reboot_now() {
   $('.js-bootTitle').html("<?=_('Reboot')?> - <?=gethostname()?>");

@@ -145,7 +145,8 @@ case 'shutdownlog':
   // both tails follow the file name, so a log rotation during the shutdown does not stop the view
   // the watcher reads from the log size at this request, so a stop logged before the view connects is still seen
   $from = (int)@filesize('/var/log/syslog') + 1;
-  $stop = "(tail -c +$from -F /var/log/syslog | grep -qm1 -F \"emhttp: Stopping web services\"; kill \$\$) & exec $run tail -F -n $rows /var/log/syslog";
+  // only a found stop line ends the view: if the watcher fails, the view keeps showing new lines until nginx stops
+  $stop = "(tail -c +$from -F /var/log/syslog | grep -qm1 -F \"emhttp: Stopping web services\" && kill \$\$) & exec $run tail -F -n $rows /var/log/syslog";
   exec("ttyd-exec -s9 -om1 -i ".escapeshellarg($sock)." bash -c ".escapeshellarg($stop));
   break;
 case 'disklog':
