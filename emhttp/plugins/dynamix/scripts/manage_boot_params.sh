@@ -13,6 +13,10 @@ GRUB_BACKUP_DIR="${GRUB_BACKUP_DIR:-/boot/grub/backups}"
 COMMENTS_FILE="${COMMENTS_FILE:-/boot/config/custom_params_comments.json}"
 HW_INIT_FLAG="/boot/config/plugins/dynamix/boot_params_hw_initialized"
 MAX_BACKUPS=10
+# Default boot menu timeout (5 seconds) in each bootloader's unit.
+# Applied by write_config when TIMEOUT is empty (e.g. "Reset to default").
+DEFAULT_SYSLINUX_TIMEOUT=50  # deciseconds
+DEFAULT_GRUB_TIMEOUT=5       # seconds
 
 # Error handling
 error_exit() {
@@ -390,7 +394,7 @@ read_config() {
         append_line=$(parse_grub_linux_args "Unraid OS")
         timeout=$(extract_grub_timeout)
         timeout=$(echo "$timeout" | tr -cd '0-9')
-        [[ -z "$timeout" ]] && timeout="5"
+        [[ -z "$timeout" ]] && timeout="$DEFAULT_GRUB_TIMEOUT"
         # Convert seconds to deciseconds for UI compatibility
         timeout=$((timeout * 10))
     else
@@ -401,7 +405,7 @@ read_config() {
         append_line=$(parse_append_line "Unraid OS")
         timeout=$(extract_timeout)
         timeout=$(echo "$timeout" | tr -cd '0-9')
-        [[ -z "$timeout" ]] && timeout="50"
+        [[ -z "$timeout" ]] && timeout="$DEFAULT_SYSLINUX_TIMEOUT"
     fi
 
     # Ensure timeout is safe for JSON output
@@ -894,8 +898,11 @@ write_config() {
         save_comments "${CUSTOM_PARAMS_COMMENTS}"
     fi
 
-    # Validate timeout (deciseconds) to keep sed safe
-    if [[ -n "${TIMEOUT}" && ! "${TIMEOUT}" =~ ^[0-9]+$ ]]; then
+    # Timeout is in deciseconds; use the default when not given
+    TIMEOUT="${TIMEOUT:-$DEFAULT_SYSLINUX_TIMEOUT}"
+
+    # Validate timeout to keep sed safe
+    if [[ ! "${TIMEOUT}" =~ ^[0-9]+$ ]]; then
         error_exit "Invalid timeout value"
     fi
 
@@ -969,11 +976,9 @@ write_config() {
         update_default_boot "${DEFAULT_BOOT_ENTRY}" "$temp_file"
     fi
 
-    # Update timeout if provided
-    if [[ -n "${TIMEOUT}" ]]; then
-        sed -i.timeout "s/^timeout .*/timeout ${TIMEOUT}/" "$temp_file"
-        rm -f "${temp_file}.timeout"
-    fi
+    # Update timeout
+    sed -i.timeout "s/^timeout .*/timeout ${TIMEOUT}/" "$temp_file"
+    rm -f "${temp_file}.timeout"
 
     normalize_file_to_crlf "$temp_file"
 
@@ -1086,8 +1091,11 @@ write_config_grub() {
         save_comments "${CUSTOM_PARAMS_COMMENTS}"
     fi
 
-    # Validate timeout (deciseconds)
-    if [[ -n "${TIMEOUT}" && ! "${TIMEOUT}" =~ ^[0-9]+$ ]]; then
+    # Timeout is in seconds; use the default when not given
+    TIMEOUT="${TIMEOUT:-$DEFAULT_GRUB_TIMEOUT}"
+
+    # Validate timeout to keep sed safe
+    if [[ ! "${TIMEOUT}" =~ ^[0-9]+$ ]]; then
         error_exit "Invalid timeout value"
     fi
 
@@ -1139,13 +1147,10 @@ write_config_grub() {
         update_grub_default "${DEFAULT_BOOT_ENTRY}" "$temp_file"
     fi
 
-    if [[ -n "${TIMEOUT}" ]]; then
-        local timeout_seconds="${TIMEOUT}"
-        if grep -q '^set timeout=' "$temp_file"; then
-            sed -i -E "s/^set timeout=.*/set timeout=${timeout_seconds}/" "$temp_file"
-        else
-            sed -i "1iset timeout=${timeout_seconds}" "$temp_file"
-        fi
+    if grep -q '^set timeout=' "$temp_file"; then
+        sed -i -E "s/^set timeout=.*/set timeout=${TIMEOUT}/" "$temp_file"
+    else
+        sed -i "1iset timeout=${TIMEOUT}" "$temp_file"
     fi
 
     normalize_file_to_crlf "$temp_file"

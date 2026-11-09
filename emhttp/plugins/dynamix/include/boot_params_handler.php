@@ -122,7 +122,8 @@ switch ($operation) {
             'CUSTOM_PARAMS' => $_POST['custom_params'] ?? '',
             'CUSTOM_PARAMS_COMMENTS' => $_POST['custom_params_comments'] ?? '',
             'DEFAULT_BOOT_ENTRY' => $_POST['default_boot_entry'] ?? '',
-            'TIMEOUT' => $_POST['timeout'] ?? '50',
+            // Empty timeout: the script applies the bootloader's default
+            'TIMEOUT' => $_POST['timeout'] ?? '',
             // Per-label application toggles
             'APPLY_TO_UNRAID_OS' => $_POST['apply_to_unraid_os'] ?? '1',
             'APPLY_TO_GUI_MODE' => $_POST['apply_to_gui_mode'] ?? '1',
@@ -244,7 +245,7 @@ switch ($operation) {
             'CUSTOM_PARAMS' => '',
             'CUSTOM_PARAMS_COMMENTS' => '{}',
             'DEFAULT_BOOT_ENTRY' => '',
-            'TIMEOUT' => '50',  // Reset to default 5 seconds
+            'TIMEOUT' => '',  // Script applies the bootloader's default (5 seconds)
             // Per-label application toggles - apply to ALL entries for reset
             'APPLY_TO_UNRAID_OS' => '1',
             'APPLY_TO_GUI_MODE' => '1',
