@@ -739,13 +739,15 @@ docker_container_start(){
 # Stop a container after the running containers that share its network
 # (network_mode: container:<name or id>). Returns 1 when the time budget is used
 # up. Returns 2 when this container or one of those failed to stop: it is then
-# left for the final stop, together with the rest.
+# left for the final stop, together with the rest. Also returns 2 on a loop: a
+# mode stored by name (target missing at create) can name the container itself
+# or one on the current path after renames. $2 is that path.
 docker_stop_one(){
   local DEP
   for DEP in $(awk -v n="$1" '{name[NR]=$1; id[NR]=$2; mode[NR]=$3; if ($1==n) me=$2}
     END{for (k in mode) if (mode[k]=="container:"n || (length(mode[k])>20 && index("container:"me,mode[k])==1)) print name[k]}' <<<"$NETWORKS"); do
-    [[ $FAILED == *" $DEP "* ]] && return 2
-    [[ $DONE == *" $DEP "* ]] || docker_stop_one $DEP || return $?
+    [[ $FAILED == *" $DEP "* || " $1 $2 " == *" $DEP "* ]] && return 2
+    [[ $DONE == *" $DEP "* ]] || docker_stop_one $DEP "$2 $1" || return $?
   done
   [[ $((SECONDS-BEGIN)) -lt $LIMIT ]] || return 1
   if ! docker stop --time=$TIME $1 >/dev/null; then FAILED="$FAILED $1 "; return 2; fi
