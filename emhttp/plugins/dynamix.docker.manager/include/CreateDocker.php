@@ -68,6 +68,16 @@ function cpu_pinning() {
 ##   CREATE CONTAINER   ##
 ##########################
 
+// Rebuild of the containers that use the network of a recreated container, shown like the commands above it
+function netdepShow($line) {
+  echo "<p class=\"logLine\" id=\"logBody\"></p><script>addLog('<b>",addslashes(htmlspecialchars($line)),"</b>');</script>\n";
+  @flush();
+}
+function netdepRebuild($name, $cmd) {
+  removeContainer($name);
+  execCommand($cmd);
+}
+
 // Simple UI blocker used by create/update operations so the user can't keep clicking around mid-install.
 function dockerUIBlockerScript($enable) {
   if ($enable) {
@@ -226,7 +236,7 @@ if (isset($_POST['contName'])) {
   execCommand($cmd);
   connectExtraNetworks($Name, $_POST['contExtraNetworks'] ?? '', $_POST['contNetwork'] ?? '', true);
   if ($startContainer) addRoute($Name); // add route for remote WireGuard access
-  foreach (rebuildNetworkDependents($Name) as $msg) echo "<script>addLog('".addslashes(htmlspecialchars($msg))."');</script>\n";
+  rebuildNetworkDependents($Name, false, 'netdepShow', 'netdepRebuild');
 
   dockerUIBlockerScript(false);
   echo '<div style="text-align:center"><button type="button" onclick="openTerminal(\'docker\',\''.addslashes($Name).'\',\'.log\')">'._('View Container Log').'</button> <button type="button" onclick="done()">'._('Done').'</button></div><br>';
@@ -310,7 +320,7 @@ if (isset($_GET['updateContainer'])){
     if ($oldImageID && $oldImageID != $newImageID) removeImage($oldImageID, $echo);
   }
   // containers that use the network of an updated container are left with only loopback until rebuilt
-  foreach (rebuildNetworkDependents($netParents ?? []) as $msg) if ($echo) echo "<script>addLog('".addslashes(htmlspecialchars($msg))."');</script>\n";
+  rebuildNetworkDependents($netParents ?? [], false, $echo ? 'netdepShow' : null, $echo ? 'netdepRebuild' : null);
   if ($echo) {
     dockerUIBlockerScript(false);
   }

@@ -799,7 +799,9 @@ function networkDependentsLock() {
 // Without this they keep running with only loopback until someone opens the Docker tab.
 // A rebuilt dependent that is itself a network container gets its own dependents rebuilt, once.
 // Returns the messages that were also written to syslog.
-function rebuildNetworkDependents($names, $wait=false) {
+// In a task window $show($line) prints a line and $rebuild($name,$cmd) removes and recreates a container with its output,
+// like the update above it; without them the rebuild runs silently.
+function rebuildNetworkDependents($names, $wait=false, $show=null, $rebuild=null) {
   global $docroot;
   $script = "$docroot/plugins/dynamix.docker.manager/scripts";
   $queue = array_values(array_filter((array)$names));
@@ -814,8 +816,10 @@ function rebuildNetworkDependents($names, $wait=false) {
     if ($state == 'false' && !$wait) {
       // created but not started yet, e.g. Auto Update starts it after the update: wait for it in the background
       exec("nohup $script/rebuild_dependents ".escapeshellarg($parent)." >/dev/null 2>&1 &");
+      if ($show) $show(sprintf(_('Containers that use the network of %s are rebuilt once it starts: it was created but not started (for example it was stopped before the update), and they need it running'),$parent));
       continue;
     }
+    if ($show) $show(sprintf(_('Rebuilding containers that use the network of %s: it was recreated, which left them with only loopback (for example apps routed through a VPN container lose their connection)'),$parent));
     foreach ($orphans as $name => $tmpl) {
       $handled[$name] = true;
       if (!$tmpl) {
@@ -824,7 +828,13 @@ function rebuildNetworkDependents($names, $wait=false) {
         $msg = "did not rebuild $name: its network container $parent is not running (for example it was updated while stopped); start $parent and open the Docker tab to rebuild $name";
       } else {
         $running = DockerUtil::docker("inspect --format='{{.State.Running}}' ".escapeshellarg($name)) == 'true';
-        exec("$script/rebuild_container ".escapeshellarg($name).' '.($running ? 'running' : 'stopped').' >/dev/null 2>&1');
+        if ($rebuild) {
+          // the same command as rebuild_container
+          [$cmd] = xmlToCommand($tmpl);
+          $rebuild($name, $running ? str_replace('/docker create ','/docker run -d ',$cmd) : $cmd);
+        } else {
+          exec("$script/rebuild_container ".escapeshellarg($name).' '.($running ? 'running' : 'stopped').' >/dev/null 2>&1');
+        }
         if (DockerUtil::ctMap(escapeshellarg($name),'Id') && !isset(DockerUtil::networkOrphans($parent)[$name])) {
           $msg = "rebuilt $name: its network container $parent was recreated, which had left $name with only loopback";
           $queue[] = $name;
@@ -834,6 +844,8 @@ function rebuildNetworkDependents($names, $wait=false) {
       }
       my_logger($msg,'docker');
       $log[] = $msg;
+      // a successful rebuild already shows its command and result in the window
+      if ($show && strncmp($msg,'rebuilt ',8)) $show($msg);
     }
   }
   return $log;

@@ -208,6 +208,8 @@ foreach (explode('*',rawurldecode($argv[1])) as $value) {
   if ($oldImageID && $oldImageID != $newImageID) removeImage_nchan($oldImageID);
 }
 // containers that use the network of an updated container are left with only loopback until rebuilt
-foreach (rebuildNetworkDependents($netParents ?? []) as $msg) write("addLog\0".htmlspecialchars($msg));
+rebuildNetworkDependents($netParents ?? [], false,
+  function($line) {write("<p class='logLine'></p>","addLog\0<b>".htmlspecialchars($line)."</b>");},
+  function($name, $cmd) {removeContainer_nchan($name); execCommand_nchan($cmd);});
 write('_DONE_','');
 ?>
