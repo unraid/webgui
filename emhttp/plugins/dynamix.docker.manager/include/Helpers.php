@@ -835,7 +835,11 @@ function rebuildNetworkDependents($names, $wait=false, $show=null, $rebuild=null
         } else {
           exec("$script/rebuild_container ".escapeshellarg($name).' '.($running ? 'running' : 'stopped').' >/dev/null 2>&1');
         }
-        if (DockerUtil::ctMap(escapeshellarg($name),'Id') && !isset(DockerUtil::networkOrphans($parent)[$name])) {
+        $rebuilt = DockerUtil::ctMap(escapeshellarg($name),'Id') && !isset(DockerUtil::networkOrphans($parent)[$name]);
+        if ($rebuilt && $running && DockerUtil::docker("inspect --format='{{.State.Running}}' ".escapeshellarg($name)) != 'true') {
+          // created with the new network, but docker run could not start it; not "rebuilt ...", so the task window shows it
+          $msg = "$name did not start after it was rebuilt for its recreated network container $parent (for example its command or a file it needs is missing); see the log of $name, then start it";
+        } elseif ($rebuilt) {
           $msg = "rebuilt $name: its network container $parent was recreated, which had left $name with only loopback";
           $queue[] = $name;
         } else {

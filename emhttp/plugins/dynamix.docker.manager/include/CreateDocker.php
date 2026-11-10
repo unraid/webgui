@@ -233,10 +233,11 @@ if (isset($_POST['contName'])) {
     exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker rm '" . escapeshellarg($Name) . "'");
   }
   if ($startContainer) $cmd = str_replace('/docker create ', '/docker run -d ', $cmd);
-  execCommand($cmd);
+  $created = execCommand($cmd);
   connectExtraNetworks($Name, $_POST['contExtraNetworks'] ?? '', $_POST['contNetwork'] ?? '', true);
   if ($startContainer) addRoute($Name); // add route for remote WireGuard access
-  rebuildNetworkDependents($Name, false, 'netdepShow', 'netdepRebuild');
+  // like the update paths: only a container that was created can be the network of others
+  if ($created) rebuildNetworkDependents($Name, false, 'netdepShow', 'netdepRebuild');
 
   dockerUIBlockerScript(false);
   echo '<div style="text-align:center"><button type="button" onclick="openTerminal(\'docker\',\''.addslashes($Name).'\',\'.log\')">'._('View Container Log').'</button> <button type="button" onclick="done()">'._('Done').'</button></div><br>';
