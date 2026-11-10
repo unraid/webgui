@@ -121,9 +121,10 @@ body {
   border: 1px solid var(--border-color);
 }
 .boot-log-note {
+  max-width: 120rem;
+  margin: 1rem auto 0;
   font-size: 1.4rem;
   text-align: center;
-  margin-top: 1rem;
 }
 </style>
 
@@ -196,14 +197,14 @@ function bootlog_open() {
   $.get('/webGui/include/OpenTerminal.php',{tag:'shutdownlog'})
   .done(function(){
     setTimeout(function(){
-      if (!bootlog_done) $('.js-bootLogView').attr('src','/logterminal/shutdownlog/').prop('hidden',false);
+      if (bootlog_done) return;
+      $('.js-bootLogView').attr('src','/logterminal/shutdownlog/').prop('hidden',false);
       $('.js-bootLog').prop('hidden',false);
     },200);
   })
   .fail(function(){
     // keep a note the status check may have written already
     $('.js-bootLogNote').text(function(i,text){return (text ? text+' ' : '')+"<?=_('The system log could not be opened')?>.";});
-    $('.js-bootLog').prop('hidden',false);
   });
 }
 function bootlog_closed() {
@@ -215,8 +216,6 @@ function bootlog_closed() {
   note += " <?=_('If the log could be saved to the boot device, the full log will be in /boot/logs/syslog-previous after the next boot')?>.";
 <?endif;?>
   $('.js-bootLogNote').text(function(i,text){return text ? text+' '+note : note;});
-  // show the note now, also while the viewer request is still pending
-  $('.js-bootLog').prop('hidden',false);
 }
 function reboot_now() {
   $('.js-bootTitle').html("<?=_('Reboot')?> - <?=gethostname()?>");
@@ -284,7 +283,8 @@ $(document).ajaxSend(function(elm, xhr, s){
   <h3 class="js-powerStatus boot-subtext"></h3>
   <div class="js-bootLog boot-log" hidden>
     <iframe class="js-bootLogView" title="<?=_('System Log')?>" hidden></iframe>
-    <p class="js-bootLogNote boot-log-note" aria-live="polite"></p>
   </div>
+  <!-- outside the hidden panel: a live region is only announced when it is exposed before its text changes -->
+  <p class="js-bootLogNote boot-log-note" aria-live="polite"></p>
 </body>
 </html>
