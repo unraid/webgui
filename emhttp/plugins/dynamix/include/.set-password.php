@@ -7,37 +7,54 @@ $VALIDATION_MESSAGES = [
     'empty' => _('root requires a password'),
     'mismatch' => _('Password confirmation does not match'),
     'maxLength' => _('Max password length is 128 characters'),
+    'invalidToken' => _('Invalid password setup request'),
     'saveError' => _('Unable to set password'),
 ];
 $POST_ERROR = '';
 
+if (session_status() === PHP_SESSION_NONE) session_start();
+$setup_token = $_SESSION['root_password_setup_token'] ?? '';
+if (session_status() === PHP_SESSION_ACTIVE && (!is_string($setup_token) || $setup_token === '')) {
+    $setup_token = bin2hex(random_bytes(32));
+    $_SESSION['root_password_setup_token'] = $setup_token;
+}
+
 /**
  * POST handler
  */
-if (!empty($_POST['password']) && !empty($_POST['confirmPassword'])) {
-    if ($_POST['password'] !== $_POST['confirmPassword']) return $POST_ERROR = $VALIDATION_MESSAGES['mismatch'];
-    if (strlen($_POST['password']) > $MAX_PASS_LENGTH) return $POST_ERROR = $VALIDATION_MESSAGES['maxLength'];
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    $submitted_token = $_POST['setup_token'] ?? null;
+    $password = $_POST['password'] ?? null;
+    $confirmation = $_POST['confirmPassword'] ?? null;
 
-    $userName = 'root';
-    $userPassword = base64_encode($_POST['password']);
+    if (session_status() !== PHP_SESSION_ACTIVE || !is_string($submitted_token) || !hash_equals($setup_token, $submitted_token)) {
+        $POST_ERROR = $VALIDATION_MESSAGES['invalidToken'];
+    } elseif (!is_string($password) || $password === '') {
+        $POST_ERROR = $VALIDATION_MESSAGES['empty'];
+    } elseif ($password !== $confirmation) {
+        $POST_ERROR = $VALIDATION_MESSAGES['mismatch'];
+    } elseif (strlen($password) > $MAX_PASS_LENGTH) {
+        $POST_ERROR = $VALIDATION_MESSAGES['maxLength'];
+    } else {
+        $userPassword = base64_encode($password);
 
-    exec("/usr/local/sbin/emcmd 'cmdUserEdit=Change&userName=$userName&userPassword=$userPassword'", $output, $result);
-    if ($result == 0) {
-        // PAM service will log to syslog: "password changed for root"
-        if (session_status()==PHP_SESSION_NONE) session_start();
-        $_SESSION['unraid_login'] = time();
-        $_SESSION['unraid_user'] = 'root';
-        session_regenerate_id(true);
-        session_write_close();
+        exec("/usr/local/sbin/emcmd 'cmdUserEdit=Change&userName=root&userPassword=$userPassword'", $output, $result);
+        if ($result == 0) {
+            // PAM service will log to syslog: "password changed for root"
+            unset($_SESSION['root_password_setup_token']);
+            $_SESSION['unraid_login'] = time();
+            $_SESSION['unraid_user'] = 'root';
+            session_regenerate_id(true);
+            session_write_close();
 
-        // Redirect the user to the start page
-        header("Location: /".$start_page);
-        exit;
+            // Redirect the user to the start page
+            header("Location: /".$start_page);
+            exit;
+        }
+
+        my_logger("{$VALIDATION_MESSAGES['saveError']} [REMOTE_ADDR]: {$REMOTE_ADDR}");
+        $POST_ERROR = $VALIDATION_MESSAGES['saveError'];
     }
-
-    // Error when attempting to set password
-    my_logger("{$VALIDATION_MESSAGES['saveError']} [REMOTE_ADDR]: {$REMOTE_ADDR}");
-    return $POST_ERROR = $VALIDATION_MESSAGES['saveError'];
 }
 
 require_once "$docroot/plugins/dynamix/include/ThemeHelper.php";
@@ -318,6 +335,7 @@ $isDarkTheme = $themeHelper->isDarkTheme();
                 <p class="error"><?=_('Please also ensure you have cookies enabled')?>.</p>
             </noscript>
             <form action="/login" method="POST" class="js-validate w-full flex flex-col">
+                <input type="hidden" name="setup_token" value="<?=htmlspecialchars($setup_token, ENT_QUOTES, 'UTF-8')?>">
                 <label for="password"><?= _('Username') ?></label>
                 <input name="username" type="text" value="root" disabled title="<?=_('Username not changeable')?>">
 
