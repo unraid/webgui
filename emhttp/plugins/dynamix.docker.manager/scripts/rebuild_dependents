@@ -1,0 +1,26 @@
+#!/usr/bin/php -q
+<?PHP
+/* Copyright 2005-2025, Lime Technology
+ * Copyright 2012-2025, Bergware International.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+// usage: rebuild_dependents <container> ...
+// Rebuild the containers that use the network of <container> after it was recreated.
+// Waits up to 5 minutes for <container> to start, e.g. Auto Update starts it after the update.
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
+
+$names = array_slice($argv,1);
+foreach ($names as $name) {
+  for ($n = 0; $n < 60 && DockerUtil::ctMap(escapeshellarg($name),'State.Running') == 'false'; $n++) sleep(5);
+}
+foreach (rebuildNetworkDependents($names,true) as $msg) echo "$msg\n";
+?>

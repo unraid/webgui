@@ -15,6 +15,9 @@
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
 
+// xmlToCommand() takes TZ and HOST_HOSTNAME from $var
+$var = parse_ini_file('/var/local/emhttp/var.ini');
+
 $DockerClient = new DockerClient();
 $DockerUpdate = new DockerUpdate();
 $DockerTemplates = new DockerTemplates();
@@ -29,9 +32,11 @@ $xml    = file_get_contents($tmpl);
 [$cmd,$name,$repository] = xmlToCommand($tmpl);
 $old = $DockerClient->getImageID($repository);
 
+// optional second argument "running" or "stopped" keeps the current state, otherwise autostart decides
+$run = ($argv[2] ?? '') ? $argv[2] == 'running' : in_array($name,$start);
+
 removeContainer($name,false,false);
-execCommand(str_replace('/docker create ','/docker run -d ',$cmd),false);
-if (!in_array($name,$start)) stopContainer($name,false,false);
+execCommand($run ? str_replace('/docker create ','/docker run -d ',$cmd) : $cmd,false);
 $DockerClient->flushCaches();
 $new = $DockerClient->getImageID($repository);
 if ($old && $old != $new) removeImage($old,false);
