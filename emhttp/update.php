@@ -50,6 +50,29 @@ function write_log($string) {
   echo "<script>addLog(\"{$string}\");</script>";
   @flush();
 }
+
+function resolve_update_file_path($file) {
+  if (!is_string($file) || $file === '' || str_contains($file, "\0") || str_contains($file, '\\')) {
+    return false;
+  }
+
+  if ($file[0] !== '/') $file = "/boot/config/plugins/$file";
+  if (!str_starts_with($file, '/boot/config/')) return false;
+  if (preg_match('#(^|/)\.\.?(/|$)#', $file)) return false;
+
+  $existingParent = dirname($file);
+  while (!is_dir($existingParent) && $existingParent !== '/boot/config' && $existingParent !== '/') {
+    $existingParent = dirname($existingParent);
+  }
+  $realParent = realpath($existingParent);
+  if ($realParent === false || ($realParent !== '/boot/config' && !str_starts_with($realParent, '/boot/config/'))) return false;
+
+  if (is_link($file)) return false;
+  $realFile = realpath($file);
+  if ($realFile !== false && !str_starts_with($realFile, '/boot/config/')) return false;
+
+  return $file;
+}
 // unRAID update control
 readfile('update.htm');
 flush();
@@ -58,10 +81,13 @@ $docroot = $_SERVER['DOCUMENT_ROOT'] ?: "/usr/local/emhttp";
 require_once "$docroot/plugins/dynamix/include/Wrappers.php";
 
 if (isset($_POST['#file'])) {
-  $file = $_POST['#file'];
+  $file = resolve_update_file_path($_POST['#file']);
+  if ($file === false) {
+    http_response_code(400);
+    syslog(LOG_INFO, 'Invalid #file path');
+    exit;
+  }
   $raw_file = isset($_POST['#raw_file']) ? ($_POST['#raw_file'] === 'true') : false;
-  // prepend with boot (boot device) if path is relative
-  if ($file && $file[0]!='/') $file = "/boot/config/plugins/$file";
   $section = $_POST['#section'] ?? false;
   $cleanup = isset($_POST['#cleanup']);
 
