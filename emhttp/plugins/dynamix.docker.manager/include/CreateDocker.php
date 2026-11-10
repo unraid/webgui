@@ -212,7 +212,7 @@ if (isset($_POST['contName'])) {
   // Extract real Entrypoint and Cmd from container for Tailscale
   if (isset($_POST['contTailscale']) && $_POST['contTailscale'] == 'on') {
     // Create preliminary base container but don't run it
-    exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker create --name '" . escapeshellarg($Name) . "' '" . escapeshellarg($Repository) . "'");
+    exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker create --name " . escapeshellarg($Name) . " " . escapeshellarg($Repository));
     // Get Entrypoint and Cmd from docker inspect
     $containerInfo = $DockerClient->getContainerDetails($Name);
     $ts_env  = isset($containerInfo['Config']['Entrypoint']) ? '-e ORG_ENTRYPOINT="' . implode(' ', $containerInfo['Config']['Entrypoint']) . '" ' : '';
@@ -220,7 +220,7 @@ if (isset($_POST['contName'])) {
     // Insert Entrypoint and Cmd to docker command
     $cmd = str_replace('-l net.unraid.docker.managed=dockerman', $ts_env . '-l net.unraid.docker.managed=dockerman' , $cmd);
     // Remove preliminary container
-    exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker rm '" . escapeshellarg($Name) . "'");
+    exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker rm " . escapeshellarg($Name));
   }
   if ($startContainer) $cmd = str_replace('/docker create ', '/docker run -d ', $cmd);
   execCommand($cmd);
@@ -292,7 +292,7 @@ if (isset($_GET['updateContainer'])){
     // Extract real Entrypoint and Cmd from container for Tailscale
     if ($TS_Enabled == 'true') {
       // Create preliminary base container but don't run it
-      exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker create --name '" . escapeshellarg($Name) . "' '" . escapeshellarg($Repository) . "'");
+      exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker create --name " . escapeshellarg($Name) . " " . escapeshellarg($Repository));
       // Get Entrypoint and Cmd from docker inspect
       $containerInfo = $DockerClient->getContainerDetails($Name);
       $ts_env  = isset($containerInfo['Config']['Entrypoint']) ? '-e ORG_ENTRYPOINT="' . implode(' ', $containerInfo['Config']['Entrypoint']) . '" ' : '';
@@ -300,7 +300,7 @@ if (isset($_GET['updateContainer'])){
       // Insert Entrypoint and Cmd to docker command
       $cmd = str_replace('-l net.unraid.docker.managed=dockerman', $ts_env . '-l net.unraid.docker.managed=dockerman' , $cmd);
       // Remove preliminary container
-      exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker rm '" . escapeshellarg($Name) . "'");
+      exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker rm " . escapeshellarg($Name));
     }
     execCommand($cmd, $echo);
     connectExtraNetworks($Name, getXmlVal($xml, "ExtraNetworks"), $Network, $echo);

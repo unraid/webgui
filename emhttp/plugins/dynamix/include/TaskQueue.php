@@ -293,7 +293,14 @@ function task_launch(&$task) {
   }
   [$name,$args] = $resolved;
   // plugin scripts publish to nchan only when their last argument is 'nchan'
-  $suffix = $task['type']==='plugins' ? ' nchan' : '';
+  $suffix = $task['type']==='plugins' ? ['nchan'] : [];
+  $command = shell_command_line($name, $args, $suffix);
+  if ($command === null) {
+    $task['status']   = 'error';
+    $task['finished'] = time();
+    if (!task_write($task)) @unlink(task_path($task['id']));
+    return false;
+  }
   // Keep the task id available to task-aware scripts and diagnostics. Output
   // capture itself no longer depends on this variable: TaskCapture.php handles
   // every publication on the shared type channel, including legacy scripts.
@@ -308,9 +315,9 @@ function task_launch(&$task) {
   // before the stamp can run.
   $complete = "$docroot/plugins/dynamix/include/task_complete";
   $stamp = '; rc=$?; NCHAN_TASK= '.escapeshellarg($complete).' '.escapeshellarg($task['id']).' "$rc"';
-  // escapeshellarg the whole bash -c payload so a single quote (or other shell
-  // metacharacter) in the resolved args cannot break out of the outer shell;
-  // bash still word-splits the args internally, preserving multi-arg commands.
+  // The command line is assembled from individually quoted arguments before
+  // the complete payload is passed to bash -c. This preserves legacy
+  // multi-argument commands without allowing bash to re-evaluate user input.
   // The wrapper writes its own PID and stops before the operation begins. PHP
   // validates + persists that process identity, then resumes the group. This
   // handshake means no privileged payload can run untracked and cleanup never
@@ -318,7 +325,7 @@ function task_launch(&$task) {
   $handshake = task_dir().'/.launch-'.$task['id'];
   @unlink($handshake);
   $gate = 'printf "%s\\n" "$$" > '.escapeshellarg($handshake).' || exit 125; kill -STOP $$; rm -f '.escapeshellarg($handshake).'; ';
-  $payload = $gate.'sleep .3 && '.$name.' '.$args.$suffix.$stamp;
+  $payload = $gate.'sleep .3 && '.$command.$stamp;
   // setsid runs the operation in its own session + process group (pid == pgid),
   // so Abort (TaskCommand.php) can signal the whole tree via a negative-pid group
   // kill and actually stop the underlying command and every child it spawned.
