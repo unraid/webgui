@@ -842,8 +842,11 @@ function rebuildNetworkDependents($names, $wait=false, $show=null, $rebuild=null
         } elseif ($rebuilt) {
           $msg = "rebuilt $name: its network container $parent was recreated, which had left $name with only loopback";
           $queue[] = $name;
-        } else {
+        } elseif (DockerUtil::ctMap(escapeshellarg($name),'Id')) {
           $msg = "could not rebuild $name after its network container $parent was recreated; open the Docker tab or Apply $name to retry";
+        } else {
+          // the rebuild removes the container before it creates it again, so a failed create leaves nothing to retry from the Docker tab
+          $msg = "could not rebuild $name after its network container $parent was recreated: $name was removed, but creating it again failed (for example a value in its template is not valid); select $name under Add Container > Template > User templates, correct it and Apply";
         }
       }
       my_logger($msg,'docker');
