@@ -22,10 +22,17 @@ $_SERVER['REQUEST_URI'] = 'docker';
 require_once "$docroot/webGui/include/Translations.php";
 
 $DockerClient = new DockerClient();
-$action       = unscript(_var($_REQUEST,'action'));
-$container    = unbundle(_var($_REQUEST,'container'));
-$name         = unscript(_var($_REQUEST,'name'));
-$image        = unscript(_var($_REQUEST,'image'));
+$requestMethod = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+if ($requestMethod !== 'POST') {
+	header('Allow: POST');
+	http_response_code(405);
+	header('Content-Type: application/json');
+	die(json_encode(['error' => _('POST required')]));
+}
+$action       = unscript(_var($_POST,'action'));
+$container    = unbundle(_var($_POST,'container'));
+$name         = unscript(_var($_POST,'name'));
+$image        = unscript(_var($_POST,'image'));
 $arrResponse  = ['error' => _('Missing parameters')];
 
 switch ($action) {
