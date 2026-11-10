@@ -21,6 +21,7 @@ extract(parse_plugin_cfg('dynamix',true));
 $_SERVER['REQUEST_URI'] = '';
 $login_locale = _var($display,'locale');
 require_once "$docroot/webGui/include/Translations.php";
+require_once "$docroot/plugins/dynamix/include/WirelessState.php";
 
 // remember current language
 $locale_init = $locale;
@@ -55,7 +56,7 @@ while (true) {
   }
   if (is_readable($ini) && file_exists($wlan0)) {
     try {
-      $wifi = parse_ini_file($ini);
+      $wifi = read_wireless_state($ini);
       $up = @file_get_contents($wlan0) == 1;
       $alive = $up ? exec("iw wlan0 link 2>/dev/null | grep -Pom1 'SSID: \\K.+'") : '';
       $echo['color'] = $alive == $wifi['SSID'] ? 'blue-text' : 'red-text';
