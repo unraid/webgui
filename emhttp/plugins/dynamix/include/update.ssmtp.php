@@ -15,4 +15,6 @@ $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Encryption.php";
 
 $_POST['AuthPass'] = base64_encrypt($_POST['AuthPass']);
+// The display name goes into the From header: replace control characters, a CR/LF would start a new header.
+$_POST['SenderName'] = trim(preg_replace('/[\x00-\x1F\x7F]+/', ' ', $_POST['SenderName'] ?? ''));
 ?>
