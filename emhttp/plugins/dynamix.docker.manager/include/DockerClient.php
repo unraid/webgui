@@ -535,86 +535,106 @@ class DockerUpdate{
 		$DockerClient = new DockerClient();
 		$registryAuth = $DockerClient->getRegistryAuth($image);
 		$manifestURL = sprintf('%s%s%s/manifests/%s', $registryAuth['apiUrl'], $registryAuth['repository'], $registryAuth['imageName'], $registryAuth['imageTag']);
-		//$this->debug('Manifest URL: '.$manifestURL);
-		$ch = getCurlHandle($manifestURL, 'HEAD');
-		$reply = curl_exec($ch);
-		if (curl_errno($ch) !== 0) {
-			//$this->debug('Error: curl error getting manifest: '.curl_error($ch));
-			return null;
-		}
-		// Validate the destination before requesting a token or sending registry credentials.
-		$resolvedManifestURL = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
 		$origin = parse_url($manifestURL);
-		$resolved = parse_url($resolvedManifestURL);
-		if (($resolved['scheme'] ?? '') !== 'https' || empty($resolved['host']) || isset($resolved['user']) || isset($resolved['pass'])) return null;
-		$sameRegistry = strtolower($origin['host']) === strtolower($resolved['host']) && ($origin['port'] ?? 443) === ($resolved['port'] ?? 443);
-		// Public registries can redirect freely. Saved credentials belong to the original registry.
-		$hasCredentials = !empty($registryAuth['username']) || !empty($registryAuth['password']);
-		if ($hasCredentials && !$sameRegistry) return null;
-		$manifestURL = $resolvedManifestURL;
-		// curl includes intermediate headers; only the final response owns the auth challenge.
-		$responses = preg_split('/\r?\n\r?\n/', trim($reply));
-		$reply = end($responses);
-		/*
-		 * Step 2: Get www-authenticate header from manifest url to generate token or basic auth
-		 */
-		$header = ['Accept: application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json,application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json'];
-		$digest_ch = getCurlHandle($manifestURL, 'HEAD', $header);
-		preg_match('@www-authenticate:\s*Bearer\s*(.*)@i', $reply, $matches);
-		if (!empty($matches[1])) {
-			$strArgs = explode(',', $matches[1]);
-			$args = [];
-			foreach ($strArgs as $arg) {
-				$arg = explode('=', $arg);
-				$args[$arg[0]] = trim($arg[1], "\" \r\n");
-			}
-			if (empty($args['realm']) || empty($args['service']) || empty($args['scope'])) return null;
-			$url = $args['realm'].'?service='.urlencode($args['service']).'&scope='.urlencode($args['scope']);
-			//$this->debug('Token URL: '.$url);
-			/**
-			 * Step 2a: Get token from API and authenticate via username / password if in private registry and auth data was found
-			 */
-			$ch = getCurlHandle($url);
-			if (!empty($registryAuth['password'])) {
-				curl_setopt($ch, CURLOPT_USERPWD, $registryAuth['username'].':'.$registryAuth['password']);
-				curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
-			}
+		$sourceAuth = $registryAuth;
+		$getRegistryHandle = static function($url, $method='GET') {
+			$ch = getCurlHandle($url, $method);
+			curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+			curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTPS);
+			curl_setopt($ch, CURLOPT_UNRESTRICTED_AUTH, false);
+			curl_setopt($ch, CURLOPT_MAXREDIRS, 10);
+			return $ch;
+		};
+		// A redirect after authentication can require the destination's own credentials.
+		for ($attempt=0; $attempt<5; $attempt++) {
+			$registryAuth = $sourceAuth;
+			$ch = $getRegistryHandle($manifestURL, 'HEAD');
 			$reply = curl_exec($ch);
 			if (curl_errno($ch) !== 0) {
-				//$this->debug('Error: curl error getting token: '.curl_error($ch));
+				//$this->debug('Error: curl error getting manifest: '.curl_error($ch));
 				return null;
 			}
-			$reply_json = json_decode($reply, true);
-			if (!$reply_json || empty($reply_json['token'])) {
-				//$this->debug('Error: Token response was empty or missing token');
+			// Validate the destination before requesting a token or sending registry credentials.
+			$resolvedManifestURL = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+			$resolved = parse_url($resolvedManifestURL);
+			if (($resolved['scheme'] ?? '') !== 'https' || empty($resolved['host']) || isset($resolved['user']) || isset($resolved['pass'])) return null;
+			$sameRegistry = strtolower($origin['host']) === strtolower($resolved['host']) && ($origin['port'] ?? 443) === ($resolved['port'] ?? 443);
+			if (!$sameRegistry) {
+				$authority = strtolower($resolved['host']).(isset($resolved['port']) ? ':'.$resolved['port'] : '');
+				$registryAuth = $DockerClient->getRegistryAuth($image, $authority);
+			}
+			$manifestURL = $resolvedManifestURL;
+			// curl includes intermediate headers; only the final response owns the auth challenge.
+			$responses = preg_split('/\r?\n\r?\n/', trim($reply));
+			$reply = end($responses);
+			/*
+			 * Step 2: Get www-authenticate header from manifest url to generate token or basic auth
+			 */
+			$header = ['Accept: application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json,application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json'];
+			$digest_ch = $getRegistryHandle($manifestURL, 'HEAD');
+			preg_match('@www-authenticate:\s*Bearer\s*(.*)@i', $reply, $matches);
+			if (!empty($matches[1])) {
+				$strArgs = explode(',', $matches[1]);
+				$args = [];
+				foreach ($strArgs as $arg) {
+					$arg = explode('=', $arg);
+					$args[$arg[0]] = trim($arg[1], "\" \r\n");
+				}
+				if (empty($args['realm']) || empty($args['service']) || empty($args['scope'])) return null;
+				$url = $args['realm'].'?service='.urlencode($args['service']).'&scope='.urlencode($args['scope']);
+				//$this->debug('Token URL: '.$url);
+				/**
+				 * Step 2a: Get token from API and authenticate via username / password if in private registry and auth data was found
+				 */
+				$tokenAuth = $registryAuth;
+				for ($tokenAttempt=0; $tokenAttempt<5; $tokenAttempt++) {
+					$ch = $getRegistryHandle($url);
+					if (!empty($tokenAuth['password'])) curl_setopt($ch, CURLOPT_USERPWD, $tokenAuth['username'].':'.$tokenAuth['password']);
+					$reply = curl_exec($ch);
+					if (curl_errno($ch) !== 0) return null;
+					$reply_json = json_decode($reply, true);
+					if (!empty($reply_json['token'])) break;
+					$nextTokenURL = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+					if ($nextTokenURL === $url) return null;
+					$tokenDestination = parse_url($nextTokenURL);
+					if (($tokenDestination['scheme'] ?? '') !== 'https' || empty($tokenDestination['host']) || isset($tokenDestination['user']) || isset($tokenDestination['pass'])) return null;
+					$authority = strtolower($tokenDestination['host']).(isset($tokenDestination['port']) ? ':'.$tokenDestination['port'] : '');
+					$tokenAuth = $DockerClient->getRegistryAuth($image, $authority);
+					$url = $nextTokenURL;
+				}
+				if (empty($reply_json['token'])) return null;
+				$token = $reply_json['token'];
+				array_push($header, 'Authorization: Bearer '.$token);
+			}
+			if (preg_match('@www-authenticate:\s*Basic\s*@i', $reply)) {
+				if (!empty($registryAuth['password'])) curl_setopt($digest_ch, CURLOPT_USERPWD, $registryAuth['username'].':'.$registryAuth['password']);
+				else return null;
+			}
+			/**
+			 * Step 3: Get Docker-Content-Digest header from manifest file
+			 */
+			curl_setopt($digest_ch, CURLOPT_HTTPHEADER, $header);
+			$reply = curl_exec($digest_ch);
+			if (curl_errno($digest_ch) !== 0) {
+				//$this->debug('Error: curl error getting manifest: '.curl_error($digest_ch));
 				return null;
 			}
-			$token = $reply_json['token'];
-			array_push($header, 'Authorization: Bearer '.$token);
+			$responses = preg_split('/\r?\n\r?\n/', trim($reply));
+			$reply = end($responses);
+			preg_match('@Docker-Content-Digest:\s*(.*)@i', $reply, $matches);
+			if (empty($matches[1])) {
+				$nextManifestURL = curl_getinfo($digest_ch, CURLINFO_EFFECTIVE_URL);
+				if ($nextManifestURL !== $manifestURL) {
+					$manifestURL = $nextManifestURL;
+					continue;
+				}
+				return null;
+			}
+			$digest = trim($matches[1]);
+			//$this->debug('Remote Digest: '.$digest);
+			return $digest;
 		}
-		if (preg_match('@www-authenticate:\s*Basic\s*@i', $reply)) {
-			if (!empty($registryAuth['password'])) curl_setopt($digest_ch, CURLOPT_USERPWD, $registryAuth['username'].':'.$registryAuth['password']);
-			else return null;
-		}
-		/**
-		 * Step 3: Get Docker-Content-Digest header from manifest file
-		 */
-		// Only credentialless requests may follow another redirect.
-		if (isset($token) || !empty($registryAuth['password'])) curl_setopt($digest_ch, CURLOPT_FOLLOWLOCATION, false);
-		curl_setopt($digest_ch, CURLOPT_HTTPHEADER, $header);
-		$reply = curl_exec($digest_ch);
-		if (curl_errno($digest_ch) !== 0) {
-			//$this->debug('Error: curl error getting manifest: '.curl_error($digest_ch));
-			return null;
-		}
-		preg_match('@Docker-Content-Digest:\s*(.*)@i', $reply, $matches);
-		if (empty($matches[1])) {
-			//$this->debug('Error: Docker-Content-Digest header is empty or missing');
-			return null;
-		}
-		$digest = trim($matches[1]);
-		//$this->debug('Remote Digest: '.$digest);
-		return $digest;
+		return null;
 	}
 
 	// DEPRECATED: Only used for Docker Index V1 type update checks
@@ -953,7 +973,7 @@ class DockerClient {
 		return $ret;
 	}
 
-	public function getRegistryAuth($image) {
+	public function getRegistryAuth($image, $authRegistry=null) {
 		$image = DockerUtil::ensureImageTag($image);
 		//$this->debug('Image: '.$image);
 		preg_match('@^([^/]+\.[^/]+/)?([^/]+/)?(.+:)(.+)$@', $image, $matches);
@@ -967,8 +987,9 @@ class DockerClient {
 			'imageTag'     => $tag,
 			'apiUrl'       => 'https://'.$registry.'v2/',
 		];
-		$configKey = $ret['registryName'];
-		if (empty($registry) || $configKey == 'docker.io') {
+		// Redirect destinations select their own credentials without changing image metadata.
+		$configKey = $authRegistry ?? $ret['registryName'];
+		if (empty($registry) || $ret['registryName'] == 'docker.io') {
 			$ret['apiUrl'] = 'https://registry-1.docker.io/v2/';
 		}
 		// Use credentials if docker.io registry is specified
