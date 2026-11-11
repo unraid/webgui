@@ -560,7 +560,7 @@ class DockerUpdate{
 			if (($resolved['scheme'] ?? '') !== 'https' || empty($resolved['host']) || isset($resolved['user']) || isset($resolved['pass'])) return null;
 			$sameRegistry = strtolower($origin['host']) === strtolower($resolved['host']) && ($origin['port'] ?? 443) === ($resolved['port'] ?? 443);
 			if (!$sameRegistry) {
-				$authority = strtolower($resolved['host']).(isset($resolved['port']) ? ':'.$resolved['port'] : '');
+				$authority = strtolower($resolved['host']).(($resolved['port'] ?? 443) !== 443 ? ':'.$resolved['port'] : '');
 				$registryAuth = $DockerClient->getRegistryAuth($image, $authority);
 			}
 			$manifestURL = $resolvedManifestURL;
@@ -593,12 +593,12 @@ class DockerUpdate{
 					$reply = curl_exec($ch);
 					if (curl_errno($ch) !== 0) return null;
 					$reply_json = json_decode($reply, true);
-					if (!empty($reply_json['token'])) break;
 					$nextTokenURL = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
-					if ($nextTokenURL === $url) return null;
 					$tokenDestination = parse_url($nextTokenURL);
 					if (($tokenDestination['scheme'] ?? '') !== 'https' || empty($tokenDestination['host']) || isset($tokenDestination['user']) || isset($tokenDestination['pass'])) return null;
-					$authority = strtolower($tokenDestination['host']).(isset($tokenDestination['port']) ? ':'.$tokenDestination['port'] : '');
+					if (!empty($reply_json['token'])) break;
+					if ($nextTokenURL === $url) return null;
+					$authority = strtolower($tokenDestination['host']).(($tokenDestination['port'] ?? 443) !== 443 ? ':'.$tokenDestination['port'] : '');
 					$tokenAuth = $DockerClient->getRegistryAuth($image, $authority);
 					$url = $nextTokenURL;
 				}
@@ -1001,6 +1001,11 @@ class DockerClient {
 			return $ret;
 		}
 		$dockerConfig = json_decode(file_get_contents($dockerConfig), true);
+		// An explicitly stored default HTTPS port identifies the same credential origin.
+		if ($authRegistry !== null && empty($dockerConfig['auths'][$configKey])) {
+			$destination = parse_url('https://'.$authRegistry);
+			if (($destination['port'] ?? 443) === 443) $configKey = $destination['host'].':443';
+		}
 		if (empty($dockerConfig['auths']) || empty($dockerConfig['auths'][ $configKey ])) {
 			return $ret;
 		}

@@ -59,7 +59,10 @@ function curl_exec($handle) {
       ? "HTTP/1.1 401 Unauthorized\r\nwww-authenticate: Basic realm=\"registry\"\r\n"
       : "HTTP/1.1 401 Unauthorized\r\nwww-authenticate: Bearer realm=\"https://tokens.example/token\",service=\"registry\",scope=\"repository:library/test:pull\"\r\n";
   }
-  if (str_starts_with($handle->url, 'https://tokens.example/token?')) return '{"token":"test-token"}';
+  if (str_starts_with($handle->url, 'https://tokens.example/token?')) {
+    $handle->effective = $GLOBALS['scenario']['token_effective'] ?? $handle->url;
+    return '{"token":"test-token"}';
+  }
   if ($GLOBALS['scenario']['digest_error'] ?? false) {
     $handle->error = CURLE_COULDNT_CONNECT;
     return false;
@@ -140,11 +143,11 @@ foreach ($denied as $destination) {
     'Unapproved destination must fail');
   same(1, count($GLOBALS['requests']), 'Unapproved destination must be rejected before any authentication request');
 }
-foreach (['https://other.example', 'https://registry.example:5443'] as $destination) {
+foreach (['https://other.example', 'https://other.example:443', 'https://registry.example:5443'] as $destination) {
   same('sha256:test-digest', run(['origin' => 'https://registry.example', 'effective' => $destination.$manifest,
     'credentials' => ['username' => 'source-user', 'password' => 'source-password']]),
     'Public destination must work even when the source has saved credentials');
-  same(parse_url($destination, PHP_URL_HOST).(parse_url($destination, PHP_URL_PORT) ? ':'.parse_url($destination, PHP_URL_PORT) : ''),
+  same(parse_url($destination, PHP_URL_HOST).((parse_url($destination, PHP_URL_PORT) ?? 443) !== 443 ? ':'.parse_url($destination, PHP_URL_PORT) : ''),
     end($GLOBALS['authLookups']), 'Destination credentials must be selected by host and port');
   same(false, isset($GLOBALS['requests'][1]->options[CURLOPT_USERPWD]), 'Source credentials must not reach the destination token service');
 }
@@ -196,6 +199,37 @@ same(null, run(['origin' => 'https://registry.example', 'effective' => $sourceUR
   'Repeated token-service redirects without a token must stop');
 same(6, count($GLOBALS['requests']), 'Token authentication retries must be bounded');
 
+foreach (['https://user:password@tokens.example/token', 'http://tokens.example/token', ''] as $destination) {
+  same(null, run(['origin' => 'https://registry.example', 'effective' => $sourceURL, 'token_effective' => $destination]),
+    'A valid token must not bypass final token URL validation');
+  same(2, count($GLOBALS['requests']), 'Invalid token destination must fail before the digest request');
+}
+
 same(null, run(['origin' => 'https://registry.example', 'effective' => 'https://registry.example'.$manifest,
   'digest_error' => true]), 'Digest transport failure must return null');
 echo "Docker registry redirect tests passed (".$GLOBALS['scenarioCount']." scenarios).\n";
+
+namespace DockerRegistryAuthTest;
+
+// Exercise the production credential reader with a synthetic Docker config.
+class DockerUtil {
+  public static function ensureImageTag($image) { return $image; }
+}
+function file_exists($path) { return $path === '/root/.docker/config.json'; }
+function file_get_contents($path) { return json_encode($GLOBALS['fixtureConfig']); }
+$start = strpos($source, 'class DockerClient {');
+$end = strpos($source, 'class DockerUtil {', $start);
+eval('namespace '.__NAMESPACE__.'; '.substr($source, $start, $end - $start));
+foreach ([
+  ['target.example', 'target.example', 'target-user'],
+  ['target.example:443', 'target.example', 'target-user'],
+  ['target.example:5443', 'target.example:5443', 'target-user'],
+  ['target.example:5443', 'target.example', ''],
+  ['https://index.docker.io/v1/', 'docker.io', 'target-user'],
+] as [$storedKey, $destination, $expectedUser]) {
+  $GLOBALS['fixtureConfig'] = ['auths' => [$storedKey => ['auth' => base64_encode('target-user:synthetic-password')]]];
+  $auth = (new DockerClient())->getRegistryAuth('source.example/library/test:latest', $destination);
+  \DockerRegistryRedirectTest\same($expectedUser, $auth['username'], 'Credential origins must match including default-port aliases');
+  \DockerRegistryRedirectTest\same('https://source.example/v2/', $auth['apiUrl'], 'Credential selection must not change image metadata');
+}
+echo "Docker credential reader tests passed (5 scenarios).\n";
