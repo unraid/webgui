@@ -518,6 +518,15 @@ class DockerUpdate{
 		return ($apiContent===false) ? null : substr(json_decode($apiContent, true)[0]['id'], 0, 8);
 	}
 
+	/**
+	 * Retrieve an image's remote manifest digest using the Docker Registry V2 API.
+	 *
+	 * Follow manifest redirects and use the registry's authentication challenge
+	 * to request the digest from the resolved manifest URL.
+	 *
+	 * @param string $image Docker image reference to look up.
+	 * @return string|null Manifest digest, or null if the lookup fails or no digest is available.
+	 */
 	public function getRemoteVersionV2($image) {
 		extract(DockerUtil::parseImageTag($image));
 		/*
