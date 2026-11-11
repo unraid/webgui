@@ -54,6 +54,21 @@ function presetMover(form) {
   form.dotm.value = form.dotm.disabled ? '*' : (form.dotm.value=='*' ? 1 : form.dotm.value);
   if (mode==1) {$('#H1').hide(); $('#H2').show();} else {$('#H2').hide(); $('#H1').show();}
 }
+function stopMover(button) {
+  swal({
+    title:"_(Stop Mover)_?",
+    text:"_(The Mover stops before its next file)_. _(The file it is copying now is finished and moved completely)_.<br>_(Files not moved yet stay where they are and are moved on the next run)_. _(You can start the Mover again at any time)_.<br><br>_(This runs)_ <code>mover stop</code>.",
+    type:'warning',
+    html:true,
+    showCancelButton:true,
+    confirmButtonText:"_(Stop)_",
+    cancelButtonText:"_(Cancel)_"
+  },function(p){
+    if (!p) return;
+    button.disabled = true;
+    $.post('/webGui/include/MoverStop.php', function(){refresh();});
+  });
+}
 // Fool Unraid by simulating the original input field
 function prepareMover(form) {
   var mode = form.shareMoverSchedule.value;
@@ -149,8 +164,12 @@ _(Mover Progress)_:
     <input type="submit" name="changeMover" value="_(Apply)_" disabled>
     <input type="button" value="_(Done)_" onclick="done()">
     <?if ($showMoverButton):?>
-      <input type="submit" name="cmdStartMover" value="<?=$buttontext?>"<?if ($moverRunning):?> disabled<?endif;?>>
-      <?if ($moverRunning):?><span>_(Mover is running)_</span><?endif;?>
+      <?if ($moverRunning):?>
+      <input type="button" value="_(Stop)_" onclick="stopMover(this)">
+      <span>_(Mover is running)_</span>
+      <?else:?>
+      <input type="submit" name="cmdStartMover" value="<?=$buttontext?>">
+      <?endif;?>
     <?endif;?>
   </span>
 </form>
