@@ -858,11 +858,61 @@ class DockerClient {
 		return $this->getDockerJSON("/containers/$id/json");
 	}
 
-	public function startContainer($id) {
-		$this->getDockerJSON("/containers/$id/start", 'POST', $code);
+	public function startContainer($id, &$error=null) {
+		$data = $this->getDockerJSON("/containers/$id/start", 'POST', $code);
+		// Docker explains a refused start in the "message" of its JSON reply, the status code alone does not
+		if ($code !== true) $error = $data['message'] ?? null;
 		$this->flushCache($this::$containersCache);
 		addRoute($id); // add route for remote WireGuard access
 		return $code;
+	}
+
+	// HTTP status number behind a code returned by getDockerJSON(): "Error code NNN" or a reverse lookup in $codes (its values are unique)
+	public function statusNumber($code) {
+		if (!is_string($code)) return '';
+		if (preg_match('/^Error code (\d+)$/', $code, $num)) return $num[1];
+		$num = array_search($code, $this::$codes, true);
+		return $num === false ? '' : (string)$num;
+	}
+
+	// Text for the error dialog after a failed start: Docker's own message, HTML escaped, plus a hint for the common causes,
+	// and the HTTP status as last line. Without a message from Docker the code text is shown as before.
+	public function startErrorText($id, $message, $code) {
+		$num  = $this->statusNumber($code);
+		$last = $num !== '' ? '<br><br>'.htmlspecialchars(sprintf(_('Docker error %s'), $num)) : '';
+		if (!$message) {
+			// "Error code NNN" already names the number
+			return htmlspecialchars($code).($code == "Error code $num" ? '' : $last);
+		}
+		$hint = '';
+		$ip   = '';
+		if (preg_match('/(?:Bind for|host port for) [^ ]*?:(\d+)/', $message, $port)) {
+			$hint = sprintf(_('Another container or service already uses host port %s. Stop it or change the port in the settings of this container'), $port[1]);
+		} elseif (stripos($message, 'address already in use') !== false) {
+			// Docker's message does not name the address: read the fixed IP from the container and look for its holder
+			$holder = '';
+			$ct     = $this->getContainerDetails($id);
+			foreach ($ct['NetworkSettings']['Networks'] ?? [] as $net => $vals) {
+				$ip = $vals['IPAMConfig']['IPv4Address'] ?? '';
+				if ($ip == '') continue;
+				foreach ($this->getDockerContainers() as $other) {
+					if ($other['Id'] == $this->extractID($ct['Id'] ?? '')) continue;
+					if (($other['Networks'][$net]['IPAddress'] ?? '') == $ip) {$holder = $other['Name']; break 2;}
+				}
+				break;
+			}
+			if ($ip && $holder) $hint = sprintf(_('Container %s already uses IP address %s. Stop it or give this container a different IP address in its settings'), $holder, $ip);
+			elseif ($ip) $hint = sprintf(_('Another container already uses IP address %s. Stop it or give this container a different IP address in its settings'), $ip);
+			else $hint = _('Another container already uses the IP address of this container. Stop it or give this container a different IP address in its settings');
+		} elseif (stripos($message, 'custom device') !== false) {
+			$hint = _('Check that the device exists, or remove it from the settings of this container');
+		} elseif (stripos($message, 'bind source path does not exist') !== false || stripos($message, 'invalid mount config') !== false) {
+			$hint = _('Check that the path exists, or correct it in the settings of this container');
+		} elseif (preg_match('/network \S+ not found/', $message)) {
+			$hint = _('Check that the network exists, or select another network in the settings of this container');
+		}
+		$text = htmlspecialchars($message);
+		return ($hint ? $text.'<br><br>'.htmlspecialchars($hint).'.' : $text).$last;
 	}
 
 	public function pauseContainer($id) {
