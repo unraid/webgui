@@ -127,6 +127,8 @@ function pullImage_nchan($name, $image) {
   write("addLog\0<br><b>"._('TOTAL DATA PULLED').":</b> ".$DockerClient->formatBytes(array_sum($alltotals)));
   if (!empty($strError)) {
     write("addLog\0<br><span class='error'><b>"._('Error').":</b> ".htmlspecialchars($strError)."</span>");
+    write("addLog\0"._('The container was not changed'));
+    my_logger("Pull of $image failed, container $name not updated");
     return false;
   }
   return true;
@@ -152,6 +154,7 @@ $style[] = "fieldset.docker{border:solid thin;margin-top:8px}";
 $style[] = "legend{font-size:1.1rem!important;font-weight:bold}";
 $style[] = "</style>";
 
+$failed = false;
 write(implode($style)."<p class='logLine'></p>");
 foreach (explode('*',rawurldecode($argv[1])) as $value) {
   $tmpl = $DockerTemplates->getUserTemplate($value);
@@ -167,7 +170,10 @@ foreach (explode('*',rawurldecode($argv[1])) as $value) {
   $TS_Enabled = getXmlVal($xml, "TailscaleEnabled");
   $oldImageID = $DockerClient->getImageID($Repository);
   // pull image
-  if (!pullImage_nchan($Name, $Repository)) continue;
+  if (!pullImage_nchan($Name, $Repository)) {
+    $failed = true;
+    continue;
+  }
   $oldContainerInfo = $DockerClient->getContainerDetails($Name);
   // determine if the container is still running
   $startContainer = false;
@@ -207,4 +213,5 @@ foreach (explode('*',rawurldecode($argv[1])) as $value) {
   if ($oldImageID && $oldImageID != $newImageID) removeImage_nchan($oldImageID);
 }
 write('_DONE_','');
+exit($failed ? 1 : 0);
 ?>

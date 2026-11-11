@@ -923,7 +923,21 @@ class DockerClient {
 				]))."\r\n";
 		}
 
-		$ret = $this->getDockerJSON("/images/create?fromImage=".urlencode($image), 'POST', $code, $callback, false, $header);
+		// The daemon streams {"error":...} only once the pull has started. Failures before that (registry
+		// unreachable, DNS, TLS, auth) come back as an HTTP error with a {"message":...} body, which the
+		// callers of this function do not look at. Turn such a reply into an "error" line for them.
+		$reported = false;
+		$wrapped = $callback ? function ($line) use ($callback, &$code, &$reported) {
+			$cnt = json_decode($line, true);
+			if (is_array($cnt) && isset($cnt['error'])) $reported = true;
+			elseif ($code !== true && is_array($cnt) && isset($cnt['message'])) {
+				$line = json_encode(['error' => $cnt['message']])."\n";
+				$reported = true;
+			}
+			$callback($line);
+		} : null;
+		$ret = $this->getDockerJSON("/images/create?fromImage=".urlencode($image), 'POST', $code, $wrapped, false, $header);
+		if ($callback && $code !== true && !$reported) $callback(json_encode(['error' => is_string($code) ? $code : 'Pull failed'])."\n");
 		$this->flushCache($this::$imagesCache);
 		return $ret;
 	}
