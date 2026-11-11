@@ -45,6 +45,7 @@ function curl_errno($handle) { return $handle->error; }
 function curl_exec($handle) {
   $GLOBALS['requests'][] = clone $handle;
   if (count($GLOBALS['requests']) === 1) {
+    if (isset($GLOBALS['scenario']['initial_reply'])) return $GLOBALS['scenario']['initial_reply'];
     $auth = $GLOBALS['scenario']['auth'] ?? 'bearer';
     if ($auth === 'none') return "HTTP/1.1 200 OK\r\nDocker-Content-Digest: sha256:test-digest\r\n";
     return $auth === 'basic'
@@ -70,6 +71,8 @@ function run(array $scenario) {
 }
 
 $manifest = '/v2/library/test/manifests/latest';
+$redirect = "HTTP/1.1 302 Found\r\nLocation: https://registry.example$manifest\r\n"
+  ."www-authenticate: Bearer realm=\"https://old-tokens.example/token\",service=\"old\",scope=\"repository:old:pull\"\r\n\r\n";
 $allowed = [
   ['origin' => 'https://registry.example', 'effective' => 'https://registry.example'.$manifest],
   ['origin' => 'https://registry.example:5443', 'effective' => 'https://registry.example:5443'.$manifest],
@@ -84,6 +87,13 @@ $allowed = [
     'credentials' => ['username' => 'test-user', 'password' => 'test-password']],
   ['origin' => 'https://registry.example', 'effective' => 'https://registry.example'.$manifest,
     'auth' => 'basic', 'credentials' => ['username' => 'test-user', 'password' => 'test-password']],
+  ['origin' => 'https://registry.example', 'effective' => 'https://registry.example'.$manifest,
+    'initial_reply' => $redirect."HTTP/2 401\r\nwww-authenticate: Bearer realm=\"https://tokens.example/token\",service=\"registry\",scope=\"repository:library/test:pull\"\r\n\r\n"],
+  ['origin' => 'https://registry.example', 'effective' => 'https://registry.example'.$manifest,
+    'auth' => 'basic', 'credentials' => ['username' => 'test-user', 'password' => 'test-password'],
+    'initial_reply' => $redirect."HTTP/2 401\r\nwww-authenticate: Basic realm=\"registry\"\r\n\r\n"],
+  ['origin' => 'https://registry.example', 'effective' => 'https://registry.example'.$manifest,
+    'auth' => 'none', 'initial_reply' => $redirect."HTTP/2 200\r\nDocker-Content-Digest: sha256:test-digest\r\n\r\n"],
 ];
 foreach ($allowed as $scenario) {
   same('sha256:test-digest', run($scenario), 'Approved registry must return its digest');

@@ -552,6 +552,9 @@ class DockerUpdate{
 		$hasCredentials = !empty($registryAuth['username']) || !empty($registryAuth['password']);
 		if ($hasCredentials && !$sameRegistry) return null;
 		$manifestURL = $resolvedManifestURL;
+		// curl includes intermediate headers; only the final response owns the auth challenge.
+		$responses = preg_split('/\r?\n\r?\n/', trim($reply));
+		$reply = end($responses);
 		/*
 		 * Step 2: Get www-authenticate header from manifest url to generate token or basic auth
 		 */
