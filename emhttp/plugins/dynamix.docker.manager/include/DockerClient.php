@@ -521,8 +521,8 @@ class DockerUpdate{
 	/**
 	 * Retrieve an image's remote manifest digest using the Docker Registry V2 API.
 	 *
-	 * Follow manifest redirects and use the registry's authentication challenge
-	 * to request the digest from the resolved manifest URL.
+	 * Follow approved manifest redirects and use the registry's authentication
+	 * challenge to request the digest without forwarding credentials elsewhere.
 	 *
 	 * @param string $image Docker image reference to look up.
 	 * @return string|null Manifest digest, or null if the lookup fails or no digest is available.
@@ -542,8 +542,16 @@ class DockerUpdate{
 			//$this->debug('Error: curl error getting manifest: '.curl_error($ch));
 			return null;
 		}
-		// Authenticate against the final manifest URL, so cross-host redirects do not drop the token.
-		$manifestURL = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+		// Validate the destination before requesting a token or sending registry credentials.
+		$resolvedManifestURL = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+		$origin = parse_url($manifestURL);
+		$resolved = parse_url($resolvedManifestURL);
+		if (($resolved['scheme'] ?? '') !== 'https' || empty($resolved['host']) || isset($resolved['user']) || isset($resolved['pass'])) return null;
+		$sameRegistry = strtolower($origin['host']) === strtolower($resolved['host']) && ($origin['port'] ?? 443) === ($resolved['port'] ?? 443);
+		// Public registries can redirect freely. Saved credentials belong to the original registry.
+		$hasCredentials = !empty($registryAuth['username']) || !empty($registryAuth['password']);
+		if ($hasCredentials && !$sameRegistry) return null;
+		$manifestURL = $resolvedManifestURL;
 		/*
 		 * Step 2: Get www-authenticate header from manifest url to generate token or basic auth
 		 */
@@ -566,6 +574,7 @@ class DockerUpdate{
 			$ch = getCurlHandle($url);
 			if (!empty($registryAuth['password'])) {
 				curl_setopt($ch, CURLOPT_USERPWD, $registryAuth['username'].':'.$registryAuth['password']);
+				curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
 			}
 			$reply = curl_exec($ch);
 			if (curl_errno($ch) !== 0) {
@@ -587,6 +596,8 @@ class DockerUpdate{
 		/**
 		 * Step 3: Get Docker-Content-Digest header from manifest file
 		 */
+		// Only credentialless requests may follow another redirect.
+		if (isset($token) || !empty($registryAuth['password'])) curl_setopt($digest_ch, CURLOPT_FOLLOWLOCATION, false);
 		curl_setopt($digest_ch, CURLOPT_HTTPHEADER, $header);
 		$reply = curl_exec($digest_ch);
 		if (curl_errno($digest_ch) !== 0) {
